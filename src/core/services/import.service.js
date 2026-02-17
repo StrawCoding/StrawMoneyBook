@@ -1,0 +1,482 @@
+import { withTransaction, run } from '@/core/db/sqlite'
+import { createLedger, listLedgers } from '@/core/repositories/ledger.repo'
+import { createId } from '@/core/utils/id'
+import { addTransaction } from '@/core/repositories/transaction.repo'
+import { assertCanCreateLedger } from '@/core/services/membership.service'
+import { repairLedgerData, scanLedgerIntegrity } from '@/core/services/repair.service'
+import { createAccountGroup, createAccount, listAccounts, listAccountGroups } from '@/core/repositories/account.repo'
+import {
+  createCategoryGroup,
+  createCategory,
+  listCategoryGroups,
+  listCategories,
+} from '@/core/repositories/category.repo'
+
+const TABLE_IMPORT_ORDER = [
+  'account_groups',
+  'accounts',
+  'category_groups',
+  'categories',
+  'transactions',
+  'transaction_attachments',
+  'counterparties',
+  'loans',
+  'loan_payments',
+  'reimbursements',
+  'reimbursement_items',
+  'budgets',
+  'budget_items',
+  'app_settings',
+  'deleted_log',
+]
+
+function parseJson(text) {
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error('JSON 格式錯誤')
+  }
+}
+
+function normalizeText(value) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim()
+}
+
+function normalizeLedgerName(value, fallback = '') {
+  const text = normalizeText(value)
+  if (text) return text
+  return normalizeText(fallback)
+}
+
+function normalizeFaIcon(value) {
+  const source = String(value ?? '').trim()
+  if (!source) return null
+
+  const tokens = source.split(/\s+/).filter(Boolean)
+  let style = 'fa-solid'
+  let iconName = ''
+
+  for (const token of tokens) {
+    if (token === 'fas' || token === 'fa-solid') {
+      style = 'fa-solid'
+      continue
+    }
+    if (token === 'far' || token === 'fa-regular') {
+      style = 'fa-regular'
+      continue
+    }
+    if (token === 'fab' || token === 'fa-brands') {
+      style = 'fa-brands'
+      continue
+    }
+    if (token.startsWith('fa-')) {
+      iconName = token
+      continue
+    }
+    if (/^[a-z0-9-]+$/i.test(token)) {
+      iconName = `fa-${token.toLowerCase()}`
+    }
+  }
+
+  if (!iconName || ['fa-solid', 'fa-regular', 'fa-brands'].includes(iconName)) {
+    return null
+  }
+
+  return `${style} ${iconName}`
+}
+
+function normalizedRows(tablePayload, tableName) {
+  const rows = tablePayload?.[tableName]
+  if (!Array.isArray(rows)) return []
+  return rows
+}
+
+function resolveSourceLedger(payload) {
+  const sourceLedgerId = payload.ledger_id ?? payload?.tables?.ledgers?.[0]?.id
+  if (!sourceLedgerId) {
+    throw new Error('JSON 缺少 ledger_id')
+  }
+
+  const ledgerRow = payload?.tables?.ledgers?.find((row) => row.id === sourceLedgerId) ?? payload?.tables?.ledgers?.[0]
+  if (!ledgerRow) {
+    throw new Error('JSON 缺少 ledgers 資料')
+  }
+
+  return {
+    sourceLedgerId,
+    ledgerRow,
+  }
+}
+
+function resolveImportedLedgerName(sourceLedgerName, options = {}) {
+  const explicitName = normalizeLedgerName(options.ledgerName)
+  if (explicitName) return explicitName
+
+  const suffix = normalizeText(options.ledgerNameSuffix ?? '（匯入）')
+  if (!suffix) return sourceLedgerName
+  return `${sourceLedgerName}${suffix}`
+}
+
+function sumNumericValues(source) {
+  if (!source || typeof source !== 'object') return 0
+  return Object.values(source).reduce((total, value) => total + Number(value ?? 0), 0)
+}
+
+function objectToInsertSql(tableName, row) {
+  const keys = Object.keys(row)
+  if (!keys.length) {
+    throw new Error(`表 ${tableName} 缺少欄位資料`) 
+  }
+
+  const placeholders = keys.map(() => '?').join(', ')
+  const sql = `INSERT INTO ${tableName} (${keys.join(', ')}) VALUES (${placeholders});`
+  const values = keys.map((key) => row[key])
+  return { sql, values }
+}
+
+export async function importLedgerJsonAsNewLedger(jsonText, options = {}) {
+  const payload = parseJson(jsonText)
+  return importLedgerPayloadAsNewLedger(payload, options)
+}
+
+async function importLedgerPayloadAsNewLedger(payload, options = {}) {
+  const { sourceLedgerId, ledgerRow } = resolveSourceLedger(payload)
+  const sourceLedgerName = normalizeLedgerName(ledgerRow.name, '匯入帳本')
+  const importedLedgerName = resolveImportedLedgerName(sourceLedgerName, options)
+
+  const existingLedgers = await listLedgers()
+  assertCanCreateLedger(existingLedgers.length)
+
+  return withTransaction(async () => {
+    const importedLedger = await createLedger({
+      id: options.keepLedgerId ? sourceLedgerId : createId('ledger_import'),
+      name: importedLedgerName,
+      currencyCode: ledgerRow.currency_code ?? 'TWD',
+      timezone: ledgerRow.timezone ?? 'Asia/Taipei',
+      color: ledgerRow.color ?? null,
+      icon: ledgerRow.icon ?? null,
+    })
+
+    let insertedRows = 0
+
+    for (const tableName of TABLE_IMPORT_ORDER) {
+      const rows = normalizedRows(payload.tables, tableName)
+      for (const sourceRow of rows) {
+        const row = { ...sourceRow, ledger_id: importedLedger.id }
+        if (tableName === 'deleted_log') {
+          delete row.id
+        }
+
+        const { sql, values } = objectToInsertSql(tableName, row)
+        await run(sql, values)
+        insertedRows += 1
+      }
+    }
+
+    let integrityCheck = null
+    if (options.runIntegrityRepair !== false) {
+      const before = await scanLedgerIntegrity(importedLedger.id)
+      const beforeIssueCount = sumNumericValues(before)
+      let fixed = {}
+      let after = before
+
+      if (beforeIssueCount > 0) {
+        const repairResult = await repairLedgerData(importedLedger.id)
+        fixed = repairResult?.fixed ?? {}
+        after = repairResult?.after ?? before
+      }
+
+      integrityCheck = {
+        before,
+        after,
+        fixed,
+        beforeIssueCount,
+        afterIssueCount: sumNumericValues(after),
+        fixedCount: sumNumericValues(fixed),
+      }
+    }
+
+    return {
+      ledgerId: importedLedger.id,
+      ledgerName: importedLedger.name,
+      insertedRows,
+      schemaVersion: payload.schema_version ?? null,
+      integrityCheck,
+    }
+  })
+}
+
+export async function importBackupJsonAsNewLedgers(jsonText, options = {}) {
+  const payload = parseJson(jsonText)
+  const allLedgersPayload = Array.isArray(payload?.ledgers) ? payload.ledgers : null
+
+  if (!allLedgersPayload || payload?.backup_scope !== 'all_ledgers') {
+    const imported = await importLedgerPayloadAsNewLedger(payload, options)
+    return {
+      mode: 'single',
+      importedLedgers: [imported],
+      firstLedgerId: imported.ledgerId,
+      firstLedgerName: imported.ledgerName,
+      totalInsertedRows: Number(imported.insertedRows ?? 0),
+      schemaVersion: imported.schemaVersion ?? null,
+      integrityCheck: imported.integrityCheck ?? null,
+    }
+  }
+
+  if (!allLedgersPayload.length) {
+    throw new Error('JSON 缺少可匯入的帳本資料')
+  }
+
+  const importedLedgers = []
+  let totalInsertedRows = 0
+
+  for (const ledgerPayload of allLedgersPayload) {
+    const imported = await importLedgerPayloadAsNewLedger(ledgerPayload, options)
+    importedLedgers.push(imported)
+    totalInsertedRows += Number(imported.insertedRows ?? 0)
+  }
+
+  return {
+    mode: 'all_ledgers',
+    importedLedgers,
+    firstLedgerId: importedLedgers[0]?.ledgerId ?? '',
+    firstLedgerName: importedLedgers[0]?.ledgerName ?? '',
+    totalInsertedRows,
+    schemaVersion: payload.schema_version ?? null,
+    integrityCheck: null,
+  }
+}
+
+function parseCsvLine(line) {
+  const values = []
+  let current = ''
+  let inQuote = false
+
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i]
+
+    if (ch === '"') {
+      if (inQuote && line[i + 1] === '"') {
+        current += '"'
+        i += 1
+      } else {
+        inQuote = !inQuote
+      }
+      continue
+    }
+
+    if (ch === ',' && !inQuote) {
+      values.push(current)
+      current = ''
+      continue
+    }
+
+    current += ch
+  }
+
+  values.push(current)
+  return values
+}
+
+function parseCsv(text) {
+  const lines = text
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+
+  if (lines.length < 2) {
+    throw new Error('CSV 至少需要標題與一筆資料')
+  }
+
+  const headers = parseCsvLine(lines[0]).map((header) => header.trim())
+  const rows = []
+
+  for (const line of lines.slice(1)) {
+    const cols = parseCsvLine(line)
+    const row = {}
+    headers.forEach((header, index) => {
+      row[header] = cols[index] ?? ''
+    })
+    rows.push(row)
+  }
+
+  return { headers, rows }
+}
+
+async function importTransactionsCsv(ledgerId, rows) {
+  const accountRows = await listAccounts(ledgerId, { includeArchived: true })
+  const categoryRows = await listCategories(ledgerId, { includeArchived: true })
+  const accountIds = new Set(accountRows.map((item) => item.id))
+  const categoryIds = new Set(categoryRows.map((item) => item.id))
+
+  let inserted = 0
+  let skipped = 0
+
+  for (const row of rows) {
+    const type = row.type?.trim()
+    const amountMinor = Math.round(Number(row.amount_minor))
+    const accountId = row.account_id?.trim()
+    const categoryId = row.category_id?.trim() || null
+
+    if (!['expense', 'income', 'adjustment', 'transfer'].includes(type)) {
+      skipped += 1
+      continue
+    }
+
+    if (!Number.isFinite(amountMinor) || amountMinor === 0 || !accountIds.has(accountId)) {
+      skipped += 1
+      continue
+    }
+
+    if (categoryId && !categoryIds.has(categoryId)) {
+      skipped += 1
+      continue
+    }
+
+    await addTransaction(ledgerId, {
+      type,
+      transferGroupId: row.transfer_group_id?.trim() || null,
+      accountId,
+      peerAccountId: row.peer_account_id?.trim() || null,
+      categoryId,
+      amountMinor,
+      occurredAt: row.occurred_at?.trim() || new Date().toISOString(),
+      note: row.note?.trim() || null,
+      location: row.location?.trim() || null,
+      tagsJson: row.tags_json?.trim() || null,
+      originType: row.origin_type?.trim() || 'import',
+      externalRefId: row.external_ref_id?.trim() || null,
+      idempotencyKey: row.idempotency_key?.trim() || null,
+    })
+
+    inserted += 1
+  }
+
+  return { inserted, skipped }
+}
+
+async function importAccountsCsv(ledgerId, rows) {
+  const existingGroups = await listAccountGroups(ledgerId)
+  const groupMap = new Map(existingGroups.map((item) => [item.name.toLowerCase(), item]))
+
+  let inserted = 0
+  let skipped = 0
+
+  for (const row of rows) {
+    const groupName = row.group_name?.trim()
+    const accountName = row.name?.trim() || row.account_name?.trim()
+
+    if (!groupName || !accountName) {
+      skipped += 1
+      continue
+    }
+
+    let group = groupMap.get(groupName.toLowerCase())
+    if (!group) {
+      group = await createAccountGroup(ledgerId, {
+        name: groupName,
+        type: row.group_type?.trim() || 'other',
+        sortOrder: groupMap.size,
+      })
+      groupMap.set(groupName.toLowerCase(), group)
+    }
+
+    await createAccount(ledgerId, {
+      groupId: group.id,
+      name: accountName,
+      accountType: row.account_type?.trim() || 'asset',
+      allowNegative: ['1', 'true', 'yes'].includes((row.allow_negative ?? '').toLowerCase()),
+      openingBalanceMinor: Math.round(Number(row.opening_balance_minor ?? 0)),
+      currencyCode: row.currency_code?.trim() || 'TWD',
+      icon: normalizeFaIcon(row.icon),
+      sortOrder: inserted,
+    })
+
+    inserted += 1
+  }
+
+  return { inserted, skipped }
+}
+
+async function importCategoriesCsv(ledgerId, rows) {
+  const existingGroups = await listCategoryGroups(ledgerId)
+  const groupMap = new Map(existingGroups.map((item) => [item.name.toLowerCase(), item]))
+
+  let inserted = 0
+  let skipped = 0
+
+  for (const row of rows) {
+    const groupName = row.group_name?.trim() || row.category_group_name?.trim()
+    const categoryName = row.name?.trim() || row.category_name?.trim()
+
+    if (!groupName || !categoryName) {
+      skipped += 1
+      continue
+    }
+
+    let group = groupMap.get(groupName.toLowerCase())
+    if (!group) {
+      group = await createCategoryGroup(ledgerId, {
+        name: groupName,
+        kind: row.group_kind?.trim() || 'expense',
+        sortOrder: groupMap.size,
+      })
+      groupMap.set(groupName.toLowerCase(), group)
+    }
+
+    await createCategory(ledgerId, {
+      groupId: group.id,
+      name: categoryName,
+      kind: row.kind?.trim() || group.kind || 'expense',
+      icon: normalizeFaIcon(row.icon),
+      isBudgetable: ['0', 'false', 'no'].includes((row.is_budgetable ?? '').toLowerCase()) ? 0 : 1,
+      sortOrder: inserted,
+    })
+
+    inserted += 1
+  }
+
+  return { inserted, skipped }
+}
+
+export async function importLedgerCsv(ledgerId, csvText, type) {
+  const { rows } = parseCsv(csvText)
+
+  return withTransaction(async () => {
+    if (type === 'transactions') {
+      return importTransactionsCsv(ledgerId, rows)
+    }
+
+    if (type === 'accounts') {
+      return importAccountsCsv(ledgerId, rows)
+    }
+
+    if (type === 'categories') {
+      return importCategoriesCsv(ledgerId, rows)
+    }
+
+    throw new Error('不支援的 CSV 匯入類型')
+  })
+}
+
+export async function previewCsvType(csvText) {
+  const { headers, rows } = parseCsv(csvText)
+
+  const headerSet = new Set(headers.map((item) => item.toLowerCase()))
+  let suggestedType = 'transactions'
+
+  if (headerSet.has('group_name') && (headerSet.has('account_name') || headerSet.has('opening_balance_minor'))) {
+    suggestedType = 'accounts'
+  } else if (headerSet.has('group_name') && (headerSet.has('category_name') || headerSet.has('kind'))) {
+    suggestedType = 'categories'
+  } else if (headerSet.has('type') && headerSet.has('amount_minor') && headerSet.has('account_id')) {
+    suggestedType = 'transactions'
+  }
+
+  return {
+    headers,
+    rowCount: rows.length,
+    suggestedType,
+  }
+}

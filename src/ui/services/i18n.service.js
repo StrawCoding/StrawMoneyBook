@@ -1,0 +1,1267 @@
+import { computed, ref } from 'vue'
+import { RUNTIME_EN_TEXT_EXACT_GENERATED } from '@/ui/services/runtime-en-exact.generated'
+import { RUNTIME_EN_TEXT_GENERATED } from '@/ui/services/runtime-en-phrases.generated'
+
+const STORAGE_KEY = 'strawmoneybook.locale'
+const DEFAULT_LOCALE = 'zh-TW'
+const SUPPORTED_LOCALES = ['zh-TW', 'en']
+const RUNTIME_EN_TEXT = {
+  '帳本已建立': 'Ledger created',
+  '建立帳本失敗': 'Failed to create ledger',
+  '儲存失敗': 'Save failed',
+  '刪除失敗': 'Delete failed',
+  '複製失敗': 'Copy failed',
+  '重設失敗': 'Reset failed',
+  '已重設全部資料': 'All data reset',
+  '載入分析資料失敗': 'Failed to load analysis data',
+  '載入首頁交易失敗': 'Failed to load home transactions',
+  '月份切換失敗': 'Failed to switch month',
+  '語音啟動失敗，請稍後再試': 'Voice startup failed, please try again later',
+  '麥克風權限被拒絕': 'Microphone permission denied',
+  '語音辨識失敗，請改用手動輸入': 'Voice recognition failed, please use manual input',
+  '已切換帳本': 'Ledger switched',
+  '請先輸入內容': 'Please enter content first',
+  '解析完成，請確認後儲存': 'Parsing complete. Please review and save.',
+  '解析完成，請先確認警示項目': 'Parsing complete. Please review warning items first.',
+  '請輸入有效金額': 'Please enter a valid amount',
+  '請選擇有效時間': 'Please select a valid time',
+  '請選擇帳戶': 'Please select an account',
+  '請選擇分類': 'Please select a category',
+  '建立交易失敗': 'Failed to create transaction',
+  'AI 自動記帳已建立交易': 'AI bookkeeping transaction created',
+  '新增失敗': 'Failed to add',
+  '更新失敗': 'Update failed',
+  '交易已更新': 'Transaction updated',
+  '交易已刪除': 'Transaction deleted',
+  '請先新增群組': 'Please create a group first',
+  '群組已新增': 'Group created',
+  '帳戶已新增': 'Account created',
+  '新增帳戶失敗': 'Failed to create account',
+  '分類已新增': 'Category created',
+  '新增分類失敗': 'Failed to create category',
+  '分類群組已新增': 'Category group created',
+  '新增群組失敗': 'Failed to create group',
+  '找不到對應群組': 'Target group not found',
+  '分類資料已更新': 'Category updated',
+  '更新分類資料失敗': 'Failed to update category',
+  '分類已處理': 'Category processed',
+  '處理分類失敗': 'Failed to process category',
+  '帳戶資料已更新': 'Account updated',
+  '更新帳戶資料失敗': 'Failed to update account',
+  '帳戶已處理': 'Account processed',
+  '刪除帳戶失敗': 'Failed to delete account',
+  'JSON 匯出完成': 'JSON export completed',
+  'CSV 匯出完成': 'CSV export completed',
+  'JSON 匯入失敗': 'JSON import failed',
+  'CSV 匯入失敗': 'CSV import failed',
+  'Google 帳號連線成功': 'Google account connected',
+  'Google 連線失敗': 'Google connection failed',
+  '已中斷 Google 連線': 'Google disconnected',
+  '中斷連線失敗': 'Failed to disconnect',
+  '請先連接 Google 帳號': 'Please connect your Google account first',
+  'Google 備份設定已更新': 'Google backup settings updated',
+  '儲存設定失敗': 'Failed to save settings',
+  '尚未設定 Google OAuth Client ID': 'Google sign-in is not configured',
+  '母分類排序已更新': 'Category group order updated',
+  '母分類已刪除': 'Category group deleted',
+  '母分類已處理': 'Category group processed',
+  '已移回未報銷': 'Moved back to unreimbursed',
+  '報銷交易已作廢': 'Reimbursement transaction canceled',
+  '借貸已建立': 'Loan record created',
+  '還款已記錄': 'Repayment recorded',
+  '借貸已作廢': 'Loan record canceled',
+  '免費版最多可建立 1 個帳本': 'Free plan supports up to 1 ledger',
+  '免費版僅可使用 1 個帳本': 'Free plan can only use 1 ledger',
+  '免費版帳戶最多 3 個': 'Free plan supports up to 3 accounts',
+  '免費版借貸最多 5 筆': 'Free plan supports up to 5 loan records',
+  '免費版報銷最多 5 筆': 'Free plan supports up to 5 reimbursable records',
+  '免費版 AI 記帳每日最多 5 次': 'Free plan allows up to 5 AI bookkeeping uses per day',
+  '無效的 Google Play 訂閱方案': 'Invalid Google Play subscription plan',
+  '目前裝置不支援訂閱流程': 'Subscription flow is not supported on this device',
+  '期初金額格式錯誤': 'Invalid opening balance format',
+  '請選擇不同的轉出/轉入帳戶': 'Please select different from/to accounts',
+  '切換帳本失敗': 'Failed to switch ledger',
+}
+
+const RUNTIME_EN_REPLACEMENTS = {
+  全部: 'All',
+  年: 'Year',
+  月: 'Month',
+  日: 'Day',
+  返回: 'Back',
+  儲存: 'Save',
+  儲存中: 'Saving',
+  取消: 'Cancel',
+  關閉: 'Close',
+  完成: 'Done',
+  新增: 'Add',
+  編輯: 'Edit',
+  刪除: 'Delete',
+  處理中: 'Processing',
+  設定: 'Settings',
+  語言: 'Language',
+  個人化: 'Personalization',
+  帳本: 'Ledger',
+  帳戶: 'Account',
+  分類: 'Category',
+  母分類: 'Category Group',
+  交易: 'Transaction',
+  轉帳: 'Transfer',
+  支出: 'Expense',
+  收入: 'Income',
+  調整: 'Adjustment',
+  報銷: 'Reimbursement',
+  資料管理: 'Data Management',
+  自動備份: 'Auto Backup',
+  輸出資料: 'Export Data',
+  輸入資料: 'Import Data',
+  重設全部資料: 'Reset All Data',
+  確認重設: 'Confirm Reset',
+  匯出: 'Export',
+  匯入: 'Import',
+  帳號: 'Account',
+  名稱: 'Name',
+  金額: 'Amount',
+  備註: 'Note',
+  時間: 'Time',
+  類型: 'Type',
+  群組: 'Group',
+  連線: 'Connect',
+  中斷連線: 'Disconnect',
+  啟用: 'Enable',
+  狀態: 'Status',
+  錯誤: 'Error',
+  立即備份: 'Backup Now',
+  '連接 Google 帳號': 'Connect Google Account',
+  '重新連線 Google': 'Reconnect Google',
+  未連線: 'Disconnected',
+  已連線: 'Connected',
+  上次備份: 'Last Backup',
+  目前帳本: 'Current Ledger',
+  管理: 'Manage',
+  資產: 'Assets',
+  首頁: 'Home',
+  分析: 'Analysis',
+  建立中: 'Creating',
+  開始使用: 'Start',
+  下一步: 'Next',
+  上一步: 'Back',
+  步驟: 'Step',
+  選擇語言: 'Choose Language',
+  我的帳本: 'My Ledger',
+  管理帳本: 'Manage Ledgers',
+  新增群組: 'Add Group',
+  新增分類: 'Add Category',
+  新增帳戶: 'Add Account',
+  新增帳號: 'Add Account',
+  新增項目: 'Add Item',
+  新增交易: 'Add Transaction',
+  刪除封存: 'Delete/Archive',
+  刪除或封存: 'Delete/Archive',
+  請選擇: 'Please select',
+  請輸入: 'Please enter',
+  請先: 'Please',
+  分類管理: 'Category Management',
+  帳戶管理: 'Account Management',
+  資產帳戶管理: 'Asset Account Management',
+  交易紀錄: 'Transaction Records',
+  最近: 'Recent',
+  刷新: 'Refresh',
+  群組名稱: 'Group Name',
+  分類名稱: 'Category Name',
+  帳戶名稱: 'Account Name',
+  帳戶幣別: 'Account Currency',
+  交易時間: 'Transaction Time',
+  交易類型: 'Transaction Type',
+  所屬群組: 'Group',
+  選擇分類: 'Choose Category',
+  請選擇幣別: 'Choose Currency',
+  選擇icon: 'Choose icon',
+  '選擇 icon': 'Choose icon',
+  匯出資料: 'Export Data',
+  匯入資料: 'Import Data',
+  匯出交易CSV: 'Export Transactions CSV',
+  匯出帳戶CSV: 'Export Accounts CSV',
+  匯出分類CSV: 'Export Categories CSV',
+  匯出CSV: 'Export CSV',
+  匯入CSV: 'Import CSV',
+  重設中: 'Resetting',
+  確認重設: 'Confirm Reset',
+  確認刪除: 'Confirm Delete',
+  請再次確認: 'Please confirm again',
+  載入失敗: 'Load failed',
+  建立失敗: 'Create failed',
+  更新排序失敗: 'Failed to update order',
+  母分類: 'Category Group',
+  期初金額: 'Opening Balance',
+  預設資金: 'Opening Funds',
+  金額: 'Amount',
+  可報銷: 'Reimbursable',
+  可選: 'Optional',
+  轉出帳戶: 'From Account',
+  轉入帳戶: 'To Account',
+  連接: 'Connect',
+  連線成功: 'Connected',
+  連線失敗: 'Connection failed',
+  備份完成: 'Backup completed',
+  備份失敗: 'Backup failed',
+  資料更動後自動備份: 'Auto backup after data changes',
+  共: 'Total',
+  筆: 'items',
+  此: 'this',
+}
+
+const RUNTIME_EN_EXACT = {
+  ...RUNTIME_EN_TEXT_EXACT_GENERATED,
+  ...RUNTIME_EN_TEXT_GENERATED,
+  ...RUNTIME_EN_TEXT,
+}
+
+const RUNTIME_EN_PHRASE_REPLACEMENTS = {
+  ...RUNTIME_EN_TEXT_GENERATED,
+  ...RUNTIME_EN_REPLACEMENTS,
+}
+
+const runtimeReplacementEntries = Object.entries(RUNTIME_EN_PHRASE_REPLACEMENTS)
+  .filter(([zh]) => String(zh ?? '').trim().length >= 4)
+  .sort((a, b) => b[0].length - a[0].length)
+
+const translatableAttributeNames = ['placeholder', 'title', 'aria-label']
+const ENABLE_RUNTIME_DOM_TRANSLATOR = true
+let domTranslatorObserver = null
+let isSyncingRuntimeDomTranslations = false
+const originalTextByNode = new WeakMap()
+const originalAttrsByElement = new WeakMap()
+
+const MESSAGES = {
+  'zh-TW': {
+    'common.back': '返回',
+    'common.cancel': '取消',
+    'common.save': '儲存',
+    'common.reset_default': '還原預設',
+    'common.light': '淺色',
+    'common.dark': '深色',
+    'nav.home': '首頁',
+    'nav.analysis': '分析',
+    'nav.assets': '資產',
+    'nav.settings': '設定',
+    'app.open_menu': '開啟選單',
+    'app.loading': '資料載入中...',
+    'settings.title': '設定',
+    'settings.data_management': '資料管理',
+    'settings.auto_backup': '自動備份',
+    'settings.ledger_management': '帳本管理',
+    'settings.category_management': '分類管理',
+    'settings.addon_templates': '附加項目清單',
+    'settings.personalization': '個人化',
+    'settings.language': '語言',
+    'settings.membership_benefits': '會員權益',
+    'settings.about_us': '關於我們',
+    'settings.version_info': '版本資訊',
+    'settings_about.title': '關於我們',
+    'settings_about.subtitle': '歡迎透過以下方式聯絡我們',
+    'settings_about.website': '官方網頁',
+    'settings_about.website_value': 'StrawMoneyBook 官方網站',
+    'settings_about.facebook': 'FaceBook',
+    'settings_about.facebook_value': 'StrawMoneyBook Facebook 專頁',
+    'settings_about.email': 'Email',
+    'settings_about.email_value': 'service@strawmb.com',
+    'settings_about.privacy_policy': '隱私權政策',
+    'settings_about.privacy_policy_value': '查看資料使用與麥克風權限說明',
+    'settings_about.open': '前往',
+    'membership_page.title': '會員權益',
+    'membership_page.subtitle': '比較免費版與會員版功能，並可直接訂閱 Google Play 會員。',
+    'membership_page.current_plan': '目前方案',
+    'membership_page.current_plan.free': '免費版',
+    'membership_page.current_plan.member': '會員',
+    'membership_page.compare.title': '方案對比',
+    'membership_page.compare.feature': '項目',
+    'membership_page.compare.free': '免費版',
+    'membership_page.compare.member': '會員',
+    'membership_page.compare.multi_ledger': '多帳本',
+    'membership_page.compare.ai_daily': 'AI 記帳每日次數',
+    'membership_page.compare.account_limit': '帳戶數',
+    'membership_page.compare.loan_limit': '借貸筆數',
+    'membership_page.compare.reimbursement_limit': '報銷筆數',
+    'membership_page.compare.free.no': '不可使用',
+    'membership_page.compare.free.ai_daily': '每天 5 次',
+    'membership_page.compare.free.account_limit': '最多 3 個',
+    'membership_page.compare.free.loan_limit': '最多 5 筆',
+    'membership_page.compare.free.reimbursement_limit': '最多 5 筆',
+    'membership_page.compare.member.yes': '可使用',
+    'membership_page.compare.member.unlimited': '無限制',
+    'membership_page.google_play.title': 'Google Play 訂閱',
+    'membership_page.google_play.desc': '可選擇月訂閱或永久方案。',
+    'membership_page.google_play.monthly': '1 個月會員',
+    'membership_page.google_play.monthly_price': '$190',
+    'membership_page.google_play.lifetime': '永久會員',
+    'membership_page.google_play.lifetime_price': '$390',
+    'membership_page.google_play.loading_prices': '讀取商店價格中...',
+    'membership_page.google_play.restore': '恢復購買',
+    'membership_page.google_play.manage': '管理訂閱',
+    'membership_page.google_play.redeem_label': '優惠碼兌換',
+    'membership_page.google_play.redeem_placeholder': '輸入 Google Play 優惠碼',
+    'membership_page.google_play.redeem_action': '兌換',
+    'membership_page.toast.subscribed_monthly': '已開通 1 個月會員',
+    'membership_page.toast.subscribed_lifetime': '已開通永久會員',
+    'membership_page.toast.subscribe_failed': '訂閱失敗',
+    'membership_page.toast.restore_success': '已完成恢復購買',
+    'membership_page.toast.restore_failed': '恢復購買失敗',
+    'membership_page.toast.manage_failed': '無法開啟訂閱管理頁',
+    'membership_page.toast.billing_not_available': '目前裝置不支援 Google Play 訂閱流程',
+    'membership_page.toast.user_canceled': '你已取消購買',
+    'membership_page.toast.store_unavailable': '目前無法連線 Google Play 商店，請稍後再試',
+    'membership_page.toast.product_unavailable': '此商品目前無法購買',
+    'membership_page.toast.already_owned': '你已擁有此方案',
+    'membership_page.toast.redeem_code_required': '請先輸入 Google Play 優惠碼',
+    'membership_page.toast.redeem_opened': '已開啟 Google Play 優惠碼兌換頁',
+    'settings_version.title': '版本資訊',
+    'settings_version.app_version': '目前版本',
+    'settings_version.developer': '開發人員',
+    'debug_page.title': 'Debug 頁面',
+    'debug_page.subtitle': '會員與 Play 商店診斷資訊',
+    'debug_page.refresh': '重新整理診斷',
+    'debug_page.key.tier': '會員等級',
+    'debug_page.key.plan': '方案',
+    'debug_page.key.active': '是否啟用',
+    'debug_page.key.source': '判斷來源',
+    'debug_page.key.reason': '原因',
+    'debug_page.key.cache_expires': '快取到期',
+    'debug_page.key.last_sync_at': '最後同步',
+    'debug_page.key.last_sync_status': '同步狀態',
+    'debug_page.key.play_supported': 'Play 支援',
+    'debug_page.key.play_calls': 'Play 呼叫紀錄',
+    'debug_page.play_calls.empty': '目前沒有呼叫紀錄',
+    'debug_page.key.play_call_started': '開始時間',
+    'debug_page.key.play_call_ended': '結束時間',
+    'debug_page.key.play_call_duration': '耗時',
+    'debug_page.key.play_call_error_code': '錯誤代碼',
+    'debug_page.key.play_call_error_message': '錯誤訊息',
+    'debug_page.key.tx_failures': '交易新增失敗紀錄',
+    'debug_page.tx_failures.empty': '目前沒有交易新增失敗紀錄',
+    'debug_page.key.tx_failure_time': '失敗時間',
+    'debug_page.key.tx_failure_ledger': '帳本 ID',
+    'debug_page.key.tx_failure_error_code': '錯誤代碼',
+    'debug_page.key.tx_failure_error_message': '錯誤訊息',
+    'settings_ledger_page.title': '帳本管理',
+    'settings_ledger_page.add_ledger': '新增帳本',
+    'settings_ledger_page.drag_sort': '拖曳排序',
+    'settings_ledger_page.dialog_title': '新增帳本',
+    'settings_ledger_page.name': '帳本名稱',
+    'settings_ledger_page.name_placeholder': '請輸入帳本名稱',
+    'settings_ledger_page.toast.created': '帳本已建立',
+    'settings_ledger_page.toast.save_failed': '建立帳本失敗',
+    'settings_ledger_detail.title': '帳本詳情',
+    'settings_ledger_detail.saving': '儲存中...',
+    'settings_ledger_detail.save_changes': '儲存變更',
+    'settings_ledger_detail.ledger_name': '帳本名稱',
+    'settings_ledger_detail.ledger_name_placeholder': '請輸入帳本名稱',
+    'settings_ledger_detail.processing': '處理中...',
+    'settings_ledger_detail.delete_ledger': '刪除帳本',
+    'settings_ledger_detail.not_found': '找不到帳本',
+    'settings_ledger_detail.confirm_delete': '確定要刪除此帳本嗎？此動作無法復原。',
+    'settings_ledger_detail.toast.updated': '帳本資料已更新',
+    'settings_ledger_detail.toast.update_failed': '更新帳本資料失敗',
+    'settings_ledger_detail.toast.deleted': '帳本已刪除',
+    'settings_ledger_detail.toast.delete_failed': '刪除帳本失敗',
+    'settings_addon_template.title': '附加項目清單',
+    'settings_addon_template.description': '自訂常用附加項目，可在快速記帳時一鍵套用。',
+    'settings_addon_template.item_name_placeholder': '附加項目名稱',
+    'settings_addon_template.delete': '刪除',
+    'settings_addon_template.add_item': '新增項目',
+    'settings_addon_template.saving': '儲存中...',
+    'settings_addon_template.toast.keep_one': '至少保留一個附加項目',
+    'settings_addon_template.toast.saved': '附加項目已儲存',
+    'settings_data.title': '資料管理',
+    'settings_data.export.title': '輸出資料',
+    'settings_data.export.desc': 'JSON 含 schema_version，且包含所有帳本，可完整還原。CSV 提供交易/帳戶/分類。',
+    'settings_data.export.json': '匯出 JSON（所有帳本）',
+    'settings_data.export.tx_csv': '匯出交易 CSV',
+    'settings_data.export.accounts_csv': '匯出帳戶 CSV',
+    'settings_data.export.categories_csv': '匯出分類 CSV',
+    'settings_data.import.title': '輸入資料',
+    'settings_data.import.json_desc': 'JSON 匯入前會先清空本機資料，再依備份內容完整還原（支援單一或多帳本備份）。',
+    'settings_data.import.csv_desc': 'CSV 匯入可選交易/帳戶/分類。',
+    'settings_data.import.option.tx_csv': '交易 CSV',
+    'settings_data.import.option.accounts_csv': '帳戶 CSV',
+    'settings_data.import.option.categories_csv': '分類 CSV',
+    'settings_data.reset.title': '重設全部資料',
+    'settings_data.reset.desc': '會清除目前裝置上的所有帳本、交易、分類與設定，且無法復原。',
+    'settings_data.reset.confirm_title': '確認重設全部資料',
+    'settings_data.reset.confirm_desc': '此動作不可還原。請再次確認你已完成備份。',
+    'settings_data.reset.processing': '重設中...',
+    'settings_data.reset.confirm_countdown': '確認重設（{count}）',
+    'settings_data.reset.confirm': '確認重設',
+    'settings_data.toast.file_read_failed': '檔案讀取失敗',
+    'settings_data.toast.export_json_done': 'JSON 匯出完成（所有帳本）',
+    'settings_data.toast.export_failed': '匯出失敗',
+    'settings_data.toast.export_csv_done': 'CSV 匯出完成',
+    'settings_data.toast.export_csv_failed': 'CSV 匯出失敗',
+    'settings_data.toast.import_json_done': 'JSON 匯入完成：{ledgerName}',
+    'settings_data.toast.import_json_failed': 'JSON 匯入失敗',
+    'settings_data.toast.import_csv_done': 'CSV 匯入完成：成功 {inserted} / 略過 {skipped}',
+    'settings_data.toast.import_csv_failed': 'CSV 匯入失敗',
+    'settings_data.toast.reset_done': '已重設全部資料',
+    'settings_data.toast.reset_failed': '重設失敗',
+    'personalization.title': '個人化',
+    'personalization.theme_scheme': '主題方案',
+    'personalization.primary_color': '主題主色',
+    'personalization.save_theme': '儲存主題',
+    'personalization.apply_color': '套用顏色',
+    'personalization.theme_saved': '主題已儲存',
+    'personalization.theme_reset': '已還原預設主題',
+    'personalization.language_saved': '語言已切換',
+    'language_page.title': '語言設定',
+    'language_page.current': '目前語言',
+    'language_page.select': '選擇語言',
+    'theme_scheme.morning-dew.name': '晨露青禾',
+    'theme_scheme.morning-dew.description': '淺色模式，青藍與嫩綠的清新風格',
+    'theme_scheme.sunny-harvest.name': '日暖豐收',
+    'theme_scheme.sunny-harvest.description': '淺色模式，溫暖稻穗金與翡翠綠',
+    'theme_scheme.modern-mint.name': '科技森綠',
+    'theme_scheme.modern-mint.description': '淺色模式，極簡留白與清爽藍綠',
+    'theme_scheme.deep-ocean.name': '深海靜謐',
+    'theme_scheme.deep-ocean.description': '科技金融感，青藍主調',
+    'theme_scheme.midnight-forest.name': '森林暗夜',
+    'theme_scheme.midnight-forest.description': '有機成長感，深綠主調',
+    'theme_scheme.charcoal.name': '高級炭灰',
+    'theme_scheme.charcoal.description': '穩定耐看，暖金點綴',
+    'language.zh-TW': '繁體中文',
+    'language.en': 'English',
+    'welcome.step': '步驟',
+    'welcome.title': '歡迎使用 StrawMoneyBook',
+    'welcome.subtitle': '三個步驟完成初始化：選擇語言、建立帳本、建立帳戶。',
+    'welcome.choose_language': '選擇語言',
+    'welcome.create_ledger': '建立帳本',
+    'welcome.ledger_ready': '已建立帳本，可前往下一步建立帳戶。',
+    'welcome.ledger_required': '請先建立第一個帳本。',
+    'welcome.ledger_name': '帳本名稱',
+    'welcome.ledger_name_placeholder': '請輸入帳本名稱',
+    'welcome.creating': '建立中...',
+    'welcome.create_account': '建立帳戶',
+    'welcome.account_ready': '帳戶建立完成，立即開始記帳。',
+    'welcome.account_required': '請新增第一個帳戶。',
+    'welcome.group_name': '群組名稱',
+    'welcome.group_name_placeholder': '例如：現金 / 銀行',
+    'welcome.account_name': '帳戶名稱',
+    'welcome.account_name_placeholder': '例如：錢包',
+    'welcome.account_currency': '帳戶幣別',
+    'welcome.back': '上一步',
+    'welcome.start': '開始使用',
+    'welcome.next': '下一步',
+    'welcome.toast.language_switched': '語言已切換',
+    'welcome.toast.ledger_created': '帳本已建立',
+    'welcome.toast.create_ledger_failed': '建立帳本失敗',
+    'welcome.toast.create_group_failed': '建立群組失敗',
+    'welcome.toast.account_created': '帳戶已新增',
+    'welcome.toast.create_account_failed': '新增帳戶失敗',
+    'feature_list.title': '功能列表',
+    'feature_list.loans': '借貸',
+    'feature_list.reimbursements': '報銷',
+    'feature_list.search_transactions': '搜尋交易',
+    'assets_page.title': '資產',
+    'assets_page.manage': '管理',
+    'assets_page.current_ledger': '目前帳本',
+    'assets_page.summary_title': '資產簡表',
+    'assets_page.disposable': '可支配',
+    'assets_page.liability': '負債',
+    'assets_page.lend': '借出',
+    'assets_page.borrow': '借入',
+    'assets_page.view': '查看',
+    'assets_page.asset_accounts': '資產帳戶',
+    'budgeting.title': '預算',
+    'budgeting.monthly_budget': '月預算',
+    'budgeting.this_month': '本月',
+    'budgeting.month_display': '{year} 年 {month} 月',
+    'budgeting.budget_total': '預算總額',
+    'budgeting.used': '已用',
+    'budgeting.remaining': '剩餘',
+    'budgeting.copy_previous': '複製上月',
+    'budgeting.add_item': '新增項目',
+    'budgeting.items_by_category': '分類預算項目',
+    'budgeting.items_count': '{count} 筆',
+    'budgeting.edit': '編輯',
+    'budgeting.delete': '刪除',
+    'budgeting.empty': '目前尚無預算項目，請新增。',
+    'budgeting.deleted_category': '分類已刪除',
+    'budgeting.confirm_delete': '確定刪除此預算項目？',
+    'budgeting.toast.saved': '預算項目已儲存',
+    'budgeting.toast.save_failed': '儲存失敗',
+    'budgeting.toast.deleted': '預算項目已刪除',
+    'budgeting.toast.delete_failed': '刪除失敗',
+    'budgeting.toast.copy_not_found': '找不到 {fromMonth} 的預算可複製',
+    'budgeting.toast.copied': '已複製 {count} 筆上月預算',
+    'budgeting.toast.copy_failed': '複製失敗',
+    'home_page.current_ledger': '目前帳本',
+    'home_page.range_label': '查看範圍',
+    'home_page.all_transactions': '全部交易',
+    'home_page.quick_add': '+ 快速新增',
+    'home_page.filter.all': '全部',
+    'home_page.filter.year': '年',
+    'home_page.filter.month': '月',
+    'home_page.filter.day': '日',
+    'home_page.toast.load_failed': '載入首頁交易失敗',
+    'home_page.toast.switch_month_failed': '月份切換失敗',
+    'home_page.year_display': '{year} 年',
+    'home_page.current_year': '今年',
+    'home_page.current_day': '今天',
+    'home_page.current_month': '本月',
+    'home_page.month_display': '{year} 年 {month} 月',
+    'home_asset_summary.title_all': '全部收支',
+    'home_asset_summary.title_year': '{year} 年收支',
+    'home_asset_summary.title_day': '{day} 收支',
+    'home_asset_summary.title_month': '{year}/{month} 收支',
+    'home_asset_summary.title_current': '當月收支',
+    'home_tx.title': '交易紀錄',
+    'home_tx.badge_count': '{month} 共 {count} 筆',
+    'home_tx.empty_this_month': '這個月份沒有交易',
+    'home_tx.range_year': '{year} 年',
+    'home_tx.range_current': '當月',
+    'calendar_page.title': '交易日曆',
+    'calendar_page.day_tx': '{date} 交易',
+    'calendar_page.empty_day': '當日沒有交易',
+    'calendar_page.toast.load_failed': '載入日曆交易失敗',
+    'analysis_page.title': '圖表分析',
+    'analysis_page.mode.all': '全部',
+    'analysis_page.mode.year': '年',
+    'analysis_page.mode.month': '月',
+    'analysis_page.type.income': '收入',
+    'analysis_page.type.expense': '支出',
+    'analysis_page.type_analysis': '{type}分析',
+    'analysis_page.type_total': '{type}總額',
+    'analysis_page.items_count': '{count}筆',
+    'analysis_page.no_data_for_type': '目前沒有{type}資料',
+    'analysis_page.uncategorized': '未分類',
+    'analysis_page.toast.load_failed': '載入分析資料失敗',
+    'analysis_category_detail.title': '分類明細',
+    'analysis_category_detail.range': '範圍：{range}',
+    'analysis_category_detail.amount': '{type}金額',
+    'analysis_category_detail.ratio': '占比',
+    'analysis_category_detail.count': '筆數',
+    'analysis_category_detail.records_title': '{range}紀錄',
+    'analysis_category_detail.no_records': '此範圍沒有此分類紀錄',
+    'analysis_category_detail.invalid_query': '缺少分類參數',
+    'analysis_category_detail.toast.load_failed': '載入分類明細失敗',
+    'transaction_search.title': '搜尋交易',
+    'transaction_search.search_placeholder': '搜尋分類、帳戶、備註、金額、日期',
+    'transaction_search.advanced_search': '進階搜尋',
+    'transaction_search.start_date': '起始日期',
+    'transaction_search.end_date': '結束日期',
+    'transaction_search.results_count': '共 {count} 筆',
+    'transaction_search.no_results': '找不到符合條件的交易',
+    'transaction_search.unknown_account': '未知帳戶',
+    'transaction_search.toast.load_failed': '載入交易失敗',
+    'transaction_search.label.reimbursement': '報銷',
+    'transaction_search.label.transfer': '轉帳',
+    'transaction_search.label.adjustment': '調整',
+    'transaction_search.label.income': '收入',
+    'transaction_search.label.expense': '支出',
+    'transaction_search.label.loan_receive_back': '收回',
+    'transaction_search.label.loan_lend': '借出',
+    'transaction_search.label.loan_repay': '歸還',
+    'transaction_search.label.loan_borrow': '借入',
+    'transaction_about.title': '交易詳情',
+    'transaction_about.detail.account': '帳戶',
+    'transaction_about.detail.incoming_account': '轉入帳戶',
+    'transaction_about.detail.category': '分類',
+    'transaction_about.detail.time': '時間',
+    'transaction_about.detail.transaction_type': '交易類型',
+    'transaction_about.edit_transaction': '編輯交易',
+    'transaction_about.related_records': '關聯紀錄',
+    'transaction_about.no_related_records': '沒有關聯紀錄',
+    'transaction_about.not_found': '找不到這筆交易',
+    'transaction_about.relation_prefix.reimbursement_source': '被報銷訂單',
+    'transaction_about.relation_prefix.reimbursement_settled': '報銷入帳紀錄',
+    'transaction_about.relation_prefix.transfer': '轉帳關聯',
+    'transaction_about.relation_prefix.loan': '借貸關聯',
+    'transaction_about.toast.load_failed': '載入交易失敗',
+    'transaction_about.toast.transfer_edit_not_supported': '目前不支援編輯轉帳交易',
+    'transaction_about.type.income': '收入',
+    'transaction_about.type.transfer': '轉帳',
+    'transaction_about.type.adjustment': '調整',
+    'transaction_about.type.expense': '支出',
+    'transaction_about.type.reimbursement': '報銷',
+    'transaction_about.type.loan_receive_back': '收回',
+    'transaction_about.type.loan_lend': '借出',
+    'transaction_about.type.loan_repay': '歸還',
+    'transaction_about.type.loan_borrow': '借入',
+    'icon_picker.title': '選擇 Icon',
+    'icon_picker.select_account_icon': '請選擇帳戶 icon',
+    'icon_picker.select_category_icon': '請選擇分類 icon',
+    'analysis_print.title': '交易報表匯出',
+    'analysis_print.mode.all': '全部',
+    'analysis_print.mode.year': '年',
+    'analysis_print.mode.month': '月',
+    'analysis_print.mode.day': '日',
+    'analysis_print.mode.custom': '自訂',
+    'analysis_print.custom_start_date': '起始日',
+    'analysis_print.custom_end_date': '結束日',
+    'analysis_print.all_hint': '將匯出當前帳本全部交易',
+    'analysis_print.exporting': '匯出中...',
+    'analysis_print.export_csv': '匯出 CSV',
+    'analysis_print.open_link': '打開連結',
+    'analysis_print.download_again': '再次下載',
+    'analysis_print.file_label': '檔案：{filename}',
+    'analysis_print.location_label': '儲存位置：{location}',
+    'analysis_print.fields_title': '匯出欄位',
+    'analysis_print.fields.item_1': '類型、記帳時間、交易帳戶、交易帳本、貨幣符號、交易金額、當期帳戶餘額',
+    'analysis_print.fields.item_2': '一級分類、二級分類、交易標籤、備註',
+    'analysis_print.fields.item_3': '退款&轉銷、收回、歸還、匯率',
+    'analysis_print.device_location_default': '裝置檔案',
+    'analysis_print.toast.no_ledger': '找不到當前帳本',
+    'analysis_print.toast.choose_custom_range': '請選擇自訂起訖日',
+    'analysis_print.toast.invalid_custom_range': '起始日不可晚於結束日',
+    'analysis_print.toast.exported_saved': '已匯出 {count} 筆交易，已存到 {location}',
+    'analysis_print.toast.exported_downloaded': '已匯出 {count} 筆交易（瀏覽器下載）',
+    'analysis_print.toast.export_failed': '匯出失敗',
+  },
+  en: {
+    'common.back': 'Back',
+    'common.cancel': 'Cancel',
+    'common.save': 'Save',
+    'common.reset_default': 'Reset',
+    'common.light': 'Light',
+    'common.dark': 'Dark',
+    'nav.home': 'Home',
+    'nav.analysis': 'Analysis',
+    'nav.assets': 'Assets',
+    'nav.settings': 'Settings',
+    'app.open_menu': 'Open menu',
+    'app.loading': 'Loading data...',
+    'settings.title': 'Settings',
+    'settings.data_management': 'Data Management',
+    'settings.auto_backup': 'Auto Backup',
+    'settings.ledger_management': 'Ledger Management',
+    'settings.category_management': 'Category Management',
+    'settings.addon_templates': 'Addon Templates',
+    'settings.personalization': 'Personalization',
+    'settings.language': 'Language',
+    'settings.membership_benefits': 'Membership Benefits',
+    'settings.about_us': 'About Us',
+    'settings.version_info': 'Version Info',
+    'settings_about.title': 'About Us',
+    'settings_about.subtitle': 'Contact us through the channels below',
+    'settings_about.website': 'Official Website',
+    'settings_about.website_value': 'StrawMoneyBook Official Site',
+    'settings_about.facebook': 'Facebook',
+    'settings_about.facebook_value': 'StrawMoneyBook Facebook Page',
+    'settings_about.email': 'Email',
+    'settings_about.email_value': 'service@strawmb.com',
+    'settings_about.privacy_policy': 'Privacy Policy',
+    'settings_about.privacy_policy_value': 'Read data usage and microphone permission details',
+    'settings_about.open': 'Open',
+    'membership_page.title': 'Membership Benefits',
+    'membership_page.subtitle': 'Compare Free and Member plans, and subscribe via Google Play.',
+    'membership_page.current_plan': 'Current Plan',
+    'membership_page.current_plan.free': 'Free',
+    'membership_page.current_plan.member': 'Member',
+    'membership_page.compare.title': 'Plan Comparison',
+    'membership_page.compare.feature': 'Feature',
+    'membership_page.compare.free': 'Free',
+    'membership_page.compare.member': 'Member',
+    'membership_page.compare.multi_ledger': 'Multi-ledger',
+    'membership_page.compare.ai_daily': 'AI bookkeeping per day',
+    'membership_page.compare.account_limit': 'Accounts',
+    'membership_page.compare.loan_limit': 'Loan records',
+    'membership_page.compare.reimbursement_limit': 'Reimbursement records',
+    'membership_page.compare.free.no': 'Not available',
+    'membership_page.compare.free.ai_daily': '5 times/day',
+    'membership_page.compare.free.account_limit': 'Up to 3',
+    'membership_page.compare.free.loan_limit': 'Up to 5',
+    'membership_page.compare.free.reimbursement_limit': 'Up to 5',
+    'membership_page.compare.member.yes': 'Available',
+    'membership_page.compare.member.unlimited': 'Unlimited',
+    'membership_page.google_play.title': 'Google Play Subscription',
+    'membership_page.google_play.desc': 'Choose a monthly or lifetime plan.',
+    'membership_page.google_play.monthly': '1-Month Member',
+    'membership_page.google_play.monthly_price': '$190',
+    'membership_page.google_play.lifetime': 'Lifetime Member',
+    'membership_page.google_play.lifetime_price': '$390',
+    'membership_page.google_play.loading_prices': 'Loading store prices...',
+    'membership_page.google_play.restore': 'Restore Purchases',
+    'membership_page.google_play.manage': 'Manage Subscription',
+    'membership_page.google_play.redeem_label': 'Promo Code Redeem',
+    'membership_page.google_play.redeem_placeholder': 'Enter Google Play promo code',
+    'membership_page.google_play.redeem_action': 'Redeem',
+    'membership_page.toast.subscribed_monthly': '1-month membership activated',
+    'membership_page.toast.subscribed_lifetime': 'Lifetime membership activated',
+    'membership_page.toast.subscribe_failed': 'Subscription failed',
+    'membership_page.toast.restore_success': 'Purchases restored',
+    'membership_page.toast.restore_failed': 'Failed to restore purchases',
+    'membership_page.toast.manage_failed': 'Unable to open subscription management',
+    'membership_page.toast.billing_not_available': 'Google Play billing is not available on this device',
+    'membership_page.toast.user_canceled': 'Purchase canceled',
+    'membership_page.toast.store_unavailable': 'Google Play Store is temporarily unavailable',
+    'membership_page.toast.product_unavailable': 'This product is currently unavailable',
+    'membership_page.toast.already_owned': 'You already own this plan',
+    'membership_page.toast.redeem_code_required': 'Please enter a Google Play promo code',
+    'membership_page.toast.redeem_opened': 'Google Play redeem page opened',
+    'settings_version.title': 'Version Info',
+    'settings_version.app_version': 'Current Version',
+    'settings_version.developer': 'Developer',
+    'debug_page.title': 'Debug Page',
+    'debug_page.subtitle': 'Membership and Play Store diagnostics',
+    'debug_page.refresh': 'Refresh Diagnostics',
+    'debug_page.key.tier': 'Membership Tier',
+    'debug_page.key.plan': 'Plan',
+    'debug_page.key.active': 'Active',
+    'debug_page.key.source': 'Source',
+    'debug_page.key.reason': 'Reason',
+    'debug_page.key.cache_expires': 'Cache Expires',
+    'debug_page.key.last_sync_at': 'Last Sync At',
+    'debug_page.key.last_sync_status': 'Sync Status',
+    'debug_page.key.play_supported': 'Play Supported',
+    'debug_page.key.play_calls': 'Play Call Trace',
+    'debug_page.play_calls.empty': 'No call records yet',
+    'debug_page.key.play_call_started': 'Started At',
+    'debug_page.key.play_call_ended': 'Ended At',
+    'debug_page.key.play_call_duration': 'Duration',
+    'debug_page.key.play_call_error_code': 'Error Code',
+    'debug_page.key.play_call_error_message': 'Error Message',
+    'debug_page.key.tx_failures': 'Transaction Create Failures',
+    'debug_page.tx_failures.empty': 'No transaction create failures yet',
+    'debug_page.key.tx_failure_time': 'Failed At',
+    'debug_page.key.tx_failure_ledger': 'Ledger ID',
+    'debug_page.key.tx_failure_error_code': 'Error Code',
+    'debug_page.key.tx_failure_error_message': 'Error Message',
+    'settings_ledger_page.title': 'Ledger Management',
+    'settings_ledger_page.add_ledger': 'Add Ledger',
+    'settings_ledger_page.drag_sort': 'Drag to reorder',
+    'settings_ledger_page.dialog_title': 'Add Ledger',
+    'settings_ledger_page.name': 'Ledger Name',
+    'settings_ledger_page.name_placeholder': 'Enter ledger name',
+    'settings_ledger_page.toast.created': 'Ledger created',
+    'settings_ledger_page.toast.save_failed': 'Failed to create ledger',
+    'settings_ledger_detail.title': 'Ledger Detail',
+    'settings_ledger_detail.saving': 'Saving...',
+    'settings_ledger_detail.save_changes': 'Save Changes',
+    'settings_ledger_detail.ledger_name': 'Ledger Name',
+    'settings_ledger_detail.ledger_name_placeholder': 'Enter ledger name',
+    'settings_ledger_detail.processing': 'Processing...',
+    'settings_ledger_detail.delete_ledger': 'Delete Ledger',
+    'settings_ledger_detail.not_found': 'Ledger not found',
+    'settings_ledger_detail.confirm_delete': 'Are you sure you want to delete this ledger? This action cannot be undone.',
+    'settings_ledger_detail.toast.updated': 'Ledger updated',
+    'settings_ledger_detail.toast.update_failed': 'Failed to update ledger',
+    'settings_ledger_detail.toast.deleted': 'Ledger deleted',
+    'settings_ledger_detail.toast.delete_failed': 'Failed to delete ledger',
+    'settings_addon_template.title': 'Addon Templates',
+    'settings_addon_template.description': 'Customize frequent addon items for quick bookkeeping.',
+    'settings_addon_template.item_name_placeholder': 'Addon item name',
+    'settings_addon_template.delete': 'Delete',
+    'settings_addon_template.add_item': 'Add Item',
+    'settings_addon_template.saving': 'Saving...',
+    'settings_addon_template.toast.keep_one': 'Keep at least one addon item',
+    'settings_addon_template.toast.saved': 'Addon templates saved',
+    'settings_data.title': 'Data Management',
+    'settings_data.export.title': 'Export Data',
+    'settings_data.export.desc': 'JSON includes schema_version and all ledgers for full restore. CSV exports transactions/accounts/categories.',
+    'settings_data.export.json': 'Export JSON (All Ledgers)',
+    'settings_data.export.tx_csv': 'Export Transactions CSV',
+    'settings_data.export.accounts_csv': 'Export Accounts CSV',
+    'settings_data.export.categories_csv': 'Export Categories CSV',
+    'settings_data.import.title': 'Import Data',
+    'settings_data.import.json_desc': 'Before JSON import, local data will be cleared, then restored from backup content (supports single or all-ledger backups).',
+    'settings_data.import.csv_desc': 'CSV import supports transactions/accounts/categories.',
+    'settings_data.import.option.tx_csv': 'Transactions CSV',
+    'settings_data.import.option.accounts_csv': 'Accounts CSV',
+    'settings_data.import.option.categories_csv': 'Categories CSV',
+    'settings_data.reset.title': 'Reset All Data',
+    'settings_data.reset.desc': 'This clears all ledgers, transactions, categories, and settings on this device and cannot be undone.',
+    'settings_data.reset.confirm_title': 'Confirm to reset all data',
+    'settings_data.reset.confirm_desc': 'This action cannot be undone. Please confirm again that you have completed the backup.',
+    'settings_data.reset.processing': 'Resetting...',
+    'settings_data.reset.confirm_countdown': 'Confirm Reset ({count})',
+    'settings_data.reset.confirm': 'Confirm Reset',
+    'settings_data.toast.file_read_failed': 'Failed to read file',
+    'settings_data.toast.export_json_done': 'JSON export completed (all ledgers)',
+    'settings_data.toast.export_failed': 'Export failed',
+    'settings_data.toast.export_csv_done': 'CSV export completed',
+    'settings_data.toast.export_csv_failed': 'CSV export failed',
+    'settings_data.toast.import_json_done': 'JSON import completed: {ledgerName}',
+    'settings_data.toast.import_json_failed': 'JSON import failed',
+    'settings_data.toast.import_csv_done': 'CSV import completed: inserted {inserted} / skipped {skipped}',
+    'settings_data.toast.import_csv_failed': 'CSV import failed',
+    'settings_data.toast.reset_done': 'All data reset',
+    'settings_data.toast.reset_failed': 'Reset failed',
+    'personalization.title': 'Personalization',
+    'personalization.theme_scheme': 'Theme Scheme',
+    'personalization.primary_color': 'Theme Primary Color',
+    'personalization.save_theme': 'Save Theme',
+    'personalization.apply_color': 'Apply color',
+    'personalization.theme_saved': 'Theme saved',
+    'personalization.theme_reset': 'Theme reset to default',
+    'personalization.language_saved': 'Language switched',
+    'language_page.title': 'Language',
+    'language_page.current': 'Current language',
+    'language_page.select': 'Select language',
+    'theme_scheme.morning-dew.name': 'Morning Dew',
+    'theme_scheme.morning-dew.description': 'Light mode with fresh teal and spring green',
+    'theme_scheme.sunny-harvest.name': 'Sunny Harvest',
+    'theme_scheme.sunny-harvest.description': 'Light mode with warm gold and emerald accents',
+    'theme_scheme.modern-mint.name': 'Modern Mint',
+    'theme_scheme.modern-mint.description': 'Light mode with minimal spacing and mint blue tones',
+    'theme_scheme.deep-ocean.name': 'Deep Ocean',
+    'theme_scheme.deep-ocean.description': 'Dark mode with a calm, fintech-inspired cyan palette',
+    'theme_scheme.midnight-forest.name': 'Midnight Forest',
+    'theme_scheme.midnight-forest.description': 'Dark mode with organic deep-green contrast',
+    'theme_scheme.charcoal.name': 'Charcoal Luxe',
+    'theme_scheme.charcoal.description': 'Dark mode with warm gold highlights on charcoal',
+    'language.zh-TW': 'Traditional Chinese',
+    'language.en': 'English',
+    'welcome.step': 'Step',
+    'welcome.title': 'Welcome to StrawMoneyBook',
+    'welcome.subtitle': 'Complete setup in 3 steps: language, ledger, and account.',
+    'welcome.choose_language': 'Choose Language',
+    'welcome.create_ledger': 'Create Ledger',
+    'welcome.ledger_ready': 'Ledger is ready. Continue to create your account.',
+    'welcome.ledger_required': 'Create your first ledger to continue.',
+    'welcome.ledger_name': 'Ledger Name',
+    'welcome.ledger_name_placeholder': 'Enter ledger name',
+    'welcome.creating': 'Creating...',
+    'welcome.create_account': 'Create Account',
+    'welcome.account_ready': 'Account ready. You can start bookkeeping now.',
+    'welcome.account_required': 'Create your first account.',
+    'welcome.group_name': 'Group Name',
+    'welcome.group_name_placeholder': 'e.g. Cash / Bank',
+    'welcome.account_name': 'Account Name',
+    'welcome.account_name_placeholder': 'e.g. Wallet',
+    'welcome.account_currency': 'Account Currency',
+    'welcome.back': 'Back',
+    'welcome.start': 'Start',
+    'welcome.next': 'Next',
+    'welcome.toast.language_switched': 'Language switched',
+    'welcome.toast.ledger_created': 'Ledger created',
+    'welcome.toast.create_ledger_failed': 'Failed to create ledger',
+    'welcome.toast.create_group_failed': 'Failed to create group',
+    'welcome.toast.account_created': 'Account created',
+    'welcome.toast.create_account_failed': 'Failed to create account',
+    'feature_list.title': 'Features',
+    'feature_list.loans': 'Loans',
+    'feature_list.reimbursements': 'Reimbursements',
+    'feature_list.search_transactions': 'Search Transactions',
+    'assets_page.title': 'Assets',
+    'assets_page.manage': 'Manage',
+    'assets_page.current_ledger': 'Current Ledger',
+    'assets_page.summary_title': 'Asset Summary',
+    'assets_page.disposable': 'Disposable',
+    'assets_page.liability': 'Liability',
+    'assets_page.lend': 'Lend',
+    'assets_page.borrow': 'Borrow',
+    'assets_page.view': 'View',
+    'assets_page.asset_accounts': 'Asset Accounts',
+    'budgeting.title': 'Budget',
+    'budgeting.monthly_budget': 'Monthly Budget',
+    'budgeting.this_month': 'This Month',
+    'budgeting.month_display': '{year}-{month}',
+    'budgeting.budget_total': 'Budget Total',
+    'budgeting.used': 'Used',
+    'budgeting.remaining': 'Remaining',
+    'budgeting.copy_previous': 'Copy Previous',
+    'budgeting.add_item': 'Add Item',
+    'budgeting.items_by_category': 'Budget Items by Category',
+    'budgeting.items_count': '{count} items',
+    'budgeting.edit': 'Edit',
+    'budgeting.delete': 'Delete',
+    'budgeting.empty': 'No budget items yet. Please add one.',
+    'budgeting.deleted_category': 'Deleted Category',
+    'budgeting.confirm_delete': 'Delete this budget item?',
+    'budgeting.toast.saved': 'Budget item saved',
+    'budgeting.toast.save_failed': 'Save failed',
+    'budgeting.toast.deleted': 'Budget item deleted',
+    'budgeting.toast.delete_failed': 'Delete failed',
+    'budgeting.toast.copy_not_found': 'No budget found in {fromMonth} to copy',
+    'budgeting.toast.copied': 'Copied {count} items from previous month',
+    'budgeting.toast.copy_failed': 'Copy failed',
+    'home_page.current_ledger': 'Current Ledger',
+    'home_page.range_label': 'Range',
+    'home_page.all_transactions': 'All Transactions',
+    'home_page.quick_add': '+ Quick Add',
+    'home_page.filter.all': 'All',
+    'home_page.filter.year': 'Year',
+    'home_page.filter.month': 'Month',
+    'home_page.filter.day': 'Day',
+    'home_page.toast.load_failed': 'Failed to load home transactions',
+    'home_page.toast.switch_month_failed': 'Failed to switch month',
+    'home_page.year_display': '{year}',
+    'home_page.current_year': 'This Year',
+    'home_page.current_day': 'Today',
+    'home_page.current_month': 'This Month',
+    'home_page.month_display': '{year}-{month}',
+    'home_asset_summary.title_all': 'All Income & Expense',
+    'home_asset_summary.title_year': '{year} Income & Expense',
+    'home_asset_summary.title_day': '{day} Income & Expense',
+    'home_asset_summary.title_month': '{year}/{month} Income & Expense',
+    'home_asset_summary.title_current': 'This Month Income & Expense',
+    'home_tx.title': 'Transaction History',
+    'home_tx.badge_count': '{month} {count} transactions',
+    'home_tx.empty_this_month': 'No transactions this month',
+    'home_tx.range_year': '{year}',
+    'home_tx.range_current': 'This Month',
+    'calendar_page.title': 'Transaction Calendar',
+    'calendar_page.day_tx': '{date} Transactions',
+    'calendar_page.empty_day': 'No transactions on this day',
+    'calendar_page.toast.load_failed': 'Failed to load calendar transactions',
+    'analysis_page.title': 'Analysis',
+    'analysis_page.mode.all': 'All',
+    'analysis_page.mode.year': 'Year',
+    'analysis_page.mode.month': 'Month',
+    'analysis_page.type.income': 'Income',
+    'analysis_page.type.expense': 'Expense',
+    'analysis_page.type_analysis': '{type} Analysis',
+    'analysis_page.type_total': '{type} Total',
+    'analysis_page.items_count': '{count} items',
+    'analysis_page.no_data_for_type': 'No {type} data',
+    'analysis_page.uncategorized': 'Uncategorized',
+    'analysis_page.toast.load_failed': 'Failed to load analysis data',
+    'analysis_category_detail.title': 'Category Detail',
+    'analysis_category_detail.range': 'Range: {range}',
+    'analysis_category_detail.amount': '{type} Amount',
+    'analysis_category_detail.ratio': 'Share',
+    'analysis_category_detail.count': 'Count',
+    'analysis_category_detail.records_title': '{range} Records',
+    'analysis_category_detail.no_records': 'No records in this range',
+    'analysis_category_detail.invalid_query': 'Missing category parameter',
+    'analysis_category_detail.toast.load_failed': 'Failed to load category detail',
+    'transaction_search.title': 'Search Transactions',
+    'transaction_search.search_placeholder': 'Search category, account, note, amount, date',
+    'transaction_search.advanced_search': 'Advanced Search',
+    'transaction_search.start_date': 'Start Date',
+    'transaction_search.end_date': 'End Date',
+    'transaction_search.results_count': '{count} results',
+    'transaction_search.no_results': 'No matching transactions',
+    'transaction_search.unknown_account': 'Unknown Account',
+    'transaction_search.toast.load_failed': 'Failed to load transactions',
+    'transaction_search.label.reimbursement': 'Reimbursement',
+    'transaction_search.label.transfer': 'Transfer',
+    'transaction_search.label.adjustment': 'Adjustment',
+    'transaction_search.label.income': 'Income',
+    'transaction_search.label.expense': 'Expense',
+    'transaction_search.label.loan_receive_back': 'Receive Back',
+    'transaction_search.label.loan_lend': 'Lend',
+    'transaction_search.label.loan_repay': 'Repay',
+    'transaction_search.label.loan_borrow': 'Borrow',
+    'transaction_about.title': 'Transaction Detail',
+    'transaction_about.detail.account': 'Account',
+    'transaction_about.detail.incoming_account': 'To Account',
+    'transaction_about.detail.category': 'Category',
+    'transaction_about.detail.time': 'Time',
+    'transaction_about.detail.transaction_type': 'Type',
+    'transaction_about.edit_transaction': 'Edit Transaction',
+    'transaction_about.related_records': 'Related Records',
+    'transaction_about.no_related_records': 'No related records',
+    'transaction_about.not_found': 'Transaction not found',
+    'transaction_about.relation_prefix.reimbursement_source': 'Reimbursed Source',
+    'transaction_about.relation_prefix.reimbursement_settled': 'Reimbursement Settlement',
+    'transaction_about.relation_prefix.transfer': 'Transfer Relation',
+    'transaction_about.relation_prefix.loan': 'Loan Relation',
+    'transaction_about.toast.load_failed': 'Failed to load transactions',
+    'transaction_about.toast.transfer_edit_not_supported': 'Transfer editing is not supported yet',
+    'transaction_about.type.income': 'Income',
+    'transaction_about.type.transfer': 'Transfer',
+    'transaction_about.type.adjustment': 'Adjustment',
+    'transaction_about.type.expense': 'Expense',
+    'transaction_about.type.reimbursement': 'Reimbursement',
+    'transaction_about.type.loan_receive_back': 'Receive Back',
+    'transaction_about.type.loan_lend': 'Lend',
+    'transaction_about.type.loan_repay': 'Repay',
+    'transaction_about.type.loan_borrow': 'Borrow',
+    'icon_picker.title': 'Choose Icon',
+    'icon_picker.select_account_icon': 'Choose an account icon',
+    'icon_picker.select_category_icon': 'Choose a category icon',
+    'analysis_print.title': 'Export Transaction Report',
+    'analysis_print.mode.all': 'All',
+    'analysis_print.mode.year': 'Year',
+    'analysis_print.mode.month': 'Month',
+    'analysis_print.mode.day': 'Day',
+    'analysis_print.mode.custom': 'Custom',
+    'analysis_print.custom_start_date': 'Start Date',
+    'analysis_print.custom_end_date': 'End Date',
+    'analysis_print.all_hint': 'Exports all transactions in the current ledger',
+    'analysis_print.exporting': 'Exporting...',
+    'analysis_print.export_csv': 'Export CSV',
+    'analysis_print.open_link': 'Open Link',
+    'analysis_print.download_again': 'Download Again',
+    'analysis_print.file_label': 'File: {filename}',
+    'analysis_print.location_label': 'Saved to: {location}',
+    'analysis_print.fields_title': 'Export Fields',
+    'analysis_print.fields.item_1': 'Type, Booked At, Account, Ledger, Currency, Amount, Account Balance',
+    'analysis_print.fields.item_2': 'Primary Category, Secondary Category, Tags, Note',
+    'analysis_print.fields.item_3': 'Refund & Write-off, Receive Back, Repay, Exchange Rate',
+    'analysis_print.device_location_default': 'Device Files',
+    'analysis_print.toast.no_ledger': 'Current ledger not found',
+    'analysis_print.toast.choose_custom_range': 'Please select start and end dates for custom range',
+    'analysis_print.toast.invalid_custom_range': 'Start date cannot be later than end date',
+    'analysis_print.toast.exported_saved': 'Exported {count} transactions and saved to {location}',
+    'analysis_print.toast.exported_downloaded': 'Exported {count} transactions (browser download)',
+    'analysis_print.toast.export_failed': 'Export failed',
+  },
+}
+
+const localeRef = ref(DEFAULT_LOCALE)
+
+function normalizeLocale(value) {
+  const raw = String(value ?? '').trim()
+  if (SUPPORTED_LOCALES.includes(raw)) return raw
+  return DEFAULT_LOCALE
+}
+
+function applyDocumentLanguage(locale) {
+  if (typeof document === 'undefined') return
+  document.documentElement.lang = locale
+}
+
+function readLocale() {
+  if (typeof localStorage === 'undefined') return DEFAULT_LOCALE
+  const storedLocale = localStorage.getItem(STORAGE_KEY)
+  if (storedLocale) {
+    return normalizeLocale(storedLocale)
+  }
+
+  const detectedLocale = detectUserLocale()
+  localStorage.setItem(STORAGE_KEY, detectedLocale)
+  return detectedLocale
+}
+
+function writeLocale(locale) {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(STORAGE_KEY, locale)
+}
+
+function detectUserLocale() {
+  if (typeof navigator === 'undefined') return DEFAULT_LOCALE
+
+  const candidates = [
+    navigator.language,
+    ...(Array.isArray(navigator.languages) ? navigator.languages : []),
+  ]
+
+  for (const item of candidates) {
+    const value = String(item ?? '').trim().toLowerCase()
+    if (!value) continue
+    if (value.startsWith('zh')) return 'zh-TW'
+    if (value.startsWith('en')) return 'en'
+  }
+
+  return DEFAULT_LOCALE
+}
+
+export function initLocalePreference() {
+  const locale = readLocale()
+  localeRef.value = locale
+  applyDocumentLanguage(locale)
+  safelyStartRuntimeDomTranslator()
+  return locale
+}
+
+export function setLocale(locale) {
+  const normalized = normalizeLocale(locale)
+  localeRef.value = normalized
+  writeLocale(normalized)
+  applyDocumentLanguage(normalized)
+  safelyStartRuntimeDomTranslator()
+  return normalized
+}
+
+export function getCurrentLocale() {
+  return localeRef.value
+}
+
+export function translateRuntimeText(input) {
+  const text = String(input ?? '')
+  if (!text) return ''
+  if (localeRef.value !== 'en') return text
+
+  if (RUNTIME_EN_EXACT[text]) return RUNTIME_EN_EXACT[text]
+
+  let output = text
+  for (const [zh, en] of runtimeReplacementEntries) {
+    if (!output.includes(zh)) continue
+    output = output.split(zh).join(en)
+  }
+  return output.replace(/\s{2,}/g, ' ').trim()
+}
+
+function translateTextByLocale(text) {
+  if (localeRef.value === 'en') return translateRuntimeText(text)
+  return text
+}
+
+function isInRuntimeTranslateExcludedZone(element) {
+  if (!element || typeof element.closest !== 'function') return false
+  if (element.closest('[data-no-runtime-translate]')) return true
+  if (element.closest('.custom-select')) return true
+  const tagName = String(element.tagName ?? '').toUpperCase()
+  return tagName === 'SELECT' || tagName === 'OPTION'
+}
+
+function shouldSkipTextNode(node) {
+  const parentElement = node?.parentElement
+  const parentTag = parentElement?.tagName
+  if (parentTag === 'SCRIPT' || parentTag === 'STYLE') return true
+  return isInRuntimeTranslateExcludedZone(parentElement)
+}
+
+function shouldRefreshOriginalValue(currentValue, originalValue) {
+  const current = String(currentValue ?? '')
+  const original = String(originalValue ?? '')
+  if (!current) return false
+  if (!original) return true
+  if (current === original) return false
+  if (localeRef.value !== 'en') return true
+  return current !== translateRuntimeText(original)
+}
+
+function processTextNode(node) {
+  if (!node || shouldSkipTextNode(node)) return
+  const current = String(node.textContent ?? '')
+  if (!originalTextByNode.has(node)) {
+    originalTextByNode.set(node, current)
+  } else if (shouldRefreshOriginalValue(current, originalTextByNode.get(node))) {
+    originalTextByNode.set(node, current)
+  }
+  const original = originalTextByNode.get(node)
+  const translated = translateTextByLocale(original)
+  if (current === translated) return
+  node.textContent = translated
+}
+
+function processElementAttributes(element) {
+  if (!element) return
+  if (isInRuntimeTranslateExcludedZone(element)) return
+  if (!originalAttrsByElement.has(element)) {
+    const snapshot = {}
+    for (const name of translatableAttributeNames) {
+      if (!element.hasAttribute(name)) continue
+      snapshot[name] = element.getAttribute(name) ?? ''
+    }
+    originalAttrsByElement.set(element, snapshot)
+  }
+
+  const original = originalAttrsByElement.get(element) ?? {}
+  for (const name of translatableAttributeNames) {
+    if (element.hasAttribute(name) && !(name in original)) {
+      original[name] = element.getAttribute(name) ?? ''
+    }
+    if (!(name in original)) continue
+    const current = element.getAttribute(name) ?? ''
+    if (shouldRefreshOriginalValue(current, original[name])) {
+      original[name] = current
+    }
+    const translated = translateTextByLocale(original[name])
+    if (current === translated) continue
+    element.setAttribute(name, translated)
+  }
+}
+
+function processNodeTree(rootNode) {
+  if (typeof document === 'undefined' || !rootNode) return
+  if (rootNode.nodeType === Node.ELEMENT_NODE && isInRuntimeTranslateExcludedZone(rootNode)) return
+
+  const textWalker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT)
+  let textNode = textWalker.nextNode()
+  while (textNode) {
+    processTextNode(textNode)
+    textNode = textWalker.nextNode()
+  }
+
+  if (rootNode.nodeType === Node.ELEMENT_NODE) {
+    processElementAttributes(rootNode)
+  }
+  if (rootNode.querySelectorAll) {
+    for (const element of rootNode.querySelectorAll('*')) {
+      processElementAttributes(element)
+    }
+  }
+}
+
+function syncRuntimeDomTranslations() {
+  if (typeof document === 'undefined' || !document.body) return
+  isSyncingRuntimeDomTranslations = true
+  try {
+    processNodeTree(document.body)
+  } finally {
+    isSyncingRuntimeDomTranslations = false
+  }
+}
+
+function startRuntimeDomTranslator() {
+  if (typeof document === 'undefined' || domTranslatorObserver || !document.body) return
+  domTranslatorObserver = new MutationObserver((mutations) => {
+    if (isSyncingRuntimeDomTranslations) return
+    isSyncingRuntimeDomTranslations = true
+    try {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          processNodeTree(node)
+        }
+        if (mutation.type === 'characterData') {
+        processTextNode(mutation.target)
+      }
+        if (mutation.type === 'attributes' && mutation.target?.nodeType === Node.ELEMENT_NODE) {
+          processElementAttributes(mutation.target)
+        }
+      }
+    } finally {
+      isSyncingRuntimeDomTranslations = false
+    }
+  })
+  domTranslatorObserver.observe(document.body, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: translatableAttributeNames,
+  })
+}
+
+function safelyStartRuntimeDomTranslator() {
+  if (!ENABLE_RUNTIME_DOM_TRANSLATOR) return
+  if (typeof document === 'undefined') return
+  startRuntimeDomTranslator()
+  syncRuntimeDomTranslations()
+  if (typeof window !== 'undefined') {
+    window.requestAnimationFrame(() => {
+      syncRuntimeDomTranslations()
+    })
+  }
+}
+
+function applyTemplateParams(template, params = {}) {
+  if (!params || typeof params !== 'object') return template
+  let output = String(template ?? '')
+  for (const [name, value] of Object.entries(params)) {
+    const token = `{${name}}`
+    output = output.split(token).join(String(value ?? ''))
+  }
+  return output
+}
+
+export function useI18n() {
+  const locale = computed(() => localeRef.value)
+
+  function t(key, paramsOrFallback = {}, explicitFallback) {
+    const hasParamsObject = paramsOrFallback && typeof paramsOrFallback === 'object' && !Array.isArray(paramsOrFallback)
+    const params = hasParamsObject ? paramsOrFallback : {}
+    const fallback = hasParamsObject ? explicitFallback : paramsOrFallback
+
+    const primary = MESSAGES[localeRef.value]?.[key]
+    const secondary = MESSAGES[DEFAULT_LOCALE]?.[key]
+    const raw = primary ?? secondary ?? (fallback === undefined ? key : fallback)
+    return applyTemplateParams(raw, params)
+  }
+
+  const localeOptions = computed(() =>
+    SUPPORTED_LOCALES.map((item) => ({
+      value: item,
+      label: t(`language.${item}`, item),
+    })),
+  )
+
+  return {
+    locale,
+    localeOptions,
+    t,
+    setLocale,
+  }
+}

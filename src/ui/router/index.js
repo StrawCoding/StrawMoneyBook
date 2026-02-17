@@ -1,0 +1,203 @@
+import { createRouter, createWebHistory } from 'vue-router'
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes: [
+    {
+      name: 'home',
+      path: '/',
+      component: () => import('@/ui/views/home.vue'),
+      meta: { tab: 'home' },
+    },
+    {
+      name: 'budget',
+      path: '/budget',
+      component: () => import('@/ui/views/budgeting.vue'),
+      meta: { tab: 'budget' },
+    },
+    {
+      name: 'analysis',
+      path: '/analysis',
+      component: () => import('@/ui/views/analysis.vue'),
+      meta: { tab: 'analysis' },
+    },
+    {
+      name: 'analysis-print',
+      path: '/analysis/print',
+      component: () => import('@/ui/views/AnalysisPrintPage.vue'),
+      meta: { tab: 'analysis' },
+    },
+    {
+      name: 'analysis-category-detail',
+      path: '/analysis/category',
+      component: () => import('@/ui/views/AnalysisCategoryDetailPage.vue'),
+      meta: { tab: 'analysis' },
+    },
+    {
+      name: 'transaction-search',
+      path: '/transactions/search',
+      component: () => import('@/ui/views/TransactionSearchPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
+      name: 'transaction-calendar',
+      path: '/transactions/calendar',
+      component: () => import('@/ui/views/CalendarPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
+      name: 'transaction-about',
+      path: '/transactions/:id',
+      component: () => import('@/ui/views/TransactionAboutPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
+      name: 'features',
+      path: '/features',
+      component: () => import('@/ui/views/FeatureListPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
+      name: 'ai-auto-bookkeeping',
+      path: '/ai-auto-bookkeeping',
+      component: () => import('@/ui/views/AiAutoBookkeepingPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
+      name: 'assets',
+      path: '/assets',
+      component: () => import('@/ui/views/assets.vue'),
+      meta: { tab: 'assets' },
+    },
+    {
+      name: 'icon-picker',
+      path: '/icons/pick',
+      component: () => import('@/ui/views/IconPickerPage.vue'),
+    },
+    {
+      name: 'settings',
+      path: '/settings',
+      component: () => import('@/ui/views/settings.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/data-management',
+      name: 'settings-data-management',
+      component: () => import('@/ui/views/settings/SettingsDataManagementPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/auto-backup',
+      name: 'settings-auto-backup',
+      component: () => import('@/ui/views/settings/SettingsAutoBackupPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/ledgers',
+      name: 'settings-ledgers',
+      component: () => import('@/ui/views/settings/SettingsLedgerPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/ledgers/:id',
+      name: 'settings-ledger-detail',
+      component: () => import('@/ui/views/settings/SettingsLedgerDetailPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/categories',
+      name: 'settings-categories',
+      component: () => import('@/ui/views/settings/SettingsCategoryPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/categories/:id',
+      name: 'settings-category-detail',
+      component: () => import('@/ui/views/settings/SettingsCategoryDetailPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/category-groups/:id',
+      name: 'settings-category-group-detail',
+      component: () => import('@/ui/views/settings/SettingsCategoryGroupDetailPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/personalization',
+      name: 'settings-personalization',
+      component: () => import('@/ui/views/settings/SettingsPersonalizationPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/language',
+      name: 'settings-language',
+      component: () => import('@/ui/views/settings/SettingsLanguagePage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/addon-templates',
+      name: 'settings-addon-templates',
+      component: () => import('@/ui/views/settings/SettingsAddonTemplatePage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/version-info',
+      name: 'settings-version-info',
+      component: () => import('@/ui/views/settings/SettingsVersionInfoPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/developer-debug',
+      name: 'settings-developer-debug',
+      component: () => import('@/ui/views/settings/SettingsDeveloperDebugPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/membership-benefits',
+      name: 'settings-membership-benefits',
+      component: () => import('@/ui/views/settings/SettingsMembershipBenefitsPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/about',
+      name: 'settings-about',
+      component: () => import('@/ui/views/settings/SettingsAboutPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      name: 'loans',
+      path: '/loans',
+      component: () => import('@/ui/views/loans/LoanListPage.vue'),
+    },
+    {
+      name: 'loan-counterparty-detail',
+      path: '/loans/counterparty',
+      component: () => import('@/ui/views/loans/LoanCounterpartyDetailPage.vue'),
+    },
+    {
+      name: 'reimbursements',
+      path: '/reimbursements',
+      component: () => import('@/ui/views/reimbursements/ReimbursementListPage.vue'),
+    },
+    {
+      name: 'account-detail',
+      path: '/accounts/:id',
+      component: () => import('@/ui/views/accounts/AccountDetailPage.vue'),
+      props: true,
+    },
+    {
+      name: 'asset-account-management',
+      path: '/assets/accounts',
+      component: () => import('@/ui/views/accounts/AssetAccountManagementPage.vue'),
+      meta: { tab: 'assets' },
+    },
+    {
+      name: 'asset-account-group-detail',
+      path: '/assets/account-groups/:id',
+      component: () => import('@/ui/views/accounts/AssetAccountGroupDetailPage.vue'),
+      meta: { tab: 'assets' },
+    },
+  ],
+})
+
+export default router

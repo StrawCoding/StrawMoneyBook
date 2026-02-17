@@ -1,0 +1,24 @@
+{
+  "appId": "com.strawcoding.strawmoneybook",
+  "appName": "StrawMoneyBook",
+  "webDir": "dist",
+  "plugins": {
+    "SocialLogin": {
+      "providers": {
+        "google": true,
+        "facebook": false,
+        "apple": false,
+        "twitter": false
+      },
+      "logLevel": 1
+    },
+    "CapacitorSQLite": {
+      "androidIsEncryption": false,
+      "androidBiometric": {
+        "biometricAuth": false,
+        "biometricTitle": "Biometric login for capacitor sqlite",
+        "biometricSubTitle": "Log in using your biometric"
+      }
+    }
+  }
+}

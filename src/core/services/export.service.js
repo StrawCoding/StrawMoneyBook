@@ -1,0 +1,557 @@
+import { query } from '@/core/db/sqlite'
+import { Capacitor } from '@capacitor/core'
+import { Directory, Filesystem } from '@capacitor/filesystem'
+
+const LEDGER_TABLES = [
+  'account_groups',
+  'accounts',
+  'category_groups',
+  'categories',
+  'transactions',
+  'transaction_attachments',
+  'counterparties',
+  'loans',
+  'loan_payments',
+  'reimbursements',
+  'reimbursement_items',
+  'budgets',
+  'budget_items',
+  'app_settings',
+  'deleted_log',
+]
+
+function toCsvValue(value) {
+  if (value === null || value === undefined) return ''
+  const text = String(value)
+  if (text.includes(',') || text.includes('"') || text.includes('\n')) {
+    return `"${text.replaceAll('"', '""')}"`
+  }
+  return text
+}
+
+function toXmlValue(value) {
+  if (value === null || value === undefined) return ''
+  return String(value)
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u0084\u0086-\u009f]/g, '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;')
+}
+
+function rowsToCsv(rows, explicitHeaders = null) {
+  const headers = Array.isArray(explicitHeaders) && explicitHeaders.length ? explicitHeaders : Object.keys(rows[0] ?? {})
+  if (!headers.length) return ''
+  const lines = [headers.join(',')]
+
+  for (const row of rows) {
+    lines.push(headers.map((header) => toCsvValue(row[header])).join(','))
+  }
+
+  return lines.join('\r\n')
+}
+
+function rowsToSpreadsheetXml(sheetName, headers, rows) {
+  const headerRow = headers
+    .map((header) => `<Cell><Data ss:Type="String">${toXmlValue(header)}</Data></Cell>`)
+    .join('')
+
+  const bodyRows = rows
+    .map((row) => {
+      const cells = headers
+        .map((header) => `<Cell><Data ss:Type="String">${toXmlValue(row[header] ?? '')}</Data></Cell>`)
+        .join('')
+      return `<Row>${cells}</Row>`
+    })
+    .join('')
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+  <Worksheet ss:Name="${toXmlValue(sheetName)}">
+    <Table>
+      <Row>${headerRow}</Row>
+      ${bodyRows}
+    </Table>
+  </Worksheet>
+</Workbook>`
+}
+
+function monthRangeUtc(monthKey) {
+  const [year, month] = String(monthKey ?? '').split('-').map((part) => Number(part))
+  const start = new Date(year, month - 1, 1, 0, 0, 0)
+  const end = new Date(year, month, 1, 0, 0, 0)
+  return { startUtc: start.toISOString(), endUtc: end.toISOString() }
+}
+
+function yearRangeUtc(yearKey) {
+  const year = Number(yearKey)
+  const start = new Date(year, 0, 1, 0, 0, 0)
+  const end = new Date(year + 1, 0, 1, 0, 0, 0)
+  return { startUtc: start.toISOString(), endUtc: end.toISOString() }
+}
+
+function dayRangeUtc(dayKey) {
+  const [year, month, day] = String(dayKey ?? '').split('-').map((part) => Number(part))
+  const start = new Date(year, month - 1, day, 0, 0, 0)
+  const end = new Date(year, month - 1, day + 1, 0, 0, 0)
+  return { startUtc: start.toISOString(), endUtc: end.toISOString() }
+}
+
+function customRangeUtc(startDate, endDate) {
+  const [startY, startM, startD] = String(startDate ?? '').split('-').map((part) => Number(part))
+  const [endY, endM, endD] = String(endDate ?? '').split('-').map((part) => Number(part))
+  const start = new Date(startY, startM - 1, startD, 0, 0, 0)
+  const end = new Date(endY, endM - 1, endD + 1, 0, 0, 0)
+  return { startUtc: start.toISOString(), endUtc: end.toISOString() }
+}
+
+function timestampForFilename(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  const second = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day}_${hour}${minute}${second}`
+}
+
+function rangeByMode(mode, options = {}) {
+  if (mode === 'year') return yearRangeUtc(options.yearKey)
+  if (mode === 'month') return monthRangeUtc(options.monthKey)
+  if (mode === 'day') return dayRangeUtc(options.dayKey)
+  if (mode === 'custom') return customRangeUtc(options.startDate, options.endDate)
+  return { startUtc: null, endUtc: null }
+}
+
+const EXCEL_HEADERS = [
+  '類型',
+  '記帳時間',
+  '交易帳戶',
+  '交易帳本',
+  '貨幣符號',
+  '交易金額',
+  '當期帳戶餘額',
+  '一級分類',
+  '二級分類',
+  '交易標籤',
+  '備註',
+  '退款&轉銷',
+  '收回',
+  '歸還',
+  '匯率',
+]
+
+async function rowsFromLedgerTable(ledgerId, tableName) {
+  const result = await query(`SELECT * FROM ${tableName} WHERE ledger_id = ?;`, [ledgerId])
+  return result?.values ?? []
+}
+
+async function getSchemaVersion() {
+  const schemaResult = await query('SELECT MAX(version) AS version FROM schema_migrations;')
+  return Number(schemaResult?.values?.[0]?.version ?? 0)
+}
+
+async function loadAccountBalanceBeforeMap(ledgerId, startUtc = null) {
+  const withRangeStart = Boolean(startUtc)
+  const sql = withRangeStart
+    ? `SELECT
+         a.id AS account_id,
+         a.opening_balance_minor + COALESCE(SUM(t.amount_minor), 0) AS balance_minor
+       FROM accounts a
+       LEFT JOIN transactions t
+         ON t.ledger_id = a.ledger_id
+        AND t.account_id = a.id
+        AND t.deleted_at IS NULL
+        AND t.occurred_at < ?
+       WHERE a.ledger_id = ?
+       GROUP BY a.id, a.opening_balance_minor;`
+    : `SELECT
+         a.id AS account_id,
+         a.opening_balance_minor AS balance_minor
+       FROM accounts a
+       WHERE a.ledger_id = ?
+       GROUP BY a.id, a.opening_balance_minor;`
+
+  const result = withRangeStart ? await query(sql, [startUtc, ledgerId]) : await query(sql, [ledgerId])
+  const rows = result?.values ?? []
+  const map = new Map()
+  for (const row of rows) {
+    map.set(String(row.account_id), Number(row.balance_minor ?? 0))
+  }
+  return map
+}
+
+export async function exportLedgerJson(ledgerId) {
+  const payload = {
+    schema_version: 0,
+    exported_at: new Date().toISOString(),
+    ledger_id: ledgerId,
+    tables: {},
+  }
+
+  payload.schema_version = await getSchemaVersion()
+
+  const ledgerResult = await query('SELECT * FROM ledgers WHERE id = ?;', [ledgerId])
+  payload.tables.ledgers = ledgerResult?.values ?? []
+
+  for (const table of LEDGER_TABLES) {
+    payload.tables[table] = await rowsFromLedgerTable(ledgerId, table)
+  }
+
+  return payload
+}
+
+export async function exportAllLedgersJson() {
+  const payload = {
+    schema_version: await getSchemaVersion(),
+    exported_at: new Date().toISOString(),
+    backup_scope: 'all_ledgers',
+    ledgers: [],
+  }
+
+  const ledgerResult = await query(
+    'SELECT * FROM ledgers WHERE deleted_at IS NULL ORDER BY sort_order ASC, created_at ASC, id ASC;',
+  )
+  const ledgers = ledgerResult?.values ?? []
+
+  for (const ledgerRow of ledgers) {
+    const ledgerId = ledgerRow?.id
+    if (!ledgerId) continue
+
+    const ledgerPayload = {
+      schema_version: payload.schema_version,
+      exported_at: payload.exported_at,
+      ledger_id: ledgerId,
+      tables: {
+        ledgers: [ledgerRow],
+      },
+    }
+
+    for (const table of LEDGER_TABLES) {
+      ledgerPayload.tables[table] = await rowsFromLedgerTable(ledgerId, table)
+    }
+
+    payload.ledgers.push(ledgerPayload)
+  }
+
+  return payload
+}
+
+export async function exportTransactionsCsv(ledgerId) {
+  const result = await query(
+    `SELECT *
+     FROM transactions
+     WHERE ledger_id = ?
+       AND deleted_at IS NULL
+     ORDER BY occurred_at DESC, created_at DESC;`,
+    [ledgerId],
+  )
+  const rows = result?.values ?? []
+  const headers = rows.length
+    ? Object.keys(rows[0])
+    : [
+        'ledger_id',
+        'id',
+        'type',
+        'transfer_group_id',
+        'account_id',
+        'peer_account_id',
+        'category_id',
+        'amount_minor',
+        'occurred_at',
+        'note',
+        'location',
+        'tags_json',
+        'origin_type',
+        'external_ref_id',
+        'idempotency_key',
+        'is_reimbursable',
+        'reimbursement_state',
+        'reimbursed_at',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+      ]
+  return rowsToCsv(rows, headers)
+}
+
+export async function exportAccountsCsv(ledgerId) {
+  const rows = await rowsFromLedgerTable(ledgerId, 'accounts')
+  return rowsToCsv(rows)
+}
+
+export async function exportCategoriesCsv(ledgerId) {
+  const rows = await rowsFromLedgerTable(ledgerId, 'categories')
+  return rowsToCsv(rows)
+}
+
+export async function exportLedgerTransactionsExcel(ledgerId, options = {}) {
+  const mode = ['all', 'year', 'month', 'day', 'custom'].includes(options.mode) ? options.mode : 'all'
+  const { startUtc, endUtc } = rangeByMode(mode, options)
+  const accountBalanceMap = await loadAccountBalanceBeforeMap(ledgerId, startUtc)
+
+  const values = [ledgerId]
+  let rangeSql = ''
+  if (startUtc && endUtc) {
+    rangeSql = ' AND t.occurred_at >= ? AND t.occurred_at < ?'
+    values.push(startUtc, endUtc)
+  }
+
+  const result = await query(
+    `SELECT
+       t.type,
+       t.account_id,
+       t.occurred_at,
+       t.note,
+       t.origin_type,
+       t.amount_minor,
+       a.name AS account_name,
+       a.currency_code,
+       l.name AS ledger_name,
+       cg.name AS category_group_name,
+       c.name AS category_name
+     FROM transactions t
+     LEFT JOIN accounts a
+       ON a.ledger_id = t.ledger_id
+      AND a.id = t.account_id
+     LEFT JOIN ledgers l
+       ON l.id = t.ledger_id
+     LEFT JOIN categories c
+       ON c.ledger_id = t.ledger_id
+      AND c.id = t.category_id
+     LEFT JOIN category_groups cg
+       ON cg.ledger_id = c.ledger_id
+      AND cg.id = c.group_id
+     WHERE t.ledger_id = ?
+       AND t.deleted_at IS NULL
+       ${rangeSql}
+     ORDER BY t.occurred_at ASC, t.created_at ASC;`,
+    values,
+  )
+
+  const rows = (result?.values ?? []).map((row) => {
+    const amountMajor = Number(row.amount_minor ?? 0) / 100
+    const accountId = String(row.account_id ?? '')
+    const nextBalanceMinor = Number(accountBalanceMap.get(accountId) ?? 0) + Number(row.amount_minor ?? 0)
+    accountBalanceMap.set(accountId, nextBalanceMinor)
+    const accountBalanceMajor = nextBalanceMinor / 100
+    const typeLabel =
+      row.type === 'expense' ? '支出' : row.type === 'income' ? '收入' : row.type === 'transfer' ? '轉帳' : '調整'
+    return {
+      類型: typeLabel,
+      記帳時間: row.occurred_at ?? '',
+      交易帳戶: row.account_name ?? '',
+      交易帳本: row.ledger_name ?? '',
+      貨幣符號: row.currency_code ?? 'TWD',
+      交易金額: String(amountMajor),
+      當期帳戶餘額: String(accountBalanceMajor),
+      一級分類: row.category_group_name ?? '',
+      二級分類: row.category_name ?? '',
+      交易標籤: row.origin_type ?? '',
+      備註: row.note ?? '',
+      '退款&轉銷': '',
+      收回: '',
+      歸還: '',
+      匯率: '1',
+    }
+  })
+
+  const ledgerName = rows[0]?.交易帳本 || 'ledger'
+  const safeLedgerName = String(ledgerName).replace(/[\\/:*?"<>|]/g, '_')
+  const filename = `${safeLedgerName}_transactions_${mode}_${timestampForFilename()}.xml`
+  const xmlText = rowsToSpreadsheetXml('Transactions', EXCEL_HEADERS, rows)
+  return { filename, xmlText, rowCount: rows.length }
+}
+
+export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
+  const mode = ['all', 'year', 'month', 'day', 'custom'].includes(options.mode) ? options.mode : 'all'
+  const { startUtc, endUtc } = rangeByMode(mode, options)
+  const accountBalanceMap = await loadAccountBalanceBeforeMap(ledgerId, startUtc)
+
+  const values = [ledgerId]
+  let rangeSql = ''
+  if (startUtc && endUtc) {
+    rangeSql = ' AND t.occurred_at >= ? AND t.occurred_at < ?'
+    values.push(startUtc, endUtc)
+  }
+
+  const result = await query(
+    `SELECT
+       t.type,
+       t.account_id,
+       t.occurred_at,
+       t.note,
+       t.origin_type,
+       t.amount_minor,
+       a.name AS account_name,
+       a.currency_code,
+       l.name AS ledger_name,
+       cg.name AS category_group_name,
+       c.name AS category_name
+     FROM transactions t
+     LEFT JOIN accounts a
+       ON a.ledger_id = t.ledger_id
+      AND a.id = t.account_id
+     LEFT JOIN ledgers l
+       ON l.id = t.ledger_id
+     LEFT JOIN categories c
+       ON c.ledger_id = t.ledger_id
+      AND c.id = t.category_id
+     LEFT JOIN category_groups cg
+       ON cg.ledger_id = c.ledger_id
+      AND cg.id = c.group_id
+     WHERE t.ledger_id = ?
+       AND t.deleted_at IS NULL
+       ${rangeSql}
+     ORDER BY t.occurred_at ASC, t.created_at ASC;`,
+    values,
+  )
+
+  const rows = (result?.values ?? []).map((row) => {
+    const amountMajor = Number(row.amount_minor ?? 0) / 100
+    const accountId = String(row.account_id ?? '')
+    const nextBalanceMinor = Number(accountBalanceMap.get(accountId) ?? 0) + Number(row.amount_minor ?? 0)
+    accountBalanceMap.set(accountId, nextBalanceMinor)
+    const accountBalanceMajor = nextBalanceMinor / 100
+    const typeLabel =
+      row.type === 'expense' ? '支出' : row.type === 'income' ? '收入' : row.type === 'transfer' ? '轉帳' : '調整'
+    return {
+      類型: typeLabel,
+      記帳時間: row.occurred_at ?? '',
+      交易帳戶: row.account_name ?? '',
+      交易帳本: row.ledger_name ?? '',
+      貨幣符號: row.currency_code ?? 'TWD',
+      交易金額: String(amountMajor),
+      當期帳戶餘額: String(accountBalanceMajor),
+      一級分類: row.category_group_name ?? '',
+      二級分類: row.category_name ?? '',
+      交易標籤: row.origin_type ?? '',
+      備註: row.note ?? '',
+      '退款&轉銷': '',
+      收回: '',
+      歸還: '',
+      匯率: '1',
+    }
+  })
+
+  const ledgerName = rows[0]?.交易帳本 || 'ledger'
+  const safeLedgerName = String(ledgerName).replace(/[\\/:*?"<>|]/g, '_')
+  const filename = `${safeLedgerName}_transactions_${mode}_${timestampForFilename()}.csv`
+  const csvText = rowsToCsv(rows, EXCEL_HEADERS)
+  return { filename, csvText, rowCount: rows.length }
+}
+
+export function downloadJsonFile(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  downloadBlob(filename, blob)
+}
+
+export function downloadCsvFile(filename, csvText) {
+  const blob = new Blob([`\ufeff${csvText}`], { type: 'text/csv;charset=utf-8' })
+  downloadBlob(filename, blob)
+}
+
+export function downloadExcelFile(filename, xmlText) {
+  const blob = new Blob([`\ufeff${xmlText}`], { type: 'application/xml;charset=utf-8' })
+  downloadBlob(filename, blob)
+}
+
+export function createExcelBlobUrl(xmlText) {
+  const blob = new Blob([`\ufeff${xmlText}`], { type: 'application/xml;charset=utf-8' })
+  return URL.createObjectURL(blob)
+}
+
+export function createCsvBlobUrl(csvText) {
+  const blob = new Blob([`\ufeff${csvText}`], { type: 'text/csv;charset=utf-8' })
+  return URL.createObjectURL(blob)
+}
+
+export function revokeBlobUrl(url) {
+  if (!url) return
+  URL.revokeObjectURL(url)
+}
+
+export function triggerDownloadFromUrl(url, filename) {
+  if (!url) return
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+}
+
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob)
+  triggerDownloadFromUrl(url, filename)
+  URL.revokeObjectURL(url)
+}
+
+function utf8ToBase64(text) {
+  const bytes = new TextEncoder().encode(text)
+  const chunkSize = 0x8000
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  }
+  return btoa(binary)
+}
+
+async function writeBase64FileToDevice(filename, dataBase64) {
+  if (!Capacitor.isNativePlatform()) {
+    return { saved: false, reason: 'not-native' }
+  }
+
+  const candidates = [
+    { directory: Directory.ExternalStorage, path: `Download/${filename}`, location: `Download/${filename}` },
+    { directory: Directory.Documents, path: filename, location: `Documents/${filename}` },
+  ].filter((item) => Boolean(item.directory))
+
+  let lastError = null
+
+  for (const candidate of candidates) {
+    try {
+      const result = await Filesystem.writeFile({
+        path: candidate.path,
+        data: dataBase64,
+        directory: candidate.directory,
+        recursive: true,
+      })
+      return {
+        saved: true,
+        uri: result?.uri ?? '',
+        openUrl: result?.uri ? Capacitor.convertFileSrc(result.uri) : '',
+        location: candidate.location,
+      }
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  return {
+    saved: false,
+    reason: lastError?.message ?? 'write-failed',
+  }
+}
+
+export async function saveJsonFileToDevice(filename, data) {
+  const jsonText = JSON.stringify(data, null, 2)
+  const dataBase64 = utf8ToBase64(jsonText)
+  return writeBase64FileToDevice(filename, dataBase64)
+}
+
+export async function saveExcelFileToDevice(filename, xmlText) {
+  const dataBase64 = utf8ToBase64(`\ufeff${xmlText}`)
+  return writeBase64FileToDevice(filename, dataBase64)
+}
+
+export async function saveCsvFileToDevice(filename, csvText) {
+  const dataBase64 = utf8ToBase64(`\ufeff${csvText}`)
+  return writeBase64FileToDevice(filename, dataBase64)
+}

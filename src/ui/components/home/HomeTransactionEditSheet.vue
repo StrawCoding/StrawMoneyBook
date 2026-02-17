@@ -1,0 +1,1189 @@
+<template>
+  <teleport to="body">
+    <transition name="overlay-fade">
+      <section v-if="open" class="sheet-mask" @click.self="$emit('close')">
+        <article class="sheet card">
+          <header class="row">
+            <h3>編輯交易</h3>
+            <button class="btn" @click="$emit('close')">關閉</button>
+          </header>
+
+          <div class="type-grid">
+            <button
+              v-for="item in types"
+              :key="item.value"
+              class="btn"
+              :class="{ primary: model.type === item.value }"
+              @click="model.type = item.value"
+            >
+              {{ item.label }}
+            </button>
+          </div>
+
+          <div class="stack form-wrap">
+            <label>
+              金額（元）
+              <input
+                v-model="model.amountInput"
+                type="text"
+                inputmode="decimal"
+                class="input"
+                @input="handleAmountInput"
+              />
+            </label>
+
+            <div class="date-extra-row">
+              <div class="field-block">
+                <span class="field-label">交易時間</span>
+                <DateTimePickerField
+                  :date="model.occurredDate"
+                  :hour="model.occurredHour"
+                  :minute="model.occurredMinute"
+                  @update:date="model.occurredDate = $event"
+                  @update:hour="model.occurredHour = $event"
+                  @update:minute="model.occurredMinute = $event"
+                />
+              </div>
+
+              <button type="button" class="btn extra-btn" @click="showExtra = true">
+                附加資訊
+              </button>
+            </div>
+
+            <div v-if="showCategory" class="inline-grid">
+              <label>
+                帳戶
+                <CustomSelect v-model="model.accountId" :options="accountStore.accounts" />
+              </label>
+
+              <label>
+                分類
+                <button
+                  type="button"
+                  class="select category-trigger"
+                  :class="{ placeholder: !selectedCategoryLabel }"
+                  :disabled="!hasVisibleCategories"
+                  @click="openCategoryPicker"
+                >
+                  <font-awesome-icon v-if="selectedCategoryIcon" :icon="selectedCategoryIcon" class="category-icon" />
+                  <span class="category-value">{{ selectedCategoryLabel || '請選擇分類' }}</span>
+                  <span class="category-arrow">›</span>
+                </button>
+              </label>
+            </div>
+
+            <div v-else-if="model.type === 'transfer'" class="inline-grid">
+              <label>
+                轉出帳戶
+                <CustomSelect v-model="model.accountId" :options="accountStore.accounts" />
+              </label>
+              <label>
+                轉入帳戶
+                <CustomSelect v-model="model.peerAccountId" :options="accountStore.accounts" />
+              </label>
+            </div>
+
+            <label v-else>
+              帳戶
+              <CustomSelect v-model="model.accountId" :options="accountStore.accounts" />
+            </label>
+
+            <section class="calc-panel">
+              <div class="calc-grid">
+                <button
+                  v-for="key in calcKeys"
+                  :key="key"
+                  type="button"
+                  class="calc-key btn"
+                  :class="{ equal: key === '=' }"
+                  @click="pressCalcKey(key)"
+                >
+                  {{ key }}
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <footer class="row">
+            <button class="btn danger" :disabled="deleting" @click="remove">刪除</button>
+            <div class="footer-actions">
+              <button class="btn" @click="$emit('close')">取消</button>
+              <button class="btn primary" @click="submit">儲存</button>
+            </div>
+          </footer>
+        </article>
+      </section>
+    </transition>
+
+    <transition name="overlay-fade">
+      <section v-if="open && showExtra" class="extra-mask" @click.self="showExtra = false">
+        <article class="extra-sheet card">
+          <header class="row">
+            <h4>附加資訊</h4>
+            <button class="btn" @click="showExtra = false">完成</button>
+          </header>
+
+          <div class="stack extra-content">
+            <div class="addon-wrap">
+              <div class="row">
+                <span class="field-label">附加項目</span>
+                <button type="button" class="btn" @click="addAddonRow">新增項目</button>
+              </div>
+
+              <div v-for="item in addonRows" :key="item.id" class="addon-row">
+                <CustomSelect
+                  v-model="item.optionId"
+                  class="addon-name"
+                  :options="addonOptionsByType"
+                  @update:model-value="onAddonOptionChange(item, $event)"
+                />
+                <CustomSelect v-model="item.direction" class="addon-dir" :options="addonDirectionOptions" />
+                <input
+                  v-model.number="item.amountMajor"
+                  class="input addon-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0"
+                />
+                <button type="button" class="btn danger addon-remove" @click="removeAddonRow(item.id)">
+                  刪除
+                </button>
+              </div>
+
+              <div class="row">
+                <small class="addon-desc">可在設定中的附加項目清單更改</small>
+              </div>
+            </div>
+
+            <label>
+              備註
+              <textarea v-model="model.note" class="textarea" rows="3" />
+            </label>
+
+            <div v-if="model.type !== 'transfer'" class="impact-wrap">
+              <span class="field-label">附加條件</span>
+              <div class="switch-list">
+                <button
+                  v-if="model.type === 'expense'"
+                  type="button"
+                  class="switch-row"
+                  :class="{ active: model.isReimbursable }"
+                  role="switch"
+                  :aria-checked="model.isReimbursable ? 'true' : 'false'"
+                  @click="model.isReimbursable = !model.isReimbursable"
+                >
+                  <span>報銷</span>
+                  <span class="switch-track"><span class="switch-thumb"></span></span>
+                </button>
+                <div class="switch-grid">
+                  <button
+                    type="button"
+                    class="switch-row"
+                    :class="{ active: model.includeInBudget }"
+                    role="switch"
+                    :aria-checked="model.includeInBudget ? 'true' : 'false'"
+                    @click="model.includeInBudget = !model.includeInBudget"
+                  >
+                    <span>紀錄預算</span>
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="switch-row"
+                    :class="{ active: model.includeInAnalysis }"
+                    role="switch"
+                    :aria-checked="model.includeInAnalysis ? 'true' : 'false'"
+                    @click="model.includeInAnalysis = !model.includeInAnalysis"
+                  >
+                    <span>紀錄收支</span>
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+    </transition>
+
+    <transition name="category-overlay">
+      <section v-if="open && showCategoryPicker" class="category-mask" @click.self="closeCategoryPicker">
+        <article class="category-sheet card">
+          <header class="row category-head">
+            <button type="button" class="btn" @click="closeCategoryPicker">返回</button>
+            <h4>選擇分類</h4>
+            <button type="button" class="btn" @click="closeCategoryPicker">完成</button>
+          </header>
+
+          <section v-if="categoryPickerGroups.length" class="category-layout">
+            <aside class="category-pane parent-pane">
+              <button
+                v-for="group in categoryPickerGroups"
+                :key="group.id"
+                type="button"
+                class="category-item"
+                :class="{ active: String(group.id) === String(categoryPickerParentId) }"
+                @click="setCategoryPickerParent(group.id)"
+              >
+                {{ group.name }}
+              </button>
+            </aside>
+
+            <section class="category-pane child-pane">
+              <button
+                v-for="category in categoryPickerChildren"
+                :key="category.id"
+                type="button"
+                class="category-item"
+                :class="{ active: category.id === model.categoryId }"
+                @click="pickCategory(category.id)"
+              >
+                <font-awesome-icon v-if="category.icon" :icon="category.icon" class="category-item-icon" />
+                <span>{{ category.name }}</span>
+              </button>
+              <p v-if="!categoryPickerChildren.length" class="category-empty">此母分類沒有可選子分類</p>
+            </section>
+          </section>
+
+          <p v-else class="category-empty">目前沒有可用分類，請先到設定新增分類。</p>
+          <p class="category-tip">可在設定中的分類管理做新增刪除</p>
+        </article>
+      </section>
+    </transition>
+  </teleport>
+
+  <AppDialog
+    :open="deleteConfirmOpen"
+    title="確認刪除"
+    message="確定要刪除這筆交易？"
+    confirm-text="確認刪除"
+    :loading="deleting"
+    loading-text="處理中..."
+    @close="closeDeleteConfirm"
+    @confirm="confirmRemove"
+  />
+</template>
+
+<script setup>
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import AppDialog from '@/ui/components/common/AppDialog.vue'
+import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
+import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import { useAccountStore } from '@/ui/stores/account.store'
+import { useCategoryStore } from '@/ui/stores/category.store'
+import { useTransactionStore } from '@/ui/stores/transaction.store'
+import { useUiStore } from '@/ui/stores/ui.store'
+import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
+import { addonDeltaMajorFromNote, mergeAddonItemsToNote, parseAddonItemsFromNote } from '@/ui/utils/addon-note'
+
+const props = defineProps({
+  open: {
+    type: Boolean,
+    default: false,
+  },
+  tx: {
+    type: Object,
+    default: null,
+  },
+})
+
+const emit = defineEmits(['close', 'saved'])
+
+const accountStore = useAccountStore()
+const categoryStore = useCategoryStore()
+const transactionStore = useTransactionStore()
+const uiStore = useUiStore()
+const addonTemplateStore = useAddonTemplateStore()
+
+const types = computed(() => {
+  if (props.tx?.type === 'transfer') {
+    return [{ value: 'transfer', label: '轉帳' }]
+  }
+  const base = [
+    { value: 'expense', label: '支出' },
+    { value: 'income', label: '收入' },
+  ]
+  if (props.tx?.type === 'adjustment') {
+    base.push({ value: 'adjustment', label: '調整' })
+  }
+  return base
+})
+
+const model = reactive({
+  type: 'expense',
+  amountMajor: null,
+  amountInput: '',
+  occurredDate: '',
+  occurredHour: 0,
+  occurredMinute: 0,
+  accountId: '',
+  peerAccountId: '',
+  categoryId: '',
+  note: '',
+  isReimbursable: false,
+  includeInBudget: true,
+  includeInAnalysis: true,
+})
+
+const showExtra = ref(false)
+const showCategoryPicker = ref(false)
+const categoryPickerParentId = ref('')
+const addonRows = ref([])
+const deleteConfirmOpen = ref(false)
+const deleting = ref(false)
+let addonSeq = 1
+
+const calcKeys = ['7', '8', '9', '÷', '4', '5', '6', '×', '1', '2', '3', '-', '0', '.', '⌫', '+', 'C', '=']
+const addonDirectionOptions = [
+  { value: 'plus', label: '+' },
+  { value: 'minus', label: '-' },
+]
+const addonOptions = computed(() => addonTemplateStore.templates)
+
+const showCategory = computed(() => model.type === 'expense' || model.type === 'income')
+const visibleCategoryGroups = computed(() => {
+  if (model.type === 'income') return categoryStore.incomeCategoryGroups
+  return categoryStore.expenseCategoryGroups
+})
+const categoryPickerGroups = computed(() => {
+  return (visibleCategoryGroups.value ?? []).filter((group) => Array.isArray(group.categories) && group.categories.length > 0)
+})
+const categoryPickerChildren = computed(() => {
+  const group = categoryPickerGroups.value.find((item) => String(item.id) === String(categoryPickerParentId.value))
+  return group?.categories ?? []
+})
+const hasVisibleCategories = computed(() => categoryPickerGroups.value.length > 0)
+const selectedCategoryLabel = computed(() => {
+  if (!model.categoryId) return ''
+  for (const group of categoryPickerGroups.value) {
+    const matched = group.categories.find((item) => item.id === model.categoryId)
+    if (matched) return `${group.name} / ${matched.name}`
+  }
+  return ''
+})
+const selectedCategoryIcon = computed(() => {
+  if (!model.categoryId) return ''
+  for (const group of categoryPickerGroups.value) {
+    const matched = group.categories.find((item) => item.id === model.categoryId)
+    if (matched?.icon) return matched.icon
+  }
+  return ''
+})
+const addonOptionsByType = computed(() => {
+  return addonOptions.value.map((item) => ({
+    value: item.id,
+    label: item.label,
+  }))
+})
+
+watch(
+  () => [props.open, props.tx],
+  ([open, tx]) => {
+    if (!open || !tx) {
+      showExtra.value = false
+      showCategoryPicker.value = false
+      deleteConfirmOpen.value = false
+      return
+    }
+
+    const occurred = new Date(tx.occurred_at)
+    const isTransfer = tx.type === 'transfer'
+    const isIncome = tx.type === 'income'
+    const isAdjustment = tx.type === 'adjustment'
+
+    model.type = isTransfer ? 'transfer' : isIncome ? 'income' : isAdjustment ? 'adjustment' : 'expense'
+    const parsedAddonRows = parseAddonRowsFromNote(tx.note)
+    const addonDeltaMajor = addonTotalDeltaMajorFromNote(tx.note)
+
+    const rawMajor = Number(tx.amount_minor) / 100
+    const finalMajor = isAdjustment ? rawMajor : Math.abs(rawMajor)
+    let baseMajor = round2(finalMajor - addonDeltaMajor)
+    if (isTransfer && rawMajor > 0) {
+      // Incoming leg stores pure transfer amount (without addon delta).
+      baseMajor = finalMajor
+    }
+    if (!Number.isFinite(baseMajor)) baseMajor = finalMajor
+    if (!isAdjustment) {
+      baseMajor = Math.max(0, baseMajor)
+    }
+    model.amountMajor = baseMajor
+    model.amountInput = formatAmountInput(model.amountMajor)
+    model.occurredDate = toDateInput(occurred)
+    model.occurredHour = occurred.getHours()
+    model.occurredMinute = occurred.getMinutes()
+    model.accountId = tx.account_id ?? accountStore.accounts[0]?.id ?? ''
+    model.peerAccountId = tx.peer_account_id ?? ''
+    model.categoryId = tx.category_id ?? defaultCategoryId(model.type)
+    model.note = tx.note ?? ''
+    model.isReimbursable = Boolean(tx.is_reimbursable) && model.type === 'expense'
+    model.includeInBudget = Boolean(Number(tx.include_in_budget ?? 1))
+    model.includeInAnalysis = Boolean(Number(tx.include_in_analysis ?? 1))
+
+    showExtra.value = false
+    showCategoryPicker.value = false
+    syncCategoryPickerParent(model.categoryId)
+    addonRows.value = parsedAddonRows
+  },
+  { immediate: true },
+)
+
+function onRequestCloseOverlay(event) {
+  if (!props.open) return
+  if (showCategoryPicker.value) {
+    showCategoryPicker.value = false
+    event.preventDefault()
+    return
+  }
+  if (showExtra.value) {
+    showExtra.value = false
+    event.preventDefault()
+    return
+  }
+  emit('close')
+  event.preventDefault()
+}
+
+onMounted(() => {
+  void addonTemplateStore.load()
+  window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
+})
+
+watch(
+  () => model.type,
+  (type) => {
+    if (type === 'transfer') {
+      model.categoryId = ''
+      model.isReimbursable = false
+      showCategoryPicker.value = false
+    } else if (type === 'income') {
+      model.categoryId = ensureInCategories(model.categoryId, categoryStore.incomeCategories)
+      model.isReimbursable = false
+    } else if (type === 'expense') {
+      model.categoryId = ensureInCategories(model.categoryId, categoryStore.expenseCategories)
+    } else {
+      model.categoryId = ''
+      model.isReimbursable = false
+      showCategoryPicker.value = false
+    }
+    syncCategoryPickerParent(model.categoryId)
+  },
+)
+
+watch(
+  () => model.isReimbursable,
+  (next, prev) => {
+    if (next && !prev) {
+      model.includeInBudget = false
+      model.includeInAnalysis = false
+    }
+  },
+)
+
+watch(
+  () => showExtra.value,
+  (open) => {
+    if (!open) return
+    if (!addonRows.value.length) {
+      addonRows.value = [createAddonRow()]
+    }
+  },
+)
+
+watch(
+  () => visibleCategoryGroups.value,
+  () => {
+    syncCategoryPickerParent(model.categoryId)
+  },
+  { deep: true },
+)
+
+function syncCategoryPickerParent(preferredCategoryId = '') {
+  if (!categoryPickerGroups.value.length) {
+    categoryPickerParentId.value = ''
+    return
+  }
+
+  if (preferredCategoryId) {
+    const matchedGroup = categoryPickerGroups.value.find((group) =>
+      group.categories.some((category) => category.id === preferredCategoryId),
+    )
+    if (matchedGroup) {
+      categoryPickerParentId.value = matchedGroup.id
+      return
+    }
+  }
+
+  const hasCurrentParent = categoryPickerGroups.value.some((group) => String(group.id) === String(categoryPickerParentId.value))
+  if (hasCurrentParent) return
+  categoryPickerParentId.value = categoryPickerGroups.value[0]?.id ?? ''
+}
+
+function openCategoryPicker() {
+  if (!hasVisibleCategories.value) {
+    uiStore.pushToast('目前沒有可用分類，請先到設定新增分類', 'error')
+    return
+  }
+  syncCategoryPickerParent(model.categoryId)
+  showCategoryPicker.value = true
+}
+
+function closeCategoryPicker() {
+  showCategoryPicker.value = false
+}
+
+function setCategoryPickerParent(groupId) {
+  categoryPickerParentId.value = groupId
+}
+
+function pickCategory(categoryId) {
+  model.categoryId = categoryId
+  syncCategoryPickerParent(categoryId)
+  showCategoryPicker.value = false
+}
+
+async function submit() {
+  if (!props.tx?.id) return
+
+  const occurredAt = toOccurredAtIso(model.occurredDate, model.occurredHour, model.occurredMinute)
+  if (!occurredAt) {
+    uiStore.pushToast('請選擇有效時間', 'error')
+    return
+  }
+
+  const baseAmountMajor = Number(model.amountMajor ?? 0)
+  const appliedAddonItems = collectAppliedAddonItems()
+  const addonDeltaMajor = appliedAddonItems.reduce((total, item) => {
+    return total + (item.direction === 'plus' ? item.deltaMajor : -item.deltaMajor)
+  }, 0)
+  const baseAmountMinor = Math.round(baseAmountMajor * 100)
+  const sourceExtraMinor = Math.round(addonDeltaMajor * 100)
+  const settledAmountMajor = round2(baseAmountMajor + addonDeltaMajor)
+  const rawAmountMinor = Math.round(settledAmountMajor * 100)
+  const noteWithAddons = mergeAddonItemsToNote(model.note, appliedAddonItems)
+  if (model.type === 'adjustment') {
+    if (!rawAmountMinor) {
+      uiStore.pushToast('調整金額不可為 0', 'error')
+      return
+    }
+  } else if (model.type === 'transfer') {
+    if (baseAmountMinor <= 0) {
+      uiStore.pushToast('請輸入有效金額（主轉帳金額需大於 0）', 'error')
+      return
+    }
+    if (baseAmountMinor + sourceExtraMinor <= 0) {
+      uiStore.pushToast('轉出金額（含附加項目）需大於 0', 'error')
+      return
+    }
+  } else if (rawAmountMinor <= 0) {
+    uiStore.pushToast('請輸入有效金額（含附加項目後需大於 0）', 'error')
+    return
+  }
+
+  try {
+    if (model.type === 'transfer') {
+      if (!model.peerAccountId) {
+        uiStore.pushToast('請選擇轉入帳戶', 'error')
+        return
+      }
+      if (model.accountId === model.peerAccountId) {
+        uiStore.pushToast('轉出與轉入帳戶不可相同', 'error')
+        return
+      }
+    }
+    const payloadAmountMinor =
+      model.type === 'adjustment'
+        ? rawAmountMinor
+        : model.type === 'transfer'
+          ? Math.abs(baseAmountMinor)
+          : Math.abs(rawAmountMinor)
+
+    await transactionStore.updateTransaction(props.tx.id, {
+      type: model.type,
+      amountMinor: payloadAmountMinor,
+      sourceExtraMinor: model.type === 'transfer' ? sourceExtraMinor : 0,
+      occurredAt,
+      accountId: model.accountId,
+      peerAccountId: model.type === 'transfer' ? model.peerAccountId : null,
+      categoryId: model.type === 'adjustment' || model.type === 'transfer' ? null : model.categoryId,
+      note: noteWithAddons,
+      isReimbursable: model.type === 'expense' && model.isReimbursable,
+      includeInBudget: model.includeInBudget,
+      includeInAnalysis: model.includeInAnalysis,
+    })
+
+    uiStore.pushToast('交易已更新')
+    emit('saved')
+    emit('close')
+  } catch (error) {
+    uiStore.pushToast(error.message ?? '更新失敗', 'error')
+  }
+}
+
+function handleAmountInput() {
+  syncAmountFromInput()
+}
+
+async function pressCalcKey(key) {
+  if (key === 'C') {
+    model.amountInput = ''
+    model.amountMajor = null
+    return
+  }
+
+  if (key === '⌫') {
+    model.amountInput = model.amountInput.slice(0, -1)
+    syncAmountFromInput()
+    return
+  }
+
+  if (key === '=') {
+    if (!isFormulaExpression(model.amountInput)) {
+      await submit()
+      return
+    }
+
+    const value = evaluateExpression(model.amountInput)
+    if (Number.isFinite(value)) {
+      model.amountMajor = value
+      model.amountInput = formatAmountInput(value)
+    }
+    return
+  }
+
+  if (isOperator(key)) {
+    const last = model.amountInput.slice(-1)
+    if (!model.amountInput && key !== '-') return
+    if (isOperator(last)) {
+      model.amountInput = `${model.amountInput.slice(0, -1)}${key}`
+    } else {
+      model.amountInput += key
+    }
+  } else {
+    model.amountInput += key
+  }
+
+  syncAmountFromInput()
+}
+
+function syncAmountFromInput() {
+  const value = evaluateExpression(model.amountInput)
+  model.amountMajor = Number.isFinite(value) ? value : null
+}
+
+function isOperator(char) {
+  return ['+', '-', '×', '÷', '*', '/'].includes(char)
+}
+
+function isFormulaExpression(input) {
+  const source = String(input ?? '').trim().replaceAll('×', '*').replaceAll('÷', '/').replace(/\s+/g, '')
+  if (!source) return false
+  let operatorCount = 0
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i]
+    if (!['+', '-', '*', '/'].includes(ch)) continue
+    if (i === 0 && ch === '-') continue
+    operatorCount += 1
+  }
+  return operatorCount > 0
+}
+
+function evaluateExpression(input) {
+  const source = String(input ?? '').trim()
+  if (!source) return null
+  if (!/^[0-9+\-×÷*/.\s]+$/.test(source)) return null
+
+  const normalized = source.replaceAll('×', '*').replaceAll('÷', '/').replace(/\s+/g, '')
+  const tokens = normalized.match(/(\d+(?:\.\d+)?)|[+\-*/]/g)
+  if (!tokens || !tokens.length) return null
+
+  const nums = []
+  const ops = []
+  let expectingNumber = true
+
+  for (const token of tokens) {
+    if (['+', '-', '*', '/'].includes(token)) {
+      if (expectingNumber) {
+        if (token === '-' && nums.length === 0) {
+          nums.push(0)
+        } else {
+          return null
+        }
+      }
+      while (ops.length && precedence(ops.at(-1)) >= precedence(token)) {
+        if (!applyOperator(nums, ops.pop())) return null
+      }
+      ops.push(token)
+      expectingNumber = true
+      continue
+    }
+
+    const num = Number(token)
+    if (!Number.isFinite(num)) return null
+    nums.push(num)
+    expectingNumber = false
+  }
+
+  if (expectingNumber) return null
+  while (ops.length) {
+    if (!applyOperator(nums, ops.pop())) return null
+  }
+
+  const result = nums[0]
+  if (!Number.isFinite(result)) return null
+  return Math.round(result * 100) / 100
+}
+
+function precedence(op) {
+  if (op === '+' || op === '-') return 1
+  if (op === '*' || op === '/') return 2
+  return 0
+}
+
+function applyOperator(nums, op) {
+  if (nums.length < 2) return false
+  const b = nums.pop()
+  const a = nums.pop()
+  if (op === '/' && b === 0) return false
+  const result = op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b
+  if (!Number.isFinite(result)) return false
+  nums.push(result)
+  return true
+}
+
+function remove() {
+  if (!props.tx?.id) return
+  deleteConfirmOpen.value = true
+}
+
+function closeDeleteConfirm() {
+  if (deleting.value) return
+  deleteConfirmOpen.value = false
+}
+
+async function confirmRemove() {
+  if (!props.tx?.id) return
+
+  deleting.value = true
+  try {
+    await transactionStore.deleteTransaction(props.tx.id)
+    uiStore.pushToast('交易已刪除')
+    deleteConfirmOpen.value = false
+    emit('saved')
+    emit('close')
+  } catch (error) {
+    uiStore.pushToast(error.message ?? '刪除失敗', 'error')
+  } finally {
+    deleting.value = false
+  }
+}
+
+function createAddonRow() {
+  const defaultOption = defaultAddonOption()
+  return {
+    id: `addon-${Date.now()}-${addonSeq++}`,
+    optionId: defaultOption.id,
+    direction: defaultOption.defaultDirection,
+    amountMajor: null,
+  }
+}
+
+function defaultAddonOption() {
+  return addonOptions.value[0] ?? { id: 'addon-default', label: '附加項目', defaultDirection: 'plus' }
+}
+
+function addAddonRow() {
+  addonRows.value.push(createAddonRow())
+}
+
+function removeAddonRow(rowId) {
+  addonRows.value = addonRows.value.filter((item) => item.id !== rowId)
+}
+
+function onAddonOptionChange(row, optionId) {
+  if (!row) return
+  row.optionId = optionId
+  const matched = addonOptions.value.find((item) => String(item.id) === String(optionId))
+  if (!matched) return
+  row.direction = matched.defaultDirection === 'minus' ? 'minus' : 'plus'
+}
+
+function collectAppliedAddonItems() {
+  return addonRows.value
+    .map((item) => ({
+      label: addonLabelOf(item.optionId),
+      direction: item.direction === 'minus' ? 'minus' : 'plus',
+      deltaMajor: round2(Math.abs(Number(item.amountMajor ?? 0))),
+    }))
+    .filter((item) => item.deltaMajor > 0)
+}
+
+function addonLabelOf(optionId) {
+  return addonOptions.value.find((item) => item.id === optionId)?.label ?? '附加項目'
+}
+
+function addonOptionIdByLabel(label) {
+  return addonOptions.value.find((item) => item.label === label)?.id ?? defaultAddonOption().id
+}
+
+function addonTotalDeltaMajorFromNote(note) {
+  return addonDeltaMajorFromNote(note)
+}
+
+function parseAddonRowsFromNote(note, options = {}) {
+  const parsedItems = parseAddonItemsFromNote(note)
+  const rows = parsedItems.map((item) => ({
+    id: `addon-${Date.now()}-${addonSeq++}`,
+    optionId: addonOptionIdByLabel(item.label),
+    direction: item.direction === 'minus' ? 'minus' : 'plus',
+    amountMajor: Number(item.deltaMajor),
+  }))
+
+  if (rows.length) return rows
+  if (options.fallbackDefault === false) return []
+  return [createAddonRow()]
+}
+
+function defaultCategoryId(type) {
+  if (type === 'income') return categoryStore.incomeCategories[0]?.id ?? ''
+  if (type === 'expense') return categoryStore.expenseCategories[0]?.id ?? ''
+  return ''
+}
+
+function ensureInCategories(categoryId, categories) {
+  if (!Array.isArray(categories) || !categories.length) return ''
+  if (categories.some((item) => item.id === categoryId)) return categoryId
+  return categories[0]?.id ?? ''
+}
+
+function toDateInput(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatAmountInput(value) {
+  const rounded = Math.round(Number(value) * 100) / 100
+  if (!Number.isFinite(rounded)) return ''
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/\.?0+$/, '')
+}
+
+function round2(value) {
+  return Math.round(Number(value) * 100) / 100
+}
+
+function toOccurredAtIso(dateInput, hourInput, minuteInput) {
+  if (!dateInput) return ''
+  const hour = Number(hourInput)
+  const minute = Number(minuteInput)
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return ''
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return ''
+
+  const local = `${dateInput}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`
+  const parsed = new Date(local)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return parsed.toISOString()
+}
+</script>
+
+<style scoped>.sheet-mask {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-backdrop);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  z-index: 70
+}
+.sheet {
+  width: min(900px, 100vw);
+  border-radius: 18px 18px 0 0;
+  padding: 14px 14px calc(14px + var(--navigation-bar-height))
+}
+h3 {
+  margin: 0
+}
+.type-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px
+}
+.form-wrap {
+  margin-top: 12px
+}
+label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted)
+}
+.field-block {
+  display: grid;
+  gap: 6px;
+  min-width: 0
+}
+.field-label {
+  font-size: 13px;
+  color: var(--muted)
+}
+.calc-panel {
+  margin-top: -2px;
+  margin-bottom: 10px
+}
+.calc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px
+}
+.calc-key {
+  padding: 12px 0;
+  font-size: 16px;
+  font-weight: 700
+}
+.calc-key.equal {
+  grid-column: 3 / span 2
+}
+.inline-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px
+}
+.category-trigger {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left
+}
+.category-icon {
+  width: 14px;
+  color: var(--primary-soft)
+}
+.category-trigger.placeholder {
+  color: var(--muted)
+}
+.category-trigger:disabled {
+  opacity: 0.65;
+  cursor: not-allowed
+}
+.category-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap
+}
+.category-arrow {
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0.8
+}
+.date-extra-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end
+}
+.extra-btn {
+  white-space: nowrap;
+  min-height: 42px;
+  align-self: end;
+  justify-content: center
+}
+footer.row {
+  justify-content: space-between
+}
+.footer-actions {
+  display: flex;
+  gap: 8px
+}
+.danger {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--danger)
+}
+.extra-mask {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-backdrop-soft);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  z-index: 80
+}
+.extra-sheet {
+  width: min(900px, 100vw);
+  border-radius: 18px 18px 0 0;
+  padding: 14px 14px calc(14px + var(--navigation-bar-height))
+}
+.category-mask {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-backdrop-strong);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  z-index: 90
+}
+.category-sheet {
+  width: min(900px, 100vw);
+  height: 100dvh;
+  border-radius: 0;
+  padding: calc(10px + var(--status-bar-height)) 12px calc(12px + var(--navigation-bar-height));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px
+}
+.category-overlay-enter-active, .category-overlay-leave-active {
+  transition: opacity var(--anim-mid) ease
+}
+.category-overlay-enter-from, .category-overlay-leave-to {
+  opacity: 0
+}
+.category-overlay-enter-active .category-sheet, .category-overlay-leave-active .category-sheet {
+  transition:
+    opacity var(--anim-mid) ease,
+    transform var(--anim-mid) var(--anim-spring)
+}
+.category-overlay-enter-from .category-sheet, .category-overlay-leave-to .category-sheet {
+  opacity: 0;
+  transform: translateY(56px)
+}
+.category-head h4 {
+  font-size: 17px
+}
+.category-layout {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(124px, 42%) minmax(0, 1fr);
+  gap: 10px
+}
+.category-pane {
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  background: var(--surface-popover);
+  padding: 6px;
+  overflow: auto
+}
+.parent-pane, .child-pane {
+  display: grid;
+  align-content: start;
+  gap: 6px
+}
+.category-item {
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 10px 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px
+}
+.category-item.active {
+  background: color-mix(in srgb, var(--primary) 26%, transparent);
+  color: var(--primary-soft);
+  font-weight: 700
+}
+.category-item-icon {
+  width: 14px;
+  color: inherit
+}
+.category-empty {
+  margin: 10px 2px 0;
+  color: var(--muted);
+  font-size: 13px
+}
+.category-tip {
+  margin: 0 2px;
+  color: var(--muted);
+  font-size: 12px
+}
+h4 {
+  margin: 0;
+  font-size: 16px
+}
+.extra-content {
+  margin-top: 10px
+}
+.addon-wrap {
+  display: grid;
+  gap: 6px
+}
+.addon-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) 74px minmax(0, 1fr) 68px;
+  gap: 8px;
+  align-items: end
+}
+.addon-name, .addon-dir, .addon-amount {
+  min-width: 0
+}
+.addon-remove {
+  padding: 10px 0
+}
+.addon-desc {
+  color: var(--muted)
+}
+.impact-wrap {
+  display: grid;
+  gap: 6px
+}
+.switch-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px
+}
+.switch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px
+}
+.switch-row {
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  background: var(--surface-soft-accent);
+  color: var(--text-soft);
+  padding: 10px 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px
+}
+.switch-track {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  padding: 2px;
+  display: inline-flex;
+  align-items: center
+}
+.switch-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--surface-highlight);
+  transform: translateX(0);
+  transition: transform var(--anim-fast) ease
+}
+.switch-row.active {
+  border-color: color-mix(in srgb, var(--ok) 64%, var(--primary) 36%);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--ok) 35%, var(--bg) 65%), color-mix(in srgb, var(--ok) 55%, var(--card) 45%));
+  color: var(--text)
+}
+.switch-row.active .switch-track {
+  background: var(--surface-ok-strong)
+}
+.switch-row.active .switch-thumb {
+  transform: translateX(20px)
+}</style>
