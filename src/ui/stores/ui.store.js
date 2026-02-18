@@ -1,5 +1,28 @@
 import { defineStore } from 'pinia'
 import { translateRuntimeText } from '@/ui/services/i18n.service'
+import router from '@/ui/router'
+
+const MEMBERSHIP_BENEFITS_ROUTE_PATH = '/settings/membership-benefits'
+
+function shouldRedirectToMembershipBenefits(message, type) {
+  if (String(type ?? '').trim().toLowerCase() !== 'error') return false
+  const text = String(message ?? '').trim()
+  if (!text) return false
+  return text.startsWith('免費版') || text.includes('MEMBERSHIP_LIMIT_')
+}
+
+function redirectToMembershipBenefitsFromToast() {
+  const currentPath = String(router.currentRoute?.value?.path ?? '')
+  if (currentPath === MEMBERSHIP_BENEFITS_ROUTE_PATH) return
+  void router.push({
+    path: MEMBERSHIP_BENEFITS_ROUTE_PATH,
+    query: {
+      from: 'limit_toast',
+    },
+  }).catch(() => {
+    // Ignore navigation failures to avoid blocking toast rendering.
+  })
+}
 
 export const useUiStore = defineStore('ui', {
   state: () => ({
@@ -9,7 +32,12 @@ export const useUiStore = defineStore('ui', {
   actions: {
     pushToast(message, type = 'info') {
       const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-      this.toasts.push({ id, message: translateRuntimeText(message), type })
+      const translatedMessage = translateRuntimeText(message)
+      this.toasts.push({ id, message: translatedMessage, type })
+
+      if (shouldRedirectToMembershipBenefits(translatedMessage, type)) {
+        redirectToMembershipBenefitsFromToast()
+      }
 
       setTimeout(() => {
         this.removeToast(id)

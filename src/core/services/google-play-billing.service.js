@@ -297,9 +297,6 @@ function isOwnedPurchase(transaction) {
   if (state && state !== 'PURCHASED' && state !== '1') {
     return false
   }
-  if (transaction.isAcknowledged === false) {
-    return false
-  }
   if (typeof transaction.isActive === 'boolean' && transaction.isActive === false) {
     return false
   }
@@ -318,11 +315,41 @@ function isOwnedPurchase(transaction) {
   return true
 }
 
+function getPurchaseProductIdentifiers(purchase) {
+  if (!purchase || typeof purchase !== 'object') return []
+
+  const identifiers = [
+    purchase.productIdentifier,
+    purchase.productId,
+    purchase.sku,
+    purchase.id,
+  ]
+
+  if (Array.isArray(purchase.productIds)) {
+    identifiers.push(...purchase.productIds)
+  }
+  if (Array.isArray(purchase.products)) {
+    identifiers.push(...purchase.products)
+  }
+  if (Array.isArray(purchase.productIdentifiers)) {
+    identifiers.push(...purchase.productIdentifiers)
+  }
+
+  return identifiers
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+}
+
 function findOwnedPurchaseByProductId(purchases, productIdentifier) {
+  const targetIdentifier = String(productIdentifier ?? '').trim()
+  if (!targetIdentifier) return null
+
   return purchases.find((purchase) => {
-    if (!purchase || String(purchase.productIdentifier ?? '').trim() !== productIdentifier) {
+    if (!purchase) {
       return false
     }
+    const identifiers = getPurchaseProductIdentifiers(purchase)
+    if (!identifiers.includes(targetIdentifier)) return false
     return isOwnedPurchase(purchase)
   }) ?? null
 }

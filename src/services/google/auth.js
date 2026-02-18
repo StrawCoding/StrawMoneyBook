@@ -80,9 +80,9 @@ async function loginGoogleWithOptions(options = {}) {
   })
 }
 
-export async function initGoogleAuth(webClientId = getConfiguredWebClientId()) {
+export async function initGoogleAuth() {
   assertNativePlatform()
-  const clientId = String(webClientId ?? '').trim()
+  const clientId = getConfiguredWebClientId()
   if (!clientId) {
     throw new Error('缺少 Google Web Client ID（請設定 VITE_GOOGLE_WEB_CLIENT_ID）')
   }

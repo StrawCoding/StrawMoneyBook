@@ -1,11 +1,10 @@
 <template>
   <section class="stack">
+    <header class="row">
+      <h2>{{ t('personalization.title') }}</h2>
+      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
+    </header>
     <article class="card panel">
-      <header class="row">
-        <h2>{{ t('personalization.title') }}</h2>
-        <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-      </header>
-
       <div class="stack section-block">
         <h3>{{ t('personalization.theme_scheme') }}</h3>
         <div class="scheme-grid">

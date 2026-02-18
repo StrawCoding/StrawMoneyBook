@@ -59,6 +59,10 @@ const playCallTraceListeners = new Set()
 let playCallTraceSeq = 0
 let playCallTraceEntries = []
 let playCallExecutionQueue = Promise.resolve()
+let membershipBenefitsRedirectInFlight = null
+
+const MEMBERSHIP_LIMIT_ERROR_PREFIX = 'MEMBERSHIP_LIMIT_'
+const MEMBERSHIP_BENEFITS_ROUTE_PATH = '/settings/membership-benefits'
 
 /**
  * @typedef {'monthly' | 'lifetime' | ''} MembershipPlan
@@ -660,6 +664,45 @@ function normalizeUsageCount(value) {
   return Math.floor(parsed)
 }
 
+function createMembershipLimitError(message, code = 'GENERAL') {
+  const error = new Error(String(message ?? '').trim() || '已達免費版使用限制')
+  error.code = `${MEMBERSHIP_LIMIT_ERROR_PREFIX}${String(code ?? 'GENERAL').trim().toUpperCase() || 'GENERAL'}`
+  return error
+}
+
+export function isMembershipLimitError(error) {
+  const code = String(error?.code ?? '').trim().toUpperCase()
+  if (code.startsWith(MEMBERSHIP_LIMIT_ERROR_PREFIX)) return true
+  const message = String(error?.message ?? '').trim()
+  return message.startsWith('免費版')
+}
+
+function triggerMembershipBenefitsRedirect(reason = 'limit_reached') {
+  if (typeof window === 'undefined') return
+  if (membershipBenefitsRedirectInFlight) return
+
+  membershipBenefitsRedirectInFlight = Promise.resolve()
+    .then(async () => {
+      const routerModule = await import('@/ui/router')
+      const router = routerModule?.default
+      if (!router) return
+      const currentPath = String(router.currentRoute?.value?.path ?? '')
+      if (currentPath === MEMBERSHIP_BENEFITS_ROUTE_PATH) return
+      await router.push({
+        path: MEMBERSHIP_BENEFITS_ROUTE_PATH,
+        query: {
+          from: String(reason ?? 'limit_reached'),
+        },
+      })
+    })
+    .catch(() => {
+      // Ignore routing failures to avoid blocking business flow.
+    })
+    .finally(() => {
+      membershipBenefitsRedirectInFlight = null
+    })
+}
+
 function isTransientStoreError(error) {
   const code = String(error?.code ?? '').trim().toUpperCase()
   if (code === 'STORE_UNAVAILABLE') return true
@@ -1034,7 +1077,9 @@ export function assertCanCreateLedger(existingLedgerCount) {
   const count = normalizeUsageCount(existingLedgerCount)
   const { maxLedgers } = getMembershipLimits()
   if (count >= maxLedgers) {
-    throw new Error('免費版最多可建立 1 個帳本')
+    const error = createMembershipLimitError('免費版最多可建立 1 個帳本', 'LEDGER_CREATE')
+    triggerMembershipBenefitsRedirect('ledger_create')
+    throw error
   }
 }
 
@@ -1042,7 +1087,9 @@ export function assertCanCreateAccount(existingAccountCount) {
   const count = normalizeUsageCount(existingAccountCount)
   const { maxAccounts } = getMembershipLimits()
   if (count >= maxAccounts) {
-    throw new Error('免費版帳戶最多 3 個')
+    const error = createMembershipLimitError('免費版帳戶最多 3 個', 'ACCOUNT_CREATE')
+    triggerMembershipBenefitsRedirect('account_create')
+    throw error
   }
 }
 
@@ -1050,7 +1097,9 @@ export function assertCanCreateLoan(existingLoanCount) {
   const count = normalizeUsageCount(existingLoanCount)
   const { maxLoans } = getMembershipLimits()
   if (count >= maxLoans) {
-    throw new Error('免費版借貸最多 5 筆')
+    const error = createMembershipLimitError('免費版借貸最多 5 筆', 'LOAN_CREATE')
+    triggerMembershipBenefitsRedirect('loan_create')
+    throw error
   }
 }
 
@@ -1058,7 +1107,9 @@ export function assertCanCreateReimbursement(existingReimbursementCount) {
   const count = normalizeUsageCount(existingReimbursementCount)
   const { maxReimbursements } = getMembershipLimits()
   if (count >= maxReimbursements) {
-    throw new Error('免費版報銷最多 5 筆')
+    const error = createMembershipLimitError('免費版報銷最多 5 筆', 'REIMBURSEMENT_CREATE')
+    triggerMembershipBenefitsRedirect('reimbursement_create')
+    throw error
   }
 }
 
@@ -1088,7 +1139,9 @@ export function getAiBookkeepingDailyUsage(now = new Date()) {
 export function assertCanUseAiBookkeeping(now = new Date()) {
   const usage = getAiBookkeepingDailyUsage(now)
   if (usage.used >= usage.limit) {
-    throw new Error('免費版 AI 記帳每日最多 5 次')
+    const error = createMembershipLimitError('免費版 AI 記帳每日最多 5 次', 'AI_BOOKKEEPING_DAILY')
+    triggerMembershipBenefitsRedirect('ai_bookkeeping_daily')
+    throw error
   }
 }
 

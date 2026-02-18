@@ -8,7 +8,7 @@
         </header>
 
         <div class="row action-row">
-          <button class="btn primary" :disabled="!canCreateLedger" @click="createLedger">{{ t('settings_ledger_page.add_ledger') }}</button>
+          <button class="btn primary" @click="createLedger">{{ t('settings_ledger_page.add_ledger') }}</button>
         </div>
         <small v-if="showFreeLimitHint" class="muted limit-tip">免費版最多可建立 1 個帳本</small>
 
@@ -89,6 +89,10 @@ watch(
 )
 
 async function createLedger() {
+  if (!canCreateLedger.value) {
+    uiStore.pushToast('免費版最多可建立 1 個帳本', 'error')
+    return
+  }
   dialogMode.value = 'create'
   ledgerNameInput.value = ''
 }

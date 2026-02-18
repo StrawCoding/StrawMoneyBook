@@ -1,6 +1,12 @@
 const STORAGE_KEY = 'strawmoneybook.theme.preference'
 const LEGACY_PRIMARY_KEY = 'strawmoneybook.theme.primary'
 const DEFAULT_SCHEME_ID = 'charcoal'
+const FONT_SCALE_MIN = 0.9
+const FONT_SCALE_MAX = 1.2
+const FONT_SCALE_STEP = 0.01
+const FONT_SCALE_DEFAULT = 1
+const FONT_SCALE_AUTO_SHRINK_STEP = 0.02
+const FONT_SCALE_AUTO_SHRINK_MAX_STEPS = 8
 
 const THEME_SCHEMES = {
   'morning-dew': {
@@ -155,6 +161,57 @@ const THEME_SCHEMES = {
   },
 }
 
+function normalizeFontScale(input) {
+  const value = Number(input)
+  if (!Number.isFinite(value)) return FONT_SCALE_DEFAULT
+  const clamped = Math.max(FONT_SCALE_MIN, Math.min(FONT_SCALE_MAX, value))
+  return Math.round(clamped / FONT_SCALE_STEP) * FONT_SCALE_STEP
+}
+
+function getDocumentLanguage() {
+  if (typeof document === 'undefined') return ''
+  return String(document.documentElement.lang ?? '').trim().toLowerCase()
+}
+
+function isCjkLanguage() {
+  const lang = getDocumentLanguage() || String(globalThis?.navigator?.language ?? '').trim().toLowerCase()
+  return lang.startsWith('zh') || lang.startsWith('ja') || lang.startsWith('ko')
+}
+
+function hasHorizontalLayoutOverflow() {
+  if (typeof document === 'undefined') return false
+  const root = document.documentElement
+  if (!root) return false
+  const overflowFromRoot = root.scrollWidth - root.clientWidth
+  if (overflowFromRoot > 1) return true
+  const appShell = document.querySelector('.app-shell')
+  if (appShell && appShell.scrollWidth - appShell.clientWidth > 1) return true
+  return false
+}
+
+function applyFontScaleInternal(fontScale) {
+  if (typeof document === 'undefined') return normalizeFontScale(fontScale)
+
+  const requestedScale = normalizeFontScale(fontScale)
+  const root = document.documentElement
+  root.style.setProperty('--font-scale', String(requestedScale))
+
+  let effectiveScale = requestedScale
+  if (isCjkLanguage() && requestedScale > FONT_SCALE_DEFAULT) {
+    root.style.setProperty('--font-scale-effective', String(effectiveScale))
+    for (let i = 0; i < FONT_SCALE_AUTO_SHRINK_MAX_STEPS; i += 1) {
+      if (!hasHorizontalLayoutOverflow()) break
+      effectiveScale = normalizeFontScale(effectiveScale - FONT_SCALE_AUTO_SHRINK_STEP)
+      root.style.setProperty('--font-scale-effective', String(effectiveScale))
+      if (effectiveScale <= FONT_SCALE_DEFAULT) break
+    }
+  }
+
+  root.style.setProperty('--font-scale-effective', String(effectiveScale))
+  root.dataset.fontScaleEffective = String(effectiveScale)
+  return requestedScale
+}
+
 function normalizeHex(input) {
   const raw = String(input ?? '').trim()
   const hex = raw.startsWith('#') ? raw.slice(1) : raw
@@ -257,6 +314,7 @@ function readPreference() {
         return {
           schemeId: getScheme(parsed.schemeId)?.id ?? DEFAULT_SCHEME_ID,
           primaryOverride: normalizeHex(parsed.primaryOverride),
+          fontScale: normalizeFontScale(parsed.fontScale),
         }
       }
     } catch {
@@ -268,6 +326,7 @@ function readPreference() {
   return {
     schemeId: DEFAULT_SCHEME_ID,
     primaryOverride: legacy,
+    fontScale: FONT_SCALE_DEFAULT,
   }
 }
 
@@ -277,6 +336,7 @@ function writePreference(preference) {
     JSON.stringify({
       schemeId: preference.schemeId,
       primaryOverride: preference.primaryOverride ?? null,
+      fontScale: normalizeFontScale(preference.fontScale),
     }),
   )
 }
@@ -285,10 +345,12 @@ function applyPreference(preference) {
   const scheme = getScheme(preference?.schemeId)
   applyPalette(scheme.palette)
   const primary = applyPrimary(preference?.primaryOverride ?? scheme.palette.primary)
+  const fontScale = applyFontScaleInternal(preference?.fontScale)
   return {
     schemeId: scheme.id,
     primary,
     schemePrimary: scheme.palette.primary,
+    fontScale,
   }
 }
 
@@ -313,6 +375,7 @@ export function getCurrentThemePreference() {
     schemeId: scheme.id,
     primary: preference.primaryOverride ?? scheme.palette.primary,
     schemePrimary: scheme.palette.primary,
+    fontScale: normalizeFontScale(preference.fontScale),
   }
 }
 
@@ -324,9 +387,11 @@ export function applyThemeScheme(schemeId) {
 }
 
 export function saveThemeScheme(schemeId) {
+  const current = readPreference()
   const preference = {
     schemeId: getScheme(schemeId).id,
     primaryOverride: null,
+    fontScale: normalizeFontScale(current.fontScale),
   }
   const applied = applyPreference(preference)
   writePreference(preference)
@@ -349,11 +414,18 @@ export function saveThemeColor(primaryHex) {
 }
 
 export function resetThemeColor() {
+  const current = readPreference()
   localStorage.removeItem(STORAGE_KEY)
   localStorage.removeItem(LEGACY_PRIMARY_KEY)
   const applied = applyPreference({
     schemeId: DEFAULT_SCHEME_ID,
     primaryOverride: null,
+    fontScale: normalizeFontScale(current.fontScale),
+  })
+  writePreference({
+    schemeId: DEFAULT_SCHEME_ID,
+    primaryOverride: null,
+    fontScale: normalizeFontScale(current.fontScale),
   })
   return applied.primary
 }
@@ -361,6 +433,22 @@ export function resetThemeColor() {
 export function loadThemeColor() {
   const applied = applyPreference(readPreference())
   return applied.primary
+}
+
+export function applyFontScale(fontScale) {
+  return applyFontScaleInternal(fontScale)
+}
+
+export function saveFontScale(fontScale) {
+  const preference = readPreference()
+  preference.fontScale = normalizeFontScale(fontScale)
+  const applied = applyPreference(preference)
+  writePreference(preference)
+  return applied.fontScale
+}
+
+export function getDefaultFontScale() {
+  return FONT_SCALE_DEFAULT
 }
 
 export function getDefaultThemeColor() {

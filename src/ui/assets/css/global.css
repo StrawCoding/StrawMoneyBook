@@ -78,6 +78,8 @@
   --navigation-bar-height: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
   --safe-area-right: env(safe-area-inset-right, 0px);
+  --font-scale: 1;
+  --font-scale-effective: 1;
 }
 
 * {
@@ -95,6 +97,10 @@ body,
   color: var(--text);
   font-family: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
   -webkit-touch-callout: default;
+}
+
+html {
+  font-size: calc(16px * var(--font-scale-effective));
 }
 
 button,
