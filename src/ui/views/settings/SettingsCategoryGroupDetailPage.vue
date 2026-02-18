@@ -15,10 +15,6 @@
 
       <div class="detail-grid">
         <div class="detail-row">
-          <small class="muted">類型</small>
-          <span>{{ kindLabel }}</span>
-        </div>
-        <div class="detail-row">
           <small class="muted">目前排序</small>
           <span>{{ currentOrder }}</span>
         </div>
@@ -82,7 +78,6 @@ const currentOrder = computed(() => {
   return index >= 0 ? index + 1 : 1
 })
 
-const kindLabel = computed(() => (groupKind.value === 'income' ? '收入' : '支出'))
 const backLink = computed(() => `/settings/categories?activeKind=${groupKind.value}`)
 
 const parsedOrderInput = computed(() => {

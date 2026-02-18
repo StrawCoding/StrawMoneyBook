@@ -29,21 +29,26 @@
         </div>
       </div>
 
-      <label>
+      <label class="color-field">
         {{ t('personalization.primary_color') }}
-        <input v-model="primary" class="color-input" type="color" @input="applyColor" />
       </label>
 
-      <div class="preset-wrap">
+      <div class="palette-wrap">
         <button
-          v-for="color in presets"
+          v-for="color in paletteColors"
           :key="color"
-          class="preset-btn"
+          class="palette-btn"
+          :class="{ active: normalizeHex(primary) === normalizeHex(color) }"
           :style="{ background: color }"
           :aria-label="`${t('personalization.apply_color')} ${color}`"
-          @click="pickPreset(color)"
+          @click="pickPaletteColor(color)"
         ></button>
       </div>
+
+      <label class="color-field">
+        {{ t('personalization.apply_color') }}
+        <input v-model="primary" class="color-input" type="color" @input="applyColor" />
+      </label>
 
       <div class="row action-row">
         <button class="btn primary" @click="saveTheme">{{ t('personalization.save_theme') }}</button>
@@ -74,7 +79,7 @@ const schemes = listThemeSchemes()
 const initialTheme = getCurrentThemePreference()
 const primary = ref(initialTheme.primary)
 const selectedSchemeId = ref(initialTheme.schemeId)
-const presets = ['#14b8a6', '#84cc16', '#fbbf24', '#0ea5e9', '#22c55e', '#ffc107', '#3498db', '#e74c3c']
+const paletteColors = buildPaletteColors()
 
 function applyColor() {
   primary.value = applyThemeColor(primary.value)
@@ -86,7 +91,7 @@ function pickScheme(schemeId) {
   primary.value = applied.primary
 }
 
-function pickPreset(color) {
+function pickPaletteColor(color) {
   primary.value = color
   applyColor()
 }
@@ -128,6 +133,57 @@ function normalizeHex(value) {
   return raw.startsWith('#') ? raw : `#${raw}`
 }
 
+function buildPaletteColors() {
+  const colors = []
+  const saturations = [70, 82]
+  const lights = [42, 52, 62]
+
+  for (let hue = 0; hue < 360; hue += 24) {
+    for (const saturation of saturations) {
+      for (const light of lights) {
+        colors.push(hslToHex(hue, saturation, light))
+      }
+    }
+  }
+  return colors
+}
+
+function hslToHex(h, s, l) {
+  const saturation = s / 100
+  const lightness = l / 100
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation
+  const segment = h / 60
+  const x = chroma * (1 - Math.abs((segment % 2) - 1))
+
+  let red = 0
+  let green = 0
+  let blue = 0
+
+  if (segment >= 0 && segment < 1) {
+    red = chroma
+    green = x
+  } else if (segment < 2) {
+    red = x
+    green = chroma
+  } else if (segment < 3) {
+    green = chroma
+    blue = x
+  } else if (segment < 4) {
+    green = x
+    blue = chroma
+  } else if (segment < 5) {
+    red = x
+    blue = chroma
+  } else {
+    red = chroma
+    blue = x
+  }
+
+  const m = lightness - chroma / 2
+  const toHex = (value) => Math.round((value + m) * 255).toString(16).padStart(2, '0')
+  return `#${toHex(red)}${toHex(green)}${toHex(blue)}`
+}
+
 function schemeName(scheme) {
   return t(`theme_scheme.${scheme.id}.name`, scheme.name)
 }
@@ -153,6 +209,9 @@ label {
   gap: 8px;
   color: var(--muted);
   font-size: 13px
+}
+.color-field {
+  margin-top: 2px;
 }
 .section-block {
   gap: 10px
@@ -217,16 +276,22 @@ label {
   background: var(--input-bg);
   padding: 6px
 }
-.preset-wrap {
+.palette-wrap {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 8px
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 6px
 }
-.preset-btn {
+.palette-btn {
   border: 2px solid color-mix(in srgb, var(--text) 18%, transparent);
-  border-radius: 10px;
-  height: 28px;
+  border-radius: 999px;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  padding: 0;
   cursor: pointer
+}
+.palette-btn.active {
+  border-color: var(--text);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 30%, transparent);
 }
 .action-row {
   margin-top: 4px
@@ -234,5 +299,8 @@ label {
 @media (max-width: 640px) {
   .scheme-grid {
     grid-template-columns: 1fr
+  }
+  .palette-wrap {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
   }
 }</style>

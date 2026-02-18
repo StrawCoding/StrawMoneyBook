@@ -327,6 +327,45 @@ function pickCategoryMatch(text, categories) {
   return best?.category ?? null
 }
 
+const MEAL_CATEGORY_PRIORITIES = [
+  { key: '早餐', triggers: [/早餐|早午餐|brunch|breakfast/i], aliases: ['早餐', '早午餐', 'brunch', 'breakfast'] },
+  { key: '午餐', triggers: [/午餐|中餐|便當|lunch/i], aliases: ['午餐', '中餐', '便當', 'lunch'] },
+  { key: '晚餐', triggers: [/晚餐|晚飯|晚餐宵夜|dinner|supper/i], aliases: ['晚餐', '晚飯', '晚餐宵夜', 'dinner', 'supper'] },
+  { key: '宵夜', triggers: [/宵夜|夜食|midnight snack|late night/i], aliases: ['宵夜', '夜食', 'midnight snack', 'late night'] },
+]
+
+function pickMealTimeCategory(text, categories) {
+  const matchedMeal = MEAL_CATEGORY_PRIORITIES.find((meal) => includesAny(text, meal.triggers))
+  if (!matchedMeal) return null
+
+  let best = null
+  for (const category of categories ?? []) {
+    const name = String(category?.name ?? '').trim()
+    if (!name) continue
+
+    const normalizedName = name.toLowerCase()
+    let score = 0
+    if (normalizedName === matchedMeal.key) {
+      score += 400
+    }
+    for (const alias of matchedMeal.aliases) {
+      const normalizedAlias = String(alias).toLowerCase()
+      if (!normalizedAlias) continue
+      if (normalizedName === normalizedAlias) {
+        score += 320
+      } else if (normalizedName.includes(normalizedAlias)) {
+        score += 200
+      }
+    }
+
+    if (!score) continue
+    if (!best || score > best.score) {
+      best = { category, score }
+    }
+  }
+  return best?.category ?? null
+}
+
 const EXPENSE_CATEGORY_SEMANTIC_RULES = [
   { triggers: [/早餐|午餐|晚餐|宵夜|便當|餐廳|咖啡|飲料|手搖|點心|foodpanda|ubereats|uber eats/i], hints: ['早餐', '午餐', '晚餐', '餐飲', '飲食', '餐費', '便當', '餐', '食', '飲', '伙食', '咖啡', 'food', 'meal'] },
   { triggers: [/捷運|高鐵|台鐵|公車|計程車|uber|停車|加油|車票|交通/i], hints: ['交通', '運輸', '通勤', '停車', '油'] },
@@ -521,6 +560,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
 
   const matchedExpenseCategory = pickCategoryMatch(text, expenseCategories)
   const matchedIncomeCategory = pickCategoryMatch(text, incomeCategories)
+  const mealExpenseCategory = pickMealTimeCategory(text, expenseCategories)
   const semanticExpenseCategory = pickCategoryBySemanticRules(text, expenseCategories, EXPENSE_CATEGORY_SEMANTIC_RULES)
   const semanticIncomeCategory = pickCategoryBySemanticRules(text, incomeCategories, INCOME_CATEGORY_SEMANTIC_RULES)
 
@@ -562,6 +602,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
       selectedCategoryName = String(selectedIncomeCategory?.name ?? '')
     } else {
       const selectedExpenseCategory =
+        mealExpenseCategory ??
         semanticExpenseCategory ??
         matchedExpenseCategory ??
         pickFirstNonGenericCategory(expenseCategories) ??

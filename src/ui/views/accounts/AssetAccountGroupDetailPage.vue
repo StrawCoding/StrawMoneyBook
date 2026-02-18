@@ -8,16 +8,12 @@
     <article v-if="group" class="card panel">
       <header class="row">
         <h3>{{ group.name }}</h3>
-        <button class="btn primary" :disabled="!canSave || saving" @click="saveOrder">
-          {{ saving ? '儲存中...' : '儲存排序' }}
+        <button class="btn primary" :disabled="!canSave || saving" @click="saveGroupProfile">
+          {{ saving ? '儲存中...' : '儲存變更' }}
         </button>
       </header>
 
       <div class="detail-grid">
-        <div class="detail-row">
-          <small class="muted">類型</small>
-          <span>{{ groupTypeLabel }}</span>
-        </div>
         <div class="detail-row">
           <small class="muted">目前排序</small>
           <span>{{ currentOrder }}</span>
@@ -25,9 +21,15 @@
       </div>
 
       <label class="field">
+        群組名稱
+        <input v-model="nameInput" class="input" type="text" maxlength="40" placeholder="請輸入群組名稱" />
+      </label>
+
+      <label class="field">
         排序數字（1 開始）
         <input v-model="orderInput" class="input" type="number" min="1" step="1" />
       </label>
+      <p v-if="nameInvalid" class="error-text">群組名稱不可為空</p>
       <p v-if="orderInvalid" class="error-text">排序數字需為大於 0 的整數</p>
 
       <div class="row action-row">
@@ -71,6 +73,7 @@ const { t } = useI18n()
 const saving = ref(false)
 const deleting = ref(false)
 const deleteConfirmOpen = ref(false)
+const nameInput = ref('')
 const orderInput = ref('1')
 
 const groupId = computed(() => String(route.params.id ?? ''))
@@ -78,13 +81,6 @@ const group = computed(() => accountStore.groups.find((item) => item.id === grou
 const currentOrder = computed(() => {
   const index = accountStore.groups.findIndex((item) => item.id === groupId.value)
   return index >= 0 ? index + 1 : 1
-})
-
-const groupTypeLabel = computed(() => {
-  const type = String(group.value?.type ?? '')
-  if (type === 'cash') return '現金'
-  if (type === 'bank') return '銀行'
-  return '其他'
 })
 
 const parsedOrderInput = computed(() => {
@@ -95,36 +91,49 @@ const parsedOrderInput = computed(() => {
   return value
 })
 
+const nameInvalid = computed(() => !String(nameInput.value ?? '').trim())
 const orderInvalid = computed(() => parsedOrderInput.value == null)
 const canSave = computed(() => {
-  if (!group.value || orderInvalid.value) return false
+  if (!group.value || orderInvalid.value || nameInvalid.value) return false
+  const nextName = String(nameInput.value ?? '').trim()
   const nextOrder = clampOrder(parsedOrderInput.value ?? 1)
-  return nextOrder !== currentOrder.value
+  return nextName !== String(group.value.name ?? '') || nextOrder !== currentOrder.value
 })
 
 watch(
-  () => currentOrder.value,
-  (value) => {
+  () => [currentOrder.value, group.value?.name],
+  ([value, groupName]) => {
+    nameInput.value = String(groupName ?? '')
     orderInput.value = String(value)
   },
   { immediate: true },
 )
 
-async function saveOrder() {
+async function saveGroupProfile() {
   if (!group.value || !canSave.value) return
 
   saving.value = true
   try {
+    const nextName = String(nameInput.value ?? '').trim()
+    if (nextName !== String(group.value.name ?? '')) {
+      await accountStore.updateAccountGroupProfile(groupId.value, { name: nextName })
+    }
+
     const ids = accountStore.groups.map((item) => item.id)
     const fromIndex = ids.indexOf(groupId.value)
     const toIndex = clampOrder(parsedOrderInput.value ?? 1) - 1
     if (fromIndex < 0) return
 
-    await accountStore.reorderGroups(moveItem(ids, fromIndex, toIndex))
-    uiStore.pushToast('母分類排序已更新')
+    const movedIds = moveItem(ids, fromIndex, toIndex)
+    const isOrderChanged = movedIds.some((id, index) => id !== ids[index])
+    if (isOrderChanged) {
+      await accountStore.reorderGroups(movedIds)
+    }
+
+    uiStore.pushToast('帳戶群組資料已更新')
     await router.push('/assets/accounts')
   } catch (error) {
-    uiStore.pushToast(error.message ?? '更新排序失敗', 'error')
+    uiStore.pushToast(error.message ?? '更新帳戶群組失敗', 'error')
   } finally {
     saving.value = false
   }

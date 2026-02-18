@@ -127,6 +127,21 @@ export async function updateAccountProfile(ledgerId, accountId, input = {}) {
   )
 }
 
+export async function updateAccountGroupProfile(ledgerId, groupId, input = {}) {
+  assertLedgerId(ledgerId)
+  if (!groupId) throw new Error('缺少帳戶群組 ID')
+  const name = String(input.name ?? '').trim()
+  if (!name) throw new Error('帳戶群組名稱不可為空')
+
+  await run(
+    `UPDATE account_groups
+     SET name = ?,
+         updated_at = ?
+     WHERE ledger_id = ? AND id = ? AND deleted_at IS NULL;`,
+    [name, nowIso(), ledgerId, groupId],
+  )
+}
+
 export async function countAccountsByGroup(ledgerId, groupId) {
   assertLedgerId(ledgerId)
   if (!groupId) return 0

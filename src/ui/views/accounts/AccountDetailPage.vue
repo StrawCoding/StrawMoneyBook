@@ -355,6 +355,7 @@ async function saveProfile() {
       openingBalanceMinor: nextOpeningBalanceMinor,
     })
     uiStore.pushToast('帳戶資料已更新')
+    await router.push('/assets/accounts')
   } catch (error) {
     uiStore.pushToast(error.message ?? '更新帳戶資料失敗', 'error')
   } finally {

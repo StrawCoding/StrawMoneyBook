@@ -11,6 +11,7 @@ import {
   updateAccountSortOrdersByGroup,
   updateAccountIcon as updateAccountIconRepo,
   updateAccountProfile as updateAccountProfileRepo,
+  updateAccountGroupProfile as updateAccountGroupProfileRepo,
 } from '@/core/repositories/account.repo'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { assertCanCreateAccount } from '@/core/services/membership.service'
@@ -128,6 +129,12 @@ export const useAccountStore = defineStore('account', {
     async updateAccountProfile(accountId, payload) {
       const ledgerStore = useLedgerStore()
       await updateAccountProfileRepo(ledgerStore.activeLedgerId, accountId, payload)
+      await this.load()
+    },
+
+    async updateAccountGroupProfile(groupId, payload) {
+      const ledgerStore = useLedgerStore()
+      await updateAccountGroupProfileRepo(ledgerStore.activeLedgerId, groupId, payload)
       await this.load()
     },
   },
