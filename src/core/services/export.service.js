@@ -16,6 +16,10 @@ const LEDGER_TABLES = [
   'reimbursement_items',
   'budgets',
   'budget_items',
+  'bank_connections',
+  'bank_accounts',
+  'bank_transactions',
+  'bank_sync_rules',
   'app_settings',
   'deleted_log',
 ]
