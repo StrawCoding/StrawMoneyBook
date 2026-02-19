@@ -3,13 +3,31 @@ import { SocialLogin } from '@capgo/capacitor-social-login'
 
 const DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
 const GOOGLE_SCOPES = ['email', 'profile', DRIVE_APPDATA_SCOPE]
+const GOOGLE_TOKEN_CACHE_KEY = 'straw.google.oauth.token_cache.v1'
+const ACCESS_TOKEN_EXPIRY_SKEW_MS = 60 * 1000
+
+const SERVER_AUTH_CODE_FLOW_ENABLED = parseBooleanEnv(import.meta.env.VITE_GOOGLE_USE_SERVER_AUTH_CODE)
+const GOOGLE_OAUTH_EXCHANGE_URL = String(
+  import.meta.env.VITE_GOOGLE_OAUTH_EXCHANGE_URL ?? '/api/google/oauth/exchange',
+).trim()
+const GOOGLE_OAUTH_REFRESH_URL = String(
+  import.meta.env.VITE_GOOGLE_OAUTH_REFRESH_URL ?? '/api/google/oauth/refresh',
+).trim()
 
 let initializedClientId = ''
+let initializedGoogleMode = ''
 let cachedAccessToken = ''
+let cachedAccessTokenExpiresAtMs = 0
+let cachedRefreshToken = ''
 let cachedProfile = null
 let ongoingSignInPromise = null
 
 const GOOGLE_REAUTH_REQUIRED_CODE = 'GOOGLE_REAUTH_REQUIRED'
+
+function parseBooleanEnv(raw) {
+  const value = String(raw ?? '').trim().toLowerCase()
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
 
 function assertNativePlatform() {
   if (!Capacitor.isNativePlatform()) {
@@ -23,8 +41,106 @@ function extractToken(raw) {
   return String(raw.token ?? '').trim()
 }
 
+function normalizeProfile(raw) {
+  const profile = raw && typeof raw === 'object' ? raw : {}
+  return {
+    email: String(profile.email ?? '').trim(),
+    name: String(profile.name ?? '').trim(),
+    imageUrl: String(profile.imageUrl ?? profile.picture ?? '').trim(),
+  }
+}
+
+function hasUsableCachedAccessToken() {
+  if (!cachedAccessToken) return false
+  if (!Number.isFinite(cachedAccessTokenExpiresAtMs) || cachedAccessTokenExpiresAtMs <= 0) return true
+  return Date.now() + ACCESS_TOKEN_EXPIRY_SKEW_MS < cachedAccessTokenExpiresAtMs
+}
+
+function canUseStorage() {
+  return typeof localStorage !== 'undefined'
+}
+
+function persistServerAuthCache() {
+  if (!SERVER_AUTH_CODE_FLOW_ENABLED || !canUseStorage()) return
+  const payload = {
+    accessToken: cachedAccessToken,
+    accessTokenExpiresAtMs: cachedAccessTokenExpiresAtMs,
+    refreshToken: cachedRefreshToken,
+    profile: cachedProfile,
+  }
+  try {
+    localStorage.setItem(GOOGLE_TOKEN_CACHE_KEY, JSON.stringify(payload))
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function restoreServerAuthCache() {
+  if (!SERVER_AUTH_CODE_FLOW_ENABLED || !canUseStorage()) return
+  try {
+    const raw = localStorage.getItem(GOOGLE_TOKEN_CACHE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return
+    cachedAccessToken = extractToken(parsed.accessToken)
+    cachedRefreshToken = String(parsed.refreshToken ?? '').trim()
+    cachedAccessTokenExpiresAtMs = Math.max(0, Number(parsed.accessTokenExpiresAtMs ?? 0) || 0)
+    cachedProfile = normalizeProfile(parsed.profile)
+  } catch {
+    // ignore parse failures
+  }
+}
+
+function clearServerAuthCache() {
+  if (!canUseStorage()) return
+  try {
+    localStorage.removeItem(GOOGLE_TOKEN_CACHE_KEY)
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function updateTokenCache({ accessToken, refreshToken, expiresInSec, expiresAtMs } = {}) {
+  if (typeof accessToken === 'string') {
+    cachedAccessToken = accessToken.trim()
+  }
+  if (typeof refreshToken === 'string') {
+    cachedRefreshToken = refreshToken.trim()
+  }
+
+  const explicitExpiresAt = Number(expiresAtMs)
+  if (Number.isFinite(explicitExpiresAt) && explicitExpiresAt > 0) {
+    cachedAccessTokenExpiresAtMs = explicitExpiresAt
+  } else {
+    const sec = Number(expiresInSec)
+    cachedAccessTokenExpiresAtMs = Number.isFinite(sec) && sec > 0 ? Date.now() + sec * 1000 : 0
+  }
+
+  persistServerAuthCache()
+}
+
+function clearTokenCache({ keepRefreshToken = false } = {}) {
+  cachedAccessToken = ''
+  cachedAccessTokenExpiresAtMs = 0
+  if (!keepRefreshToken) {
+    cachedRefreshToken = ''
+  }
+  if (SERVER_AUTH_CODE_FLOW_ENABLED) {
+    if (keepRefreshToken) persistServerAuthCache()
+    else clearServerAuthCache()
+  }
+}
+
+function getIosClientId() {
+  return String(import.meta.env.VITE_GOOGLE_IOS_CLIENT_ID ?? '').trim()
+}
+
 function getConfiguredWebClientId() {
   return String(import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID ?? '').trim()
+}
+
+function getGoogleInitializeMode() {
+  return SERVER_AUTH_CODE_FLOW_ENABLED ? 'offline' : 'online'
 }
 
 function isAccountReauthError(error) {
@@ -70,6 +186,113 @@ function createReauthRequiredError(message = 'Google 需要重新授權，請到
   return error
 }
 
+function normalizeBackendTokenPayload(payload) {
+  const source = payload && typeof payload === 'object' ? payload : {}
+  const accessToken = extractToken(source.accessToken ?? source.access_token)
+  if (!accessToken) {
+    throw new Error('後端未回傳 access token')
+  }
+
+  const refreshTokenRaw = source.refreshToken ?? source.refresh_token
+  const refreshToken = typeof refreshTokenRaw === 'string' ? refreshTokenRaw.trim() : ''
+
+  const expiresInRaw = Number(source.expiresIn ?? source.expires_in ?? 0)
+  const expiresInSec = Number.isFinite(expiresInRaw) && expiresInRaw > 0 ? expiresInRaw : 0
+
+  const expiresAtRaw = Number(source.accessTokenExpiresAtMs ?? source.access_token_expires_at_ms ?? source.expiresAtMs ?? 0)
+  const expiresAtMs = Number.isFinite(expiresAtRaw) && expiresAtRaw > 0 ? expiresAtRaw : 0
+
+  const nestedProfile = normalizeProfile(source.profile)
+  const flatProfile = normalizeProfile(source)
+  const profile = nestedProfile.email || nestedProfile.name || nestedProfile.imageUrl ? nestedProfile : flatProfile
+
+  return {
+    accessToken,
+    refreshToken,
+    expiresInSec,
+    expiresAtMs,
+    profile,
+  }
+}
+
+async function postJson(url, payload) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload ?? {}),
+  })
+
+  const text = await response.text()
+  let data = null
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = null
+    }
+  }
+
+  if (!response.ok) {
+    const message = String(data?.error_description ?? data?.error ?? data?.message ?? text ?? '').trim()
+    throw new Error(message || `HTTP ${response.status}`)
+  }
+
+  if (!data || typeof data !== 'object') {
+    throw new Error('後端回應格式錯誤')
+  }
+
+  return data
+}
+
+async function fetchGoogleProfileByAccessToken(accessToken) {
+  if (!accessToken) return null
+  try {
+    const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    if (!response.ok) return null
+    const data = await response.json()
+    const profile = normalizeProfile(data)
+    if (!profile.email && !profile.name && !profile.imageUrl) return null
+    return profile
+  } catch {
+    return null
+  }
+}
+
+async function exchangeServerAuthCode(serverAuthCode) {
+  const code = String(serverAuthCode ?? '').trim()
+  if (!code) {
+    throw new Error('Google 登入成功但未取得 server auth code')
+  }
+  if (!GOOGLE_OAUTH_EXCHANGE_URL) {
+    throw new Error('缺少 Google OAuth 後端交換端點（請設定 VITE_GOOGLE_OAUTH_EXCHANGE_URL）')
+  }
+  const payload = await postJson(GOOGLE_OAUTH_EXCHANGE_URL, {
+    serverAuthCode: code,
+  })
+  return normalizeBackendTokenPayload(payload)
+}
+
+async function refreshAccessTokenByBackend(refreshToken) {
+  const token = String(refreshToken ?? '').trim()
+  if (!token) {
+    throw createReauthRequiredError('Google 授權已失效，請到自動備份頁重新登入 Google。')
+  }
+  if (!GOOGLE_OAUTH_REFRESH_URL) {
+    throw new Error('缺少 Google OAuth 後端 refresh 端點（請設定 VITE_GOOGLE_OAUTH_REFRESH_URL）')
+  }
+  const payload = await postJson(GOOGLE_OAUTH_REFRESH_URL, {
+    refreshToken: token,
+  })
+  return normalizeBackendTokenPayload(payload)
+}
+
 async function loginGoogleWithOptions(options = {}) {
   return SocialLogin.login({
     provider: 'google',
@@ -86,15 +309,26 @@ export async function initGoogleAuth() {
   if (!clientId) {
     throw new Error('缺少 Google Web Client ID（請設定 VITE_GOOGLE_WEB_CLIENT_ID）')
   }
-  if (initializedClientId === clientId) return
+  const mode = getGoogleInitializeMode()
+  if (initializedClientId === clientId && initializedGoogleMode === mode) return
+
+  const google = {
+    webClientId: clientId,
+    mode,
+  }
+  const iOSClientId = getIosClientId()
+  if (iOSClientId) {
+    google.iOSClientId = iOSClientId
+  }
+  if (mode === 'offline') {
+    google.iOSServerClientId = clientId
+  }
 
   await SocialLogin.initialize({
-    google: {
-      webClientId: clientId,
-      mode: 'online',
-    },
+    google,
   })
   initializedClientId = clientId
+  initializedGoogleMode = mode
 }
 
 export async function googleSignIn() {
@@ -138,7 +372,38 @@ export async function googleSignIn() {
       }
     }
 
-    if (response.provider !== 'google' || response.result?.responseType !== 'online') {
+    if (response.provider !== 'google') {
+      throw new Error('Google 登入失敗，請重試')
+    }
+
+    if (SERVER_AUTH_CODE_FLOW_ENABLED) {
+      if (response.result?.responseType !== 'offline') {
+        throw new Error('Google 登入成功但未取得 server auth code')
+      }
+      const exchanged = await exchangeServerAuthCode(response.result.serverAuthCode)
+      const accessToken = exchanged.accessToken
+      const refreshToken = exchanged.refreshToken || cachedRefreshToken
+      const profileFromToken = exchanged.profile
+      const profileFromGoogle = profileFromToken.email || profileFromToken.name || profileFromToken.imageUrl
+        ? profileFromToken
+        : await fetchGoogleProfileByAccessToken(accessToken)
+
+      updateTokenCache({
+        accessToken,
+        refreshToken,
+        expiresInSec: exchanged.expiresInSec,
+        expiresAtMs: exchanged.expiresAtMs,
+      })
+
+      cachedProfile = normalizeProfile(profileFromGoogle)
+      persistServerAuthCache()
+      return {
+        accessToken: cachedAccessToken,
+        profile: cachedProfile,
+      }
+    }
+
+    if (response.result?.responseType !== 'online') {
       throw new Error('Google 登入失敗，請重試')
     }
 
@@ -146,13 +411,12 @@ export async function googleSignIn() {
     if (!accessToken) {
       throw new Error('Google 登入成功但未取得 access token')
     }
-
-    cachedAccessToken = accessToken
-    cachedProfile = {
+    updateTokenCache({ accessToken, refreshToken: '', expiresAtMs: 0 })
+    cachedProfile = normalizeProfile({
       email: response.result.profile?.email || '',
       name: response.result.profile?.name || '',
       imageUrl: response.result.profile?.imageUrl || '',
-    }
+    })
 
     return {
       accessToken,
@@ -168,8 +432,44 @@ export async function googleSignIn() {
 }
 
 export async function getAccessToken(options = {}) {
-  if (cachedAccessToken) return cachedAccessToken
+  if (hasUsableCachedAccessToken()) return cachedAccessToken
   const interactive = options?.interactive !== false
+
+  if (SERVER_AUTH_CODE_FLOW_ENABLED) {
+    if (cachedRefreshToken) {
+      try {
+        const refreshed = await refreshAccessTokenByBackend(cachedRefreshToken)
+        updateTokenCache({
+          accessToken: refreshed.accessToken,
+          refreshToken: refreshed.refreshToken || cachedRefreshToken,
+          expiresInSec: refreshed.expiresInSec,
+          expiresAtMs: refreshed.expiresAtMs,
+        })
+        if (!cachedProfile?.email) {
+          const refreshedProfile = refreshed.profile.email || refreshed.profile.name || refreshed.profile.imageUrl
+            ? refreshed.profile
+            : await fetchGoogleProfileByAccessToken(refreshed.accessToken)
+          if (refreshedProfile) {
+            cachedProfile = normalizeProfile(refreshedProfile)
+            persistServerAuthCache()
+          }
+        }
+        return cachedAccessToken
+      } catch (error) {
+        console.warn('[google-auth] backend refresh failed', error)
+      }
+    }
+
+    if (interactive) {
+      try {
+        const signed = await googleSignIn()
+        return signed.accessToken
+      } catch (error) {
+        throw normalizeGoogleAuthError(error)
+      }
+    }
+    throw createReauthRequiredError()
+  }
 
   if (interactive) {
     // Keep manual flows to a single interactive login to avoid duplicate account prompts.
@@ -201,15 +501,19 @@ export async function getAccessToken(options = {}) {
 }
 
 export async function reauth() {
-  cachedAccessToken = ''
+  clearTokenCache({ keepRefreshToken: SERVER_AUTH_CODE_FLOW_ENABLED })
   return getAccessToken()
 }
 
 export async function googleSignOut() {
   try {
     await SocialLogin.logout({ provider: 'google' })
+  } catch (error) {
+    if (!SERVER_AUTH_CODE_FLOW_ENABLED) throw error
+    const message = String(error?.message ?? '').toLowerCase()
+    if (!message.includes('offline mode')) throw error
   } finally {
-    cachedAccessToken = ''
+    clearTokenCache()
     cachedProfile = null
   }
 }
@@ -217,3 +521,5 @@ export async function googleSignOut() {
 export function getCachedGoogleProfile() {
   return cachedProfile
 }
+
+restoreServerAuthCache()
