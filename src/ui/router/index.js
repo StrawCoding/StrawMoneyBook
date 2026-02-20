@@ -93,12 +93,6 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
-      path: '/settings/bank-sync',
-      name: 'settings-bank-sync',
-      component: () => import('@/ui/views/settings/SettingsBankSyncPage.vue'),
-      meta: { tab: 'settings' },
-    },
-    {
       path: '/settings/ledgers',
       name: 'settings-ledgers',
       component: () => import('@/ui/views/settings/SettingsLedgerPage.vue'),

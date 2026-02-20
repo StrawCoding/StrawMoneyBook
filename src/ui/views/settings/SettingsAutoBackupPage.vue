@@ -404,6 +404,18 @@ function errorMessage(error, fallback) {
   return fallback
 }
 
+function withTimeout(task, timeoutMs, timeoutMessage) {
+  let timeoutId
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error(timeoutMessage))
+    }, timeoutMs)
+  })
+  return Promise.race([task, timeoutPromise]).finally(() => {
+    if (timeoutId) window.clearTimeout(timeoutId)
+  })
+}
+
 async function connectWebdav() {
   if (!ledgerStore.activeLedgerId) return
   webdavConnecting.value = true
@@ -512,7 +524,11 @@ async function connectGoogle() {
   if (!ledgerStore.activeLedgerId) return
   googleConnecting.value = true
   try {
-    googleBackupState.value = await connectGoogleBackup(ledgerStore.activeLedgerId)
+    googleBackupState.value = await withTimeout(
+      connectGoogleBackup(ledgerStore.activeLedgerId),
+      30000,
+      'Google 登入逾時，請重試'
+    )
     googleAutoEnabled.value = Boolean(googleBackupState.value.autoEnabled)
     googleDataChangeAutoEnabled.value = Boolean(googleBackupState.value.dataChangeAutoEnabled)
     googleIntervalHours.value = Number(googleBackupState.value.intervalHours || 24)
@@ -529,7 +545,11 @@ async function disconnectGoogle() {
   if (!ledgerStore.activeLedgerId) return
   googleDisconnecting.value = true
   try {
-    googleBackupState.value = await disconnectGoogleBackup(ledgerStore.activeLedgerId)
+    googleBackupState.value = await withTimeout(
+      disconnectGoogleBackup(ledgerStore.activeLedgerId),
+      15000,
+      'Google 登出逾時，請重試'
+    )
     googleAutoEnabled.value = false
     googleDataChangeAutoEnabled.value = false
     uiStore.pushToast('已登出 Google')

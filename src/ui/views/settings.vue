@@ -22,7 +22,6 @@ const { t } = useI18n()
 const settingItems = [
   { to: '/settings/data-management', labelKey: 'settings.data_management', icon: 'fa-solid fa-database' },
   { to: '/settings/auto-backup', labelKey: 'settings.auto_backup', icon: 'fa-solid fa-cloud-arrow-up' },
-  { to: '/settings/bank-sync', labelKey: 'settings.bank_sync', icon: 'fa-solid fa-building-columns' },
   { to: '/settings/ledgers', labelKey: 'settings.ledger_management', icon: 'fa-solid fa-book' },
   { to: '/settings/categories', labelKey: 'settings.category_management', icon: 'fa-solid fa-tags' },
   { to: '/settings/addon-templates', labelKey: 'settings.addon_templates', icon: 'fa-solid fa-receipt' },
