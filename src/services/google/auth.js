@@ -6,7 +6,7 @@ const GOOGLE_SCOPES = ['email', 'profile', DRIVE_APPDATA_SCOPE]
 const GOOGLE_TOKEN_CACHE_KEY = 'straw.google.oauth.token_cache.v1'
 const ACCESS_TOKEN_EXPIRY_SKEW_MS = 60 * 1000
 
-const SERVER_AUTH_CODE_FLOW_ENABLED = parseBooleanEnv(import.meta.env.VITE_GOOGLE_USE_SERVER_AUTH_CODE)
+const SERVER_AUTH_CODE_FLOW_ENABLED = parseBooleanEnv(import.meta.env.VITE_GOOGLE_USE_SERVER_AUTH_CODE ?? 'true')
 const GOOGLE_OAUTH_EXCHANGE_URL = String(
   import.meta.env.VITE_GOOGLE_OAUTH_EXCHANGE_URL ?? '/api/google/oauth/exchange',
 ).trim()
