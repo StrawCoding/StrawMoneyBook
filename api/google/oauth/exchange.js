@@ -1,6 +1,15 @@
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token'
 const GOOGLE_TOKEN_REQUEST_TIMEOUT_MS = 15 * 1000
 const GOOGLE_OAUTH_CLIENT_SHARED_KEY = String(process.env.GOOGLE_OAUTH_CLIENT_SHARED_KEY ?? '').trim()
+const ERROR_NUMBER = {
+  METHOD_NOT_ALLOWED: 'GOOGLE_EXCHANGE_001',
+  UNAUTHORIZED_CLIENT: 'GOOGLE_EXCHANGE_002',
+  MISSING_SERVER_AUTH_CODE: 'GOOGLE_EXCHANGE_003',
+  MISSING_GOOGLE_OAUTH_ENV: 'GOOGLE_EXCHANGE_004',
+  TOKEN_EXCHANGE_FAILED: 'GOOGLE_EXCHANGE_005',
+  MISSING_ACCESS_TOKEN: 'GOOGLE_EXCHANGE_006',
+  EXCHANGE_REQUEST_FAILED: 'GOOGLE_EXCHANGE_007',
+}
 
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -12,6 +21,14 @@ function setCorsHeaders(res) {
 function sendJson(res, statusCode, payload) {
   setCorsHeaders(res)
   res.status(statusCode).json(payload)
+}
+
+function sendError(res, statusCode, error, message, errorNumber) {
+  sendJson(res, statusCode, {
+    error,
+    message,
+    errorNumber,
+  })
 }
 
 function parseBody(req) {
@@ -104,21 +121,24 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== 'POST') {
-    sendJson(res, 405, { error: 'method_not_allowed' })
+    sendError(res, 405, 'method_not_allowed', 'Method not allowed', ERROR_NUMBER.METHOD_NOT_ALLOWED)
     return
   }
   if (!isClientAuthorized(req)) {
-    sendJson(res, 401, {
-      error: 'unauthorized_client',
-      message: 'missing or invalid x-straw-client-key',
-    })
+    sendError(
+      res,
+      401,
+      'unauthorized_client',
+      'missing or invalid x-straw-client-key',
+      ERROR_NUMBER.UNAUTHORIZED_CLIENT,
+    )
     return
   }
 
   const body = parseBody(req)
   const serverAuthCode = String(body.serverAuthCode ?? body.code ?? '').trim()
   if (!serverAuthCode) {
-    sendJson(res, 400, { error: 'missing_server_auth_code', message: 'serverAuthCode is required' })
+    sendError(res, 400, 'missing_server_auth_code', 'serverAuthCode is required', ERROR_NUMBER.MISSING_SERVER_AUTH_CODE)
     return
   }
 
@@ -126,10 +146,13 @@ export default async function handler(req, res) {
   const clientSecret = String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim()
   const redirectUri = String(process.env.GOOGLE_OAUTH_REDIRECT_URI ?? '').trim()
   if (!clientId || !clientSecret) {
-    sendJson(res, 500, {
-      error: 'missing_google_oauth_env',
-      message: 'GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET are required',
-    })
+    sendError(
+      res,
+      500,
+      'missing_google_oauth_env',
+      'GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET are required',
+      ERROR_NUMBER.MISSING_GOOGLE_OAUTH_ENV,
+    )
     return
   }
 
@@ -156,24 +179,30 @@ export default async function handler(req, res) {
     }
 
     if (!response.ok) {
-      sendJson(res, response.status, {
-        error: 'google_token_exchange_failed',
-        message: String(json.error_description ?? json.error ?? rawText ?? 'Google token exchange failed'),
-      })
+      sendError(
+        res,
+        response.status,
+        'google_token_exchange_failed',
+        String(json.error_description ?? json.error ?? rawText ?? 'Google token exchange failed'),
+        ERROR_NUMBER.TOKEN_EXCHANGE_FAILED,
+      )
       return
     }
 
     const payload = normalizeTokenPayload(json)
     if (!payload.accessToken) {
-      sendJson(res, 502, { error: 'missing_access_token', message: 'Google did not return access_token' })
+      sendError(res, 502, 'missing_access_token', 'Google did not return access_token', ERROR_NUMBER.MISSING_ACCESS_TOKEN)
       return
     }
 
     sendJson(res, 200, payload)
   } catch (error) {
-    sendJson(res, 500, {
-      error: 'google_exchange_request_failed',
-      message: String(error?.message ?? error ?? 'Unknown error'),
-    })
+    sendError(
+      res,
+      500,
+      'google_exchange_request_failed',
+      String(error?.message ?? error ?? 'Unknown error'),
+      ERROR_NUMBER.EXCHANGE_REQUEST_FAILED,
+    )
   }
 }

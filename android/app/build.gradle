@@ -5,8 +5,9 @@ def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
-def packageJson = new groovy.json.JsonSlurper().parse(rootProject.file('../package.json'))
-def appVersionName = packageJson.version ?: "1.0.0"
+def packageJsonText = rootProject.file('../package.json').text
+def versionMatcher = (packageJsonText =~ /"version"\s*:\s*"([^"]+)"/)
+def appVersionName = versionMatcher.find() ? versionMatcher.group(1) : "1.0.0"
 
 android {
     namespace = "com.strawcoding.strawmoneybook"
@@ -15,7 +16,7 @@ android {
         applicationId "com.strawcoding.strawmoneybook"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 36
+        versionCode 37
         versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

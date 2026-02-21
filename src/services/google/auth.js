@@ -328,7 +328,9 @@ async function postJson(url, payload) {
 
   if (!response.ok) {
     const message = String(data?.error_description ?? data?.error ?? data?.message ?? text ?? '').trim()
-    throw new Error(`${message || `HTTP ${response.status}`}（url=${url}）`)
+    const errorNumber = String(data?.errorNumber ?? '').trim()
+    const suffix = errorNumber ? `（errorNumber=${errorNumber}）` : ''
+    throw new Error(`${message || `HTTP ${response.status}`}${suffix}（url=${url}）`)
   }
 
   if (!data || typeof data !== 'object') {
