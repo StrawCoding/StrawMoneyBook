@@ -18,12 +18,21 @@ export default async function handler(req, res) {
   }
 
   if (isMockProvider(provider)) {
-    const code = normalizeText(body.code || body.public_token || 'mock_approved')
-    if (!code || !code.startsWith('mock')) {
+    const sessionId = normalizeText(body.session_id)
+    const code = normalizeText(body.code || body.public_token)
+    if (!sessionId) {
+      sendJson(res, 400, { error: 'missing_session_id', message: 'session_id is required' })
+      return
+    }
+    if (!code) {
+      sendJson(res, 400, { error: 'missing_code', message: 'code is required' })
+      return
+    }
+    if (!sessionId.startsWith('mock_session_') || !code.startsWith('mock')) {
       sendJson(res, 400, { error: 'invalid_mock_code', message: 'invalid mock authorization code' })
       return
     }
-    const seed = `${normalizeText(body.session_id)}_${code}`
+    const seed = `${sessionId}_${code}`
     const connectionId = createMockConnectionId(seed)
     const accounts = createMockAccounts(connectionId)
     sendJson(res, 200, {

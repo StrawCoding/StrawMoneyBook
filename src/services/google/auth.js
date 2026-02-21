@@ -23,6 +23,7 @@ const GOOGLE_OAUTH_REFRESH_URL = resolveGoogleOAuthEndpoint(
   import.meta.env.VITE_GOOGLE_OAUTH_REFRESH_URL,
   '/api/google/oauth/refresh',
 )
+const GOOGLE_OAUTH_CLIENT_SHARED_KEY = String(import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_SHARED_KEY ?? '').trim()
 
 let initializedClientId = ''
 let initializedGoogleMode = ''
@@ -298,13 +299,17 @@ function normalizeBackendTokenPayload(payload) {
 }
 
 async function postJson(url, payload) {
+  const headers = {
+    'Content-Type': 'application/json',
+  }
+  if (GOOGLE_OAUTH_CLIENT_SHARED_KEY) {
+    headers['X-Straw-Client-Key'] = GOOGLE_OAUTH_CLIENT_SHARED_KEY
+  }
   let response
   try {
     response = await fetchWithTimeout(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(payload ?? {}),
     }, GOOGLE_BACKEND_REQUEST_TIMEOUT_MS, GOOGLE_BACKEND_TIMEOUT_MESSAGE)
   } catch (error) {

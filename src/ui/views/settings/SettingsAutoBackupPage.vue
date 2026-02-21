@@ -336,7 +336,7 @@ async function refreshWebdavBackupState() {
   webdavBackupState.value = state
   webdavEndpointInput.value = state.endpoint || ''
   webdavUsernameInput.value = state.username || ''
-  webdavPasswordInput.value = state.password || ''
+  webdavPasswordInput.value = ''
   webdavRemoteDirInput.value = state.remoteDir || ''
   webdavAutoEnabled.value = Boolean(state.autoEnabled)
   webdavDataChangeAutoEnabled.value = Boolean(state.dataChangeAutoEnabled)
@@ -423,7 +423,7 @@ async function connectWebdav() {
     webdavBackupState.value = await connectWebdavBackup(ledgerStore.activeLedgerId, {
       endpoint: webdavEndpointInput.value,
       username: webdavUsernameInput.value,
-      password: webdavPasswordInput.value,
+      password: webdavPasswordInput.value || webdavBackupState.value.password,
       remoteDir: webdavRemoteDirInput.value,
     })
     webdavAutoEnabled.value = Boolean(webdavBackupState.value.autoEnabled)
@@ -460,15 +460,18 @@ async function saveWebdavBackupSettings() {
   }
   webdavSavingSettings.value = true
   try {
-    webdavBackupState.value = await updateWebdavBackupState(ledgerStore.activeLedgerId, {
+    const patch = {
       endpoint: webdavEndpointInput.value,
       username: webdavUsernameInput.value,
-      password: webdavPasswordInput.value,
       remoteDir: webdavRemoteDirInput.value,
       autoEnabled: Boolean(webdavAutoEnabled.value),
       dataChangeAutoEnabled: Boolean(webdavDataChangeAutoEnabled.value && webdavAutoEnabled.value),
       intervalHours: Number(webdavIntervalHours.value || 24),
-    })
+    }
+    if (webdavPasswordInput.value) {
+      patch.password = webdavPasswordInput.value
+    }
+    webdavBackupState.value = await updateWebdavBackupState(ledgerStore.activeLedgerId, patch)
     uiStore.pushToast('WebDAV 備份設定已更新')
   } catch (error) {
     uiStore.pushToast(error.message ?? '儲存設定失敗', 'error')

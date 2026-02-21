@@ -258,6 +258,7 @@ export async function setReimbursementPaid(ledgerId, reimbursementId, input) {
 }
 
 export async function findTransactionByIdempotencyKey(ledgerId, idempotencyKey) {
+  assertLedgerId(ledgerId)
   const result = await query(
     `SELECT id, type, amount_minor, occurred_at
      FROM transactions

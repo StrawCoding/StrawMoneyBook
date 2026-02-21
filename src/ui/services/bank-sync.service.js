@@ -189,7 +189,7 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
   const exchanged = await exchangeBankAuth({
     provider: normalizedProvider,
     session_id: normalizeText(linkSession?.session_id),
-    code: normalizeText(options.code || linkSession?.mock_code || 'mock_approved'),
+    code: normalizeText(options.code || linkSession?.mock_code),
     public_token: normalizeText(options.publicToken),
   })
 

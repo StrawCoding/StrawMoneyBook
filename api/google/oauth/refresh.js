@@ -1,9 +1,10 @@
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token'
 const GOOGLE_TOKEN_REQUEST_TIMEOUT_MS = 15 * 1000
+const GOOGLE_OAUTH_CLIENT_SHARED_KEY = String(process.env.GOOGLE_OAUTH_CLIENT_SHARED_KEY ?? '').trim()
 
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Straw-Client-Key')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Cache-Control', 'no-store')
 }
@@ -23,6 +24,16 @@ function parseBody(req) {
     }
   }
   return {}
+}
+
+function isClientAuthorized(req) {
+  if (!GOOGLE_OAUTH_CLIENT_SHARED_KEY) return true
+  const provided = String(
+    req.headers?.['x-straw-client-key']
+      ?? req.headers?.['X-Straw-Client-Key']
+      ?? '',
+  ).trim()
+  return Boolean(provided) && provided === GOOGLE_OAUTH_CLIENT_SHARED_KEY
 }
 
 async function requestGoogleToken(params) {
@@ -62,6 +73,13 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') {
     sendJson(res, 405, { error: 'method_not_allowed' })
+    return
+  }
+  if (!isClientAuthorized(req)) {
+    sendJson(res, 401, {
+      error: 'unauthorized_client',
+      message: 'missing or invalid x-straw-client-key',
+    })
     return
   }
 

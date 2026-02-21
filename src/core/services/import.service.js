@@ -126,10 +126,18 @@ function sumNumericValues(source) {
   return Object.values(source).reduce((total, value) => total + Number(value ?? 0), 0)
 }
 
+function toSafeSqlIdentifier(identifier, tableName) {
+  const value = String(identifier ?? '').trim()
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error(`表 ${tableName} 欄位名稱不合法：${value}`)
+  }
+  return value
+}
+
 function objectToInsertSql(tableName, row) {
-  const keys = Object.keys(row)
+  const keys = Object.keys(row).map((key) => toSafeSqlIdentifier(key, tableName))
   if (!keys.length) {
-    throw new Error(`表 ${tableName} 缺少欄位資料`) 
+    throw new Error(`表 ${tableName} 缺少欄位資料`)
   }
 
   const placeholders = keys.map(() => '?').join(', ')

@@ -57,6 +57,16 @@ function normalizeEndpoint(endpoint) {
   return text.replace(/\/+$/, '')
 }
 
+function assertSecureEndpoint(endpoint) {
+  const normalized = normalizeEndpoint(endpoint)
+  if (!normalized) {
+    throw new Error('請先輸入 WebDAV Endpoint')
+  }
+  if (!/^https:\/\//i.test(normalized)) {
+    throw new Error('WebDAV Endpoint 必須使用 HTTPS')
+  }
+}
+
 function normalizeRemoteDir(value) {
   const text = String(value ?? '').trim()
   if (!text) return ''
@@ -289,6 +299,7 @@ export async function connectWebdavBackup(ledgerId, input = {}) {
   if (!nextState.endpoint || !nextState.username || !nextState.password) {
     throw new Error('請完整填寫 Endpoint、帳號、密碼')
   }
+  assertSecureEndpoint(nextState.endpoint)
 
   await ensureRemoteDirExists(nextState)
 
@@ -322,6 +333,7 @@ export async function performWebdavBackup(ledgerId) {
   if (!state.connected || !state.endpoint || !state.username || !state.password) {
     throw new Error('請先連接 WebDAV')
   }
+  assertSecureEndpoint(state.endpoint)
 
   const payload = await exportAllLedgersJson()
   const now = new Date().toISOString()
@@ -427,6 +439,7 @@ export async function restoreWebdavBackupJson(ledgerId, options = {}) {
   if (!state.connected || !state.endpoint || !state.username || !state.password) {
     throw new Error('請先連接 WebDAV')
   }
+  assertSecureEndpoint(state.endpoint)
 
   const requestedFilename = String(options.filename ?? state.lastBackupFilename ?? '').trim()
   const candidates = []

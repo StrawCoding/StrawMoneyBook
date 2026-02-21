@@ -1,5 +1,17 @@
 import { isMockProvider, methodGuard, normalizeProvider, parseBody, sendJson, simpleHash } from './_utils.js'
 
+function createNonce() {
+  if (typeof crypto?.randomUUID === 'function') {
+    return crypto.randomUUID().replace(/-/g, '')
+  }
+  if (typeof crypto?.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16)
+    crypto.getRandomValues(bytes)
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  }
+  return simpleHash(`${Date.now()}_${Math.random()}`)
+}
+
 export default async function handler(req, res) {
   if (methodGuard(req, res)) return
   const body = parseBody(req)
@@ -10,7 +22,7 @@ export default async function handler(req, res) {
   }
 
   if (isMockProvider(provider)) {
-    const nonce = simpleHash(`${Date.now()}_${Math.random()}`)
+    const nonce = createNonce()
     sendJson(res, 200, {
       provider: 'mock_bank_tw',
       session_id: `mock_session_${nonce}`,
