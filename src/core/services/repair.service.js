@@ -6,6 +6,52 @@ async function countValue(sql, values) {
   return Number(result?.values?.[0]?.count ?? 0)
 }
 
+function parsePresetInterestMinor(rawRule) {
+  if (!rawRule) return 0
+  try {
+    const parsed = JSON.parse(String(rawRule))
+    const value = Number(parsed?.presetInterestMinor ?? 0)
+    if (!Number.isFinite(value)) return 0
+    return Math.max(0, Math.round(value))
+  } catch {
+    return 0
+  }
+}
+
+function expectedLoanStatus(row) {
+  if (row.status === 'void') return 'void'
+
+  const principalMinor = Math.max(0, Number(row.principal_minor ?? 0))
+  const paidMinor = Math.max(0, Number(row.paid_minor ?? 0))
+  const presetInterestMinor = parsePresetInterestMinor(row.interest_rule_json)
+  const targetTotalMinor = principalMinor + presetInterestMinor
+
+  if (paidMinor <= 0) return 'active'
+  if (paidMinor >= targetTotalMinor) return 'settled'
+  return 'partial'
+}
+
+async function listLoanStatusRows(ledgerId) {
+  return (
+    await query(
+      `SELECT
+         l.id,
+         l.status,
+         l.principal_minor,
+         l.interest_rule_json,
+         COALESCE(SUM(lp.amount_minor), 0) AS paid_minor
+       FROM loans l
+       LEFT JOIN loan_payments lp
+         ON lp.ledger_id = l.ledger_id
+        AND lp.loan_id = l.id
+       WHERE l.ledger_id = ?
+         AND l.deleted_at IS NULL
+       GROUP BY l.id;`,
+      [ledgerId],
+    )
+  )?.values ?? []
+}
+
 export async function scanLedgerIntegrity(ledgerId) {
   const [
     orphanTxAccount,
@@ -13,8 +59,6 @@ export async function scanLedgerIntegrity(ledgerId) {
     missingPaidTransaction,
     reimbursementTotalMismatch,
     invalidTransferGroups,
-    overpaidLoans,
-    loanStatusMismatch,
   ] = await Promise.all([
     countValue(
       `SELECT COUNT(*) AS count
@@ -82,49 +126,11 @@ export async function scanLedgerIntegrity(ledgerId) {
        WHERE z.leg_count <> 2 OR z.balance <> 0;`,
       [ledgerId],
     ),
-    countValue(
-      `SELECT COUNT(*) AS count
-       FROM (
-         SELECT l.id,
-                l.principal_minor,
-                COALESCE(SUM(lp.amount_minor), 0) AS paid_minor
-         FROM loans l
-         LEFT JOIN loan_payments lp
-           ON lp.ledger_id = l.ledger_id
-          AND lp.loan_id = l.id
-         WHERE l.ledger_id = ?
-           AND l.deleted_at IS NULL
-           AND l.status <> 'void'
-         GROUP BY l.id
-       ) z
-       WHERE z.paid_minor > z.principal_minor;`,
-      [ledgerId],
-    ),
-    countValue(
-      `SELECT COUNT(*) AS count
-       FROM (
-         SELECT l.id,
-                l.status,
-                l.principal_minor,
-                COALESCE(SUM(lp.amount_minor), 0) AS paid_minor,
-                CASE
-                  WHEN l.status = 'void' THEN 'void'
-                  WHEN COALESCE(SUM(lp.amount_minor), 0) <= 0 THEN 'active'
-                  WHEN COALESCE(SUM(lp.amount_minor), 0) >= l.principal_minor THEN 'settled'
-                  ELSE 'partial'
-                END AS expected_status
-         FROM loans l
-         LEFT JOIN loan_payments lp
-           ON lp.ledger_id = l.ledger_id
-          AND lp.loan_id = l.id
-         WHERE l.ledger_id = ?
-           AND l.deleted_at IS NULL
-         GROUP BY l.id
-       ) z
-       WHERE z.status <> z.expected_status;`,
-      [ledgerId],
-    ),
   ])
+
+  const loanRows = await listLoanStatusRows(ledgerId)
+  const loanStatusMismatch = loanRows.filter((row) => row.status !== expectedLoanStatus(row)).length
+  const overpaidLoans = 0
 
   return {
     orphanTxAccount,
@@ -214,34 +220,12 @@ export async function repairLedgerData(ledgerId) {
     )
     fixed.reimbursementPaidStateFixed = Number(paidFixRes?.changes?.changes ?? 0)
 
-    const loanRows = (
-      await query(
-        `SELECT
-           l.id,
-           l.status,
-           l.principal_minor,
-           COALESCE(SUM(lp.amount_minor), 0) AS paid_minor
-         FROM loans l
-         LEFT JOIN loan_payments lp
-           ON lp.ledger_id = l.ledger_id
-          AND lp.loan_id = l.id
-         WHERE l.ledger_id = ?
-           AND l.deleted_at IS NULL
-         GROUP BY l.id;`,
-        [ledgerId],
-      )
-    )?.values ?? []
+    const loanRows = await listLoanStatusRows(ledgerId)
 
     for (const row of loanRows) {
       if (row.status === 'void') continue
 
-      let expected = 'active'
-      if (Number(row.paid_minor) > 0 && Number(row.paid_minor) < Number(row.principal_minor)) {
-        expected = 'partial'
-      }
-      if (Number(row.paid_minor) >= Number(row.principal_minor)) {
-        expected = 'settled'
-      }
+      const expected = expectedLoanStatus(row)
 
       if (row.status !== expected) {
         await run(

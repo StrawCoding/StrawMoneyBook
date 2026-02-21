@@ -30,10 +30,14 @@
             <span>{{ formatTime(tx.occurred_at) }}</span>
             <span>{{ tx.note || '-' }}</span>
           </div>
+          <div class="row muted">
+            <span>已報銷</span>
+            <MoneyText :value-minor="Math.abs(Number(tx.reimbursed_minor ?? 0))" />
+          </div>
 
           <div class="row btn-wrap">
             <button v-if="tab === 'pending'" class="btn primary" @click="openSettle(tx)">標記已報銷</button>
-            <button v-else class="btn" @click="markPending(tx.id)">回到未報銷</button>
+            <button v-else class="btn" @click="openEditPage(tx.id)">變更</button>
             <button class="btn danger" @click="markVoid(tx.id)">作廢</button>
           </div>
         </li>
@@ -86,7 +90,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
@@ -101,8 +106,10 @@ const transactionStore = useTransactionStore()
 const accountStore = useAccountStore()
 const uiStore = useUiStore()
 const ledgerStore = useLedgerStore()
+const route = useRoute()
+const router = useRouter()
 
-const tab = ref('pending')
+const tab = ref(route.query.tab === 'reimbursed' ? 'reimbursed' : 'pending')
 const isSettleOpen = ref(false)
 const settleTargetTx = ref(null)
 const settleForm = reactive({
@@ -123,6 +130,23 @@ onMounted(() => {
   reimbursementStore.load()
 })
 
+watch(
+  () => route.query.tab,
+  (value) => {
+    tab.value = value === 'reimbursed' ? 'reimbursed' : 'pending'
+  },
+)
+
+watch(tab, (value) => {
+  if (route.query.tab === value) return
+  router.replace({
+    query: {
+      ...route.query,
+      tab: value,
+    },
+  })
+})
+
 function formatTime(iso) {
   if (!iso) return '-'
   return new Date(iso).toLocaleString('zh-TW', {
@@ -136,8 +160,8 @@ function formatTime(iso) {
 
 function openSettle(tx) {
   settleTargetTx.value = tx
-  settleForm.amountMajor = Math.abs(Number(tx.amount_minor ?? 0)) / 100
-  settleForm.accountId = accountStore.accounts[0]?.id ?? ''
+  settleForm.amountMajor = Math.abs(Number(tx.reimbursed_minor ?? tx.amount_minor ?? 0)) / 100
+  settleForm.accountId = String(tx.reimbursed_account_id ?? accountStore.accounts[0]?.id ?? '')
   settleForm.copyToLedgerIds = []
   isSettleOpen.value = true
 }
@@ -146,6 +170,14 @@ function closeSettle() {
   isSettleOpen.value = false
   settleTargetTx.value = null
   settleForm.copyToLedgerIds = []
+}
+
+function openEditPage(txId) {
+  if (!txId) return
+  router.push({
+    name: 'reimbursement-edit',
+    params: { id: txId },
+  })
 }
 
 async function confirmSettle() {
@@ -158,25 +190,18 @@ async function confirmSettle() {
       occurredAt: new Date().toISOString(),
       note: `報銷入帳（來源交易：${settleTargetTx.value.id}）`,
       copyToLedgerIds: settleForm.copyToLedgerIds,
+      allowUpdate: tab.value === 'reimbursed',
     })
     await Promise.all([transactionStore.loadRecent(), accountStore.load()])
     const copiedInfo = Number(result?.copiedLedgers ?? 0) > 0 ? `，並複製到 ${result.copiedLedgers} 個帳本` : ''
-    if (result?.alreadyExists) {
+    if (result?.updatedIncome) {
+      uiStore.pushToast(`已更新報銷入帳${copiedInfo}`)
+    } else if (result?.alreadyExists) {
       uiStore.pushToast(`已標記為報銷，且已有入帳交易${copiedInfo}`)
     } else {
       uiStore.pushToast(`已標記報銷並完成入帳${copiedInfo}`)
     }
     closeSettle()
-  } catch (error) {
-    uiStore.pushToast(error.message ?? '更新失敗', 'error')
-  }
-}
-
-async function markPending(txId) {
-  try {
-    await reimbursementStore.markUnreimbursed(txId)
-    await Promise.all([transactionStore.loadRecent(), accountStore.load()])
-    uiStore.pushToast('已移回未報銷')
   } catch (error) {
     uiStore.pushToast(error.message ?? '更新失敗', 'error')
   }

@@ -126,6 +126,7 @@ const LEGACY_COLUMN_PATCHES = {
     'ALTER TABLE loan_payments ADD COLUMN principal_component_minor INTEGER;',
     'ALTER TABLE loan_payments ADD COLUMN interest_component_minor INTEGER;',
     'ALTER TABLE loan_payments ADD COLUMN generated_tx_id TEXT;',
+    'ALTER TABLE loan_payments ADD COLUMN generated_interest_tx_id TEXT;',
     'ALTER TABLE loan_payments ADD COLUMN note TEXT;',
     'ALTER TABLE loan_payments ADD COLUMN created_at TEXT;',
     'ALTER TABLE loan_payments ADD COLUMN updated_at TEXT;',

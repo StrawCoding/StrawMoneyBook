@@ -1,6 +1,6 @@
 {
   "name": "strawmoneybook",
-  "version": "0.2.31",
+  "version": "0.2.32",
   "private": true,
   "type": "module",
   "engines": {
@@ -11,6 +11,7 @@
     "bump:patch": "npm version patch --no-git-tag-version",
     "bump:android:versionCode": "node scripts/bump-android-version-code.mjs",
     "preaab": "npm run bump:patch && npm run bump:android:versionCode",
+    "simulate:google-backup": "node scripts/simulate-google-backup-flow.mjs",
     "dev": "vite",
     "debug": "VITE_FORCE_MEMBER_ON_DEBUG=true npx vite build --mode debug && npx cap sync android && cd android && ./gradlew assembleDebug && cd ..",
     "build": "vite build && npx cap sync android && cd android && ./gradlew assembleRelease && cd ..",

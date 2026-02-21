@@ -11,14 +11,18 @@ const GOOGLE_PROFILE_FETCH_TIMEOUT_MS = 8 * 1000
 const STALE_SIGNIN_PROMISE_MS = GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS + GOOGLE_BACKEND_REQUEST_TIMEOUT_MS + 15 * 1000
 const GOOGLE_LOGIN_TIMEOUT_MESSAGE = 'Google 登入逾時，請重試'
 const GOOGLE_BACKEND_TIMEOUT_MESSAGE = 'Google 授權交換逾時，請檢查網路後重試'
+const GOOGLE_OAUTH_DEFAULT_ORIGIN = 'https://www.strawmb.com'
 
 const SERVER_AUTH_CODE_FLOW_ENABLED = parseBooleanEnv(import.meta.env.VITE_GOOGLE_USE_SERVER_AUTH_CODE ?? 'true')
-const GOOGLE_OAUTH_EXCHANGE_URL = String(
-  import.meta.env.VITE_GOOGLE_OAUTH_EXCHANGE_URL ?? '/api/google/oauth/exchange',
-).trim()
-const GOOGLE_OAUTH_REFRESH_URL = String(
-  import.meta.env.VITE_GOOGLE_OAUTH_REFRESH_URL ?? '/api/google/oauth/refresh',
-).trim()
+const GOOGLE_OAUTH_API_ORIGIN = resolveGoogleOAuthApiOrigin()
+const GOOGLE_OAUTH_EXCHANGE_URL = resolveGoogleOAuthEndpoint(
+  import.meta.env.VITE_GOOGLE_OAUTH_EXCHANGE_URL,
+  '/api/google/oauth/exchange',
+)
+const GOOGLE_OAUTH_REFRESH_URL = resolveGoogleOAuthEndpoint(
+  import.meta.env.VITE_GOOGLE_OAUTH_REFRESH_URL,
+  '/api/google/oauth/refresh',
+)
 
 let initializedClientId = ''
 let initializedGoogleMode = ''
@@ -34,6 +38,41 @@ const GOOGLE_REAUTH_REQUIRED_CODE = 'GOOGLE_REAUTH_REQUIRED'
 function parseBooleanEnv(raw) {
   const value = String(raw ?? '').trim().toLowerCase()
   return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
+
+function isAbsoluteHttpUrl(value) {
+  return /^https?:\/\//i.test(String(value ?? '').trim())
+}
+
+function resolveGoogleOAuthApiOrigin() {
+  const explicitOrigin = String(import.meta.env.VITE_GOOGLE_OAUTH_API_ORIGIN ?? '').trim()
+  if (isAbsoluteHttpUrl(explicitOrigin)) {
+    return explicitOrigin.replace(/\/+$/, '')
+  }
+
+  const siteUrl = String(import.meta.env.VITE_PRIVACY_POLICY_URL ?? '').trim()
+  if (isAbsoluteHttpUrl(siteUrl)) {
+    try {
+      return new URL(siteUrl).origin
+    } catch {
+      // ignore parse failures
+    }
+  }
+
+  return GOOGLE_OAUTH_DEFAULT_ORIGIN
+}
+
+function resolveGoogleOAuthEndpoint(raw, fallbackPath) {
+  const value = String(raw ?? '').trim() || String(fallbackPath ?? '').trim()
+  if (!value) return ''
+  if (isAbsoluteHttpUrl(value)) return value
+  if (!value.startsWith('/')) return value
+  if (!Capacitor.isNativePlatform()) return value
+  try {
+    return new URL(value, `${GOOGLE_OAUTH_API_ORIGIN}/`).toString()
+  } catch {
+    return `${GOOGLE_OAUTH_API_ORIGIN}${value}`
+  }
 }
 
 function withTimeout(task, timeoutMs, timeoutMessage) {
@@ -259,13 +298,18 @@ function normalizeBackendTokenPayload(payload) {
 }
 
 async function postJson(url, payload) {
-  const response = await fetchWithTimeout(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload ?? {}),
-  }, GOOGLE_BACKEND_REQUEST_TIMEOUT_MS, GOOGLE_BACKEND_TIMEOUT_MESSAGE)
+  let response
+  try {
+    response = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload ?? {}),
+    }, GOOGLE_BACKEND_REQUEST_TIMEOUT_MS, GOOGLE_BACKEND_TIMEOUT_MESSAGE)
+  } catch (error) {
+    throw new Error(appendDebugDetails(`Google OAuth 請求失敗（url=${url}）`, error))
+  }
 
   const text = await response.text()
   let data = null
@@ -279,11 +323,11 @@ async function postJson(url, payload) {
 
   if (!response.ok) {
     const message = String(data?.error_description ?? data?.error ?? data?.message ?? text ?? '').trim()
-    throw new Error(message || `HTTP ${response.status}`)
+    throw new Error(`${message || `HTTP ${response.status}`}（url=${url}）`)
   }
 
   if (!data || typeof data !== 'object') {
-    throw new Error('後端回應格式錯誤')
+    throw new Error(`後端回應格式錯誤（url=${url}）`)
   }
 
   return data

@@ -2,10 +2,27 @@ const DRIVE_FILES_API = 'https://www.googleapis.com/drive/v3/files'
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files'
 
 function authHeaders(accessToken, extraHeaders = {}) {
+  const normalizedExtra = normalizeHeaders(extraHeaders)
+  delete normalizedExtra.Authorization
+  delete normalizedExtra.authorization
   return {
+    ...normalizedExtra,
     Authorization: `Bearer ${accessToken}`,
-    ...extraHeaders,
   }
+}
+
+function normalizeHeaders(headers) {
+  if (!headers) return {}
+  if (Array.isArray(headers)) {
+    return Object.fromEntries(headers)
+  }
+  if (typeof headers.entries === 'function') {
+    return Object.fromEntries(Array.from(headers.entries()))
+  }
+  if (typeof headers === 'object') {
+    return { ...headers }
+  }
+  return {}
 }
 
 async function fetchWithAuth(accessToken, reauth, url, init) {
@@ -100,13 +117,22 @@ async function updateDriveFile(accessToken, reauth, fileId, jsonText) {
 }
 
 export async function uploadBackupJsonToAppDataFolder({ accessToken, reauth, filename, jsonText }) {
-  const files = await findFilesByName(accessToken, reauth, filename)
+  let currentAccessToken = accessToken
+  const reauthWithCache = typeof reauth === 'function'
+    ? async () => {
+      const refreshed = await reauth()
+      currentAccessToken = String(refreshed ?? '').trim() || currentAccessToken
+      return currentAccessToken
+    }
+    : null
+
+  const files = await findFilesByName(currentAccessToken, reauthWithCache, filename)
   const primaryFile = files[0] || null
 
   if (primaryFile?.id) {
-    await updateDriveFile(accessToken, reauth, primaryFile.id, jsonText)
+    await updateDriveFile(currentAccessToken, reauthWithCache, primaryFile.id, jsonText)
     for (const duplicate of files.slice(1)) {
-      if (duplicate?.id) await deleteDriveFile(accessToken, reauth, duplicate.id)
+      if (duplicate?.id) await deleteDriveFile(currentAccessToken, reauthWithCache, duplicate.id)
     }
     return {
       fileId: primaryFile.id,
@@ -116,7 +142,7 @@ export async function uploadBackupJsonToAppDataFolder({ accessToken, reauth, fil
     }
   }
 
-  const created = await createDriveFile(accessToken, reauth, filename, jsonText)
+  const created = await createDriveFile(currentAccessToken, reauthWithCache, filename, jsonText)
   return {
     fileId: String(created?.id ?? ''),
     filename: String(created?.name ?? filename),

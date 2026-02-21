@@ -155,7 +155,38 @@ export async function listReimbursementTransactions(ledgerId, state) {
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.account_id, t.category_id, t.amount_minor,
             t.occurred_at, t.note, t.is_reimbursable, t.reimbursement_state, t.reimbursed_at,
-            t.include_in_budget, t.include_in_analysis, c.name AS category_name
+            t.include_in_budget, t.include_in_analysis, c.name AS category_name,
+            (
+              SELECT rt.id
+              FROM transactions rt
+              WHERE rt.ledger_id = t.ledger_id
+                AND rt.deleted_at IS NULL
+                AND rt.type = 'income'
+                AND rt.origin_type = 'reimbursement'
+                AND rt.external_ref_id = t.id
+              ORDER BY rt.created_at DESC
+              LIMIT 1
+            ) AS reimbursed_tx_id,
+            (
+              SELECT rt.account_id
+              FROM transactions rt
+              WHERE rt.ledger_id = t.ledger_id
+                AND rt.deleted_at IS NULL
+                AND rt.type = 'income'
+                AND rt.origin_type = 'reimbursement'
+                AND rt.external_ref_id = t.id
+              ORDER BY rt.created_at DESC
+              LIMIT 1
+            ) AS reimbursed_account_id,
+            COALESCE((
+              SELECT SUM(rt.amount_minor)
+              FROM transactions rt
+              WHERE rt.ledger_id = t.ledger_id
+                AND rt.deleted_at IS NULL
+                AND rt.type = 'income'
+                AND rt.origin_type = 'reimbursement'
+                AND rt.external_ref_id = t.id
+            ), 0) AS reimbursed_minor
      FROM transactions t
      LEFT JOIN categories c
        ON c.ledger_id = t.ledger_id
@@ -348,6 +379,21 @@ export async function softDeleteTransferGroup(ledgerId, transferGroupId) {
        AND transfer_group_id = ?
        AND deleted_at IS NULL;`,
     [now, now, ledgerId, transferGroupId],
+  )
+}
+
+export async function softDeleteTransactionsByOriginRef(ledgerId, originType, externalRefId) {
+  assertLedgerId(ledgerId)
+  const now = nowIso()
+  await run(
+    `UPDATE transactions
+     SET deleted_at = ?,
+         updated_at = ?
+     WHERE ledger_id = ?
+       AND origin_type = ?
+       AND external_ref_id = ?
+       AND deleted_at IS NULL;`,
+    [now, now, ledgerId, String(originType ?? ''), String(externalRefId ?? '')],
   )
 }
 

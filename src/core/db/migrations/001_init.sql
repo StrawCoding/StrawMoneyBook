@@ -160,6 +160,7 @@ CREATE TABLE IF NOT EXISTS loan_payments (
   principal_component_minor INTEGER,
   interest_component_minor INTEGER,
   generated_tx_id TEXT,
+  generated_interest_tx_id TEXT,
   note TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,

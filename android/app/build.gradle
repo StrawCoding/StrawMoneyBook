@@ -15,7 +15,7 @@ android {
         applicationId "com.strawcoding.strawmoneybook"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 34
+        versionCode 35
         versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -38,6 +38,7 @@ android {
     }
     buildTypes {
         debug {
+            applicationIdSuffix "debug"
             if (keystorePropertiesFile.exists()) {
                 signingConfig signingConfigs.release
             }

@@ -97,6 +97,9 @@ async function copyExpenseToTargetLedgers(sourceLedgerId, sourceTx, payload = {}
 
   const occurredAt = payload.copyOccurredAt ?? payload.occurredAt ?? sourceTx.occurred_at ?? nowIso()
   const noteWithDate = buildCopiedExpenseNote(sourceTx.note, occurredAt)
+  const settledAmountMinor = Math.round(Number(payload.amountMinor ?? 0))
+  const fallbackSourceMinor = Math.abs(Math.round(Number(sourceTx.amount_minor ?? 0)))
+  const copiedExpenseAmountMinor = (settledAmountMinor > 0 ? settledAmountMinor : fallbackSourceMinor) * -1
   let copied = 0
   let skipped = 0
 
@@ -115,7 +118,7 @@ async function copyExpenseToTargetLedgers(sourceLedgerId, sourceTx, payload = {}
       type: 'expense',
       accountId,
       categoryId,
-      amountMinor: Number(sourceTx.amount_minor ?? 0),
+      amountMinor: copiedExpenseAmountMinor,
       occurredAt,
       note: noteWithDate,
       originType: 'manual',
@@ -381,14 +384,13 @@ export async function settleReimbursableExpense(ledgerId, payload) {
   }
 
   const amountMinor = Math.round(Number(payload.amountMinor ?? 0))
+  const allowUpdate = payload?.allowUpdate === true
 
   return withTransaction(async () => {
     const sourceTx = await findTransactionRecordById(ledgerId, payload.txId)
     if (!sourceTx) {
       throw new Error('找不到來源交易')
     }
-
-    await markTransactionReimbursed(ledgerId, payload.txId, true)
 
     if (!payload.accountId) {
       throw new Error('請選擇入帳帳戶')
@@ -400,8 +402,14 @@ export async function settleReimbursableExpense(ledgerId, payload) {
 
     const existing = await findReimbursementSettlementIncomeTx(ledgerId, payload.txId)
     if (existing) {
-      return { marked: true, createdIncome: true, alreadyExists: true, incomeTxId: existing.id }
+      if (!allowUpdate) {
+        await markTransactionReimbursed(ledgerId, payload.txId, true)
+        return { marked: true, createdIncome: true, alreadyExists: true, incomeTxId: existing.id }
+      }
+      await softDeleteTransactionById(ledgerId, existing.id)
     }
+
+    await markTransactionReimbursed(ledgerId, payload.txId, true)
 
     const reimbursementCategoryId = await ensureHiddenReimbursementCategory(ledgerId)
     const occurredAt = payload.occurredAt ?? nowIso()
@@ -425,6 +433,7 @@ export async function settleReimbursableExpense(ledgerId, payload) {
     return {
       marked: true,
       createdIncome: true,
+      updatedIncome: Boolean(existing && allowUpdate),
       incomeTxId,
       copiedLedgers: copiedResult.copied,
       skippedLedgers: copiedResult.skipped,

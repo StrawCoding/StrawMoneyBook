@@ -2,16 +2,32 @@ import { withTransaction } from '@/core/db/sqlite'
 import { nowIso } from '@/core/utils/id'
 import { ensureCounterpartyByName } from '@/core/repositories/counterparty.repo'
 import {
+  createCategory,
+  createCategoryGroup,
+  listCategories,
+  listCategoryGroups,
+} from '@/core/repositories/category.repo'
+import {
   countLoans,
   createLoan,
   createLoanPayment,
+  deleteLoanPaymentsByLoanId,
   getLoanById,
+  getLoanPaymentById,
   listLoanPayments,
   listLoans,
-  sumLoanPayments,
+  softDeleteLoanById,
+  sumLoanPaymentsAmountExcluding,
+  updateLoanPaymentById,
+  updateLoanPrincipalById,
   updateLoanStatus,
 } from '@/core/repositories/loan.repo'
-import { addTransaction } from '@/core/repositories/transaction.repo'
+import {
+  addTransaction,
+  softDeleteTransactionById,
+  softDeleteTransactionsByOriginRef,
+  updateTransactionById,
+} from '@/core/repositories/transaction.repo'
 import { assertCanCreateLoan } from '@/core/services/membership.service'
 
 function validateDirection(direction) {
@@ -23,19 +39,92 @@ function validateDirection(direction) {
 function validateAmountMinor(amountMinor, fieldName = 'amountMinor') {
   const amount = Number(amountMinor)
   if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error(`${fieldName} 必須為大於 0 的整數`) 
+    throw new Error(`${fieldName} 必須為大於 0 的整數`)
   }
   return Math.round(amount)
 }
 
-function nextLoanStatus(principalMinor, paidMinor) {
+function validateOptionalAmountMinor(amountMinor, fieldName = 'amountMinor') {
+  if (amountMinor === null || amountMinor === undefined || amountMinor === '') return 0
+  const amount = Number(amountMinor)
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new Error(`${fieldName} 必須為大於等於 0 的整數`)
+  }
+  return Math.round(amount)
+}
+
+function parseInterestRuleJson(rawRule) {
+  if (!rawRule) return { presetInterestMinor: 0 }
+  try {
+    const parsed = JSON.parse(String(rawRule))
+    const presetInterestMinor = Math.max(0, Math.round(Number(parsed?.presetInterestMinor ?? 0)))
+    return { presetInterestMinor }
+  } catch {
+    return { presetInterestMinor: 0 }
+  }
+}
+
+function normalizeLoanRecord(loan) {
+  if (!loan) return null
+
+  const principalMinor = Math.max(0, Number(loan.principal_minor ?? 0))
+  const paidMinor = Math.max(0, Number(loan.paid_minor ?? 0))
+  const { presetInterestMinor } = parseInterestRuleJson(loan.interest_rule_json)
+
+  const principalPaidMinor = Math.min(principalMinor, paidMinor)
+  const interestPaidMinor = Math.max(0, paidMinor - principalMinor)
+  const targetTotalMinor = principalMinor + presetInterestMinor
+  const remainingMinor = Math.max(0, targetTotalMinor - paidMinor)
+  const interestRemainingMinor = Math.max(0, presetInterestMinor - interestPaidMinor)
+
+  return {
+    ...loan,
+    preset_interest_minor: presetInterestMinor,
+    target_total_minor: targetTotalMinor,
+    principal_paid_minor: principalPaidMinor,
+    principal_remaining_minor: Math.max(0, principalMinor - principalPaidMinor),
+    interest_paid_minor: interestPaidMinor,
+    interest_remaining_minor: interestRemainingMinor,
+    remaining_minor: remainingMinor,
+  }
+}
+
+function nextLoanStatus(targetTotalMinor, paidMinor) {
   if (paidMinor <= 0) return 'active'
-  if (paidMinor >= principalMinor) return 'settled'
+  if (paidMinor >= targetTotalMinor) return 'settled'
   return 'partial'
 }
 
+async function ensureLoanInterestCategory(ledgerId, kind) {
+  const categories = await listCategories(ledgerId, { includeArchived: true })
+  const existing = categories.find(
+    (item) => item.name === '借貸利息' && !Number(item.is_archived) && (item.kind === kind || item.kind === 'both'),
+  )
+  if (existing) return existing.id
+
+  const groups = await listCategoryGroups(ledgerId)
+  let group = groups.find((item) => !Number(item.is_archived) && (item.kind === kind || item.kind === 'both'))
+  if (!group) {
+    group = await createCategoryGroup(ledgerId, {
+      name: kind === 'income' ? '收入' : '支出',
+      kind,
+      sortOrder: groups.length,
+    })
+  }
+
+  const created = await createCategory(ledgerId, {
+    groupId: group.id,
+    name: '借貸利息',
+    kind,
+    icon: 'fa-solid fa-percent',
+    isBudgetable: kind === 'expense' ? 1 : 0,
+    sortOrder: categories.filter((item) => item.group_id === group.id).length,
+  })
+  return created.id
+}
+
 export async function loadLoanDashboard(ledgerId) {
-  const loans = await listLoans(ledgerId)
+  const loans = (await listLoans(ledgerId)).map((loan) => normalizeLoanRecord(loan))
   const activeCount = loans.filter((loan) => ['active', 'partial'].includes(loan.status)).length
   const totalReceivable = loans
     .filter((loan) => loan.direction === 'lend' && loan.status !== 'void')
@@ -57,6 +146,7 @@ export async function loadLoanDashboard(ledgerId) {
 export async function createLoanWithOptionalTransaction(ledgerId, payload) {
   validateDirection(payload.direction)
   const principalMinor = validateAmountMinor(payload.principalMinor, 'principalMinor')
+  const interestMinor = validateOptionalAmountMinor(payload.interestMinor, 'interestMinor')
 
   if (!payload.counterpartyName?.trim()) {
     throw new Error('請輸入借貸對象')
@@ -80,6 +170,7 @@ export async function createLoanWithOptionalTransaction(ledgerId, payload) {
       counterpartyId,
       direction: payload.direction,
       principalMinor,
+      interestRuleJson: interestMinor > 0 ? JSON.stringify({ presetInterestMinor: interestMinor }) : null,
       startDate: payload.startDate,
       dueDate: payload.dueDate ?? null,
       note: payload.note ?? null,
@@ -115,7 +206,7 @@ export async function addLoanRepayment(ledgerId, payload) {
   }
 
   return withTransaction(async () => {
-    const loan = await getLoanById(ledgerId, payload.loanId)
+    const loan = normalizeLoanRecord(await getLoanById(ledgerId, payload.loanId))
     if (!loan) {
       throw new Error('找不到借貸資料')
     }
@@ -124,43 +215,66 @@ export async function addLoanRepayment(ledgerId, payload) {
       throw new Error('已作廢借貸不可還款')
     }
 
-    const paidMinor = await sumLoanPayments(ledgerId, payload.loanId)
-    const principalMinor = Number(loan.principal_minor)
-    const remainingMinor = principalMinor - paidMinor
+    const paidMinor = Number(loan.paid_minor ?? 0)
+    const principalMinor = Number(loan.principal_minor ?? 0)
+    const targetTotalMinor = Number(loan.target_total_minor ?? principalMinor)
+    const remainingMinor = Math.max(0, targetTotalMinor - paidMinor)
 
     if (remainingMinor <= 0) {
       throw new Error('此借貸已結清')
     }
 
-    if (amountMinor > remainingMinor) {
-      throw new Error(`還款金額不可超過剩餘本金 ${remainingMinor}`)
-    }
+    const principalRemainingMinor = Math.max(0, principalMinor - Number(loan.principal_paid_minor ?? 0))
+    const principalComponentMinor = Math.min(amountMinor, principalRemainingMinor)
+    const interestComponentMinor = Math.max(0, amountMinor - principalComponentMinor)
 
     const txType = loan.direction === 'lend' ? 'income' : 'expense'
-    const txAmountMinor = loan.direction === 'lend' ? amountMinor : amountMinor * -1
+    const occurredAt = payload.paidAt ?? nowIso()
+    const noteBase = payload.note ?? `借貸還款：${loan.counterparty_name ?? ''}`
 
-    const txId = await addTransaction(ledgerId, {
-      type: txType,
-      accountId: payload.accountId,
-      categoryId: payload.categoryId ?? null,
-      amountMinor: txAmountMinor,
-      occurredAt: payload.paidAt ?? nowIso(),
-      note: payload.note ?? `借貸還款：${loan.counterparty_name ?? ''}`,
-      originType: 'loan_payment',
-      externalRefId: loan.id,
-    })
+    let txId = null
+    if (principalComponentMinor > 0) {
+      txId = await addTransaction(ledgerId, {
+        type: txType,
+        accountId: payload.accountId,
+        categoryId: null,
+        amountMinor: loan.direction === 'lend' ? principalComponentMinor : principalComponentMinor * -1,
+        occurredAt,
+        note: noteBase,
+        originType: 'loan_payment',
+        externalRefId: loan.id,
+      })
+    }
+
+    let interestTxId = null
+    if (interestComponentMinor > 0) {
+      const interestCategoryId = await ensureLoanInterestCategory(ledgerId, txType)
+      interestTxId = await addTransaction(ledgerId, {
+        type: txType,
+        accountId: payload.accountId,
+        categoryId: interestCategoryId,
+        amountMinor: loan.direction === 'lend' ? interestComponentMinor : interestComponentMinor * -1,
+        occurredAt,
+        note: payload.note ?? `借貸利息：${loan.counterparty_name ?? ''}`,
+        originType: 'loan_payment',
+        externalRefId: loan.id,
+      })
+    }
 
     const paymentId = await createLoanPayment(ledgerId, {
       loanId: loan.id,
       accountId: payload.accountId,
-      paidAt: payload.paidAt ?? nowIso(),
+      paidAt: occurredAt,
       amountMinor,
+      principalComponentMinor,
+      interestComponentMinor,
       generatedTxId: txId,
+      generatedInterestTxId: interestTxId,
       note: payload.note ?? null,
     })
 
     const nextPaidMinor = paidMinor + amountMinor
-    const status = nextLoanStatus(principalMinor, nextPaidMinor)
+    const status = nextLoanStatus(targetTotalMinor, nextPaidMinor)
     const settledAt = status === 'settled' ? nowIso() : null
 
     await updateLoanStatus(ledgerId, loan.id, status, { settledAt })
@@ -168,8 +282,145 @@ export async function addLoanRepayment(ledgerId, payload) {
     return {
       paymentId,
       txId,
+      interestTxId,
       status,
-      remainingMinor: principalMinor - nextPaidMinor,
+      principalComponentMinor,
+      interestComponentMinor,
+      remainingMinor: Math.max(0, targetTotalMinor - nextPaidMinor),
+    }
+  })
+}
+
+export async function updateLoanRepayment(ledgerId, payload) {
+  const amountMinor = validateAmountMinor(payload.amountMinor, 'repaymentAmountMinor')
+
+  if (!payload.paymentId) {
+    throw new Error('paymentId 為必填')
+  }
+
+  if (!payload.accountId) {
+    throw new Error('還款必須指定帳戶')
+  }
+
+  return withTransaction(async () => {
+    const payment = await getLoanPaymentById(ledgerId, payload.paymentId)
+    if (!payment) {
+      throw new Error('找不到還款紀錄')
+    }
+
+    const loan = normalizeLoanRecord(await getLoanById(ledgerId, payment.loan_id))
+    if (!loan) {
+      throw new Error('找不到借貸資料')
+    }
+    if (loan.status === 'void') {
+      throw new Error('已作廢借貸不可修改還款')
+    }
+
+    const principalMinor = Number(loan.principal_minor ?? 0)
+    const targetTotalMinor = Number(loan.target_total_minor ?? principalMinor)
+    const paidExcludingCurrent = await sumLoanPaymentsAmountExcluding(ledgerId, loan.id, payment.id)
+    const nextPaidMinor = paidExcludingCurrent + amountMinor
+    const principalPaidExcludingCurrent = Math.min(principalMinor, Math.max(0, paidExcludingCurrent))
+    const principalRemainingMinor = Math.max(0, principalMinor - principalPaidExcludingCurrent)
+    const principalComponentMinor = Math.min(amountMinor, principalRemainingMinor)
+    const interestComponentMinor = Math.max(0, amountMinor - principalComponentMinor)
+
+    const occurredAt = payload.paidAt ?? payment.paid_at ?? nowIso()
+    const note = payload.note ?? null
+    const txType = loan.direction === 'lend' ? 'income' : 'expense'
+    let principalTxId = payment.generated_tx_id ? String(payment.generated_tx_id) : null
+    let interestTxId = payment.generated_interest_tx_id ? String(payment.generated_interest_tx_id) : null
+
+    const noteBase = note || `借貸還款：${loan.counterparty_name ?? ''}`
+
+    if (principalComponentMinor > 0) {
+      const nextAmountMinor = loan.direction === 'lend' ? principalComponentMinor : principalComponentMinor * -1
+      if (principalTxId) {
+        await updateTransactionById(ledgerId, principalTxId, {
+          accountId: payload.accountId,
+          peerAccountId: null,
+          categoryId: null,
+          amountMinor: nextAmountMinor,
+          occurredAt,
+          note: noteBase,
+          isReimbursable: false,
+          reimbursementState: 'none',
+          includeInBudget: true,
+          includeInAnalysis: true,
+        })
+      } else {
+        principalTxId = await addTransaction(ledgerId, {
+          type: txType,
+          accountId: payload.accountId,
+          categoryId: null,
+          amountMinor: nextAmountMinor,
+          occurredAt,
+          note: noteBase,
+          originType: 'loan_payment',
+          externalRefId: loan.id,
+        })
+      }
+    } else if (principalTxId) {
+      await softDeleteTransactionById(ledgerId, principalTxId)
+      principalTxId = null
+    }
+
+    if (interestComponentMinor > 0) {
+      const interestCategoryId = await ensureLoanInterestCategory(ledgerId, txType)
+      const interestAmountMinor = loan.direction === 'lend' ? interestComponentMinor : interestComponentMinor * -1
+      if (interestTxId) {
+        await updateTransactionById(ledgerId, interestTxId, {
+          accountId: payload.accountId,
+          peerAccountId: null,
+          categoryId: interestCategoryId,
+          amountMinor: interestAmountMinor,
+          occurredAt,
+          note: note || `借貸利息：${loan.counterparty_name ?? ''}`,
+          isReimbursable: false,
+          reimbursementState: 'none',
+          includeInBudget: true,
+          includeInAnalysis: true,
+        })
+      } else {
+        interestTxId = await addTransaction(ledgerId, {
+          type: txType,
+          accountId: payload.accountId,
+          categoryId: interestCategoryId,
+          amountMinor: interestAmountMinor,
+          occurredAt,
+          note: note || `借貸利息：${loan.counterparty_name ?? ''}`,
+          originType: 'loan_payment',
+          externalRefId: loan.id,
+        })
+      }
+    } else if (interestTxId) {
+      await softDeleteTransactionById(ledgerId, interestTxId)
+      interestTxId = null
+    }
+
+    await updateLoanPaymentById(ledgerId, payment.id, {
+      accountId: payload.accountId,
+      paidAt: occurredAt,
+      amountMinor,
+      principalComponentMinor,
+      interestComponentMinor,
+      generatedTxId: principalTxId,
+      generatedInterestTxId: interestTxId,
+      note,
+    })
+
+    const status = nextLoanStatus(targetTotalMinor, nextPaidMinor)
+    const settledAt = status === 'settled' ? nowIso() : null
+    await updateLoanStatus(ledgerId, loan.id, status, { settledAt })
+
+    return {
+      paymentId: payment.id,
+      txId: principalTxId,
+      interestTxId,
+      status,
+      principalComponentMinor,
+      interestComponentMinor,
+      remainingMinor: Math.max(0, targetTotalMinor - nextPaidMinor),
     }
   })
 }
@@ -179,16 +430,185 @@ export async function voidLoan(ledgerId, loanId) {
     throw new Error('loanId 為必填')
   }
 
-  const paidMinor = await sumLoanPayments(ledgerId, loanId)
-  if (paidMinor > 0) {
-    throw new Error('已有還款紀錄，無法作廢')
+  return withTransaction(async () => {
+    const loan = await getLoanById(ledgerId, loanId)
+    if (!loan) {
+      throw new Error('找不到借貸資料')
+    }
+    if (loan.status === 'void') {
+      throw new Error('借貸已作廢')
+    }
+
+    return updateLoanStatus(ledgerId, loanId, 'void', { settledAt: null })
+  })
+}
+
+export async function updateCompletedLoanPrincipal(ledgerId, payload) {
+  const principalMinor = validateAmountMinor(payload.principalMinor, 'principalMinor')
+  if (!payload.loanId) {
+    throw new Error('loanId 為必填')
   }
 
-  return updateLoanStatus(ledgerId, loanId, 'void', { settledAt: null })
+  return withTransaction(async () => {
+    const rawLoan = await getLoanById(ledgerId, payload.loanId)
+    if (!rawLoan) {
+      throw new Error('找不到借貸資料')
+    }
+    const loan = normalizeLoanRecord(rawLoan)
+    if (!['settled', 'void'].includes(loan.status)) {
+      throw new Error('僅已完成借貸可變更本金')
+    }
+
+    await updateLoanPrincipalById(ledgerId, loan.id, principalMinor)
+
+    const payments = await listLoanPayments(ledgerId, loan.id)
+    const chronological = payments
+      .slice()
+      .sort((a, b) => String(a.paid_at ?? '').localeCompare(String(b.paid_at ?? '')) || String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')))
+    const txType = loan.direction === 'lend' ? 'income' : 'expense'
+    let principalRemainingMinor = principalMinor
+    let paidMinor = 0
+
+    for (const payment of chronological) {
+      const paymentAmountMinor = Math.max(0, Number(payment.amount_minor ?? 0))
+      paidMinor += paymentAmountMinor
+      const principalComponentMinor = Math.min(paymentAmountMinor, Math.max(0, principalRemainingMinor))
+      const interestComponentMinor = Math.max(0, paymentAmountMinor - principalComponentMinor)
+      principalRemainingMinor = Math.max(0, principalRemainingMinor - principalComponentMinor)
+      let principalTxId = payment.generated_tx_id ? String(payment.generated_tx_id) : null
+      let interestTxId = payment.generated_interest_tx_id ? String(payment.generated_interest_tx_id) : null
+
+      if (principalComponentMinor > 0) {
+        const amountMinor = loan.direction === 'lend' ? principalComponentMinor : principalComponentMinor * -1
+        if (principalTxId) {
+          await updateTransactionById(ledgerId, principalTxId, {
+            accountId: payment.account_id,
+            peerAccountId: null,
+            categoryId: null,
+            amountMinor,
+            occurredAt: payment.paid_at,
+            note: payment.note || `借貸還款：${loan.counterparty_name ?? ''}`,
+            isReimbursable: false,
+            reimbursementState: 'none',
+            includeInBudget: true,
+            includeInAnalysis: true,
+          })
+        } else {
+          principalTxId = await addTransaction(ledgerId, {
+            type: txType,
+            accountId: payment.account_id,
+            categoryId: null,
+            amountMinor,
+            occurredAt: payment.paid_at,
+            note: payment.note || `借貸還款：${loan.counterparty_name ?? ''}`,
+            originType: 'loan_payment',
+            externalRefId: loan.id,
+          })
+        }
+      } else if (principalTxId) {
+        await softDeleteTransactionById(ledgerId, principalTxId)
+        principalTxId = null
+      }
+
+      if (interestComponentMinor > 0) {
+        const interestCategoryId = await ensureLoanInterestCategory(ledgerId, txType)
+        const amountMinor = loan.direction === 'lend' ? interestComponentMinor : interestComponentMinor * -1
+        if (interestTxId) {
+          await updateTransactionById(ledgerId, interestTxId, {
+            accountId: payment.account_id,
+            peerAccountId: null,
+            categoryId: interestCategoryId,
+            amountMinor,
+            occurredAt: payment.paid_at,
+            note: payment.note || `借貸利息：${loan.counterparty_name ?? ''}`,
+            isReimbursable: false,
+            reimbursementState: 'none',
+            includeInBudget: true,
+            includeInAnalysis: true,
+          })
+        } else {
+          interestTxId = await addTransaction(ledgerId, {
+            type: txType,
+            accountId: payment.account_id,
+            categoryId: interestCategoryId,
+            amountMinor,
+            occurredAt: payment.paid_at,
+            note: payment.note || `借貸利息：${loan.counterparty_name ?? ''}`,
+            originType: 'loan_payment',
+            externalRefId: loan.id,
+          })
+        }
+      } else if (interestTxId) {
+        await softDeleteTransactionById(ledgerId, interestTxId)
+        interestTxId = null
+      }
+
+      await updateLoanPaymentById(ledgerId, payment.id, {
+        accountId: payment.account_id,
+        paidAt: payment.paid_at,
+        amountMinor: paymentAmountMinor,
+        principalComponentMinor,
+        interestComponentMinor,
+        generatedTxId: principalTxId,
+        generatedInterestTxId: interestTxId,
+        note: payment.note,
+      })
+    }
+
+    const updatedLoan = normalizeLoanRecord(await getLoanById(ledgerId, loan.id))
+    if (!updatedLoan) throw new Error('找不到借貸資料')
+    if (updatedLoan.status === 'void') {
+      return { loanId: loan.id, principalMinor }
+    }
+
+    const targetTotalMinor = Number(updatedLoan.target_total_minor ?? principalMinor)
+    const nextStatus = nextLoanStatus(targetTotalMinor, paidMinor)
+    await updateLoanStatus(ledgerId, loan.id, nextStatus, {
+      settledAt: nextStatus === 'settled' ? nowIso() : null,
+    })
+    return { loanId: loan.id, principalMinor, status: nextStatus }
+  })
+}
+
+export async function restoreLoan(ledgerId, loanId) {
+  if (!loanId) {
+    throw new Error('loanId 為必填')
+  }
+
+  const loan = await getLoanById(ledgerId, loanId)
+  if (!loan) {
+    throw new Error('找不到借貸資料')
+  }
+  if (loan.status !== 'void') {
+    throw new Error('僅作廢借貸可恢復')
+  }
+
+  return updateLoanStatus(ledgerId, loanId, 'active', { settledAt: null })
+}
+
+export async function deleteVoidedLoan(ledgerId, loanId) {
+  if (!loanId) {
+    throw new Error('loanId 為必填')
+  }
+
+  return withTransaction(async () => {
+    const loan = await getLoanById(ledgerId, loanId)
+    if (!loan) {
+      throw new Error('找不到借貸資料')
+    }
+    if (!['void', 'settled'].includes(loan.status)) {
+      throw new Error('僅已完成借貸可刪除')
+    }
+
+    await softDeleteTransactionsByOriginRef(ledgerId, 'loan_payment', loanId)
+    await deleteLoanPaymentsByLoanId(ledgerId, loanId)
+    await softDeleteLoanById(ledgerId, loanId)
+    return { deleted: true, loanId }
+  })
 }
 
 export async function getLoanDetail(ledgerId, loanId) {
-  const loan = await getLoanById(ledgerId, loanId)
+  const loan = normalizeLoanRecord(await getLoanById(ledgerId, loanId))
   if (!loan) {
     throw new Error('找不到借貸資料')
   }

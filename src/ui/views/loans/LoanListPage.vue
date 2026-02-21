@@ -70,14 +70,42 @@
               </label>
 
               <label>
-                開始日期
-                <input v-model="createForm.startDate" class="input" type="date" />
+                預設利息（元，可選）
+                <input v-model.number="createForm.interestMajor" class="input" type="number" min="0" step="1" />
               </label>
 
-              <label>
-                到期日（可選）
-                <input v-model="createForm.dueDate" class="input" type="date" />
-              </label>
+              <div class="field-block">
+                <span class="field-label">開始日期</span>
+                <div class="date-picker-wrap">
+                  <DateTimePickerField
+                    :date="createForm.startDate"
+                    :hour="createForm.startHour"
+                    :minute="createForm.startMinute"
+                    prefer-bottom-anchor
+                    @update:date="pickCreateStartDate"
+                    @update:hour="pickCreateStartHour"
+                    @update:minute="pickCreateStartMinute"
+                  />
+                </div>
+              </div>
+
+              <div class="field-block">
+                <span class="field-label">到期日（可選）</span>
+                <div class="row due-date-row">
+                  <div class="due-picker-wrap">
+                    <DateTimePickerField
+                      :date="createForm.dueDate"
+                      :hour="createForm.dueHour"
+                      :minute="createForm.dueMinute"
+                      prefer-bottom-anchor
+                      @update:date="pickCreateDueDate"
+                      @update:hour="pickCreateDueHour"
+                      @update:minute="pickCreateDueMinute"
+                    />
+                  </div>
+                  <button class="btn mini-btn" type="button" @click="clearCreateDueDate">清除</button>
+                </div>
+              </div>
 
               <label>
                 建立入帳帳戶
@@ -106,6 +134,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
@@ -132,8 +161,13 @@ const createForm = reactive({
   direction: 'lend',
   counterpartyName: '',
   principalMajor: null,
+  interestMajor: null,
   startDate: new Date().toISOString().slice(0, 10),
+  startHour: new Date().getHours(),
+  startMinute: new Date().getMinutes(),
   dueDate: '',
+  dueHour: new Date().getHours(),
+  dueMinute: new Date().getMinutes(),
   accountId: '',
   note: '',
 })
@@ -209,12 +243,18 @@ function openCounterpartyDetail(name) {
 }
 
 function openCreateSheet() {
+  const now = new Date()
   createOpen.value = true
   createForm.direction = 'lend'
   createForm.counterpartyName = ''
   createForm.principalMajor = null
-  createForm.startDate = new Date().toISOString().slice(0, 10)
+  createForm.interestMajor = null
+  createForm.startDate = now.toISOString().slice(0, 10)
+  createForm.startHour = now.getHours()
+  createForm.startMinute = now.getMinutes()
   createForm.dueDate = ''
+  createForm.dueHour = now.getHours()
+  createForm.dueMinute = now.getMinutes()
   createForm.accountId = defaultAccountId.value
   createForm.note = ''
 }
@@ -223,14 +263,60 @@ function closeCreateSheet() {
   createOpen.value = false
 }
 
+function pickCreateStartDate(value) {
+  createForm.startDate = String(value ?? '')
+}
+
+function pickCreateStartHour(value) {
+  createForm.startHour = Number(value ?? 0)
+}
+
+function pickCreateStartMinute(value) {
+  createForm.startMinute = Number(value ?? 0)
+}
+
+function pickCreateDueDate(value) {
+  createForm.dueDate = String(value ?? '')
+}
+
+function pickCreateDueHour(value) {
+  createForm.dueHour = Number(value ?? 0)
+}
+
+function pickCreateDueMinute(value) {
+  createForm.dueMinute = Number(value ?? 0)
+}
+
+function clearCreateDueDate() {
+  createForm.dueDate = ''
+}
+
+function pad2(value) {
+  return String(value).padStart(2, '0')
+}
+
+function formatLoanDateTime(date, hour, minute) {
+  return `${date} ${pad2(hour)}:${pad2(minute)}`
+}
+
+function toIsoFromDateTime(date, hour, minute) {
+  const parsed = new Date(`${date}T${pad2(hour)}:${pad2(minute)}:00`)
+  if (Number.isNaN(parsed.getTime())) return new Date().toISOString()
+  return parsed.toISOString()
+}
+
 async function createLoan() {
   try {
     await loanStore.create({
       direction: createForm.direction,
       counterpartyName: createForm.counterpartyName,
       principalMinor: Math.round(Number(createForm.principalMajor ?? 0) * 100),
-      startDate: createForm.startDate,
-      dueDate: createForm.dueDate || null,
+      interestMinor: Math.round(Number(createForm.interestMajor ?? 0) * 100),
+      startDate: formatLoanDateTime(createForm.startDate, createForm.startHour, createForm.startMinute),
+      dueDate: createForm.dueDate
+        ? formatLoanDateTime(createForm.dueDate, createForm.dueHour, createForm.dueMinute)
+        : null,
+      occurredAt: toIsoFromDateTime(createForm.startDate, createForm.startHour, createForm.startMinute),
       accountId: createForm.accountId,
       note: createForm.note,
     })
@@ -306,6 +392,29 @@ h2, h3 {
 }
 .form-wrap {
   margin-top: 10px
+}
+.field-block {
+  display: grid;
+  gap: 6px
+}
+.field-label {
+  color: var(--muted);
+  font-size: 13px
+}
+.date-picker-wrap {
+  width: min(220px, 100%)
+}
+.due-date-row {
+  gap: 8px;
+  align-items: center
+}
+.due-picker-wrap {
+  flex: 0 1 220px;
+  min-width: 0;
+  max-width: 220px
+}
+.due-date-row .mini-btn {
+  flex: 0 0 auto
 }
 label {
   display: grid;

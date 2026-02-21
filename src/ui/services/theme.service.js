@@ -434,23 +434,3 @@ export function loadThemeColor() {
   const applied = applyPreference(readPreference())
   return applied.primary
 }
-
-export function applyFontScale(fontScale) {
-  return applyFontScaleInternal(fontScale)
-}
-
-export function saveFontScale(fontScale) {
-  const preference = readPreference()
-  preference.fontScale = normalizeFontScale(fontScale)
-  const applied = applyPreference(preference)
-  writePreference(preference)
-  return applied.fontScale
-}
-
-export function getDefaultFontScale() {
-  return FONT_SCALE_DEFAULT
-}
-
-export function getDefaultThemeColor() {
-  return getScheme(DEFAULT_SCHEME_ID).palette.primary
-}

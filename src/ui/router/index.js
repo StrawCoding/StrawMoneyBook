@@ -175,9 +175,21 @@ const router = createRouter({
       component: () => import('@/ui/views/loans/LoanCounterpartyDetailPage.vue'),
     },
     {
+      name: 'loan-detail',
+      path: '/loans/:id',
+      component: () => import('@/ui/views/loans/LoanDetailPage.vue'),
+      props: true,
+    },
+    {
       name: 'reimbursements',
       path: '/reimbursements',
       component: () => import('@/ui/views/reimbursements/ReimbursementListPage.vue'),
+    },
+    {
+      name: 'reimbursement-edit',
+      path: '/reimbursements/:id/edit',
+      component: () => import('@/ui/views/reimbursements/ReimbursementEditPage.vue'),
+      props: true,
     },
     {
       name: 'account-detail',

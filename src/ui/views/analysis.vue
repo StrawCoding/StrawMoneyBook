@@ -53,6 +53,9 @@
             <li v-for="item in activeBreakdown" :key="`${analysisType}-${item.id}`">
               <button type="button" class="legend-item legend-btn" @click="openCategoryDetail(item)">
                 <span class="legend-dot" :style="{ background: item.color }"></span>
+                <span class="legend-icon-wrap">
+                  <font-awesome-icon v-if="item.icon" :icon="item.icon" class="legend-icon" />
+                </span>
                 <span class="legend-label">{{ item.name }}</span>
                 <MoneyText :value-minor="item.amountMinor" />
                 <span class="legend-count">{{ t('analysis_page.items_count', { count: item.count }) }}</span>
@@ -112,6 +115,14 @@ const categoryNameMap = computed(() => {
   const map = new Map()
   for (const category of categoryStore.categories) {
     map.set(category.id, category.name)
+  }
+  return map
+})
+
+const categoryIconMap = computed(() => {
+  const map = new Map()
+  for (const category of categoryStore.categories) {
+    map.set(category.id, String(category.icon ?? '').trim())
   }
   return map
 })
@@ -216,6 +227,7 @@ function buildBreakdown(type, palette) {
       amountMinor: aggregate.amountMinor,
       count: aggregate.count,
       name: id === '__uncategorized__' ? t('analysis_page.uncategorized') : categoryNameMap.value.get(id) || t('analysis_page.uncategorized'),
+      icon: id === '__uncategorized__' ? '' : categoryIconMap.value.get(id) || '',
     }))
     .sort((a, b) => b.amountMinor - a.amountMinor)
 
@@ -321,7 +333,7 @@ h2, h3 {
 }
 .legend-item {
   display: grid;
-  grid-template-columns: auto 1fr auto auto auto;
+  grid-template-columns: auto 22px 1fr auto auto auto;
   align-items: center;
   gap: 8px;
   padding: 10px;
@@ -355,6 +367,17 @@ h2, h3 {
   width: 10px;
   height: 10px;
   border-radius: 50%
+}
+.legend-icon-wrap {
+  width: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0
+}
+.legend-icon {
+  font-size: 18px;
+  color: var(--primary-soft)
 }
 .legend-label {
   color: var(--muted)
