@@ -5,6 +5,12 @@ const DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
 const GOOGLE_SCOPES = ['email', 'profile', DRIVE_APPDATA_SCOPE]
 const GOOGLE_TOKEN_CACHE_KEY = 'straw.google.oauth.token_cache.v1'
 const ACCESS_TOKEN_EXPIRY_SKEW_MS = 60 * 1000
+const GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS = 120 * 1000
+const GOOGLE_BACKEND_REQUEST_TIMEOUT_MS = 20 * 1000
+const GOOGLE_PROFILE_FETCH_TIMEOUT_MS = 8 * 1000
+const STALE_SIGNIN_PROMISE_MS = GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS + GOOGLE_BACKEND_REQUEST_TIMEOUT_MS + 15 * 1000
+const GOOGLE_LOGIN_TIMEOUT_MESSAGE = 'Google 登入逾時，請重試'
+const GOOGLE_BACKEND_TIMEOUT_MESSAGE = 'Google 授權交換逾時，請檢查網路後重試'
 
 const SERVER_AUTH_CODE_FLOW_ENABLED = parseBooleanEnv(import.meta.env.VITE_GOOGLE_USE_SERVER_AUTH_CODE ?? 'true')
 const GOOGLE_OAUTH_EXCHANGE_URL = String(
@@ -21,12 +27,49 @@ let cachedAccessTokenExpiresAtMs = 0
 let cachedRefreshToken = ''
 let cachedProfile = null
 let ongoingSignInPromise = null
+let ongoingSignInStartedAtMs = 0
 
 const GOOGLE_REAUTH_REQUIRED_CODE = 'GOOGLE_REAUTH_REQUIRED'
 
 function parseBooleanEnv(raw) {
   const value = String(raw ?? '').trim().toLowerCase()
   return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
+
+function withTimeout(task, timeoutMs, timeoutMessage) {
+  let timeoutId = 0
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = globalThis.setTimeout(() => {
+      reject(new Error(timeoutMessage))
+    }, timeoutMs)
+  })
+  return Promise.race([task, timeoutPromise]).finally(() => {
+    if (timeoutId) globalThis.clearTimeout(timeoutId)
+  })
+}
+
+async function fetchWithTimeout(url, init, timeoutMs, timeoutMessage) {
+  const controller = typeof AbortController === 'function' ? new AbortController() : null
+  let timeoutId = 0
+  if (controller && Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    timeoutId = globalThis.setTimeout(() => {
+      controller.abort()
+    }, timeoutMs)
+  }
+
+  try {
+    return await fetch(url, {
+      ...(init ?? {}),
+      ...(controller ? { signal: controller.signal } : {}),
+    })
+  } catch (error) {
+    if (controller?.signal?.aborted) {
+      throw new Error(timeoutMessage)
+    }
+    throw error
+  } finally {
+    if (timeoutId) globalThis.clearTimeout(timeoutId)
+  }
 }
 
 function assertNativePlatform() {
@@ -216,13 +259,13 @@ function normalizeBackendTokenPayload(payload) {
 }
 
 async function postJson(url, payload) {
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload ?? {}),
-  })
+  }, GOOGLE_BACKEND_REQUEST_TIMEOUT_MS, GOOGLE_BACKEND_TIMEOUT_MESSAGE)
 
   const text = await response.text()
   let data = null
@@ -249,12 +292,12 @@ async function postJson(url, payload) {
 async function fetchGoogleProfileByAccessToken(accessToken) {
   if (!accessToken) return null
   try {
-    const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+    const response = await fetchWithTimeout('https://openidconnect.googleapis.com/v1/userinfo', {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
-    })
+    }, GOOGLE_PROFILE_FETCH_TIMEOUT_MS, 'Google 使用者資料讀取逾時')
     if (!response.ok) return null
     const data = await response.json()
     const profile = normalizeProfile(data)
@@ -333,18 +376,29 @@ export async function initGoogleAuth() {
 
 export async function googleSignIn() {
   if (ongoingSignInPromise) {
-    return ongoingSignInPromise
+    const elapsedMs = Date.now() - ongoingSignInStartedAtMs
+    if (elapsedMs >= 0 && elapsedMs < STALE_SIGNIN_PROMISE_MS) {
+      return ongoingSignInPromise
+    }
+    console.warn('[google-auth] stale sign-in promise detected, forcing a fresh login attempt', { elapsedMs })
+    ongoingSignInPromise = null
+    ongoingSignInStartedAtMs = 0
   }
 
-  ongoingSignInPromise = (async () => {
+  ongoingSignInStartedAtMs = Date.now()
+  const signInPromise = (async () => {
     await initGoogleAuth()
     let response
     try {
       // 單次登入就強制刷新 token，避免先失敗再二次互動登入導致雙彈窗。
-      response = await loginGoogleWithOptions({
-        forceRefreshToken: true,
-        filterByAuthorizedAccounts: false,
-      })
+      response = await withTimeout(
+        loginGoogleWithOptions({
+          forceRefreshToken: true,
+          filterByAuthorizedAccounts: false,
+        }),
+        GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS,
+        GOOGLE_LOGIN_TIMEOUT_MESSAGE,
+      )
     } catch (error) {
       if (isAccountReauthError(error)) {
         try {
@@ -354,12 +408,16 @@ export async function googleSignIn() {
         }
         try {
           // Retry once with explicit prompt/standard style after clearing stale auth state.
-          response = await loginGoogleWithOptions({
-            forceRefreshToken: true,
-            filterByAuthorizedAccounts: false,
-            forcePrompt: true,
-            style: 'standard',
-          })
+          response = await withTimeout(
+            loginGoogleWithOptions({
+              forceRefreshToken: true,
+              filterByAuthorizedAccounts: false,
+              forcePrompt: true,
+              style: 'standard',
+            }),
+            GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS,
+            GOOGLE_LOGIN_TIMEOUT_MESSAGE,
+          )
         } catch (retryError) {
           throw normalizeGoogleAuthError(
             new Error(
@@ -423,11 +481,15 @@ export async function googleSignIn() {
       profile: cachedProfile,
     }
   })()
+  ongoingSignInPromise = signInPromise
 
   try {
-    return await ongoingSignInPromise
+    return await signInPromise
   } finally {
-    ongoingSignInPromise = null
+    if (ongoingSignInPromise === signInPromise) {
+      ongoingSignInPromise = null
+      ongoingSignInStartedAtMs = 0
+    }
   }
 }
 

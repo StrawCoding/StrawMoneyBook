@@ -1,4 +1,5 @@
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token'
+const GOOGLE_TOKEN_REQUEST_TIMEOUT_MS = 15 * 1000
 
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -22,6 +23,34 @@ function parseBody(req) {
     }
   }
   return {}
+}
+
+async function requestGoogleToken(params) {
+  const controller = typeof AbortController === 'function' ? new AbortController() : null
+  let timeoutId = 0
+  if (controller) {
+    timeoutId = setTimeout(() => {
+      controller.abort()
+    }, GOOGLE_TOKEN_REQUEST_TIMEOUT_MS)
+  }
+
+  try {
+    return await fetch(GOOGLE_TOKEN_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params,
+      ...(controller ? { signal: controller.signal } : {}),
+    })
+  } catch (error) {
+    if (controller?.signal?.aborted) {
+      throw new Error('Google token endpoint timeout')
+    }
+    throw error
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
 }
 
 export default async function handler(req, res) {
@@ -60,13 +89,7 @@ export default async function handler(req, res) {
   params.set('refresh_token', refreshToken)
 
   try {
-    const response = await fetch(GOOGLE_TOKEN_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params,
-    })
+    const response = await requestGoogleToken(params)
 
     const rawText = await response.text()
     let json = {}

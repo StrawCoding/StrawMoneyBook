@@ -524,11 +524,7 @@ async function connectGoogle() {
   if (!ledgerStore.activeLedgerId) return
   googleConnecting.value = true
   try {
-    googleBackupState.value = await withTimeout(
-      connectGoogleBackup(ledgerStore.activeLedgerId),
-      30000,
-      'Google 登入逾時，請重試'
-    )
+    googleBackupState.value = await connectGoogleBackup(ledgerStore.activeLedgerId)
     googleAutoEnabled.value = Boolean(googleBackupState.value.autoEnabled)
     googleDataChangeAutoEnabled.value = Boolean(googleBackupState.value.dataChangeAutoEnabled)
     googleIntervalHours.value = Number(googleBackupState.value.intervalHours || 24)
