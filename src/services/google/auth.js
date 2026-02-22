@@ -13,7 +13,8 @@ const GOOGLE_LOGIN_TIMEOUT_MESSAGE = 'Google 登入逾時，請重試'
 const GOOGLE_BACKEND_TIMEOUT_MESSAGE = 'Google 授權交換逾時，請檢查網路後重試'
 const GOOGLE_OAUTH_DEFAULT_ORIGIN = 'https://www.strawmb.com'
 
-const SERVER_AUTH_CODE_FLOW_ENABLED = parseBooleanEnv(import.meta.env.VITE_GOOGLE_USE_SERVER_AUTH_CODE ?? 'true')
+const SERVER_AUTH_CODE_FLOW_REQUESTED = parseBooleanEnv(import.meta.env.VITE_GOOGLE_USE_SERVER_AUTH_CODE ?? 'true')
+const SERVER_AUTH_CODE_FLOW_ENABLED = resolveServerAuthCodeFlowEnabled()
 const GOOGLE_OAUTH_API_ORIGIN = resolveGoogleOAuthApiOrigin()
 const GOOGLE_OAUTH_EXCHANGE_URL = resolveGoogleOAuthEndpoint(
   import.meta.env.VITE_GOOGLE_OAUTH_EXCHANGE_URL,
@@ -39,6 +40,24 @@ const GOOGLE_REAUTH_REQUIRED_CODE = 'GOOGLE_REAUTH_REQUIRED'
 function parseBooleanEnv(raw) {
   const value = String(raw ?? '').trim().toLowerCase()
   return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
+
+function resolveServerAuthCodeFlowEnabled() {
+  if (!SERVER_AUTH_CODE_FLOW_REQUESTED) return false
+  if (!Capacitor.isNativePlatform()) return true
+
+  const explicitOrigin = String(import.meta.env.VITE_GOOGLE_OAUTH_API_ORIGIN ?? '').trim()
+  const exchangeEndpoint = String(import.meta.env.VITE_GOOGLE_OAUTH_EXCHANGE_URL ?? '').trim()
+  const refreshEndpoint = String(import.meta.env.VITE_GOOGLE_OAUTH_REFRESH_URL ?? '').trim()
+  const hasAbsoluteEndpoints = isAbsoluteHttpUrl(exchangeEndpoint) && isAbsoluteHttpUrl(refreshEndpoint)
+  const hasExplicitOrigin = isAbsoluteHttpUrl(explicitOrigin)
+
+  if (hasAbsoluteEndpoints || hasExplicitOrigin) return true
+
+  console.warn(
+    '[google-auth] VITE_GOOGLE_USE_SERVER_AUTH_CODE=true but no explicit Google OAuth backend is configured for native runtime; fallback to online mode.',
+  )
+  return false
 }
 
 function isAbsoluteHttpUrl(value) {
