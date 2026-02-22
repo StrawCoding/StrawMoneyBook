@@ -397,9 +397,30 @@ function restoreCheckHint(imported) {
 }
 
 function errorMessage(error, fallback) {
-  const message = String(error?.message ?? '').trim()
-  if (message) return message
-  const code = String(error?.code ?? error?.errorCode ?? '').trim()
+  if (typeof error === 'string' && error.trim()) return error.trim()
+
+  const pick = (...values) => {
+    for (const value of values) {
+      const text = String(value ?? '').trim()
+      if (text) return text
+    }
+    return ''
+  }
+
+  const baseMessage = pick(
+    error?.message,
+    error?.error_description,
+    error?.errorDescription,
+    error?.errorMessage,
+    error?.details,
+    error?.error,
+    error?.cause?.message,
+    error?.data?.message,
+    error?.response?.data?.message,
+  )
+  if (baseMessage) return baseMessage
+
+  const code = pick(error?.code, error?.errorCode, error?.status, error?.errorNumber)
   if (code) return `${fallback}（code=${code}）`
   return fallback
 }
@@ -527,7 +548,11 @@ async function connectGoogle() {
   if (!ledgerStore.activeLedgerId) return
   googleConnecting.value = true
   try {
-    googleBackupState.value = await connectGoogleBackup(ledgerStore.activeLedgerId)
+    googleBackupState.value = await withTimeout(
+      connectGoogleBackup(ledgerStore.activeLedgerId),
+      150000,
+      'Google 登入逾時，請關閉授權頁後重試'
+    )
     googleAutoEnabled.value = Boolean(googleBackupState.value.autoEnabled)
     googleDataChangeAutoEnabled.value = Boolean(googleBackupState.value.dataChangeAutoEnabled)
     googleIntervalHours.value = Number(googleBackupState.value.intervalHours || 24)
