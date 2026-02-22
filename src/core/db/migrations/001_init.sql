@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   FOREIGN KEY (ledger_id, account_id) REFERENCES accounts(ledger_id, id) ON DELETE RESTRICT,
   FOREIGN KEY (ledger_id, peer_account_id) REFERENCES accounts(ledger_id, id) ON DELETE RESTRICT,
   FOREIGN KEY (ledger_id, category_id) REFERENCES categories(ledger_id, id) ON DELETE RESTRICT,
-  CHECK (amount_minor <> 0)
+  CHECK (amount_minor IS NOT NULL)
 );
 
 CREATE TABLE IF NOT EXISTS transaction_attachments (

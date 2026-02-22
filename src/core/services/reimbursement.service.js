@@ -32,6 +32,8 @@ import {
 } from '@/core/repositories/reimbursement.repo'
 import { assertCanCreateReimbursement, isFreeTier } from '@/core/services/membership.service'
 
+const ADDON_NOTE_PREFIX = '【附加項目】'
+
 function normalizeTargetLedgerIds(activeLedgerId, rawList) {
   if (!Array.isArray(rawList)) return []
   const ids = Array.from(new Set(rawList.map((value) => String(value ?? '').trim()).filter(Boolean)))
@@ -175,11 +177,19 @@ function appendDateToNote(note, occurredAt) {
 
 function buildCopiedExpenseNote(sourceNote, occurredAt) {
   const dateKey = toDateKey(occurredAt)
-  const originalNote = String(sourceNote ?? '').trim()
+  const originalNote = stripAddonSummaryFromNote(sourceNote)
   if (!dateKey) return originalNote
   if (!originalNote) return dateKey
   if (originalNote.startsWith(dateKey)) return originalNote
   return `${dateKey} ${originalNote}`
+}
+
+function stripAddonSummaryFromNote(note) {
+  return String(note ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith(ADDON_NOTE_PREFIX))
+    .join('\n')
 }
 
 function assertCanTransition(currentStatus, nextStatus) {

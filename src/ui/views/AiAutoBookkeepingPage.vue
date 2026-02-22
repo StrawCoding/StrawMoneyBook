@@ -85,7 +85,7 @@
       <div class="stack form-wrap">
         <label class="field">
           金額（元）
-          <input v-model.number="model.amountMajor" class="input" type="number" min="0.01" step="0.01" />
+          <input v-model.number="model.amountMajor" class="input" type="number" min="0" step="0.01" />
         </label>
 
         <div class="field">
@@ -392,8 +392,12 @@ async function submit() {
   const amountMinor = Math.round(Math.abs(Number(model.amountMajor ?? 0)) * 100)
   const occurredAt = toOccurredAtIso(model.occurredDate, model.occurredHour, model.occurredMinute)
 
-  if (amountMinor <= 0) {
-    uiStore.pushToast('請輸入有效金額', 'error')
+  if (model.type === 'transfer' && amountMinor <= 0) {
+    uiStore.pushToast('請輸入有效金額（轉帳需大於 0）', 'error')
+    return
+  }
+  if (model.type !== 'transfer' && amountMinor < 0) {
+    uiStore.pushToast('請輸入有效金額（不可小於 0）', 'error')
     return
   }
   if (!occurredAt) {

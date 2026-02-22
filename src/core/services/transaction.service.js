@@ -130,6 +130,12 @@ export function subscribeTransactionFailureTrace(listener, { emitCurrent = true 
   }
 }
 
+function assertNonNegativeAmount(amountMinor) {
+  if (!Number.isFinite(Number(amountMinor)) || Number(amountMinor) < 0) {
+    throw new Error('amountMinor 必須為大於或等於 0 的數字')
+  }
+}
+
 function assertPositiveAmount(amountMinor) {
   if (!Number.isFinite(Number(amountMinor)) || Number(amountMinor) <= 0) {
     throw new Error('amountMinor 必須為大於 0 的數字')
@@ -138,7 +144,7 @@ function assertPositiveAmount(amountMinor) {
 
 export async function createExpense(ledgerId, payload) {
   return traceTransactionCreate('create_expense', ledgerId, async () => {
-    assertPositiveAmount(payload.amountMinor)
+    assertNonNegativeAmount(payload.amountMinor)
     if (!payload.accountId || !payload.categoryId) {
       throw new Error('expense 需要 accountId 與 categoryId')
     }
@@ -163,7 +169,7 @@ export async function createExpense(ledgerId, payload) {
 
 export async function createIncome(ledgerId, payload) {
   return traceTransactionCreate('create_income', ledgerId, async () => {
-    assertPositiveAmount(payload.amountMinor)
+    assertNonNegativeAmount(payload.amountMinor)
     if (!payload.accountId || !payload.categoryId) {
       throw new Error('income 需要 accountId 與 categoryId')
     }
@@ -299,7 +305,7 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
 
   let amountMinor = Number(payload.amountMinor)
   if (payload.type === 'expense' || payload.type === 'income') {
-    assertPositiveAmount(amountMinor)
+    assertNonNegativeAmount(amountMinor)
     amountMinor = Math.abs(amountMinor)
     amountMinor = payload.type === 'expense' ? amountMinor * -1 : amountMinor
     if (!payload.categoryId) {

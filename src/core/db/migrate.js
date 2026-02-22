@@ -6,6 +6,7 @@ import migration005 from '@/core/db/migrations/005_default_icons_backfill.sql?ra
 import migration006 from '@/core/db/migrations/006_ledger_sort_order.sql?raw'
 import migration007 from '@/core/db/migrations/007_remove_default_sample_transaction.sql?raw'
 import migration008 from '@/core/db/migrations/008_bank_sync.sql?raw'
+import migration009 from '@/core/db/migrations/009_allow_zero_amount_transaction.sql?raw'
 
 const MIGRATIONS = [
   { version: 1, name: 'init_schema', sql: migration001 },
@@ -16,6 +17,7 @@ const MIGRATIONS = [
   { version: 6, name: 'ledger_sort_order', sql: migration006 },
   { version: 7, name: 'remove_default_sample_transaction', sql: migration007 },
   { version: 8, name: 'bank_sync', sql: migration008 },
+  { version: 9, name: 'allow_zero_amount_transaction', sql: migration009 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'

@@ -579,8 +579,8 @@ async function submit() {
       uiStore.pushToast('轉出金額（含附加項目）需大於 0', 'error')
       return
     }
-  } else if (rawAmountMinor <= 0) {
-    uiStore.pushToast('請輸入有效金額（含附加項目後需大於 0）', 'error')
+  } else if (rawAmountMinor < 0) {
+    uiStore.pushToast('請輸入有效金額（含附加項目後不可小於 0）', 'error')
     return
   }
 
