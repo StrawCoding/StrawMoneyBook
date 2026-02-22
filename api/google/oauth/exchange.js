@@ -85,6 +85,22 @@ function normalizeTokenPayload(data = {}) {
   }
 }
 
+function tokenPrefix(raw) {
+  const token = String(raw ?? '').trim()
+  if (!token) return '(empty)'
+  const prefix = token.slice(0, 12)
+  return `${prefix}${token.length > 12 ? '...' : ''} (len=${token.length})`
+}
+
+function inferTokenType(raw) {
+  const token = String(raw ?? '').trim()
+  if (!token) return 'empty'
+  if (token.includes('.') && token.split('.').length === 3) return 'id_token_like'
+  if (token.startsWith('1//')) return 'refresh_token_like'
+  if (token.startsWith('ya29.')) return 'access_token_like'
+  return 'unknown'
+}
+
 async function requestGoogleToken(params) {
   const controller = typeof AbortController === 'function' ? new AbortController() : null
   let timeoutId = 0
@@ -194,6 +210,12 @@ export default async function handler(req, res) {
       sendError(res, 502, 'missing_access_token', 'Google did not return access_token', ERROR_NUMBER.MISSING_ACCESS_TOKEN)
       return
     }
+
+    console.info('[google-oauth-exchange] token response summary', {
+      accessToken: `${tokenPrefix(payload.accessToken)} [${inferTokenType(payload.accessToken)}]`,
+      refreshToken: `${tokenPrefix(payload.refreshToken)} [${inferTokenType(payload.refreshToken)}]`,
+      idToken: `${tokenPrefix(payload.idToken)} [${inferTokenType(payload.idToken)}]`,
+    })
 
     sendJson(res, 200, payload)
   } catch (error) {

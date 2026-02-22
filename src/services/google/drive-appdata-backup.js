@@ -1,10 +1,29 @@
 const DRIVE_FILES_API = 'https://www.googleapis.com/drive/v3/files'
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files'
 
+function tokenPrefix(raw) {
+  const token = String(raw ?? '').trim()
+  if (!token) return '(empty)'
+  const prefix = token.slice(0, 12)
+  return `${prefix}${token.length > 12 ? '...' : ''} (len=${token.length})`
+}
+
+function inferTokenType(raw) {
+  const token = String(raw ?? '').trim()
+  if (!token) return 'empty'
+  if (token.includes('.') && token.split('.').length === 3) return 'id_token_like'
+  if (token.startsWith('1//')) return 'refresh_token_like'
+  if (token.startsWith('ya29.')) return 'access_token_like'
+  return 'unknown'
+}
+
 function authHeaders(accessToken, extraHeaders = {}) {
   const normalizedExtra = normalizeHeaders(extraHeaders)
   delete normalizedExtra.Authorization
   delete normalizedExtra.authorization
+  console.info('[google-drive] Authorization token', {
+    token: `${tokenPrefix(accessToken)} [${inferTokenType(accessToken)}]`,
+  })
   return {
     ...normalizedExtra,
     Authorization: `Bearer ${accessToken}`,

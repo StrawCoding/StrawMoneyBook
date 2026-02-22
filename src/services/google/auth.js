@@ -124,6 +124,32 @@ function extractToken(raw) {
   return String(raw.token ?? '').trim()
 }
 
+function tokenPrefix(raw) {
+  const token = String(raw ?? '').trim()
+  if (!token) return '(empty)'
+  const prefix = token.slice(0, 12)
+  return `${prefix}${token.length > 12 ? '...' : ''} (len=${token.length})`
+}
+
+function inferTokenType(raw) {
+  const token = String(raw ?? '').trim()
+  if (!token) return 'empty'
+  if (token.includes('.') && token.split('.').length === 3) return 'id_token_like'
+  if (token.startsWith('1//')) return 'refresh_token_like'
+  if (token.startsWith('ya29.')) return 'access_token_like'
+  return 'unknown'
+}
+
+function logTokenDebug(tag, tokenMap = {}) {
+  const payload = Object.fromEntries(
+    Object.entries(tokenMap).map(([name, value]) => [
+      name,
+      `${tokenPrefix(value)} [${inferTokenType(value)}]`,
+    ]),
+  )
+  console.info(`[google-auth] ${tag}`, payload)
+}
+
 function normalizeProfile(raw) {
   const profile = raw && typeof raw === 'object' ? raw : {}
   return {
@@ -289,6 +315,12 @@ function normalizeBackendTokenPayload(payload) {
   const flatProfile = normalizeProfile(source)
   const profile = nestedProfile.email || nestedProfile.name || nestedProfile.imageUrl ? nestedProfile : flatProfile
 
+  logTokenDebug('normalizeBackendTokenPayload', {
+    accessToken,
+    refreshToken,
+    idToken: source.idToken ?? source.id_token,
+  })
+
   return {
     accessToken,
     refreshToken,
@@ -370,6 +402,7 @@ async function exchangeServerAuthCode(serverAuthCode) {
   const payload = await postJson(GOOGLE_OAUTH_EXCHANGE_URL, {
     serverAuthCode: code,
   })
+  console.info('[google-auth] exchangeServerAuthCode success')
   return normalizeBackendTokenPayload(payload)
 }
 
@@ -383,6 +416,10 @@ async function refreshAccessTokenByBackend(refreshToken) {
   }
   const payload = await postJson(GOOGLE_OAUTH_REFRESH_URL, {
     refreshToken: token,
+  })
+  logTokenDebug('refreshAccessTokenByBackend request/response', {
+    refreshToken: token,
+    accessToken: payload?.accessToken ?? payload?.access_token,
   })
   return normalizeBackendTokenPayload(payload)
 }
