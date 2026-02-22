@@ -6,18 +6,30 @@
     </header>
 
     <div class="split-grid">
-      <section class="split-card income">
+      <button
+        type="button"
+        class="split-card income"
+        :class="{ active: transactionStore.homeTypeFilter === 'income' }"
+        @click="toggleTypeFilter('income')"
+      >
+        <div v-if="transactionStore.homeTypeFilter === 'income'" class="active-tag">已選取</div>
         <div class="label">{{ t('transaction_search.label.income') }}</div>
         <div class="value">
           <MoneyText :value-minor="incomeMinor" />
         </div>
-      </section>
-      <section class="split-card expense">
+      </button>
+      <button
+        type="button"
+        class="split-card expense"
+        :class="{ active: transactionStore.homeTypeFilter === 'expense' }"
+        @click="toggleTypeFilter('expense')"
+      >
+        <div v-if="transactionStore.homeTypeFilter === 'expense'" class="active-tag">已選取</div>
         <div class="label">{{ t('transaction_search.label.expense') }}</div>
         <div class="value">
           <MoneyText :value-minor="expenseMinor" />
         </div>
-      </section>
+      </button>
     </div>
   </article>
 </template>
@@ -58,6 +70,14 @@ const expenseMinor = computed(() => {
     .filter((tx) => tx.type === 'expense' && tx.origin_type !== 'loan_payment')
     .reduce((total, tx) => total + Math.abs(Number(tx.amount_minor ?? 0)), 0)
 })
+
+function toggleTypeFilter(type) {
+  if (transactionStore.homeTypeFilter === type) {
+    transactionStore.setHomeTypeFilter('all')
+    return
+  }
+  transactionStore.setHomeTypeFilter(type)
+}
 </script>
 
 <style scoped>.summary-card {
@@ -79,9 +99,27 @@ h3 {
   gap: 10px
 }
 .split-card {
+  appearance: none;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  position: relative;
   border-radius: 12px;
   padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent)
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--anim-fast) ease, box-shadow var(--anim-fast) ease, border-color var(--anim-fast) ease;
+}
+.split-card:active {
+  transform: scale(0.99);
+}
+.split-card.active {
+  border-width: 2px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent), inset 0 0 0 1px color-mix(in srgb, #fff 35%, transparent);
+}
+.split-card.active .label {
+  font-weight: 800;
 }
 .split-card .label {
   font-size: 12px;
@@ -106,4 +144,22 @@ h3 {
 }
 .split-card.expense .value {
   color: var(--home-expense-card-value)
-}</style>
+}
+.active-tag {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 999px;
+  color: #fff;
+}
+.split-card.income .active-tag {
+  background: color-mix(in srgb, var(--home-income-card-value) 78%, #000 22%);
+}
+.split-card.expense .active-tag {
+  background: color-mix(in srgb, var(--home-expense-card-value) 78%, #000 22%);
+}
+</style>

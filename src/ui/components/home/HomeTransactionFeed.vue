@@ -10,7 +10,7 @@
           <font-awesome-icon icon="fa-solid fa-calendar" />
         </RouterLink>
       </div>
-      <span class="badge">{{ t('home_tx.badge_count', { month: monthLabel, count: transactionStore.homeRecent.length }) }}</span>
+      <span class="badge">{{ t('home_tx.badge_count', { month: monthLabel, count: visibleHomeTransactions.length }) }}</span>
     </header>
 
     <ul class="tx-list">
@@ -50,7 +50,7 @@
           </li>
         </ul>
       </li>
-      <li v-if="transactionStore.homeRecent.length === 0" class="muted empty-item">{{ t('home_tx.empty_this_month') }}</li>
+      <li v-if="visibleHomeTransactions.length === 0" class="muted empty-item">{{ t('home_tx.empty_this_month') }}</li>
     </ul>
 
   </article>
@@ -85,10 +85,18 @@ const monthLabel = computed(() => {
   return t('home_tx.range_current')
 })
 
+const visibleHomeTransactions = computed(() => {
+  const typeFilter = transactionStore.homeTypeFilter
+  if (typeFilter === 'income' || typeFilter === 'expense') {
+    return transactionStore.homeRecent.filter((tx) => tx.type === typeFilter)
+  }
+  return transactionStore.homeRecent
+})
+
 const groupedRecentTransactions = computed(() => {
   const grouped = []
   const groupMap = new Map()
-  for (const tx of transactionStore.homeRecent.slice(0, 12)) {
+  for (const tx of visibleHomeTransactions.value.slice(0, 12)) {
     const key = dateKeyOf(tx.occurred_at)
     if (!groupMap.has(key)) {
       const group = { dateKey: key, label: dateLabelOf(tx.occurred_at), items: [] }

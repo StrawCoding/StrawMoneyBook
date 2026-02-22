@@ -24,6 +24,7 @@ export const useTransactionStore = defineStore('transaction', {
     homeRecent: [],
     homeFilterMode: '',
     homeFilterKey: '',
+    homeTypeFilter: 'all',
     loading: false,
     homeLoading: false,
     filter: {
@@ -36,6 +37,11 @@ export const useTransactionStore = defineStore('transaction', {
   }),
 
   actions: {
+    setHomeTypeFilter(type) {
+      const normalized = type === 'income' || type === 'expense' ? type : 'all'
+      this.homeTypeFilter = normalized
+    },
+
     async loadRecent(limit = 30) {
       const ledgerStore = useLedgerStore()
       const ledgerId = ledgerStore.activeLedgerId
