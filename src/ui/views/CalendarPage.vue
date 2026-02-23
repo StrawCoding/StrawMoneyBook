@@ -69,7 +69,7 @@
               >
                 {{ addonDeltaTag(tx.note) }}
               </small>
-              <MoneyText :value-minor="tx.amount_minor" :tone="tx.type" />
+              <MoneyText :value-minor="tx.amount_minor" :currency="tx.account_currency_code" :tone="tx.type" />
             </div>
             <small class="muted tx-account-side">{{ accountNameOfTransaction(tx) }}</small>
           </div>
@@ -92,6 +92,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { addonDeltaMajorFromNote, addonDeltaTagText } from '@/ui/utils/addon-note'
+import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 
 const router = useRouter()
 const ledgerStore = useLedgerStore()
@@ -164,6 +165,7 @@ const selectedDayTransactions = computed(() => {
 
 const selectedDayIncomeMinor = computed(() => Number(dailyMap.value.get(selectedDateKey.value)?.incomeMinor ?? 0))
 const selectedDayExpenseMinor = computed(() => Number(dailyMap.value.get(selectedDateKey.value)?.expenseMinor ?? 0))
+const ledgerCurrencyCode = computed(() => normalizeCurrencyCode(ledgerStore.activeLedger?.currency_code, 'TWD'))
 
 function selectDay(dateKey) {
   if (!dateKey) return
@@ -259,7 +261,7 @@ function formatMinor(minor) {
   const value = Math.abs(Number(minor ?? 0))
   return new Intl.NumberFormat('zh-TW', {
     style: 'currency',
-    currency: 'TWD',
+    currency: ledgerCurrencyCode.value,
     minimumFractionDigits: value % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   }).format(value / 100)

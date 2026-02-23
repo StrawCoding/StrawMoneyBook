@@ -110,6 +110,57 @@
             <CustomSelect v-model="model.peerAccountId" :options="accountStore.accounts" />
           </label>
         </div>
+        <section v-if="model.type === 'transfer'" class="fx-panel">
+          <div class="fx-row">
+            <small class="muted">轉帳幣別</small>
+            <strong>{{ transferFromCurrency }} → {{ transferToCurrency }}</strong>
+          </div>
+          <template v-if="transferNeedsExchangeRate">
+            <div class="fx-mode-grid">
+              <button
+                type="button"
+                class="btn"
+                :class="{ primary: model.exchangeRateMode === 'system' }"
+                @click="model.exchangeRateMode = 'system'"
+              >
+                系統同步（央行）
+              </button>
+              <button
+                type="button"
+                class="btn"
+                :class="{ primary: model.exchangeRateMode === 'manual' }"
+                @click="model.exchangeRateMode = 'manual'"
+              >
+                自行輸入
+              </button>
+            </div>
+            <label v-if="model.exchangeRateMode === 'manual'" class="field">
+              匯率（1 {{ transferFromCurrency }} = ? {{ transferToCurrency }}）
+              <input
+                v-model.trim="model.manualExchangeRateInput"
+                type="text"
+                inputmode="decimal"
+                class="input"
+                placeholder="例如 0.0318"
+              />
+            </label>
+            <div v-else class="fx-system-row">
+              <small class="muted">央行匯率快照：{{ transferSnapshotInfoLabel }}</small>
+              <button
+                type="button"
+                class="btn"
+                :class="{ busy: exchangeRateSyncing }"
+                :disabled="exchangeRateSyncing"
+                @click="syncExchangeRateSnapshotNow"
+              >
+                {{ exchangeRateSyncing ? '同步中...' : '立即同步匯率' }}
+              </button>
+            </div>
+            <p class="muted fx-note">換算匯率：1 {{ transferFromCurrency }} = {{ transferResolvedRateLabel }} {{ transferToCurrency }}</p>
+            <p class="muted fx-note">預估轉入：{{ formatCurrencyMinor(transferEstimatedReceiveMinor, transferToCurrency) }}</p>
+          </template>
+          <p v-else class="muted fx-note">同幣別轉帳，匯率固定為 1</p>
+        </section>
 
         <div v-else class="inline-grid">
           <label class="field">
@@ -190,7 +241,15 @@ import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
+import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
+import {
+  convertAmountMinorByRate,
+  getExchangeRateSnapshot,
+  resolveCrossExchangeRate,
+  syncCbcExchangeRateSnapshot,
+} from '@/ui/services/exchange-rate.service'
 import {
   formatLoanStartDateTime,
   pickLoanForAiRepayment,
@@ -205,6 +264,7 @@ const transactionStore = useTransactionStore()
 const uiStore = useUiStore()
 const loanStore = useLoanStore()
 const budgetStore = useBudgetStore()
+const ledgerStore = useLedgerStore()
 const { locale } = useI18n()
 
 const sourceText = ref('')
@@ -247,7 +307,16 @@ const model = reactive({
   isReimbursable: false,
   includeInBudget: true,
   includeInAnalysis: true,
+  exchangeRateMode: 'system',
+  manualExchangeRateInput: '',
 })
+
+const exchangeRateSnapshot = ref({
+  syncedAt: '',
+  effectiveDate: '',
+  rates: { USD: 1 },
+})
+const exchangeRateSyncing = ref(false)
 
 const typeOptions = [
   { value: 'expense', label: '支出' },
@@ -260,12 +329,53 @@ const categoryGroupsByType = computed(() => {
   return categoryStore.expenseCategoryGroups
 })
 
+const transferFromCurrency = computed(() => accountCurrencyCode(model.accountId))
+const transferToCurrency = computed(() => accountCurrencyCode(model.peerAccountId))
+const transferNeedsExchangeRate = computed(() => {
+  return model.type === 'transfer' && transferFromCurrency.value !== transferToCurrency.value
+})
+const transferResolvedRate = computed(() => {
+  if (!transferNeedsExchangeRate.value) return 1
+  if (model.exchangeRateMode === 'manual') {
+    const manualRate = Number(model.manualExchangeRateInput)
+    if (!Number.isFinite(manualRate) || manualRate <= 0) return null
+    return manualRate
+  }
+  return resolveCrossExchangeRate(
+    exchangeRateSnapshot.value?.rates,
+    transferFromCurrency.value,
+    transferToCurrency.value,
+  )
+})
+const transferResolvedRateLabel = computed(() => {
+  if (!transferNeedsExchangeRate.value) return '1'
+  const rate = Number(transferResolvedRate.value)
+  if (!Number.isFinite(rate) || rate <= 0) return '-'
+  return rate.toFixed(6)
+})
+const transferEstimatedReceiveMinor = computed(() => {
+  const baseMinor = Math.round(Math.abs(Number(model.amountMajor ?? 0)) * 100)
+  if (baseMinor <= 0) return 0
+  const rate = Number(transferResolvedRate.value)
+  if (!Number.isFinite(rate) || rate <= 0) return 0
+  return convertAmountMinorByRate(baseMinor, rate)
+})
+const transferSnapshotInfoLabel = computed(() => {
+  if (!exchangeRateSnapshot.value?.syncedAt) return '尚未同步'
+  const parsed = new Date(exchangeRateSnapshot.value.syncedAt)
+  if (Number.isNaN(parsed.getTime())) return '尚未同步'
+  return `${parsed.toLocaleString('zh-TW')}（資料日期 ${exchangeRateSnapshot.value.effectiveDate || '-'}）`
+})
+
 watch(
   () => model.type,
   (type) => {
     if (type === 'transfer') {
       model.categoryId = ''
       model.isReimbursable = false
+      if (!model.exchangeRateMode) {
+        model.exchangeRateMode = 'system'
+      }
       return
     }
     const categoryList = type === 'income' ? categoryStore.incomeCategories : categoryStore.expenseCategories
@@ -277,6 +387,23 @@ watch(
       model.isReimbursable = false
     }
   },
+)
+
+watch(
+  () => [ledgerStore.activeLedgerId, model.type, model.accountId, model.peerAccountId, model.exchangeRateMode],
+  () => {
+    if (!ledgerStore.activeLedgerId) return
+    if (model.type !== 'transfer') return
+    if (!transferNeedsExchangeRate.value) {
+      model.exchangeRateMode = 'system'
+      model.manualExchangeRateInput = ''
+      return
+    }
+    if (model.exchangeRateMode === 'system' && !hasSystemExchangeRateReady()) {
+      void loadExchangeRateSnapshot()
+    }
+  },
+  { immediate: true },
 )
 
 watch(
@@ -398,6 +525,8 @@ function applyDraft(draft) {
   model.isReimbursable = Boolean(draft.isReimbursable) && draft.type === 'expense'
   model.includeInBudget = Boolean(draft.includeInBudget)
   model.includeInAnalysis = Boolean(draft.includeInAnalysis)
+  model.exchangeRateMode = 'system'
+  model.manualExchangeRateInput = ''
 }
 
 async function refreshLinkedDataAfterLoanWrite() {
@@ -497,8 +626,17 @@ async function submit() {
         uiStore.pushToast('請選擇不同的轉出/轉入帳戶', 'error')
         return
       }
+      const transferRate = await resolveTransferRateOrThrow()
+      const transferToAmountMinor = transferNeedsExchangeRate.value
+        ? convertAmountMinorByRate(amountMinor, transferRate)
+        : amountMinor
+      if (transferToAmountMinor <= 0) {
+        uiStore.pushToast('轉入金額需大於 0，請調整匯率', 'error')
+        return
+      }
       await transactionStore.addTransfer({
         amountMinor,
+        toAmountMinor: transferToAmountMinor,
         occurredAt,
         fromAccountId: model.accountId,
         toAccountId: model.peerAccountId,
@@ -584,6 +722,98 @@ function toOccurredAtIso(dateInput, hourInput, minuteInput) {
   const parsed = new Date(local)
   if (Number.isNaN(parsed.getTime())) return ''
   return parsed.toISOString()
+}
+
+function accountCurrencyCode(accountId) {
+  const raw = accountStore.accounts.find((item) => item.id === accountId)?.currency_code
+  return normalizeCurrencyCode(raw, 'TWD')
+}
+
+function hasSystemExchangeRateReady() {
+  if (!transferNeedsExchangeRate.value) return true
+  const rate = resolveCrossExchangeRate(
+    exchangeRateSnapshot.value?.rates,
+    transferFromCurrency.value,
+    transferToCurrency.value,
+  )
+  return Number.isFinite(rate) && rate > 0
+}
+
+async function loadExchangeRateSnapshot() {
+  const ledgerId = ledgerStore.activeLedgerId
+  if (!ledgerId) return
+  try {
+    const snapshot = await getExchangeRateSnapshot(ledgerId)
+    exchangeRateSnapshot.value = snapshot
+  } catch (error) {
+    console.warn('[ai-page] load exchange rate snapshot failed', error)
+  }
+}
+
+async function syncExchangeRateSnapshotNow(options = {}) {
+  const silent = Boolean(options?.silent)
+  const ledgerId = ledgerStore.activeLedgerId
+  if (!ledgerId || exchangeRateSyncing.value) return false
+
+  exchangeRateSyncing.value = true
+  try {
+    const snapshot = await syncCbcExchangeRateSnapshot(ledgerId)
+    exchangeRateSnapshot.value = snapshot
+    if (!silent) {
+      uiStore.pushToast(`匯率同步完成（資料日期：${snapshot.effectiveDate || '-'}）`)
+    }
+    return true
+  } catch (error) {
+    if (!silent) {
+      uiStore.pushToast(error.message ?? '匯率同步失敗', 'error')
+    }
+    return false
+  } finally {
+    exchangeRateSyncing.value = false
+  }
+}
+
+async function resolveTransferRateOrThrow() {
+  if (!transferNeedsExchangeRate.value) {
+    return 1
+  }
+
+  if (model.exchangeRateMode === 'manual') {
+    const manualRate = Number(model.manualExchangeRateInput)
+    if (!Number.isFinite(manualRate) || manualRate <= 0) {
+      throw new Error('請輸入有效匯率')
+    }
+    return manualRate
+  }
+
+  if (!hasSystemExchangeRateReady()) {
+    await loadExchangeRateSnapshot()
+  }
+  if (!hasSystemExchangeRateReady()) {
+    await syncExchangeRateSnapshotNow({ silent: true })
+  }
+
+  const rate = resolveCrossExchangeRate(
+    exchangeRateSnapshot.value?.rates,
+    transferFromCurrency.value,
+    transferToCurrency.value,
+  )
+  if (!Number.isFinite(rate) || rate <= 0) {
+    throw new Error('找不到可用的系統匯率，請改用手動輸入')
+  }
+  return rate
+}
+
+function formatCurrencyMinor(valueMinor, currencyCode = 'TWD') {
+  const minor = Math.abs(Math.round(Number(valueMinor) || 0))
+  const major = minor / 100
+  const safeCurrency = normalizeCurrencyCode(currencyCode, 'TWD')
+  return new Intl.NumberFormat('zh-TW', {
+    style: 'currency',
+    currency: safeCurrency,
+    minimumFractionDigits: minor % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(major)
 }
 </script>
 
@@ -705,6 +935,34 @@ h2, h3 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px
+}
+.fx-panel {
+  border: 1px solid var(--field-border);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+.fx-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fx-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.fx-system-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fx-note {
+  margin: 0;
 }
 .switch-list {
   display: grid;

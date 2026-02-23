@@ -127,6 +127,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { runGoogleAutoBackupIfDue, runGoogleAutoBackupOnDataChange } from '@/ui/services/google-backup.service'
 import { runWebdavAutoBackupIfDue, runWebdavAutoBackupOnDataChange } from '@/ui/services/webdav-backup.service'
+import { runExchangeRateAutoSyncIfDue } from '@/ui/services/exchange-rate.service'
 import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { initLocalePreference } from '@/ui/services/i18n.service'
@@ -349,6 +350,10 @@ async function main() {
       if (!isActive) return
       scheduleMembershipWarmup('app_resume')
       window.dispatchEvent(new Event('app:check-update'))
+      const ledgerStore = useLedgerStore(pinia)
+      if (ledgerStore.activeLedgerId) {
+        void runExchangeRateAutoSyncIfDue(ledgerStore.activeLedgerId)
+      }
     })
   }
 
@@ -369,6 +374,7 @@ async function main() {
     if (ledgerStore.activeLedgerId) {
       void runGoogleAutoBackupIfDue(ledgerStore.activeLedgerId)
       void runWebdavAutoBackupIfDue(ledgerStore.activeLedgerId)
+      void runExchangeRateAutoSyncIfDue(ledgerStore.activeLedgerId)
     }
 
     scheduleMembershipWarmup('app_start')

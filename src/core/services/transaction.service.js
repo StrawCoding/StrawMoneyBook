@@ -212,6 +212,9 @@ export async function createAdjustment(ledgerId, payload) {
 export async function createTransfer(ledgerId, payload) {
   return traceTransactionCreate('create_transfer', ledgerId, async () => {
     assertPositiveAmount(payload.amountMinor)
+    if (payload.toAmountMinor != null) {
+      assertPositiveAmount(payload.toAmountMinor)
+    }
 
     if (!payload.fromAccountId || !payload.toAccountId) {
       throw new Error('transfer 需要 fromAccountId 與 toAccountId')
@@ -226,12 +229,17 @@ export async function createTransfer(ledgerId, payload) {
     if (Math.abs(Number(payload.amountMinor)) + sourceExtraMinor <= 0) {
       throw new Error('轉出金額（含附加項目）需大於 0')
     }
+    const toAmountMinorInput = Number(payload.toAmountMinor ?? 0)
+    const toAmountMinor = Number.isFinite(toAmountMinorInput) && toAmountMinorInput > 0
+      ? Math.round(toAmountMinorInput)
+      : null
 
     return addTransfer(ledgerId, {
       ...payload,
       occurredAt: payload.occurredAt ?? new Date().toISOString(),
       amountMinor: Number(payload.amountMinor),
       sourceExtraMinor,
+      toAmountMinor,
     })
   })
 }
@@ -287,6 +295,10 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
 
     const outTx = members.find((item) => Number(item.amount_minor ?? 0) < 0) ?? members[0]
     const inTx = members.find((item) => item.id !== outTx.id) ?? members[1]
+    const toAmountMinorInput = Number(payload.toAmountMinor ?? 0)
+    const toAmountMinor = Number.isFinite(toAmountMinorInput) && toAmountMinorInput > 0
+      ? Math.round(toAmountMinorInput)
+      : Math.max(1, Math.abs(Math.round(Number(inTx?.amount_minor ?? normalizedAmountMinor))))
 
     await updateTransactionById(ledgerId, outTx.id, {
       accountId: payload.accountId,
@@ -297,7 +309,7 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
     await updateTransactionById(ledgerId, inTx.id, {
       accountId: peerAccountId,
       peerAccountId: payload.accountId,
-      amountMinor: normalizedAmountMinor,
+      amountMinor: toAmountMinor,
       ...commonUpdate,
     })
     return

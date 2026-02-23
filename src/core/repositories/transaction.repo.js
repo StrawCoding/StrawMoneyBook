@@ -37,13 +37,17 @@ export async function listRecentTransactions(ledgerId, limit = 20) {
   assertLedgerId(ledgerId)
 
   const result = await query(
-    `SELECT ledger_id, id, type, transfer_group_id, account_id, peer_account_id,
-            category_id, amount_minor, occurred_at, note, location, tags_json,
-            origin_type, external_ref_id, is_reimbursable, reimbursement_state,
-            reimbursed_at, include_in_budget, include_in_analysis, created_at
-     FROM transactions
-     WHERE ledger_id = ? AND deleted_at IS NULL
-     ORDER BY occurred_at DESC, created_at DESC
+    `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
+            t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
+            a.currency_code AS account_currency_code,
+            t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
+            t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
+     FROM transactions t
+     LEFT JOIN accounts a
+       ON a.ledger_id = t.ledger_id
+      AND a.id = t.account_id
+     WHERE t.ledger_id = ? AND t.deleted_at IS NULL
+     ORDER BY t.occurred_at DESC, t.created_at DESC
      LIMIT ?;`,
     [ledgerId, limit],
   )
@@ -56,16 +60,20 @@ export async function listTransactionsByMonth(ledgerId, monthKey) {
 
   const { startUtc, endUtc } = monthRangeUtc(monthKey)
   const result = await query(
-    `SELECT ledger_id, id, type, transfer_group_id, account_id, peer_account_id,
-            category_id, amount_minor, occurred_at, note, location, tags_json,
-            origin_type, external_ref_id, is_reimbursable, reimbursement_state,
-            reimbursed_at, include_in_budget, include_in_analysis, created_at
-     FROM transactions
-     WHERE ledger_id = ?
-       AND deleted_at IS NULL
-       AND occurred_at >= ?
-       AND occurred_at < ?
-     ORDER BY occurred_at DESC, created_at DESC;`,
+    `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
+            t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
+            a.currency_code AS account_currency_code,
+            t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
+            t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
+     FROM transactions t
+     LEFT JOIN accounts a
+       ON a.ledger_id = t.ledger_id
+      AND a.id = t.account_id
+     WHERE t.ledger_id = ?
+       AND t.deleted_at IS NULL
+       AND t.occurred_at >= ?
+       AND t.occurred_at < ?
+     ORDER BY t.occurred_at DESC, t.created_at DESC;`,
     [ledgerId, startUtc, endUtc],
   )
 
@@ -76,16 +84,20 @@ export async function listTransactionsByYear(ledgerId, yearKey) {
   assertLedgerId(ledgerId)
   const { startUtc, endUtc } = yearRangeUtc(yearKey)
   const result = await query(
-    `SELECT ledger_id, id, type, transfer_group_id, account_id, peer_account_id,
-            category_id, amount_minor, occurred_at, note, location, tags_json,
-            origin_type, external_ref_id, is_reimbursable, reimbursement_state,
-            reimbursed_at, include_in_budget, include_in_analysis, created_at
-     FROM transactions
-     WHERE ledger_id = ?
-       AND deleted_at IS NULL
-       AND occurred_at >= ?
-       AND occurred_at < ?
-     ORDER BY occurred_at DESC, created_at DESC;`,
+    `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
+            t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
+            a.currency_code AS account_currency_code,
+            t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
+            t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
+     FROM transactions t
+     LEFT JOIN accounts a
+       ON a.ledger_id = t.ledger_id
+      AND a.id = t.account_id
+     WHERE t.ledger_id = ?
+       AND t.deleted_at IS NULL
+       AND t.occurred_at >= ?
+       AND t.occurred_at < ?
+     ORDER BY t.occurred_at DESC, t.created_at DESC;`,
     [ledgerId, startUtc, endUtc],
   )
 
@@ -96,16 +108,20 @@ export async function listTransactionsByDay(ledgerId, dayKey) {
   assertLedgerId(ledgerId)
   const { startUtc, endUtc } = dayRangeUtc(dayKey)
   const result = await query(
-    `SELECT ledger_id, id, type, transfer_group_id, account_id, peer_account_id,
-            category_id, amount_minor, occurred_at, note, location, tags_json,
-            origin_type, external_ref_id, is_reimbursable, reimbursement_state,
-            reimbursed_at, include_in_budget, include_in_analysis, created_at
-     FROM transactions
-     WHERE ledger_id = ?
-       AND deleted_at IS NULL
-       AND occurred_at >= ?
-       AND occurred_at < ?
-     ORDER BY occurred_at DESC, created_at DESC;`,
+    `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
+            t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
+            a.currency_code AS account_currency_code,
+            t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
+            t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
+     FROM transactions t
+     LEFT JOIN accounts a
+       ON a.ledger_id = t.ledger_id
+      AND a.id = t.account_id
+     WHERE t.ledger_id = ?
+       AND t.deleted_at IS NULL
+       AND t.occurred_at >= ?
+       AND t.occurred_at < ?
+     ORDER BY t.occurred_at DESC, t.created_at DESC;`,
     [ledgerId, startUtc, endUtc],
   )
 
@@ -115,14 +131,18 @@ export async function listTransactionsByDay(ledgerId, dayKey) {
 export async function listAllTransactions(ledgerId) {
   assertLedgerId(ledgerId)
   const result = await query(
-    `SELECT ledger_id, id, type, transfer_group_id, account_id, peer_account_id,
-            category_id, amount_minor, occurred_at, note, location, tags_json,
-            origin_type, external_ref_id, is_reimbursable, reimbursement_state,
-            reimbursed_at, include_in_budget, include_in_analysis, created_at
-     FROM transactions
-     WHERE ledger_id = ?
-       AND deleted_at IS NULL
-     ORDER BY occurred_at DESC, created_at DESC;`,
+    `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
+            t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
+            a.currency_code AS account_currency_code,
+            t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
+            t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
+     FROM transactions t
+     LEFT JOIN accounts a
+       ON a.ledger_id = t.ledger_id
+      AND a.id = t.account_id
+     WHERE t.ledger_id = ?
+       AND t.deleted_at IS NULL
+     ORDER BY t.occurred_at DESC, t.created_at DESC;`,
     [ledgerId],
   )
   return rowsOf(result)
@@ -132,15 +152,19 @@ export async function listTransactionsByAccount(ledgerId, accountId) {
   assertLedgerId(ledgerId)
 
   const result = await query(
-    `SELECT ledger_id, id, type, transfer_group_id, account_id, peer_account_id,
-            category_id, amount_minor, occurred_at, note, location, tags_json,
-            origin_type, external_ref_id, is_reimbursable, reimbursement_state,
-            reimbursed_at, include_in_budget, include_in_analysis, created_at
-     FROM transactions
-     WHERE ledger_id = ?
-       AND (account_id = ? OR peer_account_id = ?)
-       AND deleted_at IS NULL
-     ORDER BY occurred_at DESC, created_at DESC;`,
+    `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
+            t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
+            a.currency_code AS account_currency_code,
+            t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
+            t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
+     FROM transactions t
+     LEFT JOIN accounts a
+       ON a.ledger_id = t.ledger_id
+      AND a.id = t.account_id
+     WHERE t.ledger_id = ?
+       AND (t.account_id = ? OR t.peer_account_id = ?)
+       AND t.deleted_at IS NULL
+     ORDER BY t.occurred_at DESC, t.created_at DESC;`,
     [ledgerId, accountId, accountId],
   )
 
@@ -445,6 +469,10 @@ export async function addTransfer(ledgerId, input) {
   const transferGroupId = input.transferGroupId ?? createId('tf')
   const occurredAt = input.occurredAt
   const amountMinor = Math.abs(Number(input.amountMinor))
+  const toAmountMinorInput = Number(input.toAmountMinor)
+  const toAmountMinor = Number.isFinite(toAmountMinorInput) && toAmountMinorInput > 0
+    ? Math.abs(Math.round(toAmountMinorInput))
+    : amountMinor
   const sourceExtraMinorInput = Number(input.sourceExtraMinor ?? 0)
   const sourceExtraMinor = Number.isFinite(sourceExtraMinorInput) ? Math.round(sourceExtraMinorInput) : 0
   const outAmountMinor = (amountMinor + sourceExtraMinor) * -1
@@ -466,7 +494,7 @@ export async function addTransfer(ledgerId, input) {
       transferGroupId,
       accountId: input.toAccountId,
       peerAccountId: input.fromAccountId,
-      amountMinor,
+      amountMinor: toAmountMinor,
       occurredAt,
       note: input.note,
       originType: input.originType ?? 'manual',

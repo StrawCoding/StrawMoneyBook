@@ -93,6 +93,12 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
+      path: '/settings/exchange-rate',
+      name: 'settings-exchange-rate',
+      component: () => import('@/ui/views/settings/SettingsExchangeRatePage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
       path: '/settings/ledgers',
       name: 'settings-ledgers',
       component: () => import('@/ui/views/settings/SettingsLedgerPage.vue'),

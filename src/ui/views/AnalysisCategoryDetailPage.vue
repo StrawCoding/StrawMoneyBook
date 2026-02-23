@@ -15,7 +15,7 @@
         <div class="summary-item">
           <small>{{ t('analysis_category_detail.amount', { type: activeTypeLabel }) }}</small>
           <strong>
-            <MoneyText :value-minor="categoryTotalMinor" />
+            <MoneyText :value-minor="categoryTotalMinor" :currency="analysisCurrencyCode" />
           </strong>
         </div>
         <div class="summary-item">
@@ -58,7 +58,7 @@
               </div>
               <div class="tx-side">
                 <div class="amount-line">
-                  <MoneyText :value-minor="tx.amount_minor" :tone="tx.type" />
+                  <MoneyText :value-minor="tx.amount_minor" :currency="tx.account_currency_code" :tone="tx.type" />
                 </div>
                 <small class="muted tx-account-side">{{ accountName(tx.account_id) }}</small>
               </div>
@@ -82,6 +82,7 @@ import { useUiStore } from '@/ui/stores/ui.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { listAllTransactions, listTransactionsByMonth, listTransactionsByYear } from '@/core/repositories/transaction.repo'
 import { useI18n } from '@/ui/services/i18n.service'
+import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 
 const route = useRoute()
 const router = useRouter()
@@ -113,6 +114,7 @@ const categoryNameMap = computed(() => {
 const activeTypeLabel = computed(() =>
   analysisType.value === 'income' ? t('analysis_page.type.income') : t('analysis_page.type.expense'),
 )
+const analysisCurrencyCode = computed(() => normalizeCurrencyCode(ledgerStore.activeLedger?.currency_code, 'TWD'))
 const activeCategoryLabel = computed(() => {
   if (categoryId.value === '__uncategorized__') return t('analysis_page.uncategorized')
   if (categoryNameMap.value.has(categoryId.value)) return categoryNameMap.value.get(categoryId.value) || t('analysis_page.uncategorized')

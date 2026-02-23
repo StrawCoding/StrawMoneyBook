@@ -4,6 +4,8 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 
 const props = defineProps({
   valueMinor: {
@@ -12,12 +14,21 @@ const props = defineProps({
   },
   currency: {
     type: String,
-    default: 'TWD',
+    default: '',
   },
   tone: {
     type: String,
     default: '',
   },
+})
+
+const ledgerStore = useLedgerStore()
+const resolvedCurrencyCode = computed(() => {
+  const providedCurrency = String(props.currency ?? '').trim()
+  if (providedCurrency) {
+    return normalizeCurrencyCode(providedCurrency, 'TWD')
+  }
+  return normalizeCurrencyCode(ledgerStore.activeLedger?.currency_code, 'TWD')
 })
 
 const text = computed(() => {
@@ -32,7 +43,7 @@ const text = computed(() => {
   const hasFraction = Math.abs(minor) % 100 !== 0
   return new Intl.NumberFormat('zh-TW', {
     style: 'currency',
-    currency: props.currency,
+    currency: resolvedCurrencyCode.value,
     minimumFractionDigits: hasFraction ? 2 : 0,
     maximumFractionDigits: 2,
   }).format(major)

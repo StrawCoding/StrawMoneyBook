@@ -43,7 +43,7 @@
                 >
                   {{ addonDeltaTag(tx.note) }}
                 </small>
-                <MoneyText :value-minor="tx.amount_minor" :tone="tx.type" />
+                <MoneyText :value-minor="tx.amount_minor" :currency="tx.account_currency_code" :tone="tx.type" />
               </div>
               <small class="muted tx-account-side">{{ accountNameOfTransaction(tx) }}</small>
             </div>

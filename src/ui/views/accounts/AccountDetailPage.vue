@@ -95,9 +95,9 @@
                 </div>
               </div>
               <div class="tx-side">
-                <MoneyText :value-minor="tx.amount_minor" :tone="tx.type" />
+                <MoneyText :value-minor="tx.amount_minor" :currency="tx.account_currency_code" :tone="tx.type" />
                 <small class="tx-balance">
-                  餘額 <MoneyText :value-minor="tx.balanceAfterMinor" />
+                  餘額 <MoneyText :value-minor="tx.balanceAfterMinor" :currency="accountCurrencyCode" />
                 </small>
                 <small
                   v-if="showAddonDeltaTag(tx)"
