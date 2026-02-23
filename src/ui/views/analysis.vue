@@ -216,7 +216,7 @@ function buildBreakdown(type) {
 
   const total = rows.reduce((sum, row) => sum + row.amountMinor, 0)
   if (!total) return []
-  const palette = buildMonochromePalette(type, rows.length)
+  const palette = buildThemePalette(rows.length)
 
   return rows.map((row, index) => ({
     ...row,
@@ -225,14 +225,10 @@ function buildBreakdown(type) {
   }))
 }
 
-function buildMonochromePalette(type, count) {
+function buildThemePalette(count) {
   const safeCount = Math.max(1, Number(count) || 1)
-  const darkVar = type === 'income'
-    ? 'color-mix(in srgb, var(--ok) 62%, var(--primary) 38%)'
-    : 'color-mix(in srgb, var(--danger) 74%, var(--primary) 26%)'
-  const lightVar = type === 'income'
-    ? 'color-mix(in srgb, var(--primary) 18%, var(--card) 82%)'
-    : 'color-mix(in srgb, var(--danger) 24%, var(--card) 76%)'
+  const darkVar = 'color-mix(in srgb, var(--primary) 88%, var(--text) 12%)'
+  const lightVar = 'color-mix(in srgb, var(--primary) 20%, var(--card) 80%)'
   if (safeCount === 1) {
     return [darkVar]
   }
