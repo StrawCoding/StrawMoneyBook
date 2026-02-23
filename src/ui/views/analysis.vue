@@ -94,23 +94,6 @@ const selectedYear = ref(new Date().getFullYear())
 const selectedMonth = ref(monthKeyFromDate(new Date()))
 const statsTransactions = ref([])
 
-const incomePalette = [
-  'var(--chart-income-1)',
-  'var(--chart-income-2)',
-  'var(--chart-income-3)',
-  'var(--chart-income-4)',
-  'var(--chart-income-5)',
-  'var(--chart-income-6)',
-]
-const expensePalette = [
-  'var(--chart-expense-1)',
-  'var(--chart-expense-2)',
-  'var(--chart-expense-3)',
-  'var(--chart-expense-4)',
-  'var(--chart-expense-5)',
-  'var(--chart-expense-6)',
-]
-
 const categoryNameMap = computed(() => {
   const map = new Map()
   for (const category of categoryStore.categories) {
@@ -145,8 +128,8 @@ watch(
   { immediate: true },
 )
 
-const incomeBreakdown = computed(() => buildBreakdown('income', incomePalette))
-const expenseBreakdown = computed(() => buildBreakdown('expense', expensePalette))
+const incomeBreakdown = computed(() => buildBreakdown('income'))
+const expenseBreakdown = computed(() => buildBreakdown('expense'))
 
 const incomeTotalMinor = computed(() => incomeBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
 const expenseTotalMinor = computed(() => expenseBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
@@ -207,7 +190,7 @@ async function loadStatsTransactions() {
   }
 }
 
-function buildBreakdown(type, palette) {
+function buildBreakdown(type) {
   const map = new Map()
   for (const tx of statsTransactions.value) {
     if (!Number(tx.include_in_analysis ?? 1)) continue
@@ -233,12 +216,35 @@ function buildBreakdown(type, palette) {
 
   const total = rows.reduce((sum, row) => sum + row.amountMinor, 0)
   if (!total) return []
+  const palette = buildMonochromePalette(type, rows.length)
 
   return rows.map((row, index) => ({
     ...row,
-    color: palette[index % palette.length],
+    color: palette[index],
     percent: Math.round((row.amountMinor / total) * 100),
   }))
+}
+
+function buildMonochromePalette(type, count) {
+  const safeCount = Math.max(1, Number(count) || 1)
+  const darkVar = type === 'income' ? 'var(--income-dark)' : 'var(--expense-dark)'
+  const lightVar = type === 'income' ? 'var(--income-light)' : 'var(--expense-light)'
+  if (safeCount === 1) {
+    return [darkVar]
+  }
+
+  const startDarkRatio = 92
+  const endDarkRatio = 16
+  const step = (startDarkRatio - endDarkRatio) / (safeCount - 1)
+
+  return Array.from({ length: safeCount }, (_, index) => {
+    const darkRatio = Math.max(
+      endDarkRatio,
+      Math.min(startDarkRatio, startDarkRatio - step * index),
+    )
+    const lightRatio = 100 - darkRatio
+    return `color-mix(in srgb, ${darkVar} ${darkRatio.toFixed(2)}%, ${lightVar} ${lightRatio.toFixed(2)}%)`
+  })
 }
 
 function buildPieStyle(items) {
