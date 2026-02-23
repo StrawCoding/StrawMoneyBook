@@ -1,6 +1,7 @@
 const CBC_DATA_API_URL = 'https://cpx.cbc.gov.tw/API/DataAPI/Get'
 const DEFAULT_FILE_NAME = 'BP01D01'
-const REQUEST_TIMEOUT_MS = 15 * 1000
+const REQUEST_TIMEOUT_MS = 22 * 1000
+const UPSTREAM_RETRY_COUNT = 2
 const SUPPORTED_FILE_NAMES = new Set([DEFAULT_FILE_NAME])
 
 function setCorsHeaders(res) {
@@ -50,6 +51,27 @@ async function fetchWithTimeout(url, timeoutMs) {
   }
 }
 
+function waitFor(delayMs) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs)
+  })
+}
+
+async function fetchWithRetry(url) {
+  let lastError = null
+  for (let attempt = 1; attempt <= UPSTREAM_RETRY_COUNT; attempt += 1) {
+    try {
+      return await fetchWithTimeout(url, REQUEST_TIMEOUT_MS)
+    } catch (error) {
+      lastError = error
+      if (attempt < UPSTREAM_RETRY_COUNT) {
+        await waitFor(350 * attempt)
+      }
+    }
+  }
+  throw lastError ?? new Error('央行匯率來源無回應')
+}
+
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     setCorsHeaders(res)
@@ -76,7 +98,7 @@ export default async function handler(req, res) {
   target.searchParams.set('FileName', fileName)
 
   try {
-    const upstream = await fetchWithTimeout(target.toString(), REQUEST_TIMEOUT_MS)
+    const upstream = await fetchWithRetry(target.toString())
     const bodyText = await upstream.text()
     if (!upstream.ok) {
       sendJson(res, upstream.status, {

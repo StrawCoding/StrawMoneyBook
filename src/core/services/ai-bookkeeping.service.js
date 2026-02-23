@@ -189,7 +189,7 @@ function extractAddonItems(text) {
   }
 }
 
-function findAccountMatches(text, accounts) {
+function findAccountMatchEntries(text, accounts) {
   const compact = compactText(text)
   const matches = []
 
@@ -199,7 +199,7 @@ function findAccountMatches(text, accounts) {
     const target = compactText(name)
     const index = compact.indexOf(target)
     if (index < 0) continue
-    matches.push({ account, index, score: target.length })
+    matches.push({ account, index, score: target.length, target })
   }
 
   matches.sort((a, b) => {
@@ -207,7 +207,20 @@ function findAccountMatches(text, accounts) {
     return b.score - a.score
   })
 
-  return matches.map((item) => item.account)
+  const deduped = []
+  const seen = new Set()
+  for (const item of matches) {
+    const accountId = String(item?.account?.id ?? '').trim()
+    const uniqueKey = accountId || `${item.target}:${item.index}`
+    if (seen.has(uniqueKey)) continue
+    seen.add(uniqueKey)
+    deduped.push(item)
+  }
+  return deduped
+}
+
+function findAccountMatches(text, accounts) {
+  return findAccountMatchEntries(text, accounts).map((item) => item.account)
 }
 
 function countSubsequenceHits(source, target) {
@@ -472,7 +485,7 @@ function extractSmartNoteText(text, context = {}) {
 }
 
 function normalizeType(text) {
-  if (includesAny(text, [/轉帳/, /轉入/, /轉出/, /轉到/, /匯款/, /匯入/, /匯出/])) return 'transfer'
+  if (includesAny(text, [/轉帳/, /轉出/, /轉給/, /轉至/, /匯款/, /匯出/, /跨行轉帳/, /行內轉帳/])) return 'transfer'
   if (includesAny(text, [/收入/, /薪水/, /薪資/, /獎金/, /入帳/, /收到/, /退款/, /退費/, /回饋/])) return 'income'
   return 'expense'
 }
@@ -608,25 +621,68 @@ function resolveTypeByLoanIntent(type, loanIntent) {
 }
 
 function shouldTreatAsTransfer(text, accounts) {
-  const uniqueMatchedAccountIds = [...new Set(findAccountMatches(text, accounts).map((item) => item.id).filter(Boolean))]
-  if (uniqueMatchedAccountIds.length < 2) return false
+  const source = String(text ?? '')
+  const compact = compactText(source)
+  const matchedEntries = findAccountMatchEntries(source, accounts)
+  const uniqueMatchedAccountIds = [...new Set(matchedEntries.map((item) => item?.account?.id).filter(Boolean))]
+  const transferAccounts = pickTransferAccounts(source, accounts)
+  const hasTwoDistinctAccounts = uniqueMatchedAccountIds.length >= 2
+    || Boolean(
+      transferAccounts.fromAccountId
+      && transferAccounts.toAccountId
+      && transferAccounts.fromAccountId !== transferAccounts.toAccountId,
+    )
+  if (!hasTwoDistinctAccounts) return false
 
-  const hasDirectionalPhrase = includesAny(text, [
-    /(從|由|自)\s*\S{0,12}\s*(到|至|給)/,
-    /(由)\s*\S{0,12}\s*(轉給|轉到|匯給|匯到)/,
+  const hasDirectionalPhrase = includesAny(source, [
+    /(從|由|自)\s*\S{0,16}\s*(到|至|給)/,
+    /(由)\s*\S{0,16}\s*(轉給|轉到|匯給|匯到)/,
+    /(轉|匯|挪|撥)\s*\S{0,18}\s*(到|至|給|入)/,
+    /(到|至|給)\s*\S{0,18}\s*(轉|匯|挪|撥)/,
+    /→|->|=>|➡/,
   ])
-  const hasTransferAction = includesAny(text, [
+  const hasTransferAction = includesAny(source, [
+    /轉帳/,
     /轉給/,
     /轉去/,
     /轉到/,
+    /轉入/,
+    /轉出/,
     /匯給/,
     /匯到/,
+    /匯入/,
+    /匯出/,
+    /匯款/,
     /轉來/,
     /挪到/,
     /挪去/,
+    /調撥/,
+    /移轉/,
+    /過戶/,
   ])
 
-  return hasDirectionalPhrase || hasTransferAction
+  let hasBridgeBetweenMatchedAccounts = false
+  if (matchedEntries.length >= 2) {
+    for (let index = 0; index < matchedEntries.length - 1; index += 1) {
+      const left = matchedEntries[index]
+      const right = matchedEntries.find(
+        (item, rightIndex) => rightIndex > index && item?.account?.id !== left?.account?.id,
+      )
+      if (!left || !right) continue
+
+      const leftEnd = Number(left.index) + String(left.target ?? '').length
+      const rightStart = Number(right.index)
+      if (!Number.isFinite(leftEnd) || !Number.isFinite(rightStart) || rightStart <= leftEnd) continue
+
+      const bridge = compact.slice(leftEnd, rightStart)
+      if (/轉|匯|到|至|給|→|->|=>|➡|挪|撥|移/.test(bridge)) {
+        hasBridgeBetweenMatchedAccounts = true
+        break
+      }
+    }
+  }
+
+  return hasDirectionalPhrase || hasTransferAction || hasBridgeBetweenMatchedAccounts
 }
 
 function normalizeReimbursable(text, fallback = false) {

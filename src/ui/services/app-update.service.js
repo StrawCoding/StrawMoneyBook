@@ -3,6 +3,8 @@ import appPackage from '../../../package.json'
 
 const DEFAULT_UPDATE_MANIFEST_URL = 'https://www.strawmb.com/app-update.json'
 const SECONDARY_UPDATE_MANIFEST_URL = 'https://strawmb.com/app-update.json'
+const LOCAL_UPDATE_MANIFEST_URL = '/app-update.json'
+const LOCAL_UPDATE_MANIFEST_RELATIVE_URL = './app-update.json'
 const UPDATE_CHECK_TTL_MS = 30 * 60 * 1000
 const UPDATE_FETCH_TIMEOUT_MS = 6000
 
@@ -28,6 +30,7 @@ function resolveUpdateManifestUrls(rawValue) {
   if (!candidates.length) {
     candidates.push(DEFAULT_UPDATE_MANIFEST_URL, SECONDARY_UPDATE_MANIFEST_URL)
   }
+  candidates.push(LOCAL_UPDATE_MANIFEST_URL, LOCAL_UPDATE_MANIFEST_RELATIVE_URL)
 
   const deduped = []
   const seen = new Set()
@@ -37,6 +40,21 @@ function resolveUpdateManifestUrls(rawValue) {
     deduped.push(candidate)
   }
   return deduped
+}
+
+function normalizeUpdateFetchErrorMessage(error) {
+  const raw = String(error?.message ?? error ?? '').trim()
+  if (!raw) return '未知錯誤'
+  if (/failed to fetch|networkerror|load failed|fetch failed|network request failed/i.test(raw)) {
+    return '網路連線失敗或服務無回應'
+  }
+  return raw
+}
+
+function isNetworkLikeUpdateError(message) {
+  const text = String(message ?? '').trim().toLowerCase()
+  if (!text) return false
+  return /網路連線失敗|服務無回應|failed to fetch|networkerror|load failed|fetch failed|network request failed/.test(text)
 }
 
 function parseVersionParts(versionText) {
@@ -157,17 +175,23 @@ export async function checkForAppUpdate(options = {}) {
       cachedCheckAtMs = now
       return result
     } catch (error) {
-      const message = String(error?.message ?? '').trim() || '未知錯誤'
+      const message = normalizeUpdateFetchErrorMessage(error)
       errors.push(`${url}: ${message}`)
     }
   }
+
+  const allNetworkLike = errors.length > 0
+    && errors.every((item) => isNetworkLikeUpdateError(item))
+  const fallbackMessage = allNetworkLike
+    ? '更新檢查服務暫時無法連線'
+    : errors.join(' | ')
 
   const result = {
     hasUpdate: false,
     currentVersion,
     latestVersion: '',
     playUrl: GOOGLE_PLAY_URL,
-    message: errors.join(' | '),
+    message: fallbackMessage,
     checkedAt: new Date().toISOString(),
   }
   cachedCheckResult = result

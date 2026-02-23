@@ -11,7 +11,10 @@ const EXCHANGE_RATE_PROXY_PATH = '/api/exchange-rate/cbc'
 const EXCHANGE_RATE_PROXY_DEFAULT_ORIGIN = 'https://www.strawmb.com'
 const EXCHANGE_RATE_PROXY_SECONDARY_ORIGIN = 'https://strawmb.com'
 const DEFAULT_SYNC_INTERVAL_HOURS = 24
-const FETCH_TIMEOUT_MS = 12000
+const FETCH_TIMEOUT_MS = 20000
+const FETCH_RETRY_COUNT = 2
+const FETCH_RETRY_BASE_DELAY_MS = 450
+const EXCHANGE_RATE_PROXY_FALLBACK_ORIGINS = resolveExchangeRateProxyFallbackOrigins()
 const EXCHANGE_RATE_PROXY_ENDPOINTS = resolveExchangeRateProxyEndpoints(import.meta.env.VITE_EXCHANGE_RATE_API_BASE_URL)
 
 function ensureLedgerId(ledgerId) {
@@ -45,6 +48,36 @@ function normalizeProxyEndpoint(candidate) {
   return `${raw.replace(/\/+$/, '')}${EXCHANGE_RATE_PROXY_PATH}`
 }
 
+function resolveExchangeRateProxyFallbackOrigins() {
+  const origins = []
+
+  const explicitOrigin = String(import.meta.env.VITE_EXCHANGE_RATE_API_ORIGIN ?? '').trim()
+  if (isAbsoluteHttpUrl(explicitOrigin)) {
+    origins.push(explicitOrigin)
+  }
+
+  const siteUrl = String(import.meta.env.VITE_PRIVACY_POLICY_URL ?? '').trim()
+  if (isAbsoluteHttpUrl(siteUrl)) {
+    try {
+      origins.push(new URL(siteUrl).origin)
+    } catch {
+      // ignore parse failures
+    }
+  }
+
+  origins.push(EXCHANGE_RATE_PROXY_DEFAULT_ORIGIN, EXCHANGE_RATE_PROXY_SECONDARY_ORIGIN)
+
+  const deduped = []
+  const seen = new Set()
+  for (const origin of origins) {
+    const normalized = String(origin ?? '').trim().replace(/\/+$/, '')
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    deduped.push(normalized)
+  }
+  return deduped
+}
+
 function resolveExchangeRateProxyEndpoints(rawValue) {
   const configured = String(rawValue ?? '')
     .split(/[,\n]/)
@@ -52,8 +85,8 @@ function resolveExchangeRateProxyEndpoints(rawValue) {
     .filter(Boolean)
 
   const defaults = Capacitor.isNativePlatform()
-    ? [EXCHANGE_RATE_PROXY_DEFAULT_ORIGIN, EXCHANGE_RATE_PROXY_SECONDARY_ORIGIN]
-    : [EXCHANGE_RATE_PROXY_PATH, EXCHANGE_RATE_PROXY_DEFAULT_ORIGIN]
+    ? EXCHANGE_RATE_PROXY_FALLBACK_ORIGINS
+    : [EXCHANGE_RATE_PROXY_PATH, ...EXCHANGE_RATE_PROXY_FALLBACK_ORIGINS]
 
   const candidates = configured.length ? configured : defaults
   const deduped = []
@@ -231,10 +264,16 @@ function withTimeout(task, timeoutMs, timeoutMessage) {
 function normalizeFetchErrorMessage(error) {
   const message = String(error?.message ?? error ?? '').trim()
   if (!message) return '未知錯誤'
-  if (/failed to fetch|networkerror|load failed|fetch failed/i.test(message)) {
+  if (/failed to fetch|networkerror|load failed|fetch failed|network request failed/i.test(message)) {
     return '網路連線失敗或服務無回應'
   }
   return message
+}
+
+function waitFor(delayMs) {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, delayMs)
+  })
 }
 
 async function fetchJsonPayload(url) {
@@ -265,22 +304,39 @@ async function fetchJsonPayload(url) {
   }
 }
 
+async function fetchJsonPayloadWithRetry(url, sourceLabel = '') {
+  let lastError = null
+  for (let attempt = 1; attempt <= FETCH_RETRY_COUNT; attempt += 1) {
+    try {
+      return await fetchJsonPayload(url)
+    } catch (error) {
+      lastError = error
+      if (attempt < FETCH_RETRY_COUNT) {
+        await waitFor(FETCH_RETRY_BASE_DELAY_MS * attempt)
+      }
+    }
+  }
+  const normalizedMessage = normalizeFetchErrorMessage(lastError)
+  throw new Error(`${sourceLabel || url}：${normalizedMessage}`)
+}
+
 async function fetchCbcRatesPayload() {
   const errors = []
 
   for (const endpoint of EXCHANGE_RATE_PROXY_ENDPOINTS) {
     const url = appendFileNameQuery(endpoint, CBC_FILE_CODE_DAILY)
     try {
-      return await fetchJsonPayload(url)
+      return await fetchJsonPayloadWithRetry(url, `代理 ${url}`)
     } catch (error) {
-      errors.push(`代理 ${url}：${normalizeFetchErrorMessage(error)}`)
+      errors.push(String(error?.message ?? '').trim() || `代理 ${url}：未知錯誤`)
     }
   }
 
   try {
-    return await fetchJsonPayload(appendFileNameQuery(CBC_API_BASE_URL, CBC_FILE_CODE_DAILY))
+    const cbcUrl = appendFileNameQuery(CBC_API_BASE_URL, CBC_FILE_CODE_DAILY)
+    return await fetchJsonPayloadWithRetry(cbcUrl, `央行 ${CBC_API_URL}`)
   } catch (error) {
-    errors.push(`央行 ${CBC_API_URL}：${normalizeFetchErrorMessage(error)}`)
+    errors.push(String(error?.message ?? '').trim() || `央行 ${CBC_API_URL}：未知錯誤`)
   }
 
   const message = errors.join(' | ')
@@ -288,6 +344,15 @@ async function fetchCbcRatesPayload() {
     throw new Error(`匯率同步失敗：${message}`)
   }
   throw new Error(`匯率同步失敗：${message || '未知錯誤'}`)
+}
+
+function hasUsableHistoricalRates(snapshot) {
+  const normalized = normalizeExchangeRateSnapshot(snapshot)
+  if (!normalized.syncedAt) return false
+  const currencyCodes = Object.entries(normalized.rates ?? {})
+    .filter(([currency, value]) => currency !== 'USD' && Number.isFinite(Number(value)) && Number(value) > 0)
+    .map(([currency]) => currency)
+  return currencyCodes.length > 0
 }
 
 export async function getExchangeRateSettings(ledgerId) {
@@ -312,10 +377,22 @@ export async function getExchangeRateSnapshot(ledgerId) {
 
 export async function syncCbcExchangeRateSnapshot(ledgerId) {
   ensureLedgerId(ledgerId)
-  const payload = await fetchCbcRatesPayload()
-  const snapshot = parseCbcRatesPayload(payload)
-  await setSetting(ledgerId, EXCHANGE_RATE_SNAPSHOT_KEY, snapshot)
-  return snapshot
+  const previousSnapshot = await getExchangeRateSnapshot(ledgerId)
+  try {
+    const payload = await fetchCbcRatesPayload()
+    const snapshot = parseCbcRatesPayload(payload)
+    await setSetting(ledgerId, EXCHANGE_RATE_SNAPSHOT_KEY, snapshot)
+    return snapshot
+  } catch (error) {
+    if (hasUsableHistoricalRates(previousSnapshot)) {
+      console.warn('[exchange-rate] sync failed, fallback to previous snapshot', error)
+      return {
+        ...previousSnapshot,
+        syncFallback: true,
+      }
+    }
+    throw error
+  }
 }
 
 export function resolveCrossExchangeRate(rates, fromCurrency, toCurrency) {

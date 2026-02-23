@@ -38,9 +38,14 @@
         <button class="btn" :class="{ primary: analysisType === 'expense' }" @click="analysisType = 'expense'">{{ t('analysis_page.type.expense') }}</button>
       </div>
 
+      <div class="chart-mode-tabs">
+        <button class="btn" :class="{ primary: chartMode === 'pie' }" @click="chartMode = 'pie'">{{ t('analysis_page.chart.pie') }}</button>
+        <button class="btn" :class="{ primary: chartMode === 'bar' }" @click="chartMode = 'bar'">{{ t('analysis_page.chart.bar') }}</button>
+      </div>
+
       <transition name="fade-scale" mode="out-in">
-        <div :key="analysisType">
-          <div class="chart-wrap">
+        <div :key="`${analysisType}-${chartMode}`">
+          <div v-if="chartMode === 'pie'" class="chart-wrap">
             <div class="pie" :style="activePieStyle">
               <div class="pie-hole">
                 <div class="pie-total">{{ t('analysis_page.type_total', { type: activeTypeLabel }) }}</div>
@@ -49,7 +54,7 @@
             </div>
           </div>
 
-          <ul class="legend-list">
+          <ul v-if="chartMode === 'pie'" class="legend-list">
             <li v-for="item in activeBreakdown" :key="`${analysisType}-${item.id}`">
               <button type="button" class="legend-item legend-btn" @click="openCategoryDetail(item)">
                 <span class="legend-dot" :style="{ background: item.color }"></span>
@@ -63,6 +68,36 @@
               </button>
             </li>
             <li v-if="activeBreakdown.length === 0" class="muted">{{ t('analysis_page.no_data_for_type', { type: activeTypeLabel.toLowerCase() }) }}</li>
+          </ul>
+
+          <ul v-else class="bar-chart-list">
+            <li v-for="item in activeBarRows" :key="`${analysisType}-${item.id}-bar`">
+              <button type="button" class="bar-chart-item-btn" @click="openCategoryDetail(item)">
+                <div class="bar-chart-head">
+                  <div class="bar-chart-label">
+                    <span class="legend-dot" :style="{ background: item.color }"></span>
+                    <span class="legend-icon-wrap">
+                      <font-awesome-icon
+                        v-if="item.icon"
+                        :icon="item.icon"
+                        class="legend-icon"
+                        :style="{ color: item.color }"
+                      />
+                    </span>
+                    <span class="bar-chart-name">{{ item.name }}</span>
+                  </div>
+                  <span class="bar-chart-percent">{{ item.percent }}%</span>
+                </div>
+                <div class="bar-chart-track">
+                  <span class="bar-chart-fill" :style="{ width: `${item.barWidthPercent}%`, background: item.color }"></span>
+                </div>
+                <div class="bar-chart-stats">
+                  <MoneyText :value-minor="item.amountMinor" />
+                  <span class="bar-chart-count">{{ t('analysis_page.items_count', { count: item.count }) }}</span>
+                </div>
+              </button>
+            </li>
+            <li v-if="activeBarRows.length === 0" class="muted">{{ t('analysis_page.no_data_for_type', { type: activeTypeLabel.toLowerCase() }) }}</li>
           </ul>
         </div>
       </transition>
@@ -90,9 +125,24 @@ const { t } = useI18n()
 
 const mode = ref('month')
 const analysisType = ref('expense')
+const chartMode = ref('pie')
 const selectedYear = ref(new Date().getFullYear())
 const selectedMonth = ref(monthKeyFromDate(new Date()))
 const statsTransactions = ref([])
+const CHART_MULTI_COLOR_SWATCHES = [
+  'color-mix(in srgb, #ff6b6b 82%, var(--card) 18%)',
+  'color-mix(in srgb, #ffa94d 82%, var(--card) 18%)',
+  'color-mix(in srgb, #ffd43b 82%, var(--card) 18%)',
+  'color-mix(in srgb, #69db7c 82%, var(--card) 18%)',
+  'color-mix(in srgb, #38d9a9 82%, var(--card) 18%)',
+  'color-mix(in srgb, #4dabf7 82%, var(--card) 18%)',
+  'color-mix(in srgb, #748ffc 82%, var(--card) 18%)',
+  'color-mix(in srgb, #9775fa 82%, var(--card) 18%)',
+  'color-mix(in srgb, #cc5de8 82%, var(--card) 18%)',
+  'color-mix(in srgb, #f06595 82%, var(--card) 18%)',
+  'color-mix(in srgb, #a9e34b 82%, var(--card) 18%)',
+  'color-mix(in srgb, #66d9e8 82%, var(--card) 18%)',
+]
 
 const categoryNameMap = computed(() => {
   const map = new Map()
@@ -142,6 +192,7 @@ const activeBreakdown = computed(() => (analysisType.value === 'income' ? income
 const activeTotalMinor = computed(() => (analysisType.value === 'income' ? incomeTotalMinor.value : expenseTotalMinor.value))
 const activeCount = computed(() => (analysisType.value === 'income' ? incomeCount.value : expenseCount.value))
 const activePieStyle = computed(() => (analysisType.value === 'income' ? incomePieStyle.value : expensePieStyle.value))
+const activeBarRows = computed(() => buildBarRows(activeBreakdown.value))
 const activeTypeLabel = computed(() => (analysisType.value === 'income' ? t('analysis_page.type.income') : t('analysis_page.type.expense')))
 
 function pickYear(value) {
@@ -227,24 +278,15 @@ function buildBreakdown(type) {
 
 function buildThemePalette(count) {
   const safeCount = Math.max(1, Number(count) || 1)
-  const darkVar = 'color-mix(in srgb, var(--primary) 88%, var(--text) 12%)'
-  const lightVar = 'color-mix(in srgb, var(--primary) 20%, var(--card) 80%)'
-  if (safeCount === 1) {
-    return [darkVar]
+  const palette = CHART_MULTI_COLOR_SWATCHES.slice(0, safeCount)
+  if (palette.length >= safeCount) return palette
+
+  for (let index = palette.length; index < safeCount; index += 1) {
+    const hue = (index * 137.508) % 360
+    palette.push(`color-mix(in srgb, hsl(${hue.toFixed(2)}deg 82% 62%) 82%, var(--card) 18%)`)
   }
 
-  const startDarkRatio = 92
-  const endDarkRatio = 16
-  const step = (startDarkRatio - endDarkRatio) / (safeCount - 1)
-
-  return Array.from({ length: safeCount }, (_, index) => {
-    const darkRatio = Math.max(
-      endDarkRatio,
-      Math.min(startDarkRatio, startDarkRatio - step * index),
-    )
-    const lightRatio = 100 - darkRatio
-    return `color-mix(in srgb, ${darkVar} ${darkRatio.toFixed(2)}%, ${lightVar} ${lightRatio.toFixed(2)}%)`
-  })
+  return palette
 }
 
 function buildPieStyle(items) {
@@ -265,6 +307,26 @@ function buildPieStyle(items) {
   }
 
   return { background: `conic-gradient(${segments.join(', ')})` }
+}
+
+function buildBarRows(items) {
+  const source = Array.isArray(items) ? items : []
+  if (!source.length) return []
+
+  const maxAmount = source.reduce((max, item) => Math.max(max, Number(item?.amountMinor ?? 0) || 0), 0)
+  if (!Number.isFinite(maxAmount) || maxAmount <= 0) {
+    return source.map((item) => ({ ...item, barWidthPercent: 0 }))
+  }
+
+  return source.map((item) => {
+    const amount = Number(item?.amountMinor ?? 0) || 0
+    const ratio = amount > 0 ? (amount / maxAmount) * 100 : 0
+    const barWidthPercent = amount > 0 ? Math.max(8, Math.min(100, ratio)) : 0
+    return {
+      ...item,
+      barWidthPercent: Number(barWidthPercent.toFixed(2)),
+    }
+  })
 }
 
 function monthKeyFromDate(date) {
@@ -298,6 +360,12 @@ h2, h3 {
   margin-top: 10px
 }
 .type-tabs {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px
+}
+.chart-mode-tabs {
   margin-top: 10px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -392,6 +460,78 @@ h2, h3 {
   min-width: 42px;
   text-align: right;
   font-weight: 700
+}
+.bar-chart-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px
+}
+.bar-chart-item-btn {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  text-align: left
+}
+.bar-chart-item-btn:hover {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border) 70%);
+  background: color-mix(in srgb, var(--primary) 8%, transparent)
+}
+.bar-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px
+}
+.bar-chart-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0
+}
+.bar-chart-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted)
+}
+.bar-chart-percent {
+  min-width: 42px;
+  text-align: right;
+  font-weight: 700
+}
+.bar-chart-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--chart-track);
+  overflow: hidden
+}
+.bar-chart-fill {
+  height: 100%;
+  display: block;
+  border-radius: 999px;
+  transition: width 220ms ease
+}
+.bar-chart-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px
+}
+.bar-chart-count {
+  min-width: 36px;
+  text-align: right
 }
 .legend-count {
   min-width: 36px;
