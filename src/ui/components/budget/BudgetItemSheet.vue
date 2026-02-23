@@ -4,13 +4,13 @@
       <section v-if="open" class="sheet-mask" @click.self="$emit('close')">
         <article class="sheet card">
           <header class="row">
-            <h3>{{ model.id ? '編輯預算項目' : '新增預算項目' }}</h3>
-            <button class="btn" @click="$emit('close')">關閉</button>
+            <h3>{{ model.id ? t('budget_item_sheet.title_edit') : t('budget_item_sheet.title_add') }}</h3>
+            <button class="btn" @click="$emit('close')">{{ t('common.close') }}</button>
           </header>
 
           <div class="stack form-wrap">
             <label>
-              分類
+              {{ t('budget_item_sheet.category') }}
               <button
                 type="button"
                 class="select category-trigger"
@@ -19,20 +19,20 @@
                 @click="openCategoryPicker"
               >
                 <font-awesome-icon v-if="selectedCategoryIcon" :icon="selectedCategoryIcon" class="category-icon" />
-                <span class="category-value">{{ selectedCategoryLabel || '請選擇分類' }}</span>
+                <span class="category-value">{{ selectedCategoryLabel || t('budget_item_sheet.category_placeholder') }}</span>
                 <span class="category-arrow">›</span>
               </button>
             </label>
 
             <label>
-              預算金額（元）
+              {{ t('budget_item_sheet.amount') }}
               <input v-model.number="model.amountMajor" class="input" type="number" min="0" step="1" />
             </label>
           </div>
 
           <footer class="row footer">
-            <button class="btn" @click="$emit('close')">取消</button>
-            <button class="btn primary" @click="onSave">儲存</button>
+            <button class="btn" @click="$emit('close')">{{ t('common.cancel') }}</button>
+            <button class="btn primary" @click="onSave">{{ t('common.save') }}</button>
           </footer>
         </article>
       </section>
@@ -42,9 +42,9 @@
       <section v-if="open && showCategoryPicker" class="category-mask" @click.self="closeCategoryPicker">
         <article class="category-sheet card">
           <header class="row category-head">
-            <button type="button" class="btn" @click="closeCategoryPicker">返回</button>
-            <h4>選擇分類</h4>
-            <button type="button" class="btn" @click="closeCategoryPicker">完成</button>
+            <button type="button" class="btn" @click="closeCategoryPicker">{{ t('common.back') }}</button>
+            <h4>{{ t('budget_item_sheet.picker_title') }}</h4>
+            <button type="button" class="btn" @click="closeCategoryPicker">{{ t('date_time_picker.done') }}</button>
           </header>
 
           <section v-if="categoryPickerGroups.length" class="category-layout">
@@ -73,12 +73,12 @@
                 <font-awesome-icon v-if="category.icon" :icon="category.icon" class="category-item-icon" />
                 <span>{{ category.name }}</span>
               </button>
-              <p v-if="!categoryPickerChildren.length" class="category-empty">此母分類沒有可選子分類</p>
+              <p v-if="!categoryPickerChildren.length" class="category-empty">{{ t('budget_item_sheet.no_child') }}</p>
             </section>
           </section>
 
-          <p v-else class="category-empty">目前沒有可用分類，請先到設定新增分類。</p>
-          <p class="category-tip">可在設定中的分類管理做新增刪除</p>
+          <p v-else class="category-empty">{{ t('budget_item_sheet.no_category') }}</p>
+          <p class="category-tip">{{ t('budget_item_sheet.category_tip') }}</p>
         </article>
       </section>
     </transition>
@@ -87,6 +87,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from '@/ui/services/i18n.service'
 
 const props = defineProps({
   open: {
@@ -108,6 +109,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'save'])
+const { t } = useI18n()
 
 const model = reactive({
   id: '',
@@ -126,7 +128,7 @@ const categoryPickerGroups = computed(() => {
   return [
     {
       id: '__default__',
-      name: '分類',
+      name: t('budget_item_sheet.default_group_name'),
       categories: categoryOptions.value,
     },
   ]

@@ -26,9 +26,11 @@
               <input
                 v-model="model.amountInput"
                 type="text"
-                inputmode="decimal"
+                inputmode="none"
+                readonly
                 class="input"
                 @input="handleAmountInput"
+                @focus="$event.target.blur()"
               />
             </label>
 

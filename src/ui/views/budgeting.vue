@@ -152,7 +152,9 @@ function categoryName(categoryId) {
 }
 
 function itemSpentMinor(categoryId) {
-  return Number(budgetStore.spentMap[categoryId] ?? 0)
+  const value = Number(budgetStore.spentMap[categoryId] ?? 0)
+  if (!Number.isFinite(value)) return 0
+  return Math.max(0, value)
 }
 
 function itemBudgetMinor(item) {
@@ -166,11 +168,16 @@ function itemRemainMinor(item) {
 function itemUsedRatio(item) {
   const budgetMinor = itemBudgetMinor(item)
   if (!budgetMinor) return 0
-  return itemSpentMinor(item.category_id) / budgetMinor
+  const spentMinor = itemSpentMinor(item.category_id)
+  const ratio = spentMinor / budgetMinor
+  if (!Number.isFinite(ratio)) return 0
+  return Math.max(0, ratio)
 }
 
 function itemUsedPercentLabel(item) {
-  return `${Math.round(itemUsedRatio(item) * 100)}%`
+  const ratio = itemUsedRatio(item)
+  const percent = Number.isFinite(ratio) ? Math.round(ratio * 100) : 0
+  return `${Math.max(0, percent)}%`
 }
 
 function isItemOverBudget(item) {
@@ -185,7 +192,10 @@ function itemPieStyle(item) {
     }
   }
 
-  const usedDeg = Math.min(360, Math.max(0, itemUsedRatio(item)) * 360)
+  const ratio = itemUsedRatio(item)
+  const usedDeg = Number.isFinite(ratio)
+    ? Math.min(360, Math.max(0, ratio) * 360)
+    : 0
   return {
     background: `conic-gradient(var(--chart-budget-used) 0deg ${usedDeg}deg, var(--chart-budget-remain) ${usedDeg}deg 360deg)`,
   }

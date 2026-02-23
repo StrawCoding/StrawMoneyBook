@@ -33,7 +33,7 @@
 
           <div class="time-wrap">
             <div class="time-col">
-              <small>時</small>
+              <small>{{ t('date_time_picker.hour') }}</small>
               <div class="time-list">
                 <button
                   v-for="h in hours"
@@ -49,7 +49,7 @@
             </div>
 
             <div class="time-col">
-              <small>分</small>
+              <small>{{ t('date_time_picker.minute') }}</small>
               <div class="time-list">
                 <button
                   v-for="m in minutes"
@@ -66,8 +66,8 @@
           </div>
 
           <footer class="foot">
-            <button type="button" class="btn" @click="setNow">現在</button>
-            <button type="button" class="btn" @click="open = false">完成</button>
+            <button type="button" class="btn" @click="setNow">{{ t('date_time_picker.now') }}</button>
+            <button type="button" class="btn" @click="open = false">{{ t('date_time_picker.done') }}</button>
           </footer>
         </section>
       </transition>
@@ -77,6 +77,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from '@/ui/services/i18n.service'
 
 const props = defineProps({
   date: {
@@ -99,7 +100,12 @@ const props = defineProps({
 
 const emit = defineEmits(['update:date', 'update:hour', 'update:minute'])
 
-const weekNames = ['日', '一', '二', '三', '四', '五', '六']
+const { t, locale } = useI18n()
+const weekNames = computed(() => {
+  if (locale.value === 'ja') return ['日', '月', '火', '水', '木', '金', '土']
+  if (locale.value === 'en') return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  return ['日', '一', '二', '三', '四', '五', '六']
+})
 const hours = Array.from({ length: 24 }, (_, i) => i)
 const minutes = Array.from({ length: 60 }, (_, i) => i)
 const open = ref(false)
@@ -117,16 +123,20 @@ watch(
   },
 )
 
+const localeTag = computed(() => {
+  if (locale.value === 'ja') return 'ja-JP'
+  if (locale.value === 'en') return 'en-US'
+  return 'zh-TW'
+})
+
 const monthLabel = computed(() => {
-  const y = viewMonth.value.getFullYear()
-  const m = viewMonth.value.getMonth() + 1
-  return `${y}年${m}月`
+  return new Intl.DateTimeFormat(localeTag.value, { year: 'numeric', month: 'long' }).format(viewMonth.value)
 })
 
 const displayText = computed(() => {
   const parsed = parseDate(props.date)
-  if (!parsed) return '-'
-  const datePart = parsed.toLocaleDateString('zh-TW', {
+  if (!parsed) return t('date_time_picker.empty')
+  const datePart = parsed.toLocaleDateString(localeTag.value, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

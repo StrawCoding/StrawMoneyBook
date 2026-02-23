@@ -83,19 +83,23 @@ import QuickAddSheet from '@/ui/components/home/QuickAddSheet.vue'
 import LedgerSwitcher from '@/ui/components/common/LedgerSwitcher.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { useAccountStore } from '@/ui/stores/account.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import { runDueSubscriptionCharges } from '@/core/services/subscription.service'
 
 const isSheetOpen = ref(false)
 const quickAddMode = ref('manual')
 const quickAddType = ref('expense')
 const ledgerStore = useLedgerStore()
+const accountStore = useAccountStore()
 const budgetStore = useBudgetStore()
 const transactionStore = useTransactionStore()
 const uiStore = useUiStore()
 const { t, locale } = useI18n()
+const lastSubscriptionAutoRunKey = ref('')
 const filterMode = ref('month')
 const selectedMonth = ref(budgetStore.monthKey || monthKeyFromDate(new Date()))
 const selectedDay = ref(dateKeyFromDate(new Date()))
@@ -109,9 +113,10 @@ const filterModes = computed(() => ([
 
 watch(
   () => ledgerStore.activeLedgerId,
-  (ledgerId) => {
+  async (ledgerId) => {
     if (!ledgerId) return
-    void syncHomeTransactions()
+    await syncHomeTransactions()
+    await processDueSubscriptionsOnOpen()
   },
   { immediate: true },
 )
@@ -133,6 +138,28 @@ async function syncHomeTransactions() {
     await transactionStore.loadHomeMonth(selectedMonth.value)
   } catch (error) {
     uiStore.pushToast(error.message ?? t('home_page.toast.load_failed'), 'error')
+  }
+}
+
+async function processDueSubscriptionsOnOpen() {
+  const ledgerId = ledgerStore.activeLedgerId
+  if (!ledgerId) return
+  const runKey = `${ledgerId}:${dateKeyFromDate(new Date())}`
+  if (lastSubscriptionAutoRunKey.value === runKey) return
+  lastSubscriptionAutoRunKey.value = runKey
+
+  try {
+    const result = await runDueSubscriptionCharges(ledgerId)
+    if (result.chargedCount > 0) {
+      await Promise.all([
+        syncHomeTransactions(),
+        transactionStore.loadRecent(),
+        accountStore.load(),
+      ])
+      uiStore.pushToast(`已自動處理 ${result.chargedCount} 筆定期扣款`)
+    }
+  } catch (error) {
+    console.warn('[subscription] auto charge failed', error)
   }
 }
 

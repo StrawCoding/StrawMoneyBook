@@ -9,6 +9,7 @@
         <RouterLink class="feature-link" to="/loans">{{ t('feature_list.loans') }}</RouterLink>
         <RouterLink class="feature-link" to="/reimbursements">{{ t('feature_list.reimbursements') }}</RouterLink>
         <RouterLink class="feature-link" to="/transactions/search">{{ t('feature_list.search_transactions') }}</RouterLink>
+        <RouterLink class="feature-link" to="/subscriptions">{{ t('feature_list.subscriptions') }}</RouterLink>
       </nav>
     </article>
   </section>
@@ -34,6 +35,7 @@ h2 {
   gap: 8px
 }
 .feature-link {
+  display: block;
   text-decoration: none;
   color: var(--text);
   border: 1px solid var(--border);

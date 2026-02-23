@@ -38,14 +38,10 @@
         <button class="btn" :class="{ primary: analysisType === 'expense' }" @click="analysisType = 'expense'">{{ t('analysis_page.type.expense') }}</button>
       </div>
 
-      <div class="chart-mode-tabs">
-        <button class="btn" :class="{ primary: chartMode === 'pie' }" @click="chartMode = 'pie'">{{ t('analysis_page.chart.pie') }}</button>
-        <button class="btn" :class="{ primary: chartMode === 'bar' }" @click="chartMode = 'bar'">{{ t('analysis_page.chart.bar') }}</button>
-      </div>
-
       <transition name="fade-scale" mode="out-in">
-        <div :key="`${analysisType}-${chartMode}`">
-          <div v-if="chartMode === 'pie'" class="chart-wrap">
+        <div :key="analysisType">
+          <h4 class="chart-section-title">{{ t('analysis_page.chart.pie') }}</h4>
+          <div class="chart-wrap">
             <div class="pie" :style="activePieStyle">
               <div class="pie-hole">
                 <div class="pie-total">{{ t('analysis_page.type_total', { type: activeTypeLabel }) }}</div>
@@ -54,7 +50,7 @@
             </div>
           </div>
 
-          <ul v-if="chartMode === 'pie'" class="legend-list">
+          <ul class="legend-list">
             <li v-for="item in activeBreakdown" :key="`${analysisType}-${item.id}`">
               <button type="button" class="legend-item legend-btn" @click="openCategoryDetail(item)">
                 <span class="legend-dot" :style="{ background: item.color }"></span>
@@ -67,10 +63,10 @@
                 <span class="legend-percent">{{ item.percent }}%</span>
               </button>
             </li>
-            <li v-if="activeBreakdown.length === 0" class="muted">{{ t('analysis_page.no_data_for_type', { type: activeTypeLabel.toLowerCase() }) }}</li>
           </ul>
 
-          <ul v-else class="bar-chart-list">
+          <h4 class="chart-section-title bar-section-title">{{ t('analysis_page.chart.bar') }}</h4>
+          <ul class="bar-chart-list">
             <li v-for="item in activeBarRows" :key="`${analysisType}-${item.id}-bar`">
               <button type="button" class="bar-chart-item-btn" @click="openCategoryDetail(item)">
                 <div class="bar-chart-head">
@@ -97,8 +93,9 @@
                 </div>
               </button>
             </li>
-            <li v-if="activeBarRows.length === 0" class="muted">{{ t('analysis_page.no_data_for_type', { type: activeTypeLabel.toLowerCase() }) }}</li>
           </ul>
+
+          <p v-if="activeBreakdown.length === 0" class="muted chart-empty">{{ t('analysis_page.no_data_for_type', { type: activeTypeLabel.toLowerCase() }) }}</p>
         </div>
       </transition>
     </article>
@@ -125,7 +122,6 @@ const { t } = useI18n()
 
 const mode = ref('month')
 const analysisType = ref('expense')
-const chartMode = ref('pie')
 const selectedYear = ref(new Date().getFullYear())
 const selectedMonth = ref(monthKeyFromDate(new Date()))
 const statsTransactions = ref([])
@@ -365,11 +361,13 @@ h2, h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px
 }
-.chart-mode-tabs {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px
+.chart-section-title {
+  margin: 14px 0 0;
+  font-size: 14px;
+  color: var(--muted)
+}
+.bar-section-title {
+  margin-top: 16px
 }
 .chart-wrap {
   margin-top: 12px;
@@ -463,7 +461,7 @@ h2, h3 {
 }
 .bar-chart-list {
   list-style: none;
-  margin: 14px 0 0;
+  margin: 10px 0 0;
   padding: 0;
   display: grid;
   gap: 8px
@@ -541,4 +539,7 @@ h2, h3 {
 }
 .placeholder {
   min-height: 120px
+}
+.chart-empty {
+  margin-top: 12px
 }</style>

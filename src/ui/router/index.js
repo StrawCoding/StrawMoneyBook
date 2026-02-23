@@ -64,6 +64,18 @@ const router = createRouter({
       meta: { tab: 'home' },
     },
     {
+      name: 'subscriptions',
+      path: '/subscriptions',
+      component: () => import('@/ui/views/subscriptions/SubscriptionListPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
+      name: 'subscription-detail',
+      path: '/subscriptions/:id',
+      component: () => import('@/ui/views/subscriptions/SubscriptionDetailPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
       name: 'assets',
       path: '/assets',
       component: () => import('@/ui/views/assets.vue'),
@@ -190,6 +202,11 @@ const router = createRouter({
       name: 'reimbursements',
       path: '/reimbursements',
       component: () => import('@/ui/views/reimbursements/ReimbursementListPage.vue'),
+    },
+    {
+      name: 'reimbursement-batch',
+      path: '/reimbursements/batch',
+      component: () => import('@/ui/views/reimbursements/ReimbursementBatchPage.vue'),
     },
     {
       name: 'reimbursement-edit',

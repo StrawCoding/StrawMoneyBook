@@ -5,7 +5,7 @@
         <article class="card dialog">
           <header class="row dialog-head">
             <h3>{{ title }}</h3>
-            <button class="btn mini-btn" @click="$emit('close')">關閉</button>
+            <button class="btn mini-btn" @click="$emit('close')">{{ t('common.close') }}</button>
           </header>
 
           <p v-if="message" class="muted dialog-message">{{ message }}</p>
@@ -14,9 +14,9 @@
           </div>
 
           <footer v-if="showFooter" class="row dialog-actions">
-            <button class="btn" :disabled="loading" @click="$emit('close')">{{ cancelText }}</button>
+            <button class="btn" :disabled="loading" @click="$emit('close')">{{ resolvedCancelText }}</button>
             <button class="btn primary" :disabled="confirmDisabled || loading" @click="$emit('confirm')">
-              {{ loading ? loadingText : confirmText }}
+              {{ loading ? resolvedLoadingText : resolvedConfirmText }}
             </button>
           </footer>
         </article>
@@ -26,7 +26,8 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { useI18n } from '@/ui/services/i18n.service'
 
 const props = defineProps({
   open: {
@@ -43,15 +44,15 @@ const props = defineProps({
   },
   cancelText: {
     type: String,
-    default: '取消',
+    default: '',
   },
   confirmText: {
     type: String,
-    default: '確認',
+    default: '',
   },
   loadingText: {
     type: String,
-    default: '處理中...',
+    default: '',
   },
   confirmDisabled: {
     type: Boolean,
@@ -68,6 +69,10 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'confirm'])
+const { t } = useI18n()
+const resolvedCancelText = computed(() => props.cancelText || t('common.cancel'))
+const resolvedConfirmText = computed(() => props.confirmText || t('common.confirm'))
+const resolvedLoadingText = computed(() => props.loadingText || t('common.processing'))
 
 function onRequestCloseOverlay() {
   if (!props.open) return

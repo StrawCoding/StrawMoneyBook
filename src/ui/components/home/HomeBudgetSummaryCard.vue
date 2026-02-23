@@ -49,10 +49,12 @@ const totalSpentMinor = computed(() => Math.max(0, Number(budgetStore.totalSpent
 
 const usedRatio = computed(() => {
   if (!totalBudgetMinor.value) return 0
-  return totalSpentMinor.value / totalBudgetMinor.value
+  const ratio = totalSpentMinor.value / totalBudgetMinor.value
+  if (!Number.isFinite(ratio)) return 0
+  return Math.max(0, ratio)
 })
 
-const usedPercentLabel = computed(() => `${Math.round(usedRatio.value * 100)}%`)
+const usedPercentLabel = computed(() => `${Math.max(0, Math.round(usedRatio.value * 100))}%`)
 const isOverBudget = computed(() => totalBudgetMinor.value > 0 && usedRatio.value > 1)
 
 const pieStyle = computed(() => {
@@ -62,7 +64,9 @@ const pieStyle = computed(() => {
     }
   }
 
-  const usedDeg = Math.min(360, Math.max(0, usedRatio.value) * 360)
+  const usedDeg = Number.isFinite(usedRatio.value)
+    ? Math.min(360, Math.max(0, usedRatio.value) * 360)
+    : 0
   return {
     background: `conic-gradient(var(--chart-budget-used) 0deg ${usedDeg}deg, var(--chart-budget-remain) ${usedDeg}deg 360deg)`,
   }

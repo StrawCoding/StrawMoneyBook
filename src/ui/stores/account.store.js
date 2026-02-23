@@ -15,6 +15,7 @@ import {
 } from '@/core/repositories/account.repo'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { assertCanCreateAccount } from '@/core/services/membership.service'
+import { defaultAccountIcon, normalizeFaIcon } from '@/ui/utils/fa-icon-options'
 
 export const useAccountStore = defineStore('account', {
   state: () => ({
@@ -72,7 +73,10 @@ export const useAccountStore = defineStore('account', {
         ])
 
         this.groups = groups
-        this.accounts = accounts
+        this.accounts = accounts.map((account) => ({
+          ...account,
+          icon: normalizeFaIcon(account.icon, defaultAccountIcon),
+        }))
         this.balances = balances
       } finally {
         this.loading = false

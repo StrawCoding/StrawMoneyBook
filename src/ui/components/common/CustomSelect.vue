@@ -11,7 +11,7 @@
       <span class="value" :class="{ 'icon-only': iconOnly }">
         <font-awesome-icon v-if="selectedOption?.icon" :icon="selectedOption.icon" class="option-icon" />
         <span v-if="!iconOnly || !selectedOption?.icon" class="text" :class="{ placeholder: !selectedLabel }">
-          {{ selectedLabel || placeholder }}
+          {{ selectedLabel || resolvedPlaceholder }}
         </span>
       </span>
       <span class="arrow" :class="{ open }">▾</span>
@@ -67,6 +67,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from '@/ui/services/i18n.service'
 
 const props = defineProps({
   modelValue: {
@@ -83,7 +84,7 @@ const props = defineProps({
   },
   placeholder: {
     type: String,
-    default: '請選擇',
+    default: '',
   },
   disabled: {
     type: Boolean,
@@ -96,11 +97,13 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+const { t } = useI18n()
 const open = ref(false)
 const rootRef = ref(null)
 const triggerRef = ref(null)
 const menuRef = ref(null)
 const menuStyle = ref({})
+const resolvedPlaceholder = computed(() => props.placeholder || t('common.please_select'))
 
 const normalizedOptions = computed(() => normalizeOptions(props.options))
 const normalizedGroups = computed(() => {
@@ -110,7 +113,7 @@ const normalizedGroups = computed(() => {
       if (!groupOptions.length) return null
       return {
         id: group.id ?? `group-${index}`,
-        name: group.name ?? '分類',
+        name: group.name ?? t('custom_select.default_group_name'),
         options: groupOptions,
       }
     })

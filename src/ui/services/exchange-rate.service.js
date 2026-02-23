@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, CapacitorHttp } from '@capacitor/core'
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 
@@ -7,7 +7,10 @@ const EXCHANGE_RATE_SNAPSHOT_KEY = 'exchange_rate.snapshot'
 const CBC_FILE_CODE_DAILY = 'BP01D01'
 const CBC_API_BASE_URL = 'https://cpx.cbc.gov.tw/API/DataAPI/Get'
 const CBC_API_URL = `https://cpx.cbc.gov.tw/API/DataAPI/Get?FileName=${CBC_FILE_CODE_DAILY}`
+const TAIFEX_API_URL = 'https://openapi.taifex.com.tw/v1/DailyForeignExchangeRates'
+const OPEN_ER_API_URL = 'https://open.er-api.com/v6/latest/USD'
 const EXCHANGE_RATE_PROXY_PATH = '/api/exchange-rate/cbc'
+const EXCHANGE_RATE_TAIFEX_PROXY_PATH = '/api/exchange-rate/taifex'
 const EXCHANGE_RATE_PROXY_DEFAULT_ORIGIN = 'https://www.strawmb.com'
 const EXCHANGE_RATE_PROXY_SECONDARY_ORIGIN = 'https://strawmb.com'
 const DEFAULT_SYNC_INTERVAL_HOURS = 24
@@ -15,7 +18,14 @@ const FETCH_TIMEOUT_MS = 20000
 const FETCH_RETRY_COUNT = 2
 const FETCH_RETRY_BASE_DELAY_MS = 450
 const EXCHANGE_RATE_PROXY_FALLBACK_ORIGINS = resolveExchangeRateProxyFallbackOrigins()
-const EXCHANGE_RATE_PROXY_ENDPOINTS = resolveExchangeRateProxyEndpoints(import.meta.env.VITE_EXCHANGE_RATE_API_BASE_URL)
+const EXCHANGE_RATE_PROXY_ENDPOINTS = resolveExchangeRateProxyEndpoints(
+  import.meta.env.VITE_EXCHANGE_RATE_API_BASE_URL,
+  EXCHANGE_RATE_PROXY_PATH,
+)
+const EXCHANGE_RATE_TAIFEX_PROXY_ENDPOINTS = resolveExchangeRateProxyEndpoints(
+  import.meta.env.VITE_EXCHANGE_RATE_API_BASE_URL,
+  EXCHANGE_RATE_TAIFEX_PROXY_PATH,
+)
 
 function ensureLedgerId(ledgerId) {
   if (!ledgerId) {
@@ -35,17 +45,32 @@ function isAbsoluteHttpUrl(value) {
   return /^https?:\/\//i.test(String(value ?? '').trim())
 }
 
-function normalizeProxyEndpoint(candidate) {
+function applyExchangeRateProxyPath(endpoint, proxyPath) {
+  const targetPath = String(proxyPath ?? '').trim() || EXCHANGE_RATE_PROXY_PATH
+  const raw = String(endpoint ?? '').trim()
+  if (!raw) return ''
+
+  if (/\/api\/exchange-rate\/(?:cbc|taifex)(?=[/?#]|$)/i.test(raw)) {
+    return raw.replace(/\/api\/exchange-rate\/(?:cbc|taifex)(?=[/?#]|$)/i, targetPath)
+  }
+
+  if (raw.startsWith('/')) {
+    return `${raw.replace(/\/+$/, '')}${targetPath}`
+  }
+
+  return `${raw.replace(/\/+$/, '')}${targetPath}`
+}
+
+function normalizeProxyEndpoint(candidate, proxyPath = EXCHANGE_RATE_PROXY_PATH) {
   const raw = String(candidate ?? '').trim()
   if (!raw) return ''
 
   if (raw.startsWith('/')) {
-    return raw
+    return applyExchangeRateProxyPath(raw, proxyPath)
   }
 
   if (!isAbsoluteHttpUrl(raw)) return ''
-  if (/\/api\/exchange-rate\/cbc(?:[/?#]|$)/i.test(raw)) return raw
-  return `${raw.replace(/\/+$/, '')}${EXCHANGE_RATE_PROXY_PATH}`
+  return applyExchangeRateProxyPath(raw, proxyPath)
 }
 
 function resolveExchangeRateProxyFallbackOrigins() {
@@ -78,7 +103,7 @@ function resolveExchangeRateProxyFallbackOrigins() {
   return deduped
 }
 
-function resolveExchangeRateProxyEndpoints(rawValue) {
+function resolveExchangeRateProxyEndpoints(rawValue, proxyPath = EXCHANGE_RATE_PROXY_PATH) {
   const configured = String(rawValue ?? '')
     .split(/[,\n]/)
     .map((item) => String(item ?? '').trim())
@@ -86,13 +111,13 @@ function resolveExchangeRateProxyEndpoints(rawValue) {
 
   const defaults = Capacitor.isNativePlatform()
     ? EXCHANGE_RATE_PROXY_FALLBACK_ORIGINS
-    : [EXCHANGE_RATE_PROXY_PATH, ...EXCHANGE_RATE_PROXY_FALLBACK_ORIGINS]
+    : [proxyPath, ...EXCHANGE_RATE_PROXY_FALLBACK_ORIGINS]
 
   const candidates = configured.length ? configured : defaults
   const deduped = []
   const seen = new Set()
   for (const candidate of candidates) {
-    const endpoint = normalizeProxyEndpoint(candidate)
+    const endpoint = normalizeProxyEndpoint(candidate, proxyPath)
     if (!endpoint || seen.has(endpoint)) continue
     seen.add(endpoint)
     deduped.push(endpoint)
@@ -246,6 +271,119 @@ function parseCbcRatesPayload(payload) {
   }
 }
 
+function normalizeTaifexDateKey(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  if (/^\d{8}$/.test(raw)) return raw
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return ''
+  const year = String(date.getFullYear())
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}${month}${day}`
+}
+
+function hasValidTaifexUsdRate(row = {}) {
+  return Object.entries(row).some(([label, value]) => {
+    if (String(label ?? '').trim().toLowerCase() === 'date') return false
+    const pair = parsePairFromLabel(label)
+    if (!pair) return false
+    if (pair.left !== 'USD' && pair.right !== 'USD') return false
+    const numeric = Number(value)
+    return Number.isFinite(numeric) && numeric > 0
+  })
+}
+
+function readLatestTaifexRow(rows = []) {
+  if (!Array.isArray(rows) || !rows.length) return null
+  let picked = null
+  let pickedDate = 0
+
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue
+    if (!hasValidTaifexUsdRate(row)) continue
+    const dateKey = normalizeTaifexDateKey(row.Date ?? row.date)
+    const dateScore = Number(dateKey)
+    if (!Number.isFinite(dateScore) || dateScore <= 0) continue
+    if (dateScore >= pickedDate) {
+      picked = row
+      pickedDate = dateScore
+    }
+  }
+
+  return picked
+}
+
+function parseTaifexRatesPayload(payload) {
+  const rows = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : []
+  const latestRow = readLatestTaifexRow(rows)
+  if (!latestRow) {
+    throw new Error('Taifex 匯率資料為空')
+  }
+
+  const rates = { USD: 1 }
+  for (const [label, rawValue] of Object.entries(latestRow)) {
+    if (String(label ?? '').trim().toLowerCase() === 'date') continue
+    const pair = parsePairFromLabel(label)
+    if (!pair) continue
+    const numericValue = Number(rawValue)
+    if (!Number.isFinite(numericValue) || numericValue <= 0) continue
+    if (pair.left === 'USD') {
+      rates[pair.right] = numericValue
+      continue
+    }
+    if (pair.right === 'USD') {
+      rates[pair.left] = 1 / numericValue
+    }
+  }
+
+  const effectiveDate = parseDateKeyToIso(normalizeTaifexDateKey(latestRow.Date ?? latestRow.date))
+  return {
+    provider: 'taifex',
+    sourceFileCode: 'DailyForeignExchangeRates',
+    syncedAt: new Date().toISOString(),
+    effectiveDate,
+    dataUpdatedAt: effectiveDate,
+    rates: normalizeRateMap(rates),
+  }
+}
+
+function parseOpenErApiRatesPayload(payload) {
+  const rates = normalizeRateMap(payload?.rates)
+  const availableCodes = Object.entries(rates)
+    .filter(([code, value]) => code !== 'USD' && Number.isFinite(Number(value)) && Number(value) > 0)
+    .map(([code]) => code)
+  if (!availableCodes.length) {
+    throw new Error('OpenER 匯率資料為空')
+  }
+
+  const updateUnix = Number(payload?.time_last_update_unix)
+  const updateUtcText = String(payload?.time_last_update_utc ?? '').trim()
+  let effectiveDate = ''
+
+  if (Number.isFinite(updateUnix) && updateUnix > 0) {
+    effectiveDate = new Date(updateUnix * 1000).toISOString().slice(0, 10)
+  } else {
+    const parsed = new Date(updateUtcText)
+    if (!Number.isNaN(parsed.getTime())) {
+      effectiveDate = parsed.toISOString().slice(0, 10)
+    }
+  }
+
+  return {
+    provider: 'open_er_api',
+    sourceFileCode: 'latest/USD',
+    syncedAt: new Date().toISOString(),
+    effectiveDate,
+    dataUpdatedAt: updateUtcText || effectiveDate,
+    rates,
+  }
+}
+
 function withTimeout(task, timeoutMs, timeoutMessage) {
   let timeoutId = null
   const timeoutTask = new Promise((_, reject) => {
@@ -277,6 +415,40 @@ function waitFor(delayMs) {
 }
 
 async function fetchJsonPayload(url) {
+  if (Capacitor.isNativePlatform() && isAbsoluteHttpUrl(url)) {
+    const response = await withTimeout(
+      CapacitorHttp.request({
+        url,
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+      }),
+      FETCH_TIMEOUT_MS,
+      '匯率同步逾時',
+    )
+    const status = Number(response?.status ?? 0)
+    if (!Number.isFinite(status) || status < 200 || status >= 300) {
+      throw new Error(`HTTP ${status || 0}`)
+    }
+
+    if (response?.data && typeof response.data === 'object') {
+      return response.data
+    }
+
+    const text = String(response?.data ?? '').trim()
+    if (!text) {
+      throw new Error('回應為空')
+    }
+    try {
+      return JSON.parse(text)
+    } catch {
+      throw new Error('回應格式錯誤（非 JSON）')
+    }
+  }
+
   const response = await withTimeout(
     fetch(url, {
       method: 'GET',
@@ -346,6 +518,63 @@ async function fetchCbcRatesPayload() {
   throw new Error(`匯率同步失敗：${message || '未知錯誤'}`)
 }
 
+async function fetchTaifexRatesPayload() {
+  const errors = []
+
+  for (const endpoint of EXCHANGE_RATE_TAIFEX_PROXY_ENDPOINTS) {
+    const url = String(endpoint ?? '').trim()
+    if (!url) continue
+    try {
+      return await fetchJsonPayloadWithRetry(url, `代理 ${url}`)
+    } catch (error) {
+      errors.push(String(error?.message ?? '').trim() || `代理 ${url}：未知錯誤`)
+    }
+  }
+
+  try {
+    return await fetchJsonPayloadWithRetry(TAIFEX_API_URL, `Taifex ${TAIFEX_API_URL}`)
+  } catch (error) {
+    errors.push(String(error?.message ?? '').trim() || `Taifex ${TAIFEX_API_URL}：未知錯誤`)
+  }
+
+  const message = errors.join(' | ')
+  if (/網路連線失敗或服務無回應/i.test(message)) {
+    throw new Error(`匯率同步失敗：${message}`)
+  }
+  throw new Error(`匯率同步失敗：${message || '未知錯誤'}`)
+}
+
+async function fetchOpenErApiRatesPayload() {
+  return fetchJsonPayloadWithRetry(OPEN_ER_API_URL, `OpenER ${OPEN_ER_API_URL}`)
+}
+
+async function syncExchangeRateWithFallback() {
+  const syncErrors = []
+
+  try {
+    const cbcPayload = await fetchCbcRatesPayload()
+    return parseCbcRatesPayload(cbcPayload)
+  } catch (error) {
+    syncErrors.push(`央行：${String(error?.message ?? error ?? '未知錯誤')}`)
+  }
+
+  try {
+    const taifexPayload = await fetchTaifexRatesPayload()
+    return parseTaifexRatesPayload(taifexPayload)
+  } catch (error) {
+    syncErrors.push(`Taifex：${String(error?.message ?? error ?? '未知錯誤')}`)
+  }
+
+  try {
+    const openErPayload = await fetchOpenErApiRatesPayload()
+    return parseOpenErApiRatesPayload(openErPayload)
+  } catch (error) {
+    syncErrors.push(`OpenER：${String(error?.message ?? error ?? '未知錯誤')}`)
+  }
+
+  throw new Error(`匯率同步失敗：${syncErrors.join(' | ')}`)
+}
+
 function hasUsableHistoricalRates(snapshot) {
   const normalized = normalizeExchangeRateSnapshot(snapshot)
   if (!normalized.syncedAt) return false
@@ -379,8 +608,7 @@ export async function syncCbcExchangeRateSnapshot(ledgerId) {
   ensureLedgerId(ledgerId)
   const previousSnapshot = await getExchangeRateSnapshot(ledgerId)
   try {
-    const payload = await fetchCbcRatesPayload()
-    const snapshot = parseCbcRatesPayload(payload)
+    const snapshot = await syncExchangeRateWithFallback()
     await setSetting(ledgerId, EXCHANGE_RATE_SNAPSHOT_KEY, snapshot)
     return snapshot
   } catch (error) {

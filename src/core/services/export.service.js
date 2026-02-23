@@ -133,6 +133,23 @@ function rangeByMode(mode, options = {}) {
   return { startUtc: null, endUtc: null }
 }
 
+function normalizeExportScope(value) {
+  const raw = String(value ?? '').trim().toLowerCase()
+  if (raw === 'reimbursement_pending') return 'reimbursement_pending'
+  if (raw === 'reimbursement_reimbursed') return 'reimbursement_reimbursed'
+  if (raw === 'reimbursement_pending_selected') return 'reimbursement_pending_selected'
+  return 'all'
+}
+
+function normalizeExportTxIds(values) {
+  const source = Array.isArray(values) ? values : [values]
+  const ids = source
+    .flatMap((item) => String(item ?? '').split(','))
+    .map((item) => item.trim())
+    .filter(Boolean)
+  return [...new Set(ids)]
+}
+
 const EXCEL_HEADERS = [
   '類型',
   '記帳時間',
@@ -405,6 +422,8 @@ export async function exportLedgerTransactionsExcel(ledgerId, options = {}) {
 
 export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
   const mode = ['all', 'year', 'month', 'day', 'custom'].includes(options.mode) ? options.mode : 'all'
+  const scope = normalizeExportScope(options.scope)
+  const exportTxIds = normalizeExportTxIds(options.txIds)
   const { startUtc, endUtc } = rangeByMode(mode, options)
   const accountBalanceMap = await loadAccountBalanceBeforeMap(ledgerId, startUtc)
 
@@ -413,6 +432,21 @@ export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
   if (startUtc && endUtc) {
     rangeSql = ' AND t.occurred_at >= ? AND t.occurred_at < ?'
     values.push(startUtc, endUtc)
+  }
+  let scopeSql = ''
+  let txIdsSql = ''
+  if (scope === 'reimbursement_pending') {
+    scopeSql = " AND t.type = 'expense' AND t.is_reimbursable = 1 AND t.reimbursement_state = 'pending'"
+  } else if (scope === 'reimbursement_reimbursed') {
+    scopeSql = " AND t.type = 'expense' AND t.is_reimbursable = 1 AND t.reimbursement_state = 'reimbursed'"
+  } else if (scope === 'reimbursement_pending_selected') {
+    scopeSql = " AND t.type = 'expense' AND t.is_reimbursable = 1 AND t.reimbursement_state = 'pending'"
+    if (exportTxIds.length) {
+      txIdsSql = ` AND t.id IN (${exportTxIds.map(() => '?').join(', ')})`
+      values.push(...exportTxIds)
+    } else {
+      txIdsSql = ' AND 1 = 0'
+    }
   }
 
   const result = await query(
@@ -442,6 +476,8 @@ export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
      WHERE t.ledger_id = ?
        AND t.deleted_at IS NULL
        ${rangeSql}
+       ${scopeSql}
+       ${txIdsSql}
      ORDER BY t.occurred_at ASC, t.created_at ASC;`,
     values,
   )
@@ -475,7 +511,8 @@ export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
 
   const ledgerName = rows[0]?.交易帳本 || 'ledger'
   const safeLedgerName = String(ledgerName).replace(/[\\/:*?"<>|]/g, '_')
-  const filename = `${safeLedgerName}_transactions_${mode}_${timestampForFilename()}.csv`
+  const scopeSuffix = scope === 'all' ? '' : `_${scope}`
+  const filename = `${safeLedgerName}_transactions_${mode}${scopeSuffix}_${timestampForFilename()}.csv`
   const csvText = rowsToCsv(rows, CSV_HEADERS)
   return { filename, csvText, rowCount: rows.length }
 }

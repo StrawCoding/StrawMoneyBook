@@ -104,9 +104,11 @@
               <input
                 v-model="model.amountInput"
                 type="text"
-                inputmode="decimal"
+                inputmode="none"
+                readonly
                 class="input"
                 @input="handleAmountInput"
+                @focus="$event.target.blur()"
               />
             </label>
 
@@ -153,7 +155,7 @@
                     :class="{ primary: model.exchangeRateMode === 'system' }"
                     @click="model.exchangeRateMode = 'system'"
                   >
-                    系統同步（央行）
+                    系統同步（央行/Taifex）
                   </button>
                   <button
                     type="button"

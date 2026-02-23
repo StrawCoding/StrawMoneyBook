@@ -2,7 +2,6 @@ const ACCOUNT_ICON_OPTIONS = [
   // Core money/account
   { value: 'fa-solid fa-wallet', label: '錢包' },
   { value: 'fa-solid fa-money-bill-wave', label: '現金' },
-  { value: 'fa-solid fa-piggy-bank', label: '存錢' },
   { value: 'fa-solid fa-coins', label: '零錢' },
   { value: 'fa-solid fa-money-bill-1-wave', label: '薪轉帳戶' },
   { value: 'fa-solid fa-money-check-dollar', label: '支票' },
@@ -120,6 +119,13 @@ export const defaultAccountIcon = accountIconOptions[0]?.value ?? ''
 export const defaultCategoryExpenseIcon = 'fa-solid fa-utensils'
 export const defaultCategoryIncomeIcon = 'fa-solid fa-sack-dollar'
 
+const ICON_ALIAS_MAP = {
+  'fa-bank': 'fa-building-columns',
+  'fa-university': 'fa-building-columns',
+  'fa-institution': 'fa-building-columns',
+  'fa-building': 'fa-building-columns',
+}
+
 export function normalizeFaIcon(value, fallback = '') {
   const source = String(value ?? '').trim()
   if (!source) return fallback
@@ -149,6 +155,15 @@ export function normalizeFaIcon(value, fallback = '') {
     if (/^[a-z0-9-]+$/i.test(token)) {
       iconName = `fa-${token.toLowerCase()}`
     }
+  }
+
+  if (ICON_ALIAS_MAP[iconName]) {
+    iconName = ICON_ALIAS_MAP[iconName]
+    style = 'fa-solid'
+  }
+
+  if (!iconName && /(銀行|bank)/i.test(source)) {
+    return 'fa-solid fa-building-columns'
   }
 
   if (!iconName || iconName === 'fa-solid' || iconName === 'fa-regular' || iconName === 'fa-brands') {

@@ -3,7 +3,7 @@
     <article class="card panel">
       <header class="row">
         <h2>{{ t('analysis_print.title') }}</h2>
-        <RouterLink class="btn back-btn" to="/analysis">{{ t('common.back') }}</RouterLink>
+        <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
       </header>
 
       <div class="mode-tabs">
@@ -93,6 +93,18 @@ const exportedFilename = ref('')
 const exportedLocation = ref('')
 const exportedIsDeviceLink = ref(false)
 const exportedActionLabel = computed(() => (exportedIsDeviceLink.value ? t('analysis_print.open_link') : t('analysis_print.download_again')))
+const exportScope = computed(() => String(route.query.scope ?? '').trim())
+const exportTxIds = computed(() => String(route.query.txIds ?? '')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean))
+const backLink = computed(() => {
+  if (String(route.query.from ?? '').trim() === 'reimbursements') {
+    const tab = String(route.query.tab ?? '').trim()
+    return tab ? { path: '/reimbursements', query: { tab } } : { path: '/reimbursements' }
+  }
+  return '/analysis'
+})
 
 function parseMode(value) {
   return ['all', 'year', 'month', 'day', 'custom'].includes(value) ? value : 'all'
@@ -144,6 +156,8 @@ async function exportCsv() {
       dayKey: selectedDay.value,
       startDate: startDate.value,
       endDate: endDate.value,
+      scope: exportScope.value,
+      txIds: exportTxIds.value,
     })
 
     exportedFilename.value = result.filename
@@ -259,7 +273,9 @@ label {
   align-items: center
 }
 .file-note {
-  margin: 8px 0 0
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  word-break: break-word
 }
 .fields-list {
   margin: 12px 0 0;

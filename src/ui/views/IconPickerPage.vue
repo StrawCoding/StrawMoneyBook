@@ -8,18 +8,26 @@
 
       <article class="card panel">
         <p class="muted">{{ scopeLabel }}</p>
+        <input
+          v-model.trim="keyword"
+          class="input search-input"
+          :placeholder="t('icon_picker.search_placeholder')"
+          type="search"
+        />
         <div class="icon-grid">
           <button
-            v-for="item in options"
-            :key="item.value"
+            v-for="item in filteredOptions"
+            :key="`${item.value}-${item.label}`"
             class="icon-btn"
-            :class="{ active: item.value === currentValue }"
+            :class="{ active: item.value === currentValue, 'icon-only': hideLabel }"
             type="button"
             @click.stop.prevent="pick(item.value)"
           >
             <font-awesome-icon :icon="item.icon" />
+            <span v-if="!hideLabel" class="icon-label">{{ item.label }}</span>
           </button>
         </div>
+        <p v-if="!filteredOptions.length" class="muted no-result">{{ t('icon_picker.no_results') }}</p>
       </article>
     </section>
   </div>
@@ -37,9 +45,16 @@ const router = useRouter()
 const { t } = useI18n()
 const uiStore = useUiStore()
 const picking = ref(false)
+const keyword = ref('')
 
 const scope = computed(() => (queryText(route.query.scope) === 'account' ? 'account' : 'category'))
+const hideLabel = computed(() => scope.value === 'account')
 const options = computed(() => (scope.value === 'account' ? accountIconOptions : categoryIconOptions))
+const filteredOptions = computed(() => {
+  const key = keyword.value.toLowerCase()
+  if (!key) return options.value
+  return options.value.filter((item) => String(item.label ?? '').toLowerCase().includes(key))
+})
 const scopeLabel = computed(() => (scope.value === 'account' ? t('icon_picker.select_account_icon') : t('icon_picker.select_category_icon')))
 const currentValue = computed(() => normalizeFaIcon(queryText(route.query.current), options.value[0]?.value ?? ''))
 
@@ -163,10 +178,13 @@ function buildBaseQuery(query) {
 .panel {
   padding: 14px
 }
+.search-input {
+  margin-top: 10px;
+}
 .icon-grid {
   margin-top: 10px;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   touch-action: pan-y;
 }
@@ -175,8 +193,22 @@ function buildBaseQuery(query) {
   background: color-mix(in srgb, var(--card) 85%, var(--surface-popover) 15%);
   border-radius: 14px;
   color: var(--text);
-  height: 50px;
-  font-size: 20px
+  min-height: 82px;
+  font-size: 20px;
+  padding: 8px 6px;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  align-content: center;
+}
+.icon-btn.icon-only {
+  min-height: 56px;
+}
+.icon-label {
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+  word-break: break-word;
 }
 .icon-btn.active {
   color: var(--primary-soft);
@@ -185,4 +217,13 @@ function buildBaseQuery(query) {
 }
 .icon-btn:active {
   transform: scale(0.97)
-}</style>
+}
+.no-result {
+  margin-top: 8px;
+}
+@media (max-width: 720px) {
+  .icon-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+</style>

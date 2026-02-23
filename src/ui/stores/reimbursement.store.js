@@ -47,13 +47,15 @@ export const useReimbursementStore = defineStore('reimbursement', {
       await this.load()
     },
 
-    async settle(txId, payload = {}) {
+    async settle(txId, payload = {}, options = {}) {
       const ledgerStore = useLedgerStore()
       const result = await settleReimbursableExpense(ledgerStore.activeLedgerId, {
         txId,
         ...payload,
       })
-      await this.load()
+      if (options.reload !== false) {
+        await this.load()
+      }
       return result
     },
 
