@@ -151,6 +151,35 @@ const EXCEL_HEADERS = [
   '匯率',
 ]
 
+const CSV_HEADERS = EXCEL_HEADERS.filter((header) => header !== '交易標籤')
+
+function splitCategoryPath(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return []
+  return raw
+    .split(/\s*(?:-->|->|→|＞)\s*/g)
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
+function normalizeCategoryLevels(groupName, categoryName) {
+  const groupParts = splitCategoryPath(groupName)
+  const categoryParts = splitCategoryPath(categoryName)
+
+  const primary = groupParts[0] || categoryParts[0] || ''
+  let secondary = ''
+
+  if (categoryParts.length > 1) {
+    secondary = categoryParts.slice(1).join(' / ')
+  } else if (categoryParts.length === 1) {
+    secondary = categoryParts[0]
+  } else if (groupParts.length > 1) {
+    secondary = groupParts.slice(1).join(' / ')
+  }
+
+  return { primary, secondary }
+}
+
 async function rowsFromLedgerTable(ledgerId, tableName) {
   const result = await query(`SELECT * FROM ${tableName} WHERE ledger_id = ?;`, [ledgerId])
   return result?.values ?? []
@@ -345,6 +374,7 @@ export async function exportLedgerTransactionsExcel(ledgerId, options = {}) {
     const nextBalanceMinor = Number(accountBalanceMap.get(accountId) ?? 0) + Number(row.amount_minor ?? 0)
     accountBalanceMap.set(accountId, nextBalanceMinor)
     const accountBalanceMajor = nextBalanceMinor / 100
+    const categories = normalizeCategoryLevels(row.category_group_name, row.category_name)
     const typeLabel =
       row.type === 'expense' ? '支出' : row.type === 'income' ? '收入' : row.type === 'transfer' ? '轉帳' : '調整'
     return {
@@ -355,8 +385,8 @@ export async function exportLedgerTransactionsExcel(ledgerId, options = {}) {
       貨幣符號: row.currency_code ?? 'TWD',
       交易金額: String(amountMajor),
       當期帳戶餘額: String(accountBalanceMajor),
-      一級分類: row.category_group_name ?? '',
-      二級分類: row.category_name ?? '',
+      一級分類: categories.primary,
+      二級分類: categories.secondary,
       交易標籤: row.origin_type ?? '',
       備註: row.note ?? '',
       '退款&轉銷': '',
@@ -391,7 +421,6 @@ export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
        t.account_id,
        t.occurred_at,
        t.note,
-       t.origin_type,
        t.amount_minor,
        a.name AS account_name,
        a.currency_code,
@@ -423,6 +452,7 @@ export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
     const nextBalanceMinor = Number(accountBalanceMap.get(accountId) ?? 0) + Number(row.amount_minor ?? 0)
     accountBalanceMap.set(accountId, nextBalanceMinor)
     const accountBalanceMajor = nextBalanceMinor / 100
+    const categories = normalizeCategoryLevels(row.category_group_name, row.category_name)
     const typeLabel =
       row.type === 'expense' ? '支出' : row.type === 'income' ? '收入' : row.type === 'transfer' ? '轉帳' : '調整'
     return {
@@ -433,9 +463,8 @@ export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
       貨幣符號: row.currency_code ?? 'TWD',
       交易金額: String(amountMajor),
       當期帳戶餘額: String(accountBalanceMajor),
-      一級分類: row.category_group_name ?? '',
-      二級分類: row.category_name ?? '',
-      交易標籤: row.origin_type ?? '',
+      一級分類: categories.primary,
+      二級分類: categories.secondary,
       備註: row.note ?? '',
       '退款&轉銷': '',
       收回: '',
@@ -447,7 +476,7 @@ export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
   const ledgerName = rows[0]?.交易帳本 || 'ledger'
   const safeLedgerName = String(ledgerName).replace(/[\\/:*?"<>|]/g, '_')
   const filename = `${safeLedgerName}_transactions_${mode}_${timestampForFilename()}.csv`
-  const csvText = rowsToCsv(rows, EXCEL_HEADERS)
+  const csvText = rowsToCsv(rows, CSV_HEADERS)
   return { filename, csvText, rowCount: rows.length }
 }
 

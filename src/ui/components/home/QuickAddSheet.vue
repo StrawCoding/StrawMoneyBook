@@ -319,6 +319,7 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
+import { useLoanStore } from '@/ui/stores/loan.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
@@ -326,6 +327,14 @@ import { parseAutoBookkeepingText } from '@/core/services/ai-bookkeeping.service
 import { assertCanUseAiBookkeeping, recordAiBookkeepingUsage } from '@/core/services/membership.service'
 import { mergeAddonItemsToNote } from '@/ui/utils/addon-note'
 import { useSpeechInput } from '@/ui/composables/use-speech-input'
+import {
+  formatLoanStartDateTime,
+  pickLoanForAiRepayment,
+  resolveLoanActionLabel,
+  resolveLoanCounterpartyName,
+  resolveLoanOccurredAtIso,
+  resolveLoanTransactionType,
+} from '@/ui/services/ai-loan-intent.service'
 
 const props = defineProps({
   open: {
@@ -350,6 +359,7 @@ const categoryStore = useCategoryStore()
 const transactionStore = useTransactionStore()
 const uiStore = useUiStore()
 const budgetStore = useBudgetStore()
+const loanStore = useLoanStore()
 const addonTemplateStore = useAddonTemplateStore()
 
 const types = [
@@ -418,10 +428,12 @@ const aiResultOccurredAtLabel = computed(() => {
   return aiOccurredAtLabel.value
 })
 const aiResultTitle = computed(() => {
+  if (aiCreatedRecord.value?.title) return aiCreatedRecord.value.title
   if (aiResultType.value === 'transfer') return '轉帳'
   return categoryNameById(aiResultCategoryId.value)
 })
 const aiResultIcon = computed(() => {
+  if (aiCreatedRecord.value?.icon) return aiCreatedRecord.value.icon
   if (aiResultType.value === 'transfer') return 'fa-solid fa-arrow-right-arrow-left'
   const category = categoryStore.categories.find((item) => item.id === aiResultCategoryId.value)
   return category?.icon ?? ''
@@ -433,6 +445,7 @@ const aiResultSignedAmount = computed(() => {
   return amountText
 })
 const aiResultAccountText = computed(() => {
+  if (aiCreatedRecord.value?.accountText) return aiCreatedRecord.value.accountText
   if (aiResultType.value === 'transfer') {
     return `${accountNameById(aiResultAccountId.value)} → ${accountNameById(aiResultPeerAccountId.value)}`
   }
@@ -630,6 +643,21 @@ async function parseWithAi() {
 
   applyAiDraft(result.draft)
   aiInput.value = ''
+  const loanIntent = result.draft.loanIntent ?? null
+
+  if (!loanIntent && result.draft.type !== 'transfer' && !result.draft.categoryId) {
+    const warningText = '沒有分類，請在設定中新增後再試，未建立交易紀錄'
+    pushAiMessage('assistant', warningText)
+    uiStore.pushToast(warningText, 'error')
+    return
+  }
+
+  if (loanIntent && !resolveLoanCounterpartyName(loanIntent)) {
+    const warningText = '沒有辨識到借貸對象，請補上名字後再試'
+    pushAiMessage('assistant', warningText)
+    uiStore.pushToast(warningText, 'error')
+    return
+  }
 
   try {
     assertCanUseAiBookkeeping()
@@ -643,22 +671,27 @@ async function parseWithAi() {
   aiAutoCreating.value = true
   let createdRecord = null
   try {
-    createdRecord = await submit({
-      closeAfterSuccess: false,
-      successMessage: 'AI 已自動記錄交易',
-    })
+    createdRecord = loanIntent
+      ? await submitLoanByAi(result.draft, {
+        closeAfterSuccess: false,
+        successMessage: 'AI 已自動記錄借貸',
+      })
+      : await submit({
+        closeAfterSuccess: false,
+        successMessage: 'AI 已自動記錄交易',
+      })
   } finally {
     aiAutoCreating.value = false
   }
 
   if (!createdRecord) {
-    pushAiMessage('assistant', '記帳失敗，請重試')
+    pushAiMessage('assistant', loanIntent ? '借貸記錄失敗，請重試' : '記帳失敗，請重試')
     return
   }
 
   recordAiBookkeepingUsage()
   aiCreatedRecord.value = createdRecord
-  pushAiMessage('assistant', '記帳完成')
+  pushAiMessage('assistant', loanIntent ? '借貸記錄完成' : '記帳完成')
 }
 
 async function toggleAiVoiceInput() {
@@ -726,6 +759,7 @@ function goEditCreatedTransaction() {
 function applyAiDraft(draft) {
   const parsedDate = new Date(draft.occurredAt)
   const amountMajor = Math.abs(Number(draft.amountMinor ?? 0)) / 100
+  const loanIntent = draft?.loanIntent ?? null
 
   model.type = draft.type
   if (!Number.isNaN(parsedDate.getTime())) {
@@ -740,13 +774,11 @@ function applyAiDraft(draft) {
   model.peerAccountId =
     draft.peerAccountId ?? accountStore.accounts.find((item) => item.id !== model.accountId)?.id ?? model.accountId
 
-  if (draft.type === 'transfer') {
+  if (draft.type === 'transfer' || loanIntent) {
     model.categoryId = ''
     model.isReimbursable = false
   } else {
-    const fallbackCategoryId =
-      draft.type === 'income' ? categoryStore.incomeCategories[0]?.id ?? '' : categoryStore.expenseCategories[0]?.id ?? ''
-    model.categoryId = draft.categoryId || fallbackCategoryId
+    model.categoryId = draft.categoryId ?? ''
     model.isReimbursable = Boolean(draft.isReimbursable) && draft.type === 'expense'
   }
 
@@ -912,6 +944,131 @@ async function submit(options = {}) {
     }
   } catch (error) {
     uiStore.pushToast(error.message ?? '新增失敗', 'error')
+    return null
+  }
+}
+
+function loanIntentIcon(loanIntent) {
+  if (loanIntent?.mode === 'repay') {
+    return loanIntent?.direction === 'borrow' ? 'fa-solid fa-money-bill-transfer' : 'fa-solid fa-hand-holding-dollar'
+  }
+  return loanIntent?.direction === 'borrow' ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up'
+}
+
+async function refreshLinkedDataAfterLoanWrite() {
+  await Promise.all([
+    transactionStore.loadRecent(),
+    accountStore.load(),
+    budgetStore.loadMonth(budgetStore.monthKey),
+    loanStore.load(),
+  ])
+}
+
+async function submitLoanByAi(draft, options = {}) {
+  const closeAfterSuccess = options.closeAfterSuccess !== false
+  const successMessage = options.successMessage ?? 'AI 已自動記錄借貸'
+  const loanIntent = draft?.loanIntent ?? null
+
+  if (!loanIntent) {
+    uiStore.pushToast('找不到可執行的借貸指令', 'error')
+    return null
+  }
+  if (!model.accountId) {
+    uiStore.pushToast('請先選擇帳戶', 'error')
+    return null
+  }
+
+  const actionLabel = resolveLoanActionLabel(loanIntent)
+  const txType = resolveLoanTransactionType(loanIntent)
+  const counterpartyName = resolveLoanCounterpartyName(loanIntent)
+  const amountMinor = Math.round(Math.abs(Number(draft?.amountMinor ?? 0)))
+  const occurredAt = resolveLoanOccurredAtIso(draft?.occurredAt)
+  const noteText = String(draft?.note ?? '').trim()
+
+  if (amountMinor <= 0) {
+    uiStore.pushToast('請輸入有效金額（需大於 0）', 'error')
+    return null
+  }
+
+  try {
+    if (loanIntent.mode === 'create') {
+      if (!counterpartyName) {
+        uiStore.pushToast('沒有辨識到借貸對象，請補上名字後再試', 'error')
+        return null
+      }
+      const createdLoan = await loanStore.create({
+        direction: loanIntent.direction === 'borrow' ? 'borrow' : 'lend',
+        counterpartyName,
+        principalMinor: amountMinor,
+        interestMinor: 0,
+        startDate: formatLoanStartDateTime(occurredAt),
+        dueDate: null,
+        occurredAt,
+        accountId: model.accountId,
+        note: noteText,
+      })
+
+      await refreshLinkedDataAfterLoanWrite()
+      uiStore.pushToast(successMessage)
+      if (closeAfterSuccess) {
+        emit('close')
+      }
+
+      return {
+        txId: String(createdLoan?.setup_tx_id ?? ''),
+        canEdit: Boolean(createdLoan?.setup_tx_id),
+        type: txType,
+        amountMinor,
+        occurredAt,
+        accountId: model.accountId,
+        peerAccountId: '',
+        categoryId: '',
+        title: `${actionLabel}：${counterpartyName}`,
+        icon: loanIntentIcon(loanIntent),
+        accountText: accountNameById(model.accountId),
+      }
+    }
+
+    await loanStore.load()
+    const matched = pickLoanForAiRepayment(loanStore.items, loanIntent)
+    if (!matched.loan) {
+      uiStore.pushToast(matched.warning || '找不到可歸還/收回的借貸紀錄', 'error')
+      return null
+    }
+    if (matched.warning) {
+      uiStore.pushToast(matched.warning)
+    }
+
+    const repaymentResult = await loanStore.repay({
+      loanId: matched.loan.id,
+      accountId: model.accountId,
+      amountMinor,
+      note: noteText,
+      paidAt: occurredAt,
+    })
+
+    await refreshLinkedDataAfterLoanWrite()
+    uiStore.pushToast(successMessage)
+    if (closeAfterSuccess) {
+      emit('close')
+    }
+
+    const targetName = String(matched.loan.counterparty_name ?? counterpartyName ?? '').trim() || '未指定對象'
+    return {
+      txId: String(repaymentResult?.txId ?? ''),
+      canEdit: Boolean(repaymentResult?.txId),
+      type: txType,
+      amountMinor,
+      occurredAt,
+      accountId: model.accountId,
+      peerAccountId: '',
+      categoryId: '',
+      title: `${actionLabel}：${targetName}`,
+      icon: loanIntentIcon(loanIntent),
+      accountText: accountNameById(model.accountId),
+    }
+  } catch (error) {
+    uiStore.pushToast(error.message ?? '借貸記錄失敗', 'error')
     return null
   }
 }

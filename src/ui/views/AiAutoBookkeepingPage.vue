@@ -188,12 +188,23 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
+import { useLoanStore } from '@/ui/stores/loan.store'
+import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import {
+  formatLoanStartDateTime,
+  pickLoanForAiRepayment,
+  resolveLoanActionLabel,
+  resolveLoanCounterpartyName,
+  resolveLoanOccurredAtIso,
+} from '@/ui/services/ai-loan-intent.service'
 
 const accountStore = useAccountStore()
 const categoryStore = useCategoryStore()
 const transactionStore = useTransactionStore()
 const uiStore = useUiStore()
+const loanStore = useLoanStore()
+const budgetStore = useBudgetStore()
 const { locale } = useI18n()
 
 const sourceText = ref('')
@@ -202,6 +213,7 @@ const hasDraft = ref(false)
 const pageRef = ref(null)
 const isPageLeaving = ref(false)
 const hasInputText = computed(() => String(sourceText.value ?? '').trim().length > 0)
+const latestLoanIntent = ref(null)
 const speechLiveText = ref('')
 const parsing = ref(false)
 const submitting = ref(false)
@@ -257,10 +269,9 @@ watch(
       return
     }
     const categoryList = type === 'income' ? categoryStore.incomeCategories : categoryStore.expenseCategories
-    const fallback = categoryList[0]?.id ?? ''
     const hasCurrent = categoryList.some((item) => item.id === model.categoryId)
     if (!hasCurrent) {
-      model.categoryId = fallback
+      model.categoryId = ''
     }
     if (type !== 'expense') {
       model.isReimbursable = false
@@ -303,11 +314,13 @@ async function parseText(options = {}) {
 
     if (!result.draft) {
       hasDraft.value = false
-      uiStore.pushToast('請先輸入內容', 'error')
+      latestLoanIntent.value = null
+      uiStore.pushToast(warnings.value[0] || '我沒有抓到可用交易資訊，請再描述一次', 'error')
       return
     }
 
     applyDraft(result.draft)
+    latestLoanIntent.value = result.draft.loanIntent ?? null
     if (fromSpeech) {
       model.note = ''
     }
@@ -387,17 +400,23 @@ function applyDraft(draft) {
   model.includeInAnalysis = Boolean(draft.includeInAnalysis)
 }
 
+async function refreshLinkedDataAfterLoanWrite() {
+  await Promise.all([
+    loanStore.load(),
+    transactionStore.loadRecent(),
+    budgetStore.loadMonth(budgetStore.monthKey),
+    accountStore.load(),
+  ])
+}
+
 async function submit() {
   if (parsing.value || submitting.value) return
   const amountMinor = Math.round(Math.abs(Number(model.amountMajor ?? 0)) * 100)
   const occurredAt = toOccurredAtIso(model.occurredDate, model.occurredHour, model.occurredMinute)
+  const loanIntent = latestLoanIntent.value
 
-  if (model.type === 'transfer' && amountMinor <= 0) {
-    uiStore.pushToast('請輸入有效金額（轉帳需大於 0）', 'error')
-    return
-  }
-  if (model.type !== 'transfer' && amountMinor < 0) {
-    uiStore.pushToast('請輸入有效金額（不可小於 0）', 'error')
+  if (amountMinor <= 0) {
+    uiStore.pushToast('請輸入有效金額（需大於 0）', 'error')
     return
   }
   if (!occurredAt) {
@@ -406,6 +425,10 @@ async function submit() {
   }
   if (!model.accountId) {
     uiStore.pushToast('請選擇帳戶', 'error')
+    return
+  }
+  if (!loanIntent && model.type !== 'transfer' && !model.categoryId) {
+    uiStore.pushToast('沒有分類，請在設定中新增後再試，未建立交易紀錄', 'error')
     return
   }
 
@@ -418,6 +441,57 @@ async function submit() {
 
   submitting.value = true
   try {
+    if (loanIntent) {
+      const actionLabel = resolveLoanActionLabel(loanIntent)
+      const noteText = String(model.note ?? '').trim()
+
+      if (loanIntent.mode === 'create') {
+        const counterpartyName = resolveLoanCounterpartyName(loanIntent)
+        if (!counterpartyName) {
+          uiStore.pushToast('沒有辨識到借貸對象，請補上名字後再試', 'error')
+          return
+        }
+        await loanStore.create({
+          direction: loanIntent.direction === 'borrow' ? 'borrow' : 'lend',
+          counterpartyName,
+          principalMinor: amountMinor,
+          interestMinor: 0,
+          startDate: formatLoanStartDateTime(occurredAt),
+          dueDate: null,
+          occurredAt: resolveLoanOccurredAtIso(occurredAt),
+          accountId: model.accountId,
+          note: noteText,
+        })
+      } else {
+        await loanStore.load()
+        const matched = pickLoanForAiRepayment(loanStore.items, loanIntent)
+        if (!matched.loan) {
+          uiStore.pushToast(matched.warning || '找不到可歸還/收回的借貸紀錄', 'error')
+          return
+        }
+        if (matched.warning) {
+          uiStore.pushToast(matched.warning)
+        }
+        await loanStore.repay({
+          loanId: matched.loan.id,
+          accountId: model.accountId,
+          amountMinor,
+          note: noteText,
+          paidAt: resolveLoanOccurredAtIso(occurredAt),
+        })
+      }
+
+      await refreshLinkedDataAfterLoanWrite()
+      recordAiBookkeepingUsage()
+      uiStore.pushToast(`AI 自動記帳已完成${actionLabel}`)
+      hasDraft.value = false
+      warnings.value = []
+      sourceText.value = ''
+      speechLiveText.value = ''
+      latestLoanIntent.value = null
+      return
+    }
+
     if (model.type === 'transfer') {
       if (!model.peerAccountId || model.accountId === model.peerAccountId) {
         uiStore.pushToast('請選擇不同的轉出/轉入帳戶', 'error')
@@ -431,10 +505,6 @@ async function submit() {
         note: model.note,
       })
     } else if (model.type === 'income') {
-      if (!model.categoryId) {
-        uiStore.pushToast('請選擇分類', 'error')
-        return
-      }
       await transactionStore.addIncome({
         amountMinor,
         occurredAt,
@@ -445,10 +515,6 @@ async function submit() {
         note: model.note,
       })
     } else {
-      if (!model.categoryId) {
-        uiStore.pushToast('請選擇分類', 'error')
-        return
-      }
       await transactionStore.addExpense({
         amountMinor,
         occurredAt,
@@ -467,6 +533,7 @@ async function submit() {
     warnings.value = []
     sourceText.value = ''
     speechLiveText.value = ''
+    latestLoanIntent.value = null
   } catch (error) {
     uiStore.pushToast(error.message ?? '建立交易失敗', 'error')
   } finally {

@@ -179,7 +179,7 @@ export async function createLoanWithOptionalTransaction(ledgerId, payload) {
 
     const txType = payload.direction === 'lend' ? 'expense' : 'income'
     const amountMinor = payload.direction === 'lend' ? principalMinor * -1 : principalMinor
-    await addTransaction(ledgerId, {
+    const setupTxId = await addTransaction(ledgerId, {
       type: txType,
       accountId: payload.accountId,
       categoryId: payload.categoryId ?? null,
@@ -190,7 +190,10 @@ export async function createLoanWithOptionalTransaction(ledgerId, payload) {
       externalRefId: loan.id,
     })
 
-    return loan
+    return {
+      ...loan,
+      setup_tx_id: setupTxId,
+    }
   })
 }
 

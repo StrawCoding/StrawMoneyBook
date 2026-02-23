@@ -40,27 +40,100 @@
       <BottomNav v-if="hasLedgers && !isBooting && !showWelcomePage" />
     </transition>
     <ToastHost />
+    <AppDialog
+      :open="updateDialogOpen"
+      :title="t('app_update.title')"
+      :message="updateDialogMessage"
+      :cancel-text="t('app_update.later')"
+      :confirm-text="t('app_update.google_play')"
+      @close="closeUpdateDialog"
+      @confirm="openUpdateInGooglePlay"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import BottomNav from '@/ui/components/layout/BottomNav.vue'
 import ToastHost from '@/ui/components/common/ToastHost.vue'
+import AppDialog from '@/ui/components/common/AppDialog.vue'
 import WelcomePage from '@/ui/views/WelcomePage.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
+import { useUiStore } from '@/ui/stores/ui.store'
+import { checkForAppUpdate, openGooglePlayStore } from '@/ui/services/app-update.service'
 
 const route = useRoute()
 const ledgerStore = useLedgerStore()
 const accountStore = useAccountStore()
+const uiStore = useUiStore()
 const { t } = useI18n()
 const hasLedgers = computed(() => ledgerStore.ledgers.length > 0)
 const hasAccounts = computed(() => accountStore.accounts.length > 0)
 const isBooting = computed(() => !ledgerStore.ready)
 const showWelcomePage = computed(() => ledgerStore.ready && (!hasLedgers.value || !hasAccounts.value))
+const updateDialogOpen = ref(false)
+const updateInfo = ref({
+  hasUpdate: false,
+  currentVersion: '',
+  latestVersion: '',
+  playUrl: '',
+  message: '',
+})
+const promptedVersionSet = new Set()
+let updateChecking = false
+
+const updateDialogMessage = computed(() => {
+  if (!updateInfo.value.latestVersion) return t('app_update.message_no_version')
+  const summary = t('app_update.message', {
+    latest: updateInfo.value.latestVersion,
+    current: updateInfo.value.currentVersion || '-',
+  })
+  const note = String(updateInfo.value.message ?? '').trim()
+  return note ? `${summary}\n${note}` : summary
+})
+
+function closeUpdateDialog() {
+  updateDialogOpen.value = false
+}
+
+function openUpdateInGooglePlay() {
+  const opened = openGooglePlayStore(updateInfo.value.playUrl)
+  if (!opened) {
+    uiStore.pushToast('無法開啟 Google Play 連結', 'error')
+  }
+  updateDialogOpen.value = false
+}
+
+async function checkAppUpdate(options = {}) {
+  if (updateChecking) return
+  updateChecking = true
+  try {
+    const result = await checkForAppUpdate(options)
+    updateInfo.value = result
+    if (!result.hasUpdate || !result.latestVersion) return
+    if (promptedVersionSet.has(result.latestVersion)) return
+    promptedVersionSet.add(result.latestVersion)
+    updateDialogOpen.value = true
+  } finally {
+    updateChecking = false
+  }
+}
+
+function onRequestCheckAppUpdate() {
+  void checkAppUpdate()
+}
+
+onMounted(() => {
+  window.addEventListener('app:check-update', onRequestCheckAppUpdate)
+  void checkAppUpdate({ force: true })
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('app:check-update', onRequestCheckAppUpdate)
+})
 </script>
 
 <style scoped>.app-shell {

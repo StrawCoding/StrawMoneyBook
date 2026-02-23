@@ -227,8 +227,12 @@ function buildBreakdown(type) {
 
 function buildMonochromePalette(type, count) {
   const safeCount = Math.max(1, Number(count) || 1)
-  const darkVar = type === 'income' ? 'var(--income-dark)' : 'var(--expense-dark)'
-  const lightVar = type === 'income' ? 'var(--income-light)' : 'var(--expense-light)'
+  const darkVar = type === 'income'
+    ? 'color-mix(in srgb, var(--ok) 62%, var(--primary) 38%)'
+    : 'color-mix(in srgb, var(--danger) 74%, var(--primary) 26%)'
+  const lightVar = type === 'income'
+    ? 'color-mix(in srgb, var(--primary) 18%, var(--card) 82%)'
+    : 'color-mix(in srgb, var(--danger) 24%, var(--card) 76%)'
   if (safeCount === 1) {
     return [darkVar]
   }

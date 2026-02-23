@@ -348,6 +348,7 @@ async function main() {
     CapacitorApp.addListener('appStateChange', ({ isActive }) => {
       if (!isActive) return
       scheduleMembershipWarmup('app_resume')
+      window.dispatchEvent(new Event('app:check-update'))
     })
   }
 
@@ -371,6 +372,9 @@ async function main() {
     }
 
     scheduleMembershipWarmup('app_start')
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('app:check-update'))
+    }
   } catch (error) {
     console.error('[bootstrap] failed', error)
     const uiStore = useUiStore(pinia)

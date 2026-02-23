@@ -419,14 +419,6 @@ function pickCategoryBySemanticRules(text, categories, rules) {
   return best?.category ?? null
 }
 
-function pickFirstNonGenericCategory(categories) {
-  for (const item of categories ?? []) {
-    if (!item?.id) continue
-    if (!isGenericCategoryName(item.name)) return item
-  }
-  return categories?.[0] ?? null
-}
-
 function extractSmartNoteText(text, context = {}) {
   let note = String(text ?? '')
   const accountNames = (context.accounts ?? [])
@@ -485,6 +477,136 @@ function normalizeType(text) {
   return 'expense'
 }
 
+const LOAN_INTENT_PATTERN_GROUPS = [
+  {
+    mode: 'repay',
+    direction: 'lend',
+    priority: 1,
+    patterns: [/收回/, /收到.*還款/, /還我/, /还我/, /回收借款/],
+  },
+  {
+    mode: 'repay',
+    direction: 'borrow',
+    priority: 2,
+    patterns: [/歸還/, /归还/, /還給/, /还给/, /還錢/, /还钱/, /償還/, /偿还/, /(向|跟)\S{0,8}還款/, /還款給/],
+  },
+  {
+    mode: 'create',
+    direction: 'lend',
+    priority: 3,
+    patterns: [/借給/, /借了給/, /借出給/, /借出/, /借款給/],
+  },
+  {
+    mode: 'create',
+    direction: 'borrow',
+    priority: 4,
+    patterns: [/借入/, /(向|跟)\S{0,8}借/, /借款/, /借錢/, /借钱/],
+  },
+]
+
+function firstPatternMatch(text, patterns) {
+  const source = String(text ?? '')
+  let best = null
+  for (const pattern of patterns ?? []) {
+    const cloned = new RegExp(pattern.source, pattern.flags)
+    const matched = cloned.exec(source)
+    if (!matched) continue
+    if (!best || matched.index < best.index) {
+      best = { index: matched.index, matched }
+    }
+  }
+  return best
+}
+
+function normalizeCounterpartyName(rawName) {
+  let name = String(rawName ?? '').trim()
+  if (!name) return ''
+  name = name.replace(/^[給跟向對把將]+/, '')
+  name = name.replace(/[的之]+$/g, '')
+  name = name.replace(/(借款|欠款|還款|还款|款項|款项|款|錢|钱)$/g, '')
+  name = name.replace(/^[,，。:：;；]+|[,，。:：;；]+$/g, '')
+  name = name.trim()
+  if (!name) return ''
+  if (/^\d+(?:\.\d+)?$/.test(name)) return ''
+  if (name.length > 24) {
+    name = name.slice(0, 24).trim()
+  }
+  if (!name) return ''
+  if (includesAny(name, [/^(昨天|今天|明天|前天|剛剛|刚刚|下午|上午|晚上|早上)$/])) return ''
+  return name
+}
+
+function extractCounterpartyFromLoanText(text, mode, direction) {
+  const source = String(text ?? '')
+  const patterns = []
+
+  if (mode === 'create' && direction === 'lend') {
+    patterns.push(
+      /(?:借給|借了給|借出給|借出|借款給)\s*([^\s，。,；;:：]{1,24})/i,
+      /給\s*([^\s，。,；;:：]{1,24})\s*(?:借|借款|借錢|借钱|借出)/i,
+    )
+  } else if (mode === 'create' && direction === 'borrow') {
+    patterns.push(
+      /(?:向|跟)\s*([^\s，。,；;:：]{1,24})\s*(?:借|借入|借款|借錢|借钱)/i,
+      /(?:借入|借款|借錢|借钱)\s*([^\s，。,；;:：]{1,24})/i,
+    )
+  } else if (mode === 'repay' && direction === 'lend') {
+    patterns.push(
+      /(?:收回|收到|收到了)\s*([^\s，。,；;:：]{1,24})/i,
+      /([^\s，。,；;:：]{1,24})\s*(?:還我|还我)/i,
+    )
+  } else if (mode === 'repay' && direction === 'borrow') {
+    patterns.push(
+      /(?:歸還|归还|還款|还款|還給|还给|還錢|还钱)\s*([^\s，。,；;:：]{1,24})/i,
+      /(?:向|跟)\s*([^\s，。,；;:：]{1,24})\s*(?:歸還|归还|還款|还款|還錢|还钱)/i,
+    )
+  }
+
+  for (const pattern of patterns) {
+    const matched = pattern.exec(source)
+    if (!matched) continue
+    const normalized = normalizeCounterpartyName(matched[1])
+    if (normalized) return normalized
+  }
+  return ''
+}
+
+function detectLoanIntent(text) {
+  const source = String(text ?? '')
+  const candidates = []
+  for (const group of LOAN_INTENT_PATTERN_GROUPS) {
+    const matched = firstPatternMatch(source, group.patterns)
+    if (!matched) continue
+    candidates.push({
+      mode: group.mode,
+      direction: group.direction,
+      priority: group.priority,
+      index: matched.index,
+    })
+  }
+
+  if (!candidates.length) return null
+  candidates.sort((a, b) => {
+    if (a.index !== b.index) return a.index - b.index
+    return a.priority - b.priority
+  })
+
+  const top = candidates[0]
+  return {
+    mode: top.mode,
+    direction: top.direction,
+    counterpartyName: extractCounterpartyFromLoanText(source, top.mode, top.direction),
+  }
+}
+
+function resolveTypeByLoanIntent(type, loanIntent) {
+  if (!loanIntent) return type
+  if (loanIntent.mode === 'create') {
+    return loanIntent.direction === 'borrow' ? 'income' : 'expense'
+  }
+  return loanIntent.direction === 'borrow' ? 'expense' : 'income'
+}
+
 function shouldTreatAsTransfer(text, accounts) {
   const uniqueMatchedAccountIds = [...new Set(findAccountMatches(text, accounts).map((item) => item.id).filter(Boolean))]
   if (uniqueMatchedAccountIds.length < 2) return false
@@ -539,7 +661,12 @@ export function parseAutoBookkeepingText(input, context = {}) {
   const incomeCategories = context.incomeCategories ?? []
   const warnings = []
   const rawType = normalizeType(text)
-  const inferredType = rawType === 'transfer' || shouldTreatAsTransfer(text, accounts) ? 'transfer' : rawType
+  const loanIntent = detectLoanIntent(text)
+  const inferredType = loanIntent
+    ? resolveTypeByLoanIntent(rawType, loanIntent)
+    : rawType === 'transfer' || shouldTreatAsTransfer(text, accounts)
+      ? 'transfer'
+      : rawType
   const parsedAddon = extractAddonItems(text)
   let amountMajor = NaN
   if (inferredType === 'transfer') {
@@ -565,7 +692,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
   const semanticIncomeCategory = pickCategoryBySemanticRules(text, incomeCategories, INCOME_CATEGORY_SEMANTIC_RULES)
 
   let type = inferredType
-  if (type !== 'transfer') {
+  if (type !== 'transfer' && !loanIntent) {
     const hasExpenseSignal = Boolean(matchedExpenseCategory || semanticExpenseCategory)
     const hasIncomeSignal = Boolean(matchedIncomeCategory || semanticIncomeCategory)
     if (hasExpenseSignal && !hasIncomeSignal) type = 'expense'
@@ -591,12 +718,11 @@ export function parseAutoBookkeepingText(input, context = {}) {
 
   let categoryId = ''
   let selectedCategoryName = ''
-  if (type !== 'transfer') {
+  if (type !== 'transfer' && !loanIntent) {
     if (type === 'income') {
       const selectedIncomeCategory =
         semanticIncomeCategory ??
         matchedIncomeCategory ??
-        pickFirstNonGenericCategory(incomeCategories) ??
         null
       categoryId = selectedIncomeCategory?.id ?? ''
       selectedCategoryName = String(selectedIncomeCategory?.name ?? '')
@@ -605,15 +731,18 @@ export function parseAutoBookkeepingText(input, context = {}) {
         mealExpenseCategory ??
         semanticExpenseCategory ??
         matchedExpenseCategory ??
-        pickFirstNonGenericCategory(expenseCategories) ??
         null
       categoryId = selectedExpenseCategory?.id ?? ''
       selectedCategoryName = String(selectedExpenseCategory?.name ?? '')
     }
 
     if (!categoryId) {
-      warnings.push('找不到可用分類，請先建立分類')
+      warnings.push('沒有分類，請在設定中新增後再試')
     }
+  }
+
+  if (loanIntent && !loanIntent.counterpartyName) {
+    warnings.push('沒有辨識到借貸對象，請補上名字')
   }
 
   const isReimbursable = type === 'expense' ? normalizeReimbursable(text, false) : false
@@ -623,10 +752,11 @@ export function parseAutoBookkeepingText(input, context = {}) {
   includeInBudget = normalizeIncludeFlag(text, 'budget', includeInBudget)
   includeInAnalysis = normalizeIncludeFlag(text, 'analysis', includeInAnalysis)
 
+  const noteCategories = loanIntent ? [] : type === 'income' ? incomeCategories : expenseCategories
   const autoNote = extractSmartNoteText(text, {
     accounts,
     selectedCategoryName,
-    categories: type === 'income' ? incomeCategories : expenseCategories,
+    categories: noteCategories,
   })
   const noteText = autoNote
 
@@ -643,6 +773,13 @@ export function parseAutoBookkeepingText(input, context = {}) {
     isReimbursable,
     includeInBudget,
     includeInAnalysis,
+    loanIntent: loanIntent
+      ? {
+        mode: loanIntent.mode,
+        direction: loanIntent.direction,
+        counterpartyName: loanIntent.counterpartyName,
+      }
+      : null,
   }
 
   return {

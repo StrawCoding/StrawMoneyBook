@@ -28,6 +28,7 @@ const GOOGLE_OAUTH_CLIENT_SHARED_KEY = String(import.meta.env.VITE_GOOGLE_OAUTH_
 
 let initializedClientId = ''
 let initializedGoogleMode = ''
+let runtimeGoogleModeOverride = ''
 let cachedAccessToken = ''
 let cachedAccessTokenExpiresAtMs = 0
 let cachedRefreshToken = ''
@@ -40,6 +41,11 @@ const GOOGLE_REAUTH_REQUIRED_CODE = 'GOOGLE_REAUTH_REQUIRED'
 function parseBooleanEnv(raw) {
   const value = String(raw ?? '').trim().toLowerCase()
   return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
+
+function isServerAuthCodeModeActive() {
+  if (!SERVER_AUTH_CODE_FLOW_ENABLED) return false
+  return runtimeGoogleModeOverride !== 'online'
 }
 
 function resolveServerAuthCodeFlowEnabled() {
@@ -268,7 +274,7 @@ function getConfiguredWebClientId() {
 }
 
 function getGoogleInitializeMode() {
-  return SERVER_AUTH_CODE_FLOW_ENABLED ? 'offline' : 'online'
+  return isServerAuthCodeModeActive() ? 'offline' : 'online'
 }
 
 function isAccountReauthError(error) {
@@ -453,6 +459,37 @@ async function loginGoogleWithOptions(options = {}) {
   })
 }
 
+function enableOnlineModeFallback(reason = '') {
+  if (runtimeGoogleModeOverride === 'online') return
+  runtimeGoogleModeOverride = 'online'
+  initializedGoogleMode = ''
+  clearTokenCache()
+  if (reason) {
+    console.warn('[google-auth] switch to online mode fallback', reason)
+  }
+}
+
+function resolveOnlineProfile(result) {
+  return normalizeProfile({
+    email: result?.profile?.email || '',
+    name: result?.profile?.name || '',
+    imageUrl: result?.profile?.imageUrl || '',
+  })
+}
+
+function finishOnlineSignIn(result) {
+  const accessToken = extractToken(result?.accessToken)
+  if (!accessToken) {
+    throw new Error('Google 登入成功但未取得 access token')
+  }
+  updateTokenCache({ accessToken, refreshToken: '', expiresAtMs: 0 })
+  cachedProfile = resolveOnlineProfile(result)
+  return {
+    accessToken,
+    profile: cachedProfile,
+  }
+}
+
 export async function initGoogleAuth() {
   assertNativePlatform()
   const clientId = getConfiguredWebClientId()
@@ -541,30 +578,55 @@ export async function googleSignIn() {
       throw new Error('Google 登入失敗，請重試')
     }
 
-    if (SERVER_AUTH_CODE_FLOW_ENABLED) {
-      if (response.result?.responseType !== 'offline') {
-        throw new Error('Google 登入成功但未取得 server auth code')
-      }
-      const exchanged = await exchangeServerAuthCode(response.result.serverAuthCode)
-      const accessToken = exchanged.accessToken
-      const refreshToken = exchanged.refreshToken || cachedRefreshToken
-      const profileFromToken = exchanged.profile
-      const profileFromGoogle = profileFromToken.email || profileFromToken.name || profileFromToken.imageUrl
-        ? profileFromToken
-        : await fetchGoogleProfileByAccessToken(accessToken)
+    if (isServerAuthCodeModeActive()) {
+      try {
+        if (response.result?.responseType !== 'offline') {
+          throw new Error('Google 登入成功但未取得 server auth code')
+        }
+        const exchanged = await exchangeServerAuthCode(response.result.serverAuthCode)
+        const accessToken = exchanged.accessToken
+        const refreshToken = exchanged.refreshToken || cachedRefreshToken
+        const profileFromToken = exchanged.profile
+        const profileFromGoogle = profileFromToken.email || profileFromToken.name || profileFromToken.imageUrl
+          ? profileFromToken
+          : await fetchGoogleProfileByAccessToken(accessToken)
 
-      updateTokenCache({
-        accessToken,
-        refreshToken,
-        expiresInSec: exchanged.expiresInSec,
-        expiresAtMs: exchanged.expiresAtMs,
-      })
+        updateTokenCache({
+          accessToken,
+          refreshToken,
+          expiresInSec: exchanged.expiresInSec,
+          expiresAtMs: exchanged.expiresAtMs,
+        })
 
-      cachedProfile = normalizeProfile(profileFromGoogle)
-      persistServerAuthCache()
-      return {
-        accessToken: cachedAccessToken,
-        profile: cachedProfile,
+        cachedProfile = normalizeProfile(profileFromGoogle)
+        persistServerAuthCache()
+        return {
+          accessToken: cachedAccessToken,
+          profile: cachedProfile,
+        }
+      } catch (offlineError) {
+        console.warn('[google-auth] offline auth flow failed, fallback to online mode', offlineError)
+        enableOnlineModeFallback(String(offlineError?.message ?? offlineError))
+        await initGoogleAuth()
+
+        let onlineResponse = response
+        if (onlineResponse.result?.responseType !== 'online' || !extractToken(onlineResponse.result?.accessToken)) {
+          onlineResponse = await withTimeout(
+            loginGoogleWithOptions({
+              forceRefreshToken: true,
+              filterByAuthorizedAccounts: false,
+              forcePrompt: true,
+              style: 'standard',
+            }),
+            GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS,
+            GOOGLE_LOGIN_TIMEOUT_MESSAGE,
+          )
+        }
+
+        if (onlineResponse.result?.responseType !== 'online') {
+          throw normalizeGoogleAuthError(offlineError)
+        }
+        return finishOnlineSignIn(onlineResponse.result)
       }
     }
 
@@ -572,21 +634,7 @@ export async function googleSignIn() {
       throw new Error('Google 登入失敗，請重試')
     }
 
-    const accessToken = extractToken(response.result.accessToken)
-    if (!accessToken) {
-      throw new Error('Google 登入成功但未取得 access token')
-    }
-    updateTokenCache({ accessToken, refreshToken: '', expiresAtMs: 0 })
-    cachedProfile = normalizeProfile({
-      email: response.result.profile?.email || '',
-      name: response.result.profile?.name || '',
-      imageUrl: response.result.profile?.imageUrl || '',
-    })
-
-    return {
-      accessToken,
-      profile: cachedProfile,
-    }
+    return finishOnlineSignIn(response.result)
   })()
   ongoingSignInPromise = signInPromise
 
@@ -604,7 +652,7 @@ export async function getAccessToken(options = {}) {
   if (hasUsableCachedAccessToken()) return cachedAccessToken
   const interactive = options?.interactive !== false
 
-  if (SERVER_AUTH_CODE_FLOW_ENABLED) {
+  if (isServerAuthCodeModeActive()) {
     if (cachedRefreshToken) {
       try {
         const refreshed = await refreshAccessTokenByBackend(cachedRefreshToken)
@@ -670,7 +718,7 @@ export async function getAccessToken(options = {}) {
 }
 
 export async function reauth() {
-  clearTokenCache({ keepRefreshToken: SERVER_AUTH_CODE_FLOW_ENABLED })
+  clearTokenCache({ keepRefreshToken: isServerAuthCodeModeActive() })
   return getAccessToken()
 }
 

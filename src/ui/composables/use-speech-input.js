@@ -1,6 +1,7 @@
 import { onBeforeUnmount, ref } from 'vue'
 
 const isDev = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV)
+const SPEECH_RETRYABLE_ERROR_CODES = new Set(['no-speech', 'audio-capture', 'network'])
 
 function resolveSpeechRecognitionCtor() {
   if (typeof window === 'undefined') return null
@@ -208,8 +209,43 @@ export function useSpeechInput() {
       return true
     }
 
+    let stream = null
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+      })
+    } catch (primaryError) {
+      if (isDev) {
+        console.warn('[speech] getUserMedia preferred constraints failed, fallback to default:', {
+          name: primaryError?.name,
+          message: primaryError?.message,
+        })
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      } catch (error) {
+        if (isDev) {
+          console.warn('[speech] getUserMedia failed:', {
+            name: error?.name,
+            message: error?.message,
+          })
+        }
+        if (isPermissionDeniedError(error)) {
+          lastError.value = '麥克風權限被拒絕'
+          return false
+        }
+        // Non-permission failures (e.g. busy mic / temporary device lock) should not be
+        // misreported as no permission, even if Permissions API says "denied".
+        return true
+      }
+    }
+
+    try {
       for (const track of stream.getTracks()) {
         track.stop()
       }
@@ -217,17 +253,11 @@ export function useSpeechInput() {
       return true
     } catch (error) {
       if (isDev) {
-        console.warn('[speech] getUserMedia failed:', {
+        console.warn('[speech] releasing getUserMedia stream failed:', {
           name: error?.name,
           message: error?.message,
         })
       }
-      if (isPermissionDeniedError(error)) {
-        lastError.value = '麥克風權限被拒絕'
-        return false
-      }
-      // Non-permission failures (e.g. busy mic / temporary device lock) should not be
-      // misreported as no permission, even if Permissions API says "denied".
       return true
     }
   }
@@ -251,9 +281,15 @@ export function useSpeechInput() {
     const instance = new Ctor()
     instance.lang = options.lang ?? 'zh-TW'
     instance.interimResults = options.interimResults ?? true
-    instance.continuous = options.continuous ?? false
+    instance.continuous = options.continuous ?? true
+    const maxAlternatives = Math.max(1, Number(options.maxAlternatives ?? 3) || 1)
+    if ('maxAlternatives' in instance) {
+      instance.maxAlternatives = maxAlternatives
+    }
     recognition = instance
     isListening.value = false
+    let restartQuota = Math.max(0, Number(options.autoRestartCount ?? 1) || 0)
+    let lastRawErrorCode = ''
 
     instance.onstart = () => {
       if (recognition !== instance) return
@@ -282,6 +318,7 @@ export function useSpeechInput() {
     instance.onerror = (event) => {
       if (recognition !== instance) return
       const code = normalizeRawErrorCode(event?.error)
+      lastRawErrorCode = code
       if (isDev) {
         console.warn('[speech] recognition.onerror:', code)
       }
@@ -296,6 +333,21 @@ export function useSpeechInput() {
     instance.onend = () => {
       if (recognition !== instance) return
       isListening.value = false
+      if (!manualStopRequested && restartQuota > 0 && SPEECH_RETRYABLE_ERROR_CODES.has(lastRawErrorCode)) {
+        restartQuota -= 1
+        lastRawErrorCode = ''
+        try {
+          instance.start()
+          return
+        } catch (error) {
+          if (isDev) {
+            console.warn('[speech] auto-restart failed:', {
+              name: error?.name,
+              message: error?.message,
+            })
+          }
+        }
+      }
       manualStopRequested = false
       options.onEnd?.()
       recognition = null

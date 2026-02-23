@@ -41,8 +41,9 @@ export const useLoanStore = defineStore('loan', {
 
     async create(payload) {
       const ledgerStore = useLedgerStore()
-      await createLoanWithOptionalTransaction(ledgerStore.activeLedgerId, payload)
+      const result = await createLoanWithOptionalTransaction(ledgerStore.activeLedgerId, payload)
       await this.load()
+      return result
     },
 
     async repay(payload) {

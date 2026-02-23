@@ -151,11 +151,18 @@ async function exportCsv() {
 
     if (deviceSave.saved) {
       revokeBlobUrl(exportedUrl.value)
-      exportedUrl.value = deviceSave.openUrl || deviceSave.uri || ''
-      exportedIsDeviceLink.value = true
+      if (deviceSave.openUrl) {
+        exportedUrl.value = deviceSave.openUrl
+        exportedIsDeviceLink.value = true
+      } else {
+        exportedUrl.value = createCsvBlobUrl(result.csvText)
+        exportedIsDeviceLink.value = false
+      }
       exportedLocation.value = deviceSave.location || t('analysis_print.device_location_default')
       uiStore.pushToast(t('analysis_print.toast.exported_saved', { count: result.rowCount, location: exportedLocation.value }))
-      openExportLink()
+      if (exportedIsDeviceLink.value) {
+        openExportLink()
+      }
       return
     }
 
@@ -175,11 +182,23 @@ async function exportCsv() {
 function openExportLink() {
   if (!exportedUrl.value) return
   if (exportedIsDeviceLink.value) {
-    window.location.href = exportedUrl.value
+    // Capacitor file URLs are best handled as downloads instead of route navigation.
+    if (isCapacitorFileUrl(exportedUrl.value) && exportedFilename.value) {
+      triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
+      return
+    }
+    const opened = window.open(exportedUrl.value, '_blank', 'noopener')
+    if (!opened) {
+      window.location.href = exportedUrl.value
+    }
     return
   }
   if (!exportedFilename.value) return
   triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
+}
+
+function isCapacitorFileUrl(url) {
+  return /\/_capacitor_file_\//i.test(String(url ?? ''))
 }
 
 onBeforeUnmount(() => {
