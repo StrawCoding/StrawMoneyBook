@@ -58,7 +58,7 @@
               </div>
               <div class="tx-side">
                 <div class="amount-line">
-                  <MoneyText :value-minor="tx.amount_minor" />
+                  <MoneyText :value-minor="tx.amount_minor" :tone="tx.type" />
                 </div>
                 <small class="muted tx-account-side">{{ accountName(tx.account_id) }}</small>
               </div>

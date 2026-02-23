@@ -49,7 +49,7 @@
             <small class="muted tx-note">{{ tx.note || '-' }}</small>
           </div>
           <div class="amount-wrap">
-            <MoneyText :value-minor="tx.amount_minor" />
+            <MoneyText :value-minor="tx.amount_minor" :tone="tx.type" />
             <small
               v-if="showAddonDeltaTag(tx)"
               class="addon-delta"

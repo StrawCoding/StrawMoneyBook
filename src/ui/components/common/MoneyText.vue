@@ -1,5 +1,5 @@
 <template>
-  <span>{{ text }}</span>
+  <span :class="toneClass">{{ text }}</span>
 </template>
 
 <script setup>
@@ -13,6 +13,10 @@ const props = defineProps({
   currency: {
     type: String,
     default: 'TWD',
+  },
+  tone: {
+    type: String,
+    default: '',
   },
 })
 
@@ -33,4 +37,21 @@ const text = computed(() => {
     maximumFractionDigits: 2,
   }).format(major)
 })
+
+const toneClass = computed(() => {
+  const tone = String(props.tone ?? '').trim()
+  if (tone === 'income') return 'money-income'
+  if (tone === 'expense') return 'money-expense'
+  return ''
+})
 </script>
+
+<style scoped>
+.money-income {
+  color: var(--income-dark)
+}
+
+.money-expense {
+  color: var(--expense-dark)
+}
+</style>

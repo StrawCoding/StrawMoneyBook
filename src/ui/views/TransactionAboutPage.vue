@@ -15,7 +15,7 @@
           />
           <span>{{ labelOfTransaction(transaction) }}</span>
         </h3>
-        <MoneyText :value-minor="transaction.amount_minor" />
+        <MoneyText :value-minor="transaction.amount_minor" :tone="transaction.type" />
       </header>
 
       <div class="detail-grid">
@@ -66,7 +66,7 @@
         >
           <header class="row relation-head">
             <small class="muted">{{ related.prefix }}</small>
-            <MoneyText :value-minor="related.tx.amount_minor" />
+            <MoneyText :value-minor="related.tx.amount_minor" :tone="related.tx.type" />
           </header>
 
           <div class="relation-body">

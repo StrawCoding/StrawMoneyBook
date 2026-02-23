@@ -95,7 +95,7 @@
                 </div>
               </div>
               <div class="tx-side">
-                <MoneyText :value-minor="tx.amount_minor" />
+                <MoneyText :value-minor="tx.amount_minor" :tone="tx.type" />
                 <small class="tx-balance">
                   餘額 <MoneyText :value-minor="tx.balanceAfterMinor" />
                 </small>
