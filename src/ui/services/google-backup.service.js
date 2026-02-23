@@ -125,6 +125,7 @@ export async function performGoogleBackup(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   ensureNativePlatform()
   const interactiveAuth = options?.interactiveAuth !== false
+  const reauthHandler = () => reauth({ interactive: interactiveAuth })
 
   const state = await getGoogleBackupState(ledgerId)
   if (!state.connected) {
@@ -137,7 +138,7 @@ export async function performGoogleBackup(ledgerId, options = {}) {
   const now = new Date().toISOString()
   const uploaded = await uploadBackupJsonToAppDataFolder({
     accessToken,
-    reauth,
+    reauth: reauthHandler,
     filename: GOOGLE_BACKUP_FILENAME,
     jsonText: payloadText,
   })
@@ -155,17 +156,19 @@ export async function performGoogleBackup(ledgerId, options = {}) {
   }
 }
 
-export async function restoreGoogleBackupJson(ledgerId) {
+export async function restoreGoogleBackupJson(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   ensureNativePlatform()
+  const interactiveAuth = options?.interactiveAuth !== false
+  const reauthHandler = () => reauth({ interactive: interactiveAuth })
 
   const state = await getGoogleBackupState(ledgerId)
   if (!state.connected) {
     throw new Error('請先連接 Google 帳號')
   }
 
-  const accessToken = await getAccessToken()
-  const files = await listAppDataBackups({ accessToken, reauth })
+  const accessToken = await getAccessToken({ interactive: interactiveAuth })
+  const files = await listAppDataBackups({ accessToken, reauth: reauthHandler })
   const target = pickPreferredBackupFile(files)
   if (!target?.id) {
     throw new Error('找不到 Google 備份檔')
@@ -173,7 +176,7 @@ export async function restoreGoogleBackupJson(ledgerId) {
 
   const jsonText = await downloadAppDataBackupText({
     accessToken,
-    reauth,
+    reauth: reauthHandler,
     fileId: target.id,
   })
 

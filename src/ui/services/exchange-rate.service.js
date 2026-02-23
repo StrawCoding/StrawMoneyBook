@@ -1,12 +1,18 @@
+import { Capacitor } from '@capacitor/core'
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 
 const EXCHANGE_RATE_SETTINGS_KEY = 'exchange_rate.settings'
 const EXCHANGE_RATE_SNAPSHOT_KEY = 'exchange_rate.snapshot'
 const CBC_FILE_CODE_DAILY = 'BP01D01'
+const CBC_API_BASE_URL = 'https://cpx.cbc.gov.tw/API/DataAPI/Get'
 const CBC_API_URL = `https://cpx.cbc.gov.tw/API/DataAPI/Get?FileName=${CBC_FILE_CODE_DAILY}`
+const EXCHANGE_RATE_PROXY_PATH = '/api/exchange-rate/cbc'
+const EXCHANGE_RATE_PROXY_DEFAULT_ORIGIN = 'https://www.strawmb.com'
+const EXCHANGE_RATE_PROXY_SECONDARY_ORIGIN = 'https://strawmb.com'
 const DEFAULT_SYNC_INTERVAL_HOURS = 24
 const FETCH_TIMEOUT_MS = 12000
+const EXCHANGE_RATE_PROXY_ENDPOINTS = resolveExchangeRateProxyEndpoints(import.meta.env.VITE_EXCHANGE_RATE_API_BASE_URL)
 
 function ensureLedgerId(ledgerId) {
   if (!ledgerId) {
@@ -20,6 +26,53 @@ function buildDefaultExchangeRateSettings() {
     provider: 'cbc',
     syncIntervalHours: DEFAULT_SYNC_INTERVAL_HOURS,
   }
+}
+
+function isAbsoluteHttpUrl(value) {
+  return /^https?:\/\//i.test(String(value ?? '').trim())
+}
+
+function normalizeProxyEndpoint(candidate) {
+  const raw = String(candidate ?? '').trim()
+  if (!raw) return ''
+
+  if (raw.startsWith('/')) {
+    return raw
+  }
+
+  if (!isAbsoluteHttpUrl(raw)) return ''
+  if (/\/api\/exchange-rate\/cbc(?:[/?#]|$)/i.test(raw)) return raw
+  return `${raw.replace(/\/+$/, '')}${EXCHANGE_RATE_PROXY_PATH}`
+}
+
+function resolveExchangeRateProxyEndpoints(rawValue) {
+  const configured = String(rawValue ?? '')
+    .split(/[,\n]/)
+    .map((item) => String(item ?? '').trim())
+    .filter(Boolean)
+
+  const defaults = Capacitor.isNativePlatform()
+    ? [EXCHANGE_RATE_PROXY_DEFAULT_ORIGIN, EXCHANGE_RATE_PROXY_SECONDARY_ORIGIN]
+    : [EXCHANGE_RATE_PROXY_PATH, EXCHANGE_RATE_PROXY_DEFAULT_ORIGIN]
+
+  const candidates = configured.length ? configured : defaults
+  const deduped = []
+  const seen = new Set()
+  for (const candidate of candidates) {
+    const endpoint = normalizeProxyEndpoint(candidate)
+    if (!endpoint || seen.has(endpoint)) continue
+    seen.add(endpoint)
+    deduped.push(endpoint)
+  }
+  return deduped
+}
+
+function appendFileNameQuery(url, fileName = CBC_FILE_CODE_DAILY) {
+  const target = String(url ?? '').trim()
+  if (!target) return ''
+  if (/[?&]filename=/i.test(target)) return target
+  const joiner = target.includes('?') ? '&' : '?'
+  return `${target}${joiner}FileName=${encodeURIComponent(String(fileName ?? '').trim() || CBC_FILE_CODE_DAILY)}`
 }
 
 function normalizeExchangeRateSettings(raw) {
@@ -175,9 +228,18 @@ function withTimeout(task, timeoutMs, timeoutMessage) {
   })
 }
 
-async function fetchCbcRatesPayload() {
+function normalizeFetchErrorMessage(error) {
+  const message = String(error?.message ?? error ?? '').trim()
+  if (!message) return '未知錯誤'
+  if (/failed to fetch|networkerror|load failed|fetch failed/i.test(message)) {
+    return '網路連線失敗或服務無回應'
+  }
+  return message
+}
+
+async function fetchJsonPayload(url) {
   const response = await withTimeout(
-    fetch(CBC_API_URL, {
+    fetch(url, {
       method: 'GET',
       headers: {
         'Cache-Control': 'no-cache',
@@ -189,10 +251,43 @@ async function fetchCbcRatesPayload() {
   )
 
   if (!response.ok) {
-    throw new Error(`央行匯率 API 錯誤：HTTP ${response.status}`)
+    throw new Error(`HTTP ${response.status}`)
   }
 
-  return response.json()
+  const text = await response.text()
+  if (!text.trim()) {
+    throw new Error('回應為空')
+  }
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error('回應格式錯誤（非 JSON）')
+  }
+}
+
+async function fetchCbcRatesPayload() {
+  const errors = []
+
+  for (const endpoint of EXCHANGE_RATE_PROXY_ENDPOINTS) {
+    const url = appendFileNameQuery(endpoint, CBC_FILE_CODE_DAILY)
+    try {
+      return await fetchJsonPayload(url)
+    } catch (error) {
+      errors.push(`代理 ${url}：${normalizeFetchErrorMessage(error)}`)
+    }
+  }
+
+  try {
+    return await fetchJsonPayload(appendFileNameQuery(CBC_API_BASE_URL, CBC_FILE_CODE_DAILY))
+  } catch (error) {
+    errors.push(`央行 ${CBC_API_URL}：${normalizeFetchErrorMessage(error)}`)
+  }
+
+  const message = errors.join(' | ')
+  if (/網路連線失敗或服務無回應/i.test(message)) {
+    throw new Error(`匯率同步失敗：${message}`)
+  }
+  throw new Error(`匯率同步失敗：${message || '未知錯誤'}`)
 }
 
 export async function getExchangeRateSettings(ledgerId) {

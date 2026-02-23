@@ -2,10 +2,11 @@ import capacitorConfig from '../../../capacitor.config.json'
 import appPackage from '../../../package.json'
 
 const DEFAULT_UPDATE_MANIFEST_URL = 'https://www.strawmb.com/app-update.json'
+const SECONDARY_UPDATE_MANIFEST_URL = 'https://strawmb.com/app-update.json'
 const UPDATE_CHECK_TTL_MS = 30 * 60 * 1000
 const UPDATE_FETCH_TIMEOUT_MS = 6000
 
-const UPDATE_MANIFEST_URL = String(import.meta.env.VITE_APP_UPDATE_CHECK_URL ?? DEFAULT_UPDATE_MANIFEST_URL).trim()
+const UPDATE_MANIFEST_URLS = resolveUpdateManifestUrls(import.meta.env.VITE_APP_UPDATE_CHECK_URL)
 const APP_ID = String(import.meta.env.VITE_GOOGLE_PLAY_APP_ID ?? capacitorConfig?.appId ?? '').trim()
 const DEFAULT_PLAY_URL = APP_ID ? `https://play.google.com/store/apps/details?id=${encodeURIComponent(APP_ID)}` : ''
 const CONFIGURED_PLAY_URL = String(import.meta.env.VITE_GOOGLE_PLAY_APP_URL ?? '').trim()
@@ -16,6 +17,26 @@ let cachedCheckAtMs = 0
 
 function getCurrentAppVersion() {
   return String(appPackage?.version ?? '0.0.0')
+}
+
+function resolveUpdateManifestUrls(rawValue) {
+  const candidates = String(rawValue ?? '')
+    .split(/[,\n]/)
+    .map((item) => String(item ?? '').trim())
+    .filter(Boolean)
+
+  if (!candidates.length) {
+    candidates.push(DEFAULT_UPDATE_MANIFEST_URL, SECONDARY_UPDATE_MANIFEST_URL)
+  }
+
+  const deduped = []
+  const seen = new Set()
+  for (const candidate of candidates) {
+    if (!candidate || seen.has(candidate)) continue
+    seen.add(candidate)
+    deduped.push(candidate)
+  }
+  return deduped
 }
 
 function parseVersionParts(versionText) {
@@ -64,6 +85,34 @@ function normalizeManifestPayload(rawPayload) {
   }
 }
 
+async function fetchUpdateManifestPayload(url) {
+  const response = await withTimeout(
+    fetch(url, {
+      method: 'GET',
+      headers: {
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+    }),
+    UPDATE_FETCH_TIMEOUT_MS,
+    '檢查更新逾時',
+  )
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`)
+  }
+
+  const responseText = await response.text()
+  if (!responseText.trim()) {
+    throw new Error('更新資訊為空')
+  }
+
+  try {
+    return JSON.parse(responseText)
+  } catch {
+    throw new Error('更新資訊格式錯誤（非 JSON）')
+  }
+}
+
 export async function checkForAppUpdate(options = {}) {
   const force = Boolean(options?.force)
   const now = Date.now()
@@ -72,7 +121,7 @@ export async function checkForAppUpdate(options = {}) {
   }
 
   const currentVersion = getCurrentAppVersion()
-  if (!UPDATE_MANIFEST_URL) {
+  if (!UPDATE_MANIFEST_URLS.length) {
     const result = {
       hasUpdate: false,
       currentVersion,
@@ -86,47 +135,44 @@ export async function checkForAppUpdate(options = {}) {
     return result
   }
 
-  try {
-    const response = await withTimeout(
-      fetch(UPDATE_MANIFEST_URL, {
-        method: 'GET',
-        headers: {
-          'Cache-Control': 'no-cache',
-          Pragma: 'no-cache',
-        },
-      }),
-      UPDATE_FETCH_TIMEOUT_MS,
-      '檢查更新逾時',
-    )
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
+  const errors = []
+  for (const url of UPDATE_MANIFEST_URLS) {
+    try {
+      const payload = normalizeManifestPayload(await fetchUpdateManifestPayload(url))
+      if (!payload.latestVersion) {
+        errors.push(`${url}: 缺少 latestVersion`)
+        continue
+      }
+
+      const hasUpdate = compareAppVersions(payload.latestVersion, currentVersion) > 0
+      const result = {
+        hasUpdate,
+        currentVersion,
+        latestVersion: payload.latestVersion,
+        playUrl: payload.playUrl,
+        message: payload.message,
+        checkedAt: new Date().toISOString(),
+      }
+      cachedCheckResult = result
+      cachedCheckAtMs = now
+      return result
+    } catch (error) {
+      const message = String(error?.message ?? '').trim() || '未知錯誤'
+      errors.push(`${url}: ${message}`)
     }
-    const payload = normalizeManifestPayload(await response.json())
-    const hasUpdate = payload.latestVersion ? compareAppVersions(payload.latestVersion, currentVersion) > 0 : false
-    const result = {
-      hasUpdate,
-      currentVersion,
-      latestVersion: payload.latestVersion,
-      playUrl: payload.playUrl,
-      message: payload.message,
-      checkedAt: new Date().toISOString(),
-    }
-    cachedCheckResult = result
-    cachedCheckAtMs = now
-    return result
-  } catch (error) {
-    const result = {
-      hasUpdate: false,
-      currentVersion,
-      latestVersion: '',
-      playUrl: GOOGLE_PLAY_URL,
-      message: String(error?.message ?? '').trim(),
-      checkedAt: new Date().toISOString(),
-    }
-    cachedCheckResult = result
-    cachedCheckAtMs = now
-    return result
   }
+
+  const result = {
+    hasUpdate: false,
+    currentVersion,
+    latestVersion: '',
+    playUrl: GOOGLE_PLAY_URL,
+    message: errors.join(' | '),
+    checkedAt: new Date().toISOString(),
+  }
+  cachedCheckResult = result
+  cachedCheckAtMs = now
+  return result
 }
 
 export function getGooglePlayAppUrl() {

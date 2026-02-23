@@ -8,6 +8,7 @@ const ACCESS_TOKEN_EXPIRY_SKEW_MS = 60 * 1000
 const GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS = 120 * 1000
 const GOOGLE_BACKEND_REQUEST_TIMEOUT_MS = 20 * 1000
 const GOOGLE_PROFILE_FETCH_TIMEOUT_MS = 8 * 1000
+const ONLINE_ACCESS_TOKEN_DEFAULT_TTL_SEC = 55 * 60
 const STALE_SIGNIN_PROMISE_MS = GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS + GOOGLE_BACKEND_REQUEST_TIMEOUT_MS + 15 * 1000
 const GOOGLE_LOGIN_TIMEOUT_MESSAGE = 'Google 登入逾時，請重試'
 const GOOGLE_BACKEND_TIMEOUT_MESSAGE = 'Google 授權交換逾時，請檢查網路後重試'
@@ -186,7 +187,7 @@ function normalizeProfile(raw) {
 
 function hasUsableCachedAccessToken() {
   if (!cachedAccessToken) return false
-  if (!Number.isFinite(cachedAccessTokenExpiresAtMs) || cachedAccessTokenExpiresAtMs <= 0) return true
+  if (!Number.isFinite(cachedAccessTokenExpiresAtMs) || cachedAccessTokenExpiresAtMs <= 0) return false
   return Date.now() + ACCESS_TOKEN_EXPIRY_SKEW_MS < cachedAccessTokenExpiresAtMs
 }
 
@@ -194,13 +195,14 @@ function canUseStorage() {
   return typeof localStorage !== 'undefined'
 }
 
-function persistServerAuthCache() {
-  if (!SERVER_AUTH_CODE_FLOW_ENABLED || !canUseStorage()) return
+function persistTokenCache() {
+  if (!canUseStorage()) return
   const payload = {
     accessToken: cachedAccessToken,
     accessTokenExpiresAtMs: cachedAccessTokenExpiresAtMs,
     refreshToken: cachedRefreshToken,
     profile: cachedProfile,
+    mode: getGoogleInitializeMode(),
   }
   try {
     localStorage.setItem(GOOGLE_TOKEN_CACHE_KEY, JSON.stringify(payload))
@@ -209,8 +211,8 @@ function persistServerAuthCache() {
   }
 }
 
-function restoreServerAuthCache() {
-  if (!SERVER_AUTH_CODE_FLOW_ENABLED || !canUseStorage()) return
+function restoreTokenCache() {
+  if (!canUseStorage()) return
   try {
     const raw = localStorage.getItem(GOOGLE_TOKEN_CACHE_KEY)
     if (!raw) return
@@ -225,7 +227,7 @@ function restoreServerAuthCache() {
   }
 }
 
-function clearServerAuthCache() {
+function clearTokenCacheStorage() {
   if (!canUseStorage()) return
   try {
     localStorage.removeItem(GOOGLE_TOKEN_CACHE_KEY)
@@ -250,7 +252,7 @@ function updateTokenCache({ accessToken, refreshToken, expiresInSec, expiresAtMs
     cachedAccessTokenExpiresAtMs = Number.isFinite(sec) && sec > 0 ? Date.now() + sec * 1000 : 0
   }
 
-  persistServerAuthCache()
+  persistTokenCache()
 }
 
 function clearTokenCache({ keepRefreshToken = false } = {}) {
@@ -259,10 +261,8 @@ function clearTokenCache({ keepRefreshToken = false } = {}) {
   if (!keepRefreshToken) {
     cachedRefreshToken = ''
   }
-  if (SERVER_AUTH_CODE_FLOW_ENABLED) {
-    if (keepRefreshToken) persistServerAuthCache()
-    else clearServerAuthCache()
-  }
+  if (keepRefreshToken) persistTokenCache()
+  else clearTokenCacheStorage()
 }
 
 function getIosClientId() {
@@ -477,13 +477,60 @@ function resolveOnlineProfile(result) {
   })
 }
 
+function resolveOnlineTokenExpiresInSec(payload) {
+  const source = payload && typeof payload === 'object' ? payload : {}
+  const expiresAtMsRaw = Number(
+    source.expiresAtMs ??
+    source.expires_at_ms ??
+    source.expireTimeMs ??
+    source.expirationTimeMs ??
+    0,
+  )
+  if (Number.isFinite(expiresAtMsRaw) && expiresAtMsRaw > Date.now()) {
+    const sec = Math.floor((expiresAtMsRaw - Date.now()) / 1000)
+    if (sec > 0) return sec
+  }
+
+  const expiresInRaw = Number(source.expiresIn ?? source.expires_in ?? source.expires ?? 0)
+  if (Number.isFinite(expiresInRaw) && expiresInRaw > 0) return expiresInRaw
+  return ONLINE_ACCESS_TOKEN_DEFAULT_TTL_SEC
+}
+
+async function tryGetOnlineAccessTokenFromLoggedInSession() {
+  const loginState = await SocialLogin.isLoggedIn({ provider: 'google' })
+  if (!loginState?.isLoggedIn) return ''
+
+  const auth = await SocialLogin.getAuthorizationCode({ provider: 'google' })
+  const token = extractToken(auth?.accessToken)
+  if (!token) return ''
+
+  updateTokenCache({
+    accessToken: token,
+    refreshToken: '',
+    expiresInSec: resolveOnlineTokenExpiresInSec(auth),
+  })
+
+  const profile = normalizeProfile(auth?.profile)
+  if (profile.email || profile.name || profile.imageUrl) {
+    cachedProfile = profile
+    persistTokenCache()
+  }
+
+  return cachedAccessToken
+}
+
 function finishOnlineSignIn(result) {
   const accessToken = extractToken(result?.accessToken)
   if (!accessToken) {
     throw new Error('Google 登入成功但未取得 access token')
   }
-  updateTokenCache({ accessToken, refreshToken: '', expiresAtMs: 0 })
+  updateTokenCache({
+    accessToken,
+    refreshToken: '',
+    expiresInSec: resolveOnlineTokenExpiresInSec(result),
+  })
   cachedProfile = resolveOnlineProfile(result)
+  persistTokenCache()
   return {
     accessToken,
     profile: cachedProfile,
@@ -599,7 +646,7 @@ export async function googleSignIn() {
         })
 
         cachedProfile = normalizeProfile(profileFromGoogle)
-        persistServerAuthCache()
+        persistTokenCache()
         return {
           accessToken: cachedAccessToken,
           profile: cachedProfile,
@@ -668,7 +715,7 @@ export async function getAccessToken(options = {}) {
             : await fetchGoogleProfileByAccessToken(refreshed.accessToken)
           if (refreshedProfile) {
             cachedProfile = normalizeProfile(refreshedProfile)
-            persistServerAuthCache()
+            persistTokenCache()
           }
         }
         return cachedAccessToken
@@ -688,6 +735,18 @@ export async function getAccessToken(options = {}) {
     throw createReauthRequiredError()
   }
 
+  await initGoogleAuth()
+  try {
+    const token = await tryGetOnlineAccessTokenFromLoggedInSession()
+    if (token) return token
+  } catch (error) {
+    if (!interactive) {
+      console.warn('[google-auth] background token fetch failed', error)
+      throw createReauthRequiredError(undefined, error)
+    }
+    console.warn('[google-auth] silent token fetch before interactive sign-in failed', error)
+  }
+
   if (interactive) {
     // Keep manual flows to a single interactive login to avoid duplicate account prompts.
     try {
@@ -698,28 +757,13 @@ export async function getAccessToken(options = {}) {
     }
   }
 
-  await initGoogleAuth()
-  try {
-    const loginState = await SocialLogin.isLoggedIn({ provider: 'google' })
-    if (!loginState?.isLoggedIn) {
-      throw createReauthRequiredError()
-    }
-    const auth = await SocialLogin.getAuthorizationCode({ provider: 'google' })
-    const token = extractToken(auth?.accessToken)
-    if (token) {
-      cachedAccessToken = token
-      return token
-    }
-    throw createReauthRequiredError()
-  } catch (error) {
-    console.warn('[google-auth] background token fetch failed', error)
-    throw createReauthRequiredError(undefined, error)
-  }
+  throw createReauthRequiredError()
 }
 
-export async function reauth() {
+export async function reauth(options = {}) {
+  const interactive = options?.interactive !== false
   clearTokenCache({ keepRefreshToken: isServerAuthCodeModeActive() })
-  return getAccessToken()
+  return getAccessToken({ interactive })
 }
 
 export async function googleSignOut() {
@@ -739,4 +783,4 @@ export function getCachedGoogleProfile() {
   return cachedProfile
 }
 
-restoreServerAuthCache()
+restoreTokenCache()
