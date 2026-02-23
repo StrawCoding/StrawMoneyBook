@@ -77,7 +77,6 @@
                         v-if="item.icon"
                         :icon="item.icon"
                         class="legend-icon"
-                        :style="{ color: item.color }"
                       />
                     </span>
                     <span class="bar-chart-name">{{ item.name }}</span>

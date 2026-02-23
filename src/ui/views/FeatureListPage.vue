@@ -9,7 +9,6 @@
         <RouterLink class="feature-link" to="/loans">{{ t('feature_list.loans') }}</RouterLink>
         <RouterLink class="feature-link" to="/reimbursements">{{ t('feature_list.reimbursements') }}</RouterLink>
         <RouterLink class="feature-link" to="/transactions/search">{{ t('feature_list.search_transactions') }}</RouterLink>
-        <RouterLink class="feature-link" to="/subscriptions">{{ t('feature_list.subscriptions') }}</RouterLink>
       </nav>
     </article>
   </section>
