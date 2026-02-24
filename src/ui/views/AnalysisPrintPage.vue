@@ -70,6 +70,7 @@ import { useUiStore } from '@/ui/stores/ui.store'
 import {
   createCsvBlobUrl,
   exportLedgerTransactionsCsv,
+  openFileUrl,
   revokeBlobUrl,
   saveCsvFileToDevice,
   triggerDownloadFromUrl,
@@ -150,6 +151,7 @@ async function exportCsv() {
     const deviceSave = await saveCsvFileToDevice(result.filename, result.csvText)
 
     if (deviceSave.saved) {
+      exportedFilename.value = String(deviceSave.filename ?? result.filename)
       revokeBlobUrl(exportedUrl.value)
       if (deviceSave.openUrl) {
         exportedUrl.value = deviceSave.openUrl
@@ -182,9 +184,9 @@ async function exportCsv() {
 function openExportLink() {
   if (!exportedUrl.value) return
   if (exportedIsDeviceLink.value) {
-    const opened = window.open(exportedUrl.value, '_blank', 'noopener')
-    if (!opened) {
-      window.location.assign(exportedUrl.value)
+    const opened = openFileUrl(exportedUrl.value)
+    if (!opened && exportedFilename.value) {
+      triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
     }
     return
   }

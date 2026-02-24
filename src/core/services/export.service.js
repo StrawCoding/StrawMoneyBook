@@ -560,6 +560,24 @@ export function triggerDownloadFromUrl(url, filename) {
   anchor.remove()
 }
 
+export function openFileUrl(url) {
+  const target = String(url ?? '').trim()
+  if (!target || typeof window === 'undefined') return false
+
+  try {
+    // On Capacitor WebView, direct navigation is more reliable than popup windows.
+    window.location.assign(target)
+    return true
+  } catch {
+    try {
+      const opened = window.open(target, '_blank', 'noopener')
+      return Boolean(opened)
+    } catch {
+      return false
+    }
+  }
+}
+
 function downloadBlob(filename, blob) {
   const url = URL.createObjectURL(blob)
   triggerDownloadFromUrl(url, filename)
@@ -581,9 +599,10 @@ async function writeBase64FileToDevice(filename, dataBase64) {
     return { saved: false, reason: 'not-native' }
   }
 
+  const safeFilename = sanitizeDeviceFilename(filename)
   const candidates = [
-    { directory: Directory.ExternalStorage, path: `Download/${filename}`, location: `Download/${filename}` },
-    { directory: Directory.Documents, path: filename, location: `Documents/${filename}` },
+    { directory: Directory.Documents, path: safeFilename, location: `Documents/${safeFilename}` },
+    { directory: Directory.ExternalStorage, path: `Download/${safeFilename}`, location: `Download/${safeFilename}` },
   ].filter((item) => Boolean(item.directory))
 
   let lastError = null
@@ -600,6 +619,7 @@ async function writeBase64FileToDevice(filename, dataBase64) {
         saved: true,
         uri: result?.uri ?? '',
         openUrl: result?.uri ? Capacitor.convertFileSrc(result.uri) : '',
+        filename: safeFilename,
         location: candidate.location,
       }
     } catch (error) {
@@ -611,6 +631,24 @@ async function writeBase64FileToDevice(filename, dataBase64) {
     saved: false,
     reason: lastError?.message ?? 'write-failed',
   }
+}
+
+function sanitizeDeviceFilename(filename) {
+  const raw = String(filename ?? '').trim()
+  const fallback = `export_${Date.now()}.csv`
+  if (!raw) return fallback
+
+  const withSafeExt = raw.includes('.') ? raw : `${raw}.csv`
+  const normalized = withSafeExt
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w.-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+  const sliced = normalized.slice(0, 80)
+  if (!sliced) return fallback
+  return sliced
 }
 
 export async function saveJsonFileToDevice(filename, data) {

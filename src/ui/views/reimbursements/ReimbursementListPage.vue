@@ -180,6 +180,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { isFreeTier } from '@/core/services/membership.service'
 import {
   createCsvBlobUrl,
+  openFileUrl,
   revokeBlobUrl,
   saveCsvFileToDevice,
   triggerDownloadFromUrl,
@@ -487,6 +488,7 @@ async function exportClaimSheet() {
   if (Capacitor.isNativePlatform()) {
     const saved = await saveCsvFileToDevice(filename, csvText)
     if (saved?.saved) {
+      exportedFilename.value = String(saved.filename ?? filename)
       exportLocation = saved.location || '裝置檔案'
       revokeBlobUrl(exportedUrl.value)
       if (saved.openUrl) {
@@ -524,9 +526,9 @@ async function exportClaimSheet() {
 function openExportLink() {
   if (!exportedUrl.value) return
   if (exportedIsDeviceLink.value) {
-    const opened = window.open(exportedUrl.value, '_blank', 'noopener')
-    if (!opened) {
-      window.location.assign(exportedUrl.value)
+    const opened = openFileUrl(exportedUrl.value)
+    if (!opened && exportedFilename.value) {
+      triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
     }
     return
   }

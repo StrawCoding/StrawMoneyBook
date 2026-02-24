@@ -593,7 +593,7 @@ h3 {
   display: inline-flex;
   align-items: baseline;
   gap: 10px;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
 }
 

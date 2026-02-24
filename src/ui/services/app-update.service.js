@@ -186,7 +186,8 @@ export async function checkForAppUpdate(options = {}) {
       const usedLocalFallback = isLocalUrl && remoteErrors.length > 0
       const result = {
         hasUpdate,
-        checkFailed: usedLocalFallback,
+        checkFailed: false,
+        usedLocalFallback,
         currentVersion,
         latestVersion: payload.latestVersion,
         playUrl: payload.playUrl,
