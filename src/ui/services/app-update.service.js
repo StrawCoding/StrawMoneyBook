@@ -17,6 +17,20 @@ const GOOGLE_PLAY_URL = CONFIGURED_PLAY_URL || DEFAULT_PLAY_URL
 let cachedCheckResult = null
 let cachedCheckAtMs = 0
 
+function isLocalManifestUrl(url) {
+  const source = String(url ?? '').trim()
+  if (!source) return false
+  if (source.startsWith('/') || source.startsWith('./')) return true
+  if (!/^https?:\/\//i.test(source)) return false
+  if (typeof window === 'undefined') return false
+  try {
+    const parsed = new URL(source)
+    return parsed.origin === window.location.origin
+  } catch {
+    return false
+  }
+}
+
 function getCurrentAppVersion() {
   return String(appPackage?.version ?? '0.0.0')
 }
@@ -142,6 +156,7 @@ export async function checkForAppUpdate(options = {}) {
   if (!UPDATE_MANIFEST_URLS.length) {
     const result = {
       hasUpdate: false,
+      checkFailed: true,
       currentVersion,
       latestVersion: '',
       playUrl: GOOGLE_PLAY_URL,
@@ -154,17 +169,24 @@ export async function checkForAppUpdate(options = {}) {
   }
 
   const errors = []
+  const remoteErrors = []
   for (const url of UPDATE_MANIFEST_URLS) {
+    const isLocalUrl = isLocalManifestUrl(url)
     try {
       const payload = normalizeManifestPayload(await fetchUpdateManifestPayload(url))
       if (!payload.latestVersion) {
         errors.push(`${url}: 缺少 latestVersion`)
+        if (!isLocalUrl) {
+          remoteErrors.push(`${url}: 缺少 latestVersion`)
+        }
         continue
       }
 
       const hasUpdate = compareAppVersions(payload.latestVersion, currentVersion) > 0
+      const usedLocalFallback = isLocalUrl && remoteErrors.length > 0
       const result = {
         hasUpdate,
+        checkFailed: usedLocalFallback,
         currentVersion,
         latestVersion: payload.latestVersion,
         playUrl: payload.playUrl,
@@ -176,7 +198,11 @@ export async function checkForAppUpdate(options = {}) {
       return result
     } catch (error) {
       const message = normalizeUpdateFetchErrorMessage(error)
-      errors.push(`${url}: ${message}`)
+      const errorText = `${url}: ${message}`
+      errors.push(errorText)
+      if (!isLocalUrl) {
+        remoteErrors.push(errorText)
+      }
     }
   }
 
@@ -188,6 +214,7 @@ export async function checkForAppUpdate(options = {}) {
 
   const result = {
     hasUpdate: false,
+    checkFailed: true,
     currentVersion,
     latestVersion: '',
     playUrl: GOOGLE_PLAY_URL,

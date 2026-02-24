@@ -2,8 +2,10 @@ const CBC_DATA_API_URL = 'https://cpx.cbc.gov.tw/API/DataAPI/Get'
 const TAIFEX_DAILY_FX_API_URL = 'https://openapi.taifex.com.tw/v1/DailyForeignExchangeRates'
 const FRANKFURTER_USD_API_URL = 'https://api.frankfurter.app/latest?from=USD'
 const OPEN_ER_USD_API_URL = 'https://open.er-api.com/v6/latest/USD'
+const CURRENCY_API_PAGES_USD_API_URL = 'https://latest.currency-api.pages.dev/v1/currencies/usd.json'
+const CURRENCY_API_JSDELIVR_USD_API_URL = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json'
 const DEFAULT_FILE_NAME = 'BP01D01'
-const REQUEST_TIMEOUT_MS = 22 * 1000
+const REQUEST_TIMEOUT_MS = 12 * 1000
 const UPSTREAM_RETRY_COUNT = 2
 const SUPPORTED_FILE_NAMES = new Set([DEFAULT_FILE_NAME])
 
@@ -112,6 +114,17 @@ function isLikelyOpenErPayload(payload) {
   )
 }
 
+function isLikelyCurrencyApiPayload(payload) {
+  return (
+    payload
+    && typeof payload === 'object'
+    && !Array.isArray(payload)
+    && payload.usd
+    && typeof payload.usd === 'object'
+    && !Array.isArray(payload.usd)
+  )
+}
+
 async function fetchJsonPayloadWithRetry(url, sourceLabel) {
   const response = await fetchWithRetry(url)
   const bodyText = await response.text()
@@ -123,6 +136,20 @@ async function fetchJsonPayloadWithRetry(url, sourceLabel) {
     throw new Error(`${sourceLabel} 回應格式錯誤`)
   }
   return payload
+}
+
+async function tryRespondWithPayload(res, source, errors) {
+  try {
+    const payload = await fetchJsonPayloadWithRetry(source.url, source.label)
+    if (source.validator(payload)) {
+      sendJson(res, 200, payload)
+      return true
+    }
+    errors.push(source.invalidMessage)
+  } catch (error) {
+    errors.push(String(error?.message ?? error ?? source.failedMessage))
+  }
+  return false
 }
 
 export default async function handler(req, res) {
@@ -150,53 +177,58 @@ export default async function handler(req, res) {
   const target = new URL(CBC_DATA_API_URL)
   target.searchParams.set('FileName', fileName)
   const errors = []
+  const sources = [
+    {
+      label: 'OpenER',
+      url: OPEN_ER_USD_API_URL,
+      validator: isLikelyOpenErPayload,
+      invalidMessage: 'OpenER 匯率 API 回應格式錯誤',
+      failedMessage: 'OpenER 匯率來源無回應',
+    },
+    {
+      label: 'Currency API',
+      url: CURRENCY_API_PAGES_USD_API_URL,
+      validator: isLikelyCurrencyApiPayload,
+      invalidMessage: 'Currency API 匯率回應格式錯誤',
+      failedMessage: 'Currency API 匯率來源無回應',
+    },
+    {
+      label: 'Currency API CDN',
+      url: CURRENCY_API_JSDELIVR_USD_API_URL,
+      validator: isLikelyCurrencyApiPayload,
+      invalidMessage: 'Currency API CDN 匯率回應格式錯誤',
+      failedMessage: 'Currency API CDN 匯率來源無回應',
+    },
+    {
+      label: 'TAIFEX',
+      url: TAIFEX_DAILY_FX_API_URL,
+      validator: isLikelyTaifexPayload,
+      invalidMessage: 'TAIFEX 匯率 API 回應格式錯誤',
+      failedMessage: 'TAIFEX 匯率來源無回應',
+    },
+    {
+      label: '央行',
+      url: target.toString(),
+      validator: isLikelyCbcPayload,
+      invalidMessage: '央行匯率 API 回應格式錯誤',
+      failedMessage: '央行匯率來源無回應',
+    },
+    {
+      label: 'Frankfurter',
+      url: FRANKFURTER_USD_API_URL,
+      validator: isLikelyFrankfurterPayload,
+      invalidMessage: 'Frankfurter 匯率 API 回應格式錯誤',
+      failedMessage: 'Frankfurter 匯率來源無回應',
+    },
+  ]
 
-  try {
-    const cbcPayload = await fetchJsonPayloadWithRetry(target.toString(), '央行')
-    if (isLikelyCbcPayload(cbcPayload)) {
-      sendJson(res, 200, cbcPayload)
-      return
-    }
-    errors.push('央行匯率 API 回應格式錯誤')
-  } catch (error) {
-    errors.push(String(error?.message ?? error ?? '央行匯率來源無回應'))
-  }
-
-  try {
-    const taifexPayload = await fetchJsonPayloadWithRetry(TAIFEX_DAILY_FX_API_URL, 'TAIFEX')
-    if (isLikelyTaifexPayload(taifexPayload)) {
-      sendJson(res, 200, taifexPayload)
-      return
-    }
-    errors.push('TAIFEX 匯率 API 回應格式錯誤')
-  } catch (error) {
-    errors.push(String(error?.message ?? error ?? 'TAIFEX 匯率來源無回應'))
-  }
-
-  try {
-    const frankfurterPayload = await fetchJsonPayloadWithRetry(FRANKFURTER_USD_API_URL, 'Frankfurter')
-    if (isLikelyFrankfurterPayload(frankfurterPayload)) {
-      sendJson(res, 200, frankfurterPayload)
-      return
-    }
-    errors.push('Frankfurter 匯率 API 回應格式錯誤')
-  } catch (error) {
-    errors.push(String(error?.message ?? error ?? 'Frankfurter 匯率來源無回應'))
-  }
-
-  try {
-    const openErPayload = await fetchJsonPayloadWithRetry(OPEN_ER_USD_API_URL, 'OpenER')
-    if (isLikelyOpenErPayload(openErPayload)) {
-      sendJson(res, 200, openErPayload)
-      return
-    }
-    errors.push('OpenER 匯率 API 回應格式錯誤')
-  } catch (error) {
-    errors.push(String(error?.message ?? error ?? 'OpenER 匯率來源無回應'))
+  for (const source of sources) {
+    const resolved = await tryRespondWithPayload(res, source, errors)
+    if (resolved) return
   }
 
   sendJson(res, 502, {
     error: 'exchange_rate_upstream_unavailable',
-    message: `央行、TAIFEX 與第三方匯率來源皆無法使用：${errors.join(' | ') || '未知錯誤'}`,
+    message: `匯率來源皆無法使用：${errors.join(' | ') || '未知錯誤'}`,
   })
 }

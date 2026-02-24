@@ -26,6 +26,9 @@
       </div>
       <p v-if="exportedFilename" class="muted file-note">檔案：{{ exportedFilename }}</p>
       <p v-if="exportedLocation" class="muted file-note">位置：{{ exportedLocation }}</p>
+      <div v-if="exportedUrl" class="row export-open-row">
+        <button class="btn" @click="openExportLink">{{ exportedActionLabel }}</button>
+      </div>
 
       <ul class="list">
         <li v-for="tx in activeList" :key="tx.id" class="entry">
@@ -521,22 +524,14 @@ async function exportClaimSheet() {
 function openExportLink() {
   if (!exportedUrl.value) return
   if (exportedIsDeviceLink.value) {
-    if (isCapacitorFileUrl(exportedUrl.value) && exportedFilename.value) {
-      triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
-      return
-    }
     const opened = window.open(exportedUrl.value, '_blank', 'noopener')
     if (!opened) {
-      window.location.href = exportedUrl.value
+      window.location.assign(exportedUrl.value)
     }
     return
   }
   if (!exportedFilename.value) return
   triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
-}
-
-function isCapacitorFileUrl(url) {
-  return /\/_capacitor_file_\//i.test(String(url ?? ''))
 }
 
 async function confirmSettle() {
@@ -701,6 +696,10 @@ h2 {
   margin: 8px 0 0;
   overflow-wrap: anywhere;
   word-break: break-word
+}
+.export-open-row {
+  margin-top: 8px;
+  justify-content: flex-start
 }
 .list {
   list-style: none;

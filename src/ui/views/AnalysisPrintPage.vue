@@ -182,23 +182,14 @@ async function exportCsv() {
 function openExportLink() {
   if (!exportedUrl.value) return
   if (exportedIsDeviceLink.value) {
-    // Capacitor file URLs are best handled as downloads instead of route navigation.
-    if (isCapacitorFileUrl(exportedUrl.value) && exportedFilename.value) {
-      triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
-      return
-    }
     const opened = window.open(exportedUrl.value, '_blank', 'noopener')
     if (!opened) {
-      window.location.href = exportedUrl.value
+      window.location.assign(exportedUrl.value)
     }
     return
   }
   if (!exportedFilename.value) return
   triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
-}
-
-function isCapacitorFileUrl(url) {
-  return /\/_capacitor_file_\//i.test(String(url ?? ''))
 }
 
 onBeforeUnmount(() => {

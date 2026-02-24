@@ -78,16 +78,23 @@ const showWelcomePage = computed(() => ledgerStore.ready && (!hasLedgers.value |
 const updateDialogOpen = ref(false)
 const updateInfo = ref({
   hasUpdate: false,
+  checkFailed: false,
   currentVersion: '',
   latestVersion: '',
   playUrl: '',
   message: '',
 })
 const promptedVersionSet = new Set()
+let promptedCheckFailedFallback = false
 let updateChecking = false
 
 const updateDialogMessage = computed(() => {
-  if (!updateInfo.value.latestVersion) return t('app_update.message_no_version')
+  if (!updateInfo.value.latestVersion) {
+    if (updateInfo.value.checkFailed) {
+      return t('app_update.check_failed_prompt')
+    }
+    return t('app_update.message_no_version')
+  }
   const summary = t('app_update.message', {
     latest: updateInfo.value.latestVersion,
     current: updateInfo.value.currentVersion || '-',
@@ -114,10 +121,17 @@ async function checkAppUpdate(options = {}) {
   try {
     const result = await checkForAppUpdate(options)
     updateInfo.value = result
-    if (!result.hasUpdate || !result.latestVersion) return
-    if (promptedVersionSet.has(result.latestVersion)) return
-    promptedVersionSet.add(result.latestVersion)
-    updateDialogOpen.value = true
+    if (result.hasUpdate && result.latestVersion) {
+      if (!promptedVersionSet.has(result.latestVersion)) {
+        promptedVersionSet.add(result.latestVersion)
+        updateDialogOpen.value = true
+      }
+      return
+    }
+    if (result.checkFailed && !promptedCheckFailedFallback) {
+      promptedCheckFailedFallback = true
+      updateDialogOpen.value = true
+    }
   } finally {
     updateChecking = false
   }

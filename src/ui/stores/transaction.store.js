@@ -18,6 +18,14 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 
+function includeInAnalysisOnHome(tx) {
+  return Number(tx?.include_in_analysis ?? 1) !== 0
+}
+
+function filterHomeTransactions(rows) {
+  return Array.isArray(rows) ? rows.filter((tx) => includeInAnalysisOnHome(tx)) : []
+}
+
 export const useTransactionStore = defineStore('transaction', {
   state: () => ({
     recent: [],
@@ -91,18 +99,18 @@ export const useTransactionStore = defineStore('transaction', {
       this.homeLoading = true
       try {
         if (normalizedMode === 'all') {
-          this.homeRecent = await listAllTransactions(ledgerId)
+          this.homeRecent = filterHomeTransactions(await listAllTransactions(ledgerId))
           return
         }
         if (normalizedMode === 'year') {
-          this.homeRecent = await listTransactionsByYear(ledgerId, normalizedKey)
+          this.homeRecent = filterHomeTransactions(await listTransactionsByYear(ledgerId, normalizedKey))
           return
         }
         if (normalizedMode === 'day') {
-          this.homeRecent = await listTransactionsByDay(ledgerId, normalizedKey)
+          this.homeRecent = filterHomeTransactions(await listTransactionsByDay(ledgerId, normalizedKey))
           return
         }
-        this.homeRecent = await listTransactionsByMonth(ledgerId, normalizedKey)
+        this.homeRecent = filterHomeTransactions(await listTransactionsByMonth(ledgerId, normalizedKey))
       } finally {
         this.homeLoading = false
       }

@@ -11,9 +11,11 @@ const TAIFEX_DAILY_FX_SOURCE_CODE = 'DailyForeignExchangeRates'
 const TAIFEX_DAILY_FX_API_URL = `https://openapi.taifex.com.tw/v1/${TAIFEX_DAILY_FX_SOURCE_CODE}`
 const FRANKFURTER_USD_API_URL = 'https://api.frankfurter.app/latest?from=USD'
 const OPEN_ER_USD_API_URL = 'https://open.er-api.com/v6/latest/USD'
+const CURRENCY_API_PAGES_USD_API_URL = 'https://latest.currency-api.pages.dev/v1/currencies/usd.json'
+const CURRENCY_API_JSDELIVR_USD_API_URL = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json'
 const EXCHANGE_RATE_PROXY_PATH = '/api/exchange-rate/cbc'
 const DEFAULT_SYNC_INTERVAL_HOURS = 24
-const FETCH_TIMEOUT_MS = 20000
+const FETCH_TIMEOUT_MS = 12000
 const FETCH_RETRY_COUNT = 2
 const FETCH_RETRY_BASE_DELAY_MS = 450
 const EXCHANGE_RATE_PROXY_FALLBACK_ORIGINS = resolveExchangeRateProxyFallbackOrigins()
@@ -337,6 +339,21 @@ function parseOpenErRatesPayload(payload) {
   }
 }
 
+function parseCurrencyApiRatesPayload(payload) {
+  const rates = normalizeRateMap({
+    ...(payload?.usd ?? {}),
+    USD: 1,
+  })
+  return {
+    provider: 'currency_api',
+    sourceFileCode: 'latest_usd',
+    syncedAt: new Date().toISOString(),
+    effectiveDate: parseDateLikeToIsoDate(payload?.date),
+    dataUpdatedAt: '',
+    rates,
+  }
+}
+
 function parseGenericUsdBasePayload(payload, provider = 'usd_base_api') {
   const rates = normalizeRateMap({
     ...(payload?.rates ?? {}),
@@ -388,6 +405,17 @@ function isLikelyOpenErPayload(payload) {
   )
 }
 
+function isLikelyCurrencyApiPayload(payload) {
+  return (
+    payload
+    && typeof payload === 'object'
+    && !Array.isArray(payload)
+    && payload.usd
+    && typeof payload.usd === 'object'
+    && !Array.isArray(payload.usd)
+  )
+}
+
 function isLikelyGenericUsdBasePayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false
   if (typeof payload.rates !== 'object') return false
@@ -398,8 +426,9 @@ function isLikelyGenericUsdBasePayload(payload) {
 function parseExchangeRateSnapshotPayload(payload) {
   if (isLikelyCbcPayload(payload)) return parseCbcRatesPayload(payload)
   if (isLikelyTaifexPayload(payload)) return parseTaifexRatesPayload(payload)
-  if (isLikelyFrankfurterPayload(payload)) return parseFrankfurterRatesPayload(payload)
   if (isLikelyOpenErPayload(payload)) return parseOpenErRatesPayload(payload)
+  if (isLikelyCurrencyApiPayload(payload)) return parseCurrencyApiRatesPayload(payload)
+  if (isLikelyFrankfurterPayload(payload)) return parseFrankfurterRatesPayload(payload)
   if (isLikelyGenericUsdBasePayload(payload)) return parseGenericUsdBasePayload(payload)
   throw new Error('匯率來源回應格式不支援')
 }
@@ -478,41 +507,45 @@ async function fetchJsonPayloadWithRetry(url, sourceLabel = '') {
   throw new Error(`${sourceLabel || url}：${normalizedMessage}`)
 }
 
+async function tryFetchParsedSnapshot(url, sourceLabel, errors) {
+  try {
+    const payload = await fetchJsonPayloadWithRetry(url, sourceLabel)
+    return parseExchangeRateSnapshotPayload(payload)
+  } catch (error) {
+    errors.push(String(error?.message ?? '').trim() || `${sourceLabel}：未知錯誤`)
+    return null
+  }
+}
+
+function buildExchangeRateSourceList() {
+  const cbcUrl = appendFileNameQuery(CBC_API_BASE_URL, CBC_FILE_CODE_DAILY)
+  const sources = EXCHANGE_RATE_PROXY_ENDPOINTS.map((endpoint) => {
+    const url = appendFileNameQuery(endpoint, CBC_FILE_CODE_DAILY)
+    return {
+      url,
+      label: `代理 ${url}`,
+    }
+  })
+
+  sources.push(
+    { url: OPEN_ER_USD_API_URL, label: `OpenER ${OPEN_ER_USD_API_URL}` },
+    { url: CURRENCY_API_PAGES_USD_API_URL, label: `Currency API ${CURRENCY_API_PAGES_USD_API_URL}` },
+    { url: CURRENCY_API_JSDELIVR_USD_API_URL, label: `Currency API CDN ${CURRENCY_API_JSDELIVR_USD_API_URL}` },
+    { url: TAIFEX_DAILY_FX_API_URL, label: `TAIFEX ${TAIFEX_DAILY_FX_API_URL}` },
+    { url: cbcUrl, label: `央行 ${CBC_API_URL}` },
+    { url: FRANKFURTER_USD_API_URL, label: `Frankfurter ${FRANKFURTER_USD_API_URL}` },
+  )
+  return sources
+}
+
 async function fetchExchangeRatePayload() {
   const errors = []
-
-  for (const endpoint of EXCHANGE_RATE_PROXY_ENDPOINTS) {
-    const url = appendFileNameQuery(endpoint, CBC_FILE_CODE_DAILY)
-    try {
-      return await fetchJsonPayloadWithRetry(url, `代理 ${url}`)
-    } catch (error) {
-      errors.push(String(error?.message ?? '').trim() || `代理 ${url}：未知錯誤`)
+  const sources = buildExchangeRateSourceList()
+  for (const source of sources) {
+    const snapshot = await tryFetchParsedSnapshot(source.url, source.label, errors)
+    if (snapshot) {
+      return snapshot
     }
-  }
-
-  try {
-    return await fetchJsonPayloadWithRetry(FRANKFURTER_USD_API_URL, `Frankfurter ${FRANKFURTER_USD_API_URL}`)
-  } catch (error) {
-    errors.push(String(error?.message ?? '').trim() || `Frankfurter ${FRANKFURTER_USD_API_URL}：未知錯誤`)
-  }
-
-  try {
-    return await fetchJsonPayloadWithRetry(OPEN_ER_USD_API_URL, `OpenER ${OPEN_ER_USD_API_URL}`)
-  } catch (error) {
-    errors.push(String(error?.message ?? '').trim() || `OpenER ${OPEN_ER_USD_API_URL}：未知錯誤`)
-  }
-
-  try {
-    return await fetchJsonPayloadWithRetry(TAIFEX_DAILY_FX_API_URL, `TAIFEX ${TAIFEX_DAILY_FX_API_URL}`)
-  } catch (error) {
-    errors.push(String(error?.message ?? '').trim() || `TAIFEX ${TAIFEX_DAILY_FX_API_URL}：未知錯誤`)
-  }
-
-  try {
-    const cbcUrl = appendFileNameQuery(CBC_API_BASE_URL, CBC_FILE_CODE_DAILY)
-    return await fetchJsonPayloadWithRetry(cbcUrl, `央行 ${CBC_API_URL}`)
-  } catch (error) {
-    errors.push(String(error?.message ?? '').trim() || `央行 ${CBC_API_URL}：未知錯誤`)
   }
 
   const message = errors.join(' | ')
@@ -555,8 +588,7 @@ export async function syncCbcExchangeRateSnapshot(ledgerId) {
   ensureLedgerId(ledgerId)
   const previousSnapshot = await getExchangeRateSnapshot(ledgerId)
   try {
-    const payload = await fetchExchangeRatePayload()
-    const snapshot = parseExchangeRateSnapshotPayload(payload)
+    const snapshot = await fetchExchangeRatePayload()
     await setSetting(ledgerId, EXCHANGE_RATE_SNAPSHOT_KEY, snapshot)
     return snapshot
   } catch (error) {

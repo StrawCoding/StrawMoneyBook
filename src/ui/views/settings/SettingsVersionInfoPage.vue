@@ -66,6 +66,14 @@ async function checkUpdate(options = {}) {
     const result = await checkForAppUpdate({ force: true })
     latestVersion.value = String(result.latestVersion ?? '').trim()
     hasUpdate.value = Boolean(result.hasUpdate)
+    if (result.checkFailed) {
+      updateMessage.value = t('app_update.check_failed_prompt')
+      if (!silent) {
+        uiStore.pushToast(t('settings_version.toast.check_failed'), 'error')
+      }
+      return
+    }
+
     updateMessage.value = String(result.message ?? '').trim()
     if (hasUpdate.value && !silent) {
       uiStore.pushToast(t('settings_version.toast.update_available', { version: latestVersion.value }))
