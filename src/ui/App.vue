@@ -54,7 +54,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import BottomNav from '@/ui/components/layout/BottomNav.vue'
 import ToastHost from '@/ui/components/common/ToastHost.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
@@ -66,6 +66,7 @@ import { useUiStore } from '@/ui/stores/ui.store'
 import { checkForAppUpdate, openGooglePlayStore } from '@/ui/services/app-update.service'
 
 const route = useRoute()
+const router = useRouter()
 const ledgerStore = useLedgerStore()
 const accountStore = useAccountStore()
 const uiStore = useUiStore()
@@ -126,13 +127,40 @@ function onRequestCheckAppUpdate() {
   void checkAppUpdate()
 }
 
+function canNavigateBackInApp() {
+  if (typeof window === 'undefined') return false
+  const state = window.history?.state
+  const back = String(state?.back ?? '').trim()
+  const current = String(state?.current ?? route.fullPath ?? '').trim()
+  if (!back) return false
+  return back !== current
+}
+
+function resolveBackButtonAnchor(event) {
+  if (event.defaultPrevented) return null
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return null
+  const target = event.target
+  if (!(target instanceof Element)) return null
+  return target.closest('a.back-btn')
+}
+
+function onBackButtonAnchorClick(event) {
+  const anchor = resolveBackButtonAnchor(event)
+  if (!anchor) return
+  if (!canNavigateBackInApp()) return
+  event.preventDefault()
+  router.back()
+}
+
 onMounted(() => {
   window.addEventListener('app:check-update', onRequestCheckAppUpdate)
+  window.addEventListener('click', onBackButtonAnchorClick, true)
   void checkAppUpdate({ force: true })
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('app:check-update', onRequestCheckAppUpdate)
+  window.removeEventListener('click', onBackButtonAnchorClick, true)
 })
 </script>
 

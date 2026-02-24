@@ -101,6 +101,11 @@ async function pick(icon) {
 }
 
 function goBack() {
+  if (window.history.length > 1) {
+    router.back()
+    return
+  }
+
   const from = queryText(route.query.from)
   const accountId = queryText(route.query.accountId)
   const categoryId = queryText(route.query.categoryId)

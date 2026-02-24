@@ -105,7 +105,11 @@ function formatTime(iso) {
 }
 
 function goBack() {
-  router.push(backLink.value)
+  if (window.history.length > 1) {
+    router.back()
+    return
+  }
+  void router.push(backLink.value)
 }
 
 async function save() {
