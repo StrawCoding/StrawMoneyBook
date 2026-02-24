@@ -80,6 +80,10 @@ const loanStore = useLoanStore()
 const router = useRouter()
 const { t } = useI18n()
 
+function isCountableForAnalysis(tx) {
+  return Number(tx?.include_in_analysis ?? 1) !== 0
+}
+
 const monthLabel = computed(() => {
   if (transactionStore.homeFilterMode === 'all') return t('home_page.all_transactions')
   if (transactionStore.homeFilterMode === 'year') return t('home_tx.range_year', { year: transactionStore.homeFilterKey })
@@ -111,6 +115,7 @@ const groupedRecentTransactions = computed(() => {
     }
     const group = groupMap.get(key)
     group.items.push(tx)
+    if (!isCountableForAnalysis(tx)) continue
     if (tx.type === 'income') {
       group.incomeMinor += Math.abs(Math.round(Number(tx.amount_minor ?? 0)))
     } else if (tx.type === 'expense') {

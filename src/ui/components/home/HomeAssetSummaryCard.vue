@@ -44,6 +44,10 @@ import { useI18n } from '@/ui/services/i18n.service'
 const transactionStore = useTransactionStore()
 const { t } = useI18n()
 
+function isCountableForAnalysis(tx) {
+  return Number(tx?.include_in_analysis ?? 1) !== 0
+}
+
 const title = computed(() => {
   if (transactionStore.homeFilterMode === 'all') return t('home_asset_summary.title_all')
   if (transactionStore.homeFilterMode === 'year') {
@@ -61,13 +65,13 @@ const title = computed(() => {
 
 const incomeMinor = computed(() => {
   return transactionStore.homeRecent
-    .filter((tx) => tx.type === 'income' && tx.origin_type !== 'loan_payment')
+    .filter((tx) => isCountableForAnalysis(tx) && tx.type === 'income' && tx.origin_type !== 'loan_payment')
     .reduce((total, tx) => total + Number(tx.amount_minor ?? 0), 0)
 })
 
 const expenseMinor = computed(() => {
   return transactionStore.homeRecent
-    .filter((tx) => tx.type === 'expense' && tx.origin_type !== 'loan_payment')
+    .filter((tx) => isCountableForAnalysis(tx) && tx.type === 'expense' && tx.origin_type !== 'loan_payment')
     .reduce((total, tx) => total + Math.abs(Number(tx.amount_minor ?? 0)), 0)
 })
 
