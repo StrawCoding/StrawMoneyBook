@@ -381,7 +381,8 @@ export async function importSelectedBankTransactions(ledgerId, bankTransactionId
       continue
     }
 
-    const sourceRef = buildSourceRef(row.provider, row.bank_account_id, row.provider_transaction_id)
+    const providerAccountId = normalizeText(row.provider_account_id || row.bank_account_id)
+    const sourceRef = buildSourceRef(row.provider, providerAccountId, row.provider_transaction_id)
     let existing = await findImportedLedgerTransactionBySourceRef(ledgerId, sourceRef)
 
     if (!existing) {

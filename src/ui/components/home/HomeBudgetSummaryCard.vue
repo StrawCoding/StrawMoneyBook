@@ -6,14 +6,7 @@
     </header>
 
     <div class="stat-wrap">
-      <div class="pie-shell" :class="{ over: isOverBudget }">
-        <div class="mini-pie" :style="pieStyle">
-          <div class="pie-hole">
-            <strong>{{ usedPercentLabel }}</strong>
-            <small>已用</small>
-          </div>
-        </div>
-      </div>
+      <BudgetMiniPie :ratio="usedRatio" :over="isOverBudget" :percent-label="usedPercentLabel" subtitle="已用" />
 
       <div class="remain-block">
         <div class="muted">剩餘</div>
@@ -40,33 +33,28 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
+import BudgetMiniPie from '@/ui/components/budget/BudgetMiniPie.vue'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 
 const budgetStore = useBudgetStore()
 
-const totalBudgetMinor = computed(() => Math.max(0, Number(budgetStore.totalBudgetMinor ?? 0)))
-const totalSpentMinor = computed(() => Math.max(0, Number(budgetStore.totalSpentMinor ?? 0)))
+function toFiniteNonNegative(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return 0
+  return Math.max(0, numeric)
+}
+
+const totalBudgetMinor = computed(() => toFiniteNonNegative(budgetStore.totalBudgetMinor))
+const totalSpentMinor = computed(() => toFiniteNonNegative(budgetStore.totalSpentMinor))
 
 const usedRatio = computed(() => {
   if (!totalBudgetMinor.value) return 0
-  return totalSpentMinor.value / totalBudgetMinor.value
+  const ratio = totalSpentMinor.value / totalBudgetMinor.value
+  return Number.isFinite(ratio) ? ratio : 0
 })
 
 const usedPercentLabel = computed(() => `${Math.round(usedRatio.value * 100)}%`)
 const isOverBudget = computed(() => totalBudgetMinor.value > 0 && usedRatio.value > 1)
-
-const pieStyle = computed(() => {
-  if (!totalBudgetMinor.value) {
-    return {
-      background: 'conic-gradient(var(--chart-track) 0deg 360deg)',
-    }
-  }
-
-  const usedDeg = Math.min(360, Math.max(0, usedRatio.value) * 360)
-  return {
-    background: `conic-gradient(var(--chart-budget-used) 0deg ${usedDeg}deg, var(--chart-budget-remain) ${usedDeg}deg 360deg)`,
-  }
-})
 </script>
 
 <style scoped>.summary-card {
@@ -87,42 +75,6 @@ h3 {
   grid-template-columns: 72px minmax(0, 1fr) minmax(0, 1.35fr);
   align-items: center;
   gap: 10px
-}
-.pie-shell {
-  display: grid;
-  place-items: center
-}
-.mini-pie {
-  width: 68px;
-  height: 68px;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-  display: grid;
-  place-items: center;
-  box-shadow: 0 4px 14px color-mix(in srgb, black 24%, transparent)
-}
-.pie-shell.over .mini-pie {
-  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--danger) 36%, transparent)
-}
-.pie-hole {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--card) 90%, var(--bg) 10%);
-  display: grid;
-  place-items: center;
-  gap: 1px;
-  text-align: center
-}
-.pie-hole strong {
-  font-size: 12px;
-  line-height: 1
-}
-.pie-hole small {
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1
 }
 .remain-block {
   display: grid;

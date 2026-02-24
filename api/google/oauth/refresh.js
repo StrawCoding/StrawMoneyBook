@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto'
+
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token'
 const GOOGLE_TOKEN_REQUEST_TIMEOUT_MS = 15 * 1000
 const GOOGLE_OAUTH_CLIENT_SHARED_KEY = String(process.env.GOOGLE_OAUTH_CLIENT_SHARED_KEY ?? '').trim()
@@ -44,29 +46,20 @@ function parseBody(req) {
 }
 
 function isClientAuthorized(req) {
-  if (!GOOGLE_OAUTH_CLIENT_SHARED_KEY) return true
+  if (!GOOGLE_OAUTH_CLIENT_SHARED_KEY) return false
   const provided = String(
     req.headers?.['x-straw-client-key']
       ?? req.headers?.['X-Straw-Client-Key']
       ?? '',
   ).trim()
-  return Boolean(provided) && provided === GOOGLE_OAUTH_CLIENT_SHARED_KEY
+  return secureEquals(provided, GOOGLE_OAUTH_CLIENT_SHARED_KEY)
 }
 
-function tokenPrefix(raw) {
-  const token = String(raw ?? '').trim()
-  if (!token) return '(empty)'
-  const prefix = token.slice(0, 12)
-  return `${prefix}${token.length > 12 ? '...' : ''} (len=${token.length})`
-}
-
-function inferTokenType(raw) {
-  const token = String(raw ?? '').trim()
-  if (!token) return 'empty'
-  if (token.includes('.') && token.split('.').length === 3) return 'id_token_like'
-  if (token.startsWith('1//')) return 'refresh_token_like'
-  if (token.startsWith('ya29.')) return 'access_token_like'
-  return 'unknown'
+function secureEquals(left, right) {
+  const leftBytes = Buffer.from(String(left ?? ''), 'utf8')
+  const rightBytes = Buffer.from(String(right ?? ''), 'utf8')
+  if (leftBytes.length !== rightBytes.length) return false
+  return timingSafeEqual(leftBytes, rightBytes)
 }
 
 async function requestGoogleToken(params) {
@@ -125,10 +118,6 @@ export default async function handler(req, res) {
     sendError(res, 400, 'missing_refresh_token', 'refreshToken is required', ERROR_NUMBER.MISSING_REFRESH_TOKEN)
     return
   }
-  console.info('[google-oauth-refresh] incoming refresh token summary', {
-    refreshToken: `${tokenPrefix(refreshToken)} [${inferTokenType(refreshToken)}]`,
-  })
-
   const clientId = String(process.env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim()
   const clientSecret = String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim()
   if (!clientId || !clientSecret) {
@@ -177,12 +166,6 @@ export default async function handler(req, res) {
       sendError(res, 502, 'missing_access_token', 'Google did not return access_token', ERROR_NUMBER.MISSING_ACCESS_TOKEN)
       return
     }
-
-    console.info('[google-oauth-refresh] token response summary', {
-      accessToken: `${tokenPrefix(accessToken)} [${inferTokenType(accessToken)}]`,
-      refreshToken: `${tokenPrefix(json.refresh_token ?? refreshToken)} [${inferTokenType(json.refresh_token ?? refreshToken)}]`,
-      idToken: `${tokenPrefix(json.id_token ?? '')} [${inferTokenType(json.id_token ?? '')}]`,
-    })
 
     sendJson(res, 200, {
       accessToken,

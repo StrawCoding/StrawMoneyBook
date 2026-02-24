@@ -74,7 +74,13 @@
       <p class="muted">最近 {{ accountTransactions.length }} 筆交易</p>
       <ul class="tx-list">
         <li v-for="group in groupedAccountTransactions" :key="group.dateKey" class="tx-date-group">
-          <div class="tx-date-head">{{ group.label }}</div>
+          <div class="tx-date-head">
+            <span>{{ group.label }}</span>
+            <span class="tx-date-total">
+              <small>收 <MoneyText :value-minor="group.incomeMinor" :currency="accountCurrencyCode" tone="income" /></small>
+              <small>支 <MoneyText :value-minor="group.expenseMinor" :currency="accountCurrencyCode" tone="expense" /></small>
+            </span>
+          </div>
           <ul class="tx-day-list">
             <li
               v-for="tx in group.items"
@@ -203,11 +209,17 @@ const groupedAccountTransactions = computed(() => {
   for (const tx of accountTransactions.value) {
     const key = dateKeyOf(tx.occurred_at)
     if (!groupMap.has(key)) {
-      const group = { dateKey: key, label: dateLabelOf(tx.occurred_at), items: [] }
+      const group = { dateKey: key, label: dateLabelOf(tx.occurred_at), items: [], incomeMinor: 0, expenseMinor: 0 }
       groupMap.set(key, group)
       grouped.push(group)
     }
-    groupMap.get(key).items.push(tx)
+    const group = groupMap.get(key)
+    group.items.push(tx)
+    if (tx.type === 'income') {
+      group.incomeMinor += Math.abs(Math.round(Number(tx.amount_minor ?? 0)))
+    } else if (tx.type === 'expense') {
+      group.expenseMinor += Math.abs(Math.round(Number(tx.amount_minor ?? 0)))
+    }
   }
   return grouped
 })
@@ -567,10 +579,28 @@ h3 {
 }
 
 .tx-date-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 15px;
   color: var(--muted);
   font-weight: 700;
   padding: 0 2px 2px;
+}
+
+.tx-date-total {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tx-date-total small {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
 }
 
 .tx-day-list {

@@ -581,7 +581,7 @@ export async function listBankTransactionsForReview(ledgerId, options = {}) {
     `SELECT bt.ledger_id, bt.id, bt.connection_id, bt.bank_account_id, bt.provider_transaction_id,
             bt.posted_at, bt.amount_minor, bt.currency, bt.description, bt.merchant, bt.status,
             bt.seen_in_app, bt.imported, bt.imported_txn_id, bt.first_seen_at, bt.last_seen_at, bt.updated_at,
-            ba.account_name AS bank_account_name, ba.user_label AS bank_account_user_label, ba.account_mask AS bank_account_mask,
+            ba.provider_account_id, ba.account_name AS bank_account_name, ba.user_label AS bank_account_user_label, ba.account_mask AS bank_account_mask,
             ba.mapped_account_id, a.name AS mapped_account_name,
             bc.provider, bc.user_label AS connection_user_label
      FROM bank_transactions bt
@@ -614,7 +614,7 @@ export async function listBankTransactionsByIds(ledgerId, ids = []) {
     `SELECT bt.ledger_id, bt.id, bt.connection_id, bt.bank_account_id, bt.provider_transaction_id,
             bt.posted_at, bt.amount_minor, bt.currency, bt.description, bt.merchant, bt.status,
             bt.seen_in_app, bt.imported, bt.imported_txn_id, bt.first_seen_at, bt.last_seen_at, bt.updated_at,
-            ba.account_name AS bank_account_name, ba.user_label AS bank_account_user_label, ba.account_mask AS bank_account_mask,
+            ba.provider_account_id, ba.account_name AS bank_account_name, ba.user_label AS bank_account_user_label, ba.account_mask AS bank_account_mask,
             ba.mapped_account_id,
             bc.provider
      FROM bank_transactions bt

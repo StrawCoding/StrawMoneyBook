@@ -23,6 +23,7 @@ const LEDGER_TABLES = [
   'app_settings',
   'deleted_log',
 ]
+const APP_SETTING_SECRET_KEY_RE = /(password|token|secret|authorization|client[_-]?key)/i
 
 function toCsvValue(value) {
   if (value === null || value === undefined) return ''
@@ -86,6 +87,32 @@ function rowsToSpreadsheetXml(sheetName, headers, rows) {
 </Workbook>`
 }
 
+function redactSettingSecrets(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSettingSecrets(item))
+  }
+  if (!value || typeof value !== 'object') return value
+  const output = {}
+  for (const [key, child] of Object.entries(value)) {
+    output[key] = APP_SETTING_SECRET_KEY_RE.test(key) ? '' : redactSettingSecrets(child)
+  }
+  return output
+}
+
+function sanitizeAppSettingRow(row) {
+  if (!row || typeof row !== 'object') return row
+  try {
+    const parsed = JSON.parse(String(row.value_json ?? 'null'))
+    if (!parsed || typeof parsed !== 'object') return row
+    return {
+      ...row,
+      value_json: JSON.stringify(redactSettingSecrets(parsed)),
+    }
+  } catch {
+    return row
+  }
+}
+
 function monthRangeUtc(monthKey) {
   const [year, month] = String(monthKey ?? '').split('-').map((part) => Number(part))
   const start = new Date(year, month - 1, 1, 0, 0, 0)
@@ -123,6 +150,17 @@ function timestampForFilename(date = new Date()) {
   const minute = String(date.getMinutes()).padStart(2, '0')
   const second = String(date.getSeconds()).padStart(2, '0')
   return `${year}-${month}-${day}_${hour}${minute}${second}`
+}
+
+function sanitizeFilenameSegment(value, fallback = 'ledger') {
+  const normalized = String(value ?? '')
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  if (!normalized) return fallback
+  const maxLength = 40
+  return Array.from(normalized).slice(0, maxLength).join('')
 }
 
 function rangeByMode(mode, options = {}) {
@@ -182,7 +220,9 @@ function normalizeCategoryLevels(groupName, categoryName) {
 
 async function rowsFromLedgerTable(ledgerId, tableName) {
   const result = await query(`SELECT * FROM ${tableName} WHERE ledger_id = ?;`, [ledgerId])
-  return result?.values ?? []
+  const rows = result?.values ?? []
+  if (tableName !== 'app_settings') return rows
+  return rows.map((row) => sanitizeAppSettingRow(row))
 }
 
 async function getSchemaVersion() {
@@ -397,7 +437,7 @@ export async function exportLedgerTransactionsExcel(ledgerId, options = {}) {
   })
 
   const ledgerName = rows[0]?.交易帳本 || 'ledger'
-  const safeLedgerName = String(ledgerName).replace(/[\\/:*?"<>|]/g, '_')
+  const safeLedgerName = sanitizeFilenameSegment(ledgerName)
   const filename = `${safeLedgerName}_transactions_${mode}_${timestampForFilename()}.xml`
   const xmlText = rowsToSpreadsheetXml('Transactions', EXCEL_HEADERS, rows)
   return { filename, xmlText, rowCount: rows.length }
@@ -474,7 +514,7 @@ export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
   })
 
   const ledgerName = rows[0]?.交易帳本 || 'ledger'
-  const safeLedgerName = String(ledgerName).replace(/[\\/:*?"<>|]/g, '_')
+  const safeLedgerName = sanitizeFilenameSegment(ledgerName)
   const filename = `${safeLedgerName}_transactions_${mode}_${timestampForFilename()}.csv`
   const csvText = rowsToCsv(rows, CSV_HEADERS)
   return { filename, csvText, rowCount: rows.length }

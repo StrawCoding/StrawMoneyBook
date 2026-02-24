@@ -8,6 +8,12 @@ import {
 } from '@/core/services/budget.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 
+function toFiniteMinor(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return 0
+  return numeric
+}
+
 export const useBudgetStore = defineStore('budget', {
   state: () => ({
     monthKey: monthKeyFromDate(),
@@ -19,7 +25,7 @@ export const useBudgetStore = defineStore('budget', {
 
   getters: {
     totalBudgetMinor(state) {
-      return state.items.reduce((total, item) => total + Number(item.amount_minor ?? 0), 0)
+      return state.items.reduce((total, item) => total + toFiniteMinor(item.amount_minor), 0)
     },
 
     totalSpentMinor(state) {
@@ -31,7 +37,7 @@ export const useBudgetStore = defineStore('budget', {
 
       let total = 0
       for (const categoryId of budgetedCategoryIds) {
-        total += Number(state.spentMap[categoryId] ?? 0)
+        total += toFiniteMinor(state.spentMap[categoryId])
       }
       return total
     },
@@ -62,7 +68,7 @@ export const useBudgetStore = defineStore('budget', {
         const spentMap = {}
         for (const row of snapshot.spentRows) {
           if (!row.category_id) continue
-          spentMap[row.category_id] = Number(row.spent_minor)
+          spentMap[row.category_id] = toFiniteMinor(row.spent_minor)
         }
 
         this.spentMap = spentMap

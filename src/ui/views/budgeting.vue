@@ -43,14 +43,12 @@
       <ul class="list">
         <li v-for="item in budgetStore.items" :key="item.id" class="item-row">
           <div class="item-main">
-            <div class="pie-shell" :class="{ over: isItemOverBudget(item) }">
-              <div class="mini-pie" :style="itemPieStyle(item)">
-                <div class="pie-hole">
-                  <strong>{{ itemUsedPercentLabel(item) }}</strong>
-                  <small>{{ t('budgeting.used') }}</small>
-                </div>
-              </div>
-            </div>
+            <BudgetMiniPie
+              :ratio="itemUsedRatio(item)"
+              :over="isItemOverBudget(item)"
+              :percent-label="itemUsedPercentLabel(item)"
+              :subtitle="t('budgeting.used')"
+            />
 
             <div class="item-content">
               <div class="row">
@@ -102,6 +100,7 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import BudgetItemSheet from '@/ui/components/budget/BudgetItemSheet.vue'
+import BudgetMiniPie from '@/ui/components/budget/BudgetMiniPie.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 
@@ -152,11 +151,14 @@ function categoryName(categoryId) {
 }
 
 function itemSpentMinor(categoryId) {
-  return Number(budgetStore.spentMap[categoryId] ?? 0)
+  const spentMinor = Number(budgetStore.spentMap[categoryId] ?? 0)
+  return Number.isFinite(spentMinor) ? spentMinor : 0
 }
 
 function itemBudgetMinor(item) {
-  return Math.max(0, Number(item?.amount_minor ?? 0))
+  const budgetMinor = Number(item?.amount_minor ?? 0)
+  if (!Number.isFinite(budgetMinor)) return 0
+  return Math.max(0, budgetMinor)
 }
 
 function itemRemainMinor(item) {
@@ -166,7 +168,8 @@ function itemRemainMinor(item) {
 function itemUsedRatio(item) {
   const budgetMinor = itemBudgetMinor(item)
   if (!budgetMinor) return 0
-  return itemSpentMinor(item.category_id) / budgetMinor
+  const ratio = itemSpentMinor(item.category_id) / budgetMinor
+  return Number.isFinite(ratio) ? ratio : 0
 }
 
 function itemUsedPercentLabel(item) {
@@ -175,20 +178,6 @@ function itemUsedPercentLabel(item) {
 
 function isItemOverBudget(item) {
   return itemBudgetMinor(item) > 0 && itemUsedRatio(item) > 1
-}
-
-function itemPieStyle(item) {
-  const budgetMinor = itemBudgetMinor(item)
-  if (!budgetMinor) {
-    return {
-      background: 'conic-gradient(var(--chart-track) 0deg 360deg)',
-    }
-  }
-
-  const usedDeg = Math.min(360, Math.max(0, itemUsedRatio(item)) * 360)
-  return {
-    background: `conic-gradient(var(--chart-budget-used) 0deg ${usedDeg}deg, var(--chart-budget-remain) ${usedDeg}deg 360deg)`,
-  }
 }
 
 function numberFormatLocale() {
@@ -330,39 +319,4 @@ h2, h3 {
   display: flex;
   gap: 6px
 }
-.pie-shell {
-  display: grid;
-  place-items: center
-}
-.mini-pie {
-  width: 68px;
-  height: 68px;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-  display: grid;
-  place-items: center;
-  box-shadow: 0 4px 14px color-mix(in srgb, black 24%, transparent)
-}
-.pie-shell.over .mini-pie {
-  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--danger) 36%, transparent)
-}
-.pie-hole {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--card) 90%, var(--bg) 10%);
-  display: grid;
-  place-items: center;
-  gap: 1px;
-  text-align: center
-}
-.pie-hole strong {
-  font-size: 12px;
-  line-height: 1
-}
-.pie-hole small {
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1
-}</style>
+</style>

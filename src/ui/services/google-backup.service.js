@@ -72,6 +72,56 @@ function pickPreferredBackupFile(files) {
   return exact ?? files[0]
 }
 
+function normalizeProfile(raw) {
+  return {
+    email: String(raw?.email ?? '').trim(),
+    name: String(raw?.name ?? '').trim(),
+    imageUrl: String(raw?.imageUrl ?? '').trim(),
+  }
+}
+
+function profilePatchFromState(state, profile) {
+  const patch = {}
+  if (profile.email && profile.email !== state.accountEmail) {
+    patch.accountEmail = profile.email
+  }
+  if (profile.name && profile.name !== state.accountName) {
+    patch.accountName = profile.name
+  }
+  if (profile.imageUrl && profile.imageUrl !== state.accountImageUrl) {
+    patch.accountImageUrl = profile.imageUrl
+  }
+  return patch
+}
+
+async function hydrateStateProfileFromCache(ledgerId, state) {
+  if (!state.connected) return state
+  const profile = normalizeProfile(getCachedGoogleProfile())
+  const patch = profilePatchFromState(state, profile)
+  if (!Object.keys(patch).length) return state
+  const next = normalizeState({ ...state, ...patch })
+  await setSetting(ledgerId, GOOGLE_BACKUP_KEY, next)
+  return next
+}
+
+async function resolveGoogleProfileForConnect() {
+  let reusedSession = false
+  try {
+    await getAccessToken({ interactive: false })
+    reusedSession = true
+  } catch {
+    reusedSession = false
+  }
+
+  let profile = normalizeProfile(getCachedGoogleProfile())
+  if (!profile.email && !profile.name && !profile.imageUrl && !reusedSession) {
+    const login = await googleSignIn()
+    profile = normalizeProfile(login?.profile ?? getCachedGoogleProfile())
+  }
+
+  return profile
+}
+
 async function saveState(ledgerId, patch) {
   const current = await getGoogleBackupState(ledgerId)
   const next = normalizeState({ ...current, ...patch })
@@ -82,7 +132,8 @@ async function saveState(ledgerId, patch) {
 export async function getGoogleBackupState(ledgerId) {
   assertLedgerId(ledgerId)
   const stored = await getSetting(ledgerId, GOOGLE_BACKUP_KEY)
-  return normalizeState(stored)
+  const state = normalizeState(stored)
+  return hydrateStateProfileFromCache(ledgerId, state)
 }
 
 export async function updateGoogleBackupState(ledgerId, patch = {}) {
@@ -94,12 +145,12 @@ export async function connectGoogleBackup(ledgerId) {
   assertLedgerId(ledgerId)
   ensureNativePlatform()
 
-  const login = await googleSignIn()
+  const profile = await resolveGoogleProfileForConnect()
   return saveState(ledgerId, {
     connected: true,
-    accountEmail: login.profile?.email ?? '',
-    accountName: login.profile?.name ?? '',
-    accountImageUrl: login.profile?.imageUrl ?? '',
+    accountEmail: profile.email,
+    accountName: profile.name,
+    accountImageUrl: profile.imageUrl,
     lastError: '',
   })
 }

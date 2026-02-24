@@ -38,67 +38,68 @@
         <button class="btn" :class="{ primary: analysisType === 'expense' }" @click="analysisType = 'expense'">{{ t('analysis_page.type.expense') }}</button>
       </div>
 
-      <div class="chart-mode-tabs">
-        <button class="btn" :class="{ primary: chartMode === 'pie' }" @click="chartMode = 'pie'">{{ t('analysis_page.chart.pie') }}</button>
-        <button class="btn" :class="{ primary: chartMode === 'bar' }" @click="chartMode = 'bar'">{{ t('analysis_page.chart.bar') }}</button>
-      </div>
-
       <transition name="fade-scale" mode="out-in">
-        <div :key="`${analysisType}-${chartMode}`">
-          <div v-if="chartMode === 'pie'" class="chart-wrap">
-            <div class="pie" :style="activePieStyle">
-              <div class="pie-hole">
-                <div class="pie-total">{{ t('analysis_page.type_total', { type: activeTypeLabel }) }}</div>
-                <MoneyText :value-minor="activeTotalMinor" />
+        <div :key="analysisType">
+          <template v-if="activeBreakdown.length">
+            <div class="chart-wrap">
+              <h4 class="chart-subtitle">{{ t('analysis_page.chart.pie') }}</h4>
+            </div>
+            <div class="chart-wrap">
+              <div class="pie" :style="activePieStyle">
+                <div class="pie-hole">
+                  <div class="pie-total">{{ t('analysis_page.type_total', { type: activeTypeLabel }) }}</div>
+                  <MoneyText :value-minor="activeTotalMinor" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <ul v-if="chartMode === 'pie'" class="legend-list">
-            <li v-for="item in activeBreakdown" :key="`${analysisType}-${item.id}`">
-              <button type="button" class="legend-item legend-btn" @click="openCategoryDetail(item)">
-                <span class="legend-dot" :style="{ background: item.color }"></span>
-                <span class="legend-icon-wrap">
-                  <font-awesome-icon v-if="item.icon" :icon="item.icon" class="legend-icon" />
-                </span>
-                <span class="legend-label">{{ item.name }}</span>
-                <MoneyText :value-minor="item.amountMinor" />
-                <span class="legend-count">{{ t('analysis_page.items_count', { count: item.count }) }}</span>
-                <span class="legend-percent">{{ item.percent }}%</span>
-              </button>
-            </li>
-            <li v-if="activeBreakdown.length === 0" class="muted">{{ t('analysis_page.no_data_for_type', { type: activeTypeLabel.toLowerCase() }) }}</li>
-          </ul>
-
-          <ul v-else class="bar-chart-list">
-            <li v-for="item in activeBarRows" :key="`${analysisType}-${item.id}-bar`">
-              <button type="button" class="bar-chart-item-btn" @click="openCategoryDetail(item)">
-                <div class="bar-chart-head">
-                  <div class="bar-chart-label">
-                    <span class="legend-dot" :style="{ background: item.color }"></span>
-                    <span class="legend-icon-wrap">
-                      <font-awesome-icon
-                        v-if="item.icon"
-                        :icon="item.icon"
-                        class="legend-icon"
-                        :style="{ color: item.color }"
-                      />
-                    </span>
-                    <span class="bar-chart-name">{{ item.name }}</span>
-                  </div>
-                  <span class="bar-chart-percent">{{ item.percent }}%</span>
-                </div>
-                <div class="bar-chart-track">
-                  <span class="bar-chart-fill" :style="{ width: `${item.barWidthPercent}%`, background: item.color }"></span>
-                </div>
-                <div class="bar-chart-stats">
+            <ul class="legend-list">
+              <li v-for="item in activeBreakdown" :key="`${analysisType}-${item.id}`">
+                <button type="button" class="legend-item legend-btn" @click="openCategoryDetail(item)">
+                  <span class="legend-dot" :style="{ background: item.color }"></span>
+                  <span class="legend-icon-wrap">
+                    <font-awesome-icon v-if="item.icon" :icon="item.icon" class="legend-icon" />
+                  </span>
+                  <span class="legend-label">{{ item.name }}</span>
                   <MoneyText :value-minor="item.amountMinor" />
-                  <span class="bar-chart-count">{{ t('analysis_page.items_count', { count: item.count }) }}</span>
-                </div>
-              </button>
-            </li>
-            <li v-if="activeBarRows.length === 0" class="muted">{{ t('analysis_page.no_data_for_type', { type: activeTypeLabel.toLowerCase() }) }}</li>
-          </ul>
+                  <span class="legend-count">{{ t('analysis_page.items_count', { count: item.count }) }}</span>
+                  <span class="legend-percent">{{ item.percent }}%</span>
+                </button>
+              </li>
+            </ul>
+
+            <div class="chart-wrap">
+              <h4 class="chart-subtitle">{{ t('analysis_page.chart.bar') }}</h4>
+            </div>
+            <ul class="bar-chart-list">
+              <li v-for="item in activeBarRows" :key="`${analysisType}-${item.id}-bar`">
+                <button type="button" class="bar-chart-item-btn" @click="openCategoryDetail(item)">
+                  <div class="bar-chart-head">
+                    <div class="bar-chart-label">
+                      <span class="legend-dot" :style="{ background: item.color }"></span>
+                      <span class="legend-icon-wrap">
+                        <font-awesome-icon
+                          v-if="item.icon"
+                          :icon="item.icon"
+                          class="legend-icon"
+                        />
+                      </span>
+                      <span class="bar-chart-name">{{ item.name }}</span>
+                    </div>
+                    <span class="bar-chart-percent">{{ item.percent }}%</span>
+                  </div>
+                  <div class="bar-chart-track">
+                    <span class="bar-chart-fill" :style="{ width: `${item.barWidthPercent}%`, background: item.color }"></span>
+                  </div>
+                  <div class="bar-chart-stats">
+                    <MoneyText :value-minor="item.amountMinor" />
+                    <span class="bar-chart-count">{{ t('analysis_page.items_count', { count: item.count }) }}</span>
+                  </div>
+                </button>
+              </li>
+            </ul>
+          </template>
+          <p v-else class="muted no-data-tip">{{ t('analysis_page.no_data_for_type', { type: activeTypeLabel.toLowerCase() }) }}</p>
         </div>
       </transition>
     </article>
@@ -125,7 +126,6 @@ const { t } = useI18n()
 
 const mode = ref('month')
 const analysisType = ref('expense')
-const chartMode = ref('pie')
 const selectedYear = ref(new Date().getFullYear())
 const selectedMonth = ref(monthKeyFromDate(new Date()))
 const statsTransactions = ref([])
@@ -365,16 +365,15 @@ h2, h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px
 }
-.chart-mode-tabs {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px
-}
 .chart-wrap {
   margin-top: 12px;
   display: flex;
   justify-content: center
+}
+.chart-subtitle {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0
 }
 .pie {
   width: 220px;
@@ -538,6 +537,9 @@ h2, h3 {
   text-align: right;
   color: var(--muted);
   font-size: 12px
+}
+.no-data-tip {
+  margin: 16px 0 0
 }
 .placeholder {
   min-height: 120px

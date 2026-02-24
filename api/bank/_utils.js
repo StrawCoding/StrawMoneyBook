@@ -1,6 +1,10 @@
+import { timingSafeEqual } from 'node:crypto'
+
+const BANK_SYNC_CLIENT_SHARED_KEY = String(process.env.BANK_SYNC_CLIENT_SHARED_KEY ?? '').trim()
+
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Straw-Client-Key')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Cache-Control', 'no-store')
 }
@@ -48,6 +52,32 @@ function methodGuard(req, res) {
   return false
 }
 
+function secureEquals(left, right) {
+  const leftBytes = Buffer.from(String(left ?? ''), 'utf8')
+  const rightBytes = Buffer.from(String(right ?? ''), 'utf8')
+  if (leftBytes.length !== rightBytes.length) return false
+  return timingSafeEqual(leftBytes, rightBytes)
+}
+
+function isClientAuthorized(req) {
+  if (!BANK_SYNC_CLIENT_SHARED_KEY) return false
+  const provided = String(
+    req.headers?.['x-straw-client-key']
+      ?? req.headers?.['X-Straw-Client-Key']
+      ?? '',
+  ).trim()
+  return secureEquals(provided, BANK_SYNC_CLIENT_SHARED_KEY)
+}
+
+function clientGuard(req, res) {
+  if (isClientAuthorized(req)) return false
+  sendJson(res, 401, {
+    error: 'unauthorized_client',
+    message: 'missing or invalid x-straw-client-key',
+  })
+  return true
+}
+
 function simpleHash(input) {
   const source = String(input ?? '')
   let hash = 2166136261
@@ -59,7 +89,9 @@ function simpleHash(input) {
 }
 
 export {
+  clientGuard,
   isMockProvider,
+  isClientAuthorized,
   methodGuard,
   normalizeProvider,
   normalizeText,

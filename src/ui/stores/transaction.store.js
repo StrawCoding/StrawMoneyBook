@@ -147,6 +147,32 @@ export const useTransactionStore = defineStore('transaction', {
       await this.refreshAfterWriteSafe()
     },
 
+    async deleteTransactionsBatch(txIds = []) {
+      const ledgerStore = useLedgerStore()
+      const ledgerId = ledgerStore.activeLedgerId
+      const ids = Array.from(new Set((txIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean)))
+      if (!ledgerId || !ids.length) {
+        return { deleted: 0, failed: [] }
+      }
+
+      let deleted = 0
+      const failed = []
+      for (const txId of ids) {
+        try {
+          await deleteManualTransaction(ledgerId, txId)
+          deleted += 1
+        } catch (error) {
+          failed.push({
+            txId,
+            message: String(error?.message ?? error ?? '刪除失敗'),
+          })
+        }
+      }
+
+      await this.refreshAfterWriteSafe()
+      return { deleted, failed }
+    },
+
     async refreshAfterWriteSafe(timeoutMs = 4500) {
       const refreshTask = this.refreshAfterWrite()
       const normalizedTimeoutMs = Math.max(0, Number(timeoutMs) || 0)

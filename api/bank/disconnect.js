@@ -1,7 +1,8 @@
-import { methodGuard, normalizeProvider, parseBody, sendJson } from './_utils.js'
+import { clientGuard, methodGuard, normalizeProvider, parseBody, sendJson } from './_utils.js'
 
 export default async function handler(req, res) {
   if (methodGuard(req, res)) return
+  if (clientGuard(req, res)) return
   const body = parseBody(req)
   const provider = normalizeProvider(body.provider)
   if (!provider) {

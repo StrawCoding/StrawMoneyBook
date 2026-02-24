@@ -38,7 +38,7 @@ function validateDirection(direction) {
 
 function validateAmountMinor(amountMinor, fieldName = 'amountMinor') {
   const amount = Number(amountMinor)
-  if (!Number.isFinite(amount) || amount <= 0) {
+  if (!Number.isInteger(amount) || amount <= 0) {
     throw new Error(`${fieldName} 必須為大於 0 的整數`)
   }
   return Math.round(amount)
@@ -47,7 +47,7 @@ function validateAmountMinor(amountMinor, fieldName = 'amountMinor') {
 function validateOptionalAmountMinor(amountMinor, fieldName = 'amountMinor') {
   if (amountMinor === null || amountMinor === undefined || amountMinor === '') return 0
   const amount = Number(amountMinor)
-  if (!Number.isFinite(amount) || amount < 0) {
+  if (!Number.isInteger(amount) || amount < 0) {
     throw new Error(`${fieldName} 必須為大於等於 0 的整數`)
   }
   return Math.round(amount)

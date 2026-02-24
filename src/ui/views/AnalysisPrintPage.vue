@@ -259,7 +259,9 @@ label {
   align-items: center
 }
 .file-note {
-  margin: 8px 0 0
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  word-break: break-word
 }
 .fields-list {
   margin: 12px 0 0;

@@ -1,4 +1,5 @@
 const DEFAULT_BANK_API_BASE = String(import.meta.env.VITE_BANK_SYNC_API_BASE_URL ?? '').trim()
+const BANK_SYNC_CLIENT_SHARED_KEY = String(import.meta.env.VITE_BANK_SYNC_CLIENT_SHARED_KEY ?? '').trim()
 
 const PROVIDERS_FALLBACK = [
   {
@@ -37,11 +38,16 @@ function parseProviderListFromEnv() {
 }
 
 async function postJson(path, payload) {
+  const headers = {
+    'Content-Type': 'application/json',
+  }
+  if (BANK_SYNC_CLIENT_SHARED_KEY) {
+    headers['X-Straw-Client-Key'] = BANK_SYNC_CLIENT_SHARED_KEY
+  }
+
   const response = await fetch(buildApiUrl(path), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(payload ?? {}),
   })
 

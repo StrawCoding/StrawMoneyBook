@@ -1,10 +1,11 @@
 import { computed, ref } from 'vue'
 import { RUNTIME_EN_TEXT_EXACT_GENERATED } from '@/ui/services/runtime-en-exact.generated'
 import { RUNTIME_EN_TEXT_GENERATED } from '@/ui/services/runtime-en-phrases.generated'
+import { RUNTIME_JA_MESSAGES_GENERATED } from '@/ui/services/runtime-ja-messages.generated'
 
 const STORAGE_KEY = 'strawmoneybook.locale'
 const DEFAULT_LOCALE = 'zh-TW'
-const SUPPORTED_LOCALES = ['zh-TW', 'en']
+const SUPPORTED_LOCALES = ['zh-TW', 'en', 'ja']
 const RUNTIME_EN_TEXT = {
   '帳本已建立': 'Ledger created',
   '建立帳本失敗': 'Failed to create ledger',
@@ -257,7 +258,7 @@ const RUNTIME_EN_PHRASE_REPLACEMENTS = {
   ...RUNTIME_EN_REPLACEMENTS,
 }
 
-const runtimeReplacementEntries = Object.entries(RUNTIME_EN_PHRASE_REPLACEMENTS)
+const runtimeEnReplacementEntries = Object.entries(RUNTIME_EN_PHRASE_REPLACEMENTS)
   .filter(([zh]) => String(zh ?? '').trim().length >= 4)
   .sort((a, b) => b[0].length - a[0].length)
 
@@ -499,6 +500,7 @@ const MESSAGES = {
     'theme_scheme.charcoal.description': '穩定耐看，暖金點綴',
     'language.zh-TW': '繁體中文',
     'language.en': 'English',
+    'language.ja': '日本語',
     'welcome.step': '步驟',
     'welcome.title': '歡迎使用 StrawMoneyBook',
     'welcome.subtitle': '三個步驟完成初始化：選擇語言、建立帳本、建立帳戶。',
@@ -672,7 +674,7 @@ const MESSAGES = {
     'analysis_print.all_hint': '將匯出當前帳本全部交易',
     'analysis_print.exporting': '匯出中...',
     'analysis_print.export_csv': '匯出 CSV',
-    'analysis_print.open_link': '打開連結',
+    'analysis_print.open_link': '開啟檔案',
     'analysis_print.download_again': '再次下載',
     'analysis_print.file_label': '檔案：{filename}',
     'analysis_print.location_label': '儲存位置：{location}',
@@ -918,6 +920,7 @@ const MESSAGES = {
     'theme_scheme.charcoal.description': 'Dark mode with warm gold highlights on charcoal',
     'language.zh-TW': 'Traditional Chinese',
     'language.en': 'English',
+    'language.ja': 'Japanese',
     'welcome.step': 'Step',
     'welcome.title': 'Welcome to StrawMoneyBook',
     'welcome.subtitle': 'Complete setup in 3 steps: language, ledger, and account.',
@@ -1091,7 +1094,7 @@ const MESSAGES = {
     'analysis_print.all_hint': 'Exports all transactions in the current ledger',
     'analysis_print.exporting': 'Exporting...',
     'analysis_print.export_csv': 'Export CSV',
-    'analysis_print.open_link': 'Open Link',
+    'analysis_print.open_link': 'Open File',
     'analysis_print.download_again': 'Download Again',
     'analysis_print.file_label': 'File: {filename}',
     'analysis_print.location_label': 'Saved to: {location}',
@@ -1107,6 +1110,29 @@ const MESSAGES = {
     'analysis_print.toast.exported_downloaded': 'Exported {count} transactions (browser download)',
     'analysis_print.toast.export_failed': 'Export failed',
   },
+}
+
+MESSAGES.ja = {
+  ...RUNTIME_JA_MESSAGES_GENERATED,
+  'common.on': 'オン',
+  'common.off': 'オフ',
+  'nav.home': 'ホーム',
+  'settings.exchange_rate': '為替同期',
+  'settings.bank_sync': '銀行同期',
+  'settings.version_info': 'バージョン情報',
+  'settings_about.open': '開く',
+  'home_page.quick_add': '+ クイック追加',
+  'analysis_page.type.income': '収入',
+  'analysis_page.type.expense': '支出',
+  'analysis_page.chart.pie': '円グラフ',
+  'analysis_page.chart.bar': '棒グラフ',
+  'analysis_print.title': '取引レポート出力',
+  'analysis_print.export_csv': 'CSVを出力',
+  'analysis_print.open_link': 'ファイルを開く',
+  'analysis_print.download_again': '再ダウンロード',
+  'language.zh-TW': '繁體中文',
+  'language.en': 'English',
+  'language.ja': '日本語',
 }
 
 const localeRef = ref(DEFAULT_LOCALE)
@@ -1152,6 +1178,7 @@ function detectUserLocale() {
     if (!value) continue
     if (value.startsWith('zh')) return 'zh-TW'
     if (value.startsWith('en')) return 'en'
+    if (value.startsWith('ja')) return 'ja'
   }
 
   return DEFAULT_LOCALE
@@ -1178,19 +1205,24 @@ export function getCurrentLocale() {
   return localeRef.value
 }
 
-export function translateRuntimeText(input) {
-  const text = String(input ?? '')
-  if (!text) return ''
-  if (localeRef.value !== 'en') return text
-
+function translateRuntimeTextToEnglish(text) {
   if (RUNTIME_EN_EXACT[text]) return RUNTIME_EN_EXACT[text]
 
   let output = text
-  for (const [zh, en] of runtimeReplacementEntries) {
+  for (const [zh, en] of runtimeEnReplacementEntries) {
     if (!output.includes(zh)) continue
     output = output.split(zh).join(en)
   }
   return output.replace(/\s{2,}/g, ' ').trim()
+}
+
+export function translateRuntimeText(input) {
+  const text = String(input ?? '')
+  if (!text) return ''
+  if (localeRef.value === 'en') {
+    return translateRuntimeTextToEnglish(text)
+  }
+  return text
 }
 
 function translateTextByLocale(text) {

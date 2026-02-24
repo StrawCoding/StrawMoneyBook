@@ -67,7 +67,7 @@ h3 {
 }
 .language-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 8px;
 }
 .language-btn {
@@ -86,7 +86,7 @@ h3 {
 }
 @media (max-width: 640px) {
   .language-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   }
 }
 </style>

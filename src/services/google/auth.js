@@ -150,13 +150,6 @@ function extractToken(raw) {
   return String(raw.token ?? '').trim()
 }
 
-function tokenPrefix(raw) {
-  const token = String(raw ?? '').trim()
-  if (!token) return '(empty)'
-  const prefix = token.slice(0, 12)
-  return `${prefix}${token.length > 12 ? '...' : ''} (len=${token.length})`
-}
-
 function inferTokenType(raw) {
   const token = String(raw ?? '').trim()
   if (!token) return 'empty'
@@ -167,10 +160,11 @@ function inferTokenType(raw) {
 }
 
 function logTokenDebug(tag, tokenMap = {}) {
+  if (!import.meta.env.DEV) return
   const payload = Object.fromEntries(
     Object.entries(tokenMap).map(([name, value]) => [
       name,
-      `${tokenPrefix(value)} [${inferTokenType(value)}]`,
+      inferTokenType(value),
     ]),
   )
   console.info(`[google-auth] ${tag}`, payload)

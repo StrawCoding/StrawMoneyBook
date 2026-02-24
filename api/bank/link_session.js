@@ -1,4 +1,14 @@
-import { isMockProvider, methodGuard, normalizeProvider, parseBody, sendJson, simpleHash } from './_utils.js'
+import {
+  clientGuard,
+  isMockProvider,
+  methodGuard,
+  normalizeProvider,
+  parseBody,
+  sendJson,
+  simpleHash,
+} from './_utils.js'
+
+const MOCK_SESSION_TTL_MS = 5 * 60 * 1000
 
 function createNonce() {
   if (typeof crypto?.randomUUID === 'function') {
@@ -14,6 +24,7 @@ function createNonce() {
 
 export default async function handler(req, res) {
   if (methodGuard(req, res)) return
+  if (clientGuard(req, res)) return
   const body = parseBody(req)
   const provider = normalizeProvider(body.provider)
   if (!provider) {
@@ -23,12 +34,13 @@ export default async function handler(req, res) {
 
   if (isMockProvider(provider)) {
     const nonce = createNonce()
+    const expiresAtMs = Date.now() + MOCK_SESSION_TTL_MS
     sendJson(res, 200, {
       provider: 'mock_bank_tw',
-      session_id: `mock_session_${nonce}`,
+      session_id: `mock_session_${nonce}_${expiresAtMs}`,
       link_url: `https://mock-bank.local/authorize?session=${nonce}`,
       mock_code: 'mock_approved',
-      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      expires_at: new Date(expiresAtMs).toISOString(),
     })
     return
   }

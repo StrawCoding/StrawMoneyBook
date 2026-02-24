@@ -7,9 +7,11 @@ const EXCHANGE_RATE_SNAPSHOT_KEY = 'exchange_rate.snapshot'
 const CBC_FILE_CODE_DAILY = 'BP01D01'
 const CBC_API_BASE_URL = 'https://cpx.cbc.gov.tw/API/DataAPI/Get'
 const CBC_API_URL = `https://cpx.cbc.gov.tw/API/DataAPI/Get?FileName=${CBC_FILE_CODE_DAILY}`
+const TAIFEX_DAILY_FX_SOURCE_CODE = 'DailyForeignExchangeRates'
+const TAIFEX_DAILY_FX_API_URL = `https://openapi.taifex.com.tw/v1/${TAIFEX_DAILY_FX_SOURCE_CODE}`
+const FRANKFURTER_USD_API_URL = 'https://api.frankfurter.app/latest?from=USD'
+const OPEN_ER_USD_API_URL = 'https://open.er-api.com/v6/latest/USD'
 const EXCHANGE_RATE_PROXY_PATH = '/api/exchange-rate/cbc'
-const EXCHANGE_RATE_PROXY_DEFAULT_ORIGIN = 'https://www.strawmb.com'
-const EXCHANGE_RATE_PROXY_SECONDARY_ORIGIN = 'https://strawmb.com'
 const DEFAULT_SYNC_INTERVAL_HOURS = 24
 const FETCH_TIMEOUT_MS = 20000
 const FETCH_RETRY_COUNT = 2
@@ -55,17 +57,6 @@ function resolveExchangeRateProxyFallbackOrigins() {
   if (isAbsoluteHttpUrl(explicitOrigin)) {
     origins.push(explicitOrigin)
   }
-
-  const siteUrl = String(import.meta.env.VITE_PRIVACY_POLICY_URL ?? '').trim()
-  if (isAbsoluteHttpUrl(siteUrl)) {
-    try {
-      origins.push(new URL(siteUrl).origin)
-    } catch {
-      // ignore parse failures
-    }
-  }
-
-  origins.push(EXCHANGE_RATE_PROXY_DEFAULT_ORIGIN, EXCHANGE_RATE_PROXY_SECONDARY_ORIGIN)
 
   const deduped = []
   const seen = new Set()
@@ -135,6 +126,7 @@ function normalizeCurrencyCodeForRate(code) {
   const raw = String(code ?? '').trim().toUpperCase()
   if (!raw) return ''
   if (raw === 'NTD') return 'TWD'
+  if (raw === 'RMB') return 'CNY'
   if (/^[A-Z]{3}$/.test(raw)) return raw
   return ''
 }
@@ -246,6 +238,172 @@ function parseCbcRatesPayload(payload) {
   }
 }
 
+function readLatestValidTaifexRow(rows = []) {
+  if (!Array.isArray(rows) || !rows.length) return null
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index]
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue
+    const hasValidRate = Object.entries(row).some(([key, value]) => {
+      const pair = parsePairFromLabel(key)
+      if (!pair || (pair.left !== 'USD' && pair.right !== 'USD')) return false
+      const numeric = Number(value)
+      return Number.isFinite(numeric) && numeric > 0
+    })
+    if (hasValidRate) return row
+  }
+  return null
+}
+
+function parseTaifexRatesPayload(payload) {
+  const rows = Array.isArray(payload) ? payload : []
+  const latestRow = readLatestValidTaifexRow(rows)
+  if (!latestRow) {
+    throw new Error('TAIFEX 匯率資料為空')
+  }
+
+  const rates = { USD: 1 }
+  for (const [label, rawValue] of Object.entries(latestRow)) {
+    const pair = parsePairFromLabel(label)
+    if (!pair || (pair.left !== 'USD' && pair.right !== 'USD')) continue
+
+    const numericValue = Number(rawValue)
+    if (!Number.isFinite(numericValue) || numericValue <= 0) continue
+
+    if (pair.left === 'USD') {
+      rates[pair.right] = numericValue
+      continue
+    }
+
+    rates[pair.left] = 1 / numericValue
+  }
+
+  return {
+    provider: 'taifex',
+    sourceFileCode: TAIFEX_DAILY_FX_SOURCE_CODE,
+    syncedAt: new Date().toISOString(),
+    effectiveDate: parseDateKeyToIso(latestRow.Date),
+    dataUpdatedAt: '',
+    rates: normalizeRateMap(rates),
+  }
+}
+
+function parseDateLikeToIsoDate(value) {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text
+  if (/^\d{8}$/.test(text)) return parseDateKeyToIso(text)
+
+  const asNumber = Number(text)
+  if (Number.isFinite(asNumber) && asNumber > 0) {
+    const unixMs = asNumber > 9_999_999_999 ? asNumber : asNumber * 1000
+    const date = new Date(unixMs)
+    if (!Number.isNaN(date.getTime())) {
+      return date.toISOString().slice(0, 10)
+    }
+  }
+
+  const date = new Date(text)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toISOString().slice(0, 10)
+}
+
+function parseFrankfurterRatesPayload(payload) {
+  const rates = normalizeRateMap({
+    ...(payload?.rates ?? {}),
+    USD: 1,
+  })
+  return {
+    provider: 'frankfurter',
+    sourceFileCode: 'latest_usd',
+    syncedAt: new Date().toISOString(),
+    effectiveDate: parseDateLikeToIsoDate(payload?.date),
+    dataUpdatedAt: '',
+    rates,
+  }
+}
+
+function parseOpenErRatesPayload(payload) {
+  const rates = normalizeRateMap({
+    ...(payload?.rates ?? {}),
+    USD: 1,
+  })
+  return {
+    provider: 'open_er_api',
+    sourceFileCode: 'latest_usd',
+    syncedAt: new Date().toISOString(),
+    effectiveDate: parseDateLikeToIsoDate(payload?.time_last_update_unix ?? payload?.time_last_update_utc),
+    dataUpdatedAt: String(payload?.time_last_update_utc ?? ''),
+    rates,
+  }
+}
+
+function parseGenericUsdBasePayload(payload, provider = 'usd_base_api') {
+  const rates = normalizeRateMap({
+    ...(payload?.rates ?? {}),
+    USD: 1,
+  })
+  const effectiveDate = parseDateLikeToIsoDate(
+    payload?.date
+    ?? payload?.effectiveDate
+    ?? payload?.updated_at
+    ?? payload?.timestamp
+    ?? payload?.time_last_update_unix,
+  )
+  return {
+    provider,
+    sourceFileCode: 'latest_usd',
+    syncedAt: new Date().toISOString(),
+    effectiveDate,
+    dataUpdatedAt: String(payload?.updated_at ?? payload?.time_last_update_utc ?? ''),
+    rates,
+  }
+}
+
+function isLikelyCbcPayload(payload) {
+  return Array.isArray(payload?.data?.dataSets) && Array.isArray(payload?.data?.structure?.Table1)
+}
+
+function isLikelyTaifexPayload(payload) {
+  return Array.isArray(payload) && payload.some((item) => item && typeof item === 'object' && 'Date' in item)
+}
+
+function isLikelyFrankfurterPayload(payload) {
+  return (
+    payload
+    && typeof payload === 'object'
+    && !Array.isArray(payload)
+    && String(payload.base ?? '').toUpperCase() === 'USD'
+    && typeof payload.rates === 'object'
+  )
+}
+
+function isLikelyOpenErPayload(payload) {
+  return (
+    payload
+    && typeof payload === 'object'
+    && !Array.isArray(payload)
+    && String(payload.result ?? '').toLowerCase() === 'success'
+    && String(payload.base_code ?? '').toUpperCase() === 'USD'
+    && typeof payload.rates === 'object'
+  )
+}
+
+function isLikelyGenericUsdBasePayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false
+  if (typeof payload.rates !== 'object') return false
+  const base = String(payload.base ?? payload.base_code ?? payload.currency ?? '').toUpperCase()
+  return base === 'USD'
+}
+
+function parseExchangeRateSnapshotPayload(payload) {
+  if (isLikelyCbcPayload(payload)) return parseCbcRatesPayload(payload)
+  if (isLikelyTaifexPayload(payload)) return parseTaifexRatesPayload(payload)
+  if (isLikelyFrankfurterPayload(payload)) return parseFrankfurterRatesPayload(payload)
+  if (isLikelyOpenErPayload(payload)) return parseOpenErRatesPayload(payload)
+  if (isLikelyGenericUsdBasePayload(payload)) return parseGenericUsdBasePayload(payload)
+  throw new Error('匯率來源回應格式不支援')
+}
+
 function withTimeout(task, timeoutMs, timeoutMessage) {
   let timeoutId = null
   const timeoutTask = new Promise((_, reject) => {
@@ -320,7 +478,7 @@ async function fetchJsonPayloadWithRetry(url, sourceLabel = '') {
   throw new Error(`${sourceLabel || url}：${normalizedMessage}`)
 }
 
-async function fetchCbcRatesPayload() {
+async function fetchExchangeRatePayload() {
   const errors = []
 
   for (const endpoint of EXCHANGE_RATE_PROXY_ENDPOINTS) {
@@ -330,6 +488,24 @@ async function fetchCbcRatesPayload() {
     } catch (error) {
       errors.push(String(error?.message ?? '').trim() || `代理 ${url}：未知錯誤`)
     }
+  }
+
+  try {
+    return await fetchJsonPayloadWithRetry(FRANKFURTER_USD_API_URL, `Frankfurter ${FRANKFURTER_USD_API_URL}`)
+  } catch (error) {
+    errors.push(String(error?.message ?? '').trim() || `Frankfurter ${FRANKFURTER_USD_API_URL}：未知錯誤`)
+  }
+
+  try {
+    return await fetchJsonPayloadWithRetry(OPEN_ER_USD_API_URL, `OpenER ${OPEN_ER_USD_API_URL}`)
+  } catch (error) {
+    errors.push(String(error?.message ?? '').trim() || `OpenER ${OPEN_ER_USD_API_URL}：未知錯誤`)
+  }
+
+  try {
+    return await fetchJsonPayloadWithRetry(TAIFEX_DAILY_FX_API_URL, `TAIFEX ${TAIFEX_DAILY_FX_API_URL}`)
+  } catch (error) {
+    errors.push(String(error?.message ?? '').trim() || `TAIFEX ${TAIFEX_DAILY_FX_API_URL}：未知錯誤`)
   }
 
   try {
@@ -379,8 +555,8 @@ export async function syncCbcExchangeRateSnapshot(ledgerId) {
   ensureLedgerId(ledgerId)
   const previousSnapshot = await getExchangeRateSnapshot(ledgerId)
   try {
-    const payload = await fetchCbcRatesPayload()
-    const snapshot = parseCbcRatesPayload(payload)
+    const payload = await fetchExchangeRatePayload()
+    const snapshot = parseExchangeRateSnapshotPayload(payload)
     await setSetting(ledgerId, EXCHANGE_RATE_SNAPSHOT_KEY, snapshot)
     return snapshot
   } catch (error) {

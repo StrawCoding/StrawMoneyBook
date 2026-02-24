@@ -27,6 +27,93 @@ function escapeRegExp(value) {
   return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+const ACCOUNT_NAME_GENERIC_TARGETS = new Set([
+  '銀行',
+  'bank',
+  'account',
+  'acct',
+  'card',
+  'wallet',
+  '帳戶',
+  '帐户',
+  '帳號',
+  '账号',
+  '戶頭',
+  '户头',
+  '活存',
+  '定存',
+  '存款',
+  '信用卡',
+  '簽帳卡',
+  '金融卡',
+])
+
+function stripAccountNameSuffix(value) {
+  let name = String(value ?? '').trim()
+  if (!name) return ''
+  const suffixPatterns = [
+    /(銀行|bank)$/i,
+    /(帳戶|帐户|帳號|账号|戶頭|户头)$/i,
+    /(account|acct)$/i,
+    /(活存|定存|存款)$/i,
+    /(信用卡|簽帳卡|金融卡|card|wallet)$/i,
+    /(台幣|臺幣|人民幣|美元|日圓|日元|歐元|twd|cny|usd|jpy|eur)$/i,
+  ]
+
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const pattern of suffixPatterns) {
+      const next = name.replace(pattern, '').trim()
+      if (next && next !== name) {
+        name = next
+        changed = true
+      }
+    }
+  }
+
+  return name
+}
+
+function buildAccountMatchTargets(name) {
+  const raw = String(name ?? '').trim()
+  if (!raw) return []
+
+  const targets = []
+  const seen = new Set()
+  const pushTarget = (value, bonus = 0) => {
+    const target = compactText(value)
+    if (target.length < 2) return
+    if (/^\d+$/.test(target)) return
+    if (ACCOUNT_NAME_GENERIC_TARGETS.has(target)) return
+    if (seen.has(target)) return
+    seen.add(target)
+    targets.push({ target, bonus })
+  }
+
+  pushTarget(raw, 12)
+  const strippedRaw = stripAccountNameSuffix(raw)
+  if (strippedRaw && strippedRaw !== raw) {
+    pushTarget(strippedRaw, 8)
+  }
+
+  const normalized = raw.replace(/[()（）[\]【】]/g, ' ')
+  const parts = normalized
+    .split(/[\s\-_/,.，。:：]+/)
+    .map((item) => String(item ?? '').trim())
+    .filter(Boolean)
+
+  for (const part of parts) {
+    pushTarget(part, 4)
+    const strippedPart = stripAccountNameSuffix(part)
+    if (strippedPart && strippedPart !== part) {
+      pushTarget(strippedPart, 2)
+    }
+  }
+
+  return targets
+}
+
 function parseDateTimeFromText(text, now = new Date()) {
   const base = new Date(now)
   base.setSeconds(0, 0)
@@ -196,10 +283,12 @@ function findAccountMatchEntries(text, accounts) {
   for (const account of accounts ?? []) {
     const name = String(account?.name ?? '').trim()
     if (!name) continue
-    const target = compactText(name)
-    const index = compact.indexOf(target)
-    if (index < 0) continue
-    matches.push({ account, index, score: target.length, target })
+    const targets = buildAccountMatchTargets(name)
+    for (const { target, bonus } of targets) {
+      const index = compact.indexOf(target)
+      if (index < 0) continue
+      matches.push({ account, index, score: target.length + bonus, target })
+    }
   }
 
   matches.sort((a, b) => {
@@ -294,8 +383,8 @@ function findAccountByKeyword(text, accounts, keywords) {
 function pickTransferAccounts(text, accounts) {
   const matched = findAccountMatches(text, accounts)
 
-  const fromByKeyword = findAccountByKeyword(text, accounts, ['從', '由', '自', '用', '刷', '扣'])
-  const toByKeyword = findAccountByKeyword(text, accounts, ['到', '至', '給', '轉入', '匯入'])
+  const fromByKeyword = findAccountByKeyword(text, accounts, ['從', '由', '自', '用', '刷', '扣', '轉出', '匯出', '拨出', '撥出'])
+  const toByKeyword = findAccountByKeyword(text, accounts, ['到', '至', '給', '轉入', '匯入', '存入', '打到', '撥入', '拨入'])
 
   let from = fromByKeyword ?? matched[0] ?? null
   let to = toByKeyword ?? matched.find((item) => item.id !== from?.id) ?? null
@@ -462,8 +551,8 @@ function extractSmartNoteText(text, context = {}) {
     /[+-]?\d+(?:\.\d+)?\s*(萬|w|千|k|百|元|塊|塊錢|twd|ntd|\$)/gi,
     /[+-]?\d+(?:\.\d+)?/g,
     /(昨天|今天|明天|前天|剛剛|剛才|方才|剛)/g,
-    /(刷卡|現金|轉帳|匯款|付款|支付|扣款|入帳|報[銷修]|報帳|請款|紀錄|記帳|新增|幫我|請幫我)/g,
-    /(收入|支出|轉出|轉入)/g,
+    /(刷卡|現金|轉帳|转账|轉出|转出|轉入|转入|轉給|转给|轉到|转到|匯款|汇款|匯入|汇入|匯出|汇出|打款|打錢|打钱|撥款|拨款|調撥|调拨|挪款|挪錢|挪钱|搬錢|搬钱|移轉|互轉|過戶|过户|付款|支付|扣款|入帳|報[銷修]|報帳|請款|紀錄|記帳|新增|幫我|請幫我)/g,
+    /(收入|支出|轉出|转出|轉入|转入|匯出|汇出|匯入|汇入)/g,
     /(計入預算|不計入預算|計入收支|不計入收支|算進預算|算進分析)/g,
     /(早餐|午餐|晚餐|宵夜|餐費|餐飲|伙食|飲料|咖啡|交通|車資|通勤|捷運|地鐵|公車|客運|高鐵|台鐵|火車|計程車|uber|油錢|停車費|房租|租金|水費|電費|瓦斯|網路費|電信費|醫療|藥費|娛樂|旅遊|學費|教材|服飾|美妝|薪水|薪資|獎金|利息|股息|退款|退費)/gi,
     /(錢包|信用卡|簽帳卡|金融卡|帳戶)/g,
@@ -485,7 +574,34 @@ function extractSmartNoteText(text, context = {}) {
 }
 
 function normalizeType(text) {
-  if (includesAny(text, [/轉帳/, /轉出/, /轉給/, /轉至/, /匯款/, /匯出/, /跨行轉帳/, /行內轉帳/])) return 'transfer'
+  if (
+    includesAny(text, [
+      /轉帳|转账/,
+      /轉出|转出/,
+      /轉給|转给/,
+      /轉至|转至/,
+      /轉到|转到/,
+      /轉入|转入/,
+      /轉錢|转钱/,
+      /轉款|转款/,
+      /匯款|汇款/,
+      /匯出|汇出/,
+      /匯入|汇入/,
+      /匯給|汇给/,
+      /打款|打錢|打钱/,
+      /撥款|拨款/,
+      /撥轉|拨转|調撥|调拨/,
+      /挪款|挪錢|挪钱/,
+      /搬錢|搬钱|搬款/,
+      /移轉|过户|過戶/,
+      /內轉|内转|互轉|互转/,
+      /帳戶互轉|账户互转/,
+      /跨行轉帳|跨行转账/,
+      /行內轉帳|行内转账/,
+    ])
+  ) {
+    return 'transfer'
+  }
   if (includesAny(text, [/收入/, /薪水/, /薪資/, /獎金/, /入帳/, /收到/, /退款/, /退費/, /回饋/])) return 'income'
   return 'expense'
 }
@@ -637,28 +753,33 @@ function shouldTreatAsTransfer(text, accounts) {
   const hasDirectionalPhrase = includesAny(source, [
     /(從|由|自)\s*\S{0,16}\s*(到|至|給)/,
     /(由)\s*\S{0,16}\s*(轉給|轉到|匯給|匯到)/,
-    /(轉|匯|挪|撥)\s*\S{0,18}\s*(到|至|給|入)/,
-    /(到|至|給)\s*\S{0,18}\s*(轉|匯|挪|撥)/,
+    /(轉|轉錢|轉款|匯|汇|挪|撥|拨|搬|移)\s*\S{0,18}\s*(到|至|給|入)/,
+    /(到|至|給)\s*\S{0,18}\s*(轉|轉錢|轉款|匯|汇|挪|撥|拨|搬|移)/,
+    /(帳戶|账户)\s*\S{0,18}\s*(互轉|互转)/,
     /→|->|=>|➡/,
   ])
   const hasTransferAction = includesAny(source, [
-    /轉帳/,
-    /轉給/,
-    /轉去/,
-    /轉到/,
-    /轉入/,
-    /轉出/,
-    /匯給/,
-    /匯到/,
-    /匯入/,
-    /匯出/,
-    /匯款/,
-    /轉來/,
-    /挪到/,
-    /挪去/,
-    /調撥/,
-    /移轉/,
-    /過戶/,
+    /轉帳|转账/,
+    /轉給|转给/,
+    /轉去|转去/,
+    /轉到|转到/,
+    /轉入|转入/,
+    /轉出|转出/,
+    /轉錢|转钱/,
+    /轉款|转款/,
+    /匯給|汇给/,
+    /匯到|汇到/,
+    /匯入|汇入/,
+    /匯出|汇出/,
+    /匯款|汇款/,
+    /打款|打錢|打钱/,
+    /轉來|转来/,
+    /挪到|挪去|挪錢|挪钱|挪款/,
+    /撥款|拨款|撥轉|拨转|調撥|调拨/,
+    /搬錢|搬钱|搬款/,
+    /移轉|过户|過戶/,
+    /內轉|内转|互轉|互转/,
+    /帳戶互轉|账户互转/,
   ])
 
   let hasBridgeBetweenMatchedAccounts = false
@@ -675,7 +796,7 @@ function shouldTreatAsTransfer(text, accounts) {
       if (!Number.isFinite(leftEnd) || !Number.isFinite(rightStart) || rightStart <= leftEnd) continue
 
       const bridge = compact.slice(leftEnd, rightStart)
-      if (/轉|匯|到|至|給|→|->|=>|➡|挪|撥|移/.test(bridge)) {
+      if (/轉|匯|汇|到|至|給|→|->|=>|➡|挪|撥|拨|移|搬/.test(bridge)) {
         hasBridgeBetweenMatchedAccounts = true
         break
       }

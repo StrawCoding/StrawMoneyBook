@@ -182,8 +182,14 @@ async function uploadJsonToWebdav(state, filename, payloadText) {
 async function requestWebdav(url, options = {}) {
   const timeoutMs = Math.max(1000, Number(options.timeoutMs ?? WEBDAV_REQUEST_TIMEOUT_MS) || WEBDAV_REQUEST_TIMEOUT_MS)
   if (Capacitor.isNativePlatform()) {
+    let nativeTimeoutId = 0
     try {
       const method = String(options.method ?? 'GET').toUpperCase()
+      const timeoutPromise = new Promise((_, reject) => {
+        nativeTimeoutId = globalThis.setTimeout(() => {
+          reject(new Error('request timeout'))
+        }, timeoutMs)
+      })
       const response = await Promise.race([
         CapacitorHttp.request({
           url,
@@ -191,11 +197,7 @@ async function requestWebdav(url, options = {}) {
           headers: options.headers ?? {},
           data: options.body ?? undefined,
         }),
-        new Promise((_, reject) => {
-          globalThis.setTimeout(() => {
-            reject(new Error('request timeout'))
-          }, timeoutMs)
-        }),
+        timeoutPromise,
       ])
       const status = Number(response?.status ?? 0)
       const dataText =
@@ -218,6 +220,8 @@ async function requestWebdav(url, options = {}) {
         throw new Error(`WebDAV 連線逾時（${timeoutMs}ms），請稍後再試`)
       }
       throw new Error(`WebDAV 連線失敗：${message || '原生網路錯誤'}`)
+    } finally {
+      if (nativeTimeoutId) globalThis.clearTimeout(nativeTimeoutId)
     }
   }
 
@@ -321,6 +325,8 @@ export async function disconnectWebdavBackup(ledgerId) {
   assertLedgerId(ledgerId)
   return updateWebdavBackupState(ledgerId, {
     connected: false,
+    username: '',
+    password: '',
     autoEnabled: false,
     lastBackupFilename: '',
     lastError: '',

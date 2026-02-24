@@ -131,13 +131,15 @@ export function subscribeTransactionFailureTrace(listener, { emitCurrent = true 
 }
 
 function assertNonNegativeAmount(amountMinor) {
-  if (!Number.isFinite(Number(amountMinor)) || Number(amountMinor) < 0) {
+  const amount = Number(amountMinor)
+  if (!Number.isInteger(amount) || amount < 0) {
     throw new Error('amountMinor 必須為大於或等於 0 的數字')
   }
 }
 
 function assertPositiveAmount(amountMinor) {
-  if (!Number.isFinite(Number(amountMinor)) || Number(amountMinor) <= 0) {
+  const amount = Number(amountMinor)
+  if (!Number.isInteger(amount) || amount <= 0) {
     throw new Error('amountMinor 必須為大於 0 的數字')
   }
 }
