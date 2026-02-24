@@ -232,7 +232,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave } from 'vue-router'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
-import { parseAutoBookkeepingText } from '@/core/services/ai-bookkeeping.service'
+import { getAiBookkeepingWarningFallback, parseAutoBookkeepingText } from '@/core/services/ai-bookkeeping.service'
 import { assertCanUseAiBookkeeping, recordAiBookkeepingUsage } from '@/core/services/membership.service'
 import { useSpeechInput } from '@/ui/composables/use-speech-input'
 import { useAccountStore } from '@/ui/stores/account.store'
@@ -265,7 +265,7 @@ const uiStore = useUiStore()
 const loanStore = useLoanStore()
 const budgetStore = useBudgetStore()
 const ledgerStore = useLedgerStore()
-const { locale } = useI18n()
+const { locale, t } = useI18n()
 
 const sourceText = ref('')
 const warnings = ref([])
@@ -287,9 +287,9 @@ const {
 
 const showAiStatus = computed(() => speechListening.value || parsing.value || submitting.value)
 const aiStatusText = computed(() => {
-  if (submitting.value) return 'AI 建立交易中...'
-  if (parsing.value) return 'AI 解析中...'
-  if (speechListening.value) return 'AI 聆聽中...'
+  if (submitting.value) return t('ai_bookkeeping.status.creating', 'AI 建立交易中...')
+  if (parsing.value) return t('ai_bookkeeping.status.parsing', 'AI 解析中...')
+  if (speechListening.value) return t('ai_bookkeeping.status.listening', 'AI 聆聽中...')
   return ''
 })
 const speechLanguage = computed(() => (locale.value === 'en' ? 'en-US' : 'zh-TW'))
@@ -437,12 +437,15 @@ async function parseText(options = {}) {
       now: new Date(),
     })
 
-    warnings.value = result.warnings ?? []
+    warnings.value = resolveAiParserWarnings(result)
 
     if (!result.draft) {
       hasDraft.value = false
       latestLoanIntent.value = null
-      uiStore.pushToast(warnings.value[0] || '我沒有抓到可用交易資訊，請再描述一次', 'error')
+      uiStore.pushToast(
+        warnings.value[0] || t('ai_bookkeeping.warning.no_draft', '我沒有抓到可用交易資訊，請再描述一次'),
+        'error',
+      )
       return
     }
 
@@ -683,6 +686,18 @@ function waitFor(delayMs) {
   return new Promise((resolve) => {
     setTimeout(resolve, delayMs)
   })
+}
+
+function resolveAiParserWarnings(result) {
+  const warningKeys = Array.isArray(result?.warningKeys) ? result.warningKeys : []
+  if (warningKeys.length) {
+    return warningKeys.map((key, index) => {
+      const fallbackByKey = getAiBookkeepingWarningFallback(key)
+      const fallbackByPayload = String(result?.warnings?.[index] ?? '').trim()
+      return t(key, fallbackByPayload || fallbackByKey || key)
+    })
+  }
+  return (result?.warnings ?? []).map((warning) => t(warning, warning))
 }
 
 onBeforeRouteLeave((_to, _from, next) => {

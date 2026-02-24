@@ -376,11 +376,12 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
-import { parseAutoBookkeepingText } from '@/core/services/ai-bookkeeping.service'
+import { getAiBookkeepingWarningFallback, parseAutoBookkeepingText } from '@/core/services/ai-bookkeeping.service'
 import { assertCanUseAiBookkeeping, recordAiBookkeepingUsage } from '@/core/services/membership.service'
 import { mergeAddonItemsToNote } from '@/ui/utils/addon-note'
 import { useSpeechInput } from '@/ui/composables/use-speech-input'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
+import { useI18n } from '@/ui/services/i18n.service'
 import {
   convertAmountMinorByRate,
   getExchangeRateSnapshot,
@@ -422,6 +423,7 @@ const budgetStore = useBudgetStore()
 const loanStore = useLoanStore()
 const ledgerStore = useLedgerStore()
 const addonTemplateStore = useAddonTemplateStore()
+const { t } = useI18n()
 
 const types = [
   { value: 'expense', label: '支出' },
@@ -762,9 +764,10 @@ async function parseWithAi() {
     incomeCategories: categoryStore.incomeCategories,
     now: new Date(),
   })
+  const warnings = resolveAiParserWarnings(result)
 
   if (!result.draft) {
-    const warningText = result.warnings[0] ?? '我沒有抓到可用交易資訊，請再描述一次'
+    const warningText = warnings[0] ?? t('ai_bookkeeping.warning.no_draft', '我沒有抓到可用交易資訊，請再描述一次')
     pushAiMessage('assistant', warningText)
     uiStore.pushToast(warningText, 'error')
     aiInput.value = ''
@@ -873,6 +876,18 @@ function pushAiMessage(role, text) {
     role: role === 'user' ? 'user' : 'assistant',
     text: content,
   })
+}
+
+function resolveAiParserWarnings(result) {
+  const warningKeys = Array.isArray(result?.warningKeys) ? result.warningKeys : []
+  if (warningKeys.length) {
+    return warningKeys.map((key, index) => {
+      const fallbackByKey = getAiBookkeepingWarningFallback(key)
+      const fallbackByPayload = String(result?.warnings?.[index] ?? '').trim()
+      return t(key, fallbackByPayload || fallbackByKey || key)
+    })
+  }
+  return (result?.warnings ?? []).map((warning) => t(warning, warning))
 }
 
 function goEditCreatedTransaction() {

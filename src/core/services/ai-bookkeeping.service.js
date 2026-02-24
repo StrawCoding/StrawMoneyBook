@@ -1,3 +1,37 @@
+import { extractTinyNerHints } from '@/core/services/ai-bookkeeping-tiny-ner.service'
+
+export const AI_BOOKKEEPING_WARNING_KEY = Object.freeze({
+  EMPTY_INPUT: 'ai_bookkeeping.warning.empty_input',
+  INVALID_AMOUNT: 'ai_bookkeeping.warning.invalid_amount',
+  TRANSFER_ACCOUNTS_INSUFFICIENT: 'ai_bookkeeping.warning.transfer_accounts_insufficient',
+  NO_ACCOUNT: 'ai_bookkeeping.warning.no_account',
+  NO_CATEGORY: 'ai_bookkeeping.warning.no_category',
+  NO_COUNTERPARTY: 'ai_bookkeeping.warning.no_counterparty',
+})
+
+const AI_BOOKKEEPING_WARNING_FALLBACKS = Object.freeze({
+  [AI_BOOKKEEPING_WARNING_KEY.EMPTY_INPUT]: '請輸入要解析的內容',
+  [AI_BOOKKEEPING_WARNING_KEY.INVALID_AMOUNT]: '找不到有效金額，請手動輸入',
+  [AI_BOOKKEEPING_WARNING_KEY.TRANSFER_ACCOUNTS_INSUFFICIENT]: '轉帳帳戶不足，請手動選擇轉出/轉入帳戶',
+  [AI_BOOKKEEPING_WARNING_KEY.NO_ACCOUNT]: '找不到可用帳戶，請先建立帳戶',
+  [AI_BOOKKEEPING_WARNING_KEY.NO_CATEGORY]: '沒有分類，請在設定中新增後再試',
+  [AI_BOOKKEEPING_WARNING_KEY.NO_COUNTERPARTY]: '沒有辨識到借貸對象，請補上名字',
+})
+
+export function getAiBookkeepingWarningFallback(key) {
+  const normalizedKey = String(key ?? '').trim()
+  if (!normalizedKey) return ''
+  return AI_BOOKKEEPING_WARNING_FALLBACKS[normalizedKey] ?? normalizedKey
+}
+
+function appendAiBookkeepingWarning(warnings, warningKeys, key) {
+  const normalizedKey = String(key ?? '').trim()
+  if (!normalizedKey) return
+  if (warningKeys.includes(normalizedKey)) return
+  warningKeys.push(normalizedKey)
+  warnings.push(getAiBookkeepingWarningFallback(normalizedKey))
+}
+
 function normalizeText(value) {
   return String(value ?? '')
     .replace(/[，、]/g, ' ')
@@ -824,21 +858,63 @@ function normalizeIncludeFlag(text, key, fallback) {
   return fallback
 }
 
+const EMPTY_TINY_NER_HINTS = {
+  typeHint: '',
+  typeConfidence: 0,
+  amountMajor: NaN,
+  amountConfidence: 0,
+  accountIdHint: '',
+  accountConfidence: 0,
+  fromAccountIdHint: '',
+  fromAccountConfidence: 0,
+  toAccountIdHint: '',
+  toAccountConfidence: 0,
+  expenseCategoryIdHint: '',
+  expenseCategoryConfidence: 0,
+  incomeCategoryIdHint: '',
+  incomeCategoryConfidence: 0,
+  counterpartyNameHint: '',
+  counterpartyConfidence: 0,
+}
+
 export function parseAutoBookkeepingText(input, context = {}) {
   const text = normalizeText(input)
   if (!text) {
+    const warningKey = AI_BOOKKEEPING_WARNING_KEY.EMPTY_INPUT
     return {
       draft: null,
-      warnings: ['請輸入要解析的內容'],
+      warnings: [getAiBookkeepingWarningFallback(warningKey)],
+      warningKeys: [warningKey],
     }
   }
 
   const accounts = context.accounts ?? []
   const expenseCategories = context.expenseCategories ?? []
   const incomeCategories = context.incomeCategories ?? []
+  const warningKeys = []
+  const tinyNerHints = context.useTinyNer === false
+    ? EMPTY_TINY_NER_HINTS
+    : extractTinyNerHints(text, {
+      accounts,
+      expenseCategories,
+      incomeCategories,
+    })
   const warnings = []
-  const rawType = normalizeType(text)
-  const loanIntent = detectLoanIntent(text)
+  const rawType = Number(tinyNerHints.typeConfidence) >= 0.62 && tinyNerHints.typeHint
+    ? tinyNerHints.typeHint
+    : normalizeType(text)
+  let loanIntent = detectLoanIntent(text)
+  if (
+    loanIntent
+    && !loanIntent.counterpartyName
+    && Number(tinyNerHints.counterpartyConfidence) >= 0.6
+    && tinyNerHints.counterpartyNameHint
+  ) {
+    loanIntent = {
+      ...loanIntent,
+      counterpartyName: tinyNerHints.counterpartyNameHint,
+    }
+  }
   const inferredType = loanIntent
     ? resolveTypeByLoanIntent(rawType, loanIntent)
     : rawType === 'transfer' || shouldTreatAsTransfer(text, accounts)
@@ -855,9 +931,21 @@ export function parseAutoBookkeepingText(input, context = {}) {
   } else {
     amountMajor = parseAmountMajor(text)
   }
+  const nerAmountMajor = Number(tinyNerHints.amountMajor)
+  const nerAmountConfidence = Number(tinyNerHints.amountConfidence)
+  const canUseNerAmount = Number.isFinite(nerAmountMajor) && nerAmountMajor > 0
+  if ((!Number.isFinite(amountMajor) || amountMajor <= 0) && canUseNerAmount) {
+    amountMajor = nerAmountMajor
+  } else if (
+    parsedAddon.items.length === 0
+    && canUseNerAmount
+    && nerAmountConfidence >= 0.88
+  ) {
+    amountMajor = nerAmountMajor
+  }
 
   if (!Number.isFinite(amountMajor) || amountMajor <= 0) {
-    warnings.push('找不到有效金額，請手動輸入')
+    appendAiBookkeepingWarning(warnings, warningKeys, AI_BOOKKEEPING_WARNING_KEY.INVALID_AMOUNT)
   }
 
   const occurredAt = parseDateTimeFromText(text, context.now ?? new Date())
@@ -867,11 +955,17 @@ export function parseAutoBookkeepingText(input, context = {}) {
   const mealExpenseCategory = pickMealTimeCategory(text, expenseCategories)
   const semanticExpenseCategory = pickCategoryBySemanticRules(text, expenseCategories, EXPENSE_CATEGORY_SEMANTIC_RULES)
   const semanticIncomeCategory = pickCategoryBySemanticRules(text, incomeCategories, INCOME_CATEGORY_SEMANTIC_RULES)
+  const nerExpenseCategory = Number(tinyNerHints.expenseCategoryConfidence) >= 0.68
+    ? expenseCategories.find((item) => item.id === tinyNerHints.expenseCategoryIdHint) ?? null
+    : null
+  const nerIncomeCategory = Number(tinyNerHints.incomeCategoryConfidence) >= 0.68
+    ? incomeCategories.find((item) => item.id === tinyNerHints.incomeCategoryIdHint) ?? null
+    : null
 
   let type = inferredType
   if (type !== 'transfer' && !loanIntent) {
-    const hasExpenseSignal = Boolean(matchedExpenseCategory || semanticExpenseCategory)
-    const hasIncomeSignal = Boolean(matchedIncomeCategory || semanticIncomeCategory)
+    const hasExpenseSignal = Boolean(matchedExpenseCategory || semanticExpenseCategory || nerExpenseCategory)
+    const hasIncomeSignal = Boolean(matchedIncomeCategory || semanticIncomeCategory || nerIncomeCategory)
     if (hasExpenseSignal && !hasIncomeSignal) type = 'expense'
     if (hasIncomeSignal && !hasExpenseSignal) type = 'income'
   }
@@ -879,17 +973,33 @@ export function parseAutoBookkeepingText(input, context = {}) {
   let accountId = ''
   let peerAccountId = ''
   if (type === 'transfer') {
+    const nerFromAccountId = Number(tinyNerHints.fromAccountConfidence) >= 0.6
+      ? tinyNerHints.fromAccountIdHint
+      : ''
+    const nerToAccountId = Number(tinyNerHints.toAccountConfidence) >= 0.6
+      ? tinyNerHints.toAccountIdHint
+      : ''
     const transferAccounts = pickTransferAccounts(text, accounts)
-    accountId = transferAccounts.fromAccountId || accounts[0]?.id || ''
-    peerAccountId = transferAccounts.toAccountId || accounts.find((item) => item.id !== accountId)?.id || ''
+    accountId = nerFromAccountId || transferAccounts.fromAccountId || accounts[0]?.id || ''
+    peerAccountId = nerToAccountId || transferAccounts.toAccountId || accounts.find((item) => item.id !== accountId)?.id || ''
+
+    if (accountId && peerAccountId && accountId === peerAccountId) {
+      peerAccountId =
+        transferAccounts.toAccountId && transferAccounts.toAccountId !== accountId
+          ? transferAccounts.toAccountId
+          : accounts.find((item) => item.id !== accountId)?.id || ''
+    }
 
     if (!accountId || !peerAccountId || accountId === peerAccountId) {
-      warnings.push('轉帳帳戶不足，請手動選擇轉出/轉入帳戶')
+      appendAiBookkeepingWarning(warnings, warningKeys, AI_BOOKKEEPING_WARNING_KEY.TRANSFER_ACCOUNTS_INSUFFICIENT)
     }
   } else {
-    accountId = pickClosestAccount(text, accounts)?.id ?? accounts[0]?.id ?? ''
+    const nerAccountId = Number(tinyNerHints.accountConfidence) >= 0.62
+      ? tinyNerHints.accountIdHint
+      : ''
+    accountId = nerAccountId || (pickClosestAccount(text, accounts)?.id ?? accounts[0]?.id ?? '')
     if (!accountId) {
-      warnings.push('找不到可用帳戶，請先建立帳戶')
+      appendAiBookkeepingWarning(warnings, warningKeys, AI_BOOKKEEPING_WARNING_KEY.NO_ACCOUNT)
     }
   }
 
@@ -898,6 +1008,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
   if (type !== 'transfer' && !loanIntent) {
     if (type === 'income') {
       const selectedIncomeCategory =
+        nerIncomeCategory ??
         semanticIncomeCategory ??
         matchedIncomeCategory ??
         null
@@ -905,6 +1016,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
       selectedCategoryName = String(selectedIncomeCategory?.name ?? '')
     } else {
       const selectedExpenseCategory =
+        nerExpenseCategory ??
         mealExpenseCategory ??
         semanticExpenseCategory ??
         matchedExpenseCategory ??
@@ -914,12 +1026,12 @@ export function parseAutoBookkeepingText(input, context = {}) {
     }
 
     if (!categoryId) {
-      warnings.push('沒有分類，請在設定中新增後再試')
+      appendAiBookkeepingWarning(warnings, warningKeys, AI_BOOKKEEPING_WARNING_KEY.NO_CATEGORY)
     }
   }
 
   if (loanIntent && !loanIntent.counterpartyName) {
-    warnings.push('沒有辨識到借貸對象，請補上名字')
+    appendAiBookkeepingWarning(warnings, warningKeys, AI_BOOKKEEPING_WARNING_KEY.NO_COUNTERPARTY)
   }
 
   const isReimbursable = type === 'expense' ? normalizeReimbursable(text, false) : false
@@ -965,5 +1077,6 @@ export function parseAutoBookkeepingText(input, context = {}) {
       amountMinor: toMinor(draft.amountMajor),
     },
     warnings,
+    warningKeys,
   }
 }
