@@ -39,7 +39,14 @@
             </span>
           </label>
 
-          <div class="entry-body">
+          <div
+            class="entry-body"
+            role="button"
+            tabindex="0"
+            @click="openTransactionAbout(tx)"
+            @keydown.enter.prevent="openTransactionAbout(tx)"
+            @keydown.space.prevent="openTransactionAbout(tx)"
+          >
             <div class="row entry-head">
               <div class="entry-category">
                 <span class="tx-icon-col">
@@ -168,7 +175,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Capacitor } from '@capacitor/core'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
@@ -193,6 +200,7 @@ const categoryStore = useCategoryStore()
 const uiStore = useUiStore()
 const ledgerStore = useLedgerStore()
 const route = useRoute()
+const router = useRouter()
 
 const tab = ref(route.query.tab === 'reimbursed' ? 'reimbursed' : 'pending')
 const isSettleOpen = ref(false)
@@ -305,6 +313,11 @@ function categoryIconOfTx(tx) {
   }
 
   return ''
+}
+
+function openTransactionAbout(tx) {
+  if (!tx?.id) return
+  void router.push({ name: 'transaction-about', params: { id: tx.id } })
 }
 
 function openActionSheet() {
@@ -721,7 +734,14 @@ h2 {
   border-radius: 10px;
   padding: 10px;
   display: grid;
-  gap: 8px
+  gap: 8px;
+  cursor: pointer;
+  transition: border-color var(--anim-fast) ease, box-shadow var(--anim-fast) ease
+}
+.entry-body:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 24%, transparent)
 }
 .entry-head {
   align-items: center;

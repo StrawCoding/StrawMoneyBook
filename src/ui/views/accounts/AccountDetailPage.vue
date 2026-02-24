@@ -95,11 +95,11 @@
                 <font-awesome-icon v-if="categoryIconOfTransaction(tx)" :icon="categoryIconOfTransaction(tx)" class="tx-icon" />
               </div>
               <div class="tx-main">
-                <div class="tx-type">{{ labelOfTransaction(tx) }}</div>
-                <div class="tx-meta-row">
-                  <small class="muted">{{ formatTime(tx.occurred_at) }}</small>
-                </div>
+              <div class="tx-type">{{ labelOfTransaction(tx) }}</div>
+              <div class="tx-meta-row">
+                  <small class="muted">{{ timeNoteText(tx) }}</small>
               </div>
+            </div>
               <div class="tx-side">
                 <MoneyText :value-minor="tx.amount_minor" :currency="tx.account_currency_code" :tone="tx.type" />
                 <small class="tx-balance">
@@ -470,6 +470,11 @@ function formatTime(iso) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function timeNoteText(tx) {
+  const note = String(tx?.note ?? '').trim() || '-'
+  return `${formatTime(tx?.occurred_at)} ${note}`
 }
 
 function dateKeyOf(iso) {

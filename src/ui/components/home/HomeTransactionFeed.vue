@@ -38,7 +38,7 @@
               <div class="tx-type">
                 <span>{{ labelOfTransaction(tx) }}</span>
               </div>
-              <small class="muted">{{ formatTime(tx.occurred_at) }}</small>
+              <small class="muted">{{ timeNoteText(tx) }}</small>
             </div>
             <div class="tx-side">
               <div class="amount-line">
@@ -204,6 +204,11 @@ function formatTime(iso) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function timeNoteText(tx) {
+  const note = String(tx?.note ?? '').trim() || '-'
+  return `${formatTime(tx?.occurred_at)} ${note}`
 }
 
 function addonDeltaMajor(note) {
