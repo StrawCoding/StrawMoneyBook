@@ -130,12 +130,15 @@ import { runWebdavAutoBackupIfDue, runWebdavAutoBackupOnDataChange } from '@/ui/
 import { runExchangeRateAutoSyncIfDue } from '@/ui/services/exchange-rate.service'
 import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
-import { initLocalePreference } from '@/ui/services/i18n.service'
+import { getCurrentLocale, initLocalePreference } from '@/ui/services/i18n.service'
+import { canNavigateBackInApp, resolveBackFallback, shouldConfirmExit } from '@/ui/services/navigation-back.service'
 import '@/ui/assets/css/global.css'
 
 const DATA_CHANGE_BACKUP_DEBOUNCE_MS = 15000
+const BACK_EXIT_CONFIRM_WINDOW_MS = 1600
 let dataChangeBackupTimer = null
 let dataChangeBackupRunning = false
+let lastAndroidBackPressedAt = 0
 
 function scheduleAutoBackupOnDataChange(pinia) {
   if (typeof window === 'undefined') return
@@ -319,6 +322,13 @@ function scheduleMembershipWarmup(reason) {
   run()
 }
 
+function androidExitHintMessage() {
+  const locale = String(getCurrentLocale() ?? '')
+  if (locale === 'en') return 'Press back again to exit'
+  if (locale === 'ja') return 'もう一度戻ると終了します'
+  return '再按一次返回鍵離開 App'
+}
+
 async function main() {
   loadThemeColor()
   initLocalePreference()
@@ -332,17 +342,37 @@ async function main() {
   app.mount('#app')
 
   if (Capacitor.getPlatform() === 'android') {
-    CapacitorApp.addListener('backButton', async ({ canGoBack }) => {
+    CapacitorApp.addListener('backButton', async () => {
       const overlayCloseEvent = new Event('app:request-close-overlay', { cancelable: true })
       window.dispatchEvent(overlayCloseEvent)
       if (overlayCloseEvent.defaultPrevented) {
         return
       }
 
-      if (canGoBack && router.currentRoute.value.path !== '/') {
+      const currentPath = String(router.currentRoute.value.path ?? '/')
+
+      if (canNavigateBackInApp(currentPath)) {
         await router.back()
         return
       }
+
+      const fallbackPath = resolveBackFallback(currentPath)
+      if (fallbackPath !== currentPath) {
+        await router.replace(fallbackPath)
+        return
+      }
+
+      if (shouldConfirmExit(currentPath)) {
+        const now = Date.now()
+        if (now - lastAndroidBackPressedAt <= BACK_EXIT_CONFIRM_WINDOW_MS) {
+          await CapacitorApp.exitApp()
+          return
+        }
+        lastAndroidBackPressedAt = now
+        useUiStore(pinia).pushToast(androidExitHintMessage(), 'info')
+        return
+      }
+
       await CapacitorApp.exitApp()
     })
 

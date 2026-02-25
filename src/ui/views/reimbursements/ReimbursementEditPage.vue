@@ -53,6 +53,7 @@ import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
+import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -105,11 +106,7 @@ function formatTime(iso) {
 }
 
 function goBack() {
-  if (window.history.length > 1) {
-    router.back()
-    return
-  }
-  void router.push(backLink.value)
+  void goBackOrFallback(router, backLink.value)
 }
 
 async function save() {

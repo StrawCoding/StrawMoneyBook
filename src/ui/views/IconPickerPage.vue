@@ -31,6 +31,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { accountIconOptions, categoryIconOptions, normalizeFaIcon } from '@/ui/utils/fa-icon-options'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useUiStore } from '@/ui/stores/ui.store'
+import { canNavigateBackInApp } from '@/ui/services/navigation-back.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -101,8 +102,8 @@ async function pick(icon) {
 }
 
 function goBack() {
-  if (window.history.length > 1) {
-    router.back()
+  if (canNavigateBackInApp(route.fullPath)) {
+    void router.back()
     return
   }
 

@@ -212,7 +212,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
@@ -303,9 +303,14 @@ const summaryLabel = computed(() => {
 })
 
 onMounted(() => {
+  window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
   syncTabFromRoute(route.query.tab)
   syncFinishedFromRoute(route.query.finished)
   void Promise.all([loanStore.load(), accountStore.load()])
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
 })
 
 watch(
@@ -490,6 +495,18 @@ function closeConfirmDialog() {
   if (confirmDialog.loading) return
   confirmDialog.open = false
   confirmDialog.loanId = ''
+}
+
+function onRequestCloseOverlay(event) {
+  if (repayOpen.value) {
+    closeRepaySheet()
+    event.preventDefault()
+    return
+  }
+  if (createOpen.value) {
+    closeCreateSheet()
+    event.preventDefault()
+  }
 }
 
 async function confirmDialogAction() {

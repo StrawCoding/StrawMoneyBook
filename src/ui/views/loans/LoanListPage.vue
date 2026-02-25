@@ -3,7 +3,10 @@
     <article class="card panel summary">
       <header class="row">
         <h2>借貸清單</h2>
-        <button class="btn primary" @click="openCreateSheet">新增借貸</button>
+        <div class="row head-actions">
+          <button class="btn primary" @click="openCreateSheet">新增借貸</button>
+          <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
+        </div>
       </header>
       <div class="row">
         <span class="muted">進行中</span>
@@ -130,8 +133,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
@@ -140,6 +143,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
+import { useI18n } from '@/ui/services/i18n.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -148,6 +152,7 @@ const accountStore = useAccountStore()
 const uiStore = useUiStore()
 const transactionStore = useTransactionStore()
 const budgetStore = useBudgetStore()
+const { t } = useI18n()
 
 const createOpen = ref(false)
 const tab = ref('lend')
@@ -202,7 +207,12 @@ const counterpartyGroups = computed(() => {
 onMounted(() => {
   syncTabFromRoute(route.query.tab)
   syncFinishedFromRoute(route.query.finished)
+  window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
   loanStore.load()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
 })
 
 watch(
@@ -261,6 +271,12 @@ function openCreateSheet() {
 
 function closeCreateSheet() {
   createOpen.value = false
+}
+
+function onRequestCloseOverlay(event) {
+  if (!createOpen.value) return
+  closeCreateSheet()
+  event.preventDefault()
 }
 
 function pickCreateStartDate(value) {
@@ -340,6 +356,10 @@ h2, h3 {
 .summary {
   display: grid;
   gap: 8px
+}
+.head-actions {
+  align-items: center;
+  gap: 8px;
 }
 .counterparty-list {
   list-style: none;

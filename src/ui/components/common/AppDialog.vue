@@ -69,9 +69,10 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'confirm'])
 
-function onRequestCloseOverlay() {
+function onRequestCloseOverlay(event) {
   if (!props.open) return
   emit('close')
+  event.preventDefault()
 }
 
 onMounted(() => {

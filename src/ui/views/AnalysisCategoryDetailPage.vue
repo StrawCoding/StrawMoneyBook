@@ -83,6 +83,7 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { listAllTransactions, listTransactionsByMonth, listTransactionsByYear } from '@/core/repositories/transaction.repo'
 import { useI18n } from '@/ui/services/i18n.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
+import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -220,11 +221,7 @@ async function ensureReferenceData(ledgerId) {
 }
 
 function goBack() {
-  if (window.history.length > 1) {
-    router.back()
-    return
-  }
-  void router.push({ name: 'analysis' })
+  void goBackOrFallback(router, { name: 'analysis' })
 }
 
 function openTransaction(tx) {

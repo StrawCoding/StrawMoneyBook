@@ -174,28 +174,33 @@ const router = createRouter({
       name: 'loans',
       path: '/loans',
       component: () => import('@/ui/views/loans/LoanListPage.vue'),
+      meta: { tab: 'home' },
     },
     {
       name: 'loan-counterparty-detail',
       path: '/loans/counterparty',
       component: () => import('@/ui/views/loans/LoanCounterpartyDetailPage.vue'),
+      meta: { tab: 'home' },
     },
     {
       name: 'loan-detail',
       path: '/loans/:id',
       component: () => import('@/ui/views/loans/LoanDetailPage.vue'),
       props: true,
+      meta: { tab: 'home' },
     },
     {
       name: 'reimbursements',
       path: '/reimbursements',
       component: () => import('@/ui/views/reimbursements/ReimbursementListPage.vue'),
+      meta: { tab: 'home' },
     },
     {
       name: 'reimbursement-edit',
       path: '/reimbursements/:id/edit',
       component: () => import('@/ui/views/reimbursements/ReimbursementEditPage.vue'),
       props: true,
+      meta: { tab: 'home' },
     },
     {
       name: 'account-detail',

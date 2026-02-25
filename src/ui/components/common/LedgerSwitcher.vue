@@ -109,16 +109,24 @@ function onWindowResizeOrScroll() {
   updateMenuPosition()
 }
 
+function onRequestCloseOverlay(event) {
+  if (!isOpen.value) return
+  isOpen.value = false
+  event.preventDefault()
+}
+
 onMounted(() => {
   window.addEventListener('click', onWindowClick)
   window.addEventListener('resize', onWindowResizeOrScroll)
   window.addEventListener('scroll', onWindowResizeOrScroll, true)
+  window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('click', onWindowClick)
   window.removeEventListener('resize', onWindowResizeOrScroll)
   window.removeEventListener('scroll', onWindowResizeOrScroll, true)
+  window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
 })
 
 watch(

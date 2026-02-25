@@ -86,7 +86,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
   open: {
@@ -232,6 +232,25 @@ function onSave() {
     amountMinor: Math.round(Number(model.amountMajor ?? 0) * 100),
   })
 }
+
+function onRequestCloseOverlay(event) {
+  if (!props.open) return
+  if (showCategoryPicker.value) {
+    closeCategoryPicker()
+    event.preventDefault()
+    return
+  }
+  emit('close')
+  event.preventDefault()
+}
+
+onMounted(() => {
+  window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
+})
 </script>
 
 <style scoped>.sheet-mask {

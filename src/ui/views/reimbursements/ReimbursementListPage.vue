@@ -3,6 +3,7 @@
     <article class="card panel summary">
       <header class="row">
         <h2>報銷統整</h2>
+        <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
       </header>
       <div class="row">
         <span class="muted">未報銷金額</span>
@@ -175,7 +176,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Capacitor } from '@capacitor/core'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
@@ -185,6 +186,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { isFreeTier } from '@/core/services/membership.service'
+import { useI18n } from '@/ui/services/i18n.service'
 import {
   createCsvBlobUrl,
   openFileUrl,
@@ -201,6 +203,7 @@ const uiStore = useUiStore()
 const ledgerStore = useLedgerStore()
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 
 const tab = ref(route.query.tab === 'reimbursed' ? 'reimbursed' : 'pending')
 const isSettleOpen = ref(false)
@@ -272,6 +275,7 @@ onMounted(() => {
   ]).then(() => {
     pruneSelectedIds()
   })
+  window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
 })
 
 watch(
@@ -681,12 +685,25 @@ async function markVoidSelected() {
 }
 
 onBeforeUnmount(() => {
+  window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
   revokeBlobUrl(exportedUrl.value)
 })
 
 watch(tab, () => {
   closeActionSheet()
 })
+
+function onRequestCloseOverlay(event) {
+  if (isSettleOpen.value) {
+    closeSettle()
+    event.preventDefault()
+    return
+  }
+  if (isActionSheetOpen.value) {
+    closeActionSheet()
+    event.preventDefault()
+  }
+}
 </script>
 
 <style scoped>.panel {

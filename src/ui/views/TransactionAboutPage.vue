@@ -112,6 +112,7 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { listAllTransactions } from '@/core/repositories/transaction.repo'
 import { useI18n } from '@/ui/services/i18n.service'
+import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -254,11 +255,7 @@ async function handleSaved() {
 }
 
 function goBack() {
-  if (window.history.length > 1) {
-    router.back()
-    return
-  }
-  void router.push('/')
+  void goBackOrFallback(router, '/')
 }
 
 function transactionTypeLabel(type) {

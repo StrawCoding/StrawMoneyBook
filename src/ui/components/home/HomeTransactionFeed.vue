@@ -297,7 +297,9 @@ h3 {
   border-radius: 10px;
   background: color-mix(in srgb, var(--card) 90%, transparent);
   cursor: pointer;
-  outline: none
+  outline: none;
+  min-width: 0;
+  overflow: hidden;
 }
 .tx-item:focus, .tx-item:focus-visible {
   outline: none;
@@ -321,15 +323,18 @@ h3 {
   display: grid;
   justify-items: end;
   gap: 2px;
-  flex-shrink: 0;
+  flex-shrink: 1;
   text-align: right;
-  min-width: 104px
+  min-width: 0;
+  max-width: 42%;
 }
 .amount-line {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
 }
 .addon-delta {
   font-size: 12px;
@@ -365,6 +370,8 @@ h3 {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  overflow: hidden;
 }
 .tx-time {
   flex-shrink: 0;
@@ -373,6 +380,7 @@ h3 {
   display: block;
   min-width: 0;
   flex: 1;
+  max-width: 100%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;

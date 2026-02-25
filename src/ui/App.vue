@@ -64,6 +64,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { checkForAppUpdate, openGooglePlayStore } from '@/ui/services/app-update.service'
+import { canNavigateBackInApp } from '@/ui/services/navigation-back.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -141,15 +142,6 @@ function onRequestCheckAppUpdate() {
   void checkAppUpdate({ force: true })
 }
 
-function canNavigateBackInApp() {
-  if (typeof window === 'undefined') return false
-  const state = window.history?.state
-  const back = String(state?.back ?? '').trim()
-  const current = String(state?.current ?? route.fullPath ?? '').trim()
-  if (!back) return false
-  return back !== current
-}
-
 function resolveBackButtonAnchor(event) {
   if (event.defaultPrevented) return null
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return null
@@ -161,9 +153,9 @@ function resolveBackButtonAnchor(event) {
 function onBackButtonAnchorClick(event) {
   const anchor = resolveBackButtonAnchor(event)
   if (!anchor) return
-  if (!canNavigateBackInApp()) return
+  if (!canNavigateBackInApp(route.fullPath)) return
   event.preventDefault()
-  router.back()
+  void router.back()
 }
 
 onMounted(() => {
