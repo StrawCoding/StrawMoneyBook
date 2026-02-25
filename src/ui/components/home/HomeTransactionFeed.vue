@@ -38,7 +38,10 @@
               <div class="tx-type">
                 <span>{{ labelOfTransaction(tx) }}</span>
               </div>
-              <small class="muted">{{ timeNoteText(tx) }}</small>
+              <div class="tx-meta-row muted">
+                <small class="tx-time">{{ formatTime(tx?.occurred_at) }}</small>
+                <small class="tx-note">{{ noteText(tx) }}</small>
+              </div>
             </div>
             <div class="tx-side">
               <div class="amount-line">
@@ -206,9 +209,8 @@ function formatTime(iso) {
   })
 }
 
-function timeNoteText(tx) {
-  const note = String(tx?.note ?? '').trim() || '-'
-  return `${formatTime(tx?.occurred_at)} ${note}`
+function noteText(tx) {
+  return String(tx?.note ?? '').trim() || '-'
 }
 
 function addonDeltaMajor(note) {
@@ -357,11 +359,23 @@ h3 {
   overflow: hidden
 }
 .tx-main .muted {
+  min-width: 0;
+}
+.tx-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tx-time {
+  flex-shrink: 0;
+}
+.tx-note {
   display: block;
   min-width: 0;
+  flex: 1;
   overflow: hidden;
   white-space: nowrap;
-  text-overflow: ellipsis
+  text-overflow: ellipsis;
 }
 .tx-account-side {
   max-width: 120px

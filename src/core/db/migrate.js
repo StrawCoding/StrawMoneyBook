@@ -7,6 +7,7 @@ import migration006 from '@/core/db/migrations/006_ledger_sort_order.sql?raw'
 import migration007 from '@/core/db/migrations/007_remove_default_sample_transaction.sql?raw'
 import migration008 from '@/core/db/migrations/008_bank_sync.sql?raw'
 import migration009 from '@/core/db/migrations/009_allow_zero_amount_transaction.sql?raw'
+import migration010 from '@/core/db/migrations/010_account_include_in_assets.sql?raw'
 
 const MIGRATIONS = [
   { version: 1, name: 'init_schema', sql: migration001 },
@@ -18,6 +19,7 @@ const MIGRATIONS = [
   { version: 7, name: 'remove_default_sample_transaction', sql: migration007 },
   { version: 8, name: 'bank_sync', sql: migration008 },
   { version: 9, name: 'allow_zero_amount_transaction', sql: migration009 },
+  { version: 10, name: 'account_include_in_assets', sql: migration010 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'
@@ -45,6 +47,7 @@ const LEGACY_COLUMN_PATCHES = {
     'ALTER TABLE accounts ADD COLUMN group_id TEXT;',
     "ALTER TABLE accounts ADD COLUMN account_type TEXT NOT NULL DEFAULT 'asset';",
     'ALTER TABLE accounts ADD COLUMN allow_negative INTEGER NOT NULL DEFAULT 0;',
+    'ALTER TABLE accounts ADD COLUMN include_in_assets INTEGER NOT NULL DEFAULT 1;',
     'ALTER TABLE accounts ADD COLUMN opening_balance_minor INTEGER NOT NULL DEFAULT 0;',
     "ALTER TABLE accounts ADD COLUMN currency_code TEXT NOT NULL DEFAULT 'TWD';",
     'ALTER TABLE accounts ADD COLUMN icon TEXT;',
@@ -304,6 +307,7 @@ async function patchLegacySchema(db) {
            opening_balance_minor = COALESCE(opening_balance_minor, 0),
            account_type = COALESCE(account_type, 'asset'),
            allow_negative = COALESCE(allow_negative, 0),
+           include_in_assets = COALESCE(include_in_assets, 1),
            currency_code = COALESCE(currency_code, 'TWD'),
            is_archived = COALESCE(is_archived, 0);`,
     )

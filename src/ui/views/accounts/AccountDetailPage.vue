@@ -44,6 +44,14 @@
           預設資金（元，可小數）
           <input v-model="editOpening" class="input" type="number" step="0.01" />
         </label>
+        <div class="field">
+          <span>{{ t('account.include_in_assets_label') }}</span>
+          <label class="inline-check">
+            <input v-model="editIncludeInAssets" type="checkbox" />
+            <span>{{ editIncludeInAssets ? t('account.include_in_assets_on') : t('account.include_in_assets_off') }}</span>
+          </label>
+          <small class="muted">{{ t('account.include_in_assets_hint') }}</small>
+        </div>
         <p v-if="openingInvalid" class="error-text">預設資金格式錯誤</p>
         <div class="row action-row">
           <button class="btn danger" :disabled="deleting" @click="removeAccountRecord">
@@ -61,6 +69,10 @@
           <div class="detail-row">
             <small class="muted">帳戶幣別</small>
             <span>{{ accountCurrencyCode }}</span>
+          </div>
+          <div class="detail-row">
+            <small class="muted">{{ t('account.include_in_assets_label') }}</small>
+            <span>{{ accountIncludeInAssetsLabel }}</span>
           </div>
         </div>
       </template>
@@ -171,6 +183,7 @@ const editGroupId = ref('')
 const editIcon = ref(defaultAccountIcon)
 const editCurrencyCode = ref('TWD')
 const editOpening = ref('0')
+const editIncludeInAssets = ref(true)
 const initializedAccountId = ref('')
 
 const accountId = computed(() => String(route.params.id ?? ''))
@@ -184,6 +197,9 @@ const accountGroupName = computed(() => {
   const groupId = account.value?.group_id
   if (!groupId) return '-'
   return accountStore.groups.find((item) => item.id === groupId)?.name ?? '-'
+})
+const accountIncludeInAssetsLabel = computed(() => {
+  return isAccountIncludedInAssets(account.value) ? t('account.include_in_assets_on') : t('account.include_in_assets_off')
 })
 const openingInvalid = computed(() => !Number.isFinite(Number(editOpening.value)))
 const currentAccountBalanceMinor = computed(() => {
@@ -237,6 +253,7 @@ const canSave = computed(() => {
   const groupId = String(editGroupId.value ?? '').trim()
   const currencyCode = normalizeCurrencyCode(editCurrencyCode.value, 'TWD')
   const openingMajor = Number(editOpening.value)
+  const includeInAssets = Boolean(editIncludeInAssets.value)
   if (!name || !groupId || !Number.isFinite(openingMajor)) return false
   const openingMinorNext = Math.round(openingMajor * 100)
 
@@ -245,7 +262,8 @@ const canSave = computed(() => {
     groupId !== String(account.value.group_id ?? '') ||
     icon !== normalizeFaIcon(account.value.icon, defaultAccountIcon) ||
     currencyCode !== normalizeCurrencyCode(account.value.currency_code, 'TWD') ||
-    openingMinorNext !== Number(account.value.opening_balance_minor ?? 0)
+    openingMinorNext !== Number(account.value.opening_balance_minor ?? 0) ||
+    includeInAssets !== isAccountIncludedInAssets(account.value)
   )
 })
 
@@ -262,6 +280,7 @@ watch(
     editIcon.value = normalizeFaIcon(next.icon, defaultAccountIcon)
     editCurrencyCode.value = normalizeCurrencyCode(next.currency_code, 'TWD')
     editOpening.value = String(Number(next.opening_balance_minor ?? 0) / 100)
+    editIncludeInAssets.value = isAccountIncludedInAssets(next)
     initializedAccountId.value = nextId
   },
   { immediate: true },
@@ -365,6 +384,7 @@ async function saveProfile() {
       icon: nextIcon,
       currencyCode: nextCurrencyCode,
       openingBalanceMinor: nextOpeningBalanceMinor,
+      includeInAssets: editIncludeInAssets.value,
     })
     uiStore.pushToast('帳戶資料已更新')
     await router.push('/assets/accounts')
@@ -499,6 +519,10 @@ function openEdit(tx) {
   if (!tx) return
   void router.push({ name: 'transaction-about', params: { id: tx.id } })
 }
+
+function isAccountIncludedInAssets(value) {
+  return Number(value?.include_in_assets ?? 1) === 1
+}
 </script>
 
 <style scoped>
@@ -532,6 +556,13 @@ h3 {
   gap: 6px;
   font-size: 13px;
   color: var(--muted);
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
 }
 
 .icon-picker-btn {

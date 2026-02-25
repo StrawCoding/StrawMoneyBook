@@ -52,6 +52,14 @@ function normalizeLedgerName(value, fallback = '') {
   return normalizeText(fallback)
 }
 
+function parseBooleanLike(value, fallback = false) {
+  const text = String(value ?? '').trim().toLowerCase()
+  if (!text) return fallback
+  if (['1', 'true', 'yes', 'on'].includes(text)) return true
+  if (['0', 'false', 'no', 'off'].includes(text)) return false
+  return fallback
+}
+
 function normalizeFaIcon(value) {
   const source = String(value ?? '').trim()
   if (!source) return null
@@ -398,10 +406,11 @@ async function importAccountsCsv(ledgerId, rows) {
       groupId: group.id,
       name: accountName,
       accountType: row.account_type?.trim() || 'asset',
-      allowNegative: ['1', 'true', 'yes'].includes((row.allow_negative ?? '').toLowerCase()),
+      allowNegative: parseBooleanLike(row.allow_negative, false),
       openingBalanceMinor: Math.round(Number(row.opening_balance_minor ?? 0)),
       currencyCode: row.currency_code?.trim() || 'TWD',
       icon: normalizeFaIcon(row.icon),
+      includeInAssets: parseBooleanLike(row.include_in_assets ?? row.includeInAssets, true),
       sortOrder: inserted,
     })
 

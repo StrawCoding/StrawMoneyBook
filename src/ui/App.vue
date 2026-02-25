@@ -138,7 +138,7 @@ async function checkAppUpdate(options = {}) {
 }
 
 function onRequestCheckAppUpdate() {
-  void checkAppUpdate()
+  void checkAppUpdate({ force: true })
 }
 
 function canNavigateBackInApp() {

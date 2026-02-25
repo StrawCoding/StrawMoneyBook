@@ -62,6 +62,9 @@
                         </span>
                         <span class="account-text">
                           <span class="account-name">{{ account.name }}</span>
+                          <span v-if="!isAccountIncludedInAssets(account)" class="account-subtitle">
+                            {{ t('assets_page.exclude_from_total') }}
+                          </span>
                         </span>
                       </span>
                     </RouterLink>
@@ -120,6 +123,16 @@
         期初金額（元，可小數）
         <input v-model="accountOpeningInput" class="input" type="number" step="0.01" />
       </label>
+      <div class="field">
+        <span>{{ t('account.include_in_assets_label') }}</span>
+        <label class="inline-check">
+          <input v-model="accountIncludeInAssetsInput" type="checkbox" />
+          <span>
+            {{ accountIncludeInAssetsInput ? t('account.include_in_assets_on') : t('account.include_in_assets_off') }}
+          </span>
+        </label>
+        <small class="muted">{{ t('account.include_in_assets_hint') }}</small>
+      </div>
       <p v-if="accountOpeningInvalid" class="error-text">期初金額格式錯誤</p>
     </AppDialog>
   </section>
@@ -152,6 +165,7 @@ const accountNameInput = ref('')
 const accountOpeningInput = ref('0')
 const accountIconInput = ref(defaultAccountIcon)
 const accountCurrencyCodeInput = ref('TWD')
+const accountIncludeInAssetsInput = ref(true)
 const accountItemsMap = ref({})
 const expandedGroupIds = ref(new Set())
 const expandedInitialized = ref(false)
@@ -175,6 +189,7 @@ watch(
     accountOpeningInput.value = queryText(query.accountOpening) || '0'
     accountIconInput.value = normalizeFaIcon(queryText(query.accountIcon), defaultAccountIcon)
     accountCurrencyCodeInput.value = normalizeCurrencyCode(queryText(query.accountCurrency), 'TWD')
+    accountIncludeInAssetsInput.value = queryBoolean(query.accountIncludeInAssets, true)
     accountDialogOpen.value = true
   },
   { immediate: true },
@@ -224,6 +239,10 @@ watch(
 
 function accountItemsByGroup(groupId) {
   return accountItemsMap.value[groupId] ?? []
+}
+
+function isAccountIncludedInAssets(account) {
+  return Number(account?.include_in_assets ?? 1) === 1
 }
 
 function setAccountItems(groupId, items) {
@@ -278,6 +297,7 @@ async function addAccount(groupId) {
   accountOpeningInput.value = '0'
   accountIconInput.value = defaultAccountIcon
   accountCurrencyCodeInput.value = 'TWD'
+  accountIncludeInAssetsInput.value = true
   accountDialogOpen.value = true
 }
 
@@ -309,6 +329,7 @@ function closeAccountDialog() {
   accountOpeningInput.value = '0'
   accountIconInput.value = defaultAccountIcon
   accountCurrencyCodeInput.value = 'TWD'
+  accountIncludeInAssetsInput.value = true
   clearAccountDialogQuery()
 }
 
@@ -326,6 +347,7 @@ function openAccountIconPicker() {
       accountOpening: accountOpeningInput.value,
       accountIcon: accountIconInput.value,
       accountCurrency: accountCurrencyCodeInput.value,
+      accountIncludeInAssets: accountIncludeInAssetsInput.value ? '1' : '0',
     },
   })
 }
@@ -348,6 +370,7 @@ async function submitAccountDialog() {
       openingBalanceMinor: Math.round(openingMajor * 100),
       icon: normalizeFaIcon(accountIconInput.value),
       currencyCode: normalizeCurrencyCode(accountCurrencyCodeInput.value, 'TWD'),
+      includeInAssets: accountIncludeInAssetsInput.value,
     })
     uiStore.pushToast('帳戶已新增')
     closeAccountDialog()
@@ -364,6 +387,7 @@ function clearAccountDialogQuery() {
   delete nextQuery.accountOpening
   delete nextQuery.accountIcon
   delete nextQuery.accountCurrency
+  delete nextQuery.accountIncludeInAssets
   delete nextQuery.current
   delete nextQuery.from
   delete nextQuery.scope
@@ -373,6 +397,14 @@ function clearAccountDialogQuery() {
 function queryText(value) {
   if (Array.isArray(value)) return String(value[0] ?? '')
   return String(value ?? '')
+}
+
+function queryBoolean(value, fallback = true) {
+  const text = queryText(value).trim().toLowerCase()
+  if (!text) return fallback
+  if (['0', 'false', 'no', 'off'].includes(text)) return false
+  if (['1', 'true', 'yes', 'on'].includes(text)) return true
+  return fallback
 }
 
 async function onAccountSortEnd(groupId) {
@@ -665,6 +697,13 @@ a {
   gap: 6px;
   font-size: 13px;
   color: var(--muted);
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
 }
 
 .error-text {

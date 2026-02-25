@@ -5,7 +5,9 @@ const DEFAULT_UPDATE_MANIFEST_URL = 'https://www.strawmb.com/app-update.json'
 const SECONDARY_UPDATE_MANIFEST_URL = 'https://strawmb.com/app-update.json'
 const LOCAL_UPDATE_MANIFEST_URL = '/app-update.json'
 const LOCAL_UPDATE_MANIFEST_RELATIVE_URL = './app-update.json'
-const UPDATE_CHECK_TTL_MS = 30 * 60 * 1000
+const UPDATE_CHECK_SUCCESS_TTL_MS = 30 * 60 * 1000
+const UPDATE_CHECK_DEGRADED_TTL_MS = 3 * 60 * 1000
+const UPDATE_CHECK_FAILURE_TTL_MS = 45 * 1000
 const UPDATE_FETCH_TIMEOUT_MS = 6000
 
 const UPDATE_MANIFEST_URLS = resolveUpdateManifestUrls(import.meta.env.VITE_APP_UPDATE_CHECK_URL)
@@ -16,6 +18,13 @@ const GOOGLE_PLAY_URL = CONFIGURED_PLAY_URL || DEFAULT_PLAY_URL
 
 let cachedCheckResult = null
 let cachedCheckAtMs = 0
+
+function resolveCheckCacheTtlMs(result) {
+  if (!result || typeof result !== 'object') return 0
+  if (Boolean(result.checkFailed)) return UPDATE_CHECK_FAILURE_TTL_MS
+  if (Boolean(result.usedLocalFallback)) return UPDATE_CHECK_DEGRADED_TTL_MS
+  return UPDATE_CHECK_SUCCESS_TTL_MS
+}
 
 function isLocalManifestUrl(url) {
   const source = String(url ?? '').trim()
@@ -148,8 +157,11 @@ async function fetchUpdateManifestPayload(url) {
 export async function checkForAppUpdate(options = {}) {
   const force = Boolean(options?.force)
   const now = Date.now()
-  if (!force && cachedCheckResult && now - cachedCheckAtMs <= UPDATE_CHECK_TTL_MS) {
-    return cachedCheckResult
+  if (!force && cachedCheckResult) {
+    const ttlMs = resolveCheckCacheTtlMs(cachedCheckResult)
+    if (ttlMs > 0 && now - cachedCheckAtMs <= ttlMs) {
+      return cachedCheckResult
+    }
   }
 
   const currentVersion = getCurrentAppVersion()

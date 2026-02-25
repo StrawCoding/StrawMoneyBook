@@ -75,6 +75,9 @@
                   </span>
                   <span class="account-text">
                     <span class="account-name">{{ account.name }}</span>
+                    <span v-if="!isAccountIncludedInAssets(account)" class="account-subtitle">
+                      {{ t('assets_page.exclude_from_total') }}
+                    </span>
                   </span>
                 </span>
                 <span class="account-right">
@@ -113,6 +116,9 @@ const balanceMetrics = computed(() => {
   for (const item of accountStore.balances) {
     const balance = Number(item.balance_minor ?? 0)
     balanceMap.set(item.id, balance)
+    if (!isAccountIncludedInAssets(item)) {
+      continue
+    }
 
     if (item.account_type === 'asset') {
       if (balance > 0) {
@@ -211,6 +217,10 @@ function toggleGroup(groupId) {
 
 function balanceOf(accountId) {
   return Number(balanceMetrics.value.balanceMap.get(accountId) ?? 0)
+}
+
+function isAccountIncludedInAssets(account) {
+  return Number(account?.include_in_assets ?? 1) === 1
 }
 
 function goLoans(tab) {

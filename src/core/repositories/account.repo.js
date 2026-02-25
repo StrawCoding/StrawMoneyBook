@@ -13,6 +13,17 @@ function normalizeCurrencyCode(currencyCode, fallback = 'TWD') {
   return fallback
 }
 
+function normalizeIncludeInAssets(value, fallback = 1) {
+  if (value === undefined || value === null || value === '') return fallback
+  if (typeof value === 'number') return value === 0 ? 0 : 1
+  if (typeof value === 'boolean') return value ? 1 : 0
+
+  const normalized = String(value).trim().toLowerCase()
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return 0
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return 1
+  return fallback
+}
+
 export async function listAccountGroups(ledgerId) {
   assertLedgerId(ledgerId)
   const result = await query(
@@ -31,7 +42,7 @@ export async function listAccounts(ledgerId, options = {}) {
 
   const result = await query(
     `SELECT ledger_id, id, group_id, name, account_type, allow_negative, opening_balance_minor,
-            currency_code, icon, sort_order, is_archived
+            currency_code, icon, include_in_assets, sort_order, is_archived
      FROM accounts
      WHERE ledger_id = ?
        AND deleted_at IS NULL
@@ -64,12 +75,13 @@ export async function createAccount(ledgerId, input) {
   const now = nowIso()
   const icon = normalizeAccountIcon(input.icon)
   const currencyCode = normalizeCurrencyCode(input.currencyCode, 'TWD')
+  const includeInAssets = normalizeIncludeInAssets(input.includeInAssets, 1)
 
   await run(
     `INSERT INTO accounts (
       ledger_id, id, group_id, name, account_type, allow_negative, opening_balance_minor,
-      currency_code, icon, sort_order, is_archived, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?);`,
+      currency_code, icon, include_in_assets, sort_order, is_archived, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?);`,
     [
       ledgerId,
       id,
@@ -80,6 +92,7 @@ export async function createAccount(ledgerId, input) {
       input.openingBalanceMinor ?? 0,
       currencyCode,
       icon,
+      includeInAssets,
       input.sortOrder ?? 0,
       now,
       now,
@@ -113,6 +126,8 @@ export async function updateAccountProfile(ledgerId, accountId, input = {}) {
   const openingBalanceMinor = Number.isFinite(openingBalanceMinorInput) ? Math.round(openingBalanceMinorInput) : null
   const hasCurrencyCode = String(input.currencyCode ?? '').trim() !== ''
   const currencyCode = hasCurrencyCode ? normalizeCurrencyCode(input.currencyCode) : null
+  const hasIncludeInAssets = Object.prototype.hasOwnProperty.call(input, 'includeInAssets')
+  const includeInAssets = hasIncludeInAssets ? normalizeIncludeInAssets(input.includeInAssets, 1) : null
 
   await run(
     `UPDATE accounts
@@ -121,9 +136,10 @@ export async function updateAccountProfile(ledgerId, accountId, input = {}) {
          icon = ?,
          currency_code = COALESCE(?, currency_code),
          opening_balance_minor = COALESCE(?, opening_balance_minor),
+         include_in_assets = COALESCE(?, include_in_assets),
          updated_at = ?
      WHERE ledger_id = ? AND id = ? AND deleted_at IS NULL;`,
-    [name, groupId, normalizedIcon, currencyCode, openingBalanceMinor, nowIso(), ledgerId, accountId],
+    [name, groupId, normalizedIcon, currencyCode, openingBalanceMinor, includeInAssets, nowIso(), ledgerId, accountId],
   )
 }
 
@@ -259,6 +275,7 @@ export async function getAccountBalances(ledgerId, options = {}) {
        a.allow_negative,
        a.currency_code,
        a.icon,
+       a.include_in_assets,
        a.opening_balance_minor,
        a.is_archived,
        a.opening_balance_minor + COALESCE(SUM(t.amount_minor), 0) AS balance_minor

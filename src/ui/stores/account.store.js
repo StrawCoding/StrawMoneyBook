@@ -16,6 +16,10 @@ import {
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { assertCanCreateAccount } from '@/core/services/membership.service'
 
+function isIncludedInAssets(account) {
+  return Number(account?.include_in_assets ?? 1) === 1
+}
+
 export const useAccountStore = defineStore('account', {
   state: () => ({
     groups: [],
@@ -40,6 +44,7 @@ export const useAccountStore = defineStore('account', {
       return state.groups.map((group) => {
         const groupAccounts = accountsByGroup.get(group.id) ?? []
         const totalMinor = groupAccounts.reduce((total, account) => {
+          if (!isIncludedInAssets(account)) return total
           return total + (balanceMap.get(account.id) ?? Number(account.opening_balance_minor ?? 0))
         }, 0)
 
@@ -52,7 +57,11 @@ export const useAccountStore = defineStore('account', {
     },
 
     totalAssetsMinor(state) {
-      return state.balances.reduce((total, item) => total + Number(item.balance_minor ?? 0), 0)
+      const includeMap = new Map(state.accounts.map((item) => [item.id, isIncludedInAssets(item)]))
+      return state.balances.reduce((total, item) => {
+        if (includeMap.get(item.id) === false) return total
+        return total + Number(item.balance_minor ?? 0)
+      }, 0)
     },
   },
 
