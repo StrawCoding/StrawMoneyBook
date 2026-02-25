@@ -214,6 +214,31 @@ export async function checkForAppUpdate(options = {}) {
   }
 
   const currentVersion = getCurrentAppVersion()
+  // 優先嘗試從 Google Play 抓取版本（作為主要來源），若失敗再回退到 manifest 列表
+  if (APP_ID) {
+    try {
+      const playVersion = await fetchLatestVersionFromPlayStore()
+      if (playVersion) {
+        const hasUpdate = compareAppVersions(playVersion, currentVersion) > 0
+        const result = {
+          hasUpdate,
+          checkFailed: false,
+          usedLocalFallback: false,
+          currentVersion,
+          latestVersion: playVersion,
+          playUrl: GOOGLE_PLAY_URL,
+          message: '',
+          checkedAt: new Date().toISOString(),
+        }
+        cachedCheckResult = result
+        cachedCheckAtMs = now
+        return result
+      }
+    } catch (e) {
+      // 若 Play 嘗試失敗，繼續使用 manifest 列表作為備援
+      console.warn('[app-update] fetch from Play store failed, falling back to manifest sources', e)
+    }
+  }
   if (!UPDATE_MANIFEST_URLS.length) {
     const result = {
       hasUpdate: false,
