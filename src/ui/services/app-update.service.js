@@ -154,6 +154,55 @@ async function fetchUpdateManifestPayload(url) {
   }
 }
 
+async function fetchLatestVersionFromPlayStore() {
+  if (!APP_ID) return null
+  const url = GOOGLE_PLAY_URL || DEFAULT_PLAY_URL
+  try {
+    const response = await withTimeout(
+      fetch(url, { method: 'GET', headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
+      UPDATE_FETCH_TIMEOUT_MS,
+      'Play 商店檢查逾時',
+    )
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const text = await response.text()
+
+    // 嘗試多種方式解析版本字串
+    // 1) 在 'Current Version' 或本地化標籤附近尋找版本號
+    const patterns = [
+      /Current Version[\s\S]{0,140}?([0-9]+(?:\.[0-9]+){0,})/i,
+      /目前版本[\s\S]{0,140}?([0-9]+(?:\.[0-9]+){0,})/i,
+      /最新版本[\s\S]{0,140}?([0-9]+(?:\.[0-9]+){0,})/i,
+      /"softwareVersion"\s*:\s*"([^"]+)"/i,
+      /"version"\s*:\s*"([0-9]+(?:\.[0-9]+){0,})"/i,
+    ]
+
+    for (const re of patterns) {
+      const m = re.exec(text)
+      if (m && m[1]) {
+        const v = String(m[1]).trim().replace(/[^0-9.].*$/, '')
+        if (v) return v
+      }
+    }
+
+    // 最後再嘗試直接從頁面中抓出可能的版本樣式（如 1.2.3）並以最大出現頻率作為候選
+    const guessRe = /([0-9]+(?:\.[0-9]+){1,3})/g
+    const matches = Array.from(text.matchAll(guessRe)).map((r) => r[1])
+    if (matches.length) {
+      // 選最多次出現的版本
+      const counts = {}
+      let best = null
+      for (const m of matches) {
+        counts[m] = (counts[m] || 0) + 1
+        if (!best || counts[m] > counts[best]) best = m
+      }
+      if (best) return best
+    }
+  } catch (error) {
+    // 無視錯誤，讓上層 fallback 處理
+  }
+  return null
+}
+
 export async function checkForAppUpdate(options = {}) {
   const force = Boolean(options?.force)
   const now = Date.now()
@@ -216,6 +265,31 @@ export async function checkForAppUpdate(options = {}) {
       if (!isLocalUrl) {
         remoteErrors.push(errorText)
       }
+    }
+  }
+
+  // 若所有 manifest 來源都失敗或無版本，嘗試直接從 Google Play 抓取版本（作為備援）
+  if (APP_ID) {
+    try {
+      const playVersion = await fetchLatestVersionFromPlayStore()
+      if (playVersion) {
+        const hasUpdate = compareAppVersions(playVersion, currentVersion) > 0
+        const result = {
+          hasUpdate,
+          checkFailed: false,
+          usedLocalFallback: false,
+          currentVersion,
+          latestVersion: playVersion,
+          playUrl: GOOGLE_PLAY_URL,
+          message: '',
+          checkedAt: new Date().toISOString(),
+        }
+        cachedCheckResult = result
+        cachedCheckAtMs = now
+        return result
+      }
+    } catch (e) {
+      // ignore
     }
   }
 

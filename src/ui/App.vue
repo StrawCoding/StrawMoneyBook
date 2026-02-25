@@ -64,6 +64,8 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { checkForAppUpdate, openGooglePlayStore } from '@/ui/services/app-update.service'
+import { Capacitor } from '@capacitor/core'
+import { initGoogleAuth, getAccessToken } from '@/services/google/auth'
 import { canNavigateBackInApp } from '@/ui/services/navigation-back.service'
 
 const route = useRoute()
@@ -162,6 +164,22 @@ onMounted(() => {
   window.addEventListener('app:check-update', onRequestCheckAppUpdate)
   window.addEventListener('click', onBackButtonAnchorClick, true)
   void checkAppUpdate({ force: true })
+  // 嘗試在背景進行非互動式 Google 登入（僅在 native 平台）
+  ;(async () => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        await initGoogleAuth()
+        try {
+          await getAccessToken({ interactive: false })
+        } catch (e) {
+          // 非互動式登入失敗則不提示，用戶仍可在設定頁手動登入
+        }
+      }
+    } catch (err) {
+      // 初始化或登入錯誤不應影響主流程
+      console.warn('[app] background google silent login failed', err)
+    }
+  })()
 })
 
 onBeforeUnmount(() => {
