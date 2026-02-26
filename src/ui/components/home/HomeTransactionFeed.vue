@@ -1,6 +1,6 @@
 <template>
   <article class="card summary-card">
-    <header class="row">
+    <header class="row summary-head">
       <div class="title-row">
         <h3>{{ t('home_tx.title') }}</h3>
         <RouterLink class="btn icon-btn" to="/transactions/search">
@@ -10,7 +10,7 @@
           <font-awesome-icon icon="fa-solid fa-calendar" />
         </RouterLink>
       </div>
-      <span class="badge">{{ t('home_tx.badge_count', { month: monthLabel, count: visibleHomeTransactions.length }) }}</span>
+      <span class="badge tx-count-badge">{{ t('home_tx.badge_count', { month: monthLabel, count: visibleHomeTransactions.length }) }}</span>
     </header>
 
     <ul class="tx-list">
@@ -109,7 +109,7 @@ const visibleHomeTransactions = computed(() => {
 const groupedRecentTransactions = computed(() => {
   const grouped = []
   const groupMap = new Map()
-  for (const tx of visibleHomeTransactions.value.slice(0, 12)) {
+  for (const tx of visibleHomeTransactions.value) {
     const key = dateKeyOf(tx.occurred_at)
     if (!groupMap.has(key)) {
       const group = { dateKey: key, label: dateLabelOf(tx.occurred_at), items: [], incomeMinor: 0, expenseMinor: 0 }
@@ -240,10 +240,23 @@ h3 {
   margin: 0;
   font-size: 16px
 }
+.summary-head {
+  align-items: flex-start;
+  flex-wrap: wrap
+}
 .title-row {
   display: flex;
   align-items: center;
-  gap: 8px
+  gap: 8px;
+  flex: 1;
+  min-width: 0
+}
+.tx-count-badge {
+  margin-left: auto;
+  max-width: 100%;
+  white-space: normal;
+  text-align: right;
+  line-height: 1.35
 }
 .tx-list {
   list-style: none;

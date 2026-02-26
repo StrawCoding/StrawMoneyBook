@@ -68,16 +68,17 @@
 
           <ul v-if="isGroupExpanded(group.id)" class="account-list">
             <li v-for="account in accountsByGroup(group.id)" :key="account.id">
-              <RouterLink :to="`/accounts/${account.id}`" class="account-row">
+              <RouterLink
+                :to="`/accounts/${account.id}`"
+                class="account-row"
+                :class="{ excluded: !isAccountIncludedInAssets(account) }"
+              >
                 <span class="account-left">
                   <span class="account-icon-wrap">
                     <font-awesome-icon v-if="account.icon" :icon="account.icon" class="account-icon" />
                   </span>
                   <span class="account-text">
                     <span class="account-name">{{ account.name }}</span>
-                    <span v-if="!isAccountIncludedInAssets(account)" class="account-subtitle">
-                      {{ t('assets_page.exclude_from_total') }}
-                    </span>
                   </span>
                 </span>
                 <span class="account-right">
@@ -403,6 +404,11 @@ h3 {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, white 8%, transparent);
   padding: 16px 16px;
 }
+.account-row.excluded {
+  background: color-mix(in srgb, var(--card) 92%, #000 8%);
+  border-color: color-mix(in srgb, var(--muted) 28%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--muted) 14%, transparent);
+}
 
 a {
   color: var(--text);
@@ -432,11 +438,17 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.account-row.excluded .account-name {
+  color: color-mix(in srgb, var(--text) 58%, var(--muted) 42%);
+}
 
 .account-balance {
   font-size: 18px;
   font-weight: 700;
   line-height: 1.1;
+}
+.account-row.excluded .account-balance {
+  color: var(--muted);
 }
 
 .account-right {
@@ -462,6 +474,9 @@ a {
 .account-icon {
   font-size: 22px;
   color: #f7f7f7;
+}
+.account-row.excluded .account-icon {
+  color: color-mix(in srgb, var(--muted) 78%, #f7f7f7 22%);
 }
 
 .mini-btn {

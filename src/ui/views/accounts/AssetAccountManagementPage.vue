@@ -51,7 +51,7 @@
             >
               <template #item="{ element: account }">
                 <li class="account-item-row">
-                  <div class="account-row">
+                  <div class="account-row" :class="{ excluded: !isAccountIncludedInAssets(account) }">
                     <RouterLink
                       :to="{ name: 'account-detail', params: { id: account.id }, query: { mode: 'edit' } }"
                       class="account-link"
@@ -62,9 +62,6 @@
                         </span>
                         <span class="account-text">
                           <span class="account-name">{{ account.name }}</span>
-                          <span v-if="!isAccountIncludedInAssets(account)" class="account-subtitle">
-                            {{ t('assets_page.exclude_from_total') }}
-                          </span>
                         </span>
                       </span>
                     </RouterLink>
@@ -589,6 +586,11 @@ a {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, white 8%, transparent);
   padding: 16px 16px;
 }
+.account-row.excluded {
+  background: color-mix(in srgb, var(--card) 92%, #000 8%);
+  border-color: color-mix(in srgb, var(--muted) 28%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--muted) 14%, transparent);
+}
 
 .account-link {
   min-width: 0;
@@ -620,6 +622,9 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.account-row.excluded .account-name {
+  color: color-mix(in srgb, var(--text) 58%, var(--muted) 42%);
+}
 
 .account-balance {
   font-size: 18px;
@@ -650,6 +655,9 @@ a {
 .account-icon {
   font-size: 22px;
   color: #f7f7f7;
+}
+.account-row.excluded .account-icon {
+  color: color-mix(in srgb, var(--muted) 78%, #f7f7f7 22%);
 }
 
 .drag-handle {

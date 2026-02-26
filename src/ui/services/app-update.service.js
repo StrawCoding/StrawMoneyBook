@@ -5,12 +5,17 @@ const DEFAULT_UPDATE_MANIFEST_URL = 'https://www.strawmb.com/app-update.json'
 const SECONDARY_UPDATE_MANIFEST_URL = 'https://strawmb.com/app-update.json'
 const LOCAL_UPDATE_MANIFEST_URL = '/app-update.json'
 const LOCAL_UPDATE_MANIFEST_RELATIVE_URL = './app-update.json'
+const DEFAULT_PLAY_VERSION_API_URL = 'https://www.strawmb.com/api/app-update/play'
+const SECONDARY_PLAY_VERSION_API_URL = 'https://strawmb.com/api/app-update/play'
+const LOCAL_PLAY_VERSION_API_URL = '/api/app-update/play'
+const LOCAL_PLAY_VERSION_API_RELATIVE_URL = './api/app-update/play'
 const UPDATE_CHECK_SUCCESS_TTL_MS = 30 * 60 * 1000
 const UPDATE_CHECK_DEGRADED_TTL_MS = 3 * 60 * 1000
 const UPDATE_CHECK_FAILURE_TTL_MS = 45 * 1000
 const UPDATE_FETCH_TIMEOUT_MS = 6000
 
 const UPDATE_MANIFEST_URLS = resolveUpdateManifestUrls(import.meta.env.VITE_APP_UPDATE_CHECK_URL)
+const UPDATE_PLAY_API_URLS = resolvePlayApiUrls(import.meta.env.VITE_APP_UPDATE_PLAY_API_URL)
 const APP_ID = String(import.meta.env.VITE_GOOGLE_PLAY_APP_ID ?? capacitorConfig?.appId ?? '').trim()
 const DEFAULT_PLAY_URL = APP_ID ? `https://play.google.com/store/apps/details?id=${encodeURIComponent(APP_ID)}` : ''
 const CONFIGURED_PLAY_URL = String(import.meta.env.VITE_GOOGLE_PLAY_APP_URL ?? '').trim()
@@ -65,6 +70,27 @@ function resolveUpdateManifestUrls(rawValue) {
   return deduped
 }
 
+function resolvePlayApiUrls(rawValue) {
+  const candidates = String(rawValue ?? '')
+    .split(/[,\n]/)
+    .map((item) => String(item ?? '').trim())
+    .filter(Boolean)
+
+  if (!candidates.length) {
+    candidates.push(DEFAULT_PLAY_VERSION_API_URL, SECONDARY_PLAY_VERSION_API_URL)
+  }
+  candidates.push(LOCAL_PLAY_VERSION_API_URL, LOCAL_PLAY_VERSION_API_RELATIVE_URL)
+
+  const deduped = []
+  const seen = new Set()
+  for (const candidate of candidates) {
+    if (!candidate || seen.has(candidate)) continue
+    seen.add(candidate)
+    deduped.push(candidate)
+  }
+  return deduped
+}
+
 function normalizeUpdateFetchErrorMessage(error) {
   const raw = String(error?.message ?? error ?? '').trim()
   if (!raw) return '未知錯誤'
@@ -87,6 +113,12 @@ function parseVersionParts(versionText) {
     .split('.')
     .map((part) => Number.parseInt(String(part).replace(/[^\d].*$/, ''), 10))
     .map((part) => (Number.isFinite(part) ? part : 0))
+}
+
+function isComparableVersion(versionText) {
+  const normalized = String(versionText ?? '').trim()
+  if (!normalized) return false
+  return /\d/.test(normalized)
 }
 
 export function compareAppVersions(leftVersion, rightVersion) {
@@ -126,7 +158,40 @@ function normalizeManifestPayload(rawPayload) {
   }
 }
 
-async function fetchUpdateManifestPayload(url) {
+function normalizePlayApiPayload(rawPayload) {
+  const payload = rawPayload && typeof rawPayload === 'object' ? rawPayload : {}
+  const latestVersion = String(payload.latestVersion ?? payload.latest_version ?? payload.version ?? '').trim()
+  const message = String(payload.message ?? payload.note ?? '').trim()
+  const playUrl = String(payload.playUrl ?? payload.play_url ?? payload.url ?? GOOGLE_PLAY_URL).trim() || GOOGLE_PLAY_URL
+  return {
+    latestVersion,
+    message,
+    playUrl,
+  }
+}
+
+function appendQuery(url, query = {}) {
+  const target = String(url ?? '').trim()
+  if (!target) return ''
+
+  const [rawPath, rawHash = ''] = target.split('#', 2)
+  const [basePath, existingQuery = ''] = rawPath.split('?', 2)
+  const search = new URLSearchParams(existingQuery)
+
+  for (const [key, value] of Object.entries(query)) {
+    const normalizedKey = String(key ?? '').trim()
+    const normalizedValue = String(value ?? '').trim()
+    if (!normalizedKey || !normalizedValue) continue
+    if (search.has(normalizedKey)) continue
+    search.set(normalizedKey, normalizedValue)
+  }
+
+  const queryText = search.toString()
+  const hashText = rawHash ? `#${rawHash}` : ''
+  return `${basePath}${queryText ? `?${queryText}` : ''}${hashText}`
+}
+
+async function fetchJsonPayload(url, timeoutMessage, emptyMessage, invalidMessage) {
   const response = await withTimeout(
     fetch(url, {
       method: 'GET',
@@ -136,7 +201,7 @@ async function fetchUpdateManifestPayload(url) {
       },
     }),
     UPDATE_FETCH_TIMEOUT_MS,
-    '檢查更新逾時',
+    timeoutMessage,
   )
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`)
@@ -144,61 +209,58 @@ async function fetchUpdateManifestPayload(url) {
 
   const responseText = await response.text()
   if (!responseText.trim()) {
-    throw new Error('更新資訊為空')
+    throw new Error(emptyMessage)
   }
 
   try {
     return JSON.parse(responseText)
   } catch {
-    throw new Error('更新資訊格式錯誤（非 JSON）')
+    throw new Error(invalidMessage)
   }
 }
 
-async function fetchLatestVersionFromPlayStore() {
-  if (!APP_ID) return null
-  const url = GOOGLE_PLAY_URL || DEFAULT_PLAY_URL
-  try {
-    const response = await withTimeout(
-      fetch(url, { method: 'GET', headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } }),
-      UPDATE_FETCH_TIMEOUT_MS,
-      'Play 商店檢查逾時',
-    )
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const text = await response.text()
+async function fetchUpdateManifestPayload(url) {
+  return fetchJsonPayload(
+    url,
+    '檢查更新逾時',
+    '更新資訊為空',
+    '更新資訊格式錯誤（非 JSON）',
+  )
+}
 
-    // 嘗試多種方式解析版本字串
-    // 1) 在 'Current Version' 或本地化標籤附近尋找版本號
-    const patterns = [
-      /Current Version[\s\S]{0,140}?([0-9]+(?:\.[0-9]+){0,})/i,
-      /目前版本[\s\S]{0,140}?([0-9]+(?:\.[0-9]+){0,})/i,
-      /最新版本[\s\S]{0,140}?([0-9]+(?:\.[0-9]+){0,})/i,
-      /"softwareVersion"\s*:\s*"([^"]+)"/i,
-      /"version"\s*:\s*"([0-9]+(?:\.[0-9]+){0,})"/i,
-    ]
+async function fetchPlayApiPayload(url) {
+  return fetchJsonPayload(
+    url,
+    'Play API 檢查逾時',
+    'Play API 回應為空',
+    'Play API 回應格式錯誤（非 JSON）',
+  )
+}
 
-    for (const re of patterns) {
-      const m = re.exec(text)
-      if (m && m[1]) {
-        const v = String(m[1]).trim().replace(/[^0-9.].*$/, '')
-        if (v) return v
+async function fetchLatestVersionFromPlayApi() {
+  if (!APP_ID || !UPDATE_PLAY_API_URLS.length) return null
+  const errors = []
+  for (const endpoint of UPDATE_PLAY_API_URLS) {
+    const url = appendQuery(endpoint, { appId: APP_ID })
+    if (!url) continue
+    try {
+      const payload = normalizePlayApiPayload(await fetchPlayApiPayload(url))
+      if (!payload.latestVersion) {
+        errors.push(`${url}: 缺少 latestVersion`)
+        continue
       }
-    }
-
-    // 最後再嘗試直接從頁面中抓出可能的版本樣式（如 1.2.3）並以最大出現頻率作為候選
-    const guessRe = /([0-9]+(?:\.[0-9]+){1,3})/g
-    const matches = Array.from(text.matchAll(guessRe)).map((r) => r[1])
-    if (matches.length) {
-      // 選最多次出現的版本
-      const counts = {}
-      let best = null
-      for (const m of matches) {
-        counts[m] = (counts[m] || 0) + 1
-        if (!best || counts[m] > counts[best]) best = m
+      if (!isComparableVersion(payload.latestVersion)) {
+        errors.push(`${url}: latestVersion 不可比較（${payload.latestVersion}）`)
+        continue
       }
-      if (best) return best
+      return payload
+    } catch (error) {
+      errors.push(`${url}: ${normalizeUpdateFetchErrorMessage(error)}`)
     }
-  } catch (error) {
-    // 無視錯誤，讓上層 fallback 處理
+  }
+
+  if (errors.length) {
+    console.warn('[app-update] fetch from Play API failed, falling back to manifest sources', errors.join(' | '))
   }
   return null
 }
@@ -214,31 +276,25 @@ export async function checkForAppUpdate(options = {}) {
   }
 
   const currentVersion = getCurrentAppVersion()
-  // 優先嘗試從 Google Play 抓取版本（作為主要來源），若失敗再回退到 manifest 列表
-  if (APP_ID) {
-    try {
-      const playVersion = await fetchLatestVersionFromPlayStore()
-      if (playVersion) {
-        const hasUpdate = compareAppVersions(playVersion, currentVersion) > 0
-        const result = {
-          hasUpdate,
-          checkFailed: false,
-          usedLocalFallback: false,
-          currentVersion,
-          latestVersion: playVersion,
-          playUrl: GOOGLE_PLAY_URL,
-          message: '',
-          checkedAt: new Date().toISOString(),
-        }
-        cachedCheckResult = result
-        cachedCheckAtMs = now
-        return result
-      }
-    } catch (e) {
-      // 若 Play 嘗試失敗，繼續使用 manifest 列表作為備援
-      console.warn('[app-update] fetch from Play store failed, falling back to manifest sources', e)
+  // 優先使用 Play API 取得最新版本，失敗才回退 manifest
+  const playPayload = await fetchLatestVersionFromPlayApi()
+  if (playPayload?.latestVersion) {
+    const hasUpdate = compareAppVersions(playPayload.latestVersion, currentVersion) > 0
+    const result = {
+      hasUpdate,
+      checkFailed: false,
+      usedLocalFallback: false,
+      currentVersion,
+      latestVersion: playPayload.latestVersion,
+      playUrl: playPayload.playUrl,
+      message: playPayload.message,
+      checkedAt: new Date().toISOString(),
     }
+    cachedCheckResult = result
+    cachedCheckAtMs = now
+    return result
   }
+
   if (!UPDATE_MANIFEST_URLS.length) {
     const result = {
       hasUpdate: false,
@@ -267,6 +323,14 @@ export async function checkForAppUpdate(options = {}) {
         }
         continue
       }
+      if (!isComparableVersion(payload.latestVersion)) {
+        const errorText = `${url}: latestVersion 不可比較（${payload.latestVersion}）`
+        errors.push(errorText)
+        if (!isLocalUrl) {
+          remoteErrors.push(errorText)
+        }
+        continue
+      }
 
       const hasUpdate = compareAppVersions(payload.latestVersion, currentVersion) > 0
       const usedLocalFallback = isLocalUrl && remoteErrors.length > 0
@@ -290,31 +354,6 @@ export async function checkForAppUpdate(options = {}) {
       if (!isLocalUrl) {
         remoteErrors.push(errorText)
       }
-    }
-  }
-
-  // 若所有 manifest 來源都失敗或無版本，嘗試直接從 Google Play 抓取版本（作為備援）
-  if (APP_ID) {
-    try {
-      const playVersion = await fetchLatestVersionFromPlayStore()
-      if (playVersion) {
-        const hasUpdate = compareAppVersions(playVersion, currentVersion) > 0
-        const result = {
-          hasUpdate,
-          checkFailed: false,
-          usedLocalFallback: false,
-          currentVersion,
-          latestVersion: playVersion,
-          playUrl: GOOGLE_PLAY_URL,
-          message: '',
-          checkedAt: new Date().toISOString(),
-        }
-        cachedCheckResult = result
-        cachedCheckAtMs = now
-        return result
-      }
-    } catch (e) {
-      // ignore
     }
   }
 
