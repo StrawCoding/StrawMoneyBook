@@ -298,9 +298,11 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
     const outTx = members.find((item) => Number(item.amount_minor ?? 0) < 0) ?? members[0]
     const inTx = members.find((item) => item.id !== outTx.id) ?? members[1]
     const toAmountMinorInput = Number(payload.toAmountMinor ?? 0)
+    // Keep incoming leg synced with the primary transfer amount by default.
+    // Addon delta only affects source(outgoing) leg.
     const toAmountMinor = Number.isFinite(toAmountMinorInput) && toAmountMinorInput > 0
       ? Math.round(toAmountMinorInput)
-      : Math.max(1, Math.abs(Math.round(Number(inTx?.amount_minor ?? normalizedAmountMinor))))
+      : normalizedAmountMinor
 
     await updateTransactionById(ledgerId, outTx.id, {
       accountId: payload.accountId,

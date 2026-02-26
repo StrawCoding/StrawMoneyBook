@@ -277,6 +277,7 @@ const latestLoanIntent = ref(null)
 const speechLiveText = ref('')
 const parsing = ref(false)
 const submitting = ref(false)
+const AI_SUBMIT_TIMEOUT_MS = 15000
 const {
   isSupported: speechSupported,
   isListening: speechListening,
@@ -583,19 +584,27 @@ async function submit() {
           uiStore.pushToast('沒有辨識到借貸對象，請補上名字後再試', 'error')
           return
         }
-        await loanStore.create({
-          direction: loanIntent.direction === 'borrow' ? 'borrow' : 'lend',
-          counterpartyName,
-          principalMinor: amountMinor,
-          interestMinor: 0,
-          startDate: formatLoanStartDateTime(occurredAt),
-          dueDate: null,
-          occurredAt: resolveLoanOccurredAtIso(occurredAt),
-          accountId: model.accountId,
-          note: noteText,
-        })
+        await withTimeout(
+          loanStore.create({
+            direction: loanIntent.direction === 'borrow' ? 'borrow' : 'lend',
+            counterpartyName,
+            principalMinor: amountMinor,
+            interestMinor: 0,
+            startDate: formatLoanStartDateTime(occurredAt),
+            dueDate: null,
+            occurredAt: resolveLoanOccurredAtIso(occurredAt),
+            accountId: model.accountId,
+            note: noteText,
+          }),
+          AI_SUBMIT_TIMEOUT_MS,
+          'AI 記帳逾時，請稍後再試',
+        )
       } else {
-        await loanStore.load()
+        await withTimeout(
+          loanStore.load(),
+          AI_SUBMIT_TIMEOUT_MS,
+          'AI 記帳逾時，請稍後再試',
+        )
         const matched = pickLoanForAiRepayment(loanStore.items, loanIntent)
         if (!matched.loan) {
           uiStore.pushToast(matched.warning || '找不到可歸還/收回的借貸紀錄', 'error')
@@ -604,16 +613,24 @@ async function submit() {
         if (matched.warning) {
           uiStore.pushToast(matched.warning)
         }
-        await loanStore.repay({
-          loanId: matched.loan.id,
-          accountId: model.accountId,
-          amountMinor,
-          note: noteText,
-          paidAt: resolveLoanOccurredAtIso(occurredAt),
-        })
+        await withTimeout(
+          loanStore.repay({
+            loanId: matched.loan.id,
+            accountId: model.accountId,
+            amountMinor,
+            note: noteText,
+            paidAt: resolveLoanOccurredAtIso(occurredAt),
+          }),
+          AI_SUBMIT_TIMEOUT_MS,
+          'AI 記帳逾時，請稍後再試',
+        )
       }
 
-      await refreshLinkedDataAfterLoanWrite()
+      await withTimeout(
+        refreshLinkedDataAfterLoanWrite(),
+        AI_SUBMIT_TIMEOUT_MS,
+        'AI 記帳逾時，請稍後再試',
+      )
       recordAiBookkeepingUsage()
       uiStore.pushToast(`AI 自動記帳已完成${actionLabel}`)
       hasDraft.value = false
@@ -637,35 +654,47 @@ async function submit() {
         uiStore.pushToast('轉入金額需大於 0，請調整匯率', 'error')
         return
       }
-      await transactionStore.addTransfer({
-        amountMinor,
-        toAmountMinor: transferToAmountMinor,
-        occurredAt,
-        fromAccountId: model.accountId,
-        toAccountId: model.peerAccountId,
-        note: model.note,
-      })
+      await withTimeout(
+        transactionStore.addTransfer({
+          amountMinor,
+          toAmountMinor: transferToAmountMinor,
+          occurredAt,
+          fromAccountId: model.accountId,
+          toAccountId: model.peerAccountId,
+          note: model.note,
+        }),
+        AI_SUBMIT_TIMEOUT_MS,
+        'AI 記帳逾時，請稍後再試',
+      )
     } else if (model.type === 'income') {
-      await transactionStore.addIncome({
-        amountMinor,
-        occurredAt,
-        accountId: model.accountId,
-        categoryId: model.categoryId,
-        includeInBudget: model.includeInBudget,
-        includeInAnalysis: model.includeInAnalysis,
-        note: model.note,
-      })
+      await withTimeout(
+        transactionStore.addIncome({
+          amountMinor,
+          occurredAt,
+          accountId: model.accountId,
+          categoryId: model.categoryId,
+          includeInBudget: model.includeInBudget,
+          includeInAnalysis: model.includeInAnalysis,
+          note: model.note,
+        }),
+        AI_SUBMIT_TIMEOUT_MS,
+        'AI 記帳逾時，請稍後再試',
+      )
     } else {
-      await transactionStore.addExpense({
-        amountMinor,
-        occurredAt,
-        accountId: model.accountId,
-        categoryId: model.categoryId,
-        isReimbursable: model.isReimbursable,
-        includeInBudget: model.includeInBudget,
-        includeInAnalysis: model.includeInAnalysis,
-        note: model.note,
-      })
+      await withTimeout(
+        transactionStore.addExpense({
+          amountMinor,
+          occurredAt,
+          accountId: model.accountId,
+          categoryId: model.categoryId,
+          isReimbursable: model.isReimbursable,
+          includeInBudget: model.includeInBudget,
+          includeInAnalysis: model.includeInAnalysis,
+          note: model.note,
+        }),
+        AI_SUBMIT_TIMEOUT_MS,
+        'AI 記帳逾時，請稍後再試',
+      )
     }
 
     recordAiBookkeepingUsage()
@@ -685,6 +714,22 @@ async function submit() {
 function waitFor(delayMs) {
   return new Promise((resolve) => {
     setTimeout(resolve, delayMs)
+  })
+}
+
+function withTimeout(task, timeoutMs, timeoutMessage) {
+  const safeTimeoutMs = Math.max(0, Number(timeoutMs) || 0)
+  if (safeTimeoutMs === 0) return Promise.resolve(task)
+
+  let timeoutId = 0
+  const timeoutTask = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(timeoutMessage))
+    }, safeTimeoutMs)
+  })
+
+  return Promise.race([Promise.resolve(task), timeoutTask]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId)
   })
 }
 

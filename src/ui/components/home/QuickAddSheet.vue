@@ -453,6 +453,7 @@ const aiInterimSpeechText = ref('')
 const aiMessages = ref([])
 const aiCreatedRecord = ref(null)
 const aiAutoCreating = ref(false)
+const AI_AUTOCREATE_TIMEOUT_MS = 15000
 const {
   isSupported: speechSupported,
   isListening: speechListening,
@@ -804,15 +805,24 @@ async function parseWithAi() {
   aiAutoCreating.value = true
   let createdRecord = null
   try {
-    createdRecord = loanIntent
-      ? await submitLoanByAi(result.draft, {
-        closeAfterSuccess: false,
-        successMessage: 'AI 已自動記錄借貸',
-      })
-      : await submit({
-        closeAfterSuccess: false,
-        successMessage: 'AI 已自動記錄交易',
-      })
+    createdRecord = await withTimeout(
+      loanIntent
+        ? submitLoanByAi(result.draft, {
+          closeAfterSuccess: false,
+          successMessage: 'AI 已自動記錄借貸',
+        })
+        : submit({
+          closeAfterSuccess: false,
+          successMessage: 'AI 已自動記錄交易',
+        }),
+      AI_AUTOCREATE_TIMEOUT_MS,
+      'AI 記帳逾時，請稍後再試',
+    )
+  } catch (error) {
+    const message = String(error?.message ?? error ?? '').trim() || 'AI 記帳失敗，請稍後再試'
+    pushAiMessage('assistant', message)
+    uiStore.pushToast(message, 'error')
+    return
   } finally {
     aiAutoCreating.value = false
   }
@@ -825,6 +835,22 @@ async function parseWithAi() {
   recordAiBookkeepingUsage()
   aiCreatedRecord.value = createdRecord
   pushAiMessage('assistant', loanIntent ? '借貸記錄完成' : '記帳完成')
+}
+
+function withTimeout(task, timeoutMs, timeoutMessage) {
+  const safeTimeoutMs = Math.max(0, Number(timeoutMs) || 0)
+  if (safeTimeoutMs === 0) return Promise.resolve(task)
+
+  let timeoutId = 0
+  const timeoutTask = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(timeoutMessage))
+    }, safeTimeoutMs)
+  })
+
+  return Promise.race([Promise.resolve(task), timeoutTask]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId)
+  })
 }
 
 async function toggleAiVoiceInput() {
