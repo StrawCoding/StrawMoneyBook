@@ -17,6 +17,8 @@ const UPDATE_FETCH_TIMEOUT_MS = 6000
 
 const UPDATE_MANIFEST_URLS = resolveUpdateManifestUrls(import.meta.env.VITE_APP_UPDATE_CHECK_URL)
 const UPDATE_PLAY_API_URLS = resolvePlayApiUrls(import.meta.env.VITE_APP_UPDATE_PLAY_API_URL)
+const PLAY_API_COUNTRY = normalizePlayCountry(import.meta.env.VITE_GOOGLE_PLAY_COUNTRY)
+const PLAY_API_LANG = normalizePlayLang(import.meta.env.VITE_GOOGLE_PLAY_LANG)
 const APP_ID = String(import.meta.env.VITE_GOOGLE_PLAY_APP_ID ?? capacitorConfig?.appId ?? '').trim()
 const DEFAULT_PLAY_URL = APP_ID ? `https://play.google.com/store/apps/details?id=${encodeURIComponent(APP_ID)}` : ''
 const CONFIGURED_PLAY_URL = String(import.meta.env.VITE_GOOGLE_PLAY_APP_URL ?? '').trim()
@@ -24,6 +26,20 @@ const GOOGLE_PLAY_URL = CONFIGURED_PLAY_URL || DEFAULT_PLAY_URL
 
 let cachedCheckResult = null
 let cachedCheckAtMs = 0
+
+function normalizePlayCountry(rawValue) {
+  const value = String(rawValue ?? '').trim().toLowerCase()
+  if (!value) return ''
+  if (!/^[a-z]{2}$/.test(value)) return ''
+  return value
+}
+
+function normalizePlayLang(rawValue) {
+  const value = String(rawValue ?? '').trim()
+  if (!value) return ''
+  if (!/^[A-Za-z_]{2,10}$/.test(value)) return ''
+  return value
+}
 
 function resolveCheckCacheTtlMs(result) {
   if (!result || typeof result !== 'object') return 0
@@ -92,11 +108,59 @@ function resolvePlayApiUrls(rawValue) {
   return deduped
 }
 
+function summarizeRawErrorText(text, maxLength = 180) {
+  const compact = String(text ?? '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!compact) return ''
+  if (compact.length <= maxLength) return compact
+  return `${compact.slice(0, maxLength)}...`
+}
+
+function resolveHttpErrorDetail(responseText) {
+  const text = String(responseText ?? '').trim()
+  if (!text) return ''
+
+  try {
+    const payload = JSON.parse(text)
+    if (payload && typeof payload === 'object') {
+      const fields = [payload.error, payload.message, payload.details]
+        .map((item) => summarizeRawErrorText(item, 140))
+        .filter(Boolean)
+      if (fields.length) {
+        return fields.join(' | ')
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return summarizeRawErrorText(text)
+}
+
 function normalizeUpdateFetchErrorMessage(error) {
   const raw = String(error?.message ?? error ?? '').trim()
   if (!raw) return '未知錯誤'
-  if (/failed to fetch|networkerror|load failed|fetch failed|network request failed/i.test(raw)) {
+  if (/play_app_not_found|app not found/i.test(raw)) {
+    return APP_ID
+      ? `Google Play 找不到此 App（${APP_ID}）`
+      : 'Google Play 找不到此 App'
+  }
+  if (/missing_app_id|appid is required/i.test(raw)) {
+    return '未設定 Google Play App ID（VITE_GOOGLE_PLAY_APP_ID）'
+  }
+  if (/http\s*404/i.test(raw) && /play_api|api\/app-update\/play/i.test(raw)) {
+    return 'Play 版本 API 路徑不存在（HTTP 404）'
+  }
+  if (/http\s*(401|403)|unauthorized|forbidden/i.test(raw)) {
+    return 'Play 版本 API 無權限存取'
+  }
+  if (/failed to fetch|networkerror|load failed|fetch failed|network request failed|ecconn|enotfound|connection refused/i.test(raw)) {
     return '網路連線失敗或服務無回應'
+  }
+  if (/timeout|逾時|timed out/i.test(raw)) {
+    return '更新檢查逾時'
   }
   return raw
 }
@@ -104,7 +168,43 @@ function normalizeUpdateFetchErrorMessage(error) {
 function isNetworkLikeUpdateError(message) {
   const text = String(message ?? '').trim().toLowerCase()
   if (!text) return false
-  return /網路連線失敗|服務無回應|failed to fetch|networkerror|load failed|fetch failed|network request failed/.test(text)
+  return /網路連線失敗|服務無回應|failed to fetch|networkerror|load failed|fetch failed|network request failed|timeout|timed out|ecconn|enotfound|connection refused/.test(text)
+}
+
+function buildPlayApiFailureMessage(errorItems = []) {
+  if (!Array.isArray(errorItems) || !errorItems.length) {
+    return '無法取得 Play 版本資訊'
+  }
+
+  const messages = errorItems
+    .map((item) => String(item?.message ?? '').trim())
+    .filter(Boolean)
+
+  if (!messages.length) {
+    return '無法取得 Play 版本資訊'
+  }
+
+  if (messages.some((item) => item.includes('未設定 Google Play App ID'))) {
+    return '未設定 Google Play App ID（請設定 VITE_GOOGLE_PLAY_APP_ID）'
+  }
+
+  if (messages.some((item) => item.includes('Google Play 找不到此 App'))) {
+    return APP_ID
+      ? `Google Play 找不到此 App（${APP_ID}），請確認 Play 上架狀態與 appId`
+      : 'Google Play 找不到此 App，請確認 appId'
+  }
+
+  if (messages.every((item) => item.includes('Play 版本 API 路徑不存在（HTTP 404）'))) {
+    return 'Play 版本 API 路徑不存在（HTTP 404），請確認 VITE_APP_UPDATE_PLAY_API_URL 與後端部署'
+  }
+
+  if (messages.every((item) => isNetworkLikeUpdateError(item))) {
+    return '網路連線失敗或 Play 版本服務無回應'
+  }
+
+  return errorItems
+    .map(({ url, message }) => `${url}: ${message}`)
+    .join(' | ')
 }
 
 function parseVersionParts(versionText) {
@@ -204,11 +304,13 @@ async function fetchJsonPayload(url, timeoutMessage, emptyMessage, invalidMessag
     UPDATE_FETCH_TIMEOUT_MS,
     timeoutMessage,
   )
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`)
-  }
 
   const responseText = await response.text()
+  if (!response.ok) {
+    const detail = resolveHttpErrorDetail(responseText)
+    throw new Error(detail ? `HTTP ${response.status} ${detail}` : `HTTP ${response.status}`)
+  }
+
   if (!responseText.trim()) {
     throw new Error(emptyMessage)
   }
@@ -216,7 +318,7 @@ async function fetchJsonPayload(url, timeoutMessage, emptyMessage, invalidMessag
   try {
     return JSON.parse(responseText)
   } catch {
-    throw new Error(invalidMessage)
+    throw new Error(`${invalidMessage}${responseText ? `: ${summarizeRawErrorText(responseText, 80)}` : ''}`)
   }
 }
 
@@ -239,24 +341,43 @@ async function fetchPlayApiPayload(url) {
 }
 
 async function fetchLatestVersionFromPlayApi() {
-  if (!APP_ID || !UPDATE_PLAY_API_URLS.length) {
+  if (!APP_ID) {
     return {
       payload: null,
-      errorMessage: 'Play API 未設定',
+      errorMessage: '未設定 Google Play App ID（請設定 VITE_GOOGLE_PLAY_APP_ID）',
     }
   }
+  if (!UPDATE_PLAY_API_URLS.length) {
+    return {
+      payload: null,
+      errorMessage: '未設定 Play 版本 API（請設定 VITE_APP_UPDATE_PLAY_API_URL）',
+    }
+  }
+
+  const query = {
+    appId: APP_ID,
+    country: PLAY_API_COUNTRY,
+    lang: PLAY_API_LANG,
+  }
+
   const errors = []
   for (const endpoint of UPDATE_PLAY_API_URLS) {
-    const url = appendQuery(endpoint, { appId: APP_ID })
+    const url = appendQuery(endpoint, query)
     if (!url) continue
     try {
       const payload = normalizePlayApiPayload(await fetchPlayApiPayload(url))
       if (!payload.latestVersion) {
-        errors.push(`${url}: 缺少 latestVersion`)
+        errors.push({
+          url,
+          message: '缺少 latestVersion',
+        })
         continue
       }
       if (!isComparableVersion(payload.latestVersion)) {
-        errors.push(`${url}: latestVersion 不可比較（${payload.latestVersion}）`)
+        errors.push({
+          url,
+          message: `latestVersion 不可比較（${payload.latestVersion}）`,
+        })
         continue
       }
       return {
@@ -264,11 +385,18 @@ async function fetchLatestVersionFromPlayApi() {
         errorMessage: '',
       }
     } catch (error) {
-      errors.push(`${url}: ${normalizeUpdateFetchErrorMessage(error)}`)
+      const normalizedError = normalizeUpdateFetchErrorMessage(error)
+      const errorMessage = /^HTTP\s*404\b/i.test(normalizedError)
+        ? 'Play 版本 API 路徑不存在（HTTP 404）'
+        : normalizedError
+      errors.push({
+        url,
+        message: errorMessage,
+      })
     }
   }
 
-  const errorMessage = errors.join(' | ')
+  const errorMessage = buildPlayApiFailureMessage(errors)
   if (errorMessage) {
     console.warn('[app-update] fetch from Play API failed', errorMessage)
   }
@@ -282,7 +410,7 @@ function shouldUsePlayOnlyStrategy() {
   const override = String(import.meta.env.VITE_APP_UPDATE_STRATEGY ?? '').trim().toLowerCase()
   if (override === 'manifest') return false
   if (override === 'play_only') return true
-  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android' && Boolean(APP_ID)
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
 }
 
 export async function checkForAppUpdate(options = {}) {
@@ -325,7 +453,7 @@ export async function checkForAppUpdate(options = {}) {
       currentVersion,
       latestVersion: '',
       playUrl: GOOGLE_PLAY_URL,
-      message: playApiErrorMessage,
+      message: playApiErrorMessage || '無法取得 Play 版本資訊',
       checkedAt: new Date().toISOString(),
     }
     cachedCheckResult = result

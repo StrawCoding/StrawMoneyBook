@@ -73,7 +73,7 @@ import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
-import { addonDeltaMajorFromNote, addonDeltaTagText } from '@/ui/utils/addon-note'
+import { addonDeltaMajorFromNote, addonDeltaTagText, stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const transactionStore = useTransactionStore()
@@ -210,7 +210,7 @@ function formatTime(iso) {
 }
 
 function noteText(tx) {
-  return String(tx?.note ?? '').trim() || '-'
+  return stripAddonSummaryFromNote(tx?.note).trim() || '-'
 }
 
 function addonDeltaMajor(note) {

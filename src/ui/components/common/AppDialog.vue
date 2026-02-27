@@ -104,7 +104,8 @@ onBeforeUnmount(() => {
   margin: 0
 }
 .dialog-message {
-  margin: 0
+  margin: 0;
+  white-space: pre-line;
 }
 .dialog-body {
   display: grid;

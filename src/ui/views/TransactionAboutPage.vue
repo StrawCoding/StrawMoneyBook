@@ -44,7 +44,7 @@
         </div>
       </div>
 
-      <p v-if="transaction.note" class="note">{{ transaction.note }}</p>
+      <p v-if="displayNote(transaction.note)" class="note">{{ displayNote(transaction.note) }}</p>
 
       <div class="row action-row">
         <button class="btn primary" @click="openEdit(transaction)">
@@ -75,7 +75,7 @@
             </p>
             <p class="muted">{{ relationAccountText(related.tx) }}</p>
             <p class="muted">{{ formatTime(related.tx.occurred_at) }}</p>
-            <p v-if="related.tx.note" class="muted relation-note">{{ related.tx.note }}</p>
+            <p v-if="displayNote(related.tx.note)" class="muted relation-note">{{ displayNote(related.tx.note) }}</p>
           </div>
 
           <div class="row relation-action">
@@ -113,6 +113,7 @@ import { useUiStore } from '@/ui/stores/ui.store'
 import { listAllTransactions } from '@/core/repositories/transaction.repo'
 import { useI18n } from '@/ui/services/i18n.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
+import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 
 const route = useRoute()
 const router = useRouter()
@@ -326,6 +327,10 @@ function formatTime(iso) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function displayNote(note) {
+  return stripAddonSummaryFromNote(note).trim()
 }
 </script>
 

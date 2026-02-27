@@ -46,7 +46,7 @@
               <font-awesome-icon v-if="accountIcon(tx.account_id)" :icon="accountIcon(tx.account_id)" class="tx-account-icon" />
               <span>{{ accountName(tx.account_id) }} ・ {{ formatTime(tx.occurred_at) }}</span>
             </small>
-            <small class="muted tx-note">{{ tx.note || '-' }}</small>
+            <small class="muted tx-note">{{ noteText(tx.note) || '-' }}</small>
           </div>
           <div class="amount-wrap">
             <MoneyText :value-minor="tx.amount_minor" :currency="tx.account_currency_code" :tone="tx.type" />
@@ -77,7 +77,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { listAllTransactions } from '@/core/repositories/transaction.repo'
-import { addonDeltaMajorFromNote, addonDeltaTagText } from '@/ui/utils/addon-note'
+import { addonDeltaMajorFromNote, addonDeltaTagText, stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const ledgerStore = useLedgerStore()
@@ -131,7 +131,7 @@ const filteredTransactions = computed(() => {
     const account = accountName(tx.account_id)
     const amount = String(Math.abs(Number(tx.amount_minor ?? 0)) / 100)
     const time = formatTime(tx.occurred_at)
-    const note = String(tx.note ?? '')
+    const note = noteText(tx.note)
     const text = `${category} ${account} ${amount} ${time} ${note}`.toLowerCase()
     return text.includes(query)
   })
@@ -240,6 +240,10 @@ function addonDeltaMajor(note) {
 
 function addonDeltaTag(note) {
   return addonDeltaTagText(note)
+}
+
+function noteText(note) {
+  return stripAddonSummaryFromNote(note).trim()
 }
 
 function showAddonDeltaTag(tx) {

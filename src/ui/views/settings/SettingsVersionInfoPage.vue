@@ -67,7 +67,10 @@ async function checkUpdate(options = {}) {
     latestVersion.value = String(result.latestVersion ?? '').trim()
     hasUpdate.value = Boolean(result.hasUpdate)
     if (result.checkFailed) {
-      updateMessage.value = t('app_update.check_failed_prompt')
+      const detail = String(result.message ?? '').trim()
+      updateMessage.value = detail
+        ? `${t('app_update.check_failed_prompt')}\n${detail}`
+        : t('app_update.check_failed_prompt')
       if (!silent) {
         uiStore.pushToast(t('settings_version.toast.check_failed'), 'error')
       }
@@ -142,5 +145,6 @@ onMounted(() => {
 
 .update-message {
   margin: 0;
+  white-space: pre-line;
 }
 </style>

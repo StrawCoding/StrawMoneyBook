@@ -101,30 +101,98 @@ function resolvePlayUrl(appId, rawUrl) {
   return `https://play.google.com/store/apps/details?id=${encodeURIComponent(appId)}`
 }
 
+function isAppNotFoundError(error) {
+  const message = String(error?.message ?? error ?? '').toLowerCase()
+  return /app not found/.test(message)
+}
+
+function isTimeoutError(error) {
+  const message = String(error?.message ?? error ?? '').toLowerCase()
+  return /timeout|timed out/.test(message)
+}
+
+function buildLookupTargets({ country, lang }) {
+  const candidates = [
+    { country, lang },
+    { country: DEFAULT_COUNTRY, lang: DEFAULT_LANG },
+    { country: 'us', lang: 'en_US' },
+    { country: 'tw', lang: 'zh_TW' },
+    { country: 'jp', lang: 'ja_JP' },
+  ]
+
+  const deduped = []
+  const seen = new Set()
+  for (const item of candidates) {
+    const nextCountry = normalizeCountry(item?.country) || DEFAULT_COUNTRY
+    const nextLang = normalizeLang(item?.lang) || DEFAULT_LANG
+    const key = `${nextCountry}::${nextLang}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push({ country: nextCountry, lang: nextLang })
+  }
+  return deduped
+}
+
+function buildAttemptSummary(attempts) {
+  return attempts
+    .map((attempt) => `[${attempt.country}/${attempt.lang}] ${attempt.message}`)
+    .join(' | ')
+}
+
 async function fetchLatestVersionFromPlayApi({ appId, country, lang }) {
-  const appInfo = await withTimeout(
-    gplay.app({
-      appId,
-      country,
-      lang,
-    }),
-    REQUEST_TIMEOUT_MS,
-    'Google Play API timeout',
-  )
+  const attempts = []
+  const targets = buildLookupTargets({ country, lang })
 
-  const latestVersion = String(appInfo?.version ?? '').trim()
-  if (!latestVersion) {
-    throw new Error('Google Play API missing version')
+  for (const target of targets) {
+    try {
+      const appInfo = await withTimeout(
+        gplay.app({
+          appId,
+          country: target.country,
+          lang: target.lang,
+        }),
+        REQUEST_TIMEOUT_MS,
+        'Google Play API timeout',
+      )
+
+      const latestVersion = String(appInfo?.version ?? '').trim()
+      if (!latestVersion) {
+        throw new Error('Google Play API missing version')
+      }
+
+      return {
+        appId,
+        latestVersion,
+        playUrl: resolvePlayUrl(appId, appInfo?.url),
+        title: String(appInfo?.title ?? '').trim(),
+        country: target.country,
+        lang: target.lang,
+        source: 'play_api',
+        checkedAt: new Date().toISOString(),
+      }
+    } catch (error) {
+      attempts.push({
+        country: target.country,
+        lang: target.lang,
+        message: String(error?.message ?? error ?? 'unknown_error'),
+      })
+    }
   }
 
-  return {
-    appId,
-    latestVersion,
-    playUrl: resolvePlayUrl(appId, appInfo?.url),
-    title: String(appInfo?.title ?? '').trim(),
-    source: 'play_api',
-    checkedAt: new Date().toISOString(),
+  const error = new Error('Google Play API request failed')
+  const allNotFound = attempts.length > 0 && attempts.every((item) => isAppNotFoundError(item.message))
+  const anyTimeout = attempts.some((item) => isTimeoutError(item.message))
+  if (allNotFound) {
+    error.code = 'play_app_not_found'
+    error.message = `Google Play app not found for appId=${appId}`
+  } else if (anyTimeout) {
+    error.code = 'play_api_timeout'
+    error.message = 'Google Play API timeout'
+  } else {
+    error.code = 'play_api_request_failed'
   }
+  error.details = buildAttemptSummary(attempts)
+  throw error
 }
 
 export default async function handler(req, res) {
@@ -163,9 +231,28 @@ export default async function handler(req, res) {
     setCachedLatestVersion(requestParams, payload)
     sendJson(res, 200, payload)
   } catch (error) {
+    const code = String(error?.code ?? '').trim()
+    const details = String(error?.details ?? '').trim()
+    if (code === 'play_app_not_found') {
+      sendJson(res, 404, {
+        error: 'play_app_not_found',
+        message: String(error?.message ?? 'Google Play app not found'),
+        details,
+      })
+      return
+    }
+    if (code === 'play_api_timeout') {
+      sendJson(res, 504, {
+        error: 'play_api_timeout',
+        message: String(error?.message ?? 'Google Play API timeout'),
+        details,
+      })
+      return
+    }
     sendJson(res, 502, {
       error: 'play_api_request_failed',
       message: String(error?.message ?? error ?? 'Google Play API request failed'),
+      details,
     })
   }
 }

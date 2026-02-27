@@ -381,6 +381,7 @@ import { assertCanUseAiBookkeeping, recordAiBookkeepingUsage } from '@/core/serv
 import { useSpeechInput } from '@/ui/composables/use-speech-input'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { useI18n } from '@/ui/services/i18n.service'
+import { mergeAddonItemsToNote } from '@/ui/utils/addon-note'
 import {
   convertAmountMinorByRate,
   getExchangeRateSnapshot,
@@ -1115,7 +1116,7 @@ async function submit(options = {}) {
   const settledAmountMajor = round2(baseAmountMajor + addonDeltaMajor)
   const rawAmountMinor = Math.round(settledAmountMajor * 100)
   const occurredAt = toOccurredAtIso(model.occurredDate, model.occurredHour, model.occurredMinute)
-  const noteText = String(model.note ?? '')
+  const noteText = mergeAddonItemsToNote(String(model.note ?? ''), appliedAddonItems)
 
   if (flowType === 'transfer') {
     if (baseAmountMinor <= 0) {

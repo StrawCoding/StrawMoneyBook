@@ -94,7 +94,10 @@ let updateChecking = false
 const updateDialogMessage = computed(() => {
   if (!updateInfo.value.latestVersion) {
     if (updateInfo.value.checkFailed) {
-      return t('app_update.check_failed_prompt')
+      const detail = String(updateInfo.value.message ?? '').trim()
+      return detail
+        ? `${t('app_update.check_failed_prompt')}\n${detail}`
+        : t('app_update.check_failed_prompt')
     }
     return t('app_update.message_no_version')
   }

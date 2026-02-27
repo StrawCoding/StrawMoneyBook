@@ -275,7 +275,12 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
-import { addonDeltaMajorFromNote, parseAddonItemsFromNote } from '@/ui/utils/addon-note'
+import {
+  addonDeltaMajorFromNote,
+  mergeAddonItemsToNote,
+  parseAddonItemsFromNote,
+  stripAddonSummaryFromNote,
+} from '@/ui/utils/addon-note'
 
 const props = defineProps({
   open: {
@@ -415,7 +420,7 @@ watch(
     model.accountId = tx.account_id ?? accountStore.accounts[0]?.id ?? ''
     model.peerAccountId = tx.peer_account_id ?? ''
     model.categoryId = tx.category_id ?? defaultCategoryId(model.type)
-    model.note = tx.note ?? ''
+    model.note = stripAddonSummaryFromNote(tx.note)
     model.isReimbursable = Boolean(tx.is_reimbursable) && model.type === 'expense'
     model.includeInBudget = Boolean(Number(tx.include_in_budget ?? 1))
     model.includeInAnalysis = Boolean(Number(tx.include_in_analysis ?? 1))
@@ -564,7 +569,7 @@ async function submit() {
   const sourceExtraMinor = Math.round(addonDeltaMajor * 100)
   const settledAmountMajor = round2(baseAmountMajor + addonDeltaMajor)
   const rawAmountMinor = Math.round(settledAmountMajor * 100)
-  const noteText = String(model.note ?? '')
+  const noteText = mergeAddonItemsToNote(String(model.note ?? ''), appliedAddonItems)
   if (model.type === 'adjustment') {
     if (!rawAmountMinor) {
       uiStore.pushToast('調整金額不可為 0', 'error')
