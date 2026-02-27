@@ -116,7 +116,7 @@ function closeUpdateDialog() {
 function openUpdateInGooglePlay() {
   const opened = openGooglePlayStore(updateInfo.value.playUrl)
   if (!opened) {
-    uiStore.pushToast('無法開啟 Google Play 連結', 'error')
+    uiStore.pushToast(t('settings_version.toast.open_play_failed'), 'error')
   }
   updateDialogOpen.value = false
 }

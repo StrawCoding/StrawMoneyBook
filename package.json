@@ -1,6 +1,6 @@
 {
   "name": "strawmoneybook",
-  "version": "0.5.15",
+  "version": "0.5.16",
   "private": true,
   "type": "module",
   "engines": {
@@ -28,6 +28,7 @@
     "@capacitor/cli": "^8.0.1",
     "@capacitor/core": "^8.0.1",
     "@capacitor/filesystem": "^8.1.0",
+    "@capawesome/capacitor-app-update": "^8.0.3",
     "@capgo/capacitor-social-login": "^8.3.1",
     "@capgo/native-purchases": "^8.0.23",
     "@fortawesome/fontawesome-svg-core": "^7.1.0",

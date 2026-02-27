@@ -1,6 +1,7 @@
 import capacitorConfig from '../../../capacitor.config.json'
 import appPackage from '../../../package.json'
 import { Capacitor } from '@capacitor/core'
+import { AppUpdate, AppUpdateAvailability } from '@capawesome/capacitor-app-update'
 
 const DEFAULT_UPDATE_MANIFEST_URL = 'https://www.strawmb.com/app-update.json'
 const SECONDARY_UPDATE_MANIFEST_URL = 'https://strawmb.com/app-update.json'
@@ -26,6 +27,10 @@ const GOOGLE_PLAY_URL = CONFIGURED_PLAY_URL || DEFAULT_PLAY_URL
 
 let cachedCheckResult = null
 let cachedCheckAtMs = 0
+
+function isNativeAndroidPlatform() {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
+}
 
 function normalizePlayCountry(rawValue) {
   const value = String(rawValue ?? '').trim().toLowerCase()
@@ -96,7 +101,9 @@ function resolvePlayApiUrls(rawValue) {
   if (!candidates.length) {
     candidates.push(DEFAULT_PLAY_VERSION_API_URL, SECONDARY_PLAY_VERSION_API_URL)
   }
-  candidates.push(LOCAL_PLAY_VERSION_API_URL, LOCAL_PLAY_VERSION_API_RELATIVE_URL)
+  if (Boolean(import.meta.env.DEV)) {
+    candidates.push(LOCAL_PLAY_VERSION_API_URL, LOCAL_PLAY_VERSION_API_RELATIVE_URL)
+  }
 
   const deduped = []
   const seen = new Set()
@@ -116,6 +123,12 @@ function summarizeRawErrorText(text, maxLength = 180) {
   if (!compact) return ''
   if (compact.length <= maxLength) return compact
   return `${compact.slice(0, maxLength)}...`
+}
+
+function isLikelyHtmlResponse(text) {
+  const source = String(text ?? '').trim().toLowerCase()
+  if (!source) return false
+  return /<!doctype html|<html|<head|<title|<body|strawmoneybook/.test(source)
 }
 
 function resolveHttpErrorDetail(responseText) {
@@ -142,6 +155,9 @@ function resolveHttpErrorDetail(responseText) {
 function normalizeUpdateFetchErrorMessage(error) {
   const raw = String(error?.message ?? error ?? '').trim()
   if (!raw) return '未知錯誤'
+  if (/回應為 html|收到 html|api_not_deployed_html/i.test(raw)) {
+    return 'Play 版本 API 未部署或 URL 指到前端頁面（非 JSON）'
+  }
   if (/play_app_not_found|app not found/i.test(raw)) {
     return APP_ID
       ? `Google Play 找不到此 App（${APP_ID}）`
@@ -161,6 +177,18 @@ function normalizeUpdateFetchErrorMessage(error) {
   }
   if (/timeout|逾時|timed out/i.test(raw)) {
     return '更新檢查逾時'
+  }
+  return raw
+}
+
+function normalizePlayCoreErrorMessage(error) {
+  const raw = String(error?.message ?? error ?? '').trim()
+  if (!raw) return 'Play Core 錯誤'
+  if (/timeout|逾時|timed out/i.test(raw)) {
+    return 'Play Core 檢查逾時'
+  }
+  if (/plugin.*not implemented|not implemented|unimplemented|does not have web implementation|unavailable|not available/i.test(raw)) {
+    return 'Play Core 目前不可用'
   }
   return raw
 }
@@ -192,6 +220,10 @@ function buildPlayApiFailureMessage(errorItems = []) {
     return APP_ID
       ? `Google Play 找不到此 App（${APP_ID}），請確認 Play 上架狀態與 appId`
       : 'Google Play 找不到此 App，請確認 appId'
+  }
+
+  if (messages.every((item) => item.includes('Play 版本 API 未部署或 URL 指到前端頁面（非 JSON）'))) {
+    return 'Play 版本 API 未部署或 URL 錯誤，請設定 VITE_APP_UPDATE_PLAY_API_URL 指向可用的 /api/app-update/play'
   }
 
   if (messages.every((item) => item.includes('Play 版本 API 路徑不存在（HTTP 404）'))) {
@@ -271,6 +303,37 @@ function normalizePlayApiPayload(rawPayload) {
   }
 }
 
+function normalizePlayCorePayload(rawPayload) {
+  const payload = rawPayload && typeof rawPayload === 'object' ? rawPayload : {}
+  const updateAvailability = Number(payload.updateAvailability)
+  if (!Number.isFinite(updateAvailability)) {
+    return null
+  }
+
+  if (updateAvailability === AppUpdateAvailability.UNKNOWN) {
+    return null
+  }
+
+  const hasUpdate = updateAvailability === AppUpdateAvailability.UPDATE_AVAILABLE
+    || updateAvailability === AppUpdateAvailability.UPDATE_IN_PROGRESS
+  const latestVersion = String(payload.availableVersionCode ?? '').trim()
+  const stalenessDays = Number(payload.clientVersionStalenessDays)
+  const messageParts = []
+  if (updateAvailability === AppUpdateAvailability.UPDATE_IN_PROGRESS) {
+    messageParts.push('更新安裝進行中')
+  }
+  if (Number.isFinite(stalenessDays) && stalenessDays >= 0) {
+    messageParts.push(`已可更新 ${stalenessDays} 天`)
+  }
+
+  return {
+    hasUpdate,
+    latestVersion,
+    message: messageParts.join('，'),
+    playUrl: GOOGLE_PLAY_URL,
+  }
+}
+
 function appendQuery(url, query = {}) {
   const target = String(url ?? '').trim()
   if (!target) return ''
@@ -318,6 +381,9 @@ async function fetchJsonPayload(url, timeoutMessage, emptyMessage, invalidMessag
   try {
     return JSON.parse(responseText)
   } catch {
+    if (isLikelyHtmlResponse(responseText)) {
+      throw new Error('api_not_deployed_html: 回應為 HTML')
+    }
     throw new Error(`${invalidMessage}${responseText ? `: ${summarizeRawErrorText(responseText, 80)}` : ''}`)
   }
 }
@@ -338,6 +404,39 @@ async function fetchPlayApiPayload(url) {
     'Play API 回應為空',
     'Play API 回應格式錯誤（非 JSON）',
   )
+}
+
+async function fetchLatestVersionFromPlayCore() {
+  if (!isNativeAndroidPlatform()) {
+    return {
+      payload: null,
+      errorMessage: '',
+    }
+  }
+
+  try {
+    const appUpdateInfo = await withTimeout(
+      AppUpdate.getAppUpdateInfo(),
+      UPDATE_FETCH_TIMEOUT_MS,
+      'Play Core 檢查逾時',
+    )
+    const payload = normalizePlayCorePayload(appUpdateInfo)
+    if (!payload) {
+      return {
+        payload: null,
+        errorMessage: 'Play Core 回傳未知狀態',
+      }
+    }
+    return {
+      payload,
+      errorMessage: '',
+    }
+  } catch (error) {
+    return {
+      payload: null,
+      errorMessage: normalizePlayCoreErrorMessage(error),
+    }
+  }
 }
 
 async function fetchLatestVersionFromPlayApi() {
@@ -425,6 +524,29 @@ export async function checkForAppUpdate(options = {}) {
 
   const currentVersion = getCurrentAppVersion()
   const usePlayOnly = shouldUsePlayOnlyStrategy()
+  let playCoreErrorMessage = ''
+
+  if (isNativeAndroidPlatform()) {
+    const { payload: playCorePayload, errorMessage } = await fetchLatestVersionFromPlayCore()
+    if (playCorePayload) {
+      const result = {
+        hasUpdate: Boolean(playCorePayload.hasUpdate),
+        checkFailed: false,
+        usedLocalFallback: false,
+        source: 'play_core',
+        currentVersion,
+        latestVersion: playCorePayload.latestVersion,
+        playUrl: playCorePayload.playUrl || GOOGLE_PLAY_URL,
+        message: playCorePayload.message,
+        checkedAt: new Date().toISOString(),
+      }
+      cachedCheckResult = result
+      cachedCheckAtMs = now
+      return result
+    }
+    playCoreErrorMessage = String(errorMessage ?? '').trim()
+  }
+
   const { payload: playPayload, errorMessage: playApiErrorMessage } = await fetchLatestVersionFromPlayApi()
   if (playPayload?.latestVersion) {
     const hasUpdate = compareAppVersions(playPayload.latestVersion, currentVersion) > 0
@@ -445,15 +567,19 @@ export async function checkForAppUpdate(options = {}) {
   }
 
   if (usePlayOnly) {
+    const combinedFailureMessage = [playCoreErrorMessage, playApiErrorMessage]
+      .map((item) => String(item ?? '').trim())
+      .filter(Boolean)
+      .join(' | ')
     const result = {
       hasUpdate: false,
       checkFailed: true,
       usedLocalFallback: false,
-      source: 'play_api',
+      source: isNativeAndroidPlatform() ? 'play_core' : 'play_api',
       currentVersion,
       latestVersion: '',
       playUrl: GOOGLE_PLAY_URL,
-      message: playApiErrorMessage || '無法取得 Play 版本資訊',
+      message: combinedFailureMessage || '無法取得 Play 版本資訊',
       checkedAt: new Date().toISOString(),
     }
     cachedCheckResult = result
@@ -554,6 +680,17 @@ export function getGooglePlayAppUrl() {
 
 export function openGooglePlayStore(url = GOOGLE_PLAY_URL) {
   const targetUrl = String(url ?? '').trim()
+  if (isNativeAndroidPlatform()) {
+    void AppUpdate.openAppStore(APP_ID ? { androidPackageName: APP_ID } : undefined).catch((error) => {
+      console.warn('[app-update] open Play Store via Play Core failed', error)
+      if (!targetUrl || typeof window === 'undefined') return
+      const opened = window.open(targetUrl, '_blank', 'noopener')
+      if (!opened) {
+        window.location.href = targetUrl
+      }
+    })
+    return true
+  }
   if (!targetUrl || typeof window === 'undefined') return false
   const opened = window.open(targetUrl, '_blank', 'noopener')
   if (!opened) {

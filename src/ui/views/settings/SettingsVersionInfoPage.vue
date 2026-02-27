@@ -51,10 +51,11 @@ const hasUpdate = ref(false)
 const updateMessage = ref('')
 
 const latestVersionLabel = computed(() => {
-  if (!latestVersion.value) return t('settings_version.no_update_data')
   if (hasUpdate.value) {
+    if (!latestVersion.value) return t('settings_version.update_available_no_version')
     return t('settings_version.latest_available', { version: latestVersion.value })
   }
+  if (!latestVersion.value) return t('settings_version.no_update_data')
   return latestVersion.value
 })
 
@@ -79,7 +80,11 @@ async function checkUpdate(options = {}) {
 
     updateMessage.value = String(result.message ?? '').trim()
     if (hasUpdate.value && !silent) {
-      uiStore.pushToast(t('settings_version.toast.update_available', { version: latestVersion.value }))
+      uiStore.pushToast(
+        latestVersion.value
+          ? t('settings_version.toast.update_available', { version: latestVersion.value })
+          : t('settings_version.toast.update_available_no_version'),
+      )
     } else if (!silent) {
       uiStore.pushToast(t('settings_version.toast.up_to_date'))
     }
