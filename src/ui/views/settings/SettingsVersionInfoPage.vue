@@ -46,17 +46,12 @@ const { t } = useI18n()
 const uiStore = useUiStore()
 const version = computed(() => String(appPackage?.version ?? '0.0.0'))
 const checkingUpdate = ref(false)
-const latestVersion = ref('')
 const hasUpdate = ref(false)
 const updateMessage = ref('')
 
 const latestVersionLabel = computed(() => {
-  if (hasUpdate.value) {
-    if (!latestVersion.value) return t('settings_version.update_available_no_version')
-    return t('settings_version.latest_available', { version: latestVersion.value })
-  }
-  if (!latestVersion.value) return t('settings_version.no_update_data')
-  return latestVersion.value
+  if (hasUpdate.value) return t('settings_version.update_available_no_version')
+  return t('settings_version.no_update_data')
 })
 
 async function checkUpdate(options = {}) {
@@ -65,7 +60,6 @@ async function checkUpdate(options = {}) {
   checkingUpdate.value = true
   try {
     const result = await checkForAppUpdate({ force: true })
-    latestVersion.value = String(result.latestVersion ?? '').trim()
     hasUpdate.value = Boolean(result.hasUpdate)
     if (result.checkFailed) {
       const detail = String(result.message ?? '').trim()
@@ -80,11 +74,7 @@ async function checkUpdate(options = {}) {
 
     updateMessage.value = String(result.message ?? '').trim()
     if (hasUpdate.value && !silent) {
-      uiStore.pushToast(
-        latestVersion.value
-          ? t('settings_version.toast.update_available', { version: latestVersion.value })
-          : t('settings_version.toast.update_available_no_version'),
-      )
+      uiStore.pushToast(t('settings_version.toast.update_available_no_version'))
     } else if (!silent) {
       uiStore.pushToast(t('settings_version.toast.up_to_date'))
     }

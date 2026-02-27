@@ -92,19 +92,13 @@ let promptedCheckFailedFallback = false
 let updateChecking = false
 
 const updateDialogMessage = computed(() => {
-  if (!updateInfo.value.latestVersion) {
-    if (updateInfo.value.checkFailed) {
-      const detail = String(updateInfo.value.message ?? '').trim()
-      return detail
-        ? `${t('app_update.check_failed_prompt')}\n${detail}`
-        : t('app_update.check_failed_prompt')
-    }
-    return t('app_update.message_no_version')
+  if (updateInfo.value.checkFailed) {
+    const detail = String(updateInfo.value.message ?? '').trim()
+    return detail
+      ? `${t('app_update.check_failed_prompt')}\n${detail}`
+      : t('app_update.check_failed_prompt')
   }
-  const summary = t('app_update.message', {
-    latest: updateInfo.value.latestVersion,
-    current: updateInfo.value.currentVersion || '-',
-  })
+  const summary = t('app_update.message_no_version')
   const note = String(updateInfo.value.message ?? '').trim()
   return note ? `${summary}\n${note}` : summary
 })
@@ -127,9 +121,10 @@ async function checkAppUpdate(options = {}) {
   try {
     const result = await checkForAppUpdate(options)
     updateInfo.value = result
-    if (result.hasUpdate && result.latestVersion) {
-      if (!promptedVersionSet.has(result.latestVersion)) {
-        promptedVersionSet.add(result.latestVersion)
+    if (result.hasUpdate) {
+      const updateKey = String(result.latestVersion ?? '').trim() || 'update_available'
+      if (!promptedVersionSet.has(updateKey)) {
+        promptedVersionSet.add(updateKey)
         updateDialogOpen.value = true
       }
       return
