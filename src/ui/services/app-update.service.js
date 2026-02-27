@@ -1,5 +1,6 @@
 import capacitorConfig from '../../../capacitor.config.json'
 import appPackage from '../../../package.json'
+import { Capacitor } from '@capacitor/core'
 
 const DEFAULT_UPDATE_MANIFEST_URL = 'https://www.strawmb.com/app-update.json'
 const SECONDARY_UPDATE_MANIFEST_URL = 'https://strawmb.com/app-update.json'
@@ -107,18 +108,18 @@ function isNetworkLikeUpdateError(message) {
 }
 
 function parseVersionParts(versionText) {
-  return String(versionText ?? '')
+  const groups = String(versionText ?? '')
     .trim()
     .replace(/^v/i, '')
-    .split('.')
-    .map((part) => Number.parseInt(String(part).replace(/[^\d].*$/, ''), 10))
-    .map((part) => (Number.isFinite(part) ? part : 0))
+    .match(/\d+/g)
+  if (!groups?.length) return []
+  return groups
+    .map((part) => Number.parseInt(String(part), 10))
+    .map((part) => (Number.isFinite(part) ? Math.max(0, part) : 0))
 }
 
 function isComparableVersion(versionText) {
-  const normalized = String(versionText ?? '').trim()
-  if (!normalized) return false
-  return /\d/.test(normalized)
+  return parseVersionParts(versionText).length > 0
 }
 
 export function compareAppVersions(leftVersion, rightVersion) {
@@ -238,7 +239,12 @@ async function fetchPlayApiPayload(url) {
 }
 
 async function fetchLatestVersionFromPlayApi() {
-  if (!APP_ID || !UPDATE_PLAY_API_URLS.length) return null
+  if (!APP_ID || !UPDATE_PLAY_API_URLS.length) {
+    return {
+      payload: null,
+      errorMessage: 'Play API 未設定',
+    }
+  }
   const errors = []
   for (const endpoint of UPDATE_PLAY_API_URLS) {
     const url = appendQuery(endpoint, { appId: APP_ID })
@@ -253,16 +259,30 @@ async function fetchLatestVersionFromPlayApi() {
         errors.push(`${url}: latestVersion 不可比較（${payload.latestVersion}）`)
         continue
       }
-      return payload
+      return {
+        payload,
+        errorMessage: '',
+      }
     } catch (error) {
       errors.push(`${url}: ${normalizeUpdateFetchErrorMessage(error)}`)
     }
   }
 
-  if (errors.length) {
-    console.warn('[app-update] fetch from Play API failed, falling back to manifest sources', errors.join(' | '))
+  const errorMessage = errors.join(' | ')
+  if (errorMessage) {
+    console.warn('[app-update] fetch from Play API failed', errorMessage)
   }
-  return null
+  return {
+    payload: null,
+    errorMessage,
+  }
+}
+
+function shouldUsePlayOnlyStrategy() {
+  const override = String(import.meta.env.VITE_APP_UPDATE_STRATEGY ?? '').trim().toLowerCase()
+  if (override === 'manifest') return false
+  if (override === 'play_only') return true
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android' && Boolean(APP_ID)
 }
 
 export async function checkForAppUpdate(options = {}) {
@@ -276,14 +296,15 @@ export async function checkForAppUpdate(options = {}) {
   }
 
   const currentVersion = getCurrentAppVersion()
-  // 優先使用 Play API 取得最新版本，失敗才回退 manifest
-  const playPayload = await fetchLatestVersionFromPlayApi()
+  const usePlayOnly = shouldUsePlayOnlyStrategy()
+  const { payload: playPayload, errorMessage: playApiErrorMessage } = await fetchLatestVersionFromPlayApi()
   if (playPayload?.latestVersion) {
     const hasUpdate = compareAppVersions(playPayload.latestVersion, currentVersion) > 0
     const result = {
       hasUpdate,
       checkFailed: false,
       usedLocalFallback: false,
+      source: 'play_api',
       currentVersion,
       latestVersion: playPayload.latestVersion,
       playUrl: playPayload.playUrl,
@@ -295,10 +316,29 @@ export async function checkForAppUpdate(options = {}) {
     return result
   }
 
+  if (usePlayOnly) {
+    const result = {
+      hasUpdate: false,
+      checkFailed: true,
+      usedLocalFallback: false,
+      source: 'play_api',
+      currentVersion,
+      latestVersion: '',
+      playUrl: GOOGLE_PLAY_URL,
+      message: playApiErrorMessage,
+      checkedAt: new Date().toISOString(),
+    }
+    cachedCheckResult = result
+    cachedCheckAtMs = now
+    return result
+  }
+
   if (!UPDATE_MANIFEST_URLS.length) {
     const result = {
       hasUpdate: false,
       checkFailed: true,
+      usedLocalFallback: false,
+      source: 'manifest',
       currentVersion,
       latestVersion: '',
       playUrl: GOOGLE_PLAY_URL,
@@ -338,6 +378,7 @@ export async function checkForAppUpdate(options = {}) {
         hasUpdate,
         checkFailed: false,
         usedLocalFallback,
+        source: isLocalUrl ? 'local_manifest' : 'manifest',
         currentVersion,
         latestVersion: payload.latestVersion,
         playUrl: payload.playUrl,
@@ -366,6 +407,8 @@ export async function checkForAppUpdate(options = {}) {
   const result = {
     hasUpdate: false,
     checkFailed: true,
+    usedLocalFallback: false,
+    source: 'manifest',
     currentVersion,
     latestVersion: '',
     playUrl: GOOGLE_PLAY_URL,

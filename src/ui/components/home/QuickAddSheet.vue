@@ -378,7 +378,6 @@ import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { getAiBookkeepingWarningFallback, parseAutoBookkeepingText } from '@/core/services/ai-bookkeeping.service'
 import { assertCanUseAiBookkeeping, recordAiBookkeepingUsage } from '@/core/services/membership.service'
-import { mergeAddonItemsToNote } from '@/ui/utils/addon-note'
 import { useSpeechInput } from '@/ui/composables/use-speech-input'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { useI18n } from '@/ui/services/i18n.service'
@@ -1116,7 +1115,7 @@ async function submit(options = {}) {
   const settledAmountMajor = round2(baseAmountMajor + addonDeltaMajor)
   const rawAmountMinor = Math.round(settledAmountMajor * 100)
   const occurredAt = toOccurredAtIso(model.occurredDate, model.occurredHour, model.occurredMinute)
-  const noteWithAddons = mergeAddonItemsToNote(model.note, appliedAddonItems)
+  const noteText = String(model.note ?? '')
 
   if (flowType === 'transfer') {
     if (baseAmountMinor <= 0) {
@@ -1165,7 +1164,7 @@ async function submit(options = {}) {
         isReimbursable: model.isReimbursable,
         includeInBudget: model.includeInBudget,
         includeInAnalysis: model.includeInAnalysis,
-        note: noteWithAddons,
+        note: noteText,
       })
     } else if (flowType === 'income') {
       txId = await transactionStore.addIncome({
@@ -1175,7 +1174,7 @@ async function submit(options = {}) {
         categoryId: model.categoryId,
         includeInBudget: model.includeInBudget,
         includeInAnalysis: model.includeInAnalysis,
-        note: noteWithAddons,
+        note: noteText,
       })
     } else {
       const transferRate = await resolveTransferRateOrThrow()
@@ -1193,7 +1192,7 @@ async function submit(options = {}) {
         occurredAt,
         fromAccountId: model.accountId,
         toAccountId: model.peerAccountId,
-        note: noteWithAddons,
+        note: noteText,
       })
       txId = transferResult?.outTxId ?? ''
     }

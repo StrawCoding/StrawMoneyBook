@@ -222,6 +222,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import {
+  autoConnectGoogleBackup,
   connectGoogleBackup,
   disconnectGoogleBackup,
   getGoogleBackupState,
@@ -370,7 +371,7 @@ async function refreshGoogleBackupState() {
     googleIntervalHours.value = 24
     return
   }
-  const state = await getGoogleBackupState(ledgerStore.activeLedgerId)
+  const state = await autoConnectGoogleBackup(ledgerStore.activeLedgerId)
   googleBackupState.value = state
   googleAutoEnabled.value = Boolean(state.autoEnabled)
   googleDataChangeAutoEnabled.value = Boolean(state.dataChangeAutoEnabled)

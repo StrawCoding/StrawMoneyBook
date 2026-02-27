@@ -275,7 +275,7 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
-import { addonDeltaMajorFromNote, mergeAddonItemsToNote, parseAddonItemsFromNote } from '@/ui/utils/addon-note'
+import { addonDeltaMajorFromNote, parseAddonItemsFromNote } from '@/ui/utils/addon-note'
 
 const props = defineProps({
   open: {
@@ -564,7 +564,7 @@ async function submit() {
   const sourceExtraMinor = Math.round(addonDeltaMajor * 100)
   const settledAmountMajor = round2(baseAmountMajor + addonDeltaMajor)
   const rawAmountMinor = Math.round(settledAmountMajor * 100)
-  const noteWithAddons = mergeAddonItemsToNote(model.note, appliedAddonItems)
+  const noteText = String(model.note ?? '')
   if (model.type === 'adjustment') {
     if (!rawAmountMinor) {
       uiStore.pushToast('調整金額不可為 0', 'error')
@@ -610,7 +610,7 @@ async function submit() {
       accountId: model.accountId,
       peerAccountId: model.type === 'transfer' ? model.peerAccountId : null,
       categoryId: model.type === 'adjustment' || model.type === 'transfer' ? null : model.categoryId,
-      note: noteWithAddons,
+      note: noteText,
       isReimbursable: model.type === 'expense' && model.isReimbursable,
       includeInBudget: model.includeInBudget,
       includeInAnalysis: model.includeInAnalysis,

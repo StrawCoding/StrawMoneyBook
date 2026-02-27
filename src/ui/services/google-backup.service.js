@@ -74,6 +74,11 @@ function pickPreferredBackupFile(files) {
   return exact ?? files[0]
 }
 
+function hasProfileIdentity(profile) {
+  if (!profile || typeof profile !== 'object') return false
+  return Boolean(profile.email || profile.name || profile.imageUrl)
+}
+
 function normalizeProfile(raw) {
   return {
     email: String(raw?.email ?? '').trim(),
@@ -124,6 +129,47 @@ async function resolveGoogleProfileForConnect() {
   return profile
 }
 
+function shouldAttemptSilentAutoConnect(state) {
+  if (!state || typeof state !== 'object') return false
+  if (state.connected) return true
+  return Boolean(
+    state.autoEnabled
+      || state.dataChangeAutoEnabled
+      || state.accountEmail
+      || state.accountName
+      || state.accountImageUrl,
+  )
+}
+
+async function ensureConnectedBySilentAuth(ledgerId, state) {
+  if (!Capacitor.isNativePlatform()) return state
+  if (!shouldAttemptSilentAutoConnect(state)) return state
+
+  let silentToken = ''
+  try {
+    silentToken = String(await getAccessToken({ interactive: false }) ?? '').trim()
+  } catch {
+    return state
+  }
+  if (!silentToken) return state
+
+  const profile = normalizeProfile(getCachedGoogleProfile())
+  const profilePatch = profilePatchFromState(state, profile)
+  const patch = {
+    connected: true,
+    lastError: '',
+    ...profilePatch,
+  }
+
+  if (state.connected && !Object.keys(profilePatch).length && !state.lastError) {
+    return state
+  }
+  if (!state.connected || hasProfileIdentity(profile)) {
+    return saveState(ledgerId, patch)
+  }
+  return saveState(ledgerId, { connected: true, lastError: '' })
+}
+
 async function saveState(ledgerId, patch) {
   const current = await getGoogleBackupState(ledgerId)
   const next = normalizeState({ ...current, ...patch })
@@ -136,6 +182,12 @@ export async function getGoogleBackupState(ledgerId) {
   const stored = await getSetting(ledgerId, GOOGLE_BACKUP_KEY)
   const state = normalizeState(stored)
   return hydrateStateProfileFromCache(ledgerId, state)
+}
+
+export async function autoConnectGoogleBackup(ledgerId) {
+  assertLedgerId(ledgerId)
+  const state = await getGoogleBackupState(ledgerId)
+  return ensureConnectedBySilentAuth(ledgerId, state)
 }
 
 export async function updateGoogleBackupState(ledgerId, patch = {}) {
@@ -243,7 +295,7 @@ export async function restoreGoogleBackupJson(ledgerId, options = {}) {
 export async function runGoogleAutoBackupIfDue(ledgerId) {
   assertLedgerId(ledgerId)
   if (!Capacitor.isNativePlatform()) return false
-  const state = await getGoogleBackupState(ledgerId)
+  const state = await autoConnectGoogleBackup(ledgerId)
   if (!isBackupDue(state)) return false
 
   try {
@@ -274,7 +326,7 @@ export async function runGoogleAutoBackupIfDue(ledgerId) {
 export async function runGoogleAutoBackupOnDataChange(ledgerId) {
   assertLedgerId(ledgerId)
   if (!Capacitor.isNativePlatform()) return false
-  const state = await getGoogleBackupState(ledgerId)
+  const state = await autoConnectGoogleBackup(ledgerId)
   if (!state.connected || !state.autoEnabled || !state.dataChangeAutoEnabled) return false
 
   try {
