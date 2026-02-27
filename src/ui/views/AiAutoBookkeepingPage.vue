@@ -431,10 +431,19 @@ async function parseText(options = {}) {
   parsing.value = true
 
   try {
+    if (!transactionStore.recent.length) {
+      try {
+        await transactionStore.loadRecent(120)
+      } catch {
+        // Keep parsing even if history loading fails.
+      }
+    }
+
     const result = parseAutoBookkeepingText(text, {
       accounts: accountStore.accounts,
       expenseCategories: categoryStore.expenseCategories,
       incomeCategories: categoryStore.incomeCategories,
+      historyTransactions: transactionStore.recent,
       now: new Date(),
     })
 

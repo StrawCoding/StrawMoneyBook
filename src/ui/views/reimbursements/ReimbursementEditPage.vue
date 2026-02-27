@@ -7,8 +7,8 @@
 
     <article v-if="targetTx" class="card panel">
       <header class="row">
-        <h3>{{ targetTx.category_name || targetTx.note || '未命名分類' }}</h3>
-        <MoneyText :value-minor="Math.abs(Number(targetTx.amount_minor ?? 0))" />
+        <h3>{{ targetTx.category_name || noteTextOfTx(targetTx) || '未命名分類' }}</h3>
+        <MoneyText :value-minor="originalMinorOfTx(targetTx)" />
       </header>
 
       <div class="detail-grid">
@@ -18,7 +18,7 @@
         </div>
         <div class="detail-row">
           <small class="muted">目前已報銷</small>
-          <MoneyText :value-minor="Math.abs(Number(targetTx.reimbursed_minor ?? 0))" />
+          <MoneyText :value-minor="reimbursedMinorOfTx(targetTx)" />
         </div>
       </div>
 
@@ -54,6 +54,8 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
+import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
+import { reimbursementOriginalMinor, reimbursementReimbursedMinor } from '@/ui/utils/reimbursement-item'
 
 const route = useRoute()
 const router = useRouter()
@@ -84,7 +86,8 @@ watch(
   () => targetTx.value,
   (tx) => {
     if (!tx) return
-    form.amountMajor = Math.abs(Number(tx.reimbursed_minor ?? tx.amount_minor ?? 0)) / 100
+    const defaultMinor = reimbursedMinorOfTx(tx) || originalMinorOfTx(tx)
+    form.amountMajor = defaultMinor / 100
     form.accountId = String(tx.reimbursed_account_id ?? accountStore.accounts[0]?.id ?? tx.account_id ?? '')
   },
   { immediate: true },
@@ -103,6 +106,20 @@ function formatTime(iso) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function originalMinorOfTx(tx) {
+  return reimbursementOriginalMinor(tx)
+}
+
+function reimbursedMinorOfTx(tx) {
+  return reimbursementReimbursedMinor(tx)
+}
+
+function noteTextOfTx(tx) {
+  const fromDerived = String(tx?.note_plain ?? '').trim()
+  if (fromDerived) return fromDerived
+  return stripAddonSummaryFromNote(tx?.note)
 }
 
 function goBack() {

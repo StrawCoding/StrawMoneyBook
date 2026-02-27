@@ -24,6 +24,7 @@ const LEDGER_TABLES = [
   'deleted_log',
 ]
 const APP_SETTING_SECRET_KEY_RE = /(password|token|secret|authorization|client[_-]?key)/i
+const ADDON_NOTE_PREFIX = '【附加項目】'
 
 function toCsvValue(value) {
   if (value === null || value === undefined) return ''
@@ -113,6 +114,23 @@ function sanitizeAppSettingRow(row) {
   }
 }
 
+function extractAddonSummaryFromNote(note) {
+  const line = String(note ?? '')
+    .split('\n')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(ADDON_NOTE_PREFIX))
+  if (!line) return ''
+  return line.slice(ADDON_NOTE_PREFIX.length).trim()
+}
+
+function stripAddonSummaryFromNote(note) {
+  return String(note ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith(ADDON_NOTE_PREFIX))
+    .join('\n')
+}
+
 function monthRangeUtc(monthKey) {
   const [year, month] = String(monthKey ?? '').split('-').map((part) => Number(part))
   const start = new Date(year, month - 1, 1, 0, 0, 0)
@@ -183,6 +201,7 @@ const EXCEL_HEADERS = [
   '二級分類',
   '交易標籤',
   '備註',
+  '附加項目',
   '退款&轉銷',
   '收回',
   '歸還',
@@ -325,7 +344,11 @@ export async function exportTransactionsCsv(ledgerId) {
      ORDER BY occurred_at DESC, created_at DESC;`,
     [ledgerId],
   )
-  const rows = result?.values ?? []
+  const rows = (result?.values ?? []).map((row) => ({
+    ...row,
+    note_without_addon: stripAddonSummaryFromNote(row.note),
+    addon_items: extractAddonSummaryFromNote(row.note),
+  }))
   const headers = rows.length
     ? Object.keys(rows[0])
     : [
@@ -347,6 +370,8 @@ export async function exportTransactionsCsv(ledgerId) {
         'is_reimbursable',
         'reimbursement_state',
         'reimbursed_at',
+        'note_without_addon',
+        'addon_items',
         'created_at',
         'updated_at',
         'deleted_at',
@@ -417,6 +442,7 @@ export async function exportLedgerTransactionsExcel(ledgerId, options = {}) {
     const categories = normalizeCategoryLevels(row.category_group_name, row.category_name)
     const typeLabel =
       row.type === 'expense' ? '支出' : row.type === 'income' ? '收入' : row.type === 'transfer' ? '轉帳' : '調整'
+    const addonSummary = extractAddonSummaryFromNote(row.note)
     return {
       類型: typeLabel,
       記帳時間: row.occurred_at ?? '',
@@ -428,7 +454,8 @@ export async function exportLedgerTransactionsExcel(ledgerId, options = {}) {
       一級分類: categories.primary,
       二級分類: categories.secondary,
       交易標籤: row.origin_type ?? '',
-      備註: row.note ?? '',
+      備註: stripAddonSummaryFromNote(row.note),
+      附加項目: addonSummary,
       '退款&轉銷': '',
       收回: '',
       歸還: '',
@@ -495,6 +522,7 @@ export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
     const categories = normalizeCategoryLevels(row.category_group_name, row.category_name)
     const typeLabel =
       row.type === 'expense' ? '支出' : row.type === 'income' ? '收入' : row.type === 'transfer' ? '轉帳' : '調整'
+    const addonSummary = extractAddonSummaryFromNote(row.note)
     return {
       類型: typeLabel,
       記帳時間: row.occurred_at ?? '',
@@ -505,7 +533,8 @@ export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
       當期帳戶餘額: String(accountBalanceMajor),
       一級分類: categories.primary,
       二級分類: categories.secondary,
-      備註: row.note ?? '',
+      備註: stripAddonSummaryFromNote(row.note),
+      附加項目: addonSummary,
       '退款&轉銷': '',
       收回: '',
       歸還: '',

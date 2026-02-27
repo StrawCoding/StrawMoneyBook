@@ -34,7 +34,7 @@ function appendAiBookkeepingWarning(warnings, warningKeys, key) {
 
 function normalizeText(value) {
   return String(value ?? '')
-    .replace(/[，、]/g, ' ')
+    .replace(/[，、。]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -51,6 +51,15 @@ function toMinor(major) {
 
 function round2(value) {
   return Math.round(Number(value) * 100) / 100
+}
+
+function parseLooseNumber(rawValue) {
+  const normalized = String(rawValue ?? '')
+    .trim()
+    .replace(/[,\s]/g, '')
+  if (!normalized) return NaN
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : NaN
 }
 
 function includesAny(text, patterns) {
@@ -80,6 +89,9 @@ const ACCOUNT_NAME_GENERIC_TARGETS = new Set([
   '信用卡',
   '簽帳卡',
   '金融卡',
+  '口座',
+  'カード',
+  'money',
 ])
 
 function stripAccountNameSuffix(value) {
@@ -91,7 +103,8 @@ function stripAccountNameSuffix(value) {
     /(account|acct)$/i,
     /(活存|定存|存款)$/i,
     /(信用卡|簽帳卡|金融卡|card|wallet)$/i,
-    /(台幣|臺幣|人民幣|美元|日圓|日元|歐元|twd|cny|usd|jpy|eur)$/i,
+    /(口座|カード|ウォレット)$/i,
+    /(台幣|臺幣|人民幣|美元|日圓|日元|歐元|日幣|円|yen|twd|cny|usd|jpy|eur)$/i,
   ]
 
   let changed = true
@@ -152,15 +165,15 @@ function parseDateTimeFromText(text, now = new Date()) {
   const base = new Date(now)
   base.setSeconds(0, 0)
 
-  if (/前天/.test(text)) {
+  if (/前天|おととい|day\s+before\s+yesterday/i.test(text)) {
     base.setDate(base.getDate() - 2)
-  } else if (/昨天/.test(text)) {
+  } else if (/昨天|昨日|yesterday/i.test(text)) {
     base.setDate(base.getDate() - 1)
-  } else if (/明天/.test(text)) {
+  } else if (/明天|明日|tomorrow/i.test(text)) {
     base.setDate(base.getDate() + 1)
   }
 
-  const ymd = text.match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})/)
+  const ymd = text.match(/(\d{4})\s*(?:[./-]|年)\s*(\d{1,2})\s*(?:[./-]|月)\s*(\d{1,2})(?:日)?/)
   if (ymd) {
     const year = Number(ymd[1])
     const month = Number(ymd[2]) - 1
@@ -169,7 +182,7 @@ function parseDateTimeFromText(text, now = new Date()) {
       base.setFullYear(year, month, day)
     }
   } else {
-    const md = text.match(/(\d{1,2})[/-](\d{1,2})/)
+    const md = text.match(/(\d{1,2})\s*(?:[./-]|月)\s*(\d{1,2})(?:日)?/)
     if (md) {
       const month = Number(md[1]) - 1
       const day = Number(md[2])
@@ -179,24 +192,39 @@ function parseDateTimeFromText(text, now = new Date()) {
     }
   }
 
-  const hm = text.match(/([01]?\d|2[0-3])[:：]([0-5]\d)/)
+  const hm = text.match(/([01]?\d|2[0-3])\s*[:：]\s*([0-5]\d)\s*(am|pm|a\.m\.|p\.m\.|午前|午後)?/i)
   if (hm) {
-    base.setHours(Number(hm[1]), Number(hm[2]), 0, 0)
+    let hour = Number(hm[1])
+    const minute = Number(hm[2])
+    const period = String(hm[3] ?? '').toLowerCase()
+    if ((period === 'pm' || period === 'p.m.' || period === '午後') && hour < 12) {
+      hour += 12
+    }
+    if ((period === 'am' || period === 'a.m.' || period === '午前') && hour === 12) {
+      hour = 0
+    }
+    base.setHours(hour, minute, 0, 0)
     return base.toISOString()
   }
 
-  const hourOnly = text.match(/(凌晨|早上|上午|中午|下午|晚上)?\s*(\d{1,2})\s*點(?:\s*(\d{1,2})\s*分)?/)
+  const hourOnly = text.match(
+    /(凌晨|早上|上午|中午|下午|晚上|午前|午後|morning|afternoon|evening|night)?\s*(\d{1,2})\s*(點|时|時|o'clock|oclock)?(?:\s*(\d{1,2})\s*(?:分|min|minutes?)?)?\s*(am|pm|a\.m\.|p\.m\.)?/i,
+  )
   if (hourOnly) {
+    const hasExplicitTimeMarker = Boolean(hourOnly[1] || hourOnly[3] || hourOnly[5])
+    if (!hasExplicitTimeMarker) {
+      return base.toISOString()
+    }
     let hour = Number(hourOnly[2])
-    const minute = Number(hourOnly[3] ?? 0)
-    const period = String(hourOnly[1] ?? '')
-    if ((period === '下午' || period === '晚上') && hour < 12) {
+    const minute = Number(hourOnly[4] ?? 0)
+    const period = `${String(hourOnly[1] ?? '')} ${String(hourOnly[5] ?? '')}`.toLowerCase()
+    if (/(下午|晚上|午後|afternoon|evening|night|pm|p\.m\.)/.test(period) && hour < 12) {
       hour += 12
     }
-    if (period === '中午' && hour < 11) {
+    if (/中午/.test(period) && hour < 11) {
       hour += 12
     }
-    if (period === '凌晨' && hour === 12) {
+    if (/(凌晨|午前|morning|am|a\.m\.)/.test(period) && hour === 12) {
       hour = 0
     }
     if (Number.isFinite(hour) && Number.isFinite(minute) && hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
@@ -208,10 +236,14 @@ function parseDateTimeFromText(text, now = new Date()) {
 }
 
 function parseAmountMajor(text) {
-  const withUnit = [...text.matchAll(/([+-]?\d+(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|twd|ntd|\$)/gi)]
+  const withUnit = [
+    ...text.matchAll(
+      /([+-]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\$|\$|¥|￥)/gi,
+    ),
+  ]
   if (withUnit.length > 0) {
     const target = withUnit[withUnit.length - 1]
-    const raw = Number(target[1])
+    const raw = parseLooseNumber(target[1])
     const unit = String(target[2] ?? '').toLowerCase()
     if (Number.isFinite(raw)) {
       if (unit === '萬' || unit === 'w') return Math.abs(round2(raw * 10000))
@@ -221,14 +253,14 @@ function parseAmountMajor(text) {
     }
   }
 
-  const allNumbers = [...text.matchAll(/([+-]?\d+(?:\.\d+)?)/g)]
-    .map((item) => Number(item[1]))
+  const allNumbers = [...text.matchAll(/([+-]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)/g)]
+    .map((item) => parseLooseNumber(item[1]))
     .filter((item) => Number.isFinite(item) && Math.abs(item) > 0)
     .map((item) => Math.abs(item))
 
   if (!allNumbers.length) return NaN
 
-  const year = text.match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})/)?.[1]
+  const year = text.match(/(\d{4})\s*(?:[./-]|年)\s*(\d{1,2})\s*(?:[./-]|月)\s*(\d{1,2})(?:日)?/)?.[1]
   const yearNum = Number(year)
   const candidates = allNumbers.filter((value) => {
     if (Number.isFinite(yearNum) && value === yearNum) return false
@@ -243,7 +275,7 @@ function parseAmountMajor(text) {
 }
 
 function parseAmountWithUnit(rawAmount, rawUnit = '') {
-  const amount = Math.abs(Number(rawAmount))
+  const amount = Math.abs(parseLooseNumber(rawAmount))
   if (!Number.isFinite(amount) || amount <= 0) return NaN
   const unit = String(rawUnit ?? '').toLowerCase()
   if (unit === '萬' || unit === 'w') return round2(amount * 10000)
@@ -275,11 +307,11 @@ function extractAddonItems(text) {
   const addonPatterns = [
     {
       defaultDirection: 'plus',
-      regex: /(附加項目|附加費|手續費|服務費|運費|稅金|稅費|匯費|利息|加價|加收)\s*([+-]?)\s*(\d+(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|twd|ntd|\$)?/gi,
+      regex: /(附加項目|附加費|手續費|服務費|運費|稅金|稅費|匯費|利息|加價|加收|fee|fees|service fee|shipping|tax|surcharge|interest|手数料|配送料|送料|税金)\s*([+-]?)\s*((?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\$|\$|¥|￥)?/gi,
     },
     {
       defaultDirection: 'minus',
-      regex: /(折扣|優惠|回饋|減免|折讓)\s*([+-]?)\s*(\d+(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|twd|ntd|\$)?/gi,
+      regex: /(折扣|優惠|回饋|減免|折讓|discount|coupon|rebate|cashback|値引き|割引|クーポン|キャッシュバック)\s*([+-]?)\s*((?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\$|\$|¥|￥)?/gi,
     },
   ]
 
@@ -397,15 +429,19 @@ function pickClosestAccount(text, accounts) {
 }
 
 function findAccountByKeyword(text, accounts, keywords) {
+  const source = String(text ?? '')
+  const lowerSource = source.toLowerCase()
   for (const keyword of keywords) {
-    const keywordIndex = text.indexOf(keyword)
-    const textAfterKeyword = keywordIndex >= 0 ? text.slice(keywordIndex + keyword.length) : ''
+    const normalizedKeyword = String(keyword ?? '')
+    if (!normalizedKeyword) continue
+    const keywordIndex = lowerSource.indexOf(normalizedKeyword.toLowerCase())
+    const textAfterKeyword = keywordIndex >= 0 ? source.slice(keywordIndex + normalizedKeyword.length) : ''
 
     for (const account of accounts ?? []) {
       const name = String(account?.name ?? '').trim()
       if (!name) continue
-      const keywordPattern = new RegExp(`${escapeRegExp(keyword)}\\s*${escapeRegExp(name)}`)
-      if (keywordPattern.test(text)) return account
+      const keywordPattern = new RegExp(`${escapeRegExp(normalizedKeyword)}\\s*${escapeRegExp(name)}`, 'i')
+      if (keywordPattern.test(source)) return account
     }
 
     const fuzzy = pickClosestAccount(textAfterKeyword, accounts)
@@ -417,8 +453,16 @@ function findAccountByKeyword(text, accounts, keywords) {
 function pickTransferAccounts(text, accounts) {
   const matched = findAccountMatches(text, accounts)
 
-  const fromByKeyword = findAccountByKeyword(text, accounts, ['從', '由', '自', '用', '刷', '扣', '轉出', '匯出', '拨出', '撥出'])
-  const toByKeyword = findAccountByKeyword(text, accounts, ['到', '至', '給', '轉入', '匯入', '存入', '打到', '撥入', '拨入'])
+  const fromByKeyword = findAccountByKeyword(
+    text,
+    accounts,
+    ['從', '由', '自', '用', '刷', '扣', '轉出', '匯出', '拨出', '撥出', 'from', 'via', 'using', 'out of', 'から', 'より'],
+  )
+  const toByKeyword = findAccountByKeyword(
+    text,
+    accounts,
+    ['到', '至', '給', '轉入', '匯入', '存入', '打到', '撥入', '拨入', 'to', 'into', 'deposit to', 'pay to', 'へ'],
+  )
 
   let from = fromByKeyword ?? matched[0] ?? null
   let to = toByKeyword ?? matched.find((item) => item.id !== from?.id) ?? null
@@ -463,6 +507,149 @@ function pickCategoryMatch(text, categories) {
   return best?.category ?? null
 }
 
+function tokenizeCategoryLearningText(value) {
+  const source = normalizeText(value).toLowerCase()
+  if (!source) return []
+
+  const rawSegments = source.match(/[a-z0-9]+|[\u4e00-\u9fff]+/gi) ?? []
+  const tokens = []
+
+  for (const segment of rawSegments) {
+    const token = String(segment ?? '').trim()
+    if (!token) continue
+
+    const isLatinNumeric = /^[a-z0-9]+$/.test(token)
+    if (isLatinNumeric) {
+      if (token.length >= 2 && !/^\d+$/.test(token)) {
+        tokens.push(token)
+      }
+      continue
+    }
+
+    if (token.length <= 6) {
+      tokens.push(token)
+    }
+    if (token.length >= 2) {
+      for (let i = 0; i <= token.length - 2; i += 1) {
+        tokens.push(token.slice(i, i + 2))
+      }
+    }
+  }
+
+  return tokens
+}
+
+function normalizeHistoryTransactionItem(item) {
+  if (!item || typeof item !== 'object') return null
+  const type = String(item?.type ?? '').trim()
+  const categoryId = String(item?.categoryId ?? item?.category_id ?? '').trim()
+  const note = normalizeText(item?.note ?? '')
+  const occurredAt = String(item?.occurredAt ?? item?.occurred_at ?? '').trim()
+  if (!type || !categoryId || !note) return null
+  return { type, categoryId, note, occurredAt }
+}
+
+function resolveHistoryRecencyWeight(occurredAt, now = new Date()) {
+  const parsed = new Date(occurredAt)
+  if (Number.isNaN(parsed.getTime())) return 0.7
+  const days = Math.max(0, (now.getTime() - parsed.getTime()) / 86400000)
+  return Math.max(0.35, Math.exp(-days / 240))
+}
+
+function tokenLearningWeight(token) {
+  const text = String(token ?? '')
+  if (!text) return 0
+  if (/^[a-z0-9]+$/.test(text)) {
+    return text.length >= 5 ? 1.15 : 0.95
+  }
+  if (text.length >= 3) return 1.2
+  return 1
+}
+
+function pickCategoryByHistoryLearning(text, categories, historyTransactions, targetType, now = new Date()) {
+  const categoryIdSet = new Set((categories ?? []).map((item) => String(item?.id ?? '').trim()).filter(Boolean))
+  if (!categoryIdSet.size) return null
+
+  const history = (historyTransactions ?? [])
+    .map((item) => normalizeHistoryTransactionItem(item))
+    .filter(Boolean)
+    .slice(0, 240)
+  if (!history.length) return null
+
+  const categoryTokenWeights = new Map()
+  const categorySampleWeight = new Map()
+  const tokenCategoryFrequency = new Map()
+
+  for (const tx of history) {
+    if (tx.type !== targetType) continue
+    if (!categoryIdSet.has(tx.categoryId)) continue
+    const tokenSet = new Set(tokenizeCategoryLearningText(tx.note))
+    if (!tokenSet.size) continue
+
+    const recencyWeight = resolveHistoryRecencyWeight(tx.occurredAt, now)
+    categorySampleWeight.set(
+      tx.categoryId,
+      (categorySampleWeight.get(tx.categoryId) ?? 0) + recencyWeight,
+    )
+
+    let tokenWeights = categoryTokenWeights.get(tx.categoryId)
+    if (!tokenWeights) {
+      tokenWeights = new Map()
+      categoryTokenWeights.set(tx.categoryId, tokenWeights)
+    }
+
+    for (const token of tokenSet) {
+      const weight = recencyWeight * tokenLearningWeight(token)
+      tokenWeights.set(token, (tokenWeights.get(token) ?? 0) + weight)
+      tokenCategoryFrequency.set(token, (tokenCategoryFrequency.get(token) ?? 0) + 1)
+    }
+  }
+
+  if (!categoryTokenWeights.size) return null
+  const inputTokens = [...new Set(tokenizeCategoryLearningText(text))]
+  if (!inputTokens.length) return null
+
+  const categoryCount = categoryTokenWeights.size
+  let best = null
+  for (const category of categories ?? []) {
+    const categoryId = String(category?.id ?? '').trim()
+    if (!categoryId) continue
+    const tokenWeights = categoryTokenWeights.get(categoryId)
+    if (!tokenWeights) continue
+
+    let overlap = 0
+    let score = 0
+    let categoryMagnitude = 0
+    for (const value of tokenWeights.values()) {
+      categoryMagnitude += Number(value) || 0
+    }
+    if (categoryMagnitude <= 0) continue
+
+    for (const token of inputTokens) {
+      const tokenWeight = Number(tokenWeights.get(token) ?? 0)
+      if (!tokenWeight) continue
+      overlap += 1
+      const tokenDf = Number(tokenCategoryFrequency.get(token) ?? 0)
+      const idf = Math.log((1 + categoryCount) / (1 + tokenDf)) + 1
+      score += tokenWeight * idf
+    }
+
+    if (!overlap) continue
+    const sampleWeight = Number(categorySampleWeight.get(categoryId) ?? 0)
+    const normalizedScore = score / (Math.sqrt(categoryMagnitude) + 1)
+    const confidenceBoost = Math.log1p(sampleWeight) * 0.08
+    const finalScore = normalizedScore + confidenceBoost
+
+    if (!best || finalScore > best.score) {
+      best = { category, score: finalScore, overlap }
+    }
+  }
+
+  if (!best) return null
+  if (best.overlap < 1 || best.score < 0.22) return null
+  return best.category
+}
+
 const MEAL_CATEGORY_PRIORITIES = [
   { key: '早餐', triggers: [/早餐|早午餐|brunch|breakfast/i], aliases: ['早餐', '早午餐', 'brunch', 'breakfast'] },
   { key: '午餐', triggers: [/午餐|中餐|便當|lunch/i], aliases: ['午餐', '中餐', '便當', 'lunch'] },
@@ -503,20 +690,41 @@ function pickMealTimeCategory(text, categories) {
 }
 
 const EXPENSE_CATEGORY_SEMANTIC_RULES = [
-  { triggers: [/早餐|午餐|晚餐|宵夜|便當|餐廳|咖啡|飲料|手搖|點心|foodpanda|ubereats|uber eats/i], hints: ['早餐', '午餐', '晚餐', '餐飲', '飲食', '餐費', '便當', '餐', '食', '飲', '伙食', '咖啡', 'food', 'meal'] },
-  { triggers: [/捷運|高鐵|台鐵|公車|計程車|uber|停車|加油|車票|交通/i], hints: ['交通', '運輸', '通勤', '停車', '油'] },
-  { triggers: [/房租|租金|管理費|水費|電費|瓦斯|網路費|電話費|電信/i], hints: ['居家', '家用', '房租', '水電', '電信', '網路', '租'] },
-  { triggers: [/看病|門診|藥|醫院|診所|牙醫|健保|醫療/i], hints: ['醫療', '健康', '藥', '保健'] },
-  { triggers: [/電影|演唱會|旅遊|住宿|飯店|遊戲|娛樂|ktv|netflix|spotify/i], hints: ['娛樂', '休閒', '旅遊', '玩樂'] },
-  { triggers: [/課程|學費|書|教材|補習|訓練|證照/i], hints: ['學習', '教育', '進修', '書'] },
-  { triggers: [/衣服|褲子|鞋|包包|服飾|化妝品|保養品/i], hints: ['服飾', '穿搭', '美妝', '購物'] },
+  {
+    triggers: [/早餐|午餐|晚餐|宵夜|便當|餐廳|咖啡|飲料|手搖|點心|foodpanda|ubereats|uber eats|breakfast|lunch|dinner|meal|restaurant|coffee|drink|snack|朝食|昼食|夕食|外食|喫茶/i],
+    hints: ['早餐', '午餐', '晚餐', '餐飲', '飲食', '餐費', '便當', '餐', '食', '飲', '伙食', '咖啡', 'food', 'meal', '食費', '外食'],
+  },
+  {
+    triggers: [/捷運|高鐵|台鐵|公車|計程車|uber|停車|加油|車票|交通|transport|transit|bus|train|taxi|parking|fuel|gas|commute|電車|地下鉄|タクシー|交通費/i],
+    hints: ['交通', '運輸', '通勤', '停車', '油', 'transport', 'commute', '交通費'],
+  },
+  {
+    triggers: [/房租|租金|管理費|水費|電費|瓦斯|網路費|電話費|電信|rent|utility|utilities|electric|water bill|gas bill|internet|phone bill|家賃|光熱費|通信費/i],
+    hints: ['居家', '家用', '房租', '水電', '電信', '網路', '租', 'rent', 'utilities', 'home', '家賃', '光熱費'],
+  },
+  {
+    triggers: [/看病|門診|藥|醫院|診所|牙醫|健保|醫療|clinic|hospital|doctor|medicine|medical|pharmacy|病院|診療|薬|医療/i],
+    hints: ['醫療', '健康', '藥', '保健', 'medical', 'health', 'medicine', '医療', '薬'],
+  },
+  {
+    triggers: [/電影|演唱會|旅遊|住宿|飯店|遊戲|娛樂|ktv|netflix|spotify|movie|travel|hotel|game|entertainment|concert|trip|映画|旅行|宿泊|娯楽|ゲーム/i],
+    hints: ['娛樂', '休閒', '旅遊', '玩樂', 'entertainment', 'travel', 'leisure', '娯楽', '旅行'],
+  },
+  {
+    triggers: [/課程|學費|書|教材|補習|訓練|證照|course|tuition|book|training|lesson|education|授業|学費|教材|勉強|講座/i],
+    hints: ['學習', '教育', '進修', '書', 'education', 'learning', 'tuition', '教育', '学習'],
+  },
+  {
+    triggers: [/衣服|褲子|鞋|包包|服飾|化妝品|保養品|clothes|shoes|bag|fashion|cosmetic|skincare|apparel|衣類|靴|バッグ|化粧品/i],
+    hints: ['服飾', '穿搭', '美妝', '購物', 'fashion', 'apparel', 'shopping', '服飾', '美容'],
+  },
 ]
 
 const INCOME_CATEGORY_SEMANTIC_RULES = [
-  { triggers: [/薪水|薪資|月薪|年終|獎金|津貼|加班費/i], hints: ['薪', '薪資', '薪水', '工作', '收入'] },
-  { triggers: [/利息|股息|配息|投資|分紅|回饋金/i], hints: ['投資', '利息', '股', '配息', '被動'] },
-  { triggers: [/退款|退費|退稅|退貨/i], hints: ['退款', '退費', '退稅', '其他收入'] },
-  { triggers: [/接案|佣金|手續費收入|兼職|外快/i], hints: ['接案', '兼職', '副業', '佣金', '收入'] },
+  { triggers: [/薪水|薪資|月薪|年終|獎金|津貼|加班費|salary|paycheck|wage|bonus|income|給料|給与|賞与/i], hints: ['薪', '薪資', '薪水', '工作', '收入', 'salary', 'income', '給与', '給料'] },
+  { triggers: [/利息|股息|配息|投資|分紅|回饋金|interest|dividend|investment|yield|return|利息|配当|投資/i], hints: ['投資', '利息', '股', '配息', '被動', 'investment', 'interest', 'dividend', '配当'] },
+  { triggers: [/退款|退費|退稅|退貨|refund|rebate|cashback|tax refund|返金|払い戻し/i], hints: ['退款', '退費', '退稅', '其他收入', 'refund', 'rebate', 'cashback', '返金'] },
+  { triggers: [/接案|佣金|手續費收入|兼職|外快|freelance|commission|side job|side income|contract|副業|報酬|手数料収入/i], hints: ['接案', '兼職', '副業', '佣金', '收入', 'freelance', 'commission', 'side income', '副業', '報酬'] },
 ]
 
 function includesKeyword(text, keywords) {
@@ -578,18 +786,18 @@ function extractSmartNoteText(text, context = {}) {
   }
 
   const stripPatterns = [
-    /\d{4}[/-]\d{1,2}[/-]\d{1,2}/g,
-    /\d{1,2}[/-]\d{1,2}/g,
-    /([01]?\d|2[0-3])[:：]([0-5]\d)/g,
-    /(凌晨|早上|上午|中午|下午|晚上)?\s*\d{1,2}\s*點(?:\s*\d{1,2}\s*分)?/g,
-    /[+-]?\d+(?:\.\d+)?\s*(萬|w|千|k|百|元|塊|塊錢|twd|ntd|\$)/gi,
-    /[+-]?\d+(?:\.\d+)?/g,
-    /(昨天|今天|明天|前天|剛剛|剛才|方才|剛)/g,
-    /(刷卡|現金|轉帳|转账|轉出|转出|轉入|转入|轉給|转给|轉到|转到|匯款|汇款|匯入|汇入|匯出|汇出|打款|打錢|打钱|撥款|拨款|調撥|调拨|挪款|挪錢|挪钱|搬錢|搬钱|移轉|互轉|過戶|过户|付款|支付|扣款|入帳|報[銷修]|報帳|請款|紀錄|記帳|新增|幫我|請幫我)/g,
-    /(收入|支出|轉出|转出|轉入|转入|匯出|汇出|匯入|汇入)/g,
-    /(計入預算|不計入預算|計入收支|不計入收支|算進預算|算進分析)/g,
-    /(早餐|午餐|晚餐|宵夜|餐費|餐飲|伙食|飲料|咖啡|交通|車資|通勤|捷運|地鐵|公車|客運|高鐵|台鐵|火車|計程車|uber|油錢|停車費|房租|租金|水費|電費|瓦斯|網路費|電信費|醫療|藥費|娛樂|旅遊|學費|教材|服飾|美妝|薪水|薪資|獎金|利息|股息|退款|退費)/gi,
-    /(錢包|信用卡|簽帳卡|金融卡|帳戶)/g,
+    /\d{4}\s*(?:[./-]|年)\s*\d{1,2}\s*(?:[./-]|月)\s*\d{1,2}(?:日)?/g,
+    /\d{1,2}\s*(?:[./-]|月)\s*\d{1,2}(?:日)?/g,
+    /([01]?\d|2[0-3])\s*[:：]\s*([0-5]\d)\s*(am|pm|a\.m\.|p\.m\.|午前|午後)?/gi,
+    /(凌晨|早上|上午|中午|下午|晚上|午前|午後|morning|afternoon|evening|night)?\s*\d{1,2}\s*(點|时|時|o'clock|oclock)?(?:\s*\d{1,2}\s*(分|min|minutes?)?)?\s*(am|pm|a\.m\.|p\.m\.)?/gi,
+    /[+-]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?\s*(萬|w|千|k|百|元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\$|\$|¥|￥)/gi,
+    /[+-]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?/g,
+    /(昨天|今天|明天|前天|剛剛|剛才|方才|剛|昨日|今日|明日|おととい|yesterday|today|tomorrow|just now)/gi,
+    /(刷卡|現金|轉帳|转账|轉出|转出|轉入|转入|轉給|转给|轉到|转到|匯款|汇款|匯入|汇入|匯出|汇出|打款|打錢|打钱|撥款|拨款|調撥|调拨|挪款|挪錢|挪钱|搬錢|搬钱|移轉|互轉|過戶|过户|付款|支付|扣款|入帳|報[銷修]|報帳|請款|紀錄|記帳|新增|幫我|請幫我|pay|paid|payment|spent|spend|expense|income|transfer|from|to|deposit|withdraw|record|log|create|add|reimburse|reimbursable|返済|入金|出金|振込|送金|記録|追加|精算)/gi,
+    /(收入|支出|轉出|转出|轉入|转入|匯出|汇出|匯入|汇入|income|expense|transfer|収入|支出|振替)/gi,
+    /(計入預算|不計入預算|計入收支|不計入收支|算進預算|算進分析|include in budget|exclude from budget|include in analysis|exclude from analysis|予算に含める|予算に含めない|分析に含める|分析に含めない)/gi,
+    /(早餐|午餐|晚餐|宵夜|餐費|餐飲|伙食|飲料|咖啡|交通|車資|通勤|捷運|地鐵|公車|客運|高鐵|台鐵|火車|計程車|uber|油錢|停車費|房租|租金|水費|電費|瓦斯|網路費|電信費|醫療|藥費|娛樂|旅遊|學費|教材|服飾|美妝|薪水|薪資|獎金|利息|股息|退款|退費|breakfast|lunch|dinner|meal|food|drink|transport|rent|utility|medical|travel|education|salary|bonus|interest|refund|朝食|昼食|夕食|食費|交通費|家賃|光熱費|医療|旅行|学費|給与|返金)/gi,
+    /(錢包|信用卡|簽帳卡|金融卡|帳戶|wallet|card|account|bank|口座|カード|財布)/gi,
   ]
 
   for (const pattern of stripPatterns) {
@@ -632,11 +840,37 @@ function normalizeType(text) {
       /帳戶互轉|账户互转/,
       /跨行轉帳|跨行转账/,
       /行內轉帳|行内转账/,
+      /\btransfer\b/i,
+      /\btransferred\b/i,
+      /\bmove money\b/i,
+      /\bwire\b/i,
+      /振込|送金|振替|口座間/,
     ])
   ) {
     return 'transfer'
   }
-  if (includesAny(text, [/收入/, /薪水/, /薪資/, /獎金/, /入帳/, /收到/, /退款/, /退費/, /回饋/])) return 'income'
+  if (
+    includesAny(text, [
+      /收入/,
+      /薪水/,
+      /薪資/,
+      /獎金/,
+      /入帳/,
+      /收到/,
+      /退款/,
+      /退費/,
+      /回饋/,
+      /\bincome\b/i,
+      /\bsalary\b/i,
+      /\bwage\b/i,
+      /\bbonus\b/i,
+      /\brefund\b/i,
+      /\brebate\b/i,
+      /収入|給料|給与|返金|入金/,
+    ])
+  ) {
+    return 'income'
+  }
   return 'expense'
 }
 
@@ -645,25 +879,25 @@ const LOAN_INTENT_PATTERN_GROUPS = [
     mode: 'repay',
     direction: 'lend',
     priority: 1,
-    patterns: [/收回/, /收到.*還款/, /還我/, /还我/, /回收借款/],
+    patterns: [/收回/, /收到.*還款/, /還我/, /还我/, /回收借款/, /paid me back/i, /pay me back/i, /returned.*loan/i, /貸した.*返して/, /返してくれた/],
   },
   {
     mode: 'repay',
     direction: 'borrow',
     priority: 2,
-    patterns: [/歸還/, /归还/, /還給/, /还给/, /還錢/, /还钱/, /償還/, /偿还/, /(向|跟)\S{0,8}還款/, /還款給/],
+    patterns: [/歸還/, /归还/, /還給/, /还给/, /還錢/, /还钱/, /償還/, /偿还/, /(向|跟)\S{0,8}還款/, /還款給/, /\brepay\b/i, /\brepaid\b/i, /pay back/i, /returned to/i, /返済/, /返した/],
   },
   {
     mode: 'create',
     direction: 'lend',
     priority: 3,
-    patterns: [/借給/, /借了給/, /借出給/, /借出/, /借款給/],
+    patterns: [/借給/, /借了給/, /借出給/, /借出/, /借款給/, /lend to/i, /loaned to/i, /I lent/i, /貸した/, /貸して/],
   },
   {
     mode: 'create',
     direction: 'borrow',
     priority: 4,
-    patterns: [/借入/, /(向|跟)\S{0,8}借/, /借款/, /借錢/, /借钱/],
+    patterns: [/借入/, /(向|跟)\S{0,8}借/, /借款/, /借錢/, /借钱/, /borrow from/i, /borrowed from/i, /loan from/i, /借りた/, /借入れ/],
   },
 ]
 
@@ -684,9 +918,9 @@ function firstPatternMatch(text, patterns) {
 function normalizeCounterpartyName(rawName) {
   let name = String(rawName ?? '').trim()
   if (!name) return ''
-  name = name.replace(/^[給跟向對把將]+/, '')
+  name = name.replace(/^(?:[給跟向對把將]+|to\s+|from\s+)/i, '')
   name = name.replace(/[的之]+$/g, '')
-  name = name.replace(/(借款|欠款|還款|还款|款項|款项|款|錢|钱)$/g, '')
+  name = name.replace(/(借款|欠款|還款|还款|款項|款项|款|錢|钱|loan|repay|payment|money)$/gi, '')
   name = name.replace(/^[,，。:：;；]+|[,，。:：;；]+$/g, '')
   name = name.trim()
   if (!name) return ''
@@ -695,7 +929,7 @@ function normalizeCounterpartyName(rawName) {
     name = name.slice(0, 24).trim()
   }
   if (!name) return ''
-  if (includesAny(name, [/^(昨天|今天|明天|前天|剛剛|刚刚|下午|上午|晚上|早上)$/])) return ''
+  if (includesAny(name, [/^(昨天|今天|明天|前天|剛剛|刚刚|下午|上午|晚上|早上|yesterday|today|tomorrow|afternoon|morning|evening|night|昨日|今日|明日)$/i])) return ''
   return name
 }
 
@@ -707,21 +941,30 @@ function extractCounterpartyFromLoanText(text, mode, direction) {
     patterns.push(
       /(?:借給|借了給|借出給|借出|借款給)\s*([^\s，。,；;:：]{1,24})/i,
       /給\s*([^\s，。,；;:：]{1,24})\s*(?:借|借款|借錢|借钱|借出)/i,
+      /(?:lend(?:ing)?|loan(?:ed)?)\s+to\s+([a-zA-Z][a-zA-Z0-9._-]{0,23})/i,
+      /([a-zA-Z][a-zA-Z0-9._-]{0,23})\s+(?:borrowed)\s+from\s+me/i,
+      /([^\s，。,；;:：]{1,24})\s*に\s*貸した/i,
     )
   } else if (mode === 'create' && direction === 'borrow') {
     patterns.push(
       /(?:向|跟)\s*([^\s，。,；;:：]{1,24})\s*(?:借|借入|借款|借錢|借钱)/i,
       /(?:借入|借款|借錢|借钱)\s*([^\s，。,；;:：]{1,24})/i,
+      /(?:borrow(?:ed)?|loan)\s+from\s+([a-zA-Z][a-zA-Z0-9._-]{0,23})/i,
+      /([^\s，。,；;:：]{1,24})\s*から\s*借(?:りた|入れた)?/i,
     )
   } else if (mode === 'repay' && direction === 'lend') {
     patterns.push(
       /(?:收回|收到|收到了)\s*([^\s，。,；;:：]{1,24})/i,
       /([^\s，。,；;:：]{1,24})\s*(?:還我|还我)/i,
+      /(?:received|got)\s+(?:repayment|payback)\s+from\s+([a-zA-Z][a-zA-Z0-9._-]{0,23})/i,
+      /([^\s，。,；;:：]{1,24})\s*が\s*返済した/i,
     )
   } else if (mode === 'repay' && direction === 'borrow') {
     patterns.push(
       /(?:歸還|归还|還款|还款|還給|还给|還錢|还钱)\s*([^\s，。,；;:：]{1,24})/i,
       /(?:向|跟)\s*([^\s，。,；;:：]{1,24})\s*(?:歸還|归还|還款|还款|還錢|还钱)/i,
+      /(?:repay(?:ed)?|pay(?:ing)?\s+back)\s+([a-zA-Z][a-zA-Z0-9._-]{0,23})/i,
+      /([^\s，。,；;:：]{1,24})\s*に\s*返済した/i,
     )
   }
 
@@ -790,6 +1033,11 @@ function shouldTreatAsTransfer(text, accounts) {
     /(轉|轉錢|轉款|匯|汇|挪|撥|拨|搬|移)\s*\S{0,18}\s*(到|至|給|入)/,
     /(到|至|給)\s*\S{0,18}\s*(轉|轉錢|轉款|匯|汇|挪|撥|拨|搬|移)/,
     /(帳戶|账户)\s*\S{0,18}\s*(互轉|互转)/,
+    /\bfrom\b\s+\S{0,20}\s+\bto\b/i,
+    /\btransfer\b\s+\S{0,20}\s+\bto\b/i,
+    /\bmove\b\s+\S{0,20}\s+\bto\b/i,
+    /から\s*\S{0,16}\s*へ/,
+    /口座.*(振替|送金)/,
     /→|->|=>|➡/,
   ])
   const hasTransferAction = includesAny(source, [
@@ -814,6 +1062,11 @@ function shouldTreatAsTransfer(text, accounts) {
     /移轉|过户|過戶/,
     /內轉|内转|互轉|互转/,
     /帳戶互轉|账户互转/,
+    /\btransfer\b/i,
+    /\bwire\b/i,
+    /\bmove money\b/i,
+    /\bsend money\b/i,
+    /振込|送金|振替|口座間移動/,
   ])
 
   let hasBridgeBetweenMatchedAccounts = false
@@ -830,7 +1083,7 @@ function shouldTreatAsTransfer(text, accounts) {
       if (!Number.isFinite(leftEnd) || !Number.isFinite(rightStart) || rightStart <= leftEnd) continue
 
       const bridge = compact.slice(leftEnd, rightStart)
-      if (/轉|匯|汇|到|至|給|→|->|=>|➡|挪|撥|拨|移|搬/.test(bridge)) {
+      if (/轉|匯|汇|到|至|給|→|->|=>|➡|挪|撥|拨|移|搬|to|from|transfer|wire|send|move|へ|から|振込|送金|振替/i.test(bridge)) {
         hasBridgeBetweenMatchedAccounts = true
         break
       }
@@ -841,20 +1094,49 @@ function shouldTreatAsTransfer(text, accounts) {
 }
 
 function normalizeReimbursable(text, fallback = false) {
-  if (includesAny(text, [/不報[銷修]/, /不可報[銷修]/, /不需報[銷修]/, /不用報[銷修]/, /自費/])) return false
-  if (includesAny(text, [/可報[銷修]/, /可報帳/, /報[銷修]/, /報帳/, /請款/, /墊付/])) return true
+  if (
+    includesAny(text, [
+      /不報[銷修]/,
+      /不可報[銷修]/,
+      /不需報[銷修]/,
+      /不用報[銷修]/,
+      /自費/,
+      /non[-\s]?reimbursable/i,
+      /not reimbursable/i,
+      /personal expense/i,
+      /立替不可|精算不可/,
+    ])
+  ) {
+    return false
+  }
+  if (
+    includesAny(text, [
+      /可報[銷修]/,
+      /可報帳/,
+      /報[銷修]/,
+      /報帳/,
+      /請款/,
+      /墊付/,
+      /\breimbursable\b/i,
+      /\breimburse\b/i,
+      /expense claim/i,
+      /立替|精算/,
+    ])
+  ) {
+    return true
+  }
   return fallback
 }
 
 function normalizeIncludeFlag(text, key, fallback) {
   if (key === 'budget') {
-    if (includesAny(text, [/不計入預算/, /不算預算/, /不記預算/, /不列預算/, /不走預算/, /預算外/])) return false
-    if (includesAny(text, [/計入預算/, /算進預算/, /記入預算/, /納入預算/, /列入預算/])) return true
+    if (includesAny(text, [/不計入預算/, /不算預算/, /不記預算/, /不列預算/, /不走預算/, /預算外/, /exclude from budget/i, /not in budget/i, /budget excluded/i, /予算(に)?含めない/])) return false
+    if (includesAny(text, [/計入預算/, /算進預算/, /記入預算/, /納入預算/, /列入預算/, /include in budget/i, /count toward budget/i, /budget included/i, /予算(に)?含める/])) return true
     return fallback
   }
 
-  if (includesAny(text, [/不計入收支/, /不計收支/, /不記收支/, /不計入分析/, /不算分析/, /收支外/, /分析外/])) return false
-  if (includesAny(text, [/計入收支/, /記錄收支/, /計入分析/, /算進分析/, /列入收支/, /列入分析/])) return true
+  if (includesAny(text, [/不計入收支/, /不計收支/, /不記收支/, /不計入分析/, /不算分析/, /收支外/, /分析外/, /exclude from analysis/i, /exclude from reports?/i, /not in analysis/i, /分析(に)?含めない/])) return false
+  if (includesAny(text, [/計入收支/, /記錄收支/, /計入分析/, /算進分析/, /列入收支/, /列入分析/, /include in analysis/i, /include in reports?/i, /analyze this/i, /分析(に)?含める/])) return true
   return fallback
 }
 
@@ -891,6 +1173,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
   const accounts = context.accounts ?? []
   const expenseCategories = context.expenseCategories ?? []
   const incomeCategories = context.incomeCategories ?? []
+  const historyTransactions = context.historyTransactions ?? []
   const warningKeys = []
   const tinyNerHints = context.useTinyNer === false
     ? EMPTY_TINY_NER_HINTS
@@ -952,6 +1235,20 @@ export function parseAutoBookkeepingText(input, context = {}) {
 
   const matchedExpenseCategory = pickCategoryMatch(text, expenseCategories)
   const matchedIncomeCategory = pickCategoryMatch(text, incomeCategories)
+  const learnedExpenseCategory = pickCategoryByHistoryLearning(
+    text,
+    expenseCategories,
+    historyTransactions,
+    'expense',
+    context.now ?? new Date(),
+  )
+  const learnedIncomeCategory = pickCategoryByHistoryLearning(
+    text,
+    incomeCategories,
+    historyTransactions,
+    'income',
+    context.now ?? new Date(),
+  )
   const mealExpenseCategory = pickMealTimeCategory(text, expenseCategories)
   const semanticExpenseCategory = pickCategoryBySemanticRules(text, expenseCategories, EXPENSE_CATEGORY_SEMANTIC_RULES)
   const semanticIncomeCategory = pickCategoryBySemanticRules(text, incomeCategories, INCOME_CATEGORY_SEMANTIC_RULES)
@@ -964,8 +1261,8 @@ export function parseAutoBookkeepingText(input, context = {}) {
 
   let type = inferredType
   if (type !== 'transfer' && !loanIntent) {
-    const hasExpenseSignal = Boolean(matchedExpenseCategory || semanticExpenseCategory || nerExpenseCategory)
-    const hasIncomeSignal = Boolean(matchedIncomeCategory || semanticIncomeCategory || nerIncomeCategory)
+    const hasExpenseSignal = Boolean(matchedExpenseCategory || learnedExpenseCategory || semanticExpenseCategory || nerExpenseCategory)
+    const hasIncomeSignal = Boolean(matchedIncomeCategory || learnedIncomeCategory || semanticIncomeCategory || nerIncomeCategory)
     if (hasExpenseSignal && !hasIncomeSignal) type = 'expense'
     if (hasIncomeSignal && !hasExpenseSignal) type = 'income'
   }
@@ -1009,17 +1306,19 @@ export function parseAutoBookkeepingText(input, context = {}) {
     if (type === 'income') {
       const selectedIncomeCategory =
         nerIncomeCategory ??
-        semanticIncomeCategory ??
         matchedIncomeCategory ??
+        learnedIncomeCategory ??
+        semanticIncomeCategory ??
         null
       categoryId = selectedIncomeCategory?.id ?? ''
       selectedCategoryName = String(selectedIncomeCategory?.name ?? '')
     } else {
       const selectedExpenseCategory =
         nerExpenseCategory ??
+        matchedExpenseCategory ??
+        learnedExpenseCategory ??
         mealExpenseCategory ??
         semanticExpenseCategory ??
-        matchedExpenseCategory ??
         null
       categoryId = selectedExpenseCategory?.id ?? ''
       selectedCategoryName = String(selectedExpenseCategory?.name ?? '')

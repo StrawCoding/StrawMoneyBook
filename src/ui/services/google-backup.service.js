@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core'
 import { exportAllLedgersJson } from '@/core/services/export.service'
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
+import { translateMessage } from '@/ui/services/i18n.service'
 import {
   downloadAppDataBackupText,
   listAppDataBackups,
@@ -10,6 +11,7 @@ import { getAccessToken, getCachedGoogleProfile, googleSignIn, googleSignOut, re
 
 const GOOGLE_BACKUP_KEY = 'backup.google_drive'
 const GOOGLE_BACKUP_FILENAME = 'StrawMoneyBook_all_ledgers.json'
+const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
 function buildDefaultState() {
   return {
@@ -48,12 +50,12 @@ function normalizeState(raw) {
 }
 
 function assertLedgerId(ledgerId) {
-  if (!ledgerId) throw new Error('缺少帳本 ID')
+  if (!ledgerId) throw new Error(t('settings_auto_backup.error.missing_ledger_id'))
 }
 
 function ensureNativePlatform() {
   if (!Capacitor.isNativePlatform()) {
-    throw new Error('Google 備份僅支援 App 裝置')
+    throw new Error(t('settings_auto_backup.error.google.native_only'))
   }
 }
 
@@ -180,7 +182,7 @@ export async function performGoogleBackup(ledgerId, options = {}) {
 
   const state = await getGoogleBackupState(ledgerId)
   if (!state.connected) {
-    throw new Error('請先連接 Google 帳號')
+    throw new Error(t('settings_auto_backup.error.google.connect_required'))
   }
 
   const accessToken = await getAccessToken({ interactive: interactiveAuth })
@@ -215,14 +217,14 @@ export async function restoreGoogleBackupJson(ledgerId, options = {}) {
 
   const state = await getGoogleBackupState(ledgerId)
   if (!state.connected) {
-    throw new Error('請先連接 Google 帳號')
+    throw new Error(t('settings_auto_backup.error.google.connect_required'))
   }
 
   const accessToken = await getAccessToken({ interactive: interactiveAuth })
   const files = await listAppDataBackups({ accessToken, reauth: reauthHandler })
   const target = pickPreferredBackupFile(files)
   if (!target?.id) {
-    throw new Error('找不到 Google 備份檔')
+    throw new Error(t('settings_auto_backup.error.google.restore_file_missing'))
   }
 
   const jsonText = await downloadAppDataBackupText({
@@ -258,11 +260,12 @@ export async function runGoogleAutoBackupIfDue(ledgerId) {
   } catch (error) {
     const isReauth = String(error?.code ?? '') === 'GOOGLE_REAUTH_REQUIRED'
     const detail = String(error?.message ?? error ?? '').trim()
+    const detailSuffix = detail ? t('settings_auto_backup.error.detail_suffix', { detail }) : ''
     await saveState(ledgerId, {
       lastBackupStatus: 'error',
       lastError: isReauth
-        ? `Google 自動備份已暫停：需要重新授權，請到設定頁重新登入 Google。${detail ? `（${detail}）` : ''}`
-        : detail || 'Google 自動備份失敗',
+        ? t('settings_auto_backup.error.google.auto_backup_reauth_required', { detailSuffix })
+        : detail || t('settings_auto_backup.error.google.auto_backup_failed'),
     })
     return false
   }
@@ -288,11 +291,14 @@ export async function runGoogleAutoBackupOnDataChange(ledgerId) {
   } catch (error) {
     const isReauth = String(error?.code ?? '') === 'GOOGLE_REAUTH_REQUIRED'
     const detail = String(error?.message ?? error ?? '').trim()
+    const detailSuffix = detail ? t('settings_auto_backup.error.detail_suffix', { detail }) : ''
     await saveState(ledgerId, {
       lastBackupStatus: 'error',
       lastError: isReauth
-        ? `Google 資料更動自動備份已暫停：需要重新授權，請到設定頁重新登入 Google。${detail ? `（${detail}）` : ''}`
-        : detail || 'Google 資料更動自動備份失敗',
+        ? t('settings_auto_backup.error.google.data_change_backup_reauth_required', {
+            detailSuffix,
+          })
+        : detail || t('settings_auto_backup.error.google.data_change_backup_failed'),
     })
     return false
   }

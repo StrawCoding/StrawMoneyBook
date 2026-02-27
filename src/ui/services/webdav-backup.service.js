@@ -1,9 +1,11 @@
 import { exportAllLedgersJson } from '@/core/services/export.service'
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
+import { translateMessage } from '@/ui/services/i18n.service'
 import { Capacitor, CapacitorHttp } from '@capacitor/core'
 
 const WEBDAV_BACKUP_KEY = 'backup.webdav'
 const WEBDAV_REQUEST_TIMEOUT_MS = 15000
+const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
 function buildDefaultState() {
   return {
@@ -48,7 +50,7 @@ function normalizeState(raw) {
 }
 
 function assertLedgerId(ledgerId) {
-  if (!ledgerId) throw new Error('缺少帳本 ID')
+  if (!ledgerId) throw new Error(t('settings_auto_backup.error.missing_ledger_id'))
 }
 
 function normalizeEndpoint(endpoint) {
@@ -60,10 +62,10 @@ function normalizeEndpoint(endpoint) {
 function assertSecureEndpoint(endpoint) {
   const normalized = normalizeEndpoint(endpoint)
   if (!normalized) {
-    throw new Error('請先輸入 WebDAV Endpoint')
+    throw new Error(t('settings_auto_backup.error.webdav.endpoint_required'))
   }
   if (!/^https:\/\//i.test(normalized)) {
-    throw new Error('WebDAV Endpoint 必須使用 HTTPS')
+    throw new Error(t('settings_auto_backup.error.webdav.endpoint_https_required'))
   }
 }
 
@@ -103,7 +105,7 @@ function buildLegacyBackupFilename(ledgerId) {
 function buildUploadUrl(state, filename) {
   const endpoint = normalizeEndpoint(state.endpoint)
   const remoteDir = normalizeRemoteDir(state.remoteDir)
-  if (!endpoint) throw new Error('請先輸入 WebDAV Endpoint')
+  if (!endpoint) throw new Error(t('settings_auto_backup.error.webdav.endpoint_required'))
   const encodedRemoteDir = remoteDir
     .split('/')
     .filter(Boolean)
@@ -121,7 +123,7 @@ function buildUploadUrl(state, filename) {
 function buildRemoteDirUrl(state) {
   const endpoint = normalizeEndpoint(state.endpoint)
   const remoteDir = normalizeRemoteDir(state.remoteDir)
-  if (!endpoint) throw new Error('請先輸入 WebDAV Endpoint')
+  if (!endpoint) throw new Error(t('settings_auto_backup.error.webdav.endpoint_required'))
   if (!remoteDir) return `${endpoint}/`
   const encodedRemoteDir = remoteDir
     .split('/')
@@ -174,7 +176,11 @@ async function uploadJsonToWebdav(state, filename, payloadText) {
   })
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`WebDAV 上傳失敗：${text || response.status}`)
+    throw new Error(
+      t('settings_auto_backup.error.webdav.upload_failed', {
+        detail: text || response.status,
+      }),
+    )
   }
   return { url }
 }
@@ -214,12 +220,16 @@ async function requestWebdav(url, options = {}) {
     } catch (error) {
       const message = String(error?.message ?? '')
       if (/certificate|ssl|tls/i.test(message)) {
-        throw new Error('WebDAV 連線失敗：憑證驗證失敗（請確認 HTTPS 憑證）')
+        throw new Error(t('settings_auto_backup.error.webdav.certificate_failed'))
       }
       if (/timeout/i.test(message)) {
-        throw new Error(`WebDAV 連線逾時（${timeoutMs}ms），請稍後再試`)
+        throw new Error(t('settings_auto_backup.error.webdav.timeout', { timeoutMs }))
       }
-      throw new Error(`WebDAV 連線失敗：${message || '原生網路錯誤'}`)
+      throw new Error(
+        t('settings_auto_backup.error.webdav.native_network_failed', {
+          detail: message || t('settings_auto_backup.error.native_network_default'),
+        }),
+      )
     } finally {
       if (nativeTimeoutId) globalThis.clearTimeout(nativeTimeoutId)
     }
@@ -238,10 +248,10 @@ async function requestWebdav(url, options = {}) {
   } catch (error) {
     const message = String(error?.message ?? '')
     if (error?.name === 'AbortError' || /timeout/i.test(message)) {
-      throw new Error(`WebDAV 連線逾時（${timeoutMs}ms），請稍後再試`)
+      throw new Error(t('settings_auto_backup.error.webdav.timeout', { timeoutMs }))
     }
     if (/failed to fetch|networkerror|load failed/i.test(message)) {
-      throw new Error('WebDAV 連線失敗，請檢查 Endpoint、網路或伺服器 CORS 設定')
+      throw new Error(t('settings_auto_backup.error.webdav.cors_failed'))
     }
     throw error
   } finally {
@@ -271,10 +281,18 @@ async function ensureRemoteDirExists(state) {
       continue
     }
     if (response.status === 409) {
-      throw new Error(`WebDAV 資料夾建立失敗（路徑層級不存在）：${remoteDir}`)
+      throw new Error(
+        t('settings_auto_backup.error.webdav.mkcol_parent_missing', {
+          remoteDir,
+        }),
+      )
     }
     const text = await response.text()
-    throw new Error(`WebDAV 資料夾建立失敗：${text || response.status}`)
+    throw new Error(
+      t('settings_auto_backup.error.webdav.mkcol_failed', {
+        detail: text || response.status,
+      }),
+    )
   }
 }
 
@@ -301,7 +319,7 @@ export async function connectWebdavBackup(ledgerId, input = {}) {
     connected: true,
   })
   if (!nextState.endpoint || !nextState.username || !nextState.password) {
-    throw new Error('請完整填寫 Endpoint、帳號、密碼')
+    throw new Error(t('settings_auto_backup.error.webdav.missing_credentials'))
   }
   assertSecureEndpoint(nextState.endpoint)
 
@@ -337,7 +355,7 @@ export async function performWebdavBackup(ledgerId) {
   assertLedgerId(ledgerId)
   const state = await getWebdavBackupState(ledgerId)
   if (!state.connected || !state.endpoint || !state.username || !state.password) {
-    throw new Error('請先連接 WebDAV')
+    throw new Error(t('settings_auto_backup.error.webdav.connect_required'))
   }
   assertSecureEndpoint(state.endpoint)
 
@@ -371,7 +389,11 @@ async function downloadJsonFromWebdav(state, filename) {
   })
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`WebDAV 下載失敗：${text || response.status}`)
+    throw new Error(
+      t('settings_auto_backup.error.webdav.download_failed', {
+        detail: text || response.status,
+      }),
+    )
   }
   return response.text()
 }
@@ -395,7 +417,11 @@ async function listWebdavBackupFilenames(state) {
 
   if (![200, 207].includes(Number(response.status))) {
     const text = await response.text()
-    throw new Error(`WebDAV 讀取備份清單失敗：${text || response.status}`)
+    throw new Error(
+      t('settings_auto_backup.error.webdav.list_failed', {
+        detail: text || response.status,
+      }),
+    )
   }
 
   const xmlText = await response.text()
@@ -443,7 +469,7 @@ export async function restoreWebdavBackupJson(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   const state = await getWebdavBackupState(ledgerId)
   if (!state.connected || !state.endpoint || !state.username || !state.password) {
-    throw new Error('請先連接 WebDAV')
+    throw new Error(t('settings_auto_backup.error.webdav.connect_required'))
   }
   assertSecureEndpoint(state.endpoint)
 
@@ -491,7 +517,7 @@ export async function restoreWebdavBackupJson(ledgerId, options = {}) {
   }
   if (!restoredFilename) {
     if (lastError) throw lastError
-    throw new Error('找不到可還原的 WebDAV 備份檔案')
+    throw new Error(t('settings_auto_backup.error.webdav.restore_file_missing'))
   }
 
   await updateWebdavBackupState(ledgerId, {
@@ -519,7 +545,7 @@ export async function runWebdavAutoBackupIfDue(ledgerId) {
   } catch (error) {
     await updateWebdavBackupState(ledgerId, {
       lastBackupStatus: 'error',
-      lastError: String(error?.message ?? '自動備份失敗'),
+      lastError: String(error?.message ?? t('settings_auto_backup.error.webdav.auto_backup_failed')),
     })
     return { skipped: true, reason: 'failed' }
   }
@@ -540,7 +566,7 @@ export async function runWebdavAutoBackupOnDataChange(ledgerId) {
   } catch (error) {
     await updateWebdavBackupState(ledgerId, {
       lastBackupStatus: 'error',
-      lastError: String(error?.message ?? '資料更動自動備份失敗'),
+      lastError: String(error?.message ?? t('settings_auto_backup.error.webdav.data_change_backup_failed')),
     })
     return { skipped: true, reason: 'failed' }
   }

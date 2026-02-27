@@ -53,13 +53,13 @@
                 <span class="tx-icon-col">
                   <font-awesome-icon v-if="categoryIconOfTx(tx)" :icon="categoryIconOfTx(tx)" class="tx-icon" />
                 </span>
-                <strong class="entry-name">{{ tx.category_name || tx.note || '未命名分類' }}</strong>
+                <strong class="entry-name">{{ tx.category_name || noteTextOfTx(tx) || '未命名分類' }}</strong>
               </div>
-              <MoneyText :value-minor="Math.abs(Number(tx.amount_minor ?? 0))" />
+              <MoneyText :value-minor="originalMinorOfTx(tx)" />
             </div>
             <div class="row muted">
               <span>{{ formatTime(tx.occurred_at) }}</span>
-              <span>{{ tx.note || '-' }}</span>
+              <span>{{ noteTextOfTx(tx) || '-' }}</span>
             </div>
           </div>
         </li>
@@ -187,6 +187,12 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { isFreeTier } from '@/core/services/membership.service'
 import { useI18n } from '@/ui/services/i18n.service'
+import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
+import {
+  reimbursementOriginalMinor,
+  reimbursementPendingMinor,
+  reimbursementReimbursedMinor,
+} from '@/ui/utils/reimbursement-item'
 import {
   createCsvBlobUrl,
   openFileUrl,
@@ -449,15 +455,27 @@ function timestampForFilename(date = new Date()) {
 function claimMinorOfTx(tx) {
   const pendingMinor = pendingMinorOfTx(tx)
   if (tab.value === 'pending') return pendingMinor
-  const amountMinor = Math.abs(Math.round(Number(tx?.amount_minor ?? 0)))
-  const reimbursedMinor = Math.abs(Math.round(Number(tx?.reimbursed_minor ?? 0)))
-  return reimbursedMinor > 0 ? reimbursedMinor : amountMinor
+  const originalMinor = originalMinorOfTx(tx)
+  const reimbursedMinor = reimbursedMinorOfTx(tx)
+  return reimbursedMinor > 0 ? reimbursedMinor : originalMinor
 }
 
 function pendingMinorOfTx(tx) {
-  const amountMinor = Math.abs(Math.round(Number(tx?.amount_minor ?? 0)))
-  const reimbursedMinor = Math.abs(Math.round(Number(tx?.reimbursed_minor ?? 0)))
-  return Math.max(0, amountMinor - reimbursedMinor)
+  return reimbursementPendingMinor(tx)
+}
+
+function originalMinorOfTx(tx) {
+  return reimbursementOriginalMinor(tx)
+}
+
+function reimbursedMinorOfTx(tx) {
+  return reimbursementReimbursedMinor(tx)
+}
+
+function noteTextOfTx(tx) {
+  const fromDerived = String(tx?.note_plain ?? '').trim()
+  if (fromDerived) return fromDerived
+  return stripAddonSummaryFromNote(tx?.note)
 }
 
 async function exportClaimSheet() {
@@ -469,22 +487,22 @@ async function exportClaimSheet() {
 
   const statusLabel = tab.value === 'pending' ? '未報銷' : '已報銷'
   const rows = rowsSource.map((tx) => {
-    const amountMinor = Math.abs(Math.round(Number(tx.amount_minor ?? 0)))
-    const reimbursedMinor = Math.abs(Math.round(Number(tx.reimbursed_minor ?? 0)))
+    const amountMinor = originalMinorOfTx(tx)
+    const reimbursedMinor = reimbursedMinorOfTx(tx)
     const claimMinor = claimMinorOfTx(tx)
     return {
       狀態: statusLabel,
       交易日期: toDateText(tx.occurred_at),
       分類: tx.category_name || '',
-      備註: tx.note || '',
+      備註: noteTextOfTx(tx),
       原始支出: toAmountMajorText(amountMinor),
       已報銷: toAmountMajorText(reimbursedMinor),
       本次請款: toAmountMajorText(claimMinor),
     }
   })
 
-  const totalAmountMinor = rowsSource.reduce((sum, tx) => sum + Math.abs(Math.round(Number(tx.amount_minor ?? 0))), 0)
-  const totalReimbursedMinor = rowsSource.reduce((sum, tx) => sum + Math.abs(Math.round(Number(tx.reimbursed_minor ?? 0))), 0)
+  const totalAmountMinor = rowsSource.reduce((sum, tx) => sum + originalMinorOfTx(tx), 0)
+  const totalReimbursedMinor = rowsSource.reduce((sum, tx) => sum + reimbursedMinorOfTx(tx), 0)
   const totalClaimMinor = rowsSource.reduce((sum, tx) => sum + claimMinorOfTx(tx), 0)
   rows.push({
     狀態: '合計',

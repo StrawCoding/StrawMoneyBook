@@ -1,17 +1,21 @@
 <template>
   <section class="stack">
     <header class="row page-head">
-      <h2>自動備份</h2>
+      <h2>{{ t('settings_auto_backup.title') }}</h2>
       <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
     </header>
 
-        <article class="card panel" :class="{ working: isWorking }">
-      <h3>Google Drive 自動備份</h3>
-      <p class="muted">使用 Google 登入授權後，備份會寫入 appDataFolder（隱藏應用資料夾）。</p>
+    <article class="card panel" :class="{ working: isWorking }">
+      <h3>{{ t('settings_auto_backup.google_panel_title') }}</h3>
+      <p class="muted">{{ t('settings_auto_backup.google_panel_desc') }}</p>
 
       <div class="row backup-action-row">
         <button class="btn" :class="{ busy: googleConnecting }" :aria-busy="googleConnecting" :disabled="googleConnecting" @click="connectGoogle">
-          {{ googleConnecting ? '登入中...' : (googleBackupState.connected ? '重新登入 Google' : '使用 Google 登入') }}
+          {{
+            googleConnecting
+              ? t('settings_auto_backup.google_signing_in')
+              : (googleBackupState.connected ? t('settings_auto_backup.google_sign_in_again') : t('settings_auto_backup.google_sign_in'))
+          }}
         </button>
         <button
           class="btn"
@@ -20,21 +24,21 @@
           :disabled="!googleBackupState.connected || googleDisconnecting"
           @click="disconnectGoogle"
         >
-          {{ googleDisconnecting ? '中斷中...' : '登出 Google' }}
+          {{ googleDisconnecting ? t('settings_auto_backup.google_signing_out') : t('settings_auto_backup.google_sign_out') }}
         </button>
       </div>
 
       <label class="check-row">
         <input v-model="googleAutoEnabled" type="checkbox" :disabled="!googleBackupState.connected" />
-        <span>啟用自動備份</span>
+        <span>{{ t('settings_auto_backup.enable_auto_backup') }}</span>
       </label>
 
       <label class="field">
-        自動備份間隔
+        {{ t('settings_auto_backup.interval_label') }}
         <CustomSelect v-model="googleIntervalHours" :options="googleIntervalOptions" :disabled="!googleBackupState.connected" />
         <span class="inline-check">
           <input v-model="googleDataChangeAutoEnabled" type="checkbox" :disabled="!googleBackupState.connected || !googleAutoEnabled" />
-          <span>資料更動後自動備份</span>
+          <span>{{ t('settings_auto_backup.data_change_auto_backup') }}</span>
         </span>
       </label>
 
@@ -46,7 +50,7 @@
           :disabled="!googleBackupState.connected || googleSavingSettings"
           @click="saveGoogleBackupSettings"
         >
-          {{ googleSavingSettings ? '儲存中...' : '儲存備份設定' }}
+          {{ googleSavingSettings ? t('settings_auto_backup.saving') : t('settings_auto_backup.save_settings') }}
         </button>
         <button
           class="btn primary"
@@ -55,7 +59,7 @@
           :disabled="!googleBackupState.connected || googleBackingUpNow"
           @click="backupNowToGoogle"
         >
-          {{ googleBackingUpNow ? '備份中...' : '立即備份' }}
+          {{ googleBackingUpNow ? t('settings_auto_backup.backing_up') : t('settings_auto_backup.backup_now') }}
         </button>
         <button
           class="btn"
@@ -64,66 +68,70 @@
           :disabled="!googleBackupState.connected || googleRestoringNow"
           @click="restoreFromGoogle"
         >
-          {{ googleRestoringNow ? '還原中...' : '從備份還原' }}
+          {{ googleRestoringNow ? t('settings_auto_backup.restoring') : t('settings_auto_backup.restore_now') }}
         </button>
       </div>
 
       <ul class="backup-meta-list">
         <li>
-          <span class="muted">連線狀態</span>
-          <strong>{{ googleBackupState.connected ? '已連線' : '未連線' }}</strong>
+          <span class="muted">{{ t('settings_auto_backup.status.connection') }}</span>
+          <strong>{{ googleBackupState.connected ? t('settings_auto_backup.status.connected') : t('settings_auto_backup.status.disconnected') }}</strong>
         </li>
         <li>
-          <span class="muted">Google 帳號</span>
+          <span class="muted">{{ t('settings_auto_backup.status.google_account') }}</span>
           <strong>{{ googleBackupState.accountEmail || '-' }}</strong>
         </li>
         <li>
-          <span class="muted">上次備份</span>
+          <span class="muted">{{ t('settings_auto_backup.status.last_backup') }}</span>
           <strong>{{ formatBackupTime(googleBackupState.lastBackupAt) }}</strong>
         </li>
         <li>
-          <span class="muted">備份檔名</span>
+          <span class="muted">{{ t('settings_auto_backup.status.filename') }}</span>
           <strong>{{ googleBackupState.lastBackupFilename || '-' }}</strong>
         </li>
         <li v-if="googleBackupState.lastBackupStatus === 'error' && googleBackupState.lastError">
-          <span class="muted">錯誤</span>
+          <span class="muted">{{ t('settings_auto_backup.status.error') }}</span>
           <strong>{{ googleBackupState.lastError }}</strong>
         </li>
       </ul>
 
     </article>
     <article class="card panel" :class="{ working: isWorking }">
-      <h3>WebDAV 自動備份</h3>
-      <p class="muted">填入 WebDAV 伺服器後，可把目前帳本自動備份到你的私有儲存空間。</p>
+      <h3>{{ t('settings_auto_backup.webdav_panel_title') }}</h3>
+      <p class="muted">{{ t('settings_auto_backup.webdav_panel_desc') }}</p>
 
       <label class="field">
-        WebDAV Endpoint
+        {{ t('settings_auto_backup.webdav.endpoint_label') }}
         <input
           v-model.trim="webdavEndpointInput"
           type="text"
           class="input"
-          placeholder="https://dav.example.com/remote.php/dav/files/username"
+          :placeholder="t('settings_auto_backup.webdav.endpoint_placeholder')"
         />
       </label>
 
       <label class="field">
-        帳號
-        <input v-model.trim="webdavUsernameInput" type="text" class="input" placeholder="WebDAV 帳號" />
+        {{ t('settings_auto_backup.webdav.username_label') }}
+        <input v-model.trim="webdavUsernameInput" type="text" class="input" :placeholder="t('settings_auto_backup.webdav.username_placeholder')" />
       </label>
 
       <label class="field">
-        密碼 / App Password
-        <input v-model="webdavPasswordInput" type="password" class="input" placeholder="WebDAV 密碼" />
+        {{ t('settings_auto_backup.webdav.password_label') }}
+        <input v-model="webdavPasswordInput" type="password" class="input" :placeholder="t('settings_auto_backup.webdav.password_placeholder')" />
       </label>
 
       <label class="field">
-        備份資料夾（可空白）
-        <input v-model.trim="webdavRemoteDirInput" type="text" class="input" placeholder="例如：StrawMoneyBook" />
+        {{ t('settings_auto_backup.webdav.remote_dir_label') }}
+        <input v-model.trim="webdavRemoteDirInput" type="text" class="input" :placeholder="t('settings_auto_backup.webdav.remote_dir_placeholder')" />
       </label>
 
       <div class="row backup-action-row">
         <button class="btn" :class="{ busy: webdavConnecting }" :aria-busy="webdavConnecting" :disabled="webdavConnecting" @click="connectWebdav">
-          {{ webdavConnecting ? '連線中...' : (webdavBackupState.connected ? '重新連線 WebDAV' : '連接 WebDAV') }}
+          {{
+            webdavConnecting
+              ? t('settings_auto_backup.webdav.connecting')
+              : (webdavBackupState.connected ? t('settings_auto_backup.webdav.reconnect') : t('settings_auto_backup.webdav.connect'))
+          }}
         </button>
         <button
           class="btn"
@@ -132,21 +140,21 @@
           :disabled="!webdavBackupState.connected || webdavDisconnecting"
           @click="disconnectWebdav"
         >
-          {{ webdavDisconnecting ? '中斷中...' : '中斷連線' }}
+          {{ webdavDisconnecting ? t('settings_auto_backup.webdav.disconnecting') : t('settings_auto_backup.webdav.disconnect') }}
         </button>
       </div>
 
       <label class="check-row">
         <input v-model="webdavAutoEnabled" type="checkbox" :disabled="!webdavBackupState.connected" />
-        <span>啟用自動備份</span>
+        <span>{{ t('settings_auto_backup.enable_auto_backup') }}</span>
       </label>
 
       <label class="field">
-        自動備份間隔
+        {{ t('settings_auto_backup.interval_label') }}
         <CustomSelect v-model="webdavIntervalHours" :options="webdavIntervalOptions" :disabled="!webdavBackupState.connected" />
         <span class="inline-check">
           <input v-model="webdavDataChangeAutoEnabled" type="checkbox" :disabled="!webdavBackupState.connected || !webdavAutoEnabled" />
-          <span>資料更動後自動備份</span>
+          <span>{{ t('settings_auto_backup.data_change_auto_backup') }}</span>
         </span>
       </label>
 
@@ -158,7 +166,7 @@
           :disabled="!webdavBackupState.connected || webdavSavingSettings"
           @click="saveWebdavBackupSettings"
         >
-          {{ webdavSavingSettings ? '儲存中...' : '儲存備份設定' }}
+          {{ webdavSavingSettings ? t('settings_auto_backup.saving') : t('settings_auto_backup.save_settings') }}
         </button>
         <button
           class="btn primary"
@@ -167,7 +175,7 @@
           :disabled="!webdavBackupState.connected || webdavBackingUpNow"
           @click="backupNowToWebdav"
         >
-          {{ webdavBackingUpNow ? '備份中...' : '立即備份' }}
+          {{ webdavBackingUpNow ? t('settings_auto_backup.backing_up') : t('settings_auto_backup.backup_now') }}
         </button>
         <button
           class="btn"
@@ -176,35 +184,33 @@
           :disabled="!webdavBackupState.connected || webdavRestoringNow"
           @click="restoreFromWebdav"
         >
-          {{ webdavRestoringNow ? '還原中...' : '從備份還原' }}
+          {{ webdavRestoringNow ? t('settings_auto_backup.restoring') : t('settings_auto_backup.restore_now') }}
         </button>
       </div>
 
       <ul class="backup-meta-list">
         <li>
-          <span class="muted">連線狀態</span>
-          <strong>{{ webdavBackupState.connected ? '已連線' : '未連線' }}</strong>
+          <span class="muted">{{ t('settings_auto_backup.status.connection') }}</span>
+          <strong>{{ webdavBackupState.connected ? t('settings_auto_backup.status.connected') : t('settings_auto_backup.status.disconnected') }}</strong>
         </li>
         <li>
-          <span class="muted">Endpoint</span>
+          <span class="muted">{{ t('settings_auto_backup.status.endpoint') }}</span>
           <strong>{{ webdavBackupState.endpoint || '-' }}</strong>
         </li>
         <li>
-          <span class="muted">上次備份</span>
+          <span class="muted">{{ t('settings_auto_backup.status.last_backup') }}</span>
           <strong>{{ formatBackupTime(webdavBackupState.lastBackupAt) }}</strong>
         </li>
         <li>
-          <span class="muted">備份檔名</span>
+          <span class="muted">{{ t('settings_auto_backup.status.filename') }}</span>
           <strong>{{ webdavBackupState.lastBackupFilename || '-' }}</strong>
         </li>
         <li v-if="webdavBackupState.lastBackupStatus === 'error' && webdavBackupState.lastError">
-          <span class="muted">錯誤</span>
+          <span class="muted">{{ t('settings_auto_backup.status.error') }}</span>
           <strong>{{ webdavBackupState.lastError }}</strong>
         </li>
       </ul>
     </article>
-
-
   </section>
 </template>
 
@@ -236,7 +242,7 @@ import { resetDatabase } from '@/core/db/sqlite'
 
 const ledgerStore = useLedgerStore()
 const uiStore = useUiStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const webdavBackupState = ref({
   connected: false,
@@ -285,13 +291,14 @@ const googleDisconnecting = ref(false)
 const googleSavingSettings = ref(false)
 const googleBackingUpNow = ref(false)
 const googleRestoringNow = ref(false)
-const webdavIntervalOptions = [
-  { value: 6, label: '每 6 小時' },
-  { value: 12, label: '每 12 小時' },
-  { value: 24, label: '每 24 小時' },
-  { value: 48, label: '每 48 小時' },
-]
-const googleIntervalOptions = [...webdavIntervalOptions]
+const intervalHourValues = [6, 12, 24, 48]
+const webdavIntervalOptions = computed(() =>
+  intervalHourValues.map((hours) => ({
+    value: hours,
+    label: t('settings_auto_backup.interval.every_hours', { hours }),
+  })),
+)
+const googleIntervalOptions = webdavIntervalOptions
 const isWorking = computed(() => {
   return (
     webdavConnecting.value ||
@@ -374,7 +381,7 @@ function formatBackupTime(isoText) {
   if (!isoText) return '-'
   const date = new Date(isoText)
   if (Number.isNaN(date.getTime())) return '-'
-  return date.toLocaleString('zh-TW', {
+  return date.toLocaleString(locale.value || 'zh-TW', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -386,14 +393,23 @@ function formatBackupTime(isoText) {
 function restoreCheckHint(imported) {
   const integrity = imported?.integrityCheck
   if (!integrity) return ''
-  if (Number(integrity.beforeIssueCount ?? 0) <= 0) return '，已完成資料檢查'
+  if (Number(integrity.beforeIssueCount ?? 0) <= 0) {
+    return t('settings_auto_backup.restore.check_done')
+  }
   if (Number(integrity.afterIssueCount ?? 0) <= 0) {
-    return `，已自動修復 ${Number(integrity.fixedCount ?? 0)} 項`
+    return t('settings_auto_backup.restore.check_auto_fixed', {
+      count: Number(integrity.fixedCount ?? 0),
+    })
   }
   if (Number(integrity.fixedCount ?? 0) > 0) {
-    return `，已修復 ${Number(integrity.fixedCount ?? 0)} 項（剩餘 ${Number(integrity.afterIssueCount ?? 0)} 項）`
+    return t('settings_auto_backup.restore.check_fixed_remaining', {
+      fixed: Number(integrity.fixedCount ?? 0),
+      remaining: Number(integrity.afterIssueCount ?? 0),
+    })
   }
-  return `，偵測 ${Number(integrity.afterIssueCount ?? 0)} 項異常`
+  return t('settings_auto_backup.restore.check_detected', {
+    count: Number(integrity.afterIssueCount ?? 0),
+  })
 }
 
 function errorMessage(error, fallback) {
@@ -421,7 +437,7 @@ function errorMessage(error, fallback) {
   if (baseMessage) return baseMessage
 
   const code = pick(error?.code, error?.errorCode, error?.status, error?.errorNumber)
-  if (code) return `${fallback}（code=${code}）`
+  if (code) return `${fallback} (code=${code})`
   return fallback
 }
 
@@ -450,9 +466,9 @@ async function connectWebdav() {
     webdavAutoEnabled.value = Boolean(webdavBackupState.value.autoEnabled)
     webdavDataChangeAutoEnabled.value = Boolean(webdavBackupState.value.dataChangeAutoEnabled)
     webdavIntervalHours.value = Number(webdavBackupState.value.intervalHours || 24)
-    uiStore.pushToast('WebDAV 連線成功')
+    uiStore.pushToast(t('settings_auto_backup.toast.webdav_connected'))
   } catch (error) {
-    uiStore.pushToast(error.message ?? 'WebDAV 連線失敗', 'error')
+    uiStore.pushToast(errorMessage(error, t('settings_auto_backup.error.webdav_connect_failed')), 'error')
   } finally {
     webdavConnecting.value = false
   }
@@ -465,9 +481,9 @@ async function disconnectWebdav() {
     webdavBackupState.value = await disconnectWebdavBackup(ledgerStore.activeLedgerId)
     webdavAutoEnabled.value = false
     webdavDataChangeAutoEnabled.value = false
-    uiStore.pushToast('已中斷 WebDAV 連線')
+    uiStore.pushToast(t('settings_auto_backup.toast.webdav_disconnected'))
   } catch (error) {
-    uiStore.pushToast(error.message ?? '中斷連線失敗', 'error')
+    uiStore.pushToast(errorMessage(error, t('settings_auto_backup.error.disconnect_failed')), 'error')
   } finally {
     webdavDisconnecting.value = false
   }
@@ -476,7 +492,7 @@ async function disconnectWebdav() {
 async function saveWebdavBackupSettings() {
   if (!ledgerStore.activeLedgerId) return
   if (!webdavBackupState.value.connected) {
-    uiStore.pushToast('請先連接 WebDAV', 'error')
+    uiStore.pushToast(t('settings_auto_backup.toast.webdav_connect_required'), 'error')
     return
   }
   webdavSavingSettings.value = true
@@ -493,9 +509,9 @@ async function saveWebdavBackupSettings() {
       patch.password = webdavPasswordInput.value
     }
     webdavBackupState.value = await updateWebdavBackupState(ledgerStore.activeLedgerId, patch)
-    uiStore.pushToast('WebDAV 備份設定已更新')
+    uiStore.pushToast(t('settings_auto_backup.toast.webdav_settings_updated'))
   } catch (error) {
-    uiStore.pushToast(error.message ?? '儲存設定失敗', 'error')
+    uiStore.pushToast(errorMessage(error, t('settings_auto_backup.error.save_settings_failed')), 'error')
   } finally {
     webdavSavingSettings.value = false
   }
@@ -508,10 +524,14 @@ async function backupNowToWebdav() {
     await saveWebdavBackupSettings()
     const result = await performWebdavBackup(ledgerStore.activeLedgerId)
     webdavBackupState.value = await getWebdavBackupState(ledgerStore.activeLedgerId)
-    uiStore.pushToast(`WebDAV 備份完成（${formatBackupTime(result.lastBackupAt)}）`)
+    uiStore.pushToast(
+      t('settings_auto_backup.toast.webdav_backup_done', {
+        time: formatBackupTime(result.lastBackupAt),
+      }),
+    )
   } catch (error) {
     webdavBackupState.value = await getWebdavBackupState(ledgerStore.activeLedgerId)
-    uiStore.pushToast(error.message ?? 'WebDAV 備份失敗', 'error')
+    uiStore.pushToast(errorMessage(error, t('settings_auto_backup.toast.webdav_backup_failed')), 'error')
   } finally {
     webdavBackingUpNow.value = false
   }
@@ -534,11 +554,22 @@ async function restoreFromWebdav() {
     webdavBackupState.value = await getWebdavBackupState(ledgerStore.activeLedgerId)
     const restoredCount = Number(imported.importedLedgers?.length ?? 0)
     const restoredName = imported.firstLedgerName || imported.importedLedgers?.[0]?.ledgerName || ''
-    const restoredLabel = restoredCount > 1 ? `共 ${restoredCount} 本` : restoredName
-    const usedFilename = backup.filename ? `，檔案：${backup.filename}` : ''
-    uiStore.pushToast(`WebDAV 備份已還原（${restoredLabel}）${restoreCheckHint(imported.importedLedgers?.[0])}${usedFilename}`)
+    const restoredLabel =
+      restoredCount > 1
+        ? t('settings_auto_backup.restore.multiple_ledgers', { count: restoredCount })
+        : restoredName
+    const usedFilename = backup.filename
+      ? t('settings_auto_backup.restore.filename_suffix', { filename: backup.filename })
+      : ''
+    uiStore.pushToast(
+      t('settings_auto_backup.toast.webdav_restore_done', {
+        restoredLabel,
+        hint: restoreCheckHint(imported.importedLedgers?.[0]),
+        fileSuffix: usedFilename,
+      }),
+    )
   } catch (error) {
-    uiStore.pushToast(error.message ?? 'WebDAV 備份還原失敗', 'error')
+    uiStore.pushToast(errorMessage(error, t('settings_auto_backup.toast.webdav_restore_failed')), 'error')
   } finally {
     webdavRestoringNow.value = false
   }
@@ -551,15 +582,15 @@ async function connectGoogle() {
     googleBackupState.value = await withTimeout(
       connectGoogleBackup(ledgerStore.activeLedgerId),
       150000,
-      'Google 登入逾時，請關閉授權頁後重試'
+      t('settings_auto_backup.error.google_login_timeout')
     )
     googleAutoEnabled.value = Boolean(googleBackupState.value.autoEnabled)
     googleDataChangeAutoEnabled.value = Boolean(googleBackupState.value.dataChangeAutoEnabled)
     googleIntervalHours.value = Number(googleBackupState.value.intervalHours || 24)
-    uiStore.pushToast('Google 連線成功')
+    uiStore.pushToast(t('settings_auto_backup.toast.google_connected'))
   } catch (error) {
     console.error('[google-connect] failed', error)
-    uiStore.pushToast(errorMessage(error, 'Google 連線失敗'), 'error')
+    uiStore.pushToast(errorMessage(error, t('settings_auto_backup.error.google_connect_failed')), 'error')
   } finally {
     googleConnecting.value = false
   }
@@ -572,14 +603,14 @@ async function disconnectGoogle() {
     googleBackupState.value = await withTimeout(
       disconnectGoogleBackup(ledgerStore.activeLedgerId),
       15000,
-      'Google 登出逾時，請重試'
+      t('settings_auto_backup.error.google_logout_timeout')
     )
     googleAutoEnabled.value = false
     googleDataChangeAutoEnabled.value = false
-    uiStore.pushToast('已登出 Google')
+    uiStore.pushToast(t('settings_auto_backup.toast.google_disconnected'))
   } catch (error) {
     console.error('[google-disconnect] failed', error)
-    uiStore.pushToast(errorMessage(error, 'Google 登出失敗'), 'error')
+    uiStore.pushToast(errorMessage(error, t('settings_auto_backup.error.google_disconnect_failed')), 'error')
   } finally {
     googleDisconnecting.value = false
   }
@@ -588,7 +619,7 @@ async function disconnectGoogle() {
 async function saveGoogleBackupSettings() {
   if (!ledgerStore.activeLedgerId) return
   if (!googleBackupState.value.connected) {
-    uiStore.pushToast('請先連接 Google 帳號', 'error')
+    uiStore.pushToast(t('settings_auto_backup.toast.google_connect_required'), 'error')
     return
   }
   googleSavingSettings.value = true
@@ -598,10 +629,10 @@ async function saveGoogleBackupSettings() {
       dataChangeAutoEnabled: Boolean(googleDataChangeAutoEnabled.value && googleAutoEnabled.value),
       intervalHours: Number(googleIntervalHours.value || 24),
     })
-    uiStore.pushToast('Google 備份設定已更新')
+    uiStore.pushToast(t('settings_auto_backup.toast.google_settings_updated'))
   } catch (error) {
     console.error('[google-save-settings] failed', error)
-    uiStore.pushToast(errorMessage(error, '儲存設定失敗'), 'error')
+    uiStore.pushToast(errorMessage(error, t('settings_auto_backup.error.save_settings_failed')), 'error')
   } finally {
     googleSavingSettings.value = false
   }
@@ -614,11 +645,15 @@ async function backupNowToGoogle() {
     await saveGoogleBackupSettings()
     const result = await performGoogleBackup(ledgerStore.activeLedgerId)
     googleBackupState.value = await getGoogleBackupState(ledgerStore.activeLedgerId)
-    uiStore.pushToast(`Google 備份完成（${formatBackupTime(result.lastBackupAt)}）`)
+    uiStore.pushToast(
+      t('settings_auto_backup.toast.google_backup_done', {
+        time: formatBackupTime(result.lastBackupAt),
+      }),
+    )
   } catch (error) {
     googleBackupState.value = await getGoogleBackupState(ledgerStore.activeLedgerId)
     console.error('[google-backup-now] failed', error)
-    uiStore.pushToast(errorMessage(error, 'Google 備份失敗'), 'error')
+    uiStore.pushToast(errorMessage(error, t('settings_auto_backup.toast.google_backup_failed')), 'error')
   } finally {
     googleBackingUpNow.value = false
   }
@@ -641,12 +676,23 @@ async function restoreFromGoogle() {
     googleBackupState.value = await getGoogleBackupState(ledgerStore.activeLedgerId)
     const restoredCount = Number(imported.importedLedgers?.length ?? 0)
     const restoredName = imported.firstLedgerName || imported.importedLedgers?.[0]?.ledgerName || ''
-    const restoredLabel = restoredCount > 1 ? `共 ${restoredCount} 本` : restoredName
-    const usedFilename = backup.filename ? `，檔案：${backup.filename}` : ''
-    uiStore.pushToast(`Google 備份已還原（${restoredLabel}）${restoreCheckHint(imported.importedLedgers?.[0])}${usedFilename}`)
+    const restoredLabel =
+      restoredCount > 1
+        ? t('settings_auto_backup.restore.multiple_ledgers', { count: restoredCount })
+        : restoredName
+    const usedFilename = backup.filename
+      ? t('settings_auto_backup.restore.filename_suffix', { filename: backup.filename })
+      : ''
+    uiStore.pushToast(
+      t('settings_auto_backup.toast.google_restore_done', {
+        restoredLabel,
+        hint: restoreCheckHint(imported.importedLedgers?.[0]),
+        fileSuffix: usedFilename,
+      }),
+    )
   } catch (error) {
     console.error('[google-restore] failed', error)
-    uiStore.pushToast(errorMessage(error, 'Google 備份還原失敗'), 'error')
+    uiStore.pushToast(errorMessage(error, t('settings_auto_backup.toast.google_restore_failed')), 'error')
   } finally {
     googleRestoringNow.value = false
   }

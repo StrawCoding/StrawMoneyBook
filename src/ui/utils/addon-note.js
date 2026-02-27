@@ -21,11 +21,24 @@ function parseSummaryLine(note) {
     .find((line) => line.startsWith(ADDON_NOTE_PREFIX))
 }
 
-export function parseAddonItemsFromNote(note) {
+export function addonSummaryTextFromNote(note) {
   const rawLine = parseSummaryLine(note)
-  if (!rawLine) return []
+  if (!rawLine) return ''
+  return rawLine.slice(ADDON_NOTE_PREFIX.length).trim()
+}
 
-  const summaryText = rawLine.slice(ADDON_NOTE_PREFIX.length)
+export function stripAddonSummaryFromNote(note) {
+  return String(note ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith(ADDON_NOTE_PREFIX))
+    .join('\n')
+}
+
+export function parseAddonItemsFromNote(note) {
+  const summaryText = addonSummaryTextFromNote(note)
+  if (!summaryText) return []
+
   return summaryText
     .split('、')
     .map((item) => item.trim())

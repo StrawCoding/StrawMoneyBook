@@ -758,11 +758,19 @@ async function parseWithAi() {
 
   aiCreatedRecord.value = null
   pushAiMessage('user', userText)
+  if (!transactionStore.recent.length) {
+    try {
+      await transactionStore.loadRecent(120)
+    } catch {
+      // Keep parsing even if history loading fails.
+    }
+  }
 
   const result = parseAutoBookkeepingText(userText, {
     accounts: accountStore.accounts,
     expenseCategories: categoryStore.expenseCategories,
     incomeCategories: categoryStore.incomeCategories,
+    historyTransactions: transactionStore.recent,
     now: new Date(),
   })
   const warnings = resolveAiParserWarnings(result)
@@ -863,6 +871,7 @@ async function toggleAiVoiceInput() {
   aiInterimSpeechText.value = ''
   let heardFinal = false
   let lastInterimText = ''
+  let finalSegmentsText = ''
   const started = await startSpeech({
     lang: 'zh-TW',
     interimResults: true,
@@ -870,7 +879,8 @@ async function toggleAiVoiceInput() {
       if (finalText) {
         heardFinal = true
         lastInterimText = ''
-        aiInput.value = finalText
+        finalSegmentsText = `${finalSegmentsText} ${finalText}`.trim()
+        aiInput.value = finalSegmentsText
       } else if (interimText) {
         lastInterimText = interimText
         aiInterimSpeechText.value = interimText

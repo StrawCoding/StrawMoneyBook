@@ -5,6 +5,11 @@ import {
   markTransactionReimbursed,
 } from '@/core/repositories/transaction.repo'
 import { cancelReimbursableExpenseSettlement, settleReimbursableExpense } from '@/core/services/reimbursement.service'
+import {
+  reimbursementPendingMinor,
+  reimbursementReimbursedMinor,
+  withReimbursementDerivedFields,
+} from '@/ui/utils/reimbursement-item'
 
 export const useReimbursementStore = defineStore('reimbursement', {
   state: () => ({
@@ -15,11 +20,11 @@ export const useReimbursementStore = defineStore('reimbursement', {
 
   getters: {
     pendingTotalMinor(state) {
-      return state.pendingItems.reduce((total, item) => total + Math.abs(Number(item.amount_minor ?? 0)), 0)
+      return state.pendingItems.reduce((total, item) => total + reimbursementPendingMinor(item), 0)
     },
 
     reimbursedTotalMinor(state) {
-      return state.reimbursedItems.reduce((total, item) => total + Math.abs(Number(item.amount_minor ?? 0)), 0)
+      return state.reimbursedItems.reduce((total, item) => total + reimbursementReimbursedMinor(item), 0)
     },
   },
 
@@ -34,8 +39,8 @@ export const useReimbursementStore = defineStore('reimbursement', {
           listReimbursementTransactions(ledgerStore.activeLedgerId, 'pending'),
           listReimbursementTransactions(ledgerStore.activeLedgerId, 'reimbursed'),
         ])
-        this.pendingItems = pendingItems
-        this.reimbursedItems = reimbursedItems
+        this.pendingItems = pendingItems.map((item) => withReimbursementDerivedFields(item))
+        this.reimbursedItems = reimbursedItems.map((item) => withReimbursementDerivedFields(item))
       } finally {
         this.loading = false
       }
