@@ -26,7 +26,7 @@
 
     <article class="card panel">
       <header class="row">
-        <h3>{{ t('analysis_page.scope_type_analysis', { type: activeTypeLabel, scope: activeScopeLabel }) }}</h3>
+        <h3>{{ t('analysis_page.type_analysis', { type: activeTypeLabel }) }}</h3>
         <div class="header-metrics">
           <span class="count-chip">{{ t('analysis_page.items_count', { count: activeCount }) }}</span>
           <MoneyText :value-minor="activeTotalMinor" />
@@ -38,24 +38,26 @@
         <button class="btn" :class="{ primary: analysisType === 'expense' }" @click="analysisType = 'expense'">{{ t('analysis_page.type.expense') }}</button>
       </div>
 
-      <div class="scope-tabs">
-        <button class="btn" :class="{ primary: analysisScope === 'category' }" @click="analysisScope = 'category'">
-          {{ t('analysis_page.scope.category') }}
-        </button>
-        <button class="btn" :class="{ primary: analysisScope === 'account' }" @click="analysisScope = 'account'">
-          {{ t('analysis_page.scope.account') }}
-        </button>
-      </div>
-
       <transition name="fade-scale" mode="out-in">
-        <div :key="`${analysisType}-${analysisScope}`">
+        <div :key="analysisType">
           <template v-if="activeBreakdown.length">
+            <div class="chart-wrap">
+              <h4 class="chart-subtitle">{{ t('analysis_page.chart.pie') }}</h4>
+            </div>
+            <div class="chart-wrap">
+              <div class="pie" :style="activePieStyle">
+                <div class="pie-hole">
+                  <div class="pie-total">{{ t('analysis_page.type_total', { type: activeTypeLabel }) }}</div>
+                  <MoneyText :value-minor="activeTotalMinor" />
+                </div>
+              </div>
+            </div>
             <div class="chart-wrap">
               <h4 class="chart-subtitle">{{ t('analysis_page.chart.bar') }}</h4>
             </div>
             <ul class="bar-chart-list">
               <li v-for="item in activeBarRows" :key="`${analysisType}-${item.id}-bar`">
-                <button type="button" class="bar-chart-item-btn" @click="openBreakdownDetail(item)">
+                <button type="button" class="bar-chart-item-btn" @click="openCategoryBreakdownDetail(item)">
                   <div class="bar-chart-head">
                     <div class="bar-chart-label">
                       <span class="legend-dot" :style="{ background: item.color }"></span>
@@ -86,6 +88,77 @@
       </transition>
     </article>
 
+    <article class="card panel">
+      <header class="row">
+        <h3>{{ t('analysis_page.scope.account') }}</h3>
+        <div class="header-metrics">
+          <span class="count-chip">{{ t('analysis_page.items_count', { count: accountActiveCount }) }}</span>
+          <MoneyText :value-minor="accountActiveTotalMinor" />
+        </div>
+      </header>
+
+      <div class="type-tabs account-type-tabs">
+        <button class="btn" :class="{ primary: accountAnalysisType === 'total' }" @click="accountAnalysisType = 'total'">
+          {{ t('analysis_page.type.total') }}
+        </button>
+        <button class="btn" :class="{ primary: accountAnalysisType === 'income' }" @click="accountAnalysisType = 'income'">
+          {{ t('analysis_page.type.income') }}
+        </button>
+        <button class="btn" :class="{ primary: accountAnalysisType === 'expense' }" @click="accountAnalysisType = 'expense'">
+          {{ t('analysis_page.type.expense') }}
+        </button>
+      </div>
+
+      <transition name="fade-scale" mode="out-in">
+        <div :key="`account-${accountAnalysisType}`">
+          <template v-if="accountActiveBreakdown.length">
+            <div class="chart-wrap">
+              <h4 class="chart-subtitle">{{ t('analysis_page.chart.pie') }}</h4>
+            </div>
+            <div class="chart-wrap">
+              <div class="pie" :style="accountActivePieStyle">
+                <div class="pie-hole">
+                  <div class="pie-total">{{ t('analysis_page.type_total', { type: accountActiveTypeLabel }) }}</div>
+                  <MoneyText :value-minor="accountActiveTotalMinor" />
+                </div>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <h4 class="chart-subtitle">{{ t('analysis_page.chart.bar') }}</h4>
+            </div>
+            <ul class="bar-chart-list">
+              <li v-for="item in accountActiveBarRows" :key="`account-${accountAnalysisType}-${item.id}-bar`">
+                <button type="button" class="bar-chart-item-btn" @click="openAccountBreakdownDetail(item)">
+                  <div class="bar-chart-head">
+                    <div class="bar-chart-label">
+                      <span class="legend-dot" :style="{ background: item.color }"></span>
+                      <span class="legend-icon-wrap">
+                        <font-awesome-icon
+                          v-if="item.icon"
+                          :icon="item.icon"
+                          class="legend-icon"
+                        />
+                      </span>
+                      <span class="bar-chart-name">{{ item.name }}</span>
+                    </div>
+                    <span class="bar-chart-percent">{{ item.percent }}%</span>
+                  </div>
+                  <div class="bar-chart-track">
+                    <span class="bar-chart-fill" :style="{ width: `${item.barWidthPercent}%`, background: item.color }"></span>
+                  </div>
+                  <div class="bar-chart-stats">
+                    <MoneyText :value-minor="item.amountMinor" />
+                    <span class="bar-chart-count">{{ t('analysis_page.items_count', { count: item.count }) }}</span>
+                  </div>
+                </button>
+              </li>
+            </ul>
+          </template>
+          <p v-else class="muted no-data-tip">{{ t('analysis_page.no_data_for_type', { type: accountActiveTypeLabel.toLowerCase() }) }}</p>
+        </div>
+      </transition>
+    </article>
+
   </section>
 </template>
 
@@ -110,7 +183,7 @@ const { t } = useI18n()
 
 const mode = ref('month')
 const analysisType = ref('expense')
-const analysisScope = ref('category')
+const accountAnalysisType = ref('expense')
 const selectedYear = ref(new Date().getFullYear())
 const selectedMonth = ref(monthKeyFromDate(new Date()))
 const statsTransactions = ref([])
@@ -161,6 +234,14 @@ const accountIconMap = computed(() => {
   return map
 })
 
+const accountBalanceMap = computed(() => {
+  const map = new Map()
+  for (const item of accountStore.balances) {
+    map.set(item.id, Number(item.balance_minor ?? 0))
+  }
+  return map
+})
+
 const printLink = computed(() => {
   if (mode.value === 'year') {
     return { path: '/analysis/print', query: { mode: 'year', year: String(selectedYear.value) } }
@@ -179,22 +260,54 @@ watch(
   { immediate: true },
 )
 
-const incomeCategoryBreakdown = computed(() => buildBreakdown('income', 'category'))
-const expenseCategoryBreakdown = computed(() => buildBreakdown('expense', 'category'))
+const incomeBreakdown = computed(() => buildBreakdown('income', 'category'))
+const expenseBreakdown = computed(() => buildBreakdown('expense', 'category'))
 const incomeAccountBreakdown = computed(() => buildBreakdown('income', 'account'))
 const expenseAccountBreakdown = computed(() => buildBreakdown('expense', 'account'))
+const totalAccountBreakdown = computed(() => buildAccountBalanceBreakdown())
 
-const incomeTotalMinor = computed(() => activeBreakdownBy('income').reduce((total, item) => total + item.amountMinor, 0))
-const expenseTotalMinor = computed(() => activeBreakdownBy('expense').reduce((total, item) => total + item.amountMinor, 0))
-const incomeCount = computed(() => activeBreakdownBy('income').reduce((total, item) => total + item.count, 0))
-const expenseCount = computed(() => activeBreakdownBy('expense').reduce((total, item) => total + item.count, 0))
+const incomeTotalMinor = computed(() => incomeBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
+const expenseTotalMinor = computed(() => expenseBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
+const incomeCount = computed(() => incomeBreakdown.value.reduce((total, item) => total + item.count, 0))
+const expenseCount = computed(() => expenseBreakdown.value.reduce((total, item) => total + item.count, 0))
+const accountIncomeTotalMinor = computed(() => incomeAccountBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
+const accountExpenseTotalMinor = computed(() => expenseAccountBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
+const accountIncomeCount = computed(() => incomeAccountBreakdown.value.reduce((total, item) => total + item.count, 0))
+const accountExpenseCount = computed(() => expenseAccountBreakdown.value.reduce((total, item) => total + item.count, 0))
 
-const activeBreakdown = computed(() => activeBreakdownBy(analysisType.value))
+const incomePieStyle = computed(() => buildPieStyle(incomeBreakdown.value))
+const expensePieStyle = computed(() => buildPieStyle(expenseBreakdown.value))
+const activeBreakdown = computed(() => (analysisType.value === 'income' ? incomeBreakdown.value : expenseBreakdown.value))
 const activeTotalMinor = computed(() => (analysisType.value === 'income' ? incomeTotalMinor.value : expenseTotalMinor.value))
 const activeCount = computed(() => (analysisType.value === 'income' ? incomeCount.value : expenseCount.value))
+const activePieStyle = computed(() => (analysisType.value === 'income' ? incomePieStyle.value : expensePieStyle.value))
 const activeBarRows = computed(() => buildBarRows(activeBreakdown.value))
 const activeTypeLabel = computed(() => (analysisType.value === 'income' ? t('analysis_page.type.income') : t('analysis_page.type.expense')))
-const activeScopeLabel = computed(() => (analysisScope.value === 'account' ? t('analysis_page.scope.account') : t('analysis_page.scope.category')))
+const accountActiveBreakdown = computed(() => {
+  if (accountAnalysisType.value === 'income') return incomeAccountBreakdown.value
+  if (accountAnalysisType.value === 'expense') return expenseAccountBreakdown.value
+  return totalAccountBreakdown.value
+})
+const accountTotalBalanceMinor = computed(() => totalAccountBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
+const accountActiveTotalMinor = computed(() => {
+  if (accountAnalysisType.value === 'income') return accountIncomeTotalMinor.value
+  if (accountAnalysisType.value === 'expense') return accountExpenseTotalMinor.value
+  return accountTotalBalanceMinor.value
+})
+const accountActiveCount = computed(() => {
+  if (accountAnalysisType.value === 'income') return accountIncomeCount.value
+  if (accountAnalysisType.value === 'expense') return accountExpenseCount.value
+  return totalAccountBreakdown.value.length
+})
+const accountActivePieStyle = computed(() => buildPieStyle(accountActiveBreakdown.value))
+const accountActiveBarRows = computed(() => buildBarRows(accountActiveBreakdown.value))
+const accountActiveTypeLabel = computed(() =>
+  accountAnalysisType.value === 'income'
+    ? t('analysis_page.type.income')
+    : accountAnalysisType.value === 'expense'
+      ? t('analysis_page.type.expense')
+      : t('analysis_page.type.total'),
+)
 
 function pickYear(value) {
   selectedYear.value = Number(value)
@@ -204,20 +317,8 @@ function pickMonth(value) {
   selectedMonth.value = value
 }
 
-function activeBreakdownBy(type) {
-  if (analysisScope.value === 'account') {
-    return type === 'income' ? incomeAccountBreakdown.value : expenseAccountBreakdown.value
-  }
-  return type === 'income' ? incomeCategoryBreakdown.value : expenseCategoryBreakdown.value
-}
-
-function openBreakdownDetail(item) {
+function openCategoryBreakdownDetail(item) {
   if (!item?.id) return
-  if (analysisScope.value === 'account') {
-    if (String(item.id).startsWith('__')) return
-    void router.push({ name: 'account-detail', params: { id: String(item.id) } })
-    return
-  }
   const query = {
     type: analysisType.value,
     categoryId: String(item.id),
@@ -230,6 +331,12 @@ function openBreakdownDetail(item) {
     query.month = String(selectedMonth.value)
   }
   void router.push({ name: 'analysis-category-detail', query })
+}
+
+function openAccountBreakdownDetail(item) {
+  if (!item?.id) return
+  if (String(item.id).startsWith('__')) return
+  void router.push({ name: 'account-detail', params: { id: String(item.id) } })
 }
 
 async function loadStatsTransactions() {
@@ -291,6 +398,33 @@ function buildBreakdown(type, scope = 'category') {
   }))
 }
 
+function buildAccountBalanceBreakdown() {
+  const rows = accountStore.accounts
+    .map((account) => {
+      const balanceMinor = accountBalanceMap.value.get(account.id) ?? Number(account.opening_balance_minor ?? 0)
+      return {
+        id: account.id,
+        amountMinor: Number(balanceMinor) || 0,
+        magnitudeMinor: Math.abs(Number(balanceMinor) || 0),
+        count: 1,
+        name: account.name,
+        icon: String(account.icon ?? '').trim(),
+      }
+    })
+    .sort((a, b) => b.amountMinor - a.amountMinor)
+
+  if (!rows.length) return []
+
+  const totalMagnitude = rows.reduce((sum, row) => sum + row.magnitudeMinor, 0)
+  const palette = buildThemePalette(rows.length)
+
+  return rows.map((row, index) => ({
+    ...row,
+    color: palette[index],
+    percent: totalMagnitude > 0 ? Math.round((row.magnitudeMinor / totalMagnitude) * 100) : 0,
+  }))
+}
+
 function resolveBreakdownName(id, scope) {
   if (scope === 'account') {
     if (id === '__unassigned_account__') return t('analysis_page.unassigned_account')
@@ -307,6 +441,26 @@ function resolveBreakdownIcon(id, scope) {
   }
   if (id === '__uncategorized__') return ''
   return categoryIconMap.value.get(id) || ''
+}
+
+function buildPieStyle(items) {
+  if (!items.length) {
+    return { background: 'conic-gradient(var(--chart-track) 0deg 360deg)' }
+  }
+
+  const total = items.reduce((sum, item) => sum + item.amountMinor, 0)
+  let cursor = 0
+  const segments = []
+
+  for (const item of items) {
+    const deg = (item.amountMinor / total) * 360
+    const start = cursor
+    const end = cursor + deg
+    segments.push(`${item.color} ${start}deg ${end}deg`)
+    cursor = end
+  }
+
+  return { background: `conic-gradient(${segments.join(', ')})` }
 }
 
 function buildThemePalette(count) {
@@ -326,13 +480,16 @@ function buildBarRows(items) {
   const source = Array.isArray(items) ? items : []
   if (!source.length) return []
 
-  const maxAmount = source.reduce((max, item) => Math.max(max, Number(item?.amountMinor ?? 0) || 0), 0)
+  const maxAmount = source.reduce((max, item) => {
+    const value = Math.abs(Number(item?.magnitudeMinor ?? item?.amountMinor ?? 0) || 0)
+    return Math.max(max, value)
+  }, 0)
   if (!Number.isFinite(maxAmount) || maxAmount <= 0) {
     return source.map((item) => ({ ...item, barWidthPercent: 0 }))
   }
 
   return source.map((item) => {
-    const amount = Number(item?.amountMinor ?? 0) || 0
+    const amount = Math.abs(Number(item?.magnitudeMinor ?? item?.amountMinor ?? 0) || 0)
     const ratio = amount > 0 ? (amount / maxAmount) * 100 : 0
     const barWidthPercent = amount > 0 ? Math.max(8, Math.min(100, ratio)) : 0
     return {
@@ -378,11 +535,8 @@ h2, h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px
 }
-.scope-tabs {
-  margin-top: 8px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px
+.account-type-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .chart-wrap {
   margin-top: 12px;
@@ -393,6 +547,28 @@ h2, h3 {
   font-size: 14px;
   color: var(--muted);
   margin: 0
+}
+.pie {
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent)
+}
+.pie-hole {
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background: var(--surface-popover);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 2px
+}
+.pie-total {
+  font-size: 12px;
+  color: var(--muted)
 }
 .header-metrics {
   display: inline-flex;
