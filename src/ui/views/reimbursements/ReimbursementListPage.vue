@@ -69,24 +69,6 @@
               <span>{{ noteTextOfTx(tx) || '-' }}</span>
             </div>
           </div>
-          <div class="entry-actions">
-            <button
-              v-if="tab === 'pending'"
-              class="btn entry-action-btn"
-              type="button"
-              @click.stop="openSingleSettle(tx)"
-            >
-              報銷
-            </button>
-            <button
-              v-else
-              class="btn entry-action-btn"
-              type="button"
-              @click.stop="openReimbursementEdit(tx)"
-            >
-              調整
-            </button>
-          </div>
         </li>
 
         <li v-if="!activeList.length" class="muted">目前此分頁沒有資料</li>
@@ -125,6 +107,14 @@
               </div>
               <button
                 v-else
+                class="btn action-btn"
+                :disabled="selectedActiveCount !== 1 || settlingBatch || voidingBatch"
+                @click="actionOpenSelectedAdjustment"
+              >
+                調整
+              </button>
+              <button
+                v-if="tab !== 'pending'"
                 class="btn danger action-btn"
                 :disabled="!selectedActiveCount || settlingBatch || voidingBatch"
                 @click="actionMarkVoidSelected"
@@ -167,7 +157,17 @@
                     <input v-model="settleForm.selectedAdvanceIds" class="copy-ledger-check" type="checkbox" :value="advance.id" />
                     <span class="copy-ledger-mark">✓</span>
                     <span class="copy-ledger-name">
-                      {{ advance.account_name || '未指定帳戶' }}
+                      <span class="advance-meta-line">
+                        <font-awesome-icon
+                          v-if="advanceCategoryIcon(advance)"
+                          :icon="advanceCategoryIcon(advance)"
+                          class="advance-category-icon"
+                        />
+                        <span>{{ advanceCategoryName(advance) }}</span>
+                      </span>
+                      <small class="muted copy-ledger-meta">
+                        {{ advance.account_name || '未指定帳戶' }}
+                      </small>
                       <small class="muted copy-ledger-meta">
                         <MoneyText :value-minor="advance.available_minor" />
                       </small>
@@ -231,6 +231,21 @@
                 代收金額（元）
                 <input v-model.number="advanceForm.amountMajor" type="number" min="0" step="1" class="input" />
               </label>
+              <label>
+                代收分類
+                <CustomSelect v-model="advanceForm.categoryId" :options="advanceCategoryOptions" />
+              </label>
+              <div v-if="selectedAdvanceCategory" class="row advance-category-preview">
+                <span class="muted">代收分類預覽</span>
+                <span class="advance-preview-value">
+                  <font-awesome-icon
+                    v-if="selectedAdvanceCategory.icon"
+                    :icon="selectedAdvanceCategory.icon"
+                    class="advance-category-icon"
+                  />
+                  <span>{{ selectedAdvanceCategory.name }}</span>
+                </span>
+              </div>
               <label>
                 代收帳戶
                 <CustomSelect v-model="advanceForm.accountId" :options="accountStore.accounts" />
@@ -313,6 +328,7 @@ const settleForm = reactive({
 })
 const advanceForm = reactive({
   amountMajor: 0,
+  categoryId: '',
   accountId: '',
   note: '',
 })
@@ -385,7 +401,14 @@ const singleSettleCashMinor = computed(() => {
 const canCreateAdvance = computed(() => {
   return Number.isFinite(Number(advanceForm.amountMajor))
     && Number(advanceForm.amountMajor) > 0
+    && Boolean(String(advanceForm.categoryId ?? '').trim())
     && Boolean(String(advanceForm.accountId ?? '').trim())
+})
+const advanceCategoryOptions = computed(() => categoryStore.expenseCategories ?? [])
+const selectedAdvanceCategory = computed(() => {
+  const categoryId = String(advanceForm.categoryId ?? '').trim()
+  if (!categoryId) return null
+  return (categoryStore.categories ?? []).find((item) => String(item?.id ?? '').trim() === categoryId) ?? null
 })
 const categoryIconById = computed(() => {
   const map = new Map()
@@ -465,6 +488,15 @@ function openTransactionAbout(tx) {
   void router.push({ name: 'transaction-about', params: { id: tx.id } })
 }
 
+function advanceCategoryName(advance) {
+  const name = String(advance?.category_name ?? '').trim()
+  return name || '未指定分類'
+}
+
+function advanceCategoryIcon(advance) {
+  return String(advance?.category_icon ?? '').trim()
+}
+
 function openActionSheet() {
   isActionSheetOpen.value = true
 }
@@ -475,6 +507,7 @@ function closeActionSheet() {
 
 function openAdvanceSheet() {
   advanceForm.amountMajor = 0
+  advanceForm.categoryId = String(categoryStore.expenseCategories[0]?.id ?? '')
   advanceForm.accountId = String(accountStore.accounts[0]?.id ?? '')
   advanceForm.note = ''
   isAdvanceOpen.value = true
@@ -492,6 +525,7 @@ async function submitAdvance() {
   try {
     await reimbursementStore.createAdvance({
       amountMinor: Math.round(Number(advanceForm.amountMajor ?? 0) * 100),
+      categoryId: advanceForm.categoryId,
       accountId: advanceForm.accountId,
       note: advanceForm.note,
       receivedAt: new Date().toISOString(),
@@ -535,6 +569,18 @@ function actionClearSelection() {
 function actionOpenBatchSettle() {
   closeActionSheet()
   openBatchSettle()
+}
+
+function actionOpenSelectedAdjustment() {
+  if (tab.value === 'pending') return
+  if (selectedActiveItems.value.length !== 1) {
+    uiStore.pushToast('請先勾選 1 筆要調整的項目', 'error')
+    return
+  }
+
+  const target = selectedActiveItems.value[0]
+  closeActionSheet()
+  openReimbursementEdit(target)
 }
 
 async function actionMarkVoidSelected() {
@@ -1179,6 +1225,7 @@ h2 {
 }
 .copy-ledger-name {
   display: grid;
+  gap: 2px;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -1186,6 +1233,25 @@ h2 {
 }
 .copy-ledger-meta {
   white-space: normal
+}
+.advance-meta-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.advance-category-icon {
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.advance-category-preview {
+  align-items: center;
+}
+.advance-preview-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .sheet label {
   display: grid;

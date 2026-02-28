@@ -32,7 +32,17 @@
         <div v-if="usableAdvances.length" class="advance-list">
           <label v-for="advance in usableAdvances" :key="advance.id" class="advance-item">
             <input v-model="form.selectedAdvanceIds" type="checkbox" :value="advance.id" />
-            <span>{{ advance.account_name || '未指定帳戶' }}</span>
+            <span class="advance-item-main">
+              <span class="advance-item-category">
+                <font-awesome-icon
+                  v-if="advanceCategoryIcon(advance)"
+                  :icon="advanceCategoryIcon(advance)"
+                  class="advance-category-icon"
+                />
+                <span>{{ advanceCategoryName(advance) }}</span>
+              </span>
+              <small class="muted">{{ advance.account_name || '未指定帳戶' }}</small>
+            </span>
             <MoneyText :value-minor="advanceUsableMinor(advance)" />
           </label>
         </div>
@@ -172,6 +182,15 @@ function noteTextOfTx(tx) {
   return stripAddonSummaryFromNote(tx?.note)
 }
 
+function advanceCategoryName(advance) {
+  const name = String(advance?.category_name ?? '').trim()
+  return name || '未指定分類'
+}
+
+function advanceCategoryIcon(advance) {
+  return String(advance?.category_icon ?? '').trim()
+}
+
 function advanceUsableMinor(advance) {
   const advanceId = String(advance?.id ?? '').trim()
   const availableMinor = Math.max(0, Math.round(Number(advance?.available_minor ?? 0)))
@@ -259,6 +278,22 @@ h3 {
   border-radius: 10px;
   padding: 10px;
   color: var(--text);
+}
+
+.advance-item-main {
+  display: grid;
+  gap: 2px;
+}
+
+.advance-item-category {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.advance-category-icon {
+  width: 14px;
+  text-align: center;
 }
 
 .action-row {

@@ -25,7 +25,7 @@ export const useBudgetStore = defineStore('budget', {
 
   getters: {
     totalBudgetMinor(state) {
-      return state.items.reduce((total, item) => total + toFiniteMinor(item.amount_minor), 0)
+      return state.items.reduce((total, item) => total + toFiniteMinor(item.resolved_amount_minor ?? item.amount_minor), 0)
     },
 
     totalSpentMinor(state) {

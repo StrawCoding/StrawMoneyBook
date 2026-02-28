@@ -625,16 +625,23 @@ function utf8ToBase64(text) {
   return btoa(binary)
 }
 
-async function writeBase64FileToDevice(filename, dataBase64) {
+async function writeBase64FileToDevice(filename, dataBase64, options = {}) {
   if (!Capacitor.isNativePlatform()) {
     return { saved: false, reason: 'not-native' }
   }
 
   const safeFilename = sanitizeDeviceFilename(filename)
-  const candidates = [
+  const preferDownloadOnly = Boolean(options.preferDownloadOnly)
+  const candidates = (
+    preferDownloadOnly
+      ? [
+          { directory: Directory.ExternalStorage, path: `Download/${safeFilename}`, location: `Download/${safeFilename}` },
+        ]
+      : [
     { directory: Directory.Documents, path: safeFilename, location: `Documents/${safeFilename}` },
     { directory: Directory.ExternalStorage, path: `Download/${safeFilename}`, location: `Download/${safeFilename}` },
-  ].filter((item) => Boolean(item.directory))
+        ]
+  ).filter((item) => Boolean(item.directory))
 
   let lastError = null
 
@@ -685,7 +692,7 @@ function sanitizeDeviceFilename(filename) {
 export async function saveJsonFileToDevice(filename, data) {
   const jsonText = JSON.stringify(data, null, 2)
   const dataBase64 = utf8ToBase64(jsonText)
-  return writeBase64FileToDevice(filename, dataBase64)
+  return writeBase64FileToDevice(filename, dataBase64, { preferDownloadOnly: true })
 }
 
 export async function saveExcelFileToDevice(filename, xmlText) {

@@ -101,9 +101,29 @@ function profilePatchFromState(state, profile) {
   return patch
 }
 
+function normalizeEmail(value) {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+function isPreferredAccountMismatch(state, profile) {
+  const preferredEmail = normalizeEmail(state?.accountEmail)
+  const currentEmail = normalizeEmail(profile?.email)
+  if (!preferredEmail || !currentEmail) return false
+  return preferredEmail !== currentEmail
+}
+
 async function hydrateStateProfileFromCache(ledgerId, state) {
   if (!state.connected) return state
   const profile = normalizeProfile(getCachedGoogleProfile())
+  if (isPreferredAccountMismatch(state, profile)) {
+    const next = normalizeState({
+      ...state,
+      connected: false,
+      lastError: '',
+    })
+    await setSetting(ledgerId, GOOGLE_BACKUP_KEY, next)
+    return next
+  }
   const patch = profilePatchFromState(state, profile)
   if (!Object.keys(patch).length) return state
   const next = normalizeState({ ...state, ...patch })
@@ -111,7 +131,8 @@ async function hydrateStateProfileFromCache(ledgerId, state) {
   return next
 }
 
-async function resolveGoogleProfileForConnect() {
+async function resolveGoogleProfileForConnect(preferredEmail = '') {
+  const normalizedPreferredEmail = normalizeEmail(preferredEmail)
   let reusedSession = false
   try {
     await getAccessToken({ interactive: false })
@@ -121,8 +142,12 @@ async function resolveGoogleProfileForConnect() {
   }
 
   let profile = normalizeProfile(getCachedGoogleProfile())
+  if (normalizedPreferredEmail && normalizeEmail(profile.email) && normalizeEmail(profile.email) !== normalizedPreferredEmail) {
+    reusedSession = false
+    profile = normalizeProfile({})
+  }
   if (!profile.email && !profile.name && !profile.imageUrl && !reusedSession) {
-    const login = await googleSignIn()
+    const login = await googleSignIn({ preferredEmail: normalizedPreferredEmail || preferredEmail })
     profile = normalizeProfile(login?.profile ?? getCachedGoogleProfile())
   }
 
@@ -154,6 +179,12 @@ async function ensureConnectedBySilentAuth(ledgerId, state) {
   if (!silentToken) return state
 
   const profile = normalizeProfile(getCachedGoogleProfile())
+  if (isPreferredAccountMismatch(state, profile)) {
+    return saveState(ledgerId, {
+      connected: false,
+      lastError: '',
+    })
+  }
   const profilePatch = profilePatchFromState(state, profile)
   const patch = {
     connected: true,
@@ -199,7 +230,8 @@ export async function connectGoogleBackup(ledgerId) {
   assertLedgerId(ledgerId)
   ensureNativePlatform()
 
-  const profile = await resolveGoogleProfileForConnect()
+  const current = await getGoogleBackupState(ledgerId)
+  const profile = await resolveGoogleProfileForConnect(current.accountEmail)
   return saveState(ledgerId, {
     connected: true,
     accountEmail: profile.email,

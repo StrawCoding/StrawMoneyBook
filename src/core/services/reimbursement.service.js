@@ -24,6 +24,7 @@ import {
   createReimbursementAdvanceUsage,
   createReimbursement,
   createReimbursementItem,
+  deleteReimbursementById,
   deleteReimbursementAdvanceUsagesByExpenseTx,
   getReimbursementAdvanceById,
   findTransactionByIdempotencyKey,
@@ -277,6 +278,15 @@ export async function createReimbursementAdvanceEntry(ledgerId, payload = {}) {
   if (!accountId) {
     throw new Error('代收必須指定帳戶')
   }
+  const categoryId = String(payload.categoryId ?? '').trim()
+  if (!categoryId) {
+    throw new Error('代收必須指定分類')
+  }
+  const categories = await listCategories(ledgerId, { includeArchived: false })
+  const matchedCategory = categories.find((item) => String(item?.id ?? '').trim() === categoryId)
+  if (!matchedCategory || !['expense', 'both'].includes(String(matchedCategory.kind ?? ''))) {
+    throw new Error('代收分類無效')
+  }
 
   const amountMinor = normalizeAmountMinor(payload.amountMinor)
 
@@ -301,6 +311,7 @@ export async function createReimbursementAdvanceEntry(ledgerId, payload = {}) {
     return createReimbursementAdvance(ledgerId, {
       id: advanceId,
       accountId,
+      categoryId,
       sourceTxId: txId,
       amountMinor,
       note,
@@ -374,6 +385,22 @@ export async function transitionReimbursementStatus(ledgerId, reimbursementId, n
     }
 
     return updateReimbursementStatus(ledgerId, reimbursementId, nextStatus)
+  })
+}
+
+export async function deleteReimbursement(ledgerId, reimbursementId) {
+  return withTransaction(async () => {
+    const claim = await getReimbursementById(ledgerId, reimbursementId)
+    if (!claim) {
+      throw new Error('找不到資料')
+    }
+
+    if (claim.status === 'paid') {
+      throw new Error('已完成資料不可刪除')
+    }
+
+    await deleteReimbursementById(ledgerId, reimbursementId)
+    return { deleted: true, reimbursementId }
   })
 }
 

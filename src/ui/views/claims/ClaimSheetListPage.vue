@@ -54,7 +54,7 @@
               :disabled="isClaimVoidDisabled(claim)"
               @click="voidClaim(claim)"
             >
-              {{ t('claim_sheet.void') }}
+              {{ t('common.delete') }}
             </button>
           </div>
         </li>
@@ -98,7 +98,16 @@
                   <button class="btn" @click="addManualItem">{{ t('claim_sheet.form.add_item') }}</button>
                 </div>
                 <div v-for="item in createForm.manualItems" :key="item.id" class="manual-item">
-                  <CustomSelect v-model="item.entryType" :options="entryTypeOptions" />
+                  <CustomSelect
+                    v-model="item.entryType"
+                    :options="entryTypeOptions"
+                    @update:model-value="onManualEntryTypeChange(item, $event)"
+                  />
+                  <CustomSelect
+                    v-model="item.categoryId"
+                    :groups="categoryGroupsByEntryType(item.entryType)"
+                    :placeholder="t('claim_sheet.form.choose_category')"
+                  />
                   <input
                     v-model="item.description"
                     class="input"
@@ -179,6 +188,7 @@
                   <div class="row muted detail-meta">
                     <span>{{ item.entry_type === 'income' ? t('claim_sheet.entry_type.income') : t('claim_sheet.entry_type.expense') }}</span>
                     <span>{{ item.transaction_id ? t('claim_sheet.item_source.imported') : t('claim_sheet.item_source.manual') }}</span>
+                    <span>{{ categoryName(item.category_id) }}</span>
                   </div>
                 </li>
               </ul>
@@ -244,6 +254,7 @@ import { useI18n } from '@/ui/services/i18n.service'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
 import { useAccountStore } from '@/ui/stores/account.store'
+import { useCategoryStore } from '@/ui/stores/category.store'
 import { reimbursementPendingMinor } from '@/ui/utils/reimbursement-item'
 import {
   createCsvBlobUrl,
@@ -253,6 +264,7 @@ import {
 } from '@/core/services/export.service'
 import {
   createReimbursementDraft,
+  deleteReimbursement,
   getReimbursementDetail,
   loadReimbursementDashboard,
   markReimbursementPaid,
@@ -264,6 +276,7 @@ const { t, locale } = useI18n()
 const uiStore = useUiStore()
 const reimbursementStore = useReimbursementStore()
 const accountStore = useAccountStore()
+const categoryStore = useCategoryStore()
 const ledgerStore = useLedgerStore()
 
 const dashboard = ref({
@@ -320,8 +333,10 @@ const draftTotalMinor = computed(() => {
 const canCreateClaim = computed(() => {
   const hasTitle = Boolean(String(createForm.title ?? '').trim())
   const hasImported = importedItems.value.length > 0
-  const hasManual = createForm.manualItems.some((item) => Number(item.amountMajor ?? 0) > 0)
-  return hasTitle && (hasImported || hasManual)
+  const manualItemsWithAmount = createForm.manualItems.filter((item) => Number(item.amountMajor ?? 0) > 0)
+  const hasManual = manualItemsWithAmount.length > 0
+  const manualCategoriesReady = manualItemsWithAmount.every((item) => Boolean(String(item.categoryId ?? '').trim()))
+  return hasTitle && (hasImported || hasManual) && manualCategoriesReady
 })
 
 const canCompleteClaim = computed(() => {
@@ -331,7 +346,7 @@ const canCompleteClaim = computed(() => {
 })
 
 onMounted(async () => {
-  await Promise.all([reloadDashboard(), reimbursementStore.load(), accountStore.load()])
+  await Promise.all([reloadDashboard(), reimbursementStore.load(), accountStore.load(), categoryStore.load()])
   resetCreateForm()
 })
 
@@ -347,6 +362,7 @@ function createManualItem() {
   return {
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     entryType: 'expense',
+    categoryId: firstCategoryIdByEntryType('expense'),
     description: '',
     amountMajor: 0,
   }
@@ -359,6 +375,36 @@ function addManualItem() {
 function removeManualItem(itemId) {
   createForm.manualItems = createForm.manualItems.filter((item) => item.id !== itemId)
   if (!createForm.manualItems.length) addManualItem()
+}
+
+function categoriesByEntryType(entryType) {
+  return entryType === 'income' ? categoryStore.incomeCategories : categoryStore.expenseCategories
+}
+
+function categoryGroupsByEntryType(entryType) {
+  return entryType === 'income' ? categoryStore.incomeCategoryGroups : categoryStore.expenseCategoryGroups
+}
+
+function firstCategoryIdByEntryType(entryType) {
+  return String(categoriesByEntryType(entryType)[0]?.id ?? '')
+}
+
+function ensureCategoryIdByEntryType(entryType, categoryId) {
+  const nextCategoryId = String(categoryId ?? '').trim()
+  if (!nextCategoryId) {
+    return firstCategoryIdByEntryType(entryType)
+  }
+
+  if (categoriesByEntryType(entryType).some((item) => item.id === nextCategoryId)) {
+    return nextCategoryId
+  }
+
+  return firstCategoryIdByEntryType(entryType)
+}
+
+function onManualEntryTypeChange(item, nextType) {
+  item.entryType = nextType === 'income' ? 'income' : 'expense'
+  item.categoryId = ensureCategoryIdByEntryType(item.entryType, item.categoryId)
 }
 
 async function reloadDashboard() {
@@ -414,6 +460,7 @@ async function submitCreateSheet() {
           || (item.entryType === 'income'
             ? t('claim_sheet.form.default_income_item')
             : t('claim_sheet.form.default_expense_item')),
+        categoryId: ensureCategoryIdByEntryType(item.entryType, item.categoryId) || null,
         amountMinor: Math.round(Number(item.amountMajor ?? 0) * 100),
         occurredAt: new Date().toISOString(),
       }))
@@ -467,7 +514,7 @@ function isClaimCompleteDisabled(claim) {
 }
 
 function isClaimVoidDisabled(claim) {
-  return ['paid', 'rejected'].includes(String(claim?.status ?? ''))
+  return ['paid'].includes(String(claim?.status ?? ''))
 }
 
 function openCompleteSheet(claim) {
@@ -529,10 +576,7 @@ async function voidClaim(claim) {
   if (!ok) return
 
   try {
-    if (claim.status === 'draft') {
-      await transitionReimbursementStatus(ledgerStore.activeLedgerId, claim.id, 'submitted')
-    }
-    await transitionReimbursementStatus(ledgerStore.activeLedgerId, claim.id, 'rejected')
+    await deleteReimbursement(ledgerStore.activeLedgerId, claim.id)
     await reloadDashboard()
     uiStore.pushToast(t('claim_sheet.toast.voided'))
   } catch (error) {
@@ -543,6 +587,12 @@ async function voidClaim(claim) {
 function signedMinorOfItem(item) {
   const amountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
   return String(item?.entry_type ?? '') === 'income' ? amountMinor * -1 : amountMinor
+}
+
+function categoryName(categoryId) {
+  const normalized = String(categoryId ?? '').trim()
+  if (!normalized) return t('analysis_page.uncategorized')
+  return categoryStore.categories.find((item) => item.id === normalized)?.name ?? t('analysis_page.uncategorized')
 }
 
 function toCsvValue(value) {
@@ -558,11 +608,13 @@ async function exportClaim(claim) {
 
   try {
     const detail = await getReimbursementDetail(ledgerStore.activeLedgerId, claim.id)
+    const categoryHeader = t('transaction_about.detail.category')
     const rows = detail.items.map((item) => ({
       [t('claim_sheet.export_headers.type')]:
         item.entry_type === 'income' ? t('claim_sheet.entry_type.income') : t('claim_sheet.entry_type.expense'),
       [t('claim_sheet.export_headers.source')]:
         item.transaction_id ? t('claim_sheet.item_source.imported') : t('claim_sheet.item_source.manual'),
+      [categoryHeader]: categoryName(item.category_id),
       [t('claim_sheet.export_headers.description')]: item.description || '',
       [t('claim_sheet.export_headers.amount')]: (Math.abs(signedMinorOfItem(item)) / 100).toFixed(2),
       [t('claim_sheet.export_headers.date')]: item.occurred_at ? String(item.occurred_at).slice(0, 10) : '',
@@ -570,6 +622,7 @@ async function exportClaim(claim) {
     rows.push({
       [t('claim_sheet.export_headers.type')]: t('claim_sheet.export_total'),
       [t('claim_sheet.export_headers.source')]: '',
+      [categoryHeader]: '',
       [t('claim_sheet.export_headers.description')]: '',
       [t('claim_sheet.export_headers.amount')]: (Math.abs(Number(detail.claim.total_minor ?? 0)) / 100).toFixed(2),
       [t('claim_sheet.export_headers.date')]: '',
@@ -578,6 +631,7 @@ async function exportClaim(claim) {
     const headers = [
       t('claim_sheet.export_headers.type'),
       t('claim_sheet.export_headers.source'),
+      categoryHeader,
       t('claim_sheet.export_headers.description'),
       t('claim_sheet.export_headers.amount'),
       t('claim_sheet.export_headers.date'),
@@ -701,7 +755,7 @@ h3 {
 }
 
 .manual-item {
-  grid-template-columns: 120px minmax(0, 1fr) 120px auto;
+  grid-template-columns: 120px 180px minmax(0, 1fr) 120px auto;
   align-items: center;
 }
 

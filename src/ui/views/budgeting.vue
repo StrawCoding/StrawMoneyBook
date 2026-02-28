@@ -53,12 +53,18 @@
             <div class="item-content">
               <div class="row">
                 <span>{{ categoryName(item.category_id) }}</span>
-                <MoneyText :value-minor="item.amount_minor" />
+                <MoneyText :value-minor="itemBudgetMinor(item)" />
               </div>
-              <div class="row">
-                <small class="muted">
-                  {{ t('budgeting.used') }} {{ formatMajor(itemSpentMinor(item.category_id)) }} / {{ t('budgeting.remaining') }} {{ formatMajor(itemRemainMinor(item)) }}
-                </small>
+              <small v-if="isDailyAverageItem(item)" class="muted item-rule-hint">{{ itemDailyRuleSummary(item) }}</small>
+              <div class="row budget-line used-line">
+                <small class="budget-label">{{ t('budgeting.used') }}</small>
+                <small class="budget-value">{{ formatMajor(itemSpentMinor(item.category_id)) }}</small>
+              </div>
+              <div class="row budget-line remain-line">
+                <small class="budget-label">{{ t('budgeting.remaining') }}</small>
+                <small class="budget-value">{{ formatMajor(itemRemainMinor(item)) }}</small>
+              </div>
+              <div class="row item-actions-row">
                 <div class="btn-wrap">
                   <button class="btn" @click="openEdit(item)">{{ t('budgeting.edit') }}</button>
                   <button class="btn" @click="removeItem(item.id)">{{ t('budgeting.delete') }}</button>
@@ -114,6 +120,11 @@ const editingItem = ref(null)
 const deleteDialogOpen = ref(false)
 const deleteLoading = ref(false)
 const pendingDeleteItemId = ref('')
+const budgetErrorKeys = new Set([
+  'budgeting.error.category_required',
+  'budgeting.error.rule_unit_required',
+  'budgeting.error.rule_values_required',
+])
 
 function changeMonth(offset) {
   const monthKey = shiftMonthKey(budgetStore.monthKey, offset)
@@ -156,6 +167,12 @@ function itemSpentMinor(categoryId) {
 }
 
 function itemBudgetMinor(item) {
+  const budgetMinor = Number(item?.resolved_amount_minor ?? item?.amount_minor ?? 0)
+  if (!Number.isFinite(budgetMinor)) return 0
+  return Math.max(0, budgetMinor)
+}
+
+function itemBaseMinor(item) {
   const budgetMinor = Number(item?.amount_minor ?? 0)
   if (!Number.isFinite(budgetMinor)) return 0
   return Math.max(0, budgetMinor)
@@ -180,6 +197,32 @@ function isItemOverBudget(item) {
   return itemBudgetMinor(item) > 0 && itemUsedRatio(item) > 1
 }
 
+function isDailyAverageItem(item) {
+  return String(item?.amount_mode ?? '') === 'daily_average'
+}
+
+function itemRuleValues(item) {
+  if (Array.isArray(item?.day_rule_values)) return item.day_rule_values
+  if (typeof item?.day_rule_values_json === 'string') {
+    try {
+      const parsed = JSON.parse(item.day_rule_values_json)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+function itemDailyRuleSummary(item) {
+  if (!isDailyAverageItem(item)) return ''
+  const unitKey = String(item?.day_rule_unit ?? '') === 'monthday'
+    ? 'budgeting.rule_unit.monthday'
+    : 'budgeting.rule_unit.weekday'
+  const values = itemRuleValues(item).join(', ') || '-'
+  return `${t('budgeting.amount_mode.daily_average')} ${formatMajor(itemBaseMinor(item))} / ${t(unitKey)} ${values} · ${t('budgeting.occurrence_count', { count: Number(item?.occurrence_count ?? 0) })}`
+}
+
 function numberFormatLocale() {
   return locale.value === 'en' ? 'en-US' : 'zh-TW'
 }
@@ -193,6 +236,12 @@ function formatMajor(amountMinor) {
     minimumFractionDigits: hasFraction ? 2 : 0,
     maximumFractionDigits: 2,
   }).format(minor / 100)
+}
+
+function resolveBudgetErrorMessage(error) {
+  const key = String(error?.code ?? error?.message ?? '').trim()
+  if (budgetErrorKeys.has(key)) return t(key)
+  return error?.message ?? t('budgeting.toast.save_failed')
 }
 
 function openCreate() {
@@ -216,7 +265,7 @@ async function saveItem(payload) {
     uiStore.pushToast(t('budgeting.toast.saved'))
     closeSheet()
   } catch (error) {
-    uiStore.pushToast(error.message ?? t('budgeting.toast.save_failed'), 'error')
+    uiStore.pushToast(resolveBudgetErrorMessage(error), 'error')
   }
 }
 
@@ -314,6 +363,26 @@ h2, h3 {
   display: grid;
   gap: 8px;
   min-width: 0
+}
+.item-rule-hint {
+  display: block
+}
+.budget-line {
+  justify-content: space-between;
+  font-weight: 700
+}
+.budget-label,
+.budget-value {
+  font-size: 12px
+}
+.used-line {
+  color: var(--danger, #d14343)
+}
+.remain-line {
+  color: var(--success, #1f9d55)
+}
+.item-actions-row {
+  justify-content: flex-end
 }
 .btn-wrap {
   display: flex;

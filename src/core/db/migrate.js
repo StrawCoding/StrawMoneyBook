@@ -10,6 +10,8 @@ import migration009 from '@/core/db/migrations/009_allow_zero_amount_transaction
 import migration010 from '@/core/db/migrations/010_account_include_in_assets.sql?raw'
 import migration011 from '@/core/db/migrations/011_reimbursement_advances.sql?raw'
 import migration012 from '@/core/db/migrations/012_reimbursement_item_entry_type.sql?raw'
+import migration013 from '@/core/db/migrations/013_budget_item_daily_rules.sql?raw'
+import migration014 from '@/core/db/migrations/014_reimbursement_advance_category.sql?raw'
 
 const MIGRATIONS = [
   { version: 1, name: 'init_schema', sql: migration001 },
@@ -24,6 +26,8 @@ const MIGRATIONS = [
   { version: 10, name: 'account_include_in_assets', sql: migration010 },
   { version: 11, name: 'reimbursement_advances', sql: migration011 },
   { version: 12, name: 'reimbursement_item_entry_type', sql: migration012 },
+  { version: 13, name: 'budget_item_daily_rules', sql: migration013 },
+  { version: 14, name: 'reimbursement_advance_category', sql: migration014 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'
@@ -168,6 +172,9 @@ const LEGACY_COLUMN_PATCHES = {
     'ALTER TABLE reimbursement_items ADD COLUMN created_at TEXT;',
     'ALTER TABLE reimbursement_items ADD COLUMN updated_at TEXT;',
   ],
+  reimbursement_advances: [
+    'ALTER TABLE reimbursement_advances ADD COLUMN category_id TEXT;',
+  ],
   budgets: [
     'ALTER TABLE budgets ADD COLUMN name TEXT;',
     'ALTER TABLE budgets ADD COLUMN include_transfers INTEGER NOT NULL DEFAULT 0;',
@@ -182,6 +189,9 @@ const LEGACY_COLUMN_PATCHES = {
     'ALTER TABLE budget_items ADD COLUMN category_id TEXT;',
     'ALTER TABLE budget_items ADD COLUMN category_group_id TEXT;',
     'ALTER TABLE budget_items ADD COLUMN amount_minor INTEGER NOT NULL DEFAULT 0;',
+    "ALTER TABLE budget_items ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed';",
+    "ALTER TABLE budget_items ADD COLUMN day_rule_unit TEXT NOT NULL DEFAULT 'none';",
+    "ALTER TABLE budget_items ADD COLUMN day_rule_values_json TEXT NOT NULL DEFAULT '[]';",
     'ALTER TABLE budget_items ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;',
     'ALTER TABLE budget_items ADD COLUMN created_at TEXT;',
     'ALTER TABLE budget_items ADD COLUMN updated_at TEXT;',
@@ -299,7 +309,10 @@ async function patchLegacySchema(db) {
        SET created_at = COALESCE(created_at, ${nowExpr}),
            updated_at = COALESCE(updated_at, created_at, ${nowExpr}),
            sort_order = COALESCE(sort_order, 0),
-           amount_minor = COALESCE(amount_minor, 0);`,
+           amount_minor = COALESCE(amount_minor, 0),
+           amount_mode = COALESCE(amount_mode, 'fixed'),
+           day_rule_unit = COALESCE(day_rule_unit, 'none'),
+           day_rule_values_json = COALESCE(day_rule_values_json, '[]');`,
     )
   }
 

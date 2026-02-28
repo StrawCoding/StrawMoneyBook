@@ -177,6 +177,9 @@ export async function listReimbursementAdvances(ledgerId, options = {}) {
        ra.id,
        ra.account_id,
        a.name AS account_name,
+       ra.category_id,
+       c.name AS category_name,
+       c.icon AS category_icon,
        ra.source_tx_id,
        ra.amount_minor,
        ra.used_minor,
@@ -189,6 +192,9 @@ export async function listReimbursementAdvances(ledgerId, options = {}) {
      LEFT JOIN accounts a
        ON a.ledger_id = ra.ledger_id
       AND a.id = ra.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = ra.ledger_id
+      AND c.id = ra.category_id
      WHERE ra.ledger_id = ?
        AND ra.deleted_at IS NULL
        AND (? = 0 OR ra.amount_minor > ra.used_minor)
@@ -208,6 +214,9 @@ export async function getReimbursementAdvanceById(ledgerId, advanceId) {
        ra.id,
        ra.account_id,
        a.name AS account_name,
+       ra.category_id,
+       c.name AS category_name,
+       c.icon AS category_icon,
        ra.source_tx_id,
        ra.amount_minor,
        ra.used_minor,
@@ -220,6 +229,9 @@ export async function getReimbursementAdvanceById(ledgerId, advanceId) {
      LEFT JOIN accounts a
        ON a.ledger_id = ra.ledger_id
       AND a.id = ra.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = ra.ledger_id
+      AND c.id = ra.category_id
      WHERE ra.ledger_id = ?
        AND ra.id = ?
        AND ra.deleted_at IS NULL
@@ -238,13 +250,14 @@ export async function createReimbursementAdvance(ledgerId, input) {
 
   await run(
     `INSERT INTO reimbursement_advances (
-      ledger_id, id, account_id, source_tx_id, amount_minor, used_minor,
+      ledger_id, id, account_id, category_id, source_tx_id, amount_minor, used_minor,
       note, received_at, created_at, updated_at, deleted_at
-    ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, NULL);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, NULL);`,
     [
       ledgerId,
       id,
       input.accountId,
+      input.categoryId ?? null,
       input.sourceTxId ?? null,
       input.amountMinor,
       input.note ?? null,
@@ -407,6 +420,21 @@ export async function updateReimbursementStatus(ledgerId, reimbursementId, nextS
   await run(sql, [...values, ledgerId, reimbursementId])
 
   return getReimbursementById(ledgerId, reimbursementId)
+}
+
+export async function deleteReimbursementById(ledgerId, reimbursementId) {
+  assertLedgerId(ledgerId)
+  const now = nowIso()
+
+  await run(
+    `UPDATE reimbursements
+     SET deleted_at = ?,
+         updated_at = ?
+     WHERE ledger_id = ?
+       AND id = ?
+       AND deleted_at IS NULL;`,
+    [now, now, ledgerId, reimbursementId],
+  )
 }
 
 export async function setReimbursementPaid(ledgerId, reimbursementId, input) {

@@ -444,12 +444,19 @@ async function refreshAccessTokenByBackend(refreshToken) {
 }
 
 async function loginGoogleWithOptions(options = {}) {
+  const preferredEmail = String(options.preferredEmail ?? options.loginHint ?? '').trim()
+  const authOptions = {
+    scopes: GOOGLE_SCOPES,
+    ...options,
+  }
+  delete authOptions.preferredEmail
+  if (preferredEmail && !authOptions.loginHint) {
+    authOptions.loginHint = preferredEmail
+  }
+
   return SocialLogin.login({
     provider: 'google',
-    options: {
-      scopes: GOOGLE_SCOPES,
-      ...options,
-    },
+    options: authOptions,
   })
 }
 
@@ -559,7 +566,7 @@ export async function initGoogleAuth() {
   initializedGoogleMode = mode
 }
 
-export async function googleSignIn() {
+export async function googleSignIn(options = {}) {
   if (ongoingSignInPromise) {
     const elapsedMs = Date.now() - ongoingSignInStartedAtMs
     if (elapsedMs >= 0 && elapsedMs < STALE_SIGNIN_PROMISE_MS) {
@@ -580,6 +587,7 @@ export async function googleSignIn() {
         loginGoogleWithOptions({
           forceRefreshToken: true,
           filterByAuthorizedAccounts: false,
+          preferredEmail: options.preferredEmail,
         }),
         GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS,
         GOOGLE_LOGIN_TIMEOUT_MESSAGE,
@@ -599,6 +607,7 @@ export async function googleSignIn() {
               filterByAuthorizedAccounts: false,
               forcePrompt: true,
               style: 'standard',
+              preferredEmail: options.preferredEmail,
             }),
             GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS,
             GOOGLE_LOGIN_TIMEOUT_MESSAGE,
@@ -658,6 +667,7 @@ export async function googleSignIn() {
               filterByAuthorizedAccounts: false,
               forcePrompt: true,
               style: 'standard',
+              preferredEmail: options.preferredEmail,
             }),
             GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS,
             GOOGLE_LOGIN_TIMEOUT_MESSAGE,
@@ -692,6 +702,7 @@ export async function googleSignIn() {
 export async function getAccessToken(options = {}) {
   if (hasUsableCachedAccessToken()) return cachedAccessToken
   const interactive = options?.interactive !== false
+  const preferredEmail = String(options?.preferredEmail ?? '').trim()
 
   if (isServerAuthCodeModeActive()) {
     if (cachedRefreshToken) {
@@ -720,7 +731,7 @@ export async function getAccessToken(options = {}) {
 
     if (interactive) {
       try {
-        const signed = await googleSignIn()
+        const signed = await googleSignIn({ preferredEmail })
         return signed.accessToken
       } catch (error) {
         throw normalizeGoogleAuthError(error)
@@ -744,7 +755,7 @@ export async function getAccessToken(options = {}) {
   if (interactive) {
     // Keep manual flows to a single interactive login to avoid duplicate account prompts.
     try {
-      const signed = await googleSignIn()
+      const signed = await googleSignIn({ preferredEmail })
       return signed.accessToken
     } catch (error) {
       throw normalizeGoogleAuthError(error)

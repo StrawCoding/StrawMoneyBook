@@ -46,7 +46,7 @@ export async function createBudget(ledgerId, input) {
 export async function listBudgetItems(ledgerId, budgetId) {
   const result = await query(
     `SELECT ledger_id, id, budget_id, scope_type, category_id, category_group_id,
-            amount_minor, sort_order
+            amount_minor, amount_mode, day_rule_unit, day_rule_values_json, sort_order
      FROM budget_items
      WHERE ledger_id = ? AND budget_id = ?
      ORDER BY sort_order ASC, created_at ASC;`,
@@ -63,13 +63,17 @@ export async function upsertBudgetItem(ledgerId, input) {
   await run(
     `INSERT INTO budget_items (
       ledger_id, id, budget_id, scope_type, category_id, category_group_id,
-      amount_minor, sort_order, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      amount_minor, amount_mode, day_rule_unit, day_rule_values_json,
+      sort_order, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(ledger_id, id) DO UPDATE SET
       scope_type = excluded.scope_type,
       category_id = excluded.category_id,
       category_group_id = excluded.category_group_id,
       amount_minor = excluded.amount_minor,
+      amount_mode = excluded.amount_mode,
+      day_rule_unit = excluded.day_rule_unit,
+      day_rule_values_json = excluded.day_rule_values_json,
       sort_order = excluded.sort_order,
       updated_at = excluded.updated_at;`,
     [
@@ -80,6 +84,9 @@ export async function upsertBudgetItem(ledgerId, input) {
       input.categoryId ?? null,
       input.categoryGroupId ?? null,
       input.amountMinor,
+      input.amountMode ?? 'fixed',
+      input.dayRuleUnit ?? 'none',
+      input.dayRuleValuesJson ?? '[]',
       input.sortOrder ?? 0,
       now,
       now,

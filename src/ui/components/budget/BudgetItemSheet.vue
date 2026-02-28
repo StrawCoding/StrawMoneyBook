@@ -4,13 +4,13 @@
       <section v-if="open" class="sheet-mask" @click.self="$emit('close')">
         <article class="sheet card">
           <header class="row">
-            <h3>{{ model.id ? '編輯預算項目' : '新增預算項目' }}</h3>
-            <button class="btn" @click="$emit('close')">關閉</button>
+            <h3>{{ model.id ? t('budgeting.sheet.edit_title') : t('budgeting.sheet.create_title') }}</h3>
+            <button class="btn" @click="$emit('close')">{{ t('budgeting.sheet.close') }}</button>
           </header>
 
           <div class="stack form-wrap">
             <label>
-              分類
+              {{ t('budgeting.sheet.category') }}
               <button
                 type="button"
                 class="select category-trigger"
@@ -19,20 +19,72 @@
                 @click="openCategoryPicker"
               >
                 <font-awesome-icon v-if="selectedCategoryIcon" :icon="selectedCategoryIcon" class="category-icon" />
-                <span class="category-value">{{ selectedCategoryLabel || '請選擇分類' }}</span>
+                <span class="category-value">{{ selectedCategoryLabel || t('budgeting.sheet.pick_category') }}</span>
                 <span class="category-arrow">›</span>
               </button>
             </label>
 
             <label>
-              預算金額（元）
+              {{ t('budgeting.amount_mode') }}
+              <CustomSelect v-model="model.amountMode" :options="amountModeOptions" />
+            </label>
+
+            <label v-if="model.amountMode === 'daily_average'">
+              {{ t('budgeting.rule_unit') }}
+              <CustomSelect v-model="model.dayRuleUnit" :options="dayRuleUnitOptions" />
+            </label>
+
+            <div v-if="model.amountMode === 'daily_average' && model.dayRuleUnit === 'weekday'" class="stack rule-wrap">
+              <div class="row day-rule-quick-row">
+                <button type="button" class="btn" @click="applyWeekdayPreset('weekdays')">{{ t('budgeting.sheet.rule_weekdays') }}</button>
+                <button type="button" class="btn" @click="applyWeekdayPreset('weekends')">{{ t('budgeting.sheet.rule_weekends') }}</button>
+                <button type="button" class="btn" @click="applyWeekdayPreset('all')">{{ t('budgeting.sheet.rule_all') }}</button>
+                <button type="button" class="btn" @click="applyWeekdayPreset('clear')">{{ t('budgeting.sheet.rule_clear') }}</button>
+              </div>
+              <div class="day-chip-grid">
+                <button
+                  v-for="day in weekdayValues"
+                  :key="`weekday-${day}`"
+                  type="button"
+                  class="day-chip"
+                  :class="{ active: model.dayRuleValues.includes(day) }"
+                  @click="toggleDayRuleValue(day)"
+                >
+                  {{ day }}
+                </button>
+              </div>
+              <small class="muted">{{ t('budgeting.sheet.weekday_help') }}</small>
+            </div>
+
+            <div v-if="model.amountMode === 'daily_average' && model.dayRuleUnit === 'monthday'" class="stack rule-wrap">
+              <div class="day-chip-grid monthday-grid">
+                <button
+                  v-for="day in monthdayValues"
+                  :key="`monthday-${day}`"
+                  type="button"
+                  class="day-chip"
+                  :class="{ active: model.dayRuleValues.includes(day) }"
+                  @click="toggleDayRuleValue(day)"
+                >
+                  {{ day }}
+                </button>
+              </div>
+              <small class="muted">{{ t('budgeting.sheet.monthday_help') }}</small>
+            </div>
+
+            <label>
+              {{ model.amountMode === 'daily_average' ? t('budgeting.sheet.daily_amount_label') : t('budgeting.sheet.amount_label') }}
               <input v-model.number="model.amountMajor" class="input" type="number" min="0" step="1" />
             </label>
+
+            <small v-if="model.amountMode === 'daily_average'" class="muted">
+              {{ t('budgeting.sheet.selected_days', { values: selectedDayRuleLabel || '-' }) }}
+            </small>
           </div>
 
           <footer class="row footer">
-            <button class="btn" @click="$emit('close')">取消</button>
-            <button class="btn primary" @click="onSave">儲存</button>
+            <button class="btn" @click="$emit('close')">{{ t('common.cancel') }}</button>
+            <button class="btn primary" @click="onSave">{{ t('common.save') }}</button>
           </footer>
         </article>
       </section>
@@ -42,9 +94,9 @@
       <section v-if="open && showCategoryPicker" class="category-mask" @click.self="closeCategoryPicker">
         <article class="category-sheet card">
           <header class="row category-head">
-            <button type="button" class="btn" @click="closeCategoryPicker">返回</button>
-            <h4>選擇分類</h4>
-            <button type="button" class="btn" @click="closeCategoryPicker">完成</button>
+            <button type="button" class="btn" @click="closeCategoryPicker">{{ t('common.back') }}</button>
+            <h4>{{ t('budgeting.sheet.pick_category') }}</h4>
+            <button type="button" class="btn" @click="closeCategoryPicker">{{ t('budgeting.sheet.close') }}</button>
           </header>
 
           <section v-if="categoryPickerGroups.length" class="category-layout">
@@ -73,12 +125,12 @@
                 <font-awesome-icon v-if="category.icon" :icon="category.icon" class="category-item-icon" />
                 <span>{{ category.name }}</span>
               </button>
-              <p v-if="!categoryPickerChildren.length" class="category-empty">此母分類沒有可選子分類</p>
+              <p v-if="!categoryPickerChildren.length" class="category-empty">{{ t('budgeting.sheet.category_empty_children') }}</p>
             </section>
           </section>
 
-          <p v-else class="category-empty">目前沒有可用分類，請先到設定新增分類。</p>
-          <p class="category-tip">可在設定中的分類管理做新增刪除</p>
+          <p v-else class="category-empty">{{ t('budgeting.sheet.no_categories') }}</p>
+          <p class="category-tip">{{ t('budgeting.sheet.category_tip') }}</p>
         </article>
       </section>
     </transition>
@@ -87,6 +139,8 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import { useI18n } from '@/ui/services/i18n.service'
 
 const props = defineProps({
   open: {
@@ -108,15 +162,29 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'save'])
+const { t } = useI18n()
 
 const model = reactive({
   id: '',
   categoryId: '',
   amountMajor: null,
+  amountMode: 'fixed',
+  dayRuleUnit: 'weekday',
+  dayRuleValues: [],
 })
 const showCategoryPicker = ref(false)
 const categoryPickerParentId = ref('')
+const weekdayValues = [1, 2, 3, 4, 5, 6, 7]
+const monthdayValues = Array.from({ length: 31 }, (_, index) => index + 1)
 
+const amountModeOptions = computed(() => [
+  { value: 'fixed', label: t('budgeting.amount_mode.fixed') },
+  { value: 'daily_average', label: t('budgeting.amount_mode.daily_average') },
+])
+const dayRuleUnitOptions = computed(() => [
+  { value: 'weekday', label: t('budgeting.rule_unit.weekday') },
+  { value: 'monthday', label: t('budgeting.rule_unit.monthday') },
+])
 const categoryOptions = computed(() => props.categories ?? [])
 const categoryPickerGroups = computed(() => {
   if ((props.categoryGroups ?? []).length > 0) {
@@ -126,7 +194,7 @@ const categoryPickerGroups = computed(() => {
   return [
     {
       id: '__default__',
-      name: '分類',
+      name: t('budgeting.sheet.category'),
       categories: categoryOptions.value,
     },
   ]
@@ -152,6 +220,7 @@ const selectedCategoryIcon = computed(() => {
   }
   return ''
 })
+const selectedDayRuleLabel = computed(() => model.dayRuleValues.join(', '))
 
 watch(
   () => [props.open, props.item],
@@ -162,6 +231,10 @@ watch(
       model.id = props.item.id
       model.categoryId = props.item.category_id ?? ''
       model.amountMajor = Number(props.item.amount_minor ?? 0) / 100
+      model.amountMode = normalizeAmountMode(props.item.amount_mode)
+      model.dayRuleUnit = normalizeDayRuleUnit(props.item.day_rule_unit)
+      model.dayRuleValues = normalizeDayRuleValues(props.item.day_rule_values ?? props.item.day_rule_values_json, model.dayRuleUnit)
+      ensureRuleSelection()
       showCategoryPicker.value = false
       syncCategoryPickerParent(model.categoryId)
       return
@@ -170,6 +243,9 @@ watch(
     model.id = ''
     model.categoryId = categoryOptions.value[0]?.id ?? ''
     model.amountMajor = null
+    model.amountMode = 'fixed'
+    model.dayRuleUnit = 'weekday'
+    model.dayRuleValues = defaultDayRuleValues('weekday')
     showCategoryPicker.value = false
     syncCategoryPickerParent(model.categoryId)
   },
@@ -183,6 +259,67 @@ watch(
   },
   { deep: true },
 )
+
+watch(
+  () => model.amountMode,
+  () => {
+    ensureRuleSelection()
+  },
+)
+
+watch(
+  () => model.dayRuleUnit,
+  () => {
+    ensureRuleSelection()
+  },
+)
+
+function normalizeAmountMode(value) {
+  return value === 'daily_average' ? 'daily_average' : 'fixed'
+}
+
+function normalizeDayRuleUnit(value) {
+  return value === 'monthday' ? 'monthday' : 'weekday'
+}
+
+function safeParseValues(text) {
+  try {
+    const parsed = JSON.parse(text)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function normalizeDayRuleValues(values, unit) {
+  const rawList = Array.isArray(values)
+    ? values
+    : (typeof values === 'string' ? safeParseValues(values) : [])
+  const min = 1
+  const max = unit === 'monthday' ? 31 : 7
+  return Array.from(
+    new Set(
+      rawList
+        .map((value) => Math.trunc(Number(value)))
+        .filter((value) => Number.isFinite(value) && value >= min && value <= max),
+    ),
+  ).sort((a, b) => a - b)
+}
+
+function defaultDayRuleValues(unit) {
+  return unit === 'monthday' ? [1] : [1, 2, 3, 4, 5]
+}
+
+function ensureRuleSelection() {
+  model.amountMode = normalizeAmountMode(model.amountMode)
+  model.dayRuleUnit = normalizeDayRuleUnit(model.dayRuleUnit)
+  const normalizedValues = normalizeDayRuleValues(model.dayRuleValues, model.dayRuleUnit)
+  if (model.amountMode !== 'daily_average') {
+    model.dayRuleValues = normalizedValues
+    return
+  }
+  model.dayRuleValues = normalizedValues.length ? normalizedValues : defaultDayRuleValues(model.dayRuleUnit)
+}
 
 function syncCategoryPickerParent(preferredCategoryId = '') {
   if (!categoryPickerGroups.value.length) {
@@ -225,11 +362,37 @@ function pickCategory(categoryId) {
   showCategoryPicker.value = false
 }
 
+function applyWeekdayPreset(preset) {
+  if (preset === 'weekends') {
+    model.dayRuleValues = [6, 7]
+    return
+  }
+  if (preset === 'all') {
+    model.dayRuleValues = [...weekdayValues]
+    return
+  }
+  if (preset === 'clear') {
+    model.dayRuleValues = []
+    return
+  }
+  model.dayRuleValues = [1, 2, 3, 4, 5]
+}
+
+function toggleDayRuleValue(value) {
+  const next = new Set(model.dayRuleValues)
+  if (next.has(value)) next.delete(value)
+  else next.add(value)
+  model.dayRuleValues = Array.from(next).sort((a, b) => a - b)
+}
+
 function onSave() {
   emit('save', {
     id: model.id || undefined,
     categoryId: model.categoryId,
     amountMinor: Math.round(Number(model.amountMajor ?? 0) * 100),
+    amountMode: model.amountMode,
+    dayRuleUnit: model.amountMode === 'daily_average' ? model.dayRuleUnit : 'none',
+    dayRuleValues: model.amountMode === 'daily_average' ? [...model.dayRuleValues] : [],
   })
 }
 
@@ -273,6 +436,9 @@ h3 {
 .form-wrap {
   margin-top: 12px
 }
+.rule-wrap {
+  gap: 8px
+}
 label {
   display: grid;
   gap: 6px;
@@ -311,6 +477,31 @@ label {
 }
 .footer {
   margin-top: 12px
+}
+.day-rule-quick-row {
+  gap: 6px;
+  flex-wrap: wrap
+}
+.day-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px
+}
+.monthday-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr))
+}
+.day-chip {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  min-height: 36px;
+  font-weight: 700
+}
+.day-chip.active {
+  border-color: color-mix(in srgb, var(--primary) 60%, transparent);
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: var(--primary)
 }
 .category-mask {
   position: fixed;
@@ -397,5 +588,12 @@ label {
   margin: 0 2px;
   color: var(--muted);
   font-size: 12px
+}
+
+@media (max-width: 480px) {
+  .day-chip-grid,
+  .monthday-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
 }
 </style>
