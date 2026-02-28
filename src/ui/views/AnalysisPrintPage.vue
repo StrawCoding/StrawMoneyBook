@@ -41,9 +41,6 @@
         <button class="btn primary" :disabled="exporting" @click="exportCsv">
           {{ exporting ? t('analysis_print.exporting') : t('analysis_print.export_csv') }}
         </button>
-        <button class="btn" :disabled="loadingReport" @click="exportPdf">
-          {{ t('analysis_print.export_pdf') }}
-        </button>
         <button v-if="exportedUrl" class="btn" @click="openExportLink">{{ exportedActionLabel }}</button>
       </div>
 
@@ -170,7 +167,6 @@ import { useUiStore } from '@/ui/stores/ui.store'
 import {
   CSV_HEADERS,
   createCsvBlobUrl,
-  createHtmlBlobUrl,
   exportLedgerTransactionsCsv,
   getLedgerTransactionsExportData,
   openFileUrl,
@@ -377,144 +373,12 @@ async function exportCsv() {
   }
 }
 
-function exportPdf() {
-  const ledgerId = ledgerStore.activeLedgerId
-  if (!ledgerId) {
-    uiStore.pushToast(t('analysis_print.toast.no_ledger'), 'error')
-    return
-  }
-  if (!validateRange(true)) return
-  revokeBlobUrl(exportedUrl.value)
-  exportedFilename.value = ''
-  exportedUrl.value = createHtmlBlobUrl(renderPrintDocument())
-  exportedIsDeviceLink.value = false
-  exportedLocation.value = '列印預覽（可另存為 PDF）'
-  const opened = openFileUrl(exportedUrl.value)
-  if (!opened) {
-    uiStore.pushToast(t('analysis_print.toast.print_unavailable'), 'error')
-    return
-  }
-  uiStore.pushToast(t('analysis_print.open_link'))
-}
-
 function openExportLink() {
   if (!exportedUrl.value) return
   const opened = openFileUrl(exportedUrl.value)
   if (!opened && exportedFilename.value) {
     triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
   }
-}
-
-function renderPrintDocument() {
-  const reportTitle = escapeHtml(t('analysis_print.title'))
-  const rangeLabel = escapeHtml(currentRangeLabel.value)
-  const summaryCards = chartSections.value.map((section) => {
-    return `
-      <section class="summary-card">
-        <small>${escapeHtml(t('analysis_page.type_total', { type: section.label }))}</small>
-        <strong>${escapeHtml(formatCurrency(section.totalMinor))}</strong>
-        <small>${escapeHtml(t('analysis_page.items_count', { count: section.count }))}</small>
-      </section>
-    `
-  }).join('')
-
-  const chartBlocks = chartSections.value.map((section) => {
-    const rows = section.items.length
-      ? section.items.map((item) => `
-          <tr>
-            <td>${escapeHtml(item.name)}</td>
-            <td>${escapeHtml(String(item.percent))}%</td>
-            <td>${escapeHtml(formatCurrency(item.amountMinor))}</td>
-            <td>${escapeHtml(String(item.count))}</td>
-          </tr>
-        `).join('')
-      : `<tr><td colspan="4">${escapeHtml(t('analysis_page.no_data_for_type', { type: section.label.toLowerCase() }))}</td></tr>`
-
-    return `
-      <section class="chart-section">
-        <h2>${escapeHtml(t('analysis_page.type_analysis', { type: section.label }))}</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>${escapeHtml(t('transaction_about.detail.category'))}</th>
-              <th>%</th>
-              <th>${escapeHtml(t('analysis_page.type_total', { type: section.label }))}</th>
-              <th>Count</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </section>
-    `
-  }).join('')
-
-  const tableHeaders = csvHeaders.map((header) => `<th>${escapeHtml(header)}</th>`).join('')
-  const tableRows = previewRows.value.length
-    ? previewRows.value.map((row) => `
-        <tr>${csvHeaders.map((header) => `<td>${escapeHtml(row[header] ?? '')}</td>`).join('')}</tr>
-      `).join('')
-    : `<tr><td colspan="${csvHeaders.length}">${escapeHtml(t('analysis_page.no_data_for_type', { type: t('analysis_print.mode.all') }))}</td></tr>`
-
-  return `<!doctype html>
-<html lang="zh-Hant">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${reportTitle}</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 16px; color: #1f2937; }
-    h1, h2 { margin: 0 0 10px; }
-    h1 { font-size: 22px; }
-    h2 { font-size: 18px; }
-    p { margin: 0; }
-    .meta { margin: 6px 0 14px; color: #6b7280; }
-    .summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
-    .summary-card, .chart-section, .table-section { border: 1px solid #d1d5db; border-radius: 12px; padding: 12px; }
-    .summary-card small { display: block; color: #6b7280; }
-    .summary-card strong { display: block; margin: 8px 0; font-size: 18px; }
-    .chart-section { margin-bottom: 14px; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; vertical-align: top; word-break: break-word; }
-    th { background: #f3f4f6; }
-    @media print { body { margin: 10mm; } }
-  </style>
-</head>
-<body>
-  <h1>${reportTitle}</h1>
-  <p class="meta">${rangeLabel}</p>
-  <section class="summary-grid">${summaryCards}</section>
-  ${chartBlocks}
-  <section class="table-section">
-    <h2>${escapeHtml(t('analysis_print.fields_title'))}</h2>
-    <table>
-      <thead><tr>${tableHeaders}</tr></thead>
-      <tbody>${tableRows}</tbody>
-    </table>
-  </section>
-  <script>
-    window.addEventListener('load', () => {
-      setTimeout(() => {
-        if (typeof window.print === 'function') window.print()
-      }, 120)
-    })
-  <\/script>
-</body>
-</html>`
-}
-
-function formatCurrency(valueMinor) {
-  return (Number(valueMinor ?? 0) / 100).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
 }
 
 function buildBreakdown(type) {

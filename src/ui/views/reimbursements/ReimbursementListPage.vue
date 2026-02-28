@@ -126,9 +126,6 @@
                 <button class="btn primary action-btn" :disabled="!canExportClaimSheet" @click="actionExportClaimSheetCsv">
                   匯出 CSV
                 </button>
-                <button class="btn action-btn" :disabled="!canExportClaimSheet" @click="actionExportClaimSheetPdf">
-                  匯出 PDF
-                </button>
               </div>
               <button v-if="exportedUrl" class="btn action-btn" @click="actionOpenExportLink">{{ exportedActionLabel }}</button>
               <div class="action-pair-row">
@@ -297,7 +294,6 @@ import {
 } from '@/ui/utils/reimbursement-item'
 import {
   createCsvBlobUrl,
-  createHtmlBlobUrl,
   openFileUrl,
   revokeBlobUrl,
   saveCsvFileToDevice,
@@ -601,11 +597,6 @@ async function actionExportClaimSheetCsv() {
   await exportClaimSheetCsv()
 }
 
-async function actionExportClaimSheetPdf() {
-  closeActionSheet()
-  await exportClaimSheetPdf()
-}
-
 function actionOpenExportLink() {
   closeActionSheet()
   openExportLink()
@@ -812,82 +803,12 @@ async function exportClaimSheetCsv() {
   uiStore.pushToast(`請款單已匯出（${rowsSource.length} 筆，${exportLocation}）`)
 }
 
-async function exportClaimSheetPdf() {
-  const payload = buildClaimSheetExportPayload()
-  if (!payload) {
-    uiStore.pushToast('沒有可匯出的請款資料', 'error')
-    return
-  }
-
-  revokeBlobUrl(exportedUrl.value)
-  exportedFilename.value = ''
-  exportedUrl.value = createHtmlBlobUrl(renderClaimSheetPrintDocument(payload))
-  exportedIsDeviceLink.value = false
-  exportedLocation.value = '列印預覽（可另存為 PDF）'
-
-  const opened = openFileUrl(exportedUrl.value)
-  if (!opened) {
-    uiStore.pushToast('目前裝置無法開啟列印預覽', 'error')
-    return
-  }
-  uiStore.pushToast(`請款單列印預覽已開啟（${payload.rowsSource.length} 筆）`)
-}
-
 function openExportLink() {
   if (!exportedUrl.value) return
   const opened = openFileUrl(exportedUrl.value)
   if (!opened && exportedFilename.value) {
     triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
   }
-}
-
-function renderClaimSheetPrintDocument(payload) {
-  const { rows, headers, statusLabel } = payload
-  const headerHtml = headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')
-  const rowHtml = rows.map((row) => {
-    return `<tr>${headers.map((header) => `<td>${escapeHtml(row[header] ?? '')}</td>`).join('')}</tr>`
-  }).join('')
-
-  return `<!doctype html>
-<html lang="zh-Hant">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(`請款單 ${statusLabel}`)}</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 16px; color: #1f2937; }
-    h1 { margin: 0 0 8px; font-size: 22px; }
-    p { margin: 0 0 12px; color: #6b7280; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; vertical-align: top; word-break: break-word; }
-    th { background: #f3f4f6; }
-    @media print { body { margin: 10mm; } }
-  </style>
-</head>
-<body>
-  <h1>${escapeHtml(`請款單 ${statusLabel}`)}</h1>
-  <p>${escapeHtml(`共 ${payload.rowsSource.length} 筆`)}</p>
-  <table>
-    <thead><tr>${headerHtml}</tr></thead>
-    <tbody>${rowHtml}</tbody>
-  </table>
-  <script>
-    window.addEventListener('load', () => {
-      setTimeout(() => {
-        if (typeof window.print === 'function') window.print()
-      }, 120)
-    })
-  <\/script>
-</body>
-</html>`
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
 }
 
 async function confirmSettle() {
