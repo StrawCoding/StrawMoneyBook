@@ -278,6 +278,7 @@ const speechLiveText = ref('')
 const parsing = ref(false)
 const submitting = ref(false)
 const AI_SUBMIT_TIMEOUT_MS = 15000
+const AI_HISTORY_WARMUP_TIMEOUT_MS = 1800
 const {
   isSupported: speechSupported,
   isListening: speechListening,
@@ -285,6 +286,7 @@ const {
   start: startSpeech,
   stop: stopSpeech,
 } = useSpeechInput()
+let historyWarmupTask = null
 
 const showAiStatus = computed(() => speechListening.value || parsing.value || submitting.value)
 const aiStatusText = computed(() => {
@@ -294,6 +296,7 @@ const aiStatusText = computed(() => {
   return ''
 })
 const speechLanguage = computed(() => (locale.value === 'en' ? 'en-US' : 'zh-TW'))
+const TRANSFER_RATE_AUTO_SYNC_TIMEOUT_MS = 8000
 
 const model = reactive({
   type: 'expense',
@@ -442,21 +445,24 @@ async function parseText(options = {}) {
   parsing.value = true
 
   try {
-    if (!transactionStore.recent.length) {
-      try {
-        await transactionStore.loadRecent(120)
-      } catch {
-        // Keep parsing even if history loading fails.
-      }
-    }
+    warmupRecentHistoryInBackground()
 
-    const result = parseAutoBookkeepingText(text, {
-      accounts: aiParserAccounts.value,
-      expenseCategories: categoryStore.expenseCategories,
-      incomeCategories: categoryStore.incomeCategories,
-      historyTransactions: transactionStore.recent,
-      now: new Date(),
-    })
+    let result = null
+    try {
+      result = parseAutoBookkeepingText(text, {
+        accounts: aiParserAccounts.value,
+        expenseCategories: categoryStore.expenseCategories,
+        incomeCategories: categoryStore.incomeCategories,
+        historyTransactions: transactionStore.recent,
+        now: new Date(),
+      })
+    } catch (error) {
+      warnings.value = []
+      hasDraft.value = false
+      latestLoanIntent.value = null
+      uiStore.pushToast(error?.message || 'AI 解析失敗，請稍後再試', 'error')
+      return
+    }
 
     warnings.value = resolveAiParserWarnings(result)
 
@@ -731,6 +737,21 @@ async function submit() {
   }
 }
 
+function warmupRecentHistoryInBackground() {
+  if (historyWarmupTask || transactionStore.recent.length) return
+  historyWarmupTask = withTimeout(
+    transactionStore.loadRecent(120),
+    AI_HISTORY_WARMUP_TIMEOUT_MS,
+    'AI 歷史資料預載逾時',
+  )
+    .catch((error) => {
+      console.warn('[ai-page] recent history warmup failed', error)
+    })
+    .finally(() => {
+      historyWarmupTask = null
+    })
+}
+
 function waitFor(delayMs) {
   return new Promise((resolve) => {
     setTimeout(resolve, delayMs)
@@ -870,7 +891,14 @@ async function resolveTransferRateOrThrow() {
     await loadExchangeRateSnapshot()
   }
   if (!hasSystemExchangeRateReady()) {
-    await syncExchangeRateSnapshotNow({ silent: true })
+    const synced = await withTimeout(
+      syncExchangeRateSnapshotNow({ silent: true }),
+      TRANSFER_RATE_AUTO_SYNC_TIMEOUT_MS,
+      '系統匯率同步逾時，請改用手動輸入或稍後再試',
+    )
+    if (!synced && !hasSystemExchangeRateReady()) {
+      throw new Error('找不到可用的系統匯率，請改用手動輸入')
+    }
   }
 
   const rate = resolveCrossExchangeRate(

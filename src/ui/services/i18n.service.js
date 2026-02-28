@@ -881,7 +881,7 @@ const MESSAGES = {
     'analysis_page.type.expense': '支出',
     'analysis_page.type_analysis': '{type}分析',
     'analysis_page.scope.category': '分類分析',
-    'analysis_page.scope.account': '帳號分析',
+    'analysis_page.scope.account': '帳戶分析',
     'analysis_page.scope_type_analysis': '{type}{scope}',
     'analysis_page.type_total': '{type}總額',
     'analysis_page.chart.pie': '圓餅圖',

@@ -462,6 +462,8 @@ const aiMessages = ref([])
 const aiCreatedRecord = ref(null)
 const aiAutoCreating = ref(false)
 const AI_AUTOCREATE_TIMEOUT_MS = 15000
+const AI_HISTORY_WARMUP_TIMEOUT_MS = 1800
+const TRANSFER_RATE_AUTO_SYNC_TIMEOUT_MS = 8000
 const {
   isSupported: speechSupported,
   isListening: speechListening,
@@ -470,6 +472,7 @@ const {
   stop: stopSpeech,
 } = useSpeechInput()
 let aiMessageSeq = 1
+let aiHistoryWarmupTask = null
 const showExtra = ref(false)
 const showCategoryPicker = ref(false)
 const categoryPickerParentId = ref('')
@@ -777,25 +780,39 @@ async function parseWithAi() {
 
   aiCreatedRecord.value = null
   pushAiMessage('user', userText)
-  if (!transactionStore.recent.length) {
-    try {
-      await transactionStore.loadRecent(120)
-    } catch {
-      // Keep parsing even if history loading fails.
-    }
-  }
+  warmupRecentHistoryInBackground()
 
-  const result = parseAutoBookkeepingText(userText, {
-    accounts: aiParserAccounts.value,
-    expenseCategories: categoryStore.expenseCategories,
-    incomeCategories: categoryStore.incomeCategories,
-    historyTransactions: transactionStore.recent,
-    now: new Date(),
-  })
+  let result = null
+  try {
+    result = parseAutoBookkeepingText(userText, {
+      accounts: aiParserAccounts.value,
+      expenseCategories: categoryStore.expenseCategories,
+      incomeCategories: categoryStore.incomeCategories,
+      historyTransactions: transactionStore.recent,
+      now: new Date(),
+    })
+  } catch (error) {
+    const message = String(error?.message ?? 'AI 解析失敗，請稍後再試')
+    pushAiMessage('assistant', message)
+    uiStore.pushToast(message, 'error')
+    aiInput.value = ''
+    return
+  }
   const warnings = resolveAiParserWarnings(result)
 
   if (!result.draft) {
     const warningText = warnings[0] ?? t('ai_bookkeeping.warning.no_draft', '我沒有抓到可用交易資訊，請再描述一次')
+    pushAiMessage('assistant', warningText)
+    uiStore.pushToast(warningText, 'error')
+    aiInput.value = ''
+    return
+  }
+
+  if (
+    result.draft.type === 'transfer'
+    && (!String(result.draft.accountId ?? '').trim() || !String(result.draft.peerAccountId ?? '').trim())
+  ) {
+    const warningText = warnings[0] ?? t('ai_bookkeeping.warning.transfer_accounts_insufficient')
     pushAiMessage('assistant', warningText)
     uiStore.pushToast(warningText, 'error')
     aiInput.value = ''
@@ -862,6 +879,21 @@ async function parseWithAi() {
   recordAiBookkeepingUsage()
   aiCreatedRecord.value = createdRecord
   pushAiMessage('assistant', loanIntent ? '借貸記錄完成' : '記帳完成')
+}
+
+function warmupRecentHistoryInBackground() {
+  if (aiHistoryWarmupTask || transactionStore.recent.length) return
+  aiHistoryWarmupTask = withTimeout(
+    transactionStore.loadRecent(120),
+    AI_HISTORY_WARMUP_TIMEOUT_MS,
+    'AI 歷史資料預載逾時',
+  )
+    .catch((error) => {
+      console.warn('[quick-add] recent history warmup failed', error)
+    })
+    .finally(() => {
+      aiHistoryWarmupTask = null
+    })
 }
 
 function withTimeout(task, timeoutMs, timeoutMessage) {
@@ -1122,7 +1154,14 @@ async function resolveTransferRateOrThrow() {
     await loadExchangeRateSnapshot()
   }
   if (!hasSystemExchangeRateReady()) {
-    await syncExchangeRateSnapshotNow({ silent: true })
+    const synced = await withTimeout(
+      syncExchangeRateSnapshotNow({ silent: true }),
+      TRANSFER_RATE_AUTO_SYNC_TIMEOUT_MS,
+      '系統匯率同步逾時，請改用手動輸入或稍後再試',
+    )
+    if (!synced && !hasSystemExchangeRateReady()) {
+      throw new Error('找不到可用的系統匯率，請改用手動輸入')
+    }
   }
 
   const rate = resolveCrossExchangeRate(

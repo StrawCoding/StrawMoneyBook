@@ -45,6 +45,27 @@ function compactText(value) {
     .toLowerCase()
 }
 
+function normalizeBareTypeText(value) {
+  return String(value ?? '')
+    .replace(/[\s，、。,.!！?？:：;；'"`~\-_=+()（）[\]【】]/g, '')
+    .toLowerCase()
+}
+
+const BARE_TYPE_INPUTS = Object.freeze({
+  expense: new Set(['支出', 'expense']),
+  income: new Set(['收入', 'income']),
+  transfer: new Set(['轉帳', '转账', 'transfer']),
+})
+
+function isBareTypeOnlyInput(text, type) {
+  const normalizedType = String(type ?? '').trim()
+  const candidates = BARE_TYPE_INPUTS[normalizedType]
+  if (!candidates) return false
+  const normalizedText = normalizeBareTypeText(text)
+  if (!normalizedText) return false
+  return candidates.has(normalizedText)
+}
+
 function toMinor(major) {
   return Math.round(Number(major) * 100)
 }
@@ -63,7 +84,10 @@ function parseLooseNumber(rawValue) {
 }
 
 function includesAny(text, patterns) {
-  return patterns.some((pattern) => pattern.test(text))
+  return patterns.some((pattern) => {
+    const cloned = new RegExp(pattern.source, pattern.flags)
+    return cloned.test(text)
+  })
 }
 
 function escapeRegExp(value) {
@@ -1275,6 +1299,20 @@ export function parseAutoBookkeepingText(input, context = {}) {
     }
   }
 
+  const normalizedBareText = normalizeBareTypeText(text)
+  const earlyBareType = Object.entries(BARE_TYPE_INPUTS).find(([, candidates]) => candidates.has(normalizedBareText))?.[0] ?? ''
+  if (earlyBareType) {
+    const bareWarningKeys = [AI_BOOKKEEPING_WARNING_KEY.INVALID_AMOUNT]
+    if (earlyBareType === 'transfer') {
+      bareWarningKeys.push(AI_BOOKKEEPING_WARNING_KEY.TRANSFER_ACCOUNTS_INSUFFICIENT)
+    }
+    return {
+      draft: null,
+      warnings: bareWarningKeys.map((key) => getAiBookkeepingWarningFallback(key)),
+      warningKeys: bareWarningKeys,
+    }
+  }
+
   const accounts = context.accounts ?? []
   const expenseCategories = context.expenseCategories ?? []
   const incomeCategories = context.incomeCategories ?? []
@@ -1308,6 +1346,17 @@ export function parseAutoBookkeepingText(input, context = {}) {
     : rawType === 'transfer' || shouldTreatAsTransfer(text, accounts)
       ? 'transfer'
       : rawType
+  if (!loanIntent && isBareTypeOnlyInput(text, inferredType)) {
+    const bareWarningKeys = [AI_BOOKKEEPING_WARNING_KEY.INVALID_AMOUNT]
+    if (inferredType === 'transfer') {
+      bareWarningKeys.push(AI_BOOKKEEPING_WARNING_KEY.TRANSFER_ACCOUNTS_INSUFFICIENT)
+    }
+    return {
+      draft: null,
+      warnings: bareWarningKeys.map((key) => getAiBookkeepingWarningFallback(key)),
+      warningKeys: bareWarningKeys,
+    }
+  }
   const parsedAddon = extractAddonItems(text)
   let amountMajor = NaN
   if (inferredType === 'transfer') {
@@ -1382,14 +1431,14 @@ export function parseAutoBookkeepingText(input, context = {}) {
       ? tinyNerHints.toAccountIdHint
       : ''
     const transferAccounts = pickTransferAccounts(text, accounts)
-    accountId = nerFromAccountId || transferAccounts.fromAccountId || accounts[0]?.id || ''
-    peerAccountId = nerToAccountId || transferAccounts.toAccountId || accounts.find((item) => item.id !== accountId)?.id || ''
+    accountId = nerFromAccountId || transferAccounts.fromAccountId || ''
+    peerAccountId = nerToAccountId || transferAccounts.toAccountId || ''
 
     if (accountId && peerAccountId && accountId === peerAccountId) {
       peerAccountId =
         transferAccounts.toAccountId && transferAccounts.toAccountId !== accountId
           ? transferAccounts.toAccountId
-          : accounts.find((item) => item.id !== accountId)?.id || ''
+          : ''
     }
 
     if (!accountId || !peerAccountId || accountId === peerAccountId) {

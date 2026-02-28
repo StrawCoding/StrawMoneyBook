@@ -25,13 +25,22 @@ function parseLooseNumber(rawValue) {
 }
 
 function includesAny(text, patterns) {
-  return patterns.some((pattern) => pattern.test(text))
+  return patterns.some((pattern) => {
+    const cloned = new RegExp(pattern.source, pattern.flags)
+    return cloned.test(text)
+  })
+}
+
+function createIterativeRegex(pattern) {
+  const baseFlags = String(pattern?.flags ?? '')
+  const flags = baseFlags.includes('g') ? baseFlags : `${baseFlags}g`
+  return new RegExp(pattern.source, flags)
 }
 
 function countPatternHits(text, patterns) {
   let hits = 0
   for (const pattern of patterns) {
-    const cloned = new RegExp(pattern.source, pattern.flags)
+    const cloned = createIterativeRegex(pattern)
     let matched = cloned.exec(text)
     while (matched) {
       hits += 1
