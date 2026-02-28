@@ -117,6 +117,7 @@ const securityUnlocking = ref(false)
 let securityStateListener = null
 let lastSecurityUnlockAt = 0
 const SECURITY_UNLOCK_COOLDOWN_MS = 1200
+let initialSecurityUnlockTimer = null
 
 const updateDialogMessage = computed(() => {
   if (updateInfo.value.checkFailed) {
@@ -238,7 +239,10 @@ onMounted(() => {
   window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
   void checkAppUpdate({ force: true })
   if (securityLockEnabled.value) {
-    void requestSecurityUnlock('settings_security.unlock_prompt')
+    initialSecurityUnlockTimer = window.setTimeout(() => {
+      initialSecurityUnlockTimer = null
+      void requestSecurityUnlock('settings_security.unlock_prompt')
+    }, 350)
   }
   if (Capacitor.getPlatform() === 'android') {
     void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
@@ -275,6 +279,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('app:check-update', onRequestCheckAppUpdate)
   window.removeEventListener('click', onBackButtonAnchorClick, true)
   window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
+  if (initialSecurityUnlockTimer !== null) {
+    window.clearTimeout(initialSecurityUnlockTimer)
+    initialSecurityUnlockTimer = null
+  }
   securityStateListener?.remove?.()
 })
 

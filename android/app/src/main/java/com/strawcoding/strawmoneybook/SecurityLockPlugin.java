@@ -36,7 +36,10 @@ public class SecurityLockPlugin extends Plugin {
 
     @PluginMethod
     public void authenticate(PluginCall call) {
-        if (!(getActivity() instanceof FragmentActivity)) {
+        FragmentActivity activity = getActivity() instanceof FragmentActivity
+            ? (FragmentActivity) getActivity()
+            : null;
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
             call.reject("Current activity does not support biometric authentication", "auth_unavailable");
             return;
         }
@@ -51,64 +54,90 @@ public class SecurityLockPlugin extends Plugin {
             return;
         }
 
-        String title = sanitize(call.getString("title"), "App Security Lock");
-        String subtitle = sanitize(call.getString("subtitle"), "");
-        String description = sanitize(call.getString("description"), sanitize(call.getString("reason"), ""));
+        final String title = sanitize(call.getString("title"), "App Security Lock");
+        final String subtitle = sanitize(call.getString("subtitle"), "");
+        final String description = sanitize(call.getString("description"), sanitize(call.getString("reason"), ""));
+        if (promptExecutor == null) {
+            promptExecutor = ContextCompat.getMainExecutor(activity);
+        }
 
         pendingCall = call;
-        biometricPrompt = new BiometricPrompt(
-            (FragmentActivity) getActivity(),
-            promptExecutor,
-            new BiometricPrompt.AuthenticationCallback() {
-                @Override
-                public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
-                    PluginCall activeCall = pendingCall;
-                    pendingCall = null;
-                    biometricPrompt = null;
-                    if (activeCall == null) return;
-
-                    String code = isCanceledError(errorCode) ? "auth_canceled" : "auth_error";
-                    activeCall.reject(String.valueOf(errString), code);
-                }
-
-                @Override
-                public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
-                    PluginCall activeCall = pendingCall;
-                    pendingCall = null;
-                    biometricPrompt = null;
-                    if (activeCall == null) return;
-
-                    JSObject response = new JSObject();
-                    response.put("authenticated", true);
-                    activeCall.resolve(response);
-                }
-
-                @Override
-                public void onAuthenticationFailed() {
-                    // Keep the system prompt open and let the user retry.
-                }
+        activity.runOnUiThread(() -> {
+            PluginCall activeCall = pendingCall;
+            if (activeCall == null) {
+                return;
             }
-        );
 
-        BiometricPrompt.PromptInfo.Builder promptBuilder = new BiometricPrompt.PromptInfo.Builder()
-            .setTitle(title);
+            FragmentActivity activeActivity = getActivity() instanceof FragmentActivity
+                ? (FragmentActivity) getActivity()
+                : null;
+            if (activeActivity == null || activeActivity.isFinishing() || activeActivity.isDestroyed()) {
+                pendingCall = null;
+                biometricPrompt = null;
+                activeCall.reject("Current activity does not support biometric authentication", "auth_unavailable");
+                return;
+            }
 
-        if (!subtitle.isEmpty()) {
-            promptBuilder.setSubtitle(subtitle);
-        }
-        if (!description.isEmpty()) {
-            promptBuilder.setDescription(description);
-        }
+            try {
+                biometricPrompt = new BiometricPrompt(
+                    activeActivity,
+                    promptExecutor,
+                    new BiometricPrompt.AuthenticationCallback() {
+                        @Override
+                        public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
+                            PluginCall callbackCall = pendingCall;
+                            pendingCall = null;
+                            biometricPrompt = null;
+                            if (callbackCall == null) return;
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            promptBuilder.setAllowedAuthenticators(
-                BiometricManager.Authenticators.BIOMETRIC_STRONG | BiometricManager.Authenticators.DEVICE_CREDENTIAL
-            );
-        } else {
-            promptBuilder.setDeviceCredentialAllowed(true);
-        }
+                            String code = isCanceledError(errorCode) ? "auth_canceled" : "auth_error";
+                            callbackCall.reject(String.valueOf(errString), code);
+                        }
 
-        biometricPrompt.authenticate(promptBuilder.build());
+                        @Override
+                        public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
+                            PluginCall callbackCall = pendingCall;
+                            pendingCall = null;
+                            biometricPrompt = null;
+                            if (callbackCall == null) return;
+
+                            JSObject response = new JSObject();
+                            response.put("authenticated", true);
+                            callbackCall.resolve(response);
+                        }
+
+                        @Override
+                        public void onAuthenticationFailed() {
+                            // Keep the system prompt open and let the user retry.
+                        }
+                    }
+                );
+
+                BiometricPrompt.PromptInfo.Builder promptBuilder = new BiometricPrompt.PromptInfo.Builder()
+                    .setTitle(title);
+
+                if (!subtitle.isEmpty()) {
+                    promptBuilder.setSubtitle(subtitle);
+                }
+                if (!description.isEmpty()) {
+                    promptBuilder.setDescription(description);
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    promptBuilder.setAllowedAuthenticators(
+                        BiometricManager.Authenticators.BIOMETRIC_STRONG | BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                    );
+                } else {
+                    promptBuilder.setDeviceCredentialAllowed(true);
+                }
+
+                biometricPrompt.authenticate(promptBuilder.build());
+            } catch (Exception error) {
+                pendingCall = null;
+                biometricPrompt = null;
+                activeCall.reject(String.valueOf(error.getMessage()), "auth_error");
+            }
+        });
     }
 
     private AvailabilityStatus getAvailabilityStatus() {
@@ -118,7 +147,9 @@ public class SecurityLockPlugin extends Plugin {
         }
 
         BiometricManager biometricManager = BiometricManager.from(context);
-        int biometricState = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG);
+        int biometricState = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+            ? biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+            : biometricManager.canAuthenticate();
         boolean biometricReady = biometricState == BiometricManager.BIOMETRIC_SUCCESS;
 
         KeyguardManager keyguardManager = (KeyguardManager) context.getSystemService(Context.KEYGUARD_SERVICE);
