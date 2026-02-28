@@ -122,13 +122,20 @@
       </label>
       <div class="field">
         <span>{{ t('account.include_in_assets_label') }}</span>
-        <label class="inline-check">
-          <input v-model="accountIncludeInAssetsInput" type="checkbox" />
-          <span>
-            {{ accountIncludeInAssetsInput ? t('account.include_in_assets_on') : t('account.include_in_assets_off') }}
+        <button
+          type="button"
+          class="switch-row"
+          :class="{ active: accountIncludeInAssetsInput }"
+          role="switch"
+          :aria-checked="accountIncludeInAssetsInput ? 'true' : 'false'"
+          @click="accountIncludeInAssetsInput = !accountIncludeInAssetsInput"
+        >
+          <span class="switch-copy">
+            <strong>{{ accountIncludeInAssetsInput ? t('account.include_in_assets_on') : t('account.include_in_assets_off') }}</strong>
+            <small class="muted">{{ t('account.include_in_assets_hint') }}</small>
           </span>
-        </label>
-        <small class="muted">{{ t('account.include_in_assets_hint') }}</small>
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+        </button>
       </div>
       <p v-if="accountOpeningInvalid" class="error-text">期初金額格式錯誤</p>
     </AppDialog>
@@ -707,17 +714,62 @@ a {
   color: var(--muted);
 }
 
-.inline-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text);
-}
-
 .error-text {
   margin: 0;
   color: var(--danger-text);
   font-size: 12px;
+}
+
+.switch-row {
+  width: 100%;
+  border: 1px solid var(--field-border);
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--card) 88%, var(--surface-soft-accent) 12%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.switch-copy {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+}
+
+.switch-track {
+  width: 48px;
+  height: 28px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--field-border) 72%, var(--card) 28%);
+  padding: 4px;
+  transition: background 0.2s ease;
+  flex: 0 0 auto;
+}
+
+.switch-thumb {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease;
+}
+
+.switch-row.active {
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--field-border) 54%);
+  background: color-mix(in srgb, var(--primary) 10%, var(--card) 90%);
+}
+
+.switch-row.active .switch-track {
+  background: var(--primary);
+}
+
+.switch-row.active .switch-thumb {
+  transform: translateX(20px);
 }
 
 .collapse-fade-enter-active,
