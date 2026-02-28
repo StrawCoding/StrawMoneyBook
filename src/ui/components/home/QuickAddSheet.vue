@@ -534,6 +534,15 @@ const aiResultAccountText = computed(() => {
 })
 const directAccountOptions = computed(() => accountStore.regularAccounts)
 const transferAccountOptions = computed(() => accountStore.accounts)
+const aiParserAccounts = computed(() => {
+  const groupNameMap = new Map(
+    (accountStore.groups ?? []).map((group) => [String(group?.id ?? ''), String(group?.name ?? '').trim()]),
+  )
+  return directAccountOptions.value.map((account) => ({
+    ...account,
+    groupName: groupNameMap.get(String(account?.group_id ?? '')) ?? '',
+  }))
+})
 
 const visibleCategoryGroups = computed(() => {
   if (model.type === 'income') return categoryStore.incomeCategoryGroups
@@ -777,7 +786,7 @@ async function parseWithAi() {
   }
 
   const result = parseAutoBookkeepingText(userText, {
-    accounts: directAccountOptions.value,
+    accounts: aiParserAccounts.value,
     expenseCategories: categoryStore.expenseCategories,
     incomeCategories: categoryStore.incomeCategories,
     historyTransactions: transactionStore.recent,

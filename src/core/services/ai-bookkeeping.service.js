@@ -345,15 +345,41 @@ function extractAddonItems(text) {
 function findAccountMatchEntries(text, accounts) {
   const compact = compactText(text)
   const matches = []
+  const duplicateNameCount = new Map()
+
+  for (const account of accounts ?? []) {
+    const nameKey = compactText(String(account?.name ?? '').trim())
+    if (!nameKey) continue
+    duplicateNameCount.set(nameKey, (duplicateNameCount.get(nameKey) ?? 0) + 1)
+  }
 
   for (const account of accounts ?? []) {
     const name = String(account?.name ?? '').trim()
     if (!name) continue
+    const groupName = String(account?.groupName ?? account?.group_name ?? '').trim()
+    const compactName = compactText(name)
+    const compactGroupName = compactText(groupName)
+    const hasDuplicateName = (duplicateNameCount.get(compactName) ?? 0) > 1
     const targets = buildAccountMatchTargets(name)
     for (const { target, bonus } of targets) {
       const index = compact.indexOf(target)
       if (index < 0) continue
-      matches.push({ account, index, score: target.length + bonus, target })
+      let score = target.length + bonus
+
+      if (hasDuplicateName && compactGroupName) {
+        const groupIndex = compact.indexOf(compactGroupName)
+        if (groupIndex >= 0) {
+          score += 500
+          if (
+            compact.includes(`${compactGroupName}${target}`)
+            || compact.includes(`${target}${compactGroupName}`)
+          ) {
+            score += 300
+          }
+        }
+      }
+
+      matches.push({ account, index, score, target })
     }
   }
 
@@ -414,11 +440,31 @@ function pickClosestAccount(text, accounts) {
   const strict = findAccountMatches(text, accounts)
   if (strict.length > 0) return strict[0]
 
+  const duplicateNameCount = new Map()
+  for (const account of accounts ?? []) {
+    const nameKey = compactText(String(account?.name ?? '').trim())
+    if (!nameKey) continue
+    duplicateNameCount.set(nameKey, (duplicateNameCount.get(nameKey) ?? 0) + 1)
+  }
+
   let best = null
   for (const account of accounts ?? []) {
     const name = String(account?.name ?? '').trim()
     if (!name) continue
-    const score = fuzzyAccountScore(compact, compactText(name))
+    const groupName = String(account?.groupName ?? account?.group_name ?? '').trim()
+    const compactName = compactText(name)
+    const compactGroupName = compactText(groupName)
+    let score = fuzzyAccountScore(compact, compactName)
+
+    if ((duplicateNameCount.get(compactName) ?? 0) > 1 && compactGroupName) {
+      const comboScore = fuzzyAccountScore(compact, `${compactGroupName}${compactName}`)
+      const reverseComboScore = fuzzyAccountScore(compact, `${compactName}${compactGroupName}`)
+      score = Math.max(score, comboScore + 120, reverseComboScore + 120)
+      if (compact.includes(compactGroupName)) {
+        score += 220
+      }
+    }
+
     if (!best || score > best.score) {
       best = { account, score }
     }
@@ -802,6 +848,7 @@ function extractSmartNoteText(text, context = {}) {
   const accountNames = (context.accounts ?? [])
     .map((item) => String(item?.name ?? '').trim())
     .filter(Boolean)
+  const duplicateAccountGroupNames = collectDuplicateAccountGroupNames(context.accounts)
   const selectedCategoryName = String(context.selectedCategoryName ?? '').trim()
   const categoryNames = (context.categories ?? [])
     .map((item) => String(item?.name ?? '').trim())
@@ -817,6 +864,9 @@ function extractSmartNoteText(text, context = {}) {
 
   for (const accountName of accountNames) {
     note = note.replace(new RegExp(escapeRegExp(accountName), 'gi'), ' ')
+  }
+  for (const groupName of duplicateAccountGroupNames) {
+    note = note.replace(new RegExp(escapeRegExp(groupName), 'gi'), ' ')
   }
 
   const stripPatterns = [
@@ -847,6 +897,27 @@ function extractSmartNoteText(text, context = {}) {
     note = note.slice(0, 36).trim()
   }
   return note
+}
+
+function collectDuplicateAccountGroupNames(accounts) {
+  const duplicateNameCount = new Map()
+  const result = new Set()
+
+  for (const account of accounts ?? []) {
+    const nameKey = compactText(String(account?.name ?? '').trim())
+    if (!nameKey) continue
+    duplicateNameCount.set(nameKey, (duplicateNameCount.get(nameKey) ?? 0) + 1)
+  }
+
+  for (const account of accounts ?? []) {
+    const nameKey = compactText(String(account?.name ?? '').trim())
+    if (!nameKey || (duplicateNameCount.get(nameKey) ?? 0) <= 1) continue
+    const groupName = String(account?.groupName ?? account?.group_name ?? '').trim()
+    if (!groupName) continue
+    result.add(groupName)
+  }
+
+  return Array.from(result)
 }
 
 function normalizeType(text) {
