@@ -549,6 +549,40 @@ function normalizeHistoryTransactionItem(item) {
   return { type, categoryId, note, occurredAt }
 }
 
+function normalizeHistoryCategoryAccountItem(item) {
+  if (!item || typeof item !== 'object') return null
+  const type = String(item?.type ?? '').trim()
+  const categoryId = String(item?.categoryId ?? item?.category_id ?? '').trim()
+  const accountId = String(item?.accountId ?? item?.account_id ?? '').trim()
+  const occurredAt = String(item?.occurredAt ?? item?.occurred_at ?? '').trim()
+  if (!type || !categoryId || !accountId) return null
+  return { type, categoryId, accountId, occurredAt }
+}
+
+function pickRecentAccountByCategory(historyTransactions, accounts, targetType, categoryId) {
+  const normalizedType = String(targetType ?? '').trim()
+  const normalizedCategoryId = String(categoryId ?? '').trim()
+  if (!normalizedType || !normalizedCategoryId) return ''
+
+  const activeAccountIdSet = new Set(
+    (accounts ?? []).map((item) => String(item?.id ?? '').trim()).filter(Boolean),
+  )
+  if (!activeAccountIdSet.size) return ''
+
+  const history = (historyTransactions ?? [])
+    .map((item) => normalizeHistoryCategoryAccountItem(item))
+    .filter(Boolean)
+    .slice(0, 240)
+
+  for (const tx of history) {
+    if (tx.type !== normalizedType || tx.categoryId !== normalizedCategoryId) continue
+    if (!activeAccountIdSet.has(tx.accountId)) continue
+    return tx.accountId
+  }
+
+  return ''
+}
+
 function resolveHistoryRecencyWeight(occurredAt, now = new Date()) {
   const parsed = new Date(occurredAt)
   if (Number.isNaN(parsed.getTime())) return 0.7
@@ -1294,10 +1328,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
     const nerAccountId = Number(tinyNerHints.accountConfidence) >= 0.62
       ? tinyNerHints.accountIdHint
       : ''
-    accountId = nerAccountId || (pickClosestAccount(text, accounts)?.id ?? accounts[0]?.id ?? '')
-    if (!accountId) {
-      appendAiBookkeepingWarning(warnings, warningKeys, AI_BOOKKEEPING_WARNING_KEY.NO_ACCOUNT)
-    }
+    accountId = nerAccountId || (pickClosestAccount(text, accounts)?.id ?? '')
   }
 
   let categoryId = ''
@@ -1326,6 +1357,18 @@ export function parseAutoBookkeepingText(input, context = {}) {
 
     if (!categoryId) {
       appendAiBookkeepingWarning(warnings, warningKeys, AI_BOOKKEEPING_WARNING_KEY.NO_CATEGORY)
+    }
+  }
+
+  if (type !== 'transfer') {
+    if (!accountId && !loanIntent) {
+      accountId = pickRecentAccountByCategory(historyTransactions, accounts, type, categoryId)
+    }
+    if (!accountId) {
+      accountId = accounts[0]?.id ?? ''
+    }
+    if (!accountId) {
+      appendAiBookkeepingWarning(warnings, warningKeys, AI_BOOKKEEPING_WARNING_KEY.NO_ACCOUNT)
     }
   }
 
