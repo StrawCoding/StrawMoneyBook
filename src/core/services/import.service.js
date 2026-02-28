@@ -22,6 +22,8 @@ const TABLE_IMPORT_ORDER = [
   'counterparties',
   'loans',
   'loan_payments',
+  'reimbursement_advances',
+  'reimbursement_advance_usages',
   'reimbursements',
   'reimbursement_items',
   'budgets',

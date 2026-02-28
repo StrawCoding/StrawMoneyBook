@@ -8,6 +8,8 @@ import migration007 from '@/core/db/migrations/007_remove_default_sample_transac
 import migration008 from '@/core/db/migrations/008_bank_sync.sql?raw'
 import migration009 from '@/core/db/migrations/009_allow_zero_amount_transaction.sql?raw'
 import migration010 from '@/core/db/migrations/010_account_include_in_assets.sql?raw'
+import migration011 from '@/core/db/migrations/011_reimbursement_advances.sql?raw'
+import migration012 from '@/core/db/migrations/012_reimbursement_item_entry_type.sql?raw'
 
 const MIGRATIONS = [
   { version: 1, name: 'init_schema', sql: migration001 },
@@ -20,6 +22,8 @@ const MIGRATIONS = [
   { version: 8, name: 'bank_sync', sql: migration008 },
   { version: 9, name: 'allow_zero_amount_transaction', sql: migration009 },
   { version: 10, name: 'account_include_in_assets', sql: migration010 },
+  { version: 11, name: 'reimbursement_advances', sql: migration011 },
+  { version: 12, name: 'reimbursement_item_entry_type', sql: migration012 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'
@@ -153,6 +157,7 @@ const LEGACY_COLUMN_PATCHES = {
   ],
   reimbursement_items: [
     "ALTER TABLE reimbursement_items ADD COLUMN source_type TEXT NOT NULL DEFAULT 'manual';",
+    "ALTER TABLE reimbursement_items ADD COLUMN entry_type TEXT NOT NULL DEFAULT 'expense';",
     'ALTER TABLE reimbursement_items ADD COLUMN transaction_id TEXT;',
     'ALTER TABLE reimbursement_items ADD COLUMN category_id TEXT;',
     'ALTER TABLE reimbursement_items ADD COLUMN account_id TEXT;',

@@ -9,6 +9,8 @@ const DB_VERSION = 1
 const RESET_TABLES = [
   'transaction_attachments',
   'loan_payments',
+  'reimbursement_advance_usages',
+  'reimbursement_advances',
   'reimbursement_items',
   'reimbursements',
   'budget_items',

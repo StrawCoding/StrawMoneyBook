@@ -27,7 +27,23 @@
         <input v-model.number="form.amountMajor" class="input" type="number" min="0" step="1" />
       </label>
 
-      <label class="field">
+      <div class="field">
+        <span>代收抵扣（可複選）</span>
+        <div v-if="usableAdvances.length" class="advance-list">
+          <label v-for="advance in usableAdvances" :key="advance.id" class="advance-item">
+            <input v-model="form.selectedAdvanceIds" type="checkbox" :value="advance.id" />
+            <span>{{ advance.account_name || '未指定帳戶' }}</span>
+            <MoneyText :value-minor="advanceUsableMinor(advance)" />
+          </label>
+        </div>
+        <small v-else class="muted">目前沒有可用代收</small>
+        <small v-if="selectedAdvanceCapacityMinor > 0" class="muted">
+          本次代收抵扣 <MoneyText :value-minor="selectedAdvanceCapacityMinor" />
+        </small>
+        <small v-if="cashSettleMinor <= 0" class="muted">本次將全額以代收抵扣，不再建立新的入帳交易。</small>
+      </div>
+
+      <label v-if="cashSettleMinor > 0" class="field">
         入帳帳戶
         <CustomSelect v-model="form.accountId" :options="accountStore.accounts" />
       </label>
@@ -68,6 +84,7 @@ const saving = ref(false)
 const form = reactive({
   amountMajor: 0,
   accountId: '',
+  selectedAdvanceIds: [],
 })
 
 const txId = computed(() => String(route.params.id ?? ''))
@@ -79,8 +96,40 @@ const backLink = computed(() => ({
 }))
 
 const canSave = computed(() => {
-  return Number.isFinite(Number(form.amountMajor)) && Number(form.amountMajor) > 0 && !!String(form.accountId ?? '').trim()
+  if (!Number.isFinite(Number(form.amountMajor)) || Number(form.amountMajor) <= 0) return false
+  if (cashSettleMinor.value > 0) {
+    return Boolean(String(form.accountId ?? '').trim())
+  }
+  return true
 })
+const selectedAdvanceIdSet = computed(() => {
+  return new Set((form.selectedAdvanceIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean))
+})
+const usableAdvances = computed(() => {
+  return reimbursementStore.advances.filter((item) => {
+    const availableMinor = Number(item.available_minor ?? 0)
+    return availableMinor > 0 || selectedAdvanceIdSet.value.has(String(item.id))
+  })
+})
+const settleAmountMinor = computed(() => Math.max(0, Math.round(Number(form.amountMajor ?? 0) * 100)))
+const selectedAdvanceCapacityMinor = computed(() => {
+  const advanceMap = new Map(usableAdvances.value.map((item) => [String(item?.id ?? '').trim(), item]))
+  let remainingMinor = settleAmountMinor.value
+  let totalMinor = 0
+  for (const rawAdvanceId of form.selectedAdvanceIds ?? []) {
+    const advanceId = String(rawAdvanceId ?? '').trim()
+    if (!advanceId || remainingMinor <= 0) continue
+    const advance = advanceMap.get(advanceId)
+    if (!advance) continue
+    const availableMinor = advanceUsableMinor(advance)
+    if (availableMinor <= 0) continue
+    const appliedMinor = Math.min(availableMinor, remainingMinor)
+    totalMinor += appliedMinor
+    remainingMinor -= appliedMinor
+  }
+  return totalMinor
+})
+const cashSettleMinor = computed(() => Math.max(0, settleAmountMinor.value - selectedAdvanceCapacityMinor.value))
 
 watch(
   () => targetTx.value,
@@ -89,6 +138,7 @@ watch(
     const defaultMinor = reimbursedMinorOfTx(tx) || originalMinorOfTx(tx)
     form.amountMajor = defaultMinor / 100
     form.accountId = String(tx.reimbursed_account_id ?? accountStore.accounts[0]?.id ?? tx.account_id ?? '')
+    form.selectedAdvanceIds = Array.isArray(tx.advance_ids) ? [...tx.advance_ids] : []
   },
   { immediate: true },
 )
@@ -122,6 +172,14 @@ function noteTextOfTx(tx) {
   return stripAddonSummaryFromNote(tx?.note)
 }
 
+function advanceUsableMinor(advance) {
+  const advanceId = String(advance?.id ?? '').trim()
+  const availableMinor = Math.max(0, Math.round(Number(advance?.available_minor ?? 0)))
+  const usedMap = targetTx.value?.advance_usage_map ?? {}
+  const currentUsedMinor = Math.max(0, Math.round(Number(usedMap?.[advanceId] ?? 0)))
+  return availableMinor + currentUsedMinor
+}
+
 function goBack() {
   void goBackOrFallback(router, backLink.value)
 }
@@ -132,10 +190,11 @@ async function save() {
   saving.value = true
   try {
     await reimbursementStore.settle(targetTx.value.id, {
-      amountMinor: Math.round(Number(form.amountMajor ?? 0) * 100),
-      accountId: form.accountId,
+      amountMinor: settleAmountMinor.value,
+      accountId: cashSettleMinor.value > 0 ? form.accountId : '',
       occurredAt: new Date().toISOString(),
       note: `報銷入帳（來源交易：${targetTx.value.id}）`,
+      selectedAdvanceIds: form.selectedAdvanceIds,
       allowUpdate: true,
     })
     await Promise.all([transactionStore.loadRecent(), accountStore.load()])
@@ -184,6 +243,22 @@ h3 {
   gap: 6px;
   font-size: 13px;
   color: var(--muted);
+}
+
+.advance-list {
+  display: grid;
+  gap: 8px;
+}
+
+.advance-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  color: var(--text);
 }
 
 .action-row {

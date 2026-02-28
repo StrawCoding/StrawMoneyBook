@@ -203,6 +203,24 @@ export async function listReimbursementTransactions(ledgerId, state) {
               LIMIT 1
             ) AS reimbursed_account_id,
             COALESCE((
+              SELECT SUM(u.amount_minor)
+              FROM reimbursement_advance_usages u
+              WHERE u.ledger_id = t.ledger_id
+                AND u.expense_tx_id = t.id
+            ), 0) AS advance_used_minor,
+            COALESCE((
+              SELECT GROUP_CONCAT(u.advance_id, ',')
+              FROM reimbursement_advance_usages u
+              WHERE u.ledger_id = t.ledger_id
+                AND u.expense_tx_id = t.id
+            ), '') AS advance_ids_csv,
+            COALESCE((
+              SELECT GROUP_CONCAT(u.advance_id || ':' || u.amount_minor, ',')
+              FROM reimbursement_advance_usages u
+              WHERE u.ledger_id = t.ledger_id
+                AND u.expense_tx_id = t.id
+            ), '') AS advance_usage_pairs,
+            COALESCE((
               SELECT SUM(rt.amount_minor)
               FROM transactions rt
               WHERE rt.ledger_id = t.ledger_id
@@ -210,6 +228,22 @@ export async function listReimbursementTransactions(ledgerId, state) {
                 AND rt.type = 'income'
                 AND rt.origin_type = 'reimbursement'
                 AND rt.external_ref_id = t.id
+            ), 0) AS cash_reimbursed_minor,
+            COALESCE((
+              SELECT SUM(rt.amount_minor)
+              FROM transactions rt
+              WHERE rt.ledger_id = t.ledger_id
+                AND rt.deleted_at IS NULL
+                AND rt.type = 'income'
+                AND rt.origin_type = 'reimbursement'
+                AND rt.external_ref_id = t.id
+            ), 0)
+            +
+            COALESCE((
+              SELECT SUM(u.amount_minor)
+              FROM reimbursement_advance_usages u
+              WHERE u.ledger_id = t.ledger_id
+                AND u.expense_tx_id = t.id
             ), 0) AS reimbursed_minor
      FROM transactions t
      LEFT JOIN categories c

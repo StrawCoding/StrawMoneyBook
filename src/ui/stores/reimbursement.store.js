@@ -4,7 +4,12 @@ import {
   listReimbursementTransactions,
   markTransactionReimbursed,
 } from '@/core/repositories/transaction.repo'
-import { cancelReimbursableExpenseSettlement, settleReimbursableExpense } from '@/core/services/reimbursement.service'
+import {
+  cancelReimbursableExpenseSettlement,
+  createReimbursementAdvanceEntry,
+  listReimbursementAdvancesData,
+  settleReimbursableExpense,
+} from '@/core/services/reimbursement.service'
 import {
   reimbursementPendingMinor,
   reimbursementReimbursedMinor,
@@ -15,6 +20,7 @@ export const useReimbursementStore = defineStore('reimbursement', {
   state: () => ({
     pendingItems: [],
     reimbursedItems: [],
+    advances: [],
     loading: false,
   }),
 
@@ -26,6 +32,14 @@ export const useReimbursementStore = defineStore('reimbursement', {
     reimbursedTotalMinor(state) {
       return state.reimbursedItems.reduce((total, item) => total + reimbursementReimbursedMinor(item), 0)
     },
+
+    availableAdvances(state) {
+      return state.advances.filter((item) => Number(item.available_minor ?? 0) > 0)
+    },
+
+    availableAdvanceTotalMinor() {
+      return this.availableAdvances.reduce((total, item) => total + Number(item.available_minor ?? 0), 0)
+    },
   },
 
   actions: {
@@ -35,12 +49,14 @@ export const useReimbursementStore = defineStore('reimbursement', {
 
       this.loading = true
       try {
-        const [pendingItems, reimbursedItems] = await Promise.all([
+        const [pendingItems, reimbursedItems, advances] = await Promise.all([
           listReimbursementTransactions(ledgerStore.activeLedgerId, 'pending'),
           listReimbursementTransactions(ledgerStore.activeLedgerId, 'reimbursed'),
+          listReimbursementAdvancesData(ledgerStore.activeLedgerId),
         ])
         this.pendingItems = pendingItems.map((item) => withReimbursementDerivedFields(item))
         this.reimbursedItems = reimbursedItems.map((item) => withReimbursementDerivedFields(item))
+        this.advances = advances
       } finally {
         this.loading = false
       }
@@ -58,6 +74,15 @@ export const useReimbursementStore = defineStore('reimbursement', {
         txId,
         ...payload,
       })
+      if (!options?.skipReload) {
+        await this.load()
+      }
+      return result
+    },
+
+    async createAdvance(payload = {}, options = {}) {
+      const ledgerStore = useLedgerStore()
+      const result = await createReimbursementAdvanceEntry(ledgerStore.activeLedgerId, payload)
       if (!options?.skipReload) {
         await this.load()
       }

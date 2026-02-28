@@ -5,6 +5,8 @@ import { firstRow, rowsOf } from '@/core/repositories/base.repo'
 const LEGACY_LEDGER_CHILD_DELETE_ORDER = [
   'transaction_attachments',
   'loan_payments',
+  'reimbursement_advance_usages',
+  'reimbursement_advances',
   'reimbursement_items',
   'reimbursements',
   'budget_items',

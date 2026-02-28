@@ -196,6 +196,12 @@ const router = createRouter({
       meta: { tab: 'home' },
     },
     {
+      name: 'claim-sheets',
+      path: '/claim-sheets',
+      component: () => import('@/ui/views/claims/ClaimSheetListPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
       name: 'reimbursement-edit',
       path: '/reimbursements/:id/edit',
       component: () => import('@/ui/views/reimbursements/ReimbursementEditPage.vue'),

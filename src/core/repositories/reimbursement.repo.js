@@ -111,6 +111,7 @@ export async function listReimbursementItems(ledgerId, reimbursementId) {
        i.id,
        i.reimbursement_id,
        i.source_type,
+       i.entry_type,
        i.transaction_id,
        i.category_id,
        i.account_id,
@@ -142,15 +143,16 @@ export async function createReimbursementItem(ledgerId, input) {
   await run(
     `INSERT INTO reimbursement_items (
       ledger_id, id, reimbursement_id, source_type, transaction_id,
-      category_id, account_id, description, amount_minor,
+      entry_type, category_id, account_id, description, amount_minor,
       occurred_at, attachment_uri, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       ledgerId,
       id,
       input.reimbursementId,
       input.sourceType ?? 'manual',
       input.transactionId ?? null,
+      input.entryType ?? 'expense',
       input.categoryId ?? null,
       input.accountId ?? null,
       input.description ?? null,
@@ -165,13 +167,182 @@ export async function createReimbursementItem(ledgerId, input) {
   return id
 }
 
+export async function listReimbursementAdvances(ledgerId, options = {}) {
+  assertLedgerId(ledgerId)
+  const activeOnly = options?.activeOnly !== false
+
+  const result = await query(
+    `SELECT
+       ra.ledger_id,
+       ra.id,
+       ra.account_id,
+       a.name AS account_name,
+       ra.source_tx_id,
+       ra.amount_minor,
+       ra.used_minor,
+       MAX(0, ra.amount_minor - ra.used_minor) AS available_minor,
+       ra.note,
+       ra.received_at,
+       ra.created_at,
+       ra.updated_at
+     FROM reimbursement_advances ra
+     LEFT JOIN accounts a
+       ON a.ledger_id = ra.ledger_id
+      AND a.id = ra.account_id
+     WHERE ra.ledger_id = ?
+       AND ra.deleted_at IS NULL
+       AND (? = 0 OR ra.amount_minor > ra.used_minor)
+     ORDER BY ra.received_at DESC, ra.created_at DESC;`,
+    [ledgerId, activeOnly ? 1 : 0],
+  )
+
+  return rowsOf(result)
+}
+
+export async function getReimbursementAdvanceById(ledgerId, advanceId) {
+  assertLedgerId(ledgerId)
+
+  const result = await query(
+    `SELECT
+       ra.ledger_id,
+       ra.id,
+       ra.account_id,
+       a.name AS account_name,
+       ra.source_tx_id,
+       ra.amount_minor,
+       ra.used_minor,
+       MAX(0, ra.amount_minor - ra.used_minor) AS available_minor,
+       ra.note,
+       ra.received_at,
+       ra.created_at,
+       ra.updated_at
+     FROM reimbursement_advances ra
+     LEFT JOIN accounts a
+       ON a.ledger_id = ra.ledger_id
+      AND a.id = ra.account_id
+     WHERE ra.ledger_id = ?
+       AND ra.id = ?
+       AND ra.deleted_at IS NULL
+     LIMIT 1;`,
+    [ledgerId, advanceId],
+  )
+
+  return firstRow(result)
+}
+
+export async function createReimbursementAdvance(ledgerId, input) {
+  assertLedgerId(ledgerId)
+
+  const id = input.id ?? createId('radv')
+  const now = nowIso()
+
+  await run(
+    `INSERT INTO reimbursement_advances (
+      ledger_id, id, account_id, source_tx_id, amount_minor, used_minor,
+      note, received_at, created_at, updated_at, deleted_at
+    ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, NULL);`,
+    [
+      ledgerId,
+      id,
+      input.accountId,
+      input.sourceTxId ?? null,
+      input.amountMinor,
+      input.note ?? null,
+      input.receivedAt,
+      now,
+      now,
+    ],
+  )
+
+  return getReimbursementAdvanceById(ledgerId, id)
+}
+
+export async function updateReimbursementAdvanceUsedMinor(ledgerId, advanceId, usedMinor) {
+  assertLedgerId(ledgerId)
+
+  await run(
+    `UPDATE reimbursement_advances
+     SET used_minor = ?,
+         updated_at = ?
+     WHERE ledger_id = ?
+       AND id = ?
+       AND deleted_at IS NULL;`,
+    [usedMinor, nowIso(), ledgerId, advanceId],
+  )
+
+  return getReimbursementAdvanceById(ledgerId, advanceId)
+}
+
+export async function listReimbursementAdvanceUsagesByExpenseTx(ledgerId, expenseTxId) {
+  assertLedgerId(ledgerId)
+
+  const result = await query(
+    `SELECT
+       u.ledger_id,
+       u.id,
+       u.advance_id,
+       u.expense_tx_id,
+       u.amount_minor,
+       u.created_at,
+       u.updated_at,
+       ra.account_id,
+       a.name AS account_name,
+       ra.note AS advance_note
+     FROM reimbursement_advance_usages u
+     LEFT JOIN reimbursement_advances ra
+       ON ra.ledger_id = u.ledger_id
+      AND ra.id = u.advance_id
+     LEFT JOIN accounts a
+       ON a.ledger_id = ra.ledger_id
+      AND a.id = ra.account_id
+     WHERE u.ledger_id = ?
+       AND u.expense_tx_id = ?
+     ORDER BY u.created_at ASC;`,
+    [ledgerId, expenseTxId],
+  )
+
+  return rowsOf(result)
+}
+
+export async function createReimbursementAdvanceUsage(ledgerId, input) {
+  assertLedgerId(ledgerId)
+
+  const id = input.id ?? createId('rau')
+  const now = nowIso()
+
+  await run(
+    `INSERT INTO reimbursement_advance_usages (
+      ledger_id, id, advance_id, expense_tx_id, amount_minor, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?);`,
+    [ledgerId, id, input.advanceId, input.expenseTxId, input.amountMinor, now, now],
+  )
+
+  return id
+}
+
+export async function deleteReimbursementAdvanceUsagesByExpenseTx(ledgerId, expenseTxId) {
+  assertLedgerId(ledgerId)
+
+  await run(
+    `DELETE FROM reimbursement_advance_usages
+     WHERE ledger_id = ?
+       AND expense_tx_id = ?;`,
+    [ledgerId, expenseTxId],
+  )
+}
+
 export async function recomputeReimbursementTotal(ledgerId, reimbursementId) {
   assertLedgerId(ledgerId)
 
   await run(
     `UPDATE reimbursements
      SET total_minor = (
-           SELECT COALESCE(SUM(amount_minor), 0)
+           SELECT COALESCE(SUM(
+             CASE
+               WHEN entry_type = 'income' THEN amount_minor * -1
+               ELSE amount_minor
+             END
+           ), 0)
            FROM reimbursement_items
            WHERE ledger_id = ?
              AND reimbursement_id = ?

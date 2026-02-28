@@ -8,6 +8,7 @@
       <nav class="feature-list">
         <RouterLink class="feature-link" to="/loans">{{ t('feature_list.loans') }}</RouterLink>
         <RouterLink class="feature-link" to="/reimbursements">{{ t('feature_list.reimbursements') }}</RouterLink>
+        <RouterLink class="feature-link" to="/claim-sheets">{{ t('feature_list.claim_sheets') }}</RouterLink>
         <RouterLink class="feature-link" to="/transactions/search">{{ t('feature_list.search_transactions') }}</RouterLink>
       </nav>
     </article>

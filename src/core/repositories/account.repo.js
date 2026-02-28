@@ -278,6 +278,18 @@ export async function getAccountBalances(ledgerId, options = {}) {
        a.include_in_assets,
        a.opening_balance_minor,
        a.is_archived,
+       COALESCE((
+         SELECT SUM(
+           CASE
+             WHEN ra.amount_minor > ra.used_minor THEN ra.amount_minor - ra.used_minor
+             ELSE 0
+           END
+         )
+         FROM reimbursement_advances ra
+         WHERE ra.ledger_id = a.ledger_id
+           AND ra.account_id = a.id
+           AND ra.deleted_at IS NULL
+       ), 0) AS reimbursement_advance_minor,
        a.opening_balance_minor + COALESCE(SUM(t.amount_minor), 0) AS balance_minor
      FROM accounts a
      LEFT JOIN transactions t

@@ -79,6 +79,9 @@
                   </span>
                   <span class="account-text">
                     <span class="account-name">{{ account.name }}</span>
+                    <small v-if="advanceMinorOf(account.id) > 0" class="muted account-advance">
+                      {{ t('assets_page.advance_label') }} <MoneyText :value-minor="advanceMinorOf(account.id)" />
+                    </small>
                   </span>
                 </span>
                 <span class="account-right">
@@ -113,17 +116,20 @@ const balanceMetrics = computed(() => {
   let disposableMinor = 0
   let liabilityMinor = 0
   const balanceMap = new Map()
+  const advanceMap = new Map()
 
   for (const item of accountStore.balances) {
     const balance = Number(item.balance_minor ?? 0)
+    const advanceMinor = Math.max(0, Number(item.reimbursement_advance_minor ?? 0))
     balanceMap.set(item.id, balance)
+    advanceMap.set(item.id, advanceMinor)
     if (!isAccountIncludedInAssets(item)) {
       continue
     }
 
     if (item.account_type === 'asset') {
       if (balance > 0) {
-        disposableMinor += balance
+        disposableMinor += Math.max(0, balance - advanceMinor)
       } else if (balance < 0) {
         liabilityMinor += Math.abs(balance)
       }
@@ -139,6 +145,7 @@ const balanceMetrics = computed(() => {
     disposableMinor: Math.max(0, disposableMinor),
     liabilityMinor,
     balanceMap,
+    advanceMap,
   }
 })
 const disposableMinor = computed(() => balanceMetrics.value.disposableMinor)
@@ -218,6 +225,10 @@ function toggleGroup(groupId) {
 
 function balanceOf(accountId) {
   return Number(balanceMetrics.value.balanceMap.get(accountId) ?? 0)
+}
+
+function advanceMinorOf(accountId) {
+  return Number(balanceMetrics.value.advanceMap.get(accountId) ?? 0)
 }
 
 function isAccountIncludedInAssets(account) {
@@ -437,6 +448,11 @@ a {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.account-advance {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .account-row.excluded .account-name {
   color: color-mix(in srgb, var(--text) 58%, var(--muted) 42%);

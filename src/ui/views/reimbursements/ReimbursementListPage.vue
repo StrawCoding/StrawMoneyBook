@@ -13,6 +13,13 @@
         <span class="muted">已報銷金額</span>
         <MoneyText :value-minor="reimbursementStore.reimbursedTotalMinor" />
       </div>
+      <div class="row">
+        <span class="muted">代收可抵金額</span>
+        <MoneyText :value-minor="reimbursementStore.availableAdvanceTotalMinor" />
+      </div>
+      <div class="row summary-action-row">
+        <button class="btn" @click="openAdvanceSheet">新增代收</button>
+      </div>
     </article>
 
     <article class="card panel">
@@ -61,6 +68,24 @@
               <span>{{ formatTime(tx.occurred_at) }}</span>
               <span>{{ noteTextOfTx(tx) || '-' }}</span>
             </div>
+          </div>
+          <div class="entry-actions">
+            <button
+              v-if="tab === 'pending'"
+              class="btn entry-action-btn"
+              type="button"
+              @click.stop="openSingleSettle(tx)"
+            >
+              報銷
+            </button>
+            <button
+              v-else
+              class="btn entry-action-btn"
+              type="button"
+              @click.stop="openReimbursementEdit(tx)"
+            >
+              調整
+            </button>
           </div>
         </li>
 
@@ -135,6 +160,27 @@
                 報銷金額（元）
                 <input v-model.number="settleForm.amountMajor" type="number" min="0" step="1" class="input" />
               </label>
+              <div v-if="settleMode === 'single'" class="copy-wrap">
+                <p class="copy-title">代收抵扣（可複選）</p>
+                <div v-if="usableSingleAdvances.length" class="copy-ledger-list">
+                  <label v-for="advance in usableSingleAdvances" :key="advance.id" class="copy-ledger-item">
+                    <input v-model="settleForm.selectedAdvanceIds" class="copy-ledger-check" type="checkbox" :value="advance.id" />
+                    <span class="copy-ledger-mark">✓</span>
+                    <span class="copy-ledger-name">
+                      {{ advance.account_name || '未指定帳戶' }}
+                      <small class="muted copy-ledger-meta">
+                        <MoneyText :value-minor="advance.available_minor" />
+                      </small>
+                    </span>
+                  </label>
+                </div>
+                <p v-else class="muted">目前沒有可用代收</p>
+                <div v-if="selectedAdvanceCapacityMinor > 0" class="row advance-summary-row">
+                  <span>本次代收抵扣</span>
+                  <MoneyText :value-minor="selectedAdvanceCapacityMinor" />
+                </div>
+                <p v-if="singleSettleCashMinor <= 0" class="muted">本次將全額以代收抵扣，不再建立新的入帳交易。</p>
+              </div>
               <div v-else class="batch-settle-summary">
                 <small class="muted">將以每筆「剩餘未報銷金額」入帳</small>
                 <div class="row">
@@ -143,7 +189,7 @@
                 </div>
               </div>
 
-              <label>
+              <label v-if="settleMode === 'batch' || singleSettleCashMinor > 0">
                 入帳帳戶
                 <CustomSelect v-model="settleForm.accountId" :options="accountStore.accounts" />
               </label>
@@ -164,6 +210,41 @@
               <button class="btn" @click="closeSettle">取消</button>
               <button class="btn primary" :disabled="settlingBatch" @click="confirmSettle">
                 {{ settlingBatch ? '處理中...' : '確認' }}
+              </button>
+            </footer>
+          </article>
+        </section>
+      </transition>
+    </teleport>
+
+    <teleport to="body">
+      <transition name="overlay-fade">
+        <section v-if="isAdvanceOpen" class="sheet-mask" @click.self="closeAdvanceSheet">
+          <article class="sheet card">
+            <header class="row">
+              <h3>新增代收</h3>
+              <button class="btn" @click="closeAdvanceSheet">關閉</button>
+            </header>
+
+            <div class="stack form-wrap">
+              <label>
+                代收金額（元）
+                <input v-model.number="advanceForm.amountMajor" type="number" min="0" step="1" class="input" />
+              </label>
+              <label>
+                代收帳戶
+                <CustomSelect v-model="advanceForm.accountId" :options="accountStore.accounts" />
+              </label>
+              <label>
+                備註
+                <input v-model="advanceForm.note" type="text" class="input" placeholder="例如：公司先墊付報銷款" />
+              </label>
+            </div>
+
+            <footer class="row">
+              <button class="btn" @click="closeAdvanceSheet">取消</button>
+              <button class="btn primary" :disabled="creatingAdvance || !canCreateAdvance" @click="submitAdvance">
+                {{ creatingAdvance ? '建立中...' : '確認新增' }}
               </button>
             </footer>
           </article>
@@ -214,10 +295,12 @@ const { t } = useI18n()
 const tab = ref(route.query.tab === 'reimbursed' ? 'reimbursed' : 'pending')
 const isSettleOpen = ref(false)
 const isActionSheetOpen = ref(false)
+const isAdvanceOpen = ref(false)
 const settleMode = ref('single')
 const settleTargetTx = ref(null)
 const settlingBatch = ref(false)
 const voidingBatch = ref(false)
+const creatingAdvance = ref(false)
 const exportedUrl = ref('')
 const exportedFilename = ref('')
 const exportedLocation = ref('')
@@ -226,6 +309,12 @@ const settleForm = reactive({
   amountMajor: 0,
   accountId: '',
   copyToLedgerIds: [],
+  selectedAdvanceIds: [],
+})
+const advanceForm = reactive({
+  amountMajor: 0,
+  accountId: '',
+  note: '',
 })
 const selectedByTab = reactive({
   pending: [],
@@ -253,6 +342,51 @@ const batchSettleItems = computed(() => {
 const batchSettlePendingMinor = computed(() => {
   return batchSettleItems.value.reduce((total, tx) => total + pendingMinorOfTx(tx), 0)
 })
+const selectedAdvanceIdSet = computed(() => {
+  return new Set((settleForm.selectedAdvanceIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean))
+})
+const usableSingleAdvances = computed(() => {
+  if (settleMode.value !== 'single') return []
+  if (tab.value === 'pending') {
+    return reimbursementStore.availableAdvances
+  }
+  return reimbursementStore.advances.filter((item) => {
+    const availableMinor = Number(item.available_minor ?? 0)
+    return availableMinor > 0 || selectedAdvanceIdSet.value.has(String(item.id))
+  })
+})
+const singleSettleAmountMinor = computed(() => {
+  return Math.max(0, Math.round(Number(settleForm.amountMajor ?? 0) * 100))
+})
+const selectedAdvanceCapacityMinor = computed(() => {
+  if (settleMode.value !== 'single') return 0
+  const advanceMap = new Map(usableSingleAdvances.value.map((item) => [String(item?.id ?? '').trim(), item]))
+  let remainingMinor = singleSettleAmountMinor.value
+  let totalMinor = 0
+
+  for (const rawAdvanceId of settleForm.selectedAdvanceIds ?? []) {
+    const advanceId = String(rawAdvanceId ?? '').trim()
+    if (!advanceId || remainingMinor <= 0) continue
+    const advance = advanceMap.get(advanceId)
+    if (!advance) continue
+    const availableMinor = Math.max(0, Math.round(Number(advance.available_minor ?? 0)))
+    if (availableMinor <= 0) continue
+    const appliedMinor = Math.min(availableMinor, remainingMinor)
+    totalMinor += appliedMinor
+    remainingMinor -= appliedMinor
+  }
+
+  return totalMinor
+})
+const singleSettleCashMinor = computed(() => {
+  if (settleMode.value !== 'single') return 0
+  return Math.max(0, singleSettleAmountMinor.value - selectedAdvanceCapacityMinor.value)
+})
+const canCreateAdvance = computed(() => {
+  return Number.isFinite(Number(advanceForm.amountMajor))
+    && Number(advanceForm.amountMajor) > 0
+    && Boolean(String(advanceForm.accountId ?? '').trim())
+})
 const categoryIconById = computed(() => {
   const map = new Map()
   for (const category of categoryStore.categories ?? []) {
@@ -278,6 +412,7 @@ onMounted(() => {
   Promise.all([
     reimbursementStore.load(),
     categoryStore.load(),
+    accountStore.load(),
   ]).then(() => {
     pruneSelectedIds()
   })
@@ -338,6 +473,55 @@ function closeActionSheet() {
   isActionSheetOpen.value = false
 }
 
+function openAdvanceSheet() {
+  advanceForm.amountMajor = 0
+  advanceForm.accountId = String(accountStore.accounts[0]?.id ?? '')
+  advanceForm.note = ''
+  isAdvanceOpen.value = true
+}
+
+function closeAdvanceSheet() {
+  if (creatingAdvance.value) return
+  isAdvanceOpen.value = false
+}
+
+async function submitAdvance() {
+  if (!canCreateAdvance.value || creatingAdvance.value) return
+
+  creatingAdvance.value = true
+  try {
+    await reimbursementStore.createAdvance({
+      amountMinor: Math.round(Number(advanceForm.amountMajor ?? 0) * 100),
+      accountId: advanceForm.accountId,
+      note: advanceForm.note,
+      receivedAt: new Date().toISOString(),
+    })
+    await accountStore.load()
+    isAdvanceOpen.value = false
+    uiStore.pushToast('代收已新增')
+  } catch (error) {
+    uiStore.pushToast(error.message ?? '新增失敗', 'error')
+  } finally {
+    creatingAdvance.value = false
+  }
+}
+
+function openSingleSettle(tx) {
+  if (!tx?.id) return
+  settleMode.value = 'single'
+  settleTargetTx.value = tx
+  settleForm.amountMajor = pendingMinorOfTx(tx) / 100
+  settleForm.accountId = String(accountStore.accounts[0]?.id ?? tx.account_id ?? '')
+  settleForm.copyToLedgerIds = []
+  settleForm.selectedAdvanceIds = []
+  isSettleOpen.value = true
+}
+
+function openReimbursementEdit(tx) {
+  if (!tx?.id) return
+  void router.push({ name: 'reimbursement-edit', params: { id: tx.id } })
+}
+
 function actionToggleSelectAll() {
   toggleSelectAllActive()
   closeActionSheet()
@@ -380,6 +564,7 @@ function openBatchSettle() {
   settleForm.amountMajor = 0
   settleForm.accountId = String(accountStore.accounts[0]?.id ?? '')
   settleForm.copyToLedgerIds = []
+  settleForm.selectedAdvanceIds = []
   isSettleOpen.value = true
 }
 
@@ -389,6 +574,7 @@ function closeSettle() {
   settleTargetTx.value = null
   settlingBatch.value = false
   settleForm.copyToLedgerIds = []
+  settleForm.selectedAdvanceIds = []
 }
 
 function pruneSelectedIds() {
@@ -581,24 +767,34 @@ async function confirmSettle() {
 
 async function confirmSingleSettle() {
   if (!settleTargetTx.value?.id) return
+  if (singleSettleAmountMinor.value <= 0) {
+    uiStore.pushToast('報銷金額必須大於 0', 'error')
+    return
+  }
+  if (singleSettleCashMinor.value > 0 && !String(settleForm.accountId ?? '').trim()) {
+    uiStore.pushToast('請選擇入帳帳戶', 'error')
+    return
+  }
 
   try {
     const result = await reimbursementStore.settle(settleTargetTx.value.id, {
-      amountMinor: Math.round(Number(settleForm.amountMajor ?? 0) * 100),
-      accountId: settleForm.accountId,
+      amountMinor: singleSettleAmountMinor.value,
+      accountId: singleSettleCashMinor.value > 0 ? settleForm.accountId : '',
       occurredAt: new Date().toISOString(),
       note: `報銷入帳（來源交易：${settleTargetTx.value.id}）`,
       copyToLedgerIds: settleForm.copyToLedgerIds,
+      selectedAdvanceIds: settleForm.selectedAdvanceIds,
       allowUpdate: tab.value === 'reimbursed',
     })
     await Promise.all([transactionStore.loadRecent(), accountStore.load()])
     const copiedInfo = Number(result?.copiedLedgers ?? 0) > 0 ? `，並複製到 ${result.copiedLedgers} 個帳本` : ''
+    const advanceInfo = Number(result?.usedAdvanceMinor ?? 0) > 0 ? '，已套用代收抵扣' : ''
     if (result?.updatedIncome) {
-      uiStore.pushToast(`已更新報銷入帳${copiedInfo}`)
+      uiStore.pushToast(`已更新報銷入帳${advanceInfo}${copiedInfo}`)
     } else if (result?.alreadyExists) {
-      uiStore.pushToast(`已標記為報銷，且已有入帳交易${copiedInfo}`)
+      uiStore.pushToast(`已標記為報銷，且已有入帳交易${advanceInfo}${copiedInfo}`)
     } else {
-      uiStore.pushToast(`已標記報銷並完成入帳${copiedInfo}`)
+      uiStore.pushToast(`已標記報銷並完成入帳${advanceInfo}${copiedInfo}`)
     }
     pruneSelectedIds()
     closeSettle()
@@ -712,6 +908,11 @@ watch(tab, () => {
 })
 
 function onRequestCloseOverlay(event) {
+  if (isAdvanceOpen.value) {
+    closeAdvanceSheet()
+    event.preventDefault()
+    return
+  }
   if (isSettleOpen.value) {
     closeSettle()
     event.preventDefault()
@@ -758,9 +959,13 @@ h2 {
   display: grid;
   gap: 8px
 }
+.summary-action-row {
+  justify-content: flex-end;
+  margin-top: 6px
+}
 .entry {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 26px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center
 }
@@ -781,6 +986,14 @@ h2 {
 .entry-head {
   align-items: center;
   gap: 8px
+}
+.entry-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end
+}
+.entry-action-btn {
+  min-width: 72px
 }
 .entry-category {
   display: inline-flex;
@@ -902,6 +1115,9 @@ h2 {
   display: grid;
   gap: 8px
 }
+.advance-summary-row {
+  align-items: center
+}
 .copy-wrap {
   display: grid;
   gap: 8px
@@ -962,10 +1178,14 @@ h2 {
   color: var(--primary-contrast);
 }
 .copy-ledger-name {
+  display: grid;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.copy-ledger-meta {
+  white-space: normal
 }
 .sheet label {
   display: grid;
