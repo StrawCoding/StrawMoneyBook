@@ -18,6 +18,7 @@ const LEDGER_TABLES = [
   'reimbursement_items',
   'budgets',
   'budget_items',
+  'savings_jars',
   'bank_connections',
   'bank_accounts',
   'bank_transactions',
@@ -191,7 +192,7 @@ function rangeByMode(mode, options = {}) {
   return { startUtc: null, endUtc: null }
 }
 
-const EXCEL_HEADERS = [
+export const EXCEL_HEADERS = [
   '類型',
   '記帳時間',
   '交易帳戶',
@@ -210,7 +211,7 @@ const EXCEL_HEADERS = [
   '匯率',
 ]
 
-const CSV_HEADERS = EXCEL_HEADERS.filter((header) => header !== '交易標籤')
+export const CSV_HEADERS = EXCEL_HEADERS.filter((header) => header !== '交易標籤')
 
 function splitCategoryPath(value) {
   const raw = String(value ?? '').trim()
@@ -391,7 +392,54 @@ export async function exportCategoriesCsv(ledgerId) {
   return rowsToCsv(rows)
 }
 
-export async function exportLedgerTransactionsExcel(ledgerId, options = {}) {
+function exportTypeLabel(type) {
+  if (type === 'expense') return '支出'
+  if (type === 'income') return '收入'
+  if (type === 'transfer') return '轉帳'
+  return '調整'
+}
+
+function buildLedgerTransactionExportRows(sourceRows, accountBalanceMap) {
+  const csvRows = []
+  const excelRows = []
+
+  for (const row of sourceRows) {
+    const amountMajor = Number(row.amount_minor ?? 0) / 100
+    const accountId = String(row.account_id ?? '')
+    const nextBalanceMinor = Number(accountBalanceMap.get(accountId) ?? 0) + Number(row.amount_minor ?? 0)
+    accountBalanceMap.set(accountId, nextBalanceMinor)
+    const accountBalanceMajor = nextBalanceMinor / 100
+    const categories = normalizeCategoryLevels(row.category_group_name, row.category_name)
+    const addonSummary = extractAddonSummaryFromNote(row.note)
+    const baseRow = {
+      類型: exportTypeLabel(row.type),
+      記帳時間: row.occurred_at ?? '',
+      交易帳戶: row.account_name ?? '',
+      交易帳本: row.ledger_name ?? '',
+      貨幣符號: row.currency_code ?? 'TWD',
+      交易金額: String(amountMajor),
+      當期帳戶餘額: String(accountBalanceMajor),
+      一級分類: categories.primary,
+      二級分類: categories.secondary,
+      備註: stripAddonSummaryFromNote(row.note),
+      附加項目: addonSummary,
+      '退款&轉銷': '',
+      收回: '',
+      歸還: '',
+      匯率: '1',
+    }
+
+    csvRows.push(baseRow)
+    excelRows.push({
+      ...baseRow,
+      交易標籤: row.origin_type ?? '',
+    })
+  }
+
+  return { csvRows, excelRows }
+}
+
+export async function getLedgerTransactionsExportData(ledgerId, options = {}) {
   const mode = ['all', 'year', 'month', 'day', 'custom'].includes(options.mode) ? options.mode : 'all'
   const { startUtc, endUtc } = rangeByMode(mode, options)
   const accountBalanceMap = await loadAccountBalanceBeforeMap(ledgerId, startUtc)
@@ -407,6 +455,8 @@ export async function exportLedgerTransactionsExcel(ledgerId, options = {}) {
     `SELECT
        t.type,
        t.account_id,
+       t.category_id,
+       t.include_in_analysis,
        t.occurred_at,
        t.note,
        t.origin_type,
@@ -415,7 +465,8 @@ export async function exportLedgerTransactionsExcel(ledgerId, options = {}) {
        a.currency_code,
        l.name AS ledger_name,
        cg.name AS category_group_name,
-       c.name AS category_name
+       c.name AS category_name,
+       c.icon AS category_icon
      FROM transactions t
      LEFT JOIN accounts a
        ON a.ledger_id = t.ledger_id
@@ -435,120 +486,34 @@ export async function exportLedgerTransactionsExcel(ledgerId, options = {}) {
     values,
   )
 
-  const rows = (result?.values ?? []).map((row) => {
-    const amountMajor = Number(row.amount_minor ?? 0) / 100
-    const accountId = String(row.account_id ?? '')
-    const nextBalanceMinor = Number(accountBalanceMap.get(accountId) ?? 0) + Number(row.amount_minor ?? 0)
-    accountBalanceMap.set(accountId, nextBalanceMinor)
-    const accountBalanceMajor = nextBalanceMinor / 100
-    const categories = normalizeCategoryLevels(row.category_group_name, row.category_name)
-    const typeLabel =
-      row.type === 'expense' ? '支出' : row.type === 'income' ? '收入' : row.type === 'transfer' ? '轉帳' : '調整'
-    const addonSummary = extractAddonSummaryFromNote(row.note)
-    return {
-      類型: typeLabel,
-      記帳時間: row.occurred_at ?? '',
-      交易帳戶: row.account_name ?? '',
-      交易帳本: row.ledger_name ?? '',
-      貨幣符號: row.currency_code ?? 'TWD',
-      交易金額: String(amountMajor),
-      當期帳戶餘額: String(accountBalanceMajor),
-      一級分類: categories.primary,
-      二級分類: categories.secondary,
-      交易標籤: row.origin_type ?? '',
-      備註: stripAddonSummaryFromNote(row.note),
-      附加項目: addonSummary,
-      '退款&轉銷': '',
-      收回: '',
-      歸還: '',
-      匯率: '1',
-    }
-  })
+  const sourceRows = result?.values ?? []
+  const { csvRows, excelRows } = buildLedgerTransactionExportRows(sourceRows, accountBalanceMap)
+  const ledgerName = csvRows[0]?.交易帳本 || sourceRows[0]?.ledger_name || 'ledger'
 
-  const ledgerName = rows[0]?.交易帳本 || 'ledger'
-  const safeLedgerName = sanitizeFilenameSegment(ledgerName)
-  const filename = `${safeLedgerName}_transactions_${mode}_${timestampForFilename()}.xml`
-  const xmlText = rowsToSpreadsheetXml('Transactions', EXCEL_HEADERS, rows)
-  return { filename, xmlText, rowCount: rows.length }
+  return {
+    mode,
+    ledgerName,
+    rowCount: csvRows.length,
+    csvRows,
+    excelRows,
+    records: sourceRows,
+  }
+}
+
+export async function exportLedgerTransactionsExcel(ledgerId, options = {}) {
+  const report = await getLedgerTransactionsExportData(ledgerId, options)
+  const safeLedgerName = sanitizeFilenameSegment(report.ledgerName)
+  const filename = `${safeLedgerName}_transactions_${report.mode}_${timestampForFilename()}.xml`
+  const xmlText = rowsToSpreadsheetXml('Transactions', EXCEL_HEADERS, report.excelRows)
+  return { filename, xmlText, rowCount: report.rowCount }
 }
 
 export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
-  const mode = ['all', 'year', 'month', 'day', 'custom'].includes(options.mode) ? options.mode : 'all'
-  const { startUtc, endUtc } = rangeByMode(mode, options)
-  const accountBalanceMap = await loadAccountBalanceBeforeMap(ledgerId, startUtc)
-
-  const values = [ledgerId]
-  let rangeSql = ''
-  if (startUtc && endUtc) {
-    rangeSql = ' AND t.occurred_at >= ? AND t.occurred_at < ?'
-    values.push(startUtc, endUtc)
-  }
-
-  const result = await query(
-    `SELECT
-       t.type,
-       t.account_id,
-       t.occurred_at,
-       t.note,
-       t.amount_minor,
-       a.name AS account_name,
-       a.currency_code,
-       l.name AS ledger_name,
-       cg.name AS category_group_name,
-       c.name AS category_name
-     FROM transactions t
-     LEFT JOIN accounts a
-       ON a.ledger_id = t.ledger_id
-      AND a.id = t.account_id
-     LEFT JOIN ledgers l
-       ON l.id = t.ledger_id
-     LEFT JOIN categories c
-       ON c.ledger_id = t.ledger_id
-      AND c.id = t.category_id
-     LEFT JOIN category_groups cg
-       ON cg.ledger_id = c.ledger_id
-      AND cg.id = c.group_id
-     WHERE t.ledger_id = ?
-       AND t.deleted_at IS NULL
-       ${rangeSql}
-     ORDER BY t.occurred_at ASC, t.created_at ASC;`,
-    values,
-  )
-
-  const rows = (result?.values ?? []).map((row) => {
-    const amountMajor = Number(row.amount_minor ?? 0) / 100
-    const accountId = String(row.account_id ?? '')
-    const nextBalanceMinor = Number(accountBalanceMap.get(accountId) ?? 0) + Number(row.amount_minor ?? 0)
-    accountBalanceMap.set(accountId, nextBalanceMinor)
-    const accountBalanceMajor = nextBalanceMinor / 100
-    const categories = normalizeCategoryLevels(row.category_group_name, row.category_name)
-    const typeLabel =
-      row.type === 'expense' ? '支出' : row.type === 'income' ? '收入' : row.type === 'transfer' ? '轉帳' : '調整'
-    const addonSummary = extractAddonSummaryFromNote(row.note)
-    return {
-      類型: typeLabel,
-      記帳時間: row.occurred_at ?? '',
-      交易帳戶: row.account_name ?? '',
-      交易帳本: row.ledger_name ?? '',
-      貨幣符號: row.currency_code ?? 'TWD',
-      交易金額: String(amountMajor),
-      當期帳戶餘額: String(accountBalanceMajor),
-      一級分類: categories.primary,
-      二級分類: categories.secondary,
-      備註: stripAddonSummaryFromNote(row.note),
-      附加項目: addonSummary,
-      '退款&轉銷': '',
-      收回: '',
-      歸還: '',
-      匯率: '1',
-    }
-  })
-
-  const ledgerName = rows[0]?.交易帳本 || 'ledger'
-  const safeLedgerName = sanitizeFilenameSegment(ledgerName)
-  const filename = `${safeLedgerName}_transactions_${mode}_${timestampForFilename()}.csv`
-  const csvText = rowsToCsv(rows, CSV_HEADERS)
-  return { filename, csvText, rowCount: rows.length }
+  const report = await getLedgerTransactionsExportData(ledgerId, options)
+  const safeLedgerName = sanitizeFilenameSegment(report.ledgerName)
+  const filename = `${safeLedgerName}_transactions_${report.mode}_${timestampForFilename()}.csv`
+  const csvText = rowsToCsv(report.csvRows, CSV_HEADERS)
+  return { filename, csvText, rowCount: report.rowCount }
 }
 
 export function downloadJsonFile(filename, data) {

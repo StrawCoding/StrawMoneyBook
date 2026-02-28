@@ -74,6 +74,7 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { addonDeltaMajorFromNote, addonDeltaTagText, stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
+import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const transactionStore = useTransactionStore()
@@ -159,6 +160,10 @@ function labelOfTransaction(tx) {
   if (tx.origin_type === 'loan_payment') {
     return loanTransactionLabel(tx)
   }
+  const systemLabel = getSystemTransactionLabel(tx)
+  if (systemLabel) return systemLabel
+  const directName = String(tx.category_name ?? '').trim()
+  if (directName) return directName
   const category = categoryStore.categories.find((item) => item.id === tx.category_id)
   if (category?.name) return category.name
   if (tx.type === 'transfer') return '轉帳'
@@ -181,7 +186,11 @@ function loanTransactionLabel(tx) {
 }
 
 function categoryIconOfTransaction(tx) {
-  if (!tx || tx.type === 'adjustment') return ''
+  if (!tx) return ''
+  const systemIcon = getSystemTransactionIcon(tx)
+  if (systemIcon) return systemIcon
+  const directIcon = String(tx.category_icon ?? '').trim()
+  if (directIcon) return directIcon
   if (tx.type === 'transfer') return 'fa-solid fa-arrow-right-arrow-left'
   if (tx.origin_type === 'reimbursement') return 'fa-solid fa-receipt'
   if (tx.origin_type === 'loan_payment') return loanTransactionIcon(tx)

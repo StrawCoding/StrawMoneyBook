@@ -202,6 +202,12 @@ const router = createRouter({
       meta: { tab: 'home' },
     },
     {
+      name: 'savings-jars',
+      path: '/savings-jars',
+      component: () => import('@/ui/views/savings-jars/SavingsJarListPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
       name: 'reimbursement-edit',
       path: '/reimbursements/:id/edit',
       component: () => import('@/ui/views/reimbursements/ReimbursementEditPage.vue'),

@@ -20,6 +20,10 @@ function isIncludedInAssets(account) {
   return Number(account?.include_in_assets ?? 1) === 1
 }
 
+function isSavingsJarAccount(account) {
+  return Boolean(String(account?.savings_jar_goal_type ?? '').trim())
+}
+
 export const useAccountStore = defineStore('account', {
   state: () => ({
     groups: [],
@@ -63,6 +67,14 @@ export const useAccountStore = defineStore('account', {
         return total + Number(item.balance_minor ?? 0)
       }, 0)
     },
+
+    regularAccounts(state) {
+      return state.accounts.filter((item) => !isSavingsJarAccount(item))
+    },
+
+    savingsJarAccounts(state) {
+      return state.accounts.filter((item) => isSavingsJarAccount(item))
+    },
   },
 
   actions: {
@@ -97,7 +109,7 @@ export const useAccountStore = defineStore('account', {
     async addAccount(payload) {
       const ledgerStore = useLedgerStore()
       const existingAccounts = await listAccounts(ledgerStore.activeLedgerId)
-      assertCanCreateAccount(existingAccounts.length)
+      assertCanCreateAccount(existingAccounts.filter((item) => !isSavingsJarAccount(item)).length)
       await createAccount(ledgerStore.activeLedgerId, payload)
       await this.load()
     },
@@ -111,6 +123,11 @@ export const useAccountStore = defineStore('account', {
     async removeAccount(accountId) {
       if (this.accounts.length <= 1) {
         throw new Error('至少需要保留一個帳戶')
+      }
+      const target = this.accounts.find((item) => item.id === accountId)
+      const remainingRegularCount = this.accounts.filter((item) => !isSavingsJarAccount(item) && item.id !== accountId).length
+      if (!isSavingsJarAccount(target) && remainingRegularCount <= 0) {
+        throw new Error('至少需要保留一個可交易帳戶')
       }
       const ledgerStore = useLedgerStore()
       await deleteAccountIfUnused(ledgerStore.activeLedgerId, accountId)

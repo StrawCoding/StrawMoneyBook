@@ -53,7 +53,7 @@
             <div v-if="showCategory" class="inline-grid">
               <label>
                 帳戶
-                <CustomSelect v-model="model.accountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
               </label>
 
               <label>
@@ -75,17 +75,17 @@
             <div v-else-if="model.type === 'transfer'" class="inline-grid">
               <label>
                 轉出帳戶
-                <CustomSelect v-model="model.accountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="model.accountId" :options="transferAccountOptions" />
               </label>
               <label>
                 轉入帳戶
-                <CustomSelect v-model="model.peerAccountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="model.peerAccountId" :options="transferAccountOptions" />
               </label>
             </div>
 
             <label v-else>
               帳戶
-              <CustomSelect v-model="model.accountId" :options="accountStore.accounts" />
+              <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
             </label>
 
             <section class="calc-panel">
@@ -375,6 +375,8 @@ const selectedCategoryIcon = computed(() => {
   }
   return ''
 })
+const directAccountOptions = computed(() => accountStore.regularAccounts)
+const transferAccountOptions = computed(() => accountStore.accounts)
 const addonOptionsByType = computed(() => {
   return addonOptions.value.map((item) => ({
     value: item.id,
@@ -417,7 +419,9 @@ watch(
     model.occurredDate = toDateInput(occurred)
     model.occurredHour = occurred.getHours()
     model.occurredMinute = occurred.getMinutes()
-    model.accountId = tx.account_id ?? accountStore.accounts[0]?.id ?? ''
+    model.accountId = isTransfer
+      ? tx.account_id ?? transferAccountOptions.value[0]?.id ?? ''
+      : tx.account_id ?? directAccountOptions.value[0]?.id ?? ''
     model.peerAccountId = tx.peer_account_id ?? ''
     model.categoryId = tx.category_id ?? defaultCategoryId(model.type)
     model.note = stripAddonSummaryFromNote(tx.note)

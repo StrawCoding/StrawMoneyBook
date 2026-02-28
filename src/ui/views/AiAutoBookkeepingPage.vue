@@ -103,11 +103,11 @@
         <div v-if="model.type === 'transfer'" class="inline-grid">
           <label class="field">
             轉出帳戶
-            <CustomSelect v-model="model.accountId" :options="accountStore.accounts" />
+            <CustomSelect v-model="model.accountId" :options="transferAccountOptions" />
           </label>
           <label class="field">
             轉入帳戶
-            <CustomSelect v-model="model.peerAccountId" :options="accountStore.accounts" />
+            <CustomSelect v-model="model.peerAccountId" :options="transferAccountOptions" />
           </label>
         </div>
         <section v-if="model.type === 'transfer'" class="fx-panel">
@@ -165,7 +165,7 @@
         <div v-else class="inline-grid">
           <label class="field">
             帳戶
-            <CustomSelect v-model="model.accountId" :options="accountStore.accounts" />
+            <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
           </label>
           <label class="field">
             分類
@@ -329,6 +329,8 @@ const categoryGroupsByType = computed(() => {
   if (model.type === 'income') return categoryStore.incomeCategoryGroups
   return categoryStore.expenseCategoryGroups
 })
+const directAccountOptions = computed(() => accountStore.regularAccounts)
+const transferAccountOptions = computed(() => accountStore.accounts)
 
 const transferFromCurrency = computed(() => accountCurrencyCode(model.accountId))
 const transferToCurrency = computed(() => accountCurrencyCode(model.peerAccountId))
@@ -440,7 +442,7 @@ async function parseText(options = {}) {
     }
 
     const result = parseAutoBookkeepingText(text, {
-      accounts: accountStore.accounts,
+      accounts: directAccountOptions.value,
       expenseCategories: categoryStore.expenseCategories,
       incomeCategories: categoryStore.incomeCategories,
       historyTransactions: transactionStore.recent,
@@ -531,8 +533,8 @@ function applyDraft(draft) {
   model.occurredDate = toDateInput(date)
   model.occurredHour = date.getHours()
   model.occurredMinute = date.getMinutes()
-  model.accountId = draft.accountId ?? accountStore.accounts[0]?.id ?? ''
-  model.peerAccountId = draft.peerAccountId ?? accountStore.accounts.find((item) => item.id !== model.accountId)?.id ?? ''
+  model.accountId = draft.accountId ?? directAccountOptions.value[0]?.id ?? ''
+  model.peerAccountId = draft.peerAccountId ?? transferAccountOptions.value.find((item) => item.id !== model.accountId)?.id ?? ''
   model.categoryId = draft.categoryId ?? ''
   model.note = draft.note ?? ''
   model.isReimbursable = Boolean(draft.isReimbursable) && draft.type === 'expense'

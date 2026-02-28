@@ -41,17 +41,45 @@ export async function listAccounts(ledgerId, options = {}) {
   const includeArchived = Boolean(options.includeArchived)
 
   const result = await query(
-    `SELECT ledger_id, id, group_id, name, account_type, allow_negative, opening_balance_minor,
-            currency_code, icon, include_in_assets, sort_order, is_archived
-     FROM accounts
-     WHERE ledger_id = ?
-       AND deleted_at IS NULL
-       AND (? = 1 OR is_archived = 0)
-     ORDER BY sort_order ASC, created_at ASC;`,
+    `SELECT a.ledger_id, a.id, a.group_id, a.name, a.account_type, a.allow_negative, a.opening_balance_minor,
+            a.currency_code, a.icon, a.include_in_assets, a.sort_order, a.is_archived,
+            sj.goal_type AS savings_jar_goal_type,
+            sj.target_amount_minor AS savings_jar_target_amount_minor
+     FROM accounts a
+     LEFT JOIN savings_jars sj
+       ON sj.ledger_id = a.ledger_id
+      AND sj.account_id = a.id
+     WHERE a.ledger_id = ?
+       AND a.deleted_at IS NULL
+       AND (? = 1 OR a.is_archived = 0)
+     ORDER BY a.sort_order ASC, a.created_at ASC;`,
     [ledgerId, includeArchived ? 1 : 0],
   )
 
   return rowsOf(result)
+}
+
+export async function findAccountById(ledgerId, accountId) {
+  assertLedgerId(ledgerId)
+  if (!accountId) return null
+
+  const result = await query(
+    `SELECT a.ledger_id, a.id, a.group_id, a.name, a.account_type, a.allow_negative, a.opening_balance_minor,
+            a.currency_code, a.icon, a.include_in_assets, a.sort_order, a.is_archived,
+            sj.goal_type AS savings_jar_goal_type,
+            sj.target_amount_minor AS savings_jar_target_amount_minor
+     FROM accounts a
+     LEFT JOIN savings_jars sj
+       ON sj.ledger_id = a.ledger_id
+      AND sj.account_id = a.id
+     WHERE a.ledger_id = ?
+       AND a.id = ?
+       AND a.deleted_at IS NULL
+     LIMIT 1;`,
+    [ledgerId, accountId],
+  )
+
+  return firstRow(result)
 }
 
 export async function createAccountGroup(ledgerId, input) {

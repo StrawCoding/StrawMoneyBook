@@ -39,6 +39,7 @@ export async function listRecentTransactions(ledgerId, limit = 20) {
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
             t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
+            c.name AS category_name, c.icon AS category_icon,
             a.currency_code AS account_currency_code,
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
             t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
@@ -46,6 +47,9 @@ export async function listRecentTransactions(ledgerId, limit = 20) {
      LEFT JOIN accounts a
        ON a.ledger_id = t.ledger_id
       AND a.id = t.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = t.ledger_id
+      AND c.id = t.category_id
      WHERE t.ledger_id = ? AND t.deleted_at IS NULL
      ORDER BY t.occurred_at DESC, t.created_at DESC
      LIMIT ?;`,
@@ -62,6 +66,7 @@ export async function listTransactionsByMonth(ledgerId, monthKey) {
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
             t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
+            c.name AS category_name, c.icon AS category_icon,
             a.currency_code AS account_currency_code,
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
             t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
@@ -69,6 +74,9 @@ export async function listTransactionsByMonth(ledgerId, monthKey) {
      LEFT JOIN accounts a
        ON a.ledger_id = t.ledger_id
       AND a.id = t.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = t.ledger_id
+      AND c.id = t.category_id
      WHERE t.ledger_id = ?
        AND t.deleted_at IS NULL
        AND t.occurred_at >= ?
@@ -86,6 +94,7 @@ export async function listTransactionsByYear(ledgerId, yearKey) {
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
             t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
+            c.name AS category_name, c.icon AS category_icon,
             a.currency_code AS account_currency_code,
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
             t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
@@ -93,6 +102,9 @@ export async function listTransactionsByYear(ledgerId, yearKey) {
      LEFT JOIN accounts a
        ON a.ledger_id = t.ledger_id
       AND a.id = t.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = t.ledger_id
+      AND c.id = t.category_id
      WHERE t.ledger_id = ?
        AND t.deleted_at IS NULL
        AND t.occurred_at >= ?
@@ -110,6 +122,7 @@ export async function listTransactionsByDay(ledgerId, dayKey) {
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
             t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
+            c.name AS category_name, c.icon AS category_icon,
             a.currency_code AS account_currency_code,
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
             t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
@@ -117,6 +130,9 @@ export async function listTransactionsByDay(ledgerId, dayKey) {
      LEFT JOIN accounts a
        ON a.ledger_id = t.ledger_id
       AND a.id = t.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = t.ledger_id
+      AND c.id = t.category_id
      WHERE t.ledger_id = ?
        AND t.deleted_at IS NULL
        AND t.occurred_at >= ?
@@ -133,6 +149,7 @@ export async function listAllTransactions(ledgerId) {
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
             t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
+            c.name AS category_name, c.icon AS category_icon,
             a.currency_code AS account_currency_code,
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
             t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
@@ -140,6 +157,9 @@ export async function listAllTransactions(ledgerId) {
      LEFT JOIN accounts a
        ON a.ledger_id = t.ledger_id
       AND a.id = t.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = t.ledger_id
+      AND c.id = t.category_id
      WHERE t.ledger_id = ?
        AND t.deleted_at IS NULL
      ORDER BY t.occurred_at DESC, t.created_at DESC;`,
@@ -154,6 +174,7 @@ export async function listTransactionsByAccount(ledgerId, accountId) {
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
             t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
+            c.name AS category_name, c.icon AS category_icon,
             a.currency_code AS account_currency_code,
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
             t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
@@ -161,6 +182,9 @@ export async function listTransactionsByAccount(ledgerId, accountId) {
      LEFT JOIN accounts a
        ON a.ledger_id = t.ledger_id
       AND a.id = t.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = t.ledger_id
+      AND c.id = t.category_id
      WHERE t.ledger_id = ?
        AND (t.account_id = ? OR t.peer_account_id = ?)
        AND t.deleted_at IS NULL

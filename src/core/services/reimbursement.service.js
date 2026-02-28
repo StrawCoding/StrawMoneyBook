@@ -17,6 +17,7 @@ import {
   createCategoryGroup,
   listCategories,
   listCategoryGroups,
+  updateCategoryIcon,
 } from '@/core/repositories/category.repo'
 import {
   countReimbursements,
@@ -221,10 +222,14 @@ function assertCanTransition(currentStatus, nextStatus) {
   }
 }
 
-async function ensureHiddenReimbursementCategory(ledgerId) {
+async function ensureHiddenSystemIncomeCategory(ledgerId, name, icon) {
   const categories = await listCategories(ledgerId, { includeArchived: true })
-  const existing = categories.find((item) => item.name === '報銷' && (item.kind === 'income' || item.kind === 'both'))
+  const categoryName = String(name ?? '').trim()
+  const existing = categories.find((item) => item.name === categoryName && (item.kind === 'income' || item.kind === 'both'))
   if (existing) {
+    if (icon && String(existing.icon ?? '').trim() !== icon) {
+      await updateCategoryIcon(ledgerId, existing.id, icon)
+    }
     if (!Number(existing.is_archived)) {
       await archiveCategory(ledgerId, existing.id)
     }
@@ -244,13 +249,22 @@ async function ensureHiddenReimbursementCategory(ledgerId) {
 
   const created = await createCategory(ledgerId, {
     groupId: group.id,
-    name: '報銷',
+    name: categoryName,
     kind: 'income',
+    icon: icon || undefined,
     isBudgetable: 0,
     sortOrder: categories.filter((item) => item.group_id === group.id).length,
   })
   await archiveCategory(ledgerId, created.id)
   return created.id
+}
+
+async function ensureHiddenReimbursementCategory(ledgerId) {
+  return ensureHiddenSystemIncomeCategory(ledgerId, '報銷', 'fa-solid fa-receipt')
+}
+
+async function ensureHiddenAdvanceCategory(ledgerId) {
+  return ensureHiddenSystemIncomeCategory(ledgerId, '代收', 'fa-solid fa-hand-holding-dollar')
 }
 
 export async function loadReimbursementDashboard(ledgerId) {
@@ -294,10 +308,11 @@ export async function createReimbursementAdvanceEntry(ledgerId, payload = {}) {
     const advanceId = createId('radv')
     const receivedAt = payload.receivedAt ?? nowIso()
     const note = buildAdvanceTransactionNote(payload.note)
+    const advanceCategoryId = await ensureHiddenAdvanceCategory(ledgerId)
     const txId = await addTransaction(ledgerId, {
       type: 'income',
       accountId,
-      categoryId: null,
+      categoryId: advanceCategoryId,
       amountMinor,
       occurredAt: receivedAt,
       note,
@@ -395,8 +410,15 @@ export async function deleteReimbursement(ledgerId, reimbursementId) {
       throw new Error('找不到資料')
     }
 
-    if (claim.status === 'paid') {
-      throw new Error('已完成資料不可刪除')
+    const claimItems = await listReimbursementItems(ledgerId, claim.id)
+    for (const item of claimItems) {
+      const txId = String(item?.transaction_id ?? '').trim()
+      if (!txId) continue
+      await markTransactionReimbursed(ledgerId, txId, false)
+    }
+
+    if (claim.status === 'paid' && claim.paid_tx_id) {
+      await softDeleteTransactionById(ledgerId, claim.paid_tx_id)
     }
 
     await deleteReimbursementById(ledgerId, reimbursementId)

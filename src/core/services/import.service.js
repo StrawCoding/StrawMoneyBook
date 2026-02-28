@@ -28,6 +28,7 @@ const TABLE_IMPORT_ORDER = [
   'reimbursement_items',
   'budgets',
   'budget_items',
+  'savings_jars',
   'bank_connections',
   'bank_accounts',
   'bank_transactions',

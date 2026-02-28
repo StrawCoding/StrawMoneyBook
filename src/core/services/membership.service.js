@@ -32,6 +32,7 @@ const GOOGLE_PLAY_SUPPORT_RETRY_DELAY_MS = 800
 const FREE_LIMITS = Object.freeze({
   maxLedgers: 1,
   maxAccounts: 3,
+  maxSavingsJars: 1,
   maxLoans: 5,
   maxReimbursements: 5,
   aiBookkeepingDaily: 5,
@@ -1059,6 +1060,7 @@ function toMembershipLimitsByTier(tier) {
   return {
     maxLedgers: Number.POSITIVE_INFINITY,
     maxAccounts: Number.POSITIVE_INFINITY,
+    maxSavingsJars: Number.POSITIVE_INFINITY,
     maxLoans: Number.POSITIVE_INFINITY,
     maxReimbursements: Number.POSITIVE_INFINITY,
     aiBookkeepingDaily: Number.POSITIVE_INFINITY,
@@ -1089,6 +1091,16 @@ export function assertCanCreateAccount(existingAccountCount) {
   if (count >= maxAccounts) {
     const error = createMembershipLimitError('免費版帳戶最多 3 個', 'ACCOUNT_CREATE')
     triggerMembershipBenefitsRedirect('account_create')
+    throw error
+  }
+}
+
+export function assertCanCreateSavingsJar(existingSavingsJarCount) {
+  const count = normalizeUsageCount(existingSavingsJarCount)
+  const { maxSavingsJars } = getMembershipLimits()
+  if (count >= maxSavingsJars) {
+    const error = createMembershipLimitError('免費版存錢罐最多 1 個', 'SAVINGS_JAR_CREATE')
+    triggerMembershipBenefitsRedirect('savings_jar_create')
     throw error
   }
 }

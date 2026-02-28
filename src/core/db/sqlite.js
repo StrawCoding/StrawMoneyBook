@@ -21,6 +21,7 @@ const RESET_TABLES = [
   'bank_accounts',
   'bank_connections',
   'transactions',
+  'savings_jars',
   'accounts',
   'account_groups',
   'categories',

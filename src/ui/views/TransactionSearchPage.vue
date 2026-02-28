@@ -78,6 +78,7 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { listAllTransactions } from '@/core/repositories/transaction.repo'
 import { addonDeltaMajorFromNote, addonDeltaTagText, stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
+import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const ledgerStore = useLedgerStore()
@@ -127,7 +128,7 @@ const filteredTransactions = computed(() => {
 
     if (!query) return true
 
-    const category = categoryName(tx.category_id)
+    const category = labelOfTransaction(tx)
     const account = accountName(tx.account_id)
     const amount = String(Math.abs(Number(tx.amount_minor ?? 0)) / 100)
     const time = formatTime(tx.occurred_at)
@@ -160,6 +161,10 @@ function openEdit(tx) {
 function labelOfTransaction(tx) {
   if (tx?.origin_type === 'reimbursement') return t('transaction_search.label.reimbursement')
   if (tx?.origin_type === 'loan_payment') return loanTransactionLabel(tx)
+  const systemLabel = getSystemTransactionLabel(tx)
+  if (systemLabel) return systemLabel
+  const directName = String(tx?.category_name ?? '').trim()
+  if (directName) return directName
   const category = categoryName(tx.category_id)
   if (category) return category
   if (tx.type === 'transfer') return t('transaction_search.label.transfer')
@@ -179,7 +184,11 @@ function categoryName(categoryId) {
 }
 
 function categoryIcon(tx) {
-  if (!tx || tx.type === 'adjustment') return ''
+  if (!tx) return ''
+  const systemIcon = getSystemTransactionIcon(tx)
+  if (systemIcon) return systemIcon
+  const directIcon = String(tx.category_icon ?? '').trim()
+  if (directIcon) return directIcon
   if (tx.type === 'transfer') return 'fa-solid fa-arrow-right-arrow-left'
   if (tx.origin_type === 'reimbursement') return 'fa-solid fa-receipt'
   if (tx.origin_type === 'loan_payment') return loanTransactionIcon(tx)

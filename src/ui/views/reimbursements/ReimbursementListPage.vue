@@ -284,6 +284,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { isFreeTier } from '@/core/services/membership.service'
 import { useI18n } from '@/ui/services/i18n.service'
 import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
+import { getSystemTransactionIcon } from '@/ui/utils/system-transaction-presenter'
 import {
   reimbursementOriginalMinor,
   reimbursementPendingMinor,
@@ -464,12 +465,13 @@ function formatTime(iso) {
 }
 
 function categoryIconOfTx(tx) {
-  if (!tx || tx.type === 'adjustment') return ''
-  if (tx.type === 'transfer') return 'fa-solid fa-arrow-right-arrow-left'
-  if (tx.origin_type === 'reimbursement') return 'fa-solid fa-receipt'
-
+  if (!tx) return ''
+  const systemIcon = getSystemTransactionIcon(tx)
+  if (systemIcon) return systemIcon
   const directIcon = String(tx?.category_icon ?? '').trim()
   if (directIcon) return directIcon
+  if (tx.type === 'transfer') return 'fa-solid fa-arrow-right-arrow-left'
+  if (tx.origin_type === 'reimbursement') return 'fa-solid fa-receipt'
   const byIdIcon = categoryIconById.value.get(String(tx?.category_id ?? '').trim())
   if (byIdIcon) return byIdIcon
 

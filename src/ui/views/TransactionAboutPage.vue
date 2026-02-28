@@ -30,8 +30,8 @@
         <div v-else class="detail-row">
           <small class="muted">{{ t('transaction_about.detail.category') }}</small>
           <span class="category-value">
-            <font-awesome-icon v-if="categoryIcon(transaction.category_id)" :icon="categoryIcon(transaction.category_id)" class="category-icon" />
-            <span>{{ categoryName(transaction.category_id) }}</span>
+            <font-awesome-icon v-if="detailCategoryIcon(transaction)" :icon="detailCategoryIcon(transaction)" class="category-icon" />
+            <span>{{ detailCategoryName(transaction) }}</span>
           </span>
         </div>
         <div class="detail-row">
@@ -47,6 +47,14 @@
       <p v-if="displayNote(transaction.note)" class="note">{{ displayNote(transaction.note) }}</p>
 
       <div class="row action-row">
+        <button
+          v-if="canCreateRefund"
+          class="btn"
+          :disabled="refunding"
+          @click="createRefund"
+        >
+          {{ refunding ? t('transaction_about.refunding') : t('transaction_about.refund_transaction') }}
+        </button>
         <button class="btn primary" @click="openEdit(transaction)">
           {{ t('transaction_about.edit_transaction') }}
         </button>
@@ -109,11 +117,13 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
+import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { listAllTransactions } from '@/core/repositories/transaction.repo'
 import { useI18n } from '@/ui/services/i18n.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
+import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 
 const route = useRoute()
 const router = useRouter()
@@ -121,6 +131,7 @@ const ledgerStore = useLedgerStore()
 const categoryStore = useCategoryStore()
 const accountStore = useAccountStore()
 const loanStore = useLoanStore()
+const transactionStore = useTransactionStore()
 const uiStore = useUiStore()
 const { t, locale } = useI18n()
 
@@ -129,6 +140,7 @@ const allTransactions = ref([])
 const transaction = ref(null)
 const isEditOpen = ref(false)
 const editingTx = ref(null)
+const refunding = ref(false)
 
 const txId = computed(() => String(route.params.id ?? ''))
 
@@ -202,6 +214,15 @@ const hasAnyRelation = computed(() => {
   return relationRows.value.length > 0
 })
 
+const canCreateRefund = computed(() => {
+  const tx = transaction.value
+  if (!tx) return false
+  if (!['expense', 'income'].includes(String(tx.type ?? ''))) return false
+  if (tx.transfer_group_id) return false
+  const originType = String(tx.origin_type ?? '').trim()
+  return !['reimbursement', 'loan_payment'].includes(originType)
+})
+
 watch(
   () => [ledgerStore.activeLedgerId, txId.value],
   () => {
@@ -259,6 +280,42 @@ function goBack() {
   void goBackOrFallback(router, '/')
 }
 
+async function createRefund() {
+  const tx = transaction.value
+  if (!tx || refunding.value || !canCreateRefund.value) return
+
+  const amountMinor = Math.abs(Number(tx.amount_minor ?? 0))
+  if (!amountMinor || !tx.account_id) {
+    uiStore.pushToast(t('transaction_about.toast.refund_failed'), 'error')
+    return
+  }
+
+  const noteLines = [
+    `${t('transaction_about.refund_transaction')}：${labelOfTransaction(tx)}`,
+    displayNote(tx.note),
+  ].filter(Boolean)
+
+  refunding.value = true
+  try {
+    const refundTxId = await transactionStore.addRefund({
+      amountMinor: Number(tx.amount_minor ?? 0) < 0 ? amountMinor : amountMinor * -1,
+      occurredAt: new Date().toISOString(),
+      accountId: tx.account_id,
+      note: noteLines.join('\n'),
+    })
+    uiStore.pushToast(t('transaction_about.toast.refund_created'))
+    if (refundTxId) {
+      await router.push({ name: 'transaction-about', params: { id: refundTxId } })
+      return
+    }
+    await load()
+  } catch (error) {
+    uiStore.pushToast(error.message ?? t('transaction_about.toast.refund_failed'), 'error')
+  } finally {
+    refunding.value = false
+  }
+}
+
 function transactionTypeLabel(type) {
   if (type === 'income') return t('transaction_about.type.income')
   if (type === 'transfer') return t('transaction_about.type.transfer')
@@ -270,6 +327,10 @@ function labelOfTransaction(tx) {
   if (!tx) return t('transaction_about.type.adjustment')
   if (tx.origin_type === 'reimbursement') return t('transaction_about.type.reimbursement')
   if (tx.origin_type === 'loan_payment') return loanTransactionLabel(tx)
+  const systemLabel = getSystemTransactionLabel(tx)
+  if (systemLabel) return systemLabel
+  const directName = String(tx.category_name ?? '').trim()
+  if (directName) return directName
   const category = categoryStore.categories.find((item) => item.id === tx.category_id)
   if (category?.name) return category.name
   return transactionTypeLabel(tx.type)
@@ -283,7 +344,11 @@ function loanTransactionLabel(tx) {
 }
 
 function categoryIconOfTransaction(tx) {
-  if (!tx || tx.type === 'adjustment') return ''
+  if (!tx) return ''
+  const systemIcon = getSystemTransactionIcon(tx)
+  if (systemIcon) return systemIcon
+  const directIcon = String(tx.category_icon ?? '').trim()
+  if (directIcon) return directIcon
   if (tx.type === 'transfer') return 'fa-solid fa-arrow-right-arrow-left'
   if (tx.origin_type === 'reimbursement') return 'fa-solid fa-receipt'
   if (tx.origin_type === 'loan_payment') return loanTransactionIcon(tx)
@@ -298,11 +363,23 @@ function loanTransactionIcon(tx) {
   return tx.type === 'income' ? 'fa-solid fa-hand-holding-dollar' : 'fa-solid fa-arrow-up'
 }
 
-function categoryName(categoryId) {
+function detailCategoryName(tx) {
+  const systemLabel = getSystemTransactionLabel(tx)
+  if (systemLabel) return systemLabel
+  const directName = String(tx?.category_name ?? '').trim()
+  if (directName) return directName
+  const categoryId = String(tx?.category_id ?? '').trim()
+  if (!categoryId) return '-'
   return categoryStore.categories.find((item) => item.id === categoryId)?.name ?? '-'
 }
 
-function categoryIcon(categoryId) {
+function detailCategoryIcon(tx) {
+  const systemIcon = getSystemTransactionIcon(tx)
+  if (systemIcon) return systemIcon
+  const directIcon = String(tx?.category_icon ?? '').trim()
+  if (directIcon) return directIcon
+  const categoryId = String(tx?.category_id ?? '').trim()
+  if (!categoryId) return ''
   return categoryStore.categories.find((item) => item.id === categoryId)?.icon ?? ''
 }
 
@@ -379,6 +456,8 @@ h3 {
 }
 .action-row {
   margin-top: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .relation-list {
   margin-top: 10px;

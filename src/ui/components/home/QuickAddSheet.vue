@@ -15,7 +15,15 @@
               class="chat-message"
               :class="message.role"
             >
-              {{ message.text }}
+              <p class="chat-text">{{ message.text }}</p>
+              <button
+                v-if="message.actionKey"
+                type="button"
+                class="btn chat-action-btn"
+                @click="handleAiMessageAction(message.actionKey)"
+              >
+                {{ resolveAiMessageActionLabel(message.actionKey) }}
+              </button>
             </article>
           </div>
 
@@ -133,12 +141,12 @@
             <div v-if="model.type === 'transfer'" class="inline-grid">
               <label>
                 帳戶
-                <CustomSelect v-model="model.accountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="model.accountId" :options="transferAccountOptions" />
               </label>
 
               <label>
                 轉入帳戶
-                <CustomSelect v-model="model.peerAccountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="model.peerAccountId" :options="transferAccountOptions" />
               </label>
             </div>
             <section v-if="model.type === 'transfer'" class="fx-panel">
@@ -196,7 +204,7 @@
             <div v-else class="inline-grid">
               <label>
                 帳戶
-                <CustomSelect v-model="model.accountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
               </label>
 
               <label>
@@ -524,6 +532,8 @@ const aiResultAccountText = computed(() => {
   }
   return accountNameById(aiResultAccountId.value)
 })
+const directAccountOptions = computed(() => accountStore.regularAccounts)
+const transferAccountOptions = computed(() => accountStore.accounts)
 
 const visibleCategoryGroups = computed(() => {
   if (model.type === 'income') return categoryStore.incomeCategoryGroups
@@ -767,7 +777,7 @@ async function parseWithAi() {
   }
 
   const result = parseAutoBookkeepingText(userText, {
-    accounts: accountStore.accounts,
+    accounts: directAccountOptions.value,
     expenseCategories: categoryStore.expenseCategories,
     incomeCategories: categoryStore.incomeCategories,
     historyTransactions: transactionStore.recent,
@@ -788,9 +798,9 @@ async function parseWithAi() {
   const loanIntent = result.draft.loanIntent ?? null
 
   if (!loanIntent && result.draft.type !== 'transfer' && !result.draft.categoryId) {
-    const warningText = '沒有分類，請在設定中新增後再試，未建立交易紀錄'
-    pushAiMessage('assistant', warningText)
-    uiStore.pushToast(warningText, 'error')
+    pushAiMessage('assistant', t('ai_bookkeeping.warning.no_category'), {
+      actionKey: 'open-category-management',
+    })
     return
   }
 
@@ -904,14 +914,29 @@ async function toggleAiVoiceInput() {
   }
 }
 
-function pushAiMessage(role, text) {
+function pushAiMessage(role, text, options = {}) {
   const content = String(text ?? '').trim()
   if (!content) return
+  const actionKey = String(options?.actionKey ?? '').trim()
   aiMessages.value.push({
     id: `ai-${aiMessageSeq++}`,
     role: role === 'user' ? 'user' : 'assistant',
     text: content,
+    actionKey,
   })
+}
+
+function resolveAiMessageActionLabel(actionKey) {
+  if (actionKey === 'open-category-management') {
+    return t('settings.category_management')
+  }
+  return ''
+}
+
+function handleAiMessageAction(actionKey) {
+  if (actionKey !== 'open-category-management') return
+  emit('close')
+  void router.push({ name: 'settings-categories' })
 }
 
 function resolveAiParserWarnings(result) {
@@ -951,9 +976,9 @@ function applyAiDraft(draft) {
 
   model.amount = Number.isFinite(amountMajor) ? amountMajor : null
   model.amountInput = Number.isFinite(amountMajor) ? formatAmountInput(amountMajor) : ''
-  model.accountId = draft.accountId ?? accountStore.accounts[0]?.id ?? ''
+  model.accountId = draft.accountId ?? defaultAccountId()
   model.peerAccountId =
-    draft.peerAccountId ?? accountStore.accounts.find((item) => item.id !== model.accountId)?.id ?? model.accountId
+    draft.peerAccountId ?? defaultPeerAccountId(model.accountId)
 
   if (draft.type === 'transfer' || loanIntent) {
     model.categoryId = ''
@@ -1632,16 +1657,17 @@ function monthKeyFromDate(date) {
 }
 
 function defaultAccountId() {
-  return accountStore.accounts[0]?.id ?? ''
+  return directAccountOptions.value[0]?.id ?? ''
 }
 
 function defaultPeerAccountId(baseAccountId = '') {
-  const fallback = baseAccountId || defaultAccountId()
-  return accountStore.accounts.find((item) => item.id !== fallback)?.id ?? fallback
+  const accounts = transferAccountOptions.value
+  const fallback = baseAccountId || accounts[0]?.id || ''
+  return accounts.find((item) => item.id !== fallback)?.id ?? fallback
 }
 
 function ensureValidAccounts() {
-  const accounts = accountStore.accounts
+  const accounts = model.type === 'transfer' ? transferAccountOptions.value : directAccountOptions.value
   if (!accounts.length) {
     model.accountId = ''
     model.peerAccountId = ''
@@ -1740,6 +1766,11 @@ h3 {
   padding: 10px 12px;
   line-height: 1.45;
   white-space: pre-wrap;
+  display: grid;
+  gap: 8px;
+}
+.chat-text {
+  margin: 0;
 }
 .chat-message.assistant {
   justify-self: start;
@@ -1752,6 +1783,9 @@ h3 {
   background: var(--surface-ok);
   color: var(--text);
   border: 1px solid color-mix(in srgb, var(--ok) 55%, var(--field-border) 45%);
+}
+.chat-action-btn {
+  width: fit-content;
 }
 .ai-result {
   border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--field-border));
@@ -1935,7 +1969,7 @@ label {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
-  align-items: center;
+  align-items: end;
   margin-top: 8px;
 }
 .impact-wrap {
@@ -1996,7 +2030,7 @@ label {
 .extra-btn {
   white-space: nowrap;
   min-height: 42px;
-  align-self: center;
+  align-self: end;
   justify-content: center;
 }
 .extra-mask {

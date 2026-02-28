@@ -92,6 +92,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { addonDeltaMajorFromNote, addonDeltaTagText } from '@/ui/utils/addon-note'
+import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 
 const router = useRouter()
@@ -204,6 +205,10 @@ async function loadMonthTransactions() {
 }
 
 function txLabel(tx) {
+  const systemLabel = getSystemTransactionLabel(tx)
+  if (systemLabel) return systemLabel
+  const directName = String(tx?.category_name ?? '').trim()
+  if (directName) return directName
   if (tx.type === 'transfer') return t('transaction_search.label.transfer')
   if (tx.type === 'adjustment') return t('transaction_search.label.adjustment')
   const category = categoryStore.categories.find((item) => item.id === tx.category_id)
@@ -212,7 +217,11 @@ function txLabel(tx) {
 }
 
 function txIcon(tx) {
-  if (!tx || tx.type === 'adjustment') return ''
+  if (!tx) return ''
+  const systemIcon = getSystemTransactionIcon(tx)
+  if (systemIcon) return systemIcon
+  const directIcon = String(tx?.category_icon ?? '').trim()
+  if (directIcon) return directIcon
   if (tx.type === 'transfer') return 'fa-solid fa-arrow-right-arrow-left'
   if (tx.origin_type === 'reimbursement') return 'fa-solid fa-receipt'
   if (tx.origin_type === 'loan_payment') return loanTransactionIcon(tx)

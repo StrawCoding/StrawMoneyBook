@@ -10,6 +10,7 @@ import {
   createExpense,
   createIncome,
   createAdjustment,
+  createRefundAdjustment,
   createTransfer,
   updateManualTransaction,
   deleteManualTransaction,
@@ -124,8 +125,16 @@ export const useTransactionStore = defineStore('transaction', {
 
     async addAdjustment(payload) {
       const ledgerStore = useLedgerStore()
-      await createAdjustment(ledgerStore.activeLedgerId, payload)
+      const txId = await createAdjustment(ledgerStore.activeLedgerId, payload)
       await this.refreshAfterWriteSafe()
+      return txId
+    },
+
+    async addRefund(payload) {
+      const ledgerStore = useLedgerStore()
+      const txId = await createRefundAdjustment(ledgerStore.activeLedgerId, payload)
+      await this.refreshAfterWriteSafe()
+      return txId
     },
 
     async addTransfer(payload) {

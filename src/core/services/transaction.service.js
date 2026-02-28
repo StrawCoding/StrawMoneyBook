@@ -10,6 +10,15 @@ import {
   softDeleteTransferGroup,
   markTransactionReimbursed,
 } from '@/core/repositories/transaction.repo'
+import {
+  archiveCategory,
+  createCategory,
+  createCategoryGroup,
+  listCategories,
+  listCategoryGroups,
+  updateCategoryIcon,
+} from '@/core/repositories/category.repo'
+import { isSavingsJarAccount } from '@/core/repositories/savings-jar.repo'
 import { assertCanCreateReimbursement } from '@/core/services/membership.service'
 
 const TRANSACTION_FAILURE_TRACE_MAX_ENTRIES = 60
@@ -96,6 +105,41 @@ function recordTransactionFailureTrace(operation, ledgerId, error) {
   notifyTransactionFailureTraceListeners()
 }
 
+async function ensureHiddenRefundCategory(ledgerId) {
+  const categories = await listCategories(ledgerId, { includeArchived: true })
+  const existing = categories.find((item) => item.name === '退款' && ['income', 'both'].includes(String(item.kind ?? '')))
+  if (existing) {
+    if (String(existing.icon ?? '').trim() !== 'fa-solid fa-money-bill-wave') {
+      await updateCategoryIcon(ledgerId, existing.id, 'fa-solid fa-money-bill-wave')
+    }
+    if (!Number(existing.is_archived)) {
+      await archiveCategory(ledgerId, existing.id)
+    }
+    return existing.id
+  }
+
+  const groups = await listCategoryGroups(ledgerId)
+  let group = groups.find((item) => ['income', 'both'].includes(String(item.kind ?? '')) && !Number(item.is_archived))
+  if (!group) {
+    group = await createCategoryGroup(ledgerId, {
+      name: '收入',
+      kind: 'income',
+      sortOrder: groups.length,
+    })
+  }
+
+  const created = await createCategory(ledgerId, {
+    groupId: group.id,
+    name: '退款',
+    kind: 'income',
+    icon: 'fa-solid fa-money-bill-wave',
+    isBudgetable: 0,
+    sortOrder: categories.filter((item) => item.group_id === group.id).length,
+  })
+  await archiveCategory(ledgerId, created.id)
+  return created.id
+}
+
 async function traceTransactionCreate(operation, ledgerId, task) {
   try {
     return await task()
@@ -144,12 +188,20 @@ function assertPositiveAmount(amountMinor) {
   }
 }
 
+async function assertAccountAllowsDirectTransaction(ledgerId, accountId) {
+  if (!accountId) return
+  if (await isSavingsJarAccount(ledgerId, accountId)) {
+    throw new Error('存錢罐僅支援存入與提取，請使用存錢罐功能頁')
+  }
+}
+
 export async function createExpense(ledgerId, payload) {
   return traceTransactionCreate('create_expense', ledgerId, async () => {
     assertNonNegativeAmount(payload.amountMinor)
     if (!payload.accountId || !payload.categoryId) {
       throw new Error('expense 需要 accountId 與 categoryId')
     }
+    await assertAccountAllowsDirectTransaction(ledgerId, payload.accountId)
 
     if (Boolean(payload.isReimbursable)) {
       const reimbursableCount = await countReimbursableTransactions(ledgerId)
@@ -175,6 +227,7 @@ export async function createIncome(ledgerId, payload) {
     if (!payload.accountId || !payload.categoryId) {
       throw new Error('income 需要 accountId 與 categoryId')
     }
+    await assertAccountAllowsDirectTransaction(ledgerId, payload.accountId)
 
     return addTransaction(ledgerId, {
       ...payload,
@@ -194,6 +247,7 @@ export async function createAdjustment(ledgerId, payload) {
     if (!payload.accountId) {
       throw new Error('adjustment 需要 accountId')
     }
+    await assertAccountAllowsDirectTransaction(ledgerId, payload.accountId)
     if (!Number.isFinite(Number(payload.amountMinor)) || Number(payload.amountMinor) === 0) {
       throw new Error('adjustment amountMinor 不能為 0')
     }
@@ -208,6 +262,16 @@ export async function createAdjustment(ledgerId, payload) {
       includeInAnalysis: payload.includeInAnalysis !== false,
       occurredAt: payload.occurredAt ?? new Date().toISOString(),
     })
+  })
+}
+
+export async function createRefundAdjustment(ledgerId, payload = {}) {
+  const refundCategoryId = await ensureHiddenRefundCategory(ledgerId)
+  return createAdjustment(ledgerId, {
+    ...payload,
+    categoryId: refundCategoryId,
+    includeInBudget: false,
+    includeInAnalysis: false,
   })
 }
 
@@ -256,6 +320,9 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
   }
   if (!payload.accountId) {
     throw new Error('請選擇帳戶')
+  }
+  if (payload.type !== 'transfer') {
+    await assertAccountAllowsDirectTransaction(ledgerId, payload.accountId)
   }
   if (!payload.occurredAt) {
     throw new Error('請選擇交易時間')
@@ -344,7 +411,7 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
   await updateTransactionById(ledgerId, txId, {
     accountId: payload.accountId,
     peerAccountId: null,
-    categoryId: payload.type === 'adjustment' ? null : payload.categoryId ?? null,
+    categoryId: payload.type === 'adjustment' ? currentTx.category_id ?? null : payload.categoryId ?? null,
     amountMinor,
     occurredAt: payload.occurredAt,
     note: payload.note ?? null,

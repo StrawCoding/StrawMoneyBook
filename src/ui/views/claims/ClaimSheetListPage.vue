@@ -26,8 +26,27 @@
     </article>
 
     <article class="card panel">
+      <div class="row claim-tabs">
+        <button
+          type="button"
+          class="tab-btn"
+          :class="{ active: activeClaimPage === 'active' }"
+          @click="activeClaimPage = 'active'"
+        >
+          {{ t('claim_sheet.tab.active') }} ({{ activeClaims.length }})
+        </button>
+        <button
+          type="button"
+          class="tab-btn"
+          :class="{ active: activeClaimPage === 'completed' }"
+          @click="activeClaimPage = 'completed'"
+        >
+          {{ t('claim_sheet.tab.completed') }} ({{ completedClaims.length }})
+        </button>
+      </div>
+
       <ul class="claim-list">
-        <li v-for="claim in dashboard.claims" :key="claim.id" class="claim-item">
+        <li v-for="claim in visibleClaims" :key="claim.id" class="claim-item">
           <div class="row claim-head">
             <div class="claim-info">
               <strong>{{ claim.title || t('claim_sheet.unnamed') }}</strong>
@@ -52,14 +71,14 @@
             <button
               class="btn danger"
               :disabled="isClaimVoidDisabled(claim)"
-              @click="voidClaim(claim)"
+              @click="openDeleteDialog(claim)"
             >
               {{ t('common.delete') }}
             </button>
           </div>
         </li>
 
-        <li v-if="!dashboard.claims.length" class="muted">{{ t('claim_sheet.empty') }}</li>
+        <li v-if="!visibleClaims.length" class="muted">{{ t(visibleClaimEmptyKey) }}</li>
       </ul>
     </article>
 
@@ -218,7 +237,7 @@
               </div>
               <label>
                 {{ t('claim_sheet.form.account') }}
-                <CustomSelect v-model="completeForm.accountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="completeForm.accountId" :options="claimAccountOptions" />
               </label>
               <label>
                 {{ t('claim_sheet.form.complete_note') }}
@@ -241,6 +260,18 @@
         </section>
       </transition>
     </teleport>
+
+    <AppDialog
+      :open="Boolean(deleteTarget)"
+      :title="t('claim_sheet.delete_dialog.title')"
+      :message="deleteTarget ? t('claim_sheet.confirm_void', { title: deleteTarget.title || deleteTarget.id }) : ''"
+      :confirm-text="t('common.delete')"
+      :confirm-disabled="deletingClaim"
+      :loading="deletingClaim"
+      :loading-text="t('claim_sheet.processing')"
+      @close="closeDeleteDialog"
+      @confirm="confirmDeleteClaim"
+    />
   </section>
 </template>
 
@@ -248,6 +279,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Capacitor } from '@capacitor/core'
+import AppDialog from '@/ui/components/common/AppDialog.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { useI18n } from '@/ui/services/i18n.service'
@@ -289,6 +321,9 @@ const detailClaim = ref(null)
 const detailItems = ref([])
 const completeTarget = ref(null)
 const completing = ref(false)
+const activeClaimPage = ref('active')
+const deleteTarget = ref(null)
+const deletingClaim = ref(false)
 const createForm = reactive({
   title: '',
   note: '',
@@ -306,10 +341,33 @@ const entryTypeOptions = computed(() => [
   { label: t('claim_sheet.entry_type.income'), value: 'income' },
 ])
 
+const claimAccountOptions = computed(() => {
+  return accountStore.regularAccounts.map((account) => ({
+    value: account.id,
+    label: account.name,
+  }))
+})
+
 const pendingClaimMinor = computed(() => {
   return dashboard.value.claims
     .filter((item) => item.status !== 'paid' && item.status !== 'rejected')
     .reduce((sum, item) => sum + Math.max(0, Number(item.total_minor ?? 0)), 0)
+})
+
+const activeClaims = computed(() => {
+  return dashboard.value.claims.filter((item) => String(item?.status ?? '') !== 'paid')
+})
+
+const completedClaims = computed(() => {
+  return dashboard.value.claims.filter((item) => String(item?.status ?? '') === 'paid')
+})
+
+const visibleClaims = computed(() => {
+  return activeClaimPage.value === 'completed' ? completedClaims.value : activeClaims.value
+})
+
+const visibleClaimEmptyKey = computed(() => {
+  return activeClaimPage.value === 'completed' ? 'claim_sheet.empty_completed' : 'claim_sheet.empty'
 })
 
 const importedItems = computed(() => {
@@ -342,7 +400,7 @@ const canCreateClaim = computed(() => {
 const canCompleteClaim = computed(() => {
   return Boolean(completeTarget.value)
     && Number(completeTarget.value?.total_minor ?? 0) > 0
-    && Boolean(String(completeForm.accountId ?? '').trim())
+    && claimAccountOptions.value.some((item) => item.value === String(completeForm.accountId ?? '').trim())
 })
 
 onMounted(async () => {
@@ -514,13 +572,13 @@ function isClaimCompleteDisabled(claim) {
 }
 
 function isClaimVoidDisabled(claim) {
-  return ['paid'].includes(String(claim?.status ?? ''))
+  return false
 }
 
 function openCompleteSheet(claim) {
   if (isClaimCompleteDisabled(claim)) return
   completeTarget.value = claim
-  completeForm.accountId = String(accountStore.accounts[0]?.id ?? '')
+  completeForm.accountId = String(claimAccountOptions.value[0]?.value ?? '')
   completeForm.note = String(claim?.title ?? '').trim()
     ? t('claim_sheet.default_complete_note_named', { title: claim.title })
     : t('claim_sheet.default_complete_note')
@@ -529,6 +587,16 @@ function openCompleteSheet(claim) {
 function closeCompleteSheet() {
   if (completing.value) return
   completeTarget.value = null
+}
+
+function openDeleteDialog(claim) {
+  if (!claim) return
+  deleteTarget.value = claim
+}
+
+function closeDeleteDialog(force = false) {
+  if (!force && deletingClaim.value) return
+  deleteTarget.value = null
 }
 
 async function ensureClaimReadyForPayment(claim) {
@@ -570,17 +638,20 @@ async function submitCompleteSheet() {
   }
 }
 
-async function voidClaim(claim) {
-  if (isClaimVoidDisabled(claim) || !ledgerStore.activeLedgerId) return
-  const ok = window.confirm(t('claim_sheet.confirm_void', { title: claim.title || claim.id }))
-  if (!ok) return
+async function confirmDeleteClaim() {
+  const claim = deleteTarget.value
+  if (!claim || isClaimVoidDisabled(claim) || !ledgerStore.activeLedgerId || deletingClaim.value) return
 
+  deletingClaim.value = true
   try {
     await deleteReimbursement(ledgerStore.activeLedgerId, claim.id)
-    await reloadDashboard()
+    await Promise.all([reloadDashboard(), reimbursementStore.load(), accountStore.load()])
+    closeDeleteDialog(true)
     uiStore.pushToast(t('claim_sheet.toast.voided'))
   } catch (error) {
     uiStore.pushToast(error.message ?? t('claim_sheet.toast.void_failed'), 'error')
+  } finally {
+    deletingClaim.value = false
   }
 }
 
@@ -697,6 +768,26 @@ h3 {
   padding: 0;
   display: grid;
   gap: 10px;
+}
+
+.claim-tabs {
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: var(--card);
+  color: var(--text);
+}
+
+.tab-btn.active {
+  border-color: color-mix(in srgb, var(--primary) 48%, var(--border) 52%);
+  background: color-mix(in srgb, var(--primary) 12%, var(--card) 88%);
+  color: var(--primary);
 }
 
 .claim-item,

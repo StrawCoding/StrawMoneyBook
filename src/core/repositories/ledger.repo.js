@@ -13,6 +13,7 @@ const LEGACY_LEDGER_CHILD_DELETE_ORDER = [
   'budgets',
   'loans',
   'transactions',
+  'savings_jars',
   'accounts',
   'account_groups',
   'categories',
