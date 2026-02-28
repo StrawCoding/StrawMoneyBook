@@ -49,11 +49,25 @@
       @close="closeUpdateDialog"
       @confirm="openUpdateInGooglePlay"
     />
+    <transition name="overlay-fade">
+      <section v-if="securityLocked" class="security-mask" @click.self="requestSecurityUnlock('settings_security.unlock_prompt')">
+        <article class="card security-panel">
+          <div class="security-icon">
+            <font-awesome-icon icon="fa-solid fa-shield-halved" />
+          </div>
+          <h3>{{ t('settings_security.locked_title') }}</h3>
+          <p class="muted security-message">{{ t('settings_security.locked_description') }}</p>
+          <button class="btn primary" :disabled="securityUnlocking" @click="requestSecurityUnlock('settings_security.unlock_prompt')">
+            {{ securityUnlocking ? t('settings_security.unlocking') : t('settings_security.unlock_now') }}
+          </button>
+        </article>
+      </section>
+    </transition>
   </div>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import BottomNav from '@/ui/components/layout/BottomNav.vue'
 import ToastHost from '@/ui/components/common/ToastHost.vue'
@@ -64,9 +78,16 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { checkForAppUpdate, openGooglePlayStore } from '@/ui/services/app-update.service'
+import { App as CapacitorApp } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { initGoogleAuth, getAccessToken } from '@/services/google/auth'
 import { canNavigateBackInApp } from '@/ui/services/navigation-back.service'
+import {
+  authenticateSecurityLock,
+  getSecurityLockAvailability,
+  setSecurityLockEnabled,
+  useSecurityLockEnabled,
+} from '@/ui/services/security-lock.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -90,6 +111,12 @@ const updateInfo = ref({
 const promptedVersionSet = new Set()
 let promptedCheckFailedFallback = false
 let updateChecking = false
+const securityLockEnabled = useSecurityLockEnabled()
+const securityLocked = ref(securityLockEnabled.value)
+const securityUnlocking = ref(false)
+let securityStateListener = null
+let lastSecurityUnlockAt = 0
+const SECURITY_UNLOCK_COOLDOWN_MS = 1200
 
 const updateDialogMessage = computed(() => {
   if (updateInfo.value.checkFailed) {
@@ -158,10 +185,74 @@ function onBackButtonAnchorClick(event) {
   void router.back()
 }
 
+function onRequestCloseOverlay(event) {
+  if (!securityLocked.value) return
+  event.preventDefault()
+}
+
+async function requestSecurityUnlock(reasonKey = 'settings_security.unlock_prompt') {
+  if (!securityLockEnabled.value) {
+    securityLocked.value = false
+    return true
+  }
+  if (securityUnlocking.value) return false
+
+  const availability = await getSecurityLockAvailability(t('settings_security.only_android'))
+  if (!availability.available) {
+    setSecurityLockEnabled(false)
+    securityLocked.value = false
+    uiStore.pushToast(
+      t('settings_security.toast.auto_disabled', {
+        reason: availability.message || t('settings_security.toast.not_supported'),
+      }),
+      'error',
+    )
+    return false
+  }
+
+  securityLocked.value = true
+  securityUnlocking.value = true
+  try {
+    await authenticateSecurityLock({
+      title: t('settings_security.title'),
+      reason: t(reasonKey),
+      unsupportedMessage: t('settings_security.toast.not_supported'),
+      failureMessage: t('settings_security.toast.unlock_failed'),
+    })
+    securityLocked.value = false
+    lastSecurityUnlockAt = Date.now()
+    return true
+  } catch (error) {
+    if (String(error?.code ?? '') !== 'auth_canceled') {
+      uiStore.pushToast(error?.message || t('settings_security.toast.unlock_failed'), 'error')
+    }
+    return false
+  } finally {
+    securityUnlocking.value = false
+  }
+}
+
 onMounted(() => {
   window.addEventListener('app:check-update', onRequestCheckAppUpdate)
   window.addEventListener('click', onBackButtonAnchorClick, true)
+  window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
   void checkAppUpdate({ force: true })
+  if (securityLockEnabled.value) {
+    void requestSecurityUnlock('settings_security.unlock_prompt')
+  }
+  if (Capacitor.getPlatform() === 'android') {
+    void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+      if (!securityLockEnabled.value) return
+      if (!isActive) {
+        securityLocked.value = true
+        return
+      }
+      if (Date.now() - lastSecurityUnlockAt < SECURITY_UNLOCK_COOLDOWN_MS) return
+      void requestSecurityUnlock('settings_security.resume_prompt')
+    }).then((handle) => {
+      securityStateListener = handle
+    })
+  }
   // 嘗試在背景進行非互動式 Google 登入（僅在 native 平台）
   ;(async () => {
     try {
@@ -183,7 +274,18 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('app:check-update', onRequestCheckAppUpdate)
   window.removeEventListener('click', onBackButtonAnchorClick, true)
+  window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
+  securityStateListener?.remove?.()
 })
+
+watch(
+  () => securityLockEnabled.value,
+  (enabled) => {
+    if (!enabled) {
+      securityLocked.value = false
+    }
+  },
+)
 </script>
 
 <style scoped>.app-shell {
@@ -301,5 +403,41 @@ onBeforeUnmount(() => {
   to {
     transform: translateX(100%);
   }
+}
+.security-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 82%, black), color-mix(in srgb, var(--bg-soft) 88%, black)),
+    var(--overlay-backdrop);
+}
+.security-panel {
+  width: min(420px, 100%);
+  padding: 20px;
+  display: grid;
+  gap: 12px;
+  text-align: center;
+}
+.security-panel h3 {
+  margin: 0;
+}
+.security-icon {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+}
+.security-message {
+  margin: 0;
+  white-space: pre-line;
 }
 </style>

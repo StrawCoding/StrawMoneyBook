@@ -141,6 +141,12 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
+      path: '/settings/security',
+      name: 'settings-security',
+      component: () => import('@/ui/views/settings/SettingsSecurityPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
       path: '/settings/addon-templates',
       name: 'settings-addon-templates',
       component: () => import('@/ui/views/settings/SettingsAddonTemplatePage.vue'),

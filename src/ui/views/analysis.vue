@@ -26,7 +26,7 @@
 
     <article class="card panel">
       <header class="row">
-        <h3>{{ t('analysis_page.type_analysis', { type: activeTypeLabel }) }}</h3>
+        <h3>{{ t('analysis_page.scope_type_analysis', { type: activeTypeLabel, scope: activeScopeLabel }) }}</h3>
         <div class="header-metrics">
           <span class="count-chip">{{ t('analysis_page.items_count', { count: activeCount }) }}</span>
           <MoneyText :value-minor="activeTotalMinor" />
@@ -38,42 +38,24 @@
         <button class="btn" :class="{ primary: analysisType === 'expense' }" @click="analysisType = 'expense'">{{ t('analysis_page.type.expense') }}</button>
       </div>
 
+      <div class="scope-tabs">
+        <button class="btn" :class="{ primary: analysisScope === 'category' }" @click="analysisScope = 'category'">
+          {{ t('analysis_page.scope.category') }}
+        </button>
+        <button class="btn" :class="{ primary: analysisScope === 'account' }" @click="analysisScope = 'account'">
+          {{ t('analysis_page.scope.account') }}
+        </button>
+      </div>
+
       <transition name="fade-scale" mode="out-in">
-        <div :key="analysisType">
+        <div :key="`${analysisType}-${analysisScope}`">
           <template v-if="activeBreakdown.length">
-            <div class="chart-wrap">
-              <h4 class="chart-subtitle">{{ t('analysis_page.chart.pie') }}</h4>
-            </div>
-            <div class="chart-wrap">
-              <div class="pie" :style="activePieStyle">
-                <div class="pie-hole">
-                  <div class="pie-total">{{ t('analysis_page.type_total', { type: activeTypeLabel }) }}</div>
-                  <MoneyText :value-minor="activeTotalMinor" />
-                </div>
-              </div>
-            </div>
-
-            <ul class="legend-list">
-              <li v-for="item in activeBreakdown" :key="`${analysisType}-${item.id}`">
-                <button type="button" class="legend-item legend-btn" @click="openCategoryDetail(item)">
-                  <span class="legend-dot" :style="{ background: item.color }"></span>
-                  <span class="legend-icon-wrap">
-                    <font-awesome-icon v-if="item.icon" :icon="item.icon" class="legend-icon" />
-                  </span>
-                  <span class="legend-label">{{ item.name }}</span>
-                  <MoneyText :value-minor="item.amountMinor" />
-                  <span class="legend-count">{{ t('analysis_page.items_count', { count: item.count }) }}</span>
-                  <span class="legend-percent">{{ item.percent }}%</span>
-                </button>
-              </li>
-            </ul>
-
             <div class="chart-wrap">
               <h4 class="chart-subtitle">{{ t('analysis_page.chart.bar') }}</h4>
             </div>
             <ul class="bar-chart-list">
               <li v-for="item in activeBarRows" :key="`${analysisType}-${item.id}-bar`">
-                <button type="button" class="bar-chart-item-btn" @click="openCategoryDetail(item)">
+                <button type="button" class="bar-chart-item-btn" @click="openBreakdownDetail(item)">
                   <div class="bar-chart-head">
                     <div class="bar-chart-label">
                       <span class="legend-dot" :style="{ background: item.color }"></span>
@@ -112,12 +94,14 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
+import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { listAllTransactions, listTransactionsByMonth, listTransactionsByYear } from '@/core/repositories/transaction.repo'
 import { useI18n } from '@/ui/services/i18n.service'
 
+const accountStore = useAccountStore()
 const categoryStore = useCategoryStore()
 const ledgerStore = useLedgerStore()
 const uiStore = useUiStore()
@@ -126,6 +110,7 @@ const { t } = useI18n()
 
 const mode = ref('month')
 const analysisType = ref('expense')
+const analysisScope = ref('category')
 const selectedYear = ref(new Date().getFullYear())
 const selectedMonth = ref(monthKeyFromDate(new Date()))
 const statsTransactions = ref([])
@@ -160,6 +145,22 @@ const categoryIconMap = computed(() => {
   return map
 })
 
+const accountNameMap = computed(() => {
+  const map = new Map()
+  for (const account of accountStore.accounts) {
+    map.set(account.id, account.name)
+  }
+  return map
+})
+
+const accountIconMap = computed(() => {
+  const map = new Map()
+  for (const account of accountStore.accounts) {
+    map.set(account.id, String(account.icon ?? '').trim())
+  }
+  return map
+})
+
 const printLink = computed(() => {
   if (mode.value === 'year') {
     return { path: '/analysis/print', query: { mode: 'year', year: String(selectedYear.value) } }
@@ -178,22 +179,22 @@ watch(
   { immediate: true },
 )
 
-const incomeBreakdown = computed(() => buildBreakdown('income'))
-const expenseBreakdown = computed(() => buildBreakdown('expense'))
+const incomeCategoryBreakdown = computed(() => buildBreakdown('income', 'category'))
+const expenseCategoryBreakdown = computed(() => buildBreakdown('expense', 'category'))
+const incomeAccountBreakdown = computed(() => buildBreakdown('income', 'account'))
+const expenseAccountBreakdown = computed(() => buildBreakdown('expense', 'account'))
 
-const incomeTotalMinor = computed(() => incomeBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
-const expenseTotalMinor = computed(() => expenseBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
-const incomeCount = computed(() => incomeBreakdown.value.reduce((total, item) => total + item.count, 0))
-const expenseCount = computed(() => expenseBreakdown.value.reduce((total, item) => total + item.count, 0))
+const incomeTotalMinor = computed(() => activeBreakdownBy('income').reduce((total, item) => total + item.amountMinor, 0))
+const expenseTotalMinor = computed(() => activeBreakdownBy('expense').reduce((total, item) => total + item.amountMinor, 0))
+const incomeCount = computed(() => activeBreakdownBy('income').reduce((total, item) => total + item.count, 0))
+const expenseCount = computed(() => activeBreakdownBy('expense').reduce((total, item) => total + item.count, 0))
 
-const incomePieStyle = computed(() => buildPieStyle(incomeBreakdown.value))
-const expensePieStyle = computed(() => buildPieStyle(expenseBreakdown.value))
-const activeBreakdown = computed(() => (analysisType.value === 'income' ? incomeBreakdown.value : expenseBreakdown.value))
+const activeBreakdown = computed(() => activeBreakdownBy(analysisType.value))
 const activeTotalMinor = computed(() => (analysisType.value === 'income' ? incomeTotalMinor.value : expenseTotalMinor.value))
 const activeCount = computed(() => (analysisType.value === 'income' ? incomeCount.value : expenseCount.value))
-const activePieStyle = computed(() => (analysisType.value === 'income' ? incomePieStyle.value : expensePieStyle.value))
 const activeBarRows = computed(() => buildBarRows(activeBreakdown.value))
 const activeTypeLabel = computed(() => (analysisType.value === 'income' ? t('analysis_page.type.income') : t('analysis_page.type.expense')))
+const activeScopeLabel = computed(() => (analysisScope.value === 'account' ? t('analysis_page.scope.account') : t('analysis_page.scope.category')))
 
 function pickYear(value) {
   selectedYear.value = Number(value)
@@ -203,8 +204,20 @@ function pickMonth(value) {
   selectedMonth.value = value
 }
 
-function openCategoryDetail(item) {
+function activeBreakdownBy(type) {
+  if (analysisScope.value === 'account') {
+    return type === 'income' ? incomeAccountBreakdown.value : expenseAccountBreakdown.value
+  }
+  return type === 'income' ? incomeCategoryBreakdown.value : expenseCategoryBreakdown.value
+}
+
+function openBreakdownDetail(item) {
   if (!item?.id) return
+  if (analysisScope.value === 'account') {
+    if (String(item.id).startsWith('__')) return
+    void router.push({ name: 'account-detail', params: { id: String(item.id) } })
+    return
+  }
   const query = {
     type: analysisType.value,
     categoryId: String(item.id),
@@ -241,12 +254,14 @@ async function loadStatsTransactions() {
   }
 }
 
-function buildBreakdown(type) {
+function buildBreakdown(type, scope = 'category') {
   const map = new Map()
   for (const tx of statsTransactions.value) {
     if (!Number(tx.include_in_analysis ?? 1)) continue
     if (tx.type !== type || tx.origin_type === 'loan_payment') continue
-    const key = tx.category_id || '__uncategorized__'
+    const key = scope === 'account'
+      ? (tx.account_id || '__unassigned_account__')
+      : (tx.category_id || '__uncategorized__')
     const amount = type === 'expense' ? Math.abs(Number(tx.amount_minor ?? 0)) : Number(tx.amount_minor ?? 0)
     if (!Number.isFinite(amount) || amount <= 0) continue
     const current = map.get(key) || { amountMinor: 0, count: 0 }
@@ -260,8 +275,8 @@ function buildBreakdown(type) {
       id,
       amountMinor: aggregate.amountMinor,
       count: aggregate.count,
-      name: id === '__uncategorized__' ? t('analysis_page.uncategorized') : categoryNameMap.value.get(id) || t('analysis_page.uncategorized'),
-      icon: id === '__uncategorized__' ? '' : categoryIconMap.value.get(id) || '',
+      name: resolveBreakdownName(id, scope),
+      icon: resolveBreakdownIcon(id, scope),
     }))
     .sort((a, b) => b.amountMinor - a.amountMinor)
 
@@ -276,6 +291,24 @@ function buildBreakdown(type) {
   }))
 }
 
+function resolveBreakdownName(id, scope) {
+  if (scope === 'account') {
+    if (id === '__unassigned_account__') return t('analysis_page.unassigned_account')
+    return accountNameMap.value.get(id) || t('analysis_page.unassigned_account')
+  }
+  if (id === '__uncategorized__') return t('analysis_page.uncategorized')
+  return categoryNameMap.value.get(id) || t('analysis_page.uncategorized')
+}
+
+function resolveBreakdownIcon(id, scope) {
+  if (scope === 'account') {
+    if (id === '__unassigned_account__') return ''
+    return accountIconMap.value.get(id) || ''
+  }
+  if (id === '__uncategorized__') return ''
+  return categoryIconMap.value.get(id) || ''
+}
+
 function buildThemePalette(count) {
   const safeCount = Math.max(1, Number(count) || 1)
   const palette = CHART_MULTI_COLOR_SWATCHES.slice(0, safeCount)
@@ -287,26 +320,6 @@ function buildThemePalette(count) {
   }
 
   return palette
-}
-
-function buildPieStyle(items) {
-  if (!items.length) {
-    return { background: 'conic-gradient(var(--chart-track) 0deg 360deg)' }
-  }
-
-  const total = items.reduce((sum, item) => sum + item.amountMinor, 0)
-  let cursor = 0
-  const segments = []
-
-  for (const item of items) {
-    const deg = (item.amountMinor / total) * 360
-    const start = cursor
-    const end = cursor + deg
-    segments.push(`${item.color} ${start}deg ${end}deg`)
-    cursor = end
-  }
-
-  return { background: `conic-gradient(${segments.join(', ')})` }
 }
 
 function buildBarRows(items) {
@@ -365,6 +378,12 @@ h2, h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px
 }
+.scope-tabs {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px
+}
 .chart-wrap {
   margin-top: 12px;
   display: flex;
@@ -374,55 +393,6 @@ h2, h3 {
   font-size: 14px;
   color: var(--muted);
   margin: 0
-}
-.pie {
-  width: 220px;
-  height: 220px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent)
-}
-.pie-hole {
-  width: 128px;
-  height: 128px;
-  border-radius: 50%;
-  background: var(--surface-popover);
-  display: grid;
-  place-items: center;
-  text-align: center;
-  gap: 2px
-}
-.pie-total {
-  font-size: 12px;
-  color: var(--muted)
-}
-.legend-list {
-  list-style: none;
-  margin: 14px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 8px
-}
-.legend-item {
-  display: grid;
-  grid-template-columns: auto 22px 1fr auto auto auto;
-  align-items: center;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px
-}
-.legend-btn {
-  width: 100%;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  text-align: left
-}
-.legend-btn:hover {
-  border-color: color-mix(in srgb, var(--primary) 30%, var(--border) 70%);
-  background: color-mix(in srgb, var(--primary) 8%, transparent)
 }
 .header-metrics {
   display: inline-flex;
@@ -451,14 +421,6 @@ h2, h3 {
 .legend-icon {
   font-size: 18px;
   color: var(--primary-soft)
-}
-.legend-label {
-  color: var(--muted)
-}
-.legend-percent {
-  min-width: 42px;
-  text-align: right;
-  font-weight: 700
 }
 .bar-chart-list {
   list-style: none;
@@ -531,12 +493,6 @@ h2, h3 {
 .bar-chart-count {
   min-width: 36px;
   text-align: right
-}
-.legend-count {
-  min-width: 36px;
-  text-align: right;
-  color: var(--muted);
-  font-size: 12px
 }
 .no-data-tip {
   margin: 16px 0 0
