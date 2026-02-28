@@ -541,6 +541,11 @@ export function createCsvBlobUrl(csvText) {
   return URL.createObjectURL(blob)
 }
 
+export function createHtmlBlobUrl(htmlText) {
+  const blob = new Blob([htmlText], { type: 'text/html;charset=utf-8' })
+  return URL.createObjectURL(blob)
+}
+
 export function revokeBlobUrl(url) {
   if (!url) return
   URL.revokeObjectURL(url)
@@ -558,16 +563,42 @@ export function triggerDownloadFromUrl(url, filename) {
 
 export function openFileUrl(url) {
   const target = String(url ?? '').trim()
-  if (!target || typeof window === 'undefined') return false
+  if (!target || typeof window === 'undefined' || typeof document === 'undefined') return false
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      // Capacitor WebView is more stable when navigating in-place than opening a popup.
+      window.location.assign(target)
+      return true
+    } catch {
+      // Fall through to browser-style fallbacks.
+    }
+  }
+
+  const tryAnchorOpen = () => {
+    const anchor = document.createElement('a')
+    anchor.href = target
+    anchor.target = '_blank'
+    anchor.rel = 'noopener noreferrer'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    return true
+  }
 
   try {
-    // On Capacitor WebView, direct navigation is more reliable than popup windows.
-    window.location.assign(target)
-    return true
+    const opened = window.open(target, '_blank', 'noopener,noreferrer')
+    if (opened) return true
+  } catch {
+    // Fall through to anchor and direct navigation fallbacks.
+  }
+
+  try {
+    return tryAnchorOpen()
   } catch {
     try {
-      const opened = window.open(target, '_blank', 'noopener')
-      return Boolean(opened)
+      window.location.assign(target)
+      return true
     } catch {
       return false
     }

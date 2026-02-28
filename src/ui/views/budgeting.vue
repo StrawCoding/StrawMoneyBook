@@ -56,13 +56,15 @@
                 <MoneyText :value-minor="itemBudgetMinor(item)" />
               </div>
               <small v-if="isDailyAverageItem(item)" class="muted item-rule-hint">{{ itemDailyRuleSummary(item) }}</small>
-              <div class="row budget-line used-line">
-                <small class="budget-label">{{ t('budgeting.used') }}</small>
-                <small class="budget-value">{{ formatMajor(itemSpentMinor(item.category_id)) }}</small>
-              </div>
-              <div class="row budget-line remain-line">
-                <small class="budget-label">{{ t('budgeting.remaining') }}</small>
-                <small class="budget-value">{{ formatMajor(itemRemainMinor(item)) }}</small>
+              <div class="row budget-line budget-summary-line">
+                <div class="budget-side remain-line">
+                  <small class="budget-label">{{ t('budgeting.remaining') }}</small>
+                  <small class="budget-value">{{ formatMajor(itemRemainMinor(item)) }}</small>
+                </div>
+                <div class="budget-side used-line">
+                  <small class="budget-label">{{ t('budgeting.used') }}</small>
+                  <small class="budget-value">{{ formatMajor(itemSpentMinor(item.category_id)) }}</small>
+                </div>
               </div>
               <div class="row item-actions-row">
                 <div class="btn-wrap">
@@ -371,15 +373,23 @@ h2, h3 {
   justify-content: space-between;
   font-weight: 700
 }
+.budget-summary-line {
+  gap: 12px
+}
+.budget-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px
+}
 .budget-label,
 .budget-value {
   font-size: 12px
 }
 .used-line {
-  color: var(--danger, #d14343)
+  color: var(--chart-budget-used, var(--danger, #d14343))
 }
 .remain-line {
-  color: var(--success, #1f9d55)
+  color: var(--chart-budget-remain, var(--success, #1f9d55))
 }
 .item-actions-row {
   justify-content: flex-end

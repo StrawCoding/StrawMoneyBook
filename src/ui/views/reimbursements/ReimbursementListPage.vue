@@ -122,9 +122,14 @@
                 <font-awesome-icon icon="fa-solid fa-ban" />
                 <span>{{ voidingBatch ? '批量作廢中...' : '批量作廢' }}</span>
               </button>
-              <button class="btn primary action-btn" :disabled="!canExportClaimSheet" @click="actionExportClaimSheet">
-                匯出請款單
-              </button>
+              <div class="action-pair-row">
+                <button class="btn primary action-btn" :disabled="!canExportClaimSheet" @click="actionExportClaimSheetCsv">
+                  匯出 CSV
+                </button>
+                <button class="btn action-btn" :disabled="!canExportClaimSheet" @click="actionExportClaimSheetPdf">
+                  匯出 PDF
+                </button>
+              </div>
               <button v-if="exportedUrl" class="btn action-btn" @click="actionOpenExportLink">{{ exportedActionLabel }}</button>
               <div class="action-pair-row">
                 <button class="btn action-btn" :disabled="!selectedActiveCount" @click="actionClearSelection">清除選取</button>
@@ -292,6 +297,7 @@ import {
 } from '@/ui/utils/reimbursement-item'
 import {
   createCsvBlobUrl,
+  createHtmlBlobUrl,
   openFileUrl,
   revokeBlobUrl,
   saveCsvFileToDevice,
@@ -426,7 +432,7 @@ const exportTargetItems = computed(() => {
   return []
 })
 const canExportClaimSheet = computed(() => exportTargetItems.value.length > 0)
-const exportedActionLabel = computed(() => (exportedIsDeviceLink.value ? '開啟檔案' : '再次下載'))
+const exportedActionLabel = computed(() => '開啟檔案')
 const copyLedgerOptions = computed(() => {
   if (isFreeTier()) return []
   return (ledgerStore.ledgers ?? []).filter((item) => item.id !== ledgerStore.activeLedgerId)
@@ -590,9 +596,14 @@ async function actionMarkVoidSelected() {
   await markVoidSelected()
 }
 
-async function actionExportClaimSheet() {
+async function actionExportClaimSheetCsv() {
   closeActionSheet()
-  await exportClaimSheet()
+  await exportClaimSheetCsv()
+}
+
+async function actionExportClaimSheetPdf() {
+  closeActionSheet()
+  await exportClaimSheetPdf()
 }
 
 function actionOpenExportLink() {
@@ -712,11 +723,10 @@ function noteTextOfTx(tx) {
   return stripAddonSummaryFromNote(tx?.note)
 }
 
-async function exportClaimSheet() {
+function buildClaimSheetExportPayload() {
   const rowsSource = exportTargetItems.value
   if (!rowsSource.length) {
-    uiStore.pushToast('沒有可匯出的請款資料', 'error')
-    return
+    return null
   }
 
   const statusLabel = tab.value === 'pending' ? '未報銷' : '已報銷'
@@ -750,9 +760,27 @@ async function exportClaimSheet() {
 
   const headers = ['狀態', '交易日期', '分類', '備註', '原始支出', '已報銷', '本次請款']
   const csvText = rowsToCsv(rows, headers)
-  const filename = `請款單_${statusLabel}_${timestampForFilename()}.csv`
+  return {
+    rowsSource,
+    statusLabel,
+    rows,
+    headers,
+    csvText,
+    csvFilename: `請款單_${statusLabel}_${timestampForFilename()}.csv`,
+  }
+}
+
+async function exportClaimSheetCsv() {
+  const payload = buildClaimSheetExportPayload()
+  if (!payload) {
+    uiStore.pushToast('沒有可匯出的請款資料', 'error')
+    return
+  }
+
+  const { rowsSource, csvText, csvFilename } = payload
+  const filename = csvFilename
   exportedFilename.value = filename
-  let exportLocation = '瀏覽器下載'
+  let exportLocation = Capacitor.isNativePlatform() ? 'App 內預覽' : '瀏覽器下載'
 
   if (Capacitor.isNativePlatform()) {
     const saved = await saveCsvFileToDevice(filename, csvText)
@@ -760,25 +788,17 @@ async function exportClaimSheet() {
       exportedFilename.value = String(saved.filename ?? filename)
       exportLocation = saved.location || '裝置檔案'
       revokeBlobUrl(exportedUrl.value)
-      if (saved.openUrl) {
-        exportedUrl.value = saved.openUrl
-        exportedIsDeviceLink.value = true
-      } else {
-        exportedUrl.value = createCsvBlobUrl(csvText)
-        exportedIsDeviceLink.value = false
-      }
+      exportedUrl.value = createCsvBlobUrl(csvText)
+      exportedIsDeviceLink.value = false
       exportedLocation.value = exportLocation
       uiStore.pushToast(`請款單已匯出（${rowsSource.length} 筆，${exportLocation}）`)
-      if (exportedIsDeviceLink.value) {
-        openExportLink()
-      }
       return
     } else {
       revokeBlobUrl(exportedUrl.value)
       exportedUrl.value = createCsvBlobUrl(csvText)
       exportedIsDeviceLink.value = false
-      exportedLocation.value = ''
-      triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
+      exportedLocation.value = exportLocation
+      openExportLink()
       uiStore.pushToast(`請款單已匯出（${rowsSource.length} 筆，${exportLocation}）`)
       return
     }
@@ -788,21 +808,86 @@ async function exportClaimSheet() {
   exportedUrl.value = createCsvBlobUrl(csvText)
   exportedIsDeviceLink.value = false
   exportedLocation.value = ''
-  triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
+  openExportLink()
   uiStore.pushToast(`請款單已匯出（${rowsSource.length} 筆，${exportLocation}）`)
+}
+
+async function exportClaimSheetPdf() {
+  const payload = buildClaimSheetExportPayload()
+  if (!payload) {
+    uiStore.pushToast('沒有可匯出的請款資料', 'error')
+    return
+  }
+
+  revokeBlobUrl(exportedUrl.value)
+  exportedFilename.value = ''
+  exportedUrl.value = createHtmlBlobUrl(renderClaimSheetPrintDocument(payload))
+  exportedIsDeviceLink.value = false
+  exportedLocation.value = '列印預覽（可另存為 PDF）'
+
+  const opened = openFileUrl(exportedUrl.value)
+  if (!opened) {
+    uiStore.pushToast('目前裝置無法開啟列印預覽', 'error')
+    return
+  }
+  uiStore.pushToast(`請款單列印預覽已開啟（${payload.rowsSource.length} 筆）`)
 }
 
 function openExportLink() {
   if (!exportedUrl.value) return
-  if (exportedIsDeviceLink.value) {
-    const opened = openFileUrl(exportedUrl.value)
-    if (!opened && exportedFilename.value) {
-      triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
-    }
-    return
+  const opened = openFileUrl(exportedUrl.value)
+  if (!opened && exportedFilename.value) {
+    triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
   }
-  if (!exportedFilename.value) return
-  triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
+}
+
+function renderClaimSheetPrintDocument(payload) {
+  const { rows, headers, statusLabel } = payload
+  const headerHtml = headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')
+  const rowHtml = rows.map((row) => {
+    return `<tr>${headers.map((header) => `<td>${escapeHtml(row[header] ?? '')}</td>`).join('')}</tr>`
+  }).join('')
+
+  return `<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(`請款單 ${statusLabel}`)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; color: #1f2937; }
+    h1 { margin: 0 0 8px; font-size: 22px; }
+    p { margin: 0 0 12px; color: #6b7280; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; vertical-align: top; word-break: break-word; }
+    th { background: #f3f4f6; }
+    @media print { body { margin: 10mm; } }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(`請款單 ${statusLabel}`)}</h1>
+  <p>${escapeHtml(`共 ${payload.rowsSource.length} 筆`)}</p>
+  <table>
+    <thead><tr>${headerHtml}</tr></thead>
+    <tbody>${rowHtml}</tbody>
+  </table>
+  <script>
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        if (typeof window.print === 'function') window.print()
+      }, 120)
+    })
+  <\/script>
+</body>
+</html>`
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
 }
 
 async function confirmSettle() {
