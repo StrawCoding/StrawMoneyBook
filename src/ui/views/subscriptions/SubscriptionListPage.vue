@@ -14,26 +14,37 @@
     <article class="card panel">
       <header class="row">
         <h3>{{ t('subscription_page.list_title') }}</h3>
-        <small class="muted">{{ t('subscription_page.list_hint') }}</small>
+        <small v-if="isFreePlan" class="muted">{{ t('subscription_page.list_hint') }}</small>
       </header>
 
       <ul v-if="items.length" class="item-list">
         <li v-for="item in items" :key="item.id" class="item-card" :class="{ due: isDue(item) }">
-          <div class="item-copy">
-            <div class="row title-row">
-              <strong>{{ item.name }}</strong>
-              <span class="badge" :class="{ due: isDue(item) }">
-                {{ isDue(item) ? t('subscription_page.status.due') : t('subscription_page.status.tracking') }}
-              </span>
+          <div class="item-head">
+            <div class="item-icon" aria-hidden="true">
+              <font-awesome-icon :icon="categoryIcon(item.categoryId)" />
             </div>
-            <small class="muted">{{ accountName(item.accountId) }}</small>
-            <small class="muted amount-line">
-              {{ t('subscription_page.amount') }}
-              <MoneyText :value-minor="item.amountMinor" />
-            </small>
-            <small class="muted">{{ t('subscription_page.interval_label') }} {{ describeSubscriptionInterval(item) }}</small>
-            <small class="muted">{{ t('subscription_page.next_due') }} {{ formatDate(item.nextDueAt) }}</small>
-            <small v-if="item.lastPaidAt" class="muted">{{ t('subscription_page.last_paid') }} {{ formatDate(item.lastPaidAt) }}</small>
+            <div class="item-copy">
+              <div class="row title-row">
+                <strong>{{ item.name }}</strong>
+                <span class="badge" :class="{ due: isDue(item) }">
+                  {{ isDue(item) ? t('subscription_page.status.due') : t('subscription_page.status.tracking') }}
+                </span>
+              </div>
+              <small class="muted meta-line">
+                <span>{{ accountName(item.accountId) }}</span>
+                <span>{{ t('settings_auto_fill.category') }} {{ categoryName(item.categoryId) }}</span>
+              </small>
+              <small class="muted meta-line amount-line">
+                {{ t('subscription_page.amount') }}
+                <MoneyText :value-minor="item.amountMinor" />
+                <span class="meta-separator">·</span>
+                <span>{{ t('subscription_page.interval_label') }} {{ describeSubscriptionInterval(item) }}</span>
+              </small>
+              <small class="muted meta-line">
+                <span>{{ t('subscription_page.next_due') }} {{ formatDate(item.nextDueAt) }}</span>
+                <span v-if="item.lastPaidAt">{{ t('subscription_page.last_paid') }} {{ formatDate(item.lastPaidAt) }}</span>
+              </small>
+            </div>
           </div>
           <div class="item-actions">
             <button class="btn" @click="markPaid(item.id)">{{ t('subscription_page.mark_paid') }}</button>
@@ -77,6 +88,11 @@
       </label>
 
       <label class="field">
+        {{ t('settings_auto_fill.category') }}
+        <CustomSelect v-model="form.categoryId" :options="categoryOptions" />
+      </label>
+
+      <label class="field">
         {{ t('subscription_page.amount') }}
         <input v-model.number="form.amountMajor" class="input" type="number" min="0" step="0.01" />
       </label>
@@ -85,12 +101,14 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
+import { getMembershipTierSnapshot, subscribeMembershipSnapshot } from '@/core/services/membership.service'
 import { useAccountStore } from '@/ui/stores/account.store'
+import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
@@ -104,27 +122,33 @@ import {
 } from '@/core/services/subscription-tracker.service'
 
 const accountStore = useAccountStore()
+const categoryStore = useCategoryStore()
 const ledgerStore = useLedgerStore()
 const uiStore = useUiStore()
 const { t } = useI18n()
+const DEFAULT_SUBSCRIPTION_ICON = 'fa-solid fa-calendar-days'
 
 const items = ref([])
 const dialogOpen = ref(false)
 const saving = ref(false)
 const editingId = ref('')
+const membershipTier = ref(getMembershipTierSnapshot())
 const form = reactive({
   name: '',
   intervalValue: 1,
   intervalUnit: 'month',
   accountId: '',
+  categoryId: '',
   amountMajor: 0,
 })
 
 const activeLedgerId = computed(() => ledgerStore.activeLedgerId)
+const isFreePlan = computed(() => membershipTier.value === 'free')
 const accountOptions = computed(() => accountStore.accounts.map((item) => ({
   value: item.id,
   label: item.name,
 })))
+const categoryOptions = computed(() => categoryStore.expenseCategories ?? [])
 const intervalOptions = computed(() => ([
   { value: 'year', label: t('subscription_page.interval.year') },
   { value: 'month', label: t('subscription_page.interval.month') },
@@ -134,7 +158,8 @@ const canSave = computed(() => {
   return Boolean(
     String(form.name ?? '').trim()
     && Math.max(1, Number(form.intervalValue) || 0) > 0
-    && String(form.accountId ?? '').trim(),
+    && String(form.accountId ?? '').trim()
+    && String(form.categoryId ?? '').trim(),
   )
 })
 
@@ -158,9 +183,10 @@ async function loadItems() {
     items.value = []
     return
   }
-  if (!accountStore.accounts.length) {
-    await accountStore.load().catch(() => null)
-  }
+  await Promise.all([
+    accountStore.accounts.length ? Promise.resolve() : accountStore.load().catch(() => null),
+    categoryStore.categories.length ? Promise.resolve() : categoryStore.load().catch(() => null),
+  ])
   items.value = await getSubscriptionItems(ledgerId)
 }
 
@@ -170,6 +196,7 @@ function resetForm() {
   form.intervalValue = 1
   form.intervalUnit = 'month'
   form.accountId = accountOptions.value[0]?.value ?? ''
+  form.categoryId = categoryOptions.value[0]?.value ?? ''
   form.amountMajor = 0
 }
 
@@ -184,6 +211,7 @@ function openEditDialog(item) {
   form.intervalValue = Math.max(1, Number(item?.intervalValue ?? 1) || 1)
   form.intervalUnit = String(item?.intervalUnit ?? 'month')
   form.accountId = String(item?.accountId ?? '')
+  form.categoryId = String(item?.categoryId ?? '')
   form.amountMajor = Math.abs(Number(item?.amountMinor ?? 0)) / 100
   dialogOpen.value = true
 }
@@ -203,6 +231,16 @@ function accountName(accountId) {
   return accountStore.accounts.find((item) => item.id === accountId)?.name ?? '-'
 }
 
+function categoryName(categoryId) {
+  if (!categoryId) return '未分類'
+  return categoryStore.categories.find((item) => item.id === categoryId)?.name ?? '未分類'
+}
+
+function categoryIcon(categoryId) {
+  if (!categoryId) return DEFAULT_SUBSCRIPTION_ICON
+  return categoryStore.categories.find((item) => item.id === categoryId)?.icon || DEFAULT_SUBSCRIPTION_ICON
+}
+
 function isDue(item) {
   return isSubscriptionDue(item)
 }
@@ -217,6 +255,7 @@ async function submit() {
       intervalValue: form.intervalValue,
       intervalUnit: form.intervalUnit,
       accountId: form.accountId,
+      categoryId: form.categoryId,
       amountMinor: toMinor(form.amountMajor),
     })
     uiStore.pushToast(t('subscription_page.toast.saved'))
@@ -247,9 +286,22 @@ async function markPaid(itemId) {
   }
 }
 
+let unsubscribeMembership = null
+
 onMounted(async () => {
-  if (!accountStore.accounts.length) {
-    await accountStore.load().catch(() => null)
+  unsubscribeMembership = subscribeMembershipSnapshot((next) => {
+    membershipTier.value = String(next?.tier ?? getMembershipTierSnapshot())
+  }, { emitCurrent: true })
+  await Promise.all([
+    accountStore.accounts.length ? Promise.resolve() : accountStore.load().catch(() => null),
+    categoryStore.categories.length ? Promise.resolve() : categoryStore.load().catch(() => null),
+  ])
+})
+
+onBeforeUnmount(() => {
+  if (typeof unsubscribeMembership === 'function') {
+    unsubscribeMembership()
+    unsubscribeMembership = null
   }
 })
 </script>
@@ -295,6 +347,23 @@ h3 {
   align-items: center;
 }
 
+.item-head {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.item-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+}
+
 .badge {
   padding: 2px 8px;
   border-radius: 999px;
@@ -309,7 +378,18 @@ h3 {
 
 .item-copy {
   display: grid;
-  gap: 4px;
+  gap: 3px;
+}
+
+.meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.meta-separator {
+  color: var(--muted);
 }
 
 .amount-line {
@@ -335,6 +415,17 @@ h3 {
   gap: 6px;
   font-size: 13px;
   color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .item-head {
+    grid-template-columns: 1fr;
+  }
+
+  .item-icon {
+    width: 36px;
+    height: 36px;
+  }
 }
 
 .danger {

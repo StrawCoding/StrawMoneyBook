@@ -1,6 +1,7 @@
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
 import { createId } from '@/core/utils/id'
 import { assertCanCreateSubscription } from '@/core/services/membership.service'
+import { createExpense } from '@/core/services/transaction.service'
 
 const SUBSCRIPTION_TRACKER_KEY = 'subscription_tracker.items'
 
@@ -55,6 +56,7 @@ function normalizeItem(raw) {
   const lastPaidAt = String(raw.lastPaidAt ?? '').trim()
   const nextDueAt = String(raw.nextDueAt ?? '').trim() || addInterval(new Date(), intervalValue, intervalUnit)
   const amountMinor = normalizeAmountMinor(raw.amountMinor)
+  const categoryId = String(raw.categoryId ?? '').trim()
 
   return {
     id: String(raw.id ?? createId('sub')).trim() || createId('sub'),
@@ -63,6 +65,7 @@ function normalizeItem(raw) {
     intervalUnit,
     amountMinor,
     accountId,
+    categoryId,
     createdAt: String(raw.createdAt ?? '').trim() || new Date().toISOString(),
     lastPaidAt,
     nextDueAt,
@@ -119,9 +122,28 @@ export async function markSubscriptionPaid(ledgerId, itemId, paidAt = new Date()
   ensureLedgerId(ledgerId)
   const targetId = String(itemId ?? '').trim()
   const current = await getSubscriptionItems(ledgerId)
+  const target = current.find((item) => item.id === targetId) ?? null
+  if (!target) return current
+  const paidAtIso = new Date(paidAt).toISOString()
+
+  if (Number(target?.amountMinor ?? 0) > 0 && !String(target?.categoryId ?? '').trim()) {
+    throw new Error('請先編輯訂閱並設定分類')
+  }
+
+  if (target?.accountId && target?.categoryId && Number(target?.amountMinor ?? 0) > 0) {
+    await createExpense(ledgerId, {
+      accountId: target.accountId,
+      categoryId: target.categoryId,
+      amountMinor: Number(target.amountMinor),
+      occurredAt: paidAtIso,
+      note: `訂閱扣款：${target.name}`,
+      originType: 'subscription',
+      externalRefId: target.id,
+    })
+  }
+
   const next = current.map((item) => {
     if (item.id !== targetId) return item
-    const paidAtIso = new Date(paidAt).toISOString()
     return {
       ...item,
       lastPaidAt: paidAtIso,

@@ -163,6 +163,18 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
+      path: '/settings/auto-fill-rules/new',
+      name: 'settings-auto-fill-rule-create',
+      component: () => import('@/ui/views/settings/SettingsAutoFillRuleEditPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/auto-fill-rules/:id',
+      name: 'settings-auto-fill-rule-edit',
+      component: () => import('@/ui/views/settings/SettingsAutoFillRuleEditPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
       path: '/settings/version-info',
       name: 'settings-version-info',
       component: () => import('@/ui/views/settings/SettingsVersionInfoPage.vue'),
