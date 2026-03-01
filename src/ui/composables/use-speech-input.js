@@ -1,11 +1,28 @@
 import { onBeforeUnmount, ref } from 'vue'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 
 const isDev = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV)
 const SPEECH_RETRYABLE_ERROR_CODES = new Set(['no-speech', 'audio-capture', 'network'])
+const SpeechInput = registerPlugin('SpeechInput')
+let nativeSpeechAvailabilityTask = null
 
 function resolveSpeechRecognitionCtor() {
   if (typeof window === 'undefined') return null
   return window.SpeechRecognition || window.webkitSpeechRecognition || null
+}
+
+function isNativeSpeechRuntime() {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
+}
+
+async function hasNativeSpeechSupport() {
+  if (!isNativeSpeechRuntime()) return false
+  if (!nativeSpeechAvailabilityTask) {
+    nativeSpeechAvailabilityTask = SpeechInput.isAvailable()
+      .then((result) => Boolean(result?.available))
+      .catch(() => false)
+  }
+  return nativeSpeechAvailabilityTask
 }
 
 function normalizeSpeechError(errorCode) {
@@ -144,15 +161,84 @@ export function normalizeSpeechTranscript(text) {
   })
 }
 
+function scoreSpeechAlternative(rawText, confidence) {
+  const text = normalizeSpeechTranscript(rawText)
+  if (!text) return Number.NEGATIVE_INFINITY
+
+  let score = text.length * 5
+  if (/\d/.test(text)) score += 16
+  if (/[年月日點点分:：]/.test(text)) score += 8
+
+  const numericConfidence = Number(confidence)
+  if (Number.isFinite(numericConfidence)) {
+    score += numericConfidence * 100
+  }
+
+  return score
+}
+
+function pickBestSpeechAlternative(result) {
+  const alternatives = Array.from(result ?? [])
+  if (!alternatives.length) return ''
+
+  let bestText = ''
+  let bestScore = Number.NEGATIVE_INFINITY
+  for (const alternative of alternatives) {
+    const transcript = String(alternative?.transcript ?? '')
+    const score = scoreSpeechAlternative(transcript, alternative?.confidence)
+    if (score > bestScore) {
+      bestScore = score
+      bestText = transcript
+    }
+  }
+
+  return normalizeSpeechTranscript(bestText)
+}
+
+function pickBestSpeechAlternativeFromEntries(entries = []) {
+  const alternatives = Array.isArray(entries) ? entries : []
+  if (!alternatives.length) return ''
+
+  let bestText = ''
+  let bestScore = Number.NEGATIVE_INFINITY
+  for (const alternative of alternatives) {
+    const transcript = String(alternative?.transcript ?? '')
+    const score = scoreSpeechAlternative(transcript, alternative?.confidence)
+    if (score > bestScore) {
+      bestScore = score
+      bestText = transcript
+    }
+  }
+
+  return normalizeSpeechTranscript(bestText)
+}
+
 export function useSpeechInput() {
-  const isSupported = ref(Boolean(resolveSpeechRecognitionCtor()))
+  const isSupported = ref(Boolean(resolveSpeechRecognitionCtor()) || isNativeSpeechRuntime())
   const isListening = ref(false)
   const lastError = ref('')
   const hasMicPermission = ref(false)
   let recognition = null
   let manualStopRequested = false
+  let activeEngine = ''
+  let nativeCleanup = () => {}
 
-  function stop() {
+  function clearNativeCleanup() {
+    nativeCleanup()
+    nativeCleanup = () => {}
+  }
+
+  async function stop() {
+    if (activeEngine === 'native') {
+      manualStopRequested = true
+      try {
+        await SpeechInput.stop()
+      } catch {
+        // Ignore stop failures.
+      }
+      return
+    }
+
     if (!recognition) return
     manualStopRequested = true
     try {
@@ -263,6 +349,112 @@ export function useSpeechInput() {
   }
 
   async function start(options = {}) {
+    if (await hasNativeSpeechSupport()) {
+      lastError.value = ''
+      manualStopRequested = false
+      clearNativeCleanup()
+      activeEngine = 'native'
+      isListening.value = false
+
+      let started = false
+      let restartQuota = Math.max(0, Number(options.autoRestartCount ?? 2) || 0)
+      let lastNativeRawErrorCode = ''
+      const nativeOptions = {
+        lang: options.lang ?? 'zh-TW',
+        partialResults: options.interimResults !== false,
+        maxAlternatives: Math.max(1, Number(options.maxAlternatives ?? 5) || 1),
+      }
+
+      const handles = await Promise.all([
+        SpeechInput.addListener('speechState', ({ state } = {}) => {
+          if (activeEngine !== 'native') return
+          const normalizedState = String(state ?? '').toLowerCase()
+          if (normalizedState === 'start' || normalizedState === 'ready') {
+            if (!started) {
+              started = true
+              options.onStart?.()
+            }
+            isListening.value = true
+            return
+          }
+          if (normalizedState === 'end') {
+            const shouldRestart = !manualStopRequested
+              && restartQuota > 0
+              && SPEECH_RETRYABLE_ERROR_CODES.has(lastNativeRawErrorCode)
+            isListening.value = false
+            if (shouldRestart) {
+              restartQuota -= 1
+              lastNativeRawErrorCode = ''
+              lastError.value = ''
+              void SpeechInput.start(nativeOptions).catch(() => {})
+              return
+            }
+            manualStopRequested = false
+            activeEngine = ''
+            clearNativeCleanup()
+            options.onEnd?.()
+          }
+        }),
+        SpeechInput.addListener('speechResult', (payload = {}) => {
+          if (activeEngine !== 'native') return
+          const transcripts = Array.isArray(payload?.transcripts) ? payload.transcripts : []
+          const confidences = Array.isArray(payload?.confidences) ? payload.confidences : []
+          const normalized = pickBestSpeechAlternativeFromEntries(transcripts.map((transcript, index) => ({
+            transcript,
+            confidence: confidences[index],
+          })))
+          if (!normalized) return
+          if (payload?.isFinal) {
+            options.onResult?.({
+              finalText: normalized,
+              interimText: '',
+            })
+            return
+          }
+          options.onResult?.({
+            finalText: '',
+            interimText: normalized,
+          })
+        }),
+        SpeechInput.addListener('speechError', ({ code } = {}) => {
+          if (activeEngine !== 'native') return
+          const normalizedCode = normalizeRawErrorCode(code)
+          lastNativeRawErrorCode = normalizedCode
+          if (manualStopRequested && (normalizedCode === 'aborted' || normalizedCode === 'no-speech')) {
+            return
+          }
+          const message = normalizeSpeechError(normalizedCode)
+          lastError.value = message
+          options.onError?.(message)
+        }),
+      ])
+
+      nativeCleanup = () => {
+        for (const handle of handles) {
+          try {
+            handle?.remove?.()
+          } catch {
+            // Ignore listener cleanup failures.
+          }
+        }
+      }
+
+      try {
+        await SpeechInput.start(nativeOptions)
+        return true
+      } catch (error) {
+        activeEngine = ''
+        isListening.value = false
+        manualStopRequested = false
+        clearNativeCleanup()
+        const rawCode = normalizeRawErrorCode(error?.code || error?.message)
+        const message = normalizeSpeechError(rawCode)
+        lastError.value = message
+        options.onError?.(message)
+        return false
+      }
+    }
+
     const Ctor = resolveSpeechRecognitionCtor()
     if (!Ctor) {
       isSupported.value = false
@@ -275,20 +467,21 @@ export function useSpeechInput() {
       return false
     }
 
-    stop()
+    await stop()
     lastError.value = ''
     manualStopRequested = false
     const instance = new Ctor()
     instance.lang = options.lang ?? 'zh-TW'
     instance.interimResults = options.interimResults ?? true
     instance.continuous = options.continuous ?? true
-    const maxAlternatives = Math.max(1, Number(options.maxAlternatives ?? 3) || 1)
+    const maxAlternatives = Math.max(1, Number(options.maxAlternatives ?? 5) || 1)
     if ('maxAlternatives' in instance) {
       instance.maxAlternatives = maxAlternatives
     }
     recognition = instance
+    activeEngine = 'web'
     isListening.value = false
-    let restartQuota = Math.max(0, Number(options.autoRestartCount ?? 1) || 0)
+    let restartQuota = Math.max(0, Number(options.autoRestartCount ?? 2) || 0)
     let lastRawErrorCode = ''
 
     instance.onstart = () => {
@@ -302,7 +495,7 @@ export function useSpeechInput() {
       let finalText = ''
       let interimText = ''
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const fragment = event.results[i][0]?.transcript ?? ''
+        const fragment = pickBestSpeechAlternative(event.results[i])
         if (event.results[i].isFinal) {
           finalText += fragment
         } else {
@@ -350,6 +543,7 @@ export function useSpeechInput() {
       }
       manualStopRequested = false
       options.onEnd?.()
+      activeEngine = ''
       recognition = null
     }
 
@@ -376,7 +570,8 @@ export function useSpeechInput() {
   }
 
   onBeforeUnmount(() => {
-    stop()
+    void stop()
+    clearNativeCleanup()
   })
 
   return {

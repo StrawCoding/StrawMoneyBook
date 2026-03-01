@@ -1,4 +1,4 @@
-import { createApp } from 'vue'
+import { createApp, watch } from 'vue'
 import { createPinia } from 'pinia'
 import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
@@ -132,6 +132,7 @@ import {
 } from '@/ui/services/google-backup.service'
 import { runWebdavAutoBackupIfDue, runWebdavAutoBackupOnDataChange } from '@/ui/services/webdav-backup.service'
 import { runExchangeRateAutoSyncIfDue } from '@/ui/services/exchange-rate.service'
+import { clearHomeWidgetSummary, syncHomeWidgetSummary } from '@/ui/services/home-widget.service'
 import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { getCurrentLocale, initLocalePreference } from '@/ui/services/i18n.service'
@@ -143,6 +144,62 @@ const BACK_EXIT_CONFIRM_WINDOW_MS = 1600
 let dataChangeBackupTimer = null
 let dataChangeBackupRunning = false
 let lastAndroidBackPressedAt = 0
+let homeWidgetSyncTimer = null
+
+function scheduleHomeWidgetSync(pinia, delayMs = 1200) {
+  if (typeof window === 'undefined') return
+  if (homeWidgetSyncTimer != null) {
+    window.clearTimeout(homeWidgetSyncTimer)
+  }
+  homeWidgetSyncTimer = window.setTimeout(() => {
+    homeWidgetSyncTimer = null
+    void syncActiveLedgerHomeWidget(pinia)
+  }, Math.max(0, Number(delayMs) || 0))
+}
+
+async function syncActiveLedgerHomeWidget(pinia) {
+  const ledgerStore = useLedgerStore(pinia)
+  const activeLedger = ledgerStore.activeLedger
+  if (!activeLedger?.id) {
+    await clearHomeWidgetSummary()
+    return
+  }
+  await syncHomeWidgetSummary(activeLedger.id, activeLedger.currency_code)
+}
+
+function resolveRouteFromAppUrl(rawUrl) {
+  const source = String(rawUrl ?? '').trim()
+  if (!source) return null
+
+  try {
+    const parsed = new URL(source)
+    const host = String(parsed.host ?? '').trim().toLowerCase()
+    const pathname = String(parsed.pathname ?? '').trim().replace(/\/+$/, '').toLowerCase()
+    const routeKey = pathname && pathname !== '/' ? pathname.slice(1) : host
+
+    if (routeKey === 'analysis') {
+      return { path: '/analysis' }
+    }
+
+    if (!routeKey || routeKey === 'home') {
+      const query = {}
+      if (parsed.searchParams.get('quickAdd') === '1') {
+        query.quickAdd = '1'
+      }
+      return { path: '/', query }
+    }
+  } catch (error) {
+    console.warn('[app-url] failed to parse url', source, error)
+  }
+
+  return null
+}
+
+async function handleAppUrlOpen(rawUrl) {
+  const target = resolveRouteFromAppUrl(rawUrl)
+  if (!target) return
+  await router.push(target).catch(() => {})
+}
 
 function scheduleAutoBackupOnDataChange(pinia) {
   if (typeof window === 'undefined') return
@@ -353,6 +410,17 @@ async function main() {
   app.mount('#app')
 
   if (Capacitor.getPlatform() === 'android') {
+    CapacitorApp.addListener('appUrlOpen', ({ url }) => {
+      void handleAppUrlOpen(url)
+    })
+    void CapacitorApp.getLaunchUrl().then((result) => {
+      const launchUrl = String(result?.url ?? '').trim()
+      if (!launchUrl) return
+      void handleAppUrlOpen(launchUrl)
+    }).catch((error) => {
+      console.warn('[app-url] getLaunchUrl failed', error)
+    })
+
     CapacitorApp.addListener('backButton', async () => {
       const overlayCloseEvent = new Event('app:request-close-overlay', { cancelable: true })
       window.dispatchEvent(overlayCloseEvent)
@@ -394,8 +462,10 @@ async function main() {
       const ledgerStore = useLedgerStore(pinia)
       if (ledgerStore.activeLedgerId) {
         restoreGoogleBackupSessionInBackground(ledgerStore.activeLedgerId)
+        void runGoogleAutoBackupIfDue(ledgerStore.activeLedgerId)
         void runExchangeRateAutoSyncIfDue(ledgerStore.activeLedgerId)
       }
+      void syncActiveLedgerHomeWidget(pinia)
     })
   }
 
@@ -411,6 +481,7 @@ async function main() {
     if (typeof window !== 'undefined') {
       window.addEventListener('app:data-mutated', () => {
         scheduleAutoBackupOnDataChange(pinia)
+        scheduleHomeWidgetSync(pinia)
       })
     }
     if (ledgerStore.activeLedgerId) {
@@ -421,6 +492,13 @@ async function main() {
     }
 
     scheduleMembershipWarmup('app_start')
+    watch(
+      () => `${ledgerStore.activeLedgerId}:${String(ledgerStore.activeLedger?.currency_code ?? '')}`,
+      () => {
+        void syncActiveLedgerHomeWidget(pinia)
+      },
+      { immediate: true },
+    )
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('app:check-update'))
     }

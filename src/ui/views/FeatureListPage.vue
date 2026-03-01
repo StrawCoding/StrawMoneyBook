@@ -29,6 +29,7 @@ const features = computed(() => ([
   { to: '/reimbursements', label: t('feature_list.reimbursements'), icon: 'fa-solid fa-receipt' },
   { to: '/claim-sheets', label: t('feature_list.claim_sheets'), icon: 'fa-solid fa-file-invoice-dollar' },
   { to: '/savings-jars', label: t('feature_list.savings_jars'), icon: 'fa-solid fa-piggy-bank' },
+  { to: '/subscriptions', label: t('feature_list.subscriptions'), icon: 'fa-solid fa-clock-rotate-left' },
   { to: '/transactions/search', label: t('feature_list.search_transactions'), icon: 'fa-solid fa-magnifying-glass' },
 ]))
 </script>

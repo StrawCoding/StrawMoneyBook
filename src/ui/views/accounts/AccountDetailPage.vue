@@ -2,7 +2,8 @@
   <section class="stack">
     <header class="row page-header">
       <h2 class="page-title">{{ isEditMode ? '編輯帳戶' : '帳戶明細' }}</h2>
-      <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
+      <button v-if="!isEditMode" class="btn back-btn" type="button" @click="goBack">{{ t('common.back') }}</button>
+      <RouterLink v-else class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
     </header>
 
     <article class="card panel">
@@ -172,6 +173,7 @@ import { addonDeltaMajorFromNote, addonDeltaTagText } from '@/ui/utils/addon-not
 import { defaultAccountIcon, normalizeFaIcon } from '@/ui/utils/fa-icon-options'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { currencyOptions, normalizeCurrencyCode } from '@/ui/constants/currency-options'
+import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -200,6 +202,10 @@ const accountId = computed(() => String(route.params.id ?? ''))
 const account = computed(() => accountStore.accounts.find((item) => item.id === accountId.value) ?? null)
 const isEditMode = computed(() => queryText(route.query.mode) === 'edit')
 const backLink = computed(() => (isEditMode.value ? '/assets/accounts' : '/assets'))
+
+function goBack() {
+  void goBackOrFallback(router, backLink.value)
+}
 
 const accountName = computed(() => account.value?.name || '帳戶')
 const accountCurrencyCode = computed(() => normalizeCurrencyCode(account.value?.currency_code, 'TWD'))

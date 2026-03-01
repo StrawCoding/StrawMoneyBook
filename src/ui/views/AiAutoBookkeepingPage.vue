@@ -123,7 +123,7 @@
                 :class="{ primary: model.exchangeRateMode === 'system' }"
                 @click="model.exchangeRateMode = 'system'"
               >
-                系統同步（央行）
+                系統同步（即時）
               </button>
               <button
                 type="button"
@@ -145,7 +145,7 @@
               />
             </label>
             <div v-else class="fx-system-row">
-              <small class="muted">央行匯率快照：{{ transferSnapshotInfoLabel }}</small>
+              <small class="muted">系統匯率快照：{{ transferSnapshotInfoLabel }}</small>
               <button
                 type="button"
                 class="btn"
@@ -250,6 +250,7 @@ import {
   resolveCrossExchangeRate,
   syncCbcExchangeRateSnapshot,
 } from '@/ui/services/exchange-rate.service'
+import { getAutoFillRules } from '@/ui/services/auto-fill-rule.service'
 import {
   formatLoanStartDateTime,
   pickLoanForAiRepayment,
@@ -321,6 +322,7 @@ const exchangeRateSnapshot = ref({
   rates: { USD: 1 },
 })
 const exchangeRateSyncing = ref(false)
+const autoFillRules = ref([])
 
 const typeOptions = [
   { value: 'expense', label: '支出' },
@@ -422,6 +424,14 @@ watch(
 )
 
 watch(
+  () => ledgerStore.activeLedgerId,
+  () => {
+    void loadAutoFillRules()
+  },
+  { immediate: true },
+)
+
+watch(
   () => model.isReimbursable,
   (next, prev) => {
     if (next && !prev) {
@@ -454,6 +464,7 @@ async function parseText(options = {}) {
         expenseCategories: categoryStore.expenseCategories,
         incomeCategories: categoryStore.incomeCategories,
         historyTransactions: transactionStore.recent,
+        autoFillRules: autoFillRules.value,
         now: new Date(),
       })
     } catch (error) {
@@ -750,6 +761,15 @@ function warmupRecentHistoryInBackground() {
     .finally(() => {
       historyWarmupTask = null
     })
+}
+
+async function loadAutoFillRules() {
+  const ledgerId = ledgerStore.activeLedgerId
+  if (!ledgerId) {
+    autoFillRules.value = []
+    return
+  }
+  autoFillRules.value = await getAutoFillRules(ledgerId).catch(() => [])
 }
 
 function waitFor(delayMs) {

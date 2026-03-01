@@ -14,7 +14,7 @@ const OPEN_ER_USD_API_URL = 'https://open.er-api.com/v6/latest/USD'
 const CURRENCY_API_PAGES_USD_API_URL = 'https://latest.currency-api.pages.dev/v1/currencies/usd.json'
 const CURRENCY_API_JSDELIVR_USD_API_URL = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json'
 const EXCHANGE_RATE_PROXY_PATH = '/api/exchange-rate/cbc'
-const DEFAULT_SYNC_INTERVAL_HOURS = 24
+const DEFAULT_SYNC_INTERVAL_HOURS = 1
 const FETCH_TIMEOUT_MS = 12000
 const FETCH_RETRY_COUNT = 2
 const FETCH_RETRY_BASE_DELAY_MS = 450
@@ -29,8 +29,8 @@ function ensureLedgerId(ledgerId) {
 
 function buildDefaultExchangeRateSettings() {
   return {
-    autoSyncEnabled: false,
-    provider: 'cbc',
+    autoSyncEnabled: true,
+    provider: 'open_er_api',
     syncIntervalHours: DEFAULT_SYNC_INTERVAL_HOURS,
   }
 }
@@ -107,8 +107,8 @@ function normalizeExchangeRateSettings(raw) {
   return {
     ...base,
     ...raw,
-    autoSyncEnabled: Boolean(raw.autoSyncEnabled),
-    provider: String(raw.provider ?? 'cbc').trim() || 'cbc',
+    autoSyncEnabled: raw.autoSyncEnabled == null ? base.autoSyncEnabled : Boolean(raw.autoSyncEnabled),
+    provider: String(raw.provider ?? base.provider).trim() || base.provider,
     syncIntervalHours: Math.max(1, Number(raw.syncIntervalHours ?? DEFAULT_SYNC_INTERVAL_HOURS) || DEFAULT_SYNC_INTERVAL_HOURS),
   }
 }
@@ -221,12 +221,12 @@ function parseCbcRatesPayload(payload) {
     if (!pair) continue
 
     if (pair.left === 'USD') {
-      rates[pair.right] = 1 / numericValue
+      rates[pair.right] = numericValue
       continue
     }
 
     if (pair.right === 'USD') {
-      rates[pair.left] = numericValue
+      rates[pair.left] = 1 / numericValue
     }
   }
 
@@ -423,6 +423,27 @@ function isLikelyGenericUsdBasePayload(payload) {
   return base === 'USD'
 }
 
+function hasUsdToTwdRate(snapshot) {
+  const numeric = Number(snapshot?.rates?.TWD)
+  return Number.isFinite(numeric) && numeric > 0
+}
+
+function mergeMissingCoreRates(primarySnapshot, fallbackSnapshot) {
+  const primary = normalizeExchangeRateSnapshot(primarySnapshot)
+  const fallback = normalizeExchangeRateSnapshot(fallbackSnapshot)
+  if (hasUsdToTwdRate(primary) || !hasUsdToTwdRate(fallback)) {
+    return primary
+  }
+
+  return {
+    ...primary,
+    rates: normalizeRateMap({
+      ...primary.rates,
+      TWD: fallback.rates.TWD,
+    }),
+  }
+}
+
 function parseExchangeRateSnapshotPayload(payload) {
   if (isLikelyCbcPayload(payload)) return parseCbcRatesPayload(payload)
   if (isLikelyTaifexPayload(payload)) return parseTaifexRatesPayload(payload)
@@ -519,7 +540,7 @@ async function tryFetchParsedSnapshot(url, sourceLabel, errors) {
 
 function buildExchangeRateSourceList() {
   const cbcUrl = appendFileNameQuery(CBC_API_BASE_URL, CBC_FILE_CODE_DAILY)
-  const sources = EXCHANGE_RATE_PROXY_ENDPOINTS.map((endpoint) => {
+  const proxySources = EXCHANGE_RATE_PROXY_ENDPOINTS.map((endpoint) => {
     const url = appendFileNameQuery(endpoint, CBC_FILE_CODE_DAILY)
     return {
       url,
@@ -527,25 +548,36 @@ function buildExchangeRateSourceList() {
     }
   })
 
-  sources.push(
+  return [
     { url: OPEN_ER_USD_API_URL, label: `OpenER ${OPEN_ER_USD_API_URL}` },
+    { url: TAIFEX_DAILY_FX_API_URL, label: `TAIFEX ${TAIFEX_DAILY_FX_API_URL}` },
     { url: CURRENCY_API_PAGES_USD_API_URL, label: `Currency API ${CURRENCY_API_PAGES_USD_API_URL}` },
     { url: CURRENCY_API_JSDELIVR_USD_API_URL, label: `Currency API CDN ${CURRENCY_API_JSDELIVR_USD_API_URL}` },
-    { url: TAIFEX_DAILY_FX_API_URL, label: `TAIFEX ${TAIFEX_DAILY_FX_API_URL}` },
+    ...proxySources,
     { url: cbcUrl, label: `央行 ${CBC_API_URL}` },
     { url: FRANKFURTER_USD_API_URL, label: `Frankfurter ${FRANKFURTER_USD_API_URL}` },
-  )
-  return sources
+  ]
 }
 
 async function fetchExchangeRatePayload() {
   const errors = []
   const sources = buildExchangeRateSourceList()
+  let bestSnapshot = null
   for (const source of sources) {
     const snapshot = await tryFetchParsedSnapshot(source.url, source.label, errors)
-    if (snapshot) {
-      return snapshot
+    if (!snapshot) continue
+
+    bestSnapshot = bestSnapshot
+      ? mergeMissingCoreRates(bestSnapshot, snapshot)
+      : snapshot
+
+    if (hasUsdToTwdRate(bestSnapshot)) {
+      return bestSnapshot
     }
+  }
+
+  if (bestSnapshot) {
+    return bestSnapshot
   }
 
   const message = errors.join(' | ')
@@ -633,7 +665,11 @@ export function isExchangeRateSyncDue(snapshot, settings, nowMs = Date.now()) {
   const lastSyncMs = Date.parse(normalizedSnapshot.syncedAt)
   if (!Number.isFinite(lastSyncMs)) return true
 
-  const intervalMs = normalizedSettings.syncIntervalHours * 60 * 60 * 1000
+  const intervalHours = Math.min(
+    DEFAULT_SYNC_INTERVAL_HOURS,
+    Math.max(1, Number(normalizedSettings.syncIntervalHours || DEFAULT_SYNC_INTERVAL_HOURS)),
+  )
+  const intervalMs = intervalHours * 60 * 60 * 1000
   return nowMs - lastSyncMs >= intervalMs
 }
 

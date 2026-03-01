@@ -7,7 +7,14 @@ import {
   listAppDataBackups,
   uploadBackupJsonToAppDataFolder,
 } from '@/services/google/drive-appdata-backup'
-import { getAccessToken, getCachedGoogleProfile, googleSignIn, googleSignOut, reauth } from '@/services/google/auth'
+import {
+  getAccessToken,
+  getCachedGoogleProfile,
+  googleSignIn,
+  googleSignOut,
+  hasCachedGoogleAuthSession,
+  reauth,
+} from '@/services/google/auth'
 
 const GOOGLE_BACKUP_KEY = 'backup.google_drive'
 const GOOGLE_BACKUP_FILENAME = 'StrawMoneyBook_all_ledgers.json'
@@ -155,6 +162,7 @@ async function resolveGoogleProfileForConnect(preferredEmail = '') {
 }
 
 function shouldAttemptSilentAutoConnect(state) {
+  if (hasCachedGoogleAuthSession()) return true
   if (!state || typeof state !== 'object') return false
   if (state.connected) return true
   return Boolean(

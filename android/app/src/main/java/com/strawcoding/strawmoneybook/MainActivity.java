@@ -9,7 +9,9 @@ import ee.forgr.capacitor.social.login.ModifiedMainActivityForSocialLoginPlugin;
 public class MainActivity extends BridgeActivity implements ModifiedMainActivityForSocialLoginPlugin {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        registerPlugin(HomeWidgetPlugin.class);
         registerPlugin(SecurityLockPlugin.class);
+        registerPlugin(SpeechInputPlugin.class);
         super.onCreate(savedInstanceState);
         enableWebViewTextSelection();
     }

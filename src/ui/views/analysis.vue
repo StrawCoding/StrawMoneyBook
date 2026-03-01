@@ -3,9 +3,11 @@
     <article class="card panel">
       <header class="row">
         <h2>{{ t('analysis_page.title') }}</h2>
-        <RouterLink class="btn icon-btn" :to="printLink">
-          <font-awesome-icon icon="fa-solid fa-print" />
-        </RouterLink>
+        <div class="header-actions">
+          <RouterLink class="btn icon-btn" :to="printLink">
+            <font-awesome-icon icon="fa-solid fa-print" />
+          </RouterLink>
+        </div>
       </header>
 
       <div class="mode-tabs">
@@ -519,6 +521,14 @@ h2, h3 {
   display: inline-flex;
   align-items: center;
   justify-content: center
+}
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-btn {
+  padding-inline: 12px;
 }
 .mode-tabs {
   margin-top: 10px;

@@ -788,4 +788,15 @@ export function getCachedGoogleProfile() {
   return cachedProfile
 }
 
+export function hasCachedGoogleAuthSession() {
+  const profile = cachedProfile && typeof cachedProfile === 'object' ? cachedProfile : {}
+  return Boolean(
+    cachedRefreshToken
+    || hasUsableCachedAccessToken()
+    || profile.email
+    || profile.name
+    || profile.imageUrl,
+  )
+}
+
 restoreTokenCache()

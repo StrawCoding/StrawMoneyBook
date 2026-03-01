@@ -76,6 +76,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import HomeAssetSummaryCard from '@/ui/components/home/HomeAssetSummaryCard.vue'
 import HomeBudgetSummaryCard from '@/ui/components/home/HomeBudgetSummaryCard.vue'
 import HomeTransactionFeed from '@/ui/components/home/HomeTransactionFeed.vue'
@@ -91,6 +92,8 @@ import { useI18n } from '@/ui/services/i18n.service'
 const isSheetOpen = ref(false)
 const quickAddMode = ref('manual')
 const quickAddType = ref('expense')
+const route = useRoute()
+const router = useRouter()
 const ledgerStore = useLedgerStore()
 const budgetStore = useBudgetStore()
 const transactionStore = useTransactionStore()
@@ -112,6 +115,21 @@ watch(
   (ledgerId) => {
     if (!ledgerId) return
     void syncHomeTransactions()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => String(route.query.quickAdd ?? ''),
+  (flag) => {
+    if (flag !== '1') return
+    openQuickAdd()
+    const nextQuery = { ...route.query }
+    delete nextQuery.quickAdd
+    void router.replace({
+      path: route.path,
+      query: nextQuery,
+    }).catch(() => {})
   },
   { immediate: true },
 )

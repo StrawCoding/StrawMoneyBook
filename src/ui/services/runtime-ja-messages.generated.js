@@ -376,6 +376,7 @@ export const RUNTIME_JA_MESSAGES_GENERATED = {
   "transaction_about.not_found": "トランザクションが見つかりません",
   "transaction_about.relation_prefix.reimbursement_source": "払い戻されるソース",
   "transaction_about.relation_prefix.reimbursement_settled": "償還決済",
+  "transaction_about.relation_prefix.refund": "返金関連",
   "transaction_about.relation_prefix.transfer": "譲渡関係",
   "transaction_about.relation_prefix.loan": "貸付関係",
   "transaction_about.toast.load_failed": "トランザクションのロードに失敗しました",

@@ -1,0 +1,344 @@
+<template>
+  <section class="stack">
+    <article class="card panel">
+      <header class="row">
+        <h2>{{ t('subscription_page.title') }}</h2>
+        <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
+      </header>
+      <p class="muted subtitle">{{ t('subscription_page.subtitle') }}</p>
+      <button class="btn primary" :disabled="!activeLedgerId" @click="openCreateDialog">
+        {{ t('subscription_page.add') }}
+      </button>
+    </article>
+
+    <article class="card panel">
+      <header class="row">
+        <h3>{{ t('subscription_page.list_title') }}</h3>
+        <small class="muted">{{ t('subscription_page.list_hint') }}</small>
+      </header>
+
+      <ul v-if="items.length" class="item-list">
+        <li v-for="item in items" :key="item.id" class="item-card" :class="{ due: isDue(item) }">
+          <div class="item-copy">
+            <div class="row title-row">
+              <strong>{{ item.name }}</strong>
+              <span class="badge" :class="{ due: isDue(item) }">
+                {{ isDue(item) ? t('subscription_page.status.due') : t('subscription_page.status.tracking') }}
+              </span>
+            </div>
+            <small class="muted">{{ accountName(item.accountId) }}</small>
+            <small class="muted amount-line">
+              {{ t('subscription_page.amount') }}
+              <MoneyText :value-minor="item.amountMinor" />
+            </small>
+            <small class="muted">{{ t('subscription_page.interval_label') }} {{ describeSubscriptionInterval(item) }}</small>
+            <small class="muted">{{ t('subscription_page.next_due') }} {{ formatDate(item.nextDueAt) }}</small>
+            <small v-if="item.lastPaidAt" class="muted">{{ t('subscription_page.last_paid') }} {{ formatDate(item.lastPaidAt) }}</small>
+          </div>
+          <div class="item-actions">
+            <button class="btn" @click="markPaid(item.id)">{{ t('subscription_page.mark_paid') }}</button>
+            <button class="btn" @click="openEditDialog(item)">{{ t('common.edit') }}</button>
+            <button class="btn danger" @click="removeItem(item.id)">{{ t('common.delete') }}</button>
+          </div>
+        </li>
+      </ul>
+
+      <p v-else class="muted">{{ t('subscription_page.empty') }}</p>
+    </article>
+
+    <AppDialog
+      :open="dialogOpen"
+      :title="editingId ? t('subscription_page.edit') : t('subscription_page.add')"
+      :confirm-disabled="!canSave"
+      :loading="saving"
+      loading-text="儲存中..."
+      @close="closeDialog"
+      @confirm="submit"
+    >
+      <label class="field">
+        {{ t('subscription_page.name') }}
+        <input v-model.trim="form.name" class="input" type="text" maxlength="60" />
+      </label>
+
+      <div class="interval-grid">
+        <label class="field">
+          {{ t('subscription_page.interval_value') }}
+          <input v-model.number="form.intervalValue" class="input" type="number" min="1" step="1" />
+        </label>
+        <label class="field">
+          {{ t('subscription_page.interval_unit') }}
+          <CustomSelect v-model="form.intervalUnit" :options="intervalOptions" />
+        </label>
+      </div>
+
+      <label class="field">
+        {{ t('subscription_page.account') }}
+        <CustomSelect v-model="form.accountId" :options="accountOptions" />
+      </label>
+
+      <label class="field">
+        {{ t('subscription_page.amount') }}
+        <input v-model.number="form.amountMajor" class="input" type="number" min="0" step="0.01" />
+      </label>
+    </AppDialog>
+  </section>
+</template>
+
+<script setup>
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
+import AppDialog from '@/ui/components/common/AppDialog.vue'
+import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import MoneyText from '@/ui/components/common/MoneyText.vue'
+import { useAccountStore } from '@/ui/stores/account.store'
+import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { useUiStore } from '@/ui/stores/ui.store'
+import { useI18n } from '@/ui/services/i18n.service'
+import {
+  describeSubscriptionInterval,
+  getSubscriptionItems,
+  isSubscriptionDue,
+  markSubscriptionPaid,
+  removeSubscriptionItem,
+  upsertSubscriptionItem,
+} from '@/core/services/subscription-tracker.service'
+
+const accountStore = useAccountStore()
+const ledgerStore = useLedgerStore()
+const uiStore = useUiStore()
+const { t } = useI18n()
+
+const items = ref([])
+const dialogOpen = ref(false)
+const saving = ref(false)
+const editingId = ref('')
+const form = reactive({
+  name: '',
+  intervalValue: 1,
+  intervalUnit: 'month',
+  accountId: '',
+  amountMajor: 0,
+})
+
+const activeLedgerId = computed(() => ledgerStore.activeLedgerId)
+const accountOptions = computed(() => accountStore.accounts.map((item) => ({
+  value: item.id,
+  label: item.name,
+})))
+const intervalOptions = computed(() => ([
+  { value: 'year', label: t('subscription_page.interval.year') },
+  { value: 'month', label: t('subscription_page.interval.month') },
+  { value: 'day', label: t('subscription_page.interval.day') },
+]))
+const canSave = computed(() => {
+  return Boolean(
+    String(form.name ?? '').trim()
+    && Math.max(1, Number(form.intervalValue) || 0) > 0
+    && String(form.accountId ?? '').trim(),
+  )
+})
+
+function toMinor(major) {
+  const parsed = Number(major)
+  if (!Number.isFinite(parsed) || parsed < 0) return 0
+  return Math.max(0, Math.round(parsed * 100))
+}
+
+watch(
+  () => activeLedgerId.value,
+  () => {
+    void loadItems()
+  },
+  { immediate: true },
+)
+
+async function loadItems() {
+  const ledgerId = activeLedgerId.value
+  if (!ledgerId) {
+    items.value = []
+    return
+  }
+  if (!accountStore.accounts.length) {
+    await accountStore.load().catch(() => null)
+  }
+  items.value = await getSubscriptionItems(ledgerId)
+}
+
+function resetForm() {
+  editingId.value = ''
+  form.name = ''
+  form.intervalValue = 1
+  form.intervalUnit = 'month'
+  form.accountId = accountOptions.value[0]?.value ?? ''
+  form.amountMajor = 0
+}
+
+function openCreateDialog() {
+  resetForm()
+  dialogOpen.value = true
+}
+
+function openEditDialog(item) {
+  editingId.value = String(item?.id ?? '')
+  form.name = String(item?.name ?? '')
+  form.intervalValue = Math.max(1, Number(item?.intervalValue ?? 1) || 1)
+  form.intervalUnit = String(item?.intervalUnit ?? 'month')
+  form.accountId = String(item?.accountId ?? '')
+  form.amountMajor = Math.abs(Number(item?.amountMinor ?? 0)) / 100
+  dialogOpen.value = true
+}
+
+function closeDialog() {
+  dialogOpen.value = false
+  saving.value = false
+}
+
+function formatDate(value) {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '-'
+  return parsed.toLocaleDateString('zh-TW')
+}
+
+function accountName(accountId) {
+  return accountStore.accounts.find((item) => item.id === accountId)?.name ?? '-'
+}
+
+function isDue(item) {
+  return isSubscriptionDue(item)
+}
+
+async function submit() {
+  if (!activeLedgerId.value || !canSave.value || saving.value) return
+  saving.value = true
+  try {
+    items.value = await upsertSubscriptionItem(activeLedgerId.value, {
+      id: editingId.value,
+      name: form.name,
+      intervalValue: form.intervalValue,
+      intervalUnit: form.intervalUnit,
+      accountId: form.accountId,
+      amountMinor: toMinor(form.amountMajor),
+    })
+    uiStore.pushToast(t('subscription_page.toast.saved'))
+    closeDialog()
+  } catch (error) {
+    uiStore.pushToast(error.message ?? t('subscription_page.toast.save_failed'), 'error')
+    saving.value = false
+  }
+}
+
+async function removeItem(itemId) {
+  if (!activeLedgerId.value) return
+  try {
+    items.value = await removeSubscriptionItem(activeLedgerId.value, itemId)
+    uiStore.pushToast(t('subscription_page.toast.deleted'))
+  } catch (error) {
+    uiStore.pushToast(error.message ?? t('subscription_page.toast.delete_failed'), 'error')
+  }
+}
+
+async function markPaid(itemId) {
+  if (!activeLedgerId.value) return
+  try {
+    items.value = await markSubscriptionPaid(activeLedgerId.value, itemId, new Date())
+    uiStore.pushToast(t('subscription_page.toast.marked_paid'))
+  } catch (error) {
+    uiStore.pushToast(error.message ?? t('subscription_page.toast.mark_failed'), 'error')
+  }
+}
+
+onMounted(async () => {
+  if (!accountStore.accounts.length) {
+    await accountStore.load().catch(() => null)
+  }
+})
+</script>
+
+<style scoped>
+.panel {
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+h2,
+h3 {
+  margin: 0;
+}
+
+.subtitle {
+  margin: 0;
+}
+
+.item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.item-card {
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.item-card.due {
+  border-color: color-mix(in srgb, var(--warning, #f59f00) 40%, var(--field-border) 60%);
+  background: color-mix(in srgb, var(--warning, #f59f00) 6%, var(--card) 94%);
+}
+
+.title-row {
+  align-items: center;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--field-border);
+  font-size: 12px;
+}
+
+.badge.due {
+  border-color: color-mix(in srgb, var(--warning, #f59f00) 40%, var(--field-border) 60%);
+  color: color-mix(in srgb, var(--warning, #f59f00) 80%, var(--text) 20%);
+}
+
+.item-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.amount-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.item-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.interval-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.danger {
+  background: var(--surface-danger);
+  color: var(--danger-text);
+}
+</style>

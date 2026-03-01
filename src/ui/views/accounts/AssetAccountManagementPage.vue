@@ -500,7 +500,7 @@ h3 {
   width: 100%;
   text-align: left;
   color: inherit;
-  background: color-mix(in srgb, var(--card) 76%, var(--surface-soft-accent) 24%);
+  background: color-mix(in srgb, var(--card) 82%, var(--surface-soft-accent) 18%);
   cursor: pointer;
 }
 
@@ -588,13 +588,18 @@ a {
   align-items: center;
   gap: 10px;
   border-radius: 24px;
-  background: color-mix(in srgb, var(--card) 86%, #111 14%);
-  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, white 8%, transparent);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--card) 72%, var(--surface-soft-accent) 28%),
+      color-mix(in srgb, var(--card) 86%, var(--primary) 14%)
+    );
+  border: 1px solid color-mix(in srgb, var(--primary) 14%, var(--border) 86%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, white 20%, transparent);
   padding: 16px 16px;
 }
 .account-row.excluded {
-  background: color-mix(in srgb, var(--card) 92%, #000 8%);
+  background: color-mix(in srgb, var(--card) 92%, var(--surface-soft-accent) 8%);
   border-color: color-mix(in srgb, var(--muted) 28%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--muted) 14%, transparent);
 }
@@ -661,10 +666,10 @@ a {
 
 .account-icon {
   font-size: 22px;
-  color: #f7f7f7;
+  color: color-mix(in srgb, var(--primary) 68%, var(--text) 32%);
 }
 .account-row.excluded .account-icon {
-  color: color-mix(in srgb, var(--muted) 78%, #f7f7f7 22%);
+  color: color-mix(in srgb, var(--muted) 78%, var(--text) 22%);
 }
 
 .drag-handle {
@@ -770,6 +775,26 @@ a {
 
 .switch-row.active .switch-thumb {
   transform: translateX(20px);
+}
+
+@media (prefers-color-scheme: dark) {
+  .account-row {
+    background: color-mix(in srgb, var(--card) 86%, #111 14%);
+    border-color: color-mix(in srgb, var(--text) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, white 8%, transparent);
+  }
+
+  .account-row.excluded {
+    background: color-mix(in srgb, var(--card) 92%, #000 8%);
+  }
+
+  .account-icon {
+    color: #f7f7f7;
+  }
+
+  .account-row.excluded .account-icon {
+    color: color-mix(in srgb, var(--muted) 78%, #f7f7f7 22%);
+  }
 }
 
 .collapse-fade-enter-active,

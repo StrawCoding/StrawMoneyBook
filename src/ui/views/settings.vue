@@ -21,6 +21,7 @@ const settingGroups = [
     { to: '/settings/ledgers', labelKey: 'settings.ledger_management', icon: 'fa-solid fa-book' },
     { to: '/settings/categories', labelKey: 'settings.category_management', icon: 'fa-solid fa-tags' },
     { to: '/settings/addon-templates', labelKey: 'settings.addon_templates', icon: 'fa-solid fa-receipt' },
+    { to: '/settings/auto-fill-rules', labelKey: 'settings.auto_fill_rules', icon: 'fa-solid fa-wand-magic-sparkles' },
     { to: '/settings/exchange-rate', labelKey: 'settings.exchange_rate', icon: 'fa-solid fa-arrow-right-arrow-left' },
   ],
   [

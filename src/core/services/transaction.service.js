@@ -267,9 +267,11 @@ export async function createAdjustment(ledgerId, payload) {
 
 export async function createRefundAdjustment(ledgerId, payload = {}) {
   const refundCategoryId = await ensureHiddenRefundCategory(ledgerId)
+  const sourceTransactionId = String(payload.sourceTransactionId ?? payload.externalRefId ?? '').trim()
   return createAdjustment(ledgerId, {
     ...payload,
     categoryId: refundCategoryId,
+    externalRefId: sourceTransactionId || null,
     includeInBudget: false,
     includeInAnalysis: false,
   })

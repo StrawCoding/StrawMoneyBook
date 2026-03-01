@@ -120,6 +120,12 @@ const compareRows = [
     freeKey: 'membership_page.compare.free.reimbursement_limit',
     memberKey: 'membership_page.compare.member.unlimited',
   },
+  {
+    key: 'subscription-limit',
+    featureKey: 'membership_page.compare.subscription_limit',
+    freeKey: 'membership_page.compare.free.subscription_limit',
+    memberKey: 'membership_page.compare.member.unlimited',
+  },
 ]
 
 const isBusy = computed(() => Boolean(

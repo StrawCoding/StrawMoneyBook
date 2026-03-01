@@ -74,6 +74,43 @@ function round2(value) {
   return Math.round(Number(value) * 100) / 100
 }
 
+const ADDON_NOTE_PREFIX = '【附加項目】'
+
+function stripAddonSummaryFromStoredNote(note) {
+  return String(note ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith(ADDON_NOTE_PREFIX))
+    .join('\n')
+}
+
+function parseAddonItemsFromStoredNote(note) {
+  const summaryLine = String(note ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.startsWith(ADDON_NOTE_PREFIX))
+  if (!summaryLine) return []
+
+  return summaryLine
+    .slice(ADDON_NOTE_PREFIX.length)
+    .trim()
+    .split('、')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((segment) => {
+      const matched = segment.match(/^(.+?)([+-])(\d+(?:\.\d+)?)$/)
+      if (!matched) return null
+      const [, label, , amountText] = matched
+      const deltaMajor = round2(Math.abs(Number(amountText)))
+      if (!label || deltaMajor <= 0) return null
+      return {
+        label: label.trim(),
+        deltaMajor,
+      }
+    })
+    .filter(Boolean)
+}
+
 function parseLooseNumber(rawValue) {
   const normalized = String(rawValue ?? '')
     .trim()
@@ -577,6 +614,126 @@ function pickCategoryMatch(text, categories) {
   return best?.category ?? null
 }
 
+function normalizeAutoFillRule(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const keyword = String(raw.keyword ?? '').trim()
+  if (!keyword) return null
+  const type = ['income', 'expense', 'transfer'].includes(String(raw.type ?? '').trim())
+    ? String(raw.type).trim()
+    : 'expense'
+  const amountMajor = round2(Number(raw.amountMajor ?? 0))
+  const addonItems = Array.isArray(raw.addonItems)
+    ? raw.addonItems
+      .map((item) => {
+        const label = String(item?.label ?? '').trim()
+        const deltaMajor = round2(Math.abs(Number(item?.deltaMajor ?? item?.amountMajor ?? 0)))
+        if (!label || deltaMajor <= 0) return null
+        return { label, deltaMajor }
+      })
+      .filter(Boolean)
+    : []
+  return {
+    keyword,
+    type,
+    accountId: String(raw.accountId ?? '').trim(),
+    categoryId: String(raw.categoryId ?? '').trim(),
+    note: String(raw.note ?? '').trim(),
+    amountMajor: amountMajor > 0 ? amountMajor : 0,
+    isReimbursable: type === 'expense' ? Boolean(raw.isReimbursable) : false,
+    addonItems,
+    peerAccountId: String(raw.peerAccountId ?? '').trim(),
+  }
+}
+
+function splitKeywordTokens(segment, pattern) {
+  return String(segment ?? '')
+    .split(pattern)
+    .map((item) => compactText(item))
+    .filter(Boolean)
+}
+
+function compileAutoFillKeywordExpression(keyword) {
+  const source = String(keyword ?? '').trim()
+  if (!source) return []
+
+  const orPattern = /\s*(?:\bor\b|\|\||\||或者|或)\s*/i
+  const andPattern = /\s*(?:\band\b|&&|&|且|並且|并且|和|與)\s*/i
+  const groups = source
+    .split(orPattern)
+    .map((segment) => splitKeywordTokens(segment, andPattern))
+    .filter((tokens) => tokens.length)
+
+  if (groups.length) return groups
+  const fallbackTokens = splitKeywordTokens(source, andPattern)
+  return fallbackTokens.length ? [fallbackTokens] : []
+}
+
+function matchAutoFillKeywordExpression(compact, keyword) {
+  const groups = compileAutoFillKeywordExpression(keyword)
+  if (!groups.length) return null
+
+  let best = null
+  for (const tokens of groups) {
+    let minIndex = Number.POSITIVE_INFINITY
+    let score = 0
+    let matched = true
+
+    for (const token of tokens) {
+      const index = compact.indexOf(token)
+      if (index < 0) {
+        matched = false
+        break
+      }
+      minIndex = Math.min(minIndex, index)
+      score += token.length
+    }
+
+    if (!matched) continue
+    const candidate = {
+      index: Number.isFinite(minIndex) ? minIndex : 0,
+      score,
+    }
+    if (
+      !best
+      || candidate.index < best.index
+      || (candidate.index === best.index && candidate.score > best.score)
+    ) {
+      best = candidate
+    }
+  }
+
+  return best
+}
+
+function pickMatchedAutoFillRule(text, rules) {
+  const compact = compactText(text)
+  if (!compact) return null
+
+  let best = null
+  for (const rawRule of rules ?? []) {
+    const rule = normalizeAutoFillRule(rawRule)
+    if (!rule) continue
+    const matched = matchAutoFillKeywordExpression(compact, rule.keyword)
+    if (!matched) continue
+
+    const candidate = {
+      ...rule,
+      index: matched.index,
+      score: matched.score,
+    }
+
+    if (
+      !best
+      || candidate.index < best.index
+      || (candidate.index === best.index && candidate.score > best.score)
+    ) {
+      best = candidate
+    }
+  }
+
+  return best
+}
+
 function tokenizeCategoryLearningText(value) {
   const source = normalizeText(value).toLowerCase()
   if (!source) return []
@@ -629,6 +786,31 @@ function normalizeHistoryCategoryAccountItem(item) {
   return { type, categoryId, accountId, occurredAt }
 }
 
+function normalizeHistoryAutoFillItem(item) {
+  if (!item || typeof item !== 'object') return null
+  const type = String(item?.type ?? '').trim()
+  const accountId = String(item?.accountId ?? item?.account_id ?? '').trim()
+  const peerAccountId = String(item?.peerAccountId ?? item?.peer_account_id ?? '').trim()
+  const categoryId = String(item?.categoryId ?? item?.category_id ?? '').trim()
+  const note = normalizeText(stripAddonSummaryFromStoredNote(item?.note ?? ''))
+  const rawNote = String(item?.note ?? '').trim()
+  const occurredAt = String(item?.occurredAt ?? item?.occurred_at ?? '').trim()
+  const amountMinor = Math.round(Number(item?.amountMinor ?? item?.amount_minor ?? 0))
+  if (!type) return null
+
+  return {
+    type,
+    accountId,
+    peerAccountId,
+    categoryId,
+    note,
+    occurredAt,
+    amountMajor: round2(Math.abs(amountMinor) / 100),
+    isReimbursable: Boolean(item?.isReimbursable ?? item?.is_reimbursable),
+    addonItems: parseAddonItemsFromStoredNote(rawNote),
+  }
+}
+
 function pickRecentAccountByCategory(historyTransactions, accounts, targetType, categoryId) {
   const normalizedType = String(targetType ?? '').trim()
   const normalizedCategoryId = String(categoryId ?? '').trim()
@@ -651,6 +833,51 @@ function pickRecentAccountByCategory(historyTransactions, accounts, targetType, 
   }
 
   return ''
+}
+
+function pickRecentHistoryAutoFill(text, historyTransactions, now = new Date()) {
+  const inputNote = normalizeText(stripAddonSummaryFromStoredNote(text))
+  if (!inputNote) return null
+
+  const inputCompact = compactText(inputNote)
+  const inputTokens = [...new Set(tokenizeCategoryLearningText(inputNote))]
+  const history = (historyTransactions ?? [])
+    .map((item) => normalizeHistoryAutoFillItem(item))
+    .filter(Boolean)
+    .slice(0, 60)
+
+  let best = null
+  for (const tx of history) {
+    if (!tx.note) continue
+    const noteCompact = compactText(tx.note)
+    const noteTokens = new Set(tokenizeCategoryLearningText(tx.note))
+    let score = 0
+
+    if (inputCompact && noteCompact) {
+      if (inputCompact === noteCompact) {
+        score += 260
+      } else if (noteCompact.includes(inputCompact) || inputCompact.includes(noteCompact)) {
+        score += 190
+      }
+    }
+
+    if (inputTokens.length && noteTokens.size) {
+      let overlap = 0
+      for (const token of inputTokens) {
+        if (noteTokens.has(token)) overlap += 1
+      }
+      score += overlap * 42
+    }
+
+    score += Math.round(resolveHistoryRecencyWeight(tx.occurredAt, now) * 35)
+    if (score < 80) continue
+
+    if (!best || score > best.score) {
+      best = { ...tx, score }
+    }
+  }
+
+  return best
 }
 
 function resolveHistoryRecencyWeight(occurredAt, now = new Date()) {
@@ -865,6 +1092,114 @@ function pickCategoryBySemanticRules(text, categories, rules) {
     }
   }
   return best?.category ?? null
+}
+
+const CASHBACK_CATEGORY_NAME_PATTERNS = [
+  /回饋|回馈|回饋金|現金回饋|现金回馈/,
+  /\brebate\b/i,
+  /\bcash\s*back\b/i,
+  /\bcashback\b/i,
+  /\breward\b/i,
+  /キャッシュバック|ポイント還元|還元/,
+]
+const CASHBACK_MENTION_PATTERN = /回饋|回馈|回饋金|現金回饋|现金回馈|rebate|cash\s*back|cashback|reward|キャッシュバック|ポイント還元|還元/gi
+
+function matchesAnyPattern(text, patterns) {
+  const source = String(text ?? '').trim()
+  if (!source) return false
+  return patterns.some((pattern) => {
+    const cloned = new RegExp(pattern.source, pattern.flags)
+    return cloned.test(source)
+  })
+}
+
+function isCashbackLikeCategoryName(name) {
+  return matchesAnyPattern(name, CASHBACK_CATEGORY_NAME_PATTERNS)
+}
+
+function countPatternMatches(text, pattern) {
+  const source = String(text ?? '')
+  if (!source) return 0
+
+  const cloned = new RegExp(pattern.source, pattern.flags)
+  let count = 0
+  let matched = cloned.exec(source)
+  while (matched) {
+    count += 1
+    if (matched[0] === '') {
+      cloned.lastIndex += 1
+    }
+    matched = cloned.exec(source)
+  }
+  return count
+}
+
+function pickCashbackIncomeCategory(text, categories) {
+  if (!isCashbackLikeCategoryName(text)) return null
+
+  let best = null
+  for (const category of categories ?? []) {
+    const name = String(category?.name ?? '').trim()
+    if (!isCashbackLikeCategoryName(name)) continue
+
+    let score = 100
+    const compactName = compactText(name)
+    const compactSource = compactText(text)
+    if (compactName && compactSource && compactSource.includes(compactName)) {
+      score += 180
+    } else if (compactName && compactName.includes('回饋')) {
+      score += 40
+    }
+
+    if (!best || score > best.score) {
+      best = { category, score }
+    }
+  }
+
+  return best?.category ?? null
+}
+
+function consumeCategoryCashbackAddon(addonItems, selectedCategoryName, sourceText) {
+  const source = Array.isArray(addonItems) ? addonItems : []
+  if (!source.length) return source
+  if (!isCashbackLikeCategoryName(selectedCategoryName)) return source
+
+  const cashbackAddonIndexes = source
+    .map((item, index) => (isCashbackLikeCategoryName(item?.label) ? index : -1))
+    .filter((index) => index >= 0)
+  if (!cashbackAddonIndexes.length) return source
+
+  const cashbackMentionCount = countPatternMatches(sourceText, CASHBACK_MENTION_PATTERN)
+  if (cashbackMentionCount > cashbackAddonIndexes.length) {
+    return source
+  }
+
+  const firstCashbackIndex = cashbackAddonIndexes[0]
+  if (firstCashbackIndex < 0) return source
+
+  return source.filter((_, index) => index !== firstCashbackIndex)
+}
+
+function mergeUniqueAddonItems(baseItems, extraItems) {
+  const merged = []
+  const keys = new Set()
+
+  const pushItem = (item) => {
+    const label = String(item?.label ?? '').trim()
+    const deltaMajor = round2(Math.abs(Number(item?.deltaMajor ?? item?.amountMajor ?? 0)))
+    if (!label || deltaMajor <= 0) return
+    const key = `${compactText(label)}:${deltaMajor}`
+    if (keys.has(key)) return
+    keys.add(key)
+    merged.push({
+      label,
+      deltaMajor,
+    })
+  }
+
+  for (const item of baseItems ?? []) pushItem(item)
+  for (const item of extraItems ?? []) pushItem(item)
+  return merged
 }
 
 function extractSmartNoteText(text, context = {}) {
@@ -1317,6 +1652,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
   const expenseCategories = context.expenseCategories ?? []
   const incomeCategories = context.incomeCategories ?? []
   const historyTransactions = context.historyTransactions ?? []
+  const autoFillRules = context.autoFillRules ?? []
   const warningKeys = []
   const tinyNerHints = context.useTinyNer === false
     ? EMPTY_TINY_NER_HINTS
@@ -1381,6 +1717,20 @@ export function parseAutoBookkeepingText(input, context = {}) {
     amountMajor = nerAmountMajor
   }
 
+  const historyAutoFill = loanIntent ? null : pickRecentHistoryAutoFill(
+    text,
+    historyTransactions,
+    context.now ?? new Date(),
+  )
+  const matchedAutoFillRule = loanIntent ? null : pickMatchedAutoFillRule(text, autoFillRules)
+
+  if ((!Number.isFinite(amountMajor) || amountMajor <= 0) && matchedAutoFillRule?.amountMajor > 0) {
+    amountMajor = matchedAutoFillRule.amountMajor
+  }
+  if ((!Number.isFinite(amountMajor) || amountMajor <= 0) && Number(historyAutoFill?.amountMajor) > 0) {
+    amountMajor = Number(historyAutoFill.amountMajor)
+  }
+
   if (!Number.isFinite(amountMajor) || amountMajor <= 0) {
     appendAiBookkeepingWarning(warnings, warningKeys, AI_BOOKKEEPING_WARNING_KEY.INVALID_AMOUNT)
   }
@@ -1406,6 +1756,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
   const mealExpenseCategory = pickMealTimeCategory(text, expenseCategories)
   const semanticExpenseCategory = pickCategoryBySemanticRules(text, expenseCategories, EXPENSE_CATEGORY_SEMANTIC_RULES)
   const semanticIncomeCategory = pickCategoryBySemanticRules(text, incomeCategories, INCOME_CATEGORY_SEMANTIC_RULES)
+  const cashbackIncomeCategory = pickCashbackIncomeCategory(text, incomeCategories)
   const nerExpenseCategory = Number(tinyNerHints.expenseCategoryConfidence) >= 0.68
     ? expenseCategories.find((item) => item.id === tinyNerHints.expenseCategoryIdHint) ?? null
     : null
@@ -1414,7 +1765,16 @@ export function parseAutoBookkeepingText(input, context = {}) {
     : null
 
   let type = inferredType
-  if (type !== 'transfer' && !loanIntent) {
+  if (
+    matchedAutoFillRule?.type
+    && type !== 'transfer'
+    && matchedAutoFillRule.type !== type
+  ) {
+    type = matchedAutoFillRule.type
+  } else if (!rawType && type !== 'transfer' && historyAutoFill?.type && historyAutoFill.type !== 'transfer') {
+    type = historyAutoFill.type
+  }
+  if (type !== 'transfer' && !loanIntent && !matchedAutoFillRule?.type) {
     const hasExpenseSignal = Boolean(matchedExpenseCategory || learnedExpenseCategory || semanticExpenseCategory || nerExpenseCategory)
     const hasIncomeSignal = Boolean(matchedIncomeCategory || learnedIncomeCategory || semanticIncomeCategory || nerIncomeCategory)
     if (hasExpenseSignal && !hasIncomeSignal) type = 'expense'
@@ -1434,6 +1794,19 @@ export function parseAutoBookkeepingText(input, context = {}) {
     accountId = nerFromAccountId || transferAccounts.fromAccountId || ''
     peerAccountId = nerToAccountId || transferAccounts.toAccountId || ''
 
+    if (!accountId && matchedAutoFillRule?.type === 'transfer') {
+      accountId = matchedAutoFillRule.accountId || ''
+    }
+    if (!peerAccountId && matchedAutoFillRule?.type === 'transfer') {
+      peerAccountId = matchedAutoFillRule.peerAccountId || ''
+    }
+    if (!accountId && historyAutoFill?.type === 'transfer') {
+      accountId = historyAutoFill.accountId || ''
+    }
+    if (!peerAccountId && historyAutoFill?.type === 'transfer') {
+      peerAccountId = historyAutoFill.peerAccountId || ''
+    }
+
     if (accountId && peerAccountId && accountId === peerAccountId) {
       peerAccountId =
         transferAccounts.toAccountId && transferAccounts.toAccountId !== accountId
@@ -1449,6 +1822,12 @@ export function parseAutoBookkeepingText(input, context = {}) {
       ? tinyNerHints.accountIdHint
       : ''
     accountId = nerAccountId || (pickClosestAccount(text, accounts)?.id ?? '')
+    if (!accountId && matchedAutoFillRule && matchedAutoFillRule.type === type) {
+      accountId = matchedAutoFillRule.accountId || ''
+    }
+    if (!accountId && historyAutoFill?.type === type) {
+      accountId = historyAutoFill.accountId || ''
+    }
   }
 
   let categoryId = ''
@@ -1459,6 +1838,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
         nerIncomeCategory ??
         matchedIncomeCategory ??
         learnedIncomeCategory ??
+        cashbackIncomeCategory ??
         semanticIncomeCategory ??
         null
       categoryId = selectedIncomeCategory?.id ?? ''
@@ -1476,8 +1856,30 @@ export function parseAutoBookkeepingText(input, context = {}) {
     }
 
     if (!categoryId) {
+      if (matchedAutoFillRule?.type === type) {
+        categoryId = matchedAutoFillRule.categoryId || ''
+      }
+      if (!categoryId && historyAutoFill?.type === type) {
+        categoryId = historyAutoFill.categoryId || ''
+      }
+    }
+
+    if (categoryId && !selectedCategoryName) {
+      const categoryList = type === 'income' ? incomeCategories : expenseCategories
+      selectedCategoryName = String(categoryList.find((item) => item.id === categoryId)?.name ?? '')
+    }
+
+    if (!categoryId) {
       appendAiBookkeepingWarning(warnings, warningKeys, AI_BOOKKEEPING_WARNING_KEY.NO_CATEGORY)
     }
+  }
+
+  let addonItems = consumeCategoryCashbackAddon(parsedAddon.items, selectedCategoryName, text)
+  if (matchedAutoFillRule?.addonItems?.length) {
+    addonItems = mergeUniqueAddonItems(addonItems, matchedAutoFillRule.addonItems)
+  }
+  if (!addonItems.length && historyAutoFill?.addonItems?.length) {
+    addonItems = mergeUniqueAddonItems(addonItems, historyAutoFill.addonItems)
   }
 
   if (type !== 'transfer') {
@@ -1496,7 +1898,13 @@ export function parseAutoBookkeepingText(input, context = {}) {
     appendAiBookkeepingWarning(warnings, warningKeys, AI_BOOKKEEPING_WARNING_KEY.NO_COUNTERPARTY)
   }
 
-  const isReimbursable = type === 'expense' ? normalizeReimbursable(text, false) : false
+  let isReimbursable = type === 'expense' ? normalizeReimbursable(text, false) : false
+  if (type === 'expense' && !isReimbursable && matchedAutoFillRule?.type === 'expense' && matchedAutoFillRule.isReimbursable) {
+    isReimbursable = true
+  }
+  if (type === 'expense' && !isReimbursable && historyAutoFill?.type === 'expense' && historyAutoFill.isReimbursable) {
+    isReimbursable = true
+  }
 
   let includeInBudget = type === 'transfer' ? false : !isReimbursable
   let includeInAnalysis = type === 'transfer' ? false : !isReimbursable
@@ -1509,7 +1917,16 @@ export function parseAutoBookkeepingText(input, context = {}) {
     selectedCategoryName,
     categories: noteCategories,
   })
-  const noteText = autoNote
+  let noteText = autoNote
+  if (!noteText && matchedAutoFillRule?.note) {
+    noteText = matchedAutoFillRule.note
+  }
+  if (!noteText && historyAutoFill?.note) {
+    noteText = historyAutoFill.note
+  }
+  if (noteText && matchedAutoFillRule?.note && !noteText.includes(matchedAutoFillRule.note)) {
+    noteText = `${matchedAutoFillRule.note} ${noteText}`.trim()
+  }
 
   const draft = {
     sourceText: text,
@@ -1520,7 +1937,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
     peerAccountId,
     categoryId,
     note: noteText,
-    addonItems: parsedAddon.items,
+    addonItems,
     isReimbursable,
     includeInBudget,
     includeInAnalysis,

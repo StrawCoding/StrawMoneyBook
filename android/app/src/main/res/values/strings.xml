@@ -4,4 +4,10 @@
     <string name="title_activity_main">StrawMoneyBook</string>
     <string name="package_name">com.strawcoding.strawmoneybook</string>
     <string name="custom_url_scheme">com.strawcoding.strawmoneybook</string>
+    <string name="widget_title_month_summary">本月收支</string>
+    <string name="widget_action_analysis">圖表分析</string>
+    <string name="widget_action_quick_add">快速記帳</string>
+    <string name="widget_label_income_prefix">收入 %1$s</string>
+    <string name="widget_label_expense_prefix">支出 %1$s</string>
+    <string name="widget_description">顯示本月收支圓餅圖並提供快速記帳</string>
 </resources>

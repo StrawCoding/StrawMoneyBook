@@ -2,6 +2,10 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
+  scrollBehavior(_to, _from, savedPosition) {
+    if (savedPosition) return savedPosition
+    return { left: 0, top: 0 }
+  },
   routes: [
     {
       name: 'home',
@@ -153,6 +157,12 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
+      path: '/settings/auto-fill-rules',
+      name: 'settings-auto-fill-rules',
+      component: () => import('@/ui/views/settings/SettingsAutoFillRulesPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
       path: '/settings/version-info',
       name: 'settings-version-info',
       component: () => import('@/ui/views/settings/SettingsVersionInfoPage.vue'),
@@ -211,6 +221,12 @@ const router = createRouter({
       name: 'savings-jars',
       path: '/savings-jars',
       component: () => import('@/ui/views/savings-jars/SavingsJarListPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
+      name: 'subscriptions',
+      path: '/subscriptions',
+      component: () => import('@/ui/views/subscriptions/SubscriptionListPage.vue'),
       meta: { tab: 'home' },
     },
     {

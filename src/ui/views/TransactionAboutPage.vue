@@ -123,7 +123,7 @@ import { listAllTransactions } from '@/core/repositories/transaction.repo'
 import { useI18n } from '@/ui/services/i18n.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
-import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
+import { getSystemTransactionIcon, getSystemTransactionLabel, getSystemTransactionType } from '@/ui/utils/system-transaction-presenter'
 
 const route = useRoute()
 const router = useRouter()
@@ -175,9 +175,40 @@ const loanRelated = computed(() => {
   )
 })
 
+const refundSourceTx = computed(() => {
+  const tx = transaction.value
+  if (!tx || getSystemTransactionType(tx) !== 'refund' || !tx.external_ref_id) return null
+  return allTransactions.value.find((item) => item.id === tx.external_ref_id) ?? null
+})
+
+const refundRelated = computed(() => {
+  const tx = transaction.value
+  if (!tx) return []
+  return allTransactions.value.filter(
+    (item) =>
+      item.id !== tx.id
+      && getSystemTransactionType(item) === 'refund'
+      && String(item.external_ref_id) === String(tx.id),
+  )
+})
+
 const relationRows = computed(() => {
   const rows = []
 
+  if (refundSourceTx.value) {
+    rows.push({
+      key: `refund-source-${refundSourceTx.value.id}`,
+      prefix: t('transaction_about.relation_prefix.refund'),
+      tx: refundSourceTx.value,
+    })
+  }
+  for (const tx of refundRelated.value) {
+    rows.push({
+      key: `refund-${tx.id}`,
+      prefix: t('transaction_about.relation_prefix.refund'),
+      tx,
+    })
+  }
   if (reimbursementSourceTx.value) {
     rows.push({
       key: `reim-source-${reimbursementSourceTx.value.id}`,
@@ -301,6 +332,7 @@ async function createRefund() {
       amountMinor: Number(tx.amount_minor ?? 0) < 0 ? amountMinor : amountMinor * -1,
       occurredAt: new Date().toISOString(),
       accountId: tx.account_id,
+      sourceTransactionId: tx.id,
       note: noteLines.join('\n'),
     })
     uiStore.pushToast(t('transaction_about.toast.refund_created'))
