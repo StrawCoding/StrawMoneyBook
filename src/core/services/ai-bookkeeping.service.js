@@ -793,9 +793,7 @@ function normalizeHistoryAutoFillItem(item) {
   const peerAccountId = String(item?.peerAccountId ?? item?.peer_account_id ?? '').trim()
   const categoryId = String(item?.categoryId ?? item?.category_id ?? '').trim()
   const note = normalizeText(stripAddonSummaryFromStoredNote(item?.note ?? ''))
-  const rawNote = String(item?.note ?? '').trim()
   const occurredAt = String(item?.occurredAt ?? item?.occurred_at ?? '').trim()
-  const amountMinor = Math.round(Number(item?.amountMinor ?? item?.amount_minor ?? 0))
   if (!type) return null
 
   return {
@@ -805,9 +803,6 @@ function normalizeHistoryAutoFillItem(item) {
     categoryId,
     note,
     occurredAt,
-    amountMajor: round2(Math.abs(amountMinor) / 100),
-    isReimbursable: Boolean(item?.isReimbursable ?? item?.is_reimbursable),
-    addonItems: parseAddonItemsFromStoredNote(rawNote),
   }
 }
 
@@ -1727,9 +1722,6 @@ export function parseAutoBookkeepingText(input, context = {}) {
   if ((!Number.isFinite(amountMajor) || amountMajor <= 0) && matchedAutoFillRule?.amountMajor > 0) {
     amountMajor = matchedAutoFillRule.amountMajor
   }
-  if ((!Number.isFinite(amountMajor) || amountMajor <= 0) && Number(historyAutoFill?.amountMajor) > 0) {
-    amountMajor = Number(historyAutoFill.amountMajor)
-  }
 
   if (!Number.isFinite(amountMajor) || amountMajor <= 0) {
     appendAiBookkeepingWarning(warnings, warningKeys, AI_BOOKKEEPING_WARNING_KEY.INVALID_AMOUNT)
@@ -1771,8 +1763,6 @@ export function parseAutoBookkeepingText(input, context = {}) {
     && matchedAutoFillRule.type !== type
   ) {
     type = matchedAutoFillRule.type
-  } else if (!rawType && type !== 'transfer' && historyAutoFill?.type && historyAutoFill.type !== 'transfer') {
-    type = historyAutoFill.type
   }
   if (type !== 'transfer' && !loanIntent && !matchedAutoFillRule?.type) {
     const hasExpenseSignal = Boolean(matchedExpenseCategory || learnedExpenseCategory || semanticExpenseCategory || nerExpenseCategory)
@@ -1837,7 +1827,6 @@ export function parseAutoBookkeepingText(input, context = {}) {
       const selectedIncomeCategory =
         nerIncomeCategory ??
         matchedIncomeCategory ??
-        learnedIncomeCategory ??
         cashbackIncomeCategory ??
         semanticIncomeCategory ??
         null
@@ -1847,7 +1836,6 @@ export function parseAutoBookkeepingText(input, context = {}) {
       const selectedExpenseCategory =
         nerExpenseCategory ??
         matchedExpenseCategory ??
-        learnedExpenseCategory ??
         mealExpenseCategory ??
         semanticExpenseCategory ??
         null
@@ -1858,6 +1846,11 @@ export function parseAutoBookkeepingText(input, context = {}) {
     if (!categoryId) {
       if (matchedAutoFillRule?.type === type) {
         categoryId = matchedAutoFillRule.categoryId || ''
+      }
+      if (!categoryId) {
+        categoryId = type === 'income'
+          ? (learnedIncomeCategory?.id ?? '')
+          : (learnedExpenseCategory?.id ?? '')
       }
       if (!categoryId && historyAutoFill?.type === type) {
         categoryId = historyAutoFill.categoryId || ''
@@ -1877,9 +1870,6 @@ export function parseAutoBookkeepingText(input, context = {}) {
   let addonItems = consumeCategoryCashbackAddon(parsedAddon.items, selectedCategoryName, text)
   if (matchedAutoFillRule?.addonItems?.length) {
     addonItems = mergeUniqueAddonItems(addonItems, matchedAutoFillRule.addonItems)
-  }
-  if (!addonItems.length && historyAutoFill?.addonItems?.length) {
-    addonItems = mergeUniqueAddonItems(addonItems, historyAutoFill.addonItems)
   }
 
   if (type !== 'transfer') {
@@ -1902,9 +1892,6 @@ export function parseAutoBookkeepingText(input, context = {}) {
   if (type === 'expense' && !isReimbursable && matchedAutoFillRule?.type === 'expense' && matchedAutoFillRule.isReimbursable) {
     isReimbursable = true
   }
-  if (type === 'expense' && !isReimbursable && historyAutoFill?.type === 'expense' && historyAutoFill.isReimbursable) {
-    isReimbursable = true
-  }
 
   let includeInBudget = type === 'transfer' ? false : !isReimbursable
   let includeInAnalysis = type === 'transfer' ? false : !isReimbursable
@@ -1920,9 +1907,6 @@ export function parseAutoBookkeepingText(input, context = {}) {
   let noteText = autoNote
   if (!noteText && matchedAutoFillRule?.note) {
     noteText = matchedAutoFillRule.note
-  }
-  if (!noteText && historyAutoFill?.note) {
-    noteText = historyAutoFill.note
   }
   if (noteText && matchedAutoFillRule?.note && !noteText.includes(matchedAutoFillRule.note)) {
     noteText = `${matchedAutoFillRule.note} ${noteText}`.trim()

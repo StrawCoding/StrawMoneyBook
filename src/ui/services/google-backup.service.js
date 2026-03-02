@@ -162,6 +162,7 @@ async function resolveGoogleProfileForConnect(preferredEmail = '') {
 }
 
 function shouldAttemptSilentAutoConnect(state) {
+  if (Capacitor.isNativePlatform()) return true
   if (hasCachedGoogleAuthSession()) return true
   if (!state || typeof state !== 'object') return false
   if (state.connected) return true
