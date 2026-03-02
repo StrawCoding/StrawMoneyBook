@@ -256,6 +256,7 @@ button:focus-visible,
   border-radius: 12px;
   background: var(--btn-bg);
   color: var(--text);
+  text-decoration: none;
   padding: 10px 12px;
   cursor: pointer;
   position: relative;

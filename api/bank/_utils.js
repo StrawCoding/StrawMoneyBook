@@ -70,6 +70,7 @@ function isClientAuthorized(req) {
 }
 
 function clientGuard(req, res) {
+  if (!BANK_SYNC_CLIENT_SHARED_KEY) return false
   if (isClientAuthorized(req)) return false
   sendJson(res, 401, {
     error: 'unauthorized_client',

@@ -1,29 +1,38 @@
 <template>
+  <div v-if="showDisclaimer" class="notice-overlay" role="dialog" aria-modal="true" aria-labelledby="bank-sync-notice-title">
+    <div class="card notice-dialog">
+      <h3 id="bank-sync-notice-title">{{ t('settings_bank_sync.disclaimer.title') }}</h3>
+      <p class="muted">
+        {{ t('settings_bank_sync.disclaimer.line_1') }}
+        {{ t('settings_bank_sync.disclaimer.line_2') }}
+      </p>
+      <div class="row notice-actions">
+        <button class="btn primary" @click="acceptDisclaimer">{{ t('settings_bank_sync.disclaimer.confirm') }}</button>
+      </div>
+    </div>
+  </div>
   <section class="stack">
     <header class="row page-head">
-      <h2>銀行同步</h2>
+      <h2>{{ t('settings_bank_sync.title') }}</h2>
       <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
     </header>
 
     <article class="card panel">
-      <h3>新增銀行連結</h3>
-      <p class="muted">本版預設接 Sandbox Provider（Mock Bank），流程與正式銀行同步一致，可先驗證匯入與防重邏輯。</p>
-      <div class="row connect-row">
-        <div class="provider-field">
-          <label>銀行 Provider</label>
-          <CustomSelect v-model="selectedProviderId" :options="providerOptions" />
-        </div>
-        <button class="btn primary" :disabled="!canConnect" :aria-busy="connecting" @click="connectProvider">
-          {{ connecting ? '連結中...' : '連結銀行' }}
-        </button>
+      <h3>{{ t('settings_bank_sync.management_title') }}</h3>
+      <p class="muted">{{ t('settings_bank_sync.management_desc') }}</p>
+      <p v-if="!bankSyncApiReady" class="muted bank-api-warning">{{ bankSyncApiMessage }}</p>
+      <div class="row top-action-row">
+        <RouterLink class="btn primary" :class="{ disabled: !bankSyncApiReady }" :to="bankSyncCreateLink">
+          {{ t('settings_bank_sync.add_bank') }}
+        </RouterLink>
         <button class="btn" :disabled="loadingState" :aria-busy="loadingState" @click="reloadState">
-          {{ loadingState ? '更新中...' : '重新整理' }}
+          {{ loadingState ? t('settings_bank_sync.refreshing') : t('settings_bank_sync.refresh') }}
         </button>
       </div>
     </article>
 
     <article v-if="!connections.length" class="card panel">
-      <p class="muted">尚未連結任何銀行。請先建立連結後再同步交易。</p>
+      <p class="muted">{{ t('settings_bank_sync.empty') }}</p>
     </article>
 
     <article v-for="connection in connections" :key="connection.id" class="card panel connection-card">
@@ -36,20 +45,20 @@
       </header>
 
       <ul class="meta-list">
-        <li><span class="muted">上次同步</span><strong>{{ formatDateTime(connection.last_sync_at) }}</strong></li>
-        <li><span class="muted">同步狀態</span><strong>{{ syncStatusText(connection.last_sync_status) }}</strong></li>
-        <li v-if="connection.last_error"><span class="muted">錯誤</span><strong>{{ connection.last_error }}</strong></li>
+        <li><span class="muted">{{ t('settings_bank_sync.meta.last_sync') }}</span><strong>{{ formatDateTime(connection.last_sync_at) }}</strong></li>
+        <li><span class="muted">{{ t('settings_bank_sync.meta.sync_status') }}</span><strong>{{ syncStatusText(connection.last_sync_status) }}</strong></li>
+        <li v-if="connection.last_error"><span class="muted">{{ t('settings_bank_sync.meta.error') }}</span><strong>{{ connection.last_error }}</strong></li>
       </ul>
 
       <div class="row action-row">
-        <button class="btn" @click="openReview(connection.id)">查看待匯入交易</button>
+        <button class="btn" @click="openReview(connection.id)">{{ t('settings_bank_sync.actions.review') }}</button>
         <button
           class="btn primary"
           :disabled="syncingConnectionId === connection.id"
           :aria-busy="syncingConnectionId === connection.id"
           @click="syncConnection(connection.id)"
         >
-          {{ syncingConnectionId === connection.id ? '同步中...' : '立即同步' }}
+          {{ syncingConnectionId === connection.id ? t('settings_bank_sync.actions.syncing') : t('settings_bank_sync.actions.sync_now') }}
         </button>
         <button
           class="btn"
@@ -57,13 +66,13 @@
           :aria-busy="disconnectingConnectionId === connection.id"
           @click="disconnectConnection(connection.id)"
         >
-          {{ disconnectingConnectionId === connection.id ? '解除中...' : '解除連結' }}
+          {{ disconnectingConnectionId === connection.id ? t('settings_bank_sync.actions.disconnecting') : t('settings_bank_sync.actions.disconnect') }}
         </button>
       </div>
 
       <section class="sub-panel">
-        <h4>帳戶同步設定</h4>
-        <p class="muted">可啟用/停用帳戶同步，並映射到 StrawMoneyBook 帳戶作為匯入目標。</p>
+        <h4>{{ t('settings_bank_sync.account_sync.title') }}</h4>
+        <p class="muted">{{ t('settings_bank_sync.account_sync.desc') }}</p>
         <div v-for="account in connection.accounts" :key="account.id" class="account-row">
           <label class="check-row account-enable">
             <input v-model="account.enabledBool" type="checkbox" />
@@ -71,12 +80,12 @@
           </label>
           <div class="account-config">
             <label class="field">
-              匯入目標帳戶
-              <CustomSelect v-model="account.mappedAccountIdDraft" :options="ledgerAccountOptions" placeholder="請選擇帳戶" />
+              {{ t('settings_bank_sync.account_sync.target_account') }}
+              <CustomSelect v-model="account.mappedAccountIdDraft" :options="ledgerAccountOptions" :placeholder="t('settings_bank_sync.account_sync.choose_account')" />
             </label>
             <label class="field">
-              顯示名稱（可空白）
-              <input v-model.trim="account.userLabelDraft" class="input" type="text" placeholder="例如：薪轉帳戶" />
+              {{ t('settings_bank_sync.account_sync.display_name') }}
+              <input v-model.trim="account.userLabelDraft" class="input" type="text" :placeholder="t('settings_bank_sync.account_sync.display_name_placeholder')" />
             </label>
             <button
               class="btn"
@@ -84,34 +93,34 @@
               :aria-busy="savingAccountId === account.id"
               @click="saveAccount(connection.id, account)"
             >
-              {{ savingAccountId === account.id ? '儲存中...' : '儲存帳戶設定' }}
+              {{ savingAccountId === account.id ? t('settings_bank_sync.common.saving') : t('settings_bank_sync.account_sync.save') }}
             </button>
           </div>
         </div>
       </section>
 
       <section class="sub-panel">
-        <h4>同步規則</h4>
+        <h4>{{ t('settings_bank_sync.rule.title') }}</h4>
         <div class="rule-grid">
           <label class="field">
-            同步方向
+            {{ t('settings_bank_sync.rule.direction') }}
             <CustomSelect v-model="connection.ruleDraft.direction" :options="directionOptions" />
           </label>
           <label class="field">
-            最小金額（元）
+            {{ t('settings_bank_sync.rule.min_amount') }}
             <input v-model.number="connection.ruleDraft.minAmountMajor" class="input" type="number" min="0" step="1" />
           </label>
           <label class="field">
-            回溯天數
+            {{ t('settings_bank_sync.rule.lookback_days') }}
             <CustomSelect v-model="connection.ruleDraft.lookbackDays" :options="lookbackOptions" />
           </label>
           <label class="field keyword-field">
-            排除關鍵字（逗號分隔）
-            <textarea v-model="connection.ruleDraft.excludeKeywordText" class="input text-area" rows="2" placeholder="例如：信用卡繳款, 內部轉帳" />
+            {{ t('settings_bank_sync.rule.exclude_keywords') }}
+            <textarea v-model="connection.ruleDraft.excludeKeywordText" class="input text-area" rows="2" :placeholder="t('settings_bank_sync.rule.exclude_keywords_placeholder')" />
           </label>
           <label class="check-row">
             <input v-model="connection.ruleDraft.includePending" type="checkbox" />
-            <span>包含 pending 交易</span>
+            <span>{{ t('settings_bank_sync.rule.include_pending') }}</span>
           </label>
           <button
             class="btn"
@@ -119,7 +128,7 @@
             :aria-busy="savingRuleConnectionId === connection.id"
             @click="saveRule(connection)"
           >
-            {{ savingRuleConnectionId === connection.id ? '儲存中...' : '儲存同步規則' }}
+            {{ savingRuleConnectionId === connection.id ? t('settings_bank_sync.common.saving') : t('settings_bank_sync.rule.save') }}
           </button>
         </div>
       </section>
@@ -127,23 +136,23 @@
 
     <article v-if="activeConnection" class="card panel review-panel">
       <header class="row review-head">
-        <h3>待匯入交易（{{ activeConnection.user_label || activeConnection.provider }}）</h3>
+        <h3>{{ t('settings_bank_sync.review.title', { name: activeConnection.user_label || activeConnection.provider }) }}</h3>
         <button class="btn" :disabled="reviewLoading" :aria-busy="reviewLoading" @click="loadReview(activeConnection.id)">
-          {{ reviewLoading ? '載入中...' : '重新載入' }}
+          {{ reviewLoading ? t('settings_bank_sync.common.loading') : t('settings_bank_sync.review.reload') }}
         </button>
       </header>
 
-      <div v-if="!reviewRows.length" class="muted">目前沒有待匯入交易。</div>
+      <div v-if="!reviewRows.length" class="muted">{{ t('settings_bank_sync.review.empty') }}</div>
       <template v-else>
         <div class="row review-action-row">
-          <button class="btn" @click="selectAllReviewRows">全選</button>
-          <button class="btn" @click="clearReviewSelection">全不選</button>
-          <button class="btn" @click="invertReviewSelection">反向選取</button>
+          <button class="btn" @click="selectAllReviewRows">{{ t('settings_bank_sync.review.select_all') }}</button>
+          <button class="btn" @click="clearReviewSelection">{{ t('settings_bank_sync.review.select_none') }}</button>
+          <button class="btn" @click="invertReviewSelection">{{ t('settings_bank_sync.review.invert_selection') }}</button>
           <button class="btn" :disabled="markingSeen || !selectedReviewIds.length" :aria-busy="markingSeen" @click="markSelectedSeen">
-            {{ markingSeen ? '標記中...' : '標記已看過' }}
+            {{ markingSeen ? t('settings_bank_sync.review.marking_seen') : t('settings_bank_sync.review.mark_seen') }}
           </button>
           <button class="btn primary" :disabled="importing || !selectedReviewIds.length" :aria-busy="importing" @click="importSelected">
-            {{ importing ? '匯入中...' : `匯入勾選 (${selectedReviewIds.length})` }}
+            {{ importing ? t('settings_bank_sync.review.importing') : t('settings_bank_sync.review.import_selected', { count: selectedReviewIds.length }) }}
           </button>
         </div>
 
@@ -155,13 +164,13 @@
                 <strong>{{ formatAmountMinor(row.amount_minor, row.currency) }}</strong>
                 <small class="muted">{{ formatDateTime(row.posted_at) }}</small>
               </span>
-              <span class="status-chip" :class="`status-${row.status}`">{{ row.status }}</span>
+              <span class="status-chip" :class="`status-${row.status}`">{{ reviewStatusText(row.status) }}</span>
             </label>
             <div class="item-body">
-              <div>{{ row.merchant || row.description || '（無描述）' }}</div>
+              <div>{{ row.merchant || row.description || t('settings_bank_sync.review.no_description') }}</div>
               <small class="muted">
                 {{ row.bank_account_user_label || row.bank_account_name || '-' }}
-                → {{ row.mapped_account_name || '未映射帳戶' }}
+                → {{ row.mapped_account_name || t('settings_bank_sync.review.unmapped_account') }}
               </small>
             </div>
           </li>
@@ -181,9 +190,7 @@ import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import {
-  connectBankProvider,
   disconnectBankConnection,
-  getBankProviderOptions,
   getBankSyncState,
   importSelectedBankTransactions,
   listBankReviewTransactions,
@@ -192,15 +199,17 @@ import {
   saveBankSyncRuleSettings,
   syncBankConnectionNow,
 } from '@/ui/services/bank-sync.service'
+import { getBankSyncApiUnavailableMessage, isBankSyncApiConfigured } from '@/services/bank-sync/backend'
 
-const { t } = useI18n()
+const { locale, t } = useI18n()
 const ledgerStore = useLedgerStore()
 const accountStore = useAccountStore()
 const transactionStore = useTransactionStore()
 const uiStore = useUiStore()
+const bankSyncApiReady = isBankSyncApiConfigured()
+const bankSyncApiMessage = computed(() => getBankSyncApiUnavailableMessage())
 
 const loadingState = ref(false)
-const connecting = ref(false)
 const syncingConnectionId = ref('')
 const disconnectingConnectionId = ref('')
 const savingAccountId = ref('')
@@ -208,39 +217,33 @@ const savingRuleConnectionId = ref('')
 const reviewLoading = ref(false)
 const importing = ref(false)
 const markingSeen = ref(false)
+const DISCLAIMER_ACCEPTED_KEY = 'strawmoneybook.bank_sync.disclaimer.accepted'
 
-const selectedProviderId = ref('')
 const connections = ref([])
 const activeConnectionId = ref('')
 const reviewRows = ref([])
 const selectedReviewIds = ref([])
+const showDisclaimer = ref(false)
 
-const directionOptions = [
-  { value: 'all', label: '全部' },
-  { value: 'income', label: '收入' },
-  { value: 'expense', label: '支出' },
-]
+const directionOptions = computed(() => [
+  { value: 'all', label: t('settings_bank_sync.direction.all') },
+  { value: 'income', label: t('settings_bank_sync.direction.income') },
+  { value: 'expense', label: t('settings_bank_sync.direction.expense') },
+])
 
-const lookbackOptions = [
-  { value: 0, label: '0 天' },
-  { value: 1, label: '1 天' },
-  { value: 3, label: '3 天' },
-  { value: 7, label: '7 天' },
-]
-
-const providerOptions = computed(() => {
-  return getBankProviderOptions().map((item) => ({
-    value: item.id,
-    label: item.country ? `${item.name} (${item.country})` : item.name,
-  }))
-})
+const lookbackOptions = computed(() => [
+  { value: 0, label: t('settings_bank_sync.lookback_days.option', { days: 0 }) },
+  { value: 1, label: t('settings_bank_sync.lookback_days.option', { days: 1 }) },
+  { value: 3, label: t('settings_bank_sync.lookback_days.option', { days: 3 }) },
+  { value: 7, label: t('settings_bank_sync.lookback_days.option', { days: 7 }) },
+])
 
 const ledgerAccountOptions = computed(() => {
   const options = accountStore.accounts.map((account) => ({
     value: account.id,
     label: account.name,
   }))
-  return [{ value: '__none__', label: '不設定匯入目標（暫不匯入）' }, ...options]
+  return [{ value: '__none__', label: t('settings_bank_sync.account_sync.no_target') }, ...options]
 })
 
 const activeConnection = computed(() => {
@@ -248,9 +251,26 @@ const activeConnection = computed(() => {
 })
 
 const selectedReviewIdSet = computed(() => new Set(selectedReviewIds.value))
-const canConnect = computed(() => {
-  return Boolean(ledgerStore.activeLedgerId && selectedProviderId.value && !connecting.value)
+const bankSyncCreateLink = computed(() => {
+  return bankSyncApiReady ? { name: 'settings-bank-sync-create' } : { name: 'settings-bank-sync' }
 })
+
+function resolveBankSyncErrorMessage(error, fallbackKey) {
+  if (error?.code === 'bank_sync_api_unavailable') return bankSyncApiMessage.value
+  return error?.message || t(fallbackKey)
+}
+
+function readDisclaimerAccepted() {
+  if (typeof localStorage === 'undefined') return false
+  return localStorage.getItem(DISCLAIMER_ACCEPTED_KEY) === '1'
+}
+
+function acceptDisclaimer() {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(DISCLAIMER_ACCEPTED_KEY, '1')
+  }
+  showDisclaimer.value = false
+}
 
 function normalizeConnectionForView(connection) {
   const accounts = Array.isArray(connection?.accounts)
@@ -287,6 +307,12 @@ function normalizeActiveConnection() {
 }
 
 async function reloadState({ loadReviewAfter = true } = {}) {
+  if (!bankSyncApiReady) {
+    connections.value = []
+    reviewRows.value = []
+    selectedReviewIds.value = []
+    return
+  }
   if (!ledgerStore.activeLedgerId) {
     connections.value = []
     reviewRows.value = []
@@ -299,9 +325,6 @@ async function reloadState({ loadReviewAfter = true } = {}) {
     await accountStore.load()
     const state = await getBankSyncState(ledgerStore.activeLedgerId)
     connections.value = state.map(normalizeConnectionForView)
-    if (!selectedProviderId.value) {
-      selectedProviderId.value = providerOptions.value[0]?.value ?? ''
-    }
     normalizeActiveConnection()
     if (loadReviewAfter && activeConnectionId.value) {
       await loadReview(activeConnectionId.value)
@@ -311,49 +334,33 @@ async function reloadState({ loadReviewAfter = true } = {}) {
   }
 }
 
-async function connectProvider() {
-  if (!canConnect.value) return
-  connecting.value = true
-  try {
-    const connection = await connectBankProvider(ledgerStore.activeLedgerId, selectedProviderId.value)
-    uiStore.pushToast('銀行連結成功')
-    await reloadState({ loadReviewAfter: false })
-    activeConnectionId.value = connection.id
-    await loadReview(connection.id)
-  } catch (error) {
-    uiStore.pushToast(error?.message || '銀行連結失敗', 'error')
-  } finally {
-    connecting.value = false
-  }
-}
-
 async function syncConnection(connectionId) {
   syncingConnectionId.value = connectionId
   try {
     const result = await syncBankConnectionNow(ledgerStore.activeLedgerId, connectionId)
-    uiStore.pushToast(`同步完成：新增 ${result.added.length} 筆，更新 ${result.modified.length} 筆`)
+    uiStore.pushToast(t('settings_bank_sync.toast.sync_done', { added: result.added.length, modified: result.modified.length }))
     await reloadState({ loadReviewAfter: false })
     activeConnectionId.value = connectionId
     await loadReview(connectionId)
   } catch (error) {
-    uiStore.pushToast(error?.message || '同步失敗', 'error')
+    uiStore.pushToast(resolveBankSyncErrorMessage(error, 'settings_bank_sync.toast.sync_failed'), 'error')
   } finally {
     syncingConnectionId.value = ''
   }
 }
 
 async function disconnectConnection(connectionId) {
-  if (!window.confirm('確定要解除此銀行連結？')) return
+  if (!window.confirm(t('settings_bank_sync.confirm_disconnect'))) return
   disconnectingConnectionId.value = connectionId
   try {
     await disconnectBankConnection(ledgerStore.activeLedgerId, connectionId, {
       softDelete: false,
       clearMirrorData: true,
     })
-    uiStore.pushToast('已解除銀行連結')
+    uiStore.pushToast(t('settings_bank_sync.toast.disconnected'))
     await reloadState({ loadReviewAfter: true })
   } catch (error) {
-    uiStore.pushToast(error?.message || '解除連結失敗', 'error')
+    uiStore.pushToast(resolveBankSyncErrorMessage(error, 'settings_bank_sync.toast.disconnect_failed'), 'error')
   } finally {
     disconnectingConnectionId.value = ''
   }
@@ -367,13 +374,13 @@ async function saveAccount(connectionId, account) {
       mappedAccountId: account.mappedAccountIdDraft === '__none__' ? null : account.mappedAccountIdDraft,
       userLabel: account.userLabelDraft,
     })
-    uiStore.pushToast('帳戶同步設定已儲存')
+    uiStore.pushToast(t('settings_bank_sync.toast.account_saved'))
     await reloadState({ loadReviewAfter: false })
     if (activeConnectionId.value === connectionId) {
       await loadReview(connectionId)
     }
   } catch (error) {
-    uiStore.pushToast(error?.message || '儲存帳戶設定失敗', 'error')
+    uiStore.pushToast(resolveBankSyncErrorMessage(error, 'settings_bank_sync.toast.account_save_failed'), 'error')
   } finally {
     savingAccountId.value = ''
   }
@@ -389,13 +396,13 @@ async function saveRule(connection) {
       includePending: connection.ruleDraft.includePending,
       lookbackDays: Number(connection.ruleDraft.lookbackDays ?? 3),
     })
-    uiStore.pushToast('同步規則已儲存')
+    uiStore.pushToast(t('settings_bank_sync.toast.rule_saved'))
     await reloadState({ loadReviewAfter: false })
     if (activeConnectionId.value === connection.id) {
       await loadReview(connection.id)
     }
   } catch (error) {
-    uiStore.pushToast(error?.message || '儲存規則失敗', 'error')
+    uiStore.pushToast(resolveBankSyncErrorMessage(error, 'settings_bank_sync.toast.rule_save_failed'), 'error')
   } finally {
     savingRuleConnectionId.value = ''
   }
@@ -453,11 +460,11 @@ async function importSelected() {
   importing.value = true
   try {
     const result = await importSelectedBankTransactions(ledgerStore.activeLedgerId, selectedReviewIds.value)
-    uiStore.pushToast(`匯入完成：成功 ${result.importedCount} 筆，略過 ${result.skippedCount} 筆`)
+    uiStore.pushToast(t('settings_bank_sync.toast.import_done', { imported: result.importedCount, skipped: result.skippedCount }))
     await transactionStore.refreshAfterWriteSafe(2500)
     await loadReview(activeConnectionId.value)
   } catch (error) {
-    uiStore.pushToast(error?.message || '匯入失敗', 'error')
+    uiStore.pushToast(resolveBankSyncErrorMessage(error, 'settings_bank_sync.toast.import_failed'), 'error')
   } finally {
     importing.value = false
   }
@@ -468,10 +475,10 @@ async function markSelectedSeen() {
   markingSeen.value = true
   try {
     await markBankReviewTransactionsSeen(ledgerStore.activeLedgerId, selectedReviewIds.value)
-    uiStore.pushToast('已標記為看過')
+    uiStore.pushToast(t('settings_bank_sync.toast.marked_seen'))
     await loadReview(activeConnectionId.value)
   } catch (error) {
-    uiStore.pushToast(error?.message || '標記失敗', 'error')
+    uiStore.pushToast(resolveBankSyncErrorMessage(error, 'settings_bank_sync.toast.mark_failed'), 'error')
   } finally {
     markingSeen.value = false
   }
@@ -482,14 +489,14 @@ function formatDateTime(value) {
   if (!text) return '-'
   const date = new Date(text)
   if (Number.isNaN(date.getTime())) return text
-  return date.toLocaleString()
+  return date.toLocaleString(locale.value)
 }
 
 function formatAmountMinor(amountMinor, currency) {
   const value = Number(amountMinor ?? 0) / 100
   const safeCurrency = String(currency ?? '').trim().toUpperCase() || 'TWD'
   try {
-    return new Intl.NumberFormat('zh-TW', {
+    return new Intl.NumberFormat(locale.value, {
       style: 'currency',
       currency: safeCurrency,
       maximumFractionDigits: 2,
@@ -501,20 +508,27 @@ function formatAmountMinor(amountMinor, currency) {
 
 function connectionStatusText(status) {
   const normalized = String(status ?? '').toLowerCase()
-  if (normalized === 'active') return '啟用中'
-  if (normalized === 'revoked') return '已停用'
-  return '異常'
+  if (normalized === 'active') return t('settings_bank_sync.status.active')
+  if (normalized === 'revoked') return t('settings_bank_sync.status.revoked')
+  return t('settings_bank_sync.status.error')
 }
 
 function syncStatusText(status) {
   const normalized = String(status ?? '').toLowerCase()
-  if (normalized === 'ok') return '成功'
-  if (normalized === 'error') return '失敗'
-  return '待同步'
+  if (normalized === 'ok') return t('settings_bank_sync.sync_status.ok')
+  if (normalized === 'error') return t('settings_bank_sync.sync_status.error')
+  return t('settings_bank_sync.sync_status.idle')
+}
+
+function reviewStatusText(status) {
+  const normalized = String(status ?? '').toLowerCase()
+  if (normalized === 'posted') return t('settings_bank_sync.review.status.posted')
+  if (normalized === 'reversed') return t('settings_bank_sync.review.status.reversed')
+  return t('settings_bank_sync.review.status.pending')
 }
 
 onMounted(() => {
-  selectedProviderId.value = providerOptions.value[0]?.value ?? ''
+  showDisclaimer.value = !readDisclaimerAccepted()
   void reloadState({ loadReviewAfter: true })
 })
 
@@ -526,7 +540,27 @@ watch(
 )
 </script>
 
-<style scoped>.panel {
+<style scoped>.notice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: color-mix(in srgb, #000 42%, transparent)
+}
+.notice-dialog {
+  width: min(100%, 420px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px
+}
+.notice-actions {
+  justify-content: flex-end
+}
+.panel {
   padding: 14px
 }
 .page-head {
@@ -539,20 +573,17 @@ h2 {
 h3, h4 {
   margin: 0
 }
-.connect-row {
+.top-action-row {
   gap: 10px;
   flex-wrap: wrap;
-  align-items: flex-end
+  align-items: center
 }
-.provider-field {
-  min-width: 220px;
-  flex: 1
+.bank-api-warning {
+  margin: 8px 0 0
 }
-.provider-field > label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 13px;
-  color: var(--text-muted)
+.disabled {
+  pointer-events: none;
+  opacity: 0.5
 }
 .connection-card {
   display: flex;

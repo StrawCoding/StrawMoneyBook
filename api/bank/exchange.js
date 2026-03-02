@@ -1,4 +1,5 @@
 import { createMockAccounts, createMockConnectionId } from './_mock-provider.js'
+import { exchangePlaywrightBankAuth } from './_playwright-provider.js'
 import {
   clientGuard,
   isMockProvider,
@@ -93,8 +94,18 @@ export default async function handler(req, res) {
     return
   }
 
-  sendJson(res, 501, {
-    error: 'provider_not_supported',
-    message: `provider "${provider}" is not configured yet`,
-  })
+  try {
+    const exchanged = await exchangePlaywrightBankAuth({
+      ...body,
+      provider,
+    })
+    sendJson(res, 200, exchanged)
+  } catch (error) {
+    const message = String(error?.message ?? '').trim()
+    const statusCode = message.includes('not configured yet') ? 501 : 400
+    sendJson(res, statusCode, {
+      error: statusCode === 501 ? 'provider_not_supported' : 'playwright_exchange_failed',
+      message: message || 'failed to exchange bank auth',
+    })
+  }
 }

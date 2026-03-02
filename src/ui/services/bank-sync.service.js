@@ -36,6 +36,50 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
+function buildDeviceInfo(options = {}) {
+  const platform = Capacitor.getPlatform()
+  const callbackScheme = normalizeText(options.callbackScheme) || 'strawmoneybook'
+  const deviceInfo = {
+    platform,
+    appVersion: normalizeText(options.appVersion) || 'unknown',
+  }
+  return {
+    callbackScheme,
+    deviceInfo,
+  }
+}
+
+function buildBankCredentialPayload(options = {}) {
+  const loginCustIdFake = normalizeText(options.nationalId)
+  const usrIdInput = normalizeText(options.code)
+  const pwd = String(options.password ?? '')
+  const vrfyCode = normalizeText(options.captchaCode)
+
+  if (!loginCustIdFake && !usrIdInput && !pwd && !vrfyCode) {
+    return null
+  }
+
+  return {
+    loginCustIdFake,
+    usrIdInput,
+    pwd,
+    vrfyCode,
+  }
+}
+
+function buildBankAutomationPayload() {
+  return {
+    fields: {
+      loginCustIdFake: 'loginCustIdFake',
+      usrIdInput: 'usrIdInput',
+      pwd: 'pwd',
+      vrfyCode: 'vrfyCode',
+    },
+    captchaImageId: 'code_verify',
+    refreshCaptchaAction: 'javascript:chgImg();',
+  }
+}
+
 function normalizeDirection(direction) {
   const value = normalizeText(direction).toLowerCase()
   if (value === 'income' || value === 'expense') return value
@@ -158,6 +202,23 @@ export function getBankProviderOptions() {
   return listBankProviders()
 }
 
+export async function prepareBankProviderLink(ledgerId, provider, options = {}) {
+  assertLedgerId(ledgerId)
+  const normalizedProvider = normalizeText(provider)
+  if (!normalizedProvider) throw new Error('缺少 provider')
+
+  const { callbackScheme, deviceInfo } = buildDeviceInfo(options)
+  return createBankLinkSession({
+    provider: normalizedProvider,
+    session_id: normalizeText(options.sessionId) || null,
+    refresh_captcha: Boolean(options.refreshCaptcha),
+    callback_scheme: callbackScheme,
+    device_info: deviceInfo,
+    credentials: buildBankCredentialPayload(options),
+    automation: buildBankAutomationPayload(),
+  })
+}
+
 export async function getBankSyncState(ledgerId) {
   assertLedgerId(ledgerId)
   const connections = await listBankConnections(ledgerId)
@@ -173,24 +234,33 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
   const normalizedProvider = normalizeText(provider)
   if (!normalizedProvider) throw new Error('缺少 provider')
 
-  const platform = Capacitor.getPlatform()
-  const callbackScheme = normalizeText(options.callbackScheme) || 'strawmoneybook'
-  const deviceInfo = {
-    platform,
-    appVersion: normalizeText(options.appVersion) || 'unknown',
-  }
-
-  const linkSession = await createBankLinkSession({
-    provider: normalizedProvider,
-    callback_scheme: callbackScheme,
-    device_info: deviceInfo,
-  })
+  const { callbackScheme, deviceInfo } = buildDeviceInfo(options)
+  const preparedSessionId = normalizeText(options.sessionId)
+  const preparedSessionCode = normalizeText(options.sessionCode)
+  const linkSession = preparedSessionId
+    ? {
+      session_id: preparedSessionId,
+      mock_code: preparedSessionCode,
+    }
+    : await createBankLinkSession({
+      provider: normalizedProvider,
+      callback_scheme: callbackScheme,
+      device_info: deviceInfo,
+      credentials: buildBankCredentialPayload(options),
+      automation: buildBankAutomationPayload(),
+    })
+  const isMockProvider = normalizedProvider === 'mock' || normalizedProvider === 'mock_bank_tw'
+  const exchangeCode = isMockProvider
+    ? normalizeText(preparedSessionCode || linkSession?.mock_code || options.code)
+    : normalizeText(options.code || preparedSessionCode || linkSession?.mock_code)
 
   const exchanged = await exchangeBankAuth({
     provider: normalizedProvider,
     session_id: normalizeText(linkSession?.session_id),
-    code: normalizeText(options.code || linkSession?.mock_code),
+    code: exchangeCode,
     public_token: normalizeText(options.publicToken),
+    credentials: buildBankCredentialPayload(options),
+    automation: buildBankAutomationPayload(),
   })
 
   const providerConnectionId = normalizeText(

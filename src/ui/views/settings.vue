@@ -27,6 +27,7 @@ const settingGroups = [
   [
     { to: '/settings/data-management', labelKey: 'settings.data_management', icon: 'fa-solid fa-database' },
     { to: '/settings/auto-backup', labelKey: 'settings.auto_backup', icon: 'fa-solid fa-cloud-arrow-up' },
+    { to: '/settings/bank-sync', labelKey: 'settings.bank_sync', icon: 'fa-solid fa-building-columns' },
   ],
   [
     { to: '/settings/language', labelKey: 'settings.language', icon: 'fa-solid fa-language' },

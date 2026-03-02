@@ -7,6 +7,7 @@ import {
   sendJson,
   simpleHash,
 } from './_utils.js'
+import { createPlaywrightBankLinkSession } from './_playwright-provider.js'
 
 const MOCK_SESSION_TTL_MS = 5 * 60 * 1000
 
@@ -45,8 +46,18 @@ export default async function handler(req, res) {
     return
   }
 
-  sendJson(res, 501, {
-    error: 'provider_not_supported',
-    message: `provider "${provider}" is not configured yet`,
-  })
+  try {
+    const session = await createPlaywrightBankLinkSession({
+      ...body,
+      provider,
+    })
+    sendJson(res, 200, session)
+  } catch (error) {
+    const message = String(error?.message ?? '').trim()
+    const statusCode = message.includes('not configured yet') ? 501 : 400
+    sendJson(res, statusCode, {
+      error: statusCode === 501 ? 'provider_not_supported' : 'playwright_link_failed',
+      message: message || 'failed to create bank link session',
+    })
+  }
 }

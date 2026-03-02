@@ -1,7 +1,14 @@
+import { Capacitor } from '@capacitor/core'
+
 const DEFAULT_BANK_API_BASE = String(import.meta.env.VITE_BANK_SYNC_API_BASE_URL ?? '').trim()
 const BANK_SYNC_CLIENT_SHARED_KEY = String(import.meta.env.VITE_BANK_SYNC_CLIENT_SHARED_KEY ?? '').trim()
 
 const PROVIDERS_FALLBACK = [
+  {
+    id: 'first_bank_tw',
+    name: '第一銀行',
+    country: 'TW',
+  },
   {
     id: 'mock_bank_tw',
     name: 'Mock Bank TW (Sandbox)',
@@ -16,6 +23,29 @@ function buildApiUrl(path) {
   }
   if (!DEFAULT_BANK_API_BASE) return normalizedPath
   return `${DEFAULT_BANK_API_BASE.replace(/\/$/, '')}${normalizedPath}`
+}
+
+function shouldRequireExplicitBankApiBase() {
+  if (DEFAULT_BANK_API_BASE) return false
+  return Capacitor.getPlatform() !== 'web'
+}
+
+function createMissingBankApiError() {
+  const platform = Capacitor.getPlatform()
+  const message = platform === 'web'
+    ? '銀行同步 API 未設定，請部署 /api/bank 或設定 VITE_BANK_SYNC_API_BASE_URL'
+    : '手機 App 需設定銀行同步 API URL，請先部署 /api/bank，並將完整網址填入 VITE_BANK_SYNC_API_BASE_URL'
+  const error = new Error(message)
+  error.code = 'bank_sync_api_unavailable'
+  return error
+}
+
+export function isBankSyncApiConfigured() {
+  return !shouldRequireExplicitBankApiBase()
+}
+
+export function getBankSyncApiUnavailableMessage() {
+  return createMissingBankApiError().message
 }
 
 function parseProviderListFromEnv() {
@@ -38,6 +68,10 @@ function parseProviderListFromEnv() {
 }
 
 async function postJson(path, payload) {
+  if (shouldRequireExplicitBankApiBase()) {
+    throw createMissingBankApiError()
+  }
+
   const headers = {
     'Content-Type': 'application/json',
   }
@@ -62,6 +96,9 @@ async function postJson(path, payload) {
   }
 
   if (!response.ok) {
+    if (response.status === 404 && !DEFAULT_BANK_API_BASE && path.startsWith('/api/bank/')) {
+      throw createMissingBankApiError()
+    }
     const message = String(data?.message ?? data?.error ?? text ?? '').trim()
     throw new Error(message || `HTTP ${response.status}`)
   }
