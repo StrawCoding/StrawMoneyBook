@@ -16,6 +16,7 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const { t } = useI18n()
+const SHOW_BANK_SYNC_ENTRY = false
 const settingGroups = [
   [
     { to: '/settings/ledgers', labelKey: 'settings.ledger_management', icon: 'fa-solid fa-book' },
@@ -27,7 +28,7 @@ const settingGroups = [
   [
     { to: '/settings/data-management', labelKey: 'settings.data_management', icon: 'fa-solid fa-database' },
     { to: '/settings/auto-backup', labelKey: 'settings.auto_backup', icon: 'fa-solid fa-cloud-arrow-up' },
-    { to: '/settings/bank-sync', labelKey: 'settings.bank_sync', icon: 'fa-solid fa-building-columns' },
+    ...(SHOW_BANK_SYNC_ENTRY ? [{ to: '/settings/bank-sync', labelKey: 'settings.bank_sync', icon: 'fa-solid fa-building-columns' }] : []),
   ],
   [
     { to: '/settings/language', labelKey: 'settings.language', icon: 'fa-solid fa-language' },

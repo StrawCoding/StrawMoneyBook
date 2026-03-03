@@ -35,7 +35,7 @@
           <button v-if="!showFinished" class="btn" @click="openVoidDialog" :disabled="loan.status === 'void'">完成</button>
           <button v-if="showFinished" class="btn" @click="openPrincipalSheet">變更本金</button>
           <button v-if="showFinished && loan.status === 'void'" class="btn" @click="markRestore">恢復</button>
-          <button v-if="showFinished" class="btn danger" @click="openDeleteDialog">刪除</button>
+          <button v-if="canDeleteLoan(loan)" class="btn danger" @click="openDeleteDialog">刪除</button>
         </div>
       </div>
 
@@ -126,7 +126,7 @@
     <AppDialog
       :open="confirmDialog.open"
       :title="confirmDialog.type === 'void' ? '完成借貸' : '刪除借貸'"
-      :message="confirmDialog.type === 'void' ? '確定要完成這筆借貸？不會刪除交易紀錄' : '確定要刪除這筆完成借貸？此動作無法復原'"
+      :message="confirmDialog.type === 'void' ? '確定要完成這筆借貸？不會刪除交易紀錄' : '確定要刪除這筆借貸？此動作無法復原'"
       :loading="confirmDialog.loading"
       :confirm-text="confirmDialog.type === 'void' ? '確認完成' : '確認刪除'"
       @close="closeConfirmDialog"
@@ -242,6 +242,11 @@ function statusLabel(status) {
 
 function canRepay(item) {
   return ['active', 'partial'].includes(item.status)
+}
+
+function canDeleteLoan(item) {
+  if (!item) return false
+  return item.direction === 'lend' || ['void', 'settled'].includes(item.status)
 }
 
 function openRepaySheet() {
@@ -374,7 +379,7 @@ async function removeVoidedLoan() {
   try {
     await loanStore.deleteVoided(loan.value.id)
     await refreshLinkedData()
-    uiStore.pushToast('完成借貸已刪除')
+    uiStore.pushToast('借貸已刪除')
     void router.push(backLink.value)
   } catch (error) {
     uiStore.pushToast(error.message ?? '刪除失敗', 'error')

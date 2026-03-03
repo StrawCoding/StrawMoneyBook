@@ -1383,7 +1383,7 @@ function normalizeCounterpartyName(rawName) {
   name = name.replace(/^[,，。:：;；]+|[,，。:：;；]+$/g, '')
   name = name.trim()
   if (!name) return ''
-  if (/^\d+(?:\.\d+)?$/.test(name)) return ''
+  if (isLikelyAmountLikeCounterparty(name)) return ''
   if (name.length > 24) {
     name = name.slice(0, 24).trim()
   }
@@ -1392,12 +1392,22 @@ function normalizeCounterpartyName(rawName) {
   return name
 }
 
+function isLikelyAmountLikeCounterparty(rawValue) {
+  const normalized = String(rawValue ?? '')
+    .trim()
+    .replace(/[,，\s]/g, '')
+    .toLowerCase()
+  if (!normalized) return false
+  return /^(?:nt\$?|ntd|twd|us\$|usd|\$|¥)?\d+(?:\.\d+)?(?:k|w|萬|万|千|百|元(?:整)?|塊|块|美元|美金|台幣|臺幣|日圓|日元)?$/.test(normalized)
+}
+
 function extractCounterpartyFromLoanText(text, mode, direction) {
   const source = String(text ?? '')
   const patterns = []
 
   if (mode === 'create' && direction === 'lend') {
     patterns.push(
+      /(?:借出|借了)\s*(?:nt\$?|ntd|twd|us\$|usd|\$|¥)?\s*\d[\d,]*(?:\.\d+)?(?:k|w|萬|万|千|百|元(?:整)?|塊|块|美元|美金|台幣|臺幣|日圓|日元)?\s*(?:給|借給)\s*([^\s，。,；;:：]{1,24})/i,
       /(?:借給|借了給|借出給|借出|借款給)\s*([^\s，。,；;:：]{1,24})/i,
       /給\s*([^\s，。,；;:：]{1,24})\s*(?:借|借款|借錢|借钱|借出)/i,
       /(?:lend(?:ing)?|loan(?:ed)?)\s+to\s+([a-zA-Z][a-zA-Z0-9._-]{0,23})/i,

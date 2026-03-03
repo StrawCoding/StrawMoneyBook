@@ -525,13 +525,23 @@ function normalizeCounterpartyName(rawName) {
     name = name.slice(0, 24).trim()
   }
   if (!name) return ''
-  if (/^\d+(?:\.\d+)?$/.test(name)) return ''
+  if (isLikelyAmountLikeCounterparty(name)) return ''
   if (/^(昨天|今天|明天|前天|剛剛|刚刚|下午|上午|晚上|早上|yesterday|today|tomorrow|afternoon|morning|evening|night|昨日|今日|明日)$/i.test(name)) return ''
   return name
 }
 
+function isLikelyAmountLikeCounterparty(rawValue) {
+  const normalized = String(rawValue ?? '')
+    .trim()
+    .replace(/[,，\s]/g, '')
+    .toLowerCase()
+  if (!normalized) return false
+  return /^(?:nt\$?|ntd|twd|us\$|usd|\$|¥)?\d+(?:\.\d+)?(?:k|w|萬|万|千|百|元(?:整)?|塊|块|美元|美金|台幣|臺幣|日圓|日元)?$/.test(normalized)
+}
+
 function extractCounterpartyHint(text) {
   const patterns = [
+    /(?:借出|借了)\s*(?:nt\$?|ntd|twd|us\$|usd|\$|¥)?\s*\d[\d,]*(?:\.\d+)?(?:k|w|萬|万|千|百|元(?:整)?|塊|块|美元|美金|台幣|臺幣|日圓|日元)?\s*(?:給|借給)\s*([^\s，。,；;:：]{1,24})/i,
     /(?:借給|借了給|借出給|借款給|還給|还给)\s*([^\s，。,；;:：]{1,24})/i,
     /(?:向|跟)\s*([^\s，。,；;:：]{1,24})\s*(?:借|借款|借錢|借钱|還款|还款|還錢|还钱)/i,
     /([^\s，。,；;:：]{1,24})\s*(?:還我|还我)/i,

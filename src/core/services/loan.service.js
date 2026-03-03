@@ -599,8 +599,9 @@ export async function deleteVoidedLoan(ledgerId, loanId) {
     if (!loan) {
       throw new Error('找不到借貸資料')
     }
-    if (!['void', 'settled'].includes(loan.status)) {
-      throw new Error('僅已完成借貸可刪除')
+    const canDelete = ['void', 'settled'].includes(loan.status) || loan.direction === 'lend'
+    if (!canDelete) {
+      throw new Error('僅借出或已完成借貸可刪除')
     }
 
     await softDeleteTransactionsByOriginRef(ledgerId, 'loan_payment', loanId)
