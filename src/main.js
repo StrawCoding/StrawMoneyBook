@@ -397,6 +397,14 @@ function restoreGoogleBackupSessionInBackground(ledgerId) {
   })
 }
 
+function restoreGoogleBackupForActiveLedgerInBackground(ledgerId, { runDueBackup = false } = {}) {
+  if (!ledgerId) return
+  restoreGoogleBackupSessionInBackground(ledgerId)
+  if (runDueBackup) {
+    void runGoogleAutoBackupIfDue(ledgerId)
+  }
+}
+
 async function main() {
   loadThemeColor()
   initLocalePreference()
@@ -461,8 +469,7 @@ async function main() {
       window.dispatchEvent(new Event('app:check-update'))
       const ledgerStore = useLedgerStore(pinia)
       if (ledgerStore.activeLedgerId) {
-        restoreGoogleBackupSessionInBackground(ledgerStore.activeLedgerId)
-        void runGoogleAutoBackupIfDue(ledgerStore.activeLedgerId)
+        restoreGoogleBackupForActiveLedgerInBackground(ledgerStore.activeLedgerId, { runDueBackup: true })
         void runExchangeRateAutoSyncIfDue(ledgerStore.activeLedgerId)
       }
       void syncActiveLedgerHomeWidget(pinia)
@@ -484,14 +491,19 @@ async function main() {
         scheduleHomeWidgetSync(pinia)
       })
     }
-    if (ledgerStore.activeLedgerId) {
-      restoreGoogleBackupSessionInBackground(ledgerStore.activeLedgerId)
-      void runGoogleAutoBackupIfDue(ledgerStore.activeLedgerId)
-      void runWebdavAutoBackupIfDue(ledgerStore.activeLedgerId)
-      void runExchangeRateAutoSyncIfDue(ledgerStore.activeLedgerId)
-    }
 
     scheduleMembershipWarmup('app_start')
+    watch(
+      () => ledgerStore.activeLedgerId,
+      (ledgerId) => {
+        const normalizedLedgerId = String(ledgerId ?? '').trim()
+        if (!normalizedLedgerId) return
+        restoreGoogleBackupForActiveLedgerInBackground(normalizedLedgerId, { runDueBackup: true })
+        void runWebdavAutoBackupIfDue(normalizedLedgerId)
+        void runExchangeRateAutoSyncIfDue(normalizedLedgerId)
+      },
+      { immediate: true },
+    )
     watch(
       () => `${ledgerStore.activeLedgerId}:${String(ledgerStore.activeLedger?.currency_code ?? '')}`,
       () => {
