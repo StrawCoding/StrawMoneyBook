@@ -2,13 +2,13 @@ import {
   addTransaction,
   addTransfer,
   countReimbursableTransactions,
-  findReimbursementSettlementIncomeTx,
   updateTransactionById,
   findTransactionById,
+  findTransactionRecordById,
   listTransferTransactionsByGroup,
+  listTransactionsByExternalRef,
   softDeleteTransactionById,
   softDeleteTransferGroup,
-  markTransactionReimbursed,
 } from '@/core/repositories/transaction.repo'
 import {
   archiveCategory,
@@ -193,6 +193,48 @@ async function assertAccountAllowsDirectTransaction(ledgerId, accountId) {
   if (await isSavingsJarAccount(ledgerId, accountId)) {
     throw new Error('存錢罐僅支援存入與提取，請使用存錢罐功能頁')
   }
+}
+
+function isRefundLinkedTransaction(tx) {
+  const categoryName = String(tx?.category_name ?? '').trim()
+  const note = String(tx?.note ?? '').trim()
+  if (!String(tx?.external_ref_id ?? '').trim()) return false
+  return categoryName === '退款' || note.startsWith('退款：') || note.startsWith('退款:')
+}
+
+function shouldCascadeLinkedTransaction(tx) {
+  if (!tx || typeof tx !== 'object') return false
+  return String(tx.origin_type ?? '').trim() === 'reimbursement' || isRefundLinkedTransaction(tx)
+}
+
+async function collectCascadeDeleteTransactionIds(ledgerId, target) {
+  const visited = new Set()
+  const pending = [String(target?.id ?? '').trim()].filter(Boolean)
+
+  while (pending.length > 0) {
+    const currentId = pending.shift()
+    if (!currentId || visited.has(currentId)) continue
+
+    const currentTx = currentId === target.id ? target : await findTransactionRecordById(ledgerId, currentId)
+    if (!currentTx) continue
+
+    visited.add(currentId)
+
+    const parentId = String(currentTx.external_ref_id ?? '').trim()
+    if (parentId && shouldCascadeLinkedTransaction(currentTx) && !visited.has(parentId)) {
+      pending.push(parentId)
+    }
+
+    const linkedTransactions = await listTransactionsByExternalRef(ledgerId, currentId)
+    for (const linkedTx of linkedTransactions) {
+      const linkedId = String(linkedTx?.id ?? '').trim()
+      if (!linkedId || visited.has(linkedId)) continue
+      if (!shouldCascadeLinkedTransaction(linkedTx)) continue
+      pending.push(linkedId)
+    }
+  }
+
+  return Array.from(visited)
 }
 
 export async function createExpense(ledgerId, payload) {
@@ -429,7 +471,7 @@ export async function deleteManualTransaction(ledgerId, txId) {
     throw new Error('缺少交易 ID')
   }
 
-  const target = await findTransactionById(ledgerId, txId)
+  const target = await findTransactionRecordById(ledgerId, txId)
   if (!target) {
     throw new Error('找不到交易資料')
   }
@@ -439,16 +481,8 @@ export async function deleteManualTransaction(ledgerId, txId) {
     return
   }
 
-  if (target.type === 'income' && target.origin_type === 'reimbursement' && target.external_ref_id) {
-    await markTransactionReimbursed(ledgerId, String(target.external_ref_id), false)
+  const cascadeDeleteIds = await collectCascadeDeleteTransactionIds(ledgerId, target)
+  for (const relatedTxId of cascadeDeleteIds) {
+    await softDeleteTransactionById(ledgerId, relatedTxId)
   }
-
-  if (target.type === 'expense') {
-    const settlementIncome = await findReimbursementSettlementIncomeTx(ledgerId, txId)
-    if (settlementIncome?.id) {
-      await softDeleteTransactionById(ledgerId, settlementIncome.id)
-    }
-  }
-
-  await softDeleteTransactionById(ledgerId, txId)
 }

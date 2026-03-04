@@ -411,7 +411,7 @@ export async function listTransferTransactionsByGroup(ledgerId, transferGroupId)
 export async function findTransactionRecordById(ledgerId, txId) {
   assertLedgerId(ledgerId)
   const result = await query(
-    `SELECT t.ledger_id, t.id, t.type, t.account_id, t.peer_account_id, t.category_id,
+    `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id, t.category_id,
             t.amount_minor, t.occurred_at, t.note, t.origin_type, t.external_ref_id,
             t.is_reimbursable, t.reimbursement_state, t.include_in_budget, t.include_in_analysis,
             c.name AS category_name, c.kind AS category_kind, c.icon AS category_icon,
@@ -434,6 +434,35 @@ export async function findTransactionRecordById(ledgerId, txId) {
     [ledgerId, txId],
   )
   return rowsOf(result)[0] ?? null
+}
+
+export async function listTransactionsByExternalRef(ledgerId, externalRefId) {
+  assertLedgerId(ledgerId)
+  if (!externalRefId) return []
+  const result = await query(
+    `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id, t.category_id,
+            t.amount_minor, t.occurred_at, t.note, t.origin_type, t.external_ref_id,
+            t.is_reimbursable, t.reimbursement_state, t.include_in_budget, t.include_in_analysis,
+            c.name AS category_name, c.kind AS category_kind, c.icon AS category_icon,
+            cg.name AS category_group_name, cg.kind AS category_group_kind,
+            a.name AS account_name
+     FROM transactions t
+     LEFT JOIN categories c
+       ON c.ledger_id = t.ledger_id
+      AND c.id = t.category_id
+     LEFT JOIN category_groups cg
+       ON cg.ledger_id = c.ledger_id
+      AND cg.id = c.group_id
+     LEFT JOIN accounts a
+       ON a.ledger_id = t.ledger_id
+      AND a.id = t.account_id
+     WHERE t.ledger_id = ?
+       AND t.external_ref_id = ?
+       AND t.deleted_at IS NULL
+     ORDER BY t.created_at DESC;`,
+    [ledgerId, externalRefId],
+  )
+  return rowsOf(result)
 }
 
 export async function softDeleteTransactionById(ledgerId, txId) {

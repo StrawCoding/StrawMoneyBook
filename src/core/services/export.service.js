@@ -564,10 +564,14 @@ export function triggerDownloadFromUrl(url, filename) {
 export function openFileUrl(url) {
   const target = String(url ?? '').trim()
   if (!target || typeof window === 'undefined' || typeof document === 'undefined') return false
+  const isPreviewBlobUrl = target.startsWith('blob:') || target.startsWith('data:')
 
   if (Capacitor.isNativePlatform()) {
+    if (isPreviewBlobUrl) {
+      return false
+    }
     try {
-      // Capacitor WebView is more stable when navigating in-place than opening a popup.
+      // Use in-place navigation for actual device file URLs exposed by Capacitor.
       window.location.assign(target)
       return true
     } catch {

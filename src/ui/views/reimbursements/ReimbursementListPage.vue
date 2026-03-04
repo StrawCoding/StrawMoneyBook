@@ -779,8 +779,8 @@ async function exportClaimSheetCsv() {
       exportedFilename.value = String(saved.filename ?? filename)
       exportLocation = saved.location || '裝置檔案'
       revokeBlobUrl(exportedUrl.value)
-      exportedUrl.value = createCsvBlobUrl(csvText)
-      exportedIsDeviceLink.value = false
+      exportedUrl.value = String(saved.openUrl ?? '').trim() || createCsvBlobUrl(csvText)
+      exportedIsDeviceLink.value = Boolean(String(saved.openUrl ?? '').trim())
       exportedLocation.value = exportLocation
       uiStore.pushToast(`請款單已匯出（${rowsSource.length} 筆，${exportLocation}）`)
       return
