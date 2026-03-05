@@ -16,6 +16,79 @@
               :class="message.role"
             >
               <p class="chat-text">{{ message.text }}</p>
+              <div v-if="Array.isArray(message.uiBlocks) && message.uiBlocks.length" class="ai-block-list">
+                <section
+                  v-for="(block, blockIndex) in message.uiBlocks"
+                  :key="`block-${message.id}-${blockIndex}`"
+                  class="ai-ui-block"
+                  :class="`kind-${block.kind || 'card'}`"
+                >
+                  <header
+                    v-if="String(block.title ?? '').trim() || String(block.subtitle ?? '').trim()"
+                    class="ai-ui-block-head"
+                  >
+                    <strong v-if="String(block.title ?? '').trim()">{{ block.title }}</strong>
+                    <small v-if="String(block.subtitle ?? '').trim()" class="muted">{{ block.subtitle }}</small>
+                  </header>
+
+                  <div v-if="block.kind === 'table'" class="ai-table-wrap">
+                    <table class="ai-table">
+                      <thead v-if="Array.isArray(block.content?.columns) && block.content.columns.length">
+                        <tr>
+                          <th v-for="column in block.content.columns" :key="`col-${column}`">{{ column }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(row, rowIndex) in block.content?.rows ?? []" :key="`row-${rowIndex}`">
+                          <td v-for="(cell, cellIndex) in row" :key="`cell-${rowIndex}-${cellIndex}`">{{ cell }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div
+                      v-if="String(block.content?.total_label ?? '').trim() || String(block.content?.total_value ?? '').trim()"
+                      class="ai-table-total"
+                    >
+                      <span>{{ block.content?.total_label }}</span>
+                      <strong>{{ block.content?.total_value }}</strong>
+                    </div>
+                  </div>
+
+                  <div v-else-if="block.kind === 'chart'" class="ai-chart-wrap">
+                    <small class="muted">{{ block.content?.chart_spec?.chart_type || 'bar' }}</small>
+                    <ul class="ai-chart-bars">
+                      <li
+                        v-for="item in buildChartBarsFromBlock(block)"
+                        :key="`bar-${item.label}`"
+                        class="ai-chart-row"
+                      >
+                        <span class="ai-chart-label">{{ item.label }}</span>
+                        <span class="ai-chart-track"><span class="ai-chart-fill" :style="{ width: `${item.ratio}%` }"></span></span>
+                        <span class="ai-chart-value">{{ item.valueText }}</span>
+                      </li>
+                    </ul>
+                    <p v-if="String(block.content?.summary_text ?? '').trim()" class="muted ai-chart-summary">{{ block.content.summary_text }}</p>
+                  </div>
+
+                  <div v-else-if="Array.isArray(block.content?.items) && block.content.items.length" class="ai-card-list">
+                    <p v-for="(line, lineIndex) in block.content.items" :key="`line-${lineIndex}`" class="chat-text">{{ line }}</p>
+                  </div>
+
+                  <p v-else-if="String(block.content?.text ?? '').trim()" class="chat-text">{{ block.content.text }}</p>
+
+                  <div v-if="Array.isArray(block.actions) && block.actions.length" class="ai-block-actions">
+                    <button
+                      v-for="(action, actionIndex) in block.actions"
+                      :key="`action-${actionIndex}-${action.label}`"
+                      type="button"
+                      class="btn chat-action-btn"
+                      :class="resolveActionBtnClass(action.style)"
+                      @click="handleAiUiAction(action)"
+                    >
+                      {{ action.label }}
+                    </button>
+                  </div>
+                </section>
+              </div>
               <button
                 v-if="message.actionKey"
                 type="button"
@@ -92,9 +165,6 @@
 
         <template v-else>
           <div class="type-grid">
-            <button class="btn" type="button" @click="emit('switch-mode', 'ai')">
-              AI記帳
-            </button>
             <button
               v-for="item in types"
               :key="item.value"
@@ -405,6 +475,7 @@ import {
   resolveLoanOccurredAtIso,
   resolveLoanTransactionType,
 } from '@/ui/services/ai-loan-intent.service'
+import { listTransactionsByDay, listTransactionsByMonth } from '@/core/repositories/transaction.repo'
 
 const props = defineProps({
   open: {
@@ -419,9 +490,13 @@ const props = defineProps({
     type: String,
     default: 'expense',
   },
+  useStandaloneAi: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['close', 'switch-mode'])
+const emit = defineEmits(['close', 'switch-mode', 'open-ai-page'])
 
 const router = useRouter()
 const accountStore = useAccountStore()
@@ -465,6 +540,27 @@ const aiAutoCreating = ref(false)
 const AI_AUTOCREATE_TIMEOUT_MS = 15000
 const AI_HISTORY_WARMUP_TIMEOUT_MS = 1800
 const TRANSFER_RATE_AUTO_SYNC_TIMEOUT_MS = 8000
+const AI_DIALOGUE_INTRO_STORAGE_KEY = 'strawmoneybook.ai-dialogue-intro.v1'
+const AI_CONFIRM_TOKEN_PREFIX = 'ai-confirm'
+const AI_ACTION_TYPE = Object.freeze({
+  CREATE_TRANSACTION: 'CREATE_TRANSACTION',
+  GENERATE_CHART: 'GENERATE_CHART',
+  GENERATE_REPORT: 'GENERATE_REPORT',
+  EXPORT_DATA: 'EXPORT_DATA',
+  NAVIGATE: 'NAVIGATE',
+  OPEN_MODAL: 'OPEN_MODAL',
+  SHOW_TOAST: 'SHOW_TOAST',
+})
+const AI_BLOCK_KIND = Object.freeze({
+  CARD: 'card',
+  TABLE: 'table',
+  CHART: 'chart',
+  CHIPS: 'chips',
+  CTA_ROW: 'cta_row',
+  CONFIRM: 'confirm',
+  EMPTY_STATE: 'empty_state',
+  ERROR_STATE: 'error_state',
+})
 const {
   isSupported: speechSupported,
   isListening: speechListening,
@@ -623,6 +719,14 @@ const transferSnapshotInfoLabel = computed(() => {
   return `${parsed.toLocaleString('zh-TW')}（資料日期 ${exchangeRateSnapshot.value.effectiveDate || '-'}）`
 })
 
+function openAiMode() {
+  if (props.useStandaloneAi) {
+    emit('open-ai-page')
+    return
+  }
+  emit('switch-mode', 'ai')
+}
+
 watch(
   () => props.open,
   (open) => {
@@ -665,6 +769,9 @@ watch(
     addonRows.value = [createAddonRow()]
     void loadExchangeRateSnapshot()
     void loadAutoFillRules()
+    if (isAiMode.value) {
+      ensureAiConversationBootstrapped()
+    }
   },
   { immediate: true },
 )
@@ -758,6 +865,14 @@ watch(
 )
 
 watch(
+  () => isAiMode.value,
+  (next) => {
+    if (!props.open || !next) return
+    ensureAiConversationBootstrapped()
+  },
+)
+
+watch(
   () => accountStore.accounts.map((item) => item.id),
   () => {
     ensureValidAccounts()
@@ -780,6 +895,831 @@ watch(
   { immediate: true },
 )
 
+function buildAssistantResponse({ user_message = '', ui_blocks = [], actions = [] } = {}) {
+  return {
+    user_message: String(user_message ?? '').trim(),
+    ui_blocks: Array.isArray(ui_blocks) ? ui_blocks : [],
+    actions: Array.isArray(actions) ? actions : [],
+  }
+}
+
+function pushAssistantResponse(response) {
+  const normalized = buildAssistantResponse(response)
+  if (!normalized.user_message) return
+  pushAiMessage('assistant', normalized.user_message, {
+    uiBlocks: normalized.ui_blocks,
+    actions: normalized.actions,
+  })
+}
+
+function resolveActionBtnClass(style) {
+  const normalized = String(style ?? '').trim()
+  if (normalized === 'primary') return 'primary'
+  if (normalized === 'danger') return 'danger'
+  if (normalized === 'ghost') return 'ghost'
+  return ''
+}
+
+function buildChartBarsFromBlock(block) {
+  const labels = block?.content?.chart_spec?.labels ?? []
+  const seriesData = block?.content?.chart_spec?.series?.[0]?.data ?? []
+  const unit = String(block?.content?.chart_spec?.unit ?? '').trim()
+  const values = seriesData.map((item) => Number(item) || 0)
+  const max = Math.max(1, ...values)
+  return labels.map((label, index) => {
+    const value = Number(values[index] ?? 0)
+    return {
+      label,
+      ratio: Math.max(0, Math.min(100, (value / max) * 100)),
+      valueText: unit && /^[A-Za-z]{3}$/.test(unit)
+        ? formatCurrencyMajor(value, unit)
+        : `${new Intl.NumberFormat('zh-TW').format(value)}${unit ? ` ${unit}` : ''}`,
+    }
+  })
+}
+
+function createConfirmToken(scope) {
+  const normalizedScope = String(scope ?? '').trim() || 'default'
+  return `${AI_CONFIRM_TOKEN_PREFIX}-${normalizedScope}-${Date.now()}`
+}
+
+function hasSeenAiDialogueIntro() {
+  try {
+    return localStorage.getItem(AI_DIALOGUE_INTRO_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markAiDialogueIntroSeen() {
+  try {
+    localStorage.setItem(AI_DIALOGUE_INTRO_STORAGE_KEY, '1')
+  } catch {
+    // Ignore local storage failures.
+  }
+}
+
+function buildAiFirstUseGuideResponse() {
+  const ctaActions = [
+    { label: '新增支出', action_type: AI_ACTION_TYPE.OPEN_MODAL, action_payload: { target: 'quick_add_manual', type: 'expense' }, style: 'primary' },
+    { label: '新增收入', action_type: AI_ACTION_TYPE.OPEN_MODAL, action_payload: { target: 'quick_add_manual', type: 'income' }, style: 'secondary' },
+    { label: '轉帳', action_type: AI_ACTION_TYPE.OPEN_MODAL, action_payload: { target: 'quick_add_manual', type: 'transfer' }, style: 'secondary' },
+    { label: '本月圖表', action_type: AI_ACTION_TYPE.GENERATE_CHART, action_payload: { preset: 'month_expense_category', metric: 'expense' }, style: 'ghost' },
+    { label: '列出今天', action_type: AI_ACTION_TYPE.GENERATE_REPORT, action_payload: { preset: 'today_transactions' }, style: 'ghost' },
+    { label: '匯出', action_type: AI_ACTION_TYPE.EXPORT_DATA, action_payload: { preset: 'export_transactions' }, style: 'ghost' },
+  ]
+  return buildAssistantResponse({
+    user_message: '你可以直接用一句話記帳、查詢、計算與產生圖表。我會先回覆結果，再附上可點擊下一步。',
+    ui_blocks: [
+      {
+        kind: AI_BLOCK_KIND.CARD,
+        title: '第一次使用說明',
+        content: {
+          items: [
+            '例：晚餐 180',
+            '例：列出今天交易',
+            '例：本月支出圖表',
+            '例：匯出CSV',
+            '提醒：刪除與覆蓋匯入會二次確認',
+          ],
+        },
+      },
+      {
+        kind: AI_BLOCK_KIND.CTA_ROW,
+        title: '快速開始',
+        actions: ctaActions,
+      },
+    ],
+    actions: ctaActions.map((item) => ({
+      type: item.action_type,
+      payload: item.action_payload,
+      requires_confirm: false,
+    })),
+  })
+}
+
+function buildAiReadyResponse() {
+  return buildAssistantResponse({
+    user_message: 'AI 會計對話模式已開啟。直接輸入一句話，例如：今天午餐 120。',
+    ui_blocks: [
+      {
+        kind: AI_BLOCK_KIND.CHIPS,
+        title: '常用指令',
+        actions: [
+          { label: '列出今天', action_type: AI_ACTION_TYPE.GENERATE_REPORT, action_payload: { preset: 'today_transactions' }, style: 'ghost' },
+          { label: '本月圖表', action_type: AI_ACTION_TYPE.GENERATE_CHART, action_payload: { preset: 'month_expense_category', metric: 'expense' }, style: 'ghost' },
+          { label: '切換手動', action_type: AI_ACTION_TYPE.OPEN_MODAL, action_payload: { target: 'quick_add_manual', type: 'expense' }, style: 'secondary' },
+        ],
+      },
+    ],
+  })
+}
+
+function ensureAiConversationBootstrapped() {
+  if (aiMessages.value.length) return
+  if (!hasSeenAiDialogueIntro()) {
+    pushAssistantResponse(buildAiFirstUseGuideResponse())
+    markAiDialogueIntroSeen()
+    return
+  }
+  pushAssistantResponse(buildAiReadyResponse())
+}
+
+function includesAny(text, patterns) {
+  return patterns.some((pattern) => {
+    const cloned = new RegExp(pattern.source, pattern.flags)
+    return cloned.test(text)
+  })
+}
+
+function parseLooseAmountText(rawValue) {
+  const normalized = String(rawValue ?? '')
+    .trim()
+    .replace(/,/g, '')
+    .toLowerCase()
+  if (!normalized) return NaN
+  const isK = normalized.endsWith('k')
+  const numeric = Number(isK ? normalized.slice(0, -1) : normalized)
+  if (!Number.isFinite(numeric)) return NaN
+  return isK ? numeric * 1000 : numeric
+}
+
+function formatCalcResult(value) {
+  const safeValue = Number(value)
+  if (!Number.isFinite(safeValue)) return ''
+  return new Intl.NumberFormat('zh-TW', {
+    minimumFractionDigits: Number.isInteger(safeValue) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(safeValue)
+}
+
+function tryResolveSimpleCalculation(text) {
+  const source = String(text ?? '').trim()
+  if (!source) return null
+
+  const splitMatch = source.match(/([0-9][0-9,.kK]*)\s*(?:分|÷|\/)\s*([0-9][0-9,.kK]*)\s*(?:人|位|個|个)?/)
+  if (splitMatch) {
+    const total = parseLooseAmountText(splitMatch[1])
+    const people = parseLooseAmountText(splitMatch[2])
+    if (Number.isFinite(total) && Number.isFinite(people) && people > 0) {
+      return {
+        kind: 'split',
+        expression: `${splitMatch[1]} ÷ ${splitMatch[2]}`,
+        result: Math.round((total / people) * 100) / 100,
+      }
+    }
+  }
+
+  const discountByFold = source.match(/([0-9][0-9,.kK]*)\s*打\s*([0-9](?:\.\d+)?)\s*折/)
+  if (discountByFold) {
+    const base = parseLooseAmountText(discountByFold[1])
+    const fold = Number(discountByFold[2])
+    if (Number.isFinite(base) && Number.isFinite(fold) && fold >= 0) {
+      return {
+        kind: 'discount',
+        expression: `${discountByFold[1]} 打 ${discountByFold[2]} 折`,
+        result: Math.round((base * (fold / 10)) * 100) / 100,
+      }
+    }
+  }
+
+  const discountByPercent = source.match(/([0-9][0-9,.kK]*)\s*(?:折扣|discount|off)\s*([0-9](?:\.\d+)?)\s*%/i)
+  if (discountByPercent) {
+    const base = parseLooseAmountText(discountByPercent[1])
+    const pct = Number(discountByPercent[2])
+    if (Number.isFinite(base) && Number.isFinite(pct)) {
+      return {
+        kind: 'discount',
+        expression: `${discountByPercent[1]} 折扣 ${discountByPercent[2]}%`,
+        result: Math.round((base * (1 - (pct / 100))) * 100) / 100,
+      }
+    }
+  }
+
+  if (/%/.test(source) && includesAny(source, [/折扣/, /discount/i, /off/i]) && (source.match(/\d+(?:\.\d+)?/g)?.length ?? 0) < 2) {
+    return {
+      kind: 'discount_missing_base',
+      percentText: source.match(/\d+(?:\.\d+)?%/)?.[0] ?? '',
+    }
+  }
+
+  const expression = source.replace(/[=？?]/g, '').trim()
+  if (/^[0-9+\-×÷*/.\s]+$/.test(expression) && /[+\-×÷*/]/.test(expression)) {
+    const result = evaluateExpression(expression)
+    if (Number.isFinite(result)) {
+      return {
+        kind: 'expression',
+        expression,
+        result,
+      }
+    }
+  }
+
+  return null
+}
+
+function buildCalculationResponse(sourceText, calcResult) {
+  if (calcResult?.kind === 'discount_missing_base') {
+    return buildAssistantResponse({
+      user_message: '折扣計算還差一個原價金額。請補上原價，例如：1200 折扣 10%。',
+      ui_blocks: [
+        {
+          kind: AI_BLOCK_KIND.CHIPS,
+          title: '快速填法',
+          actions: [
+            { label: '1200 折扣 10%', action_type: AI_ACTION_TYPE.SHOW_TOAST, action_payload: { message: '請直接輸入：1200 折扣 10%' }, style: 'ghost' },
+            { label: '5000 打 9 折', action_type: AI_ACTION_TYPE.SHOW_TOAST, action_payload: { message: '請直接輸入：5000 打 9 折' }, style: 'ghost' },
+          ],
+        },
+      ],
+    })
+  }
+
+  const resultValue = Number(calcResult?.result)
+  if (!Number.isFinite(resultValue)) {
+    return buildAssistantResponse({
+      user_message: '這句話看起來像計算題，但我目前無法穩定解析。你可以改成純算式，例如：5000 ÷ 3。',
+      ui_blocks: [{ kind: AI_BLOCK_KIND.ERROR_STATE, title: '無法計算', content: { text: sourceText } }],
+    })
+  }
+
+  const resultText = formatCalcResult(resultValue)
+  const expenseAmount = Math.max(0, Math.round(resultValue * 100) / 100)
+  return buildAssistantResponse({
+    user_message: `${calcResult.expression} = ${resultText}`,
+    ui_blocks: [
+      {
+        kind: AI_BLOCK_KIND.CARD,
+        title: '計算結果',
+        content: {
+          items: [
+            `${calcResult.expression}`,
+            `結果：${resultText}`,
+          ],
+        },
+      },
+      {
+        kind: AI_BLOCK_KIND.CTA_ROW,
+        actions: [
+          {
+            label: '記為支出',
+            action_type: AI_ACTION_TYPE.OPEN_MODAL,
+            action_payload: {
+              target: 'quick_add_manual',
+              type: 'expense',
+              amountMajor: expenseAmount,
+              note: `AI 計算：${calcResult.expression} = ${resultText}`,
+            },
+            style: 'primary',
+          },
+          {
+            label: '不記錄',
+            action_type: AI_ACTION_TYPE.SHOW_TOAST,
+            action_payload: { message: '已略過記帳' },
+            style: 'ghost',
+          },
+        ],
+      },
+    ],
+  })
+}
+
+function buildDangerousCommandResponse(text) {
+  const confirmToken = createConfirmToken('danger')
+  return buildAssistantResponse({
+    user_message: '這是高風險操作，我不會直接執行。請先確認影響範圍後再繼續。',
+    ui_blocks: [
+      {
+        kind: AI_BLOCK_KIND.CONFIRM,
+        title: '需要二次確認',
+        subtitle: '刪除/覆蓋類操作',
+        content: {
+          items: [
+            `你輸入：${text}`,
+            '這類操作不可逆，建議先備份資料。',
+          ],
+        },
+        actions: [
+          {
+            label: '前往資料管理',
+            action_type: AI_ACTION_TYPE.NAVIGATE,
+            action_payload: { routeName: 'settings-data-management', closeSheet: true },
+            style: 'danger',
+          },
+          {
+            label: '取消',
+            action_type: AI_ACTION_TYPE.SHOW_TOAST,
+            action_payload: { message: '已取消高風險操作' },
+            style: 'ghost',
+          },
+        ],
+      },
+    ],
+    actions: [
+      {
+        type: 'APPLY_IMPORT',
+        payload: { raw_text: text },
+        requires_confirm: true,
+        confirm_token: confirmToken,
+      },
+    ],
+  })
+}
+
+function buildExitAiResponse() {
+  return buildAssistantResponse({
+    user_message: '可以，已準備切換模式。你可以回到手動新增，或直接回列表瀏覽交易。',
+    ui_blocks: [
+      {
+        kind: AI_BLOCK_KIND.CTA_ROW,
+        actions: [
+          { label: '切換手動', action_type: AI_ACTION_TYPE.OPEN_MODAL, action_payload: { target: 'quick_add_manual', type: 'expense' }, style: 'primary' },
+          { label: '回到列表', action_type: AI_ACTION_TYPE.NAVIGATE, action_payload: { routeName: 'home', closeSheet: true }, style: 'secondary' },
+          { label: '關閉視窗', action_type: AI_ACTION_TYPE.NAVIGATE, action_payload: { routeName: 'home', closeSheet: true }, style: 'ghost' },
+        ],
+      },
+    ],
+    actions: [
+      {
+        type: AI_ACTION_TYPE.NAVIGATE,
+        payload: { routeName: 'home' },
+        requires_confirm: false,
+      },
+    ],
+  })
+}
+
+function buildCategoryHelpResponse() {
+  return buildAssistantResponse({
+    user_message: '分類相關操作我可以先幫你導到分類管理。建立後回來直接輸入「今天午餐 120」即可快速記帳。',
+    ui_blocks: [
+      {
+        kind: AI_BLOCK_KIND.CTA_ROW,
+        actions: [
+          { label: t('settings.category_management'), action_type: AI_ACTION_TYPE.NAVIGATE, action_payload: { routeName: 'settings-categories', closeSheet: true }, style: 'primary' },
+        ],
+      },
+    ],
+  })
+}
+
+function buildErrorResponse(message) {
+  const text = String(message ?? '').trim() || '處理失敗，請稍後再試'
+  return buildAssistantResponse({
+    user_message: text,
+    ui_blocks: [
+      {
+        kind: AI_BLOCK_KIND.ERROR_STATE,
+        title: '處理失敗',
+        content: { text },
+      },
+    ],
+  })
+}
+
+function resolveTypeLabel(type) {
+  if (type === 'income') return '收入'
+  if (type === 'transfer') return '轉帳'
+  return '支出'
+}
+
+function formatTxTime(occurredAt) {
+  const parsed = new Date(occurredAt)
+  if (Number.isNaN(parsed.getTime())) return '--:--'
+  const hh = String(parsed.getHours()).padStart(2, '0')
+  const mm = String(parsed.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
+}
+
+function formatSignedAmountByTx(tx) {
+  const amountMinor = Math.abs(Number(tx?.amount_minor ?? 0))
+  const currencyCode = normalizeCurrencyCode(tx?.account_currency_code, 'TWD')
+  const amountText = formatCurrencyMinor(amountMinor, currencyCode)
+  if (tx?.type === 'expense') return `-${amountText}`
+  if (tx?.type === 'income') return `+${amountText}`
+  return amountText
+}
+
+async function replyTodayTransactions() {
+  const ledgerId = ledgerStore.activeLedgerId
+  if (!ledgerId) {
+    pushAssistantResponse(buildErrorResponse('目前沒有啟用帳本，無法查詢今天交易。'))
+    return
+  }
+  const dayKey = dateKeyFromDate(new Date())
+  const rows = await listTransactionsByDay(ledgerId, dayKey).catch(() => [])
+  if (!rows.length) {
+    pushAssistantResponse(buildAssistantResponse({
+      user_message: '今天還沒有交易紀錄。',
+      ui_blocks: [
+        { kind: AI_BLOCK_KIND.EMPTY_STATE, title: '今天 0 筆', content: { text: '要不要現在新增一筆？' } },
+        {
+          kind: AI_BLOCK_KIND.CTA_ROW,
+          actions: [
+            { label: '新增支出', action_type: AI_ACTION_TYPE.OPEN_MODAL, action_payload: { target: 'quick_add_manual', type: 'expense' }, style: 'primary' },
+            { label: '新增收入', action_type: AI_ACTION_TYPE.OPEN_MODAL, action_payload: { target: 'quick_add_manual', type: 'income' }, style: 'secondary' },
+          ],
+        },
+      ],
+    }))
+    return
+  }
+
+  const incomeMinor = rows.reduce((sum, tx) => sum + (tx.type === 'income' ? Number(tx.amount_minor ?? 0) : 0), 0)
+  const expenseMinor = rows.reduce((sum, tx) => sum + (tx.type === 'expense' ? Number(tx.amount_minor ?? 0) : 0), 0)
+  const netMinor = incomeMinor - expenseMinor
+  const baseCurrency = normalizeCurrencyCode(rows[0]?.account_currency_code, 'TWD')
+  const summaryLines = [
+    `筆數：${rows.length} 筆`,
+    `收入：${formatCurrencyMinor(incomeMinor, baseCurrency)}`,
+    `支出：${formatCurrencyMinor(expenseMinor, baseCurrency)}`,
+    `淨額：${netMinor >= 0 ? '+' : '-'}${formatCurrencyMinor(Math.abs(netMinor), baseCurrency)}`,
+  ]
+  const tableRows = rows.slice(0, 8).map((tx) => [
+    formatTxTime(tx.occurred_at),
+    resolveTypeLabel(tx.type),
+    tx.category_name || '-',
+    formatSignedAmountByTx(tx),
+  ])
+
+  pushAssistantResponse(buildAssistantResponse({
+    user_message: `已列出今天交易，共 ${rows.length} 筆。`,
+    ui_blocks: [
+      {
+        kind: AI_BLOCK_KIND.CARD,
+        title: '今天交易摘要',
+        content: { items: summaryLines },
+      },
+      {
+        kind: AI_BLOCK_KIND.TABLE,
+        title: '交易列表（前 8 筆）',
+        content: {
+          columns: ['時間', '類型', '分類', '金額'],
+          rows: tableRows,
+          total_label: '今天淨額',
+          total_value: `${netMinor >= 0 ? '+' : '-'}${formatCurrencyMinor(Math.abs(netMinor), baseCurrency)}`,
+        },
+      },
+      {
+        kind: AI_BLOCK_KIND.CTA_ROW,
+        actions: [
+          { label: '本月圖表', action_type: AI_ACTION_TYPE.GENERATE_CHART, action_payload: { preset: 'month_expense_category', metric: 'expense' }, style: 'secondary' },
+          { label: '交易搜尋', action_type: AI_ACTION_TYPE.NAVIGATE, action_payload: { routeName: 'transaction-search', closeSheet: true }, style: 'ghost' },
+          { label: '匯出', action_type: AI_ACTION_TYPE.EXPORT_DATA, action_payload: { preset: 'export_transactions' }, style: 'ghost' },
+        ],
+      },
+    ],
+    actions: [
+      {
+        type: AI_ACTION_TYPE.GENERATE_REPORT,
+        payload: {
+          metric: 'cashflow',
+          group_by: 'day',
+          time_range: { from: dayKey, to: dayKey },
+        },
+        requires_confirm: false,
+      },
+    ],
+  }))
+}
+
+async function replyMonthCategoryChart(metric = 'expense') {
+  const normalizedMetric = metric === 'income' ? 'income' : 'expense'
+  const ledgerId = ledgerStore.activeLedgerId
+  if (!ledgerId) {
+    pushAssistantResponse(buildErrorResponse('目前沒有啟用帳本，無法產生圖表。'))
+    return
+  }
+
+  const monthKey = monthKeyFromDate(new Date())
+  const rows = await listTransactionsByMonth(ledgerId, monthKey).catch(() => [])
+  const targetRows = rows.filter((tx) => tx.type === normalizedMetric)
+  if (!targetRows.length) {
+    pushAssistantResponse(buildAssistantResponse({
+      user_message: normalizedMetric === 'income' ? '本月尚無收入資料可繪圖。' : '本月尚無支出資料可繪圖。',
+      ui_blocks: [
+        {
+          kind: AI_BLOCK_KIND.EMPTY_STATE,
+          title: '暫無圖表資料',
+          content: { text: '先記錄幾筆交易後，我就能產生分類圖表。' },
+        },
+      ],
+    }))
+    return
+  }
+
+  const grouped = new Map()
+  for (const tx of targetRows) {
+    const key = String(tx.category_name ?? '').trim() || '未分類'
+    grouped.set(key, (grouped.get(key) ?? 0) + (Math.abs(Number(tx.amount_minor ?? 0)) / 100))
+  }
+  const ranking = Array.from(grouped.entries())
+    .map(([name, amountMajor]) => ({ name, amountMajor: Math.round(amountMajor * 100) / 100 }))
+    .sort((a, b) => b.amountMajor - a.amountMajor)
+
+  const labels = ranking.slice(0, 8).map((item) => item.name)
+  const data = ranking.slice(0, 8).map((item) => item.amountMajor)
+  const totalMajor = Math.round(ranking.reduce((sum, item) => sum + item.amountMajor, 0) * 100) / 100
+  const unit = normalizeCurrencyCode(targetRows[0]?.account_currency_code, 'TWD')
+  const summaryText = `總額 ${formatCurrencyMajor(totalMajor, unit)}，最高為 ${ranking[0]?.name || '-'}.`
+  const tableRows = ranking.slice(0, 8).map((item, index) => [
+    `${index + 1}`,
+    item.name,
+    formatCurrencyMajor(item.amountMajor, unit),
+  ])
+
+  pushAssistantResponse(buildAssistantResponse({
+    user_message: normalizedMetric === 'income' ? '這是本月收入分類圖表。' : '這是本月支出分類圖表。',
+    ui_blocks: [
+      {
+        kind: AI_BLOCK_KIND.CHART,
+        title: normalizedMetric === 'income' ? '本月收入分類（長條）' : '本月支出分類（長條）',
+        content: {
+          chart_spec: {
+            chart_type: 'bar',
+            title: normalizedMetric === 'income' ? '本月收入分類' : '本月支出分類',
+            unit,
+            labels,
+            series: [{ name: normalizedMetric === 'income' ? '收入' : '支出', data }],
+            summary: {
+              total: totalMajor,
+              top_item: ranking[0]?.name || '',
+              change_pct: null,
+            },
+          },
+          summary_text: summaryText,
+        },
+      },
+      {
+        kind: AI_BLOCK_KIND.TABLE,
+        title: '分類排行',
+        content: {
+          columns: ['#', '分類', '金額'],
+          rows: tableRows,
+          total_label: '總額',
+          total_value: formatCurrencyMajor(totalMajor, unit),
+        },
+      },
+      {
+        kind: AI_BLOCK_KIND.CTA_ROW,
+        actions: [
+          {
+            label: normalizedMetric === 'income' ? '看支出圖表' : '看收入圖表',
+            action_type: AI_ACTION_TYPE.GENERATE_CHART,
+            action_payload: { preset: 'month_expense_category', metric: normalizedMetric === 'income' ? 'expense' : 'income' },
+            style: 'secondary',
+          },
+          { label: '列出今天', action_type: AI_ACTION_TYPE.GENERATE_REPORT, action_payload: { preset: 'today_transactions' }, style: 'ghost' },
+          { label: '匯出', action_type: AI_ACTION_TYPE.EXPORT_DATA, action_payload: { preset: 'export_transactions' }, style: 'ghost' },
+        ],
+      },
+    ],
+    actions: [
+      {
+        type: AI_ACTION_TYPE.GENERATE_CHART,
+        payload: {
+          chart_type: 'bar',
+          metric: normalizedMetric,
+          group_by: 'category',
+          time_range: {
+            from: `${monthKey}-01`,
+            to: `${monthKey}-31`,
+          },
+          filters: {},
+        },
+        requires_confirm: false,
+      },
+    ],
+  }))
+}
+
+async function replyExportPlan() {
+  const ledgerId = ledgerStore.activeLedgerId
+  if (!ledgerId) {
+    pushAssistantResponse(buildErrorResponse('目前沒有啟用帳本，無法產生匯出預覽。'))
+    return
+  }
+  const monthKey = monthKeyFromDate(new Date())
+  const rows = await listTransactionsByMonth(ledgerId, monthKey).catch(() => [])
+  const incomeMinor = rows.reduce((sum, tx) => sum + (tx.type === 'income' ? Number(tx.amount_minor ?? 0) : 0), 0)
+  const expenseMinor = rows.reduce((sum, tx) => sum + (tx.type === 'expense' ? Number(tx.amount_minor ?? 0) : 0), 0)
+  const currency = normalizeCurrencyCode(rows[0]?.account_currency_code, 'TWD')
+  const confirmToken = createConfirmToken('export')
+
+  pushAssistantResponse(buildAssistantResponse({
+    user_message: '已準備匯出交易資料，先提供預覽讓你確認。',
+    ui_blocks: [
+      {
+        kind: AI_BLOCK_KIND.CARD,
+        title: '匯出預覽',
+        content: {
+          items: [
+            `期間：${monthKey}`,
+            `筆數：${rows.length} 筆`,
+            `收入：${formatCurrencyMinor(incomeMinor, currency)}`,
+            `支出：${formatCurrencyMinor(expenseMinor, currency)}`,
+            '格式：可於下一頁選擇 CSV / Excel / JSON',
+          ],
+        },
+      },
+      {
+        kind: AI_BLOCK_KIND.CONFIRM,
+        title: '確認匯出',
+        content: {
+          text: '確認後將前往匯出頁，可再調整欄位與格式。',
+        },
+        actions: [
+          { label: '前往匯出', action_type: AI_ACTION_TYPE.NAVIGATE, action_payload: { routeName: 'analysis-print', closeSheet: true }, style: 'primary' },
+          { label: '取消', action_type: AI_ACTION_TYPE.SHOW_TOAST, action_payload: { message: '已取消匯出' }, style: 'ghost' },
+        ],
+      },
+    ],
+    actions: [
+      {
+        type: AI_ACTION_TYPE.EXPORT_DATA,
+        payload: {
+          format: 'csv',
+          time_range: { from: `${monthKey}-01`, to: `${monthKey}-31` },
+        },
+        requires_confirm: true,
+        confirm_token: confirmToken,
+      },
+    ],
+  }))
+}
+
+async function tryHandleAiDialogueCommand(userText) {
+  const text = String(userText ?? '').trim()
+  if (!text) return false
+
+  if (includesAny(text, [/刪除所有/, /刪除全部/, /清空交易/, /覆蓋匯入/, /覆盖导入/, /delete all/i])) {
+    pushAssistantResponse(buildDangerousCommandResponse(text))
+    return true
+  }
+  if (includesAny(text, [/切換手動/, /切到手動/, /回到列表/, /^退出$/, /^離開$/, /^关闭$/, /^關閉$/, /\bmanual\b/i])) {
+    pushAssistantResponse(buildExitAiResponse())
+    return true
+  }
+  if (includesAny(text, [/新增分類/, /分類管理/, /category/i])) {
+    pushAssistantResponse(buildCategoryHelpResponse())
+    return true
+  }
+  if (includesAny(text, [/列出.*今天/, /今天.*交易/, /today/i])) {
+    await replyTodayTransactions()
+    return true
+  }
+  if (includesAny(text, [/(本月|這個月|这个月).*(圖|图|chart|分析)/i, /chart/i, /圖表/, /条图/, /條圖/])) {
+    const metric = includesAny(text, [/收入/, /income/i]) ? 'income' : 'expense'
+    await replyMonthCategoryChart(metric)
+    return true
+  }
+  if (includesAny(text, [/匯出/, /导出/, /\bexport\b/i, /csv/i, /xlsx/i, /excel/i, /pdf/i, /json/i])) {
+    await replyExportPlan()
+    return true
+  }
+
+  const calcResult = tryResolveSimpleCalculation(text)
+  if (calcResult) {
+    pushAssistantResponse(buildCalculationResponse(text, calcResult))
+    return true
+  }
+
+  return false
+}
+
+async function handleAiUiAction(action) {
+  const actionType = String(action?.action_type ?? '').trim()
+  const payload = action?.action_payload ?? {}
+  if (!actionType) return
+
+  if (actionType === AI_ACTION_TYPE.SHOW_TOAST) {
+    uiStore.pushToast(String(payload?.message ?? '').trim() || '已執行')
+    return
+  }
+
+  if (actionType === AI_ACTION_TYPE.OPEN_MODAL) {
+    if (payload?.target === 'quick_add_manual') {
+      const targetType = normalizeType(payload?.type)
+      const amountMajor = Number(payload?.amountMajor)
+      model.type = targetType
+      if (Number.isFinite(amountMajor) && amountMajor > 0) {
+        model.amount = amountMajor
+        model.amountInput = formatAmountInput(amountMajor)
+      }
+      const noteText = String(payload?.note ?? '').trim()
+      if (noteText) {
+        model.note = noteText
+      }
+      emit('switch-mode', 'manual')
+      return
+    }
+  }
+
+  if (actionType === AI_ACTION_TYPE.NAVIGATE) {
+    const closeSheet = payload?.closeSheet !== false
+    if (closeSheet) emit('close')
+    if (String(payload?.routeName ?? '').trim()) {
+      await router.push({
+        name: payload.routeName,
+        params: payload.params ?? {},
+        query: payload.query ?? {},
+      }).catch(() => {})
+      return
+    }
+    if (String(payload?.routePath ?? '').trim()) {
+      await router.push({
+        path: payload.routePath,
+        query: payload.query ?? {},
+      }).catch(() => {})
+    }
+    return
+  }
+
+  if (actionType === AI_ACTION_TYPE.GENERATE_REPORT) {
+    if (payload?.preset === 'today_transactions') {
+      await replyTodayTransactions()
+    }
+    return
+  }
+
+  if (actionType === AI_ACTION_TYPE.GENERATE_CHART) {
+    const metric = payload?.metric === 'income' ? 'income' : 'expense'
+    await replyMonthCategoryChart(metric)
+    return
+  }
+
+  if (actionType === AI_ACTION_TYPE.EXPORT_DATA) {
+    await replyExportPlan()
+    return
+  }
+}
+
+function buildCreateSuccessResponse(createdRecord, draft) {
+  const kindLabel = resolveTypeLabel(createdRecord?.type ?? draft?.type)
+  const amountMinor = Math.abs(Number(createdRecord?.amountMinor ?? draft?.amountMinor ?? 0))
+  const currency = accountCurrencyCode(createdRecord?.accountId ?? draft?.accountId ?? model.accountId)
+  const amountText = formatCurrencyMinor(amountMinor, currency)
+  const detailItems = [
+    `類型：${kindLabel}`,
+    `金額：${amountText}`,
+    `時間：${formatOccurredAtLabel(createdRecord?.occurredAt ?? draft?.occurredAt ?? new Date().toISOString())}`,
+    `帳戶：${accountNameById(createdRecord?.accountId ?? draft?.accountId ?? model.accountId)}`,
+  ]
+  if ((createdRecord?.type ?? draft?.type) === 'transfer') {
+    detailItems.push(`轉入：${accountNameById(createdRecord?.peerAccountId ?? draft?.peerAccountId ?? model.peerAccountId)}`)
+  } else {
+    detailItems.push(`分類：${categoryNameById(createdRecord?.categoryId ?? draft?.categoryId ?? model.categoryId)}`)
+  }
+
+  const ctaActions = []
+  if (String(createdRecord?.txId ?? '').trim()) {
+    ctaActions.push({
+      label: '查看明細',
+      action_type: AI_ACTION_TYPE.NAVIGATE,
+      action_payload: { routeName: 'transaction-about', params: { id: createdRecord.txId }, closeSheet: true },
+      style: 'primary',
+    })
+  }
+  ctaActions.push(
+    { label: '再記一筆', action_type: AI_ACTION_TYPE.OPEN_MODAL, action_payload: { target: 'quick_add_manual', type: draft?.type ?? 'expense' }, style: 'secondary' },
+    { label: '本月圖表', action_type: AI_ACTION_TYPE.GENERATE_CHART, action_payload: { preset: 'month_expense_category', metric: 'expense' }, style: 'ghost' },
+  )
+
+  return buildAssistantResponse({
+    user_message: '記帳完成，已建立交易。',
+    ui_blocks: [
+      {
+        kind: AI_BLOCK_KIND.CARD,
+        title: '建立成功',
+        content: { items: detailItems },
+      },
+      {
+        kind: AI_BLOCK_KIND.CTA_ROW,
+        actions: ctaActions,
+      },
+    ],
+    actions: [
+      {
+        type: AI_ACTION_TYPE.CREATE_TRANSACTION,
+        payload: {
+          txn_type: draft?.type,
+          amount: amountMinor / 100,
+          currency,
+          datetime: createdRecord?.occurredAt ?? draft?.occurredAt,
+          account_id: createdRecord?.accountId ?? draft?.accountId,
+          to_account_id: createdRecord?.peerAccountId ?? draft?.peerAccountId,
+          category_id: createdRecord?.categoryId ?? draft?.categoryId,
+          note: draft?.note ?? '',
+        },
+        requires_confirm: false,
+        undo_hint: String(createdRecord?.txId ?? '').trim()
+          ? { type: 'DELETE_TRANSACTION', payload: { tx_id: createdRecord.txId } }
+          : null,
+      },
+    ],
+  })
+}
+
 async function parseWithAi() {
   if (aiAutoCreating.value) return
 
@@ -793,6 +1733,11 @@ async function parseWithAi() {
   pushAiMessage('user', userText)
   warmupRecentHistoryInBackground()
 
+  if (await tryHandleAiDialogueCommand(userText)) {
+    aiInput.value = ''
+    return
+  }
+
   let result = null
   try {
     result = parseAutoBookkeepingText(userText, {
@@ -805,7 +1750,7 @@ async function parseWithAi() {
     })
   } catch (error) {
     const message = String(error?.message ?? 'AI 解析失敗，請稍後再試')
-    pushAiMessage('assistant', message)
+    pushAssistantResponse(buildErrorResponse(message))
     uiStore.pushToast(message, 'error')
     aiInput.value = ''
     return
@@ -814,7 +1759,7 @@ async function parseWithAi() {
 
   if (!result.draft) {
     const warningText = warnings[0] ?? t('ai_bookkeeping.warning.no_draft', '我沒有抓到可用交易資訊，請再描述一次')
-    pushAiMessage('assistant', warningText)
+    pushAssistantResponse(buildErrorResponse(warningText))
     uiStore.pushToast(warningText, 'error')
     aiInput.value = ''
     return
@@ -825,7 +1770,19 @@ async function parseWithAi() {
     && (!String(result.draft.accountId ?? '').trim() || !String(result.draft.peerAccountId ?? '').trim())
   ) {
     const warningText = warnings[0] ?? t('ai_bookkeeping.warning.transfer_accounts_insufficient')
-    pushAiMessage('assistant', warningText)
+    pushAssistantResponse(buildAssistantResponse({
+      user_message: warningText,
+      ui_blocks: [
+        {
+          kind: AI_BLOCK_KIND.CONFIRM,
+          title: '轉帳資訊不足',
+          content: { text: '請確認轉出帳戶與轉入帳戶。' },
+          actions: [
+            { label: '切換手動轉帳', action_type: AI_ACTION_TYPE.OPEN_MODAL, action_payload: { target: 'quick_add_manual', type: 'transfer' }, style: 'primary' },
+          ],
+        },
+      ],
+    }))
     uiStore.pushToast(warningText, 'error')
     aiInput.value = ''
     return
@@ -836,15 +1793,26 @@ async function parseWithAi() {
   const loanIntent = result.draft.loanIntent ?? null
 
   if (!loanIntent && result.draft.type !== 'transfer' && !result.draft.categoryId) {
-    pushAiMessage('assistant', t('ai_bookkeeping.warning.no_category'), {
-      actionKey: 'open-category-management',
-    })
+    pushAssistantResponse(buildAssistantResponse({
+      user_message: t('ai_bookkeeping.warning.no_category'),
+      ui_blocks: [
+        {
+          kind: AI_BLOCK_KIND.ERROR_STATE,
+          title: '缺少分類',
+          content: { text: '你可以先到分類管理新增，或切換手動挑選分類。' },
+          actions: [
+            { label: t('settings.category_management'), action_type: AI_ACTION_TYPE.NAVIGATE, action_payload: { routeName: 'settings-categories', closeSheet: true }, style: 'primary' },
+            { label: '切換手動', action_type: AI_ACTION_TYPE.OPEN_MODAL, action_payload: { target: 'quick_add_manual', type: result.draft.type }, style: 'secondary' },
+          ],
+        },
+      ],
+    }))
     return
   }
 
   if (loanIntent && !resolveLoanCounterpartyName(loanIntent)) {
     const warningText = '沒有辨識到借貸對象，請補上名字後再試'
-    pushAiMessage('assistant', warningText)
+    pushAssistantResponse(buildErrorResponse(warningText))
     uiStore.pushToast(warningText, 'error')
     return
   }
@@ -853,7 +1821,7 @@ async function parseWithAi() {
     assertCanUseAiBookkeeping()
   } catch (error) {
     const message = error.message ?? '免費版 AI 記帳每日最多 5 次'
-    pushAiMessage('assistant', message)
+    pushAssistantResponse(buildErrorResponse(message))
     uiStore.pushToast(message, 'error')
     return
   }
@@ -876,7 +1844,7 @@ async function parseWithAi() {
     )
   } catch (error) {
     const message = String(error?.message ?? error ?? '').trim() || 'AI 記帳失敗，請稍後再試'
-    pushAiMessage('assistant', message)
+    pushAssistantResponse(buildErrorResponse(message))
     uiStore.pushToast(message, 'error')
     return
   } finally {
@@ -884,13 +1852,13 @@ async function parseWithAi() {
   }
 
   if (!createdRecord) {
-    pushAiMessage('assistant', loanIntent ? '借貸記錄失敗，請重試' : '記帳失敗，請重試')
+    pushAssistantResponse(buildErrorResponse(loanIntent ? '借貸記錄失敗，請重試' : '記帳失敗，請重試'))
     return
   }
 
   recordAiBookkeepingUsage()
   aiCreatedRecord.value = createdRecord
-  pushAiMessage('assistant', loanIntent ? '借貸記錄完成' : '記帳完成')
+  pushAssistantResponse(buildCreateSuccessResponse(createdRecord, result.draft))
 }
 
 function warmupRecentHistoryInBackground() {
@@ -971,11 +1939,15 @@ function pushAiMessage(role, text, options = {}) {
   const content = String(text ?? '').trim()
   if (!content) return
   const actionKey = String(options?.actionKey ?? '').trim()
+  const uiBlocks = Array.isArray(options?.uiBlocks) ? options.uiBlocks : []
+  const actions = Array.isArray(options?.actions) ? options.actions : []
   aiMessages.value.push({
     id: `ai-${aiMessageSeq++}`,
     role: role === 'user' ? 'user' : 'assistant',
     text: content,
     actionKey,
+    uiBlocks,
+    actions,
   })
 }
 
@@ -988,8 +1960,10 @@ function resolveAiMessageActionLabel(actionKey) {
 
 function handleAiMessageAction(actionKey) {
   if (actionKey !== 'open-category-management') return
-  emit('close')
-  void router.push({ name: 'settings-categories' })
+  void handleAiUiAction({
+    action_type: AI_ACTION_TYPE.NAVIGATE,
+    action_payload: { routeName: 'settings-categories', closeSheet: true },
+  })
 }
 
 function resolveAiParserWarnings(result) {
@@ -1809,7 +2783,7 @@ h3 {
 .type-grid {
   margin-top: 12px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 .form-wrap {
@@ -1855,6 +2829,99 @@ h3 {
 }
 .chat-action-btn {
   width: fit-content;
+}
+.ai-block-list {
+  display: grid;
+  gap: 8px;
+}
+.ai-ui-block {
+  border: 1px solid color-mix(in srgb, var(--field-border) 84%, var(--primary) 16%);
+  background: color-mix(in srgb, var(--card) 86%, var(--bg) 14%);
+  border-radius: 10px;
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+.ai-ui-block.kind-confirm,
+.ai-ui-block.kind-error_state {
+  border-color: color-mix(in srgb, var(--danger) 36%, var(--field-border) 64%);
+}
+.ai-ui-block-head {
+  display: grid;
+  gap: 2px;
+}
+.ai-card-list {
+  display: grid;
+  gap: 4px;
+}
+.ai-table-wrap {
+  display: grid;
+  gap: 6px;
+}
+.ai-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.ai-table th,
+.ai-table td {
+  text-align: left;
+  border-bottom: 1px solid color-mix(in srgb, var(--field-border) 78%, transparent 22%);
+  padding: 4px 0;
+}
+.ai-table-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.ai-chart-wrap {
+  display: grid;
+  gap: 6px;
+}
+.ai-chart-bars {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.ai-chart-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.6fr auto;
+  gap: 6px;
+  align-items: center;
+}
+.ai-chart-label {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-chart-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--field-border) 85%, var(--bg) 15%);
+  overflow: hidden;
+}
+.ai-chart-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 68%, var(--ok) 32%) 100%);
+}
+.ai-chart-value {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.ai-chart-summary {
+  margin: 0;
+}
+.ai-block-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 .ai-result {
   border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--field-border));

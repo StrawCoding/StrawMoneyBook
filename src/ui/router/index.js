@@ -44,6 +44,12 @@ const router = createRouter({
       meta: { tab: 'home' },
     },
     {
+      name: 'transaction-quick-add',
+      path: '/transactions/quick-add',
+      component: () => import('@/ui/views/BookkeepingPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
       name: 'transaction-calendar',
       path: '/transactions/calendar',
       component: () => import('@/ui/views/CalendarPage.vue'),
@@ -64,7 +70,7 @@ const router = createRouter({
     {
       name: 'ai-auto-bookkeeping',
       path: '/ai-auto-bookkeeping',
-      component: () => import('@/ui/views/AiAutoBookkeepingPage.vue'),
+      component: () => import('@/ui/views/BookkeepingPage.vue'),
       meta: { tab: 'home' },
     },
     {

@@ -4,42 +4,74 @@
 
 ## 1. 功能總覽
 
-- 多帳本管理（切換帳本、帳本設定）
-- 首頁總覽（收支卡、預算卡、交易紀錄、快速新增）
-- 首頁功能列表頁（借貸、報銷入口）
-- 交易搜尋頁（獨立頁面）
+- 多帳本管理（切換帳本、帳本設定、帳本資料載入）
+- 首頁總覽（收支卡、預算簡表、交易流、快速新增）
+- 預算簡表支援月均/日均切換，並可左右滑動切換模式
+- 交易查詢（搜尋頁、日曆頁、交易明細頁）
+- 快速新增按鈕預設開啟 AI 記帳頁（`/ai-auto-bookkeeping`）
 - 預算管理（月預算、分類預算、已用/剩餘）
-- 分析頁（收入/支出圓餅圖、統計模式切換、列印頁）
-- 資產管理（帳戶餘額、管理模式、資產簡表）
+- 分析頁（收入/支出圖表、分類明細、報表匯出）
+- 資產管理（帳戶餘額、帳戶群組、資產簡表）
 - 借貸管理（借出/借入、還款、作廢）
-- 報銷管理（未報銷/已報銷、入帳處理）
-- 設定功能（資料管理、修復、分類、帳本、個人化）
+- 報銷與請款管理（報銷入帳、請款單建立/完成/匯出）
+- 存錢罐與訂閱追蹤
+- AI 自動記帳（文字解析 + 會員次數限制）
+- 設定功能（資料管理、自動備份、匯率、自動識別、安全鎖、語言、會員）
+- 銀行同步（路由與頁面已存在，設定入口目前預設隱藏）
 
 ## 2. 路由與頁面對應
 
 路由定義檔：`src/ui/router/index.js`
+以下表格列出主要路由（非完整清單）。
 
 | 路由 | 頁面檔案 | 主要用途 |
 |---|---|---|
-| `/` | `src/ui/views/home.vue` | 首頁總覽、範圍篩選、快速新增入口 |
+| `/` | `src/ui/views/home.vue` | 首頁總覽、範圍篩選、快速新增 |
 | `/budget` | `src/ui/views/budgeting.vue` | 月預算與分類預算管理 |
-| `/analysis` | `src/ui/views/analysis.vue` | 圖表分析（全部/年/月） |
-| `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 交易報表匯出（Excel） |
-| `/transactions/search` | `src/ui/views/TransactionSearchPage.vue` | 交易搜尋（獨立頁） |
-| `/features` | `src/ui/views/FeatureListPage.vue` | 首頁功能列表（借貸/報銷入口） |
-| `/ai-auto-bookkeeping` | `src/ui/views/AiAutoBookkeepingPage.vue` | AI 記帳對話頁 |
-| `/assets` | `src/ui/views/assets.vue` | 帳戶與資產管理 |
+| `/analysis` | `src/ui/views/analysis.vue` | 收支圖表分析（全部/年/月） |
+| `/analysis/category` | `src/ui/views/AnalysisCategoryDetailPage.vue` | 分類分析明細 |
+| `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 交易報表頁（CSV 匯出） |
+| `/transactions/search` | `src/ui/views/TransactionSearchPage.vue` | 交易搜尋 |
+| `/transactions/quick-add` | `src/ui/views/QuickAddPage.vue` | 快速新增（獨立頁） |
+| `/transactions/calendar` | `src/ui/views/CalendarPage.vue` | 交易日曆 |
+| `/transactions/:id` | `src/ui/views/TransactionAboutPage.vue` | 交易明細（含退款/關聯） |
+| `/features` | `src/ui/views/FeatureListPage.vue` | 功能列表入口頁 |
+| `/ai-auto-bookkeeping` | `src/ui/views/AiAutoBookkeepingPage.vue` | AI 記帳頁 |
+| `/assets` | `src/ui/views/assets.vue` | 資產總覽 |
+| `/icons/pick` | `src/ui/views/IconPickerPage.vue` | 帳戶/分類 icon 選擇 |
 | `/assets/accounts` | `src/ui/views/accounts/AssetAccountManagementPage.vue` | 資產帳戶管理 |
-| `/icons/pick` | `src/ui/views/IconPickerPage.vue` | 帳戶/分類 icon 選擇獨立頁 |
-| `/settings` | `src/ui/views/settings.vue` | 設定首頁 Router Link 入口 |
-| `/settings/data-management` | `src/ui/views/settings/SettingsDataManagementPage.vue` | 匯入匯出與資料重設 |
-| `/settings/repair` | `src/ui/views/settings/SettingsRepairPage.vue` | 資料修復 |
-| `/settings/ledgers` | `src/ui/views/settings/SettingsLedgerPage.vue` | 帳本管理 |
-| `/settings/categories` | `src/ui/views/settings/SettingsCategoryPage.vue` | 分類與群組管理 |
-| `/settings/personalization` | `src/ui/views/settings/SettingsPersonalizationPage.vue` | 主題色個人化 |
-| `/loans` | `src/ui/views/loans/LoanListPage.vue` | 借貸清單、還款、作廢 |
-| `/reimbursements` | `src/ui/views/reimbursements/ReimbursementListPage.vue` | 報銷清單、報銷入帳 |
+| `/assets/account-groups/:id` | `src/ui/views/accounts/AssetAccountGroupDetailPage.vue` | 帳戶群組管理 |
 | `/accounts/:id` | `src/ui/views/accounts/AccountDetailPage.vue` | 帳戶明細 |
+| `/loans` | `src/ui/views/loans/LoanListPage.vue` | 借貸清單 |
+| `/loans/counterparty` | `src/ui/views/loans/LoanCounterpartyDetailPage.vue` | 依往來對象檢視借貸明細 |
+| `/loans/:id` | `src/ui/views/loans/LoanDetailPage.vue` | 借貸明細 |
+| `/reimbursements` | `src/ui/views/reimbursements/ReimbursementListPage.vue` | 報銷清單 |
+| `/reimbursements/:id/edit` | `src/ui/views/reimbursements/ReimbursementEditPage.vue` | 報銷明細編輯/入帳 |
+| `/claim-sheets` | `src/ui/views/claims/ClaimSheetListPage.vue` | 請款單清單與匯出 |
+| `/savings-jars` | `src/ui/views/savings-jars/SavingsJarListPage.vue` | 存錢罐管理 |
+| `/subscriptions` | `src/ui/views/subscriptions/SubscriptionListPage.vue` | 訂閱追蹤 |
+| `/settings` | `src/ui/views/settings.vue` | 設定首頁 |
+| `/settings/data-management` | `src/ui/views/settings/SettingsDataManagementPage.vue` | 匯入/匯出/重設 |
+| `/settings/auto-backup` | `src/ui/views/settings/SettingsAutoBackupPage.vue` | Google / WebDAV 自動備份 |
+| `/settings/exchange-rate` | `src/ui/views/settings/SettingsExchangeRatePage.vue` | 匯率同步 |
+| `/settings/bank-sync` | `src/ui/views/settings/SettingsBankSyncPage.vue` | 銀行同步管理 |
+| `/settings/bank-sync/new` | `src/ui/views/settings/SettingsBankSyncCreatePage.vue` | 新增銀行連線 |
+| `/settings/ledgers` | `src/ui/views/settings/SettingsLedgerPage.vue` | 帳本管理 |
+| `/settings/ledgers/:id` | `src/ui/views/settings/SettingsLedgerDetailPage.vue` | 帳本明細編輯/刪除 |
+| `/settings/categories` | `src/ui/views/settings/SettingsCategoryPage.vue` | 分類管理 |
+| `/settings/categories/:id` | `src/ui/views/settings/SettingsCategoryDetailPage.vue` | 分類明細編輯/刪除 |
+| `/settings/category-groups/:id` | `src/ui/views/settings/SettingsCategoryGroupDetailPage.vue` | 分類群組排序/刪除 |
+| `/settings/auto-fill-rules` | `src/ui/views/settings/SettingsAutoFillRulesPage.vue` | 自動識別規則 |
+| `/settings/auto-fill-rules/new` | `src/ui/views/settings/SettingsAutoFillRuleEditPage.vue` | 建立自動識別規則 |
+| `/settings/auto-fill-rules/:id` | `src/ui/views/settings/SettingsAutoFillRuleEditPage.vue` | 編輯自動識別規則 |
+| `/settings/addon-templates` | `src/ui/views/settings/SettingsAddonTemplatePage.vue` | 附加項目模板 |
+| `/settings/personalization` | `src/ui/views/settings/SettingsPersonalizationPage.vue` | 主題與個人化 |
+| `/settings/language` | `src/ui/views/settings/SettingsLanguagePage.vue` | 語言設定 |
+| `/settings/security` | `src/ui/views/settings/SettingsSecurityPage.vue` | 安全鎖 |
+| `/settings/membership-benefits` | `src/ui/views/settings/SettingsMembershipBenefitsPage.vue` | 會員權益 |
+| `/settings/about` | `src/ui/views/settings/SettingsAboutPage.vue` | 關於我們 |
+| `/settings/version-info` | `src/ui/views/settings/SettingsVersionInfoPage.vue` | 版本資訊 |
+| `/settings/developer-debug` | `src/ui/views/settings/SettingsDeveloperDebugPage.vue` | 開發除錯資訊頁 |
 
 ## 2.1 主要導覽流程
 
@@ -52,22 +84,42 @@
 
 ### 首頁內導覽（`src/ui/views/home.vue`）
 
-- 快速新增：開啟 `src/ui/components/home/QuickAddSheet.vue`
+- 快速新增：導向 `/ai-auto-bookkeeping`（預設）
+- 功能列表：`/features`
 - 交易搜尋：`/transactions/search`
 - 分析頁：`/analysis`
-- 功能列表：`/features`
 
 ### 設定內導覽（`src/ui/views/settings.vue`）
 
-- 資料管理：`/settings/data-management`
-- 資料修復：`/settings/repair`
 - 帳本管理：`/settings/ledgers`
 - 分類管理：`/settings/categories`
+- 附加項目：`/settings/addon-templates`
+- 自動識別：`/settings/auto-fill-rules`
+- 匯率同步：`/settings/exchange-rate`
+- 資料管理：`/settings/data-management`
+- 自動備份：`/settings/auto-backup`
+- 語言：`/settings/language`
 - 個人化：`/settings/personalization`
+- 安全鎖：`/settings/security`
+- 會員權益：`/settings/membership-benefits`
+- 關於我們：`/settings/about`
+- 版本資訊：`/settings/version-info`
+- 銀行同步：`/settings/bank-sync`（目前由 `SHOW_BANK_SYNC_ENTRY = false` 控制為隱藏入口）
+- 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
+
+### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）
+
+- 借貸：`/loans`
+- 報銷：`/reimbursements`
+- 請款單：`/claim-sheets`
+- 存錢罐：`/savings-jars`
+- 訂閱：`/subscriptions`
+- 交易搜尋：`/transactions/search`
 
 ### 資產與分類導覽
 
 - 資產頁管理入口：`/assets` -> `/assets/accounts`
+- 帳戶群組明細：`/assets/accounts` -> `/assets/account-groups/:id`
 - 帳戶明細：`/assets` 或 `/assets/accounts` -> `/accounts/:id`
 - 分類/帳戶 icon 選擇：`/settings/categories` 或 `/assets/accounts` -> `/icons/pick`
 
@@ -80,13 +132,14 @@
 | 帳本切換 | `src/ui/components/common/LedgerSwitcher.vue` |
 | 範圍選擇（全部/年/月/日） | `src/ui/components/common/HomeRangePicker.vue` |
 | 當期收支卡 | `src/ui/components/home/HomeAssetSummaryCard.vue` |
-| 預算簡表 | `src/ui/components/home/HomeBudgetSummaryCard.vue` |
+| 預算簡表（月均/日均 + 左右滑動切換） | `src/ui/components/home/HomeBudgetSummaryCard.vue` |
 | 交易清單 | `src/ui/components/home/HomeTransactionFeed.vue` |
 | 編輯交易 | `src/ui/components/home/HomeTransactionEditSheet.vue` |
-| 快速新增交易 | `src/ui/components/home/QuickAddSheet.vue` |
-| 快速新增附加資訊（備註/報銷） | `src/ui/components/home/QuickAddSheet.vue`（懸浮抽屜） |
+| 快速新增交易 | `src/ui/views/QuickAddPage.vue` |
+| 快速新增附加資訊（備註/報銷/附加項目） | `src/ui/views/QuickAddPage.vue`（頁面內） |
 | 日期時間選擇 | `src/ui/components/common/DateTimePickerField.vue` |
 | 交易搜尋頁 | `src/ui/views/TransactionSearchPage.vue` |
+| 交易日曆頁 | `src/ui/views/CalendarPage.vue` |
 | 功能列表頁 | `src/ui/views/FeatureListPage.vue` |
 
 ## 4. 分析頁功能對應
@@ -98,8 +151,9 @@
 | mode 切換（全部/年/月） | `analysis.vue` 內部 state + query repo |
 | 收入圓餅圖 | `analysis.vue`（分類彙總 + 色盤） |
 | 支出圓餅圖 | `analysis.vue`（分類彙總 + 色盤） |
+| 分類明細頁 | `analysis.vue` -> `/analysis/category` + `AnalysisCategoryDetailPage.vue` |
 | 右上角列印按鈕 | `analysis.vue` -> `/analysis/print` |
-| 交易 Excel 匯出 | `src/ui/views/AnalysisPrintPage.vue` + `src/core/services/export.service.js` |
+| 交易 CSV 匯出 | `src/ui/views/AnalysisPrintPage.vue` + `src/core/services/export.service.js` |
 | 匯出範圍 | `AnalysisPrintPage.vue`（全部/年/月/日/自訂） |
 
 ## 5. 導覽與全域 UI
@@ -107,7 +161,10 @@
 | 功能 | 檔案 |
 |---|---|
 | App Shell / Router View | `src/ui/App.vue` |
+| 啟動時背景 Google 靜默登入（備份用途） | `src/ui/App.vue` + `src/services/google/auth.js` |
+| 安全鎖遮罩與前景驗證 | `src/ui/App.vue` + `src/ui/services/security-lock.service.js` |
 | 底部導覽列 | `src/ui/components/layout/BottomNav.vue` |
+| App 內返回與 fallback 邏輯 | `src/ui/services/navigation-back.service.js` |
 | Toast 訊息 | `src/ui/components/common/ToastHost.vue` |
 | 全域樣式與動畫 | `src/ui/assets/css/global.css` |
 | 入口與 icon 註冊 | `src/main.js` |
@@ -121,27 +178,53 @@
 | `ledger.store.js` | 活動帳本、帳本切換 |
 | `account.store.js` | 帳戶清單與餘額 |
 | `category.store.js` | 分類清單、群組、二級分類資料 |
-| `transaction.store.js` | 交易載入、新增、更新、刪除、首頁篩選 |
+| `transaction.store.js` | 交易載入、新增、更新、刪除、首頁篩選與關聯刷新 |
 | `budget.store.js` | 月預算與預算項目 |
 | `loan.store.js` | 借貸清單、還款、作廢、明細 |
 | `reimbursement.store.js` | 報銷列表與報銷狀態處理 |
+| `addon-template.store.js` | 附加項目模板讀取與快取 |
 | `ui.store.js` | 全域 UI 狀態（Toast 等） |
 
 ## 7. Service（業務邏輯層）對應
 
-目錄：`src/core/services/`
+核心目錄：`src/core/services/`
 
 | Service | 功能 |
 |---|---|
 | `bootstrap.service.js` | 啟動時初始化資料與 stores |
-| `transaction.service.js` | 收入/支出/轉帳/調整建立與編輯驗證 |
+| `transaction.service.js` | 收入/支出/轉帳/退款建立、編輯驗證、刪除關聯交易（報銷/退款） |
 | `budget.service.js` | 預算快照、複製上月預算 |
 | `loan.service.js` | 借貸建立、還款、作廢 |
 | `reimbursement.service.js` | 報銷流程、報銷入帳、隱藏分類處理 |
+| `savings-jar.service.js` | 存錢罐存提與目標管理 |
+| `subscription-tracker.service.js` | 訂閱追蹤與期別處理 |
+| `ai-bookkeeping.service.js` | AI 記帳語意解析與建議 |
+| `ai-bookkeeping-tiny-ner.service.js` | AI 記帳輕量關鍵詞/實體抽取 |
+| `membership.service.js` | 會員等級、限制與 Google Play 狀態同步 |
+| `google-play-billing.service.js` | Google Play 方案查詢、購買、恢復、兌換 |
 | `import.service.js` | 匯入 |
-| `export.service.js` | 匯出（含交易 Excel） |
+| `export.service.js` | 匯出（CSV / Spreadsheet XML / 檔案落地） |
 | `repair.service.js` | 資料一致性檢查與修復 |
 | `seed.service.js` | 種子資料 |
+
+UI 服務目錄：`src/ui/services/`
+
+| Service | 功能 |
+|---|---|
+| `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原 |
+| `webdav-backup.service.js` | WebDAV 備份連線、自動備份、還原 |
+| `addon-template.service.js` | 附加項目模板預設值與保存 |
+| `bank-sync.service.js` | 銀行同步前端流程（憑證加密封裝、同步/匯入） |
+| `ai-loan-intent.service.js` | AI 借貸語意到借貸交易動作的轉換 |
+| `auto-fill-rule.service.js` | 自動識別規則 CRUD |
+| `exchange-rate.service.js` | 匯率同步資料流程 |
+| `home-widget.service.js` | Android 首頁小工具摘要同步 |
+| `navigation-back.service.js` | App 內返回可達性與 fallback 判定 |
+| `secure-setting.service.js` | 敏感設定值加密儲存（AES-GCM） |
+| `security-lock.service.js` | 生物辨識/系統憑證安全鎖整合 |
+| `theme.service.js` | 主題色、配色方案與字體縮放套用 |
+| `app-update.service.js` | App 版本檢查與商店連結 |
+| `i18n.service.js` | 多語系文案管理 |
 
 ## 8. Repository（資料存取層）對應
 
@@ -156,6 +239,8 @@
 | `ledger.repo.js` | 帳本 |
 | `loan.repo.js` | 借貸與還款紀錄 |
 | `reimbursement.repo.js` | 報銷單與明細 |
+| `savings-jar.repo.js` | 存錢罐資料 |
+| `bank-sync.repo.js` | 銀行連線與同步設定 |
 | `counterparty.repo.js` | 往來對象 |
 | `settings.repo.js` | 設定 |
 | `base.repo.js` | 通用 helper |
@@ -168,21 +253,26 @@
 - 若新增主頁功能，優先考慮：`home.vue` + `HomeTransactionFeed.vue` + `transaction.store.js`。
 - 若新增分析維度，優先考慮：`analysis.vue` 與 `transaction.repo.js` 的查詢方法。
 - 若調整交易報表欄位或匯出格式，優先考慮：`AnalysisPrintPage.vue` + `export.service.js`。
+- 若調整交易刪除邏輯，需同步檢查 `transaction.service.js` 的關聯刪除（退款/報銷）。
+- 若調整 App 開啟流程，需同步檢查 `App.vue`、`google/auth.js` 與備份 service 的靜默登入流程。
+- 若調整銀行同步入口，需同步檢查 `settings.vue` 的 `SHOW_BANK_SYNC_ENTRY` 與 `/settings/bank-sync` 路由可達性。
 
 ## 10. 文件更新時機
 
 建議在以下情況同步更新此文件：
 
 - 新增/刪除路由頁面
-- 調整主要功能流程（交易、借貸、報銷、預算）
+- 調整主要功能流程（交易、借貸、報銷、請款、預算、備份）
 - 變更 store/service/repository 的責任邊界
-- 新增重要共用元件（日期選擇器、統計元件等）
+- 新增重要共用元件（日期選擇器、統計元件、首頁卡片等）
+- 設定入口策略變更（例如：銀行同步顯示/隱藏）
 
 ## 11. 變數與函數索引（檔案層級）
 
 - 範圍：`*.js`、`*.mjs`、`*.cjs`、`*.vue` 的 `<script>` 區塊
 - 規則：僅收錄檔案層級宣告（module scope），不含函數內部區域變數
 - 產生方式：由專案自動掃描產生（可重複執行更新）
+- 備註：此段為掃描快照，新增檔案或重新建置後請重新掃描更新
 
 ### `android/app/src/main/assets/public/assets/addon-note-Bwq_D-Ew.js`
 - 函數（0）：無

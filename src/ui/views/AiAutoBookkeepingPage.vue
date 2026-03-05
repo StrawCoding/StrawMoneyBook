@@ -1,9 +1,12 @@
 <template>
   <section ref="pageRef" class="stack ai-page" :class="{ leaving: isPageLeaving }">
     <article class="card panel" :class="{ 'ai-busy-panel': speechListening || parsing || submitting }">
-      <header class="row">
-        <h2>AI 自動記帳</h2>
-        <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
+      <header v-if="!embedded" class="row">
+        <h2>{{ t('ai_bookkeeping.page_title') }}</h2>
+        <div class="header-actions">
+          <button type="button" class="btn" @click="goManualBookkeeping">{{ t('ai_bookkeeping.action.switch_manual') }}</button>
+          <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
+        </div>
       </header>
 
       <label class="field">
@@ -28,40 +31,35 @@
       </transition>
 
       <div class="row action-row">
-        <transition name="ai-action-swap" mode="out-in">
-          <button
-            v-if="!hasInputText && speechSupported"
-            key="voice"
-            class="btn icon-action-btn"
-            :class="{ primary: speechListening, busy: speechListening }"
-            :disabled="parsing || submitting"
-            :aria-label="speechListening ? '停止語音輸入' : '語音輸入'"
-            :title="speechListening ? '停止語音輸入' : '語音輸入'"
-            @click="toggleVoiceInput"
-          >
-            <font-awesome-icon icon="fa-solid fa-microphone" />
-          </button>
-          <button
-            v-else
-            key="submit"
-            class="btn primary icon-action-btn"
-            :class="{ busy: parsing || submitting }"
-            :disabled="parsing || submitting"
-            aria-label="送出 AI 記帳"
-            title="送出 AI 記帳"
-            @click="parseText"
-          >
-            <font-awesome-icon icon="fa-solid fa-paper-plane" />
-          </button>
-        </transition>
+        <button
+          v-if="speechSupported"
+          class="btn icon-action-btn"
+          :class="{ primary: speechListening, busy: speechListening }"
+          :disabled="parsing || submitting"
+          :aria-label="speechListening ? t('ai_bookkeeping.action.stop_voice_input') : t('ai_bookkeeping.action.voice_input')"
+          :title="speechListening ? t('ai_bookkeeping.action.stop_voice_input') : t('ai_bookkeeping.action.voice_input')"
+          @click="toggleVoiceInput"
+        >
+          <font-awesome-icon icon="fa-solid fa-microphone" />
+        </button>
+        <button
+          class="btn primary icon-action-btn"
+          :class="{ busy: parsing || submitting }"
+          :disabled="parsing || submitting"
+          :aria-label="t('ai_bookkeeping.action.submit')"
+          :title="t('ai_bookkeeping.action.submit')"
+          @click="parseText"
+        >
+          <font-awesome-icon icon="fa-solid fa-paper-plane" />
+        </button>
       </div>
     </article>
 
     <transition name="ai-result-pop">
       <article v-if="hasDraft" class="card panel result-panel">
       <header class="row">
-        <h3>解析結果</h3>
-        <small class="muted">可手動微調後再儲存</small>
+        <h3>{{ t('ai_bookkeeping.result.title') }}</h3>
+        <small class="muted">{{ t('ai_bookkeeping.result.hint') }}</small>
       </header>
 
       <transition name="ai-warn-pop">
@@ -218,9 +216,11 @@
         </div>
       </div>
 
-      <footer class="row action-row">
+      <footer class="row action-row result-action-row">
         <button class="btn" :disabled="parsing || submitting" @click="parseText">重新解析</button>
-        <button class="btn primary" :class="{ busy: submitting }" :disabled="parsing || submitting" @click="submit">建立交易</button>
+        <button class="btn primary" :class="{ busy: submitting }" :disabled="parsing || submitting" @click="submit">
+          {{ t('ai_bookkeeping.action.edit_transaction') }}
+        </button>
       </footer>
       </article>
     </transition>
@@ -229,11 +229,11 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { RouterLink, onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { getAiBookkeepingWarningFallback, parseAutoBookkeepingText } from '@/core/services/ai-bookkeeping.service'
-import { assertCanUseAiBookkeeping, recordAiBookkeepingUsage } from '@/core/services/membership.service'
+import { getAiBookkeepingDailyUsage, recordAiBookkeepingUsage } from '@/core/services/membership.service'
 import { useSpeechInput } from '@/ui/composables/use-speech-input'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
@@ -243,6 +243,7 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import {
   convertAmountMinorByRate,
@@ -259,6 +260,13 @@ import {
   resolveLoanOccurredAtIso,
 } from '@/ui/services/ai-loan-intent.service'
 
+defineProps({
+  embedded: {
+    type: Boolean,
+    default: false,
+  },
+})
+
 const accountStore = useAccountStore()
 const categoryStore = useCategoryStore()
 const transactionStore = useTransactionStore()
@@ -266,6 +274,7 @@ const uiStore = useUiStore()
 const loanStore = useLoanStore()
 const budgetStore = useBudgetStore()
 const ledgerStore = useLedgerStore()
+const router = useRouter()
 const { locale, t } = useI18n()
 
 const sourceText = ref('')
@@ -273,11 +282,12 @@ const warnings = ref([])
 const hasDraft = ref(false)
 const pageRef = ref(null)
 const isPageLeaving = ref(false)
-const hasInputText = computed(() => String(sourceText.value ?? '').trim().length > 0)
 const latestLoanIntent = ref(null)
 const speechLiveText = ref('')
 const parsing = ref(false)
 const submitting = ref(false)
+const persistedTransactionId = ref('')
+const persistedTransactionType = ref('')
 const AI_SUBMIT_TIMEOUT_MS = 15000
 const AI_HISTORY_WARMUP_TIMEOUT_MS = 1800
 const {
@@ -291,7 +301,7 @@ let historyWarmupTask = null
 
 const showAiStatus = computed(() => speechListening.value || parsing.value || submitting.value)
 const aiStatusText = computed(() => {
-  if (submitting.value) return t('ai_bookkeeping.status.creating', 'AI 建立交易中...')
+  if (submitting.value) return t('ai_bookkeeping.status.saving', 'AI 編輯交易中...')
   if (parsing.value) return t('ai_bookkeeping.status.parsing', 'AI 解析中...')
   if (speechListening.value) return t('ai_bookkeeping.status.listening', 'AI 聆聽中...')
   return ''
@@ -316,6 +326,17 @@ const model = reactive({
   manualExchangeRateInput: '',
 })
 
+async function goBack() {
+  await goBackOrFallback(router, '/features')
+}
+
+async function goManualBookkeeping() {
+  await router.push({
+    path: '/transactions/quick-add',
+    query: { type: model.type },
+  }).catch(() => {})
+}
+
 const exchangeRateSnapshot = ref({
   syncedAt: '',
   effectiveDate: '',
@@ -324,11 +345,11 @@ const exchangeRateSnapshot = ref({
 const exchangeRateSyncing = ref(false)
 const autoFillRules = ref([])
 
-const typeOptions = [
-  { value: 'expense', label: '支出' },
-  { value: 'income', label: '收入' },
-  { value: 'transfer', label: '轉帳' },
-]
+const typeOptions = computed(() => [
+  { value: 'expense', label: t('transaction.type.expense') },
+  { value: 'income', label: t('transaction.type.income') },
+  { value: 'transfer', label: t('transaction.type.transfer') },
+])
 
 const categoryGroupsByType = computed(() => {
   if (model.type === 'income') return categoryStore.incomeCategoryGroups
@@ -453,6 +474,7 @@ async function parseText(options = {}) {
 
   const startedAt = Date.now()
   parsing.value = true
+  let shouldAutoSubmit = false
 
   try {
     warmupRecentHistoryInBackground()
@@ -480,10 +502,8 @@ async function parseText(options = {}) {
     if (!result.draft) {
       hasDraft.value = false
       latestLoanIntent.value = null
-      uiStore.pushToast(
-        warnings.value[0] || t('ai_bookkeeping.warning.no_draft', '我沒有抓到可用交易資訊，請再描述一次'),
-        'error',
-      )
+      const warningMessage = warnings.value[0] || t('ai_bookkeeping.warning.no_draft', '我沒有抓到可用交易資訊，請再描述一次')
+      uiStore.pushToast(warningMessage, 'error')
       return
     }
 
@@ -493,6 +513,7 @@ async function parseText(options = {}) {
       model.note = ''
     }
     hasDraft.value = true
+    shouldAutoSubmit = Boolean(options.autoCreate)
     if (!warnings.value.length) {
       uiStore.pushToast('解析完成，請確認後儲存')
     } else {
@@ -504,6 +525,17 @@ async function parseText(options = {}) {
       await waitFor(260 - elapsed)
     }
     parsing.value = false
+  }
+
+  if (shouldAutoSubmit) {
+    const created = await submit({
+      autoCreated: true,
+      keepDraft: true,
+      preserveSourceText: true,
+    })
+    if (created) {
+      uiStore.pushToast(t('ai_bookkeeping.toast.auto_applied_editable', '已先套用交易，下方可再編輯'))
+    }
   }
 }
 
@@ -518,6 +550,7 @@ async function toggleVoiceInput() {
   let heardFinal = false
   let lastInterimText = ''
   let finalSegmentsText = ''
+  let autoStopped = false
   const started = await startSpeech({
     lang: speechLanguage.value,
     interimResults: true,
@@ -528,6 +561,10 @@ async function toggleVoiceInput() {
         finalSegmentsText = `${finalSegmentsText} ${finalText}`.trim()
         sourceText.value = finalSegmentsText
         speechLiveText.value = ''
+        if (!autoStopped) {
+          autoStopped = true
+          void stopSpeech()
+        }
       } else if (interimText) {
         lastInterimText = interimText
         speechLiveText.value = interimText
@@ -570,6 +607,18 @@ function applyDraft(draft) {
   model.manualExchangeRateInput = ''
 }
 
+function resetPersistedTransaction() {
+  persistedTransactionId.value = ''
+  persistedTransactionType.value = ''
+}
+
+function resolveAiLimitWithManualHint(message) {
+  const baseMessage = String(message ?? '').trim() || '免費版 AI 記帳每日最多 5 次'
+  const manualHint = t('ai_bookkeeping.toast.limit_manual_hint', '可改用手動記帳（快速新增）')
+  if (baseMessage.includes(manualHint)) return baseMessage
+  return `${baseMessage}，${manualHint}`
+}
+
 async function refreshLinkedDataAfterLoanWrite() {
   await Promise.all([
     loanStore.load(),
@@ -579,7 +628,10 @@ async function refreshLinkedDataAfterLoanWrite() {
   ])
 }
 
-async function submit() {
+async function submit(options = {}) {
+  const autoCreated = Boolean(options.autoCreated)
+  const keepDraft = Boolean(options.keepDraft)
+  const preserveSourceText = Boolean(options.preserveSourceText)
   if (parsing.value || submitting.value) return
   const amountMinor = Math.round(Math.abs(Number(model.amountMajor ?? 0)) * 100)
   const occurredAt = toOccurredAtIso(model.occurredDate, model.occurredHour, model.occurredMinute)
@@ -602,10 +654,9 @@ async function submit() {
     return
   }
 
-  try {
-    assertCanUseAiBookkeeping()
-  } catch (error) {
-    uiStore.pushToast(error.message ?? '免費版 AI 記帳每日最多 5 次', 'error')
+  const usage = getAiBookkeepingDailyUsage()
+  if (Number.isFinite(usage.limit) && usage.used >= usage.limit) {
+    uiStore.pushToast(resolveAiLimitWithManualHint('免費版 AI 記帳每日最多 5 次'), 'error')
     return
   }
 
@@ -669,15 +720,38 @@ async function submit() {
         'AI 記帳逾時，請稍後再試',
       )
       recordAiBookkeepingUsage()
-      uiStore.pushToast(`AI 自動記帳已完成${actionLabel}`)
-      hasDraft.value = false
-      warnings.value = []
-      sourceText.value = ''
-      speechLiveText.value = ''
-      latestLoanIntent.value = null
-      return
+      uiStore.pushToast(autoCreated ? `已先完成${actionLabel}` : `AI 自動記帳已完成${actionLabel}`)
+      if (!keepDraft) {
+        hasDraft.value = false
+        warnings.value = []
+        latestLoanIntent.value = null
+        resetPersistedTransaction()
+      }
+      if (!preserveSourceText) {
+        sourceText.value = ''
+        speechLiveText.value = ''
+      }
+      return true
     }
 
+    const noteText = String(model.note ?? '').trim()
+    const currentPersistedTxId = String(persistedTransactionId.value ?? '').trim()
+    const currentPersistedType = String(persistedTransactionType.value ?? '').trim()
+    const switchingTransferBoundary = Boolean(currentPersistedTxId) && (
+      (currentPersistedType === 'transfer' && model.type !== 'transfer')
+      || (currentPersistedType !== 'transfer' && model.type === 'transfer')
+    )
+    if (switchingTransferBoundary) {
+      await withTimeout(
+        transactionStore.deleteTransaction(currentPersistedTxId),
+        AI_SUBMIT_TIMEOUT_MS,
+        'AI 記帳逾時，請稍後再試',
+      )
+      resetPersistedTransaction()
+    }
+
+    let updatedExisting = false
+    const targetTxId = String(persistedTransactionId.value ?? '').trim()
     if (model.type === 'transfer') {
       if (!model.peerAccountId || model.accountId === model.peerAccountId) {
         uiStore.pushToast('請選擇不同的轉出/轉入帳戶', 'error')
@@ -691,58 +765,137 @@ async function submit() {
         uiStore.pushToast('轉入金額需大於 0，請調整匯率', 'error')
         return
       }
-      await withTimeout(
-        transactionStore.addTransfer({
-          amountMinor,
-          toAmountMinor: transferToAmountMinor,
-          occurredAt,
-          fromAccountId: model.accountId,
-          toAccountId: model.peerAccountId,
-          note: model.note,
-        }),
-        AI_SUBMIT_TIMEOUT_MS,
-        'AI 記帳逾時，請稍後再試',
-      )
+      if (targetTxId) {
+        await withTimeout(
+          transactionStore.updateTransaction(targetTxId, {
+            type: 'transfer',
+            amountMinor,
+            toAmountMinor: transferToAmountMinor,
+            sourceExtraMinor: 0,
+            occurredAt,
+            accountId: model.accountId,
+            peerAccountId: model.peerAccountId,
+            includeInBudget: model.includeInBudget,
+            includeInAnalysis: model.includeInAnalysis,
+            note: noteText,
+          }),
+          AI_SUBMIT_TIMEOUT_MS,
+          'AI 記帳逾時，請稍後再試',
+        )
+        persistedTransactionType.value = 'transfer'
+        updatedExisting = true
+      } else {
+        const transferResult = await withTimeout(
+          transactionStore.addTransfer({
+            amountMinor,
+            toAmountMinor: transferToAmountMinor,
+            occurredAt,
+            fromAccountId: model.accountId,
+            toAccountId: model.peerAccountId,
+            note: noteText,
+          }),
+          AI_SUBMIT_TIMEOUT_MS,
+          'AI 記帳逾時，請稍後再試',
+        )
+        persistedTransactionId.value = String(transferResult?.outTxId ?? transferResult?.inTxId ?? '').trim()
+        persistedTransactionType.value = 'transfer'
+      }
     } else if (model.type === 'income') {
-      await withTimeout(
-        transactionStore.addIncome({
-          amountMinor,
-          occurredAt,
-          accountId: model.accountId,
-          categoryId: model.categoryId,
-          includeInBudget: model.includeInBudget,
-          includeInAnalysis: model.includeInAnalysis,
-          note: model.note,
-        }),
-        AI_SUBMIT_TIMEOUT_MS,
-        'AI 記帳逾時，請稍後再試',
-      )
+      if (targetTxId) {
+        await withTimeout(
+          transactionStore.updateTransaction(targetTxId, {
+            type: 'income',
+            amountMinor,
+            occurredAt,
+            accountId: model.accountId,
+            categoryId: model.categoryId,
+            includeInBudget: model.includeInBudget,
+            includeInAnalysis: model.includeInAnalysis,
+            note: noteText,
+          }),
+          AI_SUBMIT_TIMEOUT_MS,
+          'AI 記帳逾時，請稍後再試',
+        )
+        persistedTransactionType.value = 'income'
+        updatedExisting = true
+      } else {
+        const createdTxId = await withTimeout(
+          transactionStore.addIncome({
+            amountMinor,
+            occurredAt,
+            accountId: model.accountId,
+            categoryId: model.categoryId,
+            includeInBudget: model.includeInBudget,
+            includeInAnalysis: model.includeInAnalysis,
+            note: noteText,
+          }),
+          AI_SUBMIT_TIMEOUT_MS,
+          'AI 記帳逾時，請稍後再試',
+        )
+        persistedTransactionId.value = String(createdTxId ?? '').trim()
+        persistedTransactionType.value = 'income'
+      }
     } else {
-      await withTimeout(
-        transactionStore.addExpense({
-          amountMinor,
-          occurredAt,
-          accountId: model.accountId,
-          categoryId: model.categoryId,
-          isReimbursable: model.isReimbursable,
-          includeInBudget: model.includeInBudget,
-          includeInAnalysis: model.includeInAnalysis,
-          note: model.note,
-        }),
-        AI_SUBMIT_TIMEOUT_MS,
-        'AI 記帳逾時，請稍後再試',
-      )
+      if (targetTxId) {
+        await withTimeout(
+          transactionStore.updateTransaction(targetTxId, {
+            type: 'expense',
+            amountMinor,
+            occurredAt,
+            accountId: model.accountId,
+            categoryId: model.categoryId,
+            isReimbursable: model.isReimbursable,
+            includeInBudget: model.includeInBudget,
+            includeInAnalysis: model.includeInAnalysis,
+            note: noteText,
+          }),
+          AI_SUBMIT_TIMEOUT_MS,
+          'AI 記帳逾時，請稍後再試',
+        )
+        persistedTransactionType.value = 'expense'
+        updatedExisting = true
+      } else {
+        const createdTxId = await withTimeout(
+          transactionStore.addExpense({
+            amountMinor,
+            occurredAt,
+            accountId: model.accountId,
+            categoryId: model.categoryId,
+            isReimbursable: model.isReimbursable,
+            includeInBudget: model.includeInBudget,
+            includeInAnalysis: model.includeInAnalysis,
+            note: noteText,
+          }),
+          AI_SUBMIT_TIMEOUT_MS,
+          'AI 記帳逾時，請稍後再試',
+        )
+        persistedTransactionId.value = String(createdTxId ?? '').trim()
+        persistedTransactionType.value = 'expense'
+      }
     }
 
     recordAiBookkeepingUsage()
-    uiStore.pushToast('AI 自動記帳已建立交易')
-    hasDraft.value = false
-    warnings.value = []
-    sourceText.value = ''
-    speechLiveText.value = ''
-    latestLoanIntent.value = null
+    if (!autoCreated) {
+      uiStore.pushToast(
+        updatedExisting
+          ? t('ai_bookkeeping.toast.updated', 'AI 記帳已更新交易')
+          : t('ai_bookkeeping.toast.saved', 'AI 記帳已儲存交易'),
+      )
+    }
+    if (!keepDraft) {
+      hasDraft.value = false
+      warnings.value = []
+      latestLoanIntent.value = null
+      resetPersistedTransaction()
+    }
+    if (!preserveSourceText) {
+      sourceText.value = ''
+      speechLiveText.value = ''
+    }
+    return true
   } catch (error) {
-    uiStore.pushToast(error.message ?? '建立交易失敗', 'error')
+    uiStore.pushToast(error.message ?? t('ai_bookkeeping.toast.save_failed', '儲存交易失敗'), 'error')
+    return false
   } finally {
     submitting.value = false
   }
@@ -983,8 +1136,17 @@ h2, h3 {
   display: grid;
   gap: 6px
 }
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 .action-row {
   margin-top: 10px
+}
+.result-action-row {
+  margin-top: 12px;
+  justify-content: flex-end;
 }
 .icon-action-btn {
   min-width: 40px;
@@ -1048,16 +1210,16 @@ h2, h3 {
   color: var(--danger-text)
 }
 .result-panel {
-  border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
+  border: 1px solid var(--border);
 }
 .type-grid {
-  margin-top: 10px;
+  margin-top: 12px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px
 }
 .form-wrap {
-  margin-top: 10px
+  margin-top: 14px
 }
 .inline-grid {
   display: grid;
@@ -1065,7 +1227,7 @@ h2, h3 {
   gap: 8px
 }
 .fx-panel {
-  border: 1px solid var(--field-border);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px;
   display: grid;
@@ -1084,7 +1246,6 @@ h2, h3 {
 }
 .fx-system-row {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -1103,45 +1264,41 @@ h2, h3 {
   gap: 8px
 }
 .switch-row {
-  border: 1px solid var(--field-border);
-  border-radius: 12px;
-  background: var(--surface-soft-accent);
-  color: var(--text-soft);
-  padding: 10px 12px;
-  font-weight: 600;
-  cursor: pointer;
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px;
+  font-weight: 700;
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 10px
+  align-items: center;
 }
 .switch-track {
-  width: 44px;
+  width: 42px;
   height: 24px;
   border-radius: 999px;
-  background: var(--surface-muted);
-  padding: 2px;
-  display: inline-flex;
-  align-items: center
+  background: color-mix(in srgb, var(--muted) 32%, transparent);
+  position: relative;
+  display: inline-block;
 }
 .switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
   width: 20px;
   height: 20px;
-  border-radius: 999px;
-  background: var(--surface-highlight);
-  transform: translateX(0);
-  transition: transform var(--anim-fast) ease
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 180ms ease;
 }
 .switch-row.active {
-  border-color: color-mix(in srgb, var(--ok) 64%, var(--primary) 36%);
-  background: linear-gradient(120deg, color-mix(in srgb, var(--ok) 35%, var(--bg) 65%), color-mix(in srgb, var(--ok) 55%, var(--card) 45%));
-  color: var(--text)
-}
-.switch-row.active .switch-track {
-  background: var(--surface-ok-strong)
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border) 48%);
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface-soft) 90%);
 }
 .switch-row.active .switch-thumb {
-  transform: translateX(20px)
+  transform: translateX(18px);
 }
 .ai-status-fade-enter-active,
 .ai-status-fade-leave-active {
@@ -1233,6 +1390,13 @@ h2, h3 {
   100% {
     opacity: 0;
     transform: translateY(10px) scale(0.992);
+  }
+}
+@media (max-width: 520px) {
+  .inline-grid,
+  .switch-grid,
+  .fx-mode-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

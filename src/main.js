@@ -182,11 +182,10 @@ function resolveRouteFromAppUrl(rawUrl) {
     }
 
     if (!routeKey || routeKey === 'home') {
-      const query = {}
       if (parsed.searchParams.get('quickAdd') === '1') {
-        query.quickAdd = '1'
+        return { path: '/ai-auto-bookkeeping' }
       }
-      return { path: '/', query }
+      return { path: '/' }
     }
   } catch (error) {
     console.warn('[app-url] failed to parse url', source, error)

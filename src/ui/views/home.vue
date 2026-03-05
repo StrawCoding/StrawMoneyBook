@@ -63,13 +63,6 @@
       <teleport to="body">
         <button class="fab btn primary" @click="openQuickAdd">{{ t('home_page.quick_add') }}</button>
       </teleport>
-      <QuickAddSheet
-        :open="isSheetOpen"
-        :mode="quickAddMode"
-        :initial-type="quickAddType"
-        @close="isSheetOpen = false"
-        @switch-mode="switchQuickAddMode"
-      />
     </section>
   </div>
 </template>
@@ -80,7 +73,6 @@ import { useRoute, useRouter } from 'vue-router'
 import HomeAssetSummaryCard from '@/ui/components/home/HomeAssetSummaryCard.vue'
 import HomeBudgetSummaryCard from '@/ui/components/home/HomeBudgetSummaryCard.vue'
 import HomeTransactionFeed from '@/ui/components/home/HomeTransactionFeed.vue'
-import QuickAddSheet from '@/ui/components/home/QuickAddSheet.vue'
 import LedgerSwitcher from '@/ui/components/common/LedgerSwitcher.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -89,9 +81,6 @@ import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 
-const isSheetOpen = ref(false)
-const quickAddMode = ref('manual')
-const quickAddType = ref('expense')
 const route = useRoute()
 const router = useRouter()
 const ledgerStore = useLedgerStore()
@@ -123,13 +112,7 @@ watch(
   () => String(route.query.quickAdd ?? ''),
   (flag) => {
     if (flag !== '1') return
-    openQuickAdd()
-    const nextQuery = { ...route.query }
-    delete nextQuery.quickAdd
-    void router.replace({
-      path: route.path,
-      query: nextQuery,
-    }).catch(() => {})
+    void router.replace('/ai-auto-bookkeeping').catch(() => {})
   },
   { immediate: true },
 )
@@ -223,13 +206,7 @@ const currentRangeLabel = computed(() => {
 })
 
 function openQuickAdd() {
-  quickAddMode.value = 'manual'
-  quickAddType.value = 'expense'
-  isSheetOpen.value = true
-}
-
-function switchQuickAddMode(mode) {
-  quickAddMode.value = mode === 'ai' ? 'ai' : 'manual'
+  void router.push('/ai-auto-bookkeeping').catch(() => {})
 }
 
 function monthKeyFromDate(date) {
