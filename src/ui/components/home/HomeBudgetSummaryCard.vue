@@ -5,45 +5,54 @@
       <RouterLink class="jump" to="/budget">查看</RouterLink>
     </header>
 
-    <div class="row mode-row">
-      <button
-        type="button"
-        class="btn mini-mode-btn"
-        :class="{ primary: displayMode === 'monthly' }"
-        @click="setDisplayMode('monthly')"
-      >
-        {{ t('home_budget_summary.mode.monthly') }}
-      </button>
-      <button
-        type="button"
-        class="btn mini-mode-btn"
-        :class="{ primary: displayMode === 'daily' }"
-        @click="setDisplayMode('daily')"
-      >
-        {{ t('home_budget_summary.mode.daily') }}
-      </button>
+    <div class="stat-viewport" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
+      <div class="stat-track" :style="{ transform: `translateX(-${displayModeIndex * 100}%)` }">
+        <section v-for="mode in displayModes" :key="mode.key" class="stat-page">
+          <div class="mode-label muted">{{ mode.label }}</div>
+          <div class="stat-wrap">
+            <BudgetMiniPie
+              :ratio="modeMetrics[mode.key].usedRatio"
+              :over="modeMetrics[mode.key].isOverBudget"
+              :percent-label="modeMetrics[mode.key].usedPercentLabel"
+              subtitle="已用"
+            />
+
+            <div class="remain-block">
+              <div class="muted">剩餘</div>
+              <div class="remain-value">
+                <MoneyText :value-minor="modeMetrics[mode.key].remainMinor" />
+              </div>
+            </div>
+
+            <div class="right-stack">
+              <div class="line">
+                <span class="muted">預算</span>
+                <MoneyText :value-minor="modeMetrics[mode.key].budgetMinor" />
+              </div>
+              <div class="line">
+                <span class="muted">已用</span>
+                <MoneyText :value-minor="modeMetrics[mode.key].spentMinor" />
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
 
-    <div class="stat-wrap" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
-      <BudgetMiniPie :ratio="usedRatio" :over="isOverBudget" :percent-label="usedPercentLabel" subtitle="已用" />
-
-      <div class="remain-block">
-        <div class="muted">剩餘</div>
-        <div class="remain-value">
-          <MoneyText :value-minor="displayRemainMinor" />
-        </div>
-      </div>
-
-      <div class="right-stack">
-        <div class="line">
-          <span class="muted">預算</span>
-          <MoneyText :value-minor="displayBudgetMinor" />
-        </div>
-        <div class="line">
-          <span class="muted">已用</span>
-          <MoneyText :value-minor="displaySpentMinor" />
-        </div>
-      </div>
+    <div class="pager-dots" role="tablist" :aria-label="t('home_budget_summary.title', '預算簡表')">
+      <button
+        v-for="mode in displayModes"
+        :key="`dot-${mode.key}`"
+        type="button"
+        class="pager-dot"
+        :class="{ active: displayMode === mode.key }"
+        :aria-label="mode.label"
+        :aria-selected="displayMode === mode.key ? 'true' : 'false'"
+        role="tab"
+        @click="setDisplayMode(mode.key)"
+      >
+        <span class="dot-core"></span>
+      </button>
     </div>
   </article>
 </template>
@@ -58,7 +67,15 @@ import { useI18n } from '@/ui/services/i18n.service'
 
 const budgetStore = useBudgetStore()
 const { t } = useI18n()
+const displayModes = computed(() => ([
+  { key: 'monthly', label: t('home_budget_summary.mode.monthly') },
+  { key: 'daily', label: t('home_budget_summary.mode.daily') },
+]))
 const displayMode = ref('monthly')
+const displayModeIndex = computed(() => {
+  const index = displayModes.value.findIndex((mode) => mode.key === displayMode.value)
+  return index >= 0 ? index : 0
+})
 const touchStartX = ref(0)
 const SWIPE_THRESHOLD_PX = 36
 
@@ -142,8 +159,7 @@ const monthDateMeta = computed(() => {
   }
 })
 
-const displayBudgetMinor = computed(() => {
-  if (displayMode.value !== 'daily') return totalBudgetMinor.value
+const dailyBudgetMinor = computed(() => {
   const { selectedDate, daysInMonth } = monthDateMeta.value
   return budgetStore.items.reduce((total, item) => {
     const baseAmountMinor = toFiniteNonNegative(item?.amount_minor)
@@ -155,24 +171,29 @@ const displayBudgetMinor = computed(() => {
   }, 0)
 })
 
-const displaySpentMinor = computed(() => {
-  if (displayMode.value !== 'daily') return totalSpentMinor.value
-  return Math.round(totalSpentMinor.value / monthDateMeta.value.elapsedDays)
-})
+const dailySpentMinor = computed(() => Math.round(totalSpentMinor.value / monthDateMeta.value.elapsedDays))
+const dailyRemainMinor = computed(() => dailyBudgetMinor.value - dailySpentMinor.value)
 
-const displayRemainMinor = computed(() => {
-  if (displayMode.value !== 'daily') return remainMinor.value
-  return displayBudgetMinor.value - displaySpentMinor.value
-})
+function calcMetricSet(mode) {
+  const budgetMinor = mode === 'daily' ? dailyBudgetMinor.value : totalBudgetMinor.value
+  const spentMinor = mode === 'daily' ? dailySpentMinor.value : totalSpentMinor.value
+  const currentRemainMinor = mode === 'daily' ? dailyRemainMinor.value : remainMinor.value
+  const usedRatio = budgetMinor > 0 ? spentMinor / budgetMinor : 0
+  const safeRatio = Number.isFinite(usedRatio) ? usedRatio : 0
+  return {
+    budgetMinor,
+    spentMinor,
+    remainMinor: currentRemainMinor,
+    usedRatio: safeRatio,
+    usedPercentLabel: `${Math.round(safeRatio * 100)}%`,
+    isOverBudget: budgetMinor > 0 && safeRatio > 1,
+  }
+}
 
-const usedRatio = computed(() => {
-  if (!displayBudgetMinor.value) return 0
-  const ratio = displaySpentMinor.value / displayBudgetMinor.value
-  return Number.isFinite(ratio) ? ratio : 0
-})
-
-const usedPercentLabel = computed(() => `${Math.round(usedRatio.value * 100)}%`)
-const isOverBudget = computed(() => displayBudgetMinor.value > 0 && usedRatio.value > 1)
+const modeMetrics = computed(() => ({
+  monthly: calcMetricSet('monthly'),
+  daily: calcMetricSet('daily'),
+}))
 
 function setDisplayMode(mode) {
   displayMode.value = mode === 'daily' ? 'daily' : 'monthly'
@@ -186,11 +207,13 @@ function onTouchEnd(event) {
   const endX = Number(event?.changedTouches?.[0]?.clientX ?? 0)
   const deltaX = endX - touchStartX.value
   if (Math.abs(deltaX) < SWIPE_THRESHOLD_PX) return
-  setDisplayMode(deltaX < 0 ? 'daily' : 'monthly')
+  if (deltaX < 0) setDisplayMode('daily')
+  else setDisplayMode('monthly')
 }
 </script>
 
-<style scoped>.summary-card {
+<style scoped>
+.summary-card {
   padding: 14px
 }
 h3 {
@@ -202,18 +225,23 @@ h3 {
   color: var(--primary-soft);
   font-size: 13px
 }
-.mode-row {
-  margin-top: 10px;
-  justify-content: flex-start;
-  gap: 8px
+.stat-viewport {
+  margin-top: 12px;
+  overflow: hidden
 }
-.mini-mode-btn {
-  min-height: 30px;
-  padding: 6px 10px;
+.stat-track {
+  display: flex;
+  transition: transform 220ms ease
+}
+.stat-page {
+  width: 100%;
+  flex: 0 0 100%
+}
+.mode-label {
+  margin-bottom: 6px;
   font-size: 12px
 }
 .stat-wrap {
-  margin-top: 12px;
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr) minmax(0, 1.35fr);
   align-items: center;
@@ -235,4 +263,34 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 8px
-}</style>
+}
+.pager-dots {
+  margin-top: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px
+}
+.pager-dot {
+  border: none;
+  background: transparent;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer
+}
+.dot-core {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #b8b8b8;
+  opacity: 1;
+  transition: width 180ms ease, opacity 180ms ease, background-color 180ms ease
+}
+.pager-dot.active .dot-core {
+  width: 18px;
+  background: var(--primary);
+  opacity: 1
+}
+</style>
