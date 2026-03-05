@@ -68,6 +68,55 @@ function toFiniteNonNegative(value) {
   return Math.max(0, numeric)
 }
 
+function normalizeAmountMode(value) {
+  return String(value ?? '').trim() === 'daily_average' ? 'daily_average' : 'fixed'
+}
+
+function normalizeDayRuleUnit(value) {
+  const normalized = String(value ?? '').trim()
+  if (normalized === 'weekday' || normalized === 'monthday') return normalized
+  return 'none'
+}
+
+function parseDayRuleValues(item, unit) {
+  const rawValues = Array.isArray(item?.day_rule_values)
+    ? item.day_rule_values
+    : item?.day_rule_values_json
+  let parsed = rawValues
+  if (!Array.isArray(parsed)) {
+    try {
+      parsed = JSON.parse(String(rawValues ?? '[]'))
+    } catch {
+      parsed = []
+    }
+  }
+  if (!Array.isArray(parsed)) return []
+  const max = unit === 'monthday' ? 31 : 7
+  return Array.from(
+    new Set(
+      parsed
+        .map((value) => Math.trunc(Number(value)))
+        .filter((value) => Number.isFinite(value) && value >= 1 && value <= max),
+    ),
+  )
+}
+
+function isBudgetItemActiveOnDate(item, date) {
+  const amountMode = normalizeAmountMode(item?.amount_mode)
+  if (amountMode !== 'daily_average') return true
+
+  const ruleUnit = normalizeDayRuleUnit(item?.day_rule_unit)
+  const ruleValues = parseDayRuleValues(item, ruleUnit)
+  if (ruleUnit === 'none' || ruleValues.length <= 0) return false
+
+  if (ruleUnit === 'monthday') {
+    return ruleValues.includes(date.getDate())
+  }
+
+  const weekday = date.getDay() === 0 ? 7 : date.getDay()
+  return ruleValues.includes(weekday)
+}
+
 const totalBudgetMinor = computed(() => toFiniteNonNegative(budgetStore.totalBudgetMinor))
 const totalSpentMinor = computed(() => toFiniteNonNegative(budgetStore.totalSpentMinor))
 const remainMinor = computed(() => Number(budgetStore.remainMinor ?? 0))
@@ -81,15 +130,29 @@ const monthDateMeta = computed(() => {
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
   const isCurrentMonth = year === now.getFullYear() && monthIndex === now.getMonth()
   const elapsedDays = isCurrentMonth ? Math.min(now.getDate(), daysInMonth) : daysInMonth
+  const selectedDay = isCurrentMonth
+    ? elapsedDays
+    : Math.min(Math.max(1, now.getDate()), daysInMonth)
   return {
+    year,
+    monthIndex,
     daysInMonth: Math.max(1, daysInMonth),
     elapsedDays: Math.max(1, elapsedDays),
+    selectedDate: new Date(year, monthIndex, selectedDay),
   }
 })
 
 const displayBudgetMinor = computed(() => {
   if (displayMode.value !== 'daily') return totalBudgetMinor.value
-  return Math.round(totalBudgetMinor.value / monthDateMeta.value.daysInMonth)
+  const { selectedDate, daysInMonth } = monthDateMeta.value
+  return budgetStore.items.reduce((total, item) => {
+    const baseAmountMinor = toFiniteNonNegative(item?.amount_minor)
+    if (!baseAmountMinor) return total
+    if (normalizeAmountMode(item?.amount_mode) === 'daily_average') {
+      return total + (isBudgetItemActiveOnDate(item, selectedDate) ? baseAmountMinor : 0)
+    }
+    return total + Math.round(baseAmountMinor / daysInMonth)
+  }, 0)
 })
 
 const displaySpentMinor = computed(() => {
