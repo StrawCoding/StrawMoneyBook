@@ -219,7 +219,7 @@
       <footer class="row action-row result-action-row">
         <button class="btn" :disabled="parsing || submitting" @click="parseText">重新解析</button>
         <button class="btn primary" :class="{ busy: submitting }" :disabled="parsing || submitting" @click="submit">
-          {{ t('ai_bookkeeping.action.edit_transaction') }}
+          {{ t('common.save') }}
         </button>
       </footer>
       </article>
@@ -464,6 +464,7 @@ watch(
 
 async function parseText(options = {}) {
   const fromSpeech = Boolean(options.fromSpeech)
+  const autoCreate = options.autoCreate !== false
   if (parsing.value || submitting.value) return
   const text = String(sourceText.value ?? '').trim()
   if (!text) {
@@ -513,11 +514,13 @@ async function parseText(options = {}) {
       model.note = ''
     }
     hasDraft.value = true
-    shouldAutoSubmit = Boolean(options.autoCreate)
-    if (!warnings.value.length) {
-      uiStore.pushToast('解析完成，請確認後儲存')
-    } else {
-      uiStore.pushToast('解析完成，請先確認警示項目')
+    shouldAutoSubmit = autoCreate
+    if (!shouldAutoSubmit) {
+      if (!warnings.value.length) {
+        uiStore.pushToast('解析完成，請確認後儲存')
+      } else {
+        uiStore.pushToast('解析完成，請先確認警示項目')
+      }
     }
   } finally {
     const elapsed = Date.now() - startedAt
@@ -1264,41 +1267,45 @@ h2, h3 {
   gap: 8px
 }
 .switch-row {
-  width: 100%;
-  border: 1px solid var(--border);
-  background: var(--surface-soft);
-  color: var(--text);
-  border-radius: 10px;
-  padding: 10px;
-  font-weight: 700;
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  background: var(--surface-soft-accent);
+  color: var(--text-soft);
+  padding: 10px 12px;
+  font-weight: 600;
+  cursor: pointer;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 .switch-track {
-  width: 42px;
+  width: 44px;
   height: 24px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--muted) 32%, transparent);
-  position: relative;
-  display: inline-block;
+  background: var(--surface-muted);
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
 }
 .switch-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
   width: 20px;
   height: 20px;
-  border-radius: 50%;
-  background: #fff;
-  transition: transform 180ms ease;
+  border-radius: 999px;
+  background: var(--surface-highlight);
+  transform: translateX(0);
+  transition: transform var(--anim-fast) ease;
 }
 .switch-row.active {
-  border-color: color-mix(in srgb, var(--primary) 52%, var(--border) 48%);
-  background: color-mix(in srgb, var(--primary) 10%, var(--surface-soft) 90%);
+  border-color: color-mix(in srgb, var(--ok) 64%, var(--primary) 36%);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--ok) 35%, var(--bg) 65%), color-mix(in srgb, var(--ok) 55%, var(--card) 45%));
+  color: var(--text);
+}
+.switch-row.active .switch-track {
+  background: var(--surface-ok-strong);
 }
 .switch-row.active .switch-thumb {
-  transform: translateX(18px);
+  transform: translateX(20px);
 }
 .ai-status-fade-enter-active,
 .ai-status-fade-leave-active {

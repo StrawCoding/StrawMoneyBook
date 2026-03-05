@@ -55,6 +55,10 @@ function isClientAuthorized(req) {
   return secureEquals(provided, GOOGLE_OAUTH_CLIENT_SHARED_KEY)
 }
 
+function shouldEnforceClientAuth() {
+  return Boolean(GOOGLE_OAUTH_CLIENT_SHARED_KEY)
+}
+
 function secureEquals(left, right) {
   const leftBytes = Buffer.from(String(left ?? ''), 'utf8')
   const rightBytes = Buffer.from(String(right ?? ''), 'utf8')
@@ -133,7 +137,7 @@ export default async function handler(req, res) {
     sendError(res, 405, 'method_not_allowed', 'Method not allowed', ERROR_NUMBER.METHOD_NOT_ALLOWED)
     return
   }
-  if (!isClientAuthorized(req)) {
+  if (shouldEnforceClientAuth() && !isClientAuthorized(req)) {
     sendError(
       res,
       401,

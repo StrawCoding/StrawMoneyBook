@@ -45,7 +45,7 @@
                 />
               </div>
 
-              <button type="button" class="btn extra-btn" @click="showExtra = true">
+              <button type="button" class="btn extra-btn" :class="{ active: showExtra }" @click="showExtra = true">
                 附加資訊
               </button>
             </div>
@@ -1004,6 +1004,11 @@ label {
   min-height: 42px;
   align-self: end;
   justify-content: center
+}
+.extra-btn.active {
+  border-color: color-mix(in srgb, var(--ok) 64%, var(--primary) 36%);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--ok) 35%, var(--bg) 65%), color-mix(in srgb, var(--ok) 55%, var(--card) 45%));
+  color: var(--text)
 }
 footer.row {
   justify-content: space-between

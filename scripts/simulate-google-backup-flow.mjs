@@ -38,7 +38,7 @@ const server = await createServer({
     noDiscovery: true,
   },
   ssr: {
-    noExternal: true,
+    noExternal: ['@capacitor/core', '@capgo/capacitor-social-login'],
   },
 })
 
