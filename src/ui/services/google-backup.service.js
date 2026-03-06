@@ -224,10 +224,41 @@ export async function getGoogleBackupState(ledgerId) {
   return hydrateStateProfileFromCache(ledgerId, state)
 }
 
-export async function autoConnectGoogleBackup(ledgerId) {
+export async function autoConnectGoogleBackup(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
+  const allowInteractive = Boolean(options.allowInteractive)
   const state = await getGoogleBackupState(ledgerId)
-  return ensureConnectedBySilentAuth(ledgerId, state)
+  const silentState = await ensureConnectedBySilentAuth(ledgerId, state)
+
+  if (!allowInteractive || !silentState.connected) {
+    return silentState
+  }
+
+  try {
+    await getAccessToken({
+      interactive: false,
+      preferredEmail: silentState.accountEmail,
+    })
+    return silentState
+  } catch {
+    // Fall through to interactive recovery.
+  }
+
+  try {
+    const profile = await resolveGoogleProfileForConnect(silentState.accountEmail)
+    return saveState(ledgerId, {
+      connected: true,
+      accountEmail: profile.email,
+      accountName: profile.name,
+      accountImageUrl: profile.imageUrl,
+      lastError: '',
+    })
+  } catch (error) {
+    const detail = String(error?.message ?? error ?? '').trim()
+    return saveState(ledgerId, {
+      lastError: detail || t('settings_auto_backup.error.google_connect_failed'),
+    })
+  }
 }
 
 export async function updateGoogleBackupState(ledgerId, patch = {}) {

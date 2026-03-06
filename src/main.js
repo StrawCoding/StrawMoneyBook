@@ -145,6 +145,7 @@ let dataChangeBackupTimer = null
 let dataChangeBackupRunning = false
 let lastAndroidBackPressedAt = 0
 let homeWidgetSyncTimer = null
+let hasTriedInteractiveGoogleAutoConnect = false
 
 function scheduleHomeWidgetSync(pinia, delayMs = 1200) {
   if (typeof window === 'undefined') return
@@ -389,16 +390,20 @@ function androidExitHintMessage() {
   return '再按一次返回鍵離開 App'
 }
 
-function restoreGoogleBackupSessionInBackground(ledgerId) {
+function restoreGoogleBackupSessionInBackground(ledgerId, { allowInteractive = false } = {}) {
   if (!ledgerId) return
-  void autoConnectGoogleBackup(ledgerId).catch((error) => {
+  const shouldAllowInteractive = Boolean(allowInteractive) && !hasTriedInteractiveGoogleAutoConnect
+  if (shouldAllowInteractive) {
+    hasTriedInteractiveGoogleAutoConnect = true
+  }
+  void autoConnectGoogleBackup(ledgerId, { allowInteractive: shouldAllowInteractive }).catch((error) => {
     console.warn('[google-backup] auto sign-in restore failed', error)
   })
 }
 
-function restoreGoogleBackupForActiveLedgerInBackground(ledgerId, { runDueBackup = false } = {}) {
+function restoreGoogleBackupForActiveLedgerInBackground(ledgerId, { runDueBackup = false, allowInteractive = false } = {}) {
   if (!ledgerId) return
-  restoreGoogleBackupSessionInBackground(ledgerId)
+  restoreGoogleBackupSessionInBackground(ledgerId, { allowInteractive })
   if (runDueBackup) {
     void runGoogleAutoBackupIfDue(ledgerId)
   }
@@ -497,7 +502,10 @@ async function main() {
       (ledgerId) => {
         const normalizedLedgerId = String(ledgerId ?? '').trim()
         if (!normalizedLedgerId) return
-        restoreGoogleBackupForActiveLedgerInBackground(normalizedLedgerId, { runDueBackup: true })
+        restoreGoogleBackupForActiveLedgerInBackground(normalizedLedgerId, {
+          runDueBackup: true,
+          allowInteractive: true,
+        })
         void runWebdavAutoBackupIfDue(normalizedLedgerId)
         void runExchangeRateAutoSyncIfDue(normalizedLedgerId)
       },

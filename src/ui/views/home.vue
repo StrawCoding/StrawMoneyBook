@@ -119,6 +119,7 @@ watch(
 
 async function syncHomeTransactions() {
   try {
+    await syncBudgetMonthByHomeFilter()
     if (filterMode.value === 'all') {
       await transactionStore.loadHomeAll()
       return
@@ -135,6 +136,18 @@ async function syncHomeTransactions() {
   } catch (error) {
     uiStore.pushToast(error.message ?? t('home_page.toast.load_failed'), 'error')
   }
+}
+
+async function syncBudgetMonthByHomeFilter() {
+  if (!ledgerStore.activeLedgerId) return
+  let targetMonthKey = ''
+  if (filterMode.value === 'month') {
+    targetMonthKey = normalizeMonthKey(selectedMonth.value)
+  } else if (filterMode.value === 'day') {
+    targetMonthKey = monthKeyFromDayKey(selectedDay.value)
+  }
+  if (!targetMonthKey || targetMonthKey === budgetStore.monthKey) return
+  await budgetStore.loadMonth(targetMonthKey)
 }
 
 async function switchFilterMode(nextMode) {
@@ -220,6 +233,18 @@ function dateKeyFromDate(date) {
   const m = String(date.getMonth() + 1).padStart(2, '0')
   const d = String(date.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
+}
+
+function normalizeMonthKey(value) {
+  const text = String(value ?? '').trim()
+  return /^\d{4}-\d{2}$/.test(text) ? text : ''
+}
+
+function monthKeyFromDayKey(dayKey) {
+  const text = String(dayKey ?? '').trim()
+  const matched = /^(\d{4})-(\d{2})-\d{2}$/.exec(text)
+  if (!matched) return ''
+  return `${matched[1]}-${matched[2]}`
 }
 
 function localeRangeMonth(year, month) {

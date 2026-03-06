@@ -63,9 +63,11 @@ import { RouterLink } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import BudgetMiniPie from '@/ui/components/budget/BudgetMiniPie.vue'
 import { useBudgetStore } from '@/ui/stores/budget.store'
+import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const budgetStore = useBudgetStore()
+const transactionStore = useTransactionStore()
 const { t } = useI18n()
 const displayModes = computed(() => ([
   { key: 'monthly', label: t('home_budget_summary.mode.monthly') },
@@ -134,9 +136,27 @@ function isBudgetItemActiveOnDate(item, date) {
   return ruleValues.includes(weekday)
 }
 
+function parseDayKey(dayKey) {
+  const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dayKey ?? '').trim())
+  if (!matched) return null
+  const year = Number(matched[1])
+  const month = Number(matched[2])
+  const day = Number(matched[3])
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null
+  const parsed = new Date(year, month - 1, day)
+  if (Number.isNaN(parsed.getTime())) return null
+  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) return null
+  return parsed
+}
+
 const totalBudgetMinor = computed(() => toFiniteNonNegative(budgetStore.totalBudgetMinor))
 const totalSpentMinor = computed(() => toFiniteNonNegative(budgetStore.totalSpentMinor))
 const remainMinor = computed(() => Number(budgetStore.remainMinor ?? 0))
+const selectedHomeDayDate = computed(() => {
+  if (transactionStore.homeFilterMode !== 'day') return null
+  return parseDayKey(transactionStore.homeFilterKey)
+})
 
 const monthDateMeta = computed(() => {
   const monthKey = String(budgetStore.monthKey ?? '').trim()
@@ -145,11 +165,22 @@ const monthDateMeta = computed(() => {
   const year = Number(matched?.[1] ?? now.getFullYear())
   const monthIndex = Math.max(0, Number(matched?.[2] ?? now.getMonth() + 1) - 1)
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
+  const selectedHomeDay = selectedHomeDayDate.value
+  const hasSelectedHomeDay = Boolean(
+    selectedHomeDay
+    && selectedHomeDay.getFullYear() === year
+    && selectedHomeDay.getMonth() === monthIndex,
+  )
+  const selectedHomeDayValue = hasSelectedHomeDay
+    ? Math.min(Math.max(1, selectedHomeDay.getDate()), daysInMonth)
+    : 0
   const isCurrentMonth = year === now.getFullYear() && monthIndex === now.getMonth()
-  const elapsedDays = isCurrentMonth ? Math.min(now.getDate(), daysInMonth) : daysInMonth
-  const selectedDay = isCurrentMonth
-    ? elapsedDays
-    : Math.min(Math.max(1, now.getDate()), daysInMonth)
+  const elapsedDays = hasSelectedHomeDay
+    ? selectedHomeDayValue
+    : (isCurrentMonth ? Math.min(now.getDate(), daysInMonth) : daysInMonth)
+  const selectedDay = hasSelectedHomeDay
+    ? selectedHomeDayValue
+    : (isCurrentMonth ? elapsedDays : Math.min(Math.max(1, now.getDate()), daysInMonth))
   return {
     year,
     monthIndex,

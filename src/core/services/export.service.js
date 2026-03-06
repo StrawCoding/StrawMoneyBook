@@ -565,17 +565,20 @@ export function openFileUrl(url) {
   const target = String(url ?? '').trim()
   if (!target || typeof window === 'undefined' || typeof document === 'undefined') return false
   const isPreviewBlobUrl = target.startsWith('blob:') || target.startsWith('data:')
+  const isCapacitorLocalFileUrl = target.includes('/_capacitor_file_/')
 
   if (Capacitor.isNativePlatform()) {
     if (isPreviewBlobUrl) {
       return false
     }
-    try {
-      // Use in-place navigation for actual device file URLs exposed by Capacitor.
-      window.location.assign(target)
-      return true
-    } catch {
-      // Fall through to browser-style fallbacks.
+    if (!isCapacitorLocalFileUrl) {
+      try {
+        // Use in-place navigation for non-Capacitor URLs.
+        window.location.assign(target)
+        return true
+      } catch {
+        // Fall through to browser-style fallbacks.
+      }
     }
   }
 
@@ -587,6 +590,9 @@ export function openFileUrl(url) {
     document.body.appendChild(anchor)
     anchor.click()
     anchor.remove()
+    if (Capacitor.isNativePlatform() && isCapacitorLocalFileUrl) {
+      return false
+    }
     return true
   }
 
