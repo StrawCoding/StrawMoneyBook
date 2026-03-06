@@ -1,9 +1,39 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+const manualScrollPositions = new Map()
+
+function readWindowScrollPosition() {
+  if (typeof window === 'undefined') {
+    return { left: 0, top: 0 }
+  }
+  return {
+    left: Number(window.scrollX ?? window.pageXOffset ?? 0) || 0,
+    top: Number(window.scrollY ?? window.pageYOffset ?? 0) || 0,
+  }
+}
+
+function resolveRememberedScrollPosition(fullPath) {
+  const key = String(fullPath ?? '').trim()
+  if (!key) return null
+  return manualScrollPositions.get(key) ?? null
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  scrollBehavior(_to, _from, savedPosition) {
+  scrollBehavior(to, _from, savedPosition) {
     if (savedPosition) return savedPosition
+    const rememberedPosition = resolveRememberedScrollPosition(to.fullPath)
+    if (rememberedPosition) {
+      return new Promise((resolve) => {
+        if (typeof window === 'undefined') {
+          resolve(rememberedPosition)
+          return
+        }
+        window.requestAnimationFrame(() => {
+          resolve(rememberedPosition)
+        })
+      })
+    }
     return { left: 0, top: 0 }
   },
   routes: [
@@ -285,6 +315,13 @@ const router = createRouter({
       meta: { tab: 'assets' },
     },
   ],
+})
+
+router.beforeEach((to, from) => {
+  const fromPath = String(from.fullPath ?? '').trim()
+  const toPath = String(to.fullPath ?? '').trim()
+  if (!fromPath || fromPath === toPath) return
+  manualScrollPositions.set(fromPath, readWindowScrollPosition())
 })
 
 export default router

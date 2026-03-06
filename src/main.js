@@ -396,17 +396,19 @@ function restoreGoogleBackupSessionInBackground(ledgerId, { allowInteractive = f
   if (shouldAllowInteractive) {
     hasTriedInteractiveGoogleAutoConnect = true
   }
-  void autoConnectGoogleBackup(ledgerId, { allowInteractive: shouldAllowInteractive }).catch((error) => {
+  return autoConnectGoogleBackup(ledgerId, { allowInteractive: shouldAllowInteractive }).catch((error) => {
     console.warn('[google-backup] auto sign-in restore failed', error)
+    return null
   })
 }
 
 function restoreGoogleBackupForActiveLedgerInBackground(ledgerId, { runDueBackup = false, allowInteractive = false } = {}) {
   if (!ledgerId) return
-  restoreGoogleBackupSessionInBackground(ledgerId, { allowInteractive })
-  if (runDueBackup) {
+  void (async () => {
+    const restoredState = await restoreGoogleBackupSessionInBackground(ledgerId, { allowInteractive })
+    if (!runDueBackup || !restoredState?.connected) return
     void runGoogleAutoBackupIfDue(ledgerId)
-  }
+  })()
 }
 
 async function main() {
