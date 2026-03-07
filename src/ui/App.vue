@@ -29,7 +29,7 @@
       <template v-if="!isBooting">
         <WelcomePage v-if="showWelcomePage" />
         <router-view v-else v-slot="{ Component, route }">
-          <transition v-if="!disableNextRouteTransition" name="route-slide" mode="out-in" appear>
+          <transition v-if="!disableNextRouteTransition" name="route-slide">
             <component :is="Component" :key="route.fullPath" />
           </transition>
           <component v-else :is="Component" :key="route.fullPath" />

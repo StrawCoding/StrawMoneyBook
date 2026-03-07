@@ -1,8 +1,6 @@
 import { ref } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 
-const manualScrollPositions = new Map()
-let pendingRestoreTimers = []
 export const disableNextRouteTransition = ref(false)
 export const routeRestoreMinHeight = ref(0)
 
@@ -10,90 +8,10 @@ if (typeof window !== 'undefined' && window.history && 'scrollRestoration' in wi
   window.history.scrollRestoration = 'manual'
 }
 
-function readWindowScrollPosition() {
-  if (typeof window === 'undefined') {
-    return { left: 0, top: 0 }
-  }
-  return {
-    left: Number(window.scrollX ?? window.pageXOffset ?? 0) || 0,
-    top: Number(window.scrollY ?? window.pageYOffset ?? 0) || 0,
-  }
-}
-
-function readDocumentHeight() {
-  if (typeof document === 'undefined') return 0
-  const docEl = document.documentElement
-  const body = document.body
-  const viewportHeight = typeof window === 'undefined' ? 0 : (Number(window.innerHeight ?? 0) || 0)
-  return Math.max(
-    Number(docEl?.scrollHeight ?? 0) || 0,
-    Number(body?.scrollHeight ?? 0) || 0,
-    viewportHeight,
-  )
-}
-
-function createScrollSnapshot() {
-  return {
-    ...readWindowScrollPosition(),
-    height: readDocumentHeight(),
-  }
-}
-
-function resolveRememberedScrollPosition(fullPath) {
-  const key = String(fullPath ?? '').trim()
-  if (!key) return null
-  return manualScrollPositions.get(key) ?? null
-}
-
-function clearPendingRestoreTimers() {
-  if (typeof window === 'undefined') return
-  for (const timerId of pendingRestoreTimers) {
-    window.clearTimeout(timerId)
-  }
-  pendingRestoreTimers = []
-}
-
-function scheduleWindowScrollRestore(position) {
-  if (typeof window === 'undefined' || !position) return
-  clearPendingRestoreTimers()
-  const left = Number(position.left ?? 0) || 0
-  const top = Number(position.top ?? 0) || 0
-  routeRestoreMinHeight.value = Math.max(Number(position.height ?? 0) || 0, Number(window.innerHeight ?? 0) || 0)
-  const restore = () => {
-    window.scrollTo({
-      left,
-      top,
-      behavior: 'auto',
-    })
-  }
-  const finalize = () => {
-    routeRestoreMinHeight.value = 0
-    disableNextRouteTransition.value = false
-  }
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(restore)
-  })
-  const delays = [0, 48, 120, 220]
-  pendingRestoreTimers = delays.map((delayMs) => window.setTimeout(restore, delayMs))
-  pendingRestoreTimers.push(window.setTimeout(() => {
-    restore()
-    finalize()
-  }, 320))
-}
-
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  scrollBehavior(to, _from, savedPosition) {
-    const rememberedPosition = resolveRememberedScrollPosition(to.fullPath)
-    if (rememberedPosition) {
-      scheduleWindowScrollRestore(rememberedPosition)
-      return {
-        left: Number(rememberedPosition.left ?? 0) || 0,
-        top: Number(rememberedPosition.top ?? 0) || 0,
-      }
-    }
+  scrollBehavior(_to, _from, savedPosition) {
     if (savedPosition) return savedPosition
-    clearPendingRestoreTimers()
     routeRestoreMinHeight.value = 0
     disableNextRouteTransition.value = false
     return { left: 0, top: 0 }
@@ -386,17 +304,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from) => {
-  const fromPath = String(from.fullPath ?? '').trim()
-  const toPath = String(to.fullPath ?? '').trim()
-  if (!fromPath || fromPath === toPath) return
-  manualScrollPositions.set(fromPath, createScrollSnapshot())
-  const rememberedSnapshot = resolveRememberedScrollPosition(toPath)
-  if (rememberedSnapshot) {
-    const viewportHeight = typeof window === 'undefined' ? 0 : (Number(window.innerHeight ?? 0) || 0)
-    disableNextRouteTransition.value = true
-    routeRestoreMinHeight.value = Math.max(Number(rememberedSnapshot.height ?? 0) || 0, viewportHeight)
-    return
-  }
+  if (String(from.fullPath ?? '').trim() === String(to.fullPath ?? '').trim()) return
   disableNextRouteTransition.value = false
   routeRestoreMinHeight.value = 0
 })
