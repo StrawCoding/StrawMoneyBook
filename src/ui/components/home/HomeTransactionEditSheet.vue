@@ -173,7 +173,10 @@
                   :aria-checked="model.isReimbursable ? 'true' : 'false'"
                   @click="model.isReimbursable = !model.isReimbursable"
                 >
-                  <span>報銷</span>
+                  <span class="switch-copy">
+                    <span class="switch-title">報銷</span>
+                    <span class="switch-hint">這筆支出會進入待報銷流程</span>
+                  </span>
                   <span class="switch-track"><span class="switch-thumb"></span></span>
                 </button>
                 <div class="switch-grid">
@@ -185,7 +188,10 @@
                     :aria-checked="model.includeInBudget ? 'true' : 'false'"
                     @click="model.includeInBudget = !model.includeInBudget"
                   >
-                    <span>紀錄預算</span>
+                    <span class="switch-copy">
+                      <span class="switch-title">紀錄預算</span>
+                      <span class="switch-hint">納入本期預算使用與超支提醒</span>
+                    </span>
                     <span class="switch-track"><span class="switch-thumb"></span></span>
                   </button>
                   <button
@@ -196,7 +202,10 @@
                     :aria-checked="model.includeInAnalysis ? 'true' : 'false'"
                     @click="model.includeInAnalysis = !model.includeInAnalysis"
                   >
-                    <span>紀錄收支</span>
+                    <span class="switch-copy">
+                      <span class="switch-title">紀錄收支</span>
+                      <span class="switch-hint">納入圖表、報表與統計分析</span>
+                    </span>
                     <span class="switch-track"><span class="switch-thumb"></span></span>
                   </button>
                 </div>
@@ -1129,22 +1138,36 @@ h4 {
 }
 .addon-wrap {
   display: grid;
-  gap: 6px
+  gap: 6px;
+  min-width: 0;
 }
 .addon-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) 74px minmax(0, 1fr) 68px;
+  display: flex;
+  flex-wrap: nowrap;
   gap: 8px;
-  align-items: end
+  align-items: end;
+  min-width: 420px;
+  overflow-x: auto;
 }
-.addon-name, .addon-dir, .addon-amount {
-  min-width: 0
+.addon-name {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.addon-dir {
+  flex: 0 0 74px;
+  min-width: 0;
+}
+.addon-amount {
+  flex: 0 0 96px;
+  min-width: 0;
 }
 .addon-remove {
-  padding: 10px 0
+  flex: 0 0 68px;
+  padding: 10px 0;
+  white-space: nowrap;
 }
 .addon-desc {
-  color: var(--muted)
+  color: var(--muted);
 }
 .impact-wrap {
   display: grid;
@@ -1162,16 +1185,40 @@ h4 {
 }
 .switch-row {
   border: 1px solid var(--field-border);
-  border-radius: 12px;
-  background: var(--surface-soft-accent);
+  border-radius: 16px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--surface-soft-accent) 76%, var(--card) 24%), color-mix(in srgb, var(--surface-muted) 82%, var(--card) 18%));
   color: var(--text-soft);
-  padding: 10px 12px;
+  padding: 12px 14px;
   font-weight: 600;
   cursor: pointer;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 10px
+  gap: 12px;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--shadow-color, #000) 8%, transparent);
+  will-change: transform;
+  transition: transform 120ms ease-out, border-color 120ms ease-out, box-shadow 120ms ease-out
+}
+.switch-row:hover {
+  transform: translate3d(0, -1px, 0);
+  border-color: color-mix(in srgb, var(--primary) 26%, var(--field-border) 74%);
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--shadow-color, #000) 12%, transparent)
+}
+.switch-copy {
+  display: grid;
+  gap: 4px;
+  text-align: left
+}
+.switch-title {
+  color: var(--text);
+  font-size: .96rem;
+  line-height: 1.2
+}
+.switch-hint {
+  color: var(--muted);
+  font-size: .76rem;
+  line-height: 1.35;
+  font-weight: 500
 }
 .switch-track {
   width: 44px;
@@ -1180,24 +1227,34 @@ h4 {
   background: var(--surface-muted);
   padding: 2px;
   display: inline-flex;
-  align-items: center
+  align-items: center;
+  flex: 0 0 auto;
+  margin-top: 2px;
+  transition: background-color 120ms ease-out
 }
 .switch-thumb {
   width: 20px;
   height: 20px;
   border-radius: 999px;
   background: var(--surface-highlight);
-  transform: translateX(0);
-  transition: transform var(--anim-fast) ease
+  transform: translate3d(0, 0, 0);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--shadow-color, #000) 18%, transparent);
+  will-change: transform;
+  transition: transform 160ms cubic-bezier(.22, .8, .28, 1), background-color 120ms ease-out
 }
 .switch-row.active {
   border-color: color-mix(in srgb, var(--ok) 64%, var(--primary) 36%);
-  background: linear-gradient(120deg, color-mix(in srgb, var(--ok) 35%, var(--bg) 65%), color-mix(in srgb, var(--ok) 55%, var(--card) 45%));
-  color: var(--text)
+  background: linear-gradient(135deg, color-mix(in srgb, var(--ok) 18%, var(--bg) 82%), color-mix(in srgb, var(--primary) 20%, var(--card) 80%));
+  color: var(--text);
+  box-shadow: 0 16px 32px color-mix(in srgb, var(--ok) 14%, transparent)
+}
+.switch-row.active .switch-hint {
+  color: color-mix(in srgb, var(--text) 70%, var(--muted) 30%)
 }
 .switch-row.active .switch-track {
   background: var(--surface-ok-strong)
 }
 .switch-row.active .switch-thumb {
-  transform: translateX(20px)
+  transform: translate3d(20px, 0, 0);
+  background: color-mix(in srgb, white 78%, var(--surface-highlight) 22%)
 }</style>

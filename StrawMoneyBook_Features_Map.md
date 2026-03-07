@@ -8,9 +8,9 @@
 - 首頁總覽（收支卡、預算簡表、交易流、快速新增）
 - 預算簡表支援月均/日均切換，並可左右滑動切換模式
 - 交易查詢（搜尋頁、日曆頁、交易明細頁）
-- 快速新增按鈕預設開啟 AI 記帳頁（`/ai-auto-bookkeeping`）
+- 快速新增按鈕預設開啟 AI 記帳模式（`/ai-auto-bookkeeping`，由 `BookkeepingPage.vue` 承載）
 - 預算管理（月預算、分類預算、已用/剩餘）
-- 分析頁（收入/支出圖表、分類明細、報表匯出）
+- 分析頁（收入/支出圖表、分類/帳戶明細、報表匯出）
 - 資產管理（帳戶餘額、帳戶群組、資產簡表）
 - 借貸管理（借出/借入、還款、作廢）
 - 報銷與請款管理（報銷入帳、請款單建立/完成/匯出）
@@ -32,11 +32,11 @@
 | `/analysis/category` | `src/ui/views/AnalysisCategoryDetailPage.vue` | 分類分析明細 |
 | `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 交易報表頁（CSV 匯出） |
 | `/transactions/search` | `src/ui/views/TransactionSearchPage.vue` | 交易搜尋 |
-| `/transactions/quick-add` | `src/ui/views/QuickAddPage.vue` | 快速新增（獨立頁） |
+| `/transactions/quick-add` | `src/ui/views/BookkeepingPage.vue` | 手動快速新增模式（內嵌 `QuickAddPage.vue`） |
 | `/transactions/calendar` | `src/ui/views/CalendarPage.vue` | 交易日曆 |
 | `/transactions/:id` | `src/ui/views/TransactionAboutPage.vue` | 交易明細（含退款/關聯） |
 | `/features` | `src/ui/views/FeatureListPage.vue` | 功能列表入口頁 |
-| `/ai-auto-bookkeeping` | `src/ui/views/AiAutoBookkeepingPage.vue` | AI 記帳頁 |
+| `/ai-auto-bookkeeping` | `src/ui/views/BookkeepingPage.vue` | AI 記帳模式（內嵌 `AiAutoBookkeepingPage.vue`） |
 | `/assets` | `src/ui/views/assets.vue` | 資產總覽 |
 | `/icons/pick` | `src/ui/views/IconPickerPage.vue` | 帳戶/分類 icon 選擇 |
 | `/assets/accounts` | `src/ui/views/accounts/AssetAccountManagementPage.vue` | 資產帳戶管理 |
@@ -135,8 +135,8 @@
 | 預算簡表（月均/日均 + 左右滑動切換） | `src/ui/components/home/HomeBudgetSummaryCard.vue` |
 | 交易清單 | `src/ui/components/home/HomeTransactionFeed.vue` |
 | 編輯交易 | `src/ui/components/home/HomeTransactionEditSheet.vue` |
-| 快速新增交易 | `src/ui/views/QuickAddPage.vue` |
-| 快速新增附加資訊（備註/報銷/附加項目） | `src/ui/views/QuickAddPage.vue`（頁面內） |
+| 快速新增交易 | `src/ui/views/BookkeepingPage.vue` + `src/ui/components/home/QuickAddSheet.vue` |
+| 快速新增附加資訊（備註/報銷/附加項目） | `src/ui/components/home/QuickAddSheet.vue`（附加項目列維持單行橫向排列） |
 | 日期時間選擇 | `src/ui/components/common/DateTimePickerField.vue` |
 | 交易搜尋頁 | `src/ui/views/TransactionSearchPage.vue` |
 | 交易日曆頁 | `src/ui/views/CalendarPage.vue` |
@@ -151,8 +151,10 @@
 | mode 切換（全部/年/月） | `analysis.vue` 內部 state + query repo |
 | 收入圓餅圖 | `analysis.vue`（分類彙總 + 色盤） |
 | 支出圓餅圖 | `analysis.vue`（分類彙總 + 色盤） |
+| 帳戶分析（總額/收入/支出） | `analysis.vue`（帳戶彙總 + 色盤） |
 | 分類明細頁 | `analysis.vue` -> `/analysis/category` + `AnalysisCategoryDetailPage.vue` |
 | 右上角列印按鈕 | `analysis.vue` -> `/analysis/print` |
+| AI 分析頁 | 已移除（不再提供 `/analysis/ai` 路由） |
 | 交易 CSV 匯出 | `src/ui/views/AnalysisPrintPage.vue` + `src/core/services/export.service.js` |
 | 匯出範圍 | `AnalysisPrintPage.vue`（全部/年/月/日/自訂） |
 
@@ -503,6 +505,7 @@ UI 服務目錄：`src/ui/services/`
 - 函數（34）：`addAddonRow`, `addonLabelOf`, `addonOptionIdByLabel`, `addonTotalDeltaMajorFromNote`, `applyOperator`, `closeCategoryPicker`, `closeDeleteConfirm`, `collectAppliedAddonItems`, `confirmRemove`, `createAddonRow`, `defaultAddonOption`, `defaultCategoryId`, `ensureInCategories`, `evaluateExpression`, `formatAmountInput`, `handleAmountInput`, `isFormulaExpression`, `isOperator`, `onAddonOptionChange`, `onRequestCloseOverlay`, `openCategoryPicker`, `parseAddonRowsFromNote`, `pickCategory`, `precedence`, `pressCalcKey`, `remove`, `removeAddonRow`, `round2`, `setCategoryPickerParent`, `submit`, `syncAmountFromInput`, `syncCategoryPickerParent`, `toDateInput`, `toOccurredAtIso`
 - 變數（27）：`accountStore`, `addonDirectionOptions`, `addonOptions`, `addonOptionsByType`, `addonRows`, `addonSeq`, `addonTemplateStore`, `calcKeys`, `categoryPickerChildren`, `categoryPickerGroups`, `categoryPickerParentId`, `categoryStore`, `deleteConfirmOpen`, `deleting`, `emit`, `hasVisibleCategories`, `model`, `props`, `selectedCategoryIcon`, `selectedCategoryLabel`, `showCategory`, `showCategoryPicker`, `showExtra`, `transactionStore`, `types`, `uiStore`, `visibleCategoryGroups`
 - 類別（0）：無
+- 補充：附加項目列採單行橫向排列；報銷/預算/收支採卡片式切換按鈕。
 
 ### `src/ui/components/home/HomeTransactionFeed.vue`
 - 函數（13）：`accountNameOfTransaction`, `addonDeltaMajor`, `addonDeltaTag`, `categoryIconOfTransaction`, `dateKeyOf`, `dateLabelOf`, `formatTime`, `labelOf`, `labelOfTransaction`, `loanTransactionIcon`, `loanTransactionLabel`, `openEdit`, `showAddonDeltaTag`
@@ -513,6 +516,7 @@ UI 服務目錄：`src/ui/services/`
 - 函數（45）：`accountNameById`, `addAddonRow`, `addonDirectionByOptionId`, `addonLabelOf`, `addonOptionIdByLabel`, `applyAiDraft`, `applyOperator`, `categoryNameById`, `closeCategoryPicker`, `collectAppliedAddonItems`, `createAddonRow`, `defaultAccountId`, `defaultAddonTemplate`, `defaultOccurredDateTime`, `defaultPeerAccountId`, `ensureCategoryIdByType`, `ensureValidAccounts`, `evaluateExpression`, `formatAmountInput`, `formatDateInput`, `formatOccurredAtLabel`, `goEditCreatedTransaction`, `handleAmountInput`, `isFormulaExpression`, `isOperator`, `monthKeyFromDate`, `normalizeType`, `onAddonOptionChange`, `onRequestCloseOverlay`, `openCategoryPicker`, `parseAddonRowsFromAiDraft`, `parseWithAi`, `pickCategory`, `precedence`, `pressCalcKey`, `pushAiMessage`, `removeAddonRow`, `resolveTypeByCategory`, `round2`, `setCategoryPickerParent`, `submit`, `syncAmountFromInput`, `syncCategoryPickerParent`, `toOccurredAtIso`, `toggleAiVoiceInput`
 - 變數（46）：`accountStore`, `addonDirectionOptions`, `addonRows`, `addonSeq`, `addonTemplateItems`, `addonTemplateOptions`, `addonTemplateStore`, `aiAutoCreating`, `aiCreatedRecord`, `aiInput`, `aiInterimSpeechText`, `aiMessageSeq`, `aiMessages`, `aiOccurredAtLabel`, `aiResultAccountId`, `aiResultAccountText`, `aiResultAmountMajor`, `aiResultCategoryId`, `aiResultIcon`, `aiResultOccurredAtLabel`, `aiResultPeerAccountId`, `aiResultSignedAmount`, `aiResultTitle`, `aiResultType`, `budgetStore`, `calcKeys`, `categoryPickerChildren`, `categoryPickerGroups`, `categoryPickerParentId`, `categoryStore`, `emit`, `equalShowsDone`, `hasAiInputText`, `hasVisibleCategories`, `isAiMode`, `model`, `props`, `router`, `selectedCategoryIcon`, `selectedCategoryLabel`, `showCategoryPicker`, `showExtra`, `transactionStore`, `types`, `uiStore`, `visibleCategoryGroups`
 - 類別（0）：無
+- 補充：同一元件同時承載 AI 對話模式與手動記帳表單；附加項目列維持單行，附加條件使用卡片式切換按鈕。
 
 ### `src/ui/components/layout/BottomNav.vue`
 - 函數（0）：無
@@ -628,6 +632,11 @@ UI 服務目錄：`src/ui/services/`
 - 函數（7）：`applyDraft`, `parseText`, `submit`, `toDateInput`, `toOccurredAtIso`, `toggleVoiceInput`, `waitFor`
 - 變數（19）：`accountStore`, `aiStatusText`, `categoryGroupsByType`, `categoryStore`, `hasDraft`, `hasInputText`, `isPageLeaving`, `model`, `pageRef`, `parsing`, `showAiStatus`, `sourceText`, `speechLanguage`, `speechLiveText`, `submitting`, `transactionStore`, `typeOptions`, `uiStore`, `warnings`
 - 類別（0）：無
+- 補充：AI 解析後的手動修正表單與 `QuickAddSheet.vue` / `HomeTransactionEditSheet.vue` 保持一致的附加項目與附加條件 UI。
+
+### `src/ui/views/BookkeepingPage.vue`
+- 功能：記帳模式容器頁，依路由在 AI 記帳與手動快速新增之間切換。
+- 內嵌頁：`src/ui/views/AiAutoBookkeepingPage.vue`、`src/ui/views/QuickAddPage.vue`
 
 ### `src/ui/views/AnalysisCategoryDetailPage.vue`
 - 函數（19）：`accountName`, `categoryIconOfTransaction`, `categoryKeyOf`, `dateKeyOf`, `dateLabelOf`, `ensureReferenceData`, `formatTime`, `goBack`, `labelOf`, `labelOfTransaction`, `loadStatsTransactions`, `loanTransactionIcon`, `loanTransactionLabel`, `monthKeyFromDate`, `normalizedAmountMinor`, `openTransaction`, `parseMode`, `parseMonthKey`, `parseYear`

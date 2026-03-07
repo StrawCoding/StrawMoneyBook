@@ -4,9 +4,6 @@
       <header class="row">
         <h2>{{ t('analysis_page.title') }}</h2>
         <div class="header-actions">
-          <RouterLink class="btn ai-btn" :to="aiLink">
-            AI 分析
-          </RouterLink>
           <RouterLink class="btn icon-btn" :to="printLink">
             <font-awesome-icon icon="fa-solid fa-print" />
           </RouterLink>
@@ -255,16 +252,6 @@ const printLink = computed(() => {
     return { path: '/analysis/print', query: { mode: 'month', month: selectedMonth.value } }
   }
   return { path: '/analysis/print', query: { mode: 'all' } }
-})
-
-const aiLink = computed(() => {
-  if (mode.value === 'year') {
-    return { name: 'analysis-ai', query: { mode: 'year', year: String(selectedYear.value) } }
-  }
-  if (mode.value === 'month') {
-    return { name: 'analysis-ai', query: { mode: 'month', month: selectedMonth.value } }
-  }
-  return { name: 'analysis-ai', query: { mode: 'all' } }
 })
 
 watch(

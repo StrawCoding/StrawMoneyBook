@@ -97,15 +97,15 @@ const compareRows = [
     memberKey: 'membership_page.compare.member.unlimited',
   },
   {
-    key: 'account-limit',
-    featureKey: 'membership_page.compare.account_limit',
-    freeKey: 'membership_page.compare.free.account_limit',
-    memberKey: 'membership_page.compare.member.unlimited',
-  },
-  {
     key: 'savings-jar-limit',
     featureKey: 'membership_page.compare.savings_jar_limit',
     freeKey: 'membership_page.compare.free.savings_jar_limit',
+    memberKey: 'membership_page.compare.member.unlimited',
+  },
+  {
+    key: 'account-limit',
+    featureKey: 'membership_page.compare.account_limit',
+    freeKey: 'membership_page.compare.free.account_limit',
     memberKey: 'membership_page.compare.member.unlimited',
   },
   {

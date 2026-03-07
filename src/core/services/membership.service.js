@@ -37,14 +37,12 @@ const FREE_LIMITS = Object.freeze({
   maxReimbursements: 5,
   aiBookkeepingDaily: 5,
   maxSubscriptions: 1,
-  aiAnalysisWeekly: 1,
 })
 
 const LEGACY_GOOGLE_PLAY_MEMBER_STORAGE_KEY = 'straw.membership.google_play.active'
 const LEGACY_GOOGLE_PLAY_MEMBER_PLAN_STORAGE_KEY = 'straw.membership.google_play.plan'
 const MEMBERSHIP_ENTITLEMENT_STORAGE_KEY = 'straw.membership.entitlement.v2'
 const AI_BOOKKEEPING_USAGE_STORAGE_KEY = 'straw.membership.ai_bookkeeping_daily_usage.v1'
-const AI_ANALYSIS_USAGE_STORAGE_KEY = 'straw.membership.ai_analysis_last_usage.v1'
 let membershipBackgroundSyncInFlight = null
 let membershipBackgroundSyncRequestedAt = 0
 let membershipSyncInFlight = null
@@ -653,24 +651,6 @@ function readAiUsageMap(storage) {
   }
 }
 
-function readAiAnalysisLastUsedAt(storage) {
-  if (!storage) return ''
-  try {
-    return String(storage.getItem(AI_ANALYSIS_USAGE_STORAGE_KEY) ?? '').trim()
-  } catch (_error) {
-    return ''
-  }
-}
-
-function writeAiAnalysisLastUsedAt(storage, value) {
-  if (!storage) return
-  try {
-    storage.setItem(AI_ANALYSIS_USAGE_STORAGE_KEY, String(value ?? '').trim())
-  } catch (_error) {
-    // Ignore write failures (e.g. private mode quota).
-  }
-}
-
 function writeAiUsageMap(storage, usageMap) {
   if (!storage) return
   try {
@@ -1086,7 +1066,6 @@ function toMembershipLimitsByTier(tier) {
     maxReimbursements: Number.POSITIVE_INFINITY,
     maxSubscriptions: Number.POSITIVE_INFINITY,
     aiBookkeepingDaily: Number.POSITIVE_INFINITY,
-    aiAnalysisWeekly: Number.POSITIVE_INFINITY,
   }
 }
 
@@ -1208,66 +1187,4 @@ export function recordAiBookkeepingUsage(now = new Date()) {
   usageMap[usage.dateKey] = usage.used + 1
   writeAiUsageMap(storage, usageMap)
   return getAiBookkeepingDailyUsage(now)
-}
-
-export function getAiAnalysisWeeklyUsage(now = new Date()) {
-  const { aiAnalysisWeekly } = getMembershipLimits()
-  const storage = getBrowserStorage()
-  const lastUsedAt = readAiAnalysisLastUsedAt(storage)
-  const lastUsedMs = toEpochMs(lastUsedAt)
-  const nowMs = toEpochMs(now)
-  const cooldownMs = 7 * 24 * 60 * 60 * 1000
-
-  if (!Number.isFinite(aiAnalysisWeekly)) {
-    return {
-      used: 0,
-      remaining: Number.POSITIVE_INFINITY,
-      limit: aiAnalysisWeekly,
-      lastUsedAt,
-      availableAt: '',
-      cooldownMs,
-    }
-  }
-
-  const used = Number.isFinite(lastUsedMs) && Number.isFinite(nowMs) && nowMs - lastUsedMs < cooldownMs ? 1 : 0
-  const availableAt = used ? new Date(lastUsedMs + cooldownMs).toISOString() : ''
-
-  return {
-    used,
-    remaining: Math.max(0, aiAnalysisWeekly - used),
-    limit: aiAnalysisWeekly,
-    lastUsedAt,
-    availableAt,
-    cooldownMs,
-  }
-}
-
-export function assertCanUseAiAnalysis(now = new Date()) {
-  const usage = getAiAnalysisWeeklyUsage(now)
-  if (usage.used >= usage.limit) {
-    const error = createMembershipLimitError('免費版 AI 綜合分析每 7 天最多 1 次', 'AI_ANALYSIS_WEEKLY')
-    triggerMembershipBenefitsRedirect('ai_analysis_weekly')
-    throw error
-  }
-}
-
-export function recordAiAnalysisUsage(now = new Date()) {
-  const usage = getAiAnalysisWeeklyUsage(now)
-  if (!Number.isFinite(usage.limit)) return usage
-
-  const storage = getBrowserStorage()
-  const nowIso = new Date(now).toISOString()
-
-  if (!storage) {
-    return {
-      ...usage,
-      used: 1,
-      remaining: 0,
-      lastUsedAt: nowIso,
-      availableAt: new Date(toEpochMs(now) + usage.cooldownMs).toISOString(),
-    }
-  }
-
-  writeAiAnalysisLastUsedAt(storage, nowIso)
-  return getAiAnalysisWeeklyUsage(now)
 }

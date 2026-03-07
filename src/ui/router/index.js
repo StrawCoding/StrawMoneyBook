@@ -48,12 +48,6 @@ const router = createRouter({
       meta: { tab: 'analysis' },
     },
     {
-      name: 'analysis-ai',
-      path: '/analysis/ai',
-      component: () => import('@/ui/views/AnalysisAiPage.vue'),
-      meta: { tab: 'analysis' },
-    },
-    {
       name: 'transaction-search',
       path: '/transactions/search',
       component: () => import('@/ui/views/TransactionSearchPage.vue'),
