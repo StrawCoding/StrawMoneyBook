@@ -29,3 +29,11 @@ export async function setSetting(ledgerId, key, value) {
     [ledgerId, key, JSON.stringify(value), nowIso()],
   )
 }
+
+export async function removeSetting(ledgerId, key) {
+  await run(
+    `DELETE FROM app_settings
+     WHERE ledger_id = ? AND key = ?;`,
+    [ledgerId, key],
+  )
+}

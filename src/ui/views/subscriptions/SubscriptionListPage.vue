@@ -89,7 +89,7 @@
 
       <label class="field">
         {{ t('settings_auto_fill.category') }}
-        <CustomSelect v-model="form.categoryId" :options="categoryOptions" />
+        <CustomSelect v-model="form.categoryId" :groups="categoryOptionGroups" />
       </label>
 
       <label class="field">
@@ -112,6 +112,7 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import { buildCategorySelectGroups, ensureCategoryIdForType, getCategoryOptionsByType } from '@/ui/utils/category-options'
 import {
   describeSubscriptionInterval,
   getSubscriptionItems,
@@ -148,7 +149,8 @@ const accountOptions = computed(() => accountStore.accounts.map((item) => ({
   value: item.id,
   label: item.name,
 })))
-const categoryOptions = computed(() => categoryStore.expenseCategories ?? [])
+const categoryOptionGroups = computed(() => buildCategorySelectGroups(categoryStore, 'expense'))
+const categoryOptions = computed(() => getCategoryOptionsByType(categoryStore, 'expense'))
 const intervalOptions = computed(() => ([
   { value: 'year', label: t('subscription_page.interval.year') },
   { value: 'month', label: t('subscription_page.interval.month') },
@@ -196,9 +198,17 @@ function resetForm() {
   form.intervalValue = 1
   form.intervalUnit = 'month'
   form.accountId = accountOptions.value[0]?.value ?? ''
-  form.categoryId = categoryOptions.value[0]?.value ?? ''
+  form.categoryId = ensureCategoryIdForType(categoryStore, 'expense', '')
   form.amountMajor = 0
 }
+
+watch(
+  () => categoryOptions.value,
+  () => {
+    form.categoryId = ensureCategoryIdForType(categoryStore, 'expense', form.categoryId)
+  },
+  { deep: true },
+)
 
 function openCreateDialog() {
   resetForm()

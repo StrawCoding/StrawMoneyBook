@@ -245,7 +245,20 @@ watch(
 
 function resolveCreateErrorMessage(error, fallbackKey) {
   if (error?.code === 'bank_sync_api_unavailable') return bankSyncApiMessage.value
-  return error?.message || t(fallbackKey)
+  const rawMessage = String(error?.message ?? '').trim()
+  if (rawMessage === 'First Bank national ID is required') return t('settings_bank_sync_create.error.first_bank_national_id_required')
+  if (rawMessage === 'First Bank account number is required') return t('settings_bank_sync_create.error.first_bank_account_number_required')
+  if (rawMessage === 'First Bank credentials and CAPTCHA are required') return t('settings_bank_sync_create.error.first_bank_credentials_required')
+  if (rawMessage === 'First Bank login failed. Please verify your credentials, account number, and CAPTCHA') {
+    return t('settings_bank_sync_create.error.first_bank_login_failed')
+  }
+  if (rawMessage === 'First Bank session expired, please reconnect and complete CAPTCHA login again') {
+    return t('settings_bank_sync_create.error.first_bank_session_expired')
+  }
+  if (rawMessage === 'First Bank sync requires a valid session token. Please reconnect and complete CAPTCHA login again') {
+    return t('settings_bank_sync_create.error.first_bank_session_expired')
+  }
+  return rawMessage || t(fallbackKey)
 }
 
 async function ensureTargetAccountId() {
@@ -368,21 +381,8 @@ async function submit() {
     if (!isMockProviderSelected.value) {
       await setEncryptedSetting(ledgerStore.activeLedgerId, `bank_sync.credentials.${connection.id}`, {
         provider: String(form.providerId ?? '').trim(),
-        accountNumber: String(form.accountNumber ?? '').trim(),
-        initialSyncStartDate: String(form.initialSyncStartDate ?? '').trim(),
-        loginCustIdFake: String(form.nationalId ?? '').trim(),
-        usrIdInput: String(form.code ?? '').trim(),
-        pwd: String(form.password ?? ''),
         sessionToken: String(connection?.providerAccess?.sessionToken || connection?.providerAccess?.accessTokenRef || '').trim(),
         accessTokenRef: String(connection?.providerAccess?.accessTokenRef || connection?.providerAccess?.sessionToken || '').trim(),
-        selectors: {
-          loginCustIdFake: 'loginCustIdFake',
-          usrIdInput: 'usrIdInput',
-          pwd: 'pwd',
-          vrfyCode: 'vrfyCode',
-        },
-        captchaImageId: 'code_verify',
-        refreshCaptchaAction: 'javascript:chgImg();',
         updatedAt: new Date().toISOString(),
       })
     }

@@ -27,7 +27,7 @@ import {
   markImportedBankTransactions,
   syncBankTransactions,
 } from '@/services/bank-sync/backend'
-import { getEncryptedSetting, setEncryptedSetting } from '@/ui/services/secure-setting.service'
+import { deleteEncryptedSetting, getEncryptedSetting, setEncryptedSetting } from '@/ui/services/secure-setting.service'
 
 function assertLedgerId(ledgerId) {
   if (!ledgerId) throw new Error('缺少帳本 ID')
@@ -60,6 +60,22 @@ function normalizeDateInput(value) {
 
 function buildBankCredentialSettingKey(connectionId) {
   return `bank_sync.credentials.${normalizeText(connectionId)}`
+}
+
+function sanitizeBankCredentialState(value) {
+  if (!value || typeof value !== 'object') return null
+  return {
+    provider: normalizeText(value.provider),
+    sessionToken: normalizeText(value.sessionToken || value.accessTokenRef),
+    accessTokenRef: normalizeText(value.accessTokenRef || value.sessionToken),
+    updatedAt: normalizeText(value.updatedAt) || new Date().toISOString(),
+  }
+}
+
+function shouldRewriteBankCredentialState(value) {
+  if (!value || typeof value !== 'object') return false
+  const allowedKeys = new Set(['provider', 'sessionToken', 'accessTokenRef', 'updatedAt'])
+  return Object.keys(value).some((key) => !allowedKeys.has(key))
 }
 
 function buildDeviceInfo(options = {}) {
@@ -370,7 +386,14 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
   try {
     const secureSettingKey = buildBankCredentialSettingKey(connectionId)
     const savedCredentialState = await getEncryptedSetting(ledgerId, secureSettingKey)
-    const sessionToken = normalizeText(savedCredentialState?.sessionToken || savedCredentialState?.accessTokenRef)
+    const sanitizedCredentialState = sanitizeBankCredentialState(savedCredentialState)
+    if (shouldRewriteBankCredentialState(savedCredentialState)) {
+      if (sanitizedCredentialState) {
+        await setEncryptedSetting(ledgerId, secureSettingKey, sanitizedCredentialState)
+      }
+    }
+    const effectiveCredentialState = sanitizedCredentialState ?? savedCredentialState
+    const sessionToken = normalizeText(effectiveCredentialState?.sessionToken || effectiveCredentialState?.accessTokenRef)
     if (isFirstBankProviderId(connection.provider) && !sessionToken) {
       throw new Error('第一銀行同步 Session 已失效，請重新連線並重新登入一次')
     }
@@ -603,6 +626,8 @@ export async function disconnectBankConnection(ledgerId, connectionId, options =
   if (options.clearMirrorData) {
     await clearBankMirrorDataByConnection(ledgerId, connectionId)
   }
+
+  await deleteEncryptedSetting(ledgerId, buildBankCredentialSettingKey(connectionId))
 
   return true
 }

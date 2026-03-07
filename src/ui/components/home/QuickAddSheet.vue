@@ -468,6 +468,7 @@ import { assertCanUseAiBookkeeping, recordAiBookkeepingUsage } from '@/core/serv
 import { useSpeechInput } from '@/ui/composables/use-speech-input'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { useI18n } from '@/ui/services/i18n.service'
+import { ensureCategoryIdForType, getCategoryGroupsByType } from '@/ui/utils/category-options'
 import { mergeAddonItemsToNote } from '@/ui/utils/addon-note'
 import {
   convertAmountMinorByRate,
@@ -654,10 +655,7 @@ const aiParserAccounts = computed(() => {
   }))
 })
 
-const visibleCategoryGroups = computed(() => {
-  if (model.type === 'income') return categoryStore.incomeCategoryGroups
-  return categoryStore.expenseCategoryGroups
-})
+const visibleCategoryGroups = computed(() => getCategoryGroupsByType(categoryStore, model.type))
 const categoryPickerGroups = computed(() => {
   return (visibleCategoryGroups.value ?? []).filter((group) => Array.isArray(group.categories) && group.categories.length > 0)
 })
@@ -2740,13 +2738,7 @@ function ensureValidAccounts() {
 }
 
 function ensureCategoryIdByType(type, currentCategoryId = '') {
-  if (type === 'transfer') return ''
-  const categories = type === 'income' ? categoryStore.incomeCategories : categoryStore.expenseCategories
-  if (!categories.length) return ''
-  if (categories.some((item) => item.id === currentCategoryId)) {
-    return currentCategoryId
-  }
-  return categories[0]?.id ?? ''
+  return ensureCategoryIdForType(categoryStore, type, currentCategoryId)
 }
 
 function resolveTypeByCategory(fallbackType, categoryId) {

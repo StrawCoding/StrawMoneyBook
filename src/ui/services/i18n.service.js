@@ -448,6 +448,11 @@ const MESSAGES = {
     'settings_bank_sync_create.mock_ready': 'Sandbox 測試連線已準備完成',
     'settings_bank_sync_create.captcha.load_failed': '驗證碼圖片讀取失敗',
     'settings_bank_sync_create.error.new_account_name_required': '請輸入新增帳戶名稱',
+    'settings_bank_sync_create.error.first_bank_national_id_required': '請輸入第一銀行身分證字號',
+    'settings_bank_sync_create.error.first_bank_account_number_required': '請輸入第一銀行銀行帳號',
+    'settings_bank_sync_create.error.first_bank_credentials_required': '請完整輸入第一銀行登入資料與驗證碼',
+    'settings_bank_sync_create.error.first_bank_login_failed': '第一銀行登入失敗，請確認身分證字號、代碼、密碼、銀行帳號與驗證碼',
+    'settings_bank_sync_create.error.first_bank_session_expired': '第一銀行登入階段已逾時，請重新整理驗證碼後再試一次',
     'settings_bank_sync_create.error.asset_group_missing': '找不到可用的帳戶群組，請先建立資產帳戶群組',
     'settings_bank_sync_create.error.account_create_failed': '銀行已連結，但新增帳戶失敗',
     'settings_bank_sync_create.asset_group_name': '資產帳戶',
@@ -1356,6 +1361,11 @@ const MESSAGES = {
     'settings_bank_sync_create.mock_ready': 'Sandbox test link session is ready',
     'settings_bank_sync_create.captcha.load_failed': 'Failed to load captcha image',
     'settings_bank_sync_create.error.new_account_name_required': 'Please enter a name for the new account',
+    'settings_bank_sync_create.error.first_bank_national_id_required': 'Please enter your First Bank national ID',
+    'settings_bank_sync_create.error.first_bank_account_number_required': 'Please enter your First Bank account number',
+    'settings_bank_sync_create.error.first_bank_credentials_required': 'Please complete all First Bank credentials and the captcha code',
+    'settings_bank_sync_create.error.first_bank_login_failed': 'First Bank login failed. Please verify your national ID, user code, password, account number, and captcha code',
+    'settings_bank_sync_create.error.first_bank_session_expired': 'The First Bank login session expired. Refresh the captcha and try again',
     'settings_bank_sync_create.error.asset_group_missing':
       'No available account group was found. Please create an asset account group first.',
     'settings_bank_sync_create.error.account_create_failed':
@@ -2216,6 +2226,11 @@ MESSAGES.ja = {
   'settings_bank_sync_create.mock_ready': 'Sandbox テスト接続の準備ができました',
   'settings_bank_sync_create.captcha.load_failed': '認証画像の読み込みに失敗しました',
   'settings_bank_sync_create.error.new_account_name_required': '新規口座名を入力してください',
+  'settings_bank_sync_create.error.first_bank_national_id_required': '第一銀行の身分証番号を入力してください',
+  'settings_bank_sync_create.error.first_bank_account_number_required': '第一銀行の口座番号を入力してください',
+  'settings_bank_sync_create.error.first_bank_credentials_required': '第一銀行のログイン情報と認証コードをすべて入力してください',
+  'settings_bank_sync_create.error.first_bank_login_failed': '第一銀行へのログインに失敗しました。身分証番号、コード、パスワード、口座番号、認証コードを確認してください',
+  'settings_bank_sync_create.error.first_bank_session_expired': '第一銀行のログインセッションが期限切れです。認証画像を更新して再試行してください',
   'settings_bank_sync_create.error.asset_group_missing':
     '利用可能な口座グループがありません。先に資産口座グループを作成してください。',
   'settings_bank_sync_create.error.account_create_failed':

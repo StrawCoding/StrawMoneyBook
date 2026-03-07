@@ -10,7 +10,11 @@ import {
 const DEFAULT_BANK_API_BASE = String(import.meta.env.VITE_BANK_SYNC_API_BASE_URL ?? '').trim()
 const BANK_SYNC_CLIENT_SHARED_KEY = String(import.meta.env.VITE_BANK_SYNC_CLIENT_SHARED_KEY ?? '').trim()
 const BANK_SYNC_UI_ENABLED = parseBooleanEnv(import.meta.env.VITE_BANK_SYNC_ENABLED, true)
-const BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS = parseBooleanEnv(import.meta.env.VITE_BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS, true)
+// Keep unsupported real-bank connectors opt-in only.
+const BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS = parseBooleanEnv(
+  import.meta.env.VITE_BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS,
+  false,
+)
 
 const PROVIDERS_FALLBACK = [
   {

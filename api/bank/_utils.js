@@ -1,6 +1,16 @@
 import { timingSafeEqual } from 'node:crypto'
 
 const BANK_SYNC_CLIENT_SHARED_KEY = String(process.env.BANK_SYNC_CLIENT_SHARED_KEY ?? '').trim()
+const BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS = parseBooleanEnv(
+  process.env.BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS,
+  false,
+)
+
+function parseBooleanEnv(value, fallback = false) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (!normalized) return fallback
+  return ['1', 'true', 'yes', 'on'].includes(normalized)
+}
 
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -44,15 +54,22 @@ function isMockProvider(provider) {
 }
 
 function isSupportedProvider(provider) {
-  return isMockProvider(provider) || isFirstBankProvider(provider)
+  if (isMockProvider(provider)) return true
+  if (isFirstBankProvider(provider)) return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS
+  return false
 }
 
 function createUnsupportedProviderMessage(provider) {
   const normalized = normalizeProvider(provider)
   if (!normalized) {
-    return '目前支援 Mock Bank TW (Sandbox) 與 First Bank TW。'
+    return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS
+      ? '目前支援 Mock Bank TW (Sandbox) 與 First Bank TW。'
+      : '目前僅支援 Mock Bank TW (Sandbox)。'
   }
-  return `provider "${normalized}" 目前未開放；請改用 Mock Bank TW (Sandbox) 或 First Bank TW。`
+  if (BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS) {
+    return `provider "${normalized}" 目前未開放；請改用 Mock Bank TW (Sandbox) 或 First Bank TW。`
+  }
+  return `provider "${normalized}" 目前未開放；請改用 Mock Bank TW (Sandbox)。`
 }
 
 function unsupportedProviderGuard(provider, res) {

@@ -1,4 +1,4 @@
-import { getSetting, setSetting } from '@/core/repositories/settings.repo'
+import { getSetting, removeSetting, setSetting } from '@/core/repositories/settings.repo'
 
 const MASTER_KEY_STORAGE_KEY = 'straw.secure-setting.master-key.v1'
 const ENCRYPTED_PAYLOAD_VERSION = 1
@@ -117,4 +117,8 @@ export async function getEncryptedSetting(ledgerId, key) {
   } catch {
     return null
   }
+}
+
+export async function deleteEncryptedSetting(ledgerId, key) {
+  await removeSetting(ledgerId, key)
 }

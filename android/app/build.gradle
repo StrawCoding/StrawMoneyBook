@@ -5,6 +5,26 @@ def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
+def resolveSigningValue = { propertyKey, envKey ->
+    def propertyValue = keystoreProperties[propertyKey]
+    if (propertyValue != null && propertyValue.toString().trim()) {
+        return propertyValue.toString().trim()
+    }
+    def envValue = System.getenv(envKey)
+    if (envValue != null && envValue.trim()) {
+        return envValue.trim()
+    }
+    return ''
+}
+def releaseStoreFilePath = resolveSigningValue('storeFile', 'ANDROID_KEYSTORE_FILE')
+def releaseStorePassword = resolveSigningValue('storePassword', 'ANDROID_KEYSTORE_PASSWORD')
+def releaseKeyAlias = resolveSigningValue('keyAlias', 'ANDROID_KEY_ALIAS')
+def releaseKeyPassword = resolveSigningValue('keyPassword', 'ANDROID_KEY_PASSWORD')
+def hasReleaseSigningConfig =
+        releaseStoreFilePath &&
+        releaseStorePassword &&
+        releaseKeyAlias &&
+        releaseKeyPassword
 def packageJsonText = rootProject.file('../package.json').text
 def versionMatcher = (packageJsonText =~ /"version"\s*:\s*"([^"]+)"/)
 def appVersionName = versionMatcher.find() ? versionMatcher.group(1) : "1.0.0"
@@ -16,7 +36,7 @@ android {
         applicationId "com.strawcoding.strawmoneybook"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 101
+        versionCode 102
         versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -27,27 +47,25 @@ android {
     }
     signingConfigs {
         release {
-            if (keystorePropertiesFile.exists()) {
-                if (keystoreProperties['storeFile']) {
-                    storeFile rootProject.file(keystoreProperties['storeFile'])
-                }
-                storePassword keystoreProperties['storePassword']
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
+            if (hasReleaseSigningConfig) {
+                storeFile rootProject.file(releaseStoreFilePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
             }
         }
     }
     buildTypes {
         debug {
             applicationIdSuffix "debug"
-            if (keystorePropertiesFile.exists()) {
+            if (hasReleaseSigningConfig) {
                 signingConfig signingConfigs.release
             }
         }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            if (keystorePropertiesFile.exists()) {
+            if (hasReleaseSigningConfig) {
                 signingConfig signingConfigs.release
             }
         }
