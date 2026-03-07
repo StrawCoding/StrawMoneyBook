@@ -96,8 +96,10 @@ function buildBankCredentialPayload(options = {}) {
   const usrIdInput = normalizeText(options.code)
   const pwd = String(options.password ?? '')
   const vrfyCode = normalizeText(options.captchaCode)
+  const hitX = normalizeText(options.loginHitX)
+  const hitY = normalizeText(options.loginHitY)
 
-  if (!loginCustIdFake && !usrIdInput && !pwd && !vrfyCode) {
+  if (!loginCustIdFake && !usrIdInput && !pwd && !vrfyCode && !hitX && !hitY) {
     return null
   }
 
@@ -106,6 +108,8 @@ function buildBankCredentialPayload(options = {}) {
     usrIdInput,
     pwd,
     vrfyCode,
+    hitX,
+    hitY,
   }
 }
 

@@ -108,6 +108,29 @@
           </div>
         </div>
 
+        <div v-if="isFirstBankSelected" class="field">
+          <div class="row captcha-head">
+            <span>{{ t('settings_bank_sync_create.login_area_image') }}</span>
+          </div>
+          <div class="captcha-preview login-area-preview" :class="{ clickable: Boolean(loginAreaImageSrc) }">
+            <img
+              v-if="loginAreaImageSrc"
+              :src="loginAreaImageSrc"
+              :alt="t('settings_bank_sync_create.login_area_image')"
+              class="captcha-image login-area-image"
+              @click="selectLoginAreaPoint"
+            />
+            <span v-else>{{ loginAreaStatusText }}</span>
+          </div>
+          <small class="muted">
+            {{
+              form.loginHitX && form.loginHitY
+                ? t('settings_bank_sync_create.login_area_selected', { x: form.loginHitX, y: form.loginHitY })
+                : t('settings_bank_sync_create.login_area_hint')
+            }}
+          </small>
+        </div>
+
         <label class="field">
           {{ t('settings_bank_sync_create.captcha_code') }}
           <input id="vrfyCode" v-model.trim="form.captchaCode" class="input" type="text" maxlength="12" />
@@ -148,7 +171,9 @@ const refreshingCaptcha = ref(false)
 const preparedSessionId = ref('')
 const preparedSessionCode = ref('')
 const captchaImageSrc = ref('')
+const loginAreaImageSrc = ref('')
 const captchaStatusText = ref(t('settings_bank_sync_create.captcha.loading'))
+const loginAreaStatusText = ref(t('settings_bank_sync_create.login_area.loading'))
 
 function defaultInitialSyncStartDate() {
   const date = new Date()
@@ -170,6 +195,8 @@ const form = reactive({
   code: '',
   password: '',
   captchaCode: '',
+  loginHitX: '',
+  loginHitY: '',
 })
 
 const backLink = { name: 'settings-bank-sync' }
@@ -203,6 +230,8 @@ const canSubmit = computed(() => {
   if (isFirstBankSelected.value) {
     if (!String(form.accountNumber ?? '').trim()) return false
     if (!String(form.initialSyncStartDate ?? '').trim()) return false
+    if (!String(form.loginHitX ?? '').trim()) return false
+    if (!String(form.loginHitY ?? '').trim()) return false
   }
   if (!isMockProviderSelected.value) {
     if (!String(form.nationalId ?? '').trim()) return false
@@ -226,6 +255,7 @@ onMounted(async () => {
   }
   if (!bankSyncApiReady) {
     captchaStatusText.value = bankSyncApiMessage.value
+    loginAreaStatusText.value = bankSyncApiMessage.value
     return
   }
   await prepareLinkSession()
@@ -238,7 +268,11 @@ watch(
     preparedSessionId.value = ''
     preparedSessionCode.value = ''
     captchaImageSrc.value = ''
+    loginAreaImageSrc.value = ''
     captchaStatusText.value = t('settings_bank_sync_create.captcha.loading')
+    loginAreaStatusText.value = t('settings_bank_sync_create.login_area.loading')
+    form.loginHitX = ''
+    form.loginHitY = ''
     void prepareLinkSession()
   },
 )
@@ -249,6 +283,7 @@ function resolveCreateErrorMessage(error, fallbackKey) {
   if (rawMessage === 'First Bank national ID is required') return t('settings_bank_sync_create.error.first_bank_national_id_required')
   if (rawMessage === 'First Bank account number is required') return t('settings_bank_sync_create.error.first_bank_account_number_required')
   if (rawMessage === 'First Bank credentials and CAPTCHA are required') return t('settings_bank_sync_create.error.first_bank_credentials_required')
+  if (rawMessage === 'First Bank login position is required') return t('settings_bank_sync_create.error.first_bank_login_position_required')
   if (rawMessage === 'First Bank login failed. Please verify your credentials, account number, and CAPTCHA') {
     return t('settings_bank_sync_create.error.first_bank_login_failed')
   }
@@ -306,12 +341,16 @@ async function ensureTargetAccountId() {
 async function prepareLinkSession({ refreshCaptcha = false } = {}) {
   if (!bankSyncApiReady) {
     captchaImageSrc.value = ''
+    loginAreaImageSrc.value = ''
     captchaStatusText.value = bankSyncApiMessage.value
+    loginAreaStatusText.value = bankSyncApiMessage.value
     return
   }
   if (!ledgerStore.activeLedgerId || !String(form.providerId ?? '').trim()) {
     captchaImageSrc.value = ''
+    loginAreaImageSrc.value = ''
     captchaStatusText.value = t('settings_bank_sync_create.captcha.choose_bank')
+    loginAreaStatusText.value = t('settings_bank_sync_create.login_area.choose_bank')
     return
   }
 
@@ -328,18 +367,28 @@ async function prepareLinkSession({ refreshCaptcha = false } = {}) {
     })
     preparedSessionId.value = String(linkSession?.session_id ?? '').trim()
     preparedSessionCode.value = String(linkSession?.mock_code ?? '').trim()
+    form.loginHitX = ''
+    form.loginHitY = ''
     if (isMockProviderSelected.value) {
       captchaImageSrc.value = ''
+      loginAreaImageSrc.value = ''
       captchaStatusText.value = t('settings_bank_sync_create.mock_ready')
+      loginAreaStatusText.value = t('settings_bank_sync_create.mock_ready')
       return
     }
     captchaImageSrc.value = String(linkSession?.captcha_image_data_url ?? linkSession?.captcha_image_src ?? '').trim()
+    loginAreaImageSrc.value = String(linkSession?.login_area_image_data_url ?? '').trim()
     captchaStatusText.value = captchaImageSrc.value
       ? t('settings_bank_sync_create.captcha.loaded')
       : t('settings_bank_sync_create.captcha.empty')
+    loginAreaStatusText.value = loginAreaImageSrc.value
+      ? t('settings_bank_sync_create.login_area.loaded')
+      : t('settings_bank_sync_create.login_area.empty')
   } catch (error) {
     captchaImageSrc.value = ''
+    loginAreaImageSrc.value = ''
     captchaStatusText.value = resolveCreateErrorMessage(error, 'settings_bank_sync_create.captcha.load_failed')
+    loginAreaStatusText.value = resolveCreateErrorMessage(error, 'settings_bank_sync_create.login_area.load_failed')
   } finally {
     preparingSession.value = false
     refreshingCaptcha.value = false
@@ -348,6 +397,21 @@ async function prepareLinkSession({ refreshCaptcha = false } = {}) {
 
 async function refreshCaptchaImage() {
   await prepareLinkSession({ refreshCaptcha: true })
+}
+
+function selectLoginAreaPoint(event) {
+  const image = event?.currentTarget
+  if (!(image instanceof HTMLImageElement)) return
+  const bounds = image.getBoundingClientRect()
+  if (!bounds.width || !bounds.height) return
+  const rawX = Number(event.clientX) - bounds.left
+  const rawY = Number(event.clientY) - bounds.top
+  const maxX = image.naturalWidth || bounds.width
+  const maxY = image.naturalHeight || bounds.height
+  const scaleX = image.naturalWidth > 0 ? image.naturalWidth / bounds.width : 1
+  const scaleY = image.naturalHeight > 0 ? image.naturalHeight / bounds.height : 1
+  form.loginHitX = String(Math.max(0, Math.min(maxX, Math.round(rawX * scaleX))))
+  form.loginHitY = String(Math.max(0, Math.min(maxY, Math.round(rawY * scaleY))))
 }
 
 async function submit() {
@@ -367,6 +431,8 @@ async function submit() {
       code: form.code,
       password: form.password,
       captchaCode: form.captchaCode,
+      loginHitX: form.loginHitX,
+      loginHitY: form.loginHitY,
     })
 
     const targetAccountId = await ensureTargetAccountId()
@@ -458,5 +524,9 @@ h3 {
   max-width: 100%;
   max-height: 96px;
   object-fit: contain;
+}
+
+.login-area-preview.clickable {
+  cursor: crosshair;
 }
 </style>

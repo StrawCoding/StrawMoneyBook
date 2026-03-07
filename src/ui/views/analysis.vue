@@ -161,6 +161,36 @@
       </transition>
     </article>
 
+    <article v-if="showTimeBarChart" class="card panel">
+      <header class="row">
+        <h3>{{ timeBarTitle }}</h3>
+        <div class="header-metrics">
+          <span class="count-chip">{{ t('analysis_page.items_count', { count: timeBarCount }) }}</span>
+          <MoneyText :value-minor="timeBarTotalMinor" />
+        </div>
+      </header>
+
+      <div class="time-bar-chart">
+        <div
+          v-for="item in timeBarRows"
+          :key="`${mode}-${analysisType}-${item.id}`"
+          class="time-bar-col"
+        >
+          <div class="time-bar-value">
+            <MoneyText :value-minor="item.amountMinor" />
+          </div>
+          <div class="time-bar-track">
+            <div
+              class="time-bar-fill"
+              :style="{ height: `${item.barHeightPercent}%`, background: timeBarColor }"
+            ></div>
+          </div>
+          <div class="time-bar-label">{{ item.label }}</div>
+          <div class="time-bar-count muted">{{ t('analysis_page.items_count', { count: item.count }) }}</div>
+        </div>
+      </div>
+    </article>
+
   </section>
 </template>
 
@@ -285,6 +315,27 @@ const activeCount = computed(() => (analysisType.value === 'income' ? incomeCoun
 const activePieStyle = computed(() => (analysisType.value === 'income' ? incomePieStyle.value : expensePieStyle.value))
 const activeBarRows = computed(() => buildBarRows(activeBreakdown.value))
 const activeTypeLabel = computed(() => (analysisType.value === 'income' ? t('analysis_page.type.income') : t('analysis_page.type.expense')))
+const timeBarRows = computed(() => buildTimeBarRows(
+  statsTransactions.value,
+  analysisType.value,
+  mode.value,
+  selectedYear.value,
+  selectedMonth.value,
+))
+const timeBarTitle = computed(() => {
+  if (mode.value === 'year') return t('analysis_page.chart.month_bar')
+  if (mode.value === 'all') return t('analysis_page.chart.year_bar')
+  if (mode.value === 'month') return t('analysis_page.chart.day_bar')
+  return ''
+})
+const timeBarTotalMinor = computed(() => timeBarRows.value.reduce((total, item) => total + item.amountMinor, 0))
+const timeBarCount = computed(() => timeBarRows.value.reduce((total, item) => total + item.count, 0))
+const showTimeBarChart = computed(() => (mode.value === 'all' || mode.value === 'year' || mode.value === 'month') && timeBarRows.value.length > 0)
+const timeBarColor = computed(() =>
+  analysisType.value === 'income'
+    ? 'color-mix(in srgb, #40c057 82%, var(--card) 18%)'
+    : 'color-mix(in srgb, #fa5252 82%, var(--card) 18%)',
+)
 const accountActiveBreakdown = computed(() => {
   if (accountAnalysisType.value === 'income') return incomeAccountBreakdown.value
   if (accountAnalysisType.value === 'expense') return expenseAccountBreakdown.value
@@ -501,6 +552,97 @@ function buildBarRows(items) {
   })
 }
 
+function buildTimeBarRows(transactions, type, modeValue, yearValue, monthValue) {
+  if (!Array.isArray(transactions) || !transactions.length) return []
+  if (modeValue !== 'all' && modeValue !== 'year' && modeValue !== 'month') return []
+
+  const bucketSeed = modeValue === 'year'
+    ? Array.from({ length: 12 }, (_, index) => ({
+      id: String(index + 1).padStart(2, '0'),
+      label: `${index + 1}月`,
+    }))
+    : modeValue === 'month'
+      ? buildDaySeeds(monthValue)
+    : buildYearSeeds(transactions)
+
+  if (!bucketSeed.length) return []
+
+  const bucketMap = new Map(
+    bucketSeed.map((item) => [item.id, { ...item, amountMinor: 0, count: 0 }]),
+  )
+
+  for (const tx of transactions) {
+    if (!Number(tx?.include_in_analysis ?? 1)) continue
+    if (tx?.type !== type || tx?.origin_type === 'loan_payment') continue
+    const amountMinor = type === 'expense' ? Math.abs(Number(tx?.amount_minor ?? 0)) : Number(tx?.amount_minor ?? 0)
+    if (!Number.isFinite(amountMinor) || amountMinor <= 0) continue
+
+    const date = new Date(tx?.occurred_at ?? '')
+    if (Number.isNaN(date.getTime())) continue
+
+    const bucketId = modeValue === 'year'
+      ? String(date.getMonth() + 1).padStart(2, '0')
+      : modeValue === 'month'
+        ? String(date.getDate()).padStart(2, '0')
+      : String(date.getFullYear())
+    const current = bucketMap.get(bucketId)
+    if (!current) continue
+    current.amountMinor += amountMinor
+    current.count += 1
+  }
+
+  const rows = bucketSeed.map((item) => bucketMap.get(item.id) || { ...item, amountMinor: 0, count: 0 })
+  const maxAmount = rows.reduce((max, item) => Math.max(max, item.amountMinor), 0)
+  return rows.map((item) => ({
+    ...item,
+    year: modeValue === 'year' ? yearValue : undefined,
+    month: modeValue === 'month' ? monthValue : undefined,
+    barHeightPercent: maxAmount > 0
+      ? Number(Math.max(item.amountMinor > 0 ? 12 : 0, (item.amountMinor / maxAmount) * 100).toFixed(2))
+      : 0,
+  }))
+}
+
+function buildYearSeeds(transactions) {
+  const years = Array.from(new Set(
+    transactions
+      .map((tx) => {
+        const date = new Date(tx?.occurred_at ?? '')
+        return Number.isNaN(date.getTime()) ? null : date.getFullYear()
+      })
+      .filter((value) => Number.isFinite(value)),
+  )).sort((left, right) => left - right)
+
+  if (!years.length) return []
+  const first = years[0]
+  const last = years[years.length - 1]
+  const seed = []
+  for (let year = first; year <= last; year += 1) {
+    seed.push({
+      id: String(year),
+      label: String(year),
+    })
+  }
+  return seed
+}
+
+function buildDaySeeds(monthValue) {
+  const text = String(monthValue ?? '').trim()
+  const match = text.match(/^(\d{4})-(\d{2})$/)
+  if (!match) return []
+  const year = Number(match[1])
+  const month = Number(match[2])
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return []
+  const daysInMonth = new Date(year, month, 0).getDate()
+  return Array.from({ length: daysInMonth }, (_, index) => {
+    const day = index + 1
+    return {
+      id: String(day).padStart(2, '0'),
+      label: `${day}日`,
+    }
+  })
+}
+
 function monthKeyFromDate(date) {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
@@ -508,11 +650,31 @@ function monthKeyFromDate(date) {
 }
 </script>
 
-<style scoped>.panel {
-  padding: 14px
+<style scoped>
+.stack {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.stack > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.panel {
+  padding: 14px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
 }
 h2, h3 {
   margin: 0
+}
+.row {
+  min-width: 0;
+  flex-wrap: wrap;
 }
 .icon-btn {
   width: 36px;
@@ -526,6 +688,8 @@ h2, h3 {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
 }
 .ai-btn {
   padding-inline: 12px;
@@ -583,14 +747,19 @@ h2, h3 {
 .header-metrics {
   display: inline-flex;
   align-items: center;
-  gap: 8px
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .count-chip {
   font-size: 12px;
   color: var(--muted);
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid var(--border)
+  border: 1px solid var(--border);
+  max-width: 100%;
 }
 .legend-dot {
   width: 10px;
@@ -682,6 +851,70 @@ h2, h3 {
 }
 .no-data-tip {
   margin: 16px 0 0
+}
+.time-bar-chart {
+  margin-top: 14px;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.time-bar-col {
+  min-width: 68px;
+  flex: 0 0 68px;
+  max-width: 68px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+.time-bar-value {
+  font-size: 11px;
+  color: var(--muted);
+  min-height: 32px;
+  width: 100%;
+  max-width: 100%;
+  display: grid;
+  align-items: end;
+  text-align: center;
+  overflow: hidden;
+}
+.time-bar-track {
+  width: 100%;
+  height: 180px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--chart-track) 60%, transparent) 0%, var(--chart-track) 100%);
+  display: flex;
+  align-items: flex-end;
+  padding: 6px;
+}
+.time-bar-fill {
+  width: 100%;
+  border-radius: 10px;
+  min-height: 0;
+  transition: height 220ms ease;
+}
+.time-bar-label {
+  font-size: 12px;
+  font-weight: 700;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.time-bar-count {
+  font-size: 11px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .placeholder {
   min-height: 120px

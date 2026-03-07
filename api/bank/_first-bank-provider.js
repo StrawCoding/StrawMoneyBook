@@ -7,6 +7,7 @@ const FIRST_BANK_BASE_URL = 'https://ibank.firstbank.com.tw'
 const FIRST_BANK_LOGIN_PAGE = '/NetBank/frame.html'
 const FIRST_BANK_LOGIN_ACTION = '/NetBank/login.html'
 const FIRST_BANK_CAPTCHA_PATH = '/NetBank/code_verify1.jpg'
+const FIRST_BANK_LOGIN_AREA_PATH = '/NetBank/loadloginArea.html'
 const FIRST_BANK_PAYSECURE_PATH = '/NetBank/common/getPaySecure.jsp'
 const FIRST_BANK_QRY_BHO_PATH = '/NetBank/qryBHOset.html'
 const FIRST_BANK_DUP_LOGIN_PATH = '/NetBank/popup/ajax_isUsrLogin.html'
@@ -17,6 +18,8 @@ const FIRST_BANK_DEFAULT_REPEAT_SEQ = '0'
 const FIRST_BANK_MAX_WINDOW_DAYS = 30
 const FIRST_BANK_AES_KEY = 'SYSTEX.6214@FCB@'
 const FIRST_BANK_AES_IV = '1234567890abcdef'
+const FIRST_BANK_LOGIN_HIT_X = '160'
+const FIRST_BANK_LOGIN_HIT_Y = '27'
 const FIRST_BANK_DEFAULT_HEADERS = {
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
   'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -123,11 +126,11 @@ function buildCookieHeader(state) {
   return cookies.join('; ')
 }
 
-function buildAbsoluteUrl(pathOrUrl) {
+function buildAbsoluteUrl(pathOrUrl, baseUrl = FIRST_BANK_BASE_URL) {
   const value = normalizeText(pathOrUrl)
   if (!value) throw new Error('missing First Bank URL')
   if (/^https?:\/\//i.test(value)) return value
-  return new URL(value, FIRST_BANK_BASE_URL).toString()
+  return new URL(value, baseUrl || FIRST_BANK_BASE_URL).toString()
 }
 
 async function requestWithSession(pathOrUrl, options = {}, state) {
@@ -258,6 +261,122 @@ function extractHiddenInputValue(html, name) {
   return ''
 }
 
+function parseHtmlAttributes(html) {
+  const attrs = {}
+  const pattern = /([A-Za-z_:][\w:.-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g
+  let match = pattern.exec(String(html ?? ''))
+  while (match) {
+    const key = normalizeText(match[1]).toLowerCase()
+    if (!key) {
+      match = pattern.exec(String(html ?? ''))
+      continue
+    }
+    attrs[key] = decodeHtmlEntities(match[2] ?? match[3] ?? match[4] ?? '')
+    match = pattern.exec(String(html ?? ''))
+  }
+  return attrs
+}
+
+function extractForms(html) {
+  const forms = []
+  const pattern = /<form\b([^>]*)>([\s\S]*?)<\/form>/gi
+  let match = pattern.exec(String(html ?? ''))
+  while (match) {
+    const attrs = parseHtmlAttributes(match[1])
+    forms.push({
+      html: match[0],
+      action: normalizeText(attrs.action),
+      method: normalizeText(attrs.method).toUpperCase() || 'GET',
+    })
+    match = pattern.exec(String(html ?? ''))
+  }
+  return forms
+}
+
+function extractFormInputs(formHtml) {
+  const inputs = []
+  const pattern = /<input\b([^>]*)>/gi
+  let match = pattern.exec(String(formHtml ?? ''))
+  while (match) {
+    const attrs = parseHtmlAttributes(match[1])
+    const name = normalizeText(attrs.name || attrs.id)
+    const type = normalizeText(attrs.type).toLowerCase() || 'text'
+    if (!name) {
+      match = pattern.exec(String(formHtml ?? ''))
+      continue
+    }
+    if (['button', 'submit', 'reset', 'image', 'file'].includes(type)) {
+      match = pattern.exec(String(formHtml ?? ''))
+      continue
+    }
+    if ((type === 'checkbox' || type === 'radio') && !Object.hasOwn(attrs, 'checked')) {
+      match = pattern.exec(String(formHtml ?? ''))
+      continue
+    }
+    inputs.push({
+      name,
+      type,
+      value: decodeHtmlEntities(attrs.value ?? ''),
+    })
+    match = pattern.exec(String(formHtml ?? ''))
+  }
+  return inputs
+}
+
+function findFirstBankLoginForm(html) {
+  const forms = extractForms(html)
+  return forms.find((form) => {
+    const inputNames = new Set(
+      extractFormInputs(form.html).map((item) => normalizeText(item.name).toLowerCase()),
+    )
+    return inputNames.has('logincustidfake') && inputNames.has('usrid') && inputNames.has('pwd') && inputNames.has('vrfycode')
+  }) ?? null
+}
+
+function parseRectCenterFromCoords(coordsText) {
+  const parts = String(coordsText ?? '')
+    .split(',')
+    .map((part) => Number(String(part ?? '').trim()))
+    .filter((value) => Number.isFinite(value))
+
+  if (parts.length < 4) return null
+  const [left, top, right, bottom] = parts
+  if (right < left || bottom < top) return null
+  return {
+    hitX: String(Math.round((left + right) / 2)),
+    hitY: String(Math.round((top + bottom) / 2)),
+  }
+}
+
+function extractFirstBankLoginAreaPoint(html) {
+  const text = String(html ?? '')
+  const patterns = [
+    /<area\b[^>]+coords=["']([^"']+)["'][^>]+href=["']javascript:\s*clickArea\(\)\s*;?["']/i,
+    /<area\b[^>]+href=["']javascript:\s*clickArea\(\)\s*;?["'][^>]+coords=["']([^"']+)["']/i,
+  ]
+  for (const pattern of patterns) {
+    const match = pattern.exec(text)
+    const center = parseRectCenterFromCoords(match?.[1] ?? '')
+    if (center) return center
+  }
+  return {
+    hitX: '',
+    hitY: '',
+  }
+}
+
+function extractFirstBankLoginPageMeta(html) {
+  const form = findFirstBankLoginForm(html)
+  const formFields = Object.fromEntries(
+    extractFormInputs(form?.html ?? String(html ?? '')).map((item) => [item.name, item.value]),
+  )
+  const loginAreaPoint = extractFirstBankLoginAreaPoint(form?.html ?? html)
+  return {
+    formFields,
+    loginAreaPoint,
+  }
+}
+
 function sha1Base64NoPadding(value) {
   return createHash('sha1').update(String(value ?? ''), 'utf8').digest('base64').replace(/=+$/g, '')
 }
@@ -321,7 +440,8 @@ function createFirstBankRsaBlock(plainText, paySecureConfig) {
       key: createRsaPublicKey(rsaModulus, rsaExponent),
       padding: constants.RSA_PKCS1_PADDING,
     },
-    Buffer.from(tripleDesKeyHex, 'utf8'),
+    // First Bank encrypts the 24-byte TripleDES key bytes, not the 48-char hex text.
+    Buffer.from(tripleDesKeyHex, 'hex'),
   ).toString('hex')
 
   return `${rsaCipherHex}${encryptedPasswordHex}`.toUpperCase()
@@ -348,7 +468,12 @@ async function initializeFirstBankLoginState(inputSessionId = '') {
   }
 
   const pageRes = await getHtmlWithSession(FIRST_BANK_LOGIN_PAGE, { method: 'GET' }, sessionState)
-  return pageRes.sessionState
+  return {
+    sessionState: pageRes.sessionState,
+    loginPageHtml: pageRes.html,
+    loginPageUrl: pageRes.url,
+    loginPageMeta: extractFirstBankLoginPageMeta(pageRes.html),
+  }
 }
 
 async function refreshFirstBankCaptcha(sessionState) {
@@ -368,6 +493,26 @@ async function refreshFirstBankCaptcha(sessionState) {
   return {
     sessionState: nextState,
     dataUrl: `data:${response.headers.get('content-type') || 'image/jpeg'};base64,${imageBuffer.toString('base64')}`,
+  }
+}
+
+async function refreshFirstBankLoginArea(sessionState) {
+  const timestamp = Date.now()
+  const { response, sessionState: nextState } = await requestWithSession(
+    `${FIRST_BANK_LOGIN_AREA_PATH}?v=${timestamp}`,
+    {
+      method: 'GET',
+      headers: {
+        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        Referer: buildAbsoluteUrl(FIRST_BANK_LOGIN_PAGE),
+      },
+    },
+    sessionState,
+  )
+  const imageBuffer = Buffer.from(await response.arrayBuffer())
+  return {
+    sessionState: nextState,
+    dataUrl: `data:${response.headers.get('content-type') || 'image/png'};base64,${imageBuffer.toString('base64')}`,
   }
 }
 
@@ -395,7 +540,7 @@ async function fetchFirstBankLoginFlags(sessionState, loginId, repeatSeq = FIRST
   }
 }
 
-function createFirstBankLoginForm(credentials, paySecureConfig, flags) {
+function createFirstBankLoginForm(credentials, paySecureConfig, flags, loginPageMeta = {}) {
   const loginId = normalizeText(credentials.loginCustIdFake).toUpperCase()
   const loginRepeatSeq = normalizeDigits(credentials.loginCustIdRptSeq || FIRST_BANK_DEFAULT_REPEAT_SEQ) || FIRST_BANK_DEFAULT_REPEAT_SEQ
   const userCode = normalizeText(credentials.usrIdInput)
@@ -403,8 +548,22 @@ function createFirstBankLoginForm(credentials, paySecureConfig, flags) {
   const captchaCode = normalizeText(credentials.vrfyCode)
   const passwordPlain = `${loginId}${loginRepeatSeq}${password}`
   const encryptedUsrId = createUsrIdEncryption(userCode)
+  const formFields = loginPageMeta?.formFields && typeof loginPageMeta.formFields === 'object'
+    ? loginPageMeta.formFields
+    : {}
+  const loginAreaPoint = loginPageMeta?.loginAreaPoint && typeof loginPageMeta.loginAreaPoint === 'object'
+    ? loginPageMeta.loginAreaPoint
+    : {}
+  const explicitHitX = normalizeDigits(credentials?.hitX)
+  const explicitHitY = normalizeDigits(credentials?.hitY)
+  const resolvedHitX = explicitHitX || normalizeDigits(loginAreaPoint.hitX)
+  const resolvedHitY = explicitHitY || normalizeDigits(loginAreaPoint.hitY)
+  if (!resolvedHitX || !resolvedHitY) {
+    throw new Error('First Bank login position is required')
+  }
 
   return {
+    ...formFields,
     encData: encryptedUsrId.encData,
     tag: encryptedUsrId.tag,
     wmsFundCode: 'null',
@@ -427,8 +586,8 @@ function createFirstBankLoginForm(credentials, paySecureConfig, flags) {
     usrId: '',
     pwd: `${sha1Base64NoPadding(passwordPlain)}=`,
     vrfyCode: captchaCode,
-    hitX: '60',
-    hitY: '12',
+    hitX: resolvedHitX,
+    hitY: resolvedHitY,
     countInt: String(countMatchingCharacters(password, /\d/)),
     countLo: String(countMatchingCharacters(password, /[a-z]/)),
     countUp: String(countMatchingCharacters(password, /[A-Z]/)),
@@ -719,6 +878,88 @@ function hasNoDataMarker(html) {
   return text.includes('查無資料') || text.includes('沒有資料') || text.includes('no data')
 }
 
+function hasFirstBankTransactionQueryMarkup(html) {
+  const inputs = extractFormInputs(html)
+  const inputNames = new Set(inputs.map((item) => normalizeText(item.name).toLowerCase()))
+  return (
+    (inputNames.has('txnstart') && inputNames.has('txnend'))
+    || /onclick=["'][^"']*\bcontract\s*\(\s*\)[^"']*["']/i.test(String(html ?? ''))
+  )
+}
+
+function findFirstBankTransactionQueryForm(html) {
+  const forms = extractForms(html)
+  const matchedForm = forms.find((form) => hasFirstBankTransactionQueryMarkup(form.html))
+  if (matchedForm) return matchedForm
+  if (!forms.length && hasFirstBankTransactionQueryMarkup(html)) {
+    return {
+      html: String(html ?? ''),
+      action: '',
+      method: 'GET',
+    }
+  }
+  return null
+}
+
+function createFirstBankTransactionQuerySubmission(html, pageUrl, accountId, rangeStart, rangeEnd) {
+  if (extractTablesByClass(html, 'CnbTable').length || hasNoDataMarker(html)) return null
+  const form = findFirstBankTransactionQueryForm(html)
+  if (!form) return null
+
+  const rawAction = normalizeText(form.action)
+  const actionUrl = (!rawAction || rawAction === '#' || rawAction.toLowerCase().startsWith('javascript:'))
+    ? buildAbsoluteUrl(pageUrl)
+    : buildAbsoluteUrl(rawAction, pageUrl)
+  const fields = Object.fromEntries(
+    extractFormInputs(form.html).map((item) => [item.name, item.value]),
+  )
+  const normalizedAccountId = normalizeDigits(accountId)
+  const txnStart = formatFirstBankDate(rangeStart)
+  const txnEnd = formatFirstBankDate(rangeEnd)
+
+  if (normalizedAccountId) fields.acnt = normalizedAccountId
+  if (txnStart) fields.txnStart = txnStart
+  if (txnEnd) fields.txnEnd = txnEnd
+
+  return {
+    method: normalizeText(form.method).toUpperCase() || 'GET',
+    actionUrl,
+    fields,
+  }
+}
+
+async function submitFirstBankTransactionQuery(sessionState, submission, refererUrl) {
+  if (!submission) return null
+  const normalizedMethod = normalizeText(submission.method).toUpperCase() || 'GET'
+  if (normalizedMethod === 'POST') {
+    return postFormWithSession(
+      submission.actionUrl,
+      submission.fields,
+      sessionState,
+      {
+        headers: {
+          Referer: buildAbsoluteUrl(refererUrl),
+        },
+      },
+    )
+  }
+
+  const url = new URL(buildAbsoluteUrl(submission.actionUrl))
+  for (const [key, value] of Object.entries(submission.fields ?? {})) {
+    url.searchParams.set(key, String(value ?? ''))
+  }
+  return getHtmlWithSession(
+    url.toString(),
+    {
+      method: 'GET',
+      headers: {
+        Referer: buildAbsoluteUrl(refererUrl),
+      },
+    },
+    sessionState,
+  )
+}
+
 function parseFirstBankTransactions(html, metadata = {}) {
   const tables = extractTablesByClass(html, 'CnbTable')
   if (!tables.length) {
@@ -756,7 +997,24 @@ async function fetchFirstBankTransactionPage(sessionState, accountId, rangeStart
     throw error
   }
 
-  return page
+  const submission = createFirstBankTransactionQuerySubmission(
+    page.html,
+    page.url,
+    accountId,
+    rangeStart,
+    rangeEnd,
+  )
+  if (!submission) return page
+
+  const queriedPage = await submitFirstBankTransactionQuery(page.sessionState, submission, page.url)
+  if (!queriedPage) return page
+  if (isFirstBankLoginHtml(queriedPage.html, queriedPage.url)) {
+    const error = new Error('First Bank session expired, please reconnect and complete CAPTCHA login again')
+    error.code = 'first_bank_session_expired'
+    throw error
+  }
+
+  return queriedPage
 }
 
 async function ensureFirstBankLoggedIn(sessionId, credentials) {
@@ -768,13 +1026,14 @@ async function ensureFirstBankLoggedIn(sessionId, credentials) {
     throw new Error('First Bank credentials and CAPTCHA are required')
   }
 
-  let sessionState = await initializeFirstBankLoginState(sessionId)
+  const loginState = await initializeFirstBankLoginState(sessionId)
+  let sessionState = loginState.sessionState
   const flags = await fetchFirstBankLoginFlags(sessionState, loginId, FIRST_BANK_DEFAULT_REPEAT_SEQ)
   sessionState = flags.sessionState
   const paySecureConfigRes = await fetchFirstBankPaySecureConfig(sessionState)
   sessionState = paySecureConfigRes.sessionState
   const paySecureConfig = paySecureConfigRes.config
-  const loginForm = createFirstBankLoginForm(credentials, paySecureConfig, flags)
+  const loginForm = createFirstBankLoginForm(credentials, paySecureConfig, flags, loginState.loginPageMeta)
   const loginResult = await postFormWithSession(
     FIRST_BANK_LOGIN_ACTION,
     loginForm,
@@ -808,12 +1067,14 @@ function createFirstBankAccount(accountNumber) {
 
 export async function createFirstBankLinkSession(payload = {}) {
   const initializedState = await initializeFirstBankLoginState(payload.session_id)
-  const { sessionState, dataUrl } = await refreshFirstBankCaptcha(initializedState)
+  const captcha = await refreshFirstBankCaptcha(initializedState.sessionState)
+  const loginArea = await refreshFirstBankLoginArea(captcha.sessionState)
   return {
     provider: FIRST_BANK_PROVIDER,
-    session_id: encodeSessionState(sessionState),
+    session_id: encodeSessionState(loginArea.sessionState),
     link_url: buildAbsoluteUrl(FIRST_BANK_LOGIN_PAGE),
-    captcha_image_data_url: dataUrl,
+    captcha_image_data_url: captcha.dataUrl,
+    login_area_image_data_url: loginArea.dataUrl,
     expires_at: new Date(Date.now() + FIRST_BANK_PRELOGIN_SESSION_TTL_MS).toISOString(),
   }
 }
@@ -829,6 +1090,9 @@ export async function exchangeFirstBankAuth(payload = {}) {
     : today
   if (!loginId) throw new Error('First Bank national ID is required')
   if (!accountNumber) throw new Error('First Bank account number is required')
+  if (!normalizeDigits(credentials?.hitX) || !normalizeDigits(credentials?.hitY)) {
+    throw new Error('First Bank login position is required')
+  }
 
   const { sessionState } = await ensureFirstBankLoggedIn(payload.session_id, credentials)
 
@@ -921,6 +1185,9 @@ export async function disconnectFirstBankAuth() {
 export {
   FIRST_BANK_PROVIDER,
   buildFirstBankCursor,
+  createFirstBankTransactionQuerySubmission,
+  extractFirstBankLoginAreaPoint,
+  extractFirstBankLoginPageMeta,
   parseFirstBankCursor,
   parseFirstBankTransactions,
   resolveFirstBankSyncStartDate,

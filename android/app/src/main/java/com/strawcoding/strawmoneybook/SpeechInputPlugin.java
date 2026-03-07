@@ -2,11 +2,14 @@ package com.strawcoding.strawmoneybook;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.content.pm.PackageManager;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
+import android.speech.RecognitionService;
 import android.speech.SpeechRecognizer;
 
 import androidx.annotation.NonNull;
@@ -31,6 +34,8 @@ import java.util.Locale;
     }
 )
 public class SpeechInputPlugin extends Plugin {
+    private static final String GOOGLE_RECOGNITION_SERVICE_PACKAGE = "com.google.android.googlequicksearchbox";
+    private static final String GOOGLE_RECOGNITION_SERVICE_CLASS = "com.google.android.googlequicksearchbox.serviceapi.GoogleRecognitionService";
     private SpeechRecognizer speechRecognizer;
     private boolean partialResultsEnabled = true;
     private String listeningLanguage = "zh-TW";
@@ -131,6 +136,7 @@ public class SpeechInputPlugin extends Plugin {
                 intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, partialResultsEnabled);
                 intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, maxResults);
                 intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, activity.getPackageName());
+                intent.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false);
 
                 speechRecognizer.cancel();
                 listening = true;
@@ -153,7 +159,7 @@ public class SpeechInputPlugin extends Plugin {
         Context context = getContext();
         if (context == null) return;
 
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context);
+        speechRecognizer = createPreferredRecognizer(context);
         speechRecognizer.setRecognitionListener(new RecognitionListener() {
             @Override
             public void onReadyForSpeech(Bundle params) {
@@ -262,6 +268,33 @@ public class SpeechInputPlugin extends Plugin {
     private boolean isRecognitionAvailable() {
         Context context = getContext();
         return context != null && SpeechRecognizer.isRecognitionAvailable(context);
+    }
+
+    private SpeechRecognizer createPreferredRecognizer(Context context) {
+        SpeechRecognizer preferredRecognizer = createGoogleAppRecognizer(context);
+        if (preferredRecognizer != null) {
+            return preferredRecognizer;
+        }
+        return SpeechRecognizer.createSpeechRecognizer(context);
+    }
+
+    private SpeechRecognizer createGoogleAppRecognizer(Context context) {
+        try {
+            PackageManager packageManager = context.getPackageManager();
+            Intent queryIntent = new Intent(RecognitionService.SERVICE_INTERFACE);
+            queryIntent.setPackage(GOOGLE_RECOGNITION_SERVICE_PACKAGE);
+            if (packageManager.queryIntentServices(queryIntent, PackageManager.MATCH_DEFAULT_ONLY).isEmpty()) {
+                return null;
+            }
+
+            ComponentName componentName = new ComponentName(
+                GOOGLE_RECOGNITION_SERVICE_PACKAGE,
+                GOOGLE_RECOGNITION_SERVICE_CLASS
+            );
+            return SpeechRecognizer.createSpeechRecognizer(context, componentName);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private String sanitizeLanguage(String language) {
