@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 const manualScrollPositions = new Map()
+let pendingRestoreTimers = []
 
 function readWindowScrollPosition() {
   if (typeof window === 'undefined') {
@@ -18,22 +19,40 @@ function resolveRememberedScrollPosition(fullPath) {
   return manualScrollPositions.get(key) ?? null
 }
 
+function clearPendingRestoreTimers() {
+  if (typeof window === 'undefined') return
+  for (const timerId of pendingRestoreTimers) {
+    window.clearTimeout(timerId)
+  }
+  pendingRestoreTimers = []
+}
+
+function scheduleWindowScrollRestore(position) {
+  if (typeof window === 'undefined' || !position) return
+  clearPendingRestoreTimers()
+  const left = Number(position.left ?? 0) || 0
+  const top = Number(position.top ?? 0) || 0
+  const restore = () => {
+    window.scrollTo({
+      left,
+      top,
+      behavior: 'auto',
+    })
+  }
+  const delays = [0, 80, 220, 420]
+  pendingRestoreTimers = delays.map((delayMs) => window.setTimeout(restore, delayMs))
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   scrollBehavior(to, _from, savedPosition) {
-    if (savedPosition) return savedPosition
     const rememberedPosition = resolveRememberedScrollPosition(to.fullPath)
     if (rememberedPosition) {
-      return new Promise((resolve) => {
-        if (typeof window === 'undefined') {
-          resolve(rememberedPosition)
-          return
-        }
-        window.requestAnimationFrame(() => {
-          resolve(rememberedPosition)
-        })
-      })
+      scheduleWindowScrollRestore(rememberedPosition)
+      return rememberedPosition
     }
+    if (savedPosition) return savedPosition
+    clearPendingRestoreTimers()
     return { left: 0, top: 0 }
   },
   routes: [
@@ -65,6 +84,12 @@ const router = createRouter({
       name: 'analysis-category-detail',
       path: '/analysis/category',
       component: () => import('@/ui/views/AnalysisCategoryDetailPage.vue'),
+      meta: { tab: 'analysis' },
+    },
+    {
+      name: 'analysis-ai',
+      path: '/analysis/ai',
+      component: () => import('@/ui/views/AnalysisAiPage.vue'),
       meta: { tab: 'analysis' },
     },
     {
