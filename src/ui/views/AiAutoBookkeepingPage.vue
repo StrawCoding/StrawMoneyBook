@@ -171,6 +171,29 @@
           </label>
         </div>
 
+        <section class="field addon-field">
+          <div class="row addon-head">
+            <span>附加項目</span>
+            <button type="button" class="btn" @click="addAddonRow">新增項目</button>
+          </div>
+
+          <div v-if="addonRows.length" class="addon-list">
+            <div v-for="item in addonRows" :key="item.id" class="addon-row">
+              <CustomSelect
+                v-model="item.optionId"
+                class="addon-name"
+                :options="addonTemplateOptions"
+                @update:model-value="onAddonOptionChange(item, $event)"
+              />
+              <CustomSelect v-model="item.direction" class="addon-dir" :options="addonDirectionOptions" />
+              <input v-model.number="item.amountMajor" class="input addon-amount" type="number" min="0" step="0.01" placeholder="0" />
+              <button type="button" class="btn danger addon-remove" @click="removeAddonRow(item.id)">刪除</button>
+            </div>
+          </div>
+
+          <small class="muted">可在設定中的附加項目清單更改</small>
+        </section>
+
         <label class="field">
           備註
           <textarea v-model.trim="model.note" class="textarea" rows="3" />
@@ -242,9 +265,11 @@ import { useUiStore } from '@/ui/stores/ui.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
+import { mergeAddonItemsToNote } from '@/ui/utils/addon-note'
 import {
   convertAmountMinorByRate,
   getExchangeRateSnapshot,
@@ -274,6 +299,7 @@ const uiStore = useUiStore()
 const loanStore = useLoanStore()
 const budgetStore = useBudgetStore()
 const ledgerStore = useLedgerStore()
+const addonTemplateStore = useAddonTemplateStore()
 const router = useRouter()
 const { locale, t } = useI18n()
 
@@ -286,6 +312,7 @@ const latestLoanIntent = ref(null)
 const speechLiveText = ref('')
 const parsing = ref(false)
 const submitting = ref(false)
+const addonRows = ref([])
 const persistedTransactionId = ref('')
 const persistedTransactionType = ref('')
 const AI_SUBMIT_TIMEOUT_MS = 15000
@@ -350,6 +377,10 @@ const typeOptions = computed(() => [
   { value: 'income', label: t('transaction.type.income') },
   { value: 'transfer', label: t('transaction.type.transfer') },
 ])
+const addonDirectionOptions = [
+  { value: 'plus', label: '+' },
+  { value: 'minus', label: '-' },
+]
 
 const categoryGroupsByType = computed(() => {
   if (model.type === 'income') return categoryStore.incomeCategoryGroups
@@ -357,6 +388,11 @@ const categoryGroupsByType = computed(() => {
 })
 const directAccountOptions = computed(() => accountStore.regularAccounts)
 const transferAccountOptions = computed(() => accountStore.accounts)
+const addonTemplateItems = computed(() => addonTemplateStore.templates)
+const addonTemplateOptions = computed(() => addonTemplateItems.value.map((item) => ({
+  value: item.id,
+  label: item.label,
+})))
 const aiParserAccounts = computed(() => {
   const groupNameMap = new Map(
     (accountStore.groups ?? []).map((group) => [String(group?.id ?? ''), String(group?.name ?? '').trim()]),
@@ -447,7 +483,10 @@ watch(
 watch(
   () => ledgerStore.activeLedgerId,
   () => {
-    void loadAutoFillRules()
+    void Promise.all([
+      loadAutoFillRules(),
+      addonTemplateStore.load(),
+    ])
   },
   { immediate: true },
 )
@@ -608,6 +647,7 @@ function applyDraft(draft) {
   model.includeInAnalysis = Boolean(draft.includeInAnalysis)
   model.exchangeRateMode = 'system'
   model.manualExchangeRateInput = ''
+  addonRows.value = parseAddonRowsFromAiDraft(draft)
 }
 
 function resetPersistedTransaction() {
@@ -636,11 +676,28 @@ async function submit(options = {}) {
   const keepDraft = Boolean(options.keepDraft)
   const preserveSourceText = Boolean(options.preserveSourceText)
   if (parsing.value || submitting.value) return
-  const amountMinor = Math.round(Math.abs(Number(model.amountMajor ?? 0)) * 100)
+  const baseAmountMajor = Number(model.amountMajor ?? 0)
+  const appliedAddonItems = collectAppliedAddonItems()
+  const addonDeltaMajor = appliedAddonItems.reduce((total, item) => {
+    return total + (item.direction === 'plus' ? item.deltaMajor : -item.deltaMajor)
+  }, 0)
+  const baseAmountMinor = Math.round(Math.abs(baseAmountMajor) * 100)
+  const sourceExtraMinor = Math.round(addonDeltaMajor * 100)
+  const settledAmountMajor = round2(baseAmountMajor + addonDeltaMajor)
+  const settledAmountMinor = Math.round(Math.abs(settledAmountMajor) * 100)
   const occurredAt = toOccurredAtIso(model.occurredDate, model.occurredHour, model.occurredMinute)
   const loanIntent = latestLoanIntent.value
 
-  if (amountMinor <= 0) {
+  if (model.type === 'transfer') {
+    if (baseAmountMinor <= 0) {
+      uiStore.pushToast('請輸入有效金額（主轉帳金額需大於 0）', 'error')
+      return
+    }
+    if (baseAmountMinor + sourceExtraMinor <= 0) {
+      uiStore.pushToast('轉出金額（含附加項目）需大於 0', 'error')
+      return
+    }
+  } else if (settledAmountMinor <= 0) {
     uiStore.pushToast('請輸入有效金額（需大於 0）', 'error')
     return
   }
@@ -667,7 +724,7 @@ async function submit(options = {}) {
   try {
     if (loanIntent) {
       const actionLabel = resolveLoanActionLabel(loanIntent)
-      const noteText = String(model.note ?? '').trim()
+      const noteText = mergeAddonItemsToNote(String(model.note ?? '').trim(), appliedAddonItems)
 
       if (loanIntent.mode === 'create') {
         const counterpartyName = resolveLoanCounterpartyName(loanIntent)
@@ -679,7 +736,7 @@ async function submit(options = {}) {
           loanStore.create({
             direction: loanIntent.direction === 'borrow' ? 'borrow' : 'lend',
             counterpartyName,
-            principalMinor: amountMinor,
+            principalMinor: settledAmountMinor,
             interestMinor: 0,
             startDate: formatLoanStartDateTime(occurredAt),
             dueDate: null,
@@ -708,7 +765,7 @@ async function submit(options = {}) {
           loanStore.repay({
             loanId: matched.loan.id,
             accountId: model.accountId,
-            amountMinor,
+            amountMinor: settledAmountMinor,
             note: noteText,
             paidAt: resolveLoanOccurredAtIso(occurredAt),
           }),
@@ -737,7 +794,7 @@ async function submit(options = {}) {
       return true
     }
 
-    const noteText = String(model.note ?? '').trim()
+    const noteText = mergeAddonItemsToNote(String(model.note ?? '').trim(), appliedAddonItems)
     const currentPersistedTxId = String(persistedTransactionId.value ?? '').trim()
     const currentPersistedType = String(persistedTransactionType.value ?? '').trim()
     const switchingTransferBoundary = Boolean(currentPersistedTxId) && (
@@ -762,8 +819,8 @@ async function submit(options = {}) {
       }
       const transferRate = await resolveTransferRateOrThrow()
       const transferToAmountMinor = transferNeedsExchangeRate.value
-        ? convertAmountMinorByRate(amountMinor, transferRate)
-        : amountMinor
+        ? convertAmountMinorByRate(baseAmountMinor, transferRate)
+        : baseAmountMinor
       if (transferToAmountMinor <= 0) {
         uiStore.pushToast('轉入金額需大於 0，請調整匯率', 'error')
         return
@@ -772,9 +829,9 @@ async function submit(options = {}) {
         await withTimeout(
           transactionStore.updateTransaction(targetTxId, {
             type: 'transfer',
-            amountMinor,
+            amountMinor: baseAmountMinor,
             toAmountMinor: transferToAmountMinor,
-            sourceExtraMinor: 0,
+            sourceExtraMinor,
             occurredAt,
             accountId: model.accountId,
             peerAccountId: model.peerAccountId,
@@ -790,8 +847,9 @@ async function submit(options = {}) {
       } else {
         const transferResult = await withTimeout(
           transactionStore.addTransfer({
-            amountMinor,
+            amountMinor: baseAmountMinor,
             toAmountMinor: transferToAmountMinor,
+            sourceExtraMinor,
             occurredAt,
             fromAccountId: model.accountId,
             toAccountId: model.peerAccountId,
@@ -808,7 +866,7 @@ async function submit(options = {}) {
         await withTimeout(
           transactionStore.updateTransaction(targetTxId, {
             type: 'income',
-            amountMinor,
+            amountMinor: settledAmountMinor,
             occurredAt,
             accountId: model.accountId,
             categoryId: model.categoryId,
@@ -824,7 +882,7 @@ async function submit(options = {}) {
       } else {
         const createdTxId = await withTimeout(
           transactionStore.addIncome({
-            amountMinor,
+            amountMinor: settledAmountMinor,
             occurredAt,
             accountId: model.accountId,
             categoryId: model.categoryId,
@@ -843,7 +901,7 @@ async function submit(options = {}) {
         await withTimeout(
           transactionStore.updateTransaction(targetTxId, {
             type: 'expense',
-            amountMinor,
+            amountMinor: settledAmountMinor,
             occurredAt,
             accountId: model.accountId,
             categoryId: model.categoryId,
@@ -860,7 +918,7 @@ async function submit(options = {}) {
       } else {
         const createdTxId = await withTimeout(
           transactionStore.addExpense({
-            amountMinor,
+            amountMinor: settledAmountMinor,
             occurredAt,
             accountId: model.accountId,
             categoryId: model.categoryId,
@@ -1088,6 +1146,91 @@ async function resolveTransferRateOrThrow() {
   return rate
 }
 
+let addonSeq = 1
+
+function round2(value) {
+  return Math.round(Number(value) * 100) / 100
+}
+
+function createAddonRow() {
+  const defaultTemplate = defaultAddonTemplate()
+  return {
+    id: `addon-${Date.now()}-${addonSeq++}`,
+    optionId: defaultTemplate.id,
+    direction: defaultTemplate.defaultDirection,
+    amountMajor: null,
+  }
+}
+
+function defaultAddonTemplate() {
+  return addonTemplateItems.value[0] ?? { id: 'addon-default', label: '附加項目', defaultDirection: 'plus' }
+}
+
+function addAddonRow() {
+  addonRows.value.push(createAddonRow())
+}
+
+function removeAddonRow(rowId) {
+  addonRows.value = addonRows.value.filter((item) => item.id !== rowId)
+}
+
+function onAddonOptionChange(row, optionId) {
+  if (!row) return
+  row.optionId = optionId
+  const matched = addonTemplateItems.value.find((item) => String(item.id) === String(optionId))
+  if (!matched) return
+  row.direction = matched.defaultDirection === 'minus' ? 'minus' : 'plus'
+}
+
+function collectAppliedAddonItems() {
+  return addonRows.value
+    .map((item) => ({
+      label: addonLabelOf(item.optionId),
+      direction: item.direction === 'minus' ? 'minus' : 'plus',
+      deltaMajor: round2(Math.abs(Number(item.amountMajor ?? 0))),
+    }))
+    .filter((item) => item.deltaMajor > 0)
+}
+
+function addonLabelOf(optionId) {
+  return addonTemplateItems.value.find((item) => item.id === optionId)?.label ?? '附加項目'
+}
+
+function addonOptionIdByLabel(label) {
+  const normalizedLabel = String(label ?? '').trim().toLowerCase()
+  if (!normalizedLabel) return defaultAddonTemplate().id
+  const exact = addonTemplateItems.value.find((item) => String(item.label ?? '').trim().toLowerCase() === normalizedLabel)
+  if (exact) return exact.id
+  const fuzzy = addonTemplateItems.value.find((item) => {
+    const target = String(item.label ?? '').trim().toLowerCase()
+    return target.includes(normalizedLabel) || normalizedLabel.includes(target)
+  })
+  return fuzzy?.id ?? defaultAddonTemplate().id
+}
+
+function addonDirectionByOptionId(optionId) {
+  const matched = addonTemplateItems.value.find((item) => String(item.id) === String(optionId))
+  if (!matched) return defaultAddonTemplate().defaultDirection === 'minus' ? 'minus' : 'plus'
+  return matched.defaultDirection === 'minus' ? 'minus' : 'plus'
+}
+
+function parseAddonRowsFromAiDraft(draft) {
+  const parsedItems = Array.isArray(draft?.addonItems) ? draft.addonItems : []
+  return parsedItems
+    .map((item) => {
+      const deltaMajor = round2(Math.abs(Number(item?.deltaMajor ?? item?.amountMajor ?? 0)))
+      if (!(deltaMajor > 0)) return null
+      const optionId = addonOptionIdByLabel(item?.label)
+      return {
+        id: `addon-${Date.now()}-${addonSeq++}`,
+        optionId,
+        direction: addonDirectionByOptionId(optionId),
+        amountMajor: deltaMajor,
+      }
+    })
+    .filter(Boolean)
+}
+
 function formatCurrencyMinor(valueMinor, currencyCode = 'TWD') {
   const minor = Math.abs(Math.round(Number(valueMinor) || 0))
   const major = minor / 100
@@ -1253,6 +1396,31 @@ h2, h3 {
   justify-content: space-between;
   gap: 8px;
 }
+.addon-field {
+  gap: 10px;
+}
+.addon-head {
+  align-items: center;
+  justify-content: space-between;
+}
+.addon-list {
+  display: grid;
+  gap: 8px;
+}
+.addon-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) 90px minmax(88px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.addon-name,
+.addon-dir,
+.addon-amount {
+  width: 100%;
+}
+.addon-remove {
+  white-space: nowrap;
+}
 .fx-note {
   margin: 0;
 }
@@ -1404,6 +1572,9 @@ h2, h3 {
   .switch-grid,
   .fx-mode-grid {
     grid-template-columns: 1fr;
+  }
+  .addon-row {
+    grid-template-columns: 1fr 84px;
   }
 }
 </style>
