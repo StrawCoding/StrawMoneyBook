@@ -23,6 +23,10 @@
         <CustomSelect v-model="form.providerId" :options="providerOptions" />
       </label>
 
+      <p v-if="isMockProviderSelected" class="muted mock-hint">
+        {{ t('settings_bank_sync_create.mock_hint') }}
+      </p>
+
       <div class="field">
         <span>{{ t('settings_bank_sync_create.account_mode') }}</span>
         <div class="mode-row">
@@ -62,38 +66,53 @@
         <small class="muted">{{ t('settings_bank_sync_create.new_account_hint') }}</small>
       </label>
 
-      <label class="field">
-        {{ t('settings_bank_sync_create.national_id') }}
-        <input id="loginCustIdFake" v-model.trim="form.nationalId" class="input" type="text" maxlength="12" />
-      </label>
+      <template v-if="isFirstBankSelected">
+        <label class="field">
+          {{ t('settings_bank_sync_create.account_number') }}
+          <input v-model.trim="form.accountNumber" class="input" type="text" inputmode="numeric" maxlength="16" />
+        </label>
 
-      <label class="field">
-        {{ t('settings_bank_sync_create.user_code') }}
-        <input id="usrIdInput" v-model.trim="form.code" class="input" type="text" maxlength="20" />
-      </label>
+        <label class="field">
+          {{ t('settings_bank_sync_create.initial_sync_start_date') }}
+          <input v-model="form.initialSyncStartDate" class="input" type="date" />
+          <small class="muted">{{ t('settings_bank_sync_create.initial_sync_start_date_hint') }}</small>
+        </label>
+      </template>
 
-      <label class="field">
-        {{ t('settings_bank_sync_create.password') }}
-        <input id="pwd" v-model="form.password" class="input" type="password" maxlength="40" />
-      </label>
+      <template v-if="!isMockProviderSelected">
+        <label class="field">
+          {{ t('settings_bank_sync_create.national_id') }}
+          <input id="loginCustIdFake" v-model.trim="form.nationalId" class="input" type="text" maxlength="12" />
+        </label>
 
-      <div class="field">
-        <div class="row captcha-head">
-          <span>{{ t('settings_bank_sync_create.captcha_image') }}</span>
-          <button type="button" class="btn" :disabled="refreshingCaptcha || preparingSession" @click="refreshCaptchaImage">
-            {{ refreshingCaptcha ? t('settings_bank_sync_create.refreshing_captcha') : t('settings_bank_sync_create.refresh_captcha') }}
-          </button>
+        <label class="field">
+          {{ t('settings_bank_sync_create.user_code') }}
+          <input id="usrIdInput" v-model.trim="form.code" class="input" type="text" maxlength="20" />
+        </label>
+
+        <label class="field">
+          {{ t('settings_bank_sync_create.password') }}
+          <input id="pwd" v-model="form.password" class="input" type="password" maxlength="40" />
+        </label>
+
+        <div class="field">
+          <div class="row captcha-head">
+            <span>{{ t('settings_bank_sync_create.captcha_image') }}</span>
+            <button type="button" class="btn" :disabled="refreshingCaptcha || preparingSession" @click="refreshCaptchaImage">
+              {{ refreshingCaptcha ? t('settings_bank_sync_create.refreshing_captcha') : t('settings_bank_sync_create.refresh_captcha') }}
+            </button>
+          </div>
+          <div id="code_verify" class="captcha-preview">
+            <img v-if="captchaImageSrc" :src="captchaImageSrc" :alt="t('settings_bank_sync_create.captcha_image')" class="captcha-image" />
+            <span v-else>{{ captchaStatusText }}</span>
+          </div>
         </div>
-        <div id="code_verify" class="captcha-preview">
-          <img v-if="captchaImageSrc" :src="captchaImageSrc" :alt="t('settings_bank_sync_create.captcha_image')" class="captcha-image" />
-          <span v-else>{{ captchaStatusText }}</span>
-        </div>
-      </div>
 
-      <label class="field">
-        {{ t('settings_bank_sync_create.captcha_code') }}
-        <input id="vrfyCode" v-model.trim="form.captchaCode" class="input" type="text" maxlength="12" />
-      </label>
+        <label class="field">
+          {{ t('settings_bank_sync_create.captcha_code') }}
+          <input id="vrfyCode" v-model.trim="form.captchaCode" class="input" type="text" maxlength="12" />
+        </label>
+      </template>
     </article>
   </section>
 </template>
@@ -130,11 +149,23 @@ const preparedSessionId = ref('')
 const preparedSessionCode = ref('')
 const captchaImageSrc = ref('')
 const captchaStatusText = ref(t('settings_bank_sync_create.captcha.loading'))
+
+function defaultInitialSyncStartDate() {
+  const date = new Date()
+  date.setDate(date.getDate() - 30)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const form = reactive({
   providerId: '',
   accountMode: 'existing',
   existingAccountId: '',
   newAccountName: '',
+  accountNumber: '',
+  initialSyncStartDate: defaultInitialSyncStartDate(),
   nationalId: '',
   code: '',
   password: '',
@@ -160,12 +191,25 @@ const assetAccountOptions = computed(() => {
 const defaultAssetGroupId = computed(() => {
   return String(accountStore.groups[0]?.id ?? '')
 })
+const isMockProviderSelected = computed(() => {
+  const providerId = String(form.providerId ?? '').trim().toLowerCase()
+  return providerId === 'mock' || providerId === 'mock_bank_tw'
+})
+const isFirstBankSelected = computed(() => {
+  return String(form.providerId ?? '').trim().toLowerCase() === 'first_bank_tw'
+})
 const canSubmit = computed(() => {
   if (!ledgerStore.activeLedgerId || !String(form.providerId ?? '').trim()) return false
-  if (!String(form.nationalId ?? '').trim()) return false
-  if (!String(form.code ?? '').trim()) return false
-  if (!String(form.password ?? '').trim()) return false
-  if (!String(form.captchaCode ?? '').trim()) return false
+  if (isFirstBankSelected.value) {
+    if (!String(form.accountNumber ?? '').trim()) return false
+    if (!String(form.initialSyncStartDate ?? '').trim()) return false
+  }
+  if (!isMockProviderSelected.value) {
+    if (!String(form.nationalId ?? '').trim()) return false
+    if (!String(form.code ?? '').trim()) return false
+    if (!String(form.password ?? '').trim()) return false
+    if (!String(form.captchaCode ?? '').trim()) return false
+  }
   if (form.accountMode === 'existing') {
     return Boolean(String(form.existingAccountId ?? '').trim())
   }
@@ -271,6 +315,11 @@ async function prepareLinkSession({ refreshCaptcha = false } = {}) {
     })
     preparedSessionId.value = String(linkSession?.session_id ?? '').trim()
     preparedSessionCode.value = String(linkSession?.mock_code ?? '').trim()
+    if (isMockProviderSelected.value) {
+      captchaImageSrc.value = ''
+      captchaStatusText.value = t('settings_bank_sync_create.mock_ready')
+      return
+    }
     captchaImageSrc.value = String(linkSession?.captcha_image_data_url ?? linkSession?.captcha_image_src ?? '').trim()
     captchaStatusText.value = captchaImageSrc.value
       ? t('settings_bank_sync_create.captcha.loaded')
@@ -299,6 +348,8 @@ async function submit() {
     const connection = await connectBankProvider(ledgerStore.activeLedgerId, form.providerId, {
       sessionId: preparedSessionId.value,
       sessionCode: preparedSessionCode.value,
+      accountNumber: form.accountNumber,
+      initialSyncStartDate: form.initialSyncStartDate,
       nationalId: form.nationalId,
       code: form.code,
       password: form.password,
@@ -314,20 +365,27 @@ async function submit() {
       })
     }
 
-    await setEncryptedSetting(ledgerStore.activeLedgerId, `bank_sync.credentials.${connection.id}`, {
-      loginCustIdFake: String(form.nationalId ?? '').trim(),
-      usrIdInput: String(form.code ?? '').trim(),
-      pwd: String(form.password ?? ''),
-      selectors: {
-        loginCustIdFake: 'loginCustIdFake',
-        usrIdInput: 'usrIdInput',
-        pwd: 'pwd',
-        vrfyCode: 'vrfyCode',
-      },
-      captchaImageId: 'code_verify',
-      refreshCaptchaAction: 'javascript:chgImg();',
-      updatedAt: new Date().toISOString(),
-    })
+    if (!isMockProviderSelected.value) {
+      await setEncryptedSetting(ledgerStore.activeLedgerId, `bank_sync.credentials.${connection.id}`, {
+        provider: String(form.providerId ?? '').trim(),
+        accountNumber: String(form.accountNumber ?? '').trim(),
+        initialSyncStartDate: String(form.initialSyncStartDate ?? '').trim(),
+        loginCustIdFake: String(form.nationalId ?? '').trim(),
+        usrIdInput: String(form.code ?? '').trim(),
+        pwd: String(form.password ?? ''),
+        sessionToken: String(connection?.providerAccess?.sessionToken || connection?.providerAccess?.accessTokenRef || '').trim(),
+        accessTokenRef: String(connection?.providerAccess?.accessTokenRef || connection?.providerAccess?.sessionToken || '').trim(),
+        selectors: {
+          loginCustIdFake: 'loginCustIdFake',
+          usrIdInput: 'usrIdInput',
+          pwd: 'pwd',
+          vrfyCode: 'vrfyCode',
+        },
+        captchaImageId: 'code_verify',
+        refreshCaptchaAction: 'javascript:chgImg();',
+        updatedAt: new Date().toISOString(),
+      })
+    }
 
     uiStore.pushToast(t('settings_bank_sync_create.toast.created'))
     await router.push(backLink)
@@ -372,6 +430,10 @@ h3 {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.mock-hint {
+  margin: -2px 0 0;
 }
 
 .captcha-head {

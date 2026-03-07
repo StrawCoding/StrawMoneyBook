@@ -34,9 +34,34 @@ function normalizeProvider(value) {
   return normalizeText(value).toLowerCase()
 }
 
+function isFirstBankProvider(provider) {
+  return normalizeProvider(provider) === 'first_bank_tw'
+}
+
 function isMockProvider(provider) {
   const value = normalizeProvider(provider)
   return value === 'mock' || value === 'mock_bank_tw'
+}
+
+function isSupportedProvider(provider) {
+  return isMockProvider(provider) || isFirstBankProvider(provider)
+}
+
+function createUnsupportedProviderMessage(provider) {
+  const normalized = normalizeProvider(provider)
+  if (!normalized) {
+    return '目前支援 Mock Bank TW (Sandbox) 與 First Bank TW。'
+  }
+  return `provider "${normalized}" 目前未開放；請改用 Mock Bank TW (Sandbox) 或 First Bank TW。`
+}
+
+function unsupportedProviderGuard(provider, res) {
+  if (isSupportedProvider(provider)) return false
+  sendJson(res, 501, {
+    error: 'provider_not_supported',
+    message: createUnsupportedProviderMessage(provider),
+  })
+  return true
 }
 
 function methodGuard(req, res) {
@@ -91,12 +116,15 @@ function simpleHash(input) {
 
 export {
   clientGuard,
+  isFirstBankProvider,
   isMockProvider,
   isClientAuthorized,
+  isSupportedProvider,
   methodGuard,
   normalizeProvider,
   normalizeText,
   parseBody,
   sendJson,
   simpleHash,
+  unsupportedProviderGuard,
 }

@@ -1,20 +1,45 @@
 import { Capacitor } from '@capacitor/core'
+import {
+  createLocalMockBankLinkSession,
+  disconnectLocalMockBankAuth,
+  exchangeLocalMockBankAuth,
+  markImportedLocalMockTransactions,
+  syncLocalMockBankTransactions,
+} from '@/services/bank-sync/local-mock-backend'
 
 const DEFAULT_BANK_API_BASE = String(import.meta.env.VITE_BANK_SYNC_API_BASE_URL ?? '').trim()
 const BANK_SYNC_CLIENT_SHARED_KEY = String(import.meta.env.VITE_BANK_SYNC_CLIENT_SHARED_KEY ?? '').trim()
+const BANK_SYNC_UI_ENABLED = parseBooleanEnv(import.meta.env.VITE_BANK_SYNC_ENABLED, true)
+const BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS = parseBooleanEnv(import.meta.env.VITE_BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS, true)
 
 const PROVIDERS_FALLBACK = [
-  {
-    id: 'first_bank_tw',
-    name: '第一銀行',
-    country: 'TW',
-  },
   {
     id: 'mock_bank_tw',
     name: 'Mock Bank TW (Sandbox)',
     country: 'TW',
   },
+  {
+    id: 'first_bank_tw',
+    name: 'First Bank i-Bank',
+    country: 'TW',
+  },
 ]
+
+function parseBooleanEnv(value, fallback = false) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (!normalized) return fallback
+  return ['1', 'true', 'yes', 'on'].includes(normalized)
+}
+
+function isMockProviderId(providerId) {
+  const normalized = String(providerId ?? '').trim().toLowerCase()
+  return normalized === 'mock' || normalized === 'mock_bank_tw'
+}
+
+function shouldExposeProvider(providerId) {
+  if (isMockProviderId(providerId)) return true
+  return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS
+}
 
 function buildApiUrl(path) {
   const normalizedPath = String(path ?? '').trim()
@@ -30,6 +55,13 @@ function shouldRequireExplicitBankApiBase() {
   return Capacitor.getPlatform() !== 'web'
 }
 
+function canUseLocalMockBankSync() {
+  if (DEFAULT_BANK_API_BASE) return false
+  if (Capacitor.getPlatform() === 'web') return false
+  const providers = parseProviderListFromEnv().filter((item) => shouldExposeProvider(item.id))
+  return providers.length > 0 && providers.every((item) => isMockProviderId(item.id))
+}
+
 function createMissingBankApiError() {
   const platform = Capacitor.getPlatform()
   const message = platform === 'web'
@@ -41,7 +73,12 @@ function createMissingBankApiError() {
 }
 
 export function isBankSyncApiConfigured() {
-  return !shouldRequireExplicitBankApiBase()
+  return canUseLocalMockBankSync() || !shouldRequireExplicitBankApiBase()
+}
+
+export function isBankSyncFeatureEnabled() {
+  if (!BANK_SYNC_UI_ENABLED) return false
+  return listBankProviders().length > 0
 }
 
 export function getBankSyncApiUnavailableMessage() {
@@ -68,6 +105,24 @@ function parseProviderListFromEnv() {
 }
 
 async function postJson(path, payload) {
+  if (canUseLocalMockBankSync()) {
+    if (path === '/api/bank/link_session' && isMockProviderId(payload?.provider)) {
+      return createLocalMockBankLinkSession(payload)
+    }
+    if (path === '/api/bank/exchange' && isMockProviderId(payload?.provider)) {
+      return exchangeLocalMockBankAuth(payload)
+    }
+    if (path === '/api/bank/sync' && isMockProviderId(payload?.provider)) {
+      return syncLocalMockBankTransactions(payload)
+    }
+    if (path === '/api/bank/disconnect' && isMockProviderId(payload?.provider)) {
+      return disconnectLocalMockBankAuth(payload)
+    }
+    if (path === '/api/bank/mark_imported') {
+      return markImportedLocalMockTransactions(payload)
+    }
+  }
+
   if (shouldRequireExplicitBankApiBase()) {
     throw createMissingBankApiError()
   }
@@ -110,7 +165,7 @@ async function postJson(path, payload) {
 }
 
 export function listBankProviders() {
-  return parseProviderListFromEnv()
+  return parseProviderListFromEnv().filter((item) => shouldExposeProvider(item.id))
 }
 
 export async function createBankLinkSession(payload = {}) {

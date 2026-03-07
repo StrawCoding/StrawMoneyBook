@@ -104,7 +104,7 @@
 - 會員權益：`/settings/membership-benefits`
 - 關於我們：`/settings/about`
 - 版本資訊：`/settings/version-info`
-- 銀行同步：`/settings/bank-sync`（目前由 `SHOW_BANK_SYNC_ENTRY = false` 控制為隱藏入口）
+- 銀行同步：`/settings/bank-sync`（入口改由 `isBankSyncFeatureEnabled()` 控制；目前預設恢復為 mock/sandbox 流程）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）
@@ -255,7 +255,7 @@ UI 服務目錄：`src/ui/services/`
 - 若調整交易報表欄位或匯出格式，優先考慮：`AnalysisPrintPage.vue` + `export.service.js`。
 - 若調整交易刪除邏輯，需同步檢查 `transaction.service.js` 的關聯刪除（退款/報銷）。
 - 若調整 App 開啟流程，需同步檢查 `App.vue`、`google/auth.js` 與備份 service 的靜默登入流程。
-- 若調整銀行同步入口，需同步檢查 `settings.vue` 的 `SHOW_BANK_SYNC_ENTRY` 與 `/settings/bank-sync` 路由可達性。
+- 若調整銀行同步入口，需同步檢查 `settings.vue` 的 `isBankSyncFeatureEnabled()`、銀行同步 API 可用性提示，以及 `/settings/bank-sync` 路由可達性。
 
 ## 10. 文件更新時機
 

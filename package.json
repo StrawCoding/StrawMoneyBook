@@ -1,6 +1,6 @@
 {
   "name": "strawmoneybook",
-  "version": "0.11.11",
+  "version": "0.12.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,8 +13,10 @@
     "bump:android:versionCode": "node scripts/bump-android-version-code.mjs",
     "preaab": "npm run bump:patch && npm run bump:android:versionCode && npm run sync:app-update-manifest",
     "simulate:google-backup": "node scripts/simulate-google-backup-flow.mjs",
+    "simulate:bank-sync": "node scripts/simulate-bank-sync-mock-flow.mjs",
+    "simulate:first-bank-provider": "node scripts/test-first-bank-provider.mjs",
     "audit:i18n": "node scripts/audit-i18n.mjs",
-    "test:smoke": "npm run audit:i18n && npm run simulate:google-backup",
+    "test:smoke": "npm run audit:i18n && npm run simulate:google-backup && npm run simulate:bank-sync && npm run simulate:first-bank-provider",
     "test": "npm run test:smoke",
     "dev": "vite",
     "debug": "npm run sync:app-update-manifest && VITE_FORCE_MEMBER_ON_DEBUG=true npx vite build --mode debug && npx cap sync android && cd android && ./gradlew assembleDebug && cd ..",

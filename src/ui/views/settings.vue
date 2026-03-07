@@ -12,12 +12,14 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
+import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
 
 const { t } = useI18n()
-const SHOW_BANK_SYNC_ENTRY = false
-const settingGroups = [
+const showBankSyncEntry = isBankSyncFeatureEnabled()
+const settingGroups = computed(() => [
   [
     { to: '/settings/ledgers', labelKey: 'settings.ledger_management', icon: 'fa-solid fa-book' },
     { to: '/settings/categories', labelKey: 'settings.category_management', icon: 'fa-solid fa-tags' },
@@ -28,7 +30,7 @@ const settingGroups = [
   [
     { to: '/settings/data-management', labelKey: 'settings.data_management', icon: 'fa-solid fa-database' },
     { to: '/settings/auto-backup', labelKey: 'settings.auto_backup', icon: 'fa-solid fa-cloud-arrow-up' },
-    ...(SHOW_BANK_SYNC_ENTRY ? [{ to: '/settings/bank-sync', labelKey: 'settings.bank_sync', icon: 'fa-solid fa-building-columns' }] : []),
+    ...(showBankSyncEntry ? [{ to: '/settings/bank-sync', labelKey: 'settings.bank_sync', icon: 'fa-solid fa-building-columns' }] : []),
   ],
   [
     { to: '/settings/language', labelKey: 'settings.language', icon: 'fa-solid fa-language' },
@@ -40,7 +42,7 @@ const settingGroups = [
     { to: '/settings/about', labelKey: 'settings.about_us', icon: 'fa-solid fa-users' },
     { to: '/settings/version-info', labelKey: 'settings.version_info', icon: 'fa-solid fa-circle-info' },
   ],
-]
+])
 </script>
 
 <style scoped>

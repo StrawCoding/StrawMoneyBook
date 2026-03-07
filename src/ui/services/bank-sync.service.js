@@ -27,6 +27,7 @@ import {
   markImportedBankTransactions,
   syncBankTransactions,
 } from '@/services/bank-sync/backend'
+import { getEncryptedSetting, setEncryptedSetting } from '@/ui/services/secure-setting.service'
 
 function assertLedgerId(ledgerId) {
   if (!ledgerId) throw new Error('缺少帳本 ID')
@@ -34,6 +35,31 @@ function assertLedgerId(ledgerId) {
 
 function normalizeText(value) {
   return String(value ?? '').trim()
+}
+
+function normalizeProviderId(value) {
+  return normalizeText(value).toLowerCase()
+}
+
+function isMockProviderId(provider) {
+  const normalized = normalizeProviderId(provider)
+  return normalized === 'mock' || normalized === 'mock_bank_tw'
+}
+
+function isFirstBankProviderId(provider) {
+  return normalizeProviderId(provider) === 'first_bank_tw'
+}
+
+function normalizeDateInput(value) {
+  const text = normalizeText(value)
+  if (!text) return ''
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return ''
+  return `${match[1]}-${match[2]}-${match[3]}`
+}
+
+function buildBankCredentialSettingKey(connectionId) {
+  return `bank_sync.credentials.${normalizeText(connectionId)}`
 }
 
 function buildDeviceInfo(options = {}) {
@@ -249,7 +275,7 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
       credentials: buildBankCredentialPayload(options),
       automation: buildBankAutomationPayload(),
     })
-  const isMockProvider = normalizedProvider === 'mock' || normalizedProvider === 'mock_bank_tw'
+  const isMockProvider = isMockProviderId(normalizedProvider)
   const exchangeCode = isMockProvider
     ? normalizeText(preparedSessionCode || linkSession?.mock_code || options.code)
     : normalizeText(options.code || preparedSessionCode || linkSession?.mock_code)
@@ -260,6 +286,8 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
     code: exchangeCode,
     public_token: normalizeText(options.publicToken),
     credentials: buildBankCredentialPayload(options),
+    account_number: normalizeText(options.accountNumber),
+    initial_sync_start_date: normalizeDateInput(options.initialSyncStartDate),
     automation: buildBankAutomationPayload(),
   })
 
@@ -275,6 +303,7 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
     providerConnectionId,
     status: 'active',
     userLabel: normalizeText(exchanged?.connection_name || exchanged?.institution_name || normalizedProvider),
+    syncCursor: normalizeText(exchanged?.sync_cursor || exchanged?.next_cursor || exchanged?.cursor),
     lastSyncStatus: 'idle',
     lastError: '',
   })
@@ -292,7 +321,14 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
     })),
   )
 
-  return getConnectionBundle(ledgerId, connection)
+  const bundle = await getConnectionBundle(ledgerId, connection)
+  return {
+    ...bundle,
+    providerAccess: {
+      accessTokenRef: normalizeText(exchanged?.access_token_ref),
+      sessionToken: normalizeText(exchanged?.session_token || exchanged?.access_token_ref),
+    },
+  }
 }
 
 export async function saveBankAccountSettings(ledgerId, bankAccountId, patch = {}) {
@@ -332,6 +368,12 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
   }
 
   try {
+    const secureSettingKey = buildBankCredentialSettingKey(connectionId)
+    const savedCredentialState = await getEncryptedSetting(ledgerId, secureSettingKey)
+    const sessionToken = normalizeText(savedCredentialState?.sessionToken || savedCredentialState?.accessTokenRef)
+    if (isFirstBankProviderId(connection.provider) && !sessionToken) {
+      throw new Error('第一銀行同步 Session 已失效，請重新連線並重新登入一次')
+    }
     const syncRes = await syncBankTransactions({
       provider: connection.provider,
       connection_id: connection.provider_connection_id,
@@ -340,6 +382,8 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
       last_sync_at: normalizeText(connection.last_sync_at) || null,
       lookback_days: rule.lookbackDays,
       account_ids: enabledAccounts.map((item) => item.provider_account_id),
+      session_token: sessionToken || null,
+      access_token_ref: sessionToken || null,
     })
 
     const normalizedRows = normalizeBackendSyncRows([
@@ -385,6 +429,16 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
 
     const syncTime = normalizeText(syncRes?.sync_time) || new Date().toISOString()
     const nextCursor = normalizeText(syncRes?.next_cursor || syncRes?.nextCursor || syncRes?.cursor)
+    const nextSessionToken = normalizeText(syncRes?.session_token || syncRes?.access_token_ref)
+
+    if (nextSessionToken && !isMockProviderId(connection.provider)) {
+      await setEncryptedSetting(ledgerId, secureSettingKey, {
+        ...(savedCredentialState && typeof savedCredentialState === 'object' ? savedCredentialState : {}),
+        sessionToken: nextSessionToken,
+        accessTokenRef: nextSessionToken,
+        updatedAt: new Date().toISOString(),
+      })
+    }
 
     await updateBankConnection(ledgerId, connectionId, {
       status: 'active',

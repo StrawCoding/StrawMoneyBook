@@ -1,7 +1,14 @@
+import { ref } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 
 const manualScrollPositions = new Map()
 let pendingRestoreTimers = []
+export const disableNextRouteTransition = ref(false)
+export const routeRestoreMinHeight = ref(0)
+
+if (typeof window !== 'undefined' && window.history && 'scrollRestoration' in window.history) {
+  window.history.scrollRestoration = 'manual'
+}
 
 function readWindowScrollPosition() {
   if (typeof window === 'undefined') {
@@ -10,6 +17,25 @@ function readWindowScrollPosition() {
   return {
     left: Number(window.scrollX ?? window.pageXOffset ?? 0) || 0,
     top: Number(window.scrollY ?? window.pageYOffset ?? 0) || 0,
+  }
+}
+
+function readDocumentHeight() {
+  if (typeof document === 'undefined') return 0
+  const docEl = document.documentElement
+  const body = document.body
+  const viewportHeight = typeof window === 'undefined' ? 0 : (Number(window.innerHeight ?? 0) || 0)
+  return Math.max(
+    Number(docEl?.scrollHeight ?? 0) || 0,
+    Number(body?.scrollHeight ?? 0) || 0,
+    viewportHeight,
+  )
+}
+
+function createScrollSnapshot() {
+  return {
+    ...readWindowScrollPosition(),
+    height: readDocumentHeight(),
   }
 }
 
@@ -32,6 +58,7 @@ function scheduleWindowScrollRestore(position) {
   clearPendingRestoreTimers()
   const left = Number(position.left ?? 0) || 0
   const top = Number(position.top ?? 0) || 0
+  routeRestoreMinHeight.value = Math.max(Number(position.height ?? 0) || 0, Number(window.innerHeight ?? 0) || 0)
   const restore = () => {
     window.scrollTo({
       left,
@@ -39,8 +66,19 @@ function scheduleWindowScrollRestore(position) {
       behavior: 'auto',
     })
   }
-  const delays = [0, 80, 220, 420]
+  const finalize = () => {
+    routeRestoreMinHeight.value = 0
+    disableNextRouteTransition.value = false
+  }
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(restore)
+  })
+  const delays = [0, 48, 120, 220]
   pendingRestoreTimers = delays.map((delayMs) => window.setTimeout(restore, delayMs))
+  pendingRestoreTimers.push(window.setTimeout(() => {
+    restore()
+    finalize()
+  }, 320))
 }
 
 const router = createRouter({
@@ -49,10 +87,15 @@ const router = createRouter({
     const rememberedPosition = resolveRememberedScrollPosition(to.fullPath)
     if (rememberedPosition) {
       scheduleWindowScrollRestore(rememberedPosition)
-      return rememberedPosition
+      return {
+        left: Number(rememberedPosition.left ?? 0) || 0,
+        top: Number(rememberedPosition.top ?? 0) || 0,
+      }
     }
     if (savedPosition) return savedPosition
     clearPendingRestoreTimers()
+    routeRestoreMinHeight.value = 0
+    disableNextRouteTransition.value = false
     return { left: 0, top: 0 }
   },
   routes: [
@@ -346,7 +389,16 @@ router.beforeEach((to, from) => {
   const fromPath = String(from.fullPath ?? '').trim()
   const toPath = String(to.fullPath ?? '').trim()
   if (!fromPath || fromPath === toPath) return
-  manualScrollPositions.set(fromPath, readWindowScrollPosition())
+  manualScrollPositions.set(fromPath, createScrollSnapshot())
+  const rememberedSnapshot = resolveRememberedScrollPosition(toPath)
+  if (rememberedSnapshot) {
+    const viewportHeight = typeof window === 'undefined' ? 0 : (Number(window.innerHeight ?? 0) || 0)
+    disableNextRouteTransition.value = true
+    routeRestoreMinHeight.value = Math.max(Number(rememberedSnapshot.height ?? 0) || 0, viewportHeight)
+    return
+  }
+  disableNextRouteTransition.value = false
+  routeRestoreMinHeight.value = 0
 })
 
 export default router

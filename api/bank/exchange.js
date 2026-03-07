@@ -1,13 +1,14 @@
+import { exchangeFirstBankAuth } from './_first-bank-provider.js'
 import { createMockAccounts, createMockConnectionId } from './_mock-provider.js'
-import { exchangePlaywrightBankAuth } from './_playwright-provider.js'
 import {
   clientGuard,
-  isMockProvider,
+  isFirstBankProvider,
   methodGuard,
   normalizeProvider,
   normalizeText,
   parseBody,
   sendJson,
+  unsupportedProviderGuard,
 } from './_utils.js'
 
 const CONSUMED_MOCK_SESSION_MAX_ENTRIES = 1000
@@ -63,49 +64,46 @@ export default async function handler(req, res) {
     return
   }
 
-  if (isMockProvider(provider)) {
-    const sessionId = normalizeText(body.session_id)
-    const code = normalizeText(body.code || body.public_token)
-    if (!sessionId) {
-      sendJson(res, 400, { error: 'missing_session_id', message: 'session_id is required' })
-      return
+  if (unsupportedProviderGuard(provider, res)) return
+
+  if (isFirstBankProvider(provider)) {
+    try {
+      const exchanged = await exchangeFirstBankAuth(body)
+      sendJson(res, 200, exchanged)
+    } catch (error) {
+      sendJson(res, 400, {
+        error: 'first_bank_exchange_failed',
+        message: String(error?.message ?? error ?? 'First Bank exchange failed'),
+      })
     }
-    if (!code) {
-      sendJson(res, 400, { error: 'missing_code', message: 'code is required' })
-      return
-    }
-    const session = parseMockSessionId(sessionId)
-    if (!session || !code.startsWith('mock') || !consumeMockSession(session)) {
-      sendJson(res, 400, { error: 'invalid_mock_code', message: 'invalid mock authorization code' })
-      return
-    }
-    const seed = `${sessionId}_${code}`
-    const connectionId = createMockConnectionId(seed)
-    const accounts = createMockAccounts(connectionId)
-    sendJson(res, 200, {
-      provider: 'mock_bank_tw',
-      institution_name: 'Mock Bank TW',
-      connection_id: connectionId,
-      connection_name: 'Mock Bank TW',
-      accounts,
-      access_token_ref: `mock_token_ref_${connectionId}`,
-      created_at: new Date().toISOString(),
-    })
     return
   }
 
-  try {
-    const exchanged = await exchangePlaywrightBankAuth({
-      ...body,
-      provider,
-    })
-    sendJson(res, 200, exchanged)
-  } catch (error) {
-    const message = String(error?.message ?? '').trim()
-    const statusCode = message.includes('not configured yet') ? 501 : 400
-    sendJson(res, statusCode, {
-      error: statusCode === 501 ? 'provider_not_supported' : 'playwright_exchange_failed',
-      message: message || 'failed to exchange bank auth',
-    })
+  const sessionId = normalizeText(body.session_id)
+  const code = normalizeText(body.code || body.public_token)
+  if (!sessionId) {
+    sendJson(res, 400, { error: 'missing_session_id', message: 'session_id is required' })
+    return
   }
+  if (!code) {
+    sendJson(res, 400, { error: 'missing_code', message: 'code is required' })
+    return
+  }
+  const session = parseMockSessionId(sessionId)
+  if (!session || !code.startsWith('mock') || !consumeMockSession(session)) {
+    sendJson(res, 400, { error: 'invalid_mock_code', message: 'invalid mock authorization code' })
+    return
+  }
+  const seed = `${sessionId}_${code}`
+  const connectionId = createMockConnectionId(seed)
+  const accounts = createMockAccounts(connectionId)
+  sendJson(res, 200, {
+    provider: 'mock_bank_tw',
+    institution_name: 'Mock Bank TW',
+    connection_id: connectionId,
+    connection_name: 'Mock Bank TW',
+    accounts,
+    access_token_ref: `mock_token_ref_${connectionId}`,
+    created_at: new Date().toISOString(),
+  })
 }

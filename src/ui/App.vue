@@ -17,7 +17,7 @@
       </transition>
     </header>
 
-    <main class="page-container" :class="{ booting: isBooting, 'welcome-mode': showWelcomePage }">
+    <main class="page-container" :class="{ booting: isBooting, 'welcome-mode': showWelcomePage }" :style="pageContainerStyle">
       <transition name="boot-overlay" appear>
         <section v-if="isBooting" class="boot-layer card">
           <img class="boot-logo" src="@/ui/assets/logo.png" alt="StrawMoneyBook logo" />
@@ -29,9 +29,10 @@
       <template v-if="!isBooting">
         <WelcomePage v-if="showWelcomePage" />
         <router-view v-else v-slot="{ Component, route }">
-          <transition name="route-slide" mode="out-in" appear>
+          <transition v-if="!disableNextRouteTransition" name="route-slide" mode="out-in" appear>
             <component :is="Component" :key="route.fullPath" />
           </transition>
+          <component v-else :is="Component" :key="route.fullPath" />
         </router-view>
       </template>
     </main>
@@ -82,6 +83,7 @@ import { App as CapacitorApp } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { initGoogleAuth, getAccessToken } from '@/services/google/auth'
 import { canNavigateBackInApp } from '@/ui/services/navigation-back.service'
+import { disableNextRouteTransition, routeRestoreMinHeight } from '@/ui/router'
 import {
   authenticateSecurityLock,
   getSecurityLockAvailability,
@@ -99,6 +101,13 @@ const hasLedgers = computed(() => ledgerStore.ledgers.length > 0)
 const hasAccounts = computed(() => accountStore.accounts.length > 0)
 const isBooting = computed(() => !ledgerStore.ready)
 const showWelcomePage = computed(() => ledgerStore.ready && (!hasLedgers.value || !hasAccounts.value))
+const pageContainerStyle = computed(() => {
+  const minHeight = Number(routeRestoreMinHeight.value ?? 0) || 0
+  if (minHeight <= 0) return null
+  return {
+    minHeight: `${minHeight}px`,
+  }
+})
 const updateDialogOpen = ref(false)
 const updateInfo = ref({
   hasUpdate: false,

@@ -1,48 +1,51 @@
 <template>
-  <div v-if="showDisclaimer" class="notice-overlay" role="dialog" aria-modal="true" aria-labelledby="bank-sync-notice-title">
-    <div class="card notice-dialog">
-      <h3 id="bank-sync-notice-title">{{ t('settings_bank_sync.disclaimer.title') }}</h3>
-      <p class="muted">
-        {{ t('settings_bank_sync.disclaimer.line_1') }}
-        {{ t('settings_bank_sync.disclaimer.line_2') }}
-      </p>
-      <div class="row notice-actions">
-        <button class="btn primary" @click="acceptDisclaimer">{{ t('settings_bank_sync.disclaimer.confirm') }}</button>
+  <div class="bank-sync-page">
+    <div v-if="showDisclaimer" class="notice-overlay" role="dialog" aria-modal="true" aria-labelledby="bank-sync-notice-title">
+      <div class="card notice-dialog">
+        <h3 id="bank-sync-notice-title">{{ t('settings_bank_sync.disclaimer.title') }}</h3>
+        <p class="muted">
+          {{ t('settings_bank_sync.disclaimer.line_1') }}
+          {{ t('settings_bank_sync.disclaimer.line_2') }}
+        </p>
+        <div class="row notice-actions">
+          <button class="btn primary" @click="acceptDisclaimer">{{ t('settings_bank_sync.disclaimer.confirm') }}</button>
+        </div>
       </div>
     </div>
-  </div>
-  <section class="stack">
-    <header class="row page-head">
-      <h2>{{ t('settings_bank_sync.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-    </header>
 
-    <article class="card panel">
-      <h3>{{ t('settings_bank_sync.management_title') }}</h3>
-      <p class="muted">{{ t('settings_bank_sync.management_desc') }}</p>
-      <p v-if="!bankSyncApiReady" class="muted bank-api-warning">{{ bankSyncApiMessage }}</p>
-      <div class="row top-action-row">
-        <RouterLink class="btn primary" :class="{ disabled: !bankSyncApiReady }" :to="bankSyncCreateLink">
-          {{ t('settings_bank_sync.add_bank') }}
-        </RouterLink>
-        <button class="btn" :disabled="loadingState" :aria-busy="loadingState" @click="reloadState">
-          {{ loadingState ? t('settings_bank_sync.refreshing') : t('settings_bank_sync.refresh') }}
-        </button>
-      </div>
-    </article>
-
-    <article v-if="!connections.length" class="card panel">
-      <p class="muted">{{ t('settings_bank_sync.empty') }}</p>
-    </article>
-
-    <article v-for="connection in connections" :key="connection.id" class="card panel connection-card">
-      <header class="row connection-head">
-        <div class="title-wrap">
-          <h3>{{ connection.user_label || connection.provider }}</h3>
-          <small class="muted">{{ connection.provider_connection_id }}</small>
-        </div>
-        <span class="status-chip" :class="`status-${connection.status}`">{{ connectionStatusText(connection.status) }}</span>
+    <section class="stack">
+      <header class="row page-head">
+        <h2>{{ t('settings_bank_sync.title') }}</h2>
+        <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
       </header>
+
+      <article class="card panel">
+        <h3>{{ t('settings_bank_sync.management_title') }}</h3>
+        <p class="muted">{{ t('settings_bank_sync.management_desc') }}</p>
+        <p class="muted sandbox-note">{{ t('settings_bank_sync.sandbox_only') }}</p>
+        <p v-if="!bankSyncApiReady" class="muted bank-api-warning">{{ bankSyncApiMessage }}</p>
+        <div class="row top-action-row">
+          <RouterLink class="btn primary" :class="{ disabled: !bankSyncApiReady }" :to="bankSyncCreateLink">
+            {{ t('settings_bank_sync.add_bank') }}
+          </RouterLink>
+          <button class="btn" :disabled="loadingState" :aria-busy="loadingState" @click="reloadState">
+            {{ loadingState ? t('settings_bank_sync.refreshing') : t('settings_bank_sync.refresh') }}
+          </button>
+        </div>
+      </article>
+
+      <article v-if="!connections.length" class="card panel">
+        <p class="muted">{{ t('settings_bank_sync.empty') }}</p>
+      </article>
+
+      <article v-for="connection in connections" :key="connection.id" class="card panel connection-card">
+        <header class="row connection-head">
+          <div class="title-wrap">
+            <h3>{{ connection.user_label || connection.provider }}</h3>
+            <small class="muted">{{ connection.provider_connection_id }}</small>
+          </div>
+          <span class="status-chip" :class="`status-${connection.status}`">{{ connectionStatusText(connection.status) }}</span>
+        </header>
 
       <ul class="meta-list">
         <li><span class="muted">{{ t('settings_bank_sync.meta.last_sync') }}</span><strong>{{ formatDateTime(connection.last_sync_at) }}</strong></li>
@@ -177,7 +180,8 @@
         </ul>
       </template>
     </article>
-  </section>
+    </section>
+  </div>
 </template>
 
 <script setup>
@@ -540,7 +544,12 @@ watch(
 )
 </script>
 
-<style scoped>.notice-overlay {
+<style scoped>
+.bank-sync-page {
+  display: block;
+}
+
+.notice-overlay {
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -577,6 +586,9 @@ h3, h4 {
   gap: 10px;
   flex-wrap: wrap;
   align-items: center
+}
+.sandbox-note {
+  margin: 6px 0 0
 }
 .bank-api-warning {
   margin: 8px 0 0
