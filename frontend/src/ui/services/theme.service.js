@@ -1,6 +1,20 @@
 const STORAGE_KEY = 'strawmoneybook.theme.preference'
 const LEGACY_PRIMARY_KEY = 'strawmoneybook.theme.primary'
 const DEFAULT_SCHEME_ID = 'charcoal'
+const CHART_THEME_COLOR_SWATCHES = [
+  '#ff6b6b',
+  '#ffa94d',
+  '#ffd43b',
+  '#69db7c',
+  '#38d9a9',
+  '#4dabf7',
+  '#748ffc',
+  '#9775fa',
+  '#cc5de8',
+  '#f06595',
+  '#a9e34b',
+  '#66d9e8',
+]
 const FONT_SCALE_MIN = 0.9
 const FONT_SCALE_MAX = 1.2
 const FONT_SCALE_STEP = 0.01
@@ -433,4 +447,8 @@ export function resetThemeColor() {
 export function loadThemeColor() {
   const applied = applyPreference(readPreference())
   return applied.primary
+}
+
+export function listThemePrimaryPaletteColors() {
+  return CHART_THEME_COLOR_SWATCHES.slice()
 }

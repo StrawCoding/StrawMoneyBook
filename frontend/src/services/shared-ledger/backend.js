@@ -164,6 +164,9 @@ async function requestJson(path, { method = 'GET', body, auth = true } = {}) {
   }
 
   if (!response.ok) {
+    if (auth && data?.user) {
+      updateSessionUser(data.user)
+    }
     if (response.status === 401 && auth) {
       clearSession()
     }
@@ -177,6 +180,9 @@ async function requestJson(path, { method = 'GET', body, auth = true } = {}) {
 
   if (!data || typeof data !== 'object') {
     throw new Error(`${API_DISPLAY_NAME} 回應格式錯誤`)
+  }
+  if (auth && data.user) {
+    updateSessionUser(data.user)
   }
   return data
 }
@@ -214,6 +220,10 @@ export function getSharedLedgerSession() {
 
 export function isSharedLedgerAuthenticated() {
   return Boolean(readSession()?.token)
+}
+
+export function hasSharedLedgerMembershipAccess() {
+  return Boolean(readSession()?.user?.membership_active)
 }
 
 export function subscribeSharedLedgerSession(listener, { emitCurrent = true } = {}) {
@@ -303,6 +313,16 @@ export async function listSharedLedgers() {
   return requestJson('/api/shared-ledgers')
 }
 
+export async function activateSharedLedgerTrial() {
+  const data = await requestJson('/api/shared-ledgers/trial/activate', {
+    method: 'POST',
+  })
+  if (data?.user) {
+    updateSessionUser(data.user)
+  }
+  return data
+}
+
 export async function createSharedLedger(payload = {}) {
   return requestJson('/api/shared-ledgers', {
     method: 'POST',
@@ -335,6 +355,14 @@ export async function pushSharedLedgerSnapshot(sharedLedgerId, payload = {}) {
   return requestJson(`/api/shared-ledgers/${normalizedId}/snapshot`, {
     method: 'POST',
     body: payload,
+  })
+}
+
+export async function deleteSharedLedger(sharedLedgerId) {
+  const normalizedId = String(sharedLedgerId ?? '').trim()
+  if (!normalizedId) throw new Error('缺少共同帳本 ID')
+  return requestJson(`/api/shared-ledgers/${normalizedId}`, {
+    method: 'DELETE',
   })
 }
 

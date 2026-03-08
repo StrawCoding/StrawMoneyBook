@@ -1,5 +1,5 @@
 import { getLedger, purgeLedger } from '@/core/repositories/ledger.repo'
-import { getSetting, setSetting } from '@/core/repositories/settings.repo'
+import { getSetting, removeSetting, setSetting } from '@/core/repositories/settings.repo'
 import { exportLedgerJson } from '@/core/services/export.service'
 import { importLedgerJsonAsNewLedger } from '@/core/services/import.service'
 import { nowIso } from '@/core/utils/id'
@@ -8,9 +8,11 @@ import {
   acceptSharedLedgerInvitation,
   createSharedLedger,
   createSharedLedgerEmailInvitation,
+  deleteSharedLedger,
   getSharedLedgerDetail,
   getSharedLedgerSession,
   getSharedLedgerSnapshot,
+  hasSharedLedgerMembershipAccess,
   isSharedLedgerAuthenticated,
   listPendingSharedLedgerInvitations,
   listSharedLedgers,
@@ -20,7 +22,7 @@ import {
 const SHARED_LEDGER_META_KEY = 'shared_ledger_meta'
 const DIRTY_QUEUE_STORAGE_KEY = 'straw.shared_ledger_dirty_queue'
 const AUTO_PUSH_DEBOUNCE_MS = 800
-const REMOTE_POLL_INTERVAL_MS = 1000
+const REMOTE_POLL_INTERVAL_MS = 5 * 60 * 1000
 const IMPORT_SYNC_MUTE_MS = 15000
 
 let autoSyncTimer = null
@@ -153,6 +155,13 @@ export async function setSharedLedgerMeta(ledgerId, item, patch = {}) {
   const nextMeta = buildSharedMeta(item, existingMeta, patch)
   await setSetting(normalizedLedgerId, SHARED_LEDGER_META_KEY, nextMeta)
   return nextMeta
+}
+
+export async function clearSharedLedgerMeta(ledgerId) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId) return
+  await removeSetting(normalizedLedgerId, SHARED_LEDGER_META_KEY)
+  clearLedgerDirty(normalizedLedgerId)
 }
 
 export async function setSharedLedgerAutoSyncEnabled(ledgerId, enabled) {
@@ -347,6 +356,20 @@ export async function inviteEmailToSharedLedger(ledgerId, email) {
   return createSharedLedgerEmailInvitation(meta.shared_ledger_id, email)
 }
 
+export async function stopSharingLocalLedger(ledgerId) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId) throw new Error('缺少帳本 ID')
+
+  const meta = await getSharedLedgerMeta(normalizedLedgerId)
+  if (!meta?.shared_ledger_id) {
+    throw new Error('此帳本尚未綁定共同帳本')
+  }
+
+  const result = await deleteSharedLedger(meta.shared_ledger_id)
+  await clearSharedLedgerMeta(normalizedLedgerId)
+  return result
+}
+
 export function getSharedLedgerSessionUser() {
   return getSharedLedgerSession()?.user ?? null
 }
@@ -373,7 +396,7 @@ async function syncSingleDirtyLedger(ledgerId) {
 }
 
 async function flushDirtyLedgers(pinia) {
-  if (!isSharedLedgerAuthenticated() || !isOnline()) return
+  if (!isSharedLedgerAuthenticated() || !hasSharedLedgerMembershipAccess() || !isOnline()) return
   const ledgerStore = useLedgerStore(pinia)
   const activeLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
   const dirtyLedgerIds = listDirtyLedgerIds()
@@ -394,7 +417,7 @@ async function flushDirtyLedgers(pinia) {
 }
 
 async function syncActiveLedgerLatest(pinia) {
-  if (!isSharedLedgerAuthenticated() || !isOnline()) return
+  if (!isSharedLedgerAuthenticated() || !hasSharedLedgerMembershipAccess() || !isOnline()) return
 
   const ledgerStore = useLedgerStore(pinia)
   const activeLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
@@ -437,7 +460,7 @@ export function scheduleActiveSharedLedgerAutoSync(pinia, delayMs = AUTO_PUSH_DE
   }
   autoSyncTimer = window.setTimeout(async () => {
     autoSyncTimer = null
-    if (!isSharedLedgerAuthenticated()) return
+    if (!isSharedLedgerAuthenticated() || !hasSharedLedgerMembershipAccess()) return
 
     const ledgerStore = useLedgerStore(pinia)
     const activeLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()

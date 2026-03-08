@@ -203,9 +203,32 @@ function getMembershipGrantSummary(user, nowMs = Date.now()) {
   }
 }
 
+function getLatestMembershipGrantBySource(user, source) {
+  const normalizedSource = String(source ?? '').trim()
+  if (!normalizedSource) return null
+
+  const grants = getMembershipGrantList(user)
+  let latestGrant = null
+  let latestEndMs = -1
+
+  for (const grant of grants) {
+    if (String(grant?.source ?? '').trim() !== normalizedSource) continue
+    const endMs = Date.parse(String(grant?.end_at ?? ''))
+    const sortableEndMs = Number.isFinite(endMs) ? endMs : -1
+    if (!latestGrant || sortableEndMs > latestEndMs) {
+      latestGrant = grant
+      latestEndMs = sortableEndMs
+    }
+  }
+
+  return latestGrant
+}
+
 function publicUser(user) {
   const membership = getMembershipGrantSummary(user)
+  const membershipGrants = getMembershipGrantList(user)
   const email = String(user?.email ?? user?.account ?? '').trim().toLowerCase()
+  const sharedLedgerTrialGrant = getLatestMembershipGrantBySource(user, 'shared_ledger_first_trial')
   return {
     id: user.id,
     email,
@@ -221,6 +244,9 @@ function publicUser(user) {
     membership_bonus_expires_at: membership.expiresAt,
     membership_active: membership.active,
     membership_source: membership.source,
+    membership_trial_eligible: membershipGrants.length === 0,
+    shared_ledger_trial_used: Boolean(sharedLedgerTrialGrant),
+    shared_ledger_trial_expires_at: String(sharedLedgerTrialGrant?.end_at ?? '').trim(),
     created_at: user.created_at,
   }
 }

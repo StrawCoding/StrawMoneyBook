@@ -1,12 +1,14 @@
 import { requireAuthenticatedUser } from '../collab/auth-session.js'
 import { methodGuard, normalizePath, normalizeText, parseBody, sendJson } from '../collab/http.js'
 import {
+  applyMembershipGrant,
   buildSharedLedgerInvitationSummary,
   buildSharedLedgerSummary,
   createId,
   createInviteCode,
   findPendingInvitationForEmail,
   findUserByEmail,
+  getMembershipGrantSummary,
   isSharedLedgerMember,
   listPendingSharedLedgerInvitationsForUser,
   nowIso,
@@ -17,6 +19,9 @@ import {
   validateSnapshot,
 } from '../collab/store.js'
 
+const SHARED_LEDGER_FIRST_TRIAL_DAYS = 3
+const SHARED_LEDGER_FIRST_TRIAL_SOURCE = 'shared_ledger_first_trial'
+
 function findSharedLedger(data, sharedLedgerId) {
   return data.shared_ledgers.find((item) => String(item.id) === String(sharedLedgerId)) ?? null
 }
@@ -26,6 +31,55 @@ function listSharedLedgersForUser(data, userId) {
     .filter((item) => isSharedLedgerMember(item, userId))
     .sort((a, b) => String(b.updated_at ?? '').localeCompare(String(a.updated_at ?? '')))
     .map((item) => buildSharedLedgerSummary(item, userId, data))
+}
+
+function isSharedLedgerTrialEligible(user) {
+  const grants = Array.isArray(user?.membership_grants) ? user.membership_grants : []
+  return grants.length === 0
+}
+
+function ensureSharedLedgerMembership(res, user) {
+  if (getMembershipGrantSummary(user).active) {
+    return true
+  }
+
+  sendJson(res, 403, {
+    error: 'membership_required',
+    message: '共同帳本僅限會員使用',
+    user: publicUser(user),
+    membership_trial_eligible: isSharedLedgerTrialEligible(user),
+  })
+  return false
+}
+
+async function handleActivateFirstTrial(req, res, user) {
+  const result = await updateStore(async (data) => {
+    const currentUser = data.users.find((item) => String(item.id) === String(user.id))
+    if (!currentUser) {
+      throw new Error('找不到使用者')
+    }
+
+    if (!isSharedLedgerTrialEligible(currentUser)) {
+      throw new Error('此帳號已使用過會員資格，無法再啟用首次 3 天免費')
+    }
+
+    const grant = applyMembershipGrant(currentUser, SHARED_LEDGER_FIRST_TRIAL_DAYS, SHARED_LEDGER_FIRST_TRIAL_SOURCE, {
+      feature: 'shared_ledgers',
+    })
+
+    return {
+      userId: currentUser.id,
+      expiresAt: String(grant?.end_at ?? ''),
+    }
+  })
+
+  const data = await readStore()
+  const currentUser = data.users.find((item) => String(item.id) === String(result?.userId ?? ''))
+  sendJson(res, 200, {
+    user: publicUser(currentUser),
+    trial_days: SHARED_LEDGER_FIRST_TRIAL_DAYS,
+    expires_at: String(result?.expiresAt ?? ''),
+  })
 }
 
 async function handleList(req, res, user) {
@@ -279,8 +333,40 @@ async function handleSnapshotPush(req, res, user, sharedLedgerId) {
   })
 }
 
+async function handleDelete(req, res, user, sharedLedgerId) {
+  const result = await updateStore(async (data) => {
+    const sharedLedger = findSharedLedger(data, sharedLedgerId)
+    if (!sharedLedger || !isSharedLedgerMember(sharedLedger, user.id)) {
+      throw new Error('找不到共同帳本')
+    }
+
+    const isOwner = String(sharedLedger.owner_user_id ?? '') === String(user.id)
+    if (isOwner) {
+      data.shared_ledgers = (data.shared_ledgers ?? []).filter((item) => String(item.id) !== String(sharedLedgerId))
+      return {
+        mode: 'owner_deleted',
+        sharedLedgerId: String(sharedLedgerId),
+      }
+    }
+
+    sharedLedger.members = (sharedLedger.members ?? []).filter((member) => String(member?.user_id ?? '') !== String(user.id))
+    sharedLedger.updated_at = nowIso()
+    sharedLedger.updated_by_user_id = user.id
+    return {
+      mode: 'member_left',
+      sharedLedgerId: String(sharedLedgerId),
+    }
+  })
+
+  sendJson(res, 200, {
+    removed: true,
+    mode: result.mode,
+    shared_ledger_id: result.sharedLedgerId,
+  })
+}
+
 export default async function sharedLedgersHandler(req, res) {
-  if (methodGuard(req, res, ['GET', 'POST'])) return
+  if (methodGuard(req, res, ['GET', 'POST', 'DELETE'])) return
 
   const user = await requireAuthenticatedUser(req, res, sendJson)
   if (!user) return
@@ -289,6 +375,15 @@ export default async function sharedLedgersHandler(req, res) {
   const segments = pathname.split('/').filter(Boolean)
 
   try {
+    if (req.method === 'POST' && segments.length === 2 && segments[0] === 'trial' && segments[1] === 'activate') {
+      await handleActivateFirstTrial(req, res, user)
+      return
+    }
+
+    if (!ensureSharedLedgerMembership(res, user)) {
+      return
+    }
+
     if (req.method === 'GET' && segments.length === 2 && segments[0] === 'invitations' && segments[1] === 'pending') {
       await handlePendingInvitations(req, res, user)
       return
@@ -331,6 +426,11 @@ export default async function sharedLedgersHandler(req, res) {
 
     if (segments.length === 2 && segments[1] === 'snapshot' && req.method === 'POST') {
       await handleSnapshotPush(req, res, user, segments[0])
+      return
+    }
+
+    if (segments.length === 1 && req.method === 'DELETE') {
+      await handleDelete(req, res, user, segments[0])
       return
     }
 

@@ -7,7 +7,7 @@
           <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
         </header>
         <p class="muted intro">
-          {{ t('settings_shared_ledgers.desc', '登入後可建立共同帳本、用 Email 邀請好友加入，並在這裡接受收到的邀請。') }}
+          {{ t('settings_shared_ledgers.desc', '共同帳本為會員功能，啟用後可建立共同帳本、用 Email 邀請好友加入，並在這裡接受收到的邀請。') }}
         </p>
         <p v-if="apiUnavailable" class="notice">
           {{ apiUnavailableMessage }}
@@ -45,186 +45,220 @@
             <div class="profile-meta">
               <strong>{{ accountName }}</strong>
               <p class="muted compact">{{ sessionUser.email || sessionUser.account }}</p>
-              <p class="muted compact">
-                {{ t('settings_shared_ledgers.account_hint', '共享帳本邀請會依照登入 Email 派送到後端待辦清單。') }}
-              </p>
+              <p class="muted compact">{{ membershipStatusText }}</p>
             </div>
           </div>
         </article>
 
-        <article class="card panel">
-          <header class="section-head">
-            <h3>{{ t('settings_shared_ledgers.pending_invites', '收到的共享帳本邀請') }}</h3>
-            <button class="btn" :disabled="remoteLoading || apiUnavailable" @click="loadRemoteLedgers">
-              {{ remoteLoading ? t('settings_shared_ledgers.loading', '載入中...') : t('settings_shared_ledgers.refresh', '重新整理') }}
-            </button>
-          </header>
+        <article v-if="!hasMembershipAccess" class="card panel membership-lock">
+          <div class="stack internal-stack">
+            <div class="info-block">
+              <strong>{{ t('settings_shared_ledgers.member_only', '共同帳本僅限會員使用') }}</strong>
+              <p class="muted compact">
+                {{ t('settings_shared_ledgers.member_only_desc', '建立、邀請、接受邀請與背景同步都需要會員資格。') }}
+              </p>
+            </div>
 
-          <ul v-if="pendingInvitations.length" class="remote-list">
-            <li v-for="item in pendingInvitations" :key="item.id" class="remote-item">
-              <div class="remote-main">
-                <div class="stack internal-stack">
-                  <strong>{{ item.shared_ledger_name }}</strong>
+            <div v-if="isTrialEligible" class="notice-box">
+              <strong>{{ t('settings_shared_ledgers.first_trial_title', '第一次使用付費會員，3 天免費') }}</strong>
+              <p class="muted compact">
+                {{ t('settings_shared_ledgers.first_trial_desc', '可先啟用 3 天免費試用，再開始使用共同帳本。') }}
+              </p>
+            </div>
+
+            <div class="remote-actions">
+              <button
+                v-if="isTrialEligible"
+                class="btn primary"
+                :disabled="trialActivating || apiUnavailable"
+                @click="activateFirstTrial"
+              >
+                {{ trialActivating ? t('settings_shared_ledgers.trial_activating', '啟用中...') : t('settings_shared_ledgers.trial_activate', '啟用 3 天免費') }}
+              </button>
+              <RouterLink class="btn" to="/settings/membership-benefits">
+                {{ t('settings_shared_ledgers.view_membership', '查看會員權益') }}
+              </RouterLink>
+            </div>
+          </div>
+        </article>
+
+        <template v-else>
+          <article class="card panel">
+            <header class="section-head">
+              <h3>{{ t('settings_shared_ledgers.pending_invites', '收到的共享帳本邀請') }}</h3>
+              <button class="btn" :disabled="remoteLoading || apiUnavailable" @click="loadRemoteLedgers">
+                {{ remoteLoading ? t('settings_shared_ledgers.loading', '載入中...') : t('settings_shared_ledgers.refresh', '重新整理') }}
+              </button>
+            </header>
+
+            <ul v-if="pendingInvitations.length" class="remote-list">
+              <li v-for="item in pendingInvitations" :key="item.id" class="remote-item">
+                <div class="remote-main">
+                  <div class="stack internal-stack">
+                    <strong>{{ item.shared_ledger_name }}</strong>
+                    <p class="muted compact">
+                      {{
+                        t(
+                          'settings_shared_ledgers.pending_invite_meta',
+                          { name: item.invited_by_display_name || '-', time: formatDateTime(item.created_at) },
+                          '邀請人：{name} ・ {time}',
+                        )
+                      }}
+                    </p>
+                    <p class="muted compact">
+                      {{ t('settings_shared_ledgers.pending_invite_email', '邀請 Email') }}：{{ item.email }}
+                    </p>
+                  </div>
+                  <div class="remote-actions">
+                    <button class="btn primary" :disabled="invitationBusyId === item.id || apiUnavailable" @click="acceptInvitation(item)">
+                      {{
+                        invitationBusyId === item.id
+                          ? t('settings_shared_ledgers.accepting', '接受中...')
+                          : t('settings_shared_ledgers.accept_and_download', '接受並下載')
+                      }}
+                    </button>
+                  </div>
+                </div>
+              </li>
+            </ul>
+
+            <p v-else class="muted compact">
+              {{ t('settings_shared_ledgers.pending_invites_empty', '目前沒有待接受的共享帳本邀請。') }}
+            </p>
+          </article>
+
+          <article class="card panel">
+            <header class="section-head">
+              <h3>{{ t('settings_shared_ledgers.current_ledger', '目前帳本') }}</h3>
+            </header>
+
+            <div v-if="activeLedger" class="stack internal-stack">
+              <div class="info-block">
+                <strong>{{ activeLedger.name }}</strong>
+                <p class="muted compact">{{ activeLedger.id }}</p>
+              </div>
+
+              <template v-if="activeLedgerMeta?.shared_ledger_id">
+                <div class="info-block">
+                  <strong>{{ currentRemoteLedger?.name || activeLedgerMeta.remote_name || '-' }}</strong>
                   <p class="muted compact">
-                    {{
-                      t(
-                        'settings_shared_ledgers.pending_invite_meta',
-                        { name: item.invited_by_display_name || '-', time: formatDateTime(item.created_at) },
-                        '邀請人：{name} ・ {time}',
-                      )
-                    }}
+                    {{ t('settings_shared_ledgers.remote_meta', { role: currentRemoteLedger?.role || activeLedgerMeta.role || '-' }, '{role}') }}
                   </p>
                   <p class="muted compact">
-                    {{ t('settings_shared_ledgers.pending_invite_email', '邀請 Email') }}：{{ item.email }}
+                    {{ t('settings_shared_ledgers.auto_sync_hint', '已啟用背景同步：本機變更會自動上傳，並每 5 分鐘檢查遠端最新資料；開啟 App 時也會先檢查一次。') }}
                   </p>
                 </div>
+
                 <div class="remote-actions">
-                  <button class="btn primary" :disabled="invitationBusyId === item.id || apiUnavailable" @click="acceptInvitation(item)">
+                  <button class="btn" :disabled="Boolean(ledgerActionBusy) || apiUnavailable" @click="stopSharingActiveLedger">
                     {{
-                      invitationBusyId === item.id
-                        ? t('settings_shared_ledgers.accepting', '接受中...')
-                        : t('settings_shared_ledgers.accept_and_download', '接受並下載')
+                      ledgerActionBusy === 'unlink'
+                        ? t('settings_shared_ledgers.unsharing', '取消共享中...')
+                        : t('settings_shared_ledgers.unshare', '取消共享')
                     }}
                   </button>
                 </div>
-              </div>
-            </li>
-          </ul>
 
-          <p v-else class="muted compact">
-            {{ t('settings_shared_ledgers.pending_invites_empty', '目前沒有待接受的共享帳本邀請。') }}
-          </p>
-        </article>
+                <label class="checkbox-row">
+                  <input :checked="activeLedgerMeta.auto_sync_enabled !== false" type="checkbox" @change="toggleAutoSync" />
+                  <span>{{ t('settings_shared_ledgers.auto_sync', '資料變更後自動同步') }}</span>
+                </label>
 
-        <article class="card panel">
-          <header class="section-head">
-            <h3>{{ t('settings_shared_ledgers.current_ledger', '目前帳本') }}</h3>
-          </header>
+                <div class="invite-box">
+                  <label class="field">
+                    {{ t('settings_shared_ledgers.invite_email', '邀請好友 Email') }}
+                    <input
+                      v-model.trim="inviteEmailInput"
+                      class="input"
+                      type="email"
+                      autocomplete="email"
+                      :placeholder="t('settings_shared_ledgers.invite_email_placeholder', 'friend@example.com')"
+                      :disabled="inviteSubmitting || ledgerActionBusy || apiUnavailable"
+                      @keyup.enter="submitInviteByEmail"
+                    />
+                  </label>
+                  <button class="btn primary" :disabled="inviteSubmitting || ledgerActionBusy || apiUnavailable || !inviteEmailInput" @click="submitInviteByEmail">
+                    {{ inviteSubmitting ? t('settings_shared_ledgers.inviting', '邀請中...') : t('settings_shared_ledgers.send_invite', '送出邀請') }}
+                  </button>
+                </div>
 
-          <div v-if="activeLedger" class="stack internal-stack">
-            <div class="info-block">
-              <strong>{{ activeLedger.name }}</strong>
-              <p class="muted compact">{{ activeLedger.id }}</p>
-            </div>
-
-            <template v-if="activeLedgerMeta?.shared_ledger_id">
-              <div class="info-block">
-                <strong>{{ currentRemoteLedger?.name || activeLedgerMeta.remote_name || '-' }}</strong>
                 <p class="muted compact">
-                  {{ t('settings_shared_ledgers.remote_meta', { role: currentRemoteLedger?.role || activeLedgerMeta.role || '-' }, '{role}') }}
+                  {{ t('settings_shared_ledgers.invite_email_hint', '系統不會寄出 Email，邀請會記錄在後端，對方用相同 Email 登入後即可在上方看到。') }}
                 </p>
-                <p class="muted compact">
-                  {{ t('settings_shared_ledgers.auto_sync_hint', '已啟用背景同步：本機變更會自動上傳，並每秒檢查遠端最新資料。') }}
-                </p>
-              </div>
+              </template>
 
-              <label class="checkbox-row">
-                <input :checked="activeLedgerMeta.auto_sync_enabled !== false" type="checkbox" @change="toggleAutoSync" />
-                <span>{{ t('settings_shared_ledgers.auto_sync', '資料變更後自動同步') }}</span>
-              </label>
-
-              <div class="invite-box">
+              <template v-else>
                 <label class="field">
-                  {{ t('settings_shared_ledgers.invite_email', '邀請好友 Email') }}
+                  {{ t('settings_shared_ledgers.shared_name', '共同帳本名稱') }}
                   <input
-                    v-model.trim="inviteEmailInput"
+                    v-model.trim="sharedLedgerNameInput"
                     class="input"
-                    type="email"
-                    autocomplete="email"
-                    :placeholder="t('settings_shared_ledgers.invite_email_placeholder', 'friend@example.com')"
-                    :disabled="inviteSubmitting || ledgerActionBusy || apiUnavailable"
-                    @keyup.enter="submitInviteByEmail"
+                    type="text"
+                    maxlength="40"
+                    :placeholder="activeLedger.name"
+                    :disabled="ledgerActionBusy || apiUnavailable"
                   />
                 </label>
-                <button class="btn primary" :disabled="inviteSubmitting || ledgerActionBusy || apiUnavailable || !inviteEmailInput" @click="submitInviteByEmail">
-                  {{ inviteSubmitting ? t('settings_shared_ledgers.inviting', '邀請中...') : t('settings_shared_ledgers.send_invite', '送出邀請') }}
+                <button class="btn primary wide-btn" :disabled="ledgerActionBusy || apiUnavailable" @click="createSharedFromActiveLedger">
+                  {{ ledgerActionBusy === 'create' ? t('settings_shared_ledgers.creating', '建立中...') : t('settings_shared_ledgers.create_shared', '建立共同帳本') }}
                 </button>
-              </div>
+              </template>
+            </div>
 
-              <p class="muted compact">
-                {{ t('settings_shared_ledgers.invite_email_hint', '系統不會寄出 Email，邀請會記錄在後端，對方用相同 Email 登入後即可在上方看到。') }}
-              </p>
-            </template>
+            <p v-else class="muted compact">
+              {{ t('settings_shared_ledgers.no_active_ledger', '目前沒有本機帳本，可先建立帳本，或先接受共享帳本邀請下載到本機。') }}
+            </p>
+          </article>
 
-            <template v-else>
-              <label class="field">
-                {{ t('settings_shared_ledgers.shared_name', '共同帳本名稱') }}
-                <input
-                  v-model.trim="sharedLedgerNameInput"
-                  class="input"
-                  type="text"
-                  maxlength="40"
-                  :placeholder="activeLedger.name"
-                  :disabled="ledgerActionBusy || apiUnavailable"
-                />
-              </label>
-              <button class="btn primary wide-btn" :disabled="ledgerActionBusy || apiUnavailable" @click="createSharedFromActiveLedger">
-                {{ ledgerActionBusy === 'create' ? t('settings_shared_ledgers.creating', '建立中...') : t('settings_shared_ledgers.create_shared', '建立共同帳本') }}
+          <article class="card panel">
+            <header class="section-head">
+              <h3>{{ t('settings_shared_ledgers.my_ledgers', '我的共同帳本') }}</h3>
+              <button class="btn" :disabled="remoteLoading || apiUnavailable" @click="loadRemoteLedgers">
+                {{ remoteLoading ? t('settings_shared_ledgers.loading', '載入中...') : t('settings_shared_ledgers.refresh', '重新整理') }}
               </button>
-            </template>
-          </div>
+            </header>
 
-          <p v-else class="muted compact">
-            {{ t('settings_shared_ledgers.no_active_ledger', '目前沒有本機帳本，可先建立帳本，或先接受共享帳本邀請下載到本機。') }}
-          </p>
-        </article>
-
-        <article class="card panel">
-          <header class="section-head">
-            <h3>{{ t('settings_shared_ledgers.my_ledgers', '我的共同帳本') }}</h3>
-            <button class="btn" :disabled="remoteLoading || apiUnavailable" @click="loadRemoteLedgers">
-              {{ remoteLoading ? t('settings_shared_ledgers.loading', '載入中...') : t('settings_shared_ledgers.refresh', '重新整理') }}
-            </button>
-          </header>
-
-          <ul v-if="remoteLedgers.length" class="remote-list">
-            <li v-for="item in remoteLedgers" :key="item.id" class="remote-item">
-              <div class="remote-main">
-                <div class="stack internal-stack">
-                  <strong>{{ item.name }}</strong>
-                  <p class="muted compact">
-                    {{ t('settings_shared_ledgers.remote_meta', { role: item.role || '-', count: item.member_count || 0 }, '{role} ・ {count} 位成員') }}
-                  </p>
-                  <p class="muted compact">
-                    {{
-                      t(
-                        'settings_shared_ledgers.remote_owner_meta',
-                        { owner: item.owner_display_name || '-', time: formatDateTime(item.updated_at) },
-                        '建立者：{owner} ・ 最近更新：{time}',
-                      )
-                    }}
-                  </p>
-                  <p v-if="bindingMap[item.id]" class="muted compact">
-                    {{ t('settings_shared_ledgers.local_binding', { name: bindingMap[item.id].ledgerName }, '已綁定本機帳本：{name}') }}
-                  </p>
+            <ul v-if="remoteLedgers.length" class="remote-list">
+              <li v-for="item in remoteLedgers" :key="item.id" class="remote-item">
+                <div class="remote-main">
+                  <div class="stack internal-stack">
+                    <strong>{{ item.name }}</strong>
+                    <p class="muted compact">
+                      {{ t('settings_shared_ledgers.remote_meta', { role: item.role || '-', count: item.member_count || 0 }, '{role} ・ {count} 位成員') }}
+                    </p>
+                    <p class="muted compact">
+                      {{
+                        t(
+                          'settings_shared_ledgers.remote_owner_meta',
+                          { owner: item.owner_display_name || '-', time: formatDateTime(item.updated_at) },
+                          '建立者：{owner} ・ 最近更新：{time}',
+                        )
+                      }}
+                    </p>
+                    <p v-if="bindingMap[item.id]" class="muted compact">
+                      {{ t('settings_shared_ledgers.local_binding', { name: bindingMap[item.id].ledgerName }, '已綁定本機帳本：{name}') }}
+                    </p>
+                  </div>
+                  <div class="remote-actions">
+                    <button class="btn primary" :disabled="remoteItemBusyId === item.id || apiUnavailable" @click="downloadRemoteLedger(item)">
+                      {{
+                        remoteItemBusyId === item.id
+                          ? t('settings_shared_ledgers.downloading', '下載中...')
+                          : bindingMap[item.id]
+                            ? t('settings_shared_ledgers.pull_now', '下載最新')
+                            : t('settings_shared_ledgers.download_to_local', '下載到本機')
+                      }}
+                    </button>
+                  </div>
                 </div>
-                <div class="remote-actions">
-                  <button
-                    v-if="bindingMap[item.id]"
-                    class="btn"
-                    :disabled="remoteItemBusyId === item.id || apiUnavailable"
-                    @click="switchToLocalLedger(bindingMap[item.id].ledgerId)"
-                  >
-                    {{ t('settings_shared_ledgers.switch_local', '切換本機帳本') }}
-                  </button>
-                  <button class="btn primary" :disabled="remoteItemBusyId === item.id || apiUnavailable" @click="downloadRemoteLedger(item)">
-                    {{
-                      remoteItemBusyId === item.id
-                        ? t('settings_shared_ledgers.downloading', '下載中...')
-                        : bindingMap[item.id]
-                          ? t('settings_shared_ledgers.pull_now', '下載最新')
-                          : t('settings_shared_ledgers.download_to_local', '下載到本機')
-                    }}
-                  </button>
-                </div>
-              </div>
-            </li>
-          </ul>
+              </li>
+            </ul>
 
-          <p v-else class="muted compact">
-            {{ t('settings_shared_ledgers.empty', '目前還沒有共同帳本。') }}
-          </p>
-        </article>
+            <p v-else class="muted compact">
+              {{ t('settings_shared_ledgers.empty', '目前還沒有共同帳本。') }}
+            </p>
+          </article>
+        </template>
       </template>
     </section>
   </div>
@@ -237,6 +271,7 @@ import { useI18n } from '@/ui/services/i18n.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import {
+  activateSharedLedgerTrial,
   getSharedLedgerApiUnavailableMessage,
   getSharedLedgerSession,
   isSharedLedgerApiConfigured,
@@ -251,6 +286,7 @@ import {
   listRemoteSharedLedgers,
   publishLedgerAsShared,
   setSharedLedgerAutoSyncEnabled,
+  stopSharingLocalLedger,
 } from '@/ui/services/shared-ledger.service'
 
 const router = useRouter()
@@ -272,12 +308,30 @@ const remoteItemBusyId = ref('')
 const invitationBusyId = ref('')
 const inviteEmailInput = ref('')
 const inviteSubmitting = ref(false)
+const trialActivating = ref(false)
 
 const activeLedger = computed(() => ledgerStore.activeLedger)
 const accountName = computed(() => String(sessionUser.value?.display_name || sessionUser.value?.email || sessionUser.value?.account || '').trim())
+const hasMembershipAccess = computed(() => Boolean(sessionUser.value?.membership_active))
+const isTrialEligible = computed(() => Boolean(sessionUser.value?.membership_trial_eligible))
 const avatarLabel = computed(() => {
   const base = accountName.value || '?'
   return base.slice(0, 1).toUpperCase()
+})
+const membershipStatusText = computed(() => {
+  if (hasMembershipAccess.value) {
+    const expiresAt = String(sessionUser.value?.membership_bonus_expires_at ?? '').trim()
+    if (expiresAt) {
+      return t('settings_shared_ledgers.membership_active_until', { time: formatDateTime(expiresAt) }, '會員已啟用，可使用至 {time}')
+    }
+    return t('settings_shared_ledgers.membership_active', '會員已啟用，可使用共同帳本與共享邀請。')
+  }
+
+  if (isTrialEligible.value) {
+    return t('settings_shared_ledgers.membership_trial_hint', '第一次使用付費會員可先免費試用 3 天。')
+  }
+
+  return t('settings_shared_ledgers.membership_required_hint', '共同帳本目前僅限有效會員使用。')
 })
 const currentRemoteLedger = computed(() => {
   const sharedLedgerId = String(activeLedgerMeta.value?.shared_ledger_id ?? '').trim()
@@ -304,7 +358,7 @@ async function refreshLocalBindings() {
 }
 
 async function loadRemoteLedgers() {
-  if (!sessionUser.value || apiUnavailable.value) {
+  if (!sessionUser.value || apiUnavailable.value || !hasMembershipAccess.value) {
     remoteLedgers.value = []
     pendingInvitations.value = []
     return
@@ -343,6 +397,26 @@ async function afterLedgerImported(ledgerId, routeHome = false) {
   await loadRemoteLedgers()
   if (routeHome) {
     await router.replace('/')
+  }
+}
+
+async function activateFirstTrial() {
+  if (!sessionUser.value || !isTrialEligible.value || apiUnavailable.value) return
+  trialActivating.value = true
+  try {
+    const result = await activateSharedLedgerTrial()
+    await loadRemoteLedgers()
+    uiStore.pushToast(
+      t(
+        'settings_shared_ledgers.toast.trial_started',
+        { time: formatDateTime(result?.expires_at) },
+        '已啟用 3 天免費試用，期限至 {time}',
+      ),
+    )
+  } catch (error) {
+    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.trial_failed', '啟用免費試用失敗'), 'error')
+  } finally {
+    trialActivating.value = false
   }
 }
 
@@ -409,13 +483,23 @@ async function downloadRemoteLedger(item) {
   }
 }
 
-async function switchToLocalLedger(ledgerId) {
+async function stopSharingActiveLedger() {
+  if (!activeLedger.value || !activeLedgerMeta.value?.shared_ledger_id || apiUnavailable.value) return
+  const confirmed = typeof window === 'undefined'
+    ? true
+    : window.confirm(t('settings_shared_ledgers.unshare_confirm', '取消共享後，這本帳本會保留在本機，但不再與共同帳本同步。是否繼續？'))
+  if (!confirmed) return
+
+  ledgerActionBusy.value = 'unlink'
   try {
-    await ledgerStore.switchLedger(ledgerId)
+    await stopSharingLocalLedger(activeLedger.value.id)
     await refreshLocalBindings()
-    uiStore.pushToast(t('settings_shared_ledgers.toast.switched', '已切換到本機帳本'))
+    await loadRemoteLedgers()
+    uiStore.pushToast(t('settings_shared_ledgers.toast.unshared', '已取消共享，帳本目前只保留本機'))
   } catch (error) {
-    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.switch_failed', '切換本機帳本失敗'), 'error')
+    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.unshare_failed', '取消共享失敗'), 'error')
+  } finally {
+    ledgerActionBusy.value = ''
   }
 }
 
@@ -490,6 +574,12 @@ p {
   padding: 10px 12px;
   border-radius: 12px;
   background: color-mix(in srgb, #f44336 10%, var(--card));
+}
+
+.notice-box {
+  padding: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 12%, var(--card));
 }
 
 .section-head,
@@ -592,6 +682,10 @@ p {
 
 .invite-box {
   align-items: end;
+}
+
+.membership-lock {
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, transparent);
 }
 
 .remote-list {

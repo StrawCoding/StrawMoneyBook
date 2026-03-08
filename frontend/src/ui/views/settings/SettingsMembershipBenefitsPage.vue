@@ -6,6 +6,12 @@
         <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
       </header>
       <p class="muted subtitle">{{ t('membership_page.subtitle') }}</p>
+      <div class="trial-note">
+        <strong>{{ t('membership_page.first_trial_title', '第一次使用付費會員 3 天免費') }}</strong>
+        <p class="muted subtitle">
+          {{ t('membership_page.first_trial_desc', '首次可先啟用 3 天免費會員，再開始使用共同帳本等會員功能。') }}
+        </p>
+      </div>
       <div class="row plan-row">
         <span class="muted">{{ t('membership_page.current_plan') }}</span>
         <span class="badge">{{ currentPlanLabel }}</span>
@@ -20,9 +26,9 @@
         <div class="compare-head">{{ t('membership_page.compare.member') }}</div>
 
         <template v-for="item in compareRows" :key="item.key">
-          <div class="compare-cell feature">{{ t(item.featureKey) }}</div>
-          <div class="compare-cell">{{ t(item.freeKey) }}</div>
-          <div class="compare-cell">{{ t(item.memberKey) }}</div>
+          <div class="compare-cell feature">{{ t(item.featureKey, item.featureFallback) }}</div>
+          <div class="compare-cell">{{ t(item.freeKey, item.freeFallback) }}</div>
+          <div class="compare-cell">{{ t(item.memberKey, item.memberFallback) }}</div>
         </template>
       </div>
     </article>
@@ -85,46 +91,76 @@ const playStoreSupported = ref(true)
 
 const compareRows = [
   {
+    key: 'shared-ledgers',
+    featureKey: 'membership_page.compare.shared_ledgers',
+    featureFallback: '共同帳本',
+    freeKey: 'membership_page.compare.free.no',
+    freeFallback: '不可使用',
+    memberKey: 'membership_page.compare.member.yes',
+    memberFallback: '可使用',
+  },
+  {
     key: 'multi-ledger',
     featureKey: 'membership_page.compare.multi_ledger',
+    featureFallback: '多帳本',
     freeKey: 'membership_page.compare.free.no',
+    freeFallback: '不可使用',
     memberKey: 'membership_page.compare.member.yes',
+    memberFallback: '可使用',
   },
   {
     key: 'ai-daily',
     featureKey: 'membership_page.compare.ai_daily',
+    featureFallback: 'AI 記帳每日次數',
     freeKey: 'membership_page.compare.free.ai_daily',
+    freeFallback: '每天 5 次',
     memberKey: 'membership_page.compare.member.unlimited',
+    memberFallback: '無限制',
   },
   {
     key: 'savings-jar-limit',
     featureKey: 'membership_page.compare.savings_jar_limit',
+    featureFallback: '存錢罐數',
     freeKey: 'membership_page.compare.free.savings_jar_limit',
+    freeFallback: '最多 1 個',
     memberKey: 'membership_page.compare.member.unlimited',
+    memberFallback: '無限制',
   },
   {
     key: 'account-limit',
     featureKey: 'membership_page.compare.account_limit',
+    featureFallback: '帳戶數',
     freeKey: 'membership_page.compare.free.account_limit',
+    freeFallback: '最多 3 個',
     memberKey: 'membership_page.compare.member.unlimited',
+    memberFallback: '無限制',
   },
   {
     key: 'loan-limit',
     featureKey: 'membership_page.compare.loan_limit',
+    featureFallback: '借貸筆數',
     freeKey: 'membership_page.compare.free.loan_limit',
+    freeFallback: '最多 5 筆',
     memberKey: 'membership_page.compare.member.unlimited',
+    memberFallback: '無限制',
   },
   {
     key: 'reimbursement-limit',
     featureKey: 'membership_page.compare.reimbursement_limit',
+    featureFallback: '報銷筆數',
     freeKey: 'membership_page.compare.free.reimbursement_limit',
+    freeFallback: '最多 5 筆',
     memberKey: 'membership_page.compare.member.unlimited',
+    memberFallback: '無限制',
   },
   {
     key: 'subscription-limit',
     featureKey: 'membership_page.compare.subscription_limit',
+    featureFallback: '訂閱項目',
     freeKey: 'membership_page.compare.free.subscription_limit',
+    freeFallback: '最多 1 個',
     memberKey: 'membership_page.compare.member.unlimited',
+    memberFallback: '無限制',
   },
 ]
 
@@ -295,6 +331,14 @@ h2, h3 {
 }
 .plan-row {
   margin-top: 2px;
+}
+.trial-note {
+  margin-top: 4px;
+  padding: 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary) 12%, var(--card));
+  display: grid;
+  gap: 6px;
 }
 .compare-grid {
   display: grid;
