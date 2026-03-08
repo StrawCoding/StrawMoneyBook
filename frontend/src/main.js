@@ -189,7 +189,7 @@ function resolveRouteFromAppUrl(rawUrl) {
 
     if (!routeKey || routeKey === 'home') {
       if (parsed.searchParams.get('quickAdd') === '1') {
-        return { path: '/ai-auto-bookkeeping' }
+        return { path: '/transactions/quick-add' }
       }
       return { path: '/' }
     }

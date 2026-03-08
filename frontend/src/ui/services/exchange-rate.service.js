@@ -488,10 +488,7 @@ async function fetchJsonPayload(url) {
   const response = await withTimeout(
     fetch(url, {
       method: 'GET',
-      headers: {
-        'Cache-Control': 'no-cache',
-        Pragma: 'no-cache',
-      },
+      cache: 'no-store',
     }),
     FETCH_TIMEOUT_MS,
     '匯率同步逾時',
@@ -548,14 +545,25 @@ function buildExchangeRateSourceList() {
     }
   })
 
-  return [
+  const directSources = [
     { url: OPEN_ER_USD_API_URL, label: `OpenER ${OPEN_ER_USD_API_URL}` },
     { url: TAIFEX_DAILY_FX_API_URL, label: `TAIFEX ${TAIFEX_DAILY_FX_API_URL}` },
     { url: CURRENCY_API_PAGES_USD_API_URL, label: `Currency API ${CURRENCY_API_PAGES_USD_API_URL}` },
     { url: CURRENCY_API_JSDELIVR_USD_API_URL, label: `Currency API CDN ${CURRENCY_API_JSDELIVR_USD_API_URL}` },
-    ...proxySources,
     { url: cbcUrl, label: `央行 ${CBC_API_URL}` },
     { url: FRANKFURTER_USD_API_URL, label: `Frankfurter ${FRANKFURTER_USD_API_URL}` },
+  ]
+
+  if (!Capacitor.isNativePlatform()) {
+    return [
+      ...proxySources,
+      ...directSources,
+    ]
+  }
+
+  return [
+    ...proxySources,
+    ...directSources,
   ]
 }
 

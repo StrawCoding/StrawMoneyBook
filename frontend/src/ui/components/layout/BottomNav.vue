@@ -52,7 +52,8 @@ const activeTab = computed(() => route.meta.tab)
   padding-bottom: var(--navigation-bar-height);
   background-color: var(--menu-bgc, var(--card));
   border-radius: 0;
-  z-index: 40
+  z-index: 40;
+  will-change: transform, opacity;
 }
 .nav-item {
   width: 100%;
@@ -62,10 +63,12 @@ const activeTab = computed(() => route.meta.tab)
   display: flex;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 140ms ease, background-color 180ms ease
+  transition:
+    transform var(--anim-fast) var(--anim-standard),
+    background-color var(--anim-mid) var(--anim-standard);
 }
 .nav-item:active {
-  transform: translateY(-2px) scale(0.97)
+  transform: translate3d(0, -1px, 0) scale(0.985);
 }
 .nav-icon {
   width: 35px;
@@ -74,12 +77,16 @@ const activeTab = computed(() => route.meta.tab)
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 150ms ease, color 150ms ease, opacity 150ms ease;
-  transform: translateY(0) scale(1);
-  opacity: 0.85
+  transition:
+    transform var(--anim-mid) var(--anim-spring),
+    color var(--anim-fast) var(--anim-standard),
+    opacity var(--anim-fast) var(--anim-standard);
+  transform: translate3d(0, 0, 0) scale(1);
+  opacity: 0.88;
+  will-change: transform, opacity;
 }
 .nav-item.active .nav-icon {
   color: var(--page-now, var(--primary));
-  transform: translateY(-4px) scale(1.08);
-  opacity: 1
+  transform: translate3d(0, -2px, 0) scale(1.04);
+  opacity: 1;
 }</style>

@@ -299,20 +299,22 @@ async function createFirstAccount() {
 .step-panel {
   display: grid;
   gap: 12px;
+  will-change: transform, opacity;
 }
 .wizard-slide-enter-active,
 .wizard-slide-leave-active {
   transition:
-    opacity var(--anim-mid) ease,
+    opacity var(--anim-mid) var(--anim-standard),
     transform var(--anim-mid) var(--anim-spring);
+  backface-visibility: hidden;
 }
 .wizard-slide-enter-from {
   opacity: 0;
-  transform: translateX(18px) scale(0.99);
+  transform: translate3d(14px, 0, 0) scale(0.995);
 }
 .wizard-slide-leave-to {
   opacity: 0;
-  transform: translateX(-14px) scale(0.99);
+  transform: translate3d(-10px, 0, 0) scale(0.995);
 }
 .ledger-step {
   width: min(640px, 100%);

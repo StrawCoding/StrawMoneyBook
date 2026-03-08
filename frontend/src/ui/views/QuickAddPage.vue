@@ -706,6 +706,7 @@ h2 {
   background: color-mix(in srgb, var(--muted) 32%, transparent);
   position: relative;
   display: inline-block;
+  transition: background-color var(--anim-fast) var(--anim-standard);
 }
 
 .switch-thumb {
@@ -716,11 +717,13 @@ h2 {
   height: 20px;
   border-radius: 50%;
   background: #fff;
-  transition: transform 180ms ease;
+  transform: translate3d(0, 0, 0);
+  transition: transform var(--anim-mid) var(--anim-spring);
+  will-change: transform;
 }
 
 .switch-row.active .switch-thumb {
-  transform: translateX(18px);
+  transform: translate3d(18px, 0, 0);
 }
 
 .action-row {

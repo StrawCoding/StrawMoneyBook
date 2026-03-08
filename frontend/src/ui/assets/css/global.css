@@ -70,9 +70,10 @@
   --shadow-popover: 0 12px 28px color-mix(in srgb, black 35%, transparent);
   --shadow-popover-lg: 0 14px 36px color-mix(in srgb, black 42%, transparent);
   --shadow-popover-xl: 0 14px 36px color-mix(in srgb, black 48%, transparent);
-  --anim-fast: 140ms;
-  --anim-mid: 220ms;
-  --anim-slow: 320ms;
+  --anim-fast: 150ms;
+  --anim-mid: 240ms;
+  --anim-slow: 360ms;
+  --anim-standard: cubic-bezier(0.2, 0, 0, 1);
   --anim-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --status-bar-height: env(safe-area-inset-top, 0px);
   --navigation-bar-height: env(safe-area-inset-bottom, 0px);
@@ -194,10 +195,10 @@ button:focus-visible,
   background: var(--card);
   border-radius: 16px;
   transition:
-    transform var(--anim-mid) ease,
-    box-shadow var(--anim-mid) ease,
-    border-color var(--anim-mid) ease,
-    background-color var(--anim-mid) ease;
+    transform var(--anim-mid) var(--anim-standard),
+    box-shadow var(--anim-mid) var(--anim-standard),
+    border-color var(--anim-fast) var(--anim-standard),
+    background-color var(--anim-fast) var(--anim-standard);
 }
 
 .stack {
@@ -206,21 +207,18 @@ button:focus-visible,
 }
 
 .stack > * {
+  --stack-delay: 0ms;
   animation: move-in var(--anim-mid) var(--anim-spring) both;
+  animation-delay: var(--stack-delay);
+  backface-visibility: hidden;
 }
 
-.stack > :nth-child(1) { animation-delay: 20ms; }
-.stack > :nth-child(2) { animation-delay: 45ms; }
-.stack > :nth-child(3) { animation-delay: 70ms; }
-.stack > :nth-child(4) { animation-delay: 95ms; }
-.stack > :nth-child(5) { animation-delay: 120ms; }
-.stack > :nth-child(6) { animation-delay: 145ms; }
-.stack > :nth-child(7) { animation-delay: 170ms; }
-.stack > :nth-child(8) { animation-delay: 195ms; }
-.stack > :nth-child(9) { animation-delay: 220ms; }
-.stack > :nth-child(10) { animation-delay: 245ms; }
-.stack > :nth-child(11) { animation-delay: 270ms; }
-.stack > :nth-child(12) { animation-delay: 295ms; }
+.stack > :nth-child(1) { --stack-delay: 12ms; }
+.stack > :nth-child(2) { --stack-delay: 24ms; }
+.stack > :nth-child(3) { --stack-delay: 36ms; }
+.stack > :nth-child(4) { --stack-delay: 48ms; }
+.stack > :nth-child(5) { --stack-delay: 60ms; }
+.stack > :nth-child(6) { --stack-delay: 72ms; }
 
 .row,
 .picker-row,
@@ -271,10 +269,10 @@ button:focus-visible,
   isolation: isolate;
   vertical-align: middle;
   transition:
-    transform var(--anim-fast) ease,
-    filter var(--anim-fast) ease,
-    box-shadow var(--anim-mid) ease,
-    background-color var(--anim-mid) ease;
+    transform var(--anim-fast) var(--anim-standard),
+    filter var(--anim-fast) var(--anim-standard),
+    box-shadow var(--anim-mid) var(--anim-standard),
+    background-color var(--anim-fast) var(--anim-standard);
 }
 
 .btn::after {
@@ -292,8 +290,8 @@ button:focus-visible,
 }
 
 .btn:active {
-  transform: scale(0.97);
-  filter: brightness(1.05);
+  transform: scale(0.985);
+  filter: brightness(1.03);
 }
 
 .btn:active::after {
@@ -308,6 +306,7 @@ button:focus-visible,
 .btn[aria-busy='true'] {
   pointer-events: none;
   animation: btn-busy 1.15s ease-in-out infinite;
+  will-change: transform, filter;
 }
 
 .btn.primary {
@@ -349,9 +348,9 @@ button.danger-btn {
   color: var(--text);
   padding: 10px;
   transition:
-    border-color var(--anim-fast) ease,
-    box-shadow var(--anim-fast) ease,
-    background-color var(--anim-fast) ease;
+    border-color var(--anim-fast) var(--anim-standard),
+    box-shadow var(--anim-fast) var(--anim-standard),
+    background-color var(--anim-fast) var(--anim-standard);
 }
 
 .input:focus,
@@ -368,16 +367,16 @@ a,
 .nav-item,
 .shortcut {
   transition:
-    transform var(--anim-fast) ease,
-    opacity var(--anim-fast) ease,
-    filter var(--anim-fast) ease;
+    transform var(--anim-fast) var(--anim-standard),
+    opacity var(--anim-fast) var(--anim-standard),
+    filter var(--anim-fast) var(--anim-standard);
 }
 
 [role='button']:active,
 .tx-item:active,
 .nav-item:active,
 .shortcut:active {
-  transform: scale(0.98);
+  transform: scale(0.99);
 }
 
 .card:hover {
@@ -387,38 +386,40 @@ a,
 .route-slide-enter-active,
 .route-slide-leave-active {
   transition:
-    opacity 180ms ease-out,
-    transform 180ms cubic-bezier(0.24, 0.9, 0.32, 1);
+    opacity var(--anim-mid) var(--anim-standard),
+    transform var(--anim-mid) var(--anim-spring);
   will-change: opacity, transform;
   backface-visibility: hidden;
 }
 
 .route-slide-enter-from {
   opacity: 0;
-  transform: translate3d(16px, 0, 0);
+  transform: translate3d(12px, 0, 0);
 }
 
 .route-slide-leave-to {
   opacity: 0;
-  transform: translate3d(-12px, 0, 0);
+  transform: translate3d(-10px, 0, 0);
 }
 
 .fade-scale-enter-active,
 .fade-scale-leave-active {
   transition:
-    opacity var(--anim-fast) ease,
-    transform var(--anim-fast) ease;
+    opacity var(--anim-fast) var(--anim-standard),
+    transform var(--anim-fast) var(--anim-spring);
+  will-change: opacity, transform;
 }
 
 .fade-scale-enter-from,
 .fade-scale-leave-to {
   opacity: 0;
-  transform: scale(0.94);
+  transform: translate3d(0, 6px, 0) scale(0.985);
 }
 
 .overlay-fade-enter-active,
 .overlay-fade-leave-active {
-  transition: opacity var(--anim-mid) ease;
+  transition: opacity var(--anim-mid) var(--anim-standard);
+  will-change: opacity;
 }
 
 .overlay-fade-enter-from,
@@ -431,8 +432,10 @@ a,
 .overlay-fade-enter-active .extra-sheet,
 .overlay-fade-leave-active .extra-sheet {
   transition:
-    opacity var(--anim-mid) ease,
+    opacity var(--anim-mid) var(--anim-standard),
     transform var(--anim-mid) var(--anim-spring);
+  will-change: opacity, transform;
+  backface-visibility: hidden;
 }
 
 .overlay-fade-enter-from .sheet,
@@ -440,38 +443,40 @@ a,
 .overlay-fade-enter-from .extra-sheet,
 .overlay-fade-leave-to .extra-sheet {
   opacity: 0;
-  transform: translateY(100%);
+  transform: translate3d(0, 32px, 0);
 }
 
 .popover-fade-enter-active,
 .popover-fade-leave-active {
   transition:
-    opacity var(--anim-fast) ease,
-    transform var(--anim-fast) ease;
+    opacity var(--anim-fast) var(--anim-standard),
+    transform var(--anim-fast) var(--anim-spring);
   transform-origin: top center;
+  will-change: opacity, transform;
 }
 
 .popover-fade-enter-from,
 .popover-fade-leave-to {
   opacity: 0;
-  transform: translateY(-6px) scale(0.98);
+  transform: translate3d(0, -4px, 0) scale(0.985);
 }
 
 .collapse-fade-enter-active,
 .collapse-fade-leave-active {
   overflow: hidden;
   transition:
-    opacity var(--anim-mid) ease,
-    transform var(--anim-mid) ease,
-    max-height var(--anim-mid) ease,
-    margin-top var(--anim-mid) ease,
-    padding-top var(--anim-mid) ease;
+    opacity var(--anim-fast) var(--anim-standard),
+    transform var(--anim-mid) var(--anim-spring),
+    max-height var(--anim-mid) var(--anim-standard),
+    margin-top var(--anim-mid) var(--anim-standard),
+    padding-top var(--anim-mid) var(--anim-standard);
+  will-change: opacity, transform, max-height;
 }
 
 .collapse-fade-enter-from,
 .collapse-fade-leave-to {
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translate3d(0, -4px, 0);
   max-height: 0;
   margin-top: 0;
   padding-top: 0;
@@ -488,86 +493,88 @@ a,
 
 .bottom-nav {
   animation: nav-rise var(--anim-mid) var(--anim-spring);
+  will-change: transform, opacity;
 }
 
 .fab {
   animation: fab-rise var(--anim-mid) var(--anim-spring);
+  will-change: transform, opacity;
 }
 
 @keyframes app-boot {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.995);
+    transform: translate3d(0, 8px, 0) scale(0.998);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
 @keyframes page-fade {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translate3d(0, 6px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 @keyframes topbar-slide {
   from {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translate3d(0, -6px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 @keyframes move-in {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.99);
+    transform: translate3d(0, 8px, 0) scale(0.996);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
 @keyframes move-in-soft {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translate3d(0, 6px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 @keyframes nav-rise {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translate3d(0, 10px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 @keyframes fab-rise {
   from {
     opacity: 0;
-    transform: translateY(18px) scale(0.94);
+    transform: translate3d(0, 14px, 0) scale(0.97);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 

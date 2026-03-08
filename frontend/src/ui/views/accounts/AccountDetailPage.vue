@@ -626,7 +626,7 @@ h3 {
   border-radius: 999px;
   background: color-mix(in srgb, var(--field-border) 72%, var(--card) 28%);
   padding: 4px;
-  transition: background 0.2s ease;
+  transition: background-color var(--anim-fast) var(--anim-standard);
   flex: 0 0 auto;
 }
 
@@ -637,7 +637,9 @@ h3 {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-  transition: transform 0.2s ease;
+  transform: translate3d(0, 0, 0);
+  transition: transform var(--anim-mid) var(--anim-spring);
+  will-change: transform;
 }
 
 .switch-row.active {
@@ -650,7 +652,7 @@ h3 {
 }
 
 .switch-row.active .switch-thumb {
-  transform: translateX(20px);
+  transform: translate3d(20px, 0, 0);
 }
 
 .action-row {

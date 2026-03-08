@@ -32,6 +32,19 @@ function isNativeAndroidPlatform() {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
 }
 
+function parseBooleanEnv(value, fallback = false) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (!normalized) return fallback
+  return ['1', 'true', 'yes', 'on'].includes(normalized)
+}
+
+function shouldSkipUpdateCheckInCurrentRuntime() {
+  if (parseBooleanEnv(import.meta.env.VITE_ENABLE_DEV_APP_UPDATE_CHECK, false)) {
+    return false
+  }
+  return Boolean(import.meta.env.DEV) && !Capacitor.isNativePlatform()
+}
+
 function normalizePlayCountry(rawValue) {
   const value = String(rawValue ?? '').trim().toLowerCase()
   if (!value) return ''
@@ -72,15 +85,21 @@ function getCurrentAppVersion() {
 }
 
 function resolveUpdateManifestUrls(rawValue) {
-  const candidates = String(rawValue ?? '')
+  const configuredCandidates = String(rawValue ?? '')
     .split(/[,\n]/)
     .map((item) => String(item ?? '').trim())
     .filter(Boolean)
+  const candidates = [...configuredCandidates]
 
-  if (!candidates.length) {
+  if (!configuredCandidates.length) {
+    if (Boolean(import.meta.env.DEV)) {
+      candidates.push(LOCAL_UPDATE_MANIFEST_URL, LOCAL_UPDATE_MANIFEST_RELATIVE_URL)
+    }
     candidates.push(DEFAULT_UPDATE_MANIFEST_URL, SECONDARY_UPDATE_MANIFEST_URL)
   }
-  candidates.push(LOCAL_UPDATE_MANIFEST_URL, LOCAL_UPDATE_MANIFEST_RELATIVE_URL)
+  if (!Boolean(import.meta.env.DEV)) {
+    candidates.push(LOCAL_UPDATE_MANIFEST_URL, LOCAL_UPDATE_MANIFEST_RELATIVE_URL)
+  }
 
   const deduped = []
   const seen = new Set()
@@ -93,16 +112,17 @@ function resolveUpdateManifestUrls(rawValue) {
 }
 
 function resolvePlayApiUrls(rawValue) {
-  const candidates = String(rawValue ?? '')
+  const configuredCandidates = String(rawValue ?? '')
     .split(/[,\n]/)
     .map((item) => String(item ?? '').trim())
     .filter(Boolean)
+  const candidates = [...configuredCandidates]
 
-  if (!candidates.length) {
-    candidates.push(DEFAULT_PLAY_VERSION_API_URL, SECONDARY_PLAY_VERSION_API_URL)
-  }
   if (Boolean(import.meta.env.DEV)) {
     candidates.push(LOCAL_PLAY_VERSION_API_URL, LOCAL_PLAY_VERSION_API_RELATIVE_URL)
+  }
+  if (!configuredCandidates.length) {
+    candidates.push(DEFAULT_PLAY_VERSION_API_URL, SECONDARY_PLAY_VERSION_API_URL)
   }
 
   const deduped = []
@@ -359,10 +379,7 @@ async function fetchJsonPayload(url, timeoutMessage, emptyMessage, invalidMessag
   const response = await withTimeout(
     fetch(url, {
       method: 'GET',
-      headers: {
-        'Cache-Control': 'no-cache',
-        Pragma: 'no-cache',
-      },
+      cache: 'no-store',
     }),
     UPDATE_FETCH_TIMEOUT_MS,
     timeoutMessage,
@@ -523,6 +540,23 @@ export async function checkForAppUpdate(options = {}) {
   }
 
   const currentVersion = getCurrentAppVersion()
+  if (shouldSkipUpdateCheckInCurrentRuntime()) {
+    const result = {
+      hasUpdate: false,
+      checkFailed: false,
+      usedLocalFallback: false,
+      source: 'dev_skip',
+      currentVersion,
+      latestVersion: currentVersion,
+      playUrl: GOOGLE_PLAY_URL,
+      message: '',
+      checkedAt: new Date(now).toISOString(),
+    }
+    cachedCheckResult = result
+    cachedCheckAtMs = now
+    return result
+  }
+
   const usePlayOnly = shouldUsePlayOnlyStrategy()
   let playCoreErrorMessage = ''
 

@@ -37,7 +37,8 @@ const orderedToasts = computed(() => {
   background: var(--surface-popover);
   color: var(--text);
   padding: 10px 12px;
-  box-shadow: var(--shadow)
+  box-shadow: var(--shadow-popover);
+  will-change: transform, opacity;
 }
 .toast.error {
   border-color: var(--danger-btn-border);
@@ -46,13 +47,13 @@ const orderedToasts = computed(() => {
 }
 .toast-enter-active, .toast-leave-active {
   transition:
-    opacity var(--anim-fast) ease,
-    transform var(--anim-fast) ease
+    opacity var(--anim-fast) var(--anim-standard),
+    transform var(--anim-fast) var(--anim-spring)
 }
 .toast-enter-from, .toast-leave-to {
   opacity: 0;
-  transform: translateY(-14px)
+  transform: translate3d(0, -10px, 0)
 }
 .toast-move {
-  transition: transform var(--anim-fast) ease
+  transition: transform var(--anim-mid) var(--anim-spring)
 }</style>

@@ -364,13 +364,15 @@ watch(
     radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 48%),
     radial-gradient(circle at 80% 0%, color-mix(in srgb, var(--ok) 22%, transparent), transparent 44%),
     var(--card);
+  will-change: transform, opacity;
 }
 .boot-logo {
   width: 72px;
   height: 72px;
   border-radius: 16px;
   box-shadow: var(--shadow-card);
-  animation: boot-logo-float 1500ms ease-in-out infinite
+  animation: boot-logo-float 1900ms var(--anim-standard) infinite;
+  will-change: transform;
 }
 .boot-title {
   margin: 2px 0 0;
@@ -397,24 +399,27 @@ watch(
   inset: 0;
   background: linear-gradient(90deg, transparent 0%, var(--primary) 42%, transparent 85%);
   transform: translateX(-100%);
-  animation: boot-progress 1100ms linear infinite
+  animation: boot-progress 1250ms linear infinite;
+  will-change: transform;
 }
 .boot-overlay-enter-active,
 .boot-overlay-leave-active {
   transition: opacity var(--anim-mid) ease, transform var(--anim-mid) var(--anim-spring);
+  will-change: opacity, transform;
+  backface-visibility: hidden;
 }
 .boot-overlay-enter-from,
 .boot-overlay-leave-to {
   opacity: 0;
-  transform: translateY(8px) scale(0.99);
+  transform: translate3d(0, 6px, 0) scale(0.995);
 }
 @keyframes boot-logo-float {
   0%,
   100% {
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
   50% {
-    transform: translateY(-6px);
+    transform: translate3d(0, -4px, 0);
   }
 }
 @keyframes boot-progress {
