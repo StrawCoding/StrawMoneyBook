@@ -67,7 +67,6 @@ import {
   applyThemeColor,
   applyThemeScheme,
   getCurrentThemePreference,
-  listThemePrimaryPaletteColors,
   listThemeSchemes,
   resetThemeColor,
   saveThemeScheme,
@@ -80,7 +79,7 @@ const schemes = listThemeSchemes()
 const initialTheme = getCurrentThemePreference()
 const primary = ref(initialTheme.primary)
 const selectedSchemeId = ref(initialTheme.schemeId)
-const paletteColors = listThemePrimaryPaletteColors()
+const paletteColors = buildPaletteColors()
 
 function applyColor() {
   primary.value = applyThemeColor(primary.value)
@@ -132,6 +131,57 @@ function schemePrimaryOf(schemeId) {
 function normalizeHex(value) {
   const raw = String(value ?? '').trim().toLowerCase()
   return raw.startsWith('#') ? raw : `#${raw}`
+}
+
+function buildPaletteColors() {
+  const colors = []
+  const saturations = [70, 82]
+  const lights = [42, 52, 62]
+
+  for (let hue = 0; hue < 360; hue += 24) {
+    for (const saturation of saturations) {
+      for (const light of lights) {
+        colors.push(hslToHex(hue, saturation, light))
+      }
+    }
+  }
+  return colors
+}
+
+function hslToHex(h, s, l) {
+  const saturation = s / 100
+  const lightness = l / 100
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation
+  const segment = h / 60
+  const x = chroma * (1 - Math.abs((segment % 2) - 1))
+
+  let red = 0
+  let green = 0
+  let blue = 0
+
+  if (segment >= 0 && segment < 1) {
+    red = chroma
+    green = x
+  } else if (segment < 2) {
+    red = x
+    green = chroma
+  } else if (segment < 3) {
+    green = chroma
+    blue = x
+  } else if (segment < 4) {
+    green = x
+    blue = chroma
+  } else if (segment < 5) {
+    red = x
+    blue = chroma
+  } else {
+    red = chroma
+    blue = x
+  }
+
+  const m = lightness - chroma / 2
+  const toHex = (value) => Math.round((value + m) * 255).toString(16).padStart(2, '0')
+  return `#${toHex(red)}${toHex(green)}${toHex(blue)}`
 }
 
 function schemeName(scheme) {

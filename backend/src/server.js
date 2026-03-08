@@ -56,6 +56,9 @@ function getRateLimitPolicy(pathname) {
 }
 
 function consumeRateLimit(req, pathname) {
+  if (req.method === 'OPTIONS') {
+    return null
+  }
   const policy = getRateLimitPolicy(pathname)
   const ip = getClientIp(req)
   const bucketKey = `${policy.key}:${ip}`

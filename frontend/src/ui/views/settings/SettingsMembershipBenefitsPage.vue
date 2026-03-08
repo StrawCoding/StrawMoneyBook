@@ -6,11 +6,18 @@
         <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
       </header>
       <p class="muted subtitle">{{ t('membership_page.subtitle') }}</p>
-      <div class="trial-note">
+      <div v-if="showTrialNote" class="trial-note">
         <strong>{{ t('membership_page.first_trial_title', '第一次使用付費會員 3 天免費') }}</strong>
         <p class="muted subtitle">
-          {{ t('membership_page.first_trial_desc', '首次可先啟用 3 天免費會員，再開始使用共同帳本等會員功能。') }}
+          {{
+            sessionUser
+              ? t('membership_page.first_trial_desc', '首次可先啟用 3 天免費會員，再開始使用共同帳本等會員功能。')
+              : t('membership_page.first_trial_login_desc', '第一次使用付費會員可先免費 3 天，請先登入後再啟用。')
+          }}
         </p>
+        <RouterLink v-if="!sessionUser" class="btn primary trial-login-btn" to="/settings/account">
+          {{ t('membership_page.first_trial_login_btn', '請先登入') }}
+        </RouterLink>
       </div>
       <div class="row plan-row">
         <span class="muted">{{ t('membership_page.current_plan') }}</span>
@@ -65,6 +72,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useUiStore } from '@/ui/stores/ui.store'
+import { getSharedLedgerSession, refreshSharedLedgerSession } from '@/services/shared-ledger/backend'
 import {
   getMembershipProductDisplay,
   getMembershipProductDisplaySnapshot,
@@ -79,6 +87,7 @@ import {
 
 const { t } = useI18n()
 const uiStore = useUiStore()
+const sessionUser = ref(getSharedLedgerSession()?.user ?? null)
 const currentTier = ref(getMembershipTier())
 const loadingPrices = ref(false)
 const submittingPlan = ref('')
@@ -167,6 +176,7 @@ const compareRows = [
 const isBusy = computed(() => Boolean(
   submittingPlan.value || restoring.value || openingManage.value || redeeming.value,
 ))
+const showTrialNote = computed(() => !sessionUser.value || Boolean(sessionUser.value?.membership_trial_eligible))
 
 const canUsePlayStore = computed(() => playStoreSupported.value && !isBusy.value)
 
@@ -312,6 +322,11 @@ async function redeemPromoCode() {
 }
 
 onMounted(async () => {
+  await refreshSharedLedgerSession()
+    .then((session) => {
+      sessionUser.value = session?.user ?? null
+    })
+    .catch(() => {})
   await refreshMembershipState('membership_page_open').catch(() => null)
   await loadProductPrices().catch(() => null)
 })
@@ -339,6 +354,11 @@ h2, h3 {
   background: color-mix(in srgb, var(--primary) 12%, var(--card));
   display: grid;
   gap: 6px;
+}
+.trial-login-btn {
+  width: 100%;
+  justify-content: center;
+  text-decoration: none;
 }
 .compare-grid {
   display: grid;

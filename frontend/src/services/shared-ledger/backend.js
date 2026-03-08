@@ -49,7 +49,7 @@ function describeNetworkFailure(requestUrl, error) {
   if (pageOrigin) {
     reasonParts.push(`頁面來源：${pageOrigin}`)
     if (/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(pageOrigin) && /^https:\/\/api\.strawmb\.com(?:\/|$)/i.test(String(requestUrl ?? '').trim())) {
-      reasonParts.push('目前正式 API 可能未允許 localhost 作為跨網域來源，請在後端 ALLOWED_ORIGINS 加入此來源，或改連本機 backend')
+      reasonParts.push('若正式 API 已允許 localhost，仍出現 Failed to fetch 時，通常是預檢請求被限流、反向代理擋掉 OPTIONS，或 HTTPS / 憑證問題')
     }
   }
   const causeMessage = String(error?.message ?? '').trim()

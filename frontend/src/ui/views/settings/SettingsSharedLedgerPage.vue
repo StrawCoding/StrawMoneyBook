@@ -249,6 +249,13 @@
                             : t('settings_shared_ledgers.download_to_local', '下載到本機')
                       }}
                     </button>
+                    <button class="btn" :disabled="remoteDeleteBusyId === item.id || apiUnavailable" @click="removeRemoteLedger(item)">
+                      {{
+                        remoteDeleteBusyId === item.id
+                          ? getRemoteUnshareBusyLabel(item)
+                          : getRemoteUnshareLabel(item)
+                      }}
+                    </button>
                   </div>
                 </div>
               </li>
@@ -261,12 +268,24 @@
         </template>
       </template>
     </section>
+
+    <AppDialog
+      :open="confirmDialog.open"
+      :title="confirmDialog.title"
+      :message="confirmDialog.message"
+      :confirm-text="confirmDialog.confirmText"
+      :loading="confirmDialog.loading"
+      :loading-text="confirmDialog.loadingText"
+      @close="closeConfirmDialog"
+      @confirm="confirmDialogAction"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import AppDialog from '@/ui/components/common/AppDialog.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
@@ -287,6 +306,7 @@ import {
   publishLedgerAsShared,
   setSharedLedgerAutoSyncEnabled,
   stopSharingLocalLedger,
+  stopSharingRemoteSharedLedger,
 } from '@/ui/services/shared-ledger.service'
 
 const router = useRouter()
@@ -305,10 +325,21 @@ const activeLedgerMeta = ref(null)
 const sharedLedgerNameInput = ref('')
 const ledgerActionBusy = ref('')
 const remoteItemBusyId = ref('')
+const remoteDeleteBusyId = ref('')
 const invitationBusyId = ref('')
 const inviteEmailInput = ref('')
 const inviteSubmitting = ref(false)
 const trialActivating = ref(false)
+const confirmDialog = ref({
+  open: false,
+  mode: '',
+  title: '',
+  message: '',
+  confirmText: '',
+  loadingText: '',
+  loading: false,
+  item: null,
+})
 
 const activeLedger = computed(() => ledgerStore.activeLedger)
 const accountName = computed(() => String(sessionUser.value?.display_name || sessionUser.value?.email || sessionUser.value?.account || '').trim())
@@ -338,6 +369,27 @@ const currentRemoteLedger = computed(() => {
   if (!sharedLedgerId) return null
   return remoteLedgers.value.find((item) => String(item?.id ?? '') === sharedLedgerId) ?? null
 })
+
+function getRemoteUnshareLabel(item) {
+  const role = String(item?.role ?? '').trim().toLowerCase()
+  return role === 'owner'
+    ? t('settings_shared_ledgers.delete_shared', '刪除共享')
+    : t('settings_shared_ledgers.leave_shared', '不再共享')
+}
+
+function getRemoteUnshareBusyLabel(item) {
+  const role = String(item?.role ?? '').trim().toLowerCase()
+  return role === 'owner'
+    ? t('settings_shared_ledgers.deleting_shared', '刪除中...')
+    : t('settings_shared_ledgers.leaving_shared', '處理中...')
+}
+
+function getRemoteUnshareConfirmMessage(item) {
+  const role = String(item?.role ?? '').trim().toLowerCase()
+  return role === 'owner'
+    ? t('settings_shared_ledgers.delete_shared_confirm', '刪除共享後，所有成員都會失去這本共同帳本的同步連線。是否繼續？')
+    : t('settings_shared_ledgers.leave_shared_confirm', '不再共享後，這本共同帳本會從你的列表移除，已下載到本機的帳本只保留本機資料。是否繼續？')
+}
 
 function formatDateTime(value) {
   const source = String(value ?? '').trim()
@@ -485,21 +537,95 @@ async function downloadRemoteLedger(item) {
 
 async function stopSharingActiveLedger() {
   if (!activeLedger.value || !activeLedgerMeta.value?.shared_ledger_id || apiUnavailable.value) return
-  const confirmed = typeof window === 'undefined'
-    ? true
-    : window.confirm(t('settings_shared_ledgers.unshare_confirm', '取消共享後，這本帳本會保留在本機，但不再與共同帳本同步。是否繼續？'))
-  if (!confirmed) return
+  confirmDialog.value = {
+    open: true,
+    mode: 'active-unshare',
+    title: t('settings_shared_ledgers.unshare', '取消共享'),
+    message: t('settings_shared_ledgers.unshare_confirm', '取消共享後，這本帳本會保留在本機，但不再與共同帳本同步。是否繼續？'),
+    confirmText: t('settings_shared_ledgers.unshare', '取消共享'),
+    loadingText: t('settings_shared_ledgers.unsharing', '取消共享中...'),
+    loading: false,
+    item: null,
+  }
+}
 
-  ledgerActionBusy.value = 'unlink'
+async function removeRemoteLedger(item) {
+  const sharedLedgerId = String(item?.id ?? '').trim()
+  if (!sharedLedgerId || apiUnavailable.value) return
+  confirmDialog.value = {
+    open: true,
+    mode: 'remote-unshare',
+    title: getRemoteUnshareLabel(item),
+    message: getRemoteUnshareConfirmMessage(item),
+    confirmText: getRemoteUnshareLabel(item),
+    loadingText: getRemoteUnshareBusyLabel(item),
+    loading: false,
+    item,
+  }
+}
+
+function closeConfirmDialog() {
+  if (confirmDialog.value.loading) return
+  confirmDialog.value = {
+    open: false,
+    mode: '',
+    title: '',
+    message: '',
+    confirmText: '',
+    loadingText: '',
+    loading: false,
+    item: null,
+  }
+}
+
+async function confirmDialogAction() {
+  if (!confirmDialog.value.open || confirmDialog.value.loading) return
+
+  confirmDialog.value = {
+    ...confirmDialog.value,
+    loading: true,
+  }
+
   try {
-    await stopSharingLocalLedger(activeLedger.value.id)
-    await refreshLocalBindings()
-    await loadRemoteLedgers()
-    uiStore.pushToast(t('settings_shared_ledgers.toast.unshared', '已取消共享，帳本目前只保留本機'))
+    if (confirmDialog.value.mode === 'active-unshare') {
+      ledgerActionBusy.value = 'unlink'
+      await stopSharingLocalLedger(activeLedger.value.id)
+      await refreshLocalBindings()
+      await loadRemoteLedgers()
+      uiStore.pushToast(t('settings_shared_ledgers.toast.unshared', '已取消共享，帳本目前只保留本機'))
+      closeConfirmDialog()
+      return
+    }
+
+    if (confirmDialog.value.mode === 'remote-unshare') {
+      const item = confirmDialog.value.item
+      const sharedLedgerId = String(item?.id ?? '').trim()
+      if (!sharedLedgerId) throw new Error('缺少共同帳本 ID')
+      remoteDeleteBusyId.value = sharedLedgerId
+      const binding = bindingMap.value[sharedLedgerId]
+      const localLedgerIds = binding?.ledgerId ? [binding.ledgerId] : []
+      await stopSharingRemoteSharedLedger(sharedLedgerId, { localLedgerIds })
+      await refreshLocalBindings()
+      await loadRemoteLedgers()
+      uiStore.pushToast(
+        String(item?.role ?? '').trim().toLowerCase() === 'owner'
+          ? t('settings_shared_ledgers.toast.shared_deleted', '共享帳本已刪除')
+          : t('settings_shared_ledgers.toast.shared_left', '已不再共享，帳本目前只保留本機'),
+      )
+      closeConfirmDialog()
+      return
+    }
+
+    closeConfirmDialog()
   } catch (error) {
     uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.unshare_failed', '取消共享失敗'), 'error')
+    confirmDialog.value = {
+      ...confirmDialog.value,
+      loading: false,
+    }
   } finally {
     ledgerActionBusy.value = ''
+    remoteDeleteBusyId.value = ''
   }
 }
 

@@ -370,6 +370,18 @@ export async function stopSharingLocalLedger(ledgerId) {
   return result
 }
 
+export async function stopSharingRemoteSharedLedger(sharedLedgerId, options = {}) {
+  const normalizedSharedLedgerId = String(sharedLedgerId ?? '').trim()
+  if (!normalizedSharedLedgerId) throw new Error('缺少共同帳本 ID')
+
+  const result = await deleteSharedLedger(normalizedSharedLedgerId)
+  const localLedgerIds = Array.isArray(options?.localLedgerIds) ? options.localLedgerIds : []
+  for (const ledgerId of localLedgerIds) {
+    await clearSharedLedgerMeta(ledgerId)
+  }
+  return result
+}
+
 export function getSharedLedgerSessionUser() {
   return getSharedLedgerSession()?.user ?? null
 }
