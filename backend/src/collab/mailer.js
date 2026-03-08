@@ -8,14 +8,20 @@ const SMTP_SECURE = String(process.env.SMTP_SECURE ?? '').trim().toLowerCase()
 const SMTP_FROM = String(process.env.SMTP_FROM ?? process.env.SMTP_EMAIL ?? '').trim()
 const SMTP_USER = String(process.env.SMTP_USER ?? process.env.SMTP_USERNAME ?? SMTP_FROM).trim()
 const SMTP_PASS = String(process.env.SMTP_PASS ?? process.env.SMTP_PASSWORD ?? '').trim()
+const SMTP_TLS_SERVERNAME = String(process.env.SMTP_TLS_SERVERNAME ?? '').trim()
+const SMTP_TLS_REJECT_UNAUTHORIZED = String(process.env.SMTP_TLS_REJECT_UNAUTHORIZED ?? '').trim().toLowerCase()
 const SMTP_JSON_TRANSPORT = String(process.env.SMTP_JSON_TRANSPORT ?? '').trim().toLowerCase()
-const EMAIL_BRAND_LOGO_FILE = fileURLToPath(new URL('../../../frontend/public/assets/icons/icon-512.webp', import.meta.url))
+const EMAIL_BRAND_LOGO_FILE = fileURLToPath(new URL('../../assets/email-brand-icon.webp', import.meta.url))
 const EMAIL_BRAND_LOGO_CID = 'strawmb-logo'
 
 let transporterPromise = null
 
 function isTruthy(value) {
   return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
+
+function isFalsy(value) {
+  return value === '0' || value === 'false' || value === 'no' || value === 'off'
 }
 
 function hasConfiguredTransport() {
@@ -47,6 +53,12 @@ async function getTransporter() {
       port: SMTP_PORT,
       secure: isTruthy(SMTP_SECURE) || SMTP_PORT === 465,
       auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+      tls: {
+        ...(SMTP_TLS_SERVERNAME ? { servername: SMTP_TLS_SERVERNAME } : {}),
+        ...(SMTP_TLS_REJECT_UNAUTHORIZED
+          ? { rejectUnauthorized: !isFalsy(SMTP_TLS_REJECT_UNAUTHORIZED) }
+          : {}),
+      },
     })
   })
 

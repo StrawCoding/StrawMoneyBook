@@ -474,6 +474,7 @@ let resetRequestCountdownTimer = null
 const MAX_AVATAR_SIDE_PX = 320
 const MAX_AVATAR_FILE_BYTES = 5 * 1024 * 1024
 const MAX_AVATAR_DATA_URL_LENGTH = 5 * 1024 * 1024
+const APP_DOWNLOAD_URL = 'https://play.google.com/store/apps/details?id=com.strawcoding.strawmoneybook'
 
 const resetToken = computed(() => String(route.query.token ?? '').trim())
 const isResetPasswordMode = computed(() => String(route.query.mode ?? '').trim() === 'reset-password' && Boolean(resetToken.value))
@@ -872,7 +873,10 @@ async function copyReferralCode() {
   const code = String(referralSummary.value?.code ?? '').trim()
   if (!code) return
   try {
-    await navigator.clipboard.writeText(code)
+    await navigator.clipboard.writeText([
+      `邀請碼：${code}`,
+      APP_DOWNLOAD_URL,
+    ].join('\n'))
     uiStore.pushToast(t('settings_account.toast.code_copied', '邀請碼已複製'))
   } catch {
     uiStore.pushToast(t('settings_account.toast.copy_failed', '複製邀請碼失敗'), 'error')
