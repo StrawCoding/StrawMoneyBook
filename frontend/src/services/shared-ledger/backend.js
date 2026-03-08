@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core'
 
-const SHARED_LEDGER_API_BASE = String(import.meta.env.VITE_SHARED_LEDGER_API_BASE_URL ?? '').trim()
+const DEV_DEFAULT_SHARED_LEDGER_API_BASE = import.meta.env.DEV ? 'http://127.0.0.1:8787' : ''
+const SHARED_LEDGER_API_BASE = String(import.meta.env.VITE_SHARED_LEDGER_API_BASE_URL ?? DEV_DEFAULT_SHARED_LEDGER_API_BASE).trim()
 const SESSION_STORAGE_KEY = 'straw.shared_ledger_session'
 
 function buildApiUrl(path) {
@@ -20,7 +21,7 @@ function shouldRequireExplicitApiBase() {
 function createMissingApiError() {
   const platform = Capacitor.getPlatform()
   const message = platform === 'web'
-    ? '共同帳本 API 未設定，請部署 /api/auth 與 /api/shared-ledgers'
+    ? '共同帳本 API 未設定，請啟動 backend Node.js 伺服器，或設定 VITE_SHARED_LEDGER_API_BASE_URL'
     : '手機 App 需設定共同帳本 API URL，請先部署後端並設定 VITE_SHARED_LEDGER_API_BASE_URL'
   const error = new Error(message)
   error.code = 'shared_ledger_api_unavailable'
