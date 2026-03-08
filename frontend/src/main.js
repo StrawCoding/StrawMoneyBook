@@ -137,6 +137,7 @@ import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { getCurrentLocale, initLocalePreference } from '@/ui/services/i18n.service'
 import { canNavigateBackInApp, resolveBackFallback, shouldConfirmExit } from '@/ui/services/navigation-back.service'
+import { scheduleActiveSharedLedgerAutoSync } from '@/ui/services/shared-ledger.service'
 import '@/ui/assets/css/global.css'
 
 const DATA_CHANGE_BACKUP_DEBOUNCE_MS = 15000
@@ -495,6 +496,7 @@ async function main() {
       window.addEventListener('app:data-mutated', () => {
         scheduleAutoBackupOnDataChange(pinia)
         scheduleHomeWidgetSync(pinia)
+        scheduleActiveSharedLedgerAutoSync(pinia)
       })
     }
 

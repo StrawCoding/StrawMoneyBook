@@ -142,6 +142,12 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
+      path: '/settings/shared-ledgers',
+      name: 'settings-shared-ledgers',
+      component: () => import('@/ui/views/settings/SettingsSharedLedgerPage.vue'),
+      meta: { tab: 'settings', allowWithoutSetup: true },
+    },
+    {
       path: '/settings/ledgers/:id',
       name: 'settings-ledger-detail',
       component: () => import('@/ui/views/settings/SettingsLedgerDetailPage.vue'),

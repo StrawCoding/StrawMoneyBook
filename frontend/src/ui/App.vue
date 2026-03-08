@@ -100,7 +100,8 @@ const { t } = useI18n()
 const hasLedgers = computed(() => ledgerStore.ledgers.length > 0)
 const hasAccounts = computed(() => accountStore.accounts.length > 0)
 const isBooting = computed(() => !ledgerStore.ready)
-const showWelcomePage = computed(() => ledgerStore.ready && (!hasLedgers.value || !hasAccounts.value))
+const allowWithoutSetup = computed(() => Boolean(route.meta?.allowWithoutSetup))
+const showWelcomePage = computed(() => ledgerStore.ready && !allowWithoutSetup.value && (!hasLedgers.value || !hasAccounts.value))
 const pageContainerStyle = computed(() => {
   const minHeight = Number(routeRestoreMinHeight.value ?? 0) || 0
   if (minHeight <= 0) return null

@@ -22,6 +22,7 @@ const showBankSyncEntry = isBankSyncFeatureEnabled()
 const settingGroups = computed(() => [
   [
     { to: '/settings/ledgers', labelKey: 'settings.ledger_management', icon: 'fa-solid fa-book' },
+    { to: '/settings/shared-ledgers', labelKey: '共同帳本', icon: 'fa-solid fa-users' },
     { to: '/settings/categories', labelKey: 'settings.category_management', icon: 'fa-solid fa-tags' },
     { to: '/settings/addon-templates', labelKey: 'settings.addon_templates', icon: 'fa-solid fa-receipt' },
     { to: '/settings/auto-fill-rules', labelKey: 'settings.auto_fill_rules', icon: 'fa-solid fa-wand-magic-sparkles' },

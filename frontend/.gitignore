@@ -7,3 +7,4 @@ coverage
 android/key.properties
 android/*.jks
 .playwright-cli
+.codex_snapshots

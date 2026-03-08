@@ -114,3 +114,16 @@ export async function deleteLedger(ledgerId) {
     await run('DELETE FROM ledgers WHERE id = ?;', [ledgerId])
   }
 }
+
+export async function purgeLedger(ledgerId) {
+  try {
+    await run('DELETE FROM ledgers WHERE id = ?;', [ledgerId])
+  } catch (error) {
+    if (!isForeignKeyError(error)) throw error
+
+    for (const table of LEGACY_LEDGER_CHILD_DELETE_ORDER) {
+      await run(`DELETE FROM ${table} WHERE ledger_id = ?;`, [ledgerId])
+    }
+    await run('DELETE FROM ledgers WHERE id = ?;', [ledgerId])
+  }
+}

@@ -36,11 +36,7 @@ function normalizeDisplayName(value, fallback = '') {
 }
 
 function createInviteCode() {
-  return randomBytes(6)
-    .toString('base64')
-    .replace(/[^A-Z0-9]/gi, '')
-    .toUpperCase()
-    .slice(0, 8)
+  return randomBytes(4).toString('hex').toUpperCase()
 }
 
 function base64UrlEncode(input) {
@@ -158,7 +154,7 @@ async function writeStore(data) {
 
 export async function updateStore(mutator) {
   let result
-  updateQueue = updateQueue.then(async () => {
+  updateQueue = updateQueue.catch(() => null).then(async () => {
     const data = await readStore()
     result = await mutator(data)
     await writeStore(data)

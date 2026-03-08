@@ -59,6 +59,26 @@ export const useLedgerStore = defineStore('ledger', {
       addonTemplateStore.$reset()
     },
 
+    async loadLedgerScopedStores() {
+      const accountStore = useAccountStore()
+      const categoryStore = useCategoryStore()
+      const transactionStore = useTransactionStore()
+      const budgetStore = useBudgetStore()
+      const loanStore = useLoanStore()
+      const reimbursementStore = useReimbursementStore()
+      const addonTemplateStore = useAddonTemplateStore()
+
+      await Promise.all([
+        accountStore.load(),
+        categoryStore.load(),
+        transactionStore.loadRecent(),
+        budgetStore.loadCurrentMonth(),
+        loanStore.load(),
+        reimbursementStore.load(),
+        addonTemplateStore.load(),
+      ])
+    },
+
     async init() {
       this.loading = true
       try {
@@ -104,7 +124,8 @@ export const useLedgerStore = defineStore('ledger', {
       localStorage.removeItem(ACTIVE_LEDGER_KEY)
     },
 
-    async switchLedger(nextLedgerId) {
+    async switchLedger(nextLedgerId, options = {}) {
+      const force = Boolean(options?.force)
       if (!nextLedgerId) {
         this.activeLedgerId = ''
         this.persistActive()
@@ -114,27 +135,10 @@ export const useLedgerStore = defineStore('ledger', {
       if (isFreeTier() && this.ledgers.length > 0 && nextLedgerId !== this.ledgers[0].id) {
         throw new Error('免費版僅可使用 1 個帳本')
       }
-      if (nextLedgerId === this.activeLedgerId) return
+      if (!force && nextLedgerId === this.activeLedgerId) return
       this.activeLedgerId = nextLedgerId
       this.persistActive()
-
-      const accountStore = useAccountStore()
-      const categoryStore = useCategoryStore()
-      const transactionStore = useTransactionStore()
-      const budgetStore = useBudgetStore()
-      const loanStore = useLoanStore()
-      const reimbursementStore = useReimbursementStore()
-      const addonTemplateStore = useAddonTemplateStore()
-
-      await Promise.all([
-        accountStore.load(),
-        categoryStore.load(),
-        transactionStore.loadRecent(),
-        budgetStore.loadCurrentMonth(),
-        loanStore.load(),
-        reimbursementStore.load(),
-        addonTemplateStore.load(),
-      ])
+      await this.loadLedgerScopedStores()
     },
 
     async addLedger(input) {
@@ -145,28 +149,21 @@ export const useLedgerStore = defineStore('ledger', {
       this.activeLedgerId = ledger.id
       this.persistActive()
 
-      const accountStore = useAccountStore()
-      const categoryStore = useCategoryStore()
-      const transactionStore = useTransactionStore()
-      const budgetStore = useBudgetStore()
-      const loanStore = useLoanStore()
-      const reimbursementStore = useReimbursementStore()
-      const addonTemplateStore = useAddonTemplateStore()
-
       await ensureLedgerDefaults(ledger.id, {
         locale: getCurrentLocale(),
         assumeEmpty: true,
       })
 
-      await Promise.all([
-        categoryStore.load(),
-        accountStore.load(),
-        transactionStore.loadRecent(),
-        budgetStore.loadCurrentMonth(),
-        loanStore.load(),
-        reimbursementStore.load(),
-        addonTemplateStore.load(),
-      ])
+      await this.loadLedgerScopedStores()
+    },
+
+    async reloadActiveLedger() {
+      await this.refresh()
+      if (!this.activeLedgerId) {
+        this.resetLedgerScopedStores()
+        return
+      }
+      await this.loadLedgerScopedStores()
     },
 
     async renameLedger(ledgerId, name) {

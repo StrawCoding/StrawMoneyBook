@@ -61,6 +61,9 @@
           >
             {{ creatingLedger ? t('welcome.creating') : t('welcome.create_ledger') }}
           </button>
+          <RouterLink v-if="!hasLedgers" class="btn secondary-link" to="/settings/shared-ledgers">
+            {{ t('welcome.join_shared_ledger', '已有共同帳本？登入並加入') }}
+          </RouterLink>
         </section>
 
         <section v-else :key="'step-3'" class="step-panel">
@@ -129,7 +132,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
@@ -369,6 +372,12 @@ h2,
 
 .create-btn {
   width: 100%;
+}
+
+.secondary-link {
+  width: 100%;
+  justify-content: center;
+  text-decoration: none;
 }
 
 .wizard-actions {
