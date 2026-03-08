@@ -175,6 +175,19 @@ function shouldAttemptSilentAutoConnect(state) {
   )
 }
 
+function shouldAttemptInteractiveAutoConnect(state) {
+  if (hasCachedGoogleAuthSession()) return true
+  if (!state || typeof state !== 'object') return false
+  if (state.connected) return true
+  return Boolean(
+    state.autoEnabled
+      || state.dataChangeAutoEnabled
+      || state.accountEmail
+      || state.accountName
+      || state.accountImageUrl,
+  )
+}
+
 async function ensureConnectedBySilentAuth(ledgerId, state) {
   if (!Capacitor.isNativePlatform()) return state
   if (!shouldAttemptSilentAutoConnect(state)) return state
@@ -229,23 +242,26 @@ export async function autoConnectGoogleBackup(ledgerId, options = {}) {
   const allowInteractive = Boolean(options.allowInteractive)
   const state = await getGoogleBackupState(ledgerId)
   const silentState = await ensureConnectedBySilentAuth(ledgerId, state)
+  const preferredEmail = String(silentState.accountEmail || state.accountEmail || '').trim()
 
-  if (!allowInteractive || !silentState.connected) {
+  if (!allowInteractive || !shouldAttemptInteractiveAutoConnect(silentState)) {
     return silentState
   }
 
-  try {
-    await getAccessToken({
-      interactive: false,
-      preferredEmail: silentState.accountEmail,
-    })
-    return silentState
-  } catch {
-    // Fall through to interactive recovery.
+  if (silentState.connected) {
+    try {
+      await getAccessToken({
+        interactive: false,
+        preferredEmail,
+      })
+      return silentState
+    } catch {
+      // Fall through to interactive recovery.
+    }
   }
 
   try {
-    const profile = await resolveGoogleProfileForConnect(silentState.accountEmail)
+    const profile = await resolveGoogleProfileForConnect(preferredEmail)
     return saveState(ledgerId, {
       connected: true,
       accountEmail: profile.email,

@@ -1,4 +1,5 @@
 import { createServer } from 'vite'
+import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
@@ -12,21 +13,9 @@ const state = {
   settings: new Map(),
   silentTokenAttempts: [],
   interactiveLogins: [],
+  cachedProfile: {},
+  hasCachedSession: false,
 }
-
-state.settings.set(`${ledgerId}::${GOOGLE_BACKUP_KEY}`, {
-  connected: true,
-  accountEmail: 'demo@strawmb.com',
-  accountName: 'Demo User',
-  accountImageUrl: '',
-  autoEnabled: true,
-  dataChangeAutoEnabled: false,
-  intervalHours: 24,
-  lastBackupFilename: '',
-  lastBackupAt: '',
-  lastBackupStatus: 'idle',
-  lastError: '',
-})
 
 globalThis.__googleAutoConnectSimState = state
 
@@ -50,23 +39,82 @@ const server = await createServer({
 try {
   const backup = await server.ssrLoadModule('/src/ui/services/google-backup.service.js')
 
-  console.log('--- Simulate: autoConnectGoogleBackup with interactive fallback ---')
+  console.log('--- Simulate: autoConnectGoogleBackup interactive recovery cases ---')
+
+  const restoredConnectedState = await runScenario(
+    backup,
+    'reconnect remembered connected account',
+    buildStoredState({
+      connected: true,
+      accountEmail: 'demo@strawmb.com',
+      accountName: 'Demo User',
+      autoEnabled: true,
+    }),
+  )
+  assert.equal(restoredConnectedState.connected, true)
+  assert.equal(restoredConnectedState.accountEmail, 'demo@strawmb.com')
+  assert.equal(state.interactiveLogins.length, 1)
+  assert.equal(state.interactiveLogins[0]?.preferredEmail, 'demo@strawmb.com')
+
+  const restoredRememberedState = await runScenario(
+    backup,
+    'reconnect remembered account even when state was disconnected',
+    buildStoredState({
+      connected: false,
+      accountEmail: 'demo@strawmb.com',
+      accountName: 'Demo User',
+      autoEnabled: true,
+    }),
+  )
+  assert.equal(restoredRememberedState.connected, true)
+  assert.equal(restoredRememberedState.accountEmail, 'demo@strawmb.com')
+  assert.equal(state.interactiveLogins.length, 1)
+  assert.equal(state.interactiveLogins[0]?.preferredEmail, 'demo@strawmb.com')
+
+  console.log('All auto-connect simulations passed.')
+} finally {
+  await server.close()
+}
+
+async function runScenario(backup, label, storedState) {
+  resetScenario(storedState)
   const restoredState = await backup.autoConnectGoogleBackup(ledgerId, { allowInteractive: true })
-  console.log({
+  console.log(label, {
     connected: restoredState.connected,
     accountEmail: restoredState.accountEmail,
     accountName: restoredState.accountName,
     lastError: restoredState.lastError,
-  })
-
-  console.log('--- Trace summary ---')
-  console.log({
     silentTokenAttempts: state.silentTokenAttempts,
     interactiveLoginCount: state.interactiveLogins.length,
     interactivePreferredEmail: state.interactiveLogins[0]?.preferredEmail ?? '',
   })
-} finally {
-  await server.close()
+  return restoredState
+}
+
+function resetScenario(storedState) {
+  state.settings.clear()
+  state.settings.set(`${ledgerId}::${GOOGLE_BACKUP_KEY}`, storedState)
+  state.silentTokenAttempts.length = 0
+  state.interactiveLogins.length = 0
+  state.cachedProfile = {}
+  state.hasCachedSession = false
+}
+
+function buildStoredState(overrides = {}) {
+  return {
+    connected: false,
+    accountEmail: '',
+    accountName: '',
+    accountImageUrl: '',
+    autoEnabled: false,
+    dataChangeAutoEnabled: false,
+    intervalHours: 24,
+    lastBackupFilename: '',
+    lastBackupAt: '',
+    lastBackupStatus: 'idle',
+    lastError: '',
+    ...overrides,
+  }
 }
 
 function createMockPlugin() {
@@ -107,7 +155,6 @@ function createMockPlugin() {
       if (id === authServiceId || id.endsWith('/src/services/google/auth.js')) {
         return `
           const state = globalThis.__googleAutoConnectSimState;
-          let cachedProfile = {};
           export async function getAccessToken(options = {}) {
             state.silentTokenAttempts.push({
               interactive: options?.interactive !== false,
@@ -121,24 +168,25 @@ function createMockPlugin() {
             return 'interactive-access-token';
           }
           export function getCachedGoogleProfile() {
-            return cachedProfile;
+            return state.cachedProfile;
           }
           export async function googleSignIn(options = {}) {
             state.interactiveLogins.push({
               preferredEmail: String(options?.preferredEmail ?? ''),
             });
-            cachedProfile = {
+            state.cachedProfile = {
               email: 'demo@strawmb.com',
               name: 'Demo User',
               imageUrl: 'https://img.local/demo.png',
             };
+            state.hasCachedSession = true;
             return {
               accessToken: 'interactive-access-token',
-              profile: cachedProfile,
+              profile: state.cachedProfile,
             };
           }
           export function hasCachedGoogleAuthSession() {
-            return true;
+            return Boolean(state.hasCachedSession);
           }
           export async function reauth() {
             return 'interactive-access-token';
