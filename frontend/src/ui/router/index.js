@@ -106,6 +106,12 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
+      path: '/settings/account',
+      name: 'settings-account',
+      component: () => import('@/ui/views/settings/SettingsAccountPage.vue'),
+      meta: { tab: 'settings', allowWithoutSetup: true },
+    },
+    {
       path: '/settings/data-management',
       name: 'settings-data-management',
       component: () => import('@/ui/views/settings/SettingsDataManagementPage.vue'),

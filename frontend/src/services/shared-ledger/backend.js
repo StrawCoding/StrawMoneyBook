@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core'
 const DEV_DEFAULT_SHARED_LEDGER_API_BASE = import.meta.env.DEV ? 'http://127.0.0.1:8787' : ''
 const SHARED_LEDGER_API_BASE = String(import.meta.env.VITE_SHARED_LEDGER_API_BASE_URL ?? DEV_DEFAULT_SHARED_LEDGER_API_BASE).trim()
 const SESSION_STORAGE_KEY = 'straw.shared_ledger_session'
+const sessionListeners = new Set()
 
 function buildApiUrl(path) {
   const normalizedPath = String(path ?? '').trim()
@@ -44,15 +45,31 @@ function writeSession(session) {
   if (typeof localStorage === 'undefined') return null
   if (!session?.token || !session?.user) {
     localStorage.removeItem(SESSION_STORAGE_KEY)
+    notifySessionListeners(null)
     return null
   }
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
+  notifySessionListeners(session)
   return session
 }
 
 function clearSession() {
   if (typeof localStorage === 'undefined') return
   localStorage.removeItem(SESSION_STORAGE_KEY)
+  notifySessionListeners(null)
+}
+
+function notifySessionListeners(session) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('shared-ledger:session-changed'))
+  }
+  for (const listener of sessionListeners) {
+    try {
+      listener(session)
+    } catch {
+      // Ignore listener errors to avoid breaking auth flow.
+    }
+  }
 }
 
 async function requestJson(path, { method = 'GET', body, auth = true } = {}) {
@@ -115,6 +132,15 @@ function persistAuthResponse(data) {
   })
 }
 
+function updateSessionUser(user) {
+  const session = readSession()
+  if (!session?.token || !user) return null
+  return writeSession({
+    token: session.token,
+    user,
+  })
+}
+
 export function isSharedLedgerApiConfigured() {
   return !shouldRequireExplicitApiBase()
 }
@@ -129,6 +155,25 @@ export function getSharedLedgerSession() {
 
 export function isSharedLedgerAuthenticated() {
   return Boolean(readSession()?.token)
+}
+
+export function subscribeSharedLedgerSession(listener, { emitCurrent = true } = {}) {
+  if (typeof listener !== 'function') {
+    return () => {}
+  }
+
+  sessionListeners.add(listener)
+  if (emitCurrent) {
+    try {
+      listener(readSession())
+    } catch {
+      // Ignore listener errors.
+    }
+  }
+
+  return () => {
+    sessionListeners.delete(listener)
+  }
 }
 
 export async function registerSharedLedgerAccount(payload = {}) {
@@ -153,10 +198,7 @@ export async function refreshSharedLedgerSession() {
   const session = readSession()
   if (!session?.token) return null
   const data = await requestJson('/api/auth/me')
-  return writeSession({
-    token: session.token,
-    user: data.user,
-  })
+  return updateSessionUser(data.user)
 }
 
 export async function logoutSharedLedgerAccount() {
@@ -174,8 +216,7 @@ export async function logoutSharedLedgerAccount() {
 }
 
 export async function listSharedLedgers() {
-  const data = await requestJson('/api/shared-ledgers')
-  return Array.isArray(data?.items) ? data.items : []
+  return requestJson('/api/shared-ledgers')
 }
 
 export async function createSharedLedger(payload = {}) {
@@ -205,4 +246,49 @@ export async function pushSharedLedgerSnapshot(sharedLedgerId, payload = {}) {
     method: 'POST',
     body: payload,
   })
+}
+
+export async function updateSharedLedgerProfile(payload = {}) {
+  const data = await requestJson('/api/auth/profile', {
+    method: 'POST',
+    body: payload,
+  })
+  updateSessionUser(data.user)
+  return data
+}
+
+export async function listPendingSharedLedgerInvitations() {
+  return requestJson('/api/shared-ledgers/invitations/pending')
+}
+
+export async function createSharedLedgerEmailInvitation(sharedLedgerId, email) {
+  const normalizedId = String(sharedLedgerId ?? '').trim()
+  if (!normalizedId) throw new Error('缺少共同帳本 ID')
+  return requestJson(`/api/shared-ledgers/${normalizedId}/invitations`, {
+    method: 'POST',
+    body: { email },
+  })
+}
+
+export async function acceptSharedLedgerInvitation(invitationId) {
+  const normalizedId = String(invitationId ?? '').trim()
+  if (!normalizedId) throw new Error('缺少共同帳本邀請 ID')
+  return requestJson(`/api/shared-ledgers/invitations/${normalizedId}`, {
+    method: 'POST',
+  })
+}
+
+export async function getReferralSummary() {
+  const data = await requestJson('/api/referrals/me')
+  updateSessionUser(data.user)
+  return data
+}
+
+export async function redeemReferralCode(code) {
+  const data = await requestJson('/api/referrals/redeem', {
+    method: 'POST',
+    body: { code },
+  })
+  updateSessionUser(data.user)
+  return data
 }

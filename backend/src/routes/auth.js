@@ -2,47 +2,43 @@ import { requireAuthenticatedUser } from '../collab/auth-session.js'
 import { methodGuard, normalizePath, normalizeText, parseBody, sendJson } from '../collab/http.js'
 import {
   createId,
-  findUserByAccount,
+  createUniqueReferralCode,
+  findUserByEmail,
   hashPassword,
   issueAccessToken,
-  normalizeAccount,
+  normalizeAvatarUrl,
   normalizeDisplayName,
   nowIso,
   publicUser,
   readStore,
   updateStore,
+  validateEmail,
   validatePassword,
   verifyPassword,
 } from '../collab/store.js'
 
-function validateAccount(account) {
-  const normalized = normalizeAccount(account)
-  if (!normalized) {
-    throw new Error('請輸入帳號')
-  }
-  if (!/^[a-z0-9._-]{3,32}$/i.test(normalized)) {
-    throw new Error('帳號僅限 3-32 碼英數、點、底線或連字號')
-  }
-  return normalized
-}
-
 async function handleRegister(req, res) {
   const body = parseBody(req)
-  const account = validateAccount(body.account)
+  const email = validateEmail(body.email ?? body.account)
   const password = validatePassword(body.password)
-  const displayName = normalizeDisplayName(body.displayName, account)
+  const displayName = normalizeDisplayName(body.displayName, email)
+  const avatarUrl = normalizeAvatarUrl(body.avatarUrl)
 
   const createdUser = await updateStore(async (data) => {
-    if (findUserByAccount(data, account)) {
-      throw new Error('此帳號已被註冊')
+    if (findUserByEmail(data, email)) {
+      throw new Error('此 Email 已被註冊')
     }
 
     const passwordRecord = hashPassword(password)
     const now = nowIso()
     const user = {
       id: createId('user'),
-      account,
+      email,
+      account: email,
       display_name: displayName,
+      avatar_url: avatarUrl,
+      referral_code: createUniqueReferralCode(data),
+      membership_grants: [],
       password_hash: passwordRecord.hash,
       password_salt: passwordRecord.salt,
       created_at: now,
@@ -60,18 +56,18 @@ async function handleRegister(req, res) {
 
 async function handleLogin(req, res) {
   const body = parseBody(req)
-  const account = validateAccount(body.account)
+  const email = validateEmail(body.email ?? body.account)
   const password = normalizeText(body.password)
   if (!password) {
     throw new Error('請輸入密碼')
   }
 
   const data = await readStore()
-  const user = findUserByAccount(data, account)
+  const user = findUserByEmail(data, email)
   if (!user || !verifyPassword(user, password)) {
     sendJson(res, 401, {
       error: 'invalid_credentials',
-      message: '帳號或密碼錯誤',
+      message: 'Email 或密碼錯誤',
     })
     return
   }
@@ -86,6 +82,31 @@ async function handleMe(req, res) {
   const user = await requireAuthenticatedUser(req, res, sendJson)
   if (!user) return
   sendJson(res, 200, { user: publicUser(user) })
+}
+
+async function handleProfileUpdate(req, res) {
+  const user = await requireAuthenticatedUser(req, res, sendJson)
+  if (!user) return
+
+  const body = parseBody(req)
+  const displayName = normalizeDisplayName(body.displayName, user.display_name || user.email)
+  const avatarUrl = normalizeAvatarUrl(body.avatarUrl)
+
+  const updatedUserId = await updateStore(async (data) => {
+    const targetUser = data.users.find((item) => String(item.id) === String(user.id))
+    if (!targetUser) {
+      throw new Error('找不到使用者')
+    }
+
+    targetUser.display_name = displayName
+    targetUser.avatar_url = avatarUrl
+    targetUser.updated_at = nowIso()
+    return targetUser.id
+  })
+
+  const data = await readStore()
+  const updatedUser = data.users.find((item) => String(item.id) === String(updatedUserId))
+  sendJson(res, 200, { user: publicUser(updatedUser) })
 }
 
 export default async function authHandler(req, res) {
@@ -111,6 +132,11 @@ export default async function authHandler(req, res) {
 
     if (req.method === 'GET' && pathname === '/me') {
       await handleMe(req, res)
+      return
+    }
+
+    if (req.method === 'POST' && pathname === '/profile') {
+      await handleProfileUpdate(req, res)
       return
     }
 

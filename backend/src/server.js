@@ -1,5 +1,6 @@
 import { createServer } from 'node:http'
 import authHandler from './routes/auth.js'
+import referralsHandler from './routes/referrals.js'
 import sharedLedgersHandler from './routes/shared-ledgers.js'
 
 const HOST = String(process.env.HOST ?? '0.0.0.0').trim() || '0.0.0.0'
@@ -56,6 +57,11 @@ const server = createServer(async (req, res) => {
 
     if (pathname.startsWith('/api/shared-ledgers')) {
       await sharedLedgersHandler(req, response)
+      return
+    }
+
+    if (pathname.startsWith('/api/referrals')) {
+      await referralsHandler(req, response)
       return
     }
 

@@ -7,7 +7,7 @@
           <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
         </header>
         <p class="muted intro">
-          {{ t('settings_shared_ledgers.desc', '登入後可把本機帳本同步成共同帳本，或使用邀請碼加入其他人的帳本。') }}
+          {{ t('settings_shared_ledgers.desc', '登入後可建立共同帳本、用 Email 邀請好友加入，並在這裡接受收到的邀請。') }}
         </p>
         <p v-if="apiUnavailable" class="notice">
           {{ apiUnavailableMessage }}
@@ -15,85 +15,88 @@
       </article>
 
       <article v-if="!sessionUser" class="card panel">
-        <header class="section-head">
-          <h3>{{ authMode === 'login' ? t('settings_shared_ledgers.login', '登入') : t('settings_shared_ledgers.register', '註冊') }}</h3>
-          <div class="tab-row">
-            <button type="button" class="tab-btn" :class="{ active: authMode === 'login' }" @click="authMode = 'login'">
-              {{ t('settings_shared_ledgers.login', '登入') }}
-            </button>
-            <button type="button" class="tab-btn" :class="{ active: authMode === 'register' }" @click="authMode = 'register'">
-              {{ t('settings_shared_ledgers.register', '註冊') }}
-            </button>
+        <div class="profile-row">
+          <div class="avatar-wrap">
+            <div class="avatar-fallback">?</div>
           </div>
-        </header>
-
-        <div class="form-grid">
-          <label class="field">
-            {{ t('settings_shared_ledgers.account', '帳號') }}
-            <input
-              v-model.trim="authForm.account"
-              class="input"
-              type="text"
-              maxlength="32"
-              autocomplete="username"
-              :placeholder="t('settings_shared_ledgers.account_placeholder', '例如：straw_user')"
-              :disabled="authSubmitting || apiUnavailable"
-            />
-          </label>
-
-          <label v-if="authMode === 'register'" class="field">
-            {{ t('settings_shared_ledgers.display_name', '顯示名稱') }}
-            <input
-              v-model.trim="authForm.displayName"
-              class="input"
-              type="text"
-              maxlength="32"
-              autocomplete="nickname"
-              :placeholder="t('settings_shared_ledgers.display_name_placeholder', '例如：小明')"
-              :disabled="authSubmitting || apiUnavailable"
-            />
-          </label>
-
-          <label class="field">
-            {{ t('settings_shared_ledgers.password', '密碼') }}
-            <input
-              v-model="authForm.password"
-              class="input"
-              type="password"
-              maxlength="64"
-              autocomplete="current-password"
-              :placeholder="t('settings_shared_ledgers.password_placeholder', '至少 8 碼')"
-              :disabled="authSubmitting || apiUnavailable"
-              @keyup.enter="submitAuth"
-            />
-          </label>
+          <div class="profile-meta">
+            <strong>{{ t('settings_shared_ledgers.login_required', '尚未登入帳號') }}</strong>
+            <p class="muted compact">
+              {{ t('settings_shared_ledgers.login_required_desc', '登入後才能建立共同帳本、邀請好友，以及接受後端收到的共享帳本邀請。') }}
+            </p>
+          </div>
         </div>
-
-        <button class="btn primary wide-btn" :disabled="authSubmitting || apiUnavailable || !canSubmitAuth" @click="submitAuth">
-          {{
-            authSubmitting
-              ? t('settings_shared_ledgers.submitting', '處理中...')
-              : authMode === 'login'
-                ? t('settings_shared_ledgers.login', '登入')
-                : t('settings_shared_ledgers.register', '註冊')
-          }}
-        </button>
+        <RouterLink class="btn primary wide-btn" to="/settings/account">
+          {{ t('settings_account.login_register', '前往登入 / 註冊') }}
+        </RouterLink>
       </article>
 
       <template v-else>
         <article class="card panel">
           <header class="section-head">
-            <h3>{{ t('settings_shared_ledgers.account_info', '共同帳本帳號') }}</h3>
+            <h3>{{ t('settings_shared_ledgers.account_info', '目前登入帳號') }}</h3>
+            <RouterLink class="btn" to="/settings/account">
+              {{ t('settings_shared_ledgers.manage_account', '管理帳號') }}
+            </RouterLink>
           </header>
-          <div class="info-row">
-            <div>
-              <strong>{{ sessionUser.display_name || sessionUser.account }}</strong>
-              <p class="muted compact">{{ sessionUser.account }}</p>
+
+          <div class="profile-row">
+            <div class="avatar-wrap">
+              <img v-if="sessionUser.avatar_url" :src="sessionUser.avatar_url" alt="avatar" class="avatar-img" />
+              <div v-else class="avatar-fallback">{{ avatarLabel }}</div>
             </div>
-            <button class="btn" :disabled="loggingOut || apiUnavailable" @click="handleLogout">
-              {{ loggingOut ? t('settings_shared_ledgers.logging_out', '登出中...') : t('settings_shared_ledgers.logout', '登出') }}
-            </button>
+            <div class="profile-meta">
+              <strong>{{ accountName }}</strong>
+              <p class="muted compact">{{ sessionUser.email || sessionUser.account }}</p>
+              <p class="muted compact">
+                {{ t('settings_shared_ledgers.account_hint', '共享帳本邀請會依照登入 Email 派送到後端待辦清單。') }}
+              </p>
+            </div>
           </div>
+        </article>
+
+        <article class="card panel">
+          <header class="section-head">
+            <h3>{{ t('settings_shared_ledgers.pending_invites', '收到的共享帳本邀請') }}</h3>
+            <button class="btn" :disabled="remoteLoading || apiUnavailable" @click="loadRemoteLedgers">
+              {{ remoteLoading ? t('settings_shared_ledgers.loading', '載入中...') : t('settings_shared_ledgers.refresh', '重新整理') }}
+            </button>
+          </header>
+
+          <ul v-if="pendingInvitations.length" class="remote-list">
+            <li v-for="item in pendingInvitations" :key="item.id" class="remote-item">
+              <div class="remote-main">
+                <div class="stack internal-stack">
+                  <strong>{{ item.shared_ledger_name }}</strong>
+                  <p class="muted compact">
+                    {{
+                      t(
+                        'settings_shared_ledgers.pending_invite_meta',
+                        { name: item.invited_by_display_name || '-', time: formatDateTime(item.created_at) },
+                        '邀請人：{name} ・ {time}',
+                      )
+                    }}
+                  </p>
+                  <p class="muted compact">
+                    {{ t('settings_shared_ledgers.pending_invite_email', '邀請 Email') }}：{{ item.email }}
+                  </p>
+                </div>
+                <div class="remote-actions">
+                  <button class="btn primary" :disabled="invitationBusyId === item.id || apiUnavailable" @click="acceptInvitation(item)">
+                    {{
+                      invitationBusyId === item.id
+                        ? t('settings_shared_ledgers.accepting', '接受中...')
+                        : t('settings_shared_ledgers.accept_and_download', '接受並下載')
+                    }}
+                  </button>
+                </div>
+              </div>
+            </li>
+          </ul>
+
+          <p v-else class="muted compact">
+            {{ t('settings_shared_ledgers.pending_invites_empty', '目前沒有待接受的共享帳本邀請。') }}
+          </p>
         </article>
 
         <article class="card panel">
@@ -110,8 +113,20 @@
             <template v-if="activeLedgerMeta?.shared_ledger_id">
               <div class="meta-grid">
                 <div>
-                  <span class="meta-label">{{ t('settings_shared_ledgers.invite_code', '邀請碼') }}</span>
-                  <strong>{{ activeLedgerMeta.invite_code || '-' }}</strong>
+                  <span class="meta-label">{{ t('settings_shared_ledgers.shared_name', '共同帳本') }}</span>
+                  <strong>{{ currentRemoteLedger?.name || activeLedgerMeta.remote_name || '-' }}</strong>
+                </div>
+                <div>
+                  <span class="meta-label">{{ t('settings_shared_ledgers.role', '你的角色') }}</span>
+                  <strong>{{ currentRemoteLedger?.role || activeLedgerMeta.role || '-' }}</strong>
+                </div>
+                <div>
+                  <span class="meta-label">{{ t('settings_shared_ledgers.member_count', '成員數') }}</span>
+                  <strong>{{ currentRemoteLedger?.member_count ?? 0 }}</strong>
+                </div>
+                <div>
+                  <span class="meta-label">{{ t('settings_shared_ledgers.pending_invites_count', '待接受邀請') }}</span>
+                  <strong>{{ currentRemoteLedger?.pending_invitation_count ?? 0 }}</strong>
                 </div>
                 <div>
                   <span class="meta-label">{{ t('settings_shared_ledgers.remote_version', '遠端版本') }}</span>
@@ -127,6 +142,28 @@
                 <input :checked="activeLedgerMeta.auto_sync_enabled !== false" type="checkbox" @change="toggleAutoSync" />
                 <span>{{ t('settings_shared_ledgers.auto_sync', '資料變更後自動同步') }}</span>
               </label>
+
+              <div class="invite-box">
+                <label class="field">
+                  {{ t('settings_shared_ledgers.invite_email', '邀請好友 Email') }}
+                  <input
+                    v-model.trim="inviteEmailInput"
+                    class="input"
+                    type="email"
+                    autocomplete="email"
+                    :placeholder="t('settings_shared_ledgers.invite_email_placeholder', 'friend@example.com')"
+                    :disabled="inviteSubmitting || ledgerActionBusy || apiUnavailable"
+                    @keyup.enter="submitInviteByEmail"
+                  />
+                </label>
+                <button class="btn primary" :disabled="inviteSubmitting || ledgerActionBusy || apiUnavailable || !inviteEmailInput" @click="submitInviteByEmail">
+                  {{ inviteSubmitting ? t('settings_shared_ledgers.inviting', '邀請中...') : t('settings_shared_ledgers.send_invite', '送出邀請') }}
+                </button>
+              </div>
+
+              <p class="muted compact">
+                {{ t('settings_shared_ledgers.invite_email_hint', '系統不會寄出 Email，邀請會記錄在後端，對方用相同 Email 登入後即可在上方看到。') }}
+              </p>
 
               <div class="action-row">
                 <button class="btn primary" :disabled="ledgerActionBusy || apiUnavailable" @click="pushActiveLedger">
@@ -157,28 +194,8 @@
           </div>
 
           <p v-else class="muted compact">
-            {{ t('settings_shared_ledgers.no_active_ledger', '目前沒有本機帳本，可先用邀請碼加入共同帳本。') }}
+            {{ t('settings_shared_ledgers.no_active_ledger', '目前沒有本機帳本，可先建立帳本，或先接受共享帳本邀請下載到本機。') }}
           </p>
-        </article>
-
-        <article class="card panel">
-          <header class="section-head">
-            <h3>{{ t('settings_shared_ledgers.join_title', '加入共同帳本') }}</h3>
-          </header>
-          <div class="join-row">
-            <input
-              v-model.trim="inviteCodeInput"
-              class="input"
-              type="text"
-              maxlength="16"
-              :placeholder="t('settings_shared_ledgers.invite_code_placeholder', '輸入邀請碼')"
-              :disabled="joiningLedger || apiUnavailable"
-              @keyup.enter="joinByInviteCode"
-            />
-            <button class="btn primary" :disabled="joiningLedger || apiUnavailable || !inviteCodeInput" @click="joinByInviteCode">
-              {{ joiningLedger ? t('settings_shared_ledgers.joining', '加入中...') : t('settings_shared_ledgers.join', '加入') }}
-            </button>
-          </div>
         </article>
 
         <article class="card panel">
@@ -198,16 +215,19 @@
                     {{ t('settings_shared_ledgers.remote_meta', { role: item.role || '-', count: item.member_count || 0 }, '{role} ・ {count} 位成員') }}
                   </p>
                   <p class="muted compact">
-                    {{ t('settings_shared_ledgers.invite_code', '邀請碼') }}：{{ item.invite_code || '-' }}
+                    {{
+                      t(
+                        'settings_shared_ledgers.remote_owner_meta',
+                        { owner: item.owner_display_name || '-', time: formatDateTime(item.updated_at) },
+                        '建立者：{owner} ・ 最近更新：{time}',
+                      )
+                    }}
                   </p>
                   <p v-if="bindingMap[item.id]" class="muted compact">
                     {{ t('settings_shared_ledgers.local_binding', { name: bindingMap[item.id].ledgerName }, '已綁定本機帳本：{name}') }}
                   </p>
                 </div>
                 <div class="remote-actions">
-                  <button class="btn" :disabled="remoteItemBusyId === item.id || apiUnavailable" @click="copyInviteCode(item.invite_code)">
-                    {{ t('settings_shared_ledgers.copy_code', '複製邀請碼') }}
-                  </button>
                   <button
                     v-if="bindingMap[item.id]"
                     class="btn"
@@ -240,23 +260,22 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import {
   getSharedLedgerApiUnavailableMessage,
+  getSharedLedgerSession,
   isSharedLedgerApiConfigured,
-  loginSharedLedgerAccount,
-  logoutSharedLedgerAccount,
   refreshSharedLedgerSession,
-  registerSharedLedgerAccount,
+  subscribeSharedLedgerSession,
 } from '@/services/shared-ledger/backend'
 import {
-  getSharedLedgerSessionUser,
+  acceptSharedLedgerInvitationToLocal,
   importRemoteSharedLedgerToLocal,
-  joinSharedLedgerByInviteCode,
+  inviteEmailToSharedLedger,
   listLocalSharedLedgerBindings,
   listRemoteSharedLedgers,
   publishLedgerAsShared,
@@ -272,30 +291,29 @@ const { t } = useI18n()
 
 const apiUnavailable = computed(() => !isSharedLedgerApiConfigured())
 const apiUnavailableMessage = computed(() => getSharedLedgerApiUnavailableMessage())
-const authMode = ref('login')
-const authSubmitting = ref(false)
-const loggingOut = ref(false)
-const sessionUser = ref(getSharedLedgerSessionUser())
-const authForm = ref({
-  account: '',
-  displayName: '',
-  password: '',
-})
+const sessionUser = ref(getSharedLedgerSession()?.user ?? null)
 const remoteLoading = ref(false)
 const remoteLedgers = ref([])
+const pendingInvitations = ref([])
 const bindingMap = ref({})
 const activeLedgerMeta = ref(null)
 const sharedLedgerNameInput = ref('')
 const ledgerActionBusy = ref('')
-const inviteCodeInput = ref('')
-const joiningLedger = ref(false)
 const remoteItemBusyId = ref('')
+const invitationBusyId = ref('')
+const inviteEmailInput = ref('')
+const inviteSubmitting = ref(false)
 
 const activeLedger = computed(() => ledgerStore.activeLedger)
-const canSubmitAuth = computed(() => {
-  if (!authForm.value.account || !authForm.value.password) return false
-  if (authMode.value === 'register' && !authForm.value.displayName) return false
-  return true
+const accountName = computed(() => String(sessionUser.value?.display_name || sessionUser.value?.email || sessionUser.value?.account || '').trim())
+const avatarLabel = computed(() => {
+  const base = accountName.value || '?'
+  return base.slice(0, 1).toUpperCase()
+})
+const currentRemoteLedger = computed(() => {
+  const sharedLedgerId = String(activeLedgerMeta.value?.shared_ledger_id ?? '').trim()
+  if (!sharedLedgerId) return null
+  return remoteLedgers.value.find((item) => String(item?.id ?? '') === sharedLedgerId) ?? null
 })
 
 function formatDateTime(value) {
@@ -317,10 +335,17 @@ async function refreshLocalBindings() {
 }
 
 async function loadRemoteLedgers() {
-  if (!sessionUser.value || apiUnavailable.value) return
+  if (!sessionUser.value || apiUnavailable.value) {
+    remoteLedgers.value = []
+    pendingInvitations.value = []
+    return
+  }
+
   remoteLoading.value = true
   try {
-    remoteLedgers.value = await listRemoteSharedLedgers()
+    const data = await listRemoteSharedLedgers()
+    remoteLedgers.value = Array.isArray(data?.items) ? data.items : []
+    pendingInvitations.value = Array.isArray(data?.pendingInvitations) ? data.pendingInvitations : []
   } catch (error) {
     uiStore.pushToast(error.message || t('settings_shared_ledgers.load_failed', '載入共同帳本失敗'), 'error')
   } finally {
@@ -332,59 +357,14 @@ async function refreshSessionAndData() {
   if (!apiUnavailable.value) {
     try {
       const session = await refreshSharedLedgerSession()
-      sessionUser.value = session?.user ?? null
+      sessionUser.value = session?.user ?? getSharedLedgerSession()?.user ?? null
     } catch {
-      sessionUser.value = null
+      sessionUser.value = getSharedLedgerSession()?.user ?? null
     }
   }
 
   await refreshLocalBindings()
-  if (sessionUser.value) {
-    await loadRemoteLedgers()
-  } else {
-    remoteLedgers.value = []
-  }
-}
-
-async function submitAuth() {
-  if (!canSubmitAuth.value || apiUnavailable.value) return
-  authSubmitting.value = true
-  try {
-    const payload = {
-      account: authForm.value.account,
-      displayName: authForm.value.displayName,
-      password: authForm.value.password,
-    }
-    const session = authMode.value === 'login'
-      ? await loginSharedLedgerAccount(payload)
-      : await registerSharedLedgerAccount(payload)
-    sessionUser.value = session.user
-    authForm.value.password = ''
-    uiStore.pushToast(
-      authMode.value === 'login'
-        ? t('settings_shared_ledgers.toast.login_done', '共同帳本登入成功')
-        : t('settings_shared_ledgers.toast.register_done', '共同帳本註冊成功'),
-    )
-    await refreshSessionAndData()
-  } catch (error) {
-    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.auth_failed', '共同帳本登入失敗'), 'error')
-  } finally {
-    authSubmitting.value = false
-  }
-}
-
-async function handleLogout() {
-  loggingOut.value = true
-  try {
-    await logoutSharedLedgerAccount()
-    sessionUser.value = null
-    remoteLedgers.value = []
-    uiStore.pushToast(t('settings_shared_ledgers.toast.logout_done', '已登出共同帳本帳號'))
-  } catch (error) {
-    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.logout_failed', '登出失敗'), 'error')
-  } finally {
-    loggingOut.value = false
-  }
+  await loadRemoteLedgers()
 }
 
 async function afterLedgerImported(ledgerId, routeHome = false) {
@@ -444,19 +424,34 @@ async function pullActiveLedger() {
   }
 }
 
-async function joinByInviteCode() {
-  if (!inviteCodeInput.value || apiUnavailable.value) return
-  joiningLedger.value = true
+async function submitInviteByEmail() {
+  if (!activeLedger.value || !inviteEmailInput.value || apiUnavailable.value) return
+  inviteSubmitting.value = true
+  try {
+    await inviteEmailToSharedLedger(activeLedger.value.id, inviteEmailInput.value)
+    inviteEmailInput.value = ''
+    await loadRemoteLedgers()
+    uiStore.pushToast(t('settings_shared_ledgers.toast.email_invite_sent', '共享帳本邀請已送出'))
+  } catch (error) {
+    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.email_invite_failed', '送出共享帳本邀請失敗'), 'error')
+  } finally {
+    inviteSubmitting.value = false
+  }
+}
+
+async function acceptInvitation(item) {
+  const invitationId = String(item?.id ?? '').trim()
+  if (!invitationId || apiUnavailable.value) return
+  invitationBusyId.value = invitationId
   try {
     const hadNoLedgers = ledgerStore.ledgers.length === 0
-    const result = await joinSharedLedgerByInviteCode(inviteCodeInput.value)
-    inviteCodeInput.value = ''
+    const result = await acceptSharedLedgerInvitationToLocal(invitationId)
     await afterLedgerImported(result.ledgerId, hadNoLedgers)
-    uiStore.pushToast(t('settings_shared_ledgers.toast.join_done', '已加入共同帳本'))
+    uiStore.pushToast(t('settings_shared_ledgers.toast.invitation_accepted', '已接受共享帳本邀請'))
   } catch (error) {
-    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.join_failed', '加入共同帳本失敗'), 'error')
+    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.invitation_failed', '接受共享帳本邀請失敗'), 'error')
   } finally {
-    joiningLedger.value = false
+    invitationBusyId.value = ''
   }
 }
 
@@ -496,17 +491,6 @@ async function toggleAutoSync(event) {
   }
 }
 
-async function copyInviteCode(inviteCode) {
-  const text = String(inviteCode ?? '').trim()
-  if (!text) return
-  try {
-    await navigator.clipboard.writeText(text)
-    uiStore.pushToast(t('settings_shared_ledgers.toast.code_copied', '邀請碼已複製'))
-  } catch {
-    uiStore.pushToast(t('settings_shared_ledgers.toast.copy_failed', '複製邀請碼失敗'), 'error')
-  }
-}
-
 watch(
   () => ledgerStore.activeLedger?.name,
   (value) => {
@@ -524,8 +508,25 @@ watch(
   },
 )
 
+let unsubscribeSession = null
+
 onMounted(() => {
+  unsubscribeSession = subscribeSharedLedgerSession((session) => {
+    sessionUser.value = session?.user ?? null
+    if (!sessionUser.value) {
+      remoteLedgers.value = []
+      pendingInvitations.value = []
+      return
+    }
+    void loadRemoteLedgers()
+  })
   void refreshSessionAndData()
+})
+
+onUnmounted(() => {
+  if (typeof unsubscribeSession === 'function') {
+    unsubscribeSession()
+  }
 })
 </script>
 
@@ -553,11 +554,10 @@ p {
 }
 
 .section-head,
-.tab-row,
 .action-row,
 .remote-actions,
-.join-row,
-.info-row {
+.info-row,
+.invite-box {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -569,37 +569,57 @@ p {
   margin-bottom: 12px;
 }
 
-.tab-btn {
-  border: 1px solid var(--line, var(--field-border));
-  background: transparent;
-  color: var(--text);
-  border-radius: 999px;
-  padding: 8px 14px;
-  font: inherit;
-}
-
-.tab-btn.active {
-  background: color-mix(in srgb, var(--primary) 18%, var(--card));
-  border-color: color-mix(in srgb, var(--primary) 50%, var(--line, var(--field-border)));
-}
-
-.form-grid,
 .stack,
 .internal-stack,
-.info-block {
+.info-block,
+.profile-meta,
+.field {
   display: grid;
   gap: 12px;
 }
 
 .field {
-  display: grid;
   gap: 6px;
   font-size: 13px;
   color: var(--muted);
+  flex: 1;
 }
 
 .wide-btn {
   width: 100%;
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.avatar-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.avatar-img,
+.avatar-fallback {
+  width: 100%;
+  height: 100%;
+}
+
+.avatar-img {
+  object-fit: cover;
+}
+
+.avatar-fallback {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 76%, #fff 24%), #1b8f6a);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
 }
 
 .meta-grid {
@@ -608,12 +628,16 @@ p {
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
+.meta-grid > div,
+.remote-item {
+  padding: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 84%, #111 16%);
+}
+
 .meta-grid > div {
   display: grid;
   gap: 4px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--card) 84%, #111 16%);
 }
 
 .meta-label {
@@ -627,18 +651,16 @@ p {
   gap: 8px;
 }
 
+.invite-box {
+  align-items: end;
+}
+
 .remote-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
   gap: 10px;
-}
-
-.remote-item {
-  padding: 12px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--card) 84%, #111 16%);
 }
 
 .remote-main {
@@ -651,11 +673,15 @@ p {
 
 @media (max-width: 640px) {
   .section-head,
-  .join-row,
-  .info-row,
-  .remote-main {
+  .remote-main,
+  .invite-box,
+  .profile-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .avatar-wrap {
+    align-self: flex-start;
   }
 }
 </style>

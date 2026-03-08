@@ -1,13 +1,19 @@
 import { requireAuthenticatedUser } from '../collab/auth-session.js'
 import { methodGuard, normalizePath, normalizeText, parseBody, sendJson } from '../collab/http.js'
 import {
+  buildSharedLedgerInvitationSummary,
   buildSharedLedgerSummary,
   createId,
   createInviteCode,
+  findPendingInvitationForEmail,
+  findUserByEmail,
   isSharedLedgerMember,
+  listPendingSharedLedgerInvitationsForUser,
   nowIso,
+  publicUser,
   readStore,
   updateStore,
+  validateEmail,
   validateSnapshot,
 } from '../collab/store.js'
 
@@ -26,6 +32,7 @@ async function handleList(req, res, user) {
   const data = await readStore()
   sendJson(res, 200, {
     items: listSharedLedgersForUser(data, user.id),
+    pending_invitations: listPendingSharedLedgerInvitationsForUser(data, user),
   })
 }
 
@@ -51,6 +58,7 @@ async function handleCreate(req, res, user) {
           joined_at: now,
         },
       ],
+      invitations: [],
       snapshot,
       version: 1,
       created_at: now,
@@ -99,6 +107,102 @@ async function handleJoin(req, res, user) {
   sendJson(res, 200, {
     item: buildSharedLedgerSummary(joined, user.id, data),
     snapshot: joined.snapshot,
+  })
+}
+
+async function handleInviteByEmail(req, res, user, sharedLedgerId) {
+  const body = parseBody(req)
+  const email = validateEmail(body.email)
+
+  const invitationId = await updateStore(async (data) => {
+    const sharedLedger = findSharedLedger(data, sharedLedgerId)
+    if (!sharedLedger || !isSharedLedgerMember(sharedLedger, user.id)) {
+      throw new Error('找不到共同帳本')
+    }
+
+    const invitedUser = findUserByEmail(data, email)
+    if (invitedUser && isSharedLedgerMember(sharedLedger, invitedUser.id)) {
+      throw new Error('對方已經在共同帳本中')
+    }
+
+    const pendingInvitation = findPendingInvitationForEmail(sharedLedger, email)
+    if (pendingInvitation) {
+      throw new Error('此 Email 已經在待邀請清單中')
+    }
+
+    const invitation = {
+      id: createId('shared_invitation'),
+      email,
+      invited_by_user_id: user.id,
+      status: 'pending',
+      created_at: nowIso(),
+      accepted_at: '',
+    }
+    sharedLedger.invitations = [...(sharedLedger.invitations ?? []), invitation]
+    sharedLedger.updated_at = nowIso()
+    sharedLedger.updated_by_user_id = user.id
+    return invitation.id
+  })
+
+  const data = await readStore()
+  const sharedLedger = findSharedLedger(data, sharedLedgerId)
+  const invitation = (sharedLedger?.invitations ?? []).find((item) => String(item.id) === String(invitationId))
+  sendJson(res, 201, {
+    invitation: buildSharedLedgerInvitationSummary(sharedLedger, invitation, data),
+  })
+}
+
+async function handlePendingInvitations(req, res, user) {
+  const data = await readStore()
+  sendJson(res, 200, {
+    items: listPendingSharedLedgerInvitationsForUser(data, user),
+    user: publicUser(user),
+  })
+}
+
+async function handleAcceptInvitation(req, res, user, invitationId) {
+  const acceptedLedgerId = await updateStore(async (data) => {
+    const currentUser = data.users.find((item) => String(item.id) === String(user.id))
+    if (!currentUser) {
+      throw new Error('找不到使用者')
+    }
+
+    for (const sharedLedger of data.shared_ledgers) {
+      const invitation = (sharedLedger.invitations ?? []).find((item) => String(item.id) === String(invitationId))
+      if (!invitation) continue
+      if (normalizeText(invitation.status || 'pending') !== 'pending') {
+        throw new Error('此邀請已失效')
+      }
+      if (String(invitation.email ?? '').trim().toLowerCase() !== String(currentUser.email ?? '').trim().toLowerCase()) {
+        throw new Error('這不是你的邀請')
+      }
+
+      if (!isSharedLedgerMember(sharedLedger, currentUser.id)) {
+        sharedLedger.members = [
+          ...(sharedLedger.members ?? []),
+          {
+            user_id: currentUser.id,
+            role: 'member',
+            joined_at: nowIso(),
+          },
+        ]
+      }
+
+      invitation.status = 'accepted'
+      invitation.accepted_at = nowIso()
+      sharedLedger.updated_at = nowIso()
+      sharedLedger.updated_by_user_id = currentUser.id
+      return sharedLedger.id
+    }
+
+    throw new Error('找不到共同帳本邀請')
+  })
+
+  const data = await readStore()
+  const sharedLedger = findSharedLedger(data, acceptedLedgerId)
+  sendJson(res, 200, {
+    item: buildSharedLedgerSummary(sharedLedger, user.id, data),
+    snapshot: sharedLedger.snapshot,
   })
 }
 
@@ -185,6 +289,16 @@ export default async function sharedLedgersHandler(req, res) {
   const segments = pathname.split('/').filter(Boolean)
 
   try {
+    if (req.method === 'GET' && segments.length === 2 && segments[0] === 'invitations' && segments[1] === 'pending') {
+      await handlePendingInvitations(req, res, user)
+      return
+    }
+
+    if (req.method === 'POST' && segments.length === 2 && segments[0] === 'invitations' && segments[1]) {
+      await handleAcceptInvitation(req, res, user, segments[1])
+      return
+    }
+
     if (req.method === 'GET' && segments.length === 0) {
       await handleList(req, res, user)
       return
@@ -197,6 +311,11 @@ export default async function sharedLedgersHandler(req, res) {
 
     if (req.method === 'POST' && segments.length === 1 && segments[0] === 'join') {
       await handleJoin(req, res, user)
+      return
+    }
+
+    if (req.method === 'POST' && segments.length === 2 && segments[1] === 'invitations') {
+      await handleInviteByEmail(req, res, user, segments[0])
       return
     }
 

@@ -5,11 +5,13 @@ import { importLedgerJsonAsNewLedger } from '@/core/services/import.service'
 import { nowIso } from '@/core/utils/id'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import {
+  acceptSharedLedgerInvitation,
   createSharedLedger,
+  createSharedLedgerEmailInvitation,
   getSharedLedgerSession,
   getSharedLedgerSnapshot,
   isSharedLedgerAuthenticated,
-  joinSharedLedger,
+  listPendingSharedLedgerInvitations,
   listSharedLedgers,
   pushSharedLedgerSnapshot,
 } from '@/services/shared-ledger/backend'
@@ -222,8 +224,8 @@ export async function importRemoteSharedLedgerToLocal(sharedLedgerId) {
   return replaceLocalLedgerWithSnapshot(result.snapshot, result.item, existingMeta)
 }
 
-export async function joinSharedLedgerByInviteCode(inviteCode) {
-  const result = await joinSharedLedger(inviteCode)
+export async function acceptSharedLedgerInvitationToLocal(invitationId) {
+  const result = await acceptSharedLedgerInvitation(invitationId)
   const existingMeta = await getSharedLedgerMeta(String(result?.item?.ledger_id ?? ''))
   const imported = await replaceLocalLedgerWithSnapshot(result.snapshot, result.item, existingMeta)
   return {
@@ -233,7 +235,31 @@ export async function joinSharedLedgerByInviteCode(inviteCode) {
 }
 
 export async function listRemoteSharedLedgers() {
-  return listSharedLedgers()
+  const data = await listSharedLedgers()
+  return {
+    items: Array.isArray(data?.items) ? data.items : [],
+    pendingInvitations: Array.isArray(data?.pending_invitations) ? data.pending_invitations : [],
+  }
+}
+
+export async function listRemotePendingSharedLedgerInvitations() {
+  const data = await listPendingSharedLedgersSafe()
+  return data.items
+}
+
+async function listPendingSharedLedgersSafe() {
+  const data = await listPendingSharedLedgerInvitations()
+  return {
+    items: Array.isArray(data?.items) ? data.items : [],
+  }
+}
+
+export async function inviteEmailToSharedLedger(ledgerId, email) {
+  const meta = await getSharedLedgerMeta(ledgerId)
+  if (!meta?.shared_ledger_id) {
+    throw new Error('此帳本尚未綁定共同帳本')
+  }
+  return createSharedLedgerEmailInvitation(meta.shared_ledger_id, email)
 }
 
 export function getSharedLedgerSessionUser() {

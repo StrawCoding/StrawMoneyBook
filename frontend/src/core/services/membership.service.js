@@ -1,4 +1,5 @@
 import appPackage from '../../../package.json'
+import { getSharedLedgerSession } from '@/services/shared-ledger/backend'
 import {
   isSupported as isGooglePlayBillingSupported,
   invalidateBillingCache as invalidateGooglePlayBillingCache,
@@ -540,15 +541,59 @@ function getTierAndPlanFromState(state) {
   }
 }
 
+function getSharedLedgerMembershipBonus(nowMs = Date.now()) {
+  const user = getSharedLedgerSession()?.user
+  if (!user || typeof user !== 'object') {
+    return {
+      active: false,
+      expiresAt: '',
+      source: '',
+    }
+  }
+
+  const expiresAt = String(user.membership_bonus_expires_at ?? '').trim()
+  if (!expiresAt) {
+    return {
+      active: false,
+      expiresAt: '',
+      source: '',
+    }
+  }
+
+  const expiresMs = Date.parse(expiresAt)
+  if (!Number.isFinite(expiresMs) || expiresMs <= nowMs) {
+    return {
+      active: false,
+      expiresAt: '',
+      source: '',
+    }
+  }
+
+  return {
+    active: true,
+    expiresAt: new Date(expiresMs).toISOString(),
+    source: String(user.membership_source ?? '').trim() || 'shared_ledger_bonus',
+  }
+}
+
 function toMembershipSnapshot(state, reason = '') {
   const normalized = normalizeEntitlementState(state)
   const tierResult = getTierAndPlanFromState(normalized)
+  const sharedLedgerBonus = getSharedLedgerMembershipBonus()
+  const active = tierResult.tier === MEMBERSHIP_MEMBER || sharedLedgerBonus.active
+  const tier = active ? MEMBERSHIP_MEMBER : MEMBERSHIP_FREE
+  const plan = tierResult.tier === MEMBERSHIP_MEMBER ? tierResult.plan : ''
+  const source = tierResult.tier === MEMBERSHIP_MEMBER
+    ? tierResult.source
+    : sharedLedgerBonus.active
+      ? sharedLedgerBonus.source
+      : tierResult.source
 
   return {
-    tier: tierResult.tier,
-    plan: tierResult.plan,
-    active: tierResult.tier === MEMBERSHIP_MEMBER,
-    source: tierResult.source,
+    tier,
+    plan,
+    active,
+    source,
     reason: String(reason ?? ''),
     lifetimeOwned: normalized.lifetimeOwned,
     monthlyLastVerifiedAt: normalized.monthlyLastVerifiedAt,
@@ -556,6 +601,9 @@ function toMembershipSnapshot(state, reason = '') {
     lastSyncAt: normalized.lastSyncAt,
     lastSyncStatus: normalized.lastSyncStatus,
     lastKnownPlan: normalized.lastKnownPlan,
+    sharedLedgerBonusActive: sharedLedgerBonus.active,
+    sharedLedgerBonusExpiresAt: sharedLedgerBonus.expiresAt,
+    sharedLedgerBonusSource: sharedLedgerBonus.source,
   }
 }
 
@@ -834,6 +882,12 @@ function triggerBackgroundMembershipSync(reason = 'background_read') {
     .finally(() => {
       membershipBackgroundSyncInFlight = null
     })
+}
+
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('shared-ledger:session-changed', () => {
+    notifyMembershipSnapshot(toMembershipSnapshot(getEntitlementState(), 'shared_ledger_session_changed'))
+  })
 }
 
 export function getMembershipTier() {
