@@ -8,6 +8,7 @@ import {
   acceptSharedLedgerInvitation,
   createSharedLedger,
   createSharedLedgerEmailInvitation,
+  getSharedLedgerDetail,
   getSharedLedgerSession,
   getSharedLedgerSnapshot,
   isSharedLedgerAuthenticated,
@@ -17,15 +18,80 @@ import {
 } from '@/services/shared-ledger/backend'
 
 const SHARED_LEDGER_META_KEY = 'shared_ledger_meta'
-const AUTO_SYNC_DELAY_MS = 5000
+const DIRTY_QUEUE_STORAGE_KEY = 'straw.shared_ledger_dirty_queue'
+const AUTO_PUSH_DEBOUNCE_MS = 800
+const REMOTE_POLL_INTERVAL_MS = 1000
 const IMPORT_SYNC_MUTE_MS = 15000
 
 let autoSyncTimer = null
-let autoSyncRunning = false
+let remotePollTimer = null
+let backgroundSyncPromise = null
+let backgroundSyncReady = false
 const mutedLedgerSyncUntil = new Map()
+const syncingLedgerIds = new Set()
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value ?? null))
+}
+
+function isOnline() {
+  return typeof navigator === 'undefined' || navigator.onLine !== false
+}
+
+function readDirtyLedgerQueue() {
+  if (typeof localStorage === 'undefined') return {}
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DIRTY_QUEUE_STORAGE_KEY) || '{}')
+    if (!parsed || typeof parsed !== 'object') return {}
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .map(([ledgerId, markedAt]) => [String(ledgerId ?? '').trim(), String(markedAt ?? '').trim()])
+        .filter(([ledgerId]) => Boolean(ledgerId)),
+    )
+  } catch {
+    return {}
+  }
+}
+
+function writeDirtyLedgerQueue(queue) {
+  if (typeof localStorage === 'undefined') return
+  const nextQueue = {}
+  for (const [ledgerId, markedAt] of Object.entries(queue ?? {})) {
+    const normalizedLedgerId = String(ledgerId ?? '').trim()
+    if (!normalizedLedgerId) continue
+    nextQueue[normalizedLedgerId] = String(markedAt ?? '').trim() || nowIso()
+  }
+  if (!Object.keys(nextQueue).length) {
+    localStorage.removeItem(DIRTY_QUEUE_STORAGE_KEY)
+    return
+  }
+  localStorage.setItem(DIRTY_QUEUE_STORAGE_KEY, JSON.stringify(nextQueue))
+}
+
+function markLedgerDirty(ledgerId) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId) return
+  const queue = readDirtyLedgerQueue()
+  queue[normalizedLedgerId] = nowIso()
+  writeDirtyLedgerQueue(queue)
+}
+
+function clearLedgerDirty(ledgerId) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId) return
+  const queue = readDirtyLedgerQueue()
+  delete queue[normalizedLedgerId]
+  writeDirtyLedgerQueue(queue)
+}
+
+function hasDirtyLedger(ledgerId) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId) return false
+  return Object.prototype.hasOwnProperty.call(readDirtyLedgerQueue(), normalizedLedgerId)
+}
+
+function listDirtyLedgerIds() {
+  return Object.keys(readDirtyLedgerQueue())
 }
 
 function sanitizeSnapshotForSharedSync(snapshot) {
@@ -123,6 +189,8 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
   }
 
   muteAutoSync(ledgerId)
+  clearLedgerDirty(ledgerId)
+
   const existingLedger = await getLedger(ledgerId)
   if (existingLedger) {
     await purgeLedger(ledgerId)
@@ -166,6 +234,7 @@ export async function publishLedgerAsShared(ledgerId, options = {}) {
     last_pushed_at: now,
     auto_sync_enabled: true,
   })
+  clearLedgerDirty(normalizedLedgerId)
 
   return {
     item: result.item,
@@ -184,12 +253,27 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
 
   const ledger = await getLedger(normalizedLedgerId)
   const snapshot = sanitizeSnapshotForSharedSync(await exportLedgerJson(normalizedLedgerId))
-  const result = await pushSharedLedgerSnapshot(meta.shared_ledger_id, {
-    baseVersion: Number(meta.version ?? 0),
-    force: Boolean(options.force),
-    name: String(ledger?.name ?? ''),
-    snapshot,
-  })
+  let result = null
+
+  try {
+    result = await pushSharedLedgerSnapshot(meta.shared_ledger_id, {
+      baseVersion: Number(meta.version ?? 0),
+      force: Boolean(options.force),
+      name: String(ledger?.name ?? ''),
+      snapshot,
+    })
+  } catch (error) {
+    const shouldForceOnConflict = Boolean(options.forceOnConflict)
+    if (!shouldForceOnConflict || String(error?.code ?? '') !== 'version_conflict') {
+      throw error
+    }
+    result = await pushSharedLedgerSnapshot(meta.shared_ledger_id, {
+      baseVersion: Number(error?.currentVersion ?? meta.version ?? 0),
+      force: true,
+      name: String(ledger?.name ?? ''),
+      snapshot,
+    })
+  }
 
   const now = nowIso()
   const nextMeta = await setSharedLedgerMeta(normalizedLedgerId, result.item, {
@@ -198,6 +282,7 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
     last_pushed_at: now,
     last_pulled_at: meta.last_pulled_at ?? null,
   })
+  clearLedgerDirty(normalizedLedgerId)
 
   return {
     item: result.item,
@@ -266,14 +351,93 @@ export function getSharedLedgerSessionUser() {
   return getSharedLedgerSession()?.user ?? null
 }
 
-export function scheduleActiveSharedLedgerAutoSync(pinia, delayMs = AUTO_SYNC_DELAY_MS) {
+async function syncSingleDirtyLedger(ledgerId) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId || syncingLedgerIds.has(normalizedLedgerId) || isAutoSyncMuted(normalizedLedgerId)) {
+    return false
+  }
+
+  const meta = await getSharedLedgerMeta(normalizedLedgerId)
+  if (!meta?.shared_ledger_id || meta.auto_sync_enabled === false) {
+    clearLedgerDirty(normalizedLedgerId)
+    return false
+  }
+
+  syncingLedgerIds.add(normalizedLedgerId)
+  try {
+    await pushLocalLedgerToShared(normalizedLedgerId, { forceOnConflict: true })
+    return true
+  } finally {
+    syncingLedgerIds.delete(normalizedLedgerId)
+  }
+}
+
+async function flushDirtyLedgers(pinia) {
+  if (!isSharedLedgerAuthenticated() || !isOnline()) return
+  const ledgerStore = useLedgerStore(pinia)
+  const activeLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
+  const dirtyLedgerIds = listDirtyLedgerIds()
+    .sort((left, right) => {
+      if (left === activeLedgerId) return -1
+      if (right === activeLedgerId) return 1
+      return 0
+    })
+
+  for (const ledgerId of dirtyLedgerIds) {
+    if (!hasDirtyLedger(ledgerId)) continue
+    try {
+      await syncSingleDirtyLedger(ledgerId)
+    } catch (error) {
+      console.warn('[shared-ledger] dirty sync failed', ledgerId, error)
+    }
+  }
+}
+
+async function syncActiveLedgerLatest(pinia) {
+  if (!isSharedLedgerAuthenticated() || !isOnline()) return
+
+  const ledgerStore = useLedgerStore(pinia)
+  const activeLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
+  if (!activeLedgerId || hasDirtyLedger(activeLedgerId) || syncingLedgerIds.has(activeLedgerId) || isAutoSyncMuted(activeLedgerId)) {
+    return
+  }
+
+  const meta = await getSharedLedgerMeta(activeLedgerId)
+  if (!meta?.shared_ledger_id || meta.auto_sync_enabled === false) return
+
+  syncingLedgerIds.add(activeLedgerId)
+  try {
+    const detail = await getSharedLedgerDetail(meta.shared_ledger_id)
+    const remoteVersion = Number(detail?.item?.version ?? 0)
+    const localVersion = Number(meta.version ?? 0)
+    if (remoteVersion <= localVersion) return
+    await pullSharedLedgerToLocal(activeLedgerId)
+    await ledgerStore.reloadActiveLedger()
+  } catch (error) {
+    console.warn('[shared-ledger] remote poll failed', activeLedgerId, error)
+  } finally {
+    syncingLedgerIds.delete(activeLedgerId)
+  }
+}
+
+export function runSharedLedgerBackgroundSyncNow(pinia) {
+  backgroundSyncPromise = Promise.resolve(backgroundSyncPromise)
+    .catch(() => null)
+    .then(async () => {
+      await flushDirtyLedgers(pinia)
+      await syncActiveLedgerLatest(pinia)
+    })
+  return backgroundSyncPromise
+}
+
+export function scheduleActiveSharedLedgerAutoSync(pinia, delayMs = AUTO_PUSH_DEBOUNCE_MS) {
   if (typeof window === 'undefined') return
   if (autoSyncTimer != null) {
     window.clearTimeout(autoSyncTimer)
   }
   autoSyncTimer = window.setTimeout(async () => {
     autoSyncTimer = null
-    if (autoSyncRunning || !isSharedLedgerAuthenticated()) return
+    if (!isSharedLedgerAuthenticated()) return
 
     const ledgerStore = useLedgerStore(pinia)
     const activeLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
@@ -282,13 +446,33 @@ export function scheduleActiveSharedLedgerAutoSync(pinia, delayMs = AUTO_SYNC_DE
     const meta = await getSharedLedgerMeta(activeLedgerId)
     if (!meta?.shared_ledger_id || meta.auto_sync_enabled === false) return
 
-    autoSyncRunning = true
-    try {
-      await pushLocalLedgerToShared(activeLedgerId)
-    } catch (error) {
-      console.warn('[shared-ledger] auto sync failed', error)
-    } finally {
-      autoSyncRunning = false
+    markLedgerDirty(activeLedgerId)
+    void runSharedLedgerBackgroundSyncNow(pinia)
+  }, Math.max(200, Number(delayMs) || 0))
+}
+
+export function initSharedLedgerBackgroundSync(pinia) {
+  if (typeof window === 'undefined' || backgroundSyncReady) return
+  backgroundSyncReady = true
+
+  const trigger = () => {
+    void runSharedLedgerBackgroundSyncNow(pinia)
+  }
+
+  remotePollTimer = window.setInterval(trigger, REMOTE_POLL_INTERVAL_MS)
+  window.addEventListener('online', trigger)
+  window.addEventListener('focus', trigger)
+  window.addEventListener('shared-ledger:session-changed', trigger)
+  trigger()
+
+  return () => {
+    if (remotePollTimer != null) {
+      window.clearInterval(remotePollTimer)
+      remotePollTimer = null
     }
-  }, Math.max(800, Number(delayMs) || 0))
+    window.removeEventListener('online', trigger)
+    window.removeEventListener('focus', trigger)
+    window.removeEventListener('shared-ledger:session-changed', trigger)
+    backgroundSyncReady = false
+  }
 }

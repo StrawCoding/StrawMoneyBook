@@ -16,7 +16,11 @@
 - 報銷與請款管理（報銷入帳、請款單建立/完成/匯出）
 - 存錢罐與訂閱追蹤
 - AI 自動記帳（文字解析 + 會員次數限制）
-- 設定功能（資料管理、自動備份、匯率、自動識別、安全鎖、語言、會員）
+- 帳號系統（Email 註冊 / 登入、個人資料、登出）
+- 共同帳本（建立共同帳本、同步、下載、接受邀請）
+- 共享帳本邀請（以 Email 建立邀請，邀請資料保存在 backend）
+- 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
+- 設定功能（資料管理、自動備份、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本）
 - 銀行同步（路由與頁面已存在，設定入口目前預設隱藏）
 
 ## 2. 路由與頁面對應
@@ -51,12 +55,14 @@
 | `/savings-jars` | `src/ui/views/savings-jars/SavingsJarListPage.vue` | 存錢罐管理 |
 | `/subscriptions` | `src/ui/views/subscriptions/SubscriptionListPage.vue` | 訂閱追蹤 |
 | `/settings` | `src/ui/views/settings.vue` | 設定首頁 |
+| `/settings/account` | `src/ui/views/settings/SettingsAccountPage.vue` | 帳號登入 / 註冊、個人資料、邀請碼、登出 |
 | `/settings/data-management` | `src/ui/views/settings/SettingsDataManagementPage.vue` | 匯入/匯出/重設 |
 | `/settings/auto-backup` | `src/ui/views/settings/SettingsAutoBackupPage.vue` | Google / WebDAV 自動備份 |
 | `/settings/exchange-rate` | `src/ui/views/settings/SettingsExchangeRatePage.vue` | 匯率同步 |
 | `/settings/bank-sync` | `src/ui/views/settings/SettingsBankSyncPage.vue` | 銀行同步管理 |
 | `/settings/bank-sync/new` | `src/ui/views/settings/SettingsBankSyncCreatePage.vue` | 新增銀行連線 |
 | `/settings/ledgers` | `src/ui/views/settings/SettingsLedgerPage.vue` | 帳本管理 |
+| `/settings/shared-ledgers` | `src/ui/views/settings/SettingsSharedLedgerPage.vue` | 共同帳本、Email 邀請、接受邀請與同步 |
 | `/settings/ledgers/:id` | `src/ui/views/settings/SettingsLedgerDetailPage.vue` | 帳本明細編輯/刪除 |
 | `/settings/categories` | `src/ui/views/settings/SettingsCategoryPage.vue` | 分類管理 |
 | `/settings/categories/:id` | `src/ui/views/settings/SettingsCategoryDetailPage.vue` | 分類明細編輯/刪除 |
@@ -91,7 +97,9 @@
 
 ### 設定內導覽（`src/ui/views/settings.vue`）
 
+- 帳號卡片：`/settings/account`（顯示頭貼、名稱、帳號；未登入時導向登入 / 註冊）
 - 帳本管理：`/settings/ledgers`
+- 共同帳本：`/settings/shared-ledgers`
 - 分類管理：`/settings/categories`
 - 附加項目：`/settings/addon-templates`
 - 自動識別：`/settings/auto-fill-rules`
@@ -163,6 +171,7 @@
 | 功能 | 檔案 |
 |---|---|
 | App Shell / Router View | `src/ui/App.vue` |
+| Welcome / allowWithoutSetup 入口控制 | `src/ui/App.vue` + `src/ui/views/WelcomePage.vue` |
 | 啟動時背景 Google 靜默登入（備份用途） | `src/ui/App.vue` + `src/services/google/auth.js` |
 | 安全鎖遮罩與前景驗證 | `src/ui/App.vue` + `src/ui/services/security-lock.service.js` |
 | 底部導覽列 | `src/ui/components/layout/BottomNav.vue` |
@@ -202,7 +211,7 @@
 | `subscription-tracker.service.js` | 訂閱追蹤與期別處理 |
 | `ai-bookkeeping.service.js` | AI 記帳語意解析與建議 |
 | `ai-bookkeeping-tiny-ner.service.js` | AI 記帳輕量關鍵詞/實體抽取 |
-| `membership.service.js` | 會員等級、限制與 Google Play 狀態同步 |
+| `membership.service.js` | 會員等級、限制、Google Play 狀態同步與邀請碼會員加成判定 |
 | `google-play-billing.service.js` | Google Play 方案查詢、購買、恢復、兌換 |
 | `import.service.js` | 匯入 |
 | `export.service.js` | 匯出（CSV / Spreadsheet XML / 檔案落地） |
@@ -213,6 +222,7 @@ UI 服務目錄：`src/ui/services/`
 
 | Service | 功能 |
 |---|---|
+| `shared-ledger.service.js` | 共同帳本前端流程：建立、下載、上傳、自動同步、本機帳本綁定 |
 | `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原 |
 | `webdav-backup.service.js` | WebDAV 備份連線、自動備份、還原 |
 | `addon-template.service.js` | 附加項目模板預設值與保存 |
@@ -228,7 +238,27 @@ UI 服務目錄：`src/ui/services/`
 | `app-update.service.js` | App 版本檢查與商店連結 |
 | `i18n.service.js` | 多語系文案管理 |
 
-## 8. Repository（資料存取層）對應
+共享帳本 API 服務目錄：`src/services/shared-ledger/`
+
+| Service | 功能 |
+|---|---|
+| `backend.js` | 共同帳本 Node backend API client、登入 session、帳號資料更新、Email 邀請、邀請碼兌換 |
+
+## 8. Backend（Node.js 共同帳本 / 帳號）對應
+
+目錄：`../backend/src/`
+
+| 檔案 | 功能 |
+|---|---|
+| `server.js` | Node.js HTTP server 入口，掛載 auth / shared-ledgers / referrals API |
+| `routes/auth.js` | Email 註冊、登入、登出、`/me`、個人資料更新 |
+| `routes/shared-ledgers.js` | 共同帳本建立、查詢、快照上傳下載、Email 邀請、接受邀請 |
+| `routes/referrals.js` | 邀請碼資訊、邀請碼兌換、會員獎勵發放 |
+| `collab/store.js` | 本機 JSON store、使用者資料、共同帳本、邀請、會員加成資料 |
+| `collab/auth-session.js` | Bearer token 驗證與登入狀態檢查 |
+| `collab/http.js` | backend 路由共用的 request/response helper |
+
+## 9. Repository（資料存取層）對應
 
 目錄：`src/core/repositories/`
 
@@ -247,7 +277,7 @@ UI 服務目錄：`src/ui/services/`
 | `settings.repo.js` | 設定 |
 | `base.repo.js` | 通用 helper |
 
-## 9. 補充說明（維護建議）
+## 10. 補充說明（維護建議）
 
 - 前端頁面應優先透過對應 store 操作，不直接在 view 內寫入 DB。
 - 業務規則集中在 service 層，若調整規則，優先改 service。
@@ -258,8 +288,9 @@ UI 服務目錄：`src/ui/services/`
 - 若調整交易刪除邏輯，需同步檢查 `transaction.service.js` 的關聯刪除（退款/報銷）。
 - 若調整 App 開啟流程，需同步檢查 `App.vue`、`google/auth.js` 與備份 service 的靜默登入流程。
 - 若調整銀行同步入口，需同步檢查 `settings.vue` 的 `isBankSyncFeatureEnabled()`、銀行同步 API 可用性提示，以及 `/settings/bank-sync` 路由可達性。
+- 若調整帳號 / 共同帳本 / 邀請碼流程，需同步檢查 `SettingsAccountPage.vue`、`SettingsSharedLedgerPage.vue`、`src/services/shared-ledger/backend.js` 與 `../backend/src/routes/*.js`。
 
-## 10. 文件更新時機
+## 11. 文件更新時機
 
 建議在以下情況同步更新此文件：
 
@@ -268,8 +299,9 @@ UI 服務目錄：`src/ui/services/`
 - 變更 store/service/repository 的責任邊界
 - 新增重要共用元件（日期選擇器、統計元件、首頁卡片等）
 - 設定入口策略變更（例如：銀行同步顯示/隱藏）
+- 帳號、共同帳本、邀請碼或 backend API 流程變更
 
-## 11. 變數與函數索引（檔案層級）
+## 12. 變數與函數索引（檔案層級）
 
 - 範圍：`*.js`、`*.mjs`、`*.cjs`、`*.vue` 的 `<script>` 區塊
 - 規則：僅收錄檔案層級宣告（module scope），不含函數內部區域變數

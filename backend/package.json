@@ -6,7 +6,12 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
-    "dev": "node src/server.js",
-    "start": "node src/server.js"
+    "dev": "node --env-file-if-exists=.env src/server.js",
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "deploy:copy": "mkdir -p /mnt/data/Data/serviceApps/StrawMB && find /mnt/data/Data/serviceApps/StrawMB -mindepth 1 -maxdepth 1 ! -name .server-data -exec rm -rf {} + && rsync -a --exclude node_modules --exclude .server-data ./ /mnt/data/Data/serviceApps/StrawMB/"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "nodemailer": "^7.0.7"
   }
 }

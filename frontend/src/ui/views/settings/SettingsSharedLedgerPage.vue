@@ -35,9 +35,6 @@
         <article class="card panel">
           <header class="section-head">
             <h3>{{ t('settings_shared_ledgers.account_info', '目前登入帳號') }}</h3>
-            <RouterLink class="btn" to="/settings/account">
-              {{ t('settings_shared_ledgers.manage_account', '管理帳號') }}
-            </RouterLink>
           </header>
 
           <div class="profile-row">
@@ -111,31 +108,14 @@
             </div>
 
             <template v-if="activeLedgerMeta?.shared_ledger_id">
-              <div class="meta-grid">
-                <div>
-                  <span class="meta-label">{{ t('settings_shared_ledgers.shared_name', '共同帳本') }}</span>
-                  <strong>{{ currentRemoteLedger?.name || activeLedgerMeta.remote_name || '-' }}</strong>
-                </div>
-                <div>
-                  <span class="meta-label">{{ t('settings_shared_ledgers.role', '你的角色') }}</span>
-                  <strong>{{ currentRemoteLedger?.role || activeLedgerMeta.role || '-' }}</strong>
-                </div>
-                <div>
-                  <span class="meta-label">{{ t('settings_shared_ledgers.member_count', '成員數') }}</span>
-                  <strong>{{ currentRemoteLedger?.member_count ?? 0 }}</strong>
-                </div>
-                <div>
-                  <span class="meta-label">{{ t('settings_shared_ledgers.pending_invites_count', '待接受邀請') }}</span>
-                  <strong>{{ currentRemoteLedger?.pending_invitation_count ?? 0 }}</strong>
-                </div>
-                <div>
-                  <span class="meta-label">{{ t('settings_shared_ledgers.remote_version', '遠端版本') }}</span>
-                  <strong>{{ activeLedgerMeta.version || 0 }}</strong>
-                </div>
-                <div>
-                  <span class="meta-label">{{ t('settings_shared_ledgers.last_synced', '上次同步') }}</span>
-                  <strong>{{ formatDateTime(activeLedgerMeta.last_synced_at) }}</strong>
-                </div>
+              <div class="info-block">
+                <strong>{{ currentRemoteLedger?.name || activeLedgerMeta.remote_name || '-' }}</strong>
+                <p class="muted compact">
+                  {{ t('settings_shared_ledgers.remote_meta', { role: currentRemoteLedger?.role || activeLedgerMeta.role || '-' }, '{role}') }}
+                </p>
+                <p class="muted compact">
+                  {{ t('settings_shared_ledgers.auto_sync_hint', '已啟用背景同步：本機變更會自動上傳，並每秒檢查遠端最新資料。') }}
+                </p>
               </div>
 
               <label class="checkbox-row">
@@ -164,15 +144,6 @@
               <p class="muted compact">
                 {{ t('settings_shared_ledgers.invite_email_hint', '系統不會寄出 Email，邀請會記錄在後端，對方用相同 Email 登入後即可在上方看到。') }}
               </p>
-
-              <div class="action-row">
-                <button class="btn primary" :disabled="ledgerActionBusy || apiUnavailable" @click="pushActiveLedger">
-                  {{ ledgerActionBusy === 'push' ? t('settings_shared_ledgers.pushing', '上傳中...') : t('settings_shared_ledgers.push_now', '立即上傳') }}
-                </button>
-                <button class="btn" :disabled="ledgerActionBusy || apiUnavailable" @click="pullActiveLedger">
-                  {{ ledgerActionBusy === 'pull' ? t('settings_shared_ledgers.pulling', '下載中...') : t('settings_shared_ledgers.pull_now', '下載最新') }}
-                </button>
-              </div>
             </template>
 
             <template v-else>
@@ -279,8 +250,6 @@ import {
   listLocalSharedLedgerBindings,
   listRemoteSharedLedgers,
   publishLedgerAsShared,
-  pullSharedLedgerToLocal,
-  pushLocalLedgerToShared,
   setSharedLedgerAutoSyncEnabled,
 } from '@/ui/services/shared-ledger.service'
 
@@ -389,36 +358,6 @@ async function createSharedFromActiveLedger() {
     uiStore.pushToast(t('settings_shared_ledgers.toast.created', '共同帳本已建立'))
   } catch (error) {
     uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.create_failed', '建立共同帳本失敗'), 'error')
-  } finally {
-    ledgerActionBusy.value = ''
-  }
-}
-
-async function pushActiveLedger() {
-  if (!activeLedger.value || apiUnavailable.value) return
-  ledgerActionBusy.value = 'push'
-  try {
-    await pushLocalLedgerToShared(activeLedger.value.id)
-    await refreshLocalBindings()
-    await loadRemoteLedgers()
-    uiStore.pushToast(t('settings_shared_ledgers.toast.push_done', '共同帳本已上傳'))
-  } catch (error) {
-    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.push_failed', '共同帳本上傳失敗'), 'error')
-  } finally {
-    ledgerActionBusy.value = ''
-  }
-}
-
-async function pullActiveLedger() {
-  if (!activeLedger.value || apiUnavailable.value) return
-  ledgerActionBusy.value = 'pull'
-  try {
-    const hadNoLedgers = ledgerStore.ledgers.length === 0
-    const result = await pullSharedLedgerToLocal(activeLedger.value.id)
-    await afterLedgerImported(result.ledgerId, hadNoLedgers)
-    uiStore.pushToast(t('settings_shared_ledgers.toast.pull_done', '共同帳本已下載到本機'))
-  } catch (error) {
-    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.pull_failed', '共同帳本下載失敗'), 'error')
   } finally {
     ledgerActionBusy.value = ''
   }

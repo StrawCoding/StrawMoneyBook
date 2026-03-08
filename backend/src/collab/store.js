@@ -1,11 +1,22 @@
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import Database from 'better-sqlite3'
 
+const CONFIGURED_DATA_FILE = String(process.env.SHARED_LEDGER_DATA_FILE ?? '').trim()
+const CONFIGURED_DB_FILE = String(process.env.SHARED_LEDGER_DB_FILE ?? '').trim()
+const DEFAULT_DB_FILE_PATH = fileURLToPath(new URL('../../.server-data/collab-store.sqlite', import.meta.url))
+const DEFAULT_LEGACY_JSON_FILE_PATH = fileURLToPath(new URL('../../.server-data/collab-store.json', import.meta.url))
 const DATA_FILE_PATH = resolve(
-  String(process.env.SHARED_LEDGER_DATA_FILE ?? '').trim()
-    || fileURLToPath(new URL('../../.server-data/collab-store.json', import.meta.url)),
+  CONFIGURED_DB_FILE
+    || (CONFIGURED_DATA_FILE.endsWith('.sqlite') ? CONFIGURED_DATA_FILE : '')
+    || DEFAULT_DB_FILE_PATH,
+)
+const LEGACY_JSON_FILE_PATH = resolve(
+  CONFIGURED_DATA_FILE && !CONFIGURED_DATA_FILE.endsWith('.sqlite')
+    ? CONFIGURED_DATA_FILE
+    : DEFAULT_LEGACY_JSON_FILE_PATH,
 )
 const TOKEN_SECRET = String(process.env.SHARED_LEDGER_TOKEN_SECRET ?? 'strawmoneybook-dev-shared-ledger-secret').trim()
 const TOKEN_TTL_MS = Math.max(60_000, Number(process.env.SHARED_LEDGER_TOKEN_TTL_MS ?? 30 * 24 * 60 * 60 * 1000) || 0)
@@ -14,9 +25,12 @@ const DEFAULT_STORE = {
   shared_ledgers: [],
   referrals: [],
 }
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const EMAIL_LOCAL_MAX_LENGTH = 64
+const EMAIL_TOTAL_MAX_LENGTH = 254
 
 let updateQueue = Promise.resolve()
+let dbInstance = null
+let databaseReadyPromise = null
 
 function nowIso() {
   return new Date().toISOString()
@@ -37,7 +51,51 @@ function validateEmail(email) {
   if (!normalized) {
     throw new Error('請輸入 Email')
   }
-  if (!EMAIL_RE.test(normalized)) {
+
+  if (normalized.length > EMAIL_TOTAL_MAX_LENGTH) {
+    throw new Error('Email 長度過長')
+  }
+
+  const parts = normalized.split('@')
+  if (parts.length !== 2) {
+    throw new Error('Email 格式不正確')
+  }
+
+  const [localPart, domainPart] = parts
+  if (!localPart || !domainPart) {
+    throw new Error('Email 格式不正確')
+  }
+
+  if (localPart.length > EMAIL_LOCAL_MAX_LENGTH) {
+    throw new Error('Email 格式不正確')
+  }
+
+  if (localPart.startsWith('.') || localPart.endsWith('.') || localPart.includes('..')) {
+    throw new Error('Email 格式不正確')
+  }
+
+  if (!/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/i.test(localPart)) {
+    throw new Error('Email 格式不正確')
+  }
+
+  const domainLabels = domainPart.split('.')
+  if (domainLabels.length < 2) {
+    throw new Error('Email 格式不正確')
+  }
+
+  for (const label of domainLabels) {
+    if (!label || label.length > 63) {
+      throw new Error('Email 格式不正確')
+    }
+    if (label.startsWith('-') || label.endsWith('-')) {
+      throw new Error('Email 格式不正確')
+    }
+    if (!/^[a-z0-9-]+$/i.test(label)) {
+      throw new Error('Email 格式不正確')
+    }
+  }
+
+  if (!/[a-z]{2,}$/i.test(domainLabels[domainLabels.length - 1])) {
     throw new Error('Email 格式不正確')
   }
   return normalized
@@ -49,7 +107,21 @@ function normalizeDisplayName(value, fallback = '') {
 }
 
 function normalizeAvatarUrl(value) {
-  return String(value ?? '').trim()
+  const source = String(value ?? '').trim()
+  if (!source) return ''
+
+  if (/^https?:\/\//i.test(source)) {
+    return source
+  }
+
+  if (/^data:image\/(?:png|jpeg|jpg|webp|gif);base64,/i.test(source)) {
+    if (source.length > 5 * 1024 * 1024) {
+      throw new Error('頭貼圖片不可超過 5MB')
+    }
+    return source
+  }
+
+  throw new Error('頭貼格式不正確')
 }
 
 function createInviteCode() {
@@ -58,6 +130,18 @@ function createInviteCode() {
 
 function createReferralCode() {
   return randomBytes(4).toString('hex').toUpperCase()
+}
+
+function createPasswordResetToken() {
+  return randomBytes(24).toString('base64url')
+}
+
+function createTemporaryPassword() {
+  return randomBytes(9).toString('base64url')
+}
+
+function hashSensitiveToken(value) {
+  return createHash('sha256').update(String(value ?? ''), 'utf8').digest('hex')
 }
 
 function base64UrlEncode(input) {
@@ -132,6 +216,8 @@ function publicUser(user) {
     referred_by_user_id: String(user?.referred_by_user_id ?? '').trim(),
     referred_by_code: String(user?.referred_by_code ?? '').trim(),
     referral_redeemed_at: String(user?.referral_redeemed_at ?? '').trim(),
+    must_change_password: Boolean(user?.must_change_password),
+    temporary_password_issued_at: String(user?.temporary_password_issued_at ?? '').trim(),
     membership_bonus_expires_at: membership.expiresAt,
     membership_active: membership.active,
     membership_source: membership.source,
@@ -179,16 +265,6 @@ function validatePassword(password) {
   return text
 }
 
-async function ensureStoreFile() {
-  await mkdir(dirname(DATA_FILE_PATH), { recursive: true })
-  try {
-    await readFile(DATA_FILE_PATH, 'utf8')
-  } catch (error) {
-    if (error?.code !== 'ENOENT') throw error
-    await writeFile(DATA_FILE_PATH, JSON.stringify(DEFAULT_STORE, null, 2), 'utf8')
-  }
-}
-
 function normalizeUserRecord(user) {
   const email = normalizeEmail(user?.email ?? user?.account)
   return {
@@ -201,6 +277,15 @@ function normalizeUserRecord(user) {
     referred_by_code: String(user?.referred_by_code ?? '').trim().toUpperCase(),
     referral_redeemed_at: String(user?.referral_redeemed_at ?? '').trim(),
     membership_grants: Array.isArray(user?.membership_grants) ? user.membership_grants : [],
+    login_failed_attempts: Math.max(0, Math.floor(Number(user?.login_failed_attempts) || 0)),
+    last_failed_login_at: String(user?.last_failed_login_at ?? '').trim(),
+    login_locked_until: String(user?.login_locked_until ?? '').trim(),
+    must_change_password: Boolean(user?.must_change_password),
+    temporary_password_issued_at: String(user?.temporary_password_issued_at ?? '').trim(),
+    password_reset_required: Boolean(user?.password_reset_required),
+    password_reset_token_hash: String(user?.password_reset_token_hash ?? '').trim(),
+    password_reset_requested_at: String(user?.password_reset_requested_at ?? '').trim(),
+    password_reset_expires_at: String(user?.password_reset_expires_at ?? '').trim(),
   }
 }
 
@@ -209,39 +294,296 @@ function normalizeSharedLedgerRecord(sharedLedger) {
     ...sharedLedger,
     members: Array.isArray(sharedLedger?.members) ? sharedLedger.members : [],
     invitations: Array.isArray(sharedLedger?.invitations) ? sharedLedger.invitations : [],
+    snapshot: sharedLedger?.snapshot && typeof sharedLedger.snapshot === 'object'
+      ? sharedLedger.snapshot
+      : {},
   }
+}
+
+function normalizeReferralRecord(referral) {
+  return {
+    ...referral,
+    id: String(referral?.id ?? '').trim(),
+    code: String(referral?.code ?? '').trim().toUpperCase(),
+    inviter_user_id: String(referral?.inviter_user_id ?? '').trim(),
+    invitee_user_id: String(referral?.invitee_user_id ?? '').trim(),
+    inviter_reward_days: Math.max(0, Math.floor(Number(referral?.inviter_reward_days) || 0)),
+    invitee_reward_days: Math.max(0, Math.floor(Number(referral?.invitee_reward_days) || 0)),
+    created_at: String(referral?.created_at ?? '').trim(),
+  }
+}
+
+function parseJsonField(value, fallback) {
+  const source = String(value ?? '').trim()
+  if (!source) return fallback
+  try {
+    return JSON.parse(source)
+  } catch {
+    return fallback
+  }
+}
+
+async function ensureDatabaseDirectory() {
+  await mkdir(dirname(DATA_FILE_PATH), { recursive: true })
+}
+
+function ensureSchema(db) {
+  db.pragma('journal_mode = WAL')
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      account TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      avatar_url TEXT NOT NULL,
+      referral_code TEXT NOT NULL UNIQUE,
+      referred_by_user_id TEXT NOT NULL,
+      referred_by_code TEXT NOT NULL,
+      referral_redeemed_at TEXT NOT NULL,
+      membership_grants_json TEXT NOT NULL,
+      login_failed_attempts INTEGER NOT NULL DEFAULT 0,
+      last_failed_login_at TEXT NOT NULL,
+      login_locked_until TEXT NOT NULL,
+      must_change_password INTEGER NOT NULL DEFAULT 0,
+      temporary_password_issued_at TEXT NOT NULL,
+      password_reset_required INTEGER NOT NULL DEFAULT 0,
+      password_reset_token_hash TEXT NOT NULL,
+      password_reset_requested_at TEXT NOT NULL,
+      password_reset_expires_at TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      password_salt TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS shared_ledgers (
+      id TEXT PRIMARY KEY,
+      ledger_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      invite_code TEXT NOT NULL UNIQUE,
+      owner_user_id TEXT NOT NULL,
+      members_json TEXT NOT NULL,
+      invitations_json TEXT NOT NULL,
+      snapshot_json TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      updated_by_user_id TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS referrals (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL,
+      inviter_user_id TEXT NOT NULL,
+      invitee_user_id TEXT NOT NULL,
+      inviter_reward_days INTEGER NOT NULL,
+      invitee_reward_days INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code);
+    CREATE INDEX IF NOT EXISTS idx_shared_ledgers_owner ON shared_ledgers(owner_user_id);
+    CREATE INDEX IF NOT EXISTS idx_shared_ledgers_invite_code ON shared_ledgers(invite_code);
+    CREATE INDEX IF NOT EXISTS idx_referrals_inviter ON referrals(inviter_user_id);
+    CREATE INDEX IF NOT EXISTS idx_referrals_invitee ON referrals(invitee_user_id);
+  `)
+
+  const userColumns = new Set(
+    db.prepare(`PRAGMA table_info(users)`).all().map((column) => String(column?.name ?? '').trim()),
+  )
+  if (!userColumns.has('must_change_password')) {
+    db.exec(`ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0`)
+  }
+  if (!userColumns.has('temporary_password_issued_at')) {
+    db.exec(`ALTER TABLE users ADD COLUMN temporary_password_issued_at TEXT NOT NULL DEFAULT ''`)
+  }
+}
+
+function loadStoreFromDatabase(db) {
+  const users = db.prepare(`
+    SELECT
+      id, email, account, display_name, avatar_url, referral_code,
+      referred_by_user_id, referred_by_code, referral_redeemed_at,
+      membership_grants_json, login_failed_attempts, last_failed_login_at,
+      login_locked_until, must_change_password, temporary_password_issued_at,
+      password_reset_required, password_reset_token_hash,
+      password_reset_requested_at, password_reset_expires_at,
+      password_hash, password_salt, created_at, updated_at
+    FROM users
+    ORDER BY created_at ASC, id ASC
+  `).all().map((row) => normalizeUserRecord({
+    ...row,
+    membership_grants: parseJsonField(row.membership_grants_json, []),
+    password_reset_required: Boolean(row.password_reset_required),
+  }))
+
+  const sharedLedgers = db.prepare(`
+    SELECT
+      id, ledger_id, name, invite_code, owner_user_id, members_json,
+      invitations_json, snapshot_json, version, created_at, updated_at,
+      updated_by_user_id
+    FROM shared_ledgers
+    ORDER BY created_at ASC, id ASC
+  `).all().map((row) => normalizeSharedLedgerRecord({
+    ...row,
+    members: parseJsonField(row.members_json, []),
+    invitations: parseJsonField(row.invitations_json, []),
+    snapshot: parseJsonField(row.snapshot_json, {}),
+  }))
+
+  const referrals = db.prepare(`
+    SELECT
+      id, code, inviter_user_id, invitee_user_id,
+      inviter_reward_days, invitee_reward_days, created_at
+    FROM referrals
+    ORDER BY created_at ASC, id ASC
+  `).all().map(normalizeReferralRecord)
+
+  return {
+    users,
+    shared_ledgers: sharedLedgers,
+    referrals,
+  }
+}
+
+function persistStoreToDatabase(db, data) {
+  const deleteUsers = db.prepare('DELETE FROM users')
+  const deleteSharedLedgers = db.prepare('DELETE FROM shared_ledgers')
+  const deleteReferrals = db.prepare('DELETE FROM referrals')
+  const insertUser = db.prepare(`
+    INSERT INTO users (
+      id, email, account, display_name, avatar_url, referral_code,
+      referred_by_user_id, referred_by_code, referral_redeemed_at,
+      membership_grants_json, login_failed_attempts, last_failed_login_at,
+      login_locked_until, must_change_password, temporary_password_issued_at,
+      password_reset_required, password_reset_token_hash,
+      password_reset_requested_at, password_reset_expires_at,
+      password_hash, password_salt, created_at, updated_at
+    ) VALUES (
+      @id, @email, @account, @display_name, @avatar_url, @referral_code,
+      @referred_by_user_id, @referred_by_code, @referral_redeemed_at,
+      @membership_grants_json, @login_failed_attempts, @last_failed_login_at,
+      @login_locked_until, @must_change_password, @temporary_password_issued_at,
+      @password_reset_required, @password_reset_token_hash,
+      @password_reset_requested_at, @password_reset_expires_at,
+      @password_hash, @password_salt, @created_at, @updated_at
+    )
+  `)
+  const insertSharedLedger = db.prepare(`
+    INSERT INTO shared_ledgers (
+      id, ledger_id, name, invite_code, owner_user_id, members_json,
+      invitations_json, snapshot_json, version, created_at, updated_at,
+      updated_by_user_id
+    ) VALUES (
+      @id, @ledger_id, @name, @invite_code, @owner_user_id, @members_json,
+      @invitations_json, @snapshot_json, @version, @created_at, @updated_at,
+      @updated_by_user_id
+    )
+  `)
+  const insertReferral = db.prepare(`
+    INSERT INTO referrals (
+      id, code, inviter_user_id, invitee_user_id,
+      inviter_reward_days, invitee_reward_days, created_at
+    ) VALUES (
+      @id, @code, @inviter_user_id, @invitee_user_id,
+      @inviter_reward_days, @invitee_reward_days, @created_at
+    )
+  `)
+
+  const writeTransaction = db.transaction((nextData) => {
+    deleteUsers.run()
+    deleteSharedLedgers.run()
+    deleteReferrals.run()
+
+    for (const rawUser of Array.isArray(nextData?.users) ? nextData.users : []) {
+      const user = normalizeUserRecord(rawUser)
+      insertUser.run({
+        ...user,
+        membership_grants_json: JSON.stringify(Array.isArray(user.membership_grants) ? user.membership_grants : []),
+        must_change_password: user.must_change_password ? 1 : 0,
+        password_reset_required: user.password_reset_required ? 1 : 0,
+      })
+    }
+
+    for (const rawSharedLedger of Array.isArray(nextData?.shared_ledgers) ? nextData.shared_ledgers : []) {
+      const sharedLedger = normalizeSharedLedgerRecord(rawSharedLedger)
+      insertSharedLedger.run({
+        ...sharedLedger,
+        members_json: JSON.stringify(Array.isArray(sharedLedger.members) ? sharedLedger.members : []),
+        invitations_json: JSON.stringify(Array.isArray(sharedLedger.invitations) ? sharedLedger.invitations : []),
+        snapshot_json: JSON.stringify(sharedLedger.snapshot ?? {}),
+        version: Number(sharedLedger.version ?? 0),
+      })
+    }
+
+    for (const rawReferral of Array.isArray(nextData?.referrals) ? nextData.referrals : []) {
+      const referral = normalizeReferralRecord(rawReferral)
+      insertReferral.run(referral)
+    }
+  })
+
+  writeTransaction(data)
+}
+
+async function migrateLegacyJsonIfNeeded(db) {
+  const hasUsers = Number(db.prepare('SELECT COUNT(*) AS count FROM users').get().count ?? 0) > 0
+  const hasSharedLedgers = Number(db.prepare('SELECT COUNT(*) AS count FROM shared_ledgers').get().count ?? 0) > 0
+  const hasReferrals = Number(db.prepare('SELECT COUNT(*) AS count FROM referrals').get().count ?? 0) > 0
+  if (hasUsers || hasSharedLedgers || hasReferrals) {
+    return
+  }
+
+  try {
+    const raw = await readFile(LEGACY_JSON_FILE_PATH, 'utf8')
+    const parsed = JSON.parse(raw)
+    const nextData = {
+      users: Array.isArray(parsed?.users) ? parsed.users.map(normalizeUserRecord) : [],
+      shared_ledgers: Array.isArray(parsed?.shared_ledgers) ? parsed.shared_ledgers.map(normalizeSharedLedgerRecord) : [],
+      referrals: Array.isArray(parsed?.referrals) ? parsed.referrals.map(normalizeReferralRecord) : [],
+    }
+    if (!nextData.users.length && !nextData.shared_ledgers.length && !nextData.referrals.length) {
+      return
+    }
+    persistStoreToDatabase(db, nextData)
+  } catch (error) {
+    if (error?.code === 'ENOENT') return
+    console.warn('[shared-ledger] legacy JSON migration skipped', error)
+  }
+}
+
+async function ensureDatabase() {
+  await ensureDatabaseDirectory()
+  if (dbInstance) return dbInstance
+
+  if (!databaseReadyPromise) {
+    databaseReadyPromise = (async () => {
+      const db = new Database(DATA_FILE_PATH)
+      ensureSchema(db)
+      await migrateLegacyJsonIfNeeded(db)
+      dbInstance = db
+      return db
+    })().catch((error) => {
+      databaseReadyPromise = null
+      throw error
+    })
+  }
+
+  return databaseReadyPromise
 }
 
 export async function readStore() {
-  await ensureStoreFile()
-  const raw = await readFile(DATA_FILE_PATH, 'utf8')
-  try {
-    const parsed = JSON.parse(raw)
-    return {
-      users: Array.isArray(parsed?.users) ? parsed.users.map(normalizeUserRecord) : [],
-      shared_ledgers: Array.isArray(parsed?.shared_ledgers) ? parsed.shared_ledgers.map(normalizeSharedLedgerRecord) : [],
-      referrals: Array.isArray(parsed?.referrals) ? parsed.referrals : [],
-    }
-  } catch {
-    return {
-      users: [],
-      shared_ledgers: [],
-      referrals: [],
-    }
-  }
-}
-
-async function writeStore(data) {
-  await ensureStoreFile()
-  await writeFile(DATA_FILE_PATH, JSON.stringify(data, null, 2), 'utf8')
+  const db = await ensureDatabase()
+  return loadStoreFromDatabase(db)
 }
 
 export async function updateStore(mutator) {
   let result
   updateQueue = updateQueue.catch(() => null).then(async () => {
-    const data = await readStore()
+    const db = await ensureDatabase()
+    const data = loadStoreFromDatabase(db)
     result = await mutator(data)
-    await writeStore(data)
+    persistStoreToDatabase(db, data)
   })
   await updateQueue
   return result
@@ -388,12 +730,16 @@ export {
   buildSharedLedgerSummary,
   createId,
   createInviteCode,
+  createPasswordResetToken,
+  createTemporaryPassword,
   createUniqueReferralCode,
   findPendingInvitationForEmail,
   findUserByAccount,
   findUserByEmail,
   findUserById,
   findUserByReferralCode,
+  hashPassword,
+  hashSensitiveToken,
   getMemberRole,
   getMembershipGrantSummary,
   isSharedLedgerMember,
@@ -409,5 +755,4 @@ export {
   validateSnapshot,
   verifyAccessToken,
   verifyPassword,
-  hashPassword,
 }
