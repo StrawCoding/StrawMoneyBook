@@ -66,14 +66,38 @@ function createBankApiMiddleware() {
   }
 }
 
+function createCatchAllApiMiddleware(loadRoute) {
+  return async function catchAllApiMiddleware(req, res, next) {
+    try {
+      req.body = await readRequestBody(req)
+      const routeModule = await loadRoute()
+      const handler = routeModule?.default
+      if (typeof handler !== 'function') {
+        next(new Error('invalid api handler'))
+        return
+      }
+      await handler(req, ensureNodeStyleResponse(res))
+    } catch (error) {
+      ensureNodeStyleResponse(res).status(500).json({
+        error: 'dev_server_error',
+        message: String(error?.message ?? error ?? 'unknown error'),
+      })
+    }
+  }
+}
+
 function bankApiDevPlugin() {
   return {
     name: 'bank-api-dev-plugin',
     configureServer(server) {
       server.middlewares.use('/api/bank', createBankApiMiddleware())
+      server.middlewares.use('/api/auth', createCatchAllApiMiddleware(() => import('./api/auth/[...path].js')))
+      server.middlewares.use('/api/shared-ledgers', createCatchAllApiMiddleware(() => import('./api/shared-ledgers/[...path].js')))
     },
     configurePreviewServer(server) {
       server.middlewares.use('/api/bank', createBankApiMiddleware())
+      server.middlewares.use('/api/auth', createCatchAllApiMiddleware(() => import('./api/auth/[...path].js')))
+      server.middlewares.use('/api/shared-ledgers', createCatchAllApiMiddleware(() => import('./api/shared-ledgers/[...path].js')))
     },
   }
 }
