@@ -315,7 +315,9 @@ button:focus-visible,
   color: var(--primary-contrast);
   font-weight: 700;
 }
-
+.btn.icon-btn {
+  min-height: 32px;
+}
 .back-btn {
   min-height: 40px;
   min-width: 80px;
