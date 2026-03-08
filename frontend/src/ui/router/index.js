@@ -1,9 +1,4 @@
-import { ref } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
-
-export const disableNextRouteTransition = ref(false)
-export const routeRestoreMinHeight = ref(0)
-const ROUTE_SCROLL_RESET_DELAY_MS = 190
 
 if (typeof window !== 'undefined' && window.history && 'scrollRestoration' in window.history) {
   window.history.scrollRestoration = 'manual'
@@ -13,13 +8,7 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   scrollBehavior(_to, _from, savedPosition) {
     if (savedPosition) return savedPosition
-    routeRestoreMinHeight.value = 0
-    disableNextRouteTransition.value = false
-    return new Promise((resolve) => {
-      window.setTimeout(() => {
-        resolve({ left: 0, top: 0 })
-      }, ROUTE_SCROLL_RESET_DELAY_MS)
-    })
+    return { left: 0, top: 0 }
   },
   routes: [
     {
@@ -312,12 +301,6 @@ const router = createRouter({
       meta: { tab: 'assets' },
     },
   ],
-})
-
-router.beforeEach((to, from) => {
-  if (String(from.fullPath ?? '').trim() === String(to.fullPath ?? '').trim()) return
-  disableNextRouteTransition.value = false
-  routeRestoreMinHeight.value = 0
 })
 
 export default router

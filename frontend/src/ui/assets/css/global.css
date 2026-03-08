@@ -383,25 +383,6 @@ a,
   box-shadow: var(--shadow-card);
 }
 
-.route-slide-enter-active,
-.route-slide-leave-active {
-  transition:
-    opacity var(--anim-mid) var(--anim-standard),
-    transform var(--anim-mid) var(--anim-spring);
-  will-change: opacity, transform;
-  backface-visibility: hidden;
-}
-
-.route-slide-enter-from {
-  opacity: 0;
-  transform: translate3d(12px, 0, 0);
-}
-
-.route-slide-leave-to {
-  opacity: 0;
-  transform: translate3d(-10px, 0, 0);
-}
-
 .fade-scale-enter-active,
 .fade-scale-leave-active {
   transition:
