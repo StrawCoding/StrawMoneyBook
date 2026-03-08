@@ -141,7 +141,8 @@
       </div>
 
       <footer class="row action-row">
-        <button class="btn primary" :class="{ busy: submitting }" :disabled="submitting" @click="submit">建立交易</button>
+        <button class="btn" :class="{ busy: submitting }" :disabled="submitting" @click="submit({ closeAfterSuccess: false })">再記</button>
+        <button class="btn primary" :class="{ busy: submitting }" :disabled="submitting" @click="submit({ closeAfterSuccess: true })">建立交易</button>
       </footer>
     </article>
   </section>
@@ -490,15 +491,32 @@ function fillDefaultOccurredAt() {
 }
 
 async function closePage() {
-  if (props.embedded) return
-  await goBackOrFallback(router, '/')
+  await goBackOrFallback(router, props.embedded ? '/features' : '/')
 }
 
 async function openAiPage() {
   await router.push('/ai-auto-bookkeeping').catch(() => {})
 }
 
-async function submit() {
+function resetFormForNextEntry() {
+  model.amountMajor = 0
+  fillDefaultOccurredAt()
+  model.note = ''
+  model.isReimbursable = false
+  model.includeInBudget = true
+  model.includeInAnalysis = true
+  model.exchangeRateMode = 'system'
+  model.manualExchangeRateInput = ''
+  if (model.type === 'transfer') {
+    ensureTransferAccounts()
+    return
+  }
+  ensureDirectAccount()
+  model.categoryId = ensureCategoryIdByType(model.type, model.categoryId)
+}
+
+async function submit(options = {}) {
+  const closeAfterSuccess = options.closeAfterSuccess !== false
   if (submitting.value) return
   const amountMinor = Math.round(Math.abs(Number(model.amountMajor ?? 0)) * 100)
   if (!Number.isFinite(amountMinor) || amountMinor <= 0) {
@@ -576,7 +594,11 @@ async function submit() {
     }
 
     uiStore.pushToast('交易已新增')
-    await closePage()
+    if (closeAfterSuccess) {
+      await closePage()
+      return
+    }
+    resetFormForNextEntry()
   } catch (error) {
     uiStore.pushToast(error.message ?? '新增失敗', 'error')
   } finally {
@@ -703,7 +725,7 @@ h2 {
 
 .action-row {
   margin-top: 12px;
-  justify-content: flex-end;
+  justify-content: space-between;
 }
 
 @media (max-width: 520px) {

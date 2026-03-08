@@ -308,6 +308,26 @@
                 </button>
               </div>
             </section>
+            <footer class="row action-row">
+              <button
+                type="button"
+                class="btn"
+                :class="{ busy: manualSubmitting }"
+                :disabled="manualSubmitting"
+                @click="submit({ closeAfterSuccess: false, successMessage: '交易已新增，可繼續再記' })"
+              >
+                再記
+              </button>
+              <button
+                type="button"
+                class="btn primary"
+                :class="{ busy: manualSubmitting }"
+                :disabled="manualSubmitting"
+                @click="submit({ closeAfterSuccess: true, successMessage: '交易已新增' })"
+              >
+                建立交易
+              </button>
+            </footer>
           </div>
         </template>
       </article>
@@ -547,6 +567,7 @@ const aiInterimSpeechText = ref('')
 const aiMessages = ref([])
 const aiCreatedRecord = ref(null)
 const aiAutoCreating = ref(false)
+const manualSubmitting = ref(false)
 const AI_AUTOCREATE_TIMEOUT_MS = 15000
 const AI_HISTORY_WARMUP_TIMEOUT_MS = 1800
 const TRANSFER_RATE_AUTO_SYNC_TIMEOUT_MS = 8000
@@ -2178,6 +2199,8 @@ async function resolveTransferRateOrThrow() {
 }
 
 async function submit(options = {}) {
+  if (manualSubmitting.value) return null
+  manualSubmitting.value = true
   const closeAfterSuccess = options.closeAfterSuccess !== false
   const successMessage = options.successMessage ?? '交易已新增'
   const flowType = resolveTypeByCategory(model.type, model.categoryId)
@@ -2276,6 +2299,8 @@ async function submit(options = {}) {
     uiStore.pushToast(successMessage)
     if (closeAfterSuccess) {
       emit('close')
+    } else {
+      resetManualDraftForNextEntry()
     }
     return {
       txId,
@@ -2290,6 +2315,8 @@ async function submit(options = {}) {
   } catch (error) {
     uiStore.pushToast(error.message ?? '新增失敗', 'error')
     return null
+  } finally {
+    manualSubmitting.value = false
   }
 }
 
@@ -2503,6 +2530,30 @@ function parseAddonRowsFromAiDraft(draft) {
 
   if (rows.length) return rows
   return [createAddonRow()]
+}
+
+function resetManualDraftForNextEntry() {
+  const defaults = defaultOccurredDateTime()
+  model.amount = null
+  model.amountInput = ''
+  model.occurredDate = defaults.date
+  model.occurredHour = defaults.hour
+  model.occurredMinute = defaults.minute
+  model.note = ''
+  model.isReimbursable = false
+  model.includeInBudget = true
+  model.includeInAnalysis = true
+  model.exchangeRateMode = 'system'
+  model.manualExchangeRateInput = ''
+  showExtra.value = false
+  showCategoryPicker.value = false
+  aiCreatedRecord.value = null
+  addonRows.value = [createAddonRow()]
+  ensureValidAccounts()
+  if (model.type !== 'transfer') {
+    model.categoryId = ensureCategoryIdByType(model.type, model.categoryId)
+    syncCategoryPickerParent(model.categoryId)
+  }
 }
 
 async function pressCalcKey(key) {
@@ -3319,6 +3370,10 @@ h4 {
 }
 .extra-content {
   margin-top: 10px;
+}
+.action-row {
+  margin-top: 12px;
+  justify-content: space-between;
 }
 .addon-wrap {
   display: grid;

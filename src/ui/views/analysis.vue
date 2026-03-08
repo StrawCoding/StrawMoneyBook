@@ -1,5 +1,5 @@
 <template>
-  <section class="stack">
+  <section class="stack analysis-page">
     <article class="card panel">
       <header class="row">
         <h2>{{ t('analysis_page.title') }}</h2>
@@ -655,7 +655,14 @@ function monthKeyFromDate(date) {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  overflow-x: clip;
+}
+
+.analysis-page > *,
+.analysis-page .row,
+.analysis-page .picker-row,
+.analysis-page .period-tabs,
+.analysis-page .ledger-switcher-wrap {
+  animation: none;
 }
 
 .stack > * {
@@ -667,7 +674,6 @@ function monthKeyFromDate(date) {
   padding: 14px;
   min-width: 0;
   max-width: 100%;
-  overflow-x: clip;
 }
 h2, h3 {
   margin: 0
