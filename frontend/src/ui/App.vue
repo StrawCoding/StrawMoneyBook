@@ -29,7 +29,9 @@
       <template v-if="!isBooting">
         <WelcomePage v-if="showWelcomePage" />
         <router-view v-else v-slot="{ Component, route }">
-          <component :is="Component" :key="route.fullPath" />
+          <transition name="route-fade" mode="out-in" @before-enter="handleRouteBeforeEnter">
+            <component :is="Component" :key="route.fullPath" />
+          </transition>
         </router-view>
       </template>
     </main>
@@ -72,6 +74,7 @@ import ToastHost from '@/ui/components/common/ToastHost.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import WelcomePage from '@/ui/views/WelcomePage.vue'
 import { useI18n } from '@/ui/services/i18n.service'
+import { flushDeferredScrollRestore } from '@/ui/services/route-scroll.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
@@ -167,6 +170,10 @@ async function checkAppUpdate(options = {}) {
 
 function onRequestCheckAppUpdate() {
   void checkAppUpdate({ force: true })
+}
+
+function handleRouteBeforeEnter() {
+  flushDeferredScrollRestore()
 }
 
 function resolveBackButtonAnchor(event) {
@@ -319,6 +326,22 @@ watch(
   display: grid;
   align-items: center;
   overflow: hidden;
+}
+.route-fade-enter-active,
+.route-fade-leave-active {
+  transition:
+    opacity 180ms var(--anim-standard),
+    transform 220ms var(--anim-spring);
+  will-change: opacity, transform;
+  backface-visibility: hidden;
+}
+.route-fade-enter-from,
+.route-fade-leave-to {
+  opacity: 0;
+  transform: translate3d(0, 10px, 0);
+}
+.route-fade-leave-active {
+  pointer-events: none;
 }
 .title-wrap {
   display: flex;

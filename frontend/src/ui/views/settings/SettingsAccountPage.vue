@@ -404,6 +404,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
+import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { getMembershipTierSnapshot } from '@/core/services/membership.service'
 import {
@@ -834,6 +835,7 @@ async function saveProfile() {
     resetAvatarInputElement()
     profileSavedMessage.value = t('settings_account.toast.profile_saved', '帳號資料已更新')
     uiStore.pushToast(t('settings_account.toast.profile_saved', '帳號資料已更新'))
+    await goBackOrFallback(router, '/settings')
   } catch (error) {
     uiStore.pushToast(error.message || t('settings_account.toast.profile_failed', '更新帳號資料失敗'), 'error')
   } finally {
