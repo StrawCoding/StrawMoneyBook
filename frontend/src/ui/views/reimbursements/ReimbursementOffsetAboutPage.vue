@@ -54,7 +54,7 @@
           <div class="usage-main">
             <div class="usage-title">
               <font-awesome-icon v-if="usage.category_icon" :icon="usage.category_icon" class="usage-icon" />
-              <strong>{{ usage.category_name || '未指定分類' }}</strong>
+              <strong>{{ usageDisplayName(usage) }}</strong>
             </div>
             <small class="muted">帳戶：{{ usage.account_name || '未指定帳戶' }}</small>
             <small v-if="usage.advance_note" class="muted break-word">{{ usage.advance_note }}</small>
@@ -144,6 +144,13 @@ function formatTime(iso) {
 function openTransaction(txId) {
   if (!txId) return
   void router.push({ name: 'transaction-about', params: { id: txId } })
+}
+
+function usageDisplayName(usage) {
+  const name = String(usage?.category_name ?? '').trim()
+  if (name) return name
+  const note = String(usage?.advance_note ?? '').trim()
+  return note || '代收'
 }
 </script>
 

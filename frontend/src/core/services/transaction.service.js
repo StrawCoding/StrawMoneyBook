@@ -20,6 +20,7 @@ import {
 } from '@/core/repositories/category.repo'
 import { isSavingsJarAccount } from '@/core/repositories/savings-jar.repo'
 import { assertCanCreateReimbursement } from '@/core/services/membership.service'
+import { removeAdvanceUsagesForExpenseTransaction } from '@/core/services/reimbursement.service'
 
 const TRANSACTION_FAILURE_TRACE_MAX_ENTRIES = 60
 const transactionFailureTraceListeners = new Set()
@@ -483,6 +484,7 @@ export async function deleteManualTransaction(ledgerId, txId) {
 
   const cascadeDeleteIds = await collectCascadeDeleteTransactionIds(ledgerId, target)
   for (const relatedTxId of cascadeDeleteIds) {
+    await removeAdvanceUsagesForExpenseTransaction(ledgerId, relatedTxId)
     await softDeleteTransactionById(ledgerId, relatedTxId)
   }
 }

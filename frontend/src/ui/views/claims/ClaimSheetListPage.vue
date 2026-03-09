@@ -761,7 +761,9 @@ function categoryName(categoryId) {
 
 function advanceCategoryName(advance) {
   const name = String(advance?.category_name ?? '').trim()
-  return name || '未指定分類'
+  if (name) return name
+  const note = String(advance?.note ?? '').trim()
+  return note || '代收'
 }
 
 function advanceCategoryIcon(advance) {

@@ -338,6 +338,105 @@ export async function listReimbursementAdvanceUsagesByExpenseTx(ledgerId, expens
   return rowsOf(result)
 }
 
+export async function listReimbursementAdvanceUsageRecords(ledgerId) {
+  assertLedgerId(ledgerId)
+
+  const result = await query(
+    `SELECT
+       u.ledger_id,
+       u.id,
+       u.advance_id,
+       u.expense_tx_id,
+       u.amount_minor,
+       u.created_at,
+       u.updated_at,
+       ra.account_id,
+       a.name AS account_name,
+       ra.category_id,
+       c.name AS category_name,
+       c.icon AS category_icon,
+       ra.note AS advance_note,
+       ra.received_at AS advance_received_at,
+       ra.deleted_at AS advance_deleted_at,
+       t.category_id AS expense_category_id,
+       tc.name AS expense_category_name,
+       t.note AS expense_note,
+       t.occurred_at AS expense_occurred_at,
+       t.deleted_at AS expense_deleted_at
+     FROM reimbursement_advance_usages u
+     LEFT JOIN reimbursement_advances ra
+       ON ra.ledger_id = u.ledger_id
+      AND ra.id = u.advance_id
+     LEFT JOIN accounts a
+       ON a.ledger_id = ra.ledger_id
+      AND a.id = ra.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = ra.ledger_id
+      AND c.id = ra.category_id
+     LEFT JOIN transactions t
+       ON t.ledger_id = u.ledger_id
+      AND t.id = u.expense_tx_id
+     LEFT JOIN categories tc
+       ON tc.ledger_id = t.ledger_id
+      AND tc.id = t.category_id
+     WHERE u.ledger_id = ?
+     ORDER BY u.created_at DESC, u.updated_at DESC;`,
+    [ledgerId],
+  )
+
+  return rowsOf(result)
+}
+
+export async function getReimbursementAdvanceUsageById(ledgerId, usageId) {
+  assertLedgerId(ledgerId)
+
+  const result = await query(
+    `SELECT
+       u.ledger_id,
+       u.id,
+       u.advance_id,
+       u.expense_tx_id,
+       u.amount_minor,
+       u.created_at,
+       u.updated_at,
+       ra.account_id,
+       a.name AS account_name,
+       ra.category_id,
+       c.name AS category_name,
+       c.icon AS category_icon,
+       ra.note AS advance_note,
+       ra.received_at AS advance_received_at,
+       ra.deleted_at AS advance_deleted_at,
+       t.category_id AS expense_category_id,
+       tc.name AS expense_category_name,
+       t.note AS expense_note,
+       t.occurred_at AS expense_occurred_at,
+       t.deleted_at AS expense_deleted_at
+     FROM reimbursement_advance_usages u
+     LEFT JOIN reimbursement_advances ra
+       ON ra.ledger_id = u.ledger_id
+      AND ra.id = u.advance_id
+     LEFT JOIN accounts a
+       ON a.ledger_id = ra.ledger_id
+      AND a.id = ra.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = ra.ledger_id
+      AND c.id = ra.category_id
+     LEFT JOIN transactions t
+       ON t.ledger_id = u.ledger_id
+      AND t.id = u.expense_tx_id
+     LEFT JOIN categories tc
+       ON tc.ledger_id = t.ledger_id
+      AND tc.id = t.category_id
+     WHERE u.ledger_id = ?
+       AND u.id = ?
+     LIMIT 1;`,
+    [ledgerId, usageId],
+  )
+
+  return firstRow(result)
+}
+
 export async function createReimbursementAdvanceUsage(ledgerId, input) {
   assertLedgerId(ledgerId)
 
@@ -362,6 +461,17 @@ export async function deleteReimbursementAdvanceUsagesByExpenseTx(ledgerId, expe
      WHERE ledger_id = ?
        AND expense_tx_id = ?;`,
     [ledgerId, expenseTxId],
+  )
+}
+
+export async function deleteReimbursementAdvanceUsageById(ledgerId, usageId) {
+  assertLedgerId(ledgerId)
+
+  await run(
+    `DELETE FROM reimbursement_advance_usages
+     WHERE ledger_id = ?
+       AND id = ?;`,
+    [ledgerId, usageId],
   )
 }
 

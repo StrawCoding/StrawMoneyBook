@@ -8,11 +8,8 @@ if (typeof window !== 'undefined' && window.history && 'scrollRestoration' in wi
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   scrollBehavior(_to, _from, savedPosition) {
-    if (savedPosition) {
-      queueDeferredScrollRestore(savedPosition)
-      return false
-    }
-    return { left: 0, top: 0 }
+    queueDeferredScrollRestore(savedPosition ?? { left: 0, top: 0 })
+    return false
   },
   routes: [
     {
@@ -265,6 +262,12 @@ const router = createRouter({
       name: 'reimbursement-advance-manage',
       path: '/reimbursements/advances',
       component: () => import('@/ui/views/reimbursements/ReimbursementAdvanceManagementPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
+      name: 'reimbursement-advance-usage-manage',
+      path: '/reimbursements/advance-usages',
+      component: () => import('@/ui/views/reimbursements/ReimbursementAdvanceUsageManagementPage.vue'),
       meta: { tab: 'home' },
     },
     {

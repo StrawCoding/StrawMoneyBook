@@ -26,10 +26,12 @@ import {
   createReimbursement,
   createReimbursementItem,
   deleteReimbursementById,
-  deleteReimbursementAdvanceUsagesByExpenseTx,
+  deleteReimbursementAdvanceUsageById,
+  getReimbursementAdvanceUsageById,
   getReimbursementAdvanceById,
   findTransactionByIdempotencyKey,
   getReimbursementById,
+  listReimbursementAdvanceUsageRecords,
   listReimbursementAdvanceUsagesByExpenseTx,
   listReimbursementAdvances,
   listReimbursementItems,
@@ -293,16 +295,6 @@ export async function createReimbursementAdvanceEntry(ledgerId, payload = {}) {
   if (!accountId) {
     throw new Error('代收必須指定帳戶')
   }
-  const categoryId = String(payload.categoryId ?? '').trim()
-  if (!categoryId) {
-    throw new Error('代收必須指定分類')
-  }
-  const categories = await listCategories(ledgerId, { includeArchived: false })
-  const matchedCategory = categories.find((item) => String(item?.id ?? '').trim() === categoryId)
-  if (!matchedCategory || !['expense', 'both'].includes(String(matchedCategory.kind ?? ''))) {
-    throw new Error('代收分類無效')
-  }
-
   const amountMinor = normalizeAmountMinor(payload.amountMinor)
 
   return withTransaction(async () => {
@@ -327,7 +319,7 @@ export async function createReimbursementAdvanceEntry(ledgerId, payload = {}) {
     return createReimbursementAdvance(ledgerId, {
       id: advanceId,
       accountId,
-      categoryId,
+      categoryId: null,
       sourceTxId: txId,
       amountMinor,
       note,
@@ -366,6 +358,10 @@ export async function deleteReimbursementAdvanceEntry(ledgerId, advanceId) {
       sourceTxId,
     }
   })
+}
+
+export async function listReimbursementAdvanceUsageRecordsData(ledgerId) {
+  return listReimbursementAdvanceUsageRecords(ledgerId)
 }
 
 export async function createReimbursementDraft(ledgerId, payload) {
@@ -608,9 +604,24 @@ export async function markReimbursementPaid(ledgerId, payload) {
   })
 }
 
-async function restoreAdvanceUsages(ledgerId, expenseTxId) {
-  const usages = await listReimbursementAdvanceUsagesByExpenseTx(ledgerId, expenseTxId)
-  if (!usages.length) return usages
+async function syncReimbursableExpenseState(ledgerId, expenseTxId) {
+  const [sourceTx, cashTx, usages] = await Promise.all([
+    findTransactionRecordById(ledgerId, expenseTxId),
+    findReimbursementSettlementIncomeTx(ledgerId, expenseTxId),
+    listReimbursementAdvanceUsagesByExpenseTx(ledgerId, expenseTxId),
+  ])
+
+  if (!sourceTx || !Number(sourceTx.is_reimbursable)) return
+
+  const hasSettlement = Boolean(cashTx?.id) || usages.length > 0
+  await markTransactionReimbursed(ledgerId, expenseTxId, hasSettlement)
+}
+
+async function deleteAdvanceUsageRecords(ledgerId, usages, options = {}) {
+  const syncExpenseState = options?.syncExpenseState !== false
+  if (!Array.isArray(usages) || !usages.length) return []
+
+  const expenseTxIds = new Set()
 
   for (const usage of usages) {
     const advance = await getReimbursementAdvanceById(ledgerId, usage.advance_id)
@@ -619,10 +630,65 @@ async function restoreAdvanceUsages(ledgerId, expenseTxId) {
     const restoreMinor = Math.max(0, Math.round(Number(usage.amount_minor ?? 0)))
     const nextUsedMinor = Math.max(0, currentUsedMinor - restoreMinor)
     await updateReimbursementAdvanceUsedMinor(ledgerId, advance.id, nextUsedMinor)
+    const expenseTxId = String(usage.expense_tx_id ?? '').trim()
+    if (expenseTxId) {
+      expenseTxIds.add(expenseTxId)
+    }
   }
 
-  await deleteReimbursementAdvanceUsagesByExpenseTx(ledgerId, expenseTxId)
+  for (const usage of usages) {
+    const usageId = String(usage?.id ?? '').trim()
+    if (!usageId) continue
+    await deleteReimbursementAdvanceUsageById(ledgerId, usageId)
+  }
+
+  if (syncExpenseState) {
+    for (const expenseTxId of expenseTxIds) {
+      await syncReimbursableExpenseState(ledgerId, expenseTxId)
+    }
+  }
+
   return usages
+}
+
+async function restoreAdvanceUsages(ledgerId, expenseTxId, options = {}) {
+  const usages = await listReimbursementAdvanceUsagesByExpenseTx(ledgerId, expenseTxId)
+  if (!usages.length) return usages
+
+  const syncExpenseState = options?.syncExpenseState !== false
+  return deleteAdvanceUsageRecords(ledgerId, usages, { syncExpenseState })
+}
+
+export async function removeAdvanceUsagesForExpenseTransaction(ledgerId, expenseTxId) {
+  if (!expenseTxId) {
+    throw new Error('expenseTxId 為必填')
+  }
+
+  return withTransaction(async () => {
+    return restoreAdvanceUsages(ledgerId, expenseTxId, { syncExpenseState: false })
+  })
+}
+
+export async function deleteReimbursementAdvanceUsageEntry(ledgerId, usageId) {
+  const normalizedUsageId = String(usageId ?? '').trim()
+  if (!normalizedUsageId) {
+    throw new Error('usageId 為必填')
+  }
+
+  return withTransaction(async () => {
+    const usage = await getReimbursementAdvanceUsageById(ledgerId, normalizedUsageId)
+    if (!usage) {
+      throw new Error('找不到抵扣紀錄')
+    }
+
+    await deleteAdvanceUsageRecords(ledgerId, [usage], { syncExpenseState: true })
+    return {
+      deleted: true,
+      usageId: normalizedUsageId,
+      expenseTxId: String(usage.expense_tx_id ?? '').trim(),
+      advanceId: String(usage.advance_id ?? '').trim(),
+    }
+  })
 }
 
 async function applyAdvanceUsages(ledgerId, expenseTxId, amountMinor, selectedAdvanceIds = []) {

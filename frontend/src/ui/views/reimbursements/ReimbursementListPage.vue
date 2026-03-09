@@ -19,6 +19,7 @@
       </div>
       <div class="row summary-action-row">
         <RouterLink class="btn" :to="{ name: 'reimbursement-advance-manage' }">管理代收</RouterLink>
+        <RouterLink class="btn" :to="{ name: 'reimbursement-advance-usage-manage' }">抵扣紀錄</RouterLink>
         <button class="btn" @click="openAdvanceSheet">新增代收</button>
       </div>
     </article>
@@ -259,21 +260,6 @@
                 <input v-model.number="advanceForm.amountMajor" type="number" min="0" step="1" class="input" />
               </label>
               <label>
-                代收分類
-                <CustomSelect v-model="advanceForm.categoryId" :options="advanceCategoryOptions" />
-              </label>
-              <div v-if="selectedAdvanceCategory" class="row advance-category-preview">
-                <span class="muted">代收分類預覽</span>
-                <span class="advance-preview-value">
-                  <font-awesome-icon
-                    v-if="selectedAdvanceCategory.icon"
-                    :icon="selectedAdvanceCategory.icon"
-                    class="advance-category-icon"
-                  />
-                  <span>{{ selectedAdvanceCategory.name }}</span>
-                </span>
-              </div>
-              <label>
                 代收帳戶
                 <CustomSelect v-model="advanceForm.accountId" :options="accountStore.accounts" />
               </label>
@@ -356,7 +342,6 @@ const settleForm = reactive({
 })
 const advanceForm = reactive({
   amountMajor: 0,
-  categoryId: '',
   accountId: '',
   note: '',
 })
@@ -429,14 +414,7 @@ const singleSettleCashMinor = computed(() => {
 const canCreateAdvance = computed(() => {
   return Number.isFinite(Number(advanceForm.amountMajor))
     && Number(advanceForm.amountMajor) > 0
-    && Boolean(String(advanceForm.categoryId ?? '').trim())
     && Boolean(String(advanceForm.accountId ?? '').trim())
-})
-const advanceCategoryOptions = computed(() => categoryStore.expenseCategories ?? [])
-const selectedAdvanceCategory = computed(() => {
-  const categoryId = String(advanceForm.categoryId ?? '').trim()
-  if (!categoryId) return null
-  return (categoryStore.categories ?? []).find((item) => String(item?.id ?? '').trim() === categoryId) ?? null
 })
 const categoryIconById = computed(() => {
   const map = new Map()
@@ -528,7 +506,9 @@ function openOffsetAbout(tx) {
 
 function advanceCategoryName(advance) {
   const name = String(advance?.category_name ?? '').trim()
-  return name || '未指定分類'
+  if (name) return name
+  const note = String(advance?.note ?? '').trim()
+  return note || '代收'
 }
 
 function advanceCategoryIcon(advance) {
@@ -549,7 +529,6 @@ function closeActionSheet() {
 
 function openAdvanceSheet() {
   advanceForm.amountMajor = 0
-  advanceForm.categoryId = String(categoryStore.expenseCategories[0]?.id ?? '')
   advanceForm.accountId = String(accountStore.accounts[0]?.id ?? '')
   advanceForm.note = ''
   isAdvanceOpen.value = true
@@ -567,7 +546,6 @@ async function submitAdvance() {
   try {
     await reimbursementStore.createAdvance({
       amountMinor: Math.round(Number(advanceForm.amountMajor ?? 0) * 100),
-      categoryId: advanceForm.categoryId,
       accountId: advanceForm.accountId,
       note: advanceForm.note,
       receivedAt: new Date().toISOString(),
@@ -1053,6 +1031,7 @@ h2 {
 }
 .summary-action-row {
   justify-content: flex-end;
+  flex-wrap: wrap;
   margin-top: 6px
 }
 .entry {
