@@ -383,6 +383,7 @@
               maxlength="16"
               :placeholder="t('settings_account.redeem_placeholder', '輸入好友邀請碼')"
               :disabled="referralSubmitting || apiUnavailable"
+              @paste="handleReferralCodePaste"
               @keyup.enter="submitReferralCode"
             />
             <button class="btn primary" :disabled="referralSubmitting || apiUnavailable || !redeemCodeInput" @click="submitReferralCode">
@@ -475,6 +476,7 @@ const MAX_AVATAR_SIDE_PX = 320
 const MAX_AVATAR_FILE_BYTES = 5 * 1024 * 1024
 const MAX_AVATAR_DATA_URL_LENGTH = 5 * 1024 * 1024
 const APP_DOWNLOAD_URL = 'https://play.google.com/store/apps/details?id=com.strawcoding.strawmoneybook'
+const REFERRAL_CODE_PATTERN = /(^|[^A-Z0-9])([A-Z0-9]{8})(?=$|[^A-Z0-9])/i
 
 const resetToken = computed(() => String(route.query.token ?? '').trim())
 const isResetPasswordMode = computed(() => String(route.query.mode ?? '').trim() === 'reset-password' && Boolean(resetToken.value))
@@ -483,6 +485,24 @@ const sessionMustChangePassword = computed(() => Boolean(sessionUser.value?.must
 function looksLikeEmail(value) {
   const source = String(value ?? '').trim()
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(source)
+}
+
+function extractReferralCode(value) {
+  const source = String(value ?? '').trim().toUpperCase()
+  if (!source) return ''
+  const matched = source.match(REFERRAL_CODE_PATTERN)
+  return String(matched?.[2] ?? '').trim()
+}
+
+function normalizeReferralCodeInput(value) {
+  const source = String(value ?? '').trim()
+  if (!source) return ''
+  const extracted = extractReferralCode(source)
+  if (extracted) return extracted
+  if (/^[A-Z0-9\s-]+$/i.test(source)) {
+    return source.replace(/[\s-]+/g, '').toUpperCase()
+  }
+  return source
 }
 
 const canSubmitAuth = computed(() => {
@@ -661,6 +681,14 @@ function closeForgotPasswordMode() {
   debugTemporaryPassword.value = ''
   stopResetRequestCountdown()
   resetRequestCooldownSeconds.value = 0
+}
+
+function handleReferralCodePaste(event) {
+  const pastedText = String(event?.clipboardData?.getData('text') ?? '')
+  const extracted = extractReferralCode(pastedText)
+  if (!extracted) return
+  event.preventDefault()
+  redeemCodeInput.value = extracted
 }
 
 async function clearResetPasswordMode() {
@@ -853,10 +881,12 @@ async function handleLogout() {
 }
 
 async function submitReferralCode() {
-  if (!redeemCodeInput.value || apiUnavailable.value) return
+  const normalizedCode = normalizeReferralCodeInput(redeemCodeInput.value)
+  if (!normalizedCode || apiUnavailable.value) return
   referralSubmitting.value = true
   try {
-    const result = await redeemReferralCode(redeemCodeInput.value)
+    redeemCodeInput.value = normalizedCode
+    const result = await redeemReferralCode(normalizedCode)
     sessionUser.value = result.user
     referralSummary.value = result.summary ?? null
     redeemCodeInput.value = ''
@@ -908,6 +938,16 @@ watch(
   () => {
     if (passwordSaving.value) return
     passwordSavedMessage.value = ''
+  },
+)
+
+watch(
+  () => redeemCodeInput.value,
+  (value) => {
+    const normalized = normalizeReferralCodeInput(value)
+    if (normalized !== value) {
+      redeemCodeInput.value = normalized
+    }
   },
 )
 
