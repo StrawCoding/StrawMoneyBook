@@ -5,6 +5,7 @@
         <h2>{{ counterpartyName }}</h2>
         <div class="row head-actions">
           <button class="btn primary" @click="openCreateSheet">新增借貸</button>
+          <button v-if="!showFinished && activeCount > 1" class="btn" @click="openBatchRepaySheet">批量{{ collectionLabelByDirection(tab) }}</button>
           <RouterLink class="btn back-btn" :to="backLink">返回</RouterLink>
         </div>
       </header>
@@ -50,8 +51,12 @@
                   <MoneyText :value-minor="loan.principal_minor" />
                 </span>
                 <span class="row item-block">
-                  <small class="muted">{{ loan.direction === 'lend' ? '收回' : '歸還' }}</small>
+                  <small class="muted">{{ paidLabel(loan) }}</small>
                   <MoneyText :value-minor="loan.paid_minor ?? 0" />
+                </span>
+                <span class="row item-block">
+                  <small class="muted">剩餘</small>
+                  <MoneyText :value-minor="loan.remaining_minor ?? 0" />
                 </span>
               </div>
 
@@ -199,6 +204,55 @@
       </transition>
     </teleport>
 
+    <teleport to="body">
+      <transition name="overlay-fade">
+        <section v-if="batchRepayOpen" class="sheet-mask" @click.self="closeBatchRepaySheet">
+          <article class="sheet card">
+            <header class="row">
+              <h3>批量{{ collectionLabelByDirection(tab) }}</h3>
+              <button class="btn" @click="closeBatchRepaySheet">關閉</button>
+            </header>
+
+            <div class="stack form-wrap">
+              <p class="muted">
+                {{ counterpartyName }} / 共 {{ batchRepayCandidates.length }} 筆進行中 /
+                剩餘 <MoneyText :value-minor="batchRepayTotalMinor" />
+              </p>
+              <label>
+                批量{{ collectionLabelByDirection(tab) }}金額（元）
+                <input v-model.number="batchRepayForm.amountMajor" class="input" type="number" min="0" step="1" />
+              </label>
+
+              <label>
+                帳戶
+                <CustomSelect v-model="batchRepayForm.accountId" :options="accountStore.accounts" />
+              </label>
+
+              <label>
+                備註
+                <textarea v-model="batchRepayForm.note" class="textarea" rows="2" />
+              </label>
+
+              <div class="stack batch-preview">
+                <small class="muted">將依較早借貸優先沖抵</small>
+                <div v-for="loan in batchRepayCandidates" :key="loan.id" class="row batch-preview-item">
+                  <span>{{ formatDateTime(loan.start_date || loan.setup_occurred_at || loan.created_at) }}</span>
+                  <span>
+                    <MoneyText :value-minor="loan.remaining_minor" />
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <footer class="row">
+              <button class="btn" @click="closeBatchRepaySheet">取消</button>
+              <button class="btn primary" @click="submitBatchRepayment">儲存</button>
+            </footer>
+          </article>
+        </section>
+      </transition>
+    </teleport>
+
     <AppDialog
       :open="confirmDialog.open"
       :title="confirmDialog.type === 'void' ? '完成借貸' : '刪除借貸'"
@@ -234,6 +288,7 @@ const budgetStore = useBudgetStore()
 
 const repayOpen = ref(false)
 const repayLoan = ref(null)
+const batchRepayOpen = ref(false)
 const createOpen = ref(false)
 const tab = ref('lend')
 const showFinished = ref(false)
@@ -258,6 +313,11 @@ const createForm = reactive({
 })
 
 const repayForm = reactive({
+  amountMajor: null,
+  accountId: '',
+  note: '',
+})
+const batchRepayForm = reactive({
   amountMajor: null,
   accountId: '',
   note: '',
@@ -289,6 +349,15 @@ const visibleLoans = computed(() => {
     return loansByCounterpartyAndTab.value.filter((loan) => ['settled', 'void'].includes(loan.status))
   }
   return loansByCounterpartyAndTab.value.filter((loan) => ['active', 'partial'].includes(loan.status))
+})
+const batchRepayCandidates = computed(() => {
+  return loansByCounterpartyAndTab.value
+    .filter((loan) => ['active', 'partial'].includes(String(loan.status ?? '')))
+    .slice()
+    .sort((a, b) => batchLoanSortTime(a) - batchLoanSortTime(b) || String(a.id ?? '').localeCompare(String(b.id ?? '')))
+})
+const batchRepayTotalMinor = computed(() => {
+  return batchRepayCandidates.value.reduce((total, loan) => total + Math.max(0, Number(loan.remaining_minor ?? 0)), 0)
 })
 const outstandingMinor = computed(() => {
   return loansByCounterpartyAndTab.value
@@ -343,6 +412,14 @@ function collectionLabel(item) {
   return item?.direction === 'borrow' ? '歸還' : '收回'
 }
 
+function collectionLabelByDirection(direction) {
+  return direction === 'borrow' ? '歸還' : '收回'
+}
+
+function paidLabel(item) {
+  return item?.direction === 'borrow' ? '已歸還' : '已收回'
+}
+
 async function refreshLinkedData() {
   await Promise.all([
     transactionStore.loadRecent(),
@@ -362,6 +439,12 @@ function canDeleteLoan(loan) {
 
 function loanDirectionIcon(loan) {
   return loan?.direction === 'borrow' ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up'
+}
+
+function batchLoanSortTime(loan) {
+  const raw = String(loan?.start_date ?? loan?.setup_occurred_at ?? loan?.created_at ?? '')
+  const parsed = Date.parse(raw)
+  return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER
 }
 
 function openCreateSheet() {
@@ -465,6 +548,17 @@ function closeRepaySheet() {
   repayLoan.value = null
 }
 
+function openBatchRepaySheet() {
+  batchRepayOpen.value = true
+  batchRepayForm.amountMajor = batchRepayTotalMinor.value / 100
+  batchRepayForm.accountId = defaultAccountId.value
+  batchRepayForm.note = ''
+}
+
+function closeBatchRepaySheet() {
+  batchRepayOpen.value = false
+}
+
 async function submitRepayment() {
   if (!repayLoan.value) return
 
@@ -483,6 +577,32 @@ async function submitRepayment() {
     closeRepaySheet()
   } catch (error) {
     uiStore.pushToast(error.message ?? `${collectionLabel(repayLoan.value)}失敗`, 'error')
+  }
+}
+
+async function submitBatchRepayment() {
+  if (!batchRepayCandidates.value.length) return
+
+  try {
+    const result = await loanStore.repayBatchByCounterparty({
+      direction: tab.value,
+      counterpartyName: counterpartyName.value,
+      accountId: batchRepayForm.accountId,
+      amountMinor: Math.round(Number(batchRepayForm.amountMajor ?? 0) * 100),
+      note: batchRepayForm.note,
+      paidAt: new Date().toISOString(),
+    })
+
+    await refreshLinkedData()
+
+    const summaryParts = [
+      `已批量${collectionLabelByDirection(tab.value)} ${result.affectedLoanCount} 筆`,
+      `剩餘 ${Math.round(Number(result.remainingMinor ?? 0)) / 100} 元`,
+    ]
+    uiStore.pushToast(summaryParts.join('，'))
+    closeBatchRepaySheet()
+  } catch (error) {
+    uiStore.pushToast(error.message ?? `批量${collectionLabelByDirection(tab.value)}失敗`, 'error')
   }
 }
 
@@ -507,6 +627,11 @@ function closeConfirmDialog() {
 }
 
 function onRequestCloseOverlay(event) {
+  if (batchRepayOpen.value) {
+    closeBatchRepaySheet()
+    event.preventDefault()
+    return
+  }
   if (repayOpen.value) {
     closeRepaySheet()
     event.preventDefault()
@@ -589,6 +714,14 @@ h2, h3 {
 }
 .head-actions {
   gap: 8px
+}
+.batch-preview {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+}
+.batch-preview-item {
+  align-items: center;
 }
 .list {
   list-style: none;
