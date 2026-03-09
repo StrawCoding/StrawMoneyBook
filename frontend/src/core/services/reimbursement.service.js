@@ -36,6 +36,7 @@ import {
   listReimbursements,
   recomputeReimbursementTotal,
   setReimbursementPaid,
+  softDeleteReimbursementAdvanceById,
   updateReimbursementAdvanceUsedMinor,
   updateReimbursementStatus,
 } from '@/core/repositories/reimbursement.repo'
@@ -335,6 +336,38 @@ export async function createReimbursementAdvanceEntry(ledgerId, payload = {}) {
   })
 }
 
+export async function deleteReimbursementAdvanceEntry(ledgerId, advanceId) {
+  const normalizedAdvanceId = String(advanceId ?? '').trim()
+  if (!normalizedAdvanceId) {
+    throw new Error('advanceId 為必填')
+  }
+
+  return withTransaction(async () => {
+    const advance = await getReimbursementAdvanceById(ledgerId, normalizedAdvanceId)
+    if (!advance) {
+      throw new Error('找不到代收資料')
+    }
+
+    const usedMinor = Math.max(0, Math.round(Number(advance.used_minor ?? 0)))
+    if (usedMinor > 0) {
+      throw new Error('已有抵扣紀錄的代收不可刪除')
+    }
+
+    await softDeleteReimbursementAdvanceById(ledgerId, normalizedAdvanceId)
+
+    const sourceTxId = String(advance.source_tx_id ?? '').trim()
+    if (sourceTxId) {
+      await softDeleteTransactionById(ledgerId, sourceTxId)
+    }
+
+    return {
+      deleted: true,
+      advanceId: normalizedAdvanceId,
+      sourceTxId,
+    }
+  })
+}
+
 export async function createReimbursementDraft(ledgerId, payload) {
   if (!payload.title?.trim()) {
     throw new Error('請輸入標題')
@@ -414,6 +447,7 @@ export async function deleteReimbursement(ledgerId, reimbursementId) {
     for (const item of claimItems) {
       const txId = String(item?.transaction_id ?? '').trim()
       if (!txId) continue
+      await restoreAdvanceUsages(ledgerId, txId)
       await markTransactionReimbursed(ledgerId, txId, false)
     }
 
@@ -426,13 +460,55 @@ export async function deleteReimbursement(ledgerId, reimbursementId) {
   })
 }
 
+function listClaimOffsettableItems(claimItems = []) {
+  return claimItems.filter((item) => {
+    const txId = String(item?.transaction_id ?? '').trim()
+    if (!txId) return false
+    if (String(item?.entry_type ?? '') === 'income') return false
+    return Math.max(0, Math.round(Number(item?.amount_minor ?? 0))) > 0
+  })
+}
+
+async function applyClaimAdvanceUsages(ledgerId, claimItems, totalMinor, selectedAdvanceIds = []) {
+  const normalizedIds = normalizeAdvanceIds(selectedAdvanceIds)
+  if (!normalizedIds.length || totalMinor <= 0) {
+    return {
+      usedAdvanceMinor: 0,
+      usedAdvanceIds: [],
+      cashAmountMinor: totalMinor,
+    }
+  }
+
+  let remainingClaimMinor = totalMinor
+  let usedAdvanceMinor = 0
+  const usedAdvanceIds = new Set()
+
+  for (const item of listClaimOffsettableItems(claimItems)) {
+    if (remainingClaimMinor <= 0) break
+
+    const txId = String(item.transaction_id ?? '').trim()
+    const itemMinor = Math.max(0, Math.round(Number(item.amount_minor ?? 0)))
+    const offsettableMinor = Math.min(itemMinor, remainingClaimMinor)
+    if (!txId || offsettableMinor <= 0) continue
+
+    const result = await applyAdvanceUsages(ledgerId, txId, offsettableMinor, normalizedIds)
+    usedAdvanceMinor += result.usedAdvanceMinor
+    remainingClaimMinor = Math.max(0, remainingClaimMinor - result.usedAdvanceMinor)
+    for (const advanceId of result.usedAdvanceIds) {
+      usedAdvanceIds.add(advanceId)
+    }
+  }
+
+  return {
+    usedAdvanceMinor,
+    usedAdvanceIds: Array.from(usedAdvanceIds),
+    cashAmountMinor: Math.max(0, totalMinor - usedAdvanceMinor),
+  }
+}
+
 export async function markReimbursementPaid(ledgerId, payload) {
   if (!payload.reimbursementId) {
     throw new Error('reimbursementId 為必填')
-  }
-
-  if (!payload.accountId) {
-    throw new Error('入帳必須指定帳戶')
   }
 
   return withTransaction(async () => {
@@ -457,12 +533,14 @@ export async function markReimbursementPaid(ledgerId, payload) {
       }
     }
 
-    if (claim.status === 'paid' && claim.paid_tx_id) {
+    if (claim.status === 'paid') {
       await syncLinkedReimbursableTransactions()
       return {
         alreadyProcessed: true,
         reimbursementId: claim.id,
-        paidTxId: claim.paid_tx_id,
+        paidTxId: claim.paid_tx_id ?? '',
+        usedAdvanceMinor: 0,
+        cashAmountMinor: Math.max(0, Math.round(Number(claim.total_minor ?? 0))),
       }
     }
 
@@ -485,22 +563,36 @@ export async function markReimbursementPaid(ledgerId, payload) {
       throw new Error('總額必須大於 0 才能入帳')
     }
 
-    const txId = await addTransaction(ledgerId, {
-      type: 'income',
-      accountId: payload.accountId,
-      categoryId: payload.categoryId ?? null,
-      amountMinor: totalMinor,
-      occurredAt: payload.paidAt ?? nowIso(),
-      note: payload.note ?? `報銷入帳：${claim.title}`,
-      originType: 'reimbursement',
-      externalRefId: claim.id,
-      idempotencyKey,
-      includeInBudget: false,
-      includeInAnalysis: false,
-    })
+    const advanceResult = await applyClaimAdvanceUsages(
+      ledgerId,
+      claimItems,
+      totalMinor,
+      payload.selectedAdvanceIds,
+    )
+    let txId = ''
+
+    if (advanceResult.cashAmountMinor > 0) {
+      if (!payload.accountId) {
+        throw new Error('入帳必須指定帳戶')
+      }
+
+      txId = await addTransaction(ledgerId, {
+        type: 'income',
+        accountId: payload.accountId,
+        categoryId: payload.categoryId ?? null,
+        amountMinor: advanceResult.cashAmountMinor,
+        occurredAt: payload.paidAt ?? nowIso(),
+        note: payload.note ?? `報銷入帳：${claim.title}`,
+        originType: 'reimbursement',
+        externalRefId: claim.id,
+        idempotencyKey,
+        includeInBudget: false,
+        includeInAnalysis: false,
+      })
+    }
 
     const updated = await setReimbursementPaid(ledgerId, claim.id, {
-      paidTxId: txId,
+      paidTxId: txId || null,
       idempotencyKey,
     })
     await syncLinkedReimbursableTransactions()
@@ -509,6 +601,9 @@ export async function markReimbursementPaid(ledgerId, payload) {
       alreadyProcessed: false,
       reimbursementId: updated.id,
       paidTxId: txId,
+      usedAdvanceMinor: advanceResult.usedAdvanceMinor,
+      usedAdvanceIds: advanceResult.usedAdvanceIds,
+      cashAmountMinor: advanceResult.cashAmountMinor,
     }
   })
 }

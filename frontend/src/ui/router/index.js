@@ -262,6 +262,12 @@ const router = createRouter({
       meta: { tab: 'home' },
     },
     {
+      name: 'reimbursement-advance-manage',
+      path: '/reimbursements/advances',
+      component: () => import('@/ui/views/reimbursements/ReimbursementAdvanceManagementPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
       name: 'claim-sheets',
       path: '/claim-sheets',
       component: () => import('@/ui/views/claims/ClaimSheetListPage.vue'),

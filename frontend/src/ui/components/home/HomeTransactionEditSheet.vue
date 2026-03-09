@@ -920,6 +920,8 @@ function toOccurredAtIso(dateInput, hourInput, minuteInput) {
 }
 .sheet {
   width: min(900px, 100vw);
+  max-width: 100vw;
+  box-sizing: border-box;
   border-radius: 18px 18px 0 0;
   padding: 14px 14px calc(14px + var(--navigation-bar-height))
 }
@@ -1041,6 +1043,8 @@ footer.row {
 }
 .extra-sheet {
   width: min(900px, 100vw);
+  max-width: 100vw;
+  box-sizing: border-box;
   border-radius: 18px 18px 0 0;
   padding: 14px 14px calc(14px + var(--navigation-bar-height))
 }
@@ -1056,6 +1060,8 @@ footer.row {
 .category-sheet {
   width: min(900px, 100vw);
   height: 100dvh;
+  max-width: 100vw;
+  box-sizing: border-box;
   border-radius: 0;
   padding: calc(10px + var(--status-bar-height)) 12px calc(12px + var(--navigation-bar-height));
   display: grid;
@@ -1134,7 +1140,9 @@ h4 {
   font-size: 16px
 }
 .extra-content {
-  margin-top: 10px
+  margin-top: 10px;
+  min-width: 0;
+  overflow-x: hidden
 }
 .addon-wrap {
   display: grid;
@@ -1143,7 +1151,7 @@ h4 {
 }
 .addon-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 74px 96px 68px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 74px) minmax(0, 96px) auto;
   gap: 8px;
   align-items: end;
   min-width: 0;
@@ -1160,6 +1168,7 @@ h4 {
 .addon-remove {
   padding: 10px 0;
   white-space: nowrap;
+  min-width: 0;
 }
 .addon-desc {
   color: var(--muted);
@@ -1255,7 +1264,10 @@ h4 {
 }
 @media (max-width: 560px) {
   .addon-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 88px);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 80px);
+  }
+  .addon-dir {
+    grid-column: 2 / 3;
   }
   .addon-amount {
     grid-column: 1 / 2;

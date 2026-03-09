@@ -674,11 +674,11 @@ async function parseText(options = {}) {
   if (shouldAutoSubmit) {
     const created = await submit({
       autoCreated: true,
-      keepDraft: true,
+      keepDraft: false,
       preserveSourceText: false,
     })
     if (created) {
-      uiStore.pushToast(t('ai_bookkeeping.toast.auto_applied_editable', '已先套用交易，下方可再編輯'))
+      uiStore.pushToast(t('ai_bookkeeping.toast.saved', 'AI 記帳已儲存交易'))
     }
   }
 }

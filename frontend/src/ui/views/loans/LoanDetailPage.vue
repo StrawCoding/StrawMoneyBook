@@ -9,7 +9,7 @@
       <div v-if="loan" class="stack loan-body">
         <div class="row">
           <strong>{{ loan.counterparty_name || '未命名對象' }}</strong>
-          <span class="badge" :class="loan.status">{{ statusLabel(loan.status) }}</span>
+          <span class="badge" :class="loan.status">{{ statusLabel(loan) }}</span>
         </div>
 
         <div class="row muted">
@@ -19,7 +19,7 @@
 
         <div class="row"><small class="muted">本金</small><MoneyText :value-minor="loan.principal_minor" /></div>
         <div class="row"><small class="muted">預設利息</small><MoneyText :value-minor="loan.preset_interest_minor ?? 0" /></div>
-        <div class="row"><small class="muted">已還</small><MoneyText :value-minor="loan.paid_minor" /></div>
+        <div class="row"><small class="muted">{{ paidLabel(loan) }}</small><MoneyText :value-minor="loan.paid_minor" /></div>
         <div class="row">
           <small class="muted">已還本金 / 利息</small>
           <span>
@@ -230,10 +230,11 @@ async function refreshLinkedData() {
   ])
 }
 
-function statusLabel(status) {
+function statusLabel(item) {
+  const status = String(item?.status ?? '')
   const map = {
     active: '進行中',
-    partial: '部分償還',
+    partial: item?.direction === 'lend' ? '部分收回' : '部分償還',
     settled: '已結清',
     void: '完成',
   }
@@ -251,6 +252,10 @@ function canDeleteLoan(item) {
 
 function collectionLabel(item) {
   return item?.direction === 'borrow' ? '歸還' : '收回'
+}
+
+function paidLabel(item) {
+  return item?.direction === 'borrow' ? '已歸還' : '已收回'
 }
 
 function collectionRecordLabel(item) {

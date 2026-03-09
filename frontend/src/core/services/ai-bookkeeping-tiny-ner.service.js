@@ -526,6 +526,7 @@ function normalizeCounterpartyName(rawName) {
   }
   if (!name) return ''
   if (isLikelyAmountLikeCounterparty(name)) return ''
+  if (!/[A-Za-z\u3040-\u30ff\u3400-\u9fff]/.test(name)) return ''
   if (/^(昨天|今天|明天|前天|剛剛|刚刚|下午|上午|晚上|早上|yesterday|today|tomorrow|afternoon|morning|evening|night|昨日|今日|明日)$/i.test(name)) return ''
   return name
 }
@@ -541,12 +542,12 @@ function isLikelyAmountLikeCounterparty(rawValue) {
 
 function extractCounterpartyHint(text) {
   const patterns = [
-    /(?:借出|借了)\s*(?:nt\$?|ntd|twd|us\$|usd|\$|¥)?\s*\d[\d,]*(?:\.\d+)?(?:k|w|萬|万|千|百|元(?:整)?|塊|块|美元|美金|台幣|臺幣|日圓|日元)?\s*(?:給|借給)\s*([^\s，。,；;:：]{1,24})/i,
-    /(?:借給|借了給|借出給|借款給|還給|还给)\s*([^\s，。,；;:：]{1,24})/i,
-    /(?:向|跟)\s*([^\s，。,；;:：]{1,24})\s*(?:借|借款|借錢|借钱|還款|还款|還錢|还钱)/i,
-    /([^\s，。,；;:：]{1,24})\s*(?:還我|还我)/i,
+    /(?:借出|借了)\s*(?:nt\$?|ntd|twd|us\$|usd|\$|¥)?\s*\d[\d,]*(?:\.\d+)?(?:k|w|萬|万|千|百|元(?:整)?|塊|块|美元|美金|台幣|臺幣|日圓|日元)?\s*(?:給|借給)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})/i,
+    /(?:借給|借了給|借出給|借款給|還給|还给)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})/i,
+    /(?:向|跟)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:借|借款|借錢|借钱|還款|还款|還錢|还钱)/i,
+    /([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:還我|还我)/i,
     /(?:lend(?:ing)?|loan(?:ed)?|borrow(?:ed)?|repay(?:ed)?|pay(?:ing)?\s+back)\s+(?:to|from)?\s*([a-zA-Z][a-zA-Z0-9._-]{0,23})/i,
-    /([^\s，。,；;:：]{1,24})\s*(?:に|から)\s*(?:貸した|借りた|返済)/i,
+    /([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:に|から)\s*(?:貸した|借りた|返済)/i,
   ]
 
   for (const pattern of patterns) {

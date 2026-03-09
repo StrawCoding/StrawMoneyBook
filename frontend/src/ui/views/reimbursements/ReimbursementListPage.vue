@@ -18,6 +18,7 @@
         <MoneyText :value-minor="reimbursementStore.availableAdvanceTotalMinor" />
       </div>
       <div class="row summary-action-row">
+        <RouterLink class="btn" :to="{ name: 'reimbursement-advance-manage' }">管理代收</RouterLink>
         <button class="btn" @click="openAdvanceSheet">新增代收</button>
       </div>
     </article>
@@ -74,6 +75,23 @@
               </small>
               <button class="btn" @click.stop="openOffsetAbout(tx)">抵消明細</button>
             </div>
+          </div>
+
+          <div class="entry-actions">
+            <button
+              v-if="tab === 'pending'"
+              class="btn entry-action-btn"
+              @click.stop="openSingleSettle(tx)"
+            >
+              報銷
+            </button>
+            <button
+              v-else
+              class="btn entry-action-btn"
+              @click.stop="openReimbursementEdit(tx)"
+            >
+              調整
+            </button>
           </div>
         </li>
 

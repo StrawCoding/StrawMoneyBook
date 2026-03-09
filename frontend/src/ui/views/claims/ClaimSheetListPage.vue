@@ -235,7 +235,41 @@
                 <span>{{ t('claim_sheet.net_amount') }}</span>
                 <MoneyText :value-minor="completeTarget.total_minor" />
               </div>
-              <label>
+              <div class="copy-wrap">
+                <p class="copy-title">代收抵扣（可複選）</p>
+                <div v-if="usableCompleteAdvances.length" class="copy-ledger-list">
+                  <label v-for="advance in usableCompleteAdvances" :key="advance.id" class="copy-ledger-item">
+                    <input v-model="completeForm.selectedAdvanceIds" class="copy-ledger-check" type="checkbox" :value="advance.id" />
+                    <span class="copy-ledger-mark">✓</span>
+                    <span class="copy-ledger-name">
+                      <span class="advance-meta-line">
+                        <font-awesome-icon
+                          v-if="advanceCategoryIcon(advance)"
+                          :icon="advanceCategoryIcon(advance)"
+                          class="advance-category-icon"
+                        />
+                        <span>{{ advanceCategoryName(advance) }}</span>
+                      </span>
+                      <small class="muted copy-ledger-meta">
+                        {{ advance.account_name || '未指定帳戶' }}
+                      </small>
+                      <small class="muted copy-ledger-meta">
+                        <MoneyText :value-minor="advance.available_minor" />
+                      </small>
+                    </span>
+                  </label>
+                </div>
+                <p v-else class="muted">目前沒有可用代收</p>
+                <div v-if="selectedCompleteAdvanceCapacityMinor > 0" class="row advance-summary-row">
+                  <span>本次代收抵扣</span>
+                  <MoneyText :value-minor="selectedCompleteAdvanceCapacityMinor" />
+                </div>
+                <p class="muted">代收只是可抵金額紀錄，可跨不同帳戶抵消；從 A 收，也可以從 B 出。</p>
+                <p v-if="completeAdvanceOffsettableMinor <= 0" class="muted">這張請款單沒有可供代收抵扣的匯入報銷項目。</p>
+                <p v-else class="muted">代收會優先抵扣匯入的報銷項目，剩餘金額才建立新的入帳交易。</p>
+                <p v-if="completeCashMinor <= 0" class="muted">本次將全額以代收抵扣，不再建立新的入帳交易。</p>
+              </div>
+              <label v-if="completeCashMinor > 0">
                 {{ t('claim_sheet.form.account') }}
                 <CustomSelect v-model="completeForm.accountId" :options="claimAccountOptions" />
               </label>
@@ -320,6 +354,7 @@ const creating = ref(false)
 const detailClaim = ref(null)
 const detailItems = ref([])
 const completeTarget = ref(null)
+const completeItems = ref([])
 const completing = ref(false)
 const activeClaimPage = ref('active')
 const deleteTarget = ref(null)
@@ -333,6 +368,7 @@ const createForm = reactive({
 const completeForm = reactive({
   accountId: '',
   note: '',
+  selectedAdvanceIds: [],
 })
 let exportUrl = ''
 
@@ -346,6 +382,56 @@ const claimAccountOptions = computed(() => {
     value: account.id,
     label: account.name,
   }))
+})
+
+const selectedCompleteAdvanceIdSet = computed(() => {
+  return new Set((completeForm.selectedAdvanceIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean))
+})
+
+const usableCompleteAdvances = computed(() => {
+  return reimbursementStore.advances.filter((item) => {
+    const advanceId = String(item?.id ?? '').trim()
+    const availableMinor = Math.max(0, Math.round(Number(item?.available_minor ?? 0)))
+    return Boolean(advanceId) && (availableMinor > 0 || selectedCompleteAdvanceIdSet.value.has(advanceId))
+  })
+})
+
+const completeAdvanceOffsettableMinor = computed(() => {
+  const claimTotalMinor = Math.max(0, Math.round(Number(completeTarget.value?.total_minor ?? 0)))
+  const linkedExpenseMinor = completeItems.value.reduce((sum, item) => {
+    const txId = String(item?.transaction_id ?? '').trim()
+    if (!txId || String(item?.entry_type ?? '') === 'income') return sum
+    const amountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
+    return sum + amountMinor
+  }, 0)
+  return Math.min(claimTotalMinor, linkedExpenseMinor)
+})
+
+const selectedCompleteAdvanceCapacityMinor = computed(() => {
+  let remainingMinor = completeAdvanceOffsettableMinor.value
+  if (remainingMinor <= 0) return 0
+
+  const advanceMap = new Map(usableCompleteAdvances.value.map((item) => [String(item?.id ?? '').trim(), item]))
+  let totalMinor = 0
+
+  for (const rawAdvanceId of completeForm.selectedAdvanceIds ?? []) {
+    const advanceId = String(rawAdvanceId ?? '').trim()
+    if (!advanceId || remainingMinor <= 0) continue
+    const advance = advanceMap.get(advanceId)
+    if (!advance) continue
+    const availableMinor = Math.max(0, Math.round(Number(advance.available_minor ?? 0)))
+    if (availableMinor <= 0) continue
+    const appliedMinor = Math.min(availableMinor, remainingMinor)
+    totalMinor += appliedMinor
+    remainingMinor -= appliedMinor
+  }
+
+  return totalMinor
+})
+
+const completeCashMinor = computed(() => {
+  const claimTotalMinor = Math.max(0, Math.round(Number(completeTarget.value?.total_minor ?? 0)))
+  return Math.max(0, claimTotalMinor - selectedCompleteAdvanceCapacityMinor.value)
 })
 
 const pendingClaimMinor = computed(() => {
@@ -398,9 +484,10 @@ const canCreateClaim = computed(() => {
 })
 
 const canCompleteClaim = computed(() => {
-  return Boolean(completeTarget.value)
-    && Number(completeTarget.value?.total_minor ?? 0) > 0
-    && claimAccountOptions.value.some((item) => item.value === String(completeForm.accountId ?? '').trim())
+  if (!completeTarget.value) return false
+  if (Number(completeTarget.value?.total_minor ?? 0) <= 0) return false
+  if (completeCashMinor.value <= 0) return true
+  return claimAccountOptions.value.some((item) => item.value === String(completeForm.accountId ?? '').trim())
 })
 
 onMounted(async () => {
@@ -578,15 +665,20 @@ function isClaimVoidDisabled(claim) {
 function openCompleteSheet(claim) {
   if (isClaimCompleteDisabled(claim)) return
   completeTarget.value = claim
+  completeItems.value = []
   completeForm.accountId = String(claimAccountOptions.value[0]?.value ?? '')
   completeForm.note = String(claim?.title ?? '').trim()
     ? t('claim_sheet.default_complete_note_named', { title: claim.title })
     : t('claim_sheet.default_complete_note')
+  completeForm.selectedAdvanceIds = []
+  void loadCompleteItems(claim.id)
 }
 
 function closeCompleteSheet() {
   if (completing.value) return
   completeTarget.value = null
+  completeItems.value = []
+  completeForm.selectedAdvanceIds = []
 }
 
 function openDeleteDialog(claim) {
@@ -625,8 +717,9 @@ async function submitCompleteSheet() {
     const readyClaim = await ensureClaimReadyForPayment(completeTarget.value)
     await markReimbursementPaid(ledgerStore.activeLedgerId, {
       reimbursementId: readyClaim.id,
-      accountId: completeForm.accountId,
+      accountId: completeCashMinor.value > 0 ? completeForm.accountId : '',
       note: completeForm.note,
+      selectedAdvanceIds: completeForm.selectedAdvanceIds,
     })
     await Promise.all([reloadDashboard(), reimbursementStore.load(), accountStore.load()])
     closeCompleteSheet()
@@ -664,6 +757,27 @@ function categoryName(categoryId) {
   const normalized = String(categoryId ?? '').trim()
   if (!normalized) return t('analysis_page.uncategorized')
   return categoryStore.categories.find((item) => item.id === normalized)?.name ?? t('analysis_page.uncategorized')
+}
+
+function advanceCategoryName(advance) {
+  const name = String(advance?.category_name ?? '').trim()
+  return name || '未指定分類'
+}
+
+function advanceCategoryIcon(advance) {
+  return String(advance?.category_icon ?? '').trim()
+}
+
+async function loadCompleteItems(claimId) {
+  if (!ledgerStore.activeLedgerId || !claimId) return
+  try {
+    const detail = await getReimbursementDetail(ledgerStore.activeLedgerId, claimId)
+    if (String(completeTarget.value?.id ?? '') !== String(claimId)) return
+    completeItems.value = detail.items
+  } catch (error) {
+    closeCompleteSheet()
+    uiStore.pushToast(error.message ?? t('claim_sheet.toast.load_failed'), 'error')
+  }
 }
 
 function toCsvValue(value) {
@@ -877,6 +991,99 @@ label {
   gap: 6px;
   font-size: 13px;
   color: var(--muted);
+}
+
+.advance-summary-row {
+  align-items: center;
+}
+
+.copy-wrap {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 92%, var(--primary) 8%);
+}
+
+.copy-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.copy-ledger-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.copy-ledger-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.copy-ledger-item:has(.copy-ledger-check:checked) {
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--border) 54%);
+  background: color-mix(in srgb, var(--primary) 12%, var(--card) 88%);
+  transform: translateY(-1px);
+}
+
+.copy-ledger-check {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+
+.copy-ledger-mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: transparent;
+  background: color-mix(in srgb, var(--card) 82%, var(--primary) 18%);
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.copy-ledger-item:has(.copy-ledger-check:checked) .copy-ledger-mark {
+  color: white;
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.copy-ledger-name {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  color: var(--text);
+}
+
+.copy-ledger-meta {
+  display: block;
+}
+
+.advance-meta-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.advance-category-icon {
+  width: 16px;
 }
 
 @media (max-width: 720px) {

@@ -286,6 +286,21 @@ export async function updateReimbursementAdvanceUsedMinor(ledgerId, advanceId, u
   return getReimbursementAdvanceById(ledgerId, advanceId)
 }
 
+export async function softDeleteReimbursementAdvanceById(ledgerId, advanceId) {
+  assertLedgerId(ledgerId)
+  const now = nowIso()
+
+  await run(
+    `UPDATE reimbursement_advances
+     SET deleted_at = ?,
+         updated_at = ?
+     WHERE ledger_id = ?
+       AND id = ?
+       AND deleted_at IS NULL;`,
+    [now, now, ledgerId, advanceId],
+  )
+}
+
 export async function listReimbursementAdvanceUsagesByExpenseTx(ledgerId, expenseTxId) {
   assertLedgerId(ledgerId)
 
