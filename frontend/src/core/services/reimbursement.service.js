@@ -664,6 +664,36 @@ export async function settleReimbursableExpense(ledgerId, payload) {
   })
 }
 
+export async function getReimbursementOffsetDetail(ledgerId, expenseTxId) {
+  if (!expenseTxId) {
+    throw new Error('expenseTxId 為必填')
+  }
+
+  const [sourceTx, cashTx, usages] = await Promise.all([
+    findTransactionRecordById(ledgerId, expenseTxId),
+    findReimbursementSettlementIncomeTx(ledgerId, expenseTxId),
+    listReimbursementAdvanceUsagesByExpenseTx(ledgerId, expenseTxId),
+  ])
+
+  if (!sourceTx) {
+    throw new Error('找不到來源交易')
+  }
+
+  const offsetMinor = usages.reduce((sum, item) => {
+    return sum + Math.max(0, Math.round(Number(item.amount_minor ?? 0)))
+  }, 0)
+  const cashMinor = Math.max(0, Math.round(Number(cashTx?.amount_minor ?? 0)))
+
+  return {
+    sourceTx,
+    cashTx: cashTx ? { ...cashTx, amount_minor: cashMinor } : null,
+    usages,
+    offsetMinor,
+    cashMinor,
+    settledMinor: offsetMinor + cashMinor,
+  }
+}
+
 export async function cancelReimbursableExpenseSettlement(ledgerId, txId) {
   if (!txId) {
     throw new Error('txId 為必填')

@@ -283,6 +283,13 @@ const router = createRouter({
       meta: { tab: 'home' },
     },
     {
+      name: 'reimbursement-offset-about',
+      path: '/reimbursements/:id/offsets',
+      component: () => import('@/ui/views/reimbursements/ReimbursementOffsetAboutPage.vue'),
+      props: true,
+      meta: { tab: 'home' },
+    },
+    {
       name: 'account-detail',
       path: '/accounts/:id',
       component: () => import('@/ui/views/accounts/AccountDetailPage.vue'),

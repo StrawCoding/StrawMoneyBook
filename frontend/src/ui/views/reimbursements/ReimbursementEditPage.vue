@@ -50,6 +50,7 @@
         <small v-if="selectedAdvanceCapacityMinor > 0" class="muted">
           本次代收抵扣 <MoneyText :value-minor="selectedAdvanceCapacityMinor" />
         </small>
+        <small class="muted">可跨不同帳戶抵消，僅扣代收額度，不另建轉帳。</small>
         <small v-if="cashSettleMinor <= 0" class="muted">本次將全額以代收抵扣，不再建立新的入帳交易。</small>
       </div>
 

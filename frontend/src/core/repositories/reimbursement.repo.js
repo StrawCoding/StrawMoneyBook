@@ -300,6 +300,9 @@ export async function listReimbursementAdvanceUsagesByExpenseTx(ledgerId, expens
        u.updated_at,
        ra.account_id,
        a.name AS account_name,
+       ra.category_id,
+       c.name AS category_name,
+       c.icon AS category_icon,
        ra.note AS advance_note
      FROM reimbursement_advance_usages u
      LEFT JOIN reimbursement_advances ra
@@ -308,6 +311,9 @@ export async function listReimbursementAdvanceUsagesByExpenseTx(ledgerId, expens
      LEFT JOIN accounts a
        ON a.ledger_id = ra.ledger_id
       AND a.id = ra.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = ra.ledger_id
+      AND c.id = ra.category_id
      WHERE u.ledger_id = ?
        AND u.expense_tx_id = ?
      ORDER BY u.created_at ASC;`,

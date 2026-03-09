@@ -1377,7 +1377,15 @@ function firstPatternMatch(text, patterns) {
 function normalizeCounterpartyName(rawName) {
   let name = String(rawName ?? '').trim()
   if (!name) return ''
+  name = name.replace(
+    /^(?:(?:nt\$?|ntd|twd|us\$|usd|\$|¥)\s*)?\d[\d,]*(?:\.\d+)?(?:k|w|萬|万|千|百|元(?:整)?|塊|块|美元|美金|台幣|臺幣|日圓|日元)?\s*(?:給|借給|還給|归还给)?\s*/i,
+    '',
+  )
   name = name.replace(/^(?:[給跟向對把將]+|to\s+|from\s+)/i, '')
+  name = name.replace(
+    /\s*(?:給|借給|還給|归还给)?\s*(?:(?:nt\$?|ntd|twd|us\$|usd|\$|¥)\s*)?\d[\d,]*(?:\.\d+)?(?:k|w|萬|万|千|百|元(?:整)?|塊|块|美元|美金|台幣|臺幣|日圓|日元)?$/i,
+    '',
+  )
   name = name.replace(/[的之]+$/g, '')
   name = name.replace(/(借款|欠款|還款|还款|款項|款项|款|錢|钱|loan|repay|payment|money)$/gi, '')
   name = name.replace(/^[,，。:：;；]+|[,，。:：;；]+$/g, '')

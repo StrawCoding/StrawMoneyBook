@@ -30,7 +30,7 @@
         <div class="row"><small class="muted">剩餘</small><MoneyText :value-minor="loan.remaining_minor" /></div>
 
         <div class="row btn-wrap">
-          <button v-if="!showFinished" class="btn" @click="openRepaySheet" :disabled="!canRepay(loan)">還款</button>
+          <button v-if="!showFinished" class="btn" @click="openRepaySheet" :disabled="!canRepay(loan)">{{ collectionLabel(loan) }}</button>
           <button class="btn" @click="refreshDetail">刷新</button>
           <button v-if="!showFinished" class="btn" @click="openVoidDialog" :disabled="loan.status === 'void'">完成</button>
           <button v-if="showFinished" class="btn" @click="openPrincipalSheet">變更本金</button>
@@ -44,7 +44,7 @@
 
     <article class="card panel">
       <div class="row">
-        <h3>還款紀錄</h3>
+        <h3>{{ collectionRecordLabel(loan) }}</h3>
         <button class="btn" @click="refreshDetail">刷新</button>
       </div>
       <ul class="payments">
@@ -59,7 +59,7 @@
             <button class="btn" @click="openEditRepayment(payment)">變更</button>
           </span>
         </li>
-        <li v-if="!payments.length" class="muted">尚無還款紀錄</li>
+        <li v-if="!payments.length" class="muted">尚無{{ collectionRecordLabel(loan) }}</li>
       </ul>
     </article>
 
@@ -68,14 +68,14 @@
         <section v-if="repayOpen" class="sheet-mask" @click.self="closeRepaySheet">
           <article class="sheet card">
             <header class="row">
-              <h3>{{ editingRepayment ? '編輯還款' : '借貸還款' }}</h3>
+              <h3>{{ editingRepayment ? `編輯${collectionLabel(loan)}` : `借貸${collectionLabel(loan)}` }}</h3>
               <button class="btn" @click="closeRepaySheet">關閉</button>
             </header>
 
             <div class="stack form-wrap">
               <p class="muted">{{ loan?.counterparty_name }} / 剩餘 <MoneyText :value-minor="loan?.remaining_minor ?? 0" /></p>
               <label>
-                還款金額（元）
+                {{ collectionLabel(loan) }}金額（元）
                 <input v-model.number="repayForm.amountMajor" class="input" type="number" min="0" step="1" />
               </label>
 
@@ -249,6 +249,14 @@ function canDeleteLoan(item) {
   return item.direction === 'lend' || ['void', 'settled'].includes(item.status)
 }
 
+function collectionLabel(item) {
+  return item?.direction === 'borrow' ? '歸還' : '收回'
+}
+
+function collectionRecordLabel(item) {
+  return `${collectionLabel(item)}紀錄`
+}
+
 function openRepaySheet() {
   if (!loan.value) return
   editingRepayment.value = null
@@ -306,10 +314,10 @@ async function submitRepayment() {
 
     await refreshLinkedData()
 
-    uiStore.pushToast(editingRepayment.value ? '還款紀錄已更新' : '還款已記錄')
+    uiStore.pushToast(editingRepayment.value ? `${collectionLabel(loan.value)}紀錄已更新` : `${collectionLabel(loan.value)}已記錄`)
     closeRepaySheet()
   } catch (error) {
-    uiStore.pushToast(error.message ?? (editingRepayment.value ? '更新還款失敗' : '還款失敗'), 'error')
+    uiStore.pushToast(error.message ?? (editingRepayment.value ? `更新${collectionLabel(loan.value)}失敗` : `${collectionLabel(loan.value)}失敗`), 'error')
   }
 }
 

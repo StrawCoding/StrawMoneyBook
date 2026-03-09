@@ -95,6 +95,14 @@ function nextLoanStatus(targetTotalMinor, paidMinor) {
   return 'partial'
 }
 
+function resolveLoanCollectionLabel(loan) {
+  return loan?.direction === 'borrow' ? '歸還' : '收回'
+}
+
+function buildLoanPaymentNote(loan) {
+  return `借貸${resolveLoanCollectionLabel(loan)}：${loan?.counterparty_name ?? ''}`
+}
+
 async function ensureLoanInterestCategory(ledgerId, kind) {
   const categories = await listCategories(ledgerId, { includeArchived: true })
   const existing = categories.find(
@@ -233,7 +241,7 @@ export async function addLoanRepayment(ledgerId, payload) {
 
     const txType = loan.direction === 'lend' ? 'income' : 'expense'
     const occurredAt = payload.paidAt ?? nowIso()
-    const noteBase = payload.note ?? `借貸還款：${loan.counterparty_name ?? ''}`
+    const noteBase = payload.note ?? buildLoanPaymentNote(loan)
 
     let txId = null
     if (principalComponentMinor > 0) {
@@ -334,7 +342,7 @@ export async function updateLoanRepayment(ledgerId, payload) {
     let principalTxId = payment.generated_tx_id ? String(payment.generated_tx_id) : null
     let interestTxId = payment.generated_interest_tx_id ? String(payment.generated_interest_tx_id) : null
 
-    const noteBase = note || `借貸還款：${loan.counterparty_name ?? ''}`
+    const noteBase = note || buildLoanPaymentNote(loan)
 
     if (principalComponentMinor > 0) {
       const nextAmountMinor = loan.direction === 'lend' ? principalComponentMinor : principalComponentMinor * -1
@@ -490,7 +498,7 @@ export async function updateCompletedLoanPrincipal(ledgerId, payload) {
             categoryId: null,
             amountMinor,
             occurredAt: payment.paid_at,
-            note: payment.note || `借貸還款：${loan.counterparty_name ?? ''}`,
+            note: payment.note || buildLoanPaymentNote(loan),
             isReimbursable: false,
             reimbursementState: 'none',
             includeInBudget: true,
@@ -503,7 +511,7 @@ export async function updateCompletedLoanPrincipal(ledgerId, payload) {
             categoryId: null,
             amountMinor,
             occurredAt: payment.paid_at,
-            note: payment.note || `借貸還款：${loan.counterparty_name ?? ''}`,
+            note: payment.note || buildLoanPaymentNote(loan),
             originType: 'loan_payment',
             externalRefId: loan.id,
           })

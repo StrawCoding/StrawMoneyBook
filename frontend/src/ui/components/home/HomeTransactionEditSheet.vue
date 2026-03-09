@@ -1142,27 +1142,22 @@ h4 {
   min-width: 0;
 }
 .addon-row {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px 96px 68px;
   gap: 8px;
   align-items: end;
-  min-width: 420px;
-  overflow-x: auto;
+  min-width: 0;
 }
 .addon-name {
-  flex: 1 1 0;
   min-width: 0;
 }
 .addon-dir {
-  flex: 0 0 74px;
   min-width: 0;
 }
 .addon-amount {
-  flex: 0 0 96px;
   min-width: 0;
 }
 .addon-remove {
-  flex: 0 0 68px;
   padding: 10px 0;
   white-space: nowrap;
 }
@@ -1257,4 +1252,15 @@ h4 {
 .switch-row.active .switch-thumb {
   transform: translate3d(20px, 0, 0);
   background: color-mix(in srgb, white 78%, var(--surface-highlight) 22%)
+}
+@media (max-width: 560px) {
+  .addon-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 88px);
+  }
+  .addon-amount {
+    grid-column: 1 / 2;
+  }
+  .addon-remove {
+    grid-column: 2 / 3;
+  }
 }</style>

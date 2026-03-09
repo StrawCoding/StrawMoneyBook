@@ -68,6 +68,12 @@
               <span>{{ formatTime(tx.occurred_at) }}</span>
               <span>{{ noteTextOfTx(tx) || '-' }}</span>
             </div>
+            <div v-if="hasAdvanceOffset(tx)" class="row offset-row">
+              <small class="offset-pill">
+                代收抵消 <MoneyText :value-minor="tx.advance_used_minor" />
+              </small>
+              <button class="btn" @click.stop="openOffsetAbout(tx)">抵消明細</button>
+            </div>
           </div>
         </li>
 
@@ -181,6 +187,7 @@
                   <span>本次代收抵扣</span>
                   <MoneyText :value-minor="selectedAdvanceCapacityMinor" />
                 </div>
+                <p class="muted">可跨不同帳戶抵消，僅扣代收額度，不另建轉帳。</p>
                 <p v-if="singleSettleCashMinor <= 0" class="muted">本次將全額以代收抵扣，不再建立新的入帳交易。</p>
               </div>
               <div v-else class="batch-settle-summary">
@@ -492,6 +499,15 @@ function openTransactionAbout(tx) {
   void router.push({ name: 'transaction-about', params: { id: tx.id } })
 }
 
+function openOffsetAbout(tx) {
+  if (!tx?.id) return
+  void router.push({
+    name: 'reimbursement-offset-about',
+    params: { id: tx.id },
+    query: { tab: tab.value },
+  })
+}
+
 function advanceCategoryName(advance) {
   const name = String(advance?.category_name ?? '').trim()
   return name || '未指定分類'
@@ -499,6 +515,10 @@ function advanceCategoryName(advance) {
 
 function advanceCategoryIcon(advance) {
   return String(advance?.category_icon ?? '').trim()
+}
+
+function hasAdvanceOffset(tx) {
+  return Math.max(0, Math.round(Number(tx?.advance_used_minor ?? 0))) > 0
 }
 
 function openActionSheet() {
@@ -1040,6 +1060,21 @@ h2 {
 .entry-head {
   align-items: center;
   gap: 8px
+}
+.offset-row {
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap
+}
+.offset-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 12%, var(--card) 88%);
+  color: var(--text);
 }
 .entry-actions {
   display: flex;

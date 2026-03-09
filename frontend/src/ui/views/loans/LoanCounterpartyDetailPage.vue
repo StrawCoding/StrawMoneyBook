@@ -69,7 +69,7 @@
           </div>
 
           <div class="row btn-wrap">
-            <button v-if="!showFinished" class="btn" @click.stop="openRepaySheet(loan)" :disabled="!canRepay(loan)">還款</button>
+            <button v-if="!showFinished" class="btn" @click.stop="openRepaySheet(loan)" :disabled="!canRepay(loan)">{{ collectionLabel(loan) }}</button>
             <button v-if="!showFinished" class="btn" @click.stop="openVoidDialog(loan.id)" :disabled="loan.status === 'void'">完成</button>
             <button v-if="showFinished && loan.status === 'void'" class="btn" @click.stop="markRestore(loan.id)">恢復</button>
             <button v-if="canDeleteLoan(loan)" class="btn danger" @click.stop="openDeleteDialog(loan.id)">刪除</button>
@@ -168,14 +168,14 @@
         <section v-if="repayOpen" class="sheet-mask" @click.self="closeRepaySheet">
           <article class="sheet card">
             <header class="row">
-              <h3>借貸還款</h3>
+              <h3>借貸{{ collectionLabel(repayLoan) }}</h3>
               <button class="btn" @click="closeRepaySheet">關閉</button>
             </header>
 
             <div class="stack form-wrap">
               <p class="muted">{{ repayLoan?.counterparty_name }} / 剩餘 <MoneyText :value-minor="repayLoan?.remaining_minor ?? 0" /></p>
               <label>
-                還款金額（元）
+                {{ collectionLabel(repayLoan) }}金額（元）
                 <input v-model.number="repayForm.amountMajor" class="input" type="number" min="0" step="1" />
               </label>
 
@@ -339,6 +339,10 @@ function normalizeCounterpartyName(rawName) {
   return String(rawName ?? '').trim() || '未命名對象'
 }
 
+function collectionLabel(item) {
+  return item?.direction === 'borrow' ? '歸還' : '收回'
+}
+
 async function refreshLinkedData() {
   await Promise.all([
     transactionStore.loadRecent(),
@@ -475,10 +479,10 @@ async function submitRepayment() {
 
     await refreshLinkedData()
 
-    uiStore.pushToast('還款已記錄')
+    uiStore.pushToast(`${collectionLabel(repayLoan.value)}已記錄`)
     closeRepaySheet()
   } catch (error) {
-    uiStore.pushToast(error.message ?? '還款失敗', 'error')
+    uiStore.pushToast(error.message ?? `${collectionLabel(repayLoan.value)}失敗`, 'error')
   }
 }
 

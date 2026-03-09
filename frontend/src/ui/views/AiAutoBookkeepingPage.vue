@@ -20,6 +20,7 @@
       </label>
 
       <small class="muted">可輸入金額、日期、帳戶名、分類名、報銷/轉帳等關鍵字。</small>
+      <small class="muted">多行會自動批量建立，每行一筆。</small>
       <small v-if="speechListening && speechLiveText" class="muted">語音辨識中：{{ speechLiveText }}</small>
       <transition name="ai-status-fade">
         <div v-if="showAiStatus" class="ai-status-chip">
@@ -510,6 +511,43 @@ watch(
   },
 )
 
+function splitBatchSourceLines(rawText) {
+  return String(rawText ?? '')
+    .split(/\r?\n+/)
+    .map((line) => line.replace(/^\s*(?:[-*•]\s*|\d+[.)、]\s*)/, '').trim())
+    .filter(Boolean)
+}
+
+function buildAiParseContext() {
+  return {
+    accounts: aiParserAccounts.value,
+    expenseCategories: categoryStore.expenseCategories,
+    incomeCategories: categoryStore.incomeCategories,
+    historyTransactions: transactionStore.recent,
+    autoFillRules: autoFillRules.value,
+    now: new Date(),
+  }
+}
+
+function parseSourceTextWithAi(text) {
+  return parseAutoBookkeepingText(text, buildAiParseContext())
+}
+
+function resetAiInputState(options = {}) {
+  const clearSourceText = options.clearSourceText !== false
+  const clearDraft = options.clearDraft !== false
+  if (clearDraft) {
+    hasDraft.value = false
+    warnings.value = []
+    latestLoanIntent.value = null
+    resetPersistedTransaction()
+  }
+  if (clearSourceText) {
+    sourceText.value = ''
+    speechLiveText.value = ''
+  }
+}
+
 async function parseText(options = {}) {
   const fromSpeech = Boolean(options.fromSpeech)
   const autoCreate = options.autoCreate !== false
@@ -528,16 +566,71 @@ async function parseText(options = {}) {
   try {
     warmupRecentHistoryInBackground()
 
+    const batchLines = autoCreate ? splitBatchSourceLines(text) : []
+    if (batchLines.length > 1) {
+      parsing.value = false
+      resetAiInputState({ clearSourceText: false, clearDraft: true })
+
+      let successCount = 0
+      const failedLines = []
+      for (const line of batchLines) {
+        let result = null
+        try {
+          result = parseSourceTextWithAi(line)
+        } catch (error) {
+          failedLines.push(`${line}（${error?.message || 'AI 解析失敗'}）`)
+          continue
+        }
+
+        if (!result?.draft) {
+          const lineWarnings = resolveAiParserWarnings(result)
+          failedLines.push(`${line}（${lineWarnings[0] || '沒有抓到可用交易資訊'}）`)
+          continue
+        }
+
+        applyDraft(result.draft)
+        latestLoanIntent.value = result.draft.loanIntent ?? null
+        warnings.value = resolveAiParserWarnings(result)
+
+        try {
+          const created = await submit({
+            autoCreated: true,
+            keepDraft: false,
+            preserveSourceText: true,
+            suppressToast: true,
+            throwOnError: true,
+          })
+          if (created) {
+            successCount += 1
+          } else {
+            failedLines.push(`${line}（儲存失敗）`)
+          }
+        } catch (error) {
+          failedLines.push(`${line}（${error?.message || '儲存失敗'}）`)
+        }
+      }
+
+      resetAiInputState({ clearSourceText: true, clearDraft: true })
+
+      if (!successCount && failedLines.length) {
+        uiStore.pushToast(`批量建立失敗：${failedLines.slice(0, 2).join('；')}`, 'error')
+        return
+      }
+
+      const summary = [`批量建立完成 ${successCount} 筆`]
+      if (failedLines.length) {
+        summary.push(`失敗 ${failedLines.length} 筆`)
+      }
+      uiStore.pushToast(summary.join('，'))
+      if (failedLines.length) {
+        uiStore.pushToast(`未建立：${failedLines.slice(0, 2).join('；')}`, 'error')
+      }
+      return
+    }
+
     let result = null
     try {
-      result = parseAutoBookkeepingText(text, {
-        accounts: aiParserAccounts.value,
-        expenseCategories: categoryStore.expenseCategories,
-        incomeCategories: categoryStore.incomeCategories,
-        historyTransactions: transactionStore.recent,
-        autoFillRules: autoFillRules.value,
-        now: new Date(),
-      })
+      result = parseSourceTextWithAi(text)
     } catch (error) {
       warnings.value = []
       hasDraft.value = false
@@ -582,7 +675,7 @@ async function parseText(options = {}) {
     const created = await submit({
       autoCreated: true,
       keepDraft: true,
-      preserveSourceText: true,
+      preserveSourceText: false,
     })
     if (created) {
       uiStore.pushToast(t('ai_bookkeeping.toast.auto_applied_editable', '已先套用交易，下方可再編輯'))
@@ -684,7 +777,19 @@ async function submit(options = {}) {
   const autoCreated = Boolean(options.autoCreated)
   const keepDraft = Boolean(options.keepDraft)
   const preserveSourceText = Boolean(options.preserveSourceText)
+  const suppressToast = Boolean(options.suppressToast)
+  const throwOnError = Boolean(options.throwOnError)
   if (parsing.value || submitting.value) return
+  const failSubmit = (message) => {
+    const resolvedMessage = String(message ?? '').trim() || t('ai_bookkeeping.toast.save_failed', '儲存交易失敗')
+    if (throwOnError) {
+      throw new Error(resolvedMessage)
+    }
+    if (!suppressToast) {
+      uiStore.pushToast(resolvedMessage, 'error')
+    }
+    return false
+  }
   const baseAmountMajor = Number(model.amountMajor ?? 0)
   const appliedAddonItems = collectAppliedAddonItems()
   const addonDeltaMajor = appliedAddonItems.reduce((total, item) => {
@@ -699,34 +804,27 @@ async function submit(options = {}) {
 
   if (model.type === 'transfer') {
     if (baseAmountMinor <= 0) {
-      uiStore.pushToast('請輸入有效金額（主轉帳金額需大於 0）', 'error')
-      return
+      return failSubmit('請輸入有效金額（主轉帳金額需大於 0）')
     }
     if (baseAmountMinor + sourceExtraMinor <= 0) {
-      uiStore.pushToast('轉出金額（含附加項目）需大於 0', 'error')
-      return
+      return failSubmit('轉出金額（含附加項目）需大於 0')
     }
   } else if (settledAmountMinor <= 0) {
-    uiStore.pushToast('請輸入有效金額（需大於 0）', 'error')
-    return
+    return failSubmit('請輸入有效金額（需大於 0）')
   }
   if (!occurredAt) {
-    uiStore.pushToast('請選擇有效時間', 'error')
-    return
+    return failSubmit('請選擇有效時間')
   }
   if (!model.accountId) {
-    uiStore.pushToast('請選擇帳戶', 'error')
-    return
+    return failSubmit('請選擇帳戶')
   }
   if (!loanIntent && model.type !== 'transfer' && !model.categoryId) {
-    uiStore.pushToast('沒有分類，請在設定中新增後再試，未建立交易紀錄', 'error')
-    return
+    return failSubmit('沒有分類，請在設定中新增後再試，未建立交易紀錄')
   }
 
   const usage = getAiBookkeepingDailyUsage()
   if (Number.isFinite(usage.limit) && usage.used >= usage.limit) {
-    uiStore.pushToast(resolveAiLimitWithManualHint('免費版 AI 記帳每日最多 5 次'), 'error')
-    return
+    return failSubmit(resolveAiLimitWithManualHint('免費版 AI 記帳每日最多 5 次'))
   }
 
   submitting.value = true
@@ -738,8 +836,7 @@ async function submit(options = {}) {
       if (loanIntent.mode === 'create') {
         const counterpartyName = resolveLoanCounterpartyName(loanIntent)
         if (!counterpartyName) {
-          uiStore.pushToast('沒有辨識到借貸對象，請補上名字後再試', 'error')
-          return
+          return failSubmit('沒有辨識到借貸對象，請補上名字後再試')
         }
         await withTimeout(
           loanStore.create({
@@ -764,10 +861,9 @@ async function submit(options = {}) {
         )
         const matched = pickLoanForAiRepayment(loanStore.items, loanIntent)
         if (!matched.loan) {
-          uiStore.pushToast(matched.warning || '找不到可歸還/收回的借貸紀錄', 'error')
-          return
+          return failSubmit(matched.warning || '找不到可歸還/收回的借貸紀錄')
         }
-        if (matched.warning) {
+        if (matched.warning && !suppressToast) {
           uiStore.pushToast(matched.warning)
         }
         await withTimeout(
@@ -789,7 +885,9 @@ async function submit(options = {}) {
         'AI 記帳逾時，請稍後再試',
       )
       recordAiBookkeepingUsage()
-      uiStore.pushToast(autoCreated ? `已先完成${actionLabel}` : `AI 自動記帳已完成${actionLabel}`)
+      if (!suppressToast) {
+        uiStore.pushToast(autoCreated ? `已先完成${actionLabel}` : `AI 自動記帳已完成${actionLabel}`)
+      }
       if (!keepDraft) {
         hasDraft.value = false
         warnings.value = []
@@ -823,16 +921,14 @@ async function submit(options = {}) {
     const targetTxId = String(persistedTransactionId.value ?? '').trim()
     if (model.type === 'transfer') {
       if (!model.peerAccountId || model.accountId === model.peerAccountId) {
-        uiStore.pushToast('請選擇不同的轉出/轉入帳戶', 'error')
-        return
+        return failSubmit('請選擇不同的轉出/轉入帳戶')
       }
       const transferRate = await resolveTransferRateOrThrow()
       const transferToAmountMinor = transferNeedsExchangeRate.value
         ? convertAmountMinorByRate(baseAmountMinor, transferRate)
         : baseAmountMinor
       if (transferToAmountMinor <= 0) {
-        uiStore.pushToast('轉入金額需大於 0，請調整匯率', 'error')
-        return
+        return failSubmit('轉入金額需大於 0，請調整匯率')
       }
       if (targetTxId) {
         await withTimeout(
@@ -945,7 +1041,7 @@ async function submit(options = {}) {
     }
 
     recordAiBookkeepingUsage()
-    if (!autoCreated) {
+    if (!autoCreated && !suppressToast) {
       uiStore.pushToast(
         updatedExisting
           ? t('ai_bookkeeping.toast.updated', 'AI 記帳已更新交易')
@@ -964,8 +1060,7 @@ async function submit(options = {}) {
     }
     return true
   } catch (error) {
-    uiStore.pushToast(error.message ?? t('ai_bookkeeping.toast.save_failed', '儲存交易失敗'), 'error')
-    return false
+    return failSubmit(error.message ?? t('ai_bookkeeping.toast.save_failed', '儲存交易失敗'))
   } finally {
     submitting.value = false
   }
@@ -1423,27 +1518,22 @@ h2, h3 {
   min-width: 0;
 }
 .addon-row {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 96px auto;
   gap: 8px;
   align-items: center;
-  min-width: 420px;
-  overflow-x: auto;
+  min-width: 0;
 }
 .addon-name {
-  flex: 1 1 0;
   min-width: 0;
 }
 .addon-dir {
-  flex: 0 0 90px;
   min-width: 0;
 }
 .addon-amount {
-  flex: 0 0 96px;
   min-width: 0;
 }
 .addon-remove {
-  flex: 0 0 auto;
   white-space: nowrap;
 }
 .fx-note {
@@ -1647,6 +1737,16 @@ h2, h3 {
   .switch-grid,
   .fx-mode-grid {
     grid-template-columns: 1fr;
+  }
+  .addon-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 88px);
+  }
+  .addon-amount {
+    grid-column: 1 / 2;
+  }
+  .addon-remove {
+    grid-column: 2 / 3;
+    justify-self: stretch;
   }
 }
 </style>
