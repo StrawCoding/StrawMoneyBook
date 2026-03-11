@@ -171,10 +171,12 @@
       </header>
 
       <div class="time-bar-chart">
-        <div
+        <button
           v-for="item in timeBarRows"
           :key="`${mode}-${analysisType}-${item.id}`"
+          type="button"
           class="time-bar-col"
+          @click="openTimeBarSearch(item)"
         >
           <div class="time-bar-value">
             <MoneyText :value-minor="item.amountMinor" />
@@ -187,7 +189,7 @@
           </div>
           <div class="time-bar-label">{{ item.label }}</div>
           <div class="time-bar-count muted">{{ t('analysis_page.items_count', { count: item.count }) }}</div>
-        </div>
+        </button>
       </div>
     </article>
 
@@ -390,6 +392,18 @@ function openAccountBreakdownDetail(item) {
   if (!item?.id) return
   if (String(item.id).startsWith('__')) return
   void router.push({ name: 'account-detail', params: { id: String(item.id) } })
+}
+
+function openTimeBarSearch(item) {
+  const range = resolveTimeBarSearchRange(item)
+  if (!range) return
+  void router.push({
+    name: 'transaction-search',
+    query: {
+      startDay: range.startDay,
+      endDay: range.endDay,
+    },
+  })
 }
 
 async function loadStatsTransactions() {
@@ -643,6 +657,48 @@ function buildDaySeeds(monthValue) {
   })
 }
 
+function resolveTimeBarSearchRange(item) {
+  const bucketId = String(item?.id ?? '').trim()
+  if (!bucketId) return null
+
+  if (mode.value === 'all') {
+    const year = Number(bucketId)
+    if (!Number.isFinite(year)) return null
+    return {
+      startDay: `${year}-01-01`,
+      endDay: `${year}-12-31`,
+    }
+  }
+
+  if (mode.value === 'year') {
+    const year = Number(selectedYear.value)
+    const month = Number(bucketId)
+    if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null
+    const monthKey = `${year}-${String(month).padStart(2, '0')}`
+    return {
+      startDay: `${monthKey}-01`,
+      endDay: `${monthKey}-${String(daysInMonthOf(year, month)).padStart(2, '0')}`,
+    }
+  }
+
+  if (mode.value === 'month') {
+    const day = Number(bucketId)
+    const match = String(selectedMonth.value ?? '').trim().match(/^(\d{4})-(\d{2})$/)
+    if (!match || !Number.isFinite(day)) return null
+    const dayKey = `${match[1]}-${match[2]}-${String(day).padStart(2, '0')}`
+    return {
+      startDay: dayKey,
+      endDay: dayKey,
+    }
+  }
+
+  return null
+}
+
+function daysInMonthOf(year, month) {
+  return new Date(year, month, 0).getDate()
+}
+
 function monthKeyFromDate(date) {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
@@ -873,12 +929,22 @@ h2, h3 {
   -webkit-overflow-scrolling: touch;
 }
 .time-bar-col {
+  border: none;
+  background: transparent;
+  padding: 0;
   min-width: 68px;
   flex: 0 0 68px;
   max-width: 68px;
   display: grid;
   gap: 8px;
   justify-items: center;
+  cursor: pointer;
+}
+.time-bar-col:hover .time-bar-track,
+.time-bar-col:focus-visible .time-bar-track {
+  outline: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 32%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 8%, var(--chart-track) 92%) 0%, var(--chart-track) 100%);
 }
 .time-bar-value {
   font-size: 11px;

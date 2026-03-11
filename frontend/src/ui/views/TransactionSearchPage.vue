@@ -98,6 +98,7 @@ const pendingOpenTxId = ref('')
 
 onMounted(() => {
   pendingOpenTxId.value = normalizeTxId(route.query.txId)
+  syncFiltersFromRouteQuery(route.query)
   void loadTransactions()
 })
 
@@ -114,6 +115,14 @@ watch(
     pendingOpenTxId.value = normalizeTxId(txId)
     tryOpenPendingTransaction()
   },
+)
+
+watch(
+  () => [route.query.startDay, route.query.endDay, route.query.keyword],
+  () => {
+    syncFiltersFromRouteQuery(route.query)
+  },
+  { immediate: true },
 )
 
 const filteredTransactions = computed(() => {
@@ -263,6 +272,17 @@ function showAddonDeltaTag(tx) {
 
 function normalizeTxId(value) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function normalizeDayQuery(value) {
+  const text = typeof value === 'string' ? value.trim() : ''
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : ''
+}
+
+function syncFiltersFromRouteQuery(query) {
+  keyword.value = typeof query?.keyword === 'string' ? query.keyword.trim() : ''
+  startDay.value = normalizeDayQuery(query?.startDay)
+  endDay.value = normalizeDayQuery(query?.endDay)
 }
 
 function clearTxIdQuery() {
