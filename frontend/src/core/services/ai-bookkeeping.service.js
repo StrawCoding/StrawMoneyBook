@@ -297,6 +297,11 @@ function parseDateTimeFromText(text, now = new Date()) {
 }
 
 function parseAmountMajor(text) {
+  const formulaAmount = parseFormulaAmountMajor(text)
+  if (Number.isFinite(formulaAmount) && formulaAmount > 0) {
+    return formulaAmount
+  }
+
   const withUnit = [
     ...text.matchAll(
       /([+-]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\$|\$|¥|￥)/gi,
@@ -333,6 +338,89 @@ function parseAmountMajor(text) {
   const sorted = [...candidates].sort((a, b) => b - a)
   const candidate = sorted.find((value) => value >= 1 && value <= 999999) ?? sorted[0]
   return round2(candidate)
+}
+
+function parseFormulaAmountMajor(text) {
+  const matches = [
+    ...String(text ?? '').matchAll(/(?:\d+(?:\.\d+)?\s*[+\-×÷*/]\s*)+\d+(?:\.\d+)?/g),
+  ]
+
+  for (let index = matches.length - 1; index >= 0; index -= 1) {
+    const candidate = String(matches[index]?.[0] ?? '').trim()
+    if (!candidate) continue
+    const normalized = candidate.replace(/\s+/g, '')
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) continue
+    if (/^\d{1,2}\/\d{1,2}$/.test(normalized)) continue
+    const value = evaluateArithmeticExpression(candidate)
+    if (Number.isFinite(value) && value > 0) {
+      return value
+    }
+  }
+
+  return NaN
+}
+
+function evaluateArithmeticExpression(input) {
+  const source = String(input ?? '').trim()
+  if (!source) return null
+  if (!/^[0-9+\-×÷*/.\s]+$/.test(source)) return null
+
+  const normalized = source.replaceAll('×', '*').replaceAll('÷', '/').replace(/\s+/g, '')
+  const tokens = normalized.match(/(\d+(?:\.\d+)?)|[+\-*/]/g)
+  if (!tokens?.length) return null
+
+  const nums = []
+  const ops = []
+  let expectingNumber = true
+
+  for (const token of tokens) {
+    if (['+', '-', '*', '/'].includes(token)) {
+      if (expectingNumber) {
+        if (token === '-' && nums.length === 0) {
+          nums.push(0)
+        } else {
+          return null
+        }
+      }
+      while (ops.length && arithmeticPrecedence(ops.at(-1)) >= arithmeticPrecedence(token)) {
+        if (!applyArithmeticOperator(nums, ops.pop())) return null
+      }
+      ops.push(token)
+      expectingNumber = true
+      continue
+    }
+
+    const num = Number(token)
+    if (!Number.isFinite(num)) return null
+    nums.push(num)
+    expectingNumber = false
+  }
+
+  if (expectingNumber) return null
+  while (ops.length) {
+    if (!applyArithmeticOperator(nums, ops.pop())) return null
+  }
+
+  const result = nums[0]
+  if (!Number.isFinite(result)) return null
+  return round2(Math.abs(result))
+}
+
+function arithmeticPrecedence(op) {
+  if (op === '+' || op === '-') return 1
+  if (op === '*' || op === '/') return 2
+  return 0
+}
+
+function applyArithmeticOperator(nums, op) {
+  if (nums.length < 2) return false
+  const b = nums.pop()
+  const a = nums.pop()
+  if (op === '/' && b === 0) return false
+  const result = op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b
+  if (!Number.isFinite(result)) return false
+  nums.push(result)
+  return true
 }
 
 function parseAmountWithUnit(rawAmount, rawUnit = '') {

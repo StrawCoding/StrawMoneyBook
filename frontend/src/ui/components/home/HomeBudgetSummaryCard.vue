@@ -136,6 +136,36 @@ function isBudgetItemActiveOnDate(item, date) {
   return ruleValues.includes(weekday)
 }
 
+function dateKeyOf(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function countBudgetItemActiveDaysFromDate(item, startDate, monthMeta) {
+  const selectedDate = startDate instanceof Date ? startDate : null
+  if (!selectedDate || Number.isNaN(selectedDate.getTime())) return 0
+
+  const amountMode = normalizeAmountMode(item?.amount_mode)
+  const startDay = Math.min(Math.max(1, selectedDate.getDate()), monthMeta.daysInMonth)
+  if (amountMode !== 'daily_average') {
+    return Math.max(1, monthMeta.daysInMonth - startDay + 1)
+  }
+
+  let total = 0
+  for (let day = startDay; day <= monthMeta.daysInMonth; day += 1) {
+    const targetDate = new Date(monthMeta.year, monthMeta.monthIndex, day)
+    if (isBudgetItemActiveOnDate(item, targetDate)) total += 1
+  }
+  return total
+}
+
+function isBudgetExpenseTransaction(tx) {
+  return String(tx?.type ?? '') === 'expense' && Boolean(Number(tx?.include_in_budget ?? 1))
+}
+
 function parseDayKey(dayKey) {
   const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dayKey ?? '').trim())
   if (!matched) return null
@@ -191,18 +221,45 @@ const monthDateMeta = computed(() => {
 })
 
 const dailyBudgetMinor = computed(() => {
-  const { selectedDate, daysInMonth } = monthDateMeta.value
+  const monthMeta = monthDateMeta.value
+  const { selectedDate } = monthMeta
   return budgetStore.items.reduce((total, item) => {
-    const baseAmountMinor = toFiniteNonNegative(item?.amount_minor)
-    if (!baseAmountMinor) return total
+    const resolvedAmountMinor = Number(item?.resolved_amount_minor ?? item?.amount_minor ?? 0)
+    if (!Number.isFinite(resolvedAmountMinor) || resolvedAmountMinor === 0) return total
+    const spentMinor = Number(budgetStore.spentMap[item?.category_id] ?? 0)
+    const remainingBudgetMinor = resolvedAmountMinor - (Number.isFinite(spentMinor) ? spentMinor : 0)
+
     if (normalizeAmountMode(item?.amount_mode) === 'daily_average') {
-      return total + (isBudgetItemActiveOnDate(item, selectedDate) ? baseAmountMinor : 0)
+      if (!isBudgetItemActiveOnDate(item, selectedDate)) return total
+      const remainingOccurrences = countBudgetItemActiveDaysFromDate(item, selectedDate, monthMeta)
+      if (remainingOccurrences <= 0) return total
+      return total + Math.round(remainingBudgetMinor / remainingOccurrences)
     }
-    return total + Math.round(baseAmountMinor / daysInMonth)
+    const remainingDays = countBudgetItemActiveDaysFromDate(item, selectedDate, monthMeta)
+    return total + Math.round(remainingBudgetMinor / remainingDays)
   }, 0)
 })
 
-const dailySpentMinor = computed(() => Math.round(totalSpentMinor.value / monthDateMeta.value.elapsedDays))
+const selectedDaySpentMinor = computed(() => {
+  const selectedDayKey = dateKeyOf(monthDateMeta.value.selectedDate)
+  if (!selectedDayKey) return 0
+
+  const transactions = (
+    transactionStore.homeFilterMode === 'day'
+    || (transactionStore.homeFilterMode === 'month' && transactionStore.homeFilterKey === budgetStore.monthKey)
+  )
+    ? transactionStore.homeRecent
+    : transactionStore.recent
+
+  return transactions.reduce((total, tx) => {
+    if (!isBudgetExpenseTransaction(tx)) return total
+    if (!tx?.category_id) return total
+    if (dateKeyOf(new Date(tx.occurred_at)) !== selectedDayKey) return total
+    return total + Math.abs(Math.round(Number(tx.amount_minor) || 0))
+  }, 0)
+})
+
+const dailySpentMinor = computed(() => selectedDaySpentMinor.value)
 const dailyRemainMinor = computed(() => dailyBudgetMinor.value - dailySpentMinor.value)
 
 function calcMetricSet(mode) {

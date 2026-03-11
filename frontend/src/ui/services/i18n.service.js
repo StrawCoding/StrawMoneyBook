@@ -290,7 +290,7 @@ const MESSAGES = {
     'app.loading': '資料載入中...',
     'home_budget_summary.title': '預算簡表',
     'home_budget_summary.mode.monthly': '月均',
-    'home_budget_summary.mode.daily': '日均',
+    'home_budget_summary.mode.daily': '當日可用',
     'ai_bookkeeping.status.creating': 'AI 建立交易中...',
     'ai_bookkeeping.status.saving': 'AI 編輯交易中...',
     'ai_bookkeeping.status.parsing': 'AI 解析中...',
@@ -1265,7 +1265,7 @@ const MESSAGES = {
     'settings.version_info': 'Version Info',
     'home_budget_summary.title': 'Budget Snapshot',
     'home_budget_summary.mode.monthly': 'Monthly Avg',
-    'home_budget_summary.mode.daily': 'Daily Avg',
+    'home_budget_summary.mode.daily': 'Available Today',
     'settings_bank_sync.title': 'Bank Sync',
     'settings_bank_sync.api_unavailable':
       'Bank sync API is not configured. Deploy /api/bank or set VITE_BANK_SYNC_API_BASE_URL.',
@@ -2146,7 +2146,7 @@ MESSAGES.ja = {
   'settings.bank_sync': '銀行同期',
   'home_budget_summary.title': '予算サマリー',
   'home_budget_summary.mode.monthly': '月平均',
-  'home_budget_summary.mode.daily': '日平均',
+  'home_budget_summary.mode.daily': '当日利用可',
   'settings_bank_sync.title': '銀行同期',
   'settings_bank_sync.api_unavailable':
     '銀行同期 API が未設定です。/api/bank をデプロイするか、VITE_BANK_SYNC_API_BASE_URL を設定してください。',

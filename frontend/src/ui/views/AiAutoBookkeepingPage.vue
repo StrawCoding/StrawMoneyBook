@@ -84,7 +84,14 @@
       <div class="stack form-wrap">
         <label class="field">
           金額（元）
-          <input v-model.number="model.amountMajor" class="input" type="number" min="0" step="0.01" />
+          <input
+            v-model="model.amountInput"
+            class="input"
+            type="text"
+            inputmode="decimal"
+            placeholder="可直接輸入 120+35-10"
+            @input="handleAmountInput"
+          />
         </label>
 
         <div class="field">
@@ -348,6 +355,7 @@ const TRANSFER_RATE_AUTO_SYNC_TIMEOUT_MS = 8000
 
 const model = reactive({
   type: 'expense',
+  amountInput: '',
   amountMajor: 0,
   occurredDate: '',
   occurredHour: 0,
@@ -534,7 +542,7 @@ function parseSourceTextWithAi(text) {
 }
 
 function resetAiInputState(options = {}) {
-  const clearSourceText = options.clearSourceText !== false
+  const clearSourceText = options.clearSourceText === true
   const clearDraft = options.clearDraft !== false
   if (clearDraft) {
     hasDraft.value = false
@@ -610,7 +618,7 @@ async function parseText(options = {}) {
         }
       }
 
-      resetAiInputState({ clearSourceText: true, clearDraft: true })
+      resetAiInputState({ clearSourceText: false, clearDraft: true })
 
       if (!successCount && failedLines.length) {
         uiStore.pushToast(`批量建立失敗：${failedLines.slice(0, 2).join('；')}`, 'error')
@@ -736,6 +744,7 @@ async function toggleVoiceInput() {
 function applyDraft(draft) {
   model.type = draft.type
   model.amountMajor = Math.abs(Number(draft.amountMinor ?? 0)) / 100
+  model.amountInput = formatAmountInput(model.amountMajor)
   const date = new Date(draft.occurredAt)
   model.occurredDate = toDateInput(date)
   model.occurredHour = date.getHours()
@@ -895,7 +904,6 @@ async function submit(options = {}) {
         resetPersistedTransaction()
       }
       if (!preserveSourceText) {
-        sourceText.value = ''
         speechLiveText.value = ''
       }
       return true
@@ -1055,7 +1063,6 @@ async function submit(options = {}) {
       resetPersistedTransaction()
     }
     if (!preserveSourceText) {
-      sourceText.value = ''
       speechLiveText.value = ''
     }
     return true
@@ -1251,6 +1258,84 @@ async function resolveTransferRateOrThrow() {
 }
 
 let addonSeq = 1
+
+function handleAmountInput() {
+  syncAmountFromInput()
+}
+
+function syncAmountFromInput() {
+  const value = evaluateExpression(model.amountInput)
+  model.amountMajor = Number.isFinite(value) ? value : null
+}
+
+function evaluateExpression(input) {
+  const source = String(input ?? '').trim()
+  if (!source) return null
+  if (!/^[0-9+\-×÷*/.\s]+$/.test(source)) return null
+
+  const normalized = source.replaceAll('×', '*').replaceAll('÷', '/').replace(/\s+/g, '')
+  const tokens = normalized.match(/(\d+(?:\.\d+)?)|[+\-*/]/g)
+  if (!tokens?.length) return null
+
+  const nums = []
+  const ops = []
+  let expectingNumber = true
+
+  for (const token of tokens) {
+    if (['+', '-', '*', '/'].includes(token)) {
+      if (expectingNumber) {
+        if (token === '-' && nums.length === 0) {
+          nums.push(0)
+        } else {
+          return null
+        }
+      }
+      while (ops.length && precedence(ops.at(-1)) >= precedence(token)) {
+        if (!applyOperator(nums, ops.pop())) return null
+      }
+      ops.push(token)
+      expectingNumber = true
+      continue
+    }
+
+    const num = Number(token)
+    if (!Number.isFinite(num)) return null
+    nums.push(num)
+    expectingNumber = false
+  }
+
+  if (expectingNumber) return null
+  while (ops.length) {
+    if (!applyOperator(nums, ops.pop())) return null
+  }
+
+  const result = nums[0]
+  if (!Number.isFinite(result)) return null
+  return round2(result)
+}
+
+function precedence(op) {
+  if (op === '+' || op === '-') return 1
+  if (op === '*' || op === '/') return 2
+  return 0
+}
+
+function applyOperator(nums, op) {
+  if (nums.length < 2) return false
+  const b = nums.pop()
+  const a = nums.pop()
+  if (op === '/' && b === 0) return false
+  const result = op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b
+  if (!Number.isFinite(result)) return false
+  nums.push(result)
+  return true
+}
+
+function formatAmountInput(value) {
+  const rounded = round2(value)
+  if (!Number.isFinite(rounded)) return ''
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/\.?0+$/, '')
+}
 
 function round2(value) {
   return Math.round(Number(value) * 100) / 100
