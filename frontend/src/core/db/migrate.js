@@ -13,6 +13,7 @@ import migration012 from '@/core/db/migrations/012_reimbursement_item_entry_type
 import migration013 from '@/core/db/migrations/013_budget_item_daily_rules.sql?raw'
 import migration014 from '@/core/db/migrations/014_reimbursement_advance_category.sql?raw'
 import migration015 from '@/core/db/migrations/015_savings_jars.sql?raw'
+import migration016 from '@/core/db/migrations/016_loan_payment_interest_tx.sql?raw'
 
 const MIGRATIONS = [
   { version: 1, name: 'init_schema', sql: migration001 },
@@ -30,6 +31,7 @@ const MIGRATIONS = [
   { version: 13, name: 'budget_item_daily_rules', sql: migration013 },
   { version: 14, name: 'reimbursement_advance_category', sql: migration014 },
   { version: 15, name: 'savings_jars', sql: migration015 },
+  { version: 16, name: 'loan_payment_interest_tx', sql: migration016 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'
