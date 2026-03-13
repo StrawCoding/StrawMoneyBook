@@ -124,6 +124,7 @@ public class SpeechInputPlugin extends Plugin {
 
         activity.runOnUiThread(() -> {
             try {
+                destroyRecognizer();
                 ensureRecognizer();
                 if (speechRecognizer == null) {
                     call.reject("Speech recognizer is unavailable", "service-not-allowed");
@@ -138,7 +139,6 @@ public class SpeechInputPlugin extends Plugin {
                 intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, activity.getPackageName());
                 intent.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false);
 
-                speechRecognizer.cancel();
                 listening = true;
                 emitState("start");
                 speechRecognizer.startListening(intent);
@@ -191,6 +191,7 @@ public class SpeechInputPlugin extends Plugin {
                 listening = false;
                 emitError(mapErrorCode(error));
                 emitState("end");
+                destroyRecognizer();
             }
 
             @Override
@@ -198,6 +199,7 @@ public class SpeechInputPlugin extends Plugin {
                 listening = false;
                 emitResult(results, true);
                 emitState("end");
+                destroyRecognizer();
             }
 
             @Override

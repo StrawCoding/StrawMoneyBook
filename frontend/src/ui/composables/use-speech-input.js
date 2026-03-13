@@ -231,6 +231,7 @@ export function useSpeechInput() {
   async function stop() {
     if (activeEngine === 'native') {
       manualStopRequested = true
+      isListening.value = false
       try {
         await SpeechInput.stop()
       } catch {
@@ -241,6 +242,7 @@ export function useSpeechInput() {
 
     if (!recognition) return
     manualStopRequested = true
+    isListening.value = false
     try {
       recognition.abort?.()
     } catch {

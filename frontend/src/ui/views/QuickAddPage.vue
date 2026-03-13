@@ -27,15 +27,22 @@
         </label>
 
         <div class="field">
-          <span>交易時間</span>
-          <DateTimePickerField
-            :date="model.occurredDate"
-            :hour="model.occurredHour"
-            :minute="model.occurredMinute"
-            @update:date="model.occurredDate = $event"
-            @update:hour="model.occurredHour = $event"
-            @update:minute="model.occurredMinute = $event"
-          />
+          <div class="date-extra-row">
+            <div class="field">
+              <span>交易時間</span>
+              <DateTimePickerField
+                :date="model.occurredDate"
+                :hour="model.occurredHour"
+                :minute="model.occurredMinute"
+                @update:date="model.occurredDate = $event"
+                @update:hour="model.occurredHour = $event"
+                @update:minute="model.occurredMinute = $event"
+              />
+            </div>
+            <button type="button" class="btn extra-btn" :class="{ active: showExtra }" @click="showExtra = true">
+              附加資訊
+            </button>
+          </div>
         </div>
 
         <div v-if="model.type === 'transfer'" class="inline-grid">
@@ -95,49 +102,6 @@
           </label>
         </div>
 
-        <label class="field">
-          備註
-          <textarea v-model.trim="model.note" class="textarea" rows="3" />
-        </label>
-
-        <div v-if="model.type === 'expense'" class="switch-list">
-          <button
-            type="button"
-            class="switch-row"
-            :class="{ active: model.isReimbursable }"
-            role="switch"
-            :aria-checked="model.isReimbursable ? 'true' : 'false'"
-            @click="model.isReimbursable = !model.isReimbursable"
-          >
-            <span>報銷</span>
-            <span class="switch-track"><span class="switch-thumb"></span></span>
-          </button>
-        </div>
-
-        <div class="switch-grid">
-          <button
-            type="button"
-            class="switch-row"
-            :class="{ active: model.includeInBudget }"
-            role="switch"
-            :aria-checked="model.includeInBudget ? 'true' : 'false'"
-            @click="model.includeInBudget = !model.includeInBudget"
-          >
-            <span>紀錄預算</span>
-            <span class="switch-track"><span class="switch-thumb"></span></span>
-          </button>
-          <button
-            type="button"
-            class="switch-row"
-            :class="{ active: model.includeInAnalysis }"
-            role="switch"
-            :aria-checked="model.includeInAnalysis ? 'true' : 'false'"
-            @click="model.includeInAnalysis = !model.includeInAnalysis"
-          >
-            <span>紀錄收支</span>
-            <span class="switch-track"><span class="switch-thumb"></span></span>
-          </button>
-        </div>
       </div>
 
       <footer class="row action-row">
@@ -145,6 +109,98 @@
         <button class="btn primary" :class="{ busy: submitting }" :disabled="submitting" @click="submit({ closeAfterSuccess: true })">建立交易</button>
       </footer>
     </article>
+
+    <teleport to="body">
+      <transition name="overlay-fade">
+        <section v-if="showExtra" class="extra-mask" @click.self="showExtra = false">
+          <article class="extra-sheet card">
+            <header class="row">
+              <h3>附加資訊</h3>
+              <button class="btn" @click="showExtra = false">完成</button>
+            </header>
+
+            <div class="stack extra-content">
+              <div class="addon-wrap">
+                <div class="row">
+                  <span class="field-label">附加項目</span>
+                  <button type="button" class="btn" @click="addAddonRow">新增項目</button>
+                </div>
+
+                <div v-for="item in addonRows" :key="item.id" class="addon-row">
+                  <CustomSelect
+                    v-model="item.optionId"
+                    class="addon-name"
+                    :options="addonTemplateOptions"
+                    @update:model-value="onAddonOptionChange(item, $event)"
+                  />
+                  <CustomSelect v-model="item.direction" class="addon-dir" :options="addonDirectionOptions" />
+                  <input
+                    v-model.number="item.amountMajor"
+                    class="input addon-amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0"
+                  />
+                  <button type="button" class="btn danger addon-remove" @click="removeAddonRow(item.id)">
+                    刪除
+                  </button>
+                </div>
+
+                <div class="row">
+                  <small class="addon-desc">可在設定中的附加項目清單更改</small>
+                </div>
+              </div>
+
+              <label class="field">
+                備註
+                <textarea v-model.trim="model.note" class="textarea" rows="3" />
+              </label>
+
+              <div v-if="model.type !== 'transfer'" class="switch-list">
+                <button
+                  v-if="model.type === 'expense'"
+                  type="button"
+                  class="switch-row"
+                  :class="{ active: model.isReimbursable }"
+                  role="switch"
+                  :aria-checked="model.isReimbursable ? 'true' : 'false'"
+                  @click="model.isReimbursable = !model.isReimbursable"
+                >
+                  <span>報銷</span>
+                  <span class="switch-track"><span class="switch-thumb"></span></span>
+                </button>
+              </div>
+
+              <div class="switch-grid">
+                <button
+                  type="button"
+                  class="switch-row"
+                  :class="{ active: model.includeInBudget }"
+                  role="switch"
+                  :aria-checked="model.includeInBudget ? 'true' : 'false'"
+                  @click="model.includeInBudget = !model.includeInBudget"
+                >
+                  <span>紀錄預算</span>
+                  <span class="switch-track"><span class="switch-thumb"></span></span>
+                </button>
+                <button
+                  type="button"
+                  class="switch-row"
+                  :class="{ active: model.includeInAnalysis }"
+                  role="switch"
+                  :aria-checked="model.includeInAnalysis ? 'true' : 'false'"
+                  @click="model.includeInAnalysis = !model.includeInAnalysis"
+                >
+                  <span>紀錄收支</span>
+                  <span class="switch-track"><span class="switch-thumb"></span></span>
+                </button>
+              </div>
+            </div>
+          </article>
+        </section>
+      </transition>
+    </teleport>
   </section>
 </template>
 
@@ -154,6 +210,7 @@ import { useRoute, useRouter } from 'vue-router'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { useAccountStore } from '@/ui/stores/account.store'
+import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
@@ -161,6 +218,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
+import { mergeAddonItemsToNote } from '@/ui/utils/addon-note'
 import {
   convertAmountMinorByRate,
   getExchangeRateSnapshot,
@@ -179,6 +237,7 @@ const props = defineProps({
 const route = useRoute()
 const router = useRouter()
 const accountStore = useAccountStore()
+const addonTemplateStore = useAddonTemplateStore()
 const categoryStore = useCategoryStore()
 const transactionStore = useTransactionStore()
 const uiStore = useUiStore()
@@ -187,11 +246,14 @@ const { t } = useI18n()
 
 const submitting = ref(false)
 const exchangeRateSyncing = ref(false)
+const showExtra = ref(false)
+const addonRows = ref([])
 const exchangeRateSnapshot = ref({
   syncedAt: '',
   effectiveDate: '',
   rates: { USD: 1 },
 })
+let addonSeq = 1
 
 const typeOptions = computed(() => [
   { value: 'expense', label: t('transaction.type.expense') },
@@ -218,6 +280,15 @@ const model = reactive({
 
 const directAccountOptions = computed(() => accountStore.regularAccounts)
 const transferAccountOptions = computed(() => accountStore.accounts)
+const addonDirectionOptions = [
+  { value: 'plus', label: '+' },
+  { value: 'minus', label: '-' },
+]
+const addonTemplateItems = computed(() => addonTemplateStore.templates)
+const addonTemplateOptions = computed(() => addonTemplateItems.value.map((item) => ({
+  value: item.id,
+  label: item.label,
+})))
 
 const categoryGroupsByType = computed(() => {
   if (model.type === 'income') return categoryStore.incomeCategoryGroups
@@ -321,6 +392,16 @@ watch(
     if (next && !prev) {
       model.includeInBudget = false
       model.includeInAnalysis = false
+    }
+  },
+)
+
+watch(
+  () => showExtra.value,
+  (open) => {
+    if (!open) return
+    if (!addonRows.value.length) {
+      addonRows.value = [createAddonRow()]
     }
   },
 )
@@ -507,6 +588,8 @@ function resetFormForNextEntry() {
   model.includeInAnalysis = true
   model.exchangeRateMode = 'system'
   model.manualExchangeRateInput = ''
+  showExtra.value = false
+  addonRows.value = []
   if (model.type === 'transfer') {
     ensureTransferAccounts()
     return
@@ -518,11 +601,16 @@ function resetFormForNextEntry() {
 async function submit(options = {}) {
   const closeAfterSuccess = options.closeAfterSuccess !== false
   if (submitting.value) return
-  const amountMinor = Math.round(Math.abs(Number(model.amountMajor ?? 0)) * 100)
-  if (!Number.isFinite(amountMinor) || amountMinor <= 0) {
-    uiStore.pushToast('請輸入有效金額', 'error')
-    return
-  }
+  const baseAmountMajor = Number(model.amountMajor ?? 0)
+  const appliedAddonItems = collectAppliedAddonItems()
+  const addonDeltaMajor = appliedAddonItems.reduce((total, item) => {
+    return total + (item.direction === 'plus' ? item.deltaMajor : -item.deltaMajor)
+  }, 0)
+  const baseAmountMinor = Math.round(Math.abs(baseAmountMajor) * 100)
+  const sourceExtraMinor = Math.round(addonDeltaMajor * 100)
+  const settledAmountMajor = round2(baseAmountMajor + addonDeltaMajor)
+  const settledAmountMinor = Math.round(Math.abs(settledAmountMajor) * 100)
+  const noteText = mergeAddonItemsToNote(String(model.note ?? '').trim(), appliedAddonItems)
 
   const occurredAt = toOccurredAtIso(model.occurredDate, model.occurredHour, model.occurredMinute)
   if (!occurredAt) {
@@ -541,6 +629,14 @@ async function submit(options = {}) {
   }
 
   if (model.type === 'transfer') {
+    if (baseAmountMinor <= 0) {
+      uiStore.pushToast('請輸入有效金額（主轉帳金額需大於 0）', 'error')
+      return
+    }
+    if (baseAmountMinor + sourceExtraMinor <= 0) {
+      uiStore.pushToast('轉出金額（含附加項目）需大於 0', 'error')
+      return
+    }
     if (!model.peerAccountId) {
       uiStore.pushToast('請先選擇轉入帳戶', 'error')
       return
@@ -549,47 +645,50 @@ async function submit(options = {}) {
       uiStore.pushToast('轉出與轉入帳戶不可相同', 'error')
       return
     }
+  } else if (settledAmountMinor <= 0) {
+    uiStore.pushToast('請輸入有效金額（需大於 0）', 'error')
+    return
   }
 
   submitting.value = true
   try {
     if (model.type === 'expense') {
       await transactionStore.addExpense({
-        amountMinor,
+        amountMinor: settledAmountMinor,
         occurredAt,
         accountId: model.accountId,
         categoryId: model.categoryId,
         isReimbursable: model.isReimbursable,
         includeInBudget: model.includeInBudget,
         includeInAnalysis: model.includeInAnalysis,
-        note: String(model.note ?? '').trim(),
+        note: noteText,
       })
     } else if (model.type === 'income') {
       await transactionStore.addIncome({
-        amountMinor,
+        amountMinor: settledAmountMinor,
         occurredAt,
         accountId: model.accountId,
         categoryId: model.categoryId,
         includeInBudget: model.includeInBudget,
         includeInAnalysis: model.includeInAnalysis,
-        note: String(model.note ?? '').trim(),
+        note: noteText,
       })
     } else {
       const transferRate = await resolveTransferRateOrThrow()
       const toAmountMinor = transferNeedsExchangeRate.value
-        ? convertAmountMinorByRate(amountMinor, transferRate)
-        : amountMinor
+        ? convertAmountMinorByRate(baseAmountMinor, transferRate)
+        : baseAmountMinor
       if (!Number.isFinite(toAmountMinor) || toAmountMinor <= 0) {
         throw new Error('轉入金額需大於 0，請調整匯率')
       }
       await transactionStore.addTransfer({
-        amountMinor,
+        amountMinor: baseAmountMinor,
         toAmountMinor,
-        sourceExtraMinor: 0,
+        sourceExtraMinor,
         occurredAt,
         fromAccountId: model.accountId,
         toAccountId: model.peerAccountId,
-        note: String(model.note ?? '').trim(),
+        note: noteText,
       })
     }
 
@@ -606,7 +705,56 @@ async function submit(options = {}) {
   }
 }
 
+function round2(value) {
+  return Math.round(Number(value) * 100) / 100
+}
+
+function createAddonRow() {
+  const defaultOption = defaultAddonOption()
+  return {
+    id: `addon-${Date.now()}-${addonSeq++}`,
+    optionId: defaultOption.id,
+    direction: defaultOption.defaultDirection,
+    amountMajor: null,
+  }
+}
+
+function defaultAddonOption() {
+  return addonTemplateItems.value[0] ?? { id: 'addon-default', label: '附加項目', defaultDirection: 'plus' }
+}
+
+function addAddonRow() {
+  addonRows.value.push(createAddonRow())
+}
+
+function removeAddonRow(rowId) {
+  addonRows.value = addonRows.value.filter((item) => item.id !== rowId)
+}
+
+function onAddonOptionChange(row, optionId) {
+  if (!row) return
+  row.optionId = optionId
+  const matched = addonTemplateItems.value.find((item) => String(item.id) === String(optionId))
+  if (!matched) return
+  row.direction = matched.defaultDirection === 'minus' ? 'minus' : 'plus'
+}
+
+function collectAppliedAddonItems() {
+  return addonRows.value
+    .map((item) => ({
+      label: addonLabelOf(item.optionId),
+      direction: item.direction === 'minus' ? 'minus' : 'plus',
+      deltaMajor: round2(Math.abs(Number(item.amountMajor ?? 0))),
+    }))
+    .filter((item) => item.deltaMajor > 0)
+}
+
+function addonLabelOf(optionId) {
+  return addonTemplateItems.value.find((item) => item.id === optionId)?.label ?? '附加項目'
+}
+
 fillDefaultOccurredAt()
+void addonTemplateStore.load()
 </script>
 
 <style scoped>
@@ -634,10 +782,35 @@ h2 {
   gap: 6px;
 }
 
+.field-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .inline-grid {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.date-extra-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.extra-btn {
+  white-space: nowrap;
+  min-height: 42px;
+  align-self: end;
+  justify-content: center;
+}
+
+.extra-btn.active {
+  border-color: color-mix(in srgb, var(--ok) 64%, var(--primary) 36%);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--ok) 35%, var(--bg) 65%), color-mix(in srgb, var(--ok) 55%, var(--card) 45%));
+  color: var(--text);
 }
 
 .fx-panel {
@@ -731,11 +904,81 @@ h2 {
   justify-content: space-between;
 }
 
+.extra-mask {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-backdrop-soft);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  z-index: 80;
+}
+
+.extra-sheet {
+  width: min(900px, 100vw);
+  max-width: 100vw;
+  box-sizing: border-box;
+  border-radius: 18px 18px 0 0;
+  padding: 14px 14px calc(14px + var(--navigation-bar-height));
+}
+
+.extra-content {
+  margin-top: 10px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.addon-wrap {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.addon-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 74px) minmax(0, 96px) auto;
+  gap: 8px;
+  align-items: end;
+  min-width: 0;
+}
+
+.addon-name,
+.addon-dir,
+.addon-amount {
+  min-width: 0;
+}
+
+.addon-remove {
+  padding: 10px 0;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.addon-desc {
+  color: var(--muted);
+}
+
 @media (max-width: 520px) {
   .inline-grid,
   .switch-grid,
   .fx-mode-grid {
     grid-template-columns: 1fr;
+  }
+
+  .addon-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 80px);
+  }
+
+  .addon-dir {
+    grid-column: 2 / 3;
+  }
+
+  .addon-amount {
+    grid-column: 1 / 2;
+  }
+
+  .addon-remove {
+    grid-column: 2 / 3;
   }
 }
 </style>
