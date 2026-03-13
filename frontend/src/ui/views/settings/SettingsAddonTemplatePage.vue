@@ -126,8 +126,8 @@ h2 {
 }
 .item-row {
   display: grid;
-  grid-template-columns: 1fr 92px auto;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 56px auto;
+  gap: 6px;
   align-items: center
 }
 .item-remove {
@@ -138,7 +138,8 @@ h2 {
 }
 @media (max-width: 640px) {
   .item-row {
-    grid-template-columns: 1fr 80px auto;
+    grid-template-columns: minmax(0, 1fr) 52px auto;
+    gap: 4px;
   }
 }
 </style>

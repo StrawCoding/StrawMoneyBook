@@ -798,6 +798,7 @@ h2 {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: end;
+  min-width: 0;
 }
 
 .extra-btn {
@@ -805,6 +806,7 @@ h2 {
   min-height: 42px;
   align-self: end;
   justify-content: center;
+  max-width: 100%;
 }
 
 .extra-btn.active {
@@ -934,10 +936,14 @@ h2 {
   min-width: 0;
 }
 
+.addon-wrap > .row {
+  flex-wrap: wrap;
+}
+
 .addon-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 74px) minmax(0, 96px) auto;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 56px 72px auto;
+  gap: 6px;
   align-items: end;
   min-width: 0;
 }
@@ -949,13 +955,24 @@ h2 {
 }
 
 .addon-remove {
-  padding: 10px 0;
+  padding: 10px 6px;
   white-space: nowrap;
   min-width: 0;
 }
 
+.addon-wrap .field-label,
+.addon-desc {
+  overflow-wrap: anywhere;
+}
+
 .addon-desc {
   color: var(--muted);
+}
+
+@media (max-width: 620px) {
+  .addon-row {
+    grid-template-columns: minmax(0, 1fr) 52px 64px auto;
+  }
 }
 
 @media (max-width: 520px) {
@@ -966,19 +983,8 @@ h2 {
   }
 
   .addon-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 80px);
-  }
-
-  .addon-dir {
-    grid-column: 2 / 3;
-  }
-
-  .addon-amount {
-    grid-column: 1 / 2;
-  }
-
-  .addon-remove {
-    grid-column: 2 / 3;
+    grid-template-columns: minmax(0, 1fr) 48px 58px auto;
+    gap: 4px;
   }
 }
 </style>
