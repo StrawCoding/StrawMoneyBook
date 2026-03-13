@@ -112,7 +112,7 @@ watch(
   () => String(route.query.quickAdd ?? ''),
   (flag) => {
     if (flag !== '1') return
-    void router.replace('/transactions/quick-add').catch(() => {})
+    void router.replace('/ai-auto-bookkeeping').catch(() => {})
   },
   { immediate: true },
 )
@@ -219,7 +219,7 @@ const currentRangeLabel = computed(() => {
 })
 
 function openQuickAdd() {
-  void router.push('/transactions/quick-add').catch(() => {})
+  void router.push('/ai-auto-bookkeeping').catch(() => {})
 }
 
 function monthKeyFromDate(date) {
