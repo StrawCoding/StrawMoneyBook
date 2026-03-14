@@ -13,6 +13,25 @@ function normalizeCurrencyCode(currencyCode, fallback = 'TWD') {
   return fallback
 }
 
+function normalizeAccountKind(value, fallback = 'cash') {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (normalized === 'credit') return 'credit'
+  return fallback === 'credit' ? 'credit' : 'cash'
+}
+
+function normalizeMinorAmount(value, fallback = 0) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return Math.max(0, Math.round(Number(fallback) || 0))
+  return Math.max(0, Math.round(numeric))
+}
+
+function normalizeRepaymentReminderDay(value) {
+  if (value === undefined || value === null || value === '') return null
+  const numeric = Math.trunc(Number(value))
+  if (!Number.isFinite(numeric) || numeric < 1 || numeric > 31) return null
+  return numeric
+}
+
 function normalizeIncludeInAssets(value, fallback = 1) {
   if (value === undefined || value === null || value === '') return fallback
   if (typeof value === 'number') return value === 0 ? 0 : 1
@@ -41,8 +60,9 @@ export async function listAccounts(ledgerId, options = {}) {
   const includeArchived = Boolean(options.includeArchived)
 
   const result = await query(
-    `SELECT a.ledger_id, a.id, a.group_id, a.name, a.account_type, a.allow_negative, a.opening_balance_minor,
-            a.currency_code, a.icon, a.include_in_assets, a.sort_order, a.is_archived,
+    `SELECT a.ledger_id, a.id, a.group_id, a.name, a.account_type, a.account_kind, a.allow_negative, a.opening_balance_minor,
+            a.currency_code, a.icon, a.credit_limit_minor, a.repayment_reminder_day,
+            a.include_in_assets, a.sort_order, a.is_archived,
             sj.goal_type AS savings_jar_goal_type,
             sj.target_amount_minor AS savings_jar_target_amount_minor
      FROM accounts a
@@ -64,8 +84,9 @@ export async function findAccountById(ledgerId, accountId) {
   if (!accountId) return null
 
   const result = await query(
-    `SELECT a.ledger_id, a.id, a.group_id, a.name, a.account_type, a.allow_negative, a.opening_balance_minor,
-            a.currency_code, a.icon, a.include_in_assets, a.sort_order, a.is_archived,
+    `SELECT a.ledger_id, a.id, a.group_id, a.name, a.account_type, a.account_kind, a.allow_negative, a.opening_balance_minor,
+            a.currency_code, a.icon, a.credit_limit_minor, a.repayment_reminder_day,
+            a.include_in_assets, a.sort_order, a.is_archived,
             sj.goal_type AS savings_jar_goal_type,
             sj.target_amount_minor AS savings_jar_target_amount_minor
      FROM accounts a
@@ -103,23 +124,30 @@ export async function createAccount(ledgerId, input) {
   const now = nowIso()
   const icon = normalizeAccountIcon(input.icon)
   const currencyCode = normalizeCurrencyCode(input.currencyCode, 'TWD')
+  const accountKind = normalizeAccountKind(input.accountKind, 'cash')
+  const creditLimitMinor = normalizeMinorAmount(input.creditLimitMinor, 0)
+  const repaymentReminderDay = normalizeRepaymentReminderDay(input.repaymentReminderDay)
   const includeInAssets = normalizeIncludeInAssets(input.includeInAssets, 1)
 
   await run(
     `INSERT INTO accounts (
-      ledger_id, id, group_id, name, account_type, allow_negative, opening_balance_minor,
-      currency_code, icon, include_in_assets, sort_order, is_archived, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?);`,
+      ledger_id, id, group_id, name, account_type, account_kind, allow_negative, opening_balance_minor,
+      currency_code, icon, credit_limit_minor, repayment_reminder_day,
+      include_in_assets, sort_order, is_archived, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?);`,
     [
       ledgerId,
       id,
       input.groupId,
       input.name,
       input.accountType ?? 'asset',
+      accountKind,
       input.allowNegative ? 1 : 0,
       input.openingBalanceMinor ?? 0,
       currencyCode,
       icon,
+      creditLimitMinor,
+      repaymentReminderDay,
       includeInAssets,
       input.sortOrder ?? 0,
       now,
@@ -154,6 +182,12 @@ export async function updateAccountProfile(ledgerId, accountId, input = {}) {
   const openingBalanceMinor = Number.isFinite(openingBalanceMinorInput) ? Math.round(openingBalanceMinorInput) : null
   const hasCurrencyCode = String(input.currencyCode ?? '').trim() !== ''
   const currencyCode = hasCurrencyCode ? normalizeCurrencyCode(input.currencyCode) : null
+  const hasAccountKind = Object.prototype.hasOwnProperty.call(input, 'accountKind')
+  const accountKind = hasAccountKind ? normalizeAccountKind(input.accountKind, 'cash') : null
+  const hasCreditLimitMinor = Object.prototype.hasOwnProperty.call(input, 'creditLimitMinor')
+  const creditLimitMinor = hasCreditLimitMinor ? normalizeMinorAmount(input.creditLimitMinor, 0) : null
+  const hasRepaymentReminderDay = Object.prototype.hasOwnProperty.call(input, 'repaymentReminderDay')
+  const repaymentReminderDay = hasRepaymentReminderDay ? normalizeRepaymentReminderDay(input.repaymentReminderDay) : undefined
   const hasIncludeInAssets = Object.prototype.hasOwnProperty.call(input, 'includeInAssets')
   const includeInAssets = hasIncludeInAssets ? normalizeIncludeInAssets(input.includeInAssets, 1) : null
 
@@ -162,12 +196,32 @@ export async function updateAccountProfile(ledgerId, accountId, input = {}) {
      SET name = ?,
          group_id = ?,
          icon = ?,
+         account_kind = COALESCE(?, account_kind),
          currency_code = COALESCE(?, currency_code),
          opening_balance_minor = COALESCE(?, opening_balance_minor),
+         credit_limit_minor = COALESCE(?, credit_limit_minor),
+         repayment_reminder_day = CASE
+           WHEN ? = 1 THEN ?
+           ELSE repayment_reminder_day
+         END,
          include_in_assets = COALESCE(?, include_in_assets),
          updated_at = ?
      WHERE ledger_id = ? AND id = ? AND deleted_at IS NULL;`,
-    [name, groupId, normalizedIcon, currencyCode, openingBalanceMinor, includeInAssets, nowIso(), ledgerId, accountId],
+    [
+      name,
+      groupId,
+      normalizedIcon,
+      accountKind,
+      currencyCode,
+      openingBalanceMinor,
+      creditLimitMinor,
+      hasRepaymentReminderDay ? 1 : 0,
+      hasRepaymentReminderDay ? repaymentReminderDay : null,
+      includeInAssets,
+      nowIso(),
+      ledgerId,
+      accountId,
+    ],
   )
 }
 

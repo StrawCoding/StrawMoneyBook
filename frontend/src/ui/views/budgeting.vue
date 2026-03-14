@@ -222,7 +222,7 @@ function itemDailyRuleSummary(item) {
     ? 'budgeting.rule_unit.monthday'
     : 'budgeting.rule_unit.weekday'
   const values = itemRuleValues(item).join(', ') || '-'
-  return `${t('budgeting.amount_mode.daily_average')} ${formatMajor(itemBaseMinor(item))} / ${t(unitKey)} ${values} · ${t('budgeting.occurrence_count', { count: Number(item?.occurrence_count ?? 0) })}`
+  return `${t('budgeting.amount_mode.daily_average')} ${formatMajor(itemBaseMinor(item))} / ${t(unitKey)} ${values} · ${t('budgeting.occurrence_count', { count: Number(item?.occurrence_count ?? 0) })} · 已用 ${Number(item?.used_occurrence_count ?? 0)} 次`
 }
 
 function numberFormatLocale() {

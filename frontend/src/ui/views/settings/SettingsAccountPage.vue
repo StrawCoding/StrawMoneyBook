@@ -7,7 +7,7 @@
           <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
         </header>
         <p class="muted intro">
-          {{ t('settings_account.desc', '使用 Email 註冊與登入，之後可管理個人資料、推薦碼與登出。') }}
+          {{ t('settings_account.desc', '可使用 Email / 密碼或 Google 登入，之後可管理個人資料、推薦碼與登出。') }}
         </p>
         <p v-if="apiUnavailable" class="notice">
           {{ apiUnavailableMessage }}
@@ -174,6 +174,34 @@
           </span>
         </div>
 
+        <div v-if="showGoogleAuthAction" class="google-auth-block">
+          <p class="muted compact">
+            {{
+              sessionUser
+                ? t('settings_account.google_bind_hint', '也可以綁定 Google，之後直接用 Google 登入')
+                : t('settings_account.google_login_hint', '也可以直接使用 Google 登入')
+            }}
+          </p>
+          <p v-if="googleUnavailableReason" class="muted compact">
+            {{ googleUnavailableReason }}
+          </p>
+          <div v-else-if="isWebGoogleRuntime" ref="googleButtonHost" class="google-button-host"></div>
+          <button
+            v-else
+            class="btn google-btn wide-btn"
+            :disabled="googleAuthSubmitting || apiUnavailable"
+            @click="handleGoogleAuthAction"
+          >
+            {{
+              googleAuthSubmitting
+                ? t('settings_account.google_working', 'Google 處理中...')
+                : sessionUser
+                  ? t('settings_account.google_bind', '綁定 Google')
+                  : t('settings_account.google_login', '使用 Google 登入')
+            }}
+          </button>
+        </div>
+
         <button class="btn primary wide-btn" :disabled="authSubmitting || apiUnavailable || !canSubmitAuth" @click="submitAuth">
           {{
             authSubmitting
@@ -271,9 +299,70 @@
           </p>
         </article>
 
+        <article v-if="!sessionMustChangePassword" class="card panel">
+          <header class="section-head">
+            <h3>{{ t('settings_account.login_methods', '登入方式') }}</h3>
+          </header>
+
+          <div class="provider-grid">
+            <div class="provider-card" :class="{ linked: hasPasswordLogin }">
+              <strong>{{ t('settings_account.email_password', 'Email / 密碼') }}</strong>
+              <small class="muted">
+                {{
+                  hasPasswordLogin
+                    ? t('settings_account.email_password_enabled', '已啟用')
+                    : t('settings_account.email_password_missing', '尚未設定密碼')
+                }}
+              </small>
+            </div>
+
+            <div class="provider-card" :class="{ linked: !!googleLinkedProvider }">
+              <strong>Google</strong>
+              <small class="muted">
+                {{
+                  googleLinkedProvider?.email
+                    ? googleLinkedProvider.email
+                    : googleLinkedProvider
+                      ? t('settings_account.google_bound', '已綁定')
+                      : t('settings_account.google_unbound', '尚未綁定')
+                }}
+              </small>
+            </div>
+          </div>
+
+          <div v-if="showGoogleAuthAction" class="google-auth-block">
+            <p v-if="googleUnavailableReason" class="muted compact">
+              {{ googleUnavailableReason }}
+            </p>
+            <div v-else-if="isWebGoogleRuntime" ref="googleButtonHost" class="google-button-host"></div>
+            <button
+              v-else
+              class="btn google-btn wide-btn"
+              :disabled="googleAuthSubmitting || apiUnavailable"
+              @click="handleGoogleAuthAction"
+            >
+              {{
+                googleAuthSubmitting
+                  ? t('settings_account.google_working', 'Google 處理中...')
+                  : t('settings_account.google_bind', '綁定 Google')
+              }}
+            </button>
+          </div>
+
+          <p v-if="googleLinkedProvider?.last_login_at" class="muted compact">
+            {{
+              t(
+                'settings_account.google_last_login',
+                { time: new Date(googleLinkedProvider.last_login_at).toLocaleString() },
+                'Google 最近登入：{time}',
+              )
+            }}
+          </p>
+        </article>
+
         <article class="card panel">
           <header class="section-head">
-            <h3>{{ t('settings_account.change_password', '更改密碼') }}</h3>
+            <h3>{{ passwordSectionTitle }}</h3>
           </header>
 
           <div class="form-grid">
@@ -322,7 +411,9 @@
             {{
               sessionMustChangePassword
                 ? t('settings_account.change_password_force_hint', '臨時密碼只能用來登入一次，請立即設定正式密碼。')
-                : t('settings_account.change_password_hint', '若要修改密碼，請先輸入目前密碼，再設定新密碼。')
+                : hasPasswordLogin
+                  ? t('settings_account.change_password_hint', '若要修改密碼，請先輸入目前密碼，再設定新密碼。')
+                  : t('settings_account.set_password_hint', '你目前是第三方登入帳號，設定密碼後也可以改用 Email / 密碼登入。')
             }}
           </p>
 
@@ -401,7 +492,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { Capacitor } from '@capacitor/core'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
@@ -414,7 +506,9 @@ import {
   getSharedLedgerSession,
   isSharedLedgerApiConfigured,
   loginSharedLedgerAccount,
+  loginSharedLedgerWithGoogle,
   logoutSharedLedgerAccount,
+  prepareSharedLedgerGoogleAuth,
   redeemReferralCode,
   refreshSharedLedgerSession,
   registerSharedLedgerAccount,
@@ -423,6 +517,13 @@ import {
   subscribeSharedLedgerSession,
   updateSharedLedgerProfile,
 } from '@/services/shared-ledger/backend'
+import {
+  disableGoogleIdentityAutoSelect,
+  getGoogleIdentityUnavailableReason,
+  isGoogleIdentitySupported,
+  renderGoogleIdentityButton,
+  signInWithGoogleCredentialManager,
+} from '@/ui/services/google-identity.service'
 
 const uiStore = useUiStore()
 const route = useRoute()
@@ -471,7 +572,11 @@ const profileForm = ref({
   avatarUrl: '',
 })
 const avatarInputEl = ref(null)
+const googleButtonHost = ref(null)
+const googleAuthSubmitting = ref(false)
+const googleChallenge = ref(null)
 let resetRequestCountdownTimer = null
+let googleChallengeRefreshTimer = null
 
 const MAX_AVATAR_SIDE_PX = 320
 const MAX_AVATAR_FILE_BYTES = 5 * 1024 * 1024
@@ -482,6 +587,33 @@ const REFERRAL_CODE_PATTERN = /(^|[^A-Z0-9])([A-Z0-9]{8})(?=$|[^A-Z0-9])/i
 const resetToken = computed(() => String(route.query.token ?? '').trim())
 const isResetPasswordMode = computed(() => String(route.query.mode ?? '').trim() === 'reset-password' && Boolean(resetToken.value))
 const sessionMustChangePassword = computed(() => Boolean(sessionUser.value?.must_change_password))
+const isWebGoogleRuntime = computed(() => Capacitor.getPlatform() === 'web')
+const isAndroidGoogleRuntime = computed(() => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android')
+const googleIdentityAvailable = computed(() => isGoogleIdentitySupported())
+const googleUnavailableReason = computed(() => {
+  if (!googleIdentityAvailable.value) {
+    return getGoogleIdentityUnavailableReason()
+  }
+  return ''
+})
+const googleLinkedProvider = computed(() => {
+  const providers = Array.isArray(sessionUser.value?.auth_providers) ? sessionUser.value.auth_providers : []
+  return providers.find((item) => String(item?.provider ?? '').trim() === 'google') ?? null
+})
+const hasPasswordLogin = computed(() => Boolean(sessionUser.value?.has_password))
+const showGoogleAuthAction = computed(() => (
+  !apiUnavailable.value
+  && googleIdentityAvailable.value
+  && (
+    !sessionUser.value
+    || (!sessionMustChangePassword.value && !googleLinkedProvider.value)
+  )
+))
+const passwordSectionTitle = computed(() => (
+  hasPasswordLogin.value
+    ? t('settings_account.change_password', '更改密碼')
+    : t('settings_account.set_password', '設定密碼')
+))
 
 function looksLikeEmail(value) {
   const source = String(value ?? '').trim()
@@ -529,7 +661,7 @@ const canSaveProfile = computed(() => {
 
 const canSubmitPasswordChange = computed(() => {
   if (!sessionUser.value) return false
-  if (!sessionMustChangePassword.value && !String(passwordForm.value.currentPassword ?? '')) return false
+  if (!sessionMustChangePassword.value && hasPasswordLogin.value && !String(passwordForm.value.currentPassword ?? '')) return false
   if (String(passwordForm.value.nextPassword ?? '').length < 8) return false
   return passwordForm.value.nextPassword === passwordForm.value.confirmPassword
 })
@@ -684,6 +816,139 @@ function closeForgotPasswordMode() {
   resetRequestCooldownSeconds.value = 0
 }
 
+function clearGoogleChallengeRefreshTimer() {
+  if (googleChallengeRefreshTimer != null) {
+    globalThis.clearTimeout(googleChallengeRefreshTimer)
+    googleChallengeRefreshTimer = null
+  }
+}
+
+function clearGoogleButtonHost() {
+  if (googleButtonHost.value) {
+    googleButtonHost.value.innerHTML = ''
+  }
+}
+
+function scheduleGoogleChallengeRefresh(expiresAt) {
+  clearGoogleChallengeRefreshTimer()
+  const expiresAtMs = Date.parse(String(expiresAt ?? ''))
+  if (!Number.isFinite(expiresAtMs)) return
+  const delayMs = Math.max(5_000, expiresAtMs - Date.now() - 30_000)
+  googleChallengeRefreshTimer = globalThis.setTimeout(() => {
+    void refreshGoogleButtonUi()
+  }, delayMs)
+}
+
+async function loadGoogleChallenge(purpose) {
+  if (!showGoogleAuthAction.value || apiUnavailable.value || !googleIdentityAvailable.value) return null
+  const normalizedPurpose = String(purpose ?? '').trim() || (sessionUser.value ? 'link' : 'login')
+  const result = await prepareSharedLedgerGoogleAuth({ purpose: normalizedPurpose })
+  googleChallenge.value = result
+  scheduleGoogleChallengeRefresh(result?.expires_at)
+  return result
+}
+
+function toGoogleErrorMessage(error, fallback) {
+  const code = String(error?.code ?? '').trim()
+  if (code === 'google_canceled') return t('settings_account.google_canceled', '已取消 Google 登入')
+  if (code === 'google_no_credential') return t('settings_account.google_no_credential', '裝置沒有可用的 Google 帳號，請先新增或改用其他登入方式')
+  return error?.message || fallback
+}
+
+async function submitGoogleIdToken(idToken, purpose) {
+  googleAuthSubmitting.value = true
+  try {
+    const session = await loginSharedLedgerWithGoogle({
+      idToken,
+      nonce: String(googleChallenge.value?.nonce ?? '').trim(),
+      purpose,
+    })
+    sessionUser.value = session.user
+    authForm.value.password = ''
+    syncProfileFormFromSession()
+    if (!session.user?.must_change_password) {
+      await loadReferralSummary()
+    } else {
+      referralSummary.value = null
+    }
+    uiStore.pushToast(
+      purpose === 'link'
+        ? t('settings_account.google_bind_done', 'Google 已綁定完成')
+        : t('settings_account.google_login_done', 'Google 登入成功'),
+    )
+  } catch (error) {
+    uiStore.pushToast(toGoogleErrorMessage(error, t('settings_account.google_login_failed', 'Google 登入失敗')), 'error')
+  } finally {
+    googleAuthSubmitting.value = false
+    googleChallenge.value = null
+    await refreshGoogleButtonUi()
+  }
+}
+
+async function refreshGoogleButtonUi() {
+  clearGoogleChallengeRefreshTimer()
+  if (!showGoogleAuthAction.value || apiUnavailable.value || !googleIdentityAvailable.value) {
+    googleChallenge.value = null
+    clearGoogleButtonHost()
+    return
+  }
+
+  const purpose = sessionUser.value ? 'link' : 'login'
+  const challenge = await loadGoogleChallenge(purpose)
+  if (!challenge) {
+    clearGoogleButtonHost()
+    return
+  }
+
+  if (!isWebGoogleRuntime.value) {
+    clearGoogleButtonHost()
+    return
+  }
+
+  await nextTick()
+  if (!googleButtonHost.value) return
+
+  try {
+    await renderGoogleIdentityButton(googleButtonHost.value, {
+      nonce: challenge.nonce,
+      text: purpose === 'link' ? 'continue_with' : 'signin_with',
+      width: 320,
+      onCredential: ({ idToken }) => {
+        void submitGoogleIdToken(idToken, purpose)
+      },
+      onError: (error) => {
+        const message = toGoogleErrorMessage(error, t('settings_account.google_login_failed', 'Google 登入失敗'))
+        if (message) {
+          uiStore.pushToast(message, 'error')
+        }
+        void refreshGoogleButtonUi()
+      },
+    })
+  } catch (error) {
+    uiStore.pushToast(toGoogleErrorMessage(error, t('settings_account.google_login_failed', 'Google 登入失敗')), 'error')
+  }
+}
+
+async function handleGoogleAuthAction() {
+  if (!isAndroidGoogleRuntime.value || googleAuthSubmitting.value || apiUnavailable.value) return
+  const purpose = sessionUser.value ? 'link' : 'login'
+  googleAuthSubmitting.value = true
+  try {
+    const challenge = await loadGoogleChallenge(purpose)
+    const result = await signInWithGoogleCredentialManager({
+      nonce: String(challenge?.nonce ?? '').trim(),
+    })
+    if (!result?.idToken) {
+      throw new Error(t('settings_account.google_id_token_missing', 'Google 未回傳可驗證的登入資料'))
+    }
+    await submitGoogleIdToken(result.idToken, purpose)
+  } catch (error) {
+    googleAuthSubmitting.value = false
+    uiStore.pushToast(toGoogleErrorMessage(error, t('settings_account.google_login_failed', 'Google 登入失敗')), 'error')
+    await refreshGoogleButtonUi()
+  }
+}
+
 function handleReferralCodePaste(event) {
   const pastedText = String(event?.clipboardData?.getData('text') ?? '')
   const extracted = extractReferralCode(pastedText)
@@ -731,6 +996,7 @@ async function refreshSession() {
   } else {
     referralSummary.value = null
   }
+  await refreshGoogleButtonUi()
 }
 
 async function submitAuth() {
@@ -756,6 +1022,7 @@ async function submitAuth() {
     } else {
       referralSummary.value = null
     }
+    await refreshGoogleButtonUi()
     uiStore.pushToast(
       authMode.value === 'login'
         ? (
@@ -813,6 +1080,7 @@ async function submitPasswordResetConfirm() {
     if (!session.user?.must_change_password) {
       await loadReferralSummary()
     }
+    await refreshGoogleButtonUi()
     uiStore.pushToast(t('settings_account.toast.password_reset_done', '密碼已更新並完成登入'))
   } catch (error) {
     uiStore.pushToast(error.message || t('settings_account.toast.password_reset_failed', '重設密碼失敗'), 'error')
@@ -859,6 +1127,7 @@ async function submitPasswordChange() {
     passwordSavedMessage.value = t('settings_account.toast.password_changed', '密碼已更新')
     uiStore.pushToast(t('settings_account.toast.password_changed', '密碼已更新'))
     await loadReferralSummary()
+    await refreshGoogleButtonUi()
   } catch (error) {
     uiStore.pushToast(error.message || t('settings_account.toast.password_change_failed', '更改密碼失敗'), 'error')
   } finally {
@@ -870,10 +1139,12 @@ async function handleLogout() {
   loggingOut.value = true
   try {
     await logoutSharedLedgerAccount()
+    await disableGoogleIdentityAutoSelect()
     sessionUser.value = null
     referralSummary.value = null
     passwordSavedMessage.value = ''
     syncProfileFormFromSession()
+    await refreshGoogleButtonUi()
     uiStore.pushToast(t('settings_account.toast.logout_done', '已登出帳號'))
   } catch (error) {
     uiStore.pushToast(error.message || t('settings_account.toast.logout_failed', '登出失敗'), 'error')
@@ -923,6 +1194,7 @@ onMounted(() => {
     syncProfileFormFromSession()
     profileSavedMessage.value = ''
     passwordSavedMessage.value = ''
+    void refreshGoogleButtonUi()
   })
   void refreshSession()
 })
@@ -953,8 +1225,17 @@ watch(
   },
 )
 
+watch(
+  () => `${showGoogleAuthAction.value}:${isWebGoogleRuntime.value}:${googleIdentityAvailable.value}:${sessionUser.value?.id ?? ''}:${googleLinkedProvider.value?.provider_sub ?? ''}`,
+  () => {
+    void refreshGoogleButtonUi()
+  },
+)
+
 onUnmounted(() => {
   stopResetRequestCountdown()
+  clearGoogleChallengeRefreshTimer()
+  clearGoogleButtonHost()
   if (typeof unsubscribeSession === 'function') {
     unsubscribeSession()
   }
@@ -1045,6 +1326,24 @@ p {
   gap: 12px;
 }
 
+.google-auth-block {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed color-mix(in srgb, var(--line, var(--field-border)) 72%, transparent);
+}
+
+.google-button-host {
+  min-height: 44px;
+}
+
+.google-btn {
+  background: #fff;
+  color: #1f1f1f;
+  border-color: color-mix(in srgb, #dadce0 78%, var(--line, var(--field-border)));
+}
+
 .field {
   display: grid;
   gap: 6px;
@@ -1115,6 +1414,26 @@ p {
   gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   margin: 12px 0;
+}
+
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.provider-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line, var(--field-border));
+  background: color-mix(in srgb, var(--card) 86%, #111 14%);
+}
+
+.provider-card.linked {
+  border-color: color-mix(in srgb, #2e7d32 55%, var(--line, var(--field-border)));
+  background: color-mix(in srgb, #2e7d32 10%, var(--card));
 }
 
 .debug-link {

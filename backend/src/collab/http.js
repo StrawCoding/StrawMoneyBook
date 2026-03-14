@@ -45,6 +45,16 @@ function getRequestOrigin(req) {
   return String(req?.headers?.origin ?? '').trim()
 }
 
+function getClientIp(req) {
+  const forwardedFor = String(req?.headers?.['x-forwarded-for'] ?? '').split(',')[0].trim()
+  const socketIp = String(req?.socket?.remoteAddress ?? '').trim()
+  return forwardedFor || socketIp || 'unknown'
+}
+
+function getUserAgent(req) {
+  return String(req?.headers?.['user-agent'] ?? '').trim()
+}
+
 function isOriginAllowed(req) {
   if (ALLOW_ALL_ORIGINS) return true
   const origin = getRequestOrigin(req)
@@ -77,7 +87,7 @@ function setCorsHeaders(res) {
   } else if (origin && isOriginAllowed(req)) {
     res.setHeader('Access-Control-Allow-Origin', origin)
   }
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
 }
 
@@ -87,7 +97,7 @@ function sendJson(res, statusCode, payload) {
 }
 
 function parseBody(req) {
-  if (req.body && typeof req.body === 'object') return req.body
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) return req.body
   if (typeof req.body === 'string') {
     try {
       return JSON.parse(req.body)
@@ -140,6 +150,8 @@ function extractBearerToken(req) {
 
 export {
   extractBearerToken,
+  getClientIp,
+  getUserAgent,
   isOriginAllowed,
   methodGuard,
   normalizePath,

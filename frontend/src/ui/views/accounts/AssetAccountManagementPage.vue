@@ -92,7 +92,7 @@
     <AppDialog
       :open="accountDialogOpen"
       title="新增帳戶"
-      :confirm-disabled="!accountNameInput.trim() || !accountTargetGroupId || accountOpeningInvalid"
+      :confirm-disabled="!accountNameInput.trim() || !accountTargetGroupId || accountAmountInvalid || accountCreditLimitInvalid || accountReminderDayInvalid"
       confirm-text="儲存"
       @close="closeAccountDialog"
       @confirm="submitAccountDialog"
@@ -113,12 +113,28 @@
         </button>
       </label>
       <label class="field">
+        帳號類型
+        <CustomSelect v-model="accountKindInput" :options="accountKindOptions" />
+      </label>
+      <label class="field">
         帳戶幣別
         <CustomSelect v-model="accountCurrencyCodeInput" :options="currencyOptions" placeholder="請選擇幣別" />
       </label>
-      <label class="field">
+      <label v-if="accountKindInput === 'cash'" class="field">
         期初金額（元，可小數）
         <input v-model="accountOpeningInput" class="input" type="number" step="0.01" />
+      </label>
+      <label v-else class="field">
+        目前欠款（元，可小數）
+        <input v-model="accountCurrentDebtInput" class="input" type="number" min="0" step="0.01" />
+      </label>
+      <label v-if="accountKindInput === 'credit'" class="field">
+        信用額度（元，可小數）
+        <input v-model="accountCreditLimitInput" class="input" type="number" min="0" step="0.01" />
+      </label>
+      <label v-if="accountKindInput === 'credit'" class="field">
+        還款提醒日（每月 1-31）
+        <input v-model="accountRepaymentReminderDayInput" class="input" type="number" min="1" max="31" step="1" placeholder="例如 15" />
       </label>
       <div class="field">
         <span>{{ t('account.include_in_assets_label') }}</span>
@@ -137,7 +153,9 @@
           <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
         </button>
       </div>
-      <p v-if="accountOpeningInvalid" class="error-text">期初金額格式錯誤</p>
+      <p v-if="accountAmountInvalid" class="error-text">{{ accountKindInput === 'credit' ? '目前欠款格式錯誤' : '期初金額格式錯誤' }}</p>
+      <p v-if="accountCreditLimitInvalid" class="error-text">信用額度格式錯誤</p>
+      <p v-if="accountReminderDayInvalid" class="error-text">還款提醒日需介於 1 到 31</p>
     </AppDialog>
   </section>
 </template>
@@ -166,7 +184,11 @@ const groupNameInput = ref('')
 const accountDialogOpen = ref(false)
 const accountTargetGroupId = ref('')
 const accountNameInput = ref('')
+const accountKindInput = ref('cash')
 const accountOpeningInput = ref('0')
+const accountCurrentDebtInput = ref('0')
+const accountCreditLimitInput = ref('0')
+const accountRepaymentReminderDayInput = ref('')
 const accountIconInput = ref(defaultAccountIcon)
 const accountCurrencyCodeInput = ref('TWD')
 const accountIncludeInAssetsInput = ref(true)
@@ -190,7 +212,11 @@ watch(
     if (queryText(query.openAccountDialog) !== '1') return
     accountTargetGroupId.value = queryText(query.accountTargetGroupId) || accountStore.groups[0]?.id || ''
     accountNameInput.value = queryText(query.accountName)
+    accountKindInput.value = normalizeAccountKind(queryText(query.accountKind))
     accountOpeningInput.value = queryText(query.accountOpening) || '0'
+    accountCurrentDebtInput.value = queryText(query.accountCurrentDebt) || '0'
+    accountCreditLimitInput.value = queryText(query.accountCreditLimit) || '0'
+    accountRepaymentReminderDayInput.value = queryText(query.accountRepaymentReminderDay)
     accountIconInput.value = normalizeFaIcon(queryText(query.accountIcon), defaultAccountIcon)
     accountCurrencyCodeInput.value = normalizeCurrencyCode(queryText(query.accountCurrency), 'TWD')
     accountIncludeInAssetsInput.value = queryBoolean(query.accountIncludeInAssets, true)
@@ -271,8 +297,23 @@ function toggleGroup(groupId) {
   persistExpandedGroupState()
 }
 
-const accountOpeningInvalid = computed(() => {
-  return !Number.isFinite(Number(accountOpeningInput.value))
+const accountKindOptions = computed(() => ([
+  { value: 'cash', label: '現金帳戶' },
+  { value: 'credit', label: '信用帳戶' },
+]))
+const accountAmountInvalid = computed(() => {
+  const rawValue = accountKindInput.value === 'credit' ? accountCurrentDebtInput.value : accountOpeningInput.value
+  return !Number.isFinite(Number(rawValue))
+})
+const accountCreditLimitInvalid = computed(() => {
+  if (accountKindInput.value !== 'credit') return false
+  const numeric = Number(accountCreditLimitInput.value)
+  return !Number.isFinite(numeric) || numeric < 0
+})
+const accountReminderDayInvalid = computed(() => {
+  if (accountKindInput.value !== 'credit' || accountRepaymentReminderDayInput.value === '') return false
+  const numeric = Math.trunc(Number(accountRepaymentReminderDayInput.value))
+  return !Number.isFinite(numeric) || numeric < 1 || numeric > 31
 })
 const groupOptions = computed(() => {
   return accountStore.groups.map((group) => ({
@@ -298,7 +339,11 @@ async function addAccountFromHeader() {
 async function addAccount(groupId) {
   accountTargetGroupId.value = groupId
   accountNameInput.value = ''
+  accountKindInput.value = 'cash'
   accountOpeningInput.value = '0'
+  accountCurrentDebtInput.value = '0'
+  accountCreditLimitInput.value = '0'
+  accountRepaymentReminderDayInput.value = ''
   accountIconInput.value = defaultAccountIcon
   accountCurrencyCodeInput.value = 'TWD'
   accountIncludeInAssetsInput.value = true
@@ -330,7 +375,11 @@ function closeAccountDialog() {
   accountDialogOpen.value = false
   accountTargetGroupId.value = ''
   accountNameInput.value = ''
+  accountKindInput.value = 'cash'
   accountOpeningInput.value = '0'
+  accountCurrentDebtInput.value = '0'
+  accountCreditLimitInput.value = '0'
+  accountRepaymentReminderDayInput.value = ''
   accountIconInput.value = defaultAccountIcon
   accountCurrencyCodeInput.value = 'TWD'
   accountIncludeInAssetsInput.value = true
@@ -348,7 +397,11 @@ function openAccountIconPicker() {
       openAccountDialog: '1',
       accountTargetGroupId: accountTargetGroupId.value,
       accountName: accountNameInput.value,
+      accountKind: accountKindInput.value,
       accountOpening: accountOpeningInput.value,
+      accountCurrentDebt: accountCurrentDebtInput.value,
+      accountCreditLimit: accountCreditLimitInput.value,
+      accountRepaymentReminderDay: accountRepaymentReminderDayInput.value,
       accountIcon: accountIconInput.value,
       accountCurrency: accountCurrencyCodeInput.value,
       accountIncludeInAssets: accountIncludeInAssetsInput.value ? '1' : '0',
@@ -359,10 +412,26 @@ function openAccountIconPicker() {
 async function submitAccountDialog() {
   const groupId = accountTargetGroupId.value
   const name = accountNameInput.value.trim()
+  const accountKind = normalizeAccountKind(accountKindInput.value)
   const openingMajor = Number(accountOpeningInput.value)
+  const currentDebtMajor = Number(accountCurrentDebtInput.value)
+  const creditLimitMajor = Number(accountCreditLimitInput.value)
+  const reminderDay = parseRepaymentReminderDay(accountRepaymentReminderDayInput.value)
   if (!groupId || !name) return
-  if (!Number.isFinite(openingMajor)) {
+  if (accountKind === 'cash' && !Number.isFinite(openingMajor)) {
     uiStore.pushToast('期初金額格式錯誤', 'error')
+    return
+  }
+  if (accountKind === 'credit' && !Number.isFinite(currentDebtMajor)) {
+    uiStore.pushToast('目前欠款格式錯誤', 'error')
+    return
+  }
+  if (accountKind === 'credit' && (!Number.isFinite(creditLimitMajor) || creditLimitMajor < 0)) {
+    uiStore.pushToast('信用額度格式錯誤', 'error')
+    return
+  }
+  if (accountKind === 'credit' && accountRepaymentReminderDayInput.value !== '' && reminderDay == null) {
+    uiStore.pushToast('還款提醒日需介於 1 到 31', 'error')
     return
   }
   try {
@@ -371,9 +440,14 @@ async function submitAccountDialog() {
       name,
       accountType: 'asset',
       allowNegative: true,
-      openingBalanceMinor: Math.round(openingMajor * 100),
+      accountKind,
+      openingBalanceMinor: accountKind === 'credit'
+        ? Math.round(Math.abs(currentDebtMajor) * 100) * -1
+        : Math.round(openingMajor * 100),
       icon: normalizeFaIcon(accountIconInput.value),
       currencyCode: normalizeCurrencyCode(accountCurrencyCodeInput.value, 'TWD'),
+      creditLimitMinor: accountKind === 'credit' ? Math.round(Math.abs(creditLimitMajor) * 100) : 0,
+      repaymentReminderDay: accountKind === 'credit' ? reminderDay : null,
       includeInAssets: accountIncludeInAssetsInput.value,
     })
     uiStore.pushToast('帳戶已新增')
@@ -388,7 +462,11 @@ function clearAccountDialogQuery() {
   delete nextQuery.openAccountDialog
   delete nextQuery.accountTargetGroupId
   delete nextQuery.accountName
+  delete nextQuery.accountKind
   delete nextQuery.accountOpening
+  delete nextQuery.accountCurrentDebt
+  delete nextQuery.accountCreditLimit
+  delete nextQuery.accountRepaymentReminderDay
   delete nextQuery.accountIcon
   delete nextQuery.accountCurrency
   delete nextQuery.accountIncludeInAssets
@@ -409,6 +487,17 @@ function queryBoolean(value, fallback = true) {
   if (['0', 'false', 'no', 'off'].includes(text)) return false
   if (['1', 'true', 'yes', 'on'].includes(text)) return true
   return fallback
+}
+
+function normalizeAccountKind(value) {
+  return String(value ?? '').trim().toLowerCase() === 'credit' ? 'credit' : 'cash'
+}
+
+function parseRepaymentReminderDay(value) {
+  if (value === '' || value === null || value === undefined) return null
+  const numeric = Math.trunc(Number(value))
+  if (!Number.isFinite(numeric) || numeric < 1 || numeric > 31) return null
+  return numeric
 }
 
 async function onAccountSortEnd(groupId) {

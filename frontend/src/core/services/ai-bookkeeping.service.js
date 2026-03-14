@@ -54,6 +54,7 @@ function normalizeBareTypeText(value) {
 const BARE_TYPE_INPUTS = Object.freeze({
   expense: new Set(['支出', 'expense']),
   income: new Set(['收入', 'income']),
+  adjustment: new Set(['結餘', '余额', '餘額', 'adjustment', 'balance']),
   transfer: new Set(['轉帳', '转账', 'transfer']),
 })
 
@@ -358,6 +359,59 @@ function parseFormulaAmountMajor(text) {
   }
 
   return NaN
+}
+
+function parseSignedFormulaAmountMajor(text) {
+  const matches = [
+    ...String(text ?? '').matchAll(/[+-]?(?:\d+(?:\.\d+)?\s*[+\-×÷*/]\s*)+\d+(?:\.\d+)?/g),
+  ]
+
+  for (let index = matches.length - 1; index >= 0; index -= 1) {
+    const candidate = String(matches[index]?.[0] ?? '').trim()
+    if (!candidate) continue
+    const normalized = candidate.replace(/\s+/g, '')
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) continue
+    if (/^\d{1,2}\/\d{1,2}$/.test(normalized)) continue
+    const value = evaluateArithmeticExpression(candidate)
+    if (Number.isFinite(value) && value !== 0) {
+      return round2(value)
+    }
+  }
+
+  return NaN
+}
+
+function parseSignedAmountMajor(text) {
+  const formulaAmount = parseSignedFormulaAmountMajor(text)
+  if (Number.isFinite(formulaAmount) && formulaAmount !== 0) {
+    return formulaAmount
+  }
+
+  const withUnit = [
+    ...String(text ?? '').matchAll(
+      /([+-]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\$|\$|¥|￥)/gi,
+    ),
+  ]
+  if (withUnit.length > 0) {
+    const target = withUnit[withUnit.length - 1]
+    const raw = parseLooseNumber(target[1])
+    const unit = String(target[2] ?? '').toLowerCase()
+    if (Number.isFinite(raw) && raw !== 0) {
+      if (unit === '萬' || unit === 'w') return round2(raw * 10000)
+      if (unit === '千' || unit === 'k') return round2(raw * 1000)
+      if (unit === '百') return round2(raw * 100)
+      return round2(raw)
+    }
+  }
+
+  const signedNumbers = [...String(text ?? '').matchAll(/([+-](?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)/g)]
+    .map((item) => parseLooseNumber(item[1]))
+    .filter((item) => Number.isFinite(item) && item !== 0)
+  if (signedNumbers.length > 0) {
+    return round2(signedNumbers[signedNumbers.length - 1])
+  }
+
+  return parseAmountMajor(text)
 }
 
 function evaluateArithmeticExpression(input) {
@@ -1365,6 +1419,20 @@ function collectDuplicateAccountGroupNames(accounts) {
 function normalizeType(text) {
   if (
     includesAny(text, [
+      /結餘/,
+      /餘額調整|余额调整/,
+      /對帳調整|对账调整/,
+      /校正/,
+      /盤點調整|盘点调整/,
+      /\bbalance adjustment\b/i,
+      /\badjustment\b/i,
+      /\breconcile\b/i,
+    ])
+  ) {
+    return 'adjustment'
+  }
+  if (
+    includesAny(text, [
       /轉帳|转账/,
       /轉出|转出/,
       /轉給|转给/,
@@ -1498,6 +1566,28 @@ function isLikelyAmountLikeCounterparty(rawValue) {
   return /^(?:nt\$?|ntd|twd|us\$|usd|\$|¥)?\d+(?:\.\d+)?(?:k|w|萬|万|千|百|元(?:整)?|塊|块|美元|美金|台幣|臺幣|日圓|日元)?$/.test(normalized)
 }
 
+function pickKnownCounterpartyName(text, counterparties = []) {
+  const source = String(text ?? '')
+  const compactSource = compactText(source)
+  if (!compactSource) return ''
+
+  const candidates = Array.from(
+    new Set(
+      (counterparties ?? [])
+        .map((item) => normalizeCounterpartyName(item))
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => b.length - a.length)
+
+  for (const candidate of candidates) {
+    const compactCandidate = compactText(candidate)
+    if (!compactCandidate || compactCandidate.length < 2) continue
+    if (compactSource.includes(compactCandidate)) return candidate
+  }
+
+  return ''
+}
+
 function extractCounterpartyFromLoanText(text, mode, direction) {
   const source = String(text ?? '')
   const patterns = []
@@ -1506,6 +1596,7 @@ function extractCounterpartyFromLoanText(text, mode, direction) {
     patterns.push(
       /(?:借出|借了)\s*(?:nt\$?|ntd|twd|us\$|usd|\$|¥)?\s*\d[\d,]*(?:\.\d+)?(?:k|w|萬|万|千|百|元(?:整)?|塊|块|美元|美金|台幣|臺幣|日圓|日元)?\s*(?:給|借給)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})/i,
       /(?:借給|借了給|借出給|借款給)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})/i,
+      /(?:借|借了)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:(?:nt\$?|ntd|twd|us\$|usd|\$|¥)\s*)?\d[\d,]*(?:\.\d+)?/i,
       /給\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:借|借款|借錢|借钱|借出)/i,
       /(?:lend(?:ing)?|loan(?:ed)?)\s+to\s+([a-zA-Z][a-zA-Z0-9._-]{0,23})/i,
       /([a-zA-Z][a-zA-Z0-9._-]{0,23})\s+(?:borrowed)\s+from\s+me/i,
@@ -1513,14 +1604,16 @@ function extractCounterpartyFromLoanText(text, mode, direction) {
     )
   } else if (mode === 'create' && direction === 'borrow') {
     patterns.push(
-      /(?:向|跟)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:借|借入|借款|借錢|借钱)/i,
+      /(?:向|跟)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:借|借了|借入|借款|借錢|借钱)/i,
       /(?:借入|借款|借錢|借钱)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})/i,
+      /(?:向|跟)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:拿|借)(?:了)?\s*(?:(?:nt\$?|ntd|twd|us\$|usd|\$|¥)\s*)?\d[\d,]*(?:\.\d+)?/i,
       /(?:borrow(?:ed)?|loan)\s+from\s+([a-zA-Z][a-zA-Z0-9._-]{0,23})/i,
       /([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*から\s*借(?:りた|入れた)?/i,
     )
   } else if (mode === 'repay' && direction === 'lend') {
     patterns.push(
       /(?:收回|收到|收到了)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})/i,
+      /(?:收|收了)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:還款|还款|還錢|还钱)?\s*(?:(?:nt\$?|ntd|twd|us\$|usd|\$|¥)\s*)?\d[\d,]*(?:\.\d+)?/i,
       /([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:還我|还我)/i,
       /(?:received|got)\s+(?:repayment|payback)\s+from\s+([a-zA-Z][a-zA-Z0-9._-]{0,23})/i,
       /([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*が\s*返済した/i,
@@ -1528,6 +1621,7 @@ function extractCounterpartyFromLoanText(text, mode, direction) {
   } else if (mode === 'repay' && direction === 'borrow') {
     patterns.push(
       /(?:歸還|归还|還款|还款|還給|还给|還錢|还钱)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})/i,
+      /(?:還|还)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:(?:nt\$?|ntd|twd|us\$|usd|\$|¥)\s*)?\d[\d,]*(?:\.\d+)?/i,
       /(?:向|跟)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:歸還|归还|還款|还款|還錢|还钱)/i,
       /(?:repay(?:ed)?|pay(?:ing)?\s+back)\s+([a-zA-Z][a-zA-Z0-9._-]{0,23})/i,
       /([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*に\s*返済した/i,
@@ -1753,6 +1847,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
   const accounts = context.accounts ?? []
   const expenseCategories = context.expenseCategories ?? []
   const incomeCategories = context.incomeCategories ?? []
+  const counterparties = context.counterparties ?? []
   const historyTransactions = context.historyTransactions ?? []
   const autoFillRules = context.autoFillRules ?? []
   const warningKeys = []
@@ -1779,6 +1874,15 @@ export function parseAutoBookkeepingText(input, context = {}) {
       counterpartyName: tinyNerHints.counterpartyNameHint,
     }
   }
+  if (loanIntent && !loanIntent.counterpartyName) {
+    const knownCounterpartyName = pickKnownCounterpartyName(text, counterparties)
+    if (knownCounterpartyName) {
+      loanIntent = {
+        ...loanIntent,
+        counterpartyName: knownCounterpartyName,
+      }
+    }
+  }
   const inferredType = loanIntent
     ? resolveTypeByLoanIntent(rawType, loanIntent)
     : rawType === 'transfer' || shouldTreatAsTransfer(text, accounts)
@@ -1799,6 +1903,8 @@ export function parseAutoBookkeepingText(input, context = {}) {
   let amountMajor = NaN
   if (inferredType === 'transfer') {
     amountMajor = parseAmountMajor(parsedAddon.strippedText)
+  } else if (inferredType === 'adjustment') {
+    amountMajor = parseSignedAmountMajor(parsedAddon.items.length > 0 ? parsedAddon.strippedText : text)
   } else if (parsedAddon.items.length > 0) {
     // If addon fragments exist, primary amount must come from non-addon content.
     // This keeps addon numbers (e.g. 優惠5元) from being treated as transaction amount.
@@ -1874,8 +1980,10 @@ export function parseAutoBookkeepingText(input, context = {}) {
   if (type !== 'transfer' && !loanIntent && !matchedAutoFillRule?.type) {
     const hasExpenseSignal = Boolean(matchedExpenseCategory || learnedExpenseCategory || semanticExpenseCategory || nerExpenseCategory)
     const hasIncomeSignal = Boolean(matchedIncomeCategory || learnedIncomeCategory || semanticIncomeCategory || nerIncomeCategory)
-    if (hasExpenseSignal && !hasIncomeSignal) type = 'expense'
-    if (hasIncomeSignal && !hasExpenseSignal) type = 'income'
+    if (type !== 'adjustment') {
+      if (hasExpenseSignal && !hasIncomeSignal) type = 'expense'
+      if (hasIncomeSignal && !hasExpenseSignal) type = 'income'
+    }
   }
 
   let accountId = ''
@@ -1929,7 +2037,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
 
   let categoryId = ''
   let selectedCategoryName = ''
-  if (type !== 'transfer' && !loanIntent) {
+  if (type !== 'transfer' && type !== 'adjustment' && !loanIntent) {
     if (type === 'income') {
       const selectedIncomeCategory =
         nerIncomeCategory ??
@@ -2000,12 +2108,16 @@ export function parseAutoBookkeepingText(input, context = {}) {
     isReimbursable = true
   }
 
-  let includeInBudget = type === 'transfer' ? false : !isReimbursable
-  let includeInAnalysis = type === 'transfer' ? false : !isReimbursable
+  let includeInBudget = type === 'transfer' || type === 'adjustment' ? false : !isReimbursable
+  let includeInAnalysis = type === 'transfer' || type === 'adjustment' ? false : !isReimbursable
   includeInBudget = normalizeIncludeFlag(text, 'budget', includeInBudget)
   includeInAnalysis = normalizeIncludeFlag(text, 'analysis', includeInAnalysis)
 
-  const noteCategories = loanIntent ? [] : type === 'income' ? incomeCategories : expenseCategories
+  const noteCategories = loanIntent || type === 'adjustment'
+    ? []
+    : type === 'income'
+      ? incomeCategories
+      : expenseCategories
   const autoNote = extractSmartNoteText(text, {
     accounts,
     selectedCategoryName,

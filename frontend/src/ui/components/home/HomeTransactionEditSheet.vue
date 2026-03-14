@@ -319,7 +319,7 @@ const types = computed(() => {
     { value: 'income', label: '收入' },
   ]
   if (props.tx?.type === 'adjustment') {
-    base.push({ value: 'adjustment', label: '調整' })
+    base.push({ value: 'adjustment', label: '結餘' })
   }
   return base
 })

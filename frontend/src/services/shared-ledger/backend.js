@@ -1,23 +1,39 @@
 import { Capacitor } from '@capacitor/core'
 
 const DEV_DEFAULT_SHARED_LEDGER_API_BASE = 'https://api.strawmb.com'
-const SHARED_LEDGER_API_BASE = String(import.meta.env.VITE_SHARED_LEDGER_API_BASE_URL ?? DEV_DEFAULT_SHARED_LEDGER_API_BASE).trim()
+const EXPLICIT_SHARED_LEDGER_API_BASE = String(import.meta.env.VITE_SHARED_LEDGER_API_BASE_URL ?? '').trim()
 const SESSION_STORAGE_KEY = 'straw.shared_ledger_session'
 const REQUEST_TIMEOUT_MS = 15_000
 const sessionListeners = new Set()
 const API_DISPLAY_NAME = 'StrawMB API'
+let ongoingRefreshPromise = null
+
+function shouldUseSameOriginLocalApi() {
+  if (EXPLICIT_SHARED_LEDGER_API_BASE) return false
+  if (Capacitor.getPlatform() !== 'web') return false
+  if (typeof window === 'undefined') return false
+  const origin = String(window.location?.origin ?? '').trim()
+  return /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(origin)
+}
+
+function getSharedLedgerApiBase() {
+  if (EXPLICIT_SHARED_LEDGER_API_BASE) return EXPLICIT_SHARED_LEDGER_API_BASE
+  if (shouldUseSameOriginLocalApi()) return ''
+  return DEV_DEFAULT_SHARED_LEDGER_API_BASE
+}
 
 function buildApiUrl(path) {
   const normalizedPath = String(path ?? '').trim()
   if (!normalizedPath.startsWith('/')) {
     throw new Error(`invalid backend api path: ${normalizedPath}`)
   }
-  if (!SHARED_LEDGER_API_BASE) return normalizedPath
-  return `${SHARED_LEDGER_API_BASE.replace(/\/$/, '')}${normalizedPath}`
+  const sharedLedgerApiBase = getSharedLedgerApiBase()
+  if (!sharedLedgerApiBase) return normalizedPath
+  return `${sharedLedgerApiBase.replace(/\/$/, '')}${normalizedPath}`
 }
 
 function shouldRequireExplicitApiBase() {
-  if (SHARED_LEDGER_API_BASE) return false
+  if (getSharedLedgerApiBase()) return false
   return Capacitor.getPlatform() !== 'web'
 }
 
@@ -73,6 +89,19 @@ function readSession() {
   }
 }
 
+function normalizeSessionUser(nextUser, previousUser = null) {
+  const source = nextUser && typeof nextUser === 'object' ? nextUser : {}
+  const previous = previousUser && typeof previousUser === 'object' ? previousUser : {}
+  const authProviders = Array.isArray(source.auth_providers)
+    ? source.auth_providers
+    : (Array.isArray(previous.auth_providers) ? previous.auth_providers : [])
+  return {
+    ...previous,
+    ...source,
+    auth_providers: authProviders,
+  }
+}
+
 function writeSession(session) {
   if (typeof localStorage === 'undefined') return null
   if (!session?.token || !session?.user) {
@@ -80,13 +109,20 @@ function writeSession(session) {
     notifySessionListeners(null)
     return null
   }
-  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
-  notifySessionListeners(session)
-  return session
+  const previous = readSession()
+  const nextSession = {
+    ...session,
+    refreshToken: String(session.refreshToken ?? '').trim(),
+    user: normalizeSessionUser(session.user, previous?.user ?? null),
+  }
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextSession))
+  notifySessionListeners(nextSession)
+  return nextSession
 }
 
 function clearSession() {
   if (typeof localStorage === 'undefined') return
+  ongoingRefreshPromise = null
   localStorage.removeItem(SESSION_STORAGE_KEY)
   notifySessionListeners(null)
 }
@@ -104,7 +140,59 @@ function notifySessionListeners(session) {
   }
 }
 
-async function requestJson(path, { method = 'GET', body, auth = true } = {}) {
+function buildAuthResponseSession(data, previousSession = null) {
+  const token = String(data?.access_token ?? data?.token ?? '').trim()
+  const user = data?.user
+  if (!token || !user) {
+    throw new Error('帳號登入回應格式錯誤')
+  }
+  return {
+    token,
+    refreshToken: String(
+      data?.refresh_token
+      ?? data?.refreshToken
+      ?? previousSession?.refreshToken
+      ?? '',
+    ).trim(),
+    user: normalizeSessionUser(user, previousSession?.user ?? null),
+  }
+}
+
+async function performRefreshRequest() {
+  const session = readSession()
+  const refreshToken = String(session?.refreshToken ?? '').trim()
+  if (!refreshToken) return null
+
+  const data = await requestJson('/api/auth/refresh', {
+    method: 'POST',
+    body: {
+      refreshToken,
+    },
+    auth: false,
+  })
+  return writeSession(buildAuthResponseSession(data, session))
+}
+
+async function tryRefreshSessionOnce({ allowRetry = true } = {}) {
+  if (!allowRetry) return null
+  const session = readSession()
+  if (!session?.refreshToken) return null
+
+  if (!ongoingRefreshPromise) {
+    ongoingRefreshPromise = performRefreshRequest()
+      .catch((error) => {
+        clearSession()
+        throw error
+      })
+      .finally(() => {
+        ongoingRefreshPromise = null
+      })
+  }
+
+  return ongoingRefreshPromise
+}
+
+async function requestJson(path, { method = 'GET', body, auth = true, _retried = false } = {}) {
   if (shouldRequireExplicitApiBase()) {
     throw createMissingApiError()
   }
@@ -168,6 +256,15 @@ async function requestJson(path, { method = 'GET', body, auth = true } = {}) {
       updateSessionUser(data.user)
     }
     if (response.status === 401 && auth) {
+      const refreshed = await tryRefreshSessionOnce({ allowRetry: !_retried })
+      if (refreshed) {
+        return requestJson(path, {
+          method,
+          body,
+          auth,
+          _retried: true,
+        })
+      }
       clearSession()
     }
     const error = new Error(String(data?.message ?? data?.error ?? text ?? `HTTP ${response.status}`))
@@ -187,14 +284,76 @@ async function requestJson(path, { method = 'GET', body, auth = true } = {}) {
   return data
 }
 
-function persistAuthResponse(data) {
-  if (!data?.token || !data?.user) {
-    throw new Error('帳號登入回應格式錯誤')
+async function requestFormData(path, { method = 'POST', body, auth = false } = {}) {
+  if (shouldRequireExplicitApiBase()) {
+    throw createMissingApiError()
   }
-  return writeSession({
-    token: data.token,
-    user: data.user,
-  })
+
+  const headers = {}
+  if (auth) {
+    const token = readSession()?.token
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+  }
+
+  const requestUrl = buildApiUrl(path)
+  const controller = typeof AbortController === 'function' ? new AbortController() : null
+  const timeoutId = controller
+    ? globalThis.setTimeout(() => {
+      controller.abort()
+    }, REQUEST_TIMEOUT_MS * 4)
+    : null
+
+  let response = null
+  try {
+    response = await fetch(requestUrl, {
+      method,
+      headers,
+      body,
+      signal: controller?.signal,
+    })
+  } catch (error) {
+    const isTimeout = String(error?.name ?? '') === 'AbortError'
+    const nextError = new Error(
+      isTimeout
+        ? `${API_DISPLAY_NAME} 連線逾時：${requestUrl}`
+        : describeNetworkFailure(requestUrl, error),
+    )
+    nextError.code = isTimeout ? 'shared_ledger_api_timeout' : 'shared_ledger_network_error'
+    nextError.cause = error
+    throw nextError
+  } finally {
+    if (timeoutId != null) {
+      globalThis.clearTimeout(timeoutId)
+    }
+  }
+
+  const text = await response.text()
+  let data = null
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = null
+    }
+  }
+
+  if (!response.ok) {
+    const error = new Error(String(data?.message ?? data?.error ?? text ?? `HTTP ${response.status}`))
+    error.code = String(data?.error ?? '')
+    error.status = response.status
+    throw error
+  }
+
+  if (!data || typeof data !== 'object') {
+    throw new Error(`${API_DISPLAY_NAME} 回應格式錯誤`)
+  }
+  return data
+}
+
+function persistAuthResponse(data) {
+  return writeSession(buildAuthResponseSession(data, readSession()))
 }
 
 function updateSessionUser(user) {
@@ -202,7 +361,8 @@ function updateSessionUser(user) {
   if (!session?.token || !user) return null
   return writeSession({
     token: session.token,
-    user,
+    refreshToken: String(session.refreshToken ?? '').trim(),
+    user: normalizeSessionUser(user, session.user),
   })
 }
 
@@ -263,6 +423,25 @@ export async function loginSharedLedgerAccount(payload = {}) {
   return persistAuthResponse(data)
 }
 
+export async function prepareSharedLedgerGoogleAuth(payload = {}) {
+  const purpose = String(payload?.purpose ?? '').trim()
+  return requestJson('/api/auth/google/prepare', {
+    method: 'POST',
+    body: payload,
+    auth: purpose === 'link',
+  })
+}
+
+export async function loginSharedLedgerWithGoogle(payload = {}) {
+  const purpose = String(payload?.purpose ?? '').trim()
+  const data = await requestJson('/api/auth/google', {
+    method: 'POST',
+    body: payload,
+    auth: purpose === 'link',
+  })
+  return persistAuthResponse(data)
+}
+
 export async function requestSharedLedgerPasswordReset(payload = {}) {
   return requestJson('/api/auth/password-reset/request', {
     method: 'POST',
@@ -297,9 +476,13 @@ export async function refreshSharedLedgerSession() {
 
 export async function logoutSharedLedgerAccount() {
   try {
-    if (readSession()?.token) {
+    const session = readSession()
+    if (session?.token) {
       await requestJson('/api/auth/logout', {
         method: 'POST',
+        body: {
+          refreshToken: session.refreshToken ?? '',
+        },
       })
     }
   } catch {
@@ -409,4 +592,27 @@ export async function redeemReferralCode(code) {
   })
   updateSessionUser(data.user)
   return data
+}
+
+export async function transcribeBookkeepingSpeech({
+  audioBlob,
+  fileName = 'voice-input.webm',
+  context = {},
+  language = 'zh',
+  source = 'ai_bookkeeping',
+} = {}) {
+  if (!(audioBlob instanceof Blob)) {
+    throw new Error('缺少語音音訊')
+  }
+
+  const formData = new FormData()
+  formData.set('audio', audioBlob, String(fileName ?? 'voice-input.webm').trim() || 'voice-input.webm')
+  formData.set('context', JSON.stringify(context ?? {}))
+  formData.set('language', String(language ?? 'zh').trim() || 'zh')
+  formData.set('source', String(source ?? 'ai_bookkeeping').trim() || 'ai_bookkeeping')
+  return requestFormData('/api/speech/transcribe', {
+    method: 'POST',
+    body: formData,
+    auth: false,
+  })
 }

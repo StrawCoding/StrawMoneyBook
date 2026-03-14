@@ -4,6 +4,7 @@ import {
   deleteBudgetItem,
   deleteBudgetItemsByBudget,
   getBudgetByMonth,
+  listBudgetUsageDaysByCategory,
   listBudgetItems,
   upsertBudgetItem,
   computeBudgetSpentByCategory,
@@ -75,7 +76,26 @@ function countDailyRuleOccurrences(monthKey, unit, values) {
   return total
 }
 
-function resolveBudgetItemForMonth(item, monthKey) {
+function countUsedOccurrencesByRule(usedDays, unit, values) {
+  if (!Array.isArray(usedDays) || !usedDays.length || unit === 'none' || !Array.isArray(values) || !values.length) return 0
+  const ruleValues = new Set(values.map((value) => Number(value)))
+  let count = 0
+
+  for (const dayText of usedDays) {
+    const date = new Date(`${dayText}T00:00:00`)
+    if (Number.isNaN(date.getTime())) continue
+    if (unit === 'monthday') {
+      if (ruleValues.has(date.getDate())) count += 1
+      continue
+    }
+    const weekday = date.getDay() === 0 ? 7 : date.getDay()
+    if (ruleValues.has(weekday)) count += 1
+  }
+
+  return count
+}
+
+function resolveBudgetItemForMonth(item, monthKey, usedDays = []) {
   const amountMode = normalizeAmountMode(item?.amount_mode)
   const dayRuleUnit = amountMode === 'daily_average' ? normalizeDayRuleUnit(item?.day_rule_unit) : 'none'
   const dayRuleValues = amountMode === 'daily_average'
@@ -84,6 +104,9 @@ function resolveBudgetItemForMonth(item, monthKey) {
   const baseAmountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
   const occurrenceCount = amountMode === 'daily_average'
     ? countDailyRuleOccurrences(monthKey, dayRuleUnit, dayRuleValues)
+    : 0
+  const usedOccurrenceCount = amountMode === 'daily_average'
+    ? countUsedOccurrencesByRule(usedDays, dayRuleUnit, dayRuleValues)
     : 0
   const resolvedAmountMinor = amountMode === 'daily_average'
     ? baseAmountMinor * occurrenceCount
@@ -96,6 +119,7 @@ function resolveBudgetItemForMonth(item, monthKey) {
     day_rule_values_json: JSON.stringify(dayRuleValues),
     day_rule_values: dayRuleValues,
     occurrence_count: occurrenceCount,
+    used_occurrence_count: usedOccurrenceCount,
     resolved_amount_minor: resolvedAmountMinor,
   }
 }
@@ -134,10 +158,23 @@ export async function ensureBudgetForMonth(ledgerId, monthKey) {
 
 export async function loadBudgetSnapshot(ledgerId, monthKey) {
   const budget = await ensureBudgetForMonth(ledgerId, monthKey)
-  const items = (await listBudgetItems(ledgerId, budget.id))
-    .map((item) => resolveBudgetItemForMonth(item, monthKey))
   const { startUtc, endUtc } = monthRangeUtc(monthKey)
-  const spentRows = await computeBudgetSpentByCategory(ledgerId, startUtc, endUtc)
+  const [rawItems, spentRows, usedOccurrenceRows] = await Promise.all([
+    listBudgetItems(ledgerId, budget.id),
+    computeBudgetSpentByCategory(ledgerId, startUtc, endUtc),
+    listBudgetUsageDaysByCategory(ledgerId, startUtc, endUtc),
+  ])
+  const usedDaysMap = new Map()
+  for (const row of usedOccurrenceRows) {
+    const categoryId = String(row?.category_id ?? '').trim()
+    const occurredDay = String(row?.occurred_day ?? '').trim()
+    if (!categoryId || !occurredDay) continue
+    if (!usedDaysMap.has(categoryId)) {
+      usedDaysMap.set(categoryId, [])
+    }
+    usedDaysMap.get(categoryId).push(occurredDay)
+  }
+  const items = rawItems.map((item) => resolveBudgetItemForMonth(item, monthKey, usedDaysMap.get(String(item?.category_id ?? '').trim()) ?? []))
 
   return {
     budget,

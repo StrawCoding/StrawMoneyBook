@@ -1,0 +1,12 @@
+services:
+  speech-stt:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    ports:
+      - "${STT_PORT:-8001}:8001"
+    env_file:
+      - .env
+    volumes:
+      - ./models:/models
+    restart: unless-stopped

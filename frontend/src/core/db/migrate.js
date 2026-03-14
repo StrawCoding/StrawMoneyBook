@@ -14,6 +14,7 @@ import migration013 from '@/core/db/migrations/013_budget_item_daily_rules.sql?r
 import migration014 from '@/core/db/migrations/014_reimbursement_advance_category.sql?raw'
 import migration015 from '@/core/db/migrations/015_savings_jars.sql?raw'
 import migration016 from '@/core/db/migrations/016_loan_payment_interest_tx.sql?raw'
+import migration017 from '@/core/db/migrations/017_account_credit_profile.sql?raw'
 
 const MIGRATIONS = [
   { version: 1, name: 'init_schema', sql: migration001 },
@@ -32,6 +33,7 @@ const MIGRATIONS = [
   { version: 14, name: 'reimbursement_advance_category', sql: migration014 },
   { version: 15, name: 'savings_jars', sql: migration015 },
   { version: 16, name: 'loan_payment_interest_tx', sql: migration016 },
+  { version: 17, name: 'account_credit_profile', sql: migration017 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'
@@ -58,11 +60,14 @@ const LEGACY_COLUMN_PATCHES = {
   accounts: [
     'ALTER TABLE accounts ADD COLUMN group_id TEXT;',
     "ALTER TABLE accounts ADD COLUMN account_type TEXT NOT NULL DEFAULT 'asset';",
+    "ALTER TABLE accounts ADD COLUMN account_kind TEXT NOT NULL DEFAULT 'cash';",
     'ALTER TABLE accounts ADD COLUMN allow_negative INTEGER NOT NULL DEFAULT 0;',
     'ALTER TABLE accounts ADD COLUMN include_in_assets INTEGER NOT NULL DEFAULT 1;',
     'ALTER TABLE accounts ADD COLUMN opening_balance_minor INTEGER NOT NULL DEFAULT 0;',
     "ALTER TABLE accounts ADD COLUMN currency_code TEXT NOT NULL DEFAULT 'TWD';",
     'ALTER TABLE accounts ADD COLUMN icon TEXT;',
+    'ALTER TABLE accounts ADD COLUMN credit_limit_minor INTEGER NOT NULL DEFAULT 0;',
+    'ALTER TABLE accounts ADD COLUMN repayment_reminder_day INTEGER;',
     'ALTER TABLE accounts ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;',
     'ALTER TABLE accounts ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;',
     'ALTER TABLE accounts ADD COLUMN deleted_at TEXT;',

@@ -409,10 +409,13 @@ async function importAccountsCsv(ledgerId, rows) {
       groupId: group.id,
       name: accountName,
       accountType: row.account_type?.trim() || 'asset',
+      accountKind: row.account_kind?.trim() || 'cash',
       allowNegative: parseBooleanLike(row.allow_negative, false),
       openingBalanceMinor: Math.round(Number(row.opening_balance_minor ?? 0)),
       currencyCode: row.currency_code?.trim() || 'TWD',
       icon: normalizeFaIcon(row.icon),
+      creditLimitMinor: Math.round(Number(row.credit_limit_minor ?? 0)),
+      repaymentReminderDay: row.repayment_reminder_day?.trim() || null,
       includeInAssets: parseBooleanLike(row.include_in_assets ?? row.includeInAssets, true),
       sortOrder: inserted,
     })

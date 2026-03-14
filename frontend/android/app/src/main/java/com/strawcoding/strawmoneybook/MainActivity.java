@@ -9,6 +9,7 @@ import ee.forgr.capacitor.social.login.ModifiedMainActivityForSocialLoginPlugin;
 public class MainActivity extends BridgeActivity implements ModifiedMainActivityForSocialLoginPlugin {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        registerPlugin(GoogleIdentityPlugin.class);
         registerPlugin(HomeWidgetPlugin.class);
         registerPlugin(SecurityLockPlugin.class);
         registerPlugin(SpeechInputPlugin.class);

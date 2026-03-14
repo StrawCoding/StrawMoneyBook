@@ -3,6 +3,7 @@ import { isOriginAllowed, sendJson } from './collab/http.js'
 import authHandler from './routes/auth.js'
 import referralsHandler from './routes/referrals.js'
 import sharedLedgersHandler from './routes/shared-ledgers.js'
+import speechHandler from './routes/speech.js'
 
 const HOST = String(process.env.HOST ?? '0.0.0.0').trim() || '0.0.0.0'
 const PORT = Math.max(1, Number(process.env.PORT ?? 8787) || 8787)
@@ -11,6 +12,8 @@ const GLOBAL_RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.GLOBAL_RAT
 const GLOBAL_RATE_LIMIT_MAX_REQUESTS = Math.max(20, Number(process.env.GLOBAL_RATE_LIMIT_MAX_REQUESTS ?? 180) || 0)
 const AUTH_RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS ?? 10 * 60_000) || 0)
 const AUTH_RATE_LIMIT_MAX_REQUESTS = Math.max(5, Number(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS ?? 40) || 0)
+const SPEECH_RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.SPEECH_RATE_LIMIT_WINDOW_MS ?? 10 * 60_000) || 0)
+const SPEECH_RATE_LIMIT_MAX_REQUESTS = Math.max(2, Number(process.env.SPEECH_RATE_LIMIT_MAX_REQUESTS ?? 24) || 0)
 
 const rateLimitBuckets = new Map()
 
@@ -45,6 +48,14 @@ function getRateLimitPolicy(pathname) {
       key: 'auth',
       maxRequests: AUTH_RATE_LIMIT_MAX_REQUESTS,
       windowMs: AUTH_RATE_LIMIT_WINDOW_MS,
+    }
+  }
+
+  if (pathname.startsWith('/api/speech')) {
+    return {
+      key: 'speech',
+      maxRequests: SPEECH_RATE_LIMIT_MAX_REQUESTS,
+      windowMs: SPEECH_RATE_LIMIT_WINDOW_MS,
     }
   }
 
@@ -84,7 +95,7 @@ function consumeRateLimit(req, pathname) {
 }
 
 async function readRequestBody(req) {
-  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return ''
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return Buffer.alloc(0)
   const chunks = []
   let totalBytes = 0
 
@@ -100,7 +111,7 @@ async function readRequestBody(req) {
     chunks.push(buffer)
   }
 
-  return Buffer.concat(chunks).toString('utf8')
+  return Buffer.concat(chunks)
 }
 
 const server = createServer(async (req, res) => {
@@ -130,7 +141,15 @@ const server = createServer(async (req, res) => {
       return
     }
 
-    req.body = await readRequestBody(req)
+    req.rawBody = await readRequestBody(req)
+    const contentType = String(req.headers?.['content-type'] ?? '').toLowerCase()
+    if (!req.rawBody.length) {
+      req.body = ''
+    } else if (contentType.includes('application/json') || contentType.startsWith('text/')) {
+      req.body = req.rawBody.toString('utf8')
+    } else {
+      req.body = req.rawBody
+    }
 
     if (pathname === '/health') {
       sendJson(response, 200, {
@@ -152,6 +171,11 @@ const server = createServer(async (req, res) => {
 
     if (pathname.startsWith('/api/referrals')) {
       await referralsHandler(req, response)
+      return
+    }
+
+    if (pathname.startsWith('/api/speech')) {
+      await speechHandler(req, response)
       return
     }
 

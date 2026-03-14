@@ -1,23 +1,44 @@
 import { requireAuthenticatedUser } from '../collab/auth-session.js'
+import { verifyGoogleIdToken } from '../collab/google-id-token.js'
 import { sendTemporaryPasswordEmail } from '../collab/mailer.js'
-import { methodGuard, normalizePath, normalizeText, parseBody, sendJson } from '../collab/http.js'
 import {
+  extractBearerToken,
+  getClientIp,
+  getUserAgent,
+  methodGuard,
+  normalizePath,
+  normalizeText,
+  parseBody,
+  sendJson,
+} from '../collab/http.js'
+import {
+  buildPublicUserProfile,
+  consumeAuthNonce,
+  createAuthNonce,
   createId,
+  createLoginSession,
   createTemporaryPassword,
   createUniqueReferralCode,
+  createUserFromExternalIdentity,
+  findUserByAuthProvider,
   findUserByEmail,
+  findUserById,
   hashPassword,
   hashSensitiveToken,
-  issueAccessToken,
+  linkUserAuthProvider,
   normalizeAvatarUrl,
   normalizeDisplayName,
   nowIso,
-  publicUser,
   readStore,
+  revokeRefreshSession,
+  rotateRefreshSession,
   updateStore,
+  updateUserFromAuthProviderLogin,
   validateEmail,
   validatePassword,
+  verifyAccessToken,
   verifyPassword,
+  writeAuthAuditLog,
 } from '../collab/store.js'
 
 const LOGIN_LOCK_THRESHOLD = 5
@@ -126,6 +147,50 @@ function sendAuthError(res, error) {
   })
 }
 
+async function getOptionalAuthenticatedUser(req) {
+  const payload = verifyAccessToken(extractBearerToken(req))
+  if (!payload?.sub) return null
+  const data = await readStore()
+  return findUserById(data, payload.sub)
+}
+
+function getCurrentSessionFamilyId(req) {
+  const payload = verifyAccessToken(extractBearerToken(req))
+  return String(payload?.sid ?? '').trim()
+}
+
+function getRequestContext(req) {
+  return {
+    ipAddress: getClientIp(req),
+    userAgent: getUserAgent(req),
+  }
+}
+
+async function sendAuthSession(res, user, {
+  issuedByProvider = 'password',
+  context = {},
+  status = 200,
+  extra = {},
+} = {}) {
+  const session = await createLoginSession(user, {
+    issuedByProvider,
+    ipAddress: context.ipAddress,
+    userAgent: context.userAgent,
+  })
+  const publicProfile = await buildPublicUserProfile(session.user)
+  sendJson(res, status, {
+    token: session.accessToken,
+    access_token: session.accessToken,
+    token_type: 'Bearer',
+    expires_in: session.expiresInSec,
+    refresh_token: session.refreshToken,
+    refresh_token_expires_in: session.refreshExpiresInSec,
+    refresh_token_expires_at: session.refreshTokenExpiresAt,
+    user: publicProfile,
+    ...extra,
+  })
+}
+
 async function handleRegister(req, res) {
   const body = parseBody(req)
   const email = validateEmail(body.email ?? body.account)
@@ -144,6 +209,7 @@ async function handleRegister(req, res) {
       id: createId('user'),
       email,
       account: email,
+      email_verified: false,
       display_name: displayName,
       avatar_url: avatarUrl,
       referral_code: createUniqueReferralCode(data),
@@ -159,6 +225,7 @@ async function handleRegister(req, res) {
       password_reset_expires_at: '',
       password_hash: passwordRecord.hash,
       password_salt: passwordRecord.salt,
+      last_login_at: now,
       created_at: now,
       updated_at: now,
     }
@@ -166,9 +233,19 @@ async function handleRegister(req, res) {
     return user
   })
 
-  sendJson(res, 201, {
-    token: issueAccessToken(createdUser),
-    user: publicUser(createdUser),
+  await writeAuthAuditLog({
+    userId: createdUser.id,
+    provider: 'password',
+    eventType: 'register',
+    eventStatus: 'success',
+    ...getRequestContext(req),
+    detail: { email },
+  }).catch(() => null)
+
+  await sendAuthSession(res, createdUser, {
+    issuedByProvider: 'password',
+    context: getRequestContext(req),
+    status: 201,
   })
 }
 
@@ -180,14 +257,26 @@ async function handleLogin(req, res) {
     throw createAuthError('請輸入密碼', 'password_required', 400)
   }
 
+  const context = getRequestContext(req)
   const data = await readStore()
   const user = findUserByEmail(data, email)
   if (!user) {
+    await writeAuthAuditLog({
+      provider: 'password',
+      eventType: 'login',
+      eventStatus: 'failure',
+      ...context,
+      detail: { email, code: 'invalid_credentials' },
+    }).catch(() => null)
     sendJson(res, 401, {
       error: 'invalid_credentials',
       message: 'Email 或密碼錯誤',
     })
     return
+  }
+
+  if (!String(user.password_hash ?? '').trim() || !String(user.password_salt ?? '').trim()) {
+    throw createAuthError('此帳號尚未設定密碼，請改用 Google 登入或先綁定密碼', 'password_login_not_available', 400)
   }
 
   try {
@@ -230,6 +319,22 @@ async function handleLogin(req, res) {
       return registerFailedLoginAttempt(targetUser)
     })
 
+    await writeAuthAuditLog({
+      userId: user.id,
+      provider: 'password',
+      eventType: 'login',
+      eventStatus: 'failure',
+      ...context,
+      detail: {
+        email,
+        code: failureState?.resetRequired
+          ? 'password_reset_required'
+          : failureState?.lockedUntil
+            ? 'login_temporarily_locked'
+            : 'invalid_credentials',
+      },
+    }).catch(() => null)
+
     if (failureState?.resetRequired) {
       sendJson(res, 403, {
         error: 'password_reset_required',
@@ -254,21 +359,210 @@ async function handleLogin(req, res) {
     return
   }
 
-  const loggedInUserId = await updateStore(async (nextData) => {
+  const loggedInUser = await updateStore(async (nextData) => {
     const targetUser = findUserByEmail(nextData, email)
     if (!targetUser) {
       throw createAuthError('找不到使用者', 'user_not_found', 404)
     }
     clearLoginFailureState(targetUser)
-    targetUser.updated_at = nowIso()
-    return targetUser.id
+    targetUser.last_login_at = nowIso()
+    targetUser.updated_at = targetUser.last_login_at
+    return targetUser
   })
 
-  const refreshedData = await readStore()
-  const loggedInUser = refreshedData.users.find((item) => String(item.id) === String(loggedInUserId))
+  await writeAuthAuditLog({
+    userId: loggedInUser.id,
+    provider: 'password',
+    eventType: 'login',
+    eventStatus: 'success',
+    ...context,
+    detail: { email },
+  }).catch(() => null)
+
+  await sendAuthSession(res, loggedInUser, {
+    issuedByProvider: 'password',
+    context,
+  })
+}
+
+async function handleGooglePrepare(req, res) {
+  const body = parseBody(req)
+  const requestedPurpose = normalizeText(body.purpose)
+  const purpose = requestedPurpose === 'link' ? 'link' : 'login'
+  const context = getRequestContext(req)
+  const currentUser = purpose === 'link'
+    ? await requireAuthenticatedUser(req, res, sendJson)
+    : await getOptionalAuthenticatedUser(req)
+
+  if (purpose === 'link' && !currentUser) {
+    return
+  }
+
+  const challenge = await createAuthNonce({
+    provider: 'google',
+    purpose,
+    userId: purpose === 'link' ? currentUser.id : '',
+    ...context,
+  })
+
+  await writeAuthAuditLog({
+    userId: currentUser?.id ?? '',
+    provider: 'google',
+    eventType: 'prepare',
+    eventStatus: 'success',
+    ...context,
+    detail: { purpose },
+  }).catch(() => null)
+
+  sendJson(res, 200, challenge)
+}
+
+async function handleGoogleAuth(req, res) {
+  const body = parseBody(req)
+  const idToken = normalizeText(body.idToken ?? body.id_token)
+  const nonce = normalizeText(body.nonce)
+  if (!idToken) {
+    throw createAuthError('缺少 Google ID token', 'google_token_required', 400)
+  }
+  if (!nonce) {
+    throw createAuthError('缺少 Google nonce', 'google_nonce_required', 400)
+  }
+
+  const context = getRequestContext(req)
+  const currentUser = await getOptionalAuthenticatedUser(req)
+  const purpose = currentUser ? 'link' : 'login'
+
+  try {
+    await consumeAuthNonce({
+      provider: 'google',
+      nonce,
+      purpose,
+      userId: currentUser?.id ?? '',
+    })
+
+    const googleProfile = await verifyGoogleIdToken({
+      idToken,
+      expectedNonce: nonce,
+    })
+
+    let resolvedUser = null
+    let eventType = 'google_login'
+    const linkedUser = await findUserByAuthProvider('google', googleProfile.sub)
+
+    if (currentUser) {
+      if (linkedUser && String(linkedUser.id) !== String(currentUser.id)) {
+        throw createAuthError('此 Google 帳號已綁定其他使用者', 'provider_already_linked', 409)
+      }
+
+      resolvedUser = await linkUserAuthProvider({
+        userId: currentUser.id,
+        provider: 'google',
+        providerSub: googleProfile.sub,
+        email: googleProfile.email,
+        emailVerified: googleProfile.email_verified,
+        displayName: googleProfile.name,
+        avatarUrl: googleProfile.picture,
+      })
+      eventType = linkedUser ? 'google_login_linked_user' : 'google_link'
+    } else if (linkedUser) {
+      resolvedUser = await updateUserFromAuthProviderLogin({
+        userId: linkedUser.id,
+        email: googleProfile.email,
+        emailVerified: googleProfile.email_verified,
+        displayName: googleProfile.name,
+        avatarUrl: googleProfile.picture,
+      })
+      eventType = 'google_login'
+    } else {
+      if (!googleProfile.email || !googleProfile.email_verified) {
+        throw createAuthError('Google 帳號 Email 未驗證，無法建立本地帳號', 'google_email_not_verified', 403)
+      }
+
+      const existingData = await readStore()
+      const existingUser = findUserByEmail(existingData, googleProfile.email)
+      if (existingUser) {
+        throw createAuthError(
+          '此 Email 已有帳號，請先用原登入方式登入後再到帳號頁綁定 Google',
+          'existing_account_link_required',
+          409,
+        )
+      }
+
+      resolvedUser = await createUserFromExternalIdentity({
+        provider: 'google',
+        providerSub: googleProfile.sub,
+        email: googleProfile.email,
+        emailVerified: googleProfile.email_verified,
+        displayName: googleProfile.name,
+        avatarUrl: googleProfile.picture,
+      })
+      eventType = 'google_register'
+    }
+
+    await writeAuthAuditLog({
+      userId: resolvedUser.id,
+      provider: 'google',
+      eventType,
+      eventStatus: 'success',
+      ...context,
+      detail: {
+        sub: googleProfile.sub,
+        email: googleProfile.email,
+        email_verified: googleProfile.email_verified,
+      },
+    }).catch(() => null)
+
+    await sendAuthSession(res, resolvedUser, {
+      issuedByProvider: 'google',
+      context,
+      extra: {
+        linked: purpose === 'link',
+      },
+    })
+  } catch (error) {
+    await writeAuthAuditLog({
+      userId: currentUser?.id ?? '',
+      provider: 'google',
+      eventType: purpose === 'link' ? 'google_link' : 'google_login',
+      eventStatus: 'failure',
+      ...context,
+      detail: {
+        code: String(error?.code ?? 'google_auth_failed'),
+      },
+    }).catch(() => null)
+    throw error
+  }
+}
+
+async function handleRefresh(req, res) {
+  const body = parseBody(req)
+  const refreshToken = normalizeText(body.refreshToken ?? body.refresh_token)
+  if (!refreshToken) {
+    throw createAuthError('缺少 refresh token', 'refresh_token_required', 400)
+  }
+
+  const context = getRequestContext(req)
+  const session = await rotateRefreshSession(refreshToken, context)
+  const publicProfile = await buildPublicUserProfile(session.user)
+
+  await writeAuthAuditLog({
+    userId: session.user.id,
+    provider: 'session',
+    eventType: 'refresh',
+    eventStatus: 'success',
+    ...context,
+    detail: { session_family_id: session.sessionFamilyId },
+  }).catch(() => null)
+
   sendJson(res, 200, {
-    token: issueAccessToken(loggedInUser),
-    user: publicUser(loggedInUser),
+    token: session.accessToken,
+    access_token: session.accessToken,
+    token_type: 'Bearer',
+    expires_in: session.expiresInSec,
+    refresh_token: session.refreshToken,
+    refresh_token_expires_in: session.refreshExpiresInSec,
+    refresh_token_expires_at: session.refreshTokenExpiresAt,
+    user: publicProfile,
   })
 }
 
@@ -335,7 +629,7 @@ async function handlePasswordResetConfirm(req, res) {
   }
 
   const tokenHash = hashSensitiveToken(token)
-  const updatedUserId = await updateStore(async (data) => {
+  const updatedUser = await updateStore(async (data) => {
     const targetUser = data.users.find((item) => String(item?.password_reset_token_hash ?? '') === tokenHash)
     if (!targetUser) {
       throw createAuthError('重設連結無效或已失效', 'password_reset_token_invalid', 400)
@@ -351,25 +645,30 @@ async function handlePasswordResetConfirm(req, res) {
     const passwordRecord = hashPassword(password)
     targetUser.password_hash = passwordRecord.hash
     targetUser.password_salt = passwordRecord.salt
+    targetUser.email_verified = Boolean(targetUser.email_verified)
+    targetUser.last_login_at = nowIso()
     clearTemporaryPasswordState(targetUser)
     clearPasswordResetState(targetUser)
     clearLoginFailureState(targetUser)
-    targetUser.updated_at = nowIso()
-    return targetUser.id
+    targetUser.updated_at = targetUser.last_login_at
+    return targetUser
   })
 
-  const data = await readStore()
-  const updatedUser = data.users.find((item) => String(item.id) === String(updatedUserId))
-  sendJson(res, 200, {
-    token: issueAccessToken(updatedUser),
-    user: publicUser(updatedUser),
+  await revokeRefreshSession('', {
+    userId: updatedUser.id,
+    reason: 'password_reset',
+  }).catch(() => null)
+
+  await sendAuthSession(res, updatedUser, {
+    issuedByProvider: 'password',
+    context: getRequestContext(req),
   })
 }
 
 async function handleMe(req, res) {
   const user = await requireAuthenticatedUser(req, res, sendJson, { allowTemporaryPassword: true })
   if (!user) return
-  sendJson(res, 200, { user: publicUser(user) })
+  sendJson(res, 200, { user: await buildPublicUserProfile(user) })
 }
 
 async function handleProfileUpdate(req, res) {
@@ -380,7 +679,7 @@ async function handleProfileUpdate(req, res) {
   const displayName = normalizeDisplayName(body.displayName, user.display_name || user.email)
   const avatarUrl = normalizeAvatarUrl(body.avatarUrl)
 
-  const updatedUserId = await updateStore(async (data) => {
+  const updatedUser = await updateStore(async (data) => {
     const targetUser = data.users.find((item) => String(item.id) === String(user.id))
     if (!targetUser) {
       throw createAuthError('找不到使用者', 'user_not_found', 404)
@@ -389,12 +688,10 @@ async function handleProfileUpdate(req, res) {
     targetUser.display_name = displayName
     targetUser.avatar_url = avatarUrl
     targetUser.updated_at = nowIso()
-    return targetUser.id
+    return targetUser
   })
 
-  const data = await readStore()
-  const updatedUser = data.users.find((item) => String(item.id) === String(updatedUserId))
-  sendJson(res, 200, { user: publicUser(updatedUser) })
+  sendJson(res, 200, { user: await buildPublicUserProfile(updatedUser) })
 }
 
 async function handlePasswordChange(req, res) {
@@ -405,13 +702,14 @@ async function handlePasswordChange(req, res) {
   const currentPassword = normalizeText(body.currentPassword)
   const nextPassword = validatePassword(body.nextPassword ?? body.password)
 
-  const updatedUserId = await updateStore(async (data) => {
+  const updatedUser = await updateStore(async (data) => {
     const targetUser = data.users.find((item) => String(item.id) === String(user.id))
     if (!targetUser) {
       throw createAuthError('找不到使用者', 'user_not_found', 404)
     }
 
-    if (!targetUser.must_change_password) {
+    const hasPassword = Boolean(String(targetUser.password_hash ?? '').trim() && String(targetUser.password_salt ?? '').trim())
+    if (!targetUser.must_change_password && hasPassword) {
       if (!currentPassword) {
         throw createAuthError('請輸入目前密碼', 'current_password_required', 400)
       }
@@ -423,19 +721,49 @@ async function handlePasswordChange(req, res) {
     const passwordRecord = hashPassword(nextPassword)
     targetUser.password_hash = passwordRecord.hash
     targetUser.password_salt = passwordRecord.salt
+    targetUser.last_login_at = nowIso()
     clearTemporaryPasswordState(targetUser)
     clearPasswordResetState(targetUser)
     clearLoginFailureState(targetUser)
-    targetUser.updated_at = nowIso()
-    return targetUser.id
+    targetUser.updated_at = targetUser.last_login_at
+    return targetUser
   })
 
-  const data = await readStore()
-  const updatedUser = data.users.find((item) => String(item.id) === String(updatedUserId))
-  sendJson(res, 200, {
-    token: issueAccessToken(updatedUser),
-    user: publicUser(updatedUser),
+  await revokeRefreshSession('', {
+    userId: updatedUser.id,
+    reason: 'password_changed',
+  }).catch(() => null)
+
+  await sendAuthSession(res, updatedUser, {
+    issuedByProvider: 'password',
+    context: getRequestContext(req),
   })
+}
+
+async function handleLogout(req, res) {
+  const body = parseBody(req)
+  const refreshToken = normalizeText(body.refreshToken ?? body.refresh_token)
+  const currentUser = await getOptionalAuthenticatedUser(req)
+  const sessionFamilyId = getCurrentSessionFamilyId(req)
+
+  await revokeRefreshSession(refreshToken, {
+    sessionFamilyId,
+    userId: currentUser?.id ?? '',
+    reason: 'logout',
+  }).catch(() => null)
+
+  if (currentUser?.id) {
+    await writeAuthAuditLog({
+      userId: currentUser.id,
+      provider: 'session',
+      eventType: 'logout',
+      eventStatus: 'success',
+      ...getRequestContext(req),
+      detail: { session_family_id: sessionFamilyId },
+    }).catch(() => null)
+  }
+
+  sendJson(res, 200, { ok: true })
 }
 
 export default async function authHandler(req, res) {
@@ -451,6 +779,21 @@ export default async function authHandler(req, res) {
 
     if (req.method === 'POST' && pathname === '/login') {
       await handleLogin(req, res)
+      return
+    }
+
+    if (req.method === 'POST' && pathname === '/google/prepare') {
+      await handleGooglePrepare(req, res)
+      return
+    }
+
+    if (req.method === 'POST' && pathname === '/google') {
+      await handleGoogleAuth(req, res)
+      return
+    }
+
+    if (req.method === 'POST' && pathname === '/refresh') {
+      await handleRefresh(req, res)
       return
     }
 
@@ -470,7 +813,7 @@ export default async function authHandler(req, res) {
     }
 
     if (req.method === 'POST' && pathname === '/logout') {
-      sendJson(res, 200, { ok: true })
+      await handleLogout(req, res)
       return
     }
 

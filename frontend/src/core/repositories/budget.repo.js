@@ -121,3 +121,21 @@ export async function computeBudgetSpentByCategory(ledgerId, monthStartUtc, mont
 
   return rowsOf(result)
 }
+
+export async function listBudgetUsageDaysByCategory(ledgerId, monthStartUtc, monthEndUtc) {
+  const result = await query(
+    `SELECT category_id, substr(occurred_at, 1, 10) AS occurred_day
+     FROM transactions
+     WHERE ledger_id = ?
+       AND deleted_at IS NULL
+       AND type = 'expense'
+       AND include_in_budget = 1
+       AND occurred_at >= ?
+       AND occurred_at < ?
+       AND category_id IS NOT NULL
+     GROUP BY category_id, substr(occurred_at, 1, 10);`,
+    [ledgerId, monthStartUtc, monthEndUtc],
+  )
+
+  return rowsOf(result)
+}

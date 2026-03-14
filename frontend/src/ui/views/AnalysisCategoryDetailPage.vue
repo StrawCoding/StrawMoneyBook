@@ -248,11 +248,11 @@ function labelOf(type) {
   if (type === 'expense') return '支出'
   if (type === 'income') return '收入'
   if (type === 'transfer') return '轉帳'
-  return '調整'
+  return '結餘'
 }
 
 function labelOfTransaction(tx) {
-  if (!tx) return '調整'
+  if (!tx) return '結餘'
   if (tx.origin_type === 'reimbursement') return '報銷'
   if (tx.origin_type === 'loan_payment') return loanTransactionLabel(tx)
   const systemLabel = getSystemTransactionLabel(tx)
@@ -262,7 +262,7 @@ function labelOfTransaction(tx) {
   const category = categoryStore.categories.find((item) => item.id === tx.category_id)
   if (category?.name) return category.name
   if (tx.type === 'transfer') return '轉帳'
-  if (tx.type === 'adjustment') return '調整'
+  if (tx.type === 'adjustment') return '結餘'
   const kind = category?.kind
   if (kind === 'income') return '收入'
   if (kind === 'expense') return '支出'

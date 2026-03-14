@@ -37,13 +37,30 @@
         </label>
 
         <label class="field">
+          帳號類型
+          <CustomSelect v-model="editAccountKind" :options="accountKindOptions" placeholder="請選擇帳號類型" />
+        </label>
+
+        <label class="field">
           帳戶幣別
           <CustomSelect v-model="editCurrencyCode" :options="currencyOptions" placeholder="請選擇幣別" />
         </label>
 
-        <label class="field">
+        <label v-if="editAccountKind === 'cash'" class="field">
           預設資金（元，可小數）
           <input v-model="editOpening" class="input" type="number" step="0.01" />
+        </label>
+        <label v-else class="field">
+          目前欠款（元，可小數）
+          <input v-model="editCurrentDebt" class="input" type="number" min="0" step="0.01" />
+        </label>
+        <label v-if="editAccountKind === 'credit'" class="field">
+          信用額度（元，可小數）
+          <input v-model="editCreditLimit" class="input" type="number" min="0" step="0.01" />
+        </label>
+        <label v-if="editAccountKind === 'credit'" class="field">
+          還款提醒日（每月 1-31）
+          <input v-model="editRepaymentReminderDay" class="input" type="number" min="1" max="31" step="1" placeholder="例如 15" />
         </label>
         <div class="field">
           <span>{{ t('account.include_in_assets_label') }}</span>
@@ -62,7 +79,9 @@
             <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
           </button>
         </div>
-        <p v-if="openingInvalid" class="error-text">預設資金格式錯誤</p>
+        <p v-if="openingInvalid" class="error-text">{{ editAccountKind === 'credit' ? '目前欠款格式錯誤' : '預設資金格式錯誤' }}</p>
+        <p v-if="creditLimitInvalid" class="error-text">信用額度格式錯誤</p>
+        <p v-if="repaymentReminderDayInvalid" class="error-text">還款提醒日需介於 1 到 31</p>
         <div class="row action-row">
           <button class="btn danger" :disabled="deleting" @click="removeAccountRecord">
             {{ deleting ? '處理中...' : '刪除/封存帳戶' }}
@@ -77,8 +96,28 @@
             <span>{{ accountGroupName }}</span>
           </div>
           <div class="detail-row">
+            <small class="muted">帳號類型</small>
+            <span>{{ accountKindLabel }}</span>
+          </div>
+          <div class="detail-row">
             <small class="muted">帳戶幣別</small>
             <span>{{ accountCurrencyCode }}</span>
+          </div>
+          <div v-if="isCreditAccount" class="detail-row">
+            <small class="muted">目前欠款</small>
+            <MoneyText :value-minor="currentCreditDebtMinor" :currency="accountCurrencyCode" />
+          </div>
+          <div v-if="isCreditAccount" class="detail-row">
+            <small class="muted">信用額度</small>
+            <MoneyText :value-minor="accountCreditLimitMinor" :currency="accountCurrencyCode" />
+          </div>
+          <div v-if="isCreditAccount" class="detail-row">
+            <small class="muted">可用額度</small>
+            <MoneyText :value-minor="availableCreditMinor" :currency="accountCurrencyCode" />
+          </div>
+          <div v-if="isCreditAccount" class="detail-row">
+            <small class="muted">還款提醒日</small>
+            <span>{{ repaymentReminderDayLabel }}</span>
           </div>
           <div class="detail-row">
             <small class="muted">{{ t('account.include_in_assets_label') }}</small>
@@ -195,6 +234,10 @@ const editGroupId = ref('')
 const editIcon = ref(defaultAccountIcon)
 const editCurrencyCode = ref('TWD')
 const editOpening = ref('0')
+const editAccountKind = ref('cash')
+const editCurrentDebt = ref('0')
+const editCreditLimit = ref('0')
+const editRepaymentReminderDay = ref('')
 const editIncludeInAssets = ref(true)
 const initializedAccountId = ref('')
 
@@ -214,14 +257,33 @@ const accountGroupName = computed(() => {
   if (!groupId) return '-'
   return accountStore.groups.find((item) => item.id === groupId)?.name ?? '-'
 })
-const accountIncludeInAssetsLabel = computed(() => {
-  return isAccountIncludedInAssets(account.value) ? t('account.include_in_assets_on') : t('account.include_in_assets_off')
-})
-const openingInvalid = computed(() => !Number.isFinite(Number(editOpening.value)))
 const currentAccountBalanceMinor = computed(() => {
   const matched = accountStore.balances.find((item) => item.id === accountId.value)
   if (matched) return Number(matched.balance_minor ?? 0)
   return Number(account.value?.opening_balance_minor ?? 0)
+})
+const accountIncludeInAssetsLabel = computed(() => {
+  return isAccountIncludedInAssets(account.value) ? t('account.include_in_assets_on') : t('account.include_in_assets_off')
+})
+const accountKindLabel = computed(() => (isCreditAccount.value ? '信用帳戶' : '現金帳戶'))
+const accountCreditLimitMinor = computed(() => Math.max(0, Number(account.value?.credit_limit_minor ?? 0)))
+const currentCreditDebtMinor = computed(() => Math.max(0, Number(currentAccountBalanceMinor.value ?? 0) * -1))
+const availableCreditMinor = computed(() => Math.max(0, accountCreditLimitMinor.value - currentCreditDebtMinor.value))
+const repaymentReminderDayLabel = computed(() => formatRepaymentReminderDay(account.value?.repayment_reminder_day))
+const isCreditAccount = computed(() => normalizeAccountKind(account.value?.account_kind) === 'credit')
+const openingInvalid = computed(() => {
+  const rawValue = editAccountKind.value === 'credit' ? editCurrentDebt.value : editOpening.value
+  return !Number.isFinite(Number(rawValue))
+})
+const creditLimitInvalid = computed(() => {
+  if (editAccountKind.value !== 'credit') return false
+  const numeric = Number(editCreditLimit.value)
+  return !Number.isFinite(numeric) || numeric < 0
+})
+const repaymentReminderDayInvalid = computed(() => {
+  if (editAccountKind.value !== 'credit' || editRepaymentReminderDay.value === '') return false
+  const numeric = Math.trunc(Number(editRepaymentReminderDay.value))
+  return !Number.isFinite(numeric) || numeric < 1 || numeric > 31
 })
 const accountTransactions = computed(() => {
   const ownRows = transactions.value.filter((tx) => String(tx.account_id) === accountId.value)
@@ -262,23 +324,40 @@ const groupOptions = computed(() => {
     label: group.name,
   }))
 })
+const accountKindOptions = computed(() => ([
+  { value: 'cash', label: '現金帳戶' },
+  { value: 'credit', label: '信用帳戶' },
+]))
 const canSave = computed(() => {
   if (!isEditMode.value || !account.value) return false
   const name = editName.value.trim()
   const icon = normalizeFaIcon(editIcon.value, defaultAccountIcon)
   const groupId = String(editGroupId.value ?? '').trim()
+  const accountKind = normalizeAccountKind(editAccountKind.value)
   const currencyCode = normalizeCurrencyCode(editCurrencyCode.value, 'TWD')
   const openingMajor = Number(editOpening.value)
+  const currentDebtMajor = Number(editCurrentDebt.value)
+  const creditLimitMajor = Number(editCreditLimit.value)
+  const creditLimitMinor = Math.round(Math.abs(creditLimitMajor) * 100)
+  const repaymentReminderDay = parseRepaymentReminderDay(editRepaymentReminderDay.value)
   const includeInAssets = Boolean(editIncludeInAssets.value)
-  if (!name || !groupId || !Number.isFinite(openingMajor)) return false
-  const openingMinorNext = Math.round(openingMajor * 100)
+  if (!name || !groupId) return false
+  if (accountKind === 'cash' && !Number.isFinite(openingMajor)) return false
+  if (accountKind === 'credit' && (!Number.isFinite(currentDebtMajor) || !Number.isFinite(creditLimitMajor) || creditLimitMajor < 0)) return false
+  if (accountKind === 'credit' && editRepaymentReminderDay.value !== '' && repaymentReminderDay == null) return false
+  const openingMinorNext = accountKind === 'credit'
+    ? Math.round(Math.abs(currentDebtMajor) * 100) * -1
+    : Math.round(openingMajor * 100)
 
   return (
     name !== String(account.value.name ?? '') ||
     groupId !== String(account.value.group_id ?? '') ||
     icon !== normalizeFaIcon(account.value.icon, defaultAccountIcon) ||
+    accountKind !== normalizeAccountKind(account.value.account_kind) ||
     currencyCode !== normalizeCurrencyCode(account.value.currency_code, 'TWD') ||
     openingMinorNext !== Number(account.value.opening_balance_minor ?? 0) ||
+    creditLimitMinor !== Math.max(0, Number(account.value.credit_limit_minor ?? 0)) ||
+    repaymentReminderDay !== parseRepaymentReminderDay(account.value.repayment_reminder_day) ||
     includeInAssets !== isAccountIncludedInAssets(account.value)
   )
 })
@@ -294,8 +373,12 @@ watch(
     editName.value = String(next.name ?? '')
     editGroupId.value = String(next.group_id ?? '')
     editIcon.value = normalizeFaIcon(next.icon, defaultAccountIcon)
+    editAccountKind.value = normalizeAccountKind(next.account_kind)
     editCurrencyCode.value = normalizeCurrencyCode(next.currency_code, 'TWD')
     editOpening.value = String(Number(next.opening_balance_minor ?? 0) / 100)
+    editCurrentDebt.value = String(Math.max(0, Number(next.opening_balance_minor ?? 0) * -1) / 100)
+    editCreditLimit.value = String(Math.max(0, Number(next.credit_limit_minor ?? 0)) / 100)
+    editRepaymentReminderDay.value = next.repayment_reminder_day == null ? '' : String(next.repayment_reminder_day)
     editIncludeInAssets.value = isAccountIncludedInAssets(next)
     initializedAccountId.value = nextId
   },
@@ -391,15 +474,27 @@ async function saveProfile() {
     const nextName = editName.value.trim()
     const nextGroupId = String(editGroupId.value ?? '').trim()
     const nextIcon = normalizeFaIcon(editIcon.value, defaultAccountIcon)
+    const nextAccountKind = normalizeAccountKind(editAccountKind.value)
     const nextCurrencyCode = normalizeCurrencyCode(editCurrencyCode.value, 'TWD')
-    const nextOpeningBalanceMinor = Math.round(Number(editOpening.value) * 100)
+    const nextOpeningBalanceMinor = nextAccountKind === 'credit'
+      ? Math.round(Math.abs(Number(editCurrentDebt.value)) * 100) * -1
+      : Math.round(Number(editOpening.value) * 100)
+    const nextCreditLimitMinor = nextAccountKind === 'credit'
+      ? Math.round(Math.abs(Number(editCreditLimit.value)) * 100)
+      : 0
+    const nextRepaymentReminderDay = nextAccountKind === 'credit'
+      ? parseRepaymentReminderDay(editRepaymentReminderDay.value)
+      : null
 
     await accountStore.updateAccountProfile(accountId.value, {
       name: nextName,
       groupId: nextGroupId,
       icon: nextIcon,
+      accountKind: nextAccountKind,
       currencyCode: nextCurrencyCode,
       openingBalanceMinor: nextOpeningBalanceMinor,
+      creditLimitMinor: nextCreditLimitMinor,
+      repaymentReminderDay: nextRepaymentReminderDay,
       includeInAssets: editIncludeInAssets.value,
     })
     uiStore.pushToast('帳戶資料已更新')
@@ -466,7 +561,7 @@ function showAddonDeltaTag(tx) {
 }
 
 function labelOfTransaction(tx) {
-  if (!tx) return '調整'
+  if (!tx) return '結餘'
   if (tx.origin_type === 'reimbursement') return '報銷'
   if (tx.origin_type === 'loan_payment') return loanTransactionLabel(tx)
   const systemLabel = getSystemTransactionLabel(tx)
@@ -478,7 +573,7 @@ function labelOfTransaction(tx) {
   if (tx.type === 'expense') return '支出'
   if (tx.type === 'income') return '收入'
   if (tx.type === 'transfer') return '轉帳'
-  return '調整'
+  return '結餘'
 }
 
 function loanTransactionLabel(tx) {
@@ -546,6 +641,23 @@ function openEdit(tx) {
 
 function isAccountIncludedInAssets(value) {
   return Number(value?.include_in_assets ?? 1) === 1
+}
+
+function normalizeAccountKind(value) {
+  return String(value ?? '').trim().toLowerCase() === 'credit' ? 'credit' : 'cash'
+}
+
+function parseRepaymentReminderDay(value) {
+  if (value === '' || value === null || value === undefined) return null
+  const numeric = Math.trunc(Number(value))
+  if (!Number.isFinite(numeric) || numeric < 1 || numeric > 31) return null
+  return numeric
+}
+
+function formatRepaymentReminderDay(value) {
+  const day = parseRepaymentReminderDay(value)
+  if (day == null) return '未設定'
+  return `每月 ${day} 日`
 }
 </script>
 

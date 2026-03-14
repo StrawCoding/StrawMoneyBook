@@ -21,6 +21,14 @@ const PREFIX_API_ROUTE_LOADERS = [
     loadRoute: () => import('./api/auth/[...path].js'),
   },
   {
+    prefix: '/api/referrals',
+    loadRoute: () => import('./api/referrals/[...path].js'),
+  },
+  {
+    prefix: '/api/speech',
+    loadRoute: () => import('./api/speech/[...path].js'),
+  },
+  {
     prefix: '/api/shared-ledgers',
     loadRoute: () => import('./api/shared-ledgers/[...path].js'),
   },
@@ -46,12 +54,12 @@ function ensureNodeStyleResponse(res) {
 }
 
 async function readRequestBody(req) {
-  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return ''
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return Buffer.alloc(0)
   const chunks = []
   for await (const chunk of req) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
   }
-  return Buffer.concat(chunks).toString('utf8')
+  return Buffer.concat(chunks)
 }
 
 function resolveApiRouteLoader(pathname) {
@@ -77,7 +85,15 @@ function createApiMiddleware() {
     }
 
     try {
-      req.body = await readRequestBody(req)
+      req.rawBody = await readRequestBody(req)
+      const contentType = String(req.headers?.['content-type'] ?? '').toLowerCase()
+      if (!req.rawBody.length) {
+        req.body = ''
+      } else if (contentType.includes('application/json') || contentType.startsWith('text/')) {
+        req.body = req.rawBody.toString('utf8')
+      } else {
+        req.body = req.rawBody
+      }
       req.query = Object.fromEntries(parsedUrl.searchParams.entries())
       const routeModule = await loadRoute()
       const handler = routeModule?.default

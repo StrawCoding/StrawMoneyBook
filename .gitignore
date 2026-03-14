@@ -9,3 +9,7 @@
 *.playwright-cli
 *.codex_snapshots
 *.vscode
+*.pyc
+*__pycache__
+*.venv
+speech-stt-service/models
