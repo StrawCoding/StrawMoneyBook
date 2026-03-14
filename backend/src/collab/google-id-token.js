@@ -1,10 +1,5 @@
 import { OAuth2Client } from 'google-auth-library'
 
-const GOOGLE_OAUTH_CLIENT_ID = String(process.env.GOOGLE_AUTH_WEB_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim()
-const GOOGLE_ALLOWED_AUDIENCES = String(process.env.GOOGLE_AUTH_ALLOWED_AUDIENCES ?? GOOGLE_OAUTH_CLIENT_ID)
-  .split(',')
-  .map((item) => item.trim())
-  .filter(Boolean)
 const GOOGLE_ALLOWED_ISSUERS = new Set([
   'accounts.google.com',
   'https://accounts.google.com',
@@ -27,15 +22,46 @@ function normalizeGooglePicture(value) {
   return ''
 }
 
+function readFirstConfiguredEnv(names = []) {
+  for (const name of names) {
+    const value = String(process.env[name] ?? '').trim()
+    if (value) return value
+  }
+  return ''
+}
+
+function parseAudienceList(value) {
+  return String(value ?? '')
+    .split(/[,\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function resolveGoogleClientId() {
+  return readFirstConfiguredEnv([
+    'GOOGLE_AUTH_WEB_CLIENT_ID',
+    'GOOGLE_OAUTH_CLIENT_ID',
+    'GOOGLE_WEB_CLIENT_ID',
+    'GOOGLE_CLIENT_ID',
+    'VITE_GOOGLE_WEB_CLIENT_ID',
+  ])
+}
+
+function resolveAllowedAudiences() {
+  const configuredAudiences = readFirstConfiguredEnv(['GOOGLE_AUTH_ALLOWED_AUDIENCES'])
+  return parseAudienceList(configuredAudiences || resolveGoogleClientId())
+}
+
 function getAllowedAudiences() {
-  if (!GOOGLE_ALLOWED_AUDIENCES.length) {
+  const audiences = resolveAllowedAudiences()
+  if (!audiences.length) {
     throw createGoogleAuthError(
       '缺少 GOOGLE_AUTH_WEB_CLIENT_ID 或 GOOGLE_AUTH_ALLOWED_AUDIENCES',
       'google_auth_not_configured',
       500,
     )
   }
-  return GOOGLE_ALLOWED_AUDIENCES
+  return audiences
 }
 
 function mapVerifyError(error) {

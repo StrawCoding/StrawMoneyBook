@@ -1,3 +1,5 @@
+import { collectCategoryTextMatchCandidates } from '@/core/services/ai-bookkeeping-category-match.js'
+
 function normalizeText(value) {
   return String(value ?? '')
     .replace(/[，、。]/g, ' ')
@@ -387,39 +389,20 @@ function buildAccountHints(accountCandidates) {
   }
 }
 
-const GENERIC_CATEGORY_NAME_RE = /^(其他|雜項|未分類|misc|other|その他)$/i
-
 function collectCategoryCandidates(text, categories, type) {
-  const candidates = []
   const contextPatterns = type === 'income'
     ? [/收入/, /薪水/, /薪資/, /獎金/, /利息/, /股息/, /退款/, /退費/, /入帳/, /收到/, /\bincome\b/i, /\bsalary\b/i, /\bbonus\b/i, /\brefund\b/i, /収入|給与|給料|返金|入金/]
     : [/花/, /買/, /付款/, /支出/, /餐/, /交通/, /房租/, /娛樂/, /醫療/, /學費/, /服飾/, /\bexpense\b/i, /\bspent\b/i, /\bpay\b/i, /\bmeal\b/i, /\btransport\b/i, /\brent\b/i, /支出|食費|交通費|家賃|医療/]
-
-  for (const category of categories ?? []) {
-    const categoryId = String(category?.id ?? '').trim()
-    const categoryName = String(category?.name ?? '').trim()
-    if (!categoryId || !categoryName) continue
-    const positions = findAllPositions(text, categoryName)
-    for (const start of positions) {
-      const end = start + categoryName.length
-      const around = text.slice(Math.max(0, start - 10), Math.min(text.length, end + 10))
-      const hasContext = includesAny(around, contextPatterns) ? 1 : 0
-      const isGeneric = GENERIC_CATEGORY_NAME_RE.test(categoryName) ? 1 : 0
-      const lengthFactor = Math.min(categoryName.length, 8) / 8
-      const score = sigmoid(-0.7 + lengthFactor * 1.1 + hasContext * 0.65 - isGeneric * 0.7)
-
-      candidates.push({
-        categoryId,
-        categoryName,
-        type,
-        start,
-        end,
-        score,
-      })
-    }
-  }
-  candidates.sort((a, b) => Number(b?.score ?? 0) - Number(a?.score ?? 0))
-  return candidates
+  return collectCategoryTextMatchCandidates(text, categories, { contextPatterns })
+    .map((candidate) => ({
+      categoryId: candidate.categoryId,
+      categoryName: candidate.categoryName,
+      type,
+      start: candidate.start,
+      end: candidate.end,
+      score: candidate.confidence,
+    }))
+    .sort((a, b) => Number(b?.score ?? 0) - Number(a?.score ?? 0))
 }
 
 function pickCategoryHint(candidates, label) {

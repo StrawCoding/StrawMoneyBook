@@ -1,4 +1,5 @@
 import { extractTinyNerHints } from '@/core/services/ai-bookkeeping-tiny-ner.service'
+import { pickBestCategoryTextMatch } from '@/core/services/ai-bookkeeping-category-match.js'
 
 export const AI_BOOKKEEPING_WARNING_KEY = Object.freeze({
   EMPTY_INPUT: 'ai_bookkeeping.warning.empty_input',
@@ -727,33 +728,7 @@ function pickTransferAccounts(text, accounts) {
 }
 
 function pickCategoryMatch(text, categories) {
-  const compact = compactText(text)
-  let best = null
-
-  for (const category of categories ?? []) {
-    const name = String(category?.name ?? '').trim()
-    if (!name) continue
-    const target = compactText(name)
-    const index = compact.indexOf(target)
-    if (index < 0) continue
-
-    const candidate = {
-      category,
-      index,
-      score: target.length,
-    }
-
-    if (!best) {
-      best = candidate
-      continue
-    }
-
-    if (candidate.index < best.index || (candidate.index === best.index && candidate.score > best.score)) {
-      best = candidate
-    }
-  }
-
-  return best?.category ?? null
+  return pickBestCategoryTextMatch(text, categories)?.category ?? null
 }
 
 function normalizeAutoFillRule(raw) {

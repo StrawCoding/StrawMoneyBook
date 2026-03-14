@@ -5,6 +5,37 @@ process.env.GOOGLE_AUTH_WEB_CLIENT_ID = 'strawmb-web-client.apps.googleuserconte
 
 const { verifyGoogleIdToken } = await import('../src/collab/google-id-token.js')
 
+function withGoogleEnv(overrides, callback) {
+  const keys = [
+    'GOOGLE_AUTH_WEB_CLIENT_ID',
+    'GOOGLE_AUTH_ALLOWED_AUDIENCES',
+    'GOOGLE_OAUTH_CLIENT_ID',
+    'GOOGLE_WEB_CLIENT_ID',
+    'GOOGLE_CLIENT_ID',
+    'VITE_GOOGLE_WEB_CLIENT_ID',
+  ]
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+
+  for (const key of keys) {
+    delete process.env[key]
+  }
+  for (const [key, value] of Object.entries(overrides ?? {})) {
+    if (value == null) continue
+    process.env[key] = String(value)
+  }
+
+  return Promise.resolve()
+    .then(callback)
+    .finally(() => {
+      for (const key of keys) {
+        delete process.env[key]
+        if (previous[key] != null) {
+          process.env[key] = previous[key]
+        }
+      }
+    })
+}
+
 test('verifyGoogleIdToken accepts a valid Google payload', async () => {
   const payload = await verifyGoogleIdToken({
     idToken: 'fake-id-token',
@@ -66,5 +97,32 @@ test('verifyGoogleIdToken maps audience errors from google-auth-library', async 
       },
     }),
     (error) => error?.code === 'google_audience_mismatch',
+  )
+})
+
+test('verifyGoogleIdToken resolves audience aliases at call time', async () => {
+  await withGoogleEnv(
+    {
+      VITE_GOOGLE_WEB_CLIENT_ID: 'vite-client.apps.googleusercontent.com',
+    },
+    async () => {
+      const payload = await verifyGoogleIdToken({
+        idToken: 'fake-id-token',
+        verifier: async () => ({
+          getPayload() {
+            return {
+              sub: 'google-sub-vite',
+              email: 'vite@example.com',
+              email_verified: true,
+              aud: 'vite-client.apps.googleusercontent.com',
+              iss: 'https://accounts.google.com',
+              exp: Math.floor(Date.now() / 1000) + 300,
+            }
+          },
+        }),
+      })
+
+      assert.equal(payload.audience, 'vite-client.apps.googleusercontent.com')
+    },
   )
 })
