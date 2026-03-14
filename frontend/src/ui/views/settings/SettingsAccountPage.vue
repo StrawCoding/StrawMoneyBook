@@ -318,14 +318,11 @@
 
             <div class="provider-card" :class="{ linked: !!googleLinkedProvider }">
               <strong>Google</strong>
-              <small class="muted">
-                {{
-                  googleLinkedProvider?.email
-                    ? googleLinkedProvider.email
-                    : googleLinkedProvider
-                      ? t('settings_account.google_bound', '已綁定')
-                      : t('settings_account.google_unbound', '尚未綁定')
-                }}
+              <small class="muted provider-status">
+                {{ googleLinkedProvider ? t('settings_account.google_bound', '已綁定') : t('settings_account.google_unbound', '尚未綁定') }}
+              </small>
+              <small v-if="googleLinkedProvider?.email" class="muted provider-detail">
+                {{ googleLinkedProvider.email }}
               </small>
             </div>
           </div>
@@ -1434,6 +1431,14 @@ p {
 .provider-card.linked {
   border-color: color-mix(in srgb, #2e7d32 55%, var(--line, var(--field-border)));
   background: color-mix(in srgb, #2e7d32 10%, var(--card));
+}
+
+.provider-status {
+  font-weight: 600;
+}
+
+.provider-detail {
+  word-break: break-word;
 }
 
 .debug-link {
