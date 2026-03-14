@@ -593,26 +593,3 @@ export async function redeemReferralCode(code) {
   updateSessionUser(data.user)
   return data
 }
-
-export async function transcribeBookkeepingSpeech({
-  audioBlob,
-  fileName = 'voice-input.webm',
-  context = {},
-  language = 'zh',
-  source = 'ai_bookkeeping',
-} = {}) {
-  if (!(audioBlob instanceof Blob)) {
-    throw new Error('缺少語音音訊')
-  }
-
-  const formData = new FormData()
-  formData.set('audio', audioBlob, String(fileName ?? 'voice-input.webm').trim() || 'voice-input.webm')
-  formData.set('context', JSON.stringify(context ?? {}))
-  formData.set('language', String(language ?? 'zh').trim() || 'zh')
-  formData.set('source', String(source ?? 'ai_bookkeeping').trim() || 'ai_bookkeeping')
-  return requestFormData('/api/speech/transcribe', {
-    method: 'POST',
-    body: formData,
-    auth: false,
-  })
-}

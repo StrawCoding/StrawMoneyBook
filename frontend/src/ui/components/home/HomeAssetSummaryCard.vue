@@ -31,6 +31,13 @@
         </div>
       </button>
     </div>
+
+    <div class="balance-row" :class="{ negative: balanceMinor < 0, positive: balanceMinor > 0 }">
+      <span class="balance-label">{{ t('home_asset_summary.balance_label') }}</span>
+      <strong class="balance-value">
+        <MoneyText :value-minor="balanceMinor" />
+      </strong>
+    </div>
   </article>
 </template>
 
@@ -74,6 +81,8 @@ const expenseMinor = computed(() => {
     .filter((tx) => isCountableForAnalysis(tx) && tx.type === 'expense' && tx.origin_type !== 'loan_payment')
     .reduce((total, tx) => total + Math.abs(Number(tx.amount_minor ?? 0)), 0)
 })
+
+const balanceMinor = computed(() => incomeMinor.value - expenseMinor.value)
 
 function toggleTypeFilter(type) {
   if (transactionStore.homeTypeFilter === type) {
@@ -165,5 +174,58 @@ h3 {
 }
 .split-card.expense .active-tag {
   background: color-mix(in srgb, var(--home-expense-card-value) 78%, #000 22%);
+}
+.balance-row {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--surface-soft-accent) 72%, var(--card) 28%),
+    color-mix(in srgb, var(--surface-highlight) 74%, var(--card) 26%)
+  );
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, white 10%, transparent);
+}
+.balance-label {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--text) 76%, var(--primary) 24%);
+  font-weight: 700;
+}
+.balance-value {
+  font-size: 18px;
+  line-height: 1.2;
+  color: var(--text);
+}
+.balance-row.positive {
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--surface-ok) 84%, var(--card) 16%),
+    color-mix(in srgb, var(--surface-highlight) 72%, var(--card) 28%)
+  );
+  border-color: color-mix(in srgb, var(--ok) 24%, transparent);
+}
+.balance-row.positive .balance-label {
+  color: color-mix(in srgb, var(--ok) 68%, var(--text) 32%);
+}
+.balance-row.positive .balance-value {
+  color: color-mix(in srgb, var(--ok) 84%, var(--text) 16%);
+}
+.balance-row.negative {
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--surface-danger) 86%, var(--card) 14%),
+    color-mix(in srgb, var(--surface-soft-accent) 70%, var(--card) 30%)
+  );
+  border-color: color-mix(in srgb, var(--danger) 28%, transparent);
+}
+.balance-row.negative .balance-label {
+  color: color-mix(in srgb, var(--danger) 70%, var(--text) 30%);
+}
+.balance-row.negative .balance-value {
+  color: color-mix(in srgb, var(--danger) 82%, var(--text) 18%);
 }
 </style>

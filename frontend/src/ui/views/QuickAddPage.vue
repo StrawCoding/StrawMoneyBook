@@ -22,8 +22,8 @@
 
       <div class="stack form-wrap">
         <label class="field">
-          {{ model.type === 'adjustment' ? '結餘金額（元，可正負）' : '金額（元）' }}
-          <input v-model.number="model.amountMajor" class="input" type="number" :min="model.type === 'adjustment' ? undefined : 0" step="0.01" />
+          金額（元）
+          <input v-model.number="model.amountMajor" class="input" type="number" min="0" step="0.01" />
         </label>
 
         <div class="field">
@@ -90,11 +90,6 @@
           </template>
           <p v-else class="muted fx-note">同幣別轉帳，匯率固定為 1</p>
         </section>
-
-        <label v-else-if="model.type === 'adjustment'" class="field">
-          帳戶
-          <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
-        </label>
 
         <div v-else class="inline-grid">
           <label class="field">
@@ -263,7 +258,6 @@ let addonSeq = 1
 const typeOptions = computed(() => [
   { value: 'expense', label: t('transaction.type.expense') },
   { value: 'income', label: t('transaction.type.income') },
-  { value: 'adjustment', label: '結餘' },
   { value: 'transfer', label: t('transaction.type.transfer') },
 ])
 
@@ -369,7 +363,7 @@ watch(
 watch(
   () => categoryGroupsByType.value.map((group) => `${group.id}:${(group.categories ?? []).length}`).join('|'),
   () => {
-    if (model.type !== 'transfer' && model.type !== 'adjustment') {
+    if (model.type !== 'transfer') {
       model.categoryId = ensureCategoryIdByType(model.type, model.categoryId)
     }
   },
@@ -384,14 +378,6 @@ watch(
       model.isReimbursable = false
       model.exchangeRateMode = model.exchangeRateMode === 'manual' ? 'manual' : 'system'
       ensureTransferAccounts()
-      return
-    }
-    if (type === 'adjustment') {
-      model.categoryId = ''
-      model.isReimbursable = false
-      model.includeInBudget = false
-      model.includeInAnalysis = false
-      ensureDirectAccount()
       return
     }
     if (!model.isReimbursable && !model.includeInBudget && !model.includeInAnalysis) {
@@ -444,7 +430,7 @@ watch(
 
 function resolveType(value) {
   const type = String(value ?? '').trim()
-  if (type === 'income' || type === 'transfer' || type === 'adjustment') return type
+  if (type === 'income' || type === 'transfer') return type
   return 'expense'
 }
 
@@ -602,19 +588,14 @@ function resetFormForNextEntry() {
   fillDefaultOccurredAt()
   model.note = ''
   model.isReimbursable = false
-  model.includeInBudget = model.type === 'adjustment' ? false : true
-  model.includeInAnalysis = model.type === 'adjustment' ? false : true
+  model.includeInBudget = true
+  model.includeInAnalysis = true
   model.exchangeRateMode = 'system'
   model.manualExchangeRateInput = ''
   showExtra.value = false
   addonRows.value = []
   if (model.type === 'transfer') {
     ensureTransferAccounts()
-    return
-  }
-  if (model.type === 'adjustment') {
-    model.categoryId = ''
-    ensureDirectAccount()
     return
   }
   ensureDirectAccount()
@@ -632,7 +613,6 @@ async function submit(options = {}) {
   const baseAmountMinor = Math.round(Math.abs(baseAmountMajor) * 100)
   const sourceExtraMinor = Math.round(addonDeltaMajor * 100)
   const settledAmountMajor = round2(baseAmountMajor + addonDeltaMajor)
-  const settledAmountMinorRaw = Math.round(settledAmountMajor * 100)
   const settledAmountMinor = Math.round(Math.abs(settledAmountMajor) * 100)
   const noteText = mergeAddonItemsToNote(String(model.note ?? '').trim(), appliedAddonItems)
 
@@ -647,7 +627,7 @@ async function submit(options = {}) {
     return
   }
 
-  if (model.type !== 'transfer' && model.type !== 'adjustment' && !model.categoryId) {
+  if (model.type !== 'transfer' && !model.categoryId) {
     uiStore.pushToast('請先選擇分類', 'error')
     return
   }
@@ -667,11 +647,6 @@ async function submit(options = {}) {
     }
     if (model.peerAccountId === model.accountId) {
       uiStore.pushToast('轉出與轉入帳戶不可相同', 'error')
-      return
-    }
-  } else if (model.type === 'adjustment') {
-    if (!settledAmountMinorRaw) {
-      uiStore.pushToast('請輸入有效結餘金額（不可為 0）', 'error')
       return
     }
   } else if (settledAmountMinor <= 0) {
@@ -698,15 +673,6 @@ async function submit(options = {}) {
         occurredAt,
         accountId: model.accountId,
         categoryId: model.categoryId,
-        includeInBudget: model.includeInBudget,
-        includeInAnalysis: model.includeInAnalysis,
-        note: noteText,
-      })
-    } else if (model.type === 'adjustment') {
-      await transactionStore.addAdjustment({
-        amountMinor: settledAmountMinorRaw,
-        occurredAt,
-        accountId: model.accountId,
         includeInBudget: model.includeInBudget,
         includeInAnalysis: model.includeInAnalysis,
         note: noteText,

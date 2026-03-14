@@ -25,10 +25,6 @@ const PREFIX_API_ROUTE_LOADERS = [
     loadRoute: () => import('./api/referrals/[...path].js'),
   },
   {
-    prefix: '/api/speech',
-    loadRoute: () => import('./api/speech/[...path].js'),
-  },
-  {
     prefix: '/api/shared-ledgers',
     loadRoute: () => import('./api/shared-ledgers/[...path].js'),
   },

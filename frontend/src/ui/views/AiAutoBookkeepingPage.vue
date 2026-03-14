@@ -1,6 +1,6 @@
 <template>
   <section ref="pageRef" class="stack ai-page" :class="{ leaving: isPageLeaving }">
-    <article class="card panel" :class="{ 'ai-busy-panel': speechListening || speechProcessing || parsing || submitting }">
+    <article class="card panel" :class="{ 'ai-busy-panel': speechListening || parsing || submitting }">
       <header v-if="!embedded" class="row">
         <h2>{{ t('ai_bookkeeping.page_title') }}</h2>
         <div class="header-actions">
@@ -21,7 +21,7 @@
 
       <small class="muted">可輸入金額、日期、帳戶名、分類名、報銷/轉帳等關鍵字。</small>
       <small class="muted">多行會自動批量建立，每行一筆。</small>
-      <small v-if="speechStatusHint" class="muted speech-hint">{{ speechStatusHint }}</small>
+      <small v-if="speechListening && speechLiveText" class="muted speech-hint">語音辨識中：{{ speechLiveText }}</small>
       <transition name="ai-status-fade">
         <div v-if="showAiStatus" class="ai-status-chip">
           <span class="ai-status-wave"></span>
@@ -36,7 +36,7 @@
           v-if="speechSupported"
           class="btn icon-action-btn"
           :class="{ primary: speechListening, busy: speechListening }"
-          :disabled="parsing || submitting || speechProcessing"
+          :disabled="parsing || submitting"
           :aria-label="speechListening ? t('ai_bookkeeping.action.stop_voice_input') : t('ai_bookkeeping.action.voice_input')"
           :title="speechListening ? t('ai_bookkeeping.action.stop_voice_input') : t('ai_bookkeeping.action.voice_input')"
           @click="toggleVoiceInput"
@@ -55,10 +55,6 @@
         </button>
       </div>
 
-      <div v-if="speechSupported && (speechListening || speechProcessing || sourceText)" class="row voice-action-row">
-        <button v-if="speechListening" type="button" class="btn" :disabled="speechProcessing" @click="cancelVoiceInput">取消錄音</button>
-        <button v-else type="button" class="btn" :disabled="speechProcessing" @click="retryVoiceInput">重錄</button>
-      </div>
     </article>
 
     <transition name="ai-result-pop">
@@ -73,59 +69,6 @@
           <li v-for="warning in warnings" :key="warning">{{ warning }}</li>
         </ul>
       </transition>
-
-      <section v-if="activeMissingRequirements.length" class="missing-panel">
-        <div class="row addon-head">
-          <strong>待補欄位</strong>
-          <small class="muted">補齊後才建議儲存</small>
-        </div>
-        <div class="missing-chip-list">
-          <span v-for="item in activeMissingRequirements" :key="item.code" class="missing-chip">{{ item.code }} {{ item.label }}</span>
-        </div>
-        <p v-if="hasMissingRequirement('p1')" class="muted">請先補上金額，支援直接輸入算式，例如 `120+35-10`。</p>
-        <div v-if="hasMissingRequirement('p2')" class="quick-pick-list">
-          <button
-            v-for="option in quickAccountPickOptions"
-            :key="option.value"
-            type="button"
-            class="btn quick-pick-btn"
-            @click="applyQuickAccountPick(option.value)"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-        <div v-if="hasMissingRequirement('p0')" class="quick-pick-list">
-          <button
-            v-for="option in quickCategoryPickOptions"
-            :key="option.value"
-            type="button"
-            class="btn quick-pick-btn"
-            @click="applyQuickCategoryPick(option.value)"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-        <div v-if="hasMissingRequirement('p3')" class="stack">
-          <div class="quick-pick-list">
-            <button
-              v-for="option in quickAddonPickOptions"
-              :key="option.value"
-              type="button"
-              class="btn quick-pick-btn"
-              @click="applyQuickAddonPick(option.value)"
-            >
-              {{ option.label }}
-            </button>
-          </div>
-          <label class="field">
-            補充對象 / 商家 / 標籤
-            <div class="supplement-row">
-              <input v-model.trim="speechSupplementText" class="input" type="text" placeholder="例如 小明、Uber、公司報銷" />
-              <button type="button" class="btn" @click="applySpeechSupplement">套用</button>
-            </div>
-          </label>
-        </div>
-      </section>
 
       <div class="type-grid">
         <button
@@ -337,8 +280,7 @@ import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { getAiBookkeepingWarningFallback, parseAutoBookkeepingText } from '@/core/services/ai-bookkeeping.service'
 import { getAiBookkeepingDailyUsage, recordAiBookkeepingUsage } from '@/core/services/membership.service'
-import { transcribeBookkeepingSpeech } from '@/services/shared-ledger/backend'
-import { useAudioRecorder } from '@/ui/composables/use-audio-recorder'
+import { useSpeechInput } from '@/ui/composables/use-speech-input'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
@@ -391,10 +333,6 @@ const pageRef = ref(null)
 const isPageLeaving = ref(false)
 const latestLoanIntent = ref(null)
 const speechLiveText = ref('')
-const speechProcessing = ref(false)
-const speechSegments = ref([])
-const speechMissingRequirements = ref([])
-const speechSupplementText = ref('')
 const parsing = ref(false)
 const submitting = ref(false)
 const addonRows = ref([])
@@ -404,33 +342,22 @@ const AI_SUBMIT_TIMEOUT_MS = 15000
 const AI_HISTORY_WARMUP_TIMEOUT_MS = 1800
 const {
   isSupported: speechSupported,
-  isRecording: speechListening,
-  elapsedMs: speechElapsedMs,
-  mimeType: speechMimeType,
+  isListening: speechListening,
   lastError: speechLastError,
   start: startSpeech,
   stop: stopSpeech,
-  reset: resetSpeechRecorder,
-} = useAudioRecorder()
+} = useSpeechInput()
 let historyWarmupTask = null
 
-const showAiStatus = computed(() => speechListening.value || speechProcessing.value || parsing.value || submitting.value)
+const showAiStatus = computed(() => speechListening.value || parsing.value || submitting.value)
 const aiStatusText = computed(() => {
   if (submitting.value) return t('ai_bookkeeping.status.saving', 'AI 編輯交易中...')
   if (parsing.value) return t('ai_bookkeeping.status.parsing', 'AI 解析中...')
-  if (speechProcessing.value) return 'AI 語音辨識中...'
-  if (speechListening.value) return 'AI 錄音中...'
+  if (speechListening.value) return t('ai_bookkeeping.status.listening', 'AI 聆聽中...')
   return ''
 })
-const speechLanguage = computed(() => (locale.value === 'en' ? 'en' : 'zh'))
+const speechLanguage = computed(() => (locale.value === 'en' ? 'en-US' : 'zh-TW'))
 const TRANSFER_RATE_AUTO_SYNC_TIMEOUT_MS = 8000
-const MISSING_REQUIREMENT_CATALOG = Object.freeze({
-  p0: { code: 'p0', label: '分類待選' },
-  p1: { code: 'p1', label: '金額不足' },
-  p2: { code: 'p2', label: '帳戶不足' },
-  p3: { code: 'p3', label: '附加項目不足' },
-})
-const ADDON_EXPECTATION_PATTERN = /手續費|服務費|運費|折扣|優惠|回饋|稅金?|停車費|外送費/
 
 const model = reactive({
   type: 'expense',
@@ -491,31 +418,6 @@ const addonTemplateOptions = computed(() => addonTemplateItems.value.map((item) 
   value: item.id,
   label: item.label,
 })))
-const quickAccountPickOptions = computed(() => directAccountOptions.value.slice(0, 8).map((item) => ({
-  value: item.id,
-  label: item.name,
-})))
-const quickCategoryPickOptions = computed(() => {
-  const categories = model.type === 'income' ? categoryStore.incomeCategories : categoryStore.expenseCategories
-  return categories.slice(0, 10).map((item) => ({
-    value: item.id,
-    label: item.name,
-  }))
-})
-const quickAddonPickOptions = computed(() => addonTemplateOptions.value.slice(0, 8))
-const activeMissingRequirements = computed(() => speechMissingRequirements.value.filter((item) => !isRequirementSatisfied(item.code)))
-const speechStatusHint = computed(() => {
-  if (speechListening.value) {
-    return `錄音中：${formatSpeechDuration(speechElapsedMs.value)}`
-  }
-  if (speechProcessing.value) {
-    return '語音辨識中，請稍候...'
-  }
-  if (speechLiveText.value) {
-    return `辨識內容：${speechLiveText.value}`
-  }
-  return ''
-})
 const aiParserAccounts = computed(() => {
   const groupNameMap = new Map(
     (accountStore.groups ?? []).map((group) => [String(group?.id ?? ''), String(group?.name ?? '').trim()]),
@@ -661,19 +563,6 @@ function buildAiParseContext() {
   }
 }
 
-function buildSpeechParseContext() {
-  return {
-    ...buildAiParseContext(),
-    addonTemplates: addonTemplateItems.value.map((item) => ({
-      id: item.id,
-      label: item.label,
-      defaultDirection: item.defaultDirection,
-    })),
-    locale: locale.value,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Taipei',
-  }
-}
-
 function parseSourceTextWithAi(text) {
   return parseAutoBookkeepingText(text, buildAiParseContext())
 }
@@ -685,71 +574,12 @@ function resetAiInputState(options = {}) {
     hasDraft.value = false
     warnings.value = []
     latestLoanIntent.value = null
-    speechMissingRequirements.value = []
-    speechSupplementText.value = ''
     resetPersistedTransaction()
   }
   if (clearSourceText) {
     sourceText.value = ''
     speechLiveText.value = ''
-    speechSegments.value = []
   }
-}
-
-function buildMissingRequirementsFromResult(result, text = '') {
-  if (Array.isArray(result?.missingRequirements)) {
-    return result.missingRequirements.map((item) => ({
-      code: String(item?.code ?? '').trim(),
-      label: String(item?.label ?? '').trim() || MISSING_REQUIREMENT_CATALOG[String(item?.code ?? '').trim()]?.label || '待補欄位',
-    })).filter((item) => item.code)
-  }
-
-  const warningKeySet = new Set(Array.isArray(result?.warningKeys) ? result.warningKeys : [])
-  const codes = []
-  if (warningKeySet.has('ai_bookkeeping.warning.invalid_amount')) codes.push('p1')
-  if (
-    warningKeySet.has('ai_bookkeeping.warning.no_account')
-    || warningKeySet.has('ai_bookkeeping.warning.transfer_accounts_insufficient')
-  ) codes.push('p2')
-  if (warningKeySet.has('ai_bookkeeping.warning.no_category')) codes.push('p0')
-  if (
-    warningKeySet.has('ai_bookkeeping.warning.no_counterparty')
-    || (ADDON_EXPECTATION_PATTERN.test(String(text ?? '')) && !(Array.isArray(result?.draft?.addonItems) && result.draft.addonItems.length))
-  ) codes.push('p3')
-  return Array.from(new Set(codes)).map((code) => MISSING_REQUIREMENT_CATALOG[code]).filter(Boolean)
-}
-
-function hasMissingRequirement(code) {
-  return activeMissingRequirements.value.some((item) => item.code === code)
-}
-
-function isRequirementSatisfied(code) {
-  if (code === 'p1') {
-    if (model.type === 'adjustment') return Number(model.amountMajor ?? 0) !== 0
-    return Number(model.amountMajor ?? 0) > 0
-  }
-  if (code === 'p2') {
-    if (model.type === 'transfer') {
-      return Boolean(model.accountId && model.peerAccountId && model.accountId !== model.peerAccountId)
-    }
-    return Boolean(model.accountId)
-  }
-  if (code === 'p0') {
-    if (latestLoanIntent.value || model.type === 'transfer' || model.type === 'adjustment') return true
-    return Boolean(model.categoryId)
-  }
-  if (code === 'p3') {
-    if (latestLoanIntent.value?.counterpartyName) return true
-    return addonRows.value.length > 0 || Boolean(model.note)
-  }
-  return false
-}
-
-function formatSpeechDuration(valueMs) {
-  const totalSeconds = Math.max(0, Math.floor((Number(valueMs) || 0) / 1000))
-  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0')
-  const seconds = String(totalSeconds % 60).padStart(2, '0')
-  return `${minutes}:${seconds}`
 }
 
 async function parseText(options = {}) {
@@ -839,13 +669,11 @@ async function parseText(options = {}) {
       warnings.value = []
       hasDraft.value = false
       latestLoanIntent.value = null
-      speechMissingRequirements.value = []
       uiStore.pushToast(error?.message || 'AI 解析失敗，請稍後再試', 'error')
       return
     }
 
     warnings.value = resolveAiParserWarnings(result)
-    speechMissingRequirements.value = buildMissingRequirementsFromResult(result, text)
 
     if (!result.draft) {
       hasDraft.value = false
@@ -890,101 +718,54 @@ async function parseText(options = {}) {
 }
 
 async function toggleVoiceInput() {
-  if (parsing.value || submitting.value || speechProcessing.value) return
+  if (parsing.value || submitting.value) return
   if (speechListening.value) {
-    const capture = await stopSpeech()
-    if (capture?.blob) {
-      await transcribeVoiceCapture(capture)
-    }
+    stopSpeech()
     return
   }
 
   speechLiveText.value = ''
-  speechSegments.value = []
-  speechMissingRequirements.value = []
+  let heardFinal = false
+  let lastInterimText = ''
+  let finalSegmentsText = ''
+  let autoStopped = false
   const started = await startSpeech({
     lang: speechLanguage.value,
+    interimResults: true,
+    onResult: ({ finalText = '', interimText = '' } = {}) => {
+      if (finalText) {
+        heardFinal = true
+        lastInterimText = ''
+        finalSegmentsText = `${finalSegmentsText} ${finalText}`.trim()
+        sourceText.value = finalSegmentsText
+        speechLiveText.value = ''
+        if (!autoStopped) {
+          autoStopped = true
+          void stopSpeech()
+        }
+      } else if (interimText) {
+        lastInterimText = interimText
+        speechLiveText.value = String(interimText ?? '').trim()
+      }
+    },
+    onError: (message) => {
+      uiStore.pushToast(message || '語音辨識失敗，請改用手動輸入', 'error')
+    },
+    onEnd: () => {
+      if (heardFinal) {
+        void parseText({ fromSpeech: true })
+      } else if (lastInterimText) {
+        sourceText.value = lastInterimText
+        void parseText({ fromSpeech: true })
+      }
+      speechLiveText.value = ''
+    },
   })
 
   if (!started && !speechLastError.value) {
     uiStore.pushToast('語音啟動失敗，請稍後再試', 'error')
   } else if (!started) {
-    uiStore.pushToast(speechLastError.value || '語音錄音失敗，請稍後再試', 'error')
-  }
-}
-
-async function cancelVoiceInput() {
-  if (!speechListening.value) return
-  await stopSpeech({ discard: true })
-  speechLiveText.value = ''
-  resetSpeechRecorder()
-}
-
-function retryVoiceInput() {
-  resetAiInputState({ clearSourceText: true, clearDraft: true })
-  resetSpeechRecorder()
-}
-
-function buildVoiceFileName(capture) {
-  const mimeType = String(capture?.mimeType ?? speechMimeType.value ?? '').trim().toLowerCase()
-  if (mimeType.includes('mp4')) return `strawmb-voice-${Date.now()}.m4a`
-  if (mimeType.includes('aac')) return `strawmb-voice-${Date.now()}.aac`
-  return `strawmb-voice-${Date.now()}.webm`
-}
-
-async function transcribeVoiceCapture(capture) {
-  if (!capture?.blob) return
-  speechProcessing.value = true
-  try {
-    const response = await transcribeBookkeepingSpeech({
-      audioBlob: capture.blob,
-      fileName: buildVoiceFileName(capture),
-      context: buildSpeechParseContext(),
-      language: speechLanguage.value,
-      source: 'ai_bookkeeping',
-    })
-    applySpeechParseResponse(response)
-  } catch (error) {
-    uiStore.pushToast(error?.message || '語音辨識失敗，請稍後再試', 'error')
-  } finally {
-    speechProcessing.value = false
-    resetSpeechRecorder()
-  }
-}
-
-function applySpeechParseResponse(response) {
-  const transcript = response?.transcript ?? {}
-  const parseResult = response?.parse ?? {}
-  const normalizedText = String(transcript?.normalizedText ?? transcript?.text ?? '').trim()
-  sourceText.value = normalizedText
-  speechLiveText.value = normalizedText
-  speechSegments.value = Array.isArray(transcript?.segments) ? transcript.segments : []
-  warnings.value = resolveAiParserWarnings(parseResult)
-  speechMissingRequirements.value = buildMissingRequirementsFromResult(parseResult, normalizedText)
-
-  if (!parseResult?.draft) {
-    hasDraft.value = false
-    latestLoanIntent.value = null
-    resetPersistedTransaction()
-    if (parseResult?.actionType === 'query_analysis') {
-      uiStore.pushToast('這句比較像查詢分析，已保留逐字稿，請改用分析頁或手動處理')
-      return
-    }
-    if (parseResult?.actionType === 'new_category') {
-      uiStore.pushToast('這句比較像新增分類，請先到分類設定建立後再記帳')
-      return
-    }
-    uiStore.pushToast(warnings.value[0] || '我沒有抓到可用交易資訊，請再描述一次', 'error')
-    return
-  }
-
-  applyDraft(parseResult.draft)
-  latestLoanIntent.value = parseResult.draft.loanIntent ?? null
-  hasDraft.value = true
-  if (speechMissingRequirements.value.length || warnings.value.length) {
-    uiStore.pushToast('語音解析完成，請先補齊缺少欄位')
-  } else {
-    uiStore.pushToast('語音解析完成，請確認後儲存')
+    uiStore.pushToast(speechLastError.value || '語音啟動失敗，請稍後再試', 'error')
   }
 }
 
@@ -1008,56 +789,6 @@ function applyDraft(draft) {
   model.exchangeRateMode = 'system'
   model.manualExchangeRateInput = ''
   addonRows.value = parseAddonRowsFromAiDraft(draft)
-}
-
-function applyQuickAccountPick(accountId) {
-  const normalizedId = String(accountId ?? '').trim()
-  if (!normalizedId) return
-  if (model.type === 'transfer') {
-    if (!model.accountId) {
-      model.accountId = normalizedId
-      return
-    }
-    if (!model.peerAccountId || model.peerAccountId === model.accountId) {
-      model.peerAccountId = normalizedId === model.accountId
-        ? transferAccountOptions.value.find((item) => item.id !== normalizedId)?.id ?? ''
-        : normalizedId
-      return
-    }
-  }
-  model.accountId = normalizedId
-}
-
-function applyQuickCategoryPick(categoryId) {
-  model.categoryId = String(categoryId ?? '').trim()
-}
-
-function applyQuickAddonPick(optionId) {
-  const normalizedId = String(optionId ?? '').trim()
-  if (!normalizedId) return
-  const row = createAddonRow()
-  row.optionId = normalizedId
-  row.direction = addonDirectionByOptionId(normalizedId)
-  addonRows.value.push(row)
-}
-
-function applySpeechSupplement() {
-  const detail = String(speechSupplementText.value ?? '').trim()
-  if (!detail) return
-  if (latestLoanIntent.value && !latestLoanIntent.value.counterpartyName) {
-    latestLoanIntent.value = {
-      ...latestLoanIntent.value,
-      counterpartyName: detail,
-    }
-    speechSupplementText.value = ''
-    return
-  }
-  if (!model.note) {
-    model.note = detail
-  } else if (!model.note.includes(detail)) {
-    model.note = `${model.note}\n${detail}`
-  }
-  speechSupplementText.value = ''
 }
 
 function resetPersistedTransaction() {
@@ -1205,8 +936,6 @@ async function submit(options = {}) {
         hasDraft.value = false
         warnings.value = []
         latestLoanIntent.value = null
-        speechMissingRequirements.value = []
-        speechSupplementText.value = ''
         resetPersistedTransaction()
       }
       if (!preserveSourceText) {
@@ -1400,8 +1129,6 @@ async function submit(options = {}) {
       hasDraft.value = false
       warnings.value = []
       latestLoanIntent.value = null
-      speechMissingRequirements.value = []
-      speechSupplementText.value = ''
       resetPersistedTransaction()
     }
     if (!preserveSourceText) {
@@ -1834,38 +1561,6 @@ h2, h3 {
 .speech-hint {
   display: block;
   min-height: 18px;
-}
-.missing-panel {
-  display: grid;
-  gap: 10px;
-  margin: 8px 0 4px;
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--warn) 28%, transparent);
-  background: color-mix(in srgb, var(--warn) 8%, var(--card) 92%);
-}
-.missing-chip-list,
-.quick-pick-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.missing-chip {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 12px;
-  background: color-mix(in srgb, var(--warn) 16%, transparent);
-  color: var(--text);
-}
-.quick-pick-btn {
-  font-size: 13px;
-}
-.supplement-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
 }
 .icon-action-btn {
   min-width: 40px;
