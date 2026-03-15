@@ -1,6 +1,8 @@
 import { query } from '@/core/db/sqlite'
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
+
+const FileOpener = registerPlugin('FileOpener')
 
 const LEDGER_TABLES = [
   'account_groups',
@@ -585,10 +587,17 @@ export function openFileUrl(url) {
   const target = String(url ?? '').trim()
   if (!target || typeof window === 'undefined' || typeof document === 'undefined') return false
   const isPreviewBlobUrl = target.startsWith('blob:') || target.startsWith('data:')
+  const isNativeDeviceFile = /^file:\/\//i.test(target) || /^content:\/\//i.test(target) || target.startsWith('/')
 
   if (Capacitor.isNativePlatform()) {
     if (isPreviewBlobUrl) {
       return false
+    }
+    if (isNativeDeviceFile) {
+      void FileOpener.openFile({ uri: target }).catch((error) => {
+        console.warn('[file-opener] failed to open exported file', error)
+      })
+      return true
     }
     try {
       // Capacitor local file URLs are usually only actionable via in-place navigation.

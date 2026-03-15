@@ -166,6 +166,7 @@ import { clearHomeWidgetSummary, syncHomeWidgetSummary } from '@/ui/services/hom
 import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { getCurrentLocale, initLocalePreference } from '@/ui/services/i18n.service'
+import { getPreferredManualBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
 import { canNavigateBackInApp, resolveBackFallback, shouldConfirmExit } from '@/ui/services/navigation-back.service'
 import { extractSharedLedgerInviteCode, restoreSharedLedgerSession } from '@/services/shared-ledger/backend'
 import {
@@ -236,7 +237,7 @@ function resolveRouteFromAppUrl(rawUrl) {
 
     if (!routeKey || routeKey === 'home') {
       if (parsed.searchParams.get('quickAdd') === '1') {
-        return { path: '/transactions/quick-add' }
+        return { path: getPreferredManualBookkeepingPath() }
       }
       return { path: '/' }
     }

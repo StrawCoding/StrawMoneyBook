@@ -31,6 +31,10 @@ export function getLastManualBookkeepingPath() {
   }
 }
 
+export function getPreferredManualBookkeepingPath() {
+  return getLastManualBookkeepingPath()
+}
+
 export function rememberManualBookkeepingPath(path) {
   const normalizedPath = normalizeManualBookkeepingPath(path)
   const storage = getStorage()

@@ -122,6 +122,24 @@ function parseLooseNumber(rawValue) {
   return Number.isFinite(parsed) ? parsed : NaN
 }
 
+const NOTE_LABEL_PATTERNS = [
+  /備註/,
+  /备注/,
+  /註記|注記/,
+  /\bmemo\b/i,
+  /\bremark\b/i,
+  /\bnote\b/i,
+]
+
+function isExplicitNoteContext(text, start, end = start) {
+  const source = String(text ?? '')
+  const localStart = Math.max(0, Number(start) || 0)
+  const localEnd = Math.max(localStart, Number(end) || localStart)
+  const left = source.slice(Math.max(0, localStart - 18), localStart)
+  const around = source.slice(Math.max(0, localStart - 18), Math.min(source.length, localEnd + 4))
+  return includesAny(left, NOTE_LABEL_PATTERNS) || includesAny(around, NOTE_LABEL_PATTERNS)
+}
+
 function includesAny(text, patterns) {
   return patterns.some((pattern) => {
     const cloned = new RegExp(pattern.source, pattern.flags)
@@ -308,7 +326,7 @@ function parseAmountMajor(text) {
     ...text.matchAll(
       /([+-]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\$|\$|¥|￥)/gi,
     ),
-  ]
+  ].filter((item) => !isExplicitNoteContext(text, item.index, item.index + String(item[0] ?? '').length))
   if (withUnit.length > 0) {
     const target = withUnit[withUnit.length - 1]
     const raw = parseLooseNumber(target[1])
@@ -322,6 +340,7 @@ function parseAmountMajor(text) {
   }
 
   const allNumbers = [...text.matchAll(/([+-]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)/g)]
+    .filter((item) => !isExplicitNoteContext(text, item.index, item.index + String(item[0] ?? '').length))
     .map((item) => parseLooseNumber(item[1]))
     .filter((item) => Number.isFinite(item) && Math.abs(item) > 0)
     .map((item) => Math.abs(item))
@@ -349,7 +368,9 @@ function parseFormulaAmountMajor(text) {
 
   for (let index = matches.length - 1; index >= 0; index -= 1) {
     const candidate = String(matches[index]?.[0] ?? '').trim()
+    const candidateStart = Number(matches[index]?.index ?? -1)
     if (!candidate) continue
+    if (candidateStart >= 0 && isExplicitNoteContext(text, candidateStart, candidateStart + candidate.length)) continue
     const normalized = candidate.replace(/\s+/g, '')
     if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) continue
     if (/^\d{1,2}\/\d{1,2}$/.test(normalized)) continue
@@ -369,7 +390,9 @@ function parseSignedFormulaAmountMajor(text) {
 
   for (let index = matches.length - 1; index >= 0; index -= 1) {
     const candidate = String(matches[index]?.[0] ?? '').trim()
+    const candidateStart = Number(matches[index]?.index ?? -1)
     if (!candidate) continue
+    if (candidateStart >= 0 && isExplicitNoteContext(text, candidateStart, candidateStart + candidate.length)) continue
     const normalized = candidate.replace(/\s+/g, '')
     if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) continue
     if (/^\d{1,2}\/\d{1,2}$/.test(normalized)) continue
@@ -392,7 +415,7 @@ function parseSignedAmountMajor(text) {
     ...String(text ?? '').matchAll(
       /([+-]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\$|\$|¥|￥)/gi,
     ),
-  ]
+  ].filter((item) => !isExplicitNoteContext(text, item.index, item.index + String(item[0] ?? '').length))
   if (withUnit.length > 0) {
     const target = withUnit[withUnit.length - 1]
     const raw = parseLooseNumber(target[1])
@@ -406,6 +429,7 @@ function parseSignedAmountMajor(text) {
   }
 
   const signedNumbers = [...String(text ?? '').matchAll(/([+-](?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)/g)]
+    .filter((item) => !isExplicitNoteContext(text, item.index, item.index + String(item[0] ?? '').length))
     .map((item) => parseLooseNumber(item[1]))
     .filter((item) => Number.isFinite(item) && item !== 0)
   if (signedNumbers.length > 0) {

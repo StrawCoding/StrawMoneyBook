@@ -214,6 +214,24 @@ function isLikelyDateOrTimeToken(text, start, end, hasUnit) {
   return false
 }
 
+const NOTE_LABEL_PATTERNS = [
+  /備註/,
+  /备注/,
+  /註記|注記/,
+  /\bmemo\b/i,
+  /\bremark\b/i,
+  /\bnote\b/i,
+]
+
+function isExplicitNoteContext(text, start, end = start) {
+  const source = String(text ?? '')
+  const localStart = Math.max(0, Number(start) || 0)
+  const localEnd = Math.max(localStart, Number(end) || localStart)
+  const left = source.slice(Math.max(0, localStart - 18), localStart)
+  const around = source.slice(Math.max(0, localStart - 18), Math.min(source.length, localEnd + 4))
+  return includesAny(left, NOTE_LABEL_PATTERNS) || includesAny(around, NOTE_LABEL_PATTERNS)
+}
+
 const AMOUNT_CONTEXT_PATTERNS = [/花/, /付/, /付款/, /支出/, /收入/, /入帳/, /金額/, /轉/, /匯/, /借/, /還/, /买|買/, /付費/, /pay|paid|spend|spent|income|expense|amount|transfer|wire/i, /支払|入金|出金|振込|送金/]
 const ADDON_CONTEXT_PATTERNS = [/附加項目/, /附加費/, /手續費/, /服務費/, /運費/, /稅金/, /稅費/, /折扣/, /優惠/, /回饋/, /減免/, /fee|shipping|tax|discount|rebate|cashback|coupon/i, /手数料|配送料|税金|割引|値引き/]
 
@@ -236,6 +254,10 @@ function collectAmountCandidates(text) {
 
     const start = matched.index
     const end = matched.index + String(matched[0] ?? '').length
+    if (isExplicitNoteContext(text, start, end)) {
+      matched = amountPattern.exec(text)
+      continue
+    }
     if (isLikelyDateOrTimeToken(text, start, end, hasUnit)) {
       matched = amountPattern.exec(text)
       continue

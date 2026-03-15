@@ -351,8 +351,10 @@ async function exportCsv() {
     if (deviceSave.saved) {
       exportedFilename.value = String(deviceSave.filename ?? result.filename)
       revokeBlobUrl(exportedUrl.value)
-      exportedUrl.value = String(deviceSave.openUrl ?? '').trim() || createCsvBlobUrl(result.csvText)
-      exportedIsDeviceLink.value = Boolean(String(deviceSave.openUrl ?? '').trim())
+      exportedUrl.value = String(deviceSave.uri ?? '').trim()
+        || String(deviceSave.openUrl ?? '').trim()
+        || createCsvBlobUrl(result.csvText)
+      exportedIsDeviceLink.value = Boolean(String(deviceSave.uri ?? '').trim() || String(deviceSave.openUrl ?? '').trim())
       exportedLocation.value = deviceSave.location || t('analysis_print.device_location_default')
       uiStore.pushToast(t('analysis_print.toast.exported_saved', { count: result.rowCount, location: exportedLocation.value }))
       return
