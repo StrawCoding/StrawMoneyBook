@@ -25,6 +25,15 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="com.strawcoding.strawmoneybook" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="www.strawmb.com" android:pathPrefix="/open/shared-ledger" />
+                <data android:scheme="https" android:host="strawmb.com" android:pathPrefix="/open/shared-ledger" />
+                <data android:scheme="https" android:host="www.strawmb.com" android:pathPrefix="/shared-ledger/join" />
+                <data android:scheme="https" android:host="strawmb.com" android:pathPrefix="/shared-ledger/join" />
+            </intent-filter>
         </activity>
 
         <receiver

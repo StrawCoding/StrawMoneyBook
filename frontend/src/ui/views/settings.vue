@@ -71,9 +71,11 @@ onMounted(() => {
   })
   void refreshSharedLedgerSession()
     .then((session) => {
-      sessionUser.value = session?.user ?? null
+      sessionUser.value = session?.user ?? getSharedLedgerSession()?.user ?? null
     })
-    .catch(() => {})
+    .catch(() => {
+      sessionUser.value = getSharedLedgerSession()?.user ?? null
+    })
 })
 
 onUnmounted(() => {

@@ -167,7 +167,7 @@ import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { getCurrentLocale, initLocalePreference } from '@/ui/services/i18n.service'
 import { canNavigateBackInApp, resolveBackFallback, shouldConfirmExit } from '@/ui/services/navigation-back.service'
-import { restoreSharedLedgerSession } from '@/services/shared-ledger/backend'
+import { extractSharedLedgerInviteCode, restoreSharedLedgerSession } from '@/services/shared-ledger/backend'
 import {
   initSharedLedgerBackgroundSync,
   runSharedLedgerBackgroundSyncNow,
@@ -212,7 +212,23 @@ function resolveRouteFromAppUrl(rawUrl) {
     const parsed = new URL(source)
     const host = String(parsed.host ?? '').trim().toLowerCase()
     const pathname = String(parsed.pathname ?? '').trim().replace(/\/+$/, '').toLowerCase()
+    const pathSegments = pathname.split('/').filter(Boolean)
     const routeKey = pathname && pathname !== '/' ? pathname.slice(1) : host
+    const inviteCode = extractSharedLedgerInviteCode(source)
+
+    if (
+      inviteCode
+      && (
+        host === 'shared-ledger'
+        || (pathSegments[0] === 'open' && pathSegments[1] === 'shared-ledger')
+        || (pathSegments[0] === 'shared-ledger' && pathSegments[1] === 'join')
+      )
+    ) {
+      return {
+        path: '/settings/shared-ledgers',
+        query: { inviteCode },
+      }
+    }
 
     if (routeKey === 'analysis') {
       return { path: '/analysis' }
@@ -462,7 +478,10 @@ function restoreGoogleBackupSessionInBackground(ledgerId, { allowInteractive = f
   if (shouldAllowInteractive) {
     hasTriedInteractiveGoogleAutoConnect = true
   }
-  return autoConnectGoogleBackup(ledgerId, { allowInteractive: shouldAllowInteractive }).catch((error) => {
+  return autoConnectGoogleBackup(ledgerId, {
+    allowInteractive: shouldAllowInteractive,
+    allowInteractiveWhenGoogleLinked: shouldAllowInteractive,
+  }).catch((error) => {
     console.warn('[google-backup] auto sign-in restore failed', error)
     return null
   })

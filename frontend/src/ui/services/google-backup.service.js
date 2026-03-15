@@ -7,6 +7,7 @@ import {
   listAppDataBackups,
   uploadBackupJsonToAppDataFolder,
 } from '@/services/google/drive-appdata-backup'
+import { getSharedLedgerSession } from '@/services/shared-ledger/backend'
 import {
   getAccessToken,
   getCachedGoogleProfile,
@@ -188,6 +189,31 @@ function shouldAttemptInteractiveAutoConnect(state) {
   )
 }
 
+function hasConfiguredGoogleBackup(state) {
+  if (!state || typeof state !== 'object') return false
+  return Boolean(
+    state.connected
+      || state.autoEnabled
+      || state.dataChangeAutoEnabled
+      || state.accountEmail
+      || state.accountName
+      || state.accountImageUrl,
+  )
+}
+
+function hasLinkedGoogleProvider() {
+  const providers = Array.isArray(getSharedLedgerSession()?.user?.auth_providers)
+    ? getSharedLedgerSession().user.auth_providers
+    : []
+  return providers.some((item) => String(item?.provider ?? '').trim() === 'google')
+}
+
+function shouldAttemptGoogleLinkedAutoConnect(state, options = {}) {
+  if (!Boolean(options?.allowInteractiveWhenGoogleLinked)) return false
+  if (!hasConfiguredGoogleBackup(state)) return false
+  return hasLinkedGoogleProvider()
+}
+
 async function ensureConnectedBySilentAuth(ledgerId, state) {
   if (!Capacitor.isNativePlatform()) return state
   if (!shouldAttemptSilentAutoConnect(state)) return state
@@ -244,7 +270,10 @@ export async function autoConnectGoogleBackup(ledgerId, options = {}) {
   const silentState = await ensureConnectedBySilentAuth(ledgerId, state)
   const preferredEmail = String(silentState.accountEmail || state.accountEmail || '').trim()
 
-  if (!allowInteractive || !shouldAttemptInteractiveAutoConnect(silentState)) {
+  const shouldAttemptInteractive = shouldAttemptInteractiveAutoConnect(silentState)
+    || shouldAttemptGoogleLinkedAutoConnect(silentState, options)
+
+  if (!allowInteractive || !shouldAttemptInteractive) {
     return silentState
   }
 

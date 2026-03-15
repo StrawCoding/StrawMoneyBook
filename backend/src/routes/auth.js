@@ -25,6 +25,7 @@ import {
   findUserById,
   hashPassword,
   hashSensitiveToken,
+  listUserAuthProviders,
   linkUserAuthProvider,
   normalizeAvatarUrl,
   normalizeDisplayName,
@@ -164,6 +165,13 @@ function getRequestContext(req) {
     ipAddress: getClientIp(req),
     userAgent: getUserAgent(req),
   }
+}
+
+function resolveGoogleAuthPurpose(rawPurpose, { authenticated = false } = {}) {
+  const requestedPurpose = normalizeText(rawPurpose)
+  if (authenticated && requestedPurpose === 'password_change') return 'password_change'
+  if (authenticated && requestedPurpose === 'link') return 'link'
+  return 'login'
 }
 
 async function sendAuthSession(res, user, {
@@ -388,15 +396,19 @@ async function handleLogin(req, res) {
 async function handleGooglePrepare(req, res) {
   const body = parseBody(req)
   const requestedPurpose = normalizeText(body.purpose)
-  const purpose = requestedPurpose === 'link' ? 'link' : 'login'
+  const wantsAuthenticatedPurpose = requestedPurpose === 'link' || requestedPurpose === 'password_change'
   const context = getRequestContext(req)
-  const currentUser = purpose === 'link'
+  const currentUser = wantsAuthenticatedPurpose
     ? await requireAuthenticatedUser(req, res, sendJson)
     : await getOptionalAuthenticatedUser(req)
 
-  if (purpose === 'link' && !currentUser) {
+  if (wantsAuthenticatedPurpose && !currentUser) {
     return
   }
+
+  const purpose = resolveGoogleAuthPurpose(requestedPurpose, {
+    authenticated: Boolean(currentUser),
+  })
 
   const challenge = await createAuthNonce({
     provider: 'google',
@@ -430,7 +442,9 @@ async function handleGoogleAuth(req, res) {
 
   const context = getRequestContext(req)
   const currentUser = await getOptionalAuthenticatedUser(req)
-  const purpose = currentUser ? 'link' : 'login'
+  const purpose = resolveGoogleAuthPurpose(body.purpose, {
+    authenticated: Boolean(currentUser),
+  })
 
   try {
     await consumeAuthNonce({
@@ -449,7 +463,34 @@ async function handleGoogleAuth(req, res) {
     let eventType = 'google_login'
     const linkedUser = await findUserByAuthProvider('google', googleProfile.sub)
 
-    if (currentUser) {
+    if (purpose === 'password_change') {
+      if (!currentUser) {
+        throw createAuthError('請先登入帳號', 'auth_required', 401)
+      }
+
+      if (linkedUser && String(linkedUser.id) !== String(currentUser.id)) {
+        throw createAuthError('此 Google 帳號已綁定其他使用者', 'provider_already_linked', 409)
+      }
+
+      resolvedUser = linkedUser
+        ? await updateUserFromAuthProviderLogin({
+            userId: linkedUser.id,
+            email: googleProfile.email,
+            emailVerified: googleProfile.email_verified,
+            displayName: googleProfile.name,
+            avatarUrl: googleProfile.picture,
+          })
+        : await linkUserAuthProvider({
+            userId: currentUser.id,
+            provider: 'google',
+            providerSub: googleProfile.sub,
+            email: googleProfile.email,
+            emailVerified: googleProfile.email_verified,
+            displayName: googleProfile.name,
+            avatarUrl: googleProfile.picture,
+          })
+      eventType = linkedUser ? 'google_password_change_verify' : 'google_link'
+    } else if (currentUser) {
       if (linkedUser && String(linkedUser.id) !== String(currentUser.id)) {
         throw createAuthError('此 Google 帳號已綁定其他使用者', 'provider_already_linked', 409)
       }
@@ -516,14 +557,18 @@ async function handleGoogleAuth(req, res) {
       issuedByProvider: 'google',
       context,
       extra: {
-        linked: purpose === 'link',
+        linked: purpose === 'link' || purpose === 'password_change',
       },
     })
   } catch (error) {
     await writeAuthAuditLog({
       userId: currentUser?.id ?? '',
       provider: 'google',
-      eventType: purpose === 'link' ? 'google_link' : 'google_login',
+      eventType: purpose === 'link'
+        ? 'google_link'
+        : purpose === 'password_change'
+          ? 'google_password_change_verify'
+          : 'google_login',
       eventStatus: 'failure',
       ...context,
       detail: {
@@ -701,6 +746,44 @@ async function handlePasswordChange(req, res) {
   const body = parseBody(req)
   const currentPassword = normalizeText(body.currentPassword)
   const nextPassword = validatePassword(body.nextPassword ?? body.password)
+  const googleIdToken = normalizeText(body.googleIdToken ?? body.google_id_token)
+  const googleNonce = normalizeText(body.googleNonce ?? body.google_nonce)
+  const hasPassword = Boolean(String(user.password_hash ?? '').trim() && String(user.password_salt ?? '').trim())
+  const googleProvider = (await listUserAuthProviders(user.id))
+    .find((item) => String(item?.provider ?? '').trim() === 'google') ?? null
+
+  if (!user.must_change_password && !hasPassword && googleProvider) {
+    if (!googleIdToken || !googleNonce) {
+      throw createAuthError('請先完成 Google 驗證，再新增密碼', 'google_reauth_required', 400)
+    }
+
+    await consumeAuthNonce({
+      provider: 'google',
+      nonce: googleNonce,
+      purpose: 'password_change',
+      userId: user.id,
+    })
+
+    const googleProfile = await verifyGoogleIdToken({
+      idToken: googleIdToken,
+      expectedNonce: googleNonce,
+    })
+    const linkedUser = await findUserByAuthProvider('google', googleProfile.sub)
+    if (linkedUser && String(linkedUser.id) !== String(user.id)) {
+      throw createAuthError('此 Google 帳號已綁定其他使用者', 'provider_already_linked', 409)
+    }
+    if (!linkedUser) {
+      await linkUserAuthProvider({
+        userId: user.id,
+        provider: 'google',
+        providerSub: googleProfile.sub,
+        email: googleProfile.email,
+        emailVerified: googleProfile.email_verified,
+        displayName: googleProfile.name,
+        avatarUrl: googleProfile.picture,
+      })
+    }
+  }
 
   const updatedUser = await updateStore(async (data) => {
     const targetUser = data.users.find((item) => String(item.id) === String(user.id))
@@ -708,8 +791,8 @@ async function handlePasswordChange(req, res) {
       throw createAuthError('找不到使用者', 'user_not_found', 404)
     }
 
-    const hasPassword = Boolean(String(targetUser.password_hash ?? '').trim() && String(targetUser.password_salt ?? '').trim())
-    if (!targetUser.must_change_password && hasPassword) {
+    const targetHasPassword = Boolean(String(targetUser.password_hash ?? '').trim() && String(targetUser.password_salt ?? '').trim())
+    if (!targetUser.must_change_password && targetHasPassword) {
       if (!currentPassword) {
         throw createAuthError('請輸入目前密碼', 'current_password_required', 400)
       }

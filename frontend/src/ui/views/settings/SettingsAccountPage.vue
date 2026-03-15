@@ -363,7 +363,7 @@
           </header>
 
           <div class="form-grid">
-            <label v-if="!sessionMustChangePassword" class="field">
+            <label v-if="showCurrentPasswordInput" class="field">
               {{ t('settings_account.current_password', '目前密碼') }}
               <input
                 v-model="passwordForm.currentPassword"
@@ -404,14 +404,38 @@
             </label>
           </div>
 
+          <div v-if="requiresGooglePasswordVerification" class="google-auth-block">
+            <p class="muted compact">
+              {{
+                googlePasswordVerified
+                  ? t('settings_account.google_password_verified', '已確認 Google 登入狀態，現在可以設定密碼。')
+                  : t('settings_account.google_password_verify_hint', '此帳號目前是使用 Google 登入，新增密碼前請先確認 Google 登入狀態。')
+              }}
+            </p>
+            <p v-if="googleUnavailableReason" class="muted compact">
+              {{ googleUnavailableReason }}
+            </p>
+            <div v-else-if="isWebGoogleRuntime" ref="googlePasswordButtonHost" class="google-button-host"></div>
+            <button
+              v-else
+              class="btn google-btn wide-btn"
+              :disabled="googleAuthSubmitting || apiUnavailable"
+              @click="handleGoogleAuthAction"
+            >
+              {{
+                googleAuthSubmitting
+                  ? t('settings_account.google_working', 'Google 處理中...')
+                  : (
+                      googlePasswordVerified
+                        ? t('settings_account.google_password_reverify', '重新確認 Google')
+                        : t('settings_account.google_password_verify', '確認 Google 登入')
+                    )
+              }}
+            </button>
+          </div>
+
           <p class="muted compact">
-            {{
-              sessionMustChangePassword
-                ? t('settings_account.change_password_force_hint', '臨時密碼只能用來登入一次，請立即設定正式密碼。')
-                : hasPasswordLogin
-                  ? t('settings_account.change_password_hint', '若要修改密碼，請先輸入目前密碼，再設定新密碼。')
-                  : t('settings_account.set_password_hint', '你目前是第三方登入帳號，設定密碼後也可以改用 Email / 密碼登入。')
-            }}
+            {{ passwordChangeHint }}
           </p>
 
           <p v-if="passwordSavedMessage" class="success-notice">
@@ -570,8 +594,14 @@ const profileForm = ref({
 })
 const avatarInputEl = ref(null)
 const googleButtonHost = ref(null)
+const googlePasswordButtonHost = ref(null)
 const googleAuthSubmitting = ref(false)
 const googleChallenge = ref(null)
+const googlePasswordVerification = ref({
+  idToken: '',
+  nonce: '',
+  verifiedAt: '',
+})
 let resetRequestCountdownTimer = null
 let googleChallengeRefreshTimer = null
 let googleChallengeRequest = null
@@ -600,6 +630,17 @@ const googleLinkedProvider = computed(() => {
   return providers.find((item) => String(item?.provider ?? '').trim() === 'google') ?? null
 })
 const hasPasswordLogin = computed(() => Boolean(sessionUser.value?.has_password))
+const requiresGooglePasswordVerification = computed(() => (
+  Boolean(sessionUser.value)
+  && !sessionMustChangePassword.value
+  && !hasPasswordLogin.value
+  && Boolean(googleLinkedProvider.value)
+))
+const showCurrentPasswordInput = computed(() => !sessionMustChangePassword.value && hasPasswordLogin.value)
+const googlePasswordVerified = computed(() => Boolean(
+  googlePasswordVerification.value.idToken
+  && googlePasswordVerification.value.nonce,
+))
 const showGoogleAuthAction = computed(() => (
   !apiUnavailable.value
   && googleIdentityAvailable.value
@@ -613,6 +654,20 @@ const passwordSectionTitle = computed(() => (
     ? t('settings_account.change_password', '更改密碼')
     : t('settings_account.set_password', '設定密碼')
 ))
+const passwordChangeHint = computed(() => {
+  if (sessionMustChangePassword.value) {
+    return t('settings_account.change_password_force_hint', '臨時密碼只能用來登入一次，請立即設定正式密碼。')
+  }
+  if (showCurrentPasswordInput.value) {
+    return t('settings_account.change_password_hint', '若要修改密碼，請先輸入目前密碼，再設定新密碼。')
+  }
+  if (requiresGooglePasswordVerification.value) {
+    return googlePasswordVerified.value
+      ? t('settings_account.set_password_google_verified_hint', 'Google 驗證已完成，設定密碼後也可以改用 Email / 密碼登入。')
+      : t('settings_account.set_password_google_hint', '你目前是使用 Google 登入，先確認 Google 後即可新增密碼。')
+  }
+  return t('settings_account.set_password_hint', '你目前是第三方登入帳號，設定密碼後也可以改用 Email / 密碼登入。')
+})
 
 function looksLikeEmail(value) {
   const source = String(value ?? '').trim()
@@ -660,7 +715,8 @@ const canSaveProfile = computed(() => {
 
 const canSubmitPasswordChange = computed(() => {
   if (!sessionUser.value) return false
-  if (!sessionMustChangePassword.value && hasPasswordLogin.value && !String(passwordForm.value.currentPassword ?? '')) return false
+  if (showCurrentPasswordInput.value && !String(passwordForm.value.currentPassword ?? '')) return false
+  if (requiresGooglePasswordVerification.value && !googlePasswordVerified.value) return false
   if (String(passwordForm.value.nextPassword ?? '').length < 8) return false
   return passwordForm.value.nextPassword === passwordForm.value.confirmPassword
 })
@@ -828,6 +884,20 @@ function clearGoogleButtonHost() {
   }
 }
 
+function clearGooglePasswordButtonHost() {
+  if (googlePasswordButtonHost.value) {
+    googlePasswordButtonHost.value.innerHTML = ''
+  }
+}
+
+function clearGooglePasswordVerification() {
+  googlePasswordVerification.value = {
+    idToken: '',
+    nonce: '',
+    verifiedAt: '',
+  }
+}
+
 function scheduleGoogleChallengeRefresh(expiresAt) {
   clearGoogleChallengeRefreshTimer()
   const expiresAtMs = Date.parse(String(expiresAt ?? ''))
@@ -922,35 +992,70 @@ async function submitGoogleIdToken(idToken, purpose) {
   }
 }
 
+async function submitGooglePasswordVerification(idToken) {
+  const nonce = String(googleChallenge.value?.nonce ?? '').trim()
+  if (!nonce) {
+    throw new Error(t('settings_account.google_nonce_missing', 'Google 驗證資料已過期，請重新確認'))
+  }
+  googlePasswordVerification.value = {
+    idToken: String(idToken ?? '').trim(),
+    nonce,
+    verifiedAt: new Date().toISOString(),
+  }
+  googleAuthSubmitting.value = false
+  uiStore.pushToast(t('settings_account.google_password_verified', '已確認 Google 登入狀態，現在可以設定密碼。'))
+  googleChallenge.value = null
+  await refreshGoogleButtonUi()
+}
+
 async function refreshGoogleButtonUi() {
   clearGoogleChallengeRefreshTimer()
-  if (!showGoogleAuthAction.value || apiUnavailable.value || !googleIdentityAvailable.value) {
+  const shouldRenderPasswordVerification = requiresGooglePasswordVerification.value
+  const shouldRenderAnyGoogleUi = showGoogleAuthAction.value || shouldRenderPasswordVerification
+  if (!shouldRenderAnyGoogleUi || apiUnavailable.value || !googleIdentityAvailable.value) {
     googleChallenge.value = null
     clearGoogleButtonHost()
+    clearGooglePasswordButtonHost()
     return
   }
 
-  const purpose = sessionUser.value ? 'link' : 'login'
+  const purpose = shouldRenderPasswordVerification
+    ? 'password_change'
+    : (sessionUser.value ? 'link' : 'login')
   const challenge = await loadGoogleChallenge(purpose)
   if (!challenge) {
     clearGoogleButtonHost()
+    clearGooglePasswordButtonHost()
     return
   }
 
   if (!isWebGoogleRuntime.value) {
     clearGoogleButtonHost()
+    clearGooglePasswordButtonHost()
     return
   }
 
   await nextTick()
-  if (!googleButtonHost.value) return
+  const targetHost = shouldRenderPasswordVerification ? googlePasswordButtonHost.value : googleButtonHost.value
+  if (!targetHost) return
+  if (shouldRenderPasswordVerification) {
+    clearGoogleButtonHost()
+  } else {
+    clearGooglePasswordButtonHost()
+  }
 
   try {
-    await renderGoogleIdentityButton(googleButtonHost.value, {
+    await renderGoogleIdentityButton(targetHost, {
       nonce: challenge.nonce,
-      text: purpose === 'link' ? 'continue_with' : 'signin_with',
+      text: purpose === 'password_change'
+        ? 'continue_with'
+        : (purpose === 'link' ? 'continue_with' : 'signin_with'),
       width: 320,
       onCredential: ({ idToken }) => {
+        if (purpose === 'password_change') {
+          void submitGooglePasswordVerification(idToken)
+          return
+        }
         void submitGoogleIdToken(idToken, purpose)
       },
       onError: (error) => {
@@ -968,7 +1073,9 @@ async function refreshGoogleButtonUi() {
 
 async function handleGoogleAuthAction() {
   if (!isAndroidGoogleRuntime.value || googleAuthSubmitting.value || apiUnavailable.value) return
-  const purpose = sessionUser.value ? 'link' : 'login'
+  const purpose = requiresGooglePasswordVerification.value
+    ? 'password_change'
+    : (sessionUser.value ? 'link' : 'login')
   googleAuthSubmitting.value = true
   try {
     const challenge = await loadGoogleChallenge(purpose)
@@ -978,7 +1085,11 @@ async function handleGoogleAuthAction() {
     if (!result?.idToken) {
       throw new Error(t('settings_account.google_id_token_missing', 'Google 未回傳可驗證的登入資料'))
     }
-    await submitGoogleIdToken(result.idToken, purpose)
+    if (purpose === 'password_change') {
+      await submitGooglePasswordVerification(result.idToken)
+    } else {
+      await submitGoogleIdToken(result.idToken, purpose)
+    }
   } catch (error) {
     googleAuthSubmitting.value = false
     uiStore.pushToast(toGoogleErrorMessage(error, t('settings_account.google_login_failed', 'Google 登入失敗')), 'error')
@@ -1023,9 +1134,9 @@ async function refreshSession() {
   if (apiUnavailable.value) return
   try {
     const session = await refreshSharedLedgerSession()
-    sessionUser.value = session?.user ?? null
+    sessionUser.value = session?.user ?? getSharedLedgerSession()?.user ?? null
   } catch {
-    sessionUser.value = null
+    sessionUser.value = getSharedLedgerSession()?.user ?? null
   }
   syncProfileFormFromSession()
   if (!sessionMustChangePassword.value) {
@@ -1156,16 +1267,30 @@ async function submitPasswordChange() {
     const session = await changeSharedLedgerPassword({
       currentPassword: passwordForm.value.currentPassword,
       nextPassword: passwordForm.value.nextPassword,
+      googleIdToken: googlePasswordVerification.value.idToken,
+      googleNonce: googlePasswordVerification.value.nonce,
     })
     sessionUser.value = session.user
     passwordForm.value.currentPassword = ''
     passwordForm.value.nextPassword = ''
     passwordForm.value.confirmPassword = ''
+    clearGooglePasswordVerification()
     passwordSavedMessage.value = t('settings_account.toast.password_changed', '密碼已更新')
     uiStore.pushToast(t('settings_account.toast.password_changed', '密碼已更新'))
     await loadReferralSummary()
     await refreshGoogleButtonUi()
   } catch (error) {
+    if ([
+      'google_reauth_required',
+      'google_nonce_invalid',
+      'google_nonce_expired',
+      'google_nonce_replayed',
+      'google_nonce_purpose_mismatch',
+      'google_nonce_user_mismatch',
+    ].includes(String(error?.code ?? '').trim())) {
+      clearGooglePasswordVerification()
+      await refreshGoogleButtonUi()
+    }
     uiStore.pushToast(error.message || t('settings_account.toast.password_change_failed', '更改密碼失敗'), 'error')
   } finally {
     passwordSaving.value = false
@@ -1180,6 +1305,7 @@ async function handleLogout() {
     sessionUser.value = null
     referralSummary.value = null
     passwordSavedMessage.value = ''
+    clearGooglePasswordVerification()
     syncProfileFormFromSession()
     await refreshGoogleButtonUi()
     uiStore.pushToast(t('settings_account.toast.logout_done', '已登出帳號'))
@@ -1228,6 +1354,7 @@ let unsubscribeSession = null
 onMounted(() => {
   unsubscribeSession = subscribeSharedLedgerSession((session) => {
     sessionUser.value = session?.user ?? null
+    clearGooglePasswordVerification()
     syncProfileFormFromSession()
     profileSavedMessage.value = ''
     passwordSavedMessage.value = ''
@@ -1253,6 +1380,14 @@ watch(
 )
 
 watch(
+  () => `${sessionUser.value?.id ?? ''}:${hasPasswordLogin.value}:${googleLinkedProvider.value?.provider_sub ?? ''}:${requiresGooglePasswordVerification.value}`,
+  () => {
+    if (requiresGooglePasswordVerification.value) return
+    clearGooglePasswordVerification()
+  },
+)
+
+watch(
   () => redeemCodeInput.value,
   (value) => {
     const normalized = normalizeReferralCodeInput(value)
@@ -1263,7 +1398,7 @@ watch(
 )
 
 watch(
-  () => `${showGoogleAuthAction.value}:${isWebGoogleRuntime.value}:${googleIdentityAvailable.value}:${sessionUser.value?.id ?? ''}:${googleLinkedProvider.value?.provider_sub ?? ''}`,
+  () => `${showGoogleAuthAction.value}:${requiresGooglePasswordVerification.value}:${isWebGoogleRuntime.value}:${googleIdentityAvailable.value}:${sessionUser.value?.id ?? ''}:${googleLinkedProvider.value?.provider_sub ?? ''}`,
   () => {
     void refreshGoogleButtonUi()
   },
@@ -1273,6 +1408,7 @@ onUnmounted(() => {
   stopResetRequestCountdown()
   clearGoogleChallengeRefreshTimer()
   clearGoogleButtonHost()
+  clearGooglePasswordButtonHost()
   if (typeof unsubscribeSession === 'function') {
     unsubscribeSession()
   }

@@ -1,8 +1,11 @@
 import { Capacitor } from '@capacitor/core'
 
 const PROD_DEFAULT_SHARED_LEDGER_API_BASE = 'https://api.strawmb.com'
+const PROD_DEFAULT_SHARED_LEDGER_INVITE_BASE = 'https://www.strawmb.com/open/shared-ledger'
 const EXPLICIT_SHARED_LEDGER_API_BASE = String(import.meta.env.VITE_SHARED_LEDGER_API_BASE_URL ?? '').trim()
+const EXPLICIT_SHARED_LEDGER_INVITE_BASE = String(import.meta.env.VITE_SHARED_LEDGER_INVITE_URL ?? '').trim()
 const SESSION_STORAGE_KEY = 'straw.shared_ledger_session'
+const PENDING_INVITE_CODE_STORAGE_KEY = 'straw.shared_ledger_pending_invite_code'
 const REQUEST_TIMEOUT_MS = 15_000
 const SESSION_RESTORE_COOLDOWN_MS = 60_000
 const sessionListeners = new Set()
@@ -38,6 +41,10 @@ function buildApiUrl(path) {
 
 function shouldRequireExplicitApiBase() {
   return !getSharedLedgerApiBase()
+}
+
+function getSharedLedgerInviteBase() {
+  return EXPLICIT_SHARED_LEDGER_INVITE_BASE || PROD_DEFAULT_SHARED_LEDGER_INVITE_BASE
 }
 
 function createMissingApiError() {
@@ -90,6 +97,22 @@ function readSession() {
   } catch {
     return null
   }
+}
+
+function readPendingInviteCode() {
+  if (typeof localStorage === 'undefined') return ''
+  return String(localStorage.getItem(PENDING_INVITE_CODE_STORAGE_KEY) ?? '').trim().toUpperCase()
+}
+
+function writePendingInviteCode(inviteCode) {
+  if (typeof localStorage === 'undefined') return ''
+  const normalizedInviteCode = String(inviteCode ?? '').trim().toUpperCase()
+  if (!normalizedInviteCode) {
+    localStorage.removeItem(PENDING_INVITE_CODE_STORAGE_KEY)
+    return ''
+  }
+  localStorage.setItem(PENDING_INVITE_CODE_STORAGE_KEY, normalizedInviteCode)
+  return normalizedInviteCode
 }
 
 function normalizeSessionUser(nextUser, previousUser = null) {
@@ -485,8 +508,15 @@ export async function changeSharedLedgerPassword(payload = {}) {
 export async function refreshSharedLedgerSession() {
   const session = readSession()
   if (!session?.token) return null
-  const data = await requestJson('/api/auth/me')
-  return updateSessionUser(data.user)
+  try {
+    const data = await requestJson('/api/auth/me')
+    return updateSessionUser(data.user)
+  } catch (error) {
+    if (shouldPreserveSessionOnRefreshFailure(error)) {
+      return readSession()
+    }
+    throw error
+  }
 }
 
 export async function restoreSharedLedgerSession({ force = false } = {}) {
@@ -563,10 +593,64 @@ export async function createSharedLedger(payload = {}) {
   })
 }
 
+export function extractSharedLedgerInviteCode(value) {
+  const source = String(value ?? '').trim()
+  if (!source) return ''
+
+  const directCode = source.toUpperCase()
+  if (/^[A-Z0-9]{6,32}$/.test(directCode)) {
+    return directCode
+  }
+
+  try {
+    const parsed = new URL(source)
+    const candidates = [
+      parsed.searchParams.get('inviteCode'),
+      parsed.searchParams.get('invite_code'),
+      parsed.searchParams.get('code'),
+    ]
+    for (const candidate of candidates) {
+      const normalizedCandidate = String(candidate ?? '').trim().toUpperCase()
+      if (/^[A-Z0-9]{6,32}$/.test(normalizedCandidate)) {
+        return normalizedCandidate
+      }
+    }
+  } catch {
+    // Ignore malformed URLs and fall through to empty result.
+  }
+
+  return ''
+}
+
+export function buildSharedLedgerInviteLink(inviteCode) {
+  const normalizedInviteCode = extractSharedLedgerInviteCode(inviteCode)
+  if (!normalizedInviteCode) return ''
+  const url = new URL(getSharedLedgerInviteBase())
+  url.searchParams.set('inviteCode', normalizedInviteCode)
+  return url.toString()
+}
+
+export function getPendingSharedLedgerInviteCode() {
+  return readPendingInviteCode()
+}
+
+export function rememberPendingSharedLedgerInviteCode(value) {
+  const normalizedInviteCode = extractSharedLedgerInviteCode(value)
+  return writePendingInviteCode(normalizedInviteCode)
+}
+
+export function clearPendingSharedLedgerInviteCode() {
+  writePendingInviteCode('')
+}
+
 export async function joinSharedLedger(inviteCode) {
+  const normalizedInviteCode = extractSharedLedgerInviteCode(inviteCode)
+  if (!normalizedInviteCode) {
+    throw new Error('共享連結無效，請重新取得邀請連結')
+  }
   return requestJson('/api/shared-ledgers/join', {
     method: 'POST',
-    body: { inviteCode },
+    body: { inviteCode: normalizedInviteCode },
   })
 }
 
@@ -610,15 +694,6 @@ export async function updateSharedLedgerProfile(payload = {}) {
 
 export async function listPendingSharedLedgerInvitations() {
   return requestJson('/api/shared-ledgers/invitations/pending')
-}
-
-export async function createSharedLedgerEmailInvitation(sharedLedgerId, email) {
-  const normalizedId = String(sharedLedgerId ?? '').trim()
-  if (!normalizedId) throw new Error('缺少共同帳本 ID')
-  return requestJson(`/api/shared-ledgers/${normalizedId}/invitations`, {
-    method: 'POST',
-    body: { email },
-  })
 }
 
 export async function acceptSharedLedgerInvitation(invitationId) {

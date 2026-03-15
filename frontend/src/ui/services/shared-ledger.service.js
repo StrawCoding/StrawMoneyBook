@@ -7,13 +7,13 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import {
   acceptSharedLedgerInvitation,
   createSharedLedger,
-  createSharedLedgerEmailInvitation,
   deleteSharedLedger,
   getSharedLedgerDetail,
   getSharedLedgerSession,
   getSharedLedgerSnapshot,
   hasSharedLedgerMembershipAccess,
   isSharedLedgerAuthenticated,
+  joinSharedLedger,
   listPendingSharedLedgerInvitations,
   listSharedLedgers,
   pushSharedLedgerSnapshot,
@@ -22,11 +22,9 @@ import {
 const SHARED_LEDGER_META_KEY = 'shared_ledger_meta'
 const DIRTY_QUEUE_STORAGE_KEY = 'straw.shared_ledger_dirty_queue'
 const AUTO_PUSH_DEBOUNCE_MS = 800
-const REMOTE_POLL_INTERVAL_MS = 5 * 60 * 1000
 const IMPORT_SYNC_MUTE_MS = 15000
 
 let autoSyncTimer = null
-let remotePollTimer = null
 let backgroundSyncPromise = null
 let backgroundSyncReady = false
 const mutedLedgerSyncUntil = new Map()
@@ -328,6 +326,16 @@ export async function acceptSharedLedgerInvitationToLocal(invitationId) {
   }
 }
 
+export async function joinSharedLedgerByLinkToLocal(inviteCodeOrLink) {
+  const result = await joinSharedLedger(inviteCodeOrLink)
+  const existingMeta = await getSharedLedgerMeta(String(result?.item?.ledger_id ?? ''))
+  const imported = await replaceLocalLedgerWithSnapshot(result.snapshot, result.item, existingMeta)
+  return {
+    ...result,
+    ...imported,
+  }
+}
+
 export async function listRemoteSharedLedgers() {
   const data = await listSharedLedgers()
   return {
@@ -346,14 +354,6 @@ async function listPendingSharedLedgersSafe() {
   return {
     items: Array.isArray(data?.items) ? data.items : [],
   }
-}
-
-export async function inviteEmailToSharedLedger(ledgerId, email) {
-  const meta = await getSharedLedgerMeta(ledgerId)
-  if (!meta?.shared_ledger_id) {
-    throw new Error('此帳本尚未綁定共同帳本')
-  }
-  return createSharedLedgerEmailInvitation(meta.shared_ledger_id, email)
 }
 
 export async function stopSharingLocalLedger(ledgerId) {
@@ -490,24 +490,9 @@ export function initSharedLedgerBackgroundSync(pinia) {
   if (typeof window === 'undefined' || backgroundSyncReady) return
   backgroundSyncReady = true
 
-  const trigger = () => {
-    void runSharedLedgerBackgroundSyncNow(pinia)
-  }
-
-  remotePollTimer = window.setInterval(trigger, REMOTE_POLL_INTERVAL_MS)
-  window.addEventListener('online', trigger)
-  window.addEventListener('focus', trigger)
-  window.addEventListener('shared-ledger:session-changed', trigger)
-  trigger()
+  void runSharedLedgerBackgroundSyncNow(pinia)
 
   return () => {
-    if (remotePollTimer != null) {
-      window.clearInterval(remotePollTimer)
-      remotePollTimer = null
-    }
-    window.removeEventListener('online', trigger)
-    window.removeEventListener('focus', trigger)
-    window.removeEventListener('shared-ledger:session-changed', trigger)
     backgroundSyncReady = false
   }
 }

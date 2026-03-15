@@ -324,9 +324,11 @@ async function redeemPromoCode() {
 onMounted(async () => {
   await refreshSharedLedgerSession()
     .then((session) => {
-      sessionUser.value = session?.user ?? null
+      sessionUser.value = session?.user ?? getSharedLedgerSession()?.user ?? null
     })
-    .catch(() => {})
+    .catch(() => {
+      sessionUser.value = getSharedLedgerSession()?.user ?? null
+    })
   await refreshMembershipState('membership_page_open').catch(() => null)
   await loadProductPrices().catch(() => null)
 })

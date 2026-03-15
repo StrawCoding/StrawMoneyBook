@@ -371,7 +371,10 @@ async function refreshGoogleBackupState() {
     googleIntervalHours.value = 24
     return
   }
-  const state = await autoConnectGoogleBackup(ledgerStore.activeLedgerId)
+  const state = await autoConnectGoogleBackup(ledgerStore.activeLedgerId, {
+    allowInteractive: true,
+    allowInteractiveWhenGoogleLinked: true,
+  })
   googleBackupState.value = state
   googleAutoEnabled.value = Boolean(state.autoEnabled)
   googleDataChangeAutoEnabled.value = Boolean(state.dataChangeAutoEnabled)

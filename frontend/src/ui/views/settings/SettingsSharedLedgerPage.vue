@@ -7,11 +7,40 @@
           <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
         </header>
         <p class="muted intro">
-          {{ t('settings_shared_ledgers.desc', '共同帳本為會員功能，啟用後可建立共同帳本、用 Email 邀請好友加入，並在這裡接受收到的邀請。') }}
+          {{ t('settings_shared_ledgers.desc_link_share', '共同帳本為會員功能，啟用後可建立共同帳本、分享加入連結，並在這裡管理同步與共享狀態。') }}
         </p>
         <p v-if="apiUnavailable" class="notice">
           {{ apiUnavailableMessage }}
         </p>
+      </article>
+
+      <article v-if="pendingInviteLinkCode" class="card panel">
+        <header class="section-head">
+          <h3>{{ t('settings_shared_ledgers.invite_link_detected', '偵測到共享連結') }}</h3>
+          <button class="btn" :disabled="inviteLinkJoining" @click="dismissPendingInviteLink">
+            {{ t('common.clear', '清除') }}
+          </button>
+        </header>
+
+        <div class="stack internal-stack">
+          <p class="muted compact">{{ pendingInviteLinkMessage }}</p>
+          <div class="link-code">{{ pendingInviteLinkCode }}</div>
+          <div class="remote-actions">
+            <button class="btn primary" :disabled="!canJoinPendingInviteLink || inviteLinkJoining" @click="joinPendingInviteLink()">
+              {{
+                inviteLinkJoining
+                  ? t('settings_shared_ledgers.joining_by_link', '加入中...')
+                  : t('settings_shared_ledgers.join_by_link', '立即加入')
+              }}
+            </button>
+            <RouterLink v-if="!sessionUser" class="btn" to="/settings/account">
+              {{ t('settings_account.login_register', '前往登入 / 註冊') }}
+            </RouterLink>
+            <RouterLink v-else-if="!hasMembershipAccess" class="btn" to="/settings/membership-benefits">
+              {{ t('settings_shared_ledgers.view_membership', '查看會員權益') }}
+            </RouterLink>
+          </div>
+        </div>
       </article>
 
       <article v-if="!sessionUser" class="card panel">
@@ -22,7 +51,7 @@
           <div class="profile-meta">
             <strong>{{ t('settings_shared_ledgers.login_required', '尚未登入帳號') }}</strong>
             <p class="muted compact">
-              {{ t('settings_shared_ledgers.login_required_desc', '登入後才能建立共同帳本、邀請好友，以及接受後端收到的共享帳本邀請。') }}
+              {{ t('settings_shared_ledgers.login_required_desc_link', '登入後才能建立共同帳本、分享加入連結，以及接收點擊連結帶入的共享帳本。') }}
             </p>
           </div>
         </div>
@@ -145,7 +174,7 @@
                     {{ t('settings_shared_ledgers.remote_meta', { role: currentRemoteLedger?.role || activeLedgerMeta.role || '-' }, '{role}') }}
                   </p>
                   <p class="muted compact">
-                    {{ t('settings_shared_ledgers.auto_sync_hint', '已啟用背景同步：本機變更會自動上傳，並每 5 分鐘檢查遠端最新資料；開啟 App 時也會先檢查一次。') }}
+                    {{ t('settings_shared_ledgers.auto_sync_hint', '已啟用背景同步：本機變更會自動上傳，並在開啟 App 時檢查遠端最新資料。') }}
                   </p>
                 </div>
 
@@ -164,26 +193,38 @@
                   <span>{{ t('settings_shared_ledgers.auto_sync', '資料變更後自動同步') }}</span>
                 </label>
 
-                <div class="invite-box">
+                <div class="share-link-box">
                   <label class="field">
-                    {{ t('settings_shared_ledgers.invite_email', '邀請好友 Email') }}
+                    {{ t('settings_shared_ledgers.share_link', '共享加入連結') }}
                     <input
-                      v-model.trim="inviteEmailInput"
+                      :value="currentShareLink"
                       class="input"
-                      type="email"
-                      autocomplete="email"
-                      :placeholder="t('settings_shared_ledgers.invite_email_placeholder', 'friend@example.com')"
-                      :disabled="inviteSubmitting || ledgerActionBusy || apiUnavailable"
-                      @keyup.enter="submitInviteByEmail"
+                      type="text"
+                      readonly
+                      :placeholder="t('settings_shared_ledgers.share_link_placeholder', '建立共同帳本後即可產生共享連結')"
+                      @focus="$event.target.select()"
                     />
                   </label>
-                  <button class="btn primary" :disabled="inviteSubmitting || ledgerActionBusy || apiUnavailable || !inviteEmailInput" @click="submitInviteByEmail">
-                    {{ inviteSubmitting ? t('settings_shared_ledgers.inviting', '邀請中...') : t('settings_shared_ledgers.send_invite', '送出邀請') }}
-                  </button>
+                  <div class="remote-actions share-link-actions">
+                    <button class="btn primary" :disabled="shareLinkBusy || ledgerActionBusy || apiUnavailable || !currentShareLink" @click="shareCurrentLedgerLink">
+                      {{
+                        shareLinkBusy === 'share'
+                          ? t('settings_shared_ledgers.sharing_link', '分享中...')
+                          : t('settings_shared_ledgers.share_link_action', '分享連結')
+                      }}
+                    </button>
+                    <button class="btn" :disabled="shareLinkBusy || ledgerActionBusy || apiUnavailable || !currentShareLink" @click="copyCurrentLedgerLink">
+                      {{
+                        shareLinkBusy === 'copy'
+                          ? t('settings_shared_ledgers.copying_link', '複製中...')
+                          : t('settings_shared_ledgers.copy_link', '複製連結')
+                      }}
+                    </button>
+                  </div>
                 </div>
 
                 <p class="muted compact">
-                  {{ t('settings_shared_ledgers.invite_email_hint', '系統不會寄出 Email，邀請會記錄在後端，對方用相同 Email 登入後即可在上方看到。') }}
+                  {{ t('settings_shared_ledgers.share_link_hint', '把這個連結傳給對方後，對方點擊即可開啟 app；登入並啟用會員後會直接加入共同帳本。') }}
                 </p>
               </template>
 
@@ -284,23 +325,27 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import {
   activateSharedLedgerTrial,
+  buildSharedLedgerInviteLink,
+  clearPendingSharedLedgerInviteCode,
   getSharedLedgerApiUnavailableMessage,
+  getPendingSharedLedgerInviteCode,
   getSharedLedgerSession,
   isSharedLedgerApiConfigured,
+  rememberPendingSharedLedgerInviteCode,
   refreshSharedLedgerSession,
   subscribeSharedLedgerSession,
 } from '@/services/shared-ledger/backend'
 import {
   acceptSharedLedgerInvitationToLocal,
   importRemoteSharedLedgerToLocal,
-  inviteEmailToSharedLedger,
+  joinSharedLedgerByLinkToLocal,
   listLocalSharedLedgerBindings,
   listRemoteSharedLedgers,
   publishLedgerAsShared,
@@ -309,6 +354,7 @@ import {
   stopSharingRemoteSharedLedger,
 } from '@/ui/services/shared-ledger.service'
 
+const route = useRoute()
 const router = useRouter()
 const ledgerStore = useLedgerStore()
 const uiStore = useUiStore()
@@ -327,9 +373,11 @@ const ledgerActionBusy = ref('')
 const remoteItemBusyId = ref('')
 const remoteDeleteBusyId = ref('')
 const invitationBusyId = ref('')
-const inviteEmailInput = ref('')
-const inviteSubmitting = ref(false)
+const shareLinkBusy = ref('')
 const trialActivating = ref(false)
+const pendingInviteLinkCode = ref(getPendingSharedLedgerInviteCode())
+const inviteLinkJoining = ref(false)
+const lastAutoJoinInviteCode = ref('')
 const confirmDialog = ref({
   open: false,
   mode: '',
@@ -369,6 +417,36 @@ const currentRemoteLedger = computed(() => {
   if (!sharedLedgerId) return null
   return remoteLedgers.value.find((item) => String(item?.id ?? '') === sharedLedgerId) ?? null
 })
+const currentInviteCode = computed(() => String(currentRemoteLedger.value?.invite_code ?? activeLedgerMeta.value?.invite_code ?? '').trim())
+const currentShareLink = computed(() => buildSharedLedgerInviteLink(currentInviteCode.value))
+const canJoinPendingInviteLink = computed(() => Boolean(
+  pendingInviteLinkCode.value
+  && sessionUser.value
+  && hasMembershipAccess.value
+  && !apiUnavailable.value,
+))
+const pendingInviteLinkMessage = computed(() => {
+  if (!pendingInviteLinkCode.value) return ''
+  if (!sessionUser.value) {
+    return t('settings_shared_ledgers.pending_link_login_hint', '已偵測到共享連結，登入後即可加入共同帳本。')
+  }
+  if (!hasMembershipAccess.value) {
+    return t('settings_shared_ledgers.pending_link_membership_hint', '已偵測到共享連結，啟用會員後即可加入共同帳本。')
+  }
+  return t('settings_shared_ledgers.pending_link_ready_hint', '已偵測到共享連結，會將共同帳本下載到本機並開始同步。')
+})
+
+async function copyTextToClipboard(text) {
+  const normalizedText = String(text ?? '').trim()
+  if (!normalizedText) {
+    throw new Error('缺少可複製的內容')
+  }
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(normalizedText)
+    return true
+  }
+  throw new Error('目前裝置不支援直接複製，請手動選取連結')
+}
 
 function getRemoteUnshareLabel(item) {
   const role = String(item?.role ?? '').trim().toLowerCase()
@@ -428,6 +506,15 @@ async function loadRemoteLedgers() {
   }
 }
 
+function refreshSharedLedgerViewInBackground() {
+  void (async () => {
+    await refreshLocalBindings()
+    await loadRemoteLedgers()
+  })().catch((error) => {
+    console.warn('[shared-ledger] refresh view state failed', error)
+  })
+}
+
 async function refreshSessionAndData() {
   if (!apiUnavailable.value) {
     try {
@@ -479,8 +566,7 @@ async function createSharedFromActiveLedger() {
     await publishLedgerAsShared(activeLedger.value.id, {
       name: sharedLedgerNameInput.value || activeLedger.value.name,
     })
-    await refreshLocalBindings()
-    await loadRemoteLedgers()
+    refreshSharedLedgerViewInBackground()
     uiStore.pushToast(t('settings_shared_ledgers.toast.created', '共同帳本已建立'))
   } catch (error) {
     uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.create_failed', '建立共同帳本失敗'), 'error')
@@ -489,18 +575,41 @@ async function createSharedFromActiveLedger() {
   }
 }
 
-async function submitInviteByEmail() {
-  if (!activeLedger.value || !inviteEmailInput.value || apiUnavailable.value) return
-  inviteSubmitting.value = true
+async function shareCurrentLedgerLink() {
+  if (!currentShareLink.value || apiUnavailable.value) return
+  shareLinkBusy.value = 'share'
   try {
-    await inviteEmailToSharedLedger(activeLedger.value.id, inviteEmailInput.value)
-    inviteEmailInput.value = ''
-    await loadRemoteLedgers()
-    uiStore.pushToast(t('settings_shared_ledgers.toast.email_invite_sent', '共享帳本邀請已送出'))
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      await navigator.share({
+        title: t('settings_shared_ledgers.share_link_title', '共同帳本邀請'),
+        text: t('settings_shared_ledgers.share_link_share_text', '點擊連結即可加入我分享的共同帳本。'),
+        url: currentShareLink.value,
+      })
+      uiStore.pushToast(t('settings_shared_ledgers.toast.link_shared', '已開啟共享連結分享'))
+      return
+    }
+    await copyTextToClipboard(currentShareLink.value)
+    uiStore.pushToast(t('settings_shared_ledgers.toast.link_copied', '共享連結已複製'))
   } catch (error) {
-    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.email_invite_failed', '送出共享帳本邀請失敗'), 'error')
+    if (String(error?.name ?? '').trim() === 'AbortError') {
+      return
+    }
+    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.link_share_failed', '分享共享連結失敗'), 'error')
   } finally {
-    inviteSubmitting.value = false
+    shareLinkBusy.value = ''
+  }
+}
+
+async function copyCurrentLedgerLink() {
+  if (!currentShareLink.value || apiUnavailable.value) return
+  shareLinkBusy.value = 'copy'
+  try {
+    await copyTextToClipboard(currentShareLink.value)
+    uiStore.pushToast(t('settings_shared_ledgers.toast.link_copied', '共享連結已複製'))
+  } catch (error) {
+    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.link_copy_failed', '複製共享連結失敗'), 'error')
+  } finally {
+    shareLinkBusy.value = ''
   }
 }
 
@@ -535,6 +644,60 @@ async function downloadRemoteLedger(item) {
   }
 }
 
+async function clearInviteCodeQueryFromRoute() {
+  const nextQuery = { ...route.query }
+  let changed = false
+  for (const key of ['inviteCode', 'invite_code', 'code']) {
+    if (Object.prototype.hasOwnProperty.call(nextQuery, key)) {
+      delete nextQuery[key]
+      changed = true
+    }
+  }
+  if (!changed) return
+  await router.replace({ path: route.path, query: nextQuery }).catch(() => {})
+}
+
+async function syncPendingInviteCodeFromRoute() {
+  const rawInviteCode = route.query.inviteCode ?? route.query.invite_code ?? route.query.code
+  if (rawInviteCode == null) return
+  const normalizedInviteCode = rememberPendingSharedLedgerInviteCode(rawInviteCode)
+  if (normalizedInviteCode) {
+    pendingInviteLinkCode.value = normalizedInviteCode
+    lastAutoJoinInviteCode.value = ''
+  } else {
+    pendingInviteLinkCode.value = ''
+    clearPendingSharedLedgerInviteCode()
+    uiStore.pushToast(t('settings_shared_ledgers.toast.invalid_link', '共享連結無效，請重新取得邀請連結'), 'error')
+  }
+  await clearInviteCodeQueryFromRoute()
+}
+
+function dismissPendingInviteLink() {
+  pendingInviteLinkCode.value = ''
+  lastAutoJoinInviteCode.value = ''
+  clearPendingSharedLedgerInviteCode()
+  void clearInviteCodeQueryFromRoute()
+}
+
+async function joinPendingInviteLink({ auto = false } = {}) {
+  const inviteCode = String(pendingInviteLinkCode.value ?? '').trim()
+  if (!inviteCode || !canJoinPendingInviteLink.value || inviteLinkJoining.value) return
+  inviteLinkJoining.value = true
+  try {
+    const hadNoLedgers = ledgerStore.ledgers.length === 0
+    const result = await joinSharedLedgerByLinkToLocal(inviteCode)
+    await afterLedgerImported(result.ledgerId, hadNoLedgers)
+    dismissPendingInviteLink()
+    uiStore.pushToast(t('settings_shared_ledgers.toast.link_joined', '已透過共享連結加入共同帳本'))
+  } catch (error) {
+    if (!auto || String(error?.message ?? '').trim()) {
+      uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.link_join_failed', '透過共享連結加入共同帳本失敗'), 'error')
+    }
+  } finally {
+    inviteLinkJoining.value = false
+  }
+}
+
 async function stopSharingActiveLedger() {
   if (!activeLedger.value || !activeLedgerMeta.value?.shared_ledger_id || apiUnavailable.value) return
   confirmDialog.value = {
@@ -564,8 +727,7 @@ async function removeRemoteLedger(item) {
   }
 }
 
-function closeConfirmDialog() {
-  if (confirmDialog.value.loading) return
+function resetConfirmDialog() {
   confirmDialog.value = {
     open: false,
     mode: '',
@@ -576,6 +738,11 @@ function closeConfirmDialog() {
     loading: false,
     item: null,
   }
+}
+
+function closeConfirmDialog() {
+  if (confirmDialog.value.loading) return
+  resetConfirmDialog()
 }
 
 async function confirmDialogAction() {
@@ -590,10 +757,11 @@ async function confirmDialogAction() {
     if (confirmDialog.value.mode === 'active-unshare') {
       ledgerActionBusy.value = 'unlink'
       await stopSharingLocalLedger(activeLedger.value.id)
-      await refreshLocalBindings()
-      await loadRemoteLedgers()
+      resetConfirmDialog()
+      ledgerActionBusy.value = ''
+      remoteDeleteBusyId.value = ''
+      refreshSharedLedgerViewInBackground()
       uiStore.pushToast(t('settings_shared_ledgers.toast.unshared', '已取消共享，帳本目前只保留本機'))
-      closeConfirmDialog()
       return
     }
 
@@ -605,18 +773,19 @@ async function confirmDialogAction() {
       const binding = bindingMap.value[sharedLedgerId]
       const localLedgerIds = binding?.ledgerId ? [binding.ledgerId] : []
       await stopSharingRemoteSharedLedger(sharedLedgerId, { localLedgerIds })
-      await refreshLocalBindings()
-      await loadRemoteLedgers()
+      resetConfirmDialog()
+      ledgerActionBusy.value = ''
+      remoteDeleteBusyId.value = ''
+      refreshSharedLedgerViewInBackground()
       uiStore.pushToast(
         String(item?.role ?? '').trim().toLowerCase() === 'owner'
           ? t('settings_shared_ledgers.toast.shared_deleted', '共享帳本已刪除')
           : t('settings_shared_ledgers.toast.shared_left', '已不再共享，帳本目前只保留本機'),
       )
-      closeConfirmDialog()
       return
     }
 
-    closeConfirmDialog()
+    resetConfirmDialog()
   } catch (error) {
     uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.unshare_failed', '取消共享失敗'), 'error')
     confirmDialog.value = {
@@ -655,6 +824,26 @@ watch(
   () => {
     void refreshLocalBindings()
   },
+)
+
+watch(
+  () => [route.query.inviteCode, route.query.invite_code, route.query.code],
+  () => {
+    void syncPendingInviteCodeFromRoute()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => [pendingInviteLinkCode.value, canJoinPendingInviteLink.value],
+  ([inviteCode, canJoin]) => {
+    const normalizedInviteCode = String(inviteCode ?? '').trim()
+    if (!normalizedInviteCode || !canJoin || inviteLinkJoining.value) return
+    if (lastAutoJoinInviteCode.value === normalizedInviteCode) return
+    lastAutoJoinInviteCode.value = normalizedInviteCode
+    void joinPendingInviteLink({ auto: true })
+  },
+  { immediate: true },
 )
 
 let unsubscribeSession = null
@@ -712,7 +901,8 @@ p {
 .action-row,
 .remote-actions,
 .info-row,
-.invite-box {
+.share-link-box,
+.share-link-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -806,8 +996,21 @@ p {
   gap: 8px;
 }
 
-.invite-box {
+.share-link-box {
   align-items: end;
+}
+
+.share-link-actions {
+  align-items: stretch;
+}
+
+.link-code {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 84%, #111 16%);
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
+  font-size: 13px;
+  word-break: break-all;
 }
 
 .membership-lock {
@@ -833,7 +1036,7 @@ p {
 @media (max-width: 640px) {
   .section-head,
   .remote-main,
-  .invite-box,
+  .share-link-box,
   .profile-row {
     flex-direction: column;
     align-items: stretch;
