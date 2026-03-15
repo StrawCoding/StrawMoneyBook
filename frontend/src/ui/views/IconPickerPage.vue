@@ -56,7 +56,7 @@ async function pick(icon) {
 
   if (from === 'account-detail') {
     if (!accountId) {
-      uiStore.pushToast('缺少帳戶 ID', 'error')
+      uiStore.pushToast(t('icon_picker.error.missing_account_id'), 'error')
       picking.value = false
       return
     }
@@ -138,7 +138,7 @@ async function safeNavigate(target) {
   try {
     await router.replace(target)
   } catch (error) {
-    uiStore.pushToast(error?.message ?? '切換 icon 失敗', 'error')
+    uiStore.pushToast(error?.message ?? t('icon_picker.error.navigate_failed'), 'error')
   }
 }
 

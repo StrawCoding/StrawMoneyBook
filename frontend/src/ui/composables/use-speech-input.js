@@ -1,10 +1,12 @@
 import { onBeforeUnmount, ref } from 'vue'
 import { Capacitor, registerPlugin } from '@capacitor/core'
+import { translateMessage } from '@/ui/services/i18n.service'
 
 const isDev = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV)
 const SPEECH_RETRYABLE_ERROR_CODES = new Set(['no-speech', 'audio-capture', 'network'])
 const SpeechInput = registerPlugin('SpeechInput')
 let nativeSpeechAvailabilityTask = null
+const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
 function resolveSpeechRecognitionCtor() {
   if (typeof window === 'undefined') return null
@@ -34,15 +36,15 @@ function normalizeSpeechError(errorCode) {
     code === 'permissiondeniederror' ||
     code === 'securityerror'
   ) {
-    return '麥克風權限被拒絕'
+    return t('speech.error.permission_denied')
   }
-  if (code === 'network') return '語音辨識需要網路連線'
-  if (code === 'no-speech') return '沒有偵測到語音，請再試一次'
-  if (code === 'audio-capture') return '無法存取麥克風裝置'
-  if (code === 'service-not-allowed') return '系統不允許語音辨識服務'
-  if (code === 'notreadableerror' || code === 'trackstarterror') return '麥克風目前不可用，請稍後再試'
-  if (code === 'notfounderror' || code === 'devicesnotfounderror') return '找不到可用麥克風裝置'
-  return '語音辨識失敗'
+  if (code === 'network') return t('speech.error.network_required')
+  if (code === 'no-speech') return t('speech.error.no_speech')
+  if (code === 'audio-capture') return t('speech.error.audio_capture')
+  if (code === 'service-not-allowed') return t('speech.error.service_not_allowed')
+  if (code === 'notreadableerror' || code === 'trackstarterror') return t('speech.error.mic_unavailable')
+  if (code === 'notfounderror' || code === 'devicesnotfounderror') return t('speech.error.mic_not_found')
+  return t('speech.error.failed')
 }
 
 function normalizeRawErrorCode(errorCode) {
@@ -324,7 +326,7 @@ export function useSpeechInput() {
           })
         }
         if (isPermissionDeniedError(error)) {
-          lastError.value = '麥克風權限被拒絕'
+          lastError.value = t('speech.error.permission_denied')
           return false
         }
         // Non-permission failures (e.g. busy mic / temporary device lock) should not be
@@ -465,7 +467,7 @@ export function useSpeechInput() {
 
     const permissionOk = await ensureMicrophonePermission()
     if (!permissionOk) {
-      options.onError?.(lastError.value || '無法取得麥克風權限')
+      options.onError?.(lastError.value || t('speech.error.permission_request_failed'))
       return false
     }
 

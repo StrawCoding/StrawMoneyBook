@@ -1,6 +1,6 @@
 {
   "name": "strawmoneybook",
-  "version": "0.17.2",
+  "version": "0.17.3",
   "private": true,
   "type": "module",
   "engines": {
@@ -17,6 +17,7 @@
     "simulate:bank-sync": "node scripts/simulate-bank-sync-mock-flow.mjs",
     "simulate:first-bank-provider": "node scripts/test-first-bank-provider.mjs",
     "audit:i18n": "node scripts/audit-i18n.mjs",
+    "audit:i18n:hardcoded": "node scripts/audit-i18n-hardcoded.mjs",
     "test:smoke": "npm run audit:i18n && npm run simulate:google-auto-connect && npm run simulate:google-backup && npm run simulate:bank-sync && npm run simulate:first-bank-provider",
     "test": "npm run test:smoke",
     "dev": "vite",

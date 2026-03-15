@@ -22,14 +22,14 @@
 
       <div class="stack form-wrap">
         <label class="field">
-          金額（元）
+          {{ t('common.amount_yuan') }}
           <input v-model.number="model.amountMajor" class="input" type="number" min="0" step="0.01" />
         </label>
 
         <div class="field">
           <div class="date-extra-row">
             <div class="field">
-              <span>交易時間</span>
+              <span>{{ t('common.transaction_time') }}</span>
               <DateTimePickerField
                 :date="model.occurredDate"
                 :hour="model.occurredHour"
@@ -40,64 +40,68 @@
               />
             </div>
             <button type="button" class="btn extra-btn" :class="{ active: showExtra }" @click="showExtra = true">
-              附加資訊
+              {{ t('common.extra_info') }}
             </button>
           </div>
         </div>
 
         <div v-if="model.type === 'transfer'" class="inline-grid">
           <label class="field">
-            轉出帳戶
+            {{ t('quick_add.field.from_account') }}
             <CustomSelect v-model="model.accountId" :options="transferAccountOptions" />
           </label>
           <label class="field">
-            轉入帳戶
+            {{ t('quick_add.field.to_account') }}
             <CustomSelect v-model="model.peerAccountId" :options="transferAccountOptions" />
           </label>
         </div>
         <section v-if="model.type === 'transfer'" class="fx-panel">
           <div class="fx-row">
-            <small class="muted">轉帳幣別</small>
+            <small class="muted">{{ t('quick_add.field.transfer_currencies') }}</small>
             <strong>{{ transferFromCurrency }} → {{ transferToCurrency }}</strong>
           </div>
           <template v-if="transferNeedsExchangeRate">
             <div class="fx-mode-grid">
               <button type="button" class="btn" :class="{ primary: model.exchangeRateMode === 'system' }" @click="model.exchangeRateMode = 'system'">
-                系統同步（即時）
+                {{ t('quick_add.fx.mode.system') }}
               </button>
               <button type="button" class="btn" :class="{ primary: model.exchangeRateMode === 'manual' }" @click="model.exchangeRateMode = 'manual'">
-                自行輸入
+                {{ t('quick_add.fx.mode.manual') }}
               </button>
             </div>
             <label v-if="model.exchangeRateMode === 'manual'" class="field">
-              匯率（1 {{ transferFromCurrency }} = ? {{ transferToCurrency }}）
+              {{ t('quick_add.field.manual_exchange_rate', { from: transferFromCurrency, to: transferToCurrency }) }}
               <input
                 v-model.trim="model.manualExchangeRateInput"
                 type="text"
                 inputmode="decimal"
                 class="input"
-                placeholder="例如 0.0318"
+                :placeholder="t('quick_add.placeholder.manual_exchange_rate')"
               />
             </label>
             <div v-else class="fx-system-row">
-              <small class="muted">系統匯率快照：{{ transferSnapshotInfoLabel }}</small>
+              <small class="muted">{{ t('quick_add.fx.snapshot_label', { label: transferSnapshotInfoLabel }) }}</small>
               <button type="button" class="btn" :class="{ busy: exchangeRateSyncing }" :disabled="exchangeRateSyncing" @click="syncExchangeRateSnapshotNow">
-                {{ exchangeRateSyncing ? '同步中...' : '立即同步匯率' }}
+                {{ exchangeRateSyncing ? t('quick_add.fx.syncing') : t('quick_add.fx.sync_now') }}
               </button>
             </div>
-            <p class="muted fx-note">換算匯率：1 {{ transferFromCurrency }} = {{ transferResolvedRateLabel }} {{ transferToCurrency }}</p>
-            <p class="muted fx-note">預估轉入：{{ formatCurrencyMinor(transferEstimatedReceiveMinor, transferToCurrency) }}</p>
+            <p class="muted fx-note">
+              {{ t('quick_add.fx.resolved_rate', { from: transferFromCurrency, rate: transferResolvedRateLabel, to: transferToCurrency }) }}
+            </p>
+            <p class="muted fx-note">
+              {{ t('quick_add.fx.estimate_receive', { amount: formatCurrencyMinor(transferEstimatedReceiveMinor, transferToCurrency) }) }}
+            </p>
           </template>
-          <p v-else class="muted fx-note">同幣別轉帳，匯率固定為 1</p>
+          <p v-else class="muted fx-note">{{ t('quick_add.fx.same_currency') }}</p>
         </section>
 
         <div v-else class="inline-grid">
           <label class="field">
-            帳戶
+            {{ t('common.account') }}
             <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
           </label>
           <label class="field">
-            分類
+            {{ t('common.category') }}
             <CustomSelect v-model="model.categoryId" :groups="categoryGroupsByType" />
           </label>
         </div>
@@ -105,8 +109,12 @@
       </div>
 
       <footer class="row action-row">
-        <button class="btn" :class="{ busy: submitting }" :disabled="submitting" @click="submit({ closeAfterSuccess: false })">再記</button>
-        <button class="btn primary" :class="{ busy: submitting }" :disabled="submitting" @click="submit({ closeAfterSuccess: true })">建立交易</button>
+        <button class="btn" :class="{ busy: submitting }" :disabled="submitting" @click="submit({ closeAfterSuccess: false })">
+          {{ t('quick_add.action.save_and_add') }}
+        </button>
+        <button class="btn primary" :class="{ busy: submitting }" :disabled="submitting" @click="submit({ closeAfterSuccess: true })">
+          {{ t('quick_add.action.create_transaction') }}
+        </button>
       </footer>
     </article>
 
@@ -115,15 +123,15 @@
         <section v-if="showExtra" class="extra-mask" @click.self="showExtra = false">
           <article class="extra-sheet card">
             <header class="row">
-              <h3>附加資訊</h3>
-              <button class="btn" @click="showExtra = false">完成</button>
+              <h3>{{ t('quick_add.extra.title') }}</h3>
+              <button class="btn" @click="showExtra = false">{{ t('common.done') }}</button>
             </header>
 
             <div class="stack extra-content">
               <div class="addon-wrap">
                 <div class="row">
-                  <span class="field-label">附加項目</span>
-                  <button type="button" class="btn" @click="addAddonRow">新增項目</button>
+                  <span class="field-label">{{ t('quick_add.extra.addon_title') }}</span>
+                  <button type="button" class="btn" @click="addAddonRow">{{ t('common.add_item') }}</button>
                 </div>
 
                 <div v-for="item in addonRows" :key="item.id" class="addon-row">
@@ -143,17 +151,17 @@
                     placeholder="0"
                   />
                   <button type="button" class="btn danger addon-remove" @click="removeAddonRow(item.id)">
-                    刪除
+                    {{ t('common.delete') }}
                   </button>
                 </div>
 
                 <div class="row">
-                  <small class="addon-desc">可在設定中的附加項目清單更改</small>
+                  <small class="addon-desc">{{ t('quick_add.extra.manage_hint') }}</small>
                 </div>
               </div>
 
               <label class="field">
-                備註
+                {{ t('common.note') }}
                 <textarea v-model.trim="model.note" class="textarea" rows="3" />
               </label>
 
@@ -167,7 +175,7 @@
                   :aria-checked="model.isReimbursable ? 'true' : 'false'"
                   @click="model.isReimbursable = !model.isReimbursable"
                 >
-                  <span>報銷</span>
+                  <span>{{ t('quick_add.extra.reimbursable') }}</span>
                   <span class="switch-track"><span class="switch-thumb"></span></span>
                 </button>
               </div>
@@ -181,7 +189,7 @@
                   :aria-checked="model.includeInBudget ? 'true' : 'false'"
                   @click="model.includeInBudget = !model.includeInBudget"
                 >
-                  <span>紀錄預算</span>
+                  <span>{{ t('quick_add.extra.include_budget') }}</span>
                   <span class="switch-track"><span class="switch-thumb"></span></span>
                 </button>
                 <button
@@ -192,7 +200,7 @@
                   :aria-checked="model.includeInAnalysis ? 'true' : 'false'"
                   @click="model.includeInAnalysis = !model.includeInAnalysis"
                 >
-                  <span>紀錄收支</span>
+                  <span>{{ t('quick_add.extra.include_analysis') }}</span>
                   <span class="switch-track"><span class="switch-thumb"></span></span>
                 </button>
               </div>
@@ -215,7 +223,7 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
-import { useI18n } from '@/ui/services/i18n.service'
+import { getCurrentLocale, useI18n } from '@/ui/services/i18n.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { mergeAddonItemsToNote } from '@/ui/utils/addon-note'
@@ -327,10 +335,10 @@ const transferEstimatedReceiveMinor = computed(() => {
   return convertAmountMinorByRate(baseAmountMinor, rate)
 })
 const transferSnapshotInfoLabel = computed(() => {
-  if (!exchangeRateSnapshot.value?.syncedAt) return '尚未同步'
+  if (!exchangeRateSnapshot.value?.syncedAt) return t('quick_add.fx.not_synced')
   const parsed = new Date(exchangeRateSnapshot.value.syncedAt)
-  if (Number.isNaN(parsed.getTime())) return '尚未同步'
-  return `${parsed.toLocaleString('zh-TW')}（資料日期 ${exchangeRateSnapshot.value.effectiveDate || '-'}）`
+  if (Number.isNaN(parsed.getTime())) return t('quick_add.fx.not_synced')
+  return `${parsed.toLocaleString(getCurrentLocale())}（資料日期 ${exchangeRateSnapshot.value.effectiveDate || '-'}）`
 })
 
 watch(
@@ -465,7 +473,7 @@ function accountCurrencyCode(accountId) {
 
 function formatCurrencyMinor(amountMinor, currencyCode = 'TWD') {
   const value = Number(amountMinor || 0) / 100
-  return new Intl.NumberFormat('zh-TW', {
+  return new Intl.NumberFormat(getCurrentLocale(), {
     style: 'currency',
     currency: normalizeCurrencyCode(currencyCode),
     maximumFractionDigits: 2,
@@ -513,10 +521,10 @@ async function syncExchangeRateSnapshotNow() {
   exchangeRateSyncing.value = true
   try {
     exchangeRateSnapshot.value = await syncCbcExchangeRateSnapshot(ledgerId)
-    uiStore.pushToast(`匯率同步完成（資料日期：${exchangeRateSnapshot.value.effectiveDate || '-'}）`)
+    uiStore.pushToast(t('quick_add.toast.rate_synced', { date: exchangeRateSnapshot.value.effectiveDate || '-' }))
     return true
   } catch (error) {
-    uiStore.pushToast(error.message ?? '匯率同步失敗', 'error')
+    uiStore.pushToast(error.message ?? t('quick_add.toast.rate_sync_failed'), 'error')
     return false
   } finally {
     exchangeRateSyncing.value = false
@@ -529,7 +537,7 @@ async function resolveTransferRateOrThrow() {
   if (model.exchangeRateMode === 'manual') {
     const manualRate = Number(model.manualExchangeRateInput)
     if (!Number.isFinite(manualRate) || manualRate <= 0) {
-      throw new Error('請輸入有效匯率')
+      throw new Error(t('quick_add.error.invalid_rate'))
     }
     return manualRate
   }
@@ -541,7 +549,7 @@ async function resolveTransferRateOrThrow() {
     await withTimeout(
       syncExchangeRateSnapshotNow(),
       TRANSFER_RATE_AUTO_SYNC_TIMEOUT_MS,
-      '系統匯率同步逾時，請改用手動輸入或稍後再試',
+      t('quick_add.error.rate_sync_timeout'),
     )
   }
 
@@ -551,7 +559,7 @@ async function resolveTransferRateOrThrow() {
     transferToCurrency.value,
   )
   if (!Number.isFinite(rate) || rate <= 0) {
-    throw new Error('找不到可用的系統匯率，請改用手動輸入')
+    throw new Error(t('quick_add.error.rate_unavailable'))
   }
   return rate
 }
@@ -618,39 +626,39 @@ async function submit(options = {}) {
 
   const occurredAt = toOccurredAtIso(model.occurredDate, model.occurredHour, model.occurredMinute)
   if (!occurredAt) {
-    uiStore.pushToast('請選擇有效時間', 'error')
+    uiStore.pushToast(t('quick_add.error.invalid_occurred_at'), 'error')
     return
   }
 
   if (!model.accountId) {
-    uiStore.pushToast('請先選擇帳戶', 'error')
+    uiStore.pushToast(t('quick_add.error.account_required'), 'error')
     return
   }
 
   if (model.type !== 'transfer' && !model.categoryId) {
-    uiStore.pushToast('請先選擇分類', 'error')
+    uiStore.pushToast(t('quick_add.error.category_required'), 'error')
     return
   }
 
   if (model.type === 'transfer') {
     if (baseAmountMinor <= 0) {
-      uiStore.pushToast('請輸入有效金額（主轉帳金額需大於 0）', 'error')
+      uiStore.pushToast(t('quick_add.error.transfer_base_amount_invalid'), 'error')
       return
     }
     if (baseAmountMinor + sourceExtraMinor <= 0) {
-      uiStore.pushToast('轉出金額（含附加項目）需大於 0', 'error')
+      uiStore.pushToast(t('quick_add.error.transfer_total_amount_invalid'), 'error')
       return
     }
     if (!model.peerAccountId) {
-      uiStore.pushToast('請先選擇轉入帳戶', 'error')
+      uiStore.pushToast(t('quick_add.error.to_account_required'), 'error')
       return
     }
     if (model.peerAccountId === model.accountId) {
-      uiStore.pushToast('轉出與轉入帳戶不可相同', 'error')
+      uiStore.pushToast(t('quick_add.error.same_account'), 'error')
       return
     }
   } else if (settledAmountMinor <= 0) {
-    uiStore.pushToast('請輸入有效金額（需大於 0）', 'error')
+    uiStore.pushToast(t('quick_add.error.amount_required'), 'error')
     return
   }
 
@@ -683,7 +691,7 @@ async function submit(options = {}) {
         ? convertAmountMinorByRate(baseAmountMinor, transferRate)
         : baseAmountMinor
       if (!Number.isFinite(toAmountMinor) || toAmountMinor <= 0) {
-        throw new Error('轉入金額需大於 0，請調整匯率')
+        throw new Error(t('quick_add.error.receive_amount_invalid'))
       }
       await transactionStore.addTransfer({
         amountMinor: baseAmountMinor,
@@ -696,14 +704,14 @@ async function submit(options = {}) {
       })
     }
 
-    uiStore.pushToast('交易已新增')
+    uiStore.pushToast(t('quick_add.toast.created'))
     if (closeAfterSuccess) {
       await closePage()
       return
     }
     resetFormForNextEntry()
   } catch (error) {
-    uiStore.pushToast(error.message ?? '新增失敗', 'error')
+    uiStore.pushToast(error.message ?? t('quick_add.toast.create_failed'), 'error')
   } finally {
     submitting.value = false
   }
@@ -724,7 +732,7 @@ function createAddonRow() {
 }
 
 function defaultAddonOption() {
-  return addonTemplateItems.value[0] ?? { id: 'addon-default', label: '附加項目', defaultDirection: 'plus' }
+  return addonTemplateItems.value[0] ?? { id: 'addon-default', label: t('quick_add.extra.addon_title'), defaultDirection: 'plus' }
 }
 
 function addAddonRow() {
@@ -754,7 +762,7 @@ function collectAppliedAddonItems() {
 }
 
 function addonLabelOf(optionId) {
-  return addonTemplateItems.value.find((item) => item.id === optionId)?.label ?? '附加項目'
+  return addonTemplateItems.value.find((item) => item.id === optionId)?.label ?? t('quick_add.extra.addon_title')
 }
 
 fillDefaultOccurredAt()

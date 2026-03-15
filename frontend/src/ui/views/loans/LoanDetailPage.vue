@@ -56,7 +56,10 @@
               本金 <MoneyText :value-minor="payment.principal_component_minor ?? 0" />
               / 利息 <MoneyText :value-minor="payment.interest_component_minor ?? 0" />
             </small>
-            <button class="btn" @click="openEditRepayment(payment)">變更</button>
+            <span class="pay-actions">
+              <button class="btn" @click="openEditRepayment(payment)">變更</button>
+              <button class="btn danger" @click="openDeleteRepaymentDialog(payment)">刪除</button>
+            </span>
           </span>
         </li>
         <li v-if="!payments.length" class="muted">尚無{{ collectionRecordLabel(loan) }}</li>
@@ -132,6 +135,16 @@
       @close="closeConfirmDialog"
       @confirm="confirmDialogAction"
     />
+
+    <AppDialog
+      :open="deleteRepaymentDialog.open"
+      :title="`刪除${collectionLabel(loan)}`"
+      :message="`確定要刪除這筆${collectionLabel(loan)}紀錄？\n會同步刪除對應交易並重算借貸金額。`"
+      :loading="deleteRepaymentDialog.loading"
+      confirm-text="確認刪除"
+      @close="closeDeleteRepaymentDialog"
+      @confirm="confirmDeleteRepayment"
+    />
   </section>
 </template>
 
@@ -170,6 +183,11 @@ const confirmDialog = reactive({
   open: false,
   loading: false,
   type: 'void',
+})
+const deleteRepaymentDialog = reactive({
+  open: false,
+  loading: false,
+  paymentId: '',
 })
 
 const loanId = computed(() => String(route.params.id ?? ''))
@@ -285,6 +303,24 @@ function closeRepaySheet() {
   editingRepayment.value = null
 }
 
+function openDeleteRepaymentDialog(payment) {
+  if (!payment?.id) return
+  deleteRepaymentDialog.open = true
+  deleteRepaymentDialog.loading = false
+  deleteRepaymentDialog.paymentId = String(payment.id)
+}
+
+function resetDeleteRepaymentDialog() {
+  deleteRepaymentDialog.open = false
+  deleteRepaymentDialog.loading = false
+  deleteRepaymentDialog.paymentId = ''
+}
+
+function closeDeleteRepaymentDialog() {
+  if (deleteRepaymentDialog.loading) return
+  resetDeleteRepaymentDialog()
+}
+
 function openPrincipalSheet() {
   if (!loan.value) return
   principalOpen.value = true
@@ -343,6 +379,25 @@ async function submitPrincipal() {
     closePrincipalSheet()
   } catch (error) {
     uiStore.pushToast(error.message ?? '更新本金失敗', 'error')
+  }
+}
+
+async function confirmDeleteRepayment() {
+  if (!loan.value || !deleteRepaymentDialog.paymentId) return
+
+  deleteRepaymentDialog.loading = true
+  try {
+    await loanStore.deleteRepayment({
+      loanId: loan.value.id,
+      paymentId: deleteRepaymentDialog.paymentId,
+    })
+    await refreshLinkedData()
+    uiStore.pushToast(`${collectionLabel(loan.value)}紀錄已刪除`)
+    resetDeleteRepaymentDialog()
+  } catch (error) {
+    uiStore.pushToast(error.message ?? `刪除${collectionLabel(loan.value)}紀錄失敗`, 'error')
+  } finally {
+    deleteRepaymentDialog.loading = false
   }
 }
 
@@ -477,6 +532,11 @@ h3 {
   display: grid;
   justify-items: end;
   gap: 2px;
+}
+
+.pay-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .sheet-mask {

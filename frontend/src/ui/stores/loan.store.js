@@ -4,6 +4,7 @@ import {
   addBatchLoanRepaymentByCounterparty,
   addLoanRepayment,
   createLoanWithOptionalTransaction,
+  deleteLoanRepayment,
   deleteVoidedLoan,
   getLoanDetail,
   loadLoanDashboard,
@@ -76,6 +77,20 @@ export const useLoanStore = defineStore('loan', {
       const result = await updateLoanRepayment(ledgerStore.activeLedgerId, payload)
       await this.load()
       if (payload.loanId) {
+        await this.loadDetail(payload.loanId)
+      } else if (this.detail?.loan?.id) {
+        await this.loadDetail(this.detail.loan.id)
+      }
+      return result
+    },
+
+    async deleteRepayment(payload) {
+      const ledgerStore = useLedgerStore()
+      const result = await deleteLoanRepayment(ledgerStore.activeLedgerId, payload)
+      await this.load()
+      if (result?.loanId) {
+        await this.loadDetail(result.loanId)
+      } else if (payload?.loanId) {
         await this.loadDetail(payload.loanId)
       } else if (this.detail?.loan?.id) {
         await this.loadDetail(this.detail.loan.id)

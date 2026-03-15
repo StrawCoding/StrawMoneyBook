@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core'
+import { translateMessage } from '@/ui/services/i18n.service'
 import {
   createLocalMockBankLinkSession,
   disconnectLocalMockBankAuth,
@@ -15,6 +16,7 @@ const BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS = parseBooleanEnv(
   import.meta.env.VITE_BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS,
   false,
 )
+const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
 const PROVIDERS_FALLBACK = [
   {
@@ -69,8 +71,8 @@ function canUseLocalMockBankSync() {
 function createMissingBankApiError() {
   const platform = Capacitor.getPlatform()
   const message = platform === 'web'
-    ? '銀行同步 API 未設定，請部署 /api/bank 或設定 VITE_BANK_SYNC_API_BASE_URL'
-    : '手機 App 需設定銀行同步 API URL，請先部署 /api/bank，並將完整網址填入 VITE_BANK_SYNC_API_BASE_URL'
+    ? t('bank_sync.error.api_unavailable_web')
+    : t('bank_sync.error.api_unavailable_native')
   const error = new Error(message)
   error.code = 'bank_sync_api_unavailable'
   return error
@@ -163,7 +165,7 @@ async function postJson(path, payload) {
   }
 
   if (!data || typeof data !== 'object') {
-    throw new Error('銀行同步後端回應格式錯誤')
+    throw new Error(t('bank_sync.error.response_invalid'))
   }
   return data
 }

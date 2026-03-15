@@ -234,6 +234,38 @@ export async function getLoanPaymentById(ledgerId, paymentId) {
   return firstRow(result)
 }
 
+export async function getLoanPaymentByGeneratedTransactionId(ledgerId, txId) {
+  assertLedgerId(ledgerId)
+  if (!txId) return null
+
+  const result = await query(
+    `SELECT
+       p.ledger_id,
+       p.id,
+       p.loan_id,
+       p.account_id,
+       a.name AS account_name,
+       p.paid_at,
+       p.amount_minor,
+       p.principal_component_minor,
+       p.interest_component_minor,
+       p.generated_tx_id,
+       p.generated_interest_tx_id,
+       p.note,
+       p.created_at
+     FROM loan_payments p
+     LEFT JOIN accounts a
+       ON a.ledger_id = p.ledger_id
+      AND a.id = p.account_id
+     WHERE p.ledger_id = ?
+       AND (p.generated_tx_id = ? OR p.generated_interest_tx_id = ?)
+     LIMIT 1;`,
+    [ledgerId, txId, txId],
+  )
+
+  return firstRow(result)
+}
+
 export async function createLoanPayment(ledgerId, input) {
   assertLedgerId(ledgerId)
 
@@ -364,5 +396,15 @@ export async function deleteLoanPaymentsByLoanId(ledgerId, loanId) {
      WHERE ledger_id = ?
        AND loan_id = ?;`,
     [ledgerId, loanId],
+  )
+}
+
+export async function deleteLoanPaymentById(ledgerId, paymentId) {
+  assertLedgerId(ledgerId)
+  await run(
+    `DELETE FROM loan_payments
+     WHERE ledger_id = ?
+       AND id = ?;`,
+    [ledgerId, paymentId],
   )
 }

@@ -11,9 +11,11 @@ import {
   countLoans,
   createLoan,
   createLoanPayment,
+  deleteLoanPaymentById,
   deleteLoanPaymentsByLoanId,
   getLoanById,
   getLoanPaymentById,
+  getLoanPaymentByGeneratedTransactionId,
   listLoanPayments,
   listLoans,
   softDeleteLoanById,
@@ -93,6 +95,21 @@ function nextLoanStatus(targetTotalMinor, paidMinor) {
   if (paidMinor <= 0) return 'active'
   if (paidMinor >= targetTotalMinor) return 'settled'
   return 'partial'
+}
+
+function resolveLoanStatusAfterPaymentChange(loan, targetTotalMinor, nextPaidMinor) {
+  if (String(loan?.status ?? '') === 'void') {
+    return {
+      status: 'void',
+      settledAt: null,
+    }
+  }
+
+  const status = nextLoanStatus(targetTotalMinor, nextPaidMinor)
+  return {
+    status,
+    settledAt: status === 'settled' ? nowIso() : null,
+  }
 }
 
 function normalizeLoanCounterpartyName(rawName) {
@@ -515,8 +532,7 @@ export async function updateLoanRepayment(ledgerId, payload) {
       note,
     })
 
-    const status = nextLoanStatus(targetTotalMinor, nextPaidMinor)
-    const settledAt = status === 'settled' ? nowIso() : null
+    const { status, settledAt } = resolveLoanStatusAfterPaymentChange(loan, targetTotalMinor, nextPaidMinor)
     await updateLoanStatus(ledgerId, loan.id, status, { settledAt })
 
     return {
@@ -547,6 +563,59 @@ export async function voidLoan(ledgerId, loanId) {
 
     return updateLoanStatus(ledgerId, loanId, 'void', { settledAt: null })
   })
+}
+
+export async function deleteLoanRepayment(ledgerId, payload) {
+  const paymentId = typeof payload === 'string' ? payload : payload?.paymentId
+  if (!paymentId) {
+    throw new Error('paymentId 為必填')
+  }
+
+  return withTransaction(async () => {
+    const payment = await getLoanPaymentById(ledgerId, paymentId)
+    if (!payment) {
+      throw new Error('找不到收回紀錄')
+    }
+
+    const loan = normalizeLoanRecord(await getLoanById(ledgerId, payment.loan_id))
+    if (!loan) {
+      throw new Error('找不到借貸資料')
+    }
+
+    const principalTxId = String(payment.generated_tx_id ?? '').trim()
+    const interestTxId = String(payment.generated_interest_tx_id ?? '').trim()
+
+    if (principalTxId) {
+      await softDeleteTransactionById(ledgerId, principalTxId)
+    }
+    if (interestTxId) {
+      await softDeleteTransactionById(ledgerId, interestTxId)
+    }
+
+    await deleteLoanPaymentById(ledgerId, payment.id)
+
+    const nextPaidMinor = Math.max(0, Number(loan.paid_minor ?? 0) - Math.max(0, Number(payment.amount_minor ?? 0)))
+    const targetTotalMinor = Number(loan.target_total_minor ?? loan.principal_minor ?? 0)
+    const { status, settledAt } = resolveLoanStatusAfterPaymentChange(loan, targetTotalMinor, nextPaidMinor)
+    await updateLoanStatus(ledgerId, loan.id, status, { settledAt })
+
+    return {
+      loanId: loan.id,
+      paymentId: payment.id,
+      txId: principalTxId || null,
+      interestTxId: interestTxId || null,
+      status,
+      remainingMinor: Math.max(0, targetTotalMinor - nextPaidMinor),
+    }
+  })
+}
+
+export async function deleteLoanRepaymentByTransactionId(ledgerId, txId) {
+  if (!txId) return null
+
+  const payment = await getLoanPaymentByGeneratedTransactionId(ledgerId, txId)
+  if (!payment?.id) return null
+  return deleteLoanRepayment(ledgerId, payment.id)
 }
 
 export async function updateCompletedLoanPrincipal(ledgerId, payload) {

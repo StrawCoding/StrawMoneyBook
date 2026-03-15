@@ -165,7 +165,7 @@ import { runExchangeRateAutoSyncIfDue } from '@/ui/services/exchange-rate.servic
 import { clearHomeWidgetSummary, syncHomeWidgetSummary } from '@/ui/services/home-widget.service'
 import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
-import { getCurrentLocale, initLocalePreference } from '@/ui/services/i18n.service'
+import { initLocalePreference, translateMessage } from '@/ui/services/i18n.service'
 import { getPreferredManualBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
 import { canNavigateBackInApp, resolveBackFallback, shouldConfirmExit } from '@/ui/services/navigation-back.service'
 import { extractSharedLedgerInviteCode, restoreSharedLedgerSession } from '@/services/shared-ledger/backend'
@@ -467,10 +467,7 @@ function scheduleMembershipWarmup(reason) {
 }
 
 function androidExitHintMessage() {
-  const locale = String(getCurrentLocale() ?? '')
-  if (locale === 'en') return 'Press back again to exit'
-  if (locale === 'ja') return 'もう一度戻ると終了します'
-  return '再按一次返回鍵離開 App'
+  return translateMessage('app.exit_again', '再按一次返回鍵離開 App')
 }
 
 function restoreGoogleBackupSessionInBackground(ledgerId, { allowInteractive = false } = {}) {
@@ -631,8 +628,8 @@ async function main() {
   } catch (error) {
     console.error('[bootstrap] failed', error)
     const uiStore = useUiStore(pinia)
-    const message = String(error?.message ?? '未知錯誤')
-    uiStore.pushToast(`初始化失敗：${message}`, 'error')
+    const message = String(error?.message ?? translateMessage('common.unknown_error', '未知錯誤'))
+    uiStore.pushToast(translateMessage('app.init_failed', { message }, '初始化失敗：{message}'), 'error')
   }
 }
 

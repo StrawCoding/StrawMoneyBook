@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core'
+import { translateMessage } from '@/ui/services/i18n.service'
 
 const PROD_DEFAULT_SHARED_LEDGER_API_BASE = 'https://api.strawmb.com'
 const PROD_DEFAULT_SHARED_LEDGER_INVITE_BASE = 'https://www.strawmb.com/open/shared-ledger'
@@ -13,6 +14,7 @@ const API_DISPLAY_NAME = 'StrawMB API'
 let ongoingRefreshPromise = null
 let ongoingSessionRestorePromise = null
 let lastSessionRestoreAt = 0
+const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
 function shouldUseSameOriginLocalApi() {
   if (EXPLICIT_SHARED_LEDGER_API_BASE) return false
@@ -50,8 +52,8 @@ function getSharedLedgerInviteBase() {
 function createMissingApiError() {
   const platform = Capacitor.getPlatform()
   const message = platform === 'web'
-    ? `${API_DISPLAY_NAME} 未設定，請啟動 backend Node.js 伺服器，或設定 VITE_SHARED_LEDGER_API_BASE_URL`
-    : `手機 App 需設定 ${API_DISPLAY_NAME} URL，請先部署後端並設定 VITE_SHARED_LEDGER_API_BASE_URL`
+    ? t('shared_ledger.error.api_unavailable_web')
+    : t('shared_ledger.error.api_unavailable_native')
   const error = new Error(message)
   error.code = 'shared_ledger_api_unavailable'
   return error
@@ -67,24 +69,28 @@ function describeNetworkFailure(requestUrl, error) {
   const reasonParts = []
 
   if (online === false) {
-    reasonParts.push('裝置目前離線')
+    reasonParts.push(t('shared_ledger.error.device_offline'))
   }
   if (pageProtocol === 'https:' && apiProtocol === 'http:') {
-    reasonParts.push('目前頁面是 HTTPS，但 API 是 HTTP，瀏覽器會擋下混合內容')
+    reasonParts.push(t('shared_ledger.error.mixed_content'))
   }
   if (pageOrigin) {
-    reasonParts.push(`頁面來源：${pageOrigin}`)
+    reasonParts.push(t('shared_ledger.error.page_origin', { origin: pageOrigin }))
     if (/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(pageOrigin) && /^https:\/\/api\.strawmb\.com(?:\/|$)/i.test(String(requestUrl ?? '').trim())) {
-      reasonParts.push('若正式 API 已允許 localhost，仍出現 Failed to fetch 時，通常是預檢請求被限流、反向代理擋掉 OPTIONS，或 HTTPS / 憑證問題')
+      reasonParts.push(t('shared_ledger.error.localhost_fetch_hint'))
     }
   }
   const causeMessage = String(error?.message ?? '').trim()
   if (causeMessage && !/^failed to fetch$/i.test(causeMessage) && !/^load failed$/i.test(causeMessage)) {
-    reasonParts.push(`瀏覽器訊息：${causeMessage}`)
+    reasonParts.push(t('shared_ledger.error.browser_message', { message: causeMessage }))
   }
 
   const reasonSuffix = reasonParts.length ? `（${reasonParts.join('；')}）` : ''
-  return `無法連線 ${API_DISPLAY_NAME}：${requestUrl}${reasonSuffix}`
+  return t('shared_ledger.error.network_failed', {
+    name: API_DISPLAY_NAME,
+    url: requestUrl,
+    reasonSuffix,
+  })
 }
 
 function readSession() {
@@ -170,7 +176,7 @@ function buildAuthResponseSession(data, previousSession = null) {
   const token = String(data?.access_token ?? data?.token ?? '').trim()
   const user = data?.user
   if (!token || !user) {
-    throw new Error('帳號登入回應格式錯誤')
+    throw new Error(t('shared_ledger.error.auth_response_invalid'))
   }
   return {
     token,
@@ -267,7 +273,7 @@ async function requestJson(path, { method = 'GET', body, auth = true, _retried =
     const isTimeout = String(error?.name ?? '') === 'AbortError'
     const nextError = new Error(
       isTimeout
-        ? `${API_DISPLAY_NAME} 連線逾時：${requestUrl}`
+        ? t('shared_ledger.error.request_timeout', { name: API_DISPLAY_NAME, url: requestUrl })
         : describeNetworkFailure(requestUrl, error),
     )
     nextError.code = isTimeout ? 'shared_ledger_api_timeout' : 'shared_ledger_network_error'
@@ -314,7 +320,7 @@ async function requestJson(path, { method = 'GET', body, auth = true, _retried =
   }
 
   if (!data || typeof data !== 'object') {
-    throw new Error(`${API_DISPLAY_NAME} 回應格式錯誤`)
+    throw new Error(t('shared_ledger.error.response_invalid', { name: API_DISPLAY_NAME }))
   }
   if (auth && data.user) {
     updateSessionUser(data.user)
@@ -355,7 +361,7 @@ async function requestFormData(path, { method = 'POST', body, auth = false } = {
     const isTimeout = String(error?.name ?? '') === 'AbortError'
     const nextError = new Error(
       isTimeout
-        ? `${API_DISPLAY_NAME} 連線逾時：${requestUrl}`
+        ? t('shared_ledger.error.request_timeout', { name: API_DISPLAY_NAME, url: requestUrl })
         : describeNetworkFailure(requestUrl, error),
     )
     nextError.code = isTimeout ? 'shared_ledger_api_timeout' : 'shared_ledger_network_error'
@@ -385,7 +391,7 @@ async function requestFormData(path, { method = 'POST', body, auth = false } = {
   }
 
   if (!data || typeof data !== 'object') {
-    throw new Error(`${API_DISPLAY_NAME} 回應格式錯誤`)
+    throw new Error(t('shared_ledger.error.response_invalid', { name: API_DISPLAY_NAME }))
   }
   return data
 }
@@ -646,7 +652,7 @@ export function clearPendingSharedLedgerInviteCode() {
 export async function joinSharedLedger(inviteCode) {
   const normalizedInviteCode = extractSharedLedgerInviteCode(inviteCode)
   if (!normalizedInviteCode) {
-    throw new Error('共享連結無效，請重新取得邀請連結')
+    throw new Error(t('shared_ledger.error.invalid_invite_link'))
   }
   return requestJson('/api/shared-ledgers/join', {
     method: 'POST',
@@ -656,19 +662,19 @@ export async function joinSharedLedger(inviteCode) {
 
 export async function getSharedLedgerSnapshot(sharedLedgerId) {
   const normalizedId = String(sharedLedgerId ?? '').trim()
-  if (!normalizedId) throw new Error('缺少共同帳本 ID')
+  if (!normalizedId) throw new Error(t('shared_ledger.error.missing_ledger_id'))
   return requestJson(`/api/shared-ledgers/${normalizedId}/snapshot`)
 }
 
 export async function getSharedLedgerDetail(sharedLedgerId) {
   const normalizedId = String(sharedLedgerId ?? '').trim()
-  if (!normalizedId) throw new Error('缺少共同帳本 ID')
+  if (!normalizedId) throw new Error(t('shared_ledger.error.missing_ledger_id'))
   return requestJson(`/api/shared-ledgers/${normalizedId}`)
 }
 
 export async function pushSharedLedgerSnapshot(sharedLedgerId, payload = {}) {
   const normalizedId = String(sharedLedgerId ?? '').trim()
-  if (!normalizedId) throw new Error('缺少共同帳本 ID')
+  if (!normalizedId) throw new Error(t('shared_ledger.error.missing_ledger_id'))
   return requestJson(`/api/shared-ledgers/${normalizedId}/snapshot`, {
     method: 'POST',
     body: payload,
@@ -677,7 +683,7 @@ export async function pushSharedLedgerSnapshot(sharedLedgerId, payload = {}) {
 
 export async function deleteSharedLedger(sharedLedgerId) {
   const normalizedId = String(sharedLedgerId ?? '').trim()
-  if (!normalizedId) throw new Error('缺少共同帳本 ID')
+  if (!normalizedId) throw new Error(t('shared_ledger.error.missing_ledger_id'))
   return requestJson(`/api/shared-ledgers/${normalizedId}`, {
     method: 'DELETE',
   })
@@ -698,7 +704,7 @@ export async function listPendingSharedLedgerInvitations() {
 
 export async function acceptSharedLedgerInvitation(invitationId) {
   const normalizedId = String(invitationId ?? '').trim()
-  if (!normalizedId) throw new Error('缺少共同帳本邀請 ID')
+  if (!normalizedId) throw new Error(t('shared_ledger.error.missing_invitation_id'))
   return requestJson(`/api/shared-ledgers/invitations/${normalizedId}`, {
     method: 'POST',
   })

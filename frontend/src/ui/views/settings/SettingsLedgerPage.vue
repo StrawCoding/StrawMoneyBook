@@ -10,7 +10,7 @@
         <div class="row action-row">
           <button class="btn primary" @click="createLedger">{{ t('settings_ledger_page.add_ledger') }}</button>
         </div>
-        <small v-if="showFreeLimitHint" class="muted limit-tip">免費版最多可建立 1 個帳本</small>
+        <small v-if="showFreeLimitHint" class="muted limit-tip">{{ t('settings_ledger_page.limit_hint') }}</small>
 
         <draggable
           v-model="ledgerItems"
@@ -90,7 +90,7 @@ watch(
 
 async function createLedger() {
   if (!canCreateLedger.value) {
-    uiStore.pushToast('免費版最多可建立 1 個帳本', 'error')
+    uiStore.pushToast(t('settings_ledger_page.toast.limit_reached'), 'error')
     return
   }
   dialogMode.value = 'create'

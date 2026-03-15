@@ -109,6 +109,21 @@ const RUNTIME_EN_TEXT = {
   'AI 建立交易中...': 'AI creating transaction...',
   'AI 解析中...': 'AI parsing...',
   'AI 聆聽中...': 'AI listening...',
+  '初始化失敗：': 'Initialization failed: ',
+  '匯率同步完成（資料日期：': 'Exchange-rate sync completed (date: ',
+  '頁面來源：': 'Page origin: ',
+  '瀏覽器訊息：': 'Browser message: ',
+  '無法連線 ': 'Unable to connect ',
+  ' 連線逾時：': ' request timed out: ',
+}
+
+const RUNTIME_JA_TEXT = {
+  '初始化失敗：': '初期化に失敗しました: ',
+  '匯率同步完成（資料日期：': '為替レートの同期が完了しました（基準日: ',
+  '頁面來源：': 'ページのオリジン: ',
+  '瀏覽器訊息：': 'ブラウザーメッセージ: ',
+  '無法連線 ': '接続できません ',
+  ' 連線逾時：': ' の接続がタイムアウトしました: ',
 }
 
 const RUNTIME_EN_REPLACEMENTS = {
@@ -248,21 +263,6 @@ const RUNTIME_EN_REPLACEMENTS = {
   此: 'this',
 }
 
-const RUNTIME_EN_EXACT = {
-  ...RUNTIME_EN_TEXT_EXACT_GENERATED,
-  ...RUNTIME_EN_TEXT_GENERATED,
-  ...RUNTIME_EN_TEXT,
-}
-
-const RUNTIME_EN_PHRASE_REPLACEMENTS = {
-  ...RUNTIME_EN_TEXT_GENERATED,
-  ...RUNTIME_EN_REPLACEMENTS,
-}
-
-const runtimeEnReplacementEntries = Object.entries(RUNTIME_EN_PHRASE_REPLACEMENTS)
-  .filter(([zh]) => String(zh ?? '').trim().length >= 4)
-  .sort((a, b) => b[0].length - a[0].length)
-
 const translatableAttributeNames = ['placeholder', 'title', 'aria-label']
 const ENABLE_RUNTIME_DOM_TRANSLATOR = true
 let domTranslatorObserver = null
@@ -282,12 +282,33 @@ const MESSAGES = {
     'common.reset_default': '還原預設',
     'common.light': '淺色',
     'common.dark': '深色',
+    'common.close': '關閉',
+    'common.done': '完成',
+    'common.add': '新增',
+    'common.create': '建立',
+    'common.name': '名稱',
+    'common.group': '群組',
+    'common.note': '備註',
+    'common.amount_yuan': '金額（元）',
+    'common.transaction_time': '交易時間',
+    'common.account': '帳戶',
+    'common.category': '分類',
+    'common.extra_info': '附加資訊',
+    'common.add_item': '新增項目',
+    'common.group_name': '群組名稱',
+    'common.category_name': '分類名稱',
+    'common.choose_icon': '選擇 icon',
+    'common.select_group': '請選擇群組',
+    'common.drag_sort': '拖動排序',
+    'common.processing': '處理中...',
+    'common.unknown_error': '未知錯誤',
     'nav.home': '首頁',
     'nav.analysis': '分析',
     'nav.assets': '資產',
     'nav.settings': '設定',
     'app.open_menu': '開啟選單',
     'app.loading': '資料載入中...',
+    'app.exit_again': '再按一次返回鍵離開 App',
     'home_budget_summary.title': '預算簡表',
     'home_budget_summary.mode.monthly': '月均',
     'home_budget_summary.mode.daily': '當日可用',
@@ -311,6 +332,44 @@ const MESSAGES = {
     'bookkeeping.manual.qna': '問答記帳',
     'quick_add.page_title': '快速新增',
     'quick_add.action.open_ai': 'AI 記帳',
+    'quick_add.action.create_transaction': '建立交易',
+    'quick_add.field.from_account': '轉出帳戶',
+    'quick_add.field.to_account': '轉入帳戶',
+    'quick_add.field.transfer_currencies': '轉帳幣別',
+    'quick_add.field.manual_exchange_rate': '匯率（1 {from} = ? {to}）',
+    'quick_add.placeholder.manual_exchange_rate': '例如 0.0318',
+    'quick_add.fx.mode.system': '系統同步（即時）',
+    'quick_add.fx.mode.manual': '自行輸入',
+    'quick_add.fx.snapshot_label': '系統匯率快照：{label}',
+    'quick_add.fx.not_synced': '尚未同步',
+    'quick_add.fx.sync_now': '立即同步匯率',
+    'quick_add.fx.syncing': '同步中...',
+    'quick_add.fx.resolved_rate': '換算匯率：1 {from} = {rate} {to}',
+    'quick_add.fx.estimate_receive': '預估轉入：{amount}',
+    'quick_add.fx.same_currency': '同幣別轉帳，匯率固定為 1',
+    'quick_add.action.save_and_add': '再記',
+    'quick_add.extra.title': '附加資訊',
+    'quick_add.extra.addon_title': '附加項目',
+    'quick_add.extra.manage_hint': '可在設定中的附加項目清單更改',
+    'quick_add.extra.reimbursable': '報銷',
+    'quick_add.extra.include_budget': '紀錄預算',
+    'quick_add.extra.include_analysis': '紀錄收支',
+    'quick_add.toast.rate_synced': '匯率同步完成（資料日期：{date}）',
+    'quick_add.toast.rate_sync_failed': '匯率同步失敗',
+    'quick_add.toast.created': '交易已新增',
+    'quick_add.toast.create_failed': '新增失敗',
+    'quick_add.error.invalid_rate': '請輸入有效匯率',
+    'quick_add.error.rate_sync_timeout': '系統匯率同步逾時，請改用手動輸入或稍後再試',
+    'quick_add.error.rate_unavailable': '找不到可用的系統匯率，請改用手動輸入',
+    'quick_add.error.receive_amount_invalid': '轉入金額需大於 0，請調整匯率',
+    'quick_add.error.invalid_occurred_at': '請選擇有效時間',
+    'quick_add.error.account_required': '請先選擇帳戶',
+    'quick_add.error.category_required': '請先選擇分類',
+    'quick_add.error.transfer_base_amount_invalid': '請輸入有效金額（主轉帳金額需大於 0）',
+    'quick_add.error.transfer_total_amount_invalid': '轉出金額（含附加項目）需大於 0',
+    'quick_add.error.to_account_required': '請先選擇轉入帳戶',
+    'quick_add.error.same_account': '轉出與轉入帳戶不可相同',
+    'quick_add.error.amount_required': '請輸入有效金額（需大於 0）',
     'transaction.type.expense': '支出',
     'transaction.type.income': '收入',
     'transaction.type.transfer': '轉帳',
@@ -328,6 +387,21 @@ const MESSAGES = {
     'ai_bookkeeping.toast.saved': 'AI 記帳已儲存交易',
     'ai_bookkeeping.toast.save_failed': '儲存交易失敗',
     'settings.title': '設定',
+    'settings_category_page.title': '分類管理',
+    'settings_category_page.add_group': '新增群組',
+    'settings_category_page.archive_hint': 'L2 分類若已被交易引用，刪除時會自動轉為封存（archive only）。',
+    'settings_category_page.group_settings': '母分類設定',
+    'settings_category_page.add_category': '新增分類',
+    'settings_category_page.dialog.group_title': '新增分類群組',
+    'settings_category_page.dialog.category_title': '新增分類',
+    'settings_category_page.icon_label': '分類 Icon',
+    'settings_category_page.group_not_found': '找不到對應群組',
+    'settings_category_page.error.add_group_first': '請先在「{kind}」新增分類群組',
+    'settings_category_page.toast.group_created': '分類群組已新增',
+    'settings_category_page.toast.group_create_failed': '新增群組失敗',
+    'settings_category_page.toast.category_created': '分類已新增',
+    'settings_category_page.toast.category_create_failed': '新增分類失敗',
+    'settings_category_page.toast.open_icon_failed': '開啟 icon 選擇器失敗',
     'settings.data_management': '資料管理',
     'settings.auto_backup': '自動備份',
     'settings.exchange_rate': '匯率同步',
@@ -419,6 +493,37 @@ const MESSAGES = {
     'settings_bank_sync.toast.import_failed': '匯入銀行交易失敗',
     'settings_bank_sync.toast.marked_seen': '已標記為已讀',
     'settings_bank_sync.toast.mark_failed': '標記已讀失敗',
+    'settings_ledger_page.limit_hint': '免費版最多可建立 1 個帳本',
+    'settings_ledger_page.toast.limit_reached': '免費版最多可建立 1 個帳本',
+    'icon_picker.error.missing_account_id': '缺少帳戶 ID',
+    'icon_picker.error.navigate_failed': '切換 icon 失敗',
+    'speech.error.permission_denied': '麥克風權限被拒絕',
+    'speech.error.network_required': '語音辨識需要網路連線',
+    'speech.error.no_speech': '沒有偵測到語音，請再試一次',
+    'speech.error.audio_capture': '無法存取麥克風裝置',
+    'speech.error.service_not_allowed': '系統不允許語音辨識服務',
+    'speech.error.mic_unavailable': '麥克風目前不可用，請稍後再試',
+    'speech.error.mic_not_found': '找不到可用麥克風裝置',
+    'speech.error.failed': '語音辨識失敗',
+    'speech.error.permission_request_failed': '無法取得麥克風權限',
+    'shared_ledger.error.api_unavailable_web': 'StrawMB API 未設定，請啟動 backend Node.js 伺服器，或設定 VITE_SHARED_LEDGER_API_BASE_URL',
+    'shared_ledger.error.api_unavailable_native': '手機 App 需設定 StrawMB API URL，請先部署後端並設定 VITE_SHARED_LEDGER_API_BASE_URL',
+    'shared_ledger.error.device_offline': '裝置目前離線',
+    'shared_ledger.error.mixed_content': '目前頁面是 HTTPS，但 API 是 HTTP，瀏覽器會擋下混合內容',
+    'shared_ledger.error.page_origin': '頁面來源：{origin}',
+    'shared_ledger.error.localhost_fetch_hint': '若正式 API 已允許 localhost，仍出現 Failed to fetch 時，通常是預檢請求被限流、反向代理擋掉 OPTIONS，或 HTTPS / 憑證問題',
+    'shared_ledger.error.browser_message': '瀏覽器訊息：{message}',
+    'shared_ledger.error.network_failed': '無法連線 {name}：{url}{reasonSuffix}',
+    'shared_ledger.error.auth_response_invalid': '帳號登入回應格式錯誤',
+    'shared_ledger.error.request_timeout': '{name} 連線逾時：{url}',
+    'shared_ledger.error.response_invalid': '{name} 回應格式錯誤',
+    'shared_ledger.error.invalid_invite_link': '共享連結無效，請重新取得邀請連結',
+    'shared_ledger.error.missing_ledger_id': '缺少共同帳本 ID',
+    'shared_ledger.error.missing_invitation_id': '缺少共同帳本邀請 ID',
+    'bank_sync.error.api_unavailable_web': '銀行同步 API 未設定，請部署 /api/bank 或設定 VITE_BANK_SYNC_API_BASE_URL',
+    'bank_sync.error.api_unavailable_native': '手機 App 需設定銀行同步 API URL，請先部署 /api/bank，並將完整網址填入 VITE_BANK_SYNC_API_BASE_URL',
+    'bank_sync.error.response_invalid': '銀行同步後端回應格式錯誤',
+    'app.init_failed': '初始化失敗：{message}',
     'settings_bank_sync_create.title': '新增銀行',
     'settings_bank_sync_create.api_unavailable_title': '尚未設定銀行同步 API',
     'settings_bank_sync_create.form_title': '銀行連線資料',
@@ -1214,12 +1319,33 @@ const MESSAGES = {
     'common.reset_default': 'Reset',
     'common.light': 'Light',
     'common.dark': 'Dark',
+    'common.close': 'Close',
+    'common.done': 'Done',
+    'common.add': 'Add',
+    'common.create': 'Create',
+    'common.name': 'Name',
+    'common.group': 'Group',
+    'common.note': 'Note',
+    'common.amount_yuan': 'Amount',
+    'common.transaction_time': 'Transaction Time',
+    'common.account': 'Account',
+    'common.category': 'Category',
+    'common.extra_info': 'Extra Details',
+    'common.add_item': 'Add Item',
+    'common.group_name': 'Group Name',
+    'common.category_name': 'Category Name',
+    'common.choose_icon': 'Choose icon',
+    'common.select_group': 'Please select a group',
+    'common.drag_sort': 'Drag to sort',
+    'common.processing': 'Processing...',
+    'common.unknown_error': 'Unknown error',
     'nav.home': 'Home',
     'nav.analysis': 'Analysis',
     'nav.assets': 'Assets',
     'nav.settings': 'Settings',
     'app.open_menu': 'Open menu',
     'app.loading': 'Loading data...',
+    'app.exit_again': 'Press back again to exit',
     'ai_bookkeeping.status.creating': 'AI creating transaction...',
     'ai_bookkeeping.status.saving': 'AI updating transaction...',
     'ai_bookkeeping.status.parsing': 'AI parsing...',
@@ -1241,6 +1367,44 @@ const MESSAGES = {
     'bookkeeping.manual.qna': 'Q&A Entry',
     'quick_add.page_title': 'Quick Add',
     'quick_add.action.open_ai': 'AI Bookkeeping',
+    'quick_add.action.create_transaction': 'Create Transaction',
+    'quick_add.field.from_account': 'From Account',
+    'quick_add.field.to_account': 'To Account',
+    'quick_add.field.transfer_currencies': 'Transfer Currencies',
+    'quick_add.field.manual_exchange_rate': 'Exchange Rate (1 {from} = ? {to})',
+    'quick_add.placeholder.manual_exchange_rate': 'e.g. 0.0318',
+    'quick_add.fx.mode.system': 'System Synced (Live)',
+    'quick_add.fx.mode.manual': 'Enter Manually',
+    'quick_add.fx.snapshot_label': 'System rate snapshot: {label}',
+    'quick_add.fx.not_synced': 'Not synced yet',
+    'quick_add.fx.sync_now': 'Sync Exchange Rate Now',
+    'quick_add.fx.syncing': 'Syncing...',
+    'quick_add.fx.resolved_rate': 'Resolved rate: 1 {from} = {rate} {to}',
+    'quick_add.fx.estimate_receive': 'Estimated received amount: {amount}',
+    'quick_add.fx.same_currency': 'Same-currency transfer uses a fixed rate of 1',
+    'quick_add.action.save_and_add': 'Save and Add Another',
+    'quick_add.extra.title': 'Extra Details',
+    'quick_add.extra.addon_title': 'Add-on Items',
+    'quick_add.extra.manage_hint': 'Manage add-on items from Settings',
+    'quick_add.extra.reimbursable': 'Reimbursable',
+    'quick_add.extra.include_budget': 'Include in Budget',
+    'quick_add.extra.include_analysis': 'Include in Income/Expense',
+    'quick_add.toast.rate_synced': 'Exchange-rate sync completed (date: {date})',
+    'quick_add.toast.rate_sync_failed': 'Failed to sync exchange rates',
+    'quick_add.toast.created': 'Transaction created',
+    'quick_add.toast.create_failed': 'Failed to create transaction',
+    'quick_add.error.invalid_rate': 'Please enter a valid exchange rate',
+    'quick_add.error.rate_sync_timeout': 'Exchange-rate sync timed out. Enter the rate manually or try again later',
+    'quick_add.error.rate_unavailable': 'No system exchange rate is available. Please enter it manually',
+    'quick_add.error.receive_amount_invalid': 'Converted incoming amount must be greater than 0. Please adjust the rate',
+    'quick_add.error.invalid_occurred_at': 'Please select a valid time',
+    'quick_add.error.account_required': 'Please select an account first',
+    'quick_add.error.category_required': 'Please select a category first',
+    'quick_add.error.transfer_base_amount_invalid': 'Please enter a valid amount (transfer amount must be greater than 0)',
+    'quick_add.error.transfer_total_amount_invalid': 'Transfer-out amount (including add-ons) must be greater than 0',
+    'quick_add.error.to_account_required': 'Please select the destination account first',
+    'quick_add.error.same_account': 'Source and destination accounts must be different',
+    'quick_add.error.amount_required': 'Please enter a valid amount (must be greater than 0)',
     'transaction.type.expense': 'Expense',
     'transaction.type.income': 'Income',
     'transaction.type.transfer': 'Transfer',
@@ -1258,6 +1422,21 @@ const MESSAGES = {
     'ai_bookkeeping.toast.saved': 'AI bookkeeping transaction saved',
     'ai_bookkeeping.toast.save_failed': 'Failed to save transaction',
     'settings.title': 'Settings',
+    'settings_category_page.title': 'Category Management',
+    'settings_category_page.add_group': 'Add Group',
+    'settings_category_page.archive_hint': 'If an L2 category is already referenced by transactions, deleting it will archive it automatically.',
+    'settings_category_page.group_settings': 'Category Group Settings',
+    'settings_category_page.add_category': 'Add Category',
+    'settings_category_page.dialog.group_title': 'Add Category Group',
+    'settings_category_page.dialog.category_title': 'Add Category',
+    'settings_category_page.icon_label': 'Category Icon',
+    'settings_category_page.group_not_found': 'Target group not found',
+    'settings_category_page.error.add_group_first': 'Please create a category group under "{kind}" first',
+    'settings_category_page.toast.group_created': 'Category group created',
+    'settings_category_page.toast.group_create_failed': 'Failed to add group',
+    'settings_category_page.toast.category_created': 'Category created',
+    'settings_category_page.toast.category_create_failed': 'Failed to add category',
+    'settings_category_page.toast.open_icon_failed': 'Failed to open the icon picker',
     'settings.data_management': 'Data Management',
     'settings.auto_backup': 'Auto Backup',
     'settings.exchange_rate': 'Exchange Rates',
@@ -1353,6 +1532,37 @@ const MESSAGES = {
     'settings_bank_sync.toast.import_failed': 'Failed to import bank transactions',
     'settings_bank_sync.toast.marked_seen': 'Marked as seen',
     'settings_bank_sync.toast.mark_failed': 'Failed to mark as seen',
+    'settings_ledger_page.limit_hint': 'Free plan supports up to 1 ledger',
+    'settings_ledger_page.toast.limit_reached': 'Free plan supports up to 1 ledger',
+    'icon_picker.error.missing_account_id': 'Missing account ID',
+    'icon_picker.error.navigate_failed': 'Failed to switch icon',
+    'speech.error.permission_denied': 'Microphone permission denied',
+    'speech.error.network_required': 'Voice recognition requires a network connection',
+    'speech.error.no_speech': 'No speech was detected. Please try again',
+    'speech.error.audio_capture': 'Unable to access the microphone',
+    'speech.error.service_not_allowed': 'Voice recognition service is not allowed on this device',
+    'speech.error.mic_unavailable': 'The microphone is temporarily unavailable. Please try again later',
+    'speech.error.mic_not_found': 'No available microphone was found',
+    'speech.error.failed': 'Voice recognition failed',
+    'speech.error.permission_request_failed': 'Unable to obtain microphone permission',
+    'shared_ledger.error.api_unavailable_web': 'StrawMB API is not configured. Start the backend Node.js server or set VITE_SHARED_LEDGER_API_BASE_URL.',
+    'shared_ledger.error.api_unavailable_native': 'The mobile app requires a StrawMB API URL. Deploy the backend and set VITE_SHARED_LEDGER_API_BASE_URL first.',
+    'shared_ledger.error.device_offline': 'The device is offline',
+    'shared_ledger.error.mixed_content': 'The page uses HTTPS but the API uses HTTP, so the browser blocks mixed content',
+    'shared_ledger.error.page_origin': 'Page origin: {origin}',
+    'shared_ledger.error.localhost_fetch_hint': 'If the production API already allows localhost but Failed to fetch still appears, the OPTIONS preflight may be rate-limited, blocked by a reverse proxy, or affected by HTTPS / certificate issues',
+    'shared_ledger.error.browser_message': 'Browser message: {message}',
+    'shared_ledger.error.network_failed': 'Unable to connect to {name}: {url}{reasonSuffix}',
+    'shared_ledger.error.auth_response_invalid': 'Invalid account sign-in response format',
+    'shared_ledger.error.request_timeout': '{name} request timed out: {url}',
+    'shared_ledger.error.response_invalid': '{name} returned an invalid response format',
+    'shared_ledger.error.invalid_invite_link': 'This shared-ledger link is invalid. Please request a new invite link',
+    'shared_ledger.error.missing_ledger_id': 'Missing shared-ledger ID',
+    'shared_ledger.error.missing_invitation_id': 'Missing shared-ledger invitation ID',
+    'bank_sync.error.api_unavailable_web': 'Bank sync API is not configured. Deploy /api/bank or set VITE_BANK_SYNC_API_BASE_URL.',
+    'bank_sync.error.api_unavailable_native': 'The mobile app requires a bank sync API URL. Deploy /api/bank and set the full VITE_BANK_SYNC_API_BASE_URL first.',
+    'bank_sync.error.response_invalid': 'Bank sync backend returned an invalid response format',
+    'app.init_failed': 'Initialization failed: {message}',
     'settings_bank_sync_create.title': 'Add Bank',
     'settings_bank_sync_create.api_unavailable_title': 'Bank Sync API Not Configured',
     'settings_bank_sync_create.form_title': 'Bank Connection Details',
@@ -2153,6 +2363,112 @@ const MESSAGES = {
 MESSAGES.ja = {
   ...RUNTIME_JA_MESSAGES_GENERATED,
   'home_asset_summary.balance_label': '残高',
+  'app.exit_again': 'もう一度戻ると終了します',
+  'common.close': '閉じる',
+  'common.done': '完了',
+  'common.add': '追加',
+  'common.create': '作成',
+  'common.name': '名称',
+  'common.group': 'グループ',
+  'common.note': 'メモ',
+  'common.amount_yuan': '金額',
+  'common.transaction_time': '取引日時',
+  'common.account': '口座',
+  'common.category': 'カテゴリ',
+  'common.extra_info': '追加情報',
+  'common.add_item': '項目を追加',
+  'common.group_name': 'グループ名',
+  'common.category_name': 'カテゴリ名',
+  'common.choose_icon': 'アイコンを選択',
+  'common.select_group': 'グループを選択してください',
+  'common.drag_sort': 'ドラッグで並び替え',
+  'common.processing': '処理中...',
+  'common.unknown_error': '不明なエラー',
+  'quick_add.field.from_account': '出金元口座',
+  'quick_add.action.create_transaction': '取引を作成',
+  'quick_add.field.to_account': '入金先口座',
+  'quick_add.field.transfer_currencies': '振替通貨',
+  'quick_add.field.manual_exchange_rate': '為替レート（1 {from} = ? {to}）',
+  'quick_add.placeholder.manual_exchange_rate': '例: 0.0318',
+  'quick_add.fx.mode.system': 'システム同期（リアルタイム）',
+  'quick_add.fx.mode.manual': '手動入力',
+  'quick_add.fx.snapshot_label': 'システムレートのスナップショット: {label}',
+  'quick_add.fx.not_synced': '未同期',
+  'quick_add.fx.sync_now': '今すぐ為替同期',
+  'quick_add.fx.syncing': '同期中...',
+  'quick_add.fx.resolved_rate': '換算レート: 1 {from} = {rate} {to}',
+  'quick_add.fx.estimate_receive': '入金見込み: {amount}',
+  'quick_add.fx.same_currency': '同一通貨の振替ではレートは常に 1 です',
+  'quick_add.action.save_and_add': '続けて記帳',
+  'quick_add.extra.title': '追加情報',
+  'quick_add.extra.addon_title': '追加項目',
+  'quick_add.extra.manage_hint': '設定の追加項目一覧から編集できます',
+  'quick_add.extra.reimbursable': '立替精算対象',
+  'quick_add.extra.include_budget': '予算に含める',
+  'quick_add.extra.include_analysis': '収支分析に含める',
+  'quick_add.toast.rate_synced': '為替レートの同期が完了しました（基準日: {date}）',
+  'quick_add.toast.rate_sync_failed': '為替レートの同期に失敗しました',
+  'quick_add.toast.created': '取引を作成しました',
+  'quick_add.toast.create_failed': '取引の作成に失敗しました',
+  'quick_add.error.invalid_rate': '有効な為替レートを入力してください',
+  'quick_add.error.rate_sync_timeout': '為替レートの同期がタイムアウトしました。手動入力するか後でもう一度お試しください',
+  'quick_add.error.rate_unavailable': '利用できるシステム為替レートが見つかりません。手動入力してください',
+  'quick_add.error.receive_amount_invalid': '入金額は 0 より大きい必要があります。レートを調整してください',
+  'quick_add.error.invalid_occurred_at': '有効な日時を選択してください',
+  'quick_add.error.account_required': '先に口座を選択してください',
+  'quick_add.error.category_required': '先にカテゴリを選択してください',
+  'quick_add.error.transfer_base_amount_invalid': '有効な金額を入力してください（振替元金額は 0 より大きい必要があります）',
+  'quick_add.error.transfer_total_amount_invalid': '追加項目を含む出金額は 0 より大きい必要があります',
+  'quick_add.error.to_account_required': '先に入金先口座を選択してください',
+  'quick_add.error.same_account': '出金元口座と入金先口座は同じにできません',
+  'quick_add.error.amount_required': '有効な金額を入力してください（0 より大きい必要があります）',
+  'settings_category_page.title': 'カテゴリ管理',
+  'settings_category_page.add_group': 'グループを追加',
+  'settings_category_page.archive_hint': 'L2 カテゴリが既に取引で使われている場合、削除時は自動的にアーカイブされます。',
+  'settings_category_page.group_settings': '親カテゴリ設定',
+  'settings_category_page.add_category': 'カテゴリを追加',
+  'settings_category_page.dialog.group_title': 'カテゴリグループを追加',
+  'settings_category_page.dialog.category_title': 'カテゴリを追加',
+  'settings_category_page.icon_label': 'カテゴリアイコン',
+  'settings_category_page.group_not_found': '対象グループが見つかりません',
+  'settings_category_page.error.add_group_first': '先に「{kind}」にカテゴリグループを追加してください',
+  'settings_category_page.toast.group_created': 'カテゴリグループを作成しました',
+  'settings_category_page.toast.group_create_failed': 'グループの追加に失敗しました',
+  'settings_category_page.toast.category_created': 'カテゴリを作成しました',
+  'settings_category_page.toast.category_create_failed': 'カテゴリの追加に失敗しました',
+  'settings_category_page.toast.open_icon_failed': 'アイコン選択画面を開けませんでした',
+  'settings_ledger_page.limit_hint': '無料版では帳本を 1 つまで作成できます',
+  'settings_ledger_page.toast.limit_reached': '無料版では帳本を 1 つまで作成できます',
+  'icon_picker.error.missing_account_id': '口座 ID がありません',
+  'icon_picker.error.navigate_failed': 'アイコンの切り替えに失敗しました',
+  'speech.error.permission_denied': 'マイク権限が拒否されました',
+  'speech.error.network_required': '音声認識にはネットワーク接続が必要です',
+  'speech.error.no_speech': '音声が検出されませんでした。もう一度お試しください',
+  'speech.error.audio_capture': 'マイクにアクセスできません',
+  'speech.error.service_not_allowed': 'この端末では音声認識サービスを利用できません',
+  'speech.error.mic_unavailable': 'マイクは現在利用できません。しばらくしてからもう一度お試しください',
+  'speech.error.mic_not_found': '利用可能なマイクが見つかりません',
+  'speech.error.failed': '音声認識に失敗しました',
+  'speech.error.permission_request_failed': 'マイク権限を取得できませんでした',
+  'shared_ledger.error.api_unavailable_web': 'StrawMB API が未設定です。backend Node.js サーバーを起動するか、VITE_SHARED_LEDGER_API_BASE_URL を設定してください。',
+  'shared_ledger.error.api_unavailable_native': 'モバイルアプリでは StrawMB API URL が必要です。先にバックエンドをデプロイし、VITE_SHARED_LEDGER_API_BASE_URL を設定してください。',
+  'shared_ledger.error.device_offline': 'デバイスは現在オフラインです',
+  'shared_ledger.error.mixed_content': '現在のページは HTTPS ですが API は HTTP のため、ブラウザが mixed content をブロックしています',
+  'shared_ledger.error.page_origin': 'ページのオリジン: {origin}',
+  'shared_ledger.error.localhost_fetch_hint': '本番 API が localhost を許可していても Failed to fetch が出る場合、OPTIONS の preflight 制限、リバースプロキシ、または HTTPS / 証明書の問題が考えられます',
+  'shared_ledger.error.browser_message': 'ブラウザーメッセージ: {message}',
+  'shared_ledger.error.network_failed': '{name} に接続できません: {url}{reasonSuffix}',
+  'shared_ledger.error.auth_response_invalid': 'アカウントのログイン応答形式が正しくありません',
+  'shared_ledger.error.request_timeout': '{name} の接続がタイムアウトしました: {url}',
+  'shared_ledger.error.response_invalid': '{name} の応答形式が正しくありません',
+  'shared_ledger.error.invalid_invite_link': '共有リンクが無効です。新しい招待リンクを取得してください',
+  'shared_ledger.error.missing_ledger_id': '共同帳本 ID がありません',
+  'shared_ledger.error.missing_invitation_id': '共同帳本招待 ID がありません',
+  'bank_sync.error.api_unavailable_web': '銀行同期 API が未設定です。/api/bank をデプロイするか、VITE_BANK_SYNC_API_BASE_URL を設定してください。',
+  'bank_sync.error.api_unavailable_native': 'モバイルアプリでは銀行同期 API URL が必要です。/api/bank をデプロイし、VITE_BANK_SYNC_API_BASE_URL に完全な URL を設定してください。',
+  'bank_sync.error.response_invalid': '銀行同期バックエンドの応答形式が正しくありません',
+  'app.init_failed': '初期化に失敗しました: {message}',
+  'budgeting.used': '使用済み',
   'settings.security_lock': 'セキュリティロック',
   'settings.bank_sync': '銀行同期',
   'home_budget_summary.title': '予算サマリー',
@@ -2743,6 +3059,60 @@ MESSAGES.ja = {
   'language.ja': '日本語',
 }
 
+const runtimeLocaleDataCache = new Map()
+
+function resolveRuntimeLocale(value) {
+  const locale = String(value ?? '').trim()
+  return SUPPORTED_LOCALES.includes(locale) ? locale : DEFAULT_LOCALE
+}
+
+function getRuntimeLocaleOverrides(locale) {
+  if (locale === 'en') {
+    return {
+      ...RUNTIME_EN_TEXT_EXACT_GENERATED,
+      ...RUNTIME_EN_TEXT_GENERATED,
+      ...RUNTIME_EN_REPLACEMENTS,
+      ...RUNTIME_EN_TEXT,
+    }
+  }
+  if (locale === 'ja') return RUNTIME_JA_TEXT
+  return {}
+}
+
+function buildRuntimeLocaleData(locale) {
+  const resolvedLocale = resolveRuntimeLocale(locale)
+  const overrides = getRuntimeLocaleOverrides(resolvedLocale)
+  const baseMessages = MESSAGES[DEFAULT_LOCALE] ?? {}
+  const targetMessages = MESSAGES[resolvedLocale] ?? {}
+  const exact = { ...overrides }
+
+  for (const [key, baseValue] of Object.entries(baseMessages)) {
+    const sourceText = String(baseValue ?? '').trim()
+    const targetText = String(targetMessages[key] ?? '').trim()
+    if (!sourceText || !targetText || sourceText === targetText) continue
+    if (!(sourceText in exact)) {
+      exact[sourceText] = targetText
+    }
+  }
+
+  const replacements = Object.entries(overrides)
+    .filter(([source]) => String(source ?? '').trim().length >= 2)
+    .sort((a, b) => b[0].length - a[0].length)
+
+  return {
+    exact,
+    replacements,
+  }
+}
+
+function getRuntimeLocaleData(locale) {
+  const resolvedLocale = resolveRuntimeLocale(locale)
+  if (!runtimeLocaleDataCache.has(resolvedLocale)) {
+    runtimeLocaleDataCache.set(resolvedLocale, buildRuntimeLocaleData(resolvedLocale))
+  }
+  return runtimeLocaleDataCache.get(resolvedLocale)
+}
+
 const localeRef = ref(DEFAULT_LOCALE)
 
 function normalizeLocale(value) {
@@ -2813,13 +3183,17 @@ export function getCurrentLocale() {
   return localeRef.value
 }
 
-function translateRuntimeTextToEnglish(text) {
-  if (RUNTIME_EN_EXACT[text]) return RUNTIME_EN_EXACT[text]
+function translateRuntimeTextToLocale(text, locale) {
+  const resolvedLocale = resolveRuntimeLocale(locale)
+  if (resolvedLocale === DEFAULT_LOCALE) return text
+
+  const { exact, replacements } = getRuntimeLocaleData(resolvedLocale)
+  if (exact[text]) return exact[text]
 
   let output = text
-  for (const [zh, en] of runtimeEnReplacementEntries) {
-    if (!output.includes(zh)) continue
-    output = output.split(zh).join(en)
+  for (const [source, translated] of replacements) {
+    if (!output.includes(source)) continue
+    output = output.split(source).join(translated)
   }
   return output.replace(/\s{2,}/g, ' ').trim()
 }
@@ -2827,14 +3201,14 @@ function translateRuntimeTextToEnglish(text) {
 export function translateRuntimeText(input) {
   const text = String(input ?? '')
   if (!text) return ''
-  if (localeRef.value === 'en') {
-    return translateRuntimeTextToEnglish(text)
+  if (localeRef.value !== DEFAULT_LOCALE) {
+    return translateRuntimeTextToLocale(text, localeRef.value)
   }
   return text
 }
 
 function translateTextByLocale(text) {
-  if (localeRef.value === 'en') return translateRuntimeText(text)
+  if (localeRef.value !== DEFAULT_LOCALE) return translateRuntimeText(text)
   return text
 }
 
@@ -2859,7 +3233,7 @@ function shouldRefreshOriginalValue(currentValue, originalValue) {
   if (!current) return false
   if (!original) return true
   if (current === original) return false
-  if (localeRef.value !== 'en') return true
+  if (localeRef.value === DEFAULT_LOCALE) return true
   return current !== translateRuntimeText(original)
 }
 

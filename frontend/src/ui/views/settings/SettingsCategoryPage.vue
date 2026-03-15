@@ -3,16 +3,16 @@
     <section class="stack">
     <article class="card panel">
       <header class="row">
-        <h2>分類管理</h2>
+        <h2>{{ t('settings_category_page.title') }}</h2>
         <div class="btn-wrap">
-          <button class="btn mini-btn" @click="addGroup">新增群組</button>
+          <button class="btn mini-btn" @click="addGroup">{{ t('settings_category_page.add_group') }}</button>
           <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
         </div>
       </header>
-      <p class="muted">L2 分類若已被交易引用，刪除時會自動轉為封存（archive only）。</p>
+      <p class="muted">{{ t('settings_category_page.archive_hint') }}</p>
       <div class="kind-tabs">
-        <button class="btn" :class="{ primary: activeKind === 'expense' }" @click="activeKind = 'expense'">支出</button>
-        <button class="btn" :class="{ primary: activeKind === 'income' }" @click="activeKind = 'income'">收入</button>
+        <button class="btn" :class="{ primary: activeKind === 'expense' }" @click="activeKind = 'expense'">{{ t('transaction.type.expense') }}</button>
+        <button class="btn" :class="{ primary: activeKind === 'income' }" @click="activeKind = 'income'">{{ t('transaction.type.income') }}</button>
       </div>
       <ul class="group-list">
         <li v-for="group in filteredGroups" :key="group.id" class="group-item">
@@ -23,7 +23,7 @@
             <RouterLink
               class="btn mini-btn icon-btn"
               :to="{ name: 'settings-category-group-detail', params: { id: group.id }, query: { activeKind } }"
-              aria-label="母分類設定"
+              :aria-label="t('settings_category_page.group_settings')"
             >
               <font-awesome-icon icon="fa-solid fa-gear" />
             </RouterLink>
@@ -46,14 +46,14 @@
                   <font-awesome-icon v-if="category.icon" :icon="category.icon" class="item-icon" />
                   <span>{{ category.name }}</span>
                 </RouterLink>
-                <font-awesome-icon icon="fa-solid fa-bars" class="drag-handle child-drag-bar" aria-label="拖動排序" />
+                <font-awesome-icon icon="fa-solid fa-bars" class="drag-handle child-drag-bar" :aria-label="t('common.drag_sort')" />
               </li>
             </template>
             <template #footer>
               <li class="row category-row add-category-row">
                 <button class="item-name add-category-btn" type="button" @click="addCategoryForGroup(group.id)">
                   <font-awesome-icon icon="fa-solid fa-circle-plus" class="item-icon" />
-                  <span>新增分類</span>
+                  <span>{{ t('settings_category_page.add_category') }}</span>
                 </button>
               </li>
             </template>
@@ -65,44 +65,44 @@
 
     <AppDialog
       :open="groupDialogOpen"
-      title="新增分類群組"
+      :title="t('settings_category_page.dialog.group_title')"
       :confirm-disabled="!groupNameInput.trim()"
-      confirm-text="儲存"
+      :confirm-text="t('common.save')"
       @close="closeGroupDialog"
       @confirm="submitGroupDialog"
     >
       <label class="field">
-        群組名稱
-        <input v-model="groupNameInput" class="input" type="text" maxlength="40" placeholder="請輸入群組名稱" />
+        {{ t('common.group_name') }}
+        <input v-model="groupNameInput" class="input" type="text" maxlength="40" :placeholder="t('common.group_name')" />
       </label>
     </AppDialog>
 
     <AppDialog
       :open="categoryDialogOpen"
-      title="新增分類"
+      :title="t('settings_category_page.dialog.category_title')"
       :confirm-disabled="!categoryNameInput.trim() || !categoryGroupIdInput"
-      confirm-text="儲存"
+      :confirm-text="t('common.save')"
       @close="closeCategoryDialog"
       @confirm="submitCategoryDialog"
     >
       <label class="field">
-        分類名稱
-        <input v-model="categoryNameInput" class="input" type="text" maxlength="40" placeholder="請輸入分類名稱" />
+        {{ t('common.category_name') }}
+        <input v-model="categoryNameInput" class="input" type="text" maxlength="40" :placeholder="t('common.category_name')" />
       </label>
       <div class="field">
-        <span>分類 Icon</span>
+        <span>{{ t('settings_category_page.icon_label') }}</span>
         <button class="icon-picker-btn" type="button" @click.stop.prevent="openCategoryIconPicker">
           <font-awesome-icon :icon="categoryIconInput" />
-          <span>選擇 icon</span>
+          <span>{{ t('common.choose_icon') }}</span>
         </button>
       </div>
       <label class="field">
-        所屬群組
+        {{ t('common.group') }}
         <template v-if="categoryGroupLockedId">
           <div class="fixed-group">{{ groupNameById(categoryGroupIdInput) }}</div>
         </template>
         <template v-else>
-          <CustomSelect v-model="categoryGroupIdInput" :options="groupOptions" placeholder="請選擇群組" />
+          <CustomSelect v-model="categoryGroupIdInput" :options="groupOptions" :placeholder="t('common.select_group')" />
         </template>
       </label>
     </AppDialog>
@@ -205,7 +205,12 @@ async function addGroup() {
 
 async function addCategory() {
   if (filteredGroups.value.length === 0) {
-    uiStore.pushToast(`請先在「${activeKind.value === 'expense' ? '支出' : '收入'}」新增分類群組`, 'error')
+    uiStore.pushToast(
+      t('settings_category_page.error.add_group_first', {
+        kind: activeKind.value === 'expense' ? t('transaction.type.expense') : t('transaction.type.income'),
+      }),
+      'error',
+    )
     return
   }
 
@@ -219,7 +224,7 @@ async function addCategory() {
 function addCategoryForGroup(groupId) {
   const group = filteredGroups.value.find((item) => item.id === groupId)
   if (!group) {
-    uiStore.pushToast('找不到對應群組', 'error')
+    uiStore.pushToast(t('settings_category_page.group_not_found'), 'error')
     return
   }
 
@@ -244,10 +249,10 @@ async function submitGroupDialog() {
       kind: activeKind.value,
       sortOrder: filteredGroups.value.length,
     })
-    uiStore.pushToast('分類群組已新增')
+    uiStore.pushToast(t('settings_category_page.toast.group_created'))
     closeGroupDialog()
   } catch (error) {
-    uiStore.pushToast(error.message ?? '新增群組失敗', 'error')
+    uiStore.pushToast(error.message ?? t('settings_category_page.toast.group_create_failed'), 'error')
   }
 }
 
@@ -277,7 +282,7 @@ async function openCategoryIconPicker() {
       },
     })
   } catch (error) {
-    uiStore.pushToast(error?.message ?? '開啟 icon 選擇器失敗', 'error')
+    uiStore.pushToast(error?.message ?? t('settings_category_page.toast.open_icon_failed'), 'error')
   }
 }
 
@@ -287,7 +292,7 @@ async function submitCategoryDialog() {
   if (!name || !groupId) return
   const group = filteredGroups.value.find((item) => item.id === groupId)
   if (!group) {
-    uiStore.pushToast('找不到對應群組', 'error')
+    uiStore.pushToast(t('settings_category_page.group_not_found'), 'error')
     return
   }
   try {
@@ -299,10 +304,10 @@ async function submitCategoryDialog() {
       icon: normalizeFaIcon(categoryIconInput.value),
       sortOrder,
     })
-    uiStore.pushToast('分類已新增')
+    uiStore.pushToast(t('settings_category_page.toast.category_created'))
     closeCategoryDialog()
   } catch (error) {
-    uiStore.pushToast(error.message ?? '新增分類失敗', 'error')
+    uiStore.pushToast(error.message ?? t('settings_category_page.toast.category_create_failed'), 'error')
   }
 }
 

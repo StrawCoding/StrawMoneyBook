@@ -20,6 +20,7 @@ import {
 } from '@/core/repositories/category.repo'
 import { isSavingsJarAccount } from '@/core/repositories/savings-jar.repo'
 import { assertCanCreateReimbursement } from '@/core/services/membership.service'
+import { deleteLoanRepaymentByTransactionId } from '@/core/services/loan.service'
 import { removeAdvanceUsagesForExpenseTransaction } from '@/core/services/reimbursement.service'
 
 const TRANSACTION_FAILURE_TRACE_MAX_ENTRIES = 60
@@ -475,6 +476,13 @@ export async function deleteManualTransaction(ledgerId, txId) {
   const target = await findTransactionRecordById(ledgerId, txId)
   if (!target) {
     throw new Error('找不到交易資料')
+  }
+
+  if (String(target.origin_type ?? '').trim() === 'loan_payment') {
+    const deletedLoanRepayment = await deleteLoanRepaymentByTransactionId(ledgerId, txId)
+    if (deletedLoanRepayment) {
+      return deletedLoanRepayment
+    }
   }
 
   if (target.type === 'transfer' && target.transfer_group_id) {
