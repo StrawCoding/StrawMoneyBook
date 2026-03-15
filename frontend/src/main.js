@@ -166,6 +166,7 @@ import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { getCurrentLocale, initLocalePreference } from '@/ui/services/i18n.service'
 import { canNavigateBackInApp, resolveBackFallback, shouldConfirmExit } from '@/ui/services/navigation-back.service'
+import { restoreSharedLedgerSession } from '@/services/shared-ledger/backend'
 import {
   initSharedLedgerBackgroundSync,
   runSharedLedgerBackgroundSyncNow,
@@ -474,6 +475,17 @@ function restoreGoogleBackupForActiveLedgerInBackground(ledgerId, { runDueBackup
   })()
 }
 
+function restoreSharedLedgerSessionInBackground(reason, { force = false } = {}) {
+  void restoreSharedLedgerSession({ force }).catch((error) => {
+    const code = String(error?.code ?? '').trim()
+    if (code === 'shared_ledger_api_unavailable') {
+      return null
+    }
+    console.warn(`[shared-ledger] session restore failed (${reason})`, error)
+    return null
+  })
+}
+
 async function main() {
   loadThemeColor()
   initLocalePreference()
@@ -534,6 +546,7 @@ async function main() {
 
     CapacitorApp.addListener('appStateChange', ({ isActive }) => {
       if (!isActive) return
+      restoreSharedLedgerSessionInBackground('app_resume')
       scheduleMembershipWarmup('app_resume')
       window.dispatchEvent(new Event('app:check-update'))
       const ledgerStore = useLedgerStore(pinia)
@@ -555,12 +568,16 @@ async function main() {
   try {
     await bootstrapApp(pinia)
     const ledgerStore = useLedgerStore(pinia)
+    restoreSharedLedgerSessionInBackground('app_start', { force: true })
     initSharedLedgerBackgroundSync(pinia)
     if (typeof window !== 'undefined') {
       window.addEventListener('app:data-mutated', () => {
         scheduleAutoBackupOnDataChange(pinia)
         scheduleHomeWidgetSync(pinia)
         scheduleActiveSharedLedgerAutoSync(pinia)
+      })
+      window.addEventListener('focus', () => {
+        restoreSharedLedgerSessionInBackground('window_focus')
       })
     }
 

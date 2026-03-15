@@ -2144,6 +2144,7 @@ const MESSAGES = {
 
 MESSAGES.ja = {
   ...RUNTIME_JA_MESSAGES_GENERATED,
+  'home_asset_summary.balance_label': '残高',
   'settings.security_lock': 'セキュリティロック',
   'settings.bank_sync': '銀行同期',
   'home_budget_summary.title': '予算サマリー',

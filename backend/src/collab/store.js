@@ -8,6 +8,7 @@ const CONFIGURED_DATA_FILE = String(process.env.SHARED_LEDGER_DATA_FILE ?? '').t
 const CONFIGURED_DB_FILE = String(process.env.SHARED_LEDGER_DB_FILE ?? '').trim()
 const DEFAULT_DB_FILE_PATH = fileURLToPath(new URL('../../.server-data/collab-store.sqlite', import.meta.url))
 const DEFAULT_LEGACY_JSON_FILE_PATH = fileURLToPath(new URL('../../.server-data/collab-store.json', import.meta.url))
+const DEV_FALLBACK_TOKEN_SECRET = 'strawmoneybook-dev-shared-ledger-secret'
 const DATA_FILE_PATH = resolve(
   CONFIGURED_DB_FILE
     || (CONFIGURED_DATA_FILE.endsWith('.sqlite') ? CONFIGURED_DATA_FILE : '')
@@ -18,7 +19,7 @@ const LEGACY_JSON_FILE_PATH = resolve(
     ? CONFIGURED_DATA_FILE
     : DEFAULT_LEGACY_JSON_FILE_PATH,
 )
-const TOKEN_SECRET = String(process.env.SHARED_LEDGER_TOKEN_SECRET ?? 'strawmoneybook-dev-shared-ledger-secret').trim()
+const TOKEN_SECRET = resolveTokenSecret()
 const ACCESS_TOKEN_TTL_MS = Math.max(
   60_000,
   Number(process.env.SHARED_LEDGER_ACCESS_TOKEN_TTL_MS ?? process.env.SHARED_LEDGER_TOKEN_TTL_MS ?? 15 * 60 * 1000) || 0,
@@ -42,6 +43,15 @@ const EMAIL_TOTAL_MAX_LENGTH = 254
 let updateQueue = Promise.resolve()
 let dbInstance = null
 let databaseReadyPromise = null
+
+function resolveTokenSecret() {
+  const configuredSecret = String(process.env.SHARED_LEDGER_TOKEN_SECRET ?? '').trim()
+  if (configuredSecret) return configuredSecret
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SHARED_LEDGER_TOKEN_SECRET is required in production')
+  }
+  return DEV_FALLBACK_TOKEN_SECRET
+}
 
 function nowIso() {
   return new Date().toISOString()

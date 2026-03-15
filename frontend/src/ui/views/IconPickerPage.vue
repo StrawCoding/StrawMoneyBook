@@ -7,27 +7,20 @@
       </header>
 
       <article class="card panel">
-        <p class="muted">{{ scopeLabel }}</p>
-        <input
-          v-model.trim="searchText"
-          class="search-input"
-          type="search"
-          placeholder="搜尋 icon / 名稱"
-        >
         <div class="icon-grid">
           <button
-            v-for="item in filteredOptions"
+            v-for="item in options"
             :key="item.value"
             class="icon-btn"
             :class="{ active: item.value === currentValue }"
             type="button"
+            :aria-label="item.label"
+            :title="item.label"
             @click.stop.prevent="pick(item.value)"
           >
             <font-awesome-icon :icon="item.icon" />
-            <span class="icon-label">{{ item.label }}</span>
           </button>
         </div>
-        <p v-if="!filteredOptions.length" class="muted empty-state">找不到符合的 icon</p>
       </article>
     </section>
   </div>
@@ -46,16 +39,9 @@ const router = useRouter()
 const { t } = useI18n()
 const uiStore = useUiStore()
 const picking = ref(false)
-const searchText = ref('')
 
 const scope = computed(() => (queryText(route.query.scope) === 'account' ? 'account' : 'category'))
 const options = computed(() => (scope.value === 'account' ? accountIconOptions : categoryIconOptions))
-const filteredOptions = computed(() => {
-  const keyword = searchText.value.trim().toLowerCase()
-  if (!keyword) return options.value
-  return options.value.filter((item) => String(item.searchText ?? `${item.label} ${item.value}`).includes(keyword))
-})
-const scopeLabel = computed(() => (scope.value === 'account' ? t('icon_picker.select_account_icon') : t('icon_picker.select_category_icon')))
 const currentValue = computed(() => normalizeFaIcon(queryText(route.query.current), options.value[0]?.value ?? ''))
 
 async function pick(icon) {
@@ -183,41 +169,24 @@ function buildBaseQuery(query) {
 .panel {
   padding: 14px
 }
-.search-input {
-  width: 100%;
-  border: 1px solid var(--field-border);
-  border-radius: 12px;
-  background: var(--surface-popover);
-  color: var(--text);
-  padding: 10px 12px;
-  font-size: 14px;
-}
 .icon-grid {
-  margin-top: 10px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
   gap: 10px;
   touch-action: pan-y;
 }
 .icon-btn {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
   border: 1px solid var(--field-border);
   background: color-mix(in srgb, var(--card) 85%, var(--surface-popover) 15%);
   border-radius: 14px;
   color: var(--text);
-  min-height: 84px;
-  padding: 10px 6px;
-  font-size: 20px
-}
-.icon-label {
-  font-size: 12px;
-  line-height: 1.2;
-  text-align: center;
-  word-break: break-word;
+  aspect-ratio: 1;
+  min-height: 64px;
+  padding: 0;
+  font-size: 22px
 }
 .icon-btn.active {
   color: var(--primary-soft);
@@ -226,8 +195,4 @@ function buildBaseQuery(query) {
 }
 .icon-btn:active {
   transform: scale(0.97)
-}
-.empty-state {
-  margin-top: 12px;
-  text-align: center;
 }</style>

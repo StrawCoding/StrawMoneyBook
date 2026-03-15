@@ -127,8 +127,13 @@ export default defineConfig(({ mode }) => {
     }
   }
 
+  const plugins = [vue(), localApiDevPlugin()]
+  if (mode !== 'production') {
+    plugins.push(vueDevTools())
+  }
+
   return {
-    plugins: [vue(), vueDevTools(), localApiDevPlugin()],
+    plugins,
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -136,6 +141,55 @@ export default defineConfig(({ mode }) => {
     },
     optimizeDeps: {
       exclude: ['jeep-sqlite', 'jeep-sqlite/loader'],
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('vuedraggable')) return 'vendor-dnd'
+              if (
+                id.includes('@capacitor-community/sqlite')
+                || id.includes('@sqlite.org/sqlite-wasm')
+                || id.includes('jeep-sqlite')
+                || id.includes('sql.js')
+              ) {
+                return 'vendor-sqlite'
+              }
+              if (id.includes('@fortawesome')) return 'vendor-icons'
+              if (id.includes('/vue/')) return 'vendor-vue'
+              return 'vendor'
+            }
+            if (
+              id.includes('/src/ui/services/i18n.service.js')
+              || id.includes('/src/ui/services/runtime-')
+            ) {
+              return 'app-i18n'
+            }
+            if (
+              id.includes('/src/core/services/ai-bookkeeping')
+              || id.includes('/src/ui/composables/use-speech-input.js')
+            ) {
+              return 'app-ai'
+            }
+            if (
+              id.includes('/src/core/services/membership.service.js')
+              || id.includes('/src/core/services/google-play-billing.service.js')
+              || id.includes('/src/ui/services/app-update.service.js')
+            ) {
+              return 'app-membership'
+            }
+            if (
+              id.includes('/src/services/google/auth.js')
+              || id.includes('/src/ui/services/google-identity.service.js')
+              || id.includes('/src/ui/services/google-backup.service.js')
+            ) {
+              return 'app-google'
+            }
+            return null
+          },
+        },
+      },
     },
   }
 })

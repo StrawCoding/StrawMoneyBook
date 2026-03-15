@@ -1,12 +1,15 @@
 import { Capacitor } from '@capacitor/core'
 
-const DEV_DEFAULT_SHARED_LEDGER_API_BASE = 'https://api.strawmb.com'
+const PROD_DEFAULT_SHARED_LEDGER_API_BASE = 'https://api.strawmb.com'
 const EXPLICIT_SHARED_LEDGER_API_BASE = String(import.meta.env.VITE_SHARED_LEDGER_API_BASE_URL ?? '').trim()
 const SESSION_STORAGE_KEY = 'straw.shared_ledger_session'
 const REQUEST_TIMEOUT_MS = 15_000
+const SESSION_RESTORE_COOLDOWN_MS = 60_000
 const sessionListeners = new Set()
 const API_DISPLAY_NAME = 'StrawMB API'
 let ongoingRefreshPromise = null
+let ongoingSessionRestorePromise = null
+let lastSessionRestoreAt = 0
 
 function shouldUseSameOriginLocalApi() {
   if (EXPLICIT_SHARED_LEDGER_API_BASE) return false
@@ -19,7 +22,8 @@ function shouldUseSameOriginLocalApi() {
 function getSharedLedgerApiBase() {
   if (EXPLICIT_SHARED_LEDGER_API_BASE) return EXPLICIT_SHARED_LEDGER_API_BASE
   if (shouldUseSameOriginLocalApi()) return ''
-  return DEV_DEFAULT_SHARED_LEDGER_API_BASE
+  if (import.meta.env.PROD) return PROD_DEFAULT_SHARED_LEDGER_API_BASE
+  return ''
 }
 
 function buildApiUrl(path) {
@@ -33,8 +37,7 @@ function buildApiUrl(path) {
 }
 
 function shouldRequireExplicitApiBase() {
-  if (getSharedLedgerApiBase()) return false
-  return Capacitor.getPlatform() !== 'web'
+  return !getSharedLedgerApiBase()
 }
 
 function createMissingApiError() {
@@ -158,6 +161,16 @@ function buildAuthResponseSession(data, previousSession = null) {
   }
 }
 
+function shouldPreserveSessionOnRefreshFailure(error) {
+  const code = String(error?.code ?? '').trim()
+  const status = Number(error?.status ?? 0)
+  return (
+    code === 'shared_ledger_network_error' ||
+    code === 'shared_ledger_api_timeout' ||
+    status >= 500
+  )
+}
+
 async function performRefreshRequest() {
   const session = readSession()
   const refreshToken = String(session?.refreshToken ?? '').trim()
@@ -181,7 +194,9 @@ async function tryRefreshSessionOnce({ allowRetry = true } = {}) {
   if (!ongoingRefreshPromise) {
     ongoingRefreshPromise = performRefreshRequest()
       .catch((error) => {
-        clearSession()
+        if (!shouldPreserveSessionOnRefreshFailure(error)) {
+          clearSession()
+        }
         throw error
       })
       .finally(() => {
@@ -472,6 +487,41 @@ export async function refreshSharedLedgerSession() {
   if (!session?.token) return null
   const data = await requestJson('/api/auth/me')
   return updateSessionUser(data.user)
+}
+
+export async function restoreSharedLedgerSession({ force = false } = {}) {
+  const session = readSession()
+  if (!session?.token) return null
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return session
+  }
+
+  const nowMs = Date.now()
+  if (!force && nowMs - lastSessionRestoreAt < SESSION_RESTORE_COOLDOWN_MS) {
+    return session
+  }
+
+  if (!ongoingSessionRestorePromise) {
+    lastSessionRestoreAt = nowMs
+    ongoingSessionRestorePromise = (async () => {
+      try {
+        if (session.refreshToken) {
+          return await performRefreshRequest()
+        }
+        return await refreshSharedLedgerSession()
+      } catch (error) {
+        if (shouldPreserveSessionOnRefreshFailure(error)) {
+          return readSession()
+        }
+        throw error
+      } finally {
+        ongoingSessionRestorePromise = null
+      }
+    })()
+  }
+
+  return ongoingSessionRestorePromise
 }
 
 export async function logoutSharedLedgerAccount() {

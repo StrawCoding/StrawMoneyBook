@@ -1,5 +1,6 @@
 import appPackage from '../../../package.json'
 import { getSharedLedgerSession } from '@/services/shared-ledger/backend'
+import router from '@/ui/router'
 import {
   isSupported as isGooglePlayBillingSupported,
   invalidateBillingCache as invalidateGooglePlayBillingCache,
@@ -733,8 +734,6 @@ function triggerMembershipBenefitsRedirect(reason = 'limit_reached') {
 
   membershipBenefitsRedirectInFlight = Promise.resolve()
     .then(async () => {
-      const routerModule = await import('@/ui/router')
-      const router = routerModule?.default
       if (!router) return
       const currentPath = String(router.currentRoute?.value?.path ?? '')
       if (currentPath === MEMBERSHIP_BENEFITS_ROUTE_PATH) return

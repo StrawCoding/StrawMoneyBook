@@ -27,6 +27,7 @@ const LEDGER_TABLES = [
   'deleted_log',
 ]
 const APP_SETTING_SECRET_KEY_RE = /(password|token|secret|authorization|client[_-]?key)/i
+const APP_SETTING_SECURE_ONLY_KEY_RE = /^(?:bank_sync\.credentials\.[^.]+|backup\.webdav\.credentials)$/i
 const ADDON_NOTE_PREFIX = '【附加項目】'
 
 function toCsvValue(value) {
@@ -105,9 +106,26 @@ function redactSettingSecrets(value) {
 
 function sanitizeAppSettingRow(row) {
   if (!row || typeof row !== 'object') return row
+  const settingKey = String(row.key ?? '').trim()
+  if (APP_SETTING_SECURE_ONLY_KEY_RE.test(settingKey)) {
+    return null
+  }
   try {
     const parsed = JSON.parse(String(row.value_json ?? 'null'))
     if (!parsed || typeof parsed !== 'object') return row
+    if (settingKey === 'backup.webdav') {
+      return {
+        ...row,
+        value_json: JSON.stringify({
+          ...redactSettingSecrets(parsed),
+          connected: false,
+          autoEnabled: false,
+          dataChangeAutoEnabled: false,
+          password: '',
+          lastError: '',
+        }),
+      }
+    }
     return {
       ...row,
       value_json: JSON.stringify(redactSettingSecrets(parsed)),
@@ -244,7 +262,9 @@ async function rowsFromLedgerTable(ledgerId, tableName) {
   const result = await query(`SELECT * FROM ${tableName} WHERE ledger_id = ?;`, [ledgerId])
   const rows = result?.values ?? []
   if (tableName !== 'app_settings') return rows
-  return rows.map((row) => sanitizeAppSettingRow(row))
+  return rows
+    .map((row) => sanitizeAppSettingRow(row))
+    .filter(Boolean)
 }
 
 async function getSchemaVersion() {

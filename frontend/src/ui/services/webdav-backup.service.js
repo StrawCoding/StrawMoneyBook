@@ -1,9 +1,11 @@
 import { exportAllLedgersJson } from '@/core/services/export.service'
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
 import { translateMessage } from '@/ui/services/i18n.service'
+import { deleteEncryptedSetting, getEncryptedSetting, setEncryptedSetting } from '@/ui/services/secure-setting.service'
 import { Capacitor, CapacitorHttp } from '@capacitor/core'
 
 const WEBDAV_BACKUP_KEY = 'backup.webdav'
+const WEBDAV_BACKUP_CREDENTIALS_KEY = 'backup.webdav.credentials'
 const WEBDAV_REQUEST_TIMEOUT_MS = 15000
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
@@ -39,6 +41,27 @@ function normalizeState(raw) {
     password,
     remoteDir: normalizeRemoteDir(raw.remoteDir),
     connected: Boolean(raw.connected && hasAuth),
+    autoEnabled: Boolean(raw.autoEnabled && hasAuth),
+    dataChangeAutoEnabled: Boolean(raw.dataChangeAutoEnabled && raw.autoEnabled && hasAuth),
+    intervalHours: Math.max(1, Number(raw.intervalHours ?? 24) || 24),
+    lastBackupFilename: String(raw.lastBackupFilename ?? '').trim(),
+    lastBackupAt: String(raw.lastBackupAt ?? ''),
+    lastBackupStatus: String(raw.lastBackupStatus ?? 'idle'),
+    lastError: String(raw.lastError ?? ''),
+  }
+}
+
+function normalizeStoredState(raw) {
+  const base = buildDefaultState()
+  if (!raw || typeof raw !== 'object') return base
+  return {
+    ...base,
+    ...raw,
+    endpoint: normalizeEndpoint(raw.endpoint),
+    username: String(raw.username ?? '').trim(),
+    password: '',
+    remoteDir: normalizeRemoteDir(raw.remoteDir),
+    connected: Boolean(raw.connected),
     autoEnabled: Boolean(raw.autoEnabled),
     dataChangeAutoEnabled: Boolean(raw.dataChangeAutoEnabled),
     intervalHours: Math.max(1, Number(raw.intervalHours ?? 24) || 24),
@@ -46,6 +69,16 @@ function normalizeState(raw) {
     lastBackupAt: String(raw.lastBackupAt ?? ''),
     lastBackupStatus: String(raw.lastBackupStatus ?? 'idle'),
     lastError: String(raw.lastError ?? ''),
+  }
+}
+
+function normalizeCredentialState(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const password = String(raw.password ?? '')
+  if (!password) return null
+  return {
+    password,
+    updatedAt: String(raw.updatedAt ?? '').trim() || new Date().toISOString(),
   }
 }
 
@@ -299,14 +332,57 @@ async function ensureRemoteDirExists(state) {
 export async function getWebdavBackupState(ledgerId) {
   assertLedgerId(ledgerId)
   const stored = await getSetting(ledgerId, WEBDAV_BACKUP_KEY)
-  return normalizeState(stored)
+  const rawState = stored && typeof stored === 'object' ? stored : buildDefaultState()
+  const secureCredentials = normalizeCredentialState(
+    await getEncryptedSetting(ledgerId, WEBDAV_BACKUP_CREDENTIALS_KEY),
+  )
+  const legacyPassword = String(rawState.password ?? '')
+
+  if (!secureCredentials && legacyPassword) {
+    await setEncryptedSetting(ledgerId, WEBDAV_BACKUP_CREDENTIALS_KEY, {
+      password: legacyPassword,
+      updatedAt: new Date().toISOString(),
+    })
+    await setSetting(ledgerId, WEBDAV_BACKUP_KEY, normalizeStoredState(rawState))
+  }
+
+  return normalizeState({
+    ...rawState,
+    password: secureCredentials?.password ?? legacyPassword,
+  })
 }
 
 export async function updateWebdavBackupState(ledgerId, patch = {}) {
   assertLedgerId(ledgerId)
   const current = await getWebdavBackupState(ledgerId)
   const next = normalizeState({ ...current, ...patch })
-  await setSetting(ledgerId, WEBDAV_BACKUP_KEY, next)
+  if (Object.prototype.hasOwnProperty.call(patch, 'password')) {
+    const nextPassword = String(patch.password ?? '')
+    if (nextPassword) {
+      await setEncryptedSetting(ledgerId, WEBDAV_BACKUP_CREDENTIALS_KEY, {
+        password: nextPassword,
+        updatedAt: new Date().toISOString(),
+      })
+    } else {
+      await deleteEncryptedSetting(ledgerId, WEBDAV_BACKUP_CREDENTIALS_KEY)
+    }
+  }
+  await setSetting(
+    ledgerId,
+    WEBDAV_BACKUP_KEY,
+    normalizeStoredState({
+      ...current,
+      ...patch,
+      connected: next.connected,
+      autoEnabled: next.autoEnabled,
+      dataChangeAutoEnabled: next.dataChangeAutoEnabled,
+      intervalHours: next.intervalHours,
+      lastBackupFilename: next.lastBackupFilename,
+      lastBackupAt: next.lastBackupAt,
+      lastBackupStatus: next.lastBackupStatus,
+      lastError: next.lastError,
+    }),
+  )
   return next
 }
 

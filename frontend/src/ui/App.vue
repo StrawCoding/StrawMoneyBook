@@ -2,7 +2,7 @@
   <div class="app-shell" :class="{ booting: isBooting, 'welcome-mode': showWelcomePage }">
     <header v-if="!isBooting && !showWelcomePage" class="top-bar">
       <div class="title-wrap">
-        <img class="brand-logo" src="@/ui/assets/logo.png" alt="StrawMoneyBook logo" />
+        <img class="brand-logo" :src="BRAND_LOGO_URL" alt="StrawMoneyBook logo" />
         <h1>StrawMoneyBook</h1>
       </div>
       <transition name="fade-scale">
@@ -20,7 +20,7 @@
     <main class="page-container" :class="{ booting: isBooting, 'welcome-mode': showWelcomePage }">
       <transition name="boot-overlay" appear>
         <section v-if="isBooting" class="boot-layer card">
-          <img class="boot-logo" src="@/ui/assets/logo.png" alt="StrawMoneyBook logo" />
+          <img class="boot-logo" :src="BRAND_LOGO_URL" alt="StrawMoneyBook logo" />
           <p class="boot-title">StrawMoneyBook</p>
           <p class="boot-subtitle">{{ t('app.loading') }}</p>
           <div class="boot-progress" aria-hidden="true" />
@@ -72,6 +72,7 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import BottomNav from '@/ui/components/layout/BottomNav.vue'
 import ToastHost from '@/ui/components/common/ToastHost.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
+import { BRAND_LOGO_URL } from '@/ui/constants/brand-assets'
 import WelcomePage from '@/ui/views/WelcomePage.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { flushDeferredScrollRestore } from '@/ui/services/route-scroll.service'

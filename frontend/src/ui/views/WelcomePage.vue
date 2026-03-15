@@ -7,7 +7,7 @@
 
       <transition name="wizard-slide" mode="out-in">
         <section v-if="step === 1" :key="'step-1'" class="step-panel">
-          <img class="hero-logo" src="@/ui/assets/logo.png" alt="StrawMoneyBook logo" />
+          <img class="hero-logo" :src="BRAND_LOGO_URL" alt="StrawMoneyBook logo" />
           <h2>{{ t('welcome.title') }}</h2>
           <p class="muted intro-copy">
             {{ t('welcome.subtitle') }}
@@ -134,6 +134,7 @@
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import { BRAND_LOGO_URL } from '@/ui/constants/brand-assets'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'

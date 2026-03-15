@@ -574,12 +574,14 @@ const googleAuthSubmitting = ref(false)
 const googleChallenge = ref(null)
 let resetRequestCountdownTimer = null
 let googleChallengeRefreshTimer = null
+let googleChallengeRequest = null
 
 const MAX_AVATAR_SIDE_PX = 320
 const MAX_AVATAR_FILE_BYTES = 5 * 1024 * 1024
 const MAX_AVATAR_DATA_URL_LENGTH = 5 * 1024 * 1024
 const APP_DOWNLOAD_URL = 'https://play.google.com/store/apps/details?id=com.strawcoding.strawmoneybook'
 const REFERRAL_CODE_PATTERN = /(^|[^A-Z0-9])([A-Z0-9]{8})(?=$|[^A-Z0-9])/i
+const GOOGLE_CHALLENGE_REUSE_BUFFER_MS = 60_000
 
 const resetToken = computed(() => String(route.query.token ?? '').trim())
 const isResetPasswordMode = computed(() => String(route.query.mode ?? '').trim() === 'reset-password' && Boolean(resetToken.value))
@@ -836,19 +838,57 @@ function scheduleGoogleChallengeRefresh(expiresAt) {
   }, delayMs)
 }
 
-async function loadGoogleChallenge(purpose) {
+function hasReusableGoogleChallenge(challenge, purpose) {
+  const normalizedPurpose = String(purpose ?? '').trim() || 'login'
+  const expiresAtMs = Date.parse(String(challenge?.expires_at ?? ''))
+  return (
+    String(challenge?.nonce ?? '').trim()
+    && String(challenge?.purpose ?? '').trim() === normalizedPurpose
+    && Number.isFinite(expiresAtMs)
+    && expiresAtMs - Date.now() > GOOGLE_CHALLENGE_REUSE_BUFFER_MS
+  )
+}
+
+async function loadGoogleChallenge(purpose, { force = false } = {}) {
   if (!showGoogleAuthAction.value || apiUnavailable.value || !googleIdentityAvailable.value) return null
   const normalizedPurpose = String(purpose ?? '').trim() || (sessionUser.value ? 'link' : 'login')
-  const result = await prepareSharedLedgerGoogleAuth({ purpose: normalizedPurpose })
-  googleChallenge.value = result
-  scheduleGoogleChallengeRefresh(result?.expires_at)
-  return result
+  if (!force && hasReusableGoogleChallenge(googleChallenge.value, normalizedPurpose)) {
+    scheduleGoogleChallengeRefresh(googleChallenge.value?.expires_at)
+    return googleChallenge.value
+  }
+  if (!force && googleChallengeRequest?.purpose === normalizedPurpose) {
+    return googleChallengeRequest.promise
+  }
+
+  const promise = prepareSharedLedgerGoogleAuth({ purpose: normalizedPurpose })
+    .then((result) => {
+      googleChallenge.value = result
+      scheduleGoogleChallengeRefresh(result?.expires_at)
+      return result
+    })
+    .finally(() => {
+      if (googleChallengeRequest?.promise === promise) {
+        googleChallengeRequest = null
+      }
+    })
+
+  googleChallengeRequest = {
+    purpose: normalizedPurpose,
+    promise,
+  }
+  return promise
 }
 
 function toGoogleErrorMessage(error, fallback) {
   const code = String(error?.code ?? '').trim()
   if (code === 'google_canceled') return t('settings_account.google_canceled', '已取消 Google 登入')
   if (code === 'google_no_credential') return t('settings_account.google_no_credential', '裝置沒有可用的 Google 帳號，請先新增或改用其他登入方式')
+  if (code === 'rate_limited') {
+    const retryAfterSeconds = Math.max(0, Number(error?.retryAfterSeconds ?? 0) || 0)
+    return retryAfterSeconds > 0
+      ? t('settings_account.google_rate_limited_retry', { seconds: retryAfterSeconds }, '操作過於頻繁，請於 {seconds} 秒後再試')
+      : t('settings_account.google_rate_limited', '操作過於頻繁，請稍後再試')
+  }
   return error?.message || fallback
 }
 

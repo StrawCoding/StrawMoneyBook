@@ -13,3 +13,6 @@
 *__pycache__
 *.venv
 speech-stt-service/models
+**/.env
+**/.env.*
+!**/.env.example
