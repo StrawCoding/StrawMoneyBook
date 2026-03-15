@@ -55,6 +55,12 @@ const router = createRouter({
       meta: { tab: 'home' },
     },
     {
+      name: 'transaction-qna-add',
+      path: '/transactions/qna',
+      component: () => import('@/ui/views/BookkeepingPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
       name: 'transaction-calendar',
       path: '/transactions/calendar',
       component: () => import('@/ui/views/CalendarPage.vue'),

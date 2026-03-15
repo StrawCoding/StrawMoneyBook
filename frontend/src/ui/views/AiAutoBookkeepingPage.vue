@@ -290,6 +290,7 @@ import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import { getLastManualBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { mergeAddonItemsToNote } from '@/ui/utils/addon-note'
@@ -383,7 +384,7 @@ async function goBack() {
 
 async function goManualBookkeeping() {
   await router.push({
-    path: '/transactions/quick-add',
+    path: getLastManualBookkeepingPath(),
     query: { type: model.type },
   }).catch(() => {})
 }
@@ -798,7 +799,7 @@ function resetPersistedTransaction() {
 
 function resolveAiLimitWithManualHint(message) {
   const baseMessage = String(message ?? '').trim() || '免費版 AI 記帳每日最多 5 次'
-  const manualHint = t('ai_bookkeeping.toast.limit_manual_hint', '可改用手動記帳（快速新增）')
+  const manualHint = t('ai_bookkeeping.toast.limit_manual_hint', '可改用手動記帳')
   if (baseMessage.includes(manualHint)) return baseMessage
   return `${baseMessage}，${manualHint}`
 }
