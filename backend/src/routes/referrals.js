@@ -2,10 +2,10 @@ import { requireAuthenticatedUser } from '../collab/auth-session.js'
 import { methodGuard, normalizePath, parseBody, sendJson } from '../collab/http.js'
 import {
   applyMembershipGrant,
+  buildPublicUserProfile,
   findUserById,
   findUserByReferralCode,
   nowIso,
-  publicUser,
   readStore,
   updateStore,
 } from '../collab/store.js'
@@ -34,7 +34,7 @@ async function handleGetSummary(req, res, user) {
   const data = await readStore()
   const currentUser = data.users.find((item) => String(item.id) === String(user.id))
   sendJson(res, 200, {
-    user: publicUser(currentUser),
+    user: await buildPublicUserProfile(currentUser),
     summary: buildReferralSummary(data, currentUser),
   })
 }
@@ -106,7 +106,7 @@ async function handleRedeem(req, res, user) {
   const data = await readStore()
   const updatedUser = data.users.find((item) => String(item.id) === String(updatedUserId))
   sendJson(res, 200, {
-    user: publicUser(updatedUser),
+    user: await buildPublicUserProfile(updatedUser),
     summary: buildReferralSummary(data, updatedUser),
   })
 }

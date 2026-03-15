@@ -2,6 +2,7 @@ import { requireAuthenticatedUser } from '../collab/auth-session.js'
 import { methodGuard, normalizePath, normalizeText, parseBody, sendJson } from '../collab/http.js'
 import {
   applyMembershipGrant,
+  buildPublicUserProfile,
   buildSharedLedgerInvitationSummary,
   buildSharedLedgerSummary,
   createId,
@@ -12,7 +13,6 @@ import {
   isSharedLedgerMember,
   listPendingSharedLedgerInvitationsForUser,
   nowIso,
-  publicUser,
   readStore,
   updateStore,
   validateEmail,
@@ -38,7 +38,7 @@ function isSharedLedgerTrialEligible(user) {
   return grants.length === 0
 }
 
-function ensureSharedLedgerMembership(res, user) {
+async function ensureSharedLedgerMembership(res, user) {
   if (getMembershipGrantSummary(user).active) {
     return true
   }
@@ -46,7 +46,7 @@ function ensureSharedLedgerMembership(res, user) {
   sendJson(res, 403, {
     error: 'membership_required',
     message: '共同帳本僅限會員使用',
-    user: publicUser(user),
+    user: await buildPublicUserProfile(user),
     membership_trial_eligible: isSharedLedgerTrialEligible(user),
   })
   return false
@@ -76,7 +76,7 @@ async function handleActivateFirstTrial(req, res, user) {
   const data = await readStore()
   const currentUser = data.users.find((item) => String(item.id) === String(result?.userId ?? ''))
   sendJson(res, 200, {
-    user: publicUser(currentUser),
+    user: await buildPublicUserProfile(currentUser),
     trial_days: SHARED_LEDGER_FIRST_TRIAL_DAYS,
     expires_at: String(result?.expiresAt ?? ''),
   })
@@ -210,7 +210,7 @@ async function handlePendingInvitations(req, res, user) {
   const data = await readStore()
   sendJson(res, 200, {
     items: listPendingSharedLedgerInvitationsForUser(data, user),
-    user: publicUser(user),
+    user: await buildPublicUserProfile(user),
   })
 }
 
@@ -380,7 +380,7 @@ export default async function sharedLedgersHandler(req, res) {
       return
     }
 
-    if (!ensureSharedLedgerMembership(res, user)) {
+    if (!await ensureSharedLedgerMembership(res, user)) {
       return
     }
 

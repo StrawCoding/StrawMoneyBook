@@ -171,8 +171,8 @@ function buildBaseQuery(query) {
 }
 .icon-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 8px;
   touch-action: pan-y;
 }
 .icon-btn {
@@ -181,12 +181,12 @@ function buildBaseQuery(query) {
   justify-content: center;
   border: 1px solid var(--field-border);
   background: color-mix(in srgb, var(--card) 85%, var(--surface-popover) 15%);
-  border-radius: 14px;
+  border-radius: 12px;
   color: var(--text);
   aspect-ratio: 1;
-  min-height: 64px;
+  min-height: 52px;
   padding: 0;
-  font-size: 22px
+  font-size: 18px
 }
 .icon-btn.active {
   color: var(--primary-soft);
