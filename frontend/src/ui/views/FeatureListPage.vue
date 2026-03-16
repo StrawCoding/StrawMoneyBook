@@ -25,6 +25,7 @@ import { useI18n } from '@/ui/services/i18n.service'
 const { t } = useI18n()
 
 const features = computed(() => ([
+  { to: '/settings/google-drive-ledger-sync', label: t('feature_list.google_drive_sync', 'Google Drive 帳本同步'), icon: 'fa-solid fa-cloud-arrow-up' },
   { to: '/loans', label: t('feature_list.loans'), icon: 'fa-solid fa-hand-holding-dollar' },
   { to: '/reimbursements', label: t('feature_list.reimbursements'), icon: 'fa-solid fa-receipt' },
   { to: '/claim-sheets', label: t('feature_list.claim_sheets'), icon: 'fa-solid fa-file-invoice-dollar' },

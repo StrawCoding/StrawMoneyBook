@@ -45,6 +45,7 @@ const settingGroups = computed(() => [
   [
     { to: '/settings/data-management', labelKey: 'settings.data_management', icon: 'fa-solid fa-database' },
     { to: '/settings/auto-backup', labelKey: 'settings.auto_backup', icon: 'fa-solid fa-cloud-arrow-up' },
+    { to: '/settings/google-drive-ledger-sync', labelKey: 'settings.google_drive_ledger_sync', icon: 'fa-solid fa-arrow-right-arrow-left' },
     ...(showBankSyncEntry ? [{ to: '/settings/bank-sync', labelKey: 'settings.bank_sync', icon: 'fa-solid fa-building-columns' }] : []),
   ],
   [

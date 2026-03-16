@@ -136,6 +136,12 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
+      path: '/settings/google-drive-ledger-sync',
+      name: 'settings-google-drive-ledger-sync',
+      component: () => import('@/ui/views/settings/SettingsGoogleDriveLedgerSyncPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
       path: '/settings/exchange-rate',
       name: 'settings-exchange-rate',
       component: () => import('@/ui/views/settings/SettingsExchangeRatePage.vue'),
