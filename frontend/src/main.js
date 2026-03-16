@@ -174,6 +174,11 @@ import {
   runSharedLedgerBackgroundSyncNow,
   scheduleActiveSharedLedgerAutoSync,
 } from '@/ui/services/shared-ledger.service'
+import {
+  initGoogleDriveLedgerSync,
+  runGoogleDriveLedgerBackgroundSyncNow,
+  scheduleActiveGoogleDriveLedgerSync,
+} from '@/ui/services/google-drive-ledger-sync.service'
 import '@/ui/assets/css/global.css'
 
 const DATA_CHANGE_BACKUP_DEBOUNCE_MS = 15000
@@ -574,6 +579,7 @@ async function main() {
         void runExchangeRateAutoSyncIfDue(ledgerStore.activeLedgerId)
       }
       void runSharedLedgerBackgroundSyncNow(pinia)
+      void runGoogleDriveLedgerBackgroundSyncNow(pinia)
       void syncActiveLedgerHomeWidget(pinia)
     })
   }
@@ -589,14 +595,17 @@ async function main() {
     const ledgerStore = useLedgerStore(pinia)
     restoreSharedLedgerSessionInBackground('app_start', { force: true })
     initSharedLedgerBackgroundSync(pinia)
+    initGoogleDriveLedgerSync(pinia)
     if (typeof window !== 'undefined') {
       window.addEventListener('app:data-mutated', () => {
         scheduleAutoBackupOnDataChange(pinia)
         scheduleHomeWidgetSync(pinia)
         scheduleActiveSharedLedgerAutoSync(pinia)
+        scheduleActiveGoogleDriveLedgerSync(pinia)
       })
       window.addEventListener('focus', () => {
         restoreSharedLedgerSessionInBackground('window_focus')
+        void runGoogleDriveLedgerBackgroundSyncNow(pinia)
       })
     }
 
