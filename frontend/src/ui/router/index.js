@@ -13,6 +13,22 @@ const router = createRouter({
   },
   routes: [
     {
+      name: 'shared-ledger-open',
+      path: '/open/shared-ledger',
+      redirect: (to) => ({
+        path: '/settings/shared-ledgers',
+        query: to.query,
+      }),
+    },
+    {
+      name: 'shared-ledger-join',
+      path: '/shared-ledger/join',
+      redirect: (to) => ({
+        path: '/settings/shared-ledgers',
+        query: to.query,
+      }),
+    },
+    {
       name: 'home',
       path: '/',
       component: () => import('@/ui/views/home.vue'),
