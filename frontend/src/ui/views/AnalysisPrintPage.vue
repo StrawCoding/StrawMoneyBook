@@ -346,7 +346,7 @@ async function exportCsv() {
     const result = await exportLedgerTransactionsCsv(ledgerId, buildExportOptions())
 
     exportedFilename.value = result.filename
-    const deviceSave = await saveCsvFileToDevice(result.filename, result.csvText)
+    const deviceSave = await saveCsvFileToDevice(result.filename, result.csvText, { category: 'analysis' })
 
     if (deviceSave.saved) {
       exportedFilename.value = String(deviceSave.filename ?? result.filename)

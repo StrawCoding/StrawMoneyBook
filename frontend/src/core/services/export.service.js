@@ -3,6 +3,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 
 const FileOpener = registerPlugin('FileOpener')
+const EXPORT_ROOT_DIR = 'StrawMoneyBook'
 
 const LEDGER_TABLES = [
   'account_groups',
@@ -660,17 +661,13 @@ async function writeBase64FileToDevice(filename, dataBase64, options = {}) {
   }
 
   const safeFilename = sanitizeDeviceFilename(filename)
-  const preferDownloadOnly = Boolean(options.preferDownloadOnly)
-  const candidates = (
-    preferDownloadOnly
-      ? [
-          { directory: Directory.ExternalStorage, path: `Download/${safeFilename}`, location: `Download/${safeFilename}` },
-        ]
-      : [
-    { directory: Directory.Documents, path: safeFilename, location: `Documents/${safeFilename}` },
-    { directory: Directory.ExternalStorage, path: `Download/${safeFilename}`, location: `Download/${safeFilename}` },
-        ]
-  ).filter((item) => Boolean(item.directory))
+  const category = sanitizeDeviceDirectorySegment(options.category, 'exports')
+  const relativePath = `${EXPORT_ROOT_DIR}/${category}/${safeFilename}`
+  const documentLocation = `Documents/${relativePath}`
+  const candidates = [
+    { directory: Directory.Documents, path: relativePath, location: documentLocation },
+    { directory: Directory.ExternalStorage, path: documentLocation, location: documentLocation },
+  ].filter((item) => Boolean(item.directory))
 
   let lastError = null
 
@@ -718,18 +715,31 @@ function sanitizeDeviceFilename(filename) {
   return sliced
 }
 
-export async function saveJsonFileToDevice(filename, data) {
+function sanitizeDeviceDirectorySegment(value, fallback = 'exports') {
+  const normalized = String(value ?? '')
+    .trim()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w.-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase()
+
+  return normalized || fallback
+}
+
+export async function saveJsonFileToDevice(filename, data, options = {}) {
   const jsonText = JSON.stringify(data, null, 2)
   const dataBase64 = utf8ToBase64(jsonText)
-  return writeBase64FileToDevice(filename, dataBase64, { preferDownloadOnly: true })
+  return writeBase64FileToDevice(filename, dataBase64, options)
 }
 
-export async function saveExcelFileToDevice(filename, xmlText) {
+export async function saveExcelFileToDevice(filename, xmlText, options = {}) {
   const dataBase64 = utf8ToBase64(`\ufeff${xmlText}`)
-  return writeBase64FileToDevice(filename, dataBase64)
+  return writeBase64FileToDevice(filename, dataBase64, options)
 }
 
-export async function saveCsvFileToDevice(filename, csvText) {
+export async function saveCsvFileToDevice(filename, csvText, options = {}) {
   const dataBase64 = utf8ToBase64(`\ufeff${csvText}`)
-  return writeBase64FileToDevice(filename, dataBase64)
+  return writeBase64FileToDevice(filename, dataBase64, options)
 }

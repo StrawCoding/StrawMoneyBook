@@ -167,11 +167,16 @@ async function handleJoin(req, res, user) {
 async function handleInviteByEmail(req, res, user, sharedLedgerId) {
   const body = parseBody(req)
   const email = validateEmail(body.email)
+  const currentUserEmail = String(user?.email ?? user?.account ?? '').trim().toLowerCase()
 
   const invitationId = await updateStore(async (data) => {
     const sharedLedger = findSharedLedger(data, sharedLedgerId)
     if (!sharedLedger || !isSharedLedgerMember(sharedLedger, user.id)) {
       throw new Error('找不到共同帳本')
+    }
+
+    if (email === currentUserEmail) {
+      throw new Error('不可邀請自己')
     }
 
     const invitedUser = findUserByEmail(data, email)
@@ -229,6 +234,9 @@ async function handleAcceptInvitation(req, res, user, invitationId) {
       }
       if (String(invitation.email ?? '').trim().toLowerCase() !== String(currentUser.email ?? '').trim().toLowerCase()) {
         throw new Error('這不是你的邀請')
+      }
+      if (String(invitation.invited_by_user_id ?? '').trim() === String(currentUser.id)) {
+        throw new Error('不可接受自己的邀請')
       }
 
       if (!isSharedLedgerMember(sharedLedger, currentUser.id)) {

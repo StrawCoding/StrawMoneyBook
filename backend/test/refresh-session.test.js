@@ -15,6 +15,8 @@ const {
   createAuthNonce,
   consumeAuthNonce,
   findUserByEmail,
+  linkUserAuthProvider,
+  listUserAuthProviders,
   rotateRefreshSession,
   updateStore,
 } = await import('../src/collab/store.js')
@@ -110,4 +112,44 @@ test('Google nonce can only be consumed once', async () => {
     }),
     (error) => error?.code === 'google_nonce_replayed',
   )
+})
+
+test('updating store data preserves linked Google provider and refresh session state', async () => {
+  const user = await createTestUser('persist@example.com')
+
+  await linkUserAuthProvider({
+    userId: user.id,
+    provider: 'google',
+    providerSub: 'google-sub-persist',
+    email: user.email,
+    emailVerified: true,
+    displayName: 'Persist Tester',
+    avatarUrl: 'https://example.com/avatar.png',
+  })
+
+  const firstSession = await createLoginSession(user, {
+    issuedByProvider: 'google',
+    ipAddress: '127.0.0.1',
+    userAgent: 'node:test',
+  })
+
+  await updateStore(async (data) => {
+    const targetUser = findUserByEmail(data, user.email)
+    assert.ok(targetUser)
+    targetUser.display_name = 'Persist Tester Updated'
+    targetUser.updated_at = new Date().toISOString()
+  })
+
+  const providers = await listUserAuthProviders(user.id)
+  assert.equal(providers.length, 1)
+  assert.equal(providers[0]?.provider, 'google')
+  assert.equal(providers[0]?.provider_sub, 'google-sub-persist')
+
+  const rotatedSession = await rotateRefreshSession(firstSession.refreshToken, {
+    ipAddress: '127.0.0.1',
+    userAgent: 'node:test',
+  })
+
+  assert.ok(rotatedSession.accessToken)
+  assert.notEqual(rotatedSession.refreshToken, firstSession.refreshToken)
 })

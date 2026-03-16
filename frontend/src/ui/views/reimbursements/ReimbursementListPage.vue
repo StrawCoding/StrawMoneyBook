@@ -790,7 +790,7 @@ async function exportClaimSheetCsv() {
   let exportLocation = Capacitor.isNativePlatform() ? 'App 內預覽' : '瀏覽器下載'
 
   if (Capacitor.isNativePlatform()) {
-    const saved = await saveCsvFileToDevice(filename, csvText)
+    const saved = await saveCsvFileToDevice(filename, csvText, { category: 'reimbursements' })
     if (saved?.saved) {
       exportedFilename.value = String(saved.filename ?? filename)
       exportLocation = saved.location || '裝置檔案'

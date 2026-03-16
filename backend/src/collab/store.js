@@ -609,10 +609,7 @@ function loadStoreFromDatabase(db) {
 }
 
 function persistStoreToDatabase(db, data) {
-  const deleteUsers = db.prepare('DELETE FROM users')
-  const deleteSharedLedgers = db.prepare('DELETE FROM shared_ledgers')
-  const deleteReferrals = db.prepare('DELETE FROM referrals')
-  const insertUser = db.prepare(`
+  const upsertUser = db.prepare(`
     INSERT INTO users (
       id, email, account, email_verified, display_name, avatar_url, referral_code,
       referred_by_user_id, referred_by_code, referral_redeemed_at,
@@ -630,8 +627,33 @@ function persistStoreToDatabase(db, data) {
       @password_reset_requested_at, @password_reset_expires_at, @last_login_at,
       @password_hash, @password_salt, @created_at, @updated_at
     )
+    ON CONFLICT(id) DO UPDATE SET
+      email = excluded.email,
+      account = excluded.account,
+      email_verified = excluded.email_verified,
+      display_name = excluded.display_name,
+      avatar_url = excluded.avatar_url,
+      referral_code = excluded.referral_code,
+      referred_by_user_id = excluded.referred_by_user_id,
+      referred_by_code = excluded.referred_by_code,
+      referral_redeemed_at = excluded.referral_redeemed_at,
+      membership_grants_json = excluded.membership_grants_json,
+      login_failed_attempts = excluded.login_failed_attempts,
+      last_failed_login_at = excluded.last_failed_login_at,
+      login_locked_until = excluded.login_locked_until,
+      must_change_password = excluded.must_change_password,
+      temporary_password_issued_at = excluded.temporary_password_issued_at,
+      password_reset_required = excluded.password_reset_required,
+      password_reset_token_hash = excluded.password_reset_token_hash,
+      password_reset_requested_at = excluded.password_reset_requested_at,
+      password_reset_expires_at = excluded.password_reset_expires_at,
+      last_login_at = excluded.last_login_at,
+      password_hash = excluded.password_hash,
+      password_salt = excluded.password_salt,
+      created_at = excluded.created_at,
+      updated_at = excluded.updated_at
   `)
-  const insertSharedLedger = db.prepare(`
+  const upsertSharedLedger = db.prepare(`
     INSERT INTO shared_ledgers (
       id, ledger_id, name, invite_code, owner_user_id, members_json,
       invitations_json, snapshot_json, version, created_at, updated_at,
@@ -641,8 +663,20 @@ function persistStoreToDatabase(db, data) {
       @invitations_json, @snapshot_json, @version, @created_at, @updated_at,
       @updated_by_user_id
     )
+    ON CONFLICT(id) DO UPDATE SET
+      ledger_id = excluded.ledger_id,
+      name = excluded.name,
+      invite_code = excluded.invite_code,
+      owner_user_id = excluded.owner_user_id,
+      members_json = excluded.members_json,
+      invitations_json = excluded.invitations_json,
+      snapshot_json = excluded.snapshot_json,
+      version = excluded.version,
+      created_at = excluded.created_at,
+      updated_at = excluded.updated_at,
+      updated_by_user_id = excluded.updated_by_user_id
   `)
-  const insertReferral = db.prepare(`
+  const upsertReferral = db.prepare(`
     INSERT INTO referrals (
       id, code, inviter_user_id, invitee_user_id,
       inviter_reward_days, invitee_reward_days, created_at
@@ -650,16 +684,32 @@ function persistStoreToDatabase(db, data) {
       @id, @code, @inviter_user_id, @invitee_user_id,
       @inviter_reward_days, @invitee_reward_days, @created_at
     )
+    ON CONFLICT(id) DO UPDATE SET
+      code = excluded.code,
+      inviter_user_id = excluded.inviter_user_id,
+      invitee_user_id = excluded.invitee_user_id,
+      inviter_reward_days = excluded.inviter_reward_days,
+      invitee_reward_days = excluded.invitee_reward_days,
+      created_at = excluded.created_at
   `)
 
-  const writeTransaction = db.transaction((nextData) => {
-    deleteUsers.run()
-    deleteSharedLedgers.run()
-    deleteReferrals.run()
+  const deleteUsersById = db.prepare('DELETE FROM users WHERE id = ?')
+  const deleteSharedLedgersById = db.prepare('DELETE FROM shared_ledgers WHERE id = ?')
+  const deleteReferralsById = db.prepare('DELETE FROM referrals WHERE id = ?')
 
-    for (const rawUser of Array.isArray(nextData?.users) ? nextData.users : []) {
-      const user = normalizeUserRecord(rawUser)
-      insertUser.run({
+  const writeTransaction = db.transaction((nextData) => {
+    const nextUsers = Array.isArray(nextData?.users) ? nextData.users.map(normalizeUserRecord) : []
+    const nextSharedLedgers = Array.isArray(nextData?.shared_ledgers)
+      ? nextData.shared_ledgers.map(normalizeSharedLedgerRecord)
+      : []
+    const nextReferrals = Array.isArray(nextData?.referrals) ? nextData.referrals.map(normalizeReferralRecord) : []
+
+    const nextUserIds = new Set(nextUsers.map((item) => String(item.id)))
+    const nextSharedLedgerIds = new Set(nextSharedLedgers.map((item) => String(item.id)))
+    const nextReferralIds = new Set(nextReferrals.map((item) => String(item.id)))
+
+    for (const user of nextUsers) {
+      upsertUser.run({
         ...user,
         membership_grants_json: JSON.stringify(Array.isArray(user.membership_grants) ? user.membership_grants : []),
         email_verified: user.email_verified ? 1 : 0,
@@ -668,9 +718,8 @@ function persistStoreToDatabase(db, data) {
       })
     }
 
-    for (const rawSharedLedger of Array.isArray(nextData?.shared_ledgers) ? nextData.shared_ledgers : []) {
-      const sharedLedger = normalizeSharedLedgerRecord(rawSharedLedger)
-      insertSharedLedger.run({
+    for (const sharedLedger of nextSharedLedgers) {
+      upsertSharedLedger.run({
         ...sharedLedger,
         members_json: JSON.stringify(Array.isArray(sharedLedger.members) ? sharedLedger.members : []),
         invitations_json: JSON.stringify(Array.isArray(sharedLedger.invitations) ? sharedLedger.invitations : []),
@@ -679,9 +728,26 @@ function persistStoreToDatabase(db, data) {
       })
     }
 
-    for (const rawReferral of Array.isArray(nextData?.referrals) ? nextData.referrals : []) {
-      const referral = normalizeReferralRecord(rawReferral)
-      insertReferral.run(referral)
+    for (const referral of nextReferrals) {
+      upsertReferral.run(referral)
+    }
+
+    for (const row of db.prepare('SELECT id FROM referrals').all()) {
+      if (!nextReferralIds.has(String(row.id))) {
+        deleteReferralsById.run(String(row.id))
+      }
+    }
+
+    for (const row of db.prepare('SELECT id FROM shared_ledgers').all()) {
+      if (!nextSharedLedgerIds.has(String(row.id))) {
+        deleteSharedLedgersById.run(String(row.id))
+      }
+    }
+
+    for (const row of db.prepare('SELECT id FROM users').all()) {
+      if (!nextUserIds.has(String(row.id))) {
+        deleteUsersById.run(String(row.id))
+      }
     }
   })
 

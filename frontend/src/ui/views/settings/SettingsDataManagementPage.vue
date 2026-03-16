@@ -156,7 +156,7 @@ async function exportJson() {
   try {
     const filename = 'strawmoneybook-all-ledgers.json'
     const data = await exportAllLedgersJson()
-    const saved = await saveJsonFileToDevice(filename, data)
+    const saved = await saveJsonFileToDevice(filename, data, { category: 'data-management' })
     if (saved?.saved && saved.location) {
       lastExportPath.value = saved.location
     } else {
@@ -187,7 +187,7 @@ async function exportCsv(type) {
       filename = `categories-${ledgerStore.activeLedgerId}.csv`
     }
 
-    const saved = await saveCsvFileToDevice(filename, csv)
+    const saved = await saveCsvFileToDevice(filename, csv, { category: 'data-management' })
     if (saved?.saved && saved.location) {
       lastExportPath.value = saved.location
     } else {

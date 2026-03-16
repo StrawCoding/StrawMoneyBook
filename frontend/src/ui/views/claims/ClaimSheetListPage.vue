@@ -830,7 +830,7 @@ async function exportClaim(claim) {
 
     revokeBlobUrl(exportUrl)
     if (Capacitor.isNativePlatform()) {
-      const saved = await saveCsvFileToDevice(filename, csvText)
+      const saved = await saveCsvFileToDevice(filename, csvText, { category: 'claim-sheets' })
       if (saved?.saved) {
         uiStore.pushToast(
           t('claim_sheet.toast.exported_saved', { location: saved.location || t('claim_sheet.device_files') }),
