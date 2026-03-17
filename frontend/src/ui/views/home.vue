@@ -56,32 +56,6 @@
       </transition>
     </article>
 
-    <article class="card feature-spotlight">
-      <div class="spotlight-badge">
-        <font-awesome-icon icon="fa-solid fa-cloud-arrow-up" />
-        <span>{{ t('home_page.feature_intro.badge', '新功能') }}</span>
-      </div>
-      <div class="stack internal-stack">
-        <h3>{{ t('home_page.feature_intro.title', 'Google Drive 帳本同步') }}</h3>
-        <p class="muted spotlight-desc">
-          {{
-            t(
-              'home_page.feature_intro.desc',
-              '可選擇指定帳本，在不同裝置間自動同步到 Google Drive；和備份分開管理，可直接前往設定啟用。',
-            )
-          }}
-        </p>
-      </div>
-      <div class="spotlight-actions">
-        <button class="btn primary" @click="openGoogleDriveLedgerSync">
-          {{ t('home_page.feature_intro.open', '立即設定') }}
-        </button>
-        <button class="btn" @click="openMembershipBenefits">
-          {{ t('home_page.feature_intro.membership', '查看會員權益') }}
-        </button>
-      </div>
-    </article>
-
     <HomeAssetSummaryCard />
     <HomeBudgetSummaryCard />
     <HomeTransactionFeed />
@@ -249,14 +223,6 @@ function openQuickAdd() {
   void router.push(getPreferredManualBookkeepingPath()).catch(() => {})
 }
 
-function openGoogleDriveLedgerSync() {
-  void router.push('/settings/google-drive-ledger-sync').catch(() => {})
-}
-
-function openMembershipBenefits() {
-  void router.push('/settings/membership-benefits').catch(() => {})
-}
-
 function monthKeyFromDate(date) {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
@@ -290,15 +256,6 @@ function localeRangeMonth(year, month) {
 
 <style scoped>.ledger-card {
   padding: 14px
-}
-.feature-spotlight {
-  padding: 14px;
-  display: grid;
-  gap: 12px;
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--primary) 16%, transparent) 0%, transparent 40%),
-    linear-gradient(135deg, color-mix(in srgb, var(--card) 90%, var(--primary) 10%) 0%, color-mix(in srgb, var(--card) 96%, #fff 4%) 100%);
-  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
 }
 .month-row {
   margin-top: 10px
@@ -334,26 +291,6 @@ function localeRangeMonth(year, month) {
 .quick-btn {
   white-space: nowrap
 }
-.spotlight-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  width: fit-content;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--primary) 12%, var(--card) 88%);
-  color: var(--primary);
-  font-size: 12px;
-  font-weight: 700;
-}
-.spotlight-desc {
-  margin: 0;
-}
-.spotlight-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 h3 {
   margin: 0;
   font-size: 16px
@@ -366,12 +303,4 @@ h3 {
   padding: 10px 14px;
   font-size: 14px;
   box-shadow: var(--shadow)
-}
-@media (max-width: 420px) {
-  .spotlight-actions {
-    display: grid;
-  }
-  .spotlight-actions > .btn {
-    width: 100%;
-  }
 }</style>
