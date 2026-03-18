@@ -80,7 +80,7 @@ import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
-import { getPreferredManualBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
+import { getPreferredBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -113,7 +113,7 @@ watch(
   () => String(route.query.quickAdd ?? ''),
   (flag) => {
     if (flag !== '1') return
-    void router.replace(getPreferredManualBookkeepingPath()).catch(() => {})
+    void router.replace(getPreferredBookkeepingPath()).catch(() => {})
   },
   { immediate: true },
 )
@@ -220,7 +220,7 @@ const currentRangeLabel = computed(() => {
 })
 
 function openQuickAdd() {
-  void router.push(getPreferredManualBookkeepingPath()).catch(() => {})
+  void router.push(getPreferredBookkeepingPath()).catch(() => {})
 }
 
 function monthKeyFromDate(date) {

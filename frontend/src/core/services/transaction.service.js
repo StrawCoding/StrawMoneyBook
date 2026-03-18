@@ -204,6 +204,11 @@ function isRefundLinkedTransaction(tx) {
   return categoryName === '退款' || note.startsWith('退款：') || note.startsWith('退款:')
 }
 
+function shouldCascadeDeleteToParent(tx) {
+  if (!tx || typeof tx !== 'object') return false
+  return String(tx.origin_type ?? '').trim() === 'reimbursement'
+}
+
 function shouldCascadeLinkedTransaction(tx) {
   if (!tx || typeof tx !== 'object') return false
   return String(tx.origin_type ?? '').trim() === 'reimbursement' || isRefundLinkedTransaction(tx)
@@ -223,7 +228,7 @@ async function collectCascadeDeleteTransactionIds(ledgerId, target) {
     visited.add(currentId)
 
     const parentId = String(currentTx.external_ref_id ?? '').trim()
-    if (parentId && shouldCascadeLinkedTransaction(currentTx) && !visited.has(parentId)) {
+    if (parentId && shouldCascadeDeleteToParent(currentTx) && !visited.has(parentId)) {
       pending.push(parentId)
     }
 

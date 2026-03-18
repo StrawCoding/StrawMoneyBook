@@ -1,5 +1,7 @@
+const LAST_BOOKKEEPING_PATH_KEY = 'straw.bookkeeping.last_path'
 const LAST_MANUAL_BOOKKEEPING_PATH_KEY = 'straw.bookkeeping.last_manual_path'
 
+export const AI_BOOKKEEPING_PATH = '/ai-auto-bookkeeping'
 export const QUICK_ADD_BOOKKEEPING_PATH = '/transactions/quick-add'
 export const QNA_BOOKKEEPING_PATH = '/transactions/qna'
 
@@ -15,10 +17,20 @@ export function isManualBookkeepingPath(path) {
   return path === QUICK_ADD_BOOKKEEPING_PATH || path === QNA_BOOKKEEPING_PATH
 }
 
+export function isBookkeepingPath(path) {
+  return path === AI_BOOKKEEPING_PATH || isManualBookkeepingPath(path)
+}
+
 export function normalizeManualBookkeepingPath(path) {
   return path === QNA_BOOKKEEPING_PATH
     ? QNA_BOOKKEEPING_PATH
     : QUICK_ADD_BOOKKEEPING_PATH
+}
+
+export function normalizeBookkeepingPath(path) {
+  return path === AI_BOOKKEEPING_PATH
+    ? AI_BOOKKEEPING_PATH
+    : normalizeManualBookkeepingPath(path)
 }
 
 export function getLastManualBookkeepingPath() {
@@ -35,12 +47,43 @@ export function getPreferredManualBookkeepingPath() {
   return getLastManualBookkeepingPath()
 }
 
+export function getLastBookkeepingPath() {
+  const storage = getStorage()
+  if (!storage) return QUICK_ADD_BOOKKEEPING_PATH
+  try {
+    return normalizeBookkeepingPath(storage.getItem(LAST_BOOKKEEPING_PATH_KEY))
+  } catch (error) {
+    return QUICK_ADD_BOOKKEEPING_PATH
+  }
+}
+
+export function getPreferredBookkeepingPath() {
+  return getLastBookkeepingPath()
+}
+
 export function rememberManualBookkeepingPath(path) {
   const normalizedPath = normalizeManualBookkeepingPath(path)
   const storage = getStorage()
   if (!storage) return normalizedPath
   try {
     storage.setItem(LAST_MANUAL_BOOKKEEPING_PATH_KEY, normalizedPath)
+    storage.setItem(LAST_BOOKKEEPING_PATH_KEY, normalizedPath)
+  } catch (error) {
+    // Ignore storage failures and keep the in-memory fallback path.
+  }
+  return normalizedPath
+}
+
+export function rememberBookkeepingPath(path) {
+  const normalizedPath = normalizeBookkeepingPath(path)
+  if (isManualBookkeepingPath(normalizedPath)) {
+    return rememberManualBookkeepingPath(normalizedPath)
+  }
+
+  const storage = getStorage()
+  if (!storage) return normalizedPath
+  try {
+    storage.setItem(LAST_BOOKKEEPING_PATH_KEY, normalizedPath)
   } catch (error) {
     // Ignore storage failures and keep the in-memory fallback path.
   }

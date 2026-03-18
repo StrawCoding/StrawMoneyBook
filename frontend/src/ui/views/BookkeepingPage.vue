@@ -61,10 +61,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
 import {
   getLastManualBookkeepingPath,
+  isBookkeepingPath,
   isManualBookkeepingPath,
+  AI_BOOKKEEPING_PATH,
   QNA_BOOKKEEPING_PATH,
   QUICK_ADD_BOOKKEEPING_PATH,
-  rememberManualBookkeepingPath,
+  rememberBookkeepingPath,
 } from '@/ui/services/bookkeeping-mode.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import AiAutoBookkeepingPage from '@/ui/views/AiAutoBookkeepingPage.vue'
@@ -77,7 +79,7 @@ const { t } = useI18n()
 const lastManualPath = ref(getLastManualBookkeepingPath())
 
 const topMode = computed(() => {
-  return route.path === '/ai-auto-bookkeeping' ? 'ai' : 'manual'
+  return route.path === AI_BOOKKEEPING_PATH ? 'ai' : 'manual'
 })
 
 const manualMode = computed(() => {
@@ -87,16 +89,20 @@ const manualMode = computed(() => {
 watch(
   () => route.path,
   (path) => {
+    if (!isBookkeepingPath(path)) return
+
     if (isManualBookkeepingPath(path)) {
-      lastManualPath.value = rememberManualBookkeepingPath(path)
+      lastManualPath.value = rememberBookkeepingPath(path)
+      return
     }
+    rememberBookkeepingPath(path)
   },
   { immediate: true },
 )
 
 async function switchTopMode(nextMode) {
   const target = nextMode === 'ai'
-    ? '/ai-auto-bookkeeping'
+    ? AI_BOOKKEEPING_PATH
     : lastManualPath.value
   if (route.path === target) return
   await router.replace(target).catch(() => {})

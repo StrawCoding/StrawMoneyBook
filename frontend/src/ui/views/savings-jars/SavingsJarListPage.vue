@@ -252,7 +252,11 @@ const flowAccountOptions = computed(() => {
   if (!jar) return []
   return accountStore.regularAccounts
     .filter((item) => normalizeCurrencyCode(item.currency_code, jar.currencyCode) === jar.currencyCode)
-    .map((item) => ({ value: item.id, label: item.name }))
+    .map((item) => ({
+      value: item.id,
+      label: item.name,
+      icon: item.icon || 'fa-solid fa-wallet',
+    }))
 })
 const isFreePlan = computed(() => isFreeTier())
 
