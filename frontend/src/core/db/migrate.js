@@ -15,6 +15,7 @@ import migration014 from '@/core/db/migrations/014_reimbursement_advance_categor
 import migration015 from '@/core/db/migrations/015_savings_jars.sql?raw'
 import migration016 from '@/core/db/migrations/016_loan_payment_interest_tx.sql?raw'
 import migration017 from '@/core/db/migrations/017_account_credit_profile.sql?raw'
+import migration018 from '@/core/db/migrations/018_shared_sync_deleted_log.sql?raw'
 
 const MIGRATIONS = [
   { version: 1, name: 'init_schema', sql: migration001 },
@@ -34,6 +35,7 @@ const MIGRATIONS = [
   { version: 15, name: 'savings_jars', sql: migration015 },
   { version: 16, name: 'loan_payment_interest_tx', sql: migration016 },
   { version: 17, name: 'account_credit_profile', sql: migration017 },
+  { version: 18, name: 'shared_sync_deleted_log', sql: migration018 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'

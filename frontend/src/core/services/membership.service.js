@@ -1,5 +1,8 @@
 import appPackage from '../../../package.json'
-import { getSharedLedgerSession } from '@/services/shared-ledger/backend'
+import {
+  getSharedLedgerSession,
+  syncSharedLedgerGooglePlayMembership,
+} from '@/services/shared-ledger/backend'
 import router from '@/ui/router'
 import {
   isSupported as isGooglePlayBillingSupported,
@@ -30,6 +33,8 @@ const MONTHLY_MEMBERSHIP_SYNC_FAILURE_GRACE_MS = 3 * 24 * 60 * 60 * 1000
 const GOOGLE_PLAY_SUPPORT_CACHE_TTL_OK_MS = 2 * 60 * 1000
 const GOOGLE_PLAY_SUPPORT_CACHE_TTL_FAIL_MS = 10 * 1000
 const GOOGLE_PLAY_SUPPORT_RETRY_DELAY_MS = 800
+const MEMBERSHIP_BACKEND_SYNC_COOLDOWN_MS = 30 * 1000
+const MEMBERSHIP_BACKEND_LIFETIME_EXPIRES_AT = '2099-12-31T23:59:59.999Z'
 
 const FREE_LIMITS = Object.freeze({
   maxLedgers: 1,
@@ -64,6 +69,10 @@ let playCallTraceSeq = 0
 let playCallTraceEntries = []
 let playCallExecutionQueue = Promise.resolve()
 let membershipBenefitsRedirectInFlight = null
+let membershipBackendSyncInFlight = null
+let membershipBackendSyncQueued = null
+let membershipBackendSyncFingerprint = ''
+let membershipBackendSyncSyncedAt = 0
 
 const MEMBERSHIP_LIMIT_ERROR_PREFIX = 'MEMBERSHIP_LIMIT_'
 const MEMBERSHIP_BENEFITS_ROUTE_PATH = '/settings/membership-benefits'
@@ -608,6 +617,120 @@ function toMembershipSnapshot(state, reason = '') {
   }
 }
 
+function resolveSharedLedgerMembershipSyncExpiry(snapshot) {
+  const plan = normalizeGooglePlayPlan(snapshot?.plan)
+  if (!plan) return ''
+
+  if (plan === 'lifetime') {
+    return MEMBERSHIP_BACKEND_LIFETIME_EXPIRES_AT
+  }
+
+  const cacheExpiresAtMs = toEpochMs(snapshot?.membershipCacheExpiresAt)
+  if (Number.isFinite(cacheExpiresAtMs)) {
+    const effectiveMs = snapshot?.lastSyncStatus === MEMBERSHIP_SYNC_STATUS_ERROR
+      ? cacheExpiresAtMs + MONTHLY_MEMBERSHIP_SYNC_FAILURE_GRACE_MS
+      : cacheExpiresAtMs
+    if (effectiveMs > Date.now()) {
+      return new Date(effectiveMs).toISOString()
+    }
+  }
+
+  const verifiedAtMs = toEpochMs(snapshot?.monthlyLastVerifiedAt)
+  if (Number.isFinite(verifiedAtMs)) {
+    return new Date(verifiedAtMs + MONTHLY_MEMBERSHIP_EXPIRY_UNKNOWN_GRACE_MS).toISOString()
+  }
+
+  return ''
+}
+
+function buildMembershipBackendSyncFingerprint(snapshot, sessionUser = null) {
+  const userId = String(sessionUser?.id ?? '').trim()
+  if (!userId) return ''
+
+  return JSON.stringify({
+    userId,
+    plan: normalizeGooglePlayPlan(snapshot?.plan),
+    lastKnownPlan: normalizeGooglePlayPlan(snapshot?.lastKnownPlan),
+    lastSyncStatus: normalizeSyncStatus(snapshot?.lastSyncStatus),
+    active: Boolean(snapshot?.active),
+    expiresAt: resolveSharedLedgerMembershipSyncExpiry(snapshot),
+  })
+}
+
+function shouldSkipInactiveMembershipBackendSync(snapshot) {
+  return (
+    !normalizeGooglePlayPlan(snapshot?.plan)
+    && normalizeSyncStatus(snapshot?.lastSyncStatus) !== MEMBERSHIP_SYNC_STATUS_OK
+  )
+}
+
+async function flushSharedLedgerMembershipSyncQueue() {
+  while (membershipBackendSyncQueued) {
+    const task = membershipBackendSyncQueued
+    membershipBackendSyncQueued = null
+
+    const sessionUser = getSharedLedgerSession()?.user ?? null
+    if (!sessionUser?.id || isDebugMembershipOverrideEnabled()) {
+      continue
+    }
+
+    const fingerprint = buildMembershipBackendSyncFingerprint(task.snapshot, sessionUser)
+    if (!fingerprint) continue
+
+    const nowMs = Date.now()
+    if (
+      fingerprint === membershipBackendSyncFingerprint
+      && nowMs - membershipBackendSyncSyncedAt < MEMBERSHIP_BACKEND_SYNC_COOLDOWN_MS
+    ) {
+      continue
+    }
+
+    if (shouldSkipInactiveMembershipBackendSync(task.snapshot)) {
+      continue
+    }
+
+    try {
+      await syncSharedLedgerGooglePlayMembership({
+        active: Boolean(normalizeGooglePlayPlan(task.snapshot?.plan) && task.snapshot?.active),
+        plan: normalizeGooglePlayPlan(task.snapshot?.plan),
+        expiresAt: resolveSharedLedgerMembershipSyncExpiry(task.snapshot),
+        observedAt: toIsoNow(),
+        lastSyncStatus: normalizeSyncStatus(task.snapshot?.lastSyncStatus),
+        reason: String(task.reason ?? '').trim(),
+      })
+      membershipBackendSyncFingerprint = fingerprint
+      membershipBackendSyncSyncedAt = nowMs
+    } catch (_error) {
+      // Ignore backend sync errors so membership reads stay non-blocking.
+    }
+  }
+}
+
+function queueSharedLedgerMembershipSync(snapshot, reason = '') {
+  if (!getSharedLedgerSession()?.token || isDebugMembershipOverrideEnabled()) return
+
+  membershipBackendSyncQueued = {
+    snapshot: cloneMembershipSnapshot(snapshot),
+    reason,
+  }
+
+  if (membershipBackendSyncInFlight) return
+
+  membershipBackendSyncInFlight = flushSharedLedgerMembershipSyncQueue()
+    .catch(() => null)
+    .finally(() => {
+      membershipBackendSyncInFlight = null
+      if (membershipBackendSyncQueued) {
+        queueSharedLedgerMembershipSync(membershipBackendSyncQueued.snapshot, membershipBackendSyncQueued.reason)
+      }
+    })
+}
+
+function cloneMembershipSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return null
+  return JSON.parse(JSON.stringify(snapshot))
+}
+
 function notifyMembershipSnapshot(snapshot) {
   if (!membershipSnapshotListeners.size) return
   for (const listener of membershipSnapshotListeners) {
@@ -623,6 +746,7 @@ function commitEntitlementState(state, reason = '') {
   saveEntitlementState(state)
   const snapshot = toMembershipSnapshot(state, reason)
   notifyMembershipSnapshot(snapshot)
+  queueSharedLedgerMembershipSync(snapshot, reason)
   return snapshot
 }
 
@@ -885,7 +1009,10 @@ function triggerBackgroundMembershipSync(reason = 'background_read') {
 
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   window.addEventListener('shared-ledger:session-changed', () => {
-    notifyMembershipSnapshot(toMembershipSnapshot(getEntitlementState(), 'shared_ledger_session_changed'))
+    const snapshot = toMembershipSnapshot(getEntitlementState(), 'shared_ledger_session_changed')
+    notifyMembershipSnapshot(snapshot)
+    queueSharedLedgerMembershipSync(snapshot, 'shared_ledger_session_changed')
+    triggerBackgroundMembershipSync('shared_ledger_session_changed')
   })
 }
 

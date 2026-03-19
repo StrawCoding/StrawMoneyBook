@@ -962,6 +962,57 @@ function applyMembershipGrant(user, days, source, meta = {}) {
   return grant
 }
 
+function syncMembershipGrantBySource(user, source, {
+  active = false,
+  startAt = '',
+  endAt = '',
+  meta = {},
+} = {}) {
+  const normalizedSource = String(source ?? '').trim()
+  if (!normalizedSource) {
+    throw createStoreError('缺少會員來源', 'membership_source_required', 400)
+  }
+
+  const existingGrants = getMembershipGrantList(user)
+  const keptGrants = existingGrants.filter((grant) => String(grant?.source ?? '').trim() !== normalizedSource)
+  const now = nowIso()
+
+  if (!active) {
+    user.membership_grants = keptGrants
+    user.updated_at = now
+    return null
+  }
+
+  const endAtMs = Date.parse(String(endAt ?? ''))
+  if (!Number.isFinite(endAtMs) || endAtMs <= Date.now()) {
+    user.membership_grants = keptGrants
+    user.updated_at = now
+    return null
+  }
+
+  const normalizedStartAt = (() => {
+    const startAtMs = Date.parse(String(startAt ?? ''))
+    if (Number.isFinite(startAtMs) && startAtMs < endAtMs) {
+      return new Date(startAtMs).toISOString()
+    }
+    return now
+  })()
+
+  const grant = {
+    id: createId('membership_grant'),
+    days: Math.max(1, Math.ceil((endAtMs - Date.parse(normalizedStartAt)) / (24 * 60 * 60 * 1000))),
+    source: normalizedSource,
+    start_at: normalizedStartAt,
+    end_at: new Date(endAtMs).toISOString(),
+    created_at: now,
+    meta,
+  }
+
+  user.membership_grants = [...keptGrants, grant]
+  user.updated_at = now
+  return grant
+}
+
 function getUserSelectSql(alias = 'u') {
   return `
     ${alias}.id AS id,
@@ -1765,6 +1816,7 @@ export {
   revokeRefreshSession,
   rotateRefreshSession,
   runSerializedDatabaseWrite,
+  syncMembershipGrantBySource,
   updateUserFromAuthProviderLogin,
   validateEmail,
   validatePassword,

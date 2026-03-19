@@ -112,12 +112,14 @@ export async function deleteLedger(ledgerId) {
       await run(`DELETE FROM ${table} WHERE ledger_id = ?;`, [ledgerId])
     }
     await run('DELETE FROM ledgers WHERE id = ?;', [ledgerId])
+    await run('DELETE FROM deleted_log WHERE ledger_id = ?;', [ledgerId])
   }
 }
 
 export async function purgeLedger(ledgerId) {
   try {
     await run('DELETE FROM ledgers WHERE id = ?;', [ledgerId])
+    await run('DELETE FROM deleted_log WHERE ledger_id = ?;', [ledgerId])
   } catch (error) {
     if (!isForeignKeyError(error)) throw error
 
@@ -125,5 +127,6 @@ export async function purgeLedger(ledgerId) {
       await run(`DELETE FROM ${table} WHERE ledger_id = ?;`, [ledgerId])
     }
     await run('DELETE FROM ledgers WHERE id = ?;', [ledgerId])
+    await run('DELETE FROM deleted_log WHERE ledger_id = ?;', [ledgerId])
   }
 }

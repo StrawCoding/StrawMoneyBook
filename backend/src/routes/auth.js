@@ -33,6 +33,7 @@ import {
   readStore,
   revokeRefreshSession,
   rotateRefreshSession,
+  syncMembershipGrantBySource,
   updateStore,
   updateUserFromAuthProviderLogin,
   validateEmail,
@@ -47,6 +48,8 @@ const LOGIN_LOCK_DURATION_MS = 10 * 60 * 1000
 const LOGIN_FORCE_RESET_THRESHOLD = 10
 const PASSWORD_RESET_REQUEST_COOLDOWN_MS = 60 * 1000
 const DEBUG_PASSWORD_RESET_RESPONSE = isTruthy(process.env.SHARED_LEDGER_DEBUG_PASSWORD_RESET)
+const GOOGLE_PLAY_CLIENT_SYNC_SOURCE = 'google_play_client_sync'
+const GOOGLE_PLAY_LIFETIME_SYNC_EXPIRES_AT = '2099-12-31T23:59:59.999Z'
 
 function isTruthy(value) {
   const normalized = String(value ?? '').trim().toLowerCase()
@@ -146,6 +149,21 @@ function sendAuthError(res, error) {
     locked_until: String(error?.locked_until ?? ''),
     retry_after_seconds: Math.max(0, Number(error?.retry_after_seconds ?? 0) || 0),
   })
+}
+
+function normalizeMembershipPlan(value) {
+  const normalized = normalizeText(value).toLowerCase()
+  if (normalized === 'monthly') return 'monthly'
+  if (normalized === 'lifetime') return 'lifetime'
+  return ''
+}
+
+function normalizeFutureIso(value) {
+  const text = normalizeText(value)
+  if (!text) return ''
+  const parsedMs = Date.parse(text)
+  if (!Number.isFinite(parsedMs)) return ''
+  return new Date(parsedMs).toISOString()
 }
 
 async function getOptionalAuthenticatedUser(req) {
@@ -739,6 +757,47 @@ async function handleProfileUpdate(req, res) {
   sendJson(res, 200, { user: await buildPublicUserProfile(updatedUser) })
 }
 
+async function handleGooglePlayMembershipSync(req, res) {
+  const user = await requireAuthenticatedUser(req, res, sendJson)
+  if (!user) return
+
+  const body = parseBody(req)
+  const active = Boolean(body.active)
+  const plan = normalizeMembershipPlan(body.plan)
+  const observedAt = normalizeFutureIso(body.observedAt ?? body.observed_at) || nowIso()
+  const expiresAt = plan === 'lifetime'
+    ? GOOGLE_PLAY_LIFETIME_SYNC_EXPIRES_AT
+    : normalizeFutureIso(body.expiresAt ?? body.expires_at)
+
+  const updatedUser = await updateStore(async (data) => {
+    const targetUser = data.users.find((item) => String(item.id) === String(user.id))
+    if (!targetUser) {
+      throw createAuthError('找不到使用者', 'user_not_found', 404)
+    }
+
+    syncMembershipGrantBySource(targetUser, GOOGLE_PLAY_CLIENT_SYNC_SOURCE, {
+      active: active && Boolean(plan),
+      startAt: observedAt,
+      endAt: expiresAt,
+      meta: {
+        plan,
+        source: 'google_play_client_sync',
+        observed_at: observedAt,
+        reported_expires_at: expiresAt,
+        last_sync_status: String(body.lastSyncStatus ?? body.last_sync_status ?? '').trim(),
+        reason: String(body.reason ?? '').trim(),
+      },
+    })
+
+    return targetUser
+  })
+
+  sendJson(res, 200, {
+    user: await buildPublicUserProfile(updatedUser),
+    membership_synced: true,
+  })
+}
+
 async function handlePasswordChange(req, res) {
   const user = await requireAuthenticatedUser(req, res, sendJson, { allowTemporaryPassword: true })
   if (!user) return
@@ -907,6 +966,11 @@ export default async function authHandler(req, res) {
 
     if (req.method === 'POST' && pathname === '/profile') {
       await handleProfileUpdate(req, res)
+      return
+    }
+
+    if (req.method === 'POST' && pathname === '/membership/google-play') {
+      await handleGooglePlayMembershipSync(req, res)
       return
     }
 

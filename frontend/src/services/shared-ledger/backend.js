@@ -698,6 +698,17 @@ export async function updateSharedLedgerProfile(payload = {}) {
   return data
 }
 
+export async function syncSharedLedgerGooglePlayMembership(payload = {}) {
+  const data = await requestJson('/api/auth/membership/google-play', {
+    method: 'POST',
+    body: payload,
+  })
+  if (data?.user) {
+    updateSessionUser(data.user)
+  }
+  return data
+}
+
 export async function listPendingSharedLedgerInvitations() {
   return requestJson('/api/shared-ledgers/invitations/pending')
 }

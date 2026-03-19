@@ -5,6 +5,11 @@ import { importLedgerJsonAsNewLedger } from '@/core/services/import.service'
 import { nowIso } from '@/core/utils/id'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import {
+  areSharedLedgerSnapshotsEquivalent,
+  mergeSharedLedgerSnapshots,
+  normalizeSharedLedgerSnapshot,
+} from '@/ui/services/shared-ledger/snapshot-merge'
+import {
   acceptSharedLedgerInvitation,
   createSharedLedger,
   deleteSharedLedger,
@@ -102,7 +107,7 @@ function sanitizeSnapshotForSharedSync(snapshot) {
   const appSettings = Array.isArray(normalized?.tables?.app_settings) ? normalized.tables.app_settings : []
   normalized.tables.app_settings = appSettings.filter((row) => String(row?.key ?? '') !== SHARED_LEDGER_META_KEY)
   normalized.exported_at = new Date().toISOString()
-  return normalized
+  return normalizeSharedLedgerSnapshot(normalized)
 }
 
 function buildSharedMeta(item, existingMeta = {}, patch = {}) {
@@ -188,7 +193,7 @@ export async function listLocalSharedLedgerBindings(ledgers = []) {
   return results.filter(Boolean)
 }
 
-async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = null) {
+async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = null, metaPatch = {}) {
   const normalizedSnapshot = sanitizeSnapshotForSharedSync(snapshot)
   const ledgerId = String(normalizedSnapshot?.ledger_id ?? '').trim()
   if (!ledgerId) {
@@ -213,8 +218,8 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
   const nextMeta = await setSharedLedgerMeta(imported.ledgerId, item, {
     auto_sync_enabled: existingMeta?.auto_sync_enabled ?? true,
     last_synced_at: now,
-    last_pulled_at: now,
-    last_pushed_at: existingMeta?.last_pushed_at ?? null,
+    last_pulled_at: metaPatch.last_pulled_at ?? now,
+    last_pushed_at: metaPatch.last_pushed_at ?? existingMeta?.last_pushed_at ?? null,
   })
 
   return {
@@ -261,6 +266,7 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
   const ledger = await getLedger(normalizedLedgerId)
   const snapshot = sanitizeSnapshotForSharedSync(await exportLedgerJson(normalizedLedgerId))
   let result = null
+  let resolvedSnapshot = null
 
   try {
     result = await pushSharedLedgerSnapshot(meta.shared_ledger_id, {
@@ -270,30 +276,57 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
       snapshot,
     })
   } catch (error) {
-    const shouldForceOnConflict = Boolean(options.forceOnConflict)
-    if (!shouldForceOnConflict || String(error?.code ?? '') !== 'version_conflict') {
+    const shouldMergeOnConflict = Boolean(options.mergeOnConflict || options.forceOnConflict)
+    if (!shouldMergeOnConflict || String(error?.code ?? '') !== 'version_conflict') {
       throw error
     }
+
+    const remote = await getSharedLedgerSnapshot(meta.shared_ledger_id)
+    const remoteSnapshot = sanitizeSnapshotForSharedSync(remote.snapshot)
+    const mergedSnapshot = mergeSharedLedgerSnapshots(snapshot, remoteSnapshot, {
+      prefer: 'remote',
+    })
+
+    if (areSharedLedgerSnapshotsEquivalent(mergedSnapshot, remoteSnapshot)) {
+      const synced = await replaceLocalLedgerWithSnapshot(remoteSnapshot, remote.item, meta, {
+        last_pushed_at: meta.last_pushed_at ?? null,
+      })
+      return {
+        item: remote.item,
+        meta: synced.meta,
+        merged: true,
+        pulled: true,
+      }
+    }
+
+    resolvedSnapshot = mergedSnapshot
     result = await pushSharedLedgerSnapshot(meta.shared_ledger_id, {
-      baseVersion: Number(error?.currentVersion ?? meta.version ?? 0),
+      baseVersion: Number(remote?.item?.version ?? error?.currentVersion ?? meta.version ?? 0),
       force: true,
-      name: String(ledger?.name ?? ''),
-      snapshot,
+      name: String(ledger?.name ?? remote?.item?.name ?? ''),
+      snapshot: mergedSnapshot,
     })
   }
 
   const now = nowIso()
+  if (resolvedSnapshot) {
+    await replaceLocalLedgerWithSnapshot(resolvedSnapshot, result.item, meta, {
+      last_pulled_at: now,
+      last_pushed_at: now,
+    })
+  }
   const nextMeta = await setSharedLedgerMeta(normalizedLedgerId, result.item, {
     auto_sync_enabled: meta.auto_sync_enabled ?? true,
     last_synced_at: now,
     last_pushed_at: now,
-    last_pulled_at: meta.last_pulled_at ?? null,
+    last_pulled_at: resolvedSnapshot ? now : (meta.last_pulled_at ?? null),
   })
   clearLedgerDirty(normalizedLedgerId)
 
   return {
     item: result.item,
     meta: nextMeta,
+    merged: Boolean(resolvedSnapshot),
   }
 }
 
@@ -400,7 +433,7 @@ async function syncSingleDirtyLedger(ledgerId) {
 
   syncingLedgerIds.add(normalizedLedgerId)
   try {
-    await pushLocalLedgerToShared(normalizedLedgerId, { forceOnConflict: true })
+    await pushLocalLedgerToShared(normalizedLedgerId, { mergeOnConflict: true })
     return true
   } finally {
     syncingLedgerIds.delete(normalizedLedgerId)

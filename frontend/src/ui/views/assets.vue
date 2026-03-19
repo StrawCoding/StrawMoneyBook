@@ -17,13 +17,13 @@
         <h3>{{ t('assets_page.summary_title') }}</h3>
       </header>
       <div class="summary-grid">
+        <div class="summary-item summary-total">
+          <small class="muted">{{ t('assets_page.total_assets') }}</small>
+          <MoneyText :value-minor="totalAssetMinor" />
+        </div>
         <div class="summary-item">
           <small class="muted">{{ t('assets_page.disposable') }}</small>
           <MoneyText :value-minor="disposableMinor" />
-        </div>
-        <div class="summary-item">
-          <small class="muted">{{ t('assets_page.liability') }}</small>
-          <MoneyText :value-minor="liabilityMinor" />
         </div>
         <button class="summary-item summary-link" @click="goLoans('lend')">
           <div class="row summary-head">
@@ -39,6 +39,17 @@
           </div>
           <MoneyText :value-minor="loanStore.summary.totalPayable" />
         </button>
+        <button class="summary-item summary-link" @click="goReimbursements">
+          <div class="row summary-head">
+            <small class="muted">{{ t('assets_page.unreimbursed') }}</small>
+            <small class="muted summary-hint">{{ t('assets_page.view') }}</small>
+          </div>
+          <MoneyText :value-minor="unreimbursedMinor" />
+        </button>
+        <div class="summary-item">
+          <small class="muted">{{ t('assets_page.liability') }}</small>
+          <MoneyText :value-minor="liabilityMinor" />
+        </div>
       </div>
     </article>
 
@@ -103,6 +114,7 @@ import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
+import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
 import LedgerSwitcher from '@/ui/components/common/LedgerSwitcher.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 
@@ -110,6 +122,7 @@ const router = useRouter()
 const accountStore = useAccountStore()
 const ledgerStore = useLedgerStore()
 const loanStore = useLoanStore()
+const reimbursementStore = useReimbursementStore()
 const { t } = useI18n()
 
 const balanceMetrics = computed(() => {
@@ -150,6 +163,13 @@ const balanceMetrics = computed(() => {
 })
 const disposableMinor = computed(() => balanceMetrics.value.disposableMinor)
 const liabilityMinor = computed(() => balanceMetrics.value.liabilityMinor)
+const unreimbursedMinor = computed(() => reimbursementStore.pendingTotalMinor)
+const totalAssetMinor = computed(() => (
+  disposableMinor.value
+  + Number(loanStore.summary.totalReceivable ?? 0)
+  - Number(loanStore.summary.totalPayable ?? 0)
+  + unreimbursedMinor.value
+))
 
 const groupSummaries = computed(() => accountStore.groupSummaries)
 const expandedGroupIds = ref(new Set())
@@ -242,6 +262,10 @@ function goLoans(tab) {
   })
 }
 
+function goReimbursements() {
+  router.push({ name: 'reimbursements' })
+}
+
 function expandedStateStorageKeyForLedger() {
   const ledgerId = String(ledgerStore.activeLedgerId ?? '').trim()
   if (!ledgerId) return ''
@@ -326,6 +350,17 @@ h3 {
   padding: 10px;
   display: grid;
   gap: 6px;
+}
+
+.summary-total {
+  grid-column: 1 / -1;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--primary) 16%, var(--card) 84%),
+      color-mix(in srgb, var(--surface-soft-accent) 26%, var(--card) 74%)
+    );
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border) 72%);
 }
 
 .summary-link {
