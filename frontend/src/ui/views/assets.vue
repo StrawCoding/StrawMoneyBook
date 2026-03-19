@@ -25,6 +25,10 @@
           <small class="muted">{{ t('assets_page.disposable') }}</small>
           <MoneyText :value-minor="disposableMinor" />
         </div>
+        <div class="summary-item">
+          <small class="muted">{{ t('assets_page.liability') }}</small>
+          <MoneyText :value-minor="liabilityMinor" />
+        </div>
         <button class="summary-item summary-link" @click="goLoans('lend')">
           <div class="row summary-head">
             <small class="muted">{{ t('assets_page.lend') }}</small>
@@ -39,17 +43,6 @@
           </div>
           <MoneyText :value-minor="loanStore.summary.totalPayable" />
         </button>
-        <button class="summary-item summary-link" @click="goReimbursements">
-          <div class="row summary-head">
-            <small class="muted">{{ t('assets_page.unreimbursed') }}</small>
-            <small class="muted summary-hint">{{ t('assets_page.view') }}</small>
-          </div>
-          <MoneyText :value-minor="unreimbursedMinor" />
-        </button>
-        <div class="summary-item">
-          <small class="muted">{{ t('assets_page.liability') }}</small>
-          <MoneyText :value-minor="liabilityMinor" />
-        </div>
       </div>
     </article>
 
@@ -354,13 +347,6 @@ h3 {
 
 .summary-total {
   grid-column: 1 / -1;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--primary) 16%, var(--card) 84%),
-      color-mix(in srgb, var(--surface-soft-accent) 26%, var(--card) 74%)
-    );
-  border-color: color-mix(in srgb, var(--primary) 28%, var(--border) 72%);
 }
 
 .summary-link {
