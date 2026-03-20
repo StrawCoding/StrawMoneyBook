@@ -1,6 +1,7 @@
 import { query, run, withTransaction } from '@/core/db/sqlite'
 import { createId, nowIso } from '@/core/utils/id'
 import { assertLedgerId, firstRow, rowsOf } from '@/core/repositories/base.repo'
+import { yieldToMainThread } from '@/core/utils/cooperative-yield'
 
 function monthRangeUtc(monthKey) {
   const [year, month] = monthKey.split('-').map((part) => Number(part))
@@ -574,6 +575,8 @@ export async function addTransfer(ledgerId, input) {
       occurredAt,
       note: input.note,
       originType: input.originType ?? 'manual',
+      externalRefId: input.externalRefId ?? null,
+      idempotencyKey: input.idempotencyKey ? `${input.idempotencyKey}:out` : null,
     })
 
     const inTxId = await addTransaction(ledgerId, {
@@ -585,6 +588,8 @@ export async function addTransfer(ledgerId, input) {
       occurredAt,
       note: input.note,
       originType: input.originType ?? 'manual',
+      externalRefId: input.externalRefId ?? null,
+      idempotencyKey: input.idempotencyKey ? `${input.idempotencyKey}:in` : null,
     })
 
     return { transferGroupId, outTxId, inTxId }

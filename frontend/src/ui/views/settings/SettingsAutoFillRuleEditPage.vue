@@ -28,17 +28,17 @@
 
       <label class="field">
         {{ form.type === 'transfer' ? t('settings_auto_fill.from_account') : t('settings_auto_fill.account') }}
-        <CustomSelect v-model="form.accountId" :options="accountOptions" />
+        <CustomSelect v-model="form.accountId" :groups="accountOptionGroups" :placeholder="t('settings_auto_fill.keep_current')" />
       </label>
 
       <label v-if="form.type === 'transfer'" class="field">
         {{ t('settings_auto_fill.to_account') }}
-        <CustomSelect v-model="form.peerAccountId" :options="accountOptions" />
+        <CustomSelect v-model="form.peerAccountId" :groups="accountOptionGroups" :placeholder="t('settings_auto_fill.keep_current')" />
       </label>
 
       <label v-if="form.type !== 'transfer'" class="field">
         {{ t('settings_auto_fill.category') }}
-        <CustomSelect v-model="form.categoryId" :options="categoryOptions" />
+        <CustomSelect v-model="form.categoryId" :groups="categoryOptionGroups" :placeholder="t('settings_auto_fill.keep_current')" />
       </label>
 
       <label class="field">
@@ -143,22 +143,12 @@ const typeOptions = computed(() => ([
   { value: 'income', label: t('analysis_page.type.income') },
   { value: 'transfer', label: t('transaction_about.type.transfer') },
 ]))
-const accountOptions = computed(() => [
-  { value: '', label: t('settings_auto_fill.keep_current') },
-  ...accountStore.accounts.map((item) => ({
-    value: item.id,
-    label: item.name,
-  })),
-])
-const categoryOptions = computed(() => {
-  const categories = form.type === 'income'
-    ? categoryStore.incomeCategories
-    : categoryStore.expenseCategories
-  return [
-    { value: '', label: t('settings_auto_fill.keep_current') },
-    ...(categories ?? []),
-  ]
-})
+const accountOptionGroups = computed(() => accountStore.groupedAccounts)
+const categoryOptionGroups = computed(() => (
+  form.type === 'income'
+    ? categoryStore.incomeCategoryGroups
+    : categoryStore.expenseCategoryGroups
+))
 const addonOptions = computed(() => [
   { value: '', label: t('settings_auto_fill.keep_current') },
   ...addonTemplateStore.templates.map((item) => ({

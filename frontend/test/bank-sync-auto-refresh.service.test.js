@@ -115,3 +115,22 @@ test('runBankSyncAutoRefreshIfDue stops immediately on credential auth errors', 
     message: '第一銀行登入失敗，請確認身分證字號、序號、代碼與密碼',
   })
 })
+
+test('runBankSyncAutoRefreshIfDue skips when bank sync requires membership', async () => {
+  setBankSyncAutoRefreshDependenciesForTest({
+    isSecurityLockEnabled: () => false,
+    isSecurityLockCurrentlyLocked: () => false,
+    getBankSyncState: async () => {
+      const error = new Error('銀行同步僅限會員使用')
+      error.code = 'MEMBERSHIP_LIMIT_BANK_SYNC_ACCESS'
+      throw error
+    },
+  })
+
+  const result = await runBankSyncAutoRefreshIfDue('ledger-1', { reason: 'app_resume' })
+
+  assert.deepEqual(result, {
+    ok: false,
+    skipped: 'membership_required',
+  })
+})

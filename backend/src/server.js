@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 import { isOriginAllowed, sendJson } from './collab/http.js'
 import authHandler from './routes/auth.js'
+import metaHandler from './routes/meta.js'
 import referralsHandler from './routes/referrals.js'
 import sharedLedgersHandler from './routes/shared-ledgers.js'
 
@@ -160,6 +161,11 @@ const server = createServer(async (req, res) => {
 
     if (pathname.startsWith('/api/referrals')) {
       await referralsHandler(req, response)
+      return
+    }
+
+    if (pathname.startsWith('/api/meta')) {
+      await metaHandler(req, response)
       return
     }
 

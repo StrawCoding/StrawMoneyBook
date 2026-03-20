@@ -140,6 +140,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { currencyOptions, normalizeCurrencyCode } from '@/ui/constants/currency-options'
+import { markPostSetupIntroPending } from '@/ui/services/post-setup-intro.service'
 
 const router = useRouter()
 const ledgerStore = useLedgerStore()
@@ -178,7 +179,7 @@ watch(
   hasAccounts,
   async (value) => {
     if (value && step.value === 3) {
-      await router.replace('/')
+      await goToPostSetupIntro()
     }
   },
   { immediate: true },
@@ -200,7 +201,7 @@ function goPrevStep() {
 async function goNextStep() {
   if (!canGoNext.value) return
   if (step.value >= 3) {
-    await router.replace('/')
+    await goToPostSetupIntro()
     return
   }
   if (step.value === 1 && hasLedgers.value) {
@@ -226,6 +227,11 @@ async function createFirstLedger() {
   } finally {
     creatingLedger.value = false
   }
+}
+
+async function goToPostSetupIntro() {
+  markPostSetupIntroPending()
+  await router.replace('/welcome/intro')
 }
 
 async function createFirstAccount() {

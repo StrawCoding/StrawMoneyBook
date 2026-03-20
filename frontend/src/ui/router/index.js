@@ -95,6 +95,11 @@ const router = createRouter({
       meta: { tab: 'home' },
     },
     {
+      name: 'post-setup-intro',
+      path: '/welcome/intro',
+      component: () => import('@/ui/views/PostSetupIntroPage.vue'),
+    },
+    {
       name: 'ai-auto-bookkeeping',
       path: '/ai-auto-bookkeeping',
       component: () => import('@/ui/views/BookkeepingPage.vue'),
@@ -157,6 +162,12 @@ const router = createRouter({
       path: '/settings/bank-sync/new',
       name: 'settings-bank-sync-create',
       component: () => import('@/ui/views/settings/SettingsBankSyncCreatePage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/bank-sync/:id',
+      name: 'settings-bank-sync-connection',
+      component: () => import('@/ui/views/settings/SettingsBankSyncConnectionPage.vue'),
       meta: { tab: 'settings' },
     },
     {

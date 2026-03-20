@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core'
-import { addTransaction } from '@/core/repositories/transaction.repo'
+import { addTransaction, addTransfer } from '@/core/repositories/transaction.repo'
 import {
   clearBankMirrorDataByConnection,
   findBankConnectionById,
@@ -27,6 +27,7 @@ import {
   markImportedBankTransactions,
   syncBankTransactions,
 } from '@/services/bank-sync/backend'
+import { getAutoFillRules } from '@/ui/services/auto-fill-rule.service'
 import {
   buildImportedNote as buildImportedNoteFromMetadata,
   createFirstBankProviderConnectionId,
@@ -36,7 +37,10 @@ import {
   selectSyncableBankAccounts,
 } from '@/services/bank-sync/shared'
 import { traceBankSyncOperation } from '@/core/services/bank-sync-debug.service'
+import { yieldToMainThread } from '@/core/utils/cooperative-yield'
 import { deleteEncryptedSetting, getEncryptedSetting, setEncryptedSetting } from '@/ui/services/secure-setting.service'
+import { buildBankImportPlan } from '@/services/bank-sync/import-auto-rule'
+import { assertCanUseBankSync } from '@/core/services/membership.service'
 
 function assertLedgerId(ledgerId) {
   if (!ledgerId) throw new Error('缺少帳本 ID')
@@ -258,6 +262,7 @@ export function getBankProviderOptions() {
 
 export async function prepareBankProviderLink(ledgerId, provider, options = {}) {
   assertLedgerId(ledgerId)
+  assertCanUseBankSync()
   const normalizedProvider = normalizeText(provider)
   if (!normalizedProvider) throw new Error('缺少 provider')
   if (isFirstBankProviderId(normalizedProvider)) {
@@ -282,6 +287,7 @@ export async function prepareBankProviderLink(ledgerId, provider, options = {}) 
 
 export async function getBankSyncState(ledgerId) {
   assertLedgerId(ledgerId)
+  assertCanUseBankSync()
   const connections = await listBankConnections(ledgerId)
   const bundles = []
   for (const connection of connections) {
@@ -290,8 +296,17 @@ export async function getBankSyncState(ledgerId) {
   return bundles
 }
 
+export async function getBankSyncConnectionDetail(ledgerId, connectionId) {
+  assertLedgerId(ledgerId)
+  assertCanUseBankSync()
+  const connection = await findBankConnectionById(ledgerId, connectionId)
+  if (!connection) return null
+  return getConnectionBundle(ledgerId, connection)
+}
+
 export async function connectBankProvider(ledgerId, provider, options = {}) {
   assertLedgerId(ledgerId)
+  assertCanUseBankSync()
   const normalizedProvider = normalizeText(provider)
   if (!normalizedProvider) throw new Error('缺少 provider')
   const isNativeFirstBank = isFirstBankProviderId(normalizedProvider)
@@ -429,11 +444,13 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
 
 export async function saveBankAccountSettings(ledgerId, bankAccountId, patch = {}) {
   assertLedgerId(ledgerId)
+  assertCanUseBankSync()
   return updateBankAccount(ledgerId, bankAccountId, patch)
 }
 
 export async function saveBankSyncRuleSettings(ledgerId, connectionId, patch = {}) {
   assertLedgerId(ledgerId)
+  assertCanUseBankSync()
   const merged = normalizeRuleInput({
     ...patch,
     excludeKeywords: Array.isArray(patch.excludeKeywords)
@@ -449,6 +466,7 @@ export async function saveBankSyncRuleSettings(ledgerId, connectionId, patch = {
 
 export async function syncBankConnectionNow(ledgerId, connectionId) {
   assertLedgerId(ledgerId)
+  assertCanUseBankSync()
   const connection = await findBankConnectionById(ledgerId, connectionId)
   if (!connection) throw new Error('找不到銀行連結')
   const normalizedStatus = String(connection.status ?? '').toLowerCase()
@@ -596,6 +614,7 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
 
 export async function listBankReviewTransactions(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
+  assertCanUseBankSync()
   const rows = await listBankTransactionsForReview(ledgerId, options)
   if (!options.connectionId) return rows
   const rule = await getBankSyncRule(ledgerId, options.connectionId)
@@ -608,7 +627,11 @@ export async function listBankReviewTransactions(ledgerId, options = {}) {
 
 export async function importSelectedBankTransactions(ledgerId, bankTransactionIds = []) {
   assertLedgerId(ledgerId)
-  const rows = await listBankTransactionsByIds(ledgerId, bankTransactionIds)
+  assertCanUseBankSync()
+  const [rows, autoFillRules] = await Promise.all([
+    listBankTransactionsByIds(ledgerId, bankTransactionIds),
+    getAutoFillRules(ledgerId).catch(() => []),
+  ])
   if (!rows.length) {
     return {
       importedCount: 0,
@@ -621,7 +644,11 @@ export async function importSelectedBankTransactions(ledgerId, bankTransactionId
   const importedMappings = []
   const skipped = []
 
-  for (const row of rows) {
+  for (const [index, row] of rows.entries()) {
+    if (index > 0 && index % 10 === 0) {
+      await yieldToMainThread()
+    }
+
     const bankTransactionId = row.id
     if (Number(row.imported ?? 0) === 1 && normalizeText(row.imported_txn_id)) {
       skipped.push({ bankTransactionId, reason: 'already_imported' })
@@ -637,26 +664,42 @@ export async function importSelectedBankTransactions(ledgerId, bankTransactionId
     const providerAccountId = normalizeText(row.provider_account_id || row.bank_account_id)
     const sourceRef = buildSourceRef(row.provider, providerAccountId, row.provider_transaction_id)
     let existing = await findImportedLedgerTransactionBySourceRef(ledgerId, sourceRef)
+    const importPlan = buildBankImportPlan(row, autoFillRules)
 
     if (!existing) {
       try {
-        const createdTxId = await addTransaction(ledgerId, {
-          type: Number(row.amount_minor ?? 0) >= 0 ? 'income' : 'expense',
-          accountId: mappedAccountId,
-          peerAccountId: null,
-          categoryId: null,
-          amountMinor: Math.round(Number(row.amount_minor ?? 0)),
-          occurredAt: normalizeText(row.posted_at) || new Date().toISOString(),
-          note: buildImportedNoteFromMetadata(row),
-          location: null,
-          tagsJson: null,
-          originType: 'import',
-          externalRefId: sourceRef,
-          idempotencyKey: sourceRef,
-          includeInBudget: true,
-          includeInAnalysis: true,
-        })
-        existing = { id: createdTxId }
+        if (importPlan.mode === 'transfer') {
+          const transfer = await addTransfer(ledgerId, {
+            fromAccountId: importPlan.fromAccountId,
+            toAccountId: importPlan.toAccountId,
+            amountMinor: Math.abs(Math.round(Number(row.amount_minor ?? 0))),
+            occurredAt: normalizeText(row.posted_at) || new Date().toISOString(),
+            note: importPlan.note,
+            originType: 'import',
+            externalRefId: sourceRef,
+            idempotencyKey: sourceRef,
+          })
+          existing = { id: transfer.outTxId }
+        } else {
+          const createdTxId = await addTransaction(ledgerId, {
+            type: importPlan.type,
+            accountId: importPlan.accountId || mappedAccountId,
+            peerAccountId: null,
+            categoryId: importPlan.categoryId || null,
+            amountMinor: Math.round(Number(row.amount_minor ?? 0)),
+            occurredAt: normalizeText(row.posted_at) || new Date().toISOString(),
+            note: importPlan.note || buildImportedNoteFromMetadata(row),
+            location: null,
+            tagsJson: null,
+            originType: 'import',
+            externalRefId: sourceRef,
+            idempotencyKey: sourceRef,
+            isReimbursable: importPlan.isReimbursable,
+            includeInBudget: true,
+            includeInAnalysis: true,
+          })
+          existing = { id: createdTxId }
+        }
       } catch (error) {
         if (!isUniqueConstraintError(error)) {
           skipped.push({
@@ -705,11 +748,13 @@ export async function importSelectedBankTransactions(ledgerId, bankTransactionId
 
 export async function markBankReviewTransactionsSeen(ledgerId, ids = []) {
   assertLedgerId(ledgerId)
+  assertCanUseBankSync()
   await markBankTransactionsSeen(ledgerId, ids)
 }
 
 export async function disconnectBankConnection(ledgerId, connectionId, options = {}) {
   assertLedgerId(ledgerId)
+  assertCanUseBankSync()
   const connection = await findBankConnectionById(ledgerId, connectionId)
   if (!connection) throw new Error('找不到銀行連結')
 

@@ -1,6 +1,7 @@
 import { query, run } from '@/core/db/sqlite'
 import { assertLedgerId, firstRow, rowsOf } from '@/core/repositories/base.repo'
 import { createId, nowIso } from '@/core/utils/id'
+import { yieldToMainThread } from '@/core/utils/cooperative-yield'
 
 function normalizeConnectionStatus(status) {
   const value = String(status ?? '').trim().toLowerCase()
@@ -478,8 +479,14 @@ export async function upsertBankTransactions(ledgerId, connectionId, transaction
   const addedIds = []
   const modifiedIds = []
   const touchedIds = []
+  let processedCount = 0
 
   for (const tx of transactions) {
+    processedCount += 1
+    if (processedCount % 20 === 0) {
+      await yieldToMainThread()
+    }
+
     const bankAccountId = normalizeText(tx?.bankAccountId)
     const providerTransactionId = normalizeText(tx?.providerTransactionId || tx?.id)
     if (!bankAccountId || !providerTransactionId) continue
@@ -679,7 +686,13 @@ export async function markBankTransactionsImported(ledgerId, mappings = []) {
   assertLedgerId(ledgerId)
   if (!Array.isArray(mappings) || !mappings.length) return
   const now = nowIso()
+  let processedCount = 0
   for (const mapping of mappings) {
+    processedCount += 1
+    if (processedCount % 20 === 0) {
+      await yieldToMainThread()
+    }
+
     const bankTransactionId = normalizeText(mapping?.bankTransactionId)
     const importedTxnId = normalizeText(mapping?.importedTxnId)
     if (!bankTransactionId || !importedTxnId) continue
@@ -699,8 +712,6 @@ export async function clearBankMirrorDataByConnection(ledgerId, connectionId) {
   assertLedgerId(ledgerId)
   if (!connectionId) return
   await run('DELETE FROM bank_transactions WHERE ledger_id = ? AND connection_id = ?;', [ledgerId, connectionId])
-  await run('DELETE FROM bank_accounts WHERE ledger_id = ? AND connection_id = ?;', [ledgerId, connectionId])
-  await run('DELETE FROM bank_sync_rules WHERE ledger_id = ? AND connection_id = ?;', [ledgerId, connectionId])
 }
 
 export async function findImportedLedgerTransactionBySourceRef(ledgerId, sourceRef) {

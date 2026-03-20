@@ -24,6 +24,53 @@ function isSavingsJarAccount(account) {
   return Boolean(String(account?.savings_jar_goal_type ?? '').trim())
 }
 
+function buildGroupedAccounts(groups, accounts, { includeSavings = true } = {}) {
+  const filteredAccounts = includeSavings
+    ? [...(accounts ?? [])]
+    : (accounts ?? []).filter((account) => !isSavingsJarAccount(account))
+
+  const accountsByGroupId = new Map()
+  for (const account of filteredAccounts) {
+    const groupId = account.group_id
+    if (!accountsByGroupId.has(groupId)) {
+      accountsByGroupId.set(groupId, [])
+    }
+    accountsByGroupId.get(groupId).push(account)
+  }
+
+  const grouped = []
+  const includedGroupIds = new Set()
+  for (const group of groups ?? []) {
+    const groupAccounts = accountsByGroupId.get(group.id) ?? []
+    if (!groupAccounts.length) continue
+
+    grouped.push({
+      ...group,
+      options: groupAccounts.map((account) => ({
+        value: account.id,
+        label: account.name,
+        icon: account.icon,
+      })),
+    })
+    includedGroupIds.add(group.id)
+  }
+
+  const orphanAccounts = filteredAccounts.filter((account) => !includedGroupIds.has(account.group_id))
+  if (orphanAccounts.length) {
+    grouped.push({
+      id: '__ungrouped__',
+      name: '未分組',
+      options: orphanAccounts.map((account) => ({
+        value: account.id,
+        label: account.name,
+        icon: account.icon,
+      })),
+    })
+  }
+
+  return grouped
+}
+
 export const useAccountStore = defineStore('account', {
   state: () => ({
     groups: [],
@@ -74,6 +121,14 @@ export const useAccountStore = defineStore('account', {
 
     savingsJarAccounts(state) {
       return state.accounts.filter((item) => isSavingsJarAccount(item))
+    },
+
+    groupedAccounts(state) {
+      return buildGroupedAccounts(state.groups, state.accounts)
+    },
+
+    groupedRegularAccounts(state) {
+      return buildGroupedAccounts(state.groups, state.accounts, { includeSavings: false })
     },
   },
 

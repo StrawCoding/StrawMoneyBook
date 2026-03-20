@@ -59,6 +59,7 @@ const MEMBERSHIP_BACKEND_SYNC_COOLDOWN_MS = 30 * 1000
 const FREE_LIMITS = Object.freeze({
   maxLedgers: 1,
   maxAccounts: 3,
+  maxBankSyncConnections: 0,
   maxSavingsJars: 1,
   maxLoans: 5,
   maxReimbursements: 5,
@@ -1081,6 +1082,7 @@ function toMembershipLimitsByTier(tier) {
   return {
     maxLedgers: Number.POSITIVE_INFINITY,
     maxAccounts: Number.POSITIVE_INFINITY,
+    maxBankSyncConnections: Number.POSITIVE_INFINITY,
     maxSavingsJars: Number.POSITIVE_INFINITY,
     maxLoans: Number.POSITIVE_INFINITY,
     maxReimbursements: Number.POSITIVE_INFINITY,
@@ -1153,6 +1155,19 @@ export function assertCanCreateSubscription(existingSubscriptionCount) {
   if (count >= maxSubscriptions) {
     const error = createMembershipLimitError('免費版訂閱項目最多 1 個', 'SUBSCRIPTION_CREATE')
     triggerMembershipBenefitsRedirect('subscription_create')
+    throw error
+  }
+}
+
+export function hasBankSyncMembershipAccess(tierOverride = '') {
+  const { maxBankSyncConnections } = getMembershipLimits(tierOverride)
+  return Number(maxBankSyncConnections) > 0 || maxBankSyncConnections === Number.POSITIVE_INFINITY
+}
+
+export function assertCanUseBankSync(tierOverride = '') {
+  if (!hasBankSyncMembershipAccess(tierOverride)) {
+    const error = createMembershipLimitError('銀行同步僅限會員使用', 'BANK_SYNC_ACCESS')
+    triggerMembershipBenefitsRedirect('bank_sync')
     throw error
   }
 }

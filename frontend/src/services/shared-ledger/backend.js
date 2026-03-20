@@ -1,11 +1,12 @@
 import { Capacitor } from '@capacitor/core'
 import { translateMessage } from '@/ui/services/i18n.service'
+import { readPersistedSharedLedgerSession, SHARED_LEDGER_SESSION_STORAGE_KEY } from '@/services/shared-ledger/session-persistence'
 
 const PROD_DEFAULT_SHARED_LEDGER_API_BASE = 'https://api.strawmb.com'
 const PROD_DEFAULT_SHARED_LEDGER_INVITE_BASE = 'https://www.strawmb.com/open/shared-ledger'
 const EXPLICIT_SHARED_LEDGER_API_BASE = String(import.meta.env.VITE_SHARED_LEDGER_API_BASE_URL ?? '').trim()
 const EXPLICIT_SHARED_LEDGER_INVITE_BASE = String(import.meta.env.VITE_SHARED_LEDGER_INVITE_URL ?? '').trim()
-const SESSION_STORAGE_KEY = 'straw.shared_ledger_session'
+const SESSION_STORAGE_KEY = SHARED_LEDGER_SESSION_STORAGE_KEY
 const PENDING_INVITE_CODE_STORAGE_KEY = 'straw.shared_ledger_pending_invite_code'
 const REQUEST_TIMEOUT_MS = 15_000
 const SESSION_RESTORE_COOLDOWN_MS = 60_000
@@ -94,15 +95,11 @@ function describeNetworkFailure(requestUrl, error) {
 }
 
 function readSession() {
-  if (typeof localStorage === 'undefined') return null
-  try {
-    const parsed = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || 'null')
-    if (!parsed || typeof parsed !== 'object') return null
-    if (!parsed.token || !parsed.user) return null
-    return parsed
-  } catch {
-    return null
-  }
+  return readPersistedSharedLedgerSession({
+    storageKey: SESSION_STORAGE_KEY,
+    localStorageRef: typeof localStorage === 'undefined' ? null : localStorage,
+    sessionStorageRef: typeof sessionStorage === 'undefined' ? null : sessionStorage,
+  })
 }
 
 function readPendingInviteCode() {

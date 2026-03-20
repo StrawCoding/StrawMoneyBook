@@ -36,6 +36,12 @@ function isConnectionEligible(connection) {
   return selectSyncableBankAccounts(connection?.accounts).length > 0
 }
 
+function isMembershipRequiredError(error) {
+  const code = normalizeText(error?.code).toUpperCase()
+  if (code === 'MEMBERSHIP_LIMIT_BANK_SYNC_ACCESS') return true
+  return normalizeText(error?.message).includes('銀行同步僅限會員使用')
+}
+
 export function resetBankSyncAutoRefreshStateForTest() {
   lastRunAtByLedger.clear()
   inflightByLedger.clear()
@@ -68,7 +74,15 @@ export async function runBankSyncAutoRefreshIfDue(ledgerId, options = {}) {
 
   const flight = (async () => {
     lastRunAtByLedger.set(normalizedLedgerId, Date.now())
-    const state = await dependencies.getBankSyncState(normalizedLedgerId)
+    let state = []
+    try {
+      state = await dependencies.getBankSyncState(normalizedLedgerId)
+    } catch (error) {
+      if (isMembershipRequiredError(error)) {
+        return { ok: false, skipped: 'membership_required' }
+      }
+      throw error
+    }
     const targets = state.filter((connection) => isConnectionEligible(connection))
     if (!targets.length) {
       return { ok: false, skipped: 'no_connections' }

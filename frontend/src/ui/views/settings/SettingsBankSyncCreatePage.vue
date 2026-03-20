@@ -10,7 +10,15 @@
       <p class="muted">{{ bankSyncApiMessage }}</p>
     </article>
 
-    <article class="card panel">
+    <article v-else-if="!hasBankSyncMembershipAccess" class="card panel warning-panel">
+      <h3>{{ t('settings_bank_sync.member_only', '銀行同步僅限會員使用') }}</h3>
+      <p class="muted">{{ t('settings_bank_sync.member_only_desc', '免費版可查看功能介紹，但建立連線、同步與匯入銀行交易都需要會員資格。') }}</p>
+      <RouterLink class="btn" to="/settings/membership-benefits">
+        {{ t('settings_bank_sync.view_membership', '查看會員權益') }}
+      </RouterLink>
+    </article>
+
+    <article v-else class="card panel">
       <header class="row panel-head">
         <h3>{{ t('settings_bank_sync_create.form_title') }}</h3>
         <button class="btn primary" :disabled="!canSubmit || submitting || !bankSyncApiReady" @click="submit">
@@ -34,7 +42,14 @@
 
         <label class="field">
           {{ t('settings_bank_sync_create.initial_sync_start_date') }}
-          <input v-model="form.initialSyncStartDate" class="input" type="date" />
+          <DateTimePickerField
+            :date="form.initialSyncStartDate"
+            :hour="pickerHour"
+            :minute="pickerMinute"
+            @update:date="form.initialSyncStartDate = $event"
+            @update:hour="pickerHour = $event"
+            @update:minute="pickerMinute = $event"
+          />
           <small class="muted">{{ t('settings_bank_sync_create.initial_sync_start_date_hint') }}</small>
         </label>
 
@@ -64,13 +79,26 @@
         </article>
       </template>
     </article>
+
+    <AppDialog
+      :open="confirmDialogOpen"
+      :title="t('settings_bank_sync_create.confirm.title', '確認新增銀行連線')"
+      :message="confirmMessage"
+      :confirm-text="t('settings_bank_sync_create.create')"
+      :loading="submitting"
+      @close="confirmDialogOpen = false"
+      @confirm="confirmSubmit"
+    />
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
+import AppDialog from '@/ui/components/common/AppDialog.vue'
+import { getMembershipTierSnapshot, hasBankSyncMembershipAccess as hasBankSyncMembershipAccessForTier, subscribeMembershipSnapshot } from '@/core/services/membership.service'
 import { connectBankProvider, getBankProviderOptions } from '@/ui/services/bank-sync.service'
 import { getBankSyncApiUnavailableMessage, isBankSyncApiConfigured } from '@/services/bank-sync/backend'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -86,6 +114,10 @@ const bankSyncApiMessage = computed(() => getBankSyncApiUnavailableMessage())
 
 const submitting = ref(false)
 const progressText = ref('')
+const confirmDialogOpen = ref(false)
+const pickerHour = ref(0)
+const pickerMinute = ref(0)
+const membershipTier = ref(getMembershipTierSnapshot())
 
 function defaultInitialSyncStartDate() {
   const date = new Date()
@@ -119,8 +151,9 @@ const isMockProviderSelected = computed(() => {
 const isFirstBankSelected = computed(() => {
   return String(form.providerId ?? '').trim().toLowerCase() === 'first_bank_tw'
 })
+const hasBankSyncMembershipAccess = computed(() => hasBankSyncMembershipAccessForTier(membershipTier.value))
 const canSubmit = computed(() => {
-  if (!ledgerStore.activeLedgerId || !String(form.providerId ?? '').trim()) return false
+  if (!hasBankSyncMembershipAccess.value || !ledgerStore.activeLedgerId || !String(form.providerId ?? '').trim()) return false
   if (!isFirstBankSelected.value) return true
   return Boolean(
     String(form.initialSyncStartDate ?? '').trim()
@@ -130,10 +163,34 @@ const canSubmit = computed(() => {
     && String(form.password ?? '').trim(),
   )
 })
+const confirmMessage = computed(() => {
+  const providerLabel = providerOptions.value.find((item) => item.value === form.providerId)?.label || form.providerId
+  if (!isFirstBankSelected.value) {
+    return t(
+      'settings_bank_sync_create.confirm.generic_message',
+      `確認要新增「${providerLabel}」銀行連線嗎？`,
+    )
+  }
+  return t(
+    'settings_bank_sync_create.confirm.first_bank_message',
+    `確認要以 ${providerLabel} 建立銀行連線，並從 ${form.initialSyncStartDate} 開始同步嗎？`,
+  )
+})
 
 onMounted(() => {
+  unsubscribeMembership = subscribeMembershipSnapshot((next) => {
+    membershipTier.value = String(next?.tier ?? getMembershipTierSnapshot())
+  }, { emitCurrent: true })
   if (!form.providerId) {
     form.providerId = providerOptions.value[0]?.value ?? ''
+  }
+})
+
+let unsubscribeMembership = null
+
+onBeforeUnmount(() => {
+  if (typeof unsubscribeMembership === 'function') {
+    unsubscribeMembership()
   }
 })
 
@@ -188,8 +245,16 @@ async function submit() {
     uiStore.pushToast(bankSyncApiMessage.value, 'error')
     return
   }
+  if (!hasBankSyncMembershipAccess.value) {
+    await router.push({ name: 'settings-membership-benefits', query: { from: 'bank_sync' } })
+    return
+  }
   if (!canSubmit.value || submitting.value) return
+  confirmDialogOpen.value = true
+}
 
+async function confirmSubmit() {
+  if (!canSubmit.value || submitting.value) return
   submitting.value = true
   const stopProgress = isFirstBankSelected.value ? startSubmitProgress() : () => {}
   try {
@@ -202,10 +267,11 @@ async function submit() {
     })
 
     uiStore.pushToast(t('settings_bank_sync_create.toast.created'))
+    confirmDialogOpen.value = false
     await router.push({
-      name: 'settings-bank-sync',
-      query: {
-        focusConnectionId: connection.id,
+      name: 'settings-bank-sync-connection',
+      params: {
+        id: connection.id,
       },
     })
   } catch (error) {

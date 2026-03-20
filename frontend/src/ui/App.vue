@@ -1,6 +1,6 @@
 <template>
-  <div class="app-shell" :class="{ booting: isBooting, 'welcome-mode': showWelcomePage }">
-    <header v-if="!isBooting && !showWelcomePage" class="top-bar">
+  <div class="app-shell" :class="{ booting: isBooting, 'welcome-mode': showGuidedFlow }">
+    <header v-if="!isBooting && !showGuidedFlow" class="top-bar">
       <div class="title-wrap">
         <img class="brand-logo" :src="BRAND_LOGO_URL" alt="StrawMoneyBook logo" />
         <h1>StrawMoneyBook</h1>
@@ -17,7 +17,7 @@
       </transition>
     </header>
 
-    <main class="page-container" :class="{ booting: isBooting, 'welcome-mode': showWelcomePage }">
+    <main class="page-container" :class="{ booting: isBooting, 'welcome-mode': showGuidedFlow }">
       <transition name="boot-overlay" appear>
         <section v-if="isBooting" class="boot-layer card">
           <img class="boot-logo" :src="BRAND_LOGO_URL" alt="StrawMoneyBook logo" />
@@ -37,7 +37,7 @@
     </main>
 
     <transition name="fade-scale" appear>
-      <BottomNav v-if="hasLedgers && !isBooting && !showWelcomePage" />
+      <BottomNav v-if="hasLedgers && !isBooting && !showGuidedFlow" />
     </transition>
     <ToastHost />
     <AppDialog
@@ -103,6 +103,7 @@ const hasAccounts = computed(() => accountStore.accounts.length > 0)
 const isBooting = computed(() => !ledgerStore.ready)
 const allowWithoutSetup = computed(() => Boolean(route.meta?.allowWithoutSetup))
 const showWelcomePage = computed(() => ledgerStore.ready && !allowWithoutSetup.value && (!hasLedgers.value || !hasAccounts.value))
+const showGuidedFlow = computed(() => showWelcomePage.value || route.name === 'post-setup-intro')
 const updateDialogOpen = ref(false)
 const updateInfo = ref({
   hasUpdate: false,
