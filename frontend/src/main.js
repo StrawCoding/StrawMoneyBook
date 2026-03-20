@@ -167,6 +167,7 @@ import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { initLocalePreference, translateMessage } from '@/ui/services/i18n.service'
 import { getPreferredBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
+import { resolveRouteFromAppUrl as resolveAppUrlRoute } from '@/ui/services/app-url-route'
 import { canNavigateBackInApp, resolveBackFallback, shouldConfirmExit } from '@/ui/services/navigation-back.service'
 import { extractSharedLedgerInviteCode, restoreSharedLedgerSession } from '@/services/shared-ledger/backend'
 import {
@@ -207,50 +208,17 @@ async function syncActiveLedgerHomeWidget(pinia) {
     await clearHomeWidgetSummary()
     return
   }
-  await syncHomeWidgetSummary(activeLedger.id, activeLedger.currency_code)
+  await syncHomeWidgetSummary(activeLedger.id, {
+    currencyCode: activeLedger.currency_code,
+    ledgerName: activeLedger.name,
+  })
 }
 
 function resolveRouteFromAppUrl(rawUrl) {
-  const source = String(rawUrl ?? '').trim()
-  if (!source) return null
-
-  try {
-    const parsed = new URL(source)
-    const host = String(parsed.host ?? '').trim().toLowerCase()
-    const pathname = String(parsed.pathname ?? '').trim().replace(/\/+$/, '').toLowerCase()
-    const pathSegments = pathname.split('/').filter(Boolean)
-    const routeKey = pathname && pathname !== '/' ? pathname.slice(1) : host
-    const inviteCode = extractSharedLedgerInviteCode(source)
-
-    if (
-      inviteCode
-      && (
-        host === 'shared-ledger'
-        || (pathSegments[0] === 'open' && pathSegments[1] === 'shared-ledger')
-        || (pathSegments[0] === 'shared-ledger' && pathSegments[1] === 'join')
-      )
-    ) {
-      return {
-        path: '/settings/shared-ledgers',
-        query: { inviteCode },
-      }
-    }
-
-    if (routeKey === 'analysis') {
-      return { path: '/analysis' }
-    }
-
-    if (!routeKey || routeKey === 'home') {
-      if (parsed.searchParams.get('quickAdd') === '1') {
-        return { path: getPreferredBookkeepingPath() }
-      }
-      return { path: '/' }
-    }
-  } catch (error) {
-    console.warn('[app-url] failed to parse url', source, error)
-  }
-
-  return null
+  return resolveAppUrlRoute(rawUrl, {
+    extractSharedLedgerInviteCode,
+    getPreferredBookkeepingPath,
+  })
 }
 
 async function handleAppUrlOpen(rawUrl) {

@@ -9,6 +9,7 @@
 - Clear app data or reinstall the app, then cold start and confirm initialization succeeds.
 - Validate old-database upgrade on a device/emulator that already contains local data.
 - If SQLite migration logic changed, confirm recovery DB fallback is not triggered unexpectedly.
+- If Android home widgets changed, add each widget type once, resize it across supported sizes, and confirm deep links and rendered summaries still work.
 
 ## Shared Ledger Validation
 - Create a shared ledger from an existing local ledger.

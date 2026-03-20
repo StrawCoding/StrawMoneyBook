@@ -1,19 +1,8 @@
 package com.strawcoding.strawmoneybook;
 
-import android.appwidget.AppWidgetManager;
-import android.appwidget.AppWidgetProvider;
-import android.content.Context;
-
-public class StrawMoneyWidgetProvider extends AppWidgetProvider {
+public class StrawMoneyWidgetProvider extends BaseHomeWidgetProvider {
     @Override
-    public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
-        super.onUpdate(context, appWidgetManager, appWidgetIds);
-        HomeWidgetPlugin.updateWidgets(context, appWidgetManager, appWidgetIds);
-    }
-
-    @Override
-    public void onEnabled(Context context) {
-        super.onEnabled(context);
-        HomeWidgetPlugin.refreshWidgets(context);
+    protected HomeWidgetPlugin.WidgetKind getWidgetKind() {
+        return HomeWidgetPlugin.WidgetKind.SUMMARY;
     }
 }

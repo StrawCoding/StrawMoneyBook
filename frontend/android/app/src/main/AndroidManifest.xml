@@ -38,6 +38,7 @@
 
         <receiver
             android:name=".StrawMoneyWidgetProvider"
+            android:label="@string/widget_catalog_summary_label"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -45,6 +46,54 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/home_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".StrawMoneyPieChartWidgetProvider"
+            android:label="@string/widget_catalog_pie_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/home_widget_info_pie_chart" />
+        </receiver>
+
+        <receiver
+            android:name=".StrawMoneyBarChartWidgetProvider"
+            android:label="@string/widget_catalog_bar_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/home_widget_info_bar_chart" />
+        </receiver>
+
+        <receiver
+            android:name=".StrawMoneyQuickAddWidgetProvider"
+            android:label="@string/widget_catalog_quick_add_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/home_widget_info_quick_add" />
+        </receiver>
+
+        <receiver
+            android:name=".StrawMoneyAiBookkeepingWidgetProvider"
+            android:label="@string/widget_catalog_ai_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/home_widget_info_ai_bookkeeping" />
         </receiver>
 
         <provider

@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { listTransactionsByMonth } from '@/core/repositories/transaction.repo'
+import { buildHomeWidgetSummaryPayload } from '@/ui/services/home-widget-summary'
 
 const HomeWidget = registerPlugin('HomeWidget')
 
@@ -13,11 +14,6 @@ function monthKeyFromDate(date = new Date()) {
   return `${year}-${month}`
 }
 
-function normalizeCurrencyCode(currencyCode) {
-  const normalized = String(currencyCode ?? '').trim().toUpperCase()
-  return normalized || 'TWD'
-}
-
 export function isHomeWidgetSupported() {
   return isAndroidNativeRuntime()
 }
@@ -28,7 +24,7 @@ export async function clearHomeWidgetSummary() {
   return true
 }
 
-export async function syncHomeWidgetSummary(ledgerId, currencyCode) {
+export async function syncHomeWidgetSummary(ledgerId, options = {}) {
   if (!isAndroidNativeRuntime()) return false
 
   const normalizedLedgerId = String(ledgerId ?? '').trim()
@@ -38,26 +34,6 @@ export async function syncHomeWidgetSummary(ledgerId, currencyCode) {
   }
 
   const transactions = await listTransactionsByMonth(normalizedLedgerId, monthKeyFromDate())
-  let incomeMinor = 0
-  let expenseMinor = 0
-
-  for (const tx of transactions) {
-    if (Number(tx?.include_in_analysis) === 0) continue
-    const type = String(tx?.type ?? '')
-    const amount = Math.round(Number(tx?.amount_minor ?? 0))
-    if (type === 'income' && amount > 0) {
-      incomeMinor += amount
-      continue
-    }
-    if (type === 'expense' && amount < 0) {
-      expenseMinor += Math.abs(amount)
-    }
-  }
-
-  await HomeWidget.updateSummary({
-    incomeMinor,
-    expenseMinor,
-    currencyCode: normalizeCurrencyCode(currencyCode),
-  })
+  await HomeWidget.updateSummary(buildHomeWidgetSummaryPayload(transactions, options))
   return true
 }
