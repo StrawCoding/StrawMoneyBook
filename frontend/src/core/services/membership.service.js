@@ -14,6 +14,29 @@ import {
   redeemPromoCode as redeemGooglePlayPromoCodeInStore,
   restore as restoreGooglePlayPurchases,
 } from './google-play-billing.service'
+import {
+  buildMembershipBackendSyncFingerprint as buildMembershipBackendSyncFingerprintValue,
+  resolveSharedLedgerMembershipSyncExpiry as resolveSharedLedgerMembershipSyncExpiryValue,
+  shouldSkipInactiveMembershipBackendSync as shouldSkipInactiveMembershipBackendSyncValue,
+} from './membership-backend-sync.js'
+import {
+  hasFreshGooglePlaySupportCache as hasFreshGooglePlaySupportCacheValue,
+  isDebugMembershipOverrideEnabledFromEnv,
+  shouldSkipMembershipBackendSyncTask,
+} from './membership-runtime.js'
+import {
+  createDefaultEntitlementState as createDefaultEntitlementStateValue,
+  getTierAndPlanFromState as getTierAndPlanFromStateValue,
+  isMembershipCacheValid as isMembershipCacheValidValue,
+  isMonthlySyncFailureGraceActive as isMonthlySyncFailureGraceActiveValue,
+  normalizeCacheExpiry as normalizeCacheExpiryValue,
+  normalizeEntitlementState as normalizeEntitlementStateValue,
+  normalizeGooglePlayPlan as normalizeGooglePlayPlanValue,
+  normalizeSyncStatus as normalizeSyncStatusValue,
+  resolveMonthlyCacheExpiry as resolveMonthlyCacheExpiryValue,
+  resolveMonthlyCacheExpiryFromPurchaseResult as resolveMonthlyCacheExpiryFromPurchaseResultValue,
+  toExpiryIso as toExpiryIsoValue,
+} from './membership-state.js'
 
 const PLAY_CALL_TRACE_MAX_ENTRIES = 60
 
@@ -28,13 +51,10 @@ const MEMBERSHIP_PRODUCT_DISPLAY_CACHE_TTL_MS = 10 * 60 * 1000
 const MEMBERSHIP_PRODUCT_DISPLAY_FETCH_TIMEOUT_MS = 25 * 1000
 const MEMBERSHIP_SYNC_RETRY_MAX_ATTEMPTS = 3
 const MEMBERSHIP_SYNC_RETRY_DELAY_MS = 1200
-const MONTHLY_MEMBERSHIP_EXPIRY_UNKNOWN_GRACE_MS = 12 * 60 * 60 * 1000
-const MONTHLY_MEMBERSHIP_SYNC_FAILURE_GRACE_MS = 3 * 24 * 60 * 60 * 1000
 const GOOGLE_PLAY_SUPPORT_CACHE_TTL_OK_MS = 2 * 60 * 1000
 const GOOGLE_PLAY_SUPPORT_CACHE_TTL_FAIL_MS = 10 * 1000
 const GOOGLE_PLAY_SUPPORT_RETRY_DELAY_MS = 800
 const MEMBERSHIP_BACKEND_SYNC_COOLDOWN_MS = 30 * 1000
-const MEMBERSHIP_BACKEND_LIFETIME_EXPIRES_AT = '2099-12-31T23:59:59.999Z'
 
 const FREE_LIMITS = Object.freeze({
   maxLedgers: 1,
@@ -105,20 +125,15 @@ const MEMBERSHIP_BENEFITS_ROUTE_PATH = '/settings/membership-benefits'
  */
 
 function isDebugMembershipOverrideEnabled() {
-  const env = import.meta.env ?? {}
-  const mode = String(env.MODE ?? '').trim().toLowerCase()
-  if (mode === 'debug') return true
-
-  const force = String(env.VITE_FORCE_MEMBER_ON_DEBUG ?? '').trim().toLowerCase()
-  return force === '1' || force === 'true' || force === 'yes' || force === 'on'
+  return isDebugMembershipOverrideEnabledFromEnv(import.meta.env ?? {})
 }
 
 function hasFreshGooglePlaySupportCache(nowMs = Date.now()) {
-  if (googlePlaySupportCache.checkedAt <= 0) return false
-  const ttl = googlePlaySupportCache.supported
-    ? GOOGLE_PLAY_SUPPORT_CACHE_TTL_OK_MS
-    : GOOGLE_PLAY_SUPPORT_CACHE_TTL_FAIL_MS
-  return nowMs - googlePlaySupportCache.checkedAt <= ttl
+  return hasFreshGooglePlaySupportCacheValue(googlePlaySupportCache, {
+    nowMs,
+    okTtlMs: GOOGLE_PLAY_SUPPORT_CACHE_TTL_OK_MS,
+    failTtlMs: GOOGLE_PLAY_SUPPORT_CACHE_TTL_FAIL_MS,
+  })
 }
 
 function setGooglePlaySupportCache(supported) {
@@ -232,83 +247,35 @@ function toDateKey(dateLike = new Date()) {
 }
 
 function normalizeGooglePlayPlan(plan) {
-  if (plan === 'monthly') return 'monthly'
-  if (plan === 'lifetime') return 'lifetime'
-  return ''
+  return normalizeGooglePlayPlanValue(plan)
 }
 
 function normalizeSyncStatus(status) {
-  return status === MEMBERSHIP_SYNC_STATUS_OK ? MEMBERSHIP_SYNC_STATUS_OK : MEMBERSHIP_SYNC_STATUS_ERROR
+  return normalizeSyncStatusValue(status)
 }
 
 function createDefaultEntitlementState() {
-  return {
-    lifetimeOwned: false,
-    monthlyLastVerifiedAt: '',
-    membershipCacheExpiresAt: '',
-    lastSyncAt: '',
-    lastSyncStatus: MEMBERSHIP_SYNC_STATUS_ERROR,
-    lastKnownPlan: '',
-  }
+  return createDefaultEntitlementStateValue()
 }
 
 function normalizeCacheExpiry(value) {
-  const text = String(value ?? '').trim()
-  if (!text) return ''
-  if (text === MEMBERSHIP_CACHE_FOREVER) return MEMBERSHIP_CACHE_FOREVER
-  const ms = Date.parse(text)
-  if (!Number.isFinite(ms)) return ''
-  return new Date(ms).toISOString()
+  return normalizeCacheExpiryValue(value)
 }
 
 function toExpiryIso(value) {
-  const ms = toEpochMs(value)
-  if (!Number.isFinite(ms)) return ''
-  return new Date(ms).toISOString()
+  return toExpiryIsoValue(value)
 }
 
 function isMembershipCacheValid(state, nowMs = Date.now()) {
-  const cacheExpiresAt = String(state.membershipCacheExpiresAt ?? '').trim()
-  if (!cacheExpiresAt) return false
-  if (cacheExpiresAt === MEMBERSHIP_CACHE_FOREVER) return true
-  const expiresMs = Date.parse(cacheExpiresAt)
-  if (!Number.isFinite(expiresMs)) return false
-  return expiresMs > nowMs
+  return isMembershipCacheValidValue(state, nowMs)
 }
 
 function isMonthlySyncFailureGraceActive(state, nowMs = Date.now()) {
-  if (normalizeGooglePlayPlan(state?.lastKnownPlan) !== 'monthly') return false
-  if (normalizeSyncStatus(state?.lastSyncStatus) !== MEMBERSHIP_SYNC_STATUS_ERROR) return false
-
-  const cacheExpiresAt = String(state?.membershipCacheExpiresAt ?? '').trim()
-  if (!cacheExpiresAt || cacheExpiresAt === MEMBERSHIP_CACHE_FOREVER) return false
-
-  const expiresMs = Date.parse(cacheExpiresAt)
-  if (!Number.isFinite(expiresMs)) return false
-
-  return nowMs <= (expiresMs + MONTHLY_MEMBERSHIP_SYNC_FAILURE_GRACE_MS)
+  return isMonthlySyncFailureGraceActiveValue(state, nowMs)
 }
 
 function normalizeEntitlementState(source) {
-  const defaults = createDefaultEntitlementState()
-  if (!source || typeof source !== 'object') return defaults
-
-  const normalized = {
-    lifetimeOwned: Boolean(source.lifetimeOwned),
-    monthlyLastVerifiedAt: String(source.monthlyLastVerifiedAt ?? '').trim(),
-    membershipCacheExpiresAt: normalizeCacheExpiry(source.membershipCacheExpiresAt),
-    lastSyncAt: String(source.lastSyncAt ?? '').trim(),
-    lastSyncStatus: normalizeSyncStatus(source.lastSyncStatus),
-    lastKnownPlan: normalizeGooglePlayPlan(String(source.lastKnownPlan ?? '').trim().toLowerCase()),
-  }
-
-  if (normalized.lifetimeOwned && normalized.lastKnownPlan !== 'lifetime') {
-    normalized.lastKnownPlan = 'lifetime'
-  }
-  if (normalized.lifetimeOwned) {
-    normalized.membershipCacheExpiresAt = MEMBERSHIP_CACHE_FOREVER
-  }
-  return normalized
+  return normalizeEntitlementStateValue(source)
 }
 
 function readEntitlementState(storage) {
@@ -505,50 +472,10 @@ export function subscribeGooglePlayCallTrace(listener, { emitCurrent = true } = 
 }
 
 function getTierAndPlanFromState(state) {
-  const nowMs = Date.now()
-
-  if (isDebugMembershipOverrideEnabled()) {
-    return {
-      tier: MEMBERSHIP_MEMBER,
-      plan: state.lifetimeOwned ? 'lifetime' : normalizeGooglePlayPlan(state.lastKnownPlan || 'monthly'),
-      source: 'debug_override',
-    }
-  }
-
-  if (state.lifetimeOwned) {
-    return {
-      tier: MEMBERSHIP_MEMBER,
-      plan: 'lifetime',
-      source: 'lifetime_cache',
-    }
-  }
-
-  const knownPlan = normalizeGooglePlayPlan(state.lastKnownPlan)
-
-  if (knownPlan && isMembershipCacheValid(state, nowMs)) {
-    const source = state.lastSyncStatus === MEMBERSHIP_SYNC_STATUS_OK
-      ? 'play_sync'
-      : `${knownPlan}_cache`
-    return {
-      tier: MEMBERSHIP_MEMBER,
-      plan: knownPlan,
-      source,
-    }
-  }
-
-  if (isMonthlySyncFailureGraceActive(state, nowMs)) {
-    return {
-      tier: MEMBERSHIP_MEMBER,
-      plan: 'monthly',
-      source: 'monthly_sync_error_grace',
-    }
-  }
-
-  return {
-    tier: MEMBERSHIP_FREE,
-    plan: '',
-    source: 'free',
-  }
+  return getTierAndPlanFromStateValue(state, {
+    debugEnabled: isDebugMembershipOverrideEnabled(),
+    nowMs: Date.now(),
+  })
 }
 
 function getSharedLedgerMembershipBonus(nowMs = Date.now()) {
@@ -618,50 +545,15 @@ function toMembershipSnapshot(state, reason = '') {
 }
 
 function resolveSharedLedgerMembershipSyncExpiry(snapshot) {
-  const plan = normalizeGooglePlayPlan(snapshot?.plan)
-  if (!plan) return ''
-
-  if (plan === 'lifetime') {
-    return MEMBERSHIP_BACKEND_LIFETIME_EXPIRES_AT
-  }
-
-  const cacheExpiresAtMs = toEpochMs(snapshot?.membershipCacheExpiresAt)
-  if (Number.isFinite(cacheExpiresAtMs)) {
-    const effectiveMs = snapshot?.lastSyncStatus === MEMBERSHIP_SYNC_STATUS_ERROR
-      ? cacheExpiresAtMs + MONTHLY_MEMBERSHIP_SYNC_FAILURE_GRACE_MS
-      : cacheExpiresAtMs
-    if (effectiveMs > Date.now()) {
-      return new Date(effectiveMs).toISOString()
-    }
-  }
-
-  const verifiedAtMs = toEpochMs(snapshot?.monthlyLastVerifiedAt)
-  if (Number.isFinite(verifiedAtMs)) {
-    return new Date(verifiedAtMs + MONTHLY_MEMBERSHIP_EXPIRY_UNKNOWN_GRACE_MS).toISOString()
-  }
-
-  return ''
+  return resolveSharedLedgerMembershipSyncExpiryValue(snapshot)
 }
 
 function buildMembershipBackendSyncFingerprint(snapshot, sessionUser = null) {
-  const userId = String(sessionUser?.id ?? '').trim()
-  if (!userId) return ''
-
-  return JSON.stringify({
-    userId,
-    plan: normalizeGooglePlayPlan(snapshot?.plan),
-    lastKnownPlan: normalizeGooglePlayPlan(snapshot?.lastKnownPlan),
-    lastSyncStatus: normalizeSyncStatus(snapshot?.lastSyncStatus),
-    active: Boolean(snapshot?.active),
-    expiresAt: resolveSharedLedgerMembershipSyncExpiry(snapshot),
-  })
+  return buildMembershipBackendSyncFingerprintValue(snapshot, sessionUser)
 }
 
 function shouldSkipInactiveMembershipBackendSync(snapshot) {
-  return (
-    !normalizeGooglePlayPlan(snapshot?.plan)
-    && normalizeSyncStatus(snapshot?.lastSyncStatus) !== MEMBERSHIP_SYNC_STATUS_OK
-  )
+  return shouldSkipInactiveMembershipBackendSyncValue(snapshot)
 }
 
 async function flushSharedLedgerMembershipSyncQueue() {
@@ -678,14 +570,16 @@ async function flushSharedLedgerMembershipSyncQueue() {
     if (!fingerprint) continue
 
     const nowMs = Date.now()
-    if (
-      fingerprint === membershipBackendSyncFingerprint
-      && nowMs - membershipBackendSyncSyncedAt < MEMBERSHIP_BACKEND_SYNC_COOLDOWN_MS
-    ) {
-      continue
-    }
-
-    if (shouldSkipInactiveMembershipBackendSync(task.snapshot)) {
+    if (shouldSkipMembershipBackendSyncTask({
+      sessionUser,
+      debugEnabled: isDebugMembershipOverrideEnabled(),
+      fingerprint,
+      lastFingerprint: membershipBackendSyncFingerprint,
+      lastSyncedAt: membershipBackendSyncSyncedAt,
+      nowMs,
+      cooldownMs: MEMBERSHIP_BACKEND_SYNC_COOLDOWN_MS,
+      inactiveSnapshot: shouldSkipInactiveMembershipBackendSync(task.snapshot),
+    })) {
       continue
     }
 
@@ -751,65 +645,11 @@ function commitEntitlementState(state, reason = '') {
 }
 
 function resolveMonthlyCacheExpiry(ownedMonthly, previousState, nowMs = Date.now()) {
-  const ownedExpiryIso = toExpiryIso(ownedMonthly?.expiresAt ?? ownedMonthly?.expirationDate)
-  const ownedExpiryMs = toEpochMs(ownedExpiryIso)
-  if (Number.isFinite(ownedExpiryMs) && ownedExpiryMs > nowMs) {
-    return new Date(ownedExpiryMs).toISOString()
-  }
-
-  const previousPlan = normalizeGooglePlayPlan(previousState?.lastKnownPlan)
-  const previousExpiryMs = toEpochMs(previousState?.membershipCacheExpiresAt)
-  if (previousPlan === 'monthly' && Number.isFinite(previousExpiryMs) && previousExpiryMs > nowMs) {
-    return new Date(previousExpiryMs).toISOString()
-  }
-
-  if (ownedMonthly) {
-    return new Date(nowMs + MONTHLY_MEMBERSHIP_EXPIRY_UNKNOWN_GRACE_MS).toISOString()
-  }
-
-  return ''
+  return resolveMonthlyCacheExpiryValue(ownedMonthly, previousState, nowMs)
 }
 
 function resolveMonthlyCacheExpiryFromPurchaseResult(purchaseResult, previousState, nowMs = Date.now()) {
-  const directExpiryIso = toExpiryIso(
-    purchaseResult?.expiresAt
-      ?? purchaseResult?.expirationDate
-      ?? purchaseResult?.expiryDate
-      ?? purchaseResult?.expiresDate
-      ?? purchaseResult?.expirationTime
-      ?? purchaseResult?.expiryTime
-      ?? purchaseResult?.expirationTimeMillis
-      ?? purchaseResult?.expiryTimeMillis,
-  )
-
-  if (directExpiryIso) {
-    const directExpiryMs = toEpochMs(directExpiryIso)
-    if (Number.isFinite(directExpiryMs) && directExpiryMs > nowMs) {
-      return new Date(directExpiryMs).toISOString()
-    }
-  }
-
-  if (Array.isArray(purchaseResult?.transactions)) {
-    for (const transaction of purchaseResult.transactions) {
-      const txExpiryIso = toExpiryIso(
-        transaction?.expiresAt
-          ?? transaction?.expirationDate
-          ?? transaction?.expiryDate
-          ?? transaction?.expiresDate
-          ?? transaction?.expirationTime
-          ?? transaction?.expiryTime
-          ?? transaction?.expirationTimeMillis
-          ?? transaction?.expiryTimeMillis,
-      )
-      if (!txExpiryIso) continue
-      const txExpiryMs = toEpochMs(txExpiryIso)
-      if (Number.isFinite(txExpiryMs) && txExpiryMs > nowMs) {
-        return new Date(txExpiryMs).toISOString()
-      }
-    }
-  }
-
-  return resolveMonthlyCacheExpiry(null, previousState, nowMs)
+  return resolveMonthlyCacheExpiryFromPurchaseResultValue(purchaseResult, previousState, nowMs)
 }
 
 function readAiUsageMap(storage) {

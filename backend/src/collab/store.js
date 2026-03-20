@@ -1,8 +1,29 @@
-import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
+import {
+  getAccessTokenExpiresInSeconds as getAccessTokenExpiresInSecondsValue,
+  issueAccessToken as issueAccessTokenValue,
+  verifyAccessToken as verifyAccessTokenValue,
+} from './store-access-token.js'
+import {
+  applyMembershipGrant as applyMembershipGrantValue,
+  getLatestMembershipGrantBySource,
+  getMembershipGrantList as getMembershipGrantListValue,
+  getMembershipGrantSummary as getMembershipGrantSummaryValue,
+  syncMembershipGrantBySource as syncMembershipGrantBySourceValue,
+} from './store-membership.js'
+import {
+  buildSharedLedgerInvitationSummary as buildSharedLedgerInvitationSummaryValue,
+  buildSharedLedgerSummary as buildSharedLedgerSummaryValue,
+  findPendingInvitationForEmail as findPendingInvitationForEmailValue,
+  getMemberRole as getMemberRoleValue,
+  isSharedLedgerMember as isSharedLedgerMemberValue,
+  listPendingSharedLedgerInvitationsForUser as listPendingSharedLedgerInvitationsForUserValue,
+  validateSnapshot as validateSnapshotValue,
+} from './store-shared-ledgers.js'
 
 const CONFIGURED_DATA_FILE = String(process.env.SHARED_LEDGER_DATA_FILE ?? '').trim()
 const CONFIGURED_DB_FILE = String(process.env.SHARED_LEDGER_DB_FILE ?? '').trim()
@@ -177,23 +198,6 @@ function hashSensitiveToken(value) {
   return createHash('sha256').update(String(value ?? ''), 'utf8').digest('hex')
 }
 
-function base64UrlEncode(input) {
-  return Buffer.from(input)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '')
-}
-
-function base64UrlDecode(input) {
-  const normalized = String(input ?? '')
-    .replace(/-/g, '+')
-    .replace(/_/g, '/')
-  const paddingLength = (4 - (normalized.length % 4 || 4)) % 4
-  const padded = normalized + '='.repeat(paddingLength)
-  return Buffer.from(padded, 'base64').toString('utf8')
-}
-
 function secureEquals(left, right) {
   const leftBuffer = Buffer.from(String(left ?? ''), 'utf8')
   const rightBuffer = Buffer.from(String(right ?? ''), 'utf8')
@@ -213,48 +217,11 @@ function verifyPassword(user, password) {
 }
 
 function getMembershipGrantList(user) {
-  return Array.isArray(user?.membership_grants) ? user.membership_grants : []
+  return getMembershipGrantListValue(user)
 }
 
 function getMembershipGrantSummary(user, nowMs = Date.now()) {
-  const grants = getMembershipGrantList(user)
-  let latestGrant = null
-
-  for (const grant of grants) {
-    const endAt = String(grant?.end_at ?? '').trim()
-    const endMs = Date.parse(endAt)
-    if (!Number.isFinite(endMs) || endMs <= nowMs) continue
-    if (!latestGrant || endMs > Date.parse(String(latestGrant.end_at ?? ''))) {
-      latestGrant = grant
-    }
-  }
-
-  return {
-    active: Boolean(latestGrant),
-    expiresAt: latestGrant ? String(latestGrant.end_at ?? '') : '',
-    source: latestGrant ? String(latestGrant.source ?? '') : '',
-  }
-}
-
-function getLatestMembershipGrantBySource(user, source) {
-  const normalizedSource = String(source ?? '').trim()
-  if (!normalizedSource) return null
-
-  const grants = getMembershipGrantList(user)
-  let latestGrant = null
-  let latestEndMs = -1
-
-  for (const grant of grants) {
-    if (String(grant?.source ?? '').trim() !== normalizedSource) continue
-    const endMs = Date.parse(String(grant?.end_at ?? ''))
-    const sortableEndMs = Number.isFinite(endMs) ? endMs : -1
-    if (!latestGrant || sortableEndMs > latestEndMs) {
-      latestGrant = grant
-      latestEndMs = sortableEndMs
-    }
-  }
-
-  return latestGrant
+  return getMembershipGrantSummaryValue(user, nowMs)
 }
 
 function normalizeAuthProviderSummary(provider) {
@@ -304,38 +271,18 @@ function publicUser(user, options = {}) {
   }
 }
 
-function signToken(payload) {
-  return createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex')
-}
-
 function issueAccessToken(user) {
-  const payload = {
-    sub: user.id,
-    email: String(user?.email ?? user?.account ?? '').trim().toLowerCase(),
-    jti: createId('atk'),
-    sid: String(user?.session_family_id ?? '').trim(),
-    exp: Date.now() + ACCESS_TOKEN_TTL_MS,
-  }
-  const encodedPayload = base64UrlEncode(JSON.stringify(payload))
-  const signature = signToken(encodedPayload)
-  return `${encodedPayload}.${signature}`
+  return issueAccessTokenValue(user, {
+    tokenSecret: TOKEN_SECRET,
+    accessTokenTtlMs: ACCESS_TOKEN_TTL_MS,
+    createId,
+  })
 }
 
 function verifyAccessToken(token) {
-  const source = String(token ?? '').trim()
-  if (!source) return null
-  const [encodedPayload, signature] = source.split('.')
-  if (!encodedPayload || !signature) return null
-  if (!secureEquals(signToken(encodedPayload), signature)) return null
-
-  try {
-    const payload = JSON.parse(base64UrlDecode(encodedPayload))
-    const expiresAt = Number(payload?.exp ?? 0)
-    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null
-    return payload
-  } catch {
-    return null
-  }
+  return verifyAccessTokenValue(token, {
+    tokenSecret: TOKEN_SECRET,
+  })
 }
 
 function validatePassword(password) {
@@ -854,112 +801,41 @@ function createUniqueReferralCode(data) {
 }
 
 function getMemberRole(sharedLedger, userId) {
-  return sharedLedger?.members?.find((member) => String(member.user_id) === String(userId))?.role ?? ''
+  return getMemberRoleValue(sharedLedger, userId)
 }
 
 function isSharedLedgerMember(sharedLedger, userId) {
-  return Boolean(getMemberRole(sharedLedger, userId))
+  return isSharedLedgerMemberValue(sharedLedger, userId)
 }
 
 function findPendingInvitationForEmail(sharedLedger, email) {
-  const normalized = normalizeEmail(email)
-  return (Array.isArray(sharedLedger?.invitations) ? sharedLedger.invitations : [])
-    .find((invitation) => String(invitation?.status ?? 'pending') === 'pending' && normalizeEmail(invitation?.email) === normalized) ?? null
+  return findPendingInvitationForEmailValue(sharedLedger, email, { normalizeEmail })
 }
 
 function validateSnapshot(snapshot) {
-  if (!snapshot || typeof snapshot !== 'object') {
-    throw new Error('共同帳本快照格式錯誤')
-  }
-  const ledgerId = String(snapshot.ledger_id ?? '').trim()
-  const tables = snapshot.tables
-  const ledgers = Array.isArray(tables?.ledgers) ? tables.ledgers : []
-  if (!ledgerId || !ledgers.length) {
-    throw new Error('共同帳本快照缺少 ledger 資料')
-  }
-  return {
-    ledgerId,
-    ledgerName: String(ledgers[0]?.name ?? '').trim() || '共同帳本',
-  }
+  return validateSnapshotValue(snapshot)
 }
 
 function buildSharedLedgerSummary(sharedLedger, currentUserId, data) {
-  const updatedBy = findUserById(data, sharedLedger.updated_by_user_id)
-  const owner = findUserById(data, sharedLedger.owner_user_id)
-  const pendingInvitations = Array.isArray(sharedLedger?.invitations)
-    ? sharedLedger.invitations.filter((item) => String(item?.status ?? 'pending') === 'pending').length
-    : 0
-
-  return {
-    id: sharedLedger.id,
-    ledger_id: sharedLedger.ledger_id,
-    name: sharedLedger.name,
-    invite_code: sharedLedger.invite_code,
-    version: Number(sharedLedger.version ?? 0),
-    role: getMemberRole(sharedLedger, currentUserId),
-    owner_display_name: owner?.display_name || owner?.email || owner?.account || '',
-    member_count: Array.isArray(sharedLedger.members) ? sharedLedger.members.length : 0,
-    pending_invitation_count: pendingInvitations,
-    created_at: sharedLedger.created_at,
-    updated_at: sharedLedger.updated_at,
-    updated_by_display_name: updatedBy?.display_name || updatedBy?.email || updatedBy?.account || '',
-  }
+  return buildSharedLedgerSummaryValue(sharedLedger, currentUserId, data, { findUserById })
 }
 
 function buildSharedLedgerInvitationSummary(sharedLedger, invitation, data) {
-  const invitedByUser = findUserById(data, invitation?.invited_by_user_id)
-  return {
-    id: invitation.id,
-    shared_ledger_id: sharedLedger.id,
-    shared_ledger_name: sharedLedger.name,
-    ledger_id: sharedLedger.ledger_id,
-    email: String(invitation?.email ?? '').trim().toLowerCase(),
-    status: String(invitation?.status ?? 'pending'),
-    invited_by_user_id: String(invitation?.invited_by_user_id ?? ''),
-    invited_by_display_name: invitedByUser?.display_name || invitedByUser?.email || invitedByUser?.account || '',
-    created_at: String(invitation?.created_at ?? ''),
-    accepted_at: String(invitation?.accepted_at ?? ''),
-  }
+  return buildSharedLedgerInvitationSummaryValue(sharedLedger, invitation, data, { findUserById })
 }
 
 function listPendingSharedLedgerInvitationsForUser(data, user) {
-  const email = normalizeEmail(user?.email ?? user?.account)
-  const items = []
-  for (const sharedLedger of data.shared_ledgers) {
-    const invitations = Array.isArray(sharedLedger?.invitations) ? sharedLedger.invitations : []
-    for (const invitation of invitations) {
-      if (String(invitation?.status ?? 'pending') !== 'pending') continue
-      if (normalizeEmail(invitation?.email) !== email) continue
-      items.push(buildSharedLedgerInvitationSummary(sharedLedger, invitation, data))
-    }
-  }
-  return items.sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')))
+  return listPendingSharedLedgerInvitationsForUserValue(data, user, {
+    normalizeEmail,
+    findUserById,
+  })
 }
 
 function applyMembershipGrant(user, days, source, meta = {}) {
-  const safeDays = Math.max(1, Math.floor(Number(days) || 0))
-  const nowMs = Date.now()
-  const existingGrants = getMembershipGrantList(user)
-  const latestEndMs = existingGrants.reduce((max, grant) => {
-    const endMs = Date.parse(String(grant?.end_at ?? ''))
-    return Number.isFinite(endMs) && endMs > max ? endMs : max
-  }, nowMs)
-  const startMs = Math.max(nowMs, latestEndMs)
-  const endMs = startMs + safeDays * 24 * 60 * 60 * 1000
-
-  const grant = {
-    id: createId('membership_grant'),
-    days: safeDays,
-    source: String(source ?? 'manual').trim() || 'manual',
-    start_at: new Date(startMs).toISOString(),
-    end_at: new Date(endMs).toISOString(),
-    created_at: nowIso(),
-    meta,
-  }
-
-  user.membership_grants = [...existingGrants, grant]
-  user.updated_at = nowIso()
-  return grant
+  return applyMembershipGrantValue(user, days, source, meta, {
+    createId,
+    nowIso,
+  })
 }
 
 function syncMembershipGrantBySource(user, source, {
@@ -968,49 +844,16 @@ function syncMembershipGrantBySource(user, source, {
   endAt = '',
   meta = {},
 } = {}) {
-  const normalizedSource = String(source ?? '').trim()
-  if (!normalizedSource) {
-    throw createStoreError('缺少會員來源', 'membership_source_required', 400)
-  }
-
-  const existingGrants = getMembershipGrantList(user)
-  const keptGrants = existingGrants.filter((grant) => String(grant?.source ?? '').trim() !== normalizedSource)
-  const now = nowIso()
-
-  if (!active) {
-    user.membership_grants = keptGrants
-    user.updated_at = now
-    return null
-  }
-
-  const endAtMs = Date.parse(String(endAt ?? ''))
-  if (!Number.isFinite(endAtMs) || endAtMs <= Date.now()) {
-    user.membership_grants = keptGrants
-    user.updated_at = now
-    return null
-  }
-
-  const normalizedStartAt = (() => {
-    const startAtMs = Date.parse(String(startAt ?? ''))
-    if (Number.isFinite(startAtMs) && startAtMs < endAtMs) {
-      return new Date(startAtMs).toISOString()
-    }
-    return now
-  })()
-
-  const grant = {
-    id: createId('membership_grant'),
-    days: Math.max(1, Math.ceil((endAtMs - Date.parse(normalizedStartAt)) / (24 * 60 * 60 * 1000))),
-    source: normalizedSource,
-    start_at: normalizedStartAt,
-    end_at: new Date(endAtMs).toISOString(),
-    created_at: now,
+  return syncMembershipGrantBySourceValue(user, source, {
+    active,
+    startAt,
+    endAt,
     meta,
-  }
-
-  user.membership_grants = [...keptGrants, grant]
-  user.updated_at = now
-  return grant
+  }, {
+    createId,
+    nowIso,
+    createStoreError,
+  })
 }
 
 function getUserSelectSql(alias = 'u') {
@@ -1073,7 +916,7 @@ function getRefreshTokenExpiryIso() {
 }
 
 function getAccessTokenExpiresInSeconds() {
-  return Math.max(60, Math.floor(ACCESS_TOKEN_TTL_MS / 1000))
+  return getAccessTokenExpiresInSecondsValue(ACCESS_TOKEN_TTL_MS)
 }
 
 function getRefreshTokenExpiresInSeconds() {

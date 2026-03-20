@@ -9,6 +9,7 @@
     "dev": "node --env-file-if-exists=.env src/server.js",
     "start": "node --env-file-if-exists=.env src/server.js",
     "test": "node --test",
+    "check": "node --test",
     "deploy:copy": "mkdir -p /mnt/data/Data/serviceApps/StrawMB && find /mnt/data/Data/serviceApps/StrawMB -mindepth 1 -maxdepth 1 ! -name .server-data -exec rm -rf {} + && rsync -a --exclude node_modules --exclude .server-data ./ /mnt/data/Data/serviceApps/StrawMB/"
   },
   "dependencies": {
