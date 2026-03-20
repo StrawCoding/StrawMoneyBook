@@ -111,7 +111,7 @@ const compareRows = [
   {
     key: 'google-drive-ledger-sync',
     featureKey: 'membership_page.compare.google_drive_ledger_sync',
-    featureFallback: 'Google Drive 帳本同步',
+    featureFallback: '帳本同步',
     freeKey: 'membership_page.compare.free.no',
     freeFallback: '不可使用',
     memberKey: 'membership_page.compare.member.yes',

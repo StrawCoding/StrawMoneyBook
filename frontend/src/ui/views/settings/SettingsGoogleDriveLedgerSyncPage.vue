@@ -1,7 +1,7 @@
 <template>
   <section class="stack">
     <header class="row page-head">
-      <h2>{{ t('settings_google_sync.title', 'Google Drive 帳本同步') }}</h2>
+      <h2>{{ t('settings_google_sync.title', '帳本同步') }}</h2>
       <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
     </header>
 
@@ -25,7 +25,7 @@
       </p>
 
       <div v-if="!hasGoogleLedgerSyncMembershipAccess" class="member-only-lock">
-        <strong>{{ t('settings_google_sync.member_only', 'Google Drive 帳本同步僅限會員使用') }}</strong>
+        <strong>{{ t('settings_google_sync.member_only', '帳本同步僅限會員使用') }}</strong>
         <p class="muted compact">
           {{
             t(
@@ -185,7 +185,7 @@ function updateGoogleLedgerSyncBindingState(ledgerId, nextState) {
 
 async function toggleGoogleLedgerSync(item, event) {
   if (!hasGoogleLedgerSyncMembershipAccess.value) {
-    uiStore.pushToast(t('settings_google_sync.member_only', 'Google Drive 帳本同步僅限會員使用'), 'error')
+    uiStore.pushToast(t('settings_google_sync.member_only', '帳本同步僅限會員使用'), 'error')
     return
   }
   const ledgerId = String(item?.ledgerId ?? '').trim()
@@ -206,12 +206,12 @@ async function toggleGoogleLedgerSync(item, event) {
     await refreshGoogleLedgerSyncBindings()
     uiStore.pushToast(
       enabled
-        ? t('settings_google_sync.toast.enabled', 'Google Drive 帳本同步已啟用')
-        : t('settings_google_sync.toast.disabled', 'Google Drive 帳本同步已停用'),
+        ? t('settings_google_sync.toast.enabled', '帳本同步已啟用')
+        : t('settings_google_sync.toast.disabled', '帳本同步已停用'),
     )
   } catch (error) {
     await refreshGoogleLedgerSyncBindings()
-    uiStore.pushToast(errorMessage(error, t('settings_google_sync.toast.toggle_failed', '更新 Google Drive 帳本同步失敗')), 'error')
+    uiStore.pushToast(errorMessage(error, t('settings_google_sync.toast.toggle_failed', '更新帳本同步失敗')), 'error')
   } finally {
     googleLedgerSyncBusyId.value = ''
   }
@@ -219,7 +219,7 @@ async function toggleGoogleLedgerSync(item, event) {
 
 async function syncGoogleLedgerItem(item) {
   if (!hasGoogleLedgerSyncMembershipAccess.value) {
-    uiStore.pushToast(t('settings_google_sync.member_only', 'Google Drive 帳本同步僅限會員使用'), 'error')
+    uiStore.pushToast(t('settings_google_sync.member_only', '帳本同步僅限會員使用'), 'error')
     return
   }
   const ledgerId = String(item?.ledgerId ?? '').trim()
@@ -245,7 +245,7 @@ async function syncGoogleLedgerItem(item) {
     uiStore.pushToast(t('settings_google_sync.toast.up_to_date', '帳本已是最新狀態'))
   } catch (error) {
     await refreshGoogleLedgerSyncBindings()
-    uiStore.pushToast(errorMessage(error, t('settings_google_sync.toast.sync_failed', 'Google Drive 帳本同步失敗')), 'error')
+    uiStore.pushToast(errorMessage(error, t('settings_google_sync.toast.sync_failed', '帳本同步失敗')), 'error')
   } finally {
     googleLedgerSyncBusyId.value = ''
   }

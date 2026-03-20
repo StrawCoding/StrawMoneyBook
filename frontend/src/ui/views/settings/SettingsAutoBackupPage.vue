@@ -96,22 +96,6 @@
       </ul>
 
     </article>
-    <article class="card panel link-panel">
-      <h3>{{ t('settings_google_sync.title', 'Google Drive 帳本同步') }}</h3>
-      <p class="muted">
-        {{
-          t(
-            'settings_auto_backup.google_sync_redirect_desc',
-            '帳本同步已獨立成單獨頁面，請前往專屬頁面選擇要同步的帳本並管理即時同步。',
-          )
-        }}
-      </p>
-      <div class="row backup-action-row">
-        <RouterLink class="btn primary" to="/settings/google-drive-ledger-sync">
-          {{ t('settings_auto_backup.google_sync_redirect_open', '前往帳本同步') }}
-        </RouterLink>
-      </div>
-    </article>
     <article class="card panel" :class="{ working: isWorking }">
       <h3>{{ t('settings_auto_backup.webdav_panel_title') }}</h3>
       <p class="muted">{{ t('settings_auto_backup.webdav_panel_desc') }}</p>

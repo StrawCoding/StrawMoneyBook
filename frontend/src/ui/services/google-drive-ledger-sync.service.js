@@ -63,7 +63,7 @@ function hasGoogleDriveLedgerSyncMembershipAccess() {
 
 function assertGoogleDriveLedgerSyncMembershipAccess() {
   if (hasGoogleDriveLedgerSyncMembershipAccess()) return
-  throw new Error(t('settings_google_sync.error.member_only', null, 'Google Drive 帳本同步僅限會員使用'))
+  throw new Error(t('settings_google_sync.error.member_only', null, '帳本同步僅限會員使用'))
 }
 
 function readLocalStorageObject(key) {
@@ -515,7 +515,7 @@ export async function setGoogleDriveLedgerSyncEnabled(ledgerId, enabled, options
         ...next,
         lastSyncStatus: 'error',
         lastError: String(error?.message ?? error ?? '').trim()
-          || t('settings_google_sync.error.sync_failed', null, 'Google Drive 帳本同步失敗'),
+          || t('settings_google_sync.error.sync_failed', null, '帳本同步失敗'),
       })
       throw error
     })
@@ -534,7 +534,7 @@ export async function syncGoogleDriveLedgerNow(ledgerId, options = {}) {
 
   const state = await getGoogleDriveLedgerSyncState(normalizedLedgerId)
   if (!state.enabled) {
-    throw new Error(t('settings_google_sync.error.sync_not_enabled', null, '此帳本尚未啟用 Google Drive 同步'))
+    throw new Error(t('settings_google_sync.error.sync_not_enabled', null, '此帳本尚未啟用帳本同步'))
   }
 
   syncingLedgerIds.add(normalizedLedgerId)
@@ -545,7 +545,7 @@ export async function syncGoogleDriveLedgerNow(ledgerId, options = {}) {
       ...state,
       lastSyncStatus: 'error',
       lastError: String(error?.message ?? error ?? '').trim()
-        || t('settings_google_sync.error.sync_failed', null, 'Google Drive 帳本同步失敗'),
+        || t('settings_google_sync.error.sync_failed', null, '帳本同步失敗'),
     })
     throw error
   } finally {
