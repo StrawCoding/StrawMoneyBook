@@ -16,6 +16,7 @@ import migration015 from '@/core/db/migrations/015_savings_jars.sql?raw'
 import migration016 from '@/core/db/migrations/016_loan_payment_interest_tx.sql?raw'
 import migration017 from '@/core/db/migrations/017_account_credit_profile.sql?raw'
 import migration018 from '@/core/db/migrations/018_shared_sync_deleted_log.sql?raw'
+import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
   { version: 1, name: 'init_schema', sql: migration001 },
@@ -215,36 +216,6 @@ const LEGACY_COLUMN_PATCHES = {
     'ALTER TABLE deleted_log ADD COLUMN payload_json TEXT;',
     'ALTER TABLE deleted_log ADD COLUMN deleted_at TEXT;',
   ],
-}
-
-function splitSqlStatements(sql) {
-  return sql
-    .split(';')
-    .map((item) => item.trim())
-    .filter(Boolean)
-}
-
-function isIgnorableMigrationError(error) {
-  const message = String(error?.message ?? error ?? '').toLowerCase()
-  return (
-    message.includes('duplicate column name') ||
-    message.includes('already exists') ||
-    message.includes('duplicate index name')
-  )
-}
-
-async function executeMigrationSql(db, sql) {
-  const statements = splitSqlStatements(sql)
-
-  for (const statement of statements) {
-    try {
-      await db.execute(`${statement};`)
-    } catch (error) {
-      if (!isIgnorableMigrationError(error)) {
-        throw error
-      }
-    }
-  }
 }
 
 async function tableExists(db, tableName) {
