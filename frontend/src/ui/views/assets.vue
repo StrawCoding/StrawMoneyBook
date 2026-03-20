@@ -20,6 +20,9 @@
         <div class="summary-item summary-total">
           <small class="muted">{{ t('assets_page.total_assets') }}</small>
           <MoneyText :value-minor="totalAssetMinor" />
+          <small class="muted summary-note">
+            {{ t('assets_page.disposable') }} + {{ t('assets_page.lend') }} - {{ t('assets_page.borrow') }} + {{ t('assets_page.unreimbursed') }}
+          </small>
         </div>
         <div class="summary-item">
           <small class="muted">{{ t('assets_page.disposable') }}</small>
@@ -347,6 +350,10 @@ h3 {
 
 .summary-total {
   grid-column: 1 / -1;
+}
+
+.summary-note {
+  line-height: 1.4;
 }
 
 .summary-link {

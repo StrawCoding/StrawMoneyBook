@@ -277,6 +277,12 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
+import {
+  buildLoanCounterpartyQuery,
+  buildLoanListQuery,
+  normalizeLoanFinished,
+  normalizeLoanTab,
+} from '@/ui/views/loans/loan-route-state.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -332,10 +338,10 @@ const confirmDialog = reactive({
 const counterpartyName = computed(() => normalizeCounterpartyName(route.query.name))
 const backLink = computed(() => ({
   name: 'loans',
-  query: {
+  query: buildLoanListQuery(route.query, {
     tab: tab.value,
-    finished: showFinished.value ? '1' : '0',
-  },
+    showFinished: showFinished.value,
+  }),
 }))
 const defaultAccountId = computed(() => accountStore.accounts[0]?.id ?? '')
 const loansByCounterpartyAndTab = computed(() => {
@@ -397,12 +403,30 @@ watch(
 )
 
 function syncTabFromRoute(tabValue) {
-  tab.value = tabValue === 'borrow' ? 'borrow' : 'lend'
+  tab.value = normalizeLoanTab(tabValue)
 }
 
 function syncFinishedFromRoute(value) {
-  showFinished.value = value === '1' || value === 'true'
+  showFinished.value = normalizeLoanFinished(value)
 }
+
+watch([tab, showFinished, counterpartyName], ([nextTab, nextShowFinished, nextName]) => {
+  const nextQuery = buildLoanCounterpartyQuery(route.query, {
+    name: nextName,
+    tab: nextTab,
+    showFinished: nextShowFinished,
+  })
+  if (
+    route.query.name === nextQuery.name
+    && route.query.tab === nextQuery.tab
+    && route.query.finished === nextQuery.finished
+  ) {
+    return
+  }
+  void router.replace({
+    query: nextQuery,
+  })
+})
 
 function normalizeCounterpartyName(rawName) {
   return String(rawName ?? '').trim() || '未命名對象'
@@ -680,11 +704,11 @@ function openLoanDetail(loanId) {
   void router.push({
     name: 'loan-detail',
     params: { id: loanId },
-    query: {
-      tab: tab.value,
-      finished: showFinished.value ? '1' : '0',
+    query: buildLoanCounterpartyQuery(route.query, {
       name: counterpartyName.value,
-    },
+      tab: tab.value,
+      showFinished: showFinished.value,
+    }),
   })
 }
 

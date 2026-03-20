@@ -159,6 +159,12 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
+import {
+  buildLoanCounterpartyQuery,
+  buildLoanListQuery,
+  normalizeLoanFinished,
+  normalizeLoanTab,
+} from '@/ui/views/loans/loan-route-state.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -200,21 +206,27 @@ const payments = computed(() => {
   return loanStore.detail?.payments ?? []
 })
 const defaultAccountId = computed(() => accountStore.accounts[0]?.id ?? '')
-const showFinished = computed(() => route.query.finished === '1' || route.query.finished === 'true')
+const showFinished = computed(() => normalizeLoanFinished(route.query.finished))
 
 const backLink = computed(() => {
-  const tab = route.query.tab === 'borrow' ? 'borrow' : 'lend'
-  const finished = showFinished.value ? '1' : '0'
+  const tab = normalizeLoanTab(route.query.tab)
   const name = String(route.query.name ?? '').trim()
   if (name) {
     return {
       name: 'loan-counterparty-detail',
-      query: { name, tab, finished },
+      query: buildLoanCounterpartyQuery(route.query, {
+        name,
+        tab,
+        showFinished: showFinished.value,
+      }),
     }
   }
   return {
     name: 'loans',
-    query: { tab, finished },
+    query: buildLoanListQuery(route.query, {
+      tab,
+      showFinished: showFinished.value,
+    }),
   }
 })
 

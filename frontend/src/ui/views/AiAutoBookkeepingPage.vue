@@ -583,6 +583,26 @@ function resetAiInputState(options = {}) {
   }
 }
 
+function finalizeAiSubmitSuccess(options = {}) {
+  const clearSourceText = options.clearSourceText !== false
+  const keepDraft = Boolean(options.keepDraft)
+
+  if (keepDraft) {
+    if (clearSourceText) {
+      sourceText.value = ''
+      speechLiveText.value = ''
+    } else if (!options.preserveSourceText) {
+      speechLiveText.value = ''
+    }
+    return
+  }
+
+  resetAiInputState({
+    clearSourceText,
+    clearDraft: true,
+  })
+}
+
 async function parseText(options = {}) {
   const fromSpeech = Boolean(options.fromSpeech)
   const autoCreate = options.autoCreate !== false
@@ -933,15 +953,10 @@ async function submit(options = {}) {
       if (!suppressToast) {
         uiStore.pushToast(autoCreated ? `已先完成${actionLabel}` : `AI 自動記帳已完成${actionLabel}`)
       }
-      if (!keepDraft) {
-        hasDraft.value = false
-        warnings.value = []
-        latestLoanIntent.value = null
-        resetPersistedTransaction()
-      }
-      if (!preserveSourceText) {
-        speechLiveText.value = ''
-      }
+      finalizeAiSubmitSuccess({
+        keepDraft,
+        preserveSourceText,
+      })
       return true
     }
 
@@ -1126,15 +1141,10 @@ async function submit(options = {}) {
           : t('ai_bookkeeping.toast.saved', 'AI 記帳已儲存交易'),
       )
     }
-    if (!keepDraft) {
-      hasDraft.value = false
-      warnings.value = []
-      latestLoanIntent.value = null
-      resetPersistedTransaction()
-    }
-    if (!preserveSourceText) {
-      speechLiveText.value = ''
-    }
+    finalizeAiSubmitSuccess({
+      keepDraft,
+      preserveSourceText,
+    })
     return true
   } catch (error) {
     return failSubmit(error.message ?? t('ai_bookkeeping.toast.save_failed', '儲存交易失敗'))

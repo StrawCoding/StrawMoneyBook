@@ -539,6 +539,73 @@ export async function exportLedgerTransactionsCsv(ledgerId, options = {}) {
   return { filename, csvText, rowCount: report.rowCount }
 }
 
+function formatMinorForCsv(value) {
+  const amountMajor = Number(value ?? 0) / 100
+  if (!Number.isFinite(amountMajor)) return '0'
+  return amountMajor
+    .toFixed(2)
+    .replace(/\.00$/, '')
+    .replace(/(\.\d)0$/, '$1')
+}
+
+function resolveLoanStatusLabel(status) {
+  const normalized = String(status ?? '').trim()
+  const labels = {
+    active: '進行中',
+    partial: '部分完成',
+    settled: '已結清',
+    void: '完成',
+  }
+  return labels[normalized] ?? normalized
+}
+
+function resolveLoanDirectionLabel(direction) {
+  return direction === 'borrow' ? '借入' : '借出'
+}
+
+const LOAN_CSV_HEADERS = [
+  '狀態',
+  '借貸方向',
+  '對象名稱',
+  '開始日期',
+  '到期日',
+  '建立入帳帳戶',
+  '本金',
+  '預設利息',
+  '已收 / 已還',
+  '剩餘',
+  '備註',
+]
+
+function buildLoanCsvRows(loans = []) {
+  return (loans ?? []).map((loan) => ({
+    狀態: resolveLoanStatusLabel(loan?.status),
+    借貸方向: resolveLoanDirectionLabel(loan?.direction),
+    對象名稱: String(loan?.counterparty_name ?? '').trim() || '未命名對象',
+    開始日期: String(loan?.start_date ?? loan?.setup_occurred_at ?? '').trim(),
+    到期日: String(loan?.due_date ?? '').trim(),
+    建立入帳帳戶: String(loan?.setup_account_name ?? '').trim(),
+    本金: formatMinorForCsv(loan?.principal_minor),
+    預設利息: formatMinorForCsv(loan?.preset_interest_minor),
+    '已收 / 已還': formatMinorForCsv(loan?.paid_minor),
+    剩餘: formatMinorForCsv(loan?.remaining_minor),
+    備註: String(loan?.note ?? '').trim(),
+  }))
+}
+
+export function exportLoanItemsCsv(loans, options = {}) {
+  const safeLedgerName = sanitizeFilenameSegment(options.ledgerName ?? 'loans')
+  const normalizedTab = options.tab === 'borrow' ? 'borrow' : 'lend'
+  const normalizedScope = options.showFinished ? 'finished' : 'active'
+  const timestamp = timestampForFilename(options.now instanceof Date ? options.now : new Date())
+  const rows = buildLoanCsvRows(loans)
+  return {
+    filename: `${safeLedgerName}_loans_${normalizedTab}_${normalizedScope}_${timestamp}.csv`,
+    csvText: rowsToCsv(rows, LOAN_CSV_HEADERS),
+    rowCount: rows.length,
+  }
+}
+
 export function downloadJsonFile(filename, data) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   downloadBlob(filename, blob)

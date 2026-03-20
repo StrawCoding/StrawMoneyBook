@@ -11,8 +11,8 @@
       </header>
       <p class="muted">{{ t('settings_category_page.archive_hint') }}</p>
       <div class="kind-tabs">
-        <button class="btn" :class="{ primary: activeKind === 'expense' }" @click="activeKind = 'expense'">{{ t('transaction.type.expense') }}</button>
-        <button class="btn" :class="{ primary: activeKind === 'income' }" @click="activeKind = 'income'">{{ t('transaction.type.income') }}</button>
+        <button class="btn" :class="{ primary: activeKind === 'expense' }" @click="setActiveKind('expense')">{{ t('transaction.type.expense') }}</button>
+        <button class="btn" :class="{ primary: activeKind === 'income' }" @click="setActiveKind('income')">{{ t('transaction.type.income') }}</button>
       </div>
       <ul class="group-list">
         <li v-for="group in filteredGroups" :key="group.id" class="group-item">
@@ -155,6 +155,14 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => activeKind.value,
+  (kind) => {
+    void syncActiveKindQuery(kind)
+  },
+  { immediate: true },
+)
+
 const filteredGroups = computed(() => {
   return categoryStore.groups.filter((group) => group.kind === activeKind.value)
 })
@@ -197,6 +205,12 @@ const groupOptions = computed(() => {
     label: group.name,
   }))
 })
+
+async function setActiveKind(kind) {
+  if (kind !== 'expense' && kind !== 'income') return
+  activeKind.value = kind
+  await syncActiveKindQuery(kind)
+}
 
 async function addGroup() {
   groupNameInput.value = ''
@@ -314,7 +328,6 @@ async function submitCategoryDialog() {
 function clearCategoryDialogQuery() {
   const nextQuery = { ...route.query }
   delete nextQuery.openCategoryDialog
-  delete nextQuery.activeKind
   delete nextQuery.categoryName
   delete nextQuery.categoryGroupId
   delete nextQuery.categoryIcon
@@ -322,6 +335,24 @@ function clearCategoryDialogQuery() {
   delete nextQuery.from
   delete nextQuery.scope
   void router.replace({ query: nextQuery })
+}
+
+async function syncActiveKindQuery(kind) {
+  if (kind !== 'expense' && kind !== 'income') return
+
+  const queryKind = queryText(route.query.activeKind)
+  if (queryKind === kind) return
+
+  try {
+    await router.replace({
+      query: {
+        ...route.query,
+        activeKind: kind,
+      },
+    })
+  } catch {
+    // Ignore navigation races caused by simultaneous route updates.
+  }
 }
 
 function queryText(value) {

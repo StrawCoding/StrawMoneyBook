@@ -28,9 +28,12 @@
           <button class="btn" :class="{ primary: tab === 'lend' }" @click="tab = 'lend'">借出</button>
           <button class="btn" :class="{ primary: tab === 'borrow' }" @click="tab = 'borrow'">借入</button>
         </div>
-        <button class="btn end-btn" :class="{ primary: showFinished }" @click="showFinished = !showFinished">
-          {{ showFinished ? '進行中' : '已結束' }}
-        </button>
+        <div class="row list-actions">
+          <button class="btn" @click="exportCsv">匯出 CSV</button>
+          <button class="btn end-btn" :class="{ primary: showFinished }" @click="showFinished = !showFinished">
+            {{ showFinished ? '進行中' : '已結束' }}
+          </button>
+        </div>
       </div>
 
       <ul v-if="counterpartyGroups.length" class="counterparty-list">
@@ -139,20 +142,36 @@ import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import { useLoanStore } from '@/ui/stores/loan.store'
+import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
+import {
+  createCsvBlobUrl,
+  exportLoanItemsCsv,
+  openFileUrl,
+  revokeBlobUrl,
+  saveCsvFileToDevice,
+  triggerDownloadFromUrl,
+} from '@/core/services/export.service'
 import { useI18n } from '@/ui/services/i18n.service'
+import {
+  buildLoanListQuery,
+  normalizeLoanFinished,
+  normalizeLoanTab,
+} from '@/ui/views/loans/loan-route-state.js'
 
 const route = useRoute()
 const router = useRouter()
+const ledgerStore = useLedgerStore()
 const loanStore = useLoanStore()
 const accountStore = useAccountStore()
 const uiStore = useUiStore()
 const transactionStore = useTransactionStore()
 const budgetStore = useBudgetStore()
 const { t } = useI18n()
+let exportedUrl = ''
 
 const createOpen = ref(false)
 const tab = ref('lend')
@@ -213,6 +232,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
+  revokeBlobUrl(exportedUrl)
 })
 
 watch(
@@ -230,12 +250,23 @@ watch(
 )
 
 function syncTabFromRoute(tabValue) {
-  tab.value = tabValue === 'borrow' ? 'borrow' : 'lend'
+  tab.value = normalizeLoanTab(tabValue)
 }
 
 function syncFinishedFromRoute(value) {
-  showFinished.value = value === '1' || value === 'true'
+  showFinished.value = normalizeLoanFinished(value)
 }
+
+watch([tab, showFinished], ([nextTab, nextShowFinished]) => {
+  const nextQuery = buildLoanListQuery(route.query, {
+    tab: nextTab,
+    showFinished: nextShowFinished,
+  })
+  if (route.query.tab === nextQuery.tab && route.query.finished === nextQuery.finished) return
+  void router.replace({
+    query: nextQuery,
+  })
+})
 
 function normalizeCounterpartyName(rawName) {
   return String(rawName ?? '').trim() || '未命名對象'
@@ -345,6 +376,39 @@ async function createLoan() {
     uiStore.pushToast(error.message ?? '建立借貸失敗', 'error')
   }
 }
+
+async function exportCsv() {
+  if (!visibleLoans.value.length) {
+    uiStore.pushToast('目前沒有可匯出的借貸資料', 'error')
+    return
+  }
+
+  try {
+    const result = exportLoanItemsCsv(visibleLoans.value, {
+      ledgerName: ledgerStore.activeLedger?.name ?? 'loans',
+      tab: tab.value,
+      showFinished: showFinished.value,
+    })
+    const deviceSave = await saveCsvFileToDevice(result.filename, result.csvText, { category: 'loans' })
+    const openTarget = String(deviceSave?.uri ?? '').trim() || String(deviceSave?.openUrl ?? '').trim()
+
+    if (deviceSave?.saved && openTarget) {
+      openFileUrl(openTarget)
+      uiStore.pushToast(`已匯出 ${result.rowCount} 筆借貸`)
+      return
+    }
+
+    revokeBlobUrl(exportedUrl)
+    exportedUrl = createCsvBlobUrl(result.csvText)
+    const opened = openFileUrl(exportedUrl)
+    if (!opened) {
+      triggerDownloadFromUrl(exportedUrl, result.filename)
+    }
+    uiStore.pushToast(`已匯出 ${result.rowCount} 筆借貸`)
+  } catch (error) {
+    uiStore.pushToast(error.message ?? '匯出借貸 CSV 失敗', 'error')
+  }
+}
 </script>
 
 <style scoped>.panel {
@@ -375,6 +439,10 @@ h2, h3 {
 .list-header {
   align-items: center;
   margin-bottom: 12px
+}
+.list-actions {
+  gap: 8px;
+  margin-left: auto;
 }
 .end-btn {
   min-width: 84px

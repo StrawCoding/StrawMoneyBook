@@ -10,8 +10,15 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
 import { getCurrentLocale } from '@/ui/services/i18n.service'
+import { repairLedgerData, scanLedgerIntegrity } from '@/core/services/repair.service'
 
 const ACTIVE_LEDGER_KEY = 'straw.active_ledger_id'
+const AUTO_CHECKED_LEDGER_IDS = new Set()
+
+function sumNumericValues(source) {
+  if (!source || typeof source !== 'object') return 0
+  return Object.values(source).reduce((total, value) => total + Number(value ?? 0), 0)
+}
 
 export const useLedgerStore = defineStore('ledger', {
   state: () => ({
@@ -60,6 +67,8 @@ export const useLedgerStore = defineStore('ledger', {
     },
 
     async loadLedgerScopedStores() {
+      await this.ensureActiveLedgerIntegrity()
+
       const accountStore = useAccountStore()
       const categoryStore = useCategoryStore()
       const transactionStore = useTransactionStore()
@@ -77,6 +86,41 @@ export const useLedgerStore = defineStore('ledger', {
         reimbursementStore.load(),
         addonTemplateStore.load(),
       ])
+    },
+
+    async ensureActiveLedgerIntegrity() {
+      const ledgerId = this.activeLedgerId
+      if (!ledgerId || AUTO_CHECKED_LEDGER_IDS.has(ledgerId)) return null
+
+      AUTO_CHECKED_LEDGER_IDS.add(ledgerId)
+
+      try {
+        const before = await scanLedgerIntegrity(ledgerId)
+        const beforeIssueCount = sumNumericValues(before)
+        if (beforeIssueCount <= 0) return { before, after: before, fixed: {} }
+
+        const repairResult = await repairLedgerData(ledgerId)
+        const fixedCount = sumNumericValues(repairResult?.fixed)
+        const afterIssueCount = sumNumericValues(repairResult?.after)
+
+        if (fixedCount > 0 || afterIssueCount > 0) {
+          console.info('[ledger] auto repair completed', {
+            ledgerId,
+            beforeIssueCount,
+            fixedCount,
+            afterIssueCount,
+          })
+        }
+
+        return {
+          before,
+          after: repairResult?.after ?? before,
+          fixed: repairResult?.fixed ?? {},
+        }
+      } catch (error) {
+        console.warn('[ledger] auto repair skipped due to error', error)
+        return null
+      }
     },
 
     async init() {

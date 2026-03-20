@@ -1,4 +1,5 @@
 import { collectCategoryTextMatchCandidates } from '@/core/services/ai-bookkeeping-category-match.js'
+import { normalizeLoanCounterpartyName } from '@/core/services/loan-counterparty-name.js'
 
 function normalizeText(value) {
   return String(value ?? '')
@@ -517,39 +518,10 @@ function detectTypeHint(text, accountCandidates, categorySignals) {
   }
 }
 
-function normalizeCounterpartyName(rawName) {
-  let name = String(rawName ?? '').trim()
-  if (!name) return ''
-  name = name.replace(/^(?:[給跟向對把將]+|to\s+|from\s+)/i, '')
-  name = name.replace(/[的之]+$/g, '')
-  name = name.replace(/(借款|欠款|還款|还款|款項|款项|款|錢|钱|loan|repay|payment|money)$/gi, '')
-  name = name.replace(/^[,，。:：;；]+|[,，。:：;；]+$/g, '')
-  name = name.trim()
-  if (!name) return ''
-  if (name.length > 24) {
-    name = name.slice(0, 24).trim()
-  }
-  if (!name) return ''
-  if (isLikelyAmountLikeCounterparty(name)) return ''
-  if (!/[A-Za-z\u3040-\u30ff\u3400-\u9fff]/.test(name)) return ''
-  if (/^(昨天|今天|明天|前天|剛剛|刚刚|下午|上午|晚上|早上|yesterday|today|tomorrow|afternoon|morning|evening|night|昨日|今日|明日)$/i.test(name)) return ''
-  return name
-}
-
-function isLikelyAmountLikeCounterparty(rawValue) {
-  const normalized = String(rawValue ?? '')
-    .trim()
-    .replace(/[,，\s]/g, '')
-    .toLowerCase()
-  if (!normalized) return false
-  return /^(?:nt\$?|ntd|twd|us\$|usd|\$|¥)?\d+(?:\.\d+)?(?:k|w|萬|万|千|百|元(?:整)?|塊|块|美元|美金|台幣|臺幣|日圓|日元)?$/.test(normalized)
-}
-
 function extractCounterpartyHint(text) {
   const patterns = [
     /(?:借出|借了)\s*(?:nt\$?|ntd|twd|us\$|usd|\$|¥)?\s*\d[\d,]*(?:\.\d+)?(?:k|w|萬|万|千|百|元(?:整)?|塊|块|美元|美金|台幣|臺幣|日圓|日元)?\s*(?:給|借給)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})/i,
     /(?:借給|借了給|借出給|借款給|還給|还给)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})/i,
-    /(?:借|借了|還|还)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:(?:nt\$?|ntd|twd|us\$|usd|\$|¥)\s*)?\d[\d,]*(?:\.\d+)?/i,
     /(?:向|跟)\s*([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:借|借了|借款|借錢|借钱|還款|还款|還錢|还钱)/i,
     /([^\d\s，。,；;:：][^\s，。,；;:：]{0,23})\s*(?:還我|还我)/i,
     /(?:lend(?:ing)?|loan(?:ed)?|borrow(?:ed)?|repay(?:ed)?|pay(?:ing)?\s+back)\s+(?:to|from)?\s*([a-zA-Z][a-zA-Z0-9._-]{0,23})/i,
@@ -559,7 +531,7 @@ function extractCounterpartyHint(text) {
   for (const pattern of patterns) {
     const matched = pattern.exec(text)
     if (!matched) continue
-    const normalized = normalizeCounterpartyName(matched[1])
+    const normalized = normalizeLoanCounterpartyName(matched[1])
     if (!normalized) continue
     const start = matched.index + String(matched[0]).indexOf(String(matched[1]))
     const end = start + normalized.length
