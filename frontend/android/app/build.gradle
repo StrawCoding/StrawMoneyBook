@@ -32,11 +32,15 @@ def appVersionName = versionMatcher.find() ? versionMatcher.group(1) : "1.0.0"
 android {
     namespace = "com.strawcoding.strawmoneybook"
     compileSdk = rootProject.ext.compileSdkVersion
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
     defaultConfig {
         applicationId "com.strawcoding.strawmoneybook"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 155
+        versionCode 156
         versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -86,9 +90,12 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.credentials:credentials:1.3.0"
     implementation "androidx.credentials:credentials-play-services-auth:1.3.0"
+    implementation "androidx.security:security-crypto:1.1.0"
+    implementation "cz.adaptech.tesseract4android:tesseract4android-openmp:4.9.0"
     implementation "com.google.android.libraries.identity.googleid:googleid:1.1.1"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test:core:1.6.1"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')

@@ -95,6 +95,45 @@
           </div>
         </article>
       </div>
+
+      <hr class="divider" />
+
+      <div class="trace-header">
+        <small class="muted">{{ t('debug_page.key.bank_sync_calls') }}</small>
+      </div>
+      <div v-if="!bankSyncCalls.length" class="muted">{{ t('debug_page.bank_sync_calls.empty') }}</div>
+      <div v-else class="trace-list">
+        <article v-for="item in bankSyncCalls" :key="item.id" class="trace-item">
+          <div class="trace-item-top">
+            <strong>{{ item.operation || '-' }}</strong>
+            <strong :class="item.status === 'ok' ? 'trace-ok' : item.status === 'error' ? 'trace-error' : ''">
+              {{ item.status || '-' }}
+            </strong>
+          </div>
+          <div class="trace-item-body">
+            <small class="muted">{{ t('debug_page.key.bank_sync_provider') }}: {{ item.provider || '-' }}</small>
+            <small class="muted">{{ t('debug_page.key.bank_sync_connection') }}: {{ item.connectionId || '-' }}</small>
+            <small class="muted">{{ t('debug_page.key.bank_sync_ledger') }}: {{ item.ledgerId || '-' }}</small>
+            <small class="muted">{{ t('debug_page.key.play_call_started') }}: {{ item.startedAt || '-' }}</small>
+            <small class="muted">{{ t('debug_page.key.play_call_ended') }}: {{ item.endedAt || '-' }}</small>
+            <small class="muted">{{ t('debug_page.key.play_call_duration') }}: {{ formatDuration(item.durationMs) }}</small>
+            <small v-if="item.errorCode" class="muted">{{ t('debug_page.key.play_call_error_code') }}: {{ item.errorCode }}</small>
+            <small v-if="item.errorMessage" class="muted break-all">{{ t('debug_page.key.play_call_error_message') }}: {{ item.errorMessage }}</small>
+            <small v-if="item.debugHint" class="muted break-all">{{ t('debug_page.key.bank_sync_debug_hint') }}: {{ item.debugHint }}</small>
+            <small v-if="item.debugLastStep" class="muted">{{ t('debug_page.key.bank_sync_last_step') }}: {{ item.debugLastStep }}</small>
+          </div>
+          <div v-if="item.steps?.length" class="trace-step-list">
+            <small class="muted">{{ t('debug_page.key.bank_sync_steps') }}</small>
+            <div v-for="(step, index) in item.steps" :key="`${item.id}-${index}`" class="trace-step-item">
+              <strong>{{ step.step || '-' }}</strong>
+              <small :class="step.status === 'ok' ? 'trace-ok' : step.status === 'error' ? 'trace-error' : 'muted'">
+                {{ step.status || '-' }}
+              </small>
+              <small class="muted break-all">{{ step.message || '-' }}</small>
+            </div>
+          </div>
+        </article>
+      </div>
     </article>
   </section>
 </template>
@@ -115,12 +154,17 @@ import {
   getTransactionFailureTraceSnapshot,
   subscribeTransactionFailureTrace,
 } from '@/core/services/transaction.service'
+import {
+  getBankSyncDebugTraceSnapshot,
+  subscribeBankSyncDebugTrace,
+} from '@/core/services/bank-sync-debug.service'
 
 const { t } = useI18n()
 const loading = ref(false)
 const playSupported = ref(false)
 const playCalls = ref(getGooglePlayCallTraceSnapshot())
 const txFailures = ref(getTransactionFailureTraceSnapshot())
+const bankSyncCalls = ref(getBankSyncDebugTraceSnapshot())
 const snapshot = reactive({
   tier: getMembershipTierSnapshot(),
   plan: '',
@@ -135,6 +179,7 @@ const snapshot = reactive({
 let unsubscribe = null
 let unsubscribePlayTrace = null
 let unsubscribeTxFailureTrace = null
+let unsubscribeBankSyncTrace = null
 
 function formatDuration(value) {
   const number = Number(value)
@@ -176,6 +221,9 @@ onMounted(async () => {
   unsubscribeTxFailureTrace = subscribeTransactionFailureTrace((items) => {
     txFailures.value = Array.isArray(items) ? items : []
   }, { emitCurrent: true })
+  unsubscribeBankSyncTrace = subscribeBankSyncDebugTrace((items) => {
+    bankSyncCalls.value = Array.isArray(items) ? items : []
+  }, { emitCurrent: true })
   await refresh()
 })
 
@@ -191,6 +239,10 @@ onBeforeUnmount(() => {
   if (typeof unsubscribeTxFailureTrace === 'function') {
     unsubscribeTxFailureTrace()
     unsubscribeTxFailureTrace = null
+  }
+  if (typeof unsubscribeBankSyncTrace === 'function') {
+    unsubscribeBankSyncTrace()
+    unsubscribeBankSyncTrace = null
   }
 })
 </script>
@@ -271,6 +323,18 @@ onBeforeUnmount(() => {
 .trace-item-body {
   display: grid;
   gap: 4px;
+}
+
+.trace-step-list {
+  display: grid;
+  gap: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--field-border);
+}
+
+.trace-step-item {
+  display: grid;
+  gap: 2px;
 }
 
 .trace-ok {

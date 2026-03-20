@@ -161,6 +161,7 @@ import {
   runGoogleAutoBackupOnDataChange,
 } from '@/ui/services/google-backup.service'
 import { runWebdavAutoBackupIfDue, runWebdavAutoBackupOnDataChange } from '@/ui/services/webdav-backup.service'
+import { runBankSyncAutoRefreshIfDue } from '@/ui/services/bank-sync-auto-refresh.service'
 import { runExchangeRateAutoSyncIfDue } from '@/ui/services/exchange-rate.service'
 import { clearHomeWidgetSummary, syncHomeWidgetSummary } from '@/ui/services/home-widget.service'
 import { warmupMembershipRuntime } from '@/core/services/membership.service'
@@ -189,6 +190,31 @@ let dataChangeBackupRunning = false
 let lastAndroidBackPressedAt = 0
 let homeWidgetSyncTimer = null
 let hasTriedInteractiveGoogleAutoConnect = false
+
+function triggerBankAutoRefresh(pinia, ledgerId, reason) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId) return
+  void runBankSyncAutoRefreshIfDue(normalizedLedgerId, { reason })
+    .then((result) => {
+      if (result?.halted === 'auth_error' && result?.message) {
+        useUiStore(pinia).pushToast(
+          translateMessage(
+            'settings_bank_sync.toast.auto_sync_disabled_auth_error',
+            { message: result.message },
+            '銀行自動同步已停止：{message}',
+          ),
+          'error',
+        )
+      }
+    })
+    .catch((error) => {
+      console.warn('[bank-sync] auto refresh dispatcher failed', {
+        ledgerId: normalizedLedgerId,
+        reason,
+        error,
+      })
+    })
+}
 
 function scheduleHomeWidgetSync(pinia, delayMs = 1200) {
   if (typeof window === 'undefined') return
@@ -545,6 +571,7 @@ async function main() {
       if (ledgerStore.activeLedgerId) {
         restoreGoogleBackupForActiveLedgerInBackground(ledgerStore.activeLedgerId, { runDueBackup: true })
         void runExchangeRateAutoSyncIfDue(ledgerStore.activeLedgerId)
+        triggerBankAutoRefresh(pinia, ledgerStore.activeLedgerId, 'app_resume')
       }
       void runSharedLedgerBackgroundSyncNow(pinia)
       void runGoogleDriveLedgerBackgroundSyncNow(pinia)
@@ -589,6 +616,7 @@ async function main() {
         })
         void runWebdavAutoBackupIfDue(normalizedLedgerId)
         void runExchangeRateAutoSyncIfDue(normalizedLedgerId)
+        triggerBankAutoRefresh(pinia, normalizedLedgerId, 'active_ledger_change')
       },
       { immediate: true },
     )

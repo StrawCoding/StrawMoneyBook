@@ -87,6 +87,7 @@ import { canNavigateBackInApp } from '@/ui/services/navigation-back.service'
 import {
   authenticateSecurityLock,
   getSecurityLockAvailability,
+  setSecurityLockCurrentLocked,
   setSecurityLockEnabled,
   useSecurityLockEnabled,
 } from '@/ui/services/security-lock.service'
@@ -201,6 +202,7 @@ function onRequestCloseOverlay(event) {
 async function requestSecurityUnlock(reasonKey = 'settings_security.unlock_prompt') {
   if (!securityLockEnabled.value) {
     securityLocked.value = false
+    setSecurityLockCurrentLocked(false)
     return true
   }
   if (securityUnlocking.value) return false
@@ -209,6 +211,7 @@ async function requestSecurityUnlock(reasonKey = 'settings_security.unlock_promp
   if (!availability.available) {
     setSecurityLockEnabled(false)
     securityLocked.value = false
+    setSecurityLockCurrentLocked(false)
     uiStore.pushToast(
       t('settings_security.toast.auto_disabled', {
         reason: availability.message || t('settings_security.toast.not_supported'),
@@ -228,6 +231,7 @@ async function requestSecurityUnlock(reasonKey = 'settings_security.unlock_promp
       failureMessage: t('settings_security.toast.unlock_failed'),
     })
     securityLocked.value = false
+    setSecurityLockCurrentLocked(false)
     lastSecurityUnlockAt = Date.now()
     return true
   } catch (error) {
@@ -246,16 +250,20 @@ onMounted(() => {
   window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
   void checkAppUpdate({ force: true })
   if (securityLockEnabled.value) {
+    setSecurityLockCurrentLocked(true)
     initialSecurityUnlockTimer = window.setTimeout(() => {
       initialSecurityUnlockTimer = null
       void requestSecurityUnlock('settings_security.unlock_prompt')
     }, 350)
+  } else {
+    setSecurityLockCurrentLocked(false)
   }
   if (Capacitor.getPlatform() === 'android') {
     void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
       if (!securityLockEnabled.value) return
       if (!isActive) {
         securityLocked.value = true
+        setSecurityLockCurrentLocked(true)
         return
       }
       if (Date.now() - lastSecurityUnlockAt < SECURITY_UNLOCK_COOLDOWN_MS) return
@@ -298,8 +306,21 @@ watch(
   (enabled) => {
     if (!enabled) {
       securityLocked.value = false
+      setSecurityLockCurrentLocked(false)
+      return
+    }
+    if (securityLocked.value) {
+      setSecurityLockCurrentLocked(true)
     }
   },
+)
+
+watch(
+  () => securityLocked.value,
+  (locked) => {
+    setSecurityLockCurrentLocked(locked)
+  },
+  { immediate: true },
 )
 </script>
 

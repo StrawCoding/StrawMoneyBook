@@ -6,6 +6,7 @@ const SECURITY_LOCK_UNSUPPORTED_CODE = 'security_lock_unsupported'
 const SecurityLock = registerPlugin('SecurityLock')
 
 const securityLockEnabledRef = ref(readStoredSecurityLockEnabled())
+const securityLockedRef = ref(securityLockEnabledRef.value)
 
 function readStoredSecurityLockEnabled() {
   if (typeof localStorage === 'undefined') return false
@@ -35,15 +36,31 @@ export function useSecurityLockEnabled() {
   return computed(() => securityLockEnabledRef.value)
 }
 
+export function useSecurityLockState() {
+  return computed(() => securityLockedRef.value)
+}
+
 export function isSecurityLockEnabled() {
   return securityLockEnabledRef.value
+}
+
+export function isSecurityLockCurrentlyLocked() {
+  return securityLockedRef.value
 }
 
 export function setSecurityLockEnabled(enabled) {
   const next = Boolean(enabled)
   securityLockEnabledRef.value = next
+  if (!next) {
+    securityLockedRef.value = false
+  }
   persistSecurityLockEnabled(next)
   return next
+}
+
+export function setSecurityLockCurrentLocked(locked) {
+  securityLockedRef.value = Boolean(locked)
+  return securityLockedRef.value
 }
 
 export async function getSecurityLockAvailability(fallbackUnsupportedMessage = '此裝置不支援安全鎖') {

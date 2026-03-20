@@ -7,6 +7,13 @@ import {
   markImportedLocalMockTransactions,
   syncLocalMockBankTransactions,
 } from '@/services/bank-sync/local-mock-backend'
+import {
+  connectNativeFirstBank,
+  disconnectNativeBankConnection,
+  isNativeBankAutomationRuntimeSupported,
+  syncNativeFirstBank,
+} from '@/services/bank-sync/native-automation'
+import { isFirstBankProviderId, isMockProviderId } from '@/services/bank-sync/shared'
 
 const DEFAULT_BANK_API_BASE = String(import.meta.env.VITE_BANK_SYNC_API_BASE_URL ?? '').trim()
 const BANK_SYNC_CLIENT_SHARED_KEY = String(import.meta.env.VITE_BANK_SYNC_CLIENT_SHARED_KEY ?? '').trim()
@@ -37,14 +44,16 @@ function parseBooleanEnv(value, fallback = false) {
   return ['1', 'true', 'yes', 'on'].includes(normalized)
 }
 
-function isMockProviderId(providerId) {
-  const normalized = String(providerId ?? '').trim().toLowerCase()
-  return normalized === 'mock' || normalized === 'mock_bank_tw'
+function isNativeFirstBankProvider(providerId) {
+  return isFirstBankProviderId(providerId) && isNativeBankAutomationRuntimeSupported()
 }
 
 function shouldExposeProvider(providerId) {
   if (isMockProviderId(providerId)) return true
-  return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS
+  if (isFirstBankProviderId(providerId)) {
+    return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS && isNativeBankAutomationRuntimeSupported()
+  }
+  return false
 }
 
 function buildApiUrl(path) {
@@ -58,6 +67,7 @@ function buildApiUrl(path) {
 
 function shouldRequireExplicitBankApiBase() {
   if (DEFAULT_BANK_API_BASE) return false
+  if (isNativeBankAutomationRuntimeSupported()) return false
   return Capacitor.getPlatform() !== 'web'
 }
 
@@ -111,6 +121,18 @@ function parseProviderListFromEnv() {
 }
 
 async function postJson(path, payload) {
+  if (isNativeFirstBankProvider(payload?.provider)) {
+    if (path === '/api/bank/exchange') {
+      return connectNativeFirstBank(payload)
+    }
+    if (path === '/api/bank/sync') {
+      return syncNativeFirstBank(payload)
+    }
+    if (path === '/api/bank/disconnect') {
+      return disconnectNativeBankConnection(payload)
+    }
+  }
+
   if (canUseLocalMockBankSync()) {
     if (path === '/api/bank/link_session' && isMockProviderId(payload?.provider)) {
       return createLocalMockBankLinkSession(payload)

@@ -27,6 +27,15 @@ import {
   markImportedBankTransactions,
   syncBankTransactions,
 } from '@/services/bank-sync/backend'
+import {
+  buildImportedNote as buildImportedNoteFromMetadata,
+  createFirstBankProviderConnectionId,
+  formatBankErrorForStorage,
+  isFirstBankProviderId as isFirstBankProviderIdShared,
+  isMockProviderId as isMockProviderIdShared,
+  selectSyncableBankAccounts,
+} from '@/services/bank-sync/shared'
+import { traceBankSyncOperation } from '@/core/services/bank-sync-debug.service'
 import { deleteEncryptedSetting, getEncryptedSetting, setEncryptedSetting } from '@/ui/services/secure-setting.service'
 
 function assertLedgerId(ledgerId) {
@@ -42,12 +51,11 @@ function normalizeProviderId(value) {
 }
 
 function isMockProviderId(provider) {
-  const normalized = normalizeProviderId(provider)
-  return normalized === 'mock' || normalized === 'mock_bank_tw'
+  return isMockProviderIdShared(provider)
 }
 
 function isFirstBankProviderId(provider) {
-  return normalizeProviderId(provider) === 'first_bank_tw'
+  return isFirstBankProviderIdShared(provider)
 }
 
 function normalizeDateInput(value) {
@@ -93,6 +101,7 @@ function buildDeviceInfo(options = {}) {
 
 function buildBankCredentialPayload(options = {}) {
   const loginCustIdFake = normalizeText(options.nationalId)
+  const loginCustIdRptSeq = normalizeText(options.repeatSeq || '0')
   const usrIdInput = normalizeText(options.code)
   const pwd = String(options.password ?? '')
   const vrfyCode = normalizeText(options.captchaCode)
@@ -105,6 +114,7 @@ function buildBankCredentialPayload(options = {}) {
 
   return {
     loginCustIdFake,
+    loginCustIdRptSeq,
     usrIdInput,
     pwd,
     vrfyCode,
@@ -117,6 +127,7 @@ function buildBankAutomationPayload() {
   return {
     fields: {
       loginCustIdFake: 'loginCustIdFake',
+      loginCustIdRptSeq: 'loginCustIdRptSeq',
       usrIdInput: 'usrIdInput',
       pwd: 'pwd',
       vrfyCode: 'vrfyCode',
@@ -159,13 +170,6 @@ function toExcludeKeywordText(keywords = []) {
 
 function buildSourceRef(provider, providerAccountId, providerTransactionId) {
   return `bank:${normalizeText(provider)}:${normalizeText(providerAccountId)}:${normalizeText(providerTransactionId)}`
-}
-
-function buildImportedNote(row) {
-  const merchant = normalizeText(row?.merchant)
-  const description = normalizeText(row?.description)
-  if (merchant && description) return `${merchant}｜${description}`
-  return merchant || description || null
 }
 
 function isUniqueConstraintError(error) {
@@ -219,7 +223,11 @@ function normalizeBackendSyncRows(payloadRows = []) {
         providerTransactionId,
         postedAt: normalizeText(item?.postedAt ?? item?.bookedAt ?? item?.posted_at) || new Date().toISOString(),
         amountMinor,
+        balanceMinor: item?.balanceMinor ?? item?.balance_minor ?? null,
         currency: normalizeText(item?.currency ?? 'TWD').toUpperCase() || 'TWD',
+        transactionType: normalizeText(item?.transactionType ?? item?.transaction_type),
+        note: normalizeText(item?.note),
+        summary: normalizeText(item?.summary),
         description: normalizeText(item?.description ?? item?.memo ?? item?.narration),
         merchant: normalizeText(item?.merchant ?? item?.counterparty ?? item?.merchantName),
         status: normalizeText(item?.status || 'posted').toLowerCase(),
@@ -252,6 +260,13 @@ export async function prepareBankProviderLink(ledgerId, provider, options = {}) 
   assertLedgerId(ledgerId)
   const normalizedProvider = normalizeText(provider)
   if (!normalizedProvider) throw new Error('缺少 provider')
+  if (isFirstBankProviderId(normalizedProvider)) {
+    return {
+      provider: normalizedProvider,
+      session_id: null,
+      native_automation: true,
+    }
+  }
 
   const { callbackScheme, deviceInfo } = buildDeviceInfo(options)
   return createBankLinkSession({
@@ -279,6 +294,62 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
   assertLedgerId(ledgerId)
   const normalizedProvider = normalizeText(provider)
   if (!normalizedProvider) throw new Error('缺少 provider')
+  const isNativeFirstBank = isFirstBankProviderId(normalizedProvider)
+
+  if (isNativeFirstBank) {
+    const providerConnectionId = createFirstBankProviderConnectionId({
+      nationalId: options.nationalId,
+      repeatSeq: options.repeatSeq,
+      userCode: options.code,
+    })
+    if (!providerConnectionId) {
+      throw new Error('第一銀行登入身分資料不完整')
+    }
+    return traceBankSyncOperation('connect_first_bank', {
+      ledgerId,
+      provider: normalizedProvider,
+      connectionId: providerConnectionId,
+    }, async (traceContext) => {
+      const exchanged = await exchangeBankAuth({
+        provider: normalizedProvider,
+        connectionId: providerConnectionId,
+        nationalId: normalizeText(options.nationalId),
+        repeatSeq: normalizeText(options.repeatSeq || '0'),
+        userCode: normalizeText(options.code),
+        password: String(options.password ?? ''),
+        initialSyncStartDate: normalizeDateInput(options.initialSyncStartDate),
+      })
+      traceContext.attachDebugTrace(exchanged?.debugTrace)
+
+      const connection = await upsertBankConnection(ledgerId, {
+        id: providerConnectionId,
+        provider: normalizedProvider,
+        providerConnectionId,
+        status: 'active',
+        userLabel: normalizeText(exchanged?.connection_name || exchanged?.institution_name || 'First Bank'),
+        syncCursor: normalizeText(exchanged?.sync_cursor || exchanged?.next_cursor || exchanged?.cursor),
+        lastSyncStatus: 'idle',
+        lastError: '',
+      })
+
+      const rawAccounts = Array.isArray(exchanged?.accounts) ? exchanged.accounts : []
+      await upsertBankAccounts(
+        ledgerId,
+        connection.id,
+        rawAccounts.map((item) => ({
+          providerAccountId: normalizeText(item?.account_id || item?.id),
+          accountMask: normalizeText(item?.mask || item?.account_mask),
+          accountName: normalizeText(item?.name || item?.account_name || item?.official_name || 'First Bank Account'),
+          accountType: normalizeText(item?.type || item?.subtype),
+          currency: normalizeText(item?.currency || item?.iso_currency_code || 'TWD'),
+          enabled: false,
+        })),
+      )
+
+      await deleteEncryptedSetting(ledgerId, buildBankCredentialSettingKey(connection.id))
+      return getConnectionBundle(ledgerId, connection)
+    })
+  }
 
   const { callbackScheme, deviceInfo } = buildDeviceInfo(options)
   const preparedSessionId = normalizeText(options.sessionId)
@@ -300,55 +371,60 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
     ? normalizeText(preparedSessionCode || linkSession?.mock_code || options.code)
     : normalizeText(options.code || preparedSessionCode || linkSession?.mock_code)
 
-  const exchanged = await exchangeBankAuth({
-    provider: normalizedProvider,
-    session_id: normalizeText(linkSession?.session_id),
-    code: exchangeCode,
-    public_token: normalizeText(options.publicToken),
-    credentials: buildBankCredentialPayload(options),
-    account_number: normalizeText(options.accountNumber),
-    initial_sync_start_date: normalizeDateInput(options.initialSyncStartDate),
-    automation: buildBankAutomationPayload(),
-  })
-
-  const providerConnectionId = normalizeText(
-    exchanged?.connection_id || exchanged?.provider_connection_id || exchanged?.item_id,
-  )
-  if (!providerConnectionId) {
-    throw new Error('銀行授權成功但缺少 connection_id')
-  }
-
-  const connection = await upsertBankConnection(ledgerId, {
-    provider: normalizedProvider,
-    providerConnectionId,
-    status: 'active',
-    userLabel: normalizeText(exchanged?.connection_name || exchanged?.institution_name || normalizedProvider),
-    syncCursor: normalizeText(exchanged?.sync_cursor || exchanged?.next_cursor || exchanged?.cursor),
-    lastSyncStatus: 'idle',
-    lastError: '',
-  })
-
-  const rawAccounts = Array.isArray(exchanged?.accounts) ? exchanged.accounts : []
-  await upsertBankAccounts(
+  return traceBankSyncOperation('connect_bank_provider', {
     ledgerId,
-    connection.id,
-    rawAccounts.map((item) => ({
-      providerAccountId: normalizeText(item?.account_id || item?.id),
-      accountMask: normalizeText(item?.mask || item?.account_mask),
-      accountName: normalizeText(item?.name || item?.account_name || item?.official_name || 'Bank Account'),
-      accountType: normalizeText(item?.type || item?.subtype),
-      currency: normalizeText(item?.currency || item?.iso_currency_code || 'TWD'),
-    })),
-  )
+    provider: normalizedProvider,
+  }, async () => {
+    const exchanged = await exchangeBankAuth({
+      provider: normalizedProvider,
+      session_id: normalizeText(linkSession?.session_id),
+      code: exchangeCode,
+      public_token: normalizeText(options.publicToken),
+      credentials: buildBankCredentialPayload(options),
+      account_number: normalizeText(options.accountNumber),
+      initial_sync_start_date: normalizeDateInput(options.initialSyncStartDate),
+      automation: buildBankAutomationPayload(),
+    })
 
-  const bundle = await getConnectionBundle(ledgerId, connection)
-  return {
-    ...bundle,
-    providerAccess: {
-      accessTokenRef: normalizeText(exchanged?.access_token_ref),
-      sessionToken: normalizeText(exchanged?.session_token || exchanged?.access_token_ref),
-    },
-  }
+    const providerConnectionId = normalizeText(
+      exchanged?.connection_id || exchanged?.provider_connection_id || exchanged?.item_id,
+    )
+    if (!providerConnectionId) {
+      throw new Error('銀行授權成功但缺少 connection_id')
+    }
+
+    const connection = await upsertBankConnection(ledgerId, {
+        provider: normalizedProvider,
+        providerConnectionId,
+        status: 'active',
+        userLabel: normalizeText(exchanged?.connection_name || exchanged?.institution_name || normalizedProvider),
+      syncCursor: normalizeText(exchanged?.sync_cursor || exchanged?.next_cursor || exchanged?.cursor),
+      lastSyncStatus: 'idle',
+      lastError: '',
+    })
+
+    const rawAccounts = Array.isArray(exchanged?.accounts) ? exchanged.accounts : []
+    await upsertBankAccounts(
+      ledgerId,
+      connection.id,
+      rawAccounts.map((item) => ({
+        providerAccountId: normalizeText(item?.account_id || item?.id),
+        accountMask: normalizeText(item?.mask || item?.account_mask),
+        accountName: normalizeText(item?.name || item?.account_name || item?.official_name || 'Bank Account'),
+        accountType: normalizeText(item?.type || item?.subtype),
+        currency: normalizeText(item?.currency || item?.iso_currency_code || 'TWD'),
+      })),
+    )
+
+    const bundle = await getConnectionBundle(ledgerId, connection)
+    return {
+      ...bundle,
+      providerAccess: {
+        accessTokenRef: normalizeText(exchanged?.access_token_ref),
+        sessionToken: normalizeText(exchanged?.session_token || exchanged?.access_token_ref),
+      },
+    }
+  })
 }
 
 export async function saveBankAccountSettings(ledgerId, bankAccountId, patch = {}) {
@@ -375,49 +451,70 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
   assertLedgerId(ledgerId)
   const connection = await findBankConnectionById(ledgerId, connectionId)
   if (!connection) throw new Error('找不到銀行連結')
-  if (String(connection.status ?? '').toLowerCase() === 'revoked') {
+  const normalizedStatus = String(connection.status ?? '').toLowerCase()
+  if (normalizedStatus === 'revoked') {
     throw new Error('此銀行連結已停用，請重新連結')
+  }
+  if (isFirstBankProviderId(connection.provider) && normalizedStatus === 'error') {
+    throw new Error('第一銀行連線已進入錯誤狀態，請先中斷連線並重新新增')
   }
 
   const [enabledAccounts, rule] = await Promise.all([
     listEnabledBankAccountsByConnection(ledgerId, connectionId),
     getBankSyncRule(ledgerId, connectionId),
   ])
-  if (!enabledAccounts.length) {
-    throw new Error('請先啟用至少一個銀行帳戶同步')
+  const syncableAccounts = selectSyncableBankAccounts(enabledAccounts)
+  if (!syncableAccounts.length) {
+    throw new Error('請先啟用並對應至少一個銀行帳戶後再同步')
   }
 
+  return traceBankSyncOperation('sync_bank_connection', {
+    ledgerId,
+    provider: connection.provider,
+    connectionId,
+  }, async (traceContext) => {
   try {
     const secureSettingKey = buildBankCredentialSettingKey(connectionId)
-    const savedCredentialState = await getEncryptedSetting(ledgerId, secureSettingKey)
-    const sanitizedCredentialState = sanitizeBankCredentialState(savedCredentialState)
-    if (shouldRewriteBankCredentialState(savedCredentialState)) {
-      if (sanitizedCredentialState) {
-        await setEncryptedSetting(ledgerId, secureSettingKey, sanitizedCredentialState)
+    const isNativeFirstBank = isFirstBankProviderId(connection.provider)
+    let savedCredentialState = null
+    let sanitizedCredentialState = null
+    let sessionToken = ''
+
+    if (!isNativeFirstBank) {
+      savedCredentialState = await getEncryptedSetting(ledgerId, secureSettingKey)
+      sanitizedCredentialState = sanitizeBankCredentialState(savedCredentialState)
+      if (shouldRewriteBankCredentialState(savedCredentialState)) {
+        if (sanitizedCredentialState) {
+          await setEncryptedSetting(ledgerId, secureSettingKey, sanitizedCredentialState)
+        }
+      }
+      const effectiveCredentialState = sanitizedCredentialState ?? savedCredentialState
+      sessionToken = normalizeText(effectiveCredentialState?.sessionToken || effectiveCredentialState?.accessTokenRef)
+      if (isFirstBankProviderId(connection.provider) && !sessionToken) {
+        throw new Error('第一銀行同步 Session 已失效，請重新連線並重新登入一次')
       }
     }
-    const effectiveCredentialState = sanitizedCredentialState ?? savedCredentialState
-    const sessionToken = normalizeText(effectiveCredentialState?.sessionToken || effectiveCredentialState?.accessTokenRef)
-    if (isFirstBankProviderId(connection.provider) && !sessionToken) {
-      throw new Error('第一銀行同步 Session 已失效，請重新連線並重新登入一次')
-    }
+
     const syncRes = await syncBankTransactions({
       provider: connection.provider,
+      connectionId: connection.id,
       connection_id: connection.provider_connection_id,
       mode: 'delta',
       cursor: normalizeText(connection.sync_cursor) || null,
       last_sync_at: normalizeText(connection.last_sync_at) || null,
       lookback_days: rule.lookbackDays,
-      account_ids: enabledAccounts.map((item) => item.provider_account_id),
-      session_token: sessionToken || null,
-      access_token_ref: sessionToken || null,
+      account_ids: syncableAccounts.map((item) => item.provider_account_id),
+      accountIds: syncableAccounts.map((item) => item.provider_account_id),
+      session_token: isNativeFirstBank ? null : (sessionToken || null),
+      access_token_ref: isNativeFirstBank ? null : (sessionToken || null),
     })
+    traceContext.attachDebugTrace(syncRes?.debugTrace)
 
     const normalizedRows = normalizeBackendSyncRows([
       ...(Array.isArray(syncRes?.added) ? syncRes.added : []),
       ...(Array.isArray(syncRes?.modified) ? syncRes.modified : []),
     ])
-    const providerAccountMap = normalizeProviderAccountMap(enabledAccounts)
+    const providerAccountMap = normalizeProviderAccountMap(syncableAccounts)
     const rowsToUpsert = normalizedRows
       .map((item) => {
         const account = providerAccountMap.get(item.providerAccountId)
@@ -427,7 +524,11 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
           providerTransactionId: item.providerTransactionId,
           postedAt: item.postedAt,
           amountMinor: item.amountMinor,
+          balanceMinor: item.balanceMinor,
           currency: item.currency || account.currency || 'TWD',
+          transactionType: item.transactionType,
+          note: item.note,
+          summary: item.summary,
           description: item.description,
           merchant: item.merchant,
           status: item.status,
@@ -458,7 +559,7 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
     const nextCursor = normalizeText(syncRes?.next_cursor || syncRes?.nextCursor || syncRes?.cursor)
     const nextSessionToken = normalizeText(syncRes?.session_token || syncRes?.access_token_ref)
 
-    if (nextSessionToken && !isMockProviderId(connection.provider)) {
+    if (nextSessionToken && !isMockProviderId(connection.provider) && !isNativeFirstBank) {
       await setEncryptedSetting(ledgerId, secureSettingKey, {
         ...(savedCredentialState && typeof savedCredentialState === 'object' ? savedCredentialState : {}),
         sessionToken: nextSessionToken,
@@ -486,10 +587,11 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
     await updateBankConnection(ledgerId, connectionId, {
       status: 'error',
       lastSyncStatus: 'error',
-      lastError: String(error?.message ?? error ?? '同步失敗'),
+      lastError: formatBankErrorForStorage(error),
     })
     throw error
   }
+  })
 }
 
 export async function listBankReviewTransactions(ledgerId, options = {}) {
@@ -545,7 +647,7 @@ export async function importSelectedBankTransactions(ledgerId, bankTransactionId
           categoryId: null,
           amountMinor: Math.round(Number(row.amount_minor ?? 0)),
           occurredAt: normalizeText(row.posted_at) || new Date().toISOString(),
-          note: buildImportedNote(row),
+          note: buildImportedNoteFromMetadata(row),
           location: null,
           tagsJson: null,
           originType: 'import',
@@ -611,27 +713,41 @@ export async function disconnectBankConnection(ledgerId, connectionId, options =
   const connection = await findBankConnectionById(ledgerId, connectionId)
   if (!connection) throw new Error('找不到銀行連結')
 
-  try {
-    await disconnectBankAuth({
-      provider: connection.provider,
-      connection_id: connection.provider_connection_id,
+  return traceBankSyncOperation('disconnect_bank_connection', {
+    ledgerId,
+    provider: connection.provider,
+    connectionId,
+  }, async () => {
+    try {
+      if (isFirstBankProviderId(connection.provider)) {
+        await disconnectBankAuth({
+          provider: connection.provider,
+          connectionId: connection.id,
+          connection_id: connection.provider_connection_id,
+        })
+      } else {
+        await disconnectBankAuth({
+          provider: connection.provider,
+          connection_id: connection.provider_connection_id,
+        })
+      }
+    } catch {
+      // Keep disconnection resilient; local revoke still applies.
+    }
+
+    await updateBankConnection(ledgerId, connectionId, {
+      status: 'revoked',
+      lastSyncStatus: 'idle',
+      lastError: '',
+      deletedAt: options.softDelete === true ? new Date().toISOString() : null,
     })
-  } catch {
-    // Keep disconnection resilient; local revoke still applies.
-  }
 
-  await updateBankConnection(ledgerId, connectionId, {
-    status: 'revoked',
-    lastSyncStatus: 'idle',
-    lastError: '',
-    deletedAt: options.softDelete === true ? new Date().toISOString() : null,
+    if (options.clearMirrorData) {
+      await clearBankMirrorDataByConnection(ledgerId, connectionId)
+    }
+
+    await deleteEncryptedSetting(ledgerId, buildBankCredentialSettingKey(connectionId))
+
+    return true
   })
-
-  if (options.clearMirrorData) {
-    await clearBankMirrorDataByConnection(ledgerId, connectionId)
-  }
-
-  await deleteEncryptedSetting(ledgerId, buildBankCredentialSettingKey(connectionId))
-
-  return true
 }

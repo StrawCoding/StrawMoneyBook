@@ -57,7 +57,7 @@
         <button class="btn" @click="openReview(connection.id)">{{ t('settings_bank_sync.actions.review') }}</button>
         <button
           class="btn primary"
-          :disabled="syncingConnectionId === connection.id"
+          :disabled="syncingConnectionId === connection.id || !canSyncConnection(connection)"
           :aria-busy="syncingConnectionId === connection.id"
           @click="syncConnection(connection.id)"
         >
@@ -72,6 +72,13 @@
           {{ disconnectingConnectionId === connection.id ? t('settings_bank_sync.actions.disconnecting') : t('settings_bank_sync.actions.disconnect') }}
         </button>
       </div>
+
+      <p v-if="!hasSyncableAccount(connection)" class="muted connection-hint">
+        {{ t('settings_bank_sync.account_sync.required_hint') }}
+      </p>
+      <p v-else-if="String(connection.status ?? '').toLowerCase() === 'error'" class="muted connection-hint">
+        {{ t('settings_bank_sync.connection.error_hint') }}
+      </p>
 
       <section class="sub-panel">
         <h4>{{ t('settings_bank_sync.account_sync.title') }}</h4>
@@ -170,7 +177,16 @@
               <span class="status-chip" :class="`status-${row.status}`">{{ reviewStatusText(row.status) }}</span>
             </label>
             <div class="item-body">
-              <div>{{ row.merchant || row.description || t('settings_bank_sync.review.no_description') }}</div>
+              <div>{{ row.summary || row.merchant || row.description || t('settings_bank_sync.review.no_description') }}</div>
+              <small v-if="row.transaction_type" class="muted">
+                {{ t('settings_bank_sync.review.transaction_type') }}: {{ row.transaction_type }}
+              </small>
+              <small v-if="row.note" class="muted">
+                {{ t('settings_bank_sync.review.note') }}: {{ row.note }}
+              </small>
+              <small v-if="row.balance_minor !== null && row.balance_minor !== undefined" class="muted">
+                {{ t('settings_bank_sync.review.balance') }}: {{ formatAmountMinor(row.balance_minor, row.currency) }}
+              </small>
               <small class="muted">
                 {{ row.bank_account_user_label || row.bank_account_name || '-' }}
                 → {{ row.mapped_account_name || t('settings_bank_sync.review.unmapped_account') }}
@@ -186,7 +202,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
@@ -206,6 +222,7 @@ import {
 import { getBankSyncApiUnavailableMessage, isBankSyncApiConfigured } from '@/services/bank-sync/backend'
 
 const { locale, t } = useI18n()
+const route = useRoute()
 const ledgerStore = useLedgerStore()
 const accountStore = useAccountStore()
 const transactionStore = useTransactionStore()
@@ -300,9 +317,27 @@ function normalizeConnectionForView(connection) {
   }
 }
 
+function hasSyncableAccount(connection) {
+  return Array.isArray(connection?.accounts) && connection.accounts.some((account) => {
+    const mappedAccountId = String(account?.mappedAccountIdDraft ?? account?.mapped_account_id ?? '').trim()
+    return Boolean(account?.enabledBool ?? Number(account?.enabled ?? 0))
+      && Boolean(mappedAccountId)
+      && mappedAccountId !== '__none__'
+  })
+}
+
+function canSyncConnection(connection) {
+  return hasSyncableAccount(connection) && String(connection?.status ?? '').toLowerCase() !== 'error'
+}
+
 function normalizeActiveConnection() {
   if (!connections.value.length) {
     activeConnectionId.value = ''
+    return
+  }
+  const focusConnectionId = String(route.query.focusConnectionId ?? '').trim()
+  if (focusConnectionId && connections.value.some((item) => item.id === focusConnectionId)) {
+    activeConnectionId.value = focusConnectionId
     return
   }
   const exists = connections.value.some((item) => item.id === activeConnectionId.value)
@@ -655,6 +690,9 @@ h3, h4 {
 .action-row {
   gap: 8px;
   flex-wrap: wrap
+}
+.connection-hint {
+  margin: -2px 0 0
 }
 .sub-panel {
   border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);

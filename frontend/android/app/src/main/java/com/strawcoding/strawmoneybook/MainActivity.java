@@ -9,6 +9,7 @@ import ee.forgr.capacitor.social.login.ModifiedMainActivityForSocialLoginPlugin;
 public class MainActivity extends BridgeActivity implements ModifiedMainActivityForSocialLoginPlugin {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        registerPlugin(BankAutomationPlugin.class);
         registerPlugin(FileOpenerPlugin.class);
         registerPlugin(GoogleIdentityPlugin.class);
         registerPlugin(HomeWidgetPlugin.class);

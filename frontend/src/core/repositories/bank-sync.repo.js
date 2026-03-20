@@ -68,6 +68,12 @@ function normalizeBankTxnAmountMinor(amountMinor) {
   return amount
 }
 
+function normalizeBankTxnBalanceMinor(balanceMinor) {
+  if (balanceMinor === null || balanceMinor === undefined || balanceMinor === '') return null
+  const amount = Math.round(Number(balanceMinor) || 0)
+  return Number.isFinite(amount) ? amount : null
+}
+
 function summarizeBankTxnForDiff(row) {
   if (!row || typeof row !== 'object') return ''
   return JSON.stringify({
@@ -77,6 +83,10 @@ function summarizeBankTxnForDiff(row) {
     description: String(row.description ?? ''),
     merchant: String(row.merchant ?? ''),
     status: String(row.status ?? ''),
+    transaction_type: String(row.transaction_type ?? row.transactionType ?? ''),
+    note: String(row.note ?? ''),
+    summary: String(row.summary ?? ''),
+    balance_minor: row.balance_minor === null || row.balanceMinor === null ? null : Number(row.balance_minor ?? row.balanceMinor ?? 0),
   })
 }
 
@@ -338,7 +348,7 @@ export async function upsertBankAccounts(ledgerId, connectionId, accounts = []) 
         normalizeText(item?.accountName, providerAccountId),
         normalizeText(item?.accountType) || null,
         normalizeCurrency(item?.currency, 'TWD'),
-        current ? Number(current.enabled ?? 1) : 1,
+        current ? Number(current.enabled ?? 1) : (item?.enabled ? 1 : 0),
         (current?.user_label ?? null),
         (current?.mapped_account_id ?? null),
         current?.created_at || now,
@@ -444,8 +454,9 @@ export async function upsertBankSyncRule(ledgerId, connectionId, rule = {}) {
 async function findBankTransactionByProviderId(ledgerId, bankAccountId, providerTransactionId) {
   const result = await query(
     `SELECT ledger_id, id, connection_id, bank_account_id, provider_transaction_id,
-            posted_at, amount_minor, currency, description, merchant, status, seen_in_app,
-            imported, imported_txn_id, raw_json, first_seen_at, last_seen_at, created_at, updated_at
+            posted_at, amount_minor, currency, description, merchant, status, transaction_type,
+            note, summary, balance_minor, seen_in_app, imported, imported_txn_id, raw_json,
+            first_seen_at, last_seen_at, created_at, updated_at
      FROM bank_transactions
      WHERE ledger_id = ?
        AND bank_account_id = ?
@@ -480,6 +491,10 @@ export async function upsertBankTransactions(ledgerId, connectionId, transaction
       description: normalizeText(tx?.description) || null,
       merchant: normalizeText(tx?.merchant) || null,
       status: normalizeBankTxnStatus(tx?.status),
+      transaction_type: normalizeText(tx?.transactionType ?? tx?.transaction_type) || null,
+      note: normalizeText(tx?.note) || null,
+      summary: normalizeText(tx?.summary) || null,
+      balance_minor: normalizeBankTxnBalanceMinor(tx?.balanceMinor ?? tx?.balance_minor),
       raw_json: tx?.rawJson ? String(tx.rawJson) : JSON.stringify(tx ?? {}),
     }
     const existing = await findBankTransactionByProviderId(ledgerId, bankAccountId, providerTransactionId)
@@ -488,10 +503,10 @@ export async function upsertBankTransactions(ledgerId, connectionId, transaction
       await run(
         `INSERT INTO bank_transactions (
           ledger_id, id, connection_id, bank_account_id, provider_transaction_id,
-          posted_at, amount_minor, currency, description, merchant, status,
-          seen_in_app, imported, imported_txn_id, raw_json,
+          posted_at, amount_minor, currency, description, merchant, status, transaction_type,
+          note, summary, balance_minor, seen_in_app, imported, imported_txn_id, raw_json,
           first_seen_at, last_seen_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?);`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?);`,
         [
           ledgerId,
           id,
@@ -504,6 +519,10 @@ export async function upsertBankTransactions(ledgerId, connectionId, transaction
           nextRow.description,
           nextRow.merchant,
           nextRow.status,
+          nextRow.transaction_type,
+          nextRow.note,
+          nextRow.summary,
+          nextRow.balance_minor,
           nextRow.raw_json,
           now,
           now,
@@ -528,6 +547,10 @@ export async function upsertBankTransactions(ledgerId, connectionId, transaction
              description = ?,
              merchant = ?,
              status = ?,
+             transaction_type = ?,
+             note = ?,
+             summary = ?,
+             balance_minor = ?,
              raw_json = ?,
              last_seen_at = ?,
              updated_at = ?
@@ -539,6 +562,10 @@ export async function upsertBankTransactions(ledgerId, connectionId, transaction
           nextRow.description,
           nextRow.merchant,
           nextRow.status,
+          nextRow.transaction_type,
+          nextRow.note,
+          nextRow.summary,
+          nextRow.balance_minor,
           nextRow.raw_json,
           now,
           now,
@@ -580,7 +607,8 @@ export async function listBankTransactionsForReview(ledgerId, options = {}) {
   const result = await query(
     `SELECT bt.ledger_id, bt.id, bt.connection_id, bt.bank_account_id, bt.provider_transaction_id,
             bt.posted_at, bt.amount_minor, bt.currency, bt.description, bt.merchant, bt.status,
-            bt.seen_in_app, bt.imported, bt.imported_txn_id, bt.first_seen_at, bt.last_seen_at, bt.updated_at,
+            bt.transaction_type, bt.note, bt.summary, bt.balance_minor, bt.seen_in_app,
+            bt.imported, bt.imported_txn_id, bt.first_seen_at, bt.last_seen_at, bt.updated_at,
             ba.provider_account_id, ba.account_name AS bank_account_name, ba.user_label AS bank_account_user_label, ba.account_mask AS bank_account_mask,
             ba.mapped_account_id, a.name AS mapped_account_name,
             bc.provider, bc.user_label AS connection_user_label
@@ -613,7 +641,8 @@ export async function listBankTransactionsByIds(ledgerId, ids = []) {
   const result = await query(
     `SELECT bt.ledger_id, bt.id, bt.connection_id, bt.bank_account_id, bt.provider_transaction_id,
             bt.posted_at, bt.amount_minor, bt.currency, bt.description, bt.merchant, bt.status,
-            bt.seen_in_app, bt.imported, bt.imported_txn_id, bt.first_seen_at, bt.last_seen_at, bt.updated_at,
+            bt.transaction_type, bt.note, bt.summary, bt.balance_minor, bt.seen_in_app,
+            bt.imported, bt.imported_txn_id, bt.first_seen_at, bt.last_seen_at, bt.updated_at,
             ba.provider_account_id, ba.account_name AS bank_account_name, ba.user_label AS bank_account_user_label, ba.account_mask AS bank_account_mask,
             ba.mapped_account_id,
             bc.provider
