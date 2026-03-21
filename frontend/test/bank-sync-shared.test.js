@@ -4,9 +4,12 @@ import assert from 'node:assert/strict'
 import {
   buildImportedNote,
   createFirstBankProviderConnectionId,
+  extractBankErrorCode,
   formatBankErrorForStorage,
   isBankCredentialAuthError,
   selectSyncableBankAccounts,
+  shouldRequireReconnectAfterBankSyncError,
+  shouldRequireReconnectForStoredBankConnection,
 } from '../src/services/bank-sync/shared.js'
 
 test('createFirstBankProviderConnectionId normalizes nationalId whitespace but keeps userCode case', () => {
@@ -72,4 +75,34 @@ test('isBankCredentialAuthError detects credential and login failures', () => {
   const genericError = new Error('network unavailable')
   genericError.code = 'bank_network_failed'
   assert.equal(isBankCredentialAuthError(genericError), false)
+})
+
+test('shouldRequireReconnectAfterBankSyncError locks only first bank auth failures', () => {
+  const authError = new Error('第一銀行登入失敗')
+  authError.code = 'first_bank_login_failed'
+  assert.equal(shouldRequireReconnectAfterBankSyncError('first_bank_tw', authError), true)
+
+  const transientError = new Error('temporary upstream failure')
+  transientError.code = 'bank_upstream_temporarily_unavailable'
+  assert.equal(shouldRequireReconnectAfterBankSyncError('first_bank_tw', transientError), false)
+  assert.equal(shouldRequireReconnectAfterBankSyncError('mock_bank_tw', authError), false)
+})
+
+test('shouldRequireReconnectForStoredBankConnection only locks stored auth errors', () => {
+  assert.equal(extractBankErrorCode('first_bank_login_failed: 登入失敗'), 'first_bank_login_failed')
+  assert.equal(shouldRequireReconnectForStoredBankConnection(
+    'first_bank_tw',
+    'error',
+    'first_bank_login_failed: 登入失敗',
+  ), true)
+  assert.equal(shouldRequireReconnectForStoredBankConnection(
+    'first_bank_tw',
+    'error',
+    'bank_upstream_temporarily_unavailable: 服務暫時無法使用',
+  ), false)
+  assert.equal(shouldRequireReconnectForStoredBankConnection(
+    'first_bank_tw',
+    'active',
+    'first_bank_login_failed: 登入失敗',
+  ), false)
 })

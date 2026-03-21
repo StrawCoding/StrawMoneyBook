@@ -76,6 +76,7 @@ import { BRAND_LOGO_URL } from '@/ui/constants/brand-assets'
 import WelcomePage from '@/ui/views/WelcomePage.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { flushDeferredScrollRestore } from '@/ui/services/route-scroll.service'
+import { shouldShowWelcomePage } from '@/ui/services/setup-flow.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
@@ -102,7 +103,13 @@ const hasLedgers = computed(() => ledgerStore.ledgers.length > 0)
 const hasAccounts = computed(() => accountStore.accounts.length > 0)
 const isBooting = computed(() => !ledgerStore.ready)
 const allowWithoutSetup = computed(() => Boolean(route.meta?.allowWithoutSetup))
-const showWelcomePage = computed(() => ledgerStore.ready && !allowWithoutSetup.value && (!hasLedgers.value || !hasAccounts.value))
+const showWelcomePage = computed(() => shouldShowWelcomePage({
+  ready: ledgerStore.ready,
+  allowWithoutSetup: allowWithoutSetup.value,
+  hasLedgers: hasLedgers.value,
+  hasAccounts: hasAccounts.value,
+  routeName: route.name,
+}))
 const showGuidedFlow = computed(() => showWelcomePage.value || route.name === 'post-setup-intro')
 const updateDialogOpen = ref(false)
 const updateInfo = ref({

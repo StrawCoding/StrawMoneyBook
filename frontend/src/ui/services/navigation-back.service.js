@@ -11,6 +11,7 @@ const FALLBACK_RULES = [
   { prefix: '/assets/', fallback: '/assets' },
   { prefix: '/loans', fallback: '/features' },
   { prefix: '/reimbursements', fallback: '/features' },
+  { prefix: '/invoice-carriers', fallback: '/features' },
   { prefix: '/transactions', fallback: '/' },
   { prefix: '/icons', fallback: '/' },
   { prefix: '/ai-auto-bookkeeping', fallback: '/features' },

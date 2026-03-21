@@ -161,7 +161,10 @@ import {
   runGoogleAutoBackupOnDataChange,
 } from '@/ui/services/google-backup.service'
 import { runWebdavAutoBackupIfDue, runWebdavAutoBackupOnDataChange } from '@/ui/services/webdav-backup.service'
+import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
 import { runBankSyncAutoRefreshIfDue } from '@/ui/services/bank-sync-auto-refresh.service'
+import { isEinvoiceCarrierApiConfigured } from '@/services/einvoice-carrier/backend'
+import { runInvoiceCarrierAutoSyncIfDue } from '@/ui/services/einvoice-carrier-auto-sync.service'
 import { runExchangeRateAutoSyncIfDue } from '@/ui/services/exchange-rate.service'
 import { clearHomeWidgetSummary, syncHomeWidgetSummary } from '@/ui/services/home-widget.service'
 import { warmupMembershipRuntime } from '@/core/services/membership.service'
@@ -181,6 +184,7 @@ import {
   runGoogleDriveLedgerBackgroundSyncNow,
   scheduleActiveGoogleDriveLedgerSync,
 } from '@/ui/services/google-drive-ledger-sync.service'
+import { installGlobalErrorLogging } from '@/ui/services/error-log.service'
 import '@/ui/assets/css/global.css'
 
 const DATA_CHANGE_BACKUP_DEBOUNCE_MS = 15000
@@ -192,6 +196,7 @@ let homeWidgetSyncTimer = null
 let hasTriedInteractiveGoogleAutoConnect = false
 
 function triggerBankAutoRefresh(pinia, ledgerId, reason) {
+  if (!isBankSyncFeatureEnabled()) return
   const normalizedLedgerId = String(ledgerId ?? '').trim()
   if (!normalizedLedgerId) return
   void runBankSyncAutoRefreshIfDue(normalizedLedgerId, { reason })
@@ -209,6 +214,32 @@ function triggerBankAutoRefresh(pinia, ledgerId, reason) {
     })
     .catch((error) => {
       console.warn('[bank-sync] auto refresh dispatcher failed', {
+        ledgerId: normalizedLedgerId,
+        reason,
+        error,
+      })
+    })
+}
+
+function triggerEinvoiceCarrierAutoSync(pinia, ledgerId, reason) {
+  if (!isEinvoiceCarrierApiConfigured()) return
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId) return
+  void runInvoiceCarrierAutoSyncIfDue(normalizedLedgerId, { reason })
+    .then((result) => {
+      if (result?.halted === 'reauth_required' && result?.message) {
+        useUiStore(pinia).pushToast(
+          translateMessage(
+            'einvoice_carrier.toast.auto_sync_reauth_required',
+            { message: result.message },
+            '發票載具自動同步已停止：{message}',
+          ),
+          'error',
+        )
+      }
+    })
+    .catch((error) => {
+      console.warn('[einvoice] auto sync dispatcher failed', {
         ledgerId: normalizedLedgerId,
         reason,
         error,
@@ -514,6 +545,7 @@ async function main() {
   app.component('font-awesome-icon', FontAwesomeIcon)
   app.use(pinia)
   app.use(router)
+  installGlobalErrorLogging(app, { router })
   app.mount('#app')
 
   if (Capacitor.getPlatform() === 'android') {
@@ -572,6 +604,7 @@ async function main() {
         restoreGoogleBackupForActiveLedgerInBackground(ledgerStore.activeLedgerId, { runDueBackup: true })
         void runExchangeRateAutoSyncIfDue(ledgerStore.activeLedgerId)
         triggerBankAutoRefresh(pinia, ledgerStore.activeLedgerId, 'app_resume')
+        triggerEinvoiceCarrierAutoSync(pinia, ledgerStore.activeLedgerId, 'app_resume')
       }
       void runSharedLedgerBackgroundSyncNow(pinia)
       void runGoogleDriveLedgerBackgroundSyncNow(pinia)
@@ -617,6 +650,7 @@ async function main() {
         void runWebdavAutoBackupIfDue(normalizedLedgerId)
         void runExchangeRateAutoSyncIfDue(normalizedLedgerId)
         triggerBankAutoRefresh(pinia, normalizedLedgerId, 'active_ledger_change')
+        triggerEinvoiceCarrierAutoSync(pinia, normalizedLedgerId, 'active_ledger_change')
       },
       { immediate: true },
     )

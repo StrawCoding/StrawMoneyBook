@@ -53,15 +53,18 @@
             :aria-busy="disconnectingConnectionId === connection.id"
             @click="openDisconnectDialog"
           >
-            {{ disconnectingConnectionId === connection.id ? t('settings_bank_sync.actions.disconnecting') : t('settings_bank_sync.actions.disconnect') }}
+            {{ disconnectingConnectionId === connection.id ? t('settings_bank_sync.actions.deleting') : t('settings_bank_sync.actions.delete') }}
           </button>
         </div>
 
         <p v-if="!hasSyncableAccount(connection)" class="muted connection-hint">
           {{ t('settings_bank_sync.account_sync.required_hint') }}
         </p>
-        <p v-else-if="String(connection.status ?? '').toLowerCase() === 'error'" class="muted connection-hint">
+        <p v-else-if="shouldRequireReconnect(connection)" class="muted connection-hint">
           {{ t('settings_bank_sync.connection.error_hint') }}
+        </p>
+        <p v-else-if="String(connection.status ?? '').toLowerCase() === 'error'" class="muted connection-hint">
+          {{ t('settings_bank_sync.connection.retry_hint') }}
         </p>
       </article>
 
@@ -202,9 +205,9 @@
 
     <AppDialog
       :open="disconnectDialogOpen"
-      :title="t('settings_bank_sync.disconnect_dialog.title', '確認中斷銀行連線')"
-      :message="t('settings_bank_sync.confirm_disconnect')"
-      :confirm-text="t('settings_bank_sync.actions.disconnect')"
+      :title="t('settings_bank_sync.delete_dialog.title', '確認刪除銀行連線')"
+      :message="t('settings_bank_sync.confirm_delete')"
+      :confirm-text="t('settings_bank_sync.actions.delete')"
       :loading="disconnectingConnectionId === connection?.id"
       @close="disconnectDialogOpen = false"
       @confirm="confirmDisconnect"
@@ -223,6 +226,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import { shouldRequireReconnectForStoredBankConnection } from '@/services/bank-sync/shared'
 import {
   disconnectBankConnection,
   getBankSyncConnectionDetail,
@@ -324,8 +328,17 @@ function hasSyncableAccount(currentConnection) {
   })
 }
 
+function shouldRequireReconnect(currentConnection) {
+  return shouldRequireReconnectForStoredBankConnection(
+    currentConnection?.provider,
+    currentConnection?.status,
+    currentConnection?.last_error,
+  )
+}
+
 function canSyncConnection(currentConnection) {
-  return hasSyncableAccount(currentConnection) && String(currentConnection?.status ?? '').toLowerCase() !== 'error'
+  return hasSyncableAccount(currentConnection)
+    && !shouldRequireReconnect(currentConnection)
 }
 
 async function loadConnection({ loadReviewAfter = true } = {}) {
@@ -376,14 +389,14 @@ async function confirmDisconnect() {
   disconnectingConnectionId.value = connection.value.id
   try {
     await disconnectBankConnection(ledgerStore.activeLedgerId, connection.value.id, {
-      softDelete: false,
+      softDelete: true,
       clearMirrorData: true,
     })
-    uiStore.pushToast(t('settings_bank_sync.toast.disconnected'))
+    uiStore.pushToast(t('settings_bank_sync.toast.deleted'))
     disconnectDialogOpen.value = false
     await router.push({ name: 'settings-bank-sync' })
   } catch (error) {
-    uiStore.pushToast(resolveBankSyncErrorMessage(error, 'settings_bank_sync.toast.disconnect_failed'), 'error')
+    uiStore.pushToast(resolveBankSyncErrorMessage(error, 'settings_bank_sync.toast.delete_failed'), 'error')
   } finally {
     disconnectingConnectionId.value = ''
   }

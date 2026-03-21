@@ -755,6 +755,23 @@ final class FirstBankAutomation {
         return 5;
     }
 
+    static boolean hasReachedRequestedPageForTest(
+        String requestedUrl,
+        String currentUrl,
+        String originalUrl,
+        String startedUrl,
+        String finishedUrl,
+        int progress
+    ) {
+        return new NavigationSnapshot(
+            currentUrl,
+            originalUrl,
+            startedUrl,
+            finishedUrl,
+            progress
+        ).hasReachedRequestedPage(requestedUrl);
+    }
+
     static String buildCaptchaSnapshotScript() {
         return """
             (() => {
@@ -1652,6 +1669,8 @@ final class FirstBankAutomation {
         private final Handler mainHandler = new Handler(Looper.getMainLooper());
         private final CookieManager cookieManager = CookieManager.getInstance();
         private final AtomicReference<CountDownLatch> navigationLatchRef = new AtomicReference<>(null);
+        private final AtomicReference<String> lastStartedUrlRef = new AtomicReference<>("");
+        private final AtomicReference<String> lastFinishedUrlRef = new AtomicReference<>("");
         private volatile CaptchaSnapshot lastCaptchaSnapshot = emptyCaptchaSnapshot("image_missing");
         private volatile String lastCaptchaSignatureBeforeRefresh = "";
 
@@ -1664,7 +1683,14 @@ final class FirstBankAutomation {
         private void installWebViewClient() throws BankAutomationException {
             runOnUiThreadAndWait(() -> webView.setWebViewClient(new WebViewClient() {
                 @Override
+                public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                    lastStartedUrlRef.set(normalizeText(url));
+                }
+
+                @Override
                 public void onPageFinished(WebView view, String url) {
+                    lastStartedUrlRef.set(normalizeText(url));
+                    lastFinishedUrlRef.set(normalizeText(url));
                     CountDownLatch latch = navigationLatchRef.getAndSet(null);
                     if (latch != null) {
                         latch.countDown();
@@ -1676,17 +1702,69 @@ final class FirstBankAutomation {
         void loadUrl(String url) throws BankAutomationException {
             CountDownLatch latch = new CountDownLatch(1);
             navigationLatchRef.set(latch);
+            lastStartedUrlRef.set("");
+            lastFinishedUrlRef.set("");
             runOnUiThreadAndWait(() -> webView.loadUrl(url));
-            awaitLatch(latch, 30, "first_bank_navigation_timeout", "First Bank page load timed out");
+            waitForNavigation(url, latch);
             waitForCondition("""
                 (() => {
                   try {
-                    return document.readyState === 'complete';
+                    const state = String(document.readyState ?? '').trim().toLowerCase();
+                    const href = String(location?.href ?? '').trim().toLowerCase();
+                    return Boolean(document.body)
+                      && href !== 'about:blank'
+                      && (state === 'interactive' || state === 'complete');
                   } catch (_error) {
                     return false;
                   }
                 })();
                 """, 15_000L, 300L, "first_bank_dom_ready_timeout", "First Bank page did not become ready in time");
+        }
+
+        private void waitForNavigation(String requestedUrl, CountDownLatch latch) throws BankAutomationException {
+            long deadline = System.currentTimeMillis() + 30_000L;
+            while (System.currentTimeMillis() < deadline) {
+                try {
+                    if (latch.await(350L, TimeUnit.MILLISECONDS)) {
+                        return;
+                    }
+                } catch (InterruptedException error) {
+                    Thread.currentThread().interrupt();
+                    throw buildNavigationTimeout(requestedUrl);
+                }
+                NavigationSnapshot snapshot = captureNavigationSnapshot();
+                if (snapshot.hasReachedRequestedPage(requestedUrl)) {
+                    return;
+                }
+            }
+            throw buildNavigationTimeout(requestedUrl);
+        }
+
+        private NavigationSnapshot captureNavigationSnapshot() throws BankAutomationException {
+            return callOnUiThreadAndWait(() -> new NavigationSnapshot(
+                normalizeText(webView.getUrl()),
+                normalizeText(webView.getOriginalUrl()),
+                normalizeText(lastStartedUrlRef.get()),
+                normalizeText(lastFinishedUrlRef.get()),
+                Math.max(0, webView.getProgress())
+            ));
+        }
+
+        private BankAutomationException buildNavigationTimeout(String requestedUrl) throws BankAutomationException {
+            NavigationSnapshot snapshot = captureNavigationSnapshot();
+            return new BankAutomationException(
+                "first_bank_navigation_timeout",
+                String.format(
+                    Locale.US,
+                    "First Bank page load timed out (requested=%s, current=%s, original=%s, started=%s, finished=%s, progress=%d)",
+                    normalizeText(requestedUrl),
+                    snapshot.currentUrl,
+                    snapshot.originalUrl,
+                    snapshot.startedUrl,
+                    snapshot.finishedUrl,
+                    snapshot.progress
+                )
+            );
         }
 
         boolean isLoginPage() throws Exception {
@@ -2107,6 +2185,52 @@ final class FirstBankAutomation {
         @FunctionalInterface
         private interface UiThreadSupplier<T> {
             T get() throws Exception;
+        }
+    }
+
+    private static final class NavigationSnapshot {
+        final String currentUrl;
+        final String originalUrl;
+        final String startedUrl;
+        final String finishedUrl;
+        final int progress;
+
+        NavigationSnapshot(String currentUrl, String originalUrl, String startedUrl, String finishedUrl, int progress) {
+            this.currentUrl = currentUrl == null ? "" : currentUrl;
+            this.originalUrl = originalUrl == null ? "" : originalUrl;
+            this.startedUrl = startedUrl == null ? "" : startedUrl;
+            this.finishedUrl = finishedUrl == null ? "" : finishedUrl;
+            this.progress = Math.max(0, progress);
+        }
+
+        boolean hasReachedRequestedPage(String requestedUrl) {
+            if (matchesRequestedUrl(requestedUrl, finishedUrl)) {
+                return true;
+            }
+            if (progress <= 0) {
+                return false;
+            }
+            return (
+                matchesRequestedUrl(requestedUrl, currentUrl)
+                || matchesRequestedUrl(requestedUrl, originalUrl)
+                || matchesRequestedUrl(requestedUrl, startedUrl)
+            );
+        }
+
+        private boolean matchesRequestedUrl(String requestedUrl, String candidateUrl) {
+            String expected = normalizeText(requestedUrl);
+            String candidate = normalizeText(candidateUrl);
+            if (expected.isEmpty() || candidate.isEmpty()) return false;
+            if (expected.equalsIgnoreCase(candidate)) return true;
+            if ("about:blank".equalsIgnoreCase(expected)) {
+                return "about:blank".equalsIgnoreCase(candidate);
+            }
+            return isFirstBankUrl(expected) && isFirstBankUrl(candidate);
+        }
+
+        private boolean isFirstBankUrl(String url) {
+            String normalized = normalizeText(url).toLowerCase(Locale.US);
+            return normalized.startsWith("https://ibank.firstbank.com.tw/");
         }
     }
 }

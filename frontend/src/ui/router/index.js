@@ -1,4 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
+import { isEinvoiceCarrierFeatureEnabled } from '@/services/einvoice-carrier/backend'
+import { getSharedLedgerSession } from '@/services/shared-ledger/backend'
 import { queueDeferredScrollRestore } from '@/ui/services/route-scroll.service'
 
 if (typeof window !== 'undefined' && window.history && 'scrollRestoration' in window.history) {
@@ -95,9 +98,29 @@ const router = createRouter({
       meta: { tab: 'home' },
     },
     {
+      name: 'invoice-carriers',
+      path: '/invoice-carriers',
+      component: () => import('@/ui/views/invoice-carriers/InvoiceCarrierPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
+      name: 'invoice-carriers-create',
+      path: '/invoice-carriers/new',
+      component: () => import('@/ui/views/invoice-carriers/InvoiceCarrierCreatePage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
+      name: 'invoice-carriers-detail',
+      path: '/invoice-carriers/:id',
+      component: () => import('@/ui/views/invoice-carriers/InvoiceCarrierDetailPage.vue'),
+      props: true,
+      meta: { tab: 'home' },
+    },
+    {
       name: 'post-setup-intro',
       path: '/welcome/intro',
       component: () => import('@/ui/views/PostSetupIntroPage.vue'),
+      meta: { allowWithoutSetup: true },
     },
     {
       name: 'ai-auto-bookkeeping',
@@ -261,6 +284,19 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
+      path: '/settings/admin',
+      name: 'settings-admin',
+      component: () => import('@/ui/views/settings/SettingsAdminPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
+      path: '/settings/admin/users/:id',
+      name: 'settings-admin-user',
+      component: () => import('@/ui/views/settings/SettingsAdminMemberPage.vue'),
+      props: true,
+      meta: { tab: 'settings' },
+    },
+    {
       path: '/settings/membership-benefits',
       name: 'settings-membership-benefits',
       component: () => import('@/ui/views/settings/SettingsMembershipBenefitsPage.vue'),
@@ -360,6 +396,36 @@ const router = createRouter({
       meta: { tab: 'assets' },
     },
   ],
+})
+
+const BANK_SYNC_ROUTE_NAMES = new Set([
+  'settings-bank-sync',
+  'settings-bank-sync-create',
+  'settings-bank-sync-connection',
+])
+
+const EINVOICE_CARRIER_ROUTE_NAMES = new Set([
+  'invoice-carriers',
+  'invoice-carriers-create',
+  'invoice-carriers-detail',
+])
+
+const ADMIN_ROUTE_NAMES = new Set([
+  'settings-admin',
+  'settings-admin-user',
+])
+
+router.beforeEach((to) => {
+  if (BANK_SYNC_ROUTE_NAMES.has(String(to.name ?? '')) && !isBankSyncFeatureEnabled()) {
+    return { name: 'settings' }
+  }
+  if (EINVOICE_CARRIER_ROUTE_NAMES.has(String(to.name ?? '')) && !isEinvoiceCarrierFeatureEnabled()) {
+    return { name: 'features' }
+  }
+  if (ADMIN_ROUTE_NAMES.has(String(to.name ?? '')) && !Boolean(getSharedLedgerSession()?.user?.is_admin)) {
+    return { name: 'settings' }
+  }
+  return true
 })
 
 export default router

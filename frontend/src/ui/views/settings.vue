@@ -33,6 +33,7 @@ import { getSharedLedgerSession, refreshSharedLedgerSession, subscribeSharedLedg
 const { t } = useI18n()
 const showBankSyncEntry = isBankSyncFeatureEnabled()
 const sessionUser = ref(getSharedLedgerSession()?.user ?? null)
+const showAdminEntry = computed(() => Boolean(sessionUser.value?.is_admin))
 const settingGroups = computed(() => [
   [
     { to: '/settings/ledgers', labelKey: 'settings.ledger_management', icon: 'fa-solid fa-book' },
@@ -55,6 +56,7 @@ const settingGroups = computed(() => [
   ],
   [
     { to: '/settings/membership-benefits', labelKey: 'settings.membership_benefits', icon: 'fa-solid fa-money-check-dollar' },
+    ...(showAdminEntry.value ? [{ to: '/settings/admin', labelKey: 'settings.admin_console', icon: 'fa-solid fa-users' }] : []),
     { to: '/settings/about', labelKey: 'settings.about_us', icon: 'fa-solid fa-users' },
     { to: '/settings/version-info', labelKey: 'settings.version_info', icon: 'fa-solid fa-circle-info' },
   ],

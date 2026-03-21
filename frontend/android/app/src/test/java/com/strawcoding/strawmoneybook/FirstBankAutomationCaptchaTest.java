@@ -102,4 +102,28 @@ public class FirstBankAutomationCaptchaTest {
         assertTrue(FirstBankAutomation.hasCaptchaSignatureChanged("previous-signature", "next-signature"));
         assertFalse(FirstBankAutomation.hasCaptchaSignatureChanged("same-signature", "same-signature"));
     }
+
+    @Test
+    public void navigationSnapshotAcceptsFirstBankNavigationWhenProgressHasAdvanced() {
+        assertTrue(FirstBankAutomation.hasReachedRequestedPageForTest(
+            "https://ibank.firstbank.com.tw/NetBank/frame.html",
+            "https://ibank.firstbank.com.tw/NetBank/2/010103.html?acnt=1234",
+            "",
+            "https://ibank.firstbank.com.tw/NetBank/frame.html",
+            "",
+            65
+        ));
+    }
+
+    @Test
+    public void navigationSnapshotStillRequiresProgressBeforeTreatingStartedPageAsReached() {
+        assertFalse(FirstBankAutomation.hasReachedRequestedPageForTest(
+            "https://ibank.firstbank.com.tw/NetBank/frame.html",
+            "",
+            "",
+            "https://ibank.firstbank.com.tw/NetBank/frame.html",
+            "",
+            0
+        ));
+    }
 }

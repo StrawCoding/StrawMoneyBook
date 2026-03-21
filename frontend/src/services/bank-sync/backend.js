@@ -1,26 +1,27 @@
 import { Capacitor } from '@capacitor/core'
-import { translateMessage } from '@/ui/services/i18n.service'
+import { translateMessage } from '../../ui/services/i18n.service.js'
 import {
   createLocalMockBankLinkSession,
   disconnectLocalMockBankAuth,
   exchangeLocalMockBankAuth,
   markImportedLocalMockTransactions,
   syncLocalMockBankTransactions,
-} from '@/services/bank-sync/local-mock-backend'
+} from './local-mock-backend.js'
 import {
   connectNativeFirstBank,
   disconnectNativeBankConnection,
   isNativeBankAutomationRuntimeSupported,
   syncNativeFirstBank,
-} from '@/services/bank-sync/native-automation'
-import { isFirstBankProviderId, isMockProviderId } from '@/services/bank-sync/shared'
+} from './native-automation.js'
+import { isFirstBankProviderId, isMockProviderId } from './shared.js'
 
-const DEFAULT_BANK_API_BASE = String(import.meta.env.VITE_BANK_SYNC_API_BASE_URL ?? '').trim()
-const BANK_SYNC_CLIENT_SHARED_KEY = String(import.meta.env.VITE_BANK_SYNC_CLIENT_SHARED_KEY ?? '').trim()
-const BANK_SYNC_UI_ENABLED = parseBooleanEnv(import.meta.env.VITE_BANK_SYNC_ENABLED, true)
+const IMPORT_META_ENV = import.meta.env ?? {}
+const DEFAULT_BANK_API_BASE = String(IMPORT_META_ENV.VITE_BANK_SYNC_API_BASE_URL ?? '').trim()
+const BANK_SYNC_CLIENT_SHARED_KEY = String(IMPORT_META_ENV.VITE_BANK_SYNC_CLIENT_SHARED_KEY ?? '').trim()
+const BANK_SYNC_FEATURE_ENABLED = false
 // Keep unsupported real-bank connectors opt-in only.
 const BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS = parseBooleanEnv(
-  import.meta.env.VITE_BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS,
+  IMPORT_META_ENV.VITE_BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS,
   false,
 )
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
@@ -88,21 +89,36 @@ function createMissingBankApiError() {
   return error
 }
 
+function createBankSyncDisabledError() {
+  const error = new Error('銀行同步功能目前已暫時關閉')
+  error.code = 'bank_sync_feature_disabled'
+  return error
+}
+
+function assertBankSyncFeatureEnabled() {
+  if (BANK_SYNC_FEATURE_ENABLED) return
+  throw createBankSyncDisabledError()
+}
+
 export function isBankSyncApiConfigured() {
+  if (!BANK_SYNC_FEATURE_ENABLED) return false
   return canUseLocalMockBankSync() || !shouldRequireExplicitBankApiBase()
 }
 
 export function isBankSyncFeatureEnabled() {
-  if (!BANK_SYNC_UI_ENABLED) return false
+  if (!BANK_SYNC_FEATURE_ENABLED) return false
   return listBankProviders().length > 0
 }
 
 export function getBankSyncApiUnavailableMessage() {
+  if (!BANK_SYNC_FEATURE_ENABLED) {
+    return createBankSyncDisabledError().message
+  }
   return createMissingBankApiError().message
 }
 
 function parseProviderListFromEnv() {
-  const raw = String(import.meta.env.VITE_BANK_SYNC_PROVIDERS_JSON ?? '').trim()
+  const raw = String(IMPORT_META_ENV.VITE_BANK_SYNC_PROVIDERS_JSON ?? '').trim()
   if (!raw) return PROVIDERS_FALLBACK
   try {
     const parsed = JSON.parse(raw)
@@ -121,6 +137,8 @@ function parseProviderListFromEnv() {
 }
 
 async function postJson(path, payload) {
+  assertBankSyncFeatureEnabled()
+
   if (isNativeFirstBankProvider(payload?.provider)) {
     if (path === '/api/bank/exchange') {
       return connectNativeFirstBank(payload)
@@ -193,6 +211,7 @@ async function postJson(path, payload) {
 }
 
 export function listBankProviders() {
+  if (!BANK_SYNC_FEATURE_ENABLED) return []
   return parseProviderListFromEnv().filter((item) => shouldExposeProvider(item.id))
 }
 

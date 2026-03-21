@@ -20,12 +20,17 @@
 <script setup>
 import { RouterLink } from 'vue-router'
 import { computed } from 'vue'
+import { isEinvoiceCarrierFeatureEnabled } from '@/services/einvoice-carrier/backend'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const { t } = useI18n()
+const showInvoiceCarrierEntry = isEinvoiceCarrierFeatureEnabled()
 
 const features = computed(() => ([
   { to: '/settings/google-drive-ledger-sync', label: t('feature_list.google_drive_sync', '帳本同步'), icon: 'fa-solid fa-cloud-arrow-up' },
+  ...(showInvoiceCarrierEntry
+    ? [{ to: '/invoice-carriers', label: t('feature_list.invoice_carriers', '發票載具'), icon: 'fa-solid fa-receipt' }]
+    : []),
   { to: '/loans', label: t('feature_list.loans'), icon: 'fa-solid fa-hand-holding-dollar' },
   { to: '/reimbursements', label: t('feature_list.reimbursements'), icon: 'fa-solid fa-receipt' },
   { to: '/claim-sheets', label: t('feature_list.claim_sheets'), icon: 'fa-solid fa-file-invoice-dollar' },

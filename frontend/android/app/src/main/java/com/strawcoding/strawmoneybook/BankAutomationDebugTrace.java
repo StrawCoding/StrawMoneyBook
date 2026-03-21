@@ -97,6 +97,8 @@ final class BankAutomationDebugTrace {
                 return "已取得驗證碼圖片，但 OCR 沒有產生有效 4 碼，請檢查 source.png 與 best-variant.png。";
             case "first_bank_login_failed":
                 return "驗證碼可能辨識錯誤或登入資料不正確，請優先檢查 captcha_attempt 與 submit_login。";
+            case "first_bank_navigation_timeout":
+                return "WebView 沒有在時間內完成頁面切換，請檢查 requested/current URL、進度值與 onPageFinished 是否有觸發。";
             case "first_bank_login_trigger_missing":
                 return "登入按鈕或 clickArea 觸發點可能變更，請檢查登入頁 DOM。";
             case "first_bank_account_list_not_found":

@@ -37,6 +37,7 @@ export function buildBankImportPlan(row, rules = []) {
   const mappedAccountId = normalizeText(row?.mapped_account_id)
   const amountMinor = Math.round(Number(row?.amount_minor ?? 0) || 0)
   const defaultType = amountMinor >= 0 ? 'income' : 'expense'
+  const isIncome = amountMinor > 0
   const importedNote = buildImportedNote(row)
   const matchedRule = resolveBankImportRule(row, rules)
 
@@ -60,8 +61,9 @@ export function buildBankImportPlan(row, rules = []) {
       return {
         mode: 'transfer',
         matchedRule,
-        fromAccountId,
-        toAccountId,
+        fromAccountId: isIncome ? toAccountId : fromAccountId,
+        toAccountId: isIncome ? fromAccountId : toAccountId,
+        importedTxnSide: isIncome ? 'in' : 'out',
         note: mergeNotes(matchedRule.note, importedNote),
       }
     }

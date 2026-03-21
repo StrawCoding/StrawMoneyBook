@@ -57,8 +57,35 @@ test('buildBankImportPlan turns matched transfer rule into transfer import plan'
   assert.equal(plan.mode, 'transfer')
   assert.equal(plan.fromAccountId, 'asset_bank')
   assert.equal(plan.toAccountId, 'asset_easy_wallet')
+  assert.equal(plan.importedTxnSide, 'out')
   assert.match(plan.note, /自動規則/)
   assert.match(plan.note, /優遊付儲值100/)
+})
+
+test('buildBankImportPlan reverses transfer direction for incoming bank transfers', () => {
+  const plan = buildBankImportPlan(
+    {
+      amount_minor: 10000,
+      mapped_account_id: 'asset_bank',
+      summary: '街口提領',
+      transaction_type: '轉入',
+    },
+    [
+      {
+        keyword: '街口',
+        type: 'transfer',
+        peerAccountId: 'asset_jkopay',
+        note: '銀行匯入',
+      },
+    ],
+  )
+
+  assert.equal(plan.mode, 'transfer')
+  assert.equal(plan.fromAccountId, 'asset_jkopay')
+  assert.equal(plan.toAccountId, 'asset_bank')
+  assert.equal(plan.importedTxnSide, 'in')
+  assert.match(plan.note, /銀行匯入/)
+  assert.match(plan.note, /街口提領/)
 })
 
 test('buildBankImportPlan keeps default transaction mode when rule type conflicts with amount sign', () => {

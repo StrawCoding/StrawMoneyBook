@@ -20,6 +20,8 @@ const RESET_TABLES = [
   'bank_transactions',
   'bank_accounts',
   'bank_connections',
+  'invoice_carrier_invoices',
+  'invoice_carrier_connections',
   'transactions',
   'savings_jars',
   'accounts',

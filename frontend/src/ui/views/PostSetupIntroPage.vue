@@ -6,11 +6,15 @@
           <p class="eyebrow">{{ t('post_setup_intro.eyebrow', '初始化完成') }}</p>
           <h2>{{ t('post_setup_intro.title', '用 1 分鐘快速認識 StrawMoneyBook') }}</h2>
           <p class="muted hero-desc">
-            {{ t('post_setup_intro.subtitle', '依序看完 4 個重點功能，就能更快上手同步、登入與會員邀請。') }}
+            {{ t('post_setup_intro.subtitle', '依序看完幾個重點功能，就能更快上手同步、登入與會員邀請。') }}
           </p>
         </div>
 
-        <div class="progress-strip" aria-label="post-setup intro progress">
+        <div
+          class="progress-strip"
+          :style="{ gridTemplateColumns: `repeat(${slides.length}, minmax(0, 1fr))` }"
+          aria-label="post-setup intro progress"
+        >
           <button
             v-for="(item, index) in slides"
             :key="item.id"
@@ -29,7 +33,7 @@
             <div class="icon-badge">
               <font-awesome-icon :icon="currentSlide.icon" />
             </div>
-            <p class="slide-step">{{ t('post_setup_intro.step', { step: currentIndex + 1 }, '第 {step} / 4 步') }}</p>
+            <p class="slide-step">{{ t('post_setup_intro.step', { step: currentIndex + 1, total: slides.length }, '第 {step} / {total} 步') }}</p>
             <h3>{{ currentSlide.title }}</h3>
             <p class="muted slide-desc">{{ currentSlide.description }}</p>
             <button type="button" class="btn quick-link" @click="openCurrentDestination">
@@ -75,6 +79,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
+import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
 import {
   completePostSetupIntro,
   isPostSetupIntroPending,
@@ -83,65 +88,73 @@ import {
 const router = useRouter()
 const { t } = useI18n()
 const currentIndex = ref(0)
+const showBankSyncSlide = isBankSyncFeatureEnabled()
 
-const slides = computed(() => ([
-  {
-    id: 'features',
-    icon: 'fa-solid fa-sparkles',
-    title: t('post_setup_intro.features.title', '特色功能介紹'),
-    description: t('post_setup_intro.features.description', '除了基本記帳，還可以直接延伸到借貸、報銷、存錢罐與訂閱追蹤。'),
-    highlight: t('post_setup_intro.features.highlight', '從首頁旁的功能列表，可以快速打開較進階的管理頁。'),
-    actionLabel: t('post_setup_intro.features.action', '前往功能列表'),
-    to: '/features',
-    points: [
-      t('post_setup_intro.features.point_1', 'AI 記帳、快速新增與搜尋交易都已經可以直接使用。'),
-      t('post_setup_intro.features.point_2', '借貸、報銷、請款單與訂閱管理都整合在同一套帳本內。'),
-      t('post_setup_intro.features.point_3', '之後要找進階功能，先從首頁右上角選單開始最快。'),
-    ],
-  },
-  {
-    id: 'bank-sync',
-    icon: 'fa-solid fa-building-columns',
-    title: t('post_setup_intro.bank_sync.title', '銀行同步'),
-    description: t('post_setup_intro.bank_sync.description', '可在 Android App 內新增銀行連線，之後把銀行交易同步進來，再決定是否匯入帳本。'),
-    highlight: t('post_setup_intro.bank_sync.highlight', '每家銀行都有自己的管理頁，可分別查看同步時間、帳戶對應與匯入狀態。'),
-    actionLabel: t('post_setup_intro.bank_sync.action', '前往銀行同步'),
-    to: '/settings/bank-sync',
-    points: [
-      t('post_setup_intro.bank_sync.point_1', '第一次新增連線後，就能在管理頁啟用、同步與查看明細。'),
-      t('post_setup_intro.bank_sync.point_2', '匯入前可先用自動識別規則，把轉帳或固定描述自動分類。'),
-      t('post_setup_intro.bank_sync.point_3', '同步資料與記帳資料分開管理，整理完成後再決定哪些交易要正式匯入。'),
-    ],
-  },
-  {
-    id: 'account-login',
-    icon: 'fa-solid fa-user-shield',
-    title: t('post_setup_intro.account.title', '帳號登入'),
-    description: t('post_setup_intro.account.description', '登入後可同步共享帳本、管理個人資料，也能把 Google 登入綁定到帳號。'),
-    highlight: t('post_setup_intro.account.highlight', '如果你打算跨裝置或和別人共同記帳，這一步會很值得先做。'),
-    actionLabel: t('post_setup_intro.account.action', '前往帳號設定'),
-    to: '/settings/account',
-    points: [
-      t('post_setup_intro.account.point_1', '支援 Email / 密碼與 Google 登入，之後都能在同一頁管理。'),
-      t('post_setup_intro.account.point_2', '登入後可以加入共同帳本，也能管理密碼、個人名稱與安全設定。'),
-      t('post_setup_intro.account.point_3', '如果你是從邀請連結進來，登入後也能直接接續相關流程。'),
-    ],
-  },
-  {
-    id: 'membership-referral',
-    icon: 'fa-solid fa-gift',
-    title: t('post_setup_intro.membership.title', '會員推廣與邀請碼'),
-    description: t('post_setup_intro.membership.description', '登入帳號後，就能分享自己的邀請碼，或輸入朋友提供的邀請碼領取對應獎勵。'),
-    highlight: t('post_setup_intro.membership.highlight', '邀請碼輸入入口就在帳號頁，會員權益頁則能查看方案內容與升級方式。'),
-    actionLabel: t('post_setup_intro.membership.action', '前往帳號與邀請碼'),
-    to: '/settings/account',
-    points: [
-      t('post_setup_intro.membership.point_1', '邀請人與被邀請人都需要先登入帳號，才能啟用推廣獎勵。'),
-      t('post_setup_intro.membership.point_2', '帳號頁可以複製自己的邀請碼，也能直接貼上朋友分享的邀請碼。'),
-      t('post_setup_intro.membership.point_3', '若想先看會員方案差異，也可以從設定中的會員權益頁進一步查看。'),
-    ],
-  },
-]))
+const slides = computed(() => {
+  const items = [
+    {
+      id: 'features',
+      icon: 'fa-solid fa-sparkles',
+      title: t('post_setup_intro.features.title', '特色功能介紹'),
+      description: t('post_setup_intro.features.description', '除了基本記帳，還可以直接延伸到借貸、報銷、存錢罐與訂閱追蹤。'),
+      highlight: t('post_setup_intro.features.highlight', '從首頁旁的功能列表，可以快速打開較進階的管理頁。'),
+      actionLabel: t('post_setup_intro.features.action', '前往功能列表'),
+      to: '/features',
+      points: [
+        t('post_setup_intro.features.point_1', 'AI 記帳、快速新增與搜尋交易都已經可以直接使用。'),
+        t('post_setup_intro.features.point_2', '借貸、報銷、請款單與訂閱管理都整合在同一套帳本內。'),
+        t('post_setup_intro.features.point_3', '之後要找進階功能，先從首頁右上角選單開始最快。'),
+      ],
+    },
+    {
+      id: 'account-login',
+      icon: 'fa-solid fa-user-shield',
+      title: t('post_setup_intro.account.title', '帳號登入'),
+      description: t('post_setup_intro.account.description', '登入後可同步共享帳本、管理個人資料，也能把 Google 登入綁定到帳號。'),
+      highlight: t('post_setup_intro.account.highlight', '如果你打算跨裝置或和別人共同記帳，這一步會很值得先做。'),
+      actionLabel: t('post_setup_intro.account.action', '前往帳號設定'),
+      to: '/settings/account',
+      points: [
+        t('post_setup_intro.account.point_1', '支援 Email / 密碼與 Google 登入，之後都能在同一頁管理。'),
+        t('post_setup_intro.account.point_2', '登入後可以加入共同帳本，也能管理密碼、個人名稱與安全設定。'),
+        t('post_setup_intro.account.point_3', '如果你是從邀請連結進來，登入後也能直接接續相關流程。'),
+      ],
+    },
+    {
+      id: 'membership-referral',
+      icon: 'fa-solid fa-gift',
+      title: t('post_setup_intro.membership.title', '會員推廣與邀請碼'),
+      description: t('post_setup_intro.membership.description', '登入帳號後，就能分享自己的邀請碼，或輸入朋友提供的邀請碼領取對應獎勵。'),
+      highlight: t('post_setup_intro.membership.highlight', '邀請碼輸入入口就在帳號頁，會員權益頁則能查看方案內容與升級方式。'),
+      actionLabel: t('post_setup_intro.membership.action', '前往帳號與邀請碼'),
+      to: '/settings/account',
+      points: [
+        t('post_setup_intro.membership.point_1', '邀請人與被邀請人都需要先登入帳號，才能啟用推廣獎勵。'),
+        t('post_setup_intro.membership.point_2', '帳號頁可以複製自己的邀請碼，也能直接貼上朋友分享的邀請碼。'),
+        t('post_setup_intro.membership.point_3', '若想先看會員方案差異，也可以從設定中的會員權益頁進一步查看。'),
+      ],
+    },
+  ]
+
+  if (showBankSyncSlide) {
+    items.splice(1, 0, {
+      id: 'bank-sync',
+      icon: 'fa-solid fa-building-columns',
+      title: t('post_setup_intro.bank_sync.title', '銀行同步'),
+      description: t('post_setup_intro.bank_sync.description', '可在 Android App 內新增銀行連線，之後把銀行交易同步進來，再決定是否匯入帳本。'),
+      highlight: t('post_setup_intro.bank_sync.highlight', '每家銀行都有自己的管理頁，可分別查看同步時間、帳戶對應與匯入狀態。'),
+      actionLabel: t('post_setup_intro.bank_sync.action', '前往銀行同步'),
+      to: '/settings/bank-sync',
+      points: [
+        t('post_setup_intro.bank_sync.point_1', '第一次新增連線後，就能在管理頁啟用、同步與查看明細。'),
+        t('post_setup_intro.bank_sync.point_2', '匯入前可先用自動識別規則，把轉帳或固定描述自動分類。'),
+        t('post_setup_intro.bank_sync.point_3', '同步資料與記帳資料分開管理，整理完成後再決定哪些交易要正式匯入。'),
+      ],
+    })
+  }
+
+  return items
+})
 
 const currentSlide = computed(() => slides.value[currentIndex.value] ?? slides.value[0])
 const isLastSlide = computed(() => currentIndex.value >= slides.value.length - 1)
@@ -227,7 +240,6 @@ h3,
 }
 .progress-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 .progress-dot {

@@ -59,6 +59,14 @@ export function formatBankErrorForStorage(error) {
   return code || message || 'bank_sync_unknown_error'
 }
 
+export function extractBankErrorCode(value) {
+  const text = normalizeText(value)
+  if (!text) return ''
+  const colonIndex = text.indexOf(':')
+  if (colonIndex <= 0) return text
+  return normalizeText(text.slice(0, colonIndex))
+}
+
 export function isBankCredentialAuthError(error) {
   const code = normalizeText(error?.code).toLowerCase()
   const message = normalizeText(error?.message ?? error).toLowerCase()
@@ -86,6 +94,20 @@ export function isBankCredentialAuthError(error) {
     || message.includes('登入失敗')
     || message.includes('逾時')
   )
+}
+
+export function shouldRequireReconnectAfterBankSyncError(providerId, error) {
+  if (!isFirstBankProviderId(providerId)) return false
+  return isBankCredentialAuthError(error)
+}
+
+export function shouldRequireReconnectForStoredBankConnection(providerId, status, lastError) {
+  if (normalizeText(status).toLowerCase() !== 'error') return false
+  const code = extractBankErrorCode(lastError)
+  return shouldRequireReconnectAfterBankSyncError(providerId, {
+    code,
+    message: lastError,
+  })
 }
 
 export function selectSyncableBankAccounts(accounts = []) {

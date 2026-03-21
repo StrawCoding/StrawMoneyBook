@@ -26,11 +26,13 @@ const LEDGER_TABLES = [
   'bank_accounts',
   'bank_transactions',
   'bank_sync_rules',
+  'invoice_carrier_connections',
+  'invoice_carrier_invoices',
   'app_settings',
   'deleted_log',
 ]
 const APP_SETTING_SECRET_KEY_RE = /(password|token|secret|authorization|client[_-]?key)/i
-const APP_SETTING_SECURE_ONLY_KEY_RE = /^(?:bank_sync\.credentials\.[^.]+|backup\.webdav\.credentials)$/i
+const APP_SETTING_SECURE_ONLY_KEY_RE = /^(?:bank_sync\.credentials\.[^.]+|einvoice\.(?:credentials|session)\.[^.]+|backup\.webdav\.credentials)$/i
 const ADDON_NOTE_PREFIX = '【附加項目】'
 
 function toCsvValue(value) {

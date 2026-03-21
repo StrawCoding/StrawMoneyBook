@@ -1,24 +1,4 @@
 import { Capacitor } from '@capacitor/core'
-import { addTransaction, addTransfer } from '@/core/repositories/transaction.repo'
-import {
-  clearBankMirrorDataByConnection,
-  findBankConnectionById,
-  findImportedLedgerTransactionBySourceRef,
-  getBankSyncRule,
-  listBankAccountsByConnection,
-  listBankConnections,
-  listBankTransactionsByIds,
-  listBankTransactionsForReview,
-  listEnabledBankAccountsByConnection,
-  markBankTransactionsImported,
-  markBankTransactionsSeen,
-  updateBankAccount,
-  updateBankConnection,
-  upsertBankAccounts,
-  upsertBankConnection,
-  upsertBankSyncRule,
-  upsertBankTransactions,
-} from '@/core/repositories/bank-sync.repo'
 import {
   createBankLinkSession,
   disconnectBankAuth,
@@ -26,8 +6,7 @@ import {
   listBankProviders,
   markImportedBankTransactions,
   syncBankTransactions,
-} from '@/services/bank-sync/backend'
-import { getAutoFillRules } from '@/ui/services/auto-fill-rule.service'
+} from '../../services/bank-sync/backend.js'
 import {
   buildImportedNote as buildImportedNoteFromMetadata,
   createFirstBankProviderConnectionId,
@@ -35,15 +14,135 @@ import {
   isFirstBankProviderId as isFirstBankProviderIdShared,
   isMockProviderId as isMockProviderIdShared,
   selectSyncableBankAccounts,
-} from '@/services/bank-sync/shared'
-import { traceBankSyncOperation } from '@/core/services/bank-sync-debug.service'
-import { yieldToMainThread } from '@/core/utils/cooperative-yield'
-import { deleteEncryptedSetting, getEncryptedSetting, setEncryptedSetting } from '@/ui/services/secure-setting.service'
-import { buildBankImportPlan } from '@/services/bank-sync/import-auto-rule'
-import { assertCanUseBankSync } from '@/core/services/membership.service'
+  shouldRequireReconnectAfterBankSyncError,
+  shouldRequireReconnectForStoredBankConnection,
+} from '../../services/bank-sync/shared.js'
+import { traceBankSyncOperation } from '../../core/services/bank-sync-debug.service.js'
+import { yieldToMainThread } from '../../core/utils/cooperative-yield.js'
+import { buildBankImportPlan } from '../../services/bank-sync/import-auto-rule.js'
 
 function assertLedgerId(ledgerId) {
   if (!ledgerId) throw new Error('缺少帳本 ID')
+}
+
+async function defaultAssertCanUseBankSync() {
+  const mod = await import('../../core/services/membership.service.js')
+  return mod.assertCanUseBankSync()
+}
+
+async function defaultAddTransaction(...args) {
+  const mod = await import('../../core/repositories/transaction.repo.js')
+  return mod.addTransaction(...args)
+}
+
+async function defaultAddTransfer(...args) {
+  const mod = await import('../../core/repositories/transaction.repo.js')
+  return mod.addTransfer(...args)
+}
+
+async function defaultClearBankMirrorDataByConnection(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.clearBankMirrorDataByConnection(...args)
+}
+
+async function defaultDeleteEncryptedSetting(...args) {
+  const mod = await import('./secure-setting.service.js')
+  return mod.deleteEncryptedSetting(...args)
+}
+
+async function defaultFindBankConnectionById(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.findBankConnectionById(...args)
+}
+
+async function defaultFindImportedLedgerTransactionBySourceRef(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.findImportedLedgerTransactionBySourceRef(...args)
+}
+
+async function defaultGetAutoFillRules(...args) {
+  const mod = await import('./auto-fill-rule.service.js')
+  return mod.getAutoFillRules(...args)
+}
+
+async function defaultGetBankSyncRule(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.getBankSyncRule(...args)
+}
+
+async function defaultGetEncryptedSetting(...args) {
+  const mod = await import('./secure-setting.service.js')
+  return mod.getEncryptedSetting(...args)
+}
+
+async function defaultListBankAccountsByConnection(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.listBankAccountsByConnection(...args)
+}
+
+async function defaultListBankConnections(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.listBankConnections(...args)
+}
+
+async function defaultListBankTransactionsByIds(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.listBankTransactionsByIds(...args)
+}
+
+async function defaultListBankTransactionsForReview(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.listBankTransactionsForReview(...args)
+}
+
+async function defaultListEnabledBankAccountsByConnection(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.listEnabledBankAccountsByConnection(...args)
+}
+
+async function defaultMarkBankTransactionsImported(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.markBankTransactionsImported(...args)
+}
+
+async function defaultMarkBankTransactionsSeen(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.markBankTransactionsSeen(...args)
+}
+
+async function defaultSetEncryptedSetting(...args) {
+  const mod = await import('./secure-setting.service.js')
+  return mod.setEncryptedSetting(...args)
+}
+
+async function defaultUpdateBankAccount(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.updateBankAccount(...args)
+}
+
+async function defaultUpdateBankConnection(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.updateBankConnection(...args)
+}
+
+async function defaultUpsertBankAccounts(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.upsertBankAccounts(...args)
+}
+
+async function defaultUpsertBankConnection(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.upsertBankConnection(...args)
+}
+
+async function defaultUpsertBankSyncRule(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.upsertBankSyncRule(...args)
+}
+
+async function defaultUpsertBankTransactions(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.upsertBankTransactions(...args)
 }
 
 function normalizeText(value) {
@@ -241,10 +340,59 @@ function normalizeBackendSyncRows(payloadRows = []) {
     .filter(Boolean)
 }
 
+const defaultDependencies = {
+  addTransaction: defaultAddTransaction,
+  addTransfer: defaultAddTransfer,
+  assertCanUseBankSync: defaultAssertCanUseBankSync,
+  clearBankMirrorDataByConnection: defaultClearBankMirrorDataByConnection,
+  createBankLinkSession,
+  deleteEncryptedSetting: defaultDeleteEncryptedSetting,
+  disconnectBankAuth,
+  exchangeBankAuth,
+  findBankConnectionById: defaultFindBankConnectionById,
+  findImportedLedgerTransactionBySourceRef: defaultFindImportedLedgerTransactionBySourceRef,
+  getAutoFillRules: defaultGetAutoFillRules,
+  getBankSyncRule: defaultGetBankSyncRule,
+  getEncryptedSetting: defaultGetEncryptedSetting,
+  listBankAccountsByConnection: defaultListBankAccountsByConnection,
+  listBankConnections: defaultListBankConnections,
+  listBankProviders,
+  listBankTransactionsByIds: defaultListBankTransactionsByIds,
+  listBankTransactionsForReview: defaultListBankTransactionsForReview,
+  listEnabledBankAccountsByConnection: defaultListEnabledBankAccountsByConnection,
+  markBankTransactionsImported: defaultMarkBankTransactionsImported,
+  markBankTransactionsSeen: defaultMarkBankTransactionsSeen,
+  markImportedBankTransactions,
+  setEncryptedSetting: defaultSetEncryptedSetting,
+  syncBankTransactions,
+  traceBankSyncOperation,
+  updateBankAccount: defaultUpdateBankAccount,
+  updateBankConnection: defaultUpdateBankConnection,
+  upsertBankAccounts: defaultUpsertBankAccounts,
+  upsertBankConnection: defaultUpsertBankConnection,
+  upsertBankSyncRule: defaultUpsertBankSyncRule,
+  upsertBankTransactions: defaultUpsertBankTransactions,
+  yieldToMainThread,
+}
+const dependencies = { ...defaultDependencies }
+
+export function setBankSyncServiceDependenciesForTest(overrides = {}) {
+  Object.assign(dependencies, overrides)
+}
+
+export function resetBankSyncServiceDependenciesForTest() {
+  for (const key of Object.keys(dependencies)) {
+    if (!(key in defaultDependencies)) {
+      delete dependencies[key]
+    }
+  }
+  Object.assign(dependencies, defaultDependencies)
+}
+
 async function getConnectionBundle(ledgerId, connection) {
   const [accounts, rule] = await Promise.all([
-    listBankAccountsByConnection(ledgerId, connection.id),
-    getBankSyncRule(ledgerId, connection.id),
+    dependencies.listBankAccountsByConnection(ledgerId, connection.id),
+    dependencies.getBankSyncRule(ledgerId, connection.id),
   ])
   return {
     ...connection,
@@ -257,12 +405,12 @@ async function getConnectionBundle(ledgerId, connection) {
 }
 
 export function getBankProviderOptions() {
-  return listBankProviders()
+  return dependencies.listBankProviders()
 }
 
 export async function prepareBankProviderLink(ledgerId, provider, options = {}) {
   assertLedgerId(ledgerId)
-  assertCanUseBankSync()
+  await dependencies.assertCanUseBankSync()
   const normalizedProvider = normalizeText(provider)
   if (!normalizedProvider) throw new Error('缺少 provider')
   if (isFirstBankProviderId(normalizedProvider)) {
@@ -274,7 +422,7 @@ export async function prepareBankProviderLink(ledgerId, provider, options = {}) 
   }
 
   const { callbackScheme, deviceInfo } = buildDeviceInfo(options)
-  return createBankLinkSession({
+  return dependencies.createBankLinkSession({
     provider: normalizedProvider,
     session_id: normalizeText(options.sessionId) || null,
     refresh_captcha: Boolean(options.refreshCaptcha),
@@ -287,8 +435,8 @@ export async function prepareBankProviderLink(ledgerId, provider, options = {}) 
 
 export async function getBankSyncState(ledgerId) {
   assertLedgerId(ledgerId)
-  assertCanUseBankSync()
-  const connections = await listBankConnections(ledgerId)
+  await dependencies.assertCanUseBankSync()
+  const connections = await dependencies.listBankConnections(ledgerId)
   const bundles = []
   for (const connection of connections) {
     bundles.push(await getConnectionBundle(ledgerId, connection))
@@ -298,15 +446,15 @@ export async function getBankSyncState(ledgerId) {
 
 export async function getBankSyncConnectionDetail(ledgerId, connectionId) {
   assertLedgerId(ledgerId)
-  assertCanUseBankSync()
-  const connection = await findBankConnectionById(ledgerId, connectionId)
+  await dependencies.assertCanUseBankSync()
+  const connection = await dependencies.findBankConnectionById(ledgerId, connectionId)
   if (!connection) return null
   return getConnectionBundle(ledgerId, connection)
 }
 
 export async function connectBankProvider(ledgerId, provider, options = {}) {
   assertLedgerId(ledgerId)
-  assertCanUseBankSync()
+  await dependencies.assertCanUseBankSync()
   const normalizedProvider = normalizeText(provider)
   if (!normalizedProvider) throw new Error('缺少 provider')
   const isNativeFirstBank = isFirstBankProviderId(normalizedProvider)
@@ -320,12 +468,12 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
     if (!providerConnectionId) {
       throw new Error('第一銀行登入身分資料不完整')
     }
-    return traceBankSyncOperation('connect_first_bank', {
+    return dependencies.traceBankSyncOperation('connect_first_bank', {
       ledgerId,
       provider: normalizedProvider,
       connectionId: providerConnectionId,
     }, async (traceContext) => {
-      const exchanged = await exchangeBankAuth({
+      const exchanged = await dependencies.exchangeBankAuth({
         provider: normalizedProvider,
         connectionId: providerConnectionId,
         nationalId: normalizeText(options.nationalId),
@@ -336,7 +484,7 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
       })
       traceContext.attachDebugTrace(exchanged?.debugTrace)
 
-      const connection = await upsertBankConnection(ledgerId, {
+      const connection = await dependencies.upsertBankConnection(ledgerId, {
         id: providerConnectionId,
         provider: normalizedProvider,
         providerConnectionId,
@@ -348,7 +496,7 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
       })
 
       const rawAccounts = Array.isArray(exchanged?.accounts) ? exchanged.accounts : []
-      await upsertBankAccounts(
+      await dependencies.upsertBankAccounts(
         ledgerId,
         connection.id,
         rawAccounts.map((item) => ({
@@ -361,7 +509,7 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
         })),
       )
 
-      await deleteEncryptedSetting(ledgerId, buildBankCredentialSettingKey(connection.id))
+      await dependencies.deleteEncryptedSetting(ledgerId, buildBankCredentialSettingKey(connection.id))
       return getConnectionBundle(ledgerId, connection)
     })
   }
@@ -374,7 +522,7 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
       session_id: preparedSessionId,
       mock_code: preparedSessionCode,
     }
-    : await createBankLinkSession({
+    : await dependencies.createBankLinkSession({
       provider: normalizedProvider,
       callback_scheme: callbackScheme,
       device_info: deviceInfo,
@@ -386,11 +534,11 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
     ? normalizeText(preparedSessionCode || linkSession?.mock_code || options.code)
     : normalizeText(options.code || preparedSessionCode || linkSession?.mock_code)
 
-  return traceBankSyncOperation('connect_bank_provider', {
+  return dependencies.traceBankSyncOperation('connect_bank_provider', {
     ledgerId,
     provider: normalizedProvider,
   }, async () => {
-    const exchanged = await exchangeBankAuth({
+    const exchanged = await dependencies.exchangeBankAuth({
       provider: normalizedProvider,
       session_id: normalizeText(linkSession?.session_id),
       code: exchangeCode,
@@ -408,7 +556,7 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
       throw new Error('銀行授權成功但缺少 connection_id')
     }
 
-    const connection = await upsertBankConnection(ledgerId, {
+    const connection = await dependencies.upsertBankConnection(ledgerId, {
         provider: normalizedProvider,
         providerConnectionId,
         status: 'active',
@@ -419,7 +567,7 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
     })
 
     const rawAccounts = Array.isArray(exchanged?.accounts) ? exchanged.accounts : []
-    await upsertBankAccounts(
+    await dependencies.upsertBankAccounts(
       ledgerId,
       connection.id,
       rawAccounts.map((item) => ({
@@ -444,20 +592,20 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
 
 export async function saveBankAccountSettings(ledgerId, bankAccountId, patch = {}) {
   assertLedgerId(ledgerId)
-  assertCanUseBankSync()
-  return updateBankAccount(ledgerId, bankAccountId, patch)
+  await dependencies.assertCanUseBankSync()
+  return dependencies.updateBankAccount(ledgerId, bankAccountId, patch)
 }
 
 export async function saveBankSyncRuleSettings(ledgerId, connectionId, patch = {}) {
   assertLedgerId(ledgerId)
-  assertCanUseBankSync()
+  await dependencies.assertCanUseBankSync()
   const merged = normalizeRuleInput({
     ...patch,
     excludeKeywords: Array.isArray(patch.excludeKeywords)
       ? patch.excludeKeywords
       : parseExcludeKeywordsFromText(patch.excludeKeywordText),
   })
-  const saved = await upsertBankSyncRule(ledgerId, connectionId, merged)
+  const saved = await dependencies.upsertBankSyncRule(ledgerId, connectionId, merged)
   return {
     ...saved,
     excludeKeywordText: toExcludeKeywordText(saved.excludeKeywords),
@@ -466,158 +614,159 @@ export async function saveBankSyncRuleSettings(ledgerId, connectionId, patch = {
 
 export async function syncBankConnectionNow(ledgerId, connectionId) {
   assertLedgerId(ledgerId)
-  assertCanUseBankSync()
-  const connection = await findBankConnectionById(ledgerId, connectionId)
+  await dependencies.assertCanUseBankSync()
+  const connection = await dependencies.findBankConnectionById(ledgerId, connectionId)
   if (!connection) throw new Error('找不到銀行連結')
   const normalizedStatus = String(connection.status ?? '').toLowerCase()
   if (normalizedStatus === 'revoked') {
     throw new Error('此銀行連結已停用，請重新連結')
   }
-  if (isFirstBankProviderId(connection.provider) && normalizedStatus === 'error') {
+  if (shouldRequireReconnectForStoredBankConnection(connection.provider, connection.status, connection.last_error)) {
     throw new Error('第一銀行連線已進入錯誤狀態，請先中斷連線並重新新增')
   }
 
   const [enabledAccounts, rule] = await Promise.all([
-    listEnabledBankAccountsByConnection(ledgerId, connectionId),
-    getBankSyncRule(ledgerId, connectionId),
+    dependencies.listEnabledBankAccountsByConnection(ledgerId, connectionId),
+    dependencies.getBankSyncRule(ledgerId, connectionId),
   ])
   const syncableAccounts = selectSyncableBankAccounts(enabledAccounts)
   if (!syncableAccounts.length) {
     throw new Error('請先啟用並對應至少一個銀行帳戶後再同步')
   }
 
-  return traceBankSyncOperation('sync_bank_connection', {
+  return dependencies.traceBankSyncOperation('sync_bank_connection', {
     ledgerId,
     provider: connection.provider,
     connectionId,
   }, async (traceContext) => {
-  try {
-    const secureSettingKey = buildBankCredentialSettingKey(connectionId)
-    const isNativeFirstBank = isFirstBankProviderId(connection.provider)
-    let savedCredentialState = null
-    let sanitizedCredentialState = null
-    let sessionToken = ''
+    try {
+      const secureSettingKey = buildBankCredentialSettingKey(connectionId)
+      const isNativeFirstBank = isFirstBankProviderId(connection.provider)
+      let savedCredentialState = null
+      let sanitizedCredentialState = null
+      let sessionToken = ''
 
-    if (!isNativeFirstBank) {
-      savedCredentialState = await getEncryptedSetting(ledgerId, secureSettingKey)
-      sanitizedCredentialState = sanitizeBankCredentialState(savedCredentialState)
-      if (shouldRewriteBankCredentialState(savedCredentialState)) {
-        if (sanitizedCredentialState) {
-          await setEncryptedSetting(ledgerId, secureSettingKey, sanitizedCredentialState)
+      if (!isNativeFirstBank) {
+        savedCredentialState = await dependencies.getEncryptedSetting(ledgerId, secureSettingKey)
+        sanitizedCredentialState = sanitizeBankCredentialState(savedCredentialState)
+        if (shouldRewriteBankCredentialState(savedCredentialState)) {
+          if (sanitizedCredentialState) {
+            await dependencies.setEncryptedSetting(ledgerId, secureSettingKey, sanitizedCredentialState)
+          }
+        }
+        const effectiveCredentialState = sanitizedCredentialState ?? savedCredentialState
+        sessionToken = normalizeText(effectiveCredentialState?.sessionToken || effectiveCredentialState?.accessTokenRef)
+        if (isFirstBankProviderId(connection.provider) && !sessionToken) {
+          throw new Error('第一銀行同步 Session 已失效，請重新連線並重新登入一次')
         }
       }
-      const effectiveCredentialState = sanitizedCredentialState ?? savedCredentialState
-      sessionToken = normalizeText(effectiveCredentialState?.sessionToken || effectiveCredentialState?.accessTokenRef)
-      if (isFirstBankProviderId(connection.provider) && !sessionToken) {
-        throw new Error('第一銀行同步 Session 已失效，請重新連線並重新登入一次')
+
+      const syncRes = await dependencies.syncBankTransactions({
+        provider: connection.provider,
+        connectionId: connection.id,
+        connection_id: connection.provider_connection_id,
+        mode: 'delta',
+        cursor: normalizeText(connection.sync_cursor) || null,
+        last_sync_at: normalizeText(connection.last_sync_at) || null,
+        lookback_days: rule.lookbackDays,
+        account_ids: syncableAccounts.map((item) => item.provider_account_id),
+        accountIds: syncableAccounts.map((item) => item.provider_account_id),
+        session_token: isNativeFirstBank ? null : (sessionToken || null),
+        access_token_ref: isNativeFirstBank ? null : (sessionToken || null),
+      })
+      traceContext.attachDebugTrace(syncRes?.debugTrace)
+
+      const normalizedRows = normalizeBackendSyncRows([
+        ...(Array.isArray(syncRes?.added) ? syncRes.added : []),
+        ...(Array.isArray(syncRes?.modified) ? syncRes.modified : []),
+      ])
+      const providerAccountMap = normalizeProviderAccountMap(syncableAccounts)
+      const rowsToUpsert = normalizedRows
+        .map((item) => {
+          const account = providerAccountMap.get(item.providerAccountId)
+          if (!account) return null
+          return {
+            bankAccountId: account.id,
+            providerTransactionId: item.providerTransactionId,
+            postedAt: item.postedAt,
+            amountMinor: item.amountMinor,
+            balanceMinor: item.balanceMinor,
+            currency: item.currency || account.currency || 'TWD',
+            transactionType: item.transactionType,
+            note: item.note,
+            summary: item.summary,
+            description: item.description,
+            merchant: item.merchant,
+            status: item.status,
+            rawJson: item.rawJson,
+          }
+        })
+        .filter(Boolean)
+
+      const upsertRes = await dependencies.upsertBankTransactions(ledgerId, connectionId, rowsToUpsert)
+      const touchedIds = Array.from(new Set([...upsertRes.addedIds, ...upsertRes.modifiedIds]))
+      const touchedRows = touchedIds.length ? await dependencies.listBankTransactionsByIds(ledgerId, touchedIds) : []
+
+      const ruleForSelection = normalizeRuleInput(rule)
+      const added = touchedRows
+        .filter((item) => upsertRes.addedIds.includes(item.id))
+        .map((item) => ({
+          ...item,
+          defaultSelected: !item.imported && applyRuleToBankTransaction(item, ruleForSelection),
+        }))
+      const modified = touchedRows
+        .filter((item) => upsertRes.modifiedIds.includes(item.id))
+        .map((item) => ({
+          ...item,
+          defaultSelected: false,
+        }))
+
+      const syncTime = normalizeText(syncRes?.sync_time) || new Date().toISOString()
+      const nextCursor = normalizeText(syncRes?.next_cursor || syncRes?.nextCursor || syncRes?.cursor)
+      const nextSessionToken = normalizeText(syncRes?.session_token || syncRes?.access_token_ref)
+
+      if (nextSessionToken && !isMockProviderId(connection.provider) && !isNativeFirstBank) {
+        await dependencies.setEncryptedSetting(ledgerId, secureSettingKey, {
+          ...(savedCredentialState && typeof savedCredentialState === 'object' ? savedCredentialState : {}),
+          sessionToken: nextSessionToken,
+          accessTokenRef: nextSessionToken,
+          updatedAt: new Date().toISOString(),
+        })
       }
-    }
 
-    const syncRes = await syncBankTransactions({
-      provider: connection.provider,
-      connectionId: connection.id,
-      connection_id: connection.provider_connection_id,
-      mode: 'delta',
-      cursor: normalizeText(connection.sync_cursor) || null,
-      last_sync_at: normalizeText(connection.last_sync_at) || null,
-      lookback_days: rule.lookbackDays,
-      account_ids: syncableAccounts.map((item) => item.provider_account_id),
-      accountIds: syncableAccounts.map((item) => item.provider_account_id),
-      session_token: isNativeFirstBank ? null : (sessionToken || null),
-      access_token_ref: isNativeFirstBank ? null : (sessionToken || null),
-    })
-    traceContext.attachDebugTrace(syncRes?.debugTrace)
-
-    const normalizedRows = normalizeBackendSyncRows([
-      ...(Array.isArray(syncRes?.added) ? syncRes.added : []),
-      ...(Array.isArray(syncRes?.modified) ? syncRes.modified : []),
-    ])
-    const providerAccountMap = normalizeProviderAccountMap(syncableAccounts)
-    const rowsToUpsert = normalizedRows
-      .map((item) => {
-        const account = providerAccountMap.get(item.providerAccountId)
-        if (!account) return null
-        return {
-          bankAccountId: account.id,
-          providerTransactionId: item.providerTransactionId,
-          postedAt: item.postedAt,
-          amountMinor: item.amountMinor,
-          balanceMinor: item.balanceMinor,
-          currency: item.currency || account.currency || 'TWD',
-          transactionType: item.transactionType,
-          note: item.note,
-          summary: item.summary,
-          description: item.description,
-          merchant: item.merchant,
-          status: item.status,
-          rawJson: item.rawJson,
-        }
+      await dependencies.updateBankConnection(ledgerId, connectionId, {
+        status: 'active',
+        lastSyncAt: syncTime,
+        syncCursor: nextCursor || connection.sync_cursor || null,
+        lastSyncStatus: 'ok',
+        lastError: '',
       })
-      .filter(Boolean)
 
-    const upsertRes = await upsertBankTransactions(ledgerId, connectionId, rowsToUpsert)
-    const touchedIds = Array.from(new Set([...upsertRes.addedIds, ...upsertRes.modifiedIds]))
-    const touchedRows = touchedIds.length ? await listBankTransactionsByIds(ledgerId, touchedIds) : []
-
-    const ruleForSelection = normalizeRuleInput(rule)
-    const added = touchedRows
-      .filter((item) => upsertRes.addedIds.includes(item.id))
-      .map((item) => ({
-        ...item,
-        defaultSelected: !item.imported && applyRuleToBankTransaction(item, ruleForSelection),
-      }))
-    const modified = touchedRows
-      .filter((item) => upsertRes.modifiedIds.includes(item.id))
-      .map((item) => ({
-        ...item,
-        defaultSelected: false,
-      }))
-
-    const syncTime = normalizeText(syncRes?.sync_time) || new Date().toISOString()
-    const nextCursor = normalizeText(syncRes?.next_cursor || syncRes?.nextCursor || syncRes?.cursor)
-    const nextSessionToken = normalizeText(syncRes?.session_token || syncRes?.access_token_ref)
-
-    if (nextSessionToken && !isMockProviderId(connection.provider) && !isNativeFirstBank) {
-      await setEncryptedSetting(ledgerId, secureSettingKey, {
-        ...(savedCredentialState && typeof savedCredentialState === 'object' ? savedCredentialState : {}),
-        sessionToken: nextSessionToken,
-        accessTokenRef: nextSessionToken,
-        updatedAt: new Date().toISOString(),
+      return {
+        added,
+        modified,
+        nextCursor: nextCursor || null,
+        syncTime,
+        raw: syncRes,
+      }
+    } catch (error) {
+      const requiresReconnect = shouldRequireReconnectAfterBankSyncError(connection.provider, error)
+      await dependencies.updateBankConnection(ledgerId, connectionId, {
+        status: requiresReconnect ? 'error' : 'active',
+        lastSyncStatus: 'error',
+        lastError: formatBankErrorForStorage(error),
       })
+      throw error
     }
-
-    await updateBankConnection(ledgerId, connectionId, {
-      status: 'active',
-      lastSyncAt: syncTime,
-      syncCursor: nextCursor || connection.sync_cursor || null,
-      lastSyncStatus: 'ok',
-      lastError: '',
-    })
-
-    return {
-      added,
-      modified,
-      nextCursor: nextCursor || null,
-      syncTime,
-      raw: syncRes,
-    }
-  } catch (error) {
-    await updateBankConnection(ledgerId, connectionId, {
-      status: 'error',
-      lastSyncStatus: 'error',
-      lastError: formatBankErrorForStorage(error),
-    })
-    throw error
-  }
   })
 }
 
 export async function listBankReviewTransactions(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
-  assertCanUseBankSync()
-  const rows = await listBankTransactionsForReview(ledgerId, options)
+  await dependencies.assertCanUseBankSync()
+  const rows = await dependencies.listBankTransactionsForReview(ledgerId, options)
   if (!options.connectionId) return rows
-  const rule = await getBankSyncRule(ledgerId, options.connectionId)
+  const rule = await dependencies.getBankSyncRule(ledgerId, options.connectionId)
   const normalizedRule = normalizeRuleInput(rule)
   return rows.map((item) => ({
     ...item,
@@ -627,10 +776,10 @@ export async function listBankReviewTransactions(ledgerId, options = {}) {
 
 export async function importSelectedBankTransactions(ledgerId, bankTransactionIds = []) {
   assertLedgerId(ledgerId)
-  assertCanUseBankSync()
+  await dependencies.assertCanUseBankSync()
   const [rows, autoFillRules] = await Promise.all([
-    listBankTransactionsByIds(ledgerId, bankTransactionIds),
-    getAutoFillRules(ledgerId).catch(() => []),
+    dependencies.listBankTransactionsByIds(ledgerId, bankTransactionIds),
+    dependencies.getAutoFillRules(ledgerId).catch(() => []),
   ])
   if (!rows.length) {
     return {
@@ -646,7 +795,7 @@ export async function importSelectedBankTransactions(ledgerId, bankTransactionId
 
   for (const [index, row] of rows.entries()) {
     if (index > 0 && index % 10 === 0) {
-      await yieldToMainThread()
+      await dependencies.yieldToMainThread()
     }
 
     const bankTransactionId = row.id
@@ -663,13 +812,13 @@ export async function importSelectedBankTransactions(ledgerId, bankTransactionId
 
     const providerAccountId = normalizeText(row.provider_account_id || row.bank_account_id)
     const sourceRef = buildSourceRef(row.provider, providerAccountId, row.provider_transaction_id)
-    let existing = await findImportedLedgerTransactionBySourceRef(ledgerId, sourceRef)
+    let existing = await dependencies.findImportedLedgerTransactionBySourceRef(ledgerId, sourceRef)
     const importPlan = buildBankImportPlan(row, autoFillRules)
 
     if (!existing) {
       try {
         if (importPlan.mode === 'transfer') {
-          const transfer = await addTransfer(ledgerId, {
+          const transfer = await dependencies.addTransfer(ledgerId, {
             fromAccountId: importPlan.fromAccountId,
             toAccountId: importPlan.toAccountId,
             amountMinor: Math.abs(Math.round(Number(row.amount_minor ?? 0))),
@@ -679,9 +828,9 @@ export async function importSelectedBankTransactions(ledgerId, bankTransactionId
             externalRefId: sourceRef,
             idempotencyKey: sourceRef,
           })
-          existing = { id: transfer.outTxId }
+          existing = { id: importPlan.importedTxnSide === 'in' ? transfer.inTxId : transfer.outTxId }
         } else {
-          const createdTxId = await addTransaction(ledgerId, {
+          const createdTxId = await dependencies.addTransaction(ledgerId, {
             type: importPlan.type,
             accountId: importPlan.accountId || mappedAccountId,
             peerAccountId: null,
@@ -709,7 +858,7 @@ export async function importSelectedBankTransactions(ledgerId, bankTransactionId
           })
           continue
         }
-        existing = await findImportedLedgerTransactionBySourceRef(ledgerId, sourceRef)
+        existing = await dependencies.findImportedLedgerTransactionBySourceRef(ledgerId, sourceRef)
       }
     }
 
@@ -725,9 +874,9 @@ export async function importSelectedBankTransactions(ledgerId, bankTransactionId
   }
 
   if (importedMappings.length) {
-    await markBankTransactionsImported(ledgerId, importedMappings)
+    await dependencies.markBankTransactionsImported(ledgerId, importedMappings)
     try {
-      await markImportedBankTransactions({
+      await dependencies.markImportedBankTransactions({
         transactions: importedMappings.map((item) => ({
           source_ref: item.sourceRef,
           imported_txn_id: item.importedTxnId,
@@ -748,30 +897,30 @@ export async function importSelectedBankTransactions(ledgerId, bankTransactionId
 
 export async function markBankReviewTransactionsSeen(ledgerId, ids = []) {
   assertLedgerId(ledgerId)
-  assertCanUseBankSync()
-  await markBankTransactionsSeen(ledgerId, ids)
+  await dependencies.assertCanUseBankSync()
+  await dependencies.markBankTransactionsSeen(ledgerId, ids)
 }
 
 export async function disconnectBankConnection(ledgerId, connectionId, options = {}) {
   assertLedgerId(ledgerId)
-  assertCanUseBankSync()
-  const connection = await findBankConnectionById(ledgerId, connectionId)
+  await dependencies.assertCanUseBankSync()
+  const connection = await dependencies.findBankConnectionById(ledgerId, connectionId)
   if (!connection) throw new Error('找不到銀行連結')
 
-  return traceBankSyncOperation('disconnect_bank_connection', {
+  return dependencies.traceBankSyncOperation('disconnect_bank_connection', {
     ledgerId,
     provider: connection.provider,
     connectionId,
   }, async () => {
     try {
       if (isFirstBankProviderId(connection.provider)) {
-        await disconnectBankAuth({
+        await dependencies.disconnectBankAuth({
           provider: connection.provider,
           connectionId: connection.id,
           connection_id: connection.provider_connection_id,
         })
       } else {
-        await disconnectBankAuth({
+        await dependencies.disconnectBankAuth({
           provider: connection.provider,
           connection_id: connection.provider_connection_id,
         })
@@ -780,7 +929,7 @@ export async function disconnectBankConnection(ledgerId, connectionId, options =
       // Keep disconnection resilient; local revoke still applies.
     }
 
-    await updateBankConnection(ledgerId, connectionId, {
+    await dependencies.updateBankConnection(ledgerId, connectionId, {
       status: 'revoked',
       lastSyncStatus: 'idle',
       lastError: '',
@@ -788,10 +937,10 @@ export async function disconnectBankConnection(ledgerId, connectionId, options =
     })
 
     if (options.clearMirrorData) {
-      await clearBankMirrorDataByConnection(ledgerId, connectionId)
+      await dependencies.clearBankMirrorDataByConnection(ledgerId, connectionId)
     }
 
-    await deleteEncryptedSetting(ledgerId, buildBankCredentialSettingKey(connectionId))
+    await dependencies.deleteEncryptedSetting(ledgerId, buildBankCredentialSettingKey(connectionId))
 
     return true
   })

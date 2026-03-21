@@ -53,6 +53,12 @@ const AUTH_NONCE_TTL_MS = Math.max(
   60_000,
   Number(process.env.SHARED_LEDGER_AUTH_NONCE_TTL_MS ?? 5 * 60 * 1000) || 0,
 )
+const ADMIN_EMAILS = new Set(
+  String(process.env.SHARED_LEDGER_ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((item) => normalizeEmail(item))
+    .filter(Boolean),
+)
 const DEFAULT_STORE = {
   users: [],
   shared_ledgers: [],
@@ -205,6 +211,15 @@ function secureEquals(left, right) {
   return timingSafeEqual(leftBuffer, rightBuffer)
 }
 
+function isAdminEmail(email) {
+  const normalized = normalizeEmail(email)
+  return normalized ? ADMIN_EMAILS.has(normalized) : false
+}
+
+function isAdminUser(user) {
+  return isAdminEmail(user?.email ?? user?.account)
+}
+
 function hashPassword(password, salt = randomBytes(16).toString('hex')) {
   const hash = scryptSync(String(password ?? ''), salt, 64).toString('hex')
   return { salt, hash }
@@ -267,6 +282,7 @@ function publicUser(user, options = {}) {
     membership_trial_eligible: membershipGrants.length === 0,
     shared_ledger_trial_used: Boolean(sharedLedgerTrialGrant),
     shared_ledger_trial_expires_at: String(sharedLedgerTrialGrant?.end_at ?? '').trim(),
+    is_admin: isAdminUser(user),
     created_at: user.created_at,
   }
 }
@@ -1645,6 +1661,8 @@ export {
   hashSensitiveToken,
   getMemberRole,
   getMembershipGrantSummary,
+  isAdminEmail,
+  isAdminUser,
   isSharedLedgerMember,
   issueAccessToken,
   listUserAuthProviders,

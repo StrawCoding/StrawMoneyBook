@@ -732,3 +732,50 @@ export async function redeemReferralCode(code) {
   updateSessionUser(data.user)
   return data
 }
+
+export async function uploadClientErrorLog(payload = {}) {
+  return requestJson('/api/client-logs', {
+    method: 'POST',
+    body: payload,
+    auth: Boolean(readSession()?.token),
+  })
+}
+
+export async function getAdminOverview() {
+  return requestJson('/api/admin')
+}
+
+export async function listAdminErrorLogs(reviewStatus = '') {
+  const suffix = reviewStatus ? `?reviewStatus=${encodeURIComponent(String(reviewStatus))}` : ''
+  return requestJson(`/api/admin/error-logs${suffix}`)
+}
+
+export async function reviewAdminErrorLog(logId, payload = {}) {
+  const normalizedId = String(logId ?? '').trim()
+  if (!normalizedId) throw new Error('缺少錯誤紀錄 ID')
+  return requestJson(`/api/admin/error-logs/${normalizedId}/review`, {
+    method: 'POST',
+    body: payload,
+  })
+}
+
+export async function updateAdminUserMembership(userId, payload = {}) {
+  const normalizedId = String(userId ?? '').trim()
+  if (!normalizedId) throw new Error('缺少使用者 ID')
+  const data = await requestJson(`/api/admin/users/${normalizedId}/membership`, {
+    method: 'POST',
+    body: payload,
+  })
+  if (normalizedId === String(readSession()?.user?.id ?? '').trim()) {
+    await refreshSharedLedgerSession().catch(() => null)
+  }
+  return data
+}
+
+export async function deleteAdminUser(userId) {
+  const normalizedId = String(userId ?? '').trim()
+  if (!normalizedId) throw new Error('缺少使用者 ID')
+  return requestJson(`/api/admin/users/${normalizedId}`, {
+    method: 'DELETE',
+  })
+}

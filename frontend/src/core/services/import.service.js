@@ -33,6 +33,8 @@ const TABLE_IMPORT_ORDER = [
   'bank_accounts',
   'bank_transactions',
   'bank_sync_rules',
+  'invoice_carrier_connections',
+  'invoice_carrier_invoices',
   'app_settings',
   'deleted_log',
 ]

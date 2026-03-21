@@ -1,5 +1,5 @@
 import { extractBearerToken } from './http.js'
-import { findUserById, readStore, verifyAccessToken } from './store.js'
+import { findUserById, isAdminUser, readStore, verifyAccessToken } from './store.js'
 
 export async function requireAuthenticatedUser(req, res, sendJson, options = {}) {
   const token = extractBearerToken(req)
@@ -31,4 +31,16 @@ export async function requireAuthenticatedUser(req, res, sendJson, options = {})
   }
 
   return user
+}
+
+export async function requireAdminUser(req, res, sendJson, options = {}) {
+  const user = await requireAuthenticatedUser(req, res, sendJson, options)
+  if (!user) return null
+  if (isAdminUser(user)) return user
+
+  sendJson(res, 403, {
+    error: 'admin_required',
+    message: '需要管理員權限',
+  })
+  return null
 }
