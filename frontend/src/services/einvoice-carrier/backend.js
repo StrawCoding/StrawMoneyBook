@@ -4,6 +4,7 @@ import { translateMessage } from '../../ui/services/i18n.service.js'
 const IMPORT_META_ENV = import.meta.env ?? {}
 const DEFAULT_EINVOICE_API_BASE = String(IMPORT_META_ENV.VITE_EINVOICE_API_BASE_URL ?? '').trim()
 const EINVOICE_CLIENT_SHARED_KEY = String(IMPORT_META_ENV.VITE_EINVOICE_CLIENT_SHARED_KEY ?? '').trim()
+const PROD_DEFAULT_EINVOICE_API_BASE = 'https://www.strawmb.com'
 const t = (key, fallback) => translateMessage(key, fallback)
 
 const PROVIDERS_FALLBACK = [
@@ -24,13 +25,33 @@ function buildApiUrl(path) {
   if (!normalizedPath.startsWith('/')) {
     throw new Error(`invalid einvoice api path: ${normalizedPath}`)
   }
-  if (!DEFAULT_EINVOICE_API_BASE) return normalizedPath
-  return `${DEFAULT_EINVOICE_API_BASE.replace(/\/$/, '')}${normalizedPath}`
+  const apiBase = getEinvoiceApiBase()
+  if (!apiBase) return normalizedPath
+  return `${apiBase.replace(/\/$/, '')}${normalizedPath}`
+}
+
+export function resolveEinvoiceApiBaseForRuntime(options = {}) {
+  const explicitBase = normalizeText(options.explicitBase ?? DEFAULT_EINVOICE_API_BASE)
+  const platform = normalizeText(options.platform ?? Capacitor.getPlatform()).toLowerCase() || 'web'
+  const isProd = options.isProd ?? Boolean(import.meta.env.PROD)
+
+  if (explicitBase) return explicitBase
+  if (platform !== 'web' && isProd) return PROD_DEFAULT_EINVOICE_API_BASE
+  return ''
+}
+
+export function shouldRequireExplicitEinvoiceApiBaseForRuntime(options = {}) {
+  const platform = normalizeText(options.platform ?? Capacitor.getPlatform()).toLowerCase() || 'web'
+  if (platform === 'web') return false
+  return !resolveEinvoiceApiBaseForRuntime(options)
+}
+
+function getEinvoiceApiBase() {
+  return resolveEinvoiceApiBaseForRuntime()
 }
 
 function shouldRequireExplicitApiBase() {
-  if (DEFAULT_EINVOICE_API_BASE) return false
-  return Capacitor.getPlatform() !== 'web'
+  return shouldRequireExplicitEinvoiceApiBaseForRuntime()
 }
 
 function createMissingEinvoiceApiError() {

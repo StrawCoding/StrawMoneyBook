@@ -79,6 +79,14 @@
             </select>
           </label>
           <label>
+            <span>{{ t('invoice_carrier.local_filter.imported', '匯入狀態') }}</span>
+            <select v-model="localFilter.imported" class="input">
+              <option value="all">{{ t('invoice_carrier.local_filter.imported_all', '全部') }}</option>
+              <option value="imported">{{ t('invoice_carrier.local_filter.imported_only', '已匯入') }}</option>
+              <option value="unimported">{{ t('invoice_carrier.local_filter.unimported_only', '未匯入') }}</option>
+            </select>
+          </label>
+          <label>
             <span>{{ t('invoice_carrier.local_filter.status', '發票狀態') }}</span>
             <select v-model="localFilter.invoiceStatus" class="input">
               <option value="all">{{ t('invoice_carrier.filter.status_all', '全部發票') }}</option>
@@ -99,6 +107,24 @@
       </article>
 
       <article class="card panel">
+        <div class="row action-row import-row">
+          <label class="import-account-field">
+            <span>{{ t('invoice_carrier.detail.import_account', '匯入帳戶') }}</span>
+            <select v-model="targetAccountId" class="input">
+              <option value="">{{ t('invoice_carrier.detail.import_account_placeholder', '請選擇帳戶') }}</option>
+              <option v-for="option in accountOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+          <button class="btn" :disabled="savingTargetAccount || !connection" :aria-busy="savingTargetAccount" @click="saveTargetAccount">
+            {{ savingTargetAccount ? t('common.processing', '處理中') : t('invoice_carrier.detail.save_import_account', '儲存匯入帳戶') }}
+          </button>
+          <button class="btn primary" :disabled="importing || !selectedIds.length || !targetAccountId" :aria-busy="importing" @click="importSelection">
+            {{ importing ? t('common.processing', '處理中') : t('invoice_carrier.detail.import_selected', { count: selectedIds.length }, '匯入所選 {count} 筆') }}
+          </button>
+        </div>
+
         <div class="row action-row">
           <button class="btn" @click="selectAllRows">{{ t('invoice_carrier.select_all', '全選') }}</button>
           <button class="btn" @click="clearSelection">{{ t('invoice_carrier.select_none', '取消全選') }}</button>
@@ -121,7 +147,10 @@
                 <strong>{{ row.invoice_number }}</strong>
                 <small class="muted">{{ row.seller_name || '-' }}</small>
               </span>
-              <span class="status-chip" :class="{ viewed: row.is_viewed === 1 }">{{ row.is_viewed === 1 ? t('invoice_carrier.viewed', '已檢視') : t('invoice_carrier.unviewed', '未檢視') }}</span>
+              <span class="item-chip-wrap">
+                <span class="status-chip" :class="{ viewed: row.is_viewed === 1 }">{{ row.is_viewed === 1 ? t('invoice_carrier.viewed', '已檢視') : t('invoice_carrier.unviewed', '未檢視') }}</span>
+                <span class="status-chip" :class="{ imported: row.imported === 1 }">{{ row.imported === 1 ? t('invoice_carrier.imported', '已匯入') : t('invoice_carrier.unimported', '未匯入') }}</span>
+              </span>
             </label>
             <div class="item-body">
               <div class="row line">
@@ -129,6 +158,9 @@
                 <span class="muted">{{ row.invoice_date }}</span>
               </div>
               <small class="muted">{{ row.carrier_label || '-' }} / {{ invoiceStatusLabel(row.invoice_status) }}</small>
+              <small v-if="row.imported === 1" class="muted">
+                {{ t('invoice_carrier.detail.imported_account', '已匯入帳戶') }}: {{ row.mapped_account_name || t('invoice_carrier.detail.imported_account_unknown', '已選帳戶') }}
+              </small>
               <small v-if="row.buyer_ban" class="muted">{{ t('invoice_carrier.filter.buyer_ban', '買方統編') }}: {{ row.buyer_ban }}</small>
             </div>
           </li>
@@ -141,14 +173,18 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useAccountStore } from '@/ui/stores/account.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import {
   getDefaultEinvoiceSyncFilter,
   getInvoiceCarrierConnectionDetail,
+  importSelectedInvoiceCarrierInvoices,
   listInvoiceCarrierMirrorInvoices,
   markInvoiceCarrierMirrorInvoicesViewed,
+  saveInvoiceCarrierConnectionSettings,
   syncInvoiceCarrierNow,
 } from '@/ui/services/einvoice-carrier.service'
 import {
@@ -159,7 +195,9 @@ import {
 
 const route = useRoute()
 const router = useRouter()
+const accountStore = useAccountStore()
 const ledgerStore = useLedgerStore()
+const transactionStore = useTransactionStore()
 const uiStore = useUiStore()
 const { t } = useI18n()
 
@@ -169,18 +207,28 @@ const apiUnavailableMessage = getEinvoiceCarrierApiUnavailableMessage()
 const loading = ref(false)
 const syncing = ref(false)
 const marking = ref(false)
+const importing = ref(false)
+const savingTargetAccount = ref(false)
 const connection = ref(null)
 const invoices = ref([])
 const selectedIds = ref([])
+const targetAccountId = ref('')
 const syncFilter = reactive(getDefaultEinvoiceSyncFilter())
 const localFilter = reactive({
   searchText: '',
   viewed: 'all',
+  imported: 'all',
   invoiceStatus: 'all',
   dateFrom: '',
   dateTo: '',
 })
 
+const accountOptions = computed(() => (
+  accountStore.regularAccounts.map((account) => ({
+    value: account.id,
+    label: account.name,
+  }))
+))
 const carrierOptions = computed(() => {
   const options = Array.isArray(connection.value?.carrier_options) ? connection.value.carrier_options : []
   if (!options.length) {
@@ -195,6 +243,8 @@ const filteredInvoices = computed(() => {
   return invoices.value.filter((row) => {
     if (localFilter.viewed === 'viewed' && Number(row.is_viewed ?? 0) !== 1) return false
     if (localFilter.viewed === 'unviewed' && Number(row.is_viewed ?? 0) === 1) return false
+    if (localFilter.imported === 'imported' && Number(row.imported ?? 0) !== 1) return false
+    if (localFilter.imported === 'unimported' && Number(row.imported ?? 0) === 1) return false
     if (localFilter.invoiceStatus !== 'all' && String(row.invoice_status ?? '') !== localFilter.invoiceStatus) return false
     if (localFilter.dateFrom && String(row.invoice_date ?? '') < localFilter.dateFrom) return false
     if (localFilter.dateTo && String(row.invoice_date ?? '') > localFilter.dateTo) return false
@@ -249,8 +299,10 @@ async function loadAll() {
   if (!ledgerId || !connectionId) return
   loading.value = true
   try {
+    await accountStore.load()
     connection.value = await getInvoiceCarrierConnectionDetail(ledgerId, connectionId)
     hydrateSyncFilterFromConnection(connection.value)
+    targetAccountId.value = String(connection.value?.mapped_account_id ?? '').trim()
     invoices.value = await listInvoiceCarrierMirrorInvoices(ledgerId, { connectionId })
     resetSelection()
   } catch (error) {
@@ -320,6 +372,49 @@ async function markSelection(isViewed) {
   }
 }
 
+async function saveTargetAccount() {
+  const ledgerId = ledgerStore.activeLedgerId
+  const connectionId = String(route.params.id ?? '').trim()
+  if (!ledgerId || !connectionId) return
+  savingTargetAccount.value = true
+  try {
+    connection.value = await saveInvoiceCarrierConnectionSettings(ledgerId, connectionId, {
+      mappedAccountId: targetAccountId.value,
+    })
+    targetAccountId.value = String(connection.value?.mapped_account_id ?? '').trim()
+    uiStore.pushToast(t('invoice_carrier.toast.import_account_saved', '已儲存匯入帳戶'))
+  } catch (error) {
+    uiStore.pushToast(String(error?.message ?? '儲存匯入帳戶失敗'), 'error')
+  } finally {
+    savingTargetAccount.value = false
+  }
+}
+
+async function importSelection() {
+  const ledgerId = ledgerStore.activeLedgerId
+  const connectionId = String(route.params.id ?? '').trim()
+  if (!ledgerId || !connectionId || !selectedIds.value.length || !targetAccountId.value) return
+  importing.value = true
+  try {
+    const result = await importSelectedInvoiceCarrierInvoices(ledgerId, connectionId, selectedIds.value, {
+      accountId: targetAccountId.value,
+    })
+    uiStore.pushToast(
+      t(
+        'invoice_carrier.toast.import_done',
+        { imported: result.importedCount, skipped: result.skippedCount },
+        '已匯入 {imported} 筆，略過 {skipped} 筆',
+      ),
+    )
+    await transactionStore.refreshAfterWriteSafe(2500)
+    await loadAll()
+  } catch (error) {
+    uiStore.pushToast(String(error?.message ?? '匯入發票失敗'), 'error')
+  } finally {
+    importing.value = false
+  }
+}
+
 onMounted(() => {
   if (!featureEnabled) {
     void router.replace({ name: 'features' })
@@ -351,6 +446,16 @@ onMounted(() => {
   gap: 8px;
   flex-wrap: wrap;
 }
+.import-row {
+  align-items: flex-end;
+}
+.import-account-field {
+  display: grid;
+  gap: 8px;
+  font-weight: 700;
+  flex: 1 1 260px;
+  min-width: min(320px, 100%);
+}
 .reauth-banner {
   margin: 0 0 12px;
   color: var(--warn);
@@ -374,6 +479,12 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.item-chip-wrap {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
 }
 .item-main {
   display: grid;
@@ -399,5 +510,9 @@ onMounted(() => {
 .status-chip.viewed {
   background: color-mix(in srgb, var(--ok) 12%, transparent);
   color: var(--ok);
+}
+.status-chip.imported {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
 }
 </style>

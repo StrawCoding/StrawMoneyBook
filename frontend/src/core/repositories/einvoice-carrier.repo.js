@@ -77,6 +77,8 @@ function normalizeConnectionRow(row) {
     last_sync_status: normalizeSyncStatus(source.last_sync_status),
     sync_filter: parseJsonObject(source.sync_filter_json),
     carrier_options: normalizeCarrierOptions(parseJsonArray(source.carrier_options_json)),
+    mapped_account_id: normalizeText(source.mapped_account_id) || null,
+    mapped_account_name: normalizeText(source.mapped_account_name) || null,
   }
 }
 
@@ -91,9 +93,15 @@ function normalizeInvoiceRow(row) {
     ...source,
     invoice_status: normalizeInvoiceStatus(source.invoice_status),
     is_viewed: Number(source.is_viewed ?? 0) === 1 ? 1 : 0,
+    imported: normalizeText(source.imported_txn_exists) ? 1 : 0,
+    imported_txn_id: normalizeText(source.imported_txn_id) || null,
     amount_minor: Math.round(Number(source.amount_minor ?? 0) || 0),
     raw: parseJsonObject(source.raw_json),
   }
+}
+
+function toSqlInPlaceholders(values = []) {
+  return Array.isArray(values) ? values.map(() => '?').join(', ') : ''
 }
 
 export function resetEinvoiceCarrierRepoDependenciesForTest() {
@@ -107,13 +115,18 @@ export function setEinvoiceCarrierRepoDependenciesForTest(overrides = {}) {
 export async function listInvoiceCarrierConnections(ledgerId) {
   assertLedgerId(ledgerId)
   const result = await dependencies.query(
-    `SELECT ledger_id, id, provider, auth_mode, provider_connection_id, status, user_label,
-            last_sync_at, last_sync_status, last_error, sync_filter_json, carrier_options_json,
-            created_at, updated_at, deleted_at
-     FROM invoice_carrier_connections
-     WHERE ledger_id = ?
-       AND deleted_at IS NULL
-     ORDER BY updated_at DESC, created_at DESC;`,
+    `SELECT ic.ledger_id, ic.id, ic.provider, ic.auth_mode, ic.provider_connection_id, ic.status, ic.user_label,
+            ic.last_sync_at, ic.last_sync_status, ic.last_error, ic.sync_filter_json, ic.carrier_options_json,
+            ic.mapped_account_id, ic.created_at, ic.updated_at, ic.deleted_at,
+            a.name AS mapped_account_name
+     FROM invoice_carrier_connections ic
+     LEFT JOIN accounts a
+       ON a.ledger_id = ic.ledger_id
+      AND a.id = ic.mapped_account_id
+      AND a.deleted_at IS NULL
+     WHERE ic.ledger_id = ?
+       AND ic.deleted_at IS NULL
+     ORDER BY ic.updated_at DESC, ic.created_at DESC;`,
     [ledgerId],
   )
   return rowsOf(result).map(normalizeConnectionRow)
@@ -124,13 +137,18 @@ export async function findInvoiceCarrierConnectionById(ledgerId, connectionId) {
   const normalizedConnectionId = normalizeText(connectionId)
   if (!normalizedConnectionId) return null
   const result = await dependencies.query(
-    `SELECT ledger_id, id, provider, auth_mode, provider_connection_id, status, user_label,
-            last_sync_at, last_sync_status, last_error, sync_filter_json, carrier_options_json,
-            created_at, updated_at, deleted_at
-     FROM invoice_carrier_connections
-     WHERE ledger_id = ?
-       AND id = ?
-       AND deleted_at IS NULL
+    `SELECT ic.ledger_id, ic.id, ic.provider, ic.auth_mode, ic.provider_connection_id, ic.status, ic.user_label,
+            ic.last_sync_at, ic.last_sync_status, ic.last_error, ic.sync_filter_json, ic.carrier_options_json,
+            ic.mapped_account_id, ic.created_at, ic.updated_at, ic.deleted_at,
+            a.name AS mapped_account_name
+     FROM invoice_carrier_connections ic
+     LEFT JOIN accounts a
+       ON a.ledger_id = ic.ledger_id
+      AND a.id = ic.mapped_account_id
+      AND a.deleted_at IS NULL
+     WHERE ic.ledger_id = ?
+       AND ic.id = ?
+       AND ic.deleted_at IS NULL
      LIMIT 1;`,
     [ledgerId, normalizedConnectionId],
   )
@@ -145,15 +163,20 @@ export async function findInvoiceCarrierConnectionByProviderRef(ledgerId, provid
   const normalizedProviderConnectionId = normalizeText(providerConnectionId)
   if (!normalizedProvider || !normalizedProviderConnectionId) return null
   const result = await dependencies.query(
-    `SELECT ledger_id, id, provider, auth_mode, provider_connection_id, status, user_label,
-            last_sync_at, last_sync_status, last_error, sync_filter_json, carrier_options_json,
-            created_at, updated_at, deleted_at
-     FROM invoice_carrier_connections
-     WHERE ledger_id = ?
-       AND provider = ?
-       AND auth_mode = ?
-       AND provider_connection_id = ?
-       AND deleted_at IS NULL
+    `SELECT ic.ledger_id, ic.id, ic.provider, ic.auth_mode, ic.provider_connection_id, ic.status, ic.user_label,
+            ic.last_sync_at, ic.last_sync_status, ic.last_error, ic.sync_filter_json, ic.carrier_options_json,
+            ic.mapped_account_id, ic.created_at, ic.updated_at, ic.deleted_at,
+            a.name AS mapped_account_name
+     FROM invoice_carrier_connections ic
+     LEFT JOIN accounts a
+       ON a.ledger_id = ic.ledger_id
+      AND a.id = ic.mapped_account_id
+      AND a.deleted_at IS NULL
+     WHERE ic.ledger_id = ?
+       AND ic.provider = ?
+       AND ic.auth_mode = ?
+       AND ic.provider_connection_id = ?
+       AND ic.deleted_at IS NULL
      LIMIT 1;`,
     [ledgerId, normalizedProvider, normalizedAuthMode, normalizedProviderConnectionId],
   )
@@ -178,9 +201,9 @@ export async function upsertInvoiceCarrierConnection(ledgerId, input = {}) {
   await dependencies.run(
     `INSERT INTO invoice_carrier_connections (
       ledger_id, id, provider, auth_mode, provider_connection_id, status, user_label,
-      last_sync_at, last_sync_status, last_error, sync_filter_json, carrier_options_json,
+      last_sync_at, last_sync_status, last_error, sync_filter_json, carrier_options_json, mapped_account_id,
       created_at, updated_at, deleted_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
     ON CONFLICT(ledger_id, id)
     DO UPDATE SET
       provider = excluded.provider,
@@ -193,6 +216,7 @@ export async function upsertInvoiceCarrierConnection(ledgerId, input = {}) {
       last_error = excluded.last_error,
       sync_filter_json = excluded.sync_filter_json,
       carrier_options_json = excluded.carrier_options_json,
+      mapped_account_id = excluded.mapped_account_id,
       updated_at = excluded.updated_at,
       deleted_at = NULL;`,
     [
@@ -208,6 +232,7 @@ export async function upsertInvoiceCarrierConnection(ledgerId, input = {}) {
       normalizeText(input.lastError ?? existing?.last_error) || null,
       JSON.stringify(input.syncFilter ?? existing?.sync_filter ?? {}),
       JSON.stringify(normalizeCarrierOptions(input.carrierOptions ?? existing?.carrier_options ?? [])),
+      normalizeText(input.mappedAccountId ?? existing?.mapped_account_id) || null,
       existing?.created_at || now,
       now,
     ],
@@ -230,6 +255,7 @@ export async function updateInvoiceCarrierConnection(ledgerId, connectionId, pat
          last_error = ?,
          sync_filter_json = ?,
          carrier_options_json = ?,
+         mapped_account_id = ?,
          updated_at = ?,
          deleted_at = ?
      WHERE ledger_id = ? AND id = ?;`,
@@ -241,6 +267,7 @@ export async function updateInvoiceCarrierConnection(ledgerId, connectionId, pat
       normalizeText(patch.lastError ?? existing.last_error) || null,
       JSON.stringify(patch.syncFilter ?? existing.sync_filter ?? {}),
       JSON.stringify(normalizeCarrierOptions(patch.carrierOptions ?? existing.carrier_options ?? [])),
+      normalizeText(patch.mappedAccountId ?? existing.mapped_account_id) || null,
       dependencies.nowIso(),
       patch.deletedAt === undefined ? (existing.deleted_at || null) : (normalizeText(patch.deletedAt) || null),
       ledgerId,
@@ -265,19 +292,66 @@ export async function listInvoiceCarrierInvoices(ledgerId, options = {}) {
   const result = await dependencies.query(
     `SELECT ici.ledger_id, ici.id, ici.connection_id, ici.provider_invoice_key, ici.invoice_number,
             ici.invoice_date, ici.amount_minor, ici.seller_name, ici.carrier_label, ici.buyer_ban,
-            ici.invoice_status, ici.is_viewed, ici.raw_json, ici.first_seen_at, ici.last_seen_at,
+            ici.invoice_status, ici.is_viewed, ici.imported, ici.imported_txn_id, ici.raw_json, ici.first_seen_at, ici.last_seen_at,
             ici.created_at, ici.updated_at, ici.deleted_at,
-            ic.provider, ic.auth_mode, ic.user_label AS connection_user_label
+            ic.provider, ic.auth_mode, ic.provider_connection_id, ic.user_label AS connection_user_label,
+            ic.mapped_account_id, a.name AS mapped_account_name,
+            tx.id AS imported_txn_exists
      FROM invoice_carrier_invoices ici
      INNER JOIN invoice_carrier_connections ic
        ON ic.ledger_id = ici.ledger_id
       AND ic.id = ici.connection_id
       AND ic.deleted_at IS NULL
+     LEFT JOIN accounts a
+       ON a.ledger_id = ic.ledger_id
+      AND a.id = ic.mapped_account_id
+      AND a.deleted_at IS NULL
+     LEFT JOIN transactions tx
+       ON tx.ledger_id = ici.ledger_id
+      AND tx.id = ici.imported_txn_id
+      AND tx.deleted_at IS NULL
      ${whereSql}
      ORDER BY ici.invoice_date DESC, ici.updated_at DESC, ici.created_at DESC;`,
     values,
   )
 
+  return rowsOf(result).map(normalizeInvoiceRow)
+}
+
+export async function listInvoiceCarrierInvoicesByIds(ledgerId, invoiceIds = []) {
+  assertLedgerId(ledgerId)
+  const normalizedIds = Array.isArray(invoiceIds)
+    ? Array.from(new Set(invoiceIds.map((item) => normalizeText(item)).filter(Boolean)))
+    : []
+  if (!normalizedIds.length) return []
+  const placeholders = toSqlInPlaceholders(normalizedIds)
+  const result = await dependencies.query(
+    `SELECT ici.ledger_id, ici.id, ici.connection_id, ici.provider_invoice_key, ici.invoice_number,
+            ici.invoice_date, ici.amount_minor, ici.seller_name, ici.carrier_label, ici.buyer_ban,
+            ici.invoice_status, ici.is_viewed, ici.imported, ici.imported_txn_id, ici.raw_json, ici.first_seen_at, ici.last_seen_at,
+            ici.created_at, ici.updated_at, ici.deleted_at,
+            ic.provider, ic.auth_mode, ic.provider_connection_id, ic.user_label AS connection_user_label,
+            ic.mapped_account_id, a.name AS mapped_account_name,
+            tx.id AS imported_txn_exists
+     FROM invoice_carrier_invoices ici
+     INNER JOIN invoice_carrier_connections ic
+       ON ic.ledger_id = ici.ledger_id
+      AND ic.id = ici.connection_id
+      AND ic.deleted_at IS NULL
+     LEFT JOIN accounts a
+       ON a.ledger_id = ic.ledger_id
+      AND a.id = ic.mapped_account_id
+      AND a.deleted_at IS NULL
+     LEFT JOIN transactions tx
+       ON tx.ledger_id = ici.ledger_id
+      AND tx.id = ici.imported_txn_id
+      AND tx.deleted_at IS NULL
+     WHERE ici.ledger_id = ?
+       AND ici.id IN (${placeholders})
+       AND ici.deleted_at IS NULL
+     ORDER BY ici.invoice_date DESC, ici.updated_at DESC, ici.created_at DESC;`,
+    [ledgerId, ...normalizedIds],
+  )
   return rowsOf(result).map(normalizeInvoiceRow)
 }
 
@@ -375,6 +449,48 @@ export async function markInvoiceCarrierInvoicesViewed(ledgerId, invoiceIds = []
     ],
   )
   return { updatedCount: normalizedIds.length }
+}
+
+export async function markInvoiceCarrierInvoicesImported(ledgerId, mappings = []) {
+  assertLedgerId(ledgerId)
+  if (!Array.isArray(mappings) || !mappings.length) return { updatedCount: 0 }
+  const now = dependencies.nowIso()
+  let updatedCount = 0
+  for (const mapping of mappings) {
+    const invoiceId = normalizeText(mapping?.invoiceId)
+    const importedTxnId = normalizeText(mapping?.importedTxnId)
+    if (!invoiceId || !importedTxnId) continue
+    await dependencies.run(
+      `UPDATE invoice_carrier_invoices
+       SET imported = 1,
+           imported_txn_id = ?,
+           is_viewed = 1,
+           updated_at = ?
+       WHERE ledger_id = ?
+         AND id = ?
+         AND deleted_at IS NULL;`,
+      [importedTxnId, now, ledgerId, invoiceId],
+    )
+    updatedCount += 1
+  }
+  return { updatedCount }
+}
+
+export async function findImportedLedgerTransactionBySourceRef(ledgerId, sourceRef) {
+  assertLedgerId(ledgerId)
+  const normalizedSourceRef = normalizeText(sourceRef)
+  if (!normalizedSourceRef) return null
+  const result = await dependencies.query(
+    `SELECT id, type, account_id, amount_minor, occurred_at
+     FROM transactions
+     WHERE ledger_id = ?
+       AND origin_type = 'import'
+       AND external_ref_id = ?
+       AND deleted_at IS NULL
+     LIMIT 1;`,
+    [ledgerId, normalizedSourceRef],
+  )
+  return firstRow(result)
 }
 
 export async function clearInvoiceCarrierMirrorDataByConnection(ledgerId, connectionId) {

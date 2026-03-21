@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   connectInvoiceCarrier,
   getInvoiceCarrierState,
+  importSelectedInvoiceCarrierInvoices,
   resetEinvoiceCarrierServiceDependenciesForTest,
   setEinvoiceCarrierServiceDependenciesForTest,
   syncInvoiceCarrierNow,
@@ -164,4 +165,71 @@ test('getInvoiceCarrierState summarizes local invoice counts', async () => {
   const state = await getInvoiceCarrierState('ledger-1')
   assert.equal(state[0].totalInvoiceCount, 2)
   assert.equal(state[0].unviewedInvoiceCount, 1)
+})
+
+test('importSelectedInvoiceCarrierInvoices creates expense transactions and marks imported rows', async () => {
+  const createdTransactions = []
+  const importedMappings = []
+  const connectionPatches = []
+
+  setEinvoiceCarrierServiceDependenciesForTest(createBaseDependencies({
+    findInvoiceCarrierConnectionById: async () => ({
+      id: 'conn-1',
+      provider: 'tw_einvoice_mobile_barcode',
+      auth_mode: 'mobile_barcode',
+      provider_connection_id: '0912345678',
+      status: 'active',
+      mapped_account_id: '',
+      sync_filter: {},
+      carrier_options: [],
+    }),
+    listInvoiceCarrierInvoicesByIds: async () => [{
+      id: 'inv-1',
+      connection_id: 'conn-1',
+      provider: 'tw_einvoice_mobile_barcode',
+      provider_connection_id: '0912345678',
+      provider_invoice_key: 'AB12345678|2026-03-20|27000|測試商店|手機條碼',
+      invoice_number: 'AB12345678',
+      invoice_date: '2026-03-20',
+      amount_minor: 27000,
+      seller_name: '測試商店',
+      carrier_label: '手機條碼',
+      imported: 0,
+      imported_txn_id: null,
+    }],
+    updateInvoiceCarrierConnection: async (_ledgerId, _connectionId, patch) => {
+      connectionPatches.push(patch)
+      return {}
+    },
+    findImportedLedgerTransactionBySourceRef: async () => null,
+    addTransaction: async (_ledgerId, input) => {
+      createdTransactions.push(input)
+      return 'tx-1'
+    },
+    markInvoiceCarrierInvoicesImported: async (_ledgerId, mappings) => {
+      importedMappings.push(...mappings)
+      return { updatedCount: mappings.length }
+    },
+  }))
+
+  const result = await importSelectedInvoiceCarrierInvoices('ledger-1', 'conn-1', ['inv-1'], {
+    accountId: 'account-1',
+  })
+
+  assert.equal(result.importedCount, 1)
+  assert.equal(result.skippedCount, 0)
+  assert.equal(createdTransactions.length, 1)
+  assert.equal(createdTransactions[0].type, 'expense')
+  assert.equal(createdTransactions[0].accountId, 'account-1')
+  assert.equal(createdTransactions[0].amountMinor, -27000)
+  assert.match(createdTransactions[0].externalRefId, /^einvoice:tw_einvoice_mobile_barcode:0912345678:/)
+  assert.equal(importedMappings.length, 1)
+  assert.deepEqual(importedMappings[0], {
+    invoiceId: 'inv-1',
+    importedTxnId: 'tx-1',
+    sourceRef: createdTransactions[0].externalRefId,
+  })
+  assert.deepEqual(connectionPatches, [{
+    mappedAccountId: 'account-1',
+  }])
 })

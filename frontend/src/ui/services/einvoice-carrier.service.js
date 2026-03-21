@@ -6,9 +6,15 @@ import {
   syncEinvoiceInvoices,
 } from '../../services/einvoice-carrier/backend.js'
 import { buildDefaultEinvoiceSyncFilter, normalizeEinvoiceSyncFilter } from '../../services/einvoice-carrier/shared.js'
+import { yieldToMainThread } from '../../core/utils/cooperative-yield.js'
 
 function assertLedgerId(ledgerId) {
   if (!ledgerId) throw new Error('缺少帳本 ID')
+}
+
+async function defaultAddTransaction(...args) {
+  const mod = await import('../../core/repositories/transaction.repo.js')
+  return mod.addTransaction(...args)
 }
 
 async function defaultClearInvoiceCarrierMirrorDataByConnection(...args) {
@@ -26,6 +32,11 @@ async function defaultFindInvoiceCarrierConnectionById(...args) {
   return mod.findInvoiceCarrierConnectionById(...args)
 }
 
+async function defaultFindImportedLedgerTransactionBySourceRef(...args) {
+  const mod = await import('../../core/repositories/einvoice-carrier.repo.js')
+  return mod.findImportedLedgerTransactionBySourceRef(...args)
+}
+
 async function defaultGetEncryptedSetting(...args) {
   const mod = await import('./secure-setting.service.js')
   return mod.getEncryptedSetting(...args)
@@ -41,9 +52,19 @@ async function defaultListInvoiceCarrierInvoices(...args) {
   return mod.listInvoiceCarrierInvoices(...args)
 }
 
+async function defaultListInvoiceCarrierInvoicesByIds(...args) {
+  const mod = await import('../../core/repositories/einvoice-carrier.repo.js')
+  return mod.listInvoiceCarrierInvoicesByIds(...args)
+}
+
 async function defaultMarkInvoiceCarrierInvoicesViewed(...args) {
   const mod = await import('../../core/repositories/einvoice-carrier.repo.js')
   return mod.markInvoiceCarrierInvoicesViewed(...args)
+}
+
+async function defaultMarkInvoiceCarrierInvoicesImported(...args) {
+  const mod = await import('../../core/repositories/einvoice-carrier.repo.js')
+  return mod.markInvoiceCarrierInvoicesImported(...args)
 }
 
 async function defaultSetEncryptedSetting(...args) {
@@ -67,22 +88,27 @@ async function defaultUpsertInvoiceCarrierInvoices(...args) {
 }
 
 const defaultDependencies = {
+  addTransaction: defaultAddTransaction,
   clearInvoiceCarrierMirrorDataByConnection: defaultClearInvoiceCarrierMirrorDataByConnection,
   createEinvoiceLinkSession,
   deleteEncryptedSetting: defaultDeleteEncryptedSetting,
   disconnectEinvoiceAuth,
   exchangeEinvoiceAuth,
   findInvoiceCarrierConnectionById: defaultFindInvoiceCarrierConnectionById,
+  findImportedLedgerTransactionBySourceRef: defaultFindImportedLedgerTransactionBySourceRef,
   getEncryptedSetting: defaultGetEncryptedSetting,
   listInvoiceCarrierConnections: defaultListInvoiceCarrierConnections,
   listInvoiceCarrierInvoices: defaultListInvoiceCarrierInvoices,
+  listInvoiceCarrierInvoicesByIds: defaultListInvoiceCarrierInvoicesByIds,
   listEinvoiceCarrierProviders,
+  markInvoiceCarrierInvoicesImported: defaultMarkInvoiceCarrierInvoicesImported,
   markInvoiceCarrierInvoicesViewed: defaultMarkInvoiceCarrierInvoicesViewed,
   setEncryptedSetting: defaultSetEncryptedSetting,
   syncEinvoiceInvoices,
   updateInvoiceCarrierConnection: defaultUpdateInvoiceCarrierConnection,
   upsertInvoiceCarrierConnection: defaultUpsertInvoiceCarrierConnection,
   upsertInvoiceCarrierInvoices: defaultUpsertInvoiceCarrierInvoices,
+  yieldToMainThread,
 }
 
 const dependencies = { ...defaultDependencies }
@@ -137,6 +163,8 @@ function parseStoredConnection(connection) {
       ? connection.sync_filter
       : {},
     carrier_options: Array.isArray(connection.carrier_options) ? connection.carrier_options : [],
+    mapped_account_id: normalizeText(connection.mapped_account_id) || null,
+    mapped_account_name: normalizeText(connection.mapped_account_name) || null,
   }
 }
 
@@ -146,8 +174,47 @@ function normalizeInvoiceViewRow(row) {
     ...source,
     invoice_status: normalizeText(source.invoice_status || 'all') || 'all',
     is_viewed: Number(source.is_viewed ?? 0) === 1 ? 1 : 0,
+    imported: Number(source.imported ?? 0) === 1 ? 1 : 0,
+    imported_txn_id: normalizeText(source.imported_txn_id) || null,
     amount_minor: Math.round(Number(source.amount_minor ?? 0) || 0),
   }
+}
+
+function isUniqueConstraintError(error) {
+  const message = String(error?.message ?? error ?? '').toLowerCase()
+  return message.includes('unique constraint') || message.includes('constraint failed')
+}
+
+function buildEinvoiceImportSourceRef(connection = {}, invoice = {}) {
+  return [
+    'einvoice',
+    normalizeText(connection.provider),
+    normalizeText(connection.provider_connection_id),
+    normalizeText(invoice.provider_invoice_key || invoice.providerInvoiceKey),
+  ].join(':')
+}
+
+function buildEinvoiceOccurredAt(invoiceDate) {
+  const normalizedDate = normalizeText(invoiceDate)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+    return `${normalizedDate}T12:00:00.000Z`
+  }
+  return new Date().toISOString()
+}
+
+function buildEinvoiceImportNote(invoice = {}) {
+  const parts = []
+  const sellerName = normalizeText(invoice.seller_name || invoice.sellerName)
+  const invoiceNumber = normalizeText(invoice.invoice_number || invoice.invoiceNumber)
+  const carrierLabel = normalizeText(invoice.carrier_label || invoice.carrierLabel)
+  const buyerBan = normalizeText(invoice.buyer_ban || invoice.buyerBan)
+
+  if (sellerName) parts.push(`店家：${sellerName}`)
+  if (invoiceNumber) parts.push(`發票：${invoiceNumber}`)
+  if (carrierLabel) parts.push(`載具：${carrierLabel}`)
+  if (buyerBan) parts.push(`統編：${buyerBan}`)
+
+  return parts.join(' / ') || '電子發票載具匯入'
 }
 
 async function hydrateConnectionSummary(ledgerId, connection) {
@@ -207,6 +274,16 @@ export async function getInvoiceCarrierConnectionDetail(ledgerId, connectionId) 
   const connection = await dependencies.findInvoiceCarrierConnectionById(ledgerId, connectionId)
   if (!connection) throw new Error('找不到發票載具連線')
   return hydrateConnectionSummary(ledgerId, parseStoredConnection(connection))
+}
+
+export async function saveInvoiceCarrierConnectionSettings(ledgerId, connectionId, patch = {}) {
+  assertLedgerId(ledgerId)
+  const connection = await dependencies.findInvoiceCarrierConnectionById(ledgerId, connectionId)
+  if (!connection) throw new Error('找不到發票載具連線')
+  await dependencies.updateInvoiceCarrierConnection(ledgerId, connectionId, {
+    mappedAccountId: normalizeText(patch.mappedAccountId) || null,
+  })
+  return getInvoiceCarrierConnectionDetail(ledgerId, connectionId)
 }
 
 export async function connectInvoiceCarrier(ledgerId, options = {}) {
@@ -360,6 +437,112 @@ export async function listInvoiceCarrierMirrorInvoices(ledgerId, options = {}) {
 export async function markInvoiceCarrierMirrorInvoicesViewed(ledgerId, invoiceIds = [], isViewed = true) {
   assertLedgerId(ledgerId)
   return dependencies.markInvoiceCarrierInvoicesViewed(ledgerId, invoiceIds, isViewed)
+}
+
+export async function importSelectedInvoiceCarrierInvoices(ledgerId, connectionId, invoiceIds = [], options = {}) {
+  assertLedgerId(ledgerId)
+  const connection = parseStoredConnection(
+    await dependencies.findInvoiceCarrierConnectionById(ledgerId, connectionId),
+  )
+  if (!connection) throw new Error('找不到發票載具連線')
+
+  const mappedAccountId = normalizeText(options.accountId || connection.mapped_account_id)
+  if (!mappedAccountId) {
+    throw new Error('請先選擇匯入帳戶')
+  }
+
+  const rows = await dependencies.listInvoiceCarrierInvoicesByIds(ledgerId, invoiceIds)
+  const targetRows = rows
+    .map(normalizeInvoiceViewRow)
+    .filter((row) => normalizeText(row.connection_id) === normalizeText(connection.id))
+
+  if (normalizeText(connection.mapped_account_id) !== mappedAccountId) {
+    await dependencies.updateInvoiceCarrierConnection(ledgerId, connection.id, {
+      mappedAccountId,
+    })
+  }
+
+  if (!targetRows.length) {
+    return {
+      importedCount: 0,
+      skippedCount: 0,
+      skipped: [],
+      importedMappings: [],
+    }
+  }
+
+  const importedMappings = []
+  const skipped = []
+
+  for (const [index, row] of targetRows.entries()) {
+    if (index > 0 && index % 10 === 0) {
+      await dependencies.yieldToMainThread()
+    }
+
+    const invoiceId = normalizeText(row.id)
+    if (Number(row.imported ?? 0) === 1 && normalizeText(row.imported_txn_id)) {
+      skipped.push({ invoiceId, reason: 'already_imported' })
+      continue
+    }
+
+    const sourceRef = buildEinvoiceImportSourceRef(connection, row)
+    let existing = await dependencies.findImportedLedgerTransactionBySourceRef(ledgerId, sourceRef)
+
+    if (!existing) {
+      try {
+        const createdTxId = await dependencies.addTransaction(ledgerId, {
+          type: 'expense',
+          accountId: mappedAccountId,
+          peerAccountId: null,
+          categoryId: null,
+          amountMinor: Math.abs(Math.round(Number(row.amount_minor ?? 0) || 0)) * -1,
+          occurredAt: buildEinvoiceOccurredAt(row.invoice_date),
+          note: buildEinvoiceImportNote(row),
+          location: null,
+          tagsJson: null,
+          originType: 'import',
+          externalRefId: sourceRef,
+          idempotencyKey: sourceRef,
+          isReimbursable: false,
+          includeInBudget: true,
+          includeInAnalysis: true,
+        })
+        existing = { id: createdTxId }
+      } catch (error) {
+        if (!isUniqueConstraintError(error)) {
+          skipped.push({
+            invoiceId,
+            reason: 'create_failed',
+            message: String(error?.message ?? error ?? 'create failed'),
+          })
+          continue
+        }
+        existing = await dependencies.findImportedLedgerTransactionBySourceRef(ledgerId, sourceRef)
+      }
+    }
+
+    if (!existing?.id) {
+      skipped.push({ invoiceId, reason: 'idempotency_failed' })
+      continue
+    }
+
+    importedMappings.push({
+      invoiceId,
+      importedTxnId: existing.id,
+      sourceRef,
+    })
+  }
+
+  if (importedMappings.length) {
+    await dependencies.markInvoiceCarrierInvoicesImported(ledgerId, importedMappings)
+  }
+
+  return {
+    importedCount: importedMappings.length,
+    skippedCount: skipped.length,
+    skipped,
+    importedMappings,
+  }
 }
 
 export async function disconnectInvoiceCarrier(ledgerId, connectionId) {

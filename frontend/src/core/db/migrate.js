@@ -18,6 +18,7 @@ import migration017 from '@/core/db/migrations/017_account_credit_profile.sql?ra
 import migration018 from '@/core/db/migrations/018_shared_sync_deleted_log.sql?raw'
 import migration019 from '@/core/db/migrations/019_bank_transaction_metadata.sql?raw'
 import migration020 from '@/core/db/migrations/020_invoice_carrier_sync.sql?raw'
+import migration021 from '@/core/db/migrations/021_invoice_carrier_import.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -41,6 +42,7 @@ const MIGRATIONS = [
   { version: 18, name: 'shared_sync_deleted_log', sql: migration018 },
   { version: 19, name: 'bank_transaction_metadata', sql: migration019 },
   { version: 20, name: 'invoice_carrier_sync', sql: migration020 },
+  { version: 21, name: 'invoice_carrier_import', sql: migration021 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'
