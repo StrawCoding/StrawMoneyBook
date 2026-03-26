@@ -199,7 +199,20 @@ export async function listTransactionsByAccount(ledgerId, accountId) {
 export async function listReimbursementTransactions(ledgerId, state) {
   assertLedgerId(ledgerId)
 
-  const normalizedState = state === 'reimbursed' ? 'reimbursed' : 'pending'
+  const normalizedState = state === 'all'
+    ? 'all'
+    : state === 'reimbursed'
+      ? 'reimbursed'
+      : 'pending'
+  const values = [ledgerId]
+  const stateClause = normalizedState === 'all'
+    ? ''
+    : `
+       AND t.reimbursement_state = ?`
+
+  if (normalizedState !== 'all') {
+    values.push(normalizedState)
+  }
 
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.account_id, t.category_id, t.amount_minor,
@@ -278,9 +291,9 @@ export async function listReimbursementTransactions(ledgerId, state) {
        AND t.deleted_at IS NULL
        AND t.type = 'expense'
        AND t.is_reimbursable = 1
-       AND t.reimbursement_state = ?
+       ${stateClause}
      ORDER BY t.occurred_at DESC, t.created_at DESC;`,
-    [ledgerId, normalizedState],
+    values,
   )
 
   return rowsOf(result)

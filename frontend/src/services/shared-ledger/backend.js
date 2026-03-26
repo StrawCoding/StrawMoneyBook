@@ -306,7 +306,6 @@ async function requestJson(path, { method = 'GET', body, auth = true, _retried =
           _retried: true,
         })
       }
-      clearSession()
     }
     const error = new Error(String(data?.message ?? data?.error ?? text ?? `HTTP ${response.status}`))
     error.code = String(data?.error ?? '')

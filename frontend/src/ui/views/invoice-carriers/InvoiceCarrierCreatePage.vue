@@ -28,9 +28,10 @@
       </label>
 
       <div class="captcha-box">
-        <img v-if="captchaDataUrl" :src="captchaDataUrl" alt="captcha" class="captcha-image" />
+        <img v-if="captchaImageSrc" :src="captchaImageSrc" alt="captcha" class="captcha-image" />
         <div v-else class="captcha-placeholder muted">{{ t('invoice_carrier.create.captcha_loading', '驗證碼載入中') }}</div>
       </div>
+      <p v-if="captchaErrorMessage" class="muted error-text">{{ captchaErrorMessage }}</p>
 
       <div class="row action-row">
         <button class="btn" :disabled="loadingCaptcha" :aria-busy="loadingCaptcha" @click="loadCaptcha(true)">
@@ -73,7 +74,8 @@ const apiUnavailableMessage = getEinvoiceCarrierApiUnavailableMessage()
 const loadingCaptcha = ref(false)
 const submitting = ref(false)
 const sessionId = ref('')
-const captchaDataUrl = ref('')
+const captchaImageSrc = ref('')
+const captchaErrorMessage = ref('')
 const form = reactive({
   mobilePhone: '',
   password: '',
@@ -93,16 +95,24 @@ const backLink = computed(() => {
 
 async function loadCaptcha(refresh = false) {
   loadingCaptcha.value = true
+  captchaErrorMessage.value = ''
   try {
     const session = await createInvoiceCarrierLinkSession({
       provider: 'tw_einvoice_mobile_barcode',
       sessionId: refresh ? sessionId.value : '',
       refreshCaptcha: refresh && Boolean(sessionId.value),
     })
+    const nextCaptchaImageSrc = String(session.captcha_image_data_url ?? '').trim()
+      || String(session.captcha_image_src ?? '').trim()
+    if (!nextCaptchaImageSrc) {
+      throw new Error(t('invoice_carrier.create.captcha_failed', '圖形驗證碼暫時無法載入，請稍後再試'))
+    }
     sessionId.value = String(session.session_id ?? '')
-    captchaDataUrl.value = String(session.captcha_image_data_url ?? '')
+    captchaImageSrc.value = nextCaptchaImageSrc
   } catch (error) {
-    uiStore.pushToast(String(error?.message ?? '載入驗證碼失敗'), 'error')
+    captchaImageSrc.value = ''
+    captchaErrorMessage.value = String(error?.message ?? '載入驗證碼失敗')
+    uiStore.pushToast(captchaErrorMessage.value, 'error')
   } finally {
     loadingCaptcha.value = false
   }
@@ -123,6 +133,7 @@ async function loadSavedCredentialDraft() {
 async function submit() {
   if (!ledgerStore.activeLedgerId) return
   submitting.value = true
+  captchaErrorMessage.value = ''
   try {
     const connection = await connectInvoiceCarrier(ledgerStore.activeLedgerId, {
       provider: 'tw_einvoice_mobile_barcode',
@@ -182,6 +193,9 @@ onMounted(async () => {
   padding: 12px;
   border: 1px dashed var(--field-border);
   border-radius: 10px;
+}
+.error-text {
+  margin: -6px 0 0;
 }
 .action-row {
   gap: 8px;

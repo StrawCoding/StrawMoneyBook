@@ -463,22 +463,27 @@ onMounted(() => {
 }
 .invoice-list {
   display: grid;
-  gap: 12px;
+  gap: 0;
   list-style: none;
   margin: 0;
   padding: 0;
-}
-.invoice-item {
   border: 1px solid var(--field-border);
   border-radius: 12px;
-  padding: 12px;
+  overflow: hidden;
+}
+.invoice-item {
+  border-bottom: 1px solid var(--field-border);
+  padding: 10px 12px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
+}
+.invoice-item:last-child {
+  border-bottom: none;
 }
 .item-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .item-chip-wrap {
   display: inline-flex;
@@ -494,13 +499,13 @@ onMounted(() => {
 }
 .item-body {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 .line {
   justify-content: space-between;
 }
 .status-chip {
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--warn) 10%, transparent);
   color: var(--warn);

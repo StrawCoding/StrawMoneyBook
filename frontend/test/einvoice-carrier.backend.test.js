@@ -44,13 +44,21 @@ test('web runtime keeps same-origin API routing without forcing explicit base', 
   )
 })
 
-test('native development runtime still requires explicit e-invoice API base', () => {
+test('native development runtime also falls back to hosted e-invoice API base', () => {
+  assert.equal(
+    resolveEinvoiceApiBaseForRuntime({
+      explicitBase: '',
+      platform: 'android',
+      isProd: false,
+    }),
+    'https://www.strawmb.com',
+  )
   assert.equal(
     shouldRequireExplicitEinvoiceApiBaseForRuntime({
       explicitBase: '',
       platform: 'android',
       isProd: false,
     }),
-    true,
+    false,
   )
 })

@@ -32,3 +32,11 @@ test('invoice carrier pages self-redirect to features when the feature is unavai
   assert.match(detailSource, /isEinvoiceCarrierFeatureEnabled/)
   assert.match(detailSource, /router\.replace\(\{ name: 'features' \}\)/)
 })
+
+test('invoice carrier create page can render captcha from either data url or raw src payload', () => {
+  const createSource = readFileSync(resolve(import.meta.dirname, '../src/ui/views/invoice-carriers/InvoiceCarrierCreatePage.vue'), 'utf8')
+
+  assert.match(createSource, /captcha_image_data_url/)
+  assert.match(createSource, /captcha_image_src/)
+  assert.match(createSource, /captchaErrorMessage/)
+})

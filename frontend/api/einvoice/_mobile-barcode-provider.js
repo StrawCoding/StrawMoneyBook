@@ -170,16 +170,43 @@ const image = await page.$(payload.imageSelector);
 if (!image) {
   return { ok: false };
 }
-const screenshotBytes = await image.screenshot({ type: 'png' });
-let screenshot = '';
-for (const byte of screenshotBytes) {
-  screenshot += String.fromCharCode(byte);
-}
 const src = await image.getAttribute('src');
+let resolvedSrc = '';
+if (src) {
+  try {
+    resolvedSrc = new URL(src, page.url()).toString();
+  } catch (_error) {
+    resolvedSrc = src;
+  }
+}
+if (/^data:image\\//i.test(resolvedSrc)) {
+  return {
+    ok: true,
+    src: resolvedSrc,
+    dataUrl: resolvedSrc,
+  };
+}
+let dataUrl = '';
+try {
+  const screenshotBytes = await image.screenshot({ type: 'png' });
+  const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let screenshot = '';
+  for (let index = 0; index < screenshotBytes.length; index += 3) {
+    const byte1 = screenshotBytes[index];
+    const byte2 = index + 1 < screenshotBytes.length ? screenshotBytes[index + 1] : 0;
+    const byte3 = index + 2 < screenshotBytes.length ? screenshotBytes[index + 2] : 0;
+    const chunk = (byte1 << 16) | (byte2 << 8) | byte3;
+    screenshot += base64Chars[(chunk >> 18) & 63];
+    screenshot += base64Chars[(chunk >> 12) & 63];
+    screenshot += index + 1 < screenshotBytes.length ? base64Chars[(chunk >> 6) & 63] : '=';
+    screenshot += index + 2 < screenshotBytes.length ? base64Chars[chunk & 63] : '=';
+  }
+  dataUrl = 'data:image/png;base64,' + screenshot;
+} catch (_error) {}
 return {
-  ok: true,
-  src: src || '',
-  dataUrl: 'data:image/png;base64,' + btoa(screenshot),
+  ok: Boolean(resolvedSrc || dataUrl),
+  src: resolvedSrc,
+  dataUrl,
 };
 `
   const response = await runPlaywrightJson(sessionId, code)
@@ -192,23 +219,38 @@ return {
   }
 }
 
+function createCaptchaUnavailableError() {
+  const error = new Error('圖形驗證碼暫時無法載入，請稍後再試')
+  error.code = 'einvoice_captcha_unavailable'
+  return error
+}
+
 export async function createEinvoiceLinkSession(payload = {}) {
   const sessionId = normalizeText(payload.session_id) || createSessionId()
   const refreshCaptcha = Boolean(payload.refresh_captcha)
 
-  if (!refreshCaptcha || !normalizeText(payload.session_id)) {
-    await openPlaywrightSession(sessionId, EINV_LOGIN_URL)
-  }
+  try {
+    if (!refreshCaptcha || !normalizeText(payload.session_id)) {
+      await openPlaywrightSession(sessionId, EINV_LOGIN_URL)
+    }
 
-  const captcha = await captureCaptcha(sessionId, refreshCaptcha)
-  return {
-    provider: EINVOICE_PROVIDER,
-    auth_mode: EINVOICE_AUTH_MODE,
-    session_id: sessionId,
-    link_url: EINV_LOGIN_URL,
-    expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-    captcha_image_src: captcha.src,
-    captcha_image_data_url: captcha.dataUrl,
+    const captcha = await captureCaptcha(sessionId, refreshCaptcha)
+    if (!normalizeText(captcha.dataUrl || captcha.src)) {
+      throw createCaptchaUnavailableError()
+    }
+
+    return {
+      provider: EINVOICE_PROVIDER,
+      auth_mode: EINVOICE_AUTH_MODE,
+      session_id: sessionId,
+      link_url: EINV_LOGIN_URL,
+      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      captcha_image_src: captcha.src,
+      captcha_image_data_url: captcha.dataUrl,
+    }
+  } catch (error) {
+    await closePlaywrightSession(sessionId)
+    throw error
   }
 }
 

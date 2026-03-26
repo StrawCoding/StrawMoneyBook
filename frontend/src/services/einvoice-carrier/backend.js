@@ -20,6 +20,10 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
+function isGenericNetworkFailure(message) {
+  return /^(?:failed to fetch|fetch failed|load failed|network request failed)$/i.test(normalizeText(message))
+}
+
 function buildApiUrl(path) {
   const normalizedPath = normalizeText(path)
   if (!normalizedPath.startsWith('/')) {
@@ -33,10 +37,9 @@ function buildApiUrl(path) {
 export function resolveEinvoiceApiBaseForRuntime(options = {}) {
   const explicitBase = normalizeText(options.explicitBase ?? DEFAULT_EINVOICE_API_BASE)
   const platform = normalizeText(options.platform ?? Capacitor.getPlatform()).toLowerCase() || 'web'
-  const isProd = options.isProd ?? Boolean(import.meta.env.PROD)
 
   if (explicitBase) return explicitBase
-  if (platform !== 'web' && isProd) return PROD_DEFAULT_EINVOICE_API_BASE
+  if (platform !== 'web') return PROD_DEFAULT_EINVOICE_API_BASE
   return ''
 }
 
@@ -63,6 +66,17 @@ function createMissingEinvoiceApiError() {
   return error
 }
 
+function createEinvoiceNetworkError(requestUrl, cause) {
+  const causeMessage = normalizeText(cause?.message ?? cause)
+  const reasonSuffix = causeMessage && !isGenericNetworkFailure(causeMessage)
+    ? `（${causeMessage}）`
+    : ''
+  const error = new Error(`發票載具同步 API 連線失敗，請確認網路或 API 位址：${requestUrl}${reasonSuffix}`)
+  error.code = 'einvoice_network_error'
+  error.cause = cause
+  return error
+}
+
 async function postJson(path, payload) {
   if (shouldRequireExplicitApiBase()) {
     throw createMissingEinvoiceApiError()
@@ -75,11 +89,17 @@ async function postJson(path, payload) {
     headers['X-Straw-Client-Key'] = EINVOICE_CLIENT_SHARED_KEY
   }
 
-  const response = await fetch(buildApiUrl(path), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload ?? {}),
-  })
+  const requestUrl = buildApiUrl(path)
+  let response
+  try {
+    response = await fetch(requestUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload ?? {}),
+    })
+  } catch (error) {
+    throw createEinvoiceNetworkError(requestUrl, error)
+  }
 
   const text = await response.text()
   let data = null

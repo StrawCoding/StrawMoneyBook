@@ -16,6 +16,7 @@ import {
   reimbursementReimbursedMinor,
   withReimbursementDerivedFields,
 } from '@/ui/utils/reimbursement-item'
+import { partitionReimbursementTransactions } from '@/core/utils/reimbursement-list-state'
 
 export const useReimbursementStore = defineStore('reimbursement', {
   state: () => ({
@@ -50,13 +51,14 @@ export const useReimbursementStore = defineStore('reimbursement', {
 
       this.loading = true
       try {
-        const [pendingItems, reimbursedItems, advances] = await Promise.all([
-          listReimbursementTransactions(ledgerStore.activeLedgerId, 'pending'),
-          listReimbursementTransactions(ledgerStore.activeLedgerId, 'reimbursed'),
+        const [items, advances] = await Promise.all([
+          listReimbursementTransactions(ledgerStore.activeLedgerId, 'all'),
           listReimbursementAdvancesData(ledgerStore.activeLedgerId),
         ])
-        this.pendingItems = pendingItems.map((item) => withReimbursementDerivedFields(item))
-        this.reimbursedItems = reimbursedItems.map((item) => withReimbursementDerivedFields(item))
+        const derivedItems = items.map((item) => withReimbursementDerivedFields(item))
+        const { pending, reimbursed } = partitionReimbursementTransactions(derivedItems)
+        this.pendingItems = pending
+        this.reimbursedItems = reimbursed
         this.advances = advances
       } finally {
         this.loading = false
