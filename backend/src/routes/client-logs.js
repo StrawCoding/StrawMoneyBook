@@ -19,7 +19,42 @@ function buildSafeContext(body = {}) {
     lineno: Number(context.lineno ?? 0) || 0,
     colno: Number(context.colno ?? 0) || 0,
     user_agent: normalizeText(body.userAgent),
+    debug: sanitizeDebugValue(context.debug),
   }
+}
+
+function truncateText(value, maxLength = 600) {
+  const text = String(value ?? '')
+  if (text.length <= maxLength) return text
+  return `${text.slice(0, Math.max(0, maxLength - 1))}…`
+}
+
+function sanitizeDebugValue(value, depth = 0) {
+  if (value == null) return null
+  if (depth >= 4) {
+    return truncateText(value, 240)
+  }
+  if (typeof value === 'string') {
+    return truncateText(value, 600)
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return value
+  }
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 30)
+      .map((item) => sanitizeDebugValue(item, depth + 1))
+      .filter((item) => item !== undefined)
+  }
+  if (typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .slice(0, 30)
+        .map(([key, entryValue]) => [key, sanitizeDebugValue(entryValue, depth + 1)])
+        .filter(([, entryValue]) => entryValue !== undefined),
+    )
+  }
+  return truncateText(value, 240)
 }
 
 export default async function clientLogsHandler(req, res) {

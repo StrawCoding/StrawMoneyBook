@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import {
   addBatchLoanRepaymentByCounterparty,
+  addBatchLoanRepaymentByLoanIds,
   addLoanRepayment,
   createLoanWithOptionalTransaction,
   deleteLoanRepayment,
@@ -61,6 +62,20 @@ export const useLoanStore = defineStore('loan', {
     async repayBatchByCounterparty(payload) {
       const ledgerStore = useLedgerStore()
       const result = await addBatchLoanRepaymentByCounterparty(ledgerStore.activeLedgerId, payload)
+      await this.load()
+      if (this.detail?.loan?.id) {
+        const touchedCurrent = Array.isArray(result?.allocations)
+          && result.allocations.some((item) => item.loanId === this.detail.loan.id)
+        if (touchedCurrent) {
+          await this.loadDetail(this.detail.loan.id)
+        }
+      }
+      return result
+    },
+
+    async repayBatchByLoanIds(payload) {
+      const ledgerStore = useLedgerStore()
+      const result = await addBatchLoanRepaymentByLoanIds(ledgerStore.activeLedgerId, payload)
       await this.load()
       if (this.detail?.loan?.id) {
         const touchedCurrent = Array.isArray(result?.allocations)

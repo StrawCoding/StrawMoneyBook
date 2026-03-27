@@ -6,7 +6,7 @@
     </header>
 
     <article v-if="featureEnabled" class="card panel">
-      <p class="muted">{{ t('invoice_carrier.management_desc', '管理手機條碼登入、同步條件與本地鏡像發票。') }}</p>
+      <p class="muted">{{ t('invoice_carrier.management_desc', '管理 Android App 內的手機條碼登入、同步條件與本地鏡像發票。') }}</p>
       <p v-if="!apiReady" class="muted warning-text">{{ apiUnavailableMessage }}</p>
       <div class="row action-row">
         <RouterLink class="btn primary" :class="{ disabled: !apiReady }" :to="{ name: 'invoice-carriers-create' }">

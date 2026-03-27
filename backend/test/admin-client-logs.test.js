@@ -125,6 +125,17 @@ test('client error logs can be uploaded and viewed from admin overview', async (
       platform: 'android',
       context: {
         source: 'window',
+        debug: {
+          operation: 'connect_invoice_carrier',
+          debugHint: 'check captcha',
+          debugLastStep: 'submit_login',
+          trace: {
+            steps: [
+              { step: 'load_login_page', status: 'ok' },
+              { step: 'submit_login', status: 'error' },
+            ],
+          },
+        },
       },
     }),
   }
@@ -151,6 +162,8 @@ test('client error logs can be uploaded and viewed from admin overview', async (
   assert.equal(overviewRes.body?.stats?.total_users >= 2, true)
   assert.equal(overviewRes.body?.error_logs?.[0]?.message, 'Unhandled invoice sync error')
   assert.equal(overviewRes.body?.error_logs?.[0]?.user_email, 'member@example.com')
+  assert.equal(overviewRes.body?.error_logs?.[0]?.context?.debug?.operation, 'connect_invoice_carrier')
+  assert.equal(overviewRes.body?.error_logs?.[0]?.context?.debug?.debugLastStep, 'submit_login')
 })
 
 test('admin can update membership and delete users while non-admin cannot access admin api', async () => {

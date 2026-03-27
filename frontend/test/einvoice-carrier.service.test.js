@@ -2,7 +2,12 @@ import test, { afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  getEinvoiceCarrierDebugTraceSnapshot,
+  resetEinvoiceCarrierDebugTraceForTest,
+} from '../src/core/services/einvoice-carrier-debug.service.js'
+import {
   connectInvoiceCarrier,
+  disconnectInvoiceCarrier,
   getInvoiceCarrierState,
   importSelectedInvoiceCarrierInvoices,
   resetEinvoiceCarrierServiceDependenciesForTest,
@@ -15,12 +20,14 @@ function createBaseDependencies(overrides = {}) {
     listEinvoiceCarrierProviders: () => [{ id: 'tw_einvoice_mobile_barcode', name: '電子發票', authMode: 'mobile_barcode' }],
     listInvoiceCarrierConnections: async () => [],
     listInvoiceCarrierInvoices: async () => [],
+    logClientError: async () => ({ ok: true }),
     ...overrides,
   }
 }
 
 afterEach(() => {
   resetEinvoiceCarrierServiceDependenciesForTest()
+  resetEinvoiceCarrierDebugTraceForTest()
 })
 
 test('connectInvoiceCarrier stores encrypted credential and session state then syncs immediately', async () => {
@@ -86,7 +93,6 @@ test('connectInvoiceCarrier stores encrypted credential and session state then s
     provider: 'tw_einvoice_mobile_barcode',
     mobilePhone: '0912345678',
     password: 'pass1234',
-    captchaCode: '2468',
   })
 
   assert.equal(connection.id, 'conn-1')
@@ -95,6 +101,108 @@ test('connectInvoiceCarrier stores encrypted credential and session state then s
   assert.equal(encryptedWrites[0].key, 'einvoice.credentials.conn-1')
   assert.equal(encryptedWrites[1].key, 'einvoice.session.conn-1')
   assert.equal(encryptedWrites[2].key, 'einvoice.session.conn-1')
+})
+
+test('connectInvoiceCarrier uploads a debug log when native login fails', async () => {
+  const uploads = []
+  const loginError = new Error('登入失敗')
+  loginError.code = 'einvoice_login_failed'
+  loginError.debugHint = 'check captcha'
+  loginError.debugLastStep = 'submit_login'
+  loginError.debugTrace = {
+    action: 'connect_einvoice_carrier',
+    debugHint: 'check captcha',
+    debugLastStep: 'submit_login',
+    steps: [
+      { step: 'load_login_page', status: 'ok', message: 'loaded', at: Date.now() },
+      { step: 'submit_login', status: 'error', message: 'failed', at: Date.now() },
+    ],
+  }
+
+  setEinvoiceCarrierServiceDependenciesForTest(createBaseDependencies({
+    exchangeEinvoiceAuth: async () => {
+      throw loginError
+    },
+    logClientError: async (error, context) => {
+      uploads.push({ error, context })
+      return { ok: true }
+    },
+  }))
+
+  await assert.rejects(
+    () => connectInvoiceCarrier('ledger-1', {
+      provider: 'tw_einvoice_mobile_barcode',
+      mobilePhone: '0912345678',
+      password: 'pass1234',
+    }),
+    /登入失敗/,
+  )
+
+  assert.equal(uploads.length, 1)
+  assert.equal(uploads[0].context.source, 'einvoice_carrier')
+  assert.equal(uploads[0].context.debug.operation, 'connect_invoice_carrier')
+  assert.equal(uploads[0].context.debug.mobilePhoneMasked, '******5678')
+  assert.equal(uploads[0].context.debug.debugLastStep, 'submit_login')
+  assert.equal(uploads[0].context.debug.trace.steps[1].status, 'error')
+
+  const traces = getEinvoiceCarrierDebugTraceSnapshot()
+  assert.equal(traces.length, 1)
+  assert.equal(traces[0].operation, 'connect_invoice_carrier')
+  assert.equal(traces[0].mobilePhoneMasked, '******5678')
+  assert.equal(traces[0].debugLastStep, 'submit_login')
+  assert.equal(traces[0].status, 'error')
+})
+
+test('disconnectInvoiceCarrier sends the stored native session ref before local cleanup', async () => {
+  const disconnectCalls = []
+  const deletedKeys = []
+
+  setEinvoiceCarrierServiceDependenciesForTest(createBaseDependencies({
+    findInvoiceCarrierConnectionById: async () => ({
+      id: 'conn-1',
+      provider: 'tw_einvoice_mobile_barcode',
+      auth_mode: 'mobile_barcode',
+      provider_connection_id: '0912345678',
+      status: 'active',
+      sync_filter: {},
+      carrier_options: [],
+    }),
+    getEncryptedSetting: async (_ledgerId, key) => {
+      if (key === 'einvoice.session.conn-1') {
+        return {
+          provider: 'tw_einvoice_mobile_barcode',
+          authMode: 'mobile_barcode',
+          sessionToken: 'einv_session_abc123',
+          accessTokenRef: 'einv_session_abc123',
+        }
+      }
+      return null
+    },
+    disconnectEinvoiceAuth: async (payload) => {
+      disconnectCalls.push(payload)
+      return { ok: true }
+    },
+    deleteEncryptedSetting: async (_ledgerId, key) => {
+      deletedKeys.push(key)
+    },
+    clearInvoiceCarrierMirrorDataByConnection: async () => ({ cleared: true }),
+    updateInvoiceCarrierConnection: async () => ({}),
+  }))
+
+  const result = await disconnectInvoiceCarrier('ledger-1', 'conn-1')
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(disconnectCalls, [{
+    provider: 'tw_einvoice_mobile_barcode',
+    auth_mode: 'mobile_barcode',
+    provider_connection_id: '0912345678',
+    session_token: 'einv_session_abc123',
+    access_token_ref: 'einv_session_abc123',
+  }])
+  assert.deepEqual(deletedKeys, [
+    'einvoice.credentials.conn-1',
+    'einvoice.session.conn-1',
+  ])
 })
 
 test('syncInvoiceCarrierNow marks session expiry as reauth required', async () => {
@@ -143,6 +251,66 @@ test('syncInvoiceCarrierNow marks session expiry as reauth required', async () =
       productName: '',
     },
   }])
+})
+
+test('syncInvoiceCarrierNow uploads a debug log when native sync fails', async () => {
+  const uploads = []
+  const syncError = new Error('查詢失敗')
+  syncError.code = 'einvoice_query_failed'
+  syncError.debugHint = 'check query form'
+  syncError.debugLastStep = 'submit_query'
+  syncError.debugTrace = {
+    action: 'sync_einvoice_carrier',
+    debugHint: 'check query form',
+    debugLastStep: 'submit_query',
+    steps: [
+      { step: 'restore_cookies', status: 'ok', message: 'restored', at: Date.now() },
+      { step: 'submit_query', status: 'error', message: 'button missing', at: Date.now() },
+    ],
+  }
+
+  setEinvoiceCarrierServiceDependenciesForTest(createBaseDependencies({
+    findInvoiceCarrierConnectionById: async () => ({
+      id: 'conn-1',
+      provider: 'tw_einvoice_mobile_barcode',
+      auth_mode: 'mobile_barcode',
+      provider_connection_id: '0912345678',
+      status: 'active',
+      sync_filter: { dateFrom: '2026-03-01', dateTo: '2026-03-20', carrier: 'all', status: 'all', buyerBan: '', productName: '' },
+      carrier_options: [],
+    }),
+    getEncryptedSetting: async () => ({
+      provider: 'tw_einvoice_mobile_barcode',
+      authMode: 'mobile_barcode',
+      sessionToken: 'session-token',
+    }),
+    syncEinvoiceInvoices: async () => {
+      throw syncError
+    },
+    updateInvoiceCarrierConnection: async () => ({}),
+    logClientError: async (error, context) => {
+      uploads.push({ error, context })
+      return { ok: true }
+    },
+  }))
+
+  await assert.rejects(
+    () => syncInvoiceCarrierNow('ledger-1', 'conn-1'),
+    /查詢失敗/,
+  )
+
+  assert.equal(uploads.length, 1)
+  assert.equal(uploads[0].context.debug.operation, 'sync_invoice_carrier')
+  assert.equal(uploads[0].context.debug.connectionId, 'conn-1')
+  assert.equal(uploads[0].context.debug.debugHint, 'check query form')
+  assert.equal(uploads[0].context.debug.trace.steps[0].step, 'restore_cookies')
+
+  const traces = getEinvoiceCarrierDebugTraceSnapshot()
+  assert.equal(traces.length, 1)
+  assert.equal(traces[0].operation, 'sync_invoice_carrier')
+  assert.equal(traces[0].connectionId, 'conn-1')
+  assert.equal(traces[0].debugHint, 'check query form')
+  assert.equal(traces[0].steps[0].step, 'restore_cookies')
 })
 
 test('getInvoiceCarrierState summarizes local invoice counts', async () => {

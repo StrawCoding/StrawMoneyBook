@@ -42,6 +42,10 @@ final class TesseractBridge {
     }
 
     static List<RecognitionCandidate> recognizeCaptchaCandidates(Context context, List<Bitmap> variants) {
+        return recognizeCaptchaCandidates(context, variants, true);
+    }
+
+    static List<RecognitionCandidate> recognizeCaptchaCandidates(Context context, List<Bitmap> variants, boolean numericMode) {
         List<RecognitionCandidate> candidates = new ArrayList<>();
         if (context == null || variants == null || variants.isEmpty()) {
             return candidates;
@@ -50,7 +54,7 @@ final class TesseractBridge {
         TessBaseAPI api = null;
         try {
             File dataDir = ensureBundledTrainedData(context.getApplicationContext());
-            api = createApi(dataDir);
+            api = createApi(dataDir, numericMode);
             for (int index = 0; index < variants.size(); index += 1) {
                 Bitmap variant = variants.get(index);
                 if (variant == null || variant.isRecycled()) continue;
@@ -132,14 +136,14 @@ final class TesseractBridge {
         }
     }
 
-    private static TessBaseAPI createApi(File dataDir) throws IOException {
+    private static TessBaseAPI createApi(File dataDir, boolean numericMode) throws IOException {
         TessBaseAPI api = new TessBaseAPI();
         if (!api.init(dataDir.getAbsolutePath(), LANGUAGE)) {
             api.recycle();
             throw new IOException("Failed to initialize Tesseract");
         }
         api.setVariable(TessBaseAPI.VAR_CHAR_WHITELIST, ALLOWED_CHARS);
-        api.setVariable("classify_bln_numeric_mode", "1");
+        api.setVariable("classify_bln_numeric_mode", numericMode ? "1" : "0");
         api.setVariable("load_system_dawg", "0");
         api.setVariable("load_freq_dawg", "0");
         return api;

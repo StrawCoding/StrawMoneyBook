@@ -1,10 +1,12 @@
-import { Capacitor } from '@capacitor/core'
 import { translateMessage } from '../../ui/services/i18n.service.js'
+import { normalizeEinvoiceCarrierOptions, normalizeEinvoiceInvoiceRows, normalizeEinvoiceSyncFilter } from './shared.js'
+import {
+  connectNativeEinvoiceCarrier,
+  disconnectNativeEinvoiceCarrier,
+  isNativeEinvoiceAutomationRuntimeSupported,
+  syncNativeEinvoiceCarrier,
+} from './native-automation.js'
 
-const IMPORT_META_ENV = import.meta.env ?? {}
-const DEFAULT_EINVOICE_API_BASE = String(IMPORT_META_ENV.VITE_EINVOICE_API_BASE_URL ?? '').trim()
-const EINVOICE_CLIENT_SHARED_KEY = String(IMPORT_META_ENV.VITE_EINVOICE_CLIENT_SHARED_KEY ?? '').trim()
-const PROD_DEFAULT_EINVOICE_API_BASE = 'https://www.strawmb.com'
 const t = (key, fallback) => translateMessage(key, fallback)
 
 const PROVIDERS_FALLBACK = [
@@ -20,120 +22,58 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
-function isGenericNetworkFailure(message) {
-  return /^(?:failed to fetch|fetch failed|load failed|network request failed)$/i.test(normalizeText(message))
-}
-
-function buildApiUrl(path) {
-  const normalizedPath = normalizeText(path)
-  if (!normalizedPath.startsWith('/')) {
-    throw new Error(`invalid einvoice api path: ${normalizedPath}`)
-  }
-  const apiBase = getEinvoiceApiBase()
-  if (!apiBase) return normalizedPath
-  return `${apiBase.replace(/\/$/, '')}${normalizedPath}`
-}
-
-export function resolveEinvoiceApiBaseForRuntime(options = {}) {
-  const explicitBase = normalizeText(options.explicitBase ?? DEFAULT_EINVOICE_API_BASE)
-  const platform = normalizeText(options.platform ?? Capacitor.getPlatform()).toLowerCase() || 'web'
-
-  if (explicitBase) return explicitBase
-  if (platform !== 'web') return PROD_DEFAULT_EINVOICE_API_BASE
-  return ''
-}
-
-export function shouldRequireExplicitEinvoiceApiBaseForRuntime(options = {}) {
-  const platform = normalizeText(options.platform ?? Capacitor.getPlatform()).toLowerCase() || 'web'
-  if (platform === 'web') return false
-  return !resolveEinvoiceApiBaseForRuntime(options)
-}
-
-function getEinvoiceApiBase() {
-  return resolveEinvoiceApiBaseForRuntime()
-}
-
-function shouldRequireExplicitApiBase() {
-  return shouldRequireExplicitEinvoiceApiBaseForRuntime()
-}
-
 function createMissingEinvoiceApiError() {
-  const message = Capacitor.getPlatform() === 'web'
-    ? t('einvoice_carrier.error.api_unavailable_web', '發票載具同步 API 未設定，請部署 /api/einvoice 或設定 VITE_EINVOICE_API_BASE_URL')
-    : t('einvoice_carrier.error.api_unavailable_native', '手機 App 需設定發票載具同步 API URL，請先部署 /api/einvoice，並將完整網址填入 VITE_EINVOICE_API_BASE_URL')
+  const message = isNativeEinvoiceAutomationRuntimeSupported()
+    ? t('einvoice_carrier.error.api_unavailable_native', '目前無法啟動 Android App 內的發票載具同步流程')
+    : t('einvoice_carrier.error.api_unavailable_web', '發票載具同步目前僅支援 Android App')
   const error = new Error(message)
   error.code = 'einvoice_api_unavailable'
   return error
 }
 
-function createEinvoiceNetworkError(requestUrl, cause) {
-  const causeMessage = normalizeText(cause?.message ?? cause)
-  const reasonSuffix = causeMessage && !isGenericNetworkFailure(causeMessage)
-    ? `（${causeMessage}）`
-    : ''
-  const error = new Error(`發票載具同步 API 連線失敗，請確認網路或 API 位址：${requestUrl}${reasonSuffix}`)
-  error.code = 'einvoice_network_error'
-  error.cause = cause
+function assertEinvoiceCarrierFeatureEnabled() {
+  if (isNativeEinvoiceAutomationRuntimeSupported()) return
+  throw createMissingEinvoiceApiError()
+}
+
+function createResponseInvalidError() {
+  const error = new Error('發票載具同步回應格式錯誤')
+  error.code = 'einvoice_response_invalid'
   return error
 }
 
-async function postJson(path, payload) {
-  if (shouldRequireExplicitApiBase()) {
-    throw createMissingEinvoiceApiError()
-  }
-
-  const headers = {
-    'Content-Type': 'application/json',
-  }
-  if (EINVOICE_CLIENT_SHARED_KEY) {
-    headers['X-Straw-Client-Key'] = EINVOICE_CLIENT_SHARED_KEY
-  }
-
-  const requestUrl = buildApiUrl(path)
-  let response
-  try {
-    response = await fetch(requestUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload ?? {}),
-    })
-  } catch (error) {
-    throw createEinvoiceNetworkError(requestUrl, error)
-  }
-
-  const text = await response.text()
-  let data = null
-  if (text) {
-    try {
-      data = JSON.parse(text)
-    } catch {
-      data = null
-    }
-  }
-
-  if (!response.ok) {
-    if (response.status === 404 && !DEFAULT_EINVOICE_API_BASE && path.startsWith('/api/einvoice/')) {
-      throw createMissingEinvoiceApiError()
-    }
-    const error = new Error(normalizeText(data?.message || data?.error || text) || `HTTP ${response.status}`)
-    error.code = normalizeText(data?.error) || `HTTP_${response.status}`
-    throw error
-  }
-
-  if (!data || typeof data !== 'object') {
-    const error = new Error('發票載具同步回應格式錯誤')
-    error.code = 'einvoice_response_invalid'
-    throw error
-  }
-  return data
+function mapNativeError(error) {
+  const code = normalizeText(error?.code)
+  const mappedCode = {
+    einvoice_automation_android_only: 'einvoice_api_unavailable',
+    einvoice_automation_unavailable: 'einvoice_api_unavailable',
+    einvoice_automation_busy: 'einvoice_automation_busy',
+    bank_automation_busy: 'einvoice_automation_busy',
+    bank_automation_timeout: 'einvoice_automation_timeout',
+    einvoice_captcha_not_ready: 'einvoice_captcha_ocr_failed',
+    einvoice_captcha_refresh_missing: 'einvoice_captcha_ocr_failed',
+    einvoice_login_trigger_missing: 'einvoice_login_failed',
+    einvoice_query_button_not_found: 'einvoice_query_failed',
+    einvoice_query_form_missing: 'einvoice_query_failed',
+    einvoice_navigation_timeout: 'einvoice_query_failed',
+  }[code] || code
+  const mappedMessage = normalizeText(error?.message)
+  const next = new Error(mappedMessage || createMissingEinvoiceApiError().message)
+  next.code = mappedCode || 'einvoice_automation_failed'
+  next.cause = error
+  next.data = error?.data ?? null
+  next.debugTrace = error?.debugTrace ?? null
+  next.debugHint = normalizeText(error?.debugHint)
+  next.debugLastStep = normalizeText(error?.debugLastStep)
+  return next
 }
 
 export function isEinvoiceCarrierFeatureEnabled() {
-  return listEinvoiceCarrierProviders().length > 0 && isEinvoiceCarrierApiConfigured()
+  return listEinvoiceCarrierProviders().length > 0
 }
 
 export function isEinvoiceCarrierApiConfigured() {
-  return !shouldRequireExplicitApiBase()
+  return isNativeEinvoiceAutomationRuntimeSupported()
 }
 
 export function getEinvoiceCarrierApiUnavailableMessage() {
@@ -141,21 +81,77 @@ export function getEinvoiceCarrierApiUnavailableMessage() {
 }
 
 export function listEinvoiceCarrierProviders() {
-  return PROVIDERS_FALLBACK.slice()
+  return isNativeEinvoiceAutomationRuntimeSupported() ? PROVIDERS_FALLBACK.slice() : []
 }
 
 export async function createEinvoiceLinkSession(payload = {}) {
-  return postJson('/api/einvoice/link_session', payload)
+  assertEinvoiceCarrierFeatureEnabled()
+  return {
+    provider: normalizeText(payload.provider || 'tw_einvoice_mobile_barcode').toLowerCase(),
+    auth_mode: normalizeText(payload.auth_mode || 'mobile_barcode').toLowerCase() || 'mobile_barcode',
+    session_id: 'native_app_automation',
+    compatibility_only: true,
+  }
 }
 
 export async function exchangeEinvoiceAuth(payload = {}) {
-  return postJson('/api/einvoice/exchange', payload)
+  assertEinvoiceCarrierFeatureEnabled()
+  try {
+    const result = await connectNativeEinvoiceCarrier({
+      provider: normalizeText(payload.provider || 'tw_einvoice_mobile_barcode').toLowerCase(),
+      authMode: normalizeText(payload.auth_mode || 'mobile_barcode').toLowerCase() || 'mobile_barcode',
+      mobilePhone: normalizeText(payload.mobile_phone),
+      password: String(payload.password ?? ''),
+    })
+    if (!result || typeof result !== 'object') throw createResponseInvalidError()
+    return {
+      ...result,
+      carrier_options: normalizeEinvoiceCarrierOptions(result.carrier_options),
+    }
+  } catch (error) {
+    throw mapNativeError(error)
+  }
 }
 
 export async function syncEinvoiceInvoices(payload = {}) {
-  return postJson('/api/einvoice/sync', payload)
+  assertEinvoiceCarrierFeatureEnabled()
+  try {
+    const filter = normalizeEinvoiceSyncFilter(payload.filter)
+    const result = await syncNativeEinvoiceCarrier({
+      provider: normalizeText(payload.provider || 'tw_einvoice_mobile_barcode').toLowerCase(),
+      authMode: normalizeText(payload.auth_mode || 'mobile_barcode').toLowerCase() || 'mobile_barcode',
+      connectionId: normalizeText(payload.connection_id || payload.connectionId),
+      sessionToken: normalizeText(payload.session_token || payload.access_token_ref),
+      accessTokenRef: normalizeText(payload.access_token_ref || payload.session_token),
+      filter,
+    })
+    if (!result || typeof result !== 'object') throw createResponseInvalidError()
+    return {
+      provider: normalizeText(result.provider || payload.provider || 'tw_einvoice_mobile_barcode').toLowerCase(),
+      auth_mode: normalizeText(result.auth_mode || payload.auth_mode || 'mobile_barcode').toLowerCase() || 'mobile_barcode',
+      sync_time: normalizeText(result.sync_time) || new Date().toISOString(),
+      session_token: normalizeText(result.session_token || result.access_token_ref || payload.session_token || payload.access_token_ref),
+      access_token_ref: normalizeText(result.access_token_ref || result.session_token || payload.access_token_ref || payload.session_token),
+      carrier_options: normalizeEinvoiceCarrierOptions(result.carrier_options),
+      filters_applied: filter,
+      invoices: normalizeEinvoiceInvoiceRows(result.invoices, filter.status),
+    }
+  } catch (error) {
+    throw mapNativeError(error)
+  }
 }
 
 export async function disconnectEinvoiceAuth(payload = {}) {
-  return postJson('/api/einvoice/disconnect', payload)
+  assertEinvoiceCarrierFeatureEnabled()
+  try {
+    return await disconnectNativeEinvoiceCarrier({
+      provider: normalizeText(payload.provider || 'tw_einvoice_mobile_barcode').toLowerCase(),
+      authMode: normalizeText(payload.auth_mode || 'mobile_barcode').toLowerCase() || 'mobile_barcode',
+      connectionId: normalizeText(payload.connection_id || payload.connectionId),
+      sessionToken: normalizeText(payload.session_token || payload.access_token_ref),
+      accessTokenRef: normalizeText(payload.access_token_ref || payload.session_token),
+    })
+  } catch (error) {
+    throw mapNativeError(error)
+  }
 }

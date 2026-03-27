@@ -10,7 +10,7 @@
     </article>
 
     <article v-else-if="featureEnabled" class="card panel form-panel">
-      <p class="muted">{{ t('invoice_carrier.create.desc', '目前 v1 僅支援電子發票手機條碼登入。登入成功後會保存加密 Session，之後 App 開啟時自動同步。') }}</p>
+      <p class="muted">{{ t('invoice_carrier.create.desc', '目前僅支援 Android App 內的電子發票手機條碼登入。圖形驗證碼辨識、登入與同步都會在 App 內自動完成。') }}</p>
 
       <label class="field">
         {{ t('invoice_carrier.create.mobile_phone', '手機號碼') }}
@@ -22,21 +22,12 @@
         <input v-model="form.password" class="input" type="password" maxlength="16" />
       </label>
 
-      <label class="field">
-        {{ t('invoice_carrier.create.captcha', '圖形驗證碼') }}
-        <input v-model.trim="form.captchaCode" class="input" type="text" inputmode="numeric" maxlength="8" />
-      </label>
-
-      <div class="captcha-box">
-        <img v-if="captchaImageSrc" :src="captchaImageSrc" alt="captcha" class="captcha-image" />
-        <div v-else class="captcha-placeholder muted">{{ t('invoice_carrier.create.captcha_loading', '驗證碼載入中') }}</div>
-      </div>
-      <p v-if="captchaErrorMessage" class="muted error-text">{{ captchaErrorMessage }}</p>
+      <article v-if="progressText" class="progress-panel">
+        <strong>{{ progressText }}</strong>
+        <small class="muted">{{ t('invoice_carrier.create.progress_hint', '請保持 App 在前景，系統會自動處理驗證碼與登入流程。') }}</small>
+      </article>
 
       <div class="row action-row">
-        <button class="btn" :disabled="loadingCaptcha" :aria-busy="loadingCaptcha" @click="loadCaptcha(true)">
-          {{ loadingCaptcha ? t('common.loading', '載入中...') : t('invoice_carrier.create.refresh_captcha', '更新驗證碼') }}
-        </button>
         <button class="btn primary" :disabled="!canSubmit || submitting" :aria-busy="submitting" @click="submit">
           {{ submitting ? t('invoice_carrier.create.submitting', '登入並同步中...') : t('invoice_carrier.create.submit', '登入並開始同步') }}
         </button>
@@ -53,7 +44,6 @@ import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import {
   connectInvoiceCarrier,
-  createInvoiceCarrierLinkSession,
   getInvoiceCarrierCredentialDraft,
 } from '@/ui/services/einvoice-carrier.service'
 import {
@@ -71,52 +61,23 @@ const { t } = useI18n()
 const featureEnabled = isEinvoiceCarrierFeatureEnabled()
 const apiReady = isEinvoiceCarrierApiConfigured()
 const apiUnavailableMessage = getEinvoiceCarrierApiUnavailableMessage()
-const loadingCaptcha = ref(false)
 const submitting = ref(false)
-const sessionId = ref('')
-const captchaImageSrc = ref('')
-const captchaErrorMessage = ref('')
+const progressText = ref('')
 const form = reactive({
   mobilePhone: '',
   password: '',
-  captchaCode: '',
 })
 
 const connectionId = computed(() => String(route.query.connectionId ?? '').trim())
 const reauthMode = computed(() => Boolean(connectionId.value))
 const canSubmit = computed(() => (
-  Boolean(form.mobilePhone && form.password && form.captchaCode && sessionId.value)
+  Boolean(ledgerStore.activeLedgerId && form.mobilePhone && form.password)
 ))
 const backLink = computed(() => {
   return reauthMode.value
     ? { name: 'invoice-carriers-detail', params: { id: connectionId.value } }
     : { name: 'invoice-carriers' }
 })
-
-async function loadCaptcha(refresh = false) {
-  loadingCaptcha.value = true
-  captchaErrorMessage.value = ''
-  try {
-    const session = await createInvoiceCarrierLinkSession({
-      provider: 'tw_einvoice_mobile_barcode',
-      sessionId: refresh ? sessionId.value : '',
-      refreshCaptcha: refresh && Boolean(sessionId.value),
-    })
-    const nextCaptchaImageSrc = String(session.captcha_image_data_url ?? '').trim()
-      || String(session.captcha_image_src ?? '').trim()
-    if (!nextCaptchaImageSrc) {
-      throw new Error(t('invoice_carrier.create.captcha_failed', '圖形驗證碼暫時無法載入，請稍後再試'))
-    }
-    sessionId.value = String(session.session_id ?? '')
-    captchaImageSrc.value = nextCaptchaImageSrc
-  } catch (error) {
-    captchaImageSrc.value = ''
-    captchaErrorMessage.value = String(error?.message ?? '載入驗證碼失敗')
-    uiStore.pushToast(captchaErrorMessage.value, 'error')
-  } finally {
-    loadingCaptcha.value = false
-  }
-}
 
 async function loadSavedCredentialDraft() {
   if (!ledgerStore.activeLedgerId || !connectionId.value) return
@@ -130,26 +91,59 @@ async function loadSavedCredentialDraft() {
   }
 }
 
+function resolveCreateErrorMessage(error) {
+  if (error?.code === 'einvoice_api_unavailable') return apiUnavailableMessage
+
+  const code = String(error?.code ?? '').trim()
+  const rawMessage = String(error?.message ?? '').trim()
+  const mappedByCode = {
+    einvoice_captcha_ocr_failed: t('invoice_carrier.create.error.captcha_ocr_failed', '圖形驗證碼辨識失敗，請稍後再試'),
+    einvoice_login_failed: t('invoice_carrier.create.error.login_failed', '發票載具登入失敗，請確認手機號碼與驗證碼(密碼)'),
+    einvoice_password_change_required: t('invoice_carrier.create.error.password_change_required', '發票載具驗證碼(密碼)已逾期，請先到電子發票平台更改後再重新登入'),
+    einvoice_query_failed: t('invoice_carrier.create.error.query_failed', '登入成功，但暫時無法讀取發票查詢頁'),
+    einvoice_session_expired: t('invoice_carrier.create.error.session_expired', '登入 Session 已失效，請重新驗證'),
+    einvoice_automation_busy: t('invoice_carrier.create.error.busy', '目前已有一個發票載具流程在執行中，請稍後再試'),
+    einvoice_automation_timeout: t('invoice_carrier.create.error.timeout', '發票載具流程逾時，請稍後再試'),
+    einvoice_automation_unavailable: t('invoice_carrier.create.error.unavailable', '目前無法啟動 App 內的發票載具流程，請稍後再試'),
+    einvoice_automation_android_only: t('invoice_carrier.create.error.android_only', '發票載具同步目前僅支援 Android App'),
+  }
+  return mappedByCode[code] || rawMessage || t('invoice_carrier.create.error.generic', '發票載具登入失敗')
+}
+
+function startSubmitProgress() {
+  progressText.value = t('invoice_carrier.create.progress.recognizing_captcha', '圖形驗證碼辨識中...')
+  const timers = [
+    window.setTimeout(() => {
+      progressText.value = t('invoice_carrier.create.progress.logging_in', '登入中...')
+    }, 900),
+    window.setTimeout(() => {
+      progressText.value = t('invoice_carrier.create.progress.loading_carriers', '讀取載具清單中...')
+    }, 2400),
+  ]
+
+  return () => {
+    timers.forEach((timerId) => window.clearTimeout(timerId))
+    progressText.value = ''
+  }
+}
+
 async function submit() {
   if (!ledgerStore.activeLedgerId) return
   submitting.value = true
-  captchaErrorMessage.value = ''
+  const stopProgress = startSubmitProgress()
   try {
     const connection = await connectInvoiceCarrier(ledgerStore.activeLedgerId, {
       provider: 'tw_einvoice_mobile_barcode',
       authMode: 'mobile_barcode',
-      sessionId: sessionId.value,
       mobilePhone: form.mobilePhone,
       password: form.password,
-      captchaCode: form.captchaCode,
     })
     uiStore.pushToast(t('invoice_carrier.toast.connected', '發票載具登入成功'))
     await router.replace({ name: 'invoice-carriers-detail', params: { id: connection.id } })
   } catch (error) {
-    uiStore.pushToast(String(error?.message ?? '發票載具登入失敗'), 'error')
-    form.captchaCode = ''
-    await loadCaptcha(true)
+    uiStore.pushToast(resolveCreateErrorMessage(error), 'error')
   } finally {
+    stopProgress()
     submitting.value = false
   }
 }
@@ -160,9 +154,6 @@ onMounted(async () => {
     return
   }
   await loadSavedCredentialDraft()
-  if (apiReady) {
-    await loadCaptcha(false)
-  }
 })
 </script>
 
@@ -179,26 +170,16 @@ onMounted(async () => {
   gap: 8px;
   font-weight: 700;
 }
-.captcha-box {
-  min-height: 56px;
-  display: flex;
-  align-items: center;
-}
-.captcha-image {
-  max-width: 240px;
-  border-radius: 10px;
-  border: 1px solid var(--field-border);
-}
-.captcha-placeholder {
-  padding: 12px;
-  border: 1px dashed var(--field-border);
-  border-radius: 10px;
-}
-.error-text {
-  margin: -6px 0 0;
-}
 .action-row {
   gap: 8px;
   flex-wrap: wrap;
+}
+.progress-panel {
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 84%, transparent);
+  padding: 12px;
+  display: grid;
+  gap: 6px;
 }
 </style>

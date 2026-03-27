@@ -29,7 +29,6 @@
           <button class="btn" :class="{ primary: tab === 'borrow' }" @click="tab = 'borrow'">借入</button>
         </div>
         <div class="row list-actions">
-          <button class="btn" @click="exportCsv">匯出 CSV</button>
           <button class="btn end-btn" :class="{ primary: showFinished }" @click="showFinished = !showFinished">
             {{ showFinished ? '進行中' : '已結束' }}
           </button>
@@ -147,14 +146,6 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
-import {
-  createCsvBlobUrl,
-  exportLoanItemsCsv,
-  openFileUrl,
-  revokeBlobUrl,
-  saveCsvFileToDevice,
-  triggerDownloadFromUrl,
-} from '@/core/services/export.service'
 import { useI18n } from '@/ui/services/i18n.service'
 import {
   buildLoanListQuery,
@@ -171,7 +162,6 @@ const uiStore = useUiStore()
 const transactionStore = useTransactionStore()
 const budgetStore = useBudgetStore()
 const { t } = useI18n()
-let exportedUrl = ''
 
 const createOpen = ref(false)
 const tab = ref('lend')
@@ -232,7 +222,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
-  revokeBlobUrl(exportedUrl)
 })
 
 watch(
@@ -377,38 +366,6 @@ async function createLoan() {
   }
 }
 
-async function exportCsv() {
-  if (!visibleLoans.value.length) {
-    uiStore.pushToast('目前沒有可匯出的借貸資料', 'error')
-    return
-  }
-
-  try {
-    const result = exportLoanItemsCsv(visibleLoans.value, {
-      ledgerName: ledgerStore.activeLedger?.name ?? 'loans',
-      tab: tab.value,
-      showFinished: showFinished.value,
-    })
-    const deviceSave = await saveCsvFileToDevice(result.filename, result.csvText, { category: 'loans' })
-    const openTarget = String(deviceSave?.uri ?? '').trim() || String(deviceSave?.openUrl ?? '').trim()
-
-    if (deviceSave?.saved && openTarget) {
-      openFileUrl(openTarget)
-      uiStore.pushToast(`已匯出 ${result.rowCount} 筆借貸`)
-      return
-    }
-
-    revokeBlobUrl(exportedUrl)
-    exportedUrl = createCsvBlobUrl(result.csvText)
-    const opened = openFileUrl(exportedUrl)
-    if (!opened) {
-      triggerDownloadFromUrl(exportedUrl, result.filename)
-    }
-    uiStore.pushToast(`已匯出 ${result.rowCount} 筆借貸`)
-  } catch (error) {
-    uiStore.pushToast(error.message ?? '匯出借貸 CSV 失敗', 'error')
-  }
-}
 </script>
 
 <style scoped>.panel {

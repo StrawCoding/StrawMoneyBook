@@ -38,6 +38,16 @@ public class BankAutomationPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void connectEinvoiceCarrier(PluginCall call) {
+        launch(call, BankAutomationActivity.ACTION_CONNECT_EINVOICE_CARRIER);
+    }
+
+    @PluginMethod
+    public void syncEinvoiceCarrier(PluginCall call) {
+        launch(call, BankAutomationActivity.ACTION_SYNC_EINVOICE_CARRIER);
+    }
+
+    @PluginMethod
     public void disconnectConnection(PluginCall call) {
         launch(call, BankAutomationActivity.ACTION_DISCONNECT_CONNECTION);
     }

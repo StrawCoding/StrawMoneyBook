@@ -30,6 +30,39 @@ test('logClientError deduplicates repeated errors within the cooldown window', a
   assert.equal(uploads[0].message, 'boom')
 })
 
+test('logClientError preserves sanitized debug metadata in the upload payload', async () => {
+  const uploads = []
+  setErrorLogServiceDependenciesForTest({
+    uploadClientErrorLog: async (payload) => {
+      uploads.push(payload)
+      return { ok: true }
+    },
+  })
+
+  const error = new Error('carrier login failed')
+  error.code = 'einvoice_login_failed'
+  await logClientError(error, {
+    source: 'einvoice_carrier',
+    routePath: '/invoice-carriers',
+    debug: {
+      operation: 'connect_invoice_carrier',
+      debugHint: 'check captcha',
+      debugLastStep: 'submit_login',
+      trace: {
+        steps: [
+          { step: 'load_login_page', status: 'ok' },
+          { step: 'submit_login', status: 'error' },
+        ],
+      },
+    },
+  })
+
+  assert.equal(uploads.length, 1)
+  assert.equal(uploads[0].context.debug.operation, 'connect_invoice_carrier')
+  assert.equal(uploads[0].context.debug.debugHint, 'check captcha')
+  assert.equal(uploads[0].context.debug.trace.steps[1].step, 'submit_login')
+})
+
 test('settings router and settings page expose the admin console entry points', () => {
   const routerSource = readFileSync(resolve(import.meta.dirname, '../src/ui/router/index.js'), 'utf8')
   const settingsSource = readFileSync(resolve(import.meta.dirname, '../src/ui/views/settings.vue'), 'utf8')
@@ -50,6 +83,12 @@ test('admin member management uses search pagination and a dedicated detail page
   assert.match(adminPageSource, /v-model\.trim="searchQuery"/)
   assert.match(adminPageSource, /pageInput/)
   assert.match(adminPageSource, /settings-admin-user/)
+  assert.match(adminPageSource, /dashboard-hero/)
+  assert.match(adminPageSource, /activityChartPoints/)
+  assert.match(adminPageSource, /healthScore/)
+  assert.match(adminPageSource, /copyLogEvent\(log\)/)
+  assert.match(adminPageSource, /buildLogCopyPayload/)
+  assert.match(adminPageSource, /navigator\.clipboard\?\.writeText/)
 
   assert.match(adminMemberPageSource, /updateAdminUserMembership/)
   assert.match(adminMemberPageSource, /deleteAdminUser/)

@@ -597,12 +597,14 @@ function buildLoanCsvRows(loans = []) {
 
 export function exportLoanItemsCsv(loans, options = {}) {
   const safeLedgerName = sanitizeFilenameSegment(options.ledgerName ?? 'loans')
+  const safeScopeName = sanitizeFilenameSegment(options.scopeName ?? '')
   const normalizedTab = options.tab === 'borrow' ? 'borrow' : 'lend'
   const normalizedScope = options.showFinished ? 'finished' : 'active'
   const timestamp = timestampForFilename(options.now instanceof Date ? options.now : new Date())
   const rows = buildLoanCsvRows(loans)
+  const scopeSegment = safeScopeName ? `_${safeScopeName}` : ''
   return {
-    filename: `${safeLedgerName}_loans_${normalizedTab}_${normalizedScope}_${timestamp}.csv`,
+    filename: `${safeLedgerName}_loans${scopeSegment}_${normalizedTab}_${normalizedScope}_${timestamp}.csv`,
     csvText: rowsToCsv(rows, LOAN_CSV_HEADERS),
     rowCount: rows.length,
   }

@@ -414,6 +414,80 @@ export async function addBatchLoanRepaymentByCounterparty(ledgerId, payload) {
   })
 }
 
+export async function addBatchLoanRepaymentByLoanIds(ledgerId, payload) {
+  const amountMinor = validateAmountMinor(payload.amountMinor, 'repaymentAmountMinor')
+  const selectedLoanIds = Array.from(
+    new Set((payload.loanIds ?? []).map((item) => String(item ?? '').trim()).filter(Boolean)),
+  )
+
+  if (!selectedLoanIds.length) {
+    throw new Error('請先選擇要批量處理的借貸')
+  }
+
+  if (!payload.accountId) {
+    throw new Error('還款必須指定帳戶')
+  }
+
+  return withTransaction(async () => {
+    const selectedLoanIdSet = new Set(selectedLoanIds)
+    const matchedLoans = sortLoansForBatchRepayment(
+      (await listLoans(ledgerId))
+        .map((loan) => normalizeLoanRecord(loan))
+        .filter((loan) => {
+          return selectedLoanIdSet.has(String(loan?.id ?? ''))
+            && ['active', 'partial'].includes(String(loan?.status ?? ''))
+            && Math.max(0, Number(loan?.remaining_minor ?? 0)) > 0
+        }),
+    )
+
+    if (!matchedLoans.length) {
+      throw new Error('找不到可批量處理的借貸')
+    }
+
+    const totalRemainingMinor = matchedLoans.reduce((total, loan) => {
+      return total + Math.max(0, Number(loan?.remaining_minor ?? 0))
+    }, 0)
+
+    if (amountMinor > totalRemainingMinor) {
+      throw new Error('批量金額不可大於選取借貸的剩餘總額')
+    }
+
+    let remainingMinor = amountMinor
+    const allocations = []
+
+    for (const loan of matchedLoans) {
+      if (remainingMinor <= 0) break
+      const loanRemainingMinor = Math.max(0, Number(loan?.remaining_minor ?? 0))
+      if (loanRemainingMinor <= 0) continue
+
+      const appliedMinor = Math.min(loanRemainingMinor, remainingMinor)
+      const result = await addLoanRepaymentInternal(ledgerId, {
+        loanId: loan.id,
+        accountId: payload.accountId,
+        amountMinor: appliedMinor,
+        note: payload.note,
+        paidAt: payload.paidAt,
+      })
+
+      allocations.push({
+        loanId: loan.id,
+        appliedMinor,
+        status: result.status,
+        remainingMinor: result.remainingMinor,
+      })
+      remainingMinor -= appliedMinor
+    }
+
+    return {
+      totalAppliedMinor: amountMinor - remainingMinor,
+      remainingMinor,
+      affectedLoanCount: allocations.length,
+      allocations,
+      loanIds: matchedLoans.map((loan) => loan.id),
+    }
+  })
+}
+
 export async function updateLoanRepayment(ledgerId, payload) {
   const amountMinor = validateAmountMinor(payload.amountMinor, 'repaymentAmountMinor')
 

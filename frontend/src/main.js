@@ -163,7 +163,7 @@ import {
 import { runWebdavAutoBackupIfDue, runWebdavAutoBackupOnDataChange } from '@/ui/services/webdav-backup.service'
 import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
 import { runBankSyncAutoRefreshIfDue } from '@/ui/services/bank-sync-auto-refresh.service'
-import { isEinvoiceCarrierApiConfigured } from '@/services/einvoice-carrier/backend'
+import { isEinvoiceCarrierFeatureEnabled } from '@/services/einvoice-carrier/backend'
 import { runInvoiceCarrierAutoSyncIfDue } from '@/ui/services/einvoice-carrier-auto-sync.service'
 import { runExchangeRateAutoSyncIfDue } from '@/ui/services/exchange-rate.service'
 import { clearHomeWidgetSummary, syncHomeWidgetSummary } from '@/ui/services/home-widget.service'
@@ -222,7 +222,7 @@ function triggerBankAutoRefresh(pinia, ledgerId, reason) {
 }
 
 function triggerEinvoiceCarrierAutoSync(pinia, ledgerId, reason) {
-  if (!isEinvoiceCarrierApiConfigured()) return
+  if (!isEinvoiceCarrierFeatureEnabled()) return
   const normalizedLedgerId = String(ledgerId ?? '').trim()
   if (!normalizedLedgerId) return
   void runInvoiceCarrierAutoSyncIfDue(normalizedLedgerId, { reason })

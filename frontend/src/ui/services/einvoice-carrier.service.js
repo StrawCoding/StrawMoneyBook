@@ -5,6 +5,7 @@ import {
   listEinvoiceCarrierProviders,
   syncEinvoiceInvoices,
 } from '../../services/einvoice-carrier/backend.js'
+import { traceEinvoiceCarrierOperation } from '../../core/services/einvoice-carrier-debug.service.js'
 import { buildDefaultEinvoiceSyncFilter, normalizeEinvoiceSyncFilter } from '../../services/einvoice-carrier/shared.js'
 import { yieldToMainThread } from '../../core/utils/cooperative-yield.js'
 
@@ -40,6 +41,11 @@ async function defaultFindImportedLedgerTransactionBySourceRef(...args) {
 async function defaultGetEncryptedSetting(...args) {
   const mod = await import('./secure-setting.service.js')
   return mod.getEncryptedSetting(...args)
+}
+
+async function defaultLogClientError(...args) {
+  const mod = await import('./error-log.service.js')
+  return mod.logClientError(...args)
 }
 
 async function defaultListInvoiceCarrierConnections(...args) {
@@ -101,10 +107,12 @@ const defaultDependencies = {
   listInvoiceCarrierInvoices: defaultListInvoiceCarrierInvoices,
   listInvoiceCarrierInvoicesByIds: defaultListInvoiceCarrierInvoicesByIds,
   listEinvoiceCarrierProviders,
+  logClientError: defaultLogClientError,
   markInvoiceCarrierInvoicesImported: defaultMarkInvoiceCarrierInvoicesImported,
   markInvoiceCarrierInvoicesViewed: defaultMarkInvoiceCarrierInvoicesViewed,
   setEncryptedSetting: defaultSetEncryptedSetting,
   syncEinvoiceInvoices,
+  traceEinvoiceCarrierOperation,
   updateInvoiceCarrierConnection: defaultUpdateInvoiceCarrierConnection,
   upsertInvoiceCarrierConnection: defaultUpsertInvoiceCarrierConnection,
   upsertInvoiceCarrierInvoices: defaultUpsertInvoiceCarrierInvoices,
@@ -123,6 +131,13 @@ function normalizeProvider(provider) {
 
 function normalizeAuthMode(authMode) {
   return normalizeText(authMode || 'mobile_barcode').toLowerCase() || 'mobile_barcode'
+}
+
+function maskMobilePhone(value) {
+  const normalized = normalizeText(value).replace(/\s+/g, '')
+  if (!normalized) return ''
+  if (normalized.length <= 4) return normalized
+  return `${'*'.repeat(Math.max(0, normalized.length - 4))}${normalized.slice(-4)}`
 }
 
 function buildCredentialSettingKey(connectionId) {
@@ -217,6 +232,68 @@ function buildEinvoiceImportNote(invoice = {}) {
   return parts.join(' / ') || '電子發票載具匯入'
 }
 
+function sanitizeDebugValue(value, depth = 0) {
+  if (value == null) return null
+  if (depth >= 4) {
+    return normalizeText(value)
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return value
+  }
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 30)
+      .map((item) => sanitizeDebugValue(item, depth + 1))
+      .filter((item) => item !== undefined)
+  }
+  if (typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .slice(0, 30)
+        .map(([key, entryValue]) => [key, sanitizeDebugValue(entryValue, depth + 1)])
+        .filter(([, entryValue]) => entryValue !== undefined),
+    )
+  }
+  return normalizeText(value)
+}
+
+function buildEinvoiceDebugContext(operation, meta = {}, error) {
+  const normalizedOperation = normalizeText(operation) || 'unknown'
+  const debugTrace = sanitizeDebugValue(error?.debugTrace)
+  return {
+    operation: normalizedOperation,
+    provider: normalizeProvider(meta.provider),
+    authMode: normalizeAuthMode(meta.authMode),
+    ledgerId: normalizeText(meta.ledgerId),
+    connectionId: normalizeText(meta.connectionId),
+    providerConnectionId: normalizeText(meta.providerConnectionId),
+    mobilePhoneMasked: maskMobilePhone(meta.mobilePhone),
+    debugHint: normalizeText(error?.debugHint || error?.debugTrace?.debugHint),
+    debugLastStep: normalizeText(error?.debugLastStep || error?.debugTrace?.debugLastStep),
+    trace: debugTrace && typeof debugTrace === 'object' ? debugTrace : null,
+  }
+}
+
+async function reportEinvoiceCarrierDebugLog(operation, meta = {}, error) {
+  try {
+    await dependencies.logClientError(error, {
+      source: 'einvoice_carrier',
+      component: 'einvoice-carrier.service',
+      info: [
+        normalizeText(operation),
+        normalizeProvider(meta.provider),
+        normalizeText(meta.connectionId || meta.providerConnectionId),
+      ].filter(Boolean).join(' | '),
+      debug: buildEinvoiceDebugContext(operation, meta, error),
+    })
+  } catch {
+    // Debug log upload is best-effort only.
+  }
+}
+
 async function hydrateConnectionSummary(ledgerId, connection) {
   const invoices = await dependencies.listInvoiceCarrierInvoices(ledgerId, { connectionId: connection.id })
   const totalInvoiceCount = invoices.length
@@ -294,47 +371,64 @@ export async function connectInvoiceCarrier(ledgerId, options = {}) {
   const password = String(options.password ?? '')
   const captchaCode = normalizeText(options.captchaCode)
   const normalizedFilter = normalizeEinvoiceSyncFilter(options.filter, getDefaultEinvoiceSyncFilter())
-
-  const exchanged = await dependencies.exchangeEinvoiceAuth({
+  return dependencies.traceEinvoiceCarrierOperation('connect_invoice_carrier', {
+    ledgerId,
     provider,
-    auth_mode: authMode,
-    session_id: normalizeText(options.sessionId) || undefined,
-    mobile_phone: mobilePhone,
-    password,
-    captcha_code: captchaCode,
-  })
+    mobilePhoneMasked: maskMobilePhone(mobilePhone),
+  }, async (traceContext) => {
+    let exchanged
+    try {
+      exchanged = await dependencies.exchangeEinvoiceAuth({
+        provider,
+        auth_mode: authMode,
+        session_id: normalizeText(options.sessionId) || undefined,
+        mobile_phone: mobilePhone,
+        password,
+        captcha_code: captchaCode,
+      })
+      traceContext.attachDebugTrace(exchanged?.debugTrace)
+    } catch (error) {
+      await reportEinvoiceCarrierDebugLog('connect_invoice_carrier', {
+        ledgerId,
+        provider,
+        authMode,
+        mobilePhone,
+      }, error)
+      throw error
+    }
 
-  const providerConnectionId = normalizeText(exchanged.provider_connection_id || mobilePhone)
-  const connection = await dependencies.upsertInvoiceCarrierConnection(ledgerId, {
-    provider,
-    authMode,
-    providerConnectionId,
-    status: 'active',
-    userLabel: normalizeText(exchanged.connection_name) || `手機條碼 ${providerConnectionId.slice(-4)}`,
-    lastSyncStatus: 'idle',
-    lastError: '',
-    syncFilter: normalizedFilter,
-    carrierOptions: Array.isArray(exchanged.carrier_options) ? exchanged.carrier_options : [],
-  })
+    const providerConnectionId = normalizeText(exchanged.provider_connection_id || mobilePhone)
+    const connection = await dependencies.upsertInvoiceCarrierConnection(ledgerId, {
+      provider,
+      authMode,
+      providerConnectionId,
+      status: 'active',
+      userLabel: normalizeText(exchanged.connection_name) || `手機條碼 ${providerConnectionId.slice(-4)}`,
+      lastSyncStatus: 'idle',
+      lastError: '',
+      syncFilter: normalizedFilter,
+      carrierOptions: Array.isArray(exchanged.carrier_options) ? exchanged.carrier_options : [],
+    })
 
-  await dependencies.setEncryptedSetting(ledgerId, buildCredentialSettingKey(connection.id), {
-    provider,
-    authMode,
-    mobilePhone,
-    password,
-    updatedAt: new Date().toISOString(),
-  })
+    await dependencies.setEncryptedSetting(ledgerId, buildCredentialSettingKey(connection.id), {
+      provider,
+      authMode,
+      mobilePhone,
+      password,
+      updatedAt: new Date().toISOString(),
+    })
 
-  await dependencies.setEncryptedSetting(ledgerId, buildSessionSettingKey(connection.id), {
-    provider,
-    authMode,
-    sessionToken: normalizeText(exchanged.session_token || exchanged.access_token_ref),
-    accessTokenRef: normalizeText(exchanged.access_token_ref || exchanged.session_token),
-    updatedAt: new Date().toISOString(),
-  })
+    await dependencies.setEncryptedSetting(ledgerId, buildSessionSettingKey(connection.id), {
+      provider,
+      authMode,
+      sessionToken: normalizeText(exchanged.session_token || exchanged.access_token_ref),
+      accessTokenRef: normalizeText(exchanged.access_token_ref || exchanged.session_token),
+      updatedAt: new Date().toISOString(),
+    })
 
-  await syncInvoiceCarrierNow(ledgerId, connection.id, { filter: normalizedFilter })
-  return getInvoiceCarrierConnectionDetail(ledgerId, connection.id)
+    await syncInvoiceCarrierNow(ledgerId, connection.id, { filter: normalizedFilter })
+    return getInvoiceCarrierConnectionDetail(ledgerId, connection.id)
+  })
 }
 
 export async function syncInvoiceCarrierNow(ledgerId, connectionId, options = {}) {
@@ -344,88 +438,109 @@ export async function syncInvoiceCarrierNow(ledgerId, connectionId, options = {}
   if (normalizeText(connection.status).toLowerCase() === 'disabled') {
     throw new Error('此發票載具連線已停用')
   }
-
-  const sessionState = sanitizeSessionState(
-    await dependencies.getEncryptedSetting(ledgerId, buildSessionSettingKey(connectionId)),
-  )
-  const sessionToken = normalizeText(sessionState?.sessionToken || sessionState?.accessTokenRef)
-  if (!sessionToken) {
-    const error = new Error('電子發票登入 Session 已失效，請重新驗證')
-    error.code = 'einvoice_session_expired'
-    await dependencies.updateInvoiceCarrierConnection(ledgerId, connectionId, {
-      status: 'reauth_required',
-      lastSyncStatus: 'error',
-      lastError: `${error.code}: ${error.message}`,
-    })
-    throw error
-  }
-
-  const syncFilter = normalizeEinvoiceSyncFilter(options.filter, connection.sync_filter || getDefaultEinvoiceSyncFilter())
-
-  try {
-    const syncRes = await dependencies.syncEinvoiceInvoices({
-      provider: connection.provider,
-      auth_mode: connection.auth_mode,
-      connection_id: connection.id,
-      provider_connection_id: connection.provider_connection_id,
-      session_token: sessionToken,
-      access_token_ref: sessionToken,
-      filter: syncFilter,
-    })
-
-    const invoices = Array.isArray(syncRes.invoices) ? syncRes.invoices : []
-    await dependencies.upsertInvoiceCarrierInvoices(
-      ledgerId,
-      connection.id,
-      invoices.map((item) => ({
-        providerInvoiceKey: normalizeText(item.providerInvoiceKey),
-        invoiceNumber: normalizeText(item.invoiceNumber),
-        invoiceDate: normalizeText(item.invoiceDate),
-        amountMinor: Math.round(Number(item.amountMinor ?? 0) || 0),
-        sellerName: normalizeText(item.sellerName),
-        carrierLabel: normalizeText(item.carrierLabel),
-        buyerBan: normalizeText(item.buyerBan),
-        invoiceStatus: normalizeText(item.invoiceStatus || syncFilter.status) || 'all',
-        raw: item.raw && typeof item.raw === 'object' ? item.raw : {},
-      })),
+  return dependencies.traceEinvoiceCarrierOperation('sync_invoice_carrier', {
+    ledgerId,
+    provider: connection.provider,
+    connectionId,
+    providerConnectionId: connection.provider_connection_id,
+  }, async (traceContext) => {
+    const sessionState = sanitizeSessionState(
+      await dependencies.getEncryptedSetting(ledgerId, buildSessionSettingKey(connectionId)),
     )
-
-    const nextSessionToken = normalizeText(syncRes.session_token || syncRes.access_token_ref)
-    if (nextSessionToken) {
-      await dependencies.setEncryptedSetting(ledgerId, buildSessionSettingKey(connection.id), {
+    const sessionToken = normalizeText(sessionState?.sessionToken || sessionState?.accessTokenRef)
+    if (!sessionToken) {
+      const error = new Error('電子發票登入 Session 已失效，請重新驗證')
+      error.code = 'einvoice_session_expired'
+      await dependencies.updateInvoiceCarrierConnection(ledgerId, connectionId, {
+        status: 'reauth_required',
+        lastSyncStatus: 'error',
+        lastError: `${error.code}: ${error.message}`,
+      })
+      await reportEinvoiceCarrierDebugLog('sync_invoice_carrier', {
+        ledgerId,
         provider: connection.provider,
         authMode: connection.auth_mode,
-        sessionToken: nextSessionToken,
-        accessTokenRef: nextSessionToken,
-        updatedAt: new Date().toISOString(),
+        connectionId,
+        providerConnectionId: connection.provider_connection_id,
+      }, error)
+      throw error
+    }
+
+    const syncFilter = normalizeEinvoiceSyncFilter(options.filter, connection.sync_filter || getDefaultEinvoiceSyncFilter())
+
+    try {
+      const syncRes = await dependencies.syncEinvoiceInvoices({
+        provider: connection.provider,
+        auth_mode: connection.auth_mode,
+        connection_id: connection.id,
+        provider_connection_id: connection.provider_connection_id,
+        session_token: sessionToken,
+        access_token_ref: sessionToken,
+        filter: syncFilter,
       })
-    }
+      traceContext.attachDebugTrace(syncRes?.debugTrace)
 
-    await dependencies.updateInvoiceCarrierConnection(ledgerId, connection.id, {
-      status: 'active',
-      lastSyncAt: normalizeText(syncRes.sync_time) || new Date().toISOString(),
-      lastSyncStatus: 'ok',
-      lastError: '',
-      syncFilter,
-      carrierOptions: Array.isArray(syncRes.carrier_options) ? syncRes.carrier_options : connection.carrier_options,
-    })
+      const invoices = Array.isArray(syncRes.invoices) ? syncRes.invoices : []
+      await dependencies.upsertInvoiceCarrierInvoices(
+        ledgerId,
+        connection.id,
+        invoices.map((item) => ({
+          providerInvoiceKey: normalizeText(item.providerInvoiceKey),
+          invoiceNumber: normalizeText(item.invoiceNumber),
+          invoiceDate: normalizeText(item.invoiceDate),
+          amountMinor: Math.round(Number(item.amountMinor ?? 0) || 0),
+          sellerName: normalizeText(item.sellerName),
+          carrierLabel: normalizeText(item.carrierLabel),
+          buyerBan: normalizeText(item.buyerBan),
+          invoiceStatus: normalizeText(item.invoiceStatus || syncFilter.status) || 'all',
+          raw: item.raw && typeof item.raw === 'object' ? item.raw : {},
+        })),
+      )
 
-    return {
-      syncedCount: invoices.length,
-      syncTime: normalizeText(syncRes.sync_time) || new Date().toISOString(),
-      filter: syncFilter,
+      const nextSessionToken = normalizeText(syncRes.session_token || syncRes.access_token_ref)
+      if (nextSessionToken) {
+        await dependencies.setEncryptedSetting(ledgerId, buildSessionSettingKey(connection.id), {
+          provider: connection.provider,
+          authMode: connection.auth_mode,
+          sessionToken: nextSessionToken,
+          accessTokenRef: nextSessionToken,
+          updatedAt: new Date().toISOString(),
+        })
+      }
+
+      await dependencies.updateInvoiceCarrierConnection(ledgerId, connection.id, {
+        status: 'active',
+        lastSyncAt: normalizeText(syncRes.sync_time) || new Date().toISOString(),
+        lastSyncStatus: 'ok',
+        lastError: '',
+        syncFilter,
+        carrierOptions: Array.isArray(syncRes.carrier_options) ? syncRes.carrier_options : connection.carrier_options,
+      })
+
+      return {
+        syncedCount: invoices.length,
+        syncTime: normalizeText(syncRes.sync_time) || new Date().toISOString(),
+        filter: syncFilter,
+      }
+    } catch (error) {
+      const code = normalizeText(error?.code)
+      const message = normalizeText(error?.message ?? error)
+      await dependencies.updateInvoiceCarrierConnection(ledgerId, connection.id, {
+        status: code === 'einvoice_session_expired' ? 'reauth_required' : 'active',
+        lastSyncStatus: 'error',
+        lastError: `${code || 'einvoice_sync_failed'}: ${message}`,
+        syncFilter,
+      })
+      await reportEinvoiceCarrierDebugLog('sync_invoice_carrier', {
+        ledgerId,
+        provider: connection.provider,
+        authMode: connection.auth_mode,
+        connectionId: connection.id,
+        providerConnectionId: connection.provider_connection_id,
+      }, error)
+      throw error
     }
-  } catch (error) {
-    const code = normalizeText(error?.code)
-    const message = normalizeText(error?.message ?? error)
-    await dependencies.updateInvoiceCarrierConnection(ledgerId, connection.id, {
-      status: code === 'einvoice_session_expired' ? 'reauth_required' : 'active',
-      lastSyncStatus: 'error',
-      lastError: `${code || 'einvoice_sync_failed'}: ${message}`,
-      syncFilter,
-    })
-    throw error
-  }
+  })
 }
 
 export async function listInvoiceCarrierMirrorInvoices(ledgerId, options = {}) {
@@ -549,29 +664,35 @@ export async function disconnectInvoiceCarrier(ledgerId, connectionId) {
   assertLedgerId(ledgerId)
   const connection = await dependencies.findInvoiceCarrierConnectionById(ledgerId, connectionId)
   if (!connection) return { ok: true }
+  return dependencies.traceEinvoiceCarrierOperation('disconnect_invoice_carrier', {
+    ledgerId,
+    provider: connection.provider,
+    connectionId,
+    providerConnectionId: connection.provider_connection_id,
+  }, async () => {
+    const sessionState = sanitizeSessionState(
+      await dependencies.getEncryptedSetting(ledgerId, buildSessionSettingKey(connectionId)),
+    )
 
-  const sessionState = sanitizeSessionState(
-    await dependencies.getEncryptedSetting(ledgerId, buildSessionSettingKey(connectionId)),
-  )
+    try {
+      await dependencies.disconnectEinvoiceAuth({
+        provider: connection.provider,
+        auth_mode: connection.auth_mode,
+        provider_connection_id: connection.provider_connection_id,
+        session_token: normalizeText(sessionState?.sessionToken || sessionState?.accessTokenRef),
+        access_token_ref: normalizeText(sessionState?.accessTokenRef || sessionState?.sessionToken),
+      })
+    } catch {
+      // Disconnect is best effort. Local cleanup still proceeds.
+    }
 
-  try {
-    await dependencies.disconnectEinvoiceAuth({
-      provider: connection.provider,
-      auth_mode: connection.auth_mode,
-      provider_connection_id: connection.provider_connection_id,
-      session_token: normalizeText(sessionState?.sessionToken || sessionState?.accessTokenRef),
-      access_token_ref: normalizeText(sessionState?.accessTokenRef || sessionState?.sessionToken),
+    await dependencies.deleteEncryptedSetting(ledgerId, buildCredentialSettingKey(connection.id))
+    await dependencies.deleteEncryptedSetting(ledgerId, buildSessionSettingKey(connection.id))
+    await dependencies.clearInvoiceCarrierMirrorDataByConnection(ledgerId, connection.id)
+    await dependencies.updateInvoiceCarrierConnection(ledgerId, connection.id, {
+      status: 'disabled',
+      deletedAt: new Date().toISOString(),
     })
-  } catch {
-    // Disconnect is best effort. Local cleanup still proceeds.
-  }
-
-  await dependencies.deleteEncryptedSetting(ledgerId, buildCredentialSettingKey(connection.id))
-  await dependencies.deleteEncryptedSetting(ledgerId, buildSessionSettingKey(connection.id))
-  await dependencies.clearInvoiceCarrierMirrorDataByConnection(ledgerId, connection.id)
-  await dependencies.updateInvoiceCarrierConnection(ledgerId, connection.id, {
-    status: 'disabled',
-    deletedAt: new Date().toISOString(),
+    return { ok: true }
   })
-  return { ok: true }
 }

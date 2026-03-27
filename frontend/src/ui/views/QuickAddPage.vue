@@ -48,11 +48,11 @@
         <div v-if="model.type === 'transfer'" class="inline-grid">
           <label class="field">
             {{ t('quick_add.field.from_account') }}
-            <CustomSelect v-model="model.accountId" :options="transferAccountOptions" />
+            <CustomSelect v-model="model.accountId" :groups="transferAccountGroups" />
           </label>
           <label class="field">
             {{ t('quick_add.field.to_account') }}
-            <CustomSelect v-model="model.peerAccountId" :options="transferAccountOptions" />
+            <CustomSelect v-model="model.peerAccountId" :groups="transferAccountGroups" />
           </label>
         </div>
         <section v-if="model.type === 'transfer'" class="fx-panel">
@@ -98,7 +98,7 @@
         <div v-else class="inline-grid">
           <label class="field">
             {{ t('common.account') }}
-            <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
+            <CustomSelect v-model="model.accountId" :groups="directAccountGroups" />
           </label>
           <label class="field">
             {{ t('common.category') }}
@@ -288,6 +288,8 @@ const model = reactive({
 
 const directAccountOptions = computed(() => accountStore.regularAccounts)
 const transferAccountOptions = computed(() => accountStore.accounts)
+const directAccountGroups = computed(() => accountStore.groupedRegularAccounts)
+const transferAccountGroups = computed(() => accountStore.groupedAccounts)
 const addonDirectionOptions = [
   { value: 'plus', label: '+' },
   { value: 'minus', label: '-' },

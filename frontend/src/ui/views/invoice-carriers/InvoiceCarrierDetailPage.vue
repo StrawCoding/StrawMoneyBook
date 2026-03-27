@@ -14,6 +14,7 @@
         <p v-if="connection.status === 'reauth_required'" class="reauth-banner">
           {{ t('invoice_carrier.detail.reauth_hint', '目前需要重新驗證，請重新登入一次後再同步。') }}
         </p>
+        <p v-if="!apiReady" class="muted warning-text">{{ apiUnavailableMessage }}</p>
         <div class="row action-row">
           <button class="btn primary" :disabled="syncing || !apiReady" :aria-busy="syncing" @click="syncNow">
             {{ syncing ? t('invoice_carrier.syncing', '同步中...') : t('invoice_carrier.sync_now', '立即同步') }}

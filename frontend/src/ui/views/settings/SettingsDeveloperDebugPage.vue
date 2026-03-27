@@ -10,7 +10,13 @@
 
       <div class="action-row">
         <button class="btn" :disabled="loading" @click="refresh">{{ t('debug_page.refresh') }}</button>
+        <button class="btn" :disabled="exporting" @click="exportDebugLogs">
+          {{ exporting ? t('common.loading', '載入中...') : t('debug_page.export', '匯出 log') }}
+        </button>
       </div>
+      <small v-if="lastExportLocation" class="muted break-all">
+        {{ t('debug_page.key.export_location', '匯出位置') }}: {{ lastExportLocation }}
+      </small>
 
       <div class="detail-grid">
         <div class="detail-row">
@@ -134,6 +140,50 @@
           </div>
         </article>
       </div>
+
+      <hr class="divider" />
+
+      <div class="trace-header">
+        <small class="muted">{{ t('debug_page.key.einvoice_calls') }}</small>
+      </div>
+      <div v-if="!einvoiceCalls.length" class="muted">{{ t('debug_page.einvoice_calls.empty') }}</div>
+      <div v-else class="trace-list">
+        <article v-for="item in einvoiceCalls" :key="item.id" class="trace-item">
+          <div class="trace-item-top">
+            <strong>{{ item.operation || '-' }}</strong>
+            <strong :class="item.status === 'ok' ? 'trace-ok' : item.status === 'error' ? 'trace-error' : ''">
+              {{ item.status || '-' }}
+            </strong>
+          </div>
+          <div class="trace-item-body">
+            <small class="muted">{{ t('debug_page.key.einvoice_provider') }}: {{ item.provider || '-' }}</small>
+            <small class="muted">{{ t('debug_page.key.einvoice_connection') }}: {{ item.connectionId || '-' }}</small>
+            <small class="muted">
+              {{ t('debug_page.key.einvoice_provider_connection') }}: {{ item.providerConnectionId || '-' }}
+            </small>
+            <small v-if="item.mobilePhoneMasked" class="muted">
+              {{ t('debug_page.key.einvoice_mobile_phone') }}: {{ item.mobilePhoneMasked }}
+            </small>
+            <small class="muted">{{ t('debug_page.key.play_call_started') }}: {{ item.startedAt || '-' }}</small>
+            <small class="muted">{{ t('debug_page.key.play_call_ended') }}: {{ item.endedAt || '-' }}</small>
+            <small class="muted">{{ t('debug_page.key.play_call_duration') }}: {{ formatDuration(item.durationMs) }}</small>
+            <small v-if="item.errorCode" class="muted">{{ t('debug_page.key.play_call_error_code') }}: {{ item.errorCode }}</small>
+            <small v-if="item.errorMessage" class="muted break-all">{{ t('debug_page.key.play_call_error_message') }}: {{ item.errorMessage }}</small>
+            <small v-if="item.debugHint" class="muted break-all">{{ t('debug_page.key.einvoice_debug_hint') }}: {{ item.debugHint }}</small>
+            <small v-if="item.debugLastStep" class="muted">{{ t('debug_page.key.einvoice_last_step') }}: {{ item.debugLastStep }}</small>
+          </div>
+          <div v-if="item.steps?.length" class="trace-step-list">
+            <small class="muted">{{ t('debug_page.key.einvoice_steps') }}</small>
+            <div v-for="(step, index) in item.steps" :key="`${item.id}-${index}`" class="trace-step-item">
+              <strong>{{ step.step || '-' }}</strong>
+              <small :class="step.status === 'ok' ? 'trace-ok' : step.status === 'error' ? 'trace-error' : 'muted'">
+                {{ step.status || '-' }}
+              </small>
+              <small class="muted break-all">{{ step.message || '-' }}</small>
+            </div>
+          </div>
+        </article>
+      </div>
     </article>
   </section>
 </template>
@@ -141,7 +191,9 @@
 <script setup>
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { downloadJsonFile, saveJsonFileToDevice } from '@/core/services/export.service'
 import { useI18n } from '@/ui/services/i18n.service'
+import { useUiStore } from '@/ui/stores/ui.store'
 import {
   getGooglePlayCallTraceSnapshot,
   getMembershipTierSnapshot,
@@ -158,13 +210,21 @@ import {
   getBankSyncDebugTraceSnapshot,
   subscribeBankSyncDebugTrace,
 } from '@/core/services/bank-sync-debug.service'
+import {
+  getEinvoiceCarrierDebugTraceSnapshot,
+  subscribeEinvoiceCarrierDebugTrace,
+} from '@/core/services/einvoice-carrier-debug.service'
 
+const uiStore = useUiStore()
 const { t } = useI18n()
 const loading = ref(false)
+const exporting = ref(false)
+const lastExportLocation = ref('')
 const playSupported = ref(false)
 const playCalls = ref(getGooglePlayCallTraceSnapshot())
 const txFailures = ref(getTransactionFailureTraceSnapshot())
 const bankSyncCalls = ref(getBankSyncDebugTraceSnapshot())
+const einvoiceCalls = ref(getEinvoiceCarrierDebugTraceSnapshot())
 const snapshot = reactive({
   tier: getMembershipTierSnapshot(),
   plan: '',
@@ -180,11 +240,66 @@ let unsubscribe = null
 let unsubscribePlayTrace = null
 let unsubscribeTxFailureTrace = null
 let unsubscribeBankSyncTrace = null
+let unsubscribeEinvoiceTrace = null
 
 function formatDuration(value) {
   const number = Number(value)
   if (!Number.isFinite(number) || number < 0) return '-'
   return `${Math.round(number)}ms`
+}
+
+function createExportTimestamp(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  const second = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day}_${hour}${minute}${second}`
+}
+
+function buildDebugExportPayload() {
+  return {
+    exported_at: new Date().toISOString(),
+    membership_snapshot: {
+      tier: snapshot.tier,
+      plan: snapshot.plan,
+      active: snapshot.active,
+      source: snapshot.source,
+      reason: snapshot.reason,
+      membershipCacheExpiresAt: snapshot.membershipCacheExpiresAt,
+      lastSyncAt: snapshot.lastSyncAt,
+      lastSyncStatus: snapshot.lastSyncStatus,
+      playSupported: playSupported.value,
+    },
+    traces: {
+      play_calls: Array.isArray(playCalls.value) ? playCalls.value : [],
+      transaction_failures: Array.isArray(txFailures.value) ? txFailures.value : [],
+      bank_sync_calls: Array.isArray(bankSyncCalls.value) ? bankSyncCalls.value : [],
+      einvoice_calls: Array.isArray(einvoiceCalls.value) ? einvoiceCalls.value : [],
+    },
+  }
+}
+
+async function exportDebugLogs() {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const filename = `strawmoneybook-debug-log_${createExportTimestamp()}.json`
+    const payload = buildDebugExportPayload()
+    const saved = await saveJsonFileToDevice(filename, payload, { category: 'debug' })
+    if (saved?.saved && saved.location) {
+      lastExportLocation.value = saved.location
+    } else {
+      downloadJsonFile(filename, payload)
+      lastExportLocation.value = `Downloads/${filename}`
+    }
+    uiStore.pushToast(t('debug_page.toast.export_done', 'Debug log 已匯出'))
+  } catch (error) {
+    uiStore.pushToast(String(error?.message ?? t('debug_page.toast.export_failed', '匯出 Debug log 失敗')), 'error')
+  } finally {
+    exporting.value = false
+  }
 }
 
 function patchSnapshot(next) {
@@ -224,6 +339,9 @@ onMounted(async () => {
   unsubscribeBankSyncTrace = subscribeBankSyncDebugTrace((items) => {
     bankSyncCalls.value = Array.isArray(items) ? items : []
   }, { emitCurrent: true })
+  unsubscribeEinvoiceTrace = subscribeEinvoiceCarrierDebugTrace((items) => {
+    einvoiceCalls.value = Array.isArray(items) ? items : []
+  }, { emitCurrent: true })
   await refresh()
 })
 
@@ -243,6 +361,10 @@ onBeforeUnmount(() => {
   if (typeof unsubscribeBankSyncTrace === 'function') {
     unsubscribeBankSyncTrace()
     unsubscribeBankSyncTrace = null
+  }
+  if (typeof unsubscribeEinvoiceTrace === 'function') {
+    unsubscribeEinvoiceTrace()
+    unsubscribeEinvoiceTrace = null
   }
 })
 </script>

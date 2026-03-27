@@ -23,6 +23,8 @@ import java.util.concurrent.Executors;
 public class BankAutomationActivity extends Activity {
     public static final String ACTION_CONNECT_FIRST_BANK = "connect_first_bank";
     public static final String ACTION_SYNC_FIRST_BANK = "sync_first_bank";
+    public static final String ACTION_CONNECT_EINVOICE_CARRIER = "connect_einvoice_carrier";
+    public static final String ACTION_SYNC_EINVOICE_CARRIER = "sync_einvoice_carrier";
     public static final String ACTION_DISCONNECT_CONNECTION = "disconnect_connection";
 
     public static final String EXTRA_ACTION = "bank_automation.action";
@@ -142,8 +144,16 @@ public class BankAutomationActivity extends Activity {
                 result = FirstBankAutomation.connect(this, webView, vault, debugTrace, payload);
             } else if (ACTION_SYNC_FIRST_BANK.equals(action)) {
                 result = FirstBankAutomation.sync(this, webView, vault, debugTrace, payload);
+            } else if (ACTION_CONNECT_EINVOICE_CARRIER.equals(action)) {
+                result = EinvoiceAutomation.connect(this, webView, vault, debugTrace, payload);
+            } else if (ACTION_SYNC_EINVOICE_CARRIER.equals(action)) {
+                result = EinvoiceAutomation.sync(this, webView, vault, debugTrace, payload);
             } else if (ACTION_DISCONNECT_CONNECTION.equals(action)) {
-                result = FirstBankAutomation.disconnect(this, webView, vault, debugTrace, payload);
+                if ("tw_einvoice_mobile_barcode".equals(payload.optString("provider"))) {
+                    result = EinvoiceAutomation.disconnect(this, webView, vault, debugTrace, payload);
+                } else {
+                    result = FirstBankAutomation.disconnect(this, webView, vault, debugTrace, payload);
+                }
             } else {
                 throw new BankAutomationException("bank_automation_action_invalid", "Unsupported bank automation action");
             }

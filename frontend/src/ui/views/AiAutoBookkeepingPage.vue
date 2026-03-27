@@ -110,11 +110,11 @@
         <div v-if="model.type === 'transfer'" class="inline-grid">
           <label class="field">
             轉出帳戶
-            <CustomSelect v-model="model.accountId" :options="transferAccountOptions" />
+            <CustomSelect v-model="model.accountId" :groups="transferAccountGroups" />
           </label>
           <label class="field">
             轉入帳戶
-            <CustomSelect v-model="model.peerAccountId" :options="transferAccountOptions" />
+            <CustomSelect v-model="model.peerAccountId" :groups="transferAccountGroups" />
           </label>
         </div>
         <section v-if="model.type === 'transfer'" class="fx-panel">
@@ -171,13 +171,13 @@
 
         <label v-else-if="model.type === 'adjustment'" class="field">
           帳戶
-          <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
+          <CustomSelect v-model="model.accountId" :groups="directAccountGroups" />
         </label>
 
         <div v-else class="inline-grid">
           <label class="field">
             帳戶
-            <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
+            <CustomSelect v-model="model.accountId" :groups="directAccountGroups" />
           </label>
           <label class="field">
             分類
@@ -264,7 +264,7 @@
 
       <footer class="row action-row result-action-row">
         <button class="btn" :disabled="parsing || submitting" @click="parseText">重新解析</button>
-        <button class="btn primary" :class="{ busy: submitting }" :disabled="parsing || submitting" @click="submit">
+        <button class="btn primary" :class="{ busy: submitting }" :disabled="parsing || submitting" @click="saveDraftAndReturn">
           {{ t('common.save') }}
         </button>
       </footer>
@@ -309,7 +309,7 @@ import {
   resolveLoanOccurredAtIso,
 } from '@/ui/services/ai-loan-intent.service'
 
-defineProps({
+const props = defineProps({
   embedded: {
     type: Boolean,
     default: false,
@@ -382,6 +382,10 @@ async function goBack() {
   await goBackOrFallback(router, '/features')
 }
 
+async function closePage() {
+  await goBackOrFallback(router, props.embedded ? '/features' : '/')
+}
+
 async function goManualBookkeeping() {
   await router.push({
     path: getLastManualBookkeepingPath(),
@@ -414,6 +418,8 @@ const categoryGroupsByType = computed(() => {
 })
 const directAccountOptions = computed(() => accountStore.regularAccounts)
 const transferAccountOptions = computed(() => accountStore.accounts)
+const directAccountGroups = computed(() => accountStore.groupedRegularAccounts)
+const transferAccountGroups = computed(() => accountStore.groupedAccounts)
 const addonTemplateItems = computed(() => addonTemplateStore.templates)
 const addonTemplateOptions = computed(() => addonTemplateItems.value.map((item) => ({
   value: item.id,
@@ -680,6 +686,9 @@ async function parseText(options = {}) {
       if (failedLines.length) {
         uiStore.pushToast(`未建立：${failedLines.slice(0, 2).join('；')}`, 'error')
       }
+      if (successCount > 0) {
+        await closePage()
+      }
       return
     }
 
@@ -731,11 +740,17 @@ async function parseText(options = {}) {
       autoCreated: true,
       keepDraft: false,
       preserveSourceText: false,
+      closeAfterSuccess: false,
     })
     if (created) {
       uiStore.pushToast(t('ai_bookkeeping.toast.saved', 'AI 記帳已儲存交易'))
+      await closePage()
     }
   }
+}
+
+async function saveDraftAndReturn() {
+  await submit({ closeAfterSuccess: true })
 }
 
 async function toggleVoiceInput() {
@@ -839,6 +854,7 @@ async function submit(options = {}) {
   const preserveSourceText = Boolean(options.preserveSourceText)
   const suppressToast = Boolean(options.suppressToast)
   const throwOnError = Boolean(options.throwOnError)
+  const closeAfterSuccess = options.closeAfterSuccess === true
   if (parsing.value || submitting.value) return
   const failSubmit = (message) => {
     const resolvedMessage = String(message ?? '').trim() || t('ai_bookkeeping.toast.save_failed', '儲存交易失敗')
@@ -957,6 +973,9 @@ async function submit(options = {}) {
         keepDraft,
         preserveSourceText,
       })
+      if (closeAfterSuccess) {
+        await closePage()
+      }
       return true
     }
 
@@ -1145,6 +1164,9 @@ async function submit(options = {}) {
       keepDraft,
       preserveSourceText,
     })
+    if (closeAfterSuccess) {
+      await closePage()
+    }
     return true
   } catch (error) {
     return failSubmit(error.message ?? t('ai_bookkeeping.toast.save_failed', '儲存交易失敗'))

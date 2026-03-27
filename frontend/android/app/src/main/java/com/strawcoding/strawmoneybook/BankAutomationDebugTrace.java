@@ -97,6 +97,27 @@ final class BankAutomationDebugTrace {
                 return "已取得驗證碼圖片，但 OCR 沒有產生有效 4 碼，請檢查 source.png 與 best-variant.png。";
             case "first_bank_login_failed":
                 return "驗證碼可能辨識錯誤或登入資料不正確，請優先檢查 captcha_attempt 與 submit_login。";
+            case "einvoice_captcha_not_ready":
+                JSONObject einvoiceCaptchaWaitDetails = findLastStepDetails("captcha_wait_ready");
+                String einvoiceReason = einvoiceCaptchaWaitDetails == null ? "" : einvoiceCaptchaWaitDetails.optString("reason", "").trim();
+                switch (einvoiceReason) {
+                    case "image_missing":
+                        return "登入頁內找不到驗證碼圖片，請檢查 .code_num img 是否改版。";
+                    case "image_incomplete":
+                        return "已找到驗證碼圖片，但尚未完成載入，請檢查圖片載入時序。";
+                    case "canvas_blocked":
+                        return "已找到驗證碼圖片，但 WebView 無法轉成 PNG，請檢查頁面是否限制 canvas 擷取。";
+                    default:
+                        return "驗證碼圖片尚未完成載入，請檢查登入頁是否成功載入 captcha。";
+                }
+            case "einvoice_captcha_refresh_missing":
+                return "找不到驗證碼刷新按鈕，請檢查登入頁 DOM 是否改版。";
+            case "einvoice_captcha_ocr_failed":
+                return "已取得發票載具驗證碼圖片，但 OCR 沒有產生有效 4 碼，請優先檢查 captcha_ocr candidates。";
+            case "einvoice_login_failed":
+                return "驗證碼可能辨識錯誤或手機號碼/驗證碼(密碼)不正確，請優先檢查 submit_login 與頁面錯誤訊息。";
+            case "einvoice_login_trigger_missing":
+                return "找不到發票載具登入按鈕，請檢查登入頁 DOM 是否改版。";
             case "first_bank_navigation_timeout":
                 return "WebView 沒有在時間內完成頁面切換，請檢查 requested/current URL、進度值與 onPageFinished 是否有觸發。";
             case "first_bank_login_trigger_missing":

@@ -18,11 +18,19 @@
       </header>
       <div class="summary-grid">
         <div class="summary-item summary-total">
-          <small class="muted">{{ t('assets_page.total_assets') }}</small>
+          <div class="row summary-title-row">
+            <small class="muted">{{ t('assets_page.total_assets') }}</small>
+            <button
+              type="button"
+              class="summary-info-btn"
+              :aria-label="t('assets_page.total_assets_info_button', '查看總資產說明')"
+              :title="t('assets_page.total_assets_info_button', '查看總資產說明')"
+              @click="totalAssetsInfoOpen = true"
+            >
+              <font-awesome-icon icon="fa-solid fa-circle-info" />
+            </button>
+          </div>
           <MoneyText :value-minor="totalAssetMinor" />
-          <small class="muted summary-note">
-            {{ t('assets_page.disposable') }} + {{ t('assets_page.lend') }} - {{ t('assets_page.borrow') }} + {{ t('assets_page.unreimbursed') }}
-          </small>
         </div>
         <div class="summary-item">
           <small class="muted">{{ t('assets_page.disposable') }}</small>
@@ -100,12 +108,48 @@
         </li>
       </ul>
     </article>
+
+    <AppDialog
+      :open="totalAssetsInfoOpen"
+      :title="t('assets_page.total_assets', '總資產')"
+      :show-footer="false"
+      @close="totalAssetsInfoOpen = false"
+    >
+      <div class="stack summary-info-content">
+        <p class="muted compact">
+          {{
+            t(
+              'assets_page.total_assets_formula',
+              '總資產 = 可支配 + 借出 - 借入 + 未報銷',
+            )
+          }}
+        </p>
+        <p class="muted compact">
+          {{
+            t(
+              'assets_page.total_assets_advance_note',
+              '可支配金額已先扣除代收，所以總資產會一起扣掉代收，不會把暫收款算進資產。',
+            )
+          }}
+        </p>
+        <p class="muted compact">
+          {{
+            t(
+              'assets_page.total_assets_advance_amount',
+              { amount: deductedAdvanceLabel },
+              '目前已扣除代收：{amount}',
+            )
+          }}
+        </p>
+      </div>
+    </AppDialog>
   </section>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import AppDialog from '@/ui/components/common/AppDialog.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -113,6 +157,8 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
 import LedgerSwitcher from '@/ui/components/common/LedgerSwitcher.vue'
 import { useI18n } from '@/ui/services/i18n.service'
+import { calculateAssetSummary, isAssetAccountIncludedInTotals } from '@/core/utils/assets-summary'
+import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 
 const router = useRouter()
 const accountStore = useAccountStore()
@@ -120,52 +166,28 @@ const ledgerStore = useLedgerStore()
 const loanStore = useLoanStore()
 const reimbursementStore = useReimbursementStore()
 const { t } = useI18n()
+const totalAssetsInfoOpen = ref(false)
 
-const balanceMetrics = computed(() => {
-  let disposableMinor = 0
-  let liabilityMinor = 0
-  const balanceMap = new Map()
-  const advanceMap = new Map()
-
-  for (const item of accountStore.balances) {
-    const balance = Number(item.balance_minor ?? 0)
-    const advanceMinor = Math.max(0, Number(item.reimbursement_advance_minor ?? 0))
-    balanceMap.set(item.id, balance)
-    advanceMap.set(item.id, advanceMinor)
-    if (!isAccountIncludedInAssets(item)) {
-      continue
-    }
-
-    if (item.account_type === 'asset') {
-      if (balance > 0) {
-        disposableMinor += Math.max(0, balance - advanceMinor)
-      } else if (balance < 0) {
-        liabilityMinor += Math.abs(balance)
-      }
-      continue
-    }
-
-    if (item.account_type === 'liability' && balance > 0) {
-      liabilityMinor += balance
-    }
-  }
-
-  return {
-    disposableMinor: Math.max(0, disposableMinor),
-    liabilityMinor,
-    balanceMap,
-    advanceMap,
-  }
-})
+const balanceMetrics = computed(() => calculateAssetSummary({
+  balances: accountStore.balances,
+  receivableMinor: loanStore.summary.totalReceivable,
+  payableMinor: loanStore.summary.totalPayable,
+  unreimbursedMinor: reimbursementStore.pendingTotalMinor,
+}))
 const disposableMinor = computed(() => balanceMetrics.value.disposableMinor)
 const liabilityMinor = computed(() => balanceMetrics.value.liabilityMinor)
-const unreimbursedMinor = computed(() => reimbursementStore.pendingTotalMinor)
-const totalAssetMinor = computed(() => (
-  disposableMinor.value
-  + Number(loanStore.summary.totalReceivable ?? 0)
-  - Number(loanStore.summary.totalPayable ?? 0)
-  + unreimbursedMinor.value
-))
+const totalAssetMinor = computed(() => balanceMetrics.value.totalAssetMinor)
+const activeCurrencyCode = computed(() => normalizeCurrencyCode(ledgerStore.activeLedger?.currency_code, 'TWD'))
+const deductedAdvanceLabel = computed(() => {
+  const amountMinor = Number(balanceMetrics.value.advanceDeductedMinor ?? 0)
+  const amountMajor = amountMinor / 100
+  return new Intl.NumberFormat('zh-TW', {
+    style: 'currency',
+    currency: activeCurrencyCode.value,
+    minimumFractionDigits: Math.abs(amountMinor) % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(amountMajor)
+})
 
 const groupSummaries = computed(() => accountStore.groupSummaries)
 const expandedGroupIds = ref(new Set())
@@ -248,7 +270,7 @@ function advanceMinorOf(accountId) {
 }
 
 function isAccountIncludedInAssets(account) {
-  return Number(account?.include_in_assets ?? 1) === 1
+  return isAssetAccountIncludedInTotals(account)
 }
 
 function goLoans(tab) {
@@ -354,6 +376,28 @@ h3 {
 
 .summary-note {
   line-height: 1.4;
+}
+
+.summary-title-row {
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-info-btn {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.summary-info-btn:hover {
+  color: var(--primary-soft);
+}
+
+.summary-info-content {
+  gap: 8px;
 }
 
 .summary-link {

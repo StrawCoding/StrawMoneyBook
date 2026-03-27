@@ -10,8 +10,13 @@
     >
       <span class="value" :class="{ 'icon-only': iconOnly }">
         <font-awesome-icon v-if="selectedOption?.icon" :icon="selectedOption.icon" class="option-icon" />
-        <span v-if="!iconOnly || !selectedOption?.icon" class="text" :class="{ placeholder: !selectedLabel }">
-          {{ selectedLabel || placeholder }}
+        <span v-if="!iconOnly || !selectedOption?.icon" class="text-wrap">
+          <span class="text" :class="{ placeholder: !selectedLabel }">
+            {{ selectedLabel || placeholder }}
+          </span>
+          <small v-if="selectedOption?.groupName && selectedLabel" class="selected-group">
+            {{ selectedOption.groupName }}
+          </small>
         </span>
       </span>
       <span class="arrow" :class="{ open }">▾</span>
@@ -106,11 +111,12 @@ const normalizedOptions = computed(() => normalizeOptions(props.options))
 const normalizedGroups = computed(() => {
   return (props.groups ?? [])
     .map((group, index) => {
-      const groupOptions = normalizeOptions(group.options ?? group.categories ?? [])
+      const groupName = group.name ?? '分類'
+      const groupOptions = normalizeOptions(group.options ?? group.categories ?? [], groupName)
       if (!groupOptions.length) return null
       return {
         id: group.id ?? `group-${index}`,
-        name: group.name ?? '分類',
+        name: groupName,
         options: groupOptions,
       }
     })
@@ -131,12 +137,13 @@ const selectedOption = computed(() => {
   return flatOptions.find((option) => isSameValue(option.value, props.modelValue)) ?? null
 })
 
-function normalizeOptions(options) {
+function normalizeOptions(options, groupName = '') {
   return (options ?? [])
     .map((item) => ({
       value: item.value ?? item.id ?? '',
       label: item.label ?? item.name ?? String(item.value ?? item.id ?? ''),
       icon: item.icon ?? '',
+      groupName: String(item.groupName ?? groupName ?? '').trim(),
       disabled: Boolean(item.disabled),
     }))
     .filter((item) => item.value !== '')
@@ -256,6 +263,11 @@ watch(
 .value.icon-only {
   justify-content: center
 }
+.text-wrap {
+  min-width: 0;
+  display: grid;
+  gap: 2px
+}
 .option-icon {
   width: 14px;
   color: var(--primary-soft)
@@ -268,6 +280,12 @@ watch(
 }
 .text.placeholder {
   color: var(--muted)
+}
+.selected-group {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: left;
 }
 .arrow {
   transition: transform var(--anim-fast) ease
