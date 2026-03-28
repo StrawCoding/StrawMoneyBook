@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
-import { isEinvoiceCarrierFeatureEnabled } from '@/services/einvoice-carrier/backend'
 import { getSharedLedgerSession } from '@/services/shared-ledger/backend'
 import { queueDeferredScrollRestore } from '@/ui/services/route-scroll.service'
 
@@ -95,25 +94,6 @@ const router = createRouter({
       name: 'features',
       path: '/features',
       component: () => import('@/ui/views/FeatureListPage.vue'),
-      meta: { tab: 'home' },
-    },
-    {
-      name: 'invoice-carriers',
-      path: '/invoice-carriers',
-      component: () => import('@/ui/views/invoice-carriers/InvoiceCarrierPage.vue'),
-      meta: { tab: 'home' },
-    },
-    {
-      name: 'invoice-carriers-create',
-      path: '/invoice-carriers/new',
-      component: () => import('@/ui/views/invoice-carriers/InvoiceCarrierCreatePage.vue'),
-      meta: { tab: 'home' },
-    },
-    {
-      name: 'invoice-carriers-detail',
-      path: '/invoice-carriers/:id',
-      component: () => import('@/ui/views/invoice-carriers/InvoiceCarrierDetailPage.vue'),
-      props: true,
       meta: { tab: 'home' },
     },
     {
@@ -404,12 +384,6 @@ const BANK_SYNC_ROUTE_NAMES = new Set([
   'settings-bank-sync-connection',
 ])
 
-const EINVOICE_CARRIER_ROUTE_NAMES = new Set([
-  'invoice-carriers',
-  'invoice-carriers-create',
-  'invoice-carriers-detail',
-])
-
 const ADMIN_ROUTE_NAMES = new Set([
   'settings-admin',
   'settings-admin-user',
@@ -418,9 +392,6 @@ const ADMIN_ROUTE_NAMES = new Set([
 router.beforeEach((to) => {
   if (BANK_SYNC_ROUTE_NAMES.has(String(to.name ?? '')) && !isBankSyncFeatureEnabled()) {
     return { name: 'settings' }
-  }
-  if (EINVOICE_CARRIER_ROUTE_NAMES.has(String(to.name ?? '')) && !isEinvoiceCarrierFeatureEnabled()) {
-    return { name: 'features' }
   }
   if (ADMIN_ROUTE_NAMES.has(String(to.name ?? '')) && !Boolean(getSharedLedgerSession()?.user?.is_admin)) {
     return { name: 'settings' }

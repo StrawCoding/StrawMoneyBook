@@ -141,49 +141,6 @@
         </article>
       </div>
 
-      <hr class="divider" />
-
-      <div class="trace-header">
-        <small class="muted">{{ t('debug_page.key.einvoice_calls') }}</small>
-      </div>
-      <div v-if="!einvoiceCalls.length" class="muted">{{ t('debug_page.einvoice_calls.empty') }}</div>
-      <div v-else class="trace-list">
-        <article v-for="item in einvoiceCalls" :key="item.id" class="trace-item">
-          <div class="trace-item-top">
-            <strong>{{ item.operation || '-' }}</strong>
-            <strong :class="item.status === 'ok' ? 'trace-ok' : item.status === 'error' ? 'trace-error' : ''">
-              {{ item.status || '-' }}
-            </strong>
-          </div>
-          <div class="trace-item-body">
-            <small class="muted">{{ t('debug_page.key.einvoice_provider') }}: {{ item.provider || '-' }}</small>
-            <small class="muted">{{ t('debug_page.key.einvoice_connection') }}: {{ item.connectionId || '-' }}</small>
-            <small class="muted">
-              {{ t('debug_page.key.einvoice_provider_connection') }}: {{ item.providerConnectionId || '-' }}
-            </small>
-            <small v-if="item.mobilePhoneMasked" class="muted">
-              {{ t('debug_page.key.einvoice_mobile_phone') }}: {{ item.mobilePhoneMasked }}
-            </small>
-            <small class="muted">{{ t('debug_page.key.play_call_started') }}: {{ item.startedAt || '-' }}</small>
-            <small class="muted">{{ t('debug_page.key.play_call_ended') }}: {{ item.endedAt || '-' }}</small>
-            <small class="muted">{{ t('debug_page.key.play_call_duration') }}: {{ formatDuration(item.durationMs) }}</small>
-            <small v-if="item.errorCode" class="muted">{{ t('debug_page.key.play_call_error_code') }}: {{ item.errorCode }}</small>
-            <small v-if="item.errorMessage" class="muted break-all">{{ t('debug_page.key.play_call_error_message') }}: {{ item.errorMessage }}</small>
-            <small v-if="item.debugHint" class="muted break-all">{{ t('debug_page.key.einvoice_debug_hint') }}: {{ item.debugHint }}</small>
-            <small v-if="item.debugLastStep" class="muted">{{ t('debug_page.key.einvoice_last_step') }}: {{ item.debugLastStep }}</small>
-          </div>
-          <div v-if="item.steps?.length" class="trace-step-list">
-            <small class="muted">{{ t('debug_page.key.einvoice_steps') }}</small>
-            <div v-for="(step, index) in item.steps" :key="`${item.id}-${index}`" class="trace-step-item">
-              <strong>{{ step.step || '-' }}</strong>
-              <small :class="step.status === 'ok' ? 'trace-ok' : step.status === 'error' ? 'trace-error' : 'muted'">
-                {{ step.status || '-' }}
-              </small>
-              <small class="muted break-all">{{ step.message || '-' }}</small>
-            </div>
-          </div>
-        </article>
-      </div>
     </article>
   </section>
 </template>
@@ -210,11 +167,6 @@ import {
   getBankSyncDebugTraceSnapshot,
   subscribeBankSyncDebugTrace,
 } from '@/core/services/bank-sync-debug.service'
-import {
-  getEinvoiceCarrierDebugTraceSnapshot,
-  subscribeEinvoiceCarrierDebugTrace,
-} from '@/core/services/einvoice-carrier-debug.service'
-
 const uiStore = useUiStore()
 const { t } = useI18n()
 const loading = ref(false)
@@ -224,7 +176,6 @@ const playSupported = ref(false)
 const playCalls = ref(getGooglePlayCallTraceSnapshot())
 const txFailures = ref(getTransactionFailureTraceSnapshot())
 const bankSyncCalls = ref(getBankSyncDebugTraceSnapshot())
-const einvoiceCalls = ref(getEinvoiceCarrierDebugTraceSnapshot())
 const snapshot = reactive({
   tier: getMembershipTierSnapshot(),
   plan: '',
@@ -240,7 +191,6 @@ let unsubscribe = null
 let unsubscribePlayTrace = null
 let unsubscribeTxFailureTrace = null
 let unsubscribeBankSyncTrace = null
-let unsubscribeEinvoiceTrace = null
 
 function formatDuration(value) {
   const number = Number(value)
@@ -276,7 +226,6 @@ function buildDebugExportPayload() {
       play_calls: Array.isArray(playCalls.value) ? playCalls.value : [],
       transaction_failures: Array.isArray(txFailures.value) ? txFailures.value : [],
       bank_sync_calls: Array.isArray(bankSyncCalls.value) ? bankSyncCalls.value : [],
-      einvoice_calls: Array.isArray(einvoiceCalls.value) ? einvoiceCalls.value : [],
     },
   }
 }
@@ -339,9 +288,6 @@ onMounted(async () => {
   unsubscribeBankSyncTrace = subscribeBankSyncDebugTrace((items) => {
     bankSyncCalls.value = Array.isArray(items) ? items : []
   }, { emitCurrent: true })
-  unsubscribeEinvoiceTrace = subscribeEinvoiceCarrierDebugTrace((items) => {
-    einvoiceCalls.value = Array.isArray(items) ? items : []
-  }, { emitCurrent: true })
   await refresh()
 })
 
@@ -361,10 +307,6 @@ onBeforeUnmount(() => {
   if (typeof unsubscribeBankSyncTrace === 'function') {
     unsubscribeBankSyncTrace()
     unsubscribeBankSyncTrace = null
-  }
-  if (typeof unsubscribeEinvoiceTrace === 'function') {
-    unsubscribeEinvoiceTrace()
-    unsubscribeEinvoiceTrace = null
   }
 })
 </script>

@@ -101,7 +101,10 @@ const uiStore = useUiStore()
 const { t } = useI18n()
 const hasLedgers = computed(() => ledgerStore.ledgers.length > 0)
 const hasAccounts = computed(() => accountStore.accounts.length > 0)
-const isBooting = computed(() => !ledgerStore.ready)
+const isBooting = computed(() => (
+  !ledgerStore.ready
+  || (hasLedgers.value && !accountStore.ready)
+))
 const allowWithoutSetup = computed(() => Boolean(route.meta?.allowWithoutSetup))
 const showWelcomePage = computed(() => shouldShowWelcomePage({
   ready: ledgerStore.ready,

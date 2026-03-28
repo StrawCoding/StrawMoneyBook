@@ -77,6 +77,7 @@ export const useAccountStore = defineStore('account', {
     accounts: [],
     balances: [],
     loading: false,
+    ready: false,
   }),
 
   getters: {
@@ -136,10 +137,15 @@ export const useAccountStore = defineStore('account', {
     async load(options = {}) {
       const ledgerStore = useLedgerStore()
       const ledgerId = ledgerStore.activeLedgerId
-      if (!ledgerId) return
 
       this.loading = true
       try {
+        if (!ledgerId) {
+          this.groups = []
+          this.accounts = []
+          this.balances = []
+          return
+        }
         const includeArchived = Boolean(options.includeArchived)
         const [groups, accounts, balances] = await Promise.all([
           listAccountGroups(ledgerId),
@@ -151,6 +157,7 @@ export const useAccountStore = defineStore('account', {
         this.accounts = accounts
         this.balances = balances
       } finally {
+        this.ready = true
         this.loading = false
       }
     },

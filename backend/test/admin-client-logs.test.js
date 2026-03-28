@@ -118,16 +118,16 @@ test('client error logs can be uploaded and viewed from admin overview', async (
       authorization: `Bearer ${memberSession.accessToken}`,
     },
     body: JSON.stringify({
-      message: 'Unhandled invoice sync error',
-      code: 'invoice_sync_failed',
+      message: 'Unhandled bank sync error',
+      code: 'bank_sync_failed',
       stack: 'Error: boom',
-      routePath: '/invoice-carriers',
+      routePath: '/settings/bank-sync',
       platform: 'android',
       context: {
         source: 'window',
         debug: {
-          operation: 'connect_invoice_carrier',
-          debugHint: 'check captcha',
+          operation: 'connect_bank_account',
+          debugHint: 'check otp',
           debugLastStep: 'submit_login',
           trace: {
             steps: [
@@ -160,9 +160,9 @@ test('client error logs can be uploaded and viewed from admin overview', async (
   assert.equal(overviewRes.statusCode, 200)
   assert.equal(overviewRes.body?.current_user?.is_admin, true)
   assert.equal(overviewRes.body?.stats?.total_users >= 2, true)
-  assert.equal(overviewRes.body?.error_logs?.[0]?.message, 'Unhandled invoice sync error')
+  assert.equal(overviewRes.body?.error_logs?.[0]?.message, 'Unhandled bank sync error')
   assert.equal(overviewRes.body?.error_logs?.[0]?.user_email, 'member@example.com')
-  assert.equal(overviewRes.body?.error_logs?.[0]?.context?.debug?.operation, 'connect_invoice_carrier')
+  assert.equal(overviewRes.body?.error_logs?.[0]?.context?.debug?.operation, 'connect_bank_account')
   assert.equal(overviewRes.body?.error_logs?.[0]?.context?.debug?.debugLastStep, 'submit_login')
 })
 

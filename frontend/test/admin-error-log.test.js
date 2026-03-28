@@ -39,14 +39,14 @@ test('logClientError preserves sanitized debug metadata in the upload payload', 
     },
   })
 
-  const error = new Error('carrier login failed')
-  error.code = 'einvoice_login_failed'
+  const error = new Error('bank sync failed')
+  error.code = 'bank_sync_login_failed'
   await logClientError(error, {
-    source: 'einvoice_carrier',
-    routePath: '/invoice-carriers',
+    source: 'bank_sync',
+    routePath: '/settings/bank-sync',
     debug: {
-      operation: 'connect_invoice_carrier',
-      debugHint: 'check captcha',
+      operation: 'connect_bank_account',
+      debugHint: 'check otp',
       debugLastStep: 'submit_login',
       trace: {
         steps: [
@@ -58,8 +58,8 @@ test('logClientError preserves sanitized debug metadata in the upload payload', 
   })
 
   assert.equal(uploads.length, 1)
-  assert.equal(uploads[0].context.debug.operation, 'connect_invoice_carrier')
-  assert.equal(uploads[0].context.debug.debugHint, 'check captcha')
+  assert.equal(uploads[0].context.debug.operation, 'connect_bank_account')
+  assert.equal(uploads[0].context.debug.debugHint, 'check otp')
   assert.equal(uploads[0].context.debug.trace.steps[1].step, 'submit_login')
 })
 
