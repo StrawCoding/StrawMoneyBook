@@ -103,13 +103,13 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="isActionSheetOpen" class="sheet-mask" @click.self="closeActionSheet">
-          <article class="sheet card action-sheet">
+          <article class="sheet card action-sheet app-bottom-sheet">
             <header class="row">
               <h3>批量操作</h3>
               <button class="btn" @click="closeActionSheet">關閉</button>
             </header>
             <small class="muted action-hint">可操作 {{ activeList.length }} 筆，已選 {{ selectedActiveCount }} 筆</small>
-            <div class="stack action-list">
+            <div class="stack action-list app-bottom-sheet-body">
               <button class="btn action-btn" :disabled="!activeList.length" @click="actionToggleSelectAll">
                 {{ isAllActiveSelected ? '取消全選' : '全選' }}
               </button>
@@ -166,13 +166,13 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="isSettleOpen" class="sheet-mask" @click.self="closeSettle">
-          <article class="sheet card">
+          <article class="sheet card app-bottom-sheet">
             <header class="row">
               <h3>{{ settleMode === 'batch' ? `批量報銷設定（${batchSettleItems.length} 筆）` : '報銷完成設定' }}</h3>
               <button class="btn" @click="closeSettle">關閉</button>
             </header>
 
-            <div class="stack form-wrap">
+            <div class="stack form-wrap app-bottom-sheet-body">
               <label v-if="settleMode === 'single'">
                 報銷金額（元）
                 <input v-model.number="settleForm.amountMajor" type="number" min="0" step="1" class="input" />
@@ -248,13 +248,13 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="isAdvanceOpen" class="sheet-mask" @click.self="closeAdvanceSheet">
-          <article class="sheet card">
+          <article class="sheet card app-bottom-sheet">
             <header class="row">
               <h3>新增代收</h3>
               <button class="btn" @click="closeAdvanceSheet">關閉</button>
             </header>
 
-            <div class="stack form-wrap">
+            <div class="stack form-wrap app-bottom-sheet-body">
               <label>
                 代收金額（元）
                 <input v-model.number="advanceForm.amountMajor" type="number" min="0" step="1" class="input" />

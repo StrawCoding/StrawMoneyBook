@@ -2,13 +2,13 @@
   <teleport to="body">
     <transition name="overlay-fade">
       <section v-if="open" class="sheet-mask" @click.self="$emit('close')">
-        <article class="sheet card">
+        <article class="sheet card app-bottom-sheet">
           <header class="row">
             <h3>{{ model.id ? t('budgeting.sheet.edit_title') : t('budgeting.sheet.create_title') }}</h3>
             <button class="btn" @click="$emit('close')">{{ t('budgeting.sheet.close') }}</button>
           </header>
 
-          <div class="stack form-wrap">
+          <div class="stack form-wrap app-bottom-sheet-body">
             <label>
               {{ t('budgeting.sheet.category') }}
               <button

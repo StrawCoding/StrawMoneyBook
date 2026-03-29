@@ -121,13 +121,13 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="showExtra" class="extra-mask" @click.self="showExtra = false">
-          <article class="extra-sheet card">
+          <article class="extra-sheet card app-bottom-sheet">
             <header class="row">
               <h3>{{ t('quick_add.extra.title') }}</h3>
               <button class="btn" @click="showExtra = false">{{ t('common.done') }}</button>
             </header>
 
-            <div class="stack extra-content">
+            <div class="stack extra-content app-bottom-sheet-body">
               <div class="addon-wrap">
                 <div class="row">
                   <span class="field-label">{{ t('quick_add.extra.addon_title') }}</span>

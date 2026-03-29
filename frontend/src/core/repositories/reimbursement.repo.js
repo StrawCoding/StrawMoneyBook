@@ -481,12 +481,7 @@ export async function recomputeReimbursementTotal(ledgerId, reimbursementId) {
   await run(
     `UPDATE reimbursements
      SET total_minor = (
-           SELECT COALESCE(SUM(
-             CASE
-               WHEN entry_type = 'income' THEN amount_minor * -1
-               ELSE amount_minor
-             END
-           ), 0)
+           SELECT COALESCE(SUM(amount_minor), 0)
            FROM reimbursement_items
            WHERE ledger_id = ?
              AND reimbursement_id = ?

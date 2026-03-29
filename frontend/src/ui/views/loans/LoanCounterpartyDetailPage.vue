@@ -114,13 +114,13 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="selectionActionSheetOpen" class="sheet-mask" @click.self="closeSelectionActionSheet">
-          <article class="sheet card action-sheet">
+          <article class="sheet card action-sheet app-bottom-sheet">
             <header class="row">
               <h3>借貸操作</h3>
               <button class="btn" @click="closeSelectionActionSheet">關閉</button>
             </header>
             <small class="muted action-hint">已選 {{ selectedVisibleCount }} 筆</small>
-            <div class="stack action-list">
+            <div class="stack action-list app-bottom-sheet-body">
               <button
                 v-if="canCollectSelected"
                 class="btn action-btn"
@@ -162,13 +162,13 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="createOpen" class="sheet-mask" @click.self="closeCreateSheet">
-          <article class="sheet card">
+          <article class="sheet card app-bottom-sheet">
             <header class="row">
               <h3>新增借貸</h3>
               <button class="btn" @click="closeCreateSheet">關閉</button>
             </header>
 
-            <div class="stack form-wrap">
+            <div class="stack form-wrap app-bottom-sheet-body">
               <label>
                 借貸方向
                 <CustomSelect v-model="createForm.direction" :options="directionOptions" />
@@ -245,13 +245,13 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="repayOpen" class="sheet-mask" @click.self="closeRepaySheet">
-          <article class="sheet card">
+          <article class="sheet card app-bottom-sheet">
             <header class="row">
               <h3>借貸{{ collectionLabel(repayLoan) }}</h3>
               <button class="btn" @click="closeRepaySheet">關閉</button>
             </header>
 
-            <div class="stack form-wrap">
+            <div class="stack form-wrap app-bottom-sheet-body">
               <p class="muted">{{ repayLoan?.counterparty_name }} / 剩餘 <MoneyText :value-minor="repayLoan?.remaining_minor ?? 0" /></p>
               <label>
                 {{ collectionLabel(repayLoan) }}金額（元）
@@ -281,13 +281,13 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="batchRepayOpen" class="sheet-mask" @click.self="closeBatchRepaySheet">
-          <article class="sheet card">
+          <article class="sheet card app-bottom-sheet">
             <header class="row">
               <h3>批量{{ collectionLabelByDirection(tab) }}</h3>
               <button class="btn" @click="closeBatchRepaySheet">關閉</button>
             </header>
 
-            <div class="stack form-wrap">
+            <div class="stack form-wrap app-bottom-sheet-body">
               <p class="muted">
                 {{ counterpartyName }} / 共 {{ batchRepayCandidates.length }} 筆選取 /
                 剩餘 <MoneyText :value-minor="batchRepayTotalMinor" />

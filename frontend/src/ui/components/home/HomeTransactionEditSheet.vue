@@ -2,7 +2,7 @@
   <teleport to="body">
     <transition name="overlay-fade">
       <section v-if="open" class="sheet-mask" @click.self="$emit('close')">
-        <article class="sheet card">
+        <article class="sheet card app-bottom-sheet">
           <header class="row">
             <h3>編輯交易</h3>
             <button class="btn" @click="$emit('close')">關閉</button>
@@ -20,7 +20,7 @@
             </button>
           </div>
 
-          <div class="stack form-wrap">
+          <div class="stack form-wrap app-bottom-sheet-body">
             <label>
               金額（元）
               <input
@@ -117,13 +117,13 @@
 
     <transition name="overlay-fade">
       <section v-if="open && showExtra" class="extra-mask" @click.self="showExtra = false">
-        <article class="extra-sheet card">
+        <article class="extra-sheet card app-bottom-sheet">
           <header class="row">
             <h4>附加資訊</h4>
             <button class="btn" @click="showExtra = false">完成</button>
           </header>
 
-          <div class="stack extra-content">
+          <div class="stack extra-content app-bottom-sheet-body">
             <div class="addon-wrap">
               <div class="row">
                 <span class="field-label">附加項目</span>

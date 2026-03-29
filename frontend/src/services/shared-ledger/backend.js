@@ -539,7 +539,9 @@ export async function restoreSharedLedgerSession({ force = false } = {}) {
     ongoingSessionRestorePromise = (async () => {
       try {
         if (session.refreshToken) {
-          return await performRefreshRequest()
+          // Reuse the shared refresh pipeline so app restore and page refresh
+          // never rotate the same refresh token in parallel.
+          return await tryRefreshSessionOnce()
         }
         return await refreshSharedLedgerSession()
       } catch (error) {

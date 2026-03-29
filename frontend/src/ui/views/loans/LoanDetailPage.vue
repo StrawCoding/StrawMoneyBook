@@ -69,13 +69,13 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="repayOpen" class="sheet-mask" @click.self="closeRepaySheet">
-          <article class="sheet card">
+          <article class="sheet card app-bottom-sheet">
             <header class="row">
               <h3>{{ editingRepayment ? `編輯${collectionLabel(loan)}` : `借貸${collectionLabel(loan)}` }}</h3>
               <button class="btn" @click="closeRepaySheet">關閉</button>
             </header>
 
-            <div class="stack form-wrap">
+            <div class="stack form-wrap app-bottom-sheet-body">
               <p class="muted">{{ loan?.counterparty_name }} / 剩餘 <MoneyText :value-minor="loan?.remaining_minor ?? 0" /></p>
               <label>
                 {{ collectionLabel(loan) }}金額（元）
@@ -105,12 +105,12 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="principalOpen" class="sheet-mask" @click.self="closePrincipalSheet">
-          <article class="sheet card">
+          <article class="sheet card app-bottom-sheet">
             <header class="row">
               <h3>變更本金</h3>
               <button class="btn" @click="closePrincipalSheet">關閉</button>
             </header>
-            <div class="stack form-wrap">
+            <div class="stack form-wrap app-bottom-sheet-body">
               <p class="muted">{{ loan?.counterparty_name }}</p>
               <label>
                 本金（元）

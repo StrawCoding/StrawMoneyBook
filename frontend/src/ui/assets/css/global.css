@@ -427,6 +427,20 @@ a,
   transform: translate3d(0, 32px, 0);
 }
 
+.app-bottom-sheet {
+  max-height: min(90dvh, calc(100dvh - max(8px, var(--status-bar-height))));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-bottom-sheet-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .popover-fade-enter-active,
 .popover-fade-leave-active {
   transition:

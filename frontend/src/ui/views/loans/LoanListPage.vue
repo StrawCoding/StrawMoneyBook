@@ -52,13 +52,13 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="createOpen" class="sheet-mask" @click.self="closeCreateSheet">
-          <article class="sheet card">
+          <article class="sheet card app-bottom-sheet">
             <header class="row">
               <h3>新增借貸</h3>
               <button class="btn" @click="closeCreateSheet">關閉</button>
             </header>
 
-            <div class="stack form-wrap">
+            <div class="stack form-wrap app-bottom-sheet-body">
               <label>
                 借貸方向
                 <CustomSelect v-model="createForm.direction" :options="directionOptions" />

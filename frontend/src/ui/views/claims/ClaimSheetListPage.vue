@@ -56,6 +56,7 @@
           </div>
           <div class="row claim-meta muted">
             <span>{{ t('claim_sheet.item_count', { count: claim.item_count }) }}</span>
+            <span v-if="claim.counterparty_name">{{ claim.counterparty_name }}</span>
             <span>{{ formatTime(claim.updated_at) }}</span>
           </div>
           <div class="row claim-actions">
@@ -85,13 +86,13 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="isCreateOpen" class="sheet-mask" @click.self="closeCreateSheet">
-          <article class="sheet card">
+          <article class="sheet card app-bottom-sheet">
             <header class="row">
               <h3>{{ t('claim_sheet.create') }}</h3>
               <button class="btn" @click="closeCreateSheet">{{ t('common.cancel') }}</button>
             </header>
 
-            <div class="stack form-wrap">
+            <div class="stack form-wrap app-bottom-sheet-body">
               <label>
                 {{ t('claim_sheet.form.title') }}
                 <input
@@ -99,6 +100,15 @@
                   class="input"
                   type="text"
                   :placeholder="t('claim_sheet.form.title_placeholder')"
+                />
+              </label>
+              <label>
+                {{ t('claim_sheet.form.counterparty') }}
+                <input
+                  v-model="createForm.counterpartyName"
+                  class="input"
+                  type="text"
+                  :placeholder="t('claim_sheet.form.counterparty_placeholder')"
                 />
               </label>
               <label>
@@ -183,13 +193,13 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="detailClaim" class="sheet-mask" @click.self="closeDetail">
-          <article class="sheet card">
+          <article class="sheet card app-bottom-sheet">
             <header class="row">
               <h3>{{ detailClaim.title || t('claim_sheet.detail_title') }}</h3>
               <button class="btn" @click="closeDetail">{{ t('common.cancel') }}</button>
             </header>
 
-            <div class="stack form-wrap">
+            <div class="stack form-wrap app-bottom-sheet-body">
               <div class="row">
                 <span class="muted">{{ t('claim_sheet.status_label') }}</span>
                 <span>{{ statusLabel(detailClaim.status) }}</span>
@@ -197,6 +207,10 @@
               <div class="row">
                 <span class="muted">{{ t('claim_sheet.net_amount') }}</span>
                 <MoneyText :value-minor="detailClaim.total_minor" />
+              </div>
+              <div v-if="detailClaim.counterparty_name" class="row">
+                <span class="muted">{{ t('claim_sheet.form.counterparty') }}</span>
+                <span>{{ detailClaim.counterparty_name }}</span>
               </div>
               <ul class="detail-list">
                 <li v-for="item in detailItems" :key="item.id" class="detail-item">
@@ -220,16 +234,20 @@
     <teleport to="body">
       <transition name="overlay-fade">
         <section v-if="completeTarget" class="sheet-mask" @click.self="closeCompleteSheet">
-          <article class="sheet card">
+          <article class="sheet card app-bottom-sheet">
             <header class="row">
               <h3>{{ t('claim_sheet.complete') }}</h3>
               <button class="btn" @click="closeCompleteSheet">{{ t('common.cancel') }}</button>
             </header>
 
-            <div class="stack form-wrap">
+            <div class="stack form-wrap app-bottom-sheet-body">
               <div class="row">
                 <span>{{ t('claim_sheet.sheet_label') }}</span>
                 <strong>{{ completeTarget.title }}</strong>
+              </div>
+              <div v-if="completeTarget.counterparty_name" class="row">
+                <span>{{ t('claim_sheet.form.counterparty') }}</span>
+                <strong>{{ completeTarget.counterparty_name }}</strong>
               </div>
               <div class="row">
                 <span>{{ t('claim_sheet.net_amount') }}</span>
@@ -361,6 +379,7 @@ const deleteTarget = ref(null)
 const deletingClaim = ref(false)
 const createForm = reactive({
   title: '',
+  counterpartyName: '',
   note: '',
   importTxIds: [],
   manualItems: [],
@@ -469,7 +488,7 @@ const draftTotalMinor = computed(() => {
   for (const item of createForm.manualItems) {
     const amountMinor = Math.max(0, Math.round(Number(item.amountMajor ?? 0) * 100))
     if (amountMinor <= 0) continue
-    totalMinor += item.entryType === 'income' ? amountMinor * -1 : amountMinor
+    totalMinor += amountMinor
   }
   return totalMinor
 })
@@ -497,6 +516,7 @@ onMounted(async () => {
 
 function resetCreateForm() {
   createForm.title = ''
+  createForm.counterpartyName = ''
   createForm.note = ''
   createForm.importTxIds = []
   createForm.manualItems = []
@@ -624,6 +644,7 @@ async function submitCreateSheet() {
 
     await createReimbursementDraft(ledgerStore.activeLedgerId, {
       title: createForm.title,
+      counterpartyName: createForm.counterpartyName,
       note: createForm.note,
       items: [...imported, ...manualItems],
     })
@@ -749,8 +770,7 @@ async function confirmDeleteClaim() {
 }
 
 function signedMinorOfItem(item) {
-  const amountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
-  return String(item?.entry_type ?? '') === 'income' ? amountMinor * -1 : amountMinor
+  return Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
 }
 
 function categoryName(categoryId) {
