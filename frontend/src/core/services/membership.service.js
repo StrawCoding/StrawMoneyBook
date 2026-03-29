@@ -37,8 +37,24 @@ import {
   resolveMonthlyCacheExpiryFromPurchaseResult as resolveMonthlyCacheExpiryFromPurchaseResultValue,
   toExpiryIso as toExpiryIsoValue,
 } from './membership-state.js'
-
-const PLAY_CALL_TRACE_MAX_ENTRIES = 60
+import {
+  createGooglePlayTraceStore,
+} from './membership-google-play-trace.js'
+import {
+  createMembershipProductDisplayStore,
+} from './membership-product-display.js'
+import {
+  getBrowserStorage,
+  migrateLegacyMembershipState,
+  readEntitlementState,
+  toDateKey,
+  writeEntitlementState,
+} from './membership-storage.js'
+import {
+  getDailyUsage,
+  normalizeUsageCount,
+  recordDailyUsage,
+} from './membership-usage.js'
 
 const MEMBERSHIP_FREE = 'free'
 const MEMBERSHIP_MEMBER = 'member'
@@ -48,7 +64,6 @@ const MEMBERSHIP_SYNC_STATUS_OK = 'ok'
 const MEMBERSHIP_SYNC_STATUS_ERROR = 'error'
 const MEMBERSHIP_BACKGROUND_SYNC_COOLDOWN_MS = 60 * 1000
 const MEMBERSHIP_PRODUCT_DISPLAY_CACHE_TTL_MS = 10 * 60 * 1000
-const MEMBERSHIP_PRODUCT_DISPLAY_FETCH_TIMEOUT_MS = 25 * 1000
 const MEMBERSHIP_SYNC_RETRY_MAX_ATTEMPTS = 3
 const MEMBERSHIP_SYNC_RETRY_DELAY_MS = 1200
 const GOOGLE_PLAY_SUPPORT_CACHE_TTL_OK_MS = 2 * 60 * 1000
@@ -74,26 +89,22 @@ const AI_BOOKKEEPING_USAGE_STORAGE_KEY = 'straw.membership.ai_bookkeeping_daily_
 let membershipBackgroundSyncInFlight = null
 let membershipBackgroundSyncRequestedAt = 0
 let membershipSyncInFlight = null
-let membershipProductDisplayCache = {
-  monthly: null,
-  lifetime: null,
-}
-let membershipProductDisplayCachedAt = 0
-let membershipProductDisplayInFlight = null
 let googlePlaySupportCache = {
   checkedAt: 0,
   supported: false,
 }
 const membershipSnapshotListeners = new Set()
-const playCallTraceListeners = new Set()
-let playCallTraceSeq = 0
-let playCallTraceEntries = []
-let playCallExecutionQueue = Promise.resolve()
 let membershipBenefitsRedirectInFlight = null
 let membershipBackendSyncInFlight = null
 let membershipBackendSyncQueued = null
 let membershipBackendSyncFingerprint = ''
 let membershipBackendSyncSyncedAt = 0
+const playTraceStore = createGooglePlayTraceStore({
+  maxEntries: 60,
+})
+const membershipProductDisplayStore = createMembershipProductDisplayStore({
+  cacheTtlMs: MEMBERSHIP_PRODUCT_DISPLAY_CACHE_TTL_MS,
+})
 
 const MEMBERSHIP_LIMIT_ERROR_PREFIX = 'MEMBERSHIP_LIMIT_'
 const MEMBERSHIP_BENEFITS_ROUTE_PATH = '/settings/membership-benefits'
@@ -175,15 +186,6 @@ export async function isGooglePlayMembershipSupported({ forceRefresh = false } =
   return false
 }
 
-function getBrowserStorage() {
-  if (typeof window === 'undefined') return null
-  try {
-    return window.localStorage ?? null
-  } catch (_error) {
-    return null
-  }
-}
-
 function toIsoNow() {
   return new Date().toISOString()
 }
@@ -192,59 +194,6 @@ function sleep(delayMs) {
   return new Promise((resolve) => {
     globalThis.setTimeout(resolve, Math.max(0, Number(delayMs) || 0))
   })
-}
-
-function withTimeout(promise, timeoutMs) {
-  const safeTimeoutMs = Math.max(1, Number(timeoutMs) || 0)
-  let timer = null
-  const timeoutPromise = new Promise((_, reject) => {
-    timer = globalThis.setTimeout(() => {
-      reject(new Error(`membership_product_display_timeout_${safeTimeoutMs}`))
-    }, safeTimeoutMs)
-  })
-
-  return Promise.race([promise, timeoutPromise]).finally(() => {
-    if (timer != null) {
-      globalThis.clearTimeout(timer)
-    }
-  })
-}
-
-function toEpochMs(value) {
-  if (value === null || value === undefined || value === '') return Number.NaN
-
-  if (value instanceof Date) {
-    const dateMs = value.getTime()
-    return Number.isFinite(dateMs) ? dateMs : Number.NaN
-  }
-
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) return Number.NaN
-    const absValue = Math.abs(value)
-    if (absValue < 1e11) {
-      return Math.round(value * 1000)
-    }
-    return Math.round(value)
-  }
-
-  const text = String(value).trim()
-  if (!text) return Number.NaN
-
-  if (/^-?\d+(\.\d+)?$/.test(text)) {
-    return toEpochMs(Number(text))
-  }
-
-  const parsedMs = Date.parse(text)
-  return Number.isFinite(parsedMs) ? parsedMs : Number.NaN
-}
-
-function toDateKey(dateLike = new Date()) {
-  const date = dateLike instanceof Date ? dateLike : new Date(dateLike)
-  if (Number.isNaN(date.getTime())) return ''
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
 }
 
 function normalizeGooglePlayPlan(plan) {
@@ -279,197 +228,48 @@ function normalizeEntitlementState(source) {
   return normalizeEntitlementStateValue(source)
 }
 
-function readEntitlementState(storage) {
-  if (!storage) return createDefaultEntitlementState()
-
-  try {
-    const raw = storage.getItem(MEMBERSHIP_ENTITLEMENT_STORAGE_KEY)
-    if (!raw) return createDefaultEntitlementState()
-    return normalizeEntitlementState(JSON.parse(raw))
-  } catch (_error) {
-    return createDefaultEntitlementState()
-  }
-}
-
-function writeEntitlementState(storage, state) {
-  if (!storage) return
-  try {
-    storage.setItem(MEMBERSHIP_ENTITLEMENT_STORAGE_KEY, JSON.stringify(normalizeEntitlementState(state)))
-  } catch (_error) {
-    // Ignore write failures.
-  }
-}
-
-function migrateLegacyMembershipState(storage) {
-  if (!storage) return createDefaultEntitlementState()
-
-  const existingRaw = storage.getItem(MEMBERSHIP_ENTITLEMENT_STORAGE_KEY)
-  if (existingRaw) {
-    const existingState = readEntitlementState(storage)
-    writeEntitlementState(storage, existingState)
-    return existingState
-  }
-
-  const legacyActiveText = String(storage.getItem(LEGACY_GOOGLE_PLAY_MEMBER_STORAGE_KEY) ?? '').trim().toLowerCase()
-  const legacyPlanText = String(storage.getItem(LEGACY_GOOGLE_PLAY_MEMBER_PLAN_STORAGE_KEY) ?? '').trim().toLowerCase()
-  const hadLegacyData = legacyActiveText !== '' || legacyPlanText !== ''
-
-  const state = createDefaultEntitlementState()
-  const legacyPlan = normalizeGooglePlayPlan(legacyPlanText)
-  const legacyActive = legacyActiveText === '1' || legacyActiveText === 'true' || legacyActiveText === MEMBERSHIP_MEMBER
-
-  if (legacyActive) {
-    const nowMs = Date.now()
-    const nowIso = new Date(nowMs).toISOString()
-    state.lastSyncAt = nowIso
-    if (legacyPlan === 'lifetime') {
-      state.lifetimeOwned = true
-      state.lastKnownPlan = 'lifetime'
-      state.membershipCacheExpiresAt = MEMBERSHIP_CACHE_FOREVER
-      state.lastSyncStatus = MEMBERSHIP_SYNC_STATUS_OK
-    } else {
-      state.monthlyLastVerifiedAt = nowIso
-      state.lastKnownPlan = 'monthly'
-      state.membershipCacheExpiresAt = ''
-      state.lastSyncStatus = MEMBERSHIP_SYNC_STATUS_ERROR
-    }
-  }
-
-  if (hadLegacyData) {
-    writeEntitlementState(storage, state)
-    try {
-      storage.removeItem(LEGACY_GOOGLE_PLAY_MEMBER_STORAGE_KEY)
-      storage.removeItem(LEGACY_GOOGLE_PLAY_MEMBER_PLAN_STORAGE_KEY)
-    } catch (_error) {
-      // Ignore remove failures.
-    }
-  }
-
-  return state
-}
-
 function getEntitlementState() {
   const storage = getBrowserStorage()
-  return migrateLegacyMembershipState(storage)
+  return migrateLegacyMembershipState(storage, {
+    entitlementStorageKey: MEMBERSHIP_ENTITLEMENT_STORAGE_KEY,
+    legacyActiveStorageKey: LEGACY_GOOGLE_PLAY_MEMBER_STORAGE_KEY,
+    legacyPlanStorageKey: LEGACY_GOOGLE_PLAY_MEMBER_PLAN_STORAGE_KEY,
+    createDefaultEntitlementState,
+    normalizeGooglePlayPlan,
+    readEntitlementState: (nextStorage) => readEntitlementState(nextStorage, {
+      storageKey: MEMBERSHIP_ENTITLEMENT_STORAGE_KEY,
+      createDefaultEntitlementState,
+      normalizeEntitlementState,
+    }),
+    writeEntitlementState: (nextStorage, state) => writeEntitlementState(nextStorage, state, {
+      storageKey: MEMBERSHIP_ENTITLEMENT_STORAGE_KEY,
+      normalizeEntitlementState,
+    }),
+    membershipCacheForever: MEMBERSHIP_CACHE_FOREVER,
+    membershipMember: MEMBERSHIP_MEMBER,
+    membershipSyncStatusError: MEMBERSHIP_SYNC_STATUS_ERROR,
+    membershipSyncStatusOk: MEMBERSHIP_SYNC_STATUS_OK,
+  })
 }
 
 function saveEntitlementState(state) {
   const storage = getBrowserStorage()
-  writeEntitlementState(storage, state)
-}
-function clonePlayCallTraceEntry(entry) {
-  if (!entry || typeof entry !== 'object') return null
-  return {
-    id: String(entry.id ?? ''),
-    operation: String(entry.operation ?? ''),
-    startedAt: String(entry.startedAt ?? ''),
-    endedAt: String(entry.endedAt ?? ''),
-    durationMs: Number.isFinite(Number(entry.durationMs)) ? Number(entry.durationMs) : null,
-    status: String(entry.status ?? ''),
-    errorCode: String(entry.errorCode ?? ''),
-    errorMessage: String(entry.errorMessage ?? ''),
-  }
-}
-
-function trimPlayCallTraceEntries() {
-  if (playCallTraceEntries.length <= PLAY_CALL_TRACE_MAX_ENTRIES) return
-  playCallTraceEntries = playCallTraceEntries.slice(0, PLAY_CALL_TRACE_MAX_ENTRIES)
-}
-
-function notifyPlayCallTraceListeners() {
-  if (!playCallTraceListeners.size) return
-  const snapshot = getGooglePlayCallTraceSnapshot()
-  for (const listener of playCallTraceListeners) {
-    try {
-      listener(snapshot)
-    } catch (_error) {
-      // Ignore listener errors to avoid breaking membership flow.
-    }
-  }
-}
-
-function beginGooglePlayCallTrace(operation) {
-  const nowMs = Date.now()
-  const entry = {
-    id: `play_call_${nowMs}_${playCallTraceSeq++}`,
-    operation: String(operation ?? '').trim() || 'unknown',
-    startedAt: new Date(nowMs).toISOString(),
-    endedAt: '',
-    durationMs: null,
-    status: 'running',
-    errorCode: '',
-    errorMessage: '',
-  }
-
-  playCallTraceEntries = [entry, ...playCallTraceEntries]
-  trimPlayCallTraceEntries()
-  notifyPlayCallTraceListeners()
-  return {
-    entry,
-    startedAtMs: nowMs,
-  }
-}
-
-function endGooglePlayCallTrace(context, { status, error = null } = {}) {
-  if (!context?.entry) return
-
-  const endedAtMs = Date.now()
-  context.entry.endedAt = new Date(endedAtMs).toISOString()
-  context.entry.durationMs = Math.max(0, endedAtMs - Number(context.startedAtMs || endedAtMs))
-  context.entry.status = status === 'ok' ? 'ok' : 'error'
-
-  if (context.entry.status === 'error') {
-    context.entry.errorCode = String(error?.code ?? '').trim().toUpperCase()
-    context.entry.errorMessage = String(error?.message ?? error ?? '').trim()
-  } else {
-    context.entry.errorCode = ''
-    context.entry.errorMessage = ''
-  }
-
-  notifyPlayCallTraceListeners()
+  writeEntitlementState(storage, state, {
+    storageKey: MEMBERSHIP_ENTITLEMENT_STORAGE_KEY,
+    normalizeEntitlementState,
+  })
 }
 
 async function traceGooglePlayCall(operation, task) {
-  const run = async () => {
-    const context = beginGooglePlayCallTrace(operation)
-    try {
-      const result = await task()
-      endGooglePlayCallTrace(context, { status: 'ok' })
-      return result
-    } catch (error) {
-      endGooglePlayCallTrace(context, { status: 'error', error })
-      throw error
-    }
-  }
-
-  const currentRun = playCallExecutionQueue.then(run, run)
-  playCallExecutionQueue = currentRun.catch(() => undefined)
-  return currentRun
+  return playTraceStore.trace(operation, task)
 }
 
 export function getGooglePlayCallTraceSnapshot() {
-  return playCallTraceEntries
-    .map(clonePlayCallTraceEntry)
-    .filter(Boolean)
+  return playTraceStore.getSnapshot()
 }
 
 export function subscribeGooglePlayCallTrace(listener, { emitCurrent = true } = {}) {
-  if (typeof listener !== 'function') {
-    return () => {}
-  }
-
-  playCallTraceListeners.add(listener)
-  if (emitCurrent) {
-    try {
-      listener(getGooglePlayCallTraceSnapshot())
-    } catch (_error) {
-      // Ignore listener errors to avoid breaking subscription flow.
-    }
-  }
-
-  return () => {
-    playCallTraceListeners.delete(listener)
-  }
+  return playTraceStore.subscribe(listener, { emitCurrent })
 }
 
 function getTierAndPlanFromState(state) {
@@ -651,33 +451,6 @@ function resolveMonthlyCacheExpiry(ownedMonthly, previousState, nowMs = Date.now
 
 function resolveMonthlyCacheExpiryFromPurchaseResult(purchaseResult, previousState, nowMs = Date.now()) {
   return resolveMonthlyCacheExpiryFromPurchaseResultValue(purchaseResult, previousState, nowMs)
-}
-
-function readAiUsageMap(storage) {
-  if (!storage) return {}
-  try {
-    const raw = storage.getItem(AI_BOOKKEEPING_USAGE_STORAGE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw)
-    return parsed && typeof parsed === 'object' ? parsed : {}
-  } catch (_error) {
-    return {}
-  }
-}
-
-function writeAiUsageMap(storage, usageMap) {
-  if (!storage) return
-  try {
-    storage.setItem(AI_BOOKKEEPING_USAGE_STORAGE_KEY, JSON.stringify(usageMap))
-  } catch (_error) {
-    // Ignore write failures (e.g. private mode quota).
-  }
-}
-
-function normalizeUsageCount(value) {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed) || parsed < 0) return 0
-  return Math.floor(parsed)
 }
 
 function createMembershipLimitError(message, code = 'GENERAL') {
@@ -898,90 +671,30 @@ export function getGooglePlayMembershipInfo() {
   }
 }
 
-function normalizeProductDisplay(display) {
-  if (!display || typeof display !== 'object') {
-    return {
-      monthly: null,
-      lifetime: null,
-    }
-  }
-  return {
-    monthly: display.monthly ?? null,
-    lifetime: display.lifetime ?? null,
-  }
-}
-
-function setMembershipProductDisplayCache(display) {
-  membershipProductDisplayCache = normalizeProductDisplay(display)
-  membershipProductDisplayCachedAt = Date.now()
-  return membershipProductDisplayCache
-}
-
-function getEmptyProductDisplay() {
-  return {
-    monthly: null,
-    lifetime: null,
-  }
-}
-
-function hasMembershipProductDisplayCache() {
-  return membershipProductDisplayCachedAt > 0
-}
-
-function isMembershipProductDisplayCacheFresh(nowMs = Date.now()) {
-  if (!hasMembershipProductDisplayCache()) return false
-  return nowMs - membershipProductDisplayCachedAt <= MEMBERSHIP_PRODUCT_DISPLAY_CACHE_TTL_MS
-}
-
 async function fetchMembershipProductDisplay({ force = false } = {}) {
-  let supported = await isGooglePlayMembershipSupported({ forceRefresh: force })
-  if (!supported && !force) {
-    supported = await isGooglePlayMembershipSupported({ forceRefresh: true })
-  }
-  if (!supported) {
-    return getEmptyProductDisplay()
-  }
-
-  if (!force && isMembershipProductDisplayCacheFresh()) {
-    return membershipProductDisplayCache
-  }
-
-  if (membershipProductDisplayInFlight) {
-    return membershipProductDisplayInFlight
-  }
-
-  membershipProductDisplayInFlight = traceGooglePlayCall('load_products', async () => loadGooglePlayProducts())
-    .then((display) => setMembershipProductDisplayCache(display))
-    .catch(() => {
-      // Invalidate support cache so next fetch re-establishes connection
+  return membershipProductDisplayStore.fetchDisplay({
+    force,
+    ensureSupported: ({ forceRefresh }) => isGooglePlayMembershipSupported({ forceRefresh }),
+    loadDisplay: () => traceGooglePlayCall('load_products', async () => loadGooglePlayProducts()),
+    onFetchError: () => {
+      // Invalidate support cache so next fetch re-establishes connection.
       googlePlaySupportCache = { checkedAt: 0, supported: false }
-      if (hasMembershipProductDisplayCache()) {
-        return membershipProductDisplayCache
-      }
-      return getEmptyProductDisplay()
-    })
-    .finally(() => {
-      membershipProductDisplayInFlight = null
-    })
-
-  return membershipProductDisplayInFlight
+    },
+  })
 }
 
 export function getMembershipProductDisplaySnapshot() {
-  if (!hasMembershipProductDisplayCache()) {
-    return getEmptyProductDisplay()
-  }
-  return membershipProductDisplayCache
+  return membershipProductDisplayStore.getSnapshot()
 }
 
 export async function getMembershipProductDisplay() {
-  if (isMembershipProductDisplayCacheFresh()) {
-    return membershipProductDisplayCache
+  if (membershipProductDisplayStore.isFresh()) {
+    return membershipProductDisplayStore.getSnapshot()
   }
 
-  if (hasMembershipProductDisplayCache()) {
+  if (membershipProductDisplayStore.hasCache()) {
     void fetchMembershipProductDisplay({ force: true })
-    return membershipProductDisplayCache
+    return membershipProductDisplayStore.getSnapshot()
   }
 
   return fetchMembershipProductDisplay({ force: true })
@@ -1173,26 +886,14 @@ export function assertCanUseBankSync(tierOverride = '') {
 }
 
 export function getAiBookkeepingDailyUsage(now = new Date()) {
-  const dateKey = toDateKey(now) || toDateKey(new Date())
   const { aiBookkeepingDaily } = getMembershipLimits()
-  if (!Number.isFinite(aiBookkeepingDaily)) {
-    return {
-      dateKey,
-      used: 0,
-      remaining: Number.POSITIVE_INFINITY,
-      limit: aiBookkeepingDaily,
-    }
-  }
-
-  const storage = getBrowserStorage()
-  const usageMap = readAiUsageMap(storage)
-  const used = normalizeUsageCount(usageMap[dateKey])
-  return {
-    dateKey,
-    used,
-    remaining: Math.max(0, aiBookkeepingDaily - used),
+  return getDailyUsage({
+    now,
+    storage: getBrowserStorage(),
+    storageKey: AI_BOOKKEEPING_USAGE_STORAGE_KEY,
+    toDateKey,
     limit: aiBookkeepingDaily,
-  }
+  })
 }
 
 export function assertCanUseAiBookkeeping(now = new Date()) {
@@ -1205,21 +906,11 @@ export function assertCanUseAiBookkeeping(now = new Date()) {
 }
 
 export function recordAiBookkeepingUsage(now = new Date()) {
-  const usage = getAiBookkeepingDailyUsage(now)
-  if (!Number.isFinite(usage.limit)) return usage
-
-  const storage = getBrowserStorage()
-  if (!storage) {
-    const used = usage.used + 1
-    return {
-      ...usage,
-      used,
-      remaining: Math.max(0, usage.limit - used),
-    }
-  }
-
-  const usageMap = readAiUsageMap(storage)
-  usageMap[usage.dateKey] = usage.used + 1
-  writeAiUsageMap(storage, usageMap)
-  return getAiBookkeepingDailyUsage(now)
+  return recordDailyUsage({
+    now,
+    storage: getBrowserStorage(),
+    storageKey: AI_BOOKKEEPING_USAGE_STORAGE_KEY,
+    toDateKey,
+    limit: getMembershipLimits().aiBookkeepingDaily,
+  })
 }

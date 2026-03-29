@@ -7,7 +7,7 @@ import {
   syncAdminMembershipGrantForUser,
   updateClientErrorLogReview,
 } from '../collab/admin-store.js'
-import { buildPublicUserProfile } from '../collab/store.js'
+import { buildPublicUserProfile } from '../collab/auth-store.js'
 
 function getPathSegments(pathname) {
   return normalizeText(pathname)

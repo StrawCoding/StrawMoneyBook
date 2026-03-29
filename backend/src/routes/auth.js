@@ -12,36 +12,38 @@ import {
   sendJson,
 } from '../collab/http.js'
 import {
+  createId,
+  createTemporaryPassword,
+  createUniqueReferralCode,
+  findUserByEmail,
+  findUserById,
+  nowIso,
+  readStore,
+  updateStore,
+} from '../collab/store.js'
+import {
   buildPublicUserProfile,
   consumeAuthNonce,
   createAuthNonce,
-  createId,
   createLoginSession,
-  createTemporaryPassword,
-  createUniqueReferralCode,
   createUserFromExternalIdentity,
   findUserByAuthProvider,
-  findUserByEmail,
-  findUserById,
   hashPassword,
   hashSensitiveToken,
   listUserAuthProviders,
   linkUserAuthProvider,
   normalizeAvatarUrl,
   normalizeDisplayName,
-  nowIso,
-  readStore,
   revokeRefreshSession,
   rotateRefreshSession,
   syncMembershipGrantBySource,
-  updateStore,
   updateUserFromAuthProviderLogin,
   validateEmail,
   validatePassword,
   verifyAccessToken,
   verifyPassword,
   writeAuthAuditLog,
-} from '../collab/store.js'
+} from '../collab/auth-store.js'
 
 const LOGIN_LOCK_THRESHOLD = 5
 const LOGIN_LOCK_DURATION_MS = 10 * 60 * 1000

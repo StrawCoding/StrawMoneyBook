@@ -3,6 +3,9 @@ import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
+import { createStoreAuthAuditApi } from './store-auth-audit.js'
+import { createStoreAuthProfileApi } from './store-auth-profile.js'
+import { createStoreAuthSessionApi } from './store-auth-session.js'
 import {
   getAccessTokenExpiresInSeconds as getAccessTokenExpiresInSecondsValue,
   issueAccessToken as issueAccessTokenValue,
@@ -237,54 +240,6 @@ function getMembershipGrantList(user) {
 
 function getMembershipGrantSummary(user, nowMs = Date.now()) {
   return getMembershipGrantSummaryValue(user, nowMs)
-}
-
-function normalizeAuthProviderSummary(provider) {
-  return {
-    provider: String(provider?.provider ?? '').trim(),
-    provider_sub: String(provider?.provider_sub ?? '').trim(),
-    email: normalizeEmail(provider?.provider_email),
-    email_verified: Boolean(provider?.email_verified),
-    display_name: String(provider?.provider_display_name ?? '').trim(),
-    avatar_url: String(provider?.provider_avatar_url ?? '').trim(),
-    linked_at: String(provider?.linked_at ?? '').trim(),
-    last_login_at: String(provider?.last_login_at ?? '').trim(),
-  }
-}
-
-function publicUser(user, options = {}) {
-  const membership = getMembershipGrantSummary(user)
-  const membershipGrants = getMembershipGrantList(user)
-  const email = String(user?.email ?? user?.account ?? '').trim().toLowerCase()
-  const sharedLedgerTrialGrant = getLatestMembershipGrantBySource(user, 'shared_ledger_first_trial')
-  const authProviders = Array.isArray(options?.authProviders)
-    ? options.authProviders.map(normalizeAuthProviderSummary)
-    : []
-  return {
-    id: user.id,
-    email,
-    account: email,
-    email_verified: Boolean(user?.email_verified),
-    display_name: user.display_name,
-    avatar_url: String(user?.avatar_url ?? '').trim(),
-    has_password: Boolean(String(user?.password_hash ?? '').trim() && String(user?.password_salt ?? '').trim()),
-    last_login_at: String(user?.last_login_at ?? '').trim(),
-    auth_providers: authProviders,
-    referral_code: String(user?.referral_code ?? '').trim(),
-    referred_by_user_id: String(user?.referred_by_user_id ?? '').trim(),
-    referred_by_code: String(user?.referred_by_code ?? '').trim(),
-    referral_redeemed_at: String(user?.referral_redeemed_at ?? '').trim(),
-    must_change_password: Boolean(user?.must_change_password),
-    temporary_password_issued_at: String(user?.temporary_password_issued_at ?? '').trim(),
-    membership_bonus_expires_at: membership.expiresAt,
-    membership_active: membership.active,
-    membership_source: membership.source,
-    membership_trial_eligible: membershipGrants.length === 0,
-    shared_ledger_trial_used: Boolean(sharedLedgerTrialGrant),
-    shared_ledger_trial_expires_at: String(sharedLedgerTrialGrant?.end_at ?? '').trim(),
-    is_admin: isAdminUser(user),
-    created_at: user.created_at,
-  }
 }
 
 function issueAccessToken(user) {
@@ -872,61 +827,6 @@ function syncMembershipGrantBySource(user, source, {
   })
 }
 
-function getUserSelectSql(alias = 'u') {
-  return `
-    ${alias}.id AS id,
-    ${alias}.email AS email,
-    ${alias}.account AS account,
-    ${alias}.email_verified AS email_verified,
-    ${alias}.display_name AS display_name,
-    ${alias}.avatar_url AS avatar_url,
-    ${alias}.referral_code AS referral_code,
-    ${alias}.referred_by_user_id AS referred_by_user_id,
-    ${alias}.referred_by_code AS referred_by_code,
-    ${alias}.referral_redeemed_at AS referral_redeemed_at,
-    ${alias}.membership_grants_json AS membership_grants_json,
-    ${alias}.login_failed_attempts AS login_failed_attempts,
-    ${alias}.last_failed_login_at AS last_failed_login_at,
-    ${alias}.login_locked_until AS login_locked_until,
-    ${alias}.must_change_password AS must_change_password,
-    ${alias}.temporary_password_issued_at AS temporary_password_issued_at,
-    ${alias}.password_reset_required AS password_reset_required,
-    ${alias}.password_reset_token_hash AS password_reset_token_hash,
-    ${alias}.password_reset_requested_at AS password_reset_requested_at,
-    ${alias}.password_reset_expires_at AS password_reset_expires_at,
-    ${alias}.password_hash AS password_hash,
-    ${alias}.password_salt AS password_salt,
-    ${alias}.last_login_at AS last_login_at,
-    ${alias}.created_at AS created_at,
-    ${alias}.updated_at AS updated_at
-  `
-}
-
-function mapUserRow(row) {
-  if (!row) return null
-  return normalizeUserRecord({
-    ...row,
-    email_verified: Boolean(row.email_verified),
-    must_change_password: Boolean(row.must_change_password),
-    password_reset_required: Boolean(row.password_reset_required),
-    membership_grants: parseJsonField(row.membership_grants_json, []),
-  })
-}
-
-function mapAuthProviderRow(row) {
-  if (!row) return null
-  return normalizeAuthProviderSummary({
-    provider: row.provider,
-    provider_sub: row.provider_sub,
-    provider_email: row.provider_email,
-    email_verified: Boolean(row.email_verified),
-    provider_display_name: row.provider_display_name,
-    provider_avatar_url: row.provider_avatar_url,
-    linked_at: row.linked_at,
-    last_login_at: row.last_login_at,
-  })
-}
-
 function getRefreshTokenExpiryIso() {
   return new Date(Date.now() + REFRESH_TOKEN_TTL_MS).toISOString()
 }
@@ -939,38 +839,6 @@ function getRefreshTokenExpiresInSeconds() {
   return Math.max(300, Math.floor(REFRESH_TOKEN_TTL_MS / 1000))
 }
 
-function findUserRowById(db, userId) {
-  const row = db.prepare(`
-    SELECT ${getUserSelectSql('u')}
-    FROM users u
-    WHERE u.id = ?
-    LIMIT 1
-  `).get(String(userId ?? '').trim())
-  return mapUserRow(row)
-}
-
-function findUserRowByEmail(db, email) {
-  const normalizedEmail = normalizeEmail(email)
-  if (!normalizedEmail) return null
-  const row = db.prepare(`
-    SELECT ${getUserSelectSql('u')}
-    FROM users u
-    WHERE u.email = ?
-    LIMIT 1
-  `).get(normalizedEmail)
-  return mapUserRow(row)
-}
-
-function findProviderLinkRow(db, provider, providerSub) {
-  return db.prepare(`
-    SELECT *
-    FROM user_auth_providers
-    WHERE provider = ?
-      AND provider_sub = ?
-    LIMIT 1
-  `).get(String(provider ?? '').trim(), String(providerSub ?? '').trim())
-}
-
 function listProviderRowsForUser(db, userId) {
   return db.prepare(`
     SELECT provider, provider_sub, provider_email, email_verified,
@@ -980,663 +848,83 @@ function listProviderRowsForUser(db, userId) {
     ORDER BY linked_at ASC, provider ASC
   `).all(String(userId ?? '').trim())
 }
+const authProfileApi = createStoreAuthProfileApi({
+  createId,
+  createStoreError,
+  createUniqueReferralCode,
+  ensureDatabase,
+  getLatestMembershipGrantBySource,
+  getMembershipGrantList,
+  getMembershipGrantSummary,
+  isAdminUser,
+  listProviderRowsForUser,
+  loadStoreFromDatabase,
+  normalizeAvatarUrl,
+  normalizeDisplayName,
+  normalizeEmail,
+  normalizeUserRecord,
+  nowIso,
+  parseJsonField,
+  runSerializedDatabaseWrite,
+  validateEmail,
+})
 
-function updateUserProfileFromIdentity(db, user, identity = {}) {
-  if (!user?.id) {
-    throw createStoreError('找不到使用者', 'user_not_found', 404)
-  }
+const {
+  buildPublicUserProfile,
+  createUserFromExternalIdentity,
+  findProviderLinkRow,
+  findUserByAuthProvider,
+  findUserRowByEmail,
+  findUserRowById,
+  getUserSelectSql,
+  linkUserAuthProvider,
+  listUserAuthProviders,
+  mapAuthProviderRow,
+  mapUserRow,
+  normalizeAuthProviderSummary,
+  publicUser,
+  updateUserFromAuthProviderLogin,
+  updateUserProfileFromIdentity,
+  upsertUserAuthProviderRow,
+} = authProfileApi
 
-  const now = String(identity.lastLoginAt ?? nowIso())
-  const nextEmail = identity.email ? validateEmail(identity.email) : ''
-  const nextDisplayName = normalizeDisplayName(identity.displayName, user.display_name || nextEmail || user.email)
-  const nextAvatarUrl = normalizeAvatarUrl(identity.avatarUrl)
-  const emailVerified = Boolean(identity.emailVerified)
+const authSessionApi = createStoreAuthSessionApi({
+  createId,
+  createOpaqueToken,
+  createStoreError,
+  findUserRowById,
+  getAccessTokenExpiresInSeconds,
+  getRefreshTokenExpiresInSeconds,
+  getRefreshTokenExpiryIso,
+  hashSensitiveToken,
+  issueAccessToken,
+  nowIso,
+  runSerializedDatabaseWrite,
+})
 
-  let resolvedEmail = String(user.email ?? '').trim().toLowerCase()
-  let resolvedAccount = String(user.account ?? '').trim().toLowerCase()
+const {
+  createLoginSession,
+  createRefreshTokenRow,
+  revokeRefreshSession,
+  revokeRefreshTokenFamilyRows,
+  rotateRefreshSession,
+} = authSessionApi
 
-  if (nextEmail && nextEmail !== resolvedEmail) {
-    const conflict = db.prepare(`
-      SELECT id
-      FROM users
-      WHERE email = ?
-        AND id <> ?
-      LIMIT 1
-    `).get(nextEmail, user.id)
-    if (!conflict) {
-      resolvedEmail = nextEmail
-      resolvedAccount = nextEmail
-    }
-  }
+const authAuditApi = createStoreAuthAuditApi({
+  authNonceTtlMs: AUTH_NONCE_TTL_MS,
+  createId,
+  createOpaqueToken,
+  createStoreError,
+  hashSensitiveToken,
+  nowIso,
+  runSerializedDatabaseWrite,
+})
 
-  const resolvedDisplayName = String(user.display_name ?? '').trim() || nextDisplayName
-  const resolvedAvatarUrl = String(user.avatar_url ?? '').trim() || nextAvatarUrl
-
-  db.prepare(`
-    UPDATE users
-    SET email = ?,
-        account = ?,
-        email_verified = ?,
-        display_name = ?,
-        avatar_url = ?,
-        last_login_at = ?,
-        updated_at = ?
-    WHERE id = ?
-  `).run(
-    resolvedEmail,
-    resolvedAccount,
-    emailVerified || Boolean(user.email_verified) ? 1 : 0,
-    resolvedDisplayName,
-    resolvedAvatarUrl,
-    now,
-    now,
-    user.id,
-  )
-
-  return findUserRowById(db, user.id)
-}
-
-function upsertUserAuthProviderRow(db, {
-  userId,
-  provider,
-  providerSub,
-  providerEmail = '',
-  emailVerified = false,
-  displayName = '',
-  avatarUrl = '',
-  linkedAt = nowIso(),
-  lastLoginAt = linkedAt,
-}) {
-  const normalizedProvider = String(provider ?? '').trim()
-  const normalizedProviderSub = String(providerSub ?? '').trim()
-  if (!normalizedProvider || !normalizedProviderSub) {
-    throw createStoreError('缺少第三方登入識別', 'provider_identity_required', 400)
-  }
-
-  const existingBySub = findProviderLinkRow(db, normalizedProvider, normalizedProviderSub)
-  if (existingBySub && String(existingBySub.user_id) !== String(userId)) {
-    throw createStoreError('此 Google 帳號已綁定其他使用者', 'provider_already_linked', 409)
-  }
-
-  const existingByUser = db.prepare(`
-    SELECT *
-    FROM user_auth_providers
-    WHERE user_id = ?
-      AND provider = ?
-    LIMIT 1
-  `).get(String(userId), normalizedProvider)
-
-  if (existingByUser && String(existingByUser.provider_sub ?? '') !== normalizedProviderSub) {
-    throw createStoreError('目前帳號已綁定其他 Google 帳號', 'provider_binding_conflict', 409)
-  }
-
-  const normalizedEmail = normalizeEmail(providerEmail)
-  const normalizedDisplayName = normalizeDisplayName(displayName, normalizedEmail)
-  const normalizedAvatarUrl = normalizeAvatarUrl(avatarUrl)
-  const now = nowIso()
-
-  if (existingByUser) {
-    db.prepare(`
-      UPDATE user_auth_providers
-      SET provider_email = ?,
-          email_verified = ?,
-          provider_display_name = ?,
-          provider_avatar_url = ?,
-          last_login_at = ?,
-          updated_at = ?
-      WHERE id = ?
-    `).run(
-      normalizedEmail,
-      emailVerified ? 1 : 0,
-      normalizedDisplayName,
-      normalizedAvatarUrl,
-      lastLoginAt,
-      now,
-      existingByUser.id,
-    )
-    return
-  }
-
-  db.prepare(`
-    INSERT INTO user_auth_providers (
-      id, user_id, provider, provider_sub, provider_email, email_verified,
-      provider_display_name, provider_avatar_url, linked_at, last_login_at,
-      created_at, updated_at
-    ) VALUES (
-      @id, @user_id, @provider, @provider_sub, @provider_email, @email_verified,
-      @provider_display_name, @provider_avatar_url, @linked_at, @last_login_at,
-      @created_at, @updated_at
-    )
-  `).run({
-    id: createId('authp'),
-    user_id: String(userId),
-    provider: normalizedProvider,
-    provider_sub: normalizedProviderSub,
-    provider_email: normalizedEmail,
-    email_verified: emailVerified ? 1 : 0,
-    provider_display_name: normalizedDisplayName,
-    provider_avatar_url: normalizedAvatarUrl,
-    linked_at: linkedAt,
-    last_login_at: lastLoginAt,
-    created_at: now,
-    updated_at: now,
-  })
-}
-
-function createRefreshTokenRow(db, {
-  userId,
-  tokenFamilyId,
-  parentTokenId = '',
-  issuedByProvider = 'password',
-  ipAddress = '',
-  userAgent = '',
-}) {
-  const now = nowIso()
-  const refreshTokenId = createId('rt')
-  const refreshToken = createOpaqueToken(36)
-  const tokenHash = hashSensitiveToken(refreshToken)
-  const expiresAt = getRefreshTokenExpiryIso()
-
-  db.prepare(`
-    INSERT INTO refresh_tokens (
-      id, user_id, token_family_id, token_hash, parent_token_id, replaced_by_token_id,
-      issued_by_provider, user_agent, ip_address, issued_at, expires_at, last_used_at,
-      revoked_at, revoke_reason, created_at, updated_at
-    ) VALUES (
-      @id, @user_id, @token_family_id, @token_hash, @parent_token_id, @replaced_by_token_id,
-      @issued_by_provider, @user_agent, @ip_address, @issued_at, @expires_at, @last_used_at,
-      @revoked_at, @revoke_reason, @created_at, @updated_at
-    )
-  `).run({
-    id: refreshTokenId,
-    user_id: String(userId),
-    token_family_id: String(tokenFamilyId),
-    token_hash: tokenHash,
-    parent_token_id: String(parentTokenId ?? ''),
-    replaced_by_token_id: '',
-    issued_by_provider: String(issuedByProvider ?? 'password').trim() || 'password',
-    user_agent: String(userAgent ?? '').trim(),
-    ip_address: String(ipAddress ?? '').trim(),
-    issued_at: now,
-    expires_at: expiresAt,
-    last_used_at: now,
-    revoked_at: '',
-    revoke_reason: '',
-    created_at: now,
-    updated_at: now,
-  })
-
-  return {
-    refreshTokenId,
-    refreshToken,
-    expiresAt,
-  }
-}
-
-function revokeRefreshTokenFamilyRows(db, tokenFamilyId, reason = 'logout') {
-  const now = nowIso()
-  db.prepare(`
-    UPDATE refresh_tokens
-    SET revoked_at = CASE WHEN revoked_at = '' THEN ? ELSE revoked_at END,
-        revoke_reason = CASE WHEN revoke_reason = '' THEN ? ELSE revoke_reason END,
-        updated_at = ?
-    WHERE token_family_id = ?
-  `).run(now, String(reason ?? 'logout').trim() || 'logout', now, String(tokenFamilyId ?? '').trim())
-}
-
-async function listUserAuthProviders(userId) {
-  const db = await ensureDatabase()
-  return listProviderRowsForUser(db, userId).map(mapAuthProviderRow)
-}
-
-async function buildPublicUserProfile(user) {
-  const authProviders = user?.id ? await listUserAuthProviders(user.id) : []
-  return publicUser(user, { authProviders })
-}
-
-async function findUserByAuthProvider(provider, providerSub) {
-  const db = await ensureDatabase()
-  const row = db.prepare(`
-    SELECT ${getUserSelectSql('u')}
-    FROM user_auth_providers p
-    INNER JOIN users u ON u.id = p.user_id
-    WHERE p.provider = ?
-      AND p.provider_sub = ?
-    LIMIT 1
-  `).get(String(provider ?? '').trim(), String(providerSub ?? '').trim())
-  return mapUserRow(row)
-}
-
-async function createAuthNonce({
-  provider,
-  purpose = 'login',
-  userId = '',
-  ipAddress = '',
-  userAgent = '',
-}) {
-  return runSerializedDatabaseWrite((db) => {
-    const nonce = createOpaqueToken(24)
-    const now = nowIso()
-    const expiresAt = new Date(Date.now() + AUTH_NONCE_TTL_MS).toISOString()
-    db.prepare(`
-      INSERT INTO auth_nonces (
-        id, provider, purpose, nonce_hash, user_id, ip_address, user_agent,
-        created_at, expires_at, consumed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '')
-    `).run(
-      createId('nonce'),
-      String(provider ?? '').trim(),
-      String(purpose ?? 'login').trim() || 'login',
-      hashSensitiveToken(nonce),
-      String(userId ?? '').trim(),
-      String(ipAddress ?? '').trim(),
-      String(userAgent ?? '').trim(),
-      now,
-      expiresAt,
-    )
-    return {
-      provider: String(provider ?? '').trim(),
-      purpose: String(purpose ?? 'login').trim() || 'login',
-      nonce,
-      expires_at: expiresAt,
-    }
-  })
-}
-
-async function consumeAuthNonce({
-  provider,
-  nonce,
-  purpose = '',
-  userId = '',
-}) {
-  const nonceHash = hashSensitiveToken(nonce)
-  return runSerializedDatabaseWrite((db) => {
-    const row = db.prepare(`
-      SELECT *
-      FROM auth_nonces
-      WHERE provider = ?
-        AND nonce_hash = ?
-      LIMIT 1
-    `).get(String(provider ?? '').trim(), nonceHash)
-
-    if (!row) {
-      throw createStoreError('Google 登入驗證碼無效', 'google_nonce_invalid', 400)
-    }
-    if (String(row.consumed_at ?? '').trim()) {
-      throw createStoreError('Google 登入驗證碼已被使用', 'google_nonce_replayed', 400)
-    }
-
-    const expiresAtMs = Date.parse(String(row.expires_at ?? ''))
-    if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
-      throw createStoreError('Google 登入驗證碼已過期', 'google_nonce_expired', 400)
-    }
-
-    if (purpose && String(row.purpose ?? '').trim() !== String(purpose).trim()) {
-      throw createStoreError('Google 登入驗證用途不符', 'google_nonce_purpose_mismatch', 400)
-    }
-
-    if (String(row.user_id ?? '').trim() && String(row.user_id ?? '').trim() !== String(userId ?? '').trim()) {
-      throw createStoreError('Google 綁定帳號不符', 'google_nonce_user_mismatch', 403)
-    }
-
-    const now = nowIso()
-    db.prepare(`
-      UPDATE auth_nonces
-      SET consumed_at = ?
-      WHERE id = ?
-    `).run(now, row.id)
-
-    return {
-      id: String(row.id ?? '').trim(),
-      provider: String(row.provider ?? '').trim(),
-      purpose: String(row.purpose ?? '').trim(),
-      user_id: String(row.user_id ?? '').trim(),
-      expires_at: String(row.expires_at ?? '').trim(),
-      consumed_at: now,
-    }
-  })
-}
-
-async function writeAuthAuditLog({
-  userId = '',
-  provider = '',
-  eventType = '',
-  eventStatus = 'info',
-  ipAddress = '',
-  userAgent = '',
-  detail = {},
-}) {
-  return runSerializedDatabaseWrite((db) => {
-    db.prepare(`
-      INSERT INTO auth_audit_logs (
-        id, user_id, provider, event_type, event_status,
-        ip_address, user_agent, detail_json, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      createId('audit'),
-      String(userId ?? '').trim(),
-      String(provider ?? '').trim(),
-      String(eventType ?? '').trim(),
-      String(eventStatus ?? 'info').trim() || 'info',
-      String(ipAddress ?? '').trim(),
-      String(userAgent ?? '').trim(),
-      JSON.stringify(detail ?? {}),
-      nowIso(),
-    )
-    return true
-  })
-}
-
-async function createUserFromExternalIdentity({
-  provider,
-  providerSub,
-  email,
-  emailVerified = false,
-  displayName = '',
-  avatarUrl = '',
-}) {
-  return runSerializedDatabaseWrite((db) => {
-    const tx = db.transaction(() => {
-      const normalizedEmail = validateEmail(email)
-      if (findUserRowByEmail(db, normalizedEmail)) {
-        throw createStoreError('此 Email 已存在，請先登入後再綁定 Google', 'existing_account_link_required', 409)
-      }
-
-      const now = nowIso()
-      const storeSnapshot = loadStoreFromDatabase(db)
-      const user = normalizeUserRecord({
-        id: createId('user'),
-        email: normalizedEmail,
-        account: normalizedEmail,
-        email_verified: Boolean(emailVerified),
-        display_name: normalizeDisplayName(displayName, normalizedEmail),
-        avatar_url: normalizeAvatarUrl(avatarUrl),
-        referral_code: createUniqueReferralCode(storeSnapshot),
-        referred_by_user_id: '',
-        referred_by_code: '',
-        referral_redeemed_at: '',
-        membership_grants: [],
-        login_failed_attempts: 0,
-        last_failed_login_at: '',
-        login_locked_until: '',
-        must_change_password: false,
-        temporary_password_issued_at: '',
-        password_reset_required: false,
-        password_reset_token_hash: '',
-        password_reset_requested_at: '',
-        password_reset_expires_at: '',
-        password_hash: '',
-        password_salt: '',
-        last_login_at: now,
-        created_at: now,
-        updated_at: now,
-      })
-
-      db.prepare(`
-        INSERT INTO users (
-          id, email, account, email_verified, display_name, avatar_url, referral_code,
-          referred_by_user_id, referred_by_code, referral_redeemed_at, membership_grants_json,
-          login_failed_attempts, last_failed_login_at, login_locked_until, must_change_password,
-          temporary_password_issued_at, password_reset_required, password_reset_token_hash,
-          password_reset_requested_at, password_reset_expires_at, password_hash, password_salt,
-          last_login_at, created_at, updated_at
-        ) VALUES (
-          @id, @email, @account, @email_verified, @display_name, @avatar_url, @referral_code,
-          @referred_by_user_id, @referred_by_code, @referral_redeemed_at, @membership_grants_json,
-          @login_failed_attempts, @last_failed_login_at, @login_locked_until, @must_change_password,
-          @temporary_password_issued_at, @password_reset_required, @password_reset_token_hash,
-          @password_reset_requested_at, @password_reset_expires_at, @password_hash, @password_salt,
-          @last_login_at, @created_at, @updated_at
-        )
-      `).run({
-        ...user,
-        email_verified: user.email_verified ? 1 : 0,
-        membership_grants_json: JSON.stringify([]),
-        must_change_password: 0,
-        password_reset_required: 0,
-      })
-
-      upsertUserAuthProviderRow(db, {
-        userId: user.id,
-        provider,
-        providerSub,
-        providerEmail: normalizedEmail,
-        emailVerified,
-        displayName,
-        avatarUrl,
-        linkedAt: now,
-        lastLoginAt: now,
-      })
-
-      return findUserRowById(db, user.id)
-    })
-
-    return tx()
-  })
-}
-
-async function linkUserAuthProvider({
-  userId,
-  provider,
-  providerSub,
-  email = '',
-  emailVerified = false,
-  displayName = '',
-  avatarUrl = '',
-}) {
-  return runSerializedDatabaseWrite((db) => {
-    const tx = db.transaction(() => {
-      const existingUser = findUserRowById(db, userId)
-      if (!existingUser) {
-        throw createStoreError('找不到使用者', 'user_not_found', 404)
-      }
-
-      const now = nowIso()
-      upsertUserAuthProviderRow(db, {
-        userId,
-        provider,
-        providerSub,
-        providerEmail: email,
-        emailVerified,
-        displayName,
-        avatarUrl,
-        linkedAt: now,
-        lastLoginAt: now,
-      })
-
-      return updateUserProfileFromIdentity(db, existingUser, {
-        email,
-        emailVerified,
-        displayName,
-        avatarUrl,
-        lastLoginAt: now,
-      })
-    })
-
-    return tx()
-  })
-}
-
-async function updateUserFromAuthProviderLogin({
-  userId,
-  email = '',
-  emailVerified = false,
-  displayName = '',
-  avatarUrl = '',
-}) {
-  return runSerializedDatabaseWrite((db) => {
-    const tx = db.transaction(() => {
-      const existingUser = findUserRowById(db, userId)
-      if (!existingUser) {
-        throw createStoreError('找不到使用者', 'user_not_found', 404)
-      }
-      return updateUserProfileFromIdentity(db, existingUser, {
-        email,
-        emailVerified,
-        displayName,
-        avatarUrl,
-      })
-    })
-    return tx()
-  })
-}
-
-async function createLoginSession(user, {
-  issuedByProvider = 'password',
-  ipAddress = '',
-  userAgent = '',
-} = {}) {
-  return runSerializedDatabaseWrite((db) => {
-    const tx = db.transaction(() => {
-      const existingUser = findUserRowById(db, user?.id)
-      if (!existingUser) {
-        throw createStoreError('找不到使用者', 'user_not_found', 404)
-      }
-
-      const sessionFamilyId = createId('rtf')
-      const refresh = createRefreshTokenRow(db, {
-        userId: existingUser.id,
-        tokenFamilyId: sessionFamilyId,
-        issuedByProvider,
-        ipAddress,
-        userAgent,
-      })
-
-      return {
-        user: existingUser,
-        accessToken: issueAccessToken({ ...existingUser, session_family_id: sessionFamilyId }),
-        refreshToken: refresh.refreshToken,
-        refreshTokenExpiresAt: refresh.expiresAt,
-        sessionFamilyId,
-        expiresInSec: getAccessTokenExpiresInSeconds(),
-        refreshExpiresInSec: getRefreshTokenExpiresInSeconds(),
-      }
-    })
-
-    return tx()
-  })
-}
-
-async function rotateRefreshSession(refreshToken, {
-  ipAddress = '',
-  userAgent = '',
-} = {}) {
-  const refreshTokenHash = hashSensitiveToken(refreshToken)
-  return runSerializedDatabaseWrite((db) => {
-    const tx = db.transaction(() => {
-      const row = db.prepare(`
-        SELECT *
-        FROM refresh_tokens
-        WHERE token_hash = ?
-        LIMIT 1
-      `).get(refreshTokenHash)
-
-      if (!row) {
-        throw createStoreError('Refresh token 無效', 'refresh_token_invalid', 401)
-      }
-
-      if (String(row.revoked_at ?? '').trim()) {
-        if (String(row.revoke_reason ?? '').trim() === 'rotated') {
-          revokeRefreshTokenFamilyRows(db, row.token_family_id, 'reuse_detected')
-          throw createStoreError('Refresh token 已重複使用，登入狀態已失效', 'refresh_token_reuse_detected', 401)
-        }
-        throw createStoreError('Refresh token 已失效', 'refresh_token_revoked', 401)
-      }
-
-      const expiresAtMs = Date.parse(String(row.expires_at ?? ''))
-      if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
-        const now = nowIso()
-        db.prepare(`
-          UPDATE refresh_tokens
-          SET revoked_at = ?, revoke_reason = 'expired', updated_at = ?
-          WHERE id = ?
-        `).run(now, now, row.id)
-        throw createStoreError('Refresh token 已過期', 'refresh_token_expired', 401)
-      }
-
-      const user = findUserRowById(db, row.user_id)
-      if (!user) {
-        revokeRefreshTokenFamilyRows(db, row.token_family_id, 'user_missing')
-        throw createStoreError('登入狀態已失效，請重新登入', 'refresh_user_missing', 401)
-      }
-
-      const now = nowIso()
-      const refresh = createRefreshTokenRow(db, {
-        userId: user.id,
-        tokenFamilyId: row.token_family_id,
-        parentTokenId: row.id,
-        issuedByProvider: row.issued_by_provider,
-        ipAddress,
-        userAgent: userAgent || row.user_agent,
-      })
-
-      db.prepare(`
-        UPDATE refresh_tokens
-        SET replaced_by_token_id = ?,
-            revoked_at = ?,
-            revoke_reason = 'rotated',
-            last_used_at = ?,
-            updated_at = ?
-        WHERE id = ?
-      `).run(refresh.refreshTokenId, now, now, now, row.id)
-
-      return {
-        user,
-        accessToken: issueAccessToken({ ...user, session_family_id: row.token_family_id }),
-        refreshToken: refresh.refreshToken,
-        refreshTokenExpiresAt: refresh.expiresAt,
-        sessionFamilyId: String(row.token_family_id ?? '').trim(),
-        expiresInSec: getAccessTokenExpiresInSeconds(),
-        refreshExpiresInSec: getRefreshTokenExpiresInSeconds(),
-      }
-    })
-
-    return tx()
-  })
-}
-
-async function revokeRefreshSession(refreshToken, {
-  sessionFamilyId = '',
-  userId = '',
-  reason = 'logout',
-} = {}) {
-  return runSerializedDatabaseWrite((db) => {
-    const tx = db.transaction(() => {
-      if (refreshToken) {
-        const tokenHash = hashSensitiveToken(refreshToken)
-        const row = db.prepare(`
-          SELECT *
-          FROM refresh_tokens
-          WHERE token_hash = ?
-          LIMIT 1
-        `).get(tokenHash)
-        if (row) {
-          revokeRefreshTokenFamilyRows(db, row.token_family_id, reason)
-          return true
-        }
-      }
-
-      if (sessionFamilyId) {
-        revokeRefreshTokenFamilyRows(db, sessionFamilyId, reason)
-        return true
-      }
-
-      if (userId) {
-        const now = nowIso()
-        db.prepare(`
-          UPDATE refresh_tokens
-          SET revoked_at = CASE WHEN revoked_at = '' THEN ? ELSE revoked_at END,
-              revoke_reason = CASE WHEN revoke_reason = '' THEN ? ELSE revoke_reason END,
-              updated_at = ?
-          WHERE user_id = ?
-        `).run(now, String(reason ?? 'logout').trim() || 'logout', now, String(userId))
-      }
-      return true
-    })
-
-    return tx()
-  })
-}
+const {
+  consumeAuthNonce,
+  createAuthNonce,
+  writeAuthAuditLog,
+} = authAuditApi
 
 export {
   applyMembershipGrant,

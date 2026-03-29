@@ -1,5 +1,5 @@
-import { collectCategoryTextMatchCandidates } from '@/core/services/ai-bookkeeping-category-match.js'
-import { normalizeLoanCounterpartyName } from '@/core/services/loan-counterparty-name.js'
+import { collectCategoryTextMatchCandidates } from './ai-bookkeeping-category-match.js'
+import { normalizeLoanCounterpartyName } from './loan-counterparty-name.js'
 
 function normalizeText(value) {
   return String(value ?? '')

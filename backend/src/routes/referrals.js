@@ -2,13 +2,13 @@ import { requireAuthenticatedUser } from '../collab/auth-session.js'
 import { methodGuard, normalizePath, parseBody, sendJson } from '../collab/http.js'
 import {
   applyMembershipGrant,
-  buildPublicUserProfile,
   findUserById,
   findUserByReferralCode,
   nowIso,
   readStore,
   updateStore,
 } from '../collab/store.js'
+import { buildPublicUserProfile } from '../collab/auth-store.js'
 
 const INVITER_REWARD_DAYS = 7
 const INVITEE_REWARD_DAYS = 3

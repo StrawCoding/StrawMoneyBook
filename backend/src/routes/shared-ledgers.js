@@ -2,7 +2,6 @@ import { requireAuthenticatedUser } from '../collab/auth-session.js'
 import { methodGuard, normalizePath, normalizeText, parseBody, sendJson } from '../collab/http.js'
 import {
   applyMembershipGrant,
-  buildPublicUserProfile,
   buildSharedLedgerInvitationSummary,
   buildSharedLedgerSummary,
   createId,
@@ -18,6 +17,7 @@ import {
   validateEmail,
   validateSnapshot,
 } from '../collab/store.js'
+import { buildPublicUserProfile } from '../collab/auth-store.js'
 
 const SHARED_LEDGER_FIRST_TRIAL_DAYS = 3
 const SHARED_LEDGER_FIRST_TRIAL_SOURCE = 'shared_ledger_first_trial'

@@ -9,6 +9,7 @@ process.env.SHARED_LEDGER_DB_FILE = join(tempDir, 'collab-store.sqlite')
 process.env.SHARED_LEDGER_TOKEN_SECRET = 'test-shared-ledger-secret'
 
 const {
+  buildPublicUserProfile,
   createId,
   createLoginSession,
   createUniqueReferralCode,
@@ -144,6 +145,11 @@ test('updating store data preserves linked Google provider and refresh session s
   assert.equal(providers.length, 1)
   assert.equal(providers[0]?.provider, 'google')
   assert.equal(providers[0]?.provider_sub, 'google-sub-persist')
+
+  const publicProfile = await buildPublicUserProfile({ ...user, display_name: 'Persist Tester Updated' })
+  assert.equal(publicProfile.auth_providers.length, 1)
+  assert.equal(publicProfile.auth_providers[0]?.provider, 'google')
+  assert.equal(publicProfile.auth_providers[0]?.provider_sub, 'google-sub-persist')
 
   const rotatedSession = await rotateRefreshSession(firstSession.refreshToken, {
     ipAddress: '127.0.0.1',
