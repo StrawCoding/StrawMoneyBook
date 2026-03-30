@@ -1,9 +1,28 @@
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
 import { createId } from '@/core/utils/id'
 import { assertCanCreateSubscription } from '@/core/services/membership.service'
-import { createExpense } from '@/core/services/transaction.service'
+import {
+  normalizeSubscriptionDateInput,
+  resolveSubscriptionNextChargeDate,
+  isSubscriptionChargeDue,
+  toSubscriptionDateInput,
+} from '@/core/utils/subscription-schedule'
 
 const SUBSCRIPTION_TRACKER_KEY = 'subscription_tracker.items'
+const defaultDependencies = {
+  getSetting,
+  setSetting,
+  assertCanCreateSubscription,
+}
+const dependencies = { ...defaultDependencies }
+
+export function resetSubscriptionTrackerDependenciesForTest() {
+  Object.assign(dependencies, defaultDependencies)
+}
+
+export function setSubscriptionTrackerDependenciesForTest(overrides = {}) {
+  Object.assign(dependencies, overrides)
+}
 
 function ensureLedgerId(ledgerId) {
   if (!ledgerId) {
@@ -24,25 +43,10 @@ function normalizeAmountMinor(value) {
   return Math.max(0, Math.round(parsed))
 }
 
-function addInterval(baseDateLike, intervalValue, intervalUnit) {
-  const baseDate = new Date(baseDateLike)
-  if (Number.isNaN(baseDate.getTime())) {
-    return new Date().toISOString()
-  }
-
-  const next = new Date(baseDate)
-  const step = Math.max(1, Number(intervalValue) || 1)
-  const unit = normalizeUnit(intervalUnit)
-
-  if (unit === 'year') {
-    next.setFullYear(next.getFullYear() + step)
-  } else if (unit === 'day') {
-    next.setDate(next.getDate() + step)
-  } else {
-    next.setMonth(next.getMonth() + step)
-  }
-
-  return next.toISOString()
+function normalizePaused(value) {
+  if (typeof value === 'boolean') return value
+  const text = String(value ?? '').trim().toLowerCase()
+  return text === '1' || text === 'true' || text === 'yes' || text === 'on'
 }
 
 function normalizeItem(raw) {
@@ -53,10 +57,16 @@ function normalizeItem(raw) {
 
   const intervalValue = Math.max(1, Number(raw.intervalValue ?? 1) || 1)
   const intervalUnit = normalizeUnit(raw.intervalUnit)
-  const lastPaidAt = String(raw.lastPaidAt ?? '').trim()
-  const nextDueAt = String(raw.nextDueAt ?? '').trim() || addInterval(new Date(), intervalValue, intervalUnit)
   const amountMinor = normalizeAmountMinor(raw.amountMinor)
   const categoryId = String(raw.categoryId ?? '').trim()
+  const startDate = normalizeSubscriptionDateInput(
+    raw.startDate
+    ?? raw.lastPaidAt
+    ?? raw.nextDueAt
+    ?? raw.createdAt
+    ?? toSubscriptionDateInput(new Date()),
+  ) || toSubscriptionDateInput(new Date())
+  const paused = normalizePaused(raw.paused)
 
   return {
     id: String(raw.id ?? createId('sub')).trim() || createId('sub'),
@@ -67,8 +77,8 @@ function normalizeItem(raw) {
     accountId,
     categoryId,
     createdAt: String(raw.createdAt ?? '').trim() || new Date().toISOString(),
-    lastPaidAt,
-    nextDueAt,
+    startDate,
+    paused,
   }
 }
 
@@ -77,19 +87,24 @@ function normalizeItems(rawItems) {
   return rawItems
     .map((item) => normalizeItem(item))
     .filter(Boolean)
-    .sort((a, b) => Date.parse(a.nextDueAt || 0) - Date.parse(b.nextDueAt || 0))
+    .sort((left, right) => {
+      if (left.paused !== right.paused) return left.paused ? 1 : -1
+      const leftNext = resolveSubscriptionNextChargeDate(left) || '9999-12-31'
+      const rightNext = resolveSubscriptionNextChargeDate(right) || '9999-12-31'
+      return leftNext.localeCompare(rightNext)
+    })
 }
 
 async function saveItems(ledgerId, items) {
   ensureLedgerId(ledgerId)
   const normalized = normalizeItems(items)
-  await setSetting(ledgerId, SUBSCRIPTION_TRACKER_KEY, normalized)
+  await dependencies.setSetting(ledgerId, SUBSCRIPTION_TRACKER_KEY, normalized)
   return normalized
 }
 
 export async function getSubscriptionItems(ledgerId) {
   ensureLedgerId(ledgerId)
-  const stored = await getSetting(ledgerId, SUBSCRIPTION_TRACKER_KEY)
+  const stored = await dependencies.getSetting(ledgerId, SUBSCRIPTION_TRACKER_KEY)
   return normalizeItems(stored)
 }
 
@@ -103,7 +118,7 @@ export async function upsertSubscriptionItem(ledgerId, item) {
   const current = await getSubscriptionItems(ledgerId)
   const exists = current.some((entry) => entry.id === normalized.id)
   if (!exists) {
-    assertCanCreateSubscription(current.length)
+    dependencies.assertCanCreateSubscription(current.length)
   }
 
   const next = current.filter((entry) => entry.id !== normalized.id)
@@ -118,41 +133,6 @@ export async function removeSubscriptionItem(ledgerId, itemId) {
   return saveItems(ledgerId, next)
 }
 
-export async function markSubscriptionPaid(ledgerId, itemId, paidAt = new Date()) {
-  ensureLedgerId(ledgerId)
-  const targetId = String(itemId ?? '').trim()
-  const current = await getSubscriptionItems(ledgerId)
-  const target = current.find((item) => item.id === targetId) ?? null
-  if (!target) return current
-  const paidAtIso = new Date(paidAt).toISOString()
-
-  if (Number(target?.amountMinor ?? 0) > 0 && !String(target?.categoryId ?? '').trim()) {
-    throw new Error('請先編輯訂閱並設定分類')
-  }
-
-  if (target?.accountId && target?.categoryId && Number(target?.amountMinor ?? 0) > 0) {
-    await createExpense(ledgerId, {
-      accountId: target.accountId,
-      categoryId: target.categoryId,
-      amountMinor: Number(target.amountMinor),
-      occurredAt: paidAtIso,
-      note: `訂閱扣款：${target.name}`,
-      originType: 'subscription',
-      externalRefId: target.id,
-    })
-  }
-
-  const next = current.map((item) => {
-    if (item.id !== targetId) return item
-    return {
-      ...item,
-      lastPaidAt: paidAtIso,
-      nextDueAt: addInterval(paidAtIso, item.intervalValue, item.intervalUnit),
-    }
-  })
-  return saveItems(ledgerId, next)
-}
-
 export function describeSubscriptionInterval(item) {
   const intervalValue = Math.max(1, Number(item?.intervalValue ?? 1) || 1)
   const intervalUnit = normalizeUnit(item?.intervalUnit)
@@ -162,8 +142,5 @@ export function describeSubscriptionInterval(item) {
 }
 
 export function isSubscriptionDue(item, now = new Date()) {
-  const nextDueMs = Date.parse(String(item?.nextDueAt ?? ''))
-  const nowMs = new Date(now).getTime()
-  if (!Number.isFinite(nextDueMs) || !Number.isFinite(nowMs)) return false
-  return nextDueMs <= nowMs
+  return isSubscriptionChargeDue(item, now)
 }

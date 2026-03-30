@@ -31,7 +31,7 @@
             </button>
           </div>
 
-          <div class="time-wrap">
+          <div v-if="showTime" class="time-wrap">
             <div class="time-col">
               <small>時</small>
               <div class="time-list">
@@ -95,6 +95,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  showTime: {
+    type: Boolean,
+    default: true,
+  },
 })
 
 const emit = defineEmits(['update:date', 'update:hour', 'update:minute'])
@@ -131,6 +135,7 @@ const displayText = computed(() => {
     month: '2-digit',
     day: '2-digit',
   })
+  if (!props.showTime) return datePart
   return `${datePart} ${pad2(props.hour)}:${pad2(props.minute)}`
 })
 

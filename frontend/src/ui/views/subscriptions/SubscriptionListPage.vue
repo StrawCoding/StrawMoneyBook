@@ -18,7 +18,12 @@
       </header>
 
       <ul v-if="items.length" class="item-list">
-        <li v-for="item in items" :key="item.id" class="item-card" :class="{ due: isDue(item) }">
+        <li
+          v-for="item in items"
+          :key="item.id"
+          class="item-card"
+          :class="{ due: isDue(item), paused: isPaused(item) }"
+        >
           <div class="item-head">
             <div class="item-icon" aria-hidden="true">
               <font-awesome-icon :icon="categoryIcon(item.categoryId)" />
@@ -26,8 +31,8 @@
             <div class="item-copy">
               <div class="row title-row">
                 <strong>{{ item.name }}</strong>
-                <span class="badge" :class="{ due: isDue(item) }">
-                  {{ isDue(item) ? t('subscription_page.status.due') : t('subscription_page.status.tracking') }}
+                <span class="badge" :class="{ due: isDue(item), paused: isPaused(item) }">
+                  {{ statusLabel(item) }}
                 </span>
               </div>
               <small class="muted meta-line">
@@ -41,13 +46,12 @@
                 <span>{{ t('subscription_page.interval_label') }} {{ describeSubscriptionInterval(item) }}</span>
               </small>
               <small class="muted meta-line">
-                <span>{{ t('subscription_page.next_due') }} {{ formatDate(item.nextDueAt) }}</span>
-                <span v-if="item.lastPaidAt">{{ t('subscription_page.last_paid') }} {{ formatDate(item.lastPaidAt) }}</span>
+                <span>{{ t('subscription_page.start_date') }} {{ formatDate(item.startDate) }}</span>
+                <span>{{ t('subscription_page.next_due') }} {{ nextChargeLabel(item) }}</span>
               </small>
             </div>
           </div>
           <div class="item-actions">
-            <button class="btn" @click="markPaid(item.id)">{{ t('subscription_page.mark_paid') }}</button>
             <button class="btn" @click="openEditDialog(item)">{{ t('common.edit') }}</button>
             <button class="btn danger" @click="removeItem(item.id)">{{ t('common.delete') }}</button>
           </div>
@@ -96,6 +100,31 @@
         {{ t('subscription_page.amount') }}
         <input v-model.number="form.amountMajor" class="input" type="number" min="0" step="0.01" />
       </label>
+
+      <div class="field">
+        <span>{{ t('subscription_page.start_date') }}</span>
+        <DateTimePickerField
+          :date="form.startDate"
+          :hour="0"
+          :minute="0"
+          :show-time="false"
+          @update:date="form.startDate = $event"
+        />
+      </div>
+
+      <div class="field">
+        <button
+          type="button"
+          class="switch-row subscription-toggle"
+          :class="{ active: form.paused }"
+          role="checkbox"
+          :aria-checked="form.paused ? 'true' : 'false'"
+          @click="form.paused = !form.paused"
+        >
+          <span>{{ t('subscription_page.pause_label') }}</span>
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </button>
+      </div>
     </AppDialog>
   </section>
 </template>
@@ -105,8 +134,10 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { getMembershipTierSnapshot, subscribeMembershipSnapshot } from '@/core/services/membership.service'
+import { resolveSubscriptionNextChargeDate, toSubscriptionDateInput } from '@/core/utils/subscription-schedule'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -117,7 +148,6 @@ import {
   describeSubscriptionInterval,
   getSubscriptionItems,
   isSubscriptionDue,
-  markSubscriptionPaid,
   removeSubscriptionItem,
   upsertSubscriptionItem,
 } from '@/core/services/subscription-tracker.service'
@@ -141,6 +171,8 @@ const form = reactive({
   accountId: '',
   categoryId: '',
   amountMajor: 0,
+  startDate: toSubscriptionDateInput(new Date()),
+  paused: false,
 })
 
 const activeLedgerId = computed(() => ledgerStore.activeLedgerId)
@@ -161,7 +193,8 @@ const canSave = computed(() => {
     String(form.name ?? '').trim()
     && Math.max(1, Number(form.intervalValue) || 0) > 0
     && String(form.accountId ?? '').trim()
-    && String(form.categoryId ?? '').trim(),
+    && String(form.categoryId ?? '').trim()
+    && String(form.startDate ?? '').trim()
   )
 })
 
@@ -200,6 +233,8 @@ function resetForm() {
   form.accountId = accountOptions.value[0]?.value ?? ''
   form.categoryId = ensureCategoryIdForType(categoryStore, 'expense', '')
   form.amountMajor = 0
+  form.startDate = toSubscriptionDateInput(new Date())
+  form.paused = false
 }
 
 watch(
@@ -223,6 +258,8 @@ function openEditDialog(item) {
   form.accountId = String(item?.accountId ?? '')
   form.categoryId = String(item?.categoryId ?? '')
   form.amountMajor = Math.abs(Number(item?.amountMinor ?? 0)) / 100
+  form.startDate = String(item?.startDate ?? '') || toSubscriptionDateInput(new Date())
+  form.paused = Boolean(item?.paused)
   dialogOpen.value = true
 }
 
@@ -232,7 +269,10 @@ function closeDialog() {
 }
 
 function formatDate(value) {
-  const parsed = new Date(value)
+  const text = String(value ?? '').trim()
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(text)
+    ? new Date(`${text}T00:00:00`)
+    : new Date(text)
   if (Number.isNaN(parsed.getTime())) return '-'
   return parsed.toLocaleDateString('zh-TW')
 }
@@ -255,6 +295,21 @@ function isDue(item) {
   return isSubscriptionDue(item)
 }
 
+function isPaused(item) {
+  return Boolean(item?.paused)
+}
+
+function nextChargeLabel(item) {
+  if (isPaused(item)) return t('subscription_page.next_due_paused')
+  return formatDate(resolveSubscriptionNextChargeDate(item))
+}
+
+function statusLabel(item) {
+  if (isPaused(item)) return t('subscription_page.status.paused')
+  if (isDue(item)) return t('subscription_page.status.due')
+  return t('subscription_page.status.tracking')
+}
+
 async function submit() {
   if (!activeLedgerId.value || !canSave.value || saving.value) return
   saving.value = true
@@ -267,6 +322,8 @@ async function submit() {
       accountId: form.accountId,
       categoryId: form.categoryId,
       amountMinor: toMinor(form.amountMajor),
+      startDate: form.startDate,
+      paused: form.paused,
     })
     uiStore.pushToast(t('subscription_page.toast.saved'))
     closeDialog()
@@ -283,16 +340,6 @@ async function removeItem(itemId) {
     uiStore.pushToast(t('subscription_page.toast.deleted'))
   } catch (error) {
     uiStore.pushToast(error.message ?? t('subscription_page.toast.delete_failed'), 'error')
-  }
-}
-
-async function markPaid(itemId) {
-  if (!activeLedgerId.value) return
-  try {
-    items.value = await markSubscriptionPaid(activeLedgerId.value, itemId, new Date())
-    uiStore.pushToast(t('subscription_page.toast.marked_paid'))
-  } catch (error) {
-    uiStore.pushToast(error.message ?? t('subscription_page.toast.mark_failed'), 'error')
   }
 }
 
@@ -353,6 +400,10 @@ h3 {
   background: color-mix(in srgb, var(--warning, #f59f00) 6%, var(--card) 94%);
 }
 
+.item-card.paused {
+  opacity: 0.82;
+}
+
 .title-row {
   align-items: center;
 }
@@ -384,6 +435,11 @@ h3 {
 .badge.due {
   border-color: color-mix(in srgb, var(--warning, #f59f00) 40%, var(--field-border) 60%);
   color: color-mix(in srgb, var(--warning, #f59f00) 80%, var(--text) 20%);
+}
+
+.badge.paused {
+  border-color: color-mix(in srgb, var(--muted) 30%, var(--field-border) 70%);
+  color: var(--muted);
 }
 
 .item-copy {
@@ -425,6 +481,58 @@ h3 {
   gap: 6px;
   font-size: 13px;
   color: var(--muted);
+}
+
+.subscription-toggle {
+  width: 100%;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--field-border);
+  border-radius: 14px;
+  background: var(--surface-popover);
+  color: var(--text);
+  text-align: left;
+}
+
+.switch-row.active {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--field-border) 55%);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface-popover) 88%);
+}
+
+.switch-track {
+  position: relative;
+  width: 46px;
+  height: 28px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+  transition: background 160ms ease;
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.18);
+  transition: transform 160ms ease;
+}
+
+.switch-row.active .switch-track {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--primary) 75%, var(--card) 25%), var(--primary));
+}
+
+.switch-row.active .switch-thumb {
+  transform: translateX(18px);
 }
 
 @media (max-width: 640px) {
