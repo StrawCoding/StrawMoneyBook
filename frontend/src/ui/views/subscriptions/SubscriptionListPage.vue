@@ -86,6 +86,12 @@
         </label>
       </div>
 
+      <label v-if="form.intervalUnit === 'month'" class="field">
+        {{ t('subscription_page.charge_day') }}
+        <input v-model.number="form.chargeDay" class="input" type="number" min="1" max="31" step="1" />
+        <small class="muted">{{ t('subscription_page.charge_day_help') }}</small>
+      </label>
+
       <label class="field">
         {{ t('subscription_page.account') }}
         <CustomSelect v-model="form.accountId" :options="accountOptions" />
@@ -168,6 +174,7 @@ const form = reactive({
   name: '',
   intervalValue: 1,
   intervalUnit: 'month',
+  chargeDay: new Date().getDate(),
   accountId: '',
   categoryId: '',
   amountMajor: 0,
@@ -230,6 +237,7 @@ function resetForm() {
   form.name = ''
   form.intervalValue = 1
   form.intervalUnit = 'month'
+  form.chargeDay = new Date().getDate()
   form.accountId = accountOptions.value[0]?.value ?? ''
   form.categoryId = ensureCategoryIdForType(categoryStore, 'expense', '')
   form.amountMajor = 0
@@ -255,6 +263,7 @@ function openEditDialog(item) {
   form.name = String(item?.name ?? '')
   form.intervalValue = Math.max(1, Number(item?.intervalValue ?? 1) || 1)
   form.intervalUnit = String(item?.intervalUnit ?? 'month')
+  form.chargeDay = Math.min(31, Math.max(1, Number(item?.chargeDay ?? String(item?.startDate ?? '').slice(-2) ?? 1) || 1))
   form.accountId = String(item?.accountId ?? '')
   form.categoryId = String(item?.categoryId ?? '')
   form.amountMajor = Math.abs(Number(item?.amountMinor ?? 0)) / 100
@@ -262,6 +271,27 @@ function openEditDialog(item) {
   form.paused = Boolean(item?.paused)
   dialogOpen.value = true
 }
+
+watch(
+  () => form.startDate,
+  (value) => {
+    if (form.intervalUnit !== 'month') return
+    const parsed = Math.trunc(Number(String(value ?? '').slice(-2)))
+    if (parsed >= 1 && parsed <= 31 && !editingId.value) {
+      form.chargeDay = parsed
+    }
+  },
+)
+
+watch(
+  () => form.intervalUnit,
+  (value, previous) => {
+    if (value !== 'month') return
+    if (previous === 'month') return
+    const parsed = Math.trunc(Number(String(form.startDate ?? '').slice(-2)))
+    form.chargeDay = Math.min(31, Math.max(1, parsed || form.chargeDay || 1))
+  },
+)
 
 function closeDialog() {
   dialogOpen.value = false
@@ -319,6 +349,7 @@ async function submit() {
       name: form.name,
       intervalValue: form.intervalValue,
       intervalUnit: form.intervalUnit,
+      chargeDay: form.chargeDay,
       accountId: form.accountId,
       categoryId: form.categoryId,
       amountMinor: toMinor(form.amountMajor),

@@ -10,6 +10,8 @@ const source = readFileSync(
 
 test('subscription list page uses custom date picker and custom pause checkbox UI', () => {
   assert.match(source, /<DateTimePickerField[\s\S]*:show-time="false"/)
+  assert.match(source, /v-if="form\.intervalUnit === 'month'"/)
+  assert.match(source, /subscription_page\.charge_day/)
   assert.match(source, /class="switch-row subscription-toggle"/)
   assert.match(source, /role="checkbox"/)
   assert.match(source, /@click="form\.paused = !form\.paused"/)

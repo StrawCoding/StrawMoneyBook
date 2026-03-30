@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS reimbursement_items (
   ledger_id TEXT NOT NULL,
   id TEXT NOT NULL,
   reimbursement_id TEXT NOT NULL,
-  source_type TEXT NOT NULL CHECK (source_type IN ('transaction','manual')),
+  source_type TEXT NOT NULL CHECK (source_type IN ('transaction','manual','advance')),
   transaction_id TEXT,
   category_id TEXT,
   account_id TEXT,

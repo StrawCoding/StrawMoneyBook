@@ -2,6 +2,27 @@ function pad2(value) {
   return String(value).padStart(2, '0')
 }
 
+function buildSubscriptionDate(year, monthIndex, day) {
+  return `${year}-${pad2(monthIndex + 1)}-${pad2(day)}`
+}
+
+function getDaysInMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate()
+}
+
+function clampSubscriptionDay(day, maxDay) {
+  return Math.min(Math.max(1, Number(day) || 1), maxDay)
+}
+
+function resolveMonthlyChargeDay(value, fallbackDateLike) {
+  const parsed = Math.trunc(Number(value))
+  if (parsed >= 1 && parsed <= 31) return parsed
+
+  const fallbackDate = parseSubscriptionDate(fallbackDateLike)
+  if (!fallbackDate) return 1
+  return fallbackDate.getDate()
+}
+
 export function toSubscriptionDateInput(dateLike = new Date()) {
   const date = dateLike instanceof Date ? new Date(dateLike) : new Date(dateLike)
   if (Number.isNaN(date.getTime())) return ''
@@ -28,25 +49,36 @@ export function parseSubscriptionDate(value) {
   return parsed
 }
 
-export function addSubscriptionInterval(baseDateLike, intervalValue, intervalUnit) {
+export function addSubscriptionInterval(baseDateLike, intervalValue, intervalUnit, options = {}) {
   const baseDate = parseSubscriptionDate(baseDateLike)
   if (!baseDate) {
     return toSubscriptionDateInput(new Date())
   }
 
-  const next = new Date(baseDate)
   const step = Math.max(1, Number(intervalValue) || 1)
   const unit = String(intervalUnit ?? '').trim().toLowerCase()
 
   if (unit === 'year') {
-    next.setFullYear(next.getFullYear() + step)
-  } else if (unit === 'day') {
-    next.setDate(next.getDate() + step)
-  } else {
-    next.setMonth(next.getMonth() + step)
+    const nextYear = baseDate.getFullYear() + step
+    const monthIndex = baseDate.getMonth()
+    const day = clampSubscriptionDay(baseDate.getDate(), getDaysInMonth(nextYear, monthIndex))
+    return buildSubscriptionDate(nextYear, monthIndex, day)
   }
 
-  return toSubscriptionDateInput(next)
+  if (unit === 'day') {
+    const next = new Date(baseDate)
+    next.setDate(next.getDate() + step)
+    return toSubscriptionDateInput(next)
+  }
+
+  const totalMonths = (baseDate.getFullYear() * 12) + baseDate.getMonth() + step
+  const nextYear = Math.floor(totalMonths / 12)
+  const monthIndex = totalMonths % 12
+  const day = clampSubscriptionDay(
+    resolveMonthlyChargeDay(options?.chargeDay, baseDate),
+    getDaysInMonth(nextYear, monthIndex),
+  )
+  return buildSubscriptionDate(nextYear, monthIndex, day)
 }
 
 export function resolveSubscriptionNextChargeDate(item, now = new Date()) {
@@ -61,7 +93,9 @@ export function resolveSubscriptionNextChargeDate(item, now = new Date()) {
   let guard = 0
 
   while (nextDateValue && nextDateValue.getTime() < today.getTime() && guard < 1200) {
-    nextDate = addSubscriptionInterval(nextDate, item?.intervalValue, item?.intervalUnit)
+    nextDate = addSubscriptionInterval(nextDate, item?.intervalValue, item?.intervalUnit, {
+      chargeDay: item?.chargeDay,
+    })
     nextDateValue = parseSubscriptionDate(nextDate)
     guard += 1
   }

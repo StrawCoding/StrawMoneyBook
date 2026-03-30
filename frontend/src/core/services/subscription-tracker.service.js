@@ -43,6 +43,14 @@ function normalizeAmountMinor(value) {
   return Math.max(0, Math.round(parsed))
 }
 
+function normalizeChargeDay(value, fallbackDateLike) {
+  const parsed = Math.trunc(Number(value))
+  if (parsed >= 1 && parsed <= 31) return parsed
+  const normalizedDate = normalizeSubscriptionDateInput(fallbackDateLike)
+  if (!normalizedDate) return 1
+  return Number(normalizedDate.slice(-2)) || 1
+}
+
 function normalizePaused(value) {
   if (typeof value === 'boolean') return value
   const text = String(value ?? '').trim().toLowerCase()
@@ -66,6 +74,7 @@ function normalizeItem(raw) {
     ?? raw.createdAt
     ?? toSubscriptionDateInput(new Date()),
   ) || toSubscriptionDateInput(new Date())
+  const chargeDay = normalizeChargeDay(raw.chargeDay, startDate)
   const paused = normalizePaused(raw.paused)
 
   return {
@@ -78,6 +87,7 @@ function normalizeItem(raw) {
     categoryId,
     createdAt: String(raw.createdAt ?? '').trim() || new Date().toISOString(),
     startDate,
+    chargeDay,
     paused,
   }
 }
@@ -138,7 +148,8 @@ export function describeSubscriptionInterval(item) {
   const intervalUnit = normalizeUnit(item?.intervalUnit)
   if (intervalUnit === 'year') return `${intervalValue}年`
   if (intervalUnit === 'day') return `${intervalValue}日`
-  return `${intervalValue}月`
+  const chargeDay = normalizeChargeDay(item?.chargeDay, item?.startDate)
+  return `${intervalValue}月（${chargeDay}號）`
 }
 
 export function isSubscriptionDue(item, now = new Date()) {
