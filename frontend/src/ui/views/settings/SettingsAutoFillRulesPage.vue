@@ -19,14 +19,10 @@
 
       <ul v-if="rules.length" class="rule-list">
         <li v-for="rule in rules" :key="rule.id" class="rule-item">
-          <div class="rule-copy">
+          <button type="button" class="rule-link" @click="goToEditPage(rule.id)">
             <strong>{{ rule.keyword }}</strong>
             <small class="muted">{{ describeRule(rule) }}</small>
-          </div>
-          <div class="rule-actions">
-            <button class="btn" @click="goToEditPage(rule.id)">{{ t('common.edit') }}</button>
-            <button class="btn danger" @click="removeRule(rule.id)">{{ t('common.delete') }}</button>
-          </div>
+          </button>
         </li>
       </ul>
 
@@ -41,15 +37,13 @@ import { RouterLink, useRouter } from 'vue-router'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
-import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
-import { getAutoFillRules, removeAutoFillRule } from '@/ui/services/auto-fill-rule.service'
+import { getAutoFillRules } from '@/ui/services/auto-fill-rule.service'
 
 const router = useRouter()
 const accountStore = useAccountStore()
 const categoryStore = useCategoryStore()
 const ledgerStore = useLedgerStore()
-const uiStore = useUiStore()
 const { t } = useI18n()
 
 const rules = ref([])
@@ -155,15 +149,6 @@ function describeRule(rule) {
   return parts.join(' / ')
 }
 
-async function removeRule(ruleId) {
-  if (!activeLedgerId.value) return
-  try {
-    rules.value = await removeAutoFillRule(activeLedgerId.value, ruleId)
-    uiStore.pushToast(t('settings_auto_fill.toast.deleted'))
-  } catch (error) {
-    uiStore.pushToast(error.message ?? t('settings_auto_fill.toast.delete_failed'), 'error')
-  }
-}
 </script>
 
 <style scoped>
@@ -189,11 +174,29 @@ h3 {
 .rule-item {
   border: 1px solid var(--field-border);
   border-radius: 12px;
+  padding: 0;
+}
+
+.rule-link {
+  width: 100%;
   padding: 10px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rule-link:hover,
+.rule-link:focus-visible {
+  background: color-mix(in srgb, var(--card) 88%, var(--primary) 12%);
+}
+
+.rule-link:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 72%, white 28%);
+  outline-offset: 2px;
 }
 
 .rule-copy {
@@ -209,14 +212,4 @@ h3 {
   word-break: break-word;
 }
 
-.rule-actions {
-  display: inline-flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.danger {
-  background: var(--surface-danger);
-  color: var(--danger-text);
-}
 </style>

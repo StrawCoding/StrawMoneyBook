@@ -744,6 +744,15 @@ async function parseText(options = {}) {
     })
     if (created) {
       uiStore.pushToast(t('ai_bookkeeping.toast.saved', 'AI 記帳已儲存交易'))
+      const savedTxId = String(persistedTransactionId.value ?? '').trim()
+      if (savedTxId) {
+        await router.push({
+          name: 'transaction-edit',
+          params: { id: savedTxId },
+          query: { from: 'ai-auto-bookkeeping' },
+        }).catch(() => {})
+        return
+      }
       await closePage()
     }
   }

@@ -91,6 +91,12 @@ const router = createRouter({
       meta: { tab: 'home' },
     },
     {
+      name: 'transaction-edit',
+      path: '/transactions/:id/edit',
+      component: () => import('@/ui/views/TransactionEditPage.vue'),
+      meta: { tab: 'home' },
+    },
+    {
       name: 'features',
       path: '/features',
       component: () => import('@/ui/views/FeatureListPage.vue'),
@@ -329,6 +335,20 @@ const router = createRouter({
       name: 'claim-sheets',
       path: '/claim-sheets',
       component: () => import('@/ui/views/claims/ClaimSheetListPage.vue'),
+      meta: { tab: 'home', transitionKey: 'claim-sheets' },
+    },
+    {
+      name: 'claim-sheet-edit',
+      path: '/claim-sheets/:id/edit',
+      component: () => import('@/ui/views/claims/ClaimSheetEditPage.vue'),
+      props: true,
+      meta: { tab: 'home' },
+    },
+    {
+      name: 'claim-sheet-detail',
+      path: '/claim-sheets/:id',
+      component: () => import('@/ui/views/claims/ClaimSheetDetailPage.vue'),
+      props: true,
       meta: { tab: 'home' },
     },
     {

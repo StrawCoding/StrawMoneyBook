@@ -29,9 +29,18 @@
       <template v-if="!isBooting">
         <WelcomePage v-if="showWelcomePage" />
         <router-view v-else v-slot="{ Component, route }">
-          <transition name="route-fade" mode="out-in" @before-enter="handleRouteBeforeEnter">
-            <component :is="Component" :key="route.fullPath" />
-          </transition>
+          <div ref="routeStageRef" class="route-stage" :class="{ transitioning: routeTransitioning }">
+            <transition
+              name="route-fade"
+              mode="out-in"
+              @before-enter="handleRouteBeforeEnter"
+              @before-leave="handleRouteBeforeLeave"
+              @after-enter="handleRouteAfterEnter"
+              @after-leave="handleRouteAfterLeave"
+            >
+              <component :is="Component" :key="resolveRouteTransitionKey(route)" />
+            </transition>
+          </div>
         </router-view>
       </template>
     </main>
@@ -126,6 +135,8 @@ const updateInfo = ref({
 const promptedVersionSet = new Set()
 let promptedCheckFailedFallback = false
 let updateChecking = false
+const routeStageRef = ref(null)
+const routeTransitioning = ref(false)
 const securityLockEnabled = useSecurityLockEnabled()
 const securityLocked = ref(securityLockEnabled.value)
 const securityUnlocking = ref(false)
@@ -187,6 +198,44 @@ function onRequestCheckAppUpdate() {
 
 function handleRouteBeforeEnter() {
   flushDeferredScrollRestore()
+}
+
+function resolveRouteTransitionKey(targetRoute) {
+  const stableKey = String(targetRoute?.meta?.transitionKey ?? '').trim()
+  return stableKey || String(targetRoute?.fullPath ?? '')
+}
+
+function setRouteStageMinHeight(heightPx = 0) {
+  const stage = routeStageRef.value
+  if (!stage) return
+  const nextHeight = Math.max(0, Math.ceil(Number(heightPx) || 0))
+  stage.style.minHeight = nextHeight > 0 ? `${nextHeight}px` : ''
+}
+
+function resolveElementHeight(element) {
+  if (!element || typeof element.getBoundingClientRect !== 'function') return 0
+  return element.getBoundingClientRect().height
+}
+
+function handleRouteBeforeLeave(element) {
+  routeTransitioning.value = true
+  setRouteStageMinHeight(resolveElementHeight(element))
+}
+
+function handleRouteAfterEnter(element) {
+  setRouteStageMinHeight(resolveElementHeight(element))
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      setRouteStageMinHeight(0)
+      routeTransitioning.value = false
+    })
+  })
+}
+
+function handleRouteAfterLeave() {
+  if (!routeTransitioning.value) {
+    setRouteStageMinHeight(0)
+  }
 }
 
 function resolveBackButtonAnchor(event) {
@@ -360,18 +409,32 @@ watch(
   align-items: center;
   overflow: hidden;
 }
+.route-stage {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+}
+.route-stage.transitioning {
+  overflow: clip;
+}
 .route-fade-enter-active,
 .route-fade-leave-active {
   transition:
-    opacity 180ms var(--anim-standard),
-    transform 220ms var(--anim-spring);
+    opacity 220ms var(--anim-standard),
+    transform 260ms var(--anim-spring);
   will-change: opacity, transform;
   backface-visibility: hidden;
+  transform-origin: top center;
 }
 .route-fade-enter-from,
 .route-fade-leave-to {
   opacity: 0;
-  transform: translate3d(0, 10px, 0);
+}
+.route-fade-enter-from {
+  transform: translate3d(0, 12px, 0) scale(0.994);
+}
+.route-fade-leave-to {
+  transform: translate3d(0, -8px, 0) scale(0.998);
 }
 .route-fade-leave-active {
   pointer-events: none;

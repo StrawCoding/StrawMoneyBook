@@ -31,7 +31,7 @@
           type="button"
           class="tab-btn"
           :class="{ active: activeClaimPage === 'active' }"
-          @click="activeClaimPage = 'active'"
+          @click="selectClaimTab('active')"
         >
           {{ t('claim_sheet.tab.active') }} ({{ activeClaims.length }})
         </button>
@@ -39,7 +39,7 @@
           type="button"
           class="tab-btn"
           :class="{ active: activeClaimPage === 'completed' }"
-          @click="activeClaimPage = 'completed'"
+          @click="selectClaimTab('completed')"
         >
           {{ t('claim_sheet.tab.completed') }} ({{ completedClaims.length }})
         </button>
@@ -47,34 +47,31 @@
 
       <ul class="claim-list">
         <li v-for="claim in visibleClaims" :key="claim.id" class="claim-item">
-          <div class="row claim-head">
-            <div class="claim-info">
-              <strong>{{ claim.title || t('claim_sheet.unnamed') }}</strong>
-              <small class="muted">{{ statusLabel(claim.status) }}</small>
-            </div>
-            <MoneyText :value-minor="claim.total_minor" />
-          </div>
-          <div class="row claim-meta muted">
-            <span>{{ t('claim_sheet.item_count', { count: claim.item_count }) }}</span>
-            <span v-if="claim.counterparty_name">{{ claim.counterparty_name }}</span>
-            <span>{{ formatTime(claim.updated_at) }}</span>
-          </div>
-          <div class="row claim-actions">
-            <button class="btn" @click="openDetail(claim)">{{ t('claim_sheet.view') }}</button>
-            <button class="btn" @click="exportClaim(claim)">{{ t('claim_sheet.export') }}</button>
-            <button
-              class="btn primary"
-              :disabled="isClaimCompleteDisabled(claim)"
-              @click="openCompleteSheet(claim)"
-            >
-              {{ t('claim_sheet.complete') }}
+          <div class="row claim-row">
+            <button type="button" class="claim-link" @click="openClaimDetail(claim)">
+              <div class="row claim-head">
+                <div class="claim-info">
+                  <strong>{{ claim.title || t('claim_sheet.unnamed') }}</strong>
+                  <small class="muted">{{ statusLabel(claim.status) }}</small>
+                </div>
+                <MoneyText :value-minor="claim.total_minor" />
+              </div>
+              <div class="claim-meta-group muted">
+                <div class="row claim-meta">
+                  <span>{{ t('claim_sheet.item_count', { count: claim.item_count }) }}</span>
+                  <span v-if="claim.counterparty_name">{{ claim.counterparty_name }}</span>
+                </div>
+                <div class="row claim-meta claim-date-row">
+                  <span>{{ formatTime(claim.updated_at) }}</span>
+                </div>
+              </div>
             </button>
             <button
-              class="btn danger"
-              :disabled="isClaimVoidDisabled(claim)"
-              @click="openDeleteDialog(claim)"
+              v-if="!isClaimCompleteDisabled(claim)"
+              class="btn primary claim-complete-btn"
+              @click.stop="openCompleteSheet(claim)"
             >
-              {{ t('common.delete') }}
+              {{ t('claim_sheet.complete') }}
             </button>
           </div>
         </li>
@@ -88,7 +85,7 @@
         <section v-if="isCreateOpen" class="sheet-mask" @click.self="closeCreateSheet">
           <article class="sheet card app-bottom-sheet">
             <header class="row">
-              <h3>{{ t('claim_sheet.create') }}</h3>
+              <h3>{{ isEditingCreateForm ? t('claim_sheet.edit') : t('claim_sheet.create') }}</h3>
               <button class="btn" @click="closeCreateSheet">{{ t('common.cancel') }}</button>
             </header>
 
@@ -132,7 +129,11 @@
                     :options="entryTypeOptions"
                     @update:model-value="onManualEntryTypeChange(item, $event)"
                   />
+                  <div v-if="item.entryType === 'advance'" class="manual-static-field muted">
+                    {{ t('claim_sheet.form.advance_category_hint') }}
+                  </div>
                   <CustomSelect
+                    v-else
                     v-model="item.categoryId"
                     :groups="categoryGroupsByEntryType(item.entryType)"
                     :placeholder="t('claim_sheet.form.choose_category')"
@@ -164,7 +165,8 @@
                   <label v-for="tx in reimbursementStore.pendingItems" :key="tx.id" class="import-item">
                     <input v-model="createForm.importTxIds" type="checkbox" :value="tx.id" />
                     <span class="import-item-text">
-                      <span>{{ tx.category_name || tx.note_plain || tx.id }}</span>
+                      <span>{{ buildImportedItemDescription(tx) }}</span>
+                      <small v-if="tx.note_plain" class="muted">{{ tx.note_plain }}</small>
                       <small class="muted">{{ formatTime(tx.occurred_at) }}</small>
                     </span>
                     <MoneyText :value-minor="pendingMinorOfTx(tx)" />
@@ -182,50 +184,9 @@
             <footer class="row">
               <button class="btn" @click="closeCreateSheet">{{ t('common.cancel') }}</button>
               <button class="btn primary" :disabled="creating || !canCreateClaim" @click="submitCreateSheet">
-                {{ creating ? t('claim_sheet.creating') : t('claim_sheet.create') }}
+                {{ creating ? t('claim_sheet.creating') : (isEditingCreateForm ? t('claim_sheet.save') : t('claim_sheet.create')) }}
               </button>
             </footer>
-          </article>
-        </section>
-      </transition>
-    </teleport>
-
-    <teleport to="body">
-      <transition name="overlay-fade">
-        <section v-if="detailClaim" class="sheet-mask" @click.self="closeDetail">
-          <article class="sheet card app-bottom-sheet">
-            <header class="row">
-              <h3>{{ detailClaim.title || t('claim_sheet.detail_title') }}</h3>
-              <button class="btn" @click="closeDetail">{{ t('common.cancel') }}</button>
-            </header>
-
-            <div class="stack form-wrap app-bottom-sheet-body">
-              <div class="row">
-                <span class="muted">{{ t('claim_sheet.status_label') }}</span>
-                <span>{{ statusLabel(detailClaim.status) }}</span>
-              </div>
-              <div class="row">
-                <span class="muted">{{ t('claim_sheet.net_amount') }}</span>
-                <MoneyText :value-minor="detailClaim.total_minor" />
-              </div>
-              <div v-if="detailClaim.counterparty_name" class="row">
-                <span class="muted">{{ t('claim_sheet.form.counterparty') }}</span>
-                <span>{{ detailClaim.counterparty_name }}</span>
-              </div>
-              <ul class="detail-list">
-                <li v-for="item in detailItems" :key="item.id" class="detail-item">
-                  <div class="row">
-                    <strong>{{ item.description || t('claim_sheet.form.unnamed_item') }}</strong>
-                    <MoneyText :value-minor="signedMinorOfItem(item)" />
-                  </div>
-                  <div class="row muted detail-meta">
-                    <span>{{ item.entry_type === 'income' ? t('claim_sheet.entry_type.income') : t('claim_sheet.entry_type.expense') }}</span>
-                    <span>{{ item.transaction_id ? t('claim_sheet.item_source.imported') : t('claim_sheet.item_source.manual') }}</span>
-                    <span>{{ categoryName(item.category_id) }}</span>
-                  </div>
-                </li>
-              </ul>
-            </div>
           </article>
         </section>
       </transition>
@@ -287,7 +248,7 @@
                 <p v-else class="muted">代收會優先抵扣匯入的報銷項目，剩餘金額才建立新的入帳交易。</p>
                 <p v-if="completeCashMinor <= 0" class="muted">本次將全額以代收抵扣，不再建立新的入帳交易。</p>
               </div>
-              <label v-if="completeCashMinor > 0">
+              <label v-if="completeRequiresAccount">
                 {{ t('claim_sheet.form.account') }}
                 <CustomSelect v-model="completeForm.accountId" :options="claimAccountOptions" />
               </label>
@@ -312,26 +273,12 @@
         </section>
       </transition>
     </teleport>
-
-    <AppDialog
-      :open="Boolean(deleteTarget)"
-      :title="t('claim_sheet.delete_dialog.title')"
-      :message="deleteTarget ? t('claim_sheet.confirm_void', { title: deleteTarget.title || deleteTarget.id }) : ''"
-      :confirm-text="t('common.delete')"
-      :confirm-disabled="deletingClaim"
-      :loading="deletingClaim"
-      :loading-text="t('claim_sheet.processing')"
-      @close="closeDeleteDialog"
-      @confirm="confirmDeleteClaim"
-    />
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
-import { Capacitor } from '@capacitor/core'
-import AppDialog from '@/ui/components/common/AppDialog.vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { useI18n } from '@/ui/services/i18n.service'
@@ -341,21 +288,17 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { reimbursementPendingMinor } from '@/ui/utils/reimbursement-item'
 import {
-  createCsvBlobUrl,
-  revokeBlobUrl,
-  saveCsvFileToDevice,
-  triggerDownloadFromUrl,
-} from '@/core/services/export.service'
-import {
   createReimbursementDraft,
-  deleteReimbursement,
   getReimbursementDetail,
   loadReimbursementDashboard,
   markReimbursementPaid,
   transitionReimbursementStatus,
+  updateReimbursementDraft,
 } from '@/core/services/reimbursement.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 
+const route = useRoute()
+const router = useRouter()
 const { t, locale } = useI18n()
 const uiStore = useUiStore()
 const reimbursementStore = useReimbursementStore()
@@ -367,17 +310,15 @@ const dashboard = ref({
   claims: [],
   summary: { pendingCount: 0, pendingTotal: 0 },
 })
+const createSheetBootstrapReady = ref(false)
 const isCreateOpen = ref(false)
 const creating = ref(false)
-const detailClaim = ref(null)
-const detailItems = ref([])
 const completeTarget = ref(null)
 const completeItems = ref([])
 const completing = ref(false)
 const activeClaimPage = ref('active')
-const deleteTarget = ref(null)
-const deletingClaim = ref(false)
 const createForm = reactive({
+  editingClaimId: '',
   title: '',
   counterpartyName: '',
   note: '',
@@ -389,12 +330,14 @@ const completeForm = reactive({
   note: '',
   selectedAdvanceIds: [],
 })
-let exportUrl = ''
 
 const entryTypeOptions = computed(() => [
   { label: t('claim_sheet.entry_type.expense'), value: 'expense' },
   { label: t('claim_sheet.entry_type.income'), value: 'income' },
+  { label: t('claim_sheet.entry_type.advance'), value: 'advance' },
 ])
+
+const isEditingCreateForm = computed(() => Boolean(String(createForm.editingClaimId ?? '').trim()))
 
 const claimAccountOptions = computed(() => {
   return accountStore.regularAccounts.map((account) => ({
@@ -453,6 +396,15 @@ const completeCashMinor = computed(() => {
   return Math.max(0, claimTotalMinor - selectedCompleteAdvanceCapacityMinor.value)
 })
 
+const completeClaimAdvanceMinor = computed(() => {
+  return completeItems.value.reduce((sum, item) => {
+    if (String(item?.source_type ?? '').trim() !== 'advance') return sum
+    return sum + Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
+  }, 0)
+})
+
+const completeRequiresAccount = computed(() => completeCashMinor.value > 0 || completeClaimAdvanceMinor.value > 0)
+
 const pendingClaimMinor = computed(() => {
   return dashboard.value.claims
     .filter((item) => item.status !== 'paid' && item.status !== 'rejected')
@@ -498,23 +450,45 @@ const canCreateClaim = computed(() => {
   const hasImported = importedItems.value.length > 0
   const manualItemsWithAmount = createForm.manualItems.filter((item) => Number(item.amountMajor ?? 0) > 0)
   const hasManual = manualItemsWithAmount.length > 0
-  const manualCategoriesReady = manualItemsWithAmount.every((item) => Boolean(String(item.categoryId ?? '').trim()))
+  const manualCategoriesReady = manualItemsWithAmount.every((item) => {
+    if (item.entryType === 'advance') return true
+    return Boolean(String(item.categoryId ?? '').trim())
+  })
   return hasTitle && (hasImported || hasManual) && manualCategoriesReady
 })
 
 const canCompleteClaim = computed(() => {
   if (!completeTarget.value) return false
   if (Number(completeTarget.value?.total_minor ?? 0) <= 0) return false
-  if (completeCashMinor.value <= 0) return true
+  if (!completeRequiresAccount.value) return true
   return claimAccountOptions.value.some((item) => item.value === String(completeForm.accountId ?? '').trim())
 })
 
 onMounted(async () => {
+  syncActiveClaimPageFromRoute()
+  createSheetBootstrapReady.value = false
   await Promise.all([reloadDashboard(), reimbursementStore.load(), accountStore.load(), categoryStore.load()])
-  resetCreateForm()
+  createSheetBootstrapReady.value = true
+  if (!String(route.query.edit ?? '').trim() && !isEditingCreateForm.value && !isCreateOpen.value) {
+    resetCreateForm()
+  }
 })
 
+watch(() => route.query.tab, () => {
+  syncActiveClaimPageFromRoute()
+})
+
+watch(
+  [() => route.query.edit, () => ledgerStore.activeLedgerId, createSheetBootstrapReady],
+  ([nextEditId, nextLedgerId, isBootstrapReady]) => {
+    if (!String(nextEditId ?? '').trim() || !String(nextLedgerId ?? '').trim() || !isBootstrapReady) return
+    void openEditSheetFromRoute()
+  },
+  { immediate: true },
+)
+
 function resetCreateForm() {
+  createForm.editingClaimId = ''
   createForm.title = ''
   createForm.counterpartyName = ''
   createForm.note = ''
@@ -543,10 +517,12 @@ function removeManualItem(itemId) {
 }
 
 function categoriesByEntryType(entryType) {
+  if (entryType === 'advance') return []
   return entryType === 'income' ? categoryStore.incomeCategories : categoryStore.expenseCategories
 }
 
 function categoryGroupsByEntryType(entryType) {
+  if (entryType === 'advance') return []
   return entryType === 'income' ? categoryStore.incomeCategoryGroups : categoryStore.expenseCategoryGroups
 }
 
@@ -568,7 +544,15 @@ function ensureCategoryIdByEntryType(entryType, categoryId) {
 }
 
 function onManualEntryTypeChange(item, nextType) {
-  item.entryType = nextType === 'income' ? 'income' : 'expense'
+  item.entryType = nextType === 'income'
+    ? 'income'
+    : nextType === 'advance'
+      ? 'advance'
+      : 'expense'
+  if (item.entryType === 'advance') {
+    item.categoryId = ''
+    return
+  }
   item.categoryId = ensureCategoryIdByEntryType(item.entryType, item.categoryId)
 }
 
@@ -601,9 +585,155 @@ function statusLabel(status) {
   return t('claim_sheet.status.draft')
 }
 
+function normalizeClaimTab(tab) {
+  return String(tab ?? '').trim() === 'completed' ? 'completed' : 'active'
+}
+
+function syncActiveClaimPageFromRoute() {
+  activeClaimPage.value = normalizeClaimTab(route.query.tab)
+}
+
+async function selectClaimTab(tab) {
+  const nextTab = normalizeClaimTab(tab)
+  activeClaimPage.value = nextTab
+  const nextQuery = { ...route.query }
+  delete nextQuery.edit
+  if (nextTab === 'completed') {
+    nextQuery.tab = 'completed'
+  } else {
+    delete nextQuery.tab
+  }
+  await router.replace({ name: 'claim-sheets', query: nextQuery })
+}
+
 function openCreateSheet() {
   resetCreateForm()
   isCreateOpen.value = true
+}
+
+function isClaimEditable(claim) {
+  return String(claim?.status ?? 'draft') === 'draft'
+}
+
+function claimTabOfStatus(status) {
+  return String(status ?? '').trim() === 'paid' ? 'completed' : 'active'
+}
+
+function openClaimDetail(claim) {
+  if (!claim?.id) return
+  const tab = claimTabOfStatus(claim?.status)
+  void router.push({
+    name: 'claim-sheet-detail',
+    params: { id: claim.id },
+    query: tab === 'completed' ? { tab } : {},
+  })
+}
+
+function buildImportedItemDescription(tx) {
+  return tx.category_name || tx.note_plain || t('claim_sheet.form.imported_reimbursement_item', { id: tx.id })
+}
+
+function buildManualClaimItems() {
+  return createForm.manualItems
+    .map((item) => {
+      const normalizedEntryType = item.entryType === 'income'
+        ? 'income'
+        : item.entryType === 'advance'
+          ? 'advance'
+          : 'expense'
+      const defaultDescription = normalizedEntryType === 'income'
+        ? t('claim_sheet.form.default_income_item')
+        : normalizedEntryType === 'advance'
+          ? t('claim_sheet.form.default_advance_item')
+          : t('claim_sheet.form.default_expense_item')
+      return {
+        entryType: normalizedEntryType === 'advance' ? 'income' : normalizedEntryType,
+        sourceType: normalizedEntryType === 'advance' ? 'advance' : 'manual',
+        description: String(item.description ?? '').trim() || defaultDescription,
+        categoryId: normalizedEntryType === 'advance'
+          ? null
+          : ensureCategoryIdByEntryType(normalizedEntryType, item.categoryId) || null,
+        amountMinor: Math.round(Number(item.amountMajor ?? 0) * 100),
+        occurredAt: new Date().toISOString(),
+      }
+    })
+    .filter((item) => item.amountMinor > 0)
+}
+
+function buildImportedClaimItems() {
+  return importedItems.value.map((tx) => ({
+    entryType: 'expense',
+    sourceType: 'transaction',
+    transactionId: tx.id,
+    categoryId: tx.category_id ?? null,
+    accountId: tx.account_id ?? null,
+    description: buildImportedItemDescription(tx),
+    amountMinor: pendingMinorOfTx(tx),
+    occurredAt: tx.occurred_at,
+  }))
+}
+
+function fillCreateFormFromDetail(detail) {
+  resetCreateForm()
+  createForm.editingClaimId = String(detail?.claim?.id ?? '')
+  createForm.title = String(detail?.claim?.title ?? '')
+  createForm.counterpartyName = String(detail?.claim?.counterparty_name ?? '')
+  createForm.note = String(detail?.claim?.note ?? '')
+  createForm.importTxIds = detail.items
+    .filter((item) => String(item?.transaction_id ?? '').trim())
+    .map((item) => String(item.transaction_id))
+  createForm.manualItems = detail.items
+    .filter((item) => !String(item?.transaction_id ?? '').trim())
+    .map((item) => {
+      const isAdvanceItem = String(item?.source_type ?? '').trim() === 'advance'
+      const entryType = isAdvanceItem
+        ? 'advance'
+        : String(item?.entry_type ?? '').trim() === 'income'
+          ? 'income'
+          : 'expense'
+      return {
+        id: `${item.id}_${Math.random().toString(36).slice(2, 8)}`,
+        entryType,
+        categoryId: isAdvanceItem ? '' : ensureCategoryIdByEntryType(entryType, item.category_id),
+        description: String(item?.description ?? ''),
+        amountMajor: Math.max(0, Math.round(Number(item?.amount_minor ?? 0))) / 100,
+      }
+    })
+  if (!createForm.manualItems.length) {
+    addManualItem()
+  }
+}
+
+async function openEditSheetById(claimId) {
+  if (!ledgerStore.activeLedgerId || !claimId) return false
+  const detail = await getReimbursementDetail(ledgerStore.activeLedgerId, claimId)
+  if (!isClaimEditable(detail?.claim)) return false
+  fillCreateFormFromDetail(detail)
+  isCreateOpen.value = true
+  return true
+}
+
+async function openEditSheetFromRoute() {
+  const claimId = String(route.query.edit ?? '').trim()
+  if (!claimId || !String(ledgerStore.activeLedgerId ?? '').trim()) return
+
+  let shouldClearEditQuery = false
+  try {
+    const opened = await openEditSheetById(claimId)
+    shouldClearEditQuery = true
+    if (!opened) {
+      uiStore.pushToast(t('claim_sheet.toast.load_failed'), 'error')
+    }
+  } catch (error) {
+    shouldClearEditQuery = true
+    uiStore.pushToast(error.message ?? t('claim_sheet.toast.load_failed'), 'error')
+  } finally {
+    if (shouldClearEditQuery && String(route.query.edit ?? '').trim()) {
+      const nextQuery = { ...route.query }
+      delete nextQuery.edit
+      await router.replace({ name: 'claim-sheets', query: nextQuery })
+    }
+  }
 }
 
 function closeCreateSheet() {
@@ -616,71 +746,33 @@ async function submitCreateSheet() {
 
   creating.value = true
   try {
-    const manualItems = createForm.manualItems
-      .map((item) => ({
-        entryType: item.entryType === 'income' ? 'income' : 'expense',
-        sourceType: 'manual',
-        description:
-          String(item.description ?? '').trim()
-          || (item.entryType === 'income'
-            ? t('claim_sheet.form.default_income_item')
-            : t('claim_sheet.form.default_expense_item')),
-        categoryId: ensureCategoryIdByEntryType(item.entryType, item.categoryId) || null,
-        amountMinor: Math.round(Number(item.amountMajor ?? 0) * 100),
-        occurredAt: new Date().toISOString(),
-      }))
-      .filter((item) => item.amountMinor > 0)
-
-    const imported = importedItems.value.map((tx) => ({
-      entryType: 'expense',
-      sourceType: 'transaction',
-      transactionId: tx.id,
-      categoryId: tx.category_id ?? null,
-      accountId: tx.account_id ?? null,
-      description: tx.category_name || tx.note_plain || t('claim_sheet.form.imported_reimbursement_item', { id: tx.id }),
-      amountMinor: pendingMinorOfTx(tx),
-      occurredAt: tx.occurred_at,
-    }))
-
-    await createReimbursementDraft(ledgerStore.activeLedgerId, {
+    const isEditing = isEditingCreateForm.value
+    const payload = {
       title: createForm.title,
       counterpartyName: createForm.counterpartyName,
       note: createForm.note,
-      items: [...imported, ...manualItems],
-    })
+      items: [...buildImportedClaimItems(), ...buildManualClaimItems()],
+    }
+
+    if (isEditing) {
+      await updateReimbursementDraft(ledgerStore.activeLedgerId, createForm.editingClaimId, payload)
+    } else {
+      await createReimbursementDraft(ledgerStore.activeLedgerId, payload)
+    }
 
     await reloadDashboard()
+    resetCreateForm()
     isCreateOpen.value = false
-    uiStore.pushToast(t('claim_sheet.toast.created'))
+    uiStore.pushToast(t(isEditing ? 'claim_sheet.toast.updated' : 'claim_sheet.toast.created'))
   } catch (error) {
-    uiStore.pushToast(error.message ?? t('claim_sheet.toast.create_failed'), 'error')
+    uiStore.pushToast(error.message ?? t(isEditingCreateForm.value ? 'claim_sheet.toast.update_failed' : 'claim_sheet.toast.create_failed'), 'error')
   } finally {
     creating.value = false
   }
 }
 
-async function openDetail(claim) {
-  if (!ledgerStore.activeLedgerId || !claim?.id) return
-  try {
-    const detail = await getReimbursementDetail(ledgerStore.activeLedgerId, claim.id)
-    detailClaim.value = detail.claim
-    detailItems.value = detail.items
-  } catch (error) {
-    uiStore.pushToast(error.message ?? t('claim_sheet.toast.load_failed'), 'error')
-  }
-}
-
-function closeDetail() {
-  detailClaim.value = null
-  detailItems.value = []
-}
-
 function isClaimCompleteDisabled(claim) {
   return Number(claim?.total_minor ?? 0) <= 0 || ['paid', 'rejected'].includes(String(claim?.status ?? ''))
-}
-
-function isClaimVoidDisabled(claim) {
-  return false
 }
 
 function openCompleteSheet(claim) {
@@ -700,16 +792,6 @@ function closeCompleteSheet() {
   completeTarget.value = null
   completeItems.value = []
   completeForm.selectedAdvanceIds = []
-}
-
-function openDeleteDialog(claim) {
-  if (!claim) return
-  deleteTarget.value = claim
-}
-
-function closeDeleteDialog(force = false) {
-  if (!force && deletingClaim.value) return
-  deleteTarget.value = null
 }
 
 async function ensureClaimReadyForPayment(claim) {
@@ -738,45 +820,19 @@ async function submitCompleteSheet() {
     const readyClaim = await ensureClaimReadyForPayment(completeTarget.value)
     await markReimbursementPaid(ledgerStore.activeLedgerId, {
       reimbursementId: readyClaim.id,
-      accountId: completeCashMinor.value > 0 ? completeForm.accountId : '',
+      accountId: completeRequiresAccount.value ? completeForm.accountId : '',
       note: completeForm.note,
       selectedAdvanceIds: completeForm.selectedAdvanceIds,
     })
     await Promise.all([reloadDashboard(), reimbursementStore.load(), accountStore.load()])
     closeCompleteSheet()
     uiStore.pushToast(t('claim_sheet.toast.completed'))
+    await router.replace({ name: 'home' })
   } catch (error) {
     uiStore.pushToast(error.message ?? t('claim_sheet.toast.complete_failed'), 'error')
   } finally {
     completing.value = false
   }
-}
-
-async function confirmDeleteClaim() {
-  const claim = deleteTarget.value
-  if (!claim || isClaimVoidDisabled(claim) || !ledgerStore.activeLedgerId || deletingClaim.value) return
-
-  deletingClaim.value = true
-  try {
-    await deleteReimbursement(ledgerStore.activeLedgerId, claim.id)
-    await Promise.all([reloadDashboard(), reimbursementStore.load(), accountStore.load()])
-    closeDeleteDialog(true)
-    uiStore.pushToast(t('claim_sheet.toast.voided'))
-  } catch (error) {
-    uiStore.pushToast(error.message ?? t('claim_sheet.toast.void_failed'), 'error')
-  } finally {
-    deletingClaim.value = false
-  }
-}
-
-function signedMinorOfItem(item) {
-  return Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
-}
-
-function categoryName(categoryId) {
-  const normalized = String(categoryId ?? '').trim()
-  if (!normalized) return t('analysis_page.uncategorized')
-  return categoryStore.categories.find((item) => item.id === normalized)?.name ?? t('analysis_page.uncategorized')
 }
 
 function advanceCategoryName(advance) {
@@ -799,71 +855,6 @@ async function loadCompleteItems(claimId) {
   } catch (error) {
     closeCompleteSheet()
     uiStore.pushToast(error.message ?? t('claim_sheet.toast.load_failed'), 'error')
-  }
-}
-
-function toCsvValue(value) {
-  const text = value === null || value === undefined ? '' : String(value)
-  if (text.includes(',') || text.includes('"') || text.includes('\n')) {
-    return `"${text.replaceAll('"', '""')}"`
-  }
-  return text
-}
-
-async function exportClaim(claim) {
-  if (!ledgerStore.activeLedgerId || !claim?.id) return
-
-  try {
-    const detail = await getReimbursementDetail(ledgerStore.activeLedgerId, claim.id)
-    const categoryHeader = t('transaction_about.detail.category')
-    const rows = detail.items.map((item) => ({
-      [t('claim_sheet.export_headers.type')]:
-        item.entry_type === 'income' ? t('claim_sheet.entry_type.income') : t('claim_sheet.entry_type.expense'),
-      [t('claim_sheet.export_headers.source')]:
-        item.transaction_id ? t('claim_sheet.item_source.imported') : t('claim_sheet.item_source.manual'),
-      [categoryHeader]: categoryName(item.category_id),
-      [t('claim_sheet.export_headers.description')]: item.description || '',
-      [t('claim_sheet.export_headers.amount')]: (Math.abs(signedMinorOfItem(item)) / 100).toFixed(2),
-      [t('claim_sheet.export_headers.date')]: item.occurred_at ? String(item.occurred_at).slice(0, 10) : '',
-    }))
-    rows.push({
-      [t('claim_sheet.export_headers.type')]: t('claim_sheet.export_total'),
-      [t('claim_sheet.export_headers.source')]: '',
-      [categoryHeader]: '',
-      [t('claim_sheet.export_headers.description')]: '',
-      [t('claim_sheet.export_headers.amount')]: (Math.abs(Number(detail.claim.total_minor ?? 0)) / 100).toFixed(2),
-      [t('claim_sheet.export_headers.date')]: '',
-    })
-
-    const headers = [
-      t('claim_sheet.export_headers.type'),
-      t('claim_sheet.export_headers.source'),
-      categoryHeader,
-      t('claim_sheet.export_headers.description'),
-      t('claim_sheet.export_headers.amount'),
-      t('claim_sheet.export_headers.date'),
-    ]
-    const csvText = [headers.join(',')]
-      .concat(rows.map((row) => headers.map((header) => toCsvValue(row[header])).join(',')))
-      .join('\r\n')
-    const filename = `${detail.claim.title || t('claim_sheet.title')}_${String(detail.claim.id)}.csv`
-
-    revokeBlobUrl(exportUrl)
-    if (Capacitor.isNativePlatform()) {
-      const saved = await saveCsvFileToDevice(filename, csvText, { category: 'claim-sheets' })
-      if (saved?.saved) {
-        uiStore.pushToast(
-          t('claim_sheet.toast.exported_saved', { location: saved.location || t('claim_sheet.device_files') }),
-        )
-        return
-      }
-    }
-
-    exportUrl = createCsvBlobUrl(csvText)
-    triggerDownloadFromUrl(exportUrl, filename)
-    uiStore.pushToast(t('claim_sheet.toast.exported'))
-  } catch (error) {
-    uiStore.pushToast(error.message ?? t('claim_sheet.toast.export_failed'), 'error')
   }
 }
 </script>
@@ -927,7 +918,6 @@ h3 {
 }
 
 .claim-item,
-.detail-item,
 .manual-item {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -938,11 +928,19 @@ h3 {
 
 .claim-head,
 .claim-meta,
-.claim-actions,
 .sub-head,
-.total-row,
-.detail-meta {
+.total-row {
   align-items: center;
+}
+
+.claim-meta-group {
+  display: grid;
+  gap: 4px;
+}
+
+.claim-row {
+  align-items: stretch;
+  gap: 10px;
 }
 
 .claim-info {
@@ -950,9 +948,25 @@ h3 {
   gap: 4px;
 }
 
-.claim-actions {
+.claim-link {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  display: grid;
   gap: 8px;
-  flex-wrap: wrap;
+}
+
+.claim-complete-btn {
+  align-self: center;
+  white-space: nowrap;
+}
+
+.claim-date-row {
+  justify-content: flex-start;
 }
 
 .sheet-mask {
@@ -986,6 +1000,16 @@ h3 {
   align-items: center;
 }
 
+.manual-static-field {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px dashed var(--border);
+  background: color-mix(in srgb, var(--card) 90%, var(--primary) 10%);
+}
+
 .import-list {
   display: grid;
   gap: 8px;
@@ -1006,6 +1030,12 @@ h3 {
 .import-item-text {
   display: grid;
   min-width: 0;
+}
+
+.detail-note {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
 }
 
 label {

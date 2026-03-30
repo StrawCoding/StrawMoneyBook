@@ -638,6 +638,11 @@ export function createHtmlBlobUrl(htmlText) {
   return URL.createObjectURL(blob)
 }
 
+export function createPdfBlobUrl(pdfData) {
+  const blob = pdfData instanceof Blob ? pdfData : new Blob([pdfData], { type: 'application/pdf' })
+  return URL.createObjectURL(blob)
+}
+
 export function revokeBlobUrl(url) {
   if (!url) return
   URL.revokeObjectURL(url)
@@ -716,6 +721,20 @@ function downloadBlob(filename, blob) {
 
 function utf8ToBase64(text) {
   const bytes = new TextEncoder().encode(text)
+  const chunkSize = 0x8000
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  }
+  return btoa(binary)
+}
+
+function bytesToBase64(bytesLike) {
+  const bytes = bytesLike instanceof Uint8Array
+    ? bytesLike
+    : bytesLike instanceof ArrayBuffer
+      ? new Uint8Array(bytesLike)
+      : new Uint8Array(bytesLike ?? [])
   const chunkSize = 0x8000
   let binary = ''
   for (let i = 0; i < bytes.length; i += chunkSize) {
@@ -810,5 +829,11 @@ export async function saveExcelFileToDevice(filename, xmlText, options = {}) {
 
 export async function saveCsvFileToDevice(filename, csvText, options = {}) {
   const dataBase64 = utf8ToBase64(`\ufeff${csvText}`)
+  return writeBase64FileToDevice(filename, dataBase64, options)
+}
+
+export async function savePdfFileToDevice(filename, pdfData, options = {}) {
+  const pdfBytes = pdfData instanceof Blob ? await pdfData.arrayBuffer() : pdfData
+  const dataBase64 = bytesToBase64(pdfBytes)
   return writeBase64FileToDevice(filename, dataBase64, options)
 }

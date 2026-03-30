@@ -25,6 +25,7 @@ import {
   createReimbursementAdvanceUsage,
   createReimbursement,
   createReimbursementItem,
+  deleteReimbursementItemsByReimbursementId,
   deleteReimbursementById,
   deleteReimbursementAdvanceUsageById,
   getReimbursementAdvanceUsageById,
@@ -39,6 +40,7 @@ import {
   recomputeReimbursementTotal,
   setReimbursementPaid,
   softDeleteReimbursementAdvanceById,
+  updateReimbursement,
   updateReimbursementAdvanceUsedMinor,
   updateReimbursementStatus,
 } from '@/core/repositories/reimbursement.repo'
@@ -172,6 +174,13 @@ function normalizeAmountMinor(amountMinor) {
 
 function normalizeReimbursementItemEntryType(value) {
   return String(value ?? '').trim() === 'income' ? 'income' : 'expense'
+}
+
+function normalizeReimbursementItemSourceType(value) {
+  const normalized = String(value ?? '').trim()
+  if (normalized === 'transaction') return 'transaction'
+  if (normalized === 'advance') return 'advance'
+  return 'manual'
 }
 
 function toDateKey(isoLike) {
@@ -386,22 +395,60 @@ export async function createReimbursementDraft(ledgerId, payload) {
       note: payload.note ?? null,
     })
 
-    for (const [index, item] of payload.items.entries()) {
-      const amountMinor = normalizeAmountMinor(item.amountMinor)
-      await createReimbursementItem(ledgerId, {
-        reimbursementId: claim.id,
-        sourceType: item.sourceType ?? 'manual',
-        entryType: normalizeReimbursementItemEntryType(item.entryType),
-        transactionId: item.transactionId ?? null,
-        categoryId: item.categoryId ?? null,
-        accountId: item.accountId ?? null,
-        description: item.description ?? `明細 ${index + 1}`,
-        amountMinor,
-        occurredAt: item.occurredAt ?? nowIso(),
-      })
-    }
+    await replaceReimbursementItems(ledgerId, claim.id, payload.items)
 
     return recomputeReimbursementTotal(ledgerId, claim.id)
+  })
+}
+
+async function replaceReimbursementItems(ledgerId, reimbursementId, items = []) {
+  await deleteReimbursementItemsByReimbursementId(ledgerId, reimbursementId)
+
+  for (const [index, item] of items.entries()) {
+    const amountMinor = normalizeAmountMinor(item.amountMinor)
+    await createReimbursementItem(ledgerId, {
+      reimbursementId,
+      sourceType: normalizeReimbursementItemSourceType(item.sourceType),
+      entryType: normalizeReimbursementItemEntryType(item.entryType),
+      transactionId: item.transactionId ?? null,
+      categoryId: item.categoryId ?? null,
+      accountId: item.accountId ?? null,
+      description: item.description ?? `明細 ${index + 1}`,
+      amountMinor,
+      occurredAt: item.occurredAt ?? nowIso(),
+    })
+  }
+}
+
+export async function updateReimbursementDraft(ledgerId, reimbursementId, payload) {
+  const normalizedReimbursementId = String(reimbursementId ?? '').trim()
+  if (!normalizedReimbursementId) {
+    throw new Error('reimbursementId 為必填')
+  }
+  if (!payload.title?.trim()) {
+    throw new Error('請輸入標題')
+  }
+  if (!Array.isArray(payload.items) || payload.items.length === 0) {
+    throw new Error('至少需要一筆明細')
+  }
+
+  return withTransaction(async () => {
+    const claim = await getReimbursementById(ledgerId, normalizedReimbursementId)
+    if (!claim) {
+      throw new Error('找不到資料')
+    }
+    if (String(claim.status ?? 'draft') !== 'draft') {
+      throw new Error('只有草稿請款單可編輯')
+    }
+
+    const counterpartyId = await ensureCounterpartyByName(ledgerId, payload.counterpartyName ?? '')
+    await updateReimbursement(ledgerId, normalizedReimbursementId, {
+      title: payload.title.trim(),
+      counterpartyId,
+      note: payload.note ?? null,
+    })
+    await replaceReimbursementItems(ledgerId, normalizedReimbursementId, payload.items)
+    return recomputeReimbursementTotal(ledgerId, normalizedReimbursementId)
   })
 }
 
@@ -462,6 +509,13 @@ function listClaimOffsettableItems(claimItems = []) {
     if (!txId) return false
     if (String(item?.entry_type ?? '') === 'income') return false
     return Math.max(0, Math.round(Number(item?.amount_minor ?? 0))) > 0
+  })
+}
+
+function listClaimAdvanceItems(claimItems = []) {
+  return claimItems.filter((item) => {
+    return String(item?.source_type ?? '').trim() === 'advance'
+      && Math.max(0, Math.round(Number(item?.amount_minor ?? 0))) > 0
   })
 }
 
@@ -559,15 +613,25 @@ export async function markReimbursementPaid(ledgerId, payload) {
       throw new Error('總額必須大於 0 才能入帳')
     }
 
+    const claimAdvanceItems = listClaimAdvanceItems(claimItems)
+    const claimAdvanceMinor = claimAdvanceItems.reduce((sum, item) => {
+      return sum + Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
+    }, 0)
     const advanceResult = await applyClaimAdvanceUsages(
       ledgerId,
       claimItems,
       totalMinor,
       payload.selectedAdvanceIds,
     )
+    const reimbursementCashMinor = Math.max(0, advanceResult.cashAmountMinor - claimAdvanceMinor)
     let txId = ''
+    const createdAdvanceIds = []
 
-    if (advanceResult.cashAmountMinor > 0) {
+    if (claimAdvanceMinor > 0 && !payload.accountId) {
+      throw new Error('請選擇入帳帳戶')
+    }
+
+    if (reimbursementCashMinor > 0) {
       if (!payload.accountId) {
         throw new Error('入帳必須指定帳戶')
       }
@@ -576,7 +640,7 @@ export async function markReimbursementPaid(ledgerId, payload) {
         type: 'income',
         accountId: payload.accountId,
         categoryId: payload.categoryId ?? null,
-        amountMinor: advanceResult.cashAmountMinor,
+        amountMinor: reimbursementCashMinor,
         occurredAt: payload.paidAt ?? nowIso(),
         note: payload.note ?? `報銷入帳：${claim.title}`,
         originType: 'reimbursement',
@@ -585,6 +649,23 @@ export async function markReimbursementPaid(ledgerId, payload) {
         includeInBudget: false,
         includeInAnalysis: false,
       })
+    }
+
+    for (const [index, item] of claimAdvanceItems.entries()) {
+      const amountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
+      if (amountMinor <= 0) continue
+      const createdAdvance = await createReimbursementAdvanceEntry(ledgerId, {
+        amountMinor,
+        accountId: payload.accountId,
+        note: String(item?.description ?? '').trim() || `${claim.title || '請款單'} 代收 ${index + 1}`,
+        receivedAt: payload.paidAt ?? nowIso(),
+      })
+      if (createdAdvance?.id) {
+        createdAdvanceIds.push(createdAdvance.id)
+      }
+      if (!txId && createdAdvance?.source_tx_id) {
+        txId = createdAdvance.source_tx_id
+      }
     }
 
     const updated = await setReimbursementPaid(ledgerId, claim.id, {
@@ -597,9 +678,11 @@ export async function markReimbursementPaid(ledgerId, payload) {
       alreadyProcessed: false,
       reimbursementId: updated.id,
       paidTxId: txId,
+      createdAdvanceIds,
+      claimAdvanceMinor,
       usedAdvanceMinor: advanceResult.usedAdvanceMinor,
       usedAdvanceIds: advanceResult.usedAdvanceIds,
-      cashAmountMinor: advanceResult.cashAmountMinor,
+      cashAmountMinor: reimbursementCashMinor,
     }
   })
 }

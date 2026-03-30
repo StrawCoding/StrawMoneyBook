@@ -103,8 +103,6 @@
     <article v-if="!transaction && !loading" class="card panel">
       <p class="muted">{{ t('transaction_about.not_found') }}</p>
     </article>
-
-    <HomeTransactionEditSheet :open="isEditOpen" :tx="editingTx" @close="closeEdit" @saved="handleSaved" />
   </section>
 </template>
 
@@ -112,7 +110,6 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
-import HomeTransactionEditSheet from '@/ui/components/home/HomeTransactionEditSheet.vue'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useAccountStore } from '@/ui/stores/account.store'
@@ -138,8 +135,6 @@ const { t, locale } = useI18n()
 const loading = ref(false)
 const allTransactions = ref([])
 const transaction = ref(null)
-const isEditOpen = ref(false)
-const editingTx = ref(null)
 const refunding = ref(false)
 
 const txId = computed(() => String(route.params.id ?? ''))
@@ -288,23 +283,7 @@ async function load() {
 
 function openEdit(tx) {
   if (!tx) return
-  editingTx.value = tx
-  isEditOpen.value = true
-}
-
-function closeEdit() {
-  isEditOpen.value = false
-  editingTx.value = null
-}
-
-async function handleSaved() {
-  await load()
-  if (!transaction.value) {
-    closeEdit()
-    goBack()
-    return
-  }
-  closeEdit()
+  void router.push({ name: 'transaction-edit', params: { id: tx.id } }).catch(() => {})
 }
 
 function goBack() {

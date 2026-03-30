@@ -102,6 +102,25 @@ export async function createReimbursement(ledgerId, input) {
   return getReimbursementById(ledgerId, id)
 }
 
+export async function updateReimbursement(ledgerId, reimbursementId, input) {
+  assertLedgerId(ledgerId)
+  const now = nowIso()
+
+  await run(
+    `UPDATE reimbursements
+     SET title = ?,
+         counterparty_id = ?,
+         note = ?,
+         updated_at = ?
+     WHERE ledger_id = ?
+       AND id = ?
+       AND deleted_at IS NULL;`,
+    [input.title ?? null, input.counterpartyId ?? null, input.note ?? null, now, ledgerId, reimbursementId],
+  )
+
+  return getReimbursementById(ledgerId, reimbursementId)
+}
+
 export async function listReimbursementItems(ledgerId, reimbursementId) {
   assertLedgerId(ledgerId)
 
@@ -165,6 +184,17 @@ export async function createReimbursementItem(ledgerId, input) {
   )
 
   return id
+}
+
+export async function deleteReimbursementItemsByReimbursementId(ledgerId, reimbursementId) {
+  assertLedgerId(ledgerId)
+
+  await run(
+    `DELETE FROM reimbursement_items
+     WHERE ledger_id = ?
+       AND reimbursement_id = ?;`,
+    [ledgerId, reimbursementId],
+  )
 }
 
 export async function listReimbursementAdvances(ledgerId, options = {}) {

@@ -186,9 +186,11 @@ import { installGlobalErrorLogging } from '@/ui/services/error-log.service'
 import '@/ui/assets/css/global.css'
 
 const DATA_CHANGE_BACKUP_DEBOUNCE_MS = 15000
+const AUTO_BACKUP_DUE_CHECK_MS = 5 * 60 * 1000
 const BACK_EXIT_CONFIRM_WINDOW_MS = 1600
 let dataChangeBackupTimer = null
 let dataChangeBackupRunning = false
+let autoBackupDueTimer = null
 let lastAndroidBackPressedAt = 0
 let homeWidgetSyncTimer = null
 let hasTriedInteractiveGoogleAutoConnect = false
@@ -228,6 +230,47 @@ function scheduleHomeWidgetSync(pinia, delayMs = 1200) {
     homeWidgetSyncTimer = null
     void syncActiveLedgerHomeWidget(pinia)
   }, Math.max(0, Number(delayMs) || 0))
+}
+
+function clearAutoBackupDueTimer() {
+  if (typeof window === 'undefined') return
+  if (autoBackupDueTimer != null) {
+    window.clearTimeout(autoBackupDueTimer)
+    autoBackupDueTimer = null
+  }
+}
+
+function scheduleAutoBackupDueCheck(pinia, delayMs = AUTO_BACKUP_DUE_CHECK_MS) {
+  if (typeof window === 'undefined') return
+  clearAutoBackupDueTimer()
+  autoBackupDueTimer = window.setTimeout(() => {
+    autoBackupDueTimer = null
+    void runAutoBackupDueCheck(pinia, 'scheduled_due_check')
+  }, Math.max(0, Number(delayMs) || 0))
+}
+
+async function runAutoBackupDueCheck(pinia, reason = 'scheduled_due_check') {
+  const ledgerStore = useLedgerStore(pinia)
+  const ledgerId = String(ledgerStore.activeLedgerId ?? '').trim()
+  if (!ledgerId) {
+    clearAutoBackupDueTimer()
+    return { skipped: true, reason: 'missing_ledger' }
+  }
+
+  try {
+    const [googleResult, webdavResult] = await Promise.allSettled([
+      runGoogleAutoBackupIfDue(ledgerId),
+      runWebdavAutoBackupIfDue(ledgerId),
+    ])
+    return {
+      skipped: false,
+      reason,
+      googleResult,
+      webdavResult,
+    }
+  } finally {
+    scheduleAutoBackupDueCheck(pinia)
+  }
 }
 
 async function syncActiveLedgerHomeWidget(pinia) {
@@ -576,6 +619,7 @@ async function main() {
         restoreGoogleBackupForActiveLedgerInBackground(ledgerStore.activeLedgerId, { runDueBackup: true })
         void runExchangeRateAutoSyncIfDue(ledgerStore.activeLedgerId)
         triggerBankAutoRefresh(pinia, ledgerStore.activeLedgerId, 'app_resume')
+        scheduleAutoBackupDueCheck(pinia)
       }
       void runSharedLedgerBackgroundSyncNow(pinia)
       void runGoogleDriveLedgerBackgroundSyncNow(pinia)
@@ -598,6 +642,7 @@ async function main() {
     if (typeof window !== 'undefined') {
       window.addEventListener('app:data-mutated', () => {
         scheduleAutoBackupOnDataChange(pinia)
+        scheduleAutoBackupDueCheck(pinia, 30000)
         scheduleHomeWidgetSync(pinia)
         scheduleActiveSharedLedgerAutoSync(pinia)
         scheduleActiveGoogleDriveLedgerSync(pinia)
@@ -613,12 +658,16 @@ async function main() {
       () => ledgerStore.activeLedgerId,
       (ledgerId) => {
         const normalizedLedgerId = String(ledgerId ?? '').trim()
-        if (!normalizedLedgerId) return
+        if (!normalizedLedgerId) {
+          clearAutoBackupDueTimer()
+          return
+        }
         restoreGoogleBackupForActiveLedgerInBackground(normalizedLedgerId, {
           runDueBackup: true,
           allowInteractive: true,
         })
         void runWebdavAutoBackupIfDue(normalizedLedgerId)
+        scheduleAutoBackupDueCheck(pinia)
         void runExchangeRateAutoSyncIfDue(normalizedLedgerId)
         triggerBankAutoRefresh(pinia, normalizedLedgerId, 'active_ledger_change')
       },
