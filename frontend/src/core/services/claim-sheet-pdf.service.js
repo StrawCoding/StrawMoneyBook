@@ -304,6 +304,20 @@ function createPdfStyles() {
         border-radius: 12px;
         background: #eff6ff;
       }
+      .item-row-note-continuation {
+        background: #f8fbff;
+      }
+      .item-note-continuation-head {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .item-note-continuation-head .cell-description {
+        min-width: 0;
+      }
+      .item-note-row-continued {
+        background: #eef2ff;
+      }
       .empty-note {
         margin: 0;
         padding: 14px;
@@ -416,6 +430,41 @@ function createItemsPanelMarkup(claim, items, labels, locale) {
   `
 }
 
+function createContinuationLabel(label) {
+  return `${label}（續）`
+}
+
+function buildItemViewModel(item, index, labels, locale, categoryName) {
+  const description = String(item?.description ?? '').trim() || labels.emptyDescription
+  const importedNote = String(item?.transaction_note ?? '').trim()
+  const itemSourceText = `${claimItemTypeLabel(item, labels)} / ${claimItemSourceLabel(item, labels)}`
+  return {
+    amountText: formatAmountMinor(item?.amount_minor, locale),
+    categoryName,
+    dateText: formatDateOnly(item?.occurred_at, locale),
+    description,
+    importedNote,
+    indexLabel: String(index + 1).padStart(2, '0'),
+    itemSourceText,
+  }
+}
+
+function createItemMainGridMarkup(viewModel) {
+  return `
+    <div class="item-main-grid">
+      <span class="item-index">${escapeHtml(viewModel.indexLabel)}</span>
+      <div class="cell cell-description">
+        <strong>${escapeHtml(viewModel.description)}</strong>
+        <small>${escapeHtml(viewModel.itemSourceText)}</small>
+      </div>
+      <span class="cell">${escapeHtml(viewModel.categoryName)}</span>
+      <span class="cell">${escapeHtml(viewModel.itemSourceText)}</span>
+      <span class="cell cell-date">${escapeHtml(viewModel.dateText)}</span>
+      <strong class="cell cell-amount">${escapeHtml(viewModel.amountText)}</strong>
+    </div>
+  `
+}
+
 function createPageElement(claim, items, labels, locale, firstPage) {
   const page = document.createElement('section')
   page.className = 'claim-pdf-page'
@@ -428,27 +477,34 @@ function createPageElement(claim, items, labels, locale, firstPage) {
   }
 }
 
-function createItemRowElement(item, index, labels, locale, categoryName) {
+function createItemRowElement(viewModel, labels, options = {}) {
+  const noteText = String(options.noteText ?? viewModel.importedNote ?? '').trim()
   const row = document.createElement('article')
   row.className = 'item-row'
-  const description = String(item?.description ?? '').trim() || labels.emptyDescription
-  const importedNote = String(item?.transaction_note ?? '').trim()
-  const itemSourceText = `${claimItemTypeLabel(item, labels)} / ${claimItemSourceLabel(item, labels)}`
   row.innerHTML = `
-    <div class="item-main-grid">
-      <span class="item-index">${escapeHtml(String(index + 1).padStart(2, '0'))}</span>
-      <div class="cell cell-description">
-        <strong>${escapeHtml(description)}</strong>
-        <small>${escapeHtml(itemSourceText)}</small>
-      </div>
-      <span class="cell">${escapeHtml(categoryName)}</span>
-      <span class="cell">${escapeHtml(itemSourceText)}</span>
-      <span class="cell cell-date">${escapeHtml(formatDateOnly(item?.occurred_at, locale))}</span>
-      <strong class="cell cell-amount">${escapeHtml(formatAmountMinor(item?.amount_minor, locale))}</strong>
-    </div>
-    ${importedNote
-      ? `<div class="item-note-row"><span class="meta-label">${escapeHtml(labels.importedNoteLabel)}</span><p>${escapeHtml(importedNote)}</p></div>`
+    ${createItemMainGridMarkup(viewModel)}
+    ${noteText
+      ? `<div class="item-note-row"><span class="meta-label">${escapeHtml(labels.importedNoteLabel)}</span><p>${escapeHtml(noteText)}</p></div>`
       : ''}
+  `
+  return row
+}
+
+function createItemContinuationRowElement(viewModel, labels, noteText) {
+  const row = document.createElement('article')
+  row.className = 'item-row item-row-note-continuation'
+  row.innerHTML = `
+    <div class="item-note-continuation-head">
+      <span class="item-index">${escapeHtml(viewModel.indexLabel)}</span>
+      <div class="cell cell-description">
+        <strong>${escapeHtml(viewModel.description)}</strong>
+        <small>${escapeHtml(createContinuationLabel(labels.importedNoteLabel))}</small>
+      </div>
+    </div>
+    <div class="item-note-row item-note-row-continued">
+      <span class="meta-label">${escapeHtml(createContinuationLabel(labels.importedNoteLabel))}</span>
+      <p>${escapeHtml(noteText)}</p>
+    </div>
   `
   return row
 }
@@ -466,26 +522,126 @@ async function waitForLayout() {
 
 async function renderPageToCanvas(page) {
   await waitForLayout()
-  const width = page.scrollWidth
-  const height = page.scrollHeight
   return html2canvas(page, {
     scale: 2,
     backgroundColor: '#ffffff',
     useCORS: true,
     logging: false,
-    width,
-    height,
-    windowWidth: width,
-    windowHeight: height,
+    width: PAGE_WIDTH_PX,
+    height: PAGE_HEIGHT_PX,
+    windowWidth: PAGE_WIDTH_PX,
+    windowHeight: PAGE_HEIGHT_PX,
   })
 }
 
-function buildPagedContainer(detail, options = {}) {
+function pageOverflows(page) {
+  return page.scrollHeight > page.clientHeight
+}
+
+function tryAppendRow(pageState, row) {
+  pageState.body.appendChild(row)
+  if (!pageOverflows(pageState.page)) {
+    return true
+  }
+  pageState.body.removeChild(row)
+  return false
+}
+
+function resolveNoteSegmentBoundary(text, requestedLength) {
+  const normalizedRequestedLength = Math.max(1, Math.min(text.length, Math.floor(requestedLength)))
+  if (normalizedRequestedLength >= text.length) {
+    return text.length
+  }
+  const candidate = text.slice(0, normalizedRequestedLength)
+  const lastLineBreak = candidate.lastIndexOf('\n')
+  const lastSpace = candidate.lastIndexOf(' ')
+  const softBoundary = Math.max(lastLineBreak, lastSpace)
+  const minimumPreferredBoundary = Math.max(1, Math.floor(normalizedRequestedLength * 0.6))
+  if (softBoundary >= minimumPreferredBoundary) {
+    return softBoundary + 1
+  }
+  return normalizedRequestedLength
+}
+
+function findLargestFittingNoteSegment(pageState, noteText, createRow) {
+  const normalizedNote = String(noteText ?? '')
+  if (!normalizedNote) return null
+
+  let low = 1
+  let high = normalizedNote.length
+  let bestSegment = null
+
+  while (low <= high) {
+    const requestedLength = Math.floor((low + high) / 2)
+    const boundary = resolveNoteSegmentBoundary(normalizedNote, requestedLength)
+    const segmentText = normalizedNote.slice(0, boundary)
+    const row = createRow(segmentText)
+    pageState.body.appendChild(row)
+    const fits = !pageOverflows(pageState.page)
+    pageState.body.removeChild(row)
+
+    if (fits) {
+      bestSegment = {
+        consumedLength: boundary,
+        text: segmentText,
+      }
+      low = requestedLength + 1
+      continue
+    }
+
+    high = requestedLength - 1
+  }
+
+  return bestSegment
+}
+
+function trimRemainingNoteText(text, consumedLength) {
+  return String(text ?? '').slice(consumedLength).replace(/^\s+/, '')
+}
+
+function appendSplitItemRows(viewModel, labels, currentPage, appendPage) {
+  const mainRow = createItemRowElement(viewModel, labels, { noteText: '' })
+  if (!tryAppendRow(currentPage, mainRow)) {
+    if (currentPage.body.childElementCount) {
+      currentPage = appendPage(false)
+    }
+    if (!tryAppendRow(currentPage, mainRow)) {
+      currentPage.body.appendChild(mainRow)
+    }
+  }
+
+  let remainingNote = viewModel.importedNote
+  while (remainingNote) {
+    const segment = findLargestFittingNoteSegment(
+      currentPage,
+      remainingNote,
+      (noteText) => createItemContinuationRowElement(viewModel, labels, noteText),
+    )
+
+    if (!segment) {
+      if (!currentPage.body.childElementCount) {
+        currentPage.body.appendChild(createItemContinuationRowElement(viewModel, labels, remainingNote))
+        break
+      }
+      currentPage = appendPage(false)
+      continue
+    }
+
+    currentPage.body.appendChild(createItemContinuationRowElement(viewModel, labels, segment.text))
+    remainingNote = trimRemainingNoteText(remainingNote, segment.consumedLength)
+    if (remainingNote) {
+      currentPage = appendPage(false)
+    }
+  }
+
+  return currentPage
+}
+
+function buildPagedContainer(detail, options = {}, container) {
   const claim = detail?.claim ?? {}
   const items = Array.isArray(detail?.items) ? detail.items : []
   const locale = options.locale || 'zh-TW'
   const labels = buildLabels(options)
-  const container = createPdfContainer()
   const pages = []
 
   function appendPage(firstPage) {
@@ -498,13 +654,16 @@ function buildPagedContainer(detail, options = {}) {
   let currentPage = appendPage(true)
   items.forEach((item, index) => {
     const categoryName = options.categoryName?.(item?.category_id) || labels.uncategorized
-    const row = createItemRowElement(item, index, labels, locale, categoryName)
-    currentPage.body.appendChild(row)
+    const viewModel = buildItemViewModel(item, index, labels, locale, categoryName)
+    const fullRow = createItemRowElement(viewModel, labels)
 
-    if (currentPage.page.scrollHeight > currentPage.page.clientHeight) {
-      currentPage.body.removeChild(row)
-      currentPage = appendPage(false)
-      currentPage.body.appendChild(row)
+    if (!tryAppendRow(currentPage, fullRow)) {
+      if (currentPage.body.childElementCount) {
+        currentPage = appendPage(false)
+      }
+      if (!tryAppendRow(currentPage, fullRow)) {
+        currentPage = appendSplitItemRows(viewModel, labels, currentPage, appendPage)
+      }
     }
   })
 
@@ -525,8 +684,9 @@ export async function buildClaimSheetPdfFile(detail, options = {}) {
     throw new Error('目前環境不支援 PDF 匯出')
   }
 
-  const { container, pages } = buildPagedContainer(detail, options)
+  const container = createPdfContainer()
   document.body.appendChild(container)
+  const { pages } = buildPagedContainer(detail, options, container)
 
   try {
     const pdf = new jsPDF({
