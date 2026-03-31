@@ -368,6 +368,43 @@ export async function listReimbursementAdvanceUsagesByExpenseTx(ledgerId, expens
   return rowsOf(result)
 }
 
+export async function listReimbursementAdvanceUsagesByAdvanceId(ledgerId, advanceId) {
+  assertLedgerId(ledgerId)
+
+  const result = await query(
+    `SELECT
+       u.ledger_id,
+       u.id,
+       u.advance_id,
+       u.expense_tx_id,
+       u.amount_minor,
+       u.created_at,
+       u.updated_at,
+       ra.account_id,
+       a.name AS account_name,
+       ra.category_id,
+       c.name AS category_name,
+       c.icon AS category_icon,
+       ra.note AS advance_note
+     FROM reimbursement_advance_usages u
+     LEFT JOIN reimbursement_advances ra
+       ON ra.ledger_id = u.ledger_id
+      AND ra.id = u.advance_id
+     LEFT JOIN accounts a
+       ON a.ledger_id = ra.ledger_id
+      AND a.id = ra.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = ra.ledger_id
+      AND c.id = ra.category_id
+     WHERE u.ledger_id = ?
+       AND u.advance_id = ?
+     ORDER BY u.created_at ASC;`,
+    [ledgerId, advanceId],
+  )
+
+  return rowsOf(result)
+}
+
 export async function listReimbursementAdvanceUsageRecords(ledgerId) {
   assertLedgerId(ledgerId)
 
@@ -412,6 +449,48 @@ export async function listReimbursementAdvanceUsageRecords(ledgerId) {
      WHERE u.ledger_id = ?
      ORDER BY u.created_at DESC, u.updated_at DESC;`,
     [ledgerId],
+  )
+
+  return rowsOf(result)
+}
+
+export async function listReimbursementAdvancesByReimbursementId(ledgerId, reimbursementId) {
+  assertLedgerId(ledgerId)
+
+  const result = await query(
+    `SELECT
+       ra.ledger_id,
+       ra.id,
+       ra.account_id,
+       a.name AS account_name,
+       ra.category_id,
+       c.name AS category_name,
+       c.icon AS category_icon,
+       ra.source_tx_id,
+       ra.amount_minor,
+       ra.used_minor,
+       MAX(0, ra.amount_minor - ra.used_minor) AS available_minor,
+       ra.note,
+       ra.received_at,
+       ra.created_at,
+       ra.updated_at
+     FROM reimbursement_advances ra
+     INNER JOIN transactions t
+       ON t.ledger_id = ra.ledger_id
+      AND t.id = ra.source_tx_id
+     LEFT JOIN accounts a
+       ON a.ledger_id = ra.ledger_id
+      AND a.id = ra.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = ra.ledger_id
+      AND c.id = ra.category_id
+     WHERE ra.ledger_id = ?
+       AND ra.deleted_at IS NULL
+       AND t.deleted_at IS NULL
+       AND t.origin_type = 'reimbursement'
+       AND t.external_ref_id = ?
+     ORDER BY ra.created_at ASC;`,
+    [ledgerId, reimbursementId],
   )
 
   return rowsOf(result)
@@ -567,6 +646,21 @@ export async function updateReimbursementStatus(ledgerId, reimbursementId, nextS
     sql = `
       UPDATE reimbursements
       SET status = ?,
+          updated_at = ?
+      WHERE ledger_id = ?
+        AND id = ?;
+    `
+  }
+
+  if (nextStatus === 'draft') {
+    sql = `
+      UPDATE reimbursements
+      SET status = ?,
+          submitted_at = NULL,
+          approved_at = NULL,
+          paid_at = NULL,
+          paid_tx_id = NULL,
+          idempotency_key = NULL,
           updated_at = ?
       WHERE ledger_id = ?
         AND id = ?;

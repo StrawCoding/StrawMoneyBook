@@ -6,6 +6,7 @@ import {
   findTransactionRecordById,
   findReimbursementSettlementIncomeTx,
   markTransactionReimbursed,
+  softDeleteTransactionsByOriginRef,
   softDeleteTransactionById,
 } from '@/core/repositories/transaction.repo'
 import {
@@ -33,7 +34,9 @@ import {
   findTransactionByIdempotencyKey,
   getReimbursementById,
   listReimbursementAdvanceUsageRecords,
+  listReimbursementAdvanceUsagesByAdvanceId,
   listReimbursementAdvanceUsagesByExpenseTx,
+  listReimbursementAdvancesByReimbursementId,
   listReimbursementAdvances,
   listReimbursementItems,
   listReimbursements,
@@ -161,7 +164,7 @@ const ALLOWED_TRANSITIONS = {
   in_review: ['approved', 'rejected'],
   approved: ['paid', 'rejected'],
   rejected: ['draft'],
-  paid: [],
+  paid: ['draft'],
 }
 
 function normalizeAmountMinor(amountMinor) {
@@ -318,9 +321,9 @@ export async function createReimbursementAdvanceEntry(ledgerId, payload = {}) {
       amountMinor,
       occurredAt: receivedAt,
       note,
-      originType: 'manual',
-      externalRefId: advanceId,
-      idempotencyKey: `reim_adv_${advanceId}`,
+      originType: payload.originType ?? 'manual',
+      externalRefId: payload.externalRefId ?? advanceId,
+      idempotencyKey: payload.idempotencyKey ?? `reim_adv_${advanceId}`,
       includeInBudget: false,
       includeInAnalysis: false,
     })
@@ -475,6 +478,11 @@ export async function transitionReimbursementStatus(ledgerId, reimbursementId, n
       throw new Error('paid 狀態請使用入帳流程')
     }
 
+    if (String(claim.status ?? '') === 'paid' && nextStatus === 'draft') {
+      const claimItems = await listReimbursementItems(ledgerId, claim.id)
+      await revertPaidClaimEffects(ledgerId, claim, claimItems)
+    }
+
     return updateReimbursementStatus(ledgerId, reimbursementId, nextStatus)
   })
 }
@@ -487,15 +495,15 @@ export async function deleteReimbursement(ledgerId, reimbursementId) {
     }
 
     const claimItems = await listReimbursementItems(ledgerId, claim.id)
-    for (const item of claimItems) {
-      const txId = String(item?.transaction_id ?? '').trim()
-      if (!txId) continue
-      await restoreAdvanceUsages(ledgerId, txId)
-      await markTransactionReimbursed(ledgerId, txId, false)
-    }
-
-    if (claim.status === 'paid' && claim.paid_tx_id) {
-      await softDeleteTransactionById(ledgerId, claim.paid_tx_id)
+    if (String(claim.status ?? '') === 'paid') {
+      await revertPaidClaimEffects(ledgerId, claim, claimItems)
+    } else {
+      for (const item of claimItems) {
+        const txId = String(item?.transaction_id ?? '').trim()
+        if (!txId) continue
+        await restoreAdvanceUsages(ledgerId, txId)
+        await markTransactionReimbursed(ledgerId, txId, false)
+      }
     }
 
     await deleteReimbursementById(ledgerId, reimbursementId)
@@ -659,6 +667,9 @@ export async function markReimbursementPaid(ledgerId, payload) {
         accountId: payload.accountId,
         note: String(item?.description ?? '').trim() || `${claim.title || '請款單'} 代收 ${index + 1}`,
         receivedAt: payload.paidAt ?? nowIso(),
+        originType: 'reimbursement',
+        externalRefId: claim.id,
+        idempotencyKey: `${idempotencyKey}:advance:${index + 1}`,
       })
       if (createdAdvance?.id) {
         createdAdvanceIds.push(createdAdvance.id)
@@ -732,6 +743,38 @@ async function deleteAdvanceUsageRecords(ledgerId, usages, options = {}) {
   }
 
   return usages
+}
+
+async function revertPaidClaimEffects(ledgerId, claim, claimItems = []) {
+  for (const item of claimItems) {
+    const txId = String(item?.transaction_id ?? '').trim()
+    if (!txId) continue
+    await restoreAdvanceUsages(ledgerId, txId)
+  }
+
+  const generatedAdvances = await listReimbursementAdvancesByReimbursementId(ledgerId, claim.id)
+  for (const advance of generatedAdvances) {
+    const usages = await listReimbursementAdvanceUsagesByAdvanceId(ledgerId, advance.id)
+    if (usages.length) {
+      await deleteAdvanceUsageRecords(ledgerId, usages, { syncExpenseState: true })
+    }
+    await softDeleteReimbursementAdvanceById(ledgerId, advance.id)
+  }
+
+  await softDeleteTransactionsByOriginRef(ledgerId, 'reimbursement', claim.id)
+
+  for (const item of claimItems) {
+    const txId = String(item?.transaction_id ?? '').trim()
+    if (!txId) continue
+    await markTransactionReimbursed(ledgerId, txId, false)
+  }
+
+  return {
+    restoredTransactionIds: claimItems
+      .map((item) => String(item?.transaction_id ?? '').trim())
+      .filter(Boolean),
+    deletedAdvanceIds: generatedAdvances.map((item) => item.id),
+  }
 }
 
 async function restoreAdvanceUsages(ledgerId, expenseTxId, options = {}) {

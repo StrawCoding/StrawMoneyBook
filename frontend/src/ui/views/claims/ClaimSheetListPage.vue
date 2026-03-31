@@ -250,7 +250,7 @@
               </div>
               <label v-if="completeRequiresAccount">
                 {{ t('claim_sheet.form.account') }}
-                <CustomSelect v-model="completeForm.accountId" :options="claimAccountOptions" />
+                <CustomSelect v-model="completeForm.accountId" :options="accountStore.accounts" />
               </label>
               <label>
                 {{ t('claim_sheet.form.complete_note') }}
@@ -338,13 +338,6 @@ const entryTypeOptions = computed(() => [
 ])
 
 const isEditingCreateForm = computed(() => Boolean(String(createForm.editingClaimId ?? '').trim()))
-
-const claimAccountOptions = computed(() => {
-  return accountStore.regularAccounts.map((account) => ({
-    value: account.id,
-    label: account.name,
-  }))
-})
 
 const selectedCompleteAdvanceIdSet = computed(() => {
   return new Set((completeForm.selectedAdvanceIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean))
@@ -461,7 +454,7 @@ const canCompleteClaim = computed(() => {
   if (!completeTarget.value) return false
   if (Number(completeTarget.value?.total_minor ?? 0) <= 0) return false
   if (!completeRequiresAccount.value) return true
-  return claimAccountOptions.value.some((item) => item.value === String(completeForm.accountId ?? '').trim())
+  return accountStore.accounts.some((item) => item.id === String(completeForm.accountId ?? '').trim())
 })
 
 onMounted(async () => {
@@ -779,7 +772,7 @@ function openCompleteSheet(claim) {
   if (isClaimCompleteDisabled(claim)) return
   completeTarget.value = claim
   completeItems.value = []
-  completeForm.accountId = String(claimAccountOptions.value[0]?.value ?? '')
+  completeForm.accountId = String(accountStore.accounts[0]?.id ?? '')
   completeForm.note = String(claim?.title ?? '').trim()
     ? t('claim_sheet.default_complete_note_named', { title: claim.title })
     : t('claim_sheet.default_complete_note')

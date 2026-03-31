@@ -39,6 +39,14 @@
         <button class="btn" :disabled="!isClaimEditable(claim)" @click="openEdit">
           {{ t('common.edit') }}
         </button>
+        <button
+          v-if="isClaimRestorable(claim)"
+          class="btn"
+          :disabled="restoring"
+          @click="openRestoreDialog"
+        >
+          {{ restoring ? t('claim_sheet.processing') : t('claim_sheet.restore') }}
+        </button>
         <button class="btn" :disabled="exporting" @click="exportClaim">
           {{ exporting ? t('claim_sheet.processing') : t('claim_sheet.export') }}
         </button>
@@ -80,6 +88,18 @@
     </article>
 
     <AppDialog
+      :open="restoreDialogOpen"
+      :title="t('claim_sheet.restore_dialog.title')"
+      :message="claim ? t('claim_sheet.confirm_restore', { title: claim.title || claim.id }) : ''"
+      :confirm-text="t('claim_sheet.restore')"
+      :confirm-disabled="restoring"
+      :loading="restoring"
+      :loading-text="t('claim_sheet.processing')"
+      @close="closeRestoreDialog"
+      @confirm="confirmRestoreClaim"
+    />
+
+    <AppDialog
       :open="deleteDialogOpen"
       :title="t('claim_sheet.delete_dialog.title')"
       :message="claim ? t('claim_sheet.confirm_void', { title: claim.title || claim.id }) : ''"
@@ -116,6 +136,7 @@ import { buildClaimSheetPdfFile } from '@/core/services/claim-sheet-pdf.service'
 import {
   deleteReimbursement,
   getReimbursementDetail,
+  transitionReimbursementStatus,
 } from '@/core/services/reimbursement.service'
 
 const route = useRoute()
@@ -129,7 +150,9 @@ const reimbursementStore = useReimbursementStore()
 const loading = ref(false)
 const exporting = ref(false)
 const deleting = ref(false)
+const restoring = ref(false)
 const deleteDialogOpen = ref(false)
+const restoreDialogOpen = ref(false)
 const claim = ref(null)
 const items = ref([])
 const exportedUrl = ref('')
@@ -193,6 +216,10 @@ function statusLabel(status) {
 
 function isClaimEditable(value) {
   return String(value?.status ?? 'draft') === 'draft'
+}
+
+function isClaimRestorable(value) {
+  return String(value?.status ?? '').trim() === 'paid'
 }
 
 function signedMinorOfItem(item) {
@@ -341,9 +368,40 @@ function openDeleteDialog() {
   deleteDialogOpen.value = true
 }
 
+function openRestoreDialog() {
+  if (!claim.value || !isClaimRestorable(claim.value)) return
+  restoreDialogOpen.value = true
+}
+
 function closeDeleteDialog() {
   if (deleting.value) return
   deleteDialogOpen.value = false
+}
+
+function closeRestoreDialog() {
+  if (restoring.value) return
+  restoreDialogOpen.value = false
+}
+
+async function confirmRestoreClaim() {
+  if (!ledgerStore.activeLedgerId || !claim.value?.id || restoring.value) return
+
+  restoring.value = true
+  try {
+    const restored = await transitionReimbursementStatus(ledgerStore.activeLedgerId, claim.value.id, 'draft')
+    claim.value = restored
+    await reimbursementStore.load()
+    uiStore.pushToast(t('claim_sheet.toast.restored'))
+    await router.replace({
+      name: 'claim-sheet-detail',
+      params: { id: claim.value.id },
+    })
+  } catch (error) {
+    uiStore.pushToast(error.message ?? t('claim_sheet.toast.restore_failed'), 'error')
+  } finally {
+    restoring.value = false
+    restoreDialogOpen.value = false
+  }
 }
 
 async function confirmDeleteClaim() {
