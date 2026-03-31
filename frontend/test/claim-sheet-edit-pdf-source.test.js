@@ -79,7 +79,10 @@ test('claim sheet completion returns home after success', () => {
 test('claim sheet pdf service renders html into paged pdf output', () => {
   assert.match(pdfServiceSource, /import html2canvas from 'html2canvas'/)
   assert.match(pdfServiceSource, /import \{ jsPDF \} from 'jspdf'/)
-  assert.match(pdfServiceSource, /await html2canvas\(container, \{/)
+  assert.match(pdfServiceSource, /currentPage\.page\.scrollHeight > currentPage\.page\.clientHeight/)
+  assert.match(pdfServiceSource, /currentPage = appendPage\(false\)/)
+  assert.match(pdfServiceSource, /for \(const \[index, \{ page \}\] of pages\.entries\(\)\)/)
+  assert.match(pdfServiceSource, /return html2canvas\(page, \{/)
   assert.match(pdfServiceSource, /pdf\.addImage\(imageData, 'PNG'/)
   assert.match(pdfServiceSource, /filename: `\$\{filenameTitle\}_\$\{filenameId\}\.pdf`/)
 })
