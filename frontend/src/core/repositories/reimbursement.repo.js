@@ -496,6 +496,43 @@ export async function listReimbursementAdvancesByReimbursementId(ledgerId, reimb
   return rowsOf(result)
 }
 
+export async function listReimbursementAdvancesBySourceTxId(ledgerId, sourceTxId) {
+  assertLedgerId(ledgerId)
+
+  const result = await query(
+    `SELECT
+       ra.ledger_id,
+       ra.id,
+       ra.account_id,
+       a.name AS account_name,
+       ra.category_id,
+       c.name AS category_name,
+       c.icon AS category_icon,
+       ra.source_tx_id,
+       ra.amount_minor,
+       ra.used_minor,
+       MAX(0, ra.amount_minor - ra.used_minor) AS available_minor,
+       ra.note,
+       ra.received_at,
+       ra.created_at,
+       ra.updated_at
+     FROM reimbursement_advances ra
+     LEFT JOIN accounts a
+       ON a.ledger_id = ra.ledger_id
+      AND a.id = ra.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = ra.ledger_id
+      AND c.id = ra.category_id
+     WHERE ra.ledger_id = ?
+       AND ra.deleted_at IS NULL
+       AND ra.source_tx_id = ?
+     ORDER BY ra.created_at ASC;`,
+    [ledgerId, sourceTxId],
+  )
+
+  return rowsOf(result)
+}
+
 export async function getReimbursementAdvanceUsageById(ledgerId, usageId) {
   assertLedgerId(ledgerId)
 

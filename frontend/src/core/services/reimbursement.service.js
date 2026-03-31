@@ -37,6 +37,7 @@ import {
   listReimbursementAdvanceUsagesByAdvanceId,
   listReimbursementAdvanceUsagesByExpenseTx,
   listReimbursementAdvancesByReimbursementId,
+  listReimbursementAdvancesBySourceTxId,
   listReimbursementAdvances,
   listReimbursementItems,
   listReimbursements,
@@ -792,6 +793,45 @@ export async function removeAdvanceUsagesForExpenseTransaction(ledgerId, expense
 
   return withTransaction(async () => {
     return restoreAdvanceUsages(ledgerId, expenseTxId, { syncExpenseState: false })
+  })
+}
+
+export async function removeReimbursementAdvanceEffectsBySourceTransaction(ledgerId, sourceTxId) {
+  const normalizedSourceTxId = String(sourceTxId ?? '').trim()
+  if (!normalizedSourceTxId) {
+    throw new Error('sourceTxId 為必填')
+  }
+
+  return withTransaction(async () => {
+    const advances = await listReimbursementAdvancesBySourceTxId(ledgerId, normalizedSourceTxId)
+    if (!advances.length) {
+      return {
+        deletedAdvanceIds: [],
+        deletedUsageIds: [],
+      }
+    }
+
+    const deletedUsageIds = []
+
+    for (const advance of advances) {
+      const usages = await listReimbursementAdvanceUsagesByAdvanceId(ledgerId, advance.id)
+      if (usages.length) {
+        await deleteAdvanceUsageRecords(ledgerId, usages, { syncExpenseState: true })
+        for (const usage of usages) {
+          const usageId = String(usage?.id ?? '').trim()
+          if (usageId) {
+            deletedUsageIds.push(usageId)
+          }
+        }
+      }
+
+      await softDeleteReimbursementAdvanceById(ledgerId, advance.id)
+    }
+
+    return {
+      deletedAdvanceIds: advances.map((advance) => advance.id),
+      deletedUsageIds,
+    }
   })
 }
 
