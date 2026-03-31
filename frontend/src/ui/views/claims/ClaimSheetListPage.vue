@@ -62,6 +62,7 @@
                   <span v-if="claim.counterparty_name">{{ claim.counterparty_name }}</span>
                 </div>
                 <div class="row claim-meta claim-date-row">
+                  <span>{{ t('transaction_about.detail.updated_at') }}</span>
                   <span>{{ formatTime(claim.updated_at) }}</span>
                 </div>
               </div>
@@ -124,6 +125,17 @@
                   <button class="btn" @click="addManualItem">{{ t('claim_sheet.form.add_item') }}</button>
                 </div>
                 <div v-for="item in createForm.manualItems" :key="item.id" class="manual-item">
+                  <div class="manual-item-preview">
+                    <div class="manual-item-preview-main">
+                      <font-awesome-icon
+                        v-if="manualItemPresentation(item).icon"
+                        :icon="manualItemPresentation(item).icon"
+                        class="item-leading-icon"
+                      />
+                      <strong>{{ manualItemPresentation(item).title }}</strong>
+                    </div>
+                    <small class="muted">{{ manualItemPresentation(item).categoryName || manualItemPresentation(item).entryLabel }}</small>
+                  </div>
                   <CustomSelect
                     v-model="item.entryType"
                     :options="entryTypeOptions"
@@ -165,8 +177,16 @@
                   <label v-for="tx in reimbursementStore.pendingItems" :key="tx.id" class="import-item">
                     <input v-model="createForm.importTxIds" type="checkbox" :value="tx.id" />
                     <span class="import-item-text">
-                      <span>{{ buildImportedItemDescription(tx) }}</span>
+                      <span class="import-item-title">
+                        <font-awesome-icon
+                          v-if="importedTxPresentation(tx).icon"
+                          :icon="importedTxPresentation(tx).icon"
+                          class="item-leading-icon"
+                        />
+                        <span>{{ importedTxPresentation(tx).title }}</span>
+                      </span>
                       <small v-if="tx.note_plain" class="muted">{{ tx.note_plain }}</small>
+                      <small v-if="importedTxPresentation(tx).categoryName" class="muted">{{ importedTxPresentation(tx).categoryName }}</small>
                       <small class="muted">{{ formatTime(tx.occurred_at) }}</small>
                     </span>
                     <MoneyText :value-minor="pendingMinorOfTx(tx)" />
@@ -288,6 +308,11 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { reimbursementPendingMinor } from '@/ui/utils/reimbursement-item'
 import {
+  buildClaimCategoryLookup,
+  presentClaimManualFormItem,
+  presentImportedClaimTx,
+} from '@/ui/utils/claim-sheet-presentation'
+import {
   createReimbursementDraft,
   getReimbursementDetail,
   loadReimbursementDashboard,
@@ -336,6 +361,8 @@ const entryTypeOptions = computed(() => [
   { label: t('claim_sheet.entry_type.income'), value: 'income' },
   { label: t('claim_sheet.entry_type.advance'), value: 'advance' },
 ])
+
+const claimCategoryLookup = computed(() => buildClaimCategoryLookup(categoryStore.categories))
 
 const isEditingCreateForm = computed(() => Boolean(String(createForm.editingClaimId ?? '').trim()))
 
@@ -623,7 +650,7 @@ function openClaimDetail(claim) {
 }
 
 function buildImportedItemDescription(tx) {
-  return tx.category_name || tx.note_plain || t('claim_sheet.form.imported_reimbursement_item', { id: tx.id })
+  return importedTxPresentation(tx).title
 }
 
 function buildManualClaimItems() {
@@ -839,6 +866,14 @@ function advanceCategoryIcon(advance) {
   return String(advance?.category_icon ?? '').trim()
 }
 
+function manualItemPresentation(item) {
+  return presentClaimManualFormItem(item, claimCategoryLookup.value, t)
+}
+
+function importedTxPresentation(tx) {
+  return presentImportedClaimTx(tx, claimCategoryLookup.value, t)
+}
+
 async function loadCompleteItems(claimId) {
   if (!ledgerStore.activeLedgerId || !claimId) return
   try {
@@ -939,6 +974,7 @@ h3 {
 .claim-info {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .claim-link {
@@ -960,6 +996,17 @@ h3 {
 
 .claim-date-row {
   justify-content: flex-start;
+  gap: 8px;
+}
+
+.claim-head {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.claim-meta {
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .sheet-mask {
@@ -989,8 +1036,33 @@ h3 {
 }
 
 .manual-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
   grid-template-columns: 120px 180px minmax(0, 1fr) 120px auto;
   align-items: center;
+}
+
+.manual-item-preview {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 4px;
+}
+
+.manual-item-preview-main,
+.import-item-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.item-leading-icon {
+  width: 16px;
+  color: var(--primary);
+  flex: 0 0 auto;
 }
 
 .manual-static-field {
@@ -1022,6 +1094,7 @@ h3 {
 
 .import-item-text {
   display: grid;
+  gap: 4px;
   min-width: 0;
 }
 

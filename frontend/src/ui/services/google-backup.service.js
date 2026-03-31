@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { exportAllLedgersJson } from '@/core/services/export.service'
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
 import { translateMessage } from '@/ui/services/i18n.service'
+import { isAutoBackupDue, resolveAutoBackupIntervalHours } from '@/ui/services/auto-backup-schedule'
 import {
   downloadAppDataBackupText,
   listAppDataBackups,
@@ -49,7 +50,7 @@ function normalizeState(raw) {
     accountImageUrl: String(raw.accountImageUrl ?? '').trim(),
     autoEnabled: Boolean(raw.autoEnabled),
     dataChangeAutoEnabled: Boolean(raw.dataChangeAutoEnabled),
-    intervalHours: Math.max(1, Number(raw.intervalHours ?? 24) || 24),
+    intervalHours: resolveAutoBackupIntervalHours(raw.intervalHours),
     lastBackupFilename: String(raw.lastBackupFilename ?? '').trim(),
     lastBackupAt: String(raw.lastBackupAt ?? ''),
     lastBackupStatus: String(raw.lastBackupStatus ?? 'idle'),
@@ -65,15 +66,6 @@ function ensureNativePlatform() {
   if (!Capacitor.isNativePlatform()) {
     throw new Error(t('settings_auto_backup.error.google.native_only'))
   }
-}
-
-function isBackupDue(state) {
-  if (!state.connected || !state.autoEnabled) return false
-  if (!state.lastBackupAt) return true
-  const lastMs = Date.parse(state.lastBackupAt)
-  if (!Number.isFinite(lastMs)) return true
-  const intervalMs = Math.max(1, Number(state.intervalHours || 24)) * 60 * 60 * 1000
-  return Date.now() - lastMs >= intervalMs
 }
 
 function pickPreferredBackupFile(files) {
@@ -413,7 +405,7 @@ export async function runGoogleAutoBackupIfDue(ledgerId) {
   assertLedgerId(ledgerId)
   if (!Capacitor.isNativePlatform()) return false
   const state = await autoConnectGoogleBackup(ledgerId)
-  if (!isBackupDue(state)) return false
+  if (!isAutoBackupDue(state)) return false
 
   try {
     const profile = getCachedGoogleProfile()

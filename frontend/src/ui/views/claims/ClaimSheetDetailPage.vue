@@ -69,16 +69,23 @@
 
       <ul class="detail-list">
         <li v-for="item in items" :key="item.id" class="detail-item">
-          <div class="row">
-            <strong>{{ item.description || t('claim_sheet.form.unnamed_item') }}</strong>
+          <div class="row detail-item-head">
+            <div class="detail-item-title">
+              <font-awesome-icon
+                v-if="itemPresentation(item).icon"
+                :icon="itemPresentation(item).icon"
+                class="detail-item-icon"
+              />
+              <strong>{{ itemPresentation(item).title }}</strong>
+            </div>
             <MoneyText :value-minor="signedMinorOfItem(item)" />
           </div>
-          <div class="row muted detail-meta">
-            <span>{{ itemEntryTypeLabel(item) }}</span>
-            <span>{{ itemSourceLabel(item) }}</span>
-            <span>{{ claimItemCategoryName(item) }}</span>
+          <div class="detail-meta">
+            <span class="detail-badge muted">{{ itemPresentation(item).entryLabel }}</span>
+            <span class="detail-badge muted">{{ itemPresentation(item).sourceLabel }}</span>
+            <span class="detail-badge muted">{{ itemPresentation(item).categoryName || t('analysis_page.uncategorized') }}</span>
           </div>
-          <p v-if="item.transaction_note" class="muted detail-note">{{ item.transaction_note }}</p>
+          <p v-if="itemPresentation(item).note" class="muted detail-note">{{ itemPresentation(item).note }}</p>
         </li>
       </ul>
     </article>
@@ -126,6 +133,10 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
 import {
+  buildClaimCategoryLookup,
+  presentClaimDetailItem,
+} from '@/ui/utils/claim-sheet-presentation'
+import {
   createPdfBlobUrl,
   openFileUrl,
   revokeBlobUrl,
@@ -160,6 +171,7 @@ const exportedFilename = ref('')
 const exportedLocation = ref('')
 
 const claimId = computed(() => String(route.params.id ?? '').trim())
+const claimCategoryLookup = computed(() => buildClaimCategoryLookup(categoryStore.categories))
 const backTab = computed(() => {
   const queryTab = String(route.query.tab ?? '').trim()
   if (queryTab === 'completed') return 'completed'
@@ -232,27 +244,8 @@ function categoryName(categoryId) {
   return categoryStore.categories.find((item) => item.id === normalized)?.name ?? t('analysis_page.uncategorized')
 }
 
-function claimItemCategoryName(item) {
-  if (String(item?.source_type ?? '').trim() === 'advance') {
-    return t('claim_sheet.entry_type.advance')
-  }
-  return categoryName(item?.category_id)
-}
-
-function itemEntryTypeLabel(item) {
-  if (String(item?.source_type ?? '').trim() === 'advance') {
-    return t('claim_sheet.entry_type.advance')
-  }
-  return String(item?.entry_type ?? '').trim() === 'income'
-    ? t('claim_sheet.entry_type.income')
-    : t('claim_sheet.entry_type.expense')
-}
-
-function itemSourceLabel(item) {
-  const sourceType = String(item?.source_type ?? '').trim()
-  if (sourceType === 'advance') return t('claim_sheet.item_source.advance')
-  if (String(item?.transaction_id ?? '').trim()) return t('claim_sheet.item_source.imported')
-  return t('claim_sheet.item_source.manual')
+function itemPresentation(item) {
+  return presentClaimDetailItem(item, claimCategoryLookup.value, t)
 }
 
 async function loadDetail() {
@@ -434,7 +427,7 @@ h3 {
 
 .claim-head,
 .action-row,
-.detail-meta {
+.detail-item-head {
   align-items: center;
 }
 
@@ -492,9 +485,43 @@ h3 {
 .detail-item {
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 10px;
+  padding: 12px;
   display: grid;
+  gap: 10px;
+}
+
+.detail-item-head {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detail-item-title {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
+}
+
+.detail-item-icon {
+  width: 16px;
+  color: var(--primary);
+  flex: 0 0 auto;
+}
+
+.detail-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.detail-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 90%, var(--primary) 10%);
 }
 
 .detail-note {

@@ -2,6 +2,7 @@ import { exportAllLedgersJson } from '@/core/services/export.service'
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
 import { translateMessage } from '@/ui/services/i18n.service'
 import { deleteEncryptedSetting, getEncryptedSetting, setEncryptedSetting } from '@/ui/services/secure-setting.service'
+import { isAutoBackupDue, resolveAutoBackupIntervalHours } from '@/ui/services/auto-backup-schedule'
 import { Capacitor, CapacitorHttp } from '@capacitor/core'
 
 const WEBDAV_BACKUP_KEY = 'backup.webdav'
@@ -43,7 +44,7 @@ function normalizeState(raw) {
     connected: Boolean(raw.connected && hasAuth),
     autoEnabled: Boolean(raw.autoEnabled && hasAuth),
     dataChangeAutoEnabled: Boolean(raw.dataChangeAutoEnabled && raw.autoEnabled && hasAuth),
-    intervalHours: Math.max(1, Number(raw.intervalHours ?? 24) || 24),
+    intervalHours: resolveAutoBackupIntervalHours(raw.intervalHours),
     lastBackupFilename: String(raw.lastBackupFilename ?? '').trim(),
     lastBackupAt: String(raw.lastBackupAt ?? ''),
     lastBackupStatus: String(raw.lastBackupStatus ?? 'idle'),
@@ -64,7 +65,7 @@ function normalizeStoredState(raw) {
     connected: Boolean(raw.connected),
     autoEnabled: Boolean(raw.autoEnabled),
     dataChangeAutoEnabled: Boolean(raw.dataChangeAutoEnabled),
-    intervalHours: Math.max(1, Number(raw.intervalHours ?? 24) || 24),
+    intervalHours: resolveAutoBackupIntervalHours(raw.intervalHours),
     lastBackupFilename: String(raw.lastBackupFilename ?? '').trim(),
     lastBackupAt: String(raw.lastBackupAt ?? ''),
     lastBackupStatus: String(raw.lastBackupStatus ?? 'idle'),
@@ -186,15 +187,6 @@ function filenameFromHref(href) {
   } catch {
     return name
   }
-}
-
-function isBackupDue(state) {
-  if (!state.connected || !state.autoEnabled) return false
-  if (!state.lastBackupAt) return true
-  const lastMs = Date.parse(state.lastBackupAt)
-  if (!Number.isFinite(lastMs)) return true
-  const intervalMs = Math.max(1, Number(state.intervalHours || 24)) * 60 * 60 * 1000
-  return Date.now() - lastMs >= intervalMs
 }
 
 async function uploadJsonToWebdav(state, filename, payloadText) {
@@ -609,7 +601,7 @@ export async function restoreWebdavBackupJson(ledgerId, options = {}) {
 export async function runWebdavAutoBackupIfDue(ledgerId) {
   assertLedgerId(ledgerId)
   const state = await getWebdavBackupState(ledgerId)
-  if (!isBackupDue(state)) {
+  if (!isAutoBackupDue(state)) {
     return { skipped: true, reason: 'not_due' }
   }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
