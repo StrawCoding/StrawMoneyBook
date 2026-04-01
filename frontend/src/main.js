@@ -647,6 +647,9 @@ async function main() {
         scheduleActiveSharedLedgerAutoSync(pinia)
         scheduleActiveGoogleDriveLedgerSync(pinia)
       })
+      window.addEventListener('app:auto-backup-config-updated', () => {
+        void runAutoBackupDueCheck(pinia, 'config_updated')
+      })
       window.addEventListener('focus', () => {
         restoreSharedLedgerSessionInBackground('window_focus')
         void runGoogleDriveLedgerBackgroundSyncNow(pinia)

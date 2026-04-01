@@ -434,6 +434,7 @@ h3 {
 .claim-title {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .detail-grid {
@@ -493,6 +494,7 @@ h3 {
 .detail-item-head {
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .detail-item-title {
@@ -528,9 +530,22 @@ h3 {
   margin: 0;
   white-space: pre-wrap;
   line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.claim-title h3,
+.detail-row span,
+.detail-item-title strong {
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 720px) {
+  .claim-head,
+  .detail-item-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .detail-grid {
     grid-template-columns: 1fr;
   }

@@ -964,17 +964,26 @@ h3 {
 .claim-meta-group {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .claim-row {
   align-items: stretch;
   gap: 10px;
+  min-width: 0;
 }
 
 .claim-info {
   display: grid;
   gap: 4px;
   min-width: 0;
+}
+
+.claim-info strong,
+.claim-meta span,
+.manual-item-preview small,
+.import-item-text small {
+  overflow-wrap: anywhere;
 }
 
 .claim-link {
@@ -1002,6 +1011,7 @@ h3 {
 .claim-head {
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .claim-meta {
@@ -1049,6 +1059,7 @@ h3 {
   grid-column: 1 / -1;
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .manual-item-preview-main,
@@ -1207,6 +1218,16 @@ label {
 @media (max-width: 720px) {
   .summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .claim-row,
+  .claim-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .claim-complete-btn {
+    width: 100%;
   }
 
   .manual-item {

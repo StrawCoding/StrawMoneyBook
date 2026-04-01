@@ -456,6 +456,19 @@ function withTimeout(task, timeoutMs, timeoutMessage) {
   })
 }
 
+function notifyAutoBackupConfigUpdated(reason) {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return
+  const detail = {
+    reason: String(reason ?? '').trim() || 'settings_updated',
+    ledgerId: String(ledgerStore.activeLedgerId ?? '').trim(),
+  }
+  if (typeof CustomEvent === 'function') {
+    window.dispatchEvent(new CustomEvent('app:auto-backup-config-updated', { detail }))
+    return
+  }
+  window.dispatchEvent(new Event('app:auto-backup-config-updated'))
+}
+
 async function connectWebdav() {
   if (!ledgerStore.activeLedgerId) return
   webdavConnecting.value = true
@@ -469,6 +482,7 @@ async function connectWebdav() {
     webdavAutoEnabled.value = Boolean(webdavBackupState.value.autoEnabled)
     webdavDataChangeAutoEnabled.value = Boolean(webdavBackupState.value.dataChangeAutoEnabled)
     webdavIntervalHours.value = Number(webdavBackupState.value.intervalHours || 24)
+    notifyAutoBackupConfigUpdated('webdav_connected')
     uiStore.pushToast(t('settings_auto_backup.toast.webdav_connected'))
   } catch (error) {
     uiStore.pushToast(errorMessage(error, t('settings_auto_backup.error.webdav_connect_failed')), 'error')
@@ -484,6 +498,7 @@ async function disconnectWebdav() {
     webdavBackupState.value = await disconnectWebdavBackup(ledgerStore.activeLedgerId)
     webdavAutoEnabled.value = false
     webdavDataChangeAutoEnabled.value = false
+    notifyAutoBackupConfigUpdated('webdav_disconnected')
     uiStore.pushToast(t('settings_auto_backup.toast.webdav_disconnected'))
   } catch (error) {
     uiStore.pushToast(errorMessage(error, t('settings_auto_backup.error.disconnect_failed')), 'error')
@@ -512,6 +527,7 @@ async function saveWebdavBackupSettings() {
       patch.password = webdavPasswordInput.value
     }
     webdavBackupState.value = await updateWebdavBackupState(ledgerStore.activeLedgerId, patch)
+    notifyAutoBackupConfigUpdated('webdav_settings_saved')
     uiStore.pushToast(t('settings_auto_backup.toast.webdav_settings_updated'))
   } catch (error) {
     uiStore.pushToast(errorMessage(error, t('settings_auto_backup.error.save_settings_failed')), 'error')
@@ -590,6 +606,7 @@ async function connectGoogle() {
     googleAutoEnabled.value = Boolean(googleBackupState.value.autoEnabled)
     googleDataChangeAutoEnabled.value = Boolean(googleBackupState.value.dataChangeAutoEnabled)
     googleIntervalHours.value = Number(googleBackupState.value.intervalHours || 24)
+    notifyAutoBackupConfigUpdated('google_connected')
     uiStore.pushToast(t('settings_auto_backup.toast.google_connected'))
   } catch (error) {
     console.error('[google-connect] failed', error)
@@ -610,6 +627,7 @@ async function disconnectGoogle() {
     )
     googleAutoEnabled.value = false
     googleDataChangeAutoEnabled.value = false
+    notifyAutoBackupConfigUpdated('google_disconnected')
     uiStore.pushToast(t('settings_auto_backup.toast.google_disconnected'))
   } catch (error) {
     console.error('[google-disconnect] failed', error)
@@ -632,6 +650,7 @@ async function saveGoogleBackupSettings() {
       dataChangeAutoEnabled: Boolean(googleDataChangeAutoEnabled.value && googleAutoEnabled.value),
       intervalHours: Number(googleIntervalHours.value || 24),
     })
+    notifyAutoBackupConfigUpdated('google_settings_saved')
     uiStore.pushToast(t('settings_auto_backup.toast.google_settings_updated'))
   } catch (error) {
     console.error('[google-save-settings] failed', error)

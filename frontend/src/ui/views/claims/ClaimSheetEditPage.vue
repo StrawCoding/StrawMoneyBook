@@ -514,6 +514,7 @@ h2 {
 .manual-item-preview {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .manual-item-preview-main,
@@ -542,7 +543,7 @@ h2 {
 
 .import-item {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   border: 1px solid var(--border);
@@ -556,6 +557,13 @@ h2 {
   min-width: 0;
 }
 
+.manual-item-preview small,
+.manual-item-preview strong,
+.import-item-text small,
+.import-item-title span {
+  overflow-wrap: anywhere;
+}
+
 .action-row {
   margin-top: 16px;
   justify-content: flex-end;
@@ -565,5 +573,16 @@ h2 {
 label {
   display: grid;
   gap: 6px;
+}
+
+@media (max-width: 720px) {
+  .action-row {
+    justify-content: stretch;
+    flex-wrap: wrap;
+  }
+
+  .action-row .btn {
+    width: 100%;
+  }
 }
 </style>

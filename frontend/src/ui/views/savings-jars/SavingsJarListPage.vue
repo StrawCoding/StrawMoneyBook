@@ -60,6 +60,33 @@
             <button class="btn" :disabled="!jar.canTransfer" @click="openFlowDialog('withdraw', jar)">{{ t('savings_jar.action.withdraw') }}</button>
           </div>
           <p v-if="!jar.canTransfer" class="muted transfer-hint">{{ t('savings_jar.same_currency_required') }}</p>
+
+          <section class="activity-section">
+            <div class="row activity-head">
+              <strong>{{ t('savings_jar.activity.title') }}</strong>
+            </div>
+            <div v-if="jar.activityRows.length" class="activity-list">
+              <button
+                v-for="activity in jar.activityRows"
+                :key="activity.id"
+                type="button"
+                class="activity-item"
+                @click="openTransactionEdit(activity.id)"
+              >
+                <div class="activity-copy">
+                  <div class="row activity-title-row">
+                    <strong>{{ activity.directionLabel }}</strong>
+                    <MoneyText :value-minor="activity.amountMinor" :currency="activity.currencyCode" tone="transfer" />
+                  </div>
+                  <p class="muted activity-meta">{{ activity.counterpartyLabel }}</p>
+                  <p v-if="activity.note" class="muted activity-note">{{ activity.note }}</p>
+                  <small class="muted">{{ formatActivityTime(activity.occurredAt) }}</small>
+                </div>
+                <span class="muted activity-action">{{ t('common.edit') }}</span>
+              </button>
+            </div>
+            <p v-else class="muted activity-empty">{{ t('savings_jar.activity.empty') }}</p>
+          </section>
         </article>
       </div>
 
@@ -161,12 +188,13 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, reactive, ref, watch } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { currencyOptions, normalizeCurrencyCode } from '@/ui/constants/currency-options'
+import { listTransactionsByAccount } from '@/core/repositories/transaction.repo'
 import { createSavingsJar, deleteSavingsJar, updateSavingsJar } from '@/core/services/savings-jar.service'
 import { isFreeTier } from '@/core/services/membership.service'
 import { useAccountStore } from '@/ui/stores/account.store'
@@ -180,6 +208,7 @@ const ledgerStore = useLedgerStore()
 const transactionStore = useTransactionStore()
 const uiStore = useUiStore()
 const { t } = useI18n()
+const router = useRouter()
 
 const jarDialogOpen = ref(false)
 const editingJarId = ref('')
@@ -189,6 +218,7 @@ const flowDialogOpen = ref(false)
 const flowSaving = ref(false)
 const flowMode = ref('deposit')
 const flowJarId = ref('')
+const jarActivityRowsById = ref({})
 const jarForm = reactive({
   name: '',
   groupId: '',
@@ -202,12 +232,18 @@ const flowForm = reactive({
   amountInput: '',
 })
 
-onMounted(async () => {
-  if (!ledgerStore.activeLedgerId) return
-  if (!accountStore.accounts.length || !accountStore.groups.length) {
+watch(
+  () => ledgerStore.activeLedgerId,
+  async (ledgerId) => {
+    if (!ledgerId) {
+      jarActivityRowsById.value = {}
+      return
+    }
     await accountStore.load()
-  }
-})
+    await loadSavingsJarActivity()
+  },
+  { immediate: true },
+)
 
 const groupOptions = computed(() => {
   return accountStore.groups.map((group) => ({
@@ -242,6 +278,7 @@ const savingJarRows = computed(() => {
       targetAmountLabel: formatCurrencyMajor(targetAmountMinor / 100, currencyCode),
       progressPercent,
       canTransfer: eligibleAccounts.length > 0,
+      activityRows: jarActivityRowsById.value[String(account.id ?? '')] ?? [],
     }
   })
 })
@@ -288,6 +325,67 @@ function formatCurrencyMajor(valueMajor, currencyCode = 'TWD') {
     minimumFractionDigits: Math.abs(Math.round(major * 100)) % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   }).format(major)
+}
+
+function formatActivityTime(iso) {
+  if (!iso) return '-'
+  return new Date(iso).toLocaleString('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function openTransactionEdit(txId) {
+  if (!txId) return
+  void router.push({ name: 'transaction-edit', params: { id: txId } }).catch(() => {})
+}
+
+function buildActivityCounterpartyLabel(tx) {
+  const accountId = String(tx?.peer_account_id ?? '').trim()
+  const accountName = accountStore.accounts.find((item) => String(item.id ?? '') === accountId)?.name
+    || t('savings_jar.activity.unknown_account')
+  const labelKey = Number(tx?.amount_minor ?? 0) >= 0
+    ? 'savings_jar.activity.from_account'
+    : 'savings_jar.activity.to_account'
+  return t(labelKey, { account: accountName })
+}
+
+async function loadSavingsJarActivity() {
+  const ledgerId = String(ledgerStore.activeLedgerId ?? '').trim()
+  const savingsJarAccounts = accountStore.savingsJarAccounts
+  if (!ledgerId || !savingsJarAccounts.length) {
+    jarActivityRowsById.value = {}
+    return
+  }
+
+  const rowsById = {}
+  const accountCurrencyFallback = normalizeCurrencyCode(ledgerStore.activeLedger?.currency_code, 'TWD')
+
+  await Promise.all(savingsJarAccounts.map(async (account) => {
+    const jarId = String(account.id ?? '').trim()
+    if (!jarId) return
+
+    const activityRows = await listTransactionsByAccount(ledgerId, jarId)
+    rowsById[jarId] = activityRows
+      .filter((item) => String(item.account_id ?? '').trim() === jarId)
+      .slice(0, 8)
+      .map((item) => ({
+        id: String(item.id ?? ''),
+        amountMinor: Number(item.amount_minor ?? 0),
+        currencyCode: normalizeCurrencyCode(item.account_currency_code, account.currency_code || accountCurrencyFallback),
+        occurredAt: String(item.occurred_at ?? ''),
+        note: String(item.note ?? '').trim(),
+        directionLabel: Number(item.amount_minor ?? 0) >= 0
+          ? t('savings_jar.activity.deposit')
+          : t('savings_jar.activity.withdraw'),
+        counterpartyLabel: buildActivityCounterpartyLabel(item),
+      }))
+  }))
+
+  jarActivityRowsById.value = rowsById
 }
 
 function resetJarForm() {
@@ -351,6 +449,7 @@ async function submitJarDialog() {
     }
 
     await accountStore.load()
+    await loadSavingsJarActivity()
     closeJarDialog()
   } catch (error) {
     uiStore.pushToast(error.message ?? t('savings_jar.toast.failed'), 'error')
@@ -372,6 +471,7 @@ async function removeSavingsJar() {
   try {
     await deleteSavingsJar(ledgerId, accountId)
     await accountStore.load()
+    await loadSavingsJarActivity()
     closeJarDialog(true)
     uiStore.pushToast(t('savings_jar.toast.deleted'))
   } catch (error) {
@@ -418,6 +518,7 @@ async function submitFlowDialog() {
     })
 
     uiStore.pushToast(t(isWithdraw ? 'savings_jar.toast.withdrawn' : 'savings_jar.toast.deposited'))
+    await loadSavingsJarActivity()
     closeFlowDialog()
   } catch (error) {
     uiStore.pushToast(error.message ?? t('savings_jar.toast.failed'), 'error')
@@ -552,8 +653,65 @@ p {
 .unlimited-note,
 .transfer-hint,
 .empty-note,
-.flow-jar-name {
+.flow-jar-name,
+.activity-empty,
+.activity-meta,
+.activity-note {
   margin: 0;
+}
+
+.activity-section {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--field-border) 72%, transparent);
+}
+
+.activity-head {
+  align-items: center;
+}
+
+.activity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.activity-item {
+  width: 100%;
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--card) 94%, var(--surface-soft-accent) 6%);
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.activity-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.activity-title-row {
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.activity-meta,
+.activity-note,
+.activity-copy small {
+  overflow-wrap: anywhere;
+}
+
+.activity-action {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .goal-type-row {
@@ -630,6 +788,15 @@ p {
   .jar-actions {
     flex-wrap: wrap;
     justify-content: flex-start;
+  }
+
+  .activity-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .activity-action {
+    align-self: flex-end;
   }
 }
 </style>

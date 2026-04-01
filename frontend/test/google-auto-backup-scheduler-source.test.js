@@ -22,3 +22,7 @@ test('backup due scheduler is refreshed on app resume, data changes, and ledger 
   assert.match(mainSource, /scheduleAutoBackupDueCheck\(pinia, 30000\)/)
   assert.match(mainSource, /clearAutoBackupDueTimer\(\)\s*\n\s*return\s*\n\s*}\s*\n\s*restoreGoogleBackupForActiveLedgerInBackground/s)
 })
+
+test('backup due scheduler reruns immediately after backup configuration updates', () => {
+  assert.match(mainSource, /window\.addEventListener\('app:auto-backup-config-updated', \(\) => \{\s*void runAutoBackupDueCheck\(pinia, 'config_updated'\)/)
+})
