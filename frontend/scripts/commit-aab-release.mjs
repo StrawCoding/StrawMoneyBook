@@ -8,13 +8,6 @@ const __dirname = dirname(__filename)
 const FRONTEND_ROOT = resolve(__dirname, '..')
 const REPO_ROOT = resolve(FRONTEND_ROOT, '..')
 
-export const RELEASE_COMMIT_FILES = [
-  'frontend/package.json',
-  'frontend/package-lock.json',
-  'frontend/android/app/build.gradle',
-  'frontend/public/app-update.json',
-]
-
 export function readFrontendVersion(frontendRoot = FRONTEND_ROOT) {
   const packageJson = JSON.parse(readFileSync(resolve(frontendRoot, 'package.json'), 'utf8'))
   const version = String(packageJson.version ?? '').trim()
@@ -39,11 +32,6 @@ export function parseGitFileList(output) {
     .split('\n')
     .map((entry) => entry.trim())
     .filter(Boolean)
-}
-
-export function findUnexpectedStagedFiles(stagedFiles, releaseFiles = RELEASE_COMMIT_FILES) {
-  const releaseFileSet = new Set(releaseFiles)
-  return stagedFiles.filter((file) => !releaseFileSet.has(file))
 }
 
 function runGit(args, repoRoot, { allowFailure = false } = {}) {
@@ -89,33 +77,14 @@ export function commitAndPushAabRelease({
 
   ensureMainBranchFn(repoRoot, gitRunner)
 
-  const stagedBeforeAdd = parseGitFileList(
-    gitRunner(['diff', '--cached', '--name-only'], repoRoot).stdout,
-  )
-  const unexpectedStagedBeforeAdd = findUnexpectedStagedFiles(stagedBeforeAdd)
-  if (unexpectedStagedBeforeAdd.length > 0) {
-    throw new Error(
-      `Found staged changes outside release files: ${unexpectedStagedBeforeAdd.join(', ')}`,
-    )
-  }
-
-  gitRunner(['add', '--', ...RELEASE_COMMIT_FILES], repoRoot)
+  gitRunner(['add', '-A'], repoRoot)
 
   const stagedFiles = parseGitFileList(
-    gitRunner(['diff', '--cached', '--name-only', '--', ...RELEASE_COMMIT_FILES], repoRoot).stdout,
-  )
-  const stagedAfterAdd = parseGitFileList(
     gitRunner(['diff', '--cached', '--name-only'], repoRoot).stdout,
   )
-  const unexpectedStagedAfterAdd = findUnexpectedStagedFiles(stagedAfterAdd)
-  if (unexpectedStagedAfterAdd.length > 0) {
-    throw new Error(
-      `Found staged changes outside release files: ${unexpectedStagedAfterAdd.join(', ')}`,
-    )
-  }
 
   if (stagedFiles.length > 0) {
-    gitRunner(['commit', '-m', commitMessage, '--', ...RELEASE_COMMIT_FILES], repoRoot)
+    gitRunner(['commit', '-m', commitMessage], repoRoot)
   }
 
   gitRunner(['push', 'origin', 'main'], repoRoot)
@@ -149,7 +118,8 @@ export function main(argv = process.argv.slice(2)) {
     console.log(JSON.stringify({
       version,
       commitMessage: buildReleaseCommitMessage(version),
-      files: RELEASE_COMMIT_FILES.map((file) => relative(REPO_ROOT, resolve(REPO_ROOT, file))),
+      repoRoot: relative(REPO_ROOT, REPO_ROOT) || '.',
+      stageMode: 'git add -A',
     }, null, 2))
     return
   }

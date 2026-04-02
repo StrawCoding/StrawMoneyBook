@@ -8,10 +8,8 @@ import {
   parseVersionCode,
 } from '../scripts/upload-aab-to-github.mjs'
 import {
-  RELEASE_COMMIT_FILES,
   buildReleaseCommitMessage,
   commitAndPushAabRelease,
-  findUnexpectedStagedFiles,
 } from '../scripts/commit-aab-release.mjs'
 
 const packageJson = JSON.parse(
@@ -51,77 +49,35 @@ test('parseVersionCode extracts Android versionCode from build.gradle', () => {
   assert.equal(parseVersionCode('versionCode 321\nversionName appVersionName'), 321)
 })
 
-test('release git step uses the package version in the commit message and stages only release files', () => {
+test('release git step uses the package version in the commit message', () => {
   assert.equal(buildReleaseCommitMessage('0.24.5'), 'chore(release): v0.24.5')
-  assert.deepEqual(RELEASE_COMMIT_FILES, [
-    'frontend/package.json',
-    'frontend/package-lock.json',
-    'frontend/android/app/build.gradle',
-    'frontend/public/app-update.json',
-  ])
-  assert.deepEqual(
-    findUnexpectedStagedFiles([
-      'frontend/package.json',
-      'frontend/src/ui/App.vue',
-    ]),
-    ['frontend/src/ui/App.vue'],
-  )
 })
 
-test('release git step blocks unrelated staged files before creating the release commit', () => {
+test('release git step stages the whole repo, commits once, and then pushes main', () => {
   const calls = []
-  const gitRunner = (args) => {
-    calls.push(args)
-    if (args.join(' ') === 'diff --cached --name-only') {
-      return { stdout: 'frontend/src/ui/App.vue\n' }
-    }
-
-    throw new Error(`Unexpected git call: ${args.join(' ')}`)
-  }
-
-  assert.throws(
-    () => commitAndPushAabRelease({
-      repoRoot: '/repo',
-      frontendRoot: '/repo/frontend',
-      gitRunner,
-      ensureMainBranchFn: () => {},
-      versionReader: () => '0.24.6',
-    }),
-    /Found staged changes outside release files: frontend\/src\/ui\/App\.vue/,
-  )
-  assert.deepEqual(calls, [['diff', '--cached', '--name-only']])
-})
-
-test('release git step commits only the release files and then pushes main', () => {
-  const calls = []
-  let diffAllCount = 0
+  let diffCount = 0
   const gitRunner = (args) => {
     calls.push(args)
     const command = args.join(' ')
-    if (command === 'diff --cached --name-only') {
-      diffAllCount += 1
-      if (diffAllCount === 1) {
-        return { stdout: '' }
-      }
-      return {
-        stdout: [
-          'frontend/package.json',
-          'frontend/public/app-update.json',
-        ].join('\n'),
-      }
-    }
-    if (command === `add -- ${RELEASE_COMMIT_FILES.join(' ')}`) {
+    if (command === 'add -A') {
       return { stdout: '' }
     }
-    if (command === `diff --cached --name-only -- ${RELEASE_COMMIT_FILES.join(' ')}`) {
+    if (command === 'diff --cached --name-only') {
+      diffCount += 1
+      if (diffCount === 1) {
+        return {
+          stdout: [
+            'frontend/package.json',
+            'frontend/scripts/commit-aab-release.mjs',
+            'package.json',
+          ].join('\n'),
+        }
+      }
       return {
-        stdout: [
-          'frontend/package.json',
-          'frontend/public/app-update.json',
-        ].join('\n'),
+        stdout: '',
       }
     }
-    if (command === `commit -m chore(release): v0.24.6 -- ${RELEASE_COMMIT_FILES.join(' ')}`) {
+    if (command === 'commit -m chore(release): v0.24.6') {
       return { stdout: '' }
     }
     if (command === 'push origin main') {
@@ -146,15 +102,51 @@ test('release git step commits only the release files and then pushes main', () 
     pushed: true,
     stagedFiles: [
       'frontend/package.json',
-      'frontend/public/app-update.json',
+      'frontend/scripts/commit-aab-release.mjs',
+      'package.json',
     ],
   })
   assert.deepEqual(calls, [
+    ['add', '-A'],
     ['diff', '--cached', '--name-only'],
-    ['add', '--', ...RELEASE_COMMIT_FILES],
-    ['diff', '--cached', '--name-only', '--', ...RELEASE_COMMIT_FILES],
+    ['commit', '-m', 'chore(release): v0.24.6'],
+    ['push', 'origin', 'main'],
+  ])
+})
+
+test('release git step skips commit when the repo is already clean but still pushes main', () => {
+  const calls = []
+  const gitRunner = (args) => {
+    calls.push(args)
+    const command = args.join(' ')
+    if (command === 'add -A' || command === 'push origin main') {
+      return { stdout: '' }
+    }
+    if (command === 'diff --cached --name-only') {
+      return { stdout: '' }
+    }
+
+    throw new Error(`Unexpected git call: ${command}`)
+  }
+
+  const result = commitAndPushAabRelease({
+    repoRoot: '/repo',
+    frontendRoot: '/repo/frontend',
+    gitRunner,
+    ensureMainBranchFn: () => {},
+    versionReader: () => '0.24.6',
+  })
+
+  assert.deepEqual(result, {
+    version: '0.24.6',
+    commitMessage: 'chore(release): v0.24.6',
+    committed: false,
+    pushed: true,
+    stagedFiles: [],
+  })
+  assert.deepEqual(calls, [
+    ['add', '-A'],
     ['diff', '--cached', '--name-only'],
-    ['commit', '-m', 'chore(release): v0.24.6', '--', ...RELEASE_COMMIT_FILES],
     ['push', 'origin', 'main'],
   ])
 })
