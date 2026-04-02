@@ -1,6 +1,6 @@
 {
   "name": "strawmoneybook",
-  "version": "0.24.3",
+  "version": "0.24.5",
   "private": true,
   "type": "module",
   "engines": {
@@ -14,6 +14,7 @@
     "preaab": "npm run bump:patch && npm run bump:android:versionCode && npm run sync:app-update-manifest",
     "aab:build": "npm run sync:app-update-manifest && npx vite build && npx cap sync android && cd android && ./gradlew bundleRelease && cd ..",
     "upload:aab:github": "node scripts/upload-aab-to-github.mjs",
+    "release:git": "node scripts/commit-aab-release.mjs",
     "simulate:google-auto-connect": "node scripts/simulate-google-auto-connect-flow.mjs",
     "simulate:google-backup": "node scripts/simulate-google-backup-flow.mjs",
     "simulate:bank-sync": "node scripts/simulate-bank-sync-mock-flow.mjs",
@@ -28,7 +29,7 @@
     "dev": "vite",
     "debug": "npm run sync:app-update-manifest && VITE_FORCE_MEMBER_ON_DEBUG=true npx vite build --mode debug && npx cap sync android && cd android && ./gradlew assembleDebug && cd ..",
     "build": "npm run sync:app-update-manifest && vite build && npx cap sync android && cd android && ./gradlew assembleRelease && cd ..",
-    "aab": "npm run aab:build && npm run upload:aab:github",
+    "aab": "npm run aab:build && npm run upload:aab:github && npm run release:git",
     "preview": "vite preview",
     "assets:generate": "mkdir -p resources && cp src/ui/assets/logo-icon.png resources/icon.png && cp src/ui/assets/logo-icon.png resources/splash.png && npx @capacitor/assets generate resources"
   },
