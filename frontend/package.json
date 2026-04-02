@@ -1,6 +1,6 @@
 {
   "name": "strawmoneybook",
-  "version": "0.24.20",
+  "version": "0.24.22",
   "private": true,
   "type": "module",
   "engines": {
@@ -32,7 +32,7 @@
     "dev": "vite",
     "debug": "npm run sync:app-update-manifest && VITE_FORCE_MEMBER_ON_DEBUG=true npx vite build --mode debug && npm run sync:android && cd android && ./gradlew assembleDebug && cd ..",
     "build": "npm run sync:app-update-manifest && vite build && npm run sync:android && cd android && ./gradlew assembleRelease && cd ..",
-    "aab": "npm run aab:build && npm run upload:aab:github && npm run release:git",
+    "aab": "npm run aab:build && npm run release:git && npm run upload:aab:github",
     "preview": "vite preview",
     "assets:generate": "mkdir -p resources && cp src/ui/assets/logo-icon.png resources/icon.png && cp src/ui/assets/logo-icon.png resources/splash.png && npx @capacitor/assets generate resources"
   },

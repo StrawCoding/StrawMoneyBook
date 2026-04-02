@@ -16,12 +16,20 @@ import {
   buildReleaseTag,
   createAndPushReleaseTag,
 } from '../scripts/create-release-tag.mjs'
+import {
+  bumpVersionCodeSource,
+  parseVersionCodeSource,
+} from '../scripts/bump-android-version-code.mjs'
 
 const packageJson = JSON.parse(
   readFileSync(resolve(import.meta.dirname, '../package.json'), 'utf8'),
 )
 const playReleaseWorkflow = readFileSync(
   resolve(import.meta.dirname, '../../.github/workflows/play-release.yml'),
+  'utf8',
+)
+const playReleaseFromGithubReleaseWorkflow = readFileSync(
+  resolve(import.meta.dirname, '../../.github/workflows/play-release-from-github-release.yml'),
   'utf8',
 )
 const ciWorkflow = readFileSync(
@@ -60,7 +68,7 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
   )
   assert.equal(
     packageJson.scripts.aab,
-    'npm run aab:build && npm run upload:aab:github && npm run release:git',
+    'npm run aab:build && npm run release:git && npm run upload:aab:github',
   )
 })
 
@@ -85,6 +93,29 @@ test('parseVersionCode falls back to the configured appVersionCode default', () 
   )
 })
 
+test('android version bump script reads fallback appVersionCode from build.gradle', () => {
+  const result = parseVersionCodeSource(
+    'def appVersionCode = resolveVersionCode(ciVersionCode, 186)\nversionCode appVersionCode',
+  )
+
+  assert.equal(result.currentCode, 186)
+})
+
+test('android version bump script increments fallback appVersionCode in build.gradle', () => {
+  const source = [
+    'def ciVersionCode = System.getenv("CI_VERSION_CODE")?.trim()',
+    'def appVersionCode = resolveVersionCode(ciVersionCode, 186)',
+    'versionCode appVersionCode',
+  ].join('\n')
+
+  const result = bumpVersionCodeSource(source)
+
+  assert.equal(result.currentCode, 186)
+  assert.equal(result.nextCode, 187)
+  assert.match(result.updated, /def appVersionCode = resolveVersionCode\(ciVersionCode, 187\)/)
+  assert.match(result.updated, /versionCode appVersionCode/)
+})
+
 test('play release workflow creates a GitHub release after the Play upload', () => {
   assert.match(playReleaseWorkflow, /uses: actions\/checkout@v6/)
   assert.match(playReleaseWorkflow, /uses: actions\/setup-java@v5/)
@@ -103,6 +134,17 @@ test('play release workflow creates a GitHub release after the Play upload', () 
   assert.match(playReleaseWorkflow, /name: Publish GitHub Release/)
   assert.match(playReleaseWorkflow, /uses: softprops\/action-gh-release@v2/)
   assert.match(playReleaseWorkflow, /files:\s*\|?\s*\n\s*\$\{\{ env\.AAB_PATH \}\}/)
+})
+
+test('github release workflow downloads the published aab asset and uploads it to play', () => {
+  assert.match(playReleaseFromGithubReleaseWorkflow, /on:\s*\n\s*release:\s*\n\s*types:\s*\n\s*-\s*published/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /uses: actions\/checkout@v6/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /uses: ruby\/setup-ruby@v1/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /bundler-cache:\s*true/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /working-directory:\s*frontend\/android/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /gh release download "\$\{\{ github\.event\.release\.tag_name \}\}" --pattern "\*\.aab" --dir "\$RELEASE_ASSET_DIR" --clobber/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /echo "AAB_PATH=\$RESOLVED_AAB_PATH" >> "\$GITHUB_ENV"/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /run: bundle exec fastlane internal/)
 })
 
 test('android flatDir patch removes unused flatDir repositories but keeps other repos', () => {

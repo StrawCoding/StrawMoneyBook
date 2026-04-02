@@ -42,7 +42,7 @@ def resolveVersionCode = { envValue, fallbackValue ->
     }
 }
 def appVersionName = ciVersionName ?: packageVersionName
-def appVersionCode = resolveVersionCode(ciVersionCode, 186)
+def appVersionCode = resolveVersionCode(ciVersionCode, 187)
 
 android {
     namespace = "com.strawcoding.strawmoneybook"
