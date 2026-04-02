@@ -1,5 +1,7 @@
 default_platform(:android)
 
+ANDROID_PROJECT_ROOT = File.expand_path("..", __dir__)
+
 def require_env!(key)
   value = ENV[key].to_s.strip
   UI.user_error!("Missing required environment variable: #{key}") if value.empty?
@@ -7,12 +9,13 @@ def require_env!(key)
 end
 
 def resolve_aab_path(explicit_path)
-  return explicit_path if !explicit_path.empty? && File.exist?(explicit_path)
+  absolute_explicit_path = explicit_path.empty? ? "" : File.expand_path(explicit_path, ANDROID_PROJECT_ROOT)
+  return absolute_explicit_path if !absolute_explicit_path.empty? && File.exist?(absolute_explicit_path)
 
-  candidates = Dir.glob("app/build/outputs/bundle/**/*.aab").sort
+  candidates = Dir.glob(File.join(ANDROID_PROJECT_ROOT, "app/build/outputs/bundle/**/*.aab")).sort
   return candidates.last unless candidates.empty?
 
-  explicit_path
+  absolute_explicit_path.empty? ? explicit_path : absolute_explicit_path
 end
 
 platform :android do

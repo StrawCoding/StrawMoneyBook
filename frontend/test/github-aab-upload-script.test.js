@@ -98,11 +98,11 @@ test('play release workflow creates a GitHub release after the Play upload', () 
   assert.match(playReleaseWorkflow, /PLAY_JSON_KEY_PATH=\$RUNNER_TEMP\/play-service-account\.json/)
   assert.match(playReleaseWorkflow, /ANDROID_KEYSTORE_FILE=\$RUNNER_TEMP\/release-keystore\.jks/)
   assert.match(playReleaseWorkflow, /name: Resolve built AAB path/)
-  assert.match(playReleaseWorkflow, /find app\/build\/outputs\/bundle -type f -name '\*\.aab'/)
+  assert.match(playReleaseWorkflow, /find "\$PWD\/app\/build\/outputs\/bundle" -type f -name '\*\.aab'/)
   assert.match(playReleaseWorkflow, /echo "AAB_PATH=\$RESOLVED_AAB_PATH" >> "\$GITHUB_ENV"/)
   assert.match(playReleaseWorkflow, /name: Publish GitHub Release/)
   assert.match(playReleaseWorkflow, /uses: softprops\/action-gh-release@v2/)
-  assert.match(playReleaseWorkflow, /files:\s*\|?\s*\n\s*\$\{\{ github\.workspace \}\}\/frontend\/android\/\$\{\{ env\.AAB_PATH \}\}/)
+  assert.match(playReleaseWorkflow, /files:\s*\|?\s*\n\s*\$\{\{ env\.AAB_PATH \}\}/)
 })
 
 test('android flatDir patch removes unused flatDir repositories but keeps other repos', () => {
