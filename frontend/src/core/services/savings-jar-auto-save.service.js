@@ -9,6 +9,10 @@ const defaultDependencies = {
     const mod = await import('../repositories/account.repo.js')
     return mod.listAccounts(...args)
   },
+  async getLedger(...args) {
+    const mod = await import('../repositories/ledger.repo.js')
+    return mod.getLedger(...args)
+  },
   async findTransactionByIdempotencyKey(...args) {
     const mod = await import('../repositories/transaction.repo.js')
     return mod.findTransactionByIdempotencyKey(...args)
@@ -77,8 +81,59 @@ function buildAutoSaveIdempotencyKey(jarId, dueDate) {
   return `sjar_auto:${jarId}:${dueDate}`
 }
 
-function toDueDateOccurredAt(dueDate) {
-  return new Date(`${dueDate}T12:00:00`).toISOString()
+function normalizeLedgerTimeZone(value) {
+  const timeZone = normalizeText(value)
+  if (!timeZone) return 'Asia/Taipei'
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date('2026-01-01T00:00:00.000Z'))
+    return timeZone
+  } catch {
+    return 'Asia/Taipei'
+  }
+}
+
+function getZonedDateTimeParts(epochMs, timeZone) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  })
+  const parts = formatter.formatToParts(new Date(epochMs))
+  const read = (type) => Number(parts.find((item) => item.type === type)?.value ?? 0)
+  return {
+    year: read('year'),
+    month: read('month'),
+    day: read('day'),
+    hour: read('hour'),
+    minute: read('minute'),
+    second: read('second'),
+  }
+}
+
+function toDueDateOccurredAt(dueDate, timeZone = 'Asia/Taipei') {
+  const matched = String(dueDate ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!matched) return new Date().toISOString()
+
+  const year = Number(matched[1])
+  const month = Number(matched[2])
+  const day = Number(matched[3])
+  const desiredEpochMs = Date.UTC(year, month - 1, day, 12, 0, 0)
+  let resolvedEpochMs = desiredEpochMs
+
+  for (let index = 0; index < 3; index += 1) {
+    const actual = getZonedDateTimeParts(resolvedEpochMs, timeZone)
+    const actualEpochMs = Date.UTC(actual.year, actual.month - 1, actual.day, actual.hour, actual.minute, actual.second)
+    const diffMs = desiredEpochMs - actualEpochMs
+    if (diffMs === 0) break
+    resolvedEpochMs += diffMs
+  }
+
+  return new Date(resolvedEpochMs).toISOString()
 }
 
 function isSourceAccountValid(sourceAccount, jarAccount) {
@@ -94,6 +149,8 @@ export async function runSavingsJarAutoSaveIfDue(ledgerId, options = {}) {
   }
 
   const now = options.now ?? new Date()
+  const ledger = await dependencies.getLedger(ledgerId)
+  const ledgerTimeZone = normalizeLedgerTimeZone(ledger?.timezone)
   const accounts = await dependencies.listAccounts(ledgerId, { includeArchived: false })
   const accountMap = new Map(accounts.map((account) => [String(account.id), account]))
   const savingsJarAccounts = accounts.filter((account) => isSavingsJarAccount(account))
@@ -141,7 +198,7 @@ export async function runSavingsJarAutoSaveIfDue(ledgerId, options = {}) {
         amountMinor: run.autoSave.amountMinor,
         fromAccountId: run.autoSave.sourceAccountId,
         toAccountId: jarId,
-        occurredAt: toDueDateOccurredAt(run.dueDate),
+        occurredAt: toDueDateOccurredAt(run.dueDate, ledgerTimeZone),
         note: `自動存錢：${run.jarAccount.name}`,
         originType: 'recurring',
         externalRefId: buildAutoSaveExternalRefId(jarId),

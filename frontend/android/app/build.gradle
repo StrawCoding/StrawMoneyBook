@@ -20,6 +20,7 @@ def releaseStoreFilePath = resolveSigningValue('storeFile', 'ANDROID_KEYSTORE_FI
 def releaseStorePassword = resolveSigningValue('storePassword', 'ANDROID_KEYSTORE_PASSWORD')
 def releaseKeyAlias = resolveSigningValue('keyAlias', 'ANDROID_KEY_ALIAS')
 def releaseKeyPassword = resolveSigningValue('keyPassword', 'ANDROID_KEY_PASSWORD')
+def releaseStoreType = resolveSigningValue('storeType', 'ANDROID_KEYSTORE_TYPE') ?: 'jks'
 def hasReleaseSigningConfig =
         releaseStoreFilePath &&
         releaseStorePassword &&
@@ -67,6 +68,7 @@ android {
         release {
             if (hasReleaseSigningConfig) {
                 storeFile rootProject.file(releaseStoreFilePath)
+                storeType releaseStoreType
                 storePassword releaseStorePassword
                 keyAlias releaseKeyAlias
                 keyPassword releaseKeyPassword

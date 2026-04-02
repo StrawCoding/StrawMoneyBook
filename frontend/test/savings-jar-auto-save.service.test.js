@@ -35,10 +35,19 @@ function buildAccounts() {
   ]
 }
 
+function buildTestDependencies(overrides = {}) {
+  return {
+    async getLedger() {
+      return { id: 'ledger_1', timezone: 'Asia/Taipei' }
+    },
+    ...overrides,
+  }
+}
+
 test('savings jar auto save creates catch-up transfers in chronological order', async () => {
   const transferCalls = []
 
-  setSavingsJarAutoSaveDependenciesForTest({
+  setSavingsJarAutoSaveDependenciesForTest(buildTestDependencies({
     async listAccounts() {
       return buildAccounts()
     },
@@ -49,7 +58,7 @@ test('savings jar auto save creates catch-up transfers in chronological order', 
       transferCalls.push(payload)
       return { transferGroupId: `tf_${transferCalls.length}` }
     },
-  })
+  }))
 
   const result = await runSavingsJarAutoSaveIfDue('ledger_1', {
     now: new Date('2026-04-15T09:00:00+08:00'),
@@ -73,7 +82,7 @@ test('savings jar auto save creates catch-up transfers in chronological order', 
 test('savings jar auto save skips paused schedules and invalid source accounts', async () => {
   const transferCalls = []
 
-  setSavingsJarAutoSaveDependenciesForTest({
+  setSavingsJarAutoSaveDependenciesForTest(buildTestDependencies({
     async listAccounts() {
       return [
         {
@@ -117,7 +126,7 @@ test('savings jar auto save skips paused schedules and invalid source accounts',
       transferCalls.push(payload)
       return { transferGroupId: 'tf_1' }
     },
-  })
+  }))
 
   const result = await runSavingsJarAutoSaveIfDue('ledger_1', {
     now: new Date('2026-04-15T09:00:00+08:00'),
@@ -129,7 +138,7 @@ test('savings jar auto save skips paused schedules and invalid source accounts',
 })
 
 test('savings jar auto save is idempotent when transfer already exists', async () => {
-  setSavingsJarAutoSaveDependenciesForTest({
+  setSavingsJarAutoSaveDependenciesForTest(buildTestDependencies({
     async listAccounts() {
       return buildAccounts()
     },
@@ -142,7 +151,7 @@ test('savings jar auto save is idempotent when transfer already exists', async (
     async createTransfer() {
       throw new Error('should not create duplicate transfer')
     },
-  })
+  }))
 
   const result = await runSavingsJarAutoSaveIfDue('ledger_1', {
     now: new Date('2026-01-31T09:00:00+08:00'),
@@ -155,7 +164,7 @@ test('savings jar auto save is idempotent when transfer already exists', async (
 test('savings jar auto save records failed transfers and continues', async () => {
   let callCount = 0
 
-  setSavingsJarAutoSaveDependenciesForTest({
+  setSavingsJarAutoSaveDependenciesForTest(buildTestDependencies({
     async listAccounts() {
       return [
         ...buildAccounts(),
@@ -184,7 +193,7 @@ test('savings jar auto save records failed transfers and continues', async () =>
       }
       return { transferGroupId: `tf_${callCount}` }
     },
-  })
+  }))
 
   const result = await runSavingsJarAutoSaveIfDue('ledger_1', {
     now: new Date('2026-03-31T09:00:00+08:00'),
@@ -193,4 +202,33 @@ test('savings jar auto save records failed transfers and continues', async () =>
   assert.equal(result.createdCount, 3)
   assert.equal(result.failedCount, 1)
   assert.deepEqual(result.createdTransferGroupIds, ['tf_2', 'tf_3', 'tf_4'])
+})
+
+test('savings jar auto save uses ledger timezone instead of runtime timezone', async () => {
+  const transferCalls = []
+
+  setSavingsJarAutoSaveDependenciesForTest(buildTestDependencies({
+    async getLedger() {
+      return { id: 'ledger_1', timezone: 'UTC' }
+    },
+    async listAccounts() {
+      return buildAccounts()
+    },
+    async findTransactionByIdempotencyKey() {
+      return null
+    },
+    async createTransfer(_ledgerId, payload) {
+      transferCalls.push(payload)
+      return { transferGroupId: 'tf_1' }
+    },
+  }))
+
+  await runSavingsJarAutoSaveIfDue('ledger_1', {
+    now: new Date('2026-01-31T09:00:00+08:00'),
+  })
+
+  assert.deepEqual(
+    transferCalls.map((item) => item.occurredAt),
+    ['2026-01-31T12:00:00.000Z'],
+  )
 })
