@@ -120,3 +120,10 @@ test('executeMigrationSql ignores duplicate schema errors when using executeSet'
 
   assert.equal(calls.length, 2)
 })
+
+test('migrate registers the savings jar auto save migration', () => {
+  const source = readFileSync(resolve(import.meta.dirname, '../src/core/db/migrate.js'), 'utf8')
+
+  assert.match(source, /import migration024 from '@\/core\/db\/migrations\/024_savings_jars_auto_save\.sql\?raw'/)
+  assert.match(source, /\{ version: 24, name: 'savings_jars_auto_save', sql: migration024 \}/)
+})

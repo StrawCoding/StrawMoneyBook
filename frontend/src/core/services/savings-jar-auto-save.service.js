@@ -1,12 +1,22 @@
-import { listAccounts } from '@/core/repositories/account.repo'
-import { findTransactionByIdempotencyKey } from '@/core/repositories/transaction.repo'
-import { createTransfer } from '@/core/services/transaction.service'
-import { listSubscriptionChargeDatesThrough, normalizeSubscriptionChargeDay, normalizeSubscriptionDateInput } from '@/core/utils/subscription-schedule'
+import {
+  listSubscriptionChargeDatesThrough,
+  normalizeSubscriptionChargeDay,
+  normalizeSubscriptionDateInput,
+} from '../utils/subscription-schedule.js'
 
 const defaultDependencies = {
-  listAccounts,
-  findTransactionByIdempotencyKey,
-  createTransfer,
+  async listAccounts(...args) {
+    const mod = await import('../repositories/account.repo.js')
+    return mod.listAccounts(...args)
+  },
+  async findTransactionByIdempotencyKey(...args) {
+    const mod = await import('../repositories/transaction.repo.js')
+    return mod.findTransactionByIdempotencyKey(...args)
+  },
+  async createTransfer(...args) {
+    const mod = await import('./transaction.service.js')
+    return mod.createTransfer(...args)
+  },
 }
 
 const dependencies = { ...defaultDependencies }
