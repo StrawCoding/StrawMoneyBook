@@ -1,0 +1,17 @@
+{
+  "name": "strawmoneybook-monorepo",
+  "private": true,
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "test:frontend": "npm run test --prefix frontend",
+    "test:backend": "npm run test --prefix backend",
+    "check:frontend": "npm run check --prefix frontend",
+    "check:backend": "npm run check --prefix backend",
+    "test": "npm run test:backend && npm run test:frontend",
+    "check": "npm run check:backend && npm run check:frontend"
+  }
+}
