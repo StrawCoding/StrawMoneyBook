@@ -73,6 +73,8 @@ test('parseVersionCode falls back to the configured appVersionCode default', () 
 })
 
 test('play release workflow creates a GitHub release after the Play upload', () => {
+  assert.match(playReleaseWorkflow, /name: Setup Node 22/)
+  assert.match(playReleaseWorkflow, /node-version:\s*"22"/)
   assert.match(playReleaseWorkflow, /permissions:\s*\n\s*contents:\s*write/)
   assert.match(playReleaseWorkflow, /name: Prepare release paths/)
   assert.match(playReleaseWorkflow, /PLAY_JSON_KEY_PATH=\$RUNNER_TEMP\/play-service-account\.json/)
