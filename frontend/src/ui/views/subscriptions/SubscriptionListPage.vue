@@ -49,6 +49,7 @@
                 <span>{{ t('subscription_page.start_date') }} {{ formatDate(item.startDate) }}</span>
                 <span>{{ t('subscription_page.next_due') }} {{ nextChargeLabel(item) }}</span>
               </small>
+              <p v-if="item.note" class="muted note-line">{{ item.note }}</p>
             </div>
           </div>
           <div class="item-actions">
@@ -63,6 +64,7 @@
 
     <AppDialog
       :open="dialogOpen"
+      presentation="sheet"
       :title="editingId ? t('subscription_page.edit') : t('subscription_page.add')"
       :confirm-disabled="!canSave"
       :loading="saving"
@@ -105,6 +107,17 @@
       <label class="field">
         {{ t('subscription_page.amount') }}
         <input v-model.number="form.amountMajor" class="input" type="number" min="0" step="0.01" />
+      </label>
+
+      <label class="field">
+        {{ t('common.note') }}
+        <textarea
+          v-model.trim="form.note"
+          class="input note-input"
+          rows="3"
+          maxlength="160"
+          :placeholder="t('subscription_page.note_placeholder')"
+        ></textarea>
       </label>
 
       <div class="field">
@@ -180,6 +193,7 @@ const form = reactive({
   amountMajor: 0,
   startDate: toSubscriptionDateInput(new Date()),
   paused: false,
+  note: '',
 })
 
 const activeLedgerId = computed(() => ledgerStore.activeLedgerId)
@@ -243,6 +257,7 @@ function resetForm() {
   form.amountMajor = 0
   form.startDate = toSubscriptionDateInput(new Date())
   form.paused = false
+  form.note = ''
 }
 
 watch(
@@ -269,6 +284,7 @@ function openEditDialog(item) {
   form.amountMajor = Math.abs(Number(item?.amountMinor ?? 0)) / 100
   form.startDate = String(item?.startDate ?? '') || toSubscriptionDateInput(new Date())
   form.paused = Boolean(item?.paused)
+  form.note = String(item?.note ?? '')
   dialogOpen.value = true
 }
 
@@ -355,6 +371,7 @@ async function submit() {
       amountMinor: toMinor(form.amountMajor),
       startDate: form.startDate,
       paused: form.paused,
+      note: form.note,
     })
     uiStore.pushToast(t('subscription_page.toast.saved'))
     closeDialog()
@@ -495,6 +512,12 @@ h3 {
   gap: 6px;
 }
 
+.note-line {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .item-actions {
   display: inline-flex;
   flex-wrap: wrap;
@@ -512,6 +535,11 @@ h3 {
   gap: 6px;
   font-size: 13px;
   color: var(--muted);
+}
+
+.note-input {
+  min-height: 84px;
+  resize: vertical;
 }
 
 .subscription-toggle {

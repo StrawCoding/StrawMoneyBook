@@ -65,6 +65,7 @@
 
     <AppDialog
       :open="groupDialogOpen"
+      presentation="sheet"
       :title="t('settings_category_page.dialog.group_title')"
       :confirm-disabled="!groupNameInput.trim()"
       :confirm-text="t('common.save')"
@@ -79,6 +80,7 @@
 
     <AppDialog
       :open="categoryDialogOpen"
+      presentation="sheet"
       :title="t('settings_category_page.dialog.category_title')"
       :confirm-disabled="!categoryNameInput.trim() || !categoryGroupIdInput"
       :confirm-text="t('common.save')"

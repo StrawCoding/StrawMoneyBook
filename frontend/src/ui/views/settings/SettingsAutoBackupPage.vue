@@ -89,6 +89,14 @@
           <span class="muted">{{ t('settings_auto_backup.status.filename') }}</span>
           <strong>{{ googleBackupState.lastBackupFilename || '-' }}</strong>
         </li>
+        <li>
+          <span class="muted">{{ t('settings_auto_backup.status.auto_check') }}</span>
+          <strong>{{ describeAutoBackupCheck(googleBackupState) }}</strong>
+        </li>
+        <li v-if="googleBackupState.lastAutoCheckAt">
+          <span class="muted">{{ t('settings_auto_backup.status.last_check') }}</span>
+          <strong>{{ formatBackupTime(googleBackupState.lastAutoCheckAt) }}</strong>
+        </li>
         <li v-if="googleBackupState.lastBackupStatus === 'error' && googleBackupState.lastError">
           <span class="muted">{{ t('settings_auto_backup.status.error') }}</span>
           <strong>{{ googleBackupState.lastError }}</strong>
@@ -205,6 +213,14 @@
           <span class="muted">{{ t('settings_auto_backup.status.filename') }}</span>
           <strong>{{ webdavBackupState.lastBackupFilename || '-' }}</strong>
         </li>
+        <li>
+          <span class="muted">{{ t('settings_auto_backup.status.auto_check') }}</span>
+          <strong>{{ describeAutoBackupCheck(webdavBackupState) }}</strong>
+        </li>
+        <li v-if="webdavBackupState.lastAutoCheckAt">
+          <span class="muted">{{ t('settings_auto_backup.status.last_check') }}</span>
+          <strong>{{ formatBackupTime(webdavBackupState.lastAutoCheckAt) }}</strong>
+        </li>
         <li v-if="webdavBackupState.lastBackupStatus === 'error' && webdavBackupState.lastError">
           <span class="muted">{{ t('settings_auto_backup.status.error') }}</span>
           <strong>{{ webdavBackupState.lastError }}</strong>
@@ -258,6 +274,9 @@ const webdavBackupState = ref({
   lastBackupFilename: '',
   lastBackupStatus: 'idle',
   lastError: '',
+  lastAutoCheckAt: '',
+  lastAutoCheckStatus: 'idle',
+  lastAutoCheckReason: '',
 })
 const googleBackupState = ref({
   connected: false,
@@ -271,6 +290,9 @@ const googleBackupState = ref({
   lastBackupFilename: '',
   lastBackupStatus: 'idle',
   lastError: '',
+  lastAutoCheckAt: '',
+  lastAutoCheckStatus: 'idle',
+  lastAutoCheckReason: '',
 })
 const webdavEndpointInput = ref('')
 const webdavUsernameInput = ref('')
@@ -329,6 +351,9 @@ async function refreshWebdavBackupState() {
       lastBackupFilename: '',
       lastBackupStatus: 'idle',
       lastError: '',
+      lastAutoCheckAt: '',
+      lastAutoCheckStatus: 'idle',
+      lastAutoCheckReason: '',
     }
     webdavEndpointInput.value = ''
     webdavUsernameInput.value = ''
@@ -364,6 +389,9 @@ async function refreshGoogleBackupState() {
       lastBackupFilename: '',
       lastBackupStatus: 'idle',
       lastError: '',
+      lastAutoCheckAt: '',
+      lastAutoCheckStatus: 'idle',
+      lastAutoCheckReason: '',
     }
     googleAutoEnabled.value = false
     googleDataChangeAutoEnabled.value = false
@@ -391,6 +419,48 @@ function formatBackupTime(isoText) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function describeAutoBackupCheck(state) {
+  const status = String(state?.lastAutoCheckStatus ?? 'idle').trim() || 'idle'
+  const reason = String(state?.lastAutoCheckReason ?? '').trim()
+
+  if (status === 'ok') {
+    if (reason === 'data_change_backup_completed') {
+      return t('settings_auto_backup.auto_check.data_change_backup_completed')
+    }
+    return t('settings_auto_backup.auto_check.backup_completed')
+  }
+
+  if (status === 'error') {
+    if (reason === 'reauth_required') {
+      return t('settings_auto_backup.auto_check.reauth_required')
+    }
+    return t('settings_auto_backup.auto_check.backup_failed')
+  }
+
+  if (status === 'skipped') {
+    if (reason === 'connect_restore_failed') {
+      return t('settings_auto_backup.auto_check.connect_restore_failed')
+    }
+    if (reason === 'not_connected') {
+      return t('settings_auto_backup.auto_check.not_connected')
+    }
+    if (reason === 'auto_disabled') {
+      return t('settings_auto_backup.auto_check.auto_disabled')
+    }
+    if (reason === 'data_change_disabled') {
+      return t('settings_auto_backup.auto_check.data_change_disabled')
+    }
+    if (reason === 'offline') {
+      return t('settings_auto_backup.auto_check.offline')
+    }
+    if (reason === 'not_due') {
+      return t('settings_auto_backup.auto_check.not_due')
+    }
+  }
+
+  return t('settings_auto_backup.auto_check.idle')
 }
 
 function restoreCheckHint(imported) {

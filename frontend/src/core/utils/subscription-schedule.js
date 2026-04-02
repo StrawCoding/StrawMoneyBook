@@ -14,7 +14,7 @@ function clampSubscriptionDay(day, maxDay) {
   return Math.min(Math.max(1, Number(day) || 1), maxDay)
 }
 
-function resolveMonthlyChargeDay(value, fallbackDateLike) {
+export function normalizeSubscriptionChargeDay(value, fallbackDateLike) {
   const parsed = Math.trunc(Number(value))
   if (parsed >= 1 && parsed <= 31) return parsed
 
@@ -75,7 +75,7 @@ export function addSubscriptionInterval(baseDateLike, intervalValue, intervalUni
   const nextYear = Math.floor(totalMonths / 12)
   const monthIndex = totalMonths % 12
   const day = clampSubscriptionDay(
-    resolveMonthlyChargeDay(options?.chargeDay, baseDate),
+    normalizeSubscriptionChargeDay(options?.chargeDay, baseDate),
     getDaysInMonth(nextYear, monthIndex),
   )
   return buildSubscriptionDate(nextYear, monthIndex, day)
@@ -101,6 +101,33 @@ export function resolveSubscriptionNextChargeDate(item, now = new Date()) {
   }
 
   return nextDate
+}
+
+export function listSubscriptionChargeDatesThrough(item, now = new Date(), options = {}) {
+  if (item?.paused) return []
+
+  const startDate = normalizeSubscriptionDateInput(item?.startDate)
+  if (!startDate) return []
+
+  const today = parseSubscriptionDate(toSubscriptionDateInput(now))
+  if (!today) return []
+
+  const dates = []
+  let nextDate = startDate
+  let nextDateValue = parseSubscriptionDate(nextDate)
+  let guard = 0
+  const maxOccurrences = Math.max(1, Number(options?.maxOccurrences ?? 1200) || 1200)
+
+  while (nextDateValue && nextDateValue.getTime() <= today.getTime() && guard < maxOccurrences) {
+    dates.push(nextDate)
+    nextDate = addSubscriptionInterval(nextDate, item?.intervalValue, item?.intervalUnit, {
+      chargeDay: item?.chargeDay,
+    })
+    nextDateValue = parseSubscriptionDate(nextDate)
+    guard += 1
+  }
+
+  return dates
 }
 
 export function isSubscriptionChargeDue(item, now = new Date()) {

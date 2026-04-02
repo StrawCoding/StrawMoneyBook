@@ -42,6 +42,7 @@
 
     <AppDialog
       :open="dialogMode === 'create'"
+      presentation="sheet"
       :title="t('settings_ledger_page.dialog_title')"
       :confirm-disabled="!ledgerNameInput.trim()"
       :confirm-text="t('common.save')"

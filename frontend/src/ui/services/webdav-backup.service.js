@@ -24,6 +24,9 @@ function buildDefaultState() {
     lastBackupAt: '',
     lastBackupStatus: 'idle',
     lastError: '',
+    lastAutoCheckAt: '',
+    lastAutoCheckStatus: 'idle',
+    lastAutoCheckReason: '',
   }
 }
 
@@ -49,6 +52,9 @@ function normalizeState(raw) {
     lastBackupAt: String(raw.lastBackupAt ?? ''),
     lastBackupStatus: String(raw.lastBackupStatus ?? 'idle'),
     lastError: String(raw.lastError ?? ''),
+    lastAutoCheckAt: String(raw.lastAutoCheckAt ?? ''),
+    lastAutoCheckStatus: String(raw.lastAutoCheckStatus ?? 'idle'),
+    lastAutoCheckReason: String(raw.lastAutoCheckReason ?? ''),
   }
 }
 
@@ -70,6 +76,9 @@ function normalizeStoredState(raw) {
     lastBackupAt: String(raw.lastBackupAt ?? ''),
     lastBackupStatus: String(raw.lastBackupStatus ?? 'idle'),
     lastError: String(raw.lastError ?? ''),
+    lastAutoCheckAt: String(raw.lastAutoCheckAt ?? ''),
+    lastAutoCheckStatus: String(raw.lastAutoCheckStatus ?? 'idle'),
+    lastAutoCheckReason: String(raw.lastAutoCheckReason ?? ''),
   }
 }
 
@@ -373,9 +382,20 @@ export async function updateWebdavBackupState(ledgerId, patch = {}) {
       lastBackupAt: next.lastBackupAt,
       lastBackupStatus: next.lastBackupStatus,
       lastError: next.lastError,
+      lastAutoCheckAt: next.lastAutoCheckAt,
+      lastAutoCheckStatus: next.lastAutoCheckStatus,
+      lastAutoCheckReason: next.lastAutoCheckReason,
     }),
   )
   return next
+}
+
+function resolveWebdavAutoBackupSkipReason(state) {
+  if (!state.connected || !state.endpoint || !state.username || !state.password) return 'not_connected'
+  if (!state.autoEnabled) return 'auto_disabled'
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline'
+  if (!isAutoBackupDue(state)) return 'not_due'
+  return ''
 }
 
 export async function connectWebdavBackup(ledgerId, input = {}) {
@@ -601,19 +621,31 @@ export async function restoreWebdavBackupJson(ledgerId, options = {}) {
 export async function runWebdavAutoBackupIfDue(ledgerId) {
   assertLedgerId(ledgerId)
   const state = await getWebdavBackupState(ledgerId)
-  if (!isAutoBackupDue(state)) {
-    return { skipped: true, reason: 'not_due' }
-  }
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return { skipped: true, reason: 'offline' }
+  const startedAt = new Date().toISOString()
+  const skipReason = resolveWebdavAutoBackupSkipReason(state)
+  if (skipReason) {
+    await updateWebdavBackupState(ledgerId, {
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'skipped',
+      lastAutoCheckReason: skipReason,
+    })
+    return { skipped: true, reason: skipReason }
   }
   try {
     const result = await performWebdavBackup(ledgerId)
+    await updateWebdavBackupState(ledgerId, {
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'ok',
+      lastAutoCheckReason: 'backup_completed',
+    })
     return { skipped: false, ...result }
   } catch (error) {
     await updateWebdavBackupState(ledgerId, {
       lastBackupStatus: 'error',
       lastError: String(error?.message ?? t('settings_auto_backup.error.webdav.auto_backup_failed')),
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'error',
+      lastAutoCheckReason: 'backup_failed',
     })
     return { skipped: true, reason: 'failed' }
   }
@@ -622,19 +654,38 @@ export async function runWebdavAutoBackupIfDue(ledgerId) {
 export async function runWebdavAutoBackupOnDataChange(ledgerId) {
   assertLedgerId(ledgerId)
   const state = await getWebdavBackupState(ledgerId)
+  const startedAt = new Date().toISOString()
   if (!state.connected || !state.autoEnabled || !state.dataChangeAutoEnabled) {
+    await updateWebdavBackupState(ledgerId, {
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'skipped',
+      lastAutoCheckReason: !state.connected ? 'not_connected' : (!state.autoEnabled ? 'auto_disabled' : 'data_change_disabled'),
+    })
     return { skipped: true, reason: 'disabled' }
   }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    await updateWebdavBackupState(ledgerId, {
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'skipped',
+      lastAutoCheckReason: 'offline',
+    })
     return { skipped: true, reason: 'offline' }
   }
   try {
     const result = await performWebdavBackup(ledgerId)
+    await updateWebdavBackupState(ledgerId, {
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'ok',
+      lastAutoCheckReason: 'data_change_backup_completed',
+    })
     return { skipped: false, ...result }
   } catch (error) {
     await updateWebdavBackupState(ledgerId, {
       lastBackupStatus: 'error',
       lastError: String(error?.message ?? t('settings_auto_backup.error.webdav.data_change_backup_failed')),
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'error',
+      lastAutoCheckReason: 'backup_failed',
     })
     return { skipped: true, reason: 'failed' }
   }

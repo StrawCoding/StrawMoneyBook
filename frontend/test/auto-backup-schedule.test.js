@@ -77,7 +77,9 @@ test('google and webdav backup services use the shared auto backup due helper', 
   )
 
   assert.match(googleSource, /import \{ isAutoBackupDue, resolveAutoBackupIntervalHours \} from '@\/ui\/services\/auto-backup-schedule'/)
-  assert.match(googleSource, /if \(!isAutoBackupDue\(state\)\) return false/)
+  assert.match(googleSource, /resolveGoogleAutoBackupSkipReason/)
+  assert.match(googleSource, /if \(!isAutoBackupDue\(state\)\) return 'not_due'/)
   assert.match(webdavSource, /import \{ isAutoBackupDue, resolveAutoBackupIntervalHours \} from '@\/ui\/services\/auto-backup-schedule'/)
-  assert.match(webdavSource, /if \(!isAutoBackupDue\(state\)\) \{/)
+  assert.match(webdavSource, /resolveWebdavAutoBackupSkipReason/)
+  assert.match(webdavSource, /if \(!isAutoBackupDue\(state\)\) return 'not_due'/)
 })

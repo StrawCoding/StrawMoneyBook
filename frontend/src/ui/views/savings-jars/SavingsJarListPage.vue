@@ -54,6 +54,20 @@
           </template>
           <p v-else class="muted unlimited-note">{{ t('savings_jar.goal_open') }}</p>
 
+          <section class="auto-save-section">
+            <div class="row auto-save-head">
+              <strong>{{ t('savings_jar.auto_save.title') }}</strong>
+              <span class="asset-chip" :class="{ excluded: jar.autoSaveStatusTone !== 'active' }">
+                {{ jar.autoSaveStatusLabel }}
+              </span>
+            </div>
+            <p class="muted auto-save-copy">{{ jar.autoSaveSummary }}</p>
+            <p v-if="jar.autoSaveNextDueLabel" class="muted auto-save-copy">
+              {{ t('savings_jar.auto_save.next_due') }} {{ jar.autoSaveNextDueLabel }}
+            </p>
+            <p v-if="jar.autoSaveInvalid" class="error-text">{{ t('savings_jar.auto_save.invalid') }}</p>
+          </section>
+
           <div class="row jar-actions">
             <button class="btn" @click="openEditDialog(jar)">{{ t('savings_jar.action.edit') }}</button>
             <button class="btn" :disabled="!jar.canTransfer" @click="openFlowDialog('deposit', jar)">{{ t('savings_jar.action.deposit') }}</button>
@@ -71,7 +85,7 @@
                 :key="activity.id"
                 type="button"
                 class="activity-item"
-                @click="openTransactionEdit(activity.id)"
+                @click="openTransactionDetail(activity.id)"
               >
                 <div class="activity-copy">
                   <div class="row activity-title-row">
@@ -82,7 +96,7 @@
                   <p v-if="activity.note" class="muted activity-note">{{ activity.note }}</p>
                   <small class="muted">{{ formatActivityTime(activity.occurredAt) }}</small>
                 </div>
-                <span class="muted activity-action">{{ t('common.edit') }}</span>
+                <span class="muted activity-action">{{ t('claim_sheet.view') }}</span>
               </button>
             </div>
             <p v-else class="muted activity-empty">{{ t('savings_jar.activity.empty') }}</p>
@@ -95,6 +109,7 @@
 
     <AppDialog
       :open="jarDialogOpen"
+      presentation="sheet"
       :title="editingJarId ? t('savings_jar.dialog.edit_title') : t('savings_jar.dialog.create_title')"
       :confirm-text="t('common.save')"
       :confirm-disabled="!canSaveJarForm || jarSaving"
@@ -152,6 +167,85 @@
         </button>
       </div>
 
+      <div class="field">
+        <span>{{ t('savings_jar.auto_save.title') }}</span>
+        <button
+          type="button"
+          class="switch-row"
+          :class="{ active: jarForm.autoSaveEnabled }"
+          :aria-pressed="jarForm.autoSaveEnabled ? 'true' : 'false'"
+          @click="jarForm.autoSaveEnabled = !jarForm.autoSaveEnabled"
+        >
+          <span class="switch-copy">
+            <strong>{{ jarForm.autoSaveEnabled ? t('savings_jar.auto_save.enabled') : t('savings_jar.auto_save.disabled') }}</strong>
+            <small class="muted">{{ t('savings_jar.auto_save.hint') }}</small>
+          </span>
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+        </button>
+      </div>
+
+      <template v-if="jarForm.autoSaveEnabled">
+        <label class="field">
+          {{ t('savings_jar.auto_save.source_account') }}
+          <CustomSelect v-model="jarForm.autoSaveSourceAccountId" :options="autoSaveAccountOptions" />
+        </label>
+
+        <label class="field">
+          {{ t('savings_jar.auto_save.amount') }}
+          <input v-model="jarForm.autoSaveAmountInput" class="input" type="number" min="0" step="0.01" />
+        </label>
+
+        <div class="interval-grid">
+          <label class="field">
+            {{ t('subscription_page.interval_value') }}
+            <input v-model.number="jarForm.autoSaveIntervalValue" class="input" type="number" min="1" step="1" />
+          </label>
+          <label class="field">
+            {{ t('subscription_page.interval_unit') }}
+            <CustomSelect v-model="jarForm.autoSaveIntervalUnit" :options="intervalOptions" />
+          </label>
+        </div>
+
+        <label v-if="jarForm.autoSaveIntervalUnit === 'month'" class="field">
+          {{ t('subscription_page.charge_day') }}
+          <input v-model.number="jarForm.autoSaveChargeDay" class="input" type="number" min="1" max="31" step="1" />
+          <small class="muted">{{ t('subscription_page.charge_day_help') }}</small>
+        </label>
+
+        <div class="field">
+          <span>{{ t('savings_jar.auto_save.start_date') }}</span>
+          <DateTimePickerField
+            :date="jarForm.autoSaveStartDate"
+            :hour="0"
+            :minute="0"
+            :show-time="false"
+            @update:date="jarForm.autoSaveStartDate = $event"
+          />
+        </div>
+
+        <div class="field">
+          <button
+            type="button"
+            class="switch-row subscription-toggle"
+            :class="{ active: jarForm.autoSavePaused }"
+            role="checkbox"
+            :aria-checked="jarForm.autoSavePaused ? 'true' : 'false'"
+            @click="jarForm.autoSavePaused = !jarForm.autoSavePaused"
+          >
+            <span>{{ t('savings_jar.auto_save.pause_label') }}</span>
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </button>
+        </div>
+
+        <p v-if="autoSaveInvalidReason" class="error-text">{{ autoSaveInvalidReason }}</p>
+      </template>
+
+      <div v-if="editingJarId && currentEditingJar?.autoSaveEnabled" class="field delete-field">
+        <button type="button" class="btn" :disabled="jarSaving || jarDeleting || autoSaveDeleting" @click="removeAutoSaveSchedule">
+          {{ autoSaveDeleting ? t('savings_jar.auto_save.deleting') : t('savings_jar.auto_save.delete') }}
+        </button>
+      </div>
+
       <div v-if="editingJarId" class="field delete-field">
         <button type="button" class="btn danger" :disabled="jarSaving || jarDeleting" @click="removeSavingsJar">
           {{ jarDeleting ? t('savings_jar.action.deleting') : t('common.delete') }}
@@ -161,6 +255,7 @@
 
     <AppDialog
       :open="flowDialogOpen"
+      presentation="sheet"
       :title="flowMode === 'withdraw' ? t('savings_jar.dialog.withdraw_title') : t('savings_jar.dialog.deposit_title')"
       :confirm-text="flowMode === 'withdraw' ? t('savings_jar.action.withdraw') : t('savings_jar.action.deposit')"
       :confirm-disabled="!canSubmitFlow || flowSaving"
@@ -192,11 +287,14 @@ import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { currencyOptions, normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { listTransactionsByAccount } from '@/core/repositories/transaction.repo'
-import { createSavingsJar, deleteSavingsJar, updateSavingsJar } from '@/core/services/savings-jar.service'
+import { createSavingsJar, deleteSavingsJar, deleteSavingsJarAutoSave, updateSavingsJar } from '@/core/services/savings-jar.service'
 import { isFreeTier } from '@/core/services/membership.service'
+import { describeSubscriptionInterval } from '@/core/services/subscription-tracker.service'
+import { resolveSubscriptionNextChargeDate, toSubscriptionDateInput } from '@/core/utils/subscription-schedule'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
@@ -214,6 +312,7 @@ const jarDialogOpen = ref(false)
 const editingJarId = ref('')
 const jarSaving = ref(false)
 const jarDeleting = ref(false)
+const autoSaveDeleting = ref(false)
 const flowDialogOpen = ref(false)
 const flowSaving = ref(false)
 const flowMode = ref('deposit')
@@ -226,11 +325,55 @@ const jarForm = reactive({
   goalType: 'open',
   targetAmountInput: '',
   includeInAssets: false,
+  autoSaveEnabled: false,
+  autoSaveSourceAccountId: '',
+  autoSaveAmountInput: '',
+  autoSaveIntervalValue: 1,
+  autoSaveIntervalUnit: 'month',
+  autoSaveChargeDay: new Date().getDate(),
+  autoSaveStartDate: toSubscriptionDateInput(new Date()),
+  autoSavePaused: false,
 })
 const flowForm = reactive({
   accountId: '',
   amountInput: '',
 })
+
+function toMinorFromMajor(value) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) return 0
+  return Math.max(0, Math.round(parsed * 100))
+}
+
+function formatDate(value) {
+  const text = String(value ?? '').trim()
+  if (!text) return '-'
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(text)
+    ? new Date(`${text}T00:00:00`)
+    : new Date(text)
+  if (Number.isNaN(parsed.getTime())) return '-'
+  return parsed.toLocaleDateString('zh-TW')
+}
+
+function readAutoSaveConfig(raw = {}) {
+  const sourceAccountId = String(raw.savings_jar_auto_save_source_account_id ?? '').trim()
+  const amountMinor = Math.round(Number(raw.savings_jar_auto_save_amount_minor) || 0)
+  const startDate = String(raw.savings_jar_auto_save_start_date ?? '').trim()
+  if (!sourceAccountId || amountMinor <= 0 || !startDate) {
+    return null
+  }
+
+  const intervalUnit = String(raw.savings_jar_auto_save_interval_unit ?? 'month').trim().toLowerCase()
+  return {
+    sourceAccountId,
+    amountMinor,
+    intervalValue: Math.max(1, Number(raw.savings_jar_auto_save_interval_value ?? 1) || 1),
+    intervalUnit: ['day', 'month', 'year'].includes(intervalUnit) ? intervalUnit : 'month',
+    chargeDay: Math.min(31, Math.max(1, Number(raw.savings_jar_auto_save_charge_day ?? String(startDate).slice(-2) ?? 1) || 1)),
+    startDate,
+    paused: Number(raw.savings_jar_auto_save_paused ?? 0) === 1,
+  }
+}
 
 watch(
   () => ledgerStore.activeLedgerId,
@@ -245,12 +388,50 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => autoSaveAccountOptions.value,
+  (options) => {
+    const currentValue = String(jarForm.autoSaveSourceAccountId ?? '')
+    if (!jarForm.autoSaveEnabled) return
+    if (options.some((item) => String(item.value ?? '') === currentValue)) return
+    jarForm.autoSaveSourceAccountId = String(options[0]?.value ?? '')
+  },
+  { deep: true },
+)
+
+watch(
+  () => jarForm.autoSaveStartDate,
+  (value) => {
+    if (jarForm.autoSaveIntervalUnit !== 'month') return
+    const parsed = Math.trunc(Number(String(value ?? '').slice(-2)))
+    if (parsed >= 1 && parsed <= 31 && !editingJarId.value) {
+      jarForm.autoSaveChargeDay = parsed
+    }
+  },
+)
+
+watch(
+  () => jarForm.autoSaveIntervalUnit,
+  (value, previous) => {
+    if (value !== 'month') return
+    if (previous === 'month') return
+    const parsed = Math.trunc(Number(String(jarForm.autoSaveStartDate ?? '').slice(-2)))
+    jarForm.autoSaveChargeDay = Math.min(31, Math.max(1, parsed || jarForm.autoSaveChargeDay || 1))
+  },
+)
+
 const groupOptions = computed(() => {
   return accountStore.groups.map((group) => ({
     value: group.id,
     label: group.name,
   }))
 })
+
+const intervalOptions = computed(() => ([
+  { value: 'year', label: t('subscription_page.interval.year') },
+  { value: 'month', label: t('subscription_page.interval.month') },
+  { value: 'day', label: t('subscription_page.interval.day') },
+]))
 
 const savingJarRows = computed(() => {
   return accountStore.savingsJarAccounts.map((account) => {
@@ -265,6 +446,36 @@ const savingJarRows = computed(() => {
     const eligibleAccounts = accountStore.regularAccounts.filter(
       (item) => normalizeCurrencyCode(item.currency_code, currencyCode) === currencyCode,
     )
+    const autoSave = readAutoSaveConfig(account)
+    const autoSaveSourceAccount = autoSave
+      ? accountStore.regularAccounts.find((item) => String(item.id ?? '') === autoSave.sourceAccountId) ?? null
+      : null
+    const autoSaveInvalid = Boolean(autoSave && !autoSaveSourceAccount)
+    const autoSaveEnabled = Boolean(autoSave)
+    const autoSaveStatusTone = !autoSaveEnabled
+      ? 'off'
+      : autoSaveInvalid
+        ? 'invalid'
+        : autoSave.paused
+          ? 'paused'
+          : 'active'
+    const autoSaveStatusLabel = !autoSaveEnabled
+      ? t('savings_jar.auto_save.status.off')
+      : autoSaveInvalid
+        ? t('savings_jar.auto_save.status.invalid')
+        : autoSave.paused
+          ? t('savings_jar.auto_save.status.paused')
+          : t('savings_jar.auto_save.status.active')
+    const autoSaveSummary = !autoSaveEnabled
+      ? t('savings_jar.auto_save.summary_off')
+      : t('savings_jar.auto_save.summary', {
+        amount: formatCurrencyMajor((autoSave?.amountMinor ?? 0) / 100, currencyCode),
+        sourceAccount: autoSaveSourceAccount?.name ?? t('savings_jar.activity.unknown_account'),
+        interval: describeSubscriptionInterval(autoSave),
+      })
+    const autoSaveNextDueLabel = autoSaveEnabled && !autoSaveInvalid && !autoSave.paused
+      ? formatDate(resolveSubscriptionNextChargeDate(autoSave))
+      : ''
 
     return {
       ...account,
@@ -278,17 +489,35 @@ const savingJarRows = computed(() => {
       targetAmountLabel: formatCurrencyMajor(targetAmountMinor / 100, currencyCode),
       progressPercent,
       canTransfer: eligibleAccounts.length > 0,
+      autoSaveEnabled,
+      autoSave,
+      autoSaveInvalid,
+      autoSaveStatusTone,
+      autoSaveStatusLabel,
+      autoSaveSummary,
+      autoSaveNextDueLabel,
       activityRows: jarActivityRowsById.value[String(account.id ?? '')] ?? [],
     }
   })
 })
 
+const currentEditingJar = computed(() => savingJarRows.value.find((item) => String(item.id ?? '') === String(editingJarId.value ?? '')) ?? null)
 const activeFlowJar = computed(() => savingJarRows.value.find((item) => item.id === flowJarId.value) ?? null)
 const flowAccountOptions = computed(() => {
   const jar = activeFlowJar.value
   if (!jar) return []
   return accountStore.regularAccounts
     .filter((item) => normalizeCurrencyCode(item.currency_code, jar.currencyCode) === jar.currencyCode)
+    .map((item) => ({
+      value: item.id,
+      label: item.name,
+      icon: item.icon || 'fa-solid fa-wallet',
+    }))
+})
+const autoSaveAccountOptions = computed(() => {
+  const currencyCode = normalizeCurrencyCode(jarForm.currencyCode, ledgerStore.activeLedger?.currency_code || 'TWD')
+  return accountStore.regularAccounts
+    .filter((item) => normalizeCurrencyCode(item.currency_code, currencyCode) === currencyCode)
     .map((item) => ({
       value: item.id,
       label: item.name,
@@ -302,8 +531,23 @@ const jarTargetInvalid = computed(() => {
   return !Number.isFinite(Number(jarForm.targetAmountInput)) || Number(jarForm.targetAmountInput) <= 0
 })
 
+const autoSaveInvalidReason = computed(() => {
+  if (!jarForm.autoSaveEnabled) return ''
+  if (!autoSaveAccountOptions.value.length) return t('savings_jar.auto_save.invalid')
+  if (!String(jarForm.autoSaveSourceAccountId ?? '').trim()) return t('savings_jar.auto_save.source_required')
+  if (toMinorFromMajor(jarForm.autoSaveAmountInput) <= 0) return t('savings_jar.auto_save.amount_required')
+  if (!String(jarForm.autoSaveStartDate ?? '').trim()) return t('savings_jar.auto_save.start_date_required')
+  return ''
+})
+
 const canSaveJarForm = computed(() => {
-  return Boolean(jarForm.name.trim() && jarForm.groupId && jarForm.currencyCode && !jarTargetInvalid.value)
+  return Boolean(
+    jarForm.name.trim()
+    && jarForm.groupId
+    && jarForm.currencyCode
+    && !jarTargetInvalid.value
+    && !autoSaveInvalidReason.value
+  )
 })
 
 const flowAmountMinor = computed(() => Math.round((Number(flowForm.amountInput) || 0) * 100))
@@ -338,9 +582,9 @@ function formatActivityTime(iso) {
   })
 }
 
-function openTransactionEdit(txId) {
+function openTransactionDetail(txId) {
   if (!txId) return
-  void router.push({ name: 'transaction-edit', params: { id: txId } }).catch(() => {})
+  void router.push({ name: 'transaction-about', params: { id: txId } }).catch(() => {})
 }
 
 function buildActivityCounterpartyLabel(tx) {
@@ -395,6 +639,14 @@ function resetJarForm() {
   jarForm.goalType = 'open'
   jarForm.targetAmountInput = ''
   jarForm.includeInAssets = false
+  jarForm.autoSaveEnabled = false
+  jarForm.autoSaveSourceAccountId = ''
+  jarForm.autoSaveAmountInput = ''
+  jarForm.autoSaveIntervalValue = 1
+  jarForm.autoSaveIntervalUnit = 'month'
+  jarForm.autoSaveChargeDay = new Date().getDate()
+  jarForm.autoSaveStartDate = toSubscriptionDateInput(new Date())
+  jarForm.autoSavePaused = false
 }
 
 function openCreateDialog() {
@@ -416,11 +668,19 @@ function openEditDialog(jar) {
   jarForm.goalType = jar.goalType
   jarForm.targetAmountInput = jar.goalType === 'target' ? String(Number(jar.targetAmountMinor ?? 0) / 100) : ''
   jarForm.includeInAssets = Boolean(jar.includeInAssets)
+  jarForm.autoSaveEnabled = Boolean(jar.autoSaveEnabled)
+  jarForm.autoSaveSourceAccountId = String(jar.autoSave?.sourceAccountId ?? '')
+  jarForm.autoSaveAmountInput = jar.autoSave ? String(Number(jar.autoSave.amountMinor ?? 0) / 100) : ''
+  jarForm.autoSaveIntervalValue = Math.max(1, Number(jar.autoSave?.intervalValue ?? 1) || 1)
+  jarForm.autoSaveIntervalUnit = String(jar.autoSave?.intervalUnit ?? 'month')
+  jarForm.autoSaveChargeDay = Math.min(31, Math.max(1, Number(jar.autoSave?.chargeDay ?? String(jar.autoSave?.startDate ?? '').slice(-2) ?? 1) || 1))
+  jarForm.autoSaveStartDate = String(jar.autoSave?.startDate ?? '') || toSubscriptionDateInput(new Date())
+  jarForm.autoSavePaused = Boolean(jar.autoSave?.paused)
   jarDialogOpen.value = true
 }
 
 function closeJarDialog(force = false) {
-  if (!force && (jarSaving.value || jarDeleting.value)) return
+  if (!force && (jarSaving.value || jarDeleting.value || autoSaveDeleting.value)) return
   jarDialogOpen.value = false
   editingJarId.value = ''
 }
@@ -438,6 +698,17 @@ async function submitJarDialog() {
       goalType: jarForm.goalType,
       targetAmountMinor: jarForm.goalType === 'target' ? Math.round(Number(jarForm.targetAmountInput || 0) * 100) : null,
       includeInAssets: jarForm.includeInAssets,
+      autoSave: jarForm.autoSaveEnabled
+        ? {
+          sourceAccountId: jarForm.autoSaveSourceAccountId,
+          amountMinor: toMinorFromMajor(jarForm.autoSaveAmountInput),
+          intervalValue: jarForm.autoSaveIntervalValue,
+          intervalUnit: jarForm.autoSaveIntervalUnit,
+          chargeDay: jarForm.autoSaveChargeDay,
+          startDate: jarForm.autoSaveStartDate,
+          paused: jarForm.autoSavePaused,
+        }
+        : null,
     }
 
     if (editingJarId.value) {
@@ -455,6 +726,31 @@ async function submitJarDialog() {
     uiStore.pushToast(error.message ?? t('savings_jar.toast.failed'), 'error')
   } finally {
     jarSaving.value = false
+  }
+}
+
+async function removeAutoSaveSchedule() {
+  const ledgerId = ledgerStore.activeLedgerId
+  const accountId = String(editingJarId.value ?? '').trim()
+  if (!ledgerId || !accountId || jarSaving.value || jarDeleting.value || autoSaveDeleting.value) return
+
+  const jar = savingJarRows.value.find((item) => String(item.id) === accountId)
+  if (!jar?.autoSaveEnabled) return
+
+  const ok = window.confirm(t('savings_jar.auto_save.confirm_delete', { name: jar?.name || accountId }))
+  if (!ok) return
+
+  autoSaveDeleting.value = true
+  try {
+    await deleteSavingsJarAutoSave(ledgerId, accountId)
+    await accountStore.load()
+    await loadSavingsJarActivity()
+    openEditDialog(savingJarRows.value.find((item) => String(item.id) === accountId) ?? jar)
+    uiStore.pushToast(t('savings_jar.toast.auto_save_deleted'))
+  } catch (error) {
+    uiStore.pushToast(error.message ?? t('savings_jar.toast.failed'), 'error')
+  } finally {
+    autoSaveDeleting.value = false
   }
 }
 
@@ -654,10 +950,24 @@ p {
 .transfer-hint,
 .empty-note,
 .flow-jar-name,
+.auto-save-copy,
 .activity-empty,
 .activity-meta,
 .activity-note {
   margin: 0;
+}
+
+.auto-save-section {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--field-border) 78%, transparent);
+  background: color-mix(in srgb, var(--card) 92%, var(--surface-soft-accent) 8%);
+}
+
+.auto-save-head {
+  align-items: center;
 }
 
 .activity-section {
@@ -721,6 +1031,12 @@ p {
   margin-top: 8px;
 }
 
+.interval-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
 .switch-row {
   width: 100%;
   border: 1px solid var(--field-border);
@@ -781,7 +1097,8 @@ p {
 
 @media (max-width: 640px) {
   .jar-grid,
-  .goal-type-row {
+  .goal-type-row,
+  .interval-grid {
     grid-template-columns: 1fr;
   }
 

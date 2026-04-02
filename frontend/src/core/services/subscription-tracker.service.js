@@ -2,6 +2,7 @@ import { getSetting, setSetting } from '@/core/repositories/settings.repo'
 import { createId } from '@/core/utils/id'
 import { assertCanCreateSubscription } from '@/core/services/membership.service'
 import {
+  normalizeSubscriptionChargeDay as normalizeChargeDay,
   normalizeSubscriptionDateInput,
   resolveSubscriptionNextChargeDate,
   isSubscriptionChargeDue,
@@ -43,18 +44,14 @@ function normalizeAmountMinor(value) {
   return Math.max(0, Math.round(parsed))
 }
 
-function normalizeChargeDay(value, fallbackDateLike) {
-  const parsed = Math.trunc(Number(value))
-  if (parsed >= 1 && parsed <= 31) return parsed
-  const normalizedDate = normalizeSubscriptionDateInput(fallbackDateLike)
-  if (!normalizedDate) return 1
-  return Number(normalizedDate.slice(-2)) || 1
-}
-
 function normalizePaused(value) {
   if (typeof value === 'boolean') return value
   const text = String(value ?? '').trim().toLowerCase()
   return text === '1' || text === 'true' || text === 'yes' || text === 'on'
+}
+
+function normalizeNote(value) {
+  return String(value ?? '').trim()
 }
 
 function normalizeItem(raw) {
@@ -76,6 +73,7 @@ function normalizeItem(raw) {
   ) || toSubscriptionDateInput(new Date())
   const chargeDay = normalizeChargeDay(raw.chargeDay, startDate)
   const paused = normalizePaused(raw.paused)
+  const note = normalizeNote(raw.note)
 
   return {
     id: String(raw.id ?? createId('sub')).trim() || createId('sub'),
@@ -89,6 +87,7 @@ function normalizeItem(raw) {
     startDate,
     chargeDay,
     paused,
+    note,
   }
 }
 

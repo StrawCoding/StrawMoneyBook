@@ -166,6 +166,7 @@ import { runBankSyncAutoRefreshIfDue } from '@/ui/services/bank-sync-auto-refres
 import { runExchangeRateAutoSyncIfDue } from '@/ui/services/exchange-rate.service'
 import { clearHomeWidgetSummary, syncHomeWidgetSummary } from '@/ui/services/home-widget.service'
 import { warmupMembershipRuntime } from '@/core/services/membership.service'
+import { runSavingsJarAutoSaveIfDue } from '@/core/services/savings-jar-auto-save.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { initLocalePreference, translateMessage } from '@/ui/services/i18n.service'
 import { getPreferredBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
@@ -550,6 +551,13 @@ function restoreSharedLedgerSessionInBackground(reason, { force = false } = {}) 
   })
 }
 
+function runSavingsJarAutoSaveInBackground(ledgerId, reason) {
+  if (!ledgerId) return
+  void runSavingsJarAutoSaveIfDue(ledgerId, { reason }).catch((error) => {
+    console.warn(`[savings-jar-auto-save] run failed (${reason})`, error)
+  })
+}
+
 async function main() {
   loadThemeColor()
   initLocalePreference()
@@ -619,6 +627,7 @@ async function main() {
         restoreGoogleBackupForActiveLedgerInBackground(ledgerStore.activeLedgerId, { runDueBackup: true })
         void runExchangeRateAutoSyncIfDue(ledgerStore.activeLedgerId)
         triggerBankAutoRefresh(pinia, ledgerStore.activeLedgerId, 'app_resume')
+        runSavingsJarAutoSaveInBackground(ledgerStore.activeLedgerId, 'app_resume')
         scheduleAutoBackupDueCheck(pinia)
       }
       void runSharedLedgerBackgroundSyncNow(pinia)
@@ -657,6 +666,9 @@ async function main() {
     }
 
     scheduleMembershipWarmup('app_start')
+    if (ledgerStore.activeLedgerId) {
+      runSavingsJarAutoSaveInBackground(ledgerStore.activeLedgerId, 'app_start')
+    }
     watch(
       () => ledgerStore.activeLedgerId,
       (ledgerId) => {
@@ -673,6 +685,7 @@ async function main() {
         scheduleAutoBackupDueCheck(pinia)
         void runExchangeRateAutoSyncIfDue(normalizedLedgerId)
         triggerBankAutoRefresh(pinia, normalizedLedgerId, 'active_ledger_change')
+        runSavingsJarAutoSaveInBackground(normalizedLedgerId, 'active_ledger_change')
       },
       { immediate: true },
     )

@@ -64,7 +64,14 @@ export async function listAccounts(ledgerId, options = {}) {
             a.currency_code, a.icon, a.credit_limit_minor, a.repayment_reminder_day,
             a.include_in_assets, a.sort_order, a.is_archived,
             sj.goal_type AS savings_jar_goal_type,
-            sj.target_amount_minor AS savings_jar_target_amount_minor
+            sj.target_amount_minor AS savings_jar_target_amount_minor,
+            sj.auto_save_source_account_id AS savings_jar_auto_save_source_account_id,
+            sj.auto_save_amount_minor AS savings_jar_auto_save_amount_minor,
+            sj.auto_save_interval_value AS savings_jar_auto_save_interval_value,
+            sj.auto_save_interval_unit AS savings_jar_auto_save_interval_unit,
+            sj.auto_save_start_date AS savings_jar_auto_save_start_date,
+            sj.auto_save_charge_day AS savings_jar_auto_save_charge_day,
+            sj.auto_save_paused AS savings_jar_auto_save_paused
      FROM accounts a
      LEFT JOIN savings_jars sj
        ON sj.ledger_id = a.ledger_id
@@ -88,7 +95,14 @@ export async function findAccountById(ledgerId, accountId) {
             a.currency_code, a.icon, a.credit_limit_minor, a.repayment_reminder_day,
             a.include_in_assets, a.sort_order, a.is_archived,
             sj.goal_type AS savings_jar_goal_type,
-            sj.target_amount_minor AS savings_jar_target_amount_minor
+            sj.target_amount_minor AS savings_jar_target_amount_minor,
+            sj.auto_save_source_account_id AS savings_jar_auto_save_source_account_id,
+            sj.auto_save_amount_minor AS savings_jar_auto_save_amount_minor,
+            sj.auto_save_interval_value AS savings_jar_auto_save_interval_value,
+            sj.auto_save_interval_unit AS savings_jar_auto_save_interval_unit,
+            sj.auto_save_start_date AS savings_jar_auto_save_start_date,
+            sj.auto_save_charge_day AS savings_jar_auto_save_charge_day,
+            sj.auto_save_paused AS savings_jar_auto_save_paused
      FROM accounts a
      LEFT JOIN savings_jars sj
        ON sj.ledger_id = a.ledger_id

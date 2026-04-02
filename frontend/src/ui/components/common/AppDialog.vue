@@ -1,19 +1,27 @@
 <template>
   <teleport to="body">
     <transition name="overlay-fade">
-      <section v-if="open" class="sheet-mask dialog-mask" @click.self="$emit('close')">
-        <article class="card dialog">
+      <section
+        v-if="open"
+        class="sheet-mask dialog-mask"
+        :class="{ 'dialog-mask-sheet': props.presentation === 'sheet' }"
+        @click.self="$emit('close')"
+      >
+        <article
+          class="card dialog"
+          :class="props.presentation === 'sheet' ? 'sheet app-bottom-sheet dialog-sheet' : 'dialog-popup'"
+        >
           <header class="row dialog-head">
             <h3>{{ title }}</h3>
             <button class="btn mini-btn" @click="$emit('close')">關閉</button>
           </header>
 
           <p v-if="message" class="muted dialog-message">{{ message }}</p>
-          <div class="dialog-body">
+          <div class="dialog-body" :class="{ 'app-bottom-sheet-body': props.presentation === 'sheet' }">
             <slot />
           </div>
 
-          <footer v-if="showFooter" class="row dialog-actions">
+          <footer v-if="showFooter" class="row dialog-actions" :class="{ 'dialog-actions-sheet': props.presentation === 'sheet' }">
             <button class="btn" :disabled="loading" @click="$emit('close')">{{ cancelText }}</button>
             <button class="btn primary" :disabled="confirmDisabled || loading" @click="$emit('confirm')">
               {{ loading ? loadingText : confirmText }}
@@ -65,6 +73,10 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  presentation: {
+    type: String,
+    default: 'dialog',
+  },
 })
 
 const emit = defineEmits(['close', 'confirm'])
@@ -88,17 +100,33 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   background: var(--overlay-backdrop);
-  display: grid;
-  place-items: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   z-index: 75;
   padding: 18px
 }
 .dialog {
+  display: grid;
+  gap: 10px
+}
+.dialog-popup {
   width: min(480px, 100%);
   border-radius: 16px;
   padding: 14px;
-  display: grid;
-  gap: 10px
+}
+.dialog-mask-sheet {
+  align-items: flex-end;
+  padding:
+    max(8px, var(--status-bar-height))
+    12px
+    calc(12px + var(--safe-area-bottom, 0px));
+}
+.dialog-sheet {
+  width: min(680px, 100%);
+  border-radius: 24px 24px 0 0;
+  padding: 16px;
+  gap: 14px;
 }
 .dialog-head h3 {
   margin: 0
@@ -114,6 +142,9 @@ onBeforeUnmount(() => {
 .dialog-actions {
   justify-content: flex-end;
   gap: 8px
+}
+.dialog-actions-sheet {
+  padding-top: 4px;
 }
 .mini-btn {
   padding: 8px 12px;

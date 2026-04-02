@@ -479,6 +479,21 @@ export async function listTransactionsByExternalRef(ledgerId, externalRefId) {
   return rowsOf(result)
 }
 
+export async function findTransactionByIdempotencyKey(ledgerId, idempotencyKey) {
+  assertLedgerId(ledgerId)
+  if (!idempotencyKey) return null
+  const result = await query(
+    `SELECT id, type, transfer_group_id, amount_minor, occurred_at
+     FROM transactions
+     WHERE ledger_id = ?
+       AND idempotency_key = ?
+       AND deleted_at IS NULL
+     LIMIT 1;`,
+    [ledgerId, idempotencyKey],
+  )
+  return firstRow(result)
+}
+
 export async function softDeleteTransactionById(ledgerId, txId) {
   assertLedgerId(ledgerId)
   const now = nowIso()

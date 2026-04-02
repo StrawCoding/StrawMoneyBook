@@ -19,6 +19,7 @@ import migration018 from '@/core/db/migrations/018_shared_sync_deleted_log.sql?r
 import migration019 from '@/core/db/migrations/019_bank_transaction_metadata.sql?raw'
 import migration022 from '@/core/db/migrations/022_drop_invoice_carrier.sql?raw'
 import migration023 from '@/core/db/migrations/023_reimbursement_item_advance_source.sql?raw'
+import migration024 from '@/core/db/migrations/024_savings_jars_auto_save.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -43,6 +44,7 @@ const MIGRATIONS = [
   { version: 19, name: 'bank_transaction_metadata', sql: migration019 },
   { version: 22, name: 'drop_invoice_carrier', sql: migration022 },
   { version: 23, name: 'reimbursement_item_advance_source', sql: migration023 },
+  { version: 24, name: 'savings_jars_auto_save', sql: migration024 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'
@@ -214,6 +216,15 @@ const LEGACY_COLUMN_PATCHES = {
     'ALTER TABLE budget_items ADD COLUMN created_at TEXT;',
     'ALTER TABLE budget_items ADD COLUMN updated_at TEXT;',
   ],
+  savings_jars: [
+    'ALTER TABLE savings_jars ADD COLUMN auto_save_source_account_id TEXT;',
+    'ALTER TABLE savings_jars ADD COLUMN auto_save_amount_minor INTEGER;',
+    'ALTER TABLE savings_jars ADD COLUMN auto_save_interval_value INTEGER;',
+    'ALTER TABLE savings_jars ADD COLUMN auto_save_interval_unit TEXT;',
+    'ALTER TABLE savings_jars ADD COLUMN auto_save_start_date TEXT;',
+    'ALTER TABLE savings_jars ADD COLUMN auto_save_charge_day INTEGER;',
+    'ALTER TABLE savings_jars ADD COLUMN auto_save_paused INTEGER NOT NULL DEFAULT 0;',
+  ],
   app_settings: [
     'ALTER TABLE app_settings ADD COLUMN value_json TEXT;',
     'ALTER TABLE app_settings ADD COLUMN updated_at TEXT;',
@@ -348,6 +359,15 @@ async function patchLegacySchema(db) {
       `UPDATE app_settings
        SET value_json = COALESCE(value_json, '{}'),
            updated_at = COALESCE(updated_at, ${nowExpr});`,
+    )
+  }
+
+  if (await tableExists(db, 'savings_jars')) {
+    await db.execute(
+      `UPDATE savings_jars
+       SET created_at = COALESCE(created_at, ${nowExpr}),
+           updated_at = COALESCE(updated_at, created_at, ${nowExpr}),
+           auto_save_paused = COALESCE(auto_save_paused, 0);`,
     )
   }
 }

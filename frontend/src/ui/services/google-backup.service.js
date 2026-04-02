@@ -35,6 +35,9 @@ function buildDefaultState() {
     lastBackupAt: '',
     lastBackupStatus: 'idle',
     lastError: '',
+    lastAutoCheckAt: '',
+    lastAutoCheckStatus: 'idle',
+    lastAutoCheckReason: '',
   }
 }
 
@@ -55,6 +58,9 @@ function normalizeState(raw) {
     lastBackupAt: String(raw.lastBackupAt ?? ''),
     lastBackupStatus: String(raw.lastBackupStatus ?? 'idle'),
     lastError: String(raw.lastError ?? ''),
+    lastAutoCheckAt: String(raw.lastAutoCheckAt ?? ''),
+    lastAutoCheckStatus: String(raw.lastAutoCheckStatus ?? 'idle'),
+    lastAutoCheckReason: String(raw.lastAutoCheckReason ?? ''),
   }
 }
 
@@ -248,6 +254,16 @@ async function saveState(ledgerId, patch) {
   return next
 }
 
+function resolveGoogleAutoBackupSkipReason(state) {
+  if (!state.connected) {
+    return state.lastError ? 'connect_restore_failed' : 'not_connected'
+  }
+  if (!state.autoEnabled) return 'auto_disabled'
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline'
+  if (!isAutoBackupDue(state)) return 'not_due'
+  return ''
+}
+
 export async function getGoogleBackupState(ledgerId) {
   assertLedgerId(ledgerId)
   const stored = await getSetting(ledgerId, GOOGLE_BACKUP_KEY)
@@ -405,7 +421,16 @@ export async function runGoogleAutoBackupIfDue(ledgerId) {
   assertLedgerId(ledgerId)
   if (!Capacitor.isNativePlatform()) return false
   const state = await autoConnectGoogleBackup(ledgerId)
-  if (!isAutoBackupDue(state)) return false
+  const startedAt = new Date().toISOString()
+  const skipReason = resolveGoogleAutoBackupSkipReason(state)
+  if (skipReason) {
+    await saveState(ledgerId, {
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'skipped',
+      lastAutoCheckReason: skipReason,
+    })
+    return false
+  }
 
   try {
     const profile = getCachedGoogleProfile()
@@ -417,6 +442,11 @@ export async function runGoogleAutoBackupIfDue(ledgerId) {
       })
     }
     await performGoogleBackup(ledgerId, { interactiveAuth: false })
+    await saveState(ledgerId, {
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'ok',
+      lastAutoCheckReason: 'backup_completed',
+    })
     return true
   } catch (error) {
     const isReauth = String(error?.code ?? '') === 'GOOGLE_REAUTH_REQUIRED'
@@ -427,6 +457,9 @@ export async function runGoogleAutoBackupIfDue(ledgerId) {
       lastError: isReauth
         ? t('settings_auto_backup.error.google.auto_backup_reauth_required', { detailSuffix })
         : detail || t('settings_auto_backup.error.google.auto_backup_failed'),
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'error',
+      lastAutoCheckReason: isReauth ? 'reauth_required' : 'backup_failed',
     })
     return false
   }
@@ -436,7 +469,25 @@ export async function runGoogleAutoBackupOnDataChange(ledgerId) {
   assertLedgerId(ledgerId)
   if (!Capacitor.isNativePlatform()) return false
   const state = await autoConnectGoogleBackup(ledgerId)
-  if (!state.connected || !state.autoEnabled || !state.dataChangeAutoEnabled) return false
+  const startedAt = new Date().toISOString()
+  if (!state.connected || !state.autoEnabled || !state.dataChangeAutoEnabled) {
+    await saveState(ledgerId, {
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'skipped',
+      lastAutoCheckReason: !state.connected
+        ? (state.lastError ? 'connect_restore_failed' : 'not_connected')
+        : (!state.autoEnabled ? 'auto_disabled' : 'data_change_disabled'),
+    })
+    return false
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    await saveState(ledgerId, {
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'skipped',
+      lastAutoCheckReason: 'offline',
+    })
+    return false
+  }
 
   try {
     const profile = getCachedGoogleProfile()
@@ -448,6 +499,11 @@ export async function runGoogleAutoBackupOnDataChange(ledgerId) {
       })
     }
     await performGoogleBackup(ledgerId, { interactiveAuth: false })
+    await saveState(ledgerId, {
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'ok',
+      lastAutoCheckReason: 'data_change_backup_completed',
+    })
     return true
   } catch (error) {
     const isReauth = String(error?.code ?? '') === 'GOOGLE_REAUTH_REQUIRED'
@@ -460,6 +516,9 @@ export async function runGoogleAutoBackupOnDataChange(ledgerId) {
             detailSuffix,
           })
         : detail || t('settings_auto_backup.error.google.data_change_backup_failed'),
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'error',
+      lastAutoCheckReason: isReauth ? 'reauth_required' : 'backup_failed',
     })
     return false
   }

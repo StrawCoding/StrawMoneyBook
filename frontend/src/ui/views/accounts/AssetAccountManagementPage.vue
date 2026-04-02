@@ -77,6 +77,7 @@
 
     <AppDialog
       :open="groupDialogOpen"
+      presentation="sheet"
       title="新增群組"
       :confirm-disabled="!groupNameInput.trim()"
       confirm-text="儲存"
@@ -91,6 +92,7 @@
 
     <AppDialog
       :open="accountDialogOpen"
+      presentation="sheet"
       title="新增帳戶"
       :confirm-disabled="!accountNameInput.trim() || !accountTargetGroupId || accountAmountInvalid || accountCreditLimitInvalid || accountReminderDayInvalid"
       confirm-text="儲存"

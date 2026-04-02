@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import {
   addSubscriptionInterval,
   isSubscriptionChargeDue,
+  listSubscriptionChargeDatesThrough,
   resolveSubscriptionNextChargeDate,
 } from '../src/core/utils/subscription-schedule.js'
 
@@ -75,11 +76,43 @@ test('subscription schedule marks only the matching day as due and respects paus
   assert.equal(isSubscriptionChargeDue({ ...item, paused: true }, new Date('2026-04-05T12:00:00+08:00')), false)
 })
 
+test('subscription schedule lists all due dates through today for catch-up runs', () => {
+  assert.deepEqual(
+    listSubscriptionChargeDatesThrough(
+      {
+        startDate: '2026-01-31',
+        intervalValue: 1,
+        intervalUnit: 'month',
+        chargeDay: 31,
+      },
+      new Date('2026-04-15T09:00:00+08:00'),
+    ),
+    ['2026-01-31', '2026-02-28', '2026-03-31'],
+  )
+})
+
+test('subscription schedule skips due-date catch-up when paused', () => {
+  assert.deepEqual(
+    listSubscriptionChargeDatesThrough(
+      {
+        startDate: '2026-01-05',
+        intervalValue: 1,
+        intervalUnit: 'month',
+        paused: true,
+      },
+      new Date('2026-04-15T09:00:00+08:00'),
+    ),
+    [],
+  )
+})
+
 test('subscription tracker normalizes new fields and removes manual paid progression', () => {
   assert.match(subscriptionTrackerSource, /const startDate = normalizeSubscriptionDateInput\(/)
   assert.match(subscriptionTrackerSource, /raw\.startDate\s*\?\?\s*raw\.lastPaidAt\s*\?\?\s*raw\.nextDueAt/)
   assert.match(subscriptionTrackerSource, /const chargeDay = normalizeChargeDay\(raw\.chargeDay, startDate\)/)
   assert.match(subscriptionTrackerSource, /const paused = normalizePaused\(raw\.paused\)/)
+  assert.match(subscriptionTrackerSource, /const note = normalizeNote\(raw\.note\)/)
+  assert.match(subscriptionTrackerSource, /note,\s*\n\s*}\s*\n}/)
   assert.match(subscriptionTrackerSource, /return isSubscriptionChargeDue\(item, now\)/)
   assert.doesNotMatch(subscriptionTrackerSource, /export async function markSubscriptionPaid/)
 })

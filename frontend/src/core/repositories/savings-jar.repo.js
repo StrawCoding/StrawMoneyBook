@@ -1,6 +1,7 @@
 import { query, run } from '@/core/db/sqlite'
 import { nowIso } from '@/core/utils/id'
 import { assertLedgerId, firstRow } from '@/core/repositories/base.repo'
+import { normalizeSubscriptionChargeDay, normalizeSubscriptionDateInput } from '@/core/utils/subscription-schedule'
 
 function normalizeGoalType(value) {
   return String(value ?? '').trim() === 'target' ? 'target' : 'open'
@@ -13,6 +14,73 @@ function normalizeTargetAmountMinor(goalType, value) {
     throw new Error('目標金額需大於 0')
   }
   return amount
+}
+
+function normalizeIntervalUnit(value) {
+  const unit = String(value ?? '').trim().toLowerCase()
+  if (unit === 'year') return 'year'
+  if (unit === 'day') return 'day'
+  return 'month'
+}
+
+function normalizeAutoSaveConfig(input = {}) {
+  if (input === null) {
+    return {
+      sourceAccountId: null,
+      amountMinor: null,
+      intervalValue: null,
+      intervalUnit: null,
+      startDate: null,
+      chargeDay: null,
+      paused: 0,
+    }
+  }
+
+  const sourceAccountId = String(input.autoSaveSourceAccountId ?? input.sourceAccountId ?? '').trim()
+  const startDate = normalizeSubscriptionDateInput(input.autoSaveStartDate ?? input.startDate)
+  const rawAmountMinor = input.autoSaveAmountMinor ?? input.amountMinor
+  const rawIntervalValue = input.autoSaveIntervalValue ?? input.intervalValue
+  const rawIntervalUnit = input.autoSaveIntervalUnit ?? input.intervalUnit
+  const rawChargeDay = input.autoSaveChargeDay ?? input.chargeDay
+  const paused = Number(input.autoSavePaused ?? input.paused) ? 1 : 0
+  const isUnset = !sourceAccountId && (rawAmountMinor === null || rawAmountMinor === undefined || rawAmountMinor === '') && !startDate
+
+  if (isUnset) {
+    return {
+      sourceAccountId: null,
+      amountMinor: null,
+      intervalValue: null,
+      intervalUnit: null,
+      startDate: null,
+      chargeDay: null,
+      paused,
+    }
+  }
+
+  if (!sourceAccountId || !startDate) {
+    throw new Error('自動存錢設定不完整')
+  }
+
+  const amountMinor = Math.round(Number(rawAmountMinor) || 0)
+  if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
+    throw new Error('自動存錢金額需大於 0')
+  }
+
+  const intervalValue = Math.max(1, Math.trunc(Number(rawIntervalValue) || 1))
+  const intervalUnit = normalizeIntervalUnit(rawIntervalUnit)
+  const chargeDay = intervalUnit === 'month'
+    ? normalizeSubscriptionChargeDay(rawChargeDay, startDate)
+    : null
+
+  return {
+    sourceAccountId,
+    amountMinor,
+    intervalValue,
+    intervalUnit,
+    startDate,
+    chargeDay,
+    paused,
+  }
 }
 
 export async function countSavingsJars(ledgerId) {
@@ -51,13 +119,32 @@ export async function createSavingsJarMeta(ledgerId, input = {}) {
   if (!accountId) throw new Error('缺少存錢罐帳戶 ID')
   const goalType = normalizeGoalType(input.goalType)
   const targetAmountMinor = normalizeTargetAmountMinor(goalType, input.targetAmountMinor)
+  const autoSaveInput = Object.prototype.hasOwnProperty.call(input, 'autoSave') ? input.autoSave : input
+  const autoSave = normalizeAutoSaveConfig(autoSaveInput)
   const now = nowIso()
 
   await run(
     `INSERT INTO savings_jars (
-      ledger_id, account_id, goal_type, target_amount_minor, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?);`,
-    [ledgerId, accountId, goalType, targetAmountMinor, now, now],
+      ledger_id, account_id, goal_type, target_amount_minor,
+      auto_save_source_account_id, auto_save_amount_minor, auto_save_interval_value,
+      auto_save_interval_unit, auto_save_start_date, auto_save_charge_day, auto_save_paused,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    [
+      ledgerId,
+      accountId,
+      goalType,
+      targetAmountMinor,
+      autoSave.sourceAccountId,
+      autoSave.amountMinor,
+      autoSave.intervalValue,
+      autoSave.intervalUnit,
+      autoSave.startDate,
+      autoSave.chargeDay,
+      autoSave.paused,
+      now,
+      now,
+    ],
   )
 }
 
@@ -67,13 +154,35 @@ export async function updateSavingsJarMeta(ledgerId, accountId, input = {}) {
   if (!normalizedAccountId) throw new Error('缺少存錢罐帳戶 ID')
   const goalType = normalizeGoalType(input.goalType)
   const targetAmountMinor = normalizeTargetAmountMinor(goalType, input.targetAmountMinor)
+  const autoSaveInput = Object.prototype.hasOwnProperty.call(input, 'autoSave') ? input.autoSave : input
+  const autoSave = normalizeAutoSaveConfig(autoSaveInput)
 
   await run(
     `UPDATE savings_jars
      SET goal_type = ?,
          target_amount_minor = ?,
+         auto_save_source_account_id = ?,
+         auto_save_amount_minor = ?,
+         auto_save_interval_value = ?,
+         auto_save_interval_unit = ?,
+         auto_save_start_date = ?,
+         auto_save_charge_day = ?,
+         auto_save_paused = ?,
          updated_at = ?
      WHERE ledger_id = ? AND account_id = ?;`,
-    [goalType, targetAmountMinor, nowIso(), ledgerId, normalizedAccountId],
+    [
+      goalType,
+      targetAmountMinor,
+      autoSave.sourceAccountId,
+      autoSave.amountMinor,
+      autoSave.intervalValue,
+      autoSave.intervalUnit,
+      autoSave.startDate,
+      autoSave.chargeDay,
+      autoSave.paused,
+      nowIso(),
+      ledgerId,
+      normalizedAccountId,
+    ],
   )
 }
