@@ -12,8 +12,6 @@ jobs:
       contents: write
     env:
       AAB_PATH: app/build/outputs/bundle/release/app-release.aab
-      PLAY_JSON_KEY_PATH: ${{ runner.temp }}/play-service-account.json
-      ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/release-keystore.jks
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -53,6 +51,11 @@ jobs:
       - name: Sync Capacitor Android
         working-directory: frontend
         run: npx cap sync android
+
+      - name: Prepare release paths
+        run: |
+          echo "PLAY_JSON_KEY_PATH=$RUNNER_TEMP/play-service-account.json" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release-keystore.jks" >> "$GITHUB_ENV"
 
       - name: Restore Play service account
         env:
