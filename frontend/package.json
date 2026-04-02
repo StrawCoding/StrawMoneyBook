@@ -1,6 +1,6 @@
 {
   "name": "strawmoneybook",
-  "version": "0.24.9",
+  "version": "0.24.10",
   "private": true,
   "type": "module",
   "engines": {
@@ -11,10 +11,12 @@
     "sync:app-update-manifest": "node scripts/sync-app-update-manifest.mjs",
     "bump:patch": "npm version patch --no-git-tag-version",
     "bump:android:versionCode": "node scripts/bump-android-version-code.mjs",
+    "gpr": "npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag",
     "preaab": "npm run bump:patch && npm run bump:android:versionCode && npm run sync:app-update-manifest",
     "aab:build": "npm run sync:app-update-manifest && npx vite build && npx cap sync android && cd android && ./gradlew bundleRelease && cd ..",
     "upload:aab:github": "node scripts/upload-aab-to-github.mjs",
     "release:git": "node scripts/commit-aab-release.mjs",
+    "release:tag": "node scripts/create-release-tag.mjs",
     "simulate:google-auto-connect": "node scripts/simulate-google-auto-connect-flow.mjs",
     "simulate:google-backup": "node scripts/simulate-google-backup-flow.mjs",
     "simulate:bank-sync": "node scripts/simulate-bank-sync-mock-flow.mjs",

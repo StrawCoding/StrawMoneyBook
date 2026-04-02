@@ -27,7 +27,21 @@ def hasReleaseSigningConfig =
         releaseKeyPassword
 def packageJsonText = rootProject.file('../package.json').text
 def versionMatcher = (packageJsonText =~ /"version"\s*:\s*"([^"]+)"/)
-def appVersionName = versionMatcher.find() ? versionMatcher.group(1) : "1.0.0"
+def packageVersionName = versionMatcher.find() ? versionMatcher.group(1) : "1.0.0"
+def ciVersionName = System.getenv("CI_VERSION_NAME")?.trim()
+def ciVersionCode = System.getenv("CI_VERSION_CODE")?.trim()
+def resolveVersionCode = { envValue, fallbackValue ->
+    if (envValue == null || !envValue) {
+        return fallbackValue
+    }
+    try {
+        return Integer.parseInt(envValue)
+    } catch (NumberFormatException ignored) {
+        return fallbackValue
+    }
+}
+def appVersionName = ciVersionName ?: packageVersionName
+def appVersionCode = resolveVersionCode(ciVersionCode, 186)
 
 android {
     namespace = "com.strawcoding.strawmoneybook"
@@ -40,7 +54,7 @@ android {
         applicationId "com.strawcoding.strawmoneybook"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 186
+        versionCode appVersionCode
         versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

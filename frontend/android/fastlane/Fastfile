@@ -1,0 +1,32 @@
+default_platform(:android)
+
+def require_env!(key)
+  value = ENV[key].to_s.strip
+  UI.user_error!("Missing required environment variable: #{key}") if value.empty?
+  value
+end
+
+platform :android do
+  desc "Upload the release AAB to Google Play internal track"
+  lane :internal do
+    package_name = require_env!("ANDROID_PACKAGE_NAME")
+    json_key_path = require_env!("PLAY_JSON_KEY_PATH")
+    aab_path = ENV.fetch("AAB_PATH", "app/build/outputs/bundle/release/app-release.aab").to_s.strip
+
+    UI.user_error!("AAB not found at #{aab_path}") unless File.exist?(aab_path)
+    UI.user_error!("Play service account json not found at #{json_key_path}") unless File.exist?(json_key_path)
+
+    upload_to_play_store(
+      package_name: package_name,
+      json_key: json_key_path,
+      aab: aab_path,
+      track: "internal",
+      release_status: "completed",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true
+    )
+  end
+end

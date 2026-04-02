@@ -9,14 +9,25 @@ const __dirname = dirname(__filename)
 const FRONTEND_ROOT = resolve(__dirname, '..')
 
 export function parseVersionCode(buildGradleSource) {
-  const match = String(buildGradleSource ?? '').match(/versionCode\s+(\d+)/)
-  if (!match) {
+  const source = String(buildGradleSource ?? '')
+  const directMatch = source.match(/versionCode\s+(\d+)/)
+  if (directMatch) {
+    const value = Number.parseInt(directMatch[1], 10)
+    if (!Number.isInteger(value) || value <= 0) {
+      throw new Error(`Invalid versionCode: ${directMatch[1]}`)
+    }
+
+    return value
+  }
+
+  const fallbackMatch = source.match(/def\s+appVersionCode\s*=\s*resolveVersionCode\([^,]+,\s*(\d+)\)/)
+  if (!fallbackMatch) {
     throw new Error('Cannot find `versionCode` in android/app/build.gradle')
   }
 
-  const value = Number.parseInt(match[1], 10)
+  const value = Number.parseInt(fallbackMatch[1], 10)
   if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`Invalid versionCode: ${match[1]}`)
+    throw new Error(`Invalid versionCode: ${fallbackMatch[1]}`)
   }
 
   return value

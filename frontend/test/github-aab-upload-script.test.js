@@ -11,12 +11,24 @@ import {
   buildReleaseCommitMessage,
   commitAndPushAabRelease,
 } from '../scripts/commit-aab-release.mjs'
+import {
+  buildReleaseTag,
+  createAndPushReleaseTag,
+} from '../scripts/create-release-tag.mjs'
 
 const packageJson = JSON.parse(
   readFileSync(resolve(import.meta.dirname, '../package.json'), 'utf8'),
 )
+const playReleaseWorkflow = readFileSync(
+  resolve(import.meta.dirname, '../../.github/workflows/play-release.yml'),
+  'utf8',
+)
 
 test('aab script builds first and then uploads the artifact to GitHub', () => {
+  assert.equal(
+    packageJson.scripts.gpr,
+    'npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag',
+  )
   assert.equal(
     packageJson.scripts['upload:aab:github'],
     'node scripts/upload-aab-to-github.mjs',
@@ -24,6 +36,10 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
   assert.equal(
     packageJson.scripts['release:git'],
     'node scripts/commit-aab-release.mjs',
+  )
+  assert.equal(
+    packageJson.scripts['release:tag'],
+    'node scripts/create-release-tag.mjs',
   )
   assert.equal(
     packageJson.scripts['aab:build'],
@@ -49,8 +65,26 @@ test('parseVersionCode extracts Android versionCode from build.gradle', () => {
   assert.equal(parseVersionCode('versionCode 321\nversionName appVersionName'), 321)
 })
 
+test('parseVersionCode falls back to the configured appVersionCode default', () => {
+  assert.equal(
+    parseVersionCode('def appVersionCode = resolveVersionCode(ciVersionCode, 186)\nversionCode appVersionCode'),
+    186,
+  )
+})
+
+test('play release workflow creates a GitHub release after the Play upload', () => {
+  assert.match(playReleaseWorkflow, /permissions:\s*\n\s*contents:\s*write/)
+  assert.match(playReleaseWorkflow, /name: Publish GitHub Release/)
+  assert.match(playReleaseWorkflow, /uses: softprops\/action-gh-release@v2/)
+  assert.match(playReleaseWorkflow, /files:\s*\|?\s*\n\s*\$\{\{ github\.workspace \}\}\/frontend\/android\/app\/build\/outputs\/bundle\/release\/app-release\.aab/)
+})
+
 test('release git step uses the package version in the commit message', () => {
   assert.equal(buildReleaseCommitMessage('0.24.5'), 'chore(release): v0.24.5')
+})
+
+test('release tag step uses the package version in the tag name', () => {
+  assert.equal(buildReleaseTag('0.24.5'), 'v0.24.5')
 })
 
 test('release git step stages the whole repo, commits once, and then pushes main', () => {
@@ -149,4 +183,58 @@ test('release git step skips commit when the repo is already clean but still pus
     ['diff', '--cached', '--name-only'],
     ['push', 'origin', 'main'],
   ])
+})
+
+test('release tag step creates and pushes the matching version tag', () => {
+  const calls = []
+  const gitRunner = (args) => {
+    calls.push(args)
+    const command = args.join(' ')
+    if (command === 'tag --list v0.24.6') {
+      return { stdout: '' }
+    }
+    if (command === 'tag v0.24.6' || command === 'push origin v0.24.6') {
+      return { stdout: '' }
+    }
+
+    throw new Error(`Unexpected git call: ${command}`)
+  }
+
+  const result = createAndPushReleaseTag({
+    repoRoot: '/repo',
+    frontendRoot: '/repo/frontend',
+    gitRunner,
+    ensureMainBranchFn: () => {},
+    versionReader: () => '0.24.6',
+  })
+
+  assert.deepEqual(result, {
+    version: '0.24.6',
+    tag: 'v0.24.6',
+    pushed: true,
+  })
+  assert.deepEqual(calls, [
+    ['tag', '--list', 'v0.24.6'],
+    ['tag', 'v0.24.6'],
+    ['push', 'origin', 'v0.24.6'],
+  ])
+})
+
+test('release tag step fails when the version tag already exists', () => {
+  assert.throws(
+    () =>
+      createAndPushReleaseTag({
+        repoRoot: '/repo',
+        frontendRoot: '/repo/frontend',
+        gitRunner: (args) => {
+          if (args.join(' ') === 'tag --list v0.24.6') {
+            return { stdout: 'v0.24.6\n' }
+          }
+          throw new Error(`Unexpected git call: ${args.join(' ')}`)
+        },
+        ensureMainBranchFn: () => {},
+        versionReader: () => '0.24.6',
+      }),
+    /Tag already exists: v0\.24\.6/,
+  )
 })
