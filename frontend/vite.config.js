@@ -1,32 +1,37 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
-import { fileURLToPath, URL } from 'node:url'
+import { fileURLToPath, pathToFileURL, URL } from 'node:url'
+
+function createRouteModuleLoader(relativePath) {
+  const moduleUrl = pathToFileURL(fileURLToPath(new URL(relativePath, import.meta.url))).href
+  return () => import(/* @vite-ignore */ moduleUrl)
+}
 
 const EXACT_API_ROUTE_LOADERS = {
-  '/api/app-update/play': () => import('./api/app-update/play.js'),
-  '/api/bank/disconnect': () => import('./api/bank/disconnect.js'),
-  '/api/bank/exchange': () => import('./api/bank/exchange.js'),
-  '/api/bank/link_session': () => import('./api/bank/link_session.js'),
-  '/api/bank/mark_imported': () => import('./api/bank/mark_imported.js'),
-  '/api/bank/sync': () => import('./api/bank/sync.js'),
-  '/api/exchange-rate/cbc': () => import('./api/exchange-rate/cbc.js'),
-  '/api/google/oauth/exchange': () => import('./api/google/oauth/exchange.js'),
-  '/api/google/oauth/refresh': () => import('./api/google/oauth/refresh.js'),
+  '/api/app-update/play': createRouteModuleLoader('./api/app-update/play.js'),
+  '/api/bank/disconnect': createRouteModuleLoader('./api/bank/disconnect.js'),
+  '/api/bank/exchange': createRouteModuleLoader('./api/bank/exchange.js'),
+  '/api/bank/link_session': createRouteModuleLoader('./api/bank/link_session.js'),
+  '/api/bank/mark_imported': createRouteModuleLoader('./api/bank/mark_imported.js'),
+  '/api/bank/sync': createRouteModuleLoader('./api/bank/sync.js'),
+  '/api/exchange-rate/cbc': createRouteModuleLoader('./api/exchange-rate/cbc.js'),
+  '/api/google/oauth/exchange': createRouteModuleLoader('./api/google/oauth/exchange.js'),
+  '/api/google/oauth/refresh': createRouteModuleLoader('./api/google/oauth/refresh.js'),
 }
 
 const PREFIX_API_ROUTE_LOADERS = [
   {
     prefix: '/api/auth',
-    loadRoute: () => import('./api/auth/[...path].js'),
+    loadRoute: createRouteModuleLoader('./api/auth/[...path].js'),
   },
   {
     prefix: '/api/referrals',
-    loadRoute: () => import('./api/referrals/[...path].js'),
+    loadRoute: createRouteModuleLoader('./api/referrals/[...path].js'),
   },
   {
     prefix: '/api/shared-ledgers',
-    loadRoute: () => import('./api/shared-ledgers/[...path].js'),
+    loadRoute: createRouteModuleLoader('./api/shared-ledgers/[...path].js'),
   },
 ]
 
@@ -119,7 +124,7 @@ function localApiDevPlugin() {
   }
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   for (const [key, value] of Object.entries(env)) {
     if (process.env[key] === undefined) {
@@ -127,7 +132,10 @@ export default defineConfig(({ mode }) => {
     }
   }
 
-  const plugins = [vue(), localApiDevPlugin()]
+  const plugins = [vue()]
+  if (command !== 'build') {
+    plugins.push(localApiDevPlugin())
+  }
   if (mode !== 'production') {
     plugins.push(vueDevTools())
   }
