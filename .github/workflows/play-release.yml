@@ -82,6 +82,17 @@ jobs:
         working-directory: frontend/android
         run: ./gradlew bundleRelease
 
+      - name: Resolve built AAB path
+        working-directory: frontend/android
+        run: |
+          RESOLVED_AAB_PATH="$(find app/build/outputs/bundle -type f -name '*.aab' | sort | tail -n 1)"
+          if [ -z "$RESOLVED_AAB_PATH" ]; then
+            echo "Unable to find built AAB under frontend/android/app/build/outputs/bundle" >&2
+            find app/build/outputs -maxdepth 4 -type f | sort >&2 || true
+            exit 1
+          fi
+          echo "AAB_PATH=$RESOLVED_AAB_PATH" >> "$GITHUB_ENV"
+
       - name: Upload to Google Play internal
         working-directory: frontend/android
         run: bundle exec fastlane internal
@@ -93,4 +104,4 @@ jobs:
           name: ${{ github.ref_name }}
           generate_release_notes: true
           files: |
-            ${{ github.workspace }}/frontend/android/app/build/outputs/bundle/release/app-release.aab
+            ${{ github.workspace }}/frontend/android/${{ env.AAB_PATH }}
