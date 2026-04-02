@@ -7,6 +7,7 @@ import {
   buildGithubReleaseInfo,
   parseVersionCode,
 } from '../scripts/upload-aab-to-github.mjs'
+import { stripUnusedFlatDirRepositories } from '../scripts/patch-android-flatdir-warning.mjs'
 import {
   buildReleaseCommitMessage,
   commitAndPushAabRelease,
@@ -23,8 +24,20 @@ const playReleaseWorkflow = readFileSync(
   resolve(import.meta.dirname, '../../.github/workflows/play-release.yml'),
   'utf8',
 )
+const ciWorkflow = readFileSync(
+  resolve(import.meta.dirname, '../../.github/workflows/ci.yml'),
+  'utf8',
+)
 
 test('aab script builds first and then uploads the artifact to GitHub', () => {
+  assert.equal(
+    packageJson.scripts.postinstall,
+    'node scripts/patch-capacitor-sqlite-plugin.mjs && node scripts/patch-android-flatdir-warning.mjs',
+  )
+  assert.equal(
+    packageJson.scripts['sync:android'],
+    'npx cap sync android && node scripts/patch-android-flatdir-warning.mjs',
+  )
   assert.equal(
     packageJson.scripts.gpr,
     'npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag',
@@ -43,7 +56,7 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
   )
   assert.equal(
     packageJson.scripts['aab:build'],
-    'npm run sync:app-update-manifest && npx vite build && npx cap sync android && cd android && ./gradlew bundleRelease && cd ..',
+    'npm run sync:app-update-manifest && npx vite build && npm run sync:android && cd android && ./gradlew bundleRelease && cd ..',
   )
   assert.equal(
     packageJson.scripts.aab,
@@ -73,15 +86,50 @@ test('parseVersionCode falls back to the configured appVersionCode default', () 
 })
 
 test('play release workflow creates a GitHub release after the Play upload', () => {
+  assert.match(playReleaseWorkflow, /uses: actions\/checkout@v6/)
+  assert.match(playReleaseWorkflow, /uses: actions\/setup-java@v5/)
+  assert.match(playReleaseWorkflow, /uses: actions\/setup-node@v6/)
   assert.match(playReleaseWorkflow, /name: Setup Node 22/)
   assert.match(playReleaseWorkflow, /node-version:\s*"22"/)
   assert.match(playReleaseWorkflow, /permissions:\s*\n\s*contents:\s*write/)
+  assert.match(playReleaseWorkflow, /name: Sync Capacitor Android/)
+  assert.match(playReleaseWorkflow, /run: npm run sync:android/)
   assert.match(playReleaseWorkflow, /name: Prepare release paths/)
   assert.match(playReleaseWorkflow, /PLAY_JSON_KEY_PATH=\$RUNNER_TEMP\/play-service-account\.json/)
   assert.match(playReleaseWorkflow, /ANDROID_KEYSTORE_FILE=\$RUNNER_TEMP\/release-keystore\.jks/)
   assert.match(playReleaseWorkflow, /name: Publish GitHub Release/)
   assert.match(playReleaseWorkflow, /uses: softprops\/action-gh-release@v2/)
   assert.match(playReleaseWorkflow, /files:\s*\|?\s*\n\s*\$\{\{ github\.workspace \}\}\/frontend\/android\/app\/build\/outputs\/bundle\/release\/app-release\.aab/)
+})
+
+test('android flatDir patch removes unused flatDir repositories but keeps other repos', () => {
+  const source = `
+repositories {
+    google()
+    mavenCentral()
+    flatDir{
+        dirs 'src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'src/main/libs', include: ['*.jar'])
+}
+`
+
+  const result = stripUnusedFlatDirRepositories(source)
+
+  assert.doesNotMatch(result, /flatDir/)
+  assert.match(result, /google\(\)/)
+  assert.match(result, /mavenCentral\(\)/)
+  assert.match(result, /implementation fileTree/)
+})
+
+test('ci workflow uses Node 24 compatible GitHub actions runtimes', () => {
+  assert.match(ciWorkflow, /uses: actions\/checkout@v6/)
+  assert.match(ciWorkflow, /uses: actions\/setup-node@v6/)
+  assert.doesNotMatch(ciWorkflow, /actions\/checkout@v4/)
+  assert.doesNotMatch(ciWorkflow, /actions\/setup-node@v4/)
 })
 
 test('release git step uses the package version in the commit message', () => {
