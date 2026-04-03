@@ -4,42 +4,48 @@
 
 ## 1. 功能總覽
 
-- 多帳本管理（切換帳本、帳本設定、帳本資料載入）
-- 首頁總覽（收支卡、預算簡表、交易流、快速新增）
-- 預算簡表支援月均/日均切換，並可左右滑動切換模式
-- 交易查詢（搜尋頁、日曆頁、交易明細頁）
-- 快速新增按鈕預設開啟 AI 記帳模式（`/ai-auto-bookkeeping`，由 `BookkeepingPage.vue` 承載）
-- 預算管理（月預算、分類預算、已用/剩餘）
-- 分析頁（收入/支出圖表、分類/帳戶明細、報表匯出）
-- 資產管理（帳戶餘額、帳戶群組、資產簡表）
-- 借貸管理（借出/借入、還款、作廢）
-- 報銷與請款管理（報銷入帳、請款單建立/完成/匯出）
-- 存錢罐與訂閱追蹤
-- AI 自動記帳（文字解析 + 會員次數限制）
-- 帳號系統（Email 註冊 / 登入、個人資料、登出）
-- 共同帳本（建立共同帳本、同步、下載、接受邀請）
-- 共享帳本邀請（以 Email 建立邀請，邀請資料保存在 backend）
+- 多帳本管理（切換帳本、排序、帳本設定、活動帳本上下文刷新）
+- 首頁總覽（帳本切換、收支卡、預算簡表、交易流、浮動快速新增）
+- 記帳三模式（AI 記帳、手動快速新增、問答記帳）
+- 交易查詢（搜尋頁、日曆頁、交易明細頁、交易編輯頁）
+- 預算管理（月預算、分類預算、日均規則、已用/剩餘）
+- 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、列印 / PDF 版面）
+- 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債）
+- 借貸管理（借出 / 借入、還款、作廢、往來對象明細）
+- 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出）
+- 存錢罐、訂閱追蹤與自動存提
+- AI 自動記帳（文字解析、語音輸入、會員次數限制）
+- 帳號系統（Email / Google 登入、個人資料、忘記密碼、臨時密碼、登出）
+- 共同帳本（建立共同帳本、共享連結、Email 邀請、接受邀請、同步）
+- Google Drive 帳本同步（逐帳本啟用、跨裝置 pull / push）
+- 自動備份（Google Drive / WebDAV）
 - 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
-- 設定功能（資料管理、自動備份、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本）
-- 銀行同步（路由與頁面已存在，設定入口目前預設隱藏）
+- 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本）
+- 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
+- Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化）
 
 ## 2. 路由與頁面對應
 
 路由定義檔：`src/ui/router/index.js`
-以下表格列出主要路由（非完整清單）。
+以下表格列出主要路由與重要 redirect / 進階頁（非完整清單）。
 
 | 路由 | 頁面檔案 | 主要用途 |
 |---|---|---|
+| `/open/shared-ledger` | redirect -> `/settings/shared-ledgers` | App URL 開啟共同帳本連結 |
+| `/shared-ledger/join` | redirect -> `/settings/shared-ledgers` | 共同帳本加入連結兼容入口 |
 | `/` | `src/ui/views/home.vue` | 首頁總覽、範圍篩選、快速新增 |
 | `/budget` | `src/ui/views/budgeting.vue` | 月預算與分類預算管理 |
 | `/analysis` | `src/ui/views/analysis.vue` | 收支圖表分析（全部/年/月） |
 | `/analysis/category` | `src/ui/views/AnalysisCategoryDetailPage.vue` | 分類分析明細 |
-| `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 交易報表頁（CSV 匯出） |
+| `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 交易報表頁（CSV 匯出 + 列印 / PDF 版面） |
 | `/transactions/search` | `src/ui/views/TransactionSearchPage.vue` | 交易搜尋 |
 | `/transactions/quick-add` | `src/ui/views/BookkeepingPage.vue` | 手動快速新增模式（內嵌 `QuickAddPage.vue`） |
+| `/transactions/qna` | `src/ui/views/BookkeepingPage.vue` | 問答記帳模式（內嵌 `QnaBookkeepingPage.vue`） |
 | `/transactions/calendar` | `src/ui/views/CalendarPage.vue` | 交易日曆 |
 | `/transactions/:id` | `src/ui/views/TransactionAboutPage.vue` | 交易明細（含退款/關聯） |
+| `/transactions/:id/edit` | `src/ui/views/TransactionEditPage.vue` | 交易編輯 |
 | `/features` | `src/ui/views/FeatureListPage.vue` | 功能列表入口頁 |
+| `/welcome/intro` | `src/ui/views/PostSetupIntroPage.vue` | 初始設定後導覽頁 |
 | `/ai-auto-bookkeeping` | `src/ui/views/BookkeepingPage.vue` | AI 記帳模式（內嵌 `AiAutoBookkeepingPage.vue`） |
 | `/assets` | `src/ui/views/assets.vue` | 資產總覽 |
 | `/icons/pick` | `src/ui/views/IconPickerPage.vue` | 帳戶/分類 icon 選擇 |
@@ -50,17 +56,24 @@
 | `/loans/counterparty` | `src/ui/views/loans/LoanCounterpartyDetailPage.vue` | 依往來對象檢視借貸明細 |
 | `/loans/:id` | `src/ui/views/loans/LoanDetailPage.vue` | 借貸明細 |
 | `/reimbursements` | `src/ui/views/reimbursements/ReimbursementListPage.vue` | 報銷清單 |
+| `/reimbursements/advances` | `src/ui/views/reimbursements/ReimbursementAdvanceManagementPage.vue` | 代收 / 預支款管理 |
+| `/reimbursements/advance-usages` | `src/ui/views/reimbursements/ReimbursementAdvanceUsageManagementPage.vue` | 代收 / 預支抵扣紀錄 |
 | `/reimbursements/:id/edit` | `src/ui/views/reimbursements/ReimbursementEditPage.vue` | 報銷明細編輯/入帳 |
+| `/reimbursements/:id/offsets` | `src/ui/views/reimbursements/ReimbursementOffsetAboutPage.vue` | 報銷抵扣說明 / 明細 |
 | `/claim-sheets` | `src/ui/views/claims/ClaimSheetListPage.vue` | 請款單清單與匯出 |
+| `/claim-sheets/:id` | `src/ui/views/claims/ClaimSheetDetailPage.vue` | 請款單明細 |
+| `/claim-sheets/:id/edit` | `src/ui/views/claims/ClaimSheetEditPage.vue` | 請款單編輯 |
 | `/savings-jars` | `src/ui/views/savings-jars/SavingsJarListPage.vue` | 存錢罐管理 |
 | `/subscriptions` | `src/ui/views/subscriptions/SubscriptionListPage.vue` | 訂閱追蹤 |
 | `/settings` | `src/ui/views/settings.vue` | 設定首頁 |
-| `/settings/account` | `src/ui/views/settings/SettingsAccountPage.vue` | 帳號登入 / 註冊、個人資料、邀請碼、登出 |
+| `/settings/account` | `src/ui/views/settings/SettingsAccountPage.vue` | 帳號登入 / 註冊、個人資料、推薦碼、忘記密碼、Google 綁定、登出 |
 | `/settings/data-management` | `src/ui/views/settings/SettingsDataManagementPage.vue` | 匯入/匯出/重設 |
 | `/settings/auto-backup` | `src/ui/views/settings/SettingsAutoBackupPage.vue` | Google / WebDAV 自動備份 |
+| `/settings/google-drive-ledger-sync` | `src/ui/views/settings/SettingsGoogleDriveLedgerSyncPage.vue` | Google Drive 帳本同步 |
 | `/settings/exchange-rate` | `src/ui/views/settings/SettingsExchangeRatePage.vue` | 匯率同步 |
 | `/settings/bank-sync` | `src/ui/views/settings/SettingsBankSyncPage.vue` | 銀行同步管理 |
 | `/settings/bank-sync/new` | `src/ui/views/settings/SettingsBankSyncCreatePage.vue` | 新增銀行連線 |
+| `/settings/bank-sync/:id` | `src/ui/views/settings/SettingsBankSyncConnectionPage.vue` | 單一銀行連線設定 / 狀態 |
 | `/settings/ledgers` | `src/ui/views/settings/SettingsLedgerPage.vue` | 帳本管理 |
 | `/settings/shared-ledgers` | `src/ui/views/settings/SettingsSharedLedgerPage.vue` | 共同帳本、Email 邀請、接受邀請與同步 |
 | `/settings/ledgers/:id` | `src/ui/views/settings/SettingsLedgerDetailPage.vue` | 帳本明細編輯/刪除 |
@@ -75,6 +88,8 @@
 | `/settings/language` | `src/ui/views/settings/SettingsLanguagePage.vue` | 語言設定 |
 | `/settings/security` | `src/ui/views/settings/SettingsSecurityPage.vue` | 安全鎖 |
 | `/settings/membership-benefits` | `src/ui/views/settings/SettingsMembershipBenefitsPage.vue` | 會員權益 |
+| `/settings/admin` | `src/ui/views/settings/SettingsAdminPage.vue` | 管理員儀表板 |
+| `/settings/admin/users/:id` | `src/ui/views/settings/SettingsAdminMemberPage.vue` | 管理員會員 / 使用者詳細頁 |
 | `/settings/about` | `src/ui/views/settings/SettingsAboutPage.vue` | 關於我們 |
 | `/settings/version-info` | `src/ui/views/settings/SettingsVersionInfoPage.vue` | 版本資訊 |
 | `/settings/developer-debug` | `src/ui/views/settings/SettingsDeveloperDebugPage.vue` | 開發除錯資訊頁 |
@@ -90,7 +105,7 @@
 
 ### 首頁內導覽（`src/ui/views/home.vue`）
 
-- 快速新增：導向 `/ai-auto-bookkeeping`（預設）
+- 快速新增：導向「上次使用的記帳模式」；首次預設 `/transactions/quick-add`
 - 功能列表：`/features`
 - 交易搜尋：`/transactions/search`
 - 分析頁：`/analysis`
@@ -106,10 +121,12 @@
 - 匯率同步：`/settings/exchange-rate`
 - 資料管理：`/settings/data-management`
 - 自動備份：`/settings/auto-backup`
+- 帳本同步：`/settings/google-drive-ledger-sync`
 - 語言：`/settings/language`
 - 個人化：`/settings/personalization`
 - 安全鎖：`/settings/security`
 - 會員權益：`/settings/membership-benefits`
+- 管理員平台：`/settings/admin`（僅管理員顯示）
 - 關於我們：`/settings/about`
 - 版本資訊：`/settings/version-info`
 - 銀行同步：`/settings/bank-sync`（入口改由 `isBankSyncFeatureEnabled()` 控制；目前預設恢復為 mock/sandbox 流程）
@@ -117,6 +134,7 @@
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）
 
+- 帳本同步：`/settings/google-drive-ledger-sync`
 - 借貸：`/loans`
 - 報銷：`/reimbursements`
 - 請款單：`/claim-sheets`
@@ -143,8 +161,11 @@
 | 預算簡表（月均/日均 + 左右滑動切換） | `src/ui/components/home/HomeBudgetSummaryCard.vue` |
 | 交易清單 | `src/ui/components/home/HomeTransactionFeed.vue` |
 | 編輯交易 | `src/ui/components/home/HomeTransactionEditSheet.vue` |
-| 快速新增交易 | `src/ui/views/BookkeepingPage.vue` + `src/ui/components/home/QuickAddSheet.vue` |
-| 快速新增附加資訊（備註/報銷/附加項目） | `src/ui/components/home/QuickAddSheet.vue`（附加項目列維持單行橫向排列） |
+| 快速新增入口 | `src/ui/views/BookkeepingPage.vue` + `src/ui/services/bookkeeping-mode.service.js` |
+| 手動快速新增 | `src/ui/views/QuickAddPage.vue` |
+| 問答記帳 | `src/ui/views/QnaBookkeepingPage.vue` |
+| AI 記帳 | `src/ui/views/AiAutoBookkeepingPage.vue` |
+| 快速新增附加資訊（備註/報銷/附加項目） | `src/ui/views/QuickAddPage.vue` |
 | 日期時間選擇 | `src/ui/components/common/DateTimePickerField.vue` |
 | 交易搜尋頁 | `src/ui/views/TransactionSearchPage.vue` |
 | 交易日曆頁 | `src/ui/views/CalendarPage.vue` |
@@ -164,6 +185,7 @@
 | 右上角列印按鈕 | `analysis.vue` -> `/analysis/print` |
 | AI 分析頁 | 已移除（不再提供 `/analysis/ai` 路由） |
 | 交易 CSV 匯出 | `src/ui/views/AnalysisPrintPage.vue` + `src/core/services/export.service.js` |
+| 列印 / PDF 版面 | `src/ui/views/AnalysisPrintPage.vue`（`print-only` 報表區塊） |
 | 匯出範圍 | `AnalysisPrintPage.vue`（全部/年/月/日/自訂） |
 
 ## 5. 導覽與全域 UI
@@ -172,13 +194,18 @@
 |---|---|
 | App Shell / Router View | `src/ui/App.vue` |
 | Welcome / allowWithoutSetup 入口控制 | `src/ui/App.vue` + `src/ui/views/WelcomePage.vue` |
+| 首次設定完成導覽 | `src/ui/views/PostSetupIntroPage.vue` + `src/ui/services/post-setup-intro.service.js` |
+| 初始 setup 判斷 | `src/ui/services/setup-flow.service.js` |
 | 啟動時背景 Google 靜默登入（備份用途） | `src/ui/App.vue` + `src/services/google/auth.js` |
 | 安全鎖遮罩與前景驗證 | `src/ui/App.vue` + `src/ui/services/security-lock.service.js` |
+| Deep link / App URL 導向 | `src/ui/services/app-url-route.js` |
+| 路由捲動復原 | `src/ui/services/route-scroll.service.js` |
 | 底部導覽列 | `src/ui/components/layout/BottomNav.vue` |
 | App 內返回與 fallback 邏輯 | `src/ui/services/navigation-back.service.js` |
 | Toast 訊息 | `src/ui/components/common/ToastHost.vue` |
+| 全域錯誤上報 | `src/ui/services/error-log.service.js` |
 | 全域樣式與動畫 | `src/ui/assets/css/global.css` |
-| 入口與 icon 註冊 | `src/main.js` |
+| 入口、plugin 註冊、首頁小工具同步 | `src/main.js` |
 
 ## 6. Store（UI 狀態層）對應
 
@@ -208,13 +235,15 @@
 | `loan.service.js` | 借貸建立、還款、作廢 |
 | `reimbursement.service.js` | 報銷流程、報銷入帳、隱藏分類處理 |
 | `savings-jar.service.js` | 存錢罐存提與目標管理 |
+| `savings-jar-auto-save.service.js` | 存錢罐自動存入 / 定期儲蓄流程 |
 | `subscription-tracker.service.js` | 訂閱追蹤與期別處理 |
 | `ai-bookkeeping.service.js` | AI 記帳語意解析與建議 |
 | `ai-bookkeeping-tiny-ner.service.js` | AI 記帳輕量關鍵詞/實體抽取 |
+| `ai-bookkeeping-category-match.js` / `ai-bookkeeping-account-match.js` | AI 記帳分類 / 帳戶比對輔助 |
 | `membership.service.js` | 會員等級、限制、Google Play 狀態同步與邀請碼會員加成判定 |
 | `google-play-billing.service.js` | Google Play 方案查詢、購買、恢復、兌換 |
 | `import.service.js` | 匯入 |
-| `export.service.js` | 匯出（CSV / Spreadsheet XML / 檔案落地） |
+| `export.service.js` | 匯出（CSV / Spreadsheet XML / 檔案落地 / 報表資料） |
 | `repair.service.js` | 資料一致性檢查與修復 |
 | `seed.service.js` | 種子資料 |
 
@@ -225,24 +254,33 @@ UI 服務目錄：`src/ui/services/`
 | `shared-ledger.service.js` | 共同帳本前端流程：建立、下載、上傳、自動同步、本機帳本綁定 |
 | `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原 |
 | `webdav-backup.service.js` | WebDAV 備份連線、自動備份、還原 |
+| `google-drive-ledger-sync.service.js` | Google Drive 帳本同步（逐帳本 enable / sync now） |
 | `addon-template.service.js` | 附加項目模板預設值與保存 |
 | `bank-sync.service.js` | 銀行同步前端流程（憑證加密封裝、同步/匯入） |
+| `bank-sync-auto-refresh.service.js` | 銀行同步自動刷新節流與前景更新 |
+| `bank-sync-debug.service.js` | 銀行同步 debug trace 與錯誤資訊 |
 | `ai-loan-intent.service.js` | AI 借貸語意到借貸交易動作的轉換 |
 | `auto-fill-rule.service.js` | 自動識別規則 CRUD |
 | `exchange-rate.service.js` | 匯率同步資料流程 |
 | `home-widget.service.js` | Android 首頁小工具摘要同步 |
+| `home-widget-summary.js` | 首頁小工具圖表摘要資料建構 |
 | `navigation-back.service.js` | App 內返回可達性與 fallback 判定 |
 | `secure-setting.service.js` | 敏感設定值加密儲存（AES-GCM） |
 | `security-lock.service.js` | 生物辨識/系統憑證安全鎖整合 |
 | `theme.service.js` | 主題色、配色方案與字體縮放套用 |
 | `app-update.service.js` | App 版本檢查與商店連結 |
 | `i18n.service.js` | 多語系文案管理 |
+| `setup-flow.service.js` | 是否顯示 Welcome / setup 流程判定 |
+| `post-setup-intro.service.js` | 設定完成後導覽旗標管理 |
+| `error-log.service.js` | 前端錯誤去重、上報與全域安裝 |
+| `app-url-route.js` | App URL / invite code 解析與導向 |
+| `route-scroll.service.js` | Router scroll restore 延後執行 |
 
 共享帳本 API 服務目錄：`src/services/shared-ledger/`
 
 | Service | 功能 |
 |---|---|
-| `backend.js` | 共同帳本 Node backend API client、登入 session、帳號資料更新、Email 邀請、邀請碼兌換 |
+| `backend.js` | 共同帳本 Node backend API client、登入 session、帳號資料更新、Email 邀請、邀請碼兌換、管理員 API、client log 上報 |
 
 ## 8. Backend（Node.js 共同帳本 / 帳號）對應
 
@@ -250,12 +288,16 @@ UI 服務目錄：`src/ui/services/`
 
 | 檔案 | 功能 |
 |---|---|
-| `server.js` | Node.js HTTP server 入口，掛載 auth / shared-ledgers / referrals API |
-| `routes/auth.js` | Email 註冊、登入、登出、`/me`、個人資料更新 |
+| `server.js` | Node.js HTTP server 入口，掛載 auth / admin / client-logs / shared-ledgers / referrals API，含 rate limit 與 body size 保護 |
+| `routes/auth.js` | Email / Google 登入、註冊、登出、refresh、`/me`、個人資料更新、忘記密碼 / 臨時密碼 / 重設密碼 |
+| `routes/admin.js` | 管理員總覽、會員狀態調整、錯誤 log 審核、使用者刪除 |
+| `routes/client-logs.js` | 前端錯誤事件上報 |
 | `routes/shared-ledgers.js` | 共同帳本建立、查詢、快照上傳下載、Email 邀請、接受邀請 |
 | `routes/referrals.js` | 邀請碼資訊、邀請碼兌換、會員獎勵發放 |
-| `collab/store.js` | 本機 JSON store、使用者資料、共同帳本、邀請、會員加成資料 |
-| `collab/auth-session.js` | Bearer token 驗證與登入狀態檢查 |
+| `collab/store.js` | 本機 JSON store、使用者資料、共同帳本、邀請、會員加成資料、access token / auth session |
+| `collab/auth-store.js` | 帳號、密碼、auth provider、會員 grant、refresh session 邏輯 |
+| `collab/admin-store.js` | 管理員總覽、client log、會員管理 |
+| `collab/auth-session.js` | Bearer token 驗證、登入狀態檢查、管理員權限檢查 |
 | `collab/http.js` | backend 路由共用的 request/response helper |
 
 ## 9. Repository（資料存取層）對應
@@ -284,11 +326,14 @@ UI 服務目錄：`src/ui/services/`
 - SQL 與資料結構調整，先改 repository，再檢查對應 store/action。
 - 若新增主頁功能，優先考慮：`home.vue` + `HomeTransactionFeed.vue` + `transaction.store.js`。
 - 若新增分析維度，優先考慮：`analysis.vue` 與 `transaction.repo.js` 的查詢方法。
-- 若調整交易報表欄位或匯出格式，優先考慮：`AnalysisPrintPage.vue` + `export.service.js`。
+- 若調整交易報表欄位或匯出格式，優先考慮：`AnalysisPrintPage.vue` + `export.service.js`，並同步檢查列印 / PDF 版面。
 - 若調整交易刪除邏輯，需同步檢查 `transaction.service.js` 的關聯刪除（退款/報銷）。
 - 若調整 App 開啟流程，需同步檢查 `App.vue`、`google/auth.js` 與備份 service 的靜默登入流程。
+- 若調整快速記帳入口，需同步檢查 `BookkeepingPage.vue`、`bookkeeping-mode.service.js`、首頁 FAB 與 Android 小工具導向。
 - 若調整銀行同步入口，需同步檢查 `settings.vue` 的 `isBankSyncFeatureEnabled()`、銀行同步 API 可用性提示，以及 `/settings/bank-sync` 路由可達性。
-- 若調整帳號 / 共同帳本 / 邀請碼流程，需同步檢查 `SettingsAccountPage.vue`、`SettingsSharedLedgerPage.vue`、`src/services/shared-ledger/backend.js` 與 `../backend/src/routes/*.js`。
+- 若調整 Google Drive 帳本同步，需同步檢查 `SettingsGoogleDriveLedgerSyncPage.vue`、`google-drive-ledger-sync.service.js`、會員限制與活動帳本 reload 流程。
+- 若調整 App URL / invite link，需同步檢查 `app-url-route.js`、router redirect 與 `SettingsSharedLedgerPage.vue` 的 invite code 自動加入邏輯。
+- 若調整帳號 / 共同帳本 / 邀請碼 / 管理員流程，需同步檢查 `SettingsAccountPage.vue`、`SettingsSharedLedgerPage.vue`、`SettingsAdminPage.vue`、`src/services/shared-ledger/backend.js` 與 `../backend/src/routes/*.js`。
 
 ## 11. 文件更新時機
 
@@ -299,7 +344,9 @@ UI 服務目錄：`src/ui/services/`
 - 變更 store/service/repository 的責任邊界
 - 新增重要共用元件（日期選擇器、統計元件、首頁卡片等）
 - 設定入口策略變更（例如：銀行同步顯示/隱藏）
-- 帳號、共同帳本、邀請碼或 backend API 流程變更
+- 帳號、共同帳本、邀請碼、管理員或 backend API 流程變更
+- 記帳模式切換邏輯變更（AI / 快速新增 / 問答）
+- Google Drive 帳本同步或分析報表列印流程變更
 
 ## 12. 變數與函數索引（檔案層級）
 

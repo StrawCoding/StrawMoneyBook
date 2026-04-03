@@ -441,6 +441,37 @@ a,
   -webkit-overflow-scrolling: touch;
 }
 
+.app-overlay-sheet-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  background: var(--overlay-backdrop);
+  padding:
+    max(8px, var(--status-bar-height))
+    12px
+    calc(12px + var(--safe-area-bottom, 0px));
+}
+
+.app-overlay-sheet-card {
+  width: min(680px, 100%);
+  border-radius: 24px 24px 0 0;
+  padding: 16px;
+  gap: 14px;
+}
+
+.app-overlay-sheet-head {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-overlay-sheet-title {
+  margin: 0;
+}
+
 .popover-fade-enter-active,
 .popover-fade-leave-active {
   transition:

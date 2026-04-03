@@ -9,10 +9,9 @@ const source = readFileSync(
 )
 
 test('savings jar page surfaces recent activity rows and routes them to a standalone transaction detail page', () => {
-  assert.match(source, /import \{ listTransactionsByAccount \} from '@\/core\/repositories\/transaction\.repo'/)
-  assert.match(source, /activityRows: jarActivityRowsById\.value\[String\(account\.id \?\? ''\)\] \?\? \[\]/)
-  assert.match(source, /\.filter\(\(item\) => String\(item\.account_id \?\? ''\)\.trim\(\) === jarId\)/)
-  assert.match(source, /void router\.push\(\{ name: 'transaction-about', params: \{ id: txId \} \}\)\.catch\(\(\) => \{\}\)/)
-  assert.match(source, /t\('claim_sheet\.view'\)/)
+  assert.doesNotMatch(source, /activityRows: jarActivityRowsById\.value\[String\(account\.id \?\? ''\)\] \?\? \[\]/)
+  assert.doesNotMatch(source, /class="activity-section"/)
+  assert.match(source, /function openSavingsJarDetail\(accountId\) \{/)
+  assert.match(source, /void router\.push\(\{ name: 'account-detail', params: \{ id: normalizedAccountId \} \}\)\.catch\(\(\) => \{\}\)/)
   assert.match(source, /t\('savings_jar\.activity\.title'\)/)
 })

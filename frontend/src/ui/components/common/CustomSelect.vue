@@ -23,9 +23,62 @@
     </button>
 
     <teleport to="body">
-      <transition name="popover-fade">
+      <transition :name="useSheetPresentation ? 'overlay-fade' : 'popover-fade'">
         <section
-          v-if="open"
+          v-if="open && useSheetPresentation"
+          class="app-overlay-sheet-mask"
+          @click.self="closeMenu"
+        >
+          <article
+            ref="menuRef"
+            class="menu card sheet app-bottom-sheet app-overlay-sheet-card menu-sheet"
+            data-no-runtime-translate
+            :class="{ 'icon-only-menu': iconOnly }"
+          >
+            <header class="row app-overlay-sheet-head">
+              <h3 class="app-overlay-sheet-title">{{ placeholder }}</h3>
+              <button type="button" class="btn mini-btn" @click="closeMenu">關閉</button>
+            </header>
+
+            <div class="app-bottom-sheet-body menu-sheet-body">
+              <template v-if="normalizedGroups.length">
+                <div v-for="group in normalizedGroups" :key="group.id" class="group">
+                  <p class="group-label">{{ group.name }}</p>
+                  <button
+                    v-for="option in group.options"
+                    :key="`${group.id}-${String(option.value)}`"
+                    type="button"
+                    class="menu-item"
+                    :class="{ 'icon-only-item': iconOnly, active: isActive(option.value) }"
+                    :disabled="option.disabled"
+                    @click="pick(option.value)"
+                  >
+                    <font-awesome-icon v-if="option.icon" :icon="option.icon" class="option-icon" />
+                    <span v-if="!iconOnly">{{ option.label }}</span>
+                  </button>
+                </div>
+              </template>
+
+              <template v-else>
+                <button
+                  v-for="option in normalizedOptions"
+                  :key="String(option.value)"
+                  type="button"
+                  class="menu-item"
+                  :class="{ 'icon-only-item': iconOnly, active: isActive(option.value) }"
+                  :disabled="option.disabled"
+                  @click="pick(option.value)"
+                >
+                  <font-awesome-icon v-if="option.icon" :icon="option.icon" class="option-icon" />
+                  <span v-if="!iconOnly">{{ option.label }}</span>
+                </button>
+              </template>
+            </div>
+          </article>
+        </section>
+
+        <section
+          v-else-if="open"
           ref="menuRef"
           class="menu card"
           :style="menuStyle"
@@ -73,6 +126,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+const SHEET_VIEWPORT_MAX_WIDTH = 720
+
 const props = defineProps({
   modelValue: {
     type: [String, Number],
@@ -106,6 +161,7 @@ const rootRef = ref(null)
 const triggerRef = ref(null)
 const menuRef = ref(null)
 const menuStyle = ref({})
+const viewportWidth = ref(0)
 
 const normalizedOptions = computed(() => normalizeOptions(props.options))
 const normalizedGroups = computed(() => {
@@ -136,6 +192,7 @@ const selectedOption = computed(() => {
     : normalizedOptions.value
   return flatOptions.find((option) => isSameValue(option.value, props.modelValue)) ?? null
 })
+const useSheetPresentation = computed(() => viewportWidth.value > 0 && viewportWidth.value <= SHEET_VIEWPORT_MAX_WIDTH)
 
 function normalizeOptions(options, groupName = '') {
   return (options ?? [])
@@ -162,21 +219,30 @@ function toggleOpen() {
   open.value = !open.value
 }
 
+function closeMenu() {
+  open.value = false
+}
+
 function pick(value) {
   emit('update:modelValue', value)
-  open.value = false
+  closeMenu()
 }
 
 function handleWindowClick(event) {
   if (rootRef.value?.contains(event.target)) return
   if (menuRef.value?.contains(event.target)) return
-  open.value = false
+  closeMenu()
 }
 
 function updateMenuPosition() {
   const trigger = triggerRef.value
   const menu = menuRef.value
   if (!trigger || !menu || typeof window === 'undefined') return
+
+  if (useSheetPresentation.value) {
+    menuStyle.value = {}
+    return
+  }
 
   const rect = trigger.getBoundingClientRect()
   const panelWidth = Math.max(180, rect.width)
@@ -200,17 +266,21 @@ function updateMenuPosition() {
 }
 
 function handleWindowResizeOrScroll() {
+  if (typeof window !== 'undefined') {
+    viewportWidth.value = Number(window.innerWidth || document.documentElement.clientWidth || 0)
+  }
   if (!open.value) return
   updateMenuPosition()
 }
 
 function onRequestCloseOverlay(event) {
   if (!open.value) return
-  open.value = false
+  closeMenu()
   event.preventDefault()
 }
 
 onMounted(() => {
+  viewportWidth.value = Number(window.innerWidth || document.documentElement.clientWidth || 0)
   window.addEventListener('click', handleWindowClick)
   window.addEventListener('resize', handleWindowResizeOrScroll)
   window.addEventListener('scroll', handleWindowResizeOrScroll, true)
@@ -236,6 +306,15 @@ watch(
     if (menuRef.value) {
       menuRef.value.scrollTop = 0
     }
+  },
+)
+
+watch(
+  useSheetPresentation,
+  async () => {
+    if (!open.value) return
+    await nextTick()
+    updateMenuPosition()
   },
 )
 </script>
@@ -303,10 +382,25 @@ watch(
   box-shadow: var(--shadow-popover);
   padding: 4px
 }
+.menu-sheet {
+  z-index: auto;
+  border-radius: 24px 24px 0 0;
+  box-shadow: var(--shadow-popover-xl);
+  padding: 16px;
+}
+.menu-sheet-body {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
 .group + .group {
   border-top: 1px solid var(--border);
   margin-top: 4px;
   padding-top: 6px
+}
+.menu-sheet-body .group + .group {
+  margin-top: 0;
+  padding-top: 10px;
 }
 .group-label {
   margin: 0;
