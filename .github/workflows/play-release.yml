@@ -39,6 +39,8 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.2"
+          bundler-cache: true
+          working-directory: frontend/android
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -48,9 +50,9 @@ jobs:
         working-directory: frontend
         run: npm run build:web
 
-      - name: Sync Capacitor Android
+      - name: Copy Capacitor Android assets
         working-directory: frontend
-        run: npm run sync:android
+        run: npm run copy:android
 
       - name: Prepare release paths
         run: |
@@ -73,10 +75,6 @@ jobs:
         run: |
           echo "CI_VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
           echo "CI_VERSION_CODE=$((100000 + GITHUB_RUN_NUMBER * 10 + GITHUB_RUN_ATTEMPT))" >> "$GITHUB_ENV"
-
-      - name: Install fastlane dependencies
-        working-directory: frontend/android
-        run: bundle install
 
       - name: Build release AAB
         working-directory: frontend/android
