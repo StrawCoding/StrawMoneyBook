@@ -1,6 +1,6 @@
 {
   "name": "strawmoneybook",
-  "version": "0.24.23",
+  "version": "0.24.24",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,12 +9,14 @@
   "scripts": {
     "postinstall": "node scripts/patch-capacitor-sqlite-plugin.mjs && node scripts/patch-android-flatdir-warning.mjs",
     "sync:app-update-manifest": "node scripts/sync-app-update-manifest.mjs",
+    "copy:android": "npx cap copy android && node scripts/patch-android-flatdir-warning.mjs",
     "sync:android": "npx cap sync android && node scripts/patch-android-flatdir-warning.mjs",
     "bump:patch": "npm version patch --no-git-tag-version",
     "bump:android:versionCode": "node scripts/bump-android-version-code.mjs",
     "gpr": "npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag",
     "preaab": "npm run bump:patch && npm run bump:android:versionCode && npm run sync:app-update-manifest",
-    "aab:build": "npm run sync:app-update-manifest && npx vite build && npm run sync:android && cd android && ./gradlew bundleRelease && cd ..",
+    "aab:build": "npm run sync:app-update-manifest && npx vite build && npm run copy:android && cd android && ./gradlew bundleRelease && cd ..",
+    "aab:build:prepared": "npx vite build && npm run copy:android && cd android && ./gradlew bundleRelease && cd ..",
     "upload:aab:github": "node scripts/upload-aab-to-github.mjs",
     "release:git": "node scripts/commit-aab-release.mjs",
     "release:tag": "node scripts/create-release-tag.mjs",
@@ -32,7 +34,7 @@
     "dev": "vite",
     "debug": "npm run sync:app-update-manifest && VITE_FORCE_MEMBER_ON_DEBUG=true npx vite build --mode debug && npm run sync:android && cd android && ./gradlew assembleDebug && cd ..",
     "build": "npm run sync:app-update-manifest && vite build && npm run sync:android && cd android && ./gradlew assembleRelease && cd ..",
-    "aab": "npm run aab:build && npm run release:git && npm run upload:aab:github",
+    "aab": "npm run aab:build:prepared && npm run release:git && npm run upload:aab:github",
     "preview": "vite preview",
     "assets:generate": "mkdir -p resources && cp src/ui/assets/logo-icon.png resources/icon.png && cp src/ui/assets/logo-icon.png resources/splash.png && npx @capacitor/assets generate resources"
   },

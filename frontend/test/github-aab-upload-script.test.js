@@ -43,6 +43,10 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
     'node scripts/patch-capacitor-sqlite-plugin.mjs && node scripts/patch-android-flatdir-warning.mjs',
   )
   assert.equal(
+    packageJson.scripts['copy:android'],
+    'npx cap copy android && node scripts/patch-android-flatdir-warning.mjs',
+  )
+  assert.equal(
     packageJson.scripts['sync:android'],
     'npx cap sync android && node scripts/patch-android-flatdir-warning.mjs',
   )
@@ -64,11 +68,15 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
   )
   assert.equal(
     packageJson.scripts['aab:build'],
-    'npm run sync:app-update-manifest && npx vite build && npm run sync:android && cd android && ./gradlew bundleRelease && cd ..',
+    'npm run sync:app-update-manifest && npx vite build && npm run copy:android && cd android && ./gradlew bundleRelease && cd ..',
+  )
+  assert.equal(
+    packageJson.scripts['aab:build:prepared'],
+    'npx vite build && npm run copy:android && cd android && ./gradlew bundleRelease && cd ..',
   )
   assert.equal(
     packageJson.scripts.aab,
-    'npm run aab:build && npm run release:git && npm run upload:aab:github',
+    'npm run aab:build:prepared && npm run release:git && npm run upload:aab:github',
   )
 })
 
