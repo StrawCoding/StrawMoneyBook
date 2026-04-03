@@ -134,31 +134,31 @@ test('parseVersionCode extracts Android versionCode from build.gradle', () => {
 
 test('parseVersionCode falls back to the configured appVersionCode default', () => {
   assert.equal(
-    parseVersionCode('def appVersionCode = resolveVersionCode(ciVersionCode, 186)\nversionCode appVersionCode'),
-    186,
+    parseVersionCode('def appVersionCode = resolveVersionCode(ciVersionCode, 187)\nversionCode appVersionCode'),
+    187,
   )
 })
 
 test('android version bump script reads fallback appVersionCode from build.gradle', () => {
   const result = parseVersionCodeSource(
-    'def appVersionCode = resolveVersionCode(ciVersionCode, 186)\nversionCode appVersionCode',
+    'def appVersionCode = resolveVersionCode(ciVersionCode, 187)\nversionCode appVersionCode',
   )
 
-  assert.equal(result.currentCode, 186)
+  assert.equal(result.currentCode, 187)
 })
 
 test('android version bump script increments fallback appVersionCode in build.gradle', () => {
   const source = [
     'def ciVersionCode = System.getenv("CI_VERSION_CODE")?.trim()',
-    'def appVersionCode = resolveVersionCode(ciVersionCode, 186)',
+    'def appVersionCode = resolveVersionCode(ciVersionCode, 187)',
     'versionCode appVersionCode',
   ].join('\n')
 
   const result = bumpVersionCodeSource(source)
 
-  assert.equal(result.currentCode, 186)
-  assert.equal(result.nextCode, 187)
-  assert.match(result.updated, /def appVersionCode = resolveVersionCode\(ciVersionCode, 187\)/)
+  assert.equal(result.currentCode, 187)
+  assert.equal(result.nextCode, 188)
+  assert.match(result.updated, /def appVersionCode = resolveVersionCode\(ciVersionCode, 188\)/)
   assert.match(result.updated, /versionCode appVersionCode/)
 })
 
@@ -185,6 +185,9 @@ test('play release workflow builds the AAB, publishes the GitHub release, and up
   assert.match(playReleaseWorkflow, /run: npm run prepare:android:release/)
   assert.match(playReleaseWorkflow, /name: Prepare release paths/)
   assert.match(playReleaseWorkflow, /ANDROID_KEYSTORE_FILE=\$RUNNER_TEMP\/release-keystore\.jks/)
+  assert.match(playReleaseWorkflow, /name: Compute Android version name from tag/)
+  assert.match(playReleaseWorkflow, /CI_VERSION_NAME=\$\{GITHUB_REF_NAME#v\}/)
+  assert.doesNotMatch(playReleaseWorkflow, /CI_VERSION_CODE=/)
   assert.match(playReleaseWorkflow, /name: Resolve built AAB path/)
   assert.match(playReleaseWorkflow, /find "\$PWD\/app\/build\/outputs\/bundle" -type f -name '\*\.aab'/)
   assert.match(playReleaseWorkflow, /echo "AAB_PATH=\$RESOLVED_AAB_PATH" >> "\$GITHUB_ENV"/)

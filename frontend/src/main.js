@@ -4,6 +4,11 @@ import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
 import { library } from '@fortawesome/fontawesome-svg-core'
 import {
+  faFacebook,
+  faInstagram,
+  faThreads,
+} from '@fortawesome/free-brands-svg-icons'
+import {
   faArrowDown,
   faArrowRightArrowLeft,
   faArrowTrendUp,
@@ -167,6 +172,7 @@ import { runExchangeRateAutoSyncIfDue } from '@/ui/services/exchange-rate.servic
 import { clearHomeWidgetSummary, syncHomeWidgetSummary } from '@/ui/services/home-widget.service'
 import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { runSavingsJarAutoSaveIfDue } from '@/core/services/savings-jar-auto-save.service'
+import { syncBookkeepingRemindersForAllLedgers } from '@/ui/services/bookkeeping-reminder.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { initLocalePreference, translateMessage } from '@/ui/services/i18n.service'
 import { getPreferredBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
@@ -323,6 +329,9 @@ function scheduleAutoBackupOnDataChange(pinia) {
 }
 
 library.add(
+  faFacebook,
+  faInstagram,
+  faThreads,
   faHouse,
   faChartPie,
   faWallet,
@@ -621,6 +630,7 @@ async function main() {
       if (!isActive) return
       restoreSharedLedgerSessionInBackground('app_resume')
       scheduleMembershipWarmup('app_resume')
+      void syncBookkeepingRemindersForAllLedgers()
       window.dispatchEvent(new Event('app:check-update'))
       const ledgerStore = useLedgerStore(pinia)
       if (ledgerStore.activeLedgerId) {
@@ -659,6 +669,9 @@ async function main() {
       window.addEventListener('app:auto-backup-config-updated', () => {
         void runAutoBackupDueCheck(pinia, 'config_updated')
       })
+      window.addEventListener('app:bookkeeping-reminder-config-updated', () => {
+        void syncBookkeepingRemindersForAllLedgers()
+      })
       window.addEventListener('focus', () => {
         restoreSharedLedgerSessionInBackground('window_focus')
         void runGoogleDriveLedgerBackgroundSyncNow(pinia)
@@ -666,6 +679,7 @@ async function main() {
     }
 
     scheduleMembershipWarmup('app_start')
+    void syncBookkeepingRemindersForAllLedgers()
     if (ledgerStore.activeLedgerId) {
       runSavingsJarAutoSaveInBackground(ledgerStore.activeLedgerId, 'app_start')
     }

@@ -19,8 +19,10 @@
 - 共同帳本（建立共同帳本、共享連結、Email 邀請、接受邀請、同步）
 - Google Drive 帳本同步（逐帳本啟用、跨裝置 pull / push）
 - 自動備份（Google Drive / WebDAV）
+- 記帳提醒與成就表（每日固定提醒、連續記帳天數、最長連續與累計記帳日）
 - 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
 - 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本）
+- 關於與聯絡入口（官網、Facebook、Instagram、Threads、Email、隱私權政策）
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
 - Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化）
 
@@ -71,6 +73,7 @@
 | `/settings/auto-backup` | `src/ui/views/settings/SettingsAutoBackupPage.vue` | Google / WebDAV 自動備份 |
 | `/settings/google-drive-ledger-sync` | `src/ui/views/settings/SettingsGoogleDriveLedgerSyncPage.vue` | Google Drive 帳本同步 |
 | `/settings/exchange-rate` | `src/ui/views/settings/SettingsExchangeRatePage.vue` | 匯率同步 |
+| `/settings/bookkeeping-reminder` | `src/ui/views/settings/SettingsBookkeepingReminderPage.vue` | 每日記帳提醒與連續記帳成就表 |
 | `/settings/bank-sync` | `src/ui/views/settings/SettingsBankSyncPage.vue` | 銀行同步管理 |
 | `/settings/bank-sync/new` | `src/ui/views/settings/SettingsBankSyncCreatePage.vue` | 新增銀行連線 |
 | `/settings/bank-sync/:id` | `src/ui/views/settings/SettingsBankSyncConnectionPage.vue` | 單一銀行連線設定 / 狀態 |
@@ -90,7 +93,7 @@
 | `/settings/membership-benefits` | `src/ui/views/settings/SettingsMembershipBenefitsPage.vue` | 會員權益 |
 | `/settings/admin` | `src/ui/views/settings/SettingsAdminPage.vue` | 管理員儀表板 |
 | `/settings/admin/users/:id` | `src/ui/views/settings/SettingsAdminMemberPage.vue` | 管理員會員 / 使用者詳細頁 |
-| `/settings/about` | `src/ui/views/settings/SettingsAboutPage.vue` | 關於我們 |
+| `/settings/about` | `src/ui/views/settings/SettingsAboutPage.vue` | 關於我們、聯絡資訊與社群入口 |
 | `/settings/version-info` | `src/ui/views/settings/SettingsVersionInfoPage.vue` | 版本資訊 |
 | `/settings/developer-debug` | `src/ui/views/settings/SettingsDeveloperDebugPage.vue` | 開發除錯資訊頁 |
 
@@ -125,9 +128,11 @@
 - 語言：`/settings/language`
 - 個人化：`/settings/personalization`
 - 安全鎖：`/settings/security`
+- 記帳提醒：`/settings/bookkeeping-reminder`
 - 會員權益：`/settings/membership-benefits`
 - 管理員平台：`/settings/admin`（僅管理員顯示）
 - 關於我們：`/settings/about`
+- 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
 - 銀行同步：`/settings/bank-sync`（入口改由 `isBankSyncFeatureEnabled()` 控制；目前預設恢復為 mock/sandbox 流程）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
@@ -203,6 +208,7 @@
 | 底部導覽列 | `src/ui/components/layout/BottomNav.vue` |
 | App 內返回與 fallback 邏輯 | `src/ui/services/navigation-back.service.js` |
 | Toast 訊息 | `src/ui/components/common/ToastHost.vue` |
+| 輸入型彈層一致性（dialog / select / 日期選擇器） | `src/ui/components/common/AppDialog.vue` + `src/ui/components/common/CustomSelect.vue` + `src/ui/components/common/DateTimePickerField.vue` |
 | 全域錯誤上報 | `src/ui/services/error-log.service.js` |
 | 全域樣式與動畫 | `src/ui/assets/css/global.css` |
 | 入口、plugin 註冊、首頁小工具同步 | `src/main.js` |
@@ -235,6 +241,7 @@
 | `loan.service.js` | 借貸建立、還款、作廢 |
 | `reimbursement.service.js` | 報銷流程、報銷入帳、隱藏分類處理 |
 | `savings-jar.service.js` | 存錢罐存提與目標管理 |
+| `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程、連續記帳成就統計 |
 | `savings-jar-auto-save.service.js` | 存錢罐自動存入 / 定期儲蓄流程 |
 | `subscription-tracker.service.js` | 訂閱追蹤與期別處理 |
 | `ai-bookkeeping.service.js` | AI 記帳語意解析與建議 |
@@ -268,7 +275,7 @@ UI 服務目錄：`src/ui/services/`
 | `secure-setting.service.js` | 敏感設定值加密儲存（AES-GCM） |
 | `security-lock.service.js` | 生物辨識/系統憑證安全鎖整合 |
 | `theme.service.js` | 主題色、配色方案與字體縮放套用 |
-| `app-update.service.js` | App 版本檢查與商店連結 |
+| `app-update.service.js` | App 版本檢查與商店連結；Android AAB 發版版本碼以 `android/app/build.gradle` 的 `appVersionCode` fallback 管理，可由 `CI_VERSION_CODE` 覆蓋，目前基準為 187 |
 | `i18n.service.js` | 多語系文案管理 |
 | `setup-flow.service.js` | 是否顯示 Welcome / setup 流程判定 |
 | `post-setup-intro.service.js` | 設定完成後導覽旗標管理 |

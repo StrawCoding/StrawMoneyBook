@@ -169,6 +169,22 @@ export async function listAllTransactions(ledgerId) {
   return rowsOf(result)
 }
 
+export async function listTransactionOccurredAtValues(ledgerId) {
+  assertLedgerId(ledgerId)
+  const result = await query(
+    `SELECT occurred_at
+     FROM transactions
+     WHERE ledger_id = ?
+       AND deleted_at IS NULL
+     ORDER BY occurred_at DESC, created_at DESC;`,
+    [ledgerId],
+  )
+
+  return rowsOf(result)
+    .map((row) => String(row?.occurred_at ?? '').trim())
+    .filter(Boolean)
+}
+
 export async function listTransactionsByAccount(ledgerId, accountId) {
   assertLedgerId(ledgerId)
 

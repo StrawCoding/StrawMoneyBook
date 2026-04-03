@@ -8,12 +8,24 @@ const appDialogSource = readFileSync(
   'utf8',
 )
 
-const formDialogFiles = [
+const appDialogFormFiles = [
   '../src/ui/views/subscriptions/SubscriptionListPage.vue',
   '../src/ui/views/savings-jars/SavingsJarListPage.vue',
   '../src/ui/views/settings/SettingsLedgerPage.vue',
   '../src/ui/views/settings/SettingsCategoryPage.vue',
   '../src/ui/views/accounts/AssetAccountManagementPage.vue',
+]
+
+const customSheetFiles = [
+  '../src/ui/components/budget/BudgetItemSheet.vue',
+  '../src/ui/components/home/HomeTransactionEditSheet.vue',
+  '../src/ui/views/QuickAddPage.vue',
+  '../src/ui/views/TransactionEditPage.vue',
+  '../src/ui/views/loans/LoanListPage.vue',
+  '../src/ui/views/loans/LoanCounterpartyDetailPage.vue',
+  '../src/ui/views/loans/LoanDetailPage.vue',
+  '../src/ui/views/reimbursements/ReimbursementListPage.vue',
+  '../src/ui/views/claims/ClaimSheetListPage.vue',
 ]
 
 test('AppDialog supports rendering form dialogs as bottom sheets', () => {
@@ -25,8 +37,16 @@ test('AppDialog supports rendering form dialogs as bottom sheets', () => {
 })
 
 test('input-heavy dialogs opt into the bottom sheet presentation', () => {
-  for (const relativePath of formDialogFiles) {
+  for (const relativePath of appDialogFormFiles) {
     const source = readFileSync(resolve(import.meta.dirname, relativePath), 'utf8')
     assert.match(source, /presentation="sheet"/)
+  }
+})
+
+test('custom form sheets reuse the shared bottom-sheet layout primitives', () => {
+  for (const relativePath of customSheetFiles) {
+    const source = readFileSync(resolve(import.meta.dirname, relativePath), 'utf8')
+    assert.match(source, /app-bottom-sheet/)
+    assert.match(source, /app-bottom-sheet-body/)
   }
 })

@@ -234,6 +234,12 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
+      path: '/settings/bookkeeping-reminder',
+      name: 'settings-bookkeeping-reminder',
+      component: () => import('@/ui/views/settings/SettingsBookkeepingReminderPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
       path: '/settings/addon-templates',
       name: 'settings-addon-templates',
       component: () => import('@/ui/views/settings/SettingsAddonTemplatePage.vue'),

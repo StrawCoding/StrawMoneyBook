@@ -76,10 +76,9 @@ jobs:
         run: |
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_FILE"
 
-      - name: Compute Android version from tag
+      - name: Compute Android version name from tag
         run: |
           echo "CI_VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
-          echo "CI_VERSION_CODE=$((100000 + GITHUB_RUN_NUMBER * 10 + GITHUB_RUN_ATTEMPT))" >> "$GITHUB_ENV"
 
       - name: Build release AAB
         working-directory: frontend/android

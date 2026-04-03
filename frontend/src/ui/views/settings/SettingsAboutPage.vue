@@ -11,51 +11,20 @@
     <article class="card panel">
       <p class="muted intro">{{ t('settings_about.subtitle') }}</p>
 
-      <a class="link-row" href="https://www.strawmb.com" target="_blank" rel="noopener noreferrer">
-        <span class="icon-wrap">
-          <font-awesome-icon icon="fa-solid fa-house" />
-        </span>
-        <span class="content-wrap">
-          <span class="label">{{ t('settings_about.website') }}</span>
-          <strong>{{ t('settings_about.website_value') }}</strong>
-        </span>
-        <span class="action">{{ t('settings_about.open') }}</span>
-      </a>
-
       <a
+        v-for="link in contactLinks"
+        :key="link.key"
         class="link-row"
-        href="https://www.facebook.com/profile.php?id=61586814027482"
-        target="_blank"
-        rel="noopener noreferrer"
+        :href="link.href"
+        :target="link.target"
+        :rel="link.rel"
       >
         <span class="icon-wrap">
-          <font-awesome-icon icon="fa-solid fa-users" />
+          <font-awesome-icon :icon="link.icon" />
         </span>
         <span class="content-wrap">
-          <span class="label">{{ t('settings_about.facebook') }}</span>
-          <strong>{{ t('settings_about.facebook_value') }}</strong>
-        </span>
-        <span class="action">{{ t('settings_about.open') }}</span>
-      </a>
-
-      <a class="link-row" href="mailto:service@strawmb.com">
-        <span class="icon-wrap">
-          <font-awesome-icon icon="fa-solid fa-paper-plane" />
-        </span>
-        <span class="content-wrap">
-          <span class="label">{{ t('settings_about.email') }}</span>
-          <strong>{{ t('settings_about.email_value') }}</strong>
-        </span>
-        <span class="action">{{ t('settings_about.open') }}</span>
-      </a>
-
-      <a class="link-row" :href="privacyPolicyUrl" target="_blank" rel="noopener noreferrer">
-        <span class="icon-wrap">
-          <font-awesome-icon icon="fa-solid fa-shield-halved" />
-        </span>
-        <span class="content-wrap">
-          <span class="label">{{ t('settings_about.privacy_policy') }}</span>
-          <strong>{{ t('settings_about.privacy_policy_value') }}</strong>
+          <span class="label">{{ t(`settings_about.${link.key}`) }}</span>
+          <strong>{{ t(`settings_about.${link.key}_value`) }}</strong>
         </span>
         <span class="action">{{ t('settings_about.open') }}</span>
       </a>
@@ -64,11 +33,54 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const { t } = useI18n()
 const privacyPolicyUrl = import.meta.env.VITE_PRIVACY_POLICY_URL || 'https://www.strawmb.com/privacy-policy'
+const contactLinks = computed(() => [
+  {
+    key: 'website',
+    href: 'https://www.strawmb.com',
+    icon: 'fa-solid fa-house',
+    target: '_blank',
+    rel: 'noopener noreferrer',
+  },
+  {
+    key: 'facebook',
+    href: 'https://www.facebook.com/profile.php?id=61586814027482',
+    icon: 'fa-brands fa-facebook',
+    target: '_blank',
+    rel: 'noopener noreferrer',
+  },
+  {
+    key: 'instagram',
+    href: 'https://www.instagram.com/strawmoneybook/',
+    icon: 'fa-brands fa-instagram',
+    target: '_blank',
+    rel: 'noopener noreferrer',
+  },
+  {
+    key: 'threads',
+    href: 'https://www.threads.com/@strawmoneybook',
+    icon: 'fa-brands fa-threads',
+    target: '_blank',
+    rel: 'noopener noreferrer',
+  },
+  {
+    key: 'email',
+    href: 'mailto:service@strawmb.com',
+    icon: 'fa-solid fa-paper-plane',
+  },
+  {
+    key: 'privacy_policy',
+    href: privacyPolicyUrl,
+    icon: 'fa-solid fa-shield-halved',
+    target: '_blank',
+    rel: 'noopener noreferrer',
+  },
+])
 </script>
 
 <style scoped>

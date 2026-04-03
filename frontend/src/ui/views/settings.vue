@@ -53,6 +53,7 @@ const settingGroups = computed(() => [
     { to: '/settings/language', labelKey: 'settings.language', icon: 'fa-solid fa-language' },
     { to: '/settings/personalization', labelKey: 'settings.personalization', icon: 'fa-solid fa-palette' },
     { to: '/settings/security', labelKey: 'settings.security_lock', icon: 'fa-solid fa-shield-halved' },
+    { to: '/settings/bookkeeping-reminder', labelKey: 'settings.bookkeeping_reminder', icon: 'fa-solid fa-calendar-days' },
   ],
   [
     { to: '/settings/membership-benefits', labelKey: 'settings.membership_benefits', icon: 'fa-solid fa-money-check-dollar' },
