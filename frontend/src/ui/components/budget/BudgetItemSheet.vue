@@ -75,6 +75,40 @@
       {{ t('budgeting.sheet.selected_days', { values: selectedDayRuleLabel || '-' }) }}
     </small>
 
+    <div class="field-card">
+      <span>{{ t('budgeting.budget_save.title') }}</span>
+      <button
+        type="button"
+        class="switch-row"
+        :class="{ active: model.budgetSaveEnabled }"
+        :aria-pressed="model.budgetSaveEnabled ? 'true' : 'false'"
+        @click="model.budgetSaveEnabled = !model.budgetSaveEnabled"
+      >
+        <span class="switch-copy">
+          <strong>{{ model.budgetSaveEnabled ? t('budgeting.budget_save.enabled') : t('budgeting.budget_save.disabled') }}</strong>
+          <small class="muted">{{ budgetSaveModeLabel }}</small>
+        </span>
+        <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+      </button>
+    </div>
+
+    <template v-if="model.budgetSaveEnabled">
+      <label>
+        {{ t('budgeting.budget_save.target') }}
+        <CustomSelect v-model="model.budgetSaveTargetAccountId" :groups="budgetSaveTargetGroups" />
+      </label>
+
+      <label>
+        {{ t('budgeting.budget_save.source') }}
+        <CustomSelect v-model="model.budgetSaveSourceAccountId" :groups="budgetSaveSourceGroups" />
+      </label>
+
+      <p class="muted budget-save-copy">
+        {{ t('budgeting.budget_save.mode_hint', { mode: budgetSaveModeLabel }) }}
+      </p>
+      <p v-if="budgetSaveInvalidReason" class="error-text">{{ budgetSaveInvalidReason }}</p>
+    </template>
+
     <template #footer>
       <button class="btn" @click="$emit('close')">{{ t('common.cancel') }}</button>
       <button class="btn primary" @click="onSave">{{ t('common.save') }}</button>
@@ -87,6 +121,7 @@ import { computed, reactive, watch } from 'vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useI18n } from '@/ui/services/i18n.service'
+import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
 
 const props = defineProps({
   open: {
@@ -105,6 +140,22 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  accountGroups: {
+    type: Array,
+    default: () => [],
+  },
+  savingsJarAccounts: {
+    type: Array,
+    default: () => [],
+  },
+  regularAccounts: {
+    type: Array,
+    default: () => [],
+  },
+  duplicateCategoryIds: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['close', 'save'])
@@ -117,6 +168,9 @@ const model = reactive({
   amountMode: 'fixed',
   dayRuleUnit: 'weekday',
   dayRuleValues: [],
+  budgetSaveEnabled: false,
+  budgetSaveTargetAccountId: '',
+  budgetSaveSourceAccountId: '',
 })
 const weekdayValues = [1, 2, 3, 4, 5, 6, 7]
 const monthdayValues = Array.from({ length: 31 }, (_, index) => index + 1)
@@ -144,6 +198,39 @@ const categoryPickerGroups = computed(() => {
   ]
 })
 const selectedDayRuleLabel = computed(() => model.dayRuleValues.join(', '))
+const duplicateCategoryIdSet = computed(() => new Set((props.duplicateCategoryIds ?? []).map((value) => String(value ?? '').trim()).filter(Boolean)))
+const budgetSaveModeLabel = computed(() => (
+  model.amountMode === 'daily_average'
+    ? t('budgeting.budget_save.mode.daily')
+    : t('budgeting.budget_save.mode.monthly')
+))
+const budgetSaveTargetGroups = computed(() => (
+  buildAccountOptionGroups(props.accountGroups, props.savingsJarAccounts)
+))
+const budgetSaveTargetOptions = computed(() => budgetSaveTargetGroups.value.flatMap((group) => group.options))
+const selectedTargetAccount = computed(() => {
+  return (props.savingsJarAccounts ?? []).find((account) => String(account.id) === String(model.budgetSaveTargetAccountId))
+})
+const budgetSaveSourceGroups = computed(() => (
+  buildAccountOptionGroups(props.accountGroups, props.regularAccounts, {
+    currencyCode: selectedTargetAccount.value?.currency_code,
+  })
+))
+const budgetSaveSourceOptions = computed(() => budgetSaveSourceGroups.value.flatMap((group) => group.options))
+const budgetSaveInvalidReason = computed(() => {
+  if (!model.budgetSaveEnabled) return ''
+  if (duplicateCategoryIdSet.value.has(String(model.categoryId ?? '').trim())) {
+    return t('budgeting.budget_save.error.conflict')
+  }
+  if (!budgetSaveTargetOptions.value.length) return t('budgeting.budget_save.error.target_invalid')
+  if (!String(model.budgetSaveTargetAccountId ?? '').trim()) return t('budgeting.budget_save.error.target_required')
+  if (!budgetSaveSourceOptions.value.length) return t('budgeting.budget_save.error.source_invalid')
+  if (!String(model.budgetSaveSourceAccountId ?? '').trim()) return t('budgeting.budget_save.error.source_required')
+  if (String(model.budgetSaveTargetAccountId) === String(model.budgetSaveSourceAccountId)) {
+    return t('budgeting.budget_save.error.same_account')
+  }
+  return ''
+})
 
 watch(
   () => [props.open, props.item],
@@ -157,6 +244,9 @@ watch(
       model.amountMode = normalizeAmountMode(props.item.amount_mode)
       model.dayRuleUnit = normalizeDayRuleUnit(props.item.day_rule_unit)
       model.dayRuleValues = normalizeDayRuleValues(props.item.day_rule_values ?? props.item.day_rule_values_json, model.dayRuleUnit)
+      model.budgetSaveEnabled = Number(props.item.budget_save_enabled ?? 0) === 1
+      model.budgetSaveTargetAccountId = String(props.item.budget_save_target_account_id ?? '')
+      model.budgetSaveSourceAccountId = String(props.item.budget_save_source_account_id ?? '')
       ensureRuleSelection()
       return
     }
@@ -167,6 +257,9 @@ watch(
     model.amountMode = 'fixed'
     model.dayRuleUnit = 'weekday'
     model.dayRuleValues = defaultDayRuleValues('weekday')
+    model.budgetSaveEnabled = false
+    model.budgetSaveTargetAccountId = String(props.savingsJarAccounts?.[0]?.id ?? '')
+    model.budgetSaveSourceAccountId = ''
   },
   { immediate: true },
 )
@@ -183,6 +276,28 @@ watch(
   () => {
     ensureRuleSelection()
   },
+)
+
+watch(
+  () => budgetSaveTargetOptions.value,
+  (options) => {
+    if (!model.budgetSaveEnabled) return
+    const current = String(model.budgetSaveTargetAccountId ?? '')
+    if (options.some((option) => String(option.value) === current)) return
+    model.budgetSaveTargetAccountId = String(options[0]?.value ?? '')
+  },
+  { deep: true },
+)
+
+watch(
+  () => budgetSaveSourceOptions.value,
+  (options) => {
+    if (!model.budgetSaveEnabled) return
+    const current = String(model.budgetSaveSourceAccountId ?? '')
+    if (options.some((option) => String(option.value) === current)) return
+    model.budgetSaveSourceAccountId = String(options[0]?.value ?? '')
+  },
+  { deep: true },
 )
 
 function normalizeAmountMode(value) {
@@ -256,6 +371,7 @@ function toggleDayRuleValue(value) {
 }
 
 function onSave() {
+  if (budgetSaveInvalidReason.value) return
   emit('save', {
     id: model.id || undefined,
     categoryId: model.categoryId,
@@ -263,6 +379,9 @@ function onSave() {
     amountMode: model.amountMode,
     dayRuleUnit: model.amountMode === 'daily_average' ? model.dayRuleUnit : 'none',
     dayRuleValues: model.amountMode === 'daily_average' ? [...model.dayRuleValues] : [],
+    budgetSaveEnabled: model.budgetSaveEnabled,
+    budgetSaveTargetAccountId: model.budgetSaveEnabled ? model.budgetSaveTargetAccountId : null,
+    budgetSaveSourceAccountId: model.budgetSaveEnabled ? model.budgetSaveSourceAccountId : null,
   })
 }
 </script>
@@ -290,11 +409,18 @@ h3 {
 .rule-wrap {
   gap: 8px
 }
+.field-card {
+  display: grid;
+  gap: 8px;
+}
 label {
   display: grid;
   gap: 6px;
   font-size: 13px;
   color: var(--muted)
+}
+.budget-save-copy {
+  margin: 0;
 }
 .category-trigger {
   width: 100%;
@@ -353,6 +479,53 @@ label {
   border-color: color-mix(in srgb, var(--primary) 60%, transparent);
   background: color-mix(in srgb, var(--primary) 14%, var(--surface));
   color: var(--primary)
+}
+.switch-row {
+  width: 100%;
+  border: 1px solid var(--field-border);
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--card) 88%, var(--surface-soft-accent) 12%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+.switch-copy {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+}
+.switch-track {
+  width: 48px;
+  height: 28px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--field-border) 72%, var(--card) 28%);
+  padding: 4px;
+  transition: background-color var(--anim-fast) var(--anim-standard);
+  flex: 0 0 auto;
+}
+.switch-thumb {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  transform: translate3d(0, 0, 0);
+  transition: transform var(--anim-mid) var(--anim-spring);
+  will-change: transform;
+}
+.switch-row.active {
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--field-border) 54%);
+  background: color-mix(in srgb, var(--primary) 10%, var(--card) 90%);
+}
+.switch-row.active .switch-track {
+  background: var(--primary);
+}
+.switch-row.active .switch-thumb {
+  transform: translate3d(20px, 0, 0);
 }
 .category-mask {
   position: fixed;

@@ -9,7 +9,7 @@
 - 首頁總覽（帳本切換、收支卡、預算簡表、交易流、浮動快速新增）
 - 記帳三模式（AI 記帳、手動快速新增、問答記帳）
 - 交易查詢（搜尋頁、日曆頁、交易明細頁、交易編輯頁）
-- 預算管理（月預算、分類預算、日均規則、已用/剩餘）
+- 預算管理（月預算、分類預算、日均規則、已用/剩餘、預算剩餘自動存入存錢罐）
 - 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、列印 / PDF 版面）
 - 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細）
@@ -38,7 +38,7 @@
 | `/open/shared-ledger` | redirect -> `/settings/shared-ledgers` | App URL 開啟共同帳本連結 |
 | `/shared-ledger/join` | redirect -> `/settings/shared-ledgers` | 共同帳本加入連結兼容入口 |
 | `/` | `src/ui/views/home.vue` | 首頁總覽、範圍篩選、快速新增 |
-| `/budget` | `src/ui/views/budgeting.vue` | 月預算與分類預算管理 |
+| `/budget` | `src/ui/views/budgeting.vue` | 月預算、分類預算與預算存款管理 |
 | `/analysis` | `src/ui/views/analysis.vue` | 收支圖表分析（全部/年/月） |
 | `/analysis/category` | `src/ui/views/AnalysisCategoryDetailPage.vue` | 分類分析明細 |
 | `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 交易報表頁（CSV 匯出 + 列印 / PDF 版面） |
@@ -211,6 +211,7 @@
 | 路由捲動復原 | `src/ui/services/route-scroll.service.js` |
 | 底部導覽列 | `src/ui/components/layout/BottomNav.vue` |
 | App 內返回與 fallback 邏輯 | `src/ui/services/navigation-back.service.js` |
+| 同頁 query 狀態切換的穩定 route transition key（如借貸清單 / 往來對象明細切換進行中與已結束時不重跑整頁切換動畫） | `src/ui/router/index.js` + `src/ui/App.vue` |
 | Toast 訊息 | `src/ui/components/common/ToastHost.vue` |
 | 輸入型彈層一致性（dialog / select / 帳本切換 / 區間切換 / 日期與時間選擇器共用 shared bottom-sheet primitives，含 Android 底部 safe area，sheet 背景延伸到底部並對齊 `BottomNav` 基準） | `src/ui/components/common/InputBottomSheet.vue` + `src/ui/components/common/AppDialog.vue` + `src/ui/components/common/CustomSelect.vue` + `src/ui/components/common/LedgerSwitcher.vue` + `src/ui/components/common/HomeRangePicker.vue` + `src/ui/components/common/DateTimePickerField.vue` + `src/ui/components/common/TimePickerField.vue` |
 | 全域錯誤上報 | `src/ui/services/error-log.service.js` |
@@ -227,7 +228,7 @@
 | `account.store.js` | 帳戶清單與餘額 |
 | `category.store.js` | 分類清單、群組、二級分類資料 |
 | `transaction.store.js` | 交易載入、新增、更新、刪除、首頁篩選與關聯刷新 |
-| `budget.store.js` | 月預算與預算項目 |
+| `budget.store.js` | 月預算、預算項目、整月預算存款設定與補跑偏好 |
 | `loan.store.js` | 借貸清單、還款、作廢、明細 |
 | `reimbursement.store.js` | 報銷列表與報銷狀態處理 |
 | `addon-template.store.js` | 附加項目模板讀取與快取 |
@@ -241,11 +242,12 @@
 |---|---|
 | `bootstrap.service.js` | 啟動時初始化資料與 stores |
 | `transaction.service.js` | 收入/支出/轉帳/退款建立、編輯驗證、刪除關聯交易（報銷/退款） |
-| `budget.service.js` | 預算快照、複製上月預算 |
+| `budget.service.js` | 預算快照、預算存款設定驗證、複製上月預算 |
+| `budget-save.service.js` | 預算剩餘額自動結算、補跑、delta/manual 補差 |
 | `loan.service.js` | 借貸建立、還款、作廢 |
 | `reimbursement.service.js` | 報銷流程、報銷入帳、隱藏分類處理 |
 | `savings-jar.service.js` | 存錢罐存提與目標管理 |
-| `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程、連續記帳成就統計、原生通知同步逾時保護、全帳本同步去重、同步序列化避免實機儲存卡死 |
+| `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程、連續記帳成就統計、原生通知同步逾時保護、全帳本同步去重、同步序列化避免實機儲存卡死、Android Local Notifications plugin proxy 相容性處理 |
 | `savings-jar-auto-save.service.js` | 存錢罐自動存入 / 定期儲蓄流程 |
 | `subscription-tracker.service.js` | 訂閱追蹤與期別處理 |
 | `ai-bookkeeping.service.js` | AI 記帳語意解析與建議 |
@@ -263,7 +265,7 @@ UI 服務目錄：`src/ui/services/`
 | Service | 功能 |
 |---|---|
 | `shared-ledger.service.js` | 共同帳本前端流程：建立、下載、上傳、自動同步、本機帳本綁定 |
-| `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原 |
+| `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原、重新授權後自動清理 stale auto-check diagnostics |
 | `webdav-backup.service.js` | WebDAV 備份連線、自動備份、還原 |
 | `google-drive-ledger-sync.service.js` | Google Drive 帳本同步（逐帳本 enable / sync now） |
 | `addon-template.service.js` | 附加項目模板預設值與保存 |
@@ -319,7 +321,7 @@ UI 服務目錄：`src/ui/services/`
 |---|---|
 | `transaction.repo.js` | 交易查詢、建立、更新、軟刪除 |
 | `account.repo.js` | 帳戶清單、餘額計算、封存/刪除 |
-| `budget.repo.js` | 預算與預算項目 |
+| `budget.repo.js` | 預算、預算項目、預算存款結算紀錄 |
 | `category.repo.js` | 分類與分類群組 |
 | `ledger.repo.js` | 帳本 |
 | `loan.repo.js` | 借貸與還款紀錄 |
@@ -327,7 +329,7 @@ UI 服務目錄：`src/ui/services/`
 | `savings-jar.repo.js` | 存錢罐資料 |
 | `bank-sync.repo.js` | 銀行連線與同步設定 |
 | `counterparty.repo.js` | 往來對象 |
-| `settings.repo.js` | 設定 |
+| `settings.repo.js` | 設定（含 ledger-scoped 預算存款偏好） |
 | `base.repo.js` | 通用 helper |
 
 ## 10. 補充說明（維護建議）
@@ -420,6 +422,8 @@ UI 服務目錄：`src/ui/services/`
 - 函數（7）：`computeBudgetSpentByCategory`, `createBudget`, `deleteBudgetItem`, `deleteBudgetItemsByBudget`, `getBudgetByMonth`, `listBudgetItems`, `upsertBudgetItem`
 - 變數（0）：無
 - 類別（0）：無
+- 補充：除原本的 budgets / budget_items 讀寫外，現在也承接整月預算存款設定、待結算 budget 篩選與 `budget_save_settlements` 結算紀錄。
+- 補充：`listBudgetItems()` 在 join `categories` 時已明確使用 `bi.sort_order AS sort_order`，避免建立新帳本後初始化預算快照時出現 ambiguous column error。
 
 ### `src/core/repositories/category.repo.js`
 - 函數（20）：`archiveCategoriesByGroup`, `archiveCategory`, `archiveCategoryGroup`, `countBudgetItemReferencesByGroup`, `countCategoryTransactions`, `countCategoryTransactionsByGroup`, `createCategory`, `createCategoryGroup`, `deleteCategoriesByGroup`, `deleteCategoryGroupById`, `deleteCategoryGroupIfUnused`, `deleteCategoryIfUnused`, `findFirstCategoryByKind`, `listCategories`, `listCategoryGroups`, `normalizeCategoryIcon`, `updateCategoryGroupSortOrdersByKind`, `updateCategoryIcon`, `updateCategoryProfile`, `updateCategorySortOrdersByGroup`
@@ -470,6 +474,13 @@ UI 服務目錄：`src/ui/services/`
 - 函數（7）：`copyPreviousMonthBudget`, `ensureBudgetForMonth`, `loadBudgetSnapshot`, `monthRangeUtc`, `previousMonthKey`, `removeBudgetItem`, `saveBudgetItem`
 - 變數（0）：無
 - 類別（0）：無
+- 補充：service 會驗證預算存款的來源/目標帳戶、同分類衝突與 ledger-scoped `retroactiveMode`，並把整月預算存款與 item-level 預算存款設定一起帶進 snapshot / 複製上月流程。
+
+### `src/core/services/budget-save.service.js`
+- 函數（1）：`runBudgetSaveIfDue`
+- 變數（0）：無
+- 類別（0）：無
+- 補充：背景流程依帳本時區補跑日結轉與月底結轉，支援 `manual` / `delta` 補差、無剩餘略過、來源餘額不足失敗記錄，以及同分類衝突排除。
 
 ### `src/core/services/export.service.js`
 - 函數（33）：`createCsvBlobUrl`, `createExcelBlobUrl`, `customRangeUtc`, `dayRangeUtc`, `downloadBlob`, `downloadCsvFile`, `downloadExcelFile`, `downloadJsonFile`, `exportAccountsCsv`, `exportAllLedgersJson`, `exportCategoriesCsv`, `exportLedgerJson`, `exportLedgerTransactionsCsv`, `exportLedgerTransactionsExcel`, `exportTransactionsCsv`, `getSchemaVersion`, `loadAccountBalanceBeforeMap`, `monthRangeUtc`, `rangeByMode`, `revokeBlobUrl`, `rowsFromLedgerTable`, `rowsToCsv`, `rowsToSpreadsheetXml`, `saveCsvFileToDevice`, `saveExcelFileToDevice`, `saveJsonFileToDevice`, `timestampForFilename`, `toCsvValue`, `toXmlValue`, `triggerDownloadFromUrl`, `utf8ToBase64`, `writeBase64FileToDevice`, `yearRangeUtc`
@@ -545,6 +556,7 @@ UI 服務目錄：`src/ui/services/`
 - 函數（6）：`closeCategoryPicker`, `onSave`, `openCategoryPicker`, `pickCategory`, `setCategoryPickerParent`, `syncCategoryPickerParent`
 - 變數（11）：`categoryOptions`, `categoryPickerChildren`, `categoryPickerGroups`, `categoryPickerParentId`, `emit`, `hasVisibleCategories`, `model`, `props`, `selectedCategoryIcon`, `selectedCategoryLabel`, `showCategoryPicker`
 - 類別（0）：無
+- 補充：sheet 內新增 item-level 預算存款開關、來源帳戶 / 目標存錢罐選擇與錯誤提示，帳戶選擇沿用快速新增的分組式 account picker；`daily_average` 會固定顯示為日結轉，其餘固定預算為月底結轉。
 
 ### `src/ui/components/common/AppDialog.vue`
 - 函數（1）：`onRequestCloseOverlay`
@@ -797,6 +809,7 @@ UI 服務目錄：`src/ui/services/`
 - 函數（22）：`categoryName`, `changeMonth`, `closeDeleteDialog`, `closeSheet`, `confirmRemoveItem`, `copyPreviousMonth`, `formatMajor`, `goCurrentMonth`, `isItemOverBudget`, `itemBudgetMinor`, `itemPieStyle`, `itemRemainMinor`, `itemSpentMinor`, `itemUsedPercentLabel`, `itemUsedRatio`, `monthKeyFromDate`, `numberFormatLocale`, `openCreate`, `openEdit`, `removeItem`, `saveItem`, `shiftMonthKey`
 - 變數（9）：`budgetStore`, `categoryStore`, `deleteDialogOpen`, `deleteLoading`, `displayMonth`, `editingItem`, `isSheetOpen`, `pendingDeleteItemId`, `uiStore`
 - 類別（0）：無
+- 補充：頁面新增整月總額預算存款區塊、retroactive mode 選擇、狀態摘要，以及預算項目列上的日結轉 / 月底結轉 chip、來源/目標摘要與衝突提示；來源/目標帳戶同樣沿用快速新增的分組式 account picker。
 
 ### `src/ui/views/home.vue`
 - 函數（12）：`applyMonthInput`, `dateKeyFromDate`, `goCurrentRange`, `localeRangeMonth`, `monthKeyFromDate`, `openQuickAdd`, `pickDay`, `pickMonth`, `pickYear`, `switchFilterMode`, `switchQuickAddMode`, `syncHomeTransactions`

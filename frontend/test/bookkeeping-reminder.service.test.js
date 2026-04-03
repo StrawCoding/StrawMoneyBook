@@ -167,6 +167,36 @@ test('syncBookkeepingReminderForLedger fails fast when loading the local notific
   )
 })
 
+test('syncBookkeepingReminderForLedger does not treat the local notification plugin proxy as a thenable', async () => {
+  let cancelCalled = false
+
+  setBookkeepingReminderDependenciesForTest({
+    getPlatform() {
+      return 'android'
+    },
+    async getSetting() {
+      return { enabled: false, hour: 21, minute: 0 }
+    },
+    async getLocalNotifications() {
+      return {
+        plugin: {
+        then() {
+          throw new Error('LocalNotifications.then() is not implemented on android')
+        },
+        async cancel() {
+          cancelCalled = true
+        },
+      }
+      }
+    },
+  })
+
+  const result = await syncBookkeepingReminderForLedger('ledger_alpha')
+
+  assert.equal(result.status, 'disabled')
+  assert.equal(cancelCalled, true)
+})
+
 test('syncBookkeepingReminderForLedger serializes concurrent reminder syncs', async () => {
   const createdChannels = []
   const cancelOrder = []

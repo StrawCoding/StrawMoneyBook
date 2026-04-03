@@ -1,19 +1,78 @@
-import { createId, monthKeyFromDate } from '@/core/utils/id'
-import {
-  createBudget,
-  deleteBudgetItem,
-  deleteBudgetItemsByBudget,
-  getBudgetByMonth,
-  listBudgetUsageDaysByCategory,
-  listBudgetItems,
-  upsertBudgetItem,
-  computeBudgetSpentByCategory,
-} from '@/core/repositories/budget.repo'
+import { createId, monthKeyFromDate } from '../utils/id.js'
+
+const BUDGET_SAVE_PREFERENCES_KEY = 'budget_save_preferences'
+const defaultDependencies = {
+  async createBudget(...args) {
+    const mod = await import('../repositories/budget.repo.js')
+    return mod.createBudget(...args)
+  },
+  async deleteBudgetItem(...args) {
+    const mod = await import('../repositories/budget.repo.js')
+    return mod.deleteBudgetItem(...args)
+  },
+  async deleteBudgetItemsByBudget(...args) {
+    const mod = await import('../repositories/budget.repo.js')
+    return mod.deleteBudgetItemsByBudget(...args)
+  },
+  async getBudgetByMonth(...args) {
+    const mod = await import('../repositories/budget.repo.js')
+    return mod.getBudgetByMonth(...args)
+  },
+  async listBudgetUsageDaysByCategory(...args) {
+    const mod = await import('../repositories/budget.repo.js')
+    return mod.listBudgetUsageDaysByCategory(...args)
+  },
+  async listBudgetItems(...args) {
+    const mod = await import('../repositories/budget.repo.js')
+    return mod.listBudgetItems(...args)
+  },
+  async updateBudgetSaveTotalConfig(...args) {
+    const mod = await import('../repositories/budget.repo.js')
+    return mod.updateBudgetSaveTotalConfig(...args)
+  },
+  async upsertBudgetItem(...args) {
+    const mod = await import('../repositories/budget.repo.js')
+    return mod.upsertBudgetItem(...args)
+  },
+  async computeBudgetSpentByCategory(...args) {
+    const mod = await import('../repositories/budget.repo.js')
+    return mod.computeBudgetSpentByCategory(...args)
+  },
+  async findAccountById(...args) {
+    const mod = await import('../repositories/account.repo.js')
+    return mod.findAccountById(...args)
+  },
+  async isSavingsJarAccount(...args) {
+    const mod = await import('../repositories/savings-jar.repo.js')
+    return mod.isSavingsJarAccount(...args)
+  },
+  async getSetting(...args) {
+    const mod = await import('../repositories/settings.repo.js')
+    return mod.getSetting(...args)
+  },
+  async setSetting(...args) {
+    const mod = await import('../repositories/settings.repo.js')
+    return mod.setSetting(...args)
+  },
+}
+const dependencies = { ...defaultDependencies }
+
+export function resetBudgetServiceDependenciesForTest() {
+  Object.assign(dependencies, defaultDependencies)
+}
+
+export function setBudgetServiceDependenciesForTest(overrides = {}) {
+  Object.assign(dependencies, overrides)
+}
 
 function createBudgetError(code) {
   const error = new Error(code)
   error.code = code
   return error
+}
+
+function normalizeText(value) {
+  return String(value ?? '').trim()
 }
 
 function normalizeAmountMode(value) {
@@ -95,6 +154,82 @@ function countUsedOccurrencesByRule(usedDays, unit, values) {
   return count
 }
 
+function normalizeBudgetSaveEnabled(value) {
+  return value === true || value === 1 || value === '1'
+}
+
+function normalizeBudgetSaveConfig(input = {}) {
+  const enabled = normalizeBudgetSaveEnabled(input.enabled ?? input.budgetSaveEnabled)
+  if (!enabled) {
+    return {
+      enabled: false,
+      targetAccountId: null,
+      sourceAccountId: null,
+    }
+  }
+  return {
+    enabled: true,
+    targetAccountId: normalizeText(input.targetAccountId ?? input.budgetSaveTargetAccountId),
+    sourceAccountId: normalizeText(input.sourceAccountId ?? input.budgetSaveSourceAccountId),
+  }
+}
+
+function normalizeRetroactiveMode(value) {
+  return normalizeText(value) === 'delta' ? 'delta' : 'manual'
+}
+
+function normalizeBudgetSavePreferences(raw = {}) {
+  return {
+    retroactiveMode: normalizeRetroactiveMode(raw?.retroactiveMode),
+  }
+}
+
+async function assertValidBudgetSaveConfig(ledgerId, config) {
+  if (!config.enabled) {
+    return {
+      enabled: false,
+      targetAccountId: null,
+      sourceAccountId: null,
+    }
+  }
+
+  if (!config.targetAccountId) {
+    throw createBudgetError('budgeting.budget_save.error.target_required')
+  }
+  if (!config.sourceAccountId) {
+    throw createBudgetError('budgeting.budget_save.error.source_required')
+  }
+  if (config.targetAccountId === config.sourceAccountId) {
+    throw createBudgetError('budgeting.budget_save.error.same_account')
+  }
+
+  const [targetAccount, sourceAccount, targetIsJar, sourceIsJar] = await Promise.all([
+    dependencies.findAccountById(ledgerId, config.targetAccountId),
+    dependencies.findAccountById(ledgerId, config.sourceAccountId),
+    dependencies.isSavingsJarAccount(ledgerId, config.targetAccountId),
+    dependencies.isSavingsJarAccount(ledgerId, config.sourceAccountId),
+  ])
+
+  if (!targetAccount || !targetIsJar) {
+    throw createBudgetError('budgeting.budget_save.error.target_invalid')
+  }
+  if (!sourceAccount || sourceIsJar) {
+    throw createBudgetError('budgeting.budget_save.error.source_invalid')
+  }
+
+  const targetCurrency = normalizeText(targetAccount.currency_code).toUpperCase()
+  const sourceCurrency = normalizeText(sourceAccount.currency_code).toUpperCase()
+  if (targetCurrency && sourceCurrency && targetCurrency !== sourceCurrency) {
+    throw createBudgetError('budgeting.budget_save.error.currency_mismatch')
+  }
+
+  return {
+    enabled: true,
+    targetAccountId: config.targetAccountId,
+    sourceAccountId: config.sourceAccountId,
+  }
+}
+
 function resolveBudgetItemForMonth(item, monthKey, usedDays = []) {
   const amountMode = normalizeAmountMode(item?.amount_mode)
   const dayRuleUnit = amountMode === 'daily_average' ? normalizeDayRuleUnit(item?.day_rule_unit) : 'none'
@@ -121,6 +256,7 @@ function resolveBudgetItemForMonth(item, monthKey, usedDays = []) {
     occurrence_count: occurrenceCount,
     used_occurrence_count: usedOccurrenceCount,
     resolved_amount_minor: resolvedAmountMinor,
+    budget_save_enabled: Number(item?.budget_save_enabled ?? 0) === 1,
   }
 }
 
@@ -142,27 +278,46 @@ export function previousMonthKey(monthKey) {
 }
 
 export async function ensureBudgetForMonth(ledgerId, monthKey) {
-  let budget = await getBudgetByMonth(ledgerId, monthKey)
+  let budget = await dependencies.getBudgetByMonth(ledgerId, monthKey)
   if (!budget) {
-    budget = await createBudget(ledgerId, {
+    budget = await dependencies.createBudget(ledgerId, {
       monthKey,
       name: `${monthKey} 月預算`,
       includeTransfers: false,
       includeLoanRepayments: false,
       includeReimbursedExpenses: false,
+      budgetSaveTotalEnabled: false,
+      budgetSaveTotalTargetAccountId: null,
+      budgetSaveTotalSourceAccountId: null,
     })
   }
 
   return budget
 }
 
+export async function getBudgetSavePreferences(ledgerId) {
+  if (!ledgerId) {
+    return normalizeBudgetSavePreferences()
+  }
+  const stored = await dependencies.getSetting(ledgerId, BUDGET_SAVE_PREFERENCES_KEY)
+  return normalizeBudgetSavePreferences(stored)
+}
+
+export async function saveBudgetSavePreferences(ledgerId, input = {}) {
+  if (!ledgerId) throw new Error('缺少帳本 ID')
+  const normalized = normalizeBudgetSavePreferences(input)
+  await dependencies.setSetting(ledgerId, BUDGET_SAVE_PREFERENCES_KEY, normalized)
+  return normalized
+}
+
 export async function loadBudgetSnapshot(ledgerId, monthKey) {
   const budget = await ensureBudgetForMonth(ledgerId, monthKey)
   const { startUtc, endUtc } = monthRangeUtc(monthKey)
-  const [rawItems, spentRows, usedOccurrenceRows] = await Promise.all([
-    listBudgetItems(ledgerId, budget.id),
-    computeBudgetSpentByCategory(ledgerId, startUtc, endUtc),
-    listBudgetUsageDaysByCategory(ledgerId, startUtc, endUtc),
+  const [rawItems, spentRows, usedOccurrenceRows, budgetSavePreferences] = await Promise.all([
+    dependencies.listBudgetItems(ledgerId, budget.id),
+    dependencies.computeBudgetSpentByCategory(ledgerId, startUtc, endUtc),
+    dependencies.listBudgetUsageDaysByCategory(ledgerId, startUtc, endUtc),
+    getBudgetSavePreferences(ledgerId),
   ])
   const usedDaysMap = new Map()
   for (const row of usedOccurrenceRows) {
@@ -180,6 +335,7 @@ export async function loadBudgetSnapshot(ledgerId, monthKey) {
     budget,
     items,
     spentRows,
+    budgetSavePreferences,
   }
 }
 
@@ -204,7 +360,19 @@ export async function saveBudgetItem(ledgerId, monthKey, payload) {
     }
   }
 
-  const id = await upsertBudgetItem(ledgerId, {
+  const budgetSave = await assertValidBudgetSaveConfig(ledgerId, normalizeBudgetSaveConfig(payload))
+  if (budgetSave.enabled) {
+    const items = await dependencies.listBudgetItems(ledgerId, budget.id)
+    const duplicateExists = items.some((item) => (
+      String(item?.id ?? '') !== String(payload.id ?? '')
+      && String(item?.category_id ?? '') === String(payload.categoryId ?? '')
+    ))
+    if (duplicateExists) {
+      throw createBudgetError('budgeting.budget_save.error.conflict')
+    }
+  }
+
+  const id = await dependencies.upsertBudgetItem(ledgerId, {
     id: payload.id,
     budgetId: budget.id,
     scopeType: 'category',
@@ -214,34 +382,48 @@ export async function saveBudgetItem(ledgerId, monthKey, payload) {
     amountMode,
     dayRuleUnit,
     dayRuleValuesJson: JSON.stringify(dayRuleValues),
+    budgetSaveEnabled: budgetSave.enabled,
+    budgetSaveTargetAccountId: budgetSave.targetAccountId,
+    budgetSaveSourceAccountId: budgetSave.sourceAccountId,
     sortOrder: payload.sortOrder ?? 0,
   })
 
   return id
 }
 
+export async function saveBudgetTotalConfig(ledgerId, monthKey, payload = {}) {
+  const budget = await ensureBudgetForMonth(ledgerId, monthKey)
+  const budgetSave = await assertValidBudgetSaveConfig(ledgerId, normalizeBudgetSaveConfig(payload))
+  await dependencies.updateBudgetSaveTotalConfig(ledgerId, budget.id, {
+    enabled: budgetSave.enabled,
+    targetAccountId: budgetSave.targetAccountId,
+    sourceAccountId: budgetSave.sourceAccountId,
+  })
+  return dependencies.getBudgetByMonth(ledgerId, monthKey)
+}
+
 export async function removeBudgetItem(ledgerId, budgetItemId) {
   if (!budgetItemId) return
-  await deleteBudgetItem(ledgerId, budgetItemId)
+  await dependencies.deleteBudgetItem(ledgerId, budgetItemId)
 }
 
 export async function copyPreviousMonthBudget(ledgerId, monthKey, options = {}) {
   const currentBudget = await ensureBudgetForMonth(ledgerId, monthKey)
   const prevKey = previousMonthKey(monthKey)
-  const prevBudget = await getBudgetByMonth(ledgerId, prevKey)
+  const prevBudget = await dependencies.getBudgetByMonth(ledgerId, prevKey)
 
   if (!prevBudget) {
     return { copied: 0, fromMonth: prevKey }
   }
 
-  const prevItems = await listBudgetItems(ledgerId, prevBudget.id)
+  const prevItems = await dependencies.listBudgetItems(ledgerId, prevBudget.id)
 
   if (options.replaceExisting !== false) {
-    await deleteBudgetItemsByBudget(ledgerId, currentBudget.id)
+    await dependencies.deleteBudgetItemsByBudget(ledgerId, currentBudget.id)
   }
 
   for (const [index, item] of prevItems.entries()) {
-    await upsertBudgetItem(ledgerId, {
+    await dependencies.upsertBudgetItem(ledgerId, {
       id: createId('bi'),
       budgetId: currentBudget.id,
       scopeType: item.scope_type,
@@ -251,9 +433,18 @@ export async function copyPreviousMonthBudget(ledgerId, monthKey, options = {}) 
       amountMode: normalizeAmountMode(item.amount_mode),
       dayRuleUnit: normalizeDayRuleUnit(item.day_rule_unit),
       dayRuleValuesJson: JSON.stringify(normalizeDayRuleValues(item.day_rule_values_json, normalizeDayRuleUnit(item.day_rule_unit))),
+      budgetSaveEnabled: Number(item.budget_save_enabled ?? 0) === 1,
+      budgetSaveTargetAccountId: item.budget_save_target_account_id,
+      budgetSaveSourceAccountId: item.budget_save_source_account_id,
       sortOrder: index,
     })
   }
+
+  await dependencies.updateBudgetSaveTotalConfig(ledgerId, currentBudget.id, {
+    enabled: Number(prevBudget.budget_save_total_enabled ?? 0) === 1,
+    targetAccountId: prevBudget.budget_save_total_target_account_id,
+    sourceAccountId: prevBudget.budget_save_total_source_account_id,
+  })
 
   return {
     copied: prevItems.length,

@@ -32,9 +32,10 @@ const defaultDependencies = {
   getPlatform() {
     return Capacitor.getPlatform()
   },
-  async getLocalNotifications() {
-    const mod = await import('@capacitor/local-notifications')
-    return mod.LocalNotifications
+  getLocalNotifications() {
+    return import('@capacitor/local-notifications').then((mod) => ({
+      plugin: mod.LocalNotifications,
+    }))
   },
   notificationTimeoutMs: DEFAULT_REMINDER_PLUGIN_TIMEOUT_MS,
   operationTimeoutMs: DEFAULT_REMINDER_OPERATION_TIMEOUT_MS,
@@ -177,8 +178,11 @@ function withTimeout(task, timeoutMs, timeoutMessage) {
       reject(new Error(timeoutMessage))
     }, timeoutMs)
   })
+  const taskPromise = task instanceof Promise
+    ? task.then((value) => ({ value }))
+    : Promise.resolve({ value: task })
 
-  return Promise.race([Promise.resolve(task), timeoutTask]).finally(() => {
+  return Promise.race([taskPromise, timeoutTask]).then((result) => result?.value).finally(() => {
     if (timeoutId != null) {
       globalThis.clearTimeout(timeoutId)
     }
@@ -191,6 +195,13 @@ function withReminderPluginTimeout(task, timeoutMessage) {
 
 function withReminderOperationTimeout(task, timeoutMessage) {
   return withTimeout(task, getReminderOperationTimeoutMs(), timeoutMessage)
+}
+
+function unwrapLocalNotificationsPlugin(value) {
+  if (value && typeof value === 'object' && 'plugin' in value) {
+    return value.plugin
+  }
+  return value
 }
 
 let reminderSyncQueue = Promise.resolve()
@@ -283,10 +294,10 @@ async function syncBookkeepingReminderForLedgerInternal(ledgerId, options = {}) 
     }
   }
 
-  const plugin = await withReminderOperationTimeout(
+  const plugin = unwrapLocalNotificationsPlugin(await withReminderOperationTimeout(
     dependencies.getLocalNotifications(),
     '載入記帳提醒通知模組逾時，請稍後再試',
-  )
+  ))
   await withReminderPluginTimeout(
     plugin.cancel({ notifications: [{ id: notificationId }] }),
     '取消舊的記帳提醒逾時，請稍後再試',
@@ -372,10 +383,10 @@ async function syncBookkeepingRemindersForAllLedgersInternal(options = {}) {
     }
   }
 
-  const plugin = await withReminderOperationTimeout(
+  const plugin = unwrapLocalNotificationsPlugin(await withReminderOperationTimeout(
     dependencies.getLocalNotifications(),
     '載入記帳提醒通知模組逾時，請稍後再試',
-  )
+  ))
   const permission = await resolveNotificationPermission(plugin, options.requestPermission === true)
   const ledgers = (await withReminderOperationTimeout(
     dependencies.listLedgers(),

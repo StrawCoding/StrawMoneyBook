@@ -304,13 +304,13 @@ const router = createRouter({
       name: 'loans',
       path: '/loans',
       component: () => import('@/ui/views/loans/LoanListPage.vue'),
-      meta: { tab: 'home' },
+      meta: { tab: 'home', transitionKey: 'loans' },
     },
     {
       name: 'loan-counterparty-detail',
       path: '/loans/counterparty',
       component: () => import('@/ui/views/loans/LoanCounterpartyDetailPage.vue'),
-      meta: { tab: 'home' },
+      meta: { tab: 'home', transitionKey: 'loan-counterparty-detail' },
     },
     {
       name: 'loan-detail',

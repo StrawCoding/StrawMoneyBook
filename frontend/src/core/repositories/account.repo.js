@@ -1,6 +1,6 @@
-import { query, run } from '@/core/db/sqlite'
-import { createId, nowIso } from '@/core/utils/id'
-import { assertLedgerId, rowsOf, firstRow } from '@/core/repositories/base.repo'
+import { query, run } from '../db/sqlite.js'
+import { createId, nowIso } from '../utils/id.js'
+import { assertLedgerId, rowsOf, firstRow } from './base.repo.js'
 
 function normalizeAccountIcon(icon) {
   const value = String(icon ?? '').trim()

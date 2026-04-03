@@ -34,6 +34,16 @@ test('auto backup services persist auto-check diagnostics for skip, success, and
   assert.match(webdavSource, /resolveWebdavAutoBackupSkipReason/)
 })
 
+test('google backup reconnect paths clear stale reauth diagnostics after recovery', () => {
+  assert.match(googleSource, /function buildRecoveredGoogleBackupPatch\(patch = \{\}\)/)
+  assert.match(googleSource, /lastAutoCheckAt: ''/)
+  assert.match(googleSource, /lastAutoCheckStatus: 'idle'/)
+  assert.match(googleSource, /lastAutoCheckReason: ''/)
+  assert.match(googleSource, /buildRecoveredGoogleBackupPatch\(profilePatch\)/)
+  assert.match(googleSource, /buildRecoveredGoogleBackupPatch\(\)/)
+  assert.match(googleSource, /return saveState\(ledgerId, buildRecoveredGoogleBackupPatch\(\{/)
+})
+
 test('auto backup settings page shows the latest auto-check reason and time', () => {
   assert.match(settingsSource, /settings_auto_backup\.status\.auto_check/)
   assert.match(settingsSource, /settings_auto_backup\.status\.last_check/)

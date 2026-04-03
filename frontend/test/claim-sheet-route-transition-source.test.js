@@ -26,3 +26,14 @@ test('claim sheet list route uses a stable transition key', () => {
     /name: 'claim-sheets'[\s\S]*meta: \{ tab: 'home', transitionKey: 'claim-sheets' \}/,
   )
 })
+
+test('loan routes use stable transition keys for in-page query state switches', () => {
+  assert.match(
+    routerSource,
+    /name: 'loans'[\s\S]*meta: \{ tab: 'home', transitionKey: 'loans' \}/,
+  )
+  assert.match(
+    routerSource,
+    /name: 'loan-counterparty-detail'[\s\S]*meta: \{ tab: 'home', transitionKey: 'loan-counterparty-detail' \}/,
+  )
+})

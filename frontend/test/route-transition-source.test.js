@@ -9,7 +9,7 @@ const source = readFileSync(
 )
 
 test('app route transition locks stage height during page switches', () => {
-  assert.match(source, /ref="routeStageRef" class="route-stage"/)
+  assert.match(source, /ref="routeStageRef"[\s\S]*class="route-stage"/)
   assert.match(source, /@before-leave="handleRouteBeforeLeave"/)
   assert.match(source, /@after-enter="handleRouteAfterEnter"/)
   assert.match(source, /function setRouteStageMinHeight\(heightPx = 0\)/)

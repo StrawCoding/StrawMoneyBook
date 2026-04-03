@@ -13,6 +13,7 @@ const RESET_TABLES = [
   'reimbursement_advances',
   'reimbursement_items',
   'reimbursements',
+  'budget_save_settlements',
   'budget_items',
   'budgets',
   'loans',

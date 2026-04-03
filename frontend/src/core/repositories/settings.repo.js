@@ -1,6 +1,6 @@
-import { query, run } from '@/core/db/sqlite'
-import { nowIso } from '@/core/utils/id'
-import { firstRow } from '@/core/repositories/base.repo'
+import { query, run } from '../db/sqlite.js'
+import { nowIso } from '../utils/id.js'
+import { firstRow } from './base.repo.js'
 
 export async function getSetting(ledgerId, key) {
   const result = await query(

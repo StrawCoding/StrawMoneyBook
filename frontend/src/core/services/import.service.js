@@ -26,6 +26,7 @@ const TABLE_IMPORT_ORDER = [
   'reimbursement_advance_usages',
   'reimbursements',
   'reimbursement_items',
+  'budget_save_settlements',
   'budgets',
   'budget_items',
   'savings_jars',

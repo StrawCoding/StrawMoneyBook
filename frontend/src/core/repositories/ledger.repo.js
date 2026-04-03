@@ -1,6 +1,6 @@
-import { query, run } from '@/core/db/sqlite'
-import { createId, nowIso } from '@/core/utils/id'
-import { firstRow, rowsOf } from '@/core/repositories/base.repo'
+import { query, run } from '../db/sqlite.js'
+import { createId, nowIso } from '../utils/id.js'
+import { firstRow, rowsOf } from './base.repo.js'
 
 const LEGACY_LEDGER_CHILD_DELETE_ORDER = [
   'transaction_attachments',
@@ -9,6 +9,7 @@ const LEGACY_LEDGER_CHILD_DELETE_ORDER = [
   'reimbursement_advances',
   'reimbursement_items',
   'reimbursements',
+  'budget_save_settlements',
   'budget_items',
   'budgets',
   'loans',

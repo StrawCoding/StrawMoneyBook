@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { monthKeyFromDate } from '@/core/utils/id'
 import {
   copyPreviousMonthBudget,
+  saveBudgetSavePreferences as saveBudgetSavePreferencesService,
+  saveBudgetTotalConfig as saveBudgetTotalConfigService,
   loadBudgetSnapshot,
   removeBudgetItem,
   saveBudgetItem,
@@ -20,6 +22,9 @@ export const useBudgetStore = defineStore('budget', {
     budget: null,
     items: [],
     spentMap: {},
+    budgetSavePreferences: {
+      retroactiveMode: 'manual',
+    },
     loading: false,
   }),
 
@@ -64,6 +69,7 @@ export const useBudgetStore = defineStore('budget', {
         const snapshot = await loadBudgetSnapshot(ledgerId, monthKey)
         this.budget = snapshot.budget
         this.items = snapshot.items
+        this.budgetSavePreferences = snapshot.budgetSavePreferences ?? { retroactiveMode: 'manual' }
 
         const spentMap = {}
         for (const row of snapshot.spentRows) {
@@ -81,6 +87,17 @@ export const useBudgetStore = defineStore('budget', {
       const ledgerStore = useLedgerStore()
       await saveBudgetItem(ledgerStore.activeLedgerId, this.monthKey, payload)
       await this.loadMonth(this.monthKey)
+    },
+
+    async saveTotalBudgetSave(payload) {
+      const ledgerStore = useLedgerStore()
+      await saveBudgetTotalConfigService(ledgerStore.activeLedgerId, this.monthKey, payload)
+      await this.loadMonth(this.monthKey)
+    },
+
+    async saveBudgetSavePreferences(payload) {
+      const ledgerStore = useLedgerStore()
+      this.budgetSavePreferences = await saveBudgetSavePreferencesService(ledgerStore.activeLedgerId, payload)
     },
 
     async deleteItem(itemId) {

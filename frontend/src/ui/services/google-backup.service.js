@@ -111,6 +111,18 @@ function normalizeEmail(value) {
   return String(value ?? '').trim().toLowerCase()
 }
 
+function buildRecoveredGoogleBackupPatch(patch = {}) {
+  return {
+    connected: true,
+    lastError: '',
+    lastBackupStatus: 'idle',
+    lastAutoCheckAt: '',
+    lastAutoCheckStatus: 'idle',
+    lastAutoCheckReason: '',
+    ...patch,
+  }
+}
+
 function isPreferredAccountMismatch(state, profile) {
   const preferredEmail = normalizeEmail(state?.accountEmail)
   const currentEmail = normalizeEmail(profile?.email)
@@ -232,11 +244,7 @@ async function ensureConnectedBySilentAuth(ledgerId, state) {
     })
   }
   const profilePatch = profilePatchFromState(state, profile)
-  const patch = {
-    connected: true,
-    lastError: '',
-    ...profilePatch,
-  }
+  const patch = buildRecoveredGoogleBackupPatch(profilePatch)
 
   if (state.connected && !Object.keys(profilePatch).length && !state.lastError) {
     return state
@@ -244,7 +252,7 @@ async function ensureConnectedBySilentAuth(ledgerId, state) {
   if (!state.connected || hasProfileIdentity(profile)) {
     return saveState(ledgerId, patch)
   }
-  return saveState(ledgerId, { connected: true, lastError: '' })
+  return saveState(ledgerId, buildRecoveredGoogleBackupPatch())
 }
 
 async function saveState(ledgerId, patch) {
@@ -299,13 +307,11 @@ export async function autoConnectGoogleBackup(ledgerId, options = {}) {
 
   try {
     const profile = await resolveGoogleProfileForConnect(preferredEmail)
-    return saveState(ledgerId, {
-      connected: true,
+    return saveState(ledgerId, buildRecoveredGoogleBackupPatch({
       accountEmail: profile.email,
       accountName: profile.name,
       accountImageUrl: profile.imageUrl,
-      lastError: '',
-    })
+    }))
   } catch (error) {
     const detail = String(error?.message ?? error ?? '').trim()
     return saveState(ledgerId, {
@@ -325,13 +331,11 @@ export async function connectGoogleBackup(ledgerId) {
 
   const current = await getGoogleBackupState(ledgerId)
   const profile = await resolveGoogleProfileForConnect(current.accountEmail)
-  return saveState(ledgerId, {
-    connected: true,
+  return saveState(ledgerId, buildRecoveredGoogleBackupPatch({
     accountEmail: profile.email,
     accountName: profile.name,
     accountImageUrl: profile.imageUrl,
-    lastError: '',
-  })
+  }))
 }
 
 export async function disconnectGoogleBackup(ledgerId) {
@@ -347,6 +351,9 @@ export async function disconnectGoogleBackup(ledgerId) {
     accountEmail: '',
     accountName: '',
     accountImageUrl: '',
+    lastAutoCheckAt: '',
+    lastAutoCheckStatus: 'idle',
+    lastAutoCheckReason: '',
     lastError: '',
   })
 }

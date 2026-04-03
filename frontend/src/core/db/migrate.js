@@ -20,6 +20,7 @@ import migration019 from '@/core/db/migrations/019_bank_transaction_metadata.sql
 import migration022 from '@/core/db/migrations/022_drop_invoice_carrier.sql?raw'
 import migration023 from '@/core/db/migrations/023_reimbursement_item_advance_source.sql?raw'
 import migration024 from '@/core/db/migrations/024_savings_jars_auto_save.sql?raw'
+import migration025 from '@/core/db/migrations/025_budget_save.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -45,6 +46,7 @@ const MIGRATIONS = [
   { version: 22, name: 'drop_invoice_carrier', sql: migration022 },
   { version: 23, name: 'reimbursement_item_advance_source', sql: migration023 },
   { version: 24, name: 'savings_jars_auto_save', sql: migration024 },
+  { version: 25, name: 'budget_save', sql: migration025 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'
@@ -200,6 +202,9 @@ const LEGACY_COLUMN_PATCHES = {
     'ALTER TABLE budgets ADD COLUMN include_transfers INTEGER NOT NULL DEFAULT 0;',
     'ALTER TABLE budgets ADD COLUMN include_loan_repayments INTEGER NOT NULL DEFAULT 0;',
     'ALTER TABLE budgets ADD COLUMN include_reimbursed_expenses INTEGER NOT NULL DEFAULT 0;',
+    'ALTER TABLE budgets ADD COLUMN budget_save_total_enabled INTEGER NOT NULL DEFAULT 0;',
+    'ALTER TABLE budgets ADD COLUMN budget_save_total_target_account_id TEXT;',
+    'ALTER TABLE budgets ADD COLUMN budget_save_total_source_account_id TEXT;',
     'ALTER TABLE budgets ADD COLUMN created_at TEXT;',
     'ALTER TABLE budgets ADD COLUMN updated_at TEXT;',
     'ALTER TABLE budgets ADD COLUMN deleted_at TEXT;',
@@ -212,6 +217,9 @@ const LEGACY_COLUMN_PATCHES = {
     "ALTER TABLE budget_items ADD COLUMN amount_mode TEXT NOT NULL DEFAULT 'fixed';",
     "ALTER TABLE budget_items ADD COLUMN day_rule_unit TEXT NOT NULL DEFAULT 'none';",
     "ALTER TABLE budget_items ADD COLUMN day_rule_values_json TEXT NOT NULL DEFAULT '[]';",
+    'ALTER TABLE budget_items ADD COLUMN budget_save_enabled INTEGER NOT NULL DEFAULT 0;',
+    'ALTER TABLE budget_items ADD COLUMN budget_save_target_account_id TEXT;',
+    'ALTER TABLE budget_items ADD COLUMN budget_save_source_account_id TEXT;',
     'ALTER TABLE budget_items ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;',
     'ALTER TABLE budget_items ADD COLUMN created_at TEXT;',
     'ALTER TABLE budget_items ADD COLUMN updated_at TEXT;',
@@ -298,7 +306,8 @@ async function patchLegacySchema(db) {
            updated_at = COALESCE(updated_at, created_at, ${nowExpr}),
            include_transfers = COALESCE(include_transfers, 0),
            include_loan_repayments = COALESCE(include_loan_repayments, 0),
-           include_reimbursed_expenses = COALESCE(include_reimbursed_expenses, 0);`,
+           include_reimbursed_expenses = COALESCE(include_reimbursed_expenses, 0),
+           budget_save_total_enabled = COALESCE(budget_save_total_enabled, 0);`,
     )
   }
 
@@ -311,7 +320,8 @@ async function patchLegacySchema(db) {
            amount_minor = COALESCE(amount_minor, 0),
            amount_mode = COALESCE(amount_mode, 'fixed'),
            day_rule_unit = COALESCE(day_rule_unit, 'none'),
-           day_rule_values_json = COALESCE(day_rule_values_json, '[]');`,
+           day_rule_values_json = COALESCE(day_rule_values_json, '[]'),
+           budget_save_enabled = COALESCE(budget_save_enabled, 0);`,
     )
   }
 

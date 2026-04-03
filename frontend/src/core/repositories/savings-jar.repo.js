@@ -1,7 +1,7 @@
-import { query, run } from '@/core/db/sqlite'
-import { nowIso } from '@/core/utils/id'
-import { assertLedgerId, firstRow } from '@/core/repositories/base.repo'
-import { normalizeSubscriptionChargeDay, normalizeSubscriptionDateInput } from '@/core/utils/subscription-schedule'
+import { query, run } from '../db/sqlite.js'
+import { nowIso } from '../utils/id.js'
+import { assertLedgerId, firstRow } from './base.repo.js'
+import { normalizeSubscriptionChargeDay, normalizeSubscriptionDateInput } from '../utils/subscription-schedule.js'
 
 function normalizeGoalType(value) {
   return String(value ?? '').trim() === 'target' ? 'target' : 'open'

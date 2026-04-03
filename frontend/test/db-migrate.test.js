@@ -127,3 +127,10 @@ test('migrate registers the savings jar auto save migration', () => {
   assert.match(source, /import migration024 from '@\/core\/db\/migrations\/024_savings_jars_auto_save\.sql\?raw'/)
   assert.match(source, /\{ version: 24, name: 'savings_jars_auto_save', sql: migration024 \}/)
 })
+
+test('migrate registers the budget save migration', () => {
+  const source = readFileSync(resolve(import.meta.dirname, '../src/core/db/migrate.js'), 'utf8')
+
+  assert.match(source, /import migration025 from '@\/core\/db\/migrations\/025_budget_save\.sql\?raw'/)
+  assert.match(source, /\{ version: 25, name: 'budget_save', sql: migration025 \}/)
+})
