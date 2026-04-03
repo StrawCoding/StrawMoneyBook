@@ -4,17 +4,28 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
+import { deriveVersionCodeFromVersionName } from './android-versioning.mjs'
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const FRONTEND_ROOT = resolve(__dirname, '..')
 
-export function parseVersionCode(buildGradleSource) {
+export function parseVersionCode(buildGradleSource, versionName) {
   const source = String(buildGradleSource ?? '')
   const directMatch = source.match(/versionCode\s+(\d+)/)
   if (directMatch) {
     const value = Number.parseInt(directMatch[1], 10)
     if (!Number.isInteger(value) || value <= 0) {
       throw new Error(`Invalid versionCode: ${directMatch[1]}`)
+    }
+
+    return value
+  }
+
+  if (source.includes('deriveVersionCodeFromVersionName')) {
+    const value = deriveVersionCodeFromVersionName(versionName)
+    if (!Number.isInteger(value) || value <= 0) {
+      throw new Error('Android versionCode is required')
     }
 
     return value
@@ -75,7 +86,7 @@ export function prepareGithubAabUpload(rootDir = FRONTEND_ROOT) {
   const packageJson = JSON.parse(readFileSync(resolve(rootDir, 'package.json'), 'utf8'))
   const buildGradleSource = readFileSync(resolve(rootDir, 'android/app/build.gradle'), 'utf8')
   const version = String(packageJson.version ?? '').trim()
-  const versionCode = parseVersionCode(buildGradleSource)
+  const versionCode = parseVersionCode(buildGradleSource, version)
   const release = buildGithubReleaseInfo({ version, versionCode })
   const artifactPath = findAabArtifact(rootDir)
 

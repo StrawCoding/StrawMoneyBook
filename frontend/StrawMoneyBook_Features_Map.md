@@ -172,6 +172,8 @@
 | AI 記帳 | `src/ui/views/AiAutoBookkeepingPage.vue` |
 | 快速新增附加資訊（備註/報銷/附加項目） | `src/ui/views/QuickAddPage.vue` |
 | 日期時間選擇 | `src/ui/components/common/DateTimePickerField.vue` |
+| 純時間選擇 | `src/ui/components/common/TimePickerField.vue` |
+| 共用輸入型 sheet 殼層 | `src/ui/components/common/InputBottomSheet.vue` |
 | 交易搜尋頁 | `src/ui/views/TransactionSearchPage.vue` |
 | 交易日曆頁 | `src/ui/views/CalendarPage.vue` |
 | 功能列表頁 | `src/ui/views/FeatureListPage.vue` |
@@ -208,7 +210,7 @@
 | 底部導覽列 | `src/ui/components/layout/BottomNav.vue` |
 | App 內返回與 fallback 邏輯 | `src/ui/services/navigation-back.service.js` |
 | Toast 訊息 | `src/ui/components/common/ToastHost.vue` |
-| 輸入型彈層一致性（dialog / select / 日期選擇器） | `src/ui/components/common/AppDialog.vue` + `src/ui/components/common/CustomSelect.vue` + `src/ui/components/common/DateTimePickerField.vue` |
+| 輸入型彈層一致性（dialog / select / 帳本切換 / 區間切換 / 日期與時間選擇器共用 shared bottom-sheet primitives） | `src/ui/components/common/InputBottomSheet.vue` + `src/ui/components/common/AppDialog.vue` + `src/ui/components/common/CustomSelect.vue` + `src/ui/components/common/LedgerSwitcher.vue` + `src/ui/components/common/HomeRangePicker.vue` + `src/ui/components/common/DateTimePickerField.vue` + `src/ui/components/common/TimePickerField.vue` |
 | 全域錯誤上報 | `src/ui/services/error-log.service.js` |
 | 全域樣式與動畫 | `src/ui/assets/css/global.css` |
 | 入口、plugin 註冊、首頁小工具同步 | `src/main.js` |
@@ -241,7 +243,7 @@
 | `loan.service.js` | 借貸建立、還款、作廢 |
 | `reimbursement.service.js` | 報銷流程、報銷入帳、隱藏分類處理 |
 | `savings-jar.service.js` | 存錢罐存提與目標管理 |
-| `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程、連續記帳成就統計 |
+| `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程、連續記帳成就統計、原生通知同步逾時保護 |
 | `savings-jar-auto-save.service.js` | 存錢罐自動存入 / 定期儲蓄流程 |
 | `subscription-tracker.service.js` | 訂閱追蹤與期別處理 |
 | `ai-bookkeeping.service.js` | AI 記帳語意解析與建議 |
@@ -275,7 +277,7 @@ UI 服務目錄：`src/ui/services/`
 | `secure-setting.service.js` | 敏感設定值加密儲存（AES-GCM） |
 | `security-lock.service.js` | 生物辨識/系統憑證安全鎖整合 |
 | `theme.service.js` | 主題色、配色方案與字體縮放套用 |
-| `app-update.service.js` | App 版本檢查與商店連結；Android AAB 發版版本碼以 `android/app/build.gradle` 的 `appVersionCode` fallback 管理，可由 `CI_VERSION_CODE` 覆蓋，目前基準為 187 |
+| `app-update.service.js` | App 版本檢查與商店連結；Android AAB 發版版本碼由 `android/app/build.gradle` 依最終 `versionName` 自動推導（`major * 1,000,000 + minor * 1,000 + patch`），仍可由 `CI_VERSION_CODE` 覆蓋 |
 | `i18n.service.js` | 多語系文案管理 |
 | `setup-flow.service.js` | 是否顯示 Welcome / setup 流程判定 |
 | `post-setup-intro.service.js` | 設定完成後導覽旗標管理 |
@@ -377,9 +379,9 @@ UI 服務目錄：`src/ui/services/`
 - 變數（1）：`__vite__mapDeps`
 - 類別（0）：無
 
-### `scripts/bump-android-version-code.mjs`
-- 函數（0）：無
-- 變數（7）：`currentCode`, `match`, `nextCode`, `pattern`, `source`, `targetPath`, `updated`
+### `scripts/android-versioning.mjs`
+- 函數（1）：`deriveVersionCodeFromVersionName`
+- 變數（3）：`DEFAULT_VERSION_CODE`, `MAJOR_MULTIPLIER`, `VERSION_SEGMENT_BASE`
 - 類別（0）：無
 
 ### `scripts/patch-capacitor-sqlite-plugin.mjs`
@@ -555,6 +557,11 @@ UI 服務目錄：`src/ui/services/`
 ### `src/ui/components/common/DateTimePickerField.vue`
 - 函數（12）：`handleWindowClick`, `handleWindowResizeOrScroll`, `pad2`, `parseDate`, `pickDate`, `pickHour`, `pickMinute`, `setNow`, `shiftMonth`, `toDateInput`, `toggleOpen`, `updatePanelPosition`
 - 變數（14）：`dayCells`, `displayText`, `emit`, `hours`, `minutes`, `monthLabel`, `open`, `panelRef`, `panelStyle`, `props`, `rootRef`, `triggerRef`, `viewMonth`, `weekNames`
+- 類別（0）：無
+
+### `src/ui/components/common/TimePickerField.vue`
+- 函數（15）：`applySelection`, `closePanel`, `handleWindowClick`, `handleWindowResizeOrScroll`, `normalizeHour`, `normalizeMinute`, `onRequestCloseOverlay`, `pad2`, `parseTime`, `pickHour`, `pickMinute`, `resetToCurrentValue`, `syncDraftFromValue`, `toggleOpen`, `updatePanelPosition`
+- 變數（14）：`displayText`, `draftHour`, `draftMinute`, `emit`, `hours`, `minutes`, `open`, `panelRef`, `panelStyle`, `props`, `rootRef`, `triggerRef`, `useSheetPresentation`, `viewportWidth`
 - 類別（0）：無
 
 ### `src/ui/components/common/HomeRangePicker.vue`

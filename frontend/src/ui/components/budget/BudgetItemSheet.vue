@@ -1,145 +1,91 @@
 <template>
-  <teleport to="body">
-    <transition name="overlay-fade">
-      <section v-if="open" class="sheet-mask" @click.self="$emit('close')">
-        <article class="sheet card app-bottom-sheet">
-          <header class="row">
-            <h3>{{ model.id ? t('budgeting.sheet.edit_title') : t('budgeting.sheet.create_title') }}</h3>
-            <button class="btn" @click="$emit('close')">{{ t('budgeting.sheet.close') }}</button>
-          </header>
+  <InputBottomSheet
+    :open="open"
+    :title="model.id ? t('budgeting.sheet.edit_title') : t('budgeting.sheet.create_title')"
+    :body-class="'stack form-wrap'"
+    :sheet-class="'sheet'"
+    :show-footer="true"
+    :close-text="t('budgeting.sheet.close')"
+    @close="$emit('close')"
+  >
+    <label>
+      {{ t('budgeting.sheet.category') }}
+      <CustomSelect
+        v-model="model.categoryId"
+        :groups="categoryPickerGroups"
+        :placeholder="t('budgeting.sheet.pick_category')"
+        :disabled="!categoryPickerGroups.length"
+      />
+    </label>
 
-          <div class="stack form-wrap app-bottom-sheet-body">
-            <label>
-              {{ t('budgeting.sheet.category') }}
-              <button
-                type="button"
-                class="select category-trigger"
-                :class="{ placeholder: !selectedCategoryLabel }"
-                :disabled="!hasVisibleCategories"
-                @click="openCategoryPicker"
-              >
-                <font-awesome-icon v-if="selectedCategoryIcon" :icon="selectedCategoryIcon" class="category-icon" />
-                <span class="category-value">{{ selectedCategoryLabel || t('budgeting.sheet.pick_category') }}</span>
-                <span class="category-arrow">›</span>
-              </button>
-            </label>
+    <label>
+      {{ t('budgeting.amount_mode') }}
+      <CustomSelect v-model="model.amountMode" :options="amountModeOptions" />
+    </label>
 
-            <label>
-              {{ t('budgeting.amount_mode') }}
-              <CustomSelect v-model="model.amountMode" :options="amountModeOptions" />
-            </label>
+    <label v-if="model.amountMode === 'daily_average'">
+      {{ t('budgeting.rule_unit') }}
+      <CustomSelect v-model="model.dayRuleUnit" :options="dayRuleUnitOptions" />
+    </label>
 
-            <label v-if="model.amountMode === 'daily_average'">
-              {{ t('budgeting.rule_unit') }}
-              <CustomSelect v-model="model.dayRuleUnit" :options="dayRuleUnitOptions" />
-            </label>
+    <div v-if="model.amountMode === 'daily_average' && model.dayRuleUnit === 'weekday'" class="stack rule-wrap">
+      <div class="row day-rule-quick-row">
+        <button type="button" class="btn" @click="applyWeekdayPreset('weekdays')">{{ t('budgeting.sheet.rule_weekdays') }}</button>
+        <button type="button" class="btn" @click="applyWeekdayPreset('weekends')">{{ t('budgeting.sheet.rule_weekends') }}</button>
+        <button type="button" class="btn" @click="applyWeekdayPreset('all')">{{ t('budgeting.sheet.rule_all') }}</button>
+        <button type="button" class="btn" @click="applyWeekdayPreset('clear')">{{ t('budgeting.sheet.rule_clear') }}</button>
+      </div>
+      <div class="day-chip-grid">
+        <button
+          v-for="day in weekdayValues"
+          :key="`weekday-${day}`"
+          type="button"
+          class="day-chip"
+          :class="{ active: model.dayRuleValues.includes(day) }"
+          @click="toggleDayRuleValue(day)"
+        >
+          {{ day }}
+        </button>
+      </div>
+      <small class="muted">{{ t('budgeting.sheet.weekday_help') }}</small>
+    </div>
 
-            <div v-if="model.amountMode === 'daily_average' && model.dayRuleUnit === 'weekday'" class="stack rule-wrap">
-              <div class="row day-rule-quick-row">
-                <button type="button" class="btn" @click="applyWeekdayPreset('weekdays')">{{ t('budgeting.sheet.rule_weekdays') }}</button>
-                <button type="button" class="btn" @click="applyWeekdayPreset('weekends')">{{ t('budgeting.sheet.rule_weekends') }}</button>
-                <button type="button" class="btn" @click="applyWeekdayPreset('all')">{{ t('budgeting.sheet.rule_all') }}</button>
-                <button type="button" class="btn" @click="applyWeekdayPreset('clear')">{{ t('budgeting.sheet.rule_clear') }}</button>
-              </div>
-              <div class="day-chip-grid">
-                <button
-                  v-for="day in weekdayValues"
-                  :key="`weekday-${day}`"
-                  type="button"
-                  class="day-chip"
-                  :class="{ active: model.dayRuleValues.includes(day) }"
-                  @click="toggleDayRuleValue(day)"
-                >
-                  {{ day }}
-                </button>
-              </div>
-              <small class="muted">{{ t('budgeting.sheet.weekday_help') }}</small>
-            </div>
+    <div v-if="model.amountMode === 'daily_average' && model.dayRuleUnit === 'monthday'" class="stack rule-wrap">
+      <div class="day-chip-grid monthday-grid">
+        <button
+          v-for="day in monthdayValues"
+          :key="`monthday-${day}`"
+          type="button"
+          class="day-chip"
+          :class="{ active: model.dayRuleValues.includes(day) }"
+          @click="toggleDayRuleValue(day)"
+        >
+          {{ day }}
+        </button>
+      </div>
+      <small class="muted">{{ t('budgeting.sheet.monthday_help') }}</small>
+    </div>
 
-            <div v-if="model.amountMode === 'daily_average' && model.dayRuleUnit === 'monthday'" class="stack rule-wrap">
-              <div class="day-chip-grid monthday-grid">
-                <button
-                  v-for="day in monthdayValues"
-                  :key="`monthday-${day}`"
-                  type="button"
-                  class="day-chip"
-                  :class="{ active: model.dayRuleValues.includes(day) }"
-                  @click="toggleDayRuleValue(day)"
-                >
-                  {{ day }}
-                </button>
-              </div>
-              <small class="muted">{{ t('budgeting.sheet.monthday_help') }}</small>
-            </div>
+    <label>
+      {{ model.amountMode === 'daily_average' ? t('budgeting.sheet.daily_amount_label') : t('budgeting.sheet.amount_label') }}
+      <input v-model.number="model.amountMajor" class="input" type="number" min="0" step="1" />
+    </label>
 
-            <label>
-              {{ model.amountMode === 'daily_average' ? t('budgeting.sheet.daily_amount_label') : t('budgeting.sheet.amount_label') }}
-              <input v-model.number="model.amountMajor" class="input" type="number" min="0" step="1" />
-            </label>
+    <small v-if="model.amountMode === 'daily_average'" class="muted">
+      {{ t('budgeting.sheet.selected_days', { values: selectedDayRuleLabel || '-' }) }}
+    </small>
 
-            <small v-if="model.amountMode === 'daily_average'" class="muted">
-              {{ t('budgeting.sheet.selected_days', { values: selectedDayRuleLabel || '-' }) }}
-            </small>
-          </div>
-
-          <footer class="row footer">
-            <button class="btn" @click="$emit('close')">{{ t('common.cancel') }}</button>
-            <button class="btn primary" @click="onSave">{{ t('common.save') }}</button>
-          </footer>
-        </article>
-      </section>
-    </transition>
-
-    <transition name="category-overlay">
-      <section v-if="open && showCategoryPicker" class="category-mask" @click.self="closeCategoryPicker">
-        <article class="category-sheet card">
-          <header class="row category-head">
-            <button type="button" class="btn" @click="closeCategoryPicker">{{ t('common.back') }}</button>
-            <h4>{{ t('budgeting.sheet.pick_category') }}</h4>
-            <button type="button" class="btn" @click="closeCategoryPicker">{{ t('budgeting.sheet.close') }}</button>
-          </header>
-
-          <section v-if="categoryPickerGroups.length" class="category-layout">
-            <aside class="category-pane parent-pane">
-              <button
-                v-for="group in categoryPickerGroups"
-                :key="group.id"
-                type="button"
-                class="category-item"
-                :class="{ active: String(group.id) === String(categoryPickerParentId) }"
-                @click="setCategoryPickerParent(group.id)"
-              >
-                {{ group.name }}
-              </button>
-            </aside>
-
-            <section class="category-pane child-pane">
-              <button
-                v-for="category in categoryPickerChildren"
-                :key="category.id"
-                type="button"
-                class="category-item"
-                :class="{ active: category.id === model.categoryId }"
-                @click="pickCategory(category.id)"
-              >
-                <font-awesome-icon v-if="category.icon" :icon="category.icon" class="category-item-icon" />
-                <span>{{ category.name }}</span>
-              </button>
-              <p v-if="!categoryPickerChildren.length" class="category-empty">{{ t('budgeting.sheet.category_empty_children') }}</p>
-            </section>
-          </section>
-
-          <p v-else class="category-empty">{{ t('budgeting.sheet.no_categories') }}</p>
-          <p class="category-tip">{{ t('budgeting.sheet.category_tip') }}</p>
-        </article>
-      </section>
-    </transition>
-  </teleport>
+    <template #footer>
+      <button class="btn" @click="$emit('close')">{{ t('common.cancel') }}</button>
+      <button class="btn primary" @click="onSave">{{ t('common.save') }}</button>
+    </template>
+  </InputBottomSheet>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const props = defineProps({
@@ -172,8 +118,6 @@ const model = reactive({
   dayRuleUnit: 'weekday',
   dayRuleValues: [],
 })
-const showCategoryPicker = ref(false)
-const categoryPickerParentId = ref('')
 const weekdayValues = [1, 2, 3, 4, 5, 6, 7]
 const monthdayValues = Array.from({ length: 31 }, (_, index) => index + 1)
 
@@ -199,27 +143,6 @@ const categoryPickerGroups = computed(() => {
     },
   ]
 })
-const categoryPickerChildren = computed(() => {
-  const group = categoryPickerGroups.value.find((item) => String(item.id) === String(categoryPickerParentId.value))
-  return group?.categories ?? []
-})
-const hasVisibleCategories = computed(() => categoryPickerGroups.value.length > 0)
-const selectedCategoryLabel = computed(() => {
-  if (!model.categoryId) return ''
-  for (const group of categoryPickerGroups.value) {
-    const matched = group.categories.find((item) => item.id === model.categoryId)
-    if (matched) return `${group.name} / ${matched.name}`
-  }
-  return ''
-})
-const selectedCategoryIcon = computed(() => {
-  if (!model.categoryId) return ''
-  for (const group of categoryPickerGroups.value) {
-    const matched = group.categories.find((item) => item.id === model.categoryId)
-    if (matched?.icon) return matched.icon
-  }
-  return ''
-})
 const selectedDayRuleLabel = computed(() => model.dayRuleValues.join(', '))
 
 watch(
@@ -235,8 +158,6 @@ watch(
       model.dayRuleUnit = normalizeDayRuleUnit(props.item.day_rule_unit)
       model.dayRuleValues = normalizeDayRuleValues(props.item.day_rule_values ?? props.item.day_rule_values_json, model.dayRuleUnit)
       ensureRuleSelection()
-      showCategoryPicker.value = false
-      syncCategoryPickerParent(model.categoryId)
       return
     }
 
@@ -246,18 +167,8 @@ watch(
     model.amountMode = 'fixed'
     model.dayRuleUnit = 'weekday'
     model.dayRuleValues = defaultDayRuleValues('weekday')
-    showCategoryPicker.value = false
-    syncCategoryPickerParent(model.categoryId)
   },
   { immediate: true },
-)
-
-watch(
-  () => categoryPickerGroups.value,
-  () => {
-    syncCategoryPickerParent(model.categoryId)
-  },
-  { deep: true },
 )
 
 watch(
@@ -321,47 +232,6 @@ function ensureRuleSelection() {
   model.dayRuleValues = normalizedValues.length ? normalizedValues : defaultDayRuleValues(model.dayRuleUnit)
 }
 
-function syncCategoryPickerParent(preferredCategoryId = '') {
-  if (!categoryPickerGroups.value.length) {
-    categoryPickerParentId.value = ''
-    return
-  }
-
-  if (preferredCategoryId) {
-    const matchedGroup = categoryPickerGroups.value.find((group) =>
-      group.categories.some((category) => category.id === preferredCategoryId),
-    )
-    if (matchedGroup) {
-      categoryPickerParentId.value = matchedGroup.id
-      return
-    }
-  }
-
-  const hasCurrentParent = categoryPickerGroups.value.some((group) => String(group.id) === String(categoryPickerParentId.value))
-  if (hasCurrentParent) return
-  categoryPickerParentId.value = categoryPickerGroups.value[0]?.id ?? ''
-}
-
-function openCategoryPicker() {
-  if (!hasVisibleCategories.value) return
-  syncCategoryPickerParent(model.categoryId)
-  showCategoryPicker.value = true
-}
-
-function closeCategoryPicker() {
-  showCategoryPicker.value = false
-}
-
-function setCategoryPickerParent(groupId) {
-  categoryPickerParentId.value = groupId
-}
-
-function pickCategory(categoryId) {
-  model.categoryId = categoryId
-  syncCategoryPickerParent(categoryId)
-  showCategoryPicker.value = false
-}
-
 function applyWeekdayPreset(preset) {
   if (preset === 'weekends') {
     model.dayRuleValues = [6, 7]
@@ -395,25 +265,6 @@ function onSave() {
     dayRuleValues: model.amountMode === 'daily_average' ? [...model.dayRuleValues] : [],
   })
 }
-
-function onRequestCloseOverlay(event) {
-  if (!props.open) return
-  if (showCategoryPicker.value) {
-    closeCategoryPicker()
-    event.preventDefault()
-    return
-  }
-  emit('close')
-  event.preventDefault()
-}
-
-onMounted(() => {
-  window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
-})
 </script>
 
 <style scoped>.sheet-mask {

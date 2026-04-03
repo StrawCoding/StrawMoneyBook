@@ -1,75 +1,79 @@
 <template>
-  <div ref="rootRef" class="range-picker">
-    <button ref="triggerRef" type="button" class="input trigger" @click="toggleOpen">
+  <div class="range-picker">
+    <button type="button" class="input trigger" @click="toggleOpen">
       <span>{{ displayLabel }}</span>
       <span class="icon">▾</span>
     </button>
 
-    <teleport to="body">
-      <transition name="popover-fade">
-        <section v-if="open" ref="panelRef" class="panel card" :style="panelStyle" data-no-runtime-translate>
-          <header class="panel-head">
-            <button type="button" class="nav-btn" @click="shift(-1)">‹</button>
-            <strong>{{ headerLabel }}</strong>
-            <button type="button" class="nav-btn" @click="shift(1)">›</button>
-          </header>
+    <InputBottomSheet
+      :open="open"
+      title="選擇區間"
+      :body-class="'panel-sheet-body'"
+      :sheet-class="'panel-sheet'"
+      :show-footer="true"
+      @close="open = false"
+    >
+      <header class="panel-head">
+        <button type="button" class="nav-btn" @click="shift(-1)">‹</button>
+        <strong>{{ headerLabel }}</strong>
+        <button type="button" class="nav-btn" @click="shift(1)">›</button>
+      </header>
 
-          <div v-if="mode === 'year'" class="year-grid">
-            <button
-              v-for="y in yearOptions"
-              :key="`y-${y}`"
-              type="button"
-              class="cell-btn"
-              :class="{ active: y === year }"
-              @click="pickYear(y)"
-            >
-              {{ y }}
-            </button>
-          </div>
+      <div v-if="mode === 'year'" class="year-grid">
+        <button
+          v-for="y in yearOptions"
+          :key="`y-${y}`"
+          type="button"
+          class="cell-btn"
+          :class="{ active: y === year }"
+          @click="pickYear(y)"
+        >
+          {{ y }}
+        </button>
+      </div>
 
-          <div v-else-if="mode === 'month'" class="month-grid">
-            <button
-              v-for="m in 12"
-              :key="`m-${m}`"
-              type="button"
-              class="cell-btn"
-              :class="{ active: m === viewMonth + 1 }"
-              @click="pickMonth(m)"
-            >
-              {{ monthName(m) }}
-            </button>
-          </div>
+      <div v-else-if="mode === 'month'" class="month-grid">
+        <button
+          v-for="m in 12"
+          :key="`m-${m}`"
+          type="button"
+          class="cell-btn"
+          :class="{ active: m === viewMonth + 1 }"
+          @click="pickMonth(m)"
+        >
+          {{ monthName(m) }}
+        </button>
+      </div>
 
-          <div v-else>
-            <div class="week-row">
-              <span v-for="w in weekNames" :key="w">{{ w }}</span>
-            </div>
-            <div class="day-grid">
-              <button
-                v-for="cell in dayCells"
-                :key="cell.iso"
-                type="button"
-                class="cell-btn day-btn"
-                :class="{ muted: !cell.inMonth, active: cell.iso === day }"
-                @click="pickDay(cell.iso)"
-              >
-                {{ cell.day }}
-              </button>
-            </div>
-          </div>
+      <div v-else>
+        <div class="week-row">
+          <span v-for="w in weekNames" :key="w">{{ w }}</span>
+        </div>
+        <div class="day-grid">
+          <button
+            v-for="cell in dayCells"
+            :key="cell.iso"
+            type="button"
+            class="cell-btn day-btn"
+            :class="{ muted: !cell.inMonth, active: cell.iso === day }"
+            @click="pickDay(cell.iso)"
+          >
+            {{ cell.day }}
+          </button>
+        </div>
+      </div>
 
-          <footer class="foot">
-            <button type="button" class="btn" @click="pickToday">今天</button>
-            <button type="button" class="btn" @click="open = false">關閉</button>
-          </footer>
-        </section>
-      </transition>
-    </teleport>
+      <template #footer>
+        <button type="button" class="btn" @click="pickToday">今天</button>
+        <button type="button" class="btn" @click="open = false">關閉</button>
+      </template>
+    </InputBottomSheet>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 
 const props = defineProps({
   mode: {
@@ -93,10 +97,6 @@ const props = defineProps({
 const emit = defineEmits(['update:year', 'update:month', 'update:day'])
 
 const open = ref(false)
-const rootRef = ref(null)
-const triggerRef = ref(null)
-const panelRef = ref(null)
-const panelStyle = ref({})
 const weekNames = ['日', '一', '二', '三', '四', '五', '六']
 const now = new Date()
 const viewYear = ref(props.year || now.getFullYear())
@@ -240,71 +240,6 @@ function toDayKey(date) {
   return `${y}-${m}-${d}`
 }
 
-function handleWindowClick(event) {
-  if (rootRef.value?.contains(event.target)) return
-  if (panelRef.value?.contains(event.target)) return
-  open.value = false
-}
-
-function updatePanelPosition() {
-  const trigger = triggerRef.value
-  const panel = panelRef.value
-  if (!trigger || !panel || typeof window === 'undefined') return
-  const rect = trigger.getBoundingClientRect()
-  const viewportWidth = Number(window.innerWidth || document.documentElement.clientWidth || 0)
-  const viewportHeight = Number(window.innerHeight || document.documentElement.clientHeight || 0)
-  const panelWidth = Math.min(Math.max(280, rect.width), Math.max(220, viewportWidth - 16))
-  const maxPanelHeight = Math.max(240, viewportHeight - 16)
-  const panelHeight = Math.min(panel.scrollHeight || 0, maxPanelHeight)
-  const spaceAbove = Math.max(0, rect.top)
-  const spaceBelow = Math.max(0, viewportHeight - rect.bottom)
-  const shouldDropUp = spaceBelow < panelHeight + 8 && spaceAbove > spaceBelow
-  const left = Math.min(Math.max(8, rect.left), Math.max(8, viewportWidth - panelWidth - 8))
-  const top = shouldDropUp
-    ? Math.max(8, rect.top - panelHeight - 6)
-    : Math.min(Math.max(8, rect.bottom + 6), Math.max(8, viewportHeight - panelHeight - 8))
-  panelStyle.value = {
-    position: 'fixed',
-    top: `${top}px`,
-    left: `${left}px`,
-    width: `${panelWidth}px`,
-    maxHeight: `${maxPanelHeight}px`,
-  }
-}
-
-watch(open, async (value) => {
-  if (!value) {
-    panelStyle.value = {}
-    return
-  }
-  await nextTick()
-  updatePanelPosition()
-})
-
-function handleWindowResizeOrScroll() {
-  if (!open.value) return
-  updatePanelPosition()
-}
-
-function onRequestCloseOverlay(event) {
-  if (!open.value) return
-  open.value = false
-  event.preventDefault()
-}
-
-onMounted(() => {
-  window.addEventListener('click', handleWindowClick)
-  window.addEventListener('resize', handleWindowResizeOrScroll)
-  window.addEventListener('scroll', handleWindowResizeOrScroll, true)
-  window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('click', handleWindowClick)
-  window.removeEventListener('resize', handleWindowResizeOrScroll)
-  window.removeEventListener('scroll', handleWindowResizeOrScroll, true)
-  window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
-})
 </script>
 
 <style scoped>.range-picker {
@@ -318,14 +253,12 @@ onBeforeUnmount(() => {
 .icon {
   opacity: 0.8
 }
-.panel {
-  border: 1px solid var(--field-border);
-  border-radius: 14px;
-  padding: 10px;
-  background: var(--surface-popover);
-  box-shadow: var(--shadow-popover-lg);
-  z-index: 130;
-  overflow: auto
+.panel-sheet {
+  padding: 16px;
+}
+.panel-sheet-body {
+  display: grid;
+  gap: 12px;
 }
 .panel-head {
   display: flex;

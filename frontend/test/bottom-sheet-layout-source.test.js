@@ -27,7 +27,6 @@ test('global bottom sheet utility caps height at 90dvh and enables internal scro
 test('bottom sheet views adopt the shared layout utility', () => {
   for (const relativePath of sourceFiles) {
     const source = readFileSync(resolve(import.meta.dirname, relativePath), 'utf8')
-    assert.match(source, /app-bottom-sheet/)
-    assert.match(source, /app-bottom-sheet-body/)
+    assert.match(source, /<InputBottomSheet|app-bottom-sheet/)
   }
 })

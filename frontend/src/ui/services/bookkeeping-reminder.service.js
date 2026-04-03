@@ -5,6 +5,7 @@ const BOOKKEEPING_REMINDER_CHANNEL_ID = 'bookkeeping-reminder'
 const DEFAULT_REMINDER_HOUR = 21
 const DEFAULT_REMINDER_MINUTE = 0
 const FALLBACK_LEDGER_TIME_ZONE = 'Asia/Taipei'
+const DEFAULT_REMINDER_PLUGIN_TIMEOUT_MS = 8000
 
 const defaultDependencies = {
   async getSetting(...args) {
@@ -34,6 +35,7 @@ const defaultDependencies = {
     const mod = await import('@capacitor/local-notifications')
     return mod.LocalNotifications
   },
+  notificationTimeoutMs: DEFAULT_REMINDER_PLUGIN_TIMEOUT_MS,
 }
 
 const dependencies = { ...defaultDependencies }
@@ -152,12 +154,40 @@ function isBookkeepingReminderNotification(notification) {
   return String(notification?.extra?.type ?? '') === 'bookkeeping_reminder'
 }
 
+function getReminderPluginTimeoutMs() {
+  const timeoutMs = Math.trunc(Number(dependencies.notificationTimeoutMs))
+  return Number.isInteger(timeoutMs) && timeoutMs > 0
+    ? timeoutMs
+    : DEFAULT_REMINDER_PLUGIN_TIMEOUT_MS
+}
+
+function withReminderPluginTimeout(task, timeoutMessage) {
+  let timeoutId = null
+  const timeoutTask = new Promise((_, reject) => {
+    timeoutId = globalThis.setTimeout(() => {
+      reject(new Error(timeoutMessage))
+    }, getReminderPluginTimeoutMs())
+  })
+
+  return Promise.race([Promise.resolve(task), timeoutTask]).finally(() => {
+    if (timeoutId != null) {
+      globalThis.clearTimeout(timeoutId)
+    }
+  })
+}
+
 async function resolveNotificationPermission(plugin, requestPermission = false) {
-  let permission = await plugin.checkPermissions()
+  let permission = await withReminderPluginTimeout(
+    plugin.checkPermissions(),
+    '檢查記帳提醒權限逾時，請稍後再試',
+  )
   let display = String(permission?.display ?? '')
 
   if (display !== 'granted' && requestPermission) {
-    permission = await plugin.requestPermissions()
+    permission = await withReminderPluginTimeout(
+      plugin.requestPermissions(),
+      '要求記帳提醒權限逾時，請稍後再試',
+    )
     display = String(permission?.display ?? display)
   }
 
@@ -166,12 +196,15 @@ async function resolveNotificationPermission(plugin, requestPermission = false) 
 
 async function ensureReminderChannel(plugin) {
   if (dependencies.getPlatform() !== 'android') return
-  await plugin.createChannel({
-    id: BOOKKEEPING_REMINDER_CHANNEL_ID,
-    name: '記帳提醒',
-    description: '每日記帳提醒通知',
-    importance: 3,
-  }).catch(() => {})
+  await withReminderPluginTimeout(
+    plugin.createChannel({
+      id: BOOKKEEPING_REMINDER_CHANNEL_ID,
+      name: '記帳提醒',
+      description: '每日記帳提醒通知',
+      importance: 3,
+    }),
+    '建立記帳提醒通知頻道逾時，請稍後再試',
+  ).catch(() => {})
 }
 
 export function normalizeBookkeepingReminderSettings(raw) {
@@ -213,7 +246,10 @@ export async function syncBookkeepingReminderForLedger(ledgerId, options = {}) {
   }
 
   const plugin = await dependencies.getLocalNotifications()
-  await plugin.cancel({ notifications: [{ id: notificationId }] }).catch(() => {})
+  await withReminderPluginTimeout(
+    plugin.cancel({ notifications: [{ id: notificationId }] }),
+    '取消舊的記帳提醒逾時，請稍後再試',
+  ).catch(() => {})
 
   if (!settings.enabled) {
     return {
@@ -238,28 +274,31 @@ export async function syncBookkeepingReminderForLedger(ledgerId, options = {}) {
 
   const ledger = await dependencies.getLedger(normalizedLedgerId)
   await ensureReminderChannel(plugin)
-  await plugin.schedule({
-    notifications: [
-      {
-        id: notificationId,
-        title: '記帳提醒',
-        body: buildReminderBody(ledger?.name),
-        schedule: {
-          on: {
-            hour: settings.hour,
-            minute: settings.minute,
+  await withReminderPluginTimeout(
+    plugin.schedule({
+      notifications: [
+        {
+          id: notificationId,
+          title: '記帳提醒',
+          body: buildReminderBody(ledger?.name),
+          schedule: {
+            on: {
+              hour: settings.hour,
+              minute: settings.minute,
+            },
+            allowWhileIdle: true,
           },
-          allowWhileIdle: true,
+          channelId: BOOKKEEPING_REMINDER_CHANNEL_ID,
+          autoCancel: true,
+          extra: {
+            type: 'bookkeeping_reminder',
+            ledgerId: normalizedLedgerId,
+          },
         },
-        channelId: BOOKKEEPING_REMINDER_CHANNEL_ID,
-        autoCancel: true,
-        extra: {
-          type: 'bookkeeping_reminder',
-          ledgerId: normalizedLedgerId,
-        },
-      },
-    ],
-  })
+      ],
+    }),
+    '同步記帳提醒排程逾時，請稍後再試',
+  )
 
   return {
     ledgerId: normalizedLedgerId,
@@ -285,15 +324,21 @@ export async function syncBookkeepingRemindersForAllLedgers(options = {}) {
   const plugin = await dependencies.getLocalNotifications()
   const permission = await resolveNotificationPermission(plugin, options.requestPermission === true)
   const ledgers = (await dependencies.listLedgers()).filter((ledger) => Number(ledger?.is_archived ?? 0) !== 1)
-  const pending = await plugin.getPending().catch(() => ({ notifications: [] }))
+  const pending = await withReminderPluginTimeout(
+    plugin.getPending(),
+    '讀取目前記帳提醒排程逾時，請稍後再試',
+  ).catch(() => ({ notifications: [] }))
   const reminderPendingNotifications = Array.isArray(pending?.notifications)
     ? pending.notifications.filter(isBookkeepingReminderNotification)
     : []
 
   if (reminderPendingNotifications.length > 0) {
-    await plugin.cancel({
-      notifications: reminderPendingNotifications.map((notification) => ({ id: notification.id })),
-    }).catch(() => {})
+    await withReminderPluginTimeout(
+      plugin.cancel({
+        notifications: reminderPendingNotifications.map((notification) => ({ id: notification.id })),
+      }),
+      '清除舊的記帳提醒排程逾時，請稍後再試',
+    ).catch(() => {})
   }
 
   const results = []

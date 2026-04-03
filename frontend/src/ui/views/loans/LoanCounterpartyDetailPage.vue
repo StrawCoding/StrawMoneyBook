@@ -159,16 +159,14 @@
       </transition>
     </teleport>
 
-    <teleport to="body">
-      <transition name="overlay-fade">
-        <section v-if="createOpen" class="sheet-mask" @click.self="closeCreateSheet">
-          <article class="sheet card app-bottom-sheet">
-            <header class="row">
-              <h3>新增借貸</h3>
-              <button class="btn" @click="closeCreateSheet">關閉</button>
-            </header>
-
-            <div class="stack form-wrap app-bottom-sheet-body">
+    <InputBottomSheet
+      :open="createOpen"
+      title="新增借貸"
+      :body-class="'stack form-wrap'"
+      :sheet-class="'sheet'"
+      :show-footer="true"
+      @close="closeCreateSheet"
+    >
               <label>
                 借貸方向
                 <CustomSelect v-model="createForm.direction" :options="directionOptions" />
@@ -231,27 +229,20 @@
                 備註
                 <textarea v-model="createForm.note" class="textarea" rows="2" />
               </label>
-            </div>
+      <template #footer>
+        <button class="btn" @click="closeCreateSheet">取消</button>
+        <button class="btn primary" @click="createLoan">儲存</button>
+      </template>
+    </InputBottomSheet>
 
-            <footer class="row">
-              <button class="btn" @click="closeCreateSheet">取消</button>
-              <button class="btn primary" @click="createLoan">儲存</button>
-            </footer>
-          </article>
-        </section>
-      </transition>
-    </teleport>
-
-    <teleport to="body">
-      <transition name="overlay-fade">
-        <section v-if="repayOpen" class="sheet-mask" @click.self="closeRepaySheet">
-          <article class="sheet card app-bottom-sheet">
-            <header class="row">
-              <h3>借貸{{ collectionLabel(repayLoan) }}</h3>
-              <button class="btn" @click="closeRepaySheet">關閉</button>
-            </header>
-
-            <div class="stack form-wrap app-bottom-sheet-body">
+    <InputBottomSheet
+      :open="repayOpen"
+      :title="`借貸${collectionLabel(repayLoan)}`"
+      :body-class="'stack form-wrap'"
+      :sheet-class="'sheet'"
+      :show-footer="true"
+      @close="closeRepaySheet"
+    >
               <p class="muted">{{ repayLoan?.counterparty_name }} / 剩餘 <MoneyText :value-minor="repayLoan?.remaining_minor ?? 0" /></p>
               <label>
                 {{ collectionLabel(repayLoan) }}金額（元）
@@ -267,27 +258,20 @@
                 備註
                 <textarea v-model="repayForm.note" class="textarea" rows="2" />
               </label>
-            </div>
+      <template #footer>
+        <button class="btn" @click="closeRepaySheet">取消</button>
+        <button class="btn primary" @click="submitRepayment">儲存</button>
+      </template>
+    </InputBottomSheet>
 
-            <footer class="row">
-              <button class="btn" @click="closeRepaySheet">取消</button>
-              <button class="btn primary" @click="submitRepayment">儲存</button>
-            </footer>
-          </article>
-        </section>
-      </transition>
-    </teleport>
-
-    <teleport to="body">
-      <transition name="overlay-fade">
-        <section v-if="batchRepayOpen" class="sheet-mask" @click.self="closeBatchRepaySheet">
-          <article class="sheet card app-bottom-sheet">
-            <header class="row">
-              <h3>批量{{ collectionLabelByDirection(tab) }}</h3>
-              <button class="btn" @click="closeBatchRepaySheet">關閉</button>
-            </header>
-
-            <div class="stack form-wrap app-bottom-sheet-body">
+    <InputBottomSheet
+      :open="batchRepayOpen"
+      :title="`批量${collectionLabelByDirection(tab)}`"
+      :body-class="'stack form-wrap'"
+      :sheet-class="'sheet'"
+      :show-footer="true"
+      @close="closeBatchRepaySheet"
+    >
               <p class="muted">
                 {{ counterpartyName }} / 共 {{ batchRepayCandidates.length }} 筆選取 /
                 剩餘 <MoneyText :value-minor="batchRepayTotalMinor" />
@@ -314,16 +298,11 @@
                   <span><MoneyText :value-minor="loan.remaining_minor" /></span>
                 </div>
               </div>
-            </div>
-
-            <footer class="row">
-              <button class="btn" @click="closeBatchRepaySheet">取消</button>
-              <button class="btn primary" @click="submitBatchRepayment">儲存</button>
-            </footer>
-          </article>
-        </section>
-      </transition>
-    </teleport>
+      <template #footer>
+        <button class="btn" @click="closeBatchRepaySheet">取消</button>
+        <button class="btn primary" @click="submitBatchRepayment">儲存</button>
+      </template>
+    </InputBottomSheet>
 
     <AppDialog
       :open="confirmDialog.open"
@@ -341,6 +320,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'

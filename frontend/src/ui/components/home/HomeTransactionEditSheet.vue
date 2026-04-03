@@ -1,266 +1,205 @@
 <template>
-  <teleport to="body">
-    <transition name="overlay-fade">
-      <section v-if="open" class="sheet-mask" @click.self="$emit('close')">
-        <article class="sheet card app-bottom-sheet">
-          <header class="row">
-            <h3>編輯交易</h3>
-            <button class="btn" @click="$emit('close')">關閉</button>
-          </header>
+  <InputBottomSheet
+    :open="open"
+    title="編輯交易"
+    :body-class="'stack form-wrap'"
+    :sheet-class="'sheet'"
+    :show-footer="true"
+    @close="$emit('close')"
+  >
+    <div class="type-grid">
+      <button
+        v-for="item in types"
+        :key="item.value"
+        class="btn"
+        :class="{ primary: model.type === item.value }"
+        @click="model.type = item.value"
+      >
+        {{ item.label }}
+      </button>
+    </div>
 
-          <div class="type-grid">
-            <button
-              v-for="item in types"
-              :key="item.value"
-              class="btn"
-              :class="{ primary: model.type === item.value }"
-              @click="model.type = item.value"
-            >
-              {{ item.label }}
-            </button>
-          </div>
+    <label>
+      金額（元）
+      <input
+        v-model="model.amountInput"
+        type="text"
+        inputmode="decimal"
+        class="input"
+        @input="handleAmountInput"
+      />
+    </label>
 
-          <div class="stack form-wrap app-bottom-sheet-body">
-            <label>
-              金額（元）
-              <input
-                v-model="model.amountInput"
-                type="text"
-                inputmode="decimal"
-                class="input"
-                @input="handleAmountInput"
-              />
-            </label>
+    <div class="date-extra-row">
+      <div class="field-block">
+        <span class="field-label">交易時間</span>
+        <DateTimePickerField
+          :date="model.occurredDate"
+          :hour="model.occurredHour"
+          :minute="model.occurredMinute"
+          @update:date="model.occurredDate = $event"
+          @update:hour="model.occurredHour = $event"
+          @update:minute="model.occurredMinute = $event"
+        />
+      </div>
 
-            <div class="date-extra-row">
-              <div class="field-block">
-                <span class="field-label">交易時間</span>
-                <DateTimePickerField
-                  :date="model.occurredDate"
-                  :hour="model.occurredHour"
-                  :minute="model.occurredMinute"
-                  @update:date="model.occurredDate = $event"
-                  @update:hour="model.occurredHour = $event"
-                  @update:minute="model.occurredMinute = $event"
-                />
-              </div>
+      <button type="button" class="btn extra-btn" :class="{ active: showExtra }" @click="showExtra = true">
+        附加資訊
+      </button>
+    </div>
 
-              <button type="button" class="btn extra-btn" :class="{ active: showExtra }" @click="showExtra = true">
-                附加資訊
-              </button>
-            </div>
+    <div v-if="showCategory" class="inline-grid">
+      <label>
+        帳戶
+        <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
+      </label>
 
-            <div v-if="showCategory" class="inline-grid">
-              <label>
-                帳戶
-                <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
-              </label>
+      <label>
+        分類
+        <CustomSelect
+          v-model="model.categoryId"
+          :groups="categoryPickerGroups"
+          placeholder="請選擇分類"
+          :disabled="!categoryPickerGroups.length"
+        />
+      </label>
+    </div>
 
-              <label>
-                分類
-                <button
-                  type="button"
-                  class="select category-trigger"
-                  :class="{ placeholder: !selectedCategoryLabel }"
-                  :disabled="!hasVisibleCategories"
-                  @click="openCategoryPicker"
-                >
-                  <font-awesome-icon v-if="selectedCategoryIcon" :icon="selectedCategoryIcon" class="category-icon" />
-                  <span class="category-value">{{ selectedCategoryLabel || '請選擇分類' }}</span>
-                  <span class="category-arrow">›</span>
-                </button>
-              </label>
-            </div>
+    <div v-else-if="model.type === 'transfer'" class="inline-grid">
+      <label>
+        轉出帳戶
+        <CustomSelect v-model="model.accountId" :options="transferAccountOptions" />
+      </label>
+      <label>
+        轉入帳戶
+        <CustomSelect v-model="model.peerAccountId" :options="transferAccountOptions" />
+      </label>
+    </div>
 
-            <div v-else-if="model.type === 'transfer'" class="inline-grid">
-              <label>
-                轉出帳戶
-                <CustomSelect v-model="model.accountId" :options="transferAccountOptions" />
-              </label>
-              <label>
-                轉入帳戶
-                <CustomSelect v-model="model.peerAccountId" :options="transferAccountOptions" />
-              </label>
-            </div>
+    <label v-else>
+      帳戶
+      <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
+    </label>
 
-            <label v-else>
-              帳戶
-              <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
-            </label>
+    <section class="calc-panel">
+      <div class="calc-grid">
+        <button
+          v-for="key in calcKeys"
+          :key="key"
+          type="button"
+          class="calc-key btn"
+          :class="{ equal: key === '=' }"
+          @click="pressCalcKey(key)"
+        >
+          {{ key }}
+        </button>
+      </div>
+    </section>
 
-            <section class="calc-panel">
-              <div class="calc-grid">
-                <button
-                  v-for="key in calcKeys"
-                  :key="key"
-                  type="button"
-                  class="calc-key btn"
-                  :class="{ equal: key === '=' }"
-                  @click="pressCalcKey(key)"
-                >
-                  {{ key }}
-                </button>
-              </div>
-            </section>
-          </div>
+    <template #footer>
+      <button class="btn danger" :disabled="deleting" @click="remove">刪除</button>
+      <div class="footer-actions">
+        <button class="btn" @click="$emit('close')">取消</button>
+        <button class="btn primary" @click="submit">儲存</button>
+      </div>
+    </template>
+  </InputBottomSheet>
 
-          <footer class="row">
-            <button class="btn danger" :disabled="deleting" @click="remove">刪除</button>
-            <div class="footer-actions">
-              <button class="btn" @click="$emit('close')">取消</button>
-              <button class="btn primary" @click="submit">儲存</button>
-            </div>
-          </footer>
-        </article>
-      </section>
-    </transition>
+  <InputBottomSheet
+    :open="open && showExtra"
+    title="附加資訊"
+    :body-class="'stack extra-content'"
+    :sheet-class="'extra-sheet'"
+    @close="showExtra = false"
+  >
+    <div class="addon-wrap">
+      <div class="row">
+        <span class="field-label">附加項目</span>
+        <button type="button" class="btn" @click="addAddonRow">新增項目</button>
+      </div>
 
-    <transition name="overlay-fade">
-      <section v-if="open && showExtra" class="extra-mask" @click.self="showExtra = false">
-        <article class="extra-sheet card app-bottom-sheet">
-          <header class="row">
-            <h4>附加資訊</h4>
-            <button class="btn" @click="showExtra = false">完成</button>
-          </header>
+      <div v-for="item in addonRows" :key="item.id" class="addon-row">
+        <CustomSelect
+          v-model="item.optionId"
+          class="addon-name"
+          :options="addonOptionsByType"
+          @update:model-value="onAddonOptionChange(item, $event)"
+        />
+        <CustomSelect v-model="item.direction" class="addon-dir" :options="addonDirectionOptions" />
+        <input
+          v-model.number="item.amountMajor"
+          class="input addon-amount"
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="0"
+        />
+        <button type="button" class="btn danger addon-remove" @click="removeAddonRow(item.id)">
+          刪除
+        </button>
+      </div>
 
-          <div class="stack extra-content app-bottom-sheet-body">
-            <div class="addon-wrap">
-              <div class="row">
-                <span class="field-label">附加項目</span>
-                <button type="button" class="btn" @click="addAddonRow">新增項目</button>
-              </div>
+      <div class="row">
+        <small class="addon-desc">可在設定中的附加項目清單更改</small>
+      </div>
+    </div>
 
-              <div v-for="item in addonRows" :key="item.id" class="addon-row">
-                <CustomSelect
-                  v-model="item.optionId"
-                  class="addon-name"
-                  :options="addonOptionsByType"
-                  @update:model-value="onAddonOptionChange(item, $event)"
-                />
-                <CustomSelect v-model="item.direction" class="addon-dir" :options="addonDirectionOptions" />
-                <input
-                  v-model.number="item.amountMajor"
-                  class="input addon-amount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0"
-                />
-                <button type="button" class="btn danger addon-remove" @click="removeAddonRow(item.id)">
-                  刪除
-                </button>
-              </div>
+    <label>
+      備註
+      <textarea v-model="model.note" class="textarea" rows="3" />
+    </label>
 
-              <div class="row">
-                <small class="addon-desc">可在設定中的附加項目清單更改</small>
-              </div>
-            </div>
-
-            <label>
-              備註
-              <textarea v-model="model.note" class="textarea" rows="3" />
-            </label>
-
-            <div v-if="model.type !== 'transfer'" class="impact-wrap">
-              <span class="field-label">附加條件</span>
-              <div class="switch-list">
-                <button
-                  v-if="model.type === 'expense'"
-                  type="button"
-                  class="switch-row"
-                  :class="{ active: model.isReimbursable }"
-                  role="switch"
-                  :aria-checked="model.isReimbursable ? 'true' : 'false'"
-                  @click="model.isReimbursable = !model.isReimbursable"
-                >
-                  <span class="switch-copy">
-                    <span class="switch-title">報銷</span>
-                    <span class="switch-hint">這筆支出會進入待報銷流程</span>
-                  </span>
-                  <span class="switch-track"><span class="switch-thumb"></span></span>
-                </button>
-                <div class="switch-grid">
-                  <button
-                    type="button"
-                    class="switch-row"
-                    :class="{ active: model.includeInBudget }"
-                    role="switch"
-                    :aria-checked="model.includeInBudget ? 'true' : 'false'"
-                    @click="model.includeInBudget = !model.includeInBudget"
-                  >
-                    <span class="switch-copy">
-                      <span class="switch-title">紀錄預算</span>
-                      <span class="switch-hint">納入本期預算使用與超支提醒</span>
-                    </span>
-                    <span class="switch-track"><span class="switch-thumb"></span></span>
-                  </button>
-                  <button
-                    type="button"
-                    class="switch-row"
-                    :class="{ active: model.includeInAnalysis }"
-                    role="switch"
-                    :aria-checked="model.includeInAnalysis ? 'true' : 'false'"
-                    @click="model.includeInAnalysis = !model.includeInAnalysis"
-                  >
-                    <span class="switch-copy">
-                      <span class="switch-title">紀錄收支</span>
-                      <span class="switch-hint">納入圖表、報表與統計分析</span>
-                    </span>
-                    <span class="switch-track"><span class="switch-thumb"></span></span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </article>
-      </section>
-    </transition>
-
-    <transition name="category-overlay">
-      <section v-if="open && showCategoryPicker" class="category-mask" @click.self="closeCategoryPicker">
-        <article class="category-sheet card">
-          <header class="row category-head">
-            <button type="button" class="btn" @click="closeCategoryPicker">返回</button>
-            <h4>選擇分類</h4>
-            <button type="button" class="btn" @click="closeCategoryPicker">完成</button>
-          </header>
-
-          <section v-if="categoryPickerGroups.length" class="category-layout">
-            <aside class="category-pane parent-pane">
-              <button
-                v-for="group in categoryPickerGroups"
-                :key="group.id"
-                type="button"
-                class="category-item"
-                :class="{ active: String(group.id) === String(categoryPickerParentId) }"
-                @click="setCategoryPickerParent(group.id)"
-              >
-                {{ group.name }}
-              </button>
-            </aside>
-
-            <section class="category-pane child-pane">
-              <button
-                v-for="category in categoryPickerChildren"
-                :key="category.id"
-                type="button"
-                class="category-item"
-                :class="{ active: category.id === model.categoryId }"
-                @click="pickCategory(category.id)"
-              >
-                <font-awesome-icon v-if="category.icon" :icon="category.icon" class="category-item-icon" />
-                <span>{{ category.name }}</span>
-              </button>
-              <p v-if="!categoryPickerChildren.length" class="category-empty">此母分類沒有可選子分類</p>
-            </section>
-          </section>
-
-          <p v-else class="category-empty">目前沒有可用分類，請先到設定新增分類。</p>
-          <p class="category-tip">可在設定中的分類管理做新增刪除</p>
-        </article>
-      </section>
-    </transition>
-  </teleport>
+    <div v-if="model.type !== 'transfer'" class="impact-wrap">
+      <span class="field-label">附加條件</span>
+      <div class="switch-list">
+        <button
+          v-if="model.type === 'expense'"
+          type="button"
+          class="switch-row"
+          :class="{ active: model.isReimbursable }"
+          role="switch"
+          :aria-checked="model.isReimbursable ? 'true' : 'false'"
+          @click="model.isReimbursable = !model.isReimbursable"
+        >
+          <span class="switch-copy">
+            <span class="switch-title">報銷</span>
+            <span class="switch-hint">這筆支出會進入待報銷流程</span>
+          </span>
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </button>
+        <div class="switch-grid">
+          <button
+            type="button"
+            class="switch-row"
+            :class="{ active: model.includeInBudget }"
+            role="switch"
+            :aria-checked="model.includeInBudget ? 'true' : 'false'"
+            @click="model.includeInBudget = !model.includeInBudget"
+          >
+            <span class="switch-copy">
+              <span class="switch-title">紀錄預算</span>
+              <span class="switch-hint">納入本期預算使用與超支提醒</span>
+            </span>
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </button>
+          <button
+            type="button"
+            class="switch-row"
+            :class="{ active: model.includeInAnalysis }"
+            role="switch"
+            :aria-checked="model.includeInAnalysis ? 'true' : 'false'"
+            @click="model.includeInAnalysis = !model.includeInAnalysis"
+          >
+            <span class="switch-copy">
+              <span class="switch-title">紀錄收支</span>
+              <span class="switch-hint">納入圖表、報表與統計分析</span>
+            </span>
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </InputBottomSheet>
 
   <AppDialog
     :open="deleteConfirmOpen"
@@ -279,6 +218,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
@@ -341,8 +281,6 @@ const model = reactive({
 })
 
 const showExtra = ref(false)
-const showCategoryPicker = ref(false)
-const categoryPickerParentId = ref('')
 const addonRows = ref([])
 const deleteConfirmOpen = ref(false)
 const deleting = ref(false)
@@ -363,27 +301,6 @@ const visibleCategoryGroups = computed(() => {
 const categoryPickerGroups = computed(() => {
   return (visibleCategoryGroups.value ?? []).filter((group) => Array.isArray(group.categories) && group.categories.length > 0)
 })
-const categoryPickerChildren = computed(() => {
-  const group = categoryPickerGroups.value.find((item) => String(item.id) === String(categoryPickerParentId.value))
-  return group?.categories ?? []
-})
-const hasVisibleCategories = computed(() => categoryPickerGroups.value.length > 0)
-const selectedCategoryLabel = computed(() => {
-  if (!model.categoryId) return ''
-  for (const group of categoryPickerGroups.value) {
-    const matched = group.categories.find((item) => item.id === model.categoryId)
-    if (matched) return `${group.name} / ${matched.name}`
-  }
-  return ''
-})
-const selectedCategoryIcon = computed(() => {
-  if (!model.categoryId) return ''
-  for (const group of categoryPickerGroups.value) {
-    const matched = group.categories.find((item) => item.id === model.categoryId)
-    if (matched?.icon) return matched.icon
-  }
-  return ''
-})
 const directAccountOptions = computed(() => accountStore.regularAccounts)
 const transferAccountOptions = computed(() => accountStore.accounts)
 const addonOptionsByType = computed(() => {
@@ -398,7 +315,6 @@ watch(
   ([open, tx]) => {
     if (!open || !tx) {
       showExtra.value = false
-      showCategoryPicker.value = false
       deleteConfirmOpen.value = false
       return
     }
@@ -439,8 +355,6 @@ watch(
     model.includeInAnalysis = Boolean(Number(tx.include_in_analysis ?? 1))
 
     showExtra.value = false
-    showCategoryPicker.value = false
-    syncCategoryPickerParent(model.categoryId)
     addonRows.value = parsedAddonRows
   },
   { immediate: true },
@@ -448,11 +362,6 @@ watch(
 
 function onRequestCloseOverlay(event) {
   if (!props.open) return
-  if (showCategoryPicker.value) {
-    showCategoryPicker.value = false
-    event.preventDefault()
-    return
-  }
   if (showExtra.value) {
     showExtra.value = false
     event.preventDefault()
@@ -477,7 +386,6 @@ watch(
     if (type === 'transfer') {
       model.categoryId = ''
       model.isReimbursable = false
-      showCategoryPicker.value = false
     } else if (type === 'income') {
       model.categoryId = ensureInCategories(model.categoryId, categoryStore.incomeCategories)
       model.isReimbursable = false
@@ -486,9 +394,7 @@ watch(
     } else {
       model.categoryId = ''
       model.isReimbursable = false
-      showCategoryPicker.value = false
     }
-    syncCategoryPickerParent(model.categoryId)
   },
 )
 
@@ -511,58 +417,6 @@ watch(
     }
   },
 )
-
-watch(
-  () => visibleCategoryGroups.value,
-  () => {
-    syncCategoryPickerParent(model.categoryId)
-  },
-  { deep: true },
-)
-
-function syncCategoryPickerParent(preferredCategoryId = '') {
-  if (!categoryPickerGroups.value.length) {
-    categoryPickerParentId.value = ''
-    return
-  }
-
-  if (preferredCategoryId) {
-    const matchedGroup = categoryPickerGroups.value.find((group) =>
-      group.categories.some((category) => category.id === preferredCategoryId),
-    )
-    if (matchedGroup) {
-      categoryPickerParentId.value = matchedGroup.id
-      return
-    }
-  }
-
-  const hasCurrentParent = categoryPickerGroups.value.some((group) => String(group.id) === String(categoryPickerParentId.value))
-  if (hasCurrentParent) return
-  categoryPickerParentId.value = categoryPickerGroups.value[0]?.id ?? ''
-}
-
-function openCategoryPicker() {
-  if (!hasVisibleCategories.value) {
-    uiStore.pushToast('目前沒有可用分類，請先到設定新增分類', 'error')
-    return
-  }
-  syncCategoryPickerParent(model.categoryId)
-  showCategoryPicker.value = true
-}
-
-function closeCategoryPicker() {
-  showCategoryPicker.value = false
-}
-
-function setCategoryPickerParent(groupId) {
-  categoryPickerParentId.value = groupId
-}
-
-function pickCategory(categoryId) {
-  model.categoryId = categoryId
-  syncCategoryPickerParent(categoryId)
-  showCategoryPicker.value = false
-}
 
 async function submit() {
   if (!props.tx?.id) return

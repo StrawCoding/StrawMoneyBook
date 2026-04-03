@@ -24,7 +24,11 @@
 
       <label class="field-label">
         {{ t('settings_bookkeeping_reminder.time_label') }}
-        <input v-model="form.time" class="input" type="time" :disabled="loading || saving" />
+        <TimePickerField
+          v-model="form.time"
+          :disabled="loading || saving"
+          title="選擇提醒時間"
+        />
       </label>
 
       <div class="detail-item">
@@ -59,6 +63,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { RouterLink } from 'vue-router'
+import TimePickerField from '@/ui/components/common/TimePickerField.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -66,7 +71,7 @@ import {
   getBookkeepingAchievement,
   getBookkeepingReminderSettings,
   saveBookkeepingReminderSettings,
-  syncBookkeepingRemindersForAllLedgers,
+  syncBookkeepingReminderForLedger,
 } from '@/ui/services/bookkeeping-reminder.service'
 
 const { t } = useI18n()
@@ -175,8 +180,9 @@ async function saveReminderSettings() {
     form.enabled = saved.enabled
     form.time = `${String(saved.hour).padStart(2, '0')}:${String(saved.minute).padStart(2, '0')}`
 
-    const syncSummary = await syncBookkeepingRemindersForAllLedgers({ requestPermission: saved.enabled })
-    const currentLedgerResult = syncSummary.results.find((item) => String(item.ledgerId) === ledgerId)
+    const currentLedgerResult = await syncBookkeepingReminderForLedger(ledgerId, {
+      requestPermission: saved.enabled,
+    })
     reminderStatus.value = currentLedgerResult?.status ?? (saved.enabled ? 'active' : 'disabled')
 
     if (reminderStatus.value === 'permission_denied') {

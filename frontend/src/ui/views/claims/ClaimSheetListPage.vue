@@ -81,16 +81,15 @@
       </ul>
     </article>
 
-    <teleport to="body">
-      <transition name="overlay-fade">
-        <section v-if="isCreateOpen" class="sheet-mask" @click.self="closeCreateSheet">
-          <article class="sheet card app-bottom-sheet">
-            <header class="row">
-              <h3>{{ isEditingCreateForm ? t('claim_sheet.edit') : t('claim_sheet.create') }}</h3>
-              <button class="btn" @click="closeCreateSheet">{{ t('common.cancel') }}</button>
-            </header>
-
-            <div class="stack form-wrap app-bottom-sheet-body">
+    <InputBottomSheet
+      :open="isCreateOpen"
+      :title="isEditingCreateForm ? t('claim_sheet.edit') : t('claim_sheet.create')"
+      :body-class="'stack form-wrap'"
+      :sheet-class="'sheet'"
+      :show-footer="true"
+      :close-text="t('common.cancel')"
+      @close="closeCreateSheet"
+    >
               <label>
                 {{ t('claim_sheet.form.title') }}
                 <input
@@ -199,29 +198,23 @@
                 <span>{{ t('claim_sheet.form.net_total') }}</span>
                 <MoneyText :value-minor="draftTotalMinor" />
               </div>
-            </div>
+      <template #footer>
+        <button class="btn" @click="closeCreateSheet">{{ t('common.cancel') }}</button>
+        <button class="btn primary" :disabled="creating || !canCreateClaim" @click="submitCreateSheet">
+          {{ creating ? t('claim_sheet.creating') : (isEditingCreateForm ? t('claim_sheet.save') : t('claim_sheet.create')) }}
+        </button>
+      </template>
+    </InputBottomSheet>
 
-            <footer class="row">
-              <button class="btn" @click="closeCreateSheet">{{ t('common.cancel') }}</button>
-              <button class="btn primary" :disabled="creating || !canCreateClaim" @click="submitCreateSheet">
-                {{ creating ? t('claim_sheet.creating') : (isEditingCreateForm ? t('claim_sheet.save') : t('claim_sheet.create')) }}
-              </button>
-            </footer>
-          </article>
-        </section>
-      </transition>
-    </teleport>
-
-    <teleport to="body">
-      <transition name="overlay-fade">
-        <section v-if="completeTarget" class="sheet-mask" @click.self="closeCompleteSheet">
-          <article class="sheet card app-bottom-sheet">
-            <header class="row">
-              <h3>{{ t('claim_sheet.complete') }}</h3>
-              <button class="btn" @click="closeCompleteSheet">{{ t('common.cancel') }}</button>
-            </header>
-
-            <div class="stack form-wrap app-bottom-sheet-body">
+    <InputBottomSheet
+      :open="Boolean(completeTarget)"
+      :title="t('claim_sheet.complete')"
+      :body-class="'stack form-wrap'"
+      :sheet-class="'sheet'"
+      :show-footer="true"
+      :close-text="t('common.cancel')"
+      @close="closeCompleteSheet"
+    >
               <div class="row">
                 <span>{{ t('claim_sheet.sheet_label') }}</span>
                 <strong>{{ completeTarget.title }}</strong>
@@ -281,24 +274,20 @@
                   :placeholder="t('claim_sheet.form.complete_note_placeholder')"
                 />
               </label>
-            </div>
-
-            <footer class="row">
-              <button class="btn" @click="closeCompleteSheet">{{ t('common.cancel') }}</button>
-              <button class="btn primary" :disabled="completing || !canCompleteClaim" @click="submitCompleteSheet">
-                {{ completing ? t('claim_sheet.processing') : t('claim_sheet.confirm_complete') }}
-              </button>
-            </footer>
-          </article>
-        </section>
-      </transition>
-    </teleport>
+      <template #footer>
+        <button class="btn" @click="closeCompleteSheet">{{ t('common.cancel') }}</button>
+        <button class="btn primary" :disabled="completing || !canCompleteClaim" @click="submitCompleteSheet">
+          {{ completing ? t('claim_sheet.processing') : t('claim_sheet.confirm_complete') }}
+        </button>
+      </template>
+    </InputBottomSheet>
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { useI18n } from '@/ui/services/i18n.service'

@@ -118,97 +118,91 @@
       </footer>
     </article>
 
-    <teleport to="body">
-      <transition name="overlay-fade">
-        <section v-if="showExtra" class="extra-mask" @click.self="showExtra = false">
-          <article class="extra-sheet card app-bottom-sheet">
-            <header class="row">
-              <h3>{{ t('quick_add.extra.title') }}</h3>
-              <button class="btn" @click="showExtra = false">{{ t('common.done') }}</button>
-            </header>
+    <InputBottomSheet
+      :open="showExtra"
+      :title="t('quick_add.extra.title')"
+      :body-class="'stack extra-content'"
+      :sheet-class="'extra-sheet'"
+      :close-text="t('common.done')"
+      @close="showExtra = false"
+    >
+      <div class="addon-wrap">
+        <div class="row">
+          <span class="field-label">{{ t('quick_add.extra.addon_title') }}</span>
+          <button type="button" class="btn" @click="addAddonRow">{{ t('common.add_item') }}</button>
+        </div>
 
-            <div class="stack extra-content app-bottom-sheet-body">
-              <div class="addon-wrap">
-                <div class="row">
-                  <span class="field-label">{{ t('quick_add.extra.addon_title') }}</span>
-                  <button type="button" class="btn" @click="addAddonRow">{{ t('common.add_item') }}</button>
-                </div>
+        <div v-for="item in addonRows" :key="item.id" class="addon-row">
+          <CustomSelect
+            v-model="item.optionId"
+            class="addon-name"
+            :options="addonTemplateOptions"
+            @update:model-value="onAddonOptionChange(item, $event)"
+          />
+          <CustomSelect v-model="item.direction" class="addon-dir" :options="addonDirectionOptions" />
+          <input
+            v-model.number="item.amountMajor"
+            class="input addon-amount"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0"
+          />
+          <button type="button" class="btn danger addon-remove" @click="removeAddonRow(item.id)">
+            {{ t('common.delete') }}
+          </button>
+        </div>
 
-                <div v-for="item in addonRows" :key="item.id" class="addon-row">
-                  <CustomSelect
-                    v-model="item.optionId"
-                    class="addon-name"
-                    :options="addonTemplateOptions"
-                    @update:model-value="onAddonOptionChange(item, $event)"
-                  />
-                  <CustomSelect v-model="item.direction" class="addon-dir" :options="addonDirectionOptions" />
-                  <input
-                    v-model.number="item.amountMajor"
-                    class="input addon-amount"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0"
-                  />
-                  <button type="button" class="btn danger addon-remove" @click="removeAddonRow(item.id)">
-                    {{ t('common.delete') }}
-                  </button>
-                </div>
+        <div class="row">
+          <small class="addon-desc">{{ t('quick_add.extra.manage_hint') }}</small>
+        </div>
+      </div>
 
-                <div class="row">
-                  <small class="addon-desc">{{ t('quick_add.extra.manage_hint') }}</small>
-                </div>
-              </div>
+      <label class="field">
+        {{ t('common.note') }}
+        <textarea v-model.trim="model.note" class="textarea" rows="3" />
+      </label>
 
-              <label class="field">
-                {{ t('common.note') }}
-                <textarea v-model.trim="model.note" class="textarea" rows="3" />
-              </label>
+      <div v-if="model.type !== 'transfer'" class="switch-list">
+        <button
+          v-if="model.type === 'expense'"
+          type="button"
+          class="switch-row"
+          :class="{ active: model.isReimbursable }"
+          role="switch"
+          :aria-checked="model.isReimbursable ? 'true' : 'false'"
+          @click="model.isReimbursable = !model.isReimbursable"
+        >
+          <span>{{ t('quick_add.extra.reimbursable') }}</span>
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </button>
+      </div>
 
-              <div v-if="model.type !== 'transfer'" class="switch-list">
-                <button
-                  v-if="model.type === 'expense'"
-                  type="button"
-                  class="switch-row"
-                  :class="{ active: model.isReimbursable }"
-                  role="switch"
-                  :aria-checked="model.isReimbursable ? 'true' : 'false'"
-                  @click="model.isReimbursable = !model.isReimbursable"
-                >
-                  <span>{{ t('quick_add.extra.reimbursable') }}</span>
-                  <span class="switch-track"><span class="switch-thumb"></span></span>
-                </button>
-              </div>
-
-              <div class="switch-grid">
-                <button
-                  type="button"
-                  class="switch-row"
-                  :class="{ active: model.includeInBudget }"
-                  role="switch"
-                  :aria-checked="model.includeInBudget ? 'true' : 'false'"
-                  @click="model.includeInBudget = !model.includeInBudget"
-                >
-                  <span>{{ t('quick_add.extra.include_budget') }}</span>
-                  <span class="switch-track"><span class="switch-thumb"></span></span>
-                </button>
-                <button
-                  type="button"
-                  class="switch-row"
-                  :class="{ active: model.includeInAnalysis }"
-                  role="switch"
-                  :aria-checked="model.includeInAnalysis ? 'true' : 'false'"
-                  @click="model.includeInAnalysis = !model.includeInAnalysis"
-                >
-                  <span>{{ t('quick_add.extra.include_analysis') }}</span>
-                  <span class="switch-track"><span class="switch-thumb"></span></span>
-                </button>
-              </div>
-            </div>
-          </article>
-        </section>
-      </transition>
-    </teleport>
+      <div class="switch-grid">
+        <button
+          type="button"
+          class="switch-row"
+          :class="{ active: model.includeInBudget }"
+          role="switch"
+          :aria-checked="model.includeInBudget ? 'true' : 'false'"
+          @click="model.includeInBudget = !model.includeInBudget"
+        >
+          <span>{{ t('quick_add.extra.include_budget') }}</span>
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </button>
+        <button
+          type="button"
+          class="switch-row"
+          :class="{ active: model.includeInAnalysis }"
+          role="switch"
+          :aria-checked="model.includeInAnalysis ? 'true' : 'false'"
+          @click="model.includeInAnalysis = !model.includeInAnalysis"
+        >
+          <span>{{ t('quick_add.extra.include_analysis') }}</span>
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </button>
+      </div>
+    </InputBottomSheet>
   </section>
 </template>
 
@@ -217,6 +211,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
 import { useCategoryStore } from '@/ui/stores/category.store'

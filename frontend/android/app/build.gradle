@@ -31,6 +31,34 @@ def versionMatcher = (packageJsonText =~ /"version"\s*:\s*"([^"]+)"/)
 def packageVersionName = versionMatcher.find() ? versionMatcher.group(1) : "1.0.0"
 def ciVersionName = System.getenv("CI_VERSION_NAME")?.trim()
 def ciVersionCode = System.getenv("CI_VERSION_CODE")?.trim()
+def deriveVersionCodeFromVersionName = { versionName, fallbackValue ->
+    def normalizedVersionName = (versionName ?: '').trim()
+    if (!normalizedVersionName) {
+        return fallbackValue
+    }
+
+    def versionCore = normalizedVersionName.tokenize('-')[0]
+    def versionParts = versionCore.tokenize('.')
+    if (versionParts.size() < 3) {
+        return fallbackValue
+    }
+
+    try {
+        def major = Integer.parseInt(versionParts[0])
+        def minor = Integer.parseInt(versionParts[1])
+        def patch = Integer.parseInt(versionParts[2])
+        if (major < 0 || minor < 0 || patch < 0) {
+            return fallbackValue
+        }
+        if (minor >= 1000 || patch >= 1000) {
+            return fallbackValue
+        }
+
+        return (major * 1_000_000) + (minor * 1_000) + patch
+    } catch (NumberFormatException ignored) {
+        return fallbackValue
+    }
+}
 def resolveVersionCode = { envValue, fallbackValue ->
     if (envValue == null || !envValue) {
         return fallbackValue
@@ -42,7 +70,8 @@ def resolveVersionCode = { envValue, fallbackValue ->
     }
 }
 def appVersionName = ciVersionName ?: packageVersionName
-def appVersionCode = resolveVersionCode(ciVersionCode, 187)
+def defaultVersionCode = deriveVersionCodeFromVersionName(appVersionName, 1)
+def appVersionCode = resolveVersionCode(ciVersionCode, defaultVersionCode)
 
 android {
     namespace = "com.strawcoding.strawmoneybook"

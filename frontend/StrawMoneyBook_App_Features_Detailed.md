@@ -190,10 +190,11 @@ Google 自動備份也已加入更貼近使用習慣的行為：
 
 在設定中的「記帳提醒」頁，使用者現在可以：
 
-- 設定每日提醒時間
+- 透過自製時間選擇器設定每日提醒時間
 - 啟用或關閉每日記帳提醒
 - 查看目前帳本的連續記帳天數
 - 查看最長連續與累計記帳日
+- 儲存時若原生通知插件沒有回應，會逾時返回錯誤而不是一直停在儲存中
 
 這讓提醒機制不只是單次通知，而是和使用習慣追蹤一起運作，能直接看到自己是否持續記帳。
 
@@ -220,7 +221,7 @@ Google 自動備份也已加入更貼近使用習慣的行為：
 
 這讓資訊層級切換更容易理解，降低「突然跳動」造成的負擔。
 
-另外，所有需要輸入資料的彈層已統一收斂為由下往上滑出的可捲動 bottom sheet，包含表單 dialog、選單與日期選擇器，避免在手機上混入桌面式 popover。
+另外，所有需要輸入資料的彈層已統一收斂為 shared bottom-sheet flow，桌面與手機都不再保留另一套輸入型 popover，包含表單 dialog、選單、日期與時間選擇器；`AppDialog`、帳本/區間切換器，以及各頁自製輸入 sheet 也都改為共用和快速記帳一致的 overlay / bottom-sheet primitives。
 
 ### 3.3 Android 返回鍵針對疊層優先關閉
 
@@ -276,7 +277,7 @@ Google 自動備份也已加入更貼近使用習慣的行為：
 在 Android 上，更新檢查優先走 Google Play 的版本狀態資訊，而不是只靠自架 API。  
 同時，Google 自動備份會在 App 啟動與回前景時嘗試恢復登入狀態。
 
-Android AAB 發版版本碼則以 `android/app/build.gradle` 的 `appVersionCode` fallback 為基準，CI 可透過 `CI_VERSION_CODE` 覆蓋；目前基準值為 `187`。目前 Play 發版 workflow 已調整為沿用此版本碼，不再額外覆蓋。
+Android AAB 發版版本碼現在改為以最終 `versionName`（tag 或 `package.json` 版本）自動推導，規則為 `major * 1,000,000 + minor * 1,000 + patch`，例如 `0.24.32 -> 24032`；CI 若有特殊需求仍可透過 `CI_VERSION_CODE` 覆蓋。這樣即使 workflow 沒有額外注入版本碼，也不會再退回固定值造成 Play Console 重複版號。
 
 這代表：
 

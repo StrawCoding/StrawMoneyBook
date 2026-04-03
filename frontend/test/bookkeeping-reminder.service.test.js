@@ -5,6 +5,7 @@ import {
   resetBookkeepingReminderDependenciesForTest,
   saveBookkeepingReminderSettings,
   setBookkeepingReminderDependenciesForTest,
+  syncBookkeepingReminderForLedger,
   syncBookkeepingRemindersForAllLedgers,
 } from '../src/ui/services/bookkeeping-reminder.service.js'
 
@@ -108,4 +109,40 @@ test('syncBookkeepingRemindersForAllLedgers cancels stale reminders and schedule
   assert.equal(scheduledNotifications[0].title, '記帳提醒')
   assert.deepEqual(scheduledNotifications[0].schedule.on, { hour: 20, minute: 30 })
   assert.deepEqual(summary.results.map((item) => item.status), ['scheduled', 'disabled'])
+})
+
+test('syncBookkeepingReminderForLedger fails fast when the local notification plugin does not respond', async () => {
+  setBookkeepingReminderDependenciesForTest({
+    notificationTimeoutMs: 10,
+    getPlatform() {
+      return 'android'
+    },
+    async getSetting() {
+      return { enabled: true, hour: 21, minute: 0 }
+    },
+    async getLedger() {
+      return { id: 'ledger_alpha', name: '個人帳本', timezone: 'Asia/Taipei' }
+    },
+    async getLocalNotifications() {
+      return {
+        checkPermissions() {
+          return new Promise(() => {})
+        },
+        cancel() {
+          return Promise.resolve()
+        },
+        schedule() {
+          return Promise.resolve()
+        },
+        createChannel() {
+          return Promise.resolve()
+        },
+      }
+    },
+  })
+
+  await assert.rejects(
+    () => syncBookkeepingReminderForLedger('ledger_alpha', { requestPermission: true }),
+    /檢查記帳提醒權限逾時，請稍後再試/,
+  )
 })

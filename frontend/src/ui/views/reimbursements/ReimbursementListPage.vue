@@ -163,16 +163,14 @@
       </transition>
     </teleport>
 
-    <teleport to="body">
-      <transition name="overlay-fade">
-        <section v-if="isSettleOpen" class="sheet-mask" @click.self="closeSettle">
-          <article class="sheet card app-bottom-sheet">
-            <header class="row">
-              <h3>{{ settleMode === 'batch' ? `批量報銷設定（${batchSettleItems.length} 筆）` : '報銷完成設定' }}</h3>
-              <button class="btn" @click="closeSettle">關閉</button>
-            </header>
-
-            <div class="stack form-wrap app-bottom-sheet-body">
+    <InputBottomSheet
+      :open="isSettleOpen"
+      :title="settleMode === 'batch' ? `批量報銷設定（${batchSettleItems.length} 筆）` : '報銷完成設定'"
+      :body-class="'stack form-wrap'"
+      :sheet-class="'sheet'"
+      :show-footer="true"
+      @close="closeSettle"
+    >
               <label v-if="settleMode === 'single'">
                 報銷金額（元）
                 <input v-model.number="settleForm.amountMajor" type="number" min="0" step="1" class="input" />
@@ -232,29 +230,22 @@
                 </div>
                 <p v-else class="muted">目前沒有其他帳本可選</p>
               </div>
-            </div>
+      <template #footer>
+        <button class="btn" @click="closeSettle">取消</button>
+        <button class="btn primary" :disabled="settlingBatch" @click="confirmSettle">
+          {{ settlingBatch ? '處理中...' : '確認' }}
+        </button>
+      </template>
+    </InputBottomSheet>
 
-            <footer class="row">
-              <button class="btn" @click="closeSettle">取消</button>
-              <button class="btn primary" :disabled="settlingBatch" @click="confirmSettle">
-                {{ settlingBatch ? '處理中...' : '確認' }}
-              </button>
-            </footer>
-          </article>
-        </section>
-      </transition>
-    </teleport>
-
-    <teleport to="body">
-      <transition name="overlay-fade">
-        <section v-if="isAdvanceOpen" class="sheet-mask" @click.self="closeAdvanceSheet">
-          <article class="sheet card app-bottom-sheet">
-            <header class="row">
-              <h3>新增代收</h3>
-              <button class="btn" @click="closeAdvanceSheet">關閉</button>
-            </header>
-
-            <div class="stack form-wrap app-bottom-sheet-body">
+    <InputBottomSheet
+      :open="isAdvanceOpen"
+      title="新增代收"
+      :body-class="'stack form-wrap'"
+      :sheet-class="'sheet'"
+      :show-footer="true"
+      @close="closeAdvanceSheet"
+    >
               <label>
                 代收金額（元）
                 <input v-model.number="advanceForm.amountMajor" type="number" min="0" step="1" class="input" />
@@ -267,18 +258,13 @@
                 備註
                 <input v-model="advanceForm.note" type="text" class="input" placeholder="例如：公司先墊付報銷款" />
               </label>
-            </div>
-
-            <footer class="row">
-              <button class="btn" @click="closeAdvanceSheet">取消</button>
-              <button class="btn primary" :disabled="creatingAdvance || !canCreateAdvance" @click="submitAdvance">
-                {{ creatingAdvance ? '建立中...' : '確認新增' }}
-              </button>
-            </footer>
-          </article>
-        </section>
-      </transition>
-    </teleport>
+      <template #footer>
+        <button class="btn" @click="closeAdvanceSheet">取消</button>
+        <button class="btn primary" :disabled="creatingAdvance || !canCreateAdvance" @click="submitAdvance">
+          {{ creatingAdvance ? '建立中...' : '確認新增' }}
+        </button>
+      </template>
+    </InputBottomSheet>
   </section>
 </template>
 
@@ -286,6 +272,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'

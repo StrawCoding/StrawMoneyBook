@@ -1,171 +1,86 @@
 <template>
-  <div ref="rootRef" class="dt-picker">
-    <button ref="triggerRef" type="button" class="input trigger" @click="toggleOpen">
+  <div class="dt-picker">
+    <button type="button" class="input trigger" @click="toggleOpen">
       <span>{{ displayText }}</span>
       <span class="icon">🗓</span>
     </button>
 
-    <teleport to="body">
-      <transition :name="useSheetPresentation ? 'overlay-fade' : 'popover-fade'">
-        <section
-          v-if="open && useSheetPresentation"
-          class="app-overlay-sheet-mask"
-          @click.self="closePanel"
+    <InputBottomSheet
+      :open="open"
+      title="選擇日期"
+      :body-class="'panel-sheet-body'"
+      :sheet-class="'panel-sheet'"
+      :show-footer="true"
+      @close="closePanel"
+    >
+      <header class="month-head">
+        <button type="button" class="nav-btn" @click="shiftMonth(-1)">‹</button>
+        <strong>{{ monthLabel }}</strong>
+        <button type="button" class="nav-btn" @click="shiftMonth(1)">›</button>
+      </header>
+
+      <div class="week-row">
+        <span v-for="w in weekNames" :key="w">{{ w }}</span>
+      </div>
+
+      <div class="day-grid">
+        <button
+          v-for="cell in dayCells"
+          :key="cell.iso"
+          type="button"
+          class="day-btn"
+          :class="{ muted: !cell.inMonth, active: cell.iso === date, today: cell.isToday }"
+          @click="pickDate(cell.iso)"
         >
-          <article
-            ref="panelRef"
-            class="panel card sheet app-bottom-sheet app-overlay-sheet-card panel-sheet"
-            data-no-runtime-translate
-          >
-            <header class="row app-overlay-sheet-head">
-              <h3 class="app-overlay-sheet-title">選擇日期</h3>
-              <button type="button" class="btn mini-btn" @click="closePanel">關閉</button>
-            </header>
+          {{ cell.day }}
+        </button>
+      </div>
 
-            <div class="app-bottom-sheet-body panel-sheet-body">
-              <header class="month-head">
-                <button type="button" class="nav-btn" @click="shiftMonth(-1)">‹</button>
-                <strong>{{ monthLabel }}</strong>
-                <button type="button" class="nav-btn" @click="shiftMonth(1)">›</button>
-              </header>
-
-              <div class="week-row">
-                <span v-for="w in weekNames" :key="w">{{ w }}</span>
-              </div>
-
-              <div class="day-grid">
-                <button
-                  v-for="cell in dayCells"
-                  :key="cell.iso"
-                  type="button"
-                  class="day-btn"
-                  :class="{ muted: !cell.inMonth, active: cell.iso === date, today: cell.isToday }"
-                  @click="pickDate(cell.iso)"
-                >
-                  {{ cell.day }}
-                </button>
-              </div>
-
-              <div v-if="showTime" class="time-wrap">
-                <div class="time-col">
-                  <small>時</small>
-                  <div class="time-list">
-                    <button
-                      v-for="h in hours"
-                      :key="`h-${h}`"
-                      type="button"
-                      class="time-btn"
-                      :class="{ active: h === hour }"
-                      @click="pickHour(h)"
-                    >
-                      {{ pad2(h) }}
-                    </button>
-                  </div>
-                </div>
-
-                <div class="time-col">
-                  <small>分</small>
-                  <div class="time-list">
-                    <button
-                      v-for="m in minutes"
-                      :key="`m-${m}`"
-                      type="button"
-                      class="time-btn"
-                      :class="{ active: m === minute }"
-                      @click="pickMinute(m)"
-                    >
-                      {{ pad2(m) }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <footer class="foot">
-              <button type="button" class="btn" @click="setNow">現在</button>
-              <button type="button" class="btn" @click="closePanel">完成</button>
-            </footer>
-          </article>
-        </section>
-
-        <section
-          v-else-if="open"
-          ref="panelRef"
-          class="panel card"
-          :style="panelStyle"
-          data-no-runtime-translate
-        >
-          <header class="month-head">
-            <button type="button" class="nav-btn" @click="shiftMonth(-1)">‹</button>
-            <strong>{{ monthLabel }}</strong>
-            <button type="button" class="nav-btn" @click="shiftMonth(1)">›</button>
-          </header>
-
-          <div class="week-row">
-            <span v-for="w in weekNames" :key="w">{{ w }}</span>
-          </div>
-
-          <div class="day-grid">
+      <div v-if="showTime" class="time-wrap">
+        <div class="time-col">
+          <small>時</small>
+          <div class="time-list">
             <button
-              v-for="cell in dayCells"
-              :key="cell.iso"
+              v-for="h in hours"
+              :key="`h-${h}`"
               type="button"
-              class="day-btn"
-              :class="{ muted: !cell.inMonth, active: cell.iso === date, today: cell.isToday }"
-              @click="pickDate(cell.iso)"
+              class="time-btn"
+              :class="{ active: h === hour }"
+              @click="pickHour(h)"
             >
-              {{ cell.day }}
+              {{ pad2(h) }}
             </button>
           </div>
+        </div>
 
-          <div v-if="showTime" class="time-wrap">
-            <div class="time-col">
-              <small>時</small>
-              <div class="time-list">
-                <button
-                  v-for="h in hours"
-                  :key="`h-${h}`"
-                  type="button"
-                  class="time-btn"
-                  :class="{ active: h === hour }"
-                  @click="pickHour(h)"
-                >
-                  {{ pad2(h) }}
-                </button>
-              </div>
-            </div>
-
-            <div class="time-col">
-              <small>分</small>
-              <div class="time-list">
-                <button
-                  v-for="m in minutes"
-                  :key="`m-${m}`"
-                  type="button"
-                  class="time-btn"
-                  :class="{ active: m === minute }"
-                  @click="pickMinute(m)"
-                >
-                  {{ pad2(m) }}
-                </button>
-              </div>
-            </div>
+        <div class="time-col">
+          <small>分</small>
+          <div class="time-list">
+            <button
+              v-for="m in minutes"
+              :key="`m-${m}`"
+              type="button"
+              class="time-btn"
+              :class="{ active: m === minute }"
+              @click="pickMinute(m)"
+            >
+              {{ pad2(m) }}
+            </button>
           </div>
+        </div>
+      </div>
 
-          <footer class="foot">
-            <button type="button" class="btn" @click="setNow">現在</button>
-            <button type="button" class="btn" @click="closePanel">完成</button>
-          </footer>
-        </section>
-      </transition>
-    </teleport>
+      <template #footer>
+        <button type="button" class="btn" @click="setNow">現在</button>
+        <button type="button" class="btn" @click="closePanel">完成</button>
+      </template>
+    </InputBottomSheet>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-
-const SHEET_VIEWPORT_MAX_WIDTH = 720
+import { computed, ref, watch } from 'vue'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 
 const props = defineProps({
   date: {
@@ -196,13 +111,7 @@ const weekNames = ['日', '一', '二', '三', '四', '五', '六']
 const hours = Array.from({ length: 24 }, (_, i) => i)
 const minutes = Array.from({ length: 60 }, (_, i) => i)
 const open = ref(false)
-const rootRef = ref(null)
-const triggerRef = ref(null)
-const panelRef = ref(null)
-const panelStyle = ref({})
-const viewportWidth = ref(0)
 const viewMonth = ref(parseDate(props.date) ?? new Date())
-const useSheetPresentation = computed(() => viewportWidth.value > 0 && viewportWidth.value <= SHEET_VIEWPORT_MAX_WIDTH)
 
 watch(
   () => props.date,
@@ -301,105 +210,6 @@ function toDateInput(date) {
 function pad2(value) {
   return String(value).padStart(2, '0')
 }
-
-function handleWindowClick(event) {
-  if (rootRef.value?.contains(event.target)) return
-  if (panelRef.value?.contains(event.target)) return
-  closePanel()
-}
-
-function updatePanelPosition() {
-  const trigger = triggerRef.value
-  const panel = panelRef.value
-  if (!trigger || !panel || typeof window === 'undefined') return
-
-  if (useSheetPresentation.value) {
-    panelStyle.value = {}
-    return
-  }
-
-  const rect = trigger.getBoundingClientRect()
-  const viewportWidth = Number(window.innerWidth || document.documentElement.clientWidth || 0)
-  const viewportHeight = Number(window.innerHeight || document.documentElement.clientHeight || 0)
-  const panelWidth = Math.min(Math.max(300, rect.width), Math.max(240, viewportWidth - 16))
-  const left = Math.min(Math.max(8, rect.left), Math.max(8, viewportWidth - panelWidth - 8))
-  const maxPanelHeight = Math.max(280, viewportHeight - 16)
-
-  if (props.preferBottomAnchor) {
-    const preferredMaxHeight = Math.min(maxPanelHeight, Math.max(280, Math.floor(viewportHeight * 0.72)))
-    panelStyle.value = {
-      position: 'fixed',
-      bottom: '8px',
-      left: `${left}px`,
-      width: `${panelWidth}px`,
-      maxHeight: `${preferredMaxHeight}px`,
-    }
-    return
-  }
-
-  const panelHeight = Math.min(panel.scrollHeight || 0, maxPanelHeight)
-  const spaceAbove = Math.max(0, rect.top)
-  const spaceBelow = Math.max(0, viewportHeight - rect.bottom)
-  const shouldDropUp = spaceBelow < panelHeight + 8 && spaceAbove > spaceBelow
-  const top = shouldDropUp
-    ? Math.max(8, rect.top - panelHeight - 6)
-    : Math.min(Math.max(8, rect.bottom + 6), Math.max(8, viewportHeight - panelHeight - 8))
-
-  panelStyle.value = {
-    position: 'fixed',
-    top: `${top}px`,
-    left: `${left}px`,
-    width: `${panelWidth}px`,
-    maxHeight: `${maxPanelHeight}px`,
-  }
-}
-
-function handleWindowResizeOrScroll() {
-  if (typeof window !== 'undefined') {
-    viewportWidth.value = Number(window.innerWidth || document.documentElement.clientWidth || 0)
-  }
-  if (!open.value) return
-  updatePanelPosition()
-}
-
-function onRequestCloseOverlay(event) {
-  if (!open.value) return
-  closePanel()
-  event.preventDefault()
-}
-
-onMounted(() => {
-  viewportWidth.value = Number(window.innerWidth || document.documentElement.clientWidth || 0)
-  window.addEventListener('click', handleWindowClick)
-  window.addEventListener('resize', handleWindowResizeOrScroll)
-  window.addEventListener('scroll', handleWindowResizeOrScroll, true)
-  window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('click', handleWindowClick)
-  window.removeEventListener('resize', handleWindowResizeOrScroll)
-  window.removeEventListener('scroll', handleWindowResizeOrScroll, true)
-  window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
-})
-
-watch(open, async (value) => {
-  if (!value) {
-    panelStyle.value = {}
-    return
-  }
-  await nextTick()
-  updatePanelPosition()
-})
-
-watch(
-  useSheetPresentation,
-  async () => {
-    if (!open.value) return
-    await nextTick()
-    updatePanelPosition()
-  },
-)
 </script>
 
 <style scoped>.dt-picker {
@@ -413,21 +223,9 @@ watch(
 .icon {
   opacity: 0.85
 }
-.panel {
-  z-index: 130;
-  border: 1px solid var(--field-border);
-  border-radius: 14px;
-  padding: 10px;
-  background: var(--surface-popover);
-  box-shadow: var(--shadow-popover-xl);
-  overflow: auto
-}
 .panel-sheet {
-  z-index: auto;
-  border-radius: 24px 24px 0 0;
   padding: 16px;
   gap: 14px;
-  overflow: hidden;
 }
 .panel-sheet-body {
   display: grid;

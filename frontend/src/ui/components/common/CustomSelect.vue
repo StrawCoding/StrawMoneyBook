@@ -1,7 +1,6 @@
 <template>
-  <div ref="rootRef" class="custom-select" :class="{ disabled }">
+  <div class="custom-select" :class="{ disabled }">
     <button
-      ref="triggerRef"
       type="button"
       class="select trigger"
       :class="{ open }"
@@ -22,111 +21,52 @@
       <span class="arrow" :class="{ open }">▾</span>
     </button>
 
-    <teleport to="body">
-      <transition :name="useSheetPresentation ? 'overlay-fade' : 'popover-fade'">
-        <section
-          v-if="open && useSheetPresentation"
-          class="app-overlay-sheet-mask"
-          @click.self="closeMenu"
-        >
-          <article
-            ref="menuRef"
-            class="menu card sheet app-bottom-sheet app-overlay-sheet-card menu-sheet"
-            data-no-runtime-translate
-            :class="{ 'icon-only-menu': iconOnly }"
+    <InputBottomSheet
+      :open="open"
+      :title="placeholder"
+      :body-class="'menu-sheet-body'"
+      :sheet-class="{ 'icon-only-menu': iconOnly, 'menu-sheet': true }"
+      @close="closeMenu"
+    >
+      <template v-if="normalizedGroups.length">
+        <div v-for="group in normalizedGroups" :key="group.id" class="group">
+          <p class="group-label">{{ group.name }}</p>
+          <button
+            v-for="option in group.options"
+            :key="`${group.id}-${String(option.value)}`"
+            type="button"
+            class="menu-item"
+            :class="{ 'icon-only-item': iconOnly, active: isActive(option.value) }"
+            :disabled="option.disabled"
+            @click="pick(option.value)"
           >
-            <header class="row app-overlay-sheet-head">
-              <h3 class="app-overlay-sheet-title">{{ placeholder }}</h3>
-              <button type="button" class="btn mini-btn" @click="closeMenu">關閉</button>
-            </header>
+            <font-awesome-icon v-if="option.icon" :icon="option.icon" class="option-icon" />
+            <span v-if="!iconOnly">{{ option.label }}</span>
+          </button>
+        </div>
+      </template>
 
-            <div class="app-bottom-sheet-body menu-sheet-body">
-              <template v-if="normalizedGroups.length">
-                <div v-for="group in normalizedGroups" :key="group.id" class="group">
-                  <p class="group-label">{{ group.name }}</p>
-                  <button
-                    v-for="option in group.options"
-                    :key="`${group.id}-${String(option.value)}`"
-                    type="button"
-                    class="menu-item"
-                    :class="{ 'icon-only-item': iconOnly, active: isActive(option.value) }"
-                    :disabled="option.disabled"
-                    @click="pick(option.value)"
-                  >
-                    <font-awesome-icon v-if="option.icon" :icon="option.icon" class="option-icon" />
-                    <span v-if="!iconOnly">{{ option.label }}</span>
-                  </button>
-                </div>
-              </template>
-
-              <template v-else>
-                <button
-                  v-for="option in normalizedOptions"
-                  :key="String(option.value)"
-                  type="button"
-                  class="menu-item"
-                  :class="{ 'icon-only-item': iconOnly, active: isActive(option.value) }"
-                  :disabled="option.disabled"
-                  @click="pick(option.value)"
-                >
-                  <font-awesome-icon v-if="option.icon" :icon="option.icon" class="option-icon" />
-                  <span v-if="!iconOnly">{{ option.label }}</span>
-                </button>
-              </template>
-            </div>
-          </article>
-        </section>
-
-        <section
-          v-else-if="open"
-          ref="menuRef"
-          class="menu card"
-          :style="menuStyle"
-          data-no-runtime-translate
-          :class="{ 'icon-only-menu': iconOnly }"
+      <template v-else>
+        <button
+          v-for="option in normalizedOptions"
+          :key="String(option.value)"
+          type="button"
+          class="menu-item"
+          :class="{ 'icon-only-item': iconOnly, active: isActive(option.value) }"
+          :disabled="option.disabled"
+          @click="pick(option.value)"
         >
-          <template v-if="normalizedGroups.length">
-            <div v-for="group in normalizedGroups" :key="group.id" class="group">
-              <p class="group-label">{{ group.name }}</p>
-              <button
-                v-for="option in group.options"
-                :key="`${group.id}-${String(option.value)}`"
-                type="button"
-                class="menu-item"
-                :class="{ 'icon-only-item': iconOnly, active: isActive(option.value) }"
-                :disabled="option.disabled"
-                @click="pick(option.value)"
-              >
-                <font-awesome-icon v-if="option.icon" :icon="option.icon" class="option-icon" />
-                <span v-if="!iconOnly">{{ option.label }}</span>
-              </button>
-            </div>
-          </template>
-
-          <template v-else>
-            <button
-              v-for="option in normalizedOptions"
-              :key="String(option.value)"
-              type="button"
-              class="menu-item"
-              :class="{ 'icon-only-item': iconOnly, active: isActive(option.value) }"
-              :disabled="option.disabled"
-              @click="pick(option.value)"
-            >
-              <font-awesome-icon v-if="option.icon" :icon="option.icon" class="option-icon" />
-              <span v-if="!iconOnly">{{ option.label }}</span>
-            </button>
-          </template>
-        </section>
-      </transition>
-    </teleport>
+          <font-awesome-icon v-if="option.icon" :icon="option.icon" class="option-icon" />
+          <span v-if="!iconOnly">{{ option.label }}</span>
+        </button>
+      </template>
+    </InputBottomSheet>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-
-const SHEET_VIEWPORT_MAX_WIDTH = 720
+import { computed, ref } from 'vue'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 
 const props = defineProps({
   modelValue: {
@@ -157,11 +97,6 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 const open = ref(false)
-const rootRef = ref(null)
-const triggerRef = ref(null)
-const menuRef = ref(null)
-const menuStyle = ref({})
-const viewportWidth = ref(0)
 
 const normalizedOptions = computed(() => normalizeOptions(props.options))
 const normalizedGroups = computed(() => {
@@ -192,7 +127,6 @@ const selectedOption = computed(() => {
     : normalizedOptions.value
   return flatOptions.find((option) => isSameValue(option.value, props.modelValue)) ?? null
 })
-const useSheetPresentation = computed(() => viewportWidth.value > 0 && viewportWidth.value <= SHEET_VIEWPORT_MAX_WIDTH)
 
 function normalizeOptions(options, groupName = '') {
   return (options ?? [])
@@ -227,96 +161,6 @@ function pick(value) {
   emit('update:modelValue', value)
   closeMenu()
 }
-
-function handleWindowClick(event) {
-  if (rootRef.value?.contains(event.target)) return
-  if (menuRef.value?.contains(event.target)) return
-  closeMenu()
-}
-
-function updateMenuPosition() {
-  const trigger = triggerRef.value
-  const menu = menuRef.value
-  if (!trigger || !menu || typeof window === 'undefined') return
-
-  if (useSheetPresentation.value) {
-    menuStyle.value = {}
-    return
-  }
-
-  const rect = trigger.getBoundingClientRect()
-  const panelWidth = Math.max(180, rect.width)
-  const viewportWidth = Number(window.innerWidth || document.documentElement.clientWidth || 0)
-  const viewportHeight = Number(window.innerHeight || document.documentElement.clientHeight || 0)
-  const left = Math.min(Math.max(8, rect.left), Math.max(8, viewportWidth - panelWidth - 8))
-  const menuHeight = Math.min(menu.scrollHeight || 0, 280)
-  const spaceAbove = Math.max(0, rect.top)
-  const spaceBelow = Math.max(0, viewportHeight - rect.bottom)
-  const shouldDropUp = spaceBelow < menuHeight + 8 && spaceAbove > spaceBelow
-  const top = shouldDropUp
-    ? Math.max(8, rect.top - menuHeight - 6)
-    : Math.min(Math.max(8, rect.bottom + 6), Math.max(8, viewportHeight - menuHeight - 8))
-
-  menuStyle.value = {
-    position: 'fixed',
-    top: `${top}px`,
-    left: `${left}px`,
-    width: `${panelWidth}px`,
-  }
-}
-
-function handleWindowResizeOrScroll() {
-  if (typeof window !== 'undefined') {
-    viewportWidth.value = Number(window.innerWidth || document.documentElement.clientWidth || 0)
-  }
-  if (!open.value) return
-  updateMenuPosition()
-}
-
-function onRequestCloseOverlay(event) {
-  if (!open.value) return
-  closeMenu()
-  event.preventDefault()
-}
-
-onMounted(() => {
-  viewportWidth.value = Number(window.innerWidth || document.documentElement.clientWidth || 0)
-  window.addEventListener('click', handleWindowClick)
-  window.addEventListener('resize', handleWindowResizeOrScroll)
-  window.addEventListener('scroll', handleWindowResizeOrScroll, true)
-  window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('click', handleWindowClick)
-  window.removeEventListener('resize', handleWindowResizeOrScroll)
-  window.removeEventListener('scroll', handleWindowResizeOrScroll, true)
-  window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
-})
-
-watch(
-  () => open.value,
-  async (next) => {
-    if (!next) {
-      menuStyle.value = {}
-      return
-    }
-    await nextTick()
-    updateMenuPosition()
-    if (menuRef.value) {
-      menuRef.value.scrollTop = 0
-    }
-  },
-)
-
-watch(
-  useSheetPresentation,
-  async () => {
-    if (!open.value) return
-    await nextTick()
-    updateMenuPosition()
-  },
-)
 </script>
 
 <style scoped>.custom-select {
@@ -372,20 +216,7 @@ watch(
 .arrow.open {
   transform: rotate(180deg)
 }
-.menu {
-  z-index: 130;
-  border: 1px solid var(--field-border);
-  border-radius: 12px;
-  background: var(--surface-popover);
-  overflow: auto;
-  max-height: 280px;
-  box-shadow: var(--shadow-popover);
-  padding: 4px
-}
 .menu-sheet {
-  z-index: auto;
-  border-radius: 24px 24px 0 0;
-  box-shadow: var(--shadow-popover-xl);
   padding: 16px;
 }
 .menu-sheet-body {

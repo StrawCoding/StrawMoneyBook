@@ -63,7 +63,7 @@ StrawMoneyBook 的特色不在單一功能，而在於把同一筆金流後續�
 
 這讓它更適合長期使用，而不是短期記帳後就難以維護。
 
-另外，所有需要輸入資料的彈層已統一朝行動端 bottom sheet 體驗收斂，包含表單 dialog、選單與日期選擇器，避免在手機上混入桌面式 popover。
+另外，所有需要輸入資料的彈層已統一為共用 bottom sheet flow，桌面與手機都不再保留另一套輸入型 popover，包含表單 dialog、選單、日期與時間選擇器；`AppDialog` 以及各頁自製輸入 sheet 也都收斂到和快速記帳一致的 shared overlay / bottom-sheet primitives。
 
 ## 3. 主要功能模組
 
@@ -435,11 +435,12 @@ Android 端已有 Google Play 會員整合：
 
 設定中的「記帳提醒」頁目前提供：
 
-- 每日固定時間提醒
+- 透過自製時間選擇器設定每日固定時間提醒
 - 提醒開關
 - 目前連續記帳天數
 - 最長連續記帳天數
 - 累計記帳日
+- 原生通知插件若同步逾時，會直接返回錯誤，不會讓畫面長時間停在儲存中
 
 這代表產品不只支援事後查帳，也開始支援持續使用的養成型提醒與成就回饋。
 
@@ -458,7 +459,7 @@ Android 端已有 Google Play 會員整合：
 
 這代表產品規劃不是純 Web 包裝，而是有實際利用原生能力。
 
-另外，Android AAB 發版版本碼目前以 `frontend/android/app/build.gradle` 內的 `appVersionCode` fallback 管理，CI 可用 `CI_VERSION_CODE` 覆蓋；現行基準值為 `187`。目前 Play 發版 workflow 已調整為沿用此版本碼，不再額外覆蓋。
+另外，Android AAB 發版版本碼現在由 `frontend/android/app/build.gradle` 依最終 `versionName` 自動推導，規則為 `major * 1,000,000 + minor * 1,000 + patch`，例如 `0.24.32 -> 24032`；CI 若需要仍可用 `CI_VERSION_CODE` 覆蓋。這樣 Play 發版 workflow 就算沒額外塞版本碼，也不會再掉回固定值導致重複版號。
 
 ### 8.2 Android 小工具
 

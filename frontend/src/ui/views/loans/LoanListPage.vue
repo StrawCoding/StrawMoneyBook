@@ -49,94 +49,89 @@
       <p v-else class="muted">{{ showFinished ? '目前沒有已結束借貸' : '目前沒有進行中借貸' }}</p>
     </article>
 
-    <teleport to="body">
-      <transition name="overlay-fade">
-        <section v-if="createOpen" class="sheet-mask" @click.self="closeCreateSheet">
-          <article class="sheet card app-bottom-sheet">
-            <header class="row">
-              <h3>新增借貸</h3>
-              <button class="btn" @click="closeCreateSheet">關閉</button>
-            </header>
+    <InputBottomSheet
+      :open="createOpen"
+      title="新增借貸"
+      :body-class="'stack form-wrap'"
+      :sheet-class="'sheet'"
+      :show-footer="true"
+      @close="closeCreateSheet"
+    >
+      <label>
+        借貸方向
+        <CustomSelect v-model="createForm.direction" :options="directionOptions" />
+      </label>
 
-            <div class="stack form-wrap app-bottom-sheet-body">
-              <label>
-                借貸方向
-                <CustomSelect v-model="createForm.direction" :options="directionOptions" />
-              </label>
+      <label>
+        對象名稱
+        <input v-model="createForm.counterpartyName" class="input" />
+      </label>
 
-              <label>
-                對象名稱
-                <input v-model="createForm.counterpartyName" class="input" />
-              </label>
+      <label>
+        本金（元）
+        <input v-model.number="createForm.principalMajor" class="input" type="number" min="0" step="1" />
+      </label>
 
-              <label>
-                本金（元）
-                <input v-model.number="createForm.principalMajor" class="input" type="number" min="0" step="1" />
-              </label>
+      <label>
+        預設利息（元，可選）
+        <input v-model.number="createForm.interestMajor" class="input" type="number" min="0" step="1" />
+      </label>
 
-              <label>
-                預設利息（元，可選）
-                <input v-model.number="createForm.interestMajor" class="input" type="number" min="0" step="1" />
-              </label>
+      <div class="field-block">
+        <span class="field-label">開始日期</span>
+        <div class="date-picker-wrap">
+          <DateTimePickerField
+            :date="createForm.startDate"
+            :hour="createForm.startHour"
+            :minute="createForm.startMinute"
+            prefer-bottom-anchor
+            @update:date="pickCreateStartDate"
+            @update:hour="pickCreateStartHour"
+            @update:minute="pickCreateStartMinute"
+          />
+        </div>
+      </div>
 
-              <div class="field-block">
-                <span class="field-label">開始日期</span>
-                <div class="date-picker-wrap">
-                  <DateTimePickerField
-                    :date="createForm.startDate"
-                    :hour="createForm.startHour"
-                    :minute="createForm.startMinute"
-                    prefer-bottom-anchor
-                    @update:date="pickCreateStartDate"
-                    @update:hour="pickCreateStartHour"
-                    @update:minute="pickCreateStartMinute"
-                  />
-                </div>
-              </div>
+      <div class="field-block">
+        <span class="field-label">到期日（可選）</span>
+        <div class="row due-date-row">
+          <div class="due-picker-wrap">
+            <DateTimePickerField
+              :date="createForm.dueDate"
+              :hour="createForm.dueHour"
+              :minute="createForm.dueMinute"
+              prefer-bottom-anchor
+              @update:date="pickCreateDueDate"
+              @update:hour="pickCreateDueHour"
+              @update:minute="pickCreateDueMinute"
+            />
+          </div>
+          <button class="btn mini-btn" type="button" @click="clearCreateDueDate">清除</button>
+        </div>
+      </div>
 
-              <div class="field-block">
-                <span class="field-label">到期日（可選）</span>
-                <div class="row due-date-row">
-                  <div class="due-picker-wrap">
-                    <DateTimePickerField
-                      :date="createForm.dueDate"
-                      :hour="createForm.dueHour"
-                      :minute="createForm.dueMinute"
-                      prefer-bottom-anchor
-                      @update:date="pickCreateDueDate"
-                      @update:hour="pickCreateDueHour"
-                      @update:minute="pickCreateDueMinute"
-                    />
-                  </div>
-                  <button class="btn mini-btn" type="button" @click="clearCreateDueDate">清除</button>
-                </div>
-              </div>
+      <label>
+        建立入帳帳戶
+        <CustomSelect v-model="createForm.accountId" :options="accountStore.accounts" />
+      </label>
 
-              <label>
-                建立入帳帳戶
-                <CustomSelect v-model="createForm.accountId" :options="accountStore.accounts" />
-              </label>
+      <label>
+        備註
+        <textarea v-model="createForm.note" class="textarea" rows="2" />
+      </label>
 
-              <label>
-                備註
-                <textarea v-model="createForm.note" class="textarea" rows="2" />
-              </label>
-            </div>
-
-            <footer class="row">
-              <button class="btn" @click="closeCreateSheet">取消</button>
-              <button class="btn primary" @click="createLoan">儲存</button>
-            </footer>
-          </article>
-        </section>
-      </transition>
-    </teleport>
+      <template #footer>
+        <button class="btn" @click="closeCreateSheet">取消</button>
+        <button class="btn primary" @click="createLoan">儲存</button>
+      </template>
+    </InputBottomSheet>
   </section>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'

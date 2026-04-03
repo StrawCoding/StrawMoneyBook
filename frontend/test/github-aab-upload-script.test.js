@@ -18,13 +18,10 @@ import {
   createAndPushReleaseTag,
 } from '../scripts/create-release-tag.mjs'
 import {
-  bumpVersionCodeSource,
-  parseVersionCodeSource,
-} from '../scripts/bump-android-version-code.mjs'
-import {
   REQUIRED_ANDROID_GENERATED_FILES,
   resolveAndroidPrepareMode,
 } from '../scripts/prepare-android-release.mjs'
+import { deriveVersionCodeFromVersionName } from '../scripts/android-versioning.mjs'
 
 const packageJson = JSON.parse(
   readFileSync(resolve(import.meta.dirname, '../package.json'), 'utf8'),
@@ -67,6 +64,7 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
     packageJson.scripts.gpr,
     'npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag',
   )
+  assert.equal(packageJson.scripts['bump:android:versionCode'], undefined)
   assert.equal(
     packageJson.scripts['upload:aab:github'],
     'node scripts/upload-aab-to-github.mjs',
@@ -78,6 +76,10 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
   assert.equal(
     packageJson.scripts['release:tag'],
     'node scripts/create-release-tag.mjs',
+  )
+  assert.equal(
+    packageJson.scripts.preaab,
+    'npm run bump:patch && npm run sync:app-update-manifest',
   )
   assert.equal(
     packageJson.scripts['aab:build'],
@@ -132,34 +134,26 @@ test('parseVersionCode extracts Android versionCode from build.gradle', () => {
   assert.equal(parseVersionCode('versionCode 321\nversionName appVersionName'), 321)
 })
 
-test('parseVersionCode falls back to the configured appVersionCode default', () => {
+test('deriveVersionCodeFromVersionName maps semver to a monotonic Play versionCode', () => {
+  assert.equal(deriveVersionCodeFromVersionName('0.24.32'), 24032)
+  assert.equal(deriveVersionCodeFromVersionName('1.2.3-beta.1'), 1002003)
+})
+
+test('parseVersionCode derives Android versionCode from versionName when build.gradle uses the shared strategy', () => {
+  assert.equal(
+    parseVersionCode(
+      'def defaultVersionCode = deriveVersionCodeFromVersionName(appVersionName, 1)\ndef appVersionCode = resolveVersionCode(ciVersionCode, defaultVersionCode)\nversionCode appVersionCode',
+      '0.24.32',
+    ),
+    24032,
+  )
+})
+
+test('parseVersionCode keeps supporting explicit fallback numbers for older build.gradle sources', () => {
   assert.equal(
     parseVersionCode('def appVersionCode = resolveVersionCode(ciVersionCode, 187)\nversionCode appVersionCode'),
     187,
   )
-})
-
-test('android version bump script reads fallback appVersionCode from build.gradle', () => {
-  const result = parseVersionCodeSource(
-    'def appVersionCode = resolveVersionCode(ciVersionCode, 187)\nversionCode appVersionCode',
-  )
-
-  assert.equal(result.currentCode, 187)
-})
-
-test('android version bump script increments fallback appVersionCode in build.gradle', () => {
-  const source = [
-    'def ciVersionCode = System.getenv("CI_VERSION_CODE")?.trim()',
-    'def appVersionCode = resolveVersionCode(ciVersionCode, 187)',
-    'versionCode appVersionCode',
-  ].join('\n')
-
-  const result = bumpVersionCodeSource(source)
-
-  assert.equal(result.currentCode, 187)
-  assert.equal(result.nextCode, 188)
-  assert.match(result.updated, /def appVersionCode = resolveVersionCode\(ciVersionCode, 188\)/)
-  assert.match(result.updated, /versionCode appVersionCode/)
 })
 
 test('play release workflow builds the AAB, publishes the GitHub release, and uploads to Google Play internal', () => {

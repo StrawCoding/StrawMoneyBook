@@ -66,16 +66,14 @@
       </ul>
     </article>
 
-    <teleport to="body">
-      <transition name="overlay-fade">
-        <section v-if="repayOpen" class="sheet-mask" @click.self="closeRepaySheet">
-          <article class="sheet card app-bottom-sheet">
-            <header class="row">
-              <h3>{{ editingRepayment ? `編輯${collectionLabel(loan)}` : `借貸${collectionLabel(loan)}` }}</h3>
-              <button class="btn" @click="closeRepaySheet">關閉</button>
-            </header>
-
-            <div class="stack form-wrap app-bottom-sheet-body">
+    <InputBottomSheet
+      :open="repayOpen"
+      :title="editingRepayment ? `編輯${collectionLabel(loan)}` : `借貸${collectionLabel(loan)}`"
+      :body-class="'stack form-wrap'"
+      :sheet-class="'sheet'"
+      :show-footer="true"
+      @close="closeRepaySheet"
+    >
               <p class="muted">{{ loan?.counterparty_name }} / 剩餘 <MoneyText :value-minor="loan?.remaining_minor ?? 0" /></p>
               <label>
                 {{ collectionLabel(loan) }}金額（元）
@@ -91,40 +89,30 @@
                 備註
                 <textarea v-model="repayForm.note" class="textarea" rows="2" />
               </label>
-            </div>
+      <template #footer>
+        <button class="btn" @click="closeRepaySheet">取消</button>
+        <button class="btn primary" @click="submitRepayment">{{ editingRepayment ? '儲存變更' : '儲存' }}</button>
+      </template>
+    </InputBottomSheet>
 
-            <footer class="row">
-              <button class="btn" @click="closeRepaySheet">取消</button>
-              <button class="btn primary" @click="submitRepayment">{{ editingRepayment ? '儲存變更' : '儲存' }}</button>
-            </footer>
-          </article>
-        </section>
-      </transition>
-    </teleport>
-
-    <teleport to="body">
-      <transition name="overlay-fade">
-        <section v-if="principalOpen" class="sheet-mask" @click.self="closePrincipalSheet">
-          <article class="sheet card app-bottom-sheet">
-            <header class="row">
-              <h3>變更本金</h3>
-              <button class="btn" @click="closePrincipalSheet">關閉</button>
-            </header>
-            <div class="stack form-wrap app-bottom-sheet-body">
+    <InputBottomSheet
+      :open="principalOpen"
+      title="變更本金"
+      :body-class="'stack form-wrap'"
+      :sheet-class="'sheet'"
+      :show-footer="true"
+      @close="closePrincipalSheet"
+    >
               <p class="muted">{{ loan?.counterparty_name }}</p>
               <label>
                 本金（元）
                 <input v-model.number="principalForm.principalMajor" class="input" type="number" min="1" step="1" />
               </label>
-            </div>
-            <footer class="row">
-              <button class="btn" @click="closePrincipalSheet">取消</button>
-              <button class="btn primary" @click="submitPrincipal">儲存</button>
-            </footer>
-          </article>
-        </section>
-      </transition>
-    </teleport>
+      <template #footer>
+        <button class="btn" @click="closePrincipalSheet">取消</button>
+        <button class="btn primary" @click="submitPrincipal">儲存</button>
+      </template>
+    </InputBottomSheet>
 
     <AppDialog
       :open="confirmDialog.open"
@@ -152,6 +140,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { useLoanStore } from '@/ui/stores/loan.store'

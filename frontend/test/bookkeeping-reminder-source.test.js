@@ -31,12 +31,13 @@ test('bookkeeping reminder settings are reachable from settings and router', () 
 })
 
 test('bookkeeping reminder page wires reminder settings and achievement board', () => {
-  assert.match(pageSource, /type="time"/)
+  assert.match(pageSource, /<TimePickerField/)
   assert.match(pageSource, /achievement-grid/)
   assert.match(pageSource, /getBookkeepingAchievement/)
   assert.match(pageSource, /saveBookkeepingReminderSettings/)
-  assert.match(pageSource, /syncBookkeepingRemindersForAllLedgers/)
+  assert.match(pageSource, /syncBookkeepingReminderForLedger/)
   assert.match(pageSource, /app:bookkeeping-reminder-config-updated/)
+  assert.doesNotMatch(pageSource, /type="time"/)
 })
 
 test('application bootstraps and refreshes bookkeeping reminders centrally', () => {

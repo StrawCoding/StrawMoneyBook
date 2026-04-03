@@ -8,6 +8,11 @@ const appDialogSource = readFileSync(
   'utf8',
 )
 
+const sharedSheetSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/components/common/InputBottomSheet.vue'),
+  'utf8',
+)
+
 const appDialogFormFiles = [
   '../src/ui/views/subscriptions/SubscriptionListPage.vue',
   '../src/ui/views/savings-jars/SavingsJarListPage.vue',
@@ -31,9 +36,10 @@ const customSheetFiles = [
 test('AppDialog supports rendering form dialogs as bottom sheets', () => {
   assert.match(appDialogSource, /presentation: \{/)
   assert.match(appDialogSource, /default: 'dialog'/)
-  assert.match(appDialogSource, /dialog-mask-sheet/)
-  assert.match(appDialogSource, /sheet app-bottom-sheet dialog-sheet/)
-  assert.match(appDialogSource, /app-bottom-sheet-body/)
+  assert.match(appDialogSource, /<InputBottomSheet/)
+  assert.match(appDialogSource, /props\.presentation === 'sheet'/)
+  assert.match(sharedSheetSource, /app-overlay-sheet-mask/)
+  assert.match(sharedSheetSource, /app-bottom-sheet-body/)
 })
 
 test('input-heavy dialogs opt into the bottom sheet presentation', () => {
@@ -46,7 +52,13 @@ test('input-heavy dialogs opt into the bottom sheet presentation', () => {
 test('custom form sheets reuse the shared bottom-sheet layout primitives', () => {
   for (const relativePath of customSheetFiles) {
     const source = readFileSync(resolve(import.meta.dirname, relativePath), 'utf8')
-    assert.match(source, /app-bottom-sheet/)
-    assert.match(source, /app-bottom-sheet-body/)
+    assert.match(source, /<InputBottomSheet/)
   }
+})
+
+test('legacy category picker overlays were removed from custom transaction and budget sheets', () => {
+  const budgetSource = readFileSync(resolve(import.meta.dirname, '../src/ui/components/budget/BudgetItemSheet.vue'), 'utf8')
+  const homeEditSource = readFileSync(resolve(import.meta.dirname, '../src/ui/components/home/HomeTransactionEditSheet.vue'), 'utf8')
+  assert.doesNotMatch(budgetSource, /showCategoryPicker|openCategoryPicker|closeCategoryPicker|pickCategory/)
+  assert.doesNotMatch(homeEditSource, /showCategoryPicker|openCategoryPicker|closeCategoryPicker|pickCategory/)
 })

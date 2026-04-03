@@ -1,27 +1,43 @@
 <template>
-  <teleport to="body">
+  <InputBottomSheet
+    v-if="props.presentation === 'sheet'"
+    :open="open"
+    :title="title"
+    :body-class="'dialog-body'"
+    :sheet-class="'dialog-sheet'"
+    :show-footer="showFooter"
+    @close="$emit('close')"
+  >
+    <p v-if="message" class="muted dialog-message">{{ message }}</p>
+    <slot />
+
+    <template #footer>
+      <button class="btn" :disabled="loading" @click="$emit('close')">{{ cancelText }}</button>
+      <button class="btn primary" :disabled="confirmDisabled || loading" @click="$emit('confirm')">
+        {{ loading ? loadingText : confirmText }}
+      </button>
+    </template>
+  </InputBottomSheet>
+
+  <teleport v-else to="body">
     <transition name="overlay-fade">
       <section
         v-if="open"
-        class="sheet-mask dialog-mask"
-        :class="{ 'dialog-mask-sheet': props.presentation === 'sheet' }"
+        class="dialog-mask dialog-mask-popup"
         @click.self="$emit('close')"
       >
-        <article
-          class="card dialog"
-          :class="props.presentation === 'sheet' ? 'sheet app-bottom-sheet dialog-sheet' : 'dialog-popup'"
-        >
+        <article class="card dialog dialog-popup">
           <header class="row dialog-head">
             <h3>{{ title }}</h3>
             <button class="btn mini-btn" @click="$emit('close')">關閉</button>
           </header>
 
           <p v-if="message" class="muted dialog-message">{{ message }}</p>
-          <div class="dialog-body" :class="{ 'app-bottom-sheet-body': props.presentation === 'sheet' }">
+          <div class="dialog-body">
             <slot />
           </div>
 
-          <footer v-if="showFooter" class="row dialog-actions" :class="{ 'dialog-actions-sheet': props.presentation === 'sheet' }">
+          <footer v-if="showFooter" class="row dialog-actions">
             <button class="btn" :disabled="loading" @click="$emit('close')">{{ cancelText }}</button>
             <button class="btn primary" :disabled="confirmDisabled || loading" @click="$emit('confirm')">
               {{ loading ? loadingText : confirmText }}
@@ -35,6 +51,7 @@
 
 <script setup>
 import { onBeforeUnmount, onMounted } from 'vue'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 
 const props = defineProps({
   open: {
@@ -82,7 +99,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'confirm'])
 
 function onRequestCloseOverlay(event) {
-  if (!props.open) return
+  if (!props.open || props.presentation === 'sheet') return
   emit('close')
   event.preventDefault()
 }
@@ -100,11 +117,13 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   background: var(--overlay-backdrop);
+}
+.dialog-mask-popup {
+  z-index: 75;
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 75;
-  padding: 18px
+  padding: 18px;
 }
 .dialog {
   display: grid;
@@ -115,19 +134,6 @@ onBeforeUnmount(() => {
   border-radius: 16px;
   padding: 14px;
 }
-.dialog-mask-sheet {
-  align-items: flex-end;
-  padding:
-    max(8px, var(--status-bar-height))
-    12px
-    calc(12px + var(--safe-area-bottom, 0px));
-}
-.dialog-sheet {
-  width: min(680px, 100%);
-  border-radius: 24px 24px 0 0;
-  padding: 16px;
-  gap: 14px;
-}
 .dialog-head h3 {
   margin: 0
 }
@@ -137,14 +143,11 @@ onBeforeUnmount(() => {
 }
 .dialog-body {
   display: grid;
-  gap: 10px
+  gap: 10px;
 }
 .dialog-actions {
   justify-content: flex-end;
   gap: 8px
-}
-.dialog-actions-sheet {
-  padding-top: 4px;
 }
 .mini-btn {
   padding: 8px 12px;
