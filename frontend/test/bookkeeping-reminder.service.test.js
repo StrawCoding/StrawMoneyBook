@@ -146,3 +146,86 @@ test('syncBookkeepingReminderForLedger fails fast when the local notification pl
     /檢查記帳提醒權限逾時，請稍後再試/,
   )
 })
+
+test('syncBookkeepingReminderForLedger fails fast when loading the local notification plugin stalls', async () => {
+  setBookkeepingReminderDependenciesForTest({
+    operationTimeoutMs: 10,
+    getPlatform() {
+      return 'android'
+    },
+    async getSetting() {
+      return { enabled: true, hour: 21, minute: 0 }
+    },
+    getLocalNotifications() {
+      return new Promise(() => {})
+    },
+  })
+
+  await assert.rejects(
+    () => syncBookkeepingReminderForLedger('ledger_alpha', { requestPermission: true }),
+    /同步記帳提醒逾時，請稍後再試/,
+  )
+})
+
+test('syncBookkeepingReminderForLedger serializes concurrent reminder syncs', async () => {
+  const createdChannels = []
+  const cancelOrder = []
+  let notifyFirstCancelStarted = null
+  const firstCancelStarted = new Promise((resolve) => {
+    notifyFirstCancelStarted = resolve
+  })
+  let releaseFirstCancel = null
+  const firstCancelPending = new Promise((resolve) => {
+    releaseFirstCancel = resolve
+  })
+
+  setBookkeepingReminderDependenciesForTest({
+    getPlatform() {
+      return 'android'
+    },
+    async getSetting(ledgerId) {
+      return ledgerId === 'ledger_alpha'
+        ? { enabled: true, hour: 21, minute: 0 }
+        : { enabled: true, hour: 22, minute: 30 }
+    },
+    async getLedger(ledgerId) {
+      return { id: ledgerId, name: ledgerId, timezone: 'Asia/Taipei' }
+    },
+    async getLocalNotifications() {
+      return {
+        async checkPermissions() {
+          return { display: 'granted' }
+        },
+        async requestPermissions() {
+          return { display: 'granted' }
+        },
+        async cancel({ notifications }) {
+          cancelOrder.push(notifications[0]?.id)
+          if (cancelOrder.length === 1) {
+            notifyFirstCancelStarted()
+            await firstCancelPending
+          }
+        },
+        async schedule() {
+          return undefined
+        },
+        async createChannel(channel) {
+          createdChannels.push(channel.id)
+        },
+      }
+    },
+  })
+
+  const firstSync = syncBookkeepingReminderForLedger('ledger_alpha', { requestPermission: true })
+  const secondSync = syncBookkeepingReminderForLedger('ledger_beta', { requestPermission: true })
+  await firstCancelStarted
+
+  assert.equal(cancelOrder.length, 1)
+
+  releaseFirstCancel()
+  const results = await Promise.all([firstSync, secondSync])
+
+  assert.equal(cancelOrder.length, 2)
+  assert.deepEqual(results.map((item) => item.status), ['scheduled', 'scheduled'])
+  assert.equal(createdChannels.every((id) => id === 'bookkeeping-reminder'), true)
+})

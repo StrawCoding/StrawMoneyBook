@@ -243,7 +243,7 @@
 | `loan.service.js` | 借貸建立、還款、作廢 |
 | `reimbursement.service.js` | 報銷流程、報銷入帳、隱藏分類處理 |
 | `savings-jar.service.js` | 存錢罐存提與目標管理 |
-| `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程、連續記帳成就統計、原生通知同步逾時保護 |
+| `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程、連續記帳成就統計、原生通知同步逾時保護、同步序列化避免實機儲存卡死 |
 | `savings-jar-auto-save.service.js` | 存錢罐自動存入 / 定期儲蓄流程 |
 | `subscription-tracker.service.js` | 訂閱追蹤與期別處理 |
 | `ai-bookkeeping.service.js` | AI 記帳語意解析與建議 |

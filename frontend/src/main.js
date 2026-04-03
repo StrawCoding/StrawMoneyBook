@@ -228,6 +228,12 @@ function triggerBankAutoRefresh(pinia, ledgerId, reason) {
     })
 }
 
+function runBookkeepingReminderSyncInBackground(reason) {
+  void syncBookkeepingRemindersForAllLedgers().catch((error) => {
+    console.warn(`[bookkeeping-reminder] background sync failed (${reason})`, error)
+  })
+}
+
 function scheduleHomeWidgetSync(pinia, delayMs = 1200) {
   if (typeof window === 'undefined') return
   if (homeWidgetSyncTimer != null) {
@@ -630,7 +636,7 @@ async function main() {
       if (!isActive) return
       restoreSharedLedgerSessionInBackground('app_resume')
       scheduleMembershipWarmup('app_resume')
-      void syncBookkeepingRemindersForAllLedgers()
+      runBookkeepingReminderSyncInBackground('app_resume')
       window.dispatchEvent(new Event('app:check-update'))
       const ledgerStore = useLedgerStore(pinia)
       if (ledgerStore.activeLedgerId) {
@@ -670,7 +676,7 @@ async function main() {
         void runAutoBackupDueCheck(pinia, 'config_updated')
       })
       window.addEventListener('app:bookkeeping-reminder-config-updated', () => {
-        void syncBookkeepingRemindersForAllLedgers()
+        runBookkeepingReminderSyncInBackground('config_updated')
       })
       window.addEventListener('focus', () => {
         restoreSharedLedgerSessionInBackground('window_focus')
@@ -679,7 +685,7 @@ async function main() {
     }
 
     scheduleMembershipWarmup('app_start')
-    void syncBookkeepingRemindersForAllLedgers()
+    runBookkeepingReminderSyncInBackground('app_start')
     if (ledgerStore.activeLedgerId) {
       runSavingsJarAutoSaveInBackground(ledgerStore.activeLedgerId, 'app_start')
     }

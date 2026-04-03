@@ -42,6 +42,7 @@ test('bookkeeping reminder page wires reminder settings and achievement board', 
 
 test('application bootstraps and refreshes bookkeeping reminders centrally', () => {
   assert.match(mainSource, /syncBookkeepingRemindersForAllLedgers/)
+  assert.match(mainSource, /runBookkeepingReminderSyncInBackground/)
   assert.match(mainSource, /window\.addEventListener\('app:bookkeeping-reminder-config-updated'/)
-  assert.match(mainSource, /void syncBookkeepingRemindersForAllLedgers\(\)/)
+  assert.match(mainSource, /background sync failed/)
 })

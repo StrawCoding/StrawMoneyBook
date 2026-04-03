@@ -6,6 +6,7 @@ const DEFAULT_REMINDER_HOUR = 21
 const DEFAULT_REMINDER_MINUTE = 0
 const FALLBACK_LEDGER_TIME_ZONE = 'Asia/Taipei'
 const DEFAULT_REMINDER_PLUGIN_TIMEOUT_MS = 8000
+const DEFAULT_REMINDER_OPERATION_TIMEOUT_MS = 12000
 
 const defaultDependencies = {
   async getSetting(...args) {
@@ -36,6 +37,7 @@ const defaultDependencies = {
     return mod.LocalNotifications
   },
   notificationTimeoutMs: DEFAULT_REMINDER_PLUGIN_TIMEOUT_MS,
+  operationTimeoutMs: DEFAULT_REMINDER_OPERATION_TIMEOUT_MS,
 }
 
 const dependencies = { ...defaultDependencies }
@@ -161,12 +163,19 @@ function getReminderPluginTimeoutMs() {
     : DEFAULT_REMINDER_PLUGIN_TIMEOUT_MS
 }
 
-function withReminderPluginTimeout(task, timeoutMessage) {
+function getReminderOperationTimeoutMs() {
+  const timeoutMs = Math.trunc(Number(dependencies.operationTimeoutMs))
+  return Number.isInteger(timeoutMs) && timeoutMs > 0
+    ? timeoutMs
+    : DEFAULT_REMINDER_OPERATION_TIMEOUT_MS
+}
+
+function withTimeout(task, timeoutMs, timeoutMessage) {
   let timeoutId = null
   const timeoutTask = new Promise((_, reject) => {
     timeoutId = globalThis.setTimeout(() => {
       reject(new Error(timeoutMessage))
-    }, getReminderPluginTimeoutMs())
+    }, timeoutMs)
   })
 
   return Promise.race([Promise.resolve(task), timeoutTask]).finally(() => {
@@ -174,6 +183,24 @@ function withReminderPluginTimeout(task, timeoutMessage) {
       globalThis.clearTimeout(timeoutId)
     }
   })
+}
+
+function withReminderPluginTimeout(task, timeoutMessage) {
+  return withTimeout(task, getReminderPluginTimeoutMs(), timeoutMessage)
+}
+
+function withReminderOperationTimeout(task, timeoutMessage) {
+  return withTimeout(task, getReminderOperationTimeoutMs(), timeoutMessage)
+}
+
+let reminderSyncQueue = Promise.resolve()
+
+function runSerializedReminderSync(task) {
+  const nextTask = reminderSyncQueue
+    .catch(() => {})
+    .then(task)
+  reminderSyncQueue = nextTask.catch(() => {})
+  return nextTask
 }
 
 async function resolveNotificationPermission(plugin, requestPermission = false) {
@@ -217,18 +244,24 @@ export function normalizeBookkeepingReminderSettings(raw) {
 
 export async function getBookkeepingReminderSettings(ledgerId) {
   assertLedgerId(ledgerId)
-  const stored = await dependencies.getSetting(ledgerId, BOOKKEEPING_REMINDER_KEY)
+  const stored = await withReminderOperationTimeout(
+    dependencies.getSetting(ledgerId, BOOKKEEPING_REMINDER_KEY),
+    '讀取記帳提醒設定逾時，請稍後再試',
+  )
   return normalizeBookkeepingReminderSettings(stored)
 }
 
 export async function saveBookkeepingReminderSettings(ledgerId, settings) {
   assertLedgerId(ledgerId)
   const normalized = normalizeBookkeepingReminderSettings(settings)
-  await dependencies.setSetting(ledgerId, BOOKKEEPING_REMINDER_KEY, normalized)
+  await withReminderOperationTimeout(
+    dependencies.setSetting(ledgerId, BOOKKEEPING_REMINDER_KEY, normalized),
+    '儲存記帳提醒設定逾時，請稍後再試',
+  )
   return normalized
 }
 
-export async function syncBookkeepingReminderForLedger(ledgerId, options = {}) {
+async function syncBookkeepingReminderForLedgerInternal(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   const platform = dependencies.getPlatform()
   const normalizedLedgerId = String(ledgerId).trim()
@@ -245,7 +278,10 @@ export async function syncBookkeepingReminderForLedger(ledgerId, options = {}) {
     }
   }
 
-  const plugin = await dependencies.getLocalNotifications()
+  const plugin = await withReminderOperationTimeout(
+    dependencies.getLocalNotifications(),
+    '載入記帳提醒通知模組逾時，請稍後再試',
+  )
   await withReminderPluginTimeout(
     plugin.cancel({ notifications: [{ id: notificationId }] }),
     '取消舊的記帳提醒逾時，請稍後再試',
@@ -272,7 +308,10 @@ export async function syncBookkeepingReminderForLedger(ledgerId, options = {}) {
     }
   }
 
-  const ledger = await dependencies.getLedger(normalizedLedgerId)
+  const ledger = await withReminderOperationTimeout(
+    dependencies.getLedger(normalizedLedgerId),
+    '讀取帳本資料逾時，請稍後再試',
+  )
   await ensureReminderChannel(plugin)
   await withReminderPluginTimeout(
     plugin.schedule({
@@ -309,7 +348,14 @@ export async function syncBookkeepingReminderForLedger(ledgerId, options = {}) {
   }
 }
 
-export async function syncBookkeepingRemindersForAllLedgers(options = {}) {
+export async function syncBookkeepingReminderForLedger(ledgerId, options = {}) {
+  return runSerializedReminderSync(() => withReminderOperationTimeout(
+    syncBookkeepingReminderForLedgerInternal(ledgerId, options),
+    '同步記帳提醒逾時，請稍後再試',
+  ))
+}
+
+async function syncBookkeepingRemindersForAllLedgersInternal(options = {}) {
   const platform = dependencies.getPlatform()
   if (platform === 'web') {
     return {
@@ -321,9 +367,15 @@ export async function syncBookkeepingRemindersForAllLedgers(options = {}) {
     }
   }
 
-  const plugin = await dependencies.getLocalNotifications()
+  const plugin = await withReminderOperationTimeout(
+    dependencies.getLocalNotifications(),
+    '載入記帳提醒通知模組逾時，請稍後再試',
+  )
   const permission = await resolveNotificationPermission(plugin, options.requestPermission === true)
-  const ledgers = (await dependencies.listLedgers()).filter((ledger) => Number(ledger?.is_archived ?? 0) !== 1)
+  const ledgers = (await withReminderOperationTimeout(
+    dependencies.listLedgers(),
+    '讀取帳本清單逾時，請稍後再試',
+  )).filter((ledger) => Number(ledger?.is_archived ?? 0) !== 1)
   const pending = await withReminderPluginTimeout(
     plugin.getPending(),
     '讀取目前記帳提醒排程逾時，請稍後再試',
@@ -343,7 +395,7 @@ export async function syncBookkeepingRemindersForAllLedgers(options = {}) {
 
   const results = []
   for (const ledger of ledgers) {
-    const result = await syncBookkeepingReminderForLedger(ledger.id, {
+    const result = await syncBookkeepingReminderForLedgerInternal(ledger.id, {
       permission,
       requestPermission: false,
     })
@@ -359,12 +411,25 @@ export async function syncBookkeepingRemindersForAllLedgers(options = {}) {
   }
 }
 
+export async function syncBookkeepingRemindersForAllLedgers(options = {}) {
+  return runSerializedReminderSync(() => withReminderOperationTimeout(
+    syncBookkeepingRemindersForAllLedgersInternal(options),
+    '同步全部帳本記帳提醒逾時，請稍後再試',
+  ))
+}
+
 export async function getBookkeepingAchievement(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   const normalizedLedgerId = String(ledgerId).trim()
-  const ledger = await dependencies.getLedger(normalizedLedgerId)
+  const ledger = await withReminderOperationTimeout(
+    dependencies.getLedger(normalizedLedgerId),
+    '讀取帳本資料逾時，請稍後再試',
+  )
   const timeZone = normalizeTimeZone(ledger?.timezone)
-  const occurredAtValues = await dependencies.listTransactionOccurredAtValues(normalizedLedgerId)
+  const occurredAtValues = await withReminderOperationTimeout(
+    dependencies.listTransactionOccurredAtValues(normalizedLedgerId),
+    '讀取記帳成就資料逾時，請稍後再試',
+  )
   const seenDateKeys = new Set()
   const dateKeys = []
 
