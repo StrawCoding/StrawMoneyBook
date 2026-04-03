@@ -19,7 +19,7 @@ def resolve_aab_path(explicit_path)
 end
 
 platform :android do
-  desc "Upload the release AAB to Google Play internal track"
+  desc "Upload the release AAB to Google Play internal track as a draft release"
   lane :internal do
     package_name = require_env!("ANDROID_PACKAGE_NAME")
     json_key_path = require_env!("PLAY_JSON_KEY_PATH")
@@ -34,7 +34,7 @@ platform :android do
       json_key: json_key_path,
       aab: aab_path,
       track: "internal",
-      release_status: "completed",
+      release_status: "draft",
       skip_upload_apk: true,
       skip_upload_metadata: true,
       skip_upload_images: true,

@@ -20,6 +20,10 @@ import {
   bumpVersionCodeSource,
   parseVersionCodeSource,
 } from '../scripts/bump-android-version-code.mjs'
+import {
+  REQUIRED_ANDROID_GENERATED_FILES,
+  resolveAndroidPrepareMode,
+} from '../scripts/prepare-android-release.mjs'
 
 const packageJson = JSON.parse(
   readFileSync(resolve(import.meta.dirname, '../package.json'), 'utf8'),
@@ -32,6 +36,10 @@ const playReleaseFromGithubReleaseWorkflow = readFileSync(
   resolve(import.meta.dirname, '../../.github/workflows/play-release-from-github-release.yml'),
   'utf8',
 )
+const fastlaneFastfile = readFileSync(
+  resolve(import.meta.dirname, '../android/fastlane/Fastfile'),
+  'utf8',
+)
 const ciWorkflow = readFileSync(
   resolve(import.meta.dirname, '../../.github/workflows/ci.yml'),
   'utf8',
@@ -41,6 +49,10 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
   assert.equal(
     packageJson.scripts.postinstall,
     'node scripts/patch-capacitor-sqlite-plugin.mjs && node scripts/patch-android-flatdir-warning.mjs',
+  )
+  assert.equal(
+    packageJson.scripts['prepare:android:release'],
+    'node scripts/prepare-android-release.mjs',
   )
   assert.equal(
     packageJson.scripts['copy:android'],
@@ -68,15 +80,32 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
   )
   assert.equal(
     packageJson.scripts['aab:build'],
-    'npm run sync:app-update-manifest && npx vite build && npm run copy:android && cd android && ./gradlew bundleRelease && cd ..',
+    'npm run sync:app-update-manifest && npx vite build && npm run prepare:android:release && cd android && ./gradlew bundleRelease && cd ..',
   )
   assert.equal(
     packageJson.scripts['aab:build:prepared'],
-    'npx vite build && npm run copy:android && cd android && ./gradlew bundleRelease && cd ..',
+    'npx vite build && npm run prepare:android:release && cd android && ./gradlew bundleRelease && cd ..',
   )
   assert.equal(
     packageJson.scripts.aab,
     'npm run aab:build:prepared && npm run release:git && npm run upload:aab:github',
+  )
+})
+
+test('android release prep uses copy when generated capacitor files already exist', () => {
+  const mode = resolveAndroidPrepareMode(resolve(import.meta.dirname, '..'))
+
+  assert.equal(mode.mode, 'copy')
+  assert.deepEqual(mode.missingFiles, [])
+})
+
+test('android release prep falls back to sync when generated capacitor files are missing', () => {
+  const mode = resolveAndroidPrepareMode('/tmp/does-not-have-generated-capacitor-files')
+
+  assert.equal(mode.mode, 'sync')
+  assert.deepEqual(
+    mode.missingFiles,
+    REQUIRED_ANDROID_GENERATED_FILES,
   )
 })
 
@@ -134,8 +163,8 @@ test('play release workflow creates a GitHub release after the Play upload', () 
   assert.match(playReleaseWorkflow, /bundler-cache:\s*true/)
   assert.match(playReleaseWorkflow, /working-directory:\s*frontend\/android/)
   assert.match(playReleaseWorkflow, /permissions:\s*\n\s*contents:\s*write/)
-  assert.match(playReleaseWorkflow, /name: Copy Capacitor Android assets/)
-  assert.match(playReleaseWorkflow, /run: npm run copy:android/)
+  assert.match(playReleaseWorkflow, /name: Prepare Capacitor Android release files/)
+  assert.match(playReleaseWorkflow, /run: npm run prepare:android:release/)
   assert.match(playReleaseWorkflow, /name: Prepare release paths/)
   assert.match(playReleaseWorkflow, /PLAY_JSON_KEY_PATH=\$RUNNER_TEMP\/play-service-account\.json/)
   assert.match(playReleaseWorkflow, /ANDROID_KEYSTORE_FILE=\$RUNNER_TEMP\/release-keystore\.jks/)
@@ -156,6 +185,13 @@ test('github release workflow downloads the published aab asset and uploads it t
   assert.match(playReleaseFromGithubReleaseWorkflow, /gh release download "\$\{\{ github\.event\.release\.tag_name \}\}" --pattern "\*\.aab" --dir "\$RELEASE_ASSET_DIR" --clobber/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /echo "AAB_PATH=\$RESOLVED_AAB_PATH" >> "\$GITHUB_ENV"/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /run: bundle exec fastlane internal/)
+})
+
+test('fastlane uploads the internal track release as a draft so the uploaded aab version stays selectable in Play Console', () => {
+  assert.match(fastlaneFastfile, /lane :internal do/)
+  assert.match(fastlaneFastfile, /track:\s*"internal"/)
+  assert.match(fastlaneFastfile, /release_status:\s*"draft"/)
+  assert.doesNotMatch(fastlaneFastfile, /release_status:\s*"completed"/)
 })
 
 test('android flatDir patch removes unused flatDir repositories but keeps other repos', () => {

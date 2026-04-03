@@ -1,6 +1,6 @@
 {
   "name": "strawmoneybook",
-  "version": "0.24.25",
+  "version": "0.24.26",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,14 +9,15 @@
   "scripts": {
     "postinstall": "node scripts/patch-capacitor-sqlite-plugin.mjs && node scripts/patch-android-flatdir-warning.mjs",
     "sync:app-update-manifest": "node scripts/sync-app-update-manifest.mjs",
+    "prepare:android:release": "node scripts/prepare-android-release.mjs",
     "copy:android": "npx cap copy android && node scripts/patch-android-flatdir-warning.mjs",
     "sync:android": "npx cap sync android && node scripts/patch-android-flatdir-warning.mjs",
     "bump:patch": "npm version patch --no-git-tag-version",
     "bump:android:versionCode": "node scripts/bump-android-version-code.mjs",
     "gpr": "npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag",
     "preaab": "npm run bump:patch && npm run bump:android:versionCode && npm run sync:app-update-manifest",
-    "aab:build": "npm run sync:app-update-manifest && npx vite build && npm run copy:android && cd android && ./gradlew bundleRelease && cd ..",
-    "aab:build:prepared": "npx vite build && npm run copy:android && cd android && ./gradlew bundleRelease && cd ..",
+    "aab:build": "npm run sync:app-update-manifest && npx vite build && npm run prepare:android:release && cd android && ./gradlew bundleRelease && cd ..",
+    "aab:build:prepared": "npx vite build && npm run prepare:android:release && cd android && ./gradlew bundleRelease && cd ..",
     "upload:aab:github": "node scripts/upload-aab-to-github.mjs",
     "release:git": "node scripts/commit-aab-release.mjs",
     "release:tag": "node scripts/create-release-tag.mjs",

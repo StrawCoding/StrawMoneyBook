@@ -50,9 +50,9 @@ jobs:
         working-directory: frontend
         run: npm run build:web
 
-      - name: Copy Capacitor Android assets
+      - name: Prepare Capacitor Android release files
         working-directory: frontend
-        run: npm run copy:android
+        run: npm run prepare:android:release
 
       - name: Prepare release paths
         run: |
