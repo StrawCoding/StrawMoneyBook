@@ -229,3 +229,79 @@ test('syncBookkeepingReminderForLedger serializes concurrent reminder syncs', as
   assert.deepEqual(results.map((item) => item.status), ['scheduled', 'scheduled'])
   assert.equal(createdChannels.every((id) => id === 'bookkeeping-reminder'), true)
 })
+
+test('syncBookkeepingRemindersForAllLedgers reuses the in-flight full sync task', async () => {
+  let pendingCalls = 0
+  let releasePending = null
+  const pendingGate = new Promise((resolve) => {
+    releasePending = resolve
+  })
+
+  setBookkeepingReminderDependenciesForTest({
+    getPlatform() {
+      return 'android'
+    },
+    async getSetting() {
+      return { enabled: false, hour: 21, minute: 0 }
+    },
+    async listLedgers() {
+      return [
+        { id: 'ledger_alpha', name: '個人帳本', is_archived: 0 },
+      ]
+    },
+    async getLedger(ledgerId) {
+      return { id: ledgerId, name: '個人帳本', timezone: 'Asia/Taipei' }
+    },
+    async getLocalNotifications() {
+      return {
+        async checkPermissions() {
+          return { display: 'granted' }
+        },
+        async requestPermissions() {
+          return { display: 'granted' }
+        },
+        async getPending() {
+          pendingCalls += 1
+          await pendingGate
+          return { notifications: [] }
+        },
+        async cancel() {
+          return undefined
+        },
+        async schedule() {
+          return undefined
+        },
+        async createChannel() {
+          return undefined
+        },
+      }
+    },
+  })
+
+  const firstSync = syncBookkeepingRemindersForAllLedgers()
+  const secondSync = syncBookkeepingRemindersForAllLedgers()
+
+  await new Promise((resolve, reject) => {
+    const startedAt = Date.now()
+    const timer = setInterval(() => {
+      if (pendingCalls === 1) {
+        clearInterval(timer)
+        resolve()
+        return
+      }
+      if (Date.now() - startedAt > 200) {
+        clearInterval(timer)
+        reject(new Error(`expected pendingCalls to reach 1, got ${pendingCalls}`))
+      }
+    }, 0)
+  })
+  assert.equal(pendingCalls, 1)
+
+  releasePending()
+  const [firstResult, secondResult] = await Promise.all([firstSync, secondSync])
+
+  assert.equal(pendingCalls, 1)
+  assert.deepEqual(firstResult, secondResult)
+  assert.equal(firstResult.scheduledCount, 0)
+  assert.equal(firstResult.status, 'scheduled')
+})

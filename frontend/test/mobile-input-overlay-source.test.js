@@ -42,6 +42,9 @@ test('global css exposes shared mobile overlay sheet primitives', () => {
   assert.match(globalCssSource, /\.app-overlay-sheet-mask \{/)
   assert.match(globalCssSource, /\.app-overlay-sheet-card \{/)
   assert.match(globalCssSource, /\.app-overlay-sheet-head \{/)
+  assert.match(globalCssSource, /--safe-area-bottom: env\(safe-area-inset-bottom, 0px\);/)
+  assert.match(globalCssSource, /\.app-overlay-sheet-mask \{[\s\S]*padding:[\s\S]*12px[\s\S]*0;/)
+  assert.match(globalCssSource, /\.app-overlay-sheet-card \{[\s\S]*calc\(16px \+ var\(--safe-area-bottom\)\)/)
 })
 
 test('shared input bottom sheet owns overlay close logic and common primitives', () => {

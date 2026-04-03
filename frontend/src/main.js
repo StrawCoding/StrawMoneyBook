@@ -675,9 +675,6 @@ async function main() {
       window.addEventListener('app:auto-backup-config-updated', () => {
         void runAutoBackupDueCheck(pinia, 'config_updated')
       })
-      window.addEventListener('app:bookkeeping-reminder-config-updated', () => {
-        runBookkeepingReminderSyncInBackground('config_updated')
-      })
       window.addEventListener('focus', () => {
         restoreSharedLedgerSessionInBackground('window_focus')
         void runGoogleDriveLedgerBackgroundSyncNow(pinia)

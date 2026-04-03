@@ -90,6 +90,7 @@ const achievement = reactive({
   totalBookkeepingDays: 0,
   lastBookkeepingDate: '',
 })
+let latestReminderSyncJobId = 0
 
 const statusText = computed(() => {
   if (reminderStatus.value === 'permission_denied') {
@@ -137,6 +138,7 @@ watch(
 
 async function loadReminderPage(ledgerId) {
   if (!String(ledgerId ?? '').trim()) return
+  latestReminderSyncJobId += 1
   loading.value = true
   try {
     const [settings, stats] = await Promise.all([
@@ -154,6 +156,31 @@ async function loadReminderPage(ledgerId) {
     uiStore.pushToast(error?.message || t('settings_bookkeeping_reminder.toast.load_failed'), 'error')
   } finally {
     loading.value = false
+  }
+}
+
+async function syncReminderInBackground(ledgerId, savedSettings) {
+  const jobId = ++latestReminderSyncJobId
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+
+  try {
+    const result = await syncBookkeepingReminderForLedger(normalizedLedgerId, {
+      requestPermission: savedSettings?.enabled === true,
+    })
+    if (jobId !== latestReminderSyncJobId) return
+    if (String(ledgerStore.activeLedgerId ?? '').trim() !== normalizedLedgerId) return
+
+    reminderStatus.value = result?.status ?? (savedSettings?.enabled ? 'active' : 'disabled')
+
+    if (reminderStatus.value === 'permission_denied') {
+      uiStore.pushToast(t('settings_bookkeeping_reminder.toast.permission_denied'), 'error')
+    } else if (reminderStatus.value === 'unsupported') {
+      uiStore.pushToast(t('settings_bookkeeping_reminder.toast.unsupported'), 'error')
+    }
+  } catch (error) {
+    if (jobId !== latestReminderSyncJobId) return
+    if (String(ledgerStore.activeLedgerId ?? '').trim() !== normalizedLedgerId) return
+    uiStore.pushToast(error?.message || t('settings_bookkeeping_reminder.toast.save_failed'), 'error')
   }
 }
 
@@ -179,23 +206,13 @@ async function saveReminderSettings() {
     })
     form.enabled = saved.enabled
     form.time = `${String(saved.hour).padStart(2, '0')}:${String(saved.minute).padStart(2, '0')}`
-
-    const currentLedgerResult = await syncBookkeepingReminderForLedger(ledgerId, {
-      requestPermission: saved.enabled,
-    })
-    reminderStatus.value = currentLedgerResult?.status ?? (saved.enabled ? 'active' : 'disabled')
-
-    if (reminderStatus.value === 'permission_denied') {
-      uiStore.pushToast(t('settings_bookkeeping_reminder.toast.permission_denied'), 'error')
-    } else if (reminderStatus.value === 'unsupported') {
-      uiStore.pushToast(t('settings_bookkeeping_reminder.toast.unsupported'), 'error')
-    } else {
-      uiStore.pushToast(t('settings_bookkeeping_reminder.toast.saved'))
-    }
-
-    window.dispatchEvent(new CustomEvent('app:bookkeeping-reminder-config-updated', {
-      detail: { ledgerId },
-    }))
+    reminderStatus.value = saved.enabled && Capacitor.getPlatform() === 'web'
+      ? 'unsupported'
+      : saved.enabled
+        ? 'active'
+        : 'disabled'
+    uiStore.pushToast(t('settings_bookkeeping_reminder.toast.saved'))
+    void syncReminderInBackground(ledgerId, saved)
   } catch (error) {
     uiStore.pushToast(error?.message || t('settings_bookkeeping_reminder.toast.save_failed'), 'error')
   } finally {

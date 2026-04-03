@@ -194,13 +194,18 @@ function withReminderOperationTimeout(task, timeoutMessage) {
 }
 
 let reminderSyncQueue = Promise.resolve()
+let inFlightAllLedgersReminderSyncTask = null
 
-function runSerializedReminderSync(task) {
-  const nextTask = reminderSyncQueue
+function enqueueSerializedReminderSync(task) {
+  const taskPromise = reminderSyncQueue
     .catch(() => {})
     .then(task)
-  reminderSyncQueue = nextTask.catch(() => {})
-  return nextTask
+  reminderSyncQueue = taskPromise.catch(() => {})
+  return taskPromise
+}
+
+function waitForSerializedReminderSync(taskPromise, timeoutMessage) {
+  return withReminderOperationTimeout(taskPromise, timeoutMessage)
 }
 
 async function resolveNotificationPermission(plugin, requestPermission = false) {
@@ -349,10 +354,10 @@ async function syncBookkeepingReminderForLedgerInternal(ledgerId, options = {}) 
 }
 
 export async function syncBookkeepingReminderForLedger(ledgerId, options = {}) {
-  return runSerializedReminderSync(() => withReminderOperationTimeout(
-    syncBookkeepingReminderForLedgerInternal(ledgerId, options),
-    '同步記帳提醒逾時，請稍後再試',
-  ))
+  const taskPromise = enqueueSerializedReminderSync(
+    () => syncBookkeepingReminderForLedgerInternal(ledgerId, options),
+  )
+  return waitForSerializedReminderSync(taskPromise, '同步記帳提醒逾時，請稍後再試')
 }
 
 async function syncBookkeepingRemindersForAllLedgersInternal(options = {}) {
@@ -412,10 +417,22 @@ async function syncBookkeepingRemindersForAllLedgersInternal(options = {}) {
 }
 
 export async function syncBookkeepingRemindersForAllLedgers(options = {}) {
-  return runSerializedReminderSync(() => withReminderOperationTimeout(
-    syncBookkeepingRemindersForAllLedgersInternal(options),
+  if (!inFlightAllLedgersReminderSyncTask) {
+    const taskPromise = enqueueSerializedReminderSync(
+      () => syncBookkeepingRemindersForAllLedgersInternal(options),
+    )
+    const sharedTaskPromise = taskPromise.finally(() => {
+      if (inFlightAllLedgersReminderSyncTask === sharedTaskPromise) {
+        inFlightAllLedgersReminderSyncTask = null
+      }
+    })
+    inFlightAllLedgersReminderSyncTask = sharedTaskPromise
+  }
+
+  return waitForSerializedReminderSync(
+    inFlightAllLedgersReminderSyncTask,
     '同步全部帳本記帳提醒逾時，請稍後再試',
-  ))
+  )
 }
 
 export async function getBookkeepingAchievement(ledgerId, options = {}) {

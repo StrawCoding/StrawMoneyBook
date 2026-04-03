@@ -36,13 +36,15 @@ test('bookkeeping reminder page wires reminder settings and achievement board', 
   assert.match(pageSource, /getBookkeepingAchievement/)
   assert.match(pageSource, /saveBookkeepingReminderSettings/)
   assert.match(pageSource, /syncBookkeepingReminderForLedger/)
-  assert.match(pageSource, /app:bookkeeping-reminder-config-updated/)
+  assert.match(pageSource, /async function syncReminderInBackground/)
+  assert.match(pageSource, /void syncReminderInBackground\(ledgerId, saved\)/)
   assert.doesNotMatch(pageSource, /type="time"/)
 })
 
 test('application bootstraps and refreshes bookkeeping reminders centrally', () => {
   assert.match(mainSource, /syncBookkeepingRemindersForAllLedgers/)
   assert.match(mainSource, /runBookkeepingReminderSyncInBackground/)
-  assert.match(mainSource, /window\.addEventListener\('app:bookkeeping-reminder-config-updated'/)
+  assert.match(mainSource, /CapacitorApp\.addListener\('appStateChange'/)
+  assert.match(mainSource, /runBookkeepingReminderSyncInBackground\('app_start'\)/)
   assert.match(mainSource, /background sync failed/)
 })

@@ -1,6 +1,7 @@
 # StrawMoneyBook 功能與檔案對應
 
 此文件整理目前 StrawMoneyBook 的主要功能、頁面、元件與資料層對應關係，方便開發與維護。
+詳細產品說明請搭配 `../StrawMoneyBook_App_Features_Detailed.md` 閱讀；該檔已統整為唯一版本。
 
 ## 1. 功能總覽
 
@@ -23,6 +24,7 @@
 - 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
 - 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本）
 - 關於與聯絡入口（官網、Facebook、Instagram、Threads、Email、隱私權政策）
+- 官方網站 SEO / 品牌搜尋關鍵字（`../StrawMoneyBookWeb/index.html`：`StrawMoneyBook`、`稻草AI記帳`、`稻草記帳`、`AI記帳`、`對話記帳`、`自動記帳` 等）
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
 - Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化）
 
@@ -210,7 +212,7 @@
 | 底部導覽列 | `src/ui/components/layout/BottomNav.vue` |
 | App 內返回與 fallback 邏輯 | `src/ui/services/navigation-back.service.js` |
 | Toast 訊息 | `src/ui/components/common/ToastHost.vue` |
-| 輸入型彈層一致性（dialog / select / 帳本切換 / 區間切換 / 日期與時間選擇器共用 shared bottom-sheet primitives） | `src/ui/components/common/InputBottomSheet.vue` + `src/ui/components/common/AppDialog.vue` + `src/ui/components/common/CustomSelect.vue` + `src/ui/components/common/LedgerSwitcher.vue` + `src/ui/components/common/HomeRangePicker.vue` + `src/ui/components/common/DateTimePickerField.vue` + `src/ui/components/common/TimePickerField.vue` |
+| 輸入型彈層一致性（dialog / select / 帳本切換 / 區間切換 / 日期與時間選擇器共用 shared bottom-sheet primitives，含 Android 底部 safe area，sheet 背景延伸到底部並對齊 `BottomNav` 基準） | `src/ui/components/common/InputBottomSheet.vue` + `src/ui/components/common/AppDialog.vue` + `src/ui/components/common/CustomSelect.vue` + `src/ui/components/common/LedgerSwitcher.vue` + `src/ui/components/common/HomeRangePicker.vue` + `src/ui/components/common/DateTimePickerField.vue` + `src/ui/components/common/TimePickerField.vue` |
 | 全域錯誤上報 | `src/ui/services/error-log.service.js` |
 | 全域樣式與動畫 | `src/ui/assets/css/global.css` |
 | 入口、plugin 註冊、首頁小工具同步 | `src/main.js` |
@@ -243,7 +245,7 @@
 | `loan.service.js` | 借貸建立、還款、作廢 |
 | `reimbursement.service.js` | 報銷流程、報銷入帳、隱藏分類處理 |
 | `savings-jar.service.js` | 存錢罐存提與目標管理 |
-| `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程、連續記帳成就統計、原生通知同步逾時保護、同步序列化避免實機儲存卡死 |
+| `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程、連續記帳成就統計、原生通知同步逾時保護、全帳本同步去重、同步序列化避免實機儲存卡死 |
 | `savings-jar-auto-save.service.js` | 存錢罐自動存入 / 定期儲蓄流程 |
 | `subscription-tracker.service.js` | 訂閱追蹤與期別處理 |
 | `ai-bookkeeping.service.js` | AI 記帳語意解析與建議 |
