@@ -279,7 +279,7 @@ UI 服務目錄：`src/ui/services/`
 | `secure-setting.service.js` | 敏感設定值加密儲存（AES-GCM） |
 | `security-lock.service.js` | 生物辨識/系統憑證安全鎖整合 |
 | `theme.service.js` | 主題色、配色方案與字體縮放套用 |
-| `app-update.service.js` | App 版本檢查與商店連結；Android AAB 發版版本碼由 `android/app/build.gradle` 依最終 `versionName` 自動推導（`major * 1,000,000 + minor * 1,000 + patch`），仍可由 `CI_VERSION_CODE` 覆蓋 |
+| `app-update.service.js` | App 版本檢查與商店連結；Android AAB 發版版本碼由 `android/app/build.gradle` 依最終 `versionName` 自動推導（`1,000,000 + major * 1,000,000 + minor * 1,000 + patch`，保留 Play 歷史版本碼升級空間），仍可由 `CI_VERSION_CODE` 覆蓋；Play 發版流程若存在 `mapping.txt` 也會一併上傳去模糊化檔 |
 | `i18n.service.js` | 多語系文案管理 |
 | `setup-flow.service.js` | 是否顯示 Welcome / setup 流程判定 |
 | `post-setup-intro.service.js` | 設定完成後導覽旗標管理 |

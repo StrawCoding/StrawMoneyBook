@@ -31,6 +31,10 @@ def versionMatcher = (packageJsonText =~ /"version"\s*:\s*"([^"]+)"/)
 def packageVersionName = versionMatcher.find() ? versionMatcher.group(1) : "1.0.0"
 def ciVersionName = System.getenv("CI_VERSION_NAME")?.trim()
 def ciVersionCode = System.getenv("CI_VERSION_CODE")?.trim()
+def versionSegmentBase = 1_000
+def majorMultiplier = versionSegmentBase * versionSegmentBase
+def playStoreVersionCodeOffset = 1_000_000
+def maxPlayVersionCode = Integer.MAX_VALUE
 def deriveVersionCodeFromVersionName = { versionName, fallbackValue ->
     def normalizedVersionName = (versionName ?: '').trim()
     if (!normalizedVersionName) {
@@ -50,11 +54,20 @@ def deriveVersionCodeFromVersionName = { versionName, fallbackValue ->
         if (major < 0 || minor < 0 || patch < 0) {
             return fallbackValue
         }
-        if (minor >= 1000 || patch >= 1000) {
+        if (minor >= versionSegmentBase || patch >= versionSegmentBase) {
             return fallbackValue
         }
 
-        return (major * 1_000_000) + (minor * 1_000) + patch
+        def computedVersionCode =
+                playStoreVersionCodeOffset +
+                (major * majorMultiplier) +
+                (minor * versionSegmentBase) +
+                patch
+        if (computedVersionCode > maxPlayVersionCode) {
+            return fallbackValue
+        }
+
+        return computedVersionCode
     } catch (NumberFormatException ignored) {
         return fallbackValue
     }
@@ -70,7 +83,7 @@ def resolveVersionCode = { envValue, fallbackValue ->
     }
 }
 def appVersionName = ciVersionName ?: packageVersionName
-def defaultVersionCode = deriveVersionCodeFromVersionName(appVersionName, 1)
+def defaultVersionCode = deriveVersionCodeFromVersionName(appVersionName, playStoreVersionCodeOffset)
 def appVersionCode = resolveVersionCode(ciVersionCode, defaultVersionCode)
 
 android {

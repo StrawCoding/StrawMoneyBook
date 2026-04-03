@@ -18,13 +18,26 @@ def resolve_aab_path(explicit_path)
   absolute_explicit_path.empty? ? explicit_path : absolute_explicit_path
 end
 
+def resolve_mapping_path(explicit_path)
+  absolute_explicit_path = explicit_path.empty? ? "" : File.expand_path(explicit_path, ANDROID_PROJECT_ROOT)
+  return absolute_explicit_path if !absolute_explicit_path.empty? && File.exist?(absolute_explicit_path)
+
+  candidates = Dir.glob(File.join(ANDROID_PROJECT_ROOT, "app/build/outputs/mapping/**/mapping.txt")).sort
+  return candidates.last unless candidates.empty?
+
+  absolute_explicit_path.empty? ? explicit_path : absolute_explicit_path
+end
+
 platform :android do
   desc "Upload the release AAB to Google Play internal track as a draft release"
   lane :internal do
     package_name = require_env!("ANDROID_PACKAGE_NAME")
     json_key_path = require_env!("PLAY_JSON_KEY_PATH")
     requested_aab_path = ENV.fetch("AAB_PATH", "app/build/outputs/bundle/release/app-release.aab").to_s.strip
+    requested_mapping_path = ENV.fetch("PLAY_MAPPING_PATH", "").to_s.strip
     aab_path = resolve_aab_path(requested_aab_path)
+    mapping_path = resolve_mapping_path(requested_mapping_path)
+    mapping_exists = !mapping_path.empty? && File.exist?(mapping_path)
 
     UI.user_error!("AAB not found at #{aab_path}") unless File.exist?(aab_path)
     UI.user_error!("Play service account json not found at #{json_key_path}") unless File.exist?(json_key_path)
@@ -33,6 +46,7 @@ platform :android do
       package_name: package_name,
       json_key: json_key_path,
       aab: aab_path,
+      mapping: mapping_exists ? mapping_path : nil,
       track: "internal",
       release_status: "draft",
       skip_upload_apk: true,

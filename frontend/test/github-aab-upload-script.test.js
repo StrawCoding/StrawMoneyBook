@@ -135,8 +135,8 @@ test('parseVersionCode extracts Android versionCode from build.gradle', () => {
 })
 
 test('deriveVersionCodeFromVersionName maps semver to a monotonic Play versionCode', () => {
-  assert.equal(deriveVersionCodeFromVersionName('0.24.32'), 24032)
-  assert.equal(deriveVersionCodeFromVersionName('1.2.3-beta.1'), 1002003)
+  assert.equal(deriveVersionCodeFromVersionName('0.24.32'), 1024032)
+  assert.equal(deriveVersionCodeFromVersionName('1.2.3-beta.1'), 2002003)
 })
 
 test('parseVersionCode derives Android versionCode from versionName when build.gradle uses the shared strategy', () => {
@@ -145,7 +145,7 @@ test('parseVersionCode derives Android versionCode from versionName when build.g
       'def defaultVersionCode = deriveVersionCodeFromVersionName(appVersionName, 1)\ndef appVersionCode = resolveVersionCode(ciVersionCode, defaultVersionCode)\nversionCode appVersionCode',
       '0.24.32',
     ),
-    24032,
+    1024032,
   )
 })
 
@@ -185,11 +185,15 @@ test('play release workflow builds the AAB, publishes the GitHub release, and up
   assert.match(playReleaseWorkflow, /name: Resolve built AAB path/)
   assert.match(playReleaseWorkflow, /find "\$PWD\/app\/build\/outputs\/bundle" -type f -name '\*\.aab'/)
   assert.match(playReleaseWorkflow, /echo "AAB_PATH=\$RESOLVED_AAB_PATH" >> "\$GITHUB_ENV"/)
+  assert.match(playReleaseWorkflow, /name: Resolve Play deobfuscation mapping path/)
+  assert.match(playReleaseWorkflow, /find "\$PWD\/app\/build\/outputs\/mapping" -type f -name 'mapping\.txt'/)
+  assert.match(playReleaseWorkflow, /echo "PLAY_MAPPING_PATH=\$RESOLVED_MAPPING_PATH" >> "\$GITHUB_ENV"/)
   assert.doesNotMatch(playReleaseWorkflow, /cache:\s*gradle/)
   assert.match(playReleaseWorkflow, /run: \.\/gradlew bundleRelease --configuration-cache --build-cache/)
   assert.match(playReleaseWorkflow, /name: Publish GitHub Release/)
   assert.match(playReleaseWorkflow, /uses: softprops\/action-gh-release@v2/)
   assert.match(playReleaseWorkflow, /files:\s*\|?\s*\n\s*\$\{\{ env\.AAB_PATH \}\}/)
+  assert.match(playReleaseWorkflow, /\$\{\{ env\.PLAY_MAPPING_PATH \}\}/)
   assert.match(playReleaseWorkflow, /name: Prepare Play upload paths/)
   assert.match(playReleaseWorkflow, /PLAY_JSON_KEY_PATH=\$RUNNER_TEMP\/play-service-account\.json/)
   assert.match(playReleaseWorkflow, /name: Restore Play service account/)
@@ -213,7 +217,9 @@ test('manual play upload workflow can retry an existing release asset upload to 
   assert.match(playReleaseFromGithubReleaseWorkflow, /working-directory:\s*frontend\/android/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /ruby-version:\s*\$\{\{ env\.RUBY_VERSION \}\}/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /gh release download "\$\{\{ inputs\.tag_name \}\}" --pattern "\*\.aab" --dir "\$RELEASE_ASSET_DIR" --clobber/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /gh release download "\$\{\{ inputs\.tag_name \}\}" --pattern "mapping\.txt" --dir "\$RELEASE_ASSET_DIR" --clobber \|\| true/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /echo "AAB_PATH=\$RESOLVED_AAB_PATH" >> "\$GITHUB_ENV"/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /echo "PLAY_MAPPING_PATH=\$RESOLVED_MAPPING_PATH" >> "\$GITHUB_ENV"/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /run: bundle exec fastlane internal/)
 })
 
@@ -221,6 +227,7 @@ test('fastlane uploads the internal track release as a draft so the uploaded aab
   assert.match(fastlaneFastfile, /lane :internal do/)
   assert.match(fastlaneFastfile, /track:\s*"internal"/)
   assert.match(fastlaneFastfile, /release_status:\s*"draft"/)
+  assert.match(fastlaneFastfile, /mapping:\s*mapping_exists \? mapping_path : nil/)
   assert.doesNotMatch(fastlaneFastfile, /release_status:\s*"completed"/)
 })
 

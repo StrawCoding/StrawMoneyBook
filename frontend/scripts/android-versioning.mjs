@@ -1,6 +1,8 @@
 const VERSION_SEGMENT_BASE = 1000
 const MAJOR_MULTIPLIER = VERSION_SEGMENT_BASE * VERSION_SEGMENT_BASE
-const DEFAULT_VERSION_CODE = 1
+const PLAY_STORE_VERSION_CODE_OFFSET = 1_000_000
+const MAX_PLAY_VERSION_CODE = 2_147_483_647
+const DEFAULT_VERSION_CODE = PLAY_STORE_VERSION_CODE_OFFSET
 
 export function deriveVersionCodeFromVersionName(versionName, fallbackValue = DEFAULT_VERSION_CODE) {
   const normalizedVersionName = String(versionName ?? '').trim()
@@ -31,5 +33,15 @@ export function deriveVersionCodeFromVersionName(versionName, fallbackValue = DE
     return fallbackValue
   }
 
-  return (major * MAJOR_MULTIPLIER) + (minor * VERSION_SEGMENT_BASE) + patch
+  const computedVersionCode =
+    PLAY_STORE_VERSION_CODE_OFFSET +
+    (major * MAJOR_MULTIPLIER) +
+    (minor * VERSION_SEGMENT_BASE) +
+    patch
+
+  if (!Number.isInteger(computedVersionCode) || computedVersionCode > MAX_PLAY_VERSION_CODE) {
+    return fallbackValue
+  }
+
+  return computedVersionCode
 }

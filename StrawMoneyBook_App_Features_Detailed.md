@@ -70,6 +70,8 @@ StrawMoneyBook 的特色不在單一功能，而在於把同一筆金流後續�
 
 從維護角度來看，前端已採用 View / Store / Service / Repository 分層，資料層則以 Capacitor + SQLite（含 Web / WASM）維持一致模型，讓功能擴充與跨平台維護成本更可控。
 
+Android 發版目前也已把版本碼策略收斂成由語意版號自動推導的單調遞增規則，並保留一段 Play Store 歷史版本碼安全區間，避免 `0.x.y` 這類版本名稱在新版發佈時反而低於舊的商店版本碼；若 release 產物存在 `mapping.txt`，Play 上傳流程也會一起帶上去模糊化檔，降低 Crash / ANR 排查成本。
+
 ### 2.4 官方網站品牌搜尋詞同步
 
 官方網站首頁目前已同步補齊品牌與功能搜尋詞，包含：

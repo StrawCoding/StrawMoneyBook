@@ -95,6 +95,14 @@ jobs:
           fi
           echo "AAB_PATH=$RESOLVED_AAB_PATH" >> "$GITHUB_ENV"
 
+      - name: Resolve Play deobfuscation mapping path
+        working-directory: frontend/android
+        run: |
+          RESOLVED_MAPPING_PATH="$(find "$PWD/app/build/outputs/mapping" -type f -name 'mapping.txt' | sort | tail -n 1)"
+          if [ -n "$RESOLVED_MAPPING_PATH" ]; then
+            echo "PLAY_MAPPING_PATH=$RESOLVED_MAPPING_PATH" >> "$GITHUB_ENV"
+          fi
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -103,6 +111,7 @@ jobs:
           generate_release_notes: true
           files: |
             ${{ env.AAB_PATH }}
+            ${{ env.PLAY_MAPPING_PATH }}
 
       - name: Prepare Play upload paths
         run: |
