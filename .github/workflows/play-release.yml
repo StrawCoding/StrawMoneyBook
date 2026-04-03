@@ -15,7 +15,6 @@ jobs:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      ANDROID_PACKAGE_NAME: ${{ secrets.ANDROID_PACKAGE_NAME }}
 
     steps:
       - name: Checkout
@@ -35,13 +34,6 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Setup Ruby 3.2
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.2"
-          bundler-cache: true
-          working-directory: frontend/android
-
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
@@ -56,14 +48,7 @@ jobs:
 
       - name: Prepare release paths
         run: |
-          echo "PLAY_JSON_KEY_PATH=$RUNNER_TEMP/play-service-account.json" >> "$GITHUB_ENV"
           echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release-keystore.jks" >> "$GITHUB_ENV"
-
-      - name: Restore Play service account
-        env:
-          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-        run: |
-          printf '%s' "$PLAY_SERVICE_ACCOUNT_JSON" > "$PLAY_JSON_KEY_PATH"
 
       - name: Restore Android keystore
         env:
@@ -90,10 +75,6 @@ jobs:
             exit 1
           fi
           echo "AAB_PATH=$RESOLVED_AAB_PATH" >> "$GITHUB_ENV"
-
-      - name: Upload to Google Play internal
-        working-directory: frontend/android
-        run: bundle exec fastlane internal
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

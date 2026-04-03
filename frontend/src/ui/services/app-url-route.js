@@ -1,6 +1,7 @@
 export function resolveRouteFromAppUrl(rawUrl, options = {}) {
   const source = String(rawUrl ?? '').trim()
   if (!source) return null
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(source)) return null
 
   const extractSharedLedgerInviteCode = typeof options.extractSharedLedgerInviteCode === 'function'
     ? options.extractSharedLedgerInviteCode
@@ -51,6 +52,7 @@ export function resolveRouteFromAppUrl(rawUrl, options = {}) {
       return { path: '/' }
     }
   } catch (error) {
+    if (error?.code === 'ERR_INVALID_URL') return null
     console.warn('[app-url] failed to parse url', source, error)
   }
 
