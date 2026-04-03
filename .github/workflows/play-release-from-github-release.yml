@@ -5,12 +5,17 @@ on:
     types:
       - published
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name }}
+  cancel-in-progress: true
+
 jobs:
   play-release-from-github-release:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
+      RUBY_VERSION: "3.2"
       ANDROID_PACKAGE_NAME: ${{ secrets.ANDROID_PACKAGE_NAME }}
 
     steps:
@@ -20,7 +25,7 @@ jobs:
       - name: Setup Ruby 3.2
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "3.2"
+          ruby-version: ${{ env.RUBY_VERSION }}
           bundler-cache: true
           working-directory: frontend/android
 
