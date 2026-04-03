@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
 
 import {
   buildGithubReleaseInfo,
@@ -93,7 +94,15 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
 })
 
 test('android release prep uses copy when generated capacitor files already exist', () => {
-  const mode = resolveAndroidPrepareMode(resolve(import.meta.dirname, '..'))
+  const frontendRoot = mkdtempSync(join(tmpdir(), 'strawmoneybook-android-release-'))
+
+  for (const relativePath of REQUIRED_ANDROID_GENERATED_FILES) {
+    const absolutePath = resolve(frontendRoot, relativePath)
+    mkdirSync(resolve(absolutePath, '..'), { recursive: true })
+    writeFileSync(absolutePath, '// generated for test\n')
+  }
+
+  const mode = resolveAndroidPrepareMode(frontendRoot)
 
   assert.equal(mode.mode, 'copy')
   assert.deepEqual(mode.missingFiles, [])
@@ -157,8 +166,11 @@ test('play release workflow builds the AAB and publishes the GitHub release with
   assert.match(playReleaseWorkflow, /uses: actions\/checkout@v6/)
   assert.match(playReleaseWorkflow, /uses: actions\/setup-java@v5/)
   assert.match(playReleaseWorkflow, /uses: actions\/setup-node@v6/)
+  assert.match(playReleaseWorkflow, /uses: gradle\/actions\/setup-gradle@v5/)
   assert.match(playReleaseWorkflow, /name: Setup Node 22/)
   assert.match(playReleaseWorkflow, /node-version:\s*"22"/)
+  assert.match(playReleaseWorkflow, /cache-encryption-key:\s*\$\{\{ secrets\.GRADLE_ENCRYPTION_KEY \}\}/)
+  assert.match(playReleaseWorkflow, /cache-read-only:\s*true/)
   assert.match(playReleaseWorkflow, /permissions:\s*\n\s*contents:\s*write/)
   assert.match(playReleaseWorkflow, /name: Prepare Capacitor Android release files/)
   assert.match(playReleaseWorkflow, /run: npm run prepare:android:release/)
@@ -169,6 +181,8 @@ test('play release workflow builds the AAB and publishes the GitHub release with
   assert.match(playReleaseWorkflow, /echo "AAB_PATH=\$RESOLVED_AAB_PATH" >> "\$GITHUB_ENV"/)
   assert.doesNotMatch(playReleaseWorkflow, /uses: ruby\/setup-ruby@v1/)
   assert.doesNotMatch(playReleaseWorkflow, /name: Upload to Google Play internal/)
+  assert.doesNotMatch(playReleaseWorkflow, /cache:\s*gradle/)
+  assert.match(playReleaseWorkflow, /run: \.\/gradlew bundleRelease --configuration-cache --build-cache/)
   assert.match(playReleaseWorkflow, /name: Publish GitHub Release/)
   assert.match(playReleaseWorkflow, /uses: softprops\/action-gh-release@v2/)
   assert.match(playReleaseWorkflow, /files:\s*\|?\s*\n\s*\$\{\{ env\.AAB_PATH \}\}/)
@@ -220,6 +234,18 @@ test('ci workflow uses Node 24 compatible GitHub actions runtimes', () => {
   assert.match(ciWorkflow, /uses: actions\/setup-node@v6/)
   assert.doesNotMatch(ciWorkflow, /actions\/checkout@v4/)
   assert.doesNotMatch(ciWorkflow, /actions\/setup-node@v4/)
+})
+
+test('ci workflow warms Android bundleRelease cache on main so tag releases can reuse Gradle state', () => {
+  assert.match(ciWorkflow, /uses: actions\/setup-java@v5/)
+  assert.match(ciWorkflow, /uses: gradle\/actions\/setup-gradle@v5/)
+  assert.match(ciWorkflow, /cache-encryption-key:\s*\$\{\{ secrets\.GRADLE_ENCRYPTION_KEY \}\}/)
+  assert.match(ciWorkflow, /name: Warm Android bundleRelease Gradle cache/)
+  assert.match(ciWorkflow, /if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/)
+  assert.match(ciWorkflow, /run: npm run prepare:android:release/)
+  assert.match(ciWorkflow, /name: Warm Android bundleRelease configuration cache/)
+  assert.match(ciWorkflow, /working-directory:\s*frontend\/android/)
+  assert.match(ciWorkflow, /run: \.\/gradlew bundleRelease --dry-run --configuration-cache --build-cache/)
 })
 
 test('release git step uses the package version in the commit message', () => {

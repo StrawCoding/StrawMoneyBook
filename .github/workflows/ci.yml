@@ -35,5 +35,20 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
       - run: npm ci
       - run: npm run check
+      - name: Warm Android bundleRelease Gradle cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: npm run prepare:android:release
+      - name: Warm Android bundleRelease configuration cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: frontend/android
+        run: ./gradlew bundleRelease --dry-run --configuration-cache --build-cache
