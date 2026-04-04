@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core'
-import { translateMessage } from '@/ui/services/i18n.service'
+import { translateMessage } from './i18n.service.js'
 
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
