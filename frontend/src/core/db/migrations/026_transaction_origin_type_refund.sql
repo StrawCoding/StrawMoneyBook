@@ -1,5 +1,7 @@
 PRAGMA foreign_keys = OFF;
 
+DROP TABLE IF EXISTS transactions_new;
+
 CREATE TABLE IF NOT EXISTS transactions_new (
   ledger_id TEXT NOT NULL,
   id TEXT NOT NULL,

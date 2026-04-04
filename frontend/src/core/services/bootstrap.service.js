@@ -47,7 +47,6 @@ async function loadStores(pinia) {
 export async function bootstrapApp(pinia) {
   try {
     await initDatabase()
-    await loadStores(pinia)
   } catch (error) {
     if (!isRecoverableBootstrapError(error)) {
       throw error
@@ -55,6 +54,7 @@ export async function bootstrapApp(pinia) {
 
     console.warn('[bootstrap] recoverable sqlite error, resetting local database')
     await resetDatabase()
-    await loadStores(pinia)
   }
+
+  await loadStores(pinia)
 }
