@@ -46,9 +46,39 @@ function getRequestOrigin(req) {
 }
 
 function getClientIp(req) {
-  const forwardedFor = String(req?.headers?.['x-forwarded-for'] ?? '').split(',')[0].trim()
+  // Priority order (most trustworthy first):
+  //
+  // 1. CF-Connecting-IP — set by Cloudflare, cannot be spoofed by clients.
+  //    Cloudflare strips any client-provided CF-Connecting-IP before forwarding.
+  //
+  // 2. X-Real-IP — typically set by nginx (`set_real_ip_from` + `real_ip_header`).
+  //    Contains a single, already-resolved client IP.
+  //
+  // 3. X-Forwarded-For (rightmost non-trusted entry) — standard proxy chain header.
+  //    Taking the LAST entry (rightmost) gives the IP added by the nearest trusted proxy,
+  //    which the client cannot forge. Contrast: taking the FIRST entry is unsafe because
+  //    clients can prepend arbitrary values.
+  //
+  // 4. socket.remoteAddress — fallback when no proxy headers are present (direct connection).
+  //
+  // IMPORTANT: Ensure your reverse proxy (nginx / Cloudflare) clears or overwrites
+  // X-Forwarded-For before forwarding to this server so a client cannot inject fake entries.
+
+  const cfConnectingIp = String(req?.headers?.['cf-connecting-ip'] ?? '').trim()
+  if (cfConnectingIp) return cfConnectingIp
+
+  const xRealIp = String(req?.headers?.['x-real-ip'] ?? '').trim()
+  if (xRealIp) return xRealIp
+
+  const forwardedFor = String(req?.headers?.['x-forwarded-for'] ?? '').trim()
+  if (forwardedFor) {
+    const entries = forwardedFor.split(',')
+    const rightmost = entries[entries.length - 1].trim()
+    if (rightmost) return rightmost
+  }
+
   const socketIp = String(req?.socket?.remoteAddress ?? '').trim()
-  return forwardedFor || socketIp || 'unknown'
+  return socketIp || 'unknown'
 }
 
 function getUserAgent(req) {

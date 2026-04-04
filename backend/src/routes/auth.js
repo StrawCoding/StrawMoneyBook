@@ -49,7 +49,13 @@ const LOGIN_LOCK_THRESHOLD = 5
 const LOGIN_LOCK_DURATION_MS = 10 * 60 * 1000
 const LOGIN_FORCE_RESET_THRESHOLD = 10
 const PASSWORD_RESET_REQUEST_COOLDOWN_MS = 60 * 1000
-const DEBUG_PASSWORD_RESET_RESPONSE = isTruthy(process.env.SHARED_LEDGER_DEBUG_PASSWORD_RESET)
+// SECURITY: This flag must NEVER be enabled in production.
+// It causes the plaintext temporary password to be returned in the API response,
+// bypassing the email verification step entirely.
+// Only usable when NODE_ENV !== 'production'.
+const DEBUG_PASSWORD_RESET_RESPONSE =
+  process.env.NODE_ENV !== 'production' &&
+  isTruthy(process.env.SHARED_LEDGER_DEBUG_PASSWORD_RESET)
 const GOOGLE_PLAY_CLIENT_SYNC_SOURCE = 'google_play_client_sync'
 const GOOGLE_PLAY_LIFETIME_SYNC_EXPIRES_AT = '2099-12-31T23:59:59.999Z'
 

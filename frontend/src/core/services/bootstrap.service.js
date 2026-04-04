@@ -11,13 +11,17 @@ import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
 function isRecoverableBootstrapError(error) {
   const message = String(error?.message ?? error ?? '').toLowerCase()
   return (
+    // Android: errors that escaped sqlite.js internal recovery (rebuild + recovery-db both failed)
     message.includes('[sqlite:android]') ||
+    // Schema-level errors on other platforms (iOS, web) where sqlite.js has no internal recovery
     message.includes('datatype mismatch') ||
     message.includes('no such column') ||
     message.includes('no such table') ||
     message.includes('code20') ||
-    message.includes('code 20') ||
-    message.includes('code 1')
+    message.includes('code 20')
+    // NOTE: 'code 1' (SQLITE_ERROR) was intentionally removed — it is a generic SQLite error
+    // that covers unrelated failures (disk full, permission denied, SQL syntax errors, etc.)
+    // and caused the entire local database to be silently wiped on any SQL error.
   )
 }
 

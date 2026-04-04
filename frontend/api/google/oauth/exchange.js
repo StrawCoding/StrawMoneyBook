@@ -13,15 +13,58 @@ const ERROR_NUMBER = {
   EXCHANGE_REQUEST_FAILED: 'GOOGLE_EXCHANGE_007',
 }
 
-function setCorsHeaders(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+// Allowlist mirrors backend/src/collab/http.js PROD_ALLOWED_ORIGINS.
+// Capacitor apps use 'capacitor://localhost'; web apps use the HTTPS domain.
+const PROD_ALLOWED_ORIGINS = new Set([
+  'https://strawmb.com',
+  'https://www.strawmb.com',
+  'capacitor://localhost',
+  'ionic://localhost',
+])
+const DEV_ALLOWED_ORIGINS = new Set([
+  ...PROD_ALLOWED_ORIGINS,
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173',
+  'http://localhost:8787',
+  'http://127.0.0.1:8787',
+])
+
+function resolveAllowedOrigin(requestOrigin) {
+  if (!requestOrigin) return null
+  const allowed = process.env.NODE_ENV === 'production' ? PROD_ALLOWED_ORIGINS : DEV_ALLOWED_ORIGINS
+  if (allowed.has(requestOrigin)) return requestOrigin
+  // Also allow any *.strawmb.com subdomain over HTTPS
+  try {
+    const parsed = new URL(requestOrigin)
+    if (parsed.protocol === 'https:' &&
+        (parsed.hostname === 'strawmb.com' || parsed.hostname.endsWith('.strawmb.com'))) {
+      return requestOrigin
+    }
+  } catch {
+    // malformed origin — deny
+  }
+  return null
+}
+
+function setCorsHeaders(req, res) {
+  const requestOrigin = String(req?.headers?.origin ?? '').trim()
+  const allowedOrigin = resolveAllowedOrigin(requestOrigin)
+  // Only set Allow-Origin when origin is explicitly recognised; native apps (no Origin header)
+  // rely on the absence of the header — which is correct behaviour for same-origin requests.
+  if (allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
+    res.setHeader('Vary', 'Origin')
+  }
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Straw-Client-Key')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Cache-Control', 'no-store')
 }
 
 function sendJson(res, statusCode, payload) {
-  setCorsHeaders(res)
+  // res.__request is attached at the top of handler() so setCorsHeaders can read the Origin.
+  setCorsHeaders(res.__request ?? {}, res)
   res.status(statusCode).json(payload)
 }
 
@@ -127,8 +170,12 @@ async function requestGoogleToken(params) {
 }
 
 export default async function handler(req, res) {
+  // Attach req so that sendJson → setCorsHeaders can read the Origin header
+  // without threading req through every helper function.
+  res.__request = req
+
   if (req.method === 'OPTIONS') {
-    setCorsHeaders(res)
+    setCorsHeaders(req, res)
     res.status(204).end()
     return
   }

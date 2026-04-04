@@ -283,11 +283,23 @@ export async function execute(sql) {
 
 export async function withTransaction(handler) {
   const conn = await getDatabase()
-  // NOTE:
-  // In current web stack, run/execute already wrap statements in their own
-  // transaction boundaries. Nesting begin/commit here causes
-  // "cannot commit/rollback - no transaction is active" errors.
-  // Keep this helper as a logical boundary only.
+  // IMPORTANT — Platform differences in atomicity:
+  //
+  // Web (SQLite WASM / sql.js):
+  //   Each run()/execute() call is already wrapped in its own implicit transaction.
+  //   Nesting explicit BEGIN/COMMIT causes "cannot commit — no transaction is active" errors.
+  //   Multi-step operations are therefore NOT atomic on web: if step 2 of 3 throws,
+  //   step 1 has already been committed and will NOT be rolled back.
+  //   This is a known platform limitation. Callers must handle partial-write scenarios.
+  //
+  // Native (Android / iOS via Capacitor SQLite):
+  //   Individual run()/execute() calls are each their own auto-committed transaction.
+  //   Multi-step operations are similarly NOT atomic without explicit BEGIN/COMMIT.
+  //   If atomicity is required on native, use conn.execute('BEGIN') / conn.execute('COMMIT')
+  //   / conn.execute('ROLLBACK') directly and test on both platforms before shipping.
+  //
+  // This helper currently serves only as a logical grouping boundary.
+  // Do NOT assume it provides rollback safety.
   return handler(conn)
 }
 
