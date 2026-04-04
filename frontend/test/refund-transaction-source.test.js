@@ -27,6 +27,14 @@ const editSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/TransactionEditPage.vue'),
   'utf8',
 )
+const initMigrationSource = readFileSync(
+  resolve(import.meta.dirname, '../src/core/db/migrations/001_init.sql'),
+  'utf8',
+)
+const refundOriginTypeMigrationSource = readFileSync(
+  resolve(import.meta.dirname, '../src/core/db/migrations/026_transaction_origin_type_refund.sql'),
+  'utf8',
+)
 
 test('transaction queries expose refund-link state for downstream summaries', () => {
   assert.match(transactionRepoSource, /function refundRelationExistsSql\(sourceAlias = 't'\)/)
@@ -44,6 +52,11 @@ test('refund creation validates account selection, avoids duplicates, and marks 
   assert.match(transactionServiceSource, /throw new Error\('此交易已建立退款'\)/)
   assert.match(transactionServiceSource, /throw new Error\('退款帳戶幣別必須與原交易帳戶一致'\)/)
   assert.match(transactionServiceSource, /originType: 'refund'/)
+})
+
+test('database schema allows refund origin type for both new and migrated ledgers', () => {
+  assert.match(initMigrationSource, /origin_type TEXT NOT NULL DEFAULT 'manual' CHECK \(origin_type IN \('manual','loan_payment','reimbursement','import','recurring','refund'\)\)/)
+  assert.match(refundOriginTypeMigrationSource, /origin_type TEXT NOT NULL DEFAULT 'manual' CHECK \(origin_type IN \('manual','loan_payment','reimbursement','import','recurring','refund'\)\)/)
 })
 
 test('transaction about page opens an account picker before creating refunds', () => {

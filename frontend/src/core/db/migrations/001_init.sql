@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   note TEXT,
   location TEXT,
   tags_json TEXT,
-  origin_type TEXT NOT NULL DEFAULT 'manual' CHECK (origin_type IN ('manual','loan_payment','reimbursement','import','recurring')),
+  origin_type TEXT NOT NULL DEFAULT 'manual' CHECK (origin_type IN ('manual','loan_payment','reimbursement','import','recurring','refund')),
   external_ref_id TEXT,
   idempotency_key TEXT,
   include_in_budget INTEGER NOT NULL DEFAULT 1 CHECK (include_in_budget IN (0,1)),

@@ -134,3 +134,10 @@ test('migrate registers the budget save migration', () => {
   assert.match(source, /import migration025 from '@\/core\/db\/migrations\/025_budget_save\.sql\?raw'/)
   assert.match(source, /\{ version: 25, name: 'budget_save', sql: migration025 \}/)
 })
+
+test('migrate registers the refund origin type migration', () => {
+  const source = readFileSync(resolve(import.meta.dirname, '../src/core/db/migrate.js'), 'utf8')
+
+  assert.match(source, /import migration026 from '@\/core\/db\/migrations\/026_transaction_origin_type_refund\.sql\?raw'/)
+  assert.match(source, /\{ version: 26, name: 'transaction_origin_type_refund', sql: migration026 \}/)
+})
