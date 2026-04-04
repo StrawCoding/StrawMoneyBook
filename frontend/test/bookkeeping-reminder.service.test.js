@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   getBookkeepingAchievement,
+  openBookkeepingReminderExactAlarmSettings,
   resetBookkeepingReminderDependenciesForTest,
   saveBookkeepingReminderSettings,
   setBookkeepingReminderDependenciesForTest,
@@ -197,6 +198,63 @@ test('syncBookkeepingReminderForLedger does not treat the local notification plu
   assert.equal(cancelCalled, true)
 })
 
+test('syncBookkeepingReminderForLedger reports exact alarm as required when notification permission is granted but exact alarms are disabled', async () => {
+  setBookkeepingReminderDependenciesForTest({
+    getPlatform() {
+      return 'android'
+    },
+    async getSetting() {
+      return { enabled: true, hour: 21, minute: 0 }
+    },
+    async getLocalNotifications() {
+      return {
+        async checkPermissions() {
+          return { display: 'granted' }
+        },
+        async requestPermissions() {
+          return { display: 'granted' }
+        },
+        async checkExactNotificationSetting() {
+          return { exact_alarm: 'denied' }
+        },
+        async cancel() {
+          return undefined
+        },
+      }
+    },
+  })
+
+  const result = await syncBookkeepingReminderForLedger('ledger_alpha', { requestPermission: true })
+
+  assert.equal(result.permission, 'granted')
+  assert.equal(result.exactAlarm, 'denied')
+  assert.equal(result.status, 'exact_alarm_required')
+})
+
+test('openBookkeepingReminderExactAlarmSettings forwards to the native exact alarm settings action', async () => {
+  let opened = false
+
+  setBookkeepingReminderDependenciesForTest({
+    getPlatform() {
+      return 'android'
+    },
+    async getLocalNotifications() {
+      return {
+        async changeExactNotificationSetting() {
+          opened = true
+          return { exact_alarm: 'granted' }
+        },
+      }
+    },
+  })
+
+  const result = await openBookkeepingReminderExactAlarmSettings()
+
+  assert.equal(opened, true)
+  assert.equal(result.exactAlarm, 'granted')
+  assert.equal(result.status, 'granted')
+})
+
 test('syncBookkeepingReminderForLedger serializes concurrent reminder syncs', async () => {
   const createdChannels = []
   const cancelOrder = []
@@ -334,4 +392,41 @@ test('syncBookkeepingRemindersForAllLedgers reuses the in-flight full sync task'
   assert.deepEqual(firstResult, secondResult)
   assert.equal(firstResult.scheduledCount, 0)
   assert.equal(firstResult.status, 'scheduled')
+})
+
+test('syncBookkeepingRemindersForAllLedgers surfaces exact alarm status in the summary', async () => {
+  setBookkeepingReminderDependenciesForTest({
+    getPlatform() {
+      return 'android'
+    },
+    async getSetting() {
+      return { enabled: true, hour: 20, minute: 30 }
+    },
+    async listLedgers() {
+      return [{ id: 'ledger_alpha', name: '個人帳本', is_archived: 0 }]
+    },
+    async getLocalNotifications() {
+      return {
+        async checkPermissions() {
+          return { display: 'granted' }
+        },
+        async checkExactNotificationSetting() {
+          return { exact_alarm: 'denied' }
+        },
+        async getPending() {
+          return { notifications: [] }
+        },
+        async cancel() {
+          return undefined
+        },
+      }
+    },
+  })
+
+  const summary = await syncBookkeepingRemindersForAllLedgers()
+
+  assert.equal(summary.permission, 'granted')
+  assert.equal(summary.exactAlarm, 'denied')
+  assert.equal(summary.status, 'exact_alarm_required')
+  assert.deepEqual(summary.results.map((item) => item.status), ['exact_alarm_required'])
 })

@@ -175,6 +175,7 @@ import {
   triggerDownloadFromUrl,
 } from '@/core/services/export.service'
 import { useI18n } from '@/ui/services/i18n.service'
+import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 
 const route = useRoute()
 const ledgerStore = useLedgerStore()
@@ -386,7 +387,7 @@ function openExportLink() {
 function buildBreakdown(type) {
   const map = new Map()
   for (const tx of reportData.value.records ?? []) {
-    if (!Number(tx.include_in_analysis ?? 1)) continue
+    if (!isCountableForIncomeExpense(tx)) continue
     if (tx.type !== type || tx.origin_type === 'loan_payment') continue
 
     const amountMinor = type === 'expense' ? Math.abs(Number(tx.amount_minor ?? 0)) : Number(tx.amount_minor ?? 0)

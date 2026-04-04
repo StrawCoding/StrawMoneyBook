@@ -7,6 +7,10 @@ const budgetingSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/budgeting.vue'),
   'utf8',
 )
+const homeBudgetSummarySource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/components/home/HomeBudgetSummaryCard.vue'),
+  'utf8',
+)
 const sheetSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/components/budget/BudgetItemSheet.vue'),
   'utf8',
@@ -16,14 +20,36 @@ const budgetRepoSource = readFileSync(
   'utf8',
 )
 
-test('budgeting page exposes monthly total budget save controls', () => {
+test('budgeting page exposes detail-first budget item and total save flows', () => {
+  assert.match(budgetingSource, /budgeting\.reserved/)
+  assert.match(budgetingSource, /@click="openItemDetail\(item\)"/)
+  assert.match(budgetingSource, /const detailItem = ref\(null\)/)
+  assert.match(budgetingSource, /const isItemDetailOpen = ref\(false\)/)
+  assert.match(budgetingSource, /<InputBottomSheet[\s\S]*:open="isItemDetailOpen"/)
+  assert.match(budgetingSource, /requestRemoveItemFromDetail/)
+  assert.match(budgetingSource, /editDetailItem/)
+  assert.match(budgetingSource, /budget-save-inline-row/)
+  assert.match(budgetingSource, /itemBudgetSaveSummary\(item\)/)
+  assert.doesNotMatch(budgetingSource, /@click="openEdit\(item\)"/)
+  assert.doesNotMatch(budgetingSource, /@click="removeItem\(item\.id\)"/)
   assert.match(budgetingSource, /budgeting\.budget_save\.total_title/)
+  assert.match(budgetingSource, /@click="openTotalBudgetSaveDetail"/)
+  assert.match(budgetingSource, /const isTotalBudgetSaveDetailOpen = ref\(false\)/)
+  assert.match(budgetingSource, /const isTotalBudgetSaveConfigOpen = ref\(false\)/)
+  assert.match(budgetingSource, /openTotalBudgetSaveConfig/)
   assert.match(budgetingSource, /saveTotalBudgetSaveConfig/)
   assert.match(budgetingSource, /retroactiveModeOptions/)
   assert.match(budgetingSource, /duplicateBudgetSaveCategoryIds/)
   assert.match(budgetingSource, /buildAccountOptionGroups/)
   assert.match(budgetingSource, /:groups="totalSaveTargetGroups"/)
   assert.match(budgetingSource, /:groups="totalSaveSourceGroups"/)
+})
+
+test('home budget summary shows reserved amount in monthly and daily modes', () => {
+  assert.match(homeBudgetSummarySource, /t\('budgeting\.reserved'\)/)
+  assert.match(homeBudgetSummarySource, /budgetStore\.reservedMinor/)
+  assert.match(homeBudgetSummarySource, /budgetStore\.reservedMinorByDate\(monthDateMeta\.value\.selectedDate, \{ includeReferenceDay: false \}\)/)
+  assert.match(homeBudgetSummarySource, /reservedMinor: currentReservedMinor/)
 })
 
 test('budget item sheet exposes item-level budget save controls', () => {

@@ -34,6 +34,25 @@ function dayRangeUtc(dayKey) {
   }
 }
 
+function refundRelationExistsSql(sourceAlias = 't') {
+  return `EXISTS (
+    SELECT 1
+    FROM transactions rt
+    LEFT JOIN categories rc
+      ON rc.ledger_id = rt.ledger_id
+     AND rc.id = rt.category_id
+    WHERE rt.ledger_id = ${sourceAlias}.ledger_id
+      AND rt.deleted_at IS NULL
+      AND rt.external_ref_id = ${sourceAlias}.id
+      AND (
+        rt.origin_type = 'refund'
+        OR rc.name = '退款'
+        OR rt.note LIKE '退款：%'
+        OR rt.note LIKE '退款:%'
+      )
+  )`
+}
+
 export async function listRecentTransactions(ledgerId, limit = 20) {
   assertLedgerId(ledgerId)
 
@@ -43,7 +62,9 @@ export async function listRecentTransactions(ledgerId, limit = 20) {
             c.name AS category_name, c.icon AS category_icon,
             a.currency_code AS account_currency_code,
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
-            t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
+            t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
+            CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            t.created_at
      FROM transactions t
      LEFT JOIN accounts a
        ON a.ledger_id = t.ledger_id
@@ -70,7 +91,9 @@ export async function listTransactionsByMonth(ledgerId, monthKey) {
             c.name AS category_name, c.icon AS category_icon,
             a.currency_code AS account_currency_code,
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
-            t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
+            t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
+            CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            t.created_at
      FROM transactions t
      LEFT JOIN accounts a
        ON a.ledger_id = t.ledger_id
@@ -98,7 +121,9 @@ export async function listTransactionsByYear(ledgerId, yearKey) {
             c.name AS category_name, c.icon AS category_icon,
             a.currency_code AS account_currency_code,
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
-            t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
+            t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
+            CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            t.created_at
      FROM transactions t
      LEFT JOIN accounts a
        ON a.ledger_id = t.ledger_id
@@ -126,7 +151,9 @@ export async function listTransactionsByDay(ledgerId, dayKey) {
             c.name AS category_name, c.icon AS category_icon,
             a.currency_code AS account_currency_code,
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
-            t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
+            t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
+            CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            t.created_at
      FROM transactions t
      LEFT JOIN accounts a
        ON a.ledger_id = t.ledger_id
@@ -153,7 +180,9 @@ export async function listAllTransactions(ledgerId) {
             c.name AS category_name, c.icon AS category_icon,
             a.currency_code AS account_currency_code,
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
-            t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
+            t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
+            CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            t.created_at
      FROM transactions t
      LEFT JOIN accounts a
        ON a.ledger_id = t.ledger_id
@@ -194,7 +223,9 @@ export async function listTransactionsByAccount(ledgerId, accountId) {
             c.name AS category_name, c.icon AS category_icon,
             a.currency_code AS account_currency_code,
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
-            t.reimbursed_at, t.include_in_budget, t.include_in_analysis, t.created_at
+            t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
+            CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            t.created_at
      FROM transactions t
      LEFT JOIN accounts a
        ON a.ledger_id = t.ledger_id
@@ -411,7 +442,8 @@ export async function updateTransactionById(ledgerId, txId, input) {
 export async function findTransactionById(ledgerId, txId) {
   assertLedgerId(ledgerId)
   const result = await query(
-    `SELECT id, type, transfer_group_id, origin_type, external_ref_id, is_reimbursable
+    `SELECT id, type, transfer_group_id, origin_type, external_ref_id, is_reimbursable,
+            CASE WHEN ${refundRelationExistsSql('transactions')} THEN 1 ELSE 0 END AS has_refund_link
      FROM transactions
      WHERE ledger_id = ?
        AND id = ?
@@ -444,6 +476,7 @@ export async function findTransactionRecordById(ledgerId, txId) {
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id, t.category_id,
             t.amount_minor, t.occurred_at, t.note, t.origin_type, t.external_ref_id,
             t.is_reimbursable, t.reimbursement_state, t.include_in_budget, t.include_in_analysis,
+            CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
             c.name AS category_name, c.kind AS category_kind, c.icon AS category_icon,
             cg.name AS category_group_name, cg.kind AS category_group_kind,
             a.name AS account_name
@@ -473,6 +506,7 @@ export async function listTransactionsByExternalRef(ledgerId, externalRefId) {
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id, t.category_id,
             t.amount_minor, t.occurred_at, t.note, t.origin_type, t.external_ref_id,
             t.is_reimbursable, t.reimbursement_state, t.include_in_budget, t.include_in_analysis,
+            CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
             c.name AS category_name, c.kind AS category_kind, c.icon AS category_icon,
             cg.name AS category_group_name, cg.kind AS category_group_kind,
             a.name AS account_name

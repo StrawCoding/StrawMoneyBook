@@ -463,6 +463,25 @@ function buildLedgerTransactionExportRows(sourceRows, accountBalanceMap) {
   return { csvRows, excelRows }
 }
 
+function refundRelationExistsSql(sourceAlias = 't') {
+  return `EXISTS (
+    SELECT 1
+    FROM transactions rt
+    LEFT JOIN categories rc
+      ON rc.ledger_id = rt.ledger_id
+     AND rc.id = rt.category_id
+    WHERE rt.ledger_id = ${sourceAlias}.ledger_id
+      AND rt.deleted_at IS NULL
+      AND rt.external_ref_id = ${sourceAlias}.id
+      AND (
+        rt.origin_type = 'refund'
+        OR rc.name = '退款'
+        OR rt.note LIKE '退款：%'
+        OR rt.note LIKE '退款:%'
+      )
+  )`
+}
+
 export async function getLedgerTransactionsExportData(ledgerId, options = {}) {
   const mode = ['all', 'year', 'month', 'day', 'custom'].includes(options.mode) ? options.mode : 'all'
   const { startUtc, endUtc } = rangeByMode(mode, options)
@@ -481,6 +500,7 @@ export async function getLedgerTransactionsExportData(ledgerId, options = {}) {
        t.account_id,
        t.category_id,
        t.include_in_analysis,
+       CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
        t.occurred_at,
        t.note,
        t.origin_type,

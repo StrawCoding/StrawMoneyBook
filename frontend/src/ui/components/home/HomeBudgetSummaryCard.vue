@@ -33,6 +33,10 @@
                 <span class="muted">已用</span>
                 <MoneyText :value-minor="modeMetrics[mode.key].spentMinor" />
               </div>
+              <div class="line">
+                <span class="muted">{{ t('budgeting.reserved') }}</span>
+                <MoneyText :value-minor="modeMetrics[mode.key].reservedMinor" />
+              </div>
             </div>
           </div>
         </section>
@@ -65,6 +69,7 @@ import BudgetMiniPie from '@/ui/components/budget/BudgetMiniPie.vue'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import { isCountableForBudget } from '@/ui/utils/refund-transaction'
 
 const budgetStore = useBudgetStore()
 const transactionStore = useTransactionStore()
@@ -145,7 +150,7 @@ function dateKeyOf(date) {
 }
 
 function isBudgetExpenseTransaction(tx) {
-  return String(tx?.type ?? '') === 'expense' && Boolean(Number(tx?.include_in_budget ?? 1))
+  return isCountableForBudget(tx)
 }
 
 function parseDayKey(dayKey) {
@@ -165,6 +170,7 @@ function parseDayKey(dayKey) {
 const totalBudgetMinor = computed(() => toFiniteNonNegative(budgetStore.totalBudgetMinor))
 const totalSpentMinor = computed(() => toFiniteNonNegative(budgetStore.totalSpentMinor))
 const remainMinor = computed(() => Number(budgetStore.remainMinor ?? 0))
+const reservedMinor = computed(() => toFiniteNonNegative(budgetStore.reservedMinor))
 const selectedHomeDayDate = computed(() => {
   if (transactionStore.homeFilterMode !== 'day') return null
   return parseDayKey(transactionStore.homeFilterKey)
@@ -247,17 +253,24 @@ const selectedDaySpentMinor = computed(() => {
 
 const dailySpentMinor = computed(() => selectedDaySpentMinor.value)
 const dailyRemainMinor = computed(() => dailyBudgetMinor.value - dailySpentMinor.value)
+const selectedDailyReservedMinor = computed(() => {
+  return toFiniteNonNegative(
+    budgetStore.reservedMinorByDate(monthDateMeta.value.selectedDate, { includeReferenceDay: false }),
+  )
+})
 
 function calcMetricSet(mode) {
   const budgetMinor = mode === 'daily' ? dailyBudgetMinor.value : totalBudgetMinor.value
   const spentMinor = mode === 'daily' ? dailySpentMinor.value : totalSpentMinor.value
   const currentRemainMinor = mode === 'daily' ? dailyRemainMinor.value : remainMinor.value
+  const currentReservedMinor = mode === 'daily' ? selectedDailyReservedMinor.value : reservedMinor.value
   const usedRatio = budgetMinor > 0 ? spentMinor / budgetMinor : 0
   const safeRatio = Number.isFinite(usedRatio) ? usedRatio : 0
   return {
     budgetMinor,
     spentMinor,
     remainMinor: currentRemainMinor,
+    reservedMinor: currentReservedMinor,
     usedRatio: safeRatio,
     usedPercentLabel: `${Math.round(safeRatio * 100)}%`,
     isOverBudget: budgetMinor > 0 && safeRatio > 1,

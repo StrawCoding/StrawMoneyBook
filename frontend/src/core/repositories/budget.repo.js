@@ -15,6 +15,25 @@ function buildBudgetSaveSettlementId(scopeType, scopeRefId, periodKey) {
   return `${String(scopeType ?? '').trim()}:${String(scopeRefId ?? '').trim()}:${String(periodKey ?? '').trim()}`
 }
 
+function refundedSourceExclusionSql(sourceAlias = 'transactions') {
+  return `NOT EXISTS (
+    SELECT 1
+    FROM transactions rt
+    LEFT JOIN categories rc
+      ON rc.ledger_id = rt.ledger_id
+     AND rc.id = rt.category_id
+    WHERE rt.ledger_id = ${sourceAlias}.ledger_id
+      AND rt.deleted_at IS NULL
+      AND rt.external_ref_id = ${sourceAlias}.id
+      AND (
+        rt.origin_type = 'refund'
+        OR rc.name = '退款'
+        OR rt.note LIKE '退款：%'
+        OR rt.note LIKE '退款:%'
+      )
+  )`
+}
+
 export async function getBudgetByMonth(ledgerId, monthKey) {
   assertLedgerId(ledgerId)
   const result = await query(
@@ -189,6 +208,7 @@ export async function computeBudgetSpentByCategory(ledgerId, monthStartUtc, mont
        AND deleted_at IS NULL
        AND type = 'expense'
        AND include_in_budget = 1
+       AND ${refundedSourceExclusionSql('transactions')}
        AND occurred_at >= ?
        AND occurred_at < ?
        AND category_id IS NOT NULL
@@ -207,6 +227,7 @@ export async function listBudgetUsageDaysByCategory(ledgerId, monthStartUtc, mon
        AND deleted_at IS NULL
        AND type = 'expense'
        AND include_in_budget = 1
+       AND ${refundedSourceExclusionSql('transactions')}
        AND occurred_at >= ?
        AND occurred_at < ?
        AND category_id IS NOT NULL

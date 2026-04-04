@@ -76,6 +76,7 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { addonDeltaMajorFromNote, addonDeltaTagText, stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { useI18n } from '@/ui/services/i18n.service'
+import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 
 const transactionStore = useTransactionStore()
 const categoryStore = useCategoryStore()
@@ -83,10 +84,6 @@ const accountStore = useAccountStore()
 const loanStore = useLoanStore()
 const router = useRouter()
 const { t } = useI18n()
-
-function isCountableForAnalysis(tx) {
-  return Number(tx?.include_in_analysis ?? 1) !== 0
-}
 
 const monthLabel = computed(() => {
   if (transactionStore.homeFilterMode === 'all') return t('home_page.all_transactions')
@@ -119,7 +116,7 @@ const groupedRecentTransactions = computed(() => {
     }
     const group = groupMap.get(key)
     group.items.push(tx)
-    if (!isCountableForAnalysis(tx)) continue
+    if (!isCountableForIncomeExpense(tx)) continue
     if (tx.type === 'income') {
       group.incomeMinor += Math.abs(Math.round(Number(tx.amount_minor ?? 0)))
     } else if (tx.type === 'expense') {

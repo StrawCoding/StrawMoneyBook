@@ -9,7 +9,8 @@
 - 首頁總覽（帳本切換、收支卡、預算簡表、交易流、浮動快速新增）
 - 記帳三模式（AI 記帳、手動快速新增、問答記帳）
 - 交易查詢（搜尋頁、日曆頁、交易明細頁、交易編輯頁）
-- 預算管理（月預算、分類預算、日均規則、已用/剩餘、預算剩餘自動存入存錢罐）
+- 退款流程（交易明細可建立退款、選擇退款帳戶、退款與原交易自動排除預算 / 收支統計）
+- 預算管理（月預算、分類預算、日均規則、已用/剩餘/保留金額、預算剩餘自動存入存錢罐）
 - 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、列印 / PDF 版面）
 - 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細）
@@ -20,7 +21,7 @@
 - 共同帳本（建立共同帳本、共享連結、Email 邀請、接受邀請、同步）
 - Google Drive 帳本同步（逐帳本啟用、跨裝置 pull / push）
 - 自動備份（Google Drive / WebDAV）
-- 記帳提醒與成就表（每日固定提醒、連續記帳天數、最長連續與累計記帳日）
+- 記帳提醒與成就表（每日固定提醒、通知權限 / 精準提醒狀態、連續記帳天數、最長連續與累計記帳日）
 - 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
 - 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本）
 - 關於與聯絡入口（官網、Facebook、Instagram、Threads、Email、隱私權政策）
@@ -179,6 +180,7 @@
 | 交易搜尋頁 | `src/ui/views/TransactionSearchPage.vue` |
 | 交易日曆頁 | `src/ui/views/CalendarPage.vue` |
 | 功能列表頁 | `src/ui/views/FeatureListPage.vue` |
+| 交易明細退款流程（選擇退款帳戶、避免重複退款） | `src/ui/views/TransactionAboutPage.vue` + `src/core/services/transaction.service.js` |
 
 ## 4. 分析頁功能對應
 
@@ -228,7 +230,7 @@
 | `account.store.js` | 帳戶清單與餘額 |
 | `category.store.js` | 分類清單、群組、二級分類資料 |
 | `transaction.store.js` | 交易載入、新增、更新、刪除、首頁篩選與關聯刷新 |
-| `budget.store.js` | 月預算、預算項目、整月預算存款設定與補跑偏好 |
+| `budget.store.js` | 月預算、預算項目、保留金額、整月預算存款設定與補跑偏好 |
 | `loan.store.js` | 借貸清單、還款、作廢、明細 |
 | `reimbursement.store.js` | 報銷列表與報銷狀態處理 |
 | `addon-template.store.js` | 附加項目模板讀取與快取 |
@@ -241,13 +243,14 @@
 | Service | 功能 |
 |---|---|
 | `bootstrap.service.js` | 啟動時初始化資料與 stores |
-| `transaction.service.js` | 收入/支出/轉帳/退款建立、編輯驗證、刪除關聯交易（報銷/退款） |
+| `transaction.service.js` | 收入/支出/轉帳/退款建立、退款帳戶驗證、編輯驗證、刪除關聯交易（報銷/退款） |
 | `budget.service.js` | 預算快照、預算存款設定驗證、複製上月預算 |
+| `budget-reserve.service.js` | 依帳本月份 / 時區 / 日均規則即時計算保留金額 |
 | `budget-save.service.js` | 預算剩餘額自動結算、補跑、delta/manual 補差 |
 | `loan.service.js` | 借貸建立、還款、作廢 |
 | `reimbursement.service.js` | 報銷流程、報銷入帳、隱藏分類處理 |
 | `savings-jar.service.js` | 存錢罐存提與目標管理 |
-| `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程、連續記帳成就統計、原生通知同步逾時保護、全帳本同步去重、同步序列化避免實機儲存卡死、Android Local Notifications plugin proxy 相容性處理 |
+| `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程、連續記帳成就統計、原生通知同步逾時保護、全帳本同步去重、同步序列化避免實機儲存卡死、Android Local Notifications plugin proxy 相容性處理、exact alarm 檢查與系統設定導引 |
 | `savings-jar-auto-save.service.js` | 存錢罐自動存入 / 定期儲蓄流程 |
 | `subscription-tracker.service.js` | 訂閱追蹤與期別處理 |
 | `ai-bookkeeping.service.js` | AI 記帳語意解析與建議 |
@@ -607,6 +610,7 @@ UI 服務目錄：`src/ui/services/`
 - 函數（0）：無
 - 變數（7）：`budgetStore`, `isOverBudget`, `pieStyle`, `totalBudgetMinor`, `totalSpentMinor`, `usedPercentLabel`, `usedRatio`
 - 類別（0）：無
+- 補充：首頁預算簡表的月模式與日模式都會顯示保留金額；日模式使用目前選定日期之後尚未到來的 `daily_average` 保留額，不含今天已生效的日均額度。
 
 ### `src/ui/components/home/HomeTransactionEditSheet.vue`
 - 函數（34）：`addAddonRow`, `addonLabelOf`, `addonOptionIdByLabel`, `addonTotalDeltaMajorFromNote`, `applyOperator`, `closeCategoryPicker`, `closeDeleteConfirm`, `collectAppliedAddonItems`, `confirmRemove`, `createAddonRow`, `defaultAddonOption`, `defaultCategoryId`, `ensureInCategories`, `evaluateExpression`, `formatAmountInput`, `handleAmountInput`, `isFormulaExpression`, `isOperator`, `onAddonOptionChange`, `onRequestCloseOverlay`, `openCategoryPicker`, `parseAddonRowsFromNote`, `pickCategory`, `precedence`, `pressCalcKey`, `remove`, `removeAddonRow`, `round2`, `setCategoryPickerParent`, `submit`, `syncAmountFromInput`, `syncCategoryPickerParent`, `toDateInput`, `toOccurredAtIso`
@@ -809,7 +813,7 @@ UI 服務目錄：`src/ui/services/`
 - 函數（22）：`categoryName`, `changeMonth`, `closeDeleteDialog`, `closeSheet`, `confirmRemoveItem`, `copyPreviousMonth`, `formatMajor`, `goCurrentMonth`, `isItemOverBudget`, `itemBudgetMinor`, `itemPieStyle`, `itemRemainMinor`, `itemSpentMinor`, `itemUsedPercentLabel`, `itemUsedRatio`, `monthKeyFromDate`, `numberFormatLocale`, `openCreate`, `openEdit`, `removeItem`, `saveItem`, `shiftMonthKey`
 - 變數（9）：`budgetStore`, `categoryStore`, `deleteDialogOpen`, `deleteLoading`, `displayMonth`, `editingItem`, `isSheetOpen`, `pendingDeleteItemId`, `uiStore`
 - 類別（0）：無
-- 補充：頁面新增整月總額預算存款區塊、retroactive mode 選擇、狀態摘要，以及預算項目列上的日結轉 / 月底結轉 chip、來源/目標摘要與衝突提示；來源/目標帳戶同樣沿用快速新增的分組式 account picker。
+- 補充：月摘要新增保留金額；分類預算列改為整列點擊先開唯讀詳情，再從詳情進入編輯 / 刪除；項目上的日結轉 / 月底結轉 chip 與 `A -> B` 來源 / 目標摘要改成同一行；整月總額預算存款也拆成摘要列 -> 詳情 sheet -> 設定 sheet 三段式流程，來源 / 目標帳戶同樣沿用快速新增的分組式 account picker。
 
 ### `src/ui/views/home.vue`
 - 函數（12）：`applyMonthInput`, `dateKeyFromDate`, `goCurrentRange`, `localeRangeMonth`, `monthKeyFromDate`, `openQuickAdd`, `pickDay`, `pickMonth`, `pickYear`, `switchFilterMode`, `switchQuickAddMode`, `syncHomeTransactions`

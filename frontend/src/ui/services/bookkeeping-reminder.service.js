@@ -197,6 +197,10 @@ function withReminderOperationTimeout(task, timeoutMessage) {
   return withTimeout(task, getReminderOperationTimeoutMs(), timeoutMessage)
 }
 
+function normalizeSettingsPermissionState(value) {
+  return String(value ?? '').trim() === 'granted' ? 'granted' : 'denied'
+}
+
 function unwrapLocalNotificationsPlugin(value) {
   if (value && typeof value === 'object' && 'plugin' in value) {
     return value.plugin
@@ -250,6 +254,16 @@ async function ensureReminderChannel(plugin) {
   ).catch(() => {})
 }
 
+async function resolveExactAlarmPermission(plugin) {
+  if (dependencies.getPlatform() !== 'android') return 'not_required'
+  if (typeof plugin?.checkExactNotificationSetting !== 'function') return 'granted'
+  const status = await withReminderPluginTimeout(
+    plugin.checkExactNotificationSetting(),
+    '檢查精準提醒設定逾時，請稍後再試',
+  )
+  return normalizeSettingsPermissionState(status?.exact_alarm)
+}
+
 export function normalizeBookkeepingReminderSettings(raw) {
   return {
     enabled: Boolean(raw?.enabled),
@@ -277,6 +291,40 @@ export async function saveBookkeepingReminderSettings(ledgerId, settings) {
   return normalized
 }
 
+export async function openBookkeepingReminderExactAlarmSettings() {
+  const platform = dependencies.getPlatform()
+  if (platform !== 'android') {
+    return {
+      platform,
+      exactAlarm: 'not_required',
+      status: 'unsupported',
+    }
+  }
+
+  const plugin = unwrapLocalNotificationsPlugin(await withReminderOperationTimeout(
+    dependencies.getLocalNotifications(),
+    '載入記帳提醒通知模組逾時，請稍後再試',
+  ))
+  if (typeof plugin?.changeExactNotificationSetting !== 'function') {
+    return {
+      platform,
+      exactAlarm: 'granted',
+      status: 'not_supported',
+    }
+  }
+
+  const result = await withReminderPluginTimeout(
+    plugin.changeExactNotificationSetting(),
+    '開啟精準提醒設定逾時，請稍後再試',
+  )
+  const exactAlarm = normalizeSettingsPermissionState(result?.exact_alarm)
+  return {
+    platform,
+    exactAlarm,
+    status: exactAlarm === 'granted' ? 'granted' : 'denied',
+  }
+}
+
 async function syncBookkeepingReminderForLedgerInternal(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   const platform = dependencies.getPlatform()
@@ -290,6 +338,7 @@ async function syncBookkeepingReminderForLedgerInternal(ledgerId, options = {}) 
       notificationId,
       settings,
       permission: 'unsupported',
+      exactAlarm: 'not_required',
       status: settings.enabled ? 'unsupported' : 'disabled',
     }
   }
@@ -309,6 +358,7 @@ async function syncBookkeepingReminderForLedgerInternal(ledgerId, options = {}) 
       notificationId,
       settings,
       permission: 'not_required',
+      exactAlarm: 'not_required',
       status: 'disabled',
     }
   }
@@ -320,7 +370,20 @@ async function syncBookkeepingReminderForLedgerInternal(ledgerId, options = {}) 
       notificationId,
       settings,
       permission,
+      exactAlarm: 'not_checked',
       status: 'permission_denied',
+    }
+  }
+
+  const exactAlarm = await resolveExactAlarmPermission(plugin)
+  if (exactAlarm !== 'granted') {
+    return {
+      ledgerId: normalizedLedgerId,
+      notificationId,
+      settings,
+      permission,
+      exactAlarm,
+      status: 'exact_alarm_required',
     }
   }
 
@@ -360,6 +423,7 @@ async function syncBookkeepingReminderForLedgerInternal(ledgerId, options = {}) 
     notificationId,
     settings,
     permission,
+    exactAlarm,
     status: 'scheduled',
   }
 }
@@ -376,6 +440,7 @@ async function syncBookkeepingRemindersForAllLedgersInternal(options = {}) {
   if (platform === 'web') {
     return {
       permission: 'unsupported',
+      exactAlarm: 'not_required',
       results: [],
       scheduledCount: 0,
       canceledCount: 0,
@@ -388,6 +453,9 @@ async function syncBookkeepingRemindersForAllLedgersInternal(options = {}) {
     '載入記帳提醒通知模組逾時，請稍後再試',
   ))
   const permission = await resolveNotificationPermission(plugin, options.requestPermission === true)
+  const exactAlarm = permission === 'granted'
+    ? await resolveExactAlarmPermission(plugin)
+    : 'not_checked'
   const ledgers = (await withReminderOperationTimeout(
     dependencies.listLedgers(),
     '讀取帳本清單逾時，請稍後再試',
@@ -420,10 +488,15 @@ async function syncBookkeepingRemindersForAllLedgersInternal(options = {}) {
 
   return {
     permission,
+    exactAlarm,
     results,
     scheduledCount: results.filter((item) => item.status === 'scheduled').length,
     canceledCount: reminderPendingNotifications.length,
-    status: permission === 'granted' ? 'scheduled' : 'permission_denied',
+    status: permission !== 'granted'
+      ? 'permission_denied'
+      : exactAlarm !== 'granted'
+        ? 'exact_alarm_required'
+        : 'scheduled',
   }
 }
 

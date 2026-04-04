@@ -85,6 +85,7 @@ import { useI18n } from '@/ui/services/i18n.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
+import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 
 const route = useRoute()
 const router = useRouter()
@@ -137,7 +138,7 @@ const rangeLabel = computed(() => {
 
 const typeTransactions = computed(() => {
   return statsTransactions.value.filter((tx) => {
-    if (!Number(tx.include_in_analysis ?? 1)) return false
+    if (!isCountableForIncomeExpense(tx)) return false
     if (tx.origin_type === 'loan_payment') return false
     if (tx.type !== analysisType.value) return false
     return normalizedAmountMinor(tx) > 0

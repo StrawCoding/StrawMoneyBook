@@ -328,6 +328,9 @@ const typeOptions = computed(() => {
   if (transaction.value?.type === 'transfer' || transaction.value?.transfer_group_id) {
     return [{ value: 'transfer', label: t('transaction.type.transfer') }]
   }
+  if (String(transaction.value?.origin_type ?? '').trim() === 'refund') {
+    return [{ value: 'adjustment', label: t('transaction.type.adjustment', '結餘') }]
+  }
   const options = [
     { value: 'expense', label: t('transaction.type.expense') },
     { value: 'income', label: t('transaction.type.income') },

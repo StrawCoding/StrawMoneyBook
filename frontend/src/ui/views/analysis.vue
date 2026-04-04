@@ -207,6 +207,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { listAllTransactions, listTransactionsByMonth, listTransactionsByYear } from '@/core/repositories/transaction.repo'
 import { useI18n } from '@/ui/services/i18n.service'
+import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 
 const accountStore = useAccountStore()
 const categoryStore = useCategoryStore()
@@ -431,7 +432,7 @@ async function loadStatsTransactions() {
 function buildBreakdown(type, scope = 'category') {
   const map = new Map()
   for (const tx of statsTransactions.value) {
-    if (!Number(tx.include_in_analysis ?? 1)) continue
+    if (!isCountableForIncomeExpense(tx)) continue
     if (tx.type !== type || tx.origin_type === 'loan_payment') continue
     const key = scope === 'account'
       ? (tx.account_id || '__unassigned_account__')
@@ -586,7 +587,7 @@ function buildTimeBarRows(transactions, type, modeValue, yearValue, monthValue) 
   )
 
   for (const tx of transactions) {
-    if (!Number(tx?.include_in_analysis ?? 1)) continue
+    if (!isCountableForIncomeExpense(tx)) continue
     if (tx?.type !== type || tx?.origin_type === 'loan_payment') continue
     const amountMinor = type === 'expense' ? Math.abs(Number(tx?.amount_minor ?? 0)) : Number(tx?.amount_minor ?? 0)
     if (!Number.isFinite(amountMinor) || amountMinor <= 0) continue

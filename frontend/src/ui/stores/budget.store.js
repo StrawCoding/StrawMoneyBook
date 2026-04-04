@@ -8,12 +8,24 @@ import {
   removeBudgetItem,
   saveBudgetItem,
 } from '@/core/services/budget.service'
+import { computeReservedMinor } from '@/core/services/budget-reserve.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 
 function toFiniteMinor(value) {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return 0
   return numeric
+}
+
+function normalizeTimeZone(value) {
+  const timeZone = String(value ?? '').trim()
+  if (!timeZone) return 'Asia/Taipei'
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date('2026-01-01T00:00:00.000Z'))
+    return timeZone
+  } catch {
+    return 'Asia/Taipei'
+  }
 }
 
 export const useBudgetStore = defineStore('budget', {
@@ -49,6 +61,22 @@ export const useBudgetStore = defineStore('budget', {
 
     remainMinor() {
       return this.totalBudgetMinor - this.totalSpentMinor
+    },
+
+    reservedMinorByDate(state) {
+      const ledgerStore = useLedgerStore()
+      const timeZone = normalizeTimeZone(ledgerStore.activeLedger?.timezone)
+      return (referenceDate = new Date(), options = {}) => (
+        computeReservedMinor(state.items, state.monthKey, referenceDate, timeZone, options)
+      )
+    },
+
+    reservedMinor() {
+      return this.reservedMinorByDate(new Date(), { includeReferenceDay: true })
+    },
+
+    dailyReservedMinor() {
+      return this.reservedMinorByDate(new Date(), { includeReferenceDay: false })
     },
   },
 

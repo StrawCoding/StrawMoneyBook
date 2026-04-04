@@ -51,7 +51,7 @@
           v-if="canCreateRefund"
           class="btn"
           :disabled="refunding"
-          @click="createRefund"
+          @click="openRefundSheet"
         >
           {{ refunding ? t('transaction_about.refunding') : t('transaction_about.refund_transaction') }}
         </button>
@@ -103,12 +103,36 @@
     <article v-if="!transaction && !loading" class="card panel">
       <p class="muted">{{ t('transaction_about.not_found') }}</p>
     </article>
+
+    <InputBottomSheet
+      :open="refundSheetOpen"
+      :title="t('transaction_about.refund_account_title')"
+      :body-class="'stack'"
+      :show-footer="true"
+      :close-text="t('common.cancel')"
+      @close="closeRefundSheet"
+    >
+      <label class="field">
+        {{ t('transaction_about.refund_account_field') }}
+        <CustomSelect v-model="refundAccountId" :groups="refundAccountGroups" />
+      </label>
+      <p class="muted">{{ t('transaction_about.refund_account_hint') }}</p>
+
+      <template #footer>
+        <button class="btn" @click="closeRefundSheet">{{ t('common.cancel') }}</button>
+        <button class="btn primary" :disabled="refunding" @click="createRefund">
+          {{ refunding ? t('transaction_about.refunding') : t('transaction_about.refund_transaction') }}
+        </button>
+      </template>
+    </InputBottomSheet>
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
@@ -136,6 +160,8 @@ const loading = ref(false)
 const allTransactions = ref([])
 const transaction = ref(null)
 const refunding = ref(false)
+const refundSheetOpen = ref(false)
+const refundAccountId = ref('')
 
 const txId = computed(() => String(route.params.id ?? ''))
 
@@ -240,13 +266,34 @@ const hasAnyRelation = computed(() => {
   return relationRows.value.length > 0
 })
 
+const refundAccountGroups = computed(() => {
+  const tx = transaction.value
+  if (!tx?.account_id) return []
+
+  const sourceCurrency = String(tx.account_currency_code ?? '').trim().toUpperCase()
+  return accountStore.groupedRegularAccounts
+    .map((group) => ({
+      ...group,
+      options: (group.options ?? []).filter((option) => {
+        const account = accountStore.regularAccounts.find((item) => item.id === option.value)
+        if (!account) return false
+        const currency = String(account.currency_code ?? '').trim().toUpperCase()
+        if (!sourceCurrency || !currency) return true
+        return currency === sourceCurrency
+      }),
+    }))
+    .filter((group) => Array.isArray(group.options) && group.options.length > 0)
+})
+
 const canCreateRefund = computed(() => {
   const tx = transaction.value
   if (!tx) return false
   if (!['expense', 'income'].includes(String(tx.type ?? ''))) return false
   if (tx.transfer_group_id) return false
+  if (getSystemTransactionType(tx) === 'refund') return false
   const originType = String(tx.origin_type ?? '').trim()
-  return !['reimbursement', 'loan_payment'].includes(originType)
+  if (['reimbursement', 'loan_payment'].includes(originType)) return false
+  return refundRelated.value.length === 0
 })
 
 watch(
@@ -290,12 +337,23 @@ function goBack() {
   void goBackOrFallback(router, '/')
 }
 
+function openRefundSheet() {
+  if (!canCreateRefund.value || refunding.value) return
+  refundAccountId.value = String(transaction.value?.account_id ?? '')
+  refundSheetOpen.value = true
+}
+
+function closeRefundSheet() {
+  if (refunding.value) return
+  refundSheetOpen.value = false
+}
+
 async function createRefund() {
   const tx = transaction.value
   if (!tx || refunding.value || !canCreateRefund.value) return
 
   const amountMinor = Math.abs(Number(tx.amount_minor ?? 0))
-  if (!amountMinor || !tx.account_id) {
+  if (!amountMinor || !tx.account_id || !refundAccountId.value) {
     uiStore.pushToast(t('transaction_about.toast.refund_failed'), 'error')
     return
   }
@@ -308,13 +366,13 @@ async function createRefund() {
   refunding.value = true
   try {
     const refundTxId = await transactionStore.addRefund({
-      amountMinor: Number(tx.amount_minor ?? 0) < 0 ? amountMinor : amountMinor * -1,
       occurredAt: new Date().toISOString(),
-      accountId: tx.account_id,
+      accountId: refundAccountId.value,
       sourceTransactionId: tx.id,
       note: noteLines.join('\n'),
     })
     uiStore.pushToast(t('transaction_about.toast.refund_created'))
+    refundSheetOpen.value = false
     if (refundTxId) {
       await router.push({ name: 'transaction-about', params: { id: refundTxId } })
       return
@@ -469,6 +527,10 @@ h3 {
   margin-top: 12px;
   flex-wrap: wrap;
   gap: 8px;
+}
+.field {
+  display: grid;
+  gap: 6px;
 }
 .relation-list {
   margin-top: 10px;

@@ -26,57 +26,24 @@
           <span class="muted">{{ t('budgeting.remaining') }}</span>
           <MoneyText :value-minor="budgetStore.remainMinor" />
         </div>
+        <div class="row">
+          <span class="muted">{{ t('budgeting.reserved') }}</span>
+          <MoneyText :value-minor="budgetStore.reservedMinor" />
+        </div>
       </div>
 
       <section class="budget-save-panel">
-        <div class="row budget-save-head">
-          <div>
-            <strong>{{ t('budgeting.budget_save.total_title') }}</strong>
-            <p class="muted budget-save-summary">{{ totalBudgetSaveSummary }}</p>
+        <button type="button" class="summary-entry-btn" @click="openTotalBudgetSaveDetail">
+          <div class="row budget-save-head">
+            <div>
+              <strong>{{ t('budgeting.budget_save.total_title') }}</strong>
+              <p class="muted budget-save-summary">{{ totalBudgetSaveSummary }}</p>
+            </div>
+            <span class="budget-save-chip" :class="{ invalid: Boolean(totalBudgetSaveInvalidReason) }">
+              {{ totalBudgetSaveStatusLabel }}
+            </span>
           </div>
-          <span class="budget-save-chip" :class="{ invalid: Boolean(totalBudgetSaveInvalidReason) }">
-            {{ totalBudgetSaveStatusLabel }}
-          </span>
-        </div>
-
-        <button
-          type="button"
-          class="switch-row"
-          :class="{ active: totalSaveForm.enabled }"
-          :aria-pressed="totalSaveForm.enabled ? 'true' : 'false'"
-          @click="totalSaveForm.enabled = !totalSaveForm.enabled"
-        >
-          <span class="switch-copy">
-            <strong>{{ totalSaveForm.enabled ? t('budgeting.budget_save.enabled') : t('budgeting.budget_save.disabled') }}</strong>
-            <small class="muted">{{ t('budgeting.budget_save.mode.monthly') }}</small>
-          </span>
-          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
         </button>
-
-        <template v-if="totalSaveForm.enabled">
-          <label>
-            {{ t('budgeting.budget_save.target') }}
-            <CustomSelect v-model="totalSaveForm.targetAccountId" :groups="totalSaveTargetGroups" />
-          </label>
-
-          <label>
-            {{ t('budgeting.budget_save.source') }}
-            <CustomSelect v-model="totalSaveForm.sourceAccountId" :groups="totalSaveSourceGroups" />
-          </label>
-
-          <label>
-            {{ t('budgeting.budget_save.retroactive_mode') }}
-            <CustomSelect v-model="totalSaveForm.retroactiveMode" :options="retroactiveModeOptions" />
-          </label>
-
-          <p v-if="totalBudgetSaveInvalidReason" class="error-text">{{ totalBudgetSaveInvalidReason }}</p>
-        </template>
-
-        <div class="row item-actions-row">
-          <button class="btn primary" :disabled="totalSaveLoading" @click="saveTotalBudgetSaveConfig">
-            {{ totalSaveLoading ? t('common.processing') : t('common.save') }}
-          </button>
-        </div>
       </section>
 
       <div class="row action-row">
@@ -93,49 +60,195 @@
 
       <ul class="list">
         <li v-for="item in budgetStore.items" :key="item.id" class="item-row">
-          <div class="item-main">
-            <BudgetMiniPie
-              :ratio="itemUsedRatio(item)"
-              :over="isItemOverBudget(item)"
-              :percent-label="itemUsedPercentLabel(item)"
-              :subtitle="t('budgeting.used')"
-            />
+          <button type="button" class="item-card-btn" @click="openItemDetail(item)">
+            <div class="item-main">
+              <BudgetMiniPie
+                :ratio="itemUsedRatio(item)"
+                :over="isItemOverBudget(item)"
+                :percent-label="itemUsedPercentLabel(item)"
+                :subtitle="t('budgeting.used')"
+              />
 
-            <div class="item-content">
-              <div class="row">
-                <span>{{ categoryName(item.category_id) }}</span>
-                <MoneyText :value-minor="itemBudgetMinor(item)" />
-              </div>
-              <small v-if="isDailyAverageItem(item)" class="muted item-rule-hint">{{ itemDailyRuleSummary(item) }}</small>
-              <div v-if="itemBudgetSaveEnabled(item)" class="budget-save-inline">
-                <span class="budget-save-chip" :class="{ invalid: Boolean(itemBudgetSaveIssue(item)) }">
-                  {{ itemBudgetSaveModeLabel(item) }}
-                </span>
-                <small class="muted">{{ itemBudgetSaveSummary(item) }}</small>
-              </div>
-              <p v-if="itemBudgetSaveIssue(item)" class="error-text">{{ itemBudgetSaveIssue(item) }}</p>
-              <div class="row budget-line budget-summary-line">
-                <div class="budget-side remain-line">
-                  <small class="budget-label">{{ t('budgeting.remaining') }}</small>
-                  <small class="budget-value">{{ formatMajor(itemRemainMinor(item)) }}</small>
+              <div class="item-content">
+                <div class="row">
+                  <span>{{ categoryName(item.category_id) }}</span>
+                  <MoneyText :value-minor="itemBudgetMinor(item)" />
                 </div>
-                <div class="budget-side used-line">
-                  <small class="budget-label">{{ t('budgeting.used') }}</small>
-                  <small class="budget-value">{{ formatMajor(itemSpentMinor(item.category_id)) }}</small>
+                <small v-if="isDailyAverageItem(item)" class="muted item-rule-hint">{{ itemDailyRuleSummary(item) }}</small>
+                <div v-if="itemBudgetSaveEnabled(item)" class="row budget-save-inline-row">
+                  <span class="budget-save-chip" :class="{ invalid: Boolean(itemBudgetSaveIssue(item)) }">
+                    {{ itemBudgetSaveModeLabel(item) }}
+                  </span>
+                  <small class="muted budget-save-inline-copy">{{ itemBudgetSaveSummary(item) }}</small>
                 </div>
-              </div>
-              <div class="row item-actions-row">
-                <div class="btn-wrap">
-                  <button class="btn" @click="openEdit(item)">{{ t('budgeting.edit') }}</button>
-                  <button class="btn" @click="removeItem(item.id)">{{ t('budgeting.delete') }}</button>
+                <p v-if="itemBudgetSaveIssue(item)" class="error-text">{{ itemBudgetSaveIssue(item) }}</p>
+                <div class="row budget-line budget-summary-line">
+                  <div class="budget-side remain-line">
+                    <small class="budget-label">{{ t('budgeting.remaining') }}</small>
+                    <small class="budget-value">{{ formatMajor(itemRemainMinor(item)) }}</small>
+                  </div>
+                  <div class="budget-side used-line">
+                    <small class="budget-label">{{ t('budgeting.used') }}</small>
+                    <small class="budget-value">{{ formatMajor(itemSpentMinor(item.category_id)) }}</small>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          </button>
         </li>
         <li v-if="budgetStore.items.length === 0" class="muted">{{ t('budgeting.empty') }}</li>
       </ul>
     </article>
+
+    <InputBottomSheet
+      :open="isItemDetailOpen"
+      :title="detailItem ? categoryName(detailItem.category_id) : t('budgeting.items_by_category')"
+      :body-class="'stack detail-sheet-body'"
+      :show-footer="true"
+      :close-text="t('budgeting.sheet.close')"
+      @close="closeItemDetail"
+    >
+      <template v-if="detailItem">
+        <div class="detail-block">
+          <small class="muted">{{ t('budgeting.sheet.category') }}</small>
+          <strong>{{ categoryName(detailItem.category_id) }}</strong>
+        </div>
+        <div class="detail-block">
+          <small class="muted">{{ t('budgeting.amount_mode') }}</small>
+          <strong>{{ detailItemAmountModeLabel }}</strong>
+        </div>
+        <div class="detail-block">
+          <small class="muted">{{ t('budgeting.sheet.amount_label') }}</small>
+          <strong>{{ detailItemAmountLabel }}</strong>
+        </div>
+        <div class="detail-row-grid">
+          <div class="detail-block">
+            <small class="muted">{{ t('budgeting.used') }}</small>
+            <strong>{{ detailItemUsedLabel }}</strong>
+          </div>
+          <div class="detail-block">
+            <small class="muted">{{ t('budgeting.remaining') }}</small>
+            <strong>{{ detailItemRemainingLabel }}</strong>
+          </div>
+        </div>
+        <div v-if="detailItemRuleText" class="detail-block">
+          <small class="muted">{{ t('budgeting.rule_unit') }}</small>
+          <strong>{{ detailItemRuleText }}</strong>
+        </div>
+        <div class="detail-block">
+          <small class="muted">{{ t('budgeting.budget_save.title') }}</small>
+          <div v-if="itemBudgetSaveEnabled(detailItem)" class="stack detail-budget-save">
+            <div class="row detail-budget-save-line">
+              <span class="budget-save-chip" :class="{ invalid: Boolean(itemBudgetSaveIssue(detailItem)) }">
+                {{ itemBudgetSaveModeLabel(detailItem) }}
+              </span>
+              <span class="detail-budget-save-copy">{{ itemBudgetSaveSummary(detailItem) }}</span>
+            </div>
+            <p v-if="itemBudgetSaveIssue(detailItem)" class="error-text">{{ itemBudgetSaveIssue(detailItem) }}</p>
+          </div>
+          <strong v-else>{{ t('budgeting.budget_save.disabled') }}</strong>
+        </div>
+      </template>
+
+      <template #footer>
+        <button class="btn" @click="requestRemoveItemFromDetail">{{ t('budgeting.delete') }}</button>
+        <button class="btn primary" @click="editDetailItem">{{ t('budgeting.edit') }}</button>
+      </template>
+    </InputBottomSheet>
+
+    <InputBottomSheet
+      :open="isTotalBudgetSaveDetailOpen"
+      :title="t('budgeting.budget_save.total_title')"
+      :body-class="'stack detail-sheet-body'"
+      :show-footer="true"
+      :close-text="t('budgeting.sheet.close')"
+      @close="closeTotalBudgetSaveDetail"
+    >
+      <div class="detail-block">
+        <small class="muted">{{ t('budgeting.detail.status') }}</small>
+        <strong>{{ totalBudgetSaveStatusLabel }}</strong>
+      </div>
+      <div class="detail-block">
+        <small class="muted">{{ t('budgeting.budget_save.title') }}</small>
+        <div v-if="totalSaveForm.enabled" class="stack detail-budget-save">
+          <div class="row detail-budget-save-line">
+            <span class="budget-save-chip" :class="{ invalid: Boolean(totalBudgetSaveInvalidReason) }">
+              {{ t('budgeting.budget_save.mode.monthly') }}
+            </span>
+            <span class="detail-budget-save-copy">{{ totalBudgetSaveSummary }}</span>
+          </div>
+          <p v-if="totalBudgetSaveInvalidReason" class="error-text">{{ totalBudgetSaveInvalidReason }}</p>
+        </div>
+        <strong v-else>{{ t('budgeting.budget_save.disabled') }}</strong>
+      </div>
+      <div v-if="totalSaveForm.enabled" class="detail-row-grid">
+        <div class="detail-block">
+          <small class="muted">{{ t('budgeting.budget_save.target') }}</small>
+          <strong>{{ selectedTotalTargetAccount?.name || '-' }}</strong>
+        </div>
+        <div class="detail-block">
+          <small class="muted">{{ t('budgeting.budget_save.source') }}</small>
+          <strong>{{ selectedTotalSourceAccount?.name || '-' }}</strong>
+        </div>
+      </div>
+      <div v-if="totalSaveForm.enabled" class="detail-block">
+        <small class="muted">{{ t('budgeting.budget_save.retroactive_mode') }}</small>
+        <strong>{{ t(`budgeting.budget_save.retroactive.${totalSaveForm.retroactiveMode}`) }}</strong>
+      </div>
+
+      <template #footer>
+        <button class="btn primary" @click="openTotalBudgetSaveConfig">{{ t('budgeting.edit') }}</button>
+      </template>
+    </InputBottomSheet>
+
+    <InputBottomSheet
+      :open="isTotalBudgetSaveConfigOpen"
+      :title="t('budgeting.budget_save.total_title')"
+      :body-class="'stack form-wrap'"
+      :show-footer="true"
+      :close-text="t('budgeting.sheet.close')"
+      @close="closeTotalBudgetSaveConfig"
+    >
+      <button
+        type="button"
+        class="switch-row"
+        :class="{ active: totalSaveForm.enabled }"
+        :aria-pressed="totalSaveForm.enabled ? 'true' : 'false'"
+        @click="totalSaveForm.enabled = !totalSaveForm.enabled"
+      >
+        <span class="switch-copy">
+          <strong>{{ totalSaveForm.enabled ? t('budgeting.budget_save.enabled') : t('budgeting.budget_save.disabled') }}</strong>
+          <small class="muted">{{ t('budgeting.budget_save.mode.monthly') }}</small>
+        </span>
+        <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+      </button>
+
+      <template v-if="totalSaveForm.enabled">
+        <label>
+          {{ t('budgeting.budget_save.target') }}
+          <CustomSelect v-model="totalSaveForm.targetAccountId" :groups="totalSaveTargetGroups" />
+        </label>
+
+        <label>
+          {{ t('budgeting.budget_save.source') }}
+          <CustomSelect v-model="totalSaveForm.sourceAccountId" :groups="totalSaveSourceGroups" />
+        </label>
+
+        <label>
+          {{ t('budgeting.budget_save.retroactive_mode') }}
+          <CustomSelect v-model="totalSaveForm.retroactiveMode" :options="retroactiveModeOptions" />
+        </label>
+
+        <p v-if="totalBudgetSaveInvalidReason" class="error-text">{{ totalBudgetSaveInvalidReason }}</p>
+      </template>
+
+      <template #footer>
+        <button class="btn" @click="closeTotalBudgetSaveConfig">{{ t('common.cancel') }}</button>
+        <button class="btn primary" :disabled="totalSaveLoading" @click="saveTotalBudgetSaveConfig">
+          {{ totalSaveLoading ? t('common.processing') : t('common.save') }}
+        </button>
+      </template>
+    </InputBottomSheet>
 
     <BudgetItemSheet
       :open="isSheetOpen"
@@ -174,6 +287,7 @@ import BudgetItemSheet from '@/ui/components/budget/BudgetItemSheet.vue'
 import BudgetMiniPie from '@/ui/components/budget/BudgetMiniPie.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
 
@@ -185,10 +299,14 @@ const { t, locale } = useI18n()
 
 const isSheetOpen = ref(false)
 const editingItem = ref(null)
+const detailItem = ref(null)
+const isItemDetailOpen = ref(false)
 const deleteDialogOpen = ref(false)
 const deleteLoading = ref(false)
 const pendingDeleteItemId = ref('')
 const totalSaveLoading = ref(false)
+const isTotalBudgetSaveDetailOpen = ref(false)
+const isTotalBudgetSaveConfigOpen = ref(false)
 const totalSaveForm = reactive({
   enabled: false,
   targetAccountId: '',
@@ -230,9 +348,13 @@ const totalSaveTargetGroups = computed(() => (
 ))
 const totalSaveTargetOptions = computed(() => totalSaveTargetGroups.value.flatMap((group) => group.options))
 
-const selectedTotalTargetAccount = computed(() => {
-  return accountStore.savingsJarAccounts.find((account) => String(account.id) === String(totalSaveForm.targetAccountId))
-})
+const selectedTotalTargetAccount = computed(() => (
+  accountStore.savingsJarAccounts.find((account) => String(account.id) === String(totalSaveForm.targetAccountId))
+))
+
+const selectedTotalSourceAccount = computed(() => (
+  accountStore.regularAccounts.find((account) => String(account.id) === String(totalSaveForm.sourceAccountId))
+))
 
 const totalSaveSourceGroups = computed(() => (
   buildAccountOptionGroups(accountStore.groups, accountStore.regularAccounts, {
@@ -259,14 +381,41 @@ const totalBudgetSaveStatusLabel = computed(() => {
 
 const totalBudgetSaveSummary = computed(() => {
   if (!totalSaveForm.enabled) return t('budgeting.budget_save.summary_off')
-  const target = accountStore.savingsJarAccounts.find((account) => String(account.id) === String(totalSaveForm.targetAccountId))
-  const source = accountStore.regularAccounts.find((account) => String(account.id) === String(totalSaveForm.sourceAccountId))
   return t('budgeting.budget_save.total_summary', {
-    source: source?.name || '-',
-    target: target?.name || '-',
+    source: selectedTotalSourceAccount.value?.name || '-',
+    target: selectedTotalTargetAccount.value?.name || '-',
     mode: t(`budgeting.budget_save.retroactive.${totalSaveForm.retroactiveMode}`),
   })
 })
+
+const detailItemAmountModeLabel = computed(() => {
+  if (!detailItem.value) return '-'
+  return isDailyAverageItem(detailItem.value)
+    ? t('budgeting.amount_mode.daily_average')
+    : t('budgeting.amount_mode.fixed')
+})
+
+const detailItemAmountLabel = computed(() => {
+  if (!detailItem.value) return '-'
+  if (!isDailyAverageItem(detailItem.value)) {
+    return formatMajor(itemBudgetMinor(detailItem.value))
+  }
+  return `${formatMajor(itemBaseMinor(detailItem.value))} / ${t('budgeting.amount_mode.daily_average')} · ${formatMajor(itemBudgetMinor(detailItem.value))}`
+})
+
+const detailItemUsedLabel = computed(() => (
+  detailItem.value ? formatMajor(itemSpentMinor(detailItem.value.category_id)) : '-'
+))
+
+const detailItemRemainingLabel = computed(() => (
+  detailItem.value ? formatMajor(itemRemainMinor(detailItem.value)) : '-'
+))
+
+const detailItemRuleText = computed(() => (
+  detailItem.value && isDailyAverageItem(detailItem.value)
+    ? itemDailyRuleSummary(detailItem.value)
+    : ''
+))
 
 watch(
   () => [budgetStore.budget, budgetStore.budgetSavePreferences],
@@ -465,6 +614,23 @@ function openEdit(item) {
   isSheetOpen.value = true
 }
 
+function openItemDetail(item) {
+  detailItem.value = item
+  isItemDetailOpen.value = true
+}
+
+function closeItemDetail() {
+  isItemDetailOpen.value = false
+  detailItem.value = null
+}
+
+function editDetailItem() {
+  if (!detailItem.value) return
+  const item = detailItem.value
+  closeItemDetail()
+  openEdit(item)
+}
+
 function closeSheet() {
   isSheetOpen.value = false
   editingItem.value = null
@@ -483,6 +649,13 @@ async function saveItem(payload) {
 function removeItem(itemId) {
   pendingDeleteItemId.value = itemId
   deleteDialogOpen.value = true
+}
+
+function requestRemoveItemFromDetail() {
+  const itemId = String(detailItem.value?.id ?? '').trim()
+  if (!itemId) return
+  closeItemDetail()
+  removeItem(itemId)
 }
 
 function closeDeleteDialog() {
@@ -532,15 +705,35 @@ async function saveTotalBudgetSaveConfig() {
       sourceAccountId: totalSaveForm.enabled ? totalSaveForm.sourceAccountId : null,
     })
     uiStore.pushToast(t('budgeting.budget_save.toast.saved'))
+    closeTotalBudgetSaveConfig()
   } catch (error) {
     uiStore.pushToast(resolveBudgetErrorMessage(error), 'error')
   } finally {
     totalSaveLoading.value = false
   }
 }
+
+function openTotalBudgetSaveDetail() {
+  isTotalBudgetSaveDetailOpen.value = true
+}
+
+function closeTotalBudgetSaveDetail() {
+  isTotalBudgetSaveDetailOpen.value = false
+}
+
+function openTotalBudgetSaveConfig() {
+  closeTotalBudgetSaveDetail()
+  isTotalBudgetSaveConfigOpen.value = true
+}
+
+function closeTotalBudgetSaveConfig() {
+  if (totalSaveLoading.value) return
+  isTotalBudgetSaveConfigOpen.value = false
+}
 </script>
 
-<style scoped>.panel {
+<style scoped>
+.panel {
   padding: 14px
 }
 h2, h3 {
@@ -578,16 +771,30 @@ h2, h3 {
   gap: 10px;
   background: color-mix(in srgb, var(--card) 92%, var(--surface-soft-accent) 8%);
 }
+.summary-entry-btn {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+}
 .budget-save-head {
   align-items: flex-start;
 }
 .budget-save-summary,
-.budget-save-inline small {
+.budget-save-inline-copy {
   margin: 0;
 }
-.budget-save-inline {
-  display: grid;
-  gap: 4px;
+.budget-save-inline-row {
+  align-items: center;
+  gap: 8px;
+}
+.budget-save-inline-copy {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .budget-save-chip {
   display: inline-flex;
@@ -615,9 +822,16 @@ h2, h3 {
   gap: 8px
 }
 .item-row {
+  border-radius: 10px;
+}
+.item-card-btn {
+  width: 100%;
   padding: 10px;
   border-radius: 10px;
   border: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  text-align: left;
 }
 .item-main {
   display: grid;
@@ -702,12 +916,30 @@ h2, h3 {
 .remain-line {
   color: var(--chart-budget-remain, var(--success, #1f9d55))
 }
-.item-actions-row {
-  justify-content: flex-end
+.detail-sheet-body {
+  gap: 12px;
 }
-.btn-wrap {
-  display: flex;
-  gap: 6px
+.detail-block {
+  display: grid;
+  gap: 4px;
+}
+.detail-row-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.detail-budget-save {
+  gap: 6px;
+}
+.detail-budget-save-line {
+  align-items: center;
+  gap: 8px;
+}
+.detail-budget-save-copy {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 label {
   display: grid;

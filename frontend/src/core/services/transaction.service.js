@@ -18,6 +18,7 @@ import {
   listCategoryGroups,
   updateCategoryIcon,
 } from '@/core/repositories/category.repo'
+import { findAccountById } from '@/core/repositories/account.repo'
 import { isSavingsJarAccount } from '@/core/repositories/savings-jar.repo'
 import { assertCanCreateReimbursement } from '@/core/services/membership.service'
 import { deleteLoanRepaymentByTransactionId } from '@/core/services/loan.service'
@@ -201,10 +202,15 @@ async function assertAccountAllowsDirectTransaction(ledgerId, accountId) {
 }
 
 function isRefundLinkedTransaction(tx) {
+  if (String(tx?.origin_type ?? '').trim() === 'refund') return true
   const categoryName = String(tx?.category_name ?? '').trim()
   const note = String(tx?.note ?? '').trim()
   if (!String(tx?.external_ref_id ?? '').trim()) return false
   return categoryName === '退款' || note.startsWith('退款：') || note.startsWith('退款:')
+}
+
+function normalizeCurrencyCode(value) {
+  return String(value ?? '').trim().toUpperCase()
 }
 
 function shouldCascadeDeleteToParent(tx) {
@@ -318,12 +324,62 @@ export async function createAdjustment(ledgerId, payload) {
 }
 
 export async function createRefundAdjustment(ledgerId, payload = {}) {
-  const refundCategoryId = await ensureHiddenRefundCategory(ledgerId)
   const sourceTransactionId = String(payload.sourceTransactionId ?? payload.externalRefId ?? '').trim()
+  if (!sourceTransactionId) {
+    throw new Error('缺少原始退款交易')
+  }
+
+  const sourceTx = await findTransactionRecordById(ledgerId, sourceTransactionId)
+  if (!sourceTx) {
+    throw new Error('找不到原始交易')
+  }
+  if (!['expense', 'income'].includes(String(sourceTx.type ?? ''))) {
+    throw new Error('只有收入或支出可以建立退款')
+  }
+  if (sourceTx.transfer_group_id) {
+    throw new Error('轉帳交易不可建立退款')
+  }
+  if (['reimbursement', 'loan_payment', 'refund'].includes(String(sourceTx.origin_type ?? '').trim())) {
+    throw new Error('此交易不可建立退款')
+  }
+
+  const existingRefunds = await listTransactionsByExternalRef(ledgerId, sourceTransactionId)
+  if (existingRefunds.some((item) => isRefundLinkedTransaction(item))) {
+    throw new Error('此交易已建立退款')
+  }
+
+  const targetAccountId = String(payload.accountId ?? sourceTx.account_id ?? '').trim()
+  if (!targetAccountId) {
+    throw new Error('請選擇退款帳戶')
+  }
+  await assertAccountAllowsDirectTransaction(ledgerId, targetAccountId)
+
+  const [sourceAccount, targetAccount] = await Promise.all([
+    findAccountById(ledgerId, sourceTx.account_id),
+    findAccountById(ledgerId, targetAccountId),
+  ])
+  if (!sourceAccount || !targetAccount) {
+    throw new Error('找不到有效退款帳戶')
+  }
+
+  const sourceCurrency = normalizeCurrencyCode(sourceAccount.currency_code)
+  const targetCurrency = normalizeCurrencyCode(targetAccount.currency_code)
+  if (sourceCurrency && targetCurrency && sourceCurrency !== targetCurrency) {
+    throw new Error('退款帳戶幣別必須與原交易帳戶一致')
+  }
+
+  const refundCategoryId = await ensureHiddenRefundCategory(ledgerId)
+  const sourceAmountMinor = Math.round(Number(sourceTx.amount_minor ?? 0))
+  if (!Number.isFinite(sourceAmountMinor) || sourceAmountMinor === 0) {
+    throw new Error('原始交易金額無效')
+  }
   return createAdjustment(ledgerId, {
     ...payload,
+    accountId: targetAccountId,
+    amountMinor: sourceAmountMinor < 0 ? Math.abs(sourceAmountMinor) : Math.abs(sourceAmountMinor) * -1,
     categoryId: refundCategoryId,
     externalRefId: sourceTransactionId || null,
+    originType: 'refund',
     includeInBudget: false,
     includeInAnalysis: false,
   })
@@ -381,6 +437,7 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
   if (!payload.occurredAt) {
     throw new Error('請選擇交易時間')
   }
+  const isRefundTransaction = String(currentTx.origin_type ?? '').trim() === 'refund'
 
   if (payload.type === 'transfer') {
     const peerAccountId = String(payload.peerAccountId ?? '').trim()
@@ -442,6 +499,9 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
 
   let amountMinor = Number(payload.amountMinor)
   if (payload.type === 'expense' || payload.type === 'income') {
+    if (isRefundTransaction) {
+      throw new Error('退款紀錄不可改為收入或支出')
+    }
     assertNonNegativeAmount(amountMinor)
     amountMinor = Math.abs(amountMinor)
     amountMinor = payload.type === 'expense' ? amountMinor * -1 : amountMinor
@@ -471,8 +531,8 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
     note: payload.note ?? null,
     isReimbursable,
     reimbursementState: isReimbursable ? 'pending' : 'none',
-    includeInBudget: payload.includeInBudget !== false,
-    includeInAnalysis: payload.includeInAnalysis !== false,
+    includeInBudget: isRefundTransaction ? false : payload.includeInBudget !== false,
+    includeInAnalysis: isRefundTransaction ? false : payload.includeInAnalysis !== false,
   })
 }
 

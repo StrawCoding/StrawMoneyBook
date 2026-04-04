@@ -36,6 +36,12 @@
         <strong>{{ statusText }}</strong>
       </div>
 
+      <div v-if="showExactAlarmAction" class="row action-row exact-alarm-row">
+        <button class="btn" :disabled="loading || saving || exactAlarmOpening" @click="openExactAlarmSettings">
+          {{ exactAlarmOpening ? t('common.processing') : t('settings_bookkeeping_reminder.open_exact_alarm') }}
+        </button>
+      </div>
+
       <div class="row action-row">
         <button class="btn primary" :disabled="loading || saving" @click="saveReminderSettings">
           {{ saving ? t('settings_bookkeeping_reminder.saving') : t('common.save') }}
@@ -70,6 +76,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import {
   getBookkeepingAchievement,
   getBookkeepingReminderSettings,
+  openBookkeepingReminderExactAlarmSettings,
   saveBookkeepingReminderSettings,
   syncBookkeepingReminderForLedger,
 } from '@/ui/services/bookkeeping-reminder.service'
@@ -79,6 +86,7 @@ const uiStore = useUiStore()
 const ledgerStore = useLedgerStore()
 const loading = ref(false)
 const saving = ref(false)
+const exactAlarmOpening = ref(false)
 const reminderStatus = ref('disabled')
 const form = reactive({
   enabled: false,
@@ -96,6 +104,9 @@ const statusText = computed(() => {
   if (reminderStatus.value === 'permission_denied') {
     return t('settings_bookkeeping_reminder.status.permission_denied')
   }
+  if (reminderStatus.value === 'exact_alarm_required') {
+    return t('settings_bookkeeping_reminder.status.exact_alarm_required')
+  }
   if (reminderStatus.value === 'unsupported') {
     return t('settings_bookkeeping_reminder.status.unsupported')
   }
@@ -104,6 +115,8 @@ const statusText = computed(() => {
   }
   return t('settings_bookkeeping_reminder.status.active')
 })
+
+const showExactAlarmAction = computed(() => reminderStatus.value === 'exact_alarm_required')
 
 const achievementMetrics = computed(() => [
   {
@@ -151,7 +164,13 @@ async function loadReminderPage(ledgerId) {
     achievement.bestStreak = stats.bestStreak
     achievement.totalBookkeepingDays = stats.totalBookkeepingDays
     achievement.lastBookkeepingDate = stats.lastBookkeepingDate
-    reminderStatus.value = settings.enabled && Capacitor.getPlatform() === 'web' ? 'unsupported' : settings.enabled ? 'active' : 'disabled'
+    if (Capacitor.getPlatform() === 'web') {
+      reminderStatus.value = settings.enabled ? 'unsupported' : 'disabled'
+      return
+    }
+
+    const result = await syncBookkeepingReminderForLedger(ledgerId, { requestPermission: false })
+    reminderStatus.value = result?.status ?? (settings.enabled ? 'active' : 'disabled')
   } catch (error) {
     uiStore.pushToast(error?.message || t('settings_bookkeeping_reminder.toast.load_failed'), 'error')
   } finally {
@@ -174,6 +193,8 @@ async function syncReminderInBackground(ledgerId, savedSettings) {
 
     if (reminderStatus.value === 'permission_denied') {
       uiStore.pushToast(t('settings_bookkeeping_reminder.toast.permission_denied'), 'error')
+    } else if (reminderStatus.value === 'exact_alarm_required') {
+      uiStore.pushToast(t('settings_bookkeeping_reminder.toast.exact_alarm_required'), 'error')
     } else if (reminderStatus.value === 'unsupported') {
       uiStore.pushToast(t('settings_bookkeeping_reminder.toast.unsupported'), 'error')
     }
@@ -217,6 +238,21 @@ async function saveReminderSettings() {
     uiStore.pushToast(error?.message || t('settings_bookkeeping_reminder.toast.save_failed'), 'error')
   } finally {
     saving.value = false
+  }
+}
+
+async function openExactAlarmSettings() {
+  exactAlarmOpening.value = true
+  try {
+    const result = await openBookkeepingReminderExactAlarmSettings()
+    if (result?.status === 'granted') {
+      uiStore.pushToast(t('settings_bookkeeping_reminder.toast.exact_alarm_updated'))
+    }
+    await loadReminderPage(String(ledgerStore.activeLedgerId ?? '').trim())
+  } catch (error) {
+    uiStore.pushToast(error?.message || t('settings_bookkeeping_reminder.toast.exact_alarm_failed'), 'error')
+  } finally {
+    exactAlarmOpening.value = false
   }
 }
 </script>
