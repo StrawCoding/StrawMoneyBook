@@ -407,6 +407,10 @@ async function syncBookkeepingReminderForLedgerInternal(ledgerId, options = {}) 
               hour: settings.hour,
               minute: settings.minute,
             },
+            // repeats: true is required for the notification to fire daily.
+            // Without it, Capacitor Local Notifications only schedules the alarm
+            // for the NEXT matching hour:minute and stops after firing once.
+            repeats: true,
             allowWhileIdle: true,
           },
           channelId: BOOKKEEPING_REMINDER_CHANNEL_ID,

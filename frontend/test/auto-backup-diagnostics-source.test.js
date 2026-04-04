@@ -53,3 +53,24 @@ test('auto backup settings page shows the latest auto-check reason and time', ()
   assert.match(settingsSource, /describeAutoBackupCheck\(googleBackupState\)/)
   assert.match(settingsSource, /describeAutoBackupCheck\(webdavBackupState\)/)
 })
+
+test('google auto backup surfaces auth failure as error instead of skip when backup is configured (SMB-110)', () => {
+  // Regression: when Google auth expires and the user has backup configured (autoEnabled or accountEmail),
+  // the service must write lastAutoCheckStatus: 'error' + lastAutoCheckReason: 'reauth_required'
+  // so that the UI reauth warning is shown.  Previously it silently wrote 'skipped'/'not_connected'.
+  assert.match(googleSource, /isAuthFailure/, 'must have isAuthFailure detection')
+  assert.match(googleSource, /reauth_required/, 'must surface reauth_required as the error reason')
+  assert.match(
+    googleSource,
+    /lastAutoCheckStatus: isAuthFailure \? 'error' : 'skipped'/,
+    'must write error status when auth failure detected in runGoogleAutoBackupIfDue',
+  )
+  assert.match(
+    googleSource,
+    /lastAutoCheckReason: isAuthFailure \? 'reauth_required' : skipReason/,
+    'must write reauth_required reason when auth failure detected',
+  )
+  // Ensure the pattern also applies to the data-change path
+  const authFailureMatches = [...googleSource.matchAll(/isAuthFailure \? 'error' : 'skipped'/g)]
+  assert.equal(authFailureMatches.length, 2, 'both runGoogleAutoBackupIfDue and runGoogleAutoBackupOnDataChange must detect auth failures')
+})

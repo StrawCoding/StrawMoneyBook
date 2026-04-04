@@ -430,3 +430,40 @@ test('syncBookkeepingRemindersForAllLedgers surfaces exact alarm status in the s
   assert.equal(summary.status, 'exact_alarm_required')
   assert.deepEqual(summary.results.map((item) => item.status), ['exact_alarm_required'])
 })
+
+test('syncBookkeepingReminderForLedger schedules daily repeating notifications with repeats: true', async () => {
+  // Regression test for SMB-116: without repeats: true, Capacitor Local Notifications
+  // only fires the alarm once at the next matching hour:minute, then stops.
+  const scheduledNotifications = []
+
+  setBookkeepingReminderDependenciesForTest({
+    getPlatform() {
+      return 'android'
+    },
+    async getSetting() {
+      return { enabled: true, hour: 21, minute: 0 }
+    },
+    async getLedger() {
+      return { id: 'ledger_alpha', name: '個人帳本', timezone: 'Asia/Taipei' }
+    },
+    async getLocalNotifications() {
+      return {
+        async checkPermissions() { return { display: 'granted' } },
+        async requestPermissions() { return { display: 'granted' } },
+        async checkExactNotificationSetting() { return { exact_alarm: 'granted' } },
+        async cancel() { return undefined },
+        async createChannel() { return undefined },
+        async schedule({ notifications }) {
+          scheduledNotifications.push(...notifications)
+        },
+      }
+    },
+  })
+
+  const result = await syncBookkeepingReminderForLedger('ledger_alpha', { requestPermission: true })
+
+  assert.equal(result.status, 'scheduled')
+  assert.equal(scheduledNotifications.length, 1)
+  assert.equal(scheduledNotifications[0].schedule.repeats, true, 'schedule must include repeats: true for daily recurrence')
+  assert.deepEqual(scheduledNotifications[0].schedule.on, { hour: 21, minute: 0 })
+})

@@ -75,6 +75,8 @@ Android 記帳提醒同步目前也已補強 Capacitor Local Notifications plugi
 
 Google Drive 自動備份在重新登入 / 靜默恢復連線成功後，也會同步清掉先前殘留的 `reauth_required` 自動檢查診斷狀態，不會已經重新授權成功了，設定頁還持續顯示「需要重新授權才能自動備份」。
 
+自動備份排程現在也會主動偵測 Google 授權失效（SMB-110 修正）：若用戶已設定自動備份（`autoEnabled` 或有綁定帳號），但靜默取 token 失敗導致 `connected: false`，不再只寫入 `skipped/not_connected`，而是改寫為 `error/reauth_required`，使設定頁能顯示明確的「需要重新授權」警示並提示用戶操作，不再讓自動備份靜默失效。
+
 從維護角度來看，前端已採用 View / Store / Service / Repository 分層，資料層則以 Capacitor + SQLite（含 Web / WASM）維持一致模型，讓功能擴充與跨平台維護成本更可控。
 
 另外，新帳本建立後會立即完成預算模組初始化並可正常載入空月預算，不會因預算項目查詢的欄位歧義中斷 onboarding 或帳本切換流程。
@@ -522,6 +524,7 @@ Android 端已有 Google Play 會員整合：
 - 提醒同步採序列化執行，並對全帳本背景同步做去重，避免前景儲存與背景刷新同時重複呼叫原生通知橋接
 - Android 13 會檢查通知權限，Android 12+ 會額外檢查 exact alarm 設定；若通知權限已開但精準提醒未開，頁面會明確顯示風險狀態與導向系統設定入口
 - 提醒狀態已明確區分為未啟用、通知權限未開、精準提醒未完整啟用、已啟用每日提醒，不再把「設定已存下」誤當成「排程已可靠完成」
+- 排程呼叫已加上 `repeats: true`，確保提醒每日重複觸發；未加此旗標時 Capacitor Local Notifications 只會在下一個符合時間點觸發一次即停止（SMB-116 修正）
 
 這代表產品不只支援事後查帳，也開始支援持續使用的養成型提醒與成就回饋。
 

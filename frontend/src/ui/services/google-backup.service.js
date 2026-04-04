@@ -431,10 +431,19 @@ export async function runGoogleAutoBackupIfDue(ledgerId) {
   const startedAt = new Date().toISOString()
   const skipReason = resolveGoogleAutoBackupSkipReason(state)
   if (skipReason) {
+    // When the user has backup configured but Google auth has expired or failed,
+    // treat it as an error (not just a skip) so that the UI shows a reauth warning.
+    // "not configured" cases (auto_disabled, not_due, offline) remain as skipped.
+    const isAuthFailure = (skipReason === 'not_connected' || skipReason === 'connect_restore_failed')
+      && (state.autoEnabled || Boolean(state.accountEmail))
     await saveState(ledgerId, {
       lastAutoCheckAt: startedAt,
-      lastAutoCheckStatus: 'skipped',
-      lastAutoCheckReason: skipReason,
+      lastAutoCheckStatus: isAuthFailure ? 'error' : 'skipped',
+      lastAutoCheckReason: isAuthFailure ? 'reauth_required' : skipReason,
+      ...(isAuthFailure ? {
+        lastBackupStatus: 'error',
+        lastError: t('settings_auto_backup.error.google.auto_backup_reauth_required', { detailSuffix: '' }),
+      } : {}),
     })
     return false
   }
@@ -478,12 +487,21 @@ export async function runGoogleAutoBackupOnDataChange(ledgerId) {
   const state = await autoConnectGoogleBackup(ledgerId)
   const startedAt = new Date().toISOString()
   if (!state.connected || !state.autoEnabled || !state.dataChangeAutoEnabled) {
+    const skipReason = !state.connected
+      ? (state.lastError ? 'connect_restore_failed' : 'not_connected')
+      : (!state.autoEnabled ? 'auto_disabled' : 'data_change_disabled')
+    // Same auth-failure detection as runGoogleAutoBackupIfDue: surface as error
+    // so the UI reauth warning is triggered instead of silently skipping.
+    const isAuthFailure = (skipReason === 'not_connected' || skipReason === 'connect_restore_failed')
+      && (state.autoEnabled || Boolean(state.accountEmail))
     await saveState(ledgerId, {
       lastAutoCheckAt: startedAt,
-      lastAutoCheckStatus: 'skipped',
-      lastAutoCheckReason: !state.connected
-        ? (state.lastError ? 'connect_restore_failed' : 'not_connected')
-        : (!state.autoEnabled ? 'auto_disabled' : 'data_change_disabled'),
+      lastAutoCheckStatus: isAuthFailure ? 'error' : 'skipped',
+      lastAutoCheckReason: isAuthFailure ? 'reauth_required' : skipReason,
+      ...(isAuthFailure ? {
+        lastBackupStatus: 'error',
+        lastError: t('settings_auto_backup.error.google.auto_backup_reauth_required', { detailSuffix: '' }),
+      } : {}),
     })
     return false
   }
