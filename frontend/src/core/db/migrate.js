@@ -27,6 +27,7 @@ import migration023 from '@/core/db/migrations/023_reimbursement_item_advance_so
 import migration024 from '@/core/db/migrations/024_savings_jars_auto_save.sql?raw'
 import migration025 from '@/core/db/migrations/025_budget_save.sql?raw'
 import migration026 from '@/core/db/migrations/026_transaction_origin_type_refund.sql?raw'
+import migration027 from '@/core/db/migrations/027_invoice_carrier.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -54,6 +55,7 @@ const MIGRATIONS = [
   { version: 24, name: 'savings_jars_auto_save', sql: migration024 },
   { version: 25, name: 'budget_save', sql: migration025 },
   { version: 26, name: 'transaction_origin_type_refund', sql: migration026 },
+  { version: 27, name: 'invoice_carrier', sql: migration027 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'

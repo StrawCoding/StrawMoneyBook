@@ -26,6 +26,7 @@ const { t } = useI18n()
 
 const features = computed(() => ([
   { to: '/settings/google-drive-ledger-sync', label: t('feature_list.google_drive_sync', '帳本同步'), icon: 'fa-solid fa-cloud-arrow-up' },
+  { to: '/settings/invoice-carrier', label: t('feature_list.invoice_carrier', '電子發票載具'), icon: 'fa-solid fa-file-invoice' },
   { to: '/loans', label: t('feature_list.loans'), icon: 'fa-solid fa-hand-holding-dollar' },
   { to: '/reimbursements', label: t('feature_list.reimbursements'), icon: 'fa-solid fa-receipt' },
   { to: '/claim-sheets', label: t('feature_list.claim_sheets'), icon: 'fa-solid fa-file-invoice-dollar' },

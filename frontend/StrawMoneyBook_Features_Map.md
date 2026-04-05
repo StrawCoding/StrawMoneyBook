@@ -27,6 +27,7 @@
 - 關於與聯絡入口（官網、Facebook、Instagram、Threads、Email、隱私權政策）
 - 官方網站 SEO / 品牌搜尋關鍵字（`../StrawMoneyBookWeb/index.html`：`StrawMoneyBook`、`稻草AI記帳`、`稻草記帳`、`AI記帳`、`對話記帳`、`自動記帳` 等）
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
+- 電子發票載具（Playwright 爬蟲自動化、OCR 驗證碼辨識、發票批量匯入）
 - Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化）
 
 ## 2. 路由與頁面對應
@@ -80,6 +81,9 @@
 | `/settings/bank-sync` | `src/ui/views/settings/SettingsBankSyncPage.vue` | 銀行同步管理 |
 | `/settings/bank-sync/new` | `src/ui/views/settings/SettingsBankSyncCreatePage.vue` | 新增銀行連線 |
 | `/settings/bank-sync/:id` | `src/ui/views/settings/SettingsBankSyncConnectionPage.vue` | 單一銀行連線設定 / 狀態 |
+| `/settings/invoice-carrier` | `src/ui/views/settings/SettingsInvoiceCarrierPage.vue` | 電子發票載具管理（列表） |
+| `/settings/invoice-carrier/new` | `src/ui/views/settings/SettingsInvoiceCarrierCreatePage.vue` | 新增電子發票載具 |
+| `/settings/invoice-carrier/:id` | `src/ui/views/settings/SettingsInvoiceCarrierConnectionPage.vue` | 單一載具詳情 / 發票匯入 |
 | `/settings/ledgers` | `src/ui/views/settings/SettingsLedgerPage.vue` | 帳本管理 |
 | `/settings/shared-ledgers` | `src/ui/views/settings/SettingsSharedLedgerPage.vue` | 共同帳本、Email 邀請、接受邀請與同步 |
 | `/settings/ledgers/:id` | `src/ui/views/settings/SettingsLedgerDetailPage.vue` | 帳本明細編輯/刪除 |
