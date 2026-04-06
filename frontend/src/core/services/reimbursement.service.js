@@ -329,12 +329,17 @@ export async function createReimbursementAdvanceEntry(ledgerId, payload = {}) {
       includeInAnalysis: false,
     })
 
+    const returnAmountMinor = payload.returnAmountMinor != null
+      ? Math.max(0, Math.round(Number(payload.returnAmountMinor) || 0)) || null
+      : null
+
     return createReimbursementAdvance(ledgerId, {
       id: advanceId,
       accountId,
       categoryId: null,
       sourceTxId: txId,
       amountMinor,
+      returnAmountMinor,
       note,
       receivedAt,
     })

@@ -24,19 +24,39 @@
           </label>
         </div>
       </details>
-      <small class="muted">{{ t('transaction_search.results_count', { count: filteredTransactions.length }) }}</small>
     </article>
 
     <article class="card panel">
+      <header class="row panel-head">
+        <small class="muted">{{ t('transaction_search.results_count', { count: filteredTransactions.length }) }}</small>
+        <button class="btn" :class="{ active: batchMode }" @click="toggleBatchMode">
+          {{ batchMode ? '取消批量' : '批量操作' }}
+        </button>
+      </header>
+
+      <div v-if="batchMode" class="batch-bar">
+        <button class="btn" @click="toggleSelectAll">
+          {{ selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? '取消全選' : '全選' }}
+        </button>
+        <span class="muted batch-count">已選 {{ selectedIds.size }} 筆</span>
+        <button class="btn primary" :disabled="selectedIds.size === 0 || batchWorking" @click="openBatchCategorySheet">
+          更改分類
+        </button>
+      </div>
+
       <ul class="tx-list">
         <li
           v-for="tx in filteredTransactions"
           :key="tx.id"
           class="tx-item"
+          :class="{ selectable: batchMode, selected: selectedIds.has(tx.id) }"
           role="button"
           tabindex="0"
-          @click="openEdit(tx)"
+          @click="batchMode ? toggleSelect(tx.id) : openEdit(tx)"
         >
+          <span v-if="batchMode" class="batch-checkbox" :class="{ checked: selectedIds.has(tx.id) }">
+            <font-awesome-icon v-if="selectedIds.has(tx.id)" icon="fa-solid fa-check" />
+          </span>
           <div class="tx-main">
             <strong class="tx-title">
               <font-awesome-icon v-if="categoryIcon(tx)" :icon="categoryIcon(tx)" class="tx-icon" />
@@ -63,6 +83,25 @@
       </ul>
     </article>
 
+    <InputBottomSheet
+      :open="batchCategorySheetOpen"
+      title="批量更改分類"
+      :body-class="'stack form-wrap'"
+      :show-footer="true"
+      :close-text="'取消'"
+      @close="closeBatchCategorySheet"
+    >
+      <label>
+        分類
+        <CustomSelect v-model="batchCategoryId" :groups="allCategoryGroups" :placeholder="'選擇分類（留空清除分類）'" />
+      </label>
+      <template #footer>
+        <button class="btn primary" :disabled="batchWorking" @click="applyBatchCategory">
+          {{ batchWorking ? '更新中...' : `套用至 ${selectedIds.size} 筆` }}
+        </button>
+      </template>
+    </InputBottomSheet>
+
   </section>
 </template>
 
@@ -71,12 +110,15 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
+import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { listAllTransactions } from '@/core/repositories/transaction.repo'
+import { batchPatchCategory } from '@/core/services/transaction.service'
 import { addonDeltaMajorFromNote, addonDeltaTagText, stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { useI18n } from '@/ui/services/i18n.service'
@@ -95,6 +137,11 @@ const startDay = ref('')
 const endDay = ref('')
 const transactions = ref([])
 const pendingOpenTxId = ref('')
+const batchMode = ref(false)
+const selectedIds = ref(new Set())
+const batchCategorySheetOpen = ref(false)
+const batchCategoryId = ref('')
+const batchWorking = ref(false)
 
 onMounted(() => {
   pendingOpenTxId.value = normalizeTxId(route.query.txId)
@@ -303,6 +350,69 @@ function tryOpenPendingTransaction() {
   clearTxIdQuery()
   openEdit(matched)
 }
+
+const allCategoryGroups = computed(() => {
+  return [
+    ...categoryStore.expenseCategoryGroups,
+    ...categoryStore.incomeCategoryGroups,
+  ]
+})
+
+function toggleBatchMode() {
+  batchMode.value = !batchMode.value
+  selectedIds.value = new Set()
+  batchCategoryId.value = ''
+}
+
+function toggleSelect(txId) {
+  const next = new Set(selectedIds.value)
+  if (next.has(txId)) {
+    next.delete(txId)
+  } else {
+    next.add(txId)
+  }
+  selectedIds.value = next
+}
+
+function toggleSelectAll() {
+  if (selectedIds.value.size === filteredTransactions.value.length && filteredTransactions.value.length > 0) {
+    selectedIds.value = new Set()
+  } else {
+    selectedIds.value = new Set(filteredTransactions.value.map((tx) => tx.id))
+  }
+}
+
+function openBatchCategorySheet() {
+  if (selectedIds.value.size === 0) return
+  batchCategoryId.value = ''
+  batchCategorySheetOpen.value = true
+}
+
+function closeBatchCategorySheet() {
+  if (batchWorking.value) return
+  batchCategorySheetOpen.value = false
+}
+
+async function applyBatchCategory() {
+  if (batchWorking.value || selectedIds.value.size === 0) return
+  const ledgerId = ledgerStore.activeLedgerId
+  if (!ledgerId) return
+
+  batchWorking.value = true
+  try {
+    const ids = Array.from(selectedIds.value)
+    await batchPatchCategory(ledgerId, ids, batchCategoryId.value || null)
+    await loadTransactions()
+    selectedIds.value = new Set()
+    batchCategorySheetOpen.value = false
+    batchMode.value = false
+    uiStore.pushToast(`已更新 ${ids.length} 筆交易的分類`)
+  } catch (error) {
+    uiStore.pushToast(error.message ?? '批量更改失敗', 'error')
+  } finally {
+    batchWorking.value = false
+  }
+}
 </script>
 
 <style scoped>.panel {
@@ -422,4 +532,46 @@ h2 {
 .empty {
   text-align: center;
   padding: 12px
+}
+.panel-head {
+  margin-bottom: 8px
+}
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  margin-bottom: 4px
+}
+.batch-count {
+  flex: 1
+}
+.tx-item.selectable {
+  cursor: pointer;
+  gap: 8px
+}
+.tx-item.selected {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, transparent)
+}
+.batch-checkbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--primary)
+}
+.batch-checkbox.checked {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff
+}
+.btn.active {
+  background: var(--primary);
+  color: #fff
 }</style>

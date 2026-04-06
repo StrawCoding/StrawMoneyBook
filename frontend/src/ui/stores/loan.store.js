@@ -5,8 +5,8 @@ import {
   addBatchLoanRepaymentByLoanIds,
   addLoanRepayment,
   createLoanWithOptionalTransaction,
+  deleteLoan,
   deleteLoanRepayment,
-  deleteVoidedLoan,
   getLoanDetail,
   loadLoanDashboard,
   restoreLoan,
@@ -145,7 +145,7 @@ export const useLoanStore = defineStore('loan', {
 
     async deleteVoided(loanId) {
       const ledgerStore = useLedgerStore()
-      await deleteVoidedLoan(ledgerStore.activeLedgerId, loanId)
+      await deleteLoan(ledgerStore.activeLedgerId, loanId)
       await this.load()
       if (this.detail?.loan?.id === loanId) {
         this.detail = null

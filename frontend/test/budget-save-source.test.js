@@ -21,7 +21,7 @@ const budgetRepoSource = readFileSync(
 )
 
 test('budgeting page exposes detail-first budget item and total save flows', () => {
-  assert.match(budgetingSource, /budgeting\.reserved/)
+  assert.doesNotMatch(budgetingSource, /budgeting\.reserved/)
   assert.match(budgetingSource, /@click="openItemDetail\(item\)"/)
   assert.match(budgetingSource, /const detailItem = ref\(null\)/)
   assert.match(budgetingSource, /const isItemDetailOpen = ref\(false\)/)
@@ -45,11 +45,12 @@ test('budgeting page exposes detail-first budget item and total save flows', () 
   assert.match(budgetingSource, /:groups="totalSaveSourceGroups"/)
 })
 
-test('home budget summary shows reserved amount in monthly and daily modes', () => {
+test('home budget summary shows reserved amount only in daily mode', () => {
   assert.match(homeBudgetSummarySource, /t\('budgeting\.reserved'\)/)
   assert.match(homeBudgetSummarySource, /budgetStore\.reservedMinor/)
   assert.match(homeBudgetSummarySource, /budgetStore\.reservedMinorByDate\(monthDateMeta\.value\.selectedDate, \{ includeReferenceDay: false \}\)/)
   assert.match(homeBudgetSummarySource, /reservedMinor: currentReservedMinor/)
+  assert.match(homeBudgetSummarySource, /v-if="mode\.key === 'daily'"[\s\S]*budgeting\.reserved/)
 })
 
 test('budget item sheet exposes item-level budget save controls', () => {

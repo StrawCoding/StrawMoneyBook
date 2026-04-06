@@ -25,6 +25,11 @@
         </label>
 
         <label>
+          歸還金額（元，留空則同代收金額）
+          <input v-model.number="form.returnAmountMajor" type="number" min="0" step="1" class="input" placeholder="可自訂歸還金額" />
+        </label>
+
+        <label>
           備註
           <input v-model.trim="form.note" type="text" class="input" placeholder="例如：公司先墊付報銷款" />
         </label>
@@ -60,6 +65,7 @@
 
             <div class="advance-meta">
               <small class="muted">帳戶：{{ advance.account_name || '未指定帳戶' }}</small>
+              <small v-if="advance.return_amount_minor != null" class="muted">歸還：<MoneyText :value-minor="advance.return_amount_minor" /></small>
               <small class="muted">可用：<MoneyText :value-minor="advance.available_minor" /></small>
               <small class="muted">已抵：<MoneyText :value-minor="advance.used_minor" /></small>
               <small class="muted">日期：{{ formatTime(advance.received_at) }}</small>
@@ -116,6 +122,7 @@ const deletingAdvanceId = ref('')
 const deleteTarget = ref(null)
 const form = reactive({
   amountMajor: 0,
+  returnAmountMajor: null,
   accountId: '',
   note: '',
 })
@@ -143,6 +150,7 @@ onMounted(async () => {
 
 function resetForm() {
   form.amountMajor = 0
+  form.returnAmountMajor = null
   form.accountId = String(accountStore.accounts[0]?.id ?? '')
   form.note = ''
 }
@@ -151,8 +159,12 @@ async function submitAdvance() {
   if (creating.value || !canCreateAdvance.value) return
   creating.value = true
   try {
+    const returnAmountMinorRaw = Number(form.returnAmountMajor ?? '')
     await reimbursementStore.createAdvance({
       amountMinor: Math.round(Number(form.amountMajor ?? 0) * 100),
+      returnAmountMinor: Number.isFinite(returnAmountMinorRaw) && returnAmountMinorRaw > 0
+        ? Math.round(returnAmountMinorRaw * 100)
+        : null,
       accountId: form.accountId,
       note: form.note,
       receivedAt: new Date().toISOString(),

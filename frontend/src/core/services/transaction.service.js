@@ -1,6 +1,7 @@
 import {
   addTransaction,
   addTransfer,
+  batchPatchCategoryForTransactions,
   countReimbursableTransactions,
   updateTransactionById,
   findTransactionById,
@@ -21,7 +22,7 @@ import {
 import { findAccountById } from '@/core/repositories/account.repo'
 import { isSavingsJarAccount } from '@/core/repositories/savings-jar.repo'
 import { assertCanCreateReimbursement } from '@/core/services/membership.service'
-import { deleteLoanRepaymentByTransactionId } from '@/core/services/loan.service'
+import { deleteLoanByExternalRefId } from '@/core/services/loan.service'
 import {
   removeAdvanceUsagesForExpenseTransaction,
   removeReimbursementAdvanceEffectsBySourceTransaction,
@@ -547,9 +548,10 @@ export async function deleteManualTransaction(ledgerId, txId) {
   }
 
   if (String(target.origin_type ?? '').trim() === 'loan_payment') {
-    const deletedLoanRepayment = await deleteLoanRepaymentByTransactionId(ledgerId, txId)
-    if (deletedLoanRepayment) {
-      return deletedLoanRepayment
+    const externalRefId = String(target.external_ref_id ?? '').trim()
+    const deletedLoan = externalRefId ? await deleteLoanByExternalRefId(ledgerId, externalRefId) : null
+    if (deletedLoan) {
+      return deletedLoan
     }
   }
 
@@ -564,4 +566,10 @@ export async function deleteManualTransaction(ledgerId, txId) {
     await removeReimbursementAdvanceEffectsBySourceTransaction(ledgerId, relatedTxId)
     await softDeleteTransactionById(ledgerId, relatedTxId)
   }
+}
+
+export async function batchPatchCategory(ledgerId, txIds, categoryId) {
+  const validIds = (txIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean)
+  if (!validIds.length) return 0
+  return batchPatchCategoryForTransactions(ledgerId, validIds, categoryId ?? null)
 }

@@ -673,3 +673,25 @@ export async function addTransfer(ledgerId, input) {
     return { transferGroupId, outTxId, inTxId }
   })
 }
+
+export async function batchPatchCategoryForTransactions(ledgerId, txIds, categoryId) {
+  assertLedgerId(ledgerId)
+  if (!Array.isArray(txIds) || txIds.length === 0) return 0
+
+  const now = nowIso()
+  let updated = 0
+  for (const txId of txIds) {
+    await run(
+      `UPDATE transactions
+       SET category_id = ?,
+           updated_at = ?
+       WHERE ledger_id = ?
+         AND id = ?
+         AND deleted_at IS NULL
+         AND type NOT IN ('transfer', 'adjustment');`,
+      [categoryId ?? null, now, ledgerId, txId],
+    )
+    updated += 1
+  }
+  return updated
+}

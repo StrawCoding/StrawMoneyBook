@@ -265,8 +265,7 @@ function canRepay(item) {
 }
 
 function canDeleteLoan(item) {
-  if (!item) return false
-  return item.direction === 'lend' || ['void', 'settled'].includes(item.status)
+  return Boolean(item)
 }
 
 function collectionLabel(item) {

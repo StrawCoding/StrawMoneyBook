@@ -213,6 +213,7 @@ export async function listReimbursementAdvances(ledgerId, options = {}) {
        ra.source_tx_id,
        ra.amount_minor,
        ra.used_minor,
+       ra.return_amount_minor,
        MAX(0, ra.amount_minor - ra.used_minor) AS available_minor,
        ra.note,
        ra.received_at,
@@ -250,6 +251,7 @@ export async function getReimbursementAdvanceById(ledgerId, advanceId) {
        ra.source_tx_id,
        ra.amount_minor,
        ra.used_minor,
+       ra.return_amount_minor,
        MAX(0, ra.amount_minor - ra.used_minor) AS available_minor,
        ra.note,
        ra.received_at,
@@ -281,8 +283,8 @@ export async function createReimbursementAdvance(ledgerId, input) {
   await run(
     `INSERT INTO reimbursement_advances (
       ledger_id, id, account_id, category_id, source_tx_id, amount_minor, used_minor,
-      note, received_at, created_at, updated_at, deleted_at
-    ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, NULL);`,
+      return_amount_minor, note, received_at, created_at, updated_at, deleted_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, NULL);`,
     [
       ledgerId,
       id,
@@ -290,6 +292,7 @@ export async function createReimbursementAdvance(ledgerId, input) {
       input.categoryId ?? null,
       input.sourceTxId ?? null,
       input.amountMinor,
+      input.returnAmountMinor ?? null,
       input.note ?? null,
       input.receivedAt,
       now,
@@ -469,6 +472,7 @@ export async function listReimbursementAdvancesByReimbursementId(ledgerId, reimb
        ra.source_tx_id,
        ra.amount_minor,
        ra.used_minor,
+       ra.return_amount_minor,
        MAX(0, ra.amount_minor - ra.used_minor) AS available_minor,
        ra.note,
        ra.received_at,
@@ -511,6 +515,7 @@ export async function listReimbursementAdvancesBySourceTxId(ledgerId, sourceTxId
        ra.source_tx_id,
        ra.amount_minor,
        ra.used_minor,
+       ra.return_amount_minor,
        MAX(0, ra.amount_minor - ra.used_minor) AS available_minor,
        ra.note,
        ra.received_at,

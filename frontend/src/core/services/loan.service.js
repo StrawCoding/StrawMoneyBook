@@ -836,6 +836,10 @@ export async function restoreLoan(ledgerId, loanId) {
 }
 
 export async function deleteVoidedLoan(ledgerId, loanId) {
+  return deleteLoan(ledgerId, loanId)
+}
+
+export async function deleteLoan(ledgerId, loanId) {
   if (!loanId) {
     throw new Error('loanId 為必填')
   }
@@ -845,16 +849,19 @@ export async function deleteVoidedLoan(ledgerId, loanId) {
     if (!loan) {
       throw new Error('找不到借貸資料')
     }
-    const canDelete = ['void', 'settled'].includes(loan.status) || loan.direction === 'lend'
-    if (!canDelete) {
-      throw new Error('僅借出或已完成借貸可刪除')
-    }
 
     await softDeleteTransactionsByOriginRef(ledgerId, 'loan_payment', loanId)
     await deleteLoanPaymentsByLoanId(ledgerId, loanId)
     await softDeleteLoanById(ledgerId, loanId)
     return { deleted: true, loanId }
   })
+}
+
+export async function deleteLoanByExternalRefId(ledgerId, externalRefId) {
+  if (!externalRefId) return null
+  const loan = await getLoanById(ledgerId, externalRefId)
+  if (!loan) return null
+  return deleteLoan(ledgerId, externalRefId)
 }
 
 export async function getLoanDetail(ledgerId, loanId) {

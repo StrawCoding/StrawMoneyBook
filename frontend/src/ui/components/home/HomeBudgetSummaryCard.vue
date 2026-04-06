@@ -33,7 +33,7 @@
                 <span class="muted">已用</span>
                 <MoneyText :value-minor="modeMetrics[mode.key].spentMinor" />
               </div>
-              <div class="line">
+              <div v-if="mode.key === 'daily'" class="line">
                 <span class="muted">{{ t('budgeting.reserved') }}</span>
                 <MoneyText :value-minor="modeMetrics[mode.key].reservedMinor" />
               </div>

@@ -26,10 +26,6 @@
           <span class="muted">{{ t('budgeting.remaining') }}</span>
           <MoneyText :value-minor="budgetStore.remainMinor" />
         </div>
-        <div class="row">
-          <span class="muted">{{ t('budgeting.reserved') }}</span>
-          <MoneyText :value-minor="budgetStore.reservedMinor" />
-        </div>
       </div>
 
       <section class="budget-save-panel">
