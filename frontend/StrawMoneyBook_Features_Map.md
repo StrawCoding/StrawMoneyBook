@@ -44,7 +44,7 @@
 | `/analysis` | `src/ui/views/analysis.vue` | 收支圖表分析（全部/年/月） |
 | `/analysis/category` | `src/ui/views/AnalysisCategoryDetailPage.vue` | 分類分析明細 |
 | `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 交易報表頁（CSV 匯出 + 列印 / PDF 版面） |
-| `/transactions/search` | `src/ui/views/TransactionSearchPage.vue` | 交易搜尋 |
+| `/transactions/search` | `src/ui/views/TransactionSearchPage.vue` | 交易搜尋（支援批量選取與批量編輯分類 / 備註 / 可報銷 / 預算 / 收支分析） |
 | `/transactions/quick-add` | `src/ui/views/BookkeepingPage.vue` | 手動快速新增模式（內嵌 `QuickAddPage.vue`） |
 | `/transactions/qna` | `src/ui/views/BookkeepingPage.vue` | 問答記帳模式（內嵌 `QnaBookkeepingPage.vue`） |
 | `/transactions/calendar` | `src/ui/views/CalendarPage.vue` | 交易日曆 |
@@ -181,7 +181,7 @@
 | 日期時間選擇 | `src/ui/components/common/DateTimePickerField.vue` |
 | 純時間選擇 | `src/ui/components/common/TimePickerField.vue` |
 | 共用輸入型 sheet 殼層 | `src/ui/components/common/InputBottomSheet.vue` |
-| 交易搜尋頁 | `src/ui/views/TransactionSearchPage.vue` |
+| 交易搜尋頁（支援批量編輯分類、備註、可報銷、是否納入預算 / 收支分析） | `src/ui/views/TransactionSearchPage.vue` |
 | 交易日曆頁 | `src/ui/views/CalendarPage.vue` |
 | 功能列表頁 | `src/ui/views/FeatureListPage.vue` |
 | 交易明細退款流程（選擇退款帳戶、避免重複退款） | `src/ui/views/TransactionAboutPage.vue` + `src/core/services/transaction.service.js` |

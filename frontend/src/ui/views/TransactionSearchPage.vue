@@ -39,8 +39,8 @@
           {{ selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? '取消全選' : '全選' }}
         </button>
         <span class="muted batch-count">已選 {{ selectedIds.size }} 筆</span>
-        <button class="btn primary" :disabled="selectedIds.size === 0 || batchWorking" @click="openBatchCategorySheet">
-          更改分類
+        <button class="btn primary" :disabled="selectedIds.size === 0 || batchWorking" @click="openBatchEditSheet">
+          批量編輯
         </button>
       </div>
 
@@ -84,19 +84,61 @@
     </article>
 
     <InputBottomSheet
-      :open="batchCategorySheetOpen"
-      title="批量更改分類"
+      :open="batchEditSheetOpen"
+      title="批量編輯交易"
       :body-class="'stack form-wrap'"
       :show-footer="true"
       :close-text="'取消'"
-      @close="closeBatchCategorySheet"
+      @close="closeBatchEditSheet"
     >
+      <div class="batch-summary muted">
+        已選 {{ selectedIds.size }} 筆
+        <span v-if="selectedBatchStats.expenseCount">・支出 {{ selectedBatchStats.expenseCount }}</span>
+        <span v-if="selectedBatchStats.incomeCount">・收入 {{ selectedBatchStats.incomeCount }}</span>
+        <span v-if="selectedBatchStats.transferCount">・轉帳 {{ selectedBatchStats.transferCount }}</span>
+        <span v-if="selectedBatchStats.adjustmentCount">・調整 {{ selectedBatchStats.adjustmentCount }}</span>
+      </div>
       <label>
         分類
-        <CustomSelect v-model="batchCategoryId" :groups="allCategoryGroups" :placeholder="'選擇分類（留空清除分類）'" />
+        <CustomSelect v-model="batchPatch.categoryId" :groups="batchCategoryGroups" :placeholder="'選擇分類（不變 / 指定分類）'" />
       </label>
+      <label>
+        備註
+        <CustomSelect v-model="batchPatch.noteMode" :options="batchNoteModeOptions" :placeholder="'選擇備註處理方式'" />
+      </label>
+      <label v-if="batchPatch.noteMode === 'replace'">
+        新備註
+        <textarea v-model.trim="batchPatch.note" class="textarea" rows="3" placeholder="輸入要套用到所有選取交易的備註" />
+      </label>
+      <label>
+        可報銷
+        <CustomSelect
+          v-model="batchPatch.isReimbursableMode"
+          :options="batchReimbursableOptions"
+          :placeholder="'選擇是否更新可報銷'"
+        />
+      </label>
+      <label>
+        納入預算
+        <CustomSelect
+          v-model="batchPatch.includeInBudgetMode"
+          :options="batchToggleOptions"
+          :placeholder="'選擇是否更新納入預算'"
+        />
+      </label>
+      <label>
+        納入收支分析
+        <CustomSelect
+          v-model="batchPatch.includeInAnalysisMode"
+          :options="batchToggleOptions"
+          :placeholder="'選擇是否更新納入收支分析'"
+        />
+      </label>
+      <p class="muted batch-hint">
+        分類只會套用到收入 / 支出交易；可報銷只會套用到支出交易。若所選交易中包含不適用項目，完成後會在結果摘要中顯示略過筆數。
+      </p>
       <template #footer>
-        <button class="btn primary" :disabled="batchWorking" @click="applyBatchCategory">
+        <button class="btn primary" :disabled="batchWorking" @click="applyBatchEdit">
           {{ batchWorking ? '更新中...' : `套用至 ${selectedIds.size} 筆` }}
         </button>
       </template>
@@ -106,7 +148,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
@@ -118,10 +160,16 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { listAllTransactions } from '@/core/repositories/transaction.repo'
-import { batchPatchCategory } from '@/core/services/transaction.service'
+import { batchPatchTransactions } from '@/core/services/transaction.service'
 import { addonDeltaMajorFromNote, addonDeltaTagText, stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { useI18n } from '@/ui/services/i18n.service'
+import {
+  BATCH_NOTE_MODE_CLEAR,
+  BATCH_NOTE_MODE_KEEP,
+  BATCH_NOTE_MODE_REPLACE,
+  BATCH_TOGGLE_KEEP,
+} from '@/core/services/transaction-batch-patch'
 
 const ledgerStore = useLedgerStore()
 const categoryStore = useCategoryStore()
@@ -139,9 +187,16 @@ const transactions = ref([])
 const pendingOpenTxId = ref('')
 const batchMode = ref(false)
 const selectedIds = ref(new Set())
-const batchCategorySheetOpen = ref(false)
-const batchCategoryId = ref('')
+const batchEditSheetOpen = ref(false)
 const batchWorking = ref(false)
+const batchPatch = reactive({
+  categoryId: '',
+  noteMode: BATCH_NOTE_MODE_KEEP,
+  note: '',
+  isReimbursableMode: BATCH_TOGGLE_KEEP,
+  includeInBudgetMode: BATCH_TOGGLE_KEEP,
+  includeInAnalysisMode: BATCH_TOGGLE_KEEP,
+})
 
 onMounted(() => {
   pendingOpenTxId.value = normalizeTxId(route.query.txId)
@@ -358,10 +413,69 @@ const allCategoryGroups = computed(() => {
   ]
 })
 
+const batchCategoryGroups = computed(() => {
+  return [
+    {
+      id: 'batch-keep',
+      name: '維持原值',
+      options: [{ value: '__keep__', label: '分類不變' }],
+    },
+    ...allCategoryGroups.value,
+  ]
+})
+
+const batchNoteModeOptions = [
+  { value: BATCH_NOTE_MODE_KEEP, label: '備註不變' },
+  { value: BATCH_NOTE_MODE_REPLACE, label: '覆蓋備註' },
+  { value: BATCH_NOTE_MODE_CLEAR, label: '清空備註' },
+]
+
+const batchToggleOptions = [
+  { value: BATCH_TOGGLE_KEEP, label: '維持原值' },
+  { value: 'true', label: '設為開啟' },
+  { value: 'false', label: '設為關閉' },
+]
+
+const batchReimbursableOptions = [
+  { value: BATCH_TOGGLE_KEEP, label: '維持原值' },
+  { value: 'true', label: '設為可報銷' },
+  { value: 'false', label: '設為不可報銷' },
+]
+
+const selectedBatchTransactions = computed(() => {
+  return transactions.value.filter((tx) => selectedIds.value.has(tx.id))
+})
+
+const selectedBatchStats = computed(() => {
+  return selectedBatchTransactions.value.reduce((summary, tx) => {
+    const type = String(tx?.type ?? '').trim()
+    if (type === 'expense') summary.expenseCount += 1
+    else if (type === 'income') summary.incomeCount += 1
+    else if (type === 'transfer') summary.transferCount += 1
+    else if (type === 'adjustment') summary.adjustmentCount += 1
+    return summary
+  }, {
+    expenseCount: 0,
+    incomeCount: 0,
+    transferCount: 0,
+    adjustmentCount: 0,
+  })
+})
+
+function resetBatchPatch() {
+  batchPatch.categoryId = '__keep__'
+  batchPatch.noteMode = BATCH_NOTE_MODE_KEEP
+  batchPatch.note = ''
+  batchPatch.isReimbursableMode = BATCH_TOGGLE_KEEP
+  batchPatch.includeInBudgetMode = BATCH_TOGGLE_KEEP
+  batchPatch.includeInAnalysisMode = BATCH_TOGGLE_KEEP
+}
+
 function toggleBatchMode() {
   batchMode.value = !batchMode.value
   selectedIds.value = new Set()
-  batchCategoryId.value = ''
+  batchEditSheetOpen.value = false
+  resetBatchPatch()
 }
 
 function toggleSelect(txId) {
@@ -382,18 +496,18 @@ function toggleSelectAll() {
   }
 }
 
-function openBatchCategorySheet() {
+function openBatchEditSheet() {
   if (selectedIds.value.size === 0) return
-  batchCategoryId.value = ''
-  batchCategorySheetOpen.value = true
+  resetBatchPatch()
+  batchEditSheetOpen.value = true
 }
 
-function closeBatchCategorySheet() {
+function closeBatchEditSheet() {
   if (batchWorking.value) return
-  batchCategorySheetOpen.value = false
+  batchEditSheetOpen.value = false
 }
 
-async function applyBatchCategory() {
+async function applyBatchEdit() {
   if (batchWorking.value || selectedIds.value.size === 0) return
   const ledgerId = ledgerStore.activeLedgerId
   if (!ledgerId) return
@@ -401,18 +515,36 @@ async function applyBatchCategory() {
   batchWorking.value = true
   try {
     const ids = Array.from(selectedIds.value)
-    await batchPatchCategory(ledgerId, ids, batchCategoryId.value || null)
+    const result = await batchPatchTransactions(ledgerId, ids, {
+      categoryId: batchPatch.categoryId === '__keep__' ? '' : batchPatch.categoryId,
+      noteMode: batchPatch.noteMode,
+      note: batchPatch.note,
+      isReimbursableMode: batchPatch.isReimbursableMode,
+      includeInBudgetMode: batchPatch.includeInBudgetMode,
+      includeInAnalysisMode: batchPatch.includeInAnalysisMode,
+    })
     await loadTransactions()
     selectedIds.value = new Set()
-    batchCategorySheetOpen.value = false
+    batchEditSheetOpen.value = false
     batchMode.value = false
-    uiStore.pushToast(`已更新 ${ids.length} 筆交易的分類`)
+    resetBatchPatch()
+    const summaryParts = [`已更新 ${result.updatedCount} 筆交易`]
+    if (result.skippedCount > 0) {
+      const firstReason = String(result.skipped?.[0]?.reason ?? '').trim()
+      summaryParts.push(`略過 ${result.skippedCount} 筆`)
+      if (firstReason) summaryParts.push(`原因：${firstReason}`)
+      uiStore.pushToast(summaryParts.join('，'), 'error')
+      return
+    }
+    uiStore.pushToast(summaryParts.join('，'))
   } catch (error) {
     uiStore.pushToast(error.message ?? '批量更改失敗', 'error')
   } finally {
     batchWorking.value = false
   }
 }
+
+resetBatchPatch()
 </script>
 
 <style scoped>.panel {
@@ -545,6 +677,11 @@ h2 {
 }
 .batch-count {
   flex: 1
+}
+.batch-summary,
+.batch-hint {
+  font-size: 12px;
+  line-height: 1.5
 }
 .tx-item.selectable {
   cursor: pointer;

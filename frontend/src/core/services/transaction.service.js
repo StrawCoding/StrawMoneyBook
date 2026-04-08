@@ -12,6 +12,11 @@ import {
   softDeleteTransferGroup,
 } from '@/core/repositories/transaction.repo'
 import {
+  buildBatchTransactionUpdateInput,
+  hasBatchTransactionPatchChanges,
+  normalizeBatchTransactionPatch,
+} from '@/core/services/transaction-batch-patch'
+import {
   archiveCategory,
   createCategory,
   createCategoryGroup,
@@ -572,4 +577,68 @@ export async function batchPatchCategory(ledgerId, txIds, categoryId) {
   const validIds = (txIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean)
   if (!validIds.length) return 0
   return batchPatchCategoryForTransactions(ledgerId, validIds, categoryId ?? null)
+}
+
+export async function batchPatchTransactions(ledgerId, txIds, rawPatch = {}) {
+  const validIds = Array.from(new Set((txIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean)))
+  if (!validIds.length) return {
+    updatedCount: 0,
+    skippedCount: 0,
+    skipped: [],
+  }
+
+  const patch = normalizeBatchTransactionPatch(rawPatch)
+  if (!hasBatchTransactionPatchChanges(patch)) {
+    throw new Error('請至少選擇一項要批量更新的欄位')
+  }
+
+  const skipped = []
+  const targets = []
+
+  for (const txId of validIds) {
+    const currentTx = await findTransactionRecordById(ledgerId, txId)
+    if (!currentTx) {
+      skipped.push({ txId, reason: '找不到交易資料' })
+      continue
+    }
+
+    const plan = buildBatchTransactionUpdateInput(currentTx, patch)
+    if (!plan.ok) {
+      skipped.push({ txId, reason: plan.reason || '此交易不支援該批量變更' })
+      continue
+    }
+
+    targets.push({
+      txId,
+      currentTx,
+      input: plan.input,
+    })
+  }
+
+  if (!targets.length) {
+    throw new Error(skipped[0]?.reason || '沒有可更新的交易')
+  }
+
+  if (patch.isReimbursableMode === 'true') {
+    const additionalReimbursableCount = targets.filter(({ currentTx, input }) => {
+      return input.isReimbursable && !Boolean(Number(currentTx?.is_reimbursable ?? 0))
+    }).length
+
+    if (additionalReimbursableCount > 0) {
+      const reimbursableCount = await countReimbursableTransactions(ledgerId)
+      for (let index = 0; index < additionalReimbursableCount; index += 1) {
+        assertCanCreateReimbursement(reimbursableCount + index)
+      }
+    }
+  }
+
+  for (const target of targets) {
+    await updateTransactionById(ledgerId, target.txId, target.input)
+  }
+
+  return {
+    updatedCount: targets.length,
+    skippedCount: skipped.length,
+    skipped,
+  }
 }
