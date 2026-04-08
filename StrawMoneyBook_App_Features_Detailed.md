@@ -83,6 +83,8 @@ Google Drive 自動備份在重新登入 / 靜默恢復連線成功後，也會�
 
 Android 發版目前也已把版本碼策略收斂成由語意版號自動推導的單調遞增規則，並保留一段 Play Store 歷史版本碼安全區間，避免 `0.x.y` 這類版本名稱在新版發佈時反而低於舊的商店版本碼；若 release 產物存在 `mapping.txt`，Play 上傳流程也會一起帶上去模糊化檔，降低 Crash / ANR 排查成本。
 
+另外，CI 的 Android release build 現在也已補上 `frontend/android/gradlew` 的可執行權限，避免 `./gradlew bundleRelease` 在 checkout 後因權限不足直接中斷，讓 bundleRelease 的驗證可以真正跑到 Gradle 階段。
+
 ### 2.4 官方網站品牌搜尋詞同步
 
 官方網站首頁目前已同步補齊品牌與功能搜尋詞，包含：

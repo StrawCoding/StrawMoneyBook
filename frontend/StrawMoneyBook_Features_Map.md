@@ -28,7 +28,7 @@
 - 官方網站 SEO / 品牌搜尋關鍵字（`../StrawMoneyBookWeb/index.html`：`StrawMoneyBook`、`稻草AI記帳`、`稻草記帳`、`AI記帳`、`對話記帳`、`自動記帳` 等）
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
 - ~~電子發票載具（暫時隱藏）~~（Playwright 爬蟲自動化、OCR 驗證碼辨識、發票批量匯入）
-- Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化）
+- Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗）
 
 ## 2. 路由與頁面對應
 
