@@ -82,16 +82,20 @@ export function escapeRegExp(value) {
 export function parseDateTimeFromText(text, now = new Date()) {
   const base = new Date(now)
   base.setSeconds(0, 0)
+  const source = String(text ?? '')
 
-  if (/前天|おととい|day\s+before\s+yesterday/i.test(text)) {
+  if (/前天|おととい|day\s+before\s+yesterday/i.test(source)) {
     base.setDate(base.getDate() - 2)
-  } else if (/昨天|昨日|yesterday/i.test(text)) {
+  } else if (/昨天|昨日|yesterday/i.test(source)) {
     base.setDate(base.getDate() - 1)
-  } else if (/明天|明日|tomorrow/i.test(text)) {
+  } else if (/明天|明日|tomorrow/i.test(source)) {
     base.setDate(base.getDate() + 1)
   }
 
-  const ymd = text.match(/(\d{4})\s*(?:[./-]|年)\s*(\d{1,2})\s*(?:[./-]|月)\s*(\d{1,2})(?:日)?/)
+  const ymd = findSafeDateMatch(
+    source,
+    /(\d{4})\s*(?:[./-]|年)\s*(\d{1,2})\s*(?:[./-]|月)\s*(\d{1,2})(?:日)?/g,
+  )
   if (ymd) {
     const year = Number(ymd[1])
     const month = Number(ymd[2]) - 1
@@ -100,17 +104,30 @@ export function parseDateTimeFromText(text, now = new Date()) {
       base.setFullYear(year, month, day)
     }
   } else {
-    const md = text.match(/(\d{1,2})\s*(?:[./-]|月)\s*(\d{1,2})(?:日)?/)
+    const md = findSafeDateMatch(
+      source,
+      /(\d{1,2})\s*(?:[./-]|月)\s*(\d{1,2})(?:日)?/g,
+    )
     if (md) {
       const month = Number(md[1]) - 1
       const day = Number(md[2])
-      if (Number.isFinite(month) && Number.isFinite(day)) {
+      if (
+        Number.isFinite(month)
+        && Number.isFinite(day)
+        && month >= 0
+        && month <= 11
+        && day >= 1
+        && day <= 31
+      ) {
         base.setMonth(month, day)
       }
     }
   }
 
-  const hm = text.match(/([01]?\d|2[0-3])\s*[:：]\s*([0-5]\d)\s*(am|pm|a\.m\.|p\.m\.|午前|午後)?/i)
+  const hm = findSafeTimeMatch(
+    source,
+    /([01]?\d|2[0-3])\s*[:：]\s*([0-5]\d)\s*(am|pm|a\.m\.|p\.m\.|午前|午後)?/gi,
+  )
   if (hm) {
     let hour = Number(hm[1])
     const minute = Number(hm[2])
@@ -125,8 +142,9 @@ export function parseDateTimeFromText(text, now = new Date()) {
     return base.toISOString()
   }
 
-  const hourOnly = text.match(
-    /(凌晨|早上|上午|中午|下午|晚上|午前|午後|morning|afternoon|evening|night)?\s*(\d{1,2})\s*(點|时|時|o'clock|oclock)?(?:\s*(\d{1,2})\s*(?:分|min|minutes?)?)?\s*(am|pm|a\.m\.|p\.m\.)?/i,
+  const hourOnly = findSafeTimeMatch(
+    source,
+    /(凌晨|早上|上午|中午|下午|晚上|午前|午後|morning|afternoon|evening|night)?\s*(\d{1,2})\s*(點|时|時|o'clock|oclock)?(?:\s*(\d{1,2})\s*(?:分|min|minutes?)?)?\s*(am|pm|a\.m\.|p\.m\.)?/gi,
   )
   if (hourOnly) {
     const hasExplicitTimeMarker = Boolean(hourOnly[1] || hourOnly[3] || hourOnly[5])
@@ -151,6 +169,35 @@ export function parseDateTimeFromText(text, now = new Date()) {
   }
 
   return base.toISOString()
+}
+
+function findSafeDateMatch(text, pattern) {
+  for (const match of String(text ?? '').matchAll(pattern)) {
+    if (isSafeDateOrTimeMatch(text, match)) return match
+  }
+  return null
+}
+
+function findSafeTimeMatch(text, pattern) {
+  for (const match of String(text ?? '').matchAll(pattern)) {
+    if (isSafeDateOrTimeMatch(text, match)) return match
+  }
+  return null
+}
+
+function isSafeDateOrTimeMatch(text, match) {
+  const source = String(text ?? '')
+  const matchedText = String(match?.[0] ?? '')
+  const start = Number(match?.index ?? -1)
+  if (!matchedText || start < 0) return false
+  const end = start + matchedText.length
+  const left = source[start - 1] ?? ''
+  const right = source[end] ?? ''
+
+  if (/\d/.test(left) || /\d/.test(right)) return false
+  if (/[+\-*/]/.test(left) || /[+\-*/]/.test(right)) return false
+
+  return true
 }
 
 export function parseAmountMajor(text) {

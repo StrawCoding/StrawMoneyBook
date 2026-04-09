@@ -75,3 +75,18 @@ test('parseAutoBookkeepingText keeps addon items separate from the main amount w
   assert.equal(result.draft?.addonItems?.[0]?.deltaMajor, 5)
   assert.match(result.draft?.note ?? '', /朋友聚餐/)
 })
+
+test('parseAutoBookkeepingText does not treat amount subtraction as month-day and keeps the intended relative date', () => {
+  const result = parseAutoBookkeepingText('昨天午餐 120-20', buildContext())
+
+  assert.equal(result.draft?.amountMajor, 100)
+  assert.equal(result.draft?.occurredAt?.slice(0, 10), '2026-03-19')
+})
+
+test('parseAutoBookkeepingText does not treat amount addition as a time token', () => {
+  const result = parseAutoBookkeepingText('今天午餐 120+20', buildContext())
+
+  assert.equal(result.draft?.amountMajor, 140)
+  assert.equal(result.draft?.occurredAt?.slice(0, 10), '2026-03-20')
+  assert.equal(result.draft?.occurredAt?.slice(11, 16), '08:00')
+})
