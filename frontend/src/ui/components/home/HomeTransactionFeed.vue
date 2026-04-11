@@ -145,10 +145,10 @@ function dateLabelOf(iso) {
 }
 
 function labelOf(type) {
-  if (type === 'expense') return '支出'
-  if (type === 'income') return '收入'
-  if (type === 'transfer') return '轉帳'
-  return '結餘'
+  if (type === 'expense') return t('home_tx.type.expense')
+  if (type === 'income') return t('home_tx.type.income')
+  if (type === 'transfer') return t('home_tx.type.transfer')
+  return t('home_tx.type.balance')
 }
 
 function labelOfTransaction(tx) {
@@ -203,8 +203,8 @@ function loanTransactionIcon(tx) {
 }
 
 function accountNameOfTransaction(tx) {
-  if (!tx?.account_id) return '未知帳戶'
-  return accountStore.accounts.find((item) => item.id === tx.account_id)?.name ?? '未知帳戶'
+  if (!tx?.account_id) return t('home_tx.unknown_account')
+  return accountStore.accounts.find((item) => item.id === tx.account_id)?.name ?? t('home_tx.unknown_account')
 }
 
 function formatTime(iso) {
@@ -332,10 +332,8 @@ h3 {
   height: 100%;
   width: 22px;
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
   align-items: center;
-  display: flex;
+  justify-content: center;
   flex-shrink: 0
 }
 .tx-side {

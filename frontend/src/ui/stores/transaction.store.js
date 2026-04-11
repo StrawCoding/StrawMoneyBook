@@ -19,6 +19,9 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 
+// 首頁「全部」模式的顯示上限，避免超大帳本一次載入幾千筆造成 UI 卡頓
+const HOME_ALL_TRANSACTIONS_DISPLAY_LIMIT = 3000
+
 export const useTransactionStore = defineStore('transaction', {
   state: () => ({
     recent: [],
@@ -92,7 +95,7 @@ export const useTransactionStore = defineStore('transaction', {
       this.homeLoading = true
       try {
         if (normalizedMode === 'all') {
-          this.homeRecent = await listAllTransactions(ledgerId)
+          this.homeRecent = await listAllTransactions(ledgerId, { limit: HOME_ALL_TRANSACTIONS_DISPLAY_LIMIT })
           return
         }
         if (normalizedMode === 'year') {

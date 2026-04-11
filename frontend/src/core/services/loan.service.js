@@ -1,5 +1,6 @@
 import { withTransaction } from '@/core/db/sqlite'
 import { nowIso } from '@/core/utils/id'
+import { findAccountById } from '@/core/repositories/account.repo'
 import { ensureCounterpartyByName } from '@/core/repositories/counterparty.repo'
 import {
   createCategory,
@@ -16,6 +17,7 @@ import {
   getLoanById,
   getLoanPaymentById,
   getLoanPaymentByGeneratedTransactionId,
+  getLoanSetupTransaction,
   listLoanPayments,
   listLoans,
   softDeleteLoanById,
@@ -31,6 +33,7 @@ import {
   updateTransactionById,
 } from '@/core/repositories/transaction.repo'
 import { assertCanCreateLoan } from '@/core/services/membership.service'
+import { isSavingsJarAccount } from '@/core/repositories/savings-jar.repo'
 
 function validateDirection(direction) {
   if (!['lend', 'borrow'].includes(direction)) {
@@ -136,6 +139,20 @@ function resolveLoanCollectionLabel(loan) {
 
 function buildLoanPaymentNote(loan) {
   return `借貸${resolveLoanCollectionLabel(loan)}：${loan?.counterparty_name ?? ''}`
+}
+
+async function assertLoanTransactionAccount(ledgerId, accountId) {
+  const normalizedAccountId = String(accountId ?? '').trim()
+  if (!normalizedAccountId) {
+    throw new Error('請選擇帳戶')
+  }
+  const account = await findAccountById(ledgerId, normalizedAccountId)
+  if (!account) {
+    throw new Error('找不到帳戶')
+  }
+  if (await isSavingsJarAccount(ledgerId, normalizedAccountId)) {
+    throw new Error('存錢罐不可直接作為借貸帳戶')
+  }
 }
 
 async function ensureLoanInterestCategory(ledgerId, kind) {
@@ -617,6 +634,48 @@ export async function updateLoanRepayment(ledgerId, payload) {
       principalComponentMinor,
       interestComponentMinor,
       remainingMinor: Math.max(0, targetTotalMinor - nextPaidMinor),
+    }
+  })
+}
+
+export async function updateLoanSetupAccount(ledgerId, payload) {
+  const loanId = String(payload?.loanId ?? '').trim()
+  const accountId = String(payload?.accountId ?? '').trim()
+
+  if (!loanId) {
+    throw new Error('loanId 為必填')
+  }
+
+  await assertLoanTransactionAccount(ledgerId, accountId)
+
+  return withTransaction(async () => {
+    const loan = await getLoanById(ledgerId, loanId)
+    if (!loan) {
+      throw new Error('找不到借貸資料')
+    }
+
+    const setupTx = await getLoanSetupTransaction(ledgerId, loanId)
+    if (!setupTx?.id) {
+      throw new Error('找不到借貸建立交易')
+    }
+
+    await updateTransactionById(ledgerId, setupTx.id, {
+      accountId,
+      peerAccountId: null,
+      categoryId: setupTx.category_id ?? null,
+      amountMinor: Number(setupTx.amount_minor ?? 0),
+      occurredAt: setupTx.occurred_at,
+      note: setupTx.note ?? null,
+      isReimbursable: Number(setupTx.is_reimbursable ?? 0) === 1,
+      reimbursementState: setupTx.reimbursement_state ?? 'none',
+      includeInBudget: Number(setupTx.include_in_budget ?? 1) === 1,
+      includeInAnalysis: Number(setupTx.include_in_analysis ?? 1) === 1,
+    })
+
+    return {
+      loanId,
+      txId: setupTx.id,
+      accountId,
     }
   })
 }

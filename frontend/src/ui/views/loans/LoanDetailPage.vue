@@ -19,6 +19,7 @@
 
         <div class="row"><small class="muted">本金</small><MoneyText :value-minor="loan.principal_minor" /></div>
         <div class="row"><small class="muted">預設利息</small><MoneyText :value-minor="loan.preset_interest_minor ?? 0" /></div>
+        <div class="row"><small class="muted">建立入帳帳戶</small><span>{{ loan.setup_account_name || '—' }}</span></div>
         <div class="row"><small class="muted">{{ paidLabel(loan) }}</small><MoneyText :value-minor="loan.paid_minor" /></div>
         <div class="row">
           <small class="muted">已還本金 / 利息</small>
@@ -31,6 +32,7 @@
 
         <div class="row btn-wrap">
           <button v-if="!showFinished" class="btn" @click="openRepaySheet" :disabled="!canRepay(loan)">{{ collectionLabel(loan) }}</button>
+          <button class="btn" @click="openSetupAccountSheet">變更入帳帳戶</button>
           <button class="btn" @click="refreshDetail">刷新</button>
           <button v-if="!showFinished" class="btn" @click="openVoidDialog" :disabled="loan.status === 'void'">完成</button>
           <button v-if="showFinished" class="btn" @click="openPrincipalSheet">變更本金</button>
@@ -92,6 +94,25 @@
       <template #footer>
         <button class="btn" @click="closeRepaySheet">取消</button>
         <button class="btn primary" @click="submitRepayment">{{ editingRepayment ? '儲存變更' : '儲存' }}</button>
+      </template>
+    </InputBottomSheet>
+
+    <InputBottomSheet
+      :open="setupAccountOpen"
+      title="變更入帳帳戶"
+      :body-class="'stack form-wrap'"
+      :sheet-class="'sheet'"
+      :show-footer="true"
+      @close="closeSetupAccountSheet"
+    >
+              <p class="muted">{{ loan?.counterparty_name }} / 目前帳戶 {{ loan?.setup_account_name || '—' }}</p>
+              <label>
+                帳戶
+                <CustomSelect v-model="setupAccountForm.accountId" :options="accountStore.accounts" />
+              </label>
+      <template #footer>
+        <button class="btn" @click="closeSetupAccountSheet">取消</button>
+        <button class="btn primary" @click="submitSetupAccount">儲存</button>
       </template>
     </InputBottomSheet>
 
@@ -166,10 +187,14 @@ const budgetStore = useBudgetStore()
 const repayOpen = ref(false)
 const editingRepayment = ref(null)
 const principalOpen = ref(false)
+const setupAccountOpen = ref(false)
 const repayForm = reactive({
   amountMajor: null,
   accountId: '',
   note: '',
+})
+const setupAccountForm = reactive({
+  accountId: '',
 })
 const principalForm = reactive({
   principalMajor: null,
@@ -303,6 +328,16 @@ function closeRepaySheet() {
   editingRepayment.value = null
 }
 
+function openSetupAccountSheet() {
+  if (!loan.value) return
+  setupAccountOpen.value = true
+  setupAccountForm.accountId = String(loan.value.setup_account_id ?? defaultAccountId.value)
+}
+
+function closeSetupAccountSheet() {
+  setupAccountOpen.value = false
+}
+
 function openDeleteRepaymentDialog(payment) {
   if (!payment?.id) return
   deleteRepaymentDialog.open = true
@@ -359,6 +394,21 @@ async function submitRepayment() {
     closeRepaySheet()
   } catch (error) {
     uiStore.pushToast(error.message ?? (editingRepayment.value ? `更新${collectionLabel(loan.value)}失敗` : `${collectionLabel(loan.value)}失敗`), 'error')
+  }
+}
+
+async function submitSetupAccount() {
+  if (!loan.value) return
+  try {
+    await loanStore.updateSetupAccount({
+      loanId: loan.value.id,
+      accountId: setupAccountForm.accountId,
+    })
+    await refreshLinkedData()
+    uiStore.pushToast('借貸入帳帳戶已更新')
+    closeSetupAccountSheet()
+  } catch (error) {
+    uiStore.pushToast(error.message ?? '更新借貸入帳帳戶失敗', 'error')
   }
 }
 
@@ -421,6 +471,11 @@ function closeConfirmDialog() {
 function onRequestCloseOverlay(event) {
   if (repayOpen.value) {
     closeRepaySheet()
+    event.preventDefault()
+    return
+  }
+  if (setupAccountOpen.value) {
+    closeSetupAccountSheet()
     event.preventDefault()
     return
   }

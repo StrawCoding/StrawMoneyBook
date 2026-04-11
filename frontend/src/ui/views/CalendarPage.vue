@@ -94,6 +94,7 @@ import { useI18n } from '@/ui/services/i18n.service'
 import { addonDeltaMajorFromNote, addonDeltaTagText } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
+import { monthKeyFromDate, dateKeyFromDate } from '@/core/utils/id'
 
 const router = useRouter()
 const ledgerStore = useLedgerStore()
@@ -274,19 +275,6 @@ function formatMinor(minor) {
     minimumFractionDigits: value % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   }).format(value / 100)
-}
-
-function monthKeyFromDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  return `${y}-${m}`
-}
-
-function dateKeyFromDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
 }
 
 function dateKeyFromIso(iso) {

@@ -14,6 +14,7 @@
 - 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、列印 / PDF 版面）
 - 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細）
+- 借貸建立後可於借貸明細變更「建立入帳帳戶」，會直接修正該筆初始借入 / 借出交易的帳戶歸屬
 - 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出）
 - 存錢罐、訂閱追蹤與自動存提
 - AI 自動記帳（文字解析、語音輸入、會員次數限制）
@@ -345,6 +346,9 @@ UI 服務目錄：`src/ui/services/`
 - 前端頁面應優先透過對應 store 操作，不直接在 view 內寫入 DB。
 - 業務規則集中在 service 層，若調整規則，優先改 service。
 - SQL 與資料結構調整，先改 repository，再檢查對應 store/action。
+- **日期工具統一使用 `src/core/utils/id.js` 的 `monthKeyFromDate` / `dateKeyFromDate`**，禁止在 view / service 內重複定義相同邏輯。
+- **多步驟刪除/寫入操作須包裝在 `withTransaction`（來自 `@/core/db/sqlite`）** 以確保資料完整性，參考 `transaction.service.js:deleteManualTransaction`。
+- `transaction.repo.js:listAllTransactions` 支援可選 `{ limit }` 參數；首頁「全部」模式已預設限制為 3000 筆（`HOME_ALL_TRANSACTIONS_DISPLAY_LIMIT`）；分析/搜尋頁仍使用無限制版本。
 - 若新增主頁功能，優先考慮：`home.vue` + `HomeTransactionFeed.vue` + `transaction.store.js`。
 - 若新增分析維度，優先考慮：`analysis.vue` 與 `transaction.repo.js` 的查詢方法。
 - 若調整交易報表欄位或匯出格式，優先考慮：`AnalysisPrintPage.vue` + `export.service.js`，並同步檢查列印 / PDF 版面。

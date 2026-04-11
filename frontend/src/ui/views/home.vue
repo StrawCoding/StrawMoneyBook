@@ -81,6 +81,7 @@ import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { getPreferredBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
+import { monthKeyFromDate, dateKeyFromDate } from '@/core/utils/id'
 
 const route = useRoute()
 const router = useRouter()
@@ -221,19 +222,6 @@ const currentRangeLabel = computed(() => {
 
 function openQuickAdd() {
   void router.push(getPreferredBookkeepingPath()).catch(() => {})
-}
-
-function monthKeyFromDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  return `${y}-${m}`
-}
-
-function dateKeyFromDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
 }
 
 function normalizeMonthKey(value) {

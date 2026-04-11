@@ -286,6 +286,7 @@ import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
+import { monthKeyFromDate } from '@/core/utils/id'
 
 const budgetStore = useBudgetStore()
 const accountStore = useAccountStore()
@@ -469,12 +470,6 @@ function shiftMonthKey(monthKey, offset = 0) {
   if (!year || !month) return ''
   const next = new Date(year, month - 1 + offset, 1)
   return monthKeyFromDate(next)
-}
-
-function monthKeyFromDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  return `${y}-${m}`
 }
 
 function categoryName(categoryId) {

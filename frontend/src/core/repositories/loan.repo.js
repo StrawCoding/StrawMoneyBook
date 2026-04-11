@@ -20,6 +20,23 @@ export async function listLoans(ledgerId) {
        l.note,
        l.created_at,
        (
+         SELECT t.account_id
+         FROM transactions t
+         WHERE t.ledger_id = l.ledger_id
+           AND t.origin_type = 'loan_payment'
+           AND t.external_ref_id = l.id
+           AND t.deleted_at IS NULL
+           AND t.type = CASE WHEN l.direction = 'lend' THEN 'expense' ELSE 'income' END
+           AND NOT EXISTS (
+             SELECT 1
+             FROM loan_payments lp_ref
+             WHERE lp_ref.ledger_id = t.ledger_id
+               AND (lp_ref.generated_tx_id = t.id OR lp_ref.generated_interest_tx_id = t.id)
+           )
+         ORDER BY t.created_at ASC, t.id ASC
+         LIMIT 1
+       ) AS setup_account_id,
+       (
          SELECT a.name
          FROM transactions t
          LEFT JOIN accounts a
@@ -30,7 +47,13 @@ export async function listLoans(ledgerId) {
            AND t.external_ref_id = l.id
            AND t.deleted_at IS NULL
            AND t.type = CASE WHEN l.direction = 'lend' THEN 'expense' ELSE 'income' END
-         ORDER BY t.occurred_at ASC, t.created_at ASC
+           AND NOT EXISTS (
+             SELECT 1
+             FROM loan_payments lp_ref
+             WHERE lp_ref.ledger_id = t.ledger_id
+               AND (lp_ref.generated_tx_id = t.id OR lp_ref.generated_interest_tx_id = t.id)
+           )
+         ORDER BY t.created_at ASC, t.id ASC
          LIMIT 1
        ) AS setup_account_name,
        (
@@ -41,7 +64,13 @@ export async function listLoans(ledgerId) {
            AND t.external_ref_id = l.id
            AND t.deleted_at IS NULL
            AND t.type = CASE WHEN l.direction = 'lend' THEN 'expense' ELSE 'income' END
-         ORDER BY t.occurred_at ASC, t.created_at ASC
+           AND NOT EXISTS (
+             SELECT 1
+             FROM loan_payments lp_ref
+             WHERE lp_ref.ledger_id = t.ledger_id
+               AND (lp_ref.generated_tx_id = t.id OR lp_ref.generated_interest_tx_id = t.id)
+           )
+         ORDER BY t.created_at ASC, t.id ASC
          LIMIT 1
        ) AS setup_occurred_at,
        COALESCE(SUM(lp.amount_minor), 0) AS paid_minor,
@@ -97,6 +126,23 @@ export async function getLoanById(ledgerId, loanId) {
        l.updated_at,
        l.settled_at,
        (
+         SELECT t.account_id
+         FROM transactions t
+         WHERE t.ledger_id = l.ledger_id
+           AND t.origin_type = 'loan_payment'
+           AND t.external_ref_id = l.id
+           AND t.deleted_at IS NULL
+           AND t.type = CASE WHEN l.direction = 'lend' THEN 'expense' ELSE 'income' END
+           AND NOT EXISTS (
+             SELECT 1
+             FROM loan_payments lp_ref
+             WHERE lp_ref.ledger_id = t.ledger_id
+               AND (lp_ref.generated_tx_id = t.id OR lp_ref.generated_interest_tx_id = t.id)
+           )
+         ORDER BY t.created_at ASC, t.id ASC
+         LIMIT 1
+       ) AS setup_account_id,
+       (
          SELECT a.name
          FROM transactions t
          LEFT JOIN accounts a
@@ -107,7 +153,13 @@ export async function getLoanById(ledgerId, loanId) {
            AND t.external_ref_id = l.id
            AND t.deleted_at IS NULL
            AND t.type = CASE WHEN l.direction = 'lend' THEN 'expense' ELSE 'income' END
-         ORDER BY t.occurred_at ASC, t.created_at ASC
+           AND NOT EXISTS (
+             SELECT 1
+             FROM loan_payments lp_ref
+             WHERE lp_ref.ledger_id = t.ledger_id
+               AND (lp_ref.generated_tx_id = t.id OR lp_ref.generated_interest_tx_id = t.id)
+           )
+         ORDER BY t.created_at ASC, t.id ASC
          LIMIT 1
        ) AS setup_account_name,
        (
@@ -118,7 +170,13 @@ export async function getLoanById(ledgerId, loanId) {
            AND t.external_ref_id = l.id
            AND t.deleted_at IS NULL
            AND t.type = CASE WHEN l.direction = 'lend' THEN 'expense' ELSE 'income' END
-         ORDER BY t.occurred_at ASC, t.created_at ASC
+           AND NOT EXISTS (
+             SELECT 1
+             FROM loan_payments lp_ref
+             WHERE lp_ref.ledger_id = t.ledger_id
+               AND (lp_ref.generated_tx_id = t.id OR lp_ref.generated_interest_tx_id = t.id)
+           )
+         ORDER BY t.created_at ASC, t.id ASC
          LIMIT 1
        ) AS setup_occurred_at,
        COALESCE(SUM(lp.amount_minor), 0) AS paid_minor,
@@ -261,6 +319,47 @@ export async function getLoanPaymentByGeneratedTransactionId(ledgerId, txId) {
        AND (p.generated_tx_id = ? OR p.generated_interest_tx_id = ?)
      LIMIT 1;`,
     [ledgerId, txId, txId],
+  )
+
+  return firstRow(result)
+}
+
+export async function getLoanSetupTransaction(ledgerId, loanId) {
+  assertLedgerId(ledgerId)
+  if (!loanId) return null
+
+  const result = await query(
+    `SELECT
+       t.id,
+       t.type,
+       t.account_id,
+       t.category_id,
+       t.amount_minor,
+       t.occurred_at,
+       t.note,
+       t.is_reimbursable,
+       t.reimbursement_state,
+       t.include_in_budget,
+       t.include_in_analysis
+     FROM transactions t
+     LEFT JOIN loans l
+       ON l.ledger_id = t.ledger_id
+      AND l.id = t.external_ref_id
+     WHERE t.ledger_id = ?
+       AND t.origin_type = 'loan_payment'
+       AND t.external_ref_id = ?
+       AND t.deleted_at IS NULL
+       AND l.deleted_at IS NULL
+       AND t.type = CASE WHEN l.direction = 'lend' THEN 'expense' ELSE 'income' END
+       AND NOT EXISTS (
+         SELECT 1
+         FROM loan_payments lp_ref
+         WHERE lp_ref.ledger_id = t.ledger_id
+           AND (lp_ref.generated_tx_id = t.id OR lp_ref.generated_interest_tx_id = t.id)
+       )
+     ORDER BY t.created_at ASC, t.id ASC
+     LIMIT 1;`,
+    [ledgerId, loanId],
   )
 
   return firstRow(result)

@@ -541,12 +541,9 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
     if (!budgetMonthKey) continue
 
     const items = await dependencies.listBudgetItems(ledgerId, budget.id)
+    const { startUtc: budgetMonthStartUtc, endUtc: budgetMonthEndUtc } = monthRangeUtc(budgetMonthKey, ledgerTimeZone)
     const monthlySpentMap = buildSpentMinorMap(
-      await dependencies.computeBudgetSpentByCategory(
-        ledgerId,
-        monthRangeUtc(budgetMonthKey, ledgerTimeZone).startUtc,
-        monthRangeUtc(budgetMonthKey, ledgerTimeZone).endUtc,
-      ),
+      await dependencies.computeBudgetSpentByCategory(ledgerId, budgetMonthStartUtc, budgetMonthEndUtc),
     )
 
     const itemsByCategory = new Map()

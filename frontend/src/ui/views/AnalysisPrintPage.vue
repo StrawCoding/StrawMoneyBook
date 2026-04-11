@@ -176,6 +176,7 @@ import {
 } from '@/core/services/export.service'
 import { useI18n } from '@/ui/services/i18n.service'
 import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
+import { monthKeyFromDate } from '@/core/utils/id'
 
 const route = useRoute()
 const ledgerStore = useLedgerStore()
@@ -472,12 +473,6 @@ function buildBarRows(items) {
 onBeforeUnmount(() => {
   revokeBlobUrl(exportedUrl.value)
 })
-
-function monthKeyFromDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  return `${y}-${m}`
-}
 
 function dayKeyFromDate(date) {
   const y = date.getFullYear()

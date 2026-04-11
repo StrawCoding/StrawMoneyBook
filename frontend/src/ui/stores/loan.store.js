@@ -11,6 +11,7 @@ import {
   loadLoanDashboard,
   restoreLoan,
   updateCompletedLoanPrincipal,
+  updateLoanSetupAccount,
   updateLoanRepayment,
   voidLoan,
 } from '@/core/services/loan.service'
@@ -116,6 +117,18 @@ export const useLoanStore = defineStore('loan', {
     async updateCompletedPrincipal(payload) {
       const ledgerStore = useLedgerStore()
       const result = await updateCompletedLoanPrincipal(ledgerStore.activeLedgerId, payload)
+      await this.load()
+      if (payload.loanId) {
+        await this.loadDetail(payload.loanId)
+      } else if (this.detail?.loan?.id) {
+        await this.loadDetail(this.detail.loan.id)
+      }
+      return result
+    },
+
+    async updateSetupAccount(payload) {
+      const ledgerStore = useLedgerStore()
+      const result = await updateLoanSetupAccount(ledgerStore.activeLedgerId, payload)
       await this.load()
       if (payload.loanId) {
         await this.loadDetail(payload.loanId)

@@ -3,6 +3,7 @@ import { createId, nowIso } from '@/core/utils/id'
 import { assertLedgerId, firstRow, rowsOf } from '@/core/repositories/base.repo'
 import { yieldToMainThread } from '@/core/utils/cooperative-yield'
 
+
 function monthRangeUtc(monthKey) {
   const [year, month] = monthKey.split('-').map((part) => Number(part))
   const start = new Date(year, month - 1, 1, 0, 0, 0)
@@ -172,8 +173,9 @@ export async function listTransactionsByDay(ledgerId, dayKey) {
   return rowsOf(result)
 }
 
-export async function listAllTransactions(ledgerId) {
+export async function listAllTransactions(ledgerId, { limit } = {}) {
   assertLedgerId(ledgerId)
+  const hasLimit = Number.isFinite(limit) && limit > 0
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
             t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
@@ -192,8 +194,9 @@ export async function listAllTransactions(ledgerId) {
       AND c.id = t.category_id
      WHERE t.ledger_id = ?
        AND t.deleted_at IS NULL
-     ORDER BY t.occurred_at DESC, t.created_at DESC;`,
-    [ledgerId],
+     ORDER BY t.occurred_at DESC, t.created_at DESC
+     ${hasLimit ? 'LIMIT ?' : ''};`,
+    hasLimit ? [ledgerId, limit] : [ledgerId],
   )
   return rowsOf(result)
 }

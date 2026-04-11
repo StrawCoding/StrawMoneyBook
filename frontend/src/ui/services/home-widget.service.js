@@ -1,17 +1,12 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { listTransactionsByMonth } from '@/core/repositories/transaction.repo'
 import { buildHomeWidgetSummaryPayload } from '@/ui/services/home-widget-summary'
+import { monthKeyFromDate } from '@/core/utils/id'
 
 const HomeWidget = registerPlugin('HomeWidget')
 
 function isAndroidNativeRuntime() {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
-}
-
-function monthKeyFromDate(date = new Date()) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  return `${year}-${month}`
 }
 
 export function isHomeWidgetSupported() {

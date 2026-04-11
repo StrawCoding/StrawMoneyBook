@@ -86,6 +86,7 @@ import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
+import { monthKeyFromDate } from '@/core/utils/id'
 
 const route = useRoute()
 const router = useRouter()
@@ -345,11 +346,7 @@ function parseMonthKey(value) {
   return source
 }
 
-function monthKeyFromDate(date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  return `${year}-${month}`
-}
+
 </script>
 
 <style scoped>

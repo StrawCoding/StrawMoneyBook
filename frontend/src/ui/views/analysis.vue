@@ -208,6 +208,7 @@ import { useUiStore } from '@/ui/stores/ui.store'
 import { listAllTransactions, listTransactionsByMonth, listTransactionsByYear } from '@/core/repositories/transaction.repo'
 import { useI18n } from '@/ui/services/i18n.service'
 import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
+import { monthKeyFromDate } from '@/core/utils/id'
 
 const accountStore = useAccountStore()
 const categoryStore = useCategoryStore()
@@ -700,11 +701,7 @@ function daysInMonthOf(year, month) {
   return new Date(year, month, 0).getDate()
 }
 
-function monthKeyFromDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  return `${y}-${m}`
-}
+
 </script>
 
 <style scoped>

@@ -1,3 +1,4 @@
+import { withTransaction } from '@/core/db/sqlite'
 import {
   addTransaction,
   addTransfer,
@@ -566,11 +567,13 @@ export async function deleteManualTransaction(ledgerId, txId) {
   }
 
   const cascadeDeleteIds = await collectCascadeDeleteTransactionIds(ledgerId, target)
-  for (const relatedTxId of cascadeDeleteIds) {
-    await removeAdvanceUsagesForExpenseTransaction(ledgerId, relatedTxId)
-    await removeReimbursementAdvanceEffectsBySourceTransaction(ledgerId, relatedTxId)
-    await softDeleteTransactionById(ledgerId, relatedTxId)
-  }
+  await withTransaction(async () => {
+    for (const relatedTxId of cascadeDeleteIds) {
+      await removeAdvanceUsagesForExpenseTransaction(ledgerId, relatedTxId)
+      await removeReimbursementAdvanceEffectsBySourceTransaction(ledgerId, relatedTxId)
+      await softDeleteTransactionById(ledgerId, relatedTxId)
+    }
+  })
 }
 
 export async function batchPatchCategory(ledgerId, txIds, categoryId) {
