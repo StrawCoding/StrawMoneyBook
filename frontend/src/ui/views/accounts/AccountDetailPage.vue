@@ -204,7 +204,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { listTransactionsByAccount } from '@/core/repositories/transaction.repo'
+import { listTransactionsForAccount } from '@/core/services/transaction-query.service'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
@@ -413,7 +413,7 @@ async function refreshTransactions() {
 
   refreshing.value = true
   try {
-    transactions.value = await listTransactionsByAccount(ledgerId, accountId.value)
+    transactions.value = await listTransactionsForAccount(ledgerId, accountId.value)
   } finally {
     refreshing.value = false
   }

@@ -80,7 +80,7 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
-import { listAllTransactions, listTransactionsByMonth, listTransactionsByYear } from '@/core/repositories/transaction.repo'
+import { listTransactionsForAnalysis } from '@/core/services/transaction-query.service'
 import { useI18n } from '@/ui/services/i18n.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
@@ -195,15 +195,14 @@ async function loadStatsTransactions() {
 
   try {
     await ensureReferenceData(ledgerId)
-    if (mode.value === 'year') {
-      statsTransactions.value = await listTransactionsByYear(ledgerId, String(selectedYear.value))
-      return
-    }
-    if (mode.value === 'month') {
-      statsTransactions.value = await listTransactionsByMonth(ledgerId, selectedMonth.value)
-      return
-    }
-    statsTransactions.value = await listAllTransactions(ledgerId)
+    statsTransactions.value = await listTransactionsForAnalysis(ledgerId, {
+      mode: mode.value,
+      key: mode.value === 'year'
+        ? String(selectedYear.value)
+        : mode.value === 'month'
+          ? selectedMonth.value
+          : '',
+    })
   } catch (error) {
     uiStore.pushToast(error.message ?? t('analysis_category_detail.toast.load_failed'), 'error')
   }

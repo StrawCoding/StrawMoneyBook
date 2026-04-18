@@ -240,7 +240,7 @@ import AppDialog from '@/ui/components/common/AppDialog.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
-import { listAllTransactions } from '@/core/repositories/transaction.repo'
+import { loadTransactionDetailContext } from '@/core/services/transaction-query.service'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
@@ -654,8 +654,9 @@ async function load() {
       categoryStore.load(),
       addonTemplateStore.load(),
     ])
-    allTransactions.value = await listAllTransactions(ledgerId)
-    transaction.value = allTransactions.value.find((item) => item.id === txId.value) ?? null
+    const detailContext = await loadTransactionDetailContext(ledgerId, txId.value)
+    allTransactions.value = detailContext.allTransactions
+    transaction.value = detailContext.transaction
     hydrateModelFromTransaction()
   } catch (error) {
     uiStore.pushToast(error.message ?? t('transaction_about.toast.load_failed'), 'error')

@@ -205,10 +205,18 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { listAllTransactions, listTransactionsByMonth, listTransactionsByYear } from '@/core/repositories/transaction.repo'
+import { listTransactionsForAnalysis } from '@/core/services/transaction-query.service'
 import { useI18n } from '@/ui/services/i18n.service'
 import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 import { monthKeyFromDate } from '@/core/utils/id'
+import {
+  buildAccountBalanceBreakdown,
+  buildBarRows,
+  buildBreakdownRows,
+  buildPieStyle,
+  buildTimeBarRows,
+  resolveTimeBarSearchRange,
+} from '@/core/utils/analysis-breakdown'
 
 const accountStore = useAccountStore()
 const categoryStore = useCategoryStore()
@@ -296,11 +304,63 @@ watch(
   { immediate: true },
 )
 
-const incomeBreakdown = computed(() => buildBreakdown('income', 'category'))
-const expenseBreakdown = computed(() => buildBreakdown('expense', 'category'))
-const incomeAccountBreakdown = computed(() => buildBreakdown('income', 'account'))
-const expenseAccountBreakdown = computed(() => buildBreakdown('expense', 'account'))
-const totalAccountBreakdown = computed(() => buildAccountBalanceBreakdown())
+const incomeBreakdown = computed(() => buildBreakdownRows({
+  transactions: statsTransactions.value,
+  type: 'income',
+  scope: 'category',
+  shouldIncludeTransaction: isCountableForIncomeExpense,
+  categoryNameMap: categoryNameMap.value,
+  categoryIconMap: categoryIconMap.value,
+  accountNameMap: accountNameMap.value,
+  accountIconMap: accountIconMap.value,
+  getUncategorizedLabel: () => t('analysis_page.uncategorized'),
+  getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
+  swatches: CHART_MULTI_COLOR_SWATCHES,
+}))
+const expenseBreakdown = computed(() => buildBreakdownRows({
+  transactions: statsTransactions.value,
+  type: 'expense',
+  scope: 'category',
+  shouldIncludeTransaction: isCountableForIncomeExpense,
+  categoryNameMap: categoryNameMap.value,
+  categoryIconMap: categoryIconMap.value,
+  accountNameMap: accountNameMap.value,
+  accountIconMap: accountIconMap.value,
+  getUncategorizedLabel: () => t('analysis_page.uncategorized'),
+  getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
+  swatches: CHART_MULTI_COLOR_SWATCHES,
+}))
+const incomeAccountBreakdown = computed(() => buildBreakdownRows({
+  transactions: statsTransactions.value,
+  type: 'income',
+  scope: 'account',
+  shouldIncludeTransaction: isCountableForIncomeExpense,
+  categoryNameMap: categoryNameMap.value,
+  categoryIconMap: categoryIconMap.value,
+  accountNameMap: accountNameMap.value,
+  accountIconMap: accountIconMap.value,
+  getUncategorizedLabel: () => t('analysis_page.uncategorized'),
+  getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
+  swatches: CHART_MULTI_COLOR_SWATCHES,
+}))
+const expenseAccountBreakdown = computed(() => buildBreakdownRows({
+  transactions: statsTransactions.value,
+  type: 'expense',
+  scope: 'account',
+  shouldIncludeTransaction: isCountableForIncomeExpense,
+  categoryNameMap: categoryNameMap.value,
+  categoryIconMap: categoryIconMap.value,
+  accountNameMap: accountNameMap.value,
+  accountIconMap: accountIconMap.value,
+  getUncategorizedLabel: () => t('analysis_page.uncategorized'),
+  getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
+  swatches: CHART_MULTI_COLOR_SWATCHES,
+}))
+const totalAccountBreakdown = computed(() => buildAccountBalanceBreakdown({
+  accounts: accountStore.accounts,
+  accountBalanceMap: accountBalanceMap.value,
+  swatches: CHART_MULTI_COLOR_SWATCHES,
+}))
 
 const incomeTotalMinor = computed(() => incomeBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
 const expenseTotalMinor = computed(() => expenseBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
@@ -319,13 +379,14 @@ const activeCount = computed(() => (analysisType.value === 'income' ? incomeCoun
 const activePieStyle = computed(() => (analysisType.value === 'income' ? incomePieStyle.value : expensePieStyle.value))
 const activeBarRows = computed(() => buildBarRows(activeBreakdown.value))
 const activeTypeLabel = computed(() => (analysisType.value === 'income' ? t('analysis_page.type.income') : t('analysis_page.type.expense')))
-const timeBarRows = computed(() => buildTimeBarRows(
-  statsTransactions.value,
-  analysisType.value,
-  mode.value,
-  selectedYear.value,
-  selectedMonth.value,
-))
+const timeBarRows = computed(() => buildTimeBarRows({
+  transactions: statsTransactions.value,
+  type: analysisType.value,
+  mode: mode.value,
+  year: selectedYear.value,
+  monthKey: selectedMonth.value,
+  shouldIncludeTransaction: isCountableForIncomeExpense,
+}))
 const timeBarTitle = computed(() => {
   if (mode.value === 'year') return t('analysis_page.chart.month_bar')
   if (mode.value === 'all') return t('analysis_page.chart.year_bar')
@@ -397,7 +458,12 @@ function openAccountBreakdownDetail(item) {
 }
 
 function openTimeBarSearch(item) {
-  const range = resolveTimeBarSearchRange(item)
+  const range = resolveTimeBarSearchRange({
+    mode: mode.value,
+    bucketId: item?.id,
+    year: selectedYear.value,
+    monthKey: selectedMonth.value,
+  })
   if (!range) return
   void router.push({
     name: 'transaction-search',
@@ -416,291 +482,18 @@ async function loadStatsTransactions() {
   }
 
   try {
-    if (mode.value === 'year') {
-      statsTransactions.value = await listTransactionsByYear(ledgerId, String(selectedYear.value))
-      return
-    }
-    if (mode.value === 'month') {
-      statsTransactions.value = await listTransactionsByMonth(ledgerId, selectedMonth.value)
-      return
-    }
-    statsTransactions.value = await listAllTransactions(ledgerId)
+    statsTransactions.value = await listTransactionsForAnalysis(ledgerId, {
+      mode: mode.value,
+      key: mode.value === 'year'
+        ? String(selectedYear.value)
+        : mode.value === 'month'
+          ? selectedMonth.value
+          : '',
+    })
   } catch (error) {
     uiStore.pushToast(error.message ?? t('analysis_page.toast.load_failed'), 'error')
   }
 }
-
-function buildBreakdown(type, scope = 'category') {
-  const map = new Map()
-  for (const tx of statsTransactions.value) {
-    if (!isCountableForIncomeExpense(tx)) continue
-    if (tx.type !== type || tx.origin_type === 'loan_payment') continue
-    const key = scope === 'account'
-      ? (tx.account_id || '__unassigned_account__')
-      : (tx.category_id || '__uncategorized__')
-    const amount = type === 'expense' ? Math.abs(Number(tx.amount_minor ?? 0)) : Number(tx.amount_minor ?? 0)
-    if (!Number.isFinite(amount) || amount <= 0) continue
-    const current = map.get(key) || { amountMinor: 0, count: 0 }
-    current.amountMinor += amount
-    current.count += 1
-    map.set(key, current)
-  }
-
-  const rows = Array.from(map.entries())
-    .map(([id, aggregate]) => ({
-      id,
-      amountMinor: aggregate.amountMinor,
-      count: aggregate.count,
-      name: resolveBreakdownName(id, scope),
-      icon: resolveBreakdownIcon(id, scope),
-    }))
-    .sort((a, b) => b.amountMinor - a.amountMinor)
-
-  const total = rows.reduce((sum, row) => sum + row.amountMinor, 0)
-  if (!total) return []
-  const palette = buildThemePalette(rows.length)
-
-  return rows.map((row, index) => ({
-    ...row,
-    color: palette[index],
-    percent: Math.round((row.amountMinor / total) * 100),
-  }))
-}
-
-function buildAccountBalanceBreakdown() {
-  const rows = accountStore.accounts
-    .map((account) => {
-      const balanceMinor = accountBalanceMap.value.get(account.id) ?? Number(account.opening_balance_minor ?? 0)
-      return {
-        id: account.id,
-        amountMinor: Number(balanceMinor) || 0,
-        magnitudeMinor: Math.abs(Number(balanceMinor) || 0),
-        count: 1,
-        name: account.name,
-        icon: String(account.icon ?? '').trim(),
-      }
-    })
-    .sort((a, b) => b.amountMinor - a.amountMinor)
-
-  if (!rows.length) return []
-
-  const totalMagnitude = rows.reduce((sum, row) => sum + row.magnitudeMinor, 0)
-  const palette = buildThemePalette(rows.length)
-
-  return rows.map((row, index) => ({
-    ...row,
-    color: palette[index],
-    percent: totalMagnitude > 0 ? Math.round((row.magnitudeMinor / totalMagnitude) * 100) : 0,
-  }))
-}
-
-function resolveBreakdownName(id, scope) {
-  if (scope === 'account') {
-    if (id === '__unassigned_account__') return t('analysis_page.unassigned_account')
-    return accountNameMap.value.get(id) || t('analysis_page.unassigned_account')
-  }
-  if (id === '__uncategorized__') return t('analysis_page.uncategorized')
-  return categoryNameMap.value.get(id) || t('analysis_page.uncategorized')
-}
-
-function resolveBreakdownIcon(id, scope) {
-  if (scope === 'account') {
-    if (id === '__unassigned_account__') return ''
-    return accountIconMap.value.get(id) || ''
-  }
-  if (id === '__uncategorized__') return ''
-  return categoryIconMap.value.get(id) || ''
-}
-
-function buildPieStyle(items) {
-  if (!items.length) {
-    return { background: 'conic-gradient(var(--chart-track) 0deg 360deg)' }
-  }
-
-  const total = items.reduce((sum, item) => sum + item.amountMinor, 0)
-  let cursor = 0
-  const segments = []
-
-  for (const item of items) {
-    const deg = (item.amountMinor / total) * 360
-    const start = cursor
-    const end = cursor + deg
-    segments.push(`${item.color} ${start}deg ${end}deg`)
-    cursor = end
-  }
-
-  return { background: `conic-gradient(${segments.join(', ')})` }
-}
-
-function buildThemePalette(count) {
-  const safeCount = Math.max(1, Number(count) || 1)
-  const palette = CHART_MULTI_COLOR_SWATCHES.slice(0, safeCount)
-  if (palette.length >= safeCount) return palette
-
-  for (let index = palette.length; index < safeCount; index += 1) {
-    const hue = (index * 137.508) % 360
-    palette.push(`color-mix(in srgb, hsl(${hue.toFixed(2)}deg 82% 62%) 82%, var(--card) 18%)`)
-  }
-
-  return palette
-}
-
-function buildBarRows(items) {
-  const source = Array.isArray(items) ? items : []
-  if (!source.length) return []
-
-  const maxAmount = source.reduce((max, item) => {
-    const value = Math.abs(Number(item?.magnitudeMinor ?? item?.amountMinor ?? 0) || 0)
-    return Math.max(max, value)
-  }, 0)
-  if (!Number.isFinite(maxAmount) || maxAmount <= 0) {
-    return source.map((item) => ({ ...item, barWidthPercent: 0 }))
-  }
-
-  return source.map((item) => {
-    const amount = Math.abs(Number(item?.magnitudeMinor ?? item?.amountMinor ?? 0) || 0)
-    const ratio = amount > 0 ? (amount / maxAmount) * 100 : 0
-    const barWidthPercent = amount > 0 ? Math.max(8, Math.min(100, ratio)) : 0
-    return {
-      ...item,
-      barWidthPercent: Number(barWidthPercent.toFixed(2)),
-    }
-  })
-}
-
-function buildTimeBarRows(transactions, type, modeValue, yearValue, monthValue) {
-  if (!Array.isArray(transactions) || !transactions.length) return []
-  if (modeValue !== 'all' && modeValue !== 'year' && modeValue !== 'month') return []
-
-  const bucketSeed = modeValue === 'year'
-    ? Array.from({ length: 12 }, (_, index) => ({
-      id: String(index + 1).padStart(2, '0'),
-      label: `${index + 1}月`,
-    }))
-    : modeValue === 'month'
-      ? buildDaySeeds(monthValue)
-    : buildYearSeeds(transactions)
-
-  if (!bucketSeed.length) return []
-
-  const bucketMap = new Map(
-    bucketSeed.map((item) => [item.id, { ...item, amountMinor: 0, count: 0 }]),
-  )
-
-  for (const tx of transactions) {
-    if (!isCountableForIncomeExpense(tx)) continue
-    if (tx?.type !== type || tx?.origin_type === 'loan_payment') continue
-    const amountMinor = type === 'expense' ? Math.abs(Number(tx?.amount_minor ?? 0)) : Number(tx?.amount_minor ?? 0)
-    if (!Number.isFinite(amountMinor) || amountMinor <= 0) continue
-
-    const date = new Date(tx?.occurred_at ?? '')
-    if (Number.isNaN(date.getTime())) continue
-
-    const bucketId = modeValue === 'year'
-      ? String(date.getMonth() + 1).padStart(2, '0')
-      : modeValue === 'month'
-        ? String(date.getDate()).padStart(2, '0')
-      : String(date.getFullYear())
-    const current = bucketMap.get(bucketId)
-    if (!current) continue
-    current.amountMinor += amountMinor
-    current.count += 1
-  }
-
-  const rows = bucketSeed.map((item) => bucketMap.get(item.id) || { ...item, amountMinor: 0, count: 0 })
-  const maxAmount = rows.reduce((max, item) => Math.max(max, item.amountMinor), 0)
-  return rows.map((item) => ({
-    ...item,
-    year: modeValue === 'year' ? yearValue : undefined,
-    month: modeValue === 'month' ? monthValue : undefined,
-    barHeightPercent: maxAmount > 0
-      ? Number(Math.max(item.amountMinor > 0 ? 12 : 0, (item.amountMinor / maxAmount) * 100).toFixed(2))
-      : 0,
-  }))
-}
-
-function buildYearSeeds(transactions) {
-  const years = Array.from(new Set(
-    transactions
-      .map((tx) => {
-        const date = new Date(tx?.occurred_at ?? '')
-        return Number.isNaN(date.getTime()) ? null : date.getFullYear()
-      })
-      .filter((value) => Number.isFinite(value)),
-  )).sort((left, right) => left - right)
-
-  if (!years.length) return []
-  const first = years[0]
-  const last = years[years.length - 1]
-  const seed = []
-  for (let year = first; year <= last; year += 1) {
-    seed.push({
-      id: String(year),
-      label: String(year),
-    })
-  }
-  return seed
-}
-
-function buildDaySeeds(monthValue) {
-  const text = String(monthValue ?? '').trim()
-  const match = text.match(/^(\d{4})-(\d{2})$/)
-  if (!match) return []
-  const year = Number(match[1])
-  const month = Number(match[2])
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return []
-  const daysInMonth = new Date(year, month, 0).getDate()
-  return Array.from({ length: daysInMonth }, (_, index) => {
-    const day = index + 1
-    return {
-      id: String(day).padStart(2, '0'),
-      label: `${day}日`,
-    }
-  })
-}
-
-function resolveTimeBarSearchRange(item) {
-  const bucketId = String(item?.id ?? '').trim()
-  if (!bucketId) return null
-
-  if (mode.value === 'all') {
-    const year = Number(bucketId)
-    if (!Number.isFinite(year)) return null
-    return {
-      startDay: `${year}-01-01`,
-      endDay: `${year}-12-31`,
-    }
-  }
-
-  if (mode.value === 'year') {
-    const year = Number(selectedYear.value)
-    const month = Number(bucketId)
-    if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null
-    const monthKey = `${year}-${String(month).padStart(2, '0')}`
-    return {
-      startDay: `${monthKey}-01`,
-      endDay: `${monthKey}-${String(daysInMonthOf(year, month)).padStart(2, '0')}`,
-    }
-  }
-
-  if (mode.value === 'month') {
-    const day = Number(bucketId)
-    const match = String(selectedMonth.value ?? '').trim().match(/^(\d{4})-(\d{2})$/)
-    if (!match || !Number.isFinite(day)) return null
-    const dayKey = `${match[1]}-${match[2]}-${String(day).padStart(2, '0')}`
-    return {
-      startDay: dayKey,
-      endDay: dayKey,
-    }
-  }
-
-  return null
-}
-
-function daysInMonthOf(year, month) {
-  return new Date(year, month, 0).getDate()
-}
-
 
 </script>
 

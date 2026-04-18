@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { resolveRouteTransitionKey } from '../src/ui/composables/app-shell-runtime.helpers.js'
 
 const appSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/App.vue'),
@@ -15,9 +16,20 @@ const routerSource = readFileSync(
 
 test('app supports stable route transition keys for same-page state switches', () => {
   assert.match(appSource, /<component :is="Component" :key="resolveRouteTransitionKey\(route\)" \/>/)
-  assert.match(appSource, /function resolveRouteTransitionKey\(targetRoute\) \{/)
-  assert.match(appSource, /const stableKey = String\(targetRoute\?\.meta\?\.transitionKey \?\? ''\)\.trim\(\)/)
-  assert.match(appSource, /return stableKey \|\| String\(targetRoute\?\.fullPath \?\? ''\)/)
+  assert.equal(
+    resolveRouteTransitionKey({
+      meta: { transitionKey: 'loans' },
+      fullPath: '/loans?status=closed',
+    }),
+    'loans',
+  )
+  assert.equal(
+    resolveRouteTransitionKey({
+      meta: { transitionKey: '' },
+      fullPath: '/claim-sheets?status=draft',
+    }),
+    '/claim-sheets?status=draft',
+  )
 })
 
 test('claim sheet list route uses a stable transition key', () => {

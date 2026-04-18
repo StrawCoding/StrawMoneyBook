@@ -163,6 +163,7 @@ export default defineConfig(({ command, mode }) => {
               if (id.includes('vuedraggable')) return 'vendor-dnd'
               if (
                 id.includes('@capacitor-community/sqlite')
+                || id.includes('/@capacitor/')
                 || id.includes('@sqlite.org/sqlite-wasm')
                 || id.includes('jeep-sqlite')
                 || id.includes('sql.js')

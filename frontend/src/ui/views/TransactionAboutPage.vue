@@ -140,7 +140,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { listAllTransactions } from '@/core/repositories/transaction.repo'
+import { loadTransactionDetailContext } from '@/core/services/transaction-query.service'
 import { useI18n } from '@/ui/services/i18n.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
@@ -319,8 +319,9 @@ async function load() {
 
   loading.value = true
   try {
-    allTransactions.value = await listAllTransactions(ledgerId)
-    transaction.value = allTransactions.value.find((item) => item.id === txId.value) ?? null
+    const detailContext = await loadTransactionDetailContext(ledgerId, txId.value)
+    allTransactions.value = detailContext.allTransactions
+    transaction.value = detailContext.transaction
   } catch (error) {
     uiStore.pushToast(error.message ?? t('transaction_about.toast.load_failed'), 'error')
   } finally {

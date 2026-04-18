@@ -1,10 +1,6 @@
 import { createServer } from 'node:http'
 import { isOriginAllowed, sendJson } from './collab/http.js'
-import adminHandler from './routes/admin.js'
-import authHandler from './routes/auth.js'
-import clientLogsHandler from './routes/client-logs.js'
-import referralsHandler from './routes/referrals.js'
-import sharedLedgersHandler from './routes/shared-ledgers.js'
+import { resolveRouteHandler } from './routes/route-table.js'
 
 const HOST = String(process.env.HOST ?? '0.0.0.0').trim() || '0.0.0.0'
 const PORT = Math.max(1, Number(process.env.PORT ?? 8787) || 8787)
@@ -142,7 +138,9 @@ const server = createServer(async (req, res) => {
       req.body = req.rawBody
     }
 
-    if (pathname === '/health') {
+    const route = resolveRouteHandler(pathname)
+
+    if (route?.type === 'health') {
       sendJson(response, 200, {
         ok: true,
         service: 'strawmoneybook-backend',
@@ -150,28 +148,8 @@ const server = createServer(async (req, res) => {
       return
     }
 
-    if (pathname.startsWith('/api/auth')) {
-      await authHandler(req, response)
-      return
-    }
-
-    if (pathname.startsWith('/api/admin')) {
-      await adminHandler(req, response)
-      return
-    }
-
-    if (pathname.startsWith('/api/client-logs')) {
-      await clientLogsHandler(req, response)
-      return
-    }
-
-    if (pathname.startsWith('/api/shared-ledgers')) {
-      await sharedLedgersHandler(req, response)
-      return
-    }
-
-    if (pathname.startsWith('/api/referrals')) {
-      await referralsHandler(req, response)
+    if (route?.handler) {
+      await route.handler(req, response)
       return
     }
 

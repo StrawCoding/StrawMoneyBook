@@ -19,7 +19,7 @@ const pageSource = readFileSync(
 )
 
 const mainSource = readFileSync(
-  resolve(import.meta.dirname, '../src/main.js'),
+  resolve(import.meta.dirname, '../src/ui/services/app-runtime.service.js'),
   'utf8',
 )
 
@@ -50,5 +50,6 @@ test('application bootstraps and refreshes bookkeeping reminders centrally', () 
   assert.match(mainSource, /runBookkeepingReminderSyncInBackground/)
   assert.match(mainSource, /CapacitorApp\.addListener\('appStateChange'/)
   assert.match(mainSource, /runBookkeepingReminderSyncInBackground\('app_start'\)/)
+  assert.match(mainSource, /runBookkeepingReminderSyncInBackground\('app_resume'\)/)
   assert.match(mainSource, /background sync failed/)
 })

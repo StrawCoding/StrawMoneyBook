@@ -84,7 +84,7 @@
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
-import { listTransactionsByMonth } from '@/core/repositories/transaction.repo'
+import { listTransactionsForCalendarMonth } from '@/core/services/transaction-query.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
@@ -199,7 +199,7 @@ async function loadMonthTransactions() {
     return
   }
   try {
-    monthTransactions.value = await listTransactionsByMonth(ledgerId, currentMonth.value)
+    monthTransactions.value = await listTransactionsForCalendarMonth(ledgerId, currentMonth.value)
   } catch (error) {
     uiStore.pushToast(error?.message ?? t('calendar_page.toast.load_failed'), 'error')
   }

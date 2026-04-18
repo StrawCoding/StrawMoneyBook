@@ -192,6 +192,7 @@
 | 交易日曆頁 | `src/ui/views/CalendarPage.vue` |
 | 功能列表頁 | `src/ui/views/FeatureListPage.vue` |
 | 交易明細退款流程（選擇退款帳戶、避免重複退款） | `src/ui/views/TransactionAboutPage.vue` + `src/core/services/transaction.service.js` |
+| 交易搜尋頁狀態協調（filter、批量選取、sheet、摘要） | `src/ui/composables/useTransactionSearchPage.js` |
 
 ## 4. 分析頁功能對應
 
@@ -199,11 +200,11 @@
 
 | 功能 | 主要邏輯來源 |
 |---|---|
-| mode 切換（全部/年/月） | `analysis.vue` 內部 state + query repo |
-| 收入圓餅圖 | `analysis.vue`（分類彙總 + 色盤） |
-| 支出圓餅圖 | `analysis.vue`（分類彙總 + 色盤） |
-| 帳戶分析（總額/收入/支出） | `analysis.vue`（帳戶彙總 + 色盤） |
-| 分類明細頁 | `analysis.vue` -> `/analysis/category` + `AnalysisCategoryDetailPage.vue` |
+| mode 切換（全部/年/月） | `analysis.vue` 內部 state + `src/core/services/transaction-query.service.js` |
+| 收入圓餅圖 | `analysis.vue` + `src/core/utils/analysis-breakdown.js`（分類彙總 + 色盤） |
+| 支出圓餅圖 | `analysis.vue` + `src/core/utils/analysis-breakdown.js`（分類彙總 + 色盤） |
+| 帳戶分析（總額/收入/支出） | `analysis.vue` + `src/core/utils/analysis-breakdown.js`（帳戶彙總 + 色盤） |
+| 分類明細頁 | `analysis.vue` -> `/analysis/category` + `AnalysisCategoryDetailPage.vue` + `src/core/services/transaction-query.service.js` |
 | 右上角列印按鈕 | `analysis.vue` -> `/analysis/print` |
 | AI 分析頁 | 已移除（不再提供 `/analysis/ai` 路由） |
 | 交易 CSV 匯出 | `src/ui/views/AnalysisPrintPage.vue` + `src/core/services/export.service.js` |
@@ -214,22 +215,23 @@
 
 | 功能 | 檔案 |
 |---|---|
-| App Shell / Router View | `src/ui/App.vue` |
+| App Shell / Router View | `src/ui/App.vue` + `src/ui/composables/useAppShellRuntime.js` |
 | Welcome / allowWithoutSetup 入口控制 | `src/ui/App.vue` + `src/ui/views/WelcomePage.vue` |
 | 首次設定完成導覽 | `src/ui/views/PostSetupIntroPage.vue` + `src/ui/services/post-setup-intro.service.js` |
 | 初始 setup 判斷 | `src/ui/services/setup-flow.service.js` |
-| 啟動時背景 Google 靜默登入（備份用途） | `src/ui/App.vue` + `src/services/google/auth.js` |
-| 安全鎖遮罩與前景驗證 | `src/ui/App.vue` + `src/ui/services/security-lock.service.js` |
+| 啟動鏈（Pinia/store 初始化、core bootstrap、首次 setup 導向） | `src/main.js` + `src/ui/services/app-bootstrap.service.js` + `src/core/services/bootstrap.service.js` |
+| 啟動時背景 Google 靜默登入、同步/備份排程、Android back、網址恢復 | `src/ui/services/app-runtime.service.js` + `src/services/google/auth.js` |
+| 安全鎖遮罩與前景驗證 | `src/ui/composables/useAppShellRuntime.js` + `src/ui/services/security-lock.service.js` |
 | Deep link / App URL 導向 | `src/ui/services/app-url-route.js` |
 | 路由捲動復原 | `src/ui/services/route-scroll.service.js` |
 | 底部導覽列 | `src/ui/components/layout/BottomNav.vue` |
 | App 內返回與 fallback 邏輯 | `src/ui/services/navigation-back.service.js` |
-| 同頁 query 狀態切換的穩定 route transition key（如借貸清單 / 往來對象明細切換進行中與已結束時不重跑整頁切換動畫） | `src/ui/router/index.js` + `src/ui/App.vue` |
+| 同頁 query 狀態切換的穩定 route transition key（如借貸清單 / 往來對象明細切換進行中與已結束時不重跑整頁切換動畫） | `src/ui/router/index.js` + `src/ui/composables/useAppShellRuntime.js` |
 | Toast 訊息 | `src/ui/components/common/ToastHost.vue` |
 | 輸入型彈層一致性（dialog / select / 帳本切換 / 區間切換 / 日期與時間選擇器共用 shared bottom-sheet primitives，含 Android 底部 safe area，sheet 背景延伸到底部並對齊 `BottomNav` 基準） | `src/ui/components/common/InputBottomSheet.vue` + `src/ui/components/common/AppDialog.vue` + `src/ui/components/common/CustomSelect.vue` + `src/ui/components/common/LedgerSwitcher.vue` + `src/ui/components/common/HomeRangePicker.vue` + `src/ui/components/common/DateTimePickerField.vue` + `src/ui/components/common/TimePickerField.vue` |
 | 全域錯誤上報 | `src/ui/services/error-log.service.js` |
 | 全域樣式與動畫 | `src/ui/assets/css/global.css` |
-| 入口、plugin 註冊、首頁小工具同步 | `src/main.js` |
+| 入口、plugin 註冊與 runtime 掛載 | `src/main.js` |
 
 ## 6. Store（UI 狀態層）對應
 
@@ -237,7 +239,7 @@
 
 | Store | 主要職責 |
 |---|---|
-| `ledger.store.js` | 活動帳本、帳本切換 |
+| `ledger.store.js` | 活動帳本、帳本切換、帳本 CRUD；跨 store reset / reload / integrity repair 已轉移到 `src/ui/services/ledger-runtime.service.js` |
 | `account.store.js` | 帳戶清單與餘額 |
 | `category.store.js` | 分類清單、群組、二級分類資料 |
 | `transaction.store.js` | 交易載入、新增、更新、刪除、首頁篩選與關聯刷新 |
@@ -253,8 +255,9 @@
 
 | Service | 功能 |
 |---|---|
-| `bootstrap.service.js` | 啟動時初始化資料與 stores |
+| `bootstrap.service.js` | 啟動時資料庫初始化、schema recover 與 DB bootstrap；不再直接碰 UI stores |
 | `transaction.service.js` | 收入/支出/轉帳/退款建立、退款帳戶驗證、編輯驗證、刪除關聯交易（報銷/退款） |
+| `transaction-query.service.js` | 統一 `all / year / month / day / account / detail-related` 交易查詢策略，供分析、搜尋、日曆、交易明細、交易編輯與帳戶明細共用 |
 | `budget.service.js` | 預算快照、預算存款設定驗證、複製上月預算 |
 | `budget-reserve.service.js` | 依帳本月份 / 時區 / 日均規則即時計算保留金額 |
 | `budget-save.service.js` | 預算剩餘額自動結算、補跑、delta/manual 補差 |
@@ -267,17 +270,27 @@
 | `ai-bookkeeping.service.js` | AI 記帳語意解析與建議 |
 | `ai-bookkeeping-tiny-ner.service.js` | AI 記帳輕量關鍵詞/實體抽取 |
 | `ai-bookkeeping-category-match.js` / `ai-bookkeeping-account-match.js` | AI 記帳分類 / 帳戶比對輔助 |
-| `membership.service.js` | 會員等級、限制、Google Play 狀態同步與邀請碼會員加成判定 |
+| `membership.service.js` | 會員等級、限制、Google Play 狀態同步、snapshot 與邀請碼會員加成判定；不再直接處理 router 導頁 |
 | `google-play-billing.service.js` | Google Play 方案查詢、購買、恢復、兌換 |
 | `import.service.js` | 匯入 |
 | `export.service.js` | 匯出（CSV / Spreadsheet XML / 檔案落地 / 報表資料） |
 | `repair.service.js` | 資料一致性檢查與修復 |
 | `seed.service.js` | 種子資料 |
 
+核心工具目錄：`src/core/utils/`
+
+| Utility | 功能 |
+|---|---|
+| `analysis-breakdown.js` | 分析頁分類/帳戶彙總、圓餅圖/長條圖資料與日別 breakdown 計算 |
+
 UI 服務目錄：`src/ui/services/`
 
 | Service | 功能 |
 |---|---|
+| `app-bootstrap.service.js` | UI 啟動鏈協調：建立 Pinia store、接 core bootstrap 結果、處理 setup 前後 app boot 流程 |
+| `app-runtime.service.js` | App runtime side effects：背景排程、同步/備份啟動、Android back、網址恢復、前景事件協調 |
+| `ledger-runtime.service.js` | 帳本切換後的 cross-store reset / reload / integrity repair 與帳本生命周期協調 |
+| `membership-navigation.service.js` | 會員限制導頁與 membership benefits navigation，將 router side effect 留在 UI 層 |
 | `shared-ledger.service.js` | 共同帳本前端流程：建立、下載、上傳、自動同步、本機帳本綁定 |
 | `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原、重新授權後自動清理 stale auto-check diagnostics；Google 授權失效時自動偵測並寫入 `error/reauth_required` 狀態使 UI 顯示重新授權警示 |
 | `webdav-backup.service.js` | WebDAV 備份連線、自動備份、還原 |
@@ -303,6 +316,13 @@ UI 服務目錄：`src/ui/services/`
 | `app-url-route.js` | App URL / invite code 解析與導向 |
 | `route-scroll.service.js` | Router scroll restore 延後執行 |
 
+UI composable 目錄：`src/ui/composables/`
+
+| Composable | 功能 |
+|---|---|
+| `useTransactionSearchPage.js` | 交易搜尋頁 filter、批量選取、批量編輯 sheet、摘要與搜尋結果協調 |
+| `useAppShellRuntime.js` | App shell boot 狀態、route transition key、視窗高度鎖定、安全鎖 lifecycle、更新提示協調 |
+
 共享帳本 API 服務目錄：`src/services/shared-ledger/`
 
 | Service | 功能 |
@@ -315,17 +335,20 @@ UI 服務目錄：`src/ui/services/`
 
 | 檔案 | 功能 |
 |---|---|
-| `server.js` | Node.js HTTP server 入口，掛載 auth / admin / client-logs / shared-ledgers / referrals API，含 rate limit 與 body size 保護 |
-| `routes/auth.js` | Email / Google 登入、註冊、登出、refresh、`/me`、個人資料更新、忘記密碼 / 臨時密碼 / 重設密碼 |
+| `server.js` | Node.js HTTP server 入口；透過 `routes/route-table.js` 做 prefix dispatcher，掛載 auth / admin / client-logs / shared-ledgers / referrals API，含 rate limit 與 body size 保護 |
+| `routes/route-table.js` | API route table 與 pathname -> handler dispatch |
+| `routes/auth.js` | auth 路由入口 re-export；實作已拆到 `routes/auth/` 模組目錄 |
+| `routes/auth/` | Email / Google 登入、註冊、登出、refresh、`/me`、個人資料更新、忘記密碼 / 臨時密碼 / 重設密碼 action handlers 與共享 helper |
 | `routes/admin.js` | 管理員總覽、會員狀態調整、錯誤 log 審核、使用者刪除 |
 | `routes/client-logs.js` | 前端錯誤事件上報 |
-| `routes/shared-ledgers.js` | 共同帳本建立、查詢、快照上傳下載、Email 邀請、接受邀請 |
+| `routes/shared-ledgers.js` | shared-ledgers 路由入口 re-export；實作已拆到 `routes/shared-ledgers/` 模組目錄 |
+| `routes/shared-ledgers/` | 共同帳本建立、查詢、快照上傳下載、Email 邀請、接受邀請、試用與同步 action handlers |
 | `routes/referrals.js` | 邀請碼資訊、邀請碼兌換、會員獎勵發放 |
 | `collab/store.js` | 本機 JSON store、使用者資料、共同帳本、邀請、會員加成資料、access token / auth session |
 | `collab/auth-store.js` | 帳號、密碼、auth provider、會員 grant、refresh session 邏輯 |
 | `collab/admin-store.js` | 管理員總覽、client log、會員管理 |
 | `collab/auth-session.js` | Bearer token 驗證、登入狀態檢查、管理員權限檢查 |
-| `collab/http.js` | backend 路由共用的 request/response helper |
+| `collab/http.js` | backend 路由共用的 request/response helper，含 path segment parsing、method/body guard 與 route error serialization |
 
 ## 9. Repository（資料存取層）對應
 
@@ -349,22 +372,25 @@ UI 服務目錄：`src/ui/services/`
 ## 10. 補充說明（維護建議）
 
 - 前端頁面應優先透過對應 store 操作，不直接在 view 內寫入 DB。
+- 交易查詢頁與分析頁不得再直接 import `transaction.repo.js`，統一經過 `transaction-query.service.js`。
 - 業務規則集中在 service 層，若調整規則，優先改 service。
 - SQL 與資料結構調整，先改 repository，再檢查對應 store/action。
 - **日期工具統一使用 `src/core/utils/id.js` 的 `monthKeyFromDate` / `dateKeyFromDate`**，禁止在 view / service 內重複定義相同邏輯。
 - **多步驟刪除/寫入操作須包裝在 `withTransaction`（來自 `@/core/db/sqlite`）** 以確保資料完整性，參考 `transaction.service.js:deleteManualTransaction`。
 - `transaction.repo.js:listAllTransactions` 支援可選 `{ limit }` 參數；首頁「全部」模式已預設限制為 3000 筆（`HOME_ALL_TRANSACTIONS_DISPLAY_LIMIT`）；分析/搜尋頁仍使用無限制版本。
 - 若新增主頁功能，優先考慮：`home.vue` + `HomeTransactionFeed.vue` + `transaction.store.js`。
-- 若新增分析維度，優先考慮：`analysis.vue` 與 `transaction.repo.js` 的查詢方法。
+- 若新增分析維度，優先考慮：`analysis.vue`、`analysis-breakdown.js` 與 `transaction-query.service.js`。
 - 若調整交易報表欄位或匯出格式，優先考慮：`AnalysisPrintPage.vue` + `export.service.js`，並同步檢查列印 / PDF 版面。
 - 若調整交易刪除邏輯，需同步檢查 `transaction.service.js` 的關聯刪除（退款/報銷）。
-- 若調整 App 開啟流程，需同步檢查 `App.vue`、`google/auth.js` 與備份 service 的靜默登入流程。
+- 若調整 App 開啟流程，需同步檢查 `main.js`、`app-bootstrap.service.js`、`app-runtime.service.js`、`useAppShellRuntime.js`、`google/auth.js` 與備份 service 的靜默登入流程。
+- 若調整帳本切換與 onboarding，需同步檢查 `ledger.store.js`、`ledger-runtime.service.js`、`setup-flow.service.js` 與相關 store reload 流程。
 - 若調整快速記帳入口，需同步檢查 `BookkeepingPage.vue`、`bookkeeping-mode.service.js`、首頁 FAB 與 Android 小工具導向。
+- 若調整會員限制或升級導流，需同步檢查 `membership.service.js`、`membership-navigation.service.js` 與 `SettingsMembershipBenefitsPage.vue`。
 - 若調整銀行同步入口，需同步檢查 `settings.vue` 的 `isBankSyncFeatureEnabled()`、銀行同步 API 可用性提示，以及 `/settings/bank-sync` 路由可達性。
 - 若調整電子發票載具入口或同步流程，需同步檢查 `settings.vue`、`FeatureListPage.vue`、`SettingsInvoiceCarrier*.vue`、`src/services/invoice-carrier/backend.js`、`src/core/services/invoice-carrier.service.js`、本機 secure settings 過濾規則，以及 `/api/invoice/*`。
 - 若調整 Google Drive 帳本同步，需同步檢查 `SettingsGoogleDriveLedgerSyncPage.vue`、`google-drive-ledger-sync.service.js`、會員限制與活動帳本 reload 流程。
 - 若調整 App URL / invite link，需同步檢查 `app-url-route.js`、router redirect 與 `SettingsSharedLedgerPage.vue` 的 invite code 自動加入邏輯。
-- 若調整帳號 / 共同帳本 / 邀請碼 / 管理員流程，需同步檢查 `SettingsAccountPage.vue`、`SettingsSharedLedgerPage.vue`、`SettingsAdminPage.vue`、`src/services/shared-ledger/backend.js` 與 `../backend/src/routes/*.js`。
+- 若調整帳號 / 共同帳本 / 邀請碼 / 管理員流程，需同步檢查 `SettingsAccountPage.vue`、`SettingsSharedLedgerPage.vue`、`SettingsAdminPage.vue`、`src/services/shared-ledger/backend.js`、`../backend/src/routes/route-table.js` 與 `../backend/src/routes/auth/`、`../backend/src/routes/shared-ledgers/`。
 
 ## 11. 文件更新時機
 

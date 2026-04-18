@@ -149,6 +149,10 @@ function normalizePath(req, mountBasePath = '') {
   return pathname.startsWith('/') ? pathname : `/${pathname}`
 }
 
+function splitPathSegments(req, mountBasePath = '') {
+  return normalizePath(req, mountBasePath).split('/').filter(Boolean)
+}
+
 function methodGuard(req, res, allowedMethods = []) {
   if (req.method === 'OPTIONS') {
     if (!isOriginAllowed(req)) {
@@ -178,6 +182,35 @@ function extractBearerToken(req) {
   return header.slice(7).trim()
 }
 
+function serializeRouteError(error, {
+  fallbackCode = 'request_failed',
+  fallbackMessage = 'request failed',
+  defaultStatus = 400,
+  extendPayload = null,
+} = {}) {
+  const payload = {
+    error: String(error?.code ?? fallbackCode),
+    message: String(error?.message ?? error ?? fallbackMessage),
+  }
+
+  if (typeof extendPayload === 'function') {
+    Object.assign(payload, extendPayload(error) ?? {})
+  } else if (extendPayload && typeof extendPayload === 'object') {
+    Object.assign(payload, extendPayload)
+  }
+
+  return {
+    status: Number(error?.status ?? defaultStatus) || defaultStatus,
+    payload,
+  }
+}
+
+function sendRouteError(res, error, options = {}) {
+  const { status, payload } = serializeRouteError(error, options)
+  sendJson(res, status, payload)
+  return { status, payload }
+}
+
 export {
   extractBearerToken,
   getClientIp,
@@ -187,6 +220,9 @@ export {
   normalizePath,
   normalizeText,
   parseBody,
+  sendRouteError,
   sendJson,
+  serializeRouteError,
   setSecurityHeaders,
+  splitPathSegments,
 }

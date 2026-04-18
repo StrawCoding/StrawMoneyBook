@@ -3,7 +3,6 @@ import {
   getSharedLedgerSession,
   syncSharedLedgerGooglePlayMembership,
 } from '@/services/shared-ledger/backend'
-import router from '@/ui/router'
 import {
   isSupported as isGooglePlayBillingSupported,
   invalidateBillingCache as invalidateGooglePlayBillingCache,
@@ -94,7 +93,6 @@ let googlePlaySupportCache = {
   supported: false,
 }
 const membershipSnapshotListeners = new Set()
-let membershipBenefitsRedirectInFlight = null
 let membershipBackendSyncInFlight = null
 let membershipBackendSyncQueued = null
 let membershipBackendSyncFingerprint = ''
@@ -107,7 +105,7 @@ const membershipProductDisplayStore = createMembershipProductDisplayStore({
 })
 
 const MEMBERSHIP_LIMIT_ERROR_PREFIX = 'MEMBERSHIP_LIMIT_'
-const MEMBERSHIP_BENEFITS_ROUTE_PATH = '/settings/membership-benefits'
+let membershipLimitNavigationHandler = null
 
 /**
  * @typedef {'monthly' | 'lifetime' | ''} MembershipPlan
@@ -466,28 +464,19 @@ export function isMembershipLimitError(error) {
   return message.startsWith('免費版')
 }
 
-function triggerMembershipBenefitsRedirect(reason = 'limit_reached') {
-  if (typeof window === 'undefined') return
-  if (membershipBenefitsRedirectInFlight) return
+export function setMembershipLimitNavigationHandler(handler) {
+  membershipLimitNavigationHandler = typeof handler === 'function' ? handler : null
+}
 
-  membershipBenefitsRedirectInFlight = Promise.resolve()
-    .then(async () => {
-      if (!router) return
-      const currentPath = String(router.currentRoute?.value?.path ?? '')
-      if (currentPath === MEMBERSHIP_BENEFITS_ROUTE_PATH) return
-      await router.push({
-        path: MEMBERSHIP_BENEFITS_ROUTE_PATH,
-        query: {
-          from: String(reason ?? 'limit_reached'),
-        },
-      })
+function notifyMembershipLimitReached(reason, error) {
+  try {
+    membershipLimitNavigationHandler?.({
+      reason: String(reason ?? 'limit_reached'),
+      error: error ?? null,
     })
-    .catch(() => {
-      // Ignore routing failures to avoid blocking business flow.
-    })
-    .finally(() => {
-      membershipBenefitsRedirectInFlight = null
-    })
+  } catch {
+    // Ignore UI-layer navigation failures to avoid blocking domain flow.
+  }
 }
 
 function isTransientStoreError(error) {
@@ -817,7 +806,7 @@ export function assertCanCreateLedger(existingLedgerCount) {
   const { maxLedgers } = getMembershipLimits()
   if (count >= maxLedgers) {
     const error = createMembershipLimitError('免費版最多可建立 1 個帳本', 'LEDGER_CREATE')
-    triggerMembershipBenefitsRedirect('ledger_create')
+    notifyMembershipLimitReached('ledger_create', error)
     throw error
   }
 }
@@ -827,7 +816,7 @@ export function assertCanCreateAccount(existingAccountCount) {
   const { maxAccounts } = getMembershipLimits()
   if (count >= maxAccounts) {
     const error = createMembershipLimitError('免費版帳戶最多 3 個', 'ACCOUNT_CREATE')
-    triggerMembershipBenefitsRedirect('account_create')
+    notifyMembershipLimitReached('account_create', error)
     throw error
   }
 }
@@ -837,7 +826,7 @@ export function assertCanCreateSavingsJar(existingSavingsJarCount) {
   const { maxSavingsJars } = getMembershipLimits()
   if (count >= maxSavingsJars) {
     const error = createMembershipLimitError('免費版存錢罐最多 1 個', 'SAVINGS_JAR_CREATE')
-    triggerMembershipBenefitsRedirect('savings_jar_create')
+    notifyMembershipLimitReached('savings_jar_create', error)
     throw error
   }
 }
@@ -847,7 +836,7 @@ export function assertCanCreateLoan(existingLoanCount) {
   const { maxLoans } = getMembershipLimits()
   if (count >= maxLoans) {
     const error = createMembershipLimitError('免費版借貸最多 5 筆', 'LOAN_CREATE')
-    triggerMembershipBenefitsRedirect('loan_create')
+    notifyMembershipLimitReached('loan_create', error)
     throw error
   }
 }
@@ -857,7 +846,7 @@ export function assertCanCreateReimbursement(existingReimbursementCount) {
   const { maxReimbursements } = getMembershipLimits()
   if (count >= maxReimbursements) {
     const error = createMembershipLimitError('免費版報銷最多 5 筆', 'REIMBURSEMENT_CREATE')
-    triggerMembershipBenefitsRedirect('reimbursement_create')
+    notifyMembershipLimitReached('reimbursement_create', error)
     throw error
   }
 }
@@ -867,7 +856,7 @@ export function assertCanCreateSubscription(existingSubscriptionCount) {
   const { maxSubscriptions } = getMembershipLimits()
   if (count >= maxSubscriptions) {
     const error = createMembershipLimitError('免費版訂閱項目最多 1 個', 'SUBSCRIPTION_CREATE')
-    triggerMembershipBenefitsRedirect('subscription_create')
+    notifyMembershipLimitReached('subscription_create', error)
     throw error
   }
 }
@@ -880,7 +869,7 @@ export function hasBankSyncMembershipAccess(tierOverride = '') {
 export function assertCanUseBankSync(tierOverride = '') {
   if (!hasBankSyncMembershipAccess(tierOverride)) {
     const error = createMembershipLimitError('銀行同步僅限會員使用', 'BANK_SYNC_ACCESS')
-    triggerMembershipBenefitsRedirect('bank_sync')
+    notifyMembershipLimitReached('bank_sync', error)
     throw error
   }
 }
@@ -900,7 +889,7 @@ export function assertCanUseAiBookkeeping(now = new Date()) {
   const usage = getAiBookkeepingDailyUsage(now)
   if (usage.used >= usage.limit) {
     const error = createMembershipLimitError('免費版 AI 記帳每日最多 5 次', 'AI_BOOKKEEPING_DAILY')
-    triggerMembershipBenefitsRedirect('ai_bookkeeping_daily')
+    notifyMembershipLimitReached('ai_bookkeeping_daily', error)
     throw error
   }
 }

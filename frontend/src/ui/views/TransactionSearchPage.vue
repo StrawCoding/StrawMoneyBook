@@ -148,7 +148,6 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
@@ -159,17 +158,8 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { listAllTransactions } from '@/core/repositories/transaction.repo'
-import { batchPatchTransactions } from '@/core/services/transaction.service'
-import { addonDeltaMajorFromNote, addonDeltaTagText, stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
-import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { useI18n } from '@/ui/services/i18n.service'
-import {
-  BATCH_NOTE_MODE_CLEAR,
-  BATCH_NOTE_MODE_KEEP,
-  BATCH_NOTE_MODE_REPLACE,
-  BATCH_TOGGLE_KEEP,
-} from '@/core/services/transaction-batch-patch'
+import { useTransactionSearchPage } from '@/ui/composables/useTransactionSearchPage'
 
 const ledgerStore = useLedgerStore()
 const categoryStore = useCategoryStore()
@@ -179,372 +169,50 @@ const uiStore = useUiStore()
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useI18n()
-
-const keyword = ref('')
-const startDay = ref('')
-const endDay = ref('')
-const transactions = ref([])
-const pendingOpenTxId = ref('')
-const batchMode = ref(false)
-const selectedIds = ref(new Set())
-const batchEditSheetOpen = ref(false)
-const batchWorking = ref(false)
-const batchPatch = reactive({
-  categoryId: '',
-  noteMode: BATCH_NOTE_MODE_KEEP,
-  note: '',
-  isReimbursableMode: BATCH_TOGGLE_KEEP,
-  includeInBudgetMode: BATCH_TOGGLE_KEEP,
-  includeInAnalysisMode: BATCH_TOGGLE_KEEP,
+const {
+  keyword,
+  startDay,
+  endDay,
+  filteredTransactions,
+  batchMode,
+  selectedIds,
+  batchEditSheetOpen,
+  batchWorking,
+  batchPatch,
+  batchCategoryGroups,
+  batchNoteModeOptions,
+  batchToggleOptions,
+  batchReimbursableOptions,
+  selectedBatchStats,
+  pickStartDay,
+  pickEndDay,
+  toggleBatchMode,
+  toggleSelectAll,
+  openBatchEditSheet,
+  closeBatchEditSheet,
+  applyBatchEdit,
+  toggleSelect,
+  openEdit,
+  categoryIcon,
+  labelOfTransaction,
+  accountIcon,
+  accountName,
+  formatTime,
+  noteText,
+  showAddonDeltaTag,
+  addonDeltaMajor,
+  addonDeltaTag,
+} = useTransactionSearchPage({
+  ledgerStore,
+  categoryStore,
+  accountStore,
+  loanStore,
+  uiStore,
+  route,
+  router,
+  t,
+  locale,
 })
-
-onMounted(() => {
-  pendingOpenTxId.value = normalizeTxId(route.query.txId)
-  syncFiltersFromRouteQuery(route.query)
-  void loadTransactions()
-})
-
-watch(
-  () => ledgerStore.activeLedgerId,
-  () => {
-    void loadTransactions()
-  },
-)
-
-watch(
-  () => route.query.txId,
-  (txId) => {
-    pendingOpenTxId.value = normalizeTxId(txId)
-    tryOpenPendingTransaction()
-  },
-)
-
-watch(
-  () => [route.query.startDay, route.query.endDay, route.query.keyword],
-  () => {
-    syncFiltersFromRouteQuery(route.query)
-  },
-  { immediate: true },
-)
-
-const filteredTransactions = computed(() => {
-  const query = keyword.value.toLowerCase()
-  const startMs = dayStartMs(startDay.value)
-  const endMs = dayEndMs(endDay.value)
-
-  return transactions.value.filter((tx) => {
-    const occurredMs = new Date(tx.occurred_at).getTime()
-    if (Number.isFinite(startMs) && occurredMs < startMs) return false
-    if (Number.isFinite(endMs) && occurredMs > endMs) return false
-
-    if (!query) return true
-
-    const category = labelOfTransaction(tx)
-    const account = accountName(tx.account_id)
-    const amount = String(Math.abs(Number(tx.amount_minor ?? 0)) / 100)
-    const time = formatTime(tx.occurred_at)
-    const note = noteText(tx.note)
-    const text = `${category} ${account} ${amount} ${time} ${note}`.toLowerCase()
-    return text.includes(query)
-  })
-})
-
-async function loadTransactions() {
-  const ledgerId = ledgerStore.activeLedgerId
-  if (!ledgerId) {
-    transactions.value = []
-    return
-  }
-
-  try {
-    transactions.value = await listAllTransactions(ledgerId)
-    tryOpenPendingTransaction()
-  } catch (error) {
-    uiStore.pushToast(error.message ?? t('transaction_search.toast.load_failed'), 'error')
-  }
-}
-
-function openEdit(tx) {
-  if (!tx) return
-  void router.push({ name: 'transaction-about', params: { id: tx.id } })
-}
-
-function labelOfTransaction(tx) {
-  if (tx?.origin_type === 'reimbursement') return t('transaction_search.label.reimbursement')
-  if (tx?.origin_type === 'loan_payment') return loanTransactionLabel(tx)
-  const systemLabel = getSystemTransactionLabel(tx)
-  if (systemLabel) return systemLabel
-  const directName = String(tx?.category_name ?? '').trim()
-  if (directName) return directName
-  const category = categoryName(tx.category_id)
-  if (category) return category
-  if (tx.type === 'transfer') return t('transaction_search.label.transfer')
-  if (tx.type === 'adjustment') return t('transaction_search.label.adjustment')
-  return tx.type === 'income' ? t('transaction_search.label.income') : t('transaction_search.label.expense')
-}
-
-function loanTransactionLabel(tx) {
-  const loanDirection = loanStore.items.find((item) => item.id === tx?.external_ref_id)?.direction
-  if (loanDirection === 'lend') return tx?.type === 'income' ? t('transaction_search.label.loan_receive_back') : t('transaction_search.label.loan_lend')
-  if (loanDirection === 'borrow') return tx?.type === 'expense' ? t('transaction_search.label.loan_repay') : t('transaction_search.label.loan_borrow')
-  return tx?.type === 'income' ? t('transaction_search.label.loan_receive_back') : t('transaction_search.label.loan_lend')
-}
-
-function categoryName(categoryId) {
-  return categoryStore.categories.find((item) => item.id === categoryId)?.name || ''
-}
-
-function categoryIcon(tx) {
-  if (!tx) return ''
-  const systemIcon = getSystemTransactionIcon(tx)
-  if (systemIcon) return systemIcon
-  const directIcon = String(tx.category_icon ?? '').trim()
-  if (directIcon) return directIcon
-  if (tx.type === 'transfer') return 'fa-solid fa-arrow-right-arrow-left'
-  if (tx.origin_type === 'reimbursement') return 'fa-solid fa-receipt'
-  if (tx.origin_type === 'loan_payment') return loanTransactionIcon(tx)
-  return categoryStore.categories.find((item) => item.id === tx.category_id)?.icon || ''
-}
-
-function loanTransactionIcon(tx) {
-  const loanDirection = loanStore.items.find((item) => item.id === tx?.external_ref_id)?.direction
-  if (loanDirection === 'lend') return tx?.type === 'income' ? 'fa-solid fa-hand-holding-dollar' : 'fa-solid fa-arrow-up'
-  if (loanDirection === 'borrow') return tx?.type === 'expense' ? 'fa-solid fa-money-bill-transfer' : 'fa-solid fa-arrow-down'
-  return tx?.type === 'income' ? 'fa-solid fa-hand-holding-dollar' : 'fa-solid fa-arrow-up'
-}
-
-function accountName(accountId) {
-  return accountStore.accounts.find((item) => item.id === accountId)?.name || t('transaction_search.unknown_account')
-}
-
-function accountIcon(accountId) {
-  return accountStore.accounts.find((item) => item.id === accountId)?.icon || ''
-}
-
-function formatTime(iso) {
-  if (!iso) return '-'
-  return new Date(iso).toLocaleString(locale.value === 'en' ? 'en-US' : 'zh-TW', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function pickStartDay(value) {
-  startDay.value = value
-}
-
-function pickEndDay(value) {
-  endDay.value = value
-}
-
-function parseLocalDateTime(value) {
-  if (!value) return NaN
-  const ms = new Date(value).getTime()
-  return Number.isFinite(ms) ? ms : NaN
-}
-
-function dayStartMs(dayKey) {
-  return parseLocalDateTime(dayKey ? `${dayKey}T00:00` : '')
-}
-
-function dayEndMs(dayKey) {
-  return parseLocalDateTime(dayKey ? `${dayKey}T23:59:59` : '')
-}
-
-function addonDeltaMajor(note) {
-  return addonDeltaMajorFromNote(note)
-}
-
-function addonDeltaTag(note) {
-  return addonDeltaTagText(note)
-}
-
-function noteText(note) {
-  return stripAddonSummaryFromNote(note).trim()
-}
-
-function showAddonDeltaTag(tx) {
-  if (!tx) return false
-  if (tx.type === 'transfer' && Number(tx.amount_minor ?? 0) > 0) return false
-  return Boolean(addonDeltaTag(tx.note))
-}
-
-function normalizeTxId(value) {
-  return typeof value === 'string' ? value.trim() : ''
-}
-
-function normalizeDayQuery(value) {
-  const text = typeof value === 'string' ? value.trim() : ''
-  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : ''
-}
-
-function syncFiltersFromRouteQuery(query) {
-  keyword.value = typeof query?.keyword === 'string' ? query.keyword.trim() : ''
-  startDay.value = normalizeDayQuery(query?.startDay)
-  endDay.value = normalizeDayQuery(query?.endDay)
-}
-
-function clearTxIdQuery() {
-  if (!route.query.txId) return
-  const nextQuery = { ...route.query }
-  delete nextQuery.txId
-  void router.replace({ query: nextQuery })
-}
-
-function tryOpenPendingTransaction() {
-  const txId = pendingOpenTxId.value
-  if (!txId) return
-
-  const matched = transactions.value.find((item) => item.id === txId)
-  if (!matched) return
-
-  pendingOpenTxId.value = ''
-  clearTxIdQuery()
-  openEdit(matched)
-}
-
-const allCategoryGroups = computed(() => {
-  return [
-    ...categoryStore.expenseCategoryGroups,
-    ...categoryStore.incomeCategoryGroups,
-  ]
-})
-
-const batchCategoryGroups = computed(() => {
-  return [
-    {
-      id: 'batch-keep',
-      name: '維持原值',
-      options: [{ value: '__keep__', label: '分類不變' }],
-    },
-    ...allCategoryGroups.value,
-  ]
-})
-
-const batchNoteModeOptions = [
-  { value: BATCH_NOTE_MODE_KEEP, label: '備註不變' },
-  { value: BATCH_NOTE_MODE_REPLACE, label: '覆蓋備註' },
-  { value: BATCH_NOTE_MODE_CLEAR, label: '清空備註' },
-]
-
-const batchToggleOptions = [
-  { value: BATCH_TOGGLE_KEEP, label: '維持原值' },
-  { value: 'true', label: '設為開啟' },
-  { value: 'false', label: '設為關閉' },
-]
-
-const batchReimbursableOptions = [
-  { value: BATCH_TOGGLE_KEEP, label: '維持原值' },
-  { value: 'true', label: '設為可報銷' },
-  { value: 'false', label: '設為不可報銷' },
-]
-
-const selectedBatchTransactions = computed(() => {
-  return transactions.value.filter((tx) => selectedIds.value.has(tx.id))
-})
-
-const selectedBatchStats = computed(() => {
-  return selectedBatchTransactions.value.reduce((summary, tx) => {
-    const type = String(tx?.type ?? '').trim()
-    if (type === 'expense') summary.expenseCount += 1
-    else if (type === 'income') summary.incomeCount += 1
-    else if (type === 'transfer') summary.transferCount += 1
-    else if (type === 'adjustment') summary.adjustmentCount += 1
-    return summary
-  }, {
-    expenseCount: 0,
-    incomeCount: 0,
-    transferCount: 0,
-    adjustmentCount: 0,
-  })
-})
-
-function resetBatchPatch() {
-  batchPatch.categoryId = '__keep__'
-  batchPatch.noteMode = BATCH_NOTE_MODE_KEEP
-  batchPatch.note = ''
-  batchPatch.isReimbursableMode = BATCH_TOGGLE_KEEP
-  batchPatch.includeInBudgetMode = BATCH_TOGGLE_KEEP
-  batchPatch.includeInAnalysisMode = BATCH_TOGGLE_KEEP
-}
-
-function toggleBatchMode() {
-  batchMode.value = !batchMode.value
-  selectedIds.value = new Set()
-  batchEditSheetOpen.value = false
-  resetBatchPatch()
-}
-
-function toggleSelect(txId) {
-  const next = new Set(selectedIds.value)
-  if (next.has(txId)) {
-    next.delete(txId)
-  } else {
-    next.add(txId)
-  }
-  selectedIds.value = next
-}
-
-function toggleSelectAll() {
-  if (selectedIds.value.size === filteredTransactions.value.length && filteredTransactions.value.length > 0) {
-    selectedIds.value = new Set()
-  } else {
-    selectedIds.value = new Set(filteredTransactions.value.map((tx) => tx.id))
-  }
-}
-
-function openBatchEditSheet() {
-  if (selectedIds.value.size === 0) return
-  resetBatchPatch()
-  batchEditSheetOpen.value = true
-}
-
-function closeBatchEditSheet() {
-  if (batchWorking.value) return
-  batchEditSheetOpen.value = false
-}
-
-async function applyBatchEdit() {
-  if (batchWorking.value || selectedIds.value.size === 0) return
-  const ledgerId = ledgerStore.activeLedgerId
-  if (!ledgerId) return
-
-  batchWorking.value = true
-  try {
-    const ids = Array.from(selectedIds.value)
-    const result = await batchPatchTransactions(ledgerId, ids, {
-      categoryId: batchPatch.categoryId === '__keep__' ? '' : batchPatch.categoryId,
-      noteMode: batchPatch.noteMode,
-      note: batchPatch.note,
-      isReimbursableMode: batchPatch.isReimbursableMode,
-      includeInBudgetMode: batchPatch.includeInBudgetMode,
-      includeInAnalysisMode: batchPatch.includeInAnalysisMode,
-    })
-    await loadTransactions()
-    selectedIds.value = new Set()
-    batchEditSheetOpen.value = false
-    batchMode.value = false
-    resetBatchPatch()
-    const summaryParts = [`已更新 ${result.updatedCount} 筆交易`]
-    if (result.skippedCount > 0) {
-      const firstReason = String(result.skipped?.[0]?.reason ?? '').trim()
-      summaryParts.push(`略過 ${result.skippedCount} 筆`)
-      if (firstReason) summaryParts.push(`原因：${firstReason}`)
-      uiStore.pushToast(summaryParts.join('，'), 'error')
-      return
-    }
-    uiStore.pushToast(summaryParts.join('，'))
-  } catch (error) {
-    uiStore.pushToast(error.message ?? '批量更改失敗', 'error')
-  } finally {
-    batchWorking.value = false
-  }
-}
-
-resetBatchPatch()
 </script>
 
 <style scoped>.panel {
