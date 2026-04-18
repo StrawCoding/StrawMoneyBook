@@ -8,22 +8,22 @@ import {
   shouldUseSameOriginLocalInvoiceApi,
 } from '../src/services/invoice-carrier/backend.js'
 
-test('invoice carrier adapter reuses shared-ledger api base on native runtime', () => {
+test('invoice carrier adapter honors an explicit dedicated api base on native runtime', () => {
   assert.equal(
     resolveInvoiceCarrierApiBase({
       env: {
-        VITE_SHARED_LEDGER_API_BASE_URL: 'https://api.example.com',
+        VITE_INVOICE_CARRIER_API_BASE_URL: 'https://invoice.example.com',
       },
       platform: 'android',
       windowRef: null,
     }),
-    'https://api.example.com',
+    'https://invoice.example.com',
   )
 
   assert.equal(
     isInvoiceCarrierApiConfiguredFor({
       env: {
-        VITE_SHARED_LEDGER_API_BASE_URL: 'https://api.example.com',
+        VITE_INVOICE_CARRIER_API_BASE_URL: 'https://invoice.example.com',
       },
       platform: 'android',
       windowRef: null,
@@ -32,20 +32,40 @@ test('invoice carrier adapter reuses shared-ledger api base on native runtime', 
   )
 })
 
-test('invoice carrier adapter falls back to the production StrawMB api host when native invoice api base is omitted', () => {
+test('invoice carrier adapter no longer piggybacks shared-ledger api base by default', () => {
   assert.equal(
     resolveInvoiceCarrierApiBase({
       env: {
-        PROD: true,
+        VITE_SHARED_LEDGER_API_BASE_URL: 'https://api.example.com',
       },
       platform: 'android',
       windowRef: null,
     }),
-    'https://api.strawmb.com',
+    'https://www.strawmb.com',
   )
 })
 
-test('invoice carrier adapter keeps same-origin local api routing on localhost web preview', () => {
+test('invoice carrier adapter falls back to the official StrawMB web host on native runtime when invoice api base is omitted', () => {
+  assert.equal(
+    resolveInvoiceCarrierApiBase({
+      env: {},
+      platform: 'android',
+      windowRef: null,
+    }),
+    'https://www.strawmb.com',
+  )
+
+  assert.equal(
+    isInvoiceCarrierApiConfiguredFor({
+      env: {},
+      platform: 'android',
+      windowRef: null,
+    }),
+    true,
+  )
+})
+
+test('invoice carrier adapter keeps same-origin api routing on localhost web preview', () => {
   assert.equal(
     shouldUseSameOriginLocalInvoiceApi({
       env: {},
@@ -83,6 +103,38 @@ test('invoice carrier adapter keeps same-origin local api routing on localhost w
       },
     }),
     true,
+  )
+})
+
+test('invoice carrier adapter keeps same-origin api routing on custom https web hosts', () => {
+  assert.equal(
+    shouldUseSameOriginLocalInvoiceApi({
+      env: {
+        PROD: true,
+      },
+      platform: 'web',
+      windowRef: {
+        location: {
+          origin: 'https://preview.example.com',
+        },
+      },
+    }),
+    true,
+  )
+
+  assert.equal(
+    resolveInvoiceCarrierApiBase({
+      env: {
+        PROD: true,
+      },
+      platform: 'web',
+      windowRef: {
+        location: {
+          origin: 'https://preview.example.com',
+        },
+      },
+    }),
+    '',
   )
 })
 

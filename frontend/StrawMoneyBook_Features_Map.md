@@ -12,7 +12,7 @@
 - 退款流程（交易明細可建立退款、選擇退款帳戶、退款與原交易自動排除預算 / 收支統計）
 - 預算管理（月預算、分類預算、日均規則、已用/剩餘/保留金額、預算剩餘自動存入存錢罐）
 - 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、列印 / PDF 版面）
-- 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、獨立群組統計）
+- 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、群組內金額摘要）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細）
 - 借貸建立後可於借貸明細變更「建立入帳帳戶」，會直接修正該筆初始借入 / 借出交易的帳戶歸屬
 - 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出）
@@ -32,7 +32,7 @@
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
-- 電子發票載具（公開但標示為實驗性；首次需在 headed browser 完成 Cloudflare 驗證，本機加密保存憑證與 storage state，支援發票批量匯入；App 端可沿用 StrawMB API host）
+- 電子發票載具（公開但標示為實驗性；首次需在 headed browser 完成 Cloudflare 驗證，本機加密保存憑證與 storage state，支援發票批量匯入；Web 預設走同源 `/api/invoice`，App 端預設走 `https://www.strawmb.com/api/invoice`）
 - Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗）
 
 ## 2. 路由與頁面對應
@@ -147,7 +147,7 @@
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
 - 銀行同步：`/settings/bank-sync`（入口改由 `isBankSyncFeatureEnabled()` 控制；目前預設恢復為 mock/sandbox 流程）
-- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；官方 Web `www.strawmb.com` / `strawmb.com` 與 localhost / preview 都走同源 `/api/invoice`，避免正式站跨網域呼叫載具 API 被瀏覽器擋成 `Failed to fetch`；App 端可沿用 StrawMB API host 或 `VITE_INVOICE_CARRIER_API_BASE_URL`，首次需人工完成 Cloudflare 驗證）
+- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；所有 HTTP(S) Web host 預設都走同源 `/api/invoice`，避免網頁跨網域呼叫被瀏覽器擋成 `Failed to fetch`；App 端若未指定 `VITE_INVOICE_CARRIER_API_BASE_URL`，則預設改走 `https://www.strawmb.com/api/invoice`，不再錯誤沿用 shared-ledger API host，首次需人工完成 Cloudflare 驗證）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）

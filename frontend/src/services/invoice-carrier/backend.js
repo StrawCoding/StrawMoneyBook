@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { translateMessage } from '../../ui/services/i18n.service.js'
 
 const IMPORT_META_ENV = import.meta.env ?? {}
-const PROD_DEFAULT_SHARED_LEDGER_API_BASE = 'https://api.strawmb.com'
+const PROD_DEFAULT_INVOICE_CARRIER_API_BASE = 'https://www.strawmb.com'
 const INVOICE_CARRIER_FEATURE_ENABLED = true
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
@@ -11,10 +11,7 @@ function normalizeText(value) {
 }
 
 function isSameOriginInvoiceApiWebOrigin(origin) {
-  return (
-    /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(origin)
-    || /^https:\/\/(?:www\.)?strawmb\.com(?::\d+)?$/i.test(origin)
-  )
+  return /^https?:\/\/[^/]+$/i.test(origin)
 }
 
 export function shouldUseSameOriginLocalInvoiceApi({
@@ -23,7 +20,6 @@ export function shouldUseSameOriginLocalInvoiceApi({
   windowRef = typeof window === 'undefined' ? null : window,
 } = {}) {
   if (normalizeText(env?.VITE_INVOICE_CARRIER_API_BASE_URL)) return false
-  if (normalizeText(env?.VITE_SHARED_LEDGER_API_BASE_URL)) return false
   if (platform !== 'web') return false
   const origin = normalizeText(windowRef?.location?.origin)
   return isSameOriginInvoiceApiWebOrigin(origin)
@@ -37,15 +33,16 @@ export function resolveInvoiceCarrierApiBase({
   const explicitInvoiceApiBase = normalizeText(env?.VITE_INVOICE_CARRIER_API_BASE_URL)
   if (explicitInvoiceApiBase) return explicitInvoiceApiBase
 
-  const sharedLedgerApiBase = normalizeText(env?.VITE_SHARED_LEDGER_API_BASE_URL)
-  if (sharedLedgerApiBase) return sharedLedgerApiBase
-
   if (shouldUseSameOriginLocalInvoiceApi({ env, platform, windowRef })) {
     return ''
   }
 
+  if (platform !== 'web') {
+    return PROD_DEFAULT_INVOICE_CARRIER_API_BASE
+  }
+
   if (Boolean(env?.PROD)) {
-    return PROD_DEFAULT_SHARED_LEDGER_API_BASE
+    return PROD_DEFAULT_INVOICE_CARRIER_API_BASE
   }
 
   return ''
@@ -77,7 +74,7 @@ function shouldRequireExplicitApiBase(options) {
 function createMissingInvoiceCarrierApiError(platform = Capacitor.getPlatform()) {
   const message = platform === 'web'
     ? t('invoice_carrier.error.api_unavailable_web', null, '電子發票載具 API 未設定，請部署 /api/invoice，並確保該 host 能啟動 headed Playwright browser')
-    : t('invoice_carrier.error.api_unavailable_native', null, '手機 App 需設定電子發票載具 API URL，或沿用 StrawMB API host，且該 host 必須先部署 /api/invoice 並能啟動 headed Playwright browser')
+    : t('invoice_carrier.error.api_unavailable_native', null, '手機 App 需設定電子發票載具 API URL；若未指定，預設 host 也必須已部署 /api/invoice 並能啟動 headed Playwright browser')
   const error = new Error(message)
   error.code = 'invoice_carrier_api_unavailable'
   return error

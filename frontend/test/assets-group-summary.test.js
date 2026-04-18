@@ -54,8 +54,9 @@ test('group summaries keep excluded accounts in group totals while asset summary
   assert.equal(assetSummary.disposableMinor, 10000)
 })
 
-test('assets page exposes a dedicated group summary section separate from the asset summary cards', () => {
-  assert.match(assetsPageSource, /assets_page\.group_summary_title/)
-  assert.match(assetsPageSource, /assets_page\.group_summary_note/)
-  assert.match(assetsPageSource, /groupStatSummaries/)
+test('assets page keeps group totals inline within each account group instead of a dedicated summary section', () => {
+  assert.match(assetsPageSource, /class="group-total"/)
+  assert.match(assetsPageSource, /groupSummaries/)
+  assert.doesNotMatch(assetsPageSource, /assets_page\.group_summary_title/)
+  assert.doesNotMatch(assetsPageSource, /groupStatSummaries/)
 })

@@ -57,31 +57,6 @@
       </div>
     </article>
 
-    <article v-if="groupStatSummaries.length" class="card panel">
-      <header class="row">
-        <h3>{{ t('assets_page.group_summary_title', '群組統計') }}</h3>
-      </header>
-      <p class="muted summary-note">
-        {{
-          t(
-            'assets_page.group_summary_note',
-            '群組金額獨立於資產簡表計算，不受「不計入資產」設定影響。',
-          )
-        }}
-      </p>
-      <div class="summary-grid group-summary-grid">
-        <div v-for="group in groupStatSummaries" :key="group.id" class="summary-item">
-          <div class="row summary-head">
-            <small class="muted">{{ group.name }}</small>
-            <small class="muted summary-hint">
-              {{ t('assets_page.group_account_count', { count: group.accountCount }, '{count} 個帳戶') }}
-            </small>
-          </div>
-          <MoneyText :value-minor="group.totalMinor" />
-        </div>
-      </div>
-    </article>
-
     <article class="card panel">
       <header class="row">
         <h3>{{ t('assets_page.asset_accounts') }}</h3>
@@ -215,9 +190,6 @@ const deductedAdvanceLabel = computed(() => {
 })
 
 const groupSummaries = computed(() => accountStore.groupSummaries)
-const groupStatSummaries = computed(() => (
-  groupSummaries.value.filter((group) => Number(group.accountCount ?? 0) > 0)
-))
 const expandedGroupIds = ref(new Set())
 const expandedInitialized = ref(false)
 const expandedStateStorageKey = 'assets-page:expanded-group-ids'

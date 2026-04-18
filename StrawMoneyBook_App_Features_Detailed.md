@@ -310,11 +310,11 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 
 其中「可支配資產」已考慮代收與暫收款不應算成可自由使用金額，因此比一般簡單加總更接近真實狀態。
 
-資產頁現在也另外提供「群組統計」：
+資產頁現在會把群組金額直接顯示在各帳戶群組列上：
 
-- 依帳戶群組彙總群組金額
-- 和總資產 / 可支配 / 負債分開顯示
-- 不受單一帳戶「是否納入資產統計」開關影響，讓群組金額與資產簡表各自反映不同管理目的
+- 每個群組標題列直接顯示群組金額
+- 不再額外拆一塊「群組統計」卡片，避免同頁重複摘要
+- 群組金額仍不受單一帳戶「是否納入資產統計」開關影響，和總資產 / 可支配 / 負債各自反映不同管理目的
 
 ### 4.4 帳戶與帳戶群組
 
@@ -625,7 +625,7 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - 支援 Tesseract.js OCR 自動辨識圖形驗證碼；辨識不足時仍會顯示圖片給使用者手動輸入
 - 新增 `session_status` API，前端可輪詢 Cloudflare 是否通過、登入表單是否可用、是否已登入與可用載具選項
 - 同步預設支援最近 2 個月日期範圍，並可依實際載具清單做篩選
-- 前端 adapter 會優先使用 `VITE_INVOICE_CARRIER_API_BASE_URL`；官方 Web（`www.strawmb.com` / `strawmb.com`）與 localhost / preview 會直接走同源 `/api/invoice/*`，避免正式站從網頁跨網域打到 API host 時被瀏覽器擋成 `Failed to fetch`；native App 若未指定專用 URL，才會沿用 `VITE_SHARED_LEDGER_API_BASE_URL` / StrawMB production API host
+- 前端 adapter 會優先使用 `VITE_INVOICE_CARRIER_API_BASE_URL`；只要是 HTTP(S) Web runtime，就會預設走當前 host 的同源 `/api/invoice/*`，避免網頁跨網域被瀏覽器擋成 `Failed to fetch`；native App 若未指定專用 URL，則預設改走 `https://www.strawmb.com/api/invoice/*`，不再錯誤沿用 shared-ledger API host
 - localhost / preview 開發環境會透過 Vite local API middleware 直接掛上 `/api/invoice/*`，讓本機測試與正式 Web 的同源行為一致
 
 **使用者流程**
@@ -647,7 +647,7 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - 使用者可彈性選擇日期範圍、載具與匯入帳戶，提高匯入控制性
 - 憑證與 storage state 屬於 local-only sensitive data，不會進 Google Drive 帳本同步，也不會進 shared-ledger snapshot
 - 若部署環境沒有 `/api/invoice` 或無法啟動 headed browser，頁面會顯示 unavailable，而不是讓使用者進入壞流程
-- 手機 App 若未另外指定 invoice API，也會沿用既有 StrawMB API host，避免設定入口顯示可見但「新增載具」按鈕長期維持 disabled
+- 手機 App 若未另外指定 invoice API，會直接使用 `https://www.strawmb.com/api/invoice/*`，避免設定入口可見但點進去仍打到沒有 `/api/invoice` 的 shared-ledger API host，最後只剩 `Failed to fetch`
 
 ## 10. 使用者輪廓
 
@@ -707,7 +707,7 @@ StrawMoneyBook 特別適合以下人群：
 
 - 銀行同步已有頁面與流程，但屬於受控功能，不應描述成全面對外開放
 - 電子發票載具雖然已公開，但仍屬實驗性功能，且首次 / 失效後必須人工完成 Cloudflare 驗證
-- 電子發票載具正式可用的前提，是部署環境已提供 `/api/invoice` 且該 host 能開 headed Playwright browser；App 端若未指定專用 URL，會沿用 StrawMB API host
+- 電子發票載具正式可用的前提，是部署環境已提供 `/api/invoice` 且該 host 能開 headed Playwright browser；App 端若未指定專用 URL，預設會走 `https://www.strawmb.com/api/invoice`
 - 多數進階同步能力屬會員功能
 - 免費版有帳本、帳戶、借貸、報銷、存錢罐、訂閱、AI 記帳次數等限制
 - 文件描述以目前程式碼為準，不代表所有流程都已完成商業化上架或全面開通
