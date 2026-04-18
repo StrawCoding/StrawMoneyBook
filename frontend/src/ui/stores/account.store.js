@@ -15,6 +15,7 @@ import {
 } from '@/core/repositories/account.repo'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { assertCanCreateAccount } from '@/core/services/membership.service'
+import { buildGroupSummaries } from '@/ui/utils/account-group-summary'
 
 function isIncludedInAssets(account) {
   return Number(account?.include_in_assets ?? 1) === 1
@@ -82,30 +83,7 @@ export const useAccountStore = defineStore('account', {
 
   getters: {
     groupSummaries(state) {
-      const balanceMap = new Map(state.balances.map((item) => [item.id, Number(item.balance_minor)]))
-      const accountsByGroup = new Map()
-
-      for (const account of state.accounts) {
-        const groupId = account.group_id
-        if (!accountsByGroup.has(groupId)) {
-          accountsByGroup.set(groupId, [])
-        }
-        accountsByGroup.get(groupId).push(account)
-      }
-
-      return state.groups.map((group) => {
-        const groupAccounts = accountsByGroup.get(group.id) ?? []
-        const totalMinor = groupAccounts.reduce((total, account) => {
-          if (!isIncludedInAssets(account)) return total
-          return total + (balanceMap.get(account.id) ?? Number(account.opening_balance_minor ?? 0))
-        }, 0)
-
-        return {
-          ...group,
-          accountCount: groupAccounts.length,
-          totalMinor,
-        }
-      })
+      return buildGroupSummaries(state.groups, state.accounts, state.balances)
     },
 
     totalAssetsMinor(state) {

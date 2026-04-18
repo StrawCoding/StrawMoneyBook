@@ -86,6 +86,53 @@ test('invoice carrier adapter keeps same-origin local api routing on localhost w
   )
 })
 
+test('invoice carrier adapter keeps same-origin api routing on StrawMB web to avoid cross-origin fetch failures', () => {
+  assert.equal(
+    shouldUseSameOriginLocalInvoiceApi({
+      env: {
+        PROD: true,
+      },
+      platform: 'web',
+      windowRef: {
+        location: {
+          origin: 'https://www.strawmb.com',
+        },
+      },
+    }),
+    true,
+  )
+
+  assert.equal(
+    resolveInvoiceCarrierApiBase({
+      env: {
+        PROD: true,
+      },
+      platform: 'web',
+      windowRef: {
+        location: {
+          origin: 'https://www.strawmb.com',
+        },
+      },
+    }),
+    '',
+  )
+
+  assert.equal(
+    isInvoiceCarrierApiConfiguredFor({
+      env: {
+        PROD: true,
+      },
+      platform: 'web',
+      windowRef: {
+        location: {
+          origin: 'https://www.strawmb.com',
+        },
+      },
+    }),
+    true,
+  )
+})
+
 test('invoice carrier adapter falls back to bank sync shared key for guarded api routes', () => {
   assert.equal(
     resolveInvoiceCarrierClientSharedKey({

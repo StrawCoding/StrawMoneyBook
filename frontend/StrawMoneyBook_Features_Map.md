@@ -12,7 +12,7 @@
 - 退款流程（交易明細可建立退款、選擇退款帳戶、退款與原交易自動排除預算 / 收支統計）
 - 預算管理（月預算、分類預算、日均規則、已用/剩餘/保留金額、預算剩餘自動存入存錢罐）
 - 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、列印 / PDF 版面）
-- 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債）
+- 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、獨立群組統計）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細）
 - 借貸建立後可於借貸明細變更「建立入帳帳戶」，會直接修正該筆初始借入 / 借出交易的帳戶歸屬
 - 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出）
@@ -147,7 +147,7 @@
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
 - 銀行同步：`/settings/bank-sync`（入口改由 `isBankSyncFeatureEnabled()` 控制；目前預設恢復為 mock/sandbox 流程）
-- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；web 可走同源 `/api/invoice`，localhost / preview 也由 Vite local API middleware 直掛，App 端可沿用 StrawMB API host 或 `VITE_INVOICE_CARRIER_API_BASE_URL`，首次需人工完成 Cloudflare 驗證）
+- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；官方 Web `www.strawmb.com` / `strawmb.com` 與 localhost / preview 都走同源 `/api/invoice`，避免正式站跨網域呼叫載具 API 被瀏覽器擋成 `Failed to fetch`；App 端可沿用 StrawMB API host 或 `VITE_INVOICE_CARRIER_API_BASE_URL`，首次需人工完成 Cloudflare 驗證）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）

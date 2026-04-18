@@ -304,6 +304,12 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 
 其中「可支配資產」已考慮代收與暫收款不應算成可自由使用金額，因此比一般簡單加總更接近真實狀態。
 
+資產頁現在也另外提供「群組統計」：
+
+- 依帳戶群組彙總群組金額
+- 和總資產 / 可支配 / 負債分開顯示
+- 不受單一帳戶「是否納入資產統計」開關影響，讓群組金額與資產簡表各自反映不同管理目的
+
 ### 4.4 帳戶與帳戶群組
 
 帳戶管理支援：
@@ -613,8 +619,8 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - 支援 Tesseract.js OCR 自動辨識圖形驗證碼；辨識不足時仍會顯示圖片給使用者手動輸入
 - 新增 `session_status` API，前端可輪詢 Cloudflare 是否通過、登入表單是否可用、是否已登入與可用載具選項
 - 同步預設支援最近 2 個月日期範圍，並可依實際載具清單做篩選
-- 前端 adapter 會優先使用 `VITE_INVOICE_CARRIER_API_BASE_URL`，若未設定則沿用 `VITE_SHARED_LEDGER_API_BASE_URL` / StrawMB production API host；client shared key 也會優先用 invoice key，否則 fallback 到 bank sync key
-- localhost / preview 開發環境也會透過 Vite local API middleware 直接掛上 `/api/invoice/*`，避免 Web 端在本機測試新增載具時直接 404
+- 前端 adapter 會優先使用 `VITE_INVOICE_CARRIER_API_BASE_URL`；官方 Web（`www.strawmb.com` / `strawmb.com`）與 localhost / preview 會直接走同源 `/api/invoice/*`，避免正式站從網頁跨網域打到 API host 時被瀏覽器擋成 `Failed to fetch`；native App 若未指定專用 URL，才會沿用 `VITE_SHARED_LEDGER_API_BASE_URL` / StrawMB production API host
+- localhost / preview 開發環境會透過 Vite local API middleware 直接掛上 `/api/invoice/*`，讓本機測試與正式 Web 的同源行為一致
 
 **使用者流程**
 1. 新增載具：啟動 headed browser → 使用者在該視窗完成 Cloudflare 安全驗證 → 前端輪詢 `session_status` → 輸入手機號碼 / 密碼 / 驗證碼完成登入

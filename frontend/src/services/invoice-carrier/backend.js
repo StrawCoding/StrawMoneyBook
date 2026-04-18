@@ -10,6 +10,13 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
+function isSameOriginInvoiceApiWebOrigin(origin) {
+  return (
+    /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(origin)
+    || /^https:\/\/(?:www\.)?strawmb\.com(?::\d+)?$/i.test(origin)
+  )
+}
+
 export function shouldUseSameOriginLocalInvoiceApi({
   env = IMPORT_META_ENV,
   platform = Capacitor.getPlatform(),
@@ -19,7 +26,7 @@ export function shouldUseSameOriginLocalInvoiceApi({
   if (normalizeText(env?.VITE_SHARED_LEDGER_API_BASE_URL)) return false
   if (platform !== 'web') return false
   const origin = normalizeText(windowRef?.location?.origin)
-  return /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(origin)
+  return isSameOriginInvoiceApiWebOrigin(origin)
 }
 
 export function resolveInvoiceCarrierApiBase({
