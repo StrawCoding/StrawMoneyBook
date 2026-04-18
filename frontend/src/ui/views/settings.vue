@@ -48,6 +48,7 @@ const settingGroups = computed(() => [
     { to: '/settings/auto-backup', labelKey: 'settings.auto_backup', icon: 'fa-solid fa-cloud-arrow-up' },
     { to: '/settings/google-drive-ledger-sync', labelKey: 'settings.google_drive_ledger_sync', icon: 'fa-solid fa-arrow-right-arrow-left' },
     ...(showBankSyncEntry ? [{ to: '/settings/bank-sync', labelKey: 'settings.bank_sync', icon: 'fa-solid fa-building-columns' }] : []),
+    { to: '/settings/invoice-carrier', labelKey: '電子發票載具（實驗性）', icon: 'fa-solid fa-file-invoice' },
   ],
   [
     { to: '/settings/language', labelKey: 'settings.language', icon: 'fa-solid fa-language' },

@@ -1,21 +1,17 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import * as invoiceCarrierService from '@/core/services/invoice-carrier.service'
-import * as uiService from '@/ui/services/invoice-carrier.service'
 
 export const useInvoiceCarrierStore = defineStore('invoice_carrier', () => {
-  // State
   const connections = ref([])
-  const invoices = ref({}) // { [connectionId]: [...invoices] }
-  const sessionIds = ref({}) // { [connectionId]: sessionId }
+  const invoices = ref({})
   const currentConnectionId = ref(null)
   const loading = ref(false)
   const error = ref(null)
 
-  // Computed
   const currentConnection = computed(() =>
     currentConnectionId.value
-      ? connections.value.find((c) => c.id === currentConnectionId.value)
+      ? connections.value.find((item) => item.id === currentConnectionId.value) ?? null
       : null,
   )
 
@@ -24,32 +20,62 @@ export const useInvoiceCarrierStore = defineStore('invoice_carrier', () => {
   )
 
   const unimportedInvoices = computed(() =>
-    currentInvoices.value.filter((inv) => !inv.imported_transaction_id),
+    currentInvoices.value.filter((invoice) => !invoice.imported_transaction_id),
   )
 
-  // Actions
+  function upsertConnection(connection) {
+    if (!connection?.id) return
+    const index = connections.value.findIndex((item) => item.id === connection.id)
+    if (index >= 0) {
+      connections.value.splice(index, 1, connection)
+      return
+    }
+    connections.value.unshift(connection)
+  }
+
   async function loadConnections() {
     try {
       loading.value = true
       error.value = null
-      const result = await invoiceCarrierService.listInvoiceCarrierConnections()
-      connections.value = result
+      connections.value = await invoiceCarrierService.listInvoiceCarrierConnections()
+      return connections.value
     } catch (e) {
       error.value = String(e?.message ?? e ?? 'Failed to load connections')
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function loadConnection(connectionId) {
+    if (!connectionId) return null
+    try {
+      loading.value = true
+      error.value = null
+      const connection = await invoiceCarrierService.getInvoiceCarrierConnection(connectionId)
+      if (connection) {
+        upsertConnection(connection)
+      } else {
+        connections.value = connections.value.filter((item) => item.id !== connectionId)
+      }
+      return connection
+    } catch (e) {
+      error.value = String(e?.message ?? e ?? 'Failed to load connection')
+      throw e
     } finally {
       loading.value = false
     }
   }
 
   async function selectConnection(connectionId) {
-    currentConnectionId.value = connectionId
-    if (connectionId) {
-      await loadInvoices(connectionId)
-    }
+    currentConnectionId.value = connectionId || null
+    if (!connectionId) return
+    await loadConnection(connectionId)
+    await loadInvoices(connectionId)
   }
 
   async function loadInvoices(connectionId) {
-    if (!connectionId) return
+    if (!connectionId) return []
     try {
       loading.value = true
       error.value = null
@@ -57,19 +83,33 @@ export const useInvoiceCarrierStore = defineStore('invoice_carrier', () => {
         limit: 500,
       })
       invoices.value[connectionId] = result
+      return result
     } catch (e) {
       error.value = String(e?.message ?? e ?? 'Failed to load invoices')
+      throw e
     } finally {
       loading.value = false
     }
   }
 
-  async function createConnection(input) {
+  async function createConnection(settingsLedgerId, input, credentialState, existingConnectionId = '') {
     try {
       loading.value = true
       error.value = null
-      const connection = await invoiceCarrierService.createInvoiceCarrierConnection(input)
-      connections.value.push(connection)
+      const connection = existingConnectionId
+        ? await invoiceCarrierService.reconnectInvoiceCarrierConnection(
+          existingConnectionId,
+          settingsLedgerId,
+          input,
+          credentialState,
+        )
+        : await invoiceCarrierService.createInvoiceCarrierConnection(
+          settingsLedgerId,
+          input,
+          credentialState,
+        )
+      upsertConnection(connection)
+      currentConnectionId.value = connection.id
       return connection
     } catch (e) {
       error.value = String(e?.message ?? e ?? 'Failed to create connection')
@@ -84,7 +124,7 @@ export const useInvoiceCarrierStore = defineStore('invoice_carrier', () => {
       loading.value = true
       error.value = null
       await invoiceCarrierService.deleteInvoiceCarrierConnection(connectionId)
-      connections.value = connections.value.filter((c) => c.id !== connectionId)
+      connections.value = connections.value.filter((item) => item.id !== connectionId)
       if (currentConnectionId.value === connectionId) {
         currentConnectionId.value = null
       }
@@ -97,13 +137,21 @@ export const useInvoiceCarrierStore = defineStore('invoice_carrier', () => {
     }
   }
 
-  async function syncConnection(sessionId, connectionId, opts = {}) {
+  async function syncConnection(fallbackLedgerId, connectionId, opts = {}) {
     try {
       loading.value = true
       error.value = null
-      const result = await uiService.syncConnection(sessionId, connectionId, opts)
+      const result = await invoiceCarrierService.syncInvoiceCarrierConnection(
+        connectionId,
+        fallbackLedgerId,
+        opts,
+      )
       invoices.value[connectionId] = result.invoices || []
-      await loadConnections()
+      if (result.connection) {
+        upsertConnection(result.connection)
+      } else {
+        await loadConnection(connectionId)
+      }
       return result
     } catch (e) {
       error.value = String(e?.message ?? e ?? 'Failed to sync')
@@ -126,7 +174,6 @@ export const useInvoiceCarrierStore = defineStore('invoice_carrier', () => {
         targetAccountId,
         categoryId,
       )
-      // 重載發票清單以反映已匯入狀態
       await loadInvoices(currentConnectionId.value)
       return result
     } catch (e) {
@@ -137,8 +184,8 @@ export const useInvoiceCarrierStore = defineStore('invoice_carrier', () => {
     }
   }
 
-  function setSessionId(connectionId, sessionId) {
-    sessionIds.value[connectionId] = sessionId
+  function setError(message) {
+    error.value = String(message ?? '').trim() || null
   }
 
   function clearError() {
@@ -146,28 +193,23 @@ export const useInvoiceCarrierStore = defineStore('invoice_carrier', () => {
   }
 
   return {
-    // State
     connections,
     invoices,
-    sessionIds,
     currentConnectionId,
     loading,
     error,
-
-    // Computed
     currentConnection,
     currentInvoices,
     unimportedInvoices,
-
-    // Actions
     loadConnections,
+    loadConnection,
     selectConnection,
     loadInvoices,
     createConnection,
     deleteConnection,
     syncConnection,
     importInvoices,
-    setSessionId,
+    setError,
     clearError,
   }
 })

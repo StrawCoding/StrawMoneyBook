@@ -4,6 +4,7 @@ import { exportLedgerJson } from '@/core/services/export.service'
 import { importLedgerJsonAsNewLedger } from '@/core/services/import.service'
 import { nowIso } from '@/core/utils/id'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { isLocalOnlyAppSettingKey } from '@/ui/services/local-only-app-settings'
 import {
   areSharedLedgerSnapshotsEquivalent,
   mergeSharedLedgerSnapshots,
@@ -105,7 +106,7 @@ function sanitizeSnapshotForSharedSync(snapshot) {
     throw new Error('帳本快照格式錯誤')
   }
   const appSettings = Array.isArray(normalized?.tables?.app_settings) ? normalized.tables.app_settings : []
-  normalized.tables.app_settings = appSettings.filter((row) => String(row?.key ?? '') !== SHARED_LEDGER_META_KEY)
+  normalized.tables.app_settings = appSettings.filter((row) => !isLocalOnlyAppSettingKey(row?.key))
   normalized.exported_at = new Date().toISOString()
   return normalizeSharedLedgerSnapshot(normalized)
 }

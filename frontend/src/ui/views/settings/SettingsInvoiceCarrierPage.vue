@@ -5,17 +5,30 @@
       <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
     </header>
 
-    <article class="card panel">
-      <h3>{{ t('settings_invoice_carrier.management_title', '載具管理') }}</h3>
-      <p class="muted">{{ t('settings_invoice_carrier.management_desc', '連結台灣電子發票載具，匯入發票到帳目記錄') }}</p>
+    <article class="card panel intro-panel">
+      <div class="eyebrow">實驗性</div>
+      <h3>{{ t('settings_invoice_carrier.management_title', '電子發票載具匯入') }}</h3>
+      <p class="muted">
+        {{ t('settings_invoice_carrier.management_desc', '首次連線會開啟瀏覽器，請先完成 Cloudflare 安全驗證，再輸入手機號碼、密碼與圖形驗證碼。成功後會把憑證與瀏覽器狀態加密保存在本機，之後可自動同步。') }}
+      </p>
+      <p class="muted experimental-note">
+        {{ t('settings_invoice_carrier.experimental_note', '若電子發票網站要求重新驗證，載具狀態會改成「需重新驗證」，不會無限重試。') }}
+      </p>
+      <p v-if="!invoiceCarrierApiReady" class="warning-note">
+        {{ invoiceCarrierApiMessage }}
+      </p>
       <div class="row top-action-row">
-        <RouterLink class="btn primary" to="/settings/invoice-carrier/new">
+        <RouterLink class="btn primary" :class="{ disabled: !invoiceCarrierApiReady }" :to="createLink">
           {{ t('settings_invoice_carrier.add_carrier', '新增載具') }}
         </RouterLink>
-        <button class="btn" :disabled="loading" :aria-busy="loading" @click="reloadState">
-          {{ loading ? t('settings_invoice_carrier.refreshing') : t('settings_invoice_carrier.refresh') }}
+        <button class="btn" :disabled="loadingState" :aria-busy="loadingState" @click="reloadState">
+          {{ loadingState ? t('settings_invoice_carrier.refreshing', '重新整理中...') : t('settings_invoice_carrier.refresh', '重新整理') }}
         </button>
       </div>
+    </article>
+
+    <article v-if="store.error" class="card panel error-panel">
+      <strong>{{ store.error }}</strong>
     </article>
 
     <article v-if="!connections.length" class="card panel">
@@ -26,10 +39,10 @@
       <header class="row connection-head">
         <div class="title-wrap">
           <h3>{{ connection.user_label || connection.mobile_phone }}</h3>
-          <small class="muted">{{ connection.provider }}</small>
+          <small class="muted">{{ connection.provider_connection_id || connection.provider }}</small>
         </div>
         <span class="status-chip" :class="`status-${connection.status}`">
-          {{ connection.status === 'active' ? '活躍' : '停用' }}
+          {{ connectionStatusText(connection.status) }}
         </span>
       </header>
 
@@ -40,10 +53,17 @@
         </li>
         <li>
           <span class="muted">同步狀態</span>
-          <strong>{{ connection.last_sync_status || '未同步' }}</strong>
+          <strong>{{ syncStatusText(connection.last_sync_status) }}</strong>
+        </li>
+        <li>
+          <span class="muted">可用載具</span>
+          <strong>{{ Array.isArray(connection.carrier_options) ? connection.carrier_options.length : 0 }}</strong>
         </li>
       </ul>
 
+      <p v-if="connection.status === 'reauth_required'" class="reauth-note">
+        這組載具需要重新驗證 Cloudflare / 登入狀態後才能再同步。
+      </p>
       <p v-if="connection.last_error" class="muted connection-error">
         {{ connection.last_error }}
       </p>
@@ -58,21 +78,48 @@
 </template>
 
 <script setup>
+import { computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useInvoiceCarrierStore } from '@/ui/stores/invoice-carrier.store'
 import { useI18n } from '@/ui/services/i18n.service'
-import { computed, onMounted } from 'vue'
+import {
+  getInvoiceCarrierApiUnavailableMessage,
+  isInvoiceCarrierApiConfigured,
+} from '@/services/invoice-carrier/backend'
 
-const { t } = useI18n()
+const { locale, t } = useI18n()
 const store = useInvoiceCarrierStore()
-
+const invoiceCarrierApiReady = isInvoiceCarrierApiConfigured()
+const invoiceCarrierApiMessage = computed(() => getInvoiceCarrierApiUnavailableMessage())
 const connections = computed(() => store.connections)
-const loading = computed(() => store.loading)
+const loadingState = computed(() => store.loading)
+const createLink = computed(() => (
+  invoiceCarrierApiReady
+    ? { name: 'settings-invoice-carrier-create' }
+    : { name: 'settings-invoice-carrier' }
+))
 
-function formatDateTime(isoString) {
-  if (!isoString) return '-'
-  const date = new Date(isoString)
-  return date.toLocaleString('zh-TW')
+function formatDateTime(value) {
+  const text = String(value ?? '').trim()
+  if (!text) return '-'
+  const date = new Date(text)
+  if (Number.isNaN(date.getTime())) return text
+  return date.toLocaleString(locale.value)
+}
+
+function connectionStatusText(status) {
+  const normalized = String(status ?? '').trim().toLowerCase()
+  if (normalized === 'reauth_required') return '需重新驗證'
+  if (normalized === 'error') return '同步失敗'
+  if (normalized === 'inactive') return '已停用'
+  return '正常'
+}
+
+function syncStatusText(status) {
+  const normalized = String(status ?? '').trim().toLowerCase()
+  if (normalized === 'ok') return '成功'
+  if (normalized === 'error') return '失敗'
+  return '尚未同步'
 }
 
 async function reloadState() {
@@ -80,62 +127,103 @@ async function reloadState() {
 }
 
 onMounted(() => {
-  store.loadConnections()
+  void reloadState()
 })
 </script>
 
 <style scoped>
 .panel {
   padding: 14px;
+  display: grid;
+  gap: 10px;
 }
 
-h2, h3 {
+.page-head,
+.connection-head {
+  justify-content: space-between;
+  align-items: center;
+}
+
+h2,
+h3 {
   margin: 0;
 }
 
-h2 {
-  font-size: 18px;
+.eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--primary);
 }
 
-.top-action-row {
-  gap: 8px;
-  margin-top: 12px;
+.muted {
+  color: var(--muted);
 }
 
-.connection-card {
-  margin-top: 12px;
+.experimental-note,
+.warning-note,
+.connection-error,
+.reauth-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
 }
 
-.connection-head {
-  margin-bottom: 12px;
-  align-items: center;
-  justify-content: space-between;
+.experimental-note {
+  background: color-mix(in srgb, var(--primary) 10%, var(--card) 90%);
 }
 
-.title-wrap h3 {
-  font-size: 14px;
-  margin-bottom: 2px;
+.warning-note,
+.reauth-note {
+  background: color-mix(in srgb, #e8a317 14%, var(--card) 86%);
+}
+
+.connection-error,
+.error-panel {
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 12%, var(--card) 88%);
+}
+
+.top-action-row,
+.action-row {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn.disabled {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.title-wrap {
+  min-width: 0;
 }
 
 .title-wrap small {
   display: block;
-  font-size: 12px;
 }
 
 .status-chip {
-  padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 999px;
+  padding: 5px 10px;
   font-size: 12px;
   font-weight: 700;
 }
 
 .status-active {
-  background: color-mix(in srgb, var(--success) 12%, var(--card) 88%);
+  background: color-mix(in srgb, var(--success) 14%, var(--card) 86%);
   color: var(--success);
 }
 
+.status-error,
+.status-reauth_required {
+  background: color-mix(in srgb, #e8a317 18%, var(--card) 82%);
+  color: #8a5a00;
+}
+
 .status-inactive {
-  background: color-mix(in srgb, var(--muted) 12%, var(--card) 88%);
+  background: color-mix(in srgb, var(--muted) 14%, var(--card) 86%);
   color: var(--muted);
 }
 
@@ -151,25 +239,6 @@ h2 {
 .meta-list li {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-}
-
-.connection-error {
-  margin-top: 8px;
-  padding: 8px;
-  background: color-mix(in srgb, var(--error) 12%, var(--card) 88%);
-  border-radius: 6px;
-  color: var(--error);
-  font-size: 12px;
-}
-
-.action-row {
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.btn {
-  font-size: 13px;
-  padding: 8px 12px;
+  gap: 16px;
 }
 </style>

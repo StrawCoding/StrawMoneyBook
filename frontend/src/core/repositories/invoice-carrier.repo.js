@@ -1,15 +1,16 @@
-import { query, run } from '@/core/db/sqlite'
-import { firstRow, rowsOf } from '@/core/repositories/base.repo'
-import { createId, nowIso } from '@/core/utils/id'
-
-function normalizeText(value, fallback = '') {
-  const text = String(value ?? '').trim()
-  return text || fallback
-}
+import { query, run } from '../db/sqlite.js'
+import { firstRow, rowsOf } from './base.repo.js'
+import { createId, nowIso } from '../utils/id.js'
+import {
+  INVOICE_CARRIER_PROVIDER_ID,
+  normalizeCarrierOptions,
+  normalizeText,
+  parseInvoiceDateText,
+} from '../../services/invoice-carrier/shared.js'
 
 function normalizeConnectionStatus(status) {
   const value = String(status ?? '').trim().toLowerCase()
-  if (value === 'inactive') return 'inactive'
+  if (value === 'inactive' || value === 'error' || value === 'reauth_required') return value
   return 'active'
 }
 
@@ -19,51 +20,90 @@ function normalizeSyncStatus(status) {
   return 'idle'
 }
 
+function normalizeAmount(amount) {
+  return Math.max(0, Math.round(Number(amount) || 0))
+}
+
+function parseCarrierOptionsJson(text) {
+  try {
+    const parsed = JSON.parse(String(text ?? '[]'))
+    return normalizeCarrierOptions(parsed)
+  } catch {
+    return []
+  }
+}
+
+function normalizeConnectionRow(row) {
+  const source = row && typeof row === 'object' ? row : {}
+  return {
+    ...source,
+    carrier_options: parseCarrierOptionsJson(source.carrier_options_json),
+  }
+}
+
+function connectionSelectSql() {
+  return `SELECT id, provider, provider_connection_id, settings_ledger_id,
+                 user_label, mobile_phone, status, carrier_options_json,
+                 last_sync_at, last_sync_status, last_error, created_at, updated_at
+          FROM invoice_carrier_connections`
+}
+
 export async function listInvoiceCarrierConnections() {
   const result = await query(
-    `SELECT id, provider, user_label, mobile_phone, status,
-            last_sync_at, last_sync_status, last_error, created_at, updated_at
-     FROM invoice_carrier_connections
-     WHERE status = 'active'
+    `${connectionSelectSql()}
+     WHERE status != 'inactive'
      ORDER BY updated_at DESC, created_at DESC;`,
   )
-  return rowsOf(result)
+  return rowsOf(result).map(normalizeConnectionRow)
 }
 
 export async function findInvoiceCarrierConnectionById(connectionId) {
   if (!connectionId) return null
   const result = await query(
-    `SELECT id, provider, user_label, mobile_phone, status,
-            last_sync_at, last_sync_status, last_error, created_at, updated_at
-     FROM invoice_carrier_connections
+    `${connectionSelectSql()}
      WHERE id = ?
      LIMIT 1;`,
     [connectionId],
   )
-  return firstRow(result)
+  return normalizeConnectionRow(firstRow(result))
+}
+
+export async function findInvoiceCarrierConnectionByProviderRef(providerConnectionId, provider = INVOICE_CARRIER_PROVIDER_ID) {
+  const normalizedRef = normalizeText(providerConnectionId)
+  const normalizedProvider = normalizeText(provider) || INVOICE_CARRIER_PROVIDER_ID
+  if (!normalizedRef) return null
+  const result = await query(
+    `${connectionSelectSql()}
+     WHERE provider = ?
+       AND provider_connection_id = ?
+     LIMIT 1;`,
+    [normalizedProvider, normalizedRef],
+  )
+  return normalizeConnectionRow(firstRow(result))
 }
 
 export async function findInvoiceCarrierConnectionByMobilePhone(mobilePhone) {
   const normalized = normalizeText(mobilePhone)
   if (!normalized) return null
   const result = await query(
-    `SELECT id, provider, user_label, mobile_phone, status,
-            last_sync_at, last_sync_status, last_error, created_at, updated_at
-     FROM invoice_carrier_connections
+    `${connectionSelectSql()}
      WHERE mobile_phone = ?
-       AND status = 'active'
+       AND status != 'inactive'
      LIMIT 1;`,
     [normalized],
   )
-  return firstRow(result)
+  return normalizeConnectionRow(firstRow(result))
 }
 
 export async function addInvoiceCarrierConnection(input) {
   const id = createId('einvconn')
-  const provider = 'einvoice_tw'
-  const mobilePhone = normalizeText(input?.mobile_phone)
-  const userLabel = normalizeText(input?.user_label) || mobilePhone
-  const status = 'active'
+  const provider = normalizeText(input?.provider) || INVOICE_CARRIER_PROVIDER_ID
+  const providerConnectionId = normalizeText(input?.provider_connection_id || input?.providerConnectionId) || id
+  const settingsLedgerId = normalizeText(input?.settings_ledger_id || input?.settingsLedgerId)
+  const mobilePhone = normalizeText(input?.mobile_phone || input?.mobilePhone)
+  const userLabel = normalizeText(input?.user_label || input?.userLabel) || mobilePhone
+  const status = normalizeConnectionStatus(input?.status)
+  const carrierOptions = normalizeCarrierOptions(input?.carrier_options || input?.carrierOptions)
   const now = nowIso()
 
   if (!mobilePhone) {
@@ -72,46 +112,95 @@ export async function addInvoiceCarrierConnection(input) {
 
   await run(
     `INSERT INTO invoice_carrier_connections (
-      id, provider, user_label, mobile_phone, status,
-      last_sync_at, last_sync_status, last_error, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, NULL, 'idle', NULL, ?, ?);`,
-    [id, provider, userLabel, mobilePhone, status, now, now],
+      id, provider, provider_connection_id, settings_ledger_id, user_label, mobile_phone, status,
+      carrier_options_json, last_sync_at, last_sync_status, last_error, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'idle', NULL, ?, ?);`,
+    [
+      id,
+      provider,
+      providerConnectionId,
+      settingsLedgerId || null,
+      userLabel,
+      mobilePhone,
+      status,
+      JSON.stringify(carrierOptions),
+      now,
+      now,
+    ],
   )
 
   return findInvoiceCarrierConnectionById(id)
 }
 
-export async function updateInvoiceCarrierConnectionSyncStatus(connectionId, input) {
+export async function updateInvoiceCarrierConnection(connectionId, input = {}) {
   if (!connectionId) throw new Error('connectionId is required')
+  const existing = await findInvoiceCarrierConnectionById(connectionId)
+  if (!existing) throw new Error('Connection not found')
 
-  const lastSyncStatus = normalizeSyncStatus(input?.last_sync_status)
-  const lastError = normalizeText(input?.last_error)
-  const now = nowIso()
+  const next = {
+    providerConnectionId: normalizeText(input?.provider_connection_id || input?.providerConnectionId) || existing.provider_connection_id || existing.id,
+    settingsLedgerId: normalizeText(input?.settings_ledger_id || input?.settingsLedgerId) || existing.settings_ledger_id || null,
+    userLabel: normalizeText(input?.user_label || input?.userLabel) || existing.user_label || existing.mobile_phone,
+    mobilePhone: normalizeText(input?.mobile_phone || input?.mobilePhone) || existing.mobile_phone,
+    status: normalizeConnectionStatus(input?.status ?? existing.status),
+    carrierOptions: normalizeCarrierOptions(
+      input?.carrier_options
+      ?? input?.carrierOptions
+      ?? existing.carrier_options,
+    ),
+    lastSyncAt: input?.last_sync_at === undefined && input?.lastSyncAt === undefined
+      ? existing.last_sync_at
+      : (normalizeText(input?.last_sync_at || input?.lastSyncAt) || null),
+    lastSyncStatus: normalizeSyncStatus(input?.last_sync_status ?? input?.lastSyncStatus ?? existing.last_sync_status),
+    lastError: normalizeText(input?.last_error || input?.lastError) || null,
+  }
 
   await run(
     `UPDATE invoice_carrier_connections
-     SET last_sync_at = ?,
+     SET provider_connection_id = ?,
+         settings_ledger_id = ?,
+         user_label = ?,
+         mobile_phone = ?,
+         status = ?,
+         carrier_options_json = ?,
+         last_sync_at = ?,
          last_sync_status = ?,
          last_error = ?,
          updated_at = ?
      WHERE id = ?;`,
-    [now, lastSyncStatus, lastError, now, connectionId],
+    [
+      next.providerConnectionId,
+      next.settingsLedgerId,
+      next.userLabel,
+      next.mobilePhone,
+      next.status,
+      JSON.stringify(next.carrierOptions),
+      next.lastSyncAt,
+      next.lastSyncStatus,
+      next.lastError,
+      nowIso(),
+      connectionId,
+    ],
   )
 
   return findInvoiceCarrierConnectionById(connectionId)
 }
 
+export async function updateInvoiceCarrierConnectionSyncStatus(connectionId, input) {
+  return updateInvoiceCarrierConnection(connectionId, {
+    status: input?.status,
+    last_sync_at: input?.last_sync_at,
+    last_sync_status: input?.last_sync_status,
+    last_error: input?.last_error,
+    carrier_options: input?.carrier_options,
+  })
+}
+
 export async function deleteInvoiceCarrierConnection(connectionId) {
   if (!connectionId) throw new Error('connectionId is required')
-
-  // 軟刪除：標記為 inactive 而不實際刪除
-  const now = nowIso()
-  await run(
-    `UPDATE invoice_carrier_connections
-     SET status = 'inactive', updated_at = ?
-     WHERE id = ?;`,
-    [now, connectionId],
-  )
+  return updateInvoiceCarrierConnection(connectionId, {
+    status: 'inactive',
+  })
 }
 
 export async function listInvoiceCarrierInvoices(connectionId, opts = {}) {
@@ -145,18 +234,36 @@ export async function findInvoiceCarrierInvoiceById(invoiceId) {
   return firstRow(result)
 }
 
+export async function findInvoiceCarrierInvoiceByUniqueKey(connectionId, invoiceNumber, invoiceDate) {
+  if (!connectionId) return null
+  const normalizedInvoiceNumber = normalizeText(invoiceNumber)
+  const normalizedInvoiceDate = parseInvoiceDateText(invoiceDate)
+  if (!normalizedInvoiceNumber || !normalizedInvoiceDate) return null
+  const result = await query(
+    `SELECT id, connection_id, invoice_number, invoice_date, seller_name,
+            amount, carrier_label, imported_transaction_id, created_at
+     FROM invoice_carrier_invoices
+     WHERE connection_id = ?
+       AND invoice_number = ?
+       AND invoice_date = ?
+     LIMIT 1;`,
+    [connectionId, normalizedInvoiceNumber, normalizedInvoiceDate],
+  )
+  return firstRow(result)
+}
+
 export async function addInvoiceCarrierInvoice(input) {
   const id = createId('einvinv')
   const connectionId = normalizeText(input?.connection_id)
   const invoiceNumber = normalizeText(input?.invoice_number)
-  const invoiceDate = normalizeText(input?.invoice_date) // ISO YYYY-MM-DD
+  const invoiceDate = parseInvoiceDateText(input?.invoice_date)
   const sellerName = normalizeText(input?.seller_name)
-  const amount = Math.round(Number(input?.amount) || 0)
+  const amount = normalizeAmount(input?.amount)
   const carrierLabel = normalizeText(input?.carrier_label)
   const now = nowIso()
 
-  if (!connectionId || !invoiceNumber) {
-    throw new Error('connection_id and invoice_number are required')
+  if (!connectionId || !invoiceNumber || !invoiceDate) {
+    throw new Error('connection_id, invoice_number and invoice_date are required')
   }
 
   await run(
@@ -168,6 +275,31 @@ export async function addInvoiceCarrierInvoice(input) {
   )
 
   return findInvoiceCarrierInvoiceById(id)
+}
+
+export async function updateInvoiceCarrierInvoice(invoiceId, input = {}) {
+  if (!invoiceId) throw new Error('invoiceId is required')
+  const existing = await findInvoiceCarrierInvoiceById(invoiceId)
+  if (!existing) throw new Error('Invoice not found')
+
+  const next = {
+    invoiceDate: parseInvoiceDateText(input?.invoice_date || input?.invoiceDate) || existing.invoice_date,
+    sellerName: normalizeText(input?.seller_name || input?.sellerName) || existing.seller_name,
+    amount: input?.amount === undefined ? existing.amount : normalizeAmount(input.amount),
+    carrierLabel: normalizeText(input?.carrier_label || input?.carrierLabel) || existing.carrier_label,
+  }
+
+  await run(
+    `UPDATE invoice_carrier_invoices
+     SET invoice_date = ?,
+         seller_name = ?,
+         amount = ?,
+         carrier_label = ?
+     WHERE id = ?;`,
+    [next.invoiceDate, next.sellerName, next.amount, next.carrierLabel, invoiceId],
+  )
+
+  return findInvoiceCarrierInvoiceById(invoiceId)
 }
 
 export async function markInvoiceCarrierInvoiceImported(invoiceId, transactionId) {
@@ -190,38 +322,54 @@ export async function upsertManyInvoiceCarrierInvoices(connectionId, invoices) {
     throw new Error('connectionId and invoices array are required')
   }
 
-  const now = nowIso()
-  const promises = invoices.map((invoice) => {
-    if (!invoice.invoice_number) {
-      console.warn('Skipping invoice without invoice_number', invoice)
-      return Promise.resolve()
+  const summary = {
+    addedCount: 0,
+    updatedCount: 0,
+    unchangedCount: 0,
+    invoices: [],
+  }
+
+  for (const invoice of invoices) {
+    const invoiceNumber = normalizeText(invoice?.invoice_number)
+    const invoiceDate = parseInvoiceDateText(invoice?.invoice_date)
+    if (!invoiceNumber || !invoiceDate) {
+      continue
     }
 
-    return run(
-      `INSERT INTO invoice_carrier_invoices (
-        id, connection_id, invoice_number, invoice_date, seller_name,
-        amount, carrier_label, imported_transaction_id, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)
-      ON CONFLICT(id)
-      DO UPDATE SET
-        invoice_date = excluded.invoice_date,
-        seller_name = excluded.seller_name,
-        amount = excluded.amount,
-        carrier_label = excluded.carrier_label;`,
-      [
-        createId('einvinv'),
-        connectionId,
-        normalizeText(invoice.invoice_number),
-        normalizeText(invoice.invoice_date),
-        normalizeText(invoice.seller_name),
-        Math.round(Number(invoice.amount) || 0),
-        normalizeText(invoice.carrier_label),
-        now,
-      ],
-    )
-  })
+    const normalized = {
+      connection_id: connectionId,
+      invoice_number: invoiceNumber,
+      invoice_date: invoiceDate,
+      seller_name: normalizeText(invoice?.seller_name),
+      amount: normalizeAmount(invoice?.amount),
+      carrier_label: normalizeText(invoice?.carrier_label),
+    }
 
-  return Promise.all(promises)
+    const existing = await findInvoiceCarrierInvoiceByUniqueKey(connectionId, invoiceNumber, invoiceDate)
+    if (!existing) {
+      const created = await addInvoiceCarrierInvoice(normalized)
+      summary.addedCount += 1
+      summary.invoices.push(created)
+      continue
+    }
+
+    const hasChanges =
+      normalizeText(existing.seller_name) !== normalized.seller_name
+      || normalizeAmount(existing.amount) !== normalized.amount
+      || normalizeText(existing.carrier_label) !== normalized.carrier_label
+
+    if (!hasChanges) {
+      summary.unchangedCount += 1
+      summary.invoices.push(existing)
+      continue
+    }
+
+    const updated = await updateInvoiceCarrierInvoice(existing.id, normalized)
+    summary.updatedCount += 1
+    summary.invoices.push(updated)
+  }
+
+  return summary
 }
 
 export async function countInvoiceCarrierInvoices(connectionId, opts = {}) {

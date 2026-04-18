@@ -100,6 +100,17 @@ Android 發版目前也已把版本碼策略收斂成由語意版號自動推導
 
 這些關鍵字會同時出現在首頁 SEO metadata 與首屏文案，讓品牌搜尋、功能搜尋與品牌加功能搜尋更容易命中官網入口。
 
+另外，官網頁面結構目前也已同步重整為一致的網站體驗：
+
+- 首頁改為 icon / symbol 導向的掃讀式結構：首屏只保留一句主要定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA
+- 首屏不再堆滿多個等權重下載按鈕；Android 為主下載 CTA，iOS 依是否有有效連結顯示狀態或入口
+- 手機版官網導覽已改為折疊選單，避免首屏被大量錨點連結擠壓
+- 首頁與次頁已補上 icon / symbol 輔助掃讀，降低單靠長段落理解資訊的成本
+- 官網保留雙主題切換，但色彩、surface、按鈕、文件頁與邀請頁已收斂到同一套 design tokens
+- `/preview` 頁會先說明預先體驗用途與期待流程，再提供外開 Google Form 與內嵌表單
+- `/open/shared-ledger` 仍保留共同帳本邀請 deep link、Web redirect 與 Play Store fallback 邏輯，但視覺與操作節奏已和首頁一致
+- 服務條款與隱私權政策已改為共用 legal document shell，官網次頁不再各自維護不同閱讀樣式
+
 ## 3. 主要功能模組
 
 ### 3.1 首頁總覽
@@ -165,8 +176,9 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 - 支援語音輸入
 - 支援多語言輸入情境
 - 盡量自動判斷分類，避免把已識別內容重複塞進備註
+- 語音再解析時，若這次只補到金額 / 類型而沒有新的備註內容，會保留使用者原本已填好的備註，不會被語音流程清空
 - 若缺少可用分類，可直接引導使用者前往分類管理補齊
-- 金額可直接輸入加減公式，例如 `120+20`、`120-20`；這類公式不會再誤觸日期/時間解析而把交易日期改亂
+- 金額可直接輸入加減公式，例如 `120+20`、`120-20`；這類公式不會再誤觸日期/時間解析而把交易日期改亂，也不會把 `+`、`*` 等算式殘留到備註欄位
 
 免費版 AI 記帳每日有次數限制，會員可解除限制。
 
@@ -596,26 +608,34 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 電子發票載具（SMB-2）用於從台灣電子發票平台（einvoice.nat.gov.tw）自動抓取發票，特點包括：
 
 **技術架構**
-- 使用 Playwright 在後端子進程執行自動化爬蟲
-- 支援 Tesseract.js OCR 自動辨識驗證碼（信心度 ≥ 70% 自動填入，否則顯示圖片讓使用者手動輸入）
-- Session TTL 5 分鐘，客端快取後續不需重新驗證
-- 日期範圍篩選（預設為最近 2 個月）、可選的載具篩選
+- 功能已公開，但明確標示為「實驗性」
+- 使用 Playwright 在後端子進程執行 headed automation，不嘗試 headless 繞過 Cloudflare
+- 支援 Tesseract.js OCR 自動辨識圖形驗證碼；辨識不足時仍會顯示圖片給使用者手動輸入
+- 新增 `session_status` API，前端可輪詢 Cloudflare 是否通過、登入表單是否可用、是否已登入與可用載具選項
+- 同步預設支援最近 2 個月日期範圍，並可依實際載具清單做篩選
+- 前端 adapter 會優先使用 `VITE_INVOICE_CARRIER_API_BASE_URL`，若未設定則沿用 `VITE_SHARED_LEDGER_API_BASE_URL` / StrawMB production API host；client shared key 也會優先用 invoice key，否則 fallback 到 bank sync key
+- localhost / preview 開發環境也會透過 Vite local API middleware 直接掛上 `/api/invoice/*`，避免 Web 端在本機測試新增載具時直接 404
 
 **使用者流程**
-1. 新增載具：輸入手機號碼 → 取得驗證碼 → 自動識別或手動輸入驗證碼 → 填密碼登入 → Session 存入 store
-2. 同步發票：選擇日期範圍 → 後端自動抓取指定日期內的發票清單
-3. 匯入交易：勾選發票清單 → 選擇匯入帳戶 → 批量匯入為帳目記錄（發票金額 = 交易金額）
+1. 新增載具：啟動 headed browser → 使用者在該視窗完成 Cloudflare 安全驗證 → 前端輪詢 `session_status` → 輸入手機號碼 / 密碼 / 驗證碼完成登入
+2. 本機保存：登入成功後，把手機號碼、密碼與 Playwright storage state 以加密 secure setting 保存到本機，key 為 `invoice_carrier.credentials.<connectionId>`
+3. 同步發票：之後同步會優先使用保存的 storage state 直接進查詢頁；若失效則自動重登入一次，仍失敗就把連線標成 `reauth_required`
+4. 匯入交易：勾選發票清單 → 選擇匯入帳戶 → 批量匯入為帳目記錄（發票金額 = 交易金額）
 
 **資料存儲**
-- `invoice_carrier_connections` 表：連線資訊（手機號碼、狀態、同步狀態、最後同步時間、錯誤訊息）
-- `invoice_carrier_invoices` 表：發票清單（發票號、金額、日期、賣方、已匯入狀態、交易關聯 ID）
-- 支援軟刪除與已匯入標記，防止重複匯入
+- `invoice_carrier_connections` 表：連線資訊（手機號碼、provider connection id、settings ledger id、狀態、同步狀態、最後同步時間、錯誤訊息、可用載具清單）
+- `invoice_carrier_invoices` 表：發票清單（發票號、ISO 日期、賣方、金額、載具標籤、已匯入狀態、交易關聯 ID）
+- `(connection_id, invoice_number, invoice_date)` 有唯一鍵，避免每次同步都重複插入
+- 更新既有發票時會保留 `imported_transaction_id`，避免把已匯入狀態洗掉
 
 **特點**
 - 完全對齊現有銀行同步架構（bank-sync），使用相同的 API route 與前後端分層
 - 不需要會員資格（與銀行同步不同），所有使用者皆可使用
 - 發票資料與帳目記錄關聯，便於查詢「這筆交易源自哪張發票」
-- 使用者可彈性選擇日期範圍與匯入帳戶，提高匯入的控制性
+- 使用者可彈性選擇日期範圍、載具與匯入帳戶，提高匯入控制性
+- 憑證與 storage state 屬於 local-only sensitive data，不會進 Google Drive 帳本同步，也不會進 shared-ledger snapshot
+- 若部署環境沒有 `/api/invoice` 或無法啟動 headed browser，頁面會顯示 unavailable，而不是讓使用者進入壞流程
+- 手機 App 若未另外指定 invoice API，也會沿用既有 StrawMB API host，避免設定入口顯示可見但「新增載具」按鈕長期維持 disabled
 
 ## 10. 使用者輪廓
 
@@ -674,6 +694,8 @@ StrawMoneyBook 特別適合以下人群：
 以下內容在文件中必須明講，避免誤導：
 
 - 銀行同步已有頁面與流程，但屬於受控功能，不應描述成全面對外開放
+- 電子發票載具雖然已公開，但仍屬實驗性功能，且首次 / 失效後必須人工完成 Cloudflare 驗證
+- 電子發票載具正式可用的前提，是部署環境已提供 `/api/invoice` 且該 host 能開 headed Playwright browser；App 端若未指定專用 URL，會沿用 StrawMB API host
 - 多數進階同步能力屬會員功能
 - 免費版有帳本、帳戶、借貸、報銷、存錢罐、訂閱、AI 記帳次數等限制
 - 文件描述以目前程式碼為準，不代表所有流程都已完成商業化上架或全面開通

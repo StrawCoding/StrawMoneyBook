@@ -294,6 +294,7 @@ import { getLastManualBookkeepingPath } from '@/ui/services/bookkeeping-mode.ser
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { mergeAddonItemsToNote } from '@/ui/utils/addon-note'
+import { resolveAiBookkeepingNoteValue } from '@/ui/services/ai-bookkeeping-draft'
 import {
   convertAmountMinorByRate,
   getExchangeRateSnapshot,
@@ -713,11 +714,10 @@ async function parseText(options = {}) {
       return
     }
 
-    applyDraft(result.draft)
+    applyDraft(result.draft, {
+      preserveCurrentNoteWhenParsedEmpty: fromSpeech,
+    })
     latestLoanIntent.value = result.draft.loanIntent ?? null
-    if (fromSpeech) {
-      model.note = ''
-    }
     hasDraft.value = true
     shouldAutoSubmit = autoCreate
     if (!shouldAutoSubmit) {
@@ -814,7 +814,8 @@ async function toggleVoiceInput() {
   }
 }
 
-function applyDraft(draft) {
+function applyDraft(draft, options = {}) {
+  const currentNote = String(model.note ?? '').trim()
   model.type = draft.type
   model.amountMajor = draft.type === 'adjustment'
     ? Number(draft.amountMinor ?? 0) / 100
@@ -827,7 +828,9 @@ function applyDraft(draft) {
   model.accountId = draft.accountId ?? directAccountOptions.value[0]?.id ?? ''
   model.peerAccountId = draft.peerAccountId ?? transferAccountOptions.value.find((item) => item.id !== model.accountId)?.id ?? ''
   model.categoryId = draft.categoryId ?? ''
-  model.note = draft.note ?? ''
+  model.note = resolveAiBookkeepingNoteValue(currentNote, draft.note, {
+    preserveCurrentWhenParsedEmpty: Boolean(options.preserveCurrentNoteWhenParsedEmpty),
+  })
   model.isReimbursable = Boolean(draft.isReimbursable) && draft.type === 'expense'
   model.includeInBudget = Boolean(draft.includeInBudget)
   model.includeInAnalysis = Boolean(draft.includeInAnalysis)

@@ -18,7 +18,8 @@
 - 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出）
 - 存錢罐、訂閱追蹤與自動存提
 - AI 自動記帳（文字解析、語音輸入、會員次數限制）
-- AI 自動記帳支援金額加減公式且不會誤改交易日期（例如 `120+20`、`120-20`）
+- AI 自動記帳支援金額加減公式且不會誤改交易日期，也不會把算式符號殘留進備註（例如 `120+20`、`120-20`）
+- AI 語音再解析若沒有辨識出新的備註內容，會保留目前表單中的既有備註
 - 帳號系統（Email / Google 登入、個人資料、忘記密碼、臨時密碼、登出）
 - 共同帳本（建立共同帳本、共享連結、Email 邀請、接受邀請、同步）
 - Google Drive 帳本同步（逐帳本啟用、跨裝置 pull / push）
@@ -28,8 +29,10 @@
 - 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本）
 - 關於與聯絡入口（官網、Facebook、Instagram、Threads、Email、隱私權政策）
 - 官方網站 SEO / 品牌搜尋關鍵字（`../StrawMoneyBookWeb/index.html`：`StrawMoneyBook`、`稻草AI記帳`、`稻草記帳`、`AI記帳`、`對話記帳`、`自動記帳` 等）
+- 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
+- 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
-- ~~電子發票載具（暫時隱藏）~~（Playwright 爬蟲自動化、OCR 驗證碼辨識、發票批量匯入）
+- 電子發票載具（公開但標示為實驗性；首次需在 headed browser 完成 Cloudflare 驗證，本機加密保存憑證與 storage state，支援發票批量匯入；App 端可沿用 StrawMB API host）
 - Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗）
 
 ## 2. 路由與頁面對應
@@ -83,9 +86,9 @@
 | `/settings/bank-sync` | `src/ui/views/settings/SettingsBankSyncPage.vue` | 銀行同步管理 |
 | `/settings/bank-sync/new` | `src/ui/views/settings/SettingsBankSyncCreatePage.vue` | 新增銀行連線 |
 | `/settings/bank-sync/:id` | `src/ui/views/settings/SettingsBankSyncConnectionPage.vue` | 單一銀行連線設定 / 狀態 |
-| `/settings/invoice-carrier` | `src/ui/views/settings/SettingsInvoiceCarrierPage.vue` | ~~電子發票載具管理（列表）~~ **[暫時隱藏]** |
-| `/settings/invoice-carrier/new` | `src/ui/views/settings/SettingsInvoiceCarrierCreatePage.vue` | ~~新增電子發票載具~~ **[暫時隱藏]** |
-| `/settings/invoice-carrier/:id` | `src/ui/views/settings/SettingsInvoiceCarrierConnectionPage.vue` | ~~單一載具詳情 / 發票匯入~~ **[暫時隱藏]** |
+| `/settings/invoice-carrier` | `src/ui/views/settings/SettingsInvoiceCarrierPage.vue` | 電子發票載具管理（公開入口，實驗性） |
+| `/settings/invoice-carrier/new` | `src/ui/views/settings/SettingsInvoiceCarrierCreatePage.vue` | 新增 / 重新驗證電子發票載具（3 段式流程） |
+| `/settings/invoice-carrier/:id` | `src/ui/views/settings/SettingsInvoiceCarrierConnectionPage.vue` | 單一載具詳情 / 同步 / 發票匯入 / 重新驗證提示 |
 | `/settings/ledgers` | `src/ui/views/settings/SettingsLedgerPage.vue` | 帳本管理 |
 | `/settings/shared-ledgers` | `src/ui/views/settings/SettingsSharedLedgerPage.vue` | 共同帳本、Email 邀請、接受邀請與同步 |
 | `/settings/ledgers/:id` | `src/ui/views/settings/SettingsLedgerDetailPage.vue` | 帳本明細編輯/刪除 |
@@ -144,11 +147,13 @@
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
 - 銀行同步：`/settings/bank-sync`（入口改由 `isBankSyncFeatureEnabled()` 控制；目前預設恢復為 mock/sandbox 流程）
+- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；web 可走同源 `/api/invoice`，localhost / preview 也由 Vite local API middleware 直掛，App 端可沿用 StrawMB API host 或 `VITE_INVOICE_CARRIER_API_BASE_URL`，首次需人工完成 Cloudflare 驗證）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）
 
 - 帳本同步：`/settings/google-drive-ledger-sync`
+- 電子發票載具（實驗性）：`/settings/invoice-carrier`
 - 借貸：`/loans`
 - 報銷：`/reimbursements`
 - 請款單：`/claim-sheets`
@@ -356,6 +361,7 @@ UI 服務目錄：`src/ui/services/`
 - 若調整 App 開啟流程，需同步檢查 `App.vue`、`google/auth.js` 與備份 service 的靜默登入流程。
 - 若調整快速記帳入口，需同步檢查 `BookkeepingPage.vue`、`bookkeeping-mode.service.js`、首頁 FAB 與 Android 小工具導向。
 - 若調整銀行同步入口，需同步檢查 `settings.vue` 的 `isBankSyncFeatureEnabled()`、銀行同步 API 可用性提示，以及 `/settings/bank-sync` 路由可達性。
+- 若調整電子發票載具入口或同步流程，需同步檢查 `settings.vue`、`FeatureListPage.vue`、`SettingsInvoiceCarrier*.vue`、`src/services/invoice-carrier/backend.js`、`src/core/services/invoice-carrier.service.js`、本機 secure settings 過濾規則，以及 `/api/invoice/*`。
 - 若調整 Google Drive 帳本同步，需同步檢查 `SettingsGoogleDriveLedgerSyncPage.vue`、`google-drive-ledger-sync.service.js`、會員限制與活動帳本 reload 流程。
 - 若調整 App URL / invite link，需同步檢查 `app-url-route.js`、router redirect 與 `SettingsSharedLedgerPage.vue` 的 invite code 自動加入邏輯。
 - 若調整帳號 / 共同帳本 / 邀請碼 / 管理員流程，需同步檢查 `SettingsAccountPage.vue`、`SettingsSharedLedgerPage.vue`、`SettingsAdminPage.vue`、`src/services/shared-ledger/backend.js` 與 `../backend/src/routes/*.js`。
@@ -368,7 +374,7 @@ UI 服務目錄：`src/ui/services/`
 - 調整主要功能流程（交易、借貸、報銷、請款、預算、備份）
 - 變更 store/service/repository 的責任邊界
 - 新增重要共用元件（日期選擇器、統計元件、首頁卡片等）
-- 設定入口策略變更（例如：銀行同步顯示/隱藏）
+- 設定入口策略變更（例如：銀行同步 / 電子發票載具顯示策略）
 - 帳號、共同帳本、邀請碼、管理員或 backend API 流程變更
 - 記帳模式切換邏輯變更（AI / 快速新增 / 問答）
 - Google Drive 帳本同步或分析報表列印流程變更

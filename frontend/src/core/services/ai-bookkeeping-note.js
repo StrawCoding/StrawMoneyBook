@@ -154,6 +154,7 @@ export function extractSmartNoteText(text, context = {}) {
   }
 
   const stripPatterns = [
+    /(?:[+-]?(?:\d+(?:\.\d+)?)\s*[+\-×÷*/]\s*)+[+-]?(?:\d+(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\$|\$|¥|￥)?/gi,
     /\d{4}\s*(?:[./-]|年)\s*\d{1,2}\s*(?:[./-]|月)\s*\d{1,2}(?:日)?/g,
     /\d{1,2}\s*(?:[./-]|月)\s*\d{1,2}(?:日)?/g,
     /([01]?\d|2[0-3])\s*[:：]\s*([0-5]\d)\s*(am|pm|a\.m\.|p\.m\.|午前|午後)?/gi,

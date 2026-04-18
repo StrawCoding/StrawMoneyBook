@@ -141,3 +141,22 @@ test('migrate registers the refund origin type migration', () => {
   assert.match(source, /import migration026 from '@\/core\/db\/migrations\/026_transaction_origin_type_refund\.sql\?raw'/)
   assert.match(source, /\{ version: 26, name: 'transaction_origin_type_refund', sql: migration026 \}/)
 })
+
+test('migrate registers the invoice carrier public release migration', () => {
+  const source = readFileSync(resolve(import.meta.dirname, '../src/core/db/migrate.js'), 'utf8')
+
+  assert.match(source, /import migration029 from '@\/core\/db\/migrations\/029_invoice_carrier_public_release\.sql\?raw'/)
+  assert.match(source, /\{ version: 29, name: 'invoice_carrier_public_release', sql: migration029 \}/)
+})
+
+test('invoice carrier public release migration adds provider and invoice uniqueness guards', () => {
+  const source = readFileSync(
+    resolve(import.meta.dirname, '../src/core/db/migrations/029_invoice_carrier_public_release.sql'),
+    'utf8',
+  )
+
+  assert.match(source, /ALTER TABLE invoice_carrier_connections ADD COLUMN provider_connection_id TEXT;/)
+  assert.match(source, /ALTER TABLE invoice_carrier_connections ADD COLUMN carrier_options_json TEXT NOT NULL DEFAULT '\[\]';/)
+  assert.match(source, /CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_carrier_connection_provider_ref/)
+  assert.match(source, /CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_carrier_invoices_unique_invoice/)
+})

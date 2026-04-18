@@ -89,4 +89,12 @@ test('parseAutoBookkeepingText does not treat amount addition as a time token', 
   assert.equal(result.draft?.amountMajor, 140)
   assert.equal(result.draft?.occurredAt?.slice(0, 10), '2026-03-20')
   assert.equal(result.draft?.occurredAt?.slice(11, 16), '08:00')
+  assert.equal(result.draft?.note ?? '', '')
+})
+
+test('parseAutoBookkeepingText removes arithmetic formulas from note text while preserving real note content', () => {
+  const result = parseAutoBookkeepingText('朋友午餐 120+20', buildContext())
+
+  assert.equal(result.draft?.amountMajor, 140)
+  assert.equal(result.draft?.note ?? '', '朋友')
 })

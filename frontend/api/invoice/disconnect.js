@@ -1,5 +1,6 @@
 import { closeInvoiceCarrierSession } from './_einvoice-provider.js'
 import {
+  clientGuard,
   methodGuard,
   parseBody,
   sendJson,
@@ -7,6 +8,7 @@ import {
 
 export default async function handler(req, res) {
   if (methodGuard(req, res)) return
+  if (clientGuard(req, res)) return
 
   const body = parseBody(req)
   const sessionId = body.session_id
@@ -21,7 +23,7 @@ export default async function handler(req, res) {
     })
   } catch (error) {
     sendJson(res, 400, {
-      error: 'einvoice_disconnect_failed',
+      error: String(error?.code ?? '').trim() || 'einvoice_disconnect_failed',
       message: String(error?.message ?? error ?? 'E-Invoice disconnect failed'),
     })
   }

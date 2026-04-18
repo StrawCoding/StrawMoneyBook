@@ -18,12 +18,12 @@ import {
   hasCachedGoogleAuthSession,
   reauth,
 } from '@/services/google/auth'
+import { isLocalOnlyAppSettingKey } from '@/ui/services/local-only-app-settings'
 
 const GOOGLE_LEDGER_SYNC_STORAGE_KEY = 'straw.google_drive_ledger_sync_state'
 const GOOGLE_LEDGER_SYNC_DIRTY_KEY = 'straw.google_drive_ledger_sync_dirty_queue'
 const GOOGLE_LEDGER_SYNC_MUTE_MS = 15000
 const AUTO_PUSH_DEBOUNCE_MS = 1000
-const LOCAL_ONLY_APP_SETTING_KEY_RE = /^(?:backup\.|sync\.|shared_ledger_meta$|bank_sync\.credentials\.)/i
 const MEMBERSHIP_TIER_MEMBER = 'member'
 
 let autoSyncTimer = null
@@ -205,7 +205,7 @@ function sanitizeSnapshotForGoogleDriveSync(snapshot) {
     throw new Error(t('settings_google_sync.error.invalid_snapshot', null, '帳本快照格式錯誤'))
   }
   const appSettings = Array.isArray(normalized?.tables?.app_settings) ? normalized.tables.app_settings : []
-  normalized.tables.app_settings = appSettings.filter((row) => !LOCAL_ONLY_APP_SETTING_KEY_RE.test(String(row?.key ?? '')))
+  normalized.tables.app_settings = appSettings.filter((row) => !isLocalOnlyAppSettingKey(row?.key))
   normalized.exported_at = new Date().toISOString()
   return normalized
 }
@@ -218,7 +218,7 @@ async function listLocalOnlySettingRows(ledgerId) {
     [ledgerId],
   )
   const rows = Array.isArray(result?.values) ? result.values : []
-  return rows.filter((row) => LOCAL_ONLY_APP_SETTING_KEY_RE.test(String(row?.key ?? '')))
+  return rows.filter((row) => isLocalOnlyAppSettingKey(row?.key))
 }
 
 async function restoreSettingRows(ledgerId, rows = []) {
