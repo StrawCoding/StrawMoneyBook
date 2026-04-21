@@ -586,6 +586,7 @@ export async function softDeleteTransactionById(ledgerId, txId) {
   await run(
     `UPDATE transactions
      SET deleted_at = ?,
+         idempotency_key = NULL,
          updated_at = ?
      WHERE ledger_id = ?
        AND id = ?
@@ -600,6 +601,7 @@ export async function softDeleteTransferGroup(ledgerId, transferGroupId) {
   await run(
     `UPDATE transactions
      SET deleted_at = ?,
+         idempotency_key = NULL,
          updated_at = ?
      WHERE ledger_id = ?
        AND transfer_group_id = ?
@@ -614,6 +616,7 @@ export async function softDeleteTransactionsByOriginRef(ledgerId, originType, ex
   await run(
     `UPDATE transactions
      SET deleted_at = ?,
+         idempotency_key = NULL,
          updated_at = ?
      WHERE ledger_id = ?
        AND origin_type = ?

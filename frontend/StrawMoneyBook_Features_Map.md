@@ -15,7 +15,7 @@
 - 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、群組內金額摘要）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細）
 - 借貸建立後可於借貸明細變更「建立入帳帳戶」，會直接修正該筆初始借入 / 借出交易的帳戶歸屬
-- 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出；完成請款單會讓匯入報銷項目回到已報銷狀態，不再留在未報銷）
+- 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出；完成請款單會讓匯入報銷項目回到已報銷狀態，不再留在未報銷；還原後重新完成不會因舊入帳交易冪等鍵撞唯一鍵）
 - 存錢罐、訂閱追蹤與自動存提
 - AI 自動記帳（文字解析、語音輸入、會員次數限制）
 - AI 自動記帳支援金額加減公式且不會誤改交易日期，也不會把算式符號殘留進備註（例如 `120+20`、`120-20`）
@@ -504,6 +504,7 @@ UI composable 目錄：`src/ui/composables/`
 - 變數（0）：無
 - 類別（0）：無
 - 補充：`listReimbursementTransactions` 的 `reimbursed_minor` 會合併直接報銷入帳、代收抵扣與已完成請款單匯入明細，避免完成請款後原交易仍被分到未報銷。
+- 補充：交易軟刪會同步清空 `idempotency_key`，讓請款單還原後再次完成、排程轉帳重建等流程不會被已軟刪交易的唯一鍵擋住。
 
 ### `src/core/services/ai-bookkeeping.service.js`
 - 函數（28）：`compactText`, `countSubsequenceHits`, `escapeRegExp`, `extractAddonItems`, `extractSmartNoteText`, `findAccountByKeyword`, `findAccountMatches`, `fuzzyAccountScore`, `includesAny`, `includesKeyword`, `isGenericCategoryName`, `normalizeIncludeFlag`, `normalizeReimbursable`, `normalizeText`, `normalizeType`, `parseAmountMajor`, `parseAmountWithUnit`, `parseAutoBookkeepingText`, `parseDateTimeFromText`, `pickCategoryBySemanticRules`, `pickCategoryMatch`, `pickClosestAccount`, `pickFirstNonGenericCategory`, `pickTransferAccounts`, `round2`, `shouldTreatAsTransfer`, `stripTextByRanges`, `toMinor`

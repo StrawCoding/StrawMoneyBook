@@ -30,3 +30,18 @@ test('reimbursable expense state sync keeps paid claim sheet items reimbursed', 
     /const hasSettlement = Boolean\(cashTx\?\.id\) \|\| usages\.length > 0 \|\| claimPaidMinor > 0/,
   )
 })
+
+test('soft-deleted reimbursement transactions release idempotency keys for claim re-completion', () => {
+  assert.match(
+    transactionRepoSource,
+    /export async function softDeleteTransactionById[\s\S]*SET deleted_at = \?,\s+idempotency_key = NULL,/,
+  )
+  assert.match(
+    transactionRepoSource,
+    /export async function softDeleteTransferGroup[\s\S]*SET deleted_at = \?,\s+idempotency_key = NULL,/,
+  )
+  assert.match(
+    transactionRepoSource,
+    /export async function softDeleteTransactionsByOriginRef[\s\S]*SET deleted_at = \?,\s+idempotency_key = NULL,/,
+  )
+})
