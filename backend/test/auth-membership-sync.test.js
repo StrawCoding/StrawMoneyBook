@@ -46,6 +46,10 @@ function createMockResponse(req) {
   }
 }
 
+function futureIso(days = 30) {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
+}
+
 async function createUser(email = 'member-sync@example.com') {
   return updateStore(async (data) => {
     const existing = findUserByEmail(data, email)
@@ -105,7 +109,7 @@ test('google play membership sync enables shared-ledger access', async () => {
     body: JSON.stringify({
       active: true,
       plan: 'monthly',
-      expiresAt: '2026-04-19T00:00:00.000Z',
+      expiresAt: futureIso(),
       lastSyncStatus: 'ok',
     }),
   }
@@ -150,7 +154,7 @@ test('google play membership sync can clear the synced grant after a verified fr
     body: JSON.stringify({
       active: true,
       plan: 'monthly',
-      expiresAt: '2026-04-19T00:00:00.000Z',
+      expiresAt: futureIso(),
       lastSyncStatus: 'ok',
     }),
   }

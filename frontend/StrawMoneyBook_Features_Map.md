@@ -338,14 +338,14 @@ UI composable 目錄：`src/ui/composables/`
 | `server.js` | Node.js HTTP server 入口；透過 `routes/route-table.js` 做 prefix dispatcher，掛載 auth / admin / client-logs / shared-ledgers / referrals API，含 rate limit 與 body size 保護 |
 | `routes/route-table.js` | API route table 與 pathname -> handler dispatch |
 | `routes/auth.js` | auth 路由入口 re-export；實作已拆到 `routes/auth/` 模組目錄 |
-| `routes/auth/` | Email / Google 登入、註冊、登出、refresh、`/me`、個人資料更新、忘記密碼 / 臨時密碼 / 重設密碼 action handlers 與共享 helper |
+| `routes/auth/` | Email / Google 登入、註冊、登出、refresh、`/me`、個人資料更新、忘記密碼 / 臨時密碼 / 重設密碼、Google Play 會員同步 action handlers 與共享 helper |
 | `routes/admin.js` | 管理員總覽、會員狀態調整、錯誤 log 審核、使用者刪除 |
 | `routes/client-logs.js` | 前端錯誤事件上報 |
 | `routes/shared-ledgers.js` | shared-ledgers 路由入口 re-export；實作已拆到 `routes/shared-ledgers/` 模組目錄 |
 | `routes/shared-ledgers/` | 共同帳本建立、查詢、快照上傳下載、Email 邀請、接受邀請、試用與同步 action handlers |
 | `routes/referrals.js` | 邀請碼資訊、邀請碼兌換、會員獎勵發放 |
 | `collab/store.js` | 本機 JSON store、使用者資料、共同帳本、邀請、會員加成資料、access token / auth session |
-| `collab/auth-store.js` | 帳號、密碼、auth provider、會員 grant、refresh session 邏輯 |
+| `collab/auth-store.js` | 帳號、密碼、auth provider、會員 grant、Google Play 同步後的 public profile 會員狀態、refresh session 邏輯 |
 | `collab/admin-store.js` | 管理員總覽、client log、會員管理 |
 | `collab/auth-session.js` | Bearer token 驗證、登入狀態檢查、管理員權限檢查 |
 | `collab/http.js` | backend 路由共用的 request/response helper，含 path segment parsing、method/body guard 與 route error serialization |
