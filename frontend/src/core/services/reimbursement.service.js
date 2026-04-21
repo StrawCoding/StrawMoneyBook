@@ -5,6 +5,7 @@ import {
   addTransaction,
   findTransactionRecordById,
   findReimbursementSettlementIncomeTx,
+  getPaidClaimItemMinorByTransactionId,
   markTransactionReimbursed,
   softDeleteTransactionsByOriginRef,
   softDeleteTransactionById,
@@ -705,15 +706,16 @@ export async function markReimbursementPaid(ledgerId, payload) {
 }
 
 async function syncReimbursableExpenseState(ledgerId, expenseTxId) {
-  const [sourceTx, cashTx, usages] = await Promise.all([
+  const [sourceTx, cashTx, usages, claimPaidMinor] = await Promise.all([
     findTransactionRecordById(ledgerId, expenseTxId),
     findReimbursementSettlementIncomeTx(ledgerId, expenseTxId),
     listReimbursementAdvanceUsagesByExpenseTx(ledgerId, expenseTxId),
+    getPaidClaimItemMinorByTransactionId(ledgerId, expenseTxId),
   ])
 
   if (!sourceTx || !Number(sourceTx.is_reimbursable)) return
 
-  const hasSettlement = Boolean(cashTx?.id) || usages.length > 0
+  const hasSettlement = Boolean(cashTx?.id) || usages.length > 0 || claimPaidMinor > 0
   await markTransactionReimbursed(ledgerId, expenseTxId, hasSettlement)
 }
 

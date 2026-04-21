@@ -54,6 +54,20 @@ function refundRelationExistsSql(sourceAlias = 't') {
   )`
 }
 
+function paidClaimItemMinorSql(sourceAlias = 't') {
+  return `COALESCE((
+    SELECT SUM(ri.amount_minor)
+    FROM reimbursement_items ri
+    INNER JOIN reimbursements r
+      ON r.ledger_id = ri.ledger_id
+     AND r.id = ri.reimbursement_id
+    WHERE ri.ledger_id = ${sourceAlias}.ledger_id
+      AND ri.transaction_id = ${sourceAlias}.id
+      AND r.deleted_at IS NULL
+      AND r.status = 'paid'
+  ), 0)`
+}
+
 export async function listRecentTransactions(ledgerId, limit = 20) {
   assertLedgerId(ledgerId)
 
@@ -317,6 +331,7 @@ export async function listReimbursementTransactions(ledgerId, state) {
                 AND rt.origin_type = 'reimbursement'
                 AND rt.external_ref_id = t.id
             ), 0) AS cash_reimbursed_minor,
+            ${paidClaimItemMinorSql('t')} AS claim_reimbursed_minor,
             COALESCE((
               SELECT SUM(rt.amount_minor)
               FROM transactions rt
@@ -332,7 +347,9 @@ export async function listReimbursementTransactions(ledgerId, state) {
               FROM reimbursement_advance_usages u
               WHERE u.ledger_id = t.ledger_id
                 AND u.expense_tx_id = t.id
-            ), 0) AS reimbursed_minor
+            ), 0)
+            +
+            ${paidClaimItemMinorSql('t')} AS reimbursed_minor
      FROM transactions t
      LEFT JOIN categories c
        ON c.ledger_id = t.ledger_id
@@ -388,6 +405,22 @@ export async function findReimbursementSettlementIncomeTx(ledgerId, expenseTxId)
     [ledgerId, expenseTxId],
   )
   return rowsOf(result)[0] ?? null
+}
+
+export async function getPaidClaimItemMinorByTransactionId(ledgerId, expenseTxId) {
+  assertLedgerId(ledgerId)
+
+  const result = await query(
+    `SELECT ${paidClaimItemMinorSql('t')} AS claim_reimbursed_minor
+     FROM transactions t
+     WHERE t.ledger_id = ?
+       AND t.id = ?
+       AND t.deleted_at IS NULL
+     LIMIT 1;`,
+    [ledgerId, expenseTxId],
+  )
+
+  return Math.max(0, Math.round(Number(firstRow(result)?.claim_reimbursed_minor ?? 0)))
 }
 
 export async function markTransactionReimbursed(ledgerId, txId, reimbursed) {

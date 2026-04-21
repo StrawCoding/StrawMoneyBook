@@ -15,7 +15,7 @@
 - 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、群組內金額摘要）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細）
 - 借貸建立後可於借貸明細變更「建立入帳帳戶」，會直接修正該筆初始借入 / 借出交易的帳戶歸屬
-- 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出）
+- 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出；完成請款單會讓匯入報銷項目回到已報銷狀態，不再留在未報銷）
 - 存錢罐、訂閱追蹤與自動存提
 - AI 自動記帳（文字解析、語音輸入、會員次數限制）
 - AI 自動記帳支援金額加減公式且不會誤改交易日期，也不會把算式符號殘留進備註（例如 `120+20`、`120-20`）
@@ -245,7 +245,7 @@
 | `transaction.store.js` | 交易載入、新增、更新、刪除、首頁篩選與關聯刷新 |
 | `budget.store.js` | 月預算、預算項目、保留金額、整月預算存款設定與補跑偏好 |
 | `loan.store.js` | 借貸清單、還款、作廢、明細 |
-| `reimbursement.store.js` | 報銷列表與報銷狀態處理 |
+| `reimbursement.store.js` | 報銷列表與報銷狀態處理；已完成請款單匯入項目會透過 `reimbursed_minor` 分入已報銷 |
 | `addon-template.store.js` | 附加項目模板讀取與快取 |
 | `ui.store.js` | 全域 UI 狀態（Toast 等） |
 
@@ -262,7 +262,7 @@
 | `budget-reserve.service.js` | 依帳本月份 / 時區 / 日均規則即時計算保留金額 |
 | `budget-save.service.js` | 預算剩餘額自動結算、補跑、delta/manual 補差 |
 | `loan.service.js` | 借貸建立、還款、作廢 |
-| `reimbursement.service.js` | 報銷流程、報銷入帳、隱藏分類處理 |
+| `reimbursement.service.js` | 報銷流程、報銷入帳、請款單完成 / 還原後的匯入報銷狀態同步、隱藏分類處理 |
 | `savings-jar.service.js` | 存錢罐存提與目標管理 |
 | `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程（含 `repeats: true` 確保每日重複觸發）、連續記帳成就統計、原生通知同步逾時保護、全帳本同步去重、同步序列化避免實機儲存卡死、Android Local Notifications plugin proxy 相容性處理、exact alarm 檢查與系統設定導引 |
 | `savings-jar-auto-save.service.js` | 存錢罐自動存入 / 定期儲蓄流程 |
@@ -500,9 +500,10 @@ UI composable 目錄：`src/ui/composables/`
 - 類別（0）：無
 
 ### `src/core/repositories/transaction.repo.js`
-- 函數（21）：`addTransaction`, `addTransfer`, `countReimbursableTransactions`, `dayRangeUtc`, `findReimbursementSettlementIncomeTx`, `findTransactionById`, `findTransactionRecordById`, `listAllTransactions`, `listRecentTransactions`, `listReimbursementTransactions`, `listTransactionsByAccount`, `listTransactionsByDay`, `listTransactionsByMonth`, `listTransactionsByYear`, `listTransferTransactionsByGroup`, `markTransactionReimbursed`, `monthRangeUtc`, `softDeleteTransactionById`, `softDeleteTransferGroup`, `updateTransactionById`, `yearRangeUtc`
+- 函數（23）：`addTransaction`, `addTransfer`, `countReimbursableTransactions`, `dayRangeUtc`, `findReimbursementSettlementIncomeTx`, `findTransactionById`, `findTransactionRecordById`, `getPaidClaimItemMinorByTransactionId`, `listAllTransactions`, `listRecentTransactions`, `listReimbursementTransactions`, `listTransactionsByAccount`, `listTransactionsByDay`, `listTransactionsByMonth`, `listTransactionsByYear`, `listTransferTransactionsByGroup`, `markTransactionReimbursed`, `monthRangeUtc`, `paidClaimItemMinorSql`, `softDeleteTransactionById`, `softDeleteTransferGroup`, `updateTransactionById`, `yearRangeUtc`
 - 變數（0）：無
 - 類別（0）：無
+- 補充：`listReimbursementTransactions` 的 `reimbursed_minor` 會合併直接報銷入帳、代收抵扣與已完成請款單匯入明細，避免完成請款後原交易仍被分到未報銷。
 
 ### `src/core/services/ai-bookkeeping.service.js`
 - 函數（28）：`compactText`, `countSubsequenceHits`, `escapeRegExp`, `extractAddonItems`, `extractSmartNoteText`, `findAccountByKeyword`, `findAccountMatches`, `fuzzyAccountScore`, `includesAny`, `includesKeyword`, `isGenericCategoryName`, `normalizeIncludeFlag`, `normalizeReimbursable`, `normalizeText`, `normalizeType`, `parseAmountMajor`, `parseAmountWithUnit`, `parseAutoBookkeepingText`, `parseDateTimeFromText`, `pickCategoryBySemanticRules`, `pickCategoryMatch`, `pickClosestAccount`, `pickFirstNonGenericCategory`, `pickTransferAccounts`, `round2`, `shouldTreatAsTransfer`, `stripTextByRanges`, `toMinor`
