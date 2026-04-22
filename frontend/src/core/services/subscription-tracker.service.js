@@ -1,13 +1,13 @@
-import { getSetting, setSetting } from '@/core/repositories/settings.repo'
-import { createId } from '@/core/utils/id'
-import { assertCanCreateSubscription } from '@/core/services/membership.service'
+import { getSetting, setSetting } from '../repositories/settings.repo.js'
+import { createId } from '../utils/id.js'
+import { assertCanCreateSubscription } from './membership.service.js'
 import {
   normalizeSubscriptionChargeDay as normalizeChargeDay,
   normalizeSubscriptionDateInput,
   resolveSubscriptionNextChargeDate,
   isSubscriptionChargeDue,
   toSubscriptionDateInput,
-} from '@/core/utils/subscription-schedule'
+} from '../utils/subscription-schedule.js'
 
 const SUBSCRIPTION_TRACKER_KEY = 'subscription_tracker.items'
 const defaultDependencies = {

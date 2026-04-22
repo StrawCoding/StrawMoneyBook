@@ -17,6 +17,7 @@ import { clearHomeWidgetSummary, syncHomeWidgetSummary } from '@/ui/services/hom
 import { runBudgetSaveIfDue } from '@/core/services/budget-save.service'
 import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { runSavingsJarAutoSaveIfDue } from '@/core/services/savings-jar-auto-save.service'
+import { runSubscriptionChargesIfDue } from '@/core/services/subscription-charge.service'
 import { syncBookkeepingRemindersForAllLedgers } from '@/ui/services/bookkeeping-reminder.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { initLocalePreference, translateMessage } from '@/ui/services/i18n.service'
@@ -291,6 +292,13 @@ function runSavingsJarAutoSaveInBackground(ledgerId, reason) {
   })
 }
 
+function runSubscriptionChargesInBackground(ledgerId, reason) {
+  if (!ledgerId) return
+  void runSubscriptionChargesIfDue(ledgerId, { reason }).catch((error) => {
+    console.warn(`[subscription-charge] run failed (${reason})`, error)
+  })
+}
+
 function runBudgetSaveInBackground(ledgerId, reason) {
   if (!ledgerId) return
   void runBudgetSaveIfDue(ledgerId, { reason }).catch((error) => {
@@ -368,6 +376,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
         void runExchangeRateAutoSyncIfDue(currentLedgerId)
         triggerBankAutoRefresh(pinia, currentLedgerId, 'app_resume')
         runSavingsJarAutoSaveInBackground(currentLedgerId, 'app_resume')
+        runSubscriptionChargesInBackground(currentLedgerId, 'app_resume')
         runBudgetSaveInBackground(currentLedgerId, 'app_resume')
         scheduleAutoBackupDueCheck(runtimeState, pinia, windowObject)
       }
@@ -402,6 +411,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
   runBookkeepingReminderSyncInBackground('app_start')
   if (ledgerStore.activeLedgerId) {
     runSavingsJarAutoSaveInBackground(ledgerStore.activeLedgerId, 'app_start')
+    runSubscriptionChargesInBackground(ledgerStore.activeLedgerId, 'app_start')
     runBudgetSaveInBackground(ledgerStore.activeLedgerId, 'app_start')
   }
 
@@ -422,6 +432,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
       void runExchangeRateAutoSyncIfDue(normalizedLedgerId)
       triggerBankAutoRefresh(pinia, normalizedLedgerId, 'active_ledger_change')
       runSavingsJarAutoSaveInBackground(normalizedLedgerId, 'active_ledger_change')
+      runSubscriptionChargesInBackground(normalizedLedgerId, 'active_ledger_change')
       runBudgetSaveInBackground(normalizedLedgerId, 'active_ledger_change')
     },
     { immediate: true },

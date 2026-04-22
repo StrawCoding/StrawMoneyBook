@@ -9,6 +9,15 @@ import {
   resolveSubscriptionNextChargeDate,
   toSubscriptionDateInput,
 } from '../src/core/utils/subscription-schedule.js'
+import {
+  resetSubscriptionChargeDependenciesForTest,
+  runSubscriptionChargesIfDue,
+  setSubscriptionChargeDependenciesForTest,
+} from '../src/core/services/subscription-charge.service.js'
+
+test.afterEach(() => {
+  resetSubscriptionChargeDependenciesForTest()
+})
 
 const subscriptionTrackerSource = readFileSync(
   resolve(import.meta.dirname, '../src/core/services/subscription-tracker.service.js'),
@@ -135,4 +144,193 @@ test('subscription tracker normalizes new fields and removes manual paid progres
   assert.match(subscriptionTrackerSource, /note,\s*\n\s*}\s*\n}/)
   assert.match(subscriptionTrackerSource, /return isSubscriptionChargeDue\(item, now\)/)
   assert.doesNotMatch(subscriptionTrackerSource, /export async function markSubscriptionPaid/)
+})
+
+test('subscription charge runner creates today due expense when app opens', async () => {
+  const createCalls = []
+
+  setSubscriptionChargeDependenciesForTest({
+    async getLedger() {
+      return { id: 'ledger_1', timezone: 'Asia/Taipei' }
+    },
+    async getSubscriptionItems() {
+      return [
+        {
+          id: 'sub_music',
+          name: 'Music',
+          accountId: 'acc_card',
+          categoryId: 'cat_entertainment',
+          amountMinor: 19900,
+          intervalValue: 1,
+          intervalUnit: 'month',
+          startDate: '2026-04-23',
+          chargeDay: 23,
+          paused: false,
+          note: 'family plan',
+        },
+      ]
+    },
+    async findTransactionByIdempotencyKey() {
+      return null
+    },
+    async createExpense(_ledgerId, payload) {
+      createCalls.push(payload)
+      return `tx_${createCalls.length}`
+    },
+  })
+
+  const result = await runSubscriptionChargesIfDue('ledger_1', {
+    now: new Date('2026-04-23T09:00:00+08:00'),
+  })
+
+  assert.equal(result.createdCount, 1)
+  assert.equal(result.failedCount, 0)
+  assert.deepEqual(result.createdTransactionIds, ['tx_1'])
+  assert.deepEqual(createCalls, [
+    {
+      accountId: 'acc_card',
+      categoryId: 'cat_entertainment',
+      amountMinor: 19900,
+      occurredAt: '2026-04-23T04:00:00.000Z',
+      note: '訂閱扣款：Music\nfamily plan',
+      originType: 'recurring',
+      externalRefId: 'subscription:sub_music',
+      idempotencyKey: 'subscription:sub_music:2026-04-23',
+    },
+  ])
+})
+
+test('subscription charge runner only charges today and is idempotent', async () => {
+  const createCalls = []
+
+  setSubscriptionChargeDependenciesForTest({
+    async getLedger() {
+      return { id: 'ledger_1', timezone: 'Asia/Taipei' }
+    },
+    async getSubscriptionItems() {
+      return [
+        {
+          id: 'sub_old',
+          name: 'Old due',
+          accountId: 'acc_card',
+          categoryId: 'cat_service',
+          amountMinor: 10000,
+          intervalValue: 1,
+          intervalUnit: 'month',
+          startDate: '2026-03-22',
+          chargeDay: 22,
+          paused: false,
+        },
+        {
+          id: 'sub_today',
+          name: 'Today due',
+          accountId: 'acc_card',
+          categoryId: 'cat_service',
+          amountMinor: 10000,
+          intervalValue: 1,
+          intervalUnit: 'month',
+          startDate: '2026-04-23',
+          chargeDay: 23,
+          paused: false,
+        },
+      ]
+    },
+    async findTransactionByIdempotencyKey(_ledgerId, key) {
+      if (key === 'subscription:sub_today:2026-04-23') {
+        return { id: 'tx_existing' }
+      }
+      return null
+    },
+    async createExpense(_ledgerId, payload) {
+      createCalls.push(payload)
+      return `tx_${createCalls.length}`
+    },
+  })
+
+  const result = await runSubscriptionChargesIfDue('ledger_1', {
+    now: new Date('2026-04-23T09:00:00+08:00'),
+  })
+
+  assert.equal(result.createdCount, 0)
+  assert.equal(result.failedCount, 0)
+  assert.equal(createCalls.length, 0)
+})
+
+test('subscription charge runner serializes concurrent checks per ledger', async () => {
+  let itemReadCount = 0
+  let releaseFirstRead = null
+  const firstReadPending = new Promise((resolvePromise) => {
+    releaseFirstRead = resolvePromise
+  })
+
+  setSubscriptionChargeDependenciesForTest({
+    async getLedger() {
+      return { id: 'ledger_1', timezone: 'Asia/Taipei' }
+    },
+    async getSubscriptionItems() {
+      itemReadCount += 1
+      if (itemReadCount === 1) {
+        await firstReadPending
+      }
+      return []
+    },
+    async findTransactionByIdempotencyKey() {
+      return null
+    },
+    async createExpense() {
+      throw new Error('should not create expense')
+    },
+  })
+
+  const firstRun = runSubscriptionChargesIfDue('ledger_1', {
+    now: new Date('2026-04-23T09:00:00+08:00'),
+  })
+  const secondRun = runSubscriptionChargesIfDue('ledger_1', {
+    now: new Date('2026-04-23T09:00:00+08:00'),
+  })
+
+  releaseFirstRead()
+  await Promise.all([firstRun, secondRun])
+
+  assert.equal(itemReadCount, 1)
+})
+
+test('subscription charge runner can rerun after an active saved-item check', async () => {
+  let itemReadCount = 0
+  let releaseFirstRead = null
+  const firstReadPending = new Promise((resolvePromise) => {
+    releaseFirstRead = resolvePromise
+  })
+
+  setSubscriptionChargeDependenciesForTest({
+    async getLedger() {
+      return { id: 'ledger_1', timezone: 'Asia/Taipei' }
+    },
+    async getSubscriptionItems() {
+      itemReadCount += 1
+      if (itemReadCount === 1) {
+        await firstReadPending
+      }
+      return []
+    },
+    async findTransactionByIdempotencyKey() {
+      return null
+    },
+    async createExpense() {
+      throw new Error('should not create expense')
+    },
+  })
+
+  const firstRun = runSubscriptionChargesIfDue('ledger_1', {
+    now: new Date('2026-04-23T09:00:00+08:00'),
+  })
+  const secondRun = runSubscriptionChargesIfDue('ledger_1', {
+    now: new Date('2026-04-23T09:00:00+08:00'),
+    rerunAfterCurrent: true,
+  })
+
+  releaseFirstRead()
+  await Promise.all([firstRun, secondRun])
+
+  assert.equal(itemReadCount, 2)
 })

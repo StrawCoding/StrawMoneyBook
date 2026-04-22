@@ -170,6 +170,7 @@ import {
   removeSubscriptionItem,
   upsertSubscriptionItem,
 } from '@/core/services/subscription-tracker.service'
+import { runSubscriptionChargesIfDue } from '@/core/services/subscription-charge.service'
 
 const accountStore = useAccountStore()
 const categoryStore = useCategoryStore()
@@ -373,6 +374,15 @@ async function submit() {
       paused: form.paused,
       note: form.note,
     })
+    const chargeResult = await runSubscriptionChargesIfDue(activeLedgerId.value, {
+      reason: 'subscription_saved',
+      rerunAfterCurrent: true,
+    })
+    if (Number(chargeResult?.createdCount ?? 0) > 0) {
+      await Promise.all([
+        accountStore.load().catch(() => null),
+      ])
+    }
     uiStore.pushToast(t('subscription_page.toast.saved'))
     closeDialog()
   } catch (error) {
