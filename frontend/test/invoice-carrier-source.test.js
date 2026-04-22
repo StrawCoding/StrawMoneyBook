@@ -40,7 +40,7 @@ test('invoice carrier backend adapter uses session_status and unavailable messag
   assert.match(backendAdapterSource, /api_unavailable_web/)
   assert.match(backendAdapterSource, /api_unavailable_native/)
   assert.match(backendAdapterSource, /VITE_INVOICE_CARRIER_API_BASE_URL/)
-  assert.match(backendAdapterSource, /https:\/\/www\.strawmb\.com/)
+  assert.match(backendAdapterSource, /https:\/\/api\.strawmb\.com/)
   assert.doesNotMatch(backendAdapterSource, /VITE_SHARED_LEDGER_API_BASE_URL/)
   assert.match(backendAdapterSource, /VITE_BANK_SYNC_CLIENT_SHARED_KEY/)
 })

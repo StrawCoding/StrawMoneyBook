@@ -41,18 +41,18 @@ test('invoice carrier adapter no longer piggybacks shared-ledger api base by def
       platform: 'android',
       windowRef: null,
     }),
-    'https://www.strawmb.com',
+    'https://api.strawmb.com',
   )
 })
 
-test('invoice carrier adapter falls back to the official StrawMB web host on native runtime when invoice api base is omitted', () => {
+test('invoice carrier adapter falls back to the official StrawMB api host on native runtime when invoice api base is omitted', () => {
   assert.equal(
     resolveInvoiceCarrierApiBase({
       env: {},
       platform: 'android',
       windowRef: null,
     }),
-    'https://www.strawmb.com',
+    'https://api.strawmb.com',
   )
 
   assert.equal(
@@ -106,7 +106,7 @@ test('invoice carrier adapter keeps same-origin api routing on localhost web pre
   )
 })
 
-test('invoice carrier adapter keeps same-origin api routing on custom https web hosts', () => {
+test('invoice carrier adapter uses production api host on custom https web hosts', () => {
   assert.equal(
     shouldUseSameOriginLocalInvoiceApi({
       env: {
@@ -119,7 +119,7 @@ test('invoice carrier adapter keeps same-origin api routing on custom https web 
         },
       },
     }),
-    true,
+    false,
   )
 
   assert.equal(
@@ -134,11 +134,11 @@ test('invoice carrier adapter keeps same-origin api routing on custom https web 
         },
       },
     }),
-    '',
+    'https://api.strawmb.com',
   )
 })
 
-test('invoice carrier adapter keeps same-origin api routing on StrawMB web to avoid cross-origin fetch failures', () => {
+test('invoice carrier adapter uses production api host on StrawMB web because www is static hosting', () => {
   assert.equal(
     shouldUseSameOriginLocalInvoiceApi({
       env: {
@@ -151,7 +151,7 @@ test('invoice carrier adapter keeps same-origin api routing on StrawMB web to av
         },
       },
     }),
-    true,
+    false,
   )
 
   assert.equal(
@@ -166,7 +166,7 @@ test('invoice carrier adapter keeps same-origin api routing on StrawMB web to av
         },
       },
     }),
-    '',
+    'https://api.strawmb.com',
   )
 
   assert.equal(

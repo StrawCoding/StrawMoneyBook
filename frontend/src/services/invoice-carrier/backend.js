@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { translateMessage } from '../../ui/services/i18n.service.js'
 
 const IMPORT_META_ENV = import.meta.env ?? {}
-const PROD_DEFAULT_INVOICE_CARRIER_API_BASE = 'https://www.strawmb.com'
+const PROD_DEFAULT_INVOICE_CARRIER_API_BASE = 'https://api.strawmb.com'
 const INVOICE_CARRIER_FEATURE_ENABLED = true
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
@@ -10,8 +10,8 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
-function isSameOriginInvoiceApiWebOrigin(origin) {
-  return /^https?:\/\/[^/]+$/i.test(origin)
+function isLocalInvoiceApiWebOrigin(origin) {
+  return /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(origin)
 }
 
 export function shouldUseSameOriginLocalInvoiceApi({
@@ -22,7 +22,7 @@ export function shouldUseSameOriginLocalInvoiceApi({
   if (normalizeText(env?.VITE_INVOICE_CARRIER_API_BASE_URL)) return false
   if (platform !== 'web') return false
   const origin = normalizeText(windowRef?.location?.origin)
-  return isSameOriginInvoiceApiWebOrigin(origin)
+  return isLocalInvoiceApiWebOrigin(origin)
 }
 
 export function resolveInvoiceCarrierApiBase({
@@ -80,6 +80,11 @@ function createMissingInvoiceCarrierApiError(platform = Capacitor.getPlatform())
   return error
 }
 
+function isLikelyHtmlResponse(text) {
+  return /^\s*<!doctype html/i.test(String(text ?? ''))
+    || /^\s*<html[\s>]/i.test(String(text ?? ''))
+}
+
 function createInvoiceCarrierDisabledError() {
   const error = new Error('電子發票載具功能目前未開放')
   error.code = 'invoice_carrier_feature_disabled'
@@ -98,7 +103,6 @@ async function postJson(path, payload = {}) {
     platform,
     windowRef: typeof window === 'undefined' ? null : window,
   }
-  const apiBase = resolveInvoiceCarrierApiBase(requestOptions)
 
   if (shouldRequireExplicitApiBase(requestOptions)) {
     throw createMissingInvoiceCarrierApiError(platform)
@@ -112,11 +116,18 @@ async function postJson(path, payload = {}) {
     headers['X-Straw-Client-Key'] = clientSharedKey
   }
 
-  const response = await fetch(buildApiUrl(path, requestOptions), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload ?? {}),
-  })
+  let response = null
+  try {
+    response = await fetch(buildApiUrl(path, requestOptions), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload ?? {}),
+    })
+  } catch (error) {
+    const apiError = createMissingInvoiceCarrierApiError(platform)
+    apiError.cause = error
+    throw apiError
+  }
 
   const text = await response.text()
   let data = null
@@ -129,7 +140,14 @@ async function postJson(path, payload = {}) {
   }
 
   if (!response.ok) {
-    if (response.status === 404 && !apiBase && path.startsWith('/api/invoice/')) {
+    if (
+      path.startsWith('/api/invoice/')
+      && (
+        response.status === 404
+        || isLikelyHtmlResponse(text)
+        || (data?.error === 'not_found' && /route not found/i.test(String(data?.message ?? '')))
+      )
+    ) {
       throw createMissingInvoiceCarrierApiError(platform)
     }
     const message = String(data?.message ?? data?.error ?? text ?? '').trim() || `HTTP ${response.status}`
@@ -140,6 +158,9 @@ async function postJson(path, payload = {}) {
   }
 
   if (!data || typeof data !== 'object') {
+    if (isLikelyHtmlResponse(text)) {
+      throw createMissingInvoiceCarrierApiError(platform)
+    }
     const error = new Error(t('invoice_carrier.error.response_invalid', null, '電子發票載具後端回應格式錯誤'))
     error.code = 'invoice_carrier_response_invalid'
     throw error
