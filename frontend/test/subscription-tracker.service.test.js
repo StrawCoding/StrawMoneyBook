@@ -44,7 +44,7 @@ test('subscription schedule supports custom monthly charge day with month-end fa
       },
       new Date('2026-02-28T09:00:00+08:00'),
     ),
-    '2026-02-28',
+    '2026-03-31',
   )
   assert.equal(
     resolveSubscriptionNextChargeDate(
@@ -58,6 +58,21 @@ test('subscription schedule supports custom monthly charge day with month-end fa
     ),
     '2026-03-31',
   )
+})
+
+test('subscription schedule treats charge dates as due from the start of the day', () => {
+  const item = {
+    startDate: '2026-04-05',
+    intervalValue: 1,
+    intervalUnit: 'month',
+    paused: false,
+  }
+
+  assert.equal(
+    resolveSubscriptionNextChargeDate(item, new Date('2026-04-05T00:00:00+08:00')),
+    '2026-05-05',
+  )
+  assert.equal(isSubscriptionChargeDue(item, new Date('2026-04-05T00:00:00+08:00')), true)
 })
 
 test('yearly subscription schedule stays on the same month with leap-safe fallback', () => {

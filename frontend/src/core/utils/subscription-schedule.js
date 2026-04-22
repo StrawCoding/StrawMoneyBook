@@ -92,7 +92,7 @@ export function resolveSubscriptionNextChargeDate(item, now = new Date()) {
   let nextDateValue = parseSubscriptionDate(nextDate)
   let guard = 0
 
-  while (nextDateValue && nextDateValue.getTime() < today.getTime() && guard < 1200) {
+  while (nextDateValue && nextDateValue.getTime() <= today.getTime() && guard < 1200) {
     nextDate = addSubscriptionInterval(nextDate, item?.intervalValue, item?.intervalUnit, {
       chargeDay: item?.chargeDay,
     })
@@ -134,5 +134,5 @@ export function isSubscriptionChargeDue(item, now = new Date()) {
   if (item?.paused) return false
   const today = toSubscriptionDateInput(now)
   if (!today) return false
-  return resolveSubscriptionNextChargeDate(item, now) === today
+  return listSubscriptionChargeDatesThrough(item, now, { maxOccurrences: 1200 }).includes(today)
 }
