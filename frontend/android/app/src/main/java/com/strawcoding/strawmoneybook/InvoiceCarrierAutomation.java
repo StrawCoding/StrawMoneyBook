@@ -203,6 +203,15 @@ final class InvoiceCarrierAutomation {
         return result;
     }
 
+    static void runThreadAffinityRegressionHarness(Activity activity, WebView webView) throws Exception {
+        BrowserSession session = new BrowserSession(activity, webView);
+        session.loadUrl("about:blank");
+        session.evaluateJson("(() => ({ ok: true }))();");
+        session.captureCookies();
+        session.restoreCookies("thread_affinity_test=1");
+        session.captureCookies();
+    }
+
     private static JSONObject buildSessionPayload(String sessionId, JSONObject status) throws JSONException {
         JSONObject result = new JSONObject(status.toString());
         result.put("provider", PROVIDER_ID);
@@ -458,12 +467,17 @@ final class InvoiceCarrierAutomation {
         private final Activity activity;
         private final WebView webView;
         private final Handler mainHandler = new Handler(Looper.getMainLooper());
+        private final CookieManager cookieManager = CookieManager.getInstance();
         private final AtomicBoolean pageFinished = new AtomicBoolean(false);
 
-        BrowserSession(Activity activity, WebView webView) {
+        BrowserSession(Activity activity, WebView webView) throws BankAutomationException {
             this.activity = activity;
             this.webView = webView;
-            this.webView.setWebViewClient(new WebViewClient() {
+            installWebViewClient();
+        }
+
+        private void installWebViewClient() throws BankAutomationException {
+            runOnUiThreadAndWait(() -> webView.setWebViewClient(new WebViewClient() {
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                     return false;
@@ -473,17 +487,17 @@ final class InvoiceCarrierAutomation {
                 public void onPageFinished(WebView view, String url) {
                     pageFinished.set(true);
                 }
-            });
+            }));
         }
 
         void loadUrl(String url) throws Exception {
             pageFinished.set(false);
             CountDownLatch latch = new CountDownLatch(1);
-            mainHandler.post(() -> {
+            runOnUiThreadAndWait(() -> {
                 webView.loadUrl(url);
                 latch.countDown();
             });
-            latch.await(3, TimeUnit.SECONDS);
+            awaitLatch(latch, 3, "invoice_carrier_navigation_start_timeout", "電子發票頁面載入啟動逾時");
             long deadline = System.currentTimeMillis() + PAGE_TIMEOUT_MS;
             while (System.currentTimeMillis() < deadline) {
                 if (pageFinished.get()) {
@@ -497,16 +511,14 @@ final class InvoiceCarrierAutomation {
         JSONObject evaluateJson(String script) throws Exception {
             AtomicReference<String> resultRef = new AtomicReference<>("");
             CountDownLatch latch = new CountDownLatch(1);
-            activity.runOnUiThread(() -> webView.evaluateJavascript(script, new ValueCallback<String>() {
+            runOnUiThreadAndWait(() -> webView.evaluateJavascript(script, new ValueCallback<String>() {
                 @Override
                 public void onReceiveValue(String value) {
                     resultRef.set(value == null ? "" : value);
                     latch.countDown();
                 }
             }));
-            if (!latch.await(8, TimeUnit.SECONDS)) {
-                throw new BankAutomationException("invoice_carrier_script_timeout", "電子發票頁面腳本執行逾時");
-            }
+            awaitLatch(latch, 8, "invoice_carrier_script_timeout", "電子發票頁面腳本執行逾時");
             Object parsed = parseEvaluateResult(resultRef.get());
             if (parsed instanceof JSONObject) return (JSONObject) parsed;
             JSONObject wrapped = new JSONObject();
@@ -515,25 +527,28 @@ final class InvoiceCarrierAutomation {
             return wrapped;
         }
 
-        String captureCookies() {
-            CookieManager cookieManager = CookieManager.getInstance();
-            String loginCookies = cookieManager.getCookie(LOGIN_URL);
-            String searchCookies = cookieManager.getCookie(SEARCH_URL);
+        String captureCookies() throws BankAutomationException {
+            String loginCookies = callOnUiThreadAndWait(() -> cookieManager.getCookie(LOGIN_URL));
+            String searchCookies = callOnUiThreadAndWait(() -> cookieManager.getCookie(SEARCH_URL));
             if (loginCookies != null && !loginCookies.trim().isEmpty()) return loginCookies.trim();
             return searchCookies == null ? "" : searchCookies.trim();
         }
 
-        void restoreCookies(String cookieHeader) {
+        void restoreCookies(String cookieHeader) throws Exception {
             String header = normalizeText(cookieHeader);
             if (header.isEmpty()) return;
-            CookieManager cookieManager = CookieManager.getInstance();
             String[] cookies = header.split(";");
             for (String cookie : cookies) {
                 String normalized = cookie.trim();
                 if (normalized.isEmpty()) continue;
-                cookieManager.setCookie("https://www.einvoice.nat.gov.tw", normalized);
+                CountDownLatch latch = callOnUiThreadAndWait(() -> {
+                    CountDownLatch innerLatch = new CountDownLatch(1);
+                    cookieManager.setCookie("https://www.einvoice.nat.gov.tw", normalized, value -> innerLatch.countDown());
+                    return innerLatch;
+                });
+                awaitLatch(latch, 5, "invoice_carrier_cookie_set_timeout", "電子發票 cookie 寫入逾時");
             }
-            cookieManager.flush();
+            runOnUiThreadAndWait(cookieManager::flush);
         }
 
         private Object parseEvaluateResult(String raw) throws JSONException {
@@ -547,6 +562,60 @@ final class InvoiceCarrierAutomation {
                 }
             }
             return value;
+        }
+
+        private void awaitLatch(CountDownLatch latch, int seconds, String code, String message) throws BankAutomationException {
+            try {
+                if (!latch.await(seconds, TimeUnit.SECONDS)) {
+                    throw new BankAutomationException(code, message);
+                }
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                throw new BankAutomationException(code, message);
+            }
+        }
+
+        private void runOnUiThreadAndWait(Runnable runnable) throws BankAutomationException {
+            CountDownLatch latch = new CountDownLatch(1);
+            AtomicReference<Exception> errorRef = new AtomicReference<>(null);
+            mainHandler.post(() -> {
+                try {
+                    runnable.run();
+                } catch (Exception error) {
+                    errorRef.set(error);
+                } finally {
+                    latch.countDown();
+                }
+            });
+            awaitLatch(latch, 20, "invoice_carrier_ui_thread_timeout", "電子發票 UI thread operation timed out");
+            if (errorRef.get() != null) {
+                throw new BankAutomationException("invoice_carrier_ui_thread_failed", String.valueOf(errorRef.get().getMessage()));
+            }
+        }
+
+        private <T> T callOnUiThreadAndWait(UiThreadSupplier<T> supplier) throws BankAutomationException {
+            CountDownLatch latch = new CountDownLatch(1);
+            AtomicReference<T> resultRef = new AtomicReference<>(null);
+            AtomicReference<Exception> errorRef = new AtomicReference<>(null);
+            mainHandler.post(() -> {
+                try {
+                    resultRef.set(supplier.get());
+                } catch (Exception error) {
+                    errorRef.set(error);
+                } finally {
+                    latch.countDown();
+                }
+            });
+            awaitLatch(latch, 20, "invoice_carrier_ui_thread_timeout", "電子發票 UI thread operation timed out");
+            if (errorRef.get() != null) {
+                throw new BankAutomationException("invoice_carrier_ui_thread_failed", String.valueOf(errorRef.get().getMessage()));
+            }
+            return resultRef.get();
+        }
+
+        @FunctionalInterface
+        private interface UiThreadSupplier<T> {
+            T get() throws Exception;
         }
     }
 }

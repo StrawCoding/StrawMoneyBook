@@ -33,7 +33,7 @@
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
-- 電子發票載具（公開但標示為實驗性；Web 首次需在 headed browser 完成 Cloudflare 驗證，Android 以原生 WebView 自動化完成新增與同步；本機加密保存憑證與 storage state，支援發票批量匯入；新增入口會一律進入新增/診斷頁，API 未就緒時在該頁顯示原因，不會停在列表頁無反應；localhost / preview Web 走同源 `/api/invoice`，production Web 預設走 `https://api.strawmb.com/api/invoice`；`www.strawmb.com` 為靜態官網，不承擔載具 API）
+- 電子發票載具（公開但標示為實驗性；Web 首次需在 headed browser 完成 Cloudflare 驗證，Android 以原生 WebView 自動化完成新增與同步且 WebView 操作統一回到 main thread；本機加密保存憑證與 storage state，支援發票批量匯入；新增入口會一律進入新增/診斷頁，API 未就緒時在該頁顯示原因，不會停在列表頁無反應；localhost / preview Web 走同源 `/api/invoice`，production Web 預設走 `https://api.strawmb.com/api/invoice`；`www.strawmb.com` 為靜態官網，不承擔載具 API）
 - Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化、電子發票載具自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗）
 
 ## 2. 路由與頁面對應
@@ -148,7 +148,7 @@
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
 - 銀行同步：`/settings/bank-sync`（入口改由 `isBankSyncFeatureEnabled()` 控制；目前預設恢復為 mock/sandbox 流程）
-- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；新增載具會導向 `/settings/invoice-carrier/new`，由新增頁處理 3 段式流程或顯示 API / 平台能力診斷；Android App 透過 `InvoiceCarrierAutomation` 原生 WebView plugin 新增 / 重新驗證 / 同步，Web 則透過 `/api/invoice` headed Playwright；localhost / preview Web 透過 Vite local API middleware 走同源 `/api/invoice`；production Web 若未指定 `VITE_INVOICE_CARRIER_API_BASE_URL`，預設走 `https://api.strawmb.com/api/invoice`，不再錯誤沿用 shared-ledger API host 或靜態官網 `www.strawmb.com`，首次需人工完成 Cloudflare 驗證）
+- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；新增載具會導向 `/settings/invoice-carrier/new`，由新增頁處理 3 段式流程或顯示 API / 平台能力診斷；Android App 透過 `InvoiceCarrierAutomation` 原生 WebView plugin 新增 / 重新驗證 / 同步，且 native BrowserSession 會將 WebView client、頁面載入、腳本執行與 cookie 操作統一切回 main thread；Web 則透過 `/api/invoice` headed Playwright；localhost / preview Web 透過 Vite local API middleware 走同源 `/api/invoice`；production Web 若未指定 `VITE_INVOICE_CARRIER_API_BASE_URL`，預設走 `https://api.strawmb.com/api/invoice`，不再錯誤沿用 shared-ledger API host 或靜態官網 `www.strawmb.com`，首次需人工完成 Cloudflare 驗證）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）
