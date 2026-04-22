@@ -630,7 +630,7 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - localhost / preview 開發環境會透過 Vite local API middleware 直接掛上 `/api/invoice/*`；正式環境則需由 `api.strawmb.com` backend 提供 `/api/invoice/*`
 
 **使用者流程**
-1. 新增載具：啟動 headed browser → 使用者在該視窗完成 Cloudflare 安全驗證 → 前端輪詢 `session_status` → 輸入手機號碼 / 密碼 / 驗證碼完成登入
+1. 新增載具：列表頁新增入口一律進入新增 / 診斷頁；若 API 未就緒，會在新增頁明確顯示原因；若 API 可用，則啟動 headed browser → 使用者在該視窗完成 Cloudflare 安全驗證 → 前端輪詢 `session_status` → 輸入手機號碼 / 密碼 / 驗證碼完成登入
 2. 本機保存：登入成功後，把手機號碼、密碼與 Playwright storage state 以加密 secure setting 保存到本機，key 為 `invoice_carrier.credentials.<connectionId>`
 3. 同步發票：之後同步會優先使用保存的 storage state 直接進查詢頁；若失效則自動重登入一次，仍失敗就把連線標成 `reauth_required`
 4. 匯入交易：勾選發票清單 → 選擇匯入帳戶 → 批量匯入為帳目記錄（發票金額 = 交易金額）

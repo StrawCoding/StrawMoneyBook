@@ -18,7 +18,7 @@
         {{ invoiceCarrierApiMessage }}
       </p>
       <div class="row top-action-row">
-        <RouterLink class="btn primary" :class="{ disabled: !invoiceCarrierApiReady }" :to="createLink">
+        <RouterLink class="btn primary" :to="{ name: 'settings-invoice-carrier-create' }">
           {{ t('settings_invoice_carrier.add_carrier', '新增載具') }}
         </RouterLink>
         <button class="btn" :disabled="loadingState" :aria-busy="loadingState" @click="reloadState">
@@ -93,11 +93,6 @@ const invoiceCarrierApiReady = isInvoiceCarrierApiConfigured()
 const invoiceCarrierApiMessage = computed(() => getInvoiceCarrierApiUnavailableMessage())
 const connections = computed(() => store.connections)
 const loadingState = computed(() => store.loading)
-const createLink = computed(() => (
-  invoiceCarrierApiReady
-    ? { name: 'settings-invoice-carrier-create' }
-    : { name: 'settings-invoice-carrier' }
-))
 
 function formatDateTime(value) {
   const text = String(value ?? '').trim()
@@ -189,11 +184,6 @@ h3 {
 .action-row {
   gap: 10px;
   flex-wrap: wrap;
-}
-
-.btn.disabled {
-  pointer-events: none;
-  opacity: 0.55;
 }
 
 .title-wrap {

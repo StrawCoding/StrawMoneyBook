@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 const settingsSource = readFileSync(resolve(import.meta.dirname, '../src/ui/views/settings.vue'), 'utf8')
 const featureListSource = readFileSync(resolve(import.meta.dirname, '../src/ui/views/FeatureListPage.vue'), 'utf8')
 const mainSource = readFileSync(resolve(import.meta.dirname, '../src/main.js'), 'utf8')
+const carrierPageSource = readFileSync(resolve(import.meta.dirname, '../src/ui/views/settings/SettingsInvoiceCarrierPage.vue'), 'utf8')
 const createPageSource = readFileSync(resolve(import.meta.dirname, '../src/ui/views/settings/SettingsInvoiceCarrierCreatePage.vue'), 'utf8')
 const connectionPageSource = readFileSync(resolve(import.meta.dirname, '../src/ui/views/settings/SettingsInvoiceCarrierConnectionPage.vue'), 'utf8')
 const backendAdapterSource = readFileSync(resolve(import.meta.dirname, '../src/services/invoice-carrier/backend.js'), 'utf8')
@@ -26,6 +27,12 @@ test('invoice carrier create page implements the three-step Cloudflare flow', ()
   assert.match(createPageSource, /secure settings/)
   assert.match(createPageSource, /pollInvoiceCarrierSessionStatus/)
   assert.match(createPageSource, /startInvoiceCarrierLinkSession/)
+})
+
+test('invoice carrier add entry always opens the create diagnostics page', () => {
+  assert.match(carrierPageSource, /:to="\{ name: 'settings-invoice-carrier-create' \}"/)
+  assert.doesNotMatch(carrierPageSource, /pointer-events:\s*none/)
+  assert.doesNotMatch(carrierPageSource, /name:\s*'settings-invoice-carrier'\s*\}/)
 })
 
 test('invoice carrier connection page exposes reauth CTA and carrier filter syncing by connection id', () => {
