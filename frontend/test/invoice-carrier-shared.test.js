@@ -7,6 +7,7 @@ import {
   isInvoiceCarrierReauthError,
   normalizeCarrierOptions,
   parseInvoiceDateText,
+  normalizeInvoiceCarrierCredentialState,
 } from '../src/services/invoice-carrier/shared.js'
 import { isLocalOnlyAppSettingKey } from '../src/ui/services/local-only-app-settings.js'
 
@@ -22,6 +23,30 @@ test('normalizeCarrierOptions deduplicates and removes empty options', () => {
     { value: '/ABC1234', label: '手機條碼' },
     { value: '', label: '空值' },
   ]), [{ value: '/ABC1234', label: '手機條碼' }])
+})
+
+test('normalizeInvoiceCarrierCredentialState preserves Android native storage markers', () => {
+  const result = normalizeInvoiceCarrierCredentialState({
+    provider: 'einvoice_tw',
+    mobilePhone: '0912345678',
+    password: 'pw',
+    storageState: {
+      native: true,
+      provider: 'einvoice_tw',
+      connectionId: 'native-conn',
+      cookies: [],
+      origins: [],
+      ignored: 'value',
+    },
+  })
+
+  assert.deepEqual(result.storageState, {
+    native: true,
+    provider: 'einvoice_tw',
+    connectionId: 'native-conn',
+    cookies: [],
+    origins: [],
+  })
 })
 
 test('invoice carrier shared helpers mark reauth errors and format local-only keys', () => {

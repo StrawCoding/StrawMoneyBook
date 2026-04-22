@@ -66,20 +66,10 @@ test('invoice carrier adapter falls back to the official StrawMB api host on nat
   )
 })
 
-test('invoice carrier link flow is blocked on native runtime unless explicitly enabled', () => {
+test('invoice carrier link flow is supported on Android native runtime and web', () => {
   assert.equal(
     isInvoiceCarrierLinkingSupportedFor({
       env: {},
-      platform: 'android',
-    }),
-    false,
-  )
-
-  assert.equal(
-    isInvoiceCarrierLinkingSupportedFor({
-      env: {
-        VITE_INVOICE_CARRIER_ALLOW_NATIVE_LINKING: 'true',
-      },
       platform: 'android',
     }),
     true,
@@ -91,6 +81,14 @@ test('invoice carrier link flow is blocked on native runtime unless explicitly e
       platform: 'web',
     }),
     true,
+  )
+
+  assert.equal(
+    isInvoiceCarrierLinkingSupportedFor({
+      env: {},
+      platform: 'ios',
+    }),
+    false,
   )
 })
 

@@ -37,10 +37,7 @@ export function normalizeInvoiceCarrierCredentialState(value) {
   if (!value || typeof value !== 'object') return null
 
   const storageState = value.storageState && typeof value.storageState === 'object'
-    ? {
-      cookies: Array.isArray(value.storageState.cookies) ? value.storageState.cookies : [],
-      origins: Array.isArray(value.storageState.origins) ? value.storageState.origins : [],
-    }
+    ? normalizeInvoiceCarrierStorageState(value.storageState)
     : null
 
   return {
@@ -51,6 +48,19 @@ export function normalizeInvoiceCarrierCredentialState(value) {
     carrierOptions: normalizeCarrierOptions(value.carrierOptions || value.carrier_options),
     updatedAt: normalizeText(value.updatedAt || value.updated_at) || new Date().toISOString(),
   }
+}
+
+function normalizeInvoiceCarrierStorageState(value) {
+  const storageState = {
+    cookies: Array.isArray(value.cookies) ? value.cookies : [],
+    origins: Array.isArray(value.origins) ? value.origins : [],
+  }
+  if (value.native) {
+    storageState.native = true
+    storageState.provider = normalizeText(value.provider)
+    storageState.connectionId = normalizeText(value.connectionId || value.connection_id)
+  }
+  return storageState
 }
 
 export function shouldRewriteInvoiceCarrierCredentialState(value) {

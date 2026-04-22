@@ -11,7 +11,7 @@
     </article>
 
     <article v-else-if="!invoiceCarrierLinkingSupported" class="card panel warning-panel">
-      <h3>手機端暫不支援新增載具</h3>
+      <h3>此平台暫不支援新增載具</h3>
       <p class="muted">{{ invoiceCarrierLinkingMessage }}</p>
     </article>
 

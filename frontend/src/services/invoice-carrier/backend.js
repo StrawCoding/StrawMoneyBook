@@ -1,5 +1,13 @@
 import { Capacitor } from '@capacitor/core'
 import { translateMessage } from '../../ui/services/i18n.service.js'
+import {
+  createNativeInvoiceCarrierLinkSession,
+  disconnectNativeInvoiceCarrierSession,
+  exchangeNativeInvoiceCarrierAuth,
+  getNativeInvoiceCarrierSessionStatus,
+  isNativeInvoiceCarrierAutomationRuntimeSupported,
+  syncNativeInvoiceCarrierData,
+} from './native-automation.js'
 
 const IMPORT_META_ENV = import.meta.env ?? {}
 const PROD_DEFAULT_INVOICE_CARRIER_API_BASE = 'https://api.strawmb.com'
@@ -8,12 +16,6 @@ const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
 function normalizeText(value) {
   return String(value ?? '').trim()
-}
-
-function parseBooleanEnv(value, fallback = false) {
-  const normalized = normalizeText(value).toLowerCase()
-  if (!normalized) return fallback
-  return ['1', 'true', 'yes', 'on'].includes(normalized)
 }
 
 function isLocalInvoiceApiWebOrigin(origin) {
@@ -177,6 +179,8 @@ async function postJson(path, payload = {}) {
 
 export function isInvoiceCarrierApiConfiguredFor(options = {}) {
   if (!INVOICE_CARRIER_FEATURE_ENABLED) return false
+  if (options?.platform === 'android') return true
+  if (!options?.platform && isNativeInvoiceCarrierAutomationRuntimeSupported()) return true
   return !shouldRequireExplicitApiBase(options)
 }
 
@@ -185,12 +189,11 @@ export function isInvoiceCarrierApiConfigured() {
 }
 
 export function isInvoiceCarrierLinkingSupportedFor({
-  env = IMPORT_META_ENV,
   platform = Capacitor.getPlatform(),
 } = {}) {
   if (!INVOICE_CARRIER_FEATURE_ENABLED) return false
   if (platform === 'web') return true
-  return parseBooleanEnv(env?.VITE_INVOICE_CARRIER_ALLOW_NATIVE_LINKING, false)
+  return platform === 'android'
 }
 
 export function isInvoiceCarrierLinkingSupported() {
@@ -212,26 +215,41 @@ export function getInvoiceCarrierLinkingUnavailableMessage() {
   return t(
     'invoice_carrier.error.native_linking_unavailable',
     null,
-    '手機 App 目前無法顯示電子發票 Cloudflare 安全驗證所需的 headed browser，因此暫不支援在手機上新增或重新驗證載具。請先在 Web / 桌面環境完成新增或重新驗證，之後手機端可使用已保存的載具資料進行同步。',
+    '目前僅支援 Web 與 Android App 新增或重新驗證電子發票載具。',
   )
 }
 
 export async function createInvoiceCarrierLinkSession(payload = {}) {
+  if (isNativeInvoiceCarrierAutomationRuntimeSupported()) {
+    return createNativeInvoiceCarrierLinkSession(payload)
+  }
   return postJson('/api/invoice/link_session', payload)
 }
 
 export async function getInvoiceCarrierSessionStatus(payload = {}) {
+  if (isNativeInvoiceCarrierAutomationRuntimeSupported()) {
+    return getNativeInvoiceCarrierSessionStatus(payload)
+  }
   return postJson('/api/invoice/session_status', payload)
 }
 
 export async function exchangeInvoiceCarrierAuth(payload = {}) {
+  if (isNativeInvoiceCarrierAutomationRuntimeSupported()) {
+    return exchangeNativeInvoiceCarrierAuth(payload)
+  }
   return postJson('/api/invoice/exchange', payload)
 }
 
 export async function syncInvoiceCarrierData(payload = {}) {
+  if (isNativeInvoiceCarrierAutomationRuntimeSupported()) {
+    return syncNativeInvoiceCarrierData(payload)
+  }
   return postJson('/api/invoice/sync', payload)
 }
 
 export async function disconnectInvoiceCarrierSession(payload = {}) {
+  if (isNativeInvoiceCarrierAutomationRuntimeSupported()) {
+    return disconnectNativeInvoiceCarrierSession(payload)
+  }
   return postJson('/api/invoice/disconnect', payload)
 }
