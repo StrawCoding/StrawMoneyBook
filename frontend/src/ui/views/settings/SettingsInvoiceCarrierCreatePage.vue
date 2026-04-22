@@ -10,6 +10,11 @@
       <p class="muted">{{ invoiceCarrierApiMessage }}</p>
     </article>
 
+    <article v-else-if="!invoiceCarrierLinkingSupported" class="card panel warning-panel">
+      <h3>手機端暫不支援新增載具</h3>
+      <p class="muted">{{ invoiceCarrierLinkingMessage }}</p>
+    </article>
+
     <template v-else>
       <article class="card panel intro-panel">
         <div class="eyebrow">實驗性</div>
@@ -134,7 +139,9 @@ import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import {
   getInvoiceCarrierApiUnavailableMessage,
+  getInvoiceCarrierLinkingUnavailableMessage,
   isInvoiceCarrierApiConfigured,
+  isInvoiceCarrierLinkingSupported,
 } from '@/services/invoice-carrier/backend'
 import { normalizeText } from '@/services/invoice-carrier/shared'
 import {
@@ -152,6 +159,8 @@ const { t } = useI18n()
 
 const invoiceCarrierApiReady = isInvoiceCarrierApiConfigured()
 const invoiceCarrierApiMessage = computed(() => getInvoiceCarrierApiUnavailableMessage())
+const invoiceCarrierLinkingSupported = isInvoiceCarrierLinkingSupported()
+const invoiceCarrierLinkingMessage = computed(() => getInvoiceCarrierLinkingUnavailableMessage())
 const reconnectConnectionId = computed(() => normalizeText(route.query.connectionId))
 const reconnectMode = computed(() => Boolean(reconnectConnectionId.value))
 const pageTitle = computed(() => (

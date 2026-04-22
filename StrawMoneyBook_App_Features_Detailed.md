@@ -630,7 +630,7 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - localhost / preview 開發環境會透過 Vite local API middleware 直接掛上 `/api/invoice/*`；正式環境則需由 `api.strawmb.com` backend 提供 `/api/invoice/*`
 
 **使用者流程**
-1. 新增載具：列表頁新增入口一律進入新增 / 診斷頁；若 API 未就緒，會在新增頁明確顯示原因；若 API 可用，則啟動 headed browser → 使用者在該視窗完成 Cloudflare 安全驗證 → 前端輪詢 `session_status` → 輸入手機號碼 / 密碼 / 驗證碼完成登入
+1. 新增載具：列表頁新增入口一律進入新增 / 診斷頁；若 API 未就緒，會在新增頁明確顯示原因；若在 Android App，預設會顯示「手機端暫不支援新增載具」，避免使用者等待看不到的遠端 headed browser；若在 Web / 桌面環境且 API 可用，則啟動 headed browser → 使用者在該視窗完成 Cloudflare 安全驗證 → 前端輪詢 `session_status` → 輸入手機號碼 / 密碼 / 驗證碼完成登入
 2. 本機保存：登入成功後，把手機號碼、密碼與 Playwright storage state 以加密 secure setting 保存到本機，key 為 `invoice_carrier.credentials.<connectionId>`
 3. 同步發票：之後同步會優先使用保存的 storage state 直接進查詢頁；若失效則自動重登入一次，仍失敗就把連線標成 `reauth_required`
 4. 匯入交易：勾選發票清單 → 選擇匯入帳戶 → 批量匯入為帳目記錄（發票金額 = 交易金額）
@@ -707,7 +707,7 @@ StrawMoneyBook 特別適合以下人群：
 以下內容在文件中必須明講，避免誤導：
 
 - 銀行同步已有頁面與流程，但屬於受控功能，不應描述成全面對外開放
-- 電子發票載具雖然已公開，但仍屬實驗性功能，且首次 / 失效後必須人工完成 Cloudflare 驗證
+- 電子發票載具雖然已公開，但仍屬實驗性功能，且首次 / 失效後必須人工完成 Cloudflare 驗證；Android App 目前預設不啟動新增 / 重新驗證流程，需先在 Web / 桌面環境完成，或未來由後端提供手機可操作的遠端 browser 後再以 `VITE_INVOICE_CARRIER_ALLOW_NATIVE_LINKING=true` 明確開啟
 - 電子發票載具正式可用的前提，是 `https://api.strawmb.com` backend 已提供 `/api/invoice` 且該 host 能開 headed Playwright browser；App 端若未指定專用 URL，預設會走 `https://api.strawmb.com/api/invoice`，`www.strawmb.com` 只作為靜態官網
 - 多數進階同步能力屬會員功能
 - 免費版有帳本、帳戶、借貸、報銷、存錢罐、訂閱、AI 記帳次數等限制

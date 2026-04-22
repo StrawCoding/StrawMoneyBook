@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  isInvoiceCarrierLinkingSupportedFor,
   isInvoiceCarrierApiConfiguredFor,
   resolveInvoiceCarrierApiBase,
   resolveInvoiceCarrierClientSharedKey,
@@ -60,6 +61,34 @@ test('invoice carrier adapter falls back to the official StrawMB api host on nat
       env: {},
       platform: 'android',
       windowRef: null,
+    }),
+    true,
+  )
+})
+
+test('invoice carrier link flow is blocked on native runtime unless explicitly enabled', () => {
+  assert.equal(
+    isInvoiceCarrierLinkingSupportedFor({
+      env: {},
+      platform: 'android',
+    }),
+    false,
+  )
+
+  assert.equal(
+    isInvoiceCarrierLinkingSupportedFor({
+      env: {
+        VITE_INVOICE_CARRIER_ALLOW_NATIVE_LINKING: 'true',
+      },
+      platform: 'android',
+    }),
+    true,
+  )
+
+  assert.equal(
+    isInvoiceCarrierLinkingSupportedFor({
+      env: {},
+      platform: 'web',
     }),
     true,
   )

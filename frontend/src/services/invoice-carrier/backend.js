@@ -10,6 +10,12 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
+function parseBooleanEnv(value, fallback = false) {
+  const normalized = normalizeText(value).toLowerCase()
+  if (!normalized) return fallback
+  return ['1', 'true', 'yes', 'on'].includes(normalized)
+}
+
 function isLocalInvoiceApiWebOrigin(origin) {
   return /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(origin)
 }
@@ -178,6 +184,19 @@ export function isInvoiceCarrierApiConfigured() {
   return isInvoiceCarrierApiConfiguredFor()
 }
 
+export function isInvoiceCarrierLinkingSupportedFor({
+  env = IMPORT_META_ENV,
+  platform = Capacitor.getPlatform(),
+} = {}) {
+  if (!INVOICE_CARRIER_FEATURE_ENABLED) return false
+  if (platform === 'web') return true
+  return parseBooleanEnv(env?.VITE_INVOICE_CARRIER_ALLOW_NATIVE_LINKING, false)
+}
+
+export function isInvoiceCarrierLinkingSupported() {
+  return isInvoiceCarrierLinkingSupportedFor()
+}
+
 export function isInvoiceCarrierFeatureEnabled() {
   return INVOICE_CARRIER_FEATURE_ENABLED
 }
@@ -187,6 +206,14 @@ export function getInvoiceCarrierApiUnavailableMessage() {
     return createInvoiceCarrierDisabledError().message
   }
   return createMissingInvoiceCarrierApiError(Capacitor.getPlatform()).message
+}
+
+export function getInvoiceCarrierLinkingUnavailableMessage() {
+  return t(
+    'invoice_carrier.error.native_linking_unavailable',
+    null,
+    '手機 App 目前無法顯示電子發票 Cloudflare 安全驗證所需的 headed browser，因此暫不支援在手機上新增或重新驗證載具。請先在 Web / 桌面環境完成新增或重新驗證，之後手機端可使用已保存的載具資料進行同步。',
+  )
 }
 
 export async function createInvoiceCarrierLinkSession(payload = {}) {

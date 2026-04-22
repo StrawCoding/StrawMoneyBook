@@ -27,6 +27,8 @@ test('invoice carrier create page implements the three-step Cloudflare flow', ()
   assert.match(createPageSource, /secure settings/)
   assert.match(createPageSource, /pollInvoiceCarrierSessionStatus/)
   assert.match(createPageSource, /startInvoiceCarrierLinkSession/)
+  assert.match(createPageSource, /isInvoiceCarrierLinkingSupported/)
+  assert.match(createPageSource, /手機端暫不支援新增載具/)
 })
 
 test('invoice carrier add entry always opens the create diagnostics page', () => {
@@ -48,6 +50,8 @@ test('invoice carrier backend adapter uses session_status and unavailable messag
   assert.match(backendAdapterSource, /api_unavailable_native/)
   assert.match(backendAdapterSource, /VITE_INVOICE_CARRIER_API_BASE_URL/)
   assert.match(backendAdapterSource, /https:\/\/api\.strawmb\.com/)
+  assert.match(backendAdapterSource, /VITE_INVOICE_CARRIER_ALLOW_NATIVE_LINKING/)
+  assert.match(backendAdapterSource, /native_linking_unavailable/)
   assert.doesNotMatch(backendAdapterSource, /VITE_SHARED_LEDGER_API_BASE_URL/)
   assert.match(backendAdapterSource, /VITE_BANK_SYNC_CLIENT_SHARED_KEY/)
 })
