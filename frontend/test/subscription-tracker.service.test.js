@@ -7,6 +7,7 @@ import {
   isSubscriptionChargeDue,
   listSubscriptionChargeDatesThrough,
   resolveSubscriptionNextChargeDate,
+  toSubscriptionDateInput,
 } from '../src/core/utils/subscription-schedule.js'
 
 const subscriptionTrackerSource = readFileSync(
@@ -73,6 +74,10 @@ test('subscription schedule treats charge dates as due from the start of the day
     '2026-05-05',
   )
   assert.equal(isSubscriptionChargeDue(item, new Date('2026-04-05T00:00:00+08:00')), true)
+})
+
+test('subscription schedule normalizes date objects in the app timezone', () => {
+  assert.equal(toSubscriptionDateInput(new Date('2026-04-05T00:00:00+08:00')), '2026-04-05')
 })
 
 test('yearly subscription schedule stays on the same month with leap-safe fallback', () => {

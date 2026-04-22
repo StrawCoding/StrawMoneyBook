@@ -17,7 +17,7 @@
 - 借貸建立後可於借貸明細變更「建立入帳帳戶」，會直接修正該筆初始借入 / 借出交易的帳戶歸屬
 - 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出；完成請款單會讓匯入報銷項目回到已報銷狀態，不再留在未報銷；還原後重新完成不會因舊入帳交易冪等鍵撞唯一鍵）
 - 存錢罐、訂閱追蹤與自動存提
-- 訂閱追蹤的扣款日以當天開始為扣款時間點；進入扣款日後仍可標示本期已到期，但「下次扣款」會直接推進到下一個週期
+- 訂閱追蹤的扣款日以當天開始為扣款時間點；進入扣款日後仍可標示本期已到期，但「下次扣款」會直接推進到下一個週期，且排程日期以 App 預設時區正規化，避免 UTC / CI 環境把台北時間午夜誤判成前一天
 - AI 自動記帳（文字解析、語音輸入、會員次數限制）
 - AI 自動記帳支援金額加減公式且不會誤改交易日期，也不會把算式符號殘留進備註（例如 `120+20`、`120-20`）
 - AI 語音再解析若沒有辨識出新的備註內容，會保留目前表單中的既有備註
@@ -267,7 +267,7 @@
 | `savings-jar.service.js` | 存錢罐存提與目標管理 |
 | `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程（含 `repeats: true` 確保每日重複觸發）、連續記帳成就統計、原生通知同步逾時保護、全帳本同步去重、同步序列化避免實機儲存卡死、Android Local Notifications plugin proxy 相容性處理、exact alarm 檢查與系統設定導引 |
 | `savings-jar-auto-save.service.js` | 存錢罐自動存入 / 定期儲蓄流程 |
-| `subscription-tracker.service.js` | 訂閱追蹤與期別處理；扣款日一開始即視為本期到期並推進下一期 |
+| `subscription-tracker.service.js` | 訂閱追蹤與期別處理；扣款日一開始即視為本期到期並推進下一期，日期 helper 以純日期與 App 預設時區處理避免環境時區漂移 |
 | `ai-bookkeeping.service.js` | AI 記帳語意解析與建議 |
 | `ai-bookkeeping-tiny-ner.service.js` | AI 記帳輕量關鍵詞/實體抽取 |
 | `ai-bookkeeping-category-match.js` / `ai-bookkeeping-account-match.js` | AI 記帳分類 / 帳戶比對輔助 |
