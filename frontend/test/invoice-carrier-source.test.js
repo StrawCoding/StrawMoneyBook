@@ -36,6 +36,12 @@ test('invoice carrier create page implements the three-step Cloudflare flow', ()
   assert.doesNotMatch(createPageSource, /手機端暫不支援新增載具/)
 })
 
+test('invoice carrier create page avoids automatic status polling on Android native sessions', () => {
+  assert.match(createPageSource, /isNativeInvoiceCarrierAutomationRuntimeSupported/)
+  assert.match(createPageSource, /const shouldAutoPollSessionStatus = computed\(\(\) => !isNativeInvoiceCarrierAutomationRuntimeSupported\(\)\)/)
+  assert.match(createPageSource, /if \(!shouldAutoPollSessionStatus\.value\) return/)
+})
+
 test('invoice carrier add entry always opens the create diagnostics page', () => {
   assert.match(carrierPageSource, /:to="\{ name: 'settings-invoice-carrier-create' \}"/)
   assert.doesNotMatch(carrierPageSource, /pointer-events:\s*none/)

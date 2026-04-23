@@ -16,3 +16,9 @@ test('auto backup settings page notifies the app when backup configuration chang
   assert.match(settingsSource, /notifyAutoBackupConfigUpdated\('google_connected'\)/)
   assert.match(settingsSource, /notifyAutoBackupConfigUpdated\('google_settings_saved'\)/)
 })
+
+test('manual backup stops when settings cannot be saved first', () => {
+  assert.match(settingsSource, /return false/)
+  assert.match(settingsSource, /const settingsSaved = await saveWebdavBackupSettings\(\)\s+if \(!settingsSaved\) return/)
+  assert.match(settingsSource, /const settingsSaved = await saveGoogleBackupSettings\(\)\s+if \(!settingsSaved\) return/)
+})

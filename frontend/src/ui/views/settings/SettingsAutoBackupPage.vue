@@ -578,10 +578,10 @@ async function disconnectWebdav() {
 }
 
 async function saveWebdavBackupSettings() {
-  if (!ledgerStore.activeLedgerId) return
+  if (!ledgerStore.activeLedgerId) return false
   if (!webdavBackupState.value.connected) {
     uiStore.pushToast(t('settings_auto_backup.toast.webdav_connect_required'), 'error')
-    return
+    return false
   }
   webdavSavingSettings.value = true
   try {
@@ -599,8 +599,10 @@ async function saveWebdavBackupSettings() {
     webdavBackupState.value = await updateWebdavBackupState(ledgerStore.activeLedgerId, patch)
     notifyAutoBackupConfigUpdated('webdav_settings_saved')
     uiStore.pushToast(t('settings_auto_backup.toast.webdav_settings_updated'))
+    return true
   } catch (error) {
     uiStore.pushToast(errorMessage(error, t('settings_auto_backup.error.save_settings_failed')), 'error')
+    return false
   } finally {
     webdavSavingSettings.value = false
   }
@@ -610,7 +612,8 @@ async function backupNowToWebdav() {
   if (!ledgerStore.activeLedgerId) return
   webdavBackingUpNow.value = true
   try {
-    await saveWebdavBackupSettings()
+    const settingsSaved = await saveWebdavBackupSettings()
+    if (!settingsSaved) return
     const result = await performWebdavBackup(ledgerStore.activeLedgerId)
     webdavBackupState.value = await getWebdavBackupState(ledgerStore.activeLedgerId)
     uiStore.pushToast(
@@ -708,10 +711,10 @@ async function disconnectGoogle() {
 }
 
 async function saveGoogleBackupSettings() {
-  if (!ledgerStore.activeLedgerId) return
+  if (!ledgerStore.activeLedgerId) return false
   if (!googleBackupState.value.connected) {
     uiStore.pushToast(t('settings_auto_backup.toast.google_connect_required'), 'error')
-    return
+    return false
   }
   googleSavingSettings.value = true
   try {
@@ -722,9 +725,11 @@ async function saveGoogleBackupSettings() {
     })
     notifyAutoBackupConfigUpdated('google_settings_saved')
     uiStore.pushToast(t('settings_auto_backup.toast.google_settings_updated'))
+    return true
   } catch (error) {
     console.error('[google-save-settings] failed', error)
     uiStore.pushToast(errorMessage(error, t('settings_auto_backup.error.save_settings_failed')), 'error')
+    return false
   } finally {
     googleSavingSettings.value = false
   }
@@ -734,7 +739,8 @@ async function backupNowToGoogle() {
   if (!ledgerStore.activeLedgerId) return
   googleBackingUpNow.value = true
   try {
-    await saveGoogleBackupSettings()
+    const settingsSaved = await saveGoogleBackupSettings()
+    if (!settingsSaved) return
     const result = await performGoogleBackup(ledgerStore.activeLedgerId)
     googleBackupState.value = await getGoogleBackupState(ledgerStore.activeLedgerId)
     uiStore.pushToast(

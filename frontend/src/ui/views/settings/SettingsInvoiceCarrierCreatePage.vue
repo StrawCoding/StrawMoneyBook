@@ -142,6 +142,7 @@ import {
   getInvoiceCarrierLinkingUnavailableMessage,
   isInvoiceCarrierApiConfigured,
   isInvoiceCarrierLinkingSupported,
+  isNativeInvoiceCarrierAutomationRuntimeSupported,
 } from '@/services/invoice-carrier/backend'
 import { normalizeText } from '@/services/invoice-carrier/shared'
 import {
@@ -161,6 +162,7 @@ const invoiceCarrierApiReady = isInvoiceCarrierApiConfigured()
 const invoiceCarrierApiMessage = computed(() => getInvoiceCarrierApiUnavailableMessage())
 const invoiceCarrierLinkingSupported = isInvoiceCarrierLinkingSupported()
 const invoiceCarrierLinkingMessage = computed(() => getInvoiceCarrierLinkingUnavailableMessage())
+const shouldAutoPollSessionStatus = computed(() => !isNativeInvoiceCarrierAutomationRuntimeSupported())
 const reconnectConnectionId = computed(() => normalizeText(route.query.connectionId))
 const reconnectMode = computed(() => Boolean(reconnectConnectionId.value))
 const pageTitle = computed(() => (
@@ -220,6 +222,7 @@ function applySessionStatus(status) {
 
 function startPolling() {
   stopPolling()
+  if (!shouldAutoPollSessionStatus.value) return
   if (!sessionId.value) return
   pollTimerId = window.setInterval(() => {
     void refreshSessionStatus()

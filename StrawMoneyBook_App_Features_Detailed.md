@@ -474,6 +474,8 @@ App 開啟、回到前景、切換帳本與儲存訂閱項目後，會檢查目�
 
 另外，Google 自動備份登入流程也已補強為在 App 啟動與回前景時嘗試靜默恢復，並優先沿用上一次備份使用的帳號，降低背景切到錯誤 Google 帳號的風險。
 
+立即備份流程目前也會先確認設定保存成功才執行實際備份；若 WebDAV / Google 尚未連線或設定更新失敗，不會繼續用舊設定觸發備份，避免使用者看到連線或保存錯誤後又收到另一個備份失敗結果。
+
 ### 6.5 匯入 / 匯出 / 修復
 
 資料管理頁除了備份，還包含：
@@ -629,13 +631,13 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - 功能已公開，但明確標示為「實驗性」
 - Web 使用 Playwright 在後端子進程執行 headed automation；Android App 使用原生 WebView 自動化，不嘗試 headless 繞過 Cloudflare，且所有 WebView client / load / JavaScript / cookie 操作都會切回 main thread 執行
 - 支援 Tesseract.js OCR 自動辨識圖形驗證碼；辨識不足時仍會顯示圖片給使用者手動輸入
-- 新增 `session_status` API，前端可輪詢 Cloudflare 是否通過、登入表單是否可用、是否已登入與可用載具選項
+- 新增 `session_status` API，Web 前端可輪詢 Cloudflare 是否通過、登入表單是否可用、是否已登入與可用載具選項；Android native 流程不做自動輪詢，避免每次狀態檢查都重新開啟原生 WebView 登入頁造成頁面反覆刷新
 - 同步預設支援最近 2 個月日期範圍，並可依實際載具清單做篩選
 - 前端 adapter 會優先使用 Android native automation；Web 則優先使用 `VITE_INVOICE_CARRIER_API_BASE_URL`，localhost / preview Web runtime 會走當前 host 的同源 `/api/invoice/*`；production Web 若未指定專用 URL，預設走 `https://api.strawmb.com/api/invoice/*`，不再錯誤沿用 shared-ledger API host 或靜態官網 `www.strawmb.com`
 - localhost / preview 開發環境會透過 Vite local API middleware 直接掛上 `/api/invoice/*`；正式環境則需由 `api.strawmb.com` backend 提供 `/api/invoice/*`
 
 **使用者流程**
-1. 新增載具：列表頁新增入口一律進入新增 / 診斷頁；若 Web API 未就緒，會在新增頁明確顯示原因；Android App 會啟動原生 WebView 自動化並沿用 Vue 表單輸入手機號碼 / 密碼 / 驗證碼，native automation 即使由背景 executor 驅動也不會直接在背景執行緒呼叫 WebView；Web / 桌面環境則啟動 headed browser → 使用者在該視窗完成 Cloudflare 安全驗證 → 前端輪詢 `session_status` → 輸入手機號碼 / 密碼 / 驗證碼完成登入
+1. 新增載具：列表頁新增入口一律進入新增 / 診斷頁；若 Web API 未就緒，會在新增頁明確顯示原因；Android App 會啟動原生 WebView 自動化並沿用 Vue 表單輸入手機號碼 / 密碼 / 驗證碼，native automation 即使由背景 executor 驅動也不會直接在背景執行緒呼叫 WebView，且不會在前端每 2 秒自動重開狀態檢查；Web / 桌面環境則啟動 headed browser → 使用者在該視窗完成 Cloudflare 安全驗證 → 前端輪詢 `session_status` → 輸入手機號碼 / 密碼 / 驗證碼完成登入
 2. 本機保存：登入成功後，把手機號碼、密碼與 Playwright storage state 或 Android native session marker 以加密 secure setting 保存到本機，key 為 `invoice_carrier.credentials.<connectionId>`；Android 另以原生 encrypted vault 保存 cookie/session 狀態
 3. 同步發票：Web 會優先使用保存的 storage state 直接進查詢頁；Android 會優先使用原生 vault session；若失效則自動重登入一次，仍失敗就把連線標成 `reauth_required`
 4. 匯入交易：勾選發票清單 → 選擇匯入帳戶 → 批量匯入為帳目記錄（發票金額 = 交易金額）
