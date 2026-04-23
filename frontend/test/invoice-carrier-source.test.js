@@ -38,6 +38,7 @@ test('invoice carrier create page implements the three-step Cloudflare flow', ()
 
 test('invoice carrier create page avoids automatic status polling on Android native sessions', () => {
   assert.match(createPageSource, /isNativeInvoiceCarrierAutomationRuntimeSupported/)
+  assert.match(backendAdapterSource, /export \{ isNativeInvoiceCarrierAutomationRuntimeSupported \}/)
   assert.match(createPageSource, /const shouldAutoPollSessionStatus = computed\(\(\) => !isNativeInvoiceCarrierAutomationRuntimeSupported\(\)\)/)
   assert.match(createPageSource, /if \(!shouldAutoPollSessionStatus\.value\) return/)
 })

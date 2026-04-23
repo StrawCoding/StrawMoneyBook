@@ -9,6 +9,8 @@ import {
   syncNativeInvoiceCarrierData,
 } from './native-automation.js'
 
+export { isNativeInvoiceCarrierAutomationRuntimeSupported }
+
 const IMPORT_META_ENV = import.meta.env ?? {}
 const PROD_DEFAULT_INVOICE_CARRIER_API_BASE = 'https://api.strawmb.com'
 const INVOICE_CARRIER_FEATURE_ENABLED = true
