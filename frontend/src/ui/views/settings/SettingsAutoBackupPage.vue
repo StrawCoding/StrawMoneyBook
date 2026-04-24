@@ -231,7 +231,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -260,6 +260,7 @@ import { resetDatabase } from '@/core/db/sqlite'
 const ledgerStore = useLedgerStore()
 const uiStore = useUiStore()
 const { t, locale } = useI18n()
+const AUTO_BACKUP_STATE_UPDATED_EVENT = 'app:auto-backup-state-updated'
 
 const webdavBackupState = ref({
   connected: false,
@@ -336,76 +337,108 @@ const isWorking = computed(() => {
     googleRestoringNow.value
   )
 })
-async function refreshWebdavBackupState() {
-  if (!ledgerStore.activeLedgerId) {
-    webdavBackupState.value = {
-      connected: false,
-      endpoint: '',
-      username: '',
-      password: '',
-      remoteDir: '',
-      autoEnabled: false,
-      dataChangeAutoEnabled: false,
-      intervalHours: 24,
-      lastBackupAt: '',
-      lastBackupFilename: '',
-      lastBackupStatus: 'idle',
-      lastError: '',
-      lastAutoCheckAt: '',
-      lastAutoCheckStatus: 'idle',
-      lastAutoCheckReason: '',
-    }
-    webdavEndpointInput.value = ''
-    webdavUsernameInput.value = ''
-    webdavPasswordInput.value = ''
-    webdavRemoteDirInput.value = ''
-    webdavAutoEnabled.value = false
-    webdavDataChangeAutoEnabled.value = false
-    webdavIntervalHours.value = 24
-    return
+
+function buildEmptyWebdavBackupState() {
+  return {
+    connected: false,
+    endpoint: '',
+    username: '',
+    password: '',
+    remoteDir: '',
+    autoEnabled: false,
+    dataChangeAutoEnabled: false,
+    intervalHours: 24,
+    lastBackupAt: '',
+    lastBackupFilename: '',
+    lastBackupStatus: 'idle',
+    lastError: '',
+    lastAutoCheckAt: '',
+    lastAutoCheckStatus: 'idle',
+    lastAutoCheckReason: '',
   }
-  const state = await getWebdavBackupState(ledgerStore.activeLedgerId)
+}
+
+function buildEmptyGoogleBackupState() {
+  return {
+    connected: false,
+    accountEmail: '',
+    accountName: '',
+    accountImageUrl: '',
+    autoEnabled: false,
+    dataChangeAutoEnabled: false,
+    intervalHours: 24,
+    lastBackupAt: '',
+    lastBackupFilename: '',
+    lastBackupStatus: 'idle',
+    lastError: '',
+    lastAutoCheckAt: '',
+    lastAutoCheckStatus: 'idle',
+    lastAutoCheckReason: '',
+  }
+}
+
+function applyWebdavBackupStateToForm(state, { preservePasswordInput = false } = {}) {
   webdavBackupState.value = state
   webdavEndpointInput.value = state.endpoint || ''
   webdavUsernameInput.value = state.username || ''
-  webdavPasswordInput.value = ''
+  if (!preservePasswordInput) {
+    webdavPasswordInput.value = ''
+  }
   webdavRemoteDirInput.value = state.remoteDir || ''
   webdavAutoEnabled.value = Boolean(state.autoEnabled)
   webdavDataChangeAutoEnabled.value = Boolean(state.dataChangeAutoEnabled)
   webdavIntervalHours.value = Number(state.intervalHours || 24)
 }
 
-async function refreshGoogleBackupState() {
-  if (!ledgerStore.activeLedgerId) {
-    googleBackupState.value = {
-      connected: false,
-      accountEmail: '',
-      accountName: '',
-      accountImageUrl: '',
-      autoEnabled: false,
-      dataChangeAutoEnabled: false,
-      intervalHours: 24,
-      lastBackupAt: '',
-      lastBackupFilename: '',
-      lastBackupStatus: 'idle',
-      lastError: '',
-      lastAutoCheckAt: '',
-      lastAutoCheckStatus: 'idle',
-      lastAutoCheckReason: '',
-    }
-    googleAutoEnabled.value = false
-    googleDataChangeAutoEnabled.value = false
-    googleIntervalHours.value = 24
-    return
-  }
-  const state = await autoConnectGoogleBackup(ledgerStore.activeLedgerId, {
-    allowInteractive: true,
-    allowInteractiveWhenGoogleLinked: true,
-  })
+function applyGoogleBackupStateToForm(state) {
   googleBackupState.value = state
   googleAutoEnabled.value = Boolean(state.autoEnabled)
   googleDataChangeAutoEnabled.value = Boolean(state.dataChangeAutoEnabled)
   googleIntervalHours.value = Number(state.intervalHours || 24)
+}
+
+async function loadWebdavBackupState() {
+  if (!ledgerStore.activeLedgerId) {
+    return buildEmptyWebdavBackupState()
+  }
+  return getWebdavBackupState(ledgerStore.activeLedgerId)
+}
+
+async function loadGoogleBackupState() {
+  if (!ledgerStore.activeLedgerId) {
+    return buildEmptyGoogleBackupState()
+  }
+  return autoConnectGoogleBackup(ledgerStore.activeLedgerId, {
+    allowInteractive: true,
+    allowInteractiveWhenGoogleLinked: true,
+  })
+}
+
+let refreshCoordinatorTicket = 0
+
+async function refreshAutoBackupState({ preservePasswordInput = false } = {}) {
+  const ticket = ++refreshCoordinatorTicket
+  const [webdavState, googleState] = await Promise.all([
+    loadWebdavBackupState(),
+    loadGoogleBackupState(),
+  ])
+  if (ticket !== refreshCoordinatorTicket) return
+  applyWebdavBackupStateToForm(webdavState, { preservePasswordInput })
+  applyGoogleBackupStateToForm(googleState)
+}
+
+function shouldRefreshFromAutoBackupEvent(detail) {
+  const eventLedgerId = String(detail?.ledgerId ?? '').trim()
+  const activeLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
+  if (!eventLedgerId || !activeLedgerId) return false
+  return eventLedgerId === activeLedgerId
+}
+
+async function handleAutoBackupStateUpdated(event) {
+  if (!shouldRefreshFromAutoBackupEvent(event?.detail)) return
+  await refreshAutoBackupState({
+    preservePasswordInput: Boolean(webdavPasswordInput.value),
+  })
 }
 
 function formatBackupTime(isoText) {
@@ -797,15 +830,22 @@ async function restoreFromGoogle() {
 }
 
 onMounted(() => {
-  void refreshWebdavBackupState()
-  void refreshGoogleBackupState()
+  void refreshAutoBackupState()
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener(AUTO_BACKUP_STATE_UPDATED_EVENT, handleAutoBackupStateUpdated)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+    window.removeEventListener(AUTO_BACKUP_STATE_UPDATED_EVENT, handleAutoBackupStateUpdated)
+  }
 })
 
 watch(
   () => ledgerStore.activeLedgerId,
   () => {
-    void refreshWebdavBackupState()
-    void refreshGoogleBackupState()
+    void refreshAutoBackupState()
   },
 )
 </script>

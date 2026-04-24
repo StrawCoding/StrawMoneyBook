@@ -26,3 +26,13 @@ test('backup due scheduler is refreshed on app resume, data changes, and ledger 
 test('backup due scheduler reruns immediately after backup configuration updates', () => {
   assert.match(mainSource, /addWindowListener\('app:auto-backup-config-updated', \(\) => \{\s*void runAutoBackupDueCheck\(runtimeState, pinia, windowObject, 'config_updated'\)/)
 })
+
+test('background auto backup runs notify the UI to refresh persisted diagnostics', () => {
+  assert.match(mainSource, /const AUTO_BACKUP_STATE_UPDATED_EVENT = 'app:auto-backup-state-updated'/)
+  assert.match(mainSource, /function notifyAutoBackupStateUpdated\(windowObject, \{ ledgerId, reason, providers = \[\] } = \{\}\) \{/)
+  assert.match(mainSource, /windowObject\.dispatchEvent\(new CustomEvent\(AUTO_BACKUP_STATE_UPDATED_EVENT, \{/)
+  assert.match(mainSource, /notifyAutoBackupStateUpdated\(windowObject, \{\s*ledgerId,\s*reason,\s*providers: \['google', 'webdav'\],\s*}\)/s)
+  assert.match(mainSource, /reason: 'data_change_background_check_completed'/)
+  assert.match(mainSource, /providers: \['google'\]/)
+  assert.match(mainSource, /reason: 'google_restore_due_check_completed'/)
+})

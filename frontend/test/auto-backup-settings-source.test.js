@@ -22,3 +22,20 @@ test('manual backup stops when settings cannot be saved first', () => {
   assert.match(settingsSource, /const settingsSaved = await saveWebdavBackupSettings\(\)\s+if \(!settingsSaved\) return/)
   assert.match(settingsSource, /const settingsSaved = await saveGoogleBackupSettings\(\)\s+if \(!settingsSaved\) return/)
 })
+
+test('settings page listens for background auto backup state updates for the active ledger only', () => {
+  assert.match(settingsSource, /const AUTO_BACKUP_STATE_UPDATED_EVENT = 'app:auto-backup-state-updated'/)
+  assert.match(settingsSource, /function shouldRefreshFromAutoBackupEvent\(detail\) \{/)
+  assert.match(settingsSource, /return eventLedgerId === activeLedgerId/)
+  assert.match(settingsSource, /window\.addEventListener\(AUTO_BACKUP_STATE_UPDATED_EVENT, handleAutoBackupStateUpdated\)/)
+  assert.match(settingsSource, /window\.removeEventListener\(AUTO_BACKUP_STATE_UPDATED_EVENT, handleAutoBackupStateUpdated\)/)
+})
+
+test('settings page refresh coordinator preserves unsaved WebDAV password input during background sync', () => {
+  assert.match(settingsSource, /async function refreshAutoBackupState\(\{ preservePasswordInput = false } = \{\}\) \{/)
+  assert.match(settingsSource, /const ticket = \+\+refreshCoordinatorTicket/)
+  assert.match(settingsSource, /if \(ticket !== refreshCoordinatorTicket\) return/)
+  assert.match(settingsSource, /applyWebdavBackupStateToForm\(webdavState, \{ preservePasswordInput }\)/)
+  assert.match(settingsSource, /if \(!preservePasswordInput\) \{\s*webdavPasswordInput\.value = ''\s*\}/s)
+  assert.match(settingsSource, /preservePasswordInput: Boolean\(webdavPasswordInput\.value\)/)
+})

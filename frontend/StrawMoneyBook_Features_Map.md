@@ -24,7 +24,7 @@
 - 帳號系統（Email / Google 登入、個人資料、忘記密碼、臨時密碼、登出）
 - 共同帳本（建立共同帳本、共享連結、Email 邀請、接受邀請、同步）
 - Google Drive 帳本同步（逐帳本啟用、跨裝置 pull / push）
-- 自動備份（Google Drive / WebDAV）
+- 自動備份（Google Drive / WebDAV；背景自動偵測 / 自動備份完成後，設定頁會即時同步最近一次 auto-check 狀態與時間）
 - 記帳提醒與成就表（每日固定提醒、通知權限 / 精準提醒狀態、連續記帳天數、最長連續與累計記帳日）
 - 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
 - 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本）
@@ -296,6 +296,7 @@ UI 服務目錄：`src/ui/services/`
 | `shared-ledger.service.js` | 共同帳本前端流程：建立、下載、上傳、自動同步、本機帳本綁定 |
 | `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原、重新授權後自動清理 stale auto-check diagnostics；Google 授權失效時自動偵測並寫入 `error/reauth_required` 狀態使 UI 顯示重新授權警示；設定頁立即備份會先確認設定保存成功才執行 |
 | `webdav-backup.service.js` | WebDAV 備份連線、自動備份、還原；設定頁立即備份會先確認設定保存成功才執行 |
+| `app-runtime.service.js` + `SettingsAutoBackupPage.vue` | 背景自動備份 / 自動偵測完成後會送出 `app:auto-backup-state-updated`，讓設定頁即時重讀 Google / WebDAV provider 狀態；重讀時會保留尚未儲存的 WebDAV 密碼輸入，避免背景 refresh 把使用者輸入清空 |
 | `google-drive-ledger-sync.service.js` | Google Drive 帳本同步（逐帳本 enable / sync now） |
 | `addon-template.service.js` | 附加項目模板預設值與保存 |
 | `bank-sync.service.js` | 銀行同步前端流程（憑證加密封裝、同步/匯入） |

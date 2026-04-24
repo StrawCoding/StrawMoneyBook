@@ -79,6 +79,8 @@ Google Drive 自動備份在重新登入 / 靜默恢復連線成功後，也會�
 
 自動備份排程現在也會主動偵測 Google 授權失效（SMB-110 修正）：若用戶已設定自動備份（`autoEnabled` 或有綁定帳號），但靜默取 token 失敗導致 `connected: false`，不再只寫入 `skipped/not_connected`，而是改寫為 `error/reauth_required`，使設定頁能顯示明確的「需要重新授權」警示並提示用戶操作，不再讓自動備份靜默失效。
 
+SMB-142 之後，自動備份設定頁也會在背景自動偵測 / 自動備份完成後即時重讀最近一次 auto-check 狀態與時間，不再因為頁面只在初次載入時抓一次 state 而長時間停留在「尚未執行自動偵測」；若使用者正在輸入 WebDAV 密碼但尚未儲存，背景同步也不會把該欄位清空。
+
 從維護角度來看，前端已採用 View / Store / Service / Repository 分層，資料層則以 Capacitor + SQLite（含 Web / WASM）維持一致模型，讓功能擴充與跨平台維護成本更可控。
 
 這條分層在 SMB-130 後又進一步收斂：`core/services/bootstrap.service.js` 現在只保留資料庫初始化與 recover，`ui/services/app-bootstrap.service.js` 接手 Pinia 與啟動鏈，`ui/services/app-runtime.service.js` 接手背景排程、網址恢復、Android back 與同步/備份 runtime side effects，而 `ui/composables/useAppShellRuntime.js` 則把 App shell 的 route transition、高度鎖定、安全鎖 lifecycle 與更新提示從 `App.vue` 抽離。
@@ -475,6 +477,8 @@ App 開啟、回到前景、切換帳本與儲存訂閱項目後，會檢查目�
 另外，Google 自動備份登入流程也已補強為在 App 啟動與回前景時嘗試靜默恢復，並優先沿用上一次備份使用的帳號，降低背景切到錯誤 Google 帳號的風險。
 
 立即備份流程目前也會先確認設定保存成功才執行實際備份；若 WebDAV / Google 尚未連線或設定更新失敗，不會繼續用舊設定觸發備份，避免使用者看到連線或保存錯誤後又收到另一個備份失敗結果。
+
+另外，背景排程、資料變更後的自動備份與 Google 靜默恢復後補跑的 due check，現在都會在完成後統一通知設定頁重讀狀態，因此「最近偵測」與「自動偵測」描述會即時更新，而不是要離開頁面再回來才看得到。
 
 ### 6.5 匯入 / 匯出 / 修復
 
