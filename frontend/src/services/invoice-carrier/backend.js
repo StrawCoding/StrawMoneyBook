@@ -1,7 +1,10 @@
 import { Capacitor } from '@capacitor/core'
 import {
+  createNativeInvoiceCarrierLinkSession,
   connectNativeInvoiceCarrier,
   disconnectNativeInvoiceCarrierSession,
+  exchangeNativeInvoiceCarrierAuth,
+  getNativeInvoiceCarrierSessionStatus,
   isNativeInvoiceCarrierAutomationRuntimeSupported,
   syncNativeInvoiceCarrierData,
 } from './native-automation.js'
@@ -86,17 +89,26 @@ export async function connectInvoiceCarrier(payload = {}) {
 }
 
 export async function createInvoiceCarrierLinkSession(payload = {}) {
-  void payload
+  assertInvoiceCarrierFeatureEnabled()
+  if (isNativeInvoiceCarrierAutomationRuntimeSupported()) {
+    return createNativeInvoiceCarrierLinkSession(payload)
+  }
   return rejectUnsupportedProductPath()
 }
 
 export async function getInvoiceCarrierSessionStatus(payload = {}) {
-  void payload
+  assertInvoiceCarrierFeatureEnabled()
+  if (isNativeInvoiceCarrierAutomationRuntimeSupported()) {
+    return getNativeInvoiceCarrierSessionStatus(payload)
+  }
   return rejectUnsupportedProductPath()
 }
 
 export async function exchangeInvoiceCarrierAuth(payload = {}) {
-  void payload
+  assertInvoiceCarrierFeatureEnabled()
+  if (isNativeInvoiceCarrierAutomationRuntimeSupported()) {
+    return exchangeNativeInvoiceCarrierAuth(payload)
+  }
   return rejectUnsupportedProductPath()
 }
 

@@ -28,14 +28,15 @@ test('settings and feature list expose invoice carrier as a public experimental 
   assert.match(mainSource, /faFileInvoice/)
 })
 
-test('invoice carrier create page now uses one-step Android automation instead of manual three-step flow', () => {
-  assert.match(createPageSource, /Android 端內全自動流程/)
-  assert.match(createPageSource, /不需要再手動輸入圖形驗證碼/)
+test('invoice carrier create page now uses Android manual captcha flow inside the app', () => {
+  assert.match(createPageSource, /Android 端內登入流程/)
+  assert.match(createPageSource, /驗證碼改由你手動輸入/)
   assert.match(createPageSource, /secure settings \/ native vault/)
-  assert.match(createPageSource, /connectInvoiceCarrier\(/)
-  assert.doesNotMatch(createPageSource, /3 段式連線流程/)
-  assert.doesNotMatch(createPageSource, /pollInvoiceCarrierSessionStatus/)
-  assert.doesNotMatch(createPageSource, /startInvoiceCarrierLinkSession/)
+  assert.match(createPageSource, /startInvoiceCarrierLinkSession\(/)
+  assert.match(createPageSource, /completeInvoiceCarrierLinkSession\(/)
+  assert.match(createPageSource, /captcha_image/)
+  assert.match(createPageSource, /重新產生驗證碼/)
+  assert.doesNotMatch(createPageSource, /不需要再手動輸入圖形驗證碼/)
 })
 
 test('invoice carrier pages expose Android-only diagnostics and disabled web messaging', () => {
@@ -45,15 +46,20 @@ test('invoice carrier pages expose Android-only diagnostics and disabled web mes
   assert.match(connectionPageSource, /自動化受阻/)
 })
 
-test('invoice carrier ui service and backend adapter use Android-only connect flow', () => {
+test('invoice carrier ui service and backend adapter use Android-only native session flow', () => {
   assert.match(uiServiceSource, /connectInvoiceCarrierBackend/)
+  assert.match(uiServiceSource, /createInvoiceCarrierLinkSessionBackend/)
+  assert.match(uiServiceSource, /exchangeInvoiceCarrierAuthBackend/)
+  assert.match(uiServiceSource, /getInvoiceCarrierSessionStatusBackend/)
   assert.match(uiServiceSource, /credentialState/)
   assert.match(backendAdapterSource, /connectNativeInvoiceCarrier/)
+  assert.match(backendAdapterSource, /createNativeInvoiceCarrierLinkSession/)
+  assert.match(backendAdapterSource, /getNativeInvoiceCarrierSessionStatus/)
+  assert.match(backendAdapterSource, /exchangeNativeInvoiceCarrierAuth/)
   assert.match(backendAdapterSource, /invoice_carrier_android_required/)
   assert.match(backendAdapterSource, /Web 版僅提供診斷與說明/)
   assert.match(backendAdapterSource, /isNativeInvoiceCarrierAutomationRuntimeSupported/)
   assert.doesNotMatch(backendAdapterSource, /https:\/\/api\.strawmb\.com/)
-  assert.doesNotMatch(backendAdapterSource, /session_status/)
 })
 
 test('invoice carrier Android native automation is registered around connect/sync/disconnect actions', () => {
@@ -61,9 +67,13 @@ test('invoice carrier Android native automation is registered around connect/syn
   assert.match(androidManifestSource, /InvoiceCarrierAutomationActivity/)
   assert.match(nativeAdapterSource, /registerPlugin\('InvoiceCarrierAutomation'\)/)
   assert.match(nativeAdapterSource, /connectNativeInvoiceCarrier/)
+  assert.match(nativeAdapterSource, /createNativeInvoiceCarrierLinkSession/)
+  assert.match(nativeAdapterSource, /exchangeNativeInvoiceCarrierAuth/)
   assert.match(androidPluginSource, /public void connect\(PluginCall call\)/)
+  assert.match(androidPluginSource, /public void createLinkSession\(PluginCall call\)/)
   assert.match(androidActivitySource, /ACTION_CONNECT/)
-  assert.match(androidAutomationSource, /authenticateSession/)
+  assert.match(androidActivitySource, /setAlpha\(0\.01f\)/)
+  assert.match(androidAutomationSource, /buildSessionPayload/)
   assert.match(androidAutomationSource, /invoice_carrier_captcha_failed/)
   assert.match(androidAutomationSource, /invoice_carrier_automation_blocked/)
   assert.match(androidAutomationSource, /provider_connection_id/)
@@ -77,9 +87,9 @@ test('local-only invoice credentials are excluded from Google Drive and shared-l
 })
 
 test('invoice carrier docs describe Android-first automation and web diagnostics mode', () => {
-  assert.match(featuresMapSource, /Android 優先的端內全自動流程/)
+  assert.match(featuresMapSource, /Android 優先的端內登入流程/)
   assert.match(featuresMapSource, /Web 僅提供診斷與說明/)
-  assert.match(detailedDocSource, /Android App 會直接在原生 WebView 內完成登入、驗證碼辨識、查詢與同步/)
+  assert.match(detailedDocSource, /Android App 會先在原生 WebView 內載入登入頁與圖形驗證碼/)
   assert.match(detailedDocSource, /Web 版只保留設定入口、診斷與說明/)
   assert.match(detailedDocSource, /automation_blocked/)
 })

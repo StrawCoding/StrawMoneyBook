@@ -633,17 +633,16 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 
 **技術架構**
 - 功能已公開，但明確標示為「實驗性」
-- Web 使用 Playwright 在後端子進程執行 headed automation；Android App 使用原生 WebView 自動化，不嘗試 headless 繞過 Cloudflare，且所有 WebView client / load / JavaScript / cookie 操作都會切回 main thread 執行
-- 支援 Tesseract.js OCR 自動辨識圖形驗證碼；辨識不足時仍會顯示圖片給使用者手動輸入
-- Android App 會直接在原生 WebView 內完成登入、驗證碼辨識、查詢與同步，不再依賴前端三段式 session / polling 流程
+- Web 不再承諾可直接新增、重新驗證或同步載具；正式產品路徑只保留 Android App 原生 WebView 流程，且所有 WebView client / load / JavaScript / cookie 操作都會切回 main thread 執行
+- 圖形驗證碼改為顯示圖片後由使用者手動輸入，不再把 OCR 當成正式登入流程
+- Android App 會先在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，不再依賴 Web 版 headed browser
 - 同步預設支援最近 2 個月日期範圍，並可依實際載具清單做篩選
-- 前端 adapter 會優先使用 Android native automation；Web 則優先使用 `VITE_INVOICE_CARRIER_API_BASE_URL`，localhost / preview Web runtime 會走當前 host 的同源 `/api/invoice/*`；production Web 若未指定專用 URL，預設走 `https://api.strawmb.com/api/invoice/*`，不再錯誤沿用 shared-ledger API host 或靜態官網 `www.strawmb.com`
-- localhost / preview 開發環境會透過 Vite local API middleware 直接掛上 `/api/invoice/*`；正式環境則需由 `api.strawmb.com` backend 提供 `/api/invoice/*`
+- 前端 adapter 會優先使用 Android native automation；Web 僅顯示診斷與導引訊息，不再依賴 `/api/invoice/*` 當成正式產品入口
 
 **使用者流程**
-1. 新增載具：列表頁新增入口一律進入新增 / 診斷頁；Android App 只需輸入手機號碼與密碼，就會在原生 WebView 內自動完成登入、驗證碼辨識、查詢頁切換與本機憑證保存；Web 版只保留設定入口、診斷與說明，不再承諾可直接新增載具
+1. 新增載具：列表頁新增入口一律進入新增 / 診斷頁；Android App 先輸入手機號碼與密碼、載入圖形驗證碼圖片，再由使用者手動輸入驗證碼後完成登入、查詢頁切換與本機憑證保存；Web 版只保留設定入口、診斷與說明，不再承諾可直接新增載具
 2. 本機保存：登入成功後，把手機號碼、密碼與 Playwright storage state 或 Android native session marker 以加密 secure setting 保存到本機，key 為 `invoice_carrier.credentials.<connectionId>`；Android 另以原生 encrypted vault 保存 cookie/session 狀態
-3. 同步發票：Web 會優先使用保存的 storage state 直接進查詢頁；Android 會優先使用原生 vault session；若失效則自動重登入一次，仍失敗就把連線標成 `reauth_required`
+3. 同步發票：Android 會優先使用原生 vault session；若失效則改為要求重新驗證，並在管理頁明確標示 `reauth_required` 或 `automation_blocked`；Web 版只保留診斷與說明
 4. 匯入交易：勾選發票清單 → 選擇匯入帳戶 → 批量匯入為帳目記錄（發票金額 = 交易金額）
 
 **資料存儲**
@@ -718,7 +717,7 @@ StrawMoneyBook 特別適合以下人群：
 以下內容在文件中必須明講，避免誤導：
 
 - 銀行同步已有頁面與流程，但屬於受控功能，不應描述成全面對外開放
-- 電子發票載具雖然已公開，但仍屬實驗性功能；Android App 已改為 Android-first 的端內自動化流程，會直接在原生 WebView 內完成登入、驗證碼辨識、查詢與同步，並補上 WebView main-thread affinity 保護，iOS 尚未納入
+- 電子發票載具雖然已公開，但仍屬實驗性功能；Android App 已改為 Android-first 的端內登入流程，會先在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成查詢與同步，並補上 WebView main-thread affinity 保護，iOS 尚未納入
 - Web 版只保留設定入口、診斷與說明，不再作為正式的新增 / 重新驗證 / 同步載具產品路徑
 - 多數進階同步能力屬會員功能
 - 免費版有帳本、帳戶、借貸、報銷、存錢罐、訂閱、AI 記帳次數等限制

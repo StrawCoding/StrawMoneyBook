@@ -33,7 +33,7 @@
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
-- 電子發票載具（公開但標示為實驗性；Android 優先的端內全自動流程，App 會直接在原生 WebView 內完成登入、驗證碼辨識、查詢與同步，並把憑證 / storage state 加密保存在本機；Web 僅提供診斷與說明，不再承諾可新增、重新驗證或同步載具；若站點流程阻擋自動化，狀態會明確標示為 `automation_blocked` 或 `reauth_required`，不會偽裝成成功）
+- 電子發票載具（公開但標示為實驗性；Android 優先的端內登入流程，App 會在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，並把憑證 / storage state 加密保存在本機；Web 僅提供診斷與說明，不再承諾可新增、重新驗證或同步載具；若站點流程阻擋自動化，狀態會明確標示為 `automation_blocked` 或 `reauth_required`，不會偽裝成成功）
 - Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化、電子發票載具自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗）
 
 ## 2. 路由與頁面對應
@@ -148,7 +148,7 @@
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
 - 銀行同步：`/settings/bank-sync`（入口改由 `isBankSyncFeatureEnabled()` 控制；目前預設恢復為 mock/sandbox 流程）
-- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；新增載具會導向 `/settings/invoice-carrier/new`；Android App 透過 `InvoiceCarrierAutomation` 原生 WebView plugin 完成端內自動化登入 / 驗證碼辨識 / 同步，且 native BrowserSession 會將 WebView client、頁面載入、腳本執行與 cookie 操作統一切回 main thread；Web 僅保留設定入口、診斷與說明，不再走 `/api/invoice` 的正式產品流程）
+- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；新增載具會導向 `/settings/invoice-carrier/new`；Android App 透過 `InvoiceCarrierAutomation` 原生 WebView plugin 載入圖形驗證碼圖片並由使用者手動輸入後完成登入 / 同步，且 native BrowserSession 會將 WebView client、頁面載入、腳本執行與 cookie 操作統一切回 main thread；Web 僅保留設定入口、診斷與說明，不再走 `/api/invoice` 的正式產品流程）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）

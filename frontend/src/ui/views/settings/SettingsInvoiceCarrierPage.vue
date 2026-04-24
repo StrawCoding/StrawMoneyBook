@@ -9,7 +9,7 @@
       <div class="eyebrow">實驗性</div>
       <h3>{{ t('settings_invoice_carrier.management_title', '電子發票載具匯入') }}</h3>
       <p class="muted">
-        {{ t('settings_invoice_carrier.management_desc', '目前正式支援 Android App 端內自動化。建立或重新驗證載具時，App 會直接在原生 WebView 內完成登入、驗證碼辨識、查詢與狀態保存。') }}
+        {{ t('settings_invoice_carrier.management_desc', '目前正式支援 Android App 端內流程。建立或重新驗證載具時，App 會先在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入後完成登入、查詢與狀態保存。') }}
       </p>
       <p class="muted experimental-note">
         {{ t('settings_invoice_carrier.experimental_note', 'Web 僅提供診斷與說明；若站點流程變動導致自動化失效，狀態會改成「需重新驗證」或「自動化受阻」，不會偽裝成成功。') }}

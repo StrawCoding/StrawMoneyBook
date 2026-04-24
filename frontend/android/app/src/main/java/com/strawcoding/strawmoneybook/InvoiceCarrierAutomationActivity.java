@@ -105,7 +105,8 @@ public class InvoiceCarrierAutomationActivity extends Activity {
 
     private WebView buildWebView() {
         WebView nextWebView = new WebView(this);
-        nextWebView.setBackgroundColor(Color.WHITE);
+        nextWebView.setBackgroundColor(Color.TRANSPARENT);
+        nextWebView.setAlpha(0.01f);
 
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
