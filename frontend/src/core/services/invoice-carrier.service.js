@@ -3,6 +3,7 @@ import {
   buildInvoiceCarrierCredentialSettingKey,
   createInvoiceCarrierError,
   formatInvoiceCarrierErrorForStorage,
+  getInvoiceCarrierErrorCode,
   isInvoiceCarrierReauthError,
   normalizeCarrierOptions,
   normalizeInvoiceCarrierCredentialState,
@@ -141,6 +142,13 @@ function buildInvoiceOccurredAt(invoiceDate) {
   return new Date(`${normalizedDate}T12:00:00+08:00`).toISOString()
 }
 
+function resolveInvoiceCarrierConnectionStatusForError(error) {
+  const code = getInvoiceCarrierErrorCode(error)
+  if (isInvoiceCarrierReauthError(error)) return 'reauth_required'
+  if (code === 'invoice_carrier_automation_blocked') return 'automation_blocked'
+  return 'error'
+}
+
 async function loadSavedCredentialState(connection, fallbackLedgerId = '') {
   const settingsLedgerId = normalizeText(connection?.settings_ledger_id) || normalizeText(fallbackLedgerId)
   if (!settingsLedgerId) return { settingsLedgerId: '', value: null }
@@ -270,6 +278,11 @@ export async function syncInvoiceCarrierConnection(connectionId, fallbackLedgerI
   }
 
   try {
+    await dependencies.updateInvoiceCarrierConnectionSyncStatus(connectionId, {
+      status: 'syncing',
+      last_sync_status: 'idle',
+    })
+
     const syncResult = await dependencies.syncInvoiceCarrierData({
       connection_id: connection.provider_connection_id || connection.id,
       start_date: opts.startDate,
@@ -323,7 +336,7 @@ export async function syncInvoiceCarrierConnection(connectionId, fallbackLedgerI
       syncStatus: 'ok',
     }
   } catch (error) {
-    const nextStatus = isInvoiceCarrierReauthError(error) ? 'reauth_required' : 'error'
+    const nextStatus = resolveInvoiceCarrierConnectionStatusForError(error)
     await dependencies.updateInvoiceCarrierConnectionSyncStatus(connectionId, {
       status: nextStatus,
       last_sync_status: 'error',

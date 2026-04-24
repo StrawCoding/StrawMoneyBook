@@ -33,6 +33,11 @@ public class InvoiceCarrierAutomationPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void connect(PluginCall call) {
+        launch(call, InvoiceCarrierAutomationActivity.ACTION_CONNECT);
+    }
+
+    @PluginMethod
     public void getSessionStatus(PluginCall call) {
         launch(call, InvoiceCarrierAutomationActivity.ACTION_GET_SESSION_STATUS);
     }

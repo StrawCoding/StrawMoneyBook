@@ -14,14 +14,17 @@
     </article>
 
     <template v-else-if="connection">
-      <article v-if="needsReauth" class="card panel reauth-panel">
-        <strong>此載具需要重新驗證</strong>
+      <article v-if="needsRecovery" class="card panel reauth-panel">
+        <strong>{{ needsAutomationRecovery ? '此載具目前受站點流程阻擋' : '此載具需要重新驗證' }}</strong>
         <p class="muted">
-          上次同步遇到 Cloudflare 或登入失效。請重新打開 headed browser 完成安全驗證後，再重新保存本機憑證。
+          {{ needsAutomationRecovery
+            ? '目前偵測到電子發票網站流程阻擋自動化。請在 Android App 內重試；若仍失敗，需視站點變更再調整自動化。'
+            : '上次同步時本機保存的登入狀態已失效，請重新驗證後再同步。' }}
         </p>
-        <RouterLink class="btn primary" :to="{ name: 'settings-invoice-carrier-create', query: { connectionId: connection.id } }">
+        <RouterLink v-if="invoiceCarrierAutomationReady" class="btn primary" :to="{ name: 'settings-invoice-carrier-create', query: { connectionId: connection.id } }">
           重新驗證載具
         </RouterLink>
+        <button v-else class="btn" disabled>需使用 Android App</button>
       </article>
 
       <article class="card panel">
@@ -38,7 +41,7 @@
         </ul>
 
         <p v-if="connection.last_error" class="error-text">{{ connection.last_error }}</p>
-        <p v-if="!invoiceCarrierApiReady" class="warning-text">{{ invoiceCarrierApiMessage }}</p>
+        <p v-if="!invoiceCarrierAutomationReady" class="warning-text">{{ invoiceCarrierApiMessage }}</p>
 
         <div class="filter-grid">
           <label class="field">
@@ -59,6 +62,14 @@
           <button class="btn primary" :disabled="!canSync || loading" @click="syncInvoices">
             {{ loading ? '同步中...' : '立即同步' }}
           </button>
+          <RouterLink
+            v-if="invoiceCarrierAutomationReady"
+            class="btn"
+            :to="{ name: 'settings-invoice-carrier-create', query: { connectionId: connection.id } }"
+          >
+            重新驗證
+          </RouterLink>
+          <button v-else class="btn" disabled>需使用 Android App</button>
           <button class="btn danger" :disabled="loading" @click="deleteConnection">
             刪除載具
           </button>
@@ -151,7 +162,7 @@ const ledgerStore = useLedgerStore()
 const accountStore = useAccountStore()
 const uiStore = useUiStore()
 
-const invoiceCarrierApiReady = isInvoiceCarrierApiConfigured()
+const invoiceCarrierAutomationReady = isInvoiceCarrierApiConfigured()
 const invoiceCarrierApiMessage = computed(() => getInvoiceCarrierApiUnavailableMessage())
 const connectionId = computed(() => String(route.params.id ?? '').trim())
 const connection = computed(() => store.currentConnection)
@@ -159,6 +170,8 @@ const invoices = computed(() => store.currentInvoices)
 const unimportedInvoices = computed(() => invoices.value.filter((item) => !item.imported_transaction_id))
 const loading = computed(() => store.loading)
 const needsReauth = computed(() => String(connection.value?.status ?? '').trim().toLowerCase() === 'reauth_required')
+const needsAutomationRecovery = computed(() => String(connection.value?.status ?? '').trim().toLowerCase() === 'automation_blocked')
+const needsRecovery = computed(() => needsReauth.value || needsAutomationRecovery.value)
 const carrierOptions = computed(() => [
   { value: 'all', label: '全部載具' },
   ...((Array.isArray(connection.value?.carrier_options) ? connection.value.carrier_options : []).map((item) => ({
@@ -173,9 +186,9 @@ const allSelectableChosen = computed(() => {
   return unimportedInvoices.value.every((item) => selectedSet.has(item.id))
 })
 const canSync = computed(() => Boolean(
-  invoiceCarrierApiReady
+  invoiceCarrierAutomationReady
   && connection.value
-  && !needsReauth.value
+  && !needsRecovery.value
   && ledgerStore.activeLedgerId,
 ))
 
@@ -201,7 +214,10 @@ function formatAmount(value) {
 
 function connectionStatusText(status) {
   const normalized = String(status ?? '').trim().toLowerCase()
+  if (normalized === 'connecting') return '連線中'
+  if (normalized === 'syncing') return '同步中'
   if (normalized === 'reauth_required') return '需重新驗證'
+  if (normalized === 'automation_blocked') return '自動化受阻'
   if (normalized === 'error') return '同步失敗'
   if (normalized === 'inactive') return '已停用'
   return '正常'
@@ -425,9 +441,16 @@ h3 {
 }
 
 .status-error,
-.status-reauth_required {
+.status-reauth_required,
+.status-automation_blocked {
   background: color-mix(in srgb, #e8a317 18%, var(--card) 82%);
   color: #8a5a00;
+}
+
+.status-connecting,
+.status-syncing {
+  background: color-mix(in srgb, var(--primary) 14%, var(--card) 86%);
+  color: var(--primary);
 }
 
 .status-inactive {

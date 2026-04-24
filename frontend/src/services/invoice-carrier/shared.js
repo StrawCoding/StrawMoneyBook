@@ -1,10 +1,8 @@
 export const INVOICE_CARRIER_PROVIDER_ID = 'einvoice_tw'
 export const INVOICE_CARRIER_REAUTH_ERROR_CODES = new Set([
   'invoice_carrier_reauth_required',
-  'invoice_carrier_cloudflare_verification_required',
-  'invoice_carrier_login_required',
   'invoice_carrier_session_expired',
-  'invoice_carrier_captcha_ocr_failed',
+  'invoice_carrier_credentials_missing',
 ])
 
 export function normalizeText(value, fallback = '') {
@@ -97,21 +95,24 @@ export function formatInvoiceDateRangeLabel(startDate, endDate) {
 }
 
 export function formatInvoiceCarrierErrorForStorage(error) {
-  const code = normalizeText(error?.code || error?.error)
+  const code = getInvoiceCarrierErrorCode(error)
   const message = normalizeText(error?.message ?? error)
   if (code && message) return `${code}: ${message}`
   return message || 'invoice_carrier_unknown_error'
 }
 
+export function getInvoiceCarrierErrorCode(error) {
+  return normalizeText(error?.code || error?.error)
+}
+
 export function isInvoiceCarrierReauthError(error) {
-  const code = normalizeText(error?.code || error?.error)
+  const code = getInvoiceCarrierErrorCode(error)
   if (code && INVOICE_CARRIER_REAUTH_ERROR_CODES.has(code)) return true
   const message = normalizeText(error?.message ?? error).toLowerCase()
   return (
     message.includes('reauth')
     || message.includes('重新驗證')
-    || message.includes('cloudflare')
-    || message.includes('security verification')
+    || message.includes('憑證遺失')
   )
 }
 

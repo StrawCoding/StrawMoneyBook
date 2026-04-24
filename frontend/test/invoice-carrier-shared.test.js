@@ -51,11 +51,11 @@ test('normalizeInvoiceCarrierCredentialState preserves Android native storage ma
 
 test('invoice carrier shared helpers mark reauth errors and format local-only keys', () => {
   const error = new Error('電子發票網站要求重新完成 Cloudflare 安全驗證')
-  error.code = 'invoice_carrier_cloudflare_verification_required'
+  error.code = 'invoice_carrier_automation_blocked'
 
   assert.equal(buildInvoiceCarrierCredentialSettingKey('conn-1'), 'invoice_carrier.credentials.conn-1')
-  assert.equal(formatInvoiceCarrierErrorForStorage(error), 'invoice_carrier_cloudflare_verification_required: 電子發票網站要求重新完成 Cloudflare 安全驗證')
-  assert.equal(isInvoiceCarrierReauthError(error), true)
+  assert.equal(formatInvoiceCarrierErrorForStorage(error), 'invoice_carrier_automation_blocked: 電子發票網站要求重新完成 Cloudflare 安全驗證')
+  assert.equal(isInvoiceCarrierReauthError(error), false)
 })
 
 test('local-only app setting filter excludes invoice and bank credentials from sync snapshots', () => {

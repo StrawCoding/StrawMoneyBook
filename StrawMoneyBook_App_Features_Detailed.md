@@ -635,13 +635,13 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - 功能已公開，但明確標示為「實驗性」
 - Web 使用 Playwright 在後端子進程執行 headed automation；Android App 使用原生 WebView 自動化，不嘗試 headless 繞過 Cloudflare，且所有 WebView client / load / JavaScript / cookie 操作都會切回 main thread 執行
 - 支援 Tesseract.js OCR 自動辨識圖形驗證碼；辨識不足時仍會顯示圖片給使用者手動輸入
-- 新增 `session_status` API，Web 前端可輪詢 Cloudflare 是否通過、登入表單是否可用、是否已登入與可用載具選項；Android native 流程不做自動輪詢，避免每次狀態檢查都重新開啟原生 WebView 登入頁造成頁面反覆刷新
+- Android App 會直接在原生 WebView 內完成登入、驗證碼辨識、查詢與同步，不再依賴前端三段式 session / polling 流程
 - 同步預設支援最近 2 個月日期範圍，並可依實際載具清單做篩選
 - 前端 adapter 會優先使用 Android native automation；Web 則優先使用 `VITE_INVOICE_CARRIER_API_BASE_URL`，localhost / preview Web runtime 會走當前 host 的同源 `/api/invoice/*`；production Web 若未指定專用 URL，預設走 `https://api.strawmb.com/api/invoice/*`，不再錯誤沿用 shared-ledger API host 或靜態官網 `www.strawmb.com`
 - localhost / preview 開發環境會透過 Vite local API middleware 直接掛上 `/api/invoice/*`；正式環境則需由 `api.strawmb.com` backend 提供 `/api/invoice/*`
 
 **使用者流程**
-1. 新增載具：列表頁新增入口一律進入新增 / 診斷頁；若 Web API 未就緒，會在新增頁明確顯示原因；Android App 會啟動原生 WebView 自動化並沿用 Vue 表單輸入手機號碼 / 密碼 / 驗證碼，native automation 即使由背景 executor 驅動也不會直接在背景執行緒呼叫 WebView，且不會在前端每 2 秒自動重開狀態檢查；Web / 桌面環境則啟動 headed browser → 使用者在該視窗完成 Cloudflare 安全驗證 → 前端輪詢 `session_status` → 輸入手機號碼 / 密碼 / 驗證碼完成登入
+1. 新增載具：列表頁新增入口一律進入新增 / 診斷頁；Android App 只需輸入手機號碼與密碼，就會在原生 WebView 內自動完成登入、驗證碼辨識、查詢頁切換與本機憑證保存；Web 版只保留設定入口、診斷與說明，不再承諾可直接新增載具
 2. 本機保存：登入成功後，把手機號碼、密碼與 Playwright storage state 或 Android native session marker 以加密 secure setting 保存到本機，key 為 `invoice_carrier.credentials.<connectionId>`；Android 另以原生 encrypted vault 保存 cookie/session 狀態
 3. 同步發票：Web 會優先使用保存的 storage state 直接進查詢頁；Android 會優先使用原生 vault session；若失效則自動重登入一次，仍失敗就把連線標成 `reauth_required`
 4. 匯入交易：勾選發票清單 → 選擇匯入帳戶 → 批量匯入為帳目記錄（發票金額 = 交易金額）
@@ -659,7 +659,7 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - 使用者可彈性選擇日期範圍、載具與匯入帳戶，提高匯入控制性
 - 憑證與 storage state 屬於 local-only sensitive data，不會進 Google Drive 帳本同步，也不會進 shared-ledger snapshot
 - 若 Web 部署環境沒有 `/api/invoice` 或無法啟動 headed browser，頁面會顯示 unavailable，而不是讓使用者進入壞流程
-- Android App 不依賴遠端 headed browser 新增或同步載具；若原生 WebView session 過期、Cloudflare 要求重新驗證或頁面結構改版，會回傳明確錯誤並要求重新驗證
+- Android App 不依賴遠端 headed browser 新增或同步載具；若原生 WebView session 過期、站點流程變動或頁面結構改版，會回傳明確錯誤並標示 `reauth_required` 或 `automation_blocked`
 
 ## 10. 使用者輪廓
 
@@ -718,8 +718,8 @@ StrawMoneyBook 特別適合以下人群：
 以下內容在文件中必須明講，避免誤導：
 
 - 銀行同步已有頁面與流程，但屬於受控功能，不應描述成全面對外開放
-- 電子發票載具雖然已公開，但仍屬實驗性功能，且首次 / 失效後必須人工完成 Cloudflare 驗證；Android App 已改由原生 WebView 自動化支援新增 / 重新驗證 / 同步，並補上 WebView main-thread affinity 保護，iOS 尚未納入
-- Web 電子發票載具正式可用的前提，是 `https://api.strawmb.com` backend 已提供 `/api/invoice` 且該 host 能開 headed Playwright browser；Android App 端則使用 native plugin，`www.strawmb.com` 只作為靜態官網
+- 電子發票載具雖然已公開，但仍屬實驗性功能；Android App 已改為 Android-first 的端內自動化流程，會直接在原生 WebView 內完成登入、驗證碼辨識、查詢與同步，並補上 WebView main-thread affinity 保護，iOS 尚未納入
+- Web 版只保留設定入口、診斷與說明，不再作為正式的新增 / 重新驗證 / 同步載具產品路徑
 - 多數進階同步能力屬會員功能
 - 免費版有帳本、帳戶、借貸、報銷、存錢罐、訂閱、AI 記帳次數等限制
 - 文件描述以目前程式碼為準，不代表所有流程都已完成商業化上架或全面開通

@@ -10,7 +10,14 @@ import {
 
 function normalizeConnectionStatus(status) {
   const value = String(status ?? '').trim().toLowerCase()
-  if (value === 'inactive' || value === 'error' || value === 'reauth_required') return value
+  if (
+    value === 'inactive'
+    || value === 'error'
+    || value === 'reauth_required'
+    || value === 'connecting'
+    || value === 'syncing'
+    || value === 'automation_blocked'
+  ) return value
   return 'active'
 }
 

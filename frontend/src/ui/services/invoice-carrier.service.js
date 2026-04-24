@@ -1,28 +1,11 @@
-import {
-  createInvoiceCarrierLinkSession,
-  disconnectInvoiceCarrierSession,
-  exchangeInvoiceCarrierAuth,
-  getInvoiceCarrierSessionStatus,
-} from '@/services/invoice-carrier/backend'
+import { connectInvoiceCarrier as connectInvoiceCarrierBackend } from '@/services/invoice-carrier/backend'
 import { normalizeCarrierOptions, normalizeText } from '@/services/invoice-carrier/shared'
 
-export async function startInvoiceCarrierLinkSession() {
-  return createInvoiceCarrierLinkSession({})
-}
-
-export async function pollInvoiceCarrierSessionStatus(sessionId, options = {}) {
-  return getInvoiceCarrierSessionStatus({
-    session_id: sessionId,
-    refresh_captcha: Boolean(options.refreshCaptcha),
-  })
-}
-
-export async function completeInvoiceCarrierAuth(sessionId, mobilePhone, password, captchaCode) {
-  const result = await exchangeInvoiceCarrierAuth({
-    session_id: sessionId,
+export async function connectInvoiceCarrier(mobilePhone, password, options = {}) {
+  void options
+  const result = await connectInvoiceCarrierBackend({
     mobile_phone: mobilePhone,
     password,
-    captcha_code: captchaCode,
   })
 
   return {
@@ -36,11 +19,4 @@ export async function completeInvoiceCarrierAuth(sessionId, mobilePhone, passwor
       updatedAt: new Date().toISOString(),
     },
   }
-}
-
-export async function disconnectInvoiceCarrierLinkSession(sessionId) {
-  if (!normalizeText(sessionId)) return { ok: true }
-  return disconnectInvoiceCarrierSession({
-    session_id: sessionId,
-  })
 }

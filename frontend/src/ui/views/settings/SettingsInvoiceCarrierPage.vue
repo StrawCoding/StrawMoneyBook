@@ -9,12 +9,12 @@
       <div class="eyebrow">實驗性</div>
       <h3>{{ t('settings_invoice_carrier.management_title', '電子發票載具匯入') }}</h3>
       <p class="muted">
-        {{ t('settings_invoice_carrier.management_desc', '首次連線會開啟瀏覽器，請先完成 Cloudflare 安全驗證，再輸入手機號碼、密碼與圖形驗證碼。成功後會把憑證與瀏覽器狀態加密保存在本機，之後可自動同步。') }}
+        {{ t('settings_invoice_carrier.management_desc', '目前正式支援 Android App 端內自動化。建立或重新驗證載具時，App 會直接在原生 WebView 內完成登入、驗證碼辨識、查詢與狀態保存。') }}
       </p>
       <p class="muted experimental-note">
-        {{ t('settings_invoice_carrier.experimental_note', '若電子發票網站要求重新驗證，載具狀態會改成「需重新驗證」，不會無限重試。') }}
+        {{ t('settings_invoice_carrier.experimental_note', 'Web 僅提供診斷與說明；若站點流程變動導致自動化失效，狀態會改成「需重新驗證」或「自動化受阻」，不會偽裝成成功。') }}
       </p>
-      <p v-if="!invoiceCarrierApiReady" class="warning-note">
+      <p v-if="!invoiceCarrierAutomationReady" class="warning-note">
         {{ invoiceCarrierApiMessage }}
       </p>
       <div class="row top-action-row">
@@ -62,7 +62,10 @@
       </ul>
 
       <p v-if="connection.status === 'reauth_required'" class="reauth-note">
-        這組載具需要重新驗證 Cloudflare / 登入狀態後才能再同步。
+        這組載具需要重新驗證後才能再同步。
+      </p>
+      <p v-else-if="connection.status === 'automation_blocked'" class="reauth-note">
+        電子發票網站流程目前阻擋自動化，請在 Android App 內重新驗證或稍後再試。
       </p>
       <p v-if="connection.last_error" class="muted connection-error">
         {{ connection.last_error }}
@@ -89,7 +92,7 @@ import {
 
 const { locale, t } = useI18n()
 const store = useInvoiceCarrierStore()
-const invoiceCarrierApiReady = isInvoiceCarrierApiConfigured()
+const invoiceCarrierAutomationReady = isInvoiceCarrierApiConfigured()
 const invoiceCarrierApiMessage = computed(() => getInvoiceCarrierApiUnavailableMessage())
 const connections = computed(() => store.connections)
 const loadingState = computed(() => store.loading)
@@ -104,7 +107,10 @@ function formatDateTime(value) {
 
 function connectionStatusText(status) {
   const normalized = String(status ?? '').trim().toLowerCase()
+  if (normalized === 'connecting') return '連線中'
+  if (normalized === 'syncing') return '同步中'
   if (normalized === 'reauth_required') return '需重新驗證'
+  if (normalized === 'automation_blocked') return '自動化受阻'
   if (normalized === 'error') return '同步失敗'
   if (normalized === 'inactive') return '已停用'
   return '正常'
@@ -207,9 +213,16 @@ h3 {
 }
 
 .status-error,
-.status-reauth_required {
+.status-reauth_required,
+.status-automation_blocked {
   background: color-mix(in srgb, #e8a317 18%, var(--card) 82%);
   color: #8a5a00;
+}
+
+.status-connecting,
+.status-syncing {
+  background: color-mix(in srgb, var(--primary) 14%, var(--card) 86%);
+  color: var(--primary);
 }
 
 .status-inactive {

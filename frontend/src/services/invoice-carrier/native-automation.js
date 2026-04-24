@@ -51,6 +51,15 @@ export async function createNativeInvoiceCarrierLinkSession(payload = {}) {
   }
 }
 
+export async function connectNativeInvoiceCarrier(payload = {}) {
+  await ensureNativeInvoiceCarrierAutomationAvailable()
+  try {
+    return await InvoiceCarrierAutomation.connect(payload)
+  } catch (error) {
+    throw normalizePluginError(error, 'Invoice carrier connect failed')
+  }
+}
+
 export async function getNativeInvoiceCarrierSessionStatus(payload = {}) {
   await ensureNativeInvoiceCarrierAutomationAvailable()
   try {

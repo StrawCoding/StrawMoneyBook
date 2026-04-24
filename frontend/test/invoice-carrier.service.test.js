@@ -158,19 +158,60 @@ test('syncInvoiceCarrierConnection persists refreshed storage state and carrier 
     origins: [],
   })
   assert.deepEqual(savedSettings[0].value.carrierOptions, [{ value: '/ABC1234', label: '手機條碼' }])
-  assert.deepEqual(updates, [{
-    status: 'active',
-    last_sync_at: '2026-04-17T08:00:00.000Z',
-    last_sync_status: 'ok',
-    last_error: '',
-    carrier_options: [{ value: '/ABC1234', label: '手機條碼' }],
-  }])
+  assert.deepEqual(updates, [
+    {
+      status: 'syncing',
+      last_sync_status: 'idle',
+    },
+    {
+      status: 'active',
+      last_sync_at: '2026-04-17T08:00:00.000Z',
+      last_sync_status: 'ok',
+      last_error: '',
+      carrier_options: [{ value: '/ABC1234', label: '手機條碼' }],
+    },
+  ])
 })
 
-test('syncInvoiceCarrierConnection stores reauth_required when backend asks for manual verification again', async () => {
+test('syncInvoiceCarrierConnection stores automation_blocked when native automation cannot pass upstream checks', async () => {
   const updates = []
-  const reauthError = new Error('電子發票網站要求重新完成 Cloudflare 安全驗證')
-  reauthError.code = 'invoice_carrier_cloudflare_verification_required'
+  const blockedError = new Error('電子發票網站目前阻擋自動化登入，請稍後再試')
+  blockedError.code = 'invoice_carrier_automation_blocked'
+
+  setInvoiceCarrierServiceDependenciesForTest({
+    findInvoiceCarrierConnectionById: async () => createConnection(),
+    getEncryptedSetting: async () => createCredentialState(),
+    syncInvoiceCarrierData: async () => {
+      throw blockedError
+    },
+    updateInvoiceCarrierConnectionSyncStatus: async (_connectionId, patch) => {
+      updates.push(patch)
+      return { ...createConnection(), ...patch }
+    },
+  })
+
+  await assert.rejects(
+    () => syncInvoiceCarrierConnection('invoice-conn-1', 'ledger-1'),
+    /阻擋自動化/,
+  )
+
+  assert.deepEqual(updates, [
+    {
+      status: 'syncing',
+      last_sync_status: 'idle',
+    },
+    {
+      status: 'automation_blocked',
+      last_sync_status: 'error',
+      last_error: 'invoice_carrier_automation_blocked: 電子發票網站目前阻擋自動化登入，請稍後再試',
+    },
+  ])
+})
+
+test('syncInvoiceCarrierConnection stores reauth_required only for explicit credential-loss style failures', async () => {
+  const updates = []
+  const reauthError = new Error('電子發票登入狀態已失效，請重新驗證載具')
+  reauthError.code = 'invoice_carrier_reauth_required'
 
   setInvoiceCarrierServiceDependenciesForTest({
     findInvoiceCarrierConnectionById: async () => createConnection(),
@@ -186,14 +227,20 @@ test('syncInvoiceCarrierConnection stores reauth_required when backend asks for 
 
   await assert.rejects(
     () => syncInvoiceCarrierConnection('invoice-conn-1', 'ledger-1'),
-    /Cloudflare/,
+    /重新驗證/,
   )
 
-  assert.deepEqual(updates, [{
-    status: 'reauth_required',
-    last_sync_status: 'error',
-    last_error: 'invoice_carrier_cloudflare_verification_required: 電子發票網站要求重新完成 Cloudflare 安全驗證',
-  }])
+  assert.deepEqual(updates, [
+    {
+      status: 'syncing',
+      last_sync_status: 'idle',
+    },
+    {
+      status: 'reauth_required',
+      last_sync_status: 'error',
+      last_error: 'invoice_carrier_reauth_required: 電子發票登入狀態已失效，請重新驗證載具',
+    },
+  ])
 })
 
 test('importInvoicesAsTransactions keeps invoice imports idempotent and writes invoice metadata to the transaction note', async () => {

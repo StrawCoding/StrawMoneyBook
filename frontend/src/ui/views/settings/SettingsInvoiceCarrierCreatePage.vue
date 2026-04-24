@@ -5,119 +5,65 @@
       <RouterLink class="btn back-btn" to="/settings/invoice-carrier">{{ t('common.back') }}</RouterLink>
     </header>
 
-    <article v-if="!invoiceCarrierApiReady" class="card panel warning-panel">
-      <h3>電子發票載具 API 尚未可用</h3>
-      <p class="muted">{{ invoiceCarrierApiMessage }}</p>
+    <article class="card panel intro-panel">
+      <div class="eyebrow">實驗性</div>
+      <h3>{{ invoiceCarrierAutomationReady ? 'Android 端內全自動流程' : '此平台僅提供診斷與說明' }}</h3>
+      <p class="muted">
+        {{ invoiceCarrierAutomationReady
+          ? 'App 會直接在原生 WebView 內完成登入、驗證碼辨識、查詢頁載入與憑證保存。手機號碼、密碼與狀態仍只會加密保存在本機 secure settings / native vault，不會同步到 Google Drive 或 shared-ledger snapshot。'
+          : '電子發票載具目前正式支援 Android App。Web 版不會再假裝能開 headed browser 或要求手動輸入圖形驗證碼；此頁只會提供能力診斷與使用說明。' }}
+      </p>
+      <p class="muted">
+        {{ reconnectMode
+          ? '重新驗證會覆蓋本機保存的憑證與狀態，完成後即可再次自動同步。'
+          : '建立成功後，後續同步會優先沿用本機保存的憑證與 cookie；若站點流程變動，系統會明確標示為需重新驗證或自動化受阻。' }}
+      </p>
     </article>
 
-    <article v-else-if="!invoiceCarrierLinkingSupported" class="card panel warning-panel">
-      <h3>此平台暫不支援新增載具</h3>
-      <p class="muted">{{ invoiceCarrierLinkingMessage }}</p>
+    <article v-if="!invoiceCarrierAutomationReady || !invoiceCarrierLinkingSupported" class="card panel warning-panel">
+      <h3>此平台暫不支援自動化新增載具</h3>
+      <p class="muted">{{ invoiceCarrierApiMessage || invoiceCarrierLinkingMessage }}</p>
+      <p class="muted">請改用 Android App 執行新增或重新驗證，Web 版可保留作為設定入口與診斷頁。</p>
     </article>
 
     <template v-else>
-      <article class="card panel intro-panel">
-        <div class="eyebrow">實驗性</div>
-        <h3>3 段式連線流程</h3>
-        <div class="stepper">
-          <span class="step-chip" :class="stepClass(1)">1. 啟動瀏覽器驗證</span>
-          <span class="step-chip" :class="stepClass(2)">2. 填入登入資訊</span>
-          <span class="step-chip" :class="stepClass(3)">3. 完成連線</span>
-        </div>
+      <article class="card panel">
+        <h3>{{ reconnectMode ? '重新驗證載具' : '新增載具' }}</h3>
         <p class="muted">
-          這個流程不會嘗試繞過 Cloudflare。第一次或憑證失效時，必須在剛開啟的瀏覽器完成安全驗證。
+          請輸入手機號碼與電子發票登入密碼。系統會在 App 內自動完成登入與驗證碼處理，不需要再手動輸入圖形驗證碼。
         </p>
-      </article>
 
-      <article v-if="currentStep === 1" class="card panel">
-        <h3>步驟 1：啟動瀏覽器並完成安全驗證</h3>
-        <p class="muted">
-          按下開始後會開一個 headed Playwright 瀏覽器。若畫面顯示 `Just a moment...`，請先在該視窗完成 Cloudflare 安全驗證。
-        </p>
+        <label class="field">
+          <span>手機號碼</span>
+          <input v-model.trim="mobilePhone" type="tel" placeholder="09xxxxxxxx" />
+        </label>
+
+        <label class="field">
+          <span>密碼</span>
+          <input v-model="password" type="password" placeholder="電子發票登入密碼" />
+        </label>
+
+        <div v-if="automationPhaseText || debugLastStep || debugHint" class="status-panel">
+          <p v-if="automationPhaseText"><strong>目前狀態：</strong>{{ automationPhaseText }}</p>
+          <p v-if="debugLastStep"><strong>最後步驟：</strong>{{ debugLastStep }}</p>
+          <p v-if="debugHint" class="muted"><strong>診斷提示：</strong>{{ debugHint }}</p>
+        </div>
+
         <div class="row action-row">
-          <button class="btn primary" :disabled="startingSession" @click="startSession">
-            {{ startingSession ? '啟動中...' : (reconnectMode ? '開始重新驗證' : '開始新增載具') }}
+          <button class="btn primary" :disabled="!canSubmit || submitting" @click="submitAuth">
+            {{ submitting ? (reconnectMode ? '重新驗證中...' : '建立連線中...') : (reconnectMode ? '開始重新驗證' : '開始新增載具') }}
           </button>
-          <button class="btn" :disabled="!sessionId || refreshingStatus" @click="refreshSessionStatus()">
-            {{ refreshingStatus ? '檢查中...' : '重新檢查狀態' }}
-          </button>
-        </div>
-
-        <div v-if="sessionId" class="status-panel">
-          <p><strong>瀏覽器 Session：</strong>{{ sessionId }}</p>
-          <p><strong>目前頁面：</strong>{{ sessionStatus?.url || sessionStatus?.title || '等待載入中' }}</p>
-          <p v-if="sessionStatus?.cloudflare_blocked" class="warning-text">
-            請在剛開啟的瀏覽器完成 Cloudflare 安全驗證，完成後此頁會自動切到下一步。
-          </p>
-          <p v-else-if="sessionStatus?.login_form_ready" class="success-text">
-            已通過安全驗證，接下來請輸入手機號碼、密碼與圖形驗證碼。
-          </p>
-          <p v-else class="muted">
-            正在等待登入頁可用...
-          </p>
-          <p v-if="sessionStatus?.error_message" class="error-text">{{ sessionStatus.error_message }}</p>
         </div>
       </article>
 
-      <article v-else-if="currentStep === 2" class="card panel">
-        <h3>步驟 2：輸入登入資訊</h3>
-        <p class="muted">
-          完成登入後，手機號碼、密碼與瀏覽器狀態會加密保存在本機 secure settings，不會同步到 Google Drive 或 shared-ledger snapshot。
-        </p>
-
-        <div v-if="sessionStatus?.cloudflare_blocked" class="warning-panel inline-warning">
-          <strong>仍在等待 Cloudflare 驗證</strong>
-          <p class="muted">請回到瀏覽器完成驗證，再按一次重新檢查狀態。</p>
-          <button class="btn" :disabled="refreshingStatus" @click="refreshSessionStatus()">重新檢查狀態</button>
-        </div>
-
-        <template v-else>
-          <label class="field">
-            <span>手機號碼</span>
-            <input v-model.trim="mobilePhone" type="tel" placeholder="09xxxxxxxx" />
-          </label>
-
-          <label class="field">
-            <span>密碼</span>
-            <input v-model="password" type="password" placeholder="電子發票登入密碼" />
-          </label>
-
-          <div v-if="requiresCaptcha && captchaImageUrl" class="captcha-box">
-            <div class="captcha-head">
-              <span>圖形驗證碼</span>
-              <button class="btn small" :disabled="refreshingStatus" @click="refreshSessionStatus(true)">更新驗證碼</button>
-            </div>
-            <img :src="captchaImageUrl" alt="captcha" />
-            <p v-if="captchaAutoFilled" class="muted">
-              OCR 建議：{{ captchaAutoFilled }}
-            </p>
-          </div>
-
-          <label v-if="requiresCaptcha" class="field">
-            <span>圖形驗證碼</span>
-            <input v-model.trim="captchaCode" type="text" maxlength="10" inputmode="numeric" placeholder="請輸入圖片上的數字" />
-          </label>
-          <p v-else class="muted">
-            已在瀏覽器完成登入，不需要再次輸入圖形驗證碼；系統會直接保存本機加密憑證。
-          </p>
-
-          <div class="row action-row">
-            <button class="btn" :disabled="refreshingStatus" @click="refreshSessionStatus()">重新檢查狀態</button>
-            <button class="btn primary" :disabled="!canSubmit || submitting" @click="submitAuth">
-              {{ submitting ? (reconnectMode ? '更新憑證中...' : '建立連線中...') : (reconnectMode ? '完成重新驗證' : '完成登入並建立連線') }}
-            </button>
-          </div>
-        </template>
-      </article>
-
-      <article v-else class="card panel success-panel">
+      <article v-if="successConnectionId" class="card panel success-panel">
         <h3>{{ reconnectMode ? '重新驗證完成' : '載具新增成功' }}</h3>
         <p class="muted">
-          {{ reconnectMode ? '本機加密憑證與瀏覽器狀態已更新，之後可再次自動同步。' : '之後同步會優先使用本機加密保存的瀏覽器狀態；若過期則自動重登入一次。' }}
+          {{ reconnectMode ? '本機加密憑證與狀態已更新。' : '本機加密憑證與狀態已建立。' }}
         </p>
         <div class="row action-row">
           <RouterLink class="btn" to="/settings/invoice-carrier">返回列表</RouterLink>
-          <RouterLink v-if="successConnectionId" class="btn primary" :to="{ name: 'settings-invoice-carrier-connection', params: { id: successConnectionId } }">
+          <RouterLink class="btn primary" :to="{ name: 'settings-invoice-carrier-connection', params: { id: successConnectionId } }">
             打開載具詳情
           </RouterLink>
         </div>
@@ -131,7 +77,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useInvoiceCarrierStore } from '@/ui/stores/invoice-carrier.store'
@@ -142,15 +88,9 @@ import {
   getInvoiceCarrierLinkingUnavailableMessage,
   isInvoiceCarrierApiConfigured,
   isInvoiceCarrierLinkingSupported,
-  isNativeInvoiceCarrierAutomationRuntimeSupported,
 } from '@/services/invoice-carrier/backend'
 import { normalizeText } from '@/services/invoice-carrier/shared'
-import {
-  completeInvoiceCarrierAuth,
-  disconnectInvoiceCarrierLinkSession,
-  pollInvoiceCarrierSessionStatus,
-  startInvoiceCarrierLinkSession,
-} from '@/ui/services/invoice-carrier.service'
+import { connectInvoiceCarrier } from '@/ui/services/invoice-carrier.service'
 
 const route = useRoute()
 const ledgerStore = useLedgerStore()
@@ -158,11 +98,10 @@ const store = useInvoiceCarrierStore()
 const uiStore = useUiStore()
 const { t } = useI18n()
 
-const invoiceCarrierApiReady = isInvoiceCarrierApiConfigured()
+const invoiceCarrierAutomationReady = isInvoiceCarrierApiConfigured()
 const invoiceCarrierApiMessage = computed(() => getInvoiceCarrierApiUnavailableMessage())
 const invoiceCarrierLinkingSupported = isInvoiceCarrierLinkingSupported()
 const invoiceCarrierLinkingMessage = computed(() => getInvoiceCarrierLinkingUnavailableMessage())
-const shouldAutoPollSessionStatus = computed(() => !isNativeInvoiceCarrierAutomationRuntimeSupported())
 const reconnectConnectionId = computed(() => normalizeText(route.query.connectionId))
 const reconnectMode = computed(() => Boolean(reconnectConnectionId.value))
 const pageTitle = computed(() => (
@@ -171,104 +110,26 @@ const pageTitle = computed(() => (
     : t('settings_invoice_carrier.create_title', '新增電子發票載具')
 ))
 
-const currentStep = ref(1)
-const startingSession = ref(false)
-const refreshingStatus = ref(false)
 const submitting = ref(false)
-const sessionId = ref('')
-const sessionStatus = ref(null)
 const successConnectionId = ref('')
 const existingConnection = ref(null)
 const errorText = ref('')
 const mobilePhone = ref('')
 const password = ref('')
-const captchaCode = ref('')
-
-let pollTimerId = 0
-
-const captchaImageUrl = computed(() => normalizeText(sessionStatus.value?.captcha_image))
-const captchaAutoFilled = computed(() => normalizeText(sessionStatus.value?.captcha_auto_filled))
-const requiresCaptcha = computed(() => Boolean(sessionStatus.value?.login_form_ready))
+const automationPhase = ref('')
+const debugHint = ref('')
+const debugLastStep = ref('')
 const canSubmit = computed(() => Boolean(
-  sessionId.value
-  && normalizeText(mobilePhone.value)
-  && String(password.value ?? '').trim()
-  && (!requiresCaptcha.value || normalizeText(captchaCode.value)),
+  normalizeText(mobilePhone.value)
+  && String(password.value ?? '').trim(),
 ))
-
-function stepClass(step) {
-  return {
-    active: currentStep.value === step,
-    done: currentStep.value > step,
-  }
-}
-
-function stopPolling() {
-  if (pollTimerId) {
-    window.clearInterval(pollTimerId)
-    pollTimerId = 0
-  }
-}
-
-function applySessionStatus(status) {
-  sessionStatus.value = status ?? null
-  if (!normalizeText(captchaCode.value) && captchaAutoFilled.value) {
-    captchaCode.value = captchaAutoFilled.value
-  }
-  if (status?.login_form_ready || status?.search_form_ready) {
-    currentStep.value = Math.max(currentStep.value, 2)
-  }
-}
-
-function startPolling() {
-  stopPolling()
-  if (!shouldAutoPollSessionStatus.value) return
-  if (!sessionId.value) return
-  pollTimerId = window.setInterval(() => {
-    void refreshSessionStatus()
-  }, 2000)
-}
-
-async function refreshSessionStatus(refreshCaptcha = false) {
-  if (!sessionId.value) return null
-  try {
-    refreshingStatus.value = true
-    const status = await pollInvoiceCarrierSessionStatus(sessionId.value, { refreshCaptcha })
-    applySessionStatus(status)
-    return status
-  } catch (error) {
-    errorText.value = String(error?.message ?? error ?? '無法取得電子發票登入狀態')
-    throw error
-  } finally {
-    refreshingStatus.value = false
-  }
-}
-
-async function startSession() {
-  try {
-    startingSession.value = true
-    errorText.value = ''
-    const result = await startInvoiceCarrierLinkSession()
-    sessionId.value = normalizeText(result.session_id)
-    applySessionStatus(result)
-    startPolling()
-  } catch (error) {
-    errorText.value = String(error?.message ?? error ?? '啟動電子發票瀏覽器失敗')
-  } finally {
-    startingSession.value = false
-  }
-}
-
-async function cleanupSession() {
-  stopPolling()
-  if (!sessionId.value) return
-  try {
-    await disconnectInvoiceCarrierLinkSession(sessionId.value)
-  } catch {
-    // Ignore disconnect cleanup errors.
-  }
-  sessionId.value = ''
-}
+const automationPhaseText = computed(() => {
+  if (automationPhase.value === 'starting') return '正在啟動原生自動化'
+  if (automationPhase.value === 'connecting') return '正在登入電子發票網站'
+  if (automationPhase.value === 'saving') return '正在保存本機憑證'
+  if (automationPhase.value === 'done') return '完成'
+  return ''
+})
 
 async function submitAuth() {
   if (!ledgerStore.activeLedgerId) {
@@ -280,12 +141,18 @@ async function submitAuth() {
   try {
     submitting.value = true
     errorText.value = ''
-    const result = await completeInvoiceCarrierAuth(
-      sessionId.value,
+    debugHint.value = ''
+    debugLastStep.value = ''
+    automationPhase.value = 'starting'
+
+    const result = await connectInvoiceCarrier(
       mobilePhone.value,
       password.value,
-      captchaCode.value,
+      {
+        connectionId: reconnectConnectionId.value,
+      },
     )
+    automationPhase.value = 'saving'
 
     const connection = await store.createConnection(
       ledgerStore.activeLedgerId,
@@ -301,14 +168,16 @@ async function submitAuth() {
     )
 
     successConnectionId.value = connection.id
-    currentStep.value = 3
+    automationPhase.value = 'done'
     uiStore.pushToast(
       reconnectMode.value ? '電子發票載具已完成重新驗證' : '電子發票載具已建立',
       'info',
     )
-    await cleanupSession()
   } catch (error) {
     errorText.value = String(error?.message ?? error ?? '電子發票登入失敗')
+    automationPhase.value = ''
+    debugHint.value = normalizeText(error?.debugHint || error?.data?.debugTrace?.debugHint)
+    debugLastStep.value = normalizeText(error?.debugLastStep || error?.data?.debugTrace?.debugLastStep)
   } finally {
     submitting.value = false
   }
@@ -326,14 +195,6 @@ onMounted(async () => {
     }
   }
 })
-
-onBeforeUnmount(() => {
-  if (currentStep.value !== 3) {
-    void cleanupSession()
-  } else {
-    stopPolling()
-  }
-})
 </script>
 
 <style scoped>
@@ -344,7 +205,6 @@ onBeforeUnmount(() => {
 }
 
 .page-head,
-.captcha-head,
 .action-row {
   justify-content: space-between;
   align-items: center;
@@ -365,31 +225,6 @@ h3 {
   font-weight: 800;
   letter-spacing: 0.08em;
   color: var(--primary);
-}
-
-.stepper {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.step-chip {
-  border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 12px;
-  font-weight: 700;
-  background: color-mix(in srgb, var(--muted) 10%, var(--card) 90%);
-  color: var(--muted);
-}
-
-.step-chip.active {
-  background: color-mix(in srgb, var(--primary) 18%, var(--card) 82%);
-  color: var(--primary);
-}
-
-.step-chip.done {
-  background: color-mix(in srgb, var(--success) 16%, var(--card) 84%);
-  color: var(--success);
 }
 
 .muted {
@@ -415,21 +250,18 @@ h3 {
 }
 
 .status-panel,
-.captcha-box,
-.warning-panel.inline-warning,
+.warning-panel,
 .error-panel,
 .success-panel {
   border-radius: 12px;
   padding: 12px;
 }
 
-.status-panel,
-.captcha-box {
+.status-panel {
   background: color-mix(in srgb, var(--primary) 8%, var(--card) 92%);
 }
 
-.warning-panel,
-.warning-panel.inline-warning {
+.warning-panel {
   background: color-mix(in srgb, #e8a317 14%, var(--card) 86%);
 }
 
@@ -440,31 +272,5 @@ h3 {
 .error-panel {
   color: var(--error);
   background: color-mix(in srgb, var(--error) 12%, var(--card) 88%);
-}
-
-.warning-text {
-  color: #8a5a00;
-  font-weight: 700;
-}
-
-.success-text {
-  color: var(--success);
-  font-weight: 700;
-}
-
-.error-text {
-  color: var(--error);
-  font-weight: 700;
-}
-
-.captcha-box img {
-  max-width: 220px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-}
-
-.small {
-  padding: 6px 10px;
-  font-size: 12px;
 }
 </style>
