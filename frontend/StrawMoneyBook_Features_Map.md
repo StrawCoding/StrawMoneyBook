@@ -34,7 +34,7 @@
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
 - 電子發票載具（公開但標示為實驗性；SMB-2 重建後只保留 Android 端內人工 captcha 流程，App 會在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，並把憑證與 native session marker 加密保存在本機；Web 僅提供診斷與說明，不再承諾可新增、重新驗證或同步載具；Node / Web headed Playwright 與 OCR `/api/invoice/*` 舊流程已移除；若 native exchange 沒有回傳可保存憑證，系統會拒絕建立 active connection；若站點流程阻擋自動化，狀態會明確標示為 `automation_blocked` 或 `reauth_required`，不會偽裝成成功）
-- Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化、電子發票載具自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗）
+- Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化、電子發票載具自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；Google Play internal 上傳若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）
 
 ## 2. 路由與頁面對應
 
@@ -313,7 +313,7 @@ UI 服務目錄：`src/ui/services/`
 | `secure-setting.service.js` | 敏感設定值加密儲存（AES-GCM） |
 | `security-lock.service.js` | 生物辨識/系統憑證安全鎖整合 |
 | `theme.service.js` | 主題色、配色方案與字體縮放套用 |
-| `app-update.service.js` | App 版本檢查與商店連結；Android AAB 發版版本碼由 `android/app/build.gradle` 依最終 `versionName` 自動推導（`1,000,000 + major * 1,000,000 + minor * 1,000 + patch`，保留 Play 歷史版本碼升級空間），仍可由 `CI_VERSION_CODE` 覆蓋；Play 發版流程若存在 `mapping.txt` 也會一併上傳去模糊化檔 |
+| `app-update.service.js` | App 版本檢查與商店連結；Android AAB 發版版本碼由 `android/app/build.gradle` 依最終 `versionName` 自動推導（`1,000,000 + major * 1,000,000 + minor * 1,000 + patch`，保留 Play 歷史版本碼升級空間），仍可由 `CI_VERSION_CODE` 覆蓋；Play 發版流程若存在 `mapping.txt` 也會一併上傳去模糊化檔；Fastlane internal lane 會針對 Google Play edit 被外部變更的暫時性衝突重開 edit 重試 |
 | `i18n.service.js` | 多語系文案管理 |
 | `setup-flow.service.js` | 是否顯示 Welcome / setup 流程判定 |
 | `post-setup-intro.service.js` | 設定完成後導覽旗標管理 |

@@ -1,6 +1,9 @@
 default_platform(:android)
 
 ANDROID_PROJECT_ROOT = File.expand_path("..", __dir__)
+PLAY_EDIT_CONFLICT_MESSAGE = "A change was made to the application outside of this Edit, please create a new edit."
+PLAY_UPLOAD_MAX_ATTEMPTS = 3
+PLAY_UPLOAD_RETRY_DELAY_SECONDS = 15
 
 def require_env!(key)
   value = ENV[key].to_s.strip
@@ -28,6 +31,25 @@ def resolve_mapping_path(explicit_path)
   absolute_explicit_path.empty? ? explicit_path : absolute_explicit_path
 end
 
+def play_edit_conflict?(error)
+  error.message.to_s.include?(PLAY_EDIT_CONFLICT_MESSAGE)
+end
+
+def upload_to_play_store_with_edit_retry!(options)
+  attempts = 0
+
+  begin
+    attempts += 1
+    upload_to_play_store(options)
+  rescue StandardError => error
+    raise unless play_edit_conflict?(error) && attempts < PLAY_UPLOAD_MAX_ATTEMPTS
+
+    UI.important("Google Play edit was changed outside this upload; retrying with a new edit (attempt #{attempts + 1}/#{PLAY_UPLOAD_MAX_ATTEMPTS})")
+    sleep(PLAY_UPLOAD_RETRY_DELAY_SECONDS)
+    retry
+  end
+end
+
 platform :android do
   desc "Upload the release AAB to Google Play internal track as a draft release"
   lane :internal do
@@ -42,7 +64,7 @@ platform :android do
     UI.user_error!("AAB not found at #{aab_path}") unless File.exist?(aab_path)
     UI.user_error!("Play service account json not found at #{json_key_path}") unless File.exist?(json_key_path)
 
-    upload_to_play_store(
+    upload_to_play_store_with_edit_retry!(
       package_name: package_name,
       json_key: json_key_path,
       aab: aab_path,

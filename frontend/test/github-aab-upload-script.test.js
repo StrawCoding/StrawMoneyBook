@@ -225,10 +225,20 @@ test('manual play upload workflow can retry an existing release asset upload to 
 
 test('fastlane uploads the internal track release as a draft so the uploaded aab version stays selectable in Play Console', () => {
   assert.match(fastlaneFastfile, /lane :internal do/)
+  assert.match(fastlaneFastfile, /upload_to_play_store_with_edit_retry!\(/)
   assert.match(fastlaneFastfile, /track:\s*"internal"/)
   assert.match(fastlaneFastfile, /release_status:\s*"draft"/)
   assert.match(fastlaneFastfile, /mapping:\s*mapping_exists \? mapping_path : nil/)
   assert.doesNotMatch(fastlaneFastfile, /release_status:\s*"completed"/)
+})
+
+test('fastlane retries Google Play edit conflicts by opening a fresh upload edit', () => {
+  assert.match(fastlaneFastfile, /PLAY_EDIT_CONFLICT_MESSAGE = "A change was made to the application outside of this Edit, please create a new edit\."/)
+  assert.match(fastlaneFastfile, /PLAY_UPLOAD_MAX_ATTEMPTS = 3/)
+  assert.match(fastlaneFastfile, /def play_edit_conflict\?\(error\)/)
+  assert.match(fastlaneFastfile, /def upload_to_play_store_with_edit_retry!\(options\)/)
+  assert.match(fastlaneFastfile, /raise unless play_edit_conflict\?\(error\) && attempts < PLAY_UPLOAD_MAX_ATTEMPTS/)
+  assert.match(fastlaneFastfile, /retry/)
 })
 
 test('android flatDir patch removes unused flatDir repositories but keeps other repos', () => {

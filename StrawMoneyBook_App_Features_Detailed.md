@@ -94,7 +94,7 @@ SMB-142 重建後，自動備份設定頁會在背景自動偵測 / 自動備份
 
 Android 發版目前也已把版本碼策略收斂成由語意版號自動推導的單調遞增規則，並保留一段 Play Store 歷史版本碼安全區間，避免 `0.x.y` 這類版本名稱在新版發佈時反而低於舊的商店版本碼；若 release 產物存在 `mapping.txt`，Play 上傳流程也會一起帶上去模糊化檔，降低 Crash / ANR 排查成本。
 
-另外，CI 的 Android release build 現在也已補上 `frontend/android/gradlew` 的可執行權限，避免 `./gradlew bundleRelease` 在 checkout 後因權限不足直接中斷，讓 bundleRelease 的驗證可以真正跑到 Gradle 階段。
+另外，CI 的 Android release build 現在也已補上 `frontend/android/gradlew` 的可執行權限，避免 `./gradlew bundleRelease` 在 checkout 後因權限不足直接中斷，讓 bundleRelease 的驗證可以真正跑到 Gradle 階段。Google Play internal 上傳也會針對「Play edit 被外部變更」這類暫時性衝突重開 edit 有限次重試，避免 AAB 已建好卻因 Play Console 或其他發版流程同時修改而直接中斷。
 
 ### 2.4 官方網站品牌搜尋詞同步
 
@@ -590,7 +590,7 @@ Android 端已有 Google Play 會員整合：
 
 這代表產品規劃不是純 Web 包裝，而是有實際利用原生能力。
 
-另外，Android AAB 發版版本碼現在由 `frontend/android/app/build.gradle` 依最終 `versionName` 自動推導，規則為 `major * 1,000,000 + minor * 1,000 + patch`，例如 `0.24.32 -> 24032`；CI 若需要仍可用 `CI_VERSION_CODE` 覆蓋。這樣 Play 發版 workflow 就算沒額外塞版本碼，也不會再掉回固定值導致重複版號。
+另外，Android AAB 發版版本碼現在由 `frontend/android/app/build.gradle` 依最終 `versionName` 自動推導，規則為 `major * 1,000,000 + minor * 1,000 + patch`，例如 `0.24.32 -> 24032`；CI 若需要仍可用 `CI_VERSION_CODE` 覆蓋。這樣 Play 發版 workflow 就算沒額外塞版本碼，也不會再掉回固定值導致重複版號。Fastlane internal lane 也會辨識 Google Play edit conflict 並重新建立上傳 edit 重試，其他非暫時性 Play API 錯誤仍會直接失敗。
 
 Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHEDULE_EXACT_ALARM`，並透過 Capacitor Local Notifications 的 exact alarm 檢查 / 跳轉 API 引導使用者完成系統層設定。
 
