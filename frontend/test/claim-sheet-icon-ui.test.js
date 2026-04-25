@@ -18,6 +18,11 @@ const claimEditSource = readFileSync(
   'utf8',
 )
 
+const claimImportSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/views/claims/ClaimSheetImportPage.vue'),
+  'utf8',
+)
+
 const claimDetailSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/claims/ClaimSheetDetailPage.vue'),
   'utf8',
@@ -39,17 +44,15 @@ test('claim sheet detail page renders icon-aware item headers and meta badges', 
   assert.match(claimDetailSource, /itemPresentation\(item\)\.categoryName \|\| t\('analysis_page\.uncategorized'\)/)
 })
 
-test('claim sheet create and edit forms show icon-enhanced manual and imported rows', () => {
+test('claim sheet create and edit forms show icon-enhanced manual rows and import page shows imported rows', () => {
   assert.match(claimListSource, /presentClaimManualFormItem/)
-  assert.match(claimListSource, /presentImportedClaimTx/)
   assert.match(claimListSource, /class="manual-item-preview"/)
   assert.match(claimListSource, /v-if="manualItemPresentation\(item\)\.icon"/)
-  assert.match(claimListSource, /v-if="importedTxPresentation\(tx\)\.icon"/)
   assert.match(claimEditSource, /presentClaimManualFormItem/)
-  assert.match(claimEditSource, /presentImportedClaimTx/)
   assert.match(claimEditSource, /class="manual-item-preview"/)
   assert.match(claimEditSource, /v-if="manualItemPresentation\(item\)\.icon"/)
-  assert.match(claimEditSource, /v-if="importedTxPresentation\(tx\)\.icon"/)
+  assert.match(claimImportSource, /presentImportedClaimTx/)
+  assert.match(claimImportSource, /v-if="importedTxPresentation\(tx\)\.icon"/)
 })
 
 test('claim sheet list cards keep detail navigation and completion affordance after the UI refresh', () => {

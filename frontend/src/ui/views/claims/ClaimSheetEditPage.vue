@@ -93,26 +93,15 @@
               <strong>{{ t('claim_sheet.form.import_reimbursements') }}</strong>
               <small class="muted">{{ t('claim_sheet.form.import_hint') }}</small>
             </div>
-            <div v-if="editableImportedTxs.length" class="import-list">
-              <label v-for="tx in editableImportedTxs" :key="tx.id" class="import-item">
-                <input v-model="form.importTxIds" type="checkbox" :value="tx.id" />
-                <span class="import-item-text">
-                  <span class="import-item-title">
-                    <font-awesome-icon
-                      v-if="importedTxPresentation(tx).icon"
-                      :icon="importedTxPresentation(tx).icon"
-                      class="item-leading-icon"
-                    />
-                    <span>{{ importedTxPresentation(tx).title }}</span>
-                  </span>
-                  <small v-if="tx.note_plain" class="muted">{{ tx.note_plain }}</small>
-                  <small v-if="importedTxPresentation(tx).categoryName" class="muted">{{ importedTxPresentation(tx).categoryName }}</small>
-                  <small class="muted">{{ formatTime(tx.occurred_at) }}</small>
-                </span>
-                <MoneyText :value-minor="pendingMinorOfTx(tx)" />
-              </label>
+            <div class="import-action-card">
+              <div class="import-summary">
+                <small class="muted">{{ t('claim_sheet.import.selected_count', { count: importedItems.length }) }}</small>
+                <MoneyText :value-minor="importedTotalMinor" />
+              </div>
+              <button type="button" class="btn" @click="openImportPage">
+                {{ t('claim_sheet.import.open') }}
+              </button>
             </div>
-            <p v-else class="muted">{{ t('claim_sheet.form.no_importable') }}</p>
           </div>
 
           <div class="row total-row">
@@ -243,6 +232,8 @@ const draftTotalMinor = computed(() => {
   return totalMinor
 })
 
+const importedTotalMinor = computed(() => importedItems.value.reduce((sum, tx) => sum + pendingMinorOfTx(tx), 0))
+
 const canSaveClaim = computed(() => {
   const hasTitle = Boolean(String(form.title ?? '').trim())
   const hasImported = importedItems.value.length > 0
@@ -276,6 +267,14 @@ function formatTime(iso) {
 
 function goBack() {
   void goBackOrFallback(router, backLink.value)
+}
+
+function openImportPage() {
+  if (!claimId.value) return
+  void router.push({
+    name: 'claim-sheet-import',
+    params: { id: claimId.value },
+  })
 }
 
 function resetForm() {
@@ -491,8 +490,7 @@ h2 {
 }
 
 .form-wrap,
-.sub-section,
-.import-list {
+.sub-section {
   display: grid;
   gap: 10px;
 }
@@ -541,17 +539,17 @@ h2 {
   background: color-mix(in srgb, var(--card) 90%, var(--primary) 10%);
 }
 
-.import-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
+.import-action-card {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px 12px;
+  gap: 10px;
 }
 
-.import-item-text {
+.import-summary {
   display: grid;
   gap: 4px;
   min-width: 0;
@@ -576,6 +574,11 @@ label {
 }
 
 @media (max-width: 720px) {
+  .import-action-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .action-row {
     justify-content: stretch;
     flex-wrap: wrap;

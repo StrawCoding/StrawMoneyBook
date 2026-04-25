@@ -172,26 +172,15 @@
                   <strong>{{ t('claim_sheet.form.import_reimbursements') }}</strong>
                   <small class="muted">{{ t('claim_sheet.form.import_hint') }}</small>
                 </div>
-                <div v-if="reimbursementStore.pendingItems.length" class="import-list">
-                  <label v-for="tx in reimbursementStore.pendingItems" :key="tx.id" class="import-item">
-                    <input v-model="createForm.importTxIds" type="checkbox" :value="tx.id" />
-                    <span class="import-item-text">
-                      <span class="import-item-title">
-                        <font-awesome-icon
-                          v-if="importedTxPresentation(tx).icon"
-                          :icon="importedTxPresentation(tx).icon"
-                          class="item-leading-icon"
-                        />
-                        <span>{{ importedTxPresentation(tx).title }}</span>
-                      </span>
-                      <small v-if="tx.note_plain" class="muted">{{ tx.note_plain }}</small>
-                      <small v-if="importedTxPresentation(tx).categoryName" class="muted">{{ importedTxPresentation(tx).categoryName }}</small>
-                      <small class="muted">{{ formatTime(tx.occurred_at) }}</small>
-                    </span>
-                    <MoneyText :value-minor="pendingMinorOfTx(tx)" />
-                  </label>
+                <div class="import-action-card">
+                  <div class="import-summary">
+                    <small class="muted">{{ t('claim_sheet.import.selected_count', { count: importedItems.length }) }}</small>
+                    <MoneyText :value-minor="importedTotalMinor" />
+                  </div>
+                  <button type="button" class="btn" @click="openImportPageFromCreateSheet">
+                    {{ t('claim_sheet.import.open') }}
+                  </button>
                 </div>
-                <p v-else class="muted">{{ t('claim_sheet.form.no_importable') }}</p>
               </div>
 
               <div class="row total-row">
@@ -301,6 +290,11 @@ import {
   presentClaimManualFormItem,
   presentImportedClaimTx,
 } from '@/ui/utils/claim-sheet-presentation'
+import {
+  clearClaimSheetDraftSession,
+  loadClaimSheetDraftSession,
+  saveClaimSheetDraftSession,
+} from '@/ui/views/claims/claim-sheet-import-draft-session'
 import {
   createReimbursementDraft,
   getReimbursementDetail,
@@ -454,6 +448,8 @@ const draftTotalMinor = computed(() => {
   return totalMinor
 })
 
+const importedTotalMinor = computed(() => importedItems.value.reduce((sum, tx) => sum + pendingMinorOfTx(tx), 0))
+
 const canCreateClaim = computed(() => {
   const hasTitle = Boolean(String(createForm.title ?? '').trim())
   const hasImported = importedItems.value.length > 0
@@ -478,6 +474,14 @@ onMounted(async () => {
   createSheetBootstrapReady.value = false
   await Promise.all([reloadDashboard(), reimbursementStore.load(), accountStore.load(), categoryStore.load()])
   createSheetBootstrapReady.value = true
+  if (String(route.query.create ?? '').trim() === '1') {
+    restoreCreateFormFromSession()
+    isCreateOpen.value = true
+    const nextQuery = { ...route.query }
+    delete nextQuery.create
+    await router.replace({ name: 'claim-sheets', query: nextQuery })
+    return
+  }
   if (!String(route.query.edit ?? '').trim() && !isEditingCreateForm.value && !isCreateOpen.value) {
     resetCreateForm()
   }
@@ -618,6 +622,42 @@ async function selectClaimTab(tab) {
 function openCreateSheet() {
   resetCreateForm()
   isCreateOpen.value = true
+}
+
+function cloneManualItemsForSession() {
+  return createForm.manualItems.map((item) => ({ ...item }))
+}
+
+function restoreCreateFormFromSession() {
+  const session = loadClaimSheetDraftSession()
+  if (!session) {
+    resetCreateForm()
+    return
+  }
+  createForm.editingClaimId = ''
+  createForm.title = session.title
+  createForm.counterpartyName = session.counterpartyName
+  createForm.note = session.note
+  createForm.importTxIds = session.importTxIds
+  createForm.manualItems = session.manualItems.length ? session.manualItems : []
+  if (!createForm.manualItems.length) addManualItem()
+}
+
+function openImportPageFromCreateSheet() {
+  saveClaimSheetDraftSession({
+    title: createForm.title,
+    counterpartyName: createForm.counterpartyName,
+    note: createForm.note,
+    importTxIds: createForm.importTxIds,
+    manualItems: cloneManualItemsForSession(),
+  })
+
+  const id = isEditingCreateForm.value ? createForm.editingClaimId : 'new'
+  isCreateOpen.value = false
+  void router.push({
+    name: 'claim-sheet-import',
+    params: { id },
+  })
 }
 
 function isClaimEditable(claim) {
@@ -770,6 +810,7 @@ async function submitCreateSheet() {
     }
 
     await reloadDashboard()
+    clearClaimSheetDraftSession()
     resetCreateForm()
     isCreateOpen.value = false
     uiStore.pushToast(t(isEditing ? 'claim_sheet.toast.updated' : 'claim_sheet.toast.created'))
@@ -1075,24 +1116,17 @@ h3 {
   background: color-mix(in srgb, var(--card) 90%, var(--primary) 10%);
 }
 
-.import-list {
-  display: grid;
-  gap: 8px;
-  max-height: 220px;
-  overflow: auto;
-}
-
-.import-item {
+.import-action-card {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  display: flex;
+  justify-content: space-between;
   gap: 8px;
   align-items: center;
 }
 
-.import-item-text {
+.import-summary {
   display: grid;
   gap: 4px;
   min-width: 0;
@@ -1217,6 +1251,11 @@ label {
 
   .claim-complete-btn {
     width: 100%;
+  }
+
+  .import-action-card {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .manual-item {

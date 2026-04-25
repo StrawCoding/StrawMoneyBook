@@ -18,6 +18,11 @@ const claimEditSource = readFileSync(
   'utf8',
 )
 
+const claimImportSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/views/claims/ClaimSheetImportPage.vue'),
+  'utf8',
+)
+
 test('claim sheet list page keeps rows within mobile width', () => {
   assert.match(claimListSource, /\.claim-row \{[\s\S]*min-width: 0;/)
   assert.match(claimListSource, /\.claim-head \{[\s\S]*min-width: 0;/)
@@ -32,9 +37,10 @@ test('claim sheet detail page wraps long content instead of overflowing', () => 
   assert.match(claimDetailSource, /@media \(max-width: 720px\) \{[\s\S]*\.claim-head,[\s\S]*flex-direction: column;/)
 })
 
-test('claim sheet edit page uses shrinkable import columns and wrapping copy', () => {
-  assert.match(claimEditSource, /grid-template-columns: auto minmax\(0, 1fr\) auto;/)
+test('claim sheet edit and import pages use shrinkable import columns and wrapping copy', () => {
+  assert.match(claimImportSource, /grid-template-columns: auto minmax\(0, 1fr\) auto;/)
   assert.match(claimEditSource, /\.manual-item-preview \{[\s\S]*min-width: 0;/)
   assert.match(claimEditSource, /\.manual-item-preview small,[\s\S]*overflow-wrap: anywhere;/)
+  assert.match(claimImportSource, /\.import-item-text small,[\s\S]*overflow-wrap: anywhere;/)
   assert.match(claimEditSource, /@media \(max-width: 720px\) \{[\s\S]*\.action-row \{[\s\S]*flex-wrap: wrap;/)
 })
