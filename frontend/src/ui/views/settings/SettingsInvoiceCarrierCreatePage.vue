@@ -241,7 +241,7 @@ async function loadCaptcha() {
       await resetCaptchaSession()
     }
 
-    const status = await startInvoiceCarrierLinkSession()
+      const status = await startInvoiceCarrierLinkSession(mobilePhone.value, password.value)
     automationPhase.value = 'loading_captcha'
     applyLinkSessionStatus(status)
   } catch (error) {

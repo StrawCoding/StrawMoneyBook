@@ -24,7 +24,7 @@
 - 帳號系統（Email / Google 登入、個人資料、忘記密碼、臨時密碼、登出）
 - 共同帳本（建立共同帳本、共享連結、Email 邀請、接受邀請、同步）
 - Google Drive 帳本同步（逐帳本啟用、跨裝置 pull / push）
-- 自動備份（Google Drive / WebDAV；手動、背景 due check、資料變更後備份都會經過 provider orchestrator 與帳本 + provider lock，避免同一時間多個觸發源互相覆蓋狀態；設定頁會即時同步最近一次 auto-check 狀態與時間）
+- 自動備份（Google Drive / WebDAV；SMB-142 重建後，手動、背景 due check、資料變更後備份都會經過共用 provider runner，回傳 `completed / skipped / error` 統一結果，並以帳本 + provider lock 避免同一時間多個觸發源互相覆蓋狀態；runtime 事件含 `ledgerId / provider / mode / status / reason / checkedAt`，設定頁會即時同步最近一次 auto-check 狀態與時間）
 - 記帳提醒與成就表（每日固定提醒、通知權限 / 精準提醒狀態、連續記帳天數、最長連續與累計記帳日）
 - 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
 - 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本）
@@ -33,7 +33,7 @@
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
-- 電子發票載具（公開但標示為實驗性；Android 優先的端內登入流程，App 會在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，並把憑證 / storage state 加密保存在本機；Web 僅提供診斷與說明，不再承諾可新增、重新驗證或同步載具；若 native exchange 沒有回傳可保存憑證，系統會拒絕建立 active connection；若站點流程阻擋自動化，狀態會明確標示為 `automation_blocked` 或 `reauth_required`，不會偽裝成成功）
+- 電子發票載具（公開但標示為實驗性；SMB-2 重建後只保留 Android 端內人工 captcha 流程，App 會在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，並把憑證與 native session marker 加密保存在本機；Web 僅提供診斷與說明，不再承諾可新增、重新驗證或同步載具；Node / Web headed Playwright 與 OCR `/api/invoice/*` 舊流程已移除；若 native exchange 沒有回傳可保存憑證，系統會拒絕建立 active connection；若站點流程阻擋自動化，狀態會明確標示為 `automation_blocked` 或 `reauth_required`，不會偽裝成成功）
 - Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化、電子發票載具自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗）
 
 ## 2. 路由與頁面對應
@@ -89,7 +89,7 @@
 | `/settings/bank-sync/new` | `src/ui/views/settings/SettingsBankSyncCreatePage.vue` | 新增銀行連線 |
 | `/settings/bank-sync/:id` | `src/ui/views/settings/SettingsBankSyncConnectionPage.vue` | 單一銀行連線設定 / 狀態 |
 | `/settings/invoice-carrier` | `src/ui/views/settings/SettingsInvoiceCarrierPage.vue` | 電子發票載具管理（公開入口，實驗性） |
-| `/settings/invoice-carrier/new` | `src/ui/views/settings/SettingsInvoiceCarrierCreatePage.vue` | 新增 / 重新驗證電子發票載具（Android 端內自動化；Web 顯示診斷） |
+| `/settings/invoice-carrier/new` | `src/ui/views/settings/SettingsInvoiceCarrierCreatePage.vue` | 新增 / 重新驗證電子發票載具（Android 端內人工 captcha；Web 顯示診斷） |
 | `/settings/invoice-carrier/:id` | `src/ui/views/settings/SettingsInvoiceCarrierConnectionPage.vue` | 單一載具詳情 / 同步 / 發票匯入 / 重新驗證提示（非 Android 僅顯示診斷） |
 | `/settings/ledgers` | `src/ui/views/settings/SettingsLedgerPage.vue` | 帳本管理 |
 | `/settings/shared-ledgers` | `src/ui/views/settings/SettingsSharedLedgerPage.vue` | 共同帳本、Email 邀請、接受邀請與同步 |
@@ -149,7 +149,7 @@
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
 - 銀行同步：`/settings/bank-sync`（入口改由 `isBankSyncFeatureEnabled()` 控制；目前預設恢復為 mock/sandbox 流程）
-- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；新增載具會導向 `/settings/invoice-carrier/new`；Android App 透過 `InvoiceCarrierAutomation` 原生 WebView plugin 載入圖形驗證碼圖片並由使用者手動輸入後完成登入 / 同步，且 native BrowserSession 會將 WebView client、頁面載入、腳本執行與 cookie 操作統一切回 main thread；Web 僅保留設定入口、診斷與說明，不再走 `/api/invoice` 的正式產品流程）
+- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；新增載具會導向 `/settings/invoice-carrier/new`；Android App 透過 `InvoiceCarrierAutomation` 原生 WebView plugin 載入圖形驗證碼圖片並由使用者手動輸入後完成登入 / 同步，且 native BrowserSession 會將 WebView client、頁面載入、腳本執行與 cookie 操作統一切回 main thread；Web 僅保留設定入口、診斷與說明，不再走 `/api/invoice` 或 headed Playwright/OCR 舊流程）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）
@@ -297,8 +297,8 @@ UI 服務目錄：`src/ui/services/`
 | `shared-ledger.service.js` | 共同帳本前端流程：建立、下載、上傳、自動同步、本機帳本綁定 |
 | `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原、重新授權後自動清理 stale auto-check diagnostics；Google 授權失效時自動偵測並寫入 `error/reauth_required` 狀態使 UI 顯示重新授權警示 |
 | `webdav-backup.service.js` | WebDAV 備份連線、自動備份、還原 |
-| `auto-backup-orchestrator.service.js` | 自動備份 provider orchestrator；統一手動備份、due check、資料變更備份的 provider lock 與 preflight，避免同帳本同 provider 同時執行造成狀態覆蓋 |
-| `app-runtime.service.js` + `SettingsAutoBackupPage.vue` | 背景自動備份 / 自動偵測完成後會送出 `app:auto-backup-state-updated`，讓設定頁即時重讀 Google / WebDAV provider 狀態；設定頁立即備份會透過 orchestrator 先確認設定保存成功才執行，重讀時會保留尚未儲存的 WebDAV 密碼輸入，避免背景 refresh 把使用者輸入清空 |
+| `auto-backup-orchestrator.service.js` | 自動備份 provider runner；統一手動備份、due check、資料變更備份的 provider lock、preflight 與 `completed / skipped / error` 結果格式，避免同帳本同 provider 同時執行造成狀態覆蓋 |
+| `app-runtime.service.js` + `SettingsAutoBackupPage.vue` | 背景自動備份 / 自動偵測完成後會送出含 `ledgerId / provider / mode / status / reason / checkedAt` 的 `app:auto-backup-state-updated`，讓設定頁即時重讀 Google / WebDAV provider 狀態；設定頁立即備份會透過 provider runner 先確認設定保存成功才執行，重讀時會保留尚未儲存的 WebDAV 密碼輸入，避免背景 refresh 把使用者輸入清空 |
 | `google-drive-ledger-sync.service.js` | Google Drive 帳本同步（逐帳本 enable / sync now） |
 | `addon-template.service.js` | 附加項目模板預設值與保存 |
 | `bank-sync.service.js` | 銀行同步前端流程（憑證加密封裝、同步/匯入） |
@@ -392,7 +392,7 @@ UI composable 目錄：`src/ui/composables/`
 - 若調整快速記帳入口，需同步檢查 `BookkeepingPage.vue`、`bookkeeping-mode.service.js`、首頁 FAB 與 Android 小工具導向。
 - 若調整會員限制或升級導流，需同步檢查 `membership.service.js`、`membership-navigation.service.js` 與 `SettingsMembershipBenefitsPage.vue`。
 - 若調整銀行同步入口，需同步檢查 `settings.vue` 的 `isBankSyncFeatureEnabled()`、銀行同步 API 可用性提示，以及 `/settings/bank-sync` 路由可達性。
-- 若調整電子發票載具入口或同步流程，需同步檢查 `settings.vue`、`FeatureListPage.vue`、`SettingsInvoiceCarrier*.vue`、`src/services/invoice-carrier/backend.js`、`src/core/services/invoice-carrier.service.js`、本機 secure settings 過濾規則，以及 `/api/invoice/*`。
+- 若調整電子發票載具入口或同步流程，需同步檢查 `settings.vue`、`FeatureListPage.vue`、`SettingsInvoiceCarrier*.vue`、`src/services/invoice-carrier/backend.js`、`src/core/services/invoice-carrier.service.js`、Android `InvoiceCarrierAutomation*`、本機 secure settings 過濾規則與 Web diagnostics 文案。
 - 若調整 Google Drive 帳本同步，需同步檢查 `SettingsGoogleDriveLedgerSyncPage.vue`、`google-drive-ledger-sync.service.js`、會員限制與活動帳本 reload 流程。
 - 若調整 App URL / invite link，需同步檢查 `app-url-route.js`、router redirect 與 `SettingsSharedLedgerPage.vue` 的 invite code 自動加入邏輯。
 - 若調整帳號 / 共同帳本 / 邀請碼 / 管理員流程，需同步檢查 `SettingsAccountPage.vue`、`SettingsSharedLedgerPage.vue`、`SettingsAdminPage.vue`、`src/services/shared-ledger/backend.js`、`../backend/src/routes/route-table.js` 與 `../backend/src/routes/auth/`、`../backend/src/routes/shared-ledgers/`。

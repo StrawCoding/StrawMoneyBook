@@ -629,7 +629,7 @@ export async function runWebdavAutoBackupIfDue(ledgerId) {
       lastAutoCheckStatus: 'skipped',
       lastAutoCheckReason: skipReason,
     })
-    return { skipped: true, reason: skipReason }
+    return { status: 'skipped', skipped: true, reason: skipReason, checkedAt: startedAt }
   }
   try {
     const result = await performWebdavBackup(ledgerId)
@@ -638,7 +638,7 @@ export async function runWebdavAutoBackupIfDue(ledgerId) {
       lastAutoCheckStatus: 'ok',
       lastAutoCheckReason: 'backup_completed',
     })
-    return { skipped: false, ...result }
+    return { status: 'completed', skipped: false, reason: 'backup_completed', checkedAt: startedAt, ...result }
   } catch (error) {
     await updateWebdavBackupState(ledgerId, {
       lastBackupStatus: 'error',
@@ -647,7 +647,7 @@ export async function runWebdavAutoBackupIfDue(ledgerId) {
       lastAutoCheckStatus: 'error',
       lastAutoCheckReason: 'backup_failed',
     })
-    return { skipped: true, reason: 'failed' }
+    return { status: 'error', skipped: false, error: true, reason: 'backup_failed', checkedAt: startedAt }
   }
 }
 
@@ -661,7 +661,12 @@ export async function runWebdavAutoBackupOnDataChange(ledgerId) {
       lastAutoCheckStatus: 'skipped',
       lastAutoCheckReason: !state.connected ? 'not_connected' : (!state.autoEnabled ? 'auto_disabled' : 'data_change_disabled'),
     })
-    return { skipped: true, reason: 'disabled' }
+    return {
+      status: 'skipped',
+      skipped: true,
+      reason: !state.connected ? 'not_connected' : (!state.autoEnabled ? 'auto_disabled' : 'data_change_disabled'),
+      checkedAt: startedAt,
+    }
   }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     await updateWebdavBackupState(ledgerId, {
@@ -669,7 +674,7 @@ export async function runWebdavAutoBackupOnDataChange(ledgerId) {
       lastAutoCheckStatus: 'skipped',
       lastAutoCheckReason: 'offline',
     })
-    return { skipped: true, reason: 'offline' }
+    return { status: 'skipped', skipped: true, reason: 'offline', checkedAt: startedAt }
   }
   try {
     const result = await performWebdavBackup(ledgerId)
@@ -678,7 +683,7 @@ export async function runWebdavAutoBackupOnDataChange(ledgerId) {
       lastAutoCheckStatus: 'ok',
       lastAutoCheckReason: 'data_change_backup_completed',
     })
-    return { skipped: false, ...result }
+    return { status: 'completed', skipped: false, reason: 'data_change_backup_completed', checkedAt: startedAt, ...result }
   } catch (error) {
     await updateWebdavBackupState(ledgerId, {
       lastBackupStatus: 'error',
@@ -687,6 +692,6 @@ export async function runWebdavAutoBackupOnDataChange(ledgerId) {
       lastAutoCheckStatus: 'error',
       lastAutoCheckReason: 'backup_failed',
     })
-    return { skipped: true, reason: 'failed' }
+    return { status: 'error', skipped: false, error: true, reason: 'backup_failed', checkedAt: startedAt }
   }
 }

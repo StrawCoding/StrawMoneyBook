@@ -47,12 +47,12 @@ test('invoice carrier pages expose Android-only diagnostics and disabled web mes
 })
 
 test('invoice carrier ui service and backend adapter use Android-only native session flow', () => {
-  assert.match(uiServiceSource, /connectInvoiceCarrierBackend/)
   assert.match(uiServiceSource, /createInvoiceCarrierLinkSessionBackend/)
   assert.match(uiServiceSource, /exchangeInvoiceCarrierAuthBackend/)
   assert.match(uiServiceSource, /getInvoiceCarrierSessionStatusBackend/)
   assert.match(uiServiceSource, /credentialState/)
-  assert.match(backendAdapterSource, /connectNativeInvoiceCarrier/)
+  assert.doesNotMatch(uiServiceSource, /connectInvoiceCarrierBackend/)
+  assert.doesNotMatch(backendAdapterSource, /connectNativeInvoiceCarrier\(/)
   assert.match(backendAdapterSource, /createNativeInvoiceCarrierLinkSession/)
   assert.match(backendAdapterSource, /getNativeInvoiceCarrierSessionStatus/)
   assert.match(backendAdapterSource, /exchangeNativeInvoiceCarrierAuth/)
@@ -62,19 +62,20 @@ test('invoice carrier ui service and backend adapter use Android-only native ses
   assert.doesNotMatch(backendAdapterSource, /https:\/\/api\.strawmb\.com/)
 })
 
-test('invoice carrier Android native automation is registered around connect/sync/disconnect actions', () => {
+test('invoice carrier Android native automation is registered around manual captcha session/sync/disconnect actions', () => {
   assert.match(androidMainActivitySource, /registerPlugin\(InvoiceCarrierAutomationPlugin\.class\)/)
   assert.match(androidManifestSource, /InvoiceCarrierAutomationActivity/)
   assert.match(nativeAdapterSource, /registerPlugin\('InvoiceCarrierAutomation'\)/)
-  assert.match(nativeAdapterSource, /connectNativeInvoiceCarrier/)
+  assert.doesNotMatch(nativeAdapterSource, /export async function connectNativeInvoiceCarrier/)
   assert.match(nativeAdapterSource, /createNativeInvoiceCarrierLinkSession/)
   assert.match(nativeAdapterSource, /exchangeNativeInvoiceCarrierAuth/)
-  assert.match(androidPluginSource, /public void connect\(PluginCall call\)/)
+  assert.doesNotMatch(androidPluginSource, /public void connect\(PluginCall call\)/)
   assert.match(androidPluginSource, /public void createLinkSession\(PluginCall call\)/)
-  assert.match(androidActivitySource, /ACTION_CONNECT/)
+  assert.doesNotMatch(androidActivitySource, /ACTION_CONNECT/)
   assert.match(androidActivitySource, /setAlpha\(0\.01f\)/)
   assert.match(androidAutomationSource, /buildSessionPayload/)
-  assert.match(androidAutomationSource, /invoice_carrier_captcha_failed/)
+  assert.match(androidAutomationSource, /manual_reauth_required/)
+  assert.doesNotMatch(androidAutomationSource, /captcha_ocr_attempt/)
   assert.match(androidAutomationSource, /invoice_carrier_automation_blocked/)
   assert.match(androidAutomationSource, /provider_connection_id/)
 })
@@ -87,9 +88,10 @@ test('local-only invoice credentials are excluded from Google Drive and shared-l
 })
 
 test('invoice carrier docs describe Android-first automation and web diagnostics mode', () => {
-  assert.match(featuresMapSource, /Android 優先的端內登入流程/)
+  assert.match(featuresMapSource, /Android 端內人工 captcha 流程/)
   assert.match(featuresMapSource, /Web 僅提供診斷與說明/)
   assert.match(detailedDocSource, /Android App 會先在原生 WebView 內載入登入頁與圖形驗證碼/)
   assert.match(detailedDocSource, /Web 版只保留設定入口、診斷與說明/)
+  assert.match(detailedDocSource, /Node \/ Web headed Playwright、OCR 與 `\/api\/invoice\/\*` 舊流程已移除/)
   assert.match(detailedDocSource, /automation_blocked/)
 })

@@ -33,39 +33,10 @@ final class InvoiceCarrierAutomation {
     private static final long PAGE_TIMEOUT_MS = 30_000L;
     private static final long READY_TIMEOUT_MS = 90_000L;
     private static final long POLL_MS = 400L;
-    private static final int CAPTCHA_MAX_ATTEMPTS = 3;
     private static final ZoneId TAIPEI_ZONE = ZoneId.of("Asia/Taipei");
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US);
 
     private InvoiceCarrierAutomation() {}
-
-    public static JSONObject connect(Activity activity, WebView webView, BankAutomationVault vault, BankAutomationDebugTrace debugTrace, JSONObject payload) throws Exception {
-        String mobilePhone = requireText(payload, "mobile_phone", "invoice_carrier_credentials_missing", "缺少手機號碼或密碼");
-        String password = requireText(payload, "password", "invoice_carrier_credentials_missing", "缺少手機號碼或密碼");
-
-        BrowserSession session = new BrowserSession(activity, webView);
-        debugTrace.record("load_login_page", "running", "Loading eInvoice login page");
-        session.loadUrl(LOGIN_URL);
-
-        JSONObject authenticatedStatus = authenticateSession(session, mobilePhone, password, debugTrace);
-        String connectionId = createProviderConnectionId(mobilePhone);
-        JSONObject carriers = new JSONObject();
-        carriers.put("available_carriers", authenticatedStatus.optJSONArray("available_carriers") == null ? new JSONArray() : authenticatedStatus.optJSONArray("available_carriers"));
-
-        JSONObject persistedState = buildPersistedConnectionState(
-            connectionId,
-            mobilePhone,
-            password,
-            session.captureCookies(),
-            carriers.optJSONArray("available_carriers")
-        );
-        vault.saveConnectionState(connectionId, persistedState);
-
-        JSONObject result = buildSuccessPayload(connectionId, mobilePhone);
-        result.put("available_carriers", carriers.optJSONArray("available_carriers"));
-        result.put("authenticated_at", nowIso());
-        return result;
-    }
 
     public static JSONObject createLinkSession(Activity activity, WebView webView, BankAutomationVault vault, BankAutomationDebugTrace debugTrace, JSONObject payload) throws Exception {
         String sessionId = "native_einv_" + UUID.randomUUID().toString().replace("-", "");
@@ -106,7 +77,7 @@ final class InvoiceCarrierAutomation {
         session.loadUrl(LOGIN_URL);
         JSONObject beforeStatus = waitForInteractiveStatus(session, debugTrace, false);
         if (beforeStatus.optBoolean("cloudflare_blocked", false)) {
-            throw new BankAutomationException("invoice_carrier_cloudflare_verification_required", "請先在手機頁面完成 Cloudflare 安全驗證");
+            throw new BankAutomationException("invoice_carrier_automation_blocked", "電子發票網站目前阻擋登入流程，請稍後再試");
         }
         if (!beforeStatus.optBoolean("login_form_ready", false) && !beforeStatus.optBoolean("search_form_ready", false)) {
             throw new BankAutomationException("invoice_carrier_login_required", "電子發票登入頁尚未就緒，請先完成安全驗證");
@@ -172,24 +143,10 @@ final class InvoiceCarrierAutomation {
         JSONObject status = inspectStatus(session, false);
 
         if (!status.optBoolean("search_form_ready", false)) {
-            String mobilePhone = normalizeText(state.optString("mobilePhone"));
-            String password = state.optString("password", "");
-            if (mobilePhone.isEmpty() || password.trim().isEmpty()) {
-                throw new BankAutomationException("invoice_carrier_reauth_required", "載具登入狀態已失效，請重新驗證載具");
+            if (status.optBoolean("cloudflare_blocked", false)) {
+                throw new BankAutomationException("invoice_carrier_automation_blocked", "電子發票網站目前阻擋同步流程，請稍後再試");
             }
-            debugTrace.record("silent_relogin_needed", "running", "eInvoice session expired; trying credential relogin");
-            session.loadUrl(LOGIN_URL);
-            try {
-                status = authenticateSession(session, mobilePhone, password, debugTrace);
-            } catch (BankAutomationException error) {
-                if ("invoice_carrier_automation_blocked".equals(error.getCode())) {
-                    throw new BankAutomationException("invoice_carrier_reauth_required", "電子發票自動重登入需要重新驗證載具");
-                }
-                throw error;
-            }
-        }
-
-        if (!status.optBoolean("search_form_ready", false)) {
+            debugTrace.record("manual_reauth_required", "warn", "eInvoice session expired; manual captcha verification is required", status);
             throw new BankAutomationException("invoice_carrier_reauth_required", "電子發票登入狀態已失效，請重新驗證載具");
         }
 
@@ -265,30 +222,6 @@ final class InvoiceCarrierAutomation {
         return storageState;
     }
 
-    private static JSONObject buildPersistedConnectionState(String connectionId, String mobilePhone, String password, String cookieHeader, JSONArray carrierOptions) throws JSONException {
-        JSONObject persistedState = new JSONObject();
-        persistedState.put("provider", PROVIDER_ID);
-        persistedState.put("connectionId", connectionId);
-        persistedState.put("mobilePhone", mobilePhone);
-        persistedState.put("password", password);
-        persistedState.put("cookieHeader", cookieHeader);
-        persistedState.put("carrierOptions", carrierOptions == null ? new JSONArray() : carrierOptions);
-        persistedState.put("updatedAt", nowIso());
-        return persistedState;
-    }
-
-    private static JSONObject buildSuccessPayload(String connectionId, String mobilePhone) throws JSONException {
-        JSONObject result = new JSONObject();
-        result.put("provider", PROVIDER_ID);
-        result.put("mobile_phone", mobilePhone);
-        result.put("provider_connection_id", connectionId);
-        result.put("storage_state", buildNativeStorageState(connectionId));
-        result.put("error_code", "");
-        result.put("error_message", "");
-        result.put("debug_trace", new JSONObject());
-        return result;
-    }
-
     private static void saveTemporarySession(BankAutomationVault vault, String sessionId, String cookieHeader) throws JSONException {
         JSONObject state = new JSONObject();
         state.put("sessionId", sessionId);
@@ -345,235 +278,6 @@ final class InvoiceCarrierAutomation {
         return latest;
     }
 
-    private static JSONObject authenticateSession(BrowserSession session, String mobilePhone, String password, BankAutomationDebugTrace debugTrace) throws Exception {
-        JSONObject status = waitForInteractiveStatus(session, debugTrace, true);
-        if (status.optBoolean("search_form_ready", false)) {
-            return status;
-        }
-        if (status.optBoolean("cloudflare_blocked", false)) {
-            throw new BankAutomationException("invoice_carrier_automation_blocked", "電子發票網站目前阻擋自動化登入，請稍後再試");
-        }
-        if (!status.optBoolean("login_form_ready", false)) {
-            throw new BankAutomationException("invoice_carrier_login_failed", "電子發票登入頁尚未就緒");
-        }
-
-        for (int attempt = 1; attempt <= CAPTCHA_MAX_ATTEMPTS; attempt += 1) {
-            JSONObject captchaResult = solveCaptcha(session, attempt > 1);
-            String captchaCode = normalizeText(captchaResult.optString("code"));
-            int captchaConfidence = captchaResult.optInt("confidence", 0);
-            debugTrace.record(
-                "captcha_ocr_attempt",
-                captchaCode.isEmpty() ? "warn" : "ok",
-                "Attempting local captcha OCR",
-                captchaResult
-            );
-
-            if (captchaCode.isEmpty()) {
-                continue;
-            }
-
-            submitLogin(session, mobilePhone, password, captchaCode);
-            JSONObject nextStatus = waitForSearchStatus(session, debugTrace);
-            if (nextStatus.optBoolean("search_form_ready", false)) {
-                return nextStatus;
-            }
-            if (nextStatus.optBoolean("cloudflare_blocked", false)) {
-                throw new BankAutomationException("invoice_carrier_automation_blocked", "電子發票網站目前阻擋自動化登入，請稍後再試");
-            }
-
-            String errorMessage = normalizeText(nextStatus.optString("error_message"));
-            String lowered = errorMessage.toLowerCase(Locale.US);
-            if (lowered.contains("驗證碼") || lowered.contains("captcha")) {
-                debugTrace.record("captcha_retry", "warn", "Retrying captcha OCR after upstream validation failure", nextStatus);
-                if (attempt < CAPTCHA_MAX_ATTEMPTS) {
-                    session.loadUrl(LOGIN_URL);
-                    status = waitForInteractiveStatus(session, debugTrace, true);
-                    if (status.optBoolean("cloudflare_blocked", false)) {
-                        throw new BankAutomationException("invoice_carrier_automation_blocked", "電子發票網站目前阻擋自動化登入，請稍後再試");
-                    }
-                    continue;
-                }
-                throw new BankAutomationException(
-                    "invoice_carrier_captcha_failed",
-                    captchaConfidence <= 0
-                        ? "電子發票驗證碼自動辨識失敗，請稍後再試"
-                        : "電子發票驗證碼辨識後仍無法通過驗證，請稍後再試"
-                );
-            }
-
-            throw new BankAutomationException(
-                "invoice_carrier_login_failed",
-                errorMessage.isEmpty() ? "電子發票登入失敗，請確認手機號碼與密碼" : errorMessage
-            );
-        }
-
-        throw new BankAutomationException("invoice_carrier_captcha_failed", "電子發票驗證碼自動辨識失敗，請稍後再試");
-    }
-
-    private static JSONObject solveCaptcha(BrowserSession session, boolean refreshCaptcha) throws Exception {
-        JSONObject payload = new JSONObject();
-        payload.put("refreshCaptcha", refreshCaptcha);
-        String script = ""
-            + "(() => {"
-            + "const p = " + payload.toString() + ";"
-            + "const imgSelector = '.code_num img, .input-group-text.code_num img, img[alt=\"圖形驗證碼\"]';"
-            + "const refreshSelector = 'button[title=\"更新圖形驗證碼\"], button[aria-label=\"更新圖形驗證碼\"]';"
-            + "const fonts = ['bold 26px Arial', 'bold 26px Helvetica', 'bold 26px sans-serif', 'bold 26px monospace'];"
-            + "const img = document.querySelector(imgSelector);"
-            + "if (!img) return { ok: false, code: '', confidence: 0, reason: 'captcha_image_not_found' };"
-            + "if (p.refreshCaptcha) { const btn = document.querySelector(refreshSelector); if (btn) { btn.click(); } }"
-            + "const source = document.querySelector(imgSelector);"
-            + "if (!source || !source.complete || source.naturalWidth <= 0) return { ok: false, code: '', confidence: 0, reason: 'captcha_image_not_ready' };"
-            + "const baseCanvas = document.createElement('canvas');"
-            + "baseCanvas.width = source.naturalWidth;"
-            + "baseCanvas.height = source.naturalHeight;"
-            + "const baseCtx = baseCanvas.getContext('2d', { willReadFrequently: true });"
-            + "baseCtx.drawImage(source, 0, 0);"
-            + "const { width, height } = baseCanvas;"
-            + "const raw = baseCtx.getImageData(0, 0, width, height);"
-            + "const data = raw.data;"
-            + "const gray = new Uint8ClampedArray(width * height);"
-            + "let minX = width, minY = height, maxX = -1, maxY = -1;"
-            + "for (let y = 0; y < height; y += 1) {"
-            + " for (let x = 0; x < width; x += 1) {"
-            + "  const offset = (y * width + x) * 4;"
-            + "  const value = Math.round(data[offset] * 0.299 + data[offset + 1] * 0.587 + data[offset + 2] * 0.114);"
-            + "  gray[y * width + x] = value;"
-            + " }"
-            + "}"
-            + "const histogram = new Array(256).fill(0);"
-            + "for (const value of gray) histogram[value] += 1;"
-            + "let total = gray.length;"
-            + "let sum = 0;"
-            + "for (let i = 0; i < 256; i += 1) sum += i * histogram[i];"
-            + "let sumB = 0; let wB = 0; let maxVariance = 0; let threshold = 170;"
-            + "for (let i = 0; i < 256; i += 1) {"
-            + " wB += histogram[i];"
-            + " if (!wB) continue;"
-            + " const wF = total - wB;"
-            + " if (!wF) break;"
-            + " sumB += i * histogram[i];"
-            + " const mB = sumB / wB;"
-            + " const mF = (sum - sumB) / wF;"
-            + " const variance = wB * wF * (mB - mF) * (mB - mF);"
-            + " if (variance > maxVariance) { maxVariance = variance; threshold = i; }"
-            + "}"
-            + "const binary = new Uint8Array(width * height);"
-            + "for (let y = 0; y < height; y += 1) {"
-            + " for (let x = 0; x < width; x += 1) {"
-            + "  const idx = y * width + x;"
-            + "  const dark = gray[idx] < threshold;"
-            + "  binary[idx] = dark ? 1 : 0;"
-            + "  if (dark) {"
-            + "   if (x < minX) minX = x;"
-            + "   if (y < minY) minY = y;"
-            + "   if (x > maxX) maxX = x;"
-            + "   if (y > maxY) maxY = y;"
-            + "  }"
-            + " }"
-            + "}"
-            + "if (maxX < minX || maxY < minY) return { ok: false, code: '', confidence: 0, reason: 'captcha_dark_pixels_missing' };"
-            + "const croppedWidth = maxX - minX + 1;"
-            + "const columns = [];"
-            + "for (let x = minX; x <= maxX; x += 1) {"
-            + " let count = 0;"
-            + " for (let y = minY; y <= maxY; y += 1) count += binary[y * width + x];"
-            + " columns.push(count);"
-            + "}"
-            + "const segments = [];"
-            + "let start = -1;"
-            + "for (let index = 0; index < columns.length; index += 1) {"
-            + " if (columns[index] > 0 && start < 0) start = index;"
-            + " if ((columns[index] === 0 || index === columns.length - 1) && start >= 0) {"
-            + "  const end = columns[index] === 0 ? index - 1 : index;"
-            + "  segments.push({ start, end });"
-            + "  start = -1;"
-            + " }"
-            + "}"
-            + "if (!segments.length) {"
-            + " const approx = Math.max(1, Math.round(croppedWidth / 4));"
-            + " for (let startX = 0; startX < croppedWidth; startX += approx) segments.push({ start: startX, end: Math.min(croppedWidth - 1, startX + approx - 1) });"
-            + "}"
-            + "while (segments.length > 4) {"
-            + " let smallest = 0;"
-            + " for (let i = 1; i < segments.length; i += 1) {"
-            + "  const currentWidth = segments[i].end - segments[i].start;"
-            + "  const smallestWidth = segments[smallest].end - segments[smallest].start;"
-            + "  if (currentWidth < smallestWidth) smallest = i;"
-            + " }"
-            + " if (smallest > 0) {"
-            + "  segments[smallest - 1].end = segments[smallest].end;"
-            + "  segments.splice(smallest, 1);"
-            + " } else if (segments.length > 1) {"
-            + "  segments[1].start = segments[0].start;"
-            + "  segments.shift();"
-            + " } else {"
-            + "  break;"
-            + " }"
-            + "}"
-            + "while (segments.length < 4) {"
-            + " let widest = 0;"
-            + " for (let i = 1; i < segments.length; i += 1) {"
-            + "  const currentWidth = segments[i].end - segments[i].start;"
-            + "  const widestWidth = segments[widest].end - segments[widest].start;"
-            + "  if (currentWidth > widestWidth) widest = i;"
-            + " }"
-            + " const segment = segments[widest];"
-            + " const middle = Math.floor((segment.start + segment.end) / 2);"
-            + " segments.splice(widest, 1, { start: segment.start, end: middle }, { start: middle + 1, end: segment.end });"
-            + "}"
-            + "const normalizeDigit = (segment) => {"
-            + " const digitCanvas = document.createElement('canvas');"
-            + " digitCanvas.width = 20; digitCanvas.height = 28;"
-            + " const digitCtx = digitCanvas.getContext('2d', { willReadFrequently: true });"
-            + " digitCtx.fillStyle = '#fff'; digitCtx.fillRect(0, 0, 20, 28);"
-            + " const sx = minX + segment.start;"
-            + " const sw = Math.max(1, segment.end - segment.start + 1);"
-            + " const sh = Math.max(1, maxY - minY + 1);"
-            + " digitCtx.drawImage(baseCanvas, sx, minY, sw, sh, 1, 1, 18, 26);"
-            + " return digitCanvas;"
-            + "};"
-            + "const templateScore = (sourceCanvas, digit) => {"
-            + " const sourceCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });"
-            + " const sourceData = sourceCtx.getImageData(0, 0, 20, 28).data;"
-            + " let best = Number.POSITIVE_INFINITY;"
-            + " for (const font of fonts) {"
-            + "  const templateCanvas = document.createElement('canvas');"
-            + "  templateCanvas.width = 20; templateCanvas.height = 28;"
-            + "  const ctx = templateCanvas.getContext('2d', { willReadFrequently: true });"
-            + "  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 20, 28);"
-            + "  ctx.fillStyle = '#000'; ctx.font = font; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';"
-            + "  ctx.fillText(String(digit), 10, 14);"
-            + "  const candidate = ctx.getImageData(0, 0, 20, 28).data;"
-            + "  let diff = 0;"
-            + "  for (let i = 0; i < sourceData.length; i += 4) {"
-            + "   const leftDark = sourceData[i] < 180 ? 1 : 0;"
-            + "   const rightDark = candidate[i] < 180 ? 1 : 0;"
-            + "   if (leftDark !== rightDark) diff += 1;"
-            + "  }"
-            + "  if (diff < best) best = diff;"
-            + " }"
-            + " return best;"
-            + "};"
-            + "const digits = [];"
-            + "const confidences = [];"
-            + "for (const segment of segments.slice(0, 4)) {"
-            + " const digitCanvas = normalizeDigit(segment);"
-            + " let bestDigit = '';"
-            + " let bestScore = Number.POSITIVE_INFINITY;"
-            + " for (let digit = 0; digit <= 9; digit += 1) {"
-            + "  const score = templateScore(digitCanvas, digit);"
-            + "  if (score < bestScore) { bestScore = score; bestDigit = String(digit); }"
-            + " }"
-            + " digits.push(bestDigit);"
-            + " confidences.push(Math.max(0, Math.min(99, Math.round(100 - (bestScore / 5)))));"
-            + "}"
-            + "const confidence = confidences.length ? Math.round(confidences.reduce((sum, value) => sum + value, 0) / confidences.length) : 0;"
-            + "return { ok: digits.every(Boolean), code: digits.join(''), confidence, reason: digits.every(Boolean) ? '' : 'captcha_ocr_failed', segments: segments.length };"
-            + "})()";
-        return session.evaluateJson(script);
-    }
-
     private static JSONObject inspectStatus(BrowserSession session, boolean includeCaptcha) throws Exception {
         String script = ""
             + "(() => {"
@@ -593,7 +297,7 @@ final class InvoiceCarrierAutomation {
             + "  try { cap = c.toDataURL('image/png'); } catch (_e) { cap = ''; }"
             + " }"
             + "}"
-            + "return { ok: true, url: location.href, title, cloudflare_blocked: cf, login_form_ready: login, search_form_ready: search, logged_in: search, available_carriers: carriers, error_message: err, captcha_image: cap, captcha_auto_filled: null, captcha_confidence: 0 };"
+            + "return { ok: true, url: location.href, title, cloudflare_blocked: cf, login_form_ready: login, search_form_ready: search, logged_in: search, available_carriers: carriers, error_message: err, captcha_image: cap };"
             + "})()";
         return session.evaluateJson(script);
     }

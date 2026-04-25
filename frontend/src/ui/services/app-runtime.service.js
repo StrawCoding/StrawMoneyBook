@@ -117,21 +117,35 @@ function clearAutoBackupDueTimer(runtimeState, windowObject = globalThis.window)
   }
 }
 
-function notifyAutoBackupStateUpdated(windowObject, { ledgerId, reason, providers = [] } = {}) {
+function notifyAutoBackupStateUpdated(windowObject, result = {}) {
   if (!windowObject?.dispatchEvent || typeof CustomEvent !== 'function') return
-  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  const normalizedLedgerId = String(result?.ledgerId ?? '').trim()
   if (!normalizedLedgerId) return
   windowObject.dispatchEvent(new CustomEvent(AUTO_BACKUP_STATE_UPDATED_EVENT, {
     detail: {
       ledgerId: normalizedLedgerId,
-      reason: String(reason ?? '').trim() || 'background_check_completed',
-      providers: [...new Set(
-        (Array.isArray(providers) ? providers : [])
-          .map((provider) => String(provider ?? '').trim())
-          .filter(Boolean),
-      )],
+      provider: String(result?.provider ?? '').trim(),
+      mode: String(result?.mode ?? '').trim(),
+      status: String(result?.status ?? '').trim() || 'skipped',
+      reason: String(result?.reason ?? '').trim() || 'background_check_completed',
+      checkedAt: String(result?.checkedAt ?? '').trim() || new Date().toISOString(),
     },
   }))
+}
+
+function notifyAutoBackupRunResults(windowObject, ledgerId, results = [], { mode = '', reason = '' } = {}) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId) return
+  for (const result of Array.isArray(results) ? results : [results]) {
+    notifyAutoBackupStateUpdated(windowObject, {
+      ledgerId: normalizedLedgerId,
+      provider: result?.provider,
+      mode: result?.mode || mode,
+      status: result?.status,
+      reason: result?.reason || reason,
+      checkedAt: result?.checkedAt,
+    })
+  }
 }
 
 function scheduleHomeWidgetSync(runtimeState, pinia, windowObject = globalThis.window, delayMs = 1200) {
@@ -163,17 +177,17 @@ async function runAutoBackupDueCheck(runtimeState, pinia, windowObject, reason =
   }
 
   try {
-    const [googleResult, webdavResult] = await runAutoBackupProvidersIfDue(ledgerId)
-    notifyAutoBackupStateUpdated(windowObject, {
-      ledgerId,
+    const results = await runAutoBackupProvidersIfDue(ledgerId)
+    notifyAutoBackupRunResults(windowObject, ledgerId, results, {
+      mode: 'due',
       reason,
-      providers: ['google', 'webdav'],
     })
     return {
       skipped: false,
       reason,
-      googleResult,
-      webdavResult,
+      results,
+      googleResult: results.find((result) => result?.provider === 'google') ?? null,
+      webdavResult: results.find((result) => result?.provider === 'webdav') ?? null,
     }
   } finally {
     scheduleAutoBackupDueCheck(runtimeState, pinia, windowObject)
@@ -222,11 +236,10 @@ function scheduleAutoBackupOnDataChange(runtimeState, pinia, windowObject = glob
       return
     }
     runAutoBackupProvidersOnDataChange(ledgerId)
-      .then(() => {
-        notifyAutoBackupStateUpdated(windowObject, {
-          ledgerId,
+      .then((results) => {
+        notifyAutoBackupRunResults(windowObject, ledgerId, results, {
+          mode: 'data_change',
           reason: 'data_change_background_check_completed',
-          providers: ['google', 'webdav'],
         })
       })
       .finally(() => {
@@ -299,11 +312,10 @@ function restoreGoogleBackupForActiveLedgerInBackground(runtimeState, ledgerId, 
   void (async () => {
     const restoredState = await restoreGoogleBackupSessionInBackground(runtimeState, ledgerId, { allowInteractive })
     if (!runDueBackup || !restoredState?.connected) return
-    await runAutoBackupProvider(ledgerId, 'google', 'due')
-    notifyAutoBackupStateUpdated(globalThis.window, {
-      ledgerId,
+    const result = await runAutoBackupProvider(ledgerId, 'google', 'due')
+    notifyAutoBackupRunResults(globalThis.window, ledgerId, [result], {
+      mode: 'due',
       reason: 'google_restore_due_check_completed',
-      providers: ['google'],
     })
   })()
 }
@@ -462,6 +474,12 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
         allowInteractive: true,
       })
       void runAutoBackupProvider(normalizedLedgerId, 'webdav', 'due')
+        .then((result) => {
+          notifyAutoBackupRunResults(windowObject, normalizedLedgerId, [result], {
+            mode: 'due',
+            reason: 'active_ledger_change',
+          })
+        })
       scheduleAutoBackupDueCheck(runtimeState, pinia, windowObject)
       void runExchangeRateAutoSyncIfDue(normalizedLedgerId)
       triggerBankAutoRefresh(pinia, normalizedLedgerId, 'active_ledger_change')

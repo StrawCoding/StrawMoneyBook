@@ -560,9 +560,14 @@ function withTimeout(task, timeoutMs, timeoutMessage) {
 
 function notifyAutoBackupConfigUpdated(reason) {
   if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return
+  const checkedAt = new Date().toISOString()
   const detail = {
     reason: String(reason ?? '').trim() || 'settings_updated',
     ledgerId: String(ledgerStore.activeLedgerId ?? '').trim(),
+    provider: 'all',
+    mode: 'config',
+    status: 'completed',
+    checkedAt,
   }
   if (typeof CustomEvent === 'function') {
     window.dispatchEvent(new CustomEvent('app:auto-backup-config-updated', { detail }))
@@ -648,6 +653,9 @@ async function backupNowToWebdav() {
       saveSettings: saveWebdavBackupSettings,
     })
     if (result?.skipped) return
+    if (result?.status === 'error') {
+      throw new Error(result.reason || t('settings_auto_backup.toast.webdav_backup_failed'))
+    }
     webdavBackupState.value = await getWebdavBackupState(ledgerStore.activeLedgerId)
     uiStore.pushToast(
       t('settings_auto_backup.toast.webdav_backup_done', {
@@ -776,6 +784,9 @@ async function backupNowToGoogle() {
       saveSettings: saveGoogleBackupSettings,
     })
     if (result?.skipped) return
+    if (result?.status === 'error') {
+      throw new Error(result.reason || t('settings_auto_backup.toast.google_backup_failed'))
+    }
     googleBackupState.value = await getGoogleBackupState(ledgerStore.activeLedgerId)
     uiStore.pushToast(
       t('settings_auto_backup.toast.google_backup_done', {

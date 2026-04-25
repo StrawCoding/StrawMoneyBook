@@ -18,11 +18,6 @@ const EXACT_API_ROUTE_LOADERS = {
   '/api/exchange-rate/cbc': createRouteModuleLoader('./api/exchange-rate/cbc.js'),
   '/api/google/oauth/exchange': createRouteModuleLoader('./api/google/oauth/exchange.js'),
   '/api/google/oauth/refresh': createRouteModuleLoader('./api/google/oauth/refresh.js'),
-  '/api/invoice/disconnect': createRouteModuleLoader('./api/invoice/disconnect.js'),
-  '/api/invoice/exchange': createRouteModuleLoader('./api/invoice/exchange.js'),
-  '/api/invoice/link_session': createRouteModuleLoader('./api/invoice/link_session.js'),
-  '/api/invoice/session_status': createRouteModuleLoader('./api/invoice/session_status.js'),
-  '/api/invoice/sync': createRouteModuleLoader('./api/invoice/sync.js'),
 }
 
 const PREFIX_API_ROUTE_LOADERS = [

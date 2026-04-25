@@ -13,6 +13,6 @@ test('vite build excludes the local api dev plugin and lazy-loads api routes at 
   assert.match(viteConfigSource, /function createRouteModuleLoader\(relativePath\)/)
   assert.match(viteConfigSource, /pathToFileURL/)
   assert.match(viteConfigSource, /import\(\/\* @vite-ignore \*\/ moduleUrl\)/)
-  assert.match(viteConfigSource, /'\/api\/invoice\/link_session': createRouteModuleLoader\('\.\/api\/invoice\/link_session\.js'\)/)
-  assert.match(viteConfigSource, /'\/api\/invoice\/session_status': createRouteModuleLoader\('\.\/api\/invoice\/session_status\.js'\)/)
+  assert.doesNotMatch(viteConfigSource, /\/api\/invoice/)
+  assert.doesNotMatch(viteConfigSource, /api\/invoice/)
 })

@@ -72,5 +72,5 @@ test('google auto backup surfaces auth failure as error instead of skip when bac
   )
   // Ensure the pattern also applies to the data-change path
   const authFailureMatches = [...googleSource.matchAll(/isAuthFailure \? 'error' : 'skipped'/g)]
-  assert.equal(authFailureMatches.length, 2, 'both runGoogleAutoBackupIfDue and runGoogleAutoBackupOnDataChange must detect auth failures')
+  assert.ok(authFailureMatches.length >= 2, 'both runGoogleAutoBackupIfDue and runGoogleAutoBackupOnDataChange must detect auth failures')
 })

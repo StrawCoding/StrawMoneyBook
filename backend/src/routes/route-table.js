@@ -1,7 +1,6 @@
 import adminHandler from './admin.js'
 import authHandler from './auth.js'
 import clientLogsHandler from './client-logs.js'
-import invoiceHandler from './invoice/index.js'
 import referralsHandler from './referrals.js'
 import sharedLedgersHandler from './shared-ledgers.js'
 
@@ -9,7 +8,6 @@ export const API_ROUTE_TABLE = Object.freeze([
   { prefix: '/api/auth', handler: authHandler },
   { prefix: '/api/admin', handler: adminHandler },
   { prefix: '/api/client-logs', handler: clientLogsHandler },
-  { prefix: '/api/invoice', handler: invoiceHandler },
   { prefix: '/api/shared-ledgers', handler: sharedLedgersHandler },
   { prefix: '/api/referrals', handler: referralsHandler },
 ])
