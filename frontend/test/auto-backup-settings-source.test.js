@@ -18,9 +18,10 @@ test('auto backup settings page notifies the app when backup configuration chang
 })
 
 test('manual backup stops when settings cannot be saved first', () => {
-  assert.match(settingsSource, /return false/)
-  assert.match(settingsSource, /const settingsSaved = await saveWebdavBackupSettings\(\)\s+if \(!settingsSaved\) return/)
-  assert.match(settingsSource, /const settingsSaved = await saveGoogleBackupSettings\(\)\s+if \(!settingsSaved\) return/)
+  assert.match(settingsSource, /runManualAutoBackupProvider/)
+  assert.match(settingsSource, /saveSettings: saveWebdavBackupSettings/)
+  assert.match(settingsSource, /saveSettings: saveGoogleBackupSettings/)
+  assert.match(settingsSource, /if \(result\?\.skipped\) return/)
 })
 
 test('settings page listens for background auto backup state updates for the active ledger only', () => {

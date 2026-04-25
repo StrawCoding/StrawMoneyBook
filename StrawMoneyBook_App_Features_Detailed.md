@@ -79,7 +79,7 @@ Google Drive 自動備份在重新登入 / 靜默恢復連線成功後，也會�
 
 自動備份排程現在也會主動偵測 Google 授權失效（SMB-110 修正）：若用戶已設定自動備份（`autoEnabled` 或有綁定帳號），但靜默取 token 失敗導致 `connected: false`，不再只寫入 `skipped/not_connected`，而是改寫為 `error/reauth_required`，使設定頁能顯示明確的「需要重新授權」警示並提示用戶操作，不再讓自動備份靜默失效。
 
-SMB-142 之後，自動備份設定頁也會在背景自動偵測 / 自動備份完成後即時重讀最近一次 auto-check 狀態與時間，不再因為頁面只在初次載入時抓一次 state 而長時間停留在「尚未執行自動偵測」；若使用者正在輸入 WebDAV 密碼但尚未儲存，背景同步也不會把該欄位清空。
+SMB-142 之後，自動備份設定頁也會在背景自動偵測 / 自動備份完成後即時重讀最近一次 auto-check 狀態與時間，不再因為頁面只在初次載入時抓一次 state 而長時間停留在「尚未執行自動偵測」；手動備份、背景 due check 與資料變更後備份都會先經過同一個 provider orchestrator，並以帳本 + provider 為 lock key 避免同時執行互相覆蓋狀態；若使用者正在輸入 WebDAV 密碼但尚未儲存，背景同步也不會把該欄位清空。
 
 從維護角度來看，前端已採用 View / Store / Service / Repository 分層，資料層則以 Capacitor + SQLite（含 Web / WASM）維持一致模型，讓功能擴充與跨平台維護成本更可控。
 
@@ -476,9 +476,9 @@ App 開啟、回到前景、切換帳本與儲存訂閱項目後，會檢查目�
 
 另外，Google 自動備份登入流程也已補強為在 App 啟動與回前景時嘗試靜默恢復，並優先沿用上一次備份使用的帳號，降低背景切到錯誤 Google 帳號的風險。
 
-立即備份流程目前也會先確認設定保存成功才執行實際備份；若 WebDAV / Google 尚未連線或設定更新失敗，不會繼續用舊設定觸發備份，避免使用者看到連線或保存錯誤後又收到另一個備份失敗結果。
+立即備份流程目前也會先進入自動備份 orchestrator，由 orchestrator 先確認設定保存成功才執行實際備份；若 WebDAV / Google 尚未連線、設定更新失敗，或同一帳本同一 provider 已有備份執行中，不會繼續用舊設定觸發另一個備份，避免使用者看到連線或保存錯誤後又收到另一個備份失敗結果。
 
-另外，背景排程、資料變更後的自動備份與 Google 靜默恢復後補跑的 due check，現在都會在完成後統一通知設定頁重讀狀態，因此「最近偵測」與「自動偵測」描述會即時更新，而不是要離開頁面再回來才看得到。
+另外，背景排程、資料變更後的自動備份與 Google 靜默恢復後補跑的 due check，現在都會透過 orchestrator 執行並在完成後統一通知設定頁重讀狀態，因此「最近偵測」與「自動偵測」描述會即時更新，而不是要離開頁面再回來才看得到。
 
 ### 6.5 匯入 / 匯出 / 修復
 
@@ -636,6 +636,7 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - Web 不再承諾可直接新增、重新驗證或同步載具；正式產品路徑只保留 Android App 原生 WebView 流程，且所有 WebView client / load / JavaScript / cookie 操作都會切回 main thread 執行
 - 圖形驗證碼改為顯示圖片後由使用者手動輸入，不再把 OCR 當成正式登入流程
 - Android App 會先在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，不再依賴 Web 版 headed browser
+- 新增 / 重新驗證若 native exchange 沒有回傳可加密保存的手機號碼與密碼狀態，會直接拒絕建立 active connection，避免使用者看到假成功但後續同步必定失敗
 - 同步預設支援最近 2 個月日期範圍，並可依實際載具清單做篩選
 - 前端 adapter 會優先使用 Android native automation；Web 僅顯示診斷與導引訊息，不再依賴 `/api/invoice/*` 當成正式產品入口
 
@@ -657,7 +658,7 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - 發票資料與帳目記錄關聯，便於查詢「這筆交易源自哪張發票」
 - 使用者可彈性選擇日期範圍、載具與匯入帳戶，提高匯入控制性
 - 憑證與 storage state 屬於 local-only sensitive data，不會進 Google Drive 帳本同步，也不會進 shared-ledger snapshot
-- 若 Web 部署環境沒有 `/api/invoice` 或無法啟動 headed browser，頁面會顯示 unavailable，而不是讓使用者進入壞流程
+- 若 Web 部署環境沒有 `/api/invoice`、無法啟動 headed browser，或 Android native 自動化回傳不完整登入結果，頁面會顯示 unavailable / deterministic error，而不是讓使用者進入壞流程或建立假成功連線
 - Android App 不依賴遠端 headed browser 新增或同步載具；若原生 WebView session 過期、站點流程變動或頁面結構改版，會回傳明確錯誤並標示 `reauth_required` 或 `automation_blocked`
 
 ## 10. 使用者輪廓

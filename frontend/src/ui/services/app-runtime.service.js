@@ -6,10 +6,12 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import {
   autoConnectGoogleBackup,
-  runGoogleAutoBackupIfDue,
-  runGoogleAutoBackupOnDataChange,
 } from '@/ui/services/google-backup.service'
-import { runWebdavAutoBackupIfDue, runWebdavAutoBackupOnDataChange } from '@/ui/services/webdav-backup.service'
+import {
+  runAutoBackupProvider,
+  runAutoBackupProvidersIfDue,
+  runAutoBackupProvidersOnDataChange,
+} from '@/ui/services/auto-backup-orchestrator.service'
 import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
 import { runBankSyncAutoRefreshIfDue } from '@/ui/services/bank-sync-auto-refresh.service'
 import { runExchangeRateAutoSyncIfDue } from '@/ui/services/exchange-rate.service'
@@ -161,10 +163,7 @@ async function runAutoBackupDueCheck(runtimeState, pinia, windowObject, reason =
   }
 
   try {
-    const [googleResult, webdavResult] = await Promise.allSettled([
-      runGoogleAutoBackupIfDue(ledgerId),
-      runWebdavAutoBackupIfDue(ledgerId),
-    ])
+    const [googleResult, webdavResult] = await runAutoBackupProvidersIfDue(ledgerId)
     notifyAutoBackupStateUpdated(windowObject, {
       ledgerId,
       reason,
@@ -222,7 +221,7 @@ function scheduleAutoBackupOnDataChange(runtimeState, pinia, windowObject = glob
       runtimeState.dataChangeBackupRunning = false
       return
     }
-    Promise.allSettled([runGoogleAutoBackupOnDataChange(ledgerId), runWebdavAutoBackupOnDataChange(ledgerId)])
+    runAutoBackupProvidersOnDataChange(ledgerId)
       .then(() => {
         notifyAutoBackupStateUpdated(windowObject, {
           ledgerId,
@@ -300,7 +299,7 @@ function restoreGoogleBackupForActiveLedgerInBackground(runtimeState, ledgerId, 
   void (async () => {
     const restoredState = await restoreGoogleBackupSessionInBackground(runtimeState, ledgerId, { allowInteractive })
     if (!runDueBackup || !restoredState?.connected) return
-    await runGoogleAutoBackupIfDue(ledgerId)
+    await runAutoBackupProvider(ledgerId, 'google', 'due')
     notifyAutoBackupStateUpdated(globalThis.window, {
       ledgerId,
       reason: 'google_restore_due_check_completed',
@@ -462,7 +461,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
         runDueBackup: true,
         allowInteractive: true,
       })
-      void runWebdavAutoBackupIfDue(normalizedLedgerId)
+      void runAutoBackupProvider(normalizedLedgerId, 'webdav', 'due')
       scheduleAutoBackupDueCheck(runtimeState, pinia, windowObject)
       void runExchangeRateAutoSyncIfDue(normalizedLedgerId)
       triggerBankAutoRefresh(pinia, normalizedLedgerId, 'active_ledger_change')

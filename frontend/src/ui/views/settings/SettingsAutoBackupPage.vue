@@ -242,7 +242,6 @@ import {
   connectGoogleBackup,
   disconnectGoogleBackup,
   getGoogleBackupState,
-  performGoogleBackup,
   restoreGoogleBackupJson,
   updateGoogleBackupState,
 } from '@/ui/services/google-backup.service'
@@ -250,10 +249,10 @@ import {
   connectWebdavBackup,
   disconnectWebdavBackup,
   getWebdavBackupState,
-  performWebdavBackup,
   restoreWebdavBackupJson,
   updateWebdavBackupState,
 } from '@/ui/services/webdav-backup.service'
+import { runManualAutoBackupProvider } from '@/ui/services/auto-backup-orchestrator.service'
 import { importBackupJsonAsNewLedgers } from '@/core/services/import.service'
 import { resetDatabase } from '@/core/db/sqlite'
 
@@ -645,9 +644,10 @@ async function backupNowToWebdav() {
   if (!ledgerStore.activeLedgerId) return
   webdavBackingUpNow.value = true
   try {
-    const settingsSaved = await saveWebdavBackupSettings()
-    if (!settingsSaved) return
-    const result = await performWebdavBackup(ledgerStore.activeLedgerId)
+    const result = await runManualAutoBackupProvider(ledgerStore.activeLedgerId, 'webdav', {
+      saveSettings: saveWebdavBackupSettings,
+    })
+    if (result?.skipped) return
     webdavBackupState.value = await getWebdavBackupState(ledgerStore.activeLedgerId)
     uiStore.pushToast(
       t('settings_auto_backup.toast.webdav_backup_done', {
@@ -772,9 +772,10 @@ async function backupNowToGoogle() {
   if (!ledgerStore.activeLedgerId) return
   googleBackingUpNow.value = true
   try {
-    const settingsSaved = await saveGoogleBackupSettings()
-    if (!settingsSaved) return
-    const result = await performGoogleBackup(ledgerStore.activeLedgerId)
+    const result = await runManualAutoBackupProvider(ledgerStore.activeLedgerId, 'google', {
+      saveSettings: saveGoogleBackupSettings,
+    })
+    if (result?.skipped) return
     googleBackupState.value = await getGoogleBackupState(ledgerStore.activeLedgerId)
     uiStore.pushToast(
       t('settings_auto_backup.toast.google_backup_done', {

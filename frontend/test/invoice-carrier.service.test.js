@@ -97,6 +97,47 @@ test('createInvoiceCarrierConnection reuses an inactive connection instead of in
   assert.equal(updates[0].patch.provider_connection_id, 'provider-conn-1')
 })
 
+test('createInvoiceCarrierConnection fails before writing an active connection when native credentials are missing', async () => {
+  let inserted = false
+  let updated = false
+
+  setInvoiceCarrierServiceDependenciesForTest({
+    findInvoiceCarrierConnectionByProviderRef: async () => null,
+    findInvoiceCarrierConnectionByMobilePhone: async () => null,
+    addInvoiceCarrierConnection: async () => {
+      inserted = true
+      return createConnection()
+    },
+    updateInvoiceCarrierConnection: async () => {
+      updated = true
+      return createConnection()
+    },
+    setEncryptedSetting: async () => {
+      throw new Error('must not save empty credentials')
+    },
+  })
+
+  await assert.rejects(
+    () => createInvoiceCarrierConnection(
+      'ledger-1',
+      {
+        mobile_phone: '0912345678',
+        provider_connection_id: 'provider-conn-1',
+        user_label: '電子發票 0912345678',
+      },
+      {
+        provider: 'einvoice_tw',
+        mobilePhone: '',
+        password: '',
+      },
+    ),
+    /登入狀態未正確保存/,
+  )
+
+  assert.equal(inserted, false)
+  assert.equal(updated, false)
+})
+
 test('syncInvoiceCarrierConnection persists refreshed storage state and carrier options', async () => {
   const savedSettings = []
   const updates = []

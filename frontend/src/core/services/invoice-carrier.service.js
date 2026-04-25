@@ -197,6 +197,14 @@ async function persistConnectionAuth({
   const providerConnectionId = normalizeText(input?.provider_connection_id || input?.providerConnectionId)
   const carrierOptions = normalizeCarrierOptions(input?.carrier_options || input?.carrierOptions)
   const userLabel = normalizeText(input?.user_label || input?.userLabel) || `電子發票 ${mobilePhone}`
+  const sanitizedCredentialState = normalizeInvoiceCarrierCredentialState(credentialState)
+
+  if (!sanitizedCredentialState?.mobilePhone || !sanitizedCredentialState?.password) {
+    throw createInvoiceCarrierError(
+      'invoice_carrier_credentials_not_saved',
+      '電子發票登入狀態未正確保存，請重新驗證載具',
+    )
+  }
 
   let connection = null
   if (connectionId) {
@@ -242,7 +250,7 @@ async function persistConnectionAuth({
     }
   }
 
-  await saveCredentialState(connection.id, settingsLedgerId, credentialState)
+  await saveCredentialState(connection.id, settingsLedgerId, sanitizedCredentialState)
   return connection
 }
 
