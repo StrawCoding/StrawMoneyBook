@@ -24,7 +24,7 @@
 - 帳號系統（Email / Google 登入、個人資料、忘記密碼、臨時密碼、登出）
 - 共同帳本（建立共同帳本、共享連結、Email 邀請、接受邀請、同步）
 - Google Drive 帳本同步（逐帳本啟用、跨裝置 pull / push）
-- 自動備份（Google Drive / WebDAV；SMB-142 重建後，手動、背景 due check、資料變更後備份都會經過共用 provider runner，回傳 `completed / skipped / error` 統一結果，並以帳本 + provider lock 避免同一時間多個觸發源互相覆蓋狀態；runtime 事件含 `ledgerId / provider / mode / status / reason / checkedAt`，設定頁會即時同步最近一次 auto-check 狀態與時間）
+- 自動備份（Google Drive / WebDAV；SMB-142 重建後，手動、背景 due check、資料變更後備份都會經過共用 provider runner，回傳 `completed / skipped / error` 統一結果，並以帳本 + provider lock 避免同一時間多個觸發源互相覆蓋狀態；runtime 事件含 `ledgerId / provider / mode / status / reason / checkedAt`，設定頁會即時同步最近一次 auto-check 狀態與時間；手機背景恢復只做靜默 Google 授權，不會在 App 啟動或帳本切換時自動彈出互動登入）
 - 記帳提醒與成就表（每日固定提醒、通知權限 / 精準提醒狀態、連續記帳天數、最長連續與累計記帳日）
 - 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
 - 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本）
@@ -33,7 +33,7 @@
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
-- 電子發票載具（公開但標示為實驗性；SMB-2 重建後只保留 Android 端內人工 captcha 流程，App 會在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，並把憑證與 native session marker 加密保存在本機；Web 僅提供診斷與說明，不再承諾可新增、重新驗證或同步載具；Node / Web headed Playwright 與 OCR `/api/invoice/*` 舊流程已移除；若 native exchange 沒有回傳可保存憑證，系統會拒絕建立 active connection；若站點流程阻擋自動化，狀態會明確標示為 `automation_blocked` 或 `reauth_required`，不會偽裝成成功）
+- 電子發票載具（公開但標示為實驗性；SMB-2 重建後只保留 Android 端內人工 captcha 流程，App 會在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，並把憑證與 native session marker 加密保存在本機；Android automation Activity 維持透明背景，captcha 會等圖片實際可讀後才回前端，重新產生會觸發站點刷新按鈕，查詢後也會等待 detail / 結果表載入完成再解析；Web 僅提供診斷與說明，不再承諾可新增、重新驗證或同步載具；Node / Web headed Playwright 與 OCR `/api/invoice/*` 舊流程已移除；若 native exchange 沒有回傳可保存憑證，系統會拒絕建立 active connection；若站點流程阻擋自動化，狀態會明確標示為 `automation_blocked` 或 `reauth_required`，不會偽裝成成功）
 - Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化、電子發票載具自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；Google Play internal 上傳若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）
 
 ## 2. 路由與頁面對應
@@ -149,7 +149,7 @@
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
 - 銀行同步：`/settings/bank-sync`（入口改由 `isBankSyncFeatureEnabled()` 控制；目前預設恢復為 mock/sandbox 流程）
-- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；新增載具會導向 `/settings/invoice-carrier/new`；Android App 透過 `InvoiceCarrierAutomation` 原生 WebView plugin 載入圖形驗證碼圖片並由使用者手動輸入後完成登入 / 同步，且 native BrowserSession 會將 WebView client、頁面載入、腳本執行與 cookie 操作統一切回 main thread；Web 僅保留設定入口、診斷與說明，不再走 `/api/invoice` 或 headed Playwright/OCR 舊流程）
+- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；新增載具會導向 `/settings/invoice-carrier/new`；Android App 透過 `InvoiceCarrierAutomation` 原生 WebView plugin 載入圖形驗證碼圖片並由使用者手動輸入後完成登入 / 同步，且 native BrowserSession 會將 WebView client、頁面載入、captcha 刷新、腳本執行與 cookie 操作統一切回 main thread；Web 僅保留設定入口、診斷與說明，不再走 `/api/invoice` 或 headed Playwright/OCR 舊流程）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）
@@ -298,7 +298,7 @@ UI 服務目錄：`src/ui/services/`
 | `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原、重新授權後自動清理 stale auto-check diagnostics；Google 授權失效時自動偵測並寫入 `error/reauth_required` 狀態使 UI 顯示重新授權警示 |
 | `webdav-backup.service.js` | WebDAV 備份連線、自動備份、還原 |
 | `auto-backup-orchestrator.service.js` | 自動備份 provider runner；統一手動備份、due check、資料變更備份的 provider lock、preflight 與 `completed / skipped / error` 結果格式，避免同帳本同 provider 同時執行造成狀態覆蓋 |
-| `app-runtime.service.js` + `SettingsAutoBackupPage.vue` | 背景自動備份 / 自動偵測完成後會送出含 `ledgerId / provider / mode / status / reason / checkedAt` 的 `app:auto-backup-state-updated`，讓設定頁即時重讀 Google / WebDAV provider 狀態；設定頁立即備份會透過 provider runner 先確認設定保存成功才執行，重讀時會保留尚未儲存的 WebDAV 密碼輸入，避免背景 refresh 把使用者輸入清空 |
+| `app-runtime.service.js` + `SettingsAutoBackupPage.vue` | 背景自動備份 / 自動偵測完成後會送出含 `ledgerId / provider / mode / status / reason / checkedAt` 的 `app:auto-backup-state-updated`，讓設定頁即時重讀 Google / WebDAV provider 狀態；設定頁立即備份會透過 provider runner 先確認設定保存成功才執行，重讀時會保留尚未儲存的 WebDAV 密碼輸入，避免背景 refresh 把使用者輸入清空；手機 App 啟動與帳本切換的 Google 備份恢復只允許靜默授權，避免背景流程彈出互動登入 |
 | `google-drive-ledger-sync.service.js` | Google Drive 帳本同步（逐帳本 enable / sync now） |
 | `addon-template.service.js` | 附加項目模板預設值與保存 |
 | `bank-sync.service.js` | 銀行同步前端流程（憑證加密封裝、同步/匯入） |

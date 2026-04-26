@@ -80,7 +80,7 @@ Google Drive 自動備份在重新登入 / 靜默恢復連線成功後，也會�
 
 自動備份排程現在也會主動偵測 Google 授權失效（SMB-110 修正）：若用戶已設定自動備份（`autoEnabled` 或有綁定帳號），但靜默取 token 失敗導致 `connected: false`，不再只寫入 `skipped/not_connected`，而是改寫為 `error/reauth_required`，使設定頁能顯示明確的「需要重新授權」警示並提示用戶操作，不再讓自動備份靜默失效。
 
-SMB-142 重建後，自動備份設定頁會在背景自動偵測 / 自動備份完成後即時重讀最近一次 auto-check 狀態與時間，不再因為頁面只在初次載入時抓一次 state 而長時間停留在「尚未執行自動偵測」；手動備份、背景 due check 與資料變更後備份都會先經過同一個 provider runner，回傳 `completed / skipped / error` 統一結果，並以帳本 + provider 為 lock key 避免同時執行互相覆蓋狀態；runtime 事件也會帶上 `ledgerId / provider / mode / status / reason / checkedAt`，讓設定頁能依目前帳本準確重讀；若使用者正在輸入 WebDAV 密碼但尚未儲存，背景同步也不會把該欄位清空。
+SMB-142 重建後，自動備份設定頁會在背景自動偵測 / 自動備份完成後即時重讀最近一次 auto-check 狀態與時間，不再因為頁面只在初次載入時抓一次 state 而長時間停留在「尚未執行自動偵測」；手動備份、背景 due check 與資料變更後備份都會先經過同一個 provider runner，回傳 `completed / skipped / error` 統一結果，並以帳本 + provider 為 lock key 避免同時執行互相覆蓋狀態；runtime 事件也會帶上 `ledgerId / provider / mode / status / reason / checkedAt`，讓設定頁能依目前帳本準確重讀；若使用者正在輸入 WebDAV 密碼但尚未儲存，背景同步也不會把該欄位清空。手機 App 啟動、回前景與帳本切換時的 Google 備份恢復只做靜默授權，不會由背景流程自動彈出互動式 Google 登入。
 
 從維護角度來看，前端已採用 View / Store / Service / Repository 分層，資料層則以 Capacitor + SQLite（含 Web / WASM）維持一致模型，讓功能擴充與跨平台維護成本更可控。
 
@@ -475,11 +475,11 @@ App 開啟、回到前景、切換帳本與儲存訂閱項目後，會檢查目�
 
 這是偏向保底、留存、災難復原的機制，和即時同步是不同層次的需求。
 
-另外，Google 自動備份登入流程也已補強為在 App 啟動與回前景時嘗試靜默恢復，並優先沿用上一次備份使用的帳號，降低背景切到錯誤 Google 帳號的風險。
+另外，Google 自動備份登入流程也已補強為在 App 啟動與回前景時嘗試靜默恢復，並優先沿用上一次備份使用的帳號，降低背景切到錯誤 Google 帳號的風險；若靜默恢復失敗，背景流程只會寫入需重新授權狀態，互動式登入保留給使用者在自動備份頁手動操作。
 
 立即備份流程目前也會先進入自動備份 provider runner，由 runner 先確認設定保存成功才執行實際備份；若 WebDAV / Google 尚未連線、設定更新失敗，或同一帳本同一 provider 已有備份執行中，不會繼續用舊設定觸發另一個備份，避免使用者看到連線或保存錯誤後又收到另一個備份失敗結果。
 
-另外，背景排程、資料變更後的自動備份與 Google 靜默恢復後補跑的 due check，現在都會透過 provider runner 執行並在完成後逐 provider 通知設定頁重讀狀態，因此「最近偵測」與「自動偵測」描述會即時更新，而不是要離開頁面再回來才看得到。
+另外，背景排程、資料變更後的自動備份與 Google 靜默恢復後補跑的 due check，現在都會透過 provider runner 執行並在完成後逐 provider 通知設定頁重讀狀態，因此「最近偵測」與「自動偵測」描述會即時更新，而不是要離開頁面再回來才看得到；手機背景恢復不會觸發 Google 互動登入彈窗，避免使用者只是在開 App 或切帳本時被授權流程打斷。
 
 ### 6.5 匯入 / 匯出 / 修復
 
@@ -637,7 +637,7 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - SMB-2 重建後，正式產品路徑只保留 Android App 原生 WebView + 人工 captcha 流程；Node / Web headed Playwright、OCR 與 `/api/invoice/*` 舊流程已移除
 - Web 不再承諾可直接新增、重新驗證或同步載具；只保留設定入口、診斷與說明，且所有 Android WebView client / load / JavaScript / cookie 操作都會切回 main thread 執行
 - 圖形驗證碼改為顯示圖片後由使用者手動輸入，不再把 OCR 當成正式登入流程
-- Android App 會先在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，不再依賴 Web 版 headed browser
+- Android App 會先在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，不再依賴 Web 版 headed browser；原生 automation Activity 採透明背景，captcha 會等圖片可讀後才回前端，重新產生會觸發站點刷新按鈕，查詢後會等待 detail / 結果表載入再解析
 - 新增 / 重新驗證若 native exchange 沒有回傳可加密保存的手機號碼與密碼狀態，會直接拒絕建立 active connection，避免使用者看到假成功但後續同步必定失敗
 - 同步預設支援最近 2 個月日期範圍，並可依實際載具清單做篩選
 - 前端 adapter 只把 Android native automation 視為正式產品入口；Web 僅顯示診斷與導引訊息
@@ -720,7 +720,7 @@ StrawMoneyBook 特別適合以下人群：
 以下內容在文件中必須明講，避免誤導：
 
 - 銀行同步已有頁面與流程，但屬於受控功能，不應描述成全面對外開放
-- 電子發票載具雖然已公開，但仍屬實驗性功能；Android App 已改為 Android-first 的端內登入流程，會先在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成查詢與同步，並補上 WebView main-thread affinity 保護，iOS 尚未納入
+- 電子發票載具雖然已公開，但仍屬實驗性功能；Android App 已改為 Android-first 的端內登入流程，會先在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成查詢與同步，並補上 WebView main-thread affinity、透明 Activity、captcha 圖片等待 / 刷新與查詢結果等待保護，iOS 尚未納入
 - Web 版只保留設定入口、診斷與說明，不再作為正式的新增 / 重新驗證 / 同步載具產品路徑
 - 多數進階同步能力屬會員功能
 - 免費版有帳本、帳戶、借貸、報銷、存錢罐、訂閱、AI 記帳次數等限制

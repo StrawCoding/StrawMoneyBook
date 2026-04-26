@@ -471,7 +471,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
       }
       restoreGoogleBackupForActiveLedgerInBackground(runtimeState, normalizedLedgerId, {
         runDueBackup: true,
-        allowInteractive: true,
+        allowInteractive: false,
       })
       void runAutoBackupProvider(normalizedLedgerId, 'webdav', 'due')
         .then((result) => {

@@ -23,6 +23,7 @@ test('backup due scheduler is refreshed on app resume, data changes, and ledger 
   assert.match(mainSource, /scheduleAutoBackupDueCheck\(runtimeState, pinia, windowObject\)\s*\n\s*}\s*\n\s*void runSharedLedgerBackgroundSyncNow/s)
   assert.match(mainSource, /scheduleAutoBackupDueCheck\(runtimeState, pinia, windowObject, 30000\)/)
   assert.match(mainSource, /clearAutoBackupDueTimer\(runtimeState, windowObject\)\s*\n\s*return\s*\n\s*}\s*\n\s*restoreGoogleBackupForActiveLedgerInBackground/s)
+  assert.match(mainSource, /restoreGoogleBackupForActiveLedgerInBackground\(runtimeState, normalizedLedgerId, \{\s*runDueBackup: true,\s*allowInteractive: false,/)
 })
 
 test('backup due scheduler reruns immediately after backup configuration updates', () => {

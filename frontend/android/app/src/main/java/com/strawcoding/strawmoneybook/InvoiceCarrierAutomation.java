@@ -56,7 +56,12 @@ final class InvoiceCarrierAutomation {
         session.restoreCookies(state.optString("cookieHeader", ""));
         debugTrace.record("reload_login_page", "running", "Reloading eInvoice session");
         session.loadUrl(LOGIN_URL);
-        JSONObject status = waitForInteractiveStatus(session, debugTrace, payload.optBoolean("refresh_captcha", false));
+        boolean shouldRefreshCaptcha = payload.optBoolean("refresh_captcha", false);
+        JSONObject status = waitForInteractiveStatus(session, debugTrace, !shouldRefreshCaptcha);
+        if (shouldRefreshCaptcha && status.optBoolean("login_form_ready", false)) {
+            refreshCaptchaImage(session, debugTrace);
+            status = waitForInteractiveStatus(session, debugTrace, true);
+        }
         saveTemporarySession(vault, sessionId, session.captureCookies());
         return buildSessionPayload(sessionId, status);
     }
@@ -249,8 +254,10 @@ final class InvoiceCarrierAutomation {
         JSONObject latest = new JSONObject();
         while (System.currentTimeMillis() < deadline) {
             latest = inspectStatus(session, includeCaptcha);
+            boolean loginReady = latest.optBoolean("login_form_ready", false);
+            boolean captchaReady = !includeCaptcha || !loginReady || !normalizeText(latest.optString("captcha_image")).isEmpty();
             if (
-                latest.optBoolean("login_form_ready", false)
+                (loginReady && captchaReady)
                 || latest.optBoolean("search_form_ready", false)
                 || latest.optBoolean("cloudflare_blocked", false)
             ) {
@@ -302,6 +309,22 @@ final class InvoiceCarrierAutomation {
         return session.evaluateJson(script);
     }
 
+    private static void refreshCaptchaImage(BrowserSession session, BankAutomationDebugTrace debugTrace) throws Exception {
+        JSONObject result = session.evaluateJson(""
+            + "(() => {"
+            + "const btn = document.querySelector('button[aria-label=\\\"更新圖形驗證碼\\\"], button[title=\\\"更新圖形驗證碼\\\"]');"
+            + "if (!btn) return { ok: false, reason: 'invoice_carrier_captcha_refresh_missing' };"
+            + "btn.click();"
+            + "return { ok: true };"
+            + "})()");
+        if (!result.optBoolean("ok", false)) {
+            debugTrace.record("captcha_refresh", "warn", result.optString("reason", "invoice_carrier_captcha_refresh_missing"), result);
+            return;
+        }
+        debugTrace.record("captcha_refresh", "ok", "eInvoice captcha refresh triggered");
+        sleep(800L);
+    }
+
     private static void submitLogin(BrowserSession session, String mobilePhone, String password, String captchaCode) throws Exception {
         JSONObject payload = new JSONObject();
         payload.put("mobilePhone", mobilePhone);
@@ -343,7 +366,34 @@ final class InvoiceCarrierAutomation {
         if (!result.optBoolean("ok", false)) {
             throw new BankAutomationException(result.optString("reason", "invoice_carrier_search_failed"), "電子發票查詢失敗");
         }
-        sleep(2_000L);
+        waitForSearchResultPage(session);
+    }
+
+    private static void waitForSearchResultPage(BrowserSession session) throws Exception {
+        long deadline = System.currentTimeMillis() + PAGE_TIMEOUT_MS;
+        JSONObject latest = new JSONObject();
+        while (System.currentTimeMillis() < deadline) {
+            latest = session.evaluateJson(""
+                + "(() => {"
+                + "const text = String(document.body && document.body.innerText || '').replace(/\\s+/g, ' ').trim();"
+                + "const hasRows = Boolean(document.querySelector('table tbody tr'));"
+                + "const noResult = text.includes('查無') || text.includes('無資料') || text.includes('沒有符合');"
+                + "const detail = location.href.includes('/detail');"
+                + "return { ok: true, detail, hasRows, noResult, url: location.href };"
+                + "})()");
+            if (
+                latest.optBoolean("detail", false)
+                || latest.optBoolean("hasRows", false)
+                || latest.optBoolean("noResult", false)
+            ) {
+                return;
+            }
+            sleep(POLL_MS);
+        }
+        throw new BankAutomationException(
+            "invoice_carrier_search_timeout",
+            "電子發票查詢結果載入逾時"
+        );
     }
 
     private static JSONArray extractInvoices(BrowserSession session) throws Exception {

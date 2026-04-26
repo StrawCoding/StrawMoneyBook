@@ -77,7 +77,7 @@ public class InvoiceCarrierAutomationActivity extends Activity {
         executorService = Executors.newSingleThreadExecutor();
         webView = buildWebView();
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.WHITE);
+        root.setBackgroundColor(Color.TRANSPARENT);
         root.addView(webView, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
