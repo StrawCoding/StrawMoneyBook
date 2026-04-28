@@ -47,7 +47,7 @@ import { RouterLink } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useI18n } from '@/ui/services/i18n.service'
-import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
+import { getEffectiveTransactionAmountMinor, isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 
 const transactionStore = useTransactionStore()
 const { t } = useI18n()
@@ -70,13 +70,13 @@ const title = computed(() => {
 const incomeMinor = computed(() => {
   return transactionStore.homeRecent
     .filter((tx) => isCountableForIncomeExpense(tx) && tx.type === 'income' && tx.origin_type !== 'loan_payment')
-    .reduce((total, tx) => total + Number(tx.amount_minor ?? 0), 0)
+    .reduce((total, tx) => total + getEffectiveTransactionAmountMinor(tx), 0)
 })
 
 const expenseMinor = computed(() => {
   return transactionStore.homeRecent
     .filter((tx) => isCountableForIncomeExpense(tx) && tx.type === 'expense' && tx.origin_type !== 'loan_payment')
-    .reduce((total, tx) => total + Math.abs(Number(tx.amount_minor ?? 0)), 0)
+    .reduce((total, tx) => total + Math.abs(getEffectiveTransactionAmountMinor(tx)), 0)
 })
 
 const balanceMinor = computed(() => incomeMinor.value - expenseMinor.value)

@@ -54,6 +54,25 @@ function refundRelationExistsSql(sourceAlias = 't') {
   )`
 }
 
+function refundDeductedMinorSql(sourceAlias = 't') {
+  return `COALESCE((
+    SELECT SUM(ABS(rt.amount_minor))
+    FROM transactions rt
+    LEFT JOIN categories rc
+      ON rc.ledger_id = rt.ledger_id
+     AND rc.id = rt.category_id
+    WHERE rt.ledger_id = ${sourceAlias}.ledger_id
+      AND rt.deleted_at IS NULL
+      AND rt.external_ref_id = ${sourceAlias}.id
+      AND (
+        rt.origin_type = 'refund'
+        OR rc.name = '退款'
+        OR rt.note LIKE '退款：%'
+        OR rt.note LIKE '退款:%'
+      )
+  ), 0)`
+}
+
 function paidClaimItemMinorSql(sourceAlias = 't') {
   return `COALESCE((
     SELECT SUM(ri.amount_minor)
@@ -79,6 +98,7 @@ export async function listRecentTransactions(ledgerId, limit = 20) {
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
             t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
             CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
             t.created_at
      FROM transactions t
      LEFT JOIN accounts a
@@ -108,6 +128,7 @@ export async function listTransactionsByMonth(ledgerId, monthKey) {
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
             t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
             CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
             t.created_at
      FROM transactions t
      LEFT JOIN accounts a
@@ -138,6 +159,7 @@ export async function listTransactionsByYear(ledgerId, yearKey) {
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
             t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
             CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
             t.created_at
      FROM transactions t
      LEFT JOIN accounts a
@@ -168,6 +190,7 @@ export async function listTransactionsByDay(ledgerId, dayKey) {
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
             t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
             CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
             t.created_at
      FROM transactions t
      LEFT JOIN accounts a
@@ -198,6 +221,7 @@ export async function listAllTransactions(ledgerId, { limit } = {}) {
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
             t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
             CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
             t.created_at
      FROM transactions t
      LEFT JOIN accounts a
@@ -242,6 +266,7 @@ export async function listTransactionsByAccount(ledgerId, accountId) {
             t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
             t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
             CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
             t.created_at
      FROM transactions t
      LEFT JOIN accounts a
@@ -479,7 +504,8 @@ export async function findTransactionById(ledgerId, txId) {
   assertLedgerId(ledgerId)
   const result = await query(
     `SELECT id, type, transfer_group_id, origin_type, external_ref_id, is_reimbursable,
-            CASE WHEN ${refundRelationExistsSql('transactions')} THEN 1 ELSE 0 END AS has_refund_link
+            CASE WHEN ${refundRelationExistsSql('transactions')} THEN 1 ELSE 0 END AS has_refund_link,
+            ${refundDeductedMinorSql('transactions')} AS refund_deducted_minor
      FROM transactions
      WHERE ledger_id = ?
        AND id = ?
@@ -513,6 +539,7 @@ export async function findTransactionRecordById(ledgerId, txId) {
             t.amount_minor, t.occurred_at, t.note, t.origin_type, t.external_ref_id,
             t.is_reimbursable, t.reimbursement_state, t.include_in_budget, t.include_in_analysis,
             CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
             c.name AS category_name, c.kind AS category_kind, c.icon AS category_icon,
             cg.name AS category_group_name, cg.kind AS category_group_kind,
             a.name AS account_name
@@ -543,6 +570,7 @@ export async function listTransactionsByExternalRef(ledgerId, externalRefId) {
             t.amount_minor, t.occurred_at, t.note, t.origin_type, t.external_ref_id,
             t.is_reimbursable, t.reimbursement_state, t.include_in_budget, t.include_in_analysis,
             CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
             c.name AS category_name, c.kind AS category_kind, c.icon AS category_icon,
             cg.name AS category_group_name, cg.kind AS category_group_kind,
             a.name AS account_name

@@ -69,7 +69,7 @@ import BudgetMiniPie from '@/ui/components/budget/BudgetMiniPie.vue'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useI18n } from '@/ui/services/i18n.service'
-import { isCountableForBudget } from '@/ui/utils/refund-transaction'
+import { getEffectiveTransactionAmountMinor, isCountableForBudget } from '@/ui/utils/refund-transaction'
 
 const budgetStore = useBudgetStore()
 const transactionStore = useTransactionStore()
@@ -247,7 +247,7 @@ const selectedDaySpentMinor = computed(() => {
     const categoryId = String(tx?.category_id ?? '').trim()
     if (!categoryId || !activeDailyBudgetCategoryIds.value.has(categoryId)) return total
     if (dateKeyOf(new Date(tx.occurred_at)) !== selectedDayKey) return total
-    return total + Math.abs(Math.round(Number(tx.amount_minor) || 0))
+    return total + Math.abs(getEffectiveTransactionAmountMinor(tx))
   }, 0)
 })
 

@@ -38,19 +38,24 @@ const refundOriginTypeMigrationSource = readFileSync(
 
 test('transaction queries expose refund-link state for downstream summaries', () => {
   assert.match(transactionRepoSource, /function refundRelationExistsSql\(sourceAlias = 't'\)/)
+  assert.match(transactionRepoSource, /function refundDeductedMinorSql\(sourceAlias = 't'\)/)
   assert.match(transactionRepoSource, /AS has_refund_link/)
+  assert.match(transactionRepoSource, /AS refund_deducted_minor/)
 })
 
-test('budget and export queries exclude refunded source transactions from aggregates', () => {
+test('budget and export queries expose refund deducted amount for net aggregates', () => {
   assert.match(budgetRepoSource, /function refundedSourceExclusionSql\(sourceAlias = 'transactions'\)/)
-  assert.match(budgetRepoSource, /AND \$\{refundedSourceExclusionSql\('transactions'\)\}/)
+  assert.match(budgetRepoSource, /function budgetSpentMinorSql\(sourceAlias = 'transactions'\)/)
+  assert.match(budgetRepoSource, /SUM\(\$\{budgetSpentMinorSql\('transactions'\)\}\) AS spent_minor/)
   assert.match(exportServiceSource, /AS has_refund_link/)
+  assert.match(exportServiceSource, /AS refund_deducted_minor/)
 })
 
 test('refund creation validates account selection, avoids duplicates, and marks refund origin type', () => {
   assert.match(transactionServiceSource, /const existingRefunds = await listTransactionsByExternalRef\(ledgerId, sourceTransactionId\)/)
   assert.match(transactionServiceSource, /throw new Error\('此交易已建立退款'\)/)
   assert.match(transactionServiceSource, /throw new Error\('退款帳戶幣別必須與原交易帳戶一致'\)/)
+  assert.match(transactionServiceSource, /throw new Error\('退款扣除金額不可超過原始交易金額'\)/)
   assert.match(transactionServiceSource, /originType: 'refund'/)
 })
 
@@ -62,10 +67,13 @@ test('database schema allows refund origin type for both new and migrated ledger
 test('transaction about page opens an account picker before creating refunds', () => {
   assert.match(aboutSource, /const refundSheetOpen = ref\(false\)/)
   assert.match(aboutSource, /const refundAccountId = ref\(''\)/)
+  assert.match(aboutSource, /const refundDeductAmountMajor = ref\(0\)/)
   assert.match(aboutSource, /<InputBottomSheet[\s\S]*transaction_about\.refund_account_title/)
   assert.match(aboutSource, /<CustomSelect v-model="refundAccountId" :groups="refundAccountGroups"/)
+  assert.match(aboutSource, /v-model\.number="refundDeductAmountMajor"/)
   assert.match(aboutSource, /@click="openRefundSheet"/)
   assert.match(aboutSource, /accountId: refundAccountId\.value/)
+  assert.match(aboutSource, /amountMinor: refundDeductMinor/)
 })
 
 test('refund edit page limits refund records to adjustment mode only', () => {

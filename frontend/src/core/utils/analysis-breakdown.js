@@ -2,6 +2,15 @@ function defaultShouldIncludeTransaction() {
   return true
 }
 
+function effectiveTransactionAmountMinor(tx) {
+  const amount = Math.round(Number(tx?.amount_minor ?? 0))
+  if (!Number.isFinite(amount) || amount === 0) return 0
+  const deducted = Math.round(Number(tx?.refund_deducted_minor ?? 0))
+  if (!Number.isFinite(deducted) || deducted <= 0) return amount
+  const remaining = Math.max(0, Math.abs(amount) - deducted)
+  return amount < 0 ? remaining * -1 : remaining
+}
+
 export const ADDON_BREAKDOWN_ID_PREFIX = '__addon__:'
 const ADDON_NOTE_PREFIX = '【附加項目】'
 
@@ -83,7 +92,8 @@ export function getBreakdownPartsForTransaction(tx, {
 } = {}) {
   if (tx?.type !== type || tx?.origin_type === 'loan_payment') return []
 
-  const amount = type === 'expense' ? Math.abs(Number(tx?.amount_minor ?? 0)) : Number(tx?.amount_minor ?? 0)
+  const effectiveAmountMinor = effectiveTransactionAmountMinor(tx)
+  const amount = type === 'expense' ? Math.abs(effectiveAmountMinor) : effectiveAmountMinor
   if (!Number.isFinite(amount) || amount <= 0) return []
 
   if (scope !== 'category' || type !== 'expense') {
@@ -362,7 +372,8 @@ export function buildTimeBarRows({
   for (const tx of transactions) {
     if (!shouldIncludeTransaction(tx)) continue
     if (tx?.type !== type || tx?.origin_type === 'loan_payment') continue
-    const amountMinor = type === 'expense' ? Math.abs(Number(tx?.amount_minor ?? 0)) : Number(tx?.amount_minor ?? 0)
+    const effectiveAmountMinor = effectiveTransactionAmountMinor(tx)
+    const amountMinor = type === 'expense' ? Math.abs(effectiveAmountMinor) : effectiveAmountMinor
     if (!Number.isFinite(amountMinor) || amountMinor <= 0) continue
 
     const date = new Date(tx?.occurred_at ?? '')

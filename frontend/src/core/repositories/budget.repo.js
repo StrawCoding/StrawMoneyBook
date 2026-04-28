@@ -34,6 +34,34 @@ function refundedSourceExclusionSql(sourceAlias = 'transactions') {
   )`
 }
 
+function refundDeductedMinorSql(sourceAlias = 'transactions') {
+  return `COALESCE((
+    SELECT SUM(ABS(rt.amount_minor))
+    FROM transactions rt
+    LEFT JOIN categories rc
+      ON rc.ledger_id = rt.ledger_id
+     AND rc.id = rt.category_id
+    WHERE rt.ledger_id = ${sourceAlias}.ledger_id
+      AND rt.deleted_at IS NULL
+      AND rt.external_ref_id = ${sourceAlias}.id
+      AND (
+        rt.origin_type = 'refund'
+        OR rc.name = '退款'
+        OR rt.note LIKE '退款：%'
+        OR rt.note LIKE '退款:%'
+      )
+  ), 0)`
+}
+
+function budgetSpentMinorSql(sourceAlias = 'transactions') {
+  const deductedSql = refundDeductedMinorSql(sourceAlias)
+  return `(CASE
+    WHEN ABS(${sourceAlias}.amount_minor) - ${deductedSql} > 0
+    THEN ABS(${sourceAlias}.amount_minor) - ${deductedSql}
+    ELSE 0
+  END)`
+}
+
 export async function getBudgetByMonth(ledgerId, monthKey) {
   assertLedgerId(ledgerId)
   const result = await query(
@@ -202,13 +230,12 @@ export async function updateBudgetSaveTotalConfig(ledgerId, budgetId, input = {}
 
 export async function computeBudgetSpentByCategory(ledgerId, monthStartUtc, monthEndUtc) {
   const result = await query(
-    `SELECT category_id, ABS(SUM(amount_minor)) AS spent_minor
+    `SELECT category_id, SUM(${budgetSpentMinorSql('transactions')}) AS spent_minor
      FROM transactions
      WHERE ledger_id = ?
        AND deleted_at IS NULL
        AND type = 'expense'
        AND include_in_budget = 1
-       AND ${refundedSourceExclusionSql('transactions')}
        AND occurred_at >= ?
        AND occurred_at < ?
        AND category_id IS NOT NULL
@@ -227,7 +254,7 @@ export async function listBudgetUsageDaysByCategory(ledgerId, monthStartUtc, mon
        AND deleted_at IS NULL
        AND type = 'expense'
        AND include_in_budget = 1
-       AND ${refundedSourceExclusionSql('transactions')}
+       AND ${budgetSpentMinorSql('transactions')} > 0
        AND occurred_at >= ?
        AND occurred_at < ?
        AND category_id IS NOT NULL

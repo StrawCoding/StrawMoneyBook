@@ -380,10 +380,21 @@ export async function createRefundAdjustment(ledgerId, payload = {}) {
   if (!Number.isFinite(sourceAmountMinor) || sourceAmountMinor === 0) {
     throw new Error('原始交易金額無效')
   }
+  const sourceAbsMinor = Math.abs(sourceAmountMinor)
+  const requestedRefundMinor = payload.amountMinor == null
+    ? sourceAbsMinor
+    : Math.round(Math.abs(Number(payload.amountMinor)))
+  if (!Number.isInteger(requestedRefundMinor) || requestedRefundMinor <= 0) {
+    throw new Error('退款扣除金額必須大於 0')
+  }
+  if (requestedRefundMinor > sourceAbsMinor) {
+    throw new Error('退款扣除金額不可超過原始交易金額')
+  }
+
   return createAdjustment(ledgerId, {
     ...payload,
     accountId: targetAccountId,
-    amountMinor: sourceAmountMinor < 0 ? Math.abs(sourceAmountMinor) : Math.abs(sourceAmountMinor) * -1,
+    amountMinor: sourceAmountMinor < 0 ? requestedRefundMinor : requestedRefundMinor * -1,
     categoryId: refundCategoryId,
     externalRefId: sourceTransactionId || null,
     originType: 'refund',

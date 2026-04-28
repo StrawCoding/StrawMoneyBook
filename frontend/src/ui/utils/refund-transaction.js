@@ -18,15 +18,34 @@ export function hasRefundLink(tx) {
   return Number(tx?.has_refund_link ?? 0) === 1
 }
 
+export function getRefundDeductedMinor(tx) {
+  const raw = Math.round(Number(tx?.refund_deducted_minor ?? 0))
+  if (Number.isFinite(raw) && raw > 0) {
+    return Math.min(Math.abs(Math.round(Number(tx?.amount_minor ?? 0)) || 0), raw)
+  }
+  return hasRefundLink(tx) ? Math.abs(Math.round(Number(tx?.amount_minor ?? 0)) || 0) : 0
+}
+
+export function getEffectiveTransactionAmountMinor(tx) {
+  const amount = Math.round(Number(tx?.amount_minor ?? 0))
+  if (!Number.isFinite(amount) || amount === 0) return 0
+  if (isRefundTransaction(tx)) return 0
+
+  const deductedMinor = getRefundDeductedMinor(tx)
+  if (deductedMinor <= 0) return amount
+
+  const remainingMinor = Math.max(0, Math.abs(amount) - deductedMinor)
+  if (remainingMinor <= 0) return 0
+  return amount < 0 ? remainingMinor * -1 : remainingMinor
+}
+
 export function isCountableForIncomeExpense(tx) {
   if (Number(tx?.include_in_analysis ?? 1) === 0) return false
-  if (hasRefundLink(tx)) return false
-  return !isRefundTransaction(tx)
+  return getEffectiveTransactionAmountMinor(tx) !== 0
 }
 
 export function isCountableForBudget(tx) {
   if (String(tx?.type ?? '') !== 'expense') return false
   if (Number(tx?.include_in_budget ?? 1) === 0) return false
-  if (hasRefundLink(tx)) return false
-  return !isRefundTransaction(tx)
+  return getEffectiveTransactionAmountMinor(tx) < 0
 }

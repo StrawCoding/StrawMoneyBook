@@ -76,7 +76,7 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { addonDeltaMajorFromNote, addonDeltaTagText, stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { useI18n } from '@/ui/services/i18n.service'
-import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
+import { getEffectiveTransactionAmountMinor, isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 
 const transactionStore = useTransactionStore()
 const categoryStore = useCategoryStore()
@@ -117,10 +117,11 @@ const groupedRecentTransactions = computed(() => {
     const group = groupMap.get(key)
     group.items.push(tx)
     if (!isCountableForIncomeExpense(tx)) continue
+    const effectiveAmountMinor = getEffectiveTransactionAmountMinor(tx)
     if (tx.type === 'income') {
-      group.incomeMinor += Math.abs(Math.round(Number(tx.amount_minor ?? 0)))
+      group.incomeMinor += Math.abs(effectiveAmountMinor)
     } else if (tx.type === 'expense') {
-      group.expenseMinor += Math.abs(Math.round(Number(tx.amount_minor ?? 0)))
+      group.expenseMinor += Math.abs(effectiveAmountMinor)
     }
   }
   return grouped

@@ -1,4 +1,4 @@
-import { isCountableForIncomeExpense } from '../utils/refund-transaction.js'
+import { getEffectiveTransactionAmountMinor, isCountableForIncomeExpense } from '../utils/refund-transaction.js'
 
 function normalizeCurrencyCode(currencyCode) {
   const normalized = String(currencyCode ?? '').trim().toUpperCase()
@@ -16,7 +16,7 @@ export function buildHomeWidgetSummaryPayload(transactions, options = {}) {
   for (const tx of transactions ?? []) {
     if (!isCountableForIncomeExpense(tx)) continue
     const type = String(tx?.type ?? '')
-    const amount = Math.round(Number(tx?.amount_minor ?? 0))
+    const amount = getEffectiveTransactionAmountMinor(tx)
     if (type === 'income' && amount > 0) {
       incomeMinor += amount
       continue

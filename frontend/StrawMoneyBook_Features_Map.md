@@ -9,7 +9,7 @@
 - 首頁總覽（帳本切換、收支卡、預算簡表、交易流、浮動快速新增）
 - 記帳三模式（AI 記帳、手動快速新增、問答記帳）
 - 交易查詢（搜尋頁、日曆頁、交易明細頁、交易編輯頁）
-- 退款流程（交易明細可建立退款、選擇退款帳戶、退款與原交易自動排除預算 / 收支統計）
+- 退款流程（交易明細可建立退款、選擇退款帳戶、指定扣除金額；SMB-149 後部分退款會以原交易扣除退款金額後的淨額納入首頁、預算、分析與列印報表，全額退款則歸零）
 - 預算管理（月預算、分類預算、日均規則、已用/剩餘/保留金額、預算剩餘自動存入存錢罐）
 - 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、列印 / PDF 版面；SMB-146 後支出分類分析會將正向附加項目拆成獨立分析列，主分類扣除該附加金額後仍維持總支出一致，分析明細與列印報表同步支援）
 - 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、群組內金額摘要）
@@ -193,7 +193,7 @@
 | 交易搜尋頁（支援批量編輯分類、備註、可報銷、是否納入預算 / 收支分析） | `src/ui/views/TransactionSearchPage.vue` |
 | 交易日曆頁 | `src/ui/views/CalendarPage.vue` |
 | 功能列表頁 | `src/ui/views/FeatureListPage.vue` |
-| 交易明細退款流程（選擇退款帳戶、避免重複退款） | `src/ui/views/TransactionAboutPage.vue` + `src/core/services/transaction.service.js` |
+| 交易明細退款流程（選擇退款帳戶、指定扣除金額、避免重複退款；彙總使用退款扣除後淨額） | `src/ui/views/TransactionAboutPage.vue` + `src/core/services/transaction.service.js` + `src/ui/utils/refund-transaction.js` |
 | 交易搜尋頁狀態協調（filter、批量選取、sheet、摘要） | `src/ui/composables/useTransactionSearchPage.js` |
 
 ## 4. 分析頁功能對應

@@ -116,6 +116,17 @@
         {{ t('transaction_about.refund_account_field') }}
         <CustomSelect v-model="refundAccountId" :groups="refundAccountGroups" />
       </label>
+      <label class="field">
+        {{ t('transaction_about.refund_deduct_amount_field') }}
+        <input
+          v-model.number="refundDeductAmountMajor"
+          class="input"
+          type="number"
+          min="0.01"
+          step="0.01"
+          inputmode="decimal"
+        />
+      </label>
       <p class="muted">{{ t('transaction_about.refund_account_hint') }}</p>
 
       <template #footer>
@@ -162,6 +173,7 @@ const transaction = ref(null)
 const refunding = ref(false)
 const refundSheetOpen = ref(false)
 const refundAccountId = ref('')
+const refundDeductAmountMajor = ref(0)
 
 const txId = computed(() => String(route.params.id ?? ''))
 
@@ -341,6 +353,7 @@ function goBack() {
 function openRefundSheet() {
   if (!canCreateRefund.value || refunding.value) return
   refundAccountId.value = String(transaction.value?.account_id ?? '')
+  refundDeductAmountMajor.value = Math.abs(Number(transaction.value?.amount_minor ?? 0)) / 100
   refundSheetOpen.value = true
 }
 
@@ -354,7 +367,8 @@ async function createRefund() {
   if (!tx || refunding.value || !canCreateRefund.value) return
 
   const amountMinor = Math.abs(Number(tx.amount_minor ?? 0))
-  if (!amountMinor || !tx.account_id || !refundAccountId.value) {
+  const refundDeductMinor = Math.round(Math.abs(Number(refundDeductAmountMajor.value ?? 0)) * 100)
+  if (!amountMinor || !tx.account_id || !refundAccountId.value || !refundDeductMinor || refundDeductMinor > amountMinor) {
     uiStore.pushToast(t('transaction_about.toast.refund_failed'), 'error')
     return
   }
@@ -370,6 +384,7 @@ async function createRefund() {
       occurredAt: new Date().toISOString(),
       accountId: refundAccountId.value,
       sourceTransactionId: tx.id,
+      amountMinor: refundDeductMinor,
       note: noteLines.join('\n'),
     })
     uiStore.pushToast(t('transaction_about.toast.refund_created'))
