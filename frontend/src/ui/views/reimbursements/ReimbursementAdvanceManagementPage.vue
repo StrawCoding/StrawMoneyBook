@@ -44,12 +44,12 @@
 
     <article class="card panel">
       <header class="row panel-head">
-        <h3>未抵扣代收</h3>
-        <small class="muted">共 {{ deletableAdvances.length }} 筆</small>
+        <h3>可用代收</h3>
+        <small class="muted">共 {{ visibleAdvances.length }} 筆</small>
       </header>
 
       <ul class="advance-list">
-        <li v-for="advance in deletableAdvances" :key="advance.id" class="advance-item">
+        <li v-for="advance in visibleAdvances" :key="advance.id" class="advance-item">
           <div class="advance-main">
             <div class="row advance-title-row">
               <span class="advance-title">
@@ -76,7 +76,8 @@
           <div class="advance-actions">
             <button
               class="btn danger"
-              :disabled="deletingAdvanceId === advance.id"
+              :disabled="deletingAdvanceId === advance.id || !canDeleteAdvance(advance)"
+              :title="canDeleteAdvance(advance) ? '刪除代收' : '已有抵扣紀錄，需先刪除抵扣紀錄才能刪除代收'"
               @click="openDeleteDialog(advance)"
             >
               {{ deletingAdvanceId === advance.id ? '刪除中...' : '刪除' }}
@@ -84,9 +85,9 @@
           </div>
         </li>
 
-        <li v-if="!deletableAdvances.length" class="muted">目前沒有可直接管理的代收資料</li>
+        <li v-if="!visibleAdvances.length" class="muted">目前沒有尚可抵扣的代收資料</li>
       </ul>
-      <p class="muted page-hint">已有抵扣紀錄的代收已移到「抵扣紀錄」頁管理。</p>
+      <p class="muted page-hint">部分抵扣但仍有餘額的代收會保留在此；完全抵扣的紀錄可到「抵扣紀錄」查看。</p>
     </article>
 
     <AppDialog
@@ -127,8 +128,8 @@ const form = reactive({
   note: '',
 })
 
-const deletableAdvances = computed(() => {
-  return reimbursementStore.advances.filter((item) => Math.max(0, Math.round(Number(item?.used_minor ?? 0))) <= 0)
+const visibleAdvances = computed(() => {
+  return reimbursementStore.advances.filter((item) => Math.max(0, Math.round(Number(item?.available_minor ?? 0))) > 0)
 })
 const deleteDialogMessage = computed(() => {
   if (!deleteTarget.value) return ''
@@ -181,6 +182,10 @@ async function submitAdvance() {
 function openDeleteDialog(advance) {
   const advanceId = String(advance?.id ?? '').trim()
   if (!advanceId || deletingAdvanceId.value) return
+  if (!canDeleteAdvance(advance)) {
+    uiStore.pushToast('已有抵扣紀錄的代收需先刪除抵扣紀錄', 'error')
+    return
+  }
   deleteTarget.value = advance
 }
 
@@ -214,6 +219,10 @@ function advanceCategoryName(advance) {
 
 function advanceCategoryIcon(advance) {
   return String(advance?.category_icon ?? '').trim()
+}
+
+function canDeleteAdvance(advance) {
+  return Math.max(0, Math.round(Number(advance?.used_minor ?? 0))) <= 0
 }
 
 function formatTime(iso) {

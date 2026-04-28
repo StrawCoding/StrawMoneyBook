@@ -15,7 +15,7 @@
 - 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、群組內金額摘要）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細）
 - 借貸建立後可於借貸明細變更「建立入帳帳戶」，會直接修正該筆初始借入 / 借出交易的帳戶歸屬
-- 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出；請款單導入報銷改由獨立頁面選取，支援全選 / 取消全選；完成請款單會讓匯入報銷項目回到已報銷狀態，不再留在未報銷；還原後重新完成不會因舊入帳交易冪等鍵撞唯一鍵）
+- 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出；請款單導入報銷改由獨立頁面選取，支援全選 / 取消全選；完成請款單會讓匯入報銷項目回到已報銷狀態，不再留在未報銷；還原後重新完成不會因舊入帳交易冪等鍵撞唯一鍵；SMB-148 後代收管理會保留部分抵扣但仍有可用餘額的代收，只有完全未抵扣項目可直接刪除）
 - 存錢罐、訂閱追蹤與自動存提
 - 訂閱追蹤的扣款日以當天開始為扣款時間點；進入扣款日後仍可標示本期已到期，但「下次扣款」會直接推進到下一個週期，且排程日期以 App 預設時區正規化，避免 UTC / CI 環境把台北時間午夜誤判成前一天；App 開啟 / 回前景 / 帳本切換與儲存訂閱後會對今日到期項目建立冪等支出交易
 - AI 自動記帳（文字解析、語音輸入、會員次數限制）
@@ -68,7 +68,7 @@
 | `/loans/counterparty` | `src/ui/views/loans/LoanCounterpartyDetailPage.vue` | 依往來對象檢視借貸明細 |
 | `/loans/:id` | `src/ui/views/loans/LoanDetailPage.vue` | 借貸明細 |
 | `/reimbursements` | `src/ui/views/reimbursements/ReimbursementListPage.vue` | 報銷清單 |
-| `/reimbursements/advances` | `src/ui/views/reimbursements/ReimbursementAdvanceManagementPage.vue` | 代收 / 預支款管理 |
+| `/reimbursements/advances` | `src/ui/views/reimbursements/ReimbursementAdvanceManagementPage.vue` | 代收 / 預支款管理；部分抵扣但仍有餘額的代收會保留顯示，刪除僅限未抵扣代收 |
 | `/reimbursements/advance-usages` | `src/ui/views/reimbursements/ReimbursementAdvanceUsageManagementPage.vue` | 代收 / 預支抵扣紀錄 |
 | `/reimbursements/:id/edit` | `src/ui/views/reimbursements/ReimbursementEditPage.vue` | 報銷明細編輯/入帳 |
 | `/reimbursements/:id/offsets` | `src/ui/views/reimbursements/ReimbursementOffsetAboutPage.vue` | 報銷抵扣說明 / 明細 |
