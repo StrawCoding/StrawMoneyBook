@@ -44,3 +44,11 @@ test('background auto backup runs notify the UI to refresh persisted diagnostics
   assert.match(mainSource, /notifyAutoBackupRunResults\(globalThis\.window, ledgerId, \[result\]/)
   assert.match(mainSource, /reason: 'google_restore_due_check_completed'/)
 })
+
+test('google restore path still runs due diagnostics when silent restore cannot connect', () => {
+  assert.match(
+    mainSource,
+    /await restoreGoogleBackupSessionInBackground\(runtimeState, ledgerId, \{ allowInteractive }\)\s*if \(!runDueBackup\) return\s*const result = await runAutoBackupProvider\(ledgerId, 'google', 'due'\)/s,
+  )
+  assert.doesNotMatch(mainSource, /if \(!runDueBackup \|\| !restoredState\?\.connected\) return/)
+})

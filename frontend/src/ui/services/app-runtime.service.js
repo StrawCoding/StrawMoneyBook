@@ -310,8 +310,8 @@ function restoreGoogleBackupSessionInBackground(runtimeState, ledgerId, { allowI
 function restoreGoogleBackupForActiveLedgerInBackground(runtimeState, ledgerId, { runDueBackup = false, allowInteractive = false } = {}) {
   if (!ledgerId) return
   void (async () => {
-    const restoredState = await restoreGoogleBackupSessionInBackground(runtimeState, ledgerId, { allowInteractive })
-    if (!runDueBackup || !restoredState?.connected) return
+    await restoreGoogleBackupSessionInBackground(runtimeState, ledgerId, { allowInteractive })
+    if (!runDueBackup) return
     const result = await runAutoBackupProvider(ledgerId, 'google', 'due')
     notifyAutoBackupRunResults(globalThis.window, ledgerId, [result], {
       mode: 'due',
