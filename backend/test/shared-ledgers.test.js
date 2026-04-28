@@ -197,3 +197,64 @@ test('cannot accept own invitation', async () => {
   assert.equal(res.statusCode, 400)
   assert.equal(res.body?.message, '不可接受自己的邀請')
 })
+
+test('snapshot push rejects stale base versions at zero boundary', async () => {
+  const owner = await createMemberUser('owner-version-zero@example.com')
+  const ledgerId = createId('ledger')
+  const sharedLedger = await updateStore(async (data) => {
+    const now = nowIso()
+    const record = {
+      id: createId('shared_ledger'),
+      ledger_id: ledgerId,
+      name: 'Version Zero Ledger',
+      invite_code: 'VERZERO1',
+      owner_user_id: owner.id,
+      members: [{ user_id: owner.id, role: 'owner', joined_at: now }],
+      invitations: [],
+      snapshot: {
+        ledger_id: ledgerId,
+        tables: { ledgers: [{ id: ledgerId, name: 'Version Zero Ledger' }] },
+      },
+      version: 0,
+      created_at: now,
+      updated_at: now,
+      updated_by_user_id: owner.id,
+    }
+    data.shared_ledgers.push(record)
+    return record
+  })
+  const session = await createLoginSession(owner, {
+    issuedByProvider: 'password',
+    ipAddress: '127.0.0.1',
+    userAgent: 'node:test',
+  })
+
+  const makeRequest = (baseVersion, name) => ({
+    method: 'POST',
+    url: `/api/shared-ledgers/${sharedLedger.id}/snapshot`,
+    headers: {
+      host: 'localhost',
+      authorization: `Bearer ${session.accessToken}`,
+    },
+    body: JSON.stringify({
+      baseVersion,
+      snapshot: {
+        ledger_id: ledgerId,
+        tables: { ledgers: [{ id: ledgerId, name }] },
+      },
+    }),
+  })
+
+  const firstReq = makeRequest(0, 'Version One Ledger')
+  const firstRes = createMockResponse(firstReq)
+  await sharedLedgersHandler(firstReq, firstRes)
+  assert.equal(firstRes.statusCode, 200)
+  assert.equal(firstRes.body?.item?.version, 1)
+
+  const staleReq = makeRequest(0, 'Stale Version Ledger')
+  const staleRes = createMockResponse(staleReq)
+  await sharedLedgersHandler(staleReq, staleRes)
+  assert.equal(staleRes.statusCode, 409)
+  assert.equal(staleRes.body?.error, 'version_conflict')
+  assert.equal(staleRes.body?.current_version, 1)
+})

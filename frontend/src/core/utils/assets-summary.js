@@ -34,8 +34,8 @@ export function calculateAssetSummary({
       continue
     }
 
-    if (item?.account_type === 'liability' && balance > 0) {
-      liabilityMinor += balance
+    if (item?.account_type === 'liability' && balance !== 0) {
+      liabilityMinor += Math.abs(balance)
     }
   }
 

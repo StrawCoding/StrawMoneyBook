@@ -79,6 +79,7 @@ export const useAccountStore = defineStore('account', {
     balances: [],
     loading: false,
     ready: false,
+    loadRequestSeq: 0,
   }),
 
   getters: {
@@ -115,13 +116,17 @@ export const useAccountStore = defineStore('account', {
     async load(options = {}) {
       const ledgerStore = useLedgerStore()
       const ledgerId = ledgerStore.activeLedgerId
+      const requestSeq = this.loadRequestSeq + 1
+      this.loadRequestSeq = requestSeq
 
       this.loading = true
       try {
         if (!ledgerId) {
-          this.groups = []
-          this.accounts = []
-          this.balances = []
+          if (this.loadRequestSeq === requestSeq) {
+            this.groups = []
+            this.accounts = []
+            this.balances = []
+          }
           return
         }
         const includeArchived = Boolean(options.includeArchived)
@@ -131,12 +136,17 @@ export const useAccountStore = defineStore('account', {
           getAccountBalances(ledgerId, { includeArchived }),
         ])
 
+        if (this.loadRequestSeq !== requestSeq || useLedgerStore().activeLedgerId !== ledgerId) {
+          return
+        }
         this.groups = groups
         this.accounts = accounts
         this.balances = balances
       } finally {
-        this.ready = true
-        this.loading = false
+        if (this.loadRequestSeq === requestSeq) {
+          this.ready = true
+          this.loading = false
+        }
       }
     },
 

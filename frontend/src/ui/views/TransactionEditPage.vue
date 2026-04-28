@@ -125,7 +125,7 @@
           </button>
           <div class="footer-actions">
             <button class="btn" :disabled="submitting" @click="goBack">{{ t('common.cancel') }}</button>
-            <button class="btn primary" :class="{ busy: submitting }" :disabled="submitting" @click="submit">
+            <button class="btn primary" :class="{ busy: submitting }" :disabled="submitting || isSubmitDisabled" @click="submit">
               {{ t('common.save') }}
             </button>
           </div>
@@ -380,6 +380,12 @@ const transferResolvedRateLabel = computed(() => {
   if (!Number.isFinite(rate) || rate <= 0) return '-'
   return rate.toFixed(6)
 })
+const isManualTransferRateInvalid = computed(() => {
+  if (model.type !== 'transfer' || !transferNeedsExchangeRate.value || model.exchangeRateMode !== 'manual') return false
+  const rate = Number(model.manualExchangeRateInput)
+  return !Number.isFinite(rate) || rate <= 0
+})
+const isSubmitDisabled = computed(() => isManualTransferRateInvalid.value)
 const transferEstimatedReceiveMinor = computed(() => {
   const baseAmountMinor = Math.round(Math.abs(Number(model.amountMajor ?? 0)) * 100)
   if (baseAmountMinor <= 0) return 0
@@ -764,6 +770,10 @@ async function submit() {
     }
     if (model.peerAccountId === model.accountId) {
       uiStore.pushToast(t('quick_add.error.same_account'), 'error')
+      return
+    }
+    if (isManualTransferRateInvalid.value) {
+      uiStore.pushToast(t('quick_add.error.invalid_rate'), 'error')
       return
     }
   } else if (model.type === 'adjustment') {

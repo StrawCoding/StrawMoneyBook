@@ -30,3 +30,11 @@ test('transaction edit page reuses quick-add style structure for extra info and 
   assert.match(editSource, /const directAccountGroups = computed\(\(\) => accountStore\.groupedRegularAccounts\)/)
   assert.match(editSource, /const transferAccountGroups = computed\(\(\) => accountStore\.groupedAccounts\)/)
 })
+
+test('transaction edit keeps signed adjustment amounts and blocks invalid manual transfer rates', () => {
+  assert.match(editSource, /const settledAmountMinorRaw = Math\.round\(settledAmountMajor \* 100\)/)
+  assert.match(editSource, /type: 'adjustment',[\s\S]*amountMinor: settledAmountMinorRaw/)
+  assert.match(editSource, /const isManualTransferRateInvalid = computed/)
+  assert.match(editSource, /:disabled="submitting \|\| isSubmitDisabled"/)
+  assert.match(editSource, /uiStore\.pushToast\(t\('quick_add\.error\.invalid_rate'\), 'error'\)/)
+})

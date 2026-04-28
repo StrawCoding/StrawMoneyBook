@@ -124,6 +124,41 @@ test('auth routes support register, login, refresh, and password reset request f
   assert.equal(tempLoginRes.body?.user?.email, 'route-user@example.com')
 })
 
+test('locked password login attempts do not escalate the failure counter', async () => {
+  const email = 'locked-route-user@example.com'
+  const password = 'password123'
+  const registerRes = await sendAuthRequest({
+    method: 'POST',
+    url: '/api/auth/register',
+    body: {
+      email,
+      password,
+      displayName: 'Locked Route User',
+    },
+  })
+
+  assert.equal(registerRes.statusCode, 201)
+
+  for (let index = 0; index < 5; index += 1) {
+    const badLoginRes = await sendAuthRequest({
+      method: 'POST',
+      url: '/api/auth/login',
+      body: { email, password: 'wrong-password' },
+    })
+    assert.equal(badLoginRes.statusCode, index === 4 ? 429 : 401)
+  }
+
+  for (let index = 0; index < 6; index += 1) {
+    const lockedRes = await sendAuthRequest({
+      method: 'POST',
+      url: '/api/auth/login',
+      body: { email, password: 'wrong-password' },
+    })
+    assert.equal(lockedRes.statusCode, 429)
+    assert.equal(lockedRes.body?.error, 'login_temporarily_locked')
+  }
+})
+
 test('auth routes support google prepare and google login through the route dispatcher', async () => {
   setAuthGoogleIdTokenVerifier(async ({ expectedNonce }) => ({
     sub: 'google-sub-route-test',

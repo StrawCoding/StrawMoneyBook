@@ -148,7 +148,7 @@ export async function handleSnapshotPush(req, res, user, sharedLedgerId) {
     }
 
     const currentVersion = Number(sharedLedger.version ?? 0)
-    if (!force && currentVersion > 0 && currentVersion !== baseVersion) {
+    if (!force && currentVersion !== baseVersion) {
       const conflictError = new Error('共同帳本已被其他成員更新，請先下載最新版本')
       conflictError.code = 'version_conflict'
       conflictError.status = 409

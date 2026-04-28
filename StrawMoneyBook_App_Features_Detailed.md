@@ -64,6 +64,8 @@ StrawMoneyBook 的特色不在單一功能，而在於把同一筆金流後續�
 - 版本更新資訊
 - 共同帳本同步
 
+手動執行「重設全部資料」前，資料管理頁會先嘗試匯出全部帳本 recovery JSON；若裝置檔案儲存不可用則退回瀏覽器下載，若 recovery 建立失敗則寫入 console 記錄並保留原本重設流程，避免因備份功能異常讓使用者完全無法重設。
+
 這讓它更適合長期使用，而不是短期記帳後就難以維護。
 
 另外，所有需要輸入資料的彈層已統一為共用 bottom sheet flow，桌面與手機都不再保留另一套輸入型 popover，包含表單 dialog、選單、日期與時間選擇器；`AppDialog` 以及各頁自製輸入 sheet 也都收斂到和快速記帳一致的 shared overlay / bottom-sheet primitives，Android 有底部導覽列 inset 的裝置也會一併吃到底部 safe area，且 sheet 卡片背景會直接延伸到底部，和 `BottomNav` 維持同一個底部基準。
@@ -84,11 +86,15 @@ SMB-142 重建後，自動備份設定頁會在背景自動偵測 / 自動備份
 
 從維護角度來看，前端已採用 View / Store / Service / Repository 分層，資料層則以 Capacitor + SQLite（含 Web / WASM）維持一致模型，讓功能擴充與跨平台維護成本更可控。
 
+帳戶資料載入也會以請求序號與活動帳本再次比對，快速切換帳本時會丟棄較晚回來的舊請求結果，避免資產與帳戶選單短暫顯示前一個帳本的資料。
+
 這條分層在 SMB-130 後又進一步收斂：`core/services/bootstrap.service.js` 現在只保留資料庫初始化與 recover，`ui/services/app-bootstrap.service.js` 接手 Pinia 與啟動鏈，`ui/services/app-runtime.service.js` 接手背景排程、網址恢復、Android back 與同步/備份 runtime side effects，而 `ui/composables/useAppShellRuntime.js` 則把 App shell 的 route transition、高度鎖定、安全鎖 lifecycle 與更新提示從 `App.vue` 抽離。
 
 交易資料流也已統一從頁面抽離：分析頁、交易搜尋、日曆、交易明細、交易編輯與帳戶明細都不再直接查 `transaction.repo.js`，而是透過 `core/services/transaction-query.service.js` 取得 `all / year / month / day / account / detail-related` 查詢結果；分析頁的分類/帳戶彙總、圓餅圖、長條圖與日別 breakdown 集中在 `core/utils/analysis-breakdown.js`，交易搜尋頁的 filter、批量選取、sheet 狀態與結果摘要則集中在 `ui/composables/useTransactionSearchPage.js`。
 
 會員邏輯也已把 domain 與導頁 side effect 分開：`core/services/membership.service.js` 只保留 entitlement、sync、snapshot 與 limit error 判斷，真正的會員限制導頁改由 `ui/services/membership-navigation.service.js` 處理，避免 core 層再反向依賴 UI router。共同帳本 backend 端則把 `auth` 與 `shared-ledgers` 路由拆成模組化目錄，並由 `backend/src/server.js` 的 route table 分派，`backend/src/collab/http.js` 提供共用 request parsing、method/body guard 與 route error serialization。
+
+共同帳本快照推送會檢查用戶端帶上的 `baseVersion`，包含初始 `version=0` 邊界；密碼登入在鎖定期間會直接回覆鎖定狀態，不再重複累加失敗次數或延長鎖定；忘記密碼若臨時密碼 Email 寄送失敗，會回滾臨時密碼寫入，保留原密碼可用。
 
 另外，新帳本建立後會立即完成預算模組初始化並可正常載入空月預算，不會因預算項目查詢的欄位歧義中斷 onboarding 或帳本切換流程。
 
@@ -163,6 +169,8 @@ Android 發版目前也已把版本碼策略收斂成由語意版號自動推導
 - 是否可報銷
 
 轉帳情境也支援跨幣別匯率處理，不是只做同幣別搬移。
+
+交易編輯頁保留調整交易的正負金額，負調整不會被轉成正數；跨幣別轉帳若使用手動匯率，無效匯率會在送出前阻擋。
 
 借貸模組現在也支援在借貸明細中調整「建立入帳帳戶」，會直接更新當初建立借入 / 借出時產生的那筆初始交易帳戶，而不會誤改後續還款 / 收款紀錄。
 

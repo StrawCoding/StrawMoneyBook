@@ -9,6 +9,7 @@ const GLOBAL_RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.GLOBAL_RAT
 const GLOBAL_RATE_LIMIT_MAX_REQUESTS = Math.max(20, Number(process.env.GLOBAL_RATE_LIMIT_MAX_REQUESTS ?? 180) || 0)
 const AUTH_RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS ?? 10 * 60_000) || 0)
 const AUTH_RATE_LIMIT_MAX_REQUESTS = Math.max(5, Number(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS ?? 40) || 0)
+const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS ?? '').trim()
 
 const rateLimitBuckets = new Map()
 
@@ -174,5 +175,8 @@ const server = createServer(async (req, res) => {
 })
 
 server.listen(PORT, HOST, () => {
+  if (ALLOWED_ORIGINS === '*') {
+    console.warn('[security] ALLOWED_ORIGINS=* is set; all origins are allowed. Do not use this in production.')
+  }
   console.log(`[backend] listening on http://${HOST}:${PORT}`)
 })

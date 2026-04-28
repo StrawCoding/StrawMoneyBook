@@ -47,6 +47,20 @@ export async function handlePasswordResetRequest(req, res) {
     const temporaryPassword = createTemporaryPassword()
     const passwordRecord = hashPassword(temporaryPassword)
     const issuedAt = nowIso()
+    const previousPasswordState = {
+      password_hash: existingUser.password_hash,
+      password_salt: existingUser.password_salt,
+      must_change_password: existingUser.must_change_password,
+      temporary_password_issued_at: existingUser.temporary_password_issued_at,
+      password_reset_token_hash: existingUser.password_reset_token_hash,
+      password_reset_requested_at: existingUser.password_reset_requested_at,
+      password_reset_expires_at: existingUser.password_reset_expires_at,
+      login_failed_attempts: existingUser.login_failed_attempts,
+      last_failed_login_at: existingUser.last_failed_login_at,
+      login_locked_until: existingUser.login_locked_until,
+      password_reset_required: existingUser.password_reset_required,
+      updated_at: existingUser.updated_at,
+    }
 
     await updateStore(async (nextData) => {
       const targetUser = findUserByEmail(nextData, email)
@@ -60,11 +74,20 @@ export async function handlePasswordResetRequest(req, res) {
       targetUser.updated_at = issuedAt
     })
 
-    await sendTemporaryPasswordEmail({
-      email,
-      displayName: existingUser.display_name || existingUser.email,
-      temporaryPassword,
-    })
+    try {
+      await sendTemporaryPasswordEmail({
+        email,
+        displayName: existingUser.display_name || existingUser.email,
+        temporaryPassword,
+      })
+    } catch (error) {
+      await updateStore(async (nextData) => {
+        const targetUser = findUserByEmail(nextData, email)
+        if (!targetUser) return
+        Object.assign(targetUser, previousPasswordState)
+      })
+      throw error
+    }
 
     if (isDebugPasswordResetResponseEnabled()) {
       debugTemporaryPassword = temporaryPassword

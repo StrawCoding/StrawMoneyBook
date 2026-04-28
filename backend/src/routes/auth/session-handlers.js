@@ -141,22 +141,6 @@ export async function handleLogin(req, res) {
 
   const lockedUntil = getLockedUntil(user)
   if (lockedUntil) {
-    if (!verifyPassword(user, password)) {
-      const failureState = await updateStore(async (nextData) => {
-        const targetUser = findUserByEmail(nextData, email)
-        if (!targetUser) return null
-        return registerFailedLoginAttempt(targetUser)
-      })
-
-      if (failureState?.resetRequired) {
-        sendJson(res, 403, {
-          error: 'password_reset_required',
-          message: '密碼錯誤已達 10 次，請先申請臨時密碼',
-        })
-        return
-      }
-    }
-
     sendJson(res, 429, {
       error: 'login_temporarily_locked',
       message: `密碼錯誤已達 5 次，請 ${getLockRemainingMinutes(lockedUntil)} 分鐘後再試`,

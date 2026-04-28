@@ -118,6 +118,18 @@ const resetConfirmLabel = computed(() => {
   return t('settings_data.reset.confirm')
 })
 
+async function createResetRecoveryBackup() {
+  const filename = `strawmoneybook-recovery-before-reset-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+  const data = await exportAllLedgersJson()
+  const saved = await saveJsonFileToDevice(filename, data, { category: 'data-management' })
+  if (saved?.saved && saved.location) {
+    lastExportPath.value = saved.location
+    return
+  }
+  downloadJsonFile(filename, data)
+  lastExportPath.value = `Downloads/${filename}`
+}
+
 function readFileAsText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -280,6 +292,11 @@ async function confirmResetAllData() {
 
   resettingAllData.value = true
   try {
+    try {
+      await createResetRecoveryBackup()
+    } catch (backupError) {
+      console.warn('[data-management] failed to create recovery backup before reset', backupError)
+    }
     await resetDatabase()
     localStorage.removeItem('straw.active_ledger_id')
     await ledgerStore.init()

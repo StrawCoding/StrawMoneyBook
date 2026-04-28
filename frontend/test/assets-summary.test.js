@@ -55,3 +55,19 @@ test('does not deduct advance from excluded accounts and still tracks liabilitie
   assert.equal(result.advanceDeductedMinor, 0)
   assert.equal(result.liabilityMinor, 17000)
 })
+
+test('counts negative liability account balances as debt', () => {
+  const result = calculateAssetSummary({
+    balances: [
+      {
+        id: 'credit-card',
+        account_type: 'liability',
+        include_in_assets: 1,
+        balance_minor: -32000,
+      },
+    ],
+  })
+
+  assert.equal(result.disposableMinor, 0)
+  assert.equal(result.liabilityMinor, 32000)
+})
