@@ -756,3 +756,7 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 - `frontend/src/ui/services/`
 - `backend/src/routes/`
 - `frontend/android/app/src/main/java/com/strawcoding/strawmoneybook/`
+
+補充維護約束：
+
+- `frontend/src/ui/services/i18n.service.js` 的手動覆蓋字典優先於 generated 文案；同一物件不可保留重複 key，且 `RUNTIME_EN_TEXT` / `RUNTIME_EN_REPLACEMENTS` 若有相同 key，應只保留 `RUNTIME_EN_TEXT`

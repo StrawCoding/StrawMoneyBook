@@ -711,6 +711,7 @@ UI composable 目錄：`src/ui/composables/`
 - 函數（21）：`applyDocumentLanguage`, `applyTemplateParams`, `detectUserLocale`, `getCurrentLocale`, `initLocalePreference`, `isInRuntimeTranslateExcludedZone`, `normalizeLocale`, `processElementAttributes`, `processNodeTree`, `processTextNode`, `readLocale`, `safelyStartRuntimeDomTranslator`, `setLocale`, `shouldRefreshOriginalValue`, `shouldSkipTextNode`, `startRuntimeDomTranslator`, `syncRuntimeDomTranslations`, `translateRuntimeText`, `translateTextByLocale`, `useI18n`, `writeLocale`
 - 變數（16）：`DEFAULT_LOCALE`, `ENABLE_RUNTIME_DOM_TRANSLATOR`, `MESSAGES`, `RUNTIME_EN_EXACT`, `RUNTIME_EN_PHRASE_REPLACEMENTS`, `RUNTIME_EN_REPLACEMENTS`, `RUNTIME_EN_TEXT`, `STORAGE_KEY`, `SUPPORTED_LOCALES`, `domTranslatorObserver`, `isSyncingRuntimeDomTranslations`, `localeRef`, `originalAttrsByElement`, `originalTextByNode`, `runtimeReplacementEntries`, `translatableAttributeNames`
 - 類別（0）：無
+- 補充：手動 `RUNTIME_EN_TEXT` / `RUNTIME_EN_REPLACEMENTS` / `MESSAGES.ja` 會覆蓋 generated 文案；同一物件內不可保留重複 key，且 `RUNTIME_EN_TEXT` 與 `RUNTIME_EN_REPLACEMENTS` 若有相同 key，應只保留前者。
 
 ### `src/ui/services/runtime-en-exact.generated.js`
 - 函數（0）：無
