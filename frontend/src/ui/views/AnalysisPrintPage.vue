@@ -406,7 +406,7 @@ function buildBreakdown(type) {
     getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
     getUncategorizedLabel: () => t('analysis_page.uncategorized'),
     swatches: CHART_MULTI_COLOR_SWATCHES,
-  }))
+  })
 }
 
 function buildPieStyle(items) {
