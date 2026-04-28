@@ -24,6 +24,7 @@ test('auto backup services persist auto-check diagnostics for skip, success, and
   assert.match(googleSource, /lastAutoCheckStatus: 'ok'/)
   assert.match(googleSource, /lastAutoCheckStatus: 'error'/)
   assert.match(googleSource, /resolveGoogleAutoBackupSkipReason/)
+  assert.match(googleSource, /lastAutoCheckReason: 'platform_unsupported'/)
 
   assert.match(webdavSource, /lastAutoCheckAt: ''/)
   assert.match(webdavSource, /lastAutoCheckStatus: 'idle'/)
@@ -52,6 +53,7 @@ test('auto backup settings page shows the latest auto-check reason and time', ()
   assert.match(settingsSource, /webdavBackupState\.lastAutoCheckAt/)
   assert.match(settingsSource, /describeAutoBackupCheck\(googleBackupState\)/)
   assert.match(settingsSource, /describeAutoBackupCheck\(webdavBackupState\)/)
+  assert.match(settingsSource, /settings_auto_backup\.auto_check\.platform_unsupported/)
 })
 
 test('google auto backup surfaces auth failure as error instead of skip when backup is configured (SMB-110)', () => {

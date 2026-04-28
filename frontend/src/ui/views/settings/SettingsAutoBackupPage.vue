@@ -487,6 +487,9 @@ function describeAutoBackupCheck(state) {
     if (reason === 'offline') {
       return t('settings_auto_backup.auto_check.offline')
     }
+    if (reason === 'platform_unsupported') {
+      return t('settings_auto_backup.auto_check.platform_unsupported')
+    }
     if (reason === 'not_due') {
       return t('settings_auto_backup.auto_check.not_due')
     }

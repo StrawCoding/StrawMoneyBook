@@ -428,6 +428,11 @@ export async function runGoogleAutoBackupIfDue(ledgerId) {
   assertLedgerId(ledgerId)
   const startedAt = new Date().toISOString()
   if (!Capacitor.isNativePlatform()) {
+    await saveState(ledgerId, {
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'skipped',
+      lastAutoCheckReason: 'platform_unsupported',
+    })
     return {
       status: 'skipped',
       skipped: true,
@@ -509,6 +514,11 @@ export async function runGoogleAutoBackupOnDataChange(ledgerId) {
   assertLedgerId(ledgerId)
   const startedAt = new Date().toISOString()
   if (!Capacitor.isNativePlatform()) {
+    await saveState(ledgerId, {
+      lastAutoCheckAt: startedAt,
+      lastAutoCheckStatus: 'skipped',
+      lastAutoCheckReason: 'platform_unsupported',
+    })
     return {
       status: 'skipped',
       skipped: true,
