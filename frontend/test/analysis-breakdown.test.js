@@ -36,6 +36,34 @@ test('category breakdown aggregates by category and assigns palette metadata', (
   assert.equal(rows[0].percent, 65)
 })
 
+test('expense category breakdown splits positive addon items without changing total expense', () => {
+  const rows = buildBreakdownRows({
+    transactions: [
+      {
+        type: 'expense',
+        amount_minor: -11500,
+        category_id: 'food',
+        note: '午餐\n【附加項目】服務費+15',
+      },
+      {
+        type: 'expense',
+        amount_minor: -9000,
+        category_id: 'food',
+        note: '晚餐\n【附加項目】優惠-10',
+      },
+    ],
+    type: 'expense',
+    categoryNameMap: new Map([['food', '餐飲']]),
+    swatches: ['#f00', '#0f0'],
+  })
+
+  assert.equal(rows.length, 2)
+  assert.deepEqual(rows.map((item) => item.name), ['餐飲', '附加項目：服務費'])
+  assert.equal(rows[0].amountMinor, 19000)
+  assert.equal(rows[1].amountMinor, 1500)
+  assert.equal(rows.reduce((sum, item) => sum + item.amountMinor, 0), 20500)
+})
+
 test('time bar rows seed missing months and resolve linked search ranges', () => {
   const rows = buildTimeBarRows({
     transactions: [

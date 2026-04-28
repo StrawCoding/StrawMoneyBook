@@ -177,6 +177,7 @@ import {
 import { useI18n } from '@/ui/services/i18n.service'
 import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 import { monthKeyFromDate } from '@/core/utils/id'
+import { buildBreakdownRows } from '@/core/utils/analysis-breakdown'
 
 const route = useRoute()
 const ledgerStore = useLedgerStore()
@@ -386,53 +387,26 @@ function openExportLink() {
 }
 
 function buildBreakdown(type) {
-  const map = new Map()
+  const categoryNameMap = new Map()
+  const categoryIconMap = new Map()
   for (const tx of reportData.value.records ?? []) {
-    if (!isCountableForIncomeExpense(tx)) continue
-    if (tx.type !== type || tx.origin_type === 'loan_payment') continue
-
-    const amountMinor = type === 'expense' ? Math.abs(Number(tx.amount_minor ?? 0)) : Number(tx.amount_minor ?? 0)
-    if (!Number.isFinite(amountMinor) || amountMinor <= 0) continue
-
-    const key = String(tx.category_id ?? '').trim() || '__uncategorized__'
-    const current = map.get(key) || {
-      id: key,
-      amountMinor: 0,
-      count: 0,
-      name: String(tx.category_name ?? '').trim() || t('analysis_page.uncategorized'),
-      icon: String(tx.category_icon ?? '').trim(),
-    }
-    current.amountMinor += amountMinor
-    current.count += 1
-    if (!current.name) {
-      current.name = t('analysis_page.uncategorized')
-    }
-    map.set(key, current)
+    const categoryId = String(tx?.category_id ?? '').trim()
+    if (!categoryId || categoryNameMap.has(categoryId)) continue
+    categoryNameMap.set(categoryId, String(tx?.category_name ?? '').trim())
+    categoryIconMap.set(categoryId, String(tx?.category_icon ?? '').trim())
   }
 
-  const rows = Array.from(map.values()).sort((a, b) => b.amountMinor - a.amountMinor)
-  if (!rows.length) return []
-
-  const total = rows.reduce((sum, row) => sum + row.amountMinor, 0)
-  const palette = buildThemePalette(rows.length)
-  return rows.map((row, index) => ({
-    ...row,
-    color: palette[index],
-    percent: Math.round((row.amountMinor / total) * 100),
+  return buildBreakdownRows({
+    transactions: reportData.value.records ?? [],
+    type,
+    scope: 'category',
+    shouldIncludeTransaction: isCountableForIncomeExpense,
+    categoryNameMap,
+    categoryIconMap,
+    getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
+    getUncategorizedLabel: () => t('analysis_page.uncategorized'),
+    swatches: CHART_MULTI_COLOR_SWATCHES,
   }))
-}
-
-function buildThemePalette(count) {
-  const safeCount = Math.max(1, Number(count) || 1)
-  const palette = CHART_MULTI_COLOR_SWATCHES.slice(0, safeCount)
-  if (palette.length >= safeCount) return palette
-
-  for (let index = palette.length; index < safeCount; index += 1) {
-    const hue = (index * 137.508) % 360
-    palette.push(`color-mix(in srgb, hsl(${hue.toFixed(2)}deg 82% 62%) 82%, var(--card) 18%)`)
-  }
-
-  return palette
 }
 
 function buildPieStyle(items) {

@@ -2,9 +2,129 @@ function defaultShouldIncludeTransaction() {
   return true
 }
 
+export const ADDON_BREAKDOWN_ID_PREFIX = '__addon__:'
+const ADDON_NOTE_PREFIX = '【附加項目】'
+
+function round2(value) {
+  return Math.round(Number(value) * 100) / 100
+}
+
+function addonBreakdownId(label) {
+  return `${ADDON_BREAKDOWN_ID_PREFIX}${encodeURIComponent(label)}`
+}
+
+export function isAddonBreakdownId(id) {
+  return String(id ?? '').startsWith(ADDON_BREAKDOWN_ID_PREFIX)
+}
+
+export function addonLabelFromBreakdownId(id) {
+  if (!isAddonBreakdownId(id)) return ''
+  try {
+    return decodeURIComponent(String(id).slice(ADDON_BREAKDOWN_ID_PREFIX.length))
+  } catch {
+    return String(id).slice(ADDON_BREAKDOWN_ID_PREFIX.length)
+  }
+}
+
+function parseAddonItemsFromNote(note) {
+  const summaryLine = String(note ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.startsWith(ADDON_NOTE_PREFIX))
+  if (!summaryLine) return []
+
+  return summaryLine
+    .slice(ADDON_NOTE_PREFIX.length)
+    .trim()
+    .split('、')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((segment) => {
+      const matched = segment.match(/^(.+?)([+-])(\d+(?:\.\d+)?)$/)
+      if (!matched) return null
+      const [, rawLabel, sign, amountText] = matched
+      const label = String(rawLabel ?? '').trim()
+      const deltaMajor = round2(Math.abs(Number(amountText)))
+      if (!label || deltaMajor <= 0) return null
+      return {
+        label,
+        direction: sign === '-' ? 'minus' : 'plus',
+        deltaMinor: Math.round(deltaMajor * 100),
+      }
+    })
+    .filter(Boolean)
+}
+
+function normalizePositiveAddonParts(tx, finalAmountMinor) {
+  const positiveItems = parseAddonItemsFromNote(tx?.note)
+    .filter((item) => item.direction === 'plus' && item.deltaMinor > 0)
+  if (!positiveItems.length || finalAmountMinor <= 0) return []
+
+  const totalAddonMinor = positiveItems.reduce((sum, item) => sum + item.deltaMinor, 0)
+  if (totalAddonMinor <= finalAmountMinor) return positiveItems
+
+  let allocatedMinor = 0
+  return positiveItems
+    .map((item, index) => {
+      const isLast = index === positiveItems.length - 1
+      const amountMinor = isLast
+        ? Math.max(0, finalAmountMinor - allocatedMinor)
+        : Math.max(0, Math.round((item.deltaMinor / totalAddonMinor) * finalAmountMinor))
+      allocatedMinor += amountMinor
+      return { ...item, deltaMinor: amountMinor }
+    })
+    .filter((item) => item.deltaMinor > 0)
+}
+
+export function getBreakdownPartsForTransaction(tx, {
+  type,
+  scope = 'category',
+  getAddonLabel = (label) => `附加項目：${label}`,
+} = {}) {
+  if (tx?.type !== type || tx?.origin_type === 'loan_payment') return []
+
+  const amount = type === 'expense' ? Math.abs(Number(tx?.amount_minor ?? 0)) : Number(tx?.amount_minor ?? 0)
+  if (!Number.isFinite(amount) || amount <= 0) return []
+
+  if (scope !== 'category' || type !== 'expense') {
+    const id = scope === 'account'
+      ? (tx.account_id || '__unassigned_account__')
+      : (tx.category_id || '__uncategorized__')
+    return [{ id, amountMinor: amount, count: 1, icon: '' }]
+  }
+
+  const addonParts = normalizePositiveAddonParts(tx, amount)
+  const addonTotalMinor = addonParts.reduce((sum, item) => sum + item.deltaMinor, 0)
+  const baseMinor = Math.max(0, amount - addonTotalMinor)
+  const parts = []
+
+  if (baseMinor > 0) {
+    parts.push({
+      id: tx.category_id || '__uncategorized__',
+      amountMinor: baseMinor,
+      count: 1,
+      icon: '',
+    })
+  }
+
+  for (const item of addonParts) {
+    parts.push({
+      id: addonBreakdownId(item.label),
+      amountMinor: item.deltaMinor,
+      count: 1,
+      name: getAddonLabel(item.label),
+      icon: 'fa-solid fa-tags',
+      addonLabel: item.label,
+    })
+  }
+
+  return parts
+}
+
 function resolveBreakdownName(id, scope, {
   accountNameMap,
   categoryNameMap,
+  getAddonLabel,
   getUnassignedAccountLabel,
   getUncategorizedLabel,
 }) {
@@ -12,6 +132,7 @@ function resolveBreakdownName(id, scope, {
     if (id === '__unassigned_account__') return getUnassignedAccountLabel()
     return accountNameMap.get(id) || getUnassignedAccountLabel()
   }
+  if (isAddonBreakdownId(id)) return getAddonLabel(addonLabelFromBreakdownId(id))
   if (id === '__uncategorized__') return getUncategorizedLabel()
   return categoryNameMap.get(id) || getUncategorizedLabel()
 }
@@ -24,6 +145,7 @@ function resolveBreakdownIcon(id, scope, {
     if (id === '__unassigned_account__') return ''
     return accountIconMap.get(id) || ''
   }
+  if (isAddonBreakdownId(id)) return 'fa-solid fa-tags'
   if (id === '__uncategorized__') return ''
   return categoryIconMap.get(id) || ''
 }
@@ -50,6 +172,7 @@ export function buildBreakdownRows({
   categoryIconMap = new Map(),
   accountNameMap = new Map(),
   accountIconMap = new Map(),
+  getAddonLabel = (label) => `附加項目：${label}`,
   getUncategorizedLabel = () => '未分類',
   getUnassignedAccountLabel = () => '未指定帳戶',
   swatches = [],
@@ -57,16 +180,13 @@ export function buildBreakdownRows({
   const map = new Map()
   for (const tx of transactions) {
     if (!shouldIncludeTransaction(tx)) continue
-    if (tx.type !== type || tx.origin_type === 'loan_payment') continue
-    const key = scope === 'account'
-      ? (tx.account_id || '__unassigned_account__')
-      : (tx.category_id || '__uncategorized__')
-    const amount = type === 'expense' ? Math.abs(Number(tx.amount_minor ?? 0)) : Number(tx.amount_minor ?? 0)
-    if (!Number.isFinite(amount) || amount <= 0) continue
-    const current = map.get(key) || { amountMinor: 0, count: 0 }
-    current.amountMinor += amount
-    current.count += 1
-    map.set(key, current)
+    const parts = getBreakdownPartsForTransaction(tx, { type, scope, getAddonLabel })
+    for (const part of parts) {
+      const current = map.get(part.id) || { amountMinor: 0, count: 0 }
+      current.amountMinor += part.amountMinor
+      current.count += part.count
+      map.set(part.id, current)
+    }
   }
 
   const rows = Array.from(map.entries())
@@ -77,6 +197,7 @@ export function buildBreakdownRows({
       name: resolveBreakdownName(id, scope, {
         accountNameMap,
         categoryNameMap,
+        getAddonLabel,
         getUnassignedAccountLabel,
         getUncategorizedLabel,
       }),

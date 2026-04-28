@@ -215,6 +215,7 @@ import {
   buildBreakdownRows,
   buildPieStyle,
   buildTimeBarRows,
+  isAddonBreakdownId,
   resolveTimeBarSearchRange,
 } from '@/core/utils/analysis-breakdown'
 
@@ -313,6 +314,7 @@ const incomeBreakdown = computed(() => buildBreakdownRows({
   categoryIconMap: categoryIconMap.value,
   accountNameMap: accountNameMap.value,
   accountIconMap: accountIconMap.value,
+  getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
   getUncategorizedLabel: () => t('analysis_page.uncategorized'),
   getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
   swatches: CHART_MULTI_COLOR_SWATCHES,
@@ -326,6 +328,7 @@ const expenseBreakdown = computed(() => buildBreakdownRows({
   categoryIconMap: categoryIconMap.value,
   accountNameMap: accountNameMap.value,
   accountIconMap: accountIconMap.value,
+  getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
   getUncategorizedLabel: () => t('analysis_page.uncategorized'),
   getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
   swatches: CHART_MULTI_COLOR_SWATCHES,
@@ -339,6 +342,7 @@ const incomeAccountBreakdown = computed(() => buildBreakdownRows({
   categoryIconMap: categoryIconMap.value,
   accountNameMap: accountNameMap.value,
   accountIconMap: accountIconMap.value,
+  getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
   getUncategorizedLabel: () => t('analysis_page.uncategorized'),
   getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
   swatches: CHART_MULTI_COLOR_SWATCHES,
@@ -352,6 +356,7 @@ const expenseAccountBreakdown = computed(() => buildBreakdownRows({
   categoryIconMap: categoryIconMap.value,
   accountNameMap: accountNameMap.value,
   accountIconMap: accountIconMap.value,
+  getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
   getUncategorizedLabel: () => t('analysis_page.uncategorized'),
   getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
   swatches: CHART_MULTI_COLOR_SWATCHES,
@@ -437,12 +442,14 @@ function pickMonth(value) {
 
 function openCategoryBreakdownDetail(item) {
   if (!item?.id) return
+  const isAddon = isAddonBreakdownId(item.id)
   const query = {
     type: analysisType.value,
-    categoryId: String(item.id),
+    categoryId: isAddon ? '__addon__' : String(item.id),
     mode: mode.value,
     label: String(item.name ?? ''),
   }
+  if (isAddon) query.addonId = String(item.id)
   if (mode.value === 'year') {
     query.year = String(selectedYear.value)
   } else if (mode.value === 'month') {

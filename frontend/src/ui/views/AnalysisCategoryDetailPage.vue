@@ -87,6 +87,10 @@ import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 import { monthKeyFromDate } from '@/core/utils/id'
+import {
+  getBreakdownPartsForTransaction,
+  isAddonBreakdownId,
+} from '@/core/utils/analysis-breakdown'
 
 const route = useRoute()
 const router = useRouter()
@@ -102,6 +106,7 @@ const referenceLedgerId = ref('')
 
 const analysisType = computed(() => (String(route.query.type ?? '') === 'income' ? 'income' : 'expense'))
 const categoryId = computed(() => String(route.query.categoryId ?? '').trim())
+const addonId = computed(() => String(route.query.addonId ?? '').trim())
 const queryCategoryLabel = computed(() => String(route.query.label ?? '').trim())
 const mode = computed(() => parseMode(String(route.query.mode ?? 'all')))
 const selectedYear = computed(() => parseYear(route.query.year))
@@ -120,6 +125,7 @@ const activeTypeLabel = computed(() =>
 )
 const analysisCurrencyCode = computed(() => normalizeCurrencyCode(ledgerStore.activeLedger?.currency_code, 'TWD'))
 const activeCategoryLabel = computed(() => {
+  if (categoryId.value === '__addon__') return queryCategoryLabel.value || t('analysis_page.addon_item', { label: '' }).trim()
   if (categoryId.value === '__uncategorized__') return t('analysis_page.uncategorized')
   if (categoryNameMap.value.has(categoryId.value)) return categoryNameMap.value.get(categoryId.value) || t('analysis_page.uncategorized')
   if (queryCategoryLabel.value) return queryCategoryLabel.value
@@ -146,7 +152,24 @@ const typeTransactions = computed(() => {
   })
 })
 const categoryTransactions = computed(() => {
-  return typeTransactions.value.filter((tx) => categoryKeyOf(tx) === categoryId.value)
+  const targetId = categoryId.value === '__addon__' && isAddonBreakdownId(addonId.value)
+    ? addonId.value
+    : categoryId.value
+
+  return typeTransactions.value.flatMap((tx) => {
+    const part = getBreakdownPartsForTransaction(tx, {
+      type: analysisType.value,
+      scope: 'category',
+      getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
+    }).find((item) => item.id === targetId)
+    if (!part) return []
+    return [{
+      ...tx,
+      amount_minor: analysisType.value === 'expense' ? part.amountMinor * -1 : part.amountMinor,
+      analysis_part_label: part.name,
+      analysis_part_icon: part.icon,
+    }]
+  })
 })
 const groupedCategoryTransactions = computed(() => {
   const grouped = []
@@ -237,10 +260,6 @@ function normalizedAmountMinor(tx) {
   return analysisType.value === 'expense' ? Math.abs(raw) : raw
 }
 
-function categoryKeyOf(tx) {
-  return String(tx?.category_id ?? '').trim() || '__uncategorized__'
-}
-
 function accountName(accountId) {
   return accountStore.accounts.find((item) => item.id === accountId)?.name || t('transaction_search.unknown_account')
 }
@@ -253,6 +272,8 @@ function labelOf(type) {
 }
 
 function labelOfTransaction(tx) {
+  const partLabel = String(tx?.analysis_part_label ?? '').trim()
+  if (partLabel) return partLabel
   if (!tx) return '結餘'
   if (tx.origin_type === 'reimbursement') return '報銷'
   if (tx.origin_type === 'loan_payment') return loanTransactionLabel(tx)
@@ -283,6 +304,8 @@ function loanTransactionLabel(tx) {
 
 function categoryIconOfTransaction(tx) {
   if (!tx) return ''
+  const partIcon = String(tx?.analysis_part_icon ?? '').trim()
+  if (partIcon) return partIcon
   const systemIcon = getSystemTransactionIcon(tx)
   if (systemIcon) return systemIcon
   const directIcon = String(tx.category_icon ?? '').trim()

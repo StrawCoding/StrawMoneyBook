@@ -11,7 +11,7 @@
 - 交易查詢（搜尋頁、日曆頁、交易明細頁、交易編輯頁）
 - 退款流程（交易明細可建立退款、選擇退款帳戶、退款與原交易自動排除預算 / 收支統計）
 - 預算管理（月預算、分類預算、日均規則、已用/剩餘/保留金額、預算剩餘自動存入存錢罐）
-- 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、列印 / PDF 版面）
+- 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、列印 / PDF 版面；SMB-146 後支出分類分析會將正向附加項目拆成獨立分析列，主分類扣除該附加金額後仍維持總支出一致，分析明細與列印報表同步支援）
 - 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、群組內金額摘要）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細）
 - 借貸建立後可於借貸明細變更「建立入帳帳戶」，會直接修正該筆初始借入 / 借出交易的帳戶歸屬
@@ -204,9 +204,9 @@
 |---|---|
 | mode 切換（全部/年/月） | `analysis.vue` 內部 state + `src/core/services/transaction-query.service.js` |
 | 收入圓餅圖 | `analysis.vue` + `src/core/utils/analysis-breakdown.js`（分類彙總 + 色盤） |
-| 支出圓餅圖 | `analysis.vue` + `src/core/utils/analysis-breakdown.js`（分類彙總 + 色盤） |
+| 支出圓餅圖 | `analysis.vue` + `src/core/utils/analysis-breakdown.js`（分類彙總 + 色盤；正向附加項目會以「附加項目」分析列納入） |
 | 帳戶分析（總額/收入/支出） | `analysis.vue` + `src/core/utils/analysis-breakdown.js`（帳戶彙總 + 色盤） |
-| 分類明細頁 | `analysis.vue` -> `/analysis/category` + `AnalysisCategoryDetailPage.vue` + `src/core/services/transaction-query.service.js` |
+| 分類明細頁 | `analysis.vue` -> `/analysis/category` + `AnalysisCategoryDetailPage.vue` + `src/core/services/transaction-query.service.js`；支援附加項目分析列明細 |
 | 右上角列印按鈕 | `analysis.vue` -> `/analysis/print` |
 | AI 分析頁 | 已移除（不再提供 `/analysis/ai` 路由） |
 | 交易 CSV 匯出 | `src/ui/views/AnalysisPrintPage.vue` + `src/core/services/export.service.js` |
