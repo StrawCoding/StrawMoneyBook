@@ -84,7 +84,7 @@ const displayModeIndex = computed(() => {
   return index >= 0 ? index : 0
 })
 const touchStartX = ref(0)
-const SWIPE_THRESHOLD_PX = 36
+const SWIPE_THRESHOLD_PX = 72
 
 function toFiniteNonNegative(value) {
   const numeric = Number(value)

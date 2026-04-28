@@ -47,12 +47,21 @@
               <h4 class="chart-subtitle">{{ t('analysis_page.chart.pie') }}</h4>
             </div>
             <div class="chart-wrap">
-              <div class="pie" :style="activePieStyle">
-                <div class="pie-hole">
-                  <div class="pie-total">{{ t('analysis_page.type_total', { type: activeTypeLabel }) }}</div>
-                  <MoneyText :value-minor="activeTotalMinor" />
+              <button
+                type="button"
+                class="pie-button"
+                :class="{ interactive: Boolean(activePieTarget) }"
+                :disabled="!activePieTarget"
+                :aria-label="activePieTarget ? `${activeTypeLabel} ${activePieTarget.name}` : activeTypeLabel"
+                @click="openCategoryBreakdownDetail(activePieTarget)"
+              >
+                <div class="pie" :style="activePieStyle">
+                  <div class="pie-hole">
+                    <div class="pie-total">{{ t('analysis_page.type_total', { type: activeTypeLabel }) }}</div>
+                    <MoneyText :value-minor="activeTotalMinor" />
+                  </div>
                 </div>
-              </div>
+              </button>
             </div>
             <div class="chart-wrap">
               <h4 class="chart-subtitle">{{ t('analysis_page.chart.bar') }}</h4>
@@ -118,12 +127,21 @@
               <h4 class="chart-subtitle">{{ t('analysis_page.chart.pie') }}</h4>
             </div>
             <div class="chart-wrap">
-              <div class="pie" :style="accountActivePieStyle">
-                <div class="pie-hole">
-                  <div class="pie-total">{{ t('analysis_page.type_total', { type: accountActiveTypeLabel }) }}</div>
-                  <MoneyText :value-minor="accountActiveTotalMinor" />
+              <button
+                type="button"
+                class="pie-button"
+                :class="{ interactive: Boolean(accountActivePieTarget) }"
+                :disabled="!accountActivePieTarget"
+                :aria-label="accountActivePieTarget ? `${accountActiveTypeLabel} ${accountActivePieTarget.name}` : accountActiveTypeLabel"
+                @click="openAccountBreakdownDetail(accountActivePieTarget)"
+              >
+                <div class="pie" :style="accountActivePieStyle">
+                  <div class="pie-hole">
+                    <div class="pie-total">{{ t('analysis_page.type_total', { type: accountActiveTypeLabel }) }}</div>
+                    <MoneyText :value-minor="accountActiveTotalMinor" />
+                  </div>
                 </div>
-              </div>
+              </button>
             </div>
             <div class="chart-wrap">
               <h4 class="chart-subtitle">{{ t('analysis_page.chart.bar') }}</h4>
@@ -382,6 +400,7 @@ const activeBreakdown = computed(() => (analysisType.value === 'income' ? income
 const activeTotalMinor = computed(() => (analysisType.value === 'income' ? incomeTotalMinor.value : expenseTotalMinor.value))
 const activeCount = computed(() => (analysisType.value === 'income' ? incomeCount.value : expenseCount.value))
 const activePieStyle = computed(() => (analysisType.value === 'income' ? incomePieStyle.value : expensePieStyle.value))
+const activePieTarget = computed(() => activeBreakdown.value[0] ?? null)
 const activeBarRows = computed(() => buildBarRows(activeBreakdown.value))
 const activeTypeLabel = computed(() => (analysisType.value === 'income' ? t('analysis_page.type.income') : t('analysis_page.type.expense')))
 const timeBarRows = computed(() => buildTimeBarRows({
@@ -423,6 +442,7 @@ const accountActiveCount = computed(() => {
   return totalAccountBreakdown.value.length
 })
 const accountActivePieStyle = computed(() => buildPieStyle(accountActiveBreakdown.value))
+const accountActivePieTarget = computed(() => accountActiveBreakdown.value.find((item) => !String(item?.id ?? '').startsWith('__')) ?? null)
 const accountActiveBarRows = computed(() => buildBarRows(accountActiveBreakdown.value))
 const accountActiveTypeLabel = computed(() =>
   accountAnalysisType.value === 'income'
@@ -583,16 +603,39 @@ h2, h3 {
   margin: 0
 }
 .pie {
-  width: 220px;
-  height: 220px;
+  width: min(220px, 56vw);
+  height: min(220px, 56vw);
   border-radius: 50%;
   display: grid;
   place-items: center;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent)
 }
+.pie-button {
+  border: none;
+  padding: 0;
+  background: transparent;
+  border-radius: 50%;
+}
+.pie-button.interactive {
+  cursor: pointer;
+  transition:
+    transform var(--anim-fast) var(--anim-standard),
+    filter var(--anim-fast) var(--anim-standard);
+}
+.pie-button.interactive:hover,
+.pie-button.interactive:focus-visible {
+  transform: translateY(-2px) scale(1.01);
+  filter: drop-shadow(0 10px 18px color-mix(in srgb, black 22%, transparent));
+}
+.pie-button.interactive:active {
+  transform: scale(0.985);
+}
+.pie-button:disabled {
+  cursor: default;
+}
 .pie-hole {
-  width: 128px;
-  height: 128px;
+  width: min(128px, 32vw);
+  height: min(128px, 32vw);
   border-radius: 50%;
   background: var(--surface-popover);
   display: grid;

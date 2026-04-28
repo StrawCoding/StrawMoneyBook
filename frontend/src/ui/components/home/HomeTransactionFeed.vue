@@ -59,7 +59,16 @@
           </li>
         </ul>
       </li>
-      <li v-if="visibleHomeTransactions.length === 0" class="muted empty-item">{{ t('home_tx.empty_this_month') }}</li>
+      <li v-if="visibleHomeTransactions.length === 0" class="empty-item">
+        <div class="empty-state">
+          <span class="empty-state-icon" aria-hidden="true">
+            <font-awesome-icon icon="fa-solid fa-receipt" />
+          </span>
+          <strong>{{ t('home_tx.empty_this_month') }}</strong>
+          <p class="muted empty-state-copy">目前還沒有符合範圍的交易，先快速新增第一筆紀錄。</p>
+          <RouterLink class="btn primary empty-state-action" to="/transactions/quick-add">立即記帳</RouterLink>
+        </div>
+      </li>
     </ul>
 
   </article>
@@ -314,7 +323,7 @@ h3 {
   gap: 12px;
   padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--card) 90%, transparent);
   cursor: pointer;
   outline: none;
@@ -414,7 +423,37 @@ h3 {
 }
 .empty-item {
   text-align: center;
-  padding: 8px
+  padding: 0
+}
+.empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 22px 16px;
+  border: 1px dashed color-mix(in srgb, var(--primary) 26%, var(--border) 74%);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-highlight) 64%, transparent);
+}
+.empty-state strong {
+  font-size: var(--text-md);
+}
+.empty-state-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  color: var(--primary-soft);
+  font-size: 20px;
+}
+.empty-state-copy {
+  margin: 0;
+  max-width: 22rem;
+  line-height: 1.5;
+}
+.empty-state-action {
+  min-width: 108px;
 }
 .icon-btn {
   width: 32px;
