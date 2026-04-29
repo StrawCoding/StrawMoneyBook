@@ -59,3 +59,12 @@ test('new claim import flow preserves draft form state while visiting the import
   assert.match(claimImportSource, /claimId\.value === 'new'/)
   assert.match(claimImportSource, /saveClaimSheetDraftSession\(\{[\s\S]*importTxIds: selectedTxIds\.value/)
 })
+
+
+test('claim reimbursement import page returns to the originating claim flow instead of raw history back', () => {
+  assert.match(claimImportSource, /const returnLink = computed\(\(\) => \{/)
+  assert.match(claimImportSource, /if \(isNewDraft\.value\) return \{ name: 'claim-sheets', query: \{ create: '1' \} \}/)
+  assert.match(claimImportSource, /return \{ name: 'claim-sheet-edit', params: \{ id: claimId\.value \} \}/)
+  assert.match(claimImportSource, /function goBack\(\) \{\s*void router\.replace\(returnLink\.value\)\s*\}/)
+  assert.doesNotMatch(claimImportSource, /goBackOrFallback/)
+})

@@ -66,7 +66,6 @@ import { getReimbursementDetail, updateReimbursementDraft } from '@/core/service
 import { buildClaimCategoryLookup, presentImportedClaimTx } from '@/ui/utils/claim-sheet-presentation'
 import { reimbursementPendingMinor } from '@/ui/utils/reimbursement-item'
 import { useI18n } from '@/ui/services/i18n.service'
-import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
@@ -176,7 +175,7 @@ function importedTxPresentation(tx) {
 }
 
 function goBack() {
-  void goBackOrFallback(router, returnLink.value)
+  void router.replace(returnLink.value)
 }
 
 function toggleSelectAll() {
