@@ -21,6 +21,11 @@ const budgetRepoSource = readFileSync(
 )
 
 test('budgeting page exposes detail-first budget item and total save flows', () => {
+  assert.match(budgetingSource, /<HomeRangePicker[\s\S]*mode="month"/)
+  assert.match(budgetingSource, /@update:month="pickMonth"/)
+  assert.match(budgetingSource, /import HomeRangePicker from '@\/ui\/components\/common\/HomeRangePicker\.vue'/)
+  assert.doesNotMatch(budgetingSource, /changeMonth\(/)
+  assert.doesNotMatch(budgetingSource, /goCurrentMonth\(/)
   assert.doesNotMatch(budgetingSource, /budgeting\.reserved/)
   assert.match(budgetingSource, /@click="openItemDetail\(item\)"/)
   assert.match(budgetingSource, /const detailItem = ref\(null\)/)

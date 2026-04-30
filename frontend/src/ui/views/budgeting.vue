@@ -5,12 +5,11 @@
     <article class="card panel">
       <header class="row">
         <h3>{{ t('budgeting.monthly_budget') }}</h3>
-        <div class="month-controls">
-          <button class="btn month-btn" :disabled="budgetStore.loading" @click="changeMonth(-1)">‹</button>
-          <span class="month-label">{{ displayMonth }}</span>
-          <button class="btn month-btn" :disabled="budgetStore.loading" @click="changeMonth(1)">›</button>
-          <button class="btn month-today" :disabled="budgetStore.loading" @click="goCurrentMonth">{{ t('budgeting.this_month') }}</button>
-        </div>
+        <HomeRangePicker
+          mode="month"
+          :month="budgetStore.monthKey"
+          @update:month="pickMonth"
+        />
       </header>
 
       <div class="stack stat">
@@ -283,10 +282,10 @@ import BudgetItemSheet from '@/ui/components/budget/BudgetItemSheet.vue'
 import BudgetMiniPie from '@/ui/components/budget/BudgetMiniPie.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
-import { monthKeyFromDate } from '@/core/utils/id'
 
 const budgetStore = useBudgetStore()
 const accountStore = useAccountStore()
@@ -447,29 +446,9 @@ watch(
   { deep: true },
 )
 
-function changeMonth(offset) {
-  const monthKey = shiftMonthKey(budgetStore.monthKey, offset)
-  if (!monthKey) return
+function pickMonth(monthKey) {
+  if (!monthKey || monthKey === budgetStore.monthKey) return
   budgetStore.loadMonth(monthKey)
-}
-
-function goCurrentMonth() {
-  const monthKey = monthKeyFromDate(new Date())
-  if (monthKey === budgetStore.monthKey) return
-  budgetStore.loadMonth(monthKey)
-}
-
-const displayMonth = computed(() => {
-  if (!budgetStore.monthKey) return '-'
-  const [year, month] = budgetStore.monthKey.split('-')
-  return t('budgeting.month_display', { year, month })
-})
-
-function shiftMonthKey(monthKey, offset = 0) {
-  const [year, month] = String(monthKey ?? '').split('-').map((part) => Number(part))
-  if (!year || !month) return ''
-  const next = new Date(year, month - 1 + offset, 1)
-  return monthKeyFromDate(next)
 }
 
 function categoryName(categoryId) {
@@ -732,23 +711,6 @@ h2, h3 {
 }
 .page-title {
   font-size: 24px
-}
-.month-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px
-}
-.month-label {
-  min-width: 90px;
-  text-align: center;
-  font-weight: 700
-}
-.month-btn {
-  width: 36px;
-  padding: 8px 0
-}
-.month-today {
-  padding: 8px 10px
 }
 .stat {
   margin-top: 10px
