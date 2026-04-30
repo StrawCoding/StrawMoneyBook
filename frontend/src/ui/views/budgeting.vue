@@ -248,6 +248,7 @@
     <BudgetItemSheet
       :open="isSheetOpen"
       :item="editingItem"
+      :budget-month="budgetStore.monthKey"
       :categories="categoryStore.expenseCategories"
       :category-groups="categoryStore.expenseCategoryGroups"
       :account-groups="accountStore.groups"

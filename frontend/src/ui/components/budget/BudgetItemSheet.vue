@@ -51,13 +51,44 @@
     </div>
 
     <div v-if="model.amountMode === 'daily_average' && model.dayRuleUnit === 'monthday'" class="stack rule-wrap">
+      <div class="monthday-picker">
+        <div class="row monthday-picker-head">
+          <div class="monthday-picker-copy">
+            <strong>{{ monthdayPreviewLabel }}</strong>
+            <small class="muted">{{ t('budgeting.sheet.monthday_picker_hint') }}</small>
+          </div>
+          <div class="row monthday-picker-actions">
+            <button type="button" class="btn icon-btn" @click="shiftMonthdayPreview(-1)">‹</button>
+            <button type="button" class="btn icon-btn" @click="shiftMonthdayPreview(1)">›</button>
+          </div>
+        </div>
+        <div class="week-row monthday-week-row">
+          <span v-for="name in weekNames" :key="`monthday-week-${name}`">{{ name }}</span>
+        </div>
+        <div class="monthday-calendar-grid">
+          <button
+            v-for="cell in monthdayCalendarCells"
+            :key="cell.key"
+            type="button"
+            class="day-chip"
+            :class="{ active: cell.active, muted: !cell.inMonth }"
+            :disabled="!cell.inMonth"
+            @click="toggleDayRuleValue(cell.day)"
+          >
+            {{ cell.label }}
+          </button>
+        </div>
+      </div>
+      <div class="row day-rule-quick-row">
+        <button type="button" class="btn" @click="applyMonthdayPreset('all')">{{ t('budgeting.sheet.rule_all') }}</button>
+        <button type="button" class="btn" @click="applyMonthdayPreset('clear')">{{ t('budgeting.sheet.rule_clear') }}</button>
+      </div>
       <div class="day-chip-grid monthday-grid">
         <button
-          v-for="day in monthdayValues"
+          v-for="day in selectedMonthdayValues"
           :key="`monthday-${day}`"
           type="button"
-          class="day-chip"
-          :class="{ active: model.dayRuleValues.includes(day) }"
+          class="day-chip active"
           @click="toggleDayRuleValue(day)"
         >
           {{ day }}
@@ -156,10 +187,14 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  budgetMonth: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits(['close', 'save'])
-const { t } = useI18n()
+const { locale, t } = useI18n()
 
 const model = reactive({
   id: '',
@@ -174,6 +209,8 @@ const model = reactive({
 })
 const weekdayValues = [1, 2, 3, 4, 5, 6, 7]
 const monthdayValues = Array.from({ length: 31 }, (_, index) => index + 1)
+const today = new Date()
+const monthdayPreview = reactive(resolveMonthdayPreview(props.budgetMonth))
 
 const amountModeOptions = computed(() => [
   { value: 'fixed', label: t('budgeting.amount_mode.fixed') },
@@ -198,6 +235,36 @@ const categoryPickerGroups = computed(() => {
   ]
 })
 const selectedDayRuleLabel = computed(() => model.dayRuleValues.join(', '))
+const selectedMonthdayValues = computed(() => (
+  normalizeDayRuleValues(model.dayRuleValues, 'monthday')
+))
+const weekNames = computed(() => {
+  const formatter = new Intl.DateTimeFormat(resolveWeekdayLocale(locale.value), { weekday: 'short' })
+  const sunday = new Date(Date.UTC(2026, 0, 4))
+  return Array.from({ length: 7 }, (_, index) => formatter.format(new Date(sunday.getTime() + index * 86400000)))
+})
+const monthdayPreviewLabel = computed(() => (
+  t('budgeting.month_display', { year: monthdayPreview.year, month: monthdayPreview.month + 1 })
+))
+const monthdayCalendarCells = computed(() => {
+  const first = new Date(monthdayPreview.year, monthdayPreview.month, 1)
+  const start = new Date(first)
+  start.setDate(first.getDate() - first.getDay())
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start)
+    date.setDate(start.getDate() + index)
+    const inMonth = date.getMonth() === monthdayPreview.month
+    const day = date.getDate()
+    return {
+      key: `${date.getFullYear()}-${date.getMonth() + 1}-${day}`,
+      label: inMonth ? String(day) : '',
+      day,
+      inMonth,
+      active: inMonth && model.dayRuleValues.includes(day),
+    }
+  })
+})
 const duplicateCategoryIdSet = computed(() => new Set((props.duplicateCategoryIds ?? []).map((value) => String(value ?? '').trim()).filter(Boolean)))
 const budgetSaveModeLabel = computed(() => (
   model.amountMode === 'daily_average'
@@ -236,6 +303,7 @@ watch(
   () => [props.open, props.item],
   () => {
     if (!props.open) return
+    syncMonthdayPreview(props.budgetMonth)
 
     if (props.item) {
       model.id = props.item.id
@@ -260,6 +328,14 @@ watch(
     model.budgetSaveEnabled = false
     model.budgetSaveTargetAccountId = String(props.savingsJarAccounts?.[0]?.id ?? '')
     model.budgetSaveSourceAccountId = ''
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.budgetMonth,
+  (value) => {
+    syncMonthdayPreview(value)
   },
   { immediate: true },
 )
@@ -363,6 +439,14 @@ function applyWeekdayPreset(preset) {
   model.dayRuleValues = [1, 2, 3, 4, 5]
 }
 
+function applyMonthdayPreset(preset) {
+  if (preset === 'all') {
+    model.dayRuleValues = [...monthdayValues]
+    return
+  }
+  model.dayRuleValues = []
+}
+
 function toggleDayRuleValue(value) {
   const next = new Set(model.dayRuleValues)
   if (next.has(value)) next.delete(value)
@@ -383,6 +467,34 @@ function onSave() {
     budgetSaveTargetAccountId: model.budgetSaveEnabled ? model.budgetSaveTargetAccountId : null,
     budgetSaveSourceAccountId: model.budgetSaveEnabled ? model.budgetSaveSourceAccountId : null,
   })
+}
+
+function shiftMonthdayPreview(offset) {
+  const next = new Date(monthdayPreview.year, monthdayPreview.month + offset, 1)
+  monthdayPreview.year = next.getFullYear()
+  monthdayPreview.month = next.getMonth()
+}
+
+function syncMonthdayPreview(monthKey) {
+  const preview = resolveMonthdayPreview(monthKey)
+  monthdayPreview.year = preview.year
+  monthdayPreview.month = preview.month
+}
+
+function resolveMonthdayPreview(monthKey) {
+  const [yearPart, monthPart] = String(monthKey ?? '').split('-')
+  const year = Number(yearPart)
+  const month = Number(monthPart)
+  if (Number.isFinite(year) && Number.isFinite(month) && month >= 1 && month <= 12) {
+    return { year, month: month - 1 }
+  }
+  return { year: today.getFullYear(), month: today.getMonth() }
+}
+
+function resolveWeekdayLocale(value) {
+  if (value === 'en') return 'en-US'
+  if (value === 'ja') return 'ja-JP'
+  return 'zh-TW'
 }
 </script>
 
@@ -465,7 +577,9 @@ label {
   gap: 6px
 }
 .monthday-grid {
-  grid-template-columns: repeat(7, minmax(0, 1fr))
+  grid-template-columns: repeat(auto-fit, minmax(52px, max-content));
+  align-items: start;
+  justify-content: flex-start
 }
 .day-chip {
   border: 1px solid var(--border);
@@ -475,10 +589,53 @@ label {
   min-height: 36px;
   font-weight: 700
 }
+.day-chip:disabled {
+  opacity: 0.28;
+  cursor: default
+}
 .day-chip.active {
   border-color: color-mix(in srgb, var(--primary) 60%, transparent);
   background: color-mix(in srgb, var(--primary) 14%, var(--surface));
   color: var(--primary)
+}
+.monthday-picker {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--field-border) 78%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card) 92%, var(--surface-soft-accent) 8%);
+}
+.monthday-picker-head,
+.monthday-picker-actions {
+  align-items: center;
+}
+.monthday-picker-copy {
+  display: grid;
+  gap: 2px;
+}
+.monthday-picker-actions {
+  gap: 8px;
+}
+.icon-btn {
+  min-width: 40px;
+  padding-inline: 0;
+}
+.week-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.monthday-week-row {
+  margin-top: 2px;
+}
+.monthday-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px
 }
 .switch-row {
   width: 100%;
@@ -617,7 +774,13 @@ label {
 @media (max-width: 480px) {
   .day-chip-grid,
   .monthday-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(44px, max-content));
+  }
+  .monthday-picker-head {
+    align-items: flex-start;
+  }
+  .monthday-picker-actions {
+    justify-content: flex-end;
   }
 }
 </style>
