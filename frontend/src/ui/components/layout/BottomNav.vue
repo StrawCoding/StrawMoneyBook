@@ -1,5 +1,5 @@
 <template>
-  <nav class="bottom-nav card">
+  <nav class="bottom-nav">
     <RouterLink
       v-for="item in items"
       :key="item.key"
@@ -9,7 +9,10 @@
       :aria-label="item.label"
       :title="item.label"
     >
-      <font-awesome-icon :icon="item.icon" class="nav-icon" />
+      <span class="nav-pill">
+        <font-awesome-icon :icon="item.icon" class="nav-icon" />
+      </span>
+      <span class="nav-label">{{ item.label }}</span>
     </RouterLink>
   </nav>
 </template>
@@ -39,54 +42,85 @@ const items = computed(() =>
 const activeTab = computed(() => route.meta.tab)
 </script>
 
-<style scoped>.bottom-nav {
+<style scoped>
+.bottom-nav {
   position: fixed;
   bottom: 0;
   left: max(var(--safe-area-left), calc((100vw - var(--app-max-width)) / 2));
   right: max(var(--safe-area-right), calc((100vw - var(--app-max-width)) / 2));
   width: auto;
-  height: calc(70px + var(--navigation-bar-height));
+  height: calc(72px + var(--navigation-bar-height));
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
+  justify-content: space-around;
+  padding-top: 8px;
   padding-bottom: var(--navigation-bar-height);
-  background-color: var(--menu-bgc, var(--card));
-  border-radius: 0;
+  padding-left: 8px;
+  padding-right: 8px;
+  background: color-mix(in srgb, var(--card-elevated) 88%, transparent 12%);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border-top: 1px solid var(--border);
   z-index: 40;
   will-change: transform, opacity;
 }
+
 .nav-item {
-  width: 100%;
-  padding: 10px;
-  align-items: center;
-  justify-content: center;
+  flex: 1;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   text-decoration: none;
+  padding: 4px 4px 0;
   -webkit-tap-highlight-color: transparent;
-  transition:
-    transform var(--anim-fast) var(--anim-standard),
-    background-color var(--anim-mid) var(--anim-standard);
+  transition: transform var(--anim-fast) var(--anim-standard);
 }
+
 .nav-item:active {
-  transform: translate3d(0, -1px, 0) scale(0.985);
+  transform: scale(0.92);
 }
-.nav-icon {
-  width: 35px;
-  font-size: 25px;
-  color: var(--menu-text, var(--muted));
+
+.nav-pill {
+  width: 48px;
+  height: 28px;
+  border-radius: var(--radius-pill);
   display: flex;
   align-items: center;
   justify-content: center;
   transition:
-    transform var(--anim-mid) var(--anim-spring),
-    color var(--anim-fast) var(--anim-standard),
-    opacity var(--anim-fast) var(--anim-standard);
-  transform: translate3d(0, 0, 0) scale(1);
-  opacity: 0.88;
-  will-change: transform, opacity;
+    background-color var(--anim-mid) var(--anim-standard),
+    transform var(--anim-mid) var(--anim-bounce);
 }
+
+.nav-icon {
+  font-size: 18px;
+  color: var(--muted);
+  transition:
+    color var(--anim-fast) var(--anim-standard),
+    transform var(--anim-mid) var(--anim-bounce);
+}
+
+.nav-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  transition: color var(--anim-fast) var(--anim-standard);
+  line-height: 1;
+}
+
+/* Active state */
+.nav-item.active .nav-pill {
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
 .nav-item.active .nav-icon {
-  color: var(--page-now, var(--primary));
-  transform: translate3d(0, -2px, 0) scale(1.04);
-  opacity: 1;
-}</style>
+  color: var(--primary);
+  transform: scale(1.1) translateY(-1px);
+}
+
+.nav-item.active .nav-label {
+  color: var(--primary-soft);
+}
+</style>

@@ -243,32 +243,57 @@ function localeRangeMonth(year, month) {
 </script>
 
 <style scoped>.ledger-card {
-  padding: 14px
+  padding: 16px;
+  background:
+    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--primary) 8%, transparent) 0%, transparent 55%),
+    var(--card);
 }
 .month-row {
-  margin-top: 10px
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between
 }
 .ledger-switcher-wrap {
-  margin-top: 10px;
+  margin-top: 12px;
   position: relative;
   z-index: 20
 }
 .period-tabs {
-  margin-top: 10px;
+  margin-top: 14px;
   position: relative;
   z-index: 1;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(4, minmax(0, 1fr))
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: var(--input-bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
 }
 .tab-btn {
-  padding: 8px 0
+  flex: 1;
+  padding: 7px 0;
+  border-radius: var(--radius-xs);
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: all var(--anim-fast) var(--anim-standard);
+}
+.tab-btn.primary {
+  background: var(--btn-bg);
+  color: var(--primary);
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
 }
 .all-range {
-  font-weight: 700
+  font-weight: 700;
+  font-size: 15px
 }
 .picker-row {
-  margin-top: 8px;
+  margin-top: 10px;
   display: flex;
   gap: 8px;
   align-items: center
@@ -281,14 +306,18 @@ function localeRangeMonth(year, month) {
 }
 h3 {
   margin: 0;
-  font-size: 16px
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-soft)
 }
 .fab {
   position: fixed;
-  right: calc(max(var(--safe-area-right), calc((100vw - var(--app-max-width)) / 2)) + 22px);
-  bottom: calc(92px + var(--navigation-bar-height));
-  border-radius: 999px;
-  padding: 10px 14px;
+  right: calc(max(var(--safe-area-right), calc((100vw - var(--app-max-width)) / 2)) + 20px);
+  bottom: calc(88px + var(--navigation-bar-height));
+  border-radius: var(--radius-pill);
+  padding: 12px 20px;
   font-size: 14px;
-  box-shadow: var(--shadow)
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: var(--shadow-primary-lg);
 }</style>

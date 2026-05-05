@@ -3,7 +3,9 @@
     <header v-if="!isBooting && !showGuidedFlow" class="top-bar">
       <div class="title-wrap">
         <img class="brand-logo" :src="BRAND_LOGO_URL" alt="StrawMoneyBook logo" />
-        <h1>StrawMoneyBook</h1>
+        <div class="brand-text">
+          <h1>StrawMoneyBook</h1>
+        </div>
       </div>
       <transition name="fade-scale">
         <RouterLink
@@ -12,7 +14,7 @@
           :aria-label="t('app.open_menu')"
           to="/features"
         >
-          <font-awesome-icon icon="fa-solid fa-bars" />
+          <font-awesome-icon icon="fa-solid fa-grip" />
         </RouterLink>
       </transition>
     </header>
@@ -191,21 +193,34 @@ const {
   gap: 10px
 }
 .brand-logo {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 30%, transparent)
+}
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 .menu-btn {
   width: 38px;
   height: 38px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  color: var(--text);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  color: var(--text-soft);
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-soft-accent)
+  background: var(--btn-bg);
+  font-size: 15px;
+  transition: all var(--anim-fast) var(--anim-standard);
+}
+.menu-btn:active {
+  transform: scale(0.93);
+  background: var(--surface-highlight);
+  color: var(--primary);
 }
 .boot-layer {
   min-height: clamp(260px, 54vh, 440px);

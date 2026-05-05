@@ -1,10 +1,15 @@
 <template>
-  <article class="card summary-card">
-    <header class="row">
-      <h3>{{ title }}</h3>
-      <RouterLink class="jump" to="/assets">{{ t('assets_page.view') }}</RouterLink>
+  <article class="hero-card card">
+    <!-- Header row -->
+    <header class="card-head">
+      <h3 class="card-title">{{ title }}</h3>
+      <RouterLink class="view-link" to="/assets">
+        {{ t('assets_page.view') }}
+        <font-awesome-icon icon="fa-solid fa-arrow-right" class="view-arrow" />
+      </RouterLink>
     </header>
 
+    <!-- Income / Expense split -->
     <div class="split-grid">
       <button
         type="button"
@@ -12,28 +17,47 @@
         :class="{ active: transactionStore.homeTypeFilter === 'income' }"
         @click="toggleTypeFilter('income')"
       >
-        <div v-if="transactionStore.homeTypeFilter === 'income'" class="active-tag">已選取</div>
-        <div class="label">{{ t('transaction_search.label.income') }}</div>
-        <div class="value">
-          <MoneyText :value-minor="incomeMinor" />
+        <div class="split-card-inner">
+          <div class="split-icon income-icon">
+            <font-awesome-icon icon="fa-solid fa-arrow-trend-up" />
+          </div>
+          <div class="split-info">
+            <div class="split-label">{{ t('transaction_search.label.income') }}</div>
+            <div class="split-value income-value">
+              <MoneyText :value-minor="incomeMinor" />
+            </div>
+          </div>
         </div>
+        <div v-if="transactionStore.homeTypeFilter === 'income'" class="active-ring" />
       </button>
+
       <button
         type="button"
         class="split-card expense"
         :class="{ active: transactionStore.homeTypeFilter === 'expense' }"
         @click="toggleTypeFilter('expense')"
       >
-        <div v-if="transactionStore.homeTypeFilter === 'expense'" class="active-tag">已選取</div>
-        <div class="label">{{ t('transaction_search.label.expense') }}</div>
-        <div class="value">
-          <MoneyText :value-minor="expenseMinor" />
+        <div class="split-card-inner">
+          <div class="split-icon expense-icon">
+            <font-awesome-icon icon="fa-solid fa-arrow-trend-down" />
+          </div>
+          <div class="split-info">
+            <div class="split-label">{{ t('transaction_search.label.expense') }}</div>
+            <div class="split-value expense-value">
+              <MoneyText :value-minor="expenseMinor" />
+            </div>
+          </div>
         </div>
+        <div v-if="transactionStore.homeTypeFilter === 'expense'" class="active-ring expense-ring" />
       </button>
     </div>
 
-    <div class="balance-row" :class="{ negative: balanceMinor < 0, positive: balanceMinor > 0 }">
-      <span class="balance-label">{{ t('home_asset_summary.balance_label') }}</span>
+    <!-- Balance row -->
+    <div class="balance-strip" :class="{ negative: balanceMinor < 0, positive: balanceMinor > 0 }">
+      <div class="balance-left">
+        <span class="balance-dot" />
+        <span class="balance-label">{{ t('home_asset_summary.balance_label') }}</span>
+      </div>
       <strong class="balance-value">
         <MoneyText :value-minor="balanceMinor" />
       </strong>
@@ -90,139 +114,241 @@ function toggleTypeFilter(type) {
 }
 </script>
 
-<style scoped>.summary-card {
-  padding: 14px
+<style scoped>
+.hero-card {
+  padding: 16px;
+  background:
+    radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--primary) 10%, transparent) 0%, transparent 60%),
+    radial-gradient(ellipse at 100% 100%, color-mix(in srgb, var(--ok) 8%, transparent) 0%, transparent 55%),
+    var(--card);
+  border-color: var(--border-strong);
 }
-h3 {
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.card-title {
   margin: 0;
-  font-size: 16px
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-soft);
+  letter-spacing: 0.01em;
 }
-.jump {
+
+.view-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   text-decoration: none;
   color: var(--primary-soft);
-  font-size: 13px
+  font-size: 12px;
+  font-weight: 600;
+  transition: color var(--anim-fast) var(--anim-standard);
 }
+
+.view-link:active {
+  color: var(--primary);
+}
+
+.view-arrow {
+  font-size: 10px;
+}
+
+/* Split cards */
 .split-grid {
-  margin-top: 10px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px
+  gap: 10px;
+  margin-bottom: 12px;
 }
+
 .split-card {
   appearance: none;
   width: 100%;
   font: inherit;
-  color: inherit;
-  position: relative;
-  border-radius: 12px;
-  padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  border: 1.5px solid transparent;
   text-align: left;
   cursor: pointer;
-  transition: transform var(--anim-fast) ease, box-shadow var(--anim-fast) ease, border-color var(--anim-fast) ease;
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform var(--anim-fast) var(--anim-bounce),
+    box-shadow var(--anim-fast) ease,
+    border-color var(--anim-fast) ease;
 }
+
 .split-card:active {
-  transform: scale(0.99);
+  transform: scale(0.97);
 }
-.split-card.active {
-  border-width: 2px;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent), inset 0 0 0 1px color-mix(in srgb, #fff 35%, transparent);
-}
-.split-card.active .label {
-  font-weight: 800;
-}
-.split-card .label {
-  font-size: 12px;
-  color: var(--text-soft)
-}
-.split-card .value {
-  margin-top: 8px;
-  font-weight: 700
-}
+
 .split-card.income {
-  background: var(--home-income-card-bg);
-  border-color: var(--home-income-card-border);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--home-income-card-border) 38%, transparent)
+  background: linear-gradient(135deg, #0a2015 0%, #0d2018 100%);
+  border-color: color-mix(in srgb, var(--home-income-card-border) 50%, transparent);
 }
-.split-card.income .value {
-  color: var(--home-income-card-value)
-}
+
 .split-card.expense {
-  background: var(--home-expense-card-bg);
+  background: linear-gradient(135deg, #1f0a0a 0%, #1f0d0d 100%);
+  border-color: color-mix(in srgb, var(--home-expense-card-border) 40%, transparent);
+}
+
+.split-card.active {
+  border-width: 1.5px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+.split-card.income.active {
+  border-color: var(--home-income-card-border);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--home-income-card-border) 25%, transparent);
+}
+
+.split-card.expense.active {
   border-color: var(--home-expense-card-border);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--home-expense-card-border) 35%, transparent)
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--home-expense-card-border) 25%, transparent);
 }
-.split-card.expense .value {
-  color: var(--home-expense-card-value)
+
+.split-card-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
 }
-.active-tag {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+
+.split-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.income-icon {
+  background: color-mix(in srgb, var(--home-income-card-border) 20%, transparent);
+  color: var(--home-income-card-value);
+}
+
+.expense-icon {
+  background: color-mix(in srgb, var(--home-expense-card-border) 18%, transparent);
+  color: var(--home-expense-card-value);
+}
+
+.split-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.split-label {
   font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
-  padding: 4px 6px;
-  border-radius: 999px;
-  color: #fff;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
 }
-.split-card.income .active-tag {
-  background: color-mix(in srgb, var(--home-income-card-value) 78%, #000 22%);
+
+.split-value {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
 }
-.split-card.expense .active-tag {
-  background: color-mix(in srgb, var(--home-expense-card-value) 78%, #000 22%);
+
+.income-value {
+  color: var(--home-income-card-value);
 }
-.balance-row {
-  margin-top: 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
+
+.expense-value {
+  color: var(--home-expense-card-value);
+}
+
+.active-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid var(--home-income-card-border);
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.active-ring.expense-ring {
+  border-color: var(--home-expense-card-border);
+}
+
+/* Balance strip */
+.balance-strip {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--surface-soft-accent) 72%, var(--card) 28%),
-    color-mix(in srgb, var(--surface-highlight) 74%, var(--card) 26%)
-  );
-  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, white 10%, transparent);
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--btn-bg) 60%, transparent);
+  border: 1px solid var(--border);
+  transition: background var(--anim-fast) ease, border-color var(--anim-fast) ease;
 }
+
+.balance-strip.positive {
+  background: color-mix(in srgb, var(--home-income-card-bg) 80%, transparent);
+  border-color: color-mix(in srgb, var(--home-income-card-border) 30%, transparent);
+}
+
+.balance-strip.negative {
+  background: color-mix(in srgb, var(--home-expense-card-bg) 80%, transparent);
+  border-color: color-mix(in srgb, var(--home-expense-card-border) 25%, transparent);
+}
+
+.balance-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.balance-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.balance-strip.positive .balance-dot {
+  background: var(--home-income-card-value);
+}
+
+.balance-strip.negative .balance-dot {
+  background: var(--home-expense-card-value);
+}
+
 .balance-label {
   font-size: 12px;
-  color: color-mix(in srgb, var(--text) 76%, var(--primary) 24%);
-  font-weight: 700;
+  font-weight: 600;
+  color: var(--muted);
 }
+
+.balance-strip.positive .balance-label {
+  color: color-mix(in srgb, var(--home-income-card-value) 70%, var(--text) 30%);
+}
+
+.balance-strip.negative .balance-label {
+  color: color-mix(in srgb, var(--home-expense-card-value) 70%, var(--text) 30%);
+}
+
 .balance-value {
   font-size: 18px;
-  line-height: 1.2;
+  font-weight: 800;
   color: var(--text);
+  letter-spacing: -0.02em;
 }
-.balance-row.positive {
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--surface-ok) 84%, var(--card) 16%),
-    color-mix(in srgb, var(--surface-highlight) 72%, var(--card) 28%)
-  );
-  border-color: color-mix(in srgb, var(--ok) 24%, transparent);
+
+.balance-strip.positive .balance-value {
+  color: var(--home-income-card-value);
 }
-.balance-row.positive .balance-label {
-  color: color-mix(in srgb, var(--ok) 68%, var(--text) 32%);
-}
-.balance-row.positive .balance-value {
-  color: color-mix(in srgb, var(--ok) 84%, var(--text) 16%);
-}
-.balance-row.negative {
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--surface-danger) 86%, var(--card) 14%),
-    color-mix(in srgb, var(--surface-soft-accent) 70%, var(--card) 30%)
-  );
-  border-color: color-mix(in srgb, var(--danger) 28%, transparent);
-}
-.balance-row.negative .balance-label {
-  color: color-mix(in srgb, var(--danger) 70%, var(--text) 30%);
-}
-.balance-row.negative .balance-value {
-  color: color-mix(in srgb, var(--danger) 82%, var(--text) 18%);
+
+.balance-strip.negative .balance-value {
+  color: var(--home-expense-card-value);
 }
 </style>
