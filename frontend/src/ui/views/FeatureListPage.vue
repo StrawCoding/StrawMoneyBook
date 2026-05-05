@@ -3,7 +3,6 @@
     <article class="card panel">
       <header class="row">
         <h2>{{ t('feature_list.title') }}</h2>
-        <RouterLink class="btn back-btn" to="/">{{ t('common.back') }}</RouterLink>
       </header>
       <nav class="feature-list">
         <RouterLink v-for="feature in features" :key="feature.to" class="feature-link" :to="feature.to">

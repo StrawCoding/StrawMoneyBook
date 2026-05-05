@@ -7,16 +7,6 @@
           <h1>StrawMoneyBook</h1>
         </div>
       </div>
-      <transition name="fade-scale">
-        <RouterLink
-          v-if="route.name === 'home' && hasLedgers"
-          class="menu-btn"
-          :aria-label="t('app.open_menu')"
-          to="/features"
-        >
-          <font-awesome-icon icon="fa-solid fa-grip" />
-        </RouterLink>
-      </transition>
     </header>
 
     <main class="page-container" :class="{ booting: isBooting, 'welcome-mode': showGuidedFlow }">
