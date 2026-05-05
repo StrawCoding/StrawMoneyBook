@@ -14,9 +14,9 @@ const transactionStoreSource = readFileSync(
 )
 
 test('transaction repo supports an optional listAllTransactions limit', () => {
-  assert.match(transactionRepoSource, /export async function listAllTransactions\(ledgerId, \{ limit \} = \{\}\)/)
+  assert.match(transactionRepoSource, /export async function listAllTransactions\(ledgerId, \{ limit, offset = 0 \} = \{\}\)/)
   assert.match(transactionRepoSource, /const hasLimit = Number\.isFinite\(limit\) && limit > 0/)
-  assert.match(transactionRepoSource, /\$\{hasLimit \? 'LIMIT \?' : ''\};/)
+  assert.match(transactionRepoSource, /\$\{hasLimit \? 'LIMIT \? OFFSET \?' : ''\};/)
 })
 
 test('home all mode caps transaction loading to avoid rendering huge ledgers at once', () => {

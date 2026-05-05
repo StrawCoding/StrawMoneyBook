@@ -19,11 +19,13 @@ const androidActivitySource = readFileSync(resolve(import.meta.dirname, '../andr
 const androidAutomationSource = readFileSync(resolve(import.meta.dirname, '../android/app/src/main/java/com/strawcoding/strawmoneybook/InvoiceCarrierAutomation.java'), 'utf8')
 const googleDriveSyncSource = readFileSync(resolve(import.meta.dirname, '../src/ui/services/google-drive-ledger-sync.service.js'), 'utf8')
 const sharedLedgerServiceSource = readFileSync(resolve(import.meta.dirname, '../src/ui/services/shared-ledger.service.js'), 'utf8')
+const i18nSource = readFileSync(resolve(import.meta.dirname, '../src/ui/services/i18n.service.js'), 'utf8')
 const featuresMapSource = readFileSync(resolve(import.meta.dirname, '../StrawMoneyBook_Features_Map.md'), 'utf8')
 const detailedDocSource = readFileSync(resolve(import.meta.dirname, '../../StrawMoneyBook_App_Features_Detailed.md'), 'utf8')
 
 test('settings and feature list expose invoice carrier as a public experimental entry', () => {
-  assert.match(settingsSource, /電子發票載具（實驗性）/)
+  assert.match(settingsSource, /settings\.invoice_carrier_experimental/)
+  assert.match(i18nSource, /'settings\.invoice_carrier_experimental': '電子發票載具（實驗性）'/)
   assert.match(featureListSource, /電子發票載具（實驗性）/)
   assert.match(mainSource, /faFileInvoice/)
 })

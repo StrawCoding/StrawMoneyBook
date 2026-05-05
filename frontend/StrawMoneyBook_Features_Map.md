@@ -8,11 +8,11 @@
 - 多帳本管理（切換帳本、排序、帳本設定、活動帳本上下文刷新）
 - 首頁總覽（帳本切換、收支卡、預算簡表、交易流、浮動快速新增；首頁交易流在無資料時會顯示空狀態與快速記帳入口，空狀態文案透過 i18n 維護並由 source test 防回歸，預算簡表滑動切換閾值已提高以降低誤觸）
 - 記帳三模式（AI 記帳、手動快速新增、問答記帳）
-- 交易查詢（搜尋頁、日曆頁、交易明細頁、交易編輯頁）
+- 交易查詢（搜尋頁、日曆頁、交易明細頁、交易編輯頁；SMB-155 後搜尋交易改為 SQL 分頁載入，每頁 300 筆，關鍵字與日期篩選會先進資料查詢層後再取當頁資料，避免大型帳本一次載入全部交易）
 - 退款流程（交易明細可建立退款、選擇退款帳戶、指定扣除金額；SMB-149 後部分退款會以原交易扣除退款金額後的淨額納入首頁、預算、分析與列印報表，全額退款則歸零）
 - 預算管理（月預算、分類預算、日均規則、已用/剩餘/保留金額、預算剩餘自動存入存錢罐；SMB-151 後預算項目的「日期」分配改用與首頁查看範圍相同的 `HomeRangePicker` 日期選擇器，並在預算項目情境啟用日曆複選，點選多個日期後轉成每月日號規則，不再只是 1~31 純數字格或另一套自製月曆；SMB-153 後功能列表加入帶圖示的預算項目入口，可直接前往 `/budget`）
 - 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、列印 / PDF 版面；SMB-146 後支出分類分析會將正向附加項目拆成獨立分析列，主分類扣除該附加金額後仍維持總支出一致，分析明細與列印報表同步支援；圓餅圖已改為可點擊並提供 hover/press 回饋，尺寸也會隨較小螢幕縮放）
-- 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、群組內金額摘要；負向負債帳戶會以絕對值納入負債摘要，避免信用卡等帳戶方向差異造成低估）
+- 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、群組內金額摘要；負向負債帳戶會以絕對值納入負債摘要，避免信用卡等帳戶方向差異造成低估；SMB-155 後帳戶明細交易紀錄改為每頁 300 筆，並用分頁前交易金額校正每筆交易後餘額）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細）
 - 借貸建立後可於借貸明細變更「建立入帳帳戶」，會直接修正該筆初始借入 / 借出交易的帳戶歸屬
 - 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出；請款單導入報銷改由獨立頁面選取，支援全選 / 取消全選；SMB-150 後從導入報銷頁返回時會固定回到原本的新增 / 編輯請款單流程，不再直接跳出請款單；完成請款單會讓匯入報銷項目回到已報銷狀態，不再留在未報銷；還原後重新完成不會因舊入帳交易冪等鍵撞唯一鍵；SMB-148 後代收管理會保留部分抵扣但仍有可用餘額的代收，只有完全未抵扣項目可直接刪除）
@@ -27,7 +27,7 @@
 - 自動備份（Google Drive / WebDAV；SMB-142 重建後，手動、背景 due check、資料變更後備份都會經過共用 provider runner，回傳 `completed / skipped / error` 統一結果，並以帳本 + provider lock 避免同一時間多個觸發源互相覆蓋狀態；runtime 事件含 `ledgerId / provider / mode / status / reason / checkedAt`，設定頁會即時同步最近一次 auto-check 狀態與時間；SMB-147 後 Google 自動備份在非原生平台會保存 `platform_unsupported` 偵測結果，Android 靜默恢復未連線時也會繼續跑 due diagnostics 寫入 `not_connected / reauth_required` 等狀態，避免頁面誤停在尚未執行自動偵測；手機背景恢復只做靜默 Google 授權，不會在 App 啟動或帳本切換時自動彈出互動登入）
 - 記帳提醒與成就表（每日固定提醒、通知權限 / 精準提醒狀態、連續記帳天數、最長連續與累計記帳日）
 - 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
-- 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本；設定首頁各入口已補上副標說明，手動重設全部資料前會先嘗試建立 recovery JSON 備份，備份失敗時仍保留錯誤紀錄並繼續既有重設流程）
+- 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本；設定首頁各入口副標與帳號卡登入提示已納入 i18n key，避免切換英文 / 日文時殘留繁中文案；手動重設全部資料前會先嘗試建立 recovery JSON 備份，備份失敗時仍保留錯誤紀錄並繼續既有重設流程）
 - 關於與聯絡入口（官網、Facebook、Instagram、Threads、Email、隱私權政策）
 - 官方網站 SEO / 品牌搜尋關鍵字（`../StrawMoneyBookWeb/index.html`：`StrawMoneyBook`、`稻草AI記帳`、`稻草記帳`、`AI記帳`、`對話記帳`、`自動記帳` 等）
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
@@ -50,7 +50,7 @@
 | `/analysis` | `src/ui/views/analysis.vue` | 收支圖表分析（全部/年/月） |
 | `/analysis/category` | `src/ui/views/AnalysisCategoryDetailPage.vue` | 分類分析明細 |
 | `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 交易報表頁（CSV 匯出 + 列印 / PDF 版面） |
-| `/transactions/search` | `src/ui/views/TransactionSearchPage.vue` | 交易搜尋（支援批量選取與批量編輯分類 / 備註 / 可報銷 / 預算 / 收支分析） |
+| `/transactions/search` | `src/ui/views/TransactionSearchPage.vue` | 交易搜尋（支援批量選取與批量編輯分類 / 備註 / 可報銷 / 預算 / 收支分析；SMB-155 後每頁 300 筆 SQL 分頁載入） |
 | `/transactions/quick-add` | `src/ui/views/BookkeepingPage.vue` | 手動快速新增模式（內嵌 `QuickAddPage.vue`） |
 | `/transactions/qna` | `src/ui/views/BookkeepingPage.vue` | 問答記帳模式（內嵌 `QnaBookkeepingPage.vue`） |
 | `/transactions/calendar` | `src/ui/views/CalendarPage.vue` | 交易日曆 |
@@ -63,7 +63,7 @@
 | `/icons/pick` | `src/ui/views/IconPickerPage.vue` | 帳戶/分類 icon 選擇 |
 | `/assets/accounts` | `src/ui/views/accounts/AssetAccountManagementPage.vue` | 資產帳戶管理 |
 | `/assets/account-groups/:id` | `src/ui/views/accounts/AssetAccountGroupDetailPage.vue` | 帳戶群組管理 |
-| `/accounts/:id` | `src/ui/views/accounts/AccountDetailPage.vue` | 帳戶明細 |
+| `/accounts/:id` | `src/ui/views/accounts/AccountDetailPage.vue` | 帳戶明細（交易紀錄每頁 300 筆，分頁後餘額仍依較新交易校正） |
 | `/loans` | `src/ui/views/loans/LoanListPage.vue` | 借貸清單 |
 | `/loans/counterparty` | `src/ui/views/loans/LoanCounterpartyDetailPage.vue` | 依往來對象檢視借貸明細 |
 | `/loans/:id` | `src/ui/views/loans/LoanDetailPage.vue` | 借貸明細 |
@@ -128,6 +128,8 @@
 - 分析頁：`/analysis`
 
 ### 設定內導覽（`src/ui/views/settings.vue`）
+
+設定首頁入口標題、入口副標與帳號卡未登入提示皆透過 `src/ui/services/i18n.service.js` 的正式 key 維護，英文與日文會直接走 `MESSAGES`，不再依賴繁中 fallback 或 runtime DOM 翻譯。
 
 - 帳號卡片：`/settings/account`（顯示頭貼、名稱、帳號；未登入時導向登入 / 註冊）
 - 帳本管理：`/settings/ledgers`

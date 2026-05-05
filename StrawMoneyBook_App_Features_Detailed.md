@@ -72,6 +72,8 @@ StrawMoneyBook 的特色不在單一功能，而在於把同一筆金流後續�
 
 另外，所有需要輸入資料的彈層已統一為共用 bottom sheet flow，桌面與手機都不再保留另一套輸入型 popover，包含表單 dialog、選單、日期與時間選擇器；`AppDialog` 以及各頁自製輸入 sheet 也都收斂到和快速記帳一致的 shared overlay / bottom-sheet primitives，Android 有底部導覽列 inset 的裝置也會一併吃到底部 safe area，且 sheet 卡片背景會直接延伸到底部，和 `BottomNav` 維持同一個底部基準。
 
+設定首頁的入口副標、共同帳本 / 電子發票載具入口名稱，以及帳號卡未登入提示目前都已改由正式 i18n key 維護，繁中、英文與日文都有對應文案，不再靠繁中 fallback 或 runtime DOM 翻譯處理這批主要導覽文字。
+
 前端內部像月份鍵、日期鍵這類共用格式化邏輯，也已收斂到 `src/core/utils/id.js`，避免首頁、分析、日曆、列印頁各自維護相同 helper 後再逐步出現行為漂移。
 
 在互動細節上，Android 返回鍵會優先關閉當前 overlay，再決定是否返回頁面或退出 App；關鍵刪除流程也統一採用自製確認對話框，並額外針對行動裝置補強長按連結與文字選取的防誤觸處理。
@@ -93,6 +95,8 @@ SMB-142 重建後，自動備份設定頁會在背景自動偵測 / 自動備份
 這條分層在 SMB-130 後又進一步收斂：`core/services/bootstrap.service.js` 現在只保留資料庫初始化與 recover，`ui/services/app-bootstrap.service.js` 接手 Pinia 與啟動鏈，`ui/services/app-runtime.service.js` 接手背景排程、網址恢復、Android back 與同步/備份 runtime side effects，而 `ui/composables/useAppShellRuntime.js` 則把 App shell 的 route transition、高度鎖定、安全鎖 lifecycle 與更新提示從 `App.vue` 抽離。
 
 交易資料流也已統一從頁面抽離：分析頁、交易搜尋、日曆、交易明細、交易編輯與帳戶明細都不再直接查 `transaction.repo.js`，而是透過 `core/services/transaction-query.service.js` 取得 `all / year / month / day / account / detail-related` 查詢結果；分析頁的分類/帳戶彙總、圓餅圖、長條圖與日別 breakdown 集中在 `core/utils/analysis-breakdown.js`，交易搜尋頁的 filter、批量選取、sheet 狀態與結果摘要則集中在 `ui/composables/useTransactionSearchPage.js`。
+
+SMB-155 後，帳戶明細與交易搜尋不再一次載入完整交易歷史，而是以 300 筆為一頁做 SQL 分頁；交易搜尋的日期與關鍵字篩選會先下推到查詢層再取當頁資料，帳戶明細則會額外查詢分頁前交易金額，用來校正每筆交易後餘額，避免第 2 頁以後餘額從錯誤基準開始計算。
 
 會員邏輯也已把 domain 與導頁 side effect 分開：`core/services/membership.service.js` 只保留 entitlement、sync、snapshot 與 limit error 判斷，真正的會員限制導頁改由 `ui/services/membership-navigation.service.js` 處理，避免 core 層再反向依賴 UI router。共同帳本 backend 端則把 `auth` 與 `shared-ledgers` 路由拆成模組化目錄，並由 `backend/src/server.js` 的 route table 分派，`backend/src/collab/http.js` 提供共用 request parsing、method/body guard 與 route error serialization。
 

@@ -87,6 +87,80 @@ function paidClaimItemMinorSql(sourceAlias = 't') {
   ), 0)`
 }
 
+function normalizeLimit(value, fallback = 300) {
+  const numeric = Math.trunc(Number(value))
+  if (!Number.isFinite(numeric) || numeric <= 0) return fallback
+  return Math.min(numeric, 1000)
+}
+
+function normalizeOffset(value) {
+  const numeric = Math.trunc(Number(value))
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0
+}
+
+function transactionListSelectSql() {
+  return `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
+            t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
+            c.name AS category_name, c.icon AS category_icon,
+            a.currency_code AS account_currency_code,
+            t.origin_type, t.external_ref_id, t.is_reimbursable, t.reimbursement_state,
+            t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
+            CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
+            ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
+            t.created_at
+     FROM transactions t
+     LEFT JOIN accounts a
+       ON a.ledger_id = t.ledger_id
+      AND a.id = t.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = t.ledger_id
+      AND c.id = t.category_id`
+}
+
+function transactionListOrderSql() {
+  return 'ORDER BY t.occurred_at DESC, t.created_at DESC'
+}
+
+function buildSearchFilterClauses({
+  keyword = '',
+  startDay = '',
+  endDay = '',
+} = {}) {
+  const clauses = ['t.ledger_id = ?', 't.deleted_at IS NULL']
+  const values = []
+
+  const normalizedStartDay = String(startDay ?? '').trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedStartDay)) {
+    clauses.push('t.occurred_at >= ?')
+    values.push(dayRangeUtc(normalizedStartDay).startUtc)
+  }
+
+  const normalizedEndDay = String(endDay ?? '').trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedEndDay)) {
+    clauses.push('t.occurred_at < ?')
+    values.push(dayRangeUtc(normalizedEndDay).endUtc)
+  }
+
+  const normalizedKeyword = String(keyword ?? '').trim().toLowerCase()
+  if (normalizedKeyword) {
+    for (const part of normalizedKeyword.split(/\s+/).filter(Boolean)) {
+      clauses.push(`LOWER(
+        COALESCE(c.name, '') || ' ' ||
+        COALESCE(a.name, '') || ' ' ||
+        COALESCE(t.note, '') || ' ' ||
+        COALESCE(t.occurred_at, '') || ' ' ||
+        COALESCE(t.type, '') || ' ' ||
+        COALESCE(t.origin_type, '') || ' ' ||
+        CAST(t.amount_minor AS TEXT) || ' ' ||
+        CAST(ABS(t.amount_minor) / 100.0 AS TEXT)
+      ) LIKE ?`)
+      values.push(`%${part}%`)
+    }
+  }
+
+  return { clauses, values }
+}
+
 export async function listRecentTransactions(ledgerId, limit = 20) {
   assertLedgerId(ledgerId)
 
@@ -210,9 +284,10 @@ export async function listTransactionsByDay(ledgerId, dayKey) {
   return rowsOf(result)
 }
 
-export async function listAllTransactions(ledgerId, { limit } = {}) {
+export async function listAllTransactions(ledgerId, { limit, offset = 0 } = {}) {
   assertLedgerId(ledgerId)
   const hasLimit = Number.isFinite(limit) && limit > 0
+  const safeOffset = normalizeOffset(offset)
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
             t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
@@ -233,10 +308,48 @@ export async function listAllTransactions(ledgerId, { limit } = {}) {
      WHERE t.ledger_id = ?
        AND t.deleted_at IS NULL
      ORDER BY t.occurred_at DESC, t.created_at DESC
-     ${hasLimit ? 'LIMIT ?' : ''};`,
-    hasLimit ? [ledgerId, limit] : [ledgerId],
+     ${hasLimit ? 'LIMIT ? OFFSET ?' : ''};`,
+    hasLimit ? [ledgerId, limit, safeOffset] : [ledgerId],
   )
   return rowsOf(result)
+}
+
+export async function listTransactionSearchPage(ledgerId, options = {}) {
+  assertLedgerId(ledgerId)
+  const limit = normalizeLimit(options.limit, 300)
+  const offset = normalizeOffset(options.offset)
+  const { clauses, values } = buildSearchFilterClauses(options)
+  const whereSql = clauses.join('\n       AND ')
+  const params = [ledgerId, ...values]
+
+  const [itemsResult, countResult] = await Promise.all([
+    query(
+      `${transactionListSelectSql()}
+       WHERE ${whereSql}
+       ${transactionListOrderSql()}
+       LIMIT ? OFFSET ?;`,
+      [...params, limit, offset],
+    ),
+    query(
+      `SELECT COUNT(*) AS total
+       FROM transactions t
+       LEFT JOIN accounts a
+         ON a.ledger_id = t.ledger_id
+        AND a.id = t.account_id
+       LEFT JOIN categories c
+         ON c.ledger_id = t.ledger_id
+        AND c.id = t.category_id
+       WHERE ${whereSql};`,
+      params,
+    ),
+  ])
+
+  return {
+    items: rowsOf(itemsResult),
+    total: Number(firstRow(countResult)?.total ?? 0),
+    limit,
+    offset,
+  }
 }
 
 export async function listTransactionOccurredAtValues(ledgerId) {
@@ -283,6 +396,56 @@ export async function listTransactionsByAccount(ledgerId, accountId) {
   )
 
   return rowsOf(result)
+}
+
+export async function listTransactionsByAccountPage(ledgerId, accountId, options = {}) {
+  assertLedgerId(ledgerId)
+  const normalizedAccountId = String(accountId ?? '').trim()
+  if (!normalizedAccountId) {
+    return { items: [], total: 0, beforeAmountMinor: 0, limit: normalizeLimit(options.limit, 300), offset: 0 }
+  }
+
+  const limit = normalizeLimit(options.limit, 300)
+  const offset = normalizeOffset(options.offset)
+  const whereSql = `t.ledger_id = ?
+       AND t.account_id = ?
+       AND t.deleted_at IS NULL`
+  const params = [ledgerId, normalizedAccountId]
+
+  const [itemsResult, countResult, beforeResult] = await Promise.all([
+    query(
+      `${transactionListSelectSql()}
+       WHERE ${whereSql}
+       ${transactionListOrderSql()}
+       LIMIT ? OFFSET ?;`,
+      [...params, limit, offset],
+    ),
+    query(
+      `SELECT COUNT(*) AS total
+       FROM transactions t
+       WHERE ${whereSql};`,
+      params,
+    ),
+    query(
+      `SELECT COALESCE(SUM(amount_minor), 0) AS before_amount_minor
+       FROM (
+         SELECT t.amount_minor
+         FROM transactions t
+         WHERE ${whereSql}
+         ${transactionListOrderSql()}
+         LIMIT ?
+       ) ordered_before_page;`,
+      [...params, offset],
+    ),
+  ])
+
+  return {
+    items: rowsOf(itemsResult),
+    total: Number(firstRow(countResult)?.total ?? 0),
+    beforeAmountMinor: Number(firstRow(beforeResult)?.before_amount_minor ?? 0),
+    limit,
+    offset,
+  }
 }
 
 export async function listReimbursementTransactions(ledgerId, state) {

@@ -132,7 +132,7 @@
         <h3>交易紀錄</h3>
         <button class="btn" :disabled="refreshing" @click="refreshTransactions">刷新</button>
       </header>
-      <p class="muted">最近 {{ accountTransactions.length }} 筆交易</p>
+      <p class="muted">共 {{ accountTransactionTotal }} 筆交易，目前顯示第 {{ accountTransactionPage }} / {{ accountTransactionTotalPages }} 頁</p>
       <ul class="tx-list">
         <li v-for="group in groupedAccountTransactions" :key="group.dateKey" class="tx-date-group">
           <div class="tx-date-head">
@@ -180,6 +180,14 @@
         <li v-if="groupedAccountTransactions.length === 0" class="muted">目前沒有交易紀錄</li>
       </ul>
 
+      <nav v-if="accountTransactionTotal > 0" class="pagination-bar" aria-label="帳戶交易分頁">
+        <button class="btn" :disabled="!canGoPreviousAccountTransactionPage" @click="goPreviousAccountTransactionPage">上一頁</button>
+        <span class="muted page-status">
+          第 {{ accountTransactionPageStart }}-{{ accountTransactionPageEnd }} 筆 / 共 {{ accountTransactionTotal }} 筆
+        </span>
+        <button class="btn" :disabled="!canGoNextAccountTransactionPage" @click="goNextAccountTransactionPage">下一頁</button>
+      </nav>
+
     </article>
 
     <AppDialog
@@ -204,7 +212,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { listTransactionsForAccount } from '@/core/services/transaction-query.service'
+import { listTransactionPageForAccount } from '@/core/services/transaction-query.service'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
@@ -224,6 +232,10 @@ const loanStore = useLoanStore()
 const uiStore = useUiStore()
 
 const transactions = ref([])
+const accountTransactionTotal = ref(0)
+const accountTransactionPage = ref(1)
+const accountTransactionTotalPages = ref(1)
+const accountTransactionBeforeAmountMinor = ref(0)
 const refreshing = ref(false)
 const saving = ref(false)
 const iconSaving = ref(false)
@@ -287,7 +299,7 @@ const repaymentReminderDayInvalid = computed(() => {
 })
 const accountTransactions = computed(() => {
   const ownRows = transactions.value.filter((tx) => String(tx.account_id) === accountId.value)
-  let cursor = currentAccountBalanceMinor.value
+  let cursor = currentAccountBalanceMinor.value - accountTransactionBeforeAmountMinor.value
   return ownRows.map((tx) => {
     const balanceAfterMinor = cursor
     cursor -= Number(tx.amount_minor ?? 0)
@@ -317,6 +329,13 @@ const groupedAccountTransactions = computed(() => {
   }
   return grouped
 })
+const accountTransactionPageStart = computed(() => {
+  if (accountTransactionTotal.value <= 0) return 0
+  return ((accountTransactionPage.value - 1) * 300) + 1
+})
+const accountTransactionPageEnd = computed(() => Math.min(accountTransactionTotal.value, accountTransactionPage.value * 300))
+const canGoPreviousAccountTransactionPage = computed(() => accountTransactionPage.value > 1)
+const canGoNextAccountTransactionPage = computed(() => accountTransactionPage.value < accountTransactionTotalPages.value)
 
 const groupOptions = computed(() => {
   return accountStore.groups.map((group) => ({
@@ -403,6 +422,7 @@ watch(
 watch(
   () => accountId.value,
   () => {
+    accountTransactionPage.value = 1
     void refreshTransactions()
   },
 )
@@ -413,10 +433,38 @@ async function refreshTransactions() {
 
   refreshing.value = true
   try {
-    transactions.value = await listTransactionsForAccount(ledgerId, accountId.value)
+    const result = await listTransactionPageForAccount(ledgerId, accountId.value, {
+      page: accountTransactionPage.value,
+    })
+    if (result.page > result.totalPages) {
+      accountTransactionPage.value = result.totalPages
+      await refreshTransactions()
+      return
+    }
+    transactions.value = result.items
+    accountTransactionTotal.value = result.total
+    accountTransactionTotalPages.value = result.totalPages
+    accountTransactionBeforeAmountMinor.value = result.beforeAmountMinor
   } finally {
     refreshing.value = false
   }
+}
+
+function setAccountTransactionPage(page) {
+  const nextPage = Math.min(Math.max(1, Math.trunc(Number(page)) || 1), accountTransactionTotalPages.value)
+  if (nextPage === accountTransactionPage.value) return
+  accountTransactionPage.value = nextPage
+  void refreshTransactions()
+}
+
+function goPreviousAccountTransactionPage() {
+  if (!canGoPreviousAccountTransactionPage.value) return
+  setAccountTransactionPage(accountTransactionPage.value - 1)
+}
+
+function goNextAccountTransactionPage() {
+  if (!canGoNextAccountTransactionPage.value) return
+  setAccountTransactionPage(accountTransactionPage.value + 1)
 }
 
 async function openIconPicker() {
@@ -905,5 +953,30 @@ h3 {
 
 .addon-delta.minus {
   color: var(--delta-minus);
+}
+
+.pagination-bar {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-status {
+  text-align: center;
+  min-width: 0;
+}
+
+@media (max-width: 420px) {
+  .pagination-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .page-status {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    font-size: 12px;
+  }
 }
 </style>

@@ -1,6 +1,6 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { batchPatchTransactions } from '@/core/services/transaction.service'
-import { listTransactionsForSearch } from '@/core/services/transaction-query.service'
+import { listTransactionsForSearch, TRANSACTION_PAGE_SIZE } from '@/core/services/transaction-query.service'
 import {
   BATCH_NOTE_MODE_CLEAR,
   BATCH_NOTE_MODE_KEEP,
@@ -38,6 +38,9 @@ export function useTransactionSearchPage({
   const startDay = ref('')
   const endDay = ref('')
   const transactions = ref([])
+  const searchTotal = ref(0)
+  const currentPage = ref(1)
+  const totalPages = ref(1)
   const pendingOpenTxId = ref('')
   const batchMode = ref(false)
   const selectedIds = ref(new Set())
@@ -155,23 +158,36 @@ export function useTransactionSearchPage({
     const txId = pendingOpenTxId.value
     if (!txId) return
 
-    const matched = transactions.value.find((item) => item.id === txId)
-    if (!matched) return
-
     pendingOpenTxId.value = ''
     clearTxIdQuery()
-    openEdit(matched)
+    openEdit({ id: txId })
   }
 
   async function loadTransactions() {
     const ledgerId = ledgerStore.activeLedgerId
     if (!ledgerId) {
       transactions.value = []
+      searchTotal.value = 0
+      currentPage.value = 1
+      totalPages.value = 1
       return
     }
 
     try {
-      transactions.value = await listTransactionsForSearch(ledgerId)
+      const result = await listTransactionsForSearch(ledgerId, {
+        page: currentPage.value,
+        keyword: keyword.value,
+        startDay: startDay.value,
+        endDay: endDay.value,
+      })
+      if (result.page > result.totalPages) {
+        currentPage.value = result.totalPages
+        await loadTransactions()
+        return
+      }
+      transactions.value = result.items
+      searchTotal.value = result.total
+      totalPages.value = result.totalPages
       tryOpenPendingTransaction()
     } catch (error) {
       uiStore.pushToast(error.message ?? t('transaction_search.toast.load_failed'), 'error')
@@ -188,14 +204,22 @@ export function useTransactionSearchPage({
 
   const filteredTransactions = computed(() => filterTransactionsForSearch({
     transactions: transactions.value,
-    keyword: keyword.value,
-    startDay: startDay.value,
-    endDay: endDay.value,
+    keyword: '',
+    startDay: '',
+    endDay: '',
     labelOfTransaction,
     accountName,
     formatTime,
     noteText,
   }))
+
+  const pageStart = computed(() => {
+    if (searchTotal.value <= 0) return 0
+    return ((currentPage.value - 1) * TRANSACTION_PAGE_SIZE) + 1
+  })
+  const pageEnd = computed(() => Math.min(searchTotal.value, currentPage.value * TRANSACTION_PAGE_SIZE))
+  const canGoPreviousPage = computed(() => currentPage.value > 1)
+  const canGoNextPage = computed(() => currentPage.value < totalPages.value)
 
   const allCategoryGroups = computed(() => ([
     ...categoryStore.expenseCategoryGroups,
@@ -269,6 +293,24 @@ export function useTransactionSearchPage({
     }
   }
 
+  function setPage(page) {
+    const nextPage = Math.min(Math.max(1, Math.trunc(Number(page)) || 1), totalPages.value)
+    if (nextPage === currentPage.value) return
+    currentPage.value = nextPage
+    selectedIds.value = new Set()
+    void loadTransactions()
+  }
+
+  function goPreviousPage() {
+    if (!canGoPreviousPage.value) return
+    setPage(currentPage.value - 1)
+  }
+
+  function goNextPage() {
+    if (!canGoNextPage.value) return
+    setPage(currentPage.value + 1)
+  }
+
   function openBatchEditSheet() {
     if (selectedIds.value.size === 0) return
     resetBatchPatch()
@@ -326,6 +368,8 @@ export function useTransactionSearchPage({
   watch(
     () => ledgerStore.activeLedgerId,
     () => {
+      currentPage.value = 1
+      selectedIds.value = new Set()
       void loadTransactions()
     },
   )
@@ -346,6 +390,15 @@ export function useTransactionSearchPage({
     { immediate: true },
   )
 
+  watch(
+    () => [keyword.value, startDay.value, endDay.value],
+    () => {
+      currentPage.value = 1
+      selectedIds.value = new Set()
+      void loadTransactions()
+    },
+  )
+
   resetBatchPatch()
 
   return {
@@ -353,6 +406,13 @@ export function useTransactionSearchPage({
     startDay,
     endDay,
     filteredTransactions,
+    searchTotal,
+    currentPage,
+    totalPages,
+    pageStart,
+    pageEnd,
+    canGoPreviousPage,
+    canGoNextPage,
     batchMode,
     selectedIds,
     batchEditSheetOpen,
@@ -371,6 +431,8 @@ export function useTransactionSearchPage({
     closeBatchEditSheet,
     applyBatchEdit,
     toggleSelect,
+    goPreviousPage,
+    goNextPage,
     openEdit,
     categoryIcon,
     labelOfTransaction,

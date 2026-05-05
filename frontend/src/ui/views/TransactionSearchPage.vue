@@ -28,7 +28,7 @@
 
     <article class="card panel">
       <header class="row panel-head">
-        <small class="muted">{{ t('transaction_search.results_count', { count: filteredTransactions.length }) }}</small>
+        <small class="muted">{{ t('transaction_search.results_count', { count: searchTotal }) }}</small>
         <button class="btn" :class="{ active: batchMode }" @click="toggleBatchMode">
           {{ batchMode ? '取消批量' : '批量操作' }}
         </button>
@@ -81,6 +81,19 @@
         </li>
         <li v-if="!filteredTransactions.length" class="muted empty">{{ t('transaction_search.no_results') }}</li>
       </ul>
+
+      <nav v-if="searchTotal > 0" class="pagination-bar" aria-label="交易搜尋分頁">
+        <button class="btn" :disabled="!canGoPreviousPage" @click="goPreviousPage">
+          {{ t('common.previous_page') }}
+        </button>
+        <span class="muted page-status">
+          {{ t('common.page_status', { page: currentPage, totalPages }) }}
+          ・{{ t('common.page_range', { start: pageStart, end: pageEnd, total: searchTotal }) }}
+        </span>
+        <button class="btn" :disabled="!canGoNextPage" @click="goNextPage">
+          {{ t('common.next_page') }}
+        </button>
+      </nav>
     </article>
 
     <InputBottomSheet
@@ -174,6 +187,13 @@ const {
   startDay,
   endDay,
   filteredTransactions,
+  searchTotal,
+  currentPage,
+  totalPages,
+  pageStart,
+  pageEnd,
+  canGoPreviousPage,
+  canGoNextPage,
   batchMode,
   selectedIds,
   batchEditSheetOpen,
@@ -188,6 +208,8 @@ const {
   pickEndDay,
   toggleBatchMode,
   toggleSelectAll,
+  goPreviousPage,
+  goNextPage,
   openBatchEditSheet,
   closeBatchEditSheet,
   applyBatchEdit,
@@ -351,6 +373,17 @@ h2 {
   font-size: 12px;
   line-height: 1.5
 }
+.pagination-bar {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px
+}
+.page-status {
+  text-align: center;
+  min-width: 0
+}
 .tx-item.selectable {
   cursor: pointer;
   gap: 8px
@@ -379,4 +412,14 @@ h2 {
 .btn.active {
   background: var(--primary);
   color: #fff
+}
+@media (max-width: 420px) {
+  .pagination-bar {
+    grid-template-columns: 1fr 1fr
+  }
+  .page-status {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    font-size: 12px
+  }
 }</style>
