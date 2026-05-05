@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./frontend/src/ui/assets/logo.png" alt="StrawMoneyBook logo" width="220">
+  <img src="./assets/V4-3.png" alt="StrawMoneyBook logo" width="220">
 </p>
 
 # StrawMoneyBook
