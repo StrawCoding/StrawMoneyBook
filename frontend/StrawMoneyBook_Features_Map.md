@@ -1,7 +1,7 @@
 # StrawMoneyBook 功能與檔案對應
 
 此文件整理目前 StrawMoneyBook 的主要功能、頁面、元件與資料層對應關係，方便開發與維護。
-詳細產品說明請搭配 `../StrawMoneyBook_App_Features_Detailed.md` 閱讀；該檔已統整為唯一版本。
+詳細產品說明請搭配 `../StrawMoneyBook_App_Features_Detailed.md` 閱讀；專案入口與開發指令請先閱讀 `../README.md`；詳細產品功能檔已統整為唯一版本。
 
 ## 1. 功能總覽
 
@@ -405,6 +405,7 @@ UI composable 目錄：`src/ui/composables/`
 - 新增/刪除路由頁面
 - 調整主要功能流程（交易、借貸、報銷、請款、預算、備份）
 - 變更 store/service/repository 的責任邊界
+- 更新專案入口介紹、快速開始、測試指令或文件索引
 - 新增重要共用元件（日期選擇器、統計元件、首頁卡片等）
 - 設定入口策略變更（例如：銀行同步 / 電子發票載具顯示策略）
 - 帳號、共同帳本、邀請碼、管理員或 backend API 流程變更

@@ -2,7 +2,7 @@
 
 > 本文件依據目前專案程式碼與頁面結構整理，狀態基準為 `2026-04-18`。
 > 重點是描述「實際產品能力、使用情境、限制與差異化」，不是單純的檔案索引。
-> 如需檔案對應關係，請搭配 `frontend/StrawMoneyBook_Features_Map.md` 閱讀。
+> 如需專案入口與開發指令，請先閱讀 `README.md`；如需檔案對應關係，請搭配 `frontend/StrawMoneyBook_Features_Map.md` 閱讀。
 
 ## 1. 產品定位
 
@@ -808,6 +808,7 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 
 本文件內容主要根據下列現有資源與程式碼結構彙整：
 
+- `README.md`
 - `frontend/StrawMoneyBook_Features_Map.md`
 - `frontend/src/ui/router/index.js`
 - `frontend/src/ui/views/`
