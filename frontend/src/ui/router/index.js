@@ -100,7 +100,7 @@ const router = createRouter({
       name: 'features',
       path: '/features',
       component: () => import('@/ui/views/FeatureListPage.vue'),
-      meta: { tab: 'home' },
+      meta: { tab: 'features' },
     },
     {
       name: 'post-setup-intro',

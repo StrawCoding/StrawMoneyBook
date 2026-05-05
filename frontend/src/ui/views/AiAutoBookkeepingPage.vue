@@ -10,18 +10,18 @@
       </header>
 
       <label class="field">
-        輸入一句話
+        {{ t('ai_bookkeeping.input.label') }}
         <textarea
           v-model.trim="sourceText"
           class="textarea"
           rows="4"
-          placeholder="例如：昨天午餐 120 元用現金，可報銷"
+          :placeholder="t('ai_bookkeeping.input.placeholder')"
         />
       </label>
 
-      <small class="muted">可輸入金額、日期、帳戶名、分類名、報銷/轉帳等關鍵字。</small>
-      <small class="muted">多行會自動批量建立，每行一筆。</small>
-      <small v-if="speechListening && speechLiveText" class="muted speech-hint">語音辨識中：{{ speechLiveText }}</small>
+      <small class="muted">{{ t('ai_bookkeeping.input.hint_keywords') }}</small>
+      <small class="muted">{{ t('ai_bookkeeping.input.hint_multiline') }}</small>
+      <small v-if="speechListening && speechLiveText" class="muted speech-hint">{{ t('ai_bookkeeping.speech.listening_prefix') }}{{ speechLiveText }}</small>
       <transition name="ai-status-fade">
         <div v-if="showAiStatus" class="ai-status-chip">
           <span class="ai-status-wave"></span>

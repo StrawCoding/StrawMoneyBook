@@ -3,6 +3,14 @@
     <article class="card welcome-card">
       <header class="stack title-wrap">
         <p class="step-text">{{ t('welcome.step') }} {{ step }} / 3</p>
+        <div class="step-dots" role="progressbar" :aria-valuenow="step" aria-valuemin="1" aria-valuemax="3">
+          <span
+            v-for="n in 3"
+            :key="n"
+            class="step-dot"
+            :class="{ active: n === step, done: n < step }"
+          />
+        </div>
       </header>
 
       <transition name="wizard-slide" mode="out-in">
@@ -301,6 +309,30 @@ async function createFirstAccount() {
   font-size: 12px;
   color: var(--muted);
   text-align: center;
+}
+
+.step-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: width 220ms ease, background-color 220ms ease;
+}
+
+.step-dot.active {
+  width: 24px;
+  background: var(--primary);
+}
+
+.step-dot.done {
+  background: color-mix(in srgb, var(--primary) 60%, transparent);
 }
 
 .step-panel {

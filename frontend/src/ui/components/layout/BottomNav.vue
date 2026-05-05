@@ -29,6 +29,7 @@ const NAV_ITEMS = [
   { key: 'home', to: '/', labelKey: 'nav.home', icon: 'fa-solid fa-house' },
   { key: 'analysis', to: '/analysis', labelKey: 'nav.analysis', icon: 'fa-solid fa-chart-pie' },
   { key: 'assets', to: '/assets', labelKey: 'nav.assets', icon: 'fa-solid fa-wallet' },
+  { key: 'features', to: '/features', labelKey: 'nav.features', icon: 'fa-solid fa-grip' },
   { key: 'settings', to: '/settings', labelKey: 'nav.settings', icon: 'fa-solid fa-gear' },
 ]
 

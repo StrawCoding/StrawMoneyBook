@@ -18,8 +18,8 @@
         <div class="tx-date-head">
           <span>{{ group.label }}</span>
           <span class="tx-date-total">
-            <small>收 <MoneyText :value-minor="group.incomeMinor" tone="income" /></small>
-            <small>支 <MoneyText :value-minor="group.expenseMinor" tone="expense" /></small>
+            <small>{{ t('home_tx.date_income_short') }} <MoneyText :value-minor="group.incomeMinor" tone="income" /></small>
+            <small>{{ t('home_tx.date_expense_short') }} <MoneyText :value-minor="group.expenseMinor" tone="expense" /></small>
           </span>
         </div>
         <ul class="tx-day-list">
@@ -65,8 +65,8 @@
             <font-awesome-icon icon="fa-solid fa-receipt" />
           </span>
           <strong>{{ t('home_tx.empty_this_month') }}</strong>
-          <p class="muted empty-state-copy">目前還沒有符合範圍的交易，先快速新增第一筆紀錄。</p>
-          <RouterLink class="btn primary empty-state-action" to="/transactions/quick-add">立即記帳</RouterLink>
+          <p class="muted empty-state-copy">{{ t('home_tx.empty_hint') }}</p>
+          <RouterLink class="btn primary empty-state-action" to="/transactions/quick-add">{{ t('home_tx.empty_action') }}</RouterLink>
         </div>
       </li>
     </ul>

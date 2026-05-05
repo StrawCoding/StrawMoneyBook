@@ -2,7 +2,7 @@
   <article class="card summary-card">
     <header class="row">
       <h3>{{ t('home_budget_summary.title', '預算簡表') }}</h3>
-      <RouterLink class="jump" to="/budget">查看</RouterLink>
+      <RouterLink class="jump" to="/budget">{{ t('home_budget_summary.view') }}</RouterLink>
     </header>
 
     <div class="stat-viewport" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
@@ -14,11 +14,11 @@
               :ratio="modeMetrics[mode.key].usedRatio"
               :over="modeMetrics[mode.key].isOverBudget"
               :percent-label="modeMetrics[mode.key].usedPercentLabel"
-              subtitle="已用"
+              :subtitle="t('home_budget_summary.used')"
             />
 
             <div class="remain-block">
-              <div class="muted">剩餘</div>
+              <div class="muted">{{ t('home_budget_summary.remain') }}</div>
               <div class="remain-value">
                 <MoneyText :value-minor="modeMetrics[mode.key].remainMinor" />
               </div>
@@ -26,11 +26,11 @@
 
             <div class="right-stack">
               <div class="line">
-                <span class="muted">預算</span>
+                <span class="muted">{{ t('home_budget_summary.budget') }}</span>
                 <MoneyText :value-minor="modeMetrics[mode.key].budgetMinor" />
               </div>
               <div class="line">
-                <span class="muted">已用</span>
+                <span class="muted">{{ t('home_budget_summary.used') }}</span>
                 <MoneyText :value-minor="modeMetrics[mode.key].spentMinor" />
               </div>
               <div v-if="mode.key === 'daily'" class="line">
