@@ -57,7 +57,7 @@ const activeTab = computed(() => route.meta.tab)
   padding-bottom: var(--navigation-bar-height);
   padding-left: 8px;
   padding-right: 8px;
-  background: color-mix(in srgb, var(--card-elevated) 88%, transparent 12%);
+  background: color-mix(in srgb, var(--bg) 92%, transparent 8%);
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   border-top: 1px solid var(--border);
