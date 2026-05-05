@@ -23,6 +23,10 @@ const settingsSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/settings.vue'),
   'utf8',
 )
+const i18nSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/services/i18n.service.js'),
+  'utf8',
+)
 
 test('global styles allow text selection by default while preserving shared tokens', () => {
   assert.match(globalCssSource, /--radius-sm: 10px;/)
@@ -37,7 +41,8 @@ test('global styles allow text selection by default while preserving shared toke
 test('home transaction feed exposes an actionable empty state', () => {
   assert.match(homeFeedSource, /class="empty-state"/)
   assert.match(homeFeedSource, /fa-solid fa-receipt/)
-  assert.match(homeFeedSource, /目前還沒有符合範圍的交易/)
+  assert.match(homeFeedSource, /home_tx\.empty_hint/)
+  assert.match(i18nSource, /目前還沒有符合範圍的交易/)
   assert.match(homeFeedSource, /to="\/transactions\/quick-add"/)
 })
 

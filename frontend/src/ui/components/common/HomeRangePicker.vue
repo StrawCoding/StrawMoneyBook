@@ -55,7 +55,8 @@
             :key="cell.iso"
             type="button"
             class="cell-btn day-btn"
-            :class="{ muted: !cell.inMonth, active: cell.iso === day }"
+            :class="{ muted: !cell.inMonth, active: isDayActive(cell) }"
+            :disabled="multiSelectDays && !cell.inMonth"
             @click="pickDay(cell.iso)"
           >
             {{ cell.day }}
@@ -92,9 +93,17 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  multiSelectDays: {
+    type: Boolean,
+    default: false,
+  },
+  selectedDayNumbers: {
+    type: Array,
+    default: () => [],
+  },
 })
 
-const emit = defineEmits(['update:year', 'update:month', 'update:day'])
+const emit = defineEmits(['update:year', 'update:month', 'update:day', 'toggle:day-number'])
 
 const open = ref(false)
 const weekNames = ['日', '一', '二', '三', '四', '五', '六']
@@ -190,6 +199,11 @@ function pickMonth(value) {
 }
 
 function pickDay(iso) {
+  if (props.multiSelectDays) {
+    const parsed = parseDay(iso)
+    if (parsed) emit('toggle:day-number', { day: parsed.day, dayKey: iso })
+    return
+  }
   emit('update:day', iso)
   open.value = false
 }
@@ -200,6 +214,11 @@ function pickToday() {
     emit('update:year', today.getFullYear())
   } else if (props.mode === 'month') {
     emit('update:month', toMonthKey(today))
+  } else if (props.multiSelectDays) {
+    viewYear.value = today.getFullYear()
+    viewMonth.value = today.getMonth()
+    emit('toggle:day-number', { day: today.getDate(), dayKey: toDayKey(today) })
+    return
   } else {
     emit('update:day', toDayKey(today))
   }
@@ -213,6 +232,11 @@ function toggleOpen() {
 function monthName(month) {
   const map = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月']
   return map[month - 1] ?? `${month}月`
+}
+
+function isDayActive(cell) {
+  if (!props.multiSelectDays) return cell.iso === props.day
+  return cell.inMonth && props.selectedDayNumbers.includes(cell.day)
 }
 
 function parseMonth(monthKey) {

@@ -52,32 +52,17 @@
 
     <div v-if="model.amountMode === 'daily_average' && model.dayRuleUnit === 'monthday'" class="stack rule-wrap">
       <div class="monthday-picker">
-        <div class="row monthday-picker-head">
-          <div class="monthday-picker-copy">
-            <strong>{{ monthdayPreviewLabel }}</strong>
-            <small class="muted">{{ t('budgeting.sheet.monthday_picker_hint') }}</small>
-          </div>
-          <div class="row monthday-picker-actions">
-            <button type="button" class="btn icon-btn" @click="shiftMonthdayPreview(-1)">‹</button>
-            <button type="button" class="btn icon-btn" @click="shiftMonthdayPreview(1)">›</button>
-          </div>
-        </div>
-        <div class="week-row monthday-week-row">
-          <span v-for="name in weekNames" :key="`monthday-week-${name}`">{{ name }}</span>
-        </div>
-        <div class="monthday-calendar-grid">
-          <button
-            v-for="cell in monthdayCalendarCells"
-            :key="cell.key"
-            type="button"
-            class="day-chip"
-            :class="{ active: cell.active, muted: !cell.inMonth }"
-            :disabled="!cell.inMonth"
-            @click="toggleDayRuleValue(cell.day)"
-          >
-            {{ cell.label }}
-          </button>
-        </div>
+        <label class="monthday-range-field">
+          <span>{{ t('budgeting.sheet.monthday_pick_label') }}</span>
+          <HomeRangePicker
+            mode="day"
+            :day="monthdayPickerDay"
+            :multi-select-days="true"
+            :selected-day-numbers="selectedMonthdayValues"
+            @toggle:day-number="toggleMonthdayFromCalendar"
+          />
+        </label>
+        <small class="muted">{{ t('budgeting.sheet.monthday_picker_hint') }}</small>
       </div>
       <div class="row day-rule-quick-row">
         <button type="button" class="btn" @click="applyMonthdayPreset('all')">{{ t('budgeting.sheet.rule_all') }}</button>
@@ -150,6 +135,7 @@
 <script setup>
 import { computed, reactive, watch } from 'vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
@@ -194,7 +180,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'save'])
-const { locale, t } = useI18n()
+const { t } = useI18n()
 
 const model = reactive({
   id: '',
@@ -238,32 +224,10 @@ const selectedDayRuleLabel = computed(() => model.dayRuleValues.join(', '))
 const selectedMonthdayValues = computed(() => (
   normalizeDayRuleValues(model.dayRuleValues, 'monthday')
 ))
-const weekNames = computed(() => {
-  const formatter = new Intl.DateTimeFormat(resolveWeekdayLocale(locale.value), { weekday: 'short' })
-  const sunday = new Date(Date.UTC(2026, 0, 4))
-  return Array.from({ length: 7 }, (_, index) => formatter.format(new Date(sunday.getTime() + index * 86400000)))
-})
-const monthdayPreviewLabel = computed(() => (
-  t('budgeting.month_display', { year: monthdayPreview.year, month: monthdayPreview.month + 1 })
-))
-const monthdayCalendarCells = computed(() => {
-  const first = new Date(monthdayPreview.year, monthdayPreview.month, 1)
-  const start = new Date(first)
-  start.setDate(first.getDate() - first.getDay())
-
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(start)
-    date.setDate(start.getDate() + index)
-    const inMonth = date.getMonth() === monthdayPreview.month
-    const day = date.getDate()
-    return {
-      key: `${date.getFullYear()}-${date.getMonth() + 1}-${day}`,
-      label: inMonth ? String(day) : '',
-      day,
-      inMonth,
-      active: inMonth && model.dayRuleValues.includes(day),
-    }
-  })
+const monthdayPickerDay = computed(() => {
+  const selected = selectedMonthdayValues.value[0]
+  const fallbackDay = Number.isFinite(selected) ? selected : 1
+  return toDayKey(monthdayPreview.year, monthdayPreview.month, clampDayToMonth(monthdayPreview.year, monthdayPreview.month, fallbackDay))
 })
 const duplicateCategoryIdSet = computed(() => new Set((props.duplicateCategoryIds ?? []).map((value) => String(value ?? '').trim()).filter(Boolean)))
 const budgetSaveModeLabel = computed(() => (
@@ -454,6 +418,14 @@ function toggleDayRuleValue(value) {
   model.dayRuleValues = Array.from(next).sort((a, b) => a - b)
 }
 
+function toggleMonthdayFromCalendar(payload) {
+  const parsed = parseDayKey(payload?.dayKey)
+  if (!parsed) return
+  monthdayPreview.year = parsed.year
+  monthdayPreview.month = parsed.month
+  toggleDayRuleValue(parsed.day)
+}
+
 function onSave() {
   if (budgetSaveInvalidReason.value) return
   emit('save', {
@@ -467,12 +439,6 @@ function onSave() {
     budgetSaveTargetAccountId: model.budgetSaveEnabled ? model.budgetSaveTargetAccountId : null,
     budgetSaveSourceAccountId: model.budgetSaveEnabled ? model.budgetSaveSourceAccountId : null,
   })
-}
-
-function shiftMonthdayPreview(offset) {
-  const next = new Date(monthdayPreview.year, monthdayPreview.month + offset, 1)
-  monthdayPreview.year = next.getFullYear()
-  monthdayPreview.month = next.getMonth()
 }
 
 function syncMonthdayPreview(monthKey) {
@@ -491,10 +457,25 @@ function resolveMonthdayPreview(monthKey) {
   return { year: today.getFullYear(), month: today.getMonth() }
 }
 
-function resolveWeekdayLocale(value) {
-  if (value === 'en') return 'en-US'
-  if (value === 'ja') return 'ja-JP'
-  return 'zh-TW'
+function parseDayKey(dayKey) {
+  const [yearPart, monthPart, dayPart] = String(dayKey ?? '').split('-')
+  const year = Number(yearPart)
+  const month = Number(monthPart)
+  const day = Number(dayPart)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null
+  if (month < 1 || month > 12) return null
+  const maxDay = new Date(year, month, 0).getDate()
+  if (day < 1 || day > maxDay) return null
+  return { year, month: month - 1, day }
+}
+
+function clampDayToMonth(year, month, day) {
+  const maxDay = new Date(year, month + 1, 0).getDate()
+  return Math.min(Math.max(1, day), maxDay)
+}
+
+function toDayKey(year, month, day) {
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 </script>
 
@@ -606,36 +587,8 @@ label {
   border-radius: 14px;
   background: color-mix(in srgb, var(--card) 92%, var(--surface-soft-accent) 8%);
 }
-.monthday-picker-head,
-.monthday-picker-actions {
-  align-items: center;
-}
-.monthday-picker-copy {
-  display: grid;
-  gap: 2px;
-}
-.monthday-picker-actions {
-  gap: 8px;
-}
-.icon-btn {
-  min-width: 40px;
-  padding-inline: 0;
-}
-.week-row {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
-  color: var(--muted);
-  font-size: 12px;
-  text-align: center;
-}
-.monthday-week-row {
-  margin-top: 2px;
-}
-.monthday-calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px
+.monthday-range-field {
+  color: var(--text);
 }
 .switch-row {
   width: 100%;
