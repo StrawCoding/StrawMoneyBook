@@ -18,3 +18,4 @@ speech-stt-service/models
 !**/.env.example
 *.claude
 *.cursor
+*.vscode
