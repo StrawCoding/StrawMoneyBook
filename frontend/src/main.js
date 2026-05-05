@@ -126,7 +126,6 @@ import {
   faShop,
   faShower,
   faSoap,
-  faSparkles,
   faStore,
   faTag,
   faTags,
@@ -178,6 +177,17 @@ import {
 import { translateMessage } from '@/ui/services/i18n.service'
 import { installGlobalErrorLogging } from '@/ui/services/error-log.service'
 import '@/ui/assets/css/global.css'
+
+const wandMagicSparklesAliasIcon = {
+  ...faWandMagicSparkles,
+  icon: [
+    faWandMagicSparkles.icon[0],
+    faWandMagicSparkles.icon[1],
+    [...new Set([...(faWandMagicSparkles.icon[2] ?? []), 'sparkles'])],
+    faWandMagicSparkles.icon[3],
+    faWandMagicSparkles.icon[4],
+  ],
+}
 
 const icons = [
   faArrowDown,
@@ -299,7 +309,6 @@ const icons = [
   faShop,
   faShower,
   faSoap,
-  faSparkles,
   faStore,
   faTag,
   faTags,
@@ -323,6 +332,7 @@ const icons = [
   faVolleyball,
   faWallet,
   faWandMagicSparkles,
+  wandMagicSparklesAliasIcon,
   faWaveSquare,
   faWifi,
   faWrench,
