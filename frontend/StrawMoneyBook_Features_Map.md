@@ -168,7 +168,7 @@
 - 資產頁管理入口：`/assets` -> `/assets/accounts`
 - 帳戶群組明細：`/assets/accounts` -> `/assets/account-groups/:id`
 - 帳戶明細：`/assets` 或 `/assets/accounts` -> `/accounts/:id`
-- 分類/帳戶 icon 選擇：`/settings/categories` 或 `/assets/accounts` -> `/icons/pick`
+- 分類/帳戶 icon 選擇：`/settings/categories` 或 `/assets/accounts` -> `/icons/pick`；Font Awesome 可選圖示註冊清單統一集中在 `src/main.js` 的 `icons` 陣列，避免匯入與實際註冊項目漂移
 
 ## 3. 首頁功能對應
 
