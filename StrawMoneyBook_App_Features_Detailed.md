@@ -748,6 +748,62 @@ StrawMoneyBook 特別適合以下人群：
 
 StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個人與協作金流中的預算、借貸、報銷、請款、儲蓄、同步與資料治理整合成一套可以長期使用的 App。
 
+## 15. UI 設計系統（Design System）
+
+### global.css Design Tokens（`src/ui/assets/css/global.css`）
+
+**間距 Token（Spacing Scale）**
+`--space-1` (4px) ～ `--space-12` (48px)，供元件直接引用，取代各元件內的硬編碼 padding/gap 值。
+
+**語意字型 Token（Semantic Font Sizes）**
+- `--font-caption: 10px`　徽章、輔助標籤
+- `--font-label: 12px`　次要標籤
+- `--font-body-sm: 13px`　次要內文
+- `--font-body: 15px`　主要內文
+- `--font-title: 18px`　卡片標題
+- `--font-heading: 22px`　頁面標題
+- `--font-display: 28px`　金額顯示
+
+**按鈕系統（Button Variants）**
+- `.btn.primary`（既有）：主要 CTA，amber gradient
+- `.btn.danger`（既有）：破壞性操作
+- `.btn.secondary`：次要操作，透明底 + 邊框
+- `.btn.ghost`：最低優先度操作，無邊框
+- `.btn.ok`：成功/確認用綠色變體
+
+**Card 變體（Card Variants）**
+- `.card`（既有）：標準卡片
+- `.card--soft`：較暗的次要卡片
+- `.card--elevated`：帶陰影的浮層卡片
+- `.card--accent`：左側 primary 色邊框，用於重要資訊
+- `.card--ok`：左側綠色邊框，用於成功狀態
+- `.card--danger`：左側紅色邊框，用於警示
+
+**Skeleton 載入系統**
+- `.skeleton`：shimmer 動畫底層，搭配 `background-size: 200%` 左右掃光
+- `.skeleton--text` / `.skeleton--text-sm`：文字行佔位
+- `.skeleton--icon`：圖示方塊佔位
+- `.skeleton--amount`：金額佔位
+- `.skeleton-row` / `.skeleton-block`：佈局容器
+
+**Input 狀態樣式**
+- `.input--error` / `.select--error` / `.textarea--error`：錯誤紅色邊框 + glow
+- `.input--success` 等：成功綠色邊框 + glow
+- `.field-hint`：說明文字容器，搭配 `--error` / `--ok` / `--muted` modifier
+
+**無障礙（WCAG）**
+- `--muted` 從 `#8888a0` 提升至 `#9999b4`，確保深色背景上的對比度達 WCAG AA 標準
+
+### 通用元件
+
+**EmptyState.vue**（`src/ui/components/common/EmptyState.vue`）
+
+通用空狀態展示元件，props：
+- `icon`（FontAwesome icon）：圖示
+- `title`：主標題
+- `description`：說明文字
+- `compact`（Boolean）：精簡版，padding 更小
+
 ## 14. 本文件整理依據
 
 本文件內容主要根據下列現有資源與程式碼結構彙整：

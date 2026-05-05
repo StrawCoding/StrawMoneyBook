@@ -22,7 +22,7 @@
   /* Text */
   --text: #f0f0f5;
   --text-soft: #c8c8d8;
-  --muted: #8888a0;
+  --muted: #9999b4;
 
   /* Status */
   --ok: #34d399;
@@ -137,6 +137,26 @@
   --text-lg: 17px;
   --text-xl: 24px;
   --text-2xl: 30px;
+
+  /* Semantic font sizes */
+  --font-caption: 10px;
+  --font-label: 12px;
+  --font-body-sm: 13px;
+  --font-body: 15px;
+  --font-title: 18px;
+  --font-heading: 22px;
+  --font-display: 28px;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
 
   /* Safe areas */
   --status-bar-height: env(safe-area-inset-top, 0px);
@@ -420,6 +440,44 @@ button.danger-btn {
   color: var(--danger-btn-text) !important;
 }
 
+/* Secondary — outlined, low-emphasis actions */
+.btn.secondary {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-soft);
+}
+.btn.secondary:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  border-color: color-mix(in srgb, var(--text) 28%, transparent);
+}
+.btn.secondary::after {
+  background: color-mix(in srgb, var(--text-soft) 40%, transparent);
+}
+
+/* Ghost — minimal, tertiary actions */
+.btn.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.btn.ghost:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-soft);
+}
+.btn.ghost::after {
+  background: color-mix(in srgb, var(--muted) 40%, transparent);
+}
+
+/* Ok / success variant */
+.btn.ok {
+  background: color-mix(in srgb, var(--ok) 18%, var(--card) 82%);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+  color: var(--ok-soft);
+}
+.btn.ok:hover {
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--ok) 24%, transparent);
+}
+
 .input,
 .select,
 .textarea {
@@ -464,6 +522,33 @@ a,
 .card:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-card);
+}
+
+/* Card variants */
+.card--soft {
+  background: var(--bg-soft);
+  border-color: var(--border);
+}
+
+.card--elevated {
+  background: var(--card-elevated);
+  box-shadow: var(--shadow-card);
+}
+
+/* Accent card: left-side primary color border for important info */
+.card--accent {
+  border-left: 3px solid var(--primary);
+  padding-left: 13px;
+}
+
+.card--ok {
+  border-left: 3px solid var(--ok);
+  padding-left: 13px;
+}
+
+.card--danger {
+  border-left: 3px solid var(--danger-fixed);
+  padding-left: 13px;
 }
 
 .fade-scale-enter-active,
@@ -708,6 +793,105 @@ a,
     transform: translateY(-1px) scale(0.995);
     filter: saturate(1.12);
   }
+}
+
+/* ─── Skeleton loading ─── */
+.skeleton {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--card) 25%,
+    var(--card-elevated) 50%,
+    var(--card) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton--text {
+  height: 14px;
+  border-radius: var(--radius-pill);
+}
+
+.skeleton--text-sm {
+  height: 11px;
+  border-radius: var(--radius-pill);
+}
+
+.skeleton--icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.skeleton--amount {
+  height: 20px;
+  width: 80px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+.skeleton--circle {
+  border-radius: 50%;
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px 0;
+}
+
+.skeleton-row + .skeleton-row {
+  border-top: 1px solid var(--border);
+}
+
+.skeleton-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Input state variants ─── */
+.input--error,
+.select--error,
+.textarea--error {
+  border-color: var(--danger-fixed) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 20%, transparent) !important;
+}
+
+.input--success,
+.select--success,
+.textarea--success {
+  border-color: var(--ok) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 16%, transparent) !important;
+}
+
+.field-hint {
+  display: block;
+  font-size: var(--font-label);
+  margin-top: var(--space-1);
+  line-height: 1.4;
+}
+
+.field-hint--error {
+  color: var(--danger-text);
+}
+
+.field-hint--ok {
+  color: var(--ok);
+}
+
+.field-hint--muted {
+  color: var(--muted);
 }
 
 @media (prefers-reduced-motion: reduce) {

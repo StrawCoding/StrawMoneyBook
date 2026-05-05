@@ -102,7 +102,7 @@ const activeTab = computed(() => route.meta.tab)
 }
 
 .nav-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--muted);
@@ -112,12 +112,13 @@ const activeTab = computed(() => route.meta.tab)
 
 /* Active state */
 .nav-item.active .nav-pill {
-  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 30%, transparent);
 }
 
 .nav-item.active .nav-icon {
   color: var(--primary);
-  transform: scale(1.1) translateY(-1px);
+  transform: scale(1.12) translateY(-1px);
 }
 
 .nav-item.active .nav-label {
