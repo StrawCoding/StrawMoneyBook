@@ -12,7 +12,7 @@
 - 退款流程（交易明細可建立退款、選擇退款帳戶、指定扣除金額；SMB-149 後部分退款會以原交易扣除退款金額後的淨額納入首頁、預算、分析與列印報表，全額退款則歸零）
 - 預算管理（月預算、分類預算、日均規則、已用/剩餘/保留金額、預算剩餘自動存入存錢罐；SMB-151 後預算項目的「日期」分配改用與首頁查看範圍相同的 `HomeRangePicker` 日期選擇器，並在預算項目情境啟用日曆複選，點選多個日期後轉成每月日號規則，不再只是 1~31 純數字格或另一套自製月曆；SMB-153 後功能列表加入帶圖示的預算項目入口，可直接前往 `/budget`）
 - 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、列印 / PDF 版面；SMB-146 後支出分類分析會將正向附加項目拆成獨立分析列，主分類扣除該附加金額後仍維持總支出一致，分析明細與列印報表同步支援；圓餅圖已改為可點擊並提供 hover/press 回饋，尺寸也會隨較小螢幕縮放）
-- 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、群組內金額摘要；負向負債帳戶會以絕對值納入負債摘要，避免信用卡等帳戶方向差異造成低估；SMB-155 後帳戶明細交易紀錄改為每頁 300 筆，並用分頁前交易金額校正每筆交易後餘額）
+- 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、群組內金額摘要；SMB-159 / SMB-160 後群組統計支援帳戶層級納入開關，並會依匯率 snapshot 將外幣帳戶換算為帳本幣別後加總；負向負債帳戶會以絕對值納入負債摘要，避免信用卡等帳戶方向差異造成低估；SMB-155 後帳戶明細交易紀錄改為每頁 300 筆，並用分頁前交易金額校正每筆交易後餘額）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細）
 - 借貸建立後可於借貸明細變更「建立入帳帳戶」，會直接修正該筆初始借入 / 借出交易的帳戶歸屬
 - 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出；請款單導入報銷改由獨立頁面選取，支援全選 / 取消全選；SMB-150 後從導入報銷頁返回時會固定回到原本的新增 / 編輯請款單流程，不再直接跳出請款單；完成請款單會讓匯入報銷項目回到已報銷狀態，不再留在未報銷；還原後重新完成不會因舊入帳交易冪等鍵撞唯一鍵；SMB-148 後代收管理會保留部分抵扣但仍有可用餘額的代收，只有完全未抵扣項目可直接刪除）
@@ -33,7 +33,7 @@
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell，並在官網 `public/terms-of-service/index.html`、`public/privacy-policy/index.html` 提供靜態直連頁，避免正式網域直接開啟法律文件路徑時因 SPA history fallback 未命中而回 404
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
-- 電子發票載具（公開但標示為實驗性；SMB-2 重建後只保留 Android 端內人工 captcha 流程，App 會在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，並把憑證與 native session marker 加密保存在本機；Android automation Activity 維持透明背景，captcha 會等圖片實際可讀後才回前端，重新產生會觸發站點刷新按鈕，查詢後也會等待 detail / 結果表載入完成再解析；Web 僅提供診斷與說明，不再承諾可新增、重新驗證或同步載具；Node / Web headed Playwright 與 OCR `/api/invoice/*` 舊流程已移除；若 native exchange 沒有回傳可保存憑證，系統會拒絕建立 active connection；若站點流程阻擋自動化，狀態會明確標示為 `automation_blocked` 或 `reauth_required`，不會偽裝成成功）
+- 電子發票載具（公開但標示為實驗性；SMB-2 重建後採 Android 端內自動辨識 captcha 流程，App 在原生 WebView 內自動登入電子發票網站，圖形驗證碼由 Tesseract OCR 自動辨識，最多嘗試五次，無需使用者手動輸入驗證碼；完成後把憑證與 native session marker 加密保存在本機；Android automation Activity 維持透明背景，captcha 以 Base64 解碼後送 OCR，查詢後等待 detail / 結果表載入再解析；Web 僅提供診斷與說明，不再承諾可新增、重新驗證或同步載具；Node / Web headed Playwright 與 `/api/invoice/*` 舊流程已移除；若站點流程阻擋自動化，狀態會明確標示為 `automation_blocked` 或 `reauth_required`，不會偽裝成成功）
 - Android 原生能力（首頁小工具目錄（SMB-157）、安全鎖、Google Identity、語音輸入、銀行自動化、電子發票載具自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；Google Play internal 上傳若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）
 - Android 桌面小工具共 5 種：月收支總覽（`StrawMoneyWidgetProvider`）、收支圓餅圖（`StrawMoneyPieChartWidgetProvider`）、收支長條圖（`StrawMoneyBarChartWidgetProvider`）、快速記帳（`StrawMoneyQuickAddWidgetProvider`）、AI 記帳（`StrawMoneyAiBookkeepingWidgetProvider`）；圖表類小工具點擊導向 `/analysis`，快速記帳導向 `/transactions/quick-add`，AI 記帳導向 `/ai-auto-bookkeeping`；資料由 JS 層 `home-widget.service.js` 透過 Capacitor HomeWidget plugin 同步當月收入/支出摘要至 SharedPreferences，Android 原生以 `HomeWidgetPlugin.java` 繪製圓餅圖與長條圖 Bitmap
 
@@ -90,7 +90,7 @@
 | `/settings/bank-sync/new` | `src/ui/views/settings/SettingsBankSyncCreatePage.vue` | 新增銀行連線 |
 | `/settings/bank-sync/:id` | `src/ui/views/settings/SettingsBankSyncConnectionPage.vue` | 單一銀行連線設定 / 狀態 |
 | `/settings/invoice-carrier` | `src/ui/views/settings/SettingsInvoiceCarrierPage.vue` | 電子發票載具管理（公開入口，實驗性） |
-| `/settings/invoice-carrier/new` | `src/ui/views/settings/SettingsInvoiceCarrierCreatePage.vue` | 新增 / 重新驗證電子發票載具（Android 端內人工 captcha；Web 顯示診斷） |
+| `/settings/invoice-carrier/new` | `src/ui/views/settings/SettingsInvoiceCarrierCreatePage.vue` | 新增 / 重新連結電子發票載具（Android 端內自動辨識 captcha；Web 顯示診斷） |
 | `/settings/invoice-carrier/:id` | `src/ui/views/settings/SettingsInvoiceCarrierConnectionPage.vue` | 單一載具詳情 / 同步 / 發票匯入 / 重新驗證提示（非 Android 僅顯示診斷） |
 | `/settings/ledgers` | `src/ui/views/settings/SettingsLedgerPage.vue` | 帳本管理 |
 | `/settings/shared-ledgers` | `src/ui/views/settings/SettingsSharedLedgerPage.vue` | 共同帳本、Email 邀請、接受邀請與同步 |
@@ -152,7 +152,7 @@
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
 - 銀行同步：`/settings/bank-sync`（入口改由 `isBankSyncFeatureEnabled()` 控制；目前預設恢復為 mock/sandbox 流程）
-- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；新增載具會導向 `/settings/invoice-carrier/new`；Android App 透過 `InvoiceCarrierAutomation` 原生 WebView plugin 載入圖形驗證碼圖片並由使用者手動輸入後完成登入 / 同步，且 native BrowserSession 會將 WebView client、頁面載入、captcha 刷新、腳本執行與 cookie 操作統一切回 main thread；Web 僅保留設定入口、診斷與說明，不再走 `/api/invoice` 或 headed Playwright/OCR 舊流程）
+- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；新增載具會導向 `/settings/invoice-carrier/new`；Android App 透過 `InvoiceCarrierAutomation` 原生 WebView plugin 自動登入，Tesseract OCR 自動辨識圖形驗證碼（最多五次），成功後加密保存憑證，native BrowserSession 統一切回 main thread；Web 僅保留設定入口、診斷與說明，不再走 `/api/invoice` 或 headed Playwright 舊流程）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）
@@ -247,7 +247,7 @@
 | Store | 主要職責 |
 |---|---|
 | `ledger.store.js` | 活動帳本、帳本切換、帳本 CRUD；跨 store reset / reload / integrity repair 已轉移到 `src/ui/services/ledger-runtime.service.js` |
-| `account.store.js` | 帳戶清單與餘額 |
+| `account.store.js` | 帳戶清單、餘額與群組統計；群組統計會讀取匯率 snapshot 並依帳戶 `include_in_group_statistics` 加總 |
 | `category.store.js` | 分類清單、群組、二級分類資料 |
 | `transaction.store.js` | 交易載入、新增、更新、刪除、首頁篩選與關聯刷新 |
 | `budget.store.js` | 月預算、預算項目、保留金額、整月預算存款設定與補跑偏好 |

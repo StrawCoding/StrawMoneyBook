@@ -52,7 +52,7 @@ test('invoice carrier linking is supported only on Android runtime', () => {
 test('invoice carrier backend source explicitly documents Android-only diagnostics for web', () => {
   assert.match(backendAdapterSource, /Android App 自動化/)
   assert.match(backendAdapterSource, /不能新增、重新驗證或同步載具/)
-  assert.match(backendAdapterSource, /createNativeInvoiceCarrierLinkSession/)
-  assert.match(backendAdapterSource, /getNativeInvoiceCarrierSessionStatus/)
-  assert.match(backendAdapterSource, /exchangeNativeInvoiceCarrierAuth/)
+  assert.match(backendAdapterSource, /connectNativeInvoiceCarrier/)
+  assert.doesNotMatch(backendAdapterSource, /createNativeInvoiceCarrierLinkSession/)
+  assert.doesNotMatch(backendAdapterSource, /exchangeNativeInvoiceCarrierAuth/)
 })

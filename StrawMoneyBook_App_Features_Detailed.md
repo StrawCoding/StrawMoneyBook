@@ -340,7 +340,8 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 
 - 每個群組標題列直接顯示群組金額
 - 不再額外拆一塊「群組統計」卡片，避免同頁重複摘要
-- 群組金額仍不受單一帳戶「是否納入資產統計」開關影響，和總資產 / 可支配 / 負債各自反映不同管理目的
+- 群組金額不受單一帳戶「是否納入資產統計」開關影響，和總資產 / 可支配 / 負債各自反映不同管理目的
+- SMB-159 / SMB-160 後帳戶可另外設定是否納入群組統計，且群組金額會以目前帳本幣別為目標，依匯率 snapshot 換算外幣帳戶餘額後加總
 
 ### 4.4 帳戶與帳戶群組
 
@@ -348,6 +349,8 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 
 - 多帳戶
 - 帳戶群組
+- 是否納入資產總額
+- 是否納入群組統計
 - 帳戶 icon
 - 是否納入資產統計
 - 帳戶幣別設定
@@ -658,16 +661,14 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 
 **技術架構**
 - 功能已公開，但明確標示為「實驗性」
-- SMB-2 重建後，正式產品路徑只保留 Android App 原生 WebView + 人工 captcha 流程；Node / Web headed Playwright、OCR 與 `/api/invoice/*` 舊流程已移除
+- SMB-2 重建後，正式產品路徑採 Android App 原生 WebView + Tesseract OCR 自動辨識 captcha 流程；Node / Web headed Playwright、OCR 與 `/api/invoice/*` 舊流程已移除
 - Web 不再承諾可直接新增、重新驗證或同步載具；只保留設定入口、診斷與說明，且所有 Android WebView client / load / JavaScript / cookie 操作都會切回 main thread 執行
-- 圖形驗證碼改為顯示圖片後由使用者手動輸入，不再把 OCR 當成正式登入流程
-- Android App 會先在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，不再依賴 Web 版 headed browser；原生 automation Activity 採透明背景，captcha 會等圖片可讀後才回前端，重新產生會觸發站點刷新按鈕，查詢後會等待 detail / 結果表載入再解析
-- 新增 / 重新驗證若 native exchange 沒有回傳可加密保存的手機號碼與密碼狀態，會直接拒絕建立 active connection，避免使用者看到假成功但後續同步必定失敗
+- Android App 在原生 WebView 內自動登入電子發票網站，圖形驗證碼以 Base64 解碼後透過 TesseractBridge OCR 自動辨識（最多嘗試五次），無需使用者手動輸入；若辨識失敗會自動刷新並重試，若確認為帳號密碼錯誤則立即回報；原生 automation Activity 採透明背景，查詢後等待 detail / 結果表載入再解析
 - 同步預設支援最近 2 個月日期範圍，並可依實際載具清單做篩選
 - 前端 adapter 只把 Android native automation 視為正式產品入口；Web 僅顯示診斷與導引訊息
 
 **使用者流程**
-1. 新增載具：列表頁新增入口一律進入新增 / 診斷頁；Android App 先輸入手機號碼與密碼、載入圖形驗證碼圖片，再由使用者手動輸入驗證碼後完成登入、查詢頁切換與本機憑證保存；Web 版只保留設定入口、診斷與說明，不再承諾可直接新增載具
+1. 新增載具：列表頁新增入口一律進入新增 / 診斷頁；Android App 只需輸入手機號碼與密碼後點「連結載具」，系統自動處理圖形驗證碼並完成登入、查詢頁切換與本機憑證保存；Web 版只保留設定入口、診斷與說明，不再承諾可直接新增載具
 2. 本機保存：登入成功後，把手機號碼、密碼與 Android native session marker 以加密 secure setting 保存到本機，key 為 `invoice_carrier.credentials.<connectionId>`；Android 另以原生 encrypted vault 保存 cookie/session 狀態
 3. 同步發票：Android 會優先使用原生 vault session；若失效則改為要求重新驗證，並在管理頁明確標示 `reauth_required` 或 `automation_blocked`；Web 版只保留診斷與說明
 4. 匯入交易：勾選發票清單 → 選擇匯入帳戶 → 批量匯入為帳目記錄（發票金額 = 交易金額）
@@ -685,7 +686,7 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - 使用者可彈性選擇日期範圍、載具與匯入帳戶，提高匯入控制性
 - 憑證與 native session marker 屬於 local-only sensitive data，不會進 Google Drive 帳本同步，也不會進 shared-ledger snapshot
 - Web 不再提供 `/api/invoice`、headed browser 或 OCR fallback；非 Android 環境會顯示 unavailable / deterministic error，而不是讓使用者進入壞流程或建立假成功連線
-- Android App 不依賴遠端 headed browser 新增或同步載具；若原生 WebView session 過期，會要求重新人工驗證，若站點流程變動或頁面結構改版，會回傳明確錯誤並標示 `reauth_required` 或 `automation_blocked`
+- Android App 不依賴遠端 headed browser 新增或同步載具；若原生 WebView session 過期，會要求重新連結，若站點流程變動或頁面結構改版，會回傳明確錯誤並標示 `reauth_required` 或 `automation_blocked`
 
 ## 10. 使用者輪廓
 

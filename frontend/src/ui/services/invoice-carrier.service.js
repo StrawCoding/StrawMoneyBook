@@ -1,7 +1,5 @@
 import {
-  createInvoiceCarrierLinkSession as createInvoiceCarrierLinkSessionBackend,
-  exchangeInvoiceCarrierAuth as exchangeInvoiceCarrierAuthBackend,
-  getInvoiceCarrierSessionStatus as getInvoiceCarrierSessionStatusBackend,
+  connectInvoiceCarrier as connectInvoiceCarrierBackend,
 } from '@/services/invoice-carrier/backend'
 import { normalizeCarrierOptions, normalizeText } from '@/services/invoice-carrier/shared'
 
@@ -16,28 +14,11 @@ function buildCredentialState(result, mobilePhone, password) {
   }
 }
 
-export async function startInvoiceCarrierLinkSession(mobilePhone, password) {
-  return createInvoiceCarrierLinkSessionBackend({
+export async function connectInvoiceCarrierLink(mobilePhone, password) {
+  const result = await connectInvoiceCarrierBackend({
     mobile_phone: mobilePhone,
     password,
   })
-}
-
-export async function refreshInvoiceCarrierLinkSession(sessionId, options = {}) {
-  return getInvoiceCarrierSessionStatusBackend({
-    session_id: sessionId,
-    refresh_captcha: Boolean(options.refreshCaptcha),
-  })
-}
-
-export async function completeInvoiceCarrierLinkSession(mobilePhone, password, captchaCode, options = {}) {
-  const result = await exchangeInvoiceCarrierAuthBackend({
-    session_id: normalizeText(options.sessionId),
-    mobile_phone: mobilePhone,
-    password,
-    captcha_code: captchaCode,
-  })
-
   return {
     ...result,
     credentialState: buildCredentialState(result, mobilePhone, password),

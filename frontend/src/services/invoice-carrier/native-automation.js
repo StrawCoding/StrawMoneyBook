@@ -42,30 +42,12 @@ function normalizePluginError(error, fallbackMessage) {
   )
 }
 
-export async function createNativeInvoiceCarrierLinkSession(payload = {}) {
+export async function connectNativeInvoiceCarrier(payload = {}) {
   await ensureNativeInvoiceCarrierAutomationAvailable()
   try {
-    return await InvoiceCarrierAutomation.createLinkSession(payload)
+    return await InvoiceCarrierAutomation.connect(payload)
   } catch (error) {
-    throw normalizePluginError(error, 'Invoice carrier link session failed')
-  }
-}
-
-export async function getNativeInvoiceCarrierSessionStatus(payload = {}) {
-  await ensureNativeInvoiceCarrierAutomationAvailable()
-  try {
-    return await InvoiceCarrierAutomation.getSessionStatus(payload)
-  } catch (error) {
-    throw normalizePluginError(error, 'Invoice carrier session status failed')
-  }
-}
-
-export async function exchangeNativeInvoiceCarrierAuth(payload = {}) {
-  await ensureNativeInvoiceCarrierAutomationAvailable()
-  try {
-    return await InvoiceCarrierAutomation.exchangeAuth(payload)
-  } catch (error) {
-    throw normalizePluginError(error, 'Invoice carrier auth exchange failed')
+    throw normalizePluginError(error, 'Invoice carrier connect failed')
   }
 }
 

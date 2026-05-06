@@ -1,9 +1,7 @@
 import { Capacitor } from '@capacitor/core'
 import {
-  createNativeInvoiceCarrierLinkSession,
+  connectNativeInvoiceCarrier,
   disconnectNativeInvoiceCarrierSession,
-  exchangeNativeInvoiceCarrierAuth,
-  getNativeInvoiceCarrierSessionStatus,
   isNativeInvoiceCarrierAutomationRuntimeSupported,
   syncNativeInvoiceCarrierData,
 } from './native-automation.js'
@@ -79,26 +77,10 @@ export function getInvoiceCarrierLinkingUnavailableMessage() {
   return createUnsupportedInvoiceCarrierError(Capacitor.getPlatform()).message
 }
 
-export async function createInvoiceCarrierLinkSession(payload = {}) {
+export async function connectInvoiceCarrier(payload = {}) {
   assertInvoiceCarrierFeatureEnabled()
   if (isNativeInvoiceCarrierAutomationRuntimeSupported()) {
-    return createNativeInvoiceCarrierLinkSession(payload)
-  }
-  return rejectUnsupportedProductPath()
-}
-
-export async function getInvoiceCarrierSessionStatus(payload = {}) {
-  assertInvoiceCarrierFeatureEnabled()
-  if (isNativeInvoiceCarrierAutomationRuntimeSupported()) {
-    return getNativeInvoiceCarrierSessionStatus(payload)
-  }
-  return rejectUnsupportedProductPath()
-}
-
-export async function exchangeInvoiceCarrierAuth(payload = {}) {
-  assertInvoiceCarrierFeatureEnabled()
-  if (isNativeInvoiceCarrierAutomationRuntimeSupported()) {
-    return exchangeNativeInvoiceCarrierAuth(payload)
+    return connectNativeInvoiceCarrier(payload)
   }
   return rejectUnsupportedProductPath()
 }
