@@ -28,18 +28,8 @@ public class InvoiceCarrierAutomationPlugin extends Plugin {
     }
 
     @PluginMethod
-    public void createLinkSession(PluginCall call) {
-        launch(call, InvoiceCarrierAutomationActivity.ACTION_CREATE_LINK_SESSION);
-    }
-
-    @PluginMethod
-    public void getSessionStatus(PluginCall call) {
-        launch(call, InvoiceCarrierAutomationActivity.ACTION_GET_SESSION_STATUS);
-    }
-
-    @PluginMethod
-    public void exchangeAuth(PluginCall call) {
-        launch(call, InvoiceCarrierAutomationActivity.ACTION_EXCHANGE_AUTH);
+    public void connect(PluginCall call) {
+        launch(call, InvoiceCarrierAutomationActivity.ACTION_CONNECT);
     }
 
     @PluginMethod

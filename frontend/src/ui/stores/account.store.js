@@ -16,6 +16,7 @@ import {
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { assertCanCreateAccount } from '@/core/services/membership.service'
 import { buildGroupSummaries } from '@/ui/utils/account-group-summary'
+import { getExchangeRateSnapshot } from '@/ui/services/exchange-rate.service'
 
 function isIncludedInAssets(account) {
   return Number(account?.include_in_assets ?? 1) === 1
@@ -77,6 +78,7 @@ export const useAccountStore = defineStore('account', {
     groups: [],
     accounts: [],
     balances: [],
+    exchangeRateSnapshot: null,
     loading: false,
     ready: false,
     loadRequestSeq: 0,
@@ -84,7 +86,11 @@ export const useAccountStore = defineStore('account', {
 
   getters: {
     groupSummaries(state) {
-      return buildGroupSummaries(state.groups, state.accounts, state.balances)
+      const ledgerStore = useLedgerStore()
+      return buildGroupSummaries(state.groups, state.accounts, state.balances, {
+        targetCurrencyCode: ledgerStore.activeLedger?.currency_code ?? 'TWD',
+        rates: state.exchangeRateSnapshot?.rates ?? {},
+      })
     },
 
     totalAssetsMinor(state) {
@@ -126,14 +132,16 @@ export const useAccountStore = defineStore('account', {
             this.groups = []
             this.accounts = []
             this.balances = []
+            this.exchangeRateSnapshot = null
           }
           return
         }
         const includeArchived = Boolean(options.includeArchived)
-        const [groups, accounts, balances] = await Promise.all([
+        const [groups, accounts, balances, exchangeRateSnapshot] = await Promise.all([
           listAccountGroups(ledgerId),
           listAccounts(ledgerId, { includeArchived }),
           getAccountBalances(ledgerId, { includeArchived }),
+          getExchangeRateSnapshot(ledgerId).catch(() => null),
         ])
 
         if (this.loadRequestSeq !== requestSeq || useLedgerStore().activeLedgerId !== ledgerId) {
@@ -142,6 +150,7 @@ export const useAccountStore = defineStore('account', {
         this.groups = groups
         this.accounts = accounts
         this.balances = balances
+        this.exchangeRateSnapshot = exchangeRateSnapshot
       } finally {
         if (this.loadRequestSeq === requestSeq) {
           this.ready = true

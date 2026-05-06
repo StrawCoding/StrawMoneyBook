@@ -31,7 +31,7 @@
 - 關於與聯絡入口（官網、Facebook、Instagram、Threads、Email、隱私權政策）
 - 官方網站 SEO / 品牌搜尋關鍵字（`../StrawMoneyBookWeb/index.html`：`StrawMoneyBook`、`稻草AI記帳`、`稻草記帳`、`AI記帳`、`對話記帳`、`自動記帳` 等）
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
-- 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell
+- 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell，並在官網 `public/terms-of-service/index.html`、`public/privacy-policy/index.html` 提供靜態直連頁，避免正式網域直接開啟法律文件路徑時因 SPA history fallback 未命中而回 404
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
 - 電子發票載具（公開但標示為實驗性；SMB-2 重建後只保留 Android 端內人工 captcha 流程，App 會在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，並把憑證與 native session marker 加密保存在本機；Android automation Activity 維持透明背景，captcha 會等圖片實際可讀後才回前端，重新產生會觸發站點刷新按鈕，查詢後也會等待 detail / 結果表載入完成再解析；Web 僅提供診斷與說明，不再承諾可新增、重新驗證或同步載具；Node / Web headed Playwright 與 OCR `/api/invoice/*` 舊流程已移除；若 native exchange 沒有回傳可保存憑證，系統會拒絕建立 active connection；若站點流程阻擋自動化，狀態會明確標示為 `automation_blocked` 或 `reauth_required`，不會偽裝成成功）
 - Android 原生能力（首頁小工具目錄（SMB-157）、安全鎖、Google Identity、語音輸入、銀行自動化、電子發票載具自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；Google Play internal 上傳若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）

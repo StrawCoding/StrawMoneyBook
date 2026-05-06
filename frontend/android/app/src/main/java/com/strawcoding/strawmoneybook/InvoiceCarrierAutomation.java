@@ -1,8 +1,11 @@
 package com.strawcoding.strawmoneybook;
 
 import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Base64;
 import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
 import android.webkit.WebResourceRequest;
@@ -17,8 +20,9 @@ import org.json.JSONTokener;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -29,98 +33,73 @@ final class InvoiceCarrierAutomation {
     private static final String LOGIN_URL = "https://www.einvoice.nat.gov.tw/accounts/login";
     private static final String SEARCH_URL = "https://www.einvoice.nat.gov.tw/portal/btc/mobile/btc502w/search";
     private static final String DETAIL_URL = "https://www.einvoice.nat.gov.tw/portal/btc/mobile/btc502w/detail";
-    private static final long SESSION_TTL_MS = 5 * 60 * 1000L;
     private static final long PAGE_TIMEOUT_MS = 30_000L;
     private static final long READY_TIMEOUT_MS = 90_000L;
     private static final long POLL_MS = 400L;
     private static final ZoneId TAIPEI_ZONE = ZoneId.of("Asia/Taipei");
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US);
+    private static final int CAPTCHA_LENGTH = 4;
+    private static final int MAX_LOGIN_ATTEMPTS = 5;
 
     private InvoiceCarrierAutomation() {}
 
-    public static JSONObject createLinkSession(Activity activity, WebView webView, BankAutomationVault vault, BankAutomationDebugTrace debugTrace, JSONObject payload) throws Exception {
-        String sessionId = "native_einv_" + UUID.randomUUID().toString().replace("-", "");
-        BrowserSession session = new BrowserSession(activity, webView);
-        debugTrace.record("load_login_page", "running", "Loading eInvoice login page");
-        session.loadUrl(LOGIN_URL);
-        JSONObject status = waitForInteractiveStatus(session, debugTrace, true);
-        saveTemporarySession(vault, sessionId, session.captureCookies());
-        debugTrace.record("session_ready", "ok", "eInvoice link session is ready");
-        return buildSessionPayload(sessionId, status);
-    }
-
-    public static JSONObject getSessionStatus(Activity activity, WebView webView, BankAutomationVault vault, BankAutomationDebugTrace debugTrace, JSONObject payload) throws Exception {
-        String sessionId = requireText(payload, "session_id", "invoice_carrier_session_required", "缺少電子發票驗證 session");
-        JSONObject state = requireTemporarySession(vault, sessionId);
-        BrowserSession session = new BrowserSession(activity, webView);
-        session.restoreCookies(state.optString("cookieHeader", ""));
-        debugTrace.record("reload_login_page", "running", "Reloading eInvoice session");
-        session.loadUrl(LOGIN_URL);
-        boolean shouldRefreshCaptcha = payload.optBoolean("refresh_captcha", false);
-        JSONObject status = waitForInteractiveStatus(session, debugTrace, !shouldRefreshCaptcha);
-        if (shouldRefreshCaptcha && status.optBoolean("login_form_ready", false)) {
-            refreshCaptchaImage(session, debugTrace);
-            status = waitForInteractiveStatus(session, debugTrace, true);
-        }
-        saveTemporarySession(vault, sessionId, session.captureCookies());
-        return buildSessionPayload(sessionId, status);
-    }
-
-    public static JSONObject exchangeAuth(Activity activity, WebView webView, BankAutomationVault vault, BankAutomationDebugTrace debugTrace, JSONObject payload) throws Exception {
-        String sessionId = requireText(payload, "session_id", "invoice_carrier_session_required", "缺少電子發票驗證 session");
-        String mobilePhone = requireText(payload, "mobile_phone", "invoice_carrier_credentials_required", "缺少手機號碼或密碼");
-        String password = requireText(payload, "password", "invoice_carrier_credentials_required", "缺少手機號碼或密碼");
-        String captchaCode = normalizeText(payload.optString("captcha_code"));
-        if (captchaCode.isEmpty()) {
-            throw new BankAutomationException("invoice_carrier_credentials_required", "缺少圖形驗證碼");
-        }
-
-        JSONObject tempState = requireTemporarySession(vault, sessionId);
-        BrowserSession session = new BrowserSession(activity, webView);
-        session.restoreCookies(tempState.optString("cookieHeader", ""));
-        debugTrace.record("load_login_page", "running", "Loading eInvoice login page for auth exchange");
-        session.loadUrl(LOGIN_URL);
-        JSONObject beforeStatus = waitForInteractiveStatus(session, debugTrace, false);
-        if (beforeStatus.optBoolean("cloudflare_blocked", false)) {
-            throw new BankAutomationException("invoice_carrier_automation_blocked", "電子發票網站目前阻擋登入流程，請稍後再試");
-        }
-        if (!beforeStatus.optBoolean("login_form_ready", false) && !beforeStatus.optBoolean("search_form_ready", false)) {
-            throw new BankAutomationException("invoice_carrier_login_required", "電子發票登入頁尚未就緒，請先完成安全驗證");
-        }
-        if (!beforeStatus.optBoolean("search_form_ready", false)) {
-            submitLogin(session, mobilePhone, password, captchaCode);
-        }
-
-        JSONObject afterStatus = waitForSearchStatus(session, debugTrace);
-        if (!afterStatus.optBoolean("search_form_ready", false)) {
-            throw new BankAutomationException(
-                "invoice_carrier_login_failed",
-                normalizeText(afterStatus.optString("error_message")).isEmpty()
-                    ? "電子發票登入失敗，請確認手機號碼、密碼與驗證碼"
-                    : afterStatus.optString("error_message")
-            );
-        }
-
+    public static JSONObject connect(Activity activity, WebView webView, BankAutomationVault vault, BankAutomationDebugTrace debugTrace, JSONObject payload) throws Exception {
+        String mobilePhone = requireText(payload, "mobile_phone", "invoice_carrier_credentials_required", "缺少手機號碼");
+        String password = requireText(payload, "password", "invoice_carrier_credentials_required", "缺少密碼");
         String connectionId = createProviderConnectionId(mobilePhone);
-        JSONObject persistedState = new JSONObject();
-        persistedState.put("provider", PROVIDER_ID);
-        persistedState.put("connectionId", connectionId);
-        persistedState.put("mobilePhone", mobilePhone);
-        persistedState.put("password", password);
-        persistedState.put("cookieHeader", session.captureCookies());
-        persistedState.put("carrierOptions", afterStatus.optJSONArray("available_carriers") == null ? new JSONArray() : afterStatus.optJSONArray("available_carriers"));
-        persistedState.put("updatedAt", nowIso());
-        vault.saveConnectionState(connectionId, persistedState);
-        vault.deleteConnectionState(tempSessionKey(sessionId));
 
-        JSONObject result = new JSONObject();
-        result.put("provider", PROVIDER_ID);
-        result.put("mobile_phone", mobilePhone);
-        result.put("provider_connection_id", connectionId);
-        result.put("storage_state", buildNativeStorageState(connectionId));
-        result.put("available_carriers", afterStatus.optJSONArray("available_carriers") == null ? new JSONArray() : afterStatus.optJSONArray("available_carriers"));
-        result.put("authenticated_at", nowIso());
-        return result;
+        for (int attempt = 0; attempt < MAX_LOGIN_ATTEMPTS; attempt++) {
+            debugTrace.record("connect_attempt", "running", "eInvoice connect attempt " + (attempt + 1) + "/" + MAX_LOGIN_ATTEMPTS);
+
+            BrowserSession session = new BrowserSession(activity, webView);
+            session.loadUrl(LOGIN_URL);
+            JSONObject status = waitForInteractiveStatus(session, debugTrace, true);
+
+            if (status.optBoolean("cloudflare_blocked", false)) {
+                throw new BankAutomationException("invoice_carrier_automation_blocked", "電子發票網站目前阻擋登入流程，請稍後再試");
+            }
+            if (status.optBoolean("search_form_ready", false)) {
+                debugTrace.record("connect_success", "ok", "Already authenticated, building result");
+                return buildConnectSuccessResult(connectionId, mobilePhone, password, session, status, vault);
+            }
+            if (!status.optBoolean("login_form_ready", false)) {
+                debugTrace.record("connect_attempt", "warn", "Login form not ready on attempt " + (attempt + 1));
+                sleep(POLL_MS);
+                continue;
+            }
+
+            String captchaDataUrl = normalizeText(status.optString("captcha_image"));
+            String captchaCode = recognizeCaptchaOcr(activity, debugTrace, attempt, captchaDataUrl);
+
+            if (captchaCode.length() != CAPTCHA_LENGTH) {
+                debugTrace.record("connect_attempt", "warn", "captcha_ocr failed, refreshing on attempt " + (attempt + 1));
+                refreshCaptchaImage(session, debugTrace);
+                JSONObject refreshedStatus = waitForInteractiveStatus(session, debugTrace, true);
+                String refreshedDataUrl = normalizeText(refreshedStatus.optString("captcha_image"));
+                captchaCode = recognizeCaptchaOcr(activity, debugTrace, attempt, refreshedDataUrl);
+            }
+
+            if (captchaCode.length() != CAPTCHA_LENGTH) {
+                debugTrace.record("connect_attempt", "warn", "captcha_ocr still failed after refresh on attempt " + (attempt + 1));
+                continue;
+            }
+
+            submitLogin(session, mobilePhone, password, captchaCode);
+            JSONObject afterStatus = waitForSearchStatus(session, debugTrace);
+
+            if (afterStatus.optBoolean("search_form_ready", false)) {
+                debugTrace.record("connect_success", "ok", "eInvoice connect succeeded on attempt " + (attempt + 1));
+                return buildConnectSuccessResult(connectionId, mobilePhone, password, session, afterStatus, vault);
+            }
+
+            String errorMessage = normalizeText(afterStatus.optString("error_message"));
+            debugTrace.record("connect_attempt", "warn", "Login failed on attempt " + (attempt + 1) + ": " + errorMessage);
+            if (!errorMessage.isEmpty() && isCredentialError(errorMessage)) {
+                throw new BankAutomationException("invoice_carrier_login_failed", errorMessage);
+            }
+        }
+
+        throw new BankAutomationException("invoice_carrier_captcha_ocr_failed", "電子發票圖形驗證碼自動辨識失敗，請稍後再試");
     }
 
     public static JSONObject sync(Activity activity, WebView webView, BankAutomationVault vault, BankAutomationDebugTrace debugTrace, JSONObject payload) throws Exception {
@@ -151,7 +130,7 @@ final class InvoiceCarrierAutomation {
             if (status.optBoolean("cloudflare_blocked", false)) {
                 throw new BankAutomationException("invoice_carrier_automation_blocked", "電子發票網站目前阻擋同步流程，請稍後再試");
             }
-            debugTrace.record("manual_reauth_required", "warn", "eInvoice session expired; manual captcha verification is required", status);
+            debugTrace.record("manual_reauth_required", "warn", "eInvoice session expired; re-authentication is required", status);
             throw new BankAutomationException("invoice_carrier_reauth_required", "電子發票登入狀態已失效，請重新驗證載具");
         }
 
@@ -185,10 +164,6 @@ final class InvoiceCarrierAutomation {
     }
 
     public static JSONObject disconnect(BankAutomationVault vault, JSONObject payload) throws JSONException {
-        String sessionId = normalizeText(payload.optString("session_id"));
-        if (!sessionId.isEmpty()) {
-            vault.deleteConnectionState(tempSessionKey(sessionId));
-        }
         String connectionId = normalizeText(payload.optString("connection_id"));
         if (!connectionId.isEmpty()) {
             vault.deleteConnectionState(connectionId);
@@ -207,14 +182,85 @@ final class InvoiceCarrierAutomation {
         session.captureCookies();
     }
 
-    private static JSONObject buildSessionPayload(String sessionId, JSONObject status) throws JSONException {
-        JSONObject result = new JSONObject(status.toString());
+    private static JSONObject buildConnectSuccessResult(String connectionId, String mobilePhone, String password, BrowserSession session, JSONObject searchStatus, BankAutomationVault vault) throws Exception {
+        JSONArray carriers = searchStatus.optJSONArray("available_carriers") == null ? new JSONArray() : searchStatus.optJSONArray("available_carriers");
+
+        JSONObject persistedState = new JSONObject();
+        persistedState.put("provider", PROVIDER_ID);
+        persistedState.put("connectionId", connectionId);
+        persistedState.put("mobilePhone", mobilePhone);
+        persistedState.put("password", password);
+        persistedState.put("cookieHeader", session.captureCookies());
+        persistedState.put("carrierOptions", carriers);
+        persistedState.put("updatedAt", nowIso());
+        vault.saveConnectionState(connectionId, persistedState);
+
+        JSONObject result = new JSONObject();
         result.put("provider", PROVIDER_ID);
-        result.put("session_id", sessionId);
-        result.put("link_url", LOGIN_URL);
-        result.put("requires_manual_verification", true);
-        result.put("expires_at", java.time.Instant.ofEpochMilli(System.currentTimeMillis() + SESSION_TTL_MS).toString());
+        result.put("mobile_phone", mobilePhone);
+        result.put("provider_connection_id", connectionId);
+        result.put("storage_state", buildNativeStorageState(connectionId));
+        result.put("available_carriers", carriers);
+        result.put("authenticated_at", nowIso());
         return result;
+    }
+
+    private static String recognizeCaptchaOcr(Activity activity, BankAutomationDebugTrace debugTrace, int attempt, String dataUrl) {
+        if (dataUrl == null || dataUrl.isEmpty()) return "";
+        try {
+            Bitmap source = decodeCaptchaBitmap(dataUrl);
+            if (source == null) return "";
+            List<Bitmap> variants = buildCaptchaVariants(source);
+            List<TesseractBridge.RecognitionCandidate> candidates = TesseractBridge.recognizeCaptchaCandidates(activity, variants, true);
+            String best = selectBestNumericCaptcha(candidates);
+            debugTrace.record("captcha_ocr", best.length() == CAPTCHA_LENGTH ? "ok" : "warn",
+                "captcha_ocr attempt=" + (attempt + 1) + " result_length=" + best.length());
+            return best;
+        } catch (Throwable error) {
+            debugTrace.record("captcha_ocr", "error", "captcha_ocr exception: " + (error.getMessage() == null ? "unknown" : error.getMessage()));
+            return "";
+        }
+    }
+
+    private static Bitmap decodeCaptchaBitmap(String dataUrl) {
+        String base64 = dataUrl.contains(",") ? dataUrl.substring(dataUrl.indexOf(',') + 1) : dataUrl;
+        byte[] bytes = Base64.decode(base64.trim(), Base64.DEFAULT);
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+    }
+
+    private static List<Bitmap> buildCaptchaVariants(Bitmap source) {
+        List<Bitmap> variants = new ArrayList<>();
+        variants.add(source);
+        variants.add(Bitmap.createScaledBitmap(source, source.getWidth() * 2, source.getHeight() * 2, true));
+        variants.add(Bitmap.createScaledBitmap(source, source.getWidth() * 3, source.getHeight() * 3, true));
+        return variants;
+    }
+
+    private static String selectBestNumericCaptcha(List<TesseractBridge.RecognitionCandidate> candidates) {
+        String best = "";
+        int bestConfidence = 0;
+        for (TesseractBridge.RecognitionCandidate candidate : candidates) {
+            String text = normalizeNumericCaptcha(candidate.text);
+            if (text.length() == CAPTCHA_LENGTH && candidate.confidence > bestConfidence) {
+                best = text;
+                bestConfidence = candidate.confidence;
+            }
+        }
+        return best;
+    }
+
+    private static String normalizeNumericCaptcha(String value) {
+        if (value == null) return "";
+        StringBuilder builder = new StringBuilder();
+        for (char c : value.toCharArray()) {
+            if (c >= '0' && c <= '9') builder.append(c);
+        }
+        return builder.toString();
+    }
+
+    private static boolean isCredentialError(String errorMessage) {
+        return errorMessage.contains("手機號碼") || errorMessage.contains("密碼")
+            || errorMessage.contains("已停用") || errorMessage.contains("停止");
     }
 
     private static JSONObject buildNativeStorageState(String connectionId) throws JSONException {
@@ -225,28 +271,6 @@ final class InvoiceCarrierAutomation {
         storageState.put("cookies", new JSONArray());
         storageState.put("origins", new JSONArray());
         return storageState;
-    }
-
-    private static void saveTemporarySession(BankAutomationVault vault, String sessionId, String cookieHeader) throws JSONException {
-        JSONObject state = new JSONObject();
-        state.put("sessionId", sessionId);
-        state.put("cookieHeader", cookieHeader);
-        state.put("expiresAtMs", System.currentTimeMillis() + SESSION_TTL_MS);
-        state.put("updatedAt", nowIso());
-        vault.saveConnectionState(tempSessionKey(sessionId), state);
-    }
-
-    private static JSONObject requireTemporarySession(BankAutomationVault vault, String sessionId) throws Exception {
-        JSONObject state = vault.getConnectionState(tempSessionKey(sessionId));
-        if (state == null || state.optLong("expiresAtMs", 0L) <= System.currentTimeMillis()) {
-            vault.deleteConnectionState(tempSessionKey(sessionId));
-            throw new BankAutomationException("invoice_carrier_session_expired", "電子發票驗證視窗已失效，請重新啟動");
-        }
-        return state;
-    }
-
-    private static String tempSessionKey(String sessionId) {
-        return "invoice_carrier.session." + normalizeText(sessionId);
     }
 
     private static JSONObject waitForInteractiveStatus(BrowserSession session, BankAutomationDebugTrace debugTrace, boolean includeCaptcha) throws Exception {

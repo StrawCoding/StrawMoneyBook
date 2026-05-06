@@ -130,7 +130,7 @@ Android 發版目前也已把版本碼策略收斂成由語意版號自動推導
 - 官網保留雙主題切換，但色彩、surface、按鈕、文件頁與邀請頁已收斂到同一套 design tokens
 - `/preview` 頁會先說明預先體驗用途與期待流程，再提供外開 Google Form 與內嵌表單
 - `/open/shared-ledger` 仍保留共同帳本邀請 deep link、Web redirect 與 Play Store fallback 邏輯，但視覺與操作節奏已和首頁一致
-- 服務條款與隱私權政策已改為共用 legal document shell，官網次頁不再各自維護不同閱讀樣式
+- 服務條款與隱私權政策已改為共用 legal document shell，官網次頁不再各自維護不同閱讀樣式；官網也為 `/terms-of-service` 與 `/privacy-policy` 保留靜態直連 HTML，讓 App 商店或搜尋引擎直接驗證法律文件 URL 時可取得有效頁面而不是 SPA fallback 404
 
 ## 3. 主要功能模組
 

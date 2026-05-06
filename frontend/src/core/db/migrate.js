@@ -21,7 +21,7 @@ import migration019 from '@/core/db/migrations/019_bank_transaction_metadata.sql
 // The schema changes from those drafts were either reverted or merged into adjacent migrations.
 // Do NOT reuse version numbers 20 or 21 — doing so would skip execution on devices that already
 // have schema_migrations rows for those versions, causing a schema split between new and existing installs.
-// Next available version: 30.
+// Next available version: 31.
 import migration022 from '@/core/db/migrations/022_drop_invoice_carrier.sql?raw'
 import migration023 from '@/core/db/migrations/023_reimbursement_item_advance_source.sql?raw'
 import migration024 from '@/core/db/migrations/024_savings_jars_auto_save.sql?raw'
@@ -30,6 +30,7 @@ import migration026 from '@/core/db/migrations/026_transaction_origin_type_refun
 import migration027 from '@/core/db/migrations/027_invoice_carrier.sql?raw'
 import migration028 from '@/core/db/migrations/028_advance_return_amount.sql?raw'
 import migration029 from '@/core/db/migrations/029_invoice_carrier_public_release.sql?raw'
+import migration030 from '@/core/db/migrations/030_account_group_statistics.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -60,6 +61,7 @@ const MIGRATIONS = [
   { version: 27, name: 'invoice_carrier', sql: migration027 },
   { version: 28, name: 'advance_return_amount', sql: migration028 },
   { version: 29, name: 'invoice_carrier_public_release', sql: migration029 },
+  { version: 30, name: 'account_group_statistics', sql: migration030 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'
@@ -89,6 +91,7 @@ const LEGACY_COLUMN_PATCHES = {
     "ALTER TABLE accounts ADD COLUMN account_kind TEXT NOT NULL DEFAULT 'cash';",
     'ALTER TABLE accounts ADD COLUMN allow_negative INTEGER NOT NULL DEFAULT 0;',
     'ALTER TABLE accounts ADD COLUMN include_in_assets INTEGER NOT NULL DEFAULT 1;',
+    'ALTER TABLE accounts ADD COLUMN include_in_group_statistics INTEGER NOT NULL DEFAULT 1;',
     'ALTER TABLE accounts ADD COLUMN opening_balance_minor INTEGER NOT NULL DEFAULT 0;',
     "ALTER TABLE accounts ADD COLUMN currency_code TEXT NOT NULL DEFAULT 'TWD';",
     'ALTER TABLE accounts ADD COLUMN icon TEXT;',
@@ -348,6 +351,7 @@ async function patchLegacySchema(db) {
            account_type = COALESCE(account_type, 'asset'),
            allow_negative = COALESCE(allow_negative, 0),
            include_in_assets = COALESCE(include_in_assets, 1),
+           include_in_group_statistics = COALESCE(include_in_group_statistics, 1),
            currency_code = COALESCE(currency_code, 'TWD'),
            is_archived = COALESCE(is_archived, 0);`,
     )

@@ -72,7 +72,7 @@
           >
             <h3 class="group-title">{{ group.name }}</h3>
             <span class="group-total-wrap">
-              <MoneyText class="group-total" :value-minor="group.totalMinor" />
+              <MoneyText class="group-total" :value-minor="group.totalMinor" :currency="group.currencyCode" />
               <font-awesome-icon
                 icon="fa-solid fa-chevron-down"
                 class="group-chevron"
@@ -86,7 +86,7 @@
               <RouterLink
                 :to="`/accounts/${account.id}`"
                 class="account-row"
-                :class="{ excluded: !isAccountIncludedInAssets(account) }"
+                :class="{ excluded: !isAccountIncludedInAssets(account), 'group-stat-excluded': !isAccountIncludedInGroupStatistics(account) }"
               >
                 <span class="account-left">
                   <span class="account-icon-wrap">
@@ -100,7 +100,7 @@
                   </span>
                 </span>
                 <span class="account-right">
-                  <MoneyText class="account-balance" :value-minor="balanceOf(account.id)" />
+                  <MoneyText class="account-balance" :value-minor="balanceOf(account.id)" :currency="account.currency_code" />
                 </span>
               </RouterLink>
             </li>
@@ -271,6 +271,10 @@ function advanceMinorOf(accountId) {
 
 function isAccountIncludedInAssets(account) {
   return isAssetAccountIncludedInTotals(account)
+}
+
+function isAccountIncludedInGroupStatistics(account) {
+  return Number(account?.include_in_group_statistics ?? 1) === 1
 }
 
 function goLoans(tab) {
@@ -496,6 +500,9 @@ h3 {
   background: color-mix(in srgb, var(--card) 92%, var(--surface-soft-accent) 8%);
   border-color: color-mix(in srgb, var(--muted) 28%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--muted) 14%, transparent);
+}
+.account-row.group-stat-excluded {
+  border-style: dashed;
 }
 
 a {

@@ -155,6 +155,23 @@
           <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
         </button>
       </div>
+      <div class="field">
+        <span>{{ t('account.include_in_group_statistics_label') }}</span>
+        <button
+          type="button"
+          class="switch-row"
+          :class="{ active: accountIncludeInGroupStatisticsInput }"
+          role="switch"
+          :aria-checked="accountIncludeInGroupStatisticsInput ? 'true' : 'false'"
+          @click="accountIncludeInGroupStatisticsInput = !accountIncludeInGroupStatisticsInput"
+        >
+          <span class="switch-copy">
+            <strong>{{ accountIncludeInGroupStatisticsInput ? t('account.include_in_group_statistics_on') : t('account.include_in_group_statistics_off') }}</strong>
+            <small class="muted">{{ t('account.include_in_group_statistics_hint') }}</small>
+          </span>
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+        </button>
+      </div>
       <p v-if="accountAmountInvalid" class="error-text">{{ accountKindInput === 'credit' ? '目前欠款格式錯誤' : '期初金額格式錯誤' }}</p>
       <p v-if="accountCreditLimitInvalid" class="error-text">信用額度格式錯誤</p>
       <p v-if="accountReminderDayInvalid" class="error-text">還款提醒日需介於 1 到 31</p>
@@ -194,6 +211,7 @@ const accountRepaymentReminderDayInput = ref('')
 const accountIconInput = ref(defaultAccountIcon)
 const accountCurrencyCodeInput = ref('TWD')
 const accountIncludeInAssetsInput = ref(true)
+const accountIncludeInGroupStatisticsInput = ref(true)
 const accountItemsMap = ref({})
 const expandedGroupIds = ref(new Set())
 const expandedInitialized = ref(false)
@@ -222,6 +240,7 @@ watch(
     accountIconInput.value = normalizeFaIcon(queryText(query.accountIcon), defaultAccountIcon)
     accountCurrencyCodeInput.value = normalizeCurrencyCode(queryText(query.accountCurrency), 'TWD')
     accountIncludeInAssetsInput.value = queryBoolean(query.accountIncludeInAssets, true)
+    accountIncludeInGroupStatisticsInput.value = queryBoolean(query.accountIncludeInGroupStatistics, true)
     accountDialogOpen.value = true
   },
   { immediate: true },
@@ -349,6 +368,7 @@ async function addAccount(groupId) {
   accountIconInput.value = defaultAccountIcon
   accountCurrencyCodeInput.value = 'TWD'
   accountIncludeInAssetsInput.value = true
+  accountIncludeInGroupStatisticsInput.value = true
   accountDialogOpen.value = true
 }
 
@@ -385,6 +405,7 @@ function closeAccountDialog() {
   accountIconInput.value = defaultAccountIcon
   accountCurrencyCodeInput.value = 'TWD'
   accountIncludeInAssetsInput.value = true
+  accountIncludeInGroupStatisticsInput.value = true
   clearAccountDialogQuery()
 }
 
@@ -407,6 +428,7 @@ function openAccountIconPicker() {
       accountIcon: accountIconInput.value,
       accountCurrency: accountCurrencyCodeInput.value,
       accountIncludeInAssets: accountIncludeInAssetsInput.value ? '1' : '0',
+      accountIncludeInGroupStatistics: accountIncludeInGroupStatisticsInput.value ? '1' : '0',
     },
   })
 }
@@ -451,6 +473,7 @@ async function submitAccountDialog() {
       creditLimitMinor: accountKind === 'credit' ? Math.round(Math.abs(creditLimitMajor) * 100) : 0,
       repaymentReminderDay: accountKind === 'credit' ? reminderDay : null,
       includeInAssets: accountIncludeInAssetsInput.value,
+      includeInGroupStatistics: accountIncludeInGroupStatisticsInput.value,
     })
     uiStore.pushToast('帳戶已新增')
     closeAccountDialog()
@@ -472,6 +495,7 @@ function clearAccountDialogQuery() {
   delete nextQuery.accountIcon
   delete nextQuery.accountCurrency
   delete nextQuery.accountIncludeInAssets
+  delete nextQuery.accountIncludeInGroupStatistics
   delete nextQuery.current
   delete nextQuery.from
   delete nextQuery.scope

@@ -21,9 +21,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class InvoiceCarrierAutomationActivity extends Activity {
-    public static final String ACTION_CREATE_LINK_SESSION = "create_link_session";
-    public static final String ACTION_GET_SESSION_STATUS = "get_session_status";
-    public static final String ACTION_EXCHANGE_AUTH = "exchange_auth";
+    public static final String ACTION_CONNECT = "connect";
     public static final String ACTION_SYNC = "sync";
     public static final String ACTION_DISCONNECT = "disconnect";
 
@@ -140,12 +138,8 @@ public class InvoiceCarrierAutomationActivity extends Activity {
             BankAutomationVault vault = new BankAutomationVault(getApplicationContext());
             JSONObject result;
             debugTrace.record("action_started", "ok", action);
-            if (ACTION_CREATE_LINK_SESSION.equals(action)) {
-                result = InvoiceCarrierAutomation.createLinkSession(this, webView, vault, debugTrace, payload);
-            } else if (ACTION_GET_SESSION_STATUS.equals(action)) {
-                result = InvoiceCarrierAutomation.getSessionStatus(this, webView, vault, debugTrace, payload);
-            } else if (ACTION_EXCHANGE_AUTH.equals(action)) {
-                result = InvoiceCarrierAutomation.exchangeAuth(this, webView, vault, debugTrace, payload);
+            if (ACTION_CONNECT.equals(action)) {
+                result = InvoiceCarrierAutomation.connect(this, webView, vault, debugTrace, payload);
             } else if (ACTION_SYNC.equals(action)) {
                 result = InvoiceCarrierAutomation.sync(this, webView, vault, debugTrace, payload);
             } else if (ACTION_DISCONNECT.equals(action)) {

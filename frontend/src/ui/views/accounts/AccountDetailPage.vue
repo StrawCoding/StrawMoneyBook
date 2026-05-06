@@ -79,6 +79,23 @@
             <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
           </button>
         </div>
+        <div class="field">
+          <span>{{ t('account.include_in_group_statistics_label') }}</span>
+          <button
+            type="button"
+            class="switch-row"
+            :class="{ active: editIncludeInGroupStatistics }"
+            role="switch"
+            :aria-checked="editIncludeInGroupStatistics ? 'true' : 'false'"
+            @click="editIncludeInGroupStatistics = !editIncludeInGroupStatistics"
+          >
+            <span class="switch-copy">
+              <strong>{{ editIncludeInGroupStatistics ? t('account.include_in_group_statistics_on') : t('account.include_in_group_statistics_off') }}</strong>
+              <small class="muted">{{ t('account.include_in_group_statistics_hint') }}</small>
+            </span>
+            <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+          </button>
+        </div>
         <p v-if="openingInvalid" class="error-text">{{ editAccountKind === 'credit' ? '目前欠款格式錯誤' : '預設資金格式錯誤' }}</p>
         <p v-if="creditLimitInvalid" class="error-text">信用額度格式錯誤</p>
         <p v-if="repaymentReminderDayInvalid" class="error-text">還款提醒日需介於 1 到 31</p>
@@ -122,6 +139,10 @@
           <div class="detail-row">
             <small class="muted">{{ t('account.include_in_assets_label') }}</small>
             <span>{{ accountIncludeInAssetsLabel }}</span>
+          </div>
+          <div class="detail-row">
+            <small class="muted">{{ t('account.include_in_group_statistics_label') }}</small>
+            <span>{{ accountIncludeInGroupStatisticsLabel }}</span>
           </div>
         </div>
       </template>
@@ -251,6 +272,7 @@ const editCurrentDebt = ref('0')
 const editCreditLimit = ref('0')
 const editRepaymentReminderDay = ref('')
 const editIncludeInAssets = ref(true)
+const editIncludeInGroupStatistics = ref(true)
 const initializedAccountId = ref('')
 
 const accountId = computed(() => String(route.params.id ?? ''))
@@ -277,6 +299,11 @@ const currentAccountBalanceMinor = computed(() => {
 const accountIncludeInAssetsLabel = computed(() => {
   return isAccountIncludedInAssets(account.value) ? t('account.include_in_assets_on') : t('account.include_in_assets_off')
 })
+const accountIncludeInGroupStatisticsLabel = computed(() => (
+  isAccountIncludedInGroupStatistics(account.value)
+    ? t('account.include_in_group_statistics_on')
+    : t('account.include_in_group_statistics_off')
+))
 const accountKindLabel = computed(() => (isCreditAccount.value ? '信用帳戶' : '現金帳戶'))
 const accountCreditLimitMinor = computed(() => Math.max(0, Number(account.value?.credit_limit_minor ?? 0)))
 const currentCreditDebtMinor = computed(() => Math.max(0, Number(currentAccountBalanceMinor.value ?? 0) * -1))
@@ -360,6 +387,7 @@ const canSave = computed(() => {
   const creditLimitMinor = Math.round(Math.abs(creditLimitMajor) * 100)
   const repaymentReminderDay = parseRepaymentReminderDay(editRepaymentReminderDay.value)
   const includeInAssets = Boolean(editIncludeInAssets.value)
+  const includeInGroupStatistics = Boolean(editIncludeInGroupStatistics.value)
   if (!name || !groupId) return false
   if (accountKind === 'cash' && !Number.isFinite(openingMajor)) return false
   if (accountKind === 'credit' && (!Number.isFinite(currentDebtMajor) || !Number.isFinite(creditLimitMajor) || creditLimitMajor < 0)) return false
@@ -377,7 +405,8 @@ const canSave = computed(() => {
     openingMinorNext !== Number(account.value.opening_balance_minor ?? 0) ||
     creditLimitMinor !== Math.max(0, Number(account.value.credit_limit_minor ?? 0)) ||
     repaymentReminderDay !== parseRepaymentReminderDay(account.value.repayment_reminder_day) ||
-    includeInAssets !== isAccountIncludedInAssets(account.value)
+    includeInAssets !== isAccountIncludedInAssets(account.value) ||
+    includeInGroupStatistics !== isAccountIncludedInGroupStatistics(account.value)
   )
 })
 
@@ -399,6 +428,7 @@ watch(
     editCreditLimit.value = String(Math.max(0, Number(next.credit_limit_minor ?? 0)) / 100)
     editRepaymentReminderDay.value = next.repayment_reminder_day == null ? '' : String(next.repayment_reminder_day)
     editIncludeInAssets.value = isAccountIncludedInAssets(next)
+    editIncludeInGroupStatistics.value = isAccountIncludedInGroupStatistics(next)
     initializedAccountId.value = nextId
   },
   { immediate: true },
@@ -544,6 +574,7 @@ async function saveProfile() {
       creditLimitMinor: nextCreditLimitMinor,
       repaymentReminderDay: nextRepaymentReminderDay,
       includeInAssets: editIncludeInAssets.value,
+      includeInGroupStatistics: editIncludeInGroupStatistics.value,
     })
     uiStore.pushToast('帳戶資料已更新')
     await router.push('/assets/accounts')
@@ -689,6 +720,10 @@ function openEdit(tx) {
 
 function isAccountIncludedInAssets(value) {
   return Number(value?.include_in_assets ?? 1) === 1
+}
+
+function isAccountIncludedInGroupStatistics(value) {
+  return Number(value?.include_in_group_statistics ?? 1) === 1
 }
 
 function normalizeAccountKind(value) {

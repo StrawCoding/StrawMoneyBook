@@ -418,6 +418,10 @@ async function importAccountsCsv(ledgerId, rows) {
       creditLimitMinor: Math.round(Number(row.credit_limit_minor ?? 0)),
       repaymentReminderDay: row.repayment_reminder_day?.trim() || null,
       includeInAssets: parseBooleanLike(row.include_in_assets ?? row.includeInAssets, true),
+      includeInGroupStatistics: parseBooleanLike(
+        row.include_in_group_statistics ?? row.includeInGroupStatistics,
+        true,
+      ),
       sortOrder: inserted,
     })
 
