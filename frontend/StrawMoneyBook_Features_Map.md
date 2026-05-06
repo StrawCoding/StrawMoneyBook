@@ -27,14 +27,15 @@
 - 自動備份（Google Drive / WebDAV；SMB-142 重建後，手動、背景 due check、資料變更後備份都會經過共用 provider runner，回傳 `completed / skipped / error` 統一結果，並以帳本 + provider lock 避免同一時間多個觸發源互相覆蓋狀態；runtime 事件含 `ledgerId / provider / mode / status / reason / checkedAt`，設定頁會即時同步最近一次 auto-check 狀態與時間；SMB-147 後 Google 自動備份在非原生平台會保存 `platform_unsupported` 偵測結果，Android 靜默恢復未連線時也會繼續跑 due diagnostics 寫入 `not_connected / reauth_required` 等狀態，避免頁面誤停在尚未執行自動偵測；手機背景恢復只做靜默 Google 授權，不會在 App 啟動或帳本切換時自動彈出互動登入）
 - 記帳提醒與成就表（每日固定提醒、通知權限 / 精準提醒狀態、連續記帳天數、最長連續與累計記帳日）
 - 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
-- 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本；設定首頁各入口副標與帳號卡登入提示已納入 i18n key，避免切換英文 / 日文時殘留繁中文案；手動重設全部資料前會先嘗試建立 recovery JSON 備份，備份失敗時仍保留錯誤紀錄並繼續既有重設流程）
+- 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本；SMB-154 / 0.26.5 後設定首頁、登入 / 註冊、共同帳本與電子發票載具相關頁面使用到的主要介面文案皆已納入 zh-TW / en / ja 正式 i18n key，避免切換英文 / 日文時依賴繁中 fallback；手動重設全部資料前會先嘗試建立 recovery JSON 備份，備份失敗時仍保留錯誤紀錄並繼續既有重設流程）
 - 關於與聯絡入口（官網、Facebook、Instagram、Threads、Email、隱私權政策）
 - 官方網站 SEO / 品牌搜尋關鍵字（`../StrawMoneyBookWeb/index.html`：`StrawMoneyBook`、`稻草AI記帳`、`稻草記帳`、`AI記帳`、`對話記帳`、`自動記帳` 等）
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
 - 電子發票載具（公開但標示為實驗性；SMB-2 重建後只保留 Android 端內人工 captcha 流程，App 會在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成登入、查詢與同步，並把憑證與 native session marker 加密保存在本機；Android automation Activity 維持透明背景，captcha 會等圖片實際可讀後才回前端，重新產生會觸發站點刷新按鈕，查詢後也會等待 detail / 結果表載入完成再解析；Web 僅提供診斷與說明，不再承諾可新增、重新驗證或同步載具；Node / Web headed Playwright 與 OCR `/api/invoice/*` 舊流程已移除；若 native exchange 沒有回傳可保存憑證，系統會拒絕建立 active connection；若站點流程阻擋自動化，狀態會明確標示為 `automation_blocked` 或 `reauth_required`，不會偽裝成成功）
-- Android 原生能力（首頁小工具、安全鎖、Google Identity、語音輸入、銀行自動化、電子發票載具自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；Google Play internal 上傳若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）
+- Android 原生能力（首頁小工具目錄（SMB-157）、安全鎖、Google Identity、語音輸入、銀行自動化、電子發票載具自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；Google Play internal 上傳若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）
+- Android 桌面小工具共 5 種：月收支總覽（`StrawMoneyWidgetProvider`）、收支圓餅圖（`StrawMoneyPieChartWidgetProvider`）、收支長條圖（`StrawMoneyBarChartWidgetProvider`）、快速記帳（`StrawMoneyQuickAddWidgetProvider`）、AI 記帳（`StrawMoneyAiBookkeepingWidgetProvider`）；圖表類小工具點擊導向 `/analysis`，快速記帳導向 `/transactions/quick-add`，AI 記帳導向 `/ai-auto-bookkeeping`；資料由 JS 層 `home-widget.service.js` 透過 Capacitor HomeWidget plugin 同步當月收入/支出摘要至 SharedPreferences，Android 原生以 `HomeWidgetPlugin.java` 繪製圓餅圖與長條圖 Bitmap
 
 ## 2. 路由與頁面對應
 
@@ -129,7 +130,7 @@
 
 ### 設定內導覽（`src/ui/views/settings.vue`）
 
-設定首頁入口標題、入口副標與帳號卡未登入提示皆透過 `src/ui/services/i18n.service.js` 的正式 key 維護，英文與日文會直接走 `MESSAGES`，不再依賴繁中 fallback 或 runtime DOM 翻譯。
+設定首頁入口標題、入口副標與帳號卡未登入提示皆透過 `src/ui/services/i18n.service.js` 的正式 key 維護；SMB-154 / 0.26.5 後登入 / 註冊頁、共同帳本頁與電子發票載具列表 / 新增 / 詳情頁使用到的 `t()` key 也會由 source test 檢查是否已註冊於 `MESSAGES`，英文與日文不再依賴繁中 fallback 或 runtime DOM 翻譯。
 
 - 帳號卡片：`/settings/account`（顯示頭貼、名稱、帳號；未登入時導向登入 / 註冊）
 - 帳本管理：`/settings/ledgers`

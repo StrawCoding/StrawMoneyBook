@@ -72,7 +72,7 @@ StrawMoneyBook 的特色不在單一功能，而在於把同一筆金流後續�
 
 另外，所有需要輸入資料的彈層已統一為共用 bottom sheet flow，桌面與手機都不再保留另一套輸入型 popover，包含表單 dialog、選單、日期與時間選擇器；`AppDialog` 以及各頁自製輸入 sheet 也都收斂到和快速記帳一致的 shared overlay / bottom-sheet primitives，Android 有底部導覽列 inset 的裝置也會一併吃到底部 safe area，且 sheet 卡片背景會直接延伸到底部，和 `BottomNav` 維持同一個底部基準。
 
-設定首頁的入口副標、共同帳本 / 電子發票載具入口名稱，以及帳號卡未登入提示目前都已改由正式 i18n key 維護，繁中、英文與日文都有對應文案，不再靠繁中 fallback 或 runtime DOM 翻譯處理這批主要導覽文字。
+SMB-154 / 0.26.5 後，設定首頁的入口副標、帳號卡未登入提示、登入 / 註冊頁、共同帳本頁，以及電子發票載具列表 / 新增 / 詳情頁使用到的主要介面文案，都已改由正式 i18n key 維護，繁中、英文與日文都有對應文案，不再靠繁中 fallback 或 runtime DOM 翻譯處理這批主要設定流程文字。
 
 前端內部像月份鍵、日期鍵這類共用格式化邏輯，也已收斂到 `src/core/utils/id.js`，避免首頁、分析、日曆、列印頁各自維護相同 helper 後再逐步出現行為漂移。
 
