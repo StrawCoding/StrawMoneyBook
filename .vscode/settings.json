@@ -3,7 +3,11 @@
   "github-actions.workflows.pinned.workflows": [
     ".github/workflows/play-release.yml"
   ],
+  "java.import.exclusions": [
+    "**/frontend/android/**"
+  ],
   "java.project.excludedPaths": [
-    "frontend/android/**"
+    "frontend/android/**",
+    "**/frontend/android/**"
   ]
 }

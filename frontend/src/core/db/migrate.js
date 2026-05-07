@@ -29,6 +29,7 @@ import migration026 from '@/core/db/migrations/026_transaction_origin_type_refun
 import migration028 from '@/core/db/migrations/028_advance_return_amount.sql?raw'
 import migration030 from '@/core/db/migrations/030_account_group_statistics.sql?raw'
 import migration031 from '@/core/db/migrations/031_remove_invoice_carrier.sql?raw'
+import migration032 from '@/core/db/migrations/032_einvoice_import.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -58,6 +59,7 @@ const MIGRATIONS = [
   { version: 28, name: 'advance_return_amount', sql: migration028 },
   { version: 30, name: 'account_group_statistics', sql: migration030 },
   { version: 31, name: 'remove_invoice_carrier', sql: migration031 },
+  { version: 32, name: 'einvoice_import', sql: migration032 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'

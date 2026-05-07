@@ -108,7 +108,7 @@ Android 發版目前也已把版本碼策略收斂成由語意版號自動推導
 
 另外，CI 的 Android release build 現在也已補上 `frontend/android/gradlew` 的可執行權限，避免 `./gradlew bundleRelease` 在 checkout 後因權限不足直接中斷，讓 bundleRelease 的驗證可以真正跑到 Gradle 階段。Google Play internal 上傳也會針對「Play edit 被外部變更」這類暫時性衝突重開 edit 有限次重試，避免 AAB 已建好卻因 Play Console 或其他發版流程同時修改而直接中斷。
 
-VS Code workspace 目前會排除 `frontend/android/**` 的一般 Java 專案掃描，避免 Red Hat Java / JDT LS 在未載入 Android Gradle classpath 時，對 `android.*`、Capacitor、Tesseract 與 Android resource 產生大量誤報；Android 原生程式碼檢查仍以 `frontend/android` 的 Gradle task 與 Android Studio 為準。
+VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.excludedPaths` 排除 `frontend/android/**` 的一般 Java 專案掃描，避免 Red Hat Java / JDT LS 在未載入 Android Gradle classpath 時，對 `android.*`、Capacitor、JUnit、Tesseract 與 Android resource 產生大量誤報；Android 原生程式碼檢查仍以 `frontend/android` 的 Gradle task 與 Android Studio 為準。
 
 ### 2.4 官方網站品牌搜尋詞同步
 
@@ -798,3 +798,38 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 補充維護約束：
 
 - `frontend/src/ui/services/i18n.service.js` 的手動覆蓋字典優先於 generated 文案；同一物件不可保留重複 key，且 `RUNTIME_EN_TEXT` / `RUNTIME_EN_REPLACEMENTS` 若有相同 key，應只保留 `RUNTIME_EN_TEXT`
+- 根目錄 `.gitignore` 已統一維護 Node、Vite/Playwright、環境檔、後端 `.server-data`、Android/Capacitor 產物、Python 暫存與本機工具快取，避免生成物與敏感設定被誤加入版本控制。
+
+---
+
+## 電子發票匯入（E-Invoice Import）
+
+**版本**：v1.0.6（SMB-165）
+**狀態**：前端架構完整，Playwright 自動抓取待實作原生插件
+
+### 功能說明
+透過 4 步驟精靈，讓使用者輸入財政部電子發票平台（einvoice.nat.gov.tw）帳號、設定查詢條件、選取發票後批量匯入至 StrawMoneyBook 帳本。
+
+### 資料庫
+- `einvoice_credentials`：加密儲存手機號碼與密碼（AES-256-GCM + PBKDF2）
+- `einvoice_invoice_imports`：發票匯入記錄，`invoice_number` UNIQUE 防止重複匯入
+
+### 精靈步驟
+1. **帳號設定**：輸入手機號碼/密碼，可勾選「記住帳號（加密儲存）」
+2. **查詢條件**：日期區間（預設近 3 個月）、發票狀態、買方統編、品名關鍵字
+3. **選取發票**：顯示抓取結果，支援全選/單選；目前平台不支援自動抓取時顯示說明提示
+4. **確認匯入**：預覽待匯入清單，確認後寫入資料庫
+
+### 安全設計
+- 帳密絕不以明文儲存，以 AES-256-GCM + PBKDF2（100,000 迭代）加密
+- 加密金鑰衍生自裝置 UUID（localStorage 綁定，首次產生後固定）
+- 每次加密使用隨機 12-byte IV
+
+### 平台限制
+- Playwright 自動抓取需要 Node.js sidecar 或原生插件，目前 `isEInvoiceAutomationSupported()` 回傳 `false`
+- Step 3 在不支援環境下顯示「功能尚在開發中」提示，不影響 DB/加密層使用
+
+### 入口
+- `功能列表` 頁面（FeatureListPage.vue）→「電子發票匯入」
+- 路由：`/einvoice-import`
+- 精靈頁頂部返回按鈕使用全域 Font Awesome `fa-chevron-left` 註冊圖示；密碼欄顯示切換使用 `fa-eye` / `fa-eye-slash` 註冊圖示，避免頁面載入時出現空按鈕。

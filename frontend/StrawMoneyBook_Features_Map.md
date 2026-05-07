@@ -35,7 +35,7 @@
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell，並在官網 `public/terms-of-service/index.html`、`public/privacy-policy/index.html` 提供靜態直連頁，避免正式網域直接開啟法律文件路徑時因 SPA history fallback 未命中而回 404
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
-- Android 原生能力（首頁小工具目錄（SMB-157）、安全鎖、Google Identity、語音輸入、銀行自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；VS Code workspace 會排除 Android Gradle 原生目錄的一般 Java 掃描，避免 JDT LS 未載入 Android SDK / Capacitor classpath 時誤報 `android.*`、`com.getcapacitor.*`、Tesseract 等套件不存在，Android 原生檢查仍以 Gradle / Android Studio 為準；Google Play internal 上傳若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）
+- Android 原生能力（首頁小工具目錄（SMB-157）、安全鎖、Google Identity、語音輸入、銀行自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；VS Code workspace 會透過 `java.import.exclusions` 與 `java.project.excludedPaths` 排除 Android Gradle 原生目錄的一般 Java 掃描，避免 JDT LS 未載入 Android SDK / Capacitor classpath 時誤報 `android.*`、`com.getcapacitor.*`、JUnit、Tesseract 等套件不存在，Android 原生檢查仍以 Gradle / Android Studio 為準；Google Play internal 上傳若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）
 - Android 桌面小工具共 5 種：月收支總覽（`StrawMoneyWidgetProvider`）、收支圓餅圖（`StrawMoneyPieChartWidgetProvider`）、收支長條圖（`StrawMoneyBarChartWidgetProvider`）、快速記帳（`StrawMoneyQuickAddWidgetProvider`）、AI 記帳（`StrawMoneyAiBookkeepingWidgetProvider`）；圖表類小工具點擊導向 `/analysis`，快速記帳導向 `/transactions/quick-add`，AI 記帳導向 `/ai-auto-bookkeeping`；資料由 JS 層 `home-widget.service.js` 透過 Capacitor HomeWidget plugin 同步當月收入/支出摘要至 SharedPreferences，Android 原生以 `HomeWidgetPlugin.java` 繪製圓餅圖與長條圖 Bitmap
 
 ## 2. 路由與頁面對應
@@ -396,6 +396,7 @@ UI composable 目錄：`src/ui/composables/`
 - 若調整 Google Drive 帳本同步，需同步檢查 `SettingsGoogleDriveLedgerSyncPage.vue`、`google-drive-ledger-sync.service.js`、會員限制與活動帳本 reload 流程。
 - 若調整 App URL / invite link，需同步檢查 `app-url-route.js`、router redirect 與 `SettingsSharedLedgerPage.vue` 的 invite code 自動加入邏輯。
 - 若調整帳號 / 共同帳本 / 邀請碼 / 管理員流程，需同步檢查 `SettingsAccountPage.vue`、`SettingsSharedLedgerPage.vue`、`SettingsAdminPage.vue`、`src/services/shared-ledger/backend.js`、`../backend/src/routes/route-table.js` 與 `../backend/src/routes/auth/`、`../backend/src/routes/shared-ledgers/`。
+- Repo 忽略規則由根目錄 `.gitignore` 統一涵蓋 Node、Vite/Playwright、環境檔、後端 runtime data、Android/Capacitor 產物與本機工具快取；子目錄 `.gitignore` 僅保留平台細節例外。
 
 ## 11. 文件更新時機
 
@@ -959,3 +960,56 @@ UI composable 目錄：`src/ui/composables/`
 - 函數（0）：無
 - 變數（1）：`settingItems`
 - 類別（0）：無
+
+---
+
+## 電子發票匯入 (E-Invoice Import) — v1.0.6
+
+### 路由
+- `/einvoice-import` → `src/ui/views/einvoice/EInvoiceImportWizardPage.vue`
+
+### 新增檔案
+
+#### `src/core/db/migrations/032_einvoice_import.sql`
+- 建立 `einvoice_credentials` 資料表（加密帳密儲存）
+- 建立 `einvoice_invoice_imports` 資料表（發票匯入記錄，UNIQUE on invoice_number）
+
+#### `src/core/repositories/einvoice-import.repo.js`
+- 函數（5）：`getEInvoiceCredential`, `upsertEInvoiceCredential`, `deleteEInvoiceCredential`, `getImportedInvoiceNumbers`, `insertInvoiceImport`, `listRecentInvoiceImports`
+
+#### `src/services/einvoice/shared.js`
+- 常數：`EINVOICE_PLATFORM`, `EINVOICE_STATUS`
+- 函數：`createEInvoiceError`, `isEInvoiceError`
+
+#### `src/services/einvoice/credential-crypto.js`
+- AES-256-GCM 加密/解密，PBKDF2 金鑰衍生（100,000 迭代）
+- 函數：`encryptCredential`, `decryptCredential`
+
+#### `src/services/einvoice/backend.js`
+- 函數（5）：`saveEInvoiceCredential`, `loadEInvoiceCredential`, `clearEInvoiceCredential`, `hasEInvoiceCredential`, `scrapeEInvoiceList`, `importSelectedInvoices`
+- `isEInvoiceAutomationSupported()` — Playwright 原生插件就緒前回傳 false
+
+#### `src/ui/stores/einvoice-import.store.js`
+- Pinia store：精靈狀態、選取邏輯、匯入結果
+
+#### `src/ui/views/einvoice/EInvoiceImportWizardPage.vue`
+- 4 步驟精靈容器，含步驟指示器、返回按鈕（`fa-chevron-left` 全域註冊）與滑動動畫
+
+#### `src/ui/views/einvoice/EInvoiceStep1Account.vue`
+- 手機號碼/密碼輸入、密碼顯示切換（`fa-eye` / `fa-eye-slash` 全域註冊）、記住帳號（加密儲存）
+
+#### `src/ui/views/einvoice/EInvoiceStep2Query.vue`
+- 查詢條件：日期區間、發票狀態、統編、品名關鍵字
+
+#### `src/ui/views/einvoice/EInvoiceStep3Select.vue`
+- 發票清單、全選/單選、已選金額彙總
+
+#### `src/ui/views/einvoice/EInvoiceStep4Confirm.vue`
+- 匯入預覽、確認匯入、結果顯示
+
+### 修改檔案
+- `src/core/db/migrate.js` — 加入 migration 032
+- `src/ui/views/FeatureListPage.vue` — 加入「電子發票匯入」入口
+- `src/ui/router/index.js` — 加入 `/einvoice-import` 路由
+- `src/ui/services/i18n.service.js` — 加入 zh-TW / en / ja 翻譯
+- `src/main.js` — 電子發票精靈返回按鈕所需 `fa-chevron-left` 與密碼顯示切換所需 `fa-eye` / `fa-eye-slash` 納入 Font Awesome 全域註冊

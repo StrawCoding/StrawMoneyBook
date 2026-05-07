@@ -1,21 +1,68 @@
-*node_modules
-*dist
-*.vite
-*.DS_Store
+# Dependencies
+node_modules/
+
+# Build output and caches
+dist/
+coverage/
+.vite/
+.cache/
+.tmp/
+.temp/
+*.tsbuildinfo
+
+# Test and automation artifacts
+test-results/
+playwright-report/
+.playwright-cli/
+.codex_snapshots/
+
+# Logs
 *.log
-*coverage
-*key.properties
-*.jks
-*.playwright-cli
-*.codex_snapshots
-*.vscode
-*.pyc
-*__pycache__
-*.venv
-speech-stt-service/models
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and local secrets
+.env
+.env.*
 **/.env
 **/.env.*
 !**/.env.example
-*.claude
-*.cursor
-*test-results
+key.properties
+*.jks
+*.keystore
+
+# Backend runtime data
+backend/.server-data/
+
+# Android and Capacitor generated files
+**/.gradle/
+**/local.properties
+**/captures/
+**/.externalNativeBuild/
+**/.cxx/
+*.apk
+*.ap_
+*.aab
+*.aar
+*.dex
+*.class
+
+# Python local artifacts
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Editor, assistant, and OS local files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/
+.cursor/
+
+# Large local model artifacts
+speech-stt-service/models/

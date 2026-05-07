@@ -180,6 +180,12 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
+      path: '/einvoice-import',
+      name: 'einvoice-import',
+      component: () => import('@/ui/views/einvoice/EInvoiceImportWizardPage.vue'),
+      meta: { tab: 'features' },
+    },
+    {
       path: '/settings/ledgers',
       name: 'settings-ledgers',
       component: () => import('@/ui/views/settings/SettingsLedgerPage.vue'),

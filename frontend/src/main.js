@@ -46,6 +46,7 @@ import {
   faChartLine,
   faCheck,
   faChevronDown,
+  faChevronLeft,
   faCirclePlus,
   faCircleDollarToSlot,
   faChild,
@@ -63,6 +64,8 @@ import {
   faDog,
   faDroplet,
   faDumbbell,
+  faEye,
+  faEyeSlash,
   faFileInvoiceDollar,
   faFilm,
   faFish,
@@ -162,6 +165,7 @@ import {
   faShieldHeart,
   faStethoscope,
   faSyringe,
+  faFileInvoice,
 } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import App from '@/ui/App.vue'
@@ -228,6 +232,7 @@ const icons = [
   faChartLine,
   faCheck,
   faChevronDown,
+  faChevronLeft,
   faCirclePlus,
   faCircleDollarToSlot,
   faChild,
@@ -245,6 +250,8 @@ const icons = [
   faDog,
   faDroplet,
   faDumbbell,
+  faEye,
+  faEyeSlash,
   faFileInvoiceDollar,
   faFilm,
   faFish,
@@ -345,6 +352,7 @@ const icons = [
   faShieldHeart,
   faStethoscope,
   faSyringe,
+  faFileInvoice,
 ]
 
 library.add(
