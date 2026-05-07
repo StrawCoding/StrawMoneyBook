@@ -86,16 +86,21 @@ async function handleNext() {
 </script>
 
 <style scoped>
-.step-content { flex: 1; padding: 16px; }
-.panel { padding: 16px; }
+.step-content {
+  align-content: start;
+  flex: 0 0 auto;
+  gap: 10px;
+  padding: 12px 16px 16px;
+}
+.panel { padding: 14px; }
 .step-heading { font-size: 17px; margin: 0 0 6px; }
-.step-desc { font-size: 13px; color: var(--text-secondary); margin: 0 0 16px; }
+.step-desc { font-size: 13px; color: var(--text-secondary); margin: 0 0 12px; }
 .field-label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; }
 .field-input {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 9px 12px;
   font-size: 15px;
   background: var(--surface);
   color: var(--text);
@@ -113,18 +118,18 @@ async function handleNext() {
   cursor: pointer;
   color: var(--text-secondary);
 }
-.mt { margin-top: 14px; }
+.mt { margin-top: 10px; }
 .remember-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 10px;
   font-size: 14px;
   cursor: pointer;
 }
 .saved-hint { font-size: 12px; color: var(--primary); margin-top: 8px; }
 .error-text { font-size: 12px; color: var(--danger); margin-top: 8px; }
-.step-footer { padding: 16px; }
+.step-footer { padding: 0; }
 .btn-primary {
   width: 100%;
   padding: 14px;

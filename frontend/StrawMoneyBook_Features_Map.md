@@ -996,7 +996,7 @@ UI composable 目錄：`src/ui/composables/`
 - 4 步驟精靈容器，含步驟指示器、返回按鈕（`fa-chevron-left` 全域註冊）與滑動動畫
 
 #### `src/ui/views/einvoice/EInvoiceStep1Account.vue`
-- 手機號碼/密碼輸入、密碼顯示切換（`fa-eye` / `fa-eye-slash` 全域註冊）、記住帳號（加密儲存）
+- 手機號碼/密碼輸入、密碼顯示切換（`fa-eye` / `fa-eye-slash` 全域註冊）、記住帳號（加密儲存）；版面採自然高度與緊湊 footer，避免帳號設定卡片下方留下過多空白
 
 #### `src/ui/views/einvoice/EInvoiceStep2Query.vue`
 - 查詢條件：日期區間、發票狀態、統編、品名關鍵字
