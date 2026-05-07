@@ -31,18 +31,6 @@ const settingsSharedLedgerSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/settings/SettingsSharedLedgerPage.vue'),
   'utf8',
 )
-const settingsInvoiceCarrierSource = readFileSync(
-  resolve(import.meta.dirname, '../src/ui/views/settings/SettingsInvoiceCarrierPage.vue'),
-  'utf8',
-)
-const settingsInvoiceCarrierCreateSource = readFileSync(
-  resolve(import.meta.dirname, '../src/ui/views/settings/SettingsInvoiceCarrierCreatePage.vue'),
-  'utf8',
-)
-const settingsInvoiceCarrierConnectionSource = readFileSync(
-  resolve(import.meta.dirname, '../src/ui/views/settings/SettingsInvoiceCarrierConnectionPage.vue'),
-  'utf8',
-)
 const i18nSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/services/i18n.service.js'),
   'utf8',
@@ -88,13 +76,10 @@ test('settings page shows helper descriptions for each entry', () => {
   assert.match(i18nSource, /'settings\.desc\.bank_sync': 'Manage bank connections, sync rules, and pending imports.'/)
 })
 
-test('SMB-154 account, shared ledger, and invoice carrier pages use registered i18n keys', () => {
+test('SMB-154 account and shared ledger pages use registered i18n keys', () => {
   const sourceByName = {
     settingsAccountSource,
     settingsSharedLedgerSource,
-    settingsInvoiceCarrierSource,
-    settingsInvoiceCarrierCreateSource,
-    settingsInvoiceCarrierConnectionSource,
   }
 
   for (const [name, source] of Object.entries(sourceByName)) {

@@ -180,24 +180,6 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
-      path: '/settings/invoice-carrier',
-      name: 'settings-invoice-carrier',
-      component: () => import('@/ui/views/settings/SettingsInvoiceCarrierPage.vue'),
-      meta: { tab: 'settings' },
-    },
-    {
-      path: '/settings/invoice-carrier/new',
-      name: 'settings-invoice-carrier-create',
-      component: () => import('@/ui/views/settings/SettingsInvoiceCarrierCreatePage.vue'),
-      meta: { tab: 'settings' },
-    },
-    {
-      path: '/settings/invoice-carrier/:id',
-      name: 'settings-invoice-carrier-connection',
-      component: () => import('@/ui/views/settings/SettingsInvoiceCarrierConnectionPage.vue'),
-      meta: { tab: 'settings' },
-    },
-    {
       path: '/settings/ledgers',
       name: 'settings-ledgers',
       component: () => import('@/ui/views/settings/SettingsLedgerPage.vue'),
@@ -435,12 +417,6 @@ const BANK_SYNC_ROUTE_NAMES = new Set([
   'settings-bank-sync-connection',
 ])
 
-const INVOICE_CARRIER_ROUTE_NAMES = new Set([
-  'settings-invoice-carrier',
-  'settings-invoice-carrier-create',
-  'settings-invoice-carrier-connection',
-])
-
 const ADMIN_ROUTE_NAMES = new Set([
   'settings-admin',
   'settings-admin-user',
@@ -449,10 +425,6 @@ const ADMIN_ROUTE_NAMES = new Set([
 router.beforeEach((to) => {
   if (BANK_SYNC_ROUTE_NAMES.has(String(to.name ?? '')) && !isBankSyncFeatureEnabled()) {
     return { name: 'settings' }
-  }
-  if (INVOICE_CARRIER_ROUTE_NAMES.has(String(to.name ?? ''))) {
-    // 電子發票功能目前不受特別限制，可改為需要會員資格
-    // 目前先允許所有使用者
   }
   if (ADMIN_ROUTE_NAMES.has(String(to.name ?? '')) && !Boolean(getSharedLedgerSession()?.user?.is_admin)) {
     return { name: 'settings' }

@@ -142,21 +142,20 @@ test('migrate registers the refund origin type migration', () => {
   assert.match(source, /\{ version: 26, name: 'transaction_origin_type_refund', sql: migration026 \}/)
 })
 
-test('migrate registers the invoice carrier public release migration', () => {
+test('migrate registers the removed invoice carrier cleanup migration', () => {
   const source = readFileSync(resolve(import.meta.dirname, '../src/core/db/migrate.js'), 'utf8')
 
-  assert.match(source, /import migration029 from '@\/core\/db\/migrations\/029_invoice_carrier_public_release\.sql\?raw'/)
-  assert.match(source, /\{ version: 29, name: 'invoice_carrier_public_release', sql: migration029 \}/)
+  assert.match(source, /import migration031 from '@\/core\/db\/migrations\/031_remove_invoice_carrier\.sql\?raw'/)
+  assert.match(source, /\{ version: 31, name: 'remove_invoice_carrier', sql: migration031 \}/)
 })
 
-test('invoice carrier public release migration adds provider and invoice uniqueness guards', () => {
+test('removed invoice carrier cleanup migration drops retired local data', () => {
   const source = readFileSync(
-    resolve(import.meta.dirname, '../src/core/db/migrations/029_invoice_carrier_public_release.sql'),
+    resolve(import.meta.dirname, '../src/core/db/migrations/031_remove_invoice_carrier.sql'),
     'utf8',
   )
 
-  assert.match(source, /ALTER TABLE invoice_carrier_connections ADD COLUMN provider_connection_id TEXT;/)
-  assert.match(source, /ALTER TABLE invoice_carrier_connections ADD COLUMN carrier_options_json TEXT NOT NULL DEFAULT '\[\]';/)
-  assert.match(source, /CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_carrier_connection_provider_ref/)
-  assert.match(source, /CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_carrier_invoices_unique_invoice/)
+  assert.match(source, /DROP TABLE IF EXISTS invoice_carrier_invoices;/)
+  assert.match(source, /DROP TABLE IF EXISTS invoice_carrier_connections;/)
+  assert.match(source, /key LIKE 'invoice_carrier\.%'/)
 })

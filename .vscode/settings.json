@@ -2,5 +2,8 @@
   "chatgpt.openOnStartup": true,
   "github-actions.workflows.pinned.workflows": [
     ".github/workflows/play-release.yml"
+  ],
+  "java.project.excludedPaths": [
+    "frontend/android/**"
   ]
 }

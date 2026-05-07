@@ -29,14 +29,13 @@
 - 自動備份（Google Drive / WebDAV；SMB-142 重建後，手動、背景 due check、資料變更後備份都會經過共用 provider runner，回傳 `completed / skipped / error` 統一結果，並以帳本 + provider lock 避免同一時間多個觸發源互相覆蓋狀態；runtime 事件含 `ledgerId / provider / mode / status / reason / checkedAt`，設定頁會即時同步最近一次 auto-check 狀態與時間；SMB-147 後 Google 自動備份在非原生平台會保存 `platform_unsupported` 偵測結果，Android 靜默恢復未連線時也會繼續跑 due diagnostics 寫入 `not_connected / reauth_required` 等狀態，避免頁面誤停在尚未執行自動偵測；手機背景恢復只做靜默 Google 授權，不會在 App 啟動或帳本切換時自動彈出互動登入）
 - 記帳提醒與成就表（每日固定提醒、通知權限 / 精準提醒狀態、連續記帳天數、最長連續與累計記帳日）
 - 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
-- 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本；SMB-154 / 0.26.5 後設定首頁、登入 / 註冊、共同帳本與電子發票載具相關頁面使用到的主要介面文案皆已納入 zh-TW / en / ja 正式 i18n key，避免切換英文 / 日文時依賴繁中 fallback；手動重設全部資料前會先嘗試建立 recovery JSON 備份，備份失敗時仍保留錯誤紀錄並繼續既有重設流程）
+- 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本；SMB-154 / 0.26.5 後設定首頁、登入 / 註冊與共同帳本相關頁面使用到的主要介面文案皆已納入 zh-TW / en / ja 正式 i18n key，避免切換英文 / 日文時依賴繁中 fallback；手動重設全部資料前會先嘗試建立 recovery JSON 備份，備份失敗時仍保留錯誤紀錄並繼續既有重設流程）
 - 關於與聯絡入口（官網、Facebook、Instagram、Threads、Email、隱私權政策）
 - 官方網站 SEO / 品牌搜尋關鍵字（`../StrawMoneyBookWeb/index.html`：`StrawMoneyBook`、`稻草AI記帳`、`稻草記帳`、`AI記帳`、`對話記帳`、`自動記帳` 等）
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell，並在官網 `public/terms-of-service/index.html`、`public/privacy-policy/index.html` 提供靜態直連頁，避免正式網域直接開啟法律文件路徑時因 SPA history fallback 未命中而回 404
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
-- 電子發票載具（公開但標示為實驗性；SMB-2 重建後採 Android 端內自動辨識 captcha 流程，App 在原生 WebView 內自動登入電子發票網站，圖形驗證碼由 Tesseract OCR 自動辨識，最多嘗試五次，無需使用者手動輸入驗證碼；完成後把憑證與 native session marker 加密保存在本機；Android automation Activity 維持透明背景，captcha 以 Base64 解碼後送 OCR，查詢後等待 detail / 結果表載入再解析；Web 僅提供診斷與說明，不再承諾可新增、重新驗證或同步載具；Node / Web headed Playwright 與 `/api/invoice/*` 舊流程已移除；若站點流程阻擋自動化，狀態會明確標示為 `automation_blocked` 或 `reauth_required`，不會偽裝成成功）
-- Android 原生能力（首頁小工具目錄（SMB-157）、安全鎖、Google Identity、語音輸入、銀行自動化、電子發票載具自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；Google Play internal 上傳若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）
+- Android 原生能力（首頁小工具目錄（SMB-157）、安全鎖、Google Identity、語音輸入、銀行自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；VS Code workspace 會排除 Android Gradle 原生目錄的一般 Java 掃描，避免 JDT LS 未載入 Android SDK / Capacitor classpath 時誤報 `android.*`、`com.getcapacitor.*`、Tesseract 等套件不存在，Android 原生檢查仍以 Gradle / Android Studio 為準；Google Play internal 上傳若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）
 - Android 桌面小工具共 5 種：月收支總覽（`StrawMoneyWidgetProvider`）、收支圓餅圖（`StrawMoneyPieChartWidgetProvider`）、收支長條圖（`StrawMoneyBarChartWidgetProvider`）、快速記帳（`StrawMoneyQuickAddWidgetProvider`）、AI 記帳（`StrawMoneyAiBookkeepingWidgetProvider`）；圖表類小工具點擊導向 `/analysis`，快速記帳導向 `/transactions/quick-add`，AI 記帳導向 `/ai-auto-bookkeeping`；資料由 JS 層 `home-widget.service.js` 透過 Capacitor HomeWidget plugin 同步當月收入/支出摘要至 SharedPreferences，Android 原生以 `HomeWidgetPlugin.java` 繪製圓餅圖與長條圖 Bitmap
 
 ## 2. 路由與頁面對應
@@ -91,9 +90,6 @@
 | `/settings/bank-sync` | `src/ui/views/settings/SettingsBankSyncPage.vue` | 銀行同步管理 |
 | `/settings/bank-sync/new` | `src/ui/views/settings/SettingsBankSyncCreatePage.vue` | 新增銀行連線 |
 | `/settings/bank-sync/:id` | `src/ui/views/settings/SettingsBankSyncConnectionPage.vue` | 單一銀行連線設定 / 狀態 |
-| `/settings/invoice-carrier` | `src/ui/views/settings/SettingsInvoiceCarrierPage.vue` | 電子發票載具管理（公開入口，實驗性） |
-| `/settings/invoice-carrier/new` | `src/ui/views/settings/SettingsInvoiceCarrierCreatePage.vue` | 新增 / 重新連結電子發票載具（Android 端內自動辨識 captcha；Web 顯示診斷） |
-| `/settings/invoice-carrier/:id` | `src/ui/views/settings/SettingsInvoiceCarrierConnectionPage.vue` | 單一載具詳情 / 同步 / 發票匯入 / 重新驗證提示（非 Android 僅顯示診斷） |
 | `/settings/ledgers` | `src/ui/views/settings/SettingsLedgerPage.vue` | 帳本管理 |
 | `/settings/shared-ledgers` | `src/ui/views/settings/SettingsSharedLedgerPage.vue` | 共同帳本、Email 邀請、接受邀請與同步 |
 | `/settings/ledgers/:id` | `src/ui/views/settings/SettingsLedgerDetailPage.vue` | 帳本明細編輯/刪除 |
@@ -132,7 +128,7 @@
 
 ### 設定內導覽（`src/ui/views/settings.vue`）
 
-設定首頁入口標題、入口副標與帳號卡未登入提示皆透過 `src/ui/services/i18n.service.js` 的正式 key 維護；SMB-154 / 0.26.5 後登入 / 註冊頁、共同帳本頁與電子發票載具列表 / 新增 / 詳情頁使用到的 `t()` key 也會由 source test 檢查是否已註冊於 `MESSAGES`，英文與日文不再依賴繁中 fallback 或 runtime DOM 翻譯。
+設定首頁入口標題、入口副標與帳號卡未登入提示皆透過 `src/ui/services/i18n.service.js` 的正式 key 維護；SMB-154 / 0.26.5 後登入 / 註冊頁與共同帳本頁使用到的 `t()` key 也會由 source test 檢查是否已註冊於 `MESSAGES`，英文與日文不再依賴繁中 fallback 或 runtime DOM 翻譯。
 
 - 帳號卡片：`/settings/account`（顯示頭貼、名稱、帳號；未登入時導向登入 / 註冊）
 - 帳本管理：`/settings/ledgers`
@@ -154,13 +150,11 @@
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
 - 銀行同步：`/settings/bank-sync`（入口改由 `isBankSyncFeatureEnabled()` 控制；目前預設恢復為 mock/sandbox 流程）
-- 電子發票載具：`/settings/invoice-carrier`（公開入口，標示實驗性；新增載具會導向 `/settings/invoice-carrier/new`；Android App 透過 `InvoiceCarrierAutomation` 原生 WebView plugin 自動登入，Tesseract OCR 自動辨識圖形驗證碼（最多五次），成功後加密保存憑證，native BrowserSession 統一切回 main thread；Web 僅保留設定入口、診斷與說明，不再走 `/api/invoice` 或 headed Playwright 舊流程）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）
 
 - 帳本同步：`/settings/google-drive-ledger-sync`
-- 電子發票載具（實驗性）：`/settings/invoice-carrier`
 - 預算項目：`/budget`
 - 借貸：`/loans`
 - 報銷：`/reimbursements`
@@ -399,7 +393,6 @@ UI composable 目錄：`src/ui/composables/`
 - 若調整快速記帳入口，需同步檢查 `BookkeepingPage.vue`、`bookkeeping-mode.service.js`、首頁 FAB 與 Android 小工具導向。
 - 若調整會員限制或升級導流，需同步檢查 `membership.service.js`、`membership-navigation.service.js` 與 `SettingsMembershipBenefitsPage.vue`。
 - 若調整銀行同步入口，需同步檢查 `settings.vue` 的 `isBankSyncFeatureEnabled()`、銀行同步 API 可用性提示，以及 `/settings/bank-sync` 路由可達性。
-- 若調整電子發票載具入口或同步流程，需同步檢查 `settings.vue`、`FeatureListPage.vue`、`SettingsInvoiceCarrier*.vue`、`src/services/invoice-carrier/backend.js`、`src/core/services/invoice-carrier.service.js`、Android `InvoiceCarrierAutomation*`、本機 secure settings 過濾規則與 Web diagnostics 文案。
 - 若調整 Google Drive 帳本同步，需同步檢查 `SettingsGoogleDriveLedgerSyncPage.vue`、`google-drive-ledger-sync.service.js`、會員限制與活動帳本 reload 流程。
 - 若調整 App URL / invite link，需同步檢查 `app-url-route.js`、router redirect 與 `SettingsSharedLedgerPage.vue` 的 invite code 自動加入邏輯。
 - 若調整帳號 / 共同帳本 / 邀請碼 / 管理員流程，需同步檢查 `SettingsAccountPage.vue`、`SettingsSharedLedgerPage.vue`、`SettingsAdminPage.vue`、`src/services/shared-ledger/backend.js`、`../backend/src/routes/route-table.js` 與 `../backend/src/routes/auth/`、`../backend/src/routes/shared-ledgers/`。
@@ -413,7 +406,7 @@ UI composable 目錄：`src/ui/composables/`
 - 變更 store/service/repository 的責任邊界
 - 更新專案入口介紹、快速開始、測試指令或文件索引
 - 新增重要共用元件（日期選擇器、統計元件、首頁卡片等）
-- 設定入口策略變更（例如：銀行同步 / 電子發票載具顯示策略）
+- 設定入口策略變更（例如：銀行同步顯示策略）
 - 帳號、共同帳本、邀請碼、管理員或 backend API 流程變更
 - 記帳模式切換邏輯變更（AI / 快速新增 / 問答）
 - Google Drive 帳本同步或分析報表列印流程變更

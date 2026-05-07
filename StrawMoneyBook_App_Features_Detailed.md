@@ -72,7 +72,7 @@ StrawMoneyBook 的特色不在單一功能，而在於把同一筆金流後續�
 
 另外，所有需要輸入資料的彈層已統一為共用 bottom sheet flow，桌面與手機都不再保留另一套輸入型 popover，包含表單 dialog、選單、日期與時間選擇器；`AppDialog` 以及各頁自製輸入 sheet 也都收斂到和快速記帳一致的 shared overlay / bottom-sheet primitives，Android 有底部導覽列 inset 的裝置也會一併吃到底部 safe area，且 sheet 卡片背景會直接延伸到底部，和 `BottomNav` 維持同一個底部基準。
 
-SMB-154 / 0.26.5 後，設定首頁的入口副標、帳號卡未登入提示、登入 / 註冊頁、共同帳本頁，以及電子發票載具列表 / 新增 / 詳情頁使用到的主要介面文案，都已改由正式 i18n key 維護，繁中、英文與日文都有對應文案，不再靠繁中 fallback 或 runtime DOM 翻譯處理這批主要設定流程文字。
+SMB-154 / 0.26.5 後，設定首頁的入口副標、帳號卡未登入提示、登入 / 註冊頁與共同帳本頁使用到的主要介面文案，都已改由正式 i18n key 維護，繁中、英文與日文都有對應文案，不再靠繁中 fallback 或 runtime DOM 翻譯處理這批主要設定流程文字。
 
 前端內部像月份鍵、日期鍵這類共用格式化邏輯，也已收斂到 `src/core/utils/id.js`，避免首頁、分析、日曆、列印頁各自維護相同 helper 後再逐步出現行為漂移。
 
@@ -107,6 +107,8 @@ SMB-155 後，帳戶明細與交易搜尋不再一次載入完整交易歷史，
 Android 發版目前也已把版本碼策略收斂成由語意版號自動推導的單調遞增規則，並保留一段 Play Store 歷史版本碼安全區間，避免 `0.x.y` 這類版本名稱在新版發佈時反而低於舊的商店版本碼；若 release 產物存在 `mapping.txt`，Play 上傳流程也會一起帶上去模糊化檔，降低 Crash / ANR 排查成本。
 
 另外，CI 的 Android release build 現在也已補上 `frontend/android/gradlew` 的可執行權限，避免 `./gradlew bundleRelease` 在 checkout 後因權限不足直接中斷，讓 bundleRelease 的驗證可以真正跑到 Gradle 階段。Google Play internal 上傳也會針對「Play edit 被外部變更」這類暫時性衝突重開 edit 有限次重試，避免 AAB 已建好卻因 Play Console 或其他發版流程同時修改而直接中斷。
+
+VS Code workspace 目前會排除 `frontend/android/**` 的一般 Java 專案掃描，避免 Red Hat Java / JDT LS 在未載入 Android Gradle classpath 時，對 `android.*`、Capacitor、Tesseract 與 Android resource 產生大量誤報；Android 原生程式碼檢查仍以 `frontend/android` 的 Gradle task 與 Android Studio 為準。
 
 ### 2.4 官方網站品牌搜尋詞同步
 
@@ -644,7 +646,7 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - 防止他人直接看到財務資料
 - 保護同步、備份等敏感設定資訊
 
-## 9. 銀行同步與電子發票載具
+## 9. 銀行同步
 
 ### 9.1 銀行同步現況
 
@@ -656,39 +658,6 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - 可建立銀行連線、查看同步狀態、管理要同步的帳戶
 
 所以這不是完全未做，而是屬於已建流程、仍受條件控制的功能。
-
-### 9.2 電子發票載具功能
-
-電子發票載具（SMB-2）用於從台灣電子發票平台（einvoice.nat.gov.tw）自動抓取發票，特點包括：
-
-**技術架構**
-- 功能已公開，但明確標示為「實驗性」
-- SMB-2 重建後，正式產品路徑採 Android App 原生 WebView + Tesseract OCR 自動辨識 captcha 流程；Node / Web headed Playwright、OCR 與 `/api/invoice/*` 舊流程已移除
-- Web 不再承諾可直接新增、重新驗證或同步載具；只保留設定入口、診斷與說明，且所有 Android WebView client / load / JavaScript / cookie 操作都會切回 main thread 執行
-- Android App 在原生 WebView 內自動登入電子發票網站，圖形驗證碼以 Base64 解碼後透過 TesseractBridge OCR 自動辨識（最多嘗試五次），無需使用者手動輸入；若辨識失敗會自動刷新並重試，若確認為帳號密碼錯誤則立即回報；原生 automation Activity 採透明背景，查詢後等待 detail / 結果表載入再解析
-- 同步預設支援最近 2 個月日期範圍，並可依實際載具清單做篩選
-- 前端 adapter 只把 Android native automation 視為正式產品入口；Web 僅顯示診斷與導引訊息
-
-**使用者流程**
-1. 新增載具：列表頁新增入口一律進入新增 / 診斷頁；Android App 只需輸入手機號碼與密碼後點「連結載具」，系統自動處理圖形驗證碼並完成登入、查詢頁切換與本機憑證保存；Web 版只保留設定入口、診斷與說明，不再承諾可直接新增載具
-2. 本機保存：登入成功後，把手機號碼、密碼與 Android native session marker 以加密 secure setting 保存到本機，key 為 `invoice_carrier.credentials.<connectionId>`；Android 另以原生 encrypted vault 保存 cookie/session 狀態
-3. 同步發票：Android 會優先使用原生 vault session；若失效則改為要求重新驗證，並在管理頁明確標示 `reauth_required` 或 `automation_blocked`；Web 版只保留診斷與說明
-4. 匯入交易：勾選發票清單 → 選擇匯入帳戶 → 批量匯入為帳目記錄（發票金額 = 交易金額）
-
-**資料存儲**
-- `invoice_carrier_connections` 表：連線資訊（手機號碼、provider connection id、settings ledger id、狀態、同步狀態、最後同步時間、錯誤訊息、可用載具清單）
-- `invoice_carrier_invoices` 表：發票清單（發票號、ISO 日期、賣方、金額、載具標籤、已匯入狀態、交易關聯 ID）
-- `(connection_id, invoice_number, invoice_date)` 有唯一鍵，避免每次同步都重複插入
-- 更新既有發票時會保留 `imported_transaction_id`，避免把已匯入狀態洗掉
-
-**特點**
-- 對齊現有銀行同步分層，但電子發票不再保留 Web API route；正式動作只走 Android native plugin
-- 不需要會員資格（與銀行同步不同），所有使用者皆可使用
-- 發票資料與帳目記錄關聯，便於查詢「這筆交易源自哪張發票」
-- 使用者可彈性選擇日期範圍、載具與匯入帳戶，提高匯入控制性
-- 憑證與 native session marker 屬於 local-only sensitive data，不會進 Google Drive 帳本同步，也不會進 shared-ledger snapshot
-- Web 不再提供 `/api/invoice`、headed browser 或 OCR fallback；非 Android 環境會顯示 unavailable / deterministic error，而不是讓使用者進入壞流程或建立假成功連線
-- Android App 不依賴遠端 headed browser 新增或同步載具；若原生 WebView session 過期，會要求重新連結，若站點流程變動或頁面結構改版，會回傳明確錯誤並標示 `reauth_required` 或 `automation_blocked`
 
 ## 10. 使用者輪廓
 
@@ -747,8 +716,6 @@ StrawMoneyBook 特別適合以下人群：
 以下內容在文件中必須明講，避免誤導：
 
 - 銀行同步已有頁面與流程，但屬於受控功能，不應描述成全面對外開放
-- 電子發票載具雖然已公開，但仍屬實驗性功能；Android App 已改為 Android-first 的端內登入流程，會先在原生 WebView 內載入登入頁與圖形驗證碼，再由使用者手動輸入驗證碼完成查詢與同步，並補上 WebView main-thread affinity、透明 Activity、captcha 圖片等待 / 刷新與查詢結果等待保護，iOS 尚未納入
-- Web 版只保留設定入口、診斷與說明，不再作為正式的新增 / 重新驗證 / 同步載具產品路徑
 - 多數進階同步能力屬會員功能
 - 免費版有帳本、帳戶、借貸、報銷、存錢罐、訂閱、AI 記帳次數等限制
 - 文件描述以目前程式碼為準，不代表所有流程都已完成商業化上架或全面開通

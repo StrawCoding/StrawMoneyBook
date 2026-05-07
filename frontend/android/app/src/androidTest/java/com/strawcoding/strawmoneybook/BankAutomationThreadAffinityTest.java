@@ -52,8 +52,6 @@ public class BankAutomationThreadAffinityTest {
                         JSONObject payload = new JSONObject();
                         payload.put("connectionId", "thread-affinity-test");
                         FirstBankAutomation.disconnect(activity, webView, vault, new BankAutomationDebugTrace("disconnect"), payload);
-
-                        InvoiceCarrierAutomation.runThreadAffinityRegressionHarness(activity, webView);
                     } catch (Throwable error) {
                         errorRef.set(error);
                     } finally {
