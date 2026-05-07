@@ -36,8 +36,8 @@
       />
     </div>
 
-    <div class="platform-notice card panel">
-      <font-awesome-icon icon="fa-solid fa-circle-info" class="notice-icon" />
+    <div v-if="!platformSupported" class="platform-notice card panel notice--warning">
+      <font-awesome-icon icon="fa-solid fa-triangle-exclamation" class="notice-icon notice-icon--warning" />
       <p>{{ t('einvoice.not_supported_notice') }}</p>
     </div>
 
@@ -53,14 +53,16 @@
 <script setup>
 import { computed, onMounted } from 'vue'
 import { useEInvoiceImportStore } from '@/ui/stores/einvoice-import.store.js'
+import { isEInvoiceAutomationSupported } from '@/services/einvoice/backend.js'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const { t } = useI18n()
 const store = useEInvoiceImportStore()
 
 const today = new Date().toISOString().slice(0, 10)
+const platformSupported = isEInvoiceAutomationSupported()
 
-const canProceed = computed(() => Boolean(store.dateFrom && store.dateTo))
+const canProceed = computed(() => Boolean(store.dateFrom && store.dateTo) && platformSupported)
 
 onMounted(() => {
   if (!store.dateFrom || !store.dateTo) {
@@ -104,7 +106,13 @@ function handleNext() {
   color: var(--text-secondary);
   padding: 12px;
 }
+.notice--warning {
+  background: color-mix(in srgb, var(--warning, #f59e0b) 10%, var(--card) 90%);
+  border: 1px solid color-mix(in srgb, var(--warning, #f59e0b) 40%, transparent 60%);
+  color: var(--text);
+}
 .notice-icon { color: var(--primary); flex-shrink: 0; margin-top: 2px; }
+.notice-icon--warning { color: var(--warning, #f59e0b); }
 .platform-notice p { margin: 0; }
 .step-footer { padding: 16px; gap: 12px; }
 .btn-primary, .btn-secondary {

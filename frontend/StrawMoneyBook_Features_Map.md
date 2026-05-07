@@ -218,6 +218,8 @@
 | 功能 | 檔案 |
 |---|---|
 | App Shell / Router View | `src/ui/App.vue` + `src/ui/composables/useAppShellRuntime.js` |
+| 頁面返回標題列 | `src/ui/assets/css/global.css`（所有含 `.back-btn` 的頁首統一為左側 chevron 返回、置中標題、右側操作區；手機寬度會把右側操作移到下一行，避免標題重疊，視覺對齊電子發票精靈頁） |
+| 記帳頁模式切換 | `src/ui/views/BookkeepingPage.vue`（AI / 手動模式切換移到置中標題列下方，避免與全域返回標題列重疊） |
 | Welcome / allowWithoutSetup 入口控制 | `src/ui/App.vue` + `src/ui/views/WelcomePage.vue` |
 | 首次設定完成導覽 | `src/ui/views/PostSetupIntroPage.vue` + `src/ui/services/post-setup-intro.service.js` |
 | 初始 setup 判斷 | `src/ui/services/setup-flow.service.js` |
@@ -865,6 +867,7 @@ UI composable 目錄：`src/ui/composables/`
 - 變數（9）：`budgetStore`, `categoryStore`, `deleteDialogOpen`, `deleteLoading`, `displayMonth`, `editingItem`, `isSheetOpen`, `pendingDeleteItemId`, `uiStore`
 - 類別（0）：無
 - 補充：月摘要新增保留金額；分類預算列改為整列點擊先開唯讀詳情，再從詳情進入編輯 / 刪除；項目上的日結轉 / 月底結轉 chip 與 `A -> B` 來源 / 目標摘要改成同一行；整月總額預算存款也拆成摘要列 -> 詳情 sheet -> 設定 sheet 三段式流程，來源 / 目標帳戶同樣沿用快速新增的分組式 account picker。
+- **(v1.0.9)**：頁面頂部新增 `header.row` 包含標題與 `RouterLink.btn.back-btn` 返回首頁（`/`）
 
 ### `src/ui/views/home.vue`
 - 函數（12）：`applyMonthInput`, `dateKeyFromDate`, `goCurrentRange`, `localeRangeMonth`, `monthKeyFromDate`, `openQuickAdd`, `pickDay`, `pickMonth`, `pickYear`, `switchFilterMode`, `switchQuickAddMode`, `syncHomeTransactions`
@@ -985,9 +988,13 @@ UI composable 目錄：`src/ui/composables/`
 - AES-256-GCM 加密/解密，PBKDF2 金鑰衍生（100,000 迭代）
 - 函數：`encryptCredential`, `decryptCredential`
 
+#### `src/services/einvoice/native-automation.js`（SMB-168, v1.0.8）
+- `isEInvoiceAutomationRuntimeSupported()` — Capacitor Android native 回傳 true，其他平台 false
+- `queryNativeEInvoices(params)` — 呼叫 `EInvoiceAutomation` Capacitor 插件執行 WebView 自動抓取
+
 #### `src/services/einvoice/backend.js`
-- 函數（5）：`saveEInvoiceCredential`, `loadEInvoiceCredential`, `clearEInvoiceCredential`, `hasEInvoiceCredential`, `scrapeEInvoiceList`, `importSelectedInvoices`
-- `isEInvoiceAutomationSupported()` — Playwright 原生插件就緒前回傳 false
+- 函數（6）：`saveEInvoiceCredential`, `loadEInvoiceCredential`, `clearEInvoiceCredential`, `hasEInvoiceCredential`, `scrapeEInvoiceList`, `importSelectedInvoices`
+- `isEInvoiceAutomationSupported()` — 委派 `isEInvoiceAutomationRuntimeSupported()`，Android native 為 true
 
 #### `src/ui/stores/einvoice-import.store.js`
 - Pinia store：精靈狀態、選取邏輯、匯入結果
@@ -997,9 +1004,11 @@ UI composable 目錄：`src/ui/composables/`
 
 #### `src/ui/views/einvoice/EInvoiceStep1Account.vue`
 - 手機號碼/密碼輸入、密碼顯示切換（`fa-eye` / `fa-eye-slash` 全域註冊）、記住帳號（加密儲存）；版面採自然高度與緊湊 footer，避免帳號設定卡片下方留下過多空白
+- **SMB-167 (v1.0.9)**：step-footer 補上「上一步」按鈕，與 Step2–4 pattern 對齊；點擊執行 `store.reset()` + `router.back()` 退出 wizard
 
 #### `src/ui/views/einvoice/EInvoiceStep2Query.vue`
 - 查詢條件：日期區間、發票狀態、統編、品名關鍵字
+- **SMB-166 (v1.0.8)**：加入 `platformSupported = isEInvoiceAutomationSupported()` 守衛；`canProceed` 包含平台支援檢查，平台不支援時「下一步」禁用；`platform-notice` 改為 warning 樣式（`notice--warning`），僅在不支援時顯示
 
 #### `src/ui/views/einvoice/EInvoiceStep3Select.vue`
 - 發票清單、全選/單選、已選金額彙總
@@ -1007,9 +1016,16 @@ UI composable 目錄：`src/ui/composables/`
 #### `src/ui/views/einvoice/EInvoiceStep4Confirm.vue`
 - 匯入預覽、確認匯入、結果顯示
 
+#### Android 原生插件（SMB-168, v1.0.8）
+- `android/.../EInvoiceAutomationPlugin.java` — `@CapacitorPlugin(name = "EInvoiceAutomation")`；方法：`isAvailable`, `queryInvoices`
+- `android/.../EInvoiceAutomationActivity.java` — 隱藏 WebView Activity，120 秒 timeout；`busy` lock 防止並發
+- `android/.../EInvoiceAutomation.java` — 完整自動化邏輯：登入 `einvoice.nat.gov.tw`、CAPTCHA OCR（TesseractBridge numeric 模式）、多頁發票清單解析；`EInvoiceException` 內嵌型別
+
 ### 修改檔案
 - `src/core/db/migrate.js` — 加入 migration 032
 - `src/ui/views/FeatureListPage.vue` — 加入「電子發票匯入」入口
 - `src/ui/router/index.js` — 加入 `/einvoice-import` 路由
 - `src/ui/services/i18n.service.js` — 加入 zh-TW / en / ja 翻譯
 - `src/main.js` — 電子發票精靈返回按鈕所需 `fa-chevron-left` 與密碼顯示切換所需 `fa-eye` / `fa-eye-slash` 納入 Font Awesome 全域註冊
+- `android/.../MainActivity.java` — 加入 `registerPlugin(EInvoiceAutomationPlugin.class)`（SMB-168）
+- `android/.../AndroidManifest.xml` — 加入 `EInvoiceAutomationActivity` 宣告（SMB-168）

@@ -420,15 +420,110 @@ button:focus-visible,
   min-height: 32px;
 }
 .back-btn {
+  width: 40px;
   min-height: 40px;
-  min-width: 80px;
-  padding: 8px 12px;
-  border-radius: 10px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  flex: 0 0 40px;
+  box-sizing: border-box;
+  color: var(--text);
+  font-size: 0;
+  gap: 0;
+}
+.btn.back-btn {
+  border-color: transparent;
+  background: transparent;
+}
+.back-btn:hover,
+.btn.back-btn:hover {
+  background: transparent;
+  box-shadow: none;
+}
+.btn.back-btn::after {
+  content: none;
+}
+.back-btn svg {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+}
+.back-btn:not(:has(svg))::before {
+  content: '';
+  width: 11px;
+  height: 11px;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  margin-left: 4px;
+}
+
+header.row:has(.back-btn) {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  align-items: center;
+  justify-content: initial;
+  gap: 0;
+}
+header.row:has(.back-btn)::after {
+  content: '';
+  grid-column: 3;
+  grid-row: 1;
+  width: 40px;
+  height: 40px;
+}
+header.row:has(.back-btn) > .back-btn,
+header.row:has(.back-btn) > :is(.header-actions, .head-actions, .btn-wrap) > .back-btn {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+}
+header.row:has(.back-btn) > :is(.header-actions, .head-actions, .btn-wrap) {
+  display: contents;
+}
+header.row:has(.back-btn) > :is(.header-actions, .head-actions, .btn-wrap) > :not(.back-btn) {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  min-width: max-content;
+  white-space: nowrap;
+}
+header.row:has(.back-btn) > :is(h1, h2, .page-title),
+header.row:has(.back-btn) > div:first-child:not(:has(.back-btn)) {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  text-align: center;
+}
+header.row:has(.back-btn) > :is(h1, h2, .page-title),
+header.row:has(.back-btn) > div:first-child:not(:has(.back-btn)) > :is(h1, h2, .page-title) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  header.row:has(.back-btn) > :is(.header-actions, .head-actions, .btn-wrap) > :not(.back-btn) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: stretch;
+    margin-top: 8px;
+    max-width: 100%;
+  }
 }
 
 /* Keep destructive actions visually stable and independent from theme colors. */

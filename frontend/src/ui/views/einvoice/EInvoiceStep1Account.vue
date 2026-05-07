@@ -38,7 +38,8 @@
       <p v-if="error" class="error-text">{{ error }}</p>
     </div>
 
-    <div class="step-footer">
+    <div class="step-footer row">
+      <button class="btn-secondary" @click="handleCancel">{{ t('einvoice.back') }}</button>
       <button class="btn-primary" :disabled="!canProceed" @click="handleNext">
         {{ t('einvoice.next') }}
       </button>
@@ -48,11 +49,13 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useEInvoiceImportStore } from '@/ui/stores/einvoice-import.store.js'
 import { loadEInvoiceCredential, saveEInvoiceCredential } from '@/services/einvoice/backend.js'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const { t } = useI18n()
+const router = useRouter()
 const store = useEInvoiceImportStore()
 
 const showPassword = ref(false)
@@ -69,6 +72,11 @@ onMounted(async () => {
     savedHint.value = true
   }
 })
+
+function handleCancel() {
+  store.reset()
+  router.back()
+}
 
 async function handleNext() {
   error.value = ''
@@ -129,17 +137,17 @@ async function handleNext() {
 }
 .saved-hint { font-size: 12px; color: var(--primary); margin-top: 8px; }
 .error-text { font-size: 12px; color: var(--danger); margin-top: 8px; }
-.step-footer { padding: 0; }
-.btn-primary {
-  width: 100%;
+.step-footer { padding: 0; gap: 12px; }
+.btn-primary, .btn-secondary {
+  flex: 1;
   padding: 14px;
-  border: none;
   border-radius: 12px;
-  background: var(--primary);
-  color: #fff;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   cursor: pointer;
+  border: none;
 }
+.btn-primary { background: var(--primary); color: #fff; }
 .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-secondary { background: var(--surface-soft-accent); color: var(--text); border: 1px solid var(--border); }
 </style>

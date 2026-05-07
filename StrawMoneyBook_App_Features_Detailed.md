@@ -78,6 +78,8 @@ SMB-154 / 0.26.5 後，設定首頁的入口副標、帳號卡未登入提示、
 
 在互動細節上，Android 返回鍵會優先關閉當前 overlay，再決定是否返回頁面或退出 App；關鍵刪除流程也統一採用自製確認對話框，並額外針對行動裝置補強長按連結與文字選取的防誤觸處理。
 
+各功能頁的返回標題列也統一為電子發票精靈頁的版型：左側 chevron 返回、標題置中、右側保留操作區或等寬空位；手機寬度下右側操作會移到標題列下一行，避免不同頁面的「返回」文字按鈕、操作按鈕與標題位置各自漂移或重疊。記帳頁的 AI / 手動模式切換則固定移到標題列下方，避免寬操作按鈕和置中標題重疊。
+
 同時，像借貸清單與往來對象明細這類會用 query 切換「進行中 / 已結束」的同頁狀態，路由也已補上穩定 `transitionKey`，避免只是切換篩選就觸發整頁淡入淡出動畫。
 
 Android 記帳提醒同步目前也已補強 Capacitor Local Notifications plugin proxy 相容性，載入通知插件時不再把 plugin 物件誤當成 thenable 去呼叫 `.then()`，避免在 Android 端拋出 `LocalNotifications.then() is not implemented` 並中斷提醒初始化。
@@ -306,6 +308,8 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
   - `delta`：若歷史交易變動造成應存金額改變，會補差額或反向回沖
 
 因此，預算模組不只是「看還剩多少」，而是能把預算紀律直接轉成實際儲蓄動作，並保留結算紀錄。
+
+**(v1.0.9)**：預算頁頂部新增 `header.row` 包含標題與 `RouterLink.btn.back-btn` 返回首頁（`/`），對齊全域返回列樣式。
 
 ### 4.2 分析與報表
 
@@ -804,8 +808,8 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 
 ## 電子發票匯入（E-Invoice Import）
 
-**版本**：v1.0.6（SMB-165）
-**狀態**：前端架構完整，Playwright 自動抓取待實作原生插件
+**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）
+**狀態**：Android 原生插件完整實作，WebView 自動抓取可用；非 Android 平台顯示說明
 
 ### 功能說明
 透過 4 步驟精靈，讓使用者輸入財政部電子發票平台（einvoice.nat.gov.tw）帳號、設定查詢條件、選取發票後批量匯入至 StrawMoneyBook 帳本。
@@ -825,11 +829,16 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 - 加密金鑰衍生自裝置 UUID（localStorage 綁定，首次產生後固定）
 - 每次加密使用隨機 12-byte IV
 
-### 平台限制
-- Playwright 自動抓取需要 Node.js sidecar 或原生插件，目前 `isEInvoiceAutomationSupported()` 回傳 `false`
-- Step 3 在不支援環境下顯示「功能尚在開發中」提示，不影響 DB/加密層使用
+### Android 原生自動化（SMB-168, v1.0.8）
+- `EInvoiceAutomation` Capacitor 插件（`registerPlugin('EInvoiceAutomation')`）透過隱藏 WebView 自動操作 `einvoice.nat.gov.tw`
+- 登入流程：選取手機條碼分頁 → 填入手機號碼/密碼 → CAPTCHA OCR（TesseractBridge，numeric 模式，4 位數字）→ 送出 → 最多重試 3 次
+- 查詢流程：填入日期區間（轉換為民國年格式 YYYmmdd）、發票狀態、統編、品名 → 解析多頁發票清單 → 回傳 JSON
+- 發票欄位：`invoiceNumber`、`amount`、`invoiceDate`（timestamp ms）、`merchantName`、`carrierName`、`buyerTaxId`
+- `isEInvoiceAutomationSupported()` 在 Android native 回傳 `true`，其他平台（Web、iOS）回傳 `false`
+- **SMB-166 (v1.0.8)**：Step 2 加入平台守衛 `canProceed = platformSupported && dateRange_valid`；非 Android 平台「下一步」禁用並顯示開發中提示
 
 ### 入口
 - `功能列表` 頁面（FeatureListPage.vue）→「電子發票匯入」
 - 路由：`/einvoice-import`
 - 精靈頁頂部返回按鈕使用全域 Font Awesome `fa-chevron-left` 註冊圖示；密碼欄顯示切換使用 `fa-eye` / `fa-eye-slash` 註冊圖示，避免頁面載入時出現空按鈕。
+- **SMB-167 (v1.0.9)**：Step 1 step-footer 補上「上一步」按鈕（原本只有「下一步」），與 Step 2–4 雙按鈕 pattern 對齊；點擊執行 `store.reset()` + `router.back()` 退出 wizard，與精靈頂部返回按鈕行為一致。

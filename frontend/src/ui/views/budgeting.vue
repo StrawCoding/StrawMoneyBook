@@ -1,6 +1,9 @@
 <template>
   <section class="stack">
-    <h2 class="page-title">{{ t('budgeting.title') }}</h2>
+    <header class="row">
+      <h2 class="page-title">{{ t('budgeting.title') }}</h2>
+      <RouterLink class="btn back-btn" to="/">{{ t('common.back') }}</RouterLink>
+    </header>
 
     <article class="card panel">
       <header class="row">
@@ -274,6 +277,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'

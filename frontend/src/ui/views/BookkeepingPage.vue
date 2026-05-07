@@ -3,28 +3,27 @@
     <article class="card panel">
       <header class="row header-row">
         <h2>{{ t('bookkeeping.page_title') }}</h2>
-        <div class="header-actions">
-          <div class="mode-toggle">
-            <button
-              type="button"
-              class="btn"
-              :class="{ primary: topMode === 'ai' }"
-              @click="switchTopMode('ai')"
-            >
-              {{ t('bookkeeping.mode.ai') }}
-            </button>
-            <button
-              type="button"
-              class="btn"
-              :class="{ primary: topMode === 'manual' }"
-              @click="switchTopMode('manual')"
-            >
-              {{ t('bookkeeping.mode.manual', '手動記帳') }}
-            </button>
-          </div>
-          <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
-        </div>
+        <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
       </header>
+
+      <div class="mode-toggle mode-toggle-row">
+        <button
+          type="button"
+          class="btn"
+          :class="{ primary: topMode === 'ai' }"
+          @click="switchTopMode('ai')"
+        >
+          {{ t('bookkeeping.mode.ai') }}
+        </button>
+        <button
+          type="button"
+          class="btn"
+          :class="{ primary: topMode === 'manual' }"
+          @click="switchTopMode('manual')"
+        >
+          {{ t('bookkeeping.mode.manual', '手動記帳') }}
+        </button>
+      </div>
 
       <div v-if="topMode === 'manual'" class="manual-switch-row">
         <span class="muted manual-switch-label">{{ t('bookkeeping.manual.label', '手動模式') }}</span>
@@ -164,6 +163,14 @@ h2 {
 
 .mode-toggle .btn {
   white-space: nowrap;
+}
+
+.mode-toggle-row {
+  margin-top: 12px;
+}
+
+.mode-toggle-row .btn {
+  flex: 1 1 0;
 }
 
 .manual-switch-actions {

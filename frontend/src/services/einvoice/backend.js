@@ -8,6 +8,7 @@ import {
 } from '@/core/repositories/einvoice-import.repo.js'
 import { decryptCredential, encryptCredential } from './credential-crypto.js'
 import { EINVOICE_PLATFORM, createEInvoiceError } from './shared.js'
+import { isEInvoiceAutomationRuntimeSupported, queryNativeEInvoices } from './native-automation.js'
 
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
@@ -63,18 +64,17 @@ export async function hasEInvoiceCredential() {
 // ── Invoice scraping (requires EInvoiceAutomation native plugin) ──────────────
 
 export function isEInvoiceAutomationSupported() {
-  // Will be updated when the native Playwright sidecar / plugin is available.
-  return false
+  return isEInvoiceAutomationRuntimeSupported()
 }
 
-export async function scrapeEInvoiceList(_queryParams) {
+export async function scrapeEInvoiceList(queryParams) {
   if (!isEInvoiceAutomationSupported()) {
     throw createEInvoiceError(
       t('einvoice.error.not_supported', {}, '目前平台尚不支援電子發票自動抓取'),
       'einvoice_not_supported',
     )
   }
-  // Placeholder — will delegate to EInvoiceAutomation plugin.
+  return queryNativeEInvoices(queryParams)
 }
 
 // ── Import invoices into ledger ───────────────────────────────────────────────
