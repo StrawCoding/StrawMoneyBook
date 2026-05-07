@@ -450,6 +450,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
 
   addWindowListener('focus', () => {
     restoreSharedLedgerSessionInBackground('window_focus')
+    void runSharedLedgerBackgroundSyncNow(pinia)
     void runGoogleDriveLedgerBackgroundSyncNow(pinia)
   })
 

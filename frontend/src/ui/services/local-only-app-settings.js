@@ -1,4 +1,4 @@
-const LOCAL_ONLY_APP_SETTING_KEY_RE = /^(?:backup\.|sync\.|shared_ledger_meta$|bank_sync\.credentials\.|invoice_carrier\.credentials\.)/i
+const LOCAL_ONLY_APP_SETTING_KEY_RE = /^(?:backup\.|sync\.|shared_ledger_meta$|bank_sync\.credentials\.|invoice_carrier\.credentials\.|bookkeeping\.)/i
 
 export { LOCAL_ONLY_APP_SETTING_KEY_RE }
 

@@ -23,6 +23,11 @@ function buildContext(overrides = {}) {
     counterparties: [],
     historyTransactions: [],
     autoFillRules: [],
+    addonTemplates: [
+      { id: 'discount', label: '優惠', defaultDirection: 'minus' },
+      { id: 'fee', label: '手續費', defaultDirection: 'plus' },
+      { id: 'coupon', label: '折價券', defaultDirection: 'minus' },
+    ],
     useTinyNer: false,
     now: new Date('2026-03-20T08:00:00.000Z'),
     ...overrides,
@@ -74,6 +79,26 @@ test('parseAutoBookkeepingText keeps addon items separate from the main amount w
   assert.equal(result.draft?.addonItems?.[0]?.label, '手續費')
   assert.equal(result.draft?.addonItems?.[0]?.deltaMajor, 5)
   assert.match(result.draft?.note ?? '', /朋友聚餐/)
+})
+
+test('parseAutoBookkeepingText recognizes custom addon template labels', () => {
+  const result = parseAutoBookkeepingText('午餐 120 折價券 20', buildContext())
+
+  assert.equal(result.draft?.amountMajor, 120)
+  assert.equal(result.draft?.addonItems?.length, 1)
+  assert.equal(result.draft?.addonItems?.[0]?.label, '折價券')
+  assert.equal(result.draft?.addonItems?.[0]?.deltaMajor, 20)
+  assert.equal(result.draft?.note ?? '', '')
+})
+
+test('parseAutoBookkeepingText can produce zero settled amount after addon offsets', () => {
+  const result = parseAutoBookkeepingText('午餐 120 優惠 120', buildContext())
+
+  assert.equal(result.draft?.amountMajor, 120)
+  assert.equal(result.draft?.addonItems?.length, 1)
+  assert.equal(result.draft?.addonItems?.[0]?.label, '優惠')
+  assert.equal(result.draft?.addonItems?.[0]?.deltaMajor, 120)
+  assert.deepEqual(result.warningKeys, [])
 })
 
 test('parseAutoBookkeepingText does not treat amount subtraction as month-day and keeps the intended relative date', () => {

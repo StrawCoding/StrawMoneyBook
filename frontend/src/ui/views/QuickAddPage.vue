@@ -618,6 +618,7 @@ async function submit(options = {}) {
   const baseAmountMinor = Math.round(Math.abs(baseAmountMajor) * 100)
   const sourceExtraMinor = Math.round(addonDeltaMajor * 100)
   const settledAmountMajor = round2(baseAmountMajor + addonDeltaMajor)
+  const settledAmountMinorRaw = Math.round(settledAmountMajor * 100)
   const settledAmountMinor = Math.round(Math.abs(settledAmountMajor) * 100)
   const noteText = mergeAddonItemsToNote(String(model.note ?? '').trim(), appliedAddonItems)
 
@@ -654,7 +655,7 @@ async function submit(options = {}) {
       uiStore.pushToast(t('quick_add.error.same_account'), 'error')
       return
     }
-  } else if (settledAmountMinor <= 0) {
+  } else if (settledAmountMinorRaw < 0) {
     uiStore.pushToast(t('quick_add.error.amount_required'), 'error')
     return
   }

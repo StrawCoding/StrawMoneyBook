@@ -47,6 +47,17 @@ export function parseAddonItemsFromStoredNote(note) {
 export function extractAddonItems(text) {
   const items = []
   const ranges = []
+  const pushItem = ({ label, direction, amountMajor, start, end }) => {
+    const normalizedLabel = String(label ?? '').trim()
+    const deltaMajor = round2(Math.abs(Number(amountMajor ?? 0)))
+    if (!normalizedLabel || !(deltaMajor > 0)) return
+    items.push({
+      label: normalizedLabel,
+      direction: direction === 'minus' ? 'minus' : 'plus',
+      deltaMajor,
+    })
+    ranges.push({ start, end })
+  }
   const addonPatterns = [
     {
       defaultDirection: 'plus',
@@ -64,12 +75,10 @@ export function extractAddonItems(text) {
       const keyword = String(matched[1] ?? '').trim() || '附加項目'
       const amountMajor = parseAmountWithUnit(matched[3], matched[4])
       if (Number.isFinite(amountMajor) && amountMajor > 0) {
-        items.push({
+        pushItem({
           label: keyword,
           direction: pattern.defaultDirection,
-          deltaMajor: amountMajor,
-        })
-        ranges.push({
+          amountMajor,
           start: matched.index,
           end: matched.index + String(matched[0] ?? '').length,
         })
@@ -81,6 +90,52 @@ export function extractAddonItems(text) {
   return {
     items,
     strippedText: stripTextSegments(text, ranges),
+  }
+}
+
+export function extractAddonItemsByTemplates(text, templates = []) {
+  const source = String(text ?? '')
+  const normalizedTemplates = (templates ?? [])
+    .map((item) => ({
+      label: String(item?.label ?? '').trim(),
+      defaultDirection: item?.defaultDirection === 'minus' ? 'minus' : 'plus',
+    }))
+    .filter((item) => item.label)
+    .sort((a, b) => b.label.length - a.label.length)
+
+  const items = []
+  const ranges = []
+  const occupiedRanges = []
+  const amountPattern = '((?:\\d{1,3}(?:[,\\s]\\d{3})+|\\d+)(?:\\.\\d+)?)\\s*(萬|w|千|k|百|元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\\$|\\$|¥|￥)?'
+
+  const overlaps = (start, end) => occupiedRanges.some((range) => start < range.end && end > range.start)
+
+  for (const template of normalizedTemplates) {
+    const pattern = new RegExp(`${escapeRegExp(template.label)}\\s*([+-]?)\\s*${amountPattern}`, 'gi')
+    let matched = pattern.exec(source)
+    while (matched) {
+      const start = matched.index
+      const end = matched.index + String(matched[0] ?? '').length
+      if (!overlaps(start, end)) {
+        const amountMajor = parseAmountWithUnit(matched[2], matched[3])
+        if (Number.isFinite(amountMajor) && amountMajor > 0) {
+          const sign = String(matched[1] ?? '').trim()
+          items.push({
+            label: template.label,
+            direction: sign === '-' ? 'minus' : sign === '+' ? 'plus' : template.defaultDirection,
+            deltaMajor: amountMajor,
+          })
+          ranges.push({ start, end })
+          occupiedRanges.push({ start, end })
+        }
+      }
+      matched = pattern.exec(source)
+    }
+  }
+
+  return {
+    items,
+    strippedText: stripTextSegments(source, ranges),
   }
 }
 

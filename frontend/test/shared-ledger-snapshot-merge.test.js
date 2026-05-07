@@ -6,6 +6,7 @@ import {
   mergeSharedLedgerSnapshots,
   normalizeSharedLedgerSnapshot,
 } from '../src/ui/services/shared-ledger/snapshot-merge.js'
+import { isLocalOnlyAppSettingKey } from '../src/ui/services/local-only-app-settings.js'
 
 function buildSnapshot(tables) {
   return {
@@ -173,4 +174,15 @@ test('mergeSharedLedgerSnapshots removes a stale tombstone when a newer row is r
   const merged = mergeSharedLedgerSnapshots(local, remote)
   assert.equal(merged.tables.categories.length, 1)
   assert.equal(merged.tables.deleted_log.length, 0)
+})
+
+test('isLocalOnlyAppSettingKey excludes bookkeeping reminder settings from shared sync', () => {
+  assert.equal(isLocalOnlyAppSettingKey('bookkeeping.reminder.settings.v1'), true, '記帳提醒設定應被排除在同步外')
+  assert.equal(isLocalOnlyAppSettingKey('bookkeeping.streak.v1'), true, '所有 bookkeeping. 前綴設定都應被排除')
+  assert.equal(isLocalOnlyAppSettingKey('backup.google_drive'), true, 'backup. 設定應被排除')
+  assert.equal(isLocalOnlyAppSettingKey('sync.google_drive'), true, 'sync. 設定應被排除')
+  assert.equal(isLocalOnlyAppSettingKey('shared_ledger_meta'), true, 'shared_ledger_meta 應被排除')
+  assert.equal(isLocalOnlyAppSettingKey('transaction.addon_templates'), false, '一般交易設定不應被排除')
+  assert.equal(isLocalOnlyAppSettingKey('ai_bookkeeping.auto_fill_rules'), false, 'AI 設定不應被排除')
+  assert.equal(isLocalOnlyAppSettingKey('exchange_rate.settings'), false, '匯率設定不應被排除')
 })

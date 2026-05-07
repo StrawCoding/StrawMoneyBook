@@ -21,6 +21,8 @@
 - AI 自動記帳（文字解析、語音輸入、會員次數限制）
 - AI 自動記帳支援金額加減公式且不會誤改交易日期，也不會把算式符號殘留進備註（例如 `120+20`、`120-20`）
 - AI 語音再解析若沒有辨識出新的備註內容，會保留目前表單中的既有備註
+- AI 自動記帳在 1.0.3 / SMB-163 後會把目前帳本的附加項目模板納入解析，像折價券、優惠、手續費等自訂模板名稱會自動拆成附加項目，不再殘留到備註或被誤當主金額
+- 交易新增 / 編輯在 1.0.3 / SMB-162 後允許主金額被附加項目完整抵消為 0 元；前端只阻擋附加後淨額為負數，與資料層允許 0 元交易的規則一致
 - 帳號系統（Email / Google 登入、個人資料、忘記密碼、臨時密碼、登出）
 - 共同帳本（建立共同帳本、共享連結、Email 邀請、接受邀請、同步；快照上傳會檢查 baseVersion，包含 version=0 邊界，避免舊快照覆蓋新資料）
 - Google Drive 帳本同步（逐帳本啟用、跨裝置 pull / push）
@@ -187,9 +189,9 @@
 | 交易清單（含空狀態與快速記帳 CTA） | `src/ui/components/home/HomeTransactionFeed.vue` |
 | 編輯交易 | `src/ui/components/home/HomeTransactionEditSheet.vue` |
 | 快速新增入口 | `src/ui/views/BookkeepingPage.vue` + `src/ui/services/bookkeeping-mode.service.js` |
-| 手動快速新增 | `src/ui/views/QuickAddPage.vue` |
+| 手動快速新增 | `src/ui/views/QuickAddPage.vue`（SMB-162 後附加項目抵消後可存 0 元交易） |
 | 問答記帳 | `src/ui/views/QnaBookkeepingPage.vue` |
-| AI 記帳 | `src/ui/views/AiAutoBookkeepingPage.vue` |
+| AI 記帳 | `src/ui/views/AiAutoBookkeepingPage.vue` + `src/core/services/ai-bookkeeping.service.js`（SMB-163 後解析帳本附加項目模板；SMB-162 後附加項目抵消後可存 0 元交易） |
 | 快速新增附加資訊（備註/報銷/附加項目） | `src/ui/views/QuickAddPage.vue` |
 | 日期時間選擇 | `src/ui/components/common/DateTimePickerField.vue` |
 | 純時間選擇 | `src/ui/components/common/TimePickerField.vue` |

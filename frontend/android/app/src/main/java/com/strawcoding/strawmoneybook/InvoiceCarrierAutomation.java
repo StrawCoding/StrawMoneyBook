@@ -40,6 +40,7 @@ final class InvoiceCarrierAutomation {
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US);
     private static final int CAPTCHA_LENGTH = 4;
     private static final int MAX_LOGIN_ATTEMPTS = 5;
+    private static final int CAPTCHA_MIN_CONFIDENCE = 30;
 
     private InvoiceCarrierAutomation() {}
 
@@ -96,6 +97,9 @@ final class InvoiceCarrierAutomation {
             debugTrace.record("connect_attempt", "warn", "Login failed on attempt " + (attempt + 1) + ": " + errorMessage);
             if (!errorMessage.isEmpty() && isCredentialError(errorMessage)) {
                 throw new BankAutomationException("invoice_carrier_login_failed", errorMessage);
+            }
+            if (!errorMessage.isEmpty() && isRateLimitError(errorMessage)) {
+                throw new BankAutomationException("invoice_carrier_rate_limited", "電子發票驗證碼錯誤次數過多，請稍後再試。錯誤：" + errorMessage);
             }
         }
 
@@ -233,7 +237,63 @@ final class InvoiceCarrierAutomation {
         variants.add(source);
         variants.add(Bitmap.createScaledBitmap(source, source.getWidth() * 2, source.getHeight() * 2, true));
         variants.add(Bitmap.createScaledBitmap(source, source.getWidth() * 3, source.getHeight() * 3, true));
+        // Otsu-binarized (high contrast) versions for cleaner OCR
+        Bitmap highContrast = toHighContrastBitmap(source);
+        variants.add(highContrast);
+        variants.add(Bitmap.createScaledBitmap(highContrast, highContrast.getWidth() * 2, highContrast.getHeight() * 2, false));
+        variants.add(Bitmap.createScaledBitmap(highContrast, highContrast.getWidth() * 3, highContrast.getHeight() * 3, false));
         return variants;
+    }
+
+    private static Bitmap toHighContrastBitmap(Bitmap source) {
+        int width = source.getWidth();
+        int height = source.getHeight();
+        int[] pixels = new int[width * height];
+        source.getPixels(pixels, 0, width, 0, 0, width, height);
+
+        // Convert to grayscale
+        int[] gray = new int[pixels.length];
+        for (int i = 0; i < pixels.length; i++) {
+            int r = (pixels[i] >> 16) & 0xFF;
+            int g = (pixels[i] >> 8) & 0xFF;
+            int b = pixels[i] & 0xFF;
+            gray[i] = (r * 299 + g * 587 + b * 114) / 1000;
+        }
+
+        // Otsu's method to find optimal threshold
+        int[] histogram = new int[256];
+        for (int v : gray) histogram[v]++;
+        int total = pixels.length;
+        float sum = 0;
+        for (int i = 0; i < 256; i++) sum += i * histogram[i];
+        float sumB = 0;
+        int wB = 0;
+        float maxVariance = 0;
+        int threshold = 128;
+        for (int i = 0; i < 256; i++) {
+            wB += histogram[i];
+            if (wB == 0) continue;
+            int wF = total - wB;
+            if (wF == 0) break;
+            sumB += i * histogram[i];
+            float mB = sumB / wB;
+            float mF = (sum - sumB) / wF;
+            float variance = (float) wB * wF * (mB - mF) * (mB - mF);
+            if (variance > maxVariance) {
+                maxVariance = variance;
+                threshold = i;
+            }
+        }
+
+        // Binarize using Otsu threshold
+        for (int i = 0; i < pixels.length; i++) {
+            int val = gray[i] < threshold ? 0 : 255;
+            pixels[i] = 0xFF000000 | (val << 16) | (val << 8) | val;
+        }
+
+        Bitmap result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        result.setPixels(pixels, 0, width, 0, 0, width, height);
+        return result;
     }
 
     private static String selectBestNumericCaptcha(List<TesseractBridge.RecognitionCandidate> candidates) {
@@ -246,6 +306,8 @@ final class InvoiceCarrierAutomation {
                 bestConfidence = candidate.confidence;
             }
         }
+        // Require minimum confidence to avoid submitting a plausible-length but wrong code
+        if (bestConfidence < CAPTCHA_MIN_CONFIDENCE) return "";
         return best;
     }
 
@@ -261,6 +323,13 @@ final class InvoiceCarrierAutomation {
     private static boolean isCredentialError(String errorMessage) {
         return errorMessage.contains("手機號碼") || errorMessage.contains("密碼")
             || errorMessage.contains("已停用") || errorMessage.contains("停止");
+    }
+
+    private static boolean isRateLimitError(String errorMessage) {
+        String lower = errorMessage.toLowerCase(Locale.US);
+        return lower.contains("please try again") || lower.contains("too many") || lower.contains("rate limit")
+            || errorMessage.contains("請稍後再試") || errorMessage.contains("暫時鎖定")
+            || errorMessage.contains("嘗試次數") || errorMessage.contains("次數過多");
     }
 
     private static JSONObject buildNativeStorageState(String connectionId) throws JSONException {
@@ -301,6 +370,12 @@ final class InvoiceCarrierAutomation {
             latest = inspectStatus(session, false);
             if (latest.optBoolean("search_form_ready", false) || latest.optBoolean("cloudflare_blocked", false)) {
                 debugTrace.record("search_status", "ok", "eInvoice search status detected", latest);
+                return latest;
+            }
+            // Break early if a login error appears — no point waiting the full 30s
+            String errorMsg = normalizeText(latest.optString("error_message"));
+            if (!errorMsg.isEmpty()) {
+                debugTrace.record("search_status", "login_error", "Login error detected early: " + errorMsg, latest);
                 return latest;
             }
             sleep(POLL_MS);

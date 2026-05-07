@@ -781,7 +781,7 @@ async function submit() {
       uiStore.pushToast(t('transaction_edit.amount_adjustment_invalid', '調整金額不可為 0'), 'error')
       return
     }
-  } else if (settledAmountMinor <= 0) {
+  } else if (settledAmountMinorRaw < 0) {
     uiStore.pushToast(t('quick_add.error.amount_required'), 'error')
     return
   }

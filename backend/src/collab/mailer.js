@@ -172,6 +172,53 @@ function buildEmailLogoHtml() {
   `
 }
 
+export async function sendSharedLedgerInvitationEmail({ email, inviterDisplayName, ledgerName, inviteUrl }) {
+  if (!hasConfiguredTransport()) {
+    throw new Error('目前尚未設定寄信服務')
+  }
+
+  const transporter = await getTransporter()
+  const safeInviter = String(inviterDisplayName ?? '').trim() || '另一位成員'
+  const safeLedgerName = String(ledgerName ?? '').trim() || '共同帳本'
+  const safeInviteUrl = String(inviteUrl ?? '').trim()
+
+  const info = await transporter.sendMail({
+    from: SMTP_FROM || SMTP_USER,
+    to: String(email ?? '').trim(),
+    subject: `${safeInviter} 邀請你加入 StrawMoneyBook 共同帳本`,
+    attachments: buildBrandLogoAttachments(),
+    text: [
+      `你好，`,
+      '',
+      `${safeInviter} 邀請你加入「${safeLedgerName}」共同帳本。`,
+      '',
+      '請開啟以下連結加入共同帳本：',
+      safeInviteUrl || '（請在 StrawMoneyBook App 中查看待接受邀請）',
+      '',
+      '如果你不認識這位使用者，請忽略這封信。',
+    ].join('\n'),
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937; max-width: 560px; margin: 0 auto;">
+        ${buildEmailLogoHtml()}
+        <p>你好，</p>
+        <p><strong>${escapeHtml(safeInviter)}</strong> 邀請你加入「<strong>${escapeHtml(safeLedgerName)}</strong>」共同帳本。</p>
+        ${safeInviteUrl ? `
+        <p>
+          <a
+            href="${escapeHtml(safeInviteUrl)}"
+            style="display:inline-block;padding:12px 18px;border-radius:12px;background:#f0b33f;color:#1f2937;text-decoration:none;font-weight:700;"
+          >加入共同帳本</a>
+        </p>
+        <p style="font-size:13px;color:#6b7280;word-break:break-all;">${escapeHtml(safeInviteUrl)}</p>
+        ` : `<p>請在 StrawMoneyBook App 中查看待接受邀請。</p>`}
+        <p style="font-size:13px;color:#6b7280;">如果你不認識這位使用者，請忽略這封信。</p>
+      </div>
+    `,
+  })
+
+  return info
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')

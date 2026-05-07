@@ -258,3 +258,55 @@ test('snapshot push rejects stale base versions at zero boundary', async () => {
   assert.equal(staleRes.body?.error, 'version_conflict')
   assert.equal(staleRes.body?.current_version, 1)
 })
+
+test('invite by email creates invitation record and returns 201', async () => {
+  const owner = await createMemberUser('owner-invite-email@example.com')
+  const ledgerId = createId('ledger')
+
+  const sharedLedger = await updateStore(async (data) => {
+    const now = nowIso()
+    const record = {
+      id: createId('shared_ledger'),
+      ledger_id: ledgerId,
+      name: 'Invite Email Ledger',
+      invite_code: 'INVMAIL1',
+      owner_user_id: owner.id,
+      members: [{ user_id: owner.id, role: 'owner', joined_at: now }],
+      invitations: [],
+      snapshot: {
+        ledger_id: ledgerId,
+        tables: { ledgers: [{ id: ledgerId, name: 'Invite Email Ledger' }] },
+      },
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      updated_by_user_id: owner.id,
+    }
+    data.shared_ledgers.push(record)
+    return record
+  })
+
+  const session = await createLoginSession(owner, {
+    issuedByProvider: 'password',
+    ipAddress: '127.0.0.1',
+    userAgent: 'node:test',
+  })
+
+  const req = {
+    method: 'POST',
+    url: `/api/shared-ledgers/${sharedLedger.id}/invitations`,
+    headers: {
+      host: 'localhost',
+      authorization: `Bearer ${session.accessToken}`,
+    },
+    body: JSON.stringify({ email: 'invited@example.com' }),
+  }
+  const res = createMockResponse(req)
+
+  await sharedLedgersHandler(req, res)
+
+  assert.equal(res.statusCode, 201)
+  assert.equal(typeof res.body?.invitation?.id, 'string')
+  assert.equal(res.body?.invitation?.email, 'invited@example.com')
+  assert.equal(res.body?.invitation?.status, 'pending')
+})

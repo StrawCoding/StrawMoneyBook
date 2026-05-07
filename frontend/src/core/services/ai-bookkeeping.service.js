@@ -21,6 +21,7 @@ import {
 } from './ai-bookkeeping-account-match.js'
 import {
   extractAddonItems as extractAddonItemsValue,
+  extractAddonItemsByTemplates as extractAddonItemsByTemplatesValue,
   extractSmartNoteText as extractSmartNoteTextValue,
   mergeUniqueAddonItems as mergeUniqueAddonItemsValue,
   parseAddonItemsFromStoredNote as parseAddonItemsFromStoredNoteValue,
@@ -116,6 +117,10 @@ function parseSignedAmountMajor(text) {
 
 function extractAddonItems(text) {
   return extractAddonItemsValue(text)
+}
+
+function extractAddonItemsByTemplates(text, templates) {
+  return extractAddonItemsByTemplatesValue(text, templates)
 }
 
 function findAccountMatchEntries(text, accounts) {
@@ -888,6 +893,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
   const counterparties = context.counterparties ?? []
   const historyTransactions = context.historyTransactions ?? []
   const autoFillRules = context.autoFillRules ?? []
+  const addonTemplates = context.addonTemplates ?? []
   const warningKeys = []
   const tinyNerHints = context.useTinyNer === false
     ? EMPTY_TINY_NER_HINTS
@@ -943,16 +949,19 @@ export function parseAutoBookkeepingText(input, context = {}) {
       warningKeys: bareWarningKeys,
     }
   }
-  const parsedAddon = extractAddonItems(text)
+  const parsedAddonByTemplates = extractAddonItemsByTemplates(text, addonTemplates)
+  const parsedAddon = extractAddonItems(parsedAddonByTemplates.strippedText)
+  const parsedAddonItems = mergeUniqueAddonItems(parsedAddonByTemplates.items, parsedAddon.items)
+  const parsedAddonStrippedText = parsedAddon.strippedText
   let amountMajor = NaN
   if (inferredType === 'transfer') {
-    amountMajor = parseAmountMajor(parsedAddon.strippedText)
+    amountMajor = parseAmountMajor(parsedAddonStrippedText)
   } else if (inferredType === 'adjustment') {
-    amountMajor = parseSignedAmountMajor(parsedAddon.items.length > 0 ? parsedAddon.strippedText : text)
-  } else if (parsedAddon.items.length > 0) {
+    amountMajor = parseSignedAmountMajor(parsedAddonItems.length > 0 ? parsedAddonStrippedText : text)
+  } else if (parsedAddonItems.length > 0) {
     // If addon fragments exist, primary amount must come from non-addon content.
     // This keeps addon numbers (e.g. 優惠5元) from being treated as transaction amount.
-    amountMajor = parseAmountMajor(parsedAddon.strippedText)
+    amountMajor = parseAmountMajor(parsedAddonStrippedText)
   } else {
     amountMajor = parseAmountMajor(text)
   }
@@ -962,7 +971,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
   if ((!Number.isFinite(amountMajor) || amountMajor <= 0) && canUseNerAmount) {
     amountMajor = nerAmountMajor
   } else if (
-    parsedAddon.items.length === 0
+    parsedAddonItems.length === 0
     && canUseNerAmount
     && nerAmountConfidence >= 0.88
   ) {
@@ -1126,7 +1135,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
     }
   }
 
-  let addonItems = consumeCategoryCashbackAddon(parsedAddon.items, selectedCategoryName, text)
+  let addonItems = consumeCategoryCashbackAddon(parsedAddonItems, selectedCategoryName, text)
   if (matchedAutoFillRule?.addonItems?.length) {
     addonItems = mergeUniqueAddonItems(addonItems, matchedAutoFillRule.addonItems)
   }
@@ -1162,7 +1171,8 @@ export function parseAutoBookkeepingText(input, context = {}) {
     : type === 'income'
       ? incomeCategories
       : expenseCategories
-  const autoNote = extractSmartNoteText(text, {
+  const noteSourceText = addonItems.length > 0 ? parsedAddonStrippedText : text
+  const autoNote = extractSmartNoteText(noteSourceText, {
     accounts,
     selectedCategoryName,
     categories: noteCategories,

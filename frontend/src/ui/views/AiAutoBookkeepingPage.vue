@@ -567,6 +567,7 @@ function buildAiParseContext() {
     ),
     historyTransactions: transactionStore.recent,
     autoFillRules: autoFillRules.value,
+    addonTemplates: addonTemplateItems.value,
     now: new Date(),
   }
 }
@@ -902,8 +903,8 @@ async function submit(options = {}) {
     if (!settledAmountMinorRaw) {
       return failSubmit('請輸入有效結餘金額（不可為 0）')
     }
-  } else if (settledAmountMinor <= 0) {
-    return failSubmit('請輸入有效金額（需大於 0）')
+  } else if (settledAmountMinorRaw < 0) {
+    return failSubmit('請輸入有效金額（含附加項目後不可小於 0）')
   }
   if (!occurredAt) {
     return failSubmit('請選擇有效時間')

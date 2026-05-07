@@ -1,3 +1,4 @@
+import { isMailTransportConfigured, sendSharedLedgerInvitationEmail } from '../../collab/mailer.js'
 import {
   buildPublicUserProfile,
   buildSharedLedgerInvitationSummary,
@@ -16,6 +17,15 @@ import {
   updateStore,
   validateEmail,
 } from './shared.js'
+
+const SHARED_LEDGER_INVITE_BASE = String(process.env.SHARED_LEDGER_INVITE_BASE_URL ?? 'https://www.strawmb.com/open/shared-ledger').trim()
+
+function buildInviteUrl(inviteCode) {
+  const normalizedCode = String(inviteCode ?? '').trim().toUpperCase()
+  if (!normalizedCode) return ''
+  const base = SHARED_LEDGER_INVITE_BASE.replace(/\/$/, '')
+  return `${base}?inviteCode=${encodeURIComponent(normalizedCode)}`
+}
 
 export async function handleInviteByEmail(req, res, user, sharedLedgerId) {
   const body = parseBody(req)
@@ -59,6 +69,20 @@ export async function handleInviteByEmail(req, res, user, sharedLedgerId) {
   const data = await readStore()
   const sharedLedger = findSharedLedger(data, sharedLedgerId)
   const invitation = (sharedLedger?.invitations ?? []).find((item) => String(item.id) === String(invitationId))
+
+  if (isMailTransportConfigured()) {
+    const inviterDisplayName = String(user?.display_name ?? user?.email ?? user?.account ?? '').trim()
+    const inviteUrl = buildInviteUrl(sharedLedger?.invite_code)
+    sendSharedLedgerInvitationEmail({
+      email,
+      inviterDisplayName,
+      ledgerName: sharedLedger?.name ?? '',
+      inviteUrl,
+    }).catch((err) => {
+      console.warn('[shared-ledger] invitation email failed', email, err?.message ?? err)
+    })
+  }
+
   sendJson(res, 201, {
     invitation: buildSharedLedgerInvitationSummary(sharedLedger, invitation, data),
   })
