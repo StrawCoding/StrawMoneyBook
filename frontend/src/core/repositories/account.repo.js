@@ -388,7 +388,8 @@ export async function getAccountBalances(ledgerId, options = {}) {
        COALESCE((
          SELECT SUM(
            CASE
-             WHEN ra.amount_minor > ra.used_minor THEN ra.amount_minor - ra.used_minor
+             WHEN ra.amount_minor > ra.used_minor + COALESCE(ra.return_amount_minor, 0)
+             THEN ra.amount_minor - ra.used_minor - COALESCE(ra.return_amount_minor, 0)
              ELSE 0
            END
          )

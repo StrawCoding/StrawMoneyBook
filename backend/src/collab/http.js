@@ -90,7 +90,6 @@ function isOriginAllowed(req) {
   const origin = getRequestOrigin(req)
   if (!origin) return true
   if (ALLOWED_ORIGINS.has(origin)) return true
-  if (origin === 'null') return true
   return isAllowedStawmbOrigin(origin)
 }
 

@@ -29,7 +29,7 @@ export async function handlePasswordResetRequest(req, res) {
   const data = await readStore()
   const existingUser = findUserByEmail(data, email)
 
-  let debugTemporaryPassword = ''
+  let debugTemporaryPassword = null
   if (existingUser) {
     const cooldownSeconds = getCooldownRemainingSeconds(
       existingUser.password_reset_requested_at,
@@ -94,12 +94,15 @@ export async function handlePasswordResetRequest(req, res) {
     }
   }
 
-  sendJson(res, 200, {
+  const responsePayload = {
     ok: true,
     message: '如果此 Email 已註冊，系統會寄出臨時密碼',
-    debug_temporary_password: debugTemporaryPassword,
     cooldown_seconds: Math.ceil(PASSWORD_RESET_REQUEST_COOLDOWN_MS / 1000),
-  })
+  }
+  if (debugTemporaryPassword !== null) {
+    responsePayload.debug_temporary_password = debugTemporaryPassword
+  }
+  sendJson(res, 200, responsePayload)
 }
 
 export async function handlePasswordResetConfirm(req, res) {

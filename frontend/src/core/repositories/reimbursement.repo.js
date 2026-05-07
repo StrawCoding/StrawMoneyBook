@@ -214,7 +214,7 @@ export async function listReimbursementAdvances(ledgerId, options = {}) {
        ra.amount_minor,
        ra.used_minor,
        ra.return_amount_minor,
-       MAX(0, ra.amount_minor - ra.used_minor) AS available_minor,
+       MAX(0, ra.amount_minor - ra.used_minor - COALESCE(ra.return_amount_minor, 0)) AS available_minor,
        ra.note,
        ra.received_at,
        ra.created_at,
@@ -228,7 +228,7 @@ export async function listReimbursementAdvances(ledgerId, options = {}) {
       AND c.id = ra.category_id
      WHERE ra.ledger_id = ?
        AND ra.deleted_at IS NULL
-       AND (? = 0 OR ra.amount_minor > ra.used_minor)
+       AND (? = 0 OR ra.amount_minor > ra.used_minor + COALESCE(ra.return_amount_minor, 0))
      ORDER BY ra.received_at DESC, ra.created_at DESC;`,
     [ledgerId, activeOnly ? 1 : 0],
   )
@@ -252,7 +252,7 @@ export async function getReimbursementAdvanceById(ledgerId, advanceId) {
        ra.amount_minor,
        ra.used_minor,
        ra.return_amount_minor,
-       MAX(0, ra.amount_minor - ra.used_minor) AS available_minor,
+       MAX(0, ra.amount_minor - ra.used_minor - COALESCE(ra.return_amount_minor, 0)) AS available_minor,
        ra.note,
        ra.received_at,
        ra.created_at,
@@ -473,7 +473,7 @@ export async function listReimbursementAdvancesByReimbursementId(ledgerId, reimb
        ra.amount_minor,
        ra.used_minor,
        ra.return_amount_minor,
-       MAX(0, ra.amount_minor - ra.used_minor) AS available_minor,
+       MAX(0, ra.amount_minor - ra.used_minor - COALESCE(ra.return_amount_minor, 0)) AS available_minor,
        ra.note,
        ra.received_at,
        ra.created_at,
@@ -516,7 +516,7 @@ export async function listReimbursementAdvancesBySourceTxId(ledgerId, sourceTxId
        ra.amount_minor,
        ra.used_minor,
        ra.return_amount_minor,
-       MAX(0, ra.amount_minor - ra.used_minor) AS available_minor,
+       MAX(0, ra.amount_minor - ra.used_minor - COALESCE(ra.return_amount_minor, 0)) AS available_minor,
        ra.note,
        ra.received_at,
        ra.created_at,
