@@ -9,6 +9,7 @@ import {
 import { decryptCredential, encryptCredential } from './credential-crypto.js'
 import { EINVOICE_PLATFORM, createEInvoiceError } from './shared.js'
 import { isEInvoiceAutomationRuntimeSupported, queryNativeEInvoices } from './native-automation.js'
+import { traceEInvoiceScrape, traceEInvoiceImport } from '@/core/services/einvoice-debug.service.js'
 
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
@@ -74,34 +75,39 @@ export async function scrapeEInvoiceList(queryParams) {
       'einvoice_not_supported',
     )
   }
-  return queryNativeEInvoices(queryParams)
+  return traceEInvoiceScrape(
+    { phone: queryParams?.phone, dateFrom: queryParams?.dateFrom, dateTo: queryParams?.dateTo },
+    () => queryNativeEInvoices(queryParams),
+  )
 }
 
 // ── Import invoices into ledger ───────────────────────────────────────────────
 
 export async function importSelectedInvoices(invoices, { accountId, categoryId, ledgerId } = {}) {
-  const alreadyImported = await getImportedInvoiceNumbers()
-  const results = { imported: [], skipped: [], failed: [] }
+  return traceEInvoiceImport(async () => {
+    const alreadyImported = await getImportedInvoiceNumbers()
+    const results = { imported: [], skipped: [], failed: [] }
 
-  for (const invoice of invoices) {
-    if (alreadyImported.has(invoice.invoiceNumber)) {
-      results.skipped.push(invoice)
-      continue
+    for (const invoice of invoices) {
+      if (alreadyImported.has(invoice.invoiceNumber)) {
+        results.skipped.push(invoice)
+        continue
+      }
+      try {
+        await insertInvoiceImport({
+          invoiceNumber: invoice.invoiceNumber,
+          amount: invoice.amount,
+          invoiceDate: invoice.invoiceDate,
+          merchantName: invoice.merchantName,
+          carrierName: invoice.carrierName,
+          transactionId: null,
+        })
+        results.imported.push(invoice)
+      } catch {
+        results.failed.push(invoice)
+      }
     }
-    try {
-      await insertInvoiceImport({
-        invoiceNumber: invoice.invoiceNumber,
-        amount: invoice.amount,
-        invoiceDate: invoice.invoiceDate,
-        merchantName: invoice.merchantName,
-        carrierName: invoice.carrierName,
-        transactionId: null,
-      })
-      results.imported.push(invoice)
-    } catch {
-      results.failed.push(invoice)
-    }
-  }
 
-  return results
+    return results
+  })
 }

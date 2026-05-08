@@ -65,6 +65,10 @@ public class EInvoiceAutomationPlugin extends Plugin {
         String errorMessage = safeExtra(data, EInvoiceAutomationActivity.EXTRA_ERROR_MESSAGE);
 
         if (activityResult.getResultCode() != Activity.RESULT_OK) {
+            if (data == null && errorCode.isEmpty() && errorMessage.isEmpty()) {
+                call.reject("電子發票自動抓取已取消", "einvoice_automation_canceled");
+                return;
+            }
             call.reject(
                 errorMessage.isEmpty() ? "E-invoice automation failed" : errorMessage,
                 errorCode.isEmpty() ? "einvoice_automation_failed" : errorCode

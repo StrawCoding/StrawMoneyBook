@@ -19,17 +19,18 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 final class EInvoiceAutomation {
     private static final String TAG = "EInvoiceAutomation";
-    private static final String LOGIN_URL = "https://www.einvoice.nat.gov.tw/btc502w/BTCIndex";
-    private static final String QUERY_URL = "https://www.einvoice.nat.gov.tw/btc502w/BTCInvController";
+    static final String LOGIN_URL = "https://www.einvoice.nat.gov.tw/accounts/login";
+    static final String QUERY_URL = "https://www.einvoice.nat.gov.tw/portal/btc/mobile/btc502w/search";
 
+    private static final String PLATFORM_CHALLENGE_CODE = "einvoice_platform_challenge";
+    private static final String PLATFORM_CHALLENGE_MESSAGE =
+        "電子發票平台目前擋下內嵌自動化連線，請改用官方 API/後端串接後再啟用自動抓取";
     private static final int CAPTCHA_MAX_ATTEMPTS = 3;
     private static final int CAPTCHA_EXPECTED_LENGTH = 4;
     private static final long CAPTCHA_POLL_MS = 300L;
@@ -64,6 +65,7 @@ final class EInvoiceAutomation {
         BrowserSession session = new BrowserSession(activity, webView);
         Log.d(TAG, "Loading login page");
         session.loadUrl(LOGIN_URL);
+        assertPlatformAllowsAutomation(session, "login");
 
         performLogin(activity, session, phone, password);
         Log.d(TAG, "Login succeeded");
@@ -155,6 +157,7 @@ final class EInvoiceAutomation {
     private static JSONArray fetchInvoices(BrowserSession session, String dateFrom, String dateTo, String invoiceStatus, String buyerTaxId, String keyword) throws Exception {
         // Navigate to query page
         session.loadUrl(QUERY_URL);
+        assertPlatformAllowsAutomation(session, "query");
 
         // Fill query form and submit
         String rocDateFrom = toRocDate(dateFrom);
@@ -201,6 +204,41 @@ final class EInvoiceAutomation {
         }
 
         return filterInvoices(allInvoices, keyword, buyerTaxId);
+    }
+
+    private static void assertPlatformAllowsAutomation(BrowserSession session, String stage) throws Exception {
+        Object result = session.evaluateJavaScript(buildPlatformChallengeDetectScript());
+        if (!(result instanceof JSONObject)) return;
+
+        JSONObject snapshot = (JSONObject) result;
+        if (!isPlatformChallengeSnapshot(snapshot)) return;
+
+        Log.w(TAG, "E-invoice platform challenge detected stage=" + stage + " snapshot=" + snapshot);
+        throw new EInvoiceException(PLATFORM_CHALLENGE_CODE, PLATFORM_CHALLENGE_MESSAGE);
+    }
+
+    static boolean isPlatformChallengeSnapshot(JSONObject snapshot) {
+        if (snapshot == null) return false;
+        if (snapshot.optBoolean("challenge", false)) return true;
+
+        return isPlatformChallengeSnapshotText(
+            snapshot.optString("title", ""),
+            snapshot.optString("text", ""),
+            snapshot.optString("url", "")
+        );
+    }
+
+    static boolean isPlatformChallengeSnapshotText(String rawTitle, String rawText, String rawUrl) {
+        String title = normalizeText(rawTitle).toLowerCase(Locale.US);
+        String text = normalizeText(rawText).toLowerCase(Locale.US);
+        String url = normalizeText(rawUrl).toLowerCase(Locale.US);
+
+        return title.contains("just a moment")
+            || text.contains("cloudflare")
+            || text.contains("enable javascript and cookies")
+            || text.contains("checking if the site connection is secure")
+            || text.contains("cf-mitigated")
+            || url.contains("/cdn-cgi/challenge-platform/");
     }
 
     private static JSONArray filterInvoices(JSONArray invoices, String keyword, String buyerTaxId) throws Exception {
@@ -312,16 +350,24 @@ final class EInvoiceAutomation {
         return """
             (() => {
               try {
-                // Try clicking the mobile barcode tab (手機條碼)
-                const tabSelectors = [
-                  'a[href*="mobile"]',
-                  'a[data-type="0"]',
-                  'a[data-target*="phone"]',
-                  '.nav-tabs a:first-child',
-                  'li.active a',
-                  'a:contains("手機")',
+                // If the mobile phone field is already visible, the correct tab is already active — do nothing.
+                // Clicking a tab unnecessarily can switch AWAY from the already-correct carrier form.
+                if (document.querySelector('#mobile_phone, input[name="mobile_phone"]')) return true;
+                // Find the 手機條碼 tab by text content (works regardless of element type or position)
+                const candidates = Array.from(document.querySelectorAll('a, button, li, div[role="tab"]'));
+                for (const el of candidates) {
+                  const text = (el.textContent || '').trim();
+                  if (text === '手機條碼' || text.startsWith('手機條碼') || text.includes('手機載具')) {
+                    el.click();
+                    return true;
+                  }
+                }
+                // Fallback: attribute-based selectors (avoid position-based selectors like :first-child)
+                const attrSelectors = [
+                  'a[href*="mobile"]', 'a[data-type="0"]', 'a[data-target*="phone"]',
+                  'a[data-carrier-type="phone"]', '[data-tab="mobile"]',
                 ];
-                for (const sel of tabSelectors) {
+                for (const sel of attrSelectors) {
                   try {
                     const el = document.querySelector(sel);
                     if (el) { el.click(); return true; }
@@ -337,7 +383,7 @@ final class EInvoiceAutomation {
         return """
             (() => {
               try {
-                const img = document.querySelector('#captchaImg, img[id*="captcha"], img[src*="captcha"]');
+                const img = document.querySelector('#captchaImg, img[id*="captcha"], img[src*="captcha"], img[alt*="驗證碼"], img[alt*="captcha"]');
                 if (!img) return { ready: false, reason: 'image_missing' };
                 const w = img.naturalWidth || img.width || 0;
                 const h = img.naturalHeight || img.height || 0;
@@ -359,6 +405,32 @@ final class EInvoiceAutomation {
             """;
     }
 
+    private static String buildPlatformChallengeDetectScript() {
+        return """
+            (() => {
+              try {
+                const title = String(document.title || '');
+                const text = String(document.body?.innerText || document.documentElement?.textContent || '').slice(0, 4000);
+                const html = String(document.documentElement?.innerHTML || '').slice(0, 12000);
+                const challenge = Boolean(
+                  document.querySelector('script[src*="challenges.cloudflare.com"]') ||
+                  document.querySelector('iframe[src*="challenges.cloudflare.com"]') ||
+                  document.querySelector('#challenge-running, .cf-browser-verification, .cf-challenge') ||
+                  html.includes('cf-mitigated') ||
+                  html.includes('/cdn-cgi/challenge-platform/') ||
+                  /just a moment/i.test(title) ||
+                  /enable javascript and cookies/i.test(text) ||
+                  /checking if the site connection is secure/i.test(text) ||
+                  /cloudflare/i.test(text)
+                );
+                return { challenge, title, text, url: String(location.href || '') };
+              } catch (e) {
+                return { challenge: false, reason: String(e?.message || 'error') };
+              }
+            })();
+            """;
+    }
+
     private static String buildRefreshCaptchaScript() {
         return """
             (() => {
@@ -369,6 +441,8 @@ final class EInvoiceAutomation {
                   'a[href*="captcha"]',
                   'img[onclick*="captcha"]',
                   '.captcha-refresh',
+                  'button[aria-label*="更新"]',
+                  'button[title*="更新"]',
                 ];
                 for (const sel of refreshSelectors) {
                   const el = document.querySelector(sel);
@@ -413,6 +487,7 @@ final class EInvoiceAutomation {
                 return null;
               }
               const phoneEl = findInput([
+                '#mobile_phone', 'input[name="mobile_phone"]',
                 '#loginPhone', '#phoneNo', '#phone',
                 'input[name="btc502wQ.userPh"]', 'input[name="phoneNo"]',
                 'input[type="tel"]', 'input[placeholder*="手機"]',
@@ -659,20 +734,19 @@ final class EInvoiceAutomation {
         }
 
         Object evaluateJavaScript(String script) throws Exception {
-            return callOnUiThreadAndWait(() -> {
-                final AtomicReference<Object> resultRef = new AtomicReference<>(null);
-                final CountDownLatch latch = new CountDownLatch(1);
+            final AtomicReference<Object> resultRef = new AtomicReference<>(null);
+            final CountDownLatch latch = new CountDownLatch(1);
+            // Post evaluateJavascript to the main thread without blocking it.
+            // The JS callback is also delivered on the main thread, so we must
+            // not hold latch.await() there — wait on the background thread instead.
+            mainHandler.post(() ->
                 webView.evaluateJavascript(script, value -> {
                     resultRef.set(parseJsResult(value));
                     latch.countDown();
-                });
-                try {
-                    latch.await(15_000L, TimeUnit.MILLISECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-                return resultRef.get();
-            });
+                })
+            );
+            latch.await(15_000L, TimeUnit.MILLISECONDS);
+            return resultRef.get();
         }
 
         private static Object parseJsResult(String value) {
@@ -700,14 +774,6 @@ final class EInvoiceAutomation {
             latch.await(10_000L, TimeUnit.MILLISECONDS);
         }
 
-        private <T> T callOnUiThreadAndWait(Callable<T> callable) throws Exception {
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                return callable.call();
-            }
-            FutureTask<T> task = new FutureTask<>(callable);
-            mainHandler.post(task);
-            return task.get(15_000L, TimeUnit.MILLISECONDS);
-        }
     }
 
     // ── Utilities ──────────────────────────────────────────────────────────────
