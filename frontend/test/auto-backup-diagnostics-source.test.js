@@ -35,14 +35,22 @@ test('auto backup services persist auto-check diagnostics for skip, success, and
   assert.match(webdavSource, /resolveWebdavAutoBackupSkipReason/)
 })
 
-test('google backup reconnect paths clear stale reauth diagnostics after recovery', () => {
+test('google backup reconnect patch restores connection state without resetting auto-check diagnostics (SMB-156)', () => {
+  // buildRecoveredGoogleBackupPatch is used when Google silently or interactively reconnects.
+  // It must NOT reset lastAutoCheckAt/Status/Reason — those are written by the auto backup runner
+  // and must survive reconnection so the UI shows the last actual detection result.
+  // Only disconnectGoogleBackup explicitly clears auto-check fields (intentional reset).
   assert.match(googleSource, /function buildRecoveredGoogleBackupPatch\(patch = \{\}\)/)
-  assert.match(googleSource, /lastAutoCheckAt: ''/)
-  assert.match(googleSource, /lastAutoCheckStatus: 'idle'/)
-  assert.match(googleSource, /lastAutoCheckReason: ''/)
   assert.match(googleSource, /buildRecoveredGoogleBackupPatch\(profilePatch\)/)
   assert.match(googleSource, /buildRecoveredGoogleBackupPatch\(\)/)
   assert.match(googleSource, /return saveState\(ledgerId, buildRecoveredGoogleBackupPatch\(\{/)
+
+  // Extract just the function body to verify it does not reset auto-check fields
+  const fnMatch = googleSource.match(/function buildRecoveredGoogleBackupPatch[\s\S]*?\n  \}/)
+  const fnBody = fnMatch ? fnMatch[0] : ''
+  assert.ok(!fnBody.includes('lastAutoCheckAt'), 'buildRecoveredGoogleBackupPatch must not reset lastAutoCheckAt')
+  assert.ok(!fnBody.includes('lastAutoCheckStatus'), 'buildRecoveredGoogleBackupPatch must not reset lastAutoCheckStatus')
+  assert.ok(!fnBody.includes('lastAutoCheckReason'), 'buildRecoveredGoogleBackupPatch must not reset lastAutoCheckReason')
 })
 
 test('auto backup settings page shows the latest auto-check reason and time', () => {

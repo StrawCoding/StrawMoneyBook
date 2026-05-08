@@ -768,15 +768,19 @@ final class EInvoiceAutomation {
             """, safePhone, safePassword, safeCaptcha);
     }
 
-    private static String buildLoginPageDetectScript() {
+    static String buildLoginPageDetectScript() {
         return """
             (() => {
               try {
-                // On the login page if we find phone or password input
+                // Primary: URL-based detection — if we have left /accounts/login we have successfully logged in.
+                // Generic type-based selectors (tel, password) are not used because they match elements
+                // on the post-login query page and cause waitForLoginSuccess to always time out.
+                if (!String(location.href || '').includes('/accounts/login')) return false;
+                // Fallback: specific ID/name selectors that only exist on the login page itself
                 return Boolean(
-                  document.querySelector('#mobile_phone, input[name="mobile_phone"], #loginPhone, #phoneNo, #phone, #cellphone, #mobile, #carrierMobile, input[name="btc502wQ.userPh"], input[name="phoneNo"], input[type="tel"], input[inputmode="tel"], input[placeholder*="手機"]') ||
-                  document.querySelector('#loginPass, #passwd, #password, input[name="btc502wQ.userPasswd"], input[name="passwd"], input[type="password"]') ||
-                  document.querySelector('#captcha, #captchaCode, #verifyCode, input[name="captcha"], input[name="verifyCode"], input[placeholder*="驗證碼"]')
+                  document.querySelector('#mobile_phone, input[name="mobile_phone"], #loginPhone, #phoneNo, #phone, input[name="btc502wQ.userPh"], input[name="phoneNo"]') ||
+                  document.querySelector('#loginPass, #passwd, input[name="btc502wQ.userPasswd"], input[name="passwd"]') ||
+                  document.querySelector('#captcha, #captchaCode, #verifyCode, input[name="captcha"], input[name="verifyCode"]')
                 );
               } catch (_) { return false; }
             })();

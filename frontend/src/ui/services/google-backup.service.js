@@ -116,9 +116,6 @@ function buildRecoveredGoogleBackupPatch(patch = {}) {
     connected: true,
     lastError: '',
     lastBackupStatus: 'idle',
-    lastAutoCheckAt: '',
-    lastAutoCheckStatus: 'idle',
-    lastAutoCheckReason: '',
     ...patch,
   }
 }

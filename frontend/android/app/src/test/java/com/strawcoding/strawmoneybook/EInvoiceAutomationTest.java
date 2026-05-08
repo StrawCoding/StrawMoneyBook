@@ -68,4 +68,19 @@ public class EInvoiceAutomationTest {
         assertTrue(script.contains("captcha_missing"));
         assertTrue(script.contains("input[placeholder*=\"條碼\"]"));
     }
+
+    @Test
+    public void loginPageDetectScriptUsesUrlCheckAsPrimaryIndicator() {
+        // The URL-first approach avoids false positives from generic selectors like
+        // input[type="tel"] or input[type="password"] that also appear on the query page
+        // after a successful login, which would cause waitForLoginSuccess to always time out.
+        String script = EInvoiceAutomation.buildLoginPageDetectScript();
+
+        assertTrue(script.contains("/accounts/login"));
+        assertTrue(script.contains("location.href"));
+        // Must NOT use overly generic type-based selectors
+        assertFalse(script.contains("input[type=\"tel\"]"));
+        assertFalse(script.contains("input[type=\"password\"]"));
+        assertFalse(script.contains("input[inputmode=\"tel\"]"));
+    }
 }
