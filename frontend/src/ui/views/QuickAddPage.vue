@@ -21,10 +21,10 @@
       </div>
 
       <div class="stack form-wrap">
-        <label class="field">
+        <div class="field">
           {{ t('common.amount_yuan') }}
-          <input v-model.number="model.amountMajor" class="input" type="number" min="0" step="0.01" />
-        </label>
+          <AmountCalculatorInput v-model="model.amountMajor" />
+        </div>
 
         <div class="field">
           <div class="date-extra-row">
@@ -212,6 +212,7 @@ import { useRoute, useRouter } from 'vue-router'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
+import AmountCalculatorInput from '@/ui/components/common/AmountCalculatorInput.vue'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
 import { useCategoryStore } from '@/ui/stores/category.store'

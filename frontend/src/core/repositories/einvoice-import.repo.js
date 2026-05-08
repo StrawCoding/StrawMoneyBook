@@ -14,6 +14,7 @@ function normalizeCredentialRow(row) {
     encryptedAccount: String(row.encrypted_account ?? ''),
     encryptedPassword: String(row.encrypted_password ?? ''),
     iv: String(row.iv ?? ''),
+    passwordIv: String(row.password_iv ?? row.iv ?? ''),
     createdAt: Number(row.created_at ?? 0),
     updatedAt: Number(row.updated_at ?? 0),
   }
@@ -28,21 +29,21 @@ export async function getEInvoiceCredential(platform = 'einvoice') {
   return row ? normalizeCredentialRow(row) : null
 }
 
-export async function upsertEInvoiceCredential({ platform = 'einvoice', encryptedAccount, encryptedPassword, iv }) {
+export async function upsertEInvoiceCredential({ platform = 'einvoice', encryptedAccount, encryptedPassword, iv, passwordIv = iv }) {
   const existing = await getEInvoiceCredential(platform)
   const now = nowMs()
   if (existing) {
     await run(
       `UPDATE einvoice_credentials
-       SET encrypted_account = ?, encrypted_password = ?, iv = ?, updated_at = ?
+       SET encrypted_account = ?, encrypted_password = ?, iv = ?, password_iv = ?, updated_at = ?
        WHERE platform = ?;`,
-      [encryptedAccount, encryptedPassword, iv, now, platform],
+      [encryptedAccount, encryptedPassword, iv, passwordIv, now, platform],
     )
   } else {
     await run(
-      `INSERT INTO einvoice_credentials (platform, encrypted_account, encrypted_password, iv, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?);`,
-      [platform, encryptedAccount, encryptedPassword, iv, now, now],
+      `INSERT INTO einvoice_credentials (platform, encrypted_account, encrypted_password, iv, password_iv, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?);`,
+      [platform, encryptedAccount, encryptedPassword, iv, passwordIv, now, now],
     )
   }
   return getEInvoiceCredential(platform)

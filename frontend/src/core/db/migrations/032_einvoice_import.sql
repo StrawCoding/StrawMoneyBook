@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS einvoice_credentials (
   encrypted_account  TEXT NOT NULL,
   encrypted_password TEXT NOT NULL,
   iv        TEXT    NOT NULL,
+  password_iv TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );

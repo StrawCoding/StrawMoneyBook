@@ -31,12 +31,13 @@ function getOrCreateDeviceUuid() {
 export async function saveEInvoiceCredential(phone, password) {
   const deviceUuid = getOrCreateDeviceUuid()
   const { encrypted: encryptedAccount, iv: ivAccount } = await encryptCredential(phone, deviceUuid)
-  const { encrypted: encryptedPassword } = await encryptCredential(password, deviceUuid)
+  const { encrypted: encryptedPassword, iv: ivPassword } = await encryptCredential(password, deviceUuid)
   await upsertEInvoiceCredential({
     platform: EINVOICE_PLATFORM,
     encryptedAccount,
     encryptedPassword,
     iv: ivAccount,
+    passwordIv: ivPassword,
   })
 }
 
@@ -46,7 +47,7 @@ export async function loadEInvoiceCredential() {
   const deviceUuid = getOrCreateDeviceUuid()
   try {
     const phone = await decryptCredential(row.encryptedAccount, row.iv, deviceUuid)
-    const password = await decryptCredential(row.encryptedPassword, row.iv, deviceUuid)
+    const password = await decryptCredential(row.encryptedPassword, row.passwordIv || row.iv, deviceUuid)
     return { phone, password }
   } catch {
     return null

@@ -808,14 +808,14 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 
 ## 電子發票匯入（E-Invoice Import）
 
-**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）
+**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）；帳密 IV 修正 v1.0.13（SMB-174）
 **狀態**：Android 原生插件保留 WebView 自動化流程，但會先偵測財政部站台的防自動化/Cloudflare challenge；被平台擋下時回傳明確錯誤，不再只顯示 `E-invoice automation failed`。穩定正式匯入仍應改接財政部電子發票官方 API 與後端代理。
 
 ### 功能說明
 透過 4 步驟精靈，讓使用者輸入財政部電子發票平台（einvoice.nat.gov.tw）帳號、設定查詢條件、選取發票後批量匯入至 StrawMoneyBook 帳本。
 
 ### 資料庫
-- `einvoice_credentials`：加密儲存手機號碼與密碼（AES-256-GCM + PBKDF2）
+- `einvoice_credentials`：加密儲存手機號碼與密碼（AES-256-GCM + PBKDF2），手機號碼與密碼各自保存對應 IV，避免記住帳號後密碼無法正確還原
 - `einvoice_invoice_imports`：發票匯入記錄，`invoice_number` UNIQUE 防止重複匯入
 
 ### 精靈步驟
@@ -839,6 +839,7 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 - **SMB-170 (v1.0.9)**：修正 `evaluateJavascript` 在 UI thread 內等待 callback 的死鎖風險，改由背景 thread 等待結果，避免每次腳本執行都逾時並導致自動化流程失敗；登入頁與查詢頁載入後也會偵測 Cloudflare / 防自動化 challenge，命中時回傳 `einvoice_platform_challenge` 與可診斷訊息；Activity 被取消且沒有錯誤 payload 時改回傳 `einvoice_automation_canceled`，避免前端只看到通用 `E-invoice automation failed`。
 - **SMB-172**：Debug Page 新增「載具抓取紀錄」區塊，透過 `einvoice-debug.service.js` 追蹤每次 `scrape`（抓取）和 `import`（匯入）操作；記錄欄位包含手機號碼（前 4 碼可見其餘遮蔽）、查詢日期區間、操作狀態（running / ok / error）、耗時、抓取發票數、匯入 / 跳過 / 失敗筆數及錯誤代碼與訊息；i18n 同步新增 zh-TW / en / ja key；匯出 debug log 的 JSON payload 也加入 `einvoice_calls` 欄位。
 - **SMB-173 (v1.0.9)**：Android WebView 自動化改用財政部電子發票整合服務平台目前的登入與查詢路徑：`/accounts/login` 與 `/portal/btc/mobile/btc502w/search`；舊的 `/btc502w/BTCIndex`、`/btc502w/BTCInvController` 不再作為入口 URL，避免官方路由變更時直接落到 404 或錯誤頁。官方登入頁的手機條碼 / 載具模式選取也改為掃描文字、label、radio / checkbox、select option 與 data/aria 屬性，填入手機號碼、密碼與驗證碼時會觸發完整 input/change/keyup/blur 事件；找不到欄位時回傳 `phone_missing`、`password_missing` 或 `captcha_missing` 等診斷原因。
+- **SMB-174 (v1.0.13)**：修正「記住帳號」的密碼 IV 遺失問題；手機號碼與密碼現在會分別保存 AES-GCM IV，既有資料庫透過 migration 033 補上 `password_iv` 欄位，新儲存的憑證可在下一次進入精靈時正確還原並帶入 Android 自動化流程。
 
 ### 入口
 - `功能列表` 頁面（FeatureListPage.vue）→「電子發票匯入」

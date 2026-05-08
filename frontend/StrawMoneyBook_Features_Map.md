@@ -7,7 +7,7 @@
 
 - 多帳本管理（切換帳本、排序、帳本設定、活動帳本上下文刷新）
 - 首頁總覽（帳本切換、收支卡、預算簡表、交易流、浮動快速新增；首頁交易流在無資料時會顯示空狀態與快速記帳入口，空狀態文案透過 i18n 維護並由 source test 防回歸，預算簡表滑動切換閾值已提高以降低誤觸）
-- 記帳三模式（AI 記帳、手動快速新增、問答記帳）
+- 記帳三模式（AI 記帳、手動快速新增、問答記帳；SMB-175 後手動快速新增的金額欄整合計算機，支援加減乘除四則運算並即時預覽結果）
 - 交易查詢（搜尋頁、日曆頁、交易明細頁、交易編輯頁；SMB-155 後搜尋交易改為 SQL 分頁載入，每頁 300 筆，關鍵字與日期篩選會先進資料查詢層後再取當頁資料，避免大型帳本一次載入全部交易）
 - 退款流程（交易明細可建立退款、選擇退款帳戶、指定扣除金額；SMB-149 後部分退款會以原交易扣除退款金額後的淨額納入首頁、預算、分析與列印報表，全額退款則歸零）
 - 預算管理（月預算、分類預算、日均規則、已用/剩餘/保留金額、預算剩餘自動存入存錢罐；SMB-151 後預算項目的「日期」分配改用與首頁查看範圍相同的 `HomeRangePicker` 日期選擇器，並在預算項目情境啟用日曆複選，點選多個日期後轉成每月日號規則，不再只是 1~31 純數字格或另一套自製月曆；SMB-153 後功能列表加入帶圖示的預算項目入口，可直接前往 `/budget`）
@@ -183,13 +183,14 @@
 | 交易清單（含空狀態與快速記帳 CTA） | `src/ui/components/home/HomeTransactionFeed.vue` |
 | 編輯交易 | `src/ui/components/home/HomeTransactionEditSheet.vue` |
 | 快速新增入口 | `src/ui/views/BookkeepingPage.vue` + `src/ui/services/bookkeeping-mode.service.js` |
-| 手動快速新增 | `src/ui/views/QuickAddPage.vue`（SMB-162 後附加項目抵消後可存 0 元交易） |
+| 手動快速新增 | `src/ui/views/QuickAddPage.vue`（SMB-162 後附加項目抵消後可存 0 元交易；SMB-175 後金額欄整合計算機） |
 | 問答記帳 | `src/ui/views/QnaBookkeepingPage.vue` |
 | AI 記帳 | `src/ui/views/AiAutoBookkeepingPage.vue` + `src/core/services/ai-bookkeeping.service.js`（SMB-163 後解析帳本附加項目模板；SMB-162 後附加項目抵消後可存 0 元交易） |
 | 快速新增附加資訊（備註/報銷/附加項目） | `src/ui/views/QuickAddPage.vue` |
 | 日期時間選擇 | `src/ui/components/common/DateTimePickerField.vue` |
 | 純時間選擇 | `src/ui/components/common/TimePickerField.vue` |
 | 共用輸入型 sheet 殼層 | `src/ui/components/common/InputBottomSheet.vue` |
+| 金額計算機輸入欄 | `src/ui/components/common/AmountCalculatorInput.vue`（SMB-175；邏輯層：`src/ui/utils/amount-calculator.js`） |
 | 交易搜尋頁（支援批量編輯分類、備註、可報銷、是否納入預算 / 收支分析） | `src/ui/views/TransactionSearchPage.vue` |
 | 交易日曆頁 | `src/ui/views/CalendarPage.vue` |
 | 功能列表頁 | `src/ui/views/FeatureListPage.vue` |
@@ -976,11 +977,15 @@ UI composable 目錄：`src/ui/composables/`
 ### 新增檔案
 
 #### `src/core/db/migrations/032_einvoice_import.sql`
-- 建立 `einvoice_credentials` 資料表（加密帳密儲存）
+- 建立 `einvoice_credentials` 資料表（加密帳密儲存，含手機與密碼各自 IV）
 - 建立 `einvoice_invoice_imports` 資料表（發票匯入記錄，UNIQUE on invoice_number）
+
+#### `src/core/db/migrations/033_einvoice_credential_password_iv.sql`
+- **SMB-174 (v1.0.13)**：既有資料庫補上 `einvoice_credentials.password_iv`，讓密碼加密 IV 不再被手機號碼 IV 覆蓋
 
 #### `src/core/repositories/einvoice-import.repo.js`
 - 函數（5）：`getEInvoiceCredential`, `upsertEInvoiceCredential`, `deleteEInvoiceCredential`, `getImportedInvoiceNumbers`, `insertInvoiceImport`, `listRecentInvoiceImports`
+- `upsertEInvoiceCredential` 會保存 `passwordIv`；`getEInvoiceCredential` 讀回 `passwordIv`，舊資料缺值時才 fallback 到 `iv`
 
 #### `src/services/einvoice/shared.js`
 - 常數：`EINVOICE_PLATFORM`, `EINVOICE_STATUS`
@@ -1025,9 +1030,10 @@ UI composable 目錄：`src/ui/composables/`
 - **SMB-170 (v1.0.9)**：`EInvoiceAutomation.java` 的 `evaluateJavaScript()` 改為只在 UI thread 呼叫 `webView.evaluateJavascript()`，並在背景 thread 等待 callback，避免原本 UI thread 內等待造成腳本結果逾時；登入頁/查詢頁載入後也偵測 Cloudflare 或平台防自動化 challenge，命中時回傳 `einvoice_platform_challenge` 與明確訊息；`EInvoiceAutomationPlugin.java` 將無 payload 的取消結果改成 `einvoice_automation_canceled`，避免只顯示 `E-invoice automation failed`。
 - **SMB-172**：新增 `einvoice-debug.service.js`；`backend.js` 的 `scrapeEInvoiceList()` 與 `importSelectedInvoices()` 各自包覆 `traceEInvoiceScrape` / `traceEInvoiceImport`，記錄每次操作的狀態、耗時、發票數量及錯誤；Debug Page 新增「載具抓取紀錄」區塊並同步加入 i18n（zh-TW / en / ja）
 - **SMB-173 (v1.0.9)**：`EInvoiceAutomation.java` 的登入入口改為 `https://www.einvoice.nat.gov.tw/accounts/login`，查詢入口改為 `https://www.einvoice.nat.gov.tw/portal/btc/mobile/btc502w/search`；手機條碼 / 載具模式選取改為掃描文字、label、radio / checkbox、select option 與 data/aria 屬性，登入填值會觸發完整 input/change/keyup/blur 事件，找不到欄位時回傳 `phone_missing`、`password_missing` 或 `captcha_missing` 診斷；單元測試鎖住官方路徑與載具填入腳本，避免回退到舊的 `/btc502w/BTCIndex` 或 `/btc502w/BTCInvController`。
+- **SMB-174 (v1.0.13)**：`src/services/einvoice/backend.js`、`src/core/repositories/einvoice-import.repo.js` 與 DB migrations 032/033 修正記住帳號的密碼 IV 保存；`einvoice_credentials.password_iv` 會保存密碼加密時的 AES-GCM IV，避免只用手機號碼 IV 解密密碼而導致下次抓取時帳密無法正確還原。
 
 ### 修改檔案
-- `src/core/db/migrate.js` — 加入 migration 032
+- `src/core/db/migrate.js` — 加入 migration 032，SMB-174 後再加入 migration 033 補 `password_iv`
 - `src/ui/views/FeatureListPage.vue` — 加入「電子發票匯入」入口
 - `src/ui/router/index.js` — 加入 `/einvoice-import` 路由
 - `src/ui/services/i18n.service.js` — 加入 zh-TW / en / ja 翻譯
