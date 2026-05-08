@@ -636,9 +636,12 @@ final class EInvoiceAutomation {
                   text.includes('mobile');
               };
               function dispatchFull(el) {
-                for (const type of ['input', 'change', 'keyup', 'blur']) {
-                  el.dispatchEvent(new Event(type, { bubbles: true }));
-                }
+                // Real browser order: input → keyup (while focused), then change → blur (on focus loss).
+                // Using InputEvent for 'input' so framework synthetic-event systems treat it as user input.
+                el.dispatchEvent(new (typeof InputEvent !== 'undefined' ? InputEvent : Event)('input', { bubbles: true, cancelable: true }));
+                el.dispatchEvent(new Event('keyup', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                el.dispatchEvent(new Event('blur', { bubbles: true }));
               }
               function ensureMobileCarrier() {
                 const existing = document.querySelector(
