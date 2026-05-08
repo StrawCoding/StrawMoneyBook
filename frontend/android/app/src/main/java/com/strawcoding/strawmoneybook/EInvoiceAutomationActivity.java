@@ -6,15 +6,18 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.JsResult;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
-import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.concurrent.ExecutorService;
@@ -26,7 +29,9 @@ public class EInvoiceAutomationActivity extends Activity {
     public static final String EXTRA_ERROR_CODE = "einvoice_automation.error_code";
     public static final String EXTRA_ERROR_MESSAGE = "einvoice_automation.error_message";
 
-    private static final long AUTOMATION_TIMEOUT_MS = 120_000L;
+    // SMB-174 redesign: extended timeout to accommodate manual-captcha fallback (the user may
+    // need up to 90s to read and type the captcha after OCR fails).
+    private static final long AUTOMATION_TIMEOUT_MS = 180_000L;
     private static final Object BUSY_LOCK = new Object();
     private static boolean busy = false;
 
@@ -34,6 +39,7 @@ public class EInvoiceAutomationActivity extends Activity {
     private ExecutorService executorService;
     private Runnable timeoutRunnable;
     private WebView webView;
+    private TextView statusTitle;
     private boolean finished = false;
 
     public static boolean isBusy() {
@@ -67,13 +73,7 @@ public class EInvoiceAutomationActivity extends Activity {
 
         executorService = Executors.newSingleThreadExecutor();
         webView = buildWebView();
-        FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.TRANSPARENT);
-        root.addView(webView, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT
-        ));
-        setContentView(root);
+        setContentView(buildContentView(webView));
 
         final String payloadJson = stringExtra(getIntent(), EXTRA_PAYLOAD_JSON);
         final JSONObject payload;
@@ -90,10 +90,79 @@ public class EInvoiceAutomationActivity extends Activity {
         executorService.execute(() -> runQuery(payload));
     }
 
+    private View buildContentView(WebView contentWebView) {
+        // SMB-174: WebView is now visible (alpha 1.0) with a status header so users can SEE the
+        // automation flow. Previously alpha=0.01 hid the entire WebView, making CAPTCHA OCR
+        // failures and login errors invisible — Tester's "我沒有看到他有輸入" was literally
+        // accurate because the WebView itself was nearly invisible.
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setBackgroundColor(Color.WHITE);
+        container.addView(buildStatusHeader(), new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        container.addView(contentWebView, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            0,
+            1f
+        ));
+        return container;
+    }
+
+    private View buildStatusHeader() {
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setBackgroundColor(Color.parseColor("#1F2937"));
+        int paddingPx = dp(12);
+        header.setPadding(paddingPx, paddingPx, paddingPx, paddingPx);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+
+        statusTitle = new TextView(this);
+        statusTitle.setText("正在開啟電子發票平台…");
+        statusTitle.setTextColor(Color.WHITE);
+        statusTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        header.addView(statusTitle, titleParams);
+
+        TextView cancel = new TextView(this);
+        cancel.setText("取消");
+        cancel.setTextColor(Color.WHITE);
+        cancel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f);
+        cancel.setPadding(dp(12), dp(4), dp(12), dp(4));
+        cancel.setClickable(true);
+        cancel.setFocusable(true);
+        cancel.setOnClickListener(v -> finishWithError(
+            "einvoice_automation_canceled",
+            "使用者取消電子發票自動登入"
+        ));
+        header.addView(cancel, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        return header;
+    }
+
+    private int dp(int dp) {
+        return Math.round(dp * getResources().getDisplayMetrics().density);
+    }
+
+    public void postStatus(String text) {
+        // SMB-174 redesign: bridge for EInvoiceAutomation to push live progress messages
+        // ("選取手機條碼載具…" / "自動辨識驗證碼…" / "驗證碼自動辨識失敗，請手動輸入後按登入") to
+        // the visible WebView header bar. Called from the automation background thread, so
+        // we marshal back to the UI thread before touching the TextView.
+        if (statusTitle == null || text == null || text.trim().isEmpty()) return;
+        mainHandler.post(() -> {
+            if (statusTitle != null) statusTitle.setText(text);
+        });
+    }
+
     private WebView buildWebView() {
         WebView nextWebView = new WebView(this);
-        nextWebView.setBackgroundColor(Color.TRANSPARENT);
-        nextWebView.setAlpha(0.01f);
+        nextWebView.setBackgroundColor(Color.WHITE);
 
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
@@ -125,7 +194,7 @@ public class EInvoiceAutomationActivity extends Activity {
 
     private void runQuery(JSONObject payload) {
         try {
-            JSONObject result = EInvoiceAutomation.query(this, webView, payload);
+            JSONObject result = EInvoiceAutomation.query(this, webView, payload, this::postStatus);
             finishWithSuccess(result);
         } catch (EInvoiceAutomation.EInvoiceException error) {
             String msg = error.getMessage();
@@ -182,6 +251,7 @@ public class EInvoiceAutomationActivity extends Activity {
             current.removeAllViews();
             current.destroy();
         }
+        statusTitle = null;
         releaseBusy();
         super.onDestroy();
     }

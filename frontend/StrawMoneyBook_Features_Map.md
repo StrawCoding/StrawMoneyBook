@@ -983,6 +983,46 @@ UI composable 目錄：`src/ui/composables/`
 #### `src/core/db/migrations/033_einvoice_credential_password_iv.sql`
 - **SMB-174 (v1.0.13)**：既有資料庫補上 `einvoice_credentials.password_iv`，讓密碼加密 IV 不再被手機號碼 IV 覆蓋
 
+#### `android/app/src/main/java/com/strawcoding/strawmoneybook/EInvoiceAutomationActivity.java`
+- **SMB-174 Restart (v1.0.15)**：
+  - 移除 `setAlpha(0.01f)` 隱形 WebView，改為 `Color.WHITE` 全可見
+  - 新增 `buildContentView` / `buildStatusHeader` / `dp`：WebView 上方深灰底動態說明列 + 取消鈕（取消 → `finishWithError("einvoice_automation_canceled", ...)`）
+  - `statusTitle` 改為 `TextView` 成員 + `postStatus(String)`（透過 `mainHandler.post` 從背景 thread 安全更新）
+  - `runQuery` 把 `this::postStatus` 當作 `Consumer<String>` 傳給 `EInvoiceAutomation.query`
+  - `AUTOMATION_TIMEOUT_MS` 從 120s 延長到 180s 容納手動 captcha 等待
+  - `onDestroy` 一併清空 `statusTitle`
+
+#### `android/app/src/main/java/com/strawcoding/strawmoneybook/EInvoiceAutomation.java`
+- **SMB-174 Restart (v1.0.15)**：
+  - 常數重整：`OCR_MAX_ATTEMPTS=2`、`AUTO_LOGIN_WAIT_MS=12000`、`MANUAL_LOGIN_WAIT_MS=90000`、`LOGIN_DETECT_POLL_MS=600`
+  - `query` 多載：新增 `query(activity, webView, params, statusUpdater)`，舊 `query` 委派為 `null`
+  - `BrowserSession` 接 `Consumer<String> statusUpdater` 並提供 `setStatus(String)`
+  - `performLogin` 重寫為「混合自動 + 手動 fallback」：自動填帳密 → OCR 嘗試 N 次 → 失敗則切手動模式（重整驗證碼、清空欄位、聚焦欄位、等使用者輸入並按登入）
+  - `waitForLoginSuccess(session, timeoutMs)` — 改接受可變 timeout（自動 12s / 手動 90s）
+  - 新增方法：`isFillCredentialsResultSuccess`、`describeFillCredentialsFailure`、`capturePageErrorDetail`
+  - 新 JS scripts：`buildFillCredentialsOnlyScript(phone, password)`、`buildClearCaptchaInputScript()`、`buildFocusCaptchaInputScript()`、`buildPageErrorDetailScript()`
+  - `classifyLoginFailure(int, int, int, String)` 將失敗分類為 `einvoice_captcha_image_missing` / `einvoice_captcha_recognition_failed` / `einvoice_login_failed`（附帶站台原文錯誤）
+
+#### `android/app/src/test/java/com/strawcoding/strawmoneybook/EInvoiceAutomationTest.java`
+- **SMB-174 Restart (v1.0.15)**：共新增 10 個測試：
+  - `pageErrorDetailScriptScansAlertAndDangerSelectors`
+  - `classifyLoginFailureReportsCaptchaImageMissingWhenAllAttemptsFailedToLoad`
+  - `classifyLoginFailureReportsOcrFailureWhenAllAttemptsFailedToRecognize`
+  - `classifyLoginFailureReportsLoginFailedWhenServerRejectedSubmit`
+  - `classifyLoginFailureWithoutPageErrorOmitsTrailingDetail`
+  - `fillCredentialsOnlyScriptFillsPhoneAndPasswordWithoutSubmitting`
+  - `clearCaptchaInputScriptOnlyResetsCaptchaFieldValue`
+  - `focusCaptchaInputScriptScrollsAndFocusesCaptchaField`
+  - `isFillCredentialsResultSuccessAcceptsBooleanTrueAndRejectsNonJsonObjectValues`
+  - `hybridFlowTimingConstantsAreReasonableForUserManualCaptcha`
+
+#### `scripts/simulate-einvoice-login-flow.mjs`
+- **SMB-174 Restart (v1.0.15)**：
+  - Step 6A — 提取 `buildPageErrorDetailScript`，在 mock DOM 注入 `.alert-danger` 元素，驗證可擷取「驗證碼錯誤」
+  - Step 8 — `buildFillCredentialsOnlyScript` 在 mock DOM 中只填手機/密碼，**驗證 captcha 為空 + submit 未被點擊**
+  - Step 9 — `buildClearCaptchaInputScript` + `buildFocusCaptchaInputScript`，instrumented 元素驗證 `scrollIntoView / focus / select` 都被呼叫
+  - 全套：32/32 通過
+
 #### `src/core/repositories/einvoice-import.repo.js`
 - 函數（5）：`getEInvoiceCredential`, `upsertEInvoiceCredential`, `deleteEInvoiceCredential`, `getImportedInvoiceNumbers`, `insertInvoiceImport`, `listRecentInvoiceImports`
 - `upsertEInvoiceCredential` 會保存 `passwordIv`；`getEInvoiceCredential` 讀回 `passwordIv`，舊資料缺值時才 fallback 到 `iv`

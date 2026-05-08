@@ -808,7 +808,7 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 
 ## 電子發票匯入（E-Invoice Import）
 
-**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）；帳密 IV 修正 v1.0.13（SMB-174）
+**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）；帳密 IV 修正 v1.0.13（SMB-174）；自動化流程可見化 + 失敗診斷分類 v1.0.15（SMB-174 Restart）
 **狀態**：Android 原生插件保留 WebView 自動化流程，但會先偵測財政部站台的防自動化/Cloudflare challenge；被平台擋下時回傳明確錯誤，不再只顯示 `E-invoice automation failed`。穩定正式匯入仍應改接財政部電子發票官方 API 與後端代理。
 
 ### 功能說明
@@ -840,6 +840,26 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 - **SMB-172**：Debug Page 新增「載具抓取紀錄」區塊，透過 `einvoice-debug.service.js` 追蹤每次 `scrape`（抓取）和 `import`（匯入）操作；記錄欄位包含手機號碼（前 4 碼可見其餘遮蔽）、查詢日期區間、操作狀態（running / ok / error）、耗時、抓取發票數、匯入 / 跳過 / 失敗筆數及錯誤代碼與訊息；i18n 同步新增 zh-TW / en / ja key；匯出 debug log 的 JSON payload 也加入 `einvoice_calls` 欄位。
 - **SMB-173 (v1.0.9)**：Android WebView 自動化改用財政部電子發票整合服務平台目前的登入與查詢路徑：`/accounts/login` 與 `/portal/btc/mobile/btc502w/search`；舊的 `/btc502w/BTCIndex`、`/btc502w/BTCInvController` 不再作為入口 URL，避免官方路由變更時直接落到 404 或錯誤頁。官方登入頁的手機條碼 / 載具模式選取也改為掃描文字、label、radio / checkbox、select option 與 data/aria 屬性，填入手機號碼、密碼與驗證碼時會觸發完整 input/change/keyup/blur 事件；找不到欄位時回傳 `phone_missing`、`password_missing` 或 `captcha_missing` 等診斷原因。
 - **SMB-174 (v1.0.13)**：修正「記住帳號」的密碼 IV 遺失問題；手機號碼與密碼現在會分別保存 AES-GCM IV，既有資料庫透過 migration 033 補上 `password_iv` 欄位，新儲存的憑證可在下一次進入精靈時正確還原並帶入 Android 自動化流程。
+- **SMB-174 Restart (v1.0.15)**：自動化流程徹底重做為「混合自動 + 手動驗證碼 fallback」，保證能完成登入。回應 Tester「我沒有看到他有輸入」與「請讓他能完整完美的工作」。
+
+  **新流程（5 階段，狀態列即時顯示）**：
+  1. `正在開啟電子發票平台…` — `loadUrl(LOGIN_URL)` 並偵測 Cloudflare 挑戰
+  2. `選取手機條碼載具…` — `selectMobileCarrier` + `waitForMobileCarrierLoginFormStable`
+  3. `自動填入帳號與密碼…` — 新 `buildFillCredentialsOnlyScript()` 只填手機/密碼，不送出、不觸碰驗證碼，使用者可即時確認
+  4. `自動辨識驗證碼…（嘗試 1/2 → 2/2）` — OCR + `buildSubmitLoginScript`，失敗則重整驗證碼再試（最多 `OCR_MAX_ATTEMPTS=2` 次）
+  5. **若 OCR 仍失敗 → 手動模式**：`驗證碼自動辨識失敗，請看下方驗證碼，輸入後按登入按鈕`。重整驗證碼、清空驗證碼欄位（`buildClearCaptchaInputScript`）、聚焦驗證碼欄位並 scrollIntoView（`buildFocusCaptchaInputScript`），等使用者親自輸入並按平台登入按鈕；偵測到 URL 離開 `/accounts/login` 即 `登入成功，正在抓取發票…` 並繼續抓取流程。
+
+  **核心元件**：
+  - `EInvoiceAutomationActivity`：移除 `setAlpha(0.01f)`，WebView 全可見、白底；頂部說明列為動態 `TextView statusTitle` + 取消鈕，新增 `postStatus(String)` 透過 `mainHandler.post` 從背景 thread 安全更新；`AUTOMATION_TIMEOUT_MS` 從 120s 延長到 180s 以容納手動 captcha 等待。`onDestroy` 一併清空 `statusTitle` 避免回呼到已釋放 view。
+  - `EInvoiceAutomation`：常數重整為 `OCR_MAX_ATTEMPTS=2 / AUTO_LOGIN_WAIT_MS=12000 / MANUAL_LOGIN_WAIT_MS=90000`；`query()` 多載新增 `Consumer<String> statusUpdater`；`BrowserSession` 持有 `statusUpdater` 並提供 `setStatus(String)`；`performLogin` 重寫為自動 + 手動 fallback；`waitForLoginSuccess` 改接受 `timeoutMs` 參數，靈活控制自動/手動兩段等待時間；`isFillCredentialsResultSuccess` / `describeFillCredentialsFailure` 提供 fill 階段的成功/失敗判定。`classifyLoginFailure` 仍保留並依舊區分 `einvoice_captcha_image_missing` / `einvoice_captcha_recognition_failed` / `einvoice_login_failed`（附帶 `buildPageErrorDetailScript` 擷取的站台原文錯誤）。
+  - 新 JS scripts：
+    - `buildFillCredentialsOnlyScript(phone, password)` — 只填手機/密碼，回傳 `{ filled, reason, missing }`，不點 submit、不觸碰驗證碼
+    - `buildClearCaptchaInputScript()` — 清空驗證碼欄位（OCR 失敗時讓使用者輸入新值不會被舊值困擾）
+    - `buildFocusCaptchaInputScript()` — `scrollIntoView` + `focus` + `select` 引導使用者輸入
+
+  **測試**：
+  - Java 單元測試新增 `fillCredentialsOnlyScriptFillsPhoneAndPasswordWithoutSubmitting`、`clearCaptchaInputScriptOnlyResetsCaptchaFieldValue`、`focusCaptchaInputScriptScrollsAndFocusesCaptchaField`、`isFillCredentialsResultSuccessAcceptsBooleanTrueAndRejectsNonJsonObjectValues`、`hybridFlowTimingConstantsAreReasonableForUserManualCaptcha`，加上原本的 5 個 `pageErrorDetailScript*` / `classifyLoginFailure*` 共 10 個新測試。
+  - `simulate-einvoice-login-flow.mjs` 加 Step 6A（站台錯誤擷取）、Step 8（自動填帳密不送出 / 不觸碰驗證碼）、Step 9（手動模式 focus/clear），共 32 項全通過。
 
 ### 入口
 - `功能列表` 頁面（FeatureListPage.vue）→「電子發票匯入」

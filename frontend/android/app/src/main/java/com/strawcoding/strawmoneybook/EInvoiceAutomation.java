@@ -22,6 +22,7 @@ import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 final class EInvoiceAutomation {
     private static final String TAG = "EInvoiceAutomation";
@@ -31,10 +32,13 @@ final class EInvoiceAutomation {
     private static final String PLATFORM_CHALLENGE_CODE = "einvoice_platform_challenge";
     private static final String PLATFORM_CHALLENGE_MESSAGE =
         "電子發票平台目前擋下內嵌自動化連線，請改用官方 API/後端串接後再啟用自動抓取";
-    private static final int CAPTCHA_MAX_ATTEMPTS = 3;
-    private static final int CAPTCHA_EXPECTED_LENGTH = 4;
+    static final int OCR_MAX_ATTEMPTS = 2;
+    static final int CAPTCHA_EXPECTED_LENGTH = 4;
     private static final long CAPTCHA_POLL_MS = 300L;
     private static final long CAPTCHA_READY_TIMEOUT_MS = 15_000L;
+    static final long AUTO_LOGIN_WAIT_MS = 12_000L;
+    static final long MANUAL_LOGIN_WAIT_MS = 90_000L;
+    private static final long LOGIN_DETECT_POLL_MS = 600L;
     private static final ZoneId TAIPEI_ZONE = ZoneId.of("Asia/Taipei");
     private static final DateTimeFormatter ROC_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd", Locale.US);
 
@@ -54,6 +58,10 @@ final class EInvoiceAutomation {
     // ── Entry point ────────────────────────────────────────────────────────────
 
     static JSONObject query(Activity activity, WebView webView, JSONObject params) throws Exception {
+        return query(activity, webView, params, null);
+    }
+
+    static JSONObject query(Activity activity, WebView webView, JSONObject params, Consumer<String> statusUpdater) throws Exception {
         String phone = requireText(params, "phone", "einvoice_phone_required", "手機號碼為必填");
         String password = requireText(params, "password", "einvoice_password_required", "密碼為必填");
         String dateFrom = requireText(params, "dateFrom", "einvoice_date_required", "查詢起始日期為必填");
@@ -62,7 +70,8 @@ final class EInvoiceAutomation {
         String buyerTaxId = normalizeText(params.optString("buyerTaxId", ""));
         String keyword = normalizeText(params.optString("keyword", ""));
 
-        BrowserSession session = new BrowserSession(activity, webView);
+        BrowserSession session = new BrowserSession(activity, webView, statusUpdater);
+        session.setStatus("正在開啟電子發票平台…");
         Log.d(TAG, "Loading login page");
         session.loadUrl(LOGIN_URL);
         assertPlatformAllowsAutomation(session, "login");
@@ -70,8 +79,10 @@ final class EInvoiceAutomation {
         performLogin(activity, session, phone, password);
         Log.d(TAG, "Login succeeded");
 
+        session.setStatus("登入成功，正在抓取發票…");
         JSONArray invoices = fetchInvoices(session, dateFrom, dateTo, invoiceStatus, buyerTaxId, keyword);
         Log.d(TAG, "Fetched invoices count=" + invoices.length());
+        session.setStatus("已抓取 " + invoices.length() + " 張發票，正在回傳結果…");
 
         JSONObject result = new JSONObject();
         result.put("invoices", invoices);
@@ -81,47 +92,115 @@ final class EInvoiceAutomation {
     // ── Login ──────────────────────────────────────────────────────────────────
 
     private static void performLogin(Activity activity, BrowserSession session, String phone, String password) throws Exception {
+        // SMB-174 redesign: hybrid auto/manual login flow. Stages:
+        //   1. Auto-select 手機條碼 carrier and wait for the login form to be ready.
+        //   2. Auto-fill phone+password (without submitting) so users can confirm the credentials.
+        //   3. Try OCR + auto-submit up to OCR_MAX_ATTEMPTS times (login can succeed without user help).
+        //   4. If OCR/auto-submit fails, fall back to MANUAL mode: refresh captcha, focus the
+        //      captcha input, prompt the user via the status bar to type it themselves and click
+        //      the platform's login button. We watch for the URL to leave /accounts/login and
+        //      then continue the scrape automatically. This guarantees the flow can complete
+        //      even when OCR is unreliable or the captcha format changes.
+        session.setStatus("選取手機條碼載具…");
         JSONObject carrierSnapshot = selectMobileCarrier(session);
         waitForMobileCarrierLoginFormStable(session, carrierSnapshot);
 
-        for (int attempt = 0; attempt < CAPTCHA_MAX_ATTEMPTS; attempt++) {
+        session.setStatus("自動填入帳號與密碼…");
+        Object fillResult = session.evaluateJavaScript(buildFillCredentialsOnlyScript(phone, password));
+        if (!isFillCredentialsResultSuccess(fillResult)) {
+            throw new EInvoiceException(
+                "einvoice_login_form_missing",
+                describeFillCredentialsFailure(fillResult, carrierSnapshot)
+            );
+        }
+
+        int captchaImageMissing = 0;
+        int captchaOcrFailed = 0;
+        int submitAttempted = 0;
+        String lastPageError = "";
+
+        for (int attempt = 0; attempt < OCR_MAX_ATTEMPTS; attempt++) {
+            session.setStatus("自動辨識驗證碼…（嘗試 " + (attempt + 1) + "/" + OCR_MAX_ATTEMPTS + "）");
             if (attempt > 0) {
-                // Refresh captcha and reload login page if previous attempt failed
                 session.evaluateJavaScript(buildRefreshCaptchaScript());
-                Thread.sleep(1_000L);
+                Thread.sleep(800L);
+                // Phone/password may have been cleared by the failed submit — re-fill defensively.
+                session.evaluateJavaScript(buildFillCredentialsOnlyScript(phone, password));
             }
 
-            // Wait for CAPTCHA image to be ready
             String captchaDataUrl = waitForCaptchaReady(session);
             if (captchaDataUrl.isEmpty()) {
+                captchaImageMissing++;
                 Log.d(TAG, "Captcha not ready on attempt " + (attempt + 1));
                 continue;
             }
 
-            // OCR the CAPTCHA (numeric 4-digit)
             String captchaText = recognizeNumericCaptcha(activity, captchaDataUrl);
             if (captchaText.length() != CAPTCHA_EXPECTED_LENGTH) {
+                captchaOcrFailed++;
                 Log.d(TAG, "Captcha OCR result invalid length=" + captchaText.length() + " attempt=" + (attempt + 1));
                 continue;
             }
 
+            session.setStatus("送出登入請求…");
             Log.d(TAG, "Submitting login attempt=" + (attempt + 1));
             Object submitResult = session.evaluateJavaScript(buildSubmitLoginScript(phone, password, captchaText));
             if (!isSubmitLoginResultSuccess(submitResult)) {
                 throw new EInvoiceException("einvoice_login_form_missing", describeSubmitLoginFailure(submitResult, carrierSnapshot));
             }
+            submitAttempted++;
 
-            if (waitForLoginSuccess(session)) {
+            if (waitForLoginSuccess(session, AUTO_LOGIN_WAIT_MS)) {
                 return;
             }
 
-            Log.d(TAG, "Login failed attempt=" + (attempt + 1) + ", retrying");
-            session.loadUrl(LOGIN_URL);
-            carrierSnapshot = selectMobileCarrier(session);
-            waitForMobileCarrierLoginFormStable(session, carrierSnapshot);
+            String pageError = capturePageErrorDetail(session);
+            if (!pageError.isEmpty()) lastPageError = pageError;
+            Log.d(TAG, "Auto-login failed attempt=" + (attempt + 1) + " pageError=" + pageError);
         }
 
-        throw new EInvoiceException("einvoice_login_failed", "電子發票平台登入失敗，請確認手機號碼、密碼及驗證碼是否正確");
+        // Auto path exhausted — switch to MANUAL captcha mode. The WebView is fully visible
+        // (alpha=1.0) so the user can read the captcha image directly, type into the focused
+        // input, and click the platform's own login button. We just watch for URL change.
+        session.setStatus("驗證碼自動辨識失敗，請看下方驗證碼，輸入後按登入按鈕");
+        session.evaluateJavaScript(buildRefreshCaptchaScript());
+        Thread.sleep(400L);
+        session.evaluateJavaScript(buildFillCredentialsOnlyScript(phone, password));
+        session.evaluateJavaScript(buildClearCaptchaInputScript());
+        session.evaluateJavaScript(buildFocusCaptchaInputScript());
+
+        if (waitForLoginSuccess(session, MANUAL_LOGIN_WAIT_MS)) {
+            return;
+        }
+
+        String pageError = capturePageErrorDetail(session);
+        if (!pageError.isEmpty()) lastPageError = pageError;
+        throw classifyLoginFailure(captchaImageMissing, captchaOcrFailed, submitAttempted, lastPageError);
+    }
+
+    static EInvoiceException classifyLoginFailure(int captchaImageMissing, int captchaOcrFailed, int submitAttempted, String lastPageError) {
+        // Differentiated diagnosis: pick the dominant blocker so users see a meaningful error.
+        if (submitAttempted == 0 && captchaImageMissing >= OCR_MAX_ATTEMPTS) {
+            return new EInvoiceException("einvoice_captcha_image_missing",
+                "驗證碼圖片無法載入，平台可能要求額外驗證或圖片格式變更");
+        }
+        if (submitAttempted == 0 && captchaOcrFailed > 0) {
+            return new EInvoiceException("einvoice_captcha_recognition_failed",
+                "驗證碼自動辨識失敗（連續 " + captchaOcrFailed + " 次無法取得 4 位數字），請稍後再試或回報技術人員");
+        }
+        String message = "電子發票平台登入失敗，請確認手機號碼、密碼及驗證碼是否正確";
+        if (lastPageError != null && !lastPageError.isEmpty()) {
+            message += "（網站回應：" + lastPageError + "）";
+        }
+        return new EInvoiceException("einvoice_login_failed", message);
+    }
+
+    private static String capturePageErrorDetail(BrowserSession session) throws Exception {
+        Object result = session.evaluateJavaScript(buildPageErrorDetailScript());
+        if (result instanceof JSONObject) {
+            return normalizeText(((JSONObject) result).optString("text", ""));
+        }
+        return "";
     }
 
     private static JSONObject selectMobileCarrier(BrowserSession session) throws Exception {
@@ -186,16 +265,34 @@ final class EInvoiceAutomation {
         return "";
     }
 
-    private static boolean waitForLoginSuccess(BrowserSession session) throws Exception {
-        long deadline = System.currentTimeMillis() + 20_000L;
+    private static boolean waitForLoginSuccess(BrowserSession session, long timeoutMs) throws Exception {
+        long deadline = System.currentTimeMillis() + timeoutMs;
         while (System.currentTimeMillis() < deadline) {
             boolean onLoginPage = Boolean.TRUE.equals(session.evaluateJavaScript(buildLoginPageDetectScript()));
             if (!onLoginPage) {
                 return true;
             }
-            Thread.sleep(600L);
+            Thread.sleep(LOGIN_DETECT_POLL_MS);
         }
         return false;
+    }
+
+    static boolean isFillCredentialsResultSuccess(Object result) {
+        if (Boolean.TRUE.equals(result)) return true;
+        if (!(result instanceof JSONObject)) return false;
+        return ((JSONObject) result).optBoolean("filled", false);
+    }
+
+    private static String describeFillCredentialsFailure(Object result, JSONObject carrierSnapshot) {
+        if (result instanceof JSONObject) {
+            JSONObject snapshot = (JSONObject) result;
+            String reason = normalizeText(snapshot.optString("reason", ""));
+            String missing = normalizeText(snapshot.optString("missing", ""));
+            String detail = reason.isEmpty() ? "找不到帳號或密碼欄位" : "找不到帳號或密碼欄位: " + reason;
+            if (!missing.isEmpty()) detail += " (" + missing + ")";
+            return detail;
+        }
+        return "找不到帳號或密碼欄位，載具選取結果: " + String.valueOf(carrierSnapshot);
     }
 
     // ── Invoice query ──────────────────────────────────────────────────────────
@@ -602,6 +699,140 @@ final class EInvoiceAutomation {
             """;
     }
 
+    static String buildFillCredentialsOnlyScript(String phone, String password) {
+        // SMB-174 redesign: fill phone + password without submitting and without filling captcha.
+        // Used both for the visible auto-fill stage (so users can verify the credentials we
+        // typed) and for the manual-captcha fallback (so the user only needs to handle the
+        // captcha + login button themselves). Returns { filled, reason, missing } so the Java
+        // side can report a precise failure when the form fields are not present.
+        String safePhone = escapeJs(phone);
+        String safePassword = escapeJs(password);
+        return String.format(Locale.US, """
+            (() => {
+              const visible = (el) => {
+                if (!el) return false;
+                const style = getComputedStyle(el);
+                const rect = el.getBoundingClientRect();
+                return !el.disabled && style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+              };
+              const normalize = (value) => String(value || '').replace(/\\s+/g, '').toLowerCase();
+              const dataText = (el) => Object.keys(el?.dataset || {}).map((key) => `${key}:${el.dataset[key]}`).join(' ');
+              const textOf = (el) => [
+                el?.textContent,
+                el?.getAttribute?.('aria-label'),
+                el?.getAttribute?.('title'),
+                el?.getAttribute?.('for'),
+                el?.getAttribute?.('name'),
+                el?.getAttribute?.('id'),
+                el?.getAttribute?.('value'),
+                dataText(el),
+              ].filter(Boolean).join(' ');
+              function dispatchFull(el) {
+                el.dispatchEvent(new (typeof InputEvent !== 'undefined' ? InputEvent : Event)('input', { bubbles: true, cancelable: true }));
+                el.dispatchEvent(new Event('keyup', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                el.dispatchEvent(new Event('blur', { bubbles: true }));
+              }
+              function setVal(el, value) {
+                const nativeInputSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                if (nativeInputSetter) nativeInputSetter.call(el, value); else el.value = value;
+                dispatchFull(el);
+              }
+              const roots = Array.from(document.querySelectorAll(
+                'form, [role="tabpanel"], .tab-pane, .tab-content, .login-panel, .login-form, .card, section, main, body'
+              )).filter(visible);
+              const mobileRoots = roots.filter((root) =>
+                root.querySelector('#mobile_phone, input[name="mobile_phone"], #loginPhone, #phoneNo, #phone, input[name="btc502wQ.userPh"], input[name="phoneNo"], input[type="tel"], input[inputmode="tel"], input[placeholder*="手機"]') ||
+                normalize(textOf(root)).includes('手機條碼') ||
+                normalize(textOf(root)).includes('手機載具') ||
+                normalize(textOf(root)).includes('mobilebarcode') ||
+                normalize(textOf(root)).includes('mobilecarrier')
+              );
+              const searchRoots = (mobileRoots.length ? mobileRoots : roots.length ? roots : [document]).filter(Boolean);
+              function findInput(selectors) {
+                for (const root of searchRoots) {
+                  for (const sel of selectors) {
+                    try {
+                      const matches = Array.from(root.querySelectorAll(sel)).filter(visible);
+                      if (matches.length) return matches[0];
+                    } catch (_) {}
+                  }
+                }
+                for (const sel of selectors) {
+                  try {
+                    const matches = Array.from(document.querySelectorAll(sel)).filter(visible);
+                    if (matches.length) return matches[0];
+                  } catch (_) {}
+                }
+                return null;
+              }
+              const phoneEl = findInput([
+                '#mobile_phone', 'input[name="mobile_phone"]',
+                '#loginPhone', '#phoneNo', '#phone',
+                '#cellphone', '#mobile', '#carrierMobile',
+                'input[name="btc502wQ.userPh"]', 'input[name="phoneNo"]',
+                'input[name*="mobile"]', 'input[name*="phone"]', 'input[id*="mobile"]', 'input[id*="phone"]',
+                'input[type="tel"]', 'input[inputmode="tel"]', 'input[autocomplete="tel"]',
+                'input[placeholder*="手機"]', 'input[placeholder*="條碼"]', 'input[aria-label*="手機"]',
+              ]);
+              const passEl = findInput([
+                '#loginPass', '#passwd', '#password',
+                'input[name="btc502wQ.userPasswd"]', 'input[name="passwd"]',
+                'input[name*="password"]', 'input[name*="passwd"]', 'input[id*="password"]', 'input[id*="passwd"]',
+                'input[type="password"]',
+              ]);
+              const missing = [];
+              if (!phoneEl) missing.push('phone_missing');
+              if (!passEl) missing.push('password_missing');
+              if (missing.length) {
+                return { filled: false, reason: missing[0], missing: missing.join(',') };
+              }
+              setVal(phoneEl, '%s');
+              setVal(passEl, '%s');
+              return { filled: true, reason: 'phone_password_filled' };
+            })();
+            """, safePhone, safePassword);
+    }
+
+    static String buildClearCaptchaInputScript() {
+        // Manual-captcha fallback: clear any auto-OCR'd value so the user types a fresh one.
+        return """
+            (() => {
+              try {
+                const el = document.querySelector(
+                  '#captcha, #captchaCode, #verifyCode, input[name="captcha"], input[name="verifyCode"], input[name*="captcha"], input[name*="verify"], input[id*="captcha"], input[id*="verify"], input[placeholder*="驗證碼"], input[aria-label*="驗證碼"], input[maxlength="4"]'
+                );
+                if (!el) return false;
+                const nativeInputSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                if (nativeInputSetter) nativeInputSetter.call(el, ''); else el.value = '';
+                el.dispatchEvent(new (typeof InputEvent !== 'undefined' ? InputEvent : Event)('input', { bubbles: true, cancelable: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+              } catch (_) { return false; }
+            })();
+            """;
+    }
+
+    static String buildFocusCaptchaInputScript() {
+        // Manual-captcha fallback: scroll the captcha into view, focus it, and select any
+        // existing value so the user's first keystroke replaces it. Helps make the manual
+        // step obvious immediately after the status bar prompt.
+        return """
+            (() => {
+              try {
+                const el = document.querySelector(
+                  '#captcha, #captchaCode, #verifyCode, input[name="captcha"], input[name="verifyCode"], input[name*="captcha"], input[name*="verify"], input[id*="captcha"], input[id*="verify"], input[placeholder*="驗證碼"], input[aria-label*="驗證碼"], input[maxlength="4"]'
+                );
+                if (!el) return false;
+                if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                if (typeof el.focus === 'function') el.focus({ preventScroll: false });
+                if (typeof el.select === 'function') el.select();
+                return true;
+              } catch (_) { return false; }
+            })();
+            """;
+    }
+
     static String buildSubmitLoginScript(String phone, String password, String captcha) {
         String safePhone = escapeJs(phone);
         String safePassword = escapeJs(password);
@@ -790,6 +1021,38 @@ final class EInvoiceAutomation {
             """;
     }
 
+    static String buildPageErrorDetailScript() {
+        // SMB-174: capture any error/alert text rendered by the einvoice site after a failed
+        // submit so the user sees the platform's actual error (e.g. 驗證碼錯誤 / 帳號或密碼錯誤)
+        // instead of only the generic einvoice_login_failed message.
+        return """
+            (() => {
+              try {
+                const isVisible = (el) => {
+                  if (!el) return false;
+                  const style = getComputedStyle(el);
+                  const rect = el.getBoundingClientRect();
+                  return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+                };
+                const selectors = [
+                  '.error-message', '.alert-danger', '.alert-error', '.alert-warning',
+                  '#errorMsg', '#errMsg', '#loginError',
+                  '[role="alert"]', '.invalid-feedback', '.help-block.error',
+                  '.text-danger', '.error', '.errMsg',
+                ];
+                for (const sel of selectors) {
+                  for (const el of Array.from(document.querySelectorAll(sel))) {
+                    if (!isVisible(el)) continue;
+                    const text = String(el.textContent || '').trim();
+                    if (text) return { text: text.slice(0, 200) };
+                  }
+                }
+                return { text: '' };
+              } catch (e) { return { text: '' }; }
+            })();
+            """;
+    }
+
     private static String buildFillQueryFormScript(String dateFrom, String dateTo, String status, String buyerTaxId, String keyword) {
         String safeFrom = escapeJs(dateFrom);
         String safeTo = escapeJs(dateTo);
@@ -948,14 +1211,28 @@ final class EInvoiceAutomation {
     private static final class BrowserSession {
         private final Activity activity;
         private final WebView webView;
+        private final Consumer<String> statusUpdater;
         private final Handler mainHandler = new Handler(Looper.getMainLooper());
         private final AtomicReference<CountDownLatch> navigationLatchRef = new AtomicReference<>(null);
         private final AtomicReference<String> lastFinishedUrlRef = new AtomicReference<>("");
 
         BrowserSession(Activity activity, WebView webView) throws Exception {
+            this(activity, webView, null);
+        }
+
+        BrowserSession(Activity activity, WebView webView, Consumer<String> statusUpdater) throws Exception {
             this.activity = activity;
             this.webView = webView;
+            this.statusUpdater = statusUpdater != null ? statusUpdater : (text) -> {};
             installWebViewClient();
+        }
+
+        void setStatus(String text) {
+            try {
+                statusUpdater.accept(text);
+            } catch (Exception ignored) {
+                // status updates must never disrupt the automation flow
+            }
         }
 
         private void installWebViewClient() throws Exception {

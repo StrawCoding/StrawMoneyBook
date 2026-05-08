@@ -45,6 +45,17 @@ const formSnapshotScript = extractScript('static String buildLoginFormSnapshotSc
 const loginDetectScript = extractScript('static String buildLoginPageDetectScript()')
 const platformChallengeScript = extractScript('private static String buildPlatformChallengeDetectScript()')
 const captchaSnapshotScript = extractScript('private static String buildCaptchaSnapshotScript()')
+const pageErrorDetailScript = extractScript('static String buildPageErrorDetailScript()')
+
+// SMB-174 redesign: hybrid auto/manual flow scripts
+const fillCredentialsOnlyTemplate = extractScript('static String buildFillCredentialsOnlyScript(')
+const focusCaptchaInputScript = extractScript('static String buildFocusCaptchaInputScript()')
+const clearCaptchaInputScript = extractScript('static String buildClearCaptchaInputScript()')
+let _fcoIdx = 0
+const fillCredentialsOnlyScript = fillCredentialsOnlyTemplate.replace(
+  /%s/g,
+  () => ['0910047171', 'Swxd3167@'][_fcoIdx++] ?? '',
+)
 
 // buildSubmitLoginScript 使用 String.format，需替換 %s 佔位符
 const submitTemplate = extractScript('static String buildSubmitLoginScript(')
@@ -563,6 +574,40 @@ check('loginDetect at QUERY_URL', afterLogin, false,
   '[SMB-174 關鍵修復] URL 離開 /accounts/login 後必須回傳 false，代表登入成功。' +
   '修復前使用 input[type="tel"]/input[type="password"] 選擇器，查詢頁也有這些元素，導致永遠回傳 true')
 
+// ── Step 6A: 登入失敗時 — 頁面錯誤訊息擷取（SMB-174）────────────────────────
+
+section('Step 6A  登入失敗頁面錯誤訊息擷取（buildPageErrorDetailScript）')
+const errorMsgEl = new MockEl({
+  tag: 'div',
+  attrs: { class: 'alert-danger', role: 'alert' },
+  text: '驗證碼錯誤',
+  visible: true,
+})
+const errorPageDocument = {
+  title: '財政部電子發票整合服務平台',
+  body: { innerText: '驗證碼錯誤' },
+  documentElement: { textContent: '驗證碼錯誤', innerHTML: '' },
+  readyState: 'complete',
+  querySelector(sel) { return matchAll([errorMsgEl], sel)[0] ?? null },
+  querySelectorAll(sel) { return matchAll([errorMsgEl], sel) },
+  createElement() { return new MockEl({ tag: 'canvas' }) },
+}
+const ctxErr = {
+  location: { href: LOGIN_URL },
+  document: errorPageDocument,
+  window: { HTMLInputElement: { prototype: {} } },
+  getComputedStyle: () => ({ display: 'block', visibility: 'visible' }),
+  String: globalThis.String,
+  Boolean: globalThis.Boolean,
+  Array: globalThis.Array,
+  Object: globalThis.Object,
+}
+const pageErrorResult = runScript(pageErrorDetailScript, ctxErr)
+console.log(`  原始結果: ${JSON.stringify(pageErrorResult)}`)
+check('擷取到平台錯誤文字', pageErrorResult?.text, '驗證碼錯誤',
+  '[SMB-174] 登入失敗後必須能擷取站台顯示的錯誤訊息（如「驗證碼錯誤」/「帳號或密碼錯誤」），' +
+  '才能在 einvoice_login_failed 訊息附帶平台回應，避免使用者看到無資訊的 generic 失敗')
+
 // ── Step 7: Cloudflare 挑戰 URL 偵測 ─────────────────────────────────────
 
 section('Step 7  Cloudflare 挑戰 URL 偵測（應正確識別）')
@@ -577,6 +622,59 @@ const challengeUrlResult = runScript(platformChallengeScript, ctxChallengeUrl)
 console.log(`  原始結果: ${JSON.stringify(challengeUrlResult)}`)
 checkTrue('challenge URL 偵測到 Cloudflare', challengeUrlResult?.challenge,
   '當 URL 含有 /cdn-cgi/challenge-platform/ 時必須偵測為平台挑戰')
+
+// ── Step 8: 混合自動/手動登入流程 — 自動填帳密（不送出）─────────────────────
+
+section('Step 8  自動填帳密（buildFillCredentialsOnlyScript）— 不應送出 / 不應觸碰驗證碼')
+const els8 = buildLoginPage()
+els8.carrierBtn.click() // 模擬 Step 1 已完成，登入表單顯示
+const ctx8 = createPageContext(els8, LOGIN_URL)
+const fillResult = runScript(fillCredentialsOnlyScript, ctx8)
+console.log(`  原始結果: ${JSON.stringify(fillResult)}`)
+checkTrue('filled === true', fillResult?.filled,
+  '[SMB-174 混合流程] 自動填好帳號密碼（不填驗證碼、不送出），讓使用者可確認所填內容')
+check('phone 已填入', els8.phoneInput.value, '0910047171', '手機號碼欄位必須被填入測試帳號')
+check('password 已填入', els8.passInput.value, 'Swxd3167@', '密碼欄位必須被填入測試密碼')
+check('captcha 保持空白（不應被觸碰）', els8.captchaInput.value, '',
+  'Fill-only 階段不可填入驗證碼；驗證碼留給 OCR 自動模式或手動模式處理')
+checkTrue('submit 未被點擊（不應送出）', !els8.submitBtn._clicked,
+  'Fill-only 階段絕對不能送出表單；送出由後續 OCR auto-submit 或手動模式控制')
+
+// ── Step 9: 手動驗證碼 fallback — focus + clear 驗證碼欄位 ───────────────────
+
+section('Step 9  手動模式輔助腳本（focusCaptchaInput + clearCaptchaInput）')
+const els9 = buildLoginPage()
+els9.carrierBtn.click()
+els9.captchaInput._value = 'XXXX' // OCR 留下的舊值
+
+// 為 instrumented 行為加上 focus / select / scrollIntoView 紀錄
+let captchaFocused = false
+let captchaSelected = false
+let captchaScrolled = false
+els9.captchaInput.focus = () => { captchaFocused = true }
+els9.captchaInput.select = () => { captchaSelected = true }
+els9.captchaInput.scrollIntoView = () => { captchaScrolled = true }
+
+const ctx9 = createPageContext(els9, LOGIN_URL)
+
+// 先 clear
+const clearResult = runScript(clearCaptchaInputScript, ctx9)
+console.log(`  clear 結果: ${clearResult}`)
+checkTrue('clearCaptchaInputScript 回傳 true', clearResult,
+  '[SMB-174 手動模式] 進入手動模式時應清空 OCR 之前留下的錯誤值')
+check('captcha 欄位已清空', els9.captchaInput.value, '',
+  'OCR 失敗後切手動模式，舊值必須清空，避免使用者輸入時困惑')
+
+// 再 focus
+const focusResult = runScript(focusCaptchaInputScript, ctx9)
+console.log(`  focus 結果: ${focusResult}`)
+checkTrue('focusCaptchaInputScript 回傳 true', focusResult,
+  '[SMB-174 手動模式] 必須能找到 captcha 並 focus，引導使用者輸入')
+checkTrue('captcha 欄位 scrollIntoView 被呼叫', captchaScrolled,
+  '手動模式應將 captcha 捲入視野中央，使用者明顯看到要輸入的位置')
+checkTrue('captcha 欄位 focus() 被呼叫', captchaFocused, 'focus 必須觸發以開啟鍵盤')
+checkTrue('captcha 欄位 select() 被呼叫', captchaSelected,
+  'select() 讓使用者首個按鍵直接覆蓋舊值，不需先按刪除')
 
 // ─── 最終報告 ─────────────────────────────────────────────────────────────────
 
