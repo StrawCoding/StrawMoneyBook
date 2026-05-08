@@ -38,4 +38,34 @@ public class EInvoiceAutomationTest {
             EInvoiceAutomation.LOGIN_URL
         ));
     }
+
+    @Test
+    public void mobileCarrierSelectionScriptScansTextLabelsInputsAndSelectOptions() {
+        String script = EInvoiceAutomation.buildSelectMobileCarrierScript();
+
+        assertTrue(script.contains("手機條碼"));
+        assertTrue(script.contains("手機載具"));
+        assertTrue(script.contains("mobilebarcode"));
+        assertTrue(script.contains("select"));
+        assertTrue(script.contains("label"));
+        assertTrue(script.contains("input[type=\"radio\"]"));
+        assertTrue(script.contains("aria-label"));
+        assertTrue(script.contains("dataset"));
+        assertFalse(script.contains(":contains("));
+    }
+
+    @Test
+    public void submitLoginScriptUsesVisibleRootsAndFullInputEvents() {
+        String script = EInvoiceAutomation.buildSubmitLoginScript("0912345678", "secret", "1234");
+
+        assertTrue(script.contains("ensureMobileCarrier"));
+        assertTrue(script.contains("querySelectorAll"));
+        assertTrue(script.contains("[role=\"tabpanel\"]"));
+        assertTrue(script.contains("getBoundingClientRect"));
+        assertTrue(script.contains("keyup"));
+        assertTrue(script.contains("phone_missing"));
+        assertTrue(script.contains("password_missing"));
+        assertTrue(script.contains("captcha_missing"));
+        assertTrue(script.contains("input[placeholder*=\"條碼\"]"));
+    }
 }

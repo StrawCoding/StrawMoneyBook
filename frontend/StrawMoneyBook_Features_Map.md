@@ -1024,7 +1024,7 @@ UI composable 目錄：`src/ui/composables/`
 - `android/.../EInvoiceAutomation.java` — 完整自動化邏輯：登入 `einvoice.nat.gov.tw`、CAPTCHA OCR（TesseractBridge numeric 模式）、多頁發票清單解析；`EInvoiceException` 內嵌型別
 - **SMB-170 (v1.0.9)**：`EInvoiceAutomation.java` 的 `evaluateJavaScript()` 改為只在 UI thread 呼叫 `webView.evaluateJavascript()`，並在背景 thread 等待 callback，避免原本 UI thread 內等待造成腳本結果逾時；登入頁/查詢頁載入後也偵測 Cloudflare 或平台防自動化 challenge，命中時回傳 `einvoice_platform_challenge` 與明確訊息；`EInvoiceAutomationPlugin.java` 將無 payload 的取消結果改成 `einvoice_automation_canceled`，避免只顯示 `E-invoice automation failed`。
 - **SMB-172**：新增 `einvoice-debug.service.js`；`backend.js` 的 `scrapeEInvoiceList()` 與 `importSelectedInvoices()` 各自包覆 `traceEInvoiceScrape` / `traceEInvoiceImport`，記錄每次操作的狀態、耗時、發票數量及錯誤；Debug Page 新增「載具抓取紀錄」區塊並同步加入 i18n（zh-TW / en / ja）
-- **SMB-173 (v1.0.9)**：`EInvoiceAutomation.java` 的登入入口改為 `https://www.einvoice.nat.gov.tw/accounts/login`，查詢入口改為 `https://www.einvoice.nat.gov.tw/portal/btc/mobile/btc502w/search`；單元測試鎖住官方路徑，避免回退到舊的 `/btc502w/BTCIndex` 或 `/btc502w/BTCInvController`。
+- **SMB-173 (v1.0.9)**：`EInvoiceAutomation.java` 的登入入口改為 `https://www.einvoice.nat.gov.tw/accounts/login`，查詢入口改為 `https://www.einvoice.nat.gov.tw/portal/btc/mobile/btc502w/search`；手機條碼 / 載具模式選取改為掃描文字、label、radio / checkbox、select option 與 data/aria 屬性，登入填值會觸發完整 input/change/keyup/blur 事件，找不到欄位時回傳 `phone_missing`、`password_missing` 或 `captcha_missing` 診斷；單元測試鎖住官方路徑與載具填入腳本，避免回退到舊的 `/btc502w/BTCIndex` 或 `/btc502w/BTCInvController`。
 
 ### 修改檔案
 - `src/core/db/migrate.js` — 加入 migration 032

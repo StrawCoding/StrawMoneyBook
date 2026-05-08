@@ -838,7 +838,7 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 - **SMB-166 (v1.0.8)**：Step 2 加入平台守衛 `canProceed = platformSupported && dateRange_valid`；非 Android 平台「下一步」禁用並顯示開發中提示
 - **SMB-170 (v1.0.9)**：修正 `evaluateJavascript` 在 UI thread 內等待 callback 的死鎖風險，改由背景 thread 等待結果，避免每次腳本執行都逾時並導致自動化流程失敗；登入頁與查詢頁載入後也會偵測 Cloudflare / 防自動化 challenge，命中時回傳 `einvoice_platform_challenge` 與可診斷訊息；Activity 被取消且沒有錯誤 payload 時改回傳 `einvoice_automation_canceled`，避免前端只看到通用 `E-invoice automation failed`。
 - **SMB-172**：Debug Page 新增「載具抓取紀錄」區塊，透過 `einvoice-debug.service.js` 追蹤每次 `scrape`（抓取）和 `import`（匯入）操作；記錄欄位包含手機號碼（前 4 碼可見其餘遮蔽）、查詢日期區間、操作狀態（running / ok / error）、耗時、抓取發票數、匯入 / 跳過 / 失敗筆數及錯誤代碼與訊息；i18n 同步新增 zh-TW / en / ja key；匯出 debug log 的 JSON payload 也加入 `einvoice_calls` 欄位。
-- **SMB-173 (v1.0.9)**：Android WebView 自動化改用財政部電子發票整合服務平台目前的登入與查詢路徑：`/accounts/login` 與 `/portal/btc/mobile/btc502w/search`；舊的 `/btc502w/BTCIndex`、`/btc502w/BTCInvController` 不再作為入口 URL，避免官方路由變更時直接落到 404 或錯誤頁。
+- **SMB-173 (v1.0.9)**：Android WebView 自動化改用財政部電子發票整合服務平台目前的登入與查詢路徑：`/accounts/login` 與 `/portal/btc/mobile/btc502w/search`；舊的 `/btc502w/BTCIndex`、`/btc502w/BTCInvController` 不再作為入口 URL，避免官方路由變更時直接落到 404 或錯誤頁。官方登入頁的手機條碼 / 載具模式選取也改為掃描文字、label、radio / checkbox、select option 與 data/aria 屬性，填入手機號碼、密碼與驗證碼時會觸發完整 input/change/keyup/blur 事件；找不到欄位時回傳 `phone_missing`、`password_missing` 或 `captcha_missing` 等診斷原因。
 
 ### 入口
 - `功能列表` 頁面（FeatureListPage.vue）→「電子發票匯入」

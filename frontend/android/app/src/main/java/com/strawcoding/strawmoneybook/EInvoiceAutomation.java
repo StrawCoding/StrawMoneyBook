@@ -81,9 +81,8 @@ final class EInvoiceAutomation {
     // ── Login ──────────────────────────────────────────────────────────────────
 
     private static void performLogin(Activity activity, BrowserSession session, String phone, String password) throws Exception {
-        // Select 手機條碼 carrier type tab if present
-        session.evaluateJavaScript(buildSelectMobileCarrierScript());
-        Thread.sleep(500L);
+        JSONObject carrierSnapshot = selectMobileCarrier(session);
+        waitForMobileCarrierLoginFormStable(session, carrierSnapshot);
 
         for (int attempt = 0; attempt < CAPTCHA_MAX_ATTEMPTS; attempt++) {
             if (attempt > 0) {
@@ -107,9 +106,9 @@ final class EInvoiceAutomation {
             }
 
             Log.d(TAG, "Submitting login attempt=" + (attempt + 1));
-            boolean submitted = Boolean.TRUE.equals(session.evaluateJavaScript(buildSubmitLoginScript(phone, password, captchaText)));
-            if (!submitted) {
-                throw new EInvoiceException("einvoice_login_form_missing", "找不到登入表單");
+            Object submitResult = session.evaluateJavaScript(buildSubmitLoginScript(phone, password, captchaText));
+            if (!isSubmitLoginResultSuccess(submitResult)) {
+                throw new EInvoiceException("einvoice_login_form_missing", describeSubmitLoginFailure(submitResult, carrierSnapshot));
             }
 
             if (waitForLoginSuccess(session)) {
@@ -118,11 +117,58 @@ final class EInvoiceAutomation {
 
             Log.d(TAG, "Login failed attempt=" + (attempt + 1) + ", retrying");
             session.loadUrl(LOGIN_URL);
-            session.evaluateJavaScript(buildSelectMobileCarrierScript());
-            Thread.sleep(500L);
+            carrierSnapshot = selectMobileCarrier(session);
+            waitForMobileCarrierLoginFormStable(session, carrierSnapshot);
         }
 
         throw new EInvoiceException("einvoice_login_failed", "電子發票平台登入失敗，請確認手機號碼、密碼及驗證碼是否正確");
+    }
+
+    private static JSONObject selectMobileCarrier(BrowserSession session) throws Exception {
+        Object result = session.evaluateJavaScript(buildSelectMobileCarrierScript());
+        JSONObject snapshot = result instanceof JSONObject ? (JSONObject) result : new JSONObject().put("selected", Boolean.TRUE.equals(result));
+        Log.d(TAG, "Mobile carrier selection snapshot=" + snapshot);
+        return snapshot;
+    }
+
+    private static void waitForMobileCarrierLoginFormStable(BrowserSession session, JSONObject carrierSnapshot) throws Exception {
+        long deadline = System.currentTimeMillis() + 8_000L;
+        JSONObject lastSnapshot = null;
+        while (System.currentTimeMillis() < deadline) {
+            Object result = session.evaluateJavaScript(buildLoginFormSnapshotScript());
+            if (result instanceof JSONObject) {
+                lastSnapshot = (JSONObject) result;
+                if (
+                    lastSnapshot.optBoolean("mobileFieldVisible", false) ||
+                    (lastSnapshot.optBoolean("passwordFieldVisible", false) && lastSnapshot.optBoolean("captchaVisible", false))
+                ) {
+                    Log.d(TAG, "Login form ready carrier=" + carrierSnapshot + " form=" + lastSnapshot);
+                    return;
+                }
+            }
+            Thread.sleep(300L);
+        }
+        Log.d(TAG, "Login form did not fully stabilize carrier=" + carrierSnapshot + " form=" + lastSnapshot);
+    }
+
+    private static boolean isSubmitLoginResultSuccess(Object result) {
+        if (Boolean.TRUE.equals(result)) return true;
+        if (!(result instanceof JSONObject)) return false;
+        return ((JSONObject) result).optBoolean("submitted", false);
+    }
+
+    private static String describeSubmitLoginFailure(Object result, JSONObject carrierSnapshot) {
+        if (result instanceof JSONObject) {
+            JSONObject snapshot = (JSONObject) result;
+            String reason = normalizeText(snapshot.optString("reason", ""));
+            String missing = normalizeText(snapshot.optString("missing", ""));
+            String carrier = String.valueOf(snapshot.opt("carrier"));
+            String detail = reason.isEmpty() ? "找不到登入表單" : "找不到登入表單: " + reason;
+            if (!missing.isEmpty()) detail += " (" + missing + ")";
+            if (!carrier.isEmpty() && !"null".equals(carrier)) detail += " carrier=" + carrier;
+            return detail;
+        }
+        return "找不到登入表單，載具選取結果: " + String.valueOf(carrierSnapshot);
     }
 
     private static String waitForCaptchaReady(BrowserSession session) throws Exception {
@@ -346,35 +392,130 @@ final class EInvoiceAutomation {
 
     // ── JavaScript scripts ─────────────────────────────────────────────────────
 
-    private static String buildSelectMobileCarrierScript() {
+    static String buildSelectMobileCarrierScript() {
         return """
             (() => {
               try {
-                // If the mobile phone field is already visible, the correct tab is already active — do nothing.
-                // Clicking a tab unnecessarily can switch AWAY from the already-correct carrier form.
-                if (document.querySelector('#mobile_phone, input[name="mobile_phone"]')) return true;
-                // Find the 手機條碼 tab by text content (works regardless of element type or position)
-                const candidates = Array.from(document.querySelectorAll('a, button, li, div[role="tab"]'));
-                for (const el of candidates) {
-                  const text = (el.textContent || '').trim();
-                  if (text === '手機條碼' || text.startsWith('手機條碼') || text.includes('手機載具')) {
-                    el.click();
-                    return true;
+                const visible = (el) => {
+                  if (!el) return false;
+                  const style = getComputedStyle(el);
+                  const rect = el.getBoundingClientRect();
+                  return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+                };
+                const normalize = (value) => String(value || '').replace(/\\s+/g, '').toLowerCase();
+                const dataText = (el) => Object.keys(el?.dataset || {}).map((key) => `${key}:${el.dataset[key]}`).join(' ');
+                const textOf = (el) => [
+                  el?.textContent,
+                  el?.getAttribute?.('aria-label'),
+                  el?.getAttribute?.('title'),
+                  el?.getAttribute?.('for'),
+                  el?.getAttribute?.('name'),
+                  el?.getAttribute?.('id'),
+                  el?.getAttribute?.('value'),
+                  dataText(el),
+                ].filter(Boolean).join(' ');
+                const isMobileCarrierSignal = (el) => {
+                  const text = normalize(textOf(el));
+                  return text.includes('手機條碼') ||
+                    text.includes('手機載具') ||
+                    text.includes('mobilebarcode') ||
+                    text.includes('mobilecarrier') ||
+                    text.includes('barcode') ||
+                    text.includes('mobile');
+                };
+                const dispatchFull = (el) => {
+                  for (const type of ['input', 'change', 'click', 'blur']) {
+                    el.dispatchEvent(new Event(type, { bubbles: true }));
+                  }
+                };
+                const mobileField = document.querySelector(
+                  '#mobile_phone, input[name="mobile_phone"], #loginPhone, #phoneNo, #phone, input[name="btc502wQ.userPh"], input[name="phoneNo"], input[type="tel"], input[inputmode="tel"], input[placeholder*="手機"]'
+                );
+                if (mobileField && visible(mobileField)) {
+                  return { selected: true, method: 'already_visible', reason: 'mobile_field_visible' };
+                }
+
+                const selects = Array.from(document.querySelectorAll('select')).filter(visible);
+                for (const select of selects) {
+                  const options = Array.from(select.options || []);
+                  const match = options.find((option) => isMobileCarrierSignal(option));
+                  if (match) {
+                    select.value = match.value;
+                    dispatchFull(select);
+                    return { selected: true, method: 'select_option', reason: normalize(textOf(match)) };
                   }
                 }
-                // Fallback: attribute-based selectors (avoid position-based selectors like :first-child)
+
+                const controls = Array.from(document.querySelectorAll(
+                  'a, button, label, input[type="radio"], input[type="checkbox"], [role="tab"], [role="button"], [data-tab], [data-target], [data-bs-target]'
+                )).filter(visible);
+                for (const el of controls) {
+                  if (!isMobileCarrierSignal(el)) continue;
+                  if (el.tagName === 'LABEL') {
+                    const forId = el.getAttribute('for');
+                    const target = forId ? document.getElementById(forId) : null;
+                    if (target) {
+                      target.checked = true;
+                      dispatchFull(target);
+                    }
+                  }
+                  el.click();
+                  dispatchFull(el);
+                  return { selected: true, method: el.tagName.toLowerCase(), reason: normalize(textOf(el)).slice(0, 120) };
+                }
+
                 const attrSelectors = [
-                  'a[href*="mobile"]', 'a[data-type="0"]', 'a[data-target*="phone"]',
-                  'a[data-carrier-type="phone"]', '[data-tab="mobile"]',
+                  'a[href*="mobile"]',
+                  'a[href*="barcode"]',
+                  '[data-type="0"]',
+                  '[data-target*="phone"]',
+                  '[data-target*="mobile"]',
+                  '[data-bs-target*="mobile"]',
+                  '[data-carrier-type*="phone"]',
+                  '[data-carrier-type*="mobile"]',
+                  '[data-tab*="mobile"]',
                 ];
                 for (const sel of attrSelectors) {
                   try {
                     const el = document.querySelector(sel);
-                    if (el) { el.click(); return true; }
+                    if (el && visible(el)) {
+                      el.click();
+                      dispatchFull(el);
+                      return { selected: true, method: 'selector', reason: sel };
+                    }
                   } catch (_) {}
                 }
-                return false;
-              } catch (_) { return false; }
+                return { selected: false, method: 'none', reason: 'mobile_carrier_control_missing' };
+              } catch (e) {
+                return { selected: false, method: 'error', reason: String(e?.message || 'error') };
+              }
+            })();
+            """;
+    }
+
+    static String buildLoginFormSnapshotScript() {
+        return """
+            (() => {
+              try {
+                const visible = (el) => {
+                  if (!el) return false;
+                  const style = getComputedStyle(el);
+                  const rect = el.getBoundingClientRect();
+                  return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+                };
+                const mobileSelectors = '#mobile_phone, input[name="mobile_phone"], #loginPhone, #phoneNo, #phone, input[name="btc502wQ.userPh"], input[name="phoneNo"], input[type="tel"], input[inputmode="tel"], input[placeholder*="手機"]';
+                const passwordSelectors = '#loginPass, #passwd, #password, input[name="btc502wQ.userPasswd"], input[name="passwd"], input[type="password"]';
+                const captchaSelectors = '#captcha, #captchaCode, #verifyCode, input[name="captcha"], input[name="verifyCode"], input[maxlength="4"], img[id*="captcha"], img[src*="captcha"], img[alt*="驗證碼"]';
+                return {
+                  url: String(location.href || ''),
+                  title: String(document.title || ''),
+                  mobileFieldVisible: Array.from(document.querySelectorAll(mobileSelectors)).some(visible),
+                  passwordFieldVisible: Array.from(document.querySelectorAll(passwordSelectors)).some(visible),
+                  captchaVisible: Array.from(document.querySelectorAll(captchaSelectors)).some(visible),
+                };
+              } catch (e) {
+                return { error: String(e?.message || 'error') };
+              }
             })();
             """;
     }
@@ -461,27 +602,110 @@ final class EInvoiceAutomation {
             """;
     }
 
-    private static String buildSubmitLoginScript(String phone, String password, String captcha) {
+    static String buildSubmitLoginScript(String phone, String password, String captcha) {
         String safePhone = escapeJs(phone);
         String safePassword = escapeJs(password);
         String safeCaptcha = escapeJs(captcha);
         return String.format(Locale.US, """
             (() => {
+              const visible = (el) => {
+                if (!el) return false;
+                const style = getComputedStyle(el);
+                const rect = el.getBoundingClientRect();
+                return !el.disabled && style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+              };
+              const normalize = (value) => String(value || '').replace(/\\s+/g, '').toLowerCase();
+              const dataText = (el) => Object.keys(el?.dataset || {}).map((key) => `${key}:${el.dataset[key]}`).join(' ');
+              const textOf = (el) => [
+                el?.textContent,
+                el?.getAttribute?.('aria-label'),
+                el?.getAttribute?.('title'),
+                el?.getAttribute?.('for'),
+                el?.getAttribute?.('name'),
+                el?.getAttribute?.('id'),
+                el?.getAttribute?.('value'),
+                dataText(el),
+              ].filter(Boolean).join(' ');
+              const isMobileCarrierSignal = (el) => {
+                const text = normalize(textOf(el));
+                return text.includes('手機條碼') ||
+                  text.includes('手機載具') ||
+                  text.includes('mobilebarcode') ||
+                  text.includes('mobilecarrier') ||
+                  text.includes('barcode') ||
+                  text.includes('mobile');
+              };
+              function dispatchFull(el) {
+                for (const type of ['input', 'change', 'keyup', 'blur']) {
+                  el.dispatchEvent(new Event(type, { bubbles: true }));
+                }
+              }
+              function ensureMobileCarrier() {
+                const existing = document.querySelector(
+                  '#mobile_phone, input[name="mobile_phone"], #loginPhone, #phoneNo, #phone, input[name="btc502wQ.userPh"], input[name="phoneNo"], input[type="tel"], input[inputmode="tel"], input[placeholder*="手機"]'
+                );
+                if (existing && visible(existing)) return { selected: true, method: 'already_visible', reason: 'mobile_field_visible' };
+
+                for (const select of Array.from(document.querySelectorAll('select')).filter(visible)) {
+                  const match = Array.from(select.options || []).find((option) => isMobileCarrierSignal(option));
+                  if (!match) continue;
+                  select.value = match.value;
+                  dispatchFull(select);
+                  return { selected: true, method: 'select_option', reason: normalize(textOf(match)) };
+                }
+
+                const controls = Array.from(document.querySelectorAll(
+                  'a, button, label, input[type="radio"], input[type="checkbox"], [role="tab"], [role="button"], [data-tab], [data-target], [data-bs-target]'
+                )).filter(visible);
+                for (const el of controls) {
+                  if (!isMobileCarrierSignal(el)) continue;
+                  if (el.tagName === 'LABEL') {
+                    const target = el.getAttribute('for') ? document.getElementById(el.getAttribute('for')) : null;
+                    if (target) {
+                      target.checked = true;
+                      dispatchFull(target);
+                    }
+                  }
+                  el.click();
+                  dispatchFull(el);
+                  return { selected: true, method: el.tagName.toLowerCase(), reason: normalize(textOf(el)).slice(0, 120) };
+                }
+                return { selected: false, method: 'none', reason: 'mobile_carrier_control_missing' };
+              }
               function setVal(el, value) {
                 const nativeInputSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
                 if (nativeInputSetter) {
                   nativeInputSetter.call(el, value);
-                  el.dispatchEvent(new Event('input', { bubbles: true }));
-                  el.dispatchEvent(new Event('change', { bubbles: true }));
                 } else {
                   el.value = value;
                 }
+                dispatchFull(el);
               }
+              const carrier = ensureMobileCarrier();
+              const roots = Array.from(document.querySelectorAll(
+                'form, [role="tabpanel"], .tab-pane, .tab-content, .login-panel, .login-form, .card, section, main, body'
+              )).filter(visible);
+              const mobileRoots = roots.filter((root) =>
+                root.querySelector('#mobile_phone, input[name="mobile_phone"], #loginPhone, #phoneNo, #phone, input[name="btc502wQ.userPh"], input[name="phoneNo"], input[type="tel"], input[inputmode="tel"], input[placeholder*="手機"]') ||
+                normalize(textOf(root)).includes('手機條碼') ||
+                normalize(textOf(root)).includes('手機載具') ||
+                normalize(textOf(root)).includes('mobilebarcode') ||
+                normalize(textOf(root)).includes('mobilecarrier')
+              );
+              const searchRoots = (mobileRoots.length ? mobileRoots : roots.length ? roots : [document]).filter(Boolean);
               function findInput(selectors) {
+                for (const root of searchRoots) {
+                  for (const sel of selectors) {
+                    try {
+                      const matches = Array.from(root.querySelectorAll(sel)).filter(visible);
+                      if (matches.length) return matches[0];
+                    } catch (_) {}
+                  }
+                }
                 for (const sel of selectors) {
                   try {
-                    const el = document.querySelector(sel);
-                    if (el) return el;
+                    const matches = Array.from(document.querySelectorAll(sel)).filter(visible);
+                    if (matches.length) return matches[0];
                   } catch (_) {}
                 }
                 return null;
@@ -489,36 +713,57 @@ final class EInvoiceAutomation {
               const phoneEl = findInput([
                 '#mobile_phone', 'input[name="mobile_phone"]',
                 '#loginPhone', '#phoneNo', '#phone',
+                '#cellphone', '#mobile', '#carrierMobile',
                 'input[name="btc502wQ.userPh"]', 'input[name="phoneNo"]',
-                'input[type="tel"]', 'input[placeholder*="手機"]',
+                'input[name*="mobile"]', 'input[name*="phone"]', 'input[id*="mobile"]', 'input[id*="phone"]',
+                'input[type="tel"]', 'input[inputmode="tel"]', 'input[autocomplete="tel"]',
+                'input[placeholder*="手機"]', 'input[placeholder*="條碼"]', 'input[aria-label*="手機"]',
               ]);
               const passEl = findInput([
                 '#loginPass', '#passwd', '#password',
                 'input[name="btc502wQ.userPasswd"]', 'input[name="passwd"]',
+                'input[name*="password"]', 'input[name*="passwd"]', 'input[id*="password"]', 'input[id*="passwd"]',
                 'input[type="password"]',
               ]);
               const captchaEl = findInput([
                 '#captcha', '#captchaCode', '#verifyCode',
                 'input[name="captcha"]', 'input[name="verifyCode"]',
+                'input[name*="captcha"]', 'input[name*="verify"]', 'input[id*="captcha"]', 'input[id*="verify"]',
+                'input[placeholder*="驗證碼"]', 'input[aria-label*="驗證碼"]', 'input[maxlength="4"]',
               ]);
-              if (!phoneEl || !passEl || !captchaEl) return false;
+              const missing = [];
+              if (!phoneEl) missing.push('phone_missing');
+              if (!passEl) missing.push('password_missing');
+              if (!captchaEl) missing.push('captcha_missing');
+              if (missing.length) {
+                return { submitted: false, reason: missing[0], missing: missing.join(','), carrier };
+              }
               setVal(phoneEl, '%s');
               setVal(passEl, '%s');
               setVal(captchaEl, '%s');
-              // Submit the form
               const submitSelectors = [
                 'button[type="submit"]', 'input[type="submit"]',
                 '.btn-login', '.login-btn', 'a.btn-query',
-                'button.btn-primary', 'a[onclick*="login"]',
+                'button.btn-primary', 'a[onclick*="login"]', 'button[onclick*="login"]',
+                'button[aria-label*="登入"]', 'button[title*="登入"]',
               ];
-              for (const sel of submitSelectors) {
-                const btn = document.querySelector(sel);
-                if (btn) { btn.click(); return true; }
+              const submitRoots = [phoneEl.closest('form'), ...searchRoots].filter(Boolean);
+              for (const root of submitRoots) {
+                for (const sel of submitSelectors) {
+                  const btn = root.querySelector(sel);
+                  if (btn && visible(btn)) {
+                    btn.click();
+                    return { submitted: true, reason: 'clicked_submit', carrier };
+                  }
+                }
               }
-              // Fallback: submit the form directly
               const form = phoneEl.closest('form');
-              if (form) { form.submit(); return true; }
-              return false;
+              if (form) {
+                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                if (typeof form.submit === 'function') form.submit();
+                return { submitted: true, reason: 'submitted_form', carrier };
+              }
+              return { submitted: false, reason: 'submit_control_missing', missing: '', carrier };
             })();
             """, safePhone, safePassword, safeCaptcha);
     }
@@ -529,9 +774,9 @@ final class EInvoiceAutomation {
               try {
                 // On the login page if we find phone or password input
                 return Boolean(
-                  document.querySelector('#loginPhone, #phoneNo, #phone, input[name="btc502wQ.userPh"], input[name="phoneNo"]') ||
-                  document.querySelector('#loginPass, #passwd, input[name="btc502wQ.userPasswd"], input[name="passwd"]') ||
-                  document.querySelector('#captcha, #captchaCode, #verifyCode')
+                  document.querySelector('#mobile_phone, input[name="mobile_phone"], #loginPhone, #phoneNo, #phone, #cellphone, #mobile, #carrierMobile, input[name="btc502wQ.userPh"], input[name="phoneNo"], input[type="tel"], input[inputmode="tel"], input[placeholder*="手機"]') ||
+                  document.querySelector('#loginPass, #passwd, #password, input[name="btc502wQ.userPasswd"], input[name="passwd"], input[type="password"]') ||
+                  document.querySelector('#captcha, #captchaCode, #verifyCode, input[name="captcha"], input[name="verifyCode"], input[placeholder*="驗證碼"]')
                 );
               } catch (_) { return false; }
             })();
