@@ -41,6 +41,8 @@ final class EInvoiceAutomation {
     private static final long CAPTCHA_READY_TIMEOUT_MS = 15_000L;
     static final long AUTO_LOGIN_WAIT_MS = 12_000L;
     static final long MANUAL_LOGIN_WAIT_MS = 90_000L;
+    static final long QUERY_FORM_WAIT_MS = 10_000L;
+    static final long QUERY_FORM_POLL_MS = 500L;
     private static final long LOGIN_DETECT_POLL_MS = 600L;
     private static final ZoneId TAIPEI_ZONE = ZoneId.of("Asia/Taipei");
     private static final DateTimeFormatter ROC_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd", Locale.US);
@@ -337,11 +339,9 @@ final class EInvoiceAutomation {
         // Fill query form and submit
         String rocDateFrom = toRocDate(dateFrom);
         String rocDateTo = toRocDate(dateTo);
-        boolean formFilled = Boolean.TRUE.equals(session.evaluateJavaScript(
-            buildFillQueryFormScript(rocDateFrom, rocDateTo, invoiceStatus, buyerTaxId, keyword)
-        ));
+        boolean formFilled = waitForQueryFormAndSubmit(session, rocDateFrom, rocDateTo, invoiceStatus, buyerTaxId, keyword);
         if (!formFilled) {
-            throw new EInvoiceException("einvoice_query_form_missing", "找不到發票查詢表單");
+            throw new EInvoiceException("einvoice_query_form_missing", describeQueryFormMissing(session));
         }
 
         // Wait for results
@@ -397,6 +397,33 @@ final class EInvoiceAutomation {
         }
 
         return filterInvoices(allInvoices, keyword, buyerTaxId);
+    }
+
+    private static boolean waitForQueryFormAndSubmit(BrowserSession session, String dateFrom, String dateTo, String invoiceStatus, String buyerTaxId, String keyword) throws Exception {
+        long deadline = System.currentTimeMillis() + QUERY_FORM_WAIT_MS;
+        while (System.currentTimeMillis() < deadline) {
+            Object result = session.evaluateJavaScript(
+                buildFillQueryFormScript(dateFrom, dateTo, invoiceStatus, buyerTaxId, keyword)
+            );
+            if (Boolean.TRUE.equals(result)) return true;
+            Thread.sleep(QUERY_FORM_POLL_MS);
+        }
+        return false;
+    }
+
+    private static String describeQueryFormMissing(BrowserSession session) throws Exception {
+        Object pageSnap = session.evaluateJavaScript(buildQueryPageDiagnosticScript());
+        if (!(pageSnap instanceof JSONObject)) {
+            return "找不到發票查詢表單";
+        }
+        JSONObject snap = (JSONObject) pageSnap;
+        String url = normalizeText(snap.optString("url", ""));
+        String title = normalizeText(snap.optString("title", ""));
+        String summary = normalizeText(snap.optString("summary", ""));
+        return "找不到發票查詢表單（等待 10 秒）。" +
+            (url.isEmpty() ? "" : " 目前頁面: " + url) +
+            (title.isEmpty() ? "" : " 標題: " + title) +
+            (summary.isEmpty() ? "" : " 頁面摘要: " + summary);
     }
 
     private static void assertPlatformAllowsAutomation(BrowserSession session, String stage) throws Exception {
@@ -1240,45 +1267,106 @@ final class EInvoiceAutomation {
                 const nativeInputSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
                 if (nativeInputSetter) {
                   nativeInputSetter.call(el, value);
-                  el.dispatchEvent(new Event('input', { bubbles: true }));
-                  el.dispatchEvent(new Event('change', { bubbles: true }));
                 } else {
                   el.value = value;
                 }
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                el.dispatchEvent(new Event('keyup', { bubbles: true }));
+                el.dispatchEvent(new Event('blur', { bubbles: true }));
               }
               function setSelect(el, value) {
                 if (!el) return;
+                const normalized = String(value || '').trim();
                 for (const opt of el.options) {
-                  if (opt.value === value || opt.text.includes(value)) {
+                  if (
+                    opt.value === normalized ||
+                    opt.text.includes(normalized) ||
+                    (normalized === 'all' && (/全部|所有|不限/.test(opt.text) || opt.value === ''))
+                  ) {
                     el.value = opt.value;
                     el.dispatchEvent(new Event('change', { bubbles: true }));
                     return;
                   }
                 }
               }
-              // Date range
-              const dateFromEl = document.querySelector('#qryDateS, #startDate, #start_date, input[name*="qryDateS"], input[name*="startDate"], input[name*="dateFrom"], input[name*="start"], input[placeholder*="起"]');
-              const dateToEl = document.querySelector('#qryDateE, #endDate, #end_date, input[name*="qryDateE"], input[name*="endDate"], input[name*="dateTo"], input[name*="end"], input[placeholder*="迄"]');
+              const find = (selectors) => {
+                for (const selector of selectors) {
+                  const el = document.querySelector(selector);
+                  if (el) return el;
+                }
+                return null;
+              };
+              // btc502w query form fields. The exact name selectors are first so site
+              // re-rendering does not accidentally match unrelated generic date inputs.
+              const dateFromEl = find([
+                'input[name="btc502wQ.qryDateS"]',
+                '#qryDateS',
+                'input[name*="qryDateS"]',
+                'input[placeholder*="起"]',
+              ]);
+              const dateToEl = find([
+                'input[name="btc502wQ.qryDateE"]',
+                '#qryDateE',
+                'input[name*="qryDateE"]',
+                'input[placeholder*="迄"]',
+              ]);
+              const submitBtn = Array.from(document.querySelectorAll('button[type="submit"], input[type="submit"], .btn-query, .search-btn, a.btn-primary, button, a'))
+                .find((el) => /查詢|搜尋|送出|確定|query|search/i.test(textOf(el) || el.value || el.getAttribute?.('aria-label') || ''));
+              const form = dateFromEl?.closest('form') || dateToEl?.closest('form') || submitBtn?.closest?.('form') || document.querySelector('form[name="btc502wForm"], form[id*="btc502w"], form[action*="btc502w"]');
+              if (!dateFromEl && !dateToEl && !submitBtn && !form) return false;
               setVal(dateFromEl, '%s');
               setVal(dateToEl, '%s');
               // Invoice status
-              const statusEl = document.querySelector('#invStatus, #invoiceStatus, select[name*="status"], select[name*="invStatus"]');
+              const statusEl = find([
+                'select[name="btc502wQ.invStatus"]',
+                '#invStatus',
+                'select[name*="invStatus"]',
+                'select[name*="status"]',
+              ]);
               if (statusEl) setSelect(statusEl, '%s');
               // Buyer tax ID
-              const taxIdEl = document.querySelector('#buyerBan, #buyerTaxId, input[name*="buyerBan"], input[name*="taxId"], input[placeholder*="統編"]');
+              const taxIdEl = find([
+                'input[name="btc502wQ.buyerBan"]',
+                '#buyerBan',
+                'input[name*="buyerBan"]',
+                'input[name*="taxId"]',
+                'input[placeholder*="統編"]',
+              ]);
               setVal(taxIdEl, '%s');
               // Keyword
-              const keywordEl = document.querySelector('#keyword, #itemKeyword, input[name*="keyword"], input[placeholder*="關鍵字"], input[placeholder*="品名"]');
+              const keywordEl = find([
+                'input[name="btc502wQ.keyword"]',
+                '#keyword',
+                'input[name*="keyword"]',
+                'input[placeholder*="關鍵字"]',
+                'input[placeholder*="品名"]',
+              ]);
               setVal(keywordEl, '%s');
               // Submit
-              const submitBtn = Array.from(document.querySelectorAll('button[type="submit"], input[type="submit"], .btn-query, .search-btn, a.btn-primary, button, a'))
-                .find((el) => /查詢|搜尋|送出|確定|query|search/i.test(textOf(el) || el.value || el.getAttribute?.('aria-label') || ''));
               if (submitBtn) { submitBtn.click(); return true; }
-              const form = dateFromEl?.closest('form') || document.querySelector('form');
               if (form) { form.submit(); return true; }
               return hasResultSignal();
             })();
             """, safeFrom, safeTo, safeStatus, safeTaxId, safeKeyword);
+    }
+
+    static String buildQueryPageDiagnosticScript() {
+        return """
+            (() => {
+              try {
+                const textOf = (el) => String(el?.innerText || el?.textContent || '').replace(/\\s+/g, ' ').trim();
+                const text = textOf(document.body || document.documentElement);
+                return {
+                  url: String(location.href || ''),
+                  title: String(document.title || ''),
+                  summary: text.slice(0, 240),
+                };
+              } catch (_) {
+                return { url: '', title: '', summary: '' };
+              }
+            })();
+            """;
     }
 
     static String buildWaitForResultsScript() {

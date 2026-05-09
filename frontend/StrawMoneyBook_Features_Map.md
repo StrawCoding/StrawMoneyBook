@@ -1011,6 +1011,10 @@ UI composable 目錄：`src/ui/composables/`
   - `recognizeNumericCaptcha`：Bitmap variants 在 try/finally 中回收，修復記憶體洩漏
   - `selectBestCandidate`：同分時以原始置信度作 tie-breaker，加入 Log 輸出
   - `buildParseInvoiceListScript`：8 位數（統編格式）無條件排除為金額，不受 amountLabel 影響；7 位數保持僅在無標籤時排除
+- **SMB-180 (v1.0.18)**：
+  - `fetchInvoices`：登入後載入 btc502w 查詢頁時最多輪詢 10 秒等待表單渲染；表單尚未出現時 `buildFillQueryFormScript` 回 `false`，Java 端繼續重試
+  - `buildFillQueryFormScript`：優先鎖定 `btc502wQ.qryDateS`、`btc502wQ.qryDateE`、`btc502wQ.invStatus`、`btc502wQ.buyerBan`、`btc502wQ.keyword`，避免泛用 selector 命中錯頁欄位；成功填寫後才點擊查詢或提交表單
+  - `buildQueryPageDiagnosticScript`：查詢表單最終缺失時回傳 URL、title、頁面摘要，錯誤碼維持 `einvoice_query_form_missing` 但訊息可直接用於實機 debug
 
 #### `android/app/src/main/java/com/strawcoding/strawmoneybook/TesseractBridge.java`
 - **v1.0.17**：`recognizeSegmentedCaptcha` 中，單一分段識別失敗時改以放大 2x 後重試一次（PSM_SINGLE_CHAR），仍失敗才放棄該候選，提升低品質驗證碼的識別率
@@ -1031,6 +1035,9 @@ UI composable 目錄：`src/ui/composables/`
   - `fillCredentialsFailureScriptIncludesFormDiagnostics`：驗證失敗回報含 `formDiag`、`location.href`、`visibleInputs`
   - `parseAmountScriptUnconditionallyExcludesEightDigitNumbers`：驗證 8 位數無條件過濾不受標籤影響
   - `waitForResultsTimeoutErrorCodeIsCorrect`：驗證等待腳本包含發票格式或載具清單偵測
+- **SMB-180 (v1.0.18)**：新增 2 個測試：
+  - `queryFormScriptTargetsBtc502wFieldsAndReturnsFalseBeforeFormRenders`：鎖住 btc502w 欄位 selector 與尚未渲染時回 `false`
+  - `queryFormTimingAndDiagnosticsSupportAsyncRenderDebugging`：鎖住 10 秒輪詢常數與查詢頁診斷 payload
 
 #### `scripts/simulate-einvoice-login-flow.mjs`
 - **SMB-174 Restart (v1.0.15)**：
@@ -1042,6 +1049,8 @@ UI composable 目錄：`src/ui/composables/`
   - Step 11 — 空白/載入中頁面 `waitForResults` 應回傳 false（防止靜默超時造成無任何發票誤顯）
   - Step 12 — 含金額標籤時統編仍不誤判為金額（邊緣案例）
   - 全套：41/41 通過
+- **SMB-180 (v1.0.18)**：
+  - Step 13 — 查詢頁載入中尚未渲染 btc502w 表單時 `buildFillQueryFormScript` 回 `false`；表單渲染後精準填入 `btc502wQ.*` 欄位並點擊查詢按鈕
 
 #### `src/core/repositories/einvoice-import.repo.js`
 - 函數（5）：`getEInvoiceCredential`, `upsertEInvoiceCredential`, `deleteEInvoiceCredential`, `getImportedInvoiceNumbers`, `insertInvoiceImport`, `listRecentInvoiceImports`

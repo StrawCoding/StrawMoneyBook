@@ -148,6 +148,32 @@ public class EInvoiceAutomationTest {
     }
 
     @Test
+    public void queryFormScriptTargetsBtc502wFieldsAndReturnsFalseBeforeFormRenders() {
+        String script = EInvoiceAutomation.buildFillQueryFormScript("1140101", "1140131", "all", "24536806", "咖啡");
+
+        assertTrue(script.contains("btc502wQ.qryDateS"));
+        assertTrue(script.contains("btc502wQ.qryDateE"));
+        assertTrue(script.contains("btc502wQ.invStatus"));
+        assertTrue(script.contains("btc502wQ.buyerBan"));
+        assertTrue(script.contains("btc502wQ.keyword"));
+        assertTrue(script.contains("return false"));
+        assertTrue(script.contains("keyup"));
+        assertTrue(script.contains("blur"));
+    }
+
+    @Test
+    public void queryFormTimingAndDiagnosticsSupportAsyncRenderDebugging() {
+        String diagnosticScript = EInvoiceAutomation.buildQueryPageDiagnosticScript();
+
+        assertTrue(EInvoiceAutomation.QUERY_FORM_WAIT_MS >= 10_000L);
+        assertTrue(EInvoiceAutomation.QUERY_FORM_POLL_MS <= 500L);
+        assertTrue(diagnosticScript.contains("location.href"));
+        assertTrue(diagnosticScript.contains("document.title"));
+        assertTrue(diagnosticScript.contains("summary"));
+        assertTrue(diagnosticScript.contains("slice(0, 240)"));
+    }
+
+    @Test
     public void numericCaptchaModeUsesDigitOnlyWhitelist() {
         assertEquals("0123456789", TesseractBridge.NUMERIC_ALLOWED_CHARS);
     }

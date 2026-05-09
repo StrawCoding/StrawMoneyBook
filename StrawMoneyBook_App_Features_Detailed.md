@@ -808,7 +808,7 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 
 ## 電子發票匯入（E-Invoice Import）
 
-**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）；帳密 IV 修正 v1.0.13（SMB-174）；自動化流程可見化 + 失敗診斷分類 v1.0.15（SMB-174 Restart）；驗證碼讀取與載具清單資料偵測修正 v1.0.16（SMB-179）；載具流程四大問題修復 v1.0.17
+**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）；帳密 IV 修正 v1.0.13（SMB-174）；自動化流程可見化 + 失敗診斷分類 v1.0.15（SMB-174 Restart）；驗證碼讀取與載具清單資料偵測修正 v1.0.16（SMB-179）；載具流程四大問題修復 v1.0.17；查詢頁穩定修復 v1.0.18（SMB-180）
 **狀態**：Android 原生插件保留 WebView 自動化流程，但會先偵測財政部站台的防自動化/Cloudflare challenge；被平台擋下時回傳明確錯誤，不再只顯示 `E-invoice automation failed`。穩定正式匯入仍應改接財政部電子發票官方 API 與後端代理。
 
 ### 功能說明
@@ -842,6 +842,7 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 - **SMB-174 (v1.0.13)**：修正「記住帳號」的密碼 IV 遺失問題；手機號碼與密碼現在會分別保存 AES-GCM IV，既有資料庫透過 migration 033 補上 `password_iv` 欄位，新儲存的憑證可在下一次進入精靈時正確還原並帶入 Android 自動化流程。
 - **SMB-174 Restart (v1.0.15)**：自動化流程徹底重做為「混合自動 + 手動驗證碼 fallback」，保證能完成登入。回應 Tester「我沒有看到他有輸入」與「請讓他能完整完美的工作」。
 - **SMB-179 (v1.0.16)**：驗證碼讀取不再只依賴 `<img>` canvas data URL；若 canvas 因站台保護或背景圖呈現而讀不到，會改由 Android WebView 可見區域裁切驗證碼元素做 OCR，並把 Tesseract numeric mode 收斂成純數字白名單與多組放大 / 灰階 / 高對比 / 二值化前處理。登入後若站台跳到「載具清單資料」或新版發票結果頁，也會以頁面文字、發票號碼 pattern、`role=row` / card / list 結構偵測與解析，不再只吃舊 `invTable` selector，且解析時避免把 8 位買方統編誤判成發票金額。
+- **SMB-180 (v1.0.18)**：登入成功後進入 btc502w 查詢頁時，`fetchInvoices` 會對查詢表單最多輪詢 10 秒；`buildFillQueryFormScript` 優先鎖定 `btc502wQ.qryDateS`、`btc502wQ.qryDateE`、`btc502wQ.invStatus`、`btc502wQ.buyerBan`、`btc502wQ.keyword` 欄位，表單尚未渲染時回 `false` 讓 Java 重試，已在結果頁時則維持直接成功。若最後仍找不到表單，會拋 `einvoice_query_form_missing` 並附上當前 URL、title 與頁面摘要，協助判斷平台改版、登入失效或跳轉錯頁。
 
   **新流程（5 階段，狀態列即時顯示）**：
   1. `正在開啟電子發票平台…` — `loadUrl(LOGIN_URL)` 並偵測 Cloudflare 挑戰

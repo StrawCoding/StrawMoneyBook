@@ -768,6 +768,52 @@ check('含金額標籤時統編不誤判為金額', parseResult12?.invoices?.[0]
 check('含金額標籤時統編正確擷取', parseResult12?.invoices?.[0]?.buyerTaxId, '12345678',
   '8 位統編應保留到 buyerTaxId 欄位，不應被金額解析消耗掉')
 
+// ─── Step 13：btc502w 查詢表單非同步渲染與送出 ──────────────────────────────
+console.log('\n── Step 13  btc502w 查詢表單填寫（載入中=false，渲染後=true）')
+
+const ctx13Loading = createPageContext({}, QUERY_URL, '查詢頁載入中')
+ctx13Loading.document.body = { innerText: '資料載入中...' }
+ctx13Loading.document.documentElement = { textContent: '資料載入中...', innerHTML: '' }
+const queryFormLoadingResult = runScript(fillQueryFormScript, ctx13Loading)
+console.log(`  載入中 fill/query 結果: ${queryFormLoadingResult}`)
+check('查詢表單尚未渲染時回 false', queryFormLoadingResult, false,
+  'Java 端應繼續輪詢，而不是在 Vue/平台表單尚未出現時立刻拋 query_form_missing')
+
+const queryDateFrom = new MockEl({ tag: 'input', attrs: { name: 'btc502wQ.qryDateS' }, visible: true })
+const queryDateTo = new MockEl({ tag: 'input', attrs: { name: 'btc502wQ.qryDateE' }, visible: true })
+const queryStatus = new MockEl({ tag: 'select', attrs: { name: 'btc502wQ.invStatus' }, visible: true })
+queryStatus.options = [
+  { value: '', text: '全部' },
+  { value: '1', text: '已開立' },
+]
+const queryBuyerBan = new MockEl({ tag: 'input', attrs: { name: 'btc502wQ.buyerBan' }, visible: true })
+const queryKeyword = new MockEl({ tag: 'input', attrs: { name: 'btc502wQ.keyword' }, visible: true })
+const querySubmit = new MockEl({ tag: 'button', attrs: { type: 'submit' }, text: '查詢', visible: true })
+const queryForm = new MockEl({
+  tag: 'form',
+  attrs: { name: 'btc502wForm', action: '/portal/btc/mobile/btc502w/search' },
+  visible: true,
+})
+queryForm._children = [queryDateFrom, queryDateTo, queryStatus, queryBuyerBan, queryKeyword, querySubmit]
+queryForm.submit = () => { queryForm._submitted = true }
+for (const el of queryForm._children) el._form = queryForm
+
+const ctx13 = createPageContext({ queryForm }, QUERY_URL, '載具明細查詢')
+ctx13.document.body = { innerText: '載具明細查詢 查詢日期 發票狀態 買方統編 關鍵字' }
+ctx13.document.documentElement = { textContent: ctx13.document.body.innerText, innerHTML: '' }
+const queryFormResult = runScript(fillQueryFormScript, ctx13)
+console.log(`  btc502w fill/query 結果: ${queryFormResult}`)
+check('btc502w 查詢表單送出成功', queryFormResult, true,
+  '渲染完成後應以 btc502wQ.* 欄位精準填入並送出查詢')
+check('btc502w 起日已填入', queryDateFrom.value, '1140501',
+  '起始日期必須填入 ROC yyyyMMdd 格式')
+check('btc502w 迄日已填入', queryDateTo.value, '1140508',
+  '結束日期必須填入 ROC yyyyMMdd 格式')
+check('btc502w 狀態選全部', queryStatus.value, '',
+  'status=all 應對應平台「全部」或空值 option')
+checkTrue('btc502w 查詢按鈕被點擊', querySubmit._clicked,
+  '有查詢按鈕時應優先 click，而不是直接 form.submit() 繞過站台事件')
+
 // ─── 最終報告 ─────────────────────────────────────────────────────────────────
 
 const total = report.length
