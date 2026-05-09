@@ -1,14 +1,15 @@
 <template>
   <section class="stack counterparty-page">
+    <header class="row page-head">
+      <h2>{{ counterpartyName }}</h2>
+      <div class="row head-actions">
+        <button class="btn primary" @click="openCreateSheet">新增借貸</button>
+        <button class="btn" :disabled="!visibleLoans.length" @click="exportCsv">匯出 CSV</button>
+        <RouterLink class="btn back-btn" :to="backLink">返回</RouterLink>
+      </div>
+    </header>
+
     <article class="card panel">
-      <header class="row">
-        <h2>{{ counterpartyName }}</h2>
-        <div class="row head-actions">
-          <button class="btn primary" @click="openCreateSheet">新增借貸</button>
-          <button class="btn" :disabled="!visibleLoans.length" @click="exportCsv">匯出 CSV</button>
-          <RouterLink class="btn back-btn" :to="backLink">返回</RouterLink>
-        </div>
-      </header>
       <div class="row summary-row">
         <span class="muted">{{ summaryLabel }}</span>
         <MoneyText :value-minor="outstandingMinor" />

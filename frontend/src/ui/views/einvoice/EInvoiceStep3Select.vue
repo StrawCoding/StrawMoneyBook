@@ -83,13 +83,12 @@ function formatDate(ms) {
 
 onMounted(async () => {
   if (store.invoiceList.length > 0) return
-  if (!isEInvoiceAutomationSupported()) {
-    store.errorMessage = t('einvoice.error.not_supported', {}, '目前平台尚不支援電子發票自動抓取，敬請期待後續版本。')
-    return
-  }
   store.isScraping = true
   store.errorMessage = ''
   try {
+    if (!isEInvoiceAutomationSupported()) {
+      throw new Error(t('einvoice.error.not_supported', {}, '目前平台尚不支援電子發票自動抓取，敬請期待後續版本。'))
+    }
     const list = await scrapeEInvoiceList({
       phone: store.phone,
       password: store.password,

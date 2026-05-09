@@ -1,11 +1,11 @@
 <template>
   <section class="stack">
-    <article class="card panel">
-      <header class="row">
-        <h2>借貸明細</h2>
-        <RouterLink class="btn back-btn" :to="backLink">返回</RouterLink>
-      </header>
+    <header class="row page-head">
+      <h2>借貸明細</h2>
+      <RouterLink class="btn back-btn" :to="backLink">返回</RouterLink>
+    </header>
 
+    <article class="card panel">
       <div v-if="loan" class="stack loan-body">
         <div class="row">
           <strong>{{ loan.counterparty_name || '未命名對象' }}</strong>

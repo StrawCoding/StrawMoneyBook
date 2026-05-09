@@ -1,10 +1,11 @@
 <template>
   <section class="stack">
+    <header class="row page-head">
+      <h2>{{ t('transaction_search.title') }}</h2>
+      <RouterLink class="btn back-btn" to="/">{{ t('common.back') }}</RouterLink>
+    </header>
+
     <article class="card panel">
-      <header class="row">
-        <h2>{{ t('transaction_search.title') }}</h2>
-        <RouterLink class="btn back-btn" to="/">{{ t('common.back') }}</RouterLink>
-      </header>
       <input
         v-model.trim="keyword"
         class="input"

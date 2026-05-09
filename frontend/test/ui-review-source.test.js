@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const globalCssSource = readFileSync(
@@ -31,10 +31,41 @@ const settingsSharedLedgerSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/settings/SettingsSharedLedgerPage.vue'),
   'utf8',
 )
+const eInvoiceImportWizardSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/views/einvoice/EInvoiceImportWizardPage.vue'),
+  'utf8',
+)
+const loanListSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/views/loans/LoanListPage.vue'),
+  'utf8',
+)
+const claimSheetListSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/views/claims/ClaimSheetListPage.vue'),
+  'utf8',
+)
+const subscriptionListSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/views/subscriptions/SubscriptionListPage.vue'),
+  'utf8',
+)
+const settingsLedgerSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/views/settings/SettingsLedgerPage.vue'),
+  'utf8',
+)
 const i18nSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/services/i18n.service.js'),
   'utf8',
 )
+const viewsDir = resolve(import.meta.dirname, '../src/ui/views')
+
+function listVueFiles(dir) {
+  const entries = readdirSync(dir)
+  return entries.flatMap((entry) => {
+    const path = resolve(dir, entry)
+    const stat = statSync(path)
+    if (stat.isDirectory()) return listVueFiles(path)
+    return path.endsWith('.vue') ? [path] : []
+  })
+}
 
 test('global styles allow text selection by default while preserving shared tokens', () => {
   assert.match(globalCssSource, /--radius-sm: 10px;/)
@@ -64,6 +95,38 @@ test('analysis page makes pie charts interactive with responsive sizing', () => 
   assert.match(analysisPageSource, /openAccountBreakdownDetail\(accountActivePieTarget\)/)
   assert.match(analysisPageSource, /width: min\(220px, 56vw\);/)
   assert.match(analysisPageSource, /transform: translateY\(-2px\) scale\(1\.01\);/)
+})
+
+test('SMB-178 subpage headers share the ledger sync back header style', () => {
+  assert.match(globalCssSource, /header\.row:has\(\.back-btn\)\s*\{[\s\S]*grid-template-columns:\s*40px minmax\(0, 1fr\) 40px;/)
+  assert.match(globalCssSource, /header\.row:has\(\.back-btn\)::after\s*\{[\s\S]*grid-column:\s*3;/)
+  assert.match(globalCssSource, /header\.row:has\(\.back-btn\) > :is\(h1, h2, \.page-title\)[\s\S]*justify-self:\s*center;/)
+  assert.match(eInvoiceImportWizardSource, /class="btn back-btn"/)
+  assert.doesNotMatch(eInvoiceImportWizardSource, /\.back-btn\s*\{/)
+})
+
+test('SMB-178 page-level back headers are not nested inside content cards', () => {
+  const nestedPageHeaderPattern = /<article class="card panel(?: summary)?">\s*<header class="row">\s*<h[12][\s\S]*?class="[^"]*\bback-btn\b/
+  const offenders = []
+  for (const filePath of listVueFiles(viewsDir)) {
+    const source = readFileSync(filePath, 'utf8')
+    if (nestedPageHeaderPattern.test(source)) offenders.push(filePath.replace(`${viewsDir}/`, ''))
+  }
+  assert.deepEqual(offenders, [])
+})
+
+test('SMB-178 create buttons use the savings jar panel-head position', () => {
+  const sourceByName = {
+    loanListSource,
+    claimSheetListSource,
+    subscriptionListSource,
+    settingsLedgerSource,
+  }
+  for (const [name, source] of Object.entries(sourceByName)) {
+    assert.match(source, /<header class="row page-head">\s*<h2[\s\S]*?<RouterLink class="btn back-btn"/, `${name} keeps page header focused on title and back`)
+    assert.match(source, /<article class="card panel(?: summary)?">\s*<header class="row panel-head">[\s\S]*?<button class="btn primary"/, `${name} places primary action in first panel header`)
+    assert.doesNotMatch(source, /<header class="row page-head">(?:(?!<\/header>)[\s\S])*<button class="btn primary"/, `${name} should not put primary action in page header`)
+  }
 })
 
 test('settings page shows helper descriptions for each entry', () => {

@@ -1,11 +1,12 @@
 <template>
   <div class="view-root">
     <section class="stack">
+      <header class="row page-head">
+        <h2>{{ t('settings_account.title', '帳號') }}</h2>
+        <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
+      </header>
+
       <article class="card panel">
-        <header class="row">
-          <h2>{{ t('settings_account.title', '帳號') }}</h2>
-          <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-        </header>
         <p class="muted intro">
           {{ t('settings_account.desc', '可使用 Email / 密碼或 Google 登入，之後可管理個人資料、推薦碼與登出。') }}
         </p>

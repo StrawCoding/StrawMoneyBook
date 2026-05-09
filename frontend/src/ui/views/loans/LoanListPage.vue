@@ -1,12 +1,14 @@
 <template>
   <section class="stack">
+    <header class="row page-head">
+      <h2>借貸清單</h2>
+      <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
+    </header>
+
     <article class="card panel summary">
-      <header class="row">
-        <h2>借貸清單</h2>
-        <div class="row head-actions">
-          <button class="btn primary" @click="openCreateSheet">新增借貸</button>
-          <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
-        </div>
+      <header class="row panel-head">
+        <h3>借貸清單</h3>
+        <button class="btn primary" @click="openCreateSheet">新增借貸</button>
       </header>
       <div class="row">
         <span class="muted">進行中</span>
@@ -373,9 +375,9 @@ h2, h3 {
   display: grid;
   gap: 8px
 }
-.head-actions {
-  align-items: center;
-  gap: 8px;
+.panel-head {
+  align-items: flex-start;
+  gap: 10px;
 }
 .counterparty-list {
   list-style: none;

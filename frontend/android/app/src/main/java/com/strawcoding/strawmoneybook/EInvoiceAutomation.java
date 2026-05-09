@@ -3,6 +3,8 @@ package com.strawcoding.strawmoneybook;
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Base64;
@@ -13,6 +15,7 @@ import android.webkit.WebViewClient;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -227,7 +230,21 @@ final class EInvoiceAutomation {
             }
             Thread.sleep(300L);
         }
-        Log.d(TAG, "Login form did not fully stabilize carrier=" + carrierSnapshot + " form=" + lastSnapshot);
+        Log.w(TAG, "Login form did not fully stabilize carrier=" + carrierSnapshot + " form=" + lastSnapshot);
+        boolean partiallyVisible = lastSnapshot != null && (
+            lastSnapshot.optBoolean("passwordFieldVisible", false) ||
+            lastSnapshot.optBoolean("captchaVisible", false)
+        );
+        if (!partiallyVisible) {
+            throw new EInvoiceException(
+                "einvoice_login_form_missing",
+                "選取手機條碼後等待 8 秒，登入表單未出現。" +
+                " 載具選取結果: " + carrierSnapshot +
+                " 表單快照: " + lastSnapshot
+            );
+        }
+        // 表單部分可見，給予額外 2 秒讓動畫完成
+        Thread.sleep(2_000L);
     }
 
     private static boolean isSubmitLoginResultSuccess(Object result) {
@@ -257,7 +274,19 @@ final class EInvoiceAutomation {
             if (result instanceof JSONObject) {
                 JSONObject snapshot = (JSONObject) result;
                 if (snapshot.optBoolean("ready", false)) {
-                    return normalizeText(snapshot.optString("dataUrl", ""));
+                    String dataUrl = normalizeText(snapshot.optString("dataUrl", ""));
+                    if (!dataUrl.isEmpty()) return dataUrl;
+
+                    JSONObject rect = snapshot.optJSONObject("rect");
+                    if (rect != null) {
+                        String captured = session.captureVisibleRegionDataUrl(
+                            (float) rect.optDouble("left", 0),
+                            (float) rect.optDouble("top", 0),
+                            (float) rect.optDouble("width", 0),
+                            (float) rect.optDouble("height", 0)
+                        );
+                        if (!captured.isEmpty()) return captured;
+                    }
                 }
             }
             Thread.sleep(CAPTCHA_POLL_MS);
@@ -288,8 +317,11 @@ final class EInvoiceAutomation {
             JSONObject snapshot = (JSONObject) result;
             String reason = normalizeText(snapshot.optString("reason", ""));
             String missing = normalizeText(snapshot.optString("missing", ""));
+            JSONObject formDiag = snapshot.optJSONObject("formDiag");
+            String url = formDiag != null ? normalizeText(formDiag.optString("url", "")) : "";
             String detail = reason.isEmpty() ? "找不到帳號或密碼欄位" : "找不到帳號或密碼欄位: " + reason;
             if (!missing.isEmpty()) detail += " (" + missing + ")";
+            if (!url.isEmpty()) detail += " url=" + url;
             return detail;
         }
         return "找不到帳號或密碼欄位，載具選取結果: " + String.valueOf(carrierSnapshot);
@@ -314,10 +346,28 @@ final class EInvoiceAutomation {
 
         // Wait for results
         long deadline = System.currentTimeMillis() + 30_000L;
+        boolean resultsReady = false;
         while (System.currentTimeMillis() < deadline) {
             Boolean hasResults = (Boolean) session.evaluateJavaScript(buildWaitForResultsScript());
-            if (Boolean.TRUE.equals(hasResults)) break;
+            if (Boolean.TRUE.equals(hasResults)) {
+                resultsReady = true;
+                break;
+            }
             Thread.sleep(500L);
+        }
+        if (!resultsReady) {
+            Object pageSnap = session.evaluateJavaScript(
+                "(() => { try { return { url: String(location.href||''), title: String(document.title||'') }; } catch(_) { return null; } })()"
+            );
+            String diagUrl = pageSnap instanceof JSONObject ? ((JSONObject) pageSnap).optString("url", "") : "";
+            String diagTitle = pageSnap instanceof JSONObject ? ((JSONObject) pageSnap).optString("title", "") : "";
+            Log.w(TAG, "waitForResults timeout url=" + diagUrl + " title=" + diagTitle);
+            throw new EInvoiceException(
+                "einvoice_query_results_timeout",
+                "等待發票查詢結果逾時（30 秒）。" +
+                (diagUrl.isEmpty() ? "" : " 目前頁面: " + diagUrl) +
+                (diagTitle.isEmpty() ? "" : " 標題: " + diagTitle)
+            );
         }
 
         // Parse results - may span multiple pages
@@ -414,13 +464,19 @@ final class EInvoiceAutomation {
             if (source == null) return "";
 
             List<Bitmap> variants = buildCaptchaVariants(source);
-            // numeric=true: 4-digit numeric CAPTCHA
-            List<TesseractBridge.RecognitionCandidate> candidates = TesseractBridge.recognizeCaptchaCandidates(activity, variants, true);
-            String best = selectBestCandidate(candidates);
-            // Keep only digits
-            String digitsOnly = best.replaceAll("[^0-9]", "");
-            Log.d(TAG, "Captcha OCR raw=" + best + " digits=" + digitsOnly);
-            return digitsOnly;
+            try {
+                // numeric=true: 4-digit numeric CAPTCHA
+                List<TesseractBridge.RecognitionCandidate> candidates = TesseractBridge.recognizeCaptchaCandidates(activity, variants, true);
+                String best = selectBestCandidate(candidates);
+                // Keep only digits
+                String digitsOnly = best.replaceAll("[^0-9]", "");
+                Log.d(TAG, "Captcha OCR raw=" + best + " digits=" + digitsOnly);
+                return digitsOnly;
+            } finally {
+                for (Bitmap variant : variants) {
+                    if (variant != null && !variant.isRecycled()) variant.recycle();
+                }
+            }
         } catch (Exception e) {
             Log.w(TAG, "Captcha OCR failed", e);
             return "";
@@ -429,14 +485,45 @@ final class EInvoiceAutomation {
 
     private static List<Bitmap> buildCaptchaVariants(Bitmap source) {
         List<Bitmap> variants = new ArrayList<>();
-        variants.add(source);
-        // Grayscale variant
+        addBitmapVariant(variants, source);
+        addBitmapVariant(variants, scaleBitmap(source, 3));
+
         Bitmap gray = toGrayscale(source);
-        if (gray != null) variants.add(gray);
-        // High-contrast variant
+        addBitmapVariant(variants, gray);
+        addBitmapVariant(variants, scaleBitmap(gray != null ? gray : source, 3));
+
         Bitmap contrast = toHighContrast(gray != null ? gray : source);
-        if (contrast != null) variants.add(contrast);
+        addBitmapVariant(variants, contrast);
+        addBitmapVariant(variants, scaleBitmap(contrast != null ? contrast : source, 3));
+
+        Bitmap binaryDark = toBinaryThreshold(gray != null ? gray : source, 150, false);
+        addBitmapVariant(variants, binaryDark);
+        addBitmapVariant(variants, scaleBitmap(binaryDark != null ? binaryDark : source, 3));
+
+        Bitmap binaryLight = toBinaryThreshold(gray != null ? gray : source, 190, false);
+        addBitmapVariant(variants, binaryLight);
+        addBitmapVariant(variants, toBinaryThreshold(gray != null ? gray : source, 150, true));
         return variants;
+    }
+
+    private static void addBitmapVariant(List<Bitmap> variants, Bitmap bitmap) {
+        if (bitmap != null && !bitmap.isRecycled()) {
+            variants.add(bitmap);
+        }
+    }
+
+    private static Bitmap scaleBitmap(Bitmap src, int factor) {
+        try {
+            if (src == null || factor <= 1) return src;
+            return Bitmap.createScaledBitmap(
+                src,
+                Math.max(1, src.getWidth() * factor),
+                Math.max(1, src.getHeight() * factor),
+                true
+            );
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static Bitmap toGrayscale(Bitmap src) {
@@ -473,18 +560,52 @@ final class EInvoiceAutomation {
         }
     }
 
+    private static Bitmap toBinaryThreshold(Bitmap src, int threshold, boolean invert) {
+        if (src == null || src.isRecycled()) return null;
+        try {
+            Bitmap result = Bitmap.createBitmap(src.getWidth(), src.getHeight(), Bitmap.Config.ARGB_8888);
+            int width = src.getWidth();
+            int height = src.getHeight();
+            int normalizedThreshold = Math.max(0, Math.min(255, threshold));
+            for (int y = 0; y < height; y += 1) {
+                for (int x = 0; x < width; x += 1) {
+                    int pixel = src.getPixel(x, y);
+                    int r = (pixel >> 16) & 0xff;
+                    int g = (pixel >> 8) & 0xff;
+                    int b = pixel & 0xff;
+                    int luminance = Math.round((0.299f * r) + (0.587f * g) + (0.114f * b));
+                    boolean dark = luminance < normalizedThreshold;
+                    int value = (dark ^ invert) ? 0x00 : 0xff;
+                    result.setPixel(x, y, 0xff000000 | (value << 16) | (value << 8) | value);
+                }
+            }
+            return result;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static String selectBestCandidate(List<TesseractBridge.RecognitionCandidate> candidates) {
         String best = "";
         int bestScore = -1;
+        int bestConfidence = -1;
         for (TesseractBridge.RecognitionCandidate c : candidates) {
-            String text = c.text.replaceAll("[^0-9]", "");
+            String text = normalizeCaptchaDigits(c.text);
             int score = c.confidence * (text.length() == CAPTCHA_EXPECTED_LENGTH ? 2 : 1);
-            if (score > bestScore) {
+            if (score > bestScore || (score == bestScore && c.confidence > bestConfidence)) {
                 bestScore = score;
+                bestConfidence = c.confidence;
                 best = text;
             }
         }
+        Log.d(TAG, "Best captcha candidate score=" + bestScore + " confidence=" + bestConfidence + " text=" + best);
         return best;
+    }
+
+    private static String normalizeCaptchaDigits(String rawText) {
+        String digits = rawText == null ? "" : rawText.replaceAll("[^0-9]", "");
+        if (digits.length() <= CAPTCHA_EXPECTED_LENGTH) return digits;
+        return digits.substring(0, CAPTCHA_EXPECTED_LENGTH);
     }
 
     // ── JavaScript scripts ─────────────────────────────────────────────────────
@@ -617,25 +738,58 @@ final class EInvoiceAutomation {
             """;
     }
 
-    private static String buildCaptchaSnapshotScript() {
+    static String buildCaptchaSnapshotScript() {
         return """
             (() => {
               try {
-                const img = document.querySelector('#captchaImg, img[id*="captcha"], img[src*="captcha"], img[alt*="驗證碼"], img[alt*="captcha"]');
+                const visible = (el) => {
+                  if (!el) return false;
+                  const style = getComputedStyle(el);
+                  const rect = el.getBoundingClientRect();
+                  return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+                };
+                const candidates = Array.from(document.querySelectorAll([
+                  '#captchaImg',
+                  '#captcha_image',
+                  '#captchaImage',
+                  'img[id*="captcha" i]',
+                  'img[name*="captcha" i]',
+                  'img[src*="captcha" i]',
+                  'img[alt*="驗證碼"]',
+                  'img[alt*="captcha" i]',
+                  '[style*="captcha" i]'
+                ].join(','))).filter(visible);
+                const img = candidates[0] || null;
                 if (!img) return { ready: false, reason: 'image_missing' };
+                if (typeof img.scrollIntoView === 'function') {
+                  img.scrollIntoView({ block: 'center', behavior: 'auto' });
+                }
+                const rect = img.getBoundingClientRect();
+                const rectSnapshot = {
+                  left: Math.max(0, rect.left || 0),
+                  top: Math.max(0, rect.top || 0),
+                  width: Math.max(0, rect.width || img.width || 0),
+                  height: Math.max(0, rect.height || img.height || 0),
+                  devicePixelRatio: Number(window.devicePixelRatio || 1)
+                };
                 const w = img.naturalWidth || img.width || 0;
                 const h = img.naturalHeight || img.height || 0;
-                if (!img.complete || w === 0 || h === 0) return { ready: false, reason: 'image_incomplete' };
+                if ((img.tagName || '').toLowerCase() !== 'img') {
+                  return rectSnapshot.width > 0 && rectSnapshot.height > 0
+                    ? { ready: true, dataUrl: '', rect: rectSnapshot, reason: 'element_capture' }
+                    : { ready: false, reason: 'element_rect_empty', rect: rectSnapshot };
+                }
+                if (!img.complete || w === 0 || h === 0) return { ready: false, reason: 'image_incomplete', rect: rectSnapshot };
                 const canvas = document.createElement('canvas');
                 canvas.width = w;
                 canvas.height = h;
                 const ctx = canvas.getContext('2d');
-                if (!ctx) return { ready: false, reason: 'canvas_blocked' };
+                if (!ctx) return { ready: true, dataUrl: '', rect: rectSnapshot, reason: 'canvas_context_missing' };
                 ctx.drawImage(img, 0, 0, w, h);
                 let dataUrl = '';
                 try { dataUrl = canvas.toDataURL('image/png'); } catch (_) {}
-                if (!dataUrl || dataUrl.length < 64) return { ready: false, reason: 'canvas_blocked' };
-                return { ready: true, dataUrl };
+                if (!dataUrl || dataUrl.length < 64) return { ready: true, dataUrl: '', rect: rectSnapshot, reason: 'canvas_blocked' };
+                return { ready: true, dataUrl, rect: rectSnapshot };
               } catch (e) {
                 return { ready: false, reason: String(e.message || 'error') };
               }
@@ -785,7 +939,14 @@ final class EInvoiceAutomation {
               if (!phoneEl) missing.push('phone_missing');
               if (!passEl) missing.push('password_missing');
               if (missing.length) {
-                return { filled: false, reason: missing[0], missing: missing.join(',') };
+                const formDiag = {
+                  url: String(location.href || ''),
+                  visibleInputs: Array.from(document.querySelectorAll('input'))
+                    .filter(visible)
+                    .map((el) => ({ id: el.id, name: el.name, type: el.type, placeholder: el.placeholder }))
+                    .slice(0, 10),
+                };
+                return { filled: false, reason: missing[0], missing: missing.join(','), formDiag };
               }
               setVal(phoneEl, '%s');
               setVal(passEl, '%s');
@@ -1053,7 +1214,7 @@ final class EInvoiceAutomation {
             """;
     }
 
-    private static String buildFillQueryFormScript(String dateFrom, String dateTo, String status, String buyerTaxId, String keyword) {
+    static String buildFillQueryFormScript(String dateFrom, String dateTo, String status, String buyerTaxId, String keyword) {
         String safeFrom = escapeJs(dateFrom);
         String safeTo = escapeJs(dateTo);
         String safeStatus = escapeJs(status);
@@ -1061,6 +1222,19 @@ final class EInvoiceAutomation {
         String safeKeyword = escapeJs(keyword);
         return String.format(Locale.US, """
             (() => {
+              const textOf = (el) => String(el?.innerText || el?.textContent || '').trim();
+              const pageText = textOf(document.body || document.documentElement);
+              const hasResultSignal = () => (
+                /[A-Z]{2}\\d{8}/.test(pageText) ||
+                pageText.includes('載具清單資料') ||
+                pageText.includes('發票清單') ||
+                pageText.includes('發票號碼') ||
+                pageText.includes('營業人') ||
+                pageText.includes('賣方') ||
+                pageText.includes('查無資料') ||
+                pageText.includes('查無符合')
+              );
+              if (hasResultSignal()) return true;
               function setVal(el, value) {
                 if (!el) return;
                 const nativeInputSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
@@ -1083,97 +1257,149 @@ final class EInvoiceAutomation {
                 }
               }
               // Date range
-              const dateFromEl = document.querySelector('#qryDateS, #startDate, input[name*="startDate"], input[name*="dateFrom"]');
-              const dateToEl = document.querySelector('#qryDateE, #endDate, input[name*="endDate"], input[name*="dateTo"]');
+              const dateFromEl = document.querySelector('#qryDateS, #startDate, #start_date, input[name*="qryDateS"], input[name*="startDate"], input[name*="dateFrom"], input[name*="start"], input[placeholder*="起"]');
+              const dateToEl = document.querySelector('#qryDateE, #endDate, #end_date, input[name*="qryDateE"], input[name*="endDate"], input[name*="dateTo"], input[name*="end"], input[placeholder*="迄"]');
               setVal(dateFromEl, '%s');
               setVal(dateToEl, '%s');
               // Invoice status
-              const statusEl = document.querySelector('#invStatus, select[name*="status"]');
+              const statusEl = document.querySelector('#invStatus, #invoiceStatus, select[name*="status"], select[name*="invStatus"]');
               if (statusEl) setSelect(statusEl, '%s');
               // Buyer tax ID
-              const taxIdEl = document.querySelector('#buyerBan, input[name*="buyerBan"], input[name*="taxId"]');
+              const taxIdEl = document.querySelector('#buyerBan, #buyerTaxId, input[name*="buyerBan"], input[name*="taxId"], input[placeholder*="統編"]');
               setVal(taxIdEl, '%s');
               // Keyword
-              const keywordEl = document.querySelector('#keyword, input[name*="keyword"]');
+              const keywordEl = document.querySelector('#keyword, #itemKeyword, input[name*="keyword"], input[placeholder*="關鍵字"], input[placeholder*="品名"]');
               setVal(keywordEl, '%s');
               // Submit
-              const submitBtn = document.querySelector('button[type="submit"], input[type="submit"], .btn-query, .search-btn, a.btn-primary');
+              const submitBtn = Array.from(document.querySelectorAll('button[type="submit"], input[type="submit"], .btn-query, .search-btn, a.btn-primary, button, a'))
+                .find((el) => /查詢|搜尋|送出|確定|query|search/i.test(textOf(el) || el.value || el.getAttribute?.('aria-label') || ''));
               if (submitBtn) { submitBtn.click(); return true; }
               const form = dateFromEl?.closest('form') || document.querySelector('form');
               if (form) { form.submit(); return true; }
-              return false;
+              return hasResultSignal();
             })();
             """, safeFrom, safeTo, safeStatus, safeTaxId, safeKeyword);
     }
 
-    private static String buildWaitForResultsScript() {
+    static String buildWaitForResultsScript() {
         return """
             (() => {
               try {
-                // Results table or result count indicator
+                const textOf = (el) => String(el?.innerText || el?.textContent || '').trim();
+                const pageText = textOf(document.body || document.documentElement);
+                const invoiceLike = (pageText.match(/[A-Z]{2}\\d{8}/g) || []).length;
+                const rows = Array.from(document.querySelectorAll(
+                  'table.inv-list tr, table[id*="invTable"] tr, #invResult tr, tbody tr, [role="row"], .invoice-result, .invoice-list, .list-group-item, .card'
+                ));
+                const hasResultHeading = [
+                  '載具清單資料',
+                  '發票清單',
+                  '發票號碼',
+                  '發票號碼/隨機碼',
+                  '營業人',
+                  '賣方',
+                  '消費日期',
+                  '發票日期',
+                ].some((needle) => pageText.includes(needle));
+                const hasEmptyState = ['查無資料', '查無符合', '無符合條件', '沒有資料', 'No data'].some((needle) => pageText.includes(needle));
                 return Boolean(
                   document.querySelector('table.inv-list, table[id*="invTable"], .invoice-result, #invResult') ||
                   document.querySelector('tr.inv-row, td.inv-no, td[class*="invoiceNo"]') ||
-                  document.querySelector('.no-result, .empty-result, #noData')
+                  document.querySelector('.no-result, .empty-result, #noData') ||
+                  invoiceLike > 0 ||
+                  (hasResultHeading && rows.length > 0) ||
+                  hasEmptyState
                 );
               } catch (_) { return false; }
             })();
             """;
     }
 
-    private static String buildParseInvoiceListScript() {
+    static String buildParseInvoiceListScript() {
         return """
             (() => {
               try {
                 const invoices = [];
-                // Try various table selectors for the invoice list
-                const rows = Array.from(document.querySelectorAll(
-                  'table.inv-list tr:not(:first-child), ' +
-                  'table[id*="invTable"] tr:not(:first-child), ' +
-                  '#invResult tr.data-row, ' +
-                  'tbody tr'
-                ));
-                for (const row of rows) {
-                  const cells = Array.from(row.querySelectorAll('td'));
-                  if (cells.length < 3) continue;
-                  // Try to find invoice number (format: 2 letters + 8 digits)
-                  let invoiceNo = '';
-                  let amount = 0;
-                  let dateMs = 0;
-                  let merchantName = '';
-                  let carrierName = '手機條碼';
-                  let buyerTaxId = '';
-                  for (const cell of cells) {
-                    const text = cell.textContent.trim();
-                    if (/^[A-Z]{2}\\d{8}$/.test(text) && !invoiceNo) {
-                      invoiceNo = text;
-                    } else if (/^\\d{1,3}(,\\d{3})*$/.test(text) || /^\\d+$/.test(text)) {
-                      const num = parseInt(text.replace(/,/g, ''), 10);
-                      if (num > 0 && !amount) amount = num;
-                    } else if (/^\\d{3}\\/\\d{2}\\/\\d{2}$/.test(text) || /^\\d{4}-\\d{2}-\\d{2}$/.test(text)) {
-                      // ROC date format: YYY/MM/DD or ISO: YYYY-MM-DD
-                      try {
-                        let parts;
-                        if (text.includes('/')) {
-                          parts = text.split('/');
-                          const year = parseInt(parts[0], 10) + 1911;
-                          dateMs = new Date(year, parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)).getTime();
-                        } else {
-                          dateMs = new Date(text).getTime();
-                        }
-                      } catch (_) {}
-                    } else if (text.length > 2 && !merchantName && !/^\\d+$/.test(text)) {
-                      merchantName = text;
-                    } else if (/^\\d{8}$/.test(text) && !buyerTaxId) {
-                      buyerTaxId = text;
+                const visible = (el) => {
+                  if (!el) return false;
+                  const style = getComputedStyle(el);
+                  const rect = el.getBoundingClientRect();
+                  return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+                };
+                const textOf = (el) => String(el?.innerText || el?.textContent || '').replace(/\\s+/g, ' ').trim();
+                const parseAmount = (texts) => {
+                  const preferred = texts.find((text) => /金額|總計|合計|銷售額|NT\\$|\\$/.test(text));
+                  const sourceTexts = preferred ? [preferred, ...texts] : texts;
+                  for (const text of sourceTexts) {
+                    const amountLabel = /金額|總計|合計|銷售額|NT[$]|[$]/.test(text);
+                    const cleaned = text.replace(/,/g, '');
+                    const matches = cleaned.match(/(?:NT[$]|[$])?\\s*(-?\\d{1,7})(?:\\.\\d+)?/g) || [];
+                    for (const match of matches) {
+                      const normalized = String(match).replace(/[^0-9-]/g, '');
+                      if (!normalized) continue;
+                      if (/^\\d{8}$/.test(normalized)) continue; // 8 位數為買方統編，無論是否有金額標籤都不視為金額
+                      if (!amountLabel && /^\\d{7}$/.test(normalized)) continue;
+                      const num = parseInt(normalized, 10);
+                      if (Number.isFinite(num) && num > 0) return num;
                     }
                   }
-                  if (invoiceNo) {
+                  return 0;
+                };
+                const parseDateMs = (texts) => {
+                  const joined = texts.join(' ');
+                  const match = joined.match(/(\\d{3})[\\/.-](\\d{1,2})[\\/.-](\\d{1,2})|(\\d{4})[\\/.-](\\d{1,2})[\\/.-](\\d{1,2})/);
+                  if (!match) return 0;
+                  try {
+                    if (match[1]) return new Date(Number(match[1]) + 1911, Number(match[2]) - 1, Number(match[3])).getTime();
+                    return new Date(Number(match[4]), Number(match[5]) - 1, Number(match[6])).getTime();
+                  } catch (_) {
+                    return 0;
+                  }
+                };
+                const inferMerchantName = (texts, invoiceNo, buyerTaxId) => {
+                  const ignored = new Set(['發票號碼', '發票日期', '日期', '金額', '總計', '載具', '買方統編', '統一編號', '營業人']);
+                  for (const raw of texts) {
+                    const text = raw
+                      .replace(invoiceNo, '')
+                      .replace(buyerTaxId, '')
+                      .replace(/\\d{3}[\\/.-]\\d{1,2}[\\/.-]\\d{1,2}/g, '')
+                      .replace(/\\d{4}[\\/.-]\\d{1,2}[\\/.-]\\d{1,2}/g, '')
+                      .replace(/NT[$]?\\s*\\d[\\d,]*/gi, '')
+                      .trim();
+                    if (text.length <= 1) continue;
+                    if (/^[\\d,\\s$.-]+$/.test(text)) continue;
+                    if (ignored.has(text)) continue;
+                    if (/電子發票|手機條碼|載具清單資料|查詢結果/.test(text)) continue;
+                    return text.slice(0, 80);
+                  }
+                  return '';
+                };
+                const containers = Array.from(document.querySelectorAll(
+                  'table.inv-list tr:not(:first-child), table[id*="invTable"] tr:not(:first-child), #invResult tr.data-row, tbody tr, [role="row"], .invoice-result li, .invoice-list li, .list-group-item, .card, [class*="invoice"], [class*="carrier"]'
+                )).filter(visible);
+                const seen = new Set();
+                for (const row of containers) {
+                  const rowText = textOf(row);
+                  const invoiceMatches = rowText.match(/[A-Z]{2}\\d{8}/g) || [];
+                  if (!invoiceMatches.length) continue;
+                  const cells = Array.from(row.querySelectorAll('td, th, div, span, p, li')).map(textOf).filter(Boolean);
+                  const texts = cells.length ? cells : [rowText];
+                  for (const invoiceNo of invoiceMatches) {
+                    if (seen.has(invoiceNo)) continue;
+                    const buyerTaxId = (texts.find((text) => /統編|統一編號|buyer/i.test(text) && /\\b\\d{8}\\b/.test(text))?.match(/\\b\\d{8}\\b/) || [])[0] ||
+                      ((rowText.replace(invoiceNo, '').match(/\\b\\d{8}\\b/) || [])[0] ?? '');
+                    const amount = parseAmount(texts);
+                    const dateMs = parseDateMs(texts);
+                    const carrierText = texts.find((text) => /手機條碼|載具/.test(text)) || '';
+                    const carrierName = carrierText ? carrierText.slice(0, 50) : '手機條碼';
+                    const merchantName = inferMerchantName(texts, invoiceNo, buyerTaxId);
                     invoices.push({ invoiceNumber: invoiceNo, amount, invoiceDate: dateMs, merchantName, carrierName, buyerTaxId });
+                    seen.add(invoiceNo);
                   }
                 }
                 // Check if there is a next page button
-                const nextPageBtn = document.querySelector('.pagination .next:not(.disabled), a[onclick*="nextPage"]:not([disabled])');
+                const nextPageBtn = Array.from(document.querySelectorAll('.pagination .next:not(.disabled), a[onclick*="nextPage"]:not([disabled]), button, a'))
+                  .find((el) => visible(el) && /下一頁|下頁|next/i.test(textOf(el) || el.getAttribute?.('aria-label') || ''));
                 return { invoices, hasNextPage: Boolean(nextPageBtn) };
               } catch (e) {
                 return { invoices: [], hasNextPage: false };
@@ -1182,11 +1408,19 @@ final class EInvoiceAutomation {
             """;
     }
 
-    private static String buildGoNextPageScript() {
+    static String buildGoNextPageScript() {
         return """
             (() => {
               try {
-                const nextBtn = document.querySelector('.pagination .next:not(.disabled), a[onclick*="nextPage"]:not([disabled])');
+                const textOf = (el) => String(el?.innerText || el?.textContent || el?.getAttribute?.('aria-label') || '').trim();
+                const visible = (el) => {
+                  if (!el) return false;
+                  const style = getComputedStyle(el);
+                  const rect = el.getBoundingClientRect();
+                  return !el.disabled && style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+                };
+                const nextBtn = Array.from(document.querySelectorAll('.pagination .next:not(.disabled), a[onclick*="nextPage"]:not([disabled]), button, a'))
+                  .find((el) => visible(el) && /下一頁|下頁|next/i.test(textOf(el)));
                 if (nextBtn) { nextBtn.click(); return true; }
                 return false;
               } catch (_) { return false; }
@@ -1275,6 +1509,56 @@ final class EInvoiceAutomation {
                 })
             );
             latch.await(15_000L, TimeUnit.MILLISECONDS);
+            return resultRef.get();
+        }
+
+        String captureVisibleRegionDataUrl(float left, float top, float width, float height) throws Exception {
+            if (width <= 0 || height <= 0) return "";
+            final AtomicReference<String> resultRef = new AtomicReference<>("");
+            final CountDownLatch latch = new CountDownLatch(1);
+            mainHandler.post(() -> {
+                try {
+                    int viewWidth = Math.max(1, webView.getWidth());
+                    int viewHeight = Math.max(1, webView.getHeight());
+                    if (viewWidth <= 1 || viewHeight <= 1) {
+                        resultRef.set("");
+                        return;
+                    }
+
+                    float scale = Math.max(0.1f, webView.getScale());
+                    int x = Math.max(0, Math.round(left * scale));
+                    int y = Math.max(0, Math.round(top * scale));
+                    int w = Math.max(1, Math.round(width * scale));
+                    int h = Math.max(1, Math.round(height * scale));
+                    Rect crop = new Rect(
+                        Math.max(0, x - 4),
+                        Math.max(0, y - 4),
+                        Math.min(viewWidth, x + w + 4),
+                        Math.min(viewHeight, y + h + 4)
+                    );
+                    if (crop.width() <= 0 || crop.height() <= 0) {
+                        resultRef.set("");
+                        return;
+                    }
+
+                    Bitmap full = Bitmap.createBitmap(viewWidth, viewHeight, Bitmap.Config.ARGB_8888);
+                    Canvas canvas = new Canvas(full);
+                    webView.draw(canvas);
+                    Bitmap cropped = Bitmap.createBitmap(full, crop.left, crop.top, crop.width(), crop.height());
+                    ByteArrayOutputStream output = new ByteArrayOutputStream();
+                    cropped.compress(Bitmap.CompressFormat.PNG, 100, output);
+                    String encoded = Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP);
+                    resultRef.set(encoded.isEmpty() ? "" : "data:image/png;base64," + encoded);
+                    if (!cropped.isRecycled()) cropped.recycle();
+                    if (!full.isRecycled()) full.recycle();
+                } catch (Throwable error) {
+                    Log.w(TAG, "Failed to capture captcha element region", error);
+                    resultRef.set("");
+                } finally {
+                    latch.countDown();
+                }
+            });
+            latch.await(5_000L, TimeUnit.MILLISECONDS);
             return resultRef.get();
         }
 

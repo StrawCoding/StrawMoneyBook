@@ -1,10 +1,11 @@
 <template>
   <section class="stack">
+    <header class="row page-head">
+      <h2>{{ t('settings_auto_fill.title') }}</h2>
+      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
+    </header>
+
     <article class="card panel">
-      <header class="row">
-        <h2>{{ t('settings_auto_fill.title') }}</h2>
-        <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-      </header>
       <p class="muted">{{ t('settings_auto_fill.hint') }}</p>
       <button class="btn primary" :disabled="!activeLedgerId" @click="goToCreatePage">
         {{ t('settings_auto_fill.add_rule') }}

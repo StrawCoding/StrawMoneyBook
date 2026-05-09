@@ -1,11 +1,12 @@
 <template>
   <div class="view-root">
     <section class="stack">
+      <header class="row page-head">
+        <h2>{{ t('settings_shared_ledgers.title', '共同帳本') }}</h2>
+        <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
+      </header>
+
       <article class="card panel">
-        <header class="row">
-          <h2>{{ t('settings_shared_ledgers.title', '共同帳本') }}</h2>
-          <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-        </header>
         <p class="muted intro">
           {{ t('settings_shared_ledgers.desc_link_share', '共同帳本為會員功能，啟用後可建立共同帳本、分享加入連結，並在這裡管理同步與共享狀態。') }}
         </p>

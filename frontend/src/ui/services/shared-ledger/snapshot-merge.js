@@ -15,6 +15,7 @@ const SNAPSHOT_TABLE_ORDER = [
   'reimbursement_items',
   'budget_save_settlements',
   'budgets',
+  'budget_containers',
   'budget_items',
   'savings_jars',
   'bank_connections',

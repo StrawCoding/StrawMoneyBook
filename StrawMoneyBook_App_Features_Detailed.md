@@ -78,7 +78,7 @@ SMB-154 / 0.26.5 後，設定首頁的入口副標、帳號卡未登入提示、
 
 在互動細節上，Android 返回鍵會優先關閉當前 overlay，再決定是否返回頁面或退出 App；關鍵刪除流程也統一採用自製確認對話框，並額外針對行動裝置補強長按連結與文字選取的防誤觸處理。
 
-各功能頁的返回標題列也統一為電子發票精靈頁的版型：左側 chevron 返回、標題置中、右側保留操作區或等寬空位；手機寬度下右側操作會移到標題列下一行，避免不同頁面的「返回」文字按鈕、操作按鈕與標題位置各自漂移或重疊。記帳頁的 AI / 手動模式切換則固定移到標題列下方，避免寬操作按鈕和置中標題重疊。
+各功能頁的返回標題列也統一為帳本同步頁的版型：頁面主 header 直接放在頁面容器下，不包進內容 card / block；左側 chevron 返回、標題置中、右側保留等寬空位；新增 / 主要操作按鈕改放在第一個內容卡的 `panel-head` 右側，和存錢罐頁一致。SMB-178 後借貸、報銷、請款單、訂閱、交易搜尋與相關設定子頁的主 header 已移出內容卡片，借貸、請款單、訂閱項目與帳本設定的主要按鈕也已移到內容卡標題列；電子發票精靈頁也改回共用 `.btn.back-btn` 返回鍵樣式，不再以頁面 scoped CSS 覆寫返回鍵尺寸。記帳頁的 AI / 手動模式切換則固定移到標題列下方，避免寬操作按鈕和置中標題重疊。
 
 同時，像借貸清單與往來對象明細這類會用 query 切換「進行中 / 已結束」的同頁狀態，路由也已補上穩定 `transitionKey`，避免只是切換篩選就觸發整頁淡入淡出動畫。
 
@@ -808,7 +808,7 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 
 ## 電子發票匯入（E-Invoice Import）
 
-**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）；帳密 IV 修正 v1.0.13（SMB-174）；自動化流程可見化 + 失敗診斷分類 v1.0.15（SMB-174 Restart）
+**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）；帳密 IV 修正 v1.0.13（SMB-174）；自動化流程可見化 + 失敗診斷分類 v1.0.15（SMB-174 Restart）；驗證碼讀取與載具清單資料偵測修正 v1.0.16（SMB-179）；載具流程四大問題修復 v1.0.17
 **狀態**：Android 原生插件保留 WebView 自動化流程，但會先偵測財政部站台的防自動化/Cloudflare challenge；被平台擋下時回傳明確錯誤，不再只顯示 `E-invoice automation failed`。穩定正式匯入仍應改接財政部電子發票官方 API 與後端代理。
 
 ### 功能說明
@@ -841,6 +841,7 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 - **SMB-173 (v1.0.9)**：Android WebView 自動化改用財政部電子發票整合服務平台目前的登入與查詢路徑：`/accounts/login` 與 `/portal/btc/mobile/btc502w/search`；舊的 `/btc502w/BTCIndex`、`/btc502w/BTCInvController` 不再作為入口 URL，避免官方路由變更時直接落到 404 或錯誤頁。官方登入頁的手機條碼 / 載具模式選取也改為掃描文字、label、radio / checkbox、select option 與 data/aria 屬性，填入手機號碼、密碼與驗證碼時會觸發完整 input/change/keyup/blur 事件；找不到欄位時回傳 `phone_missing`、`password_missing` 或 `captcha_missing` 等診斷原因。
 - **SMB-174 (v1.0.13)**：修正「記住帳號」的密碼 IV 遺失問題；手機號碼與密碼現在會分別保存 AES-GCM IV，既有資料庫透過 migration 033 補上 `password_iv` 欄位，新儲存的憑證可在下一次進入精靈時正確還原並帶入 Android 自動化流程。
 - **SMB-174 Restart (v1.0.15)**：自動化流程徹底重做為「混合自動 + 手動驗證碼 fallback」，保證能完成登入。回應 Tester「我沒有看到他有輸入」與「請讓他能完整完美的工作」。
+- **SMB-179 (v1.0.16)**：驗證碼讀取不再只依賴 `<img>` canvas data URL；若 canvas 因站台保護或背景圖呈現而讀不到，會改由 Android WebView 可見區域裁切驗證碼元素做 OCR，並把 Tesseract numeric mode 收斂成純數字白名單與多組放大 / 灰階 / 高對比 / 二值化前處理。登入後若站台跳到「載具清單資料」或新版發票結果頁，也會以頁面文字、發票號碼 pattern、`role=row` / card / list 結構偵測與解析，不再只吃舊 `invTable` selector，且解析時避免把 8 位買方統編誤判成發票金額。
 
   **新流程（5 階段，狀態列即時顯示）**：
   1. `正在開啟電子發票平台…` — `loadUrl(LOGIN_URL)` 並偵測 Cloudflare 挑戰
@@ -860,6 +861,22 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
   **測試**：
   - Java 單元測試新增 `fillCredentialsOnlyScriptFillsPhoneAndPasswordWithoutSubmitting`、`clearCaptchaInputScriptOnlyResetsCaptchaFieldValue`、`focusCaptchaInputScriptScrollsAndFocusesCaptchaField`、`isFillCredentialsResultSuccessAcceptsBooleanTrueAndRejectsNonJsonObjectValues`、`hybridFlowTimingConstantsAreReasonableForUserManualCaptcha`，加上原本的 5 個 `pageErrorDetailScript*` / `classifyLoginFailure*` 共 10 個新測試。
   - `simulate-einvoice-login-flow.mjs` 加 Step 6A（站台錯誤擷取）、Step 8（自動填帳密不送出 / 不觸碰驗證碼）、Step 9（手動模式 focus/clear），共 32 項全通過。
+
+- **v1.0.17（載具流程四大問題修復）**：
+  - **問題 1：OCR 識別失敗**
+    - `TesseractBridge.recognizeSegmentedCaptcha`：分段識別失敗時改為放大 2x 後 PSM_SINGLE_CHAR 重試，仍失敗才放棄，提升低品質驗證碼的識別率
+    - `EInvoiceAutomation.selectBestCandidate`：同分時以原始置信度作 tie-breaker，加入 Log 輸出協助追查
+    - `EInvoiceAutomation.recognizeNumericCaptcha`：Bitmap variants 在 `try/finally` 中回收，修復長時間執行時的記憶體洩漏
+  - **問題 2：跳轉發票頁後出現「找不到帳號密碼填寫處」**
+    - `waitForMobileCarrierLoginFormStable`：8 秒後表單完全未出現時直接拋出 `einvoice_login_form_missing`（附帶載具快照與表單快照），而非靜默繼續讓後續 fill 腳本在未就緒表單上執行；表單部分可見時額外等 2 秒
+    - `buildFillCredentialsOnlyScript`：填入失敗時在回傳物件附帶 `formDiag`（當前頁面 URL + 可見 input 列表），方便排查平台 DOM 變動
+    - `describeFillCredentialsFailure`：從 `formDiag.url` 讀取頁面 URL 加入錯誤訊息
+  - **問題 3：未到達發票頁面卻顯示「無任何發票」**
+    - `fetchInvoices` 的 `waitForResults` 30 秒超時後拋出 `einvoice_query_results_timeout`（附帶當前頁面 URL / 標題），而非靜默返回空陣列使前端誤顯空狀態
+    - `EInvoiceStep3Select.vue`：`onMounted` 中 `isEInvoiceAutomationSupported()` 判斷移入 try 區塊，確保 `isScraping` 在所有路徑（含平台不支援）都由 `finally` 正確重置為 false
+  - **問題 4：金額解析誤吃買方統編**
+    - `buildParseInvoiceListScript` 中的 `parseAmount`：8 位數（統編格式）無條件排除，不受 `amountLabel` 影響，避免「金額 NT\$xxx 買方統編 12345678」類型的行誤把統編解析為金額
+  - **測試**：Java 單元測試新增 `fillCredentialsFailureScriptIncludesFormDiagnostics`、`parseAmountScriptUnconditionallyExcludesEightDigitNumbers`、`waitForResultsTimeoutErrorCodeIsCorrect`；`simulate-einvoice-login-flow.mjs` 新增 Step 11（空白頁 waitForResults）、Step 12（含金額標籤時統編不誤判），全套 41/41 通過
 
 ### 入口
 - `功能列表` 頁面（FeatureListPage.vue）→「電子發票匯入」

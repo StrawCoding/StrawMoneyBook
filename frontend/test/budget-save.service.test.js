@@ -35,6 +35,9 @@ function createBaseDependencies(overrides = {}) {
     async getBudgetSavePreferences() {
       return { retroactiveMode: 'manual' }
     },
+    async listBudgetContainers() {
+      return []
+    },
     async getBudgetSaveSettlement(_ledgerId, scopeType, scopeRefId, periodKey) {
       return settlements.get(`${scopeType}:${scopeRefId}:${periodKey}`) ?? null
     },

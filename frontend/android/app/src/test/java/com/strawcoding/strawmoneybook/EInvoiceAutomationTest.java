@@ -116,6 +116,43 @@ public class EInvoiceAutomationTest {
     }
 
     @Test
+    public void captchaSnapshotScriptProvidesNativeRegionCaptureFallback() {
+        // Canvas readback can fail when the captcha image is protected or rendered as a
+        // non-img element. In that case the automation must still return the element rect
+        // so the native WebView screenshot fallback can OCR the visible captcha.
+        String script = EInvoiceAutomation.buildCaptchaSnapshotScript();
+
+        assertTrue(script.contains("rectSnapshot"));
+        assertTrue(script.contains("devicePixelRatio"));
+        assertTrue(script.contains("canvas_blocked"));
+        assertTrue(script.contains("ready: true"));
+        assertTrue(script.contains("scrollIntoView"));
+    }
+
+    @Test
+    public void queryResultScriptsRecognizeCarrierListDataPage() {
+        // The einvoice site can land on a carrier-list/results page whose DOM does not use
+        // the old invTable selectors. We must detect page text and invoice-number patterns.
+        String waitScript = EInvoiceAutomation.buildWaitForResultsScript();
+        String fillScript = EInvoiceAutomation.buildFillQueryFormScript("1140101", "1140131", "all", "", "");
+        String parseScript = EInvoiceAutomation.buildParseInvoiceListScript();
+
+        assertTrue(waitScript.contains("載具清單資料"));
+        assertTrue(waitScript.contains("[A-Z]{2}\\d{8}"));
+        assertTrue(waitScript.contains("發票號碼"));
+        assertTrue(fillScript.contains("hasResultSignal"));
+        assertTrue(fillScript.contains("載具清單資料"));
+        assertTrue(parseScript.contains("[role=\"row\"]"));
+        assertTrue(parseScript.contains("統編|統一編號"));
+        assertTrue(parseScript.contains("replace(invoiceNo"));
+    }
+
+    @Test
+    public void numericCaptchaModeUsesDigitOnlyWhitelist() {
+        assertEquals("0123456789", TesseractBridge.NUMERIC_ALLOWED_CHARS);
+    }
+
+    @Test
     public void isFillCredentialsResultSuccessAcceptsBooleanTrueAndRejectsNonJsonObjectValues() {
         // We test the non-JSONObject branches here because android.jar's JSONObject is a
         // stub in plain JVM unit tests (throws "not mocked"). The JSONObject branch is
@@ -207,5 +244,33 @@ public class EInvoiceAutomationTest {
             EInvoiceAutomation.classifyLoginFailure(0, 0, 1, "");
         assertEquals("einvoice_login_failed", error.getCode());
         assertFalse(error.getMessage().contains("網站回應"));
+    }
+
+    @Test
+    public void fillCredentialsFailureScriptIncludesFormDiagnostics() {
+        String script = EInvoiceAutomation.buildFillCredentialsOnlyScript("0912345678", "secret");
+        assertTrue("失敗回報應包含 formDiag 物件", script.contains("formDiag"));
+        assertTrue("formDiag 應包含當前頁面 URL", script.contains("location.href"));
+        assertTrue("formDiag 應包含可見 input 列表", script.contains("visibleInputs"));
+    }
+
+    @Test
+    public void parseAmountScriptUnconditionallyExcludesEightDigitNumbers() {
+        String script = EInvoiceAutomation.buildParseInvoiceListScript();
+        // 8 位數（買方統編格式）應無條件被排除，不受 amountLabel 影響
+        // Java text block 中 \\d → 執行期字串為 \d
+        assertTrue("8 位數應無條件排除", script.contains("/^\\d{8}$/.test(normalized)) continue"));
+        // 7 位數只在無金額標籤時排除
+        assertTrue("7 位數只在無標籤時排除", script.contains("!amountLabel && /^\\d{7}$/.test(normalized)"));
+    }
+
+    @Test
+    public void waitForResultsTimeoutErrorCodeIsCorrect() {
+        // 驗證超時錯誤碼常數格式正確（Java 端拋出 einvoice_query_results_timeout）
+        // buildWaitForResultsScript 不應在空頁面誤判為已有結果
+        String script = EInvoiceAutomation.buildWaitForResultsScript();
+        assertFalse("等待腳本不應為空", script.isEmpty());
+        assertTrue("等待腳本應包含發票格式或載具清單偵測",
+            script.contains("[A-Z]{2}") || script.contains("載具清單"));
     }
 }

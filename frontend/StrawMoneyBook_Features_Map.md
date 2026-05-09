@@ -30,12 +30,13 @@
 - 記帳提醒與成就表（每日固定提醒、通知權限 / 精準提醒狀態、連續記帳天數、最長連續與累計記帳日）
 - 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
 - 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本；SMB-154 / 0.26.5 後設定首頁、登入 / 註冊與共同帳本相關頁面使用到的主要介面文案皆已納入 zh-TW / en / ja 正式 i18n key，避免切換英文 / 日文時依賴繁中 fallback；手動重設全部資料前會先嘗試建立 recovery JSON 備份，備份失敗時仍保留錯誤紀錄並繼續既有重設流程）
+- 子頁 header 標準（SMB-178）：含返回鍵的頁面主 header 採帳本同步頁樣式，直接放在頁面容器下，不包在 `card panel` 內容區塊內；全域 `.back-btn` 以 40px chevron icon 呈現，標題置中；新增 / 主要操作按鈕改放在第一個內容卡的 `panel-head` 右側，和存錢罐頁一致
 - 關於與聯絡入口（官網、Facebook、Instagram、Threads、Email、隱私權政策）
 - 官方網站 SEO / 品牌搜尋關鍵字（`../StrawMoneyBookWeb/index.html`：`StrawMoneyBook`、`稻草AI記帳`、`稻草記帳`、`AI記帳`、`對話記帳`、`自動記帳` 等）
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell，並在官網 `public/terms-of-service/index.html`、`public/privacy-policy/index.html` 提供靜態直連頁，避免正式網域直接開啟法律文件路徑時因 SPA history fallback 未命中而回 404
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
-- Android 原生能力（首頁小工具目錄（SMB-157）、安全鎖、Google Identity、語音輸入、銀行自動化；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；VS Code workspace 會透過 `java.import.exclusions` 與 `java.project.excludedPaths` 排除 Android Gradle 原生目錄的一般 Java 掃描，避免 JDT LS 未載入 Android SDK / Capacitor classpath 時誤報 `android.*`、`com.getcapacitor.*`、JUnit、Tesseract 等套件不存在，Android 原生檢查仍以 Gradle / Android Studio 為準；Google Play internal 上傳若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）
+- Android 原生能力（首頁小工具目錄（SMB-157）、安全鎖、Google Identity、語音輸入、銀行自動化；電子發票精靈頁 header 在 SMB-178 後收斂回共用 `.btn.back-btn`，和帳本同步頁相同採左側 chevron、置中標題、右側等寬保留位；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；VS Code workspace 會透過 `java.import.exclusions` 與 `java.project.excludedPaths` 排除 Android Gradle 原生目錄的一般 Java 掃描，避免 JDT LS 未載入 Android SDK / Capacitor classpath 時誤報 `android.*`、`com.getcapacitor.*`、JUnit、Tesseract 等套件不存在，Android 原生檢查仍以 Gradle / Android Studio 為準；Google Play internal 上傳若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）
 - Android 桌面小工具共 5 種：月收支總覽（`StrawMoneyWidgetProvider`）、收支圓餅圖（`StrawMoneyPieChartWidgetProvider`）、收支長條圖（`StrawMoneyBarChartWidgetProvider`）、快速記帳（`StrawMoneyQuickAddWidgetProvider`）、AI 記帳（`StrawMoneyAiBookkeepingWidgetProvider`）；圖表類小工具點擊導向 `/analysis`，快速記帳導向 `/transactions/quick-add`，AI 記帳導向 `/ai-auto-bookkeeping`；資料由 JS 層 `home-widget.service.js` 透過 Capacitor HomeWidget plugin 同步當月收入/支出摘要至 SharedPreferences，Android 原生以 `HomeWidgetPlugin.java` 繪製圓餅圖與長條圖 Bitmap
 
 ## 2. 路由與頁面對應
@@ -1002,6 +1003,17 @@ UI composable 目錄：`src/ui/composables/`
   - 新增方法：`isFillCredentialsResultSuccess`、`describeFillCredentialsFailure`、`capturePageErrorDetail`
   - 新 JS scripts：`buildFillCredentialsOnlyScript(phone, password)`、`buildClearCaptchaInputScript()`、`buildFocusCaptchaInputScript()`、`buildPageErrorDetailScript()`
   - `classifyLoginFailure(int, int, int, String)` 將失敗分類為 `einvoice_captcha_image_missing` / `einvoice_captcha_recognition_failed` / `einvoice_login_failed`（附帶站台原文錯誤）
+- **v1.0.17（載具流程修復）**：
+  - `waitForMobileCarrierLoginFormStable`：8 秒後表單完全未出現時拋出 `einvoice_login_form_missing`（附帶載具快照），而非靜默繼續；部分可見則額外等 2 秒
+  - `buildFillCredentialsOnlyScript`：填入失敗時在回傳物件中附帶 `formDiag`（url + visibleInputs），方便遠端排查
+  - `describeFillCredentialsFailure`：從 `formDiag.url` 讀取頁面 URL 加入錯誤訊息
+  - `fetchInvoices`：`waitForResults` 30 秒超時後拋出 `einvoice_query_results_timeout`（附帶當前頁面 URL / 標題）而非靜默返回空陣列
+  - `recognizeNumericCaptcha`：Bitmap variants 在 try/finally 中回收，修復記憶體洩漏
+  - `selectBestCandidate`：同分時以原始置信度作 tie-breaker，加入 Log 輸出
+  - `buildParseInvoiceListScript`：8 位數（統編格式）無條件排除為金額，不受 amountLabel 影響；7 位數保持僅在無標籤時排除
+
+#### `android/app/src/main/java/com/strawcoding/strawmoneybook/TesseractBridge.java`
+- **v1.0.17**：`recognizeSegmentedCaptcha` 中，單一分段識別失敗時改以放大 2x 後重試一次（PSM_SINGLE_CHAR），仍失敗才放棄該候選，提升低品質驗證碼的識別率
 
 #### `android/app/src/test/java/com/strawcoding/strawmoneybook/EInvoiceAutomationTest.java`
 - **SMB-174 Restart (v1.0.15)**：共新增 10 個測試：
@@ -1015,6 +1027,10 @@ UI composable 目錄：`src/ui/composables/`
   - `focusCaptchaInputScriptScrollsAndFocusesCaptchaField`
   - `isFillCredentialsResultSuccessAcceptsBooleanTrueAndRejectsNonJsonObjectValues`
   - `hybridFlowTimingConstantsAreReasonableForUserManualCaptcha`
+- **v1.0.17**：新增 3 個測試：
+  - `fillCredentialsFailureScriptIncludesFormDiagnostics`：驗證失敗回報含 `formDiag`、`location.href`、`visibleInputs`
+  - `parseAmountScriptUnconditionallyExcludesEightDigitNumbers`：驗證 8 位數無條件過濾不受標籤影響
+  - `waitForResultsTimeoutErrorCodeIsCorrect`：驗證等待腳本包含發票格式或載具清單偵測
 
 #### `scripts/simulate-einvoice-login-flow.mjs`
 - **SMB-174 Restart (v1.0.15)**：
@@ -1022,6 +1038,10 @@ UI composable 目錄：`src/ui/composables/`
   - Step 8 — `buildFillCredentialsOnlyScript` 在 mock DOM 中只填手機/密碼，**驗證 captcha 為空 + submit 未被點擊**
   - Step 9 — `buildClearCaptchaInputScript` + `buildFocusCaptchaInputScript`，instrumented 元素驗證 `scrollIntoView / focus / select` 都被呼叫
   - 全套：32/32 通過
+- **v1.0.17**：
+  - Step 11 — 空白/載入中頁面 `waitForResults` 應回傳 false（防止靜默超時造成無任何發票誤顯）
+  - Step 12 — 含金額標籤時統編仍不誤判為金額（邊緣案例）
+  - 全套：41/41 通過
 
 #### `src/core/repositories/einvoice-import.repo.js`
 - 函數（5）：`getEInvoiceCredential`, `upsertEInvoiceCredential`, `deleteEInvoiceCredential`, `getImportedInvoiceNumbers`, `insertInvoiceImport`, `listRecentInvoiceImports`
@@ -1071,6 +1091,7 @@ UI composable 目錄：`src/ui/composables/`
 - **SMB-172**：新增 `einvoice-debug.service.js`；`backend.js` 的 `scrapeEInvoiceList()` 與 `importSelectedInvoices()` 各自包覆 `traceEInvoiceScrape` / `traceEInvoiceImport`，記錄每次操作的狀態、耗時、發票數量及錯誤；Debug Page 新增「載具抓取紀錄」區塊並同步加入 i18n（zh-TW / en / ja）
 - **SMB-173 (v1.0.9)**：`EInvoiceAutomation.java` 的登入入口改為 `https://www.einvoice.nat.gov.tw/accounts/login`，查詢入口改為 `https://www.einvoice.nat.gov.tw/portal/btc/mobile/btc502w/search`；手機條碼 / 載具模式選取改為掃描文字、label、radio / checkbox、select option 與 data/aria 屬性，登入填值會觸發完整 input/change/keyup/blur 事件，找不到欄位時回傳 `phone_missing`、`password_missing` 或 `captcha_missing` 診斷；單元測試鎖住官方路徑與載具填入腳本，避免回退到舊的 `/btc502w/BTCIndex` 或 `/btc502w/BTCInvController`。
 - **SMB-174 (v1.0.13)**：`src/services/einvoice/backend.js`、`src/core/repositories/einvoice-import.repo.js` 與 DB migrations 032/033 修正記住帳號的密碼 IV 保存；`einvoice_credentials.password_iv` 會保存密碼加密時的 AES-GCM IV，避免只用手機號碼 IV 解密密碼而導致下次抓取時帳密無法正確還原。
+- **SMB-179 (v1.0.16)**：`EInvoiceAutomation.java` 補強驗證碼擷取與載具清單資料偵測；canvas 讀不到驗證碼時會回傳元素 rect 並由 Android WebView 截圖裁切後交給 OCR，OCR 前處理新增放大、灰階、高對比、二值化與反白變體，numeric mode 也改為純數字白名單。發票結果頁偵測不再只依賴舊 `invTable`，會辨識「載具清單資料」、發票號碼 pattern、`role=row` / card / list 結構，解析時避免把 8 位買方統編誤判成金額；`EInvoiceAutomationTest` 與 `simulate-einvoice-login-flow.mjs` 補上對應測試。
 
 ### 修改檔案
 - `src/core/db/migrate.js` — 加入 migration 032，SMB-174 後再加入 migration 033 補 `password_iv`

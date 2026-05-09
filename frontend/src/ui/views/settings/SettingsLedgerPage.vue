@@ -1,15 +1,16 @@
 <template>
   <div class="view-root">
     <section class="stack">
-      <article class="card panel">
-        <header class="row">
-          <h2>{{ t('settings_ledger_page.title') }}</h2>
-          <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-        </header>
+      <header class="row page-head">
+        <h2>{{ t('settings_ledger_page.title') }}</h2>
+        <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
+      </header>
 
-        <div class="row action-row">
+      <article class="card panel">
+        <header class="row panel-head">
+          <h3>{{ t('settings_ledger_page.title') }}</h3>
           <button class="btn primary" @click="createLedger">{{ t('settings_ledger_page.add_ledger') }}</button>
-        </div>
+        </header>
         <small v-if="showFreeLimitHint" class="muted limit-tip">{{ t('settings_ledger_page.limit_hint') }}</small>
 
         <draggable
@@ -131,12 +132,14 @@ async function submitDialog() {
 .panel {
   padding: 14px
 }
-h2 {
+h2,
+h3 {
   margin: 0;
   font-size: 18px
 }
-.action-row {
-  margin-top: 10px
+.panel-head {
+  align-items: flex-start;
+  gap: 10px;
 }
 .limit-tip {
   display: block;

@@ -1,14 +1,15 @@
 <template>
   <div class="view-root">
     <section class="stack">
-    <article class="card panel">
-      <header class="row">
+      <header class="row page-head">
         <h2>{{ t('settings_category_page.title') }}</h2>
         <div class="btn-wrap">
           <button class="btn mini-btn" @click="addGroup">{{ t('settings_category_page.add_group') }}</button>
           <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
         </div>
       </header>
+
+    <article class="card panel">
       <p class="muted">{{ t('settings_category_page.archive_hint') }}</p>
       <div class="kind-tabs">
         <button class="btn" :class="{ primary: activeKind === 'expense' }" @click="setActiveKind('expense')">{{ t('transaction.type.expense') }}</button>

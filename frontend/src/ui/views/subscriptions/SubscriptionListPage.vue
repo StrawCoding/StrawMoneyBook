@@ -1,14 +1,18 @@
 <template>
   <section class="stack">
+    <header class="row page-head">
+      <h2>{{ t('subscription_page.title') }}</h2>
+      <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
+    </header>
+
     <article class="card panel">
-      <header class="row">
-        <h2>{{ t('subscription_page.title') }}</h2>
-        <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
+      <header class="row panel-head">
+        <h3>{{ t('subscription_page.title') }}</h3>
+        <button class="btn primary" :disabled="!activeLedgerId" @click="openCreateDialog">
+          {{ t('subscription_page.add') }}
+        </button>
       </header>
       <p class="muted subtitle">{{ t('subscription_page.subtitle') }}</p>
-      <button class="btn primary" :disabled="!activeLedgerId" @click="openCreateDialog">
-        {{ t('subscription_page.add') }}
-      </button>
     </article>
 
     <article class="card panel">
@@ -431,6 +435,11 @@ onBeforeUnmount(() => {
 h2,
 h3 {
   margin: 0;
+}
+
+.panel-head {
+  align-items: flex-start;
+  gap: 10px;
 }
 
 .subtitle {

@@ -1,11 +1,11 @@
 <template>
   <section class="stack claim-edit-page">
-    <article class="card panel">
-      <header class="row">
-        <h2>{{ t('claim_sheet.edit') }}</h2>
-        <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
-      </header>
+    <header class="row page-head">
+      <h2>{{ t('claim_sheet.edit') }}</h2>
+      <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
+    </header>
 
+    <article class="card panel">
       <div v-if="loading" class="muted">{{ t('app.loading') }}</div>
       <template v-else-if="claim && isEditableClaim">
         <div class="stack form-wrap">

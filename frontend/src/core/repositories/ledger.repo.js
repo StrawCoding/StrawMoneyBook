@@ -11,6 +11,7 @@ const LEGACY_LEDGER_CHILD_DELETE_ORDER = [
   'reimbursements',
   'budget_save_settlements',
   'budget_items',
+  'budget_containers',
   'budgets',
   'loans',
   'transactions',

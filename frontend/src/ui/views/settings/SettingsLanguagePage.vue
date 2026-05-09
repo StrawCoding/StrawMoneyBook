@@ -1,11 +1,11 @@
 <template>
   <section class="stack">
-    <article class="card panel">
-      <header class="row">
-        <h2>{{ t('language_page.title') }}</h2>
-        <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-      </header>
+    <header class="row page-head">
+      <h2>{{ t('language_page.title') }}</h2>
+      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
+    </header>
 
+    <article class="card panel">
       <p class="muted current-line">{{ t('language_page.current') }}：{{ currentLabel }}</p>
 
       <div class="stack section-block">

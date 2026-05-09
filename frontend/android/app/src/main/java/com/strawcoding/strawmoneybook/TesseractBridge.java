@@ -23,6 +23,7 @@ final class TesseractBridge {
     private static final String TRAINEDDATA_FILENAME = "eng.traineddata";
     private static final String LANGUAGE = "eng";
     private static final String ALLOWED_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    static final String NUMERIC_ALLOWED_CHARS = "0123456789";
     static final String TRAINEDDATA_MD5 = "d1be414fbb296b3ad777bfca655e194e";
 
     private TesseractBridge() {}
@@ -142,7 +143,7 @@ final class TesseractBridge {
             api.recycle();
             throw new IOException("Failed to initialize Tesseract");
         }
-        api.setVariable(TessBaseAPI.VAR_CHAR_WHITELIST, ALLOWED_CHARS);
+        api.setVariable(TessBaseAPI.VAR_CHAR_WHITELIST, numericMode ? NUMERIC_ALLOWED_CHARS : ALLOWED_CHARS);
         api.setVariable("classify_bln_numeric_mode", numericMode ? "1" : "0");
         api.setVariable("load_system_dawg", "0");
         api.setVariable("load_freq_dawg", "0");
@@ -180,7 +181,19 @@ final class TesseractBridge {
                 String text = api.getUTF8Text();
                 String normalized = FirstBankAutomation.normalizeCaptchaString(text);
                 if (normalized.isEmpty()) {
-                    return null;
+                    // 放大後重試一次
+                    api.clear();
+                    Bitmap scaled = Bitmap.createScaledBitmap(segment, segment.getWidth() * 2, segment.getHeight() * 2, true);
+                    try {
+                        api.setPageSegMode(TessBaseAPI.PageSegMode.PSM_SINGLE_CHAR);
+                        api.setImage(scaled);
+                        text = api.getUTF8Text();
+                        normalized = FirstBankAutomation.normalizeCaptchaString(text);
+                    } finally {
+                        api.clear();
+                        if (!scaled.isRecycled()) scaled.recycle();
+                    }
+                    if (normalized.isEmpty()) return null;
                 }
                 segments.add(String.valueOf(normalized.charAt(0)));
                 totalConfidence += Math.max(1, api.meanConfidence());

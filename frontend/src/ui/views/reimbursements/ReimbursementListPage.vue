@@ -1,10 +1,11 @@
 <template>
   <section class="stack">
+    <header class="row page-head">
+      <h2>報銷統整</h2>
+      <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
+    </header>
+
     <article class="card panel summary">
-      <header class="row">
-        <h2>報銷統整</h2>
-        <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
-      </header>
       <div class="row">
         <span class="muted">未報銷金額</span>
         <MoneyText :value-minor="reimbursementStore.pendingTotalMinor" />

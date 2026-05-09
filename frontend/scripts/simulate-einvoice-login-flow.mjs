@@ -37,24 +37,32 @@ function extractScript(methodPattern) {
   else if (endComma === -1) blockEnd = endSemicolon
   else blockEnd = Math.min(endSemicolon, endComma)
   if (blockEnd === -1) throw new Error(`Text block 未正確關閉: ${methodPattern}`)
-  return content.slice(0, blockEnd).trim()
+  return content.slice(0, blockEnd).trim().replace(/\\\\/g, '\\')
 }
 
 const selectCarrierScript = extractScript('static String buildSelectMobileCarrierScript()')
 const formSnapshotScript = extractScript('static String buildLoginFormSnapshotScript()')
 const loginDetectScript = extractScript('static String buildLoginPageDetectScript()')
 const platformChallengeScript = extractScript('private static String buildPlatformChallengeDetectScript()')
-const captchaSnapshotScript = extractScript('private static String buildCaptchaSnapshotScript()')
+const captchaSnapshotScript = extractScript('static String buildCaptchaSnapshotScript()')
 const pageErrorDetailScript = extractScript('static String buildPageErrorDetailScript()')
+const waitForResultsScript = extractScript('static String buildWaitForResultsScript()')
+const parseInvoiceListScript = extractScript('static String buildParseInvoiceListScript()')
 
 // SMB-174 redesign: hybrid auto/manual flow scripts
 const fillCredentialsOnlyTemplate = extractScript('static String buildFillCredentialsOnlyScript(')
+const fillQueryFormTemplate = extractScript('static String buildFillQueryFormScript(')
 const focusCaptchaInputScript = extractScript('static String buildFocusCaptchaInputScript()')
 const clearCaptchaInputScript = extractScript('static String buildClearCaptchaInputScript()')
 let _fcoIdx = 0
 const fillCredentialsOnlyScript = fillCredentialsOnlyTemplate.replace(
   /%s/g,
   () => ['0910047171', 'Swxd3167@'][_fcoIdx++] ?? '',
+)
+let _fqIdx = 0
+const fillQueryFormScript = fillQueryFormTemplate.replace(
+  /%s/g,
+  () => ['1140501', '1140508', 'all', '', ''][_fqIdx++] ?? '',
 )
 
 // buildSubmitLoginScript 使用 String.format，需替換 %s 佔位符
@@ -277,6 +285,7 @@ function createPageContext(els, url, pageTitle = '財政部電子發票整合服
     Boolean: globalThis.Boolean,
     Array: globalThis.Array,
     Object: globalThis.Object,
+    Set: globalThis.Set,
     Math: globalThis.Math,
     Number: globalThis.Number,
     Date: globalThis.Date,
@@ -675,6 +684,89 @@ checkTrue('captcha 欄位 scrollIntoView 被呼叫', captchaScrolled,
 checkTrue('captcha 欄位 focus() 被呼叫', captchaFocused, 'focus 必須觸發以開啟鍵盤')
 checkTrue('captcha 欄位 select() 被呼叫', captchaSelected,
   'select() 讓使用者首個按鍵直接覆蓋舊值，不需先按刪除')
+
+// ── Step 10: 載具清單資料 / 發票結果頁偵測與解析 ─────────────────────────────
+
+section('Step 10  載具清單資料頁偵測與發票列解析')
+const invoiceRow = new MockEl({
+  tag: 'div',
+  attrs: { role: 'row' },
+  visible: true,
+})
+invoiceRow._children = [
+  new MockEl({ tag: 'span', text: 'UZ12345678', visible: true }),
+  new MockEl({ tag: 'span', text: '114/05/01', visible: true }),
+  new MockEl({ tag: 'span', text: '星巴克股份有限公司', visible: true }),
+  new MockEl({ tag: 'span', text: '金額 NT$125', visible: true }),
+  new MockEl({ tag: 'span', text: '買方統編 24536806', visible: true }),
+  new MockEl({ tag: 'span', text: '手機條碼', visible: true }),
+]
+
+const ctx10 = createPageContext({ invoiceRow }, QUERY_URL, '載具清單資料')
+ctx10.document.body = {
+  innerText: '載具清單資料 發票號碼 UZ12345678 發票日期 114/05/01 金額 NT$125 買方統編 24536806',
+}
+ctx10.document.documentElement = {
+  textContent: ctx10.document.body.innerText,
+  innerHTML: '',
+}
+
+const existingResultDetected = runScript(fillQueryFormScript, ctx10)
+console.log(`  fill/query 已在結果頁偵測: ${existingResultDetected}`)
+check('已在載具清單資料頁時不再誤判 query form missing', existingResultDetected, true,
+  '跳轉後若頁面已是載具清單資料 / 發票結果頁，fill query script 應直接回傳 true，而不是因找不到舊 query form selector 失敗')
+
+const waitResultDetected = runScript(waitForResultsScript, ctx10)
+console.log(`  wait 結果: ${waitResultDetected}`)
+check('waitForResults 可偵測載具清單資料頁', waitResultDetected, true,
+  '結果頁可能沒有舊 invTable selector；應以「載具清單資料」文字與發票號碼 pattern 作為 fallback')
+
+const parseResult = runScript(parseInvoiceListScript, ctx10)
+console.log(`  parse 結果: ${JSON.stringify(parseResult)}`)
+check('解析出 1 張發票', parseResult?.invoices?.length, 1,
+  '發票列沒有舊 table class 時仍應可由 role=row / card/list 結構解析')
+check('發票號碼正確', parseResult?.invoices?.[0]?.invoiceNumber, 'UZ12345678',
+  '應從 row text 擷取兩碼英文 + 八碼數字的發票號碼')
+check('金額不應誤吃買方統編', parseResult?.invoices?.[0]?.amount, 125,
+  '買方統編是 8 位數，不能被第一個純數字規則誤判成發票金額')
+check('買方統編正確', parseResult?.invoices?.[0]?.buyerTaxId, '24536806',
+  '統編需保留到 invoice payload，後續匯入備註 / debug 才能追溯')
+
+// ─── Step 11：waitForResults 在空白/載入中頁面應回傳 false ────────────────────
+console.log('\n── Step 11  waitForResults 空白頁應回傳 false（不誤判為已有結果）')
+
+const ctx11 = createPageContext({}, QUERY_URL, '頁面載入中')
+ctx11.document.body = { innerText: '頁面載入中...' }
+ctx11.document.documentElement = { textContent: '頁面載入中...', innerHTML: '' }
+
+const waitOnBlankPage = runScript(waitForResultsScript, ctx11)
+console.log(`  空白頁 waitForResults: ${waitOnBlankPage}`)
+check('空白頁 waitForResults=false', waitOnBlankPage, false,
+  '非發票頁應回傳 false，Java 端計時後拋出 einvoice_query_results_timeout，而非靜默返回空列表造成「無任何發票」誤顯')
+
+// ─── Step 12：金額解析 — 含金額標籤時統編仍不應誤判為金額 ────────────────────
+console.log('\n── Step 12  金額解析邊緣案例（含「金額」標籤的行也含統編）')
+
+const invoiceRow12 = new MockEl({ tag: 'div', attrs: { role: 'row' }, visible: true })
+invoiceRow12._children = [
+  new MockEl({ tag: 'span', text: 'AB12345678', visible: true }),
+  new MockEl({ tag: 'span', text: '金額 NT$250 買方統編 12345678', visible: true }),
+]
+const ctx12 = createPageContext({ invoiceRow12 }, QUERY_URL, '載具清單資料')
+ctx12.document.body = {
+  innerText: '載具清單資料 發票號碼 AB12345678 金額 NT$250 買方統編 12345678',
+}
+ctx12.document.documentElement = {
+  textContent: ctx12.document.body.innerText,
+  innerHTML: '',
+}
+
+const parseResult12 = runScript(parseInvoiceListScript, ctx12)
+console.log(`  parse 含標籤統編: ${JSON.stringify(parseResult12)}`)
+check('含金額標籤時統編不誤判為金額', parseResult12?.invoices?.[0]?.amount, 250,
+  '即使行內有「金額」標籤，8 位統編仍不能被當金額解析')
+check('含金額標籤時統編正確擷取', parseResult12?.invoices?.[0]?.buyerTaxId, '12345678',
+  '8 位統編應保留到 buyerTaxId 欄位，不應被金額解析消耗掉')
 
 // ─── 最終報告 ─────────────────────────────────────────────────────────────────
 

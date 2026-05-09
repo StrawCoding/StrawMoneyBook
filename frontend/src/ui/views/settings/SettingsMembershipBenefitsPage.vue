@@ -1,10 +1,11 @@
 <template>
   <section class="stack">
+    <header class="row page-head">
+      <h2>{{ t('membership_page.title') }}</h2>
+      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
+    </header>
+
     <article class="card panel">
-      <header class="row">
-        <h2>{{ t('membership_page.title') }}</h2>
-        <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-      </header>
       <p class="muted subtitle">{{ t('membership_page.subtitle') }}</p>
       <div v-if="showTrialNote" class="trial-note">
         <strong>{{ t('membership_page.first_trial_title', '第一次使用付費會員 3 天免費') }}</strong>

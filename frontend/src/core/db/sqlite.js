@@ -15,6 +15,7 @@ const RESET_TABLES = [
   'reimbursements',
   'budget_save_settlements',
   'budget_items',
+  'budget_containers',
   'budgets',
   'loans',
   'bank_sync_rules',

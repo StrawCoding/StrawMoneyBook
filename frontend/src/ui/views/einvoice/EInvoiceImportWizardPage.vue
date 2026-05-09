@@ -1,7 +1,7 @@
 <template>
   <section class="stack wizard-page">
     <header class="wizard-header row">
-      <button class="back-btn" @click="handleBack">
+      <button class="btn back-btn" type="button" @click="handleBack">
         <font-awesome-icon icon="fa-solid fa-chevron-left" />
       </button>
       <h1 class="wizard-title">{{ t('einvoice.title') }}</h1>
@@ -76,14 +76,6 @@ function handleBack() {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--border);
-}
-.back-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text);
-  padding: 4px 8px;
-  font-size: 18px;
 }
 .wizard-title {
   font-size: 17px;

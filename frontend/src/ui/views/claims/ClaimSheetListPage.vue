@@ -1,12 +1,14 @@
 <template>
   <section class="stack">
+    <header class="row page-head">
+      <h2>{{ t('claim_sheet.title') }}</h2>
+      <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
+    </header>
+
     <article class="card panel">
-      <header class="row">
-        <h2>{{ t('claim_sheet.title') }}</h2>
-        <div class="row header-actions">
-          <button class="btn primary" @click="openCreateSheet">{{ t('claim_sheet.create') }}</button>
-          <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
-        </div>
+      <header class="row panel-head">
+        <h3>{{ t('claim_sheet.title') }}</h3>
+        <button class="btn primary" @click="openCreateSheet">{{ t('claim_sheet.create') }}</button>
       </header>
 
       <div class="summary-grid">
@@ -927,8 +929,9 @@ h3 {
   margin: 0;
 }
 
-.header-actions {
-  gap: 8px;
+.panel-head {
+  align-items: flex-start;
+  gap: 10px;
 }
 
 .summary-grid {
