@@ -657,7 +657,7 @@ async function backupNowToWebdav() {
     })
     if (result?.skipped) return
     if (result?.status === 'error') {
-      throw new Error(result.reason || t('settings_auto_backup.toast.webdav_backup_failed'))
+      throw new Error(result.errorDetail || t('settings_auto_backup.toast.webdav_backup_failed'))
     }
     webdavBackupState.value = await getWebdavBackupState(ledgerStore.activeLedgerId)
     uiStore.pushToast(
@@ -788,7 +788,7 @@ async function backupNowToGoogle() {
     })
     if (result?.skipped) return
     if (result?.status === 'error') {
-      throw new Error(result.reason || t('settings_auto_backup.toast.google_backup_failed'))
+      throw new Error(result.errorDetail || t('settings_auto_backup.toast.google_backup_failed'))
     }
     googleBackupState.value = await getGoogleBackupState(ledgerStore.activeLedgerId)
     uiStore.pushToast(

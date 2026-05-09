@@ -36,6 +36,16 @@ test('settings page listens for background auto backup state updates for the act
   assert.match(settingsSource, /window\.removeEventListener\(AUTO_BACKUP_STATE_UPDATED_EVENT, handleAutoBackupStateUpdated\)/)
 })
 
+test('manual backup error toast uses errorDetail not reason to avoid raw code strings in the UI (SMB-181)', () => {
+  // When runManualAutoBackupProvider returns status=error, the UI must use
+  // result.errorDetail (the original error message) rather than result.reason
+  // (a raw code like 'backup_failed') so the user sees a readable message.
+  assert.doesNotMatch(settingsSource, /throw new Error\(result\?\.reason/)
+  assert.doesNotMatch(settingsSource, /throw new Error\(result\.reason/)
+  assert.match(settingsSource, /throw new Error\(result\.errorDetail \|\| t\('settings_auto_backup\.toast\.webdav_backup_failed'\)\)/)
+  assert.match(settingsSource, /throw new Error\(result\.errorDetail \|\| t\('settings_auto_backup\.toast\.google_backup_failed'\)\)/)
+})
+
 test('settings page refresh coordinator preserves unsaved WebDAV password input during background sync', () => {
   assert.match(settingsSource, /async function refreshAutoBackupState\(\{ preservePasswordInput = false } = \{\}\) \{/)
   assert.match(settingsSource, /const ticket = \+\+refreshCoordinatorTicket/)

@@ -85,6 +85,7 @@ function buildProviderRunResult({
     status: normalizedStatus,
     skipped: normalizedStatus === STATUS_SKIPPED,
     error: normalizedStatus === STATUS_ERROR,
+    errorDetail: error != null ? normalizeText(error?.message) : '',
     reason: normalizeText(reason || rawResult?.reason) || (
       normalizedStatus === STATUS_COMPLETED
         ? 'backup_completed'

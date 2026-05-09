@@ -57,6 +57,13 @@ test('manual backup buttons save settings through orchestrator preflight before 
   assert.match(settingsSource, /runManualAutoBackupProvider\(ledgerStore\.activeLedgerId, 'google'/)
 })
 
+test('buildProviderRunResult includes errorDetail with the original error message when error is thrown (SMB-181)', () => {
+  // When a backup runner throws, buildProviderRunResult must preserve the original
+  // error.message as errorDetail so the UI can show a human-readable message
+  // instead of the raw reason code (e.g. 'backup_failed').
+  assert.match(orchestratorSource, /errorDetail: error != null \? normalizeText\(error\?\.message\) : ''/)
+})
+
 test('runtime state update events include provider, mode, status, reason, and checkedAt', () => {
   assert.match(runtimeSource, /function notifyAutoBackupStateUpdated\(windowObject, result = \{\}\) \{/)
   assert.match(runtimeSource, /provider: String\(result\?\.provider/)
