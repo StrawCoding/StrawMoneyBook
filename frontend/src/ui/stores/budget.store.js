@@ -6,8 +6,6 @@ import {
   saveBudgetTotalConfig as saveBudgetTotalConfigService,
   loadBudgetSnapshot,
   removeBudgetItem,
-  removeBudgetContainer,
-  saveBudgetContainer,
   saveBudgetItem,
 } from '@/core/services/budget.service'
 import { computeReservedMinor } from '@/core/services/budget-reserve.service'
@@ -35,7 +33,6 @@ export const useBudgetStore = defineStore('budget', {
     monthKey: monthKeyFromDate(),
     budget: null,
     items: [],
-    containers: [],
     spentMap: {},
     budgetSavePreferences: {
       retroactiveMode: 'manual',
@@ -45,16 +42,15 @@ export const useBudgetStore = defineStore('budget', {
 
   getters: {
     totalBudgetMinor(state) {
-      const containedIds = new Set(state.containers.map((container) => String(container.id)))
-      const containerBudget = state.containers.reduce((total, container) => total + toFiniteMinor(container.amount_minor), 0)
-      const ungroupedBudget = state.items
-        .filter((item) => !containedIds.has(String(item.budget_container_id ?? '')))
-        .reduce((total, item) => total + toFiniteMinor(item.resolved_amount_minor ?? item.amount_minor), 0)
-      return containerBudget + ungroupedBudget
+      return state.items.reduce((total, item) => total + toFiniteMinor(item.resolved_amount_minor ?? item.amount_minor), 0)
     },
 
     totalSpentMinor(state) {
-      const budgetedCategoryIds = new Set(state.items.map((item) => item.category_id).filter(Boolean))
+      const budgetedCategoryIds = new Set(
+        state.items
+          .map((item) => item.category_id)
+          .filter((categoryId) => Boolean(categoryId)),
+      )
 
       let total = 0
       for (const categoryId of budgetedCategoryIds) {
@@ -101,15 +97,12 @@ export const useBudgetStore = defineStore('budget', {
         const snapshot = await loadBudgetSnapshot(ledgerId, monthKey)
         this.budget = snapshot.budget
         this.items = snapshot.items
-        this.containers = snapshot.containers ?? []
         this.budgetSavePreferences = snapshot.budgetSavePreferences ?? { retroactiveMode: 'manual' }
 
         const spentMap = {}
         for (const row of snapshot.spentRows) {
-          const spentMinor = toFiniteMinor(row.spent_minor)
-          if (row.category_id) {
-            spentMap[row.category_id] = spentMinor
-          }
+          if (!row.category_id) continue
+          spentMap[row.category_id] = toFiniteMinor(row.spent_minor)
         }
 
         this.spentMap = spentMap
@@ -121,12 +114,6 @@ export const useBudgetStore = defineStore('budget', {
     async upsertItem(payload) {
       const ledgerStore = useLedgerStore()
       await saveBudgetItem(ledgerStore.activeLedgerId, this.monthKey, payload)
-      await this.loadMonth(this.monthKey)
-    },
-
-    async upsertContainer(payload) {
-      const ledgerStore = useLedgerStore()
-      await saveBudgetContainer(ledgerStore.activeLedgerId, this.monthKey, payload)
       await this.loadMonth(this.monthKey)
     },
 
@@ -144,12 +131,6 @@ export const useBudgetStore = defineStore('budget', {
     async deleteItem(itemId) {
       const ledgerStore = useLedgerStore()
       await removeBudgetItem(ledgerStore.activeLedgerId, itemId)
-      await this.loadMonth(this.monthKey)
-    },
-
-    async deleteContainer(containerId) {
-      const ledgerStore = useLedgerStore()
-      await removeBudgetContainer(ledgerStore.activeLedgerId, containerId)
       await this.loadMonth(this.monthKey)
     },
 

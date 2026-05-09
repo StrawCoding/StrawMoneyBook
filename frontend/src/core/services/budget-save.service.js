@@ -13,10 +13,6 @@ const defaultDependencies = {
     const mod = await import('../repositories/budget.repo.js')
     return mod.listBudgetItems(...args)
   },
-  async listBudgetContainers(...args) {
-    const mod = await import('../repositories/budget.repo.js')
-    return mod.listBudgetContainers(...args)
-  },
   async computeBudgetSpentByCategory(...args) {
     const mod = await import('../repositories/budget.repo.js')
     return mod.computeBudgetSpentByCategory(...args)
@@ -206,24 +202,10 @@ function buildSpentMinorMap(rows = []) {
   const map = new Map()
   for (const row of rows) {
     const categoryId = normalizeText(row?.category_id)
-    const spentMinor = Math.max(0, Math.round(Number(row?.spent_minor ?? 0) || 0))
-    if (categoryId) {
-      map.set(categoryId, spentMinor)
-    }
+    if (!categoryId) continue
+    map.set(categoryId, Math.max(0, Math.round(Number(row?.spent_minor ?? 0) || 0)))
   }
   return map
-}
-
-function getItemSpentKey(item) {
-  return normalizeText(item?.category_id)
-}
-
-function buildContainerSpentMinor(container, items, spentMap) {
-  const containerId = normalizeText(container?.id)
-  if (!containerId) return 0
-  return items
-    .filter((item) => normalizeText(item?.budget_container_id) === containerId)
-    .reduce((total, item) => total + Number(spentMap.get(getItemSpentKey(item)) ?? 0), 0)
 }
 
 function toDueDateOccurredAt(dueDate, timeZone = 'Asia/Taipei') {
@@ -558,31 +540,20 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
     const budgetMonthKey = normalizeText(budget.month_key)
     if (!budgetMonthKey) continue
 
-    const [items, containers] = await Promise.all([
-      dependencies.listBudgetItems(ledgerId, budget.id),
-      dependencies.listBudgetContainers(ledgerId, budget.id),
-    ])
+    const items = await dependencies.listBudgetItems(ledgerId, budget.id)
     const { startUtc: budgetMonthStartUtc, endUtc: budgetMonthEndUtc } = monthRangeUtc(budgetMonthKey, ledgerTimeZone)
     const monthlySpentMap = buildSpentMinorMap(
       await dependencies.computeBudgetSpentByCategory(ledgerId, budgetMonthStartUtc, budgetMonthEndUtc),
     )
 
     const itemsByCategory = new Map()
-    const containersById = new Map(containers.map((container) => [normalizeText(container?.id), container]))
-    const enabledContainerIds = new Set(
-      containers
-        .filter((container) => normalizeBudgetSaveEnabled(container?.budget_save_enabled))
-        .map((container) => normalizeText(container?.id))
-        .filter(Boolean),
-    )
     for (const item of items) {
       const categoryId = normalizeText(item?.category_id)
-      if (categoryId) {
-        if (!itemsByCategory.has(categoryId)) {
-          itemsByCategory.set(categoryId, [])
-        }
-        itemsByCategory.get(categoryId).push(item)
+      if (!categoryId) continue
+      if (!itemsByCategory.has(categoryId)) {
+        itemsByCategory.set(categoryId, [])
       }
+      itemsByCategory.get(categoryId).push(item)
     }
 
     const conflictCategoryIds = new Set(
@@ -590,68 +561,15 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
         .filter(([, categoryItems]) => categoryItems.length > 1 && categoryItems.some((item) => normalizeBudgetSaveEnabled(item?.budget_save_enabled)))
         .map(([categoryId]) => categoryId),
     )
-    for (const container of containers) {
-      if (!normalizeBudgetSaveEnabled(container?.budget_save_enabled)) continue
-      const config = readBudgetSaveConfig(container, 'item')
-      const scopeRefId = String(container.id)
-      const containerLabel = normalizeText(container?.name) || scopeRefId
-      const childHasSave = items.some((item) => (
-        normalizeText(item?.budget_container_id) === scopeRefId
-        && normalizeBudgetSaveEnabled(item?.budget_save_enabled)
-      ))
-      if (childHasSave) {
-        if (compareMonthKey(budgetMonthKey, currentMonthKey) < 0) {
-          await recordNonTransferSettlement({
-            scopeType: 'budget_item_month',
-            scopeRefId,
-            periodKey: budgetMonthKey,
-            config,
-            status: 'conflict',
-            lastError: 'budget_save_parent_conflict',
-          })
-        }
-        continue
-      }
-      const configStatus = buildConfigStatus(config, accountMap)
-      if (!configStatus.valid) {
-        if (compareMonthKey(budgetMonthKey, currentMonthKey) < 0) {
-          await recordNonTransferSettlement({
-            scopeType: 'budget_item_month',
-            scopeRefId,
-            periodKey: budgetMonthKey,
-            config,
-            status: 'invalid_config',
-            lastError: configStatus.reason,
-          })
-        }
-        continue
-      }
-      if (compareMonthKey(budgetMonthKey, currentMonthKey) < 0) {
-        const expectedAmountMinor = Math.max(
-          0,
-          Math.round(Number(container?.amount_minor ?? 0) || 0) - buildContainerSpentMinor(container, items, monthlySpentMap),
-        )
-        await finalizeSettlement({
-          scopeType: 'budget_item_month',
-          scopeRefId,
-          periodKey: budgetMonthKey,
-          expectedAmountMinor,
-          configStatus,
-          label: `${containerLabel} ${budgetMonthKey}`,
-          dueDateKey: buildMonthLastDayKey(budgetMonthKey),
-        })
-      }
-    }
 
     for (const item of items) {
       if (!normalizeBudgetSaveEnabled(item?.budget_save_enabled)) continue
       const categoryId = normalizeText(item?.category_id)
-      const itemSpentKey = getItemSpentKey(item)
       const config = readBudgetSaveConfig(item, 'item')
       const scopeRefId = String(item.id)
       const itemLabel = normalizeText(item?.category_name) || categoryId || scopeRefId
 
-      if (conflictCategoryIds.has(categoryId) || enabledContainerIds.has(normalizeText(item?.budget_container_id))) {
+      if (conflictCategoryIds.has(categoryId)) {
         if (normalizeAmountMode(item?.amount_mode) === 'daily_average') {
           const dueDayKeys = listMatchingDayKeys(budgetMonthKey, item).filter((dayKey) => dayKey < todayDayKey)
           for (const periodKey of dueDayKeys) {
@@ -708,7 +626,7 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
         const dueDayKeys = listMatchingDayKeys(budgetMonthKey, item).filter((dayKey) => dayKey < todayDayKey)
         for (const periodKey of dueDayKeys) {
           const daySpentMap = await loadSpentMinorMapForDay(periodKey)
-          const expectedAmountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0) || 0) - Number(daySpentMap.get(itemSpentKey) ?? 0))
+          const expectedAmountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0) || 0) - Number(daySpentMap.get(categoryId) ?? 0))
           await finalizeSettlement({
             scopeType: 'budget_item_day',
             scopeRefId,
@@ -723,7 +641,7 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
       }
 
       if (compareMonthKey(budgetMonthKey, currentMonthKey) < 0) {
-        const expectedAmountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0) || 0) - Number(monthlySpentMap.get(itemSpentKey) ?? 0))
+        const expectedAmountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0) || 0) - Number(monthlySpentMap.get(categoryId) ?? 0))
         await finalizeSettlement({
           scopeType: 'budget_item_month',
           scopeRefId,
@@ -754,23 +672,21 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
       continue
     }
 
-    let totalExpectedAmountMinor = 0
-    for (const container of containers) {
-      const containerId = normalizeText(container?.id)
-      if (!containerId || enabledContainerIds.has(containerId)) continue
-      const containerBudgetMinor = Math.max(0, Math.round(Number(container?.amount_minor ?? 0) || 0))
-      totalExpectedAmountMinor += Math.max(0, containerBudgetMinor - buildContainerSpentMinor(container, items, monthlySpentMap))
+    const excludedCategoryIds = new Set(conflictCategoryIds)
+    for (const [categoryId, categoryItems] of itemsByCategory.entries()) {
+      if (categoryItems.some((item) => normalizeBudgetSaveEnabled(item?.budget_save_enabled))) {
+        excludedCategoryIds.add(categoryId)
+      }
     }
-    for (const item of items) {
-      const categoryId = normalizeText(item?.category_id)
-      const containerId = normalizeText(item?.budget_container_id)
-      if (containerId && containersById.has(containerId)) continue
-      if (normalizeBudgetSaveEnabled(item?.budget_save_enabled)) continue
-      if (conflictCategoryIds.has(categoryId)) continue
-      const spentKey = getItemSpentKey(item)
-      if (!spentKey) continue
-      const categoryBudgetMinor = resolveItemMonthBudgetMinor(item, budgetMonthKey)
-      const categoryRemainMinor = Math.max(0, categoryBudgetMinor - Number(monthlySpentMap.get(spentKey) ?? 0))
+
+    let totalExpectedAmountMinor = 0
+    for (const [categoryId, categoryItems] of itemsByCategory.entries()) {
+      if (excludedCategoryIds.has(categoryId)) continue
+      const categoryBudgetMinor = categoryItems.reduce(
+        (total, item) => total + resolveItemMonthBudgetMinor(item, budgetMonthKey),
+        0,
+      )
+      const categoryRemainMinor = Math.max(0, categoryBudgetMinor - Number(monthlySpentMap.get(categoryId) ?? 0))
       totalExpectedAmountMinor += categoryRemainMinor
     }
 

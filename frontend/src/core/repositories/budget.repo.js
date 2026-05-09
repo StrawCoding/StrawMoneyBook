@@ -127,13 +127,6 @@ export async function listBudgetsWithSaveRules(ledgerId) {
              AND bi.budget_id = b.id
              AND bi.budget_save_enabled = 1
          )
-         OR EXISTS (
-           SELECT 1
-           FROM budget_containers bc
-           WHERE bc.ledger_id = b.ledger_id
-             AND bc.budget_id = b.id
-             AND bc.budget_save_enabled = 1
-         )
        )
      ORDER BY b.month_key ASC, b.created_at ASC;`,
     [ledgerId],
@@ -141,76 +134,16 @@ export async function listBudgetsWithSaveRules(ledgerId) {
   return rowsOf(result)
 }
 
-export async function listBudgetContainers(ledgerId, budgetId) {
-  const result = await query(
-    `SELECT ledger_id, id, budget_id, name, amount_minor,
-            budget_save_enabled, budget_save_target_account_id, budget_save_source_account_id,
-            sort_order, created_at, updated_at
-     FROM budget_containers
-     WHERE ledger_id = ? AND budget_id = ?
-     ORDER BY sort_order ASC, created_at ASC;`,
-    [ledgerId, budgetId],
-  )
-  return rowsOf(result)
-}
-
-export async function upsertBudgetContainer(ledgerId, input) {
-  const now = nowIso()
-  const id = input.id ?? createId('bc')
-
-  await run(
-    `INSERT INTO budget_containers (
-      ledger_id, id, budget_id, name, amount_minor,
-      budget_save_enabled, budget_save_target_account_id, budget_save_source_account_id,
-      sort_order, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(ledger_id, id) DO UPDATE SET
-      budget_id = excluded.budget_id,
-      name = excluded.name,
-      amount_minor = excluded.amount_minor,
-      budget_save_enabled = excluded.budget_save_enabled,
-      budget_save_target_account_id = excluded.budget_save_target_account_id,
-      budget_save_source_account_id = excluded.budget_save_source_account_id,
-      sort_order = excluded.sort_order,
-      updated_at = excluded.updated_at;`,
-    [
-      ledgerId,
-      id,
-      input.budgetId,
-      input.name,
-      input.amountMinor,
-      normalizeBudgetSaveEnabled(input.budgetSaveEnabled),
-      normalizeBudgetSaveAccountId(input.budgetSaveTargetAccountId),
-      normalizeBudgetSaveAccountId(input.budgetSaveSourceAccountId),
-      input.sortOrder ?? 0,
-      now,
-      now,
-    ],
-  )
-
-  return id
-}
-
 export async function listBudgetItems(ledgerId, budgetId) {
   const result = await query(
     `SELECT bi.ledger_id, bi.id, bi.budget_id, bi.scope_type, bi.category_id, bi.category_group_id,
-            bi.budget_container_id,
             bi.amount_minor, bi.amount_mode, bi.day_rule_unit, bi.day_rule_values_json,
             bi.budget_save_enabled, bi.budget_save_target_account_id, bi.budget_save_source_account_id,
-            bi.sort_order AS sort_order, c.name AS category_name,
-            cg.name AS category_group_name,
-            c.group_id AS resolved_category_group_id,
-            bc.name AS budget_container_name
+            bi.sort_order AS sort_order, c.name AS category_name
      FROM budget_items bi
      LEFT JOIN categories c
        ON c.ledger_id = bi.ledger_id
       AND c.id = bi.category_id
-     LEFT JOIN category_groups cg
-       ON cg.ledger_id = bi.ledger_id
-      AND cg.id = c.group_id
-     LEFT JOIN budget_containers bc
-       ON bc.ledger_id = bi.ledger_id
-      AND bc.id = bi.budget_container_id
      WHERE bi.ledger_id = ? AND bi.budget_id = ?
      ORDER BY bi.sort_order ASC, bi.created_at ASC;`,
     [ledgerId, budgetId],
@@ -225,16 +158,15 @@ export async function upsertBudgetItem(ledgerId, input) {
 
   await run(
     `INSERT INTO budget_items (
-      ledger_id, id, budget_id, scope_type, category_id, category_group_id, budget_container_id,
+      ledger_id, id, budget_id, scope_type, category_id, category_group_id,
       amount_minor, amount_mode, day_rule_unit, day_rule_values_json,
       budget_save_enabled, budget_save_target_account_id, budget_save_source_account_id,
       sort_order, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(ledger_id, id) DO UPDATE SET
       scope_type = excluded.scope_type,
       category_id = excluded.category_id,
       category_group_id = excluded.category_group_id,
-      budget_container_id = excluded.budget_container_id,
       amount_minor = excluded.amount_minor,
       amount_mode = excluded.amount_mode,
       day_rule_unit = excluded.day_rule_unit,
@@ -251,7 +183,6 @@ export async function upsertBudgetItem(ledgerId, input) {
       input.scopeType,
       input.categoryId ?? null,
       input.categoryGroupId ?? null,
-      input.budgetContainerId ?? null,
       input.amountMinor,
       input.amountMode ?? 'fixed',
       input.dayRuleUnit ?? 'none',
@@ -270,15 +201,6 @@ export async function upsertBudgetItem(ledgerId, input) {
 
 export async function deleteBudgetItem(ledgerId, budgetItemId) {
   await run('DELETE FROM budget_items WHERE ledger_id = ? AND id = ?;', [ledgerId, budgetItemId])
-}
-
-export async function deleteBudgetContainer(ledgerId, budgetContainerId) {
-  await run('UPDATE budget_items SET budget_container_id = NULL WHERE ledger_id = ? AND budget_container_id = ?;', [ledgerId, budgetContainerId])
-  await run('DELETE FROM budget_containers WHERE ledger_id = ? AND id = ?;', [ledgerId, budgetContainerId])
-}
-
-export async function deleteBudgetContainersByBudget(ledgerId, budgetId) {
-  await run('DELETE FROM budget_containers WHERE ledger_id = ? AND budget_id = ?;', [ledgerId, budgetId])
 }
 
 export async function deleteBudgetItemsByBudget(ledgerId, budgetId) {
@@ -308,19 +230,16 @@ export async function updateBudgetSaveTotalConfig(ledgerId, budgetId, input = {}
 
 export async function computeBudgetSpentByCategory(ledgerId, monthStartUtc, monthEndUtc) {
   const result = await query(
-    `SELECT transactions.category_id, c.group_id AS category_group_id, SUM(${budgetSpentMinorSql('transactions')}) AS spent_minor
+    `SELECT category_id, SUM(${budgetSpentMinorSql('transactions')}) AS spent_minor
      FROM transactions
-     LEFT JOIN categories c
-       ON c.ledger_id = transactions.ledger_id
-      AND c.id = transactions.category_id
-     WHERE transactions.ledger_id = ?
-       AND transactions.deleted_at IS NULL
-       AND transactions.type = 'expense'
-       AND transactions.include_in_budget = 1
-       AND transactions.occurred_at >= ?
-       AND transactions.occurred_at < ?
-       AND transactions.category_id IS NOT NULL
-     GROUP BY transactions.category_id, c.group_id;`,
+     WHERE ledger_id = ?
+       AND deleted_at IS NULL
+       AND type = 'expense'
+       AND include_in_budget = 1
+       AND occurred_at >= ?
+       AND occurred_at < ?
+       AND category_id IS NOT NULL
+     GROUP BY category_id;`,
     [ledgerId, monthStartUtc, monthEndUtc],
   )
 
