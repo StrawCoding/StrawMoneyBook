@@ -29,6 +29,7 @@ function getOrCreateDeviceUuid() {
 // ── Credential management ─────────────────────────────────────────────────────
 
 export async function saveEInvoiceCredential(phone, password) {
+  console.log('[EInvoice] 儲存帳號憑證（手機號碼前 4 碼）:', String(phone ?? '').slice(0, 4) + '****')
   const deviceUuid = getOrCreateDeviceUuid()
   const { encrypted: encryptedAccount, iv: ivAccount } = await encryptCredential(phone, deviceUuid)
   const { encrypted: encryptedPassword, iv: ivPassword } = await encryptCredential(password, deviceUuid)
@@ -39,22 +40,29 @@ export async function saveEInvoiceCredential(phone, password) {
     iv: ivAccount,
     passwordIv: ivPassword,
   })
+  console.log('[EInvoice] 帳號憑證儲存成功')
 }
 
 export async function loadEInvoiceCredential() {
   const row = await getEInvoiceCredential(EINVOICE_PLATFORM)
-  if (!row) return null
+  if (!row) {
+    console.log('[EInvoice] 無已儲存憑證')
+    return null
+  }
   const deviceUuid = getOrCreateDeviceUuid()
   try {
     const phone = await decryptCredential(row.encryptedAccount, row.iv, deviceUuid)
     const password = await decryptCredential(row.encryptedPassword, row.passwordIv || row.iv, deviceUuid)
+    console.log('[EInvoice] 已載入儲存憑證（手機號碼前 4 碼）:', String(phone ?? '').slice(0, 4) + '****')
     return { phone, password }
-  } catch {
+  } catch (err) {
+    console.error('[EInvoice] 憑證解密失敗，忽略已儲存資料', err)
     return null
   }
 }
 
 export async function clearEInvoiceCredential() {
+  console.log('[EInvoice] 清除帳號憑證')
   await deleteEInvoiceCredential(EINVOICE_PLATFORM)
 }
 
@@ -76,9 +84,14 @@ export async function scrapeEInvoiceList(queryParams) {
       'einvoice_not_supported',
     )
   }
+  console.log('[EInvoice] 開始抓取發票 — 日期區間:', queryParams?.dateFrom, '~', queryParams?.dateTo)
   return traceEInvoiceScrape(
     { phone: queryParams?.phone, dateFrom: queryParams?.dateFrom, dateTo: queryParams?.dateTo },
-    () => queryNativeEInvoices(queryParams),
+    async () => {
+      const result = await queryNativeEInvoices(queryParams)
+      console.log('[EInvoice] 抓取完成，API 回傳', result?.length ?? 0, '筆')
+      return result
+    },
   )
 }
 
@@ -86,11 +99,14 @@ export async function scrapeEInvoiceList(queryParams) {
 
 export async function importSelectedInvoices(invoices, { accountId, categoryId, ledgerId } = {}) {
   return traceEInvoiceImport(async () => {
+    console.log('[EInvoice] 開始匯入，共', invoices.length, '筆待處理')
     const alreadyImported = await getImportedInvoiceNumbers()
+    console.log('[EInvoice] 已匯入發票號碼共', alreadyImported.size, '筆（用於去重）')
     const results = { imported: [], skipped: [], failed: [] }
 
     for (const invoice of invoices) {
       if (alreadyImported.has(invoice.invoiceNumber)) {
+        console.log('[EInvoice] 跳過重複發票:', invoice.invoiceNumber)
         results.skipped.push(invoice)
         continue
       }
@@ -103,12 +119,15 @@ export async function importSelectedInvoices(invoices, { accountId, categoryId, 
           carrierName: invoice.carrierName,
           transactionId: null,
         })
+        console.log('[EInvoice] 寫入成功:', invoice.invoiceNumber, '金額:', invoice.amount)
         results.imported.push(invoice)
-      } catch {
+      } catch (err) {
+        console.error('[EInvoice] 單筆發票寫入失敗:', invoice.invoiceNumber, err)
         results.failed.push(invoice)
       }
     }
 
+    console.log('[EInvoice] 匯入結束 — 成功:', results.imported.length, '略過:', results.skipped.length, '失敗:', results.failed.length)
     return results
   })
 }

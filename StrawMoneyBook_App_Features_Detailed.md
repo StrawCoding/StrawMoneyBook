@@ -879,6 +879,13 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
     - `buildParseInvoiceListScript` 中的 `parseAmount`：8 位數（統編格式）無條件排除，不受 `amountLabel` 影響，避免「金額 NT\$xxx 買方統編 12345678」類型的行誤把統編解析為金額
   - **測試**：Java 單元測試新增 `fillCredentialsFailureScriptIncludesFormDiagnostics`、`parseAmountScriptUnconditionallyExcludesEightDigitNumbers`、`waitForResultsTimeoutErrorCodeIsCorrect`；`simulate-einvoice-login-flow.mjs` 新增 Step 11（空白頁 waitForResults）、Step 12（含金額標籤時統編不誤判），全套 41/41 通過
 
+- **v1.0.24（載具流程穩定性修復）**：
+  - **[Bug 修復] 匯入失敗訊息消失**：`EInvoiceStep4Confirm.vue` 原本在 catch 中設定 `store.errorMessage` 並跳回 Step3，但 Step3 的 `onMounted` 立即清空 `store.errorMessage = ''`，導致使用者看不到任何錯誤提示。改為在 Step4 使用本地 `importError` ref，錯誤顯示於 Step4 原地（確認按鈕下方紅色提示文字），不再轉跳 Step3。
+  - **[Bug 修復] 抓取並發 race condition**：`EInvoiceStep3Select.vue` 的 `onMounted` 新增 `if (store.isScraping) return` 守衛，避免使用者快速來回切換步驟時觸發多個並發 scrape 請求，防止 `invoiceList` 被非預期覆蓋與 `isScraping` 提前重置。
+  - **[防呆] Step4 匯入防重複點擊**：`handleImport` 起始加入 `if (store.isImporting) return` JS 層守衛（原本只靠 `:disabled` 屬性，React/Vue tick 之前可能重複觸發）；「上一步」按鈕在匯入中也改為 `disabled`。
+  - **[可觀測性] 補充 debug log**：`backend.js`（憑證儲存/載入/抓取/匯入各階段）、`EInvoiceStep3Select.vue`（抓取開始/完成/失敗）、`EInvoiceStep4Confirm.vue`（匯入開始/完成/失敗）均補上 `console.log` / `console.error`，log 不輸出手機號碼完整內容（僅前 4 碼）、密碼、token 等敏感資料。
+  - **[測試] 新增 `test/einvoice-import.test.js`**：10 個單元測試案例，覆蓋空清單、全新匯入、去重跳過、全部重複、單筆 DB 失敗、全部失敗、混合情境、transactionId 固定為 null、merchantName 為 null、去重基準 Set 正確性；`node --test test/*.test.js` 382/382 通過。
+
 ### 入口
 - `功能列表` 頁面（FeatureListPage.vue）→「電子發票匯入」
 - 路由：`/einvoice-import`

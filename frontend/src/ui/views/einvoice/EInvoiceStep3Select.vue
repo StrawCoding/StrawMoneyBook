@@ -88,8 +88,16 @@ function goBack() {
 
 onMounted(async () => {
   store.errorMessage = ''
-  if (store.invoiceList.length > 0) return
+  if (store.isScraping) {
+    console.log('[EInvoice] Step3: 已有抓取進行中，略過重複觸發')
+    return
+  }
+  if (store.invoiceList.length > 0) {
+    console.log('[EInvoice] Step3: 已有發票清單（', store.invoiceList.length, '筆），略過重新抓取')
+    return
+  }
   store.isScraping = true
+  console.log('[EInvoice] Step3: 開始抓取發票 — 日期:', store.dateFrom, '~', store.dateTo)
   try {
     if (!isEInvoiceAutomationSupported()) {
       throw new Error(t('einvoice.error.not_supported', {}, '目前平台尚不支援電子發票自動抓取，敬請期待後續版本。'))
@@ -103,8 +111,10 @@ onMounted(async () => {
       buyerTaxId: store.buyerTaxId,
       keyword: store.keyword,
     })
+    console.log('[EInvoice] Step3: 抓取完成，共', list?.length ?? 0, '筆發票')
     store.setInvoiceList(list ?? [])
   } catch (err) {
+    console.error('[EInvoice] Step3: 抓取失敗', err)
     store.errorMessage = err?.message || t('einvoice.error.scrape_failed', {}, '抓取發票失敗，請重試')
   } finally {
     store.isScraping = false

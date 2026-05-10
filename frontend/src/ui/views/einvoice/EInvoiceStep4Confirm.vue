@@ -13,8 +13,10 @@
         </div>
       </div>
 
+      <p v-if="importError" class="error-text">{{ importError }}</p>
+
       <div class="step-footer row">
-        <button class="btn-secondary" @click="store.currentStep = 3">{{ t('einvoice.back') }}</button>
+        <button class="btn-secondary" :disabled="store.isImporting" @click="store.currentStep = 3">{{ t('einvoice.back') }}</button>
         <button class="btn-primary" :disabled="store.isImporting" @click="handleImport">
           <span v-if="store.isImporting">{{ t('einvoice.step4.importing') }}</span>
           <span v-else>{{ t('einvoice.step4.confirm') }}</span>
@@ -42,6 +44,7 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEInvoiceImportStore } from '@/ui/stores/einvoice-import.store.js'
 import { importSelectedInvoices } from '@/services/einvoice/backend.js'
@@ -51,18 +54,24 @@ const { t } = useI18n()
 const router = useRouter()
 const store = useEInvoiceImportStore()
 
+const importError = ref('')
+
 function formatAmount(amount) {
   return Number(amount).toLocaleString('zh-TW')
 }
 
 async function handleImport() {
+  if (store.isImporting) return
+  importError.value = ''
   store.isImporting = true
+  console.log('[EInvoice] Step4: 開始匯入，筆數:', store.selectedInvoices.length)
   try {
     const result = await importSelectedInvoices(store.selectedInvoices)
+    console.log('[EInvoice] Step4: 匯入完成 — 成功:', result.imported.length, '略過:', result.skipped.length, '失敗:', result.failed.length)
     store.importResult = result
   } catch (err) {
-    store.errorMessage = err?.message || t('einvoice.error.import_failed', {}, '匯入失敗，請重試')
-    store.currentStep = 3
+    console.error('[EInvoice] Step4: 匯入失敗', err)
+    importError.value = err?.message || t('einvoice.error.import_failed', {}, '匯入失敗，請重試')
   } finally {
     store.isImporting = false
   }
@@ -97,6 +106,7 @@ function handleFinish() {
 .result-block p { margin: 0; font-size: 14px; color: var(--text-secondary); }
 .skipped-text { font-size: 12px; }
 .failed-text { font-size: 12px; color: var(--warning, #f59e0b); }
+.error-text { font-size: 13px; color: var(--danger); margin: 0; text-align: center; }
 .step-footer { padding: 0; gap: 12px; }
 .step-footer.row { display: flex; }
 .btn-primary, .btn-secondary {
