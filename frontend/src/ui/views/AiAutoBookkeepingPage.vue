@@ -223,8 +223,8 @@
             @click="model.isReimbursable = !model.isReimbursable"
           >
             <span class="switch-copy">
-              <span class="switch-title">報銷</span>
-              <span class="switch-hint">這筆支出會進入待報銷流程</span>
+              <span class="switch-title">{{ t('quick_add.extra.reimbursable') }}</span>
+              <span class="switch-hint">{{ t('quick_add.extra.reimbursable_hint') }}</span>
             </span>
             <span class="switch-track"><span class="switch-thumb"></span></span>
           </button>
@@ -240,8 +240,8 @@
             @click="model.includeInBudget = !model.includeInBudget"
           >
             <span class="switch-copy">
-              <span class="switch-title">紀錄預算</span>
-              <span class="switch-hint">納入本期預算使用與超支提醒</span>
+              <span class="switch-title">{{ t('quick_add.extra.include_budget') }}</span>
+              <span class="switch-hint">{{ t('quick_add.extra.include_budget_hint') }}</span>
             </span>
             <span class="switch-track"><span class="switch-thumb"></span></span>
           </button>
@@ -254,8 +254,8 @@
             @click="model.includeInAnalysis = !model.includeInAnalysis"
           >
             <span class="switch-copy">
-              <span class="switch-title">紀錄收支</span>
-              <span class="switch-hint">納入圖表、報表與統計分析</span>
+              <span class="switch-title">{{ t('quick_add.extra.include_analysis') }}</span>
+              <span class="switch-hint">{{ t('quick_add.extra.include_analysis_hint') }}</span>
             </span>
             <span class="switch-track"><span class="switch-thumb"></span></span>
           </button>

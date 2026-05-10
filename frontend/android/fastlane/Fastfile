@@ -51,10 +51,11 @@ def upload_to_play_store_with_edit_retry!(options)
 end
 
 platform :android do
-  desc "Upload the release AAB to Google Play internal track as a draft release"
-  lane :internal do
+  desc "Publish the release AAB to the Google Play closed testing track"
+  lane :closed_testing do
     package_name = require_env!("ANDROID_PACKAGE_NAME")
     json_key_path = require_env!("PLAY_JSON_KEY_PATH")
+    play_track = ENV.fetch("PLAY_CLOSED_TESTING_TRACK", "alpha").to_s.strip
     requested_aab_path = ENV.fetch("AAB_PATH", "app/build/outputs/bundle/release/app-release.aab").to_s.strip
     requested_mapping_path = ENV.fetch("PLAY_MAPPING_PATH", "").to_s.strip
     aab_path = resolve_aab_path(requested_aab_path)
@@ -63,14 +64,15 @@ platform :android do
 
     UI.user_error!("AAB not found at #{aab_path}") unless File.exist?(aab_path)
     UI.user_error!("Play service account json not found at #{json_key_path}") unless File.exist?(json_key_path)
+    UI.user_error!("PLAY_CLOSED_TESTING_TRACK must not be empty") if play_track.empty?
 
     upload_to_play_store_with_edit_retry!(
       package_name: package_name,
       json_key: json_key_path,
       aab: aab_path,
       mapping: mapping_exists ? mapping_path : nil,
-      track: "internal",
-      release_status: "draft",
+      track: play_track,
+      release_status: "completed",
       skip_upload_apk: true,
       skip_upload_metadata: true,
       skip_upload_images: true,

@@ -1,4 +1,4 @@
-name: Play Release From GitHub Release
+name: Play Closed Testing Release From GitHub Release
 
 on:
   workflow_dispatch:
@@ -20,6 +20,7 @@ jobs:
     env:
       RUBY_VERSION: "3.2"
       ANDROID_PACKAGE_NAME: ${{ secrets.ANDROID_PACKAGE_NAME }}
+      PLAY_CLOSED_TESTING_TRACK: ${{ vars.PLAY_CLOSED_TESTING_TRACK || 'alpha' }}
 
     steps:
       - name: Checkout
@@ -62,6 +63,6 @@ jobs:
             echo "PLAY_MAPPING_PATH=$RESOLVED_MAPPING_PATH" >> "$GITHUB_ENV"
           fi
 
-      - name: Upload to Google Play internal
+      - name: Publish to Google Play closed testing
         working-directory: frontend/android
-        run: bundle exec fastlane internal
+        run: bundle exec fastlane closed_testing

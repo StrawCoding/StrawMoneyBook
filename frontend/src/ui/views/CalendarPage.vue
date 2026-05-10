@@ -102,12 +102,17 @@ const categoryStore = useCategoryStore()
 const loanStore = useLoanStore()
 const accountStore = useAccountStore()
 const uiStore = useUiStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const currentMonth = ref(monthKeyFromDate(new Date()))
 const selectedDateKey = ref(dateKeyFromDate(new Date()))
 const monthTransactions = ref([])
-const weekLabels = ['日', '一', '二', '三', '四', '五', '六']
+// 2024-01-07 is a Sunday; generate narrow weekday labels for Sun–Sat
+const weekLabels = computed(() =>
+  Array.from({ length: 7 }, (_, i) =>
+    new Intl.DateTimeFormat(locale.value, { weekday: 'narrow' }).format(new Date(2024, 0, 7 + i))
+  )
+)
 
 watch(
   () => [ledgerStore.activeLedgerId, currentMonth.value],

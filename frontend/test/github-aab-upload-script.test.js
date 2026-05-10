@@ -156,7 +156,8 @@ test('parseVersionCode keeps supporting explicit fallback numbers for older buil
   )
 })
 
-test('play release workflow builds the AAB, publishes the GitHub release, and uploads to Google Play internal', () => {
+test('play release workflow builds the AAB, publishes the GitHub release, and publishes Google Play closed testing', () => {
+  assert.match(playReleaseWorkflow, /name: Play Closed Testing Release/)
   assert.match(playReleaseWorkflow, /concurrency:\s*\n\s*group:\s*\$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}/)
   assert.match(playReleaseWorkflow, /cancel-in-progress:\s*true/)
   assert.match(playReleaseWorkflow, /uses: actions\/checkout@v6/)
@@ -169,6 +170,7 @@ test('play release workflow builds the AAB, publishes the GitHub release, and up
   assert.match(playReleaseWorkflow, /JAVA_VERSION:\s*"21"/)
   assert.match(playReleaseWorkflow, /RUBY_VERSION:\s*"3\.2"/)
   assert.match(playReleaseWorkflow, /ANDROID_PACKAGE_NAME:\s*\$\{\{ secrets\.ANDROID_PACKAGE_NAME \}\}/)
+  assert.match(playReleaseWorkflow, /PLAY_CLOSED_TESTING_TRACK:\s*\$\{\{ vars\.PLAY_CLOSED_TESTING_TRACK \|\| 'alpha' \}\}/)
   assert.match(playReleaseWorkflow, /node-version:\s*\$\{\{ env\.NODE_VERSION \}\}/)
   assert.match(playReleaseWorkflow, /java-version:\s*\$\{\{ env\.JAVA_VERSION \}\}/)
   assert.match(playReleaseWorkflow, /ruby-version:\s*\$\{\{ env\.RUBY_VERSION \}\}/)
@@ -198,12 +200,13 @@ test('play release workflow builds the AAB, publishes the GitHub release, and up
   assert.match(playReleaseWorkflow, /PLAY_JSON_KEY_PATH=\$RUNNER_TEMP\/play-service-account\.json/)
   assert.match(playReleaseWorkflow, /name: Restore Play service account/)
   assert.match(playReleaseWorkflow, /PLAY_SERVICE_ACCOUNT_JSON:\s*\$\{\{ secrets\.PLAY_SERVICE_ACCOUNT_JSON \}\}/)
-  assert.match(playReleaseWorkflow, /name: Upload to Google Play internal/)
-  assert.match(playReleaseWorkflow, /run: bundle exec fastlane internal/)
+  assert.match(playReleaseWorkflow, /name: Publish to Google Play closed testing/)
+  assert.match(playReleaseWorkflow, /run: bundle exec fastlane closed_testing/)
 })
 
 test('manual play upload workflow can retry an existing release asset upload to play', () => {
   assert.match(playReleaseFromGithubReleaseWorkflow, /on:\s*\n\s*workflow_dispatch:/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /name: Play Closed Testing Release From GitHub Release/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /tag_name:\s*\n\s*description:\s*Git tag \/ release tag to upload to Google Play/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /required:\s*true/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /type:\s*string/)
@@ -213,6 +216,7 @@ test('manual play upload workflow can retry an existing release asset upload to 
   assert.match(playReleaseFromGithubReleaseWorkflow, /uses: ruby\/setup-ruby@v1/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /permissions:\s*\n\s*contents:\s*read/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /RUBY_VERSION:\s*"3\.2"/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /PLAY_CLOSED_TESTING_TRACK:\s*\$\{\{ vars\.PLAY_CLOSED_TESTING_TRACK \|\| 'alpha' \}\}/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /bundler-cache:\s*true/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /working-directory:\s*frontend\/android/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /ruby-version:\s*\$\{\{ env\.RUBY_VERSION \}\}/)
@@ -220,16 +224,18 @@ test('manual play upload workflow can retry an existing release asset upload to 
   assert.match(playReleaseFromGithubReleaseWorkflow, /gh release download "\$\{\{ inputs\.tag_name \}\}" --pattern "mapping\.txt" --dir "\$RELEASE_ASSET_DIR" --clobber \|\| true/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /echo "AAB_PATH=\$RESOLVED_AAB_PATH" >> "\$GITHUB_ENV"/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /echo "PLAY_MAPPING_PATH=\$RESOLVED_MAPPING_PATH" >> "\$GITHUB_ENV"/)
-  assert.match(playReleaseFromGithubReleaseWorkflow, /run: bundle exec fastlane internal/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /run: bundle exec fastlane closed_testing/)
 })
 
-test('fastlane uploads the internal track release as a draft so the uploaded aab version stays selectable in Play Console', () => {
-  assert.match(fastlaneFastfile, /lane :internal do/)
+test('fastlane publishes the closed testing track release and keeps the track configurable', () => {
+  assert.match(fastlaneFastfile, /lane :closed_testing do/)
   assert.match(fastlaneFastfile, /upload_to_play_store_with_edit_retry!\(/)
-  assert.match(fastlaneFastfile, /track:\s*"internal"/)
-  assert.match(fastlaneFastfile, /release_status:\s*"draft"/)
+  assert.match(fastlaneFastfile, /play_track = ENV\.fetch\("PLAY_CLOSED_TESTING_TRACK", "alpha"\)\.to_s\.strip/)
+  assert.match(fastlaneFastfile, /UI\.user_error!\("PLAY_CLOSED_TESTING_TRACK must not be empty"\) if play_track\.empty\?/)
+  assert.match(fastlaneFastfile, /track:\s*play_track/)
+  assert.match(fastlaneFastfile, /release_status:\s*"completed"/)
   assert.match(fastlaneFastfile, /mapping:\s*mapping_exists \? mapping_path : nil/)
-  assert.doesNotMatch(fastlaneFastfile, /release_status:\s*"completed"/)
+  assert.doesNotMatch(fastlaneFastfile, /release_status:\s*"draft"/)
 })
 
 test('fastlane retries Google Play edit conflicts by opening a fresh upload edit', () => {

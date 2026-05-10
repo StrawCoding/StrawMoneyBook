@@ -36,7 +36,7 @@
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell，並在官網 `public/terms-of-service/index.html`、`public/privacy-policy/index.html` 提供靜態直連頁，避免正式網域直接開啟法律文件路徑時因 SPA history fallback 未命中而回 404
 - 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
-- Android 原生能力（首頁小工具目錄（SMB-157）、安全鎖、Google Identity、語音輸入、銀行自動化；電子發票精靈頁 header 在 SMB-178 後收斂回共用 `.btn.back-btn`，和帳本同步頁相同採左側 chevron、置中標題、右側等寬保留位；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；VS Code workspace 會透過 `java.import.exclusions` 與 `java.project.excludedPaths` 排除 Android Gradle 原生目錄的一般 Java 掃描，避免 JDT LS 未載入 Android SDK / Capacitor classpath 時誤報 `android.*`、`com.getcapacitor.*`、JUnit、Tesseract 等套件不存在，Android 原生檢查仍以 Gradle / Android Studio 為準；Google Play internal 上傳若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）
+- Android 原生能力（首頁小工具目錄（SMB-157）、安全鎖、Google Identity、語音輸入、銀行自動化；電子發票精靈頁 header 在 SMB-178 後收斂回共用 `.btn.back-btn`，和帳本同步頁相同採左側 chevron、置中標題、右側等寬保留位；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；VS Code workspace 會透過 `java.import.exclusions` 與 `java.project.excludedPaths` 排除 Android Gradle 原生目錄的一般 Java 掃描，避免 JDT LS 未載入 Android SDK / Capacitor classpath 時誤報 `android.*`、`com.getcapacitor.*`、JUnit、Tesseract 等套件不存在，Android 原生檢查仍以 Gradle / Android Studio 為準；`npm run gpr` 推送版本 tag 後，GitHub Actions 會建置 AAB、建立 GitHub Release，並透過 Fastlane 發布到 Google Play 封閉測試 track；若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試）
 - Android 桌面小工具共 5 種：月收支總覽（`StrawMoneyWidgetProvider`）、收支圓餅圖（`StrawMoneyPieChartWidgetProvider`）、收支長條圖（`StrawMoneyBarChartWidgetProvider`）、快速記帳（`StrawMoneyQuickAddWidgetProvider`）、AI 記帳（`StrawMoneyAiBookkeepingWidgetProvider`）；圖表類小工具點擊導向 `/analysis`，快速記帳導向 `/transactions/quick-add`，AI 記帳導向 `/ai-auto-bookkeeping`；資料由 JS 層 `home-widget.service.js` 透過 Capacitor HomeWidget plugin 同步當月收入/支出摘要至 SharedPreferences，Android 原生以 `HomeWidgetPlugin.java` 繪製圓餅圖與長條圖 Bitmap
 
 ## 2. 路由與頁面對應
@@ -319,7 +319,7 @@ UI 服務目錄：`src/ui/services/`
 | `secure-setting.service.js` | 敏感設定值加密儲存（AES-GCM） |
 | `security-lock.service.js` | 生物辨識/系統憑證安全鎖整合 |
 | `theme.service.js` | 主題色、配色方案與字體縮放套用 |
-| `app-update.service.js` | App 版本檢查與商店連結；Android AAB 發版版本碼由 `android/app/build.gradle` 依最終 `versionName` 自動推導（`1,000,000 + major * 1,000,000 + minor * 1,000 + patch`，保留 Play 歷史版本碼升級空間），仍可由 `CI_VERSION_CODE` 覆蓋；Play 發版流程若存在 `mapping.txt` 也會一併上傳去模糊化檔；Fastlane internal lane 會針對 Google Play edit 被外部變更的暫時性衝突重開 edit 重試 |
+| `app-update.service.js` | App 版本檢查與商店連結；Android AAB 發版版本碼由 `android/app/build.gradle` 依最終 `versionName` 自動推導（`1,000,000 + major * 1,000,000 + minor * 1,000 + patch`，保留 Play 歷史版本碼升級空間），仍可由 `CI_VERSION_CODE` 覆蓋；Play 發版流程若存在 `mapping.txt` 也會一併上傳去模糊化檔；Fastlane `closed_testing` lane 預設發布到 Google Play `alpha` 封閉測試 track，可用 GitHub Actions 變數 `PLAY_CLOSED_TESTING_TRACK` 指定其他封閉測試 track，並會針對 Google Play edit 被外部變更的暫時性衝突重開 edit 重試 |
 | `i18n.service.js` | 多語系文案管理 |
 | `setup-flow.service.js` | 是否顯示 Welcome / setup 流程判定 |
 | `post-setup-intro.service.js` | 設定完成後導覽旗標管理 |

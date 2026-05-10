@@ -265,17 +265,17 @@ function accountName(accountId) {
 }
 
 function labelOf(type) {
-  if (type === 'expense') return '支出'
-  if (type === 'income') return '收入'
-  if (type === 'transfer') return '轉帳'
-  return '結餘'
+  if (type === 'expense') return t('analysis_page.type.expense')
+  if (type === 'income') return t('analysis_page.type.income')
+  if (type === 'transfer') return t('home_tx.type.transfer')
+  return t('home_tx.type.balance')
 }
 
 function labelOfTransaction(tx) {
   const partLabel = String(tx?.analysis_part_label ?? '').trim()
   if (partLabel) return partLabel
-  if (!tx) return '結餘'
-  if (tx.origin_type === 'reimbursement') return '報銷'
+  if (!tx) return t('home_tx.type.balance')
+  if (tx.origin_type === 'reimbursement') return t('transaction_search.label.reimbursement')
   if (tx.origin_type === 'loan_payment') return loanTransactionLabel(tx)
   const systemLabel = getSystemTransactionLabel(tx)
   if (systemLabel) return systemLabel
@@ -283,23 +283,23 @@ function labelOfTransaction(tx) {
   if (directName) return directName
   const category = categoryStore.categories.find((item) => item.id === tx.category_id)
   if (category?.name) return category.name
-  if (tx.type === 'transfer') return '轉帳'
-  if (tx.type === 'adjustment') return '結餘'
+  if (tx.type === 'transfer') return t('home_tx.type.transfer')
+  if (tx.type === 'adjustment') return t('home_tx.type.balance')
   const kind = category?.kind
-  if (kind === 'income') return '收入'
-  if (kind === 'expense') return '支出'
+  if (kind === 'income') return t('analysis_page.type.income')
+  if (kind === 'expense') return t('analysis_page.type.expense')
   return labelOf(tx.type)
 }
 
 function loanTransactionLabel(tx) {
   const loanDirection = loanStore.items.find((item) => item.id === tx.external_ref_id)?.direction
   if (loanDirection === 'lend') {
-    return tx.type === 'income' ? '收回' : '借出'
+    return tx.type === 'income' ? t('transaction_search.label.loan_receive_back') : t('transaction_search.label.loan_lend')
   }
   if (loanDirection === 'borrow') {
-    return tx.type === 'expense' ? '歸還' : '借入'
+    return tx.type === 'expense' ? t('transaction_search.label.loan_repay') : t('transaction_search.label.loan_borrow')
   }
-  return tx.type === 'income' ? '收回' : '借出'
+  return tx.type === 'income' ? t('transaction_search.label.loan_receive_back') : t('transaction_search.label.loan_lend')
 }
 
 function categoryIconOfTransaction(tx) {

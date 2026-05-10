@@ -7,7 +7,7 @@
 
     <InputBottomSheet
       :open="open"
-      title="選擇區間"
+      :title="t('home_range_picker.title')"
       :body-class="'panel-sheet-body'"
       :sheet-class="'panel-sheet'"
       :show-footer="true"
@@ -65,8 +65,8 @@
       </div>
 
       <template #footer>
-        <button type="button" class="btn" @click="pickToday">今天</button>
-        <button type="button" class="btn" @click="open = false">關閉</button>
+        <button type="button" class="btn" @click="pickToday">{{ t('common.today') }}</button>
+        <button type="button" class="btn" @click="open = false">{{ t('common.close') }}</button>
       </template>
     </InputBottomSheet>
   </div>
@@ -75,6 +75,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
+import { useI18n } from '@/ui/services/i18n.service'
 
 const props = defineProps({
   mode: {
@@ -105,8 +106,14 @@ const props = defineProps({
 
 const emit = defineEmits(['update:year', 'update:month', 'update:day', 'toggle:day-number'])
 
+const { t, locale } = useI18n()
 const open = ref(false)
-const weekNames = ['日', '一', '二', '三', '四', '五', '六']
+// 2024-01-07 is a Sunday; we generate narrow weekday labels for Sun–Sat
+const weekNames = computed(() =>
+  Array.from({ length: 7 }, (_, i) =>
+    new Intl.DateTimeFormat(locale.value, { weekday: 'narrow' }).format(new Date(2024, 0, 7 + i))
+  )
+)
 const now = new Date()
 const viewYear = ref(props.year || now.getFullYear())
 const viewMonth = ref(parseMonth(props.month)?.month ?? now.getMonth())
@@ -139,15 +146,15 @@ watch(
 )
 
 const displayLabel = computed(() => {
-  if (props.mode === 'year') return `${props.year || now.getFullYear()} 年`
+  if (props.mode === 'year') return t('home_page.year_display', { year: props.year || now.getFullYear() })
   if (props.mode === 'day') return props.day || toDayKey(now)
   return props.month || toMonthKey(now)
 })
 
 const headerLabel = computed(() => {
-  if (props.mode === 'year') return `${viewYear.value} 年`
-  if (props.mode === 'month') return `${viewYear.value} 年`
-  return `${viewYear.value} 年 ${viewMonth.value + 1} 月`
+  if (props.mode === 'year') return t('home_page.year_display', { year: viewYear.value })
+  if (props.mode === 'month') return t('home_page.year_display', { year: viewYear.value })
+  return t('home_page.month_display', { year: viewYear.value, month: viewMonth.value + 1 })
 })
 
 const yearOptions = computed(() => {
@@ -230,8 +237,7 @@ function toggleOpen() {
 }
 
 function monthName(month) {
-  const map = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月']
-  return map[month - 1] ?? `${month}月`
+  return new Intl.DateTimeFormat(locale.value, { month: 'long' }).format(new Date(2024, month - 1, 1))
 }
 
 function isDayActive(cell) {

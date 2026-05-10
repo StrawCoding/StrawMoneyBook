@@ -1,32 +1,32 @@
 <template>
   <section class="stack">
     <header class="row page-header">
-      <h2 class="page-title">代收抵扣紀錄</h2>
+      <h2 class="page-title">{{ t('reimbursement_advance_usage.title') }}</h2>
       <div class="row header-actions">
-        <RouterLink class="btn" :to="{ name: 'reimbursement-advance-manage' }">代收管理</RouterLink>
-        <RouterLink class="btn back-btn" :to="{ name: 'reimbursements' }">返回</RouterLink>
+        <RouterLink class="btn" :to="{ name: 'reimbursement-advance-manage' }">{{ t('reimbursement_advance_usage.advance_manage_button') }}</RouterLink>
+        <RouterLink class="btn back-btn" :to="{ name: 'reimbursements' }">{{ t('common.back') }}</RouterLink>
       </div>
     </header>
 
     <article class="card panel summary-panel">
       <div class="summary-row">
-        <span class="muted">抵扣筆數</span>
+        <span class="muted">{{ t('reimbursement_advance_usage.count_label') }}</span>
         <strong>{{ records.length }}</strong>
       </div>
       <div class="summary-row">
-        <span class="muted">涉及代收</span>
+        <span class="muted">{{ t('reimbursement_advance_usage.advance_count_label') }}</span>
         <strong>{{ usedAdvanceCount }}</strong>
       </div>
       <div class="summary-row">
-        <span class="muted">抵扣總額</span>
+        <span class="muted">{{ t('reimbursement_advance_usage.total_label') }}</span>
         <MoneyText :value-minor="usedTotalMinor" />
       </div>
     </article>
 
     <article class="card panel">
       <header class="row panel-head">
-        <h3>抵扣清單</h3>
-        <small class="muted">已移出代收管理頁</small>
+        <h3>{{ t('reimbursement_advance_usage.list_title') }}</h3>
+        <small class="muted">{{ t('reimbursement_advance_usage.list_note') }}</small>
       </header>
 
       <ul class="record-list">
@@ -42,17 +42,17 @@
                   />
                   <strong>{{ advanceDisplayName(record) }}</strong>
                 </span>
-                <small class="muted">帳戶：{{ record.account_name || '未指定帳戶' }}</small>
+                <small class="muted">{{ t('reimbursement_advance_usage.account_prefix') }}{{ record.account_name || t('savings_jar.activity.unknown_account') }}</small>
               </div>
               <MoneyText :value-minor="record.amount_minor" />
             </div>
 
             <div class="record-meta">
-              <small class="muted">來源交易：{{ expenseDisplayName(record) }}</small>
-              <small class="muted">交易日期：{{ formatTime(record.expense_occurred_at) }}</small>
-              <small class="muted">抵扣時間：{{ formatTime(record.created_at) }}</small>
-              <small v-if="record.advance_note" class="muted break-word">代收備註：{{ record.advance_note }}</small>
-              <small v-if="record.expense_deleted_at" class="danger-text">來源交易已刪除，可手動清除殘留紀錄。</small>
+              <small class="muted">{{ t('reimbursement_advance_usage.source_tx_prefix') }}{{ expenseDisplayName(record) }}</small>
+              <small class="muted">{{ t('reimbursement_advance_usage.tx_date_prefix') }}{{ formatTime(record.expense_occurred_at) }}</small>
+              <small class="muted">{{ t('reimbursement_advance_usage.offset_time_prefix') }}{{ formatTime(record.created_at) }}</small>
+              <small v-if="record.advance_note" class="muted break-word">{{ t('reimbursement_advance_usage.advance_note_prefix') }}{{ record.advance_note }}</small>
+              <small v-if="record.expense_deleted_at" class="danger-text">{{ t('reimbursement_advance_usage.source_deleted_warning') }}</small>
             </div>
           </div>
 
@@ -62,37 +62,37 @@
               class="btn"
               @click="openOffsetAbout(record)"
             >
-              抵扣明細
+              {{ t('reimbursement_advance_usage.detail_button') }}
             </button>
             <button
               v-if="!record.expense_deleted_at"
               class="btn"
               @click="openTransaction(record.expense_tx_id)"
             >
-              來源交易
+              {{ t('reimbursement_advance_usage.source_tx_button') }}
             </button>
             <button
               class="btn danger"
               :disabled="deletingUsageId === record.id"
               @click="openDeleteDialog(record)"
             >
-              {{ deletingUsageId === record.id ? '刪除中...' : '刪除紀錄' }}
+              {{ deletingUsageId === record.id ? t('reimbursement_advance_usage.deleting') : t('reimbursement_advance_usage.delete_button') }}
             </button>
           </div>
         </li>
 
-        <li v-if="!loading && !records.length" class="muted">目前沒有代收抵扣紀錄</li>
-        <li v-if="loading" class="muted">載入中...</li>
+        <li v-if="!loading && !records.length" class="muted">{{ t('reimbursement_advance_usage.empty') }}</li>
+        <li v-if="loading" class="muted">{{ t('common.processing') }}</li>
       </ul>
     </article>
 
     <AppDialog
       :open="Boolean(deleteTarget)"
-      title="刪除抵扣紀錄"
+      :title="t('reimbursement_advance_usage.delete_dialog_title')"
       :message="deleteDialogMessage"
-      confirm-text="確認刪除"
-      cancel-text="取消"
-      loading-text="刪除中..."
+      :confirm-text="t('reimbursement_advance_usage.delete_dialog_confirm')"
+      :cancel-text="t('common.cancel')"
+      :loading-text="t('reimbursement_advance_usage.deleting')"
       :loading="Boolean(deletingUsageId)"
       @close="closeDeleteDialog"
       @confirm="confirmDelete"
@@ -113,11 +113,13 @@ import {
   listReimbursementAdvanceUsageRecordsData,
 } from '@/core/services/reimbursement.service'
 import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
+import { useI18n } from '@/ui/services/i18n.service'
 
 const router = useRouter()
 const ledgerStore = useLedgerStore()
 const reimbursementStore = useReimbursementStore()
 const uiStore = useUiStore()
+const { t } = useI18n()
 
 const loading = ref(false)
 const deletingUsageId = ref('')
@@ -132,7 +134,7 @@ const usedTotalMinor = computed(() => {
 })
 const deleteDialogMessage = computed(() => {
   if (!deleteTarget.value) return ''
-  return `確定要刪除這筆抵扣紀錄？\n${expenseDisplayName(deleteTarget.value)}`
+  return t('reimbursement_advance_usage.delete_dialog_message', { name: expenseDisplayName(deleteTarget.value) })
 })
 
 watch(
@@ -158,7 +160,7 @@ async function load() {
     records.value = await listReimbursementAdvanceUsageRecordsData(ledgerId)
   } catch (error) {
     records.value = []
-    uiStore.pushToast(error.message ?? '載入抵扣紀錄失敗', 'error')
+    uiStore.pushToast(error.message ?? t('reimbursement_advance_usage.toast.load_failed'), 'error')
   } finally {
     loading.value = false
   }
@@ -168,7 +170,7 @@ function advanceDisplayName(record) {
   const name = String(record?.category_name ?? '').trim()
   if (name) return name
   const note = String(record?.advance_note ?? '').trim()
-  return note || '代收'
+  return note || t('reimbursement_advance_usage.default_advance_name')
 }
 
 function advanceCategoryIcon(record) {
@@ -180,7 +182,7 @@ function expenseDisplayName(record) {
   if (categoryName) return categoryName
   const noteText = stripAddonSummaryFromNote(record?.expense_note)
   if (noteText) return noteText
-  return String(record?.expense_tx_id ?? '').trim() || '來源交易'
+  return String(record?.expense_tx_id ?? '').trim() || t('reimbursement_advance_usage.default_source_tx_name')
 }
 
 function openTransaction(txId) {
@@ -215,9 +217,9 @@ async function confirmDelete() {
     await deleteReimbursementAdvanceUsageEntry(ledgerId, usageId)
     await Promise.all([load(), reimbursementStore.load()])
     deleteTarget.value = null
-    uiStore.pushToast('抵扣紀錄已刪除')
+    uiStore.pushToast(t('reimbursement_advance_usage.toast.deleted'))
   } catch (error) {
-    uiStore.pushToast(error.message ?? '刪除抵扣紀錄失敗', 'error')
+    uiStore.pushToast(error.message ?? t('reimbursement_advance_usage.toast.delete_failed'), 'error')
   } finally {
     deletingUsageId.value = ''
   }

@@ -1,7 +1,7 @@
 <template>
   <InputBottomSheet
     :open="open"
-    title="編輯交易"
+    :title="t('transaction_about.edit_transaction')"
     :body-class="'stack form-wrap'"
     :sheet-class="'sheet'"
     :show-footer="true"
@@ -20,7 +20,7 @@
     </div>
 
     <label>
-      金額（元）
+      {{ t('common.amount_yuan') }}
       <input
         v-model="model.amountInput"
         type="text"
@@ -32,7 +32,7 @@
 
     <div class="date-extra-row">
       <div class="field-block">
-        <span class="field-label">交易時間</span>
+        <span class="field-label">{{ t('common.transaction_time') }}</span>
         <DateTimePickerField
           :date="model.occurredDate"
           :hour="model.occurredHour"
@@ -44,22 +44,22 @@
       </div>
 
       <button type="button" class="btn extra-btn" :class="{ active: showExtra }" @click="showExtra = true">
-        附加資訊
+        {{ t('common.extra_info') }}
       </button>
     </div>
 
     <div v-if="showCategory" class="inline-grid">
       <label>
-        帳戶
+        {{ t('common.account') }}
         <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
       </label>
 
       <label>
-        分類
+        {{ t('common.category') }}
         <CustomSelect
           v-model="model.categoryId"
           :groups="categoryPickerGroups"
-          placeholder="請選擇分類"
+          :placeholder="t('quick_add.error.category_required')"
           :disabled="!categoryPickerGroups.length"
         />
       </label>
@@ -67,17 +67,17 @@
 
     <div v-else-if="model.type === 'transfer'" class="inline-grid">
       <label>
-        轉出帳戶
+        {{ t('quick_add.field.from_account') }}
         <CustomSelect v-model="model.accountId" :options="transferAccountOptions" />
       </label>
       <label>
-        轉入帳戶
+        {{ t('quick_add.field.to_account') }}
         <CustomSelect v-model="model.peerAccountId" :options="transferAccountOptions" />
       </label>
     </div>
 
     <label v-else>
-      帳戶
+      {{ t('common.account') }}
       <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
     </label>
 
@@ -97,25 +97,25 @@
     </section>
 
     <template #footer>
-      <button class="btn danger" :disabled="deleting" @click="remove">刪除</button>
+      <button class="btn danger" :disabled="deleting" @click="remove">{{ t('common.delete') }}</button>
       <div class="footer-actions">
-        <button class="btn" @click="$emit('close')">取消</button>
-        <button class="btn primary" @click="submit">儲存</button>
+        <button class="btn" @click="$emit('close')">{{ t('common.cancel') }}</button>
+        <button class="btn primary" @click="submit">{{ t('common.save') }}</button>
       </div>
     </template>
   </InputBottomSheet>
 
   <InputBottomSheet
     :open="open && showExtra"
-    title="附加資訊"
+    :title="t('common.extra_info')"
     :body-class="'stack extra-content'"
     :sheet-class="'extra-sheet'"
     @close="showExtra = false"
   >
     <div class="addon-wrap">
       <div class="row">
-        <span class="field-label">附加項目</span>
-        <button type="button" class="btn" @click="addAddonRow">新增項目</button>
+        <span class="field-label">{{ t('quick_add.extra.addon_title') }}</span>
+        <button type="button" class="btn" @click="addAddonRow">{{ t('common.add_item') }}</button>
       </div>
 
       <div v-for="item in addonRows" :key="item.id" class="addon-row">
@@ -135,17 +135,17 @@
           placeholder="0"
         />
         <button type="button" class="btn danger addon-remove" @click="removeAddonRow(item.id)">
-          刪除
+          {{ t('common.delete') }}
         </button>
       </div>
 
       <div class="row">
-        <small class="addon-desc">可在設定中的附加項目清單更改</small>
+        <small class="addon-desc">{{ t('quick_add.extra.manage_hint') }}</small>
       </div>
     </div>
 
     <label>
-      備註
+      {{ t('common.note') }}
       <textarea v-model="model.note" class="textarea" rows="3" />
     </label>
 
@@ -162,8 +162,8 @@
           @click="model.isReimbursable = !model.isReimbursable"
         >
           <span class="switch-copy">
-            <span class="switch-title">報銷</span>
-            <span class="switch-hint">這筆支出會進入待報銷流程</span>
+            <span class="switch-title">{{ t('quick_add.extra.reimbursable') }}</span>
+            <span class="switch-hint">{{ t('quick_add.extra.reimbursable_hint') }}</span>
           </span>
           <span class="switch-track"><span class="switch-thumb"></span></span>
         </button>
@@ -177,8 +177,8 @@
             @click="model.includeInBudget = !model.includeInBudget"
           >
             <span class="switch-copy">
-              <span class="switch-title">紀錄預算</span>
-              <span class="switch-hint">納入本期預算使用與超支提醒</span>
+              <span class="switch-title">{{ t('quick_add.extra.include_budget') }}</span>
+              <span class="switch-hint">{{ t('quick_add.extra.include_budget_hint') }}</span>
             </span>
             <span class="switch-track"><span class="switch-thumb"></span></span>
           </button>
@@ -191,8 +191,8 @@
             @click="model.includeInAnalysis = !model.includeInAnalysis"
           >
             <span class="switch-copy">
-              <span class="switch-title">紀錄收支</span>
-              <span class="switch-hint">納入圖表、報表與統計分析</span>
+              <span class="switch-title">{{ t('quick_add.extra.include_analysis') }}</span>
+              <span class="switch-hint">{{ t('quick_add.extra.include_analysis_hint') }}</span>
             </span>
             <span class="switch-track"><span class="switch-thumb"></span></span>
           </button>
@@ -203,11 +203,11 @@
 
   <AppDialog
     :open="deleteConfirmOpen"
-    title="確認刪除"
-    message="確定要刪除這筆交易？"
-    confirm-text="確認刪除"
+    :title="t('home_tx_edit.delete_dialog_title')"
+    :message="t('home_tx_edit.delete_dialog_message')"
+    :confirm-text="t('home_tx_edit.delete_dialog_confirm')"
     :loading="deleting"
-    loading-text="處理中..."
+    :loading-text="t('common.processing')"
     @close="closeDeleteConfirm"
     @confirm="confirmRemove"
   />
@@ -224,6 +224,7 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
+import { useI18n } from '@/ui/services/i18n.service'
 import {
   addonDeltaMajorFromNote,
   mergeAddonItemsToNote,
@@ -249,17 +250,18 @@ const categoryStore = useCategoryStore()
 const transactionStore = useTransactionStore()
 const uiStore = useUiStore()
 const addonTemplateStore = useAddonTemplateStore()
+const { t } = useI18n()
 
 const types = computed(() => {
   if (props.tx?.type === 'transfer') {
-    return [{ value: 'transfer', label: '轉帳' }]
+    return [{ value: 'transfer', label: t('home_tx.type.transfer') }]
   }
   const base = [
-    { value: 'expense', label: '支出' },
-    { value: 'income', label: '收入' },
+    { value: 'expense', label: t('analysis_page.type.expense') },
+    { value: 'income', label: t('analysis_page.type.income') },
   ]
   if (props.tx?.type === 'adjustment') {
-    base.push({ value: 'adjustment', label: '結餘' })
+    base.push({ value: 'adjustment', label: t('home_tx.type.balance') })
   }
   return base
 })
@@ -439,31 +441,31 @@ async function submit() {
   const noteText = mergeAddonItemsToNote(String(model.note ?? ''), appliedAddonItems)
   if (model.type === 'adjustment') {
     if (!rawAmountMinor) {
-      uiStore.pushToast('調整金額不可為 0', 'error')
+      uiStore.pushToast(t('home_tx_edit.error.adjustment_zero'), 'error')
       return
     }
   } else if (model.type === 'transfer') {
     if (baseAmountMinor <= 0) {
-      uiStore.pushToast('請輸入有效金額（主轉帳金額需大於 0）', 'error')
+      uiStore.pushToast(t('quick_add.error.transfer_base_amount_invalid'), 'error')
       return
     }
     if (baseAmountMinor + sourceExtraMinor <= 0) {
-      uiStore.pushToast('轉出金額（含附加項目）需大於 0', 'error')
+      uiStore.pushToast(t('quick_add.error.transfer_total_amount_invalid'), 'error')
       return
     }
   } else if (rawAmountMinor < 0) {
-    uiStore.pushToast('請輸入有效金額（含附加項目後不可小於 0）', 'error')
+    uiStore.pushToast(t('home_tx_edit.error.amount_too_small'), 'error')
     return
   }
 
   try {
     if (model.type === 'transfer') {
       if (!model.peerAccountId) {
-        uiStore.pushToast('請選擇轉入帳戶', 'error')
+        uiStore.pushToast(t('quick_add.error.to_account_required'), 'error')
         return
       }
       if (model.accountId === model.peerAccountId) {
-        uiStore.pushToast('轉出與轉入帳戶不可相同', 'error')
+        uiStore.pushToast(t('quick_add.error.same_account'), 'error')
         return
       }
     }
@@ -665,7 +667,7 @@ function createAddonRow() {
 }
 
 function defaultAddonOption() {
-  return addonOptions.value[0] ?? { id: 'addon-default', label: '附加項目', defaultDirection: 'plus' }
+  return addonOptions.value[0] ?? { id: 'addon-default', label: t('quick_add.extra.addon_title'), defaultDirection: 'plus' }
 }
 
 function addAddonRow() {
@@ -695,7 +697,7 @@ function collectAppliedAddonItems() {
 }
 
 function addonLabelOf(optionId) {
-  return addonOptions.value.find((item) => item.id === optionId)?.label ?? '附加項目'
+  return addonOptions.value.find((item) => item.id === optionId)?.label ?? t('quick_add.extra.addon_title')
 }
 
 function addonOptionIdByLabel(label) {
