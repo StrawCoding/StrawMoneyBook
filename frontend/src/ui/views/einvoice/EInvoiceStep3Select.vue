@@ -51,7 +51,7 @@
       </div>
 
       <div class="step-footer row">
-        <button class="btn-secondary" @click="store.currentStep = 2">{{ t('einvoice.back') }}</button>
+        <button class="btn-secondary" @click="goBack">{{ t('einvoice.back') }}</button>
         <button
           class="btn-primary"
           :disabled="store.selectedInvoiceNumbers.size === 0"
@@ -81,10 +81,15 @@ function formatDate(ms) {
   return new Date(ms).toLocaleDateString('zh-TW')
 }
 
+function goBack() {
+  store.setInvoiceList([])
+  store.currentStep = 2
+}
+
 onMounted(async () => {
+  store.errorMessage = ''
   if (store.invoiceList.length > 0) return
   store.isScraping = true
-  store.errorMessage = ''
   try {
     if (!isEInvoiceAutomationSupported()) {
       throw new Error(t('einvoice.error.not_supported', {}, '目前平台尚不支援電子發票自動抓取，敬請期待後續版本。'))

@@ -1088,9 +1088,11 @@ UI composable 目錄：`src/ui/composables/`
 
 #### `src/ui/views/einvoice/EInvoiceStep3Select.vue`
 - 發票清單、全選/單選、已選金額彙總
+- **問題審查修復 (v1.0.22)**：`onMounted` 中 `store.errorMessage = ''` 移到 early-return 之前，修正 Step 4 匯入失敗後回到 Step 3 仍顯示錯誤畫面的問題；「上一步」改呼叫 `goBack()` 同時清空 `invoiceList`，修正回到 Step 2 修改查詢條件後 Step 3 仍顯示舊清單的問題。
 
 #### `src/ui/views/einvoice/EInvoiceStep4Confirm.vue`
 - 匯入預覽、確認匯入、結果顯示
+- **問題審查修復 (v1.0.22)**：結果畫面新增 `failed` 筆數顯示（`v-if="store.importResult.failed.length > 0"`，橘色警示文字）；`i18n.service.js` 同步新增 `einvoice.step4.result_failed` 三語翻譯。
 
 #### Android 原生插件（SMB-168, v1.0.8）
 - `android/.../EInvoiceAutomationPlugin.java` — `@CapacitorPlugin(name = "EInvoiceAutomation")`；方法：`isAvailable`, `queryInvoices`

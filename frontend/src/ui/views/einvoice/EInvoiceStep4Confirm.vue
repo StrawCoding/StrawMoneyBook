@@ -30,6 +30,9 @@
         <p v-if="store.importResult.skipped.length > 0" class="skipped-text">
           {{ t('einvoice.step4.result_skipped', { count: store.importResult.skipped.length }) }}
         </p>
+        <p v-if="store.importResult.failed.length > 0" class="failed-text">
+          {{ t('einvoice.step4.result_failed', { count: store.importResult.failed.length }) }}
+        </p>
       </div>
       <div class="step-footer">
         <button class="btn-primary" @click="handleFinish">{{ t('einvoice.step4.finish') }}</button>
@@ -93,6 +96,7 @@ function handleFinish() {
 .result-block h2 { font-size: 20px; margin: 0; }
 .result-block p { margin: 0; font-size: 14px; color: var(--text-secondary); }
 .skipped-text { font-size: 12px; }
+.failed-text { font-size: 12px; color: var(--warning, #f59e0b); }
 .step-footer { padding: 0; gap: 12px; }
 .step-footer.row { display: flex; }
 .btn-primary, .btn-secondary {
