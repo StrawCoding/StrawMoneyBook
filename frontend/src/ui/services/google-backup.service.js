@@ -496,6 +496,7 @@ export async function runGoogleAutoBackupIfDue(ledgerId) {
       lastAutoCheckAt: startedAt,
       lastAutoCheckStatus: 'error',
       lastAutoCheckReason: isReauth ? 'reauth_required' : 'backup_failed',
+      ...(isReauth ? { connected: false } : {}),
     })
     return {
       status: 'error',
@@ -598,6 +599,7 @@ export async function runGoogleAutoBackupOnDataChange(ledgerId) {
       lastAutoCheckAt: startedAt,
       lastAutoCheckStatus: 'error',
       lastAutoCheckReason: isReauth ? 'reauth_required' : 'backup_failed',
+      ...(isReauth ? { connected: false } : {}),
     })
     return {
       status: 'error',

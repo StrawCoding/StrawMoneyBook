@@ -61,8 +61,16 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
     'npx cap sync android && node scripts/patch-android-flatdir-warning.mjs',
   )
   assert.equal(
+    packageJson.scripts['notes:check'],
+    'node scripts/release-notes.mjs --check',
+  )
+  assert.equal(
+    packageJson.scripts['notes:clear'],
+    'node scripts/release-notes.mjs --clear',
+  )
+  assert.equal(
     packageJson.scripts.gpr,
-    'npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag',
+    'npm run notes:check && npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag && npm run notes:clear',
   )
   assert.equal(packageJson.scripts['bump:android:versionCode'], undefined)
   assert.equal(
@@ -220,6 +228,8 @@ test('manual play upload workflow can retry an existing release asset upload to 
   assert.match(playReleaseFromGithubReleaseWorkflow, /bundler-cache:\s*true/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /working-directory:\s*frontend\/android/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /ruby-version:\s*\$\{\{ env\.RUBY_VERSION \}\}/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /name: Compute Android version name from tag input/)
+  assert.match(playReleaseFromGithubReleaseWorkflow, /CI_VERSION_NAME=/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /gh release download "\$\{\{ inputs\.tag_name \}\}" --pattern "\*\.aab" --dir "\$RELEASE_ASSET_DIR" --clobber/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /gh release download "\$\{\{ inputs\.tag_name \}\}" --pattern "mapping\.txt" --dir "\$RELEASE_ASSET_DIR" --clobber \|\| true/)
   assert.match(playReleaseFromGithubReleaseWorkflow, /echo "AAB_PATH=\$RESOLVED_AAB_PATH" >> "\$GITHUB_ENV"/)
@@ -236,6 +246,18 @@ test('fastlane publishes the closed testing track release and keeps the track co
   assert.match(fastlaneFastfile, /release_status:\s*"completed"/)
   assert.match(fastlaneFastfile, /mapping:\s*mapping_exists \? mapping_path : nil/)
   assert.doesNotMatch(fastlaneFastfile, /release_status:\s*"draft"/)
+})
+
+test('fastlane reads pending release notes and uploads changelogs when content is present', () => {
+  assert.match(fastlaneFastfile, /PENDING_RELEASE_NOTES_PATH = File\.join\(REPO_ROOT, "release-notes\.pending\.md"\)/)
+  assert.match(fastlaneFastfile, /CHANGELOGS_DIR = File\.join\(__dir__, "metadata", "android", "zh-TW", "changelogs"\)/)
+  assert.match(fastlaneFastfile, /def version_code_from_name\(version_name\)/)
+  assert.match(fastlaneFastfile, /\(major \+ 1\) \* 1_000_000 \+ minor \* 1_000 \+ patch/)
+  assert.match(fastlaneFastfile, /def prepare_play_changelogs\(version_name/)
+  assert.match(fastlaneFastfile, /FileUtils\.mkdir_p\(CHANGELOGS_DIR\)/)
+  assert.match(fastlaneFastfile, /ci_version_name = ENV\.fetch\("CI_VERSION_NAME", ""\)\.strip/)
+  assert.match(fastlaneFastfile, /has_changelogs = prepare_play_changelogs\(ci_version_name\)/)
+  assert.match(fastlaneFastfile, /skip_upload_changelogs: !has_changelogs/)
 })
 
 test('fastlane retries Google Play edit conflicts by opening a fresh upload edit', () => {

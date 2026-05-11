@@ -1,6 +1,11 @@
+require 'fileutils'
+
 default_platform(:android)
 
 ANDROID_PROJECT_ROOT = File.expand_path("..", __dir__)
+REPO_ROOT = File.expand_path("../..", ANDROID_PROJECT_ROOT)
+PENDING_RELEASE_NOTES_PATH = File.join(REPO_ROOT, "release-notes.pending.md")
+CHANGELOGS_DIR = File.join(__dir__, "metadata", "android", "zh-TW", "changelogs")
 PLAY_EDIT_CONFLICT_MESSAGE = "A change was made to the application outside of this Edit, please create a new edit."
 PLAY_UPLOAD_MAX_ATTEMPTS = 3
 PLAY_UPLOAD_RETRY_DELAY_SECONDS = 15
@@ -50,6 +55,29 @@ def upload_to_play_store_with_edit_retry!(options)
   end
 end
 
+def version_code_from_name(version_name)
+  clean = version_name.to_s.strip.split("-").first.to_s
+  parts = clean.split(".").map(&:to_i)
+  major = parts[0] || 0
+  minor = parts[1] || 0
+  patch = parts[2] || 0
+  (major + 1) * 1_000_000 + minor * 1_000 + patch
+end
+
+def prepare_play_changelogs(version_name, notes_path = PENDING_RELEASE_NOTES_PATH)
+  return false if version_name.to_s.strip.empty?
+  return false unless File.exist?(notes_path)
+
+  lines = File.readlines(notes_path).map(&:strip).reject { |l| l.empty? || l.start_with?("#") }
+  return false if lines.empty?
+
+  version_code = version_code_from_name(version_name)
+  FileUtils.mkdir_p(CHANGELOGS_DIR)
+  File.write(File.join(CHANGELOGS_DIR, "#{version_code}.txt"), lines.join("\n"))
+  UI.message("[release-notes] Loaded #{lines.length} line(s) for version code #{version_code}")
+  true
+end
+
 platform :android do
   desc "Publish the release AAB to the Google Play closed testing track"
   lane :closed_testing do
@@ -66,6 +94,15 @@ platform :android do
     UI.user_error!("Play service account json not found at #{json_key_path}") unless File.exist?(json_key_path)
     UI.user_error!("PLAY_CLOSED_TESTING_TRACK must not be empty") if play_track.empty?
 
+    ci_version_name = ENV.fetch("CI_VERSION_NAME", "").strip
+    UI.message("[release-notes] Reading pending release notes...")
+    has_changelogs = prepare_play_changelogs(ci_version_name)
+    if has_changelogs
+      UI.message("[release-notes] Release notes ready — will upload changelogs to Google Play.")
+    else
+      UI.important("[release-notes] No release notes found — skipping changelog upload.")
+    end
+
     upload_to_play_store_with_edit_retry!(
       package_name: package_name,
       json_key: json_key_path,
@@ -77,7 +114,7 @@ platform :android do
       skip_upload_metadata: true,
       skip_upload_images: true,
       skip_upload_screenshots: true,
-      skip_upload_changelogs: true
+      skip_upload_changelogs: !has_changelogs
     )
   end
 end

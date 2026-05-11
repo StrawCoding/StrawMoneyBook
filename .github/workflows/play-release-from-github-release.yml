@@ -44,6 +44,12 @@ jobs:
         run: |
           printf '%s' "$PLAY_SERVICE_ACCOUNT_JSON" > "$PLAY_JSON_KEY_PATH"
 
+      - name: Compute Android version name from tag input
+        run: |
+          VERSION_NAME="${{ inputs.tag_name }}"
+          VERSION_NAME="${VERSION_NAME#v}"
+          echo "CI_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+
       - name: Download AAB from GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

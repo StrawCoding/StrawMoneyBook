@@ -1,6 +1,6 @@
 {
   "name": "strawmoneybook",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,7 +13,9 @@
     "copy:android": "npx cap copy android && node scripts/patch-android-flatdir-warning.mjs",
     "sync:android": "npx cap sync android && node scripts/patch-android-flatdir-warning.mjs",
     "bump:patch": "npm version patch --no-git-tag-version",
-    "gpr": "npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag",
+    "notes:check": "node scripts/release-notes.mjs --check",
+    "notes:clear": "node scripts/release-notes.mjs --clear",
+    "gpr": "npm run notes:check && npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag && npm run notes:clear",
     "preaab": "npm run bump:patch && npm run sync:app-update-manifest",
     "aab:build": "npm run sync:app-update-manifest && npx vite build && npm run prepare:android:release && cd android && ./gradlew bundleRelease && cd ..",
     "aab:build:prepared": "npx vite build && npm run prepare:android:release && cd android && ./gradlew bundleRelease && cd ..",

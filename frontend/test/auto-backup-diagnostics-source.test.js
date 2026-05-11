@@ -84,3 +84,27 @@ test('google auto backup surfaces auth failure as error instead of skip when bac
   const authFailureMatches = [...googleSource.matchAll(/isAuthFailure \? 'error' : 'skipped'/g)]
   assert.ok(authFailureMatches.length >= 2, 'both runGoogleAutoBackupIfDue and runGoogleAutoBackupOnDataChange must detect auth failures')
 })
+
+test('google auto backup sets connected:false when performGoogleBackup throws GOOGLE_REAUTH_REQUIRED (SMB-182)', () => {
+  // Regression: after migration restore (v1.0.23), devices with valid-looking connected:true but
+  // expired auth would attempt backup, hit GOOGLE_REAUTH_REQUIRED in performGoogleBackup, and only
+  // persist lastAutoCheckReason:'reauth_required' WITHOUT resetting connected:false.  On the next
+  // auto-check cycle the same connected:true state caused another backup attempt (skip path skips
+  // only when connected=false), producing an infinite reauth loop until manual intervention.
+  // Fix: when isReauth=true in catch, also save connected:false so the next cycle's skip-path
+  // isAuthFailure detection fires instead of re-attempting backup.
+  const reauthConnectedPatch = googleSource.match(
+    /isReauth \? 'reauth_required' : 'backup_failed',\s*\.\.\.\(isReauth \? \{ connected: false \} : \{\}\)/,
+  )
+  assert.ok(
+    reauthConnectedPatch !== null,
+    'runGoogleAutoBackupIfDue must set connected:false when GOOGLE_REAUTH_REQUIRED is caught',
+  )
+  const dataChangeRauthConnectedPatch = googleSource.match(
+    /isReauth \? 'reauth_required' : 'backup_failed',\s*\.\.\.\(isReauth \? \{ connected: false \} : \{\}\)/g,
+  )
+  assert.ok(
+    Array.isArray(dataChangeRauthConnectedPatch) && dataChangeRauthConnectedPatch.length >= 2,
+    'both runGoogleAutoBackupIfDue and runGoogleAutoBackupOnDataChange must set connected:false on reauth error',
+  )
+})
