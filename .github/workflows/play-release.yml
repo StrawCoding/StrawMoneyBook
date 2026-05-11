@@ -104,11 +104,24 @@ jobs:
             echo "PLAY_MAPPING_PATH=$RESOLVED_MAPPING_PATH" >> "$GITHUB_ENV"
           fi
 
+      - name: Prepare GitHub Release body
+        run: |
+          NOTES_FILE="release-notes.pending.md"
+          RELEASE_BODY_PATH="${{ runner.temp }}/github-release-body.md"
+          printf '' > "$RELEASE_BODY_PATH"
+          if [ -f "$NOTES_FILE" ]; then
+            CONTENT=$(grep -v '^#' "$NOTES_FILE" | grep -v '^[[:space:]]*$' || true)
+            if [ -n "$CONTENT" ]; then
+              printf '## 版本變更\n\n%s\n' "$CONTENT" > "$RELEASE_BODY_PATH"
+            fi
+          fi
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
+          body_path: ${{ runner.temp }}/github-release-body.md
           generate_release_notes: true
           files: |
             ${{ env.AAB_PATH }}
