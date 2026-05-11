@@ -64,11 +64,23 @@ def version_code_from_name(version_name)
   (major + 1) * 1_000_000 + minor * 1_000 + patch
 end
 
+def read_pending_note_lines(notes_path)
+  return [] unless File.exist?(notes_path)
+  lines = []
+  File.readlines(notes_path).each do |line|
+    stripped = line.strip
+    break if stripped == "---"
+    next if stripped.empty? || stripped.start_with?("#")
+    lines << stripped
+  end
+  lines
+end
+
 def prepare_play_changelogs(version_name, notes_path = PENDING_RELEASE_NOTES_PATH)
   return false if version_name.to_s.strip.empty?
   return false unless File.exist?(notes_path)
 
-  lines = File.readlines(notes_path).map(&:strip).reject { |l| l.empty? || l.start_with?("#") }
+  lines = read_pending_note_lines(notes_path)
   return false if lines.empty?
 
   version_code = version_code_from_name(version_name)
@@ -79,6 +91,43 @@ def prepare_play_changelogs(version_name, notes_path = PENDING_RELEASE_NOTES_PAT
 end
 
 platform :android do
+  desc "Submit the release AAB to Google Play production track for review"
+  lane :production_review do
+    package_name = require_env!("ANDROID_PACKAGE_NAME")
+    json_key_path = require_env!("PLAY_JSON_KEY_PATH")
+    requested_aab_path = ENV.fetch("AAB_PATH", "app/build/outputs/bundle/release/app-release.aab").to_s.strip
+    requested_mapping_path = ENV.fetch("PLAY_MAPPING_PATH", "").to_s.strip
+    aab_path = resolve_aab_path(requested_aab_path)
+    mapping_path = resolve_mapping_path(requested_mapping_path)
+    mapping_exists = !mapping_path.empty? && File.exist?(mapping_path)
+
+    UI.user_error!("AAB not found at #{aab_path}") unless File.exist?(aab_path)
+    UI.user_error!("Play service account json not found at #{json_key_path}") unless File.exist?(json_key_path)
+
+    ci_version_name = ENV.fetch("CI_VERSION_NAME", "").strip
+    UI.message("[release-notes] Reading pending release notes...")
+    has_changelogs = prepare_play_changelogs(ci_version_name)
+    if has_changelogs
+      UI.message("[release-notes] Release notes ready — will upload changelogs to Google Play.")
+    else
+      UI.important("[release-notes] No release notes found — skipping changelog upload.")
+    end
+
+    upload_to_play_store_with_edit_retry!(
+      package_name: package_name,
+      json_key: json_key_path,
+      aab: aab_path,
+      mapping: mapping_exists ? mapping_path : nil,
+      track: "production",
+      release_status: "completed",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: !has_changelogs
+    )
+  end
+
   desc "Publish the release AAB to the Google Play closed testing track"
   lane :closed_testing do
     package_name = require_env!("ANDROID_PACKAGE_NAME")

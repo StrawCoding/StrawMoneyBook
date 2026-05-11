@@ -1,6 +1,6 @@
 {
   "name": "strawmoneybook",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,9 +13,12 @@
     "copy:android": "npx cap copy android && node scripts/patch-android-flatdir-warning.mjs",
     "sync:android": "npx cap sync android && node scripts/patch-android-flatdir-warning.mjs",
     "bump:patch": "npm version patch --no-git-tag-version",
+    "bump:minor": "npm version minor --no-git-tag-version",
     "notes:check": "node scripts/release-notes.mjs --check",
+    "notes:archive": "node scripts/release-notes.mjs --archive",
     "notes:clear": "node scripts/release-notes.mjs --clear",
-    "gpr": "npm run notes:check && npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag && npm run notes:clear",
+    "gpr": "npm run notes:check && npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag && npm run notes:archive",
+    "gpr:minor": "npm run notes:check && npm run bump:minor && npm run sync:app-update-manifest && npm run release:git && npm run release:tag && npm run notes:clear",
     "preaab": "npm run bump:patch && npm run sync:app-update-manifest",
     "aab:build": "npm run sync:app-update-manifest && npx vite build && npm run prepare:android:release && cd android && ./gradlew bundleRelease && cd ..",
     "aab:build:prepared": "npx vite build && npm run prepare:android:release && cd android && ./gradlew bundleRelease && cd ..",

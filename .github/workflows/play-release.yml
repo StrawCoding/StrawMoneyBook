@@ -11,6 +11,7 @@ concurrency:
 
 jobs:
   play-release:
+    if: ${{ !endsWith(github.ref_name, '.0') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -110,7 +111,7 @@ jobs:
           RELEASE_BODY_PATH="${{ runner.temp }}/github-release-body.md"
           printf '' > "$RELEASE_BODY_PATH"
           if [ -f "$NOTES_FILE" ]; then
-            CONTENT=$(grep -v '^#' "$NOTES_FILE" | grep -v '^[[:space:]]*$' || true)
+            CONTENT=$(awk 'BEGIN{p=1} /^---$/{p=0} p && !/^#/ && !/^[[:space:]]*$/{print}' "$NOTES_FILE" || true)
             if [ -n "$CONTENT" ]; then
               printf '## 版本變更\n\n%s\n' "$CONTENT" > "$RELEASE_BODY_PATH"
             fi

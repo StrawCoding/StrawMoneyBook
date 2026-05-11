@@ -34,6 +34,10 @@ const playReleaseFromGithubReleaseWorkflow = readFileSync(
   resolve(import.meta.dirname, '../../.github/workflows/play-release-from-github-release.yml'),
   'utf8',
 )
+const playProductionReleaseWorkflow = readFileSync(
+  resolve(import.meta.dirname, '../../.github/workflows/play-production-release.yml'),
+  'utf8',
+)
 const fastlaneFastfile = readFileSync(
   resolve(import.meta.dirname, '../android/fastlane/Fastfile'),
   'utf8',
@@ -69,8 +73,16 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
     'node scripts/release-notes.mjs --clear',
   )
   assert.equal(
+    packageJson.scripts['notes:archive'],
+    'node scripts/release-notes.mjs --archive',
+  )
+  assert.equal(
     packageJson.scripts.gpr,
-    'npm run notes:check && npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag && npm run notes:clear',
+    'npm run notes:check && npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag && npm run notes:archive',
+  )
+  assert.equal(
+    packageJson.scripts['gpr:minor'],
+    'npm run notes:check && npm run bump:minor && npm run sync:app-update-manifest && npm run release:git && npm run release:tag && npm run notes:clear',
   )
   assert.equal(packageJson.scripts['bump:android:versionCode'], undefined)
   assert.equal(
