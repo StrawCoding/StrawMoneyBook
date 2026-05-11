@@ -17,7 +17,7 @@ import {
   googleSignIn,
   hasCachedGoogleAuthSession,
   reauth,
-} from '@/services/google/auth'
+} from '@/services/einvoice/auth'
 import { isLocalOnlyAppSettingKey } from '@/ui/services/local-only-app-settings'
 
 const GOOGLE_LEDGER_SYNC_STORAGE_KEY = 'straw.google_drive_ledger_sync_state'

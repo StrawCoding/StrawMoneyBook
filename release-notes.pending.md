@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- gpr 發布流程調整：release-notes.pending.md 沒有 pending 內容時只提示不中止，仍可建立版本 tag 並上傳；patch 發版不會封存空白版本區塊
+
 ---
 
 ## v1.1.8

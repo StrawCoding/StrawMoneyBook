@@ -4,7 +4,7 @@ import { App as CapacitorApp } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { flushDeferredScrollRestore } from '@/ui/services/route-scroll.service'
 import { checkForAppUpdate, openGooglePlayStore } from '@/ui/services/app-update.service'
-import { initGoogleAuth, getAccessToken } from '@/services/google/auth'
+import { initGoogleAuth, getAccessToken } from '@/services/einvoice/auth'
 import { canNavigateBackInApp } from '@/ui/services/navigation-back.service'
 import {
   authenticateSecurityLock,

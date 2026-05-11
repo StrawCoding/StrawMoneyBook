@@ -34,6 +34,13 @@ export function readValidNoteLines(filePath = NOTES_FILE_PATH) {
     .filter((line) => line && !line.startsWith('#'))
 }
 
+export function getReleaseNotesStatus(filePath = NOTES_FILE_PATH) {
+  return {
+    exists: existsSync(filePath),
+    lineCount: readValidNoteLines(filePath).length,
+  }
+}
+
 export function formatForPlayConsole(lines, maxLength = PLAY_CONSOLE_MAX_LENGTH) {
   const joined = lines.join('\n')
   return joined.length <= maxLength ? joined : joined.slice(0, maxLength)
@@ -46,6 +53,11 @@ export function resetNotesFile(filePath = NOTES_FILE_PATH) {
 export function archiveNotesFile(version, filePath = NOTES_FILE_PATH) {
   const lines = readValidNoteLines(filePath)
   const { history } = parseFile(filePath)
+
+  if (lines.length === 0) {
+    writeFileSync(filePath, history ? `${NOTES_HEADER}\n${history.trimStart()}` : NOTES_HEADER, 'utf8')
+    return
+  }
 
   const versionSection = `## v${version}\n${lines.map((l) => `- ${l.startsWith('- ') ? l.slice(2) : l}`).join('\n')}\n`
 
@@ -137,7 +149,7 @@ function printHelp() {
   console.log([
     'Usage: node scripts/release-notes.mjs [--check | --archive | --clear]',
     '',
-    '--check    Validate that pending notes exist; exit 1 if empty',
+    '--check    Validate that the pending notes file exists; empty notes are allowed',
     '--archive  Move pending notes into versioned history section (for patch releases)',
     '--clear    Reset the entire file to header only (for minor/major releases)',
   ].join('\n'))
@@ -151,18 +163,17 @@ export function main(argv = process.argv.slice(2)) {
 
   if (argv.includes('--check')) {
     console.log('[release-notes] Reading pending release notes...')
-    if (!existsSync(NOTES_FILE_PATH)) {
+    const status = getReleaseNotesStatus(NOTES_FILE_PATH)
+    if (!status.exists) {
       console.error('[release-notes] ERROR: release-notes.pending.md not found. Create the file and add release notes before publishing.')
       process.exitCode = 1
       return
     }
-    const lines = readValidNoteLines(NOTES_FILE_PATH)
-    if (lines.length === 0) {
-      console.error('[release-notes] WARNING: release-notes.pending.md is empty. Add release notes before publishing.')
-      process.exitCode = 1
+    if (status.lineCount === 0) {
+      console.warn('[release-notes] WARNING: release-notes.pending.md is empty. Publishing will continue without custom release notes.')
       return
     }
-    console.log(`[release-notes] Found ${lines.length} release note line(s). Ready to publish.`)
+    console.log(`[release-notes] Found ${status.lineCount} release note line(s). Ready to publish.`)
     return
   }
 

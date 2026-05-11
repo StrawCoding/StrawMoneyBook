@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 
 import {
   readValidNoteLines,
+  getReleaseNotesStatus,
   formatForPlayConsole,
   resetNotesFile,
   clearAndPushNotes,
@@ -36,6 +37,11 @@ test('readValidNoteLines returns empty array when file has only header', () => {
 test('readValidNoteLines returns empty array when file is blank', () => {
   const filePath = tempFile('\n\n\n')
   assert.deepEqual(readValidNoteLines(filePath), [])
+})
+
+test('getReleaseNotesStatus allows an existing file with no pending note lines', () => {
+  const filePath = tempFile('# Pending Release Notes\n')
+  assert.deepEqual(getReleaseNotesStatus(filePath), { exists: true, lineCount: 0 })
 })
 
 test('readValidNoteLines strips header lines and blank lines, returns content', () => {
@@ -147,6 +153,25 @@ test('archiveNotesFile accumulates multiple versions in history', () => {
   assert.ok(content.includes('## v1.1.7'))
   // v1.1.8 應在 v1.1.7 之前（較新的在上方）
   assert.ok(content.indexOf('## v1.1.8') < content.indexOf('## v1.1.7'))
+  assert.deepEqual(readValidNoteLines(filePath), [])
+})
+
+test('archiveNotesFile does not create an empty version section when pending notes are empty', () => {
+  const filePath = tempFile([
+    '# Pending Release Notes',
+    '',
+    '---',
+    '',
+    '## v1.1.7',
+    '- v1.1.7 的改動',
+    '',
+  ].join('\n'))
+
+  archiveNotesFile('1.1.8', filePath)
+
+  const content = readFileSync(filePath, 'utf8')
+  assert.ok(!content.includes('## v1.1.8'))
+  assert.ok(content.includes('## v1.1.7'))
   assert.deepEqual(readValidNoteLines(filePath), [])
 })
 

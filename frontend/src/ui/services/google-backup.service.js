@@ -16,7 +16,7 @@ import {
   googleSignOut,
   hasCachedGoogleAuthSession,
   reauth,
-} from '@/services/google/auth'
+} from '@/services/einvoice/auth'
 
 const GOOGLE_BACKUP_KEY = 'backup.google_drive'
 const GOOGLE_BACKUP_FILENAME = 'StrawMoneyBook_all_ledgers.json'
