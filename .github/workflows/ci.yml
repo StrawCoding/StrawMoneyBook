@@ -8,7 +8,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -56,6 +56,8 @@ jobs:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
       - run: npm ci
       - run: npm run check
+      - name: Validate release notes pending file exists
+        run: test -f ../release-notes.pending.md || (echo "release-notes.pending.md is missing from repo root" && exit 1)
       - name: Prepare Android release files for cache warmup
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: npm run prepare:android:release
