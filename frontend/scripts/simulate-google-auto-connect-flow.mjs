@@ -131,7 +131,7 @@ function createMockPlugin() {
     resolveId(source) {
       if (source === '@capacitor/core') return capacitorCoreId
       if (source === '@/core/repositories/settings.repo' || source === '@/core/repositories/settings.repo.js') return settingsRepoId
-      if (source === '@/services/google/auth' || source === '@/services/google/auth.js') return authServiceId
+      if (source === '@/services/google/auth' || source === '@/services/google/auth.js' || source === '@/services/einvoice/auth' || source === '@/services/einvoice/auth.js') return authServiceId
       if (source === '@/core/services/export.service' || source === '@/core/services/export.service.js') return exportServiceId
       if (source === '@/services/google/drive-appdata-backup' || source === '@/services/google/drive-appdata-backup.js') return driveServiceId
       if (source === '@/ui/services/i18n.service' || source === '@/ui/services/i18n.service.js') return i18nServiceId
@@ -152,7 +152,7 @@ function createMockPlugin() {
           }
         `
       }
-      if (id === authServiceId || id.endsWith('/src/services/google/auth.js')) {
+      if (id === authServiceId || id.endsWith('/src/services/google/auth.js') || id.endsWith('/src/services/einvoice/auth.js')) {
         return `
           const state = globalThis.__googleAutoConnectSimState;
           export async function getAccessToken(options = {}) {
