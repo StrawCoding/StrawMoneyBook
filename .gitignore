@@ -24,11 +24,8 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Environment and local secrets
-.env
-.env.*
-**/.env
-**/.env.*
-!**/.env.example
+./backend/.env
+.env.example
 key.properties
 *.jks
 *.keystore
