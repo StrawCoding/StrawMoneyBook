@@ -100,7 +100,7 @@ SMB-142 重建後，自動備份設定頁會在背景自動偵測 / 自動備份
 
 SMB-155 後，帳戶明細與交易搜尋不再一次載入完整交易歷史，而是以 300 筆為一頁做 SQL 分頁；交易搜尋的日期與關鍵字篩選會先下推到查詢層再取當頁資料，帳戶明細則會額外查詢分頁前交易金額，用來校正每筆交易後餘額，避免第 2 頁以後餘額從錯誤基準開始計算。
 
-會員邏輯也已把 domain 與導頁 side effect 分開：`core/services/membership.service.js` 只保留 entitlement、sync、snapshot 與 limit error 判斷，真正的會員限制導頁改由 `ui/services/membership-navigation.service.js` 處理，避免 core 層再反向依賴 UI router。共同帳本 backend 端則把 `auth` 與 `shared-ledgers` 路由拆成模組化目錄，並由 `backend/src/server.js` 的 route table 分派，`backend/src/collab/http.js` 提供共用 request parsing、method/body guard 與 route error serialization。
+會員邏輯也已把 domain 與導頁 side effect 分開：`core/services/membership.service.js` 只保留 entitlement、sync、snapshot 與 limit error 判斷，真正的會員限制導頁改由 `ui/services/membership-navigation.service.js` 處理，避免 core 層再反向依賴 UI router。帳號 Google 登入與 Google 備份也已共用前端 Web Client ID 解析，帳號頁在缺少設定時仍會顯示 Google 區塊與設定提示，不會讓 Google 登入入口整段消失。共同帳本 backend 端則把 `auth` 與 `shared-ledgers` 路由拆成模組化目錄，並由 `backend/src/server.js` 的 route table 分派，`backend/src/collab/http.js` 提供共用 request parsing、method/body guard 與 route error serialization。
 
 共同帳本快照推送會檢查用戶端帶上的 `baseVersion`，包含初始 `version=0` 邊界；密碼登入在鎖定期間會直接回覆鎖定狀態，不再重複累加失敗次數或延長鎖定；忘記密碼若臨時密碼 Email 寄送失敗，會回滾臨時密碼寫入，保留原密碼可用。
 

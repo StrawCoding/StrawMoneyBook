@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { SocialLogin } from '@capgo/capacitor-social-login'
+import { getConfiguredGoogleWebClientId, getGoogleWebClientIdMissingMessage } from '@/services/google/client-id'
 
 const DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
 const GOOGLE_SCOPES = ['email', 'profile', DRIVE_APPDATA_SCOPE]
@@ -264,7 +265,7 @@ function getIosClientId() {
 }
 
 function getConfiguredWebClientId() {
-  return String(import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID ?? '').trim()
+  return getConfiguredGoogleWebClientId()
 }
 
 function getGoogleInitializeMode() {
@@ -542,7 +543,7 @@ export async function initGoogleAuth() {
   assertNativePlatform()
   const clientId = getConfiguredWebClientId()
   if (!clientId) {
-    throw new Error('缺少 Google Web Client ID（請設定 VITE_GOOGLE_WEB_CLIENT_ID）')
+    throw new Error(getGoogleWebClientIdMissingMessage())
   }
   const mode = getGoogleInitializeMode()
   if (initializedClientId === clientId && initializedGoogleMode === mode) return

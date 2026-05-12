@@ -1,7 +1,8 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
+import { getConfiguredGoogleWebClientId, getGoogleWebClientIdMissingMessage } from '@/services/google/client-id'
 
 const GIS_SCRIPT_URL = 'https://accounts.google.com/gsi/client'
-const GOOGLE_WEB_CLIENT_ID = String(import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID ?? '').trim()
+const GOOGLE_WEB_CLIENT_ID = getConfiguredGoogleWebClientId()
 const GoogleIdentity = registerPlugin('GoogleIdentity')
 
 let gisScriptPromise = null
@@ -28,14 +29,14 @@ export function isGoogleIdentitySupported() {
 
 export function getGoogleIdentityUnavailableReason() {
   if (!GOOGLE_WEB_CLIENT_ID) {
-    return '缺少 Google Web Client ID（請設定 VITE_GOOGLE_WEB_CLIENT_ID）'
+    return getGoogleWebClientIdMissingMessage()
   }
   if (isWebRuntime()) return ''
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') return ''
   if (Capacitor.isNativePlatform()) {
     return '目前僅支援 Android App 的 Google 登入'
   }
-  return '缺少 Google Web Client ID（請設定 VITE_GOOGLE_WEB_CLIENT_ID）'
+  return getGoogleWebClientIdMissingMessage()
 }
 
 async function loadGoogleIdentityScript() {

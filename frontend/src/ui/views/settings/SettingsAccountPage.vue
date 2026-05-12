@@ -644,7 +644,6 @@ const googlePasswordVerified = computed(() => Boolean(
 ))
 const showGoogleAuthAction = computed(() => (
   !apiUnavailable.value
-  && googleIdentityAvailable.value
   && (
     !sessionUser.value
     || (!sessionMustChangePassword.value && !googleLinkedProvider.value)
