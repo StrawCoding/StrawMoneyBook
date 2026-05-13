@@ -173,6 +173,103 @@ function sortDeletedLogRows(rows) {
   })
 }
 
+function buildIdSet(rows = [], key = 'id') {
+  return new Set(
+    rows
+      .map((row) => normalizeText(row?.[key]))
+      .filter(Boolean),
+  )
+}
+
+function cloneRowWithNullMissingRefs(row, fields = [], existingIds = new Set()) {
+  let nextRow = row
+  for (const field of fields) {
+    const refId = normalizeText(nextRow?.[field])
+    if (refId && !existingIds.has(refId)) {
+      nextRow = { ...nextRow, [field]: null }
+    }
+  }
+  return nextRow
+}
+
+function pruneSharedLedgerSnapshotForeignKeys(tables) {
+  const nextTables = { ...tables }
+
+  nextTables.accounts = listTableRows({ tables: nextTables }, 'accounts')
+    .filter((row) => buildIdSet(nextTables.account_groups).has(normalizeText(row?.group_id)))
+  const accountIds = buildIdSet(nextTables.accounts)
+
+  nextTables.categories = listTableRows({ tables: nextTables }, 'categories')
+    .filter((row) => buildIdSet(nextTables.category_groups).has(normalizeText(row?.group_id)))
+  const categoryIds = buildIdSet(nextTables.categories)
+
+  nextTables.transactions = listTableRows({ tables: nextTables }, 'transactions')
+    .map((row) => cloneRowWithNullMissingRefs(row, ['peer_account_id'], accountIds))
+    .map((row) => cloneRowWithNullMissingRefs(row, ['category_id'], categoryIds))
+    .filter((row) => accountIds.has(normalizeText(row?.account_id)))
+  const transactionIds = buildIdSet(nextTables.transactions)
+
+  nextTables.transaction_attachments = listTableRows({ tables: nextTables }, 'transaction_attachments')
+    .filter((row) => transactionIds.has(normalizeText(row?.transaction_id)))
+
+  nextTables.loans = listTableRows({ tables: nextTables }, 'loans')
+    .filter((row) => buildIdSet(nextTables.counterparties).has(normalizeText(row?.counterparty_id)))
+  const loanIds = buildIdSet(nextTables.loans)
+
+  nextTables.loan_payments = listTableRows({ tables: nextTables }, 'loan_payments')
+    .map((row) => cloneRowWithNullMissingRefs(row, ['generated_tx_id', 'generated_interest_tx_id'], transactionIds))
+    .filter((row) => loanIds.has(normalizeText(row?.loan_id)) && accountIds.has(normalizeText(row?.account_id)))
+
+  nextTables.reimbursement_advances = listTableRows({ tables: nextTables }, 'reimbursement_advances')
+    .map((row) => cloneRowWithNullMissingRefs(row, ['source_tx_id'], transactionIds))
+    .filter((row) => accountIds.has(normalizeText(row?.account_id)))
+  const advanceIds = buildIdSet(nextTables.reimbursement_advances)
+
+  nextTables.reimbursement_advance_usages = listTableRows({ tables: nextTables }, 'reimbursement_advance_usages')
+    .filter((row) => advanceIds.has(normalizeText(row?.advance_id)) && transactionIds.has(normalizeText(row?.expense_tx_id)))
+
+  nextTables.reimbursements = listTableRows({ tables: nextTables }, 'reimbursements')
+    .map((row) => cloneRowWithNullMissingRefs(row, ['counterparty_id'], buildIdSet(nextTables.counterparties)))
+    .map((row) => cloneRowWithNullMissingRefs(row, ['paid_tx_id'], transactionIds))
+  const reimbursementIds = buildIdSet(nextTables.reimbursements)
+
+  nextTables.reimbursement_items = listTableRows({ tables: nextTables }, 'reimbursement_items')
+    .map((row) => cloneRowWithNullMissingRefs(row, ['transaction_id'], transactionIds))
+    .map((row) => cloneRowWithNullMissingRefs(row, ['category_id'], categoryIds))
+    .map((row) => cloneRowWithNullMissingRefs(row, ['account_id'], accountIds))
+    .filter((row) => reimbursementIds.has(normalizeText(row?.reimbursement_id)))
+
+  nextTables.budget_containers = listTableRows({ tables: nextTables }, 'budget_containers')
+    .filter((row) => buildIdSet(nextTables.budgets).has(normalizeText(row?.budget_id)))
+
+  nextTables.budget_items = listTableRows({ tables: nextTables }, 'budget_items')
+    .filter((row) => buildIdSet(nextTables.budgets).has(normalizeText(row?.budget_id)))
+    .filter((row) => {
+      const scopeType = normalizeText(row?.scope_type)
+      if (scopeType === 'category') return categoryIds.has(normalizeText(row?.category_id))
+      if (scopeType === 'group') return buildIdSet(nextTables.category_groups).has(normalizeText(row?.category_group_id))
+      return true
+    })
+
+  nextTables.savings_jars = listTableRows({ tables: nextTables }, 'savings_jars')
+    .filter((row) => accountIds.has(normalizeText(row?.account_id)))
+
+  nextTables.bank_accounts = listTableRows({ tables: nextTables }, 'bank_accounts')
+    .map((row) => cloneRowWithNullMissingRefs(row, ['mapped_account_id'], accountIds))
+    .filter((row) => buildIdSet(nextTables.bank_connections).has(normalizeText(row?.connection_id)))
+  const bankAccountIds = buildIdSet(nextTables.bank_accounts)
+
+  nextTables.bank_transactions = listTableRows({ tables: nextTables }, 'bank_transactions')
+    .map((row) => cloneRowWithNullMissingRefs(row, ['imported_txn_id'], transactionIds))
+    .filter((row) => buildIdSet(nextTables.bank_connections).has(normalizeText(row?.connection_id)))
+    .filter((row) => bankAccountIds.has(normalizeText(row?.bank_account_id)))
+
+  nextTables.bank_sync_rules = listTableRows({ tables: nextTables }, 'bank_sync_rules')
+    .filter((row) => buildIdSet(nextTables.bank_connections).has(normalizeText(row?.connection_id)))
+
+  return nextTables
+}
+
 function normalizeDeletedLogRow(row) {
   if (!row || typeof row !== 'object') return null
 
@@ -271,13 +368,14 @@ function canonicalizeSnapshot(snapshot) {
     tables[tableName] = sortRows(tableName, mergedRows)
   }
 
-  tables.deleted_log = sortDeletedLogRows(Array.from(tombstoneMap.values()))
+  const prunedTables = pruneSharedLedgerSnapshotForeignKeys(tables)
+  prunedTables.deleted_log = sortDeletedLogRows(Array.from(tombstoneMap.values()))
 
   return {
     schema_version: normalizedSnapshot.schema_version ?? null,
     ledger_id: normalizeText(normalizedSnapshot.ledger_id),
     exported_at: toIso(normalizedSnapshot.exported_at),
-    tables,
+    tables: prunedTables,
   }
 }
 

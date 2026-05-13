@@ -27,15 +27,27 @@ function buildSnapshot(tables) {
 
 test('mergeSharedLedgerSnapshots keeps the newest row update', () => {
   const local = buildSnapshot({
+    category_groups: [{
+      id: 'group_expense',
+      name: '支出',
+      updated_at: '2026-03-19T08:00:00.000Z',
+    }],
     categories: [{
       id: 'cat_food',
+      group_id: 'group_expense',
       name: '本地舊分類',
       updated_at: '2026-03-19T09:00:00.000Z',
     }],
   })
   const remote = buildSnapshot({
+    category_groups: [{
+      id: 'group_expense',
+      name: '支出',
+      updated_at: '2026-03-19T08:00:00.000Z',
+    }],
     categories: [{
       id: 'cat_food',
+      group_id: 'group_expense',
       name: '遠端新分類',
       updated_at: '2026-03-19T11:00:00.000Z',
     }],
@@ -116,15 +128,27 @@ test('areSharedLedgerSnapshotsEquivalent ignores exported_at differences', () =>
 
 test('mergeSharedLedgerSnapshots keeps deterministic rows when timestamps tie', () => {
   const local = buildSnapshot({
+    category_groups: [{
+      id: 'group_expense',
+      name: '支出',
+      updated_at: '2026-03-19T08:00:00.000Z',
+    }],
     categories: [{
       id: 'cat_food',
+      group_id: 'group_expense',
       name: '本地名稱',
       updated_at: '2026-03-19T09:00:00.000Z',
     }],
   })
   const remote = buildSnapshot({
+    category_groups: [{
+      id: 'group_expense',
+      name: '支出',
+      updated_at: '2026-03-19T08:00:00.000Z',
+    }],
     categories: [{
       id: 'cat_food',
+      group_id: 'group_expense',
       name: '遠端名稱',
       updated_at: '2026-03-19T09:00:00.000Z',
     }],
@@ -164,8 +188,14 @@ test('mergeSharedLedgerSnapshots removes a stale tombstone when a newer row is r
     }],
   })
   const remote = buildSnapshot({
+    category_groups: [{
+      id: 'group_expense',
+      name: '支出',
+      updated_at: '2026-03-19T08:00:00.000Z',
+    }],
     categories: [{
       id: 'cat_returned',
+      group_id: 'group_expense',
       name: '重新建立的分類',
       updated_at: '2026-03-19T11:00:00.000Z',
     }],
@@ -174,6 +204,106 @@ test('mergeSharedLedgerSnapshots removes a stale tombstone when a newer row is r
   const merged = mergeSharedLedgerSnapshots(local, remote)
   assert.equal(merged.tables.categories.length, 1)
   assert.equal(merged.tables.deleted_log.length, 0)
+})
+
+test('normalizeSharedLedgerSnapshot prunes rows that would violate shared-ledger import foreign keys (SMB-187)', () => {
+  const snapshot = buildSnapshot({
+    account_groups: [],
+    accounts: [{
+      id: 'acc_deleted',
+      group_id: 'group_deleted',
+      name: '已刪除帳戶',
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }],
+    category_groups: [],
+    categories: [{
+      id: 'cat_deleted',
+      group_id: 'cat_group_deleted',
+      name: '已刪除分類',
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }],
+    transactions: [{
+      id: 'tx_orphan',
+      account_id: 'acc_deleted',
+      category_id: 'cat_deleted',
+      amount_minor: 100,
+      occurred_at: '2026-05-13T10:00:00.000Z',
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }],
+    transaction_attachments: [{
+      id: 'att_orphan',
+      transaction_id: 'tx_orphan',
+      file_uri: 'file://orphan.jpg',
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }],
+  })
+
+  const normalized = normalizeSharedLedgerSnapshot(snapshot)
+
+  assert.equal(normalized.tables.accounts.length, 0)
+  assert.equal(normalized.tables.categories.length, 0)
+  assert.equal(normalized.tables.transactions.length, 0)
+  assert.equal(normalized.tables.transaction_attachments.length, 0)
+})
+
+test('normalizeSharedLedgerSnapshot nulls optional shared-ledger foreign keys when referenced rows are missing (SMB-187)', () => {
+  const snapshot = buildSnapshot({
+    account_groups: [{
+      id: 'group_cash',
+      name: '現金',
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }],
+    accounts: [{
+      id: 'acc_cash',
+      group_id: 'group_cash',
+      name: '現金',
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }],
+    category_groups: [],
+    categories: [],
+    transactions: [{
+      id: 'tx_kept',
+      account_id: 'acc_cash',
+      peer_account_id: 'acc_missing',
+      category_id: 'cat_missing',
+      amount_minor: 100,
+      occurred_at: '2026-05-13T10:00:00.000Z',
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }],
+    reimbursements: [{
+      id: 'rei_kept',
+      title: '請款',
+      status: 'paid',
+      counterparty_id: 'cp_missing',
+      paid_tx_id: 'tx_missing',
+      total_minor: 100,
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }],
+    reimbursement_items: [{
+      id: 'rei_item',
+      reimbursement_id: 'rei_kept',
+      source_type: 'transaction',
+      transaction_id: 'tx_missing',
+      category_id: 'cat_missing',
+      account_id: 'acc_missing',
+      amount_minor: 100,
+      occurred_at: '2026-05-13T10:00:00.000Z',
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }],
+  })
+
+  const normalized = normalizeSharedLedgerSnapshot(snapshot)
+  const tx = normalized.tables.transactions.find((row) => row.id === 'tx_kept')
+  const reimbursement = normalized.tables.reimbursements.find((row) => row.id === 'rei_kept')
+  const reimbursementItem = normalized.tables.reimbursement_items.find((row) => row.id === 'rei_item')
+
+  assert.equal(tx.peer_account_id, null)
+  assert.equal(tx.category_id, null)
+  assert.equal(reimbursement.counterparty_id, null)
+  assert.equal(reimbursement.paid_tx_id, null)
+  assert.equal(reimbursementItem.transaction_id, null)
+  assert.equal(reimbursementItem.category_id, null)
+  assert.equal(reimbursementItem.account_id, null)
 })
 
 test('isLocalOnlyAppSettingKey excludes bookkeeping reminder settings from shared sync', () => {

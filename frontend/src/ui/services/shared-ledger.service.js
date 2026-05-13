@@ -205,15 +205,36 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
   clearLedgerDirty(ledgerId)
 
   const existingLedger = await getLedger(ledgerId)
-  if (existingLedger) {
-    await purgeLedger(ledgerId)
-  }
+  const existingSnapshot = existingLedger ? await exportLedgerJson(ledgerId) : null
+  let purgedExistingLedger = false
+  let imported = null
 
-  const imported = await importLedgerJsonAsNewLedger(JSON.stringify(normalizedSnapshot), {
-    keepLedgerId: true,
-    ledgerName: String(item?.name ?? ''),
-    runIntegrityRepair: true,
-  })
+  try {
+    if (existingLedger) {
+      await purgeLedger(ledgerId)
+      purgedExistingLedger = true
+    }
+
+    imported = await importLedgerJsonAsNewLedger(JSON.stringify(normalizedSnapshot), {
+      keepLedgerId: true,
+      ledgerName: String(item?.name ?? ''),
+      runIntegrityRepair: true,
+    })
+  } catch (error) {
+    if (purgedExistingLedger && existingSnapshot) {
+      try {
+        await purgeLedger(ledgerId)
+        await importLedgerJsonAsNewLedger(JSON.stringify(existingSnapshot), {
+          keepLedgerId: true,
+          ledgerName: existingLedger.name,
+          runIntegrityRepair: true,
+        })
+      } catch (restoreError) {
+        console.error('[shared-ledger] failed to restore local ledger after snapshot import failure', restoreError)
+      }
+    }
+    throw error
+  }
 
   const now = nowIso()
   const nextMeta = await setSharedLedgerMeta(imported.ledgerId, item, {

@@ -102,7 +102,7 @@ SMB-155 後，帳戶明細與交易搜尋不再一次載入完整交易歷史，
 
 會員邏輯也已把 domain 與導頁 side effect 分開：`core/services/membership.service.js` 只保留 entitlement、sync、snapshot 與 limit error 判斷，真正的會員限制導頁改由 `ui/services/membership-navigation.service.js` 處理，避免 core 層再反向依賴 UI router。帳號 Google 登入與 Google 備份也已共用前端 Web Client ID 解析，帳號頁在缺少設定時仍會顯示 Google 區塊與設定提示，不會讓 Google 登入入口整段消失。共同帳本 backend 端則把 `auth` 與 `shared-ledgers` 路由拆成模組化目錄，並由 `backend/src/server.js` 的 route table 分派，`backend/src/collab/http.js` 提供共用 request parsing、method/body guard 與 route error serialization。
 
-共同帳本快照推送會檢查用戶端帶上的 `baseVersion`，包含初始 `version=0` 邊界；密碼登入在鎖定期間會直接回覆鎖定狀態，不再重複累加失敗次數或延長鎖定；忘記密碼若臨時密碼 Email 寄送失敗，會回滾臨時密碼寫入，保留原密碼可用。
+共同帳本快照推送會檢查用戶端帶上的 `baseVersion`，包含初始 `version=0` 邊界；SMB-187 / v1.2.4 後共同帳本快照在套用 tombstone 與合併遠端 / 本機資料後，會先修剪缺少必備父資料的孤兒子列，並把可為 NULL 的失效引用清空，避免拉取、接受邀請或連結加入時因 SQLite foreign key constraint failed 中斷；替換本機帳本前也會先保留原本本機快照，若遠端快照匯入仍失敗會嘗試復原本機帳本，降低資料被清空後中斷的風險；密碼登入在鎖定期間會直接回覆鎖定狀態，不再重複累加失敗次數或延長鎖定；忘記密碼若臨時密碼 Email 寄送失敗，會回滾臨時密碼寫入，保留原密碼可用。
 
 另外，新帳本建立後會立即完成預算模組初始化並可正常載入空月預算，不會因預算項目查詢的欄位歧義中斷 onboarding 或帳本切換流程。
 
@@ -479,6 +479,8 @@ App 開啟、回到前景、切換帳本與儲存訂閱項目後，會檢查目�
 
 這代表它不是單純把資料丟上雲端，而是有共享身分與同步關係的設計。
 
+SMB-188 / v1.2.4 後，PostSetupIntroPage 新增了「共同帳本」專屬步驟，讓首次設定的使用者能在導覽中直接了解並前往相關設定。
+
 ### 6.3 Google Drive 帳本同步
 
 這個功能和「備份」不同。
@@ -491,6 +493,10 @@ App 開啟、回到前景、切換帳本與儲存訂閱項目後，會檢查目�
 - 只有選定帳本會同步
 
 適合跨裝置持續作業，而不是只做災難復原。
+
+開啟 App 時（含從背景恢復前景），`app-runtime.service.js` 會同時觸發共同帳本與 Google Drive 帳本同步的背景同步，無需手動操作。
+
+SMB-188 / v1.2.4 後，PostSetupIntroPage 新增了「帳本同步（Google Drive）」專屬步驟，讓首次設定的使用者能在導覽中直接了解並前往相關設定。
 
 ### 6.4 自動備份與還原
 

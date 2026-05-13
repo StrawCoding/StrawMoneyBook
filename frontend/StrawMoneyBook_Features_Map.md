@@ -24,7 +24,7 @@
 - AI 自動記帳在 1.0.3 / SMB-163 後會把目前帳本的附加項目模板納入解析，像折價券、優惠、手續費等自訂模板名稱會自動拆成附加項目，不再殘留到備註或被誤當主金額
 - 交易新增 / 編輯在 1.0.3 / SMB-162 後允許主金額被附加項目完整抵消為 0 元；前端只阻擋附加後淨額為負數，與資料層允許 0 元交易的規則一致
 - 帳號系統（Email / Google 登入、個人資料、忘記密碼、臨時密碼、登出；Google 登入與 Google 備份共用前端 Web Client ID 解析，帳號頁缺少設定時仍會顯示 Google 區塊與設定提示，不再整段消失）
-- 共同帳本（建立共同帳本、共享連結、Email 邀請、接受邀請、同步；快照上傳會檢查 baseVersion，包含 version=0 邊界，避免舊快照覆蓋新資料）
+- 共同帳本（建立共同帳本、共享連結、Email 邀請、接受邀請、同步；快照上傳會檢查 baseVersion，包含 version=0 邊界，避免舊快照覆蓋新資料；SMB-187 / v1.2.4 後共同帳本快照在合併 tombstone 後會先修剪孤兒子資料列或清空可為 NULL 的失效引用，避免拉取 / 接受共享帳本時因 SQLite foreign key constraint 中斷；替換本機帳本前會先保留本機快照，若遠端快照匯入失敗會嘗試復原原本本機帳本，降低資料被清空後中斷的風險）
 - Google Drive 帳本同步（逐帳本啟用、跨裝置 pull / push）
 - 自動備份（Google Drive / WebDAV；SMB-142 重建後，手動、背景 due check、資料更動後備份都會經過共用 provider runner，回傳 `completed / skipped / error` 統一結果，並以帳本 + provider lock 避免同一時間多個觸發源互相覆蓋狀態；runtime 事件含 `ledgerId / provider / mode / status / reason / checkedAt`，設定頁會即時同步最近一次 auto-check 狀態與時間；SMB-147 後 Google 自動備份在非原生平台會保存 `platform_unsupported` 偵測結果，Android 靜默恢復未連線時也會繼續跑 due diagnostics 寫入 `not_connected / reauth_required` 等狀態，避免頁面誤停在尚未執行自動偵測；手機背景恢復只做靜默 Google 授權，不會在 App 啟動或帳本切換時自動彈出互動登入；SMB-181 後手動備份失敗時 toast 改顯示原始 error.message 而非 reason code，`buildProviderRunResult` 加入 `errorDetail` 欄位保存原始錯誤訊息，UI 改用 `result.errorDetail` 建立錯誤；SMB-186 / v1.2.3 後使用者在自動備份頁明確重新登入 Google 成功時，會清除過期的 `reauth_required` 自動檢查診斷，避免畫面仍顯示需要重新授權）
 - 記帳提醒與成就表（每日固定提醒、通知權限 / 精準提醒狀態、連續記帳天數、最長連續與累計記帳日）
@@ -60,7 +60,7 @@
 | `/transactions/:id` | `src/ui/views/TransactionAboutPage.vue` | 交易明細（含退款/關聯） |
 | `/transactions/:id/edit` | `src/ui/views/TransactionEditPage.vue` | 交易編輯 |
 | `/features` | `src/ui/views/FeatureListPage.vue` | 功能列表入口頁 |
-| `/welcome/intro` | `src/ui/views/PostSetupIntroPage.vue` | 初始設定後導覽頁 |
+| `/welcome/intro` | `src/ui/views/PostSetupIntroPage.vue` | 初始設定後導覽頁（含特色功能、帳號登入、共同帳本、帳本同步、會員邀請碼；SMB-188 / v1.2.4 後新增共同帳本與帳本同步兩個步驟） |
 | `/ai-auto-bookkeeping` | `src/ui/views/BookkeepingPage.vue` | AI 記帳模式（內嵌 `AiAutoBookkeepingPage.vue`） |
 | `/assets` | `src/ui/views/assets.vue` | 資產總覽 |
 | `/icons/pick` | `src/ui/views/IconPickerPage.vue` | 帳戶/分類 icon 選擇 |
@@ -223,7 +223,7 @@
 | 頁面返回標題列 | `src/ui/assets/css/global.css`（所有含 `.back-btn` 的頁首統一為左側 chevron 返回、置中標題、右側操作區；手機寬度會把右側操作移到下一行，避免標題重疊，視覺對齊電子發票精靈頁） |
 | 記帳頁模式切換 | `src/ui/views/BookkeepingPage.vue`（AI / 手動模式切換移到置中標題列下方，避免與全域返回標題列重疊） |
 | Welcome / allowWithoutSetup 入口控制 | `src/ui/App.vue` + `src/ui/views/WelcomePage.vue` |
-| 首次設定完成導覽 | `src/ui/views/PostSetupIntroPage.vue` + `src/ui/services/post-setup-intro.service.js` |
+| 首次設定完成導覽 | `src/ui/views/PostSetupIntroPage.vue` + `src/ui/services/post-setup-intro.service.js`（SMB-188 / v1.2.4 後含共同帳本與帳本同步步驟） |
 | 初始 setup 判斷 | `src/ui/services/setup-flow.service.js` |
 | 啟動鏈（Pinia/store 初始化、core bootstrap、首次 setup 導向） | `src/main.js` + `src/ui/services/app-bootstrap.service.js` + `src/core/services/bootstrap.service.js` |
 | 啟動時背景 Google 靜默登入、同步/備份排程、Android back、網址恢復 | `src/ui/services/app-runtime.service.js` + `src/services/google/auth.js` |
