@@ -120,6 +120,20 @@ function buildRecoveredGoogleBackupPatch(patch = {}) {
   }
 }
 
+function buildManualGoogleConnectPatch(state, profile) {
+  const patch = buildRecoveredGoogleBackupPatch({
+    accountEmail: profile.email,
+    accountName: profile.name,
+    accountImageUrl: profile.imageUrl,
+  })
+  if (state?.lastAutoCheckReason === 'reauth_required') {
+    patch.lastAutoCheckAt = ''
+    patch.lastAutoCheckStatus = 'idle'
+    patch.lastAutoCheckReason = ''
+  }
+  return patch
+}
+
 function isPreferredAccountMismatch(state, profile) {
   const preferredEmail = normalizeEmail(state?.accountEmail)
   const currentEmail = normalizeEmail(profile?.email)
@@ -328,11 +342,7 @@ export async function connectGoogleBackup(ledgerId) {
 
   const current = await getGoogleBackupState(ledgerId)
   const profile = await resolveGoogleProfileForConnect(current.accountEmail)
-  return saveState(ledgerId, buildRecoveredGoogleBackupPatch({
-    accountEmail: profile.email,
-    accountName: profile.name,
-    accountImageUrl: profile.imageUrl,
-  }))
+  return saveState(ledgerId, buildManualGoogleConnectPatch(current, profile))
 }
 
 export async function disconnectGoogleBackup(ledgerId) {

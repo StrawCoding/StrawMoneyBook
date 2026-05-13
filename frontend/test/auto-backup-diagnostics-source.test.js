@@ -53,6 +53,20 @@ test('google backup reconnect patch restores connection state without resetting 
   assert.ok(!fnBody.includes('lastAutoCheckReason'), 'buildRecoveredGoogleBackupPatch must not reset lastAutoCheckReason')
 })
 
+test('manual Google reconnect clears stale reauth diagnostics after successful sign-in (SMB-186)', () => {
+  // Regression: after the user explicitly signs in again from the auto-backup
+  // settings page, the connection is recovered but the old reauth_required
+  // auto-check reason must not keep showing as if reauthorization were still needed.
+  // Silent recovery still uses buildRecoveredGoogleBackupPatch directly and keeps
+  // the SMB-156 behavior above.
+  assert.match(googleSource, /function buildManualGoogleConnectPatch\(state, profile\) \{/)
+  assert.match(googleSource, /if \(state\?\.lastAutoCheckReason === 'reauth_required'\) \{/)
+  assert.match(googleSource, /patch\.lastAutoCheckAt = ''/)
+  assert.match(googleSource, /patch\.lastAutoCheckStatus = 'idle'/)
+  assert.match(googleSource, /patch\.lastAutoCheckReason = ''/)
+  assert.match(googleSource, /return saveState\(ledgerId, buildManualGoogleConnectPatch\(current, profile\)\)/)
+})
+
 test('auto backup settings page shows the latest auto-check reason and time', () => {
   assert.match(settingsSource, /settings_auto_backup\.status\.auto_check/)
   assert.match(settingsSource, /settings_auto_backup\.status\.last_check/)
