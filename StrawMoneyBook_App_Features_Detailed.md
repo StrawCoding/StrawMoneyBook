@@ -68,6 +68,8 @@ StrawMoneyBook 的特色不在單一功能，而在於把同一筆金流後續�
 
 手動執行「重設全部資料」前，資料管理頁會先嘗試匯出全部帳本 recovery JSON；若裝置檔案儲存不可用則退回瀏覽器下載，若 recovery 建立失敗則寫入 console 記錄並保留原本重設流程，避免因備份功能異常讓使用者完全無法重設。
 
+SMB-190 / v1.2.5 後，資料管理頁手動匯出的全部帳本 JSON 與 CSV 檔名都會加入時間戳，避免在 Android 原生檔案儲存或瀏覽器下載時因固定檔名重複覆蓋，讓多次匯出可以保留各自的檔案版本。
+
 這讓它更適合長期使用，而不是短期記帳後就難以維護。
 
 另外，所有需要輸入資料的彈層已統一為共用 bottom sheet flow，桌面與手機都不再保留另一套輸入型 popover，包含表單 dialog、選單、日期與時間選擇器；`AppDialog` 以及各頁自製輸入 sheet 也都收斂到和快速記帳一致的 shared overlay / bottom-sheet primitives，Android 有底部導覽列 inset 的裝置也會一併吃到底部 safe area，且 sheet 卡片背景會直接延伸到底部，和 `BottomNav` 維持同一個底部基準。
@@ -99,6 +101,8 @@ SMB-142 重建後，自動備份設定頁會在背景自動偵測 / 自動備份
 交易資料流也已統一從頁面抽離：分析頁、交易搜尋、日曆、交易明細、交易編輯與帳戶明細都不再直接查 `transaction.repo.js`，而是透過 `core/services/transaction-query.service.js` 取得 `all / year / month / day / account / detail-related` 查詢結果；分析頁的分類/帳戶彙總、圓餅圖、長條圖與日別 breakdown 集中在 `core/utils/analysis-breakdown.js`，交易搜尋頁的 filter、批量選取、sheet 狀態與結果摘要則集中在 `ui/composables/useTransactionSearchPage.js`。
 
 SMB-155 後，帳戶明細與交易搜尋不再一次載入完整交易歷史，而是以 300 筆為一頁做 SQL 分頁；交易搜尋的日期與關鍵字篩選會先下推到查詢層再取當頁資料，帳戶明細則會額外查詢分頁前交易金額，用來校正每筆交易後餘額，避免第 2 頁以後餘額從錯誤基準開始計算。
+
+SMB-189 / v1.2.5 後，帳本 scoped store 載入前會先執行帳本完整性掃描與自動修復。除了既有報銷總額、報銷已付款狀態與借貸狀態修復，也會把交易遺失帳戶或 peer 帳戶指到隱藏的資料修復帳戶、清空遺失分類引用，並解除無法成對或金額不平衡的轉帳群組，避免壞資料持續阻斷帳本載入或後續查詢。
 
 會員邏輯也已把 domain 與導頁 side effect 分開：`core/services/membership.service.js` 只保留 entitlement、sync、snapshot 與 limit error 判斷，真正的會員限制導頁改由 `ui/services/membership-navigation.service.js` 處理，避免 core 層再反向依賴 UI router。帳號 Google 登入與 Google 備份也已共用前端 Web Client ID 解析，帳號頁在缺少設定時仍會顯示 Google 區塊與設定提示，不會讓 Google 登入入口整段消失。共同帳本 backend 端則把 `auth` 與 `shared-ledgers` 路由拆成模組化目錄，並由 `backend/src/server.js` 的 route table 分派，`backend/src/collab/http.js` 提供共用 request parsing、method/body guard 與 route error serialization。
 

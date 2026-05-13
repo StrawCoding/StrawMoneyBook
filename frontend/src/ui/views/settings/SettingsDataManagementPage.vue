@@ -83,6 +83,7 @@ import {
   exportTransactionsCsv,
   saveCsvFileToDevice,
   saveJsonFileToDevice,
+  timestampForFilename,
 } from '@/core/services/export.service'
 import { importBackupJsonAsNewLedgers, importLedgerCsv } from '@/core/services/import.service'
 import { resetDatabase } from '@/core/db/sqlite'
@@ -166,7 +167,7 @@ function importIntegrityHint(result) {
 
 async function exportJson() {
   try {
-    const filename = 'strawmoneybook-all-ledgers.json'
+    const filename = `strawmoneybook-all-ledgers-${timestampForFilename()}.json`
     const data = await exportAllLedgersJson()
     const saved = await saveJsonFileToDevice(filename, data, { category: 'data-management' })
     if (saved?.saved && saved.location) {
@@ -188,15 +189,15 @@ async function exportCsv(type) {
 
     if (type === 'transactions') {
       csv = await exportTransactionsCsv(ledgerStore.activeLedgerId)
-      filename = `transactions-${ledgerStore.activeLedgerId}.csv`
+      filename = `transactions-${ledgerStore.activeLedgerId}-${timestampForFilename()}.csv`
     }
     if (type === 'accounts') {
       csv = await exportAccountsCsv(ledgerStore.activeLedgerId)
-      filename = `accounts-${ledgerStore.activeLedgerId}.csv`
+      filename = `accounts-${ledgerStore.activeLedgerId}-${timestampForFilename()}.csv`
     }
     if (type === 'categories') {
       csv = await exportCategoriesCsv(ledgerStore.activeLedgerId)
-      filename = `categories-${ledgerStore.activeLedgerId}.csv`
+      filename = `categories-${ledgerStore.activeLedgerId}-${timestampForFilename()}.csv`
     }
 
     const saved = await saveCsvFileToDevice(filename, csv, { category: 'data-management' })
