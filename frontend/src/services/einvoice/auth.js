@@ -62,6 +62,11 @@ function resolveServerAuthCodeFlowEnabled() {
 
   if (hasAbsoluteEndpoints || hasExplicitOrigin) return true
 
+  // Also enable when the API origin can be derived from VITE_PRIVACY_POLICY_URL (or the
+  // hardcoded default). The exchange/refresh endpoints are built from the same origin, so
+  // server-auth-code mode is available whenever a valid HTTPS origin is resolvable.
+  if (isAbsoluteHttpUrl(resolveGoogleOAuthApiOrigin())) return true
+
   console.warn(
     '[google-auth] VITE_GOOGLE_USE_SERVER_AUTH_CODE=true but no explicit Google OAuth backend is configured for native runtime; fallback to online mode.',
   )

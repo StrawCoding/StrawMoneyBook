@@ -15,6 +15,10 @@ const settingsSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/settings/SettingsAutoBackupPage.vue'),
   'utf8',
 )
+const googleAuthSource = readFileSync(
+  resolve(import.meta.dirname, '../src/services/einvoice/auth.js'),
+  'utf8',
+)
 
 test('auto backup services persist auto-check diagnostics for skip, success, and error states', () => {
   assert.match(googleSource, /lastAutoCheckAt: ''/)
@@ -120,5 +124,41 @@ test('google auto backup sets connected:false when performGoogleBackup throws GO
   assert.ok(
     Array.isArray(dataChangeRauthConnectedPatch) && dataChangeRauthConnectedPatch.length >= 2,
     'both runGoogleAutoBackupIfDue and runGoogleAutoBackupOnDataChange must set connected:false on reauth error',
+  )
+})
+
+test('google connect profile resolver always triggers interactive sign-in when silent token fails (SMB-186)', () => {
+  // Regression: resolveGoogleProfileForConnect previously skipped googleSignIn when the
+  // profile was cached but the access token was expired. This caused autoConnectGoogleBackup
+  // to save connected:true without a valid token, making the very next backup attempt fail
+  // again with reauth_required — a silent reconnect that did not actually reconnect.
+  // Fix: whenever silent token retrieval fails (!reusedSession), always call googleSignIn
+  // regardless of whether a cached profile exists.
+  assert.match(googleSource, /async function resolveGoogleProfileForConnect/, 'function must exist')
+  assert.doesNotMatch(
+    googleSource,
+    /!profile\.email && !profile\.name && !profile\.imageUrl && !reusedSession/,
+    'must NOT gate googleSignIn on profile being empty — cached profile is not a valid session',
+  )
+  assert.match(
+    googleSource,
+    /if \(!reusedSession\) \{\n.*googleSignIn/s,
+    'must trigger googleSignIn whenever reusedSession is false',
+  )
+})
+
+test('server auth code flow is enabled on native when API origin is derivable from VITE_PRIVACY_POLICY_URL (SMB-186)', () => {
+  // Regression: resolveServerAuthCodeFlowEnabled only checked explicit env vars
+  // (VITE_GOOGLE_OAUTH_API_ORIGIN, VITE_GOOGLE_OAUTH_EXCHANGE_URL, VITE_GOOGLE_OAUTH_REFRESH_URL).
+  // When only VITE_PRIVACY_POLICY_URL was set (as in the production .env), the derived API origin
+  // was valid but server-auth-code mode was disabled, forcing online-only mode with no refresh
+  // token — causing frequent mandatory re-authorizations after access-token expiry.
+  // Fix: also enable server-auth-code mode when resolveGoogleOAuthApiOrigin() returns an HTTPS URL.
+  const fnMatch = googleAuthSource.match(/function resolveServerAuthCodeFlowEnabled[\s\S]*?\n\}/)
+  assert.ok(fnMatch, 'resolveServerAuthCodeFlowEnabled must exist in auth source')
+  assert.match(
+    fnMatch[0],
+    /resolveGoogleOAuthApiOrigin\(\)/,
+    'must check the derived API origin (resolveGoogleOAuthApiOrigin) as a fallback condition',
   )
 })

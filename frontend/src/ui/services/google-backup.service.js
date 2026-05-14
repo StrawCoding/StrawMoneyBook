@@ -175,7 +175,10 @@ async function resolveGoogleProfileForConnect(preferredEmail = '') {
     reusedSession = false
     profile = normalizeProfile({})
   }
-  if (!profile.email && !profile.name && !profile.imageUrl && !reusedSession) {
+  // A cached profile only tells us who the user is — it does not mean we have a valid auth
+  // session. If silent token retrieval failed (!reusedSession), we must sign in interactively
+  // to obtain fresh tokens, regardless of what the profile cache contains.
+  if (!reusedSession) {
     const login = await googleSignIn({ preferredEmail: normalizedPreferredEmail || preferredEmail })
     profile = normalizeProfile(login?.profile ?? getCachedGoogleProfile())
   }

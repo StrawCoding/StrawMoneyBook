@@ -13,6 +13,10 @@
 - (SMB-189) 擴充帳本載入前的自動資料修復，會處理交易遺失帳戶 / peer 帳戶 / 分類引用與無法成對或金額不平衡的轉帳群組，避免壞帳本資料持續阻斷查詢
 - (SMB-190) 資料管理頁匯出全部帳本 JSON 與 CSV 時改用帶時間戳的檔名，避免重複匯出覆蓋同一路徑檔案
 
+## v1.2.7
+- (SMB-186) 修復 Google 自動備份在 native 平台因 server auth code flow 判斷僅依賴明確 env 變數而意外落回 online mode（無 refresh token），導致 access token (~55 分鐘) 到期後必須手動重新授權
+- (SMB-186) 修復 `resolveGoogleProfileForConnect` 在 silent token 失敗但 profile 有快取時，不觸發新的 `googleSignIn`，造成 `connected: true` 存入卻沒有有效 token，下次自動備份立即失敗
+
 ## v1.2.1
 - (SMB-187 / v1.2.4) 修復共同帳本同步 / 匯入快照時，孤兒引用資料可能造成 SQLite `FOREIGN KEY constraint failed (code 1811)` 中斷，並在遠端快照替換失敗時嘗試復原原本本機帳本
 - (SMB-186 / v1.2.3) 修復 Google 自動備份重新授權成功後，設定頁仍可能保留「需要重新授權後才能自動備份」過期診斷
