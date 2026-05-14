@@ -232,3 +232,56 @@ test('savings jar auto save uses ledger timezone instead of runtime timezone', a
     ['2026-01-31T12:00:00.000Z'],
   )
 })
+
+test('savings jar auto save uses ledger timezone for due detection', async () => {
+  const transferCalls = []
+
+  setSavingsJarAutoSaveDependenciesForTest(buildTestDependencies({
+    async getLedger() {
+      return { id: 'ledger_1', timezone: 'UTC' }
+    },
+    async listAccounts() {
+      return [
+        {
+          id: 'acc_source',
+          name: '主帳戶',
+          currency_code: 'TWD',
+          savings_jar_goal_type: '',
+        },
+        {
+          id: 'jar_utc',
+          name: 'UTC 基金',
+          currency_code: 'TWD',
+          savings_jar_goal_type: 'target',
+          savings_jar_auto_save_source_account_id: 'acc_source',
+          savings_jar_auto_save_amount_minor: 10000,
+          savings_jar_auto_save_interval_value: 1,
+          savings_jar_auto_save_interval_unit: 'month',
+          savings_jar_auto_save_start_date: '2026-04-05',
+          savings_jar_auto_save_charge_day: 5,
+          savings_jar_auto_save_paused: 0,
+        },
+      ]
+    },
+    async findTransactionByIdempotencyKey() {
+      return null
+    },
+    async createTransfer(_ledgerId, payload) {
+      transferCalls.push(payload)
+      return { transferGroupId: `tf_${transferCalls.length}` }
+    },
+  }))
+
+  const beforeUtcDueDay = await runSavingsJarAutoSaveIfDue('ledger_1', {
+    now: new Date('2026-04-05T00:30:00+08:00'),
+  })
+  assert.equal(beforeUtcDueDay.createdCount, 0)
+  assert.equal(transferCalls.length, 0)
+
+  const onUtcDueDay = await runSavingsJarAutoSaveIfDue('ledger_1', {
+    now: new Date('2026-04-05T08:30:00+08:00'),
+  })
+  assert.equal(onUtcDueDay.createdCount, 1)
+  assert.equal(transferCalls[0].idempotencyKey, 'sjar_auto:jar_utc:2026-04-05')
+  assert.equal(transferCalls[0].occurredAt, '2026-04-05T12:00:00.000Z')
+})

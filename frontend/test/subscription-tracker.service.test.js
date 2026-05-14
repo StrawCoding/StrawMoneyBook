@@ -89,6 +89,19 @@ test('subscription schedule normalizes date objects in the app timezone', () => 
   assert.equal(toSubscriptionDateInput(new Date('2026-04-05T00:00:00+08:00')), '2026-04-05')
 })
 
+test('subscription schedule accepts explicit timezone for due-day boundaries', () => {
+  const item = {
+    startDate: '2026-04-05',
+    intervalValue: 1,
+    intervalUnit: 'month',
+    paused: false,
+  }
+
+  assert.equal(toSubscriptionDateInput(new Date('2026-04-05T00:30:00+08:00'), 'UTC'), '2026-04-04')
+  assert.equal(isSubscriptionChargeDue(item, new Date('2026-04-05T00:30:00+08:00'), { timeZone: 'UTC' }), false)
+  assert.equal(isSubscriptionChargeDue(item, new Date('2026-04-05T08:30:00+08:00'), { timeZone: 'UTC' }), true)
+})
+
 test('yearly subscription schedule stays on the same month with leap-safe fallback', () => {
   assert.equal(addSubscriptionInterval('2024-02-29', 1, 'year'), '2025-02-28')
 })
@@ -198,6 +211,52 @@ test('subscription charge runner creates today due expense when app opens', asyn
       idempotencyKey: 'subscription:sub_music:2026-04-23',
     },
   ])
+})
+
+test('subscription charge runner uses ledger timezone for due detection', async () => {
+  const createCalls = []
+
+  setSubscriptionChargeDependenciesForTest({
+    async getLedger() {
+      return { id: 'ledger_1', timezone: 'UTC' }
+    },
+    async getSubscriptionItems() {
+      return [
+        {
+          id: 'sub_utc',
+          name: 'UTC service',
+          accountId: 'acc_card',
+          categoryId: 'cat_service',
+          amountMinor: 12000,
+          intervalValue: 1,
+          intervalUnit: 'month',
+          startDate: '2026-04-05',
+          chargeDay: 5,
+          paused: false,
+        },
+      ]
+    },
+    async findTransactionByIdempotencyKey() {
+      return null
+    },
+    async createExpense(_ledgerId, payload) {
+      createCalls.push(payload)
+      return `tx_${createCalls.length}`
+    },
+  })
+
+  const beforeUtcDueDay = await runSubscriptionChargesIfDue('ledger_1', {
+    now: new Date('2026-04-05T00:30:00+08:00'),
+  })
+  assert.equal(beforeUtcDueDay.createdCount, 0)
+  assert.equal(createCalls.length, 0)
+
+  const onUtcDueDay = await runSubscriptionChargesIfDue('ledger_1', {
+    now: new Date('2026-04-05T08:30:00+08:00'),
+  })
+  assert.equal(onUtcDueDay.createdCount, 1)
+  assert.equal(createCalls[0].idempotencyKey, 'subscription:sub_utc:2026-04-05')
+  assert.equal(createCalls[0].occurredAt, '2026-04-05T12:00:00.000Z')
 })
 
 test('subscription charge runner only charges today and is idempotent', async () => {

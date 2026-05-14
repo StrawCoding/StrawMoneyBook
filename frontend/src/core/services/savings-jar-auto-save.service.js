@@ -167,7 +167,7 @@ export async function runSavingsJarAutoSaveIfDue(ledgerId, options = {}) {
       continue
     }
 
-    const dueDates = listSubscriptionChargeDatesThrough(autoSave, now)
+    const dueDates = listSubscriptionChargeDatesThrough(autoSave, now, { timeZone: ledgerTimeZone })
     for (const dueDate of dueDates) {
       pendingRuns.push({
         jarAccount,

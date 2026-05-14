@@ -112,10 +112,10 @@ function buildSubscriptionChargeNote(item) {
   return note ? `訂閱扣款：${name}\n${note}` : `訂閱扣款：${name}`
 }
 
-function getTodayDueDate(item, now) {
-  const today = toSubscriptionDateInput(now)
+function getTodayDueDate(item, now, timeZone) {
+  const today = toSubscriptionDateInput(now, timeZone)
   if (!today) return ''
-  const dueDates = listSubscriptionChargeDatesThrough(item, now, { maxOccurrences: 1200 })
+  const dueDates = listSubscriptionChargeDatesThrough(item, now, { maxOccurrences: 1200, timeZone })
   return dueDates.includes(today) ? today : ''
 }
 
@@ -148,7 +148,7 @@ async function executeSubscriptionChargesIfDue(ledgerId, options = {}) {
       continue
     }
 
-    const dueDate = getTodayDueDate(item, now)
+    const dueDate = getTodayDueDate(item, now, ledgerTimeZone)
     if (!dueDate) continue
 
     pendingRuns.push({ item, dueDate })

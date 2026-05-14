@@ -128,17 +128,19 @@ export function addSubscriptionInterval(baseDateLike, intervalValue, intervalUni
   return buildSubscriptionDate(nextYear, monthIndex, day)
 }
 
-export function resolveSubscriptionNextChargeDate(item, now = new Date()) {
+export function resolveSubscriptionNextChargeDate(item, now = new Date(), options = {}) {
   const startDate = normalizeSubscriptionDateInput(item?.startDate)
   if (!startDate) return ''
 
-  const today = parseSubscriptionDate(toSubscriptionDateInput(now))
+  const timeZone = String(options?.timeZone ?? '').trim() || 'Asia/Taipei'
+  const today = parseSubscriptionDate(toSubscriptionDateInput(now, timeZone))
   if (!today) return startDate
 
   let nextDate = startDate
   let guard = 0
+  const todayInput = toSubscriptionDateInput(now, timeZone)
 
-  while (compareSubscriptionDates(nextDate, toSubscriptionDateInput(now)) <= 0 && guard < 1200) {
+  while (compareSubscriptionDates(nextDate, todayInput) <= 0 && guard < 1200) {
     nextDate = addSubscriptionInterval(nextDate, item?.intervalValue, item?.intervalUnit, {
       chargeDay: item?.chargeDay,
     })
@@ -154,14 +156,15 @@ export function listSubscriptionChargeDatesThrough(item, now = new Date(), optio
   const startDate = normalizeSubscriptionDateInput(item?.startDate)
   if (!startDate) return []
 
-  const today = parseSubscriptionDate(toSubscriptionDateInput(now))
+  const timeZone = String(options?.timeZone ?? '').trim() || 'Asia/Taipei'
+  const todayInput = toSubscriptionDateInput(now, timeZone)
+  const today = parseSubscriptionDate(todayInput)
   if (!today) return []
 
   const dates = []
   let nextDate = startDate
   let guard = 0
   const maxOccurrences = Math.max(1, Number(options?.maxOccurrences ?? 1200) || 1200)
-  const todayInput = toSubscriptionDateInput(now)
 
   while (compareSubscriptionDates(nextDate, todayInput) <= 0 && guard < maxOccurrences) {
     dates.push(nextDate)
@@ -174,9 +177,10 @@ export function listSubscriptionChargeDatesThrough(item, now = new Date(), optio
   return dates
 }
 
-export function isSubscriptionChargeDue(item, now = new Date()) {
+export function isSubscriptionChargeDue(item, now = new Date(), options = {}) {
   if (item?.paused) return false
-  const today = toSubscriptionDateInput(now)
+  const timeZone = String(options?.timeZone ?? '').trim() || 'Asia/Taipei'
+  const today = toSubscriptionDateInput(now, timeZone)
   if (!today) return false
-  return listSubscriptionChargeDatesThrough(item, now, { maxOccurrences: 1200 }).includes(today)
+  return listSubscriptionChargeDatesThrough(item, now, { maxOccurrences: 1200, timeZone }).includes(today)
 }
