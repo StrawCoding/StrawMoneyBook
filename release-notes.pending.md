@@ -1,9 +1,9 @@
 # Pending Release Notes
 
-## v1.2.9
-- (SMB-191) 修復 Android Google 自動備份首次互動登入未觸發 SocialLogin fallback，導致部分帳號顯示 Google Sign-In failed 而無法完成登入的問題
-
 ---
+
+## v1.2.10
+- (SMB-191) 修復 Android Google 自動備份首次互動登入未觸發 SocialLogin fallback，導致部分帳號顯示 Google Sign-In failed 而無法完成登入的問題
 
 ## v1.2.6
 - 修復訂閱自動扣款與存錢罐自動存入在非 App 預設時區帳本的跨日邊界可能提早或延後觸發的問題，現在到期日判斷會使用帳本時區
