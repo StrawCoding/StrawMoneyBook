@@ -63,3 +63,6 @@ Thumbs.db
 
 # Large local model artifacts
 speech-stt-service/models/
+
+# Local development/design artifacts
+developeTmp/
