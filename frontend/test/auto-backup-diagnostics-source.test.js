@@ -162,3 +162,23 @@ test('server auth code flow is enabled on native when API origin is derivable fr
     'must check the derived API origin (resolveGoogleOAuthApiOrigin) as a fallback condition',
   )
 })
+
+test('google backup sign-in starts with bottom credential UI before standard fallback (SMB-191)', () => {
+  // Regression: auto-backup used the plugin default standard Google UI on the first attempt.
+  // The SocialLogin plugin only performs its NoCredentialException fallback path when the
+  // initial request is explicitly sent through style:"bottom"; otherwise users can get a
+  // terminal "Google Sign-In failed" and cannot complete the auto-backup login.
+  // Fix: the first interactive login should use bottom UI with unrestricted account filtering,
+  // while the stale-account retry remains the explicit standard prompt.
+  assert.match(googleAuthSource, /style: 'bottom'/, 'initial Google backup sign-in must request bottom UI')
+  assert.match(
+    googleAuthSource,
+    /loginGoogleWithOptions\(\{[\s\S]*?forceRefreshToken: true,[\s\S]*?filterByAuthorizedAccounts: false,[\s\S]*?style: 'bottom',[\s\S]*?preferredEmail: options\.preferredEmail,[\s\S]*?\}\)/,
+    'first login attempt must use bottom UI with filterByAuthorizedAccounts=false',
+  )
+  assert.match(
+    googleAuthSource,
+    /forcePrompt: true,[\s\S]*?style: 'standard'/,
+    'retry after stale auth state should still force the standard prompt',
+  )
+})

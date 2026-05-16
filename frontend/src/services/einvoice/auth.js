@@ -588,11 +588,14 @@ export async function googleSignIn(options = {}) {
     await initGoogleAuth()
     let response
     try {
-      // 單次登入就強制刷新 token，避免先失敗再二次互動登入導致雙彈窗。
+      // Start with Credential Manager bottom UI so the SocialLogin plugin can fall back to
+      // standard UI on NoCredentialException instead of ending the auto-backup login flow.
+      // Still force refresh token on this single interactive attempt to avoid a second prompt.
       response = await withTimeout(
         loginGoogleWithOptions({
           forceRefreshToken: true,
           filterByAuthorizedAccounts: false,
+          style: 'bottom',
           preferredEmail: options.preferredEmail,
         }),
         GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS,

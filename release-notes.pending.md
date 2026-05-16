@@ -1,5 +1,8 @@
 # Pending Release Notes
 
+## v1.2.9
+- (SMB-191) 修復 Android Google 自動備份首次互動登入未觸發 SocialLogin fallback，導致部分帳號顯示 Google Sign-In failed 而無法完成登入的問題
+
 ---
 
 ## v1.2.6
