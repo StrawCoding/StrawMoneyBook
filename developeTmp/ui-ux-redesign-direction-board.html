@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>StrawMoneyBook UI/UX 改版方向板</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d0d10;
+      --bg-soft: #131318;
+      --card: #1c1c22;
+      --card-elevated: #212129;
+      --primary: #f5a623;
+      --primary-soft: #f7c26b;
+      --primary-vivid: #ffb830;
+      --primary-contrast: #1a1000;
+      --secondary: #34d399;
+      --secondary-soft: #6ee7b7;
+      --text: #f0f0f5;
+      --text-soft: #c8c8d8;
+      --muted: #9999b4;
+      --danger: #f87171;
+      --expense: #f87171;
+      --income: #34d399;
+      --border: rgba(255,255,255,.10);
+      --border-strong: rgba(255,255,255,.18);
+      --input-bg: #16161d;
+      --radius-sm: 10px;
+      --radius-md: 14px;
+      --radius-lg: 18px;
+      --radius-xl: 28px;
+      --shadow-card: 0 18px 60px rgba(0,0,0,.36);
+      --shadow-soft: 0 8px 28px rgba(0,0,0,.28);
+      --font: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, -apple-system, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 8% -6%, rgba(245,166,35,.16), transparent 34rem),
+        radial-gradient(circle at 86% 2%, rgba(52,211,153,.10), transparent 31rem),
+        linear-gradient(180deg, #0d0d10 0%, #101014 55%, #0a0a0d 100%);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.55;
+    }
+
+    a { color: inherit; }
+    button { font: inherit; }
+
+    .page {
+      width: min(1440px, calc(100vw - 40px));
+      margin: 0 auto;
+      padding: 36px 0 72px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr);
+      gap: 28px;
+      align-items: stretch;
+      margin-bottom: 26px;
+    }
+
+    .intro-card,
+    .principle-card,
+    .direction-card,
+    .notes-card {
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--card) 88%, transparent);
+      box-shadow: var(--shadow-card);
+      border-radius: var(--radius-xl);
+    }
+
+    .intro-card {
+      padding: clamp(24px, 4vw, 46px);
+      min-height: 390px;
+      display: grid;
+      align-content: space-between;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .intro-card::after {
+      content: '';
+      position: absolute;
+      inset: auto -18% -34% 34%;
+      height: 280px;
+      background: radial-gradient(circle, rgba(245,166,35,.20), transparent 68%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 11px;
+      border: 1px solid rgba(245,166,35,.28);
+      background: rgba(245,166,35,.10);
+      color: var(--primary-soft);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+    h1 {
+      max-width: 860px;
+      margin-top: 22px;
+      font-size: clamp(38px, 6vw, 78px);
+      line-height: .96;
+      letter-spacing: -.065em;
+      text-wrap: balance;
+    }
+
+    .lead {
+      margin-top: 22px;
+      max-width: 720px;
+      color: var(--text-soft);
+      font-size: clamp(15px, 1.6vw, 19px);
+      text-wrap: pretty;
+    }
+
+    .context-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 30px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      color: var(--text-soft);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .principle-card {
+      padding: 22px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .principle-card h2,
+    .notes-card h2 {
+      font-size: 18px;
+      letter-spacing: -.01em;
+    }
+
+    .principles {
+      display: grid;
+      gap: 10px;
+    }
+
+    .principle {
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: rgba(255,255,255,.035);
+    }
+
+    .principle strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .principle span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 18px;
+      margin: 34px 0 16px;
+    }
+
+    .section-head h2 {
+      font-size: clamp(26px, 3.5vw, 44px);
+      line-height: 1;
+      letter-spacing: -.05em;
+    }
+
+    .section-head p {
+      max-width: 620px;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: right;
+    }
+
+    .directions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .direction-card {
+      padding: 18px;
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .direction-card[data-accent="amber"] { --accent: #f5a623; --accent-soft: rgba(245,166,35,.16); }
+    .direction-card[data-accent="emerald"] { --accent: #34d399; --accent-soft: rgba(52,211,153,.14); }
+    .direction-card[data-accent="violet"] { --accent: #a78bfa; --accent-soft: rgba(167,139,250,.14); }
+
+    .direction-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .option-label {
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .direction-card h3 {
+      margin-top: 5px;
+      font-size: 24px;
+      letter-spacing: -.04em;
+      line-height: 1.08;
+    }
+
+    .risk {
+      padding: 5px 8px;
+      border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: color-mix(in srgb, var(--accent) 78%, white 22%);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .phone {
+      width: min(100%, 360px);
+      margin: 0 auto;
+      aspect-ratio: 390 / 812;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 42px;
+      background: #09090c;
+      padding: 12px;
+      box-shadow: 0 22px 70px rgba(0,0,0,.48);
+      position: relative;
+    }
+
+    .screen {
+      height: 100%;
+      border-radius: 32px;
+      overflow: hidden;
+      background: var(--screen-bg, #0d0d10);
+      position: relative;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .status {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px 8px;
+      color: rgba(255,255,255,.82);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .signal { display: flex; gap: 3px; align-items: end; }
+    .signal i { display:block; width: 3px; border-radius: 2px; background: currentColor; }
+    .signal i:nth-child(1){ height:5px } .signal i:nth-child(2){ height:7px } .signal i:nth-child(3){ height:9px }
+
+    .screen-content {
+      padding: 6px 16px 0;
+      overflow: hidden;
+    }
+
+    .app-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .brand-mini {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+    }
+
+    .logo-dot {
+      width: 34px;
+      height: 34px;
+      border-radius: 11px;
+      background:
+        radial-gradient(circle at 32% 28%, #fff4c4 0 10%, transparent 12%),
+        linear-gradient(135deg, #ffb830, #1b8f6a);
+      box-shadow: 0 6px 18px rgba(245,166,35,.32);
+      flex: 0 0 auto;
+    }
+
+    .brand-mini b { display:block; font-size: 13px; line-height:1.1; }
+    .brand-mini span { display:block; color: var(--muted); font-size: 10px; }
+    .round-btn {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 12px;
+      background: rgba(255,255,255,.045);
+      color: var(--text-soft);
+    }
+
+    .mini-tabs,
+    .segmented {
+      display: flex;
+      gap: 6px;
+      padding: 4px;
+      background: rgba(255,255,255,.045);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 999px;
+    }
+
+    .mini-tabs span,
+    .segmented span {
+      flex: 1;
+      min-height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .mini-tabs .active,
+    .segmented .active {
+      background: var(--accent, var(--primary));
+      color: #130e05;
+      box-shadow: 0 5px 18px color-mix(in srgb, var(--accent, var(--primary)) 32%, transparent);
+    }
+
+    .money-hero {
+      margin-top: 12px;
+      padding: 18px;
+      border-radius: 24px;
+      background:
+        linear-gradient(145deg, color-mix(in srgb, var(--accent) 18%, transparent), rgba(255,255,255,.05)),
+        #17171d;
+      border: 1px solid color-mix(in srgb, var(--accent) 24%, rgba(255,255,255,.12));
+    }
+
+    .money-hero .label,
+    .label { color: var(--muted); font-size: 11px; font-weight: 700; }
+    .money { margin-top: 6px; font-size: 32px; line-height: 1; letter-spacing: -.05em; font-weight: 900; }
+    .subrow { display:flex; justify-content:space-between; gap: 8px; margin-top: 12px; color: var(--text-soft); font-size: 11px; }
+
+    .two-col { display:grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 10px; }
+    .metric {
+      min-height: 72px;
+      padding: 12px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.045);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+    .metric strong { display:block; margin-top: 5px; font-size: 16px; }
+    .metric.income strong { color: var(--income); }
+    .metric.expense strong { color: var(--expense); }
+
+    .list-card {
+      margin-top: 10px;
+      padding: 13px;
+      border-radius: 20px;
+      background: rgba(255,255,255,.045);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+    .list-card header { display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; }
+    .list-card header b { font-size: 13px; }
+    .list-card header span { color: var(--accent); font-size: 11px; font-weight: 800; }
+    .tx { display:flex; align-items:center; gap: 9px; padding: 8px 0; border-top: 1px solid rgba(255,255,255,.06); }
+    .tx:first-of-type { border-top: 0; padding-top: 0; }
+    .tx i { width: 28px; height:28px; border-radius:10px; display:grid; place-items:center; background: var(--accent-soft); color: var(--accent); font-style:normal; font-size:12px; }
+    .tx-main { min-width:0; flex: 1; }
+    .tx-main b { display:block; font-size:12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tx-main span { display:block; color:var(--muted); font-size:10px; }
+    .tx em { font-style:normal; font-size:12px; font-weight:900; }
+
+    .bottom-nav {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 2px;
+      padding: 9px 10px 12px;
+      background: rgba(11,11,14,.86);
+      border-top: 1px solid rgba(255,255,255,.08);
+      backdrop-filter: blur(20px);
+    }
+    .bottom-nav span {
+      display:grid;
+      place-items:center;
+      gap: 3px;
+      min-height: 44px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+    }
+    .bottom-nav b { width: 42px; height: 24px; display:grid; place-items:center; border-radius:999px; font-weight:900; }
+    .bottom-nav .on { color: color-mix(in srgb, var(--accent) 82%, white 18%); }
+    .bottom-nav .on b { background: var(--accent-soft); box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 24%, transparent); }
+
+    .option-b .screen { --screen-bg: linear-gradient(180deg, #0c1110 0%, #0e1312 42%, #090b0d 100%); }
+    .insight-stack { display:grid; gap: 10px; margin-top: 12px; }
+    .coach-card {
+      padding: 14px;
+      border-radius: 22px;
+      border: 1px solid rgba(52,211,153,.20);
+      background: linear-gradient(135deg, rgba(52,211,153,.15), rgba(255,255,255,.04));
+    }
+    .coach-card b { font-size: 13px; display:block; margin-bottom:4px; }
+    .coach-card p { color: var(--text-soft); font-size: 11px; }
+    .progress {
+      height: 8px;
+      background: rgba(255,255,255,.08);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .progress i { display:block; height:100%; width: 68%; background: linear-gradient(90deg, var(--income), var(--accent)); border-radius: inherit; }
+    .timeline { margin-top: 10px; display:grid; gap: 8px; }
+    .timeline-row { display:grid; grid-template-columns: 46px 1fr auto; gap: 8px; align-items:center; font-size: 11px; color: var(--text-soft); }
+    .timeline-row .bar { height: 8px; border-radius:999px; background: rgba(255,255,255,.08); overflow:hidden; }
+    .timeline-row .bar i { display:block; height:100%; border-radius:inherit; background: var(--accent); }
+
+    .option-c .screen { --screen-bg: #0a0a0f; }
+    .command {
+      margin-top: 12px;
+      padding: 12px;
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      border-radius: 18px;
+      border: 1px solid rgba(167,139,250,.24);
+      background: rgba(167,139,250,.12);
+      color: #ddd6fe;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .quick-grid { display:grid; grid-template-columns: repeat(2, 1fr); gap: 9px; margin-top: 10px; }
+    .quick {
+      min-height: 86px;
+      padding: 12px;
+      border-radius: 20px;
+      background: rgba(255,255,255,.045);
+      border: 1px solid rgba(255,255,255,.08);
+      display:grid;
+      align-content: space-between;
+    }
+    .quick i { width:30px; height:30px; border-radius:12px; display:grid; place-items:center; background: rgba(167,139,250,.16); color:#c4b5fd; font-style:normal; }
+    .quick b { font-size: 13px; }
+    .quick span { font-size:10px; color: var(--muted); }
+    .fab {
+      position:absolute;
+      right: 22px;
+      bottom: 82px;
+      width: 58px;
+      height: 58px;
+      display:grid;
+      place-items:center;
+      border-radius: 22px;
+      background: var(--accent);
+      color:#120b2a;
+      box-shadow: 0 14px 34px rgba(167,139,250,.32);
+      font-size: 30px;
+      font-weight: 500;
+    }
+
+    .direction-copy {
+      display: grid;
+      gap: 12px;
+      padding-top: 2px;
+    }
+    .direction-copy p { color: var(--text-soft); font-size: 14px; text-wrap: pretty; }
+    .mini-spec {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .spec {
+      padding: 10px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.035);
+      border: 1px solid rgba(255,255,255,.07);
+    }
+    .spec small { display:block; color: var(--muted); font-size: 10px; margin-bottom: 3px; }
+    .spec b { font-size: 12px; }
+
+    .journey {
+      display:grid;
+      gap: 7px;
+      margin-top: 2px;
+    }
+    .journey li {
+      display:grid;
+      grid-template-columns: 22px 1fr;
+      gap: 8px;
+      align-items:start;
+      color: var(--text-soft);
+      font-size: 13px;
+      list-style:none;
+    }
+    .journey li::before {
+      content: attr(data-step);
+      width: 22px;
+      height: 22px;
+      display:grid;
+      place-items:center;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .notes-card {
+      margin-top: 18px;
+      padding: 22px;
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+    }
+    .note-block {
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.035);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+    .note-block h3 { font-size: 15px; margin-bottom: 8px; }
+    .note-block p, .note-block li { color: var(--muted); font-size: 13px; }
+    .note-block ul { margin: 0; padding-left: 18px; }
+
+    .tweaks {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 20;
+      width: min(320px, calc(100vw - 36px));
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 22px;
+      background: rgba(20,20,26,.86);
+      backdrop-filter: blur(22px) saturate(1.35);
+      box-shadow: 0 20px 70px rgba(0,0,0,.42);
+      overflow: hidden;
+    }
+    .tweaks summary {
+      cursor: pointer;
+      padding: 13px 15px;
+      color: var(--text-soft);
+      font-size: 13px;
+      font-weight: 900;
+      list-style: none;
+    }
+    .tweaks summary::-webkit-details-marker { display:none; }
+    .tweak-body { display:grid; gap: 12px; padding: 0 15px 15px; }
+    .tweak-row { display:grid; gap: 6px; }
+    .tweak-row label { color: var(--muted); font-size: 12px; font-weight: 800; }
+    .tweak-row select {
+      width: 100%;
+      padding: 9px 10px;
+      color: var(--text);
+      background: #111116;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 12px;
+    }
+
+    body.focus-conservative .direction-card:not([data-kind="conservative"]),
+    body.focus-strong .direction-card:not([data-kind="strong"]),
+    body.focus-divergent .direction-card:not([data-kind="divergent"]) {
+      opacity: .28;
+      filter: saturate(.55);
+      transform: scale(.985);
+    }
+    body.density-compact .direction-card { padding: 14px; gap: 12px; }
+    body.density-compact .phone { width: min(100%, 330px); }
+    body.density-roomy .direction-card { padding: 22px; gap: 20px; }
+    body.density-roomy .phone { width: min(100%, 380px); }
+
+    @media (max-width: 1180px) {
+      .hero { grid-template-columns: 1fr; }
+      .directions { grid-template-columns: 1fr; }
+      .direction-card { grid-template-columns: minmax(0, 390px) 1fr; align-items: center; }
+      .direction-top { grid-column: 1 / -1; }
+      .phone { margin: 0; }
+      .notes-card { grid-template-columns: 1fr; }
+      body.focus-conservative .direction-card:not([data-kind="conservative"]),
+      body.focus-strong .direction-card:not([data-kind="strong"]),
+      body.focus-divergent .direction-card:not([data-kind="divergent"]) { display: none; }
+    }
+
+    @media (max-width: 720px) {
+      .page { width: min(100vw - 22px, 440px); padding-top: 16px; }
+      .intro-card { min-height: auto; }
+      .section-head { display:grid; }
+      .section-head p { text-align:left; }
+      .direction-card { grid-template-columns: 1fr; }
+      .phone { margin: 0 auto; }
+      .mini-spec { grid-template-columns: 1fr; }
+      .tweaks { position: sticky; left: 0; right: 0; bottom: 10px; margin: 18px auto 0; }
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .direction-card,
+      .phone,
+      .round-btn,
+      .tx,
+      .quick { transition: transform 180ms cubic-bezier(.2,0,0,1), opacity 180ms ease, filter 180ms ease; }
+      .direction-card:hover .phone { transform: translateY(-3px); }
+      .round-btn:active,
+      .quick:active,
+      .tx:active { transform: scale(.97); }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero" aria-labelledby="title">
+      <article class="intro-card">
+        <div>
+          <span class="eyebrow">StrawMoneyBook · UI/UX redesign directions</span>
+          <h1 id="title">把記帳從「填表」改成「掌握今天」</h1>
+          <p class="lead">依照現有 Vue 介面與設計語彙製作：深色底、琥珀主色、底部導覽、卡片式行動 App。這份方向板不更動產品策略，而是提供三個可落地的視覺與互動方向，讓你挑選接下來要深入打磨的路線。</p>
+        </div>
+        <div class="context-strip" aria-label="設計依據">
+          <span class="chip">現有 tokens：#0d0d10 / #f5a623 / #34d399</span>
+          <span class="chip">核心頁：首頁、分析、資產、功能、設定</span>
+          <span class="chip">行動優先 · 44px 以上觸控</span>
+          <span class="chip">避免假數據與裝飾性圖表</span>
+        </div>
+      </article>
+
+      <aside class="principle-card" aria-label="設計原則">
+        <h2>共通 UX 原則</h2>
+        <div class="principles">
+          <div class="principle"><strong>1. 首屏只回答三件事</strong><span>現在花多少、剩多少、下一步做什麼。降低首頁摘要的認知負荷。</span></div>
+          <div class="principle"><strong>2. 篩選要像「時間鏡頭」</strong><span>年 / 月 / 日 / 全部維持，但讓時間選擇更像瀏覽，而不是表單。</span></div>
+          <div class="principle"><strong>3. 收支不是只有數字</strong><span>用趨勢、預算壓力、交易脈絡輔助判斷，但避免憑空編造洞察。</span></div>
+          <div class="principle"><strong>4. 記帳入口必須永遠可見</strong><span>快速新增保留高優先權；進階功能收進導覽或命令式入口。</span></div>
+        </div>
+      </aside>
+    </section>
+
+    <div class="section-head">
+      <h2>三個改版方向</h2>
+      <p>從保守到發散：第一個最低風險，第二個是建議主方向，第三個用來探索更高效率的操作模型。</p>
+    </div>
+
+    <section class="directions" aria-label="UI/UX 改版方向">
+      <article class="direction-card" data-kind="conservative" data-accent="amber">
+        <div class="direction-top">
+          <div><div class="option-label">Option A · Conservative</div><h3>現有架構精修：更安靜、更清楚</h3></div>
+          <span class="risk">低風險</span>
+        </div>
+        <div class="phone option-a" aria-label="方向 A 手機 mockup">
+          <div class="screen">
+            <div class="status"><span>21:18</span><span class="signal"><i></i><i></i><i></i></span></div>
+            <div class="screen-content">
+              <div class="app-head"><div class="brand-mini"><span class="logo-dot"></span><div><b>StrawMoneyBook</b><span>家庭帳本</span></div></div><span class="round-btn">⌕</span></div>
+              <div class="mini-tabs"><span>全部</span><span>年</span><span class="active">月</span><span>日</span></div>
+              <section class="money-hero"><span class="label">2026 年 5 月結餘</span><div class="money">$ 18,420</div><div class="subrow"><span>收入 $ 42,000</span><span>支出 $ 23,580</span></div></section>
+              <div class="two-col"><div class="metric income"><span class="label">收入</span><strong>$42,000</strong></div><div class="metric expense"><span class="label">支出</span><strong>$23,580</strong></div></div>
+              <section class="list-card"><header><b>最近交易</b><span>查看全部</span></header><div class="tx"><i>食</i><div class="tx-main"><b>晚餐</b><span>今天 19:42 · 信用卡</span></div><em>-$280</em></div><div class="tx"><i>薪</i><div class="tx-main"><b>薪資</b><span>今天 09:00 · 銀行</span></div><em style="color:var(--income)">+$42,000</em></div><div class="tx"><i>交</i><div class="tx-main"><b>捷運</b><span>昨天 08:20 · 悠遊卡</span></div><em>-$35</em></div></section>
+            </div>
+            <nav class="bottom-nav"><span class="on"><b>⌂</b>首頁</span><span><b>◔</b>分析</span><span><b>▣</b>資產</span><span><b>✦</b>功能</span><span><b>⚙</b>設定</span></nav>
+          </div>
+        </div>
+        <div class="direction-copy">
+          <p>保留現有資訊架構與深色琥珀風格，重點是整理層級：首頁第一張卡改為「本期結餘」主敘事，收入 / 支出卡作為可點擊篩選，最近交易降低雜訊。</p>
+          <div class="mini-spec"><div class="spec"><small>適合</small><b>短期迭代、低開發成本</b></div><div class="spec"><small>視覺</small><b>現有 tokens + 更少光暈</b></div><div class="spec"><small>互動</small><b>篩選即時回饋</b></div><div class="spec"><small>風險</small><b>差異感較小</b></div></div>
+          <ul class="journey"><li data-step="1">使用者打開 App，先看本期結果。</li><li data-step="2">點收入 / 支出卡，交易列表同步篩選。</li><li data-step="3">從底部導覽進分析或功能，不改習慣。</li></ul>
+        </div>
+      </article>
+
+      <article class="direction-card" data-kind="strong" data-accent="emerald">
+        <div class="direction-top">
+          <div><div class="option-label">Option B · Strong-fit</div><h3>財務儀表板：今日狀態 + 預算壓力</h3></div>
+          <span class="risk">建議主方向</span>
+        </div>
+        <div class="phone option-b" aria-label="方向 B 手機 mockup">
+          <div class="screen">
+            <div class="status"><span>21:18</span><span class="signal"><i></i><i></i><i></i></span></div>
+            <div class="screen-content">
+              <div class="app-head"><div class="brand-mini"><span class="logo-dot"></span><div><b>今天的帳本</b><span>2026/05/16 · 週六</span></div></div><span class="round-btn">＋</span></div>
+              <div class="segmented"><span>年</span><span class="active">月</span><span>日</span></div>
+              <section class="money-hero"><span class="label">本月可用餘額</span><div class="money">$ 18,420</div><div class="progress"><i></i></div><div class="subrow"><span>預算已用 68%</span><span>剩 15 天</span></div></section>
+              <div class="insight-stack">
+                <section class="coach-card"><b>今天可以放心花 $612</b><p>依目前日均支出推估，本月仍在預算內。若今天新增大額支出，會即時更新。</p></section>
+                <section class="list-card"><header><b>支出節奏</b><span>分析</span></header><div class="timeline"><div class="timeline-row"><span>餐飲</span><span class="bar"><i style="width:76%"></i></span><b>$8,240</b></div><div class="timeline-row"><span>交通</span><span class="bar"><i style="width:36%"></i></span><b>$1,120</b></div><div class="timeline-row"><span>訂閱</span><span class="bar"><i style="width:52%"></i></span><b>$2,880</b></div></div></section>
+                <section class="list-card"><header><b>待注意</b><span>2 項</span></header><div class="tx"><i>!</i><div class="tx-main"><b>訂閱將於 3 天後扣款</b><span>可先預留 $390</span></div></div></section>
+              </div>
+            </div>
+            <nav class="bottom-nav"><span class="on"><b>⌂</b>今日</span><span><b>◔</b>分析</span><span><b>▣</b>資產</span><span><b>✦</b>功能</span><span><b>⚙</b>設定</span></nav>
+          </div>
+        </div>
+        <div class="direction-copy">
+          <p>把首頁從「交易摘要」提升為「財務狀態儀表板」。保留真實資料來源，但用預算剩餘、日均可用、類別節奏讓使用者知道下一步該注意什麼。</p>
+          <div class="mini-spec"><div class="spec"><small>適合</small><b>日常使用黏著度</b></div><div class="spec"><small>視覺</small><b>深色 + 綠色狀態輔助</b></div><div class="spec"><small>互動</small><b>狀態卡可下鑽</b></div><div class="spec"><small>風險</small><b>需定義洞察規則</b></div></div>
+          <ul class="journey"><li data-step="1">先看到本月可用與預算壓力。</li><li data-step="2">從「待注意」直接處理訂閱、預算或異常支出。</li><li data-step="3">分析頁承接下鑽，不再只是圖表展示。</li></ul>
+        </div>
+      </article>
+
+      <article class="direction-card" data-kind="divergent" data-accent="violet">
+        <div class="direction-top">
+          <div><div class="option-label">Option C · Divergent</div><h3>命令式 App：快速新增與搜尋優先</h3></div>
+          <span class="risk">探索型</span>
+        </div>
+        <div class="phone option-c" aria-label="方向 C 手機 mockup">
+          <div class="screen">
+            <div class="status"><span>21:18</span><span class="signal"><i></i><i></i><i></i></span></div>
+            <div class="screen-content">
+              <div class="app-head"><div class="brand-mini"><span class="logo-dot"></span><div><b>快速工作台</b><span>輸入、搜尋、跳轉</span></div></div><span class="round-btn">⌘</span></div>
+              <div class="command">⌕ 輸入「早餐 80 現金」或搜尋交易</div>
+              <div class="quick-grid"><div class="quick"><i>＋</i><div><b>新增支出</b><span>三步內完成</span></div></div><div class="quick"><i>↔</i><div><b>轉帳</b><span>帳戶間移動</span></div></div><div class="quick"><i>掃</i><div><b>電子發票</b><span>匯入與核對</span></div></div><div class="quick"><i>AI</i><div><b>自動記帳</b><span>從文字建立草稿</span></div></div></div>
+              <section class="list-card"><header><b>最近使用</b><span>全部功能</span></header><div class="tx"><i>預</i><div class="tx-main"><b>調整餐飲預算</b><span>昨天使用</span></div></div><div class="tx"><i>報</i><div class="tx-main"><b>建立報銷單</b><span>3 天前</span></div></div><div class="tx"><i>帳</i><div class="tx-main"><b>共享帳本成員</b><span>上週使用</span></div></div></section>
+              <section class="list-card"><header><b>本月摘要</b><span>首頁</span></header><div class="subrow"><span>收入 $42,000</span><span>支出 $23,580</span></div><div class="progress"><i style="width:56%;background:#a78bfa"></i></div></section>
+            </div>
+            <div class="fab">＋</div>
+            <nav class="bottom-nav"><span><b>⌂</b>首頁</span><span><b>◔</b>分析</span><span class="on"><b>⌘</b>工作台</span><span><b>▣</b>資產</span><span><b>⚙</b>設定</span></nav>
+          </div>
+        </div>
+        <div class="direction-copy">
+          <p>把高頻入口集中成「工作台 / 命令列」。適合功能越來越多的 StrawMoneyBook：使用者不必記得功能在哪，可以從搜尋、快捷與最近使用進入。</p>
+          <div class="mini-spec"><div class="spec"><small>適合</small><b>進階使用者與多功能成長</b></div><div class="spec"><small>視覺</small><b>更科技、更聚焦輸入</b></div><div class="spec"><small>互動</small><b>文字命令 + 快捷卡</b></div><div class="spec"><small>風險</small><b>導覽模型變動較大</b></div></div>
+          <ul class="journey"><li data-step="1">打開 App 後先輸入或點快捷。</li><li data-step="2">快速新增、發票、報銷、預算都從同一入口開始。</li><li data-step="3">首頁退居狀態概覽，工作台承擔操作中心。</li></ul>
+        </div>
+      </article>
+    </section>
+
+    <section class="notes-card" aria-label="下一步建議">
+      <div class="note-block"><h3>我建議選 Option B</h3><p>它最符合個人財務產品的日常價值：不是只記錄過去，而是幫使用者判斷今天是否安全、哪裡該注意。</p></div>
+      <div class="note-block"><h3>實作拆分</h3><ul><li>先改首頁首屏資訊架構。</li><li>再把分析頁變成首頁卡片的下鑽結果。</li><li>最後補強空狀態、錯誤狀態、載入骨架。</li></ul></div>
+      <div class="note-block"><h3>需要避免</h3><ul><li>不要加入無來源的假洞察。</li><li>不要讓圖表比決策更重要。</li><li>不要為了新鮮感移除熟悉底部導覽。</li></ul></div>
+    </section>
+
+    <details class="tweaks">
+      <summary>Tweaks · 檢視控制</summary>
+      <div class="tweak-body">
+        <div class="tweak-row"><label for="focus">聚焦方向</label><select id="focus"><option value="all">全部顯示</option><option value="conservative">只看 A 保守</option><option value="strong">只看 B 主方向</option><option value="divergent">只看 C 發散</option></select></div>
+        <div class="tweak-row"><label for="density">展示密度</label><select id="density"><option value="normal">標準</option><option value="compact">緊湊</option><option value="roomy">寬鬆</option></select></div>
+      </div>
+    </details>
+  </main>
+
+  <script>
+    const focus = document.querySelector('#focus')
+    const density = document.querySelector('#density')
+    const savedFocus = localStorage.getItem('smb-direction-focus') || 'all'
+    const savedDensity = localStorage.getItem('smb-direction-density') || 'normal'
+    focus.value = savedFocus
+    density.value = savedDensity
+
+    function applyTweaks() {
+      document.body.classList.remove('focus-conservative', 'focus-strong', 'focus-divergent', 'density-compact', 'density-roomy')
+      if (focus.value !== 'all') document.body.classList.add(`focus-${focus.value}`)
+      if (density.value !== 'normal') document.body.classList.add(`density-${density.value}`)
+      localStorage.setItem('smb-direction-focus', focus.value)
+      localStorage.setItem('smb-direction-density', density.value)
+    }
+
+    focus.addEventListener('change', applyTweaks)
+    density.addEventListener('change', applyTweaks)
+    applyTweaks()
+  </script>
+</body>
+</html>

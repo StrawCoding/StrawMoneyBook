@@ -408,8 +408,7 @@ async function loadGoogleBackupState() {
     return buildEmptyGoogleBackupState()
   }
   return autoConnectGoogleBackup(ledgerStore.activeLedgerId, {
-    allowInteractive: true,
-    allowInteractiveWhenGoogleLinked: true,
+    allowInteractive: false,
   })
 }
 

@@ -46,6 +46,11 @@ test('manual backup error toast uses errorDetail not reason to avoid raw code st
   assert.match(settingsSource, /throw new Error\(result\.errorDetail \|\| t\('settings_auto_backup\.toast\.google_backup_failed'\)\)/)
 })
 
+test('settings page refreshes Google backup state silently without opening interactive sign-in on mount', () => {
+  assert.match(settingsSource, /return autoConnectGoogleBackup\(ledgerStore\.activeLedgerId, \{\s*allowInteractive: false,\s*\}\)/s)
+  assert.doesNotMatch(settingsSource, /allowInteractiveWhenGoogleLinked: true/)
+})
+
 test('settings page refresh coordinator preserves unsaved WebDAV password input during background sync', () => {
   assert.match(settingsSource, /async function refreshAutoBackupState\(\{ preservePasswordInput = false } = \{\}\) \{/)
   assert.match(settingsSource, /const ticket = \+\+refreshCoordinatorTicket/)
