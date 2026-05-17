@@ -13,7 +13,7 @@ const ONLINE_ACCESS_TOKEN_DEFAULT_TTL_SEC = 55 * 60
 const STALE_SIGNIN_PROMISE_MS = GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS + GOOGLE_BACKEND_REQUEST_TIMEOUT_MS + 15 * 1000
 const GOOGLE_LOGIN_TIMEOUT_MESSAGE = 'Google 登入逾時，請重試'
 const GOOGLE_BACKEND_TIMEOUT_MESSAGE = 'Google 授權交換逾時，請檢查網路後重試'
-const GOOGLE_OAUTH_DEFAULT_ORIGIN = 'https://www.strawmb.com'
+const GOOGLE_OAUTH_DEFAULT_ORIGIN = 'https://api.strawmb.com'
 
 const SERVER_AUTH_CODE_FLOW_REQUESTED = parseBooleanEnv(import.meta.env.VITE_GOOGLE_USE_SERVER_AUTH_CODE ?? 'true')
 const SERVER_AUTH_CODE_FLOW_ENABLED = resolveServerAuthCodeFlowEnabled()
@@ -62,11 +62,6 @@ function resolveServerAuthCodeFlowEnabled() {
 
   if (hasAbsoluteEndpoints || hasExplicitOrigin) return true
 
-  // Also enable when the API origin can be derived from VITE_PRIVACY_POLICY_URL (or the
-  // hardcoded default). The exchange/refresh endpoints are built from the same origin, so
-  // server-auth-code mode is available whenever a valid HTTPS origin is resolvable.
-  if (isAbsoluteHttpUrl(resolveGoogleOAuthApiOrigin())) return true
-
   console.warn(
     '[google-auth] VITE_GOOGLE_USE_SERVER_AUTH_CODE=true but no explicit Google OAuth backend is configured for native runtime; fallback to online mode.',
   )
@@ -81,15 +76,6 @@ function resolveGoogleOAuthApiOrigin() {
   const explicitOrigin = String(import.meta.env.VITE_GOOGLE_OAUTH_API_ORIGIN ?? '').trim()
   if (isAbsoluteHttpUrl(explicitOrigin)) {
     return explicitOrigin.replace(/\/+$/, '')
-  }
-
-  const siteUrl = String(import.meta.env.VITE_PRIVACY_POLICY_URL ?? '').trim()
-  if (isAbsoluteHttpUrl(siteUrl)) {
-    try {
-      return new URL(siteUrl).origin
-    } catch {
-      // ignore parse failures
-    }
   }
 
   return GOOGLE_OAUTH_DEFAULT_ORIGIN

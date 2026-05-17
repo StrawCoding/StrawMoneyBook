@@ -1,11 +1,13 @@
 import adminHandler from './admin.js'
 import authHandler from './auth.js'
 import clientLogsHandler from './client-logs.js'
+import googleOAuthHandler from './google-oauth.js'
 import referralsHandler from './referrals.js'
 import sharedLedgersHandler from './shared-ledgers.js'
 
 export const API_ROUTE_TABLE = Object.freeze([
   { prefix: '/api/auth', handler: authHandler },
+  { prefix: '/api/google/oauth', handler: googleOAuthHandler },
   { prefix: '/api/admin', handler: adminHandler },
   { prefix: '/api/client-logs', handler: clientLogsHandler },
   { prefix: '/api/shared-ledgers', handler: sharedLedgersHandler },

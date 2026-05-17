@@ -147,19 +147,22 @@ test('google connect profile resolver always triggers interactive sign-in when s
   )
 })
 
-test('server auth code flow is enabled on native when API origin is derivable from VITE_PRIVACY_POLICY_URL (SMB-186)', () => {
-  // Regression: resolveServerAuthCodeFlowEnabled only checked explicit env vars
-  // (VITE_GOOGLE_OAUTH_API_ORIGIN, VITE_GOOGLE_OAUTH_EXCHANGE_URL, VITE_GOOGLE_OAUTH_REFRESH_URL).
-  // When only VITE_PRIVACY_POLICY_URL was set (as in the production .env), the derived API origin
-  // was valid but server-auth-code mode was disabled, forcing online-only mode with no refresh
-  // token — causing frequent mandatory re-authorizations after access-token expiry.
-  // Fix: also enable server-auth-code mode when resolveGoogleOAuthApiOrigin() returns an HTTPS URL.
+test('server auth code flow uses API host, not static privacy-policy host (SMB-192)', () => {
+  // Regression: SMB-186 derived the OAuth API origin from VITE_PRIVACY_POLICY_URL, which points
+  // at the static website host. Production POSTs to /api/google/oauth/* on that host return 405,
+  // so Google backup login could not complete correctly after the release. The native app must
+  // target the real API host by default and route OAuth exchange/refresh through backend routes.
   const fnMatch = googleAuthSource.match(/function resolveServerAuthCodeFlowEnabled[\s\S]*?\n\}/)
   assert.ok(fnMatch, 'resolveServerAuthCodeFlowEnabled must exist in auth source')
-  assert.match(
+  assert.doesNotMatch(
     fnMatch[0],
     /resolveGoogleOAuthApiOrigin\(\)/,
-    'must check the derived API origin (resolveGoogleOAuthApiOrigin) as a fallback condition',
+    'must not treat a privacy-policy/static-site derived origin as proof that OAuth backend exists',
+  )
+  assert.match(
+    googleAuthSource,
+    /const GOOGLE_OAUTH_DEFAULT_ORIGIN = 'https:\/\/api\.strawmb\.com'/,
+    'native default OAuth origin must be the API host, not www.strawmb.com',
   )
 })
 

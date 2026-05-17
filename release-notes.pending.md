@@ -4,6 +4,7 @@
 
 ## v1.2.11
 - (SMB-192) 修復自動備份設定頁載入或背景刷新時會自動觸發 Google 互動登入，導致 Google 備份面板卡住或反覆顯示登入錯誤的問題；現在頁面刷新只做靜默恢復，使用者按下登入 / 重新登入才開啟 Google 登入流程
+- (SMB-192) 修復 Google 備份 native server auth code 交換誤用官網 / 隱私權政策靜態網域造成 `405 Not Allowed` 的問題；OAuth exchange / refresh 預設改走 `https://api.strawmb.com`，後端也註冊 `/api/google/oauth/*` 路由，避免正式 App 連到靜態網站主機
 
 ## v1.2.10
 - (SMB-191) 修復 Android Google 自動備份首次互動登入未觸發 SocialLogin fallback，導致部分帳號顯示 Google Sign-In failed 而無法完成登入的問題
