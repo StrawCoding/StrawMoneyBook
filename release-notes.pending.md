@@ -2,6 +2,9 @@
 
 ---
 
+## v1.2.13
+- (SMB-165) 電子發票匯入 Step 4 新增「同步建立支出交易」選填區塊；選取帳戶與分類後，匯入時會依發票金額與日期自動建立支出交易並記錄 transaction_id，方便後續帳本查詢；未選擇時維持舊行為（僅存匯入紀錄）
+
 ## v1.2.11
 - (SMB-192) 修復自動備份設定頁載入或背景刷新時會自動觸發 Google 互動登入，導致 Google 備份面板卡住或反覆顯示登入錯誤的問題；現在頁面刷新只做靜默恢復，使用者按下登入 / 重新登入才開啟 Google 登入流程
 - (SMB-192) 修復 Google 備份 native server auth code 交換誤用官網 / 隱私權政策靜態網域造成 `405 Not Allowed` 的問題；OAuth exchange / refresh 預設改走 `https://api.strawmb.com`，後端也註冊 `/api/google/oauth/*` 路由，避免正式 App 連到靜態網站主機

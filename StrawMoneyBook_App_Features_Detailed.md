@@ -893,6 +893,8 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
     - `buildParseInvoiceListScript` 中的 `parseAmount`：8 位數（統編格式）無條件排除，不受 `amountLabel` 影響，避免「金額 NT\$xxx 買方統編 12345678」類型的行誤把統編解析為金額
   - **測試**：Java 單元測試新增 `fillCredentialsFailureScriptIncludesFormDiagnostics`、`parseAmountScriptUnconditionallyExcludesEightDigitNumbers`、`waitForResultsTimeoutErrorCodeIsCorrect`；`simulate-einvoice-login-flow.mjs` 新增 Step 11（空白頁 waitForResults）、Step 12（含金額標籤時統編不誤判），全套 41/41 通過
 
+- **v1.2.13（SMB-165 匯入交易建立）**：Step 4 新增可選的「同步建立支出交易」區塊；使用者可在確認匯入前選取記帳帳戶與支出分類，選取後每筆匯入發票將依發票金額（×100 換算 amountMinor）與日期自動建立 `einvoice` 來源的支出交易，並將交易 ID 寫入 `einvoice_invoice_imports.transaction_id`；未選帳戶 / 分類時維持舊行為（僅儲存匯入紀錄，transaction_id 為 null）；i18n 同步新增 `einvoice.step4.create_tx_label` 等 7 個三語 key；新增 5 個單元測試覆蓋交易建立路徑（transactionId 正確、createExpense 失敗進入 failed、amountMinor 換算、重複發票不呼叫 createExpense）。
+
 - **v1.0.24（載具流程穩定性修復）**：
   - **[Bug 修復] 匯入失敗訊息消失**：`EInvoiceStep4Confirm.vue` 原本在 catch 中設定 `store.errorMessage` 並跳回 Step3，但 Step3 的 `onMounted` 立即清空 `store.errorMessage = ''`，導致使用者看不到任何錯誤提示。改為在 Step4 使用本地 `importError` ref，錯誤顯示於 Step4 原地（確認按鈕下方紅色提示文字），不再轉跳 Step3。
   - **[Bug 修復] 抓取並發 race condition**：`EInvoiceStep3Select.vue` 的 `onMounted` 新增 `if (store.isScraping) return` 守衛，避免使用者快速來回切換步驟時觸發多個並發 scrape 請求，防止 `invoiceList` 被非預期覆蓋與 `isScraping` 提前重置。

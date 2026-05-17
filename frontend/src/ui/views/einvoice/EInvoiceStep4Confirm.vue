@@ -13,6 +13,30 @@
         </div>
       </div>
 
+      <div class="card panel">
+        <p class="tx-section-label">{{ t('einvoice.step4.create_tx_label') }}</p>
+
+        <label class="field-label">{{ t('einvoice.step4.account_label') }}</label>
+        <select v-model="store.defaultAccountId" class="field-input">
+          <option value="">{{ t('einvoice.step4.no_account') }}</option>
+          <option v-for="acc in regularAccounts" :key="acc.id" :value="acc.id">
+            {{ acc.name }}
+          </option>
+        </select>
+
+        <label class="field-label mt">{{ t('einvoice.step4.category_label') }}</label>
+        <select v-model="store.defaultCategoryId" class="field-input" :disabled="!store.defaultAccountId">
+          <option value="">{{ t('einvoice.step4.no_category') }}</option>
+          <option v-for="cat in expenseCategories" :key="cat.id" :value="cat.id">
+            {{ cat.name }}
+          </option>
+        </select>
+
+        <p v-if="store.defaultAccountId && store.defaultCategoryId" class="tx-hint">
+          {{ t('einvoice.step4.tx_hint') }}
+        </p>
+      </div>
+
       <p v-if="importError" class="error-text">{{ importError }}</p>
 
       <div class="step-footer row">
@@ -44,17 +68,26 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEInvoiceImportStore } from '@/ui/stores/einvoice-import.store.js'
+import { useAccountStore } from '@/ui/stores/account.store.js'
+import { useCategoryStore } from '@/ui/stores/category.store.js'
+import { useLedgerStore } from '@/ui/stores/ledger.store.js'
 import { importSelectedInvoices } from '@/services/einvoice/backend.js'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const { t } = useI18n()
 const router = useRouter()
 const store = useEInvoiceImportStore()
+const accountStore = useAccountStore()
+const categoryStore = useCategoryStore()
+const ledgerStore = useLedgerStore()
 
 const importError = ref('')
+
+const regularAccounts = computed(() => accountStore.regularAccounts ?? [])
+const expenseCategories = computed(() => categoryStore.expenseCategories ?? [])
 
 function formatAmount(amount) {
   return Number(amount).toLocaleString('zh-TW')
@@ -66,7 +99,11 @@ async function handleImport() {
   store.isImporting = true
   console.log('[EInvoice] Step4: 開始匯入，筆數:', store.selectedInvoices.length)
   try {
-    const result = await importSelectedInvoices(store.selectedInvoices)
+    const result = await importSelectedInvoices(store.selectedInvoices, {
+      ledgerId: ledgerStore.activeLedgerId || undefined,
+      accountId: store.defaultAccountId || undefined,
+      categoryId: store.defaultCategoryId || undefined,
+    })
     console.log('[EInvoice] Step4: 匯入完成 — 成功:', result.imported.length, '略過:', result.skipped.length, '失敗:', result.failed.length)
     store.importResult = result
   } catch (err) {
@@ -93,6 +130,21 @@ function handleFinish() {
 .preview-row:last-child { border-bottom: none; }
 .preview-merchant { color: var(--text); }
 .preview-amount { font-weight: 700; color: var(--primary); }
+.tx-section-label { font-size: 13px; color: var(--text-secondary); margin: 0 0 14px; }
+.field-label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; }
+.field-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 15px;
+  background: var(--surface);
+  color: var(--text);
+  box-sizing: border-box;
+}
+.field-input:disabled { opacity: 0.4; }
+.mt { margin-top: 14px; }
+.tx-hint { font-size: 12px; color: var(--primary); margin: 10px 0 0; }
 .result-block {
   display: flex;
   flex-direction: column;

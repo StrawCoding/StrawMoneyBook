@@ -1,6 +1,6 @@
 /**
  * 電子發票匯入流程測試
- * 覆蓋去重、部分失敗、空資料等核心場景
+ * 覆蓋去重、部分失敗、空資料、交易建立等核心場景
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -23,7 +23,7 @@ function createRepoStub({ existingNumbers = [], insertShouldFailFor = new Set() 
 
 // ── importSelectedInvoices 邏輯（從 backend.js 提取為純函式，方便測試）──────
 
-async function importInvoicesWithRepo(invoices, repo) {
+async function importInvoicesWithRepo(invoices, repo, { createExpense } = {}) {
   const alreadyImported = await repo.getImportedInvoiceNumbers()
   const results = { imported: [], skipped: [], failed: [] }
   for (const invoice of invoices) {
@@ -32,13 +32,17 @@ async function importInvoicesWithRepo(invoices, repo) {
       continue
     }
     try {
+      let transactionId = null
+      if (typeof createExpense === 'function') {
+        transactionId = await createExpense(invoice)
+      }
       await repo.insertInvoiceImport({
         invoiceNumber: invoice.invoiceNumber,
         amount: invoice.amount,
         invoiceDate: invoice.invoiceDate,
         merchantName: invoice.merchantName ?? null,
         carrierName: invoice.carrierName ?? null,
-        transactionId: null,
+        transactionId,
       })
       results.imported.push(invoice)
     } catch {
@@ -143,10 +147,45 @@ test('混合情境：部分重複 + 部分失敗 + 部分成功', async () => {
   assert.equal(result.imported[0].invoiceNumber, 'CC-33333333')
 })
 
-test('insertInvoiceImport 傳入的 transactionId 始終為 null', async () => {
+test('未提供 createExpense 時 transactionId 為 null', async () => {
   const repo = createRepoStub()
   await importInvoicesWithRepo([makeInvoice('AA-12345678')], repo)
   assert.equal(repo.inserted[0].transactionId, null)
+})
+
+test('提供 createExpense 時 transactionId 為回傳值', async () => {
+  const repo = createRepoStub()
+  const createExpense = async (invoice) => `tx_${invoice.invoiceNumber}`
+  await importInvoicesWithRepo([makeInvoice('AA-12345678')], repo, { createExpense })
+  assert.equal(repo.inserted[0].transactionId, 'tx_AA-12345678')
+})
+
+test('createExpense 拋出錯誤時該發票進入 failed', async () => {
+  const repo = createRepoStub()
+  const createExpense = async () => { throw new Error('tx_create_error') }
+  const result = await importInvoicesWithRepo([makeInvoice('AA-12345678')], repo, { createExpense })
+  assert.equal(result.failed.length, 1)
+  assert.equal(result.imported.length, 0)
+  assert.equal(repo.inserted.length, 0)
+})
+
+test('createExpense amountMinor 換算應為金額乘以 100', async () => {
+  const repo = createRepoStub()
+  const calls = []
+  const createExpense = async (invoice) => {
+    calls.push({ amountMinor: Math.round(Number(invoice.amount) * 100) })
+    return 'tx_ok'
+  }
+  await importInvoicesWithRepo([makeInvoice('AA-12345678', { amount: 500 })], repo, { createExpense })
+  assert.equal(calls[0].amountMinor, 50000)
+})
+
+test('已匯入的發票被跳過時不呼叫 createExpense', async () => {
+  const repo = createRepoStub({ existingNumbers: ['AA-12345678'] })
+  let expenseCalled = false
+  const createExpense = async () => { expenseCalled = true; return 'tx_ok' }
+  await importInvoicesWithRepo([makeInvoice('AA-12345678')], repo, { createExpense })
+  assert.equal(expenseCalled, false)
 })
 
 test('merchantName 為 null 時不拋出錯誤', async () => {

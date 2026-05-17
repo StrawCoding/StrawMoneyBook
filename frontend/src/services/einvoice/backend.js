@@ -10,6 +10,7 @@ import { decryptCredential, encryptCredential } from './credential-crypto.js'
 import { EINVOICE_PLATFORM, createEInvoiceError } from './shared.js'
 import { isEInvoiceAutomationRuntimeSupported, queryNativeEInvoices } from './native-automation.js'
 import { traceEInvoiceScrape, traceEInvoiceImport } from '@/core/services/einvoice-debug.service.js'
+import { createExpense } from '@/core/services/transaction.service.js'
 
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
@@ -102,6 +103,10 @@ export async function importSelectedInvoices(invoices, { accountId, categoryId, 
     console.log('[EInvoice] 開始匯入，共', invoices.length, '筆待處理')
     const alreadyImported = await getImportedInvoiceNumbers()
     console.log('[EInvoice] 已匯入發票號碼共', alreadyImported.size, '筆（用於去重）')
+    const shouldCreateTransactions = Boolean(ledgerId && accountId && categoryId)
+    if (shouldCreateTransactions) {
+      console.log('[EInvoice] 將同步建立支出交易 — 帳本:', ledgerId, '帳戶:', accountId, '分類:', categoryId)
+    }
     const results = { imported: [], skipped: [], failed: [] }
 
     for (const invoice of invoices) {
@@ -111,13 +116,25 @@ export async function importSelectedInvoices(invoices, { accountId, categoryId, 
         continue
       }
       try {
+        let transactionId = null
+        if (shouldCreateTransactions) {
+          transactionId = await createExpense(ledgerId, {
+            accountId,
+            categoryId,
+            amountMinor: Math.round(Number(invoice.amount) * 100),
+            occurredAt: new Date(invoice.invoiceDate).toISOString(),
+            note: invoice.merchantName ?? '',
+            originType: 'einvoice',
+          })
+          console.log('[EInvoice] 已建立支出交易:', transactionId, '發票:', invoice.invoiceNumber)
+        }
         await insertInvoiceImport({
           invoiceNumber: invoice.invoiceNumber,
           amount: invoice.amount,
           invoiceDate: invoice.invoiceDate,
           merchantName: invoice.merchantName,
           carrierName: invoice.carrierName,
-          transactionId: null,
+          transactionId,
         })
         console.log('[EInvoice] 寫入成功:', invoice.invoiceNumber, '金額:', invoice.amount)
         results.imported.push(invoice)

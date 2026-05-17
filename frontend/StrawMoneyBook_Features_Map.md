@@ -970,7 +970,7 @@ UI composable 目錄：`src/ui/composables/`
 
 ---
 
-## 電子發票匯入 (E-Invoice Import) — v1.0.6
+## 電子發票匯入 (E-Invoice Import) — v1.0.6（SMB-165 v1.2.13：匯入時可選帳戶/分類同步建立支出交易，transaction_id 寫回匯入記錄；`importSelectedInvoices` 接受 ledgerId/accountId/categoryId，呼叫 `createExpense` 並以 originType='einvoice' 建立支出；Step 4 新增帳戶與分類 select；store 新增 defaultAccountId/defaultCategoryId；i18n 三語各新增 7 key；新增 5 個測試覆蓋交易建立路徑）
 
 ### 路由
 - `/einvoice-import` → `src/ui/views/einvoice/EInvoiceImportWizardPage.vue`

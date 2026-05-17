@@ -23,8 +23,10 @@ export const useEInvoiceImportStore = defineStore('einvoiceImport', () => {
   const invoiceList = ref([])
   const selectedInvoiceNumbers = ref(new Set())
 
-  // Step 4: import results
+  // Step 4: import results & optional transaction creation
   const importResult = ref(null)
+  const defaultAccountId = ref('')
+  const defaultCategoryId = ref('')
 
   // ── Loading / error ─────────────────────────────────────────────────────────
   const isScraping = ref(false)
@@ -82,6 +84,8 @@ export const useEInvoiceImportStore = defineStore('einvoiceImport', () => {
     invoiceList.value = []
     selectedInvoiceNumbers.value = new Set()
     importResult.value = null
+    defaultAccountId.value = ''
+    defaultCategoryId.value = ''
     isScraping.value = false
     isImporting.value = false
     errorMessage.value = ''
@@ -104,6 +108,8 @@ export const useEInvoiceImportStore = defineStore('einvoiceImport', () => {
     isScraping,
     isImporting,
     errorMessage,
+    defaultAccountId,
+    defaultCategoryId,
     selectedInvoices,
     totalSelectedAmount,
     allSelected,
