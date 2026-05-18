@@ -248,6 +248,8 @@ export async function createLoanWithOptionalTransaction(ledgerId, payload) {
       note: payload.note ?? `借貸建立：${payload.counterpartyName}`,
       originType: 'loan_payment',
       externalRefId: loan.id,
+      includeInBudget: false,
+      includeInAnalysis: false,
     })
 
     return {
@@ -312,6 +314,8 @@ async function addLoanRepaymentInternal(ledgerId, payload) {
       note: noteBase,
       originType: 'loan_payment',
       externalRefId: loan.id,
+      includeInBudget: false,
+      includeInAnalysis: false,
     })
   }
 
@@ -327,6 +331,8 @@ async function addLoanRepaymentInternal(ledgerId, payload) {
       note: payload.note ?? `借貸利息：${loan.counterparty_name ?? ''}`,
       originType: 'loan_payment',
       externalRefId: loan.id,
+      includeInBudget: false,
+      includeInAnalysis: false,
     })
   }
 
@@ -565,8 +571,8 @@ export async function updateLoanRepayment(ledgerId, payload) {
           note: noteBase,
           isReimbursable: false,
           reimbursementState: 'none',
-          includeInBudget: true,
-          includeInAnalysis: true,
+          includeInBudget: false,
+          includeInAnalysis: false,
         })
       } else {
         principalTxId = await addTransaction(ledgerId, {
@@ -578,6 +584,8 @@ export async function updateLoanRepayment(ledgerId, payload) {
           note: noteBase,
           originType: 'loan_payment',
           externalRefId: loan.id,
+          includeInBudget: false,
+          includeInAnalysis: false,
         })
       }
     } else if (principalTxId) {
@@ -598,8 +606,8 @@ export async function updateLoanRepayment(ledgerId, payload) {
           note: note || `借貸利息：${loan.counterparty_name ?? ''}`,
           isReimbursable: false,
           reimbursementState: 'none',
-          includeInBudget: true,
-          includeInAnalysis: true,
+          includeInBudget: false,
+          includeInAnalysis: false,
         })
       } else {
         interestTxId = await addTransaction(ledgerId, {
@@ -611,6 +619,8 @@ export async function updateLoanRepayment(ledgerId, payload) {
           note: note || `借貸利息：${loan.counterparty_name ?? ''}`,
           originType: 'loan_payment',
           externalRefId: loan.id,
+          includeInBudget: false,
+          includeInAnalysis: false,
         })
       }
     } else if (interestTxId) {
@@ -804,8 +814,8 @@ export async function updateCompletedLoanPrincipal(ledgerId, payload) {
             note: payment.note || buildLoanPaymentNote(loan),
             isReimbursable: false,
             reimbursementState: 'none',
-            includeInBudget: true,
-            includeInAnalysis: true,
+            includeInBudget: false,
+            includeInAnalysis: false,
           })
         } else {
           principalTxId = await addTransaction(ledgerId, {
@@ -817,6 +827,8 @@ export async function updateCompletedLoanPrincipal(ledgerId, payload) {
             note: payment.note || buildLoanPaymentNote(loan),
             originType: 'loan_payment',
             externalRefId: loan.id,
+            includeInBudget: false,
+            includeInAnalysis: false,
           })
         }
       } else if (principalTxId) {
@@ -837,8 +849,8 @@ export async function updateCompletedLoanPrincipal(ledgerId, payload) {
             note: payment.note || `借貸利息：${loan.counterparty_name ?? ''}`,
             isReimbursable: false,
             reimbursementState: 'none',
-            includeInBudget: true,
-            includeInAnalysis: true,
+            includeInBudget: false,
+            includeInAnalysis: false,
           })
         } else {
           interestTxId = await addTransaction(ledgerId, {
@@ -850,6 +862,8 @@ export async function updateCompletedLoanPrincipal(ledgerId, payload) {
             note: payment.note || `借貸利息：${loan.counterparty_name ?? ''}`,
             originType: 'loan_payment',
             externalRefId: loan.id,
+            includeInBudget: false,
+            includeInAnalysis: false,
           })
         }
       } else if (interestTxId) {
