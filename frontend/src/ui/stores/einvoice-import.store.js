@@ -3,15 +3,15 @@ import { ref, computed } from 'vue'
 import { EINVOICE_STATUS } from '@/services/einvoice/shared.js'
 
 export const useEInvoiceImportStore = defineStore('einvoiceImport', () => {
-  // ── Wizard state ────────────────────────────────────────────────────────────
+  // ── Wizard navigation ─────────────────────────────────────────────────────
   const currentStep = ref(1)
 
-  // Step 1: account
+  // ── Step 1: credentials ───────────────────────────────────────────────────
   const phone = ref('')
   const password = ref('')
   const rememberCredentials = ref(true)
 
-  // Step 2: query conditions
+  // ── Step 2: query conditions ──────────────────────────────────────────────
   const dateFrom = ref('')
   const dateTo = ref('')
   const selectedCarrier = ref('all')
@@ -19,21 +19,26 @@ export const useEInvoiceImportStore = defineStore('einvoiceImport', () => {
   const buyerTaxId = ref('')
   const keyword = ref('')
 
-  // Step 3: scraped list & selection
+  // ── Step 3: scrape state machine ──────────────────────────────────────────
+  // scrapeStatus: 'idle' | 'running' | 'done' | 'failed' | 'cancelled' | 'timeout'
+  const scrapeStatus = ref('idle')
+  const scrapeError = ref('')
+  // Monotonically-increasing counter. Callers capture the value returned by
+  // startScrape() and pass it back to commit/fail so that late-arriving
+  // responses from a cancelled or superseded request are silently discarded.
+  const scrapeGeneration = ref(0)
   const invoiceList = ref([])
   const selectedInvoiceNumbers = ref(new Set())
 
-  // Step 4: import results & optional transaction creation
+  // ── Step 4: import results ────────────────────────────────────────────────
   const importResult = ref(null)
   const defaultAccountId = ref('')
   const defaultCategoryId = ref('')
-
-  // ── Loading / error ─────────────────────────────────────────────────────────
-  const isScraping = ref(false)
   const isImporting = ref(false)
-  const errorMessage = ref('')
 
-  // ── Computed ────────────────────────────────────────────────────────────────
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const isScraping = computed(() => scrapeStatus.value === 'running')
+
   const selectedInvoices = computed(() =>
     invoiceList.value.filter((inv) => selectedInvoiceNumbers.value.has(inv.invoiceNumber)),
   )
@@ -46,7 +51,50 @@ export const useEInvoiceImportStore = defineStore('einvoiceImport', () => {
     () => invoiceList.value.length > 0 && selectedInvoiceNumbers.value.size === invoiceList.value.length,
   )
 
-  // ── Actions ─────────────────────────────────────────────────────────────────
+  // ── Scrape lifecycle ──────────────────────────────────────────────────────
+
+  function startScrape() {
+    scrapeGeneration.value++
+    scrapeStatus.value = 'running'
+    scrapeError.value = ''
+    invoiceList.value = []
+    selectedInvoiceNumbers.value = new Set()
+    return scrapeGeneration.value
+  }
+
+  function commitScrapeResult(token, list) {
+    if (scrapeGeneration.value !== token) return false
+    invoiceList.value = list ?? []
+    selectedInvoiceNumbers.value = new Set()
+    scrapeStatus.value = 'done'
+    return true
+  }
+
+  function failScrape(token, message, status = 'failed') {
+    if (scrapeGeneration.value !== token) return false
+    scrapeError.value = message
+    scrapeStatus.value = status
+    return true
+  }
+
+  function cancelScrape() {
+    if (scrapeStatus.value !== 'running') return
+    scrapeGeneration.value++
+    scrapeStatus.value = 'cancelled'
+    scrapeError.value = ''
+  }
+
+  /** Clear scrape results; call when navigating back to step 2 so downstream state is fresh. */
+  function clearScrapeResults() {
+    scrapeGeneration.value++
+    scrapeStatus.value = 'idle'
+    scrapeError.value = ''
+    invoiceList.value = []
+    selectedInvoiceNumbers.value = new Set()
+  }
+
+  // ── Selection ─────────────────────────────────────────────────────────────
+
   function toggleSelectAll() {
     if (allSelected.value) {
       selectedInvoiceNumbers.value = new Set()
@@ -65,10 +113,7 @@ export const useEInvoiceImportStore = defineStore('einvoiceImport', () => {
     selectedInvoiceNumbers.value = next
   }
 
-  function setInvoiceList(list) {
-    invoiceList.value = list
-    selectedInvoiceNumbers.value = new Set()
-  }
+  // ── Full reset ────────────────────────────────────────────────────────────
 
   function reset() {
     currentStep.value = 1
@@ -81,41 +126,28 @@ export const useEInvoiceImportStore = defineStore('einvoiceImport', () => {
     invoiceStatus.value = EINVOICE_STATUS.ALL
     buyerTaxId.value = ''
     keyword.value = ''
+    scrapeGeneration.value = 0
+    scrapeStatus.value = 'idle'
+    scrapeError.value = ''
     invoiceList.value = []
     selectedInvoiceNumbers.value = new Set()
     importResult.value = null
     defaultAccountId.value = ''
     defaultCategoryId.value = ''
-    isScraping.value = false
     isImporting.value = false
-    errorMessage.value = ''
   }
 
   return {
     currentStep,
-    phone,
-    password,
-    rememberCredentials,
-    dateFrom,
-    dateTo,
-    selectedCarrier,
-    invoiceStatus,
-    buyerTaxId,
-    keyword,
-    invoiceList,
-    selectedInvoiceNumbers,
-    importResult,
-    isScraping,
-    isImporting,
-    errorMessage,
-    defaultAccountId,
-    defaultCategoryId,
-    selectedInvoices,
-    totalSelectedAmount,
-    allSelected,
-    toggleSelectAll,
-    toggleSelect,
-    setInvoiceList,
+    phone, password, rememberCredentials,
+    dateFrom, dateTo, selectedCarrier, invoiceStatus, buyerTaxId, keyword,
+    scrapeStatus, scrapeError,
+    invoiceList, selectedInvoiceNumbers,
+    importResult, defaultAccountId, defaultCategoryId,
+    isScraping, isImporting,
+    selectedInvoices, totalSelectedAmount, allSelected,
+    startScrape, commitScrapeResult, failScrape, cancelScrape, clearScrapeResults,
+    toggleSelectAll, toggleSelect,
     reset,
   }
 })

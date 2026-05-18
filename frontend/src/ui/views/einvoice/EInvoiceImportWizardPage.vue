@@ -8,13 +8,24 @@
       <span />
     </header>
 
-    <div class="step-indicator row">
-      <div
-        v-for="n in 4"
-        :key="n"
-        class="step-dot"
-        :class="{ active: currentStep >= n, current: currentStep === n }"
-      />
+    <div class="stage-track">
+      <template v-for="(stageKey, i) in STAGE_KEYS" :key="i">
+        <div
+          class="stage-step"
+          :class="{ done: currentStep > i + 1, current: currentStep === i + 1 }"
+        >
+          <div class="stage-circle">
+            <font-awesome-icon
+              v-if="currentStep > i + 1"
+              icon="fa-solid fa-check"
+              class="stage-check"
+            />
+            <span v-else>{{ i + 1 }}</span>
+          </div>
+          <span class="stage-name">{{ t(stageKey) }}</span>
+        </div>
+        <div v-if="i < 3" class="stage-connector" :class="{ done: currentStep > i + 1 }" />
+      </template>
     </div>
 
     <transition :name="transitionName" mode="out-in">
@@ -37,28 +48,38 @@ const { t } = useI18n()
 const router = useRouter()
 const store = useEInvoiceImportStore()
 
-const prevStep = ref(store.currentStep)
+const STAGE_KEYS = [
+  'einvoice.stage1',
+  'einvoice.stage2',
+  'einvoice.stage3',
+  'einvoice.stage4',
+]
+
 const transitionName = ref('slide-left')
 
 watch(
   () => store.currentStep,
   (next, prev) => {
     transitionName.value = next > prev ? 'slide-left' : 'slide-right'
-    prevStep.value = prev
   },
 )
 
 const currentStep = computed(() => store.currentStep)
-
 const STEP_COMPONENTS = [EInvoiceStep1Account, EInvoiceStep2Query, EInvoiceStep3Select, EInvoiceStep4Confirm]
 const currentStepComponent = computed(() => STEP_COMPONENTS[currentStep.value - 1])
 
 function handleBack() {
-  if (store.currentStep > 1) {
-    store.currentStep--
-  } else {
+  if (store.currentStep === 1) {
     store.reset()
     router.back()
+  } else if (store.currentStep === 3) {
+    store.clearScrapeResults()
+    store.currentStep = 2
+  } else if (store.currentStep === 4) {
+    store.importResult = null
+    store.currentStep = 3
+  } else {
+    store.currentStep--
   }
 }
 </script>
@@ -82,25 +103,72 @@ function handleBack() {
   margin: 0;
   font-weight: 700;
 }
-.step-indicator {
+
+/* Named stage track */
+.stage-track {
+  display: flex;
+  align-items: flex-start;
   justify-content: center;
-  gap: 8px;
-  padding: 12px;
+  padding: 14px 12px 10px;
 }
-.step-dot {
-  width: 8px;
-  height: 8px;
+.stage-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.stage-circle {
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+.stage-check {
+  font-size: 11px;
+}
+.stage-step.current .stage-circle {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+.stage-step.done .stage-circle {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface) 86%);
+  color: var(--primary);
+}
+.stage-name {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: color 0.2s;
+  text-align: center;
+}
+.stage-step.current .stage-name {
+  color: var(--primary);
+  font-weight: 600;
+}
+.stage-connector {
+  flex: 1;
+  height: 2px;
   background: var(--border);
+  margin-top: 12px;
+  min-width: 6px;
   transition: background 0.2s;
 }
-.step-dot.active {
+.stage-connector.done {
   background: var(--primary);
 }
-.step-dot.current {
-  width: 20px;
-  border-radius: 4px;
-}
+
+/* Slide transitions */
 .slide-left-enter-active,
 .slide-left-leave-active,
 .slide-right-enter-active,

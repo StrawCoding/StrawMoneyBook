@@ -183,7 +183,7 @@ const router = createRouter({
       path: '/einvoice-import',
       name: 'einvoice-import',
       component: () => import('@/ui/views/einvoice/EInvoiceImportWizardPage.vue'),
-      meta: { tab: 'features' },
+      meta: { tab: 'features', hideAppChrome: true },
     },
     {
       path: '/settings/ledgers',

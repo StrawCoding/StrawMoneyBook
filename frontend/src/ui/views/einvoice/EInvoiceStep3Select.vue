@@ -1,16 +1,35 @@
 <template>
   <div class="step-content stack">
-    <div v-if="store.isScraping" class="loading-block">
+
+    <!-- Idle / Running: spinner + cancel button -->
+    <div v-if="store.scrapeStatus === 'idle' || store.scrapeStatus === 'running'" class="fetch-running">
       <div class="spinner" />
-      <p>{{ t('einvoice.step3.scraping') }}</p>
+      <p class="fetch-label">{{ t('einvoice.step3.scraping') }}</p>
+      <button
+        v-if="store.scrapeStatus === 'running'"
+        class="btn-secondary btn-wide"
+        @click="handleCancel"
+      >
+        {{ t('einvoice.step3.cancel') }}
+      </button>
     </div>
 
-    <div v-else-if="store.errorMessage" class="error-block card panel">
-      <font-awesome-icon icon="fa-solid fa-triangle-exclamation" class="error-icon" />
-      <p>{{ store.errorMessage }}</p>
-      <button class="btn-secondary" @click="store.currentStep = 2">{{ t('einvoice.back') }}</button>
+    <!-- Error / timeout / cancelled states -->
+    <div v-else-if="isErrorState" class="status-block card panel">
+      <font-awesome-icon :icon="errorIcon" class="status-icon" :class="errorIconClass" />
+      <p class="status-title">{{ errorTitle }}</p>
+      <p v-if="store.scrapeError" class="status-detail">{{ store.scrapeError }}</p>
+      <div class="status-actions row">
+        <button class="btn-secondary" @click="handleBackToQuery">
+          {{ t('einvoice.step3.back_to_query') }}
+        </button>
+        <button class="btn-primary" @click="handleRetry">
+          {{ t('einvoice.step3.retry') }}
+        </button>
+      </div>
     </div>
 
+    <!-- Done: invoice list -->
     <template v-else>
       <div class="list-header card panel">
         <label class="select-all-row">
@@ -51,7 +70,7 @@
       </div>
 
       <div class="step-footer row">
-        <button class="btn-secondary" @click="goBack">{{ t('einvoice.back') }}</button>
+        <button class="btn-secondary" @click="handleBackToQuery">{{ t('einvoice.back') }}</button>
         <button
           class="btn-primary"
           :disabled="store.selectedInvoiceNumbers.size === 0"
@@ -65,7 +84,7 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useEInvoiceImportStore } from '@/ui/stores/einvoice-import.store.js'
 import { scrapeEInvoiceList, isEInvoiceAutomationSupported } from '@/services/einvoice/backend.js'
 import { useI18n } from '@/ui/services/i18n.service'
@@ -73,34 +92,22 @@ import { useI18n } from '@/ui/services/i18n.service'
 const { t } = useI18n()
 const store = useEInvoiceImportStore()
 
-function formatAmount(amount) {
-  return Number(amount).toLocaleString('zh-TW')
+// ── Scrape ────────────────────────────────────────────────────────────────────
+
+function classifyScrapeError(err) {
+  const code = err?.code ?? ''
+  if (code === 'einvoice_automation_canceled') return 'cancelled'
+  if (code.includes('timeout')) return 'timeout'
+  return 'failed'
 }
 
-function formatDate(ms) {
-  return new Date(ms).toLocaleDateString('zh-TW')
-}
-
-function goBack() {
-  store.setInvoiceList([])
-  store.currentStep = 2
-}
-
-onMounted(async () => {
-  store.errorMessage = ''
-  if (store.isScraping) {
-    console.log('[EInvoice] Step3: 已有抓取進行中，略過重複觸發')
-    return
-  }
-  if (store.invoiceList.length > 0) {
-    console.log('[EInvoice] Step3: 已有發票清單（', store.invoiceList.length, '筆），略過重新抓取')
-    return
-  }
-  store.isScraping = true
-  console.log('[EInvoice] Step3: 開始抓取發票 — 日期:', store.dateFrom, '~', store.dateTo)
+async function runScrape() {
+  const token = store.startScrape()
+  console.log('[EInvoice] Step3: 開始抓取 (token:', token, ')，日期:', store.dateFrom, '~', store.dateTo)
   try {
     if (!isEInvoiceAutomationSupported()) {
-      throw new Error(t('einvoice.error.not_supported', {}, '目前平台尚不支援電子發票自動抓取，敬請期待後續版本。'))
+      store.failScrape(token, t('einvoice.step3.status_not_supported'), 'failed')
+      return
     }
     const list = await scrapeEInvoiceList({
       phone: store.phone,
@@ -111,21 +118,91 @@ onMounted(async () => {
       buyerTaxId: store.buyerTaxId,
       keyword: store.keyword,
     })
-    console.log('[EInvoice] Step3: 抓取完成，共', list?.length ?? 0, '筆發票')
-    store.setInvoiceList(list ?? [])
+    const committed = store.commitScrapeResult(token, list ?? [])
+    if (committed) {
+      console.log('[EInvoice] Step3: 抓取完成，共', list?.length ?? 0, '筆發票')
+    } else {
+      console.log('[EInvoice] Step3: 抓取結果已過期，丟棄 (token:', token, ')')
+    }
   } catch (err) {
-    console.error('[EInvoice] Step3: 抓取失敗', err)
-    store.errorMessage = err?.message || t('einvoice.error.scrape_failed', {}, '抓取發票失敗，請重試')
-  } finally {
-    store.isScraping = false
+    const status = classifyScrapeError(err)
+    const committed = store.failScrape(token, err?.message || t('einvoice.error.scrape_failed'), status)
+    if (committed) {
+      console.error('[EInvoice] Step3: 抓取失敗 (', status, ')', err)
+    }
+  }
+}
+
+onMounted(async () => {
+  if (store.scrapeStatus === 'running') {
+    console.log('[EInvoice] Step3: 已有抓取進行中，略過重複觸發')
+    return
+  }
+  if (store.scrapeStatus === 'done') {
+    console.log('[EInvoice] Step3: 已有抓取結果 (', store.invoiceList.length, '筆)，略過重新抓取')
+    return
+  }
+  await runScrape()
+})
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+
+function handleCancel() {
+  store.cancelScrape()
+  console.log('[EInvoice] Step3: 使用者取消抓取')
+}
+
+async function handleRetry() {
+  console.log('[EInvoice] Step3: 使用者重試抓取')
+  await runScrape()
+}
+
+function handleBackToQuery() {
+  store.clearScrapeResults()
+  store.currentStep = 2
+}
+
+// ── Error state UI ─────────────────────────────────────────────────────────────
+
+const isErrorState = computed(() =>
+  ['failed', 'cancelled', 'timeout'].includes(store.scrapeStatus),
+)
+
+const errorTitle = computed(() => {
+  switch (store.scrapeStatus) {
+    case 'cancelled': return t('einvoice.step3.status_cancelled')
+    case 'timeout':   return t('einvoice.step3.status_timeout')
+    default:          return t('einvoice.step3.status_failed')
   }
 })
+
+const errorIcon = computed(() => {
+  if (store.scrapeStatus === 'cancelled') return 'fa-solid fa-xmark-circle'
+  if (store.scrapeStatus === 'timeout')   return 'fa-solid fa-clock'
+  return 'fa-solid fa-triangle-exclamation'
+})
+
+const errorIconClass = computed(() =>
+  store.scrapeStatus === 'cancelled' ? 'icon--muted' : 'icon--warning',
+)
+
+// ── Formatters ────────────────────────────────────────────────────────────────
+
+function formatAmount(amount) {
+  return Number(amount).toLocaleString('zh-TW')
+}
+
+function formatDate(ms) {
+  return new Date(ms).toLocaleDateString('zh-TW')
+}
 </script>
 
 <style scoped>
 .step-content { flex: 1; padding: 16px; gap: 12px; }
 .panel { padding: 14px; }
-.loading-block {
+
+/* Fetch running */
+.fetch-running {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -133,6 +210,7 @@ onMounted(async () => {
   flex: 1;
   gap: 16px;
   color: var(--text-secondary);
+  padding: 40px 24px;
 }
 .spinner {
   width: 36px;
@@ -143,15 +221,35 @@ onMounted(async () => {
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-.error-block {
+.fetch-label { font-size: 14px; margin: 0; }
+.btn-wide {
+  padding: 10px 24px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface-soft-accent);
+  color: var(--text);
+}
+
+/* Error / status block */
+.status-block {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   text-align: center;
-  color: var(--text-secondary);
+  padding: 28px 20px;
 }
-.error-icon { font-size: 28px; color: var(--warning); }
+.status-icon { font-size: 32px; }
+.icon--warning { color: var(--warning, #f59e0b); }
+.icon--muted   { color: var(--text-secondary); }
+.status-title  { font-size: 15px; font-weight: 700; margin: 0; }
+.status-detail { font-size: 12px; color: var(--text-secondary); margin: 0; }
+.status-actions { gap: 10px; width: 100%; margin-top: 6px; }
+
+/* Invoice list */
 .list-header { display: flex; justify-content: space-between; align-items: center; }
 .select-all-row { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
 .selected-summary { font-size: 12px; color: var(--primary); font-weight: 600; }
@@ -181,6 +279,8 @@ onMounted(async () => {
 .invoice-number { font-size: 11px; color: var(--text-secondary); margin: 2px 0 0; }
 .invoice-date { font-size: 11px; color: var(--text-secondary); margin: 0; }
 .invoice-amount { font-weight: 700; font-size: 15px; color: var(--primary); flex-shrink: 0; }
+
+/* Footer */
 .step-footer { padding: 0; gap: 12px; }
 .btn-primary, .btn-secondary {
   flex: 1;

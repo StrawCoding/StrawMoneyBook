@@ -1090,6 +1090,7 @@ UI composable 目錄：`src/ui/composables/`
 - 發票清單、全選/單選、已選金額彙總
 - **問題審查修復 (v1.0.22)**：`onMounted` 中 `store.errorMessage = ''` 移到 early-return 之前，修正 Step 4 匯入失敗後回到 Step 3 仍顯示錯誤畫面的問題；「上一步」改呼叫 `goBack()` 同時清空 `invoiceList`，修正回到 Step 2 修改查詢條件後 Step 3 仍顯示舊清單的問題。
 - **載具流程修復 (v1.0.24)**：`onMounted` 加入 `if (store.isScraping) return` 防護，避免快速來回切換步驟時觸發並發 scrape race condition；補充 console.log 記錄抓取開始/完成/失敗。
+- **SMB-209 (v1.2.14)**：刪除無名四點式舊精靈呈現，改為「帳號驗證 / 查詢條件 / 抓取發票 / 確認匯入」命名階段；抓取階段改由 `scrapeStatus` state machine 管理 idle / running / done / failed / cancelled / timeout，提供取消、重試、修改查詢條件按鈕與三語錯誤文案；`scrapeGeneration` token 會丟棄已取消或被新查詢取代的晚回結果，修改查詢條件時清空發票清單與選取狀態，避免新舊資料混用。
 
 #### `src/ui/views/einvoice/EInvoiceStep4Confirm.vue`
 - 匯入預覽、確認匯入、結果顯示

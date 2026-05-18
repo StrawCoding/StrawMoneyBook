@@ -1,6 +1,6 @@
 <template>
-  <div class="app-shell" :class="{ booting: isBooting, 'welcome-mode': showGuidedFlow }">
-    <header v-if="!isBooting && !showGuidedFlow" class="top-bar">
+  <div class="app-shell" :class="{ booting: isBooting, 'welcome-mode': showGuidedFlow, 'full-screen-route': hideAppChrome }">
+    <header v-if="!isBooting && !showGuidedFlow && !hideAppChrome" class="top-bar">
       <div class="title-wrap">
         <img class="brand-logo" :src="BRAND_LOGO_URL" alt="StrawMoneyBook logo" />
         <div class="brand-text">
@@ -9,7 +9,7 @@
       </div>
     </header>
 
-    <main class="page-container" :class="{ booting: isBooting, 'welcome-mode': showGuidedFlow }">
+    <main class="page-container" :class="{ booting: isBooting, 'welcome-mode': showGuidedFlow, 'full-screen-route': hideAppChrome }">
       <transition name="boot-overlay" appear>
         <section v-if="isBooting" class="boot-layer card">
           <img class="boot-logo" :src="BRAND_LOGO_URL" alt="StrawMoneyBook logo" />
@@ -38,7 +38,7 @@
     </main>
 
     <transition name="fade-scale" appear>
-      <BottomNav v-if="hasLedgers && !isBooting && !showGuidedFlow" />
+      <BottomNav v-if="hasLedgers && !isBooting && !showGuidedFlow && !hideAppChrome" />
     </transition>
     <ToastHost />
     <AppDialog
@@ -96,6 +96,7 @@ const isBooting = computed(() => isAppShellBooting({
   accountReady: accountStore.ready,
 }))
 const allowWithoutSetup = computed(() => Boolean(route.meta?.allowWithoutSetup))
+const hideAppChrome = computed(() => Boolean(route.meta?.hideAppChrome))
 const showWelcomePage = computed(() => shouldShowWelcomePage({
   ready: ledgerStore.ready,
   allowWithoutSetup: allowWithoutSetup.value,
@@ -137,6 +138,10 @@ const {
   overflow: hidden;
   padding-bottom: 0;
 }
+.app-shell.full-screen-route {
+  padding-top: 0;
+  padding-bottom: 0;
+}
 .page-container.booting {
   width: min(560px, calc(100vw - 24px));
 }
@@ -146,6 +151,9 @@ const {
   display: grid;
   align-items: center;
   overflow: hidden;
+}
+.page-container.full-screen-route {
+  min-height: 100dvh;
 }
 .route-stage {
   position: relative;

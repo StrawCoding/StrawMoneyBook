@@ -40,7 +40,7 @@
       <p v-if="importError" class="error-text">{{ importError }}</p>
 
       <div class="step-footer row">
-        <button class="btn-secondary" :disabled="store.isImporting" @click="store.currentStep = 3">{{ t('einvoice.back') }}</button>
+        <button class="btn-secondary" :disabled="store.isImporting" @click="goBack">{{ t('einvoice.back') }}</button>
         <button class="btn-primary" :disabled="store.isImporting" @click="handleImport">
           <span v-if="store.isImporting">{{ t('einvoice.step4.importing') }}</span>
           <span v-else>{{ t('einvoice.step4.confirm') }}</span>
@@ -112,6 +112,11 @@ async function handleImport() {
   } finally {
     store.isImporting = false
   }
+}
+
+function goBack() {
+  store.importResult = null
+  store.currentStep = 3
 }
 
 function handleFinish() {
