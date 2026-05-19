@@ -614,19 +614,26 @@ function resetFormForNextEntry() {
   model.amountMajor = 0
   fillDefaultOccurredAt()
   model.note = ''
-  model.isReimbursable = false
-  model.includeInBudget = true
-  model.includeInAnalysis = true
   model.exchangeRateMode = 'system'
   model.manualExchangeRateInput = ''
   showExtra.value = false
   addonRows.value = []
   if (model.type === 'transfer') {
+    model.isReimbursable = false
+    model.includeInBudget = true
+    model.includeInAnalysis = true
     ensureTransferAccounts()
     return
   }
   ensureDirectAccount()
-  model.categoryId = ensureCategoryIdByType(model.type, model.categoryId)
+  const nextCategoryId = ensureCategoryIdByType(model.type, model.categoryId)
+  if (nextCategoryId !== model.categoryId) {
+    model.categoryId = nextCategoryId
+    // watch for model.categoryId will call applyCategoryDefaults
+  } else {
+    // categoryId unchanged, watch won't fire, apply defaults manually
+    void applyCategoryDefaults(model.categoryId)
+  }
 }
 
 async function submit(options = {}) {
