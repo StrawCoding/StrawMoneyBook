@@ -117,7 +117,7 @@
             </strong>
           </div>
           <div class="trace-item-body">
-            <small v-if="item.maskedPhone" class="muted">{{ t('debug_page.key.einvoice_phone') }}: {{ item.maskedPhone }}</small>
+            <small v-if="item.maskedCarrierBarcode" class="muted">{{ t('debug_page.key.einvoice_carrier_barcode') }}: {{ item.maskedCarrierBarcode }}</small>
             <small v-if="item.dateFrom" class="muted">{{ t('debug_page.key.einvoice_date_from') }}: {{ item.dateFrom }}</small>
             <small v-if="item.dateTo" class="muted">{{ t('debug_page.key.einvoice_date_to') }}: {{ item.dateTo }}</small>
             <small class="muted">{{ t('debug_page.key.play_call_started') }}: {{ item.startedAt || '-' }}</small>

@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { isOriginAllowed, sendJson } from './collab/http.js'
+import { getClientIp, isOriginAllowed, sendJson } from './collab/http.js'
 import { resolveRouteHandler } from './routes/route-table.js'
 
 const HOST = String(process.env.HOST ?? '0.0.0.0').trim() || '0.0.0.0'
@@ -9,6 +9,8 @@ const GLOBAL_RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.GLOBAL_RAT
 const GLOBAL_RATE_LIMIT_MAX_REQUESTS = Math.max(20, Number(process.env.GLOBAL_RATE_LIMIT_MAX_REQUESTS ?? 180) || 0)
 const AUTH_RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS ?? 10 * 60_000) || 0)
 const AUTH_RATE_LIMIT_MAX_REQUESTS = Math.max(5, Number(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS ?? 40) || 0)
+const EINVOICE_RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.EINVOICE_RATE_LIMIT_WINDOW_MS ?? 10 * 60_000) || 0)
+const EINVOICE_RATE_LIMIT_MAX_REQUESTS = Math.max(3, Number(process.env.EINVOICE_RATE_LIMIT_MAX_REQUESTS ?? 12) || 0)
 const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS ?? '').trim()
 
 const rateLimitBuckets = new Map()
@@ -32,18 +34,20 @@ function ensureNodeStyleResponse(res) {
   return res
 }
 
-function getClientIp(req) {
-  const forwardedFor = String(req.headers?.['x-forwarded-for'] ?? '').split(',')[0].trim()
-  const socketIp = String(req.socket?.remoteAddress ?? '').trim()
-  return forwardedFor || socketIp || 'unknown'
-}
-
 function getRateLimitPolicy(pathname) {
   if (pathname.startsWith('/api/auth')) {
     return {
       key: 'auth',
       maxRequests: AUTH_RATE_LIMIT_MAX_REQUESTS,
       windowMs: AUTH_RATE_LIMIT_WINDOW_MS,
+    }
+  }
+
+  if (pathname.startsWith('/api/einvoice')) {
+    return {
+      key: 'einvoice',
+      maxRequests: EINVOICE_RATE_LIMIT_MAX_REQUESTS,
+      windowMs: EINVOICE_RATE_LIMIT_WINDOW_MS,
     }
   }
 

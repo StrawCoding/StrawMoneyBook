@@ -4,7 +4,6 @@ import assert from 'node:assert/strict'
 import {
   createEInvoiceError,
   isEInvoiceError,
-  EINVOICE_STATUS,
   EINVOICE_PLATFORM,
 } from '../src/services/einvoice/shared.js'
 
@@ -50,18 +49,9 @@ test('EINVOICE_PLATFORM is the expected constant', () => {
   assert.equal(EINVOICE_PLATFORM, 'einvoice')
 })
 
-test('EINVOICE_STATUS is frozen and contains expected keys', () => {
-  assert.ok(Object.isFrozen(EINVOICE_STATUS))
-  assert.equal(EINVOICE_STATUS.ALL, 'all')
-  assert.equal(EINVOICE_STATUS.NOT_DONATED, 'not_donated')
-  assert.equal(EINVOICE_STATUS.DONATED, 'donated')
-  assert.equal(EINVOICE_STATUS.VOIDED, 'voided')
-})
-
-test('isEInvoiceAutomationSupported returns false in non-native context (Node.js test environment)', async () => {
-  // In the Node.js test environment (non-Capacitor), isEInvoiceAutomationRuntimeSupported()
-  // returns false because Capacitor.isNativePlatform() is false.
-  // On Android native builds it returns true, enabling the EInvoiceAutomation plugin flow.
+test('shared constants no longer expose the old invoice status filter state', async () => {
   const { EINVOICE_PLATFORM: p } = await import('../src/services/einvoice/shared.js')
   assert.equal(typeof p, 'string')
+  const shared = await import('../src/services/einvoice/shared.js')
+  assert.equal(Object.hasOwn(shared, 'EINVOICE_STATUS'), false)
 })

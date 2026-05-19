@@ -4,29 +4,32 @@
       <h2 class="step-heading">{{ t('einvoice.step1.title') }}</h2>
       <p class="step-desc">{{ t('einvoice.step1.desc') }}</p>
 
-      <label class="field-label">{{ t('einvoice.step1.phone') }}</label>
+      <label class="field-label">{{ t('einvoice.step1.carrier_barcode') }}</label>
       <input
-        v-model="store.phone"
+        v-model="store.carrierBarcode"
         class="field-input"
-        type="tel"
-        inputmode="tel"
-        :placeholder="t('einvoice.step1.phone_placeholder')"
-        autocomplete="tel"
+        type="text"
+        inputmode="text"
+        autocomplete="username"
+        :placeholder="t('einvoice.step1.carrier_barcode_placeholder')"
+        @input="normalizeBarcode"
       />
+      <p class="field-hint">{{ t('einvoice.step1.carrier_barcode_hint') }}</p>
 
-      <label class="field-label mt">{{ t('einvoice.step1.password') }}</label>
+      <label class="field-label mt">{{ t('einvoice.step1.verification_code') }}</label>
       <div class="password-wrap">
         <input
-          v-model="store.password"
+          v-model="store.verificationCode"
           class="field-input"
-          :type="showPassword ? 'text' : 'password'"
-          :placeholder="t('einvoice.step1.password_placeholder')"
+          :type="showCode ? 'text' : 'password'"
           autocomplete="current-password"
+          :placeholder="t('einvoice.step1.verification_code_placeholder')"
         />
-        <button class="eye-btn" @click="showPassword = !showPassword">
-          <font-awesome-icon :icon="showPassword ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'" />
+        <button type="button" class="eye-btn" @click="showCode = !showCode">
+          <font-awesome-icon :icon="showCode ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'" />
         </button>
       </div>
+      <p class="field-hint">{{ t('einvoice.step1.verification_code_hint') }}</p>
 
       <label class="remember-row mt">
         <input v-model="store.rememberCredentials" type="checkbox" />
@@ -34,13 +37,12 @@
       </label>
 
       <p v-if="savedHint" class="saved-hint">{{ t('einvoice.step1.credential_loaded') }}</p>
-
       <p v-if="error" class="error-text">{{ error }}</p>
     </div>
 
     <div class="step-footer row">
-      <button class="btn-secondary" @click="handleCancel">{{ t('einvoice.back') }}</button>
-      <button class="btn-primary" :disabled="!canProceed" @click="handleNext">
+      <button class="btn-secondary" type="button" @click="handleCancel">{{ t('einvoice.back') }}</button>
+      <button class="btn-primary" type="button" :disabled="!canProceed" @click="handleNext">
         {{ t('einvoice.next') }}
       </button>
     </div>
@@ -58,17 +60,28 @@ const { t } = useI18n()
 const router = useRouter()
 const store = useEInvoiceImportStore()
 
-const showPassword = ref(false)
+const showCode = ref(false)
 const savedHint = ref(false)
 const error = ref('')
 
-const canProceed = computed(() => store.phone.trim().length > 0 && store.password.trim().length > 0)
+const BARCODE_RE = /^\/[A-Za-z0-9]{7}$/
+const canProceed = computed(
+  () => BARCODE_RE.test(store.carrierBarcode.trim()) && store.verificationCode.trim().length >= 4,
+)
+
+function normalizeBarcode() {
+  // Auto-prepend '/' if user omits it
+  const raw = store.carrierBarcode.replace(/\s/g, '')
+  if (raw && !raw.startsWith('/')) {
+    store.carrierBarcode = `/${raw}`
+  }
+}
 
 onMounted(async () => {
   const cred = await loadEInvoiceCredential()
   if (cred) {
-    store.phone = cred.phone
-    store.password = cred.password
+    store.carrierBarcode = cred.carrierBarcode ?? ''
+    store.verificationCode = cred.verificationCode ?? ''
     savedHint.value = true
   }
 })
@@ -83,7 +96,7 @@ async function handleNext() {
   if (!canProceed.value) return
   if (store.rememberCredentials) {
     try {
-      await saveEInvoiceCredential(store.phone.trim(), store.password)
+      await saveEInvoiceCredential(store.carrierBarcode.trim(), store.verificationCode)
     } catch {
       error.value = t('einvoice.step1.save_error', {}, '儲存帳號失敗')
       return
@@ -114,6 +127,7 @@ async function handleNext() {
   color: var(--text);
   box-sizing: border-box;
 }
+.field-hint { font-size: 11px; color: var(--text-secondary); margin: 5px 0 0; }
 .password-wrap { position: relative; }
 .password-wrap .field-input { padding-right: 44px; }
 .eye-btn {

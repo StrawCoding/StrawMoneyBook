@@ -824,20 +824,20 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 
 ## 電子發票匯入（E-Invoice Import）
 
-**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）；帳密 IV 修正 v1.0.13（SMB-174）；自動化流程可見化 + 失敗診斷分類 v1.0.15（SMB-174 Restart）；驗證碼讀取與載具清單資料偵測修正 v1.0.16（SMB-179）；載具流程四大問題修復 v1.0.17；查詢頁穩定修復 v1.0.18（SMB-180）；UI 問題審查修復 v1.0.22（SMB-165 審查）；載具計畫重設計 v1.2.14（SMB-209）
-**狀態**：Android 原生插件保留 WebView 自動化流程，但前端匯入計畫已重新設計為命名階段與狀態機；抓取可取消、重試，失敗 / 逾時 / 取消都有明確回饋，晚回的舊抓取結果會被丟棄。穩定正式匯入仍應改接財政部電子發票官方 API 與後端代理。
+**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）；帳密 IV 修正 v1.0.13（SMB-174）；自動化流程可見化 + 失敗診斷分類 v1.0.15（SMB-174 Restart）；驗證碼讀取與載具清單資料偵測修正 v1.0.16（SMB-179）；載具流程四大問題修復 v1.0.17；查詢頁穩定修復 v1.0.18（SMB-180）；UI 問題審查修復 v1.0.22（SMB-165 審查）；載具計畫重設計 v1.2.14（SMB-209）；刪除舊 WebView 方案並改接官方 API proxy v1.2.16（SMB-209 Restart）
+**狀態**：前端匯入計畫已重新設計為命名階段與狀態機，並停用舊 Android WebView 自動化入口；查詢改由 StrawMoneyBook backend `/api/einvoice/query-invoices` 代理財政部電子發票官方 API。查詢可取消、重試，失敗 / 逾時 / 取消都有明確回饋，晚回的舊查詢結果會被丟棄，避免新舊邏輯並存；backend 端需設定 `EINVOICE_APP_ID`、`EINVOICE_API_KEY`、`EINVOICE_CLIENT_SHARED_KEY`，前端則以 `VITE_EINVOICE_CLIENT_SHARED_KEY` 送出 `X-Straw-Client-Key`，並有電子發票專用 rate limit、日期 / 查詢碼驗證與過多頁數防截斷。
 
 ### 功能說明
-透過「帳號驗證 → 查詢條件 → 抓取發票 → 確認匯入」命名階段，讓使用者輸入財政部電子發票平台（einvoice.nat.gov.tw）帳號、設定查詢條件、抓取並選取發票後批量匯入至 StrawMoneyBook 帳本。
+透過「載具設定 → 查詢條件 → 查詢發票 → 確認匯入」命名階段，讓使用者輸入手機條碼與查詢碼、設定日期區間、查詢並選取發票後批量匯入至 StrawMoneyBook 帳本。查詢端不再依賴驗證碼 OCR 或嵌入式 WebView，而是由 backend 以 `cardNo / cardEncrypt / startDate / endDate` 呼叫財政部電子發票 API。
 
 ### 資料庫
-- `einvoice_credentials`：加密儲存手機號碼與密碼（AES-256-GCM + PBKDF2），手機號碼與密碼各自保存對應 IV，避免記住帳號後密碼無法正確還原
+- `einvoice_credentials`：加密儲存手機條碼與查詢碼（AES-256-GCM + PBKDF2），條碼與查詢碼各自保存對應 IV，避免記住載具資料後無法正確還原
 - `einvoice_invoice_imports`：發票匯入記錄，`invoice_number` UNIQUE 防止重複匯入
 
 ### 精靈步驟
-1. **帳號驗證**：輸入手機號碼/密碼，可勾選「記住帳號（加密儲存）」，表單區塊使用自然高度排列，避免手機畫面出現過多空白
-2. **查詢條件**：日期區間（預設近 3 個月）、發票狀態、買方統編、品名關鍵字；返回修改時會清除下游抓取結果與選取狀態
-3. **抓取發票**：以狀態機顯示 running / done / failed / cancelled / timeout；抓取中可取消，失敗、逾時與取消可重試或回到查詢條件；`scrapeGeneration` token 防止已取消或舊查詢的晚回結果覆蓋新資料
+1. **載具設定**：輸入手機條碼 / 查詢碼，可勾選「記住載具資料（加密儲存）」，表單區塊使用自然高度排列，避免手機畫面出現過多空白
+2. **查詢條件**：日期區間（預設最近 62 天，與 backend 單次查詢上限一致，避免預設值直接觸發 `date_range_too_large`）；返回修改時會清除下游查詢結果與選取狀態。舊方案的發票狀態、買方統編、品名關鍵字篩選已移除，避免前端保留官方 WebView 查詢頁欄位假象
+3. **查詢發票**：以狀態機顯示 running / done / failed / cancelled / timeout；查詢中可取消，失敗、逾時與取消可重試或回到查詢條件；`scrapeGeneration` token 防止已取消或舊查詢的晚回結果覆蓋新資料
 4. **確認匯入**：預覽待匯入清單，選填同步建立支出交易，確認後寫入資料庫
 
 ### 安全設計
@@ -845,55 +845,11 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 - 加密金鑰衍生自裝置 UUID（localStorage 綁定，首次產生後固定）
 - 每次加密使用隨機 12-byte IV
 
-### Android 原生自動化（SMB-168, v1.0.8）
-- `EInvoiceAutomation` Capacitor 插件（`registerPlugin('EInvoiceAutomation')`）透過隱藏 WebView 自動操作 `einvoice.nat.gov.tw`
-- 登入流程：選取手機條碼分頁 → 填入手機號碼/密碼 → CAPTCHA OCR（TesseractBridge，numeric 模式，4 位數字）→ 送出 → 最多重試 3 次
-- 查詢流程：填入日期區間（轉換為民國年格式 YYYmmdd）、發票狀態、統編、品名 → 解析多頁發票清單 → 回傳 JSON
-- 發票欄位：`invoiceNumber`、`amount`、`invoiceDate`（timestamp ms）、`merchantName`、`carrierName`、`buyerTaxId`
-- `isEInvoiceAutomationSupported()` 在 Android native 回傳 `true`，其他平台（Web、iOS）回傳 `false`
-- **SMB-166 (v1.0.8)**：Step 2 加入平台守衛 `canProceed = platformSupported && dateRange_valid`；非 Android 平台「下一步」禁用並顯示開發中提示
-- **SMB-170 (v1.0.9)**：修正 `evaluateJavascript` 在 UI thread 內等待 callback 的死鎖風險，改由背景 thread 等待結果，避免每次腳本執行都逾時並導致自動化流程失敗；登入頁與查詢頁載入後也會偵測 Cloudflare / 防自動化 challenge，命中時回傳 `einvoice_platform_challenge` 與可診斷訊息；Activity 被取消且沒有錯誤 payload 時改回傳 `einvoice_automation_canceled`，避免前端只看到通用 `E-invoice automation failed`。
-- **SMB-172**：Debug Page 新增「載具抓取紀錄」區塊，透過 `einvoice-debug.service.js` 追蹤每次 `scrape`（抓取）和 `import`（匯入）操作；記錄欄位包含手機號碼（前 4 碼可見其餘遮蔽）、查詢日期區間、操作狀態（running / ok / error）、耗時、抓取發票數、匯入 / 跳過 / 失敗筆數及錯誤代碼與訊息；i18n 同步新增 zh-TW / en / ja key；匯出 debug log 的 JSON payload 也加入 `einvoice_calls` 欄位。
-- **SMB-173 (v1.0.9)**：Android WebView 自動化改用財政部電子發票整合服務平台目前的登入與查詢路徑：`/accounts/login` 與 `/portal/btc/mobile/btc502w/search`；舊的 `/btc502w/BTCIndex`、`/btc502w/BTCInvController` 不再作為入口 URL，避免官方路由變更時直接落到 404 或錯誤頁。官方登入頁的手機條碼 / 載具模式選取也改為掃描文字、label、radio / checkbox、select option 與 data/aria 屬性，填入手機號碼、密碼與驗證碼時會觸發完整 input/change/keyup/blur 事件；找不到欄位時回傳 `phone_missing`、`password_missing` 或 `captcha_missing` 等診斷原因。
-- **SMB-174 (v1.0.13)**：修正「記住帳號」的密碼 IV 遺失問題；手機號碼與密碼現在會分別保存 AES-GCM IV，既有資料庫透過 migration 033 補上 `password_iv` 欄位，新儲存的憑證可在下一次進入精靈時正確還原並帶入 Android 自動化流程。
-- **SMB-174 Restart (v1.0.15)**：自動化流程徹底重做為「混合自動 + 手動驗證碼 fallback」，保證能完成登入。回應 Tester「我沒有看到他有輸入」與「請讓他能完整完美的工作」。
-- **SMB-179 (v1.0.16)**：驗證碼讀取不再只依賴 `<img>` canvas data URL；若 canvas 因站台保護或背景圖呈現而讀不到，會改由 Android WebView 可見區域裁切驗證碼元素做 OCR，並把 Tesseract numeric mode 收斂成純數字白名單與多組放大 / 灰階 / 高對比 / 二值化前處理。登入後若站台跳到「載具清單資料」或新版發票結果頁，也會以頁面文字、發票號碼 pattern、`role=row` / card / list 結構偵測與解析，不再只吃舊 `invTable` selector，且解析時避免把 8 位買方統編誤判成發票金額。
-- **SMB-180 (v1.0.18)**：登入成功後進入 btc502w 查詢頁時，`fetchInvoices` 會對查詢表單最多輪詢 10 秒；`buildFillQueryFormScript` 優先鎖定 `btc502wQ.qryDateS`、`btc502wQ.qryDateE`、`btc502wQ.invStatus`、`btc502wQ.buyerBan`、`btc502wQ.keyword` 欄位，表單尚未渲染時回 `false` 讓 Java 重試，已在結果頁時則維持直接成功。若最後仍找不到表單，會拋 `einvoice_query_form_missing` 並附上當前 URL、title 與頁面摘要，協助判斷平台改版、登入失效或跳轉錯頁。
-
-  **新流程（5 階段，狀態列即時顯示）**：
-  1. `正在開啟電子發票平台…` — `loadUrl(LOGIN_URL)` 並偵測 Cloudflare 挑戰
-  2. `選取手機條碼載具…` — `selectMobileCarrier` + `waitForMobileCarrierLoginFormStable`
-  3. `自動填入帳號與密碼…` — 新 `buildFillCredentialsOnlyScript()` 只填手機/密碼，不送出、不觸碰驗證碼，使用者可即時確認
-  4. `自動辨識驗證碼…（嘗試 1/2 → 2/2）` — OCR + `buildSubmitLoginScript`，失敗則重整驗證碼再試（最多 `OCR_MAX_ATTEMPTS=2` 次）
-  5. **若 OCR 仍失敗 → 手動模式**：`驗證碼自動辨識失敗，請看下方驗證碼，輸入後按登入按鈕`。重整驗證碼、清空驗證碼欄位（`buildClearCaptchaInputScript`）、聚焦驗證碼欄位並 scrollIntoView（`buildFocusCaptchaInputScript`），等使用者親自輸入並按平台登入按鈕；偵測到 URL 離開 `/accounts/login` 即 `登入成功，正在抓取發票…` 並繼續抓取流程。
-
-  **核心元件**：
-  - `EInvoiceAutomationActivity`：移除 `setAlpha(0.01f)`，WebView 全可見、白底；頂部說明列為動態 `TextView statusTitle` + 取消鈕，新增 `postStatus(String)` 透過 `mainHandler.post` 從背景 thread 安全更新；`AUTOMATION_TIMEOUT_MS` 從 120s 延長到 180s 以容納手動 captcha 等待。`onDestroy` 一併清空 `statusTitle` 避免回呼到已釋放 view。
-  - `EInvoiceAutomation`：常數重整為 `OCR_MAX_ATTEMPTS=2 / AUTO_LOGIN_WAIT_MS=12000 / MANUAL_LOGIN_WAIT_MS=90000`；`query()` 多載新增 `Consumer<String> statusUpdater`；`BrowserSession` 持有 `statusUpdater` 並提供 `setStatus(String)`；`performLogin` 重寫為自動 + 手動 fallback；`waitForLoginSuccess` 改接受 `timeoutMs` 參數，靈活控制自動/手動兩段等待時間；`isFillCredentialsResultSuccess` / `describeFillCredentialsFailure` 提供 fill 階段的成功/失敗判定。`classifyLoginFailure` 仍保留並依舊區分 `einvoice_captcha_image_missing` / `einvoice_captcha_recognition_failed` / `einvoice_login_failed`（附帶 `buildPageErrorDetailScript` 擷取的站台原文錯誤）。
-  - 新 JS scripts：
-    - `buildFillCredentialsOnlyScript(phone, password)` — 只填手機/密碼，回傳 `{ filled, reason, missing }`，不點 submit、不觸碰驗證碼
-    - `buildClearCaptchaInputScript()` — 清空驗證碼欄位（OCR 失敗時讓使用者輸入新值不會被舊值困擾）
-    - `buildFocusCaptchaInputScript()` — `scrollIntoView` + `focus` + `select` 引導使用者輸入
-
-  **測試**：
-  - Java 單元測試新增 `fillCredentialsOnlyScriptFillsPhoneAndPasswordWithoutSubmitting`、`clearCaptchaInputScriptOnlyResetsCaptchaFieldValue`、`focusCaptchaInputScriptScrollsAndFocusesCaptchaField`、`isFillCredentialsResultSuccessAcceptsBooleanTrueAndRejectsNonJsonObjectValues`、`hybridFlowTimingConstantsAreReasonableForUserManualCaptcha`，加上原本的 5 個 `pageErrorDetailScript*` / `classifyLoginFailure*` 共 10 個新測試。
-  - `simulate-einvoice-login-flow.mjs` 加 Step 6A（站台錯誤擷取）、Step 8（自動填帳密不送出 / 不觸碰驗證碼）、Step 9（手動模式 focus/clear），共 32 項全通過。
-
-- **v1.0.17（載具流程四大問題修復）**：
-  - **問題 1：OCR 識別失敗**
-    - `TesseractBridge.recognizeSegmentedCaptcha`：分段識別失敗時改為放大 2x 後 PSM_SINGLE_CHAR 重試，仍失敗才放棄，提升低品質驗證碼的識別率
-    - `EInvoiceAutomation.selectBestCandidate`：同分時以原始置信度作 tie-breaker，加入 Log 輸出協助追查
-    - `EInvoiceAutomation.recognizeNumericCaptcha`：Bitmap variants 在 `try/finally` 中回收，修復長時間執行時的記憶體洩漏
-  - **問題 2：跳轉發票頁後出現「找不到帳號密碼填寫處」**
-    - `waitForMobileCarrierLoginFormStable`：8 秒後表單完全未出現時直接拋出 `einvoice_login_form_missing`（附帶載具快照與表單快照），而非靜默繼續讓後續 fill 腳本在未就緒表單上執行；表單部分可見時額外等 2 秒
-    - `buildFillCredentialsOnlyScript`：填入失敗時在回傳物件附帶 `formDiag`（當前頁面 URL + 可見 input 列表），方便排查平台 DOM 變動
-    - `describeFillCredentialsFailure`：從 `formDiag.url` 讀取頁面 URL 加入錯誤訊息
-  - **問題 3：未到達發票頁面卻顯示「無任何發票」**
-    - `fetchInvoices` 的 `waitForResults` 30 秒超時後拋出 `einvoice_query_results_timeout`（附帶當前頁面 URL / 標題），而非靜默返回空陣列使前端誤顯空狀態
-    - `EInvoiceStep3Select.vue`：`onMounted` 中 `isEInvoiceAutomationSupported()` 判斷移入 try 區塊，確保 `isScraping` 在所有路徑（含平台不支援）都由 `finally` 正確重置為 false
-  - **問題 4：金額解析誤吃買方統編**
-    - `buildParseInvoiceListScript` 中的 `parseAmount`：8 位數（統編格式）無條件排除，不受 `amountLabel` 影響，避免「金額 NT\$xxx 買方統編 12345678」類型的行誤把統編解析為金額
-  - **測試**：Java 單元測試新增 `fillCredentialsFailureScriptIncludesFormDiagnostics`、`parseAmountScriptUnconditionallyExcludesEightDigitNumbers`、`waitForResultsTimeoutErrorCodeIsCorrect`；`simulate-einvoice-login-flow.mjs` 新增 Step 11（空白頁 waitForResults）、Step 12（含金額標籤時統編不誤判），全套 41/41 通過
+### 舊 Android 原生自動化（SMB-168～SMB-180；SMB-209 已刪除）
+- SMB-209 以「刪除重來」為前提移除電子發票 Android WebView / OCR 自動化方案：不再註冊 `EInvoiceAutomation` Capacitor 插件、不再宣告電子發票 Activity，並刪除相關 Java 實作、Java 測試與登入模擬腳本。
+- `src/services/einvoice/native-automation.js` 僅保留 no-op stub，固定回傳不支援並指向 backend API 流程；產品查詢路徑不再含官方網頁登入、CAPTCHA OCR、手動驗證碼 fallback 或舊查詢頁 DOM 解析。
+- 新查詢路徑：frontend `scrapeEInvoiceList()` → backend `/api/einvoice/query-invoices` → 財政部電子發票 API；使用手機條碼 `cardNo`、查詢碼 `cardEncrypt`、日期區間與 `onlyWinningInv` 查詢，回傳標準化發票清單。
+- Debug trace 改記錄遮罩後的手機條碼 `maskedCarrierBarcode`，不再保存或顯示舊手機號碼 / 密碼欄位。
 
 - **v1.2.13（SMB-165 匯入交易建立）**：Step 4 新增可選的「同步建立支出交易」區塊；使用者可在確認匯入前選取記帳帳戶與支出分類，選取後每筆匯入發票將依發票金額（×100 換算 amountMinor）與日期自動建立 `einvoice` 來源的支出交易，並將交易 ID 寫入 `einvoice_invoice_imports.transaction_id`；未選帳戶 / 分類時維持舊行為（僅儲存匯入紀錄，transaction_id 為 null）；i18n 同步新增 `einvoice.step4.create_tx_label` 等 7 個三語 key；新增 5 個單元測試覆蓋交易建立路徑（transactionId 正確、createExpense 失敗進入 failed、amountMinor 換算、重複發票不呼叫 createExpense）。
 

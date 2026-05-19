@@ -7,10 +7,10 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
-function maskPhone(phone) {
-  const p = normalizeText(phone)
-  if (p.length < 4) return p
-  return p.slice(0, 4) + '****'
+function maskCarrierBarcode(carrierBarcode) {
+  const barcode = normalizeText(carrierBarcode)
+  if (barcode.length < 4) return barcode
+  return barcode.slice(0, 4) + '****'
 }
 
 function cloneEInvoiceTraceEntry(entry) {
@@ -18,7 +18,7 @@ function cloneEInvoiceTraceEntry(entry) {
   return {
     id: normalizeText(entry.id),
     operation: normalizeText(entry.operation),
-    maskedPhone: normalizeText(entry.maskedPhone),
+    maskedCarrierBarcode: normalizeText(entry.maskedCarrierBarcode),
     dateFrom: normalizeText(entry.dateFrom),
     dateTo: normalizeText(entry.dateTo),
     startedAt: normalizeText(entry.startedAt),
@@ -56,7 +56,7 @@ function beginEInvoiceTrace(operation, meta = {}) {
   const entry = {
     id: `einvoice_trace_${nowMs}_${einvoiceTraceSeq++}`,
     operation: normalizeText(operation) || 'unknown',
-    maskedPhone: maskPhone(meta.phone),
+    maskedCarrierBarcode: maskCarrierBarcode(meta.carrierBarcode),
     dateFrom: normalizeText(meta.dateFrom),
     dateTo: normalizeText(meta.dateTo),
     startedAt: new Date(nowMs).toISOString(),

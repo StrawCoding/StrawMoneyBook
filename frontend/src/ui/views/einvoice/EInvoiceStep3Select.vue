@@ -8,6 +8,7 @@
       <button
         v-if="store.scrapeStatus === 'running'"
         class="btn-secondary btn-wide"
+        type="button"
         @click="handleCancel"
       >
         {{ t('einvoice.step3.cancel') }}
@@ -20,10 +21,10 @@
       <p class="status-title">{{ errorTitle }}</p>
       <p v-if="store.scrapeError" class="status-detail">{{ store.scrapeError }}</p>
       <div class="status-actions row">
-        <button class="btn-secondary" @click="handleBackToQuery">
+        <button class="btn-secondary" type="button" @click="handleBackToQuery">
           {{ t('einvoice.step3.back_to_query') }}
         </button>
-        <button class="btn-primary" @click="handleRetry">
+        <button class="btn-primary" type="button" @click="handleRetry">
           {{ t('einvoice.step3.retry') }}
         </button>
       </div>
@@ -70,9 +71,10 @@
       </div>
 
       <div class="step-footer row">
-        <button class="btn-secondary" @click="handleBackToQuery">{{ t('einvoice.back') }}</button>
+        <button class="btn-secondary" type="button" @click="handleBackToQuery">{{ t('einvoice.back') }}</button>
         <button
           class="btn-primary"
+          type="button"
           :disabled="store.selectedInvoiceNumbers.size === 0"
           @click="store.currentStep = 4"
         >
@@ -86,7 +88,7 @@
 <script setup>
 import { computed, onMounted } from 'vue'
 import { useEInvoiceImportStore } from '@/ui/stores/einvoice-import.store.js'
-import { scrapeEInvoiceList, isEInvoiceAutomationSupported } from '@/services/einvoice/backend.js'
+import { scrapeEInvoiceList } from '@/services/einvoice/backend.js'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const { t } = useI18n()
@@ -103,43 +105,36 @@ function classifyScrapeError(err) {
 
 async function runScrape() {
   const token = store.startScrape()
-  console.log('[EInvoice] Step3: 開始抓取 (token:', token, ')，日期:', store.dateFrom, '~', store.dateTo)
+  console.log('[EInvoice] Step3: 開始查詢 (token:', token, ')，日期:', store.dateFrom, '~', store.dateTo)
   try {
-    if (!isEInvoiceAutomationSupported()) {
-      store.failScrape(token, t('einvoice.step3.status_not_supported'), 'failed')
-      return
-    }
     const list = await scrapeEInvoiceList({
-      phone: store.phone,
-      password: store.password,
+      carrierBarcode: store.carrierBarcode,
+      verificationCode: store.verificationCode,
       dateFrom: store.dateFrom,
       dateTo: store.dateTo,
-      invoiceStatus: store.invoiceStatus,
-      buyerTaxId: store.buyerTaxId,
-      keyword: store.keyword,
     })
     const committed = store.commitScrapeResult(token, list ?? [])
     if (committed) {
-      console.log('[EInvoice] Step3: 抓取完成，共', list?.length ?? 0, '筆發票')
+      console.log('[EInvoice] Step3: 查詢完成，共', list?.length ?? 0, '筆發票')
     } else {
-      console.log('[EInvoice] Step3: 抓取結果已過期，丟棄 (token:', token, ')')
+      console.log('[EInvoice] Step3: 查詢結果已過期，丟棄 (token:', token, ')')
     }
   } catch (err) {
     const status = classifyScrapeError(err)
     const committed = store.failScrape(token, err?.message || t('einvoice.error.scrape_failed'), status)
     if (committed) {
-      console.error('[EInvoice] Step3: 抓取失敗 (', status, ')', err)
+      console.error('[EInvoice] Step3: 查詢失敗 (', status, ')', err)
     }
   }
 }
 
 onMounted(async () => {
   if (store.scrapeStatus === 'running') {
-    console.log('[EInvoice] Step3: 已有抓取進行中，略過重複觸發')
+    console.log('[EInvoice] Step3: 已有查詢進行中，略過重複觸發')
     return
   }
   if (store.scrapeStatus === 'done') {
-    console.log('[EInvoice] Step3: 已有抓取結果 (', store.invoiceList.length, '筆)，略過重新抓取')
+    console.log('[EInvoice] Step3: 已有查詢結果 (', store.invoiceList.length, '筆)，略過重新查詢')
     return
   }
   await runScrape()
@@ -149,11 +144,11 @@ onMounted(async () => {
 
 function handleCancel() {
   store.cancelScrape()
-  console.log('[EInvoice] Step3: 使用者取消抓取')
+  console.log('[EInvoice] Step3: 使用者取消查詢')
 }
 
 async function handleRetry() {
-  console.log('[EInvoice] Step3: 使用者重試抓取')
+  console.log('[EInvoice] Step3: 使用者重試查詢')
   await runScrape()
 }
 
@@ -177,7 +172,7 @@ const errorTitle = computed(() => {
 })
 
 const errorIcon = computed(() => {
-  if (store.scrapeStatus === 'cancelled') return 'fa-solid fa-xmark-circle'
+  if (store.scrapeStatus === 'cancelled') return 'fa-solid fa-circle-xmark'
   if (store.scrapeStatus === 'timeout')   return 'fa-solid fa-clock'
   return 'fa-solid fa-triangle-exclamation'
 })

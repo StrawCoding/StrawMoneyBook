@@ -1,31 +1,25 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { EINVOICE_STATUS } from '@/services/einvoice/shared.js'
 
 export const useEInvoiceImportStore = defineStore('einvoiceImport', () => {
   // ── Wizard navigation ─────────────────────────────────────────────────────
   const currentStep = ref(1)
 
-  // ── Step 1: credentials ───────────────────────────────────────────────────
-  const phone = ref('')
-  const password = ref('')
+  // ── Step 1: carrier credentials ───────────────────────────────────────────
+  const carrierBarcode = ref('')
+  const verificationCode = ref('')
   const rememberCredentials = ref(true)
 
   // ── Step 2: query conditions ──────────────────────────────────────────────
   const dateFrom = ref('')
   const dateTo = ref('')
-  const selectedCarrier = ref('all')
-  const invoiceStatus = ref(EINVOICE_STATUS.ALL)
-  const buyerTaxId = ref('')
-  const keyword = ref('')
 
   // ── Step 3: scrape state machine ──────────────────────────────────────────
   // scrapeStatus: 'idle' | 'running' | 'done' | 'failed' | 'cancelled' | 'timeout'
   const scrapeStatus = ref('idle')
   const scrapeError = ref('')
-  // Monotonically-increasing counter. Callers capture the value returned by
-  // startScrape() and pass it back to commit/fail so that late-arriving
-  // responses from a cancelled or superseded request are silently discarded.
+  // Monotonically-increasing counter; callers capture the value from startScrape()
+  // and pass it back so late-arriving results from cancelled requests are discarded.
   const scrapeGeneration = ref(0)
   const invoiceList = ref([])
   const selectedInvoiceNumbers = ref(new Set())
@@ -117,15 +111,11 @@ export const useEInvoiceImportStore = defineStore('einvoiceImport', () => {
 
   function reset() {
     currentStep.value = 1
-    phone.value = ''
-    password.value = ''
+    carrierBarcode.value = ''
+    verificationCode.value = ''
     rememberCredentials.value = true
     dateFrom.value = ''
     dateTo.value = ''
-    selectedCarrier.value = 'all'
-    invoiceStatus.value = EINVOICE_STATUS.ALL
-    buyerTaxId.value = ''
-    keyword.value = ''
     scrapeGeneration.value = 0
     scrapeStatus.value = 'idle'
     scrapeError.value = ''
@@ -139,8 +129,8 @@ export const useEInvoiceImportStore = defineStore('einvoiceImport', () => {
 
   return {
     currentStep,
-    phone, password, rememberCredentials,
-    dateFrom, dateTo, selectedCarrier, invoiceStatus, buyerTaxId, keyword,
+    carrierBarcode, verificationCode, rememberCredentials,
+    dateFrom, dateTo,
     scrapeStatus, scrapeError,
     invoiceList, selectedInvoiceNumbers,
     importResult, defaultAccountId, defaultCategoryId,

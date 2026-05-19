@@ -29,6 +29,7 @@ test('server route table resolves health and api prefixes without chained if blo
   assert.equal(resolveRouteHandler('/api/auth/login')?.prefix, '/api/auth')
   assert.equal(resolveRouteHandler('/api/google/oauth/exchange')?.prefix, '/api/google/oauth')
   assert.equal(resolveRouteHandler('/api/google/oauth/refresh')?.prefix, '/api/google/oauth')
+  assert.equal(resolveRouteHandler('/api/einvoice/query-invoices')?.prefix, '/api/einvoice')
   assert.equal(resolveRouteHandler('/api/shared-ledgers/join')?.prefix, '/api/shared-ledgers')
   assert.equal(resolveRouteHandler('/api/invoice/link_session'), null)
   assert.equal(resolveRouteHandler('/api/unknown'), null)

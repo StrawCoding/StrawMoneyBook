@@ -970,7 +970,7 @@ UI composable 目錄：`src/ui/composables/`
 
 ---
 
-## 電子發票匯入 (E-Invoice Import) — v1.0.6（SMB-165 v1.2.13：匯入時可選帳戶/分類同步建立支出交易，transaction_id 寫回匯入記錄；`importSelectedInvoices` 接受 ledgerId/accountId/categoryId，呼叫 `createExpense` 並以 originType='einvoice' 建立支出；Step 4 新增帳戶與分類 select；store 新增 defaultAccountId/defaultCategoryId；i18n 三語各新增 7 key；新增 5 個測試覆蓋交易建立路徑）
+## 電子發票匯入 (E-Invoice Import) — v1.0.6（SMB-165 v1.2.13：匯入時可選帳戶/分類同步建立支出交易，transaction_id 寫回匯入記錄；SMB-209 Restart / v1.2.16：刪除舊 WebView/OCR 查詢入口，改由 backend `/api/einvoice/query-invoices` 代理財政部官方 API；Step 1 改為手機條碼 + 查詢碼，Step 2 保留日期區間且預設最近 62 天以符合後端單次查詢上限，查詢階段支援取消 / 重試 / 逾時 / 失敗狀態）
 
 ### 路由
 - `/einvoice-import` → `src/ui/views/einvoice/EInvoiceImportWizardPage.vue`
@@ -984,80 +984,20 @@ UI composable 目錄：`src/ui/composables/`
 #### `src/core/db/migrations/033_einvoice_credential_password_iv.sql`
 - **SMB-174 (v1.0.13)**：既有資料庫補上 `einvoice_credentials.password_iv`，讓密碼加密 IV 不再被手機號碼 IV 覆蓋
 
-#### `android/app/src/main/java/com/strawcoding/strawmoneybook/EInvoiceAutomationActivity.java`
-- **SMB-174 Restart (v1.0.15)**：
-  - 移除 `setAlpha(0.01f)` 隱形 WebView，改為 `Color.WHITE` 全可見
-  - 新增 `buildContentView` / `buildStatusHeader` / `dp`：WebView 上方深灰底動態說明列 + 取消鈕（取消 → `finishWithError("einvoice_automation_canceled", ...)`）
-  - `statusTitle` 改為 `TextView` 成員 + `postStatus(String)`（透過 `mainHandler.post` 從背景 thread 安全更新）
-  - `runQuery` 把 `this::postStatus` 當作 `Consumer<String>` 傳給 `EInvoiceAutomation.query`
-  - `AUTOMATION_TIMEOUT_MS` 從 120s 延長到 180s 容納手動 captcha 等待
-  - `onDestroy` 一併清空 `statusTitle`
-
-#### `android/app/src/main/java/com/strawcoding/strawmoneybook/EInvoiceAutomation.java`
-- **SMB-174 Restart (v1.0.15)**：
-  - 常數重整：`OCR_MAX_ATTEMPTS=2`、`AUTO_LOGIN_WAIT_MS=12000`、`MANUAL_LOGIN_WAIT_MS=90000`、`LOGIN_DETECT_POLL_MS=600`
-  - `query` 多載：新增 `query(activity, webView, params, statusUpdater)`，舊 `query` 委派為 `null`
-  - `BrowserSession` 接 `Consumer<String> statusUpdater` 並提供 `setStatus(String)`
-  - `performLogin` 重寫為「混合自動 + 手動 fallback」：自動填帳密 → OCR 嘗試 N 次 → 失敗則切手動模式（重整驗證碼、清空欄位、聚焦欄位、等使用者輸入並按登入）
-  - `waitForLoginSuccess(session, timeoutMs)` — 改接受可變 timeout（自動 12s / 手動 90s）
-  - 新增方法：`isFillCredentialsResultSuccess`、`describeFillCredentialsFailure`、`capturePageErrorDetail`
-  - 新 JS scripts：`buildFillCredentialsOnlyScript(phone, password)`、`buildClearCaptchaInputScript()`、`buildFocusCaptchaInputScript()`、`buildPageErrorDetailScript()`
-  - `classifyLoginFailure(int, int, int, String)` 將失敗分類為 `einvoice_captcha_image_missing` / `einvoice_captcha_recognition_failed` / `einvoice_login_failed`（附帶站台原文錯誤）
-- **v1.0.17（載具流程修復）**：
-  - `waitForMobileCarrierLoginFormStable`：8 秒後表單完全未出現時拋出 `einvoice_login_form_missing`（附帶載具快照），而非靜默繼續；部分可見則額外等 2 秒
-  - `buildFillCredentialsOnlyScript`：填入失敗時在回傳物件中附帶 `formDiag`（url + visibleInputs），方便遠端排查
-  - `describeFillCredentialsFailure`：從 `formDiag.url` 讀取頁面 URL 加入錯誤訊息
-  - `fetchInvoices`：`waitForResults` 30 秒超時後拋出 `einvoice_query_results_timeout`（附帶當前頁面 URL / 標題）而非靜默返回空陣列
-  - `recognizeNumericCaptcha`：Bitmap variants 在 try/finally 中回收，修復記憶體洩漏
-  - `selectBestCandidate`：同分時以原始置信度作 tie-breaker，加入 Log 輸出
-  - `buildParseInvoiceListScript`：8 位數（統編格式）無條件排除為金額，不受 amountLabel 影響；7 位數保持僅在無標籤時排除
-- **SMB-180 (v1.0.18)**：
-  - `fetchInvoices`：登入後載入 btc502w 查詢頁時最多輪詢 10 秒等待表單渲染；表單尚未出現時 `buildFillQueryFormScript` 回 `false`，Java 端繼續重試
-  - `buildFillQueryFormScript`：優先鎖定 `btc502wQ.qryDateS`、`btc502wQ.qryDateE`、`btc502wQ.invStatus`、`btc502wQ.buyerBan`、`btc502wQ.keyword`，避免泛用 selector 命中錯頁欄位；成功填寫後才點擊查詢或提交表單
-  - `buildQueryPageDiagnosticScript`：查詢表單最終缺失時回傳 URL、title、頁面摘要，錯誤碼維持 `einvoice_query_form_missing` 但訊息可直接用於實機 debug
-
-#### `android/app/src/main/java/com/strawcoding/strawmoneybook/TesseractBridge.java`
-- **v1.0.17**：`recognizeSegmentedCaptcha` 中，單一分段識別失敗時改以放大 2x 後重試一次（PSM_SINGLE_CHAR），仍失敗才放棄該候選，提升低品質驗證碼的識別率
-
-#### `android/app/src/test/java/com/strawcoding/strawmoneybook/EInvoiceAutomationTest.java`
-- **SMB-174 Restart (v1.0.15)**：共新增 10 個測試：
-  - `pageErrorDetailScriptScansAlertAndDangerSelectors`
-  - `classifyLoginFailureReportsCaptchaImageMissingWhenAllAttemptsFailedToLoad`
-  - `classifyLoginFailureReportsOcrFailureWhenAllAttemptsFailedToRecognize`
-  - `classifyLoginFailureReportsLoginFailedWhenServerRejectedSubmit`
-  - `classifyLoginFailureWithoutPageErrorOmitsTrailingDetail`
-  - `fillCredentialsOnlyScriptFillsPhoneAndPasswordWithoutSubmitting`
-  - `clearCaptchaInputScriptOnlyResetsCaptchaFieldValue`
-  - `focusCaptchaInputScriptScrollsAndFocusesCaptchaField`
-  - `isFillCredentialsResultSuccessAcceptsBooleanTrueAndRejectsNonJsonObjectValues`
-  - `hybridFlowTimingConstantsAreReasonableForUserManualCaptcha`
-- **v1.0.17**：新增 3 個測試：
-  - `fillCredentialsFailureScriptIncludesFormDiagnostics`：驗證失敗回報含 `formDiag`、`location.href`、`visibleInputs`
-  - `parseAmountScriptUnconditionallyExcludesEightDigitNumbers`：驗證 8 位數無條件過濾不受標籤影響
-  - `waitForResultsTimeoutErrorCodeIsCorrect`：驗證等待腳本包含發票格式或載具清單偵測
-- **SMB-180 (v1.0.18)**：新增 2 個測試：
-  - `queryFormScriptTargetsBtc502wFieldsAndReturnsFalseBeforeFormRenders`：鎖住 btc502w 欄位 selector 與尚未渲染時回 `false`
-  - `queryFormTimingAndDiagnosticsSupportAsyncRenderDebugging`：鎖住 10 秒輪詢常數與查詢頁診斷 payload
-
-#### `scripts/simulate-einvoice-login-flow.mjs`
-- **SMB-174 Restart (v1.0.15)**：
-  - Step 6A — 提取 `buildPageErrorDetailScript`，在 mock DOM 注入 `.alert-danger` 元素，驗證可擷取「驗證碼錯誤」
-  - Step 8 — `buildFillCredentialsOnlyScript` 在 mock DOM 中只填手機/密碼，**驗證 captcha 為空 + submit 未被點擊**
-  - Step 9 — `buildClearCaptchaInputScript` + `buildFocusCaptchaInputScript`，instrumented 元素驗證 `scrollIntoView / focus / select` 都被呼叫
-  - 全套：32/32 通過
-- **v1.0.17**：
-  - Step 11 — 空白/載入中頁面 `waitForResults` 應回傳 false（防止靜默超時造成無任何發票誤顯）
-  - Step 12 — 含金額標籤時統編仍不誤判為金額（邊緣案例）
-  - 全套：41/41 通過
-- **SMB-180 (v1.0.18)**：
-  - Step 13 — 查詢頁載入中尚未渲染 btc502w 表單時 `buildFillQueryFormScript` 回 `false`；表單渲染後精準填入 `btc502wQ.*` 欄位並點擊查詢按鈕
+#### SMB-209 刪除的舊電子發票 Android WebView/OCR 自動化
+- 已刪除 `android/app/src/main/java/com/strawcoding/strawmoneybook/EInvoiceAutomationActivity.java`
+- 已刪除 `android/app/src/main/java/com/strawcoding/strawmoneybook/EInvoiceAutomation.java`
+- 已刪除 `android/app/src/main/java/com/strawcoding/strawmoneybook/EInvoiceAutomationPlugin.java`
+- 已刪除 `android/app/src/test/java/com/strawcoding/strawmoneybook/EInvoiceAutomationTest.java`
+- 已刪除 `scripts/simulate-einvoice-login-flow.mjs` 與 `package.json` 的 `simulate:einvoice-login` / smoke test 串接
+- `TesseractBridge.java` 因第一銀行自動化仍使用而保留，但電子發票流程不再呼叫 OCR / WebView / CAPTCHA 相關程式碼
 
 #### `src/core/repositories/einvoice-import.repo.js`
 - 函數（5）：`getEInvoiceCredential`, `upsertEInvoiceCredential`, `deleteEInvoiceCredential`, `getImportedInvoiceNumbers`, `insertInvoiceImport`, `listRecentInvoiceImports`
 - `upsertEInvoiceCredential` 會保存 `passwordIv`；`getEInvoiceCredential` 讀回 `passwordIv`，舊資料缺值時才 fallback 到 `iv`
 
 #### `src/services/einvoice/shared.js`
-- 常數：`EINVOICE_PLATFORM`, `EINVOICE_STATUS`
+- 常數：`EINVOICE_PLATFORM`（舊 `EINVOICE_STATUS` 發票狀態篩選已移除）
 - 函數：`createEInvoiceError`, `isEInvoiceError`
 
 #### `src/services/einvoice/credential-crypto.js`
@@ -1065,26 +1005,25 @@ UI composable 目錄：`src/ui/composables/`
 - 函數：`encryptCredential`, `decryptCredential`
 
 #### `src/services/einvoice/native-automation.js`（SMB-168, v1.0.8）
-- `isEInvoiceAutomationRuntimeSupported()` — Capacitor Android native 回傳 true，其他平台 false
-- `queryNativeEInvoices(params)` — 呼叫 `EInvoiceAutomation` Capacitor 插件執行 WebView 自動抓取
+- SMB-209 刪除舊方案後保留相容 stub：`isEInvoiceAutomationRuntimeSupported()` 固定回傳 false；`queryNativeEInvoices()` 為 no-op error stub，不再註冊或呼叫電子發票 Android WebView / OCR 插件
 
 #### `src/services/einvoice/backend.js`
 - 函數（6）：`saveEInvoiceCredential`, `loadEInvoiceCredential`, `clearEInvoiceCredential`, `hasEInvoiceCredential`, `scrapeEInvoiceList`, `importSelectedInvoices`
-- `isEInvoiceAutomationSupported()` — 委派 `isEInvoiceAutomationRuntimeSupported()`，Android native 為 true
+- `scrapeEInvoiceList()` 以 fetch 呼叫 `/api/einvoice/query-invoices`（native / production 預設 `https://api.strawmb.com`，開發 web 可走相對路徑），送出 `cardNo`、`cardEncrypt`、`startDate`、`endDate`；35 秒前端逾時會轉成 `einvoice_query_timeout`
 
 #### `src/ui/stores/einvoice-import.store.js`
-- Pinia store：精靈狀態、選取邏輯、匯入結果
+- Pinia store：精靈狀態、手機條碼 / 查詢碼、日期區間、抓取 generation token、取消 / 逾時 / 失敗狀態、選取邏輯、匯入結果；舊 `invoiceStatus` 狀態已移除
 
 #### `src/ui/views/einvoice/EInvoiceImportWizardPage.vue`
 - 4 步驟精靈容器，含步驟指示器、返回按鈕（`fa-chevron-left` 全域註冊）與滑動動畫
 
 #### `src/ui/views/einvoice/EInvoiceStep1Account.vue`
-- 手機號碼/密碼輸入、密碼顯示切換（`fa-eye` / `fa-eye-slash` 全域註冊）、記住帳號（加密儲存）；版面採自然高度與緊湊 footer，避免帳號設定卡片下方留下過多空白
+- 手機條碼 / 查詢碼輸入、查詢碼顯示切換（`fa-eye` / `fa-eye-slash` 全域註冊）、記住帳號（加密儲存）；版面採自然高度與緊湊 footer，避免帳號設定卡片下方留下過多空白
 - **SMB-167 (v1.0.9)**：step-footer 補上「上一步」按鈕，與 Step2–4 pattern 對齊；點擊執行 `store.reset()` + `router.back()` 退出 wizard
 
 #### `src/ui/views/einvoice/EInvoiceStep2Query.vue`
-- 查詢條件：日期區間、發票狀態、統編、品名關鍵字
-- **SMB-166 (v1.0.8)**：加入 `platformSupported = isEInvoiceAutomationSupported()` 守衛；`canProceed` 包含平台支援檢查，平台不支援時「下一步」禁用；`platform-notice` 改為 warning 樣式（`notice--warning`），僅在不支援時顯示
+- 查詢條件：日期區間；舊 WebView 查詢頁專屬的發票狀態、統編、品名關鍵字已移除；預設最近 62 天符合 backend 單次查詢上限
+- SMB-209 後不再檢查 Android native 平台支援，Web / 行動版皆走 backend API 查詢
 
 #### `src/ui/views/einvoice/EInvoiceStep3Select.vue`
 - 發票清單、全選/單選、已選金額彙總
@@ -1097,15 +1036,10 @@ UI composable 目錄：`src/ui/composables/`
 - **問題審查修復 (v1.0.22)**：結果畫面新增 `failed` 筆數顯示（`v-if="store.importResult.failed.length > 0"`，橘色警示文字）；`i18n.service.js` 同步新增 `einvoice.step4.result_failed` 三語翻譯。
 - **載具流程修復 (v1.0.24)**：匯入失敗時改以本地 `importError` ref 在 Step4 原地顯示錯誤，不再 `store.errorMessage + store.currentStep = 3`（舊做法導致跳回 Step3 時 onMounted 立即清空錯誤訊息，用戶看不到失敗原因）；`handleImport` 加入 `if (store.isImporting) return` JS 層防重複點擊；「上一步」按鈕在匯入中也禁用；補充 console.log 記錄匯入開始/完成/失敗。
 
-#### Android 原生插件（SMB-168, v1.0.8）
-- `android/.../EInvoiceAutomationPlugin.java` — `@CapacitorPlugin(name = "EInvoiceAutomation")`；方法：`isAvailable`, `queryInvoices`
-- `android/.../EInvoiceAutomationActivity.java` — 隱藏 WebView Activity，120 秒 timeout；`busy` lock 防止並發
-- `android/.../EInvoiceAutomation.java` — 完整自動化邏輯：登入 `einvoice.nat.gov.tw`、CAPTCHA OCR（TesseractBridge numeric 模式）、多頁發票清單解析；`EInvoiceException` 內嵌型別
-- **SMB-170 (v1.0.9)**：`EInvoiceAutomation.java` 的 `evaluateJavaScript()` 改為只在 UI thread 呼叫 `webView.evaluateJavascript()`，並在背景 thread 等待 callback，避免原本 UI thread 內等待造成腳本結果逾時；登入頁/查詢頁載入後也偵測 Cloudflare 或平台防自動化 challenge，命中時回傳 `einvoice_platform_challenge` 與明確訊息；`EInvoiceAutomationPlugin.java` 將無 payload 的取消結果改成 `einvoice_automation_canceled`，避免只顯示 `E-invoice automation failed`。
-- **SMB-172**：新增 `einvoice-debug.service.js`；`backend.js` 的 `scrapeEInvoiceList()` 與 `importSelectedInvoices()` 各自包覆 `traceEInvoiceScrape` / `traceEInvoiceImport`，記錄每次操作的狀態、耗時、發票數量及錯誤；Debug Page 新增「載具抓取紀錄」區塊並同步加入 i18n（zh-TW / en / ja）
-- **SMB-173 (v1.0.9)**：`EInvoiceAutomation.java` 的登入入口改為 `https://www.einvoice.nat.gov.tw/accounts/login`，查詢入口改為 `https://www.einvoice.nat.gov.tw/portal/btc/mobile/btc502w/search`；手機條碼 / 載具模式選取改為掃描文字、label、radio / checkbox、select option 與 data/aria 屬性，登入填值會觸發完整 input/change/keyup/blur 事件，找不到欄位時回傳 `phone_missing`、`password_missing` 或 `captcha_missing` 診斷；單元測試鎖住官方路徑與載具填入腳本，避免回退到舊的 `/btc502w/BTCIndex` 或 `/btc502w/BTCInvController`。
-- **SMB-174 (v1.0.13)**：`src/services/einvoice/backend.js`、`src/core/repositories/einvoice-import.repo.js` 與 DB migrations 032/033 修正記住帳號的密碼 IV 保存；`einvoice_credentials.password_iv` 會保存密碼加密時的 AES-GCM IV，避免只用手機號碼 IV 解密密碼而導致下次抓取時帳密無法正確還原。
-- **SMB-179 (v1.0.16)**：`EInvoiceAutomation.java` 補強驗證碼擷取與載具清單資料偵測；canvas 讀不到驗證碼時會回傳元素 rect 並由 Android WebView 截圖裁切後交給 OCR，OCR 前處理新增放大、灰階、高對比、二值化與反白變體，numeric mode 也改為純數字白名單。發票結果頁偵測不再只依賴舊 `invTable`，會辨識「載具清單資料」、發票號碼 pattern、`role=row` / card / list 結構，解析時避免把 8 位買方統編誤判成金額；`EInvoiceAutomationTest` 與 `simulate-einvoice-login-flow.mjs` 補上對應測試。
+#### Android 原生插件（SMB-168 舊電子發票插件；SMB-209 已移除）
+- `android/.../EInvoiceAutomationPlugin.java`、`EInvoiceAutomationActivity.java`、`EInvoiceAutomation.java` 與 `EInvoiceAutomationTest.java` 已刪除
+- `MainActivity.java` 不再 `registerPlugin(EInvoiceAutomationPlugin.class)`；`AndroidManifest.xml` 不再宣告 `EInvoiceAutomationActivity`
+- 保留與電子發票無關、仍由銀行自動化使用的 `TesseractBridge.java`
 
 ### 修改檔案
 - `src/core/db/migrate.js` — 加入 migration 032，SMB-174 後再加入 migration 033 補 `password_iv`
@@ -1113,5 +1047,5 @@ UI composable 目錄：`src/ui/composables/`
 - `src/ui/router/index.js` — 加入 `/einvoice-import` 路由
 - `src/ui/services/i18n.service.js` — 加入 zh-TW / en / ja 翻譯
 - `src/main.js` — 電子發票精靈返回按鈕所需 `fa-chevron-left` 與密碼顯示切換所需 `fa-eye` / `fa-eye-slash` 納入 Font Awesome 全域註冊
-- `android/.../MainActivity.java` — 加入 `registerPlugin(EInvoiceAutomationPlugin.class)`（SMB-168）
-- `android/.../AndroidManifest.xml` — 加入 `EInvoiceAutomationActivity` 宣告（SMB-168）
+- `android/.../MainActivity.java` — SMB-209 移除 `registerPlugin(EInvoiceAutomationPlugin.class)`；仍保留銀行、Google、Widget、安全鎖等插件註冊
+- `android/.../AndroidManifest.xml` — SMB-209 移除 `EInvoiceAutomationActivity` 宣告；仍保留銀行自動化 Activity

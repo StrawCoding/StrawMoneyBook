@@ -181,7 +181,7 @@ export const RUNTIME_JA_MESSAGES_GENERATED = {
   "debug_page.key.bank_sync_steps": "ステップ詳細",
   "debug_page.key.einvoice_calls": "電子インボイス記録",
   "debug_page.einvoice_calls.empty": "電子インボイスの記録はまだありません",
-  "debug_page.key.einvoice_phone": "電話番号",
+  "debug_page.key.einvoice_carrier_barcode": "モバイルバーコード",
   "debug_page.key.einvoice_date_from": "開始日",
   "debug_page.key.einvoice_date_to": "終了日",
   "debug_page.key.einvoice_invoice_count": "取得発票数",

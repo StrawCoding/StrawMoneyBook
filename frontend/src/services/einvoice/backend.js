@@ -8,11 +8,30 @@ import {
 } from '@/core/repositories/einvoice-import.repo.js'
 import { decryptCredential, encryptCredential } from './credential-crypto.js'
 import { EINVOICE_PLATFORM, createEInvoiceError } from './shared.js'
-import { isEInvoiceAutomationRuntimeSupported, queryNativeEInvoices } from './native-automation.js'
 import { traceEInvoiceScrape, traceEInvoiceImport } from '@/core/services/einvoice-debug.service.js'
 import { createExpense } from '@/core/services/transaction.service.js'
+import { Capacitor } from '@capacitor/core'
 
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
+
+// ── Backend API base URL ──────────────────────────────────────────────────────
+
+const PROD_DEFAULT_API_BASE = 'https://api.strawmb.com'
+const EXPLICIT_API_BASE = String(import.meta.env.VITE_EINVOICE_API_BASE_URL ?? '').trim()
+const EINVOICE_CLIENT_SHARED_KEY = String(import.meta.env.VITE_EINVOICE_CLIENT_SHARED_KEY ?? '').trim()
+const EINVOICE_QUERY_TIMEOUT_MS = 35_000
+
+function getEInvoiceApiBase() {
+  if (EXPLICIT_API_BASE) return EXPLICIT_API_BASE
+  if (Capacitor.getPlatform() !== 'web') return PROD_DEFAULT_API_BASE
+  if (import.meta.env.PROD) return PROD_DEFAULT_API_BASE
+  return ''
+}
+
+function buildApiUrl(path) {
+  const base = getEInvoiceApiBase()
+  return base ? `${base.replace(/\/$/, '')}${path}` : path
+}
 
 // ── Device UUID (stable per-install key for credential encryption) ─────────────
 
@@ -29,11 +48,11 @@ function getOrCreateDeviceUuid() {
 
 // ── Credential management ─────────────────────────────────────────────────────
 
-export async function saveEInvoiceCredential(phone, password) {
-  console.log('[EInvoice] 儲存帳號憑證（手機號碼前 4 碼）:', String(phone ?? '').slice(0, 4) + '****')
+export async function saveEInvoiceCredential(carrierBarcode, verificationCode) {
+  console.log('[EInvoice] 儲存載具憑證（條碼前 4 碼）:', String(carrierBarcode ?? '').slice(0, 4) + '****')
   const deviceUuid = getOrCreateDeviceUuid()
-  const { encrypted: encryptedAccount, iv: ivAccount } = await encryptCredential(phone, deviceUuid)
-  const { encrypted: encryptedPassword, iv: ivPassword } = await encryptCredential(password, deviceUuid)
+  const { encrypted: encryptedAccount, iv: ivAccount } = await encryptCredential(carrierBarcode, deviceUuid)
+  const { encrypted: encryptedPassword, iv: ivPassword } = await encryptCredential(verificationCode, deviceUuid)
   await upsertEInvoiceCredential({
     platform: EINVOICE_PLATFORM,
     encryptedAccount,
@@ -41,7 +60,7 @@ export async function saveEInvoiceCredential(phone, password) {
     iv: ivAccount,
     passwordIv: ivPassword,
   })
-  console.log('[EInvoice] 帳號憑證儲存成功')
+  console.log('[EInvoice] 載具憑證儲存成功')
 }
 
 export async function loadEInvoiceCredential() {
@@ -52,10 +71,10 @@ export async function loadEInvoiceCredential() {
   }
   const deviceUuid = getOrCreateDeviceUuid()
   try {
-    const phone = await decryptCredential(row.encryptedAccount, row.iv, deviceUuid)
-    const password = await decryptCredential(row.encryptedPassword, row.passwordIv || row.iv, deviceUuid)
-    console.log('[EInvoice] 已載入儲存憑證（手機號碼前 4 碼）:', String(phone ?? '').slice(0, 4) + '****')
-    return { phone, password }
+    const carrierBarcode = await decryptCredential(row.encryptedAccount, row.iv, deviceUuid)
+    const verificationCode = await decryptCredential(row.encryptedPassword, row.passwordIv || row.iv, deviceUuid)
+    console.log('[EInvoice] 已載入儲存憑證（條碼前 4 碼）:', String(carrierBarcode ?? '').slice(0, 4) + '****')
+    return { carrierBarcode, verificationCode }
   } catch (err) {
     console.error('[EInvoice] 憑證解密失敗，忽略已儲存資料', err)
     return null
@@ -63,7 +82,7 @@ export async function loadEInvoiceCredential() {
 }
 
 export async function clearEInvoiceCredential() {
-  console.log('[EInvoice] 清除帳號憑證')
+  console.log('[EInvoice] 清除載具憑證')
   await deleteEInvoiceCredential(EINVOICE_PLATFORM)
 }
 
@@ -72,26 +91,58 @@ export async function hasEInvoiceCredential() {
   return Boolean(row)
 }
 
-// ── Invoice scraping (requires EInvoiceAutomation native plugin) ──────────────
-
-export function isEInvoiceAutomationSupported() {
-  return isEInvoiceAutomationRuntimeSupported()
-}
+// ── Invoice scraping via backend API ─────────────────────────────────────────
 
 export async function scrapeEInvoiceList(queryParams) {
-  if (!isEInvoiceAutomationSupported()) {
-    throw createEInvoiceError(
-      t('einvoice.error.not_supported', {}, '目前平台尚不支援電子發票自動抓取'),
-      'einvoice_not_supported',
-    )
-  }
-  console.log('[EInvoice] 開始抓取發票 — 日期區間:', queryParams?.dateFrom, '~', queryParams?.dateTo)
+  console.log('[EInvoice] 開始查詢發票 — 日期區間:', queryParams?.dateFrom, '~', queryParams?.dateTo)
   return traceEInvoiceScrape(
-    { phone: queryParams?.phone, dateFrom: queryParams?.dateFrom, dateTo: queryParams?.dateTo },
+    { carrierBarcode: queryParams?.carrierBarcode, dateFrom: queryParams?.dateFrom, dateTo: queryParams?.dateTo },
     async () => {
-      const result = await queryNativeEInvoices(queryParams)
-      console.log('[EInvoice] 抓取完成，API 回傳', result?.length ?? 0, '筆')
-      return result
+      const url = buildApiUrl('/api/einvoice/query-invoices')
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), EINVOICE_QUERY_TIMEOUT_MS)
+      try {
+        const headers = { 'Content-Type': 'application/json' }
+        if (EINVOICE_CLIENT_SHARED_KEY) {
+          headers['X-Straw-Client-Key'] = EINVOICE_CLIENT_SHARED_KEY
+        }
+        const response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            cardNo: String(queryParams?.carrierBarcode ?? '').trim(),
+            cardEncrypt: String(queryParams?.verificationCode ?? ''),
+            startDate: String(queryParams?.dateFrom ?? '').trim(),
+            endDate: String(queryParams?.dateTo ?? '').trim(),
+            onlyWinningInv: 'N',
+          }),
+          signal: controller.signal,
+        })
+        let data = null
+        try {
+          data = await response.json()
+        } catch {
+          data = null
+        }
+        if (!response.ok) {
+          const errorCode = String(data?.error ?? 'einvoice_query_failed')
+          const errorMessage = String(data?.message ?? t('einvoice.error.scrape_failed', {}, '抓取發票失敗，請重試'))
+          throw createEInvoiceError(errorMessage, errorCode)
+        }
+        const list = Array.isArray(data?.invoices) ? data.invoices : []
+        console.log('[EInvoice] 查詢完成，API 回傳', list.length, '筆')
+        return list
+      } catch (err) {
+        if (err?.name === 'AbortError') {
+          throw createEInvoiceError(
+            t('einvoice.error.timeout', {}, '查詢逾時，請稍後再試'),
+            'einvoice_query_timeout',
+          )
+        }
+        throw err
+      } finally {
+        clearTimeout(timeout)
+      }
     },
   )
 }
