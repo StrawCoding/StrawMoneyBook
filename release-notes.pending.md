@@ -2,6 +2,9 @@
 
 ---
 
+## v1.2.18
+- (SMB-213) 修復 Google 自動備份在未設定 `VITE_GOOGLE_OAUTH_API_ORIGIN` 等明確 env 變數時，native 平台的 `resolveServerAuthCodeFlowEnabled` 判斷落回 online mode（無 refresh token，access token ~55 分鐘到期），造成頻繁需要重新授權才能自動備份；修復方式：在明確 env 判斷之後，補回以 `GOOGLE_OAUTH_DEFAULT_ORIGIN`（`https://api.strawmb.com`）為 fallback 的 `isAbsoluteHttpUrl` 檢查，讓 native 預設即啟用 server auth code flow（長效 refresh token），不再需要額外設定 env 才能正常運作
+
 ## v1.2.17
 - (SMB-211) 修復交易搜尋無法用「借出 / 借入 / 歸還（還款）/ 收回（收回借款）」等借貸顯示條件搜尋借貸交易的問題；搜尋 SQL 會納入借貸方向、往來對象與畫面顯示標籤
 

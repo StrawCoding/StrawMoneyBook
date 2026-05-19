@@ -62,6 +62,10 @@ function resolveServerAuthCodeFlowEnabled() {
 
   if (hasAbsoluteEndpoints || hasExplicitOrigin) return true
 
+  // When no explicit env vars are set, use the built-in default API origin so that
+  // server auth code flow (long-lived refresh tokens) works on native out of the box.
+  if (isAbsoluteHttpUrl(GOOGLE_OAUTH_DEFAULT_ORIGIN)) return true
+
   console.warn(
     '[google-auth] VITE_GOOGLE_USE_SERVER_AUTH_CODE=true but no explicit Google OAuth backend is configured for native runtime; fallback to online mode.',
   )

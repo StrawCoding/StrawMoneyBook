@@ -166,6 +166,28 @@ test('server auth code flow uses API host, not static privacy-policy host (SMB-1
   )
 })
 
+test('server auth code flow enabled on native via default origin without explicit env vars (SMB-213)', () => {
+  // Regression: v1.2.12 removed the isAbsoluteHttpUrl(resolveGoogleOAuthApiOrigin()) check to fix the
+  // 405 issue (resolveGoogleOAuthApiOrigin previously derived origin from VITE_PRIVACY_POLICY_URL which
+  // pointed at the static site). But it was not replaced with a check on GOOGLE_OAUTH_DEFAULT_ORIGIN,
+  // so on native platforms without explicit VITE_GOOGLE_OAUTH_API_ORIGIN / exchange / refresh env vars,
+  // resolveServerAuthCodeFlowEnabled() always falls back to online mode (short-lived access tokens).
+  // Fix: when explicit env vars are not set, use isAbsoluteHttpUrl(GOOGLE_OAUTH_DEFAULT_ORIGIN) as the
+  // fallback so that server auth code flow (refresh tokens) is enabled on native out of the box.
+  const fnMatch = googleAuthSource.match(/function resolveServerAuthCodeFlowEnabled[\s\S]*?\n\}/)
+  assert.ok(fnMatch, 'resolveServerAuthCodeFlowEnabled must exist in auth source')
+  assert.match(
+    fnMatch[0],
+    /isAbsoluteHttpUrl\(GOOGLE_OAUTH_DEFAULT_ORIGIN\)/,
+    'must check GOOGLE_OAUTH_DEFAULT_ORIGIN as a fallback so native platforms use server auth code flow without explicit env vars',
+  )
+  assert.doesNotMatch(
+    fnMatch[0],
+    /resolveGoogleOAuthApiOrigin\(\)/,
+    'must not call resolveGoogleOAuthApiOrigin() inside resolveServerAuthCodeFlowEnabled — that would re-introduce the static-site 405 regression',
+  )
+})
+
 test('google backup sign-in starts with bottom credential UI before standard fallback (SMB-191)', () => {
   // Regression: auto-backup used the plugin default standard Google UI on the first attempt.
   // The SocialLogin plugin only performs its NoCredentialException fallback path when the
