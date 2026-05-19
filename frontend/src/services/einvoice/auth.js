@@ -578,14 +578,15 @@ export async function googleSignIn(options = {}) {
     await initGoogleAuth()
     let response
     try {
-      // Start with Credential Manager bottom UI so the SocialLogin plugin can fall back to
-      // standard UI on NoCredentialException instead of ending the auto-backup login flow.
-      // Still force refresh token on this single interactive attempt to avoid a second prompt.
+      // Server auth code mode (offline) uses standard UI: Credential Manager (bottom) cannot return
+      // serverAuthCode on Android, so using it causes a silent fallback loop and leaves the user
+      // stuck in the "logging in" state.  Online mode still uses bottom UI so the SocialLogin plugin
+      // can fall back to standard UI on NoCredentialException instead of ending the login flow.
       response = await withTimeout(
         loginGoogleWithOptions({
           forceRefreshToken: true,
           filterByAuthorizedAccounts: false,
-          style: 'bottom',
+          style: isServerAuthCodeModeActive() ? 'standard' : 'bottom',
           preferredEmail: options.preferredEmail,
         }),
         GOOGLE_INTERACTIVE_LOGIN_TIMEOUT_MS,

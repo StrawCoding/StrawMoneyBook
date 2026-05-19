@@ -188,18 +188,21 @@ test('server auth code flow enabled on native via default origin without explici
   )
 })
 
-test('google backup sign-in starts with bottom credential UI before standard fallback (SMB-191)', () => {
-  // Regression: auto-backup used the plugin default standard Google UI on the first attempt.
-  // The SocialLogin plugin only performs its NoCredentialException fallback path when the
-  // initial request is explicitly sent through style:"bottom"; otherwise users can get a
-  // terminal "Google Sign-In failed" and cannot complete the auto-backup login.
-  // Fix: the first interactive login should use bottom UI with unrestricted account filtering,
-  // while the stale-account retry remains the explicit standard prompt.
-  assert.match(googleAuthSource, /style: 'bottom'/, 'initial Google backup sign-in must request bottom UI')
+test('google backup sign-in adapts UI style based on auth mode to avoid Credential Manager incompatibility (SMB-191, SMB-213)', () => {
+  // SMB-191: The SocialLogin plugin only performs its NoCredentialException fallback path when the
+  // initial request is sent through style:"bottom"; without it users can get a terminal
+  // "Google Sign-In failed" in online mode and cannot complete the auto-backup login.
+  // SMB-213 Restart: Credential Manager (style:"bottom") is incompatible with server auth code
+  // flow (mode:"offline") on Android — it cannot return a serverAuthCode, causing a silent
+  // fallback loop that leaves the user stuck in the "logging in" state for up to 150 seconds.
+  // Fix: use style:"standard" when isServerAuthCodeModeActive() so the traditional Google Sign-In
+  // dialog is used for offline mode, which reliably returns serverAuthCode.  Online mode still uses
+  // style:"bottom" for the NoCredentialException graceful fallback.
+  assert.match(googleAuthSource, /isServerAuthCodeModeActive\(\) \? 'standard' : 'bottom'/, 'first login style must use ternary: standard for offline/server-auth-code mode, bottom for online mode')
   assert.match(
     googleAuthSource,
-    /loginGoogleWithOptions\(\{[\s\S]*?forceRefreshToken: true,[\s\S]*?filterByAuthorizedAccounts: false,[\s\S]*?style: 'bottom',[\s\S]*?preferredEmail: options\.preferredEmail,[\s\S]*?\}\)/,
-    'first login attempt must use bottom UI with filterByAuthorizedAccounts=false',
+    /loginGoogleWithOptions\(\{[\s\S]*?filterByAuthorizedAccounts: false,[\s\S]*?style: isServerAuthCodeModeActive\(\) \? 'standard' : 'bottom',[\s\S]*?preferredEmail: options\.preferredEmail,[\s\S]*?\}\)/,
+    'first login attempt must use standard for offline/server-auth-code mode and bottom for online mode',
   )
   assert.match(
     googleAuthSource,

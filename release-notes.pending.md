@@ -2,6 +2,9 @@
 
 ---
 
+## v1.2.21
+- (SMB-213) 修復 Android Google 自動備份連線畫面「一直呈現登入中」的問題；根因：Credential Manager bottom UI（`style: 'bottom'`）與 server auth code flow（`mode: 'offline'`）不相容，Credential Manager 無法在 Android 回傳 serverAuthCode，導致 exchange 失敗後 fallback 觸發第二個互動登入對話框，使用者若不與第二個對話框互動，將卡住長達 150 秒；修復方式：`googleSignIn` 第一次登入嘗試改依模式選擇 UI style，server auth code mode 使用 `style: 'standard'`（傳統 Google 登入，可靠回傳 serverAuthCode），online mode 仍使用 `style: 'bottom'`（保留 SMB-191 的 NoCredentialException graceful fallback）
+
 ## v1.2.20
 - (SMB-209) 修復電子發票載具匯入 Step 1「下一步」在合法手機條碼含 `+ . -` 符號時仍保持 disabled 的問題；前端與 backend `cardNo` 驗證同步允許 `/` 後 7 位英數字或 `+ . -`，並更新三語格式提示，避免合法載具條碼被阻擋或前後端規則不一致
 
