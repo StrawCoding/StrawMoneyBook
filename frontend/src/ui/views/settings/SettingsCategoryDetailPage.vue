@@ -34,6 +34,46 @@
         <CustomSelect v-model="editGroupId" :options="groupOptions" placeholder="請選擇群組" />
       </label>
 
+      <div class="defaults-section">
+        <p class="defaults-hint">{{ t('settings_category_detail.defaults_hint') }}</p>
+        <div class="switch-list">
+          <button
+            v-if="categoryKind === 'expense'"
+            type="button"
+            class="switch-row"
+            :class="{ active: editDefaultIsReimbursable }"
+            role="switch"
+            :aria-checked="editDefaultIsReimbursable ? 'true' : 'false'"
+            @click="editDefaultIsReimbursable = !editDefaultIsReimbursable"
+          >
+            <span>{{ t('settings_category_detail.default_is_reimbursable') }}</span>
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </button>
+          <button
+            type="button"
+            class="switch-row"
+            :class="{ active: editDefaultIncludeInBudget }"
+            role="switch"
+            :aria-checked="editDefaultIncludeInBudget ? 'true' : 'false'"
+            @click="editDefaultIncludeInBudget = !editDefaultIncludeInBudget"
+          >
+            <span>{{ t('settings_category_detail.default_include_in_budget') }}</span>
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </button>
+          <button
+            type="button"
+            class="switch-row"
+            :class="{ active: editDefaultIncludeInAnalysis }"
+            role="switch"
+            :aria-checked="editDefaultIncludeInAnalysis ? 'true' : 'false'"
+            @click="editDefaultIncludeInAnalysis = !editDefaultIncludeInAnalysis"
+          >
+            <span>{{ t('settings_category_detail.default_include_in_analysis') }}</span>
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </button>
+        </div>
+      </div>
+
       <div class="row action-row">
         <button class="btn danger" :disabled="deleting" @click="removeCategoryRecord">
           {{ deleting ? '處理中...' : '刪除/封存分類' }}
@@ -79,6 +119,9 @@ const deleting = ref(false)
 const editName = ref('')
 const editGroupId = ref('')
 const editIcon = ref(defaultCategoryExpenseIcon)
+const editDefaultIncludeInAnalysis = ref(true)
+const editDefaultIncludeInBudget = ref(true)
+const editDefaultIsReimbursable = ref(false)
 const deleteConfirmOpen = ref(false)
 const initializedCategoryId = ref('')
 
@@ -110,7 +153,10 @@ const canSave = computed(() => {
   return (
     name !== String(category.value.name ?? '') ||
     groupId !== String(category.value.group_id ?? '') ||
-    icon !== normalizeFaIcon(category.value.icon, fallback)
+    icon !== normalizeFaIcon(category.value.icon, fallback) ||
+    editDefaultIncludeInAnalysis.value !== Boolean(category.value.default_include_in_analysis ?? 1) ||
+    editDefaultIncludeInBudget.value !== Boolean(category.value.default_include_in_budget ?? 1) ||
+    editDefaultIsReimbursable.value !== Boolean(category.value.default_is_reimbursable ?? 0)
   )
 })
 
@@ -126,6 +172,9 @@ watch(
     editName.value = String(next.name ?? '')
     editGroupId.value = String(next.group_id ?? '')
     editIcon.value = normalizeFaIcon(next.icon, fallback)
+    editDefaultIncludeInAnalysis.value = Boolean(next.default_include_in_analysis ?? 1)
+    editDefaultIncludeInBudget.value = Boolean(next.default_include_in_budget ?? 1)
+    editDefaultIsReimbursable.value = Boolean(next.default_is_reimbursable ?? 0)
     initializedCategoryId.value = nextId
   },
   { immediate: true },
@@ -159,6 +208,9 @@ async function saveProfile() {
       name: editName.value.trim(),
       groupId: String(editGroupId.value ?? '').trim(),
       icon: normalizeFaIcon(editIcon.value, fallback),
+      defaultIncludeInAnalysis: editDefaultIncludeInAnalysis.value,
+      defaultIncludeInBudget: editDefaultIncludeInBudget.value,
+      defaultIsReimbursable: editDefaultIsReimbursable.value,
     })
     uiStore.pushToast('分類資料已更新')
     await router.push(backLink.value)
@@ -253,6 +305,60 @@ function queryText(value) {
   padding: 8px 12px;
   display: inline-flex;
   align-items: center
+}
+.defaults-section {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+}
+.defaults-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.switch-list {
+  display: grid;
+  gap: 8px;
+}
+.switch-row {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+}
+.switch-row.active {
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border) 48%);
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface-soft) 90%);
+}
+.switch-track {
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 32%, transparent);
+  position: relative;
+  display: inline-block;
+  transition: background-color var(--anim-fast) var(--anim-standard);
+}
+.switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate3d(0, 0, 0);
+  transition: transform var(--anim-mid) var(--anim-spring);
+  will-change: transform;
+}
+.switch-row.active .switch-thumb {
+  transform: translate3d(18px, 0, 0);
 }
 .action-row {
   margin-top: 12px

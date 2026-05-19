@@ -2,6 +2,9 @@
 
 ---
 
+## v1.2.19
+- (SMB-212) 分類管理新增「預設記帳設定」區塊：可在分類明細頁分別設定「預設紀錄收支」、「預設紀錄預算」、「預設報銷」開關；選取該分類新增交易時，對應的記帳選項將自動套用分類預設值；現有分類的預設值與原本記帳行為一致（紀錄收支開、紀錄預算開、報銷關）
+
 ## v1.2.18
 - (SMB-213) 修復 Google 自動備份在未設定 `VITE_GOOGLE_OAUTH_API_ORIGIN` 等明確 env 變數時，native 平台的 `resolveServerAuthCodeFlowEnabled` 判斷落回 online mode（無 refresh token，access token ~55 分鐘到期），造成頻繁需要重新授權才能自動備份；修復方式：在明確 env 判斷之後，補回以 `GOOGLE_OAUTH_DEFAULT_ORIGIN`（`https://api.strawmb.com`）為 fallback 的 `isAbsoluteHttpUrl` 檢查，讓 native 預設即啟用 server auth code flow（長效 refresh token），不再需要額外設定 env 才能正常運作
 

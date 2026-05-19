@@ -95,7 +95,7 @@
 | `/settings/shared-ledgers` | `src/ui/views/settings/SettingsSharedLedgerPage.vue` | 共同帳本、Email 邀請、接受邀請與同步 |
 | `/settings/ledgers/:id` | `src/ui/views/settings/SettingsLedgerDetailPage.vue` | 帳本明細編輯/刪除 |
 | `/settings/categories` | `src/ui/views/settings/SettingsCategoryPage.vue` | 分類管理 |
-| `/settings/categories/:id` | `src/ui/views/settings/SettingsCategoryDetailPage.vue` | 分類明細編輯/刪除 |
+| `/settings/categories/:id` | `src/ui/views/settings/SettingsCategoryDetailPage.vue` | 分類明細編輯/刪除；SMB-212 後新增「預設記帳設定」區塊，可設定「預設紀錄收支」、「預設紀錄預算」、「預設報銷」三個開關；快速新增交易時選取該分類會自動套用此預設值 |
 | `/settings/category-groups/:id` | `src/ui/views/settings/SettingsCategoryGroupDetailPage.vue` | 分類群組排序/刪除 |
 | `/settings/auto-fill-rules` | `src/ui/views/settings/SettingsAutoFillRulesPage.vue` | 自動識別規則 |
 | `/settings/auto-fill-rules/new` | `src/ui/views/settings/SettingsAutoFillRuleEditPage.vue` | 建立自動識別規則 |

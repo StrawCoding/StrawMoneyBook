@@ -29,7 +29,8 @@ export async function listCategories(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   const includeArchived = Boolean(options.includeArchived)
   const result = await query(
-    `SELECT ledger_id, id, group_id, name, kind, icon, is_budgetable, sort_order, is_archived
+    `SELECT ledger_id, id, group_id, name, kind, icon, is_budgetable, sort_order, is_archived,
+            default_include_in_analysis, default_include_in_budget, default_is_reimbursable
      FROM categories
      WHERE ledger_id = ?
        AND deleted_at IS NULL
@@ -63,8 +64,10 @@ export async function createCategory(ledgerId, input) {
 
   await run(
     `INSERT INTO categories (
-      ledger_id, id, group_id, name, kind, icon, is_budgetable, sort_order, is_archived, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?);`,
+      ledger_id, id, group_id, name, kind, icon, is_budgetable, sort_order, is_archived,
+      default_include_in_analysis, default_include_in_budget, default_is_reimbursable,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?);`,
     [
       ledgerId,
       id,
@@ -74,6 +77,9 @@ export async function createCategory(ledgerId, input) {
       icon,
       input.isBudgetable ?? 1,
       input.sortOrder ?? 0,
+      input.defaultIncludeInAnalysis ?? 1,
+      input.defaultIncludeInBudget ?? 1,
+      input.defaultIsReimbursable ?? 0,
       now,
       now,
     ],
@@ -103,11 +109,17 @@ export async function updateCategoryProfile(ledgerId, categoryId, input = {}) {
   if (!groupId) throw new Error('缺少分類群組')
   const normalizedIcon = normalizeCategoryIcon({ icon: input.icon, name })
 
+  const defaultIncludeInAnalysis = input.defaultIncludeInAnalysis != null ? (Boolean(input.defaultIncludeInAnalysis) ? 1 : 0) : 1
+  const defaultIncludeInBudget = input.defaultIncludeInBudget != null ? (Boolean(input.defaultIncludeInBudget) ? 1 : 0) : 1
+  const defaultIsReimbursable = input.defaultIsReimbursable != null ? (Boolean(input.defaultIsReimbursable) ? 1 : 0) : 0
+
   await run(
     `UPDATE categories
-     SET name = ?, group_id = ?, icon = ?, updated_at = ?
+     SET name = ?, group_id = ?, icon = ?,
+         default_include_in_analysis = ?, default_include_in_budget = ?, default_is_reimbursable = ?,
+         updated_at = ?
      WHERE ledger_id = ? AND id = ? AND deleted_at IS NULL;`,
-    [name, groupId, normalizedIcon, nowIso(), ledgerId, categoryId],
+    [name, groupId, normalizedIcon, defaultIncludeInAnalysis, defaultIncludeInBudget, defaultIsReimbursable, nowIso(), ledgerId, categoryId],
   )
 }
 

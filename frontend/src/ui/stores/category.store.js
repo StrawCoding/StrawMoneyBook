@@ -143,7 +143,14 @@ export const useCategoryStore = defineStore('category', {
 
     async updateCategoryProfile(categoryId, payload) {
       const ledgerStore = useLedgerStore()
-      await updateCategoryProfileRepo(ledgerStore.activeLedgerId, categoryId, payload)
+      await updateCategoryProfileRepo(ledgerStore.activeLedgerId, categoryId, {
+        name: payload.name,
+        groupId: payload.groupId,
+        icon: payload.icon,
+        defaultIncludeInAnalysis: payload.defaultIncludeInAnalysis,
+        defaultIncludeInBudget: payload.defaultIncludeInBudget,
+        defaultIsReimbursable: payload.defaultIsReimbursable,
+      })
       await this.load()
     },
 

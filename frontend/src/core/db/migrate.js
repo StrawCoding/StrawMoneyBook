@@ -32,6 +32,7 @@ import migration031 from '@/core/db/migrations/031_remove_invoice_carrier.sql?ra
 import migration032 from '@/core/db/migrations/032_einvoice_import.sql?raw'
 import migration033 from '@/core/db/migrations/033_einvoice_credential_password_iv.sql?raw'
 import migration034 from '@/core/db/migrations/034_budget_containers.sql?raw'
+import migration035 from '@/core/db/migrations/035_category_default_flags.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -64,6 +65,7 @@ const MIGRATIONS = [
   { version: 32, name: 'einvoice_import', sql: migration032 },
   { version: 33, name: 'einvoice_credential_password_iv', sql: migration033 },
   { version: 34, name: 'budget_containers', sql: migration034 },
+  { version: 35, name: 'category_default_flags', sql: migration035 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'

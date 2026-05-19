@@ -207,7 +207,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
@@ -251,6 +251,7 @@ const { t } = useI18n()
 const submitting = ref(false)
 const exchangeRateSyncing = ref(false)
 const showExtra = ref(false)
+const applyingCategoryDefaults = ref(false)
 const addonRows = ref([])
 const exchangeRateSnapshot = ref({
   syncedAt: '',
@@ -399,10 +400,19 @@ watch(
 watch(
   () => model.isReimbursable,
   (next, prev) => {
+    if (applyingCategoryDefaults.value) return
     if (next && !prev) {
       model.includeInBudget = false
       model.includeInAnalysis = false
     }
+  },
+)
+
+watch(
+  () => model.categoryId,
+  (categoryId) => {
+    if (!categoryId || model.type === 'transfer') return
+    applyCategoryDefaults(categoryId)
   },
 )
 
@@ -462,6 +472,17 @@ function ensureCategoryIdByType(type, currentCategoryId) {
   const ids = groups.flatMap((group) => group.categories ?? []).map((item) => item.id)
   if (ids.includes(currentCategoryId)) return currentCategoryId
   return ids[0] ?? ''
+}
+
+async function applyCategoryDefaults(categoryId) {
+  const cat = categoryStore.categories.find((c) => c.id === categoryId)
+  if (!cat) return
+  applyingCategoryDefaults.value = true
+  model.isReimbursable = Boolean(cat.default_is_reimbursable)
+  model.includeInBudget = Boolean(cat.default_include_in_budget ?? 1)
+  model.includeInAnalysis = Boolean(cat.default_include_in_analysis ?? 1)
+  await nextTick()
+  applyingCategoryDefaults.value = false
 }
 
 function accountCurrencyCode(accountId) {
