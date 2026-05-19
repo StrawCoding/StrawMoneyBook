@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- (SMB-209) 載具匯入改為手機條碼 + 查詢碼 + backend 官方 API proxy，移除舊 WebView/OCR 方案
-
 ---
+
+## v1.2.16
+- (SMB-209) 載具匯入改為手機條碼 + 查詢碼 + backend 官方 API proxy，移除舊 WebView/OCR 方案
 
 ## v1.2.15
 - (SMB-210) 借出 / 借入交易（含還款與利息）建立時預設不計入收支紀錄與預算；使用者可於交易明細頁手動開啟
