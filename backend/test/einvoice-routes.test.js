@@ -130,6 +130,37 @@ test('einvoice route validates mobile barcode before calling Ministry API', asyn
   }
 })
 
+test('einvoice route accepts Ministry mobile barcode symbols before proxying', async () => {
+  setEInvoiceEnv()
+  const originalFetch = globalThis.fetch
+  let requestBody = ''
+  globalThis.fetch = async (_url, options) => {
+    requestBody = String(options?.body ?? '')
+    return {
+      ok: true,
+      async json() {
+        return { code: '200', v2InvPageCnt: 1, details: [] }
+      },
+    }
+  }
+
+  try {
+    const { default: handler } = await import('../src/routes/einvoice.js?symbol-card')
+    const res = await callHandler(handler, {
+      cardNo: '/A+.-123',
+      cardEncrypt: '1234',
+      startDate: '2026-05-01',
+      endDate: '2026-05-18',
+    }, '/api/einvoice/query-invoices', authHeaders)
+
+    assert.equal(res.statusCode, 200)
+    assert.match(requestBody, /cardNo=%2FA%2B\.-123/)
+  } finally {
+    globalThis.fetch = originalFetch
+    clearEInvoiceEnv()
+  }
+})
+
 test('einvoice route validates date range before calling Ministry API', async () => {
   setEInvoiceEnv()
   const originalFetch = globalThis.fetch

@@ -70,6 +70,13 @@ test('電子發票 Step1 UI 顯示手機條碼與查詢碼輸入欄位', () => {
   assert.doesNotMatch(source, /password_placeholder/)
 })
 
+test('電子發票 Step1 下一步允許財政部手機條碼可用符號字元', () => {
+  const source = read('src/ui/views/einvoice/EInvoiceStep1Account.vue')
+
+  assert.ok(source.includes('[A-Za-z0-9+.\\-]{7}'))
+  assert.doesNotMatch(source, /\[A-Za-z0-9\]\{7\}/)
+})
+
 test('電子發票 Step2 預設查詢區間不超過後端單次查詢上限', () => {
   const source = read('src/ui/views/einvoice/EInvoiceStep2Query.vue')
 

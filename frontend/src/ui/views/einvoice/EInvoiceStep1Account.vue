@@ -64,7 +64,7 @@ const showCode = ref(false)
 const savedHint = ref(false)
 const error = ref('')
 
-const BARCODE_RE = /^\/[A-Za-z0-9]{7}$/
+const BARCODE_RE = /^\/[A-Za-z0-9+.\-]{7}$/
 const canProceed = computed(
   () => BARCODE_RE.test(store.carrierBarcode.trim()) && store.verificationCode.trim().length >= 4,
 )

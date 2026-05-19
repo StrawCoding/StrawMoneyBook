@@ -970,7 +970,7 @@ UI composable 目錄：`src/ui/composables/`
 
 ---
 
-## 電子發票匯入 (E-Invoice Import) — v1.0.6（SMB-165 v1.2.13：匯入時可選帳戶/分類同步建立支出交易，transaction_id 寫回匯入記錄；SMB-209 Restart / v1.2.16：刪除舊 WebView/OCR 查詢入口，改由 backend `/api/einvoice/query-invoices` 代理財政部官方 API；Step 1 改為手機條碼 + 查詢碼，Step 2 保留日期區間且預設最近 62 天以符合後端單次查詢上限，查詢階段支援取消 / 重試 / 逾時 / 失敗狀態）
+## 電子發票匯入 (E-Invoice Import) — v1.0.6（SMB-165 v1.2.13：匯入時可選帳戶/分類同步建立支出交易，transaction_id 寫回匯入記錄；SMB-209 Restart / v1.2.16：刪除舊 WebView/OCR 查詢入口，改由 backend `/api/einvoice/query-invoices` 代理財政部官方 API；Step 1 改為手機條碼 + 查詢碼，Step 2 保留日期區間且預設最近 62 天以符合後端單次查詢上限，查詢階段支援取消 / 重試 / 逾時 / 失敗狀態；SMB-209 Restart / v1.2.20：手機條碼驗證允許 `/` 後 7 碼使用英數字與 `+ . -` 符號，修復合法條碼無法點擊下一步）
 
 ### 路由
 - `/einvoice-import` → `src/ui/views/einvoice/EInvoiceImportWizardPage.vue`
@@ -1018,7 +1018,7 @@ UI composable 目錄：`src/ui/composables/`
 - 4 步驟精靈容器，含步驟指示器、返回按鈕（`fa-chevron-left` 全域註冊）與滑動動畫
 
 #### `src/ui/views/einvoice/EInvoiceStep1Account.vue`
-- 手機條碼 / 查詢碼輸入、查詢碼顯示切換（`fa-eye` / `fa-eye-slash` 全域註冊）、記住帳號（加密儲存）；版面採自然高度與緊湊 footer，避免帳號設定卡片下方留下過多空白
+- 手機條碼 / 查詢碼輸入、查詢碼顯示切換（`fa-eye` / `fa-eye-slash` 全域註冊）、記住帳號（加密儲存）；手機條碼驗證接受 `/` 後 7 位英數字或 `+ . -` 符號，避免財政部合法條碼因前端 regex 過窄而讓下一步保持 disabled；版面採自然高度與緊湊 footer，避免帳號設定卡片下方留下過多空白
 - **SMB-167 (v1.0.9)**：step-footer 補上「上一步」按鈕，與 Step2–4 pattern 對齊；點擊執行 `store.reset()` + `router.back()` 退出 wizard
 
 #### `src/ui/views/einvoice/EInvoiceStep2Query.vue`

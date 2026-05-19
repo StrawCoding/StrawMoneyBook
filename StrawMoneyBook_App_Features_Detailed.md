@@ -826,8 +826,8 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 
 ## 電子發票匯入（E-Invoice Import）
 
-**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）；帳密 IV 修正 v1.0.13（SMB-174）；自動化流程可見化 + 失敗診斷分類 v1.0.15（SMB-174 Restart）；驗證碼讀取與載具清單資料偵測修正 v1.0.16（SMB-179）；載具流程四大問題修復 v1.0.17；查詢頁穩定修復 v1.0.18（SMB-180）；UI 問題審查修復 v1.0.22（SMB-165 審查）；載具計畫重設計 v1.2.14（SMB-209）；刪除舊 WebView 方案並改接官方 API proxy v1.2.16（SMB-209 Restart）
-**狀態**：前端匯入計畫已重新設計為命名階段與狀態機，並停用舊 Android WebView 自動化入口；查詢改由 StrawMoneyBook backend `/api/einvoice/query-invoices` 代理財政部電子發票官方 API。查詢可取消、重試，失敗 / 逾時 / 取消都有明確回饋，晚回的舊查詢結果會被丟棄，避免新舊邏輯並存；backend 端需設定 `EINVOICE_APP_ID`、`EINVOICE_API_KEY`、`EINVOICE_CLIENT_SHARED_KEY`，前端則以 `VITE_EINVOICE_CLIENT_SHARED_KEY` 送出 `X-Straw-Client-Key`，並有電子發票專用 rate limit、日期 / 查詢碼驗證與過多頁數防截斷。
+**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）；帳密 IV 修正 v1.0.13（SMB-174）；自動化流程可見化 + 失敗診斷分類 v1.0.15（SMB-174 Restart）；驗證碼讀取與載具清單資料偵測修正 v1.0.16（SMB-179）；載具流程四大問題修復 v1.0.17；查詢頁穩定修復 v1.0.18（SMB-180）；UI 問題審查修復 v1.0.22（SMB-165 審查）；載具計畫重設計 v1.2.14（SMB-209）；刪除舊 WebView 方案並改接官方 API proxy v1.2.16（SMB-209 Restart）；手機條碼符號字元修復 v1.2.20（SMB-209 Restart）
+**狀態**：前端匯入計畫已重新設計為命名階段與狀態機，並停用舊 Android WebView 自動化入口；查詢改由 StrawMoneyBook backend `/api/einvoice/query-invoices` 代理財政部電子發票官方 API。Step 1 手機條碼驗證接受財政部條碼可用字元（`/` 後 7 碼可為英數字或 `+ . -`），避免合法條碼因前端驗證過窄而無法點擊下一步；backend `cardNo` 驗證同步放寬，避免前後端規則不一致。查詢可取消、重試，失敗 / 逾時 / 取消都有明確回饋，晚回的舊查詢結果會被丟棄，避免新舊邏輯並存；backend 端需設定 `EINVOICE_APP_ID`、`EINVOICE_API_KEY`、`EINVOICE_CLIENT_SHARED_KEY`，前端則以 `VITE_EINVOICE_CLIENT_SHARED_KEY` 送出 `X-Straw-Client-Key`，並有電子發票專用 rate limit、日期 / 查詢碼驗證與過多頁數防截斷。
 
 ### 功能說明
 透過「載具設定 → 查詢條件 → 查詢發票 → 確認匯入」命名階段，讓使用者輸入手機條碼與查詢碼、設定日期區間、查詢並選取發票後批量匯入至 StrawMoneyBook 帳本。查詢端不再依賴驗證碼 OCR 或嵌入式 WebView，而是由 backend 以 `cardNo / cardEncrypt / startDate / endDate` 呼叫財政部電子發票 API。
@@ -837,7 +837,7 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 - `einvoice_invoice_imports`：發票匯入記錄，`invoice_number` UNIQUE 防止重複匯入
 
 ### 精靈步驟
-1. **載具設定**：輸入手機條碼 / 查詢碼，可勾選「記住載具資料（加密儲存）」，表單區塊使用自然高度排列，避免手機畫面出現過多空白
+1. **載具設定**：輸入手機條碼 / 查詢碼，可勾選「記住載具資料（加密儲存）」；手機條碼格式為 `/` 開頭接 7 位英數字或 `+ . -` 符號，前端下一步與 backend proxy 使用相同格式守門；表單區塊使用自然高度排列，避免手機畫面出現過多空白
 2. **查詢條件**：日期區間（預設最近 62 天，與 backend 單次查詢上限一致，避免預設值直接觸發 `date_range_too_large`）；返回修改時會清除下游查詢結果與選取狀態。舊方案的發票狀態、買方統編、品名關鍵字篩選已移除，避免前端保留官方 WebView 查詢頁欄位假象
 3. **查詢發票**：以狀態機顯示 running / done / failed / cancelled / timeout；查詢中可取消，失敗、逾時與取消可重試或回到查詢條件；`scrapeGeneration` token 防止已取消或舊查詢的晚回結果覆蓋新資料
 4. **確認匯入**：預覽待匯入清單，選填同步建立支出交易，確認後寫入資料庫

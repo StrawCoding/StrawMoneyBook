@@ -67,8 +67,8 @@ function validateQueryInput({ cardNo, cardEncrypt, startDate, endDate }) {
     return { error: 'missing_params', message: '缺少必要參數（cardNo、cardEncrypt、startDate、endDate）' }
   }
 
-  if (!/^\/[A-Za-z0-9]{7}$/.test(cardNo)) {
-    return { error: 'invalid_card_no', message: '手機條碼格式錯誤，應為 / 開頭接 7 位英數字（如 /ABC1234）' }
+  if (!/^\/[A-Za-z0-9+.\-]{7}$/.test(cardNo)) {
+    return { error: 'invalid_card_no', message: '手機條碼格式錯誤，應為 / 開頭接 7 位英數字或 + . - 符號（如 /ABC1234）' }
   }
 
   if (!/^[A-Za-z0-9!#$%&()*+,.\-/:;<=>?@[\]^_`{|}~]{4,32}$/.test(cardEncrypt)) {
