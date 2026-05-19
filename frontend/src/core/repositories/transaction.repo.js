@@ -98,6 +98,23 @@ function normalizeOffset(value) {
   return Number.isFinite(numeric) && numeric > 0 ? numeric : 0
 }
 
+function transactionListLookupJoinsSql() {
+  return `LEFT JOIN accounts a
+       ON a.ledger_id = t.ledger_id
+      AND a.id = t.account_id
+     LEFT JOIN categories c
+       ON c.ledger_id = t.ledger_id
+      AND c.id = t.category_id
+     LEFT JOIN loans l
+       ON l.ledger_id = t.ledger_id
+      AND l.id = t.external_ref_id
+      AND t.origin_type = 'loan_payment'
+      AND l.deleted_at IS NULL
+     LEFT JOIN counterparties cp
+       ON cp.ledger_id = l.ledger_id
+      AND cp.id = l.counterparty_id`
+}
+
 function transactionListSelectSql() {
   return `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
             t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
@@ -109,12 +126,7 @@ function transactionListSelectSql() {
             ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
             t.created_at
      FROM transactions t
-     LEFT JOIN accounts a
-       ON a.ledger_id = t.ledger_id
-      AND a.id = t.account_id
-     LEFT JOIN categories c
-       ON c.ledger_id = t.ledger_id
-      AND c.id = t.category_id`
+     ${transactionListLookupJoinsSql()}`
 }
 
 function transactionListOrderSql() {
@@ -151,6 +163,17 @@ function buildSearchFilterClauses({
         COALESCE(t.occurred_at, '') || ' ' ||
         COALESCE(t.type, '') || ' ' ||
         COALESCE(t.origin_type, '') || ' ' ||
+        COALESCE(l.direction, '') || ' ' ||
+        COALESCE(cp.name, '') || ' ' ||
+        CASE
+          WHEN t.origin_type = 'loan_payment' AND l.direction = 'lend' AND t.type = 'income' THEN '收回 收回借款 loan receive back loan_receive_back'
+          WHEN t.origin_type = 'loan_payment' AND l.direction = 'lend' THEN '借出 loan lend loan_lend'
+          WHEN t.origin_type = 'loan_payment' AND l.direction = 'borrow' AND t.type = 'expense' THEN '歸還 還款 loan repay loan_repay'
+          WHEN t.origin_type = 'loan_payment' AND l.direction = 'borrow' THEN '借入 loan borrow loan_borrow'
+          WHEN t.origin_type = 'loan_payment' AND t.type = 'income' THEN '收回 收回借款 loan receive back loan_receive_back'
+          WHEN t.origin_type = 'loan_payment' THEN '借出 loan lend loan_lend'
+          ELSE ''
+        END || ' ' ||
         CAST(t.amount_minor AS TEXT) || ' ' ||
         CAST(ABS(t.amount_minor) / 100.0 AS TEXT)
       ) LIKE ?`)
@@ -333,12 +356,7 @@ export async function listTransactionSearchPage(ledgerId, options = {}) {
     query(
       `SELECT COUNT(*) AS total
        FROM transactions t
-       LEFT JOIN accounts a
-         ON a.ledger_id = t.ledger_id
-        AND a.id = t.account_id
-       LEFT JOIN categories c
-         ON c.ledger_id = t.ledger_id
-        AND c.id = t.category_id
+       ${transactionListLookupJoinsSql()}
        WHERE ${whereSql};`,
       params,
     ),

@@ -23,6 +23,11 @@ const transactionSearchPageSource = readFileSync(
   'utf8',
 )
 
+const i18nSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/services/i18n.service.js'),
+  'utf8',
+)
+
 const accountDetailPageSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/accounts/AccountDetailPage.vue'),
   'utf8',
@@ -51,4 +56,19 @@ test('SMB-155 search and account pages expose pagination controls', () => {
   assert.match(transactionSearchComposableSource, /goNextPage/)
   assert.match(transactionSearchPageSource, /pagination-bar/)
   assert.match(accountDetailPageSource, /goNextAccountTransactionPage/)
+})
+
+test('SMB-211 transaction search includes loan display labels in SQL keyword filtering', () => {
+  assert.match(transactionRepoSource, /LEFT JOIN loans l/)
+  assert.match(transactionRepoSource, /l\.id = t\.external_ref_id/)
+  assert.match(transactionRepoSource, /LEFT JOIN counterparties cp/)
+  assert.match(transactionRepoSource, /借出/)
+  assert.match(transactionRepoSource, /借入/)
+  assert.match(transactionRepoSource, /歸還/)
+  assert.match(transactionRepoSource, /收回/)
+  assert.match(transactionRepoSource, /還款/)
+  assert.match(transactionRepoSource, /收回借款/)
+  assert.match(transactionRepoSource, /cp\.name/)
+  assert.match(i18nSource, /'transaction_search\.label\.loan_receive_back': '收回'/)
+  assert.match(i18nSource, /'transaction_search\.label\.loan_repay': '歸還'/)
 })
