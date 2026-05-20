@@ -2,6 +2,9 @@
 
 ---
 
+## v1.2.22
+- (SMB-214) 借出借入還款支援利息：新增 / 編輯還款時若輸入金額超過剩餘本金，超出部分自動計為利息並建立「借貸利息」分類的獨立交易（借出為利息收入、借入為利息支出）；還款表單即時顯示「超出本金部分 X 元將計為利息」預覽；建立借貸時已設定預設利息者，仍以本金加預設利息為上限
+
 ## v1.2.21
 - (SMB-213) 修復 Android Google 自動備份連線畫面「一直呈現登入中」的問題；根因：Credential Manager bottom UI（`style: 'bottom'`）與 server auth code flow（`mode: 'offline'`）不相容，Credential Manager 無法在 Android 回傳 serverAuthCode，導致 exchange 失敗後 fallback 觸發第二個互動登入對話框，使用者若不與第二個對話框互動，將卡住長達 150 秒；修復方式：`googleSignIn` 第一次登入嘗試改依模式選擇 UI style，server auth code mode 使用 `style: 'standard'`（傳統 Google 登入，可靠回傳 serverAuthCode），online mode 仍使用 `style: 'bottom'`（保留 SMB-191 的 NoCredentialException graceful fallback）
 

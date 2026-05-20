@@ -285,13 +285,14 @@ async function addLoanRepaymentInternal(ledgerId, payload) {
 
   const paidMinor = Number(loan.paid_minor ?? 0)
   const principalMinor = Number(loan.principal_minor ?? 0)
+  const presetInterestMinor = Number(loan.preset_interest_minor ?? 0)
   const targetTotalMinor = Number(loan.target_total_minor ?? principalMinor)
   const remainingMinor = Math.max(0, targetTotalMinor - paidMinor)
 
   if (remainingMinor <= 0) {
     throw new Error('此借貸已結清')
   }
-  if (amountMinor > remainingMinor) {
+  if (presetInterestMinor > 0 && amountMinor > remainingMinor) {
     throw new Error('還款金額不可大於借貸剩餘金額')
   }
 
@@ -540,10 +541,11 @@ export async function updateLoanRepayment(ledgerId, payload) {
     }
 
     const principalMinor = Number(loan.principal_minor ?? 0)
+    const presetInterestMinor = Number(loan.preset_interest_minor ?? 0)
     const targetTotalMinor = Number(loan.target_total_minor ?? principalMinor)
     const paidExcludingCurrent = await sumLoanPaymentsAmountExcluding(ledgerId, loan.id, payment.id)
     const nextPaidMinor = paidExcludingCurrent + amountMinor
-    if (nextPaidMinor > targetTotalMinor) {
+    if (presetInterestMinor > 0 && nextPaidMinor > targetTotalMinor) {
       throw new Error('還款金額不可大於借貸剩餘金額')
     }
     const principalPaidExcludingCurrent = Math.min(principalMinor, Math.max(0, paidExcludingCurrent))

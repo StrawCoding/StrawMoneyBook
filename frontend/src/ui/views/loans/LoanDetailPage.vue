@@ -81,6 +81,9 @@
                 {{ collectionLabel(loan) }}金額（元）
                 <input v-model.number="repayForm.amountMajor" class="input" type="number" min="0" step="1" />
               </label>
+              <p v-if="repayInterestPreview > 0" class="interest-hint muted">
+                超出本金部分 <MoneyText :value-minor="repayInterestPreview" /> 將計為利息
+              </p>
 
               <label>
                 帳戶
@@ -221,6 +224,13 @@ const payments = computed(() => {
 })
 const defaultAccountId = computed(() => accountStore.accounts[0]?.id ?? '')
 const showFinished = computed(() => normalizeLoanFinished(route.query.finished))
+
+const repayInterestPreview = computed(() => {
+  if (!loan.value || Number(loan.value.preset_interest_minor ?? 0) > 0) return 0
+  const amountMinor = Math.round(Number(repayForm.amountMajor ?? 0) * 100)
+  const principalRemainingMinor = Number(loan.value.principal_remaining_minor ?? 0)
+  return Math.max(0, amountMinor - principalRemainingMinor)
+})
 
 const backLink = computed(() => {
   const tab = normalizeLoanTab(route.query.tab)
@@ -618,5 +628,10 @@ label {
   gap: 6px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.interest-hint {
+  font-size: 12px;
+  margin: 0;
 }
 </style>
