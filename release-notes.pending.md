@@ -2,6 +2,9 @@
 
 ---
 
+## v1.2.24
+- (SMB-213) 修復 Android Google 自動備份重新授權仍可能一直停在「登入中」的問題：補上 MainActivity 對 Capgo SocialLogin Google offline authorization activity result 的轉送，讓 server auth code 授權 PendingIntent 回來後會交給 `SocialLoginPlugin.handleGoogleLoginIntent(...)` 完成 promise，不再等到 timeout
+
 ## v1.2.23
 - (SMB-209) 修復電子發票載具匯入 Step 1「下一步」即使在合法格式下仍可能維持 disabled 的問題：新增手機條碼與查詢碼行內驗證錯誤訊息，讓使用者清楚看到欄位格式不符或查詢碼過短的原因；修正 `normalizeBarcode` 未正確去除條碼內部空白的 bug（輸入含內部空白之條碼時，去除空白後的值未回寫 store，導致下一步判斷與儲存行為不一致）
 

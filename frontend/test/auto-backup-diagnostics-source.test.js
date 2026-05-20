@@ -210,3 +210,26 @@ test('google backup sign-in adapts UI style based on auth mode to avoid Credenti
     'retry after stale auth state should still force the standard prompt',
   )
 })
+
+test('Android MainActivity forwards Google offline authorization results to SocialLogin plugin (SMB-213 Restart)', () => {
+  // Root cause for the latest "still cannot login" report: offline/server-auth-code login can launch
+  // a Google authorization PendingIntent after account selection. The Capgo SocialLogin plugin stores
+  // that PendingIntent future internally, but its normal handleOnActivityResult path does not dispatch
+  // Google request codes. MainActivity must explicitly forward GoogleProvider.REQUEST_AUTHORIZE_GOOGLE_*
+  // results to SocialLoginPlugin.handleGoogleLoginIntent; otherwise the JS login promise waits until
+  // the 120s timeout and the UI appears stuck on "登入中".
+  const mainActivitySource = readFileSync(
+    resolve(import.meta.dirname, '../android/app/src/main/java/com/strawcoding/strawmoneybook/MainActivity.java'),
+    'utf8',
+  )
+
+  assert.match(mainActivitySource, /import android\.content\.Intent;/)
+  assert.match(mainActivitySource, /import com\.getcapacitor\.PluginHandle;/)
+  assert.match(mainActivitySource, /import ee\.forgr\.capacitor\.social\.login\.GoogleProvider;/)
+  assert.match(mainActivitySource, /import ee\.forgr\.capacitor\.social\.login\.SocialLoginPlugin;/)
+  assert.match(mainActivitySource, /protected void onActivityResult\(int requestCode, int resultCode, Intent data\)/)
+  assert.match(mainActivitySource, /GoogleProvider\.REQUEST_AUTHORIZE_GOOGLE_MIN/)
+  assert.match(mainActivitySource, /GoogleProvider\.REQUEST_AUTHORIZE_GOOGLE_MAX/)
+  assert.match(mainActivitySource, /getBridge\(\)\.getPlugin\("SocialLogin"\)/)
+  assert.match(mainActivitySource, /handleGoogleLoginIntent\(requestCode, data\)/)
+})
