@@ -14,7 +14,8 @@
         :placeholder="t('einvoice.step1.carrier_barcode_placeholder')"
         @input="normalizeBarcode"
       />
-      <p class="field-hint">{{ t('einvoice.step1.carrier_barcode_hint') }}</p>
+      <p v-if="barcodeError" class="error-text">{{ barcodeError }}</p>
+      <p v-else class="field-hint">{{ t('einvoice.step1.carrier_barcode_hint') }}</p>
 
       <label class="field-label mt">{{ t('einvoice.step1.verification_code') }}</label>
       <div class="password-wrap">
@@ -29,7 +30,8 @@
           <font-awesome-icon :icon="showCode ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'" />
         </button>
       </div>
-      <p class="field-hint">{{ t('einvoice.step1.verification_code_hint') }}</p>
+      <p v-if="codeError" class="error-text">{{ codeError }}</p>
+      <p v-else class="field-hint">{{ t('einvoice.step1.verification_code_hint') }}</p>
 
       <label class="remember-row mt">
         <input v-model="store.rememberCredentials" type="checkbox" />
@@ -69,11 +71,25 @@ const canProceed = computed(
   () => BARCODE_RE.test(store.carrierBarcode.trim()) && store.verificationCode.trim().length >= 4,
 )
 
+const barcodeError = computed(() => {
+  const val = store.carrierBarcode.trim()
+  if (!val) return ''
+  return BARCODE_RE.test(val) ? '' : t('einvoice.step1.barcode_error')
+})
+
+const codeError = computed(() => {
+  const val = store.verificationCode.trim()
+  if (!val) return ''
+  return val.length >= 4 ? '' : t('einvoice.step1.code_error')
+})
+
 function normalizeBarcode() {
-  // Auto-prepend '/' if user omits it
-  const raw = store.carrierBarcode.replace(/\s/g, '')
-  if (raw && !raw.startsWith('/')) {
-    store.carrierBarcode = `/${raw}`
+  let val = store.carrierBarcode.replace(/\s/g, '')
+  if (val && !val.startsWith('/')) {
+    val = `/${val}`
+  }
+  if (val !== store.carrierBarcode) {
+    store.carrierBarcode = val
   }
 }
 

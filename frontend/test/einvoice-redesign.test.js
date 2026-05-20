@@ -77,6 +77,27 @@ test('電子發票 Step1 下一步允許財政部手機條碼可用符號字元'
   assert.doesNotMatch(source, /\[A-Za-z0-9\]\{7\}/)
 })
 
+test('電子發票 Step1 格式錯誤時顯示行內驗證訊息並修正 normalizeBarcode 空白處理', () => {
+  const source = read('src/ui/views/einvoice/EInvoiceStep1Account.vue')
+
+  assert.match(source, /barcodeError/)
+  assert.match(source, /codeError/)
+  assert.match(source, /einvoice\.step1\.barcode_error/)
+  assert.match(source, /einvoice\.step1\.code_error/)
+  assert.match(source, /v-if="barcodeError"/)
+  assert.match(source, /v-if="codeError"/)
+  assert.match(source, /store\.carrierBarcode = val/)
+})
+
+test('電子發票 Step1 驗證錯誤 i18n 具備繁中、英文、日文三語', () => {
+  const source = read('src/ui/services/i18n.service.js')
+  const keys = ['einvoice.step1.barcode_error', 'einvoice.step1.code_error']
+  for (const key of keys) {
+    const matches = source.match(new RegExp(`'${key.replaceAll('.', '\\.')}':`, 'g')) ?? []
+    assert.equal(matches.length, 3, `${key} should exist in zh-TW, en, ja`)
+  }
+})
+
 test('電子發票 Step2 預設查詢區間不超過後端單次查詢上限', () => {
   const source = read('src/ui/views/einvoice/EInvoiceStep2Query.vue')
 

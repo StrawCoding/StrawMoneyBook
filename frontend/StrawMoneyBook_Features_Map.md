@@ -970,7 +970,7 @@ UI composable 目錄：`src/ui/composables/`
 
 ---
 
-## 電子發票匯入 (E-Invoice Import) — v1.0.6（SMB-165 v1.2.13：匯入時可選帳戶/分類同步建立支出交易，transaction_id 寫回匯入記錄；SMB-209 Restart / v1.2.16：刪除舊 WebView/OCR 查詢入口，改由 backend `/api/einvoice/query-invoices` 代理財政部官方 API；Step 1 改為手機條碼 + 查詢碼，Step 2 保留日期區間且預設最近 62 天以符合後端單次查詢上限，查詢階段支援取消 / 重試 / 逾時 / 失敗狀態；SMB-209 Restart / v1.2.20：手機條碼驗證允許 `/` 後 7 碼使用英數字與 `+ . -` 符號，修復合法條碼無法點擊下一步）
+## 電子發票匯入 (E-Invoice Import) — v1.0.6（SMB-165 v1.2.13：匯入時可選帳戶/分類同步建立支出交易，transaction_id 寫回匯入記錄；SMB-209 Restart / v1.2.16：刪除舊 WebView/OCR 查詢入口，改由 backend `/api/einvoice/query-invoices` 代理財政部官方 API；Step 1 改為手機條碼 + 查詢碼，Step 2 保留日期區間且預設最近 62 天以符合後端單次查詢上限，查詢階段支援取消 / 重試 / 逾時 / 失敗狀態；SMB-209 Restart / v1.2.20：手機條碼驗證允許 `/` 後 7 碼使用英數字與 `+ . -` 符號，修復合法條碼無法點擊下一步；SMB-209 Restart / v1.2.23：Step 1 行內驗證錯誤訊息（格式不符 / 查詢碼過短）、normalizeBarcode 修正去除內部空白）
 
 ### 路由
 - `/einvoice-import` → `src/ui/views/einvoice/EInvoiceImportWizardPage.vue`
