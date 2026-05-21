@@ -210,6 +210,24 @@ function sanitizeSnapshotForGoogleDriveSync(snapshot) {
   return normalized
 }
 
+function resolveSnapshotLedgerId(snapshot) {
+  const rootLedgerId = String(snapshot?.ledger_id ?? '').trim()
+  const tableLedgerId = String(snapshot?.tables?.ledgers?.[0]?.id ?? '').trim()
+  return rootLedgerId || tableLedgerId
+}
+
+async function restoreLocalLedgerFromBackup(ledgerId, localBackupText, existingLedger) {
+  const requestedLedgerId = String(ledgerId ?? '').trim()
+  if (!requestedLedgerId || !localBackupText) return null
+  const stillExists = await getLedger(requestedLedgerId)
+  if (stillExists) return null
+  return importLedgerJsonAsNewLedger(localBackupText, {
+    keepLedgerId: true,
+    ledgerName: String(existingLedger?.name ?? '').trim(),
+    runIntegrityRepair: false,
+  })
+}
+
 async function listLocalOnlySettingRows(ledgerId) {
   const result = await query(
     `SELECT key, value_json, updated_at
@@ -324,25 +342,47 @@ export async function listGoogleDriveLedgerSyncBindings(ledgers = []) {
 
 async function replaceLocalLedgerWithRemoteSnapshot(snapshot, ledgerId, state, remoteFile) {
   const normalizedSnapshot = sanitizeSnapshotForGoogleDriveSync(snapshot)
-  const normalizedLedgerId = String(normalizedSnapshot?.ledger_id ?? ledgerId ?? '').trim()
-  if (!normalizedLedgerId) {
+  const requestedLedgerId = String(ledgerId ?? '').trim()
+  if (!requestedLedgerId) {
     throw new Error(t('settings_google_sync.error.missing_ledger_id', null, '缺少帳本 ID'))
   }
 
-  const preservedSettings = await listLocalOnlySettingRows(normalizedLedgerId)
-  muteAutoSync(normalizedLedgerId)
-  clearLedgerDirty(normalizedLedgerId)
-
-  const existingLedger = await getLedger(normalizedLedgerId)
-  if (existingLedger) {
-    await purgeLedger(normalizedLedgerId)
+  const snapshotLedgerId = resolveSnapshotLedgerId(normalizedSnapshot)
+  if (snapshotLedgerId !== requestedLedgerId) {
+    throw new Error(t(
+      'settings_google_sync.error.ledger_mismatch',
+      null,
+      '遠端帳本快照與目前帳本不一致，已停止同步以避免覆蓋錯誤資料',
+    ))
   }
 
-  const imported = await importLedgerJsonAsNewLedger(JSON.stringify(normalizedSnapshot), {
-    keepLedgerId: true,
-    ledgerName: String(normalizedSnapshot?.tables?.ledgers?.[0]?.name ?? existingLedger?.name ?? ''),
-    runIntegrityRepair: true,
-  })
+  const preservedSettings = await listLocalOnlySettingRows(requestedLedgerId)
+  const existingLedger = await getLedger(requestedLedgerId)
+  const localBackupText = existingLedger
+    ? JSON.stringify(sanitizeSnapshotForGoogleDriveSync(await exportLedgerJson(requestedLedgerId)), null, 2)
+    : ''
+
+  muteAutoSync(requestedLedgerId)
+  clearLedgerDirty(requestedLedgerId)
+
+  let imported = null
+  try {
+    if (existingLedger) {
+      await purgeLedger(requestedLedgerId)
+    }
+
+    imported = await importLedgerJsonAsNewLedger(JSON.stringify(normalizedSnapshot), {
+      keepLedgerId: true,
+      ledgerName: String(normalizedSnapshot?.tables?.ledgers?.[0]?.name ?? existingLedger?.name ?? ''),
+      runIntegrityRepair: true,
+    })
+  } catch (error) {
+    if (localBackupText) {
+      await restoreLocalLedgerFromBackup(requestedLedgerId, localBackupText, existingLedger)
+      await restoreSettingRows(requestedLedgerId, preservedSettings)
+    }
+    throw error
+  }
 
   await restoreSettingRows(imported.ledgerId, preservedSettings)
 
