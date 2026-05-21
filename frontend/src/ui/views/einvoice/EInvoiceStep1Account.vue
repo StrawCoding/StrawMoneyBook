@@ -38,7 +38,15 @@
         <span>{{ t('einvoice.step1.remember') }}</span>
       </label>
 
-      <p v-if="savedHint" class="saved-hint">{{ t('einvoice.step1.credential_loaded') }}</p>
+      <button
+        v-if="hasSavedCredential"
+        class="clear-credential-btn"
+        type="button"
+        @click="handleClearSavedCredential"
+      >
+        {{ t('einvoice.step1.clear_saved') }}
+      </button>
+      <p v-if="savedHint" class="saved-hint">{{ savedHint }}</p>
       <p v-if="error" class="error-text">{{ error }}</p>
     </div>
 
@@ -55,7 +63,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEInvoiceImportStore } from '@/ui/stores/einvoice-import.store.js'
-import { loadEInvoiceCredential, saveEInvoiceCredential } from '@/services/einvoice/backend.js'
+import { loadEInvoiceCredential, saveEInvoiceCredential, clearEInvoiceCredential } from '@/services/einvoice/backend.js'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const { t } = useI18n()
@@ -63,7 +71,8 @@ const router = useRouter()
 const store = useEInvoiceImportStore()
 
 const showCode = ref(false)
-const savedHint = ref(false)
+const hasSavedCredential = ref(false)
+const savedHint = ref('')
 const error = ref('')
 
 const BARCODE_RE = /^\/[A-Za-z0-9+.\-]{7}$/
@@ -98,9 +107,24 @@ onMounted(async () => {
   if (cred) {
     store.carrierBarcode = cred.carrierBarcode ?? ''
     store.verificationCode = cred.verificationCode ?? ''
-    savedHint.value = true
+    hasSavedCredential.value = true
+    savedHint.value = t('einvoice.step1.credential_loaded')
   }
 })
+
+async function handleClearSavedCredential() {
+  error.value = ''
+  try {
+    await clearEInvoiceCredential()
+    store.carrierBarcode = ''
+    store.verificationCode = ''
+    store.rememberCredentials = false
+    hasSavedCredential.value = false
+    savedHint.value = t('einvoice.step1.clear_saved_done')
+  } catch {
+    error.value = t('einvoice.step1.clear_saved_error', {}, '清除載具資料失敗')
+  }
+}
 
 function handleCancel() {
   store.reset()
@@ -166,6 +190,18 @@ async function handleNext() {
   cursor: pointer;
 }
 .saved-hint { font-size: 12px; color: var(--primary); margin-top: 8px; }
+.clear-credential-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 8px;
+  padding: 0;
+  text-align: left;
+}
 .error-text { font-size: 12px; color: var(--danger); margin-top: 8px; }
 .step-footer { padding: 0; gap: 12px; }
 .btn-primary, .btn-secondary {

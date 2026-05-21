@@ -2,6 +2,9 @@
 
 ---
 
+## v1.2.25
+- (SMB-209) 依載具 project 技術文檔補齊電子發票 Step 1「清除已儲存載具資料」入口：載入加密儲存的手機條碼 / 查詢碼後可直接清除本機憑證，畫面同步清空欄位並關閉記住載具，三語 i18n、功能地圖與詳細文件同步更新
+
 ## v1.2.24
 - (SMB-213) 修復 Android Google 自動備份重新授權仍可能一直停在「登入中」的問題：補上 MainActivity 對 Capgo SocialLogin Google offline authorization activity result 的轉送，讓 server auth code 授權 PendingIntent 回來後會交給 `SocialLoginPlugin.handleGoogleLoginIntent(...)` 完成 promise，不再等到 timeout
 

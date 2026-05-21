@@ -89,13 +89,33 @@ test('電子發票 Step1 格式錯誤時顯示行內驗證訊息並修正 normal
   assert.match(source, /store\.carrierBarcode = val/)
 })
 
-test('電子發票 Step1 驗證錯誤 i18n 具備繁中、英文、日文三語', () => {
+test('電子發票 Step1 驗證錯誤與清除儲存載具 i18n 具備繁中、英文、日文三語', () => {
   const source = read('src/ui/services/i18n.service.js')
-  const keys = ['einvoice.step1.barcode_error', 'einvoice.step1.code_error']
+  const keys = [
+    'einvoice.step1.barcode_error',
+    'einvoice.step1.code_error',
+    'einvoice.step1.clear_saved',
+    'einvoice.step1.clear_saved_done',
+    'einvoice.step1.clear_saved_error',
+  ]
   for (const key of keys) {
     const matches = source.match(new RegExp(`'${key.replaceAll('.', '\\.')}':`, 'g')) ?? []
     assert.equal(matches.length, 3, `${key} should exist in zh-TW, en, ja`)
   }
+})
+
+test('電子發票 Step1 依技術文檔提供清除已儲存載具資料入口', () => {
+  const source = read('src/ui/views/einvoice/EInvoiceStep1Account.vue')
+
+  assert.match(source, /clearEInvoiceCredential/)
+  assert.match(source, /hasSavedCredential = ref\(false\)/)
+  assert.match(source, /v-if="hasSavedCredential"/)
+  assert.match(source, /handleClearSavedCredential/)
+  assert.match(source, /einvoice\.step1\.clear_saved/)
+  assert.match(source, /einvoice\.step1\.clear_saved_done/)
+  assert.match(source, /store\.carrierBarcode = ''/)
+  assert.match(source, /store\.verificationCode = ''/)
+  assert.match(source, /hasSavedCredential\.value = false/)
 })
 
 test('電子發票 Step2 預設查詢區間不超過後端單次查詢上限', () => {
