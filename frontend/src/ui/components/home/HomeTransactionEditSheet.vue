@@ -19,16 +19,10 @@
       </button>
     </div>
 
-    <label>
+    <div class="field">
       {{ t('common.amount_yuan') }}
-      <input
-        v-model="model.amountInput"
-        type="text"
-        inputmode="decimal"
-        class="input"
-        @input="handleAmountInput"
-      />
-    </label>
+      <AmountCalculatorInput v-model="model.amountMajor" />
+    </div>
 
     <div class="date-extra-row">
       <div class="field-block">
@@ -80,21 +74,6 @@
       {{ t('common.account') }}
       <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
     </label>
-
-    <section class="calc-panel">
-      <div class="calc-grid">
-        <button
-          v-for="key in calcKeys"
-          :key="key"
-          type="button"
-          class="calc-key btn"
-          :class="{ equal: key === '=' }"
-          @click="pressCalcKey(key)"
-        >
-          {{ key }}
-        </button>
-      </div>
-    </section>
 
     <template #footer>
       <button class="btn danger" :disabled="deleting" @click="remove">{{ t('common.delete') }}</button>
@@ -215,6 +194,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import AmountCalculatorInput from '@/ui/components/common/AmountCalculatorInput.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
@@ -269,7 +249,6 @@ const types = computed(() => {
 const model = reactive({
   type: 'expense',
   amountMajor: null,
-  amountInput: '',
   occurredDate: '',
   occurredHour: 0,
   occurredMinute: 0,
@@ -289,8 +268,6 @@ const addonRows = ref([])
 const deleteConfirmOpen = ref(false)
 const deleting = ref(false)
 let addonSeq = 1
-
-const calcKeys = ['7', '8', '9', '÷', '4', '5', '6', '×', '1', '2', '3', '-', '0', '.', '⌫', '+', 'C', '=']
 const addonDirectionOptions = [
   { value: 'plus', label: '+' },
   { value: 'minus', label: '-' },
@@ -345,7 +322,6 @@ watch(
       baseMajor = Math.max(0, baseMajor)
     }
     model.amountMajor = baseMajor
-    model.amountInput = formatAmountInput(model.amountMajor)
     model.occurredDate = toDateInput(occurred)
     model.occurredHour = occurred.getHours()
     model.occurredMinute = occurred.getMinutes()
@@ -512,137 +488,6 @@ async function submit() {
   } catch (error) {
     uiStore.pushToast(error.message ?? '更新失敗', 'error')
   }
-}
-
-function handleAmountInput() {
-  syncAmountFromInput()
-}
-
-async function pressCalcKey(key) {
-  if (key === 'C') {
-    model.amountInput = ''
-    model.amountMajor = null
-    return
-  }
-
-  if (key === '⌫') {
-    model.amountInput = model.amountInput.slice(0, -1)
-    syncAmountFromInput()
-    return
-  }
-
-  if (key === '=') {
-    if (!isFormulaExpression(model.amountInput)) {
-      await submit()
-      return
-    }
-
-    const value = evaluateExpression(model.amountInput)
-    if (Number.isFinite(value)) {
-      model.amountMajor = value
-      model.amountInput = formatAmountInput(value)
-    }
-    return
-  }
-
-  if (isOperator(key)) {
-    const last = model.amountInput.slice(-1)
-    if (!model.amountInput && key !== '-') return
-    if (isOperator(last)) {
-      model.amountInput = `${model.amountInput.slice(0, -1)}${key}`
-    } else {
-      model.amountInput += key
-    }
-  } else {
-    model.amountInput += key
-  }
-
-  syncAmountFromInput()
-}
-
-function syncAmountFromInput() {
-  const value = evaluateExpression(model.amountInput)
-  model.amountMajor = Number.isFinite(value) ? value : null
-}
-
-function isOperator(char) {
-  return ['+', '-', '×', '÷', '*', '/'].includes(char)
-}
-
-function isFormulaExpression(input) {
-  const source = String(input ?? '').trim().replaceAll('×', '*').replaceAll('÷', '/').replace(/\s+/g, '')
-  if (!source) return false
-  let operatorCount = 0
-  for (let i = 0; i < source.length; i += 1) {
-    const ch = source[i]
-    if (!['+', '-', '*', '/'].includes(ch)) continue
-    if (i === 0 && ch === '-') continue
-    operatorCount += 1
-  }
-  return operatorCount > 0
-}
-
-function evaluateExpression(input) {
-  const source = String(input ?? '').trim()
-  if (!source) return null
-  if (!/^[0-9+\-×÷*/.\s]+$/.test(source)) return null
-
-  const normalized = source.replaceAll('×', '*').replaceAll('÷', '/').replace(/\s+/g, '')
-  const tokens = normalized.match(/(\d+(?:\.\d+)?)|[+\-*/]/g)
-  if (!tokens || !tokens.length) return null
-
-  const nums = []
-  const ops = []
-  let expectingNumber = true
-
-  for (const token of tokens) {
-    if (['+', '-', '*', '/'].includes(token)) {
-      if (expectingNumber) {
-        if (token === '-' && nums.length === 0) {
-          nums.push(0)
-        } else {
-          return null
-        }
-      }
-      while (ops.length && precedence(ops.at(-1)) >= precedence(token)) {
-        if (!applyOperator(nums, ops.pop())) return null
-      }
-      ops.push(token)
-      expectingNumber = true
-      continue
-    }
-
-    const num = Number(token)
-    if (!Number.isFinite(num)) return null
-    nums.push(num)
-    expectingNumber = false
-  }
-
-  if (expectingNumber) return null
-  while (ops.length) {
-    if (!applyOperator(nums, ops.pop())) return null
-  }
-
-  const result = nums[0]
-  if (!Number.isFinite(result)) return null
-  return Math.round(result * 100) / 100
-}
-
-function precedence(op) {
-  if (op === '+' || op === '-') return 1
-  if (op === '*' || op === '/') return 2
-  return 0
-}
-
-function applyOperator(nums, op) {
-  if (nums.length < 2) return false
-  const b = nums.pop()
-  const a = nums.pop()
-  if (op === '/' && b === 0) return false
-  const result = op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b
-  if (!Number.isFinite(result)) return false
-  nums.push(result)
-  return true
 }
 
 function remove() {
@@ -826,6 +671,12 @@ label {
   font-size: 13px;
   color: var(--muted)
 }
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted)
+}
 .field-block {
   display: grid;
   gap: 6px;
@@ -834,23 +685,6 @@ label {
 .field-label {
   font-size: 13px;
   color: var(--muted)
-}
-.calc-panel {
-  margin-top: -2px;
-  margin-bottom: 10px
-}
-.calc-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px
-}
-.calc-key {
-  padding: 12px 0;
-  font-size: 16px;
-  font-weight: 700
-}
-.calc-key.equal {
-  grid-column: 3 / span 2
 }
 .inline-grid {
   display: grid;

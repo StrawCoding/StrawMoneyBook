@@ -182,7 +182,7 @@
 | 當期收支卡 | `src/ui/components/home/HomeAssetSummaryCard.vue` |
 | 預算簡表（月均/日均 + 左右滑動切換） | `src/ui/components/home/HomeBudgetSummaryCard.vue` |
 | 交易清單（含空狀態與快速記帳 CTA） | `src/ui/components/home/HomeTransactionFeed.vue` |
-| 編輯交易 | `src/ui/components/home/HomeTransactionEditSheet.vue` |
+| 編輯交易 | `src/ui/components/home/HomeTransactionEditSheet.vue`（SMB-217 後改用 AmountCalculatorInput 計算機輸入） |
 | 快速新增入口 | `src/ui/views/BookkeepingPage.vue` + `src/ui/services/bookkeeping-mode.service.js` |
 | 手動快速新增 | `src/ui/views/QuickAddPage.vue`（SMB-162 後附加項目抵消後可存 0 元交易；SMB-175 後金額欄整合計算機） |
 | 問答記帳 | `src/ui/views/QnaBookkeepingPage.vue` |

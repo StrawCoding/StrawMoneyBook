@@ -62,3 +62,11 @@ test('home transaction edit sheet also syncs category reimbursement defaults saf
   assert.match(homeEditSheetSource, /model\.includeInBudget = Boolean\(cat\.default_include_in_budget \?\? 1\)/)
   assert.match(homeEditSheetSource, /model\.includeInAnalysis = Boolean\(cat\.default_include_in_analysis \?\? 1\)/)
 })
+
+test('home transaction edit sheet uses AmountCalculatorInput like manual quick add', () => {
+  assert.match(homeEditSheetSource, /import.*AmountCalculatorInput.*from.*AmountCalculatorInput/)
+  assert.match(homeEditSheetSource, /<AmountCalculatorInput v-model="model\.amountMajor"/)
+  // Should NOT have the old calc-panel calculator grid
+  assert.doesNotMatch(homeEditSheetSource, /class="calc-panel"/)
+  assert.doesNotMatch(homeEditSheetSource, /pressCalcKey/)
+})
