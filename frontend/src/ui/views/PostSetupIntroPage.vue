@@ -40,6 +40,18 @@
               <font-awesome-icon icon="fa-solid fa-arrow-up-right-from-square" />
               <span>{{ currentSlide.actionLabel }}</span>
             </button>
+            <div v-if="currentSlide.extraActions?.length" class="extra-action-list" aria-label="post-setup intro related actions">
+              <button
+                v-for="action in currentSlide.extraActions"
+                :key="action.to"
+                type="button"
+                class="btn ghost quick-link extra-action"
+                @click="openDestination(action.to)"
+              >
+                <font-awesome-icon :icon="action.icon" />
+                <span>{{ action.label }}</span>
+              </button>
+            </div>
           </div>
 
           <div class="detail-panel">
@@ -128,6 +140,18 @@ const slides = computed(() => {
       highlight: t('post_setup_intro.shared_ledger.highlight', '共同帳本為會員功能，登入帳號後可從設定啟用，並管理同步狀態與成員。'),
       actionLabel: t('post_setup_intro.shared_ledger.action', '前往共同帳本'),
       to: '/settings/shared-ledgers',
+      extraActions: [
+        {
+          label: t('post_setup_intro.shared_ledger.restore_backup_action', '恢復備份'),
+          icon: 'fa-solid fa-database',
+          to: '/settings/data-management',
+        },
+        {
+          label: t('post_setup_intro.shared_ledger.ledger_sync_action', '帳本同步'),
+          icon: 'fa-solid fa-cloud-arrow-up',
+          to: '/settings/google-drive-ledger-sync',
+        },
+      ],
       points: [
         t('post_setup_intro.shared_ledger.point_1', '建立後可分享加入連結，或以 Email 邀請對方加入共同帳本。'),
         t('post_setup_intro.shared_ledger.point_2', '每次記帳都會自動推送同步，確保所有成員看到一致的帳本。'),
@@ -196,7 +220,11 @@ function goPrev() {
 }
 
 async function openCurrentDestination() {
-  await completeAndNavigate(currentSlide.value.to)
+  await openDestination(currentSlide.value.to)
+}
+
+async function openDestination(path) {
+  await completeAndNavigate(path)
 }
 
 async function goNext() {
@@ -319,6 +347,14 @@ h3,
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+.extra-action-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.extra-action {
+  justify-self: auto;
 }
 .highlight-card {
   padding: 16px;

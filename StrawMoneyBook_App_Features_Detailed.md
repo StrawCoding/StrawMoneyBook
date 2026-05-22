@@ -112,6 +112,8 @@ SMB-189 / v1.2.5 後，帳本 scoped store 載入前會先執行帳本完整性�
 
 另外，新帳本建立後會立即完成預算模組初始化並可正常載入空月預算，不會因預算項目查詢的欄位歧義中斷 onboarding 或帳本切換流程。
 
+SMB-215 / v1.2.27 後，初始設定後導覽頁的共同帳本步驟會在原本「前往共同帳本」之外，另外提供「恢復備份」與「帳本同步」快速按鈕，讓使用者在初始化完成後可直接前往資料管理還原備份，或進入 Google Drive 帳本同步頁設定跨裝置同步。
+
 Android 發版目前也已把版本碼策略收斂成由語意版號自動推導的單調遞增規則，並保留一段 Play Store 歷史版本碼安全區間，避免 `0.x.y` 這類版本名稱在新版發佈時反而低於舊的商店版本碼；若 release 產物存在 `mapping.txt`，Play 上傳流程也會一起帶上去模糊化檔，降低 Crash / ANR 排查成本。`npm run gpr` 推送版本 tag 後，GitHub Actions 會建置 AAB、建立 GitHub Release，並透過 Fastlane 發布到 Google Play 封閉測試 track；預設 track 是 `alpha`，也可用 GitHub Actions 變數 `PLAY_CLOSED_TESTING_TRACK` 指向其他封閉測試 track。SMB-183 後 `gpr` 在 bump 前先執行 `notes:check` 確認專案根目錄的 `release-notes.pending.md` 檔案存在；pending notes 為空時只提示但仍允許發版，patch 發版成功後會封存既有 notes，空 notes 不會建立空白版本區塊，minor 發版則執行 `notes:clear` 清空暫存檔並 push。GitHub Actions 建立 GitHub Release 時也會把暫存檔內容加入 release body，Fastlane 同步填入 Google Play changelog；發佈失敗時暫存檔不會被清空，確保下次發版紀錄不遺失。
 
 另外，CI 的 Android release build 現在也已補上 `frontend/android/gradlew` 的可執行權限，避免 `./gradlew bundleRelease` 在 checkout 後因權限不足直接中斷，讓 bundleRelease 的驗證可以真正跑到 Gradle 階段。CI concurrency 只會取消 PR 的舊 run，`main` push 會排隊跑完，避免發版 commit 與清空 release notes commit 互相產生取消 annotation。Google Play 封閉測試上傳也會針對「Play edit 被外部變更」這類暫時性衝突重開 edit 有限次重試，避免 AAB 已建好卻因 Play Console 或其他發版流程同時修改而直接中斷。
