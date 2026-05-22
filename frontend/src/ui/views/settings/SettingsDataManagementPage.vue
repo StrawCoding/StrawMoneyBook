@@ -41,6 +41,35 @@
 
     <teleport to="body">
       <transition name="overlay-fade">
+        <section
+          v-if="operationProgress.active"
+          class="operation-progress-mask"
+          aria-live="polite"
+          aria-modal="true"
+          role="dialog"
+        >
+          <article class="card operation-progress-dialog">
+            <p class="operation-progress-eyebrow">{{ t('settings_data.progress.title') }}</p>
+            <h3>{{ operationProgressTitle }}</h3>
+            <p class="muted operation-progress-message">{{ operationProgressMessage }}</p>
+            <div
+              class="operation-progress-bar"
+              role="progressbar"
+              :aria-label="operationProgressTitle"
+              :aria-valuenow="operationProgress.percent"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <span class="operation-progress-fill" :style="{ width: `${operationProgress.percent}%` }" />
+            </div>
+            <strong class="operation-progress-percent">{{ operationProgress.percent }}%</strong>
+          </article>
+        </section>
+      </transition>
+    </teleport>
+
+    <teleport to="body">
+      <transition name="overlay-fade">
         <section v-if="isResetConfirmOpen" class="sheet-mask reset-mask" @click.self="closeResetConfirm">
           <article class="card reset-dialog">
             <header class="row">
@@ -111,13 +140,80 @@ const isResetConfirmOpen = ref(false)
 const resetCountdown = ref(0)
 const resettingAllData = ref(false)
 const lastExportPath = ref('')
+const operationProgress = ref(createIdleOperationProgress())
 let resetTimerId = null
+let operationProgressTimerId = null
 
 const resetConfirmLabel = computed(() => {
   if (resettingAllData.value) return t('settings_data.reset.processing')
   if (resetCountdown.value > 0) return t('settings_data.reset.confirm_countdown', { count: resetCountdown.value })
   return t('settings_data.reset.confirm')
 })
+
+const operationProgressTitle = computed(() => {
+  if (operationProgress.value.type === 'resetAll') return t('settings_data.progress.reset.title')
+  if (operationProgress.value.type === 'importCsv') return t('settings_data.progress.import_csv.title')
+  return t('settings_data.progress.import_json.title')
+})
+
+const operationProgressMessage = computed(() => {
+  if (operationProgress.value.type === 'resetAll') return t('settings_data.progress.reset.message')
+  if (operationProgress.value.type === 'importCsv') return t('settings_data.progress.import_csv.message')
+  return t('settings_data.progress.import_json.message')
+})
+
+function createIdleOperationProgress() {
+  return {
+    active: false,
+    type: '',
+    percent: 0,
+  }
+}
+
+function clearOperationProgressTimer() {
+  if (operationProgressTimerId) {
+    window.clearInterval(operationProgressTimerId)
+    operationProgressTimerId = null
+  }
+}
+
+function showOperationProgress(type) {
+  clearOperationProgressTimer()
+  operationProgress.value = {
+    active: true,
+    type,
+    percent: 8,
+  }
+  operationProgressTimerId = window.setInterval(() => {
+    const current = Number(operationProgress.value.percent || 0)
+    if (!operationProgress.value.active || current >= 92) return
+    const step = current < 35 ? 7 : current < 70 ? 4 : 2
+    operationProgress.value = {
+      ...operationProgress.value,
+      percent: Math.min(92, current + step),
+    }
+  }, 450)
+}
+
+async function hideOperationProgress() {
+  clearOperationProgressTimer()
+  if (!operationProgress.value.active) return
+  operationProgress.value = {
+    ...operationProgress.value,
+    percent: 100,
+  }
+  await new Promise((resolve) => window.setTimeout(resolve, 240))
+  operationProgress.value = createIdleOperationProgress()
+}
+
+async function withOperationProgress(type, task) {
+  showOperationProgress(type)
+  try {
+    return await task()
+  } finally {
+    await hideOperationProgress()
+  }
+}
 
 async function createResetRecoveryBackup() {
   const filename = `strawmoneybook-recovery-before-reset-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
@@ -218,14 +314,17 @@ async function onImportJsonFile(event) {
   if (!file) return
 
   try {
-    const text = await readFileAsText(file)
-    await resetDatabase()
-    const result = await importBackupJsonAsNewLedgers(text)
-    await ledgerStore.refresh()
-    if (result.firstLedgerId) {
-      await ledgerStore.switchLedger(result.firstLedgerId)
-    }
-    await refreshAllStores()
+    const result = await withOperationProgress('importJson', async () => {
+      const text = await readFileAsText(file)
+      await resetDatabase()
+      const imported = await importBackupJsonAsNewLedgers(text)
+      await ledgerStore.refresh()
+      if (imported.firstLedgerId) {
+        await ledgerStore.switchLedger(imported.firstLedgerId)
+      }
+      await refreshAllStores()
+      return imported
+    })
     const importedCount = Number(result.importedLedgers?.length ?? 0)
     const importedName = result.firstLedgerName || result.importedLedgers?.[0]?.ledgerName || ''
     const importedLabel = importedCount > 1 ? `共 ${importedCount} 本` : importedName
@@ -242,9 +341,12 @@ async function onImportCsvFile(event) {
   if (!file) return
 
   try {
-    const text = await readFileAsText(file)
-    const result = await importLedgerCsv(ledgerStore.activeLedgerId, text, csvImportType.value)
-    await refreshAllStores()
+    const result = await withOperationProgress('importCsv', async () => {
+      const text = await readFileAsText(file)
+      const imported = await importLedgerCsv(ledgerStore.activeLedgerId, text, csvImportType.value)
+      await refreshAllStores()
+      return imported
+    })
     uiStore.pushToast(t('settings_data.toast.import_csv_done', { inserted: result.inserted, skipped: result.skipped }))
   } catch (error) {
     uiStore.pushToast(error.message ?? t('settings_data.toast.import_csv_failed'), 'error')
@@ -293,15 +395,17 @@ async function confirmResetAllData() {
 
   resettingAllData.value = true
   try {
-    try {
-      await createResetRecoveryBackup()
-    } catch (backupError) {
-      console.warn('[data-management] failed to create recovery backup before reset', backupError)
-    }
-    await resetDatabase()
-    localStorage.removeItem('straw.active_ledger_id')
-    await ledgerStore.init()
-    await refreshAllStores()
+    await withOperationProgress('resetAll', async () => {
+      try {
+        await createResetRecoveryBackup()
+      } catch (backupError) {
+        console.warn('[data-management] failed to create recovery backup before reset', backupError)
+      }
+      await resetDatabase()
+      localStorage.removeItem('straw.active_ledger_id')
+      await ledgerStore.init()
+      await refreshAllStores()
+    })
     uiStore.pushToast(t('settings_data.toast.reset_done'))
     closeResetConfirm({ force: true })
   } catch (error) {
@@ -317,6 +421,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearResetTimer()
+  clearOperationProgressTimer()
   window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
 })
 </script>
@@ -390,4 +495,48 @@ h3 {
   margin-top: 6px;
   justify-content: flex-end;
   gap: 8px
+}
+.operation-progress-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 86;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: var(--overlay-backdrop);
+}
+.operation-progress-dialog {
+  width: min(420px, calc(100vw - 28px));
+  padding: 18px;
+  border-radius: 18px;
+  display: grid;
+  gap: 10px;
+  text-align: center;
+}
+.operation-progress-eyebrow {
+  margin: 0;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.operation-progress-message {
+  margin: 0;
+}
+.operation-progress-bar {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 65%, transparent);
+}
+.operation-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--ok) 60%, var(--primary)));
+  transition: width 260ms ease;
+}
+.operation-progress-percent {
+  color: var(--primary);
+  font-size: 20px;
 }</style>
