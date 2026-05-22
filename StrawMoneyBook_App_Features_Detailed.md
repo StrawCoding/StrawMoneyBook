@@ -100,7 +100,7 @@ SMB-142 重建後，自動備份設定頁會在背景自動偵測 / 自動備份
 
 這條分層在 SMB-130 後又進一步收斂：`core/services/bootstrap.service.js` 現在只保留資料庫初始化與 recover，`ui/services/app-bootstrap.service.js` 接手 Pinia 與啟動鏈，`ui/services/app-runtime.service.js` 接手背景排程、網址恢復、Android back 與同步/備份 runtime side effects，而 `ui/composables/useAppShellRuntime.js` 則把 App shell 的 route transition、高度鎖定、安全鎖 lifecycle 與更新提示從 `App.vue` 抽離。
 
-交易資料流也已統一從頁面抽離：分析頁、交易搜尋、日曆、交易明細、交易編輯與帳戶明細都不再直接查 `transaction.repo.js`，而是透過 `core/services/transaction-query.service.js` 取得 `all / year / month / day / account / detail-related` 查詢結果；分析頁的分類/帳戶彙總、圓餅圖、長條圖與日別 breakdown 集中在 `core/utils/analysis-breakdown.js`，交易搜尋頁的 filter、批量選取、sheet 狀態與結果摘要則集中在 `ui/composables/useTransactionSearchPage.js`。SMB-211 後，交易搜尋的 SQL 關鍵字條件會同時比對借貸交易的顯示標籤、借貸方向與往來對象，使用者可直接輸入「借出」、「借入」、「歸還 / 還款」或「收回 / 收回借款」搜尋對應借貸交易，而不是只能用底層 `loan_payment` origin type 或備註文字命中。
+交易資料流也已統一從頁面抽離：分析頁、交易搜尋、日曆、交易明細、交易編輯與帳戶明細都不再直接查 `transaction.repo.js`，而是透過 `core/services/transaction-query.service.js` 取得 `all / year / month / day / account / detail-related` 查詢結果；分析頁的分類/帳戶彙總、圓餅圖、長條圖與日別 breakdown 集中在 `core/utils/analysis-breakdown.js`，交易搜尋頁的 filter、批量選取、sheet 狀態與結果摘要則集中在 `ui/composables/useTransactionSearchPage.js`。SMB-211 後，交易搜尋的 SQL 關鍵字條件會同時比對借貸交易的顯示標籤、借貸方向與往來對象，使用者可直接輸入「借出」、「借入」、「歸還 / 還款」或「收回 / 收回借款」搜尋對應借貸交易，而不是只能用底層 `loan_payment` origin type 或備註文字命中。SMB-219 / v1.2.28 後，交易編輯頁與首頁交易編輯 sheet 在改選分類時會同步套用分類預設的報銷、紀錄預算與紀錄收支設定；載入既有交易時則保留該交易原本已儲存的記帳旗標，避免開啟編輯畫面就被分類預設覆蓋。
 
 SMB-155 後，帳戶明細與交易搜尋不再一次載入完整交易歷史，而是以 300 筆為一頁做 SQL 分頁；交易搜尋的日期與關鍵字篩選會先下推到查詢層再取當頁資料，帳戶明細則會額外查詢分頁前交易金額，用來校正每筆交易後餘額，避免第 2 頁以後餘額從錯誤基準開始計算。
 

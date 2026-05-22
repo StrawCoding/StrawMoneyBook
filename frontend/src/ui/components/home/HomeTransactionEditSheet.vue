@@ -214,7 +214,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
@@ -283,6 +283,8 @@ const model = reactive({
 })
 
 const showExtra = ref(false)
+const applyingCategoryDefaults = ref(false)
+const hydratingTransactionModel = ref(false)
 const addonRows = ref([])
 const deleteConfirmOpen = ref(false)
 const deleting = ref(false)
@@ -321,6 +323,7 @@ watch(
       return
     }
 
+    hydratingTransactionModel.value = true
     const occurred = new Date(tx.occurred_at)
     const isTransfer = tx.type === 'transfer'
     const isIncome = tx.type === 'income'
@@ -358,6 +361,9 @@ watch(
 
     showExtra.value = false
     addonRows.value = parsedAddonRows
+    void nextTick(() => {
+      hydratingTransactionModel.value = false
+    })
   },
   { immediate: true },
 )
@@ -403,10 +409,20 @@ watch(
 watch(
   () => model.isReimbursable,
   (next, prev) => {
+    if (applyingCategoryDefaults.value || hydratingTransactionModel.value) return
     if (next && !prev) {
       model.includeInBudget = false
       model.includeInAnalysis = false
     }
+  },
+)
+
+watch(
+  () => model.categoryId,
+  (categoryId) => {
+    if (hydratingTransactionModel.value) return
+    if (!categoryId || model.type === 'transfer' || model.type === 'adjustment') return
+    void applyCategoryDefaults(categoryId)
   },
 )
 
@@ -732,6 +748,17 @@ function ensureInCategories(categoryId, categories) {
   if (!Array.isArray(categories) || !categories.length) return ''
   if (categories.some((item) => item.id === categoryId)) return categoryId
   return categories[0]?.id ?? ''
+}
+
+async function applyCategoryDefaults(categoryId) {
+  const cat = categoryStore.categories.find((c) => c.id === categoryId)
+  if (!cat) return
+  applyingCategoryDefaults.value = true
+  model.isReimbursable = model.type === 'expense' && Boolean(cat.default_is_reimbursable)
+  model.includeInBudget = Boolean(cat.default_include_in_budget ?? 1)
+  model.includeInAnalysis = Boolean(cat.default_include_in_analysis ?? 1)
+  await nextTick()
+  applyingCategoryDefaults.value = false
 }
 
 function toDateInput(date) {

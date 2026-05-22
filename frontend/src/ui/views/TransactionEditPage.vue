@@ -234,7 +234,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
@@ -279,6 +279,8 @@ const loading = ref(false)
 const submitting = ref(false)
 const deleting = ref(false)
 const showExtra = ref(false)
+const applyingCategoryDefaults = ref(false)
+const hydratingTransactionModel = ref(false)
 const deleteConfirmOpen = ref(false)
 const transaction = ref(null)
 const allTransactions = ref([])
@@ -423,10 +425,20 @@ watch(
 watch(
   () => model.isReimbursable,
   (next, prev) => {
+    if (applyingCategoryDefaults.value || hydratingTransactionModel.value) return
     if (next && !prev) {
       model.includeInBudget = false
       model.includeInAnalysis = false
     }
+  },
+)
+
+watch(
+  () => model.categoryId,
+  (categoryId) => {
+    if (hydratingTransactionModel.value) return
+    if (!categoryId || model.type === 'transfer' || model.type === 'adjustment') return
+    void applyCategoryDefaults(categoryId)
   },
 )
 
@@ -481,6 +493,17 @@ function ensureCategoryIdByType(type, currentCategoryId) {
   const ids = groups.flatMap((group) => group.categories ?? []).map((item) => item.id)
   if (ids.includes(currentCategoryId)) return currentCategoryId
   return ids[0] ?? ''
+}
+
+async function applyCategoryDefaults(categoryId) {
+  const cat = categoryStore.categories.find((c) => c.id === categoryId)
+  if (!cat) return
+  applyingCategoryDefaults.value = true
+  model.isReimbursable = model.type === 'expense' && Boolean(cat.default_is_reimbursable)
+  model.includeInBudget = Boolean(cat.default_include_in_budget ?? 1)
+  model.includeInAnalysis = Boolean(cat.default_include_in_analysis ?? 1)
+  await nextTick()
+  applyingCategoryDefaults.value = false
 }
 
 function accountCurrencyCode(accountId) {
@@ -675,6 +698,7 @@ function hydrateModelFromTransaction() {
   const tx = transaction.value
   if (!tx) return
 
+  hydratingTransactionModel.value = true
   showExtra.value = false
   deleteConfirmOpen.value = false
 
@@ -703,6 +727,9 @@ function hydrateModelFromTransaction() {
     model.exchangeRateMode = transferNeedsExchangeRate.value && manualRate > 0 ? 'manual' : 'system'
     model.manualExchangeRateInput = transferNeedsExchangeRate.value && manualRate > 0 ? formatAmountInput(manualRate) : ''
     addonRows.value = parseAddonRowsFromNote(outTx.note)
+    void nextTick(() => {
+      hydratingTransactionModel.value = false
+    })
     return
   }
 
@@ -723,6 +750,9 @@ function hydrateModelFromTransaction() {
   model.exchangeRateMode = 'system'
   model.manualExchangeRateInput = ''
   addonRows.value = parseAddonRowsFromNote(tx.note)
+  void nextTick(() => {
+    hydratingTransactionModel.value = false
+  })
 }
 
 async function submit() {
