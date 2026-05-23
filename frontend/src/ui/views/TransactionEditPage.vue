@@ -24,13 +24,7 @@
         <div class="stack form-wrap">
           <label class="field">
             {{ amountFieldLabel }}
-            <input
-              v-model.number="model.amountMajor"
-              class="input"
-              type="number"
-              :min="model.type === 'adjustment' ? undefined : 0"
-              step="0.01"
-            />
+            <AmountCalculatorInput v-model="model.amountMajor" :allow-negative="model.type === 'adjustment'" />
           </label>
 
           <div class="field">
@@ -237,6 +231,7 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
+import AmountCalculatorInput from '@/ui/components/common/AmountCalculatorInput.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'

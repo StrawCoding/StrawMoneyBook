@@ -64,6 +64,10 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  allowNegative: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -83,14 +87,14 @@ const triggerLabel = computed(() => {
 
 function openCalc() {
   const val = Number(props.modelValue ?? 0)
-  expression.value = val > 0 ? String(val) : ''
+  expression.value = Number.isFinite(val) && (val > 0 || (props.allowNegative && val < 0)) ? String(val) : ''
   calcOpen.value = true
 }
 
 function resolvedConfirmValue() {
   const result = liveResult.value
   if (result !== null) return result
-  const match = expression.value.match(/^(\d+(?:\.\d*)?)/)
+  const match = expression.value.match(props.allowNegative ? /^(-?\d+(?:\.\d*)?)/ : /^(\d+(?:\.\d*)?)/)
   if (match) {
     const parsed = parseFloat(match[1])
     return Number.isFinite(parsed) ? parsed : 0
@@ -123,6 +127,10 @@ function pressDot() {
 }
 
 function pressOp(op) {
+  if (props.allowNegative && op === '-' && !expression.value) {
+    expression.value = '-'
+    return
+  }
   if (!expression.value) return
   const last = expression.value.at(-1)
   if (['+', '-', '*', '/'].includes(last)) {

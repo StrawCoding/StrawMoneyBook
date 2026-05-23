@@ -70,3 +70,20 @@ test('home transaction edit sheet uses AmountCalculatorInput like manual quick a
   assert.doesNotMatch(homeEditSheetSource, /class="calc-panel"/)
   assert.doesNotMatch(homeEditSheetSource, /pressCalcKey/)
 })
+
+test('standalone transaction edit page also uses AmountCalculatorInput', () => {
+  assert.match(editSource, /import.*AmountCalculatorInput.*from.*AmountCalculatorInput/)
+  assert.match(editSource, /<AmountCalculatorInput v-model="model\.amountMajor" :allow-negative="model\.type === 'adjustment'"/)
+  assert.doesNotMatch(editSource, /v-model\.number="model\.amountMajor"/)
+})
+
+test('AmountCalculatorInput can preserve signed adjustment amounts when allowed', () => {
+  const calculatorSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/components/common/AmountCalculatorInput.vue'),
+    'utf8',
+  )
+  assert.match(calculatorSource, /allowNegative:\s*{[\s\S]*type:\s*Boolean[\s\S]*default:\s*false/)
+  assert.match(calculatorSource, /props\.allowNegative && val < 0/)
+  assert.ok(calculatorSource.includes("expression.value.match(props.allowNegative ? /^(-?\\d+(?:\\.\\d*)?)/"))
+  assert.match(calculatorSource, /props\.allowNegative && op === '-' && !expression\.value/)
+})
