@@ -19,6 +19,14 @@ const settingsAccountSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/settings/SettingsAccountPage.vue'),
   'utf8',
 )
+const oauthExchangeApiSource = readFileSync(
+  resolve(import.meta.dirname, '../api/google/oauth/exchange.js'),
+  'utf8',
+)
+const oauthRefreshApiSource = readFileSync(
+  resolve(import.meta.dirname, '../api/google/oauth/refresh.js'),
+  'utf8',
+)
 const i18nSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/services/i18n.service.js'),
   'utf8',
@@ -33,6 +41,19 @@ test('Google auth paths share the same frontend web client id resolver', () => {
   assert.match(googleClientIdSource, /settings_account\.google_client_id_missing/)
   assert.doesNotMatch(googleIdentitySource, /import\.meta\.env\.VITE_GOOGLE_WEB_CLIENT_ID/)
   assert.doesNotMatch(googleBackupAuthSource, /import\.meta\.env\.VITE_GOOGLE_WEB_CLIENT_ID/)
+})
+
+test('serverless Google OAuth APIs accept shared web client id fallback', () => {
+  // Regression: api.strawmb.com may run the serverless copy of the OAuth endpoints.
+  // Those endpoints must not require a duplicate GOOGLE_OAUTH_CLIENT_ID when the
+  // already-configured GOOGLE_AUTH_WEB_CLIENT_ID is the same OAuth web client.
+  for (const source of [oauthExchangeApiSource, oauthRefreshApiSource]) {
+    assert.match(
+      source,
+      /String\(process\.env\.GOOGLE_OAUTH_CLIENT_ID \?\? ''\)\.trim\(\) \|\|\s*String\(process\.env\.GOOGLE_AUTH_WEB_CLIENT_ID \?\? ''\)\.trim\(\)/,
+    )
+    assert.match(source, /GOOGLE_AUTH_WEB_CLIENT_ID \(or GOOGLE_OAUTH_CLIENT_ID\)/)
+  }
 })
 
 test('Google client id missing message is translated by supported locales', () => {

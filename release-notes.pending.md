@@ -2,6 +2,9 @@
 
 ---
 
+## v1.2.34
+- (SMB-213) 修復 api.strawmb.com serverless Google OAuth exchange / refresh 端點仍要求重複設定 `GOOGLE_OAUTH_CLIENT_ID` 的問題：serverless 端點現在也會以既有 `GOOGLE_AUTH_WEB_CLIENT_ID` 作為 OAuth Web Client ID fallback，讓重新授權後的自動備份可共用同一組 Web Client ID 設定；補上 regression test 覆蓋 exchange 與 refresh serverless copy
+
 ## v1.2.33
 - (SMB-213) 修復後端 Google OAuth exchange / refresh 端點無法載入 `GOOGLE_OAUTH_CLIENT_SECRET` 導致每次重新授權均回傳 `GOOGLE_EXCHANGE_004 (missing_google_oauth_env)`：`getGoogleOAuthEnv()` 改以 `GOOGLE_AUTH_WEB_CLIENT_ID` 作為 `clientId` 的 fallback，減少重複設定；start script 新增 `--env-file-if-exists=/.env` 確保 1Panel 管理的 env file 在 `npm start` 時被載入；伺服器啟動時若 `GOOGLE_OAUTH_CLIENT_SECRET` 未設定會主動印出明確警告，避免靜默失效；`.env.example` 補上 `GOOGLE_OAUTH_CLIENT_SECRET` 說明
 

@@ -169,6 +169,18 @@ async function requestGoogleToken(params) {
   }
 }
 
+function getGoogleOAuthEnv() {
+  // GOOGLE_OAUTH_CLIENT_ID falls back to GOOGLE_AUTH_WEB_CLIENT_ID so api.strawmb.com
+  // can reuse the already configured OAuth web client for server-auth-code exchange.
+  const clientId = String(process.env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim() ||
+    String(process.env.GOOGLE_AUTH_WEB_CLIENT_ID ?? '').trim()
+  return {
+    clientId,
+    clientSecret: String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim(),
+    redirectUri: String(process.env.GOOGLE_OAUTH_REDIRECT_URI ?? '').trim(),
+  }
+}
+
 export default async function handler(req, res) {
   // Attach req so that sendJson → setCorsHeaders can read the Origin header
   // without threading req through every helper function.
@@ -202,15 +214,17 @@ export default async function handler(req, res) {
     return
   }
 
-  const clientId = String(process.env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim()
-  const clientSecret = String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim()
-  const redirectUri = String(process.env.GOOGLE_OAUTH_REDIRECT_URI ?? '').trim()
+  const { clientId, clientSecret, redirectUri } = getGoogleOAuthEnv()
   if (!clientId || !clientSecret) {
+    const missing = [
+      !clientId && 'GOOGLE_AUTH_WEB_CLIENT_ID (or GOOGLE_OAUTH_CLIENT_ID)',
+      !clientSecret && 'GOOGLE_OAUTH_CLIENT_SECRET',
+    ].filter(Boolean).join(' and ')
     sendError(
       res,
       500,
       'missing_google_oauth_env',
-      'GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET are required',
+      `${missing} are required`,
       ERROR_NUMBER.MISSING_GOOGLE_OAUTH_ENV,
     )
     return

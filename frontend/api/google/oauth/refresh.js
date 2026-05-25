@@ -94,6 +94,16 @@ async function requestGoogleToken(params) {
   }
 }
 
+function getGoogleOAuthEnv() {
+  // GOOGLE_OAUTH_CLIENT_ID falls back to GOOGLE_AUTH_WEB_CLIENT_ID so api.strawmb.com
+  // can reuse the already configured OAuth web client for refresh-token exchange.
+  return {
+    clientId: String(process.env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim() ||
+      String(process.env.GOOGLE_AUTH_WEB_CLIENT_ID ?? '').trim(),
+    clientSecret: String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim(),
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     setCorsHeaders(res)
@@ -122,14 +132,17 @@ export default async function handler(req, res) {
     sendError(res, 400, 'missing_refresh_token', 'refreshToken is required', ERROR_NUMBER.MISSING_REFRESH_TOKEN)
     return
   }
-  const clientId = String(process.env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim()
-  const clientSecret = String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim()
+  const { clientId, clientSecret } = getGoogleOAuthEnv()
   if (!clientId || !clientSecret) {
+    const missing = [
+      !clientId && 'GOOGLE_AUTH_WEB_CLIENT_ID (or GOOGLE_OAUTH_CLIENT_ID)',
+      !clientSecret && 'GOOGLE_OAUTH_CLIENT_SECRET',
+    ].filter(Boolean).join(' and ')
     sendError(
       res,
       500,
       'missing_google_oauth_env',
-      'GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET are required',
+      `${missing} are required`,
       ERROR_NUMBER.MISSING_GOOGLE_OAUTH_ENV,
     )
     return
