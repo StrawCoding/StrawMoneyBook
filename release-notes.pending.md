@@ -2,6 +2,9 @@
 
 ---
 
+## v1.2.33
+- (SMB-213) 修復後端 Google OAuth exchange / refresh 端點無法載入 `GOOGLE_OAUTH_CLIENT_SECRET` 導致每次重新授權均回傳 `GOOGLE_EXCHANGE_004 (missing_google_oauth_env)`：`getGoogleOAuthEnv()` 改以 `GOOGLE_AUTH_WEB_CLIENT_ID` 作為 `clientId` 的 fallback，減少重複設定；start script 新增 `--env-file-if-exists=/.env` 確保 1Panel 管理的 env file 在 `npm start` 時被載入；伺服器啟動時若 `GOOGLE_OAUTH_CLIENT_SECRET` 未設定會主動印出明確警告，避免靜默失效；`.env.example` 補上 `GOOGLE_OAUTH_CLIENT_SECRET` 說明
+
 ## v1.2.32
 - (SMB-213) 修復 Google 自動備份重新授權後仍可能再次顯示「需要重新授權」的問題：自動備份重新登入與手動備份 / 還原現在會要求取得新的長效 refresh token；若 offline server auth code exchange 未回傳 refresh token，前端不再靜默降級成短效 online access token，也不會沿用舊的失效 refresh token，避免 UI 暫時顯示已連線但下一次背景備份立即失敗
 

@@ -74,12 +74,13 @@ function sendUnauthorizedClient(res, errorNumber) {
   sendError(res, 401, 'unauthorized_client', 'missing or invalid x-straw-client-key', errorNumber)
 }
 
-function sendMissingGoogleEnv(res, errorNumber) {
+function sendMissingGoogleEnv(res, errorNumber, missingVars = []) {
+  const varList = missingVars.length > 0 ? missingVars.join(', ') : 'GOOGLE_OAUTH_CLIENT_SECRET'
   sendError(
     res,
     500,
     'missing_google_oauth_env',
-    'GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET are required',
+    `${varList} is not configured on the server`,
     errorNumber,
   )
 }
@@ -145,8 +146,14 @@ async function requestGoogleToken(params) {
 }
 
 function getGoogleOAuthEnv() {
+  // GOOGLE_OAUTH_CLIENT_ID falls back to GOOGLE_AUTH_WEB_CLIENT_ID so operators only
+  // need to set the separate var when using a different OAuth 2.0 web client for exchange.
+  const clientId = (
+    String(process.env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim() ||
+    String(process.env.GOOGLE_AUTH_WEB_CLIENT_ID ?? '').trim()
+  )
   return {
-    clientId: String(process.env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim(),
+    clientId,
     clientSecret: String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim(),
     redirectUri: String(process.env.GOOGLE_OAUTH_REDIRECT_URI ?? '').trim(),
   }
@@ -191,7 +198,8 @@ async function exchangeServerAuthCode(req, res) {
 
   const { clientId, clientSecret, redirectUri } = getGoogleOAuthEnv()
   if (!clientId || !clientSecret) {
-    sendMissingGoogleEnv(res, EXCHANGE_ERROR_NUMBER.MISSING_GOOGLE_OAUTH_ENV)
+    const missing = [!clientId && 'GOOGLE_AUTH_WEB_CLIENT_ID (or GOOGLE_OAUTH_CLIENT_ID)', !clientSecret && 'GOOGLE_OAUTH_CLIENT_SECRET'].filter(Boolean)
+    sendMissingGoogleEnv(res, EXCHANGE_ERROR_NUMBER.MISSING_GOOGLE_OAUTH_ENV, missing)
     return
   }
 
@@ -256,7 +264,8 @@ async function refreshAccessToken(req, res) {
 
   const { clientId, clientSecret } = getGoogleOAuthEnv()
   if (!clientId || !clientSecret) {
-    sendMissingGoogleEnv(res, REFRESH_ERROR_NUMBER.MISSING_GOOGLE_OAUTH_ENV)
+    const missing = [!clientId && 'GOOGLE_AUTH_WEB_CLIENT_ID (or GOOGLE_OAUTH_CLIENT_ID)', !clientSecret && 'GOOGLE_OAUTH_CLIENT_SECRET'].filter(Boolean)
+    sendMissingGoogleEnv(res, REFRESH_ERROR_NUMBER.MISSING_GOOGLE_OAUTH_ENV, missing)
     return
   }
 

@@ -182,5 +182,17 @@ server.listen(PORT, HOST, () => {
   if (ALLOWED_ORIGINS === '*') {
     console.warn('[security] ALLOWED_ORIGINS=* is set; all origins are allowed. Do not use this in production.')
   }
+  const hasGoogleClientId = Boolean(
+    String(process.env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim() ||
+    String(process.env.GOOGLE_AUTH_WEB_CLIENT_ID ?? '').trim(),
+  )
+  const hasGoogleClientSecret = Boolean(String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim())
+  if (!hasGoogleClientId || !hasGoogleClientSecret) {
+    const missing = [
+      !hasGoogleClientId && 'GOOGLE_AUTH_WEB_CLIENT_ID (or GOOGLE_OAUTH_CLIENT_ID)',
+      !hasGoogleClientSecret && 'GOOGLE_OAUTH_CLIENT_SECRET',
+    ].filter(Boolean)
+    console.warn(`[google-oauth] Missing env vars: ${missing.join(', ')}. Google Drive backup token exchange will fail with GOOGLE_EXCHANGE_004 / GOOGLE_REFRESH_004 until these are configured.`)
+  }
   console.log(`[backend] listening on http://${HOST}:${PORT}`)
 })
