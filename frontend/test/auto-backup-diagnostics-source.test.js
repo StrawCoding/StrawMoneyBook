@@ -233,3 +233,51 @@ test('Android MainActivity forwards Google offline authorization results to Soci
   assert.match(mainActivitySource, /getBridge\(\)\.getPlugin\("SocialLogin"\)/)
   assert.match(mainActivitySource, /handleGoogleLoginIntent\(requestCode, data\)/)
 })
+
+test('google auto backup reconnect must require a fresh refresh token and must not downgrade to online mode (SMB-213 Restart)', () => {
+  // Regression: after a background auto backup wrote reauth_required, a manual reconnect could complete
+  // with only a short-lived access token if the offline exchange did not return a fresh refresh_token.
+  // That saved connected:true, cleared the warning, and the next automatic backup immediately paused
+  // with reauth_required again. Auto backup/reconnect must require persistent auth instead of silently
+  // carrying a stale cached refresh token or downgrading to online mode.
+  assert.match(
+    googleSource,
+    /googleSignIn\(\{[\s\S]*?preferredEmail: normalizedPreferredEmail \|\| preferredEmail,[\s\S]*?requireRefreshToken: true,[\s\S]*?\}\)/,
+    'connectGoogleBackup must request a persistent refresh token during manual reconnect',
+  )
+  assert.match(
+    googleSource,
+    /getAccessToken\(\{[\s\S]*?interactive: interactiveAuth,[\s\S]*?requireRefreshToken: true,[\s\S]*?\}\)/,
+    'manual backup/restore must require persistent Google auth when reauthorizing',
+  )
+  assert.match(
+    googleAuthSource,
+    /if \(requireRefreshToken && !exchanged\.refreshToken\) \{[\s\S]*?GOOGLE_REFRESH_TOKEN_REQUIRED_MESSAGE[\s\S]*?\}/,
+    'offline sign-in must reject when Google exchange does not return a fresh refresh token',
+  )
+  assert.match(
+    googleAuthSource,
+    /if \(requireRefreshToken\) \{\n\s*throw normalizeGoogleAuthError\(offlineError\)\n\s*\}/,
+    'persistent auth requests must not fallback to online mode after offline exchange failure',
+  )
+  assert.match(
+    googleAuthSource,
+    /function ensureServerAuthCodeModeForRefreshToken\(\) \{[\s\S]*?runtimeGoogleModeOverride === 'online'[\s\S]*?runtimeGoogleModeOverride = ''[\s\S]*?clearTokenCache\(\)[\s\S]*?\}/,
+    'refresh-token-required flows must reset runtime online fallback instead of accepting online mode',
+  )
+  assert.match(
+    googleAuthSource,
+    /if \(hasUsableCachedAccessToken\(\) && \(!requireRefreshToken \|\| cachedRefreshToken\)\) return cachedAccessToken/,
+    'refresh-token-required flows must not accept a cached access token unless a refresh token also exists',
+  )
+  assert.match(
+    googleSource,
+    /await getAccessToken\(\{\n\s*interactive: false,\n\s*requireRefreshToken: true,\n\s*\}\)/,
+    'connect profile resolver must not silently reuse access-token-only sessions',
+  )
+  assert.match(
+    googleAuthSource,
+    /refresh-token sign-in cannot reuse an online-only sign-in promise/,
+    'refresh-token-required sign-in must not share an ongoing online-only login promise',
+  )
+})

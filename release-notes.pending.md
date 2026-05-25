@@ -2,6 +2,9 @@
 
 ---
 
+## v1.2.32
+- (SMB-213) 修復 Google 自動備份重新授權後仍可能再次顯示「需要重新授權」的問題：自動備份重新登入與手動備份 / 還原現在會要求取得新的長效 refresh token；若 offline server auth code exchange 未回傳 refresh token，前端不再靜默降級成短效 online access token，也不會沿用舊的失效 refresh token，避免 UI 暫時顯示已連線但下一次背景備份立即失敗
+
 ## v1.2.26
 - (SMB-218) 修復 Google Drive 帳本同步拉回遠端快照時的資料保護缺口：同步前會驗證遠端快照 `ledger_id` 與目前帳本一致，不一致時停止同步；替換本機帳本前會先建立本機 JSON 快照，遠端匯入失敗時嘗試復原原帳本與本機同步設定，避免錯帳本或異常快照覆蓋本機資料
 

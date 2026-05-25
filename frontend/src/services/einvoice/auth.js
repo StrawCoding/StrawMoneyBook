@@ -37,8 +37,10 @@ let cachedRefreshToken = ''
 let cachedProfile = null
 let ongoingSignInPromise = null
 let ongoingSignInStartedAtMs = 0
+let ongoingSignInRequiresRefreshToken = false
 
 const GOOGLE_REAUTH_REQUIRED_CODE = 'GOOGLE_REAUTH_REQUIRED'
+const GOOGLE_REFRESH_TOKEN_REQUIRED_MESSAGE = 'Google 登入成功但未取得長效 refresh token，無法用於自動備份'
 
 function parseBooleanEnv(raw) {
   const value = String(raw ?? '').trim().toLowerCase()
@@ -48,6 +50,17 @@ function parseBooleanEnv(raw) {
 function isServerAuthCodeModeActive() {
   if (!SERVER_AUTH_CODE_FLOW_ENABLED) return false
   return runtimeGoogleModeOverride !== 'online'
+}
+
+function ensureServerAuthCodeModeForRefreshToken() {
+  if (!SERVER_AUTH_CODE_FLOW_ENABLED) {
+    throw new Error('Google 自動備份需要長效授權，但目前未啟用 server auth code flow')
+  }
+  if (runtimeGoogleModeOverride === 'online') {
+    runtimeGoogleModeOverride = ''
+    initializedGoogleMode = ''
+    clearTokenCache()
+  }
 }
 
 function resolveServerAuthCodeFlowEnabled() {
@@ -563,18 +576,26 @@ export async function initGoogleAuth() {
 }
 
 export async function googleSignIn(options = {}) {
+  const requireRefreshToken = Boolean(options?.requireRefreshToken)
   if (ongoingSignInPromise) {
     const elapsedMs = Date.now() - ongoingSignInStartedAtMs
     if (elapsedMs >= 0 && elapsedMs < STALE_SIGNIN_PROMISE_MS) {
-      return ongoingSignInPromise
+      if (!requireRefreshToken || ongoingSignInRequiresRefreshToken) {
+        return ongoingSignInPromise
+      }
+      console.warn('[google-auth] refresh-token sign-in cannot reuse an online-only sign-in promise')
+    } else {
+      console.warn('[google-auth] stale sign-in promise detected, forcing a fresh login attempt', { elapsedMs })
     }
-    console.warn('[google-auth] stale sign-in promise detected, forcing a fresh login attempt', { elapsedMs })
     ongoingSignInPromise = null
     ongoingSignInStartedAtMs = 0
+    ongoingSignInRequiresRefreshToken = false
   }
 
   ongoingSignInStartedAtMs = Date.now()
+  ongoingSignInRequiresRefreshToken = requireRefreshToken
   const signInPromise = (async () => {
+    if (requireRefreshToken) ensureServerAuthCodeModeForRefreshToken()
     await initGoogleAuth()
     let response
     try {
@@ -635,6 +656,9 @@ export async function googleSignIn(options = {}) {
         }
         const exchanged = await exchangeServerAuthCode(response.result.serverAuthCode)
         const accessToken = exchanged.accessToken
+        if (requireRefreshToken && !exchanged.refreshToken) {
+          throw new Error(GOOGLE_REFRESH_TOKEN_REQUIRED_MESSAGE)
+        }
         const refreshToken = exchanged.refreshToken || cachedRefreshToken
         const profileFromToken = exchanged.profile
         const profileFromGoogle = profileFromToken.email || profileFromToken.name || profileFromToken.imageUrl
@@ -655,6 +679,9 @@ export async function googleSignIn(options = {}) {
           profile: cachedProfile,
         }
       } catch (offlineError) {
+        if (requireRefreshToken) {
+          throw normalizeGoogleAuthError(offlineError)
+        }
         console.warn('[google-auth] offline auth flow failed, fallback to online mode', offlineError)
         enableOnlineModeFallback(String(offlineError?.message ?? offlineError))
         await initGoogleAuth()
@@ -681,6 +708,10 @@ export async function googleSignIn(options = {}) {
       }
     }
 
+    if (requireRefreshToken) {
+      throw new Error(GOOGLE_REFRESH_TOKEN_REQUIRED_MESSAGE)
+    }
+
     if (response.result?.responseType !== 'online') {
       throw new Error('Google 登入失敗，請重試')
     }
@@ -695,12 +726,15 @@ export async function googleSignIn(options = {}) {
     if (ongoingSignInPromise === signInPromise) {
       ongoingSignInPromise = null
       ongoingSignInStartedAtMs = 0
+      ongoingSignInRequiresRefreshToken = false
     }
   }
 }
 
 export async function getAccessToken(options = {}) {
-  if (hasUsableCachedAccessToken()) return cachedAccessToken
+  const requireRefreshToken = Boolean(options?.requireRefreshToken)
+  if (requireRefreshToken) ensureServerAuthCodeModeForRefreshToken()
+  if (hasUsableCachedAccessToken() && (!requireRefreshToken || cachedRefreshToken)) return cachedAccessToken
   const interactive = options?.interactive !== false
   const preferredEmail = String(options?.preferredEmail ?? '').trim()
 
@@ -731,7 +765,10 @@ export async function getAccessToken(options = {}) {
 
     if (interactive) {
       try {
-        const signed = await googleSignIn({ preferredEmail })
+        const signed = await googleSignIn({
+          preferredEmail,
+          requireRefreshToken,
+        })
         return signed.accessToken
       } catch (error) {
         throw normalizeGoogleAuthError(error)
@@ -755,7 +792,10 @@ export async function getAccessToken(options = {}) {
   if (interactive) {
     // Keep manual flows to a single interactive login to avoid duplicate account prompts.
     try {
-      const signed = await googleSignIn({ preferredEmail })
+      const signed = await googleSignIn({
+        preferredEmail,
+        requireRefreshToken,
+      })
       return signed.accessToken
     } catch (error) {
       throw normalizeGoogleAuthError(error)
@@ -768,7 +808,10 @@ export async function getAccessToken(options = {}) {
 export async function reauth(options = {}) {
   const interactive = options?.interactive !== false
   clearTokenCache({ keepRefreshToken: isServerAuthCodeModeActive() })
-  return getAccessToken({ interactive })
+  return getAccessToken({
+    interactive,
+    requireRefreshToken: Boolean(options?.requireRefreshToken),
+  })
 }
 
 export async function googleSignOut() {

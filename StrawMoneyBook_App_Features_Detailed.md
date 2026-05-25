@@ -88,7 +88,7 @@ Android 記帳提醒同步目前也已補強 Capacitor Local Notifications plugi
 
 Google Drive 自動備份在重新登入 / 靜默恢復連線成功後，也會同步清掉先前殘留的 `reauth_required` 自動檢查診斷狀態，不會已經重新授權成功了，設定頁還持續顯示「需要重新授權才能自動備份」。
 
-SMB-213 Restart / v1.2.24 後，Android Google 自動備份的 offline/server auth code 重新授權也會在原生 `MainActivity` 轉送 Capgo SocialLogin 的 Google authorization activity result。Google 授權 PendingIntent 回到 App 後會交給 `SocialLoginPlugin.handleGoogleLoginIntent(...)` 完成登入 promise，避免畫面一直停在「登入中」直到逾時。
+SMB-213 Restart / v1.2.24 後，Android Google 自動備份的 offline/server auth code 重新授權也會在原生 `MainActivity` 轉送 Capgo SocialLogin 的 Google authorization activity result。Google 授權 PendingIntent 回到 App 後會交給 `SocialLoginPlugin.handleGoogleLoginIntent(...)` 完成登入 promise，避免畫面一直停在「登入中」直到逾時。SMB-213 Restart / v1.2.32 後，自動備份重新登入與手動備份 / 還原的互動式重新授權會要求取得新的長效 refresh token；若 offline exchange 未回傳 refresh token，不再靜默降級成短效 online access token 或沿用舊的失效 refresh token，避免畫面暫時顯示已連線但下一次自動備份又立刻回到「需要重新授權」。
 
 自動備份排程現在也會主動偵測 Google 授權失效（SMB-110 修正）：若用戶已設定自動備份（`autoEnabled` 或有綁定帳號），但靜默取 token 失敗導致 `connected: false`，不再只寫入 `skipped/not_connected`，而是改寫為 `error/reauth_required`，使設定頁能顯示明確的「需要重新授權」警示並提示用戶操作，不再讓自動備份靜默失效。
 

@@ -164,7 +164,10 @@ async function resolveGoogleProfileForConnect(preferredEmail = '') {
   const normalizedPreferredEmail = normalizeEmail(preferredEmail)
   let reusedSession = false
   try {
-    await getAccessToken({ interactive: false })
+    await getAccessToken({
+      interactive: false,
+      requireRefreshToken: true,
+    })
     reusedSession = true
   } catch {
     reusedSession = false
@@ -179,7 +182,10 @@ async function resolveGoogleProfileForConnect(preferredEmail = '') {
   // session. If silent token retrieval failed (!reusedSession), we must sign in interactively
   // to obtain fresh tokens, regardless of what the profile cache contains.
   if (!reusedSession) {
-    const login = await googleSignIn({ preferredEmail: normalizedPreferredEmail || preferredEmail })
+    const login = await googleSignIn({
+      preferredEmail: normalizedPreferredEmail || preferredEmail,
+      requireRefreshToken: true,
+    })
     profile = normalizeProfile(login?.profile ?? getCachedGoogleProfile())
   }
 
@@ -244,7 +250,10 @@ async function ensureConnectedBySilentAuth(ledgerId, state) {
 
   let silentToken = ''
   try {
-    silentToken = String(await getAccessToken({ interactive: false }) ?? '').trim()
+    silentToken = String(await getAccessToken({
+      interactive: false,
+      requireRefreshToken: true,
+    }) ?? '').trim()
   } catch {
     return state
   }
@@ -312,6 +321,7 @@ export async function autoConnectGoogleBackup(ledgerId, options = {}) {
       await getAccessToken({
         interactive: false,
         preferredEmail,
+        requireRefreshToken: true,
       })
       return silentState
     } catch {
@@ -372,14 +382,20 @@ export async function performGoogleBackup(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   ensureNativePlatform()
   const interactiveAuth = options?.interactiveAuth !== false
-  const reauthHandler = () => reauth({ interactive: interactiveAuth })
+  const reauthHandler = () => reauth({
+    interactive: interactiveAuth,
+    requireRefreshToken: true,
+  })
 
   const state = await getGoogleBackupState(ledgerId)
   if (!state.connected) {
     throw new Error(t('settings_auto_backup.error.google.connect_required'))
   }
 
-  const accessToken = await getAccessToken({ interactive: interactiveAuth })
+  const accessToken = await getAccessToken({
+    interactive: interactiveAuth,
+    requireRefreshToken: true,
+  })
   const payload = await exportAllLedgersJson()
   const payloadText = JSON.stringify(payload, null, 2)
   const now = new Date().toISOString()
@@ -407,14 +423,20 @@ export async function restoreGoogleBackupJson(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   ensureNativePlatform()
   const interactiveAuth = options?.interactiveAuth !== false
-  const reauthHandler = () => reauth({ interactive: interactiveAuth })
+  const reauthHandler = () => reauth({
+    interactive: interactiveAuth,
+    requireRefreshToken: true,
+  })
 
   const state = await getGoogleBackupState(ledgerId)
   if (!state.connected) {
     throw new Error(t('settings_auto_backup.error.google.connect_required'))
   }
 
-  const accessToken = await getAccessToken({ interactive: interactiveAuth })
+  const accessToken = await getAccessToken({
+    interactive: interactiveAuth,
+    requireRefreshToken: true,
+  })
   const files = await listAppDataBackups({ accessToken, reauth: reauthHandler })
   const target = pickPreferredBackupFile(files)
   if (!target?.id) {
