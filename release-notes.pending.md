@@ -2,6 +2,11 @@
 
 ---
 
+## v1.2.35
+- (SMB-222) 請款單導入流程新增借入 / 借貸入帳交易的候選與顯示邏輯，請款單導入頁與列表頁會共用 claim-sheet import service / utility 來統一報銷與借入交易的展示、金額與匯入建構；同步補上 borrow loan 相關 i18n 文案與導入來源標籤
+
+---
+
 ## v1.2.34
 - (SMB-213) 修復 api.strawmb.com serverless Google OAuth exchange / refresh 端點仍要求重複設定 `GOOGLE_OAUTH_CLIENT_ID` 的問題：serverless 端點現在也會以既有 `GOOGLE_AUTH_WEB_CLIENT_ID` 作為 OAuth Web Client ID fallback，讓重新授權後的自動備份可共用同一組 Web Client ID 設定；補上 regression test 覆蓋 exchange 與 refresh serverless copy
 

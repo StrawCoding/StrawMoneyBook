@@ -305,7 +305,12 @@ import {
   transitionReimbursementStatus,
   updateReimbursementDraft,
 } from '@/core/services/reimbursement.service'
+import { listClaimSheetImportableTransactions } from '@/core/services/claim-sheet-import.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import {
+  buildClaimSheetImportedClaimItem,
+  claimSheetImportedAmountMinor,
+} from '@/ui/utils/claim-sheet-import'
 
 const route = useRoute()
 const router = useRouter()
@@ -321,6 +326,7 @@ const dashboard = ref({
   summary: { pendingCount: 0, pendingTotal: 0 },
 })
 const createSheetBootstrapReady = ref(false)
+const importableTxs = ref([])
 const isCreateOpen = ref(false)
 const creating = ref(false)
 const completeTarget = ref(null)
@@ -434,7 +440,7 @@ const visibleClaimEmptyKey = computed(() => {
 
 const importedItems = computed(() => {
   const idSet = new Set(createForm.importTxIds.map((id) => String(id ?? '').trim()).filter(Boolean))
-  return reimbursementStore.pendingItems.filter((tx) => idSet.has(String(tx.id)))
+  return importableTxs.value.filter((tx) => idSet.has(String(tx.id)))
 })
 
 const draftTotalMinor = computed(() => {
@@ -475,6 +481,7 @@ onMounted(async () => {
   syncActiveClaimPageFromRoute()
   createSheetBootstrapReady.value = false
   await Promise.all([reloadDashboard(), reimbursementStore.load(), accountStore.load(), categoryStore.load()])
+  await reloadImportableTxs()
   createSheetBootstrapReady.value = true
   if (String(route.query.create ?? '').trim() === '1') {
     restoreCreateFormFromSession()
@@ -576,8 +583,18 @@ async function reloadDashboard() {
   dashboard.value = await loadReimbursementDashboard(ledgerStore.activeLedgerId)
 }
 
+async function reloadImportableTxs() {
+  if (!ledgerStore.activeLedgerId) {
+    importableTxs.value = []
+    return
+  }
+  importableTxs.value = await listClaimSheetImportableTransactions(ledgerStore.activeLedgerId, {
+    reimbursementTransactions: reimbursementStore.pendingItems,
+  })
+}
+
 function pendingMinorOfTx(tx) {
-  return reimbursementPendingMinor(tx)
+  return claimSheetImportedAmountMinor(tx)
 }
 
 function formatTime(iso) {
@@ -680,10 +697,6 @@ function openClaimDetail(claim) {
   })
 }
 
-function buildImportedItemDescription(tx) {
-  return importedTxPresentation(tx).title
-}
-
 function buildManualClaimItems() {
   return createForm.manualItems
     .map((item) => {
@@ -712,16 +725,7 @@ function buildManualClaimItems() {
 }
 
 function buildImportedClaimItems() {
-  return importedItems.value.map((tx) => ({
-    entryType: 'expense',
-    sourceType: 'transaction',
-    transactionId: tx.id,
-    categoryId: tx.category_id ?? null,
-    accountId: tx.account_id ?? null,
-    description: buildImportedItemDescription(tx),
-    amountMinor: pendingMinorOfTx(tx),
-    occurredAt: tx.occurred_at,
-  }))
+  return importedItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t))
 }
 
 function fillCreateFormFromDetail(detail) {
@@ -876,7 +880,9 @@ async function submitCompleteSheet() {
       note: completeForm.note,
       selectedAdvanceIds: completeForm.selectedAdvanceIds,
     })
-    await Promise.all([reloadDashboard(), reimbursementStore.load(), accountStore.load()])
+    await Promise.all([reloadDashboard(), accountStore.load()])
+    await reimbursementStore.load()
+    await reloadImportableTxs()
     closeCompleteSheet()
     uiStore.pushToast(t('claim_sheet.toast.completed'))
     await router.replace({ name: 'home' })

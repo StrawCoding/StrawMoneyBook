@@ -63,8 +63,13 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { getReimbursementDetail, updateReimbursementDraft } from '@/core/services/reimbursement.service'
+import { listClaimSheetImportableTransactions } from '@/core/services/claim-sheet-import.service'
 import { buildClaimCategoryLookup, presentImportedClaimTx } from '@/ui/utils/claim-sheet-presentation'
-import { reimbursementPendingMinor } from '@/ui/utils/reimbursement-item'
+import {
+  buildClaimSheetImportedClaimItem,
+  buildClaimSheetImportedDraftTx,
+  claimSheetImportedAmountMinor,
+} from '@/ui/utils/claim-sheet-import'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -87,6 +92,7 @@ const loading = ref(false)
 const saving = ref(false)
 const claim = ref(null)
 const claimItems = ref([])
+const importableTxs = ref([])
 const selectedTxIds = ref([])
 const draftSession = ref(null)
 
@@ -101,23 +107,12 @@ const returnLink = computed(() => {
 const selectedImportedDraftItems = computed(() => {
   return claimItems.value
     .filter((item) => String(item?.transaction_id ?? '').trim())
-    .map((item) => ({
-      id: String(item.transaction_id),
-      transaction_id: String(item.transaction_id),
-      category_id: item.category_id ?? null,
-      account_id: item.account_id ?? null,
-      category_name: '',
-      note_plain: String(item.transaction_note ?? '').trim(),
-      note: String(item.transaction_note ?? item.description ?? '').trim(),
-      occurred_at: item.occurred_at,
-      amount_minor: Math.max(0, Math.round(Number(item.amount_minor ?? 0))),
-      reimbursed_minor: 0,
-    }))
+    .map((item) => buildClaimSheetImportedDraftTx(item))
 })
 
 const editableImportedTxs = computed(() => {
   const txMap = new Map()
-  for (const tx of reimbursementStore.pendingItems) {
+  for (const tx of importableTxs.value) {
     const txId = String(tx?.id ?? '').trim()
     if (txId) txMap.set(txId, tx)
   }
@@ -134,7 +129,7 @@ const selectedImportedItems = computed(() => {
 })
 
 const selectedTotalMinor = computed(() => {
-  return selectedImportedItems.value.reduce((sum, tx) => sum + pendingMinorOfTx(tx), 0)
+  return selectedImportedItems.value.reduce((sum, tx) => sum + claimSheetImportedAmountMinor(tx), 0)
 })
 
 const allImportableSelected = computed(() => {
@@ -156,7 +151,7 @@ onMounted(() => {
 })
 
 function pendingMinorOfTx(tx) {
-  return reimbursementPendingMinor(tx)
+  return claimSheetImportedAmountMinor(tx)
 }
 
 function formatTime(iso) {
@@ -192,6 +187,25 @@ async function loadPage() {
   loading.value = true
   try {
     await Promise.all([categoryStore.load(), reimbursementStore.load()])
+    if (!ledgerStore.activeLedgerId) {
+      importableTxs.value = []
+      if (isNewDraft.value) {
+        draftSession.value = loadClaimSheetDraftSession() ?? {
+          title: '',
+          counterpartyName: '',
+          note: '',
+          importTxIds: [],
+          manualItems: [],
+        }
+        selectedTxIds.value = [...draftSession.value.importTxIds]
+      }
+      return
+    }
+
+    importableTxs.value = await listClaimSheetImportableTransactions(ledgerStore.activeLedgerId, {
+      reimbursementTransactions: reimbursementStore.pendingItems,
+    })
+
     if (isNewDraft.value) {
       draftSession.value = loadClaimSheetDraftSession() ?? {
         title: '',
@@ -204,7 +218,7 @@ async function loadPage() {
       return
     }
 
-    if (!ledgerStore.activeLedgerId || !claimId.value) {
+    if (!claimId.value) {
       claim.value = null
       claimItems.value = []
       return
@@ -222,21 +236,8 @@ async function loadPage() {
   }
 }
 
-function buildImportedItemDescription(tx) {
-  return importedTxPresentation(tx).title
-}
-
 function buildImportedClaimItems() {
-  return selectedImportedItems.value.map((tx) => ({
-    entryType: 'expense',
-    sourceType: 'transaction',
-    transactionId: tx.id,
-    categoryId: tx.category_id ?? null,
-    accountId: tx.account_id ?? null,
-    description: buildImportedItemDescription(tx),
-    amountMinor: pendingMinorOfTx(tx),
-    occurredAt: tx.occurred_at,
-  }))
+  return selectedImportedItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t))
 }
 
 function preservedManualClaimItems() {

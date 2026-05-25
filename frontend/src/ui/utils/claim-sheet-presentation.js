@@ -1,3 +1,9 @@
+import {
+  claimSheetImportKindFromTx,
+  claimSheetImportedIcon,
+  claimSheetImportedTitle,
+} from '@/ui/utils/claim-sheet-import'
+
 export const CLAIM_ADVANCE_ICON = 'fa-solid fa-hand-holding-dollar'
 
 export function buildClaimCategoryLookup(categories = []) {
@@ -35,13 +41,22 @@ export function presentClaimDetailItem(item, categoryLookup, t) {
   const isAdvance = sourceType === 'advance'
   const transactionId = String(item?.transaction_id ?? '').trim()
   const entryType = String(item?.entry_type ?? '').trim() === 'income' ? 'income' : 'expense'
+  const importKind = isAdvance
+    ? ''
+    : transactionId && entryType === 'income'
+      ? 'borrow_loan'
+      : transactionId
+        ? 'reimbursement'
+        : ''
 
   return {
     title: String(item?.description ?? '').trim() || t('claim_sheet.form.unnamed_item'),
     icon: isAdvance ? CLAIM_ADVANCE_ICON : categoryIconFromLookup(item?.category_id, categoryLookup),
     categoryName: isAdvance
       ? t('claim_sheet.entry_type.advance')
-      : categoryNameFromLookup(item?.category_id, categoryLookup, item?.category_name),
+      : importKind === 'borrow_loan'
+        ? t('claim_sheet.item_source.borrow_loan')
+        : categoryNameFromLookup(item?.category_id, categoryLookup, item?.category_name),
     entryLabel: isAdvance
       ? t('claim_sheet.entry_type.advance')
       : entryType === 'income'
@@ -49,9 +64,11 @@ export function presentClaimDetailItem(item, categoryLookup, t) {
         : t('claim_sheet.entry_type.expense'),
     sourceLabel: isAdvance
       ? t('claim_sheet.item_source.advance')
-      : transactionId
-        ? t('claim_sheet.item_source.imported')
-        : t('claim_sheet.item_source.manual'),
+      : importKind === 'borrow_loan'
+        ? t('claim_sheet.item_source.borrow_loan')
+        : transactionId
+          ? t('claim_sheet.item_source.imported')
+          : t('claim_sheet.item_source.manual'),
     note: String(item?.transaction_note ?? '').trim(),
   }
 }
@@ -84,14 +101,17 @@ export function presentClaimManualFormItem(item, categoryLookup, t) {
 }
 
 export function presentImportedClaimTx(tx, categoryLookup, t) {
-  const title = String(tx?.category_name ?? '').trim()
-    || String(tx?.note_plain ?? '').trim()
-    || t('claim_sheet.form.imported_reimbursement_item', { id: tx.id })
+  const kind = claimSheetImportKindFromTx(tx)
+  const title = claimSheetImportedTitle(tx, t)
 
   return {
     title,
-    icon: categoryIconFromLookup(tx?.category_id, categoryLookup, tx?.category_icon),
-    categoryName: categoryNameFromLookup(tx?.category_id, categoryLookup, tx?.category_name),
+    icon: kind === 'borrow_loan'
+      ? claimSheetImportedIcon(tx)
+      : categoryIconFromLookup(tx?.category_id, categoryLookup, tx?.category_icon),
+    categoryName: kind === 'borrow_loan'
+      ? t('claim_sheet.item_source.borrow_loan')
+      : categoryNameFromLookup(tx?.category_id, categoryLookup, tx?.category_name),
     note: String(tx?.note_plain ?? '').trim(),
   }
 }

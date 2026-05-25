@@ -365,6 +365,48 @@ export async function getLoanSetupTransaction(ledgerId, loanId) {
   return firstRow(result)
 }
 
+export async function listBorrowLoanImportTransactions(ledgerId) {
+  assertLedgerId(ledgerId)
+
+  const result = await query(
+    `SELECT
+       t.id,
+       t.type,
+       t.account_id,
+       t.category_id,
+       t.amount_minor,
+       t.occurred_at,
+       t.note,
+       t.origin_type,
+       t.external_ref_id AS loan_id,
+       l.direction AS loan_direction,
+       cp.name AS counterparty_name
+     FROM transactions t
+     LEFT JOIN loans l
+       ON l.ledger_id = t.ledger_id
+      AND l.id = t.external_ref_id
+     LEFT JOIN counterparties cp
+       ON cp.ledger_id = l.ledger_id
+      AND cp.id = l.counterparty_id
+     WHERE t.ledger_id = ?
+       AND t.origin_type = 'loan_payment'
+       AND t.type = 'income'
+       AND t.deleted_at IS NULL
+       AND l.deleted_at IS NULL
+       AND l.direction = 'borrow'
+       AND NOT EXISTS (
+         SELECT 1
+         FROM loan_payments lp_ref
+         WHERE lp_ref.ledger_id = t.ledger_id
+           AND (lp_ref.generated_tx_id = t.id OR lp_ref.generated_interest_tx_id = t.id)
+       )
+     ORDER BY t.occurred_at DESC, t.created_at DESC, t.id DESC;`,
+    [ledgerId],
+  )
+
+  return rowsOf(result)
+}
+
 export async function createLoanPayment(ledgerId, input) {
   assertLedgerId(ledgerId)
 
