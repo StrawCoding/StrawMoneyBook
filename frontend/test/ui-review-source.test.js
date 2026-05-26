@@ -56,6 +56,7 @@ const i18nSource = readFileSync(
   'utf8',
 )
 const viewsDir = resolve(import.meta.dirname, '../src/ui/views')
+const settingsViewsDir = resolve(import.meta.dirname, '../src/ui/views/settings')
 
 function listVueFiles(dir) {
   const entries = readdirSync(dir)
@@ -137,6 +138,17 @@ test('settings page shows helper descriptions for each entry', () => {
   assert.match(i18nSource, /'settings\.desc\.bank_sync': '管理銀行連線、同步規則與待匯入交易。'/)
   assert.match(i18nSource, /'settings\.desc\.addon_templates': 'Create common add-on items for quick use in transactions.'/)
   assert.match(i18nSource, /'settings\.desc\.bank_sync': 'Manage bank connections, sync rules, and pending imports.'/)
+})
+
+test('SMB-221 settings subpage titles include feature icons', () => {
+  const offenders = []
+  for (const filePath of listVueFiles(settingsViewsDir)) {
+    const source = readFileSync(filePath, 'utf8')
+    const titleMatch = source.match(/<h2 class="page-title"[\s\S]*?<\/h2>/)
+    if (!titleMatch) continue
+    if (!/class="title-icon"/.test(titleMatch[0])) offenders.push(filePath.replace(`${settingsViewsDir}/`, ''))
+  }
+  assert.deepEqual(offenders, [])
 })
 
 test('SMB-154 account and shared ledger pages use registered i18n keys', () => {

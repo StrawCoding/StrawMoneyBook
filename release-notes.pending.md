@@ -3,7 +3,7 @@
 ---
 
 ## v1.2.40
-- (SMB-221) 設定頁面所有子項目頁面的標題加入對應 icon，與「關於我們」頁面一致的視覺風格；共更新 26 個設定子頁面，每頁依照功能性質套用相符的 Font Awesome icon，並加入 `display: inline-flex` 與 gap 排版
+- (SMB-221) 設定頁面所有子項目頁面的標題加入對應 icon，與「關於我們」頁面一致的視覺風格；共更新 26 個設定子頁面，每頁依照功能性質套用相符的 Font Awesome icon，並加入 `display: inline-flex` 與 gap 排版；補上 source regression test 防止後續設定子頁標題漏掉 `title-icon`
 
 ---
 
