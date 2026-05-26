@@ -5,11 +5,16 @@ import { resolve } from 'node:path'
 
 import {
   logClientError,
+  logToastError,
+  getErrorLogSnapshot,
+  subscribeErrorLog,
+  resetErrorLogForTest,
   resetErrorLogServiceDependenciesForTest,
   setErrorLogServiceDependenciesForTest,
 } from '../src/ui/services/error-log.service.js'
 
 afterEach(() => {
+  resetErrorLogForTest()
   resetErrorLogServiceDependenciesForTest()
 })
 
@@ -61,6 +66,77 @@ test('logClientError preserves sanitized debug metadata in the upload payload', 
   assert.equal(uploads[0].context.debug.operation, 'connect_bank_account')
   assert.equal(uploads[0].context.debug.debugHint, 'check otp')
   assert.equal(uploads[0].context.debug.trace.steps[1].step, 'submit_login')
+})
+
+// SMB-220: error log buffer integration tests
+
+test('logToastError appends error entry accessible via getErrorLogSnapshot', () => {
+  logToastError('網路連線失敗', '/settings/auto-backup')
+  const snapshot = getErrorLogSnapshot()
+  assert.equal(snapshot.length, 1)
+  assert.equal(snapshot[0].source, 'toast')
+  assert.equal(snapshot[0].message, '網路連線失敗')
+  assert.equal(snapshot[0].routePath, '/settings/auto-backup')
+  assert.ok(snapshot[0].loggedAt)
+  assert.ok(snapshot[0].id.startsWith('error_log_'))
+})
+
+test('logClientError appends vue error entry to in-memory buffer', async () => {
+  setErrorLogServiceDependenciesForTest({
+    uploadClientErrorLog: async () => ({ ok: true }),
+  })
+  const error = new Error('component render failed')
+  await logClientError(error, { source: 'vue', component: 'HomeView', routePath: '/' })
+  const snapshot = getErrorLogSnapshot()
+  assert.equal(snapshot.length, 1)
+  assert.equal(snapshot[0].source, 'vue')
+  assert.equal(snapshot[0].message, 'component render failed')
+  assert.equal(snapshot[0].component, 'HomeView')
+  assert.equal(snapshot[0].routePath, '/')
+})
+
+test('subscribeErrorLog receives current entries immediately and on update', () => {
+  logToastError('first error', '/home')
+  const received = []
+  const unsub = subscribeErrorLog((items) => received.push([...items]))
+  logToastError('second error', '/settings')
+  unsub()
+
+  assert.ok(received.length >= 2)
+  assert.equal(received[0].length, 1)
+  assert.equal(received[0][0].message, 'first error')
+  assert.equal(received[1].length, 2)
+  assert.equal(received[1][0].message, 'second error')
+})
+
+test('error log buffer trims to 100 entries', () => {
+  for (let i = 0; i < 105; i++) {
+    logToastError(`error ${i}`, '/home')
+  }
+  const snapshot = getErrorLogSnapshot()
+  assert.equal(snapshot.length, 100)
+  assert.equal(snapshot[0].message, 'error 104')
+})
+
+test('SMB-220 debug page imports subscribeErrorLog and getErrorLogSnapshot', () => {
+  const debugPageSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/views/settings/SettingsDeveloperDebugPage.vue'),
+    'utf8',
+  )
+  assert.match(debugPageSource, /subscribeErrorLog/)
+  assert.match(debugPageSource, /getErrorLogSnapshot/)
+  assert.match(debugPageSource, /error_logs/)
+})
+
+test('SMB-220 main.js installs global error logging', () => {
+  const mainSource = readFileSync(resolve(import.meta.dirname, '../src/main.js'), 'utf8')
+  assert.match(mainSource, /installGlobalErrorLogging/)
+})
+
+test('SMB-220 ui.store calls logToastError for error type toasts', () => {
+  const storeSource = readFileSync(resolve(import.meta.dirname, '../src/ui/stores/ui.store.js'), 'utf8')
+  assert.match(storeSource, /logToastError/)
+  assert.match(storeSource, /type.*error|error.*type/i)
 })
 
 test('settings router and settings page expose the admin console entry points', () => {
