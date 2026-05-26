@@ -2,7 +2,7 @@
   <div class="view-root">
     <section class="stack">
       <header class="row page-head">
-        <h2>{{ t('settings_category_page.title') }}</h2>
+        <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-tags" class="title-icon" />{{ t('settings_category_page.title') }}</h2>
         <div class="btn-wrap">
           <button class="btn mini-btn" @click="addGroup">{{ t('settings_category_page.add_group') }}</button>
           <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
@@ -379,6 +379,15 @@ async function onCategorySortEnd(groupId) {
 h2 {
   margin: 0;
   font-size: 22px
+}
+.page-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.title-icon {
+  font-size: 18px;
+  color: var(--primary-soft);
 }
 .group-list, .category-list {
   list-style: none;

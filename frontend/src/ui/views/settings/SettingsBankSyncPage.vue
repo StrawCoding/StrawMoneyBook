@@ -1,7 +1,7 @@
 <template>
   <section class="stack">
     <header class="row page-head">
-      <h2>{{ t('settings_bank_sync.title') }}</h2>
+      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-building-columns" class="title-icon" />{{ t('settings_bank_sync.title') }}</h2>
       <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
     </header>
 
@@ -229,6 +229,17 @@ watch(
 h2,
 h3 {
   margin: 0;
+}
+
+.page-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-icon {
+  font-size: 18px;
+  color: var(--primary-soft);
 }
 
 .top-action-row,

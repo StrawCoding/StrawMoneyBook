@@ -2,7 +2,7 @@
   <section class="stack">
     <header class="row page-head">
       <div class="title-wrap">
-        <h2>{{ pageTitle }}</h2>
+        <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-building-columns" class="title-icon" />{{ pageTitle }}</h2>
         <small v-if="connection" class="muted">{{ connection.provider_connection_id }}</small>
       </div>
       <RouterLink class="btn back-btn" to="/settings/bank-sync">{{ t('common.back') }}</RouterLink>
@@ -603,6 +603,17 @@ h2,
 h3,
 h4 {
   margin: 0;
+}
+
+.page-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-icon {
+  font-size: 18px;
+  color: var(--primary-soft);
 }
 
 .connection-card,

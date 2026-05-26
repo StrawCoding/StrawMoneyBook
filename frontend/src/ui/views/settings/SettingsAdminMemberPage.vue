@@ -2,7 +2,7 @@
   <section class="stack">
     <header class="row page-head">
       <div class="title-wrap">
-        <h2>{{ pageTitle }}</h2>
+        <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-user-group" class="title-icon" />{{ pageTitle }}</h2>
         <small v-if="member" class="muted">{{ member.email }}</small>
       </div>
       <RouterLink class="btn back-btn" to="/settings/admin">{{ t('common.back') }}</RouterLink>
@@ -262,6 +262,18 @@ onUnmounted(() => {
 .page-head,
 .section-head {
   align-items: center;
+}
+
+.page-title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-icon {
+  font-size: 18px;
+  color: var(--primary-soft);
 }
 .title-wrap {
   min-width: 0;

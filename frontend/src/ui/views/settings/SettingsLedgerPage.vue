@@ -2,7 +2,7 @@
   <div class="view-root">
     <section class="stack">
       <header class="row page-head">
-        <h2>{{ t('settings_ledger_page.title') }}</h2>
+        <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-book" class="title-icon" />{{ t('settings_ledger_page.title') }}</h2>
         <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
       </header>
 
@@ -136,6 +136,15 @@ h2,
 h3 {
   margin: 0;
   font-size: 18px
+}
+.page-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.title-icon {
+  font-size: 18px;
+  color: var(--primary-soft);
 }
 .panel-head {
   align-items: flex-start;

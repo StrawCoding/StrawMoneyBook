@@ -1,7 +1,7 @@
 <template>
   <section class="stack">
     <header class="row page-head">
-      <h2>{{ t('membership_page.title') }}</h2>
+      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-money-check-dollar" class="title-icon" />{{ t('membership_page.title') }}</h2>
       <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
     </header>
 
@@ -361,6 +361,17 @@ onMounted(async () => {
 }
 h2, h3 {
   margin: 0;
+}
+
+.page-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-icon {
+  font-size: 18px;
+  color: var(--primary-soft);
 }
 .subtitle {
   margin: 0;

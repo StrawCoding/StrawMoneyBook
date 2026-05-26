@@ -1,7 +1,7 @@
 <template>
   <section class="stack">
     <header class="row">
-      <h2>{{ t('personalization.title') }}</h2>
+      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-palette" class="title-icon" />{{ t('personalization.title') }}</h2>
       <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
     </header>
     <article class="card panel">
@@ -198,6 +198,15 @@ function schemeDescription(scheme) {
 }
 h2 {
   margin: 0
+}
+.page-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.title-icon {
+  font-size: 18px;
+  color: var(--primary-soft);
 }
 h3 {
   margin: 0;

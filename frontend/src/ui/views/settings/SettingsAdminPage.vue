@@ -5,7 +5,7 @@
         <span class="hero-kicker">Admin Console</span>
         <div class="row page-head">
           <div class="hero-title-wrap">
-            <h2>{{ t('settings_admin.title', '管理員平台') }}</h2>
+            <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-users" class="title-icon" />{{ t('settings_admin.title', '管理員平台') }}</h2>
             <p class="muted hero-desc">
               {{ t('settings_admin.desc', '查看使用者、會員狀態與錯誤 log，並執行基本管理操作。') }}
             </p>
@@ -883,6 +883,18 @@ onUnmounted(() => {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--primary);
+}
+
+.page-title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-icon {
+  font-size: 18px;
+  color: var(--primary-soft);
 }
 
 .page-head {

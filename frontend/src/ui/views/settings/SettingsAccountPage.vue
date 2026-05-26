@@ -2,7 +2,7 @@
   <div class="view-root">
     <section class="stack">
       <header class="row page-head">
-        <h2>{{ t('settings_account.title', '帳號') }}</h2>
+        <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-user-check" class="title-icon" />{{ t('settings_account.title', '帳號') }}</h2>
         <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
       </header>
 
@@ -1424,6 +1424,17 @@ h2,
 h3,
 p {
   margin: 0;
+}
+
+.page-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-icon {
+  font-size: 18px;
+  color: var(--primary-soft);
 }
 
 .intro,

@@ -1,7 +1,7 @@
 <template>
   <section class="stack">
     <header class="row page-header">
-      <h2 class="page-title">分類明細</h2>
+      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-tag" class="title-icon" />分類明細</h2>
       <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
     </header>
 
@@ -272,8 +272,18 @@ function queryText(value) {
 <style scoped>.panel {
   padding: 14px
 }
-.page-title, h3 {
+.page-title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+h3 {
   margin: 0
+}
+.title-icon {
+  font-size: 18px;
+  color: var(--primary-soft);
 }
 .page-header {
   align-items: center

@@ -1,7 +1,7 @@
 <template>
   <section class="stack">
     <header class="row page-header">
-      <h2 class="page-title">{{ t('debug_page.title') }}</h2>
+      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-bug" class="title-icon" />{{ t('debug_page.title') }}</h2>
       <RouterLink class="btn back-btn" to="/settings/version-info">{{ t('common.back') }}</RouterLink>
     </header>
 
@@ -400,6 +400,14 @@ onBeforeUnmount(() => {
 
 .page-title {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-icon {
+  font-size: 18px;
+  color: var(--primary-soft);
 }
 
 .page-header {

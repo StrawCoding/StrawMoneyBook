@@ -1,7 +1,7 @@
 <template>
   <section class="stack">
     <header class="row page-head">
-      <h2>{{ t('settings_google_sync.title', '帳本同步') }}</h2>
+      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-arrow-right-arrow-left" class="title-icon" />{{ t('settings_google_sync.title', '帳本同步') }}</h2>
       <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
     </header>
 
@@ -340,6 +340,17 @@ watch(
 h2,
 h3 {
   margin: 0;
+}
+
+.page-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-icon {
+  font-size: 18px;
+  color: var(--primary-soft);
 }
 .compact {
   margin: 0;

@@ -2,6 +2,11 @@
 
 ---
 
+## v1.2.40
+- (SMB-221) 設定頁面所有子項目頁面的標題加入對應 icon，與「關於我們」頁面一致的視覺風格；共更新 26 個設定子頁面，每頁依照功能性質套用相符的 Font Awesome icon，並加入 `display: inline-flex` 與 gap 排版
+
+---
+
 ## v1.2.38
 - (SMB-220) 開發者 Debug 頁新增 Error Log 紀錄區塊：所有 Vue 元件錯誤、全域 window 錯誤、未處理 Promise 拒絕與 toast 彈窗錯誤訊息，現在都會同步記錄在 in-memory error log buffer（最多 100 筆）並即時顯示於 Debug 頁面，方便開發者診斷；Debug log 匯出也包含 error log 資料；補充 SMB-220 buffer 行為、訂閱與整合接入點的節點測試
 
