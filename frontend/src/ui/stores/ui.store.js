@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { translateRuntimeText } from '@/ui/services/i18n.service'
+import { logToastError } from '@/ui/services/error-log.service'
 import router from '@/ui/router'
 
 const MEMBERSHIP_BENEFITS_ROUTE_PATH = '/settings/membership-benefits'
@@ -37,6 +38,11 @@ export const useUiStore = defineStore('ui', {
 
       if (shouldRedirectToMembershipBenefits(translatedMessage, type)) {
         redirectToMembershipBenefitsFromToast()
+      }
+
+      if (String(type ?? '').trim().toLowerCase() === 'error') {
+        const routePath = String(router.currentRoute?.value?.fullPath || router.currentRoute?.value?.path || '')
+        logToastError(translatedMessage, routePath)
       }
 
       setTimeout(() => {

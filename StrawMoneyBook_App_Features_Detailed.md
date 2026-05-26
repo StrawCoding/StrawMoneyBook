@@ -70,7 +70,7 @@ StrawMoneyBook 的特色不在單一功能，而在於把同一筆金流後續�
 
 SMB-190 / v1.2.5 後，資料管理頁手動匯出的全部帳本 JSON 與 CSV 檔名都會加入時間戳，避免在 Android 原生檔案儲存或瀏覽器下載時因固定檔名重複覆蓋，讓多次匯出可以保留各自的檔案版本。SMB-216 / v1.2.29 後，資料管理頁的恢復備份、CSV 匯入與重設資料這類可能超過 3 秒的流程會顯示含百分比的加載動畫與目前動作說明，讓使用者知道系統仍在處理而不是壞掉或卡住。
 
-這讓它更適合長期使用，而不是短期記帳後就難以維護。
+這讓它更適合長期使用，而不是短期記帳後就難以維護。SMB-220 / v1.2.37 後，Debug 頁面新增 Error Log 紀錄區塊，所有 Vue 元件錯誤、全域 window 錯誤、未處理 Promise 拒絕與 toast 彈窗錯誤訊息都會同步記錄在 in-memory buffer（最多 100 筆），開發者可在設定 → 版本資訊 → Debug 頁面即時查看並一鍵匯出。
 
 另外，所有需要輸入資料的彈層已統一為共用 bottom sheet flow，桌面與手機都不再保留另一套輸入型 popover，包含表單 dialog、選單、日期與時間選擇器；`AppDialog` 以及各頁自製輸入 sheet 也都收斂到和快速記帳一致的 shared overlay / bottom-sheet primitives，Android 有底部導覽列 inset 的裝置也會一併吃到底部 safe area，且 sheet 卡片背景會直接延伸到底部，和 `BottomNav` 維持同一個底部基準。
 

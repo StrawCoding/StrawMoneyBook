@@ -5,6 +5,86 @@ async function defaultUploadClientErrorLog(...args) {
   return mod.uploadClientErrorLog(...args)
 }
 
+const ERROR_LOG_MAX_ENTRIES = 100
+const errorLogListeners = new Set()
+let errorLogSeq = 0
+let errorLogEntries = []
+
+function cloneErrorLogEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null
+  return {
+    id: String(entry.id ?? ''),
+    source: String(entry.source ?? ''),
+    message: String(entry.message ?? ''),
+    code: String(entry.code ?? ''),
+    routePath: String(entry.routePath ?? ''),
+    component: String(entry.component ?? ''),
+    loggedAt: String(entry.loggedAt ?? ''),
+  }
+}
+
+function trimErrorLogEntries() {
+  if (errorLogEntries.length <= ERROR_LOG_MAX_ENTRIES) return
+  errorLogEntries = errorLogEntries.slice(0, ERROR_LOG_MAX_ENTRIES)
+}
+
+function notifyErrorLogListeners() {
+  if (!errorLogListeners.size) return
+  const snapshot = getErrorLogSnapshot()
+  for (const listener of errorLogListeners) {
+    try {
+      listener(snapshot)
+    } catch {
+      // Ignore listener errors.
+    }
+  }
+}
+
+function appendErrorLog(error, context = {}) {
+  const nowMs = Date.now()
+  const entry = {
+    id: `error_log_${nowMs}_${errorLogSeq++}`,
+    source: String(context.source ?? ''),
+    message: String(error?.message ?? error ?? ''),
+    code: String(error?.code ?? ''),
+    routePath: String(context.routePath ?? ''),
+    component: String(context.component ?? ''),
+    loggedAt: new Date(nowMs).toISOString(),
+  }
+  errorLogEntries = [entry, ...errorLogEntries]
+  trimErrorLogEntries()
+  notifyErrorLogListeners()
+}
+
+export function logToastError(message, routePath = '') {
+  appendErrorLog({ message: String(message ?? '') }, { source: 'toast', routePath })
+}
+
+export function getErrorLogSnapshot() {
+  return errorLogEntries.map(cloneErrorLogEntry).filter(Boolean)
+}
+
+export function subscribeErrorLog(listener, { emitCurrent = true } = {}) {
+  if (typeof listener !== 'function') return () => {}
+  errorLogListeners.add(listener)
+  if (emitCurrent) {
+    try {
+      listener(getErrorLogSnapshot())
+    } catch {
+      // Ignore listener errors.
+    }
+  }
+  return () => {
+    errorLogListeners.delete(listener)
+  }
+}
+
+export function resetErrorLogForTest() {
+  errorLogSeq = 0
+  errorLogEntries = []
+  notifyErrorLogListeners()
+}
+
 const DUPLICATE_WINDOW_MS = 30_000
 
 const defaultDependencies = {
@@ -131,6 +211,7 @@ export async function logClientError(error, context = {}) {
   if (!payload.message) {
     return { skipped: 'empty' }
   }
+  appendErrorLog(error, context)
   const fingerprint = buildFingerprint(error, context)
   if (shouldSkipAsDuplicate(fingerprint)) {
     return { skipped: 'duplicate' }

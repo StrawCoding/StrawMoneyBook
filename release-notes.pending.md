@@ -2,6 +2,11 @@
 
 ---
 
+## v1.2.37
+- (SMB-220) 開發者 Debug 頁新增 Error Log 紀錄區塊：所有 Vue 元件錯誤、全域 window 錯誤、未處理 Promise 拒絕與 toast 彈窗錯誤訊息，現在都會同步記錄在 in-memory error log buffer（最多 100 筆）並即時顯示於 Debug 頁面，方便開發者診斷；Debug log 匯出也包含 error log 資料
+
+---
+
 ## v1.2.35
 - (SMB-222) 請款單導入流程新增借入 / 借貸入帳交易的候選與顯示邏輯，請款單導入頁與列表頁會共用 claim-sheet import service / utility 來統一報銷與借入交易的展示、金額與匯入建構；同步補上 borrow loan 相關 i18n 文案與導入來源標籤
 

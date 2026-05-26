@@ -930,9 +930,10 @@ UI composable 目錄：`src/ui/composables/`
 
 ### `src/ui/views/settings/SettingsDeveloperDebugPage.vue`
 - 函數（3）：`formatDuration`, `patchSnapshot`, `refresh`
-- 變數（11）：`bankSyncCalls`, `einvoiceCalls`, `loading`, `playCalls`, `playSupported`, `snapshot`, `txFailures`, `unsubscribe`, `unsubscribeEInvoiceTrace`, `unsubscribePlayTrace`, `unsubscribeTxFailureTrace`
+- 變數（13）：`bankSyncCalls`, `einvoiceCalls`, `errorLogs`, `loading`, `playCalls`, `playSupported`, `snapshot`, `txFailures`, `unsubscribe`, `unsubscribeBankSyncTrace`, `unsubscribeEInvoiceTrace`, `unsubscribeErrorLog`, `unsubscribePlayTrace`, `unsubscribeTxFailureTrace`
 - 類別（0）：無
 - **SMB-172**：新增載具（電子發票）抓取紀錄區塊；使用 `einvoice-debug.service.js` 追蹤 `scrape` 和 `import` 兩種操作，顯示手機號碼（末4位遮蔽）、查詢日期區間、狀態、抓取/匯入/跳過/失敗筆數、錯誤訊息；export payload 也一併包含 `einvoice_calls`
+- **SMB-220**：新增 Error Log 紀錄區塊；使用 `error-log.service.js` 的 `subscribeErrorLog` 即時顯示 Vue 元件錯誤、window 錯誤、unhandled rejection 與 toast 彈窗錯誤（最多 100 筆）；export payload 包含 `error_logs`
 
 ### `src/ui/views/settings/SettingsLanguagePage.vue`
 - 函數（1）：`pickLanguage`

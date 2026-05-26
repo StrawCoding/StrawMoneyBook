@@ -136,6 +136,27 @@
       <hr class="divider" />
 
       <div class="trace-header">
+        <small class="muted">{{ t('debug_page.key.error_logs') }}</small>
+      </div>
+      <div v-if="!errorLogs.length" class="muted">{{ t('debug_page.error_logs.empty') }}</div>
+      <div v-else class="trace-list">
+        <article v-for="item in errorLogs" :key="item.id" class="trace-item">
+          <div class="trace-item-top">
+            <strong class="break-all">{{ item.message || '-' }}</strong>
+            <strong class="trace-error">{{ item.source || '-' }}</strong>
+          </div>
+          <div class="trace-item-body">
+            <small class="muted">{{ t('debug_page.key.error_log_time') }}: {{ item.loggedAt || '-' }}</small>
+            <small v-if="item.code" class="muted">{{ t('debug_page.key.play_call_error_code') }}: {{ item.code }}</small>
+            <small v-if="item.routePath" class="muted">{{ t('debug_page.key.error_log_route') }}: {{ item.routePath }}</small>
+            <small v-if="item.component" class="muted">{{ t('debug_page.key.error_log_component') }}: {{ item.component }}</small>
+          </div>
+        </article>
+      </div>
+
+      <hr class="divider" />
+
+      <div class="trace-header">
         <small class="muted">{{ t('debug_page.key.bank_sync_calls') }}</small>
       </div>
       <div v-if="!bankSyncCalls.length" class="muted">{{ t('debug_page.bank_sync_calls.empty') }}</div>
@@ -202,6 +223,10 @@ import {
   getEInvoiceDebugTraceSnapshot,
   subscribeEInvoiceDebugTrace,
 } from '@/core/services/einvoice-debug.service'
+import {
+  getErrorLogSnapshot,
+  subscribeErrorLog,
+} from '@/ui/services/error-log.service'
 const uiStore = useUiStore()
 const { t } = useI18n()
 const loading = ref(false)
@@ -212,6 +237,7 @@ const playCalls = ref(getGooglePlayCallTraceSnapshot())
 const txFailures = ref(getTransactionFailureTraceSnapshot())
 const einvoiceCalls = ref(getEInvoiceDebugTraceSnapshot())
 const bankSyncCalls = ref(getBankSyncDebugTraceSnapshot())
+const errorLogs = ref(getErrorLogSnapshot())
 const snapshot = reactive({
   tier: getMembershipTierSnapshot(),
   plan: '',
@@ -228,6 +254,7 @@ let unsubscribePlayTrace = null
 let unsubscribeTxFailureTrace = null
 let unsubscribeEInvoiceTrace = null
 let unsubscribeBankSyncTrace = null
+let unsubscribeErrorLog = null
 
 function formatDuration(value) {
   const number = Number(value)
@@ -264,6 +291,7 @@ function buildDebugExportPayload() {
       transaction_failures: Array.isArray(txFailures.value) ? txFailures.value : [],
       einvoice_calls: Array.isArray(einvoiceCalls.value) ? einvoiceCalls.value : [],
       bank_sync_calls: Array.isArray(bankSyncCalls.value) ? bankSyncCalls.value : [],
+      error_logs: Array.isArray(errorLogs.value) ? errorLogs.value : [],
     },
   }
 }
@@ -329,6 +357,9 @@ onMounted(async () => {
   unsubscribeBankSyncTrace = subscribeBankSyncDebugTrace((items) => {
     bankSyncCalls.value = Array.isArray(items) ? items : []
   }, { emitCurrent: true })
+  unsubscribeErrorLog = subscribeErrorLog((items) => {
+    errorLogs.value = Array.isArray(items) ? items : []
+  }, { emitCurrent: true })
   await refresh()
 })
 
@@ -352,6 +383,10 @@ onBeforeUnmount(() => {
   if (typeof unsubscribeBankSyncTrace === 'function') {
     unsubscribeBankSyncTrace()
     unsubscribeBankSyncTrace = null
+  }
+  if (typeof unsubscribeErrorLog === 'function') {
+    unsubscribeErrorLog()
+    unsubscribeErrorLog = null
   }
 })
 </script>
