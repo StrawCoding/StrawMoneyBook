@@ -8,6 +8,7 @@ import {
   deleteLoan,
   deleteLoanRepayment,
   getLoanDetail,
+  listLoanInterestPayments,
   loadLoanDashboard,
   restoreLoan,
   updateCompletedLoanPrincipal,
@@ -25,8 +26,28 @@ export const useLoanStore = defineStore('loan', {
       totalPayable: 0,
     },
     detail: null,
+    interestPayments: [],
     loading: false,
   }),
+
+  getters: {
+    interestTotalMinor(state) {
+      return state.interestPayments.reduce(
+        (total, payment) => total + Math.max(0, Number(payment.interest_component_minor ?? 0)),
+        0,
+      )
+    },
+    lendInterestTotalMinor(state) {
+      return state.interestPayments
+        .filter((payment) => payment.loan_direction === 'lend')
+        .reduce((total, payment) => total + Math.max(0, Number(payment.interest_component_minor ?? 0)), 0)
+    },
+    borrowInterestTotalMinor(state) {
+      return state.interestPayments
+        .filter((payment) => payment.loan_direction === 'borrow')
+        .reduce((total, payment) => total + Math.max(0, Number(payment.interest_component_minor ?? 0)), 0)
+    },
+  },
 
   actions: {
     async load() {
@@ -168,6 +189,17 @@ export const useLoanStore = defineStore('loan', {
     async loadDetail(loanId) {
       const ledgerStore = useLedgerStore()
       this.detail = await getLoanDetail(ledgerStore.activeLedgerId, loanId)
+    },
+
+    async loadInterestPayments(options = {}) {
+      const ledgerStore = useLedgerStore()
+      if (!ledgerStore.activeLedgerId) {
+        this.interestPayments = []
+        return []
+      }
+      const records = await listLoanInterestPayments(ledgerStore.activeLedgerId, options)
+      this.interestPayments = Array.isArray(records) ? records : []
+      return this.interestPayments
     },
   },
 })

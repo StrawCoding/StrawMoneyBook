@@ -292,6 +292,46 @@ export async function getLoanPaymentById(ledgerId, paymentId) {
   return firstRow(result)
 }
 
+export async function listLoanInterestPaymentRecords(ledgerId) {
+  assertLedgerId(ledgerId)
+
+  const result = await query(
+    `SELECT
+       p.ledger_id,
+       p.id,
+       p.loan_id,
+       p.account_id,
+       a.name AS account_name,
+       p.paid_at,
+       p.amount_minor,
+       p.principal_component_minor,
+       p.interest_component_minor,
+       p.generated_tx_id,
+       p.generated_interest_tx_id,
+       p.note,
+       p.created_at,
+       l.direction AS loan_direction,
+       c.name AS counterparty_name
+     FROM loan_payments p
+     INNER JOIN loans l
+       ON l.ledger_id = p.ledger_id
+      AND l.id = p.loan_id
+     LEFT JOIN counterparties c
+       ON c.ledger_id = l.ledger_id
+      AND c.id = l.counterparty_id
+     LEFT JOIN accounts a
+       ON a.ledger_id = p.ledger_id
+      AND a.id = p.account_id
+     WHERE p.ledger_id = ?
+       AND COALESCE(p.interest_component_minor, 0) > 0
+       AND l.deleted_at IS NULL
+     ORDER BY p.paid_at DESC, p.created_at DESC;`,
+    [ledgerId],
+  )
+
+  return rowsOf(result)
+}
+
 export async function getLoanPaymentByGeneratedTransactionId(ledgerId, txId) {
   assertLedgerId(ledgerId)
   if (!txId) return null

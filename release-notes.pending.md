@@ -2,6 +2,11 @@
 
 ---
 
+## v1.2.43
+- (SMB-214) 借出借入利息改為獨立區塊與頁面，不再僅 inline 於還款 sheet：借貸明細頁新增「利息紀錄」獨立區塊（與「歸還 / 收回紀錄」分離），顯示累計利息與每筆利息明細；新增「借貸利息明細」總覽頁 `/loans/interest`，依借出 / 借入分計利息合計並支援 tab 過濾；借貸清單頁新增「利息明細」入口；補上 service 層 `listLoanInterestPayments` 與 store 層 `loadInterestPayments`、`interestPayments` getters、source-level regression test，明確讓借貸利息與代報銷功能在 UI 上完全分離
+
+---
+
 ## v1.2.40
 - (SMB-221) 設定頁面所有子項目頁面的標題加入對應 icon，與「關於我們」頁面一致的視覺風格；共更新 26 個設定子頁面，每頁依照功能性質套用相符的 Font Awesome icon，並加入 `display: inline-flex` 與 gap 排版；補上 source regression test 防止後續設定子頁標題漏掉 `title-icon`
 

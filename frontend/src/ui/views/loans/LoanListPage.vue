@@ -8,7 +8,10 @@
     <article class="card panel summary">
       <header class="row panel-head">
         <h3>借貸清單</h3>
-        <button class="btn primary" @click="openCreateSheet">新增借貸</button>
+        <div class="row head-actions">
+          <RouterLink class="btn" :to="{ name: 'loan-interest' }">利息明細</RouterLink>
+          <button class="btn primary" @click="openCreateSheet">新增借貸</button>
+        </div>
       </header>
       <div class="row">
         <span class="muted">進行中</span>
@@ -376,8 +379,12 @@ h2, h3 {
   gap: 8px
 }
 .panel-head {
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
+}
+.head-actions {
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .counterparty-list {
   list-style: none;

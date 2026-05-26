@@ -68,6 +68,31 @@
       </ul>
     </article>
 
+    <article class="card panel interest-panel">
+      <header class="row panel-head">
+        <h3>利息紀錄</h3>
+        <RouterLink class="btn" :to="{ name: 'loan-interest' }">全部利息</RouterLink>
+      </header>
+      <p class="muted interest-hint">借出金額歸還超出本金的部分自動計為利息（借入同理）；本區塊與報銷功能無關，獨立呈現本筆借貸所有利息。</p>
+      <div class="row interest-summary">
+        <small class="muted">累計利息</small>
+        <MoneyText :value-minor="loan?.interest_paid_minor ?? 0" />
+      </div>
+      <ul class="payments interest-payments">
+        <li v-for="payment in interestPayments" :key="`interest-${payment.id}`" class="row pay-item">
+          <span>{{ formatDateTime(payment.paid_at) }}</span>
+          <span class="pay-amount-wrap">
+            <MoneyText :value-minor="payment.interest_component_minor ?? 0" />
+            <small class="muted">
+              本筆{{ collectionLabel(loan) }} <MoneyText :value-minor="payment.amount_minor ?? 0" />
+              ・本金 <MoneyText :value-minor="payment.principal_component_minor ?? 0" />
+            </small>
+          </span>
+        </li>
+        <li v-if="!interestPayments.length" class="muted">尚無利息紀錄</li>
+      </ul>
+    </article>
+
     <InputBottomSheet
       :open="repayOpen"
       :title="editingRepayment ? `編輯${collectionLabel(loan)}` : `借貸${collectionLabel(loan)}`"
@@ -221,6 +246,11 @@ const loan = computed(() => {
 const payments = computed(() => {
   if (loanStore.detail?.loan?.id !== loanId.value) return []
   return loanStore.detail?.payments ?? []
+})
+const interestPayments = computed(() => {
+  return payments.value.filter(
+    (payment) => Math.max(0, Number(payment?.interest_component_minor ?? 0)) > 0,
+  )
 })
 const defaultAccountId = computed(() => accountStore.accounts[0]?.id ?? '')
 const showFinished = computed(() => normalizeLoanFinished(route.query.finished))
@@ -633,5 +663,27 @@ label {
 .interest-hint {
   font-size: 12px;
   margin: 0;
+}
+
+.interest-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.interest-panel .panel-head {
+  align-items: center;
+}
+
+.interest-summary {
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--surface-soft-accent) 60%, var(--card));
+}
+
+.interest-payments {
+  margin-top: 0;
 }
 </style>

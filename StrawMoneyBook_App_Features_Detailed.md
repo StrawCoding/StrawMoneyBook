@@ -396,6 +396,14 @@ v1.2.6 後，若建立借貸時已設定「預設利息」，單筆新增 / 編�
 
 v1.2.22（SMB-214）後，支援利息功能：新增 / 編輯還款時若輸入金額超過剩餘本金，超出部分自動計為利息並建立對應的利息交易（分類「借貸利息」，借出方向為利息收入、借入方向為利息支出）；還款表單會即時顯示「超出本金部分 X 元將計為利息」預覽；若借貸已設定預設利息，上限仍為本金加預設利息，不允許超額。
 
+v1.2.43（SMB-214 Restart follow-up）後，借貸利息進一步以「另一個區塊與頁面」獨立呈現，避免和代報銷／代墊抵扣等其他功能在概念與視覺上混淆：
+
+- **借貸明細頁新增獨立「利息紀錄」區塊**：與既有「歸還 / 收回紀錄」分開，列出本筆借貸所有 `interest_component_minor > 0` 的還款的利息部分，並顯示「累計利息」（沿用 `loan.interest_paid_minor`）；標題附「全部利息」按鈕直接連到借貸利息總覽頁。
+- **新增「借貸利息明細」獨立頁面**（路由 `loan-interest`、路徑 `/loans/interest`、頁面 `LoanInterestListPage.vue`）：列出帳本內所有借貸的利息紀錄（按 `paid_at DESC`），頂部分計「借出利息合計」與「借入利息合計」，並提供「全部 / 借出 / 借入」tab；每筆紀錄顯示對象、方向、日期、帳戶、利息金額與對應還款本金，可一鍵跳轉至該筆借貸明細頁。
+- **借貸清單頁新增「利息明細」入口**：與「新增借貸」按鈕並列在面板標題列。
+- 後端 service 層提供 `listLoanInterestPayments(ledgerId, { direction })`（內建 `direction` 為 `lend | borrow` 時的過濾，預設回傳全部），repo 層提供 `listLoanInterestPaymentRecords(ledgerId)` 帶 `loan_direction`、`counterparty_name`、`account_name`；store 提供 `loadInterestPayments(options)` 與 `interestPayments` state、`interestTotalMinor` / `lendInterestTotalMinor` / `borrowInterestTotalMinor` getters。
+- 利息紀錄全程僅由 `loan_payments` 衍生，與 `reimbursement_advances` / `reimbursement_advance_usages` 完全分離，借貸利息交易仍維持 `include_in_budget = 0`、`include_in_analysis = 0`、`is_reimbursable = 0`、`reimbursement_state = 'none'`，不會出現在報銷統整列表。
+
 v1.2.15（SMB-210）後，借出 / 借入建立與所有還款（含利息）產生的交易，預設 `include_in_budget = 0`、`include_in_analysis = 0`，不計入收支分析與預算統計，避免債權債務移轉扭曲月度收支；使用者仍可於交易明細頁手動開啟計入。
 
 ### 5.2 報銷管理

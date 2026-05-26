@@ -319,6 +319,12 @@ const router = createRouter({
       meta: { tab: 'home', transitionKey: 'loan-counterparty-detail' },
     },
     {
+      name: 'loan-interest',
+      path: '/loans/interest',
+      component: () => import('@/ui/views/loans/LoanInterestListPage.vue'),
+      meta: { tab: 'home', transitionKey: 'loan-interest' },
+    },
+    {
       name: 'loan-detail',
       path: '/loans/:id',
       component: () => import('@/ui/views/loans/LoanDetailPage.vue'),

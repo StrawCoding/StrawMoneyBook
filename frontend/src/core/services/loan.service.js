@@ -18,6 +18,7 @@ import {
   getLoanPaymentById,
   getLoanPaymentByGeneratedTransactionId,
   getLoanSetupTransaction,
+  listLoanInterestPaymentRecords,
   listLoanPayments,
   listLoans,
   softDeleteLoanById,
@@ -953,4 +954,14 @@ export async function getLoanDetail(ledgerId, loanId) {
 
   const payments = await listLoanPayments(ledgerId, loanId)
   return { loan, payments }
+}
+
+export async function listLoanInterestPayments(ledgerId, options = {}) {
+  const direction = options?.direction ?? null
+  const rawRecords = await listLoanInterestPaymentRecords(ledgerId)
+  const filtered = rawRecords.filter((payment) => Number(payment.interest_component_minor ?? 0) > 0)
+  if (direction === 'lend' || direction === 'borrow') {
+    return filtered.filter((payment) => payment.loan_direction === direction)
+  }
+  return filtered
 }
