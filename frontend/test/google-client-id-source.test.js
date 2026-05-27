@@ -56,6 +56,28 @@ test('serverless Google OAuth APIs accept shared web client id fallback', () => 
   }
 })
 
+test('SMB-224: Google OAuth exchange ignores env redirect_uri for Android server auth codes', () => {
+  // Regression: env redirect_uri breaks mobile server auth code exchange with GOOGLE_EXCHANGE_005.
+  // redirect_uri must only be sent when the client explicitly passes it.
+  assert.match(oauthExchangeApiSource, /function resolveExchangeRedirectUri/)
+  const getEnvMatch = oauthExchangeApiSource.match(/function getGoogleOAuthEnv\(\) \{[\s\S]*?\n\}/)
+  assert.ok(getEnvMatch, 'getGoogleOAuthEnv must exist')
+  assert.doesNotMatch(getEnvMatch[0], /redirectUri/)
+  assert.match(
+    oauthExchangeApiSource,
+    /resolveExchangeRedirectUri\(body\)/,
+    'exchange must resolve redirect_uri from request body only',
+  )
+})
+
+test('SMB-224: Google OAuth postJson surfaces backend message before machine error code', () => {
+  assert.match(
+    googleBackupAuthSource,
+    /data\?\.message \?\?\s*data\?\.error_description/,
+    'postJson must prefer backend message (Google error_description) over error code',
+  )
+})
+
 test('Google client id missing message is translated by supported locales', () => {
   assert.match(i18nSource, /'settings_account\.google_client_id_missing': '缺少 Google Web Client ID/)
   assert.match(i18nSource, /'settings_account\.google_client_id_missing': 'Missing Google Web Client ID/)

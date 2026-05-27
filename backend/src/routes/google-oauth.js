@@ -155,8 +155,15 @@ function getGoogleOAuthEnv() {
   return {
     clientId,
     clientSecret: String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim(),
-    redirectUri: String(process.env.GOOGLE_OAUTH_REDIRECT_URI ?? '').trim(),
   }
+}
+
+function resolveExchangeRedirectUri(body = {}) {
+  // Android/iOS server auth code exchange must not send redirect_uri unless the client
+  // explicitly passes one. GOOGLE_OAUTH_REDIRECT_URI is intentionally ignored because
+  // operators often set it for web OAuth callbacks, which breaks mobile offline exchange
+  // with GOOGLE_EXCHANGE_005 (invalid_grant / redirect_uri_mismatch).
+  return String(body.redirectUri ?? body.redirect_uri ?? '').trim()
 }
 
 async function parseGoogleTokenResponse(response) {
@@ -196,7 +203,7 @@ async function exchangeServerAuthCode(req, res) {
     return
   }
 
-  const { clientId, clientSecret, redirectUri } = getGoogleOAuthEnv()
+  const { clientId, clientSecret } = getGoogleOAuthEnv()
   if (!clientId || !clientSecret) {
     const missing = [!clientId && 'GOOGLE_AUTH_WEB_CLIENT_ID (or GOOGLE_OAUTH_CLIENT_ID)', !clientSecret && 'GOOGLE_OAUTH_CLIENT_SECRET'].filter(Boolean)
     sendMissingGoogleEnv(res, EXCHANGE_ERROR_NUMBER.MISSING_GOOGLE_OAUTH_ENV, missing)
@@ -208,6 +215,7 @@ async function exchangeServerAuthCode(req, res) {
   params.set('client_id', clientId)
   params.set('client_secret', clientSecret)
   params.set('grant_type', 'authorization_code')
+  const redirectUri = resolveExchangeRedirectUri(body)
   if (redirectUri) params.set('redirect_uri', redirectUri)
 
   try {

@@ -2,6 +2,11 @@
 
 ---
 
+## v1.2.46
+- (SMB-224) 修復 Google 自動備份重新登入時 server auth code exchange 回傳 `GOOGLE_EXCHANGE_005`：OAuth exchange 端點不再從 `GOOGLE_OAUTH_REDIRECT_URI` 環境變數自動帶入 `redirect_uri`（Android/iOS offline server auth code 交換不應附帶 redirect_uri，否則 Google 會拒絕並回傳 invalid_grant / redirect_uri_mismatch）；`postJson` 改優先顯示後端 `message`（含 Google `error_description`）而非機器可讀的 `error` code，並將 invalid_grant 類錯誤映射為明確的重新登入提示；backend 與 api.strawmb.com serverless copy 同步修正
+
+---
+
 ## v1.2.45
 - (SMB-222) 請款單「導入借入」改為「導入借出」：只列出尚未完成的借出（`loans.direction='lend'` 且 `status NOT IN ('settled','void')`，且尚無任何 loan_payment 還款的借出 setup 交易），完成請款單時會把對應的借出整套消除（軟刪 `loan_payment` 來源交易、刪除 `loan_payments` 還款記錄、軟刪 `loans`）；請款單從 paid 退回 draft 或刪除已完成請款單時會復原被消除的借出與 setup 交易；繁中、英文、日文 i18n（`claim_sheet.form.import_borrow_loans` / `import_borrow_loan_hint` / `no_importable_borrow_loan` / `import.open_borrow_loan` / `imported_borrow_loan_item` / `item_source.borrow_loan`）同步改為借出 / lent loan / 貸出；新增 `restoreSoftDeletedLoanById`、`restoreSoftDeletedTransactionsByOriginRef`、`findTransactionExternalRefIncludingDeleted` repo helper；補上 source regression test 防止 listBorrowLoanImportTransactions 再次抓 borrow direction 或忽略 status filter
 

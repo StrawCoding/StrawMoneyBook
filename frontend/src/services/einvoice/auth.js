@@ -314,6 +314,19 @@ function normalizeGoogleAuthError(error) {
     )
   }
   const message = String(error?.message ?? '').trim()
+  const lower = message.toLowerCase()
+  if (
+    lower.includes('invalid_grant')
+    || lower.includes('redirect_uri_mismatch')
+    || lower.includes('code was already redeemed')
+  ) {
+    return new Error(
+      appendDebugDetails(
+        'Google 授權碼已失效或無法交換，請到自動備份頁重新登入 Google。',
+        error,
+      ),
+    )
+  }
   return new Error(appendDebugDetails(message || 'Google 登入失敗', error))
 }
 
@@ -387,7 +400,13 @@ async function postJson(url, payload) {
   }
 
   if (!response.ok) {
-    const message = String(data?.error_description ?? data?.error ?? data?.message ?? text ?? '').trim()
+    const message = String(
+      data?.message ??
+      data?.error_description ??
+      text ??
+      data?.error ??
+      '',
+    ).trim()
     const errorNumber = String(data?.errorNumber ?? '').trim()
     const suffix = errorNumber ? `（errorNumber=${errorNumber}）` : ''
     throw new Error(`${message || `HTTP ${response.status}`}${suffix}（url=${url}）`)
