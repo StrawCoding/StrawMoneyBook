@@ -11,8 +11,7 @@ export function claimSheetImportKindFromTx(tx) {
   if (explicitKind) return explicitKind
 
   const originType = String(tx?.origin_type ?? '').trim()
-  const txType = String(tx?.type ?? '').trim()
-  if (originType === 'loan_payment' && txType === 'income') {
+  if (originType === 'loan_payment') {
     return 'borrow_loan'
   }
 

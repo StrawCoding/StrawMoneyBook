@@ -2,6 +2,11 @@
 
 ---
 
+## v1.2.45
+- (SMB-222) 請款單「導入借入」改為「導入借出」：只列出尚未完成的借出（`loans.direction='lend'` 且 `status NOT IN ('settled','void')`，且尚無任何 loan_payment 還款的借出 setup 交易），完成請款單時會把對應的借出整套消除（軟刪 `loan_payment` 來源交易、刪除 `loan_payments` 還款記錄、軟刪 `loans`）；請款單從 paid 退回 draft 或刪除已完成請款單時會復原被消除的借出與 setup 交易；繁中、英文、日文 i18n（`claim_sheet.form.import_borrow_loans` / `import_borrow_loan_hint` / `no_importable_borrow_loan` / `import.open_borrow_loan` / `imported_borrow_loan_item` / `item_source.borrow_loan`）同步改為借出 / lent loan / 貸出；新增 `restoreSoftDeletedLoanById`、`restoreSoftDeletedTransactionsByOriginRef`、`findTransactionExternalRefIncludingDeleted` repo helper；補上 source regression test 防止 listBorrowLoanImportTransactions 再次抓 borrow direction 或忽略 status filter
+
+---
+
 ## v1.2.44
 - (SMB-222) 請款單導入借入 / 借貸入帳交易拆出獨立區塊與獨立頁面 (`/claim-sheets/:id/import-borrow-loans`)，不再和導入報銷混在同一份候選列表；請款單建立 / 編輯表單同時顯示「導入報銷」與「導入借入」兩個區塊與專屬按鈕，draft session 分別保存兩種選取；請款單編輯儲存時 borrow_loan 改透過 `buildClaimSheetImportedClaimItem` 正確寫入 `entry_type=income`，修復先前 Edit 頁將借入導入誤存為 expense 的回歸；三語 i18n、節點測試、build:web 與 Playwright UI 驗證皆通過
 

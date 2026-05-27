@@ -38,6 +38,21 @@ const draftSessionSource = readFileSync(
   'utf8',
 )
 
+const loanRepoSource = readFileSync(
+  resolve(import.meta.dirname, '../src/core/repositories/loan.repo.js'),
+  'utf8',
+)
+
+const reimbursementServiceSource = readFileSync(
+  resolve(import.meta.dirname, '../src/core/services/reimbursement.service.js'),
+  'utf8',
+)
+
+const i18nServiceSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/services/i18n.service.js'),
+  'utf8',
+)
+
 test('claim sheets expose a dedicated reimbursement import route and page', () => {
   assert.match(routerSource, /name: 'claim-sheet-import'/)
   assert.match(routerSource, /path: '\/claim-sheets\/:id\/import-reimbursements'/)
@@ -126,4 +141,28 @@ test('claim edit page persists imported borrow loan items with proper income ent
   assert.match(claimEditSource, /buildImportedBorrowLoanClaimItems/)
   assert.match(claimEditSource, /buildClaimSheetImportedClaimItem\(tx, t\)/)
   assert.doesNotMatch(claimEditSource, /entryType: 'expense',\s*sourceType: 'transaction',\s*transactionId: tx\.id/)
+})
+
+test('SMB-222 v1.2.45: importable lent loans only list outstanding lend setup transactions', () => {
+  assert.match(loanRepoSource, /AND t\.type = 'expense'/)
+  assert.match(loanRepoSource, /AND l\.direction = 'lend'/)
+  assert.match(loanRepoSource, /AND l\.status NOT IN \('settled', 'void'\)/)
+  assert.doesNotMatch(loanRepoSource, /AND l\.direction = 'borrow'/)
+})
+
+test('SMB-222 v1.2.45: claim sheet i18n strings rename borrow_loan import to lent loans', () => {
+  assert.match(i18nServiceSource, /'claim_sheet\.form\.import_borrow_loans': '導入借出'/)
+  assert.match(i18nServiceSource, /'claim_sheet\.form\.no_importable_borrow_loan': '目前沒有可導入的未完成借出'/)
+  assert.match(i18nServiceSource, /'claim_sheet\.import\.open_borrow_loan': '選擇借出項目'/)
+  assert.match(i18nServiceSource, /'claim_sheet\.item_source\.borrow_loan': '導入借出'/)
+  assert.doesNotMatch(i18nServiceSource, /'claim_sheet\.form\.import_borrow_loans': '導入借入'/)
+})
+
+test('SMB-222 v1.2.45: completing reimbursement clears imported lent loans and reverting restores them', () => {
+  assert.match(reimbursementServiceSource, /function clearBorrowLoanClaimSources/)
+  assert.match(reimbursementServiceSource, /function restoreBorrowLoanClaimSources/)
+  assert.match(reimbursementServiceSource, /await clearBorrowLoanClaimSources\(ledgerId, claimItems\)/)
+  assert.match(reimbursementServiceSource, /await restoreBorrowLoanClaimSources\(ledgerId, claimItems\)/)
+  assert.match(reimbursementServiceSource, /restoreSoftDeletedLoanById/)
+  assert.match(reimbursementServiceSource, /restoreSoftDeletedTransactionsByOriginRef/)
 })

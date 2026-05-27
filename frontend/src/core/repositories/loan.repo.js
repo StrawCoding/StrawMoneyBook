@@ -380,6 +380,7 @@ export async function listBorrowLoanImportTransactions(ledgerId) {
        t.origin_type,
        t.external_ref_id AS loan_id,
        l.direction AS loan_direction,
+       l.status AS loan_status,
        cp.name AS counterparty_name
      FROM transactions t
      LEFT JOIN loans l
@@ -390,10 +391,11 @@ export async function listBorrowLoanImportTransactions(ledgerId) {
       AND cp.id = l.counterparty_id
      WHERE t.ledger_id = ?
        AND t.origin_type = 'loan_payment'
-       AND t.type = 'income'
+       AND t.type = 'expense'
        AND t.deleted_at IS NULL
        AND l.deleted_at IS NULL
-       AND l.direction = 'borrow'
+       AND l.direction = 'lend'
+       AND l.status NOT IN ('settled', 'void')
        AND NOT EXISTS (
          SELECT 1
          FROM loan_payments lp_ref
@@ -528,6 +530,20 @@ export async function softDeleteLoanById(ledgerId, loanId) {
        AND deleted_at IS NULL;`,
     [now, now, ledgerId, loanId],
   )
+}
+
+export async function restoreSoftDeletedLoanById(ledgerId, loanId) {
+  assertLedgerId(ledgerId)
+  await run(
+    `UPDATE loans
+     SET deleted_at = NULL,
+         updated_at = ?
+     WHERE ledger_id = ?
+       AND id = ?
+       AND deleted_at IS NOT NULL;`,
+    [nowIso(), ledgerId, loanId],
+  )
+  return getLoanById(ledgerId, loanId)
 }
 
 export async function deleteLoanPaymentsByLoanId(ledgerId, loanId) {

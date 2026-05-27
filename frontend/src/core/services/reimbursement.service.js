@@ -4,12 +4,20 @@ import { ensureCounterpartyByName } from '@/core/repositories/counterparty.repo'
 import {
   addTransaction,
   findTransactionRecordById,
+  findTransactionExternalRefIncludingDeleted,
   findReimbursementSettlementIncomeTx,
   getPaidClaimItemMinorByTransactionId,
   markTransactionReimbursed,
+  restoreSoftDeletedTransactionsByOriginRef,
   softDeleteTransactionsByOriginRef,
   softDeleteTransactionById,
 } from '@/core/repositories/transaction.repo'
+import {
+  getLoanById,
+  restoreSoftDeletedLoanById,
+  softDeleteLoanById,
+  deleteLoanPaymentsByLoanId,
+} from '@/core/repositories/loan.repo'
 import {
   listAccounts,
 } from '@/core/repositories/account.repo'
@@ -52,6 +60,12 @@ import {
 import { assertCanCreateReimbursement, isFreeTier } from '@/core/services/membership.service'
 
 const ADDON_NOTE_PREFIX = '【附加項目】'
+
+function isBorrowLoanClaimItem(item) {
+  if (!item) return false
+  if (String(item.source_type ?? '').trim() !== 'transaction') return false
+  return String(item.entry_type ?? '').trim() === 'income'
+}
 
 function normalizeTargetLedgerIds(activeLedgerId, rawList) {
   if (!Array.isArray(rawList)) return []
@@ -691,6 +705,7 @@ export async function markReimbursementPaid(ledgerId, payload) {
       idempotencyKey,
     })
     await syncLinkedReimbursableTransactions()
+    const clearedLoanIds = await clearBorrowLoanClaimSources(ledgerId, claimItems)
 
     return {
       alreadyProcessed: false,
@@ -701,8 +716,49 @@ export async function markReimbursementPaid(ledgerId, payload) {
       usedAdvanceMinor: advanceResult.usedAdvanceMinor,
       usedAdvanceIds: advanceResult.usedAdvanceIds,
       cashAmountMinor: reimbursementCashMinor,
+      clearedLoanIds,
     }
   })
+}
+
+async function resolveBorrowLoanIdsFromClaimItems(ledgerId, claimItems = []) {
+  const loanIds = new Set()
+  for (const item of claimItems) {
+    if (!isBorrowLoanClaimItem(item)) continue
+    const txId = String(item?.transaction_id ?? '').trim()
+    if (!txId) continue
+    const record = await findTransactionExternalRefIncludingDeleted(ledgerId, txId)
+    const originType = String(record?.origin_type ?? '').trim()
+    const externalRefId = String(record?.external_ref_id ?? '').trim()
+    if (!externalRefId || originType !== 'loan_payment') continue
+    loanIds.add(externalRefId)
+  }
+  return Array.from(loanIds)
+}
+
+async function clearBorrowLoanClaimSources(ledgerId, claimItems = []) {
+  const loanIds = await resolveBorrowLoanIdsFromClaimItems(ledgerId, claimItems)
+  const clearedLoanIds = []
+  for (const loanId of loanIds) {
+    const loan = await getLoanById(ledgerId, loanId)
+    if (!loan) continue
+    await softDeleteTransactionsByOriginRef(ledgerId, 'loan_payment', loanId)
+    await deleteLoanPaymentsByLoanId(ledgerId, loanId)
+    await softDeleteLoanById(ledgerId, loanId)
+    clearedLoanIds.push(loanId)
+  }
+  return clearedLoanIds
+}
+
+async function restoreBorrowLoanClaimSources(ledgerId, claimItems = []) {
+  const loanIds = await resolveBorrowLoanIdsFromClaimItems(ledgerId, claimItems)
+  const restoredLoanIds = []
+  for (const loanId of loanIds) {
+    await restoreSoftDeletedLoanById(ledgerId, loanId)
+    await restoreSoftDeletedTransactionsByOriginRef(ledgerId, 'loan_payment', loanId)
+    restoredLoanIds.push(loanId)
+  }
+  return restoredLoanIds
 }
 
 async function syncReimbursableExpenseState(ledgerId, expenseTxId) {
@@ -754,6 +810,8 @@ async function deleteAdvanceUsageRecords(ledgerId, usages, options = {}) {
 }
 
 async function revertPaidClaimEffects(ledgerId, claim, claimItems = []) {
+  const restoredLoanIds = await restoreBorrowLoanClaimSources(ledgerId, claimItems)
+
   for (const item of claimItems) {
     const txId = String(item?.transaction_id ?? '').trim()
     if (!txId) continue
@@ -782,6 +840,7 @@ async function revertPaidClaimEffects(ledgerId, claim, claimItems = []) {
       .map((item) => String(item?.transaction_id ?? '').trim())
       .filter(Boolean),
     deletedAdvanceIds: generatedAdvances.map((item) => item.id),
+    restoredLoanIds,
   }
 }
 

@@ -835,6 +835,35 @@ export async function softDeleteTransactionsByOriginRef(ledgerId, originType, ex
   )
 }
 
+export async function restoreSoftDeletedTransactionsByOriginRef(ledgerId, originType, externalRefId) {
+  assertLedgerId(ledgerId)
+  const now = nowIso()
+  await run(
+    `UPDATE transactions
+     SET deleted_at = NULL,
+         updated_at = ?
+     WHERE ledger_id = ?
+       AND origin_type = ?
+       AND external_ref_id = ?
+       AND deleted_at IS NOT NULL;`,
+    [now, ledgerId, String(originType ?? ''), String(externalRefId ?? '')],
+  )
+}
+
+export async function findTransactionExternalRefIncludingDeleted(ledgerId, txId) {
+  assertLedgerId(ledgerId)
+  if (!txId) return null
+  const result = await query(
+    `SELECT id, origin_type, external_ref_id, deleted_at
+     FROM transactions
+     WHERE ledger_id = ?
+       AND id = ?
+     LIMIT 1;`,
+    [ledgerId, String(txId)],
+  )
+  return firstRow(result) ?? null
+}
+
 export async function addTransaction(ledgerId, input) {
   assertLedgerId(ledgerId)
 
