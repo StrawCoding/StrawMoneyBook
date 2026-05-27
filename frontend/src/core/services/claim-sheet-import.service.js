@@ -26,9 +26,27 @@ function compareImportableTx(a, b) {
   return String(b?.id ?? '').localeCompare(String(a?.id ?? ''))
 }
 
-export async function listClaimSheetImportableTransactions(ledgerId, { reimbursementTransactions = [] } = {}) {
+export function listClaimSheetImportableReimbursements({ reimbursementTransactions = [] } = {}) {
+  return reimbursementTransactions
+    .map(annotateReimbursementImportTx)
+    .filter((tx) => String(tx?.id ?? '').trim())
+    .sort(compareImportableTx)
+}
+
+export async function listClaimSheetImportableBorrowLoans(ledgerId) {
   const borrowLoanTransactions = ledgerId ? await listBorrowLoanImportTransactions(ledgerId) : []
-  return [...reimbursementTransactions.map(annotateReimbursementImportTx), ...borrowLoanTransactions.map(annotateBorrowLoanImportTx)]
+  return borrowLoanTransactions
+    .map(annotateBorrowLoanImportTx)
+    .filter((tx) => String(tx?.id ?? '').trim())
+    .sort(compareImportableTx)
+}
+
+export async function listClaimSheetImportableTransactions(ledgerId, { reimbursementTransactions = [] } = {}) {
+  const [reimbursementImportable, borrowLoanImportable] = await Promise.all([
+    Promise.resolve(listClaimSheetImportableReimbursements({ reimbursementTransactions })),
+    listClaimSheetImportableBorrowLoans(ledgerId),
+  ])
+  return [...reimbursementImportable, ...borrowLoanImportable]
     .filter((tx) => String(tx?.id ?? '').trim())
     .sort(compareImportableTx)
 }

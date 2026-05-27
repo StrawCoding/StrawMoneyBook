@@ -1,0 +1,412 @@
+<template>
+  <section class="stack claim-import-page">
+    <article class="card panel">
+      <header class="row page-head">
+        <div>
+          <h2>{{ t('claim_sheet.form.import_borrow_loans') }}</h2>
+          <small class="muted">{{ t('claim_sheet.form.import_borrow_loan_hint') }}</small>
+        </div>
+        <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
+      </header>
+
+      <div class="row import-toolbar">
+        <div class="selection-summary">
+          <small class="muted">{{ t('claim_sheet.import.selected_count', { count: selectedTxIds.length }) }}</small>
+          <MoneyText :value-minor="selectedTotalMinor" />
+        </div>
+        <button
+          type="button"
+          class="btn"
+          :disabled="!editableImportedTxs.length"
+          @click="toggleSelectAll"
+        >
+          {{ allImportableSelected ? t('claim_sheet.import.clear_all') : t('claim_sheet.import.select_all') }}
+        </button>
+      </div>
+    </article>
+
+    <article class="card panel">
+      <div v-if="loading" class="muted">{{ t('app.loading') }}</div>
+      <div v-else-if="editableImportedTxs.length" class="import-list">
+        <label v-for="tx in editableImportedTxs" :key="tx.id" class="import-item">
+          <input v-model="selectedTxIds" type="checkbox" :value="String(tx.id)" />
+          <span class="import-item-text">
+            <span class="import-item-title">
+              <font-awesome-icon
+                v-if="importedTxPresentation(tx).icon"
+                :icon="importedTxPresentation(tx).icon"
+                class="item-leading-icon"
+              />
+              <span>{{ importedTxPresentation(tx).title }}</span>
+            </span>
+            <small v-if="tx.note_plain" class="muted">{{ tx.note_plain }}</small>
+            <small v-if="importedTxPresentation(tx).categoryName" class="muted">{{ importedTxPresentation(tx).categoryName }}</small>
+            <small v-if="tx.counterparty_name" class="muted">{{ tx.counterparty_name }}</small>
+            <small class="muted">{{ formatTime(tx.occurred_at) }}</small>
+          </span>
+          <MoneyText :value-minor="pendingMinorOfTx(tx)" />
+        </label>
+      </div>
+      <p v-else class="muted">{{ t('claim_sheet.form.no_importable_borrow_loan') }}</p>
+    </article>
+
+    <footer class="row action-row">
+      <button type="button" class="btn" :disabled="saving" @click="goBack">{{ t('common.cancel') }}</button>
+      <button type="button" class="btn primary" :disabled="saving || loading || !canSaveSelection" @click="saveSelection">
+        {{ saving ? t('claim_sheet.processing') : t('common.save') }}
+      </button>
+    </footer>
+  </section>
+</template>
+
+<script setup>
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import MoneyText from '@/ui/components/common/MoneyText.vue'
+import { getReimbursementDetail, updateReimbursementDraft } from '@/core/services/reimbursement.service'
+import { listClaimSheetImportableBorrowLoans } from '@/core/services/claim-sheet-import.service'
+import { buildClaimCategoryLookup, presentImportedClaimTx } from '@/ui/utils/claim-sheet-presentation'
+import {
+  buildClaimSheetImportedClaimItem,
+  buildClaimSheetImportedDraftTx,
+  claimSheetImportKindFromClaimItem,
+  claimSheetImportedAmountMinor,
+} from '@/ui/utils/claim-sheet-import'
+import { useI18n } from '@/ui/services/i18n.service'
+import { useCategoryStore } from '@/ui/stores/category.store'
+import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
+import { useUiStore } from '@/ui/stores/ui.store'
+import {
+  loadClaimSheetDraftSession,
+  saveClaimSheetDraftSession,
+} from '@/ui/views/claims/claim-sheet-import-draft-session'
+
+const CURRENT_KIND = 'borrow_loan'
+
+const route = useRoute()
+const router = useRouter()
+const { t, locale } = useI18n()
+const uiStore = useUiStore()
+const ledgerStore = useLedgerStore()
+const categoryStore = useCategoryStore()
+const reimbursementStore = useReimbursementStore()
+
+const loading = ref(false)
+const saving = ref(false)
+const claim = ref(null)
+const claimItems = ref([])
+const importableTxs = ref([])
+const selectedTxIds = ref([])
+const draftSession = ref(null)
+
+const claimId = computed(() => String(route.params.id ?? '').trim())
+const isNewDraft = computed(() => claimId.value === 'new')
+const claimCategoryLookup = computed(() => buildClaimCategoryLookup(categoryStore.categories))
+const returnLink = computed(() => {
+  if (isNewDraft.value) return { name: 'claim-sheets', query: { create: '1' } }
+  return { name: 'claim-sheet-edit', params: { id: claimId.value } }
+})
+
+const currentKindClaimItems = computed(() => {
+  return claimItems.value.filter((item) => {
+    if (!String(item?.transaction_id ?? '').trim()) return false
+    return claimSheetImportKindFromClaimItem(item) === CURRENT_KIND
+  })
+})
+
+const preservedClaimItems = computed(() => {
+  return claimItems.value.filter((item) => {
+    const transactionId = String(item?.transaction_id ?? '').trim()
+    if (!transactionId) return false
+    return claimSheetImportKindFromClaimItem(item) !== CURRENT_KIND
+  })
+})
+
+const selectedImportedDraftItems = computed(() => {
+  return currentKindClaimItems.value.map((item) => buildClaimSheetImportedDraftTx(item))
+})
+
+const editableImportedTxs = computed(() => {
+  const txMap = new Map()
+  for (const tx of importableTxs.value) {
+    const txId = String(tx?.id ?? '').trim()
+    if (txId) txMap.set(txId, tx)
+  }
+  for (const tx of selectedImportedDraftItems.value) {
+    const txId = String(tx?.id ?? '').trim()
+    if (txId && !txMap.has(txId)) txMap.set(txId, tx)
+  }
+  return Array.from(txMap.values())
+})
+
+const selectedImportedItems = computed(() => {
+  const idSet = new Set(selectedTxIds.value.map((id) => String(id ?? '').trim()).filter(Boolean))
+  return editableImportedTxs.value.filter((tx) => idSet.has(String(tx.id)))
+})
+
+const selectedTotalMinor = computed(() => {
+  return selectedImportedItems.value.reduce((sum, tx) => sum + claimSheetImportedAmountMinor(tx), 0)
+})
+
+const allImportableSelected = computed(() => {
+  const ids = editableImportedTxs.value.map((tx) => String(tx?.id ?? '').trim()).filter(Boolean)
+  if (!ids.length) return false
+  const selected = new Set(selectedTxIds.value.map((id) => String(id ?? '').trim()).filter(Boolean))
+  return ids.every((id) => selected.has(id))
+})
+
+const manualClaimItems = computed(() => preservedManualClaimItems())
+
+const canSaveSelection = computed(() => {
+  if (isNewDraft.value) return true
+  return (
+    selectedImportedItems.value.length > 0
+    || preservedClaimItems.value.length > 0
+    || manualClaimItems.value.length > 0
+  )
+})
+
+onMounted(() => {
+  void loadPage()
+})
+
+function pendingMinorOfTx(tx) {
+  return claimSheetImportedAmountMinor(tx)
+}
+
+function formatTime(iso) {
+  if (!iso) return '-'
+  return new Date(iso).toLocaleString(locale.value || 'zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function importedTxPresentation(tx) {
+  return presentImportedClaimTx(tx, claimCategoryLookup.value, t)
+}
+
+function goBack() {
+  void router.replace(returnLink.value)
+}
+
+function toggleSelectAll() {
+  if (allImportableSelected.value) {
+    selectedTxIds.value = []
+    return
+  }
+  selectedTxIds.value = editableImportedTxs.value
+    .map((tx) => String(tx?.id ?? '').trim())
+    .filter(Boolean)
+}
+
+function preservedDraftClaimItems() {
+  return preservedClaimItems.value.map((item) => ({
+    entryType: String(item?.entry_type ?? '').trim() === 'income' ? 'income' : 'expense',
+    sourceType: 'transaction',
+    transactionId: String(item?.transaction_id ?? '').trim(),
+    categoryId: item.category_id ?? null,
+    accountId: item.account_id ?? null,
+    description: String(item?.description ?? '').trim() || t('claim_sheet.form.unnamed_item'),
+    amountMinor: Math.max(0, Math.round(Number(item?.amount_minor ?? 0))),
+    occurredAt: item.occurred_at,
+  }))
+}
+
+async function loadPage() {
+  loading.value = true
+  try {
+    await Promise.all([categoryStore.load(), reimbursementStore.load()])
+    if (!ledgerStore.activeLedgerId) {
+      importableTxs.value = []
+      if (isNewDraft.value) {
+        draftSession.value = loadClaimSheetDraftSession() ?? {
+          title: '',
+          counterpartyName: '',
+          note: '',
+          importTxIds: [],
+          borrowLoanImportTxIds: [],
+          manualItems: [],
+        }
+        selectedTxIds.value = [...draftSession.value.borrowLoanImportTxIds]
+      }
+      return
+    }
+
+    importableTxs.value = await listClaimSheetImportableBorrowLoans(ledgerStore.activeLedgerId)
+
+    if (isNewDraft.value) {
+      draftSession.value = loadClaimSheetDraftSession() ?? {
+        title: '',
+        counterpartyName: '',
+        note: '',
+        importTxIds: [],
+        borrowLoanImportTxIds: [],
+        manualItems: [],
+      }
+      selectedTxIds.value = [...draftSession.value.borrowLoanImportTxIds]
+      return
+    }
+
+    if (!claimId.value) {
+      claim.value = null
+      claimItems.value = []
+      return
+    }
+    const detail = await getReimbursementDetail(ledgerStore.activeLedgerId, claimId.value)
+    claim.value = detail.claim ?? null
+    claimItems.value = Array.isArray(detail.items) ? detail.items : []
+    selectedTxIds.value = currentKindClaimItems.value.map((item) => String(item.transaction_id))
+  } catch (error) {
+    uiStore.pushToast(error.message ?? t('claim_sheet.toast.load_failed'), 'error')
+  } finally {
+    loading.value = false
+  }
+}
+
+function buildImportedClaimItems() {
+  return selectedImportedItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t))
+}
+
+function preservedManualClaimItems() {
+  return claimItems.value
+    .filter((item) => !String(item?.transaction_id ?? '').trim())
+    .map((item) => ({
+      entryType: String(item?.entry_type ?? '').trim() === 'income' ? 'income' : 'expense',
+      sourceType: String(item?.source_type ?? '').trim() === 'advance' ? 'advance' : 'manual',
+      categoryId: item.category_id ?? null,
+      accountId: item.account_id ?? null,
+      description: String(item?.description ?? '').trim() || t('claim_sheet.form.unnamed_item'),
+      amountMinor: Math.max(0, Math.round(Number(item?.amount_minor ?? 0))),
+      occurredAt: item.occurred_at,
+    }))
+}
+
+async function saveSelection() {
+  if (saving.value) return
+  saving.value = true
+  try {
+    if (isNewDraft.value) {
+      const session = draftSession.value ?? loadClaimSheetDraftSession() ?? {}
+      saveClaimSheetDraftSession({
+        ...session,
+        importTxIds: session.importTxIds ?? [],
+        borrowLoanImportTxIds: selectedTxIds.value,
+      })
+      await router.replace(returnLink.value)
+      return
+    }
+
+    if (!ledgerStore.activeLedgerId || !claim.value) return
+    await updateReimbursementDraft(ledgerStore.activeLedgerId, claim.value.id, {
+      title: claim.value.title,
+      counterpartyName: claim.value.counterparty_name,
+      note: claim.value.note,
+      items: [
+        ...buildImportedClaimItems(),
+        ...preservedDraftClaimItems(),
+        ...manualClaimItems.value,
+      ],
+    })
+    await reimbursementStore.load()
+    uiStore.pushToast(t('claim_sheet.toast.updated'))
+    await router.replace(returnLink.value)
+  } catch (error) {
+    uiStore.pushToast(error.message ?? t('claim_sheet.toast.update_failed'), 'error')
+  } finally {
+    saving.value = false
+  }
+}
+</script>
+
+<style scoped>
+.panel {
+  padding: 14px;
+}
+
+h2 {
+  margin: 0;
+}
+
+.page-head,
+.import-toolbar,
+.action-row {
+  align-items: center;
+}
+
+.page-head {
+  gap: 12px;
+}
+
+.selection-summary {
+  display: grid;
+  gap: 4px;
+}
+
+.import-toolbar {
+  margin-top: 12px;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.import-list {
+  display: grid;
+  gap: 8px;
+}
+
+.import-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.import-item-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.import-item-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.item-leading-icon {
+  width: 16px;
+  color: var(--primary);
+  flex: 0 0 auto;
+}
+
+.import-item-text small,
+.import-item-title span {
+  overflow-wrap: anywhere;
+}
+
+.action-row {
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .page-head,
+  .import-toolbar,
+  .action-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .action-row .btn {
+    width: 100%;
+  }
+}
+</style>

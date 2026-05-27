@@ -15,7 +15,7 @@
 - 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、群組內金額摘要；SMB-159 / SMB-160 後群組統計支援帳戶層級納入開關，並會依匯率 snapshot 將外幣帳戶換算為帳本幣別後加總；負向負債帳戶會以絕對值納入負債摘要，避免信用卡等帳戶方向差異造成低估；SMB-155 後帳戶明細交易紀錄改為每頁 300 筆，並用分頁前交易金額校正每筆交易後餘額）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細；v1.2.6 後若借貸設有預設利息，單筆新增 / 編輯還款會阻擋超過本金加預設利息的目標總額；v1.2.22 / SMB-214 後還款支援利息功能：輸入金額超過剩餘本金時，超出部分自動計為利息並建立對應利息交易（借出方向為利息收入、借入方向為利息支出），還款表單即時顯示利息預覽；v1.2.15 / SMB-210 後借出 / 借入建立與所有還款、利息交易預設不計入收支分析與預算統計）
 - 借貸建立後可於借貸明細變更「建立入帳帳戶」，會直接修正該筆初始借入 / 借出交易的帳戶歸屬
-- 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出；請款單導入報銷改由獨立頁面選取，支援全選 / 取消全選，並開始把借入 / 借貸入帳交易納入同一導入選取流程；SMB-150 後從導入報銷頁返回時會固定回到原本的新增 / 編輯請款單流程，不再直接跳出請款單；完成請款單會讓匯入報銷項目回到已報銷狀態，不再留在未報銷；還原後重新完成不會因舊入帳交易冪等鍵撞唯一鍵；SMB-148 後代收管理會保留部分抵扣但仍有可用餘額的代收，只有完全未抵扣項目可直接刪除）
+- 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出；請款單導入報銷改由獨立頁面選取，支援全選 / 取消全選；SMB-222 Restart / v1.2.43 後請款單導入借入 / 借貸入帳交易拆出獨立區塊與獨立頁面 (`/claim-sheets/:id/import-borrow-loans`)，與導入報銷不再混在同一份候選列表，請款單建立 / 編輯表單同時提供「導入報銷」與「導入借入」兩個區塊與按鈕，draft session 也分開保存兩種選取，請款單編輯儲存時 borrow_loan 改透過 `buildClaimSheetImportedClaimItem` 正確寫入 `entry_type=income`，不會被誤存為 expense；SMB-150 後從導入報銷頁返回時會固定回到原本的新增 / 編輯請款單流程，不再直接跳出請款單；完成請款單會讓匯入報銷項目回到已報銷狀態，不再留在未報銷；還原後重新完成不會因舊入帳交易冪等鍵撞唯一鍵；SMB-148 後代收管理會保留部分抵扣但仍有可用餘額的代收，只有完全未抵扣項目可直接刪除）
 - 存錢罐、訂閱追蹤與自動存提
 - 訂閱追蹤的扣款日以當天開始為扣款時間點；進入扣款日後仍可標示本期已到期，但「下次扣款」會直接推進到下一個週期，且排程日期以 App 預設時區正規化，避免 UTC / CI 環境把台北時間午夜誤判成前一天；v1.2.6 後訂閱自動扣款與存錢罐自動存入的到期日判斷會使用帳本時區，App 開啟 / 回前景 / 帳本切換與儲存訂閱後會對今日到期項目建立冪等支出交易
 - AI 自動記帳（文字解析、語音輸入、會員次數限制）
@@ -79,7 +79,8 @@
 | `/claim-sheets` | `src/ui/views/claims/ClaimSheetListPage.vue` | 請款單清單與匯出 |
 | `/claim-sheets/:id` | `src/ui/views/claims/ClaimSheetDetailPage.vue` | 請款單明細 |
 | `/claim-sheets/:id/edit` | `src/ui/views/claims/ClaimSheetEditPage.vue` | 請款單編輯 |
-| `/claim-sheets/:id/import-reimbursements` | `src/ui/views/claims/ClaimSheetImportPage.vue` | 請款單導入報銷獨立選取頁，支援全選 / 取消全選；`:id` 為 `new` 時暫存新增表單選取 |
+| `/claim-sheets/:id/import-reimbursements` | `src/ui/views/claims/ClaimSheetImportPage.vue` | 請款單導入報銷獨立選取頁（reimbursement-only），支援全選 / 取消全選；`:id` 為 `new` 時暫存新增表單選取；儲存時會保留另一個區塊的借入導入選取與手動項目 |
+| `/claim-sheets/:id/import-borrow-loans` | `src/ui/views/claims/ClaimSheetImportBorrowLoanPage.vue` | 請款單導入借入 / 借貸入帳交易獨立選取頁（borrow_loan-only），SMB-222 Restart / v1.2.43 拆出，支援全選 / 取消全選；`:id` 為 `new` 時與報銷選取分開暫存；儲存時會保留另一個區塊的報銷導入選取與手動項目 |
 | `/savings-jars` | `src/ui/views/savings-jars/SavingsJarListPage.vue` | 存錢罐管理 |
 | `/subscriptions` | `src/ui/views/subscriptions/SubscriptionListPage.vue` | 訂閱追蹤 |
 | `/settings` | `src/ui/views/settings.vue` | 設定首頁 |

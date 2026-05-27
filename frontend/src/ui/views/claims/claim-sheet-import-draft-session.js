@@ -5,6 +5,11 @@ function storage() {
   return window.sessionStorage ?? null
 }
 
+function normalizeIdList(list) {
+  if (!Array.isArray(list)) return []
+  return list.map((id) => String(id ?? '').trim()).filter(Boolean)
+}
+
 export function saveClaimSheetDraftSession(payload = {}) {
   const target = storage()
   if (!target) return
@@ -12,7 +17,8 @@ export function saveClaimSheetDraftSession(payload = {}) {
     title: String(payload.title ?? ''),
     counterpartyName: String(payload.counterpartyName ?? ''),
     note: String(payload.note ?? ''),
-    importTxIds: Array.isArray(payload.importTxIds) ? payload.importTxIds.map(String) : [],
+    importTxIds: normalizeIdList(payload.importTxIds),
+    borrowLoanImportTxIds: normalizeIdList(payload.borrowLoanImportTxIds),
     manualItems: Array.isArray(payload.manualItems) ? payload.manualItems : [],
   }))
 }
@@ -28,7 +34,8 @@ export function loadClaimSheetDraftSession() {
       title: String(parsed?.title ?? ''),
       counterpartyName: String(parsed?.counterpartyName ?? ''),
       note: String(parsed?.note ?? ''),
-      importTxIds: Array.isArray(parsed?.importTxIds) ? parsed.importTxIds.map(String) : [],
+      importTxIds: normalizeIdList(parsed?.importTxIds),
+      borrowLoanImportTxIds: normalizeIdList(parsed?.borrowLoanImportTxIds),
       manualItems: Array.isArray(parsed?.manualItems) ? parsed.manualItems : [],
     }
   } catch {

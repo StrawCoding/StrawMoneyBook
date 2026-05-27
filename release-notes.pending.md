@@ -2,6 +2,11 @@
 
 ---
 
+## v1.2.43
+- (SMB-222) 請款單導入借入 / 借貸入帳交易拆出獨立區塊與獨立頁面 (`/claim-sheets/:id/import-borrow-loans`)，不再和導入報銷混在同一份候選列表；請款單建立 / 編輯表單同時顯示「導入報銷」與「導入借入」兩個區塊與專屬按鈕，draft session 分別保存兩種選取；請款單編輯儲存時 borrow_loan 改透過 `buildClaimSheetImportedClaimItem` 正確寫入 `entry_type=income`，修復先前 Edit 頁將借入導入誤存為 expense 的回歸；三語 i18n、節點測試、build:web 與 Playwright UI 驗證皆通過
+
+---
+
 ## v1.2.40
 - (SMB-221) 設定頁面所有子項目頁面的標題加入對應 icon，與「關於我們」頁面一致的視覺風格；共更新 26 個設定子頁面，每頁依照功能性質套用相符的 Font Awesome icon，並加入 `display: inline-flex` 與 gap 排版；補上 source regression test 防止後續設定子頁標題漏掉 `title-icon`
 

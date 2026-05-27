@@ -63,11 +63,12 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { getReimbursementDetail, updateReimbursementDraft } from '@/core/services/reimbursement.service'
-import { listClaimSheetImportableTransactions } from '@/core/services/claim-sheet-import.service'
+import { listClaimSheetImportableReimbursements } from '@/core/services/claim-sheet-import.service'
 import { buildClaimCategoryLookup, presentImportedClaimTx } from '@/ui/utils/claim-sheet-presentation'
 import {
   buildClaimSheetImportedClaimItem,
   buildClaimSheetImportedDraftTx,
+  claimSheetImportKindFromClaimItem,
   claimSheetImportedAmountMinor,
 } from '@/ui/utils/claim-sheet-import'
 import { useI18n } from '@/ui/services/i18n.service'
@@ -79,6 +80,8 @@ import {
   loadClaimSheetDraftSession,
   saveClaimSheetDraftSession,
 } from '@/ui/views/claims/claim-sheet-import-draft-session'
+
+const CURRENT_KIND = 'reimbursement'
 
 const route = useRoute()
 const router = useRouter()
@@ -104,10 +107,23 @@ const returnLink = computed(() => {
   return { name: 'claim-sheet-edit', params: { id: claimId.value } }
 })
 
+const currentKindClaimItems = computed(() => {
+  return claimItems.value.filter((item) => {
+    if (!String(item?.transaction_id ?? '').trim()) return false
+    return claimSheetImportKindFromClaimItem(item) === CURRENT_KIND
+  })
+})
+
+const preservedClaimItems = computed(() => {
+  return claimItems.value.filter((item) => {
+    const transactionId = String(item?.transaction_id ?? '').trim()
+    if (!transactionId) return false
+    return claimSheetImportKindFromClaimItem(item) !== CURRENT_KIND
+  })
+})
+
 const selectedImportedDraftItems = computed(() => {
-  return claimItems.value
-    .filter((item) => String(item?.transaction_id ?? '').trim())
-    .map((item) => buildClaimSheetImportedDraftTx(item))
+  return currentKindClaimItems.value.map((item) => buildClaimSheetImportedDraftTx(item))
 })
 
 const editableImportedTxs = computed(() => {
@@ -143,7 +159,11 @@ const manualClaimItems = computed(() => preservedManualClaimItems())
 
 const canSaveSelection = computed(() => {
   if (isNewDraft.value) return true
-  return selectedImportedItems.value.length > 0 || manualClaimItems.value.length > 0
+  return (
+    selectedImportedItems.value.length > 0
+    || preservedClaimItems.value.length > 0
+    || manualClaimItems.value.length > 0
+  )
 })
 
 onMounted(() => {
@@ -183,6 +203,19 @@ function toggleSelectAll() {
     .filter(Boolean)
 }
 
+function preservedReimbursementDraftClaimItems() {
+  return preservedClaimItems.value.map((item) => ({
+    entryType: String(item?.entry_type ?? '').trim() === 'income' ? 'income' : 'expense',
+    sourceType: 'transaction',
+    transactionId: String(item?.transaction_id ?? '').trim(),
+    categoryId: item.category_id ?? null,
+    accountId: item.account_id ?? null,
+    description: String(item?.description ?? '').trim() || t('claim_sheet.form.unnamed_item'),
+    amountMinor: Math.max(0, Math.round(Number(item?.amount_minor ?? 0))),
+    occurredAt: item.occurred_at,
+  }))
+}
+
 async function loadPage() {
   loading.value = true
   try {
@@ -195,6 +228,7 @@ async function loadPage() {
           counterpartyName: '',
           note: '',
           importTxIds: [],
+          borrowLoanImportTxIds: [],
           manualItems: [],
         }
         selectedTxIds.value = [...draftSession.value.importTxIds]
@@ -202,7 +236,7 @@ async function loadPage() {
       return
     }
 
-    importableTxs.value = await listClaimSheetImportableTransactions(ledgerStore.activeLedgerId, {
+    importableTxs.value = listClaimSheetImportableReimbursements({
       reimbursementTransactions: reimbursementStore.pendingItems,
     })
 
@@ -212,6 +246,7 @@ async function loadPage() {
         counterpartyName: '',
         note: '',
         importTxIds: [],
+        borrowLoanImportTxIds: [],
         manualItems: [],
       }
       selectedTxIds.value = [...draftSession.value.importTxIds]
@@ -226,9 +261,7 @@ async function loadPage() {
     const detail = await getReimbursementDetail(ledgerStore.activeLedgerId, claimId.value)
     claim.value = detail.claim ?? null
     claimItems.value = Array.isArray(detail.items) ? detail.items : []
-    selectedTxIds.value = claimItems.value
-      .filter((item) => String(item?.transaction_id ?? '').trim())
-      .map((item) => String(item.transaction_id))
+    selectedTxIds.value = currentKindClaimItems.value.map((item) => String(item.transaction_id))
   } catch (error) {
     uiStore.pushToast(error.message ?? t('claim_sheet.toast.load_failed'), 'error')
   } finally {
@@ -263,6 +296,7 @@ async function saveSelection() {
       saveClaimSheetDraftSession({
         ...session,
         importTxIds: selectedTxIds.value,
+        borrowLoanImportTxIds: session.borrowLoanImportTxIds ?? [],
       })
       await router.replace(returnLink.value)
       return
@@ -273,7 +307,11 @@ async function saveSelection() {
       title: claim.value.title,
       counterpartyName: claim.value.counterparty_name,
       note: claim.value.note,
-      items: [...buildImportedClaimItems(), ...manualClaimItems.value],
+      items: [
+        ...buildImportedClaimItems(),
+        ...preservedReimbursementDraftClaimItems(),
+        ...manualClaimItems.value,
+      ],
     })
     await reimbursementStore.load()
     uiStore.pushToast(t('claim_sheet.toast.updated'))

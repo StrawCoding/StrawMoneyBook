@@ -104,6 +104,22 @@
             </div>
           </div>
 
+          <div class="stack sub-section">
+            <div class="row sub-head">
+              <strong>{{ t('claim_sheet.form.import_borrow_loans') }}</strong>
+              <small class="muted">{{ t('claim_sheet.form.import_borrow_loan_hint') }}</small>
+            </div>
+            <div class="import-action-card">
+              <div class="import-summary">
+                <small class="muted">{{ t('claim_sheet.import.selected_count', { count: importedBorrowLoanItems.length }) }}</small>
+                <MoneyText :value-minor="importedBorrowLoanTotalMinor" />
+              </div>
+              <button type="button" class="btn" @click="openBorrowLoanImportPage">
+                {{ t('claim_sheet.import.open_borrow_loan') }}
+              </button>
+            </div>
+          </div>
+
           <div class="row total-row">
             <span>{{ t('claim_sheet.form.net_total') }}</span>
             <MoneyText :value-minor="draftTotalMinor" />
@@ -129,12 +145,17 @@ import { useRoute, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { getReimbursementDetail, updateReimbursementDraft } from '@/core/services/reimbursement.service'
+import { listClaimSheetImportableBorrowLoans } from '@/core/services/claim-sheet-import.service'
 import {
   buildClaimCategoryLookup,
   presentClaimManualFormItem,
-  presentImportedClaimTx,
 } from '@/ui/utils/claim-sheet-presentation'
-import { reimbursementPendingMinor } from '@/ui/utils/reimbursement-item'
+import {
+  buildClaimSheetImportedClaimItem,
+  buildClaimSheetImportedDraftTx,
+  claimSheetImportKindFromClaimItem,
+  claimSheetImportedAmountMinor,
+} from '@/ui/utils/claim-sheet-import'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useCategoryStore } from '@/ui/stores/category.store'
@@ -144,7 +165,7 @@ import { useUiStore } from '@/ui/stores/ui.store'
 
 const route = useRoute()
 const router = useRouter()
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const uiStore = useUiStore()
 const ledgerStore = useLedgerStore()
 const categoryStore = useCategoryStore()
@@ -154,11 +175,13 @@ const loading = ref(false)
 const saving = ref(false)
 const claim = ref(null)
 const claimItems = ref([])
+const importableBorrowLoanTxs = ref([])
 const form = reactive({
   title: '',
   counterpartyName: '',
   note: '',
   importTxIds: [],
+  borrowLoanImportTxIds: [],
   manualItems: [],
 })
 
@@ -179,21 +202,26 @@ const entryTypeOptions = computed(() => [
 
 const claimCategoryLookup = computed(() => buildClaimCategoryLookup(categoryStore.categories))
 
+const reimbursementClaimItems = computed(() => {
+  return claimItems.value.filter((item) => {
+    if (!String(item?.transaction_id ?? '').trim()) return false
+    return claimSheetImportKindFromClaimItem(item) === 'reimbursement'
+  })
+})
+
+const borrowLoanClaimItems = computed(() => {
+  return claimItems.value.filter((item) => {
+    if (!String(item?.transaction_id ?? '').trim()) return false
+    return claimSheetImportKindFromClaimItem(item) === 'borrow_loan'
+  })
+})
+
 const selectedImportedDraftItems = computed(() => {
-  return claimItems.value
-    .filter((item) => String(item?.transaction_id ?? '').trim())
-    .map((item) => ({
-      id: String(item.transaction_id),
-      transaction_id: String(item.transaction_id),
-      category_id: item.category_id ?? null,
-      account_id: item.account_id ?? null,
-      category_name: '',
-      note_plain: String(item.transaction_note ?? '').trim(),
-      note: String(item.transaction_note ?? item.description ?? '').trim(),
-      occurred_at: item.occurred_at,
-      amount_minor: Math.max(0, Math.round(Number(item.amount_minor ?? 0))),
-      reimbursed_minor: 0,
-    }))
+  return reimbursementClaimItems.value.map((item) => buildClaimSheetImportedDraftTx(item))
+})
+
+const selectedBorrowLoanDraftItems = computed(() => {
+  return borrowLoanClaimItems.value.map((item) => buildClaimSheetImportedDraftTx(item))
 })
 
 const editableImportedTxs = computed(() => {
@@ -214,15 +242,41 @@ const editableImportedTxs = computed(() => {
   return Array.from(txMap.values())
 })
 
+const editableBorrowLoanTxs = computed(() => {
+  const txMap = new Map()
+
+  for (const tx of importableBorrowLoanTxs.value) {
+    const txId = String(tx?.id ?? '').trim()
+    if (!txId) continue
+    txMap.set(txId, tx)
+  }
+
+  for (const tx of selectedBorrowLoanDraftItems.value) {
+    const txId = String(tx?.id ?? '').trim()
+    if (!txId || txMap.has(txId)) continue
+    txMap.set(txId, tx)
+  }
+
+  return Array.from(txMap.values())
+})
+
 const importedItems = computed(() => {
   const idSet = new Set(form.importTxIds.map((id) => String(id ?? '').trim()).filter(Boolean))
   return editableImportedTxs.value.filter((tx) => idSet.has(String(tx.id)))
+})
+
+const importedBorrowLoanItems = computed(() => {
+  const idSet = new Set(form.borrowLoanImportTxIds.map((id) => String(id ?? '').trim()).filter(Boolean))
+  return editableBorrowLoanTxs.value.filter((tx) => idSet.has(String(tx.id)))
 })
 
 const draftTotalMinor = computed(() => {
   let totalMinor = 0
   for (const tx of importedItems.value) {
     totalMinor += pendingMinorOfTx(tx)
+  }
+  for (const tx of importedBorrowLoanItems.value) {
+    totalMinor += claimSheetImportedAmountMinor(tx)
   }
   for (const item of form.manualItems) {
     const amountMinor = Math.max(0, Math.round(Number(item.amountMajor ?? 0) * 100))
@@ -234,9 +288,13 @@ const draftTotalMinor = computed(() => {
 
 const importedTotalMinor = computed(() => importedItems.value.reduce((sum, tx) => sum + pendingMinorOfTx(tx), 0))
 
+const importedBorrowLoanTotalMinor = computed(() => {
+  return importedBorrowLoanItems.value.reduce((sum, tx) => sum + claimSheetImportedAmountMinor(tx), 0)
+})
+
 const canSaveClaim = computed(() => {
   const hasTitle = Boolean(String(form.title ?? '').trim())
-  const hasImported = importedItems.value.length > 0
+  const hasImported = importedItems.value.length > 0 || importedBorrowLoanItems.value.length > 0
   const manualItemsWithAmount = form.manualItems.filter((item) => Number(item.amountMajor ?? 0) > 0)
   const hasManual = manualItemsWithAmount.length > 0
   const manualCategoriesReady = manualItemsWithAmount.every((item) => {
@@ -254,17 +312,6 @@ watch(
   { immediate: true },
 )
 
-function formatTime(iso) {
-  if (!iso) return '-'
-  return new Date(iso).toLocaleString(locale.value || 'zh-TW', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 function goBack() {
   void goBackOrFallback(router, backLink.value)
 }
@@ -277,11 +324,20 @@ function openImportPage() {
   })
 }
 
+function openBorrowLoanImportPage() {
+  if (!claimId.value) return
+  void router.push({
+    name: 'claim-sheet-import-borrow-loan',
+    params: { id: claimId.value },
+  })
+}
+
 function resetForm() {
   form.title = ''
   form.counterpartyName = ''
   form.note = ''
   form.importTxIds = []
+  form.borrowLoanImportTxIds = []
   form.manualItems = []
   addManualItem()
 }
@@ -345,12 +401,8 @@ function onManualEntryTypeChange(item, nextType) {
   item.categoryId = ensureCategoryIdByEntryType(item.entryType, item.categoryId)
 }
 
-function buildImportedItemDescription(tx) {
-  return importedTxPresentation(tx).title
-}
-
 function pendingMinorOfTx(tx) {
-  return reimbursementPendingMinor(tx)
+  return claimSheetImportedAmountMinor(tx)
 }
 
 function buildManualClaimItems() {
@@ -381,16 +433,11 @@ function buildManualClaimItems() {
 }
 
 function buildImportedClaimItems() {
-  return importedItems.value.map((tx) => ({
-    entryType: 'expense',
-    sourceType: 'transaction',
-    transactionId: tx.id,
-    categoryId: tx.category_id ?? null,
-    accountId: tx.account_id ?? null,
-    description: buildImportedItemDescription(tx),
-    amountMinor: pendingMinorOfTx(tx),
-    occurredAt: tx.occurred_at,
-  }))
+  return importedItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t))
+}
+
+function buildImportedBorrowLoanClaimItems() {
+  return importedBorrowLoanItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t))
 }
 
 function fillFormFromDetail(detail) {
@@ -399,7 +446,16 @@ function fillFormFromDetail(detail) {
   form.counterpartyName = String(detail?.claim?.counterparty_name ?? '')
   form.note = String(detail?.claim?.note ?? '')
   form.importTxIds = detail.items
-    .filter((item) => String(item?.transaction_id ?? '').trim())
+    .filter((item) => {
+      if (!String(item?.transaction_id ?? '').trim()) return false
+      return claimSheetImportKindFromClaimItem(item) === 'reimbursement'
+    })
+    .map((item) => String(item.transaction_id))
+  form.borrowLoanImportTxIds = detail.items
+    .filter((item) => {
+      if (!String(item?.transaction_id ?? '').trim()) return false
+      return claimSheetImportKindFromClaimItem(item) === 'borrow_loan'
+    })
     .map((item) => String(item.transaction_id))
   form.manualItems = detail.items
     .filter((item) => !String(item?.transaction_id ?? '').trim())
@@ -427,23 +483,27 @@ async function loadPage() {
   if (!ledgerStore.activeLedgerId || !claimId.value) {
     claim.value = null
     claimItems.value = []
+    importableBorrowLoanTxs.value = []
     return
   }
 
   loading.value = true
   try {
-    const [detail] = await Promise.all([
+    const [detail, , , borrowLoanImportable] = await Promise.all([
       getReimbursementDetail(ledgerStore.activeLedgerId, claimId.value),
       categoryStore.load(),
       reimbursementStore.load(),
+      listClaimSheetImportableBorrowLoans(ledgerStore.activeLedgerId),
     ])
     if (claimId.value !== String(route.params.id ?? '').trim()) return
     claim.value = detail.claim ?? null
     claimItems.value = Array.isArray(detail.items) ? detail.items : []
+    importableBorrowLoanTxs.value = Array.isArray(borrowLoanImportable) ? borrowLoanImportable : []
     fillFormFromDetail(detail)
   } catch (error) {
     claim.value = null
     claimItems.value = []
+    importableBorrowLoanTxs.value = []
     uiStore.pushToast(error.message ?? t('claim_sheet.toast.load_failed'), 'error')
   } finally {
     loading.value = false
@@ -459,7 +519,11 @@ async function submit() {
       title: form.title,
       counterpartyName: form.counterpartyName,
       note: form.note,
-      items: [...buildImportedClaimItems(), ...buildManualClaimItems()],
+      items: [
+        ...buildImportedClaimItems(),
+        ...buildImportedBorrowLoanClaimItems(),
+        ...buildManualClaimItems(),
+      ],
     })
     await reimbursementStore.load()
     uiStore.pushToast(t('claim_sheet.toast.updated'))
@@ -473,10 +537,6 @@ async function submit() {
 
 function manualItemPresentation(item) {
   return presentClaimManualFormItem(item, claimCategoryLookup.value, t)
-}
-
-function importedTxPresentation(tx) {
-  return presentImportedClaimTx(tx, claimCategoryLookup.value, t)
 }
 </script>
 

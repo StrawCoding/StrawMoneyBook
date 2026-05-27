@@ -364,6 +364,13 @@ const router = createRouter({
       meta: { tab: 'home' },
     },
     {
+      name: 'claim-sheet-import-borrow-loan',
+      path: '/claim-sheets/:id/import-borrow-loans',
+      component: () => import('@/ui/views/claims/ClaimSheetImportBorrowLoanPage.vue'),
+      props: true,
+      meta: { tab: 'home' },
+    },
+    {
       name: 'claim-sheet-detail',
       path: '/claim-sheets/:id',
       component: () => import('@/ui/views/claims/ClaimSheetDetailPage.vue'),
