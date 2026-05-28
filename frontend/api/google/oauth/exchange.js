@@ -169,15 +169,40 @@ async function requestGoogleToken(params) {
   }
 }
 
+// See backend/src/routes/google-oauth.js for the same heuristic. Mirrored here so
+// the api.strawmb.com serverless copy detects the misconfiguration (client_id
+// pasted into GOOGLE_OAUTH_CLIENT_SECRET) and returns a clear
+// MISSING_GOOGLE_OAUTH_ENV error instead of Google's confusing
+// "invalid_client / client secret is invalid" surfaced as GOOGLE_EXCHANGE_005.
+function isClientIdShapedSecret(value) {
+  return /\.apps\.googleusercontent\.com$/i.test(String(value ?? '').trim())
+}
+
 function getGoogleOAuthEnv() {
   // GOOGLE_OAUTH_CLIENT_ID falls back to GOOGLE_AUTH_WEB_CLIENT_ID so api.strawmb.com
   // can reuse the already configured OAuth web client for server-auth-code exchange.
   const clientId = String(process.env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim() ||
     String(process.env.GOOGLE_AUTH_WEB_CLIENT_ID ?? '').trim()
+  const rawClientSecret = String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim()
+  const clientSecretLooksLikeClientId = isClientIdShapedSecret(rawClientSecret)
   return {
     clientId,
-    clientSecret: String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim(),
+    clientSecret: clientSecretLooksLikeClientId ? '' : rawClientSecret,
+    clientSecretLooksLikeClientId,
   }
+}
+
+function describeMissingOAuthVars({ hasClientId, hasClientSecret, clientSecretLooksLikeClientId }) {
+  const missing = []
+  if (!hasClientId) missing.push('GOOGLE_AUTH_WEB_CLIENT_ID (or GOOGLE_OAUTH_CLIENT_ID)')
+  if (!hasClientSecret) {
+    missing.push(
+      clientSecretLooksLikeClientId
+        ? "GOOGLE_OAUTH_CLIENT_SECRET (current value looks like a Google OAuth client_id ending with '.apps.googleusercontent.com'; paste the OAuth web-client SECRET from Google Cloud Console > APIs & Services > Credentials, which normally starts with 'GOCSPX-')"
+        : 'GOOGLE_OAUTH_CLIENT_SECRET',
+    )
+  }
+  return missing
 }
 
 function resolveExchangeRedirectUri(body = {}) {
@@ -221,12 +246,13 @@ export default async function handler(req, res) {
     return
   }
 
-  const { clientId, clientSecret } = getGoogleOAuthEnv()
+  const { clientId, clientSecret, clientSecretLooksLikeClientId } = getGoogleOAuthEnv()
   if (!clientId || !clientSecret) {
-    const missing = [
-      !clientId && 'GOOGLE_AUTH_WEB_CLIENT_ID (or GOOGLE_OAUTH_CLIENT_ID)',
-      !clientSecret && 'GOOGLE_OAUTH_CLIENT_SECRET',
-    ].filter(Boolean).join(' and ')
+    const missing = describeMissingOAuthVars({
+      hasClientId: Boolean(clientId),
+      hasClientSecret: Boolean(clientSecret),
+      clientSecretLooksLikeClientId,
+    }).join(' and ')
     sendError(
       res,
       500,

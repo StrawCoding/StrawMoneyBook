@@ -316,6 +316,25 @@ function normalizeGoogleAuthError(error) {
   const message = String(error?.message ?? '').trim()
   const lower = message.toLowerCase()
   if (
+    lower.includes('missing_google_oauth_env')
+    || lower.includes('google_exchange_004')
+    || lower.includes('google_refresh_004')
+    || lower.includes('google_oauth_client_secret')
+    || lower.includes('invalid_client')
+    || lower.includes('client secret is invalid')
+  ) {
+    // Server-side OAuth misconfiguration (e.g. GOOGLE_OAUTH_CLIENT_SECRET
+    // pasted as a client_id, or env vars missing). End users cannot fix
+    // this themselves; surface a clear "contact admin" prompt while keeping
+    // the original debug detail for Linear / bug reports.
+    return new Error(
+      appendDebugDetails(
+        'Google 自動備份後端設定錯誤，請通知管理員檢查 Google OAuth client / secret 設定。',
+        error,
+      ),
+    )
+  }
+  if (
     lower.includes('invalid_grant')
     || lower.includes('redirect_uri_mismatch')
     || lower.includes('code was already redeemed')

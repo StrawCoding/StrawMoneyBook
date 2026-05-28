@@ -145,6 +145,19 @@ async function requestGoogleToken(params) {
   }
 }
 
+// Heuristic used to detect a common operator mistake: pasting the Google OAuth web
+// client_id value into GOOGLE_OAUTH_CLIENT_SECRET. Real Google OAuth web-client
+// secrets begin with the "GOCSPX-" prefix and never end with
+// ".apps.googleusercontent.com". When the configured secret has the shape of a
+// client_id, Google's token endpoint responds with "invalid_client / The provided
+// client secret is invalid." which on the client side surfaces as the confusing
+// GOOGLE_EXCHANGE_005 (TOKEN_EXCHANGE_FAILED). Treating such a value as missing
+// instead lets the request fail fast with the actionable
+// MISSING_GOOGLE_OAUTH_ENV error so the operator can fix the env.
+function isClientIdShapedSecret(value) {
+  return /\.apps\.googleusercontent\.com$/i.test(String(value ?? '').trim())
+}
+
 function getGoogleOAuthEnv() {
   // GOOGLE_OAUTH_CLIENT_ID falls back to GOOGLE_AUTH_WEB_CLIENT_ID so operators only
   // need to set the separate var when using a different OAuth 2.0 web client for exchange.
@@ -152,10 +165,26 @@ function getGoogleOAuthEnv() {
     String(process.env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim() ||
     String(process.env.GOOGLE_AUTH_WEB_CLIENT_ID ?? '').trim()
   )
+  const rawClientSecret = String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim()
+  const clientSecretLooksLikeClientId = isClientIdShapedSecret(rawClientSecret)
   return {
     clientId,
-    clientSecret: String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim(),
+    clientSecret: clientSecretLooksLikeClientId ? '' : rawClientSecret,
+    clientSecretLooksLikeClientId,
   }
+}
+
+function describeMissingOAuthVars({ hasClientId, hasClientSecret, clientSecretLooksLikeClientId }) {
+  const missing = []
+  if (!hasClientId) missing.push('GOOGLE_AUTH_WEB_CLIENT_ID (or GOOGLE_OAUTH_CLIENT_ID)')
+  if (!hasClientSecret) {
+    missing.push(
+      clientSecretLooksLikeClientId
+        ? "GOOGLE_OAUTH_CLIENT_SECRET (current value looks like a Google OAuth client_id ending with '.apps.googleusercontent.com'; paste the OAuth web-client SECRET from Google Cloud Console > APIs & Services > Credentials, which normally starts with 'GOCSPX-')"
+        : 'GOOGLE_OAUTH_CLIENT_SECRET',
+    )
+  }
+  return missing
 }
 
 function resolveExchangeRedirectUri(body = {}) {
@@ -203,9 +232,13 @@ async function exchangeServerAuthCode(req, res) {
     return
   }
 
-  const { clientId, clientSecret } = getGoogleOAuthEnv()
+  const { clientId, clientSecret, clientSecretLooksLikeClientId } = getGoogleOAuthEnv()
   if (!clientId || !clientSecret) {
-    const missing = [!clientId && 'GOOGLE_AUTH_WEB_CLIENT_ID (or GOOGLE_OAUTH_CLIENT_ID)', !clientSecret && 'GOOGLE_OAUTH_CLIENT_SECRET'].filter(Boolean)
+    const missing = describeMissingOAuthVars({
+      hasClientId: Boolean(clientId),
+      hasClientSecret: Boolean(clientSecret),
+      clientSecretLooksLikeClientId,
+    })
     sendMissingGoogleEnv(res, EXCHANGE_ERROR_NUMBER.MISSING_GOOGLE_OAUTH_ENV, missing)
     return
   }
@@ -270,9 +303,13 @@ async function refreshAccessToken(req, res) {
     return
   }
 
-  const { clientId, clientSecret } = getGoogleOAuthEnv()
+  const { clientId, clientSecret, clientSecretLooksLikeClientId } = getGoogleOAuthEnv()
   if (!clientId || !clientSecret) {
-    const missing = [!clientId && 'GOOGLE_AUTH_WEB_CLIENT_ID (or GOOGLE_OAUTH_CLIENT_ID)', !clientSecret && 'GOOGLE_OAUTH_CLIENT_SECRET'].filter(Boolean)
+    const missing = describeMissingOAuthVars({
+      hasClientId: Boolean(clientId),
+      hasClientSecret: Boolean(clientSecret),
+      clientSecretLooksLikeClientId,
+    })
     sendMissingGoogleEnv(res, REFRESH_ERROR_NUMBER.MISSING_GOOGLE_OAUTH_ENV, missing)
     return
   }

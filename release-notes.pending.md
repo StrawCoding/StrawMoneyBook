@@ -2,6 +2,12 @@
 
 ---
 
+## v1.2.47
+- (SMB-224 Restart) 再修復 Google 自動備份 `GOOGLE_EXCHANGE_005`：v1.2.46 部署後仍重現，根因為 production env `GOOGLE_OAUTH_CLIENT_SECRET` 被誤設為 client_id 值（結尾為 `.apps.googleusercontent.com`，而非真正的 `GOCSPX-...` web client secret），Google token endpoint 因此一律回 `invalid_client / "The provided client secret is invalid."`。backend (`backend/src/routes/google-oauth.js`) 與 api.strawmb.com serverless (`frontend/api/google/oauth/exchange.js` + `refresh.js`) 的 OAuth exchange / refresh 端點現在會偵測「client-id 形狀的 secret」（結尾 `.apps.googleusercontent.com`），將其視為 missing 並改回 `GOOGLE_EXCHANGE_004 / GOOGLE_REFRESH_004 missing_google_oauth_env`，錯誤訊息明確指出該 env 應使用 `GOCSPX-` 開頭的 web client secret；`backend/src/server.js` 在啟動時若偵測到此誤設會 `console.error` 一行精準警告（過去只警告完全沒設的情境）；前端 `frontend/src/services/einvoice/auth.js` 的 `normalizeGoogleAuthError` 也將 `missing_google_oauth_env / invalid_client / "client secret is invalid"` 類錯誤映射為「Google 自動備份後端設定錯誤，請通知管理員檢查 Google OAuth client / secret 設定」，避免一般使用者誤以為是自己的 Google 帳號問題；補上 backend 與 frontend regression tests
+- (SMB-224 Restart 部署提醒) 修這次代碼後，operator 仍需把 `/mnt/data/Data/serviceApps/StrawMB/.env` 的 `GOOGLE_OAUTH_CLIENT_SECRET` 由 client_id 值改為 Google Cloud Console > APIs & Services > Credentials > Web client > Client secret 的 `GOCSPX-...` 字串，並重啟 `StrawMB` 容器，自動備份重新登入才會完全恢復；在 env 更新前，這次的代碼會把錯誤從 `GOOGLE_EXCHANGE_005` 變成更明確的 `GOOGLE_EXCHANGE_004 missing_google_oauth_env`，讓問題不再被誤判為「Google 授權碼失效」
+
+---
+
 ## v1.2.46
 - (SMB-224) 修復 Google 自動備份重新登入時 server auth code exchange 回傳 `GOOGLE_EXCHANGE_005`：OAuth exchange 端點不再從 `GOOGLE_OAUTH_REDIRECT_URI` 環境變數自動帶入 `redirect_uri`（Android/iOS offline server auth code 交換不應附帶 redirect_uri，否則 Google 會拒絕並回傳 invalid_grant / redirect_uri_mismatch）；`postJson` 改優先顯示後端 `message`（含 Google `error_description`）而非機器可讀的 `error` code，並將 invalid_grant 類錯誤映射為明確的重新登入提示；backend 與 api.strawmb.com serverless copy 同步修正
 

@@ -186,8 +186,20 @@ server.listen(PORT, HOST, () => {
     String(process.env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim() ||
     String(process.env.GOOGLE_AUTH_WEB_CLIENT_ID ?? '').trim(),
   )
-  const hasGoogleClientSecret = Boolean(String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim())
-  if (!hasGoogleClientId || !hasGoogleClientSecret) {
+  const rawGoogleClientSecret = String(process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? '').trim()
+  const hasGoogleClientSecret = Boolean(rawGoogleClientSecret)
+  const clientSecretLooksLikeClientId = /\.apps\.googleusercontent\.com$/i.test(rawGoogleClientSecret)
+  if (clientSecretLooksLikeClientId) {
+    console.error(
+      "[google-oauth] GOOGLE_OAUTH_CLIENT_SECRET appears to be a Google OAuth client_id "
+        + "(ends with '.apps.googleusercontent.com'). A real OAuth web-client secret starts with "
+        + "'GOCSPX-'. Until this is corrected, Google Drive backup will fail with "
+        + 'GOOGLE_EXCHANGE_004 / GOOGLE_REFRESH_004 (the route now treats a client_id-shaped '
+        + 'secret as missing so callers receive an actionable error). Update '
+        + 'GOOGLE_OAUTH_CLIENT_SECRET in the env file with the OAuth web-client secret from '
+        + 'Google Cloud Console > APIs & Services > Credentials > (your web client) > Client secret.',
+    )
+  } else if (!hasGoogleClientId || !hasGoogleClientSecret) {
     const missing = [
       !hasGoogleClientId && 'GOOGLE_AUTH_WEB_CLIENT_ID (or GOOGLE_OAUTH_CLIENT_ID)',
       !hasGoogleClientSecret && 'GOOGLE_OAUTH_CLIENT_SECRET',
