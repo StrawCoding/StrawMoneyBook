@@ -381,6 +381,9 @@ export async function listBorrowLoanImportTransactions(ledgerId) {
        t.external_ref_id AS loan_id,
        l.direction AS loan_direction,
        l.status AS loan_status,
+       l.note AS loan_note,
+       l.start_date AS loan_start_date,
+       l.principal_minor AS loan_principal_minor,
        cp.name AS counterparty_name
      FROM transactions t
      LEFT JOIN loans l

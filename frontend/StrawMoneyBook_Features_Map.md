@@ -82,7 +82,7 @@
 | `/claim-sheets/:id` | `src/ui/views/claims/ClaimSheetDetailPage.vue` | 請款單明細 |
 | `/claim-sheets/:id/edit` | `src/ui/views/claims/ClaimSheetEditPage.vue` | 請款單編輯 |
 | `/claim-sheets/:id/import-reimbursements` | `src/ui/views/claims/ClaimSheetImportPage.vue` | 請款單導入報銷獨立選取頁（reimbursement-only），支援全選 / 取消全選；`:id` 為 `new` 時暫存新增表單選取；儲存時會保留另一個區塊的借入導入選取與手動項目 |
-| `/claim-sheets/:id/import-borrow-loans` | `src/ui/views/claims/ClaimSheetImportBorrowLoanPage.vue` | 請款單導入借出獨立選取頁（borrow_loan-only），SMB-222 Restart / v1.2.44 拆出，SMB-222 Restart / v1.2.45 後僅列尚未完成的借出（`loans.direction='lend'` 且 `status NOT IN ('settled','void')`），支援全選 / 取消全選；`:id` 為 `new` 時與報銷選取分開暫存；儲存時會保留另一個區塊的報銷導入選取與手動項目 |
+| `/claim-sheets/:id/import-borrow-loans` | `src/ui/views/claims/ClaimSheetImportBorrowLoanPage.vue` | 請款單導入借出獨立選取頁（borrow_loan-only），SMB-222 Restart / v1.2.44 拆出，SMB-222 Restart / v1.2.45 後僅列尚未完成的借出（`loans.direction='lend'` 且 `status NOT IN ('settled','void')`），SMB-222 Restart / v1.2.48 後候選列表與已導入 claim items 改用 `往來對象 · 借出備註` 等人類可讀名稱，不再顯示 `借出 {tx-uuid}` 系統 ID（`listBorrowLoanImportTransactions` 多帶 `loans.note / start_date / principal_minor`，`claimSheetImportedTitle` 與 i18n `imported_borrow_loan_item` / `imported_reimbursement_item` 三語同步更新）；支援全選 / 取消全選；`:id` 為 `new` 時與報銷選取分開暫存；儲存時會保留另一個區塊的報銷導入選取與手動項目 |
 | `/savings-jars` | `src/ui/views/savings-jars/SavingsJarListPage.vue` | 存錢罐管理 |
 | `/subscriptions` | `src/ui/views/subscriptions/SubscriptionListPage.vue` | 訂閱追蹤 |
 | `/settings` | `src/ui/views/settings.vue` | 設定首頁 |

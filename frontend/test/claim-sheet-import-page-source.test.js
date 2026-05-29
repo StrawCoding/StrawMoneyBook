@@ -166,3 +166,61 @@ test('SMB-222 v1.2.45: completing reimbursement clears imported lent loans and r
   assert.match(reimbursementServiceSource, /restoreSoftDeletedLoanById/)
   assert.match(reimbursementServiceSource, /restoreSoftDeletedTransactionsByOriginRef/)
 })
+
+test('SMB-222 v1.2.48: importable lent loan query exposes loan note / start_date / principal for title rendering', () => {
+  // The lent-loan import list now joins the underlying loan record so that the
+  // UI can render counterparty + loan note instead of falling back to the raw
+  // transaction UUID (the bug Tester re-reported on 2026-05-29).
+  assert.match(loanRepoSource, /l\.note AS loan_note/)
+  assert.match(loanRepoSource, /l\.start_date AS loan_start_date/)
+  assert.match(loanRepoSource, /l\.principal_minor AS loan_principal_minor/)
+  assert.match(claimImportServiceSource, /loan_note: String\(tx\?\.loan_note \?\? ''\)\.trim\(\)/)
+  assert.match(claimImportServiceSource, /loan_start_date: String\(tx\?\.loan_start_date \?\? ''\)\.trim\(\)/)
+})
+
+test('SMB-222 v1.2.48: claim sheet imported title never leaks the raw transaction id for borrow_loan / reimbursement', () => {
+  // The lent-loan title is now composed from counterparty_name + loan_note
+  // (with tx note / start_date / i18n fallback) — but never tx.id. We assert
+  // the source-level invariants so a future regression that re-introduces
+  // `{ id: tx?.id }` interpolation is caught even before the function runs.
+  const claimImportUtilSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/utils/claim-sheet-import.js'),
+    'utf8',
+  )
+
+  // No t(..., { id: ... }) call anywhere in the title fallback chain.
+  assert.doesNotMatch(claimImportUtilSource, /imported_borrow_loan_item['"][^)]*\bid:\s*tx/)
+  assert.doesNotMatch(claimImportUtilSource, /imported_reimbursement_item['"][^)]*\bid:\s*tx/)
+  assert.doesNotMatch(
+    claimImportUtilSource,
+    /t\(\s*['"]claim_sheet\.form\.imported_(?:borrow_loan|reimbursement)_item['"]\s*,\s*\{[^}]*\bid\s*:/,
+  )
+
+  // The new title resolver pulls counterparty + loan note + start_date and
+  // calls the i18n key with NO interpolation map.
+  assert.match(claimImportUtilSource, /tx\?\.counterparty_name/)
+  assert.match(claimImportUtilSource, /tx\?\.loan_note/)
+  assert.match(claimImportUtilSource, /tx\?\.loan_start_date/)
+  assert.match(
+    claimImportUtilSource,
+    /t\(\s*['"]claim_sheet\.form\.imported_borrow_loan_item['"]\s*\)/,
+  )
+  assert.match(
+    claimImportUtilSource,
+    /t\(\s*['"]claim_sheet\.form\.imported_reimbursement_item['"]\s*\)/,
+  )
+})
+
+test('SMB-222 v1.2.48: imported_*_item i18n strings no longer interpolate {id} in any locale', () => {
+  // zh-TW
+  assert.match(i18nServiceSource, /'claim_sheet\.form\.imported_reimbursement_item': '未命名報銷'/)
+  assert.match(i18nServiceSource, /'claim_sheet\.form\.imported_borrow_loan_item': '未命名借出'/)
+  assert.doesNotMatch(i18nServiceSource, /'claim_sheet\.form\.imported_reimbursement_item': '報銷 \{id\}'/)
+  assert.doesNotMatch(i18nServiceSource, /'claim_sheet\.form\.imported_borrow_loan_item': '借出 \{id\}'/)
+  // en
+  assert.match(i18nServiceSource, /'claim_sheet\.form\.imported_reimbursement_item': 'Untitled reimbursement'/)
+  assert.match(i18nServiceSource, /'claim_sheet\.form\.imported_borrow_loan_item': 'Untitled lent loan'/)
+  // ja
+  assert.match(i18nServiceSource, /'claim_sheet\.form\.imported_reimbursement_item': '名称未設定の立替'/)
+  assert.match(i18nServiceSource, /'claim_sheet\.form\.imported_borrow_loan_item': '名称未設定の貸出'/)
+})

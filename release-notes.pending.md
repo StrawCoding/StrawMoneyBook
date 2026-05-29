@@ -2,6 +2,11 @@
 
 ---
 
+## v1.2.48
+- (SMB-222 Restart) 請款單「導入借出」清單與已導入借出 claim item 不再以交易 UUID 為顯示名稱：`listBorrowLoanImportTransactions` 改為一併取出 `loans.note`、`loans.start_date`、`loans.principal_minor`；前端 `claimSheetImportedTitle` 重寫優先順序為「往來對象名稱 · 借出備註 → 往來對象 → 借出備註 → 交易備註 → 借出建立日期（搭配 i18n 名稱）→ 純 i18n fallback」，並完全移除舊有的 `t('claim_sheet.form.imported_borrow_loan_item', { id: tx.id })` 路徑；三語 i18n（zh-TW `未命名借出`、en `Untitled lent loan`、ja `名称未設定の貸出`）改為不帶 `{id}` 的純名稱，避免請款單導入畫面再顯示「借出 abc-123-uuid」之類的系統 ID；同步處理 `imported_reimbursement_item` 對應翻譯；補上 `frontend/test/claim-sheet-import-page-source.test.js` 中三段 SMB-222 v1.2.48 regression（loan repo SELECT、annotator 欄位、title 與 i18n 不可再帶 `{id}`）
+
+---
+
 ## v1.2.47
 - (SMB-224 Restart) 再修復 Google 自動備份 `GOOGLE_EXCHANGE_005`：v1.2.46 部署後仍重現，根因為 production env `GOOGLE_OAUTH_CLIENT_SECRET` 被誤設為 client_id 值（結尾為 `.apps.googleusercontent.com`，而非真正的 `GOCSPX-...` web client secret），Google token endpoint 因此一律回 `invalid_client / "The provided client secret is invalid."`。backend (`backend/src/routes/google-oauth.js`) 與 api.strawmb.com serverless (`frontend/api/google/oauth/exchange.js` + `refresh.js`) 的 OAuth exchange / refresh 端點現在會偵測「client-id 形狀的 secret」（結尾 `.apps.googleusercontent.com`），將其視為 missing 並改回 `GOOGLE_EXCHANGE_004 / GOOGLE_REFRESH_004 missing_google_oauth_env`，錯誤訊息明確指出該 env 應使用 `GOCSPX-` 開頭的 web client secret；`backend/src/server.js` 在啟動時若偵測到此誤設會 `console.error` 一行精準警告（過去只警告完全沒設的情境）；前端 `frontend/src/services/einvoice/auth.js` 的 `normalizeGoogleAuthError` 也將 `missing_google_oauth_env / invalid_client / "client secret is invalid"` 類錯誤映射為「Google 自動備份後端設定錯誤，請通知管理員檢查 Google OAuth client / secret 設定」，避免一般使用者誤以為是自己的 Google 帳號問題；補上 backend 與 frontend regression tests
 - (SMB-224 Restart 部署提醒) 修這次代碼後，operator 仍需把 `/mnt/data/Data/serviceApps/StrawMB/.env` 的 `GOOGLE_OAUTH_CLIENT_SECRET` 由 client_id 值改為 Google Cloud Console > APIs & Services > Credentials > Web client > Client secret 的 `GOCSPX-...` 字串，並重啟 `StrawMB` 容器，自動備份重新登入才會完全恢復；在 env 更新前，這次的代碼會把錯誤從 `GOOGLE_EXCHANGE_005` 變成更明確的 `GOOGLE_EXCHANGE_004 missing_google_oauth_env`，讓問題不再被誤判為「Google 授權碼失效」

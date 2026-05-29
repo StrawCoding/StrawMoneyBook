@@ -14,6 +14,11 @@ function annotateBorrowLoanImportTx(tx) {
     claimImportKind: 'borrow_loan',
     loan_id: tx?.loan_id ?? null,
     loan_direction: tx?.loan_direction ?? null,
+    loan_note: String(tx?.loan_note ?? '').trim(),
+    loan_start_date: String(tx?.loan_start_date ?? '').trim(),
+    loan_principal_minor: Number.isFinite(Number(tx?.loan_principal_minor))
+      ? Number(tx?.loan_principal_minor)
+      : null,
     counterparty_name: String(tx?.counterparty_name ?? '').trim(),
     note_plain: String(tx?.note ?? '').trim(),
   }

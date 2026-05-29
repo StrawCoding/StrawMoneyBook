@@ -27,17 +27,36 @@ export function claimSheetImportKindFromClaimItem(item) {
   return 'reimbursement'
 }
 
+function joinTitleParts(parts) {
+  return parts
+    .map((part) => String(part ?? '').trim())
+    .filter(Boolean)
+    .join(' · ')
+}
+
 export function claimSheetImportedTitle(tx, t) {
   const kind = claimSheetImportKindFromTx(tx)
   if (kind === 'borrow_loan') {
-    return String(tx?.note_plain ?? '').trim()
-      || String(tx?.note ?? '').trim()
-      || t('claim_sheet.form.imported_borrow_loan_item', { id: tx?.id })
+    // For lent loans the human-readable identifier is the counterparty name
+    // (e.g. "張三") plus the loan note (if the user typed one) — never the
+    // underlying transaction UUID. Falling back to tx.id leaks an internal
+    // system id into the UI (SMB-222 Restart).
+    const counterpartyName = String(tx?.counterparty_name ?? '').trim()
+    const loanNote = String(tx?.loan_note ?? '').trim()
+    const txNote = String(tx?.note_plain ?? tx?.note ?? '').trim()
+    const startDate = String(tx?.loan_start_date ?? '').trim()
+    const composed = joinTitleParts([counterpartyName, loanNote])
+    if (composed) return composed
+    if (txNote) return txNote
+    if (startDate) {
+      return joinTitleParts([t('claim_sheet.form.imported_borrow_loan_item'), startDate])
+    }
+    return t('claim_sheet.form.imported_borrow_loan_item')
   }
 
   return String(tx?.category_name ?? '').trim()
     || String(tx?.note_plain ?? '').trim()
-    || t('claim_sheet.form.imported_reimbursement_item', { id: tx?.id })
+    || t('claim_sheet.form.imported_reimbursement_item')
 }
 
 export function claimSheetImportedIcon(tx) {
