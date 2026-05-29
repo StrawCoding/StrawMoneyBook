@@ -2,6 +2,11 @@
 
 ---
 
+## v1.2.49
+- (SMB-225) 借貸明細頁（單筆借貸 / 項目頁）新增「新增同對象借出」與「新增同對象借入」兩個快速入口：點擊後開啟 `InputBottomSheet`，對象名稱與建立入帳帳戶會預先帶入目前借貸的 `counterparty_name` 與 `setup_account_id`，借貸方向依按鈕固定（避免使用者誤選），本金 / 預設利息 / 開始日期 / 到期日 / 備註可立即填寫；儲存時呼叫既有 `loanStore.create`（與 LoanCounterpartyDetailPage / LoanListPage 完全同一條建立路徑），驗證對象名稱非空、本金 > 0，成功後 toast 顯示「已新增借出/借入：對象名稱」並保留在原借貸明細頁，不會打亂使用者的閱讀位置；`onRequestCloseOverlay` 也納入新增 sheet，避免 Android back / overlay 衝突；新增 `loan-detail-same-counterparty-source.test.js` 共 6 段 SMB-225 v1.2.49 source regression，覆蓋按鈕存在、表單欄位、handler 預填、submit 驗證、overlay close 整合與 sheet title
+
+---
+
 ## v1.2.48
 - (SMB-222 Restart) 請款單「導入借出」清單與已導入借出 claim item 不再以交易 UUID 為顯示名稱：`listBorrowLoanImportTransactions` 改為一併取出 `loans.note`、`loans.start_date`、`loans.principal_minor`；前端 `claimSheetImportedTitle` 重寫優先順序為「往來對象名稱 · 借出備註 → 往來對象 → 借出備註 → 交易備註 → 借出建立日期（搭配 i18n 名稱）→ 純 i18n fallback」，並完全移除舊有的 `t('claim_sheet.form.imported_borrow_loan_item', { id: tx.id })` 路徑；三語 i18n（zh-TW `未命名借出`、en `Untitled lent loan`、ja `名称未設定の貸出`）改為不帶 `{id}` 的純名稱，避免請款單導入畫面再顯示「借出 abc-123-uuid」之類的系統 ID；同步處理 `imported_reimbursement_item` 對應翻譯；補上 `frontend/test/claim-sheet-import-page-source.test.js` 中三段 SMB-222 v1.2.48 regression（loan repo SELECT、annotator 欄位、title 與 i18n 不可再帶 `{id}`）
 

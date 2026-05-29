@@ -39,6 +39,18 @@
           <button v-if="showFinished && loan.status === 'void'" class="btn" @click="markRestore">恢復</button>
           <button v-if="canDeleteLoan(loan)" class="btn danger" @click="openDeleteDialog">刪除</button>
         </div>
+
+        <div class="row btn-wrap counterparty-actions">
+          <small class="muted counterparty-actions-hint">新增同對象的下一筆借貸</small>
+          <button class="btn" @click="openCreateForSameCounterparty('lend')">
+            <font-awesome-icon icon="fa-solid fa-arrow-up" class="counterparty-action-icon" />
+            新增同對象借出
+          </button>
+          <button class="btn" @click="openCreateForSameCounterparty('borrow')">
+            <font-awesome-icon icon="fa-solid fa-arrow-down" class="counterparty-action-icon" />
+            新增同對象借入
+          </button>
+        </div>
       </div>
 
       <p v-else class="muted">找不到借貸資料</p>
@@ -157,6 +169,86 @@
       @close="closeDeleteRepaymentDialog"
       @confirm="confirmDeleteRepayment"
     />
+
+    <InputBottomSheet
+      :open="createOpen"
+      :title="createSheetTitle"
+      :body-class="'stack form-wrap'"
+      :sheet-class="'sheet'"
+      :show-footer="true"
+      @close="closeCreateSheet"
+    >
+              <p class="muted">{{ createForm.counterpartyName || '未命名對象' }} · {{ createForm.direction === 'borrow' ? '借入（應付）' : '借出（應收）' }}</p>
+
+              <label>
+                借貸方向
+                <CustomSelect v-model="createForm.direction" :options="directionOptions" />
+              </label>
+
+              <label>
+                對象名稱
+                <input v-model="createForm.counterpartyName" class="input" />
+              </label>
+
+              <label>
+                本金（元）
+                <input v-model.number="createForm.principalMajor" class="input" type="number" min="0" step="1" />
+              </label>
+
+              <label>
+                預設利息（元，可選）
+                <input v-model.number="createForm.interestMajor" class="input" type="number" min="0" step="1" />
+              </label>
+
+              <div class="field-block">
+                <span class="field-label">開始日期</span>
+                <div class="date-picker-wrap">
+                  <DateTimePickerField
+                    :date="createForm.startDate"
+                    :hour="createForm.startHour"
+                    :minute="createForm.startMinute"
+                    prefer-bottom-anchor
+                    @update:date="pickCreateStartDate"
+                    @update:hour="pickCreateStartHour"
+                    @update:minute="pickCreateStartMinute"
+                  />
+                </div>
+              </div>
+
+              <div class="field-block">
+                <span class="field-label">到期日（可選）</span>
+                <div class="row due-date-row">
+                  <div class="due-picker-wrap">
+                    <DateTimePickerField
+                      :date="createForm.dueDate"
+                      :hour="createForm.dueHour"
+                      :minute="createForm.dueMinute"
+                      prefer-bottom-anchor
+                      @update:date="pickCreateDueDate"
+                      @update:hour="pickCreateDueHour"
+                      @update:minute="pickCreateDueMinute"
+                    />
+                  </div>
+                  <button class="btn mini-btn" type="button" @click="clearCreateDueDate">清除</button>
+                </div>
+              </div>
+
+              <label>
+                建立入帳帳戶
+                <CustomSelect v-model="createForm.accountId" :options="accountStore.accounts" />
+              </label>
+
+              <label>
+                備註
+                <textarea v-model="createForm.note" class="textarea" rows="2" />
+              </label>
+      <template #footer>
+        <button class="btn" :disabled="creatingLoan" @click="closeCreateSheet">取消</button>
+        <button class="btn primary" :disabled="creatingLoan" @click="submitCreateLoan">
+          {{ creatingLoan ? '處理中…' : '儲存' }}
+        </button>
+      </template>
+    </InputBottomSheet>
   </section>
 </template>
 
@@ -167,6 +259,7 @@ import AppDialog from '@/ui/components/common/AppDialog.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
@@ -191,6 +284,8 @@ const repayOpen = ref(false)
 const editingRepayment = ref(null)
 const principalOpen = ref(false)
 const setupAccountOpen = ref(false)
+const createOpen = ref(false)
+const creatingLoan = ref(false)
 const repayForm = reactive({
   amountMajor: null,
   accountId: '',
@@ -212,6 +307,24 @@ const deleteRepaymentDialog = reactive({
   loading: false,
   paymentId: '',
 })
+const directionOptions = [
+  { value: 'lend', label: '借出（應收）' },
+  { value: 'borrow', label: '借入（應付）' },
+]
+const createForm = reactive({
+  direction: 'lend',
+  counterpartyName: '',
+  principalMajor: null,
+  interestMajor: null,
+  startDate: new Date().toISOString().slice(0, 10),
+  startHour: new Date().getHours(),
+  startMinute: new Date().getMinutes(),
+  dueDate: '',
+  dueHour: new Date().getHours(),
+  dueMinute: new Date().getMinutes(),
+  accountId: '',
+  note: '',
+})
 
 const loanId = computed(() => String(route.params.id ?? ''))
 const loan = computed(() => {
@@ -230,6 +343,10 @@ const repayInterestPreview = computed(() => {
   const amountMinor = Math.round(Number(repayForm.amountMajor ?? 0) * 100)
   const principalRemainingMinor = Number(loan.value.principal_remaining_minor ?? 0)
   return Math.max(0, amountMinor - principalRemainingMinor)
+})
+
+const createSheetTitle = computed(() => {
+  return createForm.direction === 'borrow' ? '新增同對象借入' : '新增同對象借出'
 })
 
 const backLink = computed(() => {
@@ -461,6 +578,109 @@ async function confirmDeleteRepayment() {
   }
 }
 
+function pad2(value) {
+  return String(value).padStart(2, '0')
+}
+
+function formatLoanDateTime(date, hour, minute) {
+  return `${date} ${pad2(hour)}:${pad2(minute)}`
+}
+
+function toIsoFromDateTime(date, hour, minute) {
+  const parsed = new Date(`${date}T${pad2(hour)}:${pad2(minute)}:00`)
+  if (Number.isNaN(parsed.getTime())) return new Date().toISOString()
+  return parsed.toISOString()
+}
+
+function pickCreateStartDate(value) {
+  createForm.startDate = String(value ?? '')
+}
+
+function pickCreateStartHour(value) {
+  createForm.startHour = Number(value ?? 0)
+}
+
+function pickCreateStartMinute(value) {
+  createForm.startMinute = Number(value ?? 0)
+}
+
+function pickCreateDueDate(value) {
+  createForm.dueDate = String(value ?? '')
+}
+
+function pickCreateDueHour(value) {
+  createForm.dueHour = Number(value ?? 0)
+}
+
+function pickCreateDueMinute(value) {
+  createForm.dueMinute = Number(value ?? 0)
+}
+
+function clearCreateDueDate() {
+  createForm.dueDate = ''
+}
+
+function openCreateForSameCounterparty(direction) {
+  if (!loan.value) return
+  const now = new Date()
+  const rawCounterparty = String(loan.value?.counterparty_name ?? '').trim()
+  createOpen.value = true
+  createForm.direction = direction === 'borrow' ? 'borrow' : 'lend'
+  createForm.counterpartyName = rawCounterparty
+  createForm.principalMajor = null
+  createForm.interestMajor = null
+  createForm.startDate = now.toISOString().slice(0, 10)
+  createForm.startHour = now.getHours()
+  createForm.startMinute = now.getMinutes()
+  createForm.dueDate = ''
+  createForm.dueHour = now.getHours()
+  createForm.dueMinute = now.getMinutes()
+  createForm.accountId = String(loan.value?.setup_account_id ?? defaultAccountId.value ?? '')
+  createForm.note = ''
+}
+
+function closeCreateSheet() {
+  if (creatingLoan.value) return
+  createOpen.value = false
+}
+
+async function submitCreateLoan() {
+  if (creatingLoan.value) return
+  const counterpartyName = String(createForm.counterpartyName ?? '').trim()
+  if (!counterpartyName) {
+    uiStore.pushToast('請輸入對象名稱', 'error')
+    return
+  }
+  const principalMinor = Math.round(Number(createForm.principalMajor ?? 0) * 100)
+  if (!Number.isFinite(principalMinor) || principalMinor <= 0) {
+    uiStore.pushToast('本金需大於 0', 'error')
+    return
+  }
+  creatingLoan.value = true
+  try {
+    await loanStore.create({
+      direction: createForm.direction,
+      counterpartyName,
+      principalMinor,
+      interestMinor: Math.max(0, Math.round(Number(createForm.interestMajor ?? 0) * 100)),
+      startDate: formatLoanDateTime(createForm.startDate, createForm.startHour, createForm.startMinute),
+      dueDate: createForm.dueDate
+        ? formatLoanDateTime(createForm.dueDate, createForm.dueHour, createForm.dueMinute)
+        : null,
+      occurredAt: toIsoFromDateTime(createForm.startDate, createForm.startHour, createForm.startMinute),
+      accountId: createForm.accountId,
+      note: createForm.note,
+    })
+    await refreshLinkedData()
+    uiStore.pushToast(`已新增${createForm.direction === 'borrow' ? '借入' : '借出'}：${counterpartyName}`)
+    createOpen.value = false
+  } catch (error) {
+    uiStore.pushToast(error.message ?? '新增借貸失敗', 'error')
+  } finally {
+    creatingLoan.value = false
+  }
+}
+
 function openVoidDialog() {
   confirmDialog.open = true
   confirmDialog.loading = false
@@ -479,6 +699,11 @@ function closeConfirmDialog() {
 }
 
 function onRequestCloseOverlay(event) {
+  if (createOpen.value) {
+    closeCreateSheet()
+    event.preventDefault()
+    return
+  }
   if (repayOpen.value) {
     closeRepaySheet()
     event.preventDefault()
@@ -577,6 +802,69 @@ h3 {
 
 .btn-wrap {
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.counterparty-actions {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent 40%);
+  padding-top: 10px;
+  margin-top: 4px;
+  align-items: center;
+}
+
+.counterparty-actions-hint {
+  flex: 1 1 auto;
+  text-align: left;
+  font-size: 13px;
+}
+
+.counterparty-action-icon {
+  margin-right: 6px;
+}
+
+@media (max-width: 480px) {
+  .counterparty-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .counterparty-actions-hint {
+    text-align: center;
+  }
+
+  .counterparty-actions .btn {
+    width: 100%;
+  }
+}
+
+.field-block {
+  display: grid;
+  gap: 6px;
+}
+
+.field-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.date-picker-wrap {
+  width: min(220px, 100%);
+}
+
+.due-date-row {
+  gap: 8px;
+  align-items: center;
+}
+
+.due-picker-wrap {
+  flex: 0 1 220px;
+  min-width: 0;
+  max-width: 220px;
+}
+
+.due-date-row .mini-btn {
+  flex: 0 0 auto;
 }
 
 .payments {
