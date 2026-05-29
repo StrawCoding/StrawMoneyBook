@@ -3,12 +3,21 @@
     <header class="row page-head">
       <h2>{{ counterpartyName }}</h2>
       <div class="row head-actions">
-        <button class="btn primary" @click="openCreateSheet('lend')">新增該對象借出</button>
-        <button class="btn primary" @click="openCreateSheet('borrow')">新增該對象借入</button>
         <button class="btn" :disabled="!visibleLoans.length" @click="exportCsv">匯出 CSV</button>
         <RouterLink class="btn back-btn" :to="backLink">返回</RouterLink>
       </div>
     </header>
+
+    <div class="row counterparty-create-actions">
+      <button class="btn primary" @click="openCreateSheet('lend')">
+        <font-awesome-icon icon="fa-solid fa-arrow-up" class="counterparty-create-icon" />
+        新增該對象借出
+      </button>
+      <button class="btn primary" @click="openCreateSheet('borrow')">
+        <font-awesome-icon icon="fa-solid fa-arrow-down" class="counterparty-create-icon" />
+        新增該對象借入
+      </button>
+    </div>
 
     <article class="card panel">
       <div class="row summary-row">
@@ -1021,6 +1030,51 @@ h3 {
 .head-actions {
   gap: 8px;
   flex-wrap: wrap;
+}
+
+/*
+ * SMB-225 Restart / v1.2.51: 兩顆 primary 「新增該對象借出 / 借入」必須放在
+ * `header` 之外，否則全域 CSS `header.row:has(.back-btn)` 會在 mobile 把
+ * head-actions 子按鈕全部擠進同一個 grid cell (grid-row: 2; grid-column: 1/-1;
+ * justify-self: stretch)，視覺上只剩最後一顆可見 (Tester 截圖只看到「匯出
+ * CSV」滿寬)。獨立的 .counterparty-create-actions row 避開 iOS-nav grid。
+ */
+.counterparty-create-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 4px;
+  align-items: stretch;
+}
+
+.counterparty-create-actions .btn {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.counterparty-create-icon {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 480px) {
+  .counterparty-create-actions {
+    flex-direction: column;
+  }
+
+  /*
+   * In column mode `flex: 1 1 200px` is on the main axis (vertical) so
+   * each button would stretch to fill remaining height (~200px tall) —
+   * reset flex to auto so each button keeps its natural button height
+   * and only the width stretches via width: 100%.
+   */
+  .counterparty-create-actions .btn {
+    flex: 0 0 auto;
+    width: 100%;
+  }
 }
 
 .batch-preview {

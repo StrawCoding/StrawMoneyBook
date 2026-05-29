@@ -2,6 +2,11 @@
 
 ---
 
+## v1.2.51
+- (SMB-225 Restart) 修正 v1.2.50 在 `LoanCounterpartyDetailPage`（對象明細）加入「新增該對象借出 / 借入」兩顆按鈕在 mobile 上**完全看不見**的問題：Tester 回報該頁面只看到單一「匯出 CSV」滿寬，新加的兩顆 primary 按鈕無顯示。根因為頁首 `<header class="row page-head">` 觸發全域 `global.css` 中 `header.row:has(.back-btn)` 的 iOS-nav grid 規則（line 469-527）：mobile 下 (`@media max-width: 720px`) 所有非 back-btn 的 head-actions 子元素被擠進**同一個 grid cell** (`grid-row: 2 / grid-column: 1/-1 / justify-self: stretch`)，三顆按鈕（lend / borrow / csv）視覺上全部疊在一起，DOM order 最後的「匯出 CSV」蓋住前兩顆 → Tester 看不到。本次把兩顆 primary 按鈕**移出 header**，改放在 header 與 summary 之間獨立的 `<div class="row counterparty-create-actions">` 容器中，完全避開 iOS-nav grid 影響；補上 scoped CSS：desktop `flex: 1 1 200px` 並排、`@media (max-width: 480px)` 切換為 column 並 reset `flex: 0 0 auto` 維持正常按鈕高度（避免 column 主軸 stretch 把按鈕拉到 ~200px 高）；同步用 Playwright 在 412×915 mobile viewport 截圖驗證兩顆 primary 黃色按鈕真實渲染、高度合理；測試更新為 5 段 `SMB-225 v1.2.51` regression：(1) 兩顆按鈕在 `.counterparty-create-actions` 容器內（與 header 互為 siblings）；(2) `.head-actions` block 內**不再含**任何 `openCreateSheet` 字串，杜絕未來被誤改回 header；(3) CSS 含 `display: flex`、`flex-wrap: wrap`、`flex: 1 1 200px`、`@media 480px → flex-direction: column / flex: 0 0 auto`；(4) `openCreateSheet(directionOverride)` 行為保留；(5) `LoanDetailPage` 仍不殘留 v1.2.49 誤放入口
+
+---
+
 ## v1.2.50
 - (SMB-225 Restart) 修正 v1.2.49 把「新增該對象借出 / 借入」入口加錯位置：Tester 指出該入口應在「借出 page → 項目（對象）內 → 有匯出 CSV btn 的頁面」，亦即 `LoanCounterpartyDetailPage`（對象明細）；本次把 v1.2.49 加在 `LoanDetailPage`（單筆借貸明細）的兩顆按鈕、新增 sheet、相關 import / CSS 全部還原，並把 `LoanCounterpartyDetailPage` 頁首原本的單一「新增借貸」按鈕拆成兩顆獨立 primary 按鈕「新增該對象借出」+「新增該對象借入」，與既有「匯出 CSV / 返回」共處同一行 `head-actions`；既有 `openCreateSheet` 改為接受 `directionOverride` 參數，按鈕呼叫時傳入 `'lend'` / `'borrow'`，鎖定 `createForm.direction` 不再被當前 tab 覆蓋，避免使用者在借出 tab 想新增借入時被誤導；沒有按鈕指定的舊呼叫仍保留 tab fallback 行為；新增 `loan-counterparty-create-direction-source.test.js` 共 4 段 SMB-225 v1.2.50 regression，涵蓋頁首按鈕排列、handler 接受 directionOverride、舊單一「新增借貸」按鈕已移除、`LoanDetailPage` 不再殘留誤放的快速入口
 
