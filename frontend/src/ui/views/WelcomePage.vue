@@ -72,6 +72,14 @@
           <RouterLink v-if="!hasLedgers" class="btn secondary-link" to="/settings/shared-ledgers">
             {{ t('welcome.join_shared_ledger', '已有共同帳本？登入並加入') }}
           </RouterLink>
+          <RouterLink v-if="!hasLedgers" class="btn secondary-link" to="/settings/data-management">
+            <font-awesome-icon icon="fa-solid fa-database" class="secondary-link-icon" />
+            {{ t('welcome.restore_backup_action', '恢復備份') }}
+          </RouterLink>
+          <RouterLink v-if="!hasLedgers" class="btn secondary-link" to="/settings/google-drive-ledger-sync">
+            <font-awesome-icon icon="fa-solid fa-cloud-arrow-up" class="secondary-link-icon" />
+            {{ t('welcome.ledger_sync_action', '帳本同步') }}
+          </RouterLink>
         </section>
 
         <section v-else :key="'step-3'" class="step-panel">
@@ -419,6 +427,13 @@ h2,
   width: 100%;
   justify-content: center;
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.secondary-link-icon {
+  flex: 0 0 auto;
 }
 
 .wizard-actions {

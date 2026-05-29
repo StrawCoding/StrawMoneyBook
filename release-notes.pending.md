@@ -1,1 +1,8 @@
 # Pending Release Notes
+
+---
+
+## v1.3.1
+- (SMB-215 Restart) 修正 v1.2.27 的「恢復備份 / 帳本同步」入口放在錯誤的 surface：v1.2.27 把按鈕加在 `PostSetupIntroPage.vue`（**初始化完成後**的導覽頁 `/welcome/intro`）的 shared-ledger slide，但 issue title「初始化頁面」與 Tester 回報「沒有東西」實際指的是 `WelcomePage.vue` 的 setup wizard 第二頁「建立帳本」（既有的「已有共同帳本？登入並加入」連結那一頁）。本次在 `WelcomePage.vue` step 2 既有 secondary-link 旁邊新增兩顆 `RouterLink`：「恢復備份」→ `/settings/data-management`、「帳本同步」→ `/settings/google-drive-ledger-sync`，僅在 `!hasLedgers` 時顯示（與既有 join_shared_ledger 連結一致），帶 database / cloud-arrow-up FontAwesome 圖示。同時把 `router/index.js` 兩個目的地 route 加上 `meta.allowWithoutSetup: true`，否則 `App.vue` 的 `shouldShowWelcomePage` 會在 `hasLedgers=false / hasAccounts=false` 狀態下立即把使用者攔回 `/welcome`，讓按鈕變成「假入口」。新增 i18n keys `welcome.restore_backup_action` / `welcome.ledger_sync_action` 於三語（zh-TW `恢復備份 / 帳本同步`、en `Restore Backup / Ledger Sync`、ja `バックアップを復元 / 台帳の同期`），順便補回 `welcome.join_shared_ledger` 三語 key（過去只用 inline fallback）。Playwright mobile 412×915 viewport 全程驗證：走完 step 1 → step 2 後三個 secondary-link 真實 render；點「恢復備份」→ 順利進到 `/settings/data-management`（顯示「資料管理」+ 匯入 JSON / CSV 入口，沒被 welcome 攔回）；回 welcome 再點「帳本同步」→ 順利進到 `/settings/google-drive-ledger-sync`（顯示「帳本同步」標題、會員限定說明）。新增 `frontend/test/welcome-page-step2-actions-source.test.js` 共 3 段 SMB-215 v1.3.1 source regression：(1) step 2 含兩個 RouterLink 且都帶 `v-if="!hasLedgers"`；(2) 兩個 route 都帶 `allowWithoutSetup: true`；(3) i18n 兩個 key 三語完整。v1.2.27 在 `PostSetupIntroPage.vue` shared-ledger slide 加的 extraActions 維持不動，兩處入口並存，Tester 無論在哪個畫面都能找到。
+
+---

@@ -141,7 +141,12 @@ const router = createRouter({
       path: '/settings/data-management',
       name: 'settings-data-management',
       component: () => import('@/ui/views/settings/SettingsDataManagementPage.vue'),
-      meta: { tab: 'settings' },
+      // SMB-215 v1.3.1: allow access before ledger/account exist so that
+      // the WelcomePage step 2 「恢復備份」entry actually reaches this
+      // page (匯入 JSON / CSV 本來就是 0-state 還原入口). Without this
+      // meta App.vue's shouldShowWelcomePage immediately redirects back
+      // to /welcome and the button silently does nothing.
+      meta: { tab: 'settings', allowWithoutSetup: true },
     },
     {
       path: '/settings/auto-backup',
@@ -153,7 +158,10 @@ const router = createRouter({
       path: '/settings/google-drive-ledger-sync',
       name: 'settings-google-drive-ledger-sync',
       component: () => import('@/ui/views/settings/SettingsGoogleDriveLedgerSyncPage.vue'),
-      meta: { tab: 'settings' },
+      // SMB-215 v1.3.1: see settings-data-management above — WelcomePage
+      // step 2 「帳本同步」entry needs allowWithoutSetup, otherwise the
+      // button is dead.
+      meta: { tab: 'settings', allowWithoutSetup: true },
     },
     {
       path: '/settings/exchange-rate',
