@@ -3,7 +3,8 @@
     <header class="row page-head">
       <h2>{{ counterpartyName }}</h2>
       <div class="row head-actions">
-        <button class="btn primary" @click="openCreateSheet">新增借貸</button>
+        <button class="btn primary" @click="openCreateSheet('lend')">新增該對象借出</button>
+        <button class="btn primary" @click="openCreateSheet('borrow')">新增該對象借入</button>
         <button class="btn" :disabled="!visibleLoans.length" @click="exportCsv">匯出 CSV</button>
         <RouterLink class="btn back-btn" :to="backLink">返回</RouterLink>
       </div>
@@ -657,10 +658,19 @@ function closeSelectionActionSheet() {
   selectionActionSheetOpen.value = false
 }
 
-function openCreateSheet() {
+function openCreateSheet(directionOverride) {
   const now = new Date()
+  // SMB-225 v1.2.50: the header now exposes two dedicated buttons —
+  // 「新增該對象借出」/「新增該對象借入」 — which pass an explicit direction
+  // so the create sheet locks the chosen side. Older single-button callers
+  // (none after v1.2.50, but kept for safety) fall back to the active tab.
+  const normalizedDirection = directionOverride === 'borrow'
+    ? 'borrow'
+    : directionOverride === 'lend'
+      ? 'lend'
+      : (tab.value === 'borrow' ? 'borrow' : 'lend')
   createOpen.value = true
-  createForm.direction = tab.value === 'borrow' ? 'borrow' : 'lend'
+  createForm.direction = normalizedDirection
   createForm.counterpartyName = counterpartyName.value === '未命名對象' ? '' : counterpartyName.value
   createForm.principalMajor = null
   createForm.interestMajor = null

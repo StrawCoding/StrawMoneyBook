@@ -2,8 +2,8 @@
 
 ---
 
-## v1.2.49
-- (SMB-225) 借貸明細頁（單筆借貸 / 項目頁）新增「新增同對象借出」與「新增同對象借入」兩個快速入口：點擊後開啟 `InputBottomSheet`，對象名稱與建立入帳帳戶會預先帶入目前借貸的 `counterparty_name` 與 `setup_account_id`，借貸方向依按鈕固定（避免使用者誤選），本金 / 預設利息 / 開始日期 / 到期日 / 備註可立即填寫；儲存時呼叫既有 `loanStore.create`（與 LoanCounterpartyDetailPage / LoanListPage 完全同一條建立路徑），驗證對象名稱非空、本金 > 0，成功後 toast 顯示「已新增借出/借入：對象名稱」並保留在原借貸明細頁，不會打亂使用者的閱讀位置；`onRequestCloseOverlay` 也納入新增 sheet，避免 Android back / overlay 衝突；新增 `loan-detail-same-counterparty-source.test.js` 共 6 段 SMB-225 v1.2.49 source regression，覆蓋按鈕存在、表單欄位、handler 預填、submit 驗證、overlay close 整合與 sheet title
+## v1.2.50
+- (SMB-225 Restart) 修正 v1.2.49 把「新增該對象借出 / 借入」入口加錯位置：Tester 指出該入口應在「借出 page → 項目（對象）內 → 有匯出 CSV btn 的頁面」，亦即 `LoanCounterpartyDetailPage`（對象明細）；本次把 v1.2.49 加在 `LoanDetailPage`（單筆借貸明細）的兩顆按鈕、新增 sheet、相關 import / CSS 全部還原，並把 `LoanCounterpartyDetailPage` 頁首原本的單一「新增借貸」按鈕拆成兩顆獨立 primary 按鈕「新增該對象借出」+「新增該對象借入」，與既有「匯出 CSV / 返回」共處同一行 `head-actions`；既有 `openCreateSheet` 改為接受 `directionOverride` 參數，按鈕呼叫時傳入 `'lend'` / `'borrow'`，鎖定 `createForm.direction` 不再被當前 tab 覆蓋，避免使用者在借出 tab 想新增借入時被誤導；沒有按鈕指定的舊呼叫仍保留 tab fallback 行為；新增 `loan-counterparty-create-direction-source.test.js` 共 4 段 SMB-225 v1.2.50 regression，涵蓋頁首按鈕排列、handler 接受 directionOverride、舊單一「新增借貸」按鈕已移除、`LoanDetailPage` 不再殘留誤放的快速入口
 
 ---
 
