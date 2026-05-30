@@ -141,18 +141,21 @@ const router = createRouter({
       path: '/settings/data-management',
       name: 'settings-data-management',
       component: () => import('@/ui/views/settings/SettingsDataManagementPage.vue'),
-      // SMB-215 v1.3.1: allow access before ledger/account exist so that
-      // the WelcomePage step 2 「恢復備份」entry actually reaches this
-      // page (匯入 JSON / CSV 本來就是 0-state 還原入口). Without this
-      // meta App.vue's shouldShowWelcomePage immediately redirects back
-      // to /welcome and the button silently does nothing.
-      meta: { tab: 'settings', allowWithoutSetup: true },
+      meta: { tab: 'settings' },
     },
     {
       path: '/settings/auto-backup',
       name: 'settings-auto-backup',
       component: () => import('@/ui/views/settings/SettingsAutoBackupPage.vue'),
-      meta: { tab: 'settings' },
+      // SMB-215 v1.3.2: WelcomePage step 2 「恢復備份」now points here
+      // (Tester clarified that the entry must lead to a page with
+      // *automatic backup items* — Google Drive / WebDAV connected
+      // accounts that can run 立即還原 — not the manual JSON/CSV import
+      // surface). allowWithoutSetup is required so that 0-ledger users
+      // arriving from the wizard aren't bounced back by
+      // shouldShowWelcomePage. The page itself does not require a
+      // ledger to connect / sign in / 立即還原.
+      meta: { tab: 'settings', allowWithoutSetup: true },
     },
     {
       path: '/settings/google-drive-ledger-sync',

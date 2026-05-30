@@ -4,29 +4,29 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 /*
- * SMB-215 Restart (v1.3.1) — regression coverage:
+ * SMB-215 Restart history & current invariants (v1.3.2):
  *
- * v1.2.27 added the「恢復備份 / 帳本同步」quick actions to the wrong
- * surface (PostSetupIntroPage's shared-ledger slide — i.e. the page
- * AFTER setup completes), but the Tester's original requirement and
- * the issue title「初始化頁面」refer to the SETUP wizard itself
- * (`WelcomePage.vue`), specifically step 2「建立帳本」where the
- * existing「已有共同帳本？登入並加入」 secondary link already lives.
+ *  - v1.2.27: added「恢復備份 / 帳本同步」to PostSetupIntroPage's
+ *    shared-ledger slide (the page reached AFTER setup completes).
+ *    Tester reply「沒有東西」 → wrong surface.
  *
- * The Tester's「沒有東西」reply confirmed that they could not find the
- * buttons on the 初始化第二頁 (because they were on PostSetupIntroPage
- * which is reached AFTER finishing step 3).
+ *  - v1.3.1: moved the two buttons to WelcomePage step 2 (the actual
+ *    「初始化頁面第二頁」the Tester referred to). The「恢復備份」 button
+ *    pointed to `/settings/data-management` (manual JSON / CSV import).
+ *    Tester reply「恢復備份需要有自動備份的項目」 → the destination
+ *    must be a surface with *automatic backup items* (Google Drive /
+ *    WebDAV sign-in + 立即還原), not the manual import page.
  *
- * v1.3.1 fixes this by adding the two buttons to WelcomePage step 2
- * (siblings of the existing shared-ledger link, only when
- * `!hasLedgers`), and adds `allowWithoutSetup: true` to the two
- * destination routes so the buttons actually reach their target pages
- * instead of being silently bounced back to WelcomePage by App.vue's
- * shouldShowWelcomePage guard.
+ *  - v1.3.2 (this fix): point「恢復備份」 to `/settings/auto-backup`
+ *    instead, and move `allowWithoutSetup: true` from
+ *    `settings-data-management` to `settings-auto-backup`. The
+ *    `/settings/google-drive-ledger-sync` allowWithoutSetup from
+ *    v1.3.1 stays (it's the「帳本同步」 destination).
  *
- * These tests pin both invariants. The v1.2.27 work on
- * PostSetupIntroPage is intentionally preserved (see
- * post-setup-intro-actions-source.test.js) — both surfaces now expose
+ * These tests pin every invariant the Tester actually cares about,
+ * so a future refactor can't silently regress back to v1.2.27 / v1.3.1.
+ * The v1.2.27 entry on PostSetupIntroPage is intentionally preserved
+ * (see post-setup-intro-actions-source.test.js) — both surfaces expose
  * the entries so the Tester finds them wherever they look.
  */
 
@@ -47,7 +47,7 @@ const jaSource = readFileSync(
   'utf8',
 )
 
-test('SMB-215 v1.3.1: WelcomePage step 2 exposes 恢復備份 + 帳本同步 RouterLinks (only when !hasLedgers)', () => {
+test('SMB-215 v1.3.2: WelcomePage step 2 exposes 恢復備份 (→ auto-backup) + 帳本同步 RouterLinks (only when !hasLedgers)', () => {
   // Extract the step-2 section so we don't accidentally match the
   // wrong slide.
   const step2Match = welcomeSource.match(
@@ -56,10 +56,16 @@ test('SMB-215 v1.3.1: WelcomePage step 2 exposes 恢復備份 + 帳本同步 Rou
   assert.ok(step2Match, 'WelcomePage step-2 section must exist')
   const step2 = step2Match[0]
 
-  // Restore-backup entry
+  // Restore-backup entry MUST point to /settings/auto-backup
+  // (Tester reply v1.3.1 → v1.3.2: 「恢復備份需要有自動備份的項目」).
   assert.match(
     step2,
-    /<RouterLink v-if="!hasLedgers" class="btn secondary-link" to="\/settings\/data-management">[\s\S]*?welcome\.restore_backup_action/,
+    /<RouterLink v-if="!hasLedgers" class="btn secondary-link" to="\/settings\/auto-backup">[\s\S]*?welcome\.restore_backup_action/,
+  )
+  // Must NOT point to the manual JSON/CSV import page anymore.
+  assert.doesNotMatch(
+    step2,
+    /<RouterLink[^>]+to="\/settings\/data-management"[^>]*>[\s\S]*?welcome\.restore_backup_action/,
   )
   // Ledger-sync entry
   assert.match(
@@ -70,24 +76,33 @@ test('SMB-215 v1.3.1: WelcomePage step 2 exposes 恢復備份 + 帳本同步 Rou
   assert.match(step2, /welcome\.join_shared_ledger/)
 })
 
-test('SMB-215 v1.3.1: data-management + google-drive-ledger-sync routes have allowWithoutSetup: true', () => {
+test('SMB-215 v1.3.2: auto-backup + google-drive-ledger-sync routes have allowWithoutSetup: true; data-management does NOT (reverted)', () => {
   // Without allowWithoutSetup the buttons would be dead — App.vue would
   // immediately redirect back to WelcomePage because the user still has
   // 0 ledgers / 0 accounts when they click the button.
-  const dataMgmtBlock = routerSource.match(
-    /name: 'settings-data-management'[\s\S]*?\},/,
+  const autoBackupBlock = routerSource.match(
+    /name: 'settings-auto-backup'[\s\S]*?\},/,
   )?.[0]
-  assert.ok(dataMgmtBlock, 'settings-data-management route block must exist')
-  assert.match(dataMgmtBlock, /allowWithoutSetup:\s*true/)
+  assert.ok(autoBackupBlock, 'settings-auto-backup route block must exist')
+  assert.match(autoBackupBlock, /allowWithoutSetup:\s*true/)
 
   const syncBlock = routerSource.match(
     /name: 'settings-google-drive-ledger-sync'[\s\S]*?\},/,
   )?.[0]
   assert.ok(syncBlock, 'settings-google-drive-ledger-sync route block must exist')
   assert.match(syncBlock, /allowWithoutSetup:\s*true/)
+
+  // settings-data-management's allowWithoutSetup was reverted in v1.3.2
+  // since the entry no longer points there. Keep the assertion narrow so
+  // a future contributor doesn't accidentally re-add it.
+  const dataMgmtBlock = routerSource.match(
+    /name: 'settings-data-management'[\s\S]*?\},/,
+  )?.[0]
+  assert.ok(dataMgmtBlock, 'settings-data-management route block must exist')
+  assert.doesNotMatch(dataMgmtBlock, /allowWithoutSetup:\s*true/)
 })
 
-test('SMB-215 v1.3.1: i18n welcome.restore_backup_action / welcome.ledger_sync_action exist in all three locales', () => {
+test('SMB-215 v1.3.2: i18n welcome.restore_backup_action / welcome.ledger_sync_action exist in all three locales', () => {
   // zh-TW base — the audit script also enforces parity, but we pin the
   // exact zh-TW strings so they're not silently changed.
   assert.match(i18nSource, /'welcome\.restore_backup_action':\s*'恢復備份'/)

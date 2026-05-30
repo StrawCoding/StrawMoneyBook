@@ -72,7 +72,7 @@
           <RouterLink v-if="!hasLedgers" class="btn secondary-link" to="/settings/shared-ledgers">
             {{ t('welcome.join_shared_ledger', '已有共同帳本？登入並加入') }}
           </RouterLink>
-          <RouterLink v-if="!hasLedgers" class="btn secondary-link" to="/settings/data-management">
+          <RouterLink v-if="!hasLedgers" class="btn secondary-link" to="/settings/auto-backup">
             <font-awesome-icon icon="fa-solid fa-database" class="secondary-link-icon" />
             {{ t('welcome.restore_backup_action', '恢復備份') }}
           </RouterLink>

@@ -144,7 +144,10 @@ const slides = computed(() => {
         {
           label: t('post_setup_intro.shared_ledger.restore_backup_action', '恢復備份'),
           icon: 'fa-solid fa-database',
-          to: '/settings/data-management',
+          // SMB-215 v1.3.2: Tester clarified that 「恢復備份」 must lead to
+          // a surface with automatic backup items (Google Drive / WebDAV
+          // sign-in + 立即還原), not the manual JSON/CSV import page.
+          to: '/settings/auto-backup',
         },
         {
           label: t('post_setup_intro.shared_ledger.ledger_sync_action', '帳本同步'),

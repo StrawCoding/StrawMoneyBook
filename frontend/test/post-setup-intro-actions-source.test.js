@@ -16,12 +16,16 @@ const detailedDocSource = readFileSync(
   'utf8',
 )
 
-test('shared-ledger intro slide exposes backup restore and ledger sync quick actions', () => {
+test('shared-ledger intro slide exposes backup restore (→ auto-backup) and ledger sync quick actions', () => {
   const sharedLedgerBlock = introSource.match(/id: 'shared-ledger',[\s\S]*?points: \[/)?.[0] ?? ''
 
   assert.match(sharedLedgerBlock, /extraActions:\s*\[/)
   assert.match(sharedLedgerBlock, /post_setup_intro\.shared_ledger\.restore_backup_action/)
-  assert.match(sharedLedgerBlock, /to: '\/settings\/data-management'/)
+  // SMB-215 v1.3.2: 「恢復備份」 must point to /settings/auto-backup so
+  // Tester sees 自動備份 items (Google Drive / WebDAV sign-in + 立即還原),
+  // not the manual JSON / CSV import surface (`/settings/data-management`).
+  assert.match(sharedLedgerBlock, /to: '\/settings\/auto-backup'/)
+  assert.doesNotMatch(sharedLedgerBlock, /to: '\/settings\/data-management'/)
   assert.match(sharedLedgerBlock, /post_setup_intro\.shared_ledger\.ledger_sync_action/)
   assert.match(sharedLedgerBlock, /to: '\/settings\/google-drive-ledger-sync'/)
 })
