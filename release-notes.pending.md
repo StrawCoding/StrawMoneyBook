@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- (SMB-226) 載具重建：依技術文檔 §3.3.2 補齊載具名稱→交易標籤（`buildCarrierTagsJson` + `importSelectedInvoices` 寫入 `tagsJson`）；Step 3 發票清單與 Step 4 確認預覽新增載具 chip（`carrier-chip` / `preview-carrier`）；新增 `einvoice.step3.carrier_label` 三語 i18n；新增 `test/einvoice-carrier.test.js`（5 案例）與 `einvoice-import.test.js` 載具標籤串接測試（2 案例）；Playwright mobile 驗證 Step3 顯示 2 個「手機條碼」chip、Step4 預覽 2 個載具 pill、無相關 console error
-
 ---
+
+## v1.3.3
+- (SMB-226) 載具重建：依技術文檔 §3.3.2 補齊載具名稱→交易標籤（`buildCarrierTagsJson` + `importSelectedInvoices` 寫入 `tagsJson`）；Step 3 發票清單與 Step 4 確認預覽新增載具 chip（`carrier-chip` / `preview-carrier`）；新增 `einvoice.step3.carrier_label` 三語 i18n；新增 `test/einvoice-carrier.test.js`（5 案例）與 `einvoice-import.test.js` 載具標籤串接測試（2 案例）；Playwright mobile 驗證 Step3 顯示 2 個「手機條碼」chip、Step4 預覽 2 個載具 pill、無相關 console error
 
 ## v1.3.2
 - (SMB-215 Restart) 修正 v1.3.1 把「恢復備份」按鈕指到錯誤目的地：Tester 回報「恢復備份需要有自動備份的項目」——v1.3.1 把按鈕 `to` 設為 `/settings/data-management`（只能匯入手動 JSON / CSV 檔），但使用者要的是**自動備份**（Google Drive / WebDAV 登入後一鍵還原）的入口。本次把 `WelcomePage.vue` step 2 與 `PostSetupIntroPage.vue` shared-ledger slide 的「恢復備份」目的地都改為 `/settings/auto-backup`（SettingsAutoBackupPage，含 Google Drive 自動備份面板：使用 Google 登入 → 啟用自動備份 → 立即還原；WebDAV 自動備份面板同理），完全符合 Tester「需要有自動備份的項目」訴求。router meta 把 `allowWithoutSetup: true` 從 `settings-data-management` 移到 `settings-auto-backup`（`settings-google-drive-ledger-sync` 的 v1.3.1 設定保留，因為「帳本同步」按鈕仍指那），讓 0-ledger 使用者從 wizard 進到 auto-backup 不會被 `shouldShowWelcomePage` 攔回。Playwright mobile 412×915 viewport 全程驗證：step 2「恢復備份」連結 `/url: /settings/auto-backup`，點按後 URL 變 `/settings/auto-backup`，畫面顯示「自動備份」標題 + 「Google Drive 自動備份」面板（使用 Google 登入 / 啟用自動備份 checkbox / 立即還原 primary 按鈕）+ 「WebDAV 自動備份」面板。更新 `welcome-page-step2-actions-source.test.js` 為 SMB-215 v1.3.2 invariants：(1) 步驟 2「恢復備份」`to="/settings/auto-backup"` 且**不**指向 data-management；(2) `auto-backup` + `google-drive-ledger-sync` 兩 route 有 `allowWithoutSetup`，`data-management` 已**不再**有；(3) i18n 三語 key 不變。`post-setup-intro-actions-source.test.js` 也同步斷言 shared-ledger 的 restore-backup extraAction `to: '/settings/auto-backup'`，杜絕 data-management 回流
