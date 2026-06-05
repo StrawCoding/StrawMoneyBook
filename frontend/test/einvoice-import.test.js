@@ -4,6 +4,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { buildCarrierTagsJson } from '../src/services/einvoice/shared.js'
 
 // ── 測試用 DB stub ──────────────────────────────────────────────────────────
 
@@ -34,7 +35,10 @@ async function importInvoicesWithRepo(invoices, repo, { createExpense } = {}) {
     try {
       let transactionId = null
       if (typeof createExpense === 'function') {
-        transactionId = await createExpense(invoice)
+        transactionId = await createExpense({
+          ...invoice,
+          tagsJson: buildCarrierTagsJson(invoice.carrierName),
+        })
       }
       await repo.insertInvoiceImport({
         invoiceNumber: invoice.invoiceNumber,
@@ -193,6 +197,37 @@ test('merchantName 為 null 時不拋出錯誤', async () => {
   const invoice = makeInvoice('AA-12345678', { merchantName: null })
   const result = await importInvoicesWithRepo([invoice], repo)
   assert.equal(result.imported.length, 1)
+})
+
+test('建立交易時帶有載具名稱的發票會把載具寫入 tagsJson（SMB-226）', async () => {
+  const repo = createRepoStub()
+  const calls = []
+  const createExpense = async (payload) => {
+    calls.push(payload)
+    return 'tx_ok'
+  }
+  await importInvoicesWithRepo(
+    [makeInvoice('AA-12345678', { carrierName: '手機條碼' })],
+    repo,
+    { createExpense },
+  )
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].tagsJson, JSON.stringify(['手機條碼']))
+})
+
+test('發票無載具名稱時 tagsJson 為 null（SMB-226）', async () => {
+  const repo = createRepoStub()
+  const calls = []
+  const createExpense = async (payload) => {
+    calls.push(payload)
+    return 'tx_ok'
+  }
+  await importInvoicesWithRepo(
+    [makeInvoice('AA-12345678', { carrierName: null })],
+    repo,
+    { createExpense },
+  )
+  assert.equal(calls[0].tagsJson, null)
 })
 
 test('已匯入號碼 Set 大小正確反映去重基準數', async () => {

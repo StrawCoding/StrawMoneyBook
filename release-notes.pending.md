@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (SMB-226) 載具重建：依技術文檔 §3.3.2 補齊載具名稱→交易標籤（`buildCarrierTagsJson` + `importSelectedInvoices` 寫入 `tagsJson`）；Step 3 發票清單與 Step 4 確認預覽新增載具 chip（`carrier-chip` / `preview-carrier`）；新增 `einvoice.step3.carrier_label` 三語 i18n；新增 `test/einvoice-carrier.test.js`（5 案例）與 `einvoice-import.test.js` 載具標籤串接測試（2 案例）；Playwright mobile 驗證 Step3 顯示 2 個「手機條碼」chip、Step4 預覽 2 個載具 pill、無相關 console error
+
 ---
 
 ## v1.3.2

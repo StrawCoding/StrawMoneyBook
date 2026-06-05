@@ -64,7 +64,13 @@
           <div class="invoice-info">
             <p class="invoice-merchant">{{ inv.merchantName || t('einvoice.step3.unknown_merchant') }}</p>
             <p class="invoice-number">{{ inv.invoiceNumber }}</p>
-            <p class="invoice-date">{{ formatDate(inv.invoiceDate) }}</p>
+            <div class="invoice-meta">
+              <span class="invoice-date">{{ formatDate(inv.invoiceDate) }}</span>
+              <span v-if="inv.carrierName" class="carrier-chip" :title="t('einvoice.step3.carrier_label')">
+                <font-awesome-icon icon="fa-solid fa-receipt" class="carrier-icon" />
+                {{ inv.carrierName }}
+              </span>
+            </div>
           </div>
           <div class="invoice-amount">NT${{ formatAmount(inv.amount) }}</div>
         </div>
@@ -272,7 +278,24 @@ function formatDate(ms) {
 .invoice-info { flex: 1; min-width: 0; }
 .invoice-merchant { font-weight: 700; font-size: 14px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .invoice-number { font-size: 11px; color: var(--text-secondary); margin: 2px 0 0; }
-.invoice-date { font-size: 11px; color: var(--text-secondary); margin: 0; }
+.invoice-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 0; }
+.invoice-date { font-size: 11px; color: var(--text-secondary); }
+.carrier-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--card) 88%);
+  border-radius: 999px;
+  padding: 2px 8px;
+  max-width: 60%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.carrier-icon { font-size: 9px; }
 .invoice-amount { font-weight: 700; font-size: 15px; color: var(--primary); flex-shrink: 0; }
 
 /* Footer */

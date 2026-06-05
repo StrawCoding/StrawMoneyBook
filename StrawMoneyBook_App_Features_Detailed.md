@@ -834,7 +834,7 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 
 ## 電子發票匯入（E-Invoice Import）
 
-**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）；帳密 IV 修正 v1.0.13（SMB-174）；自動化流程可見化 + 失敗診斷分類 v1.0.15（SMB-174 Restart）；驗證碼讀取與載具清單資料偵測修正 v1.0.16（SMB-179）；載具流程四大問題修復 v1.0.17；查詢頁穩定修復 v1.0.18（SMB-180）；UI 問題審查修復 v1.0.22（SMB-165 審查）；載具計畫重設計 v1.2.14（SMB-209）；刪除舊 WebView 方案並改接官方 API proxy v1.2.16（SMB-209 Restart）；手機條碼符號字元修復 v1.2.20（SMB-209 Restart）；Step1 行內驗證錯誤訊息 + normalizeBarcode 空白修正 v1.2.23（SMB-209 Restart）；Step1 清除已儲存載具資料 v1.2.25（SMB-209 Restart）
+**版本**：v1.0.6（SMB-165）；Android 原生插件 v1.0.8（SMB-168）；平台挑戰偵測 v1.0.9（SMB-170）；官方網址校正 v1.0.9（SMB-173）；帳密 IV 修正 v1.0.13（SMB-174）；自動化流程可見化 + 失敗診斷分類 v1.0.15（SMB-174 Restart）；驗證碼讀取與載具清單資料偵測修正 v1.0.16（SMB-179）；載具流程四大問題修復 v1.0.17；查詢頁穩定修復 v1.0.18（SMB-180）；UI 問題審查修復 v1.0.22（SMB-165 審查）；載具計畫重設計 v1.2.14（SMB-209）；刪除舊 WebView 方案並改接官方 API proxy v1.2.16（SMB-209 Restart）；手機條碼符號字元修復 v1.2.20（SMB-209 Restart）；Step1 行內驗證錯誤訊息 + normalizeBarcode 空白修正 v1.2.23（SMB-209 Restart）；Step1 清除已儲存載具資料 v1.2.25（SMB-209 Restart）；載具名稱顯示與匯入交易標籤重建 v1.3.3（SMB-226）
 **狀態**：前端匯入計畫已重新設計為命名階段與狀態機，並停用舊 Android WebView 自動化入口；查詢改由 StrawMoneyBook backend `/api/einvoice/query-invoices` 代理財政部電子發票官方 API。Step 1 手機條碼驗證接受財政部條碼可用字元（`/` 後 7 碼可為英數字或 `+ . -`），避免合法條碼因前端驗證過窄而無法點擊下一步；backend `cardNo` 驗證同步放寬，避免前後端規則不一致。查詢可取消、重試，失敗 / 逾時 / 取消都有明確回饋，晚回的舊查詢結果會被丟棄，避免新舊邏輯並存；backend 端需設定 `EINVOICE_APP_ID`、`EINVOICE_API_KEY`、`EINVOICE_CLIENT_SHARED_KEY`，前端則以 `VITE_EINVOICE_CLIENT_SHARED_KEY` 送出 `X-Straw-Client-Key`，並有電子發票專用 rate limit、日期 / 查詢碼驗證與過多頁數防截斷。
 
 ### 功能說明
@@ -862,6 +862,7 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
 - Debug trace 改記錄遮罩後的手機條碼 `maskedCarrierBarcode`，不再保存或顯示舊手機號碼 / 密碼欄位。
 
 - **v1.2.13（SMB-165 匯入交易建立）**：Step 4 新增可選的「同步建立支出交易」區塊；使用者可在確認匯入前選取記帳帳戶與支出分類，選取後每筆匯入發票將依發票金額（×100 換算 amountMinor）與日期自動建立 `einvoice` 來源的支出交易，並將交易 ID 寫入 `einvoice_invoice_imports.transaction_id`；未選帳戶 / 分類時維持舊行為（僅儲存匯入紀錄，transaction_id 為 null）；i18n 同步新增 `einvoice.step4.create_tx_label` 等 7 個三語 key；新增 5 個單元測試覆蓋交易建立路徑（transactionId 正確、createExpense 失敗進入 failed、amountMinor 換算、重複發票不呼叫 createExpense）。
+- **v1.3.3（SMB-226 載具重建）**：依技術文檔 §3.3.2 補齊「載具名稱 → 標籤（tag）」：`buildCarrierTagsJson()` 將 `carrierName` 轉成 `transactions.tags_json` 相容的 JSON 陣列字串，匯入並同步建立支出交易時寫入 `tagsJson`；Step 3 發票卡片與 Step 4 確認預覽新增載具 chip（`carrier-chip` / `preview-carrier`），讓使用者可辨識每筆發票所屬載具；新增 `einvoice.step3.carrier_label` 三語 i18n；新增 `test/einvoice-carrier.test.js` 與 `einvoice-import.test.js` 載具標籤串接測試；Playwright 驗證 Step3/Step4 載具 UI 正確渲染。
 
 - **v1.0.24（載具流程穩定性修復）**：
   - **[Bug 修復] 匯入失敗訊息消失**：`EInvoiceStep4Confirm.vue` 原本在 catch 中設定 `store.errorMessage` 並跳回 Step3，但 Step3 的 `onMounted` 立即清空 `store.errorMessage = ''`，導致使用者看不到任何錯誤提示。改為在 Step4 使用本地 `importError` ref，錯誤顯示於 Step4 原地（確認按鈕下方紅色提示文字），不再轉跳 Step3。

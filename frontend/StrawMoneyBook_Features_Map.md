@@ -977,7 +977,7 @@ UI composable 目錄：`src/ui/composables/`
 
 ---
 
-## 電子發票匯入 (E-Invoice Import) — v1.0.6（SMB-165 v1.2.13：匯入時可選帳戶/分類同步建立支出交易，transaction_id 寫回匯入記錄；SMB-209 Restart / v1.2.16：刪除舊 WebView/OCR 查詢入口，改由 backend `/api/einvoice/query-invoices` 代理財政部官方 API；Step 1 改為手機條碼 + 查詢碼，Step 2 保留日期區間且預設最近 62 天以符合後端單次查詢上限，查詢階段支援取消 / 重試 / 逾時 / 失敗狀態；SMB-209 Restart / v1.2.20：手機條碼驗證允許 `/` 後 7 碼使用英數字與 `+ . -` 符號，修復合法條碼無法點擊下一步；SMB-209 Restart / v1.2.23：Step 1 行內驗證錯誤訊息（格式不符 / 查詢碼過短）、normalizeBarcode 修正去除內部空白；SMB-209 Restart / v1.2.25：Step 1 依技術文檔補上清除已儲存載具資料入口）
+## 電子發票匯入 (E-Invoice Import) — v1.0.6（SMB-165 v1.2.13：匯入時可選帳戶/分類同步建立支出交易，transaction_id 寫回匯入記錄；SMB-209 Restart / v1.2.16：刪除舊 WebView/OCR 查詢入口，改由 backend `/api/einvoice/query-invoices` 代理財政部官方 API；Step 1 改為手機條碼 + 查詢碼，Step 2 保留日期區間且預設最近 62 天以符合後端單次查詢上限，查詢階段支援取消 / 重試 / 逾時 / 失敗狀態；SMB-209 Restart / v1.2.20：手機條碼驗證允許 `/` 後 7 碼使用英數字與 `+ . -` 符號，修復合法條碼無法點擊下一步；SMB-209 Restart / v1.2.23：Step 1 行內驗證錯誤訊息（格式不符 / 查詢碼過短）、normalizeBarcode 修正去除內部空白；SMB-209 Restart / v1.2.25：Step 1 依技術文檔補上清除已儲存載具資料入口；SMB-226 / v1.3.3：載具名稱顯示與匯入交易標籤重建）
 
 ### 路由
 - `/einvoice-import` → `src/ui/views/einvoice/EInvoiceImportWizardPage.vue`
@@ -1005,7 +1005,7 @@ UI composable 目錄：`src/ui/composables/`
 
 #### `src/services/einvoice/shared.js`
 - 常數：`EINVOICE_PLATFORM`（舊 `EINVOICE_STATUS` 發票狀態篩選已移除）
-- 函數：`createEInvoiceError`, `isEInvoiceError`
+- 函數：`createEInvoiceError`, `isEInvoiceError`, `buildCarrierTagsJson`（SMB-226 / v1.3.3：載具名稱 → `tags_json` JSON 陣列字串）
 
 #### `src/services/einvoice/credential-crypto.js`
 - AES-256-GCM 加密/解密，PBKDF2 金鑰衍生（100,000 迭代）
@@ -1017,6 +1017,7 @@ UI composable 目錄：`src/ui/composables/`
 #### `src/services/einvoice/backend.js`
 - 函數（6）：`saveEInvoiceCredential`, `loadEInvoiceCredential`, `clearEInvoiceCredential`, `hasEInvoiceCredential`, `scrapeEInvoiceList`, `importSelectedInvoices`
 - `scrapeEInvoiceList()` 以 fetch 呼叫 `/api/einvoice/query-invoices`（native / production 預設 `https://api.strawmb.com`，開發 web 可走相對路徑），送出 `cardNo`、`cardEncrypt`、`startDate`、`endDate`；35 秒前端逾時會轉成 `einvoice_query_timeout`
+- **SMB-226 / v1.3.3**：`importSelectedInvoices()` 同步建立支出交易時，透過 `buildCarrierTagsJson(invoice.carrierName)` 把載具名稱寫入 `createExpense` 的 `tagsJson`
 
 #### `src/ui/stores/einvoice-import.store.js`
 - Pinia store：精靈狀態、手機條碼 / 查詢碼、日期區間、抓取 generation token、取消 / 逾時 / 失敗狀態、選取邏輯、匯入結果；舊 `invoiceStatus` 狀態已移除
@@ -1037,9 +1038,11 @@ UI composable 目錄：`src/ui/composables/`
 - **問題審查修復 (v1.0.22)**：`onMounted` 中 `store.errorMessage = ''` 移到 early-return 之前，修正 Step 4 匯入失敗後回到 Step 3 仍顯示錯誤畫面的問題；「上一步」改呼叫 `goBack()` 同時清空 `invoiceList`，修正回到 Step 2 修改查詢條件後 Step 3 仍顯示舊清單的問題。
 - **載具流程修復 (v1.0.24)**：`onMounted` 加入 `if (store.isScraping) return` 防護，避免快速來回切換步驟時觸發並發 scrape race condition；補充 console.log 記錄抓取開始/完成/失敗。
 - **SMB-209 (v1.2.14)**：刪除無名四點式舊精靈呈現，改為「帳號驗證 / 查詢條件 / 抓取發票 / 確認匯入」命名階段；抓取階段改由 `scrapeStatus` state machine 管理 idle / running / done / failed / cancelled / timeout，提供取消、重試、修改查詢條件按鈕與三語錯誤文案；`scrapeGeneration` token 會丟棄已取消或被新查詢取代的晚回結果，修改查詢條件時清空發票清單與選取狀態，避免新舊資料混用。
+- **SMB-226 / v1.3.3**：發票卡片新增 `.carrier-chip`（`fa-receipt` 圖示 + `carrierName`），讓使用者可辨識每筆發票所屬載具
 
 #### `src/ui/views/einvoice/EInvoiceStep4Confirm.vue`
 - 匯入預覽、確認匯入、結果顯示
+- **SMB-226 / v1.3.3**：預覽列新增 `.preview-carrier` pill，顯示待匯入發票的載具名稱
 - **問題審查修復 (v1.0.22)**：結果畫面新增 `failed` 筆數顯示（`v-if="store.importResult.failed.length > 0"`，橘色警示文字）；`i18n.service.js` 同步新增 `einvoice.step4.result_failed` 三語翻譯。
 - **載具流程修復 (v1.0.24)**：匯入失敗時改以本地 `importError` ref 在 Step4 原地顯示錯誤，不再 `store.errorMessage + store.currentStep = 3`（舊做法導致跳回 Step3 時 onMounted 立即清空錯誤訊息，用戶看不到失敗原因）；`handleImport` 加入 `if (store.isImporting) return` JS 層防重複點擊；「上一步」按鈕在匯入中也禁用；補充 console.log 記錄匯入開始/完成/失敗。
 

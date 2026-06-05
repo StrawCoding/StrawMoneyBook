@@ -7,7 +7,7 @@ import {
   upsertEInvoiceCredential,
 } from '@/core/repositories/einvoice-import.repo.js'
 import { decryptCredential, encryptCredential } from './credential-crypto.js'
-import { EINVOICE_PLATFORM, createEInvoiceError } from './shared.js'
+import { EINVOICE_PLATFORM, createEInvoiceError, buildCarrierTagsJson } from './shared.js'
 import { traceEInvoiceScrape, traceEInvoiceImport } from '@/core/services/einvoice-debug.service.js'
 import { createExpense } from '@/core/services/transaction.service.js'
 import { Capacitor } from '@capacitor/core'
@@ -175,6 +175,7 @@ export async function importSelectedInvoices(invoices, { accountId, categoryId, 
             amountMinor: Math.round(Number(invoice.amount) * 100),
             occurredAt: new Date(invoice.invoiceDate).toISOString(),
             note: invoice.merchantName ?? '',
+            tagsJson: buildCarrierTagsJson(invoice.carrierName),
             originType: 'einvoice',
           })
           console.log('[EInvoice] 已建立支出交易:', transactionId, '發票:', invoice.invoiceNumber)

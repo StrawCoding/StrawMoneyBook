@@ -7,7 +7,10 @@
 
         <div class="invoice-preview-list">
           <div v-for="inv in store.selectedInvoices" :key="inv.invoiceNumber" class="preview-row">
-            <span class="preview-merchant">{{ inv.merchantName || t('einvoice.step3.unknown_merchant') }}</span>
+            <span class="preview-merchant">
+              {{ inv.merchantName || t('einvoice.step3.unknown_merchant') }}
+              <span v-if="inv.carrierName" class="preview-carrier" :title="t('einvoice.step3.carrier_label')">{{ inv.carrierName }}</span>
+            </span>
             <span class="preview-amount">NT${{ formatAmount(inv.amount) }}</span>
           </div>
         </div>
@@ -133,7 +136,18 @@ function handleFinish() {
 .invoice-preview-list { display: flex; flex-direction: column; gap: 8px; }
 .preview-row { display: flex; justify-content: space-between; align-items: center; font-size: 14px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .preview-row:last-child { border-bottom: none; }
-.preview-merchant { color: var(--text); }
+.preview-merchant { color: var(--text); display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.preview-carrier {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--card) 88%);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .preview-amount { font-weight: 700; color: var(--primary); }
 .tx-section-label { font-size: 13px; color: var(--text-secondary); margin: 0 0 14px; }
 .field-label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; }
