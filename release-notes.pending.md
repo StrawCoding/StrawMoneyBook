@@ -1,10 +1,10 @@
 # Pending Release Notes
 
-- (SMB-234) 修復共同帳本 Email 邀請寄失敗無提示：後端改為同步寄信並回傳 `email_delivery` 狀態（sent / failed / not_configured），邀請紀錄保存寄送狀態與錯誤訊息並寫入 server log；新增列出待加入邀請與重發 API；`SettingsSharedLedgerPage.vue` 補上 Email 邀請輸入、待加入清單、寄送狀態與成功 / 失敗 toast，失敗時可重發。新增 backend `shared-ledger-invitation-email.test.js` 與 frontend source regression 測試。
-
-- (SMB-233) 修復 Web 版 auth token 存 localStorage 的 XSS 竊取風險：refresh token 改由後端 HttpOnly cookie（`X-Straw-Auth-Storage: cookie` + `credentials: include`）管理，access token 僅保留在記憶體，使用者資料改存 sessionStorage 且不再持久化 token；登入 / 註冊 / refresh / logout 端點支援 cookie 模式並自動遷移清除舊版 localStorage session；後端補 `Access-Control-Allow-Credentials`、CORS 允許 `X-Straw-Auth-Storage`；前端 `index.html` 加入 CSP meta。新增 `auth-cookies.test.js`、`auth-session-storage.test.js` 與 source regression 測試。
-
 ---
+
+## v1.3.6
+- (SMB-234) 修復共同帳本 Email 邀請寄失敗無提示：後端改為同步寄信並回傳 `email_delivery` 狀態（sent / failed / not_configured），邀請紀錄保存寄送狀態與錯誤訊息並寫入 server log；新增列出待加入邀請與重發 API；`SettingsSharedLedgerPage.vue` 補上 Email 邀請輸入、待加入清單、寄送狀態與成功 / 失敗 toast，失敗時可重發。新增 backend `shared-ledger-invitation-email.test.js` 與 frontend source regression 測試。
+- (SMB-233) 修復 Web 版 auth token 存 localStorage 的 XSS 竊取風險：refresh token 改由後端 HttpOnly cookie（`X-Straw-Auth-Storage: cookie` + `credentials: include`）管理，access token 僅保留在記憶體，使用者資料改存 sessionStorage 且不再持久化 token；登入 / 註冊 / refresh / logout 端點支援 cookie 模式並自動遷移清除舊版 localStorage session；後端補 `Access-Control-Allow-Credentials`、CORS 允許 `X-Straw-Auth-Storage`；前端 `index.html` 加入 CSP meta。新增 `auth-cookies.test.js`、`auth-session-storage.test.js` 與 source regression 測試。
 
 ## v1.3.4
 - (SMB-230) Google Drive 帳本同步導入衝突合併機制：新增 base snapshot 快取與三方合併（base / local / remote），pull 時不再直接覆蓋本機未上傳變更；若尚無 base 但本機有 dirty 變更則以雙向合併保留雙方修改。衝突採較新變更（last-write-wins），設定頁顯示衝突筆數與 warning toast。新增 `threeWayMergeSnapshots` 單元測試與 google-drive-ledger-sync source regression 測試；三語 i18n。
