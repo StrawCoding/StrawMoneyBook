@@ -301,7 +301,7 @@ async function loadRemoteLedgerFile(ledgerId, accessToken, reauthHandler) {
   return findRemoteFileByLedger(files, ledgerId)
 }
 
-async function ensureGoogleAccess({ interactive = false, preferredEmail = '' } = {}) {
+async function ensureGoogleAccess({ interactive = false, preferredEmail = '', boundEmail = '' } = {}) {
   const normalizedPreferredEmail = normalizeEmail(preferredEmail)
   let accessToken = ''
   try {
@@ -322,6 +322,21 @@ async function ensureGoogleAccess({ interactive = false, preferredEmail = '' } =
   }
 
   const profile = normalizeProfile(getCachedGoogleProfile())
+  const normalizedBoundEmail = normalizeEmail(boundEmail)
+  if (normalizedBoundEmail && normalizeEmail(profile.email) !== normalizedBoundEmail) {
+    const switchError = new Error(
+      t(
+        'settings_google_sync.error.account_switched',
+        { bound: boundEmail, current: profile.email || '-' },
+        `Google 帳號已切換（綁定：${boundEmail}，目前：${profile.email || '-' }）`,
+      ),
+    )
+    switchError.code = 'GOOGLE_ACCOUNT_SWITCHED'
+    switchError.boundEmail = boundEmail
+    switchError.currentEmail = profile.email || ''
+    throw switchError
+  }
+
   return {
     accessToken,
     profile,
@@ -447,6 +462,7 @@ async function pushLedgerToGoogleDrive(ledgerId, state, options = {}) {
   const { accessToken, profile } = await ensureGoogleAccess({
     interactive: interactiveAuth,
     preferredEmail: state.accountEmail,
+    boundEmail: state.accountEmail,
   })
   const reauthHandler = () => reauth({ interactive: interactiveAuth })
   const snapshot = sanitizeSnapshotForGoogleDriveSync(await exportLedgerJson(normalizedLedgerId))
@@ -543,6 +559,7 @@ async function pullLedgerFromGoogleDrive(ledgerId, state, options = {}) {
   const { accessToken, profile } = await ensureGoogleAccess({
     interactive: interactiveAuth,
     preferredEmail: state.accountEmail,
+    boundEmail: state.accountEmail,
   })
   const reauthHandler = () => reauth({ interactive: interactiveAuth })
   const remoteFile = await loadRemoteLedgerFile(normalizedLedgerId, accessToken, reauthHandler)
@@ -589,6 +606,7 @@ async function resolveSyncAction(ledgerId, state, options = {}) {
   const { accessToken } = await ensureGoogleAccess({
     interactive: interactiveAuth,
     preferredEmail: state.accountEmail,
+    boundEmail: state.accountEmail,
   })
   const reauthHandler = () => reauth({ interactive: interactiveAuth })
   const remoteFile = await loadRemoteLedgerFile(normalizedLedgerId, accessToken, reauthHandler)
@@ -638,6 +656,7 @@ export async function setGoogleDriveLedgerSyncEnabled(ledgerId, enabled, options
   const { profile } = await ensureGoogleAccess({
     interactive: options?.interactiveAuth !== false,
     preferredEmail: current.accountEmail,
+    boundEmail: current.accountEmail,
   })
 
   const next = await setGoogleDriveLedgerSyncState(normalizedLedgerId, {

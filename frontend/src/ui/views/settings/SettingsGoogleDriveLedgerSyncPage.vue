@@ -115,6 +115,7 @@ import { getMembershipTierSnapshot, subscribeMembershipSnapshot } from '@/core/s
 import {
   listGoogleDriveLedgerSyncBindings,
   setGoogleDriveLedgerSyncEnabled,
+  setGoogleDriveLedgerSyncState,
   syncGoogleDriveLedgerNow,
 } from '@/ui/services/google-drive-ledger-sync.service'
 import { useI18n } from '@/ui/services/i18n.service'
@@ -219,6 +220,19 @@ async function toggleGoogleLedgerSync(item, event) {
         : t('settings_google_sync.toast.disabled', '帳本同步已停用'),
     )
   } catch (error) {
+    if (error?.code === 'GOOGLE_ACCOUNT_SWITCHED') {
+      const confirmed = window.confirm(
+        t(
+          'settings_google_sync.confirm.switch_account',
+          { bound: error.boundEmail, current: error.currentEmail },
+          `Google 帳號已切換為 ${error.currentEmail}，是否改綁定此帳號並重新同步？`,
+        ),
+      )
+      if (confirmed) {
+        await setGoogleDriveLedgerSyncState(ledgerId, { accountEmail: error.currentEmail })
+        return toggleGoogleLedgerSync(item, event)
+      }
+    }
     await refreshGoogleLedgerSyncBindings()
     uiStore.pushToast(errorMessage(error, t('settings_google_sync.toast.toggle_failed', '更新帳本同步失敗')), 'error')
   } finally {
@@ -266,6 +280,19 @@ async function syncGoogleLedgerItem(item) {
     }
     uiStore.pushToast(t('settings_google_sync.toast.up_to_date', '帳本已是最新狀態'))
   } catch (error) {
+    if (error?.code === 'GOOGLE_ACCOUNT_SWITCHED') {
+      const confirmed = window.confirm(
+        t(
+          'settings_google_sync.confirm.switch_account',
+          { bound: error.boundEmail, current: error.currentEmail },
+          `Google 帳號已切換為 ${error.currentEmail}，是否改綁定此帳號並重新同步？`,
+        ),
+      )
+      if (confirmed) {
+        await setGoogleDriveLedgerSyncState(ledgerId, { accountEmail: error.currentEmail })
+        return syncGoogleLedgerItem(item)
+      }
+    }
     await refreshGoogleLedgerSyncBindings()
     uiStore.pushToast(errorMessage(error, t('settings_google_sync.toast.sync_failed', '帳本同步失敗')), 'error')
   } finally {
