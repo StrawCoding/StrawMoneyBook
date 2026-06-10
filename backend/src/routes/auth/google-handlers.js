@@ -183,6 +183,7 @@ export async function handleGoogleAuth(req, res) {
     await sendAuthSession(res, resolvedUser, {
       issuedByProvider: 'google',
       context,
+      req,
       extra: {
         linked: purpose === 'link' || purpose === 'password_change',
       },

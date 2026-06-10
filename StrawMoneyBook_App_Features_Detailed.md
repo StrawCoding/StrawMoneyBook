@@ -572,6 +572,8 @@ SMB-188 / v1.2.4 後，PostSetupIntroPage 新增了「帳本同步（Google Driv
 
 這表示帳號系統不只是 demo 登入，而是有基礎帳務保護與恢復流程。
 
+SMB-233 / v1.3.5 後，共同帳本帳號 session 不再把 refresh token 或 access token 寫入 `localStorage`：Web / Capacitor 客戶端改以 `X-Straw-Auth-Storage: cookie` 搭配 `credentials: include` 讓後端以 HttpOnly cookie 管理 refresh token rotation，access token 僅保留在 JS 記憶體，使用者資料改存 `sessionStorage`（`straw.shared_ledger_user.v2`）；頁面重載或 App 重啟時會先嘗試以 cookie 靜默 refresh 再恢復 Bearer session。後端 `auth-cookies.js` 會在 cookie 模式下省略 JSON 內的 `refresh_token`，並於 logout 清除 cookie；`http.js` 也補上 `Access-Control-Allow-Credentials` 與 CSP meta（前端 `index.html`）降低 XSS 外洩風險。既有 `straw.shared_ledger_session` localStorage / sessionStorage 舊資料會在首次讀取時自動遷移並清除 token 欄位。
+
 ### 7.2 會員權益
 
 會員頁目前反映的權益包含：

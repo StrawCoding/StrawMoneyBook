@@ -116,8 +116,11 @@ function setCorsHeaders(res) {
   } else if (origin && isOriginAllowed(req)) {
     res.setHeader('Access-Control-Allow-Origin', origin)
   }
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-Straw-Client-Key')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-Straw-Client-Key, X-Straw-Auth-Storage')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+  if (!ALLOW_ALL_ORIGINS && origin && isOriginAllowed(req)) {
+    res.setHeader('Access-Control-Allow-Credentials', 'true')
+  }
 }
 
 function sendJson(res, statusCode, payload) {
@@ -213,6 +216,7 @@ function sendRouteError(res, error, options = {}) {
 export {
   extractBearerToken,
   getClientIp,
+  getRequestOrigin,
   getUserAgent,
   isOriginAllowed,
   methodGuard,

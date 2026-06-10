@@ -147,5 +147,6 @@ export async function handlePasswordResetConfirm(req, res) {
   await sendAuthSession(res, updatedUser, {
     issuedByProvider: 'password',
     context: getRequestContext(req),
+    req,
   })
 }

@@ -406,7 +406,7 @@ UI composable 目錄：`src/ui/composables/`
 - 若調整銀行同步入口，需同步檢查 `settings.vue` 的 `isBankSyncFeatureEnabled()`、銀行同步 API 可用性提示，以及 `/settings/bank-sync` 路由可達性。
 - 若調整 Google Drive 帳本同步，需同步檢查 `SettingsGoogleDriveLedgerSyncPage.vue`、`google-drive-ledger-sync.service.js`、會員限制與活動帳本 reload 流程。
 - 若調整 App URL / invite link，需同步檢查 `app-url-route.js`、router redirect 與 `SettingsSharedLedgerPage.vue` 的 invite code 自動加入邏輯。
-- 若調整帳號 / 共同帳本 / 邀請碼 / 管理員流程，需同步檢查 `SettingsAccountPage.vue`、`SettingsSharedLedgerPage.vue`、`SettingsAdminPage.vue`、`src/services/shared-ledger/backend.js`、`../backend/src/routes/route-table.js` 與 `../backend/src/routes/auth/`、`../backend/src/routes/shared-ledgers/`。
+- 若調整帳號 / 共同帳本 / 邀請碼 / 管理員流程，需同步檢查 `SettingsAccountPage.vue`、`SettingsSharedLedgerPage.vue`、`SettingsAdminPage.vue`、`src/services/shared-ledger/backend.js`、`src/services/shared-ledger/auth-session-storage.js`、`../backend/src/collab/auth-cookies.js`、`../backend/src/routes/route-table.js` 與 `../backend/src/routes/auth/`、`../backend/src/routes/shared-ledgers/`。SMB-233 / v1.3.5 後帳號 refresh token 不再存 `localStorage`，改由後端 HttpOnly cookie + 前端記憶體 access token；`auth-session-storage.js` 負責遷移舊 `straw.shared_ledger_session` 並只把 user profile 存進 `sessionStorage`。
 - Repo 忽略規則由根目錄 `.gitignore` 統一涵蓋 Node、Vite/Playwright、環境檔、後端 runtime data、Android/Capacitor 產物與本機工具快取；子目錄 `.gitignore` 僅保留平台細節例外。
 
 ## 11. 文件更新時機

@@ -1,3 +1,9 @@
+import {
+  buildAuthSessionResponse,
+  clearRefreshTokenCookie,
+  setRefreshTokenCookie,
+  usesCookieAuthStorage,
+} from '../../collab/auth-cookies.js'
 import { requireAuthenticatedUser } from '../../collab/auth-session.js'
 import { verifyGoogleIdToken } from '../../collab/google-id-token.js'
 import { sendTemporaryPasswordEmail } from '../../collab/mailer.js'
@@ -219,6 +225,7 @@ export async function sendAuthSession(res, user, {
   context = {},
   status = 200,
   extra = {},
+  req = null,
 } = {}) {
   const session = await createLoginSession(user, {
     issuedByProvider,
@@ -226,17 +233,22 @@ export async function sendAuthSession(res, user, {
     userAgent: context.userAgent,
   })
   const publicProfile = await buildPublicUserProfile(session.user)
-  sendJson(res, status, {
-    token: session.accessToken,
-    access_token: session.accessToken,
-    token_type: 'Bearer',
-    expires_in: session.expiresInSec,
-    refresh_token: session.refreshToken,
-    refresh_token_expires_in: session.refreshExpiresInSec,
-    refresh_token_expires_at: session.refreshTokenExpiresAt,
-    user: publicProfile,
-    ...extra,
-  })
+  const cookieMode = usesCookieAuthStorage(req ?? res?.__request ?? null)
+
+  if (cookieMode) {
+    setRefreshTokenCookie(res, session.refreshToken, {
+      req: req ?? res?.__request ?? null,
+      maxAgeSec: session.refreshExpiresInSec,
+    })
+  }
+
+  sendJson(res, status, buildAuthSessionResponse({
+    ...session,
+    publicProfile,
+  }, {
+    cookieMode,
+    extra,
+  }))
 }
 
 export {

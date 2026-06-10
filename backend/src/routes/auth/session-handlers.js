@@ -1,4 +1,11 @@
 import {
+  buildAuthSessionResponse,
+  clearRefreshTokenCookie,
+  extractRefreshTokenFromRequest,
+  setRefreshTokenCookie,
+  usesCookieAuthStorage,
+} from '../../collab/auth-cookies.js'
+import {
   assertLoginAllowed,
   buildPublicUserProfile,
   clearLoginFailureState,
@@ -99,6 +106,7 @@ export async function handleRegister(req, res) {
     issuedByProvider: 'password',
     context: getRequestContext(req),
     status: 201,
+    req,
   })
 }
 
@@ -219,12 +227,13 @@ export async function handleLogin(req, res) {
   await sendAuthSession(res, loggedInUser, {
     issuedByProvider: 'password',
     context,
+    req,
   })
 }
 
 export async function handleRefresh(req, res) {
   const body = parseBody(req)
-  const refreshToken = normalizeText(body.refreshToken ?? body.refresh_token)
+  const refreshToken = extractRefreshTokenFromRequest(req, body)
   if (!refreshToken) {
     throw createAuthError('缺少 refresh token', 'refresh_token_required', 400)
   }
@@ -232,6 +241,7 @@ export async function handleRefresh(req, res) {
   const context = getRequestContext(req)
   const session = await rotateRefreshSession(refreshToken, context)
   const publicProfile = await buildPublicUserProfile(session.user)
+  const cookieMode = usesCookieAuthStorage(req)
 
   await writeAuthAuditLog({
     userId: session.user.id,
@@ -242,16 +252,19 @@ export async function handleRefresh(req, res) {
     detail: { session_family_id: session.sessionFamilyId },
   }).catch(() => null)
 
-  sendJson(res, 200, {
-    token: session.accessToken,
-    access_token: session.accessToken,
-    token_type: 'Bearer',
-    expires_in: session.expiresInSec,
-    refresh_token: session.refreshToken,
-    refresh_token_expires_in: session.refreshExpiresInSec,
-    refresh_token_expires_at: session.refreshTokenExpiresAt,
-    user: publicProfile,
-  })
+  if (cookieMode) {
+    setRefreshTokenCookie(res, session.refreshToken, {
+      req,
+      maxAgeSec: session.refreshExpiresInSec,
+    })
+  }
+
+  sendJson(res, 200, buildAuthSessionResponse({
+    ...session,
+    publicProfile,
+  }, {
+    cookieMode,
+  }))
 }
 
 export async function handleMe(req, res) {
@@ -405,12 +418,13 @@ export async function handlePasswordChange(req, res) {
   await sendAuthSession(res, updatedUser, {
     issuedByProvider: 'password',
     context: getRequestContext(req),
+    req,
   })
 }
 
 export async function handleLogout(req, res) {
   const body = parseBody(req)
-  const refreshToken = normalizeText(body.refreshToken ?? body.refresh_token)
+  const refreshToken = extractRefreshTokenFromRequest(req, body)
   const currentUser = await getOptionalAuthenticatedUser(req)
   const sessionFamilyId = getCurrentSessionFamilyId(req)
 
@@ -429,6 +443,10 @@ export async function handleLogout(req, res) {
       ...getRequestContext(req),
       detail: { session_family_id: sessionFamilyId },
     }).catch(() => null)
+  }
+
+  if (usesCookieAuthStorage(req)) {
+    clearRefreshTokenCookie(res, req)
   }
 
   sendJson(res, 200, { ok: true })

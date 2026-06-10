@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (SMB-233) 修復 Web 版 auth token 存 localStorage 的 XSS 竊取風險：refresh token 改由後端 HttpOnly cookie（`X-Straw-Auth-Storage: cookie` + `credentials: include`）管理，access token 僅保留在記憶體，使用者資料改存 sessionStorage 且不再持久化 token；登入 / 註冊 / refresh / logout 端點支援 cookie 模式並自動遷移清除舊版 localStorage session；後端補 `Access-Control-Allow-Credentials`、CORS 允許 `X-Straw-Auth-Storage`；前端 `index.html` 加入 CSP meta。新增 `auth-cookies.test.js`、`auth-session-storage.test.js` 與 source regression 測試。
+
 ---
 
 ## v1.3.4

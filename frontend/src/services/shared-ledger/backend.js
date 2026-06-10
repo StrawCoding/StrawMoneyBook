@@ -1,12 +1,20 @@
 import { Capacitor } from '@capacitor/core'
 import { translateMessage } from '@/ui/services/i18n.service'
-import { readPersistedSharedLedgerSession, SHARED_LEDGER_SESSION_STORAGE_KEY } from '@/services/shared-ledger/session-persistence'
+import {
+  clearPersistedAuthSession,
+  getAuthStorageHeaders,
+  getStoredAccessToken,
+  getStoredRefreshToken,
+  hasPersistedAuthIdentity,
+  readPersistedAuthSession,
+  shouldSendAuthCredentials,
+  writePersistedAuthSession,
+} from '@/services/shared-ledger/auth-session-storage'
 
 const PROD_DEFAULT_SHARED_LEDGER_API_BASE = 'https://api.strawmb.com'
 const PROD_DEFAULT_SHARED_LEDGER_INVITE_BASE = 'https://www.strawmb.com/open/shared-ledger'
 const EXPLICIT_SHARED_LEDGER_API_BASE = String(import.meta.env.VITE_SHARED_LEDGER_API_BASE_URL ?? '').trim()
 const EXPLICIT_SHARED_LEDGER_INVITE_BASE = String(import.meta.env.VITE_SHARED_LEDGER_INVITE_URL ?? '').trim()
-const SESSION_STORAGE_KEY = SHARED_LEDGER_SESSION_STORAGE_KEY
 const PENDING_INVITE_CODE_STORAGE_KEY = 'straw.shared_ledger_pending_invite_code'
 const REQUEST_TIMEOUT_MS = 15_000
 const SESSION_RESTORE_COOLDOWN_MS = 60_000
@@ -95,11 +103,7 @@ function describeNetworkFailure(requestUrl, error) {
 }
 
 function readSession() {
-  return readPersistedSharedLedgerSession({
-    storageKey: SESSION_STORAGE_KEY,
-    localStorageRef: typeof localStorage === 'undefined' ? null : localStorage,
-    sessionStorageRef: typeof sessionStorage === 'undefined' ? null : sessionStorage,
-  })
+  return readPersistedAuthSession()
 }
 
 function readPendingInviteCode() {
@@ -132,27 +136,24 @@ function normalizeSessionUser(nextUser, previousUser = null) {
 }
 
 function writeSession(session) {
-  if (typeof localStorage === 'undefined') return null
   if (!session?.token || !session?.user) {
-    localStorage.removeItem(SESSION_STORAGE_KEY)
+    clearPersistedAuthSession()
     notifySessionListeners(null)
     return null
   }
   const previous = readSession()
-  const nextSession = {
-    ...session,
+  const nextSession = writePersistedAuthSession({
+    token: session.token,
     refreshToken: String(session.refreshToken ?? '').trim(),
     user: normalizeSessionUser(session.user, previous?.user ?? null),
-  }
-  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextSession))
+  })
   notifySessionListeners(nextSession)
   return nextSession
 }
 
 function clearSession() {
-  if (typeof localStorage === 'undefined') return
   ongoingRefreshPromise = null
-  localStorage.removeItem(SESSION_STORAGE_KEY)
+  clearPersistedAuthSession()
   notifySessionListeners(null)
 }
 
@@ -175,14 +176,16 @@ function buildAuthResponseSession(data, previousSession = null) {
   if (!token || !user) {
     throw new Error(t('shared_ledger.error.auth_response_invalid'))
   }
+  const refreshToken = String(
+    data?.refresh_token
+    ?? data?.refreshToken
+    ?? previousSession?.refreshToken
+    ?? getStoredRefreshToken()
+    ?? '',
+  ).trim()
   return {
     token,
-    refreshToken: String(
-      data?.refresh_token
-      ?? data?.refreshToken
-      ?? previousSession?.refreshToken
-      ?? '',
-    ).trim(),
+    refreshToken,
     user: normalizeSessionUser(user, previousSession?.user ?? null),
   }
 }
@@ -199,15 +202,14 @@ function shouldPreserveSessionOnRefreshFailure(error) {
 
 async function performRefreshRequest() {
   const session = readSession()
-  const refreshToken = String(session?.refreshToken ?? '').trim()
-  if (!refreshToken) return null
+  const refreshToken = String(session?.refreshToken ?? getStoredRefreshToken() ?? '').trim()
+  const body = refreshToken ? { refreshToken } : {}
 
   const data = await requestJson('/api/auth/refresh', {
     method: 'POST',
-    body: {
-      refreshToken,
-    },
+    body,
     auth: false,
+    useAuthStorage: true,
   })
   return writeSession(buildAuthResponseSession(data, session))
 }
@@ -215,7 +217,8 @@ async function performRefreshRequest() {
 async function tryRefreshSessionOnce({ allowRetry = true } = {}) {
   if (!allowRetry) return null
   const session = readSession()
-  if (!session?.refreshToken) return null
+  const refreshToken = String(session?.refreshToken ?? getStoredRefreshToken() ?? '').trim()
+  if (!session?.token && !refreshToken && !shouldSendAuthCredentials()) return null
 
   if (!ongoingRefreshPromise) {
     ongoingRefreshPromise = performRefreshRequest()
@@ -233,18 +236,20 @@ async function tryRefreshSessionOnce({ allowRetry = true } = {}) {
   return ongoingRefreshPromise
 }
 
-async function requestJson(path, { method = 'GET', body, auth = true, _retried = false } = {}) {
+async function requestJson(path, { method = 'GET', body, auth = true, _retried = false, useAuthStorage = false } = {}) {
   if (shouldRequireExplicitApiBase()) {
     throw createMissingApiError()
   }
 
-  const headers = {}
+  const headers = {
+    ...((useAuthStorage || shouldSendAuthCredentials()) ? getAuthStorageHeaders() : {}),
+  }
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json'
   }
 
   if (auth) {
-    const token = readSession()?.token
+    const token = readSession()?.token ?? getStoredAccessToken()
     if (token) {
       headers.Authorization = `Bearer ${token}`
     }
@@ -264,6 +269,7 @@ async function requestJson(path, { method = 'GET', body, auth = true, _retried =
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      credentials: (useAuthStorage || shouldSendAuthCredentials()) ? 'include' : 'same-origin',
       signal: controller?.signal,
     })
   } catch (error) {
@@ -331,7 +337,7 @@ async function requestFormData(path, { method = 'POST', body, auth = false } = {
 
   const headers = {}
   if (auth) {
-    const token = readSession()?.token
+    const token = readSession()?.token ?? getStoredAccessToken()
     if (token) {
       headers.Authorization = `Bearer ${token}`
     }
@@ -351,6 +357,7 @@ async function requestFormData(path, { method = 'POST', body, auth = false } = {
       method,
       headers,
       body,
+      credentials: shouldSendAuthCredentials() ? 'include' : 'same-origin',
       signal: controller?.signal,
     })
   } catch (error) {
@@ -419,7 +426,7 @@ export function getSharedLedgerSession() {
 }
 
 export function isSharedLedgerAuthenticated() {
-  return Boolean(readSession()?.token)
+  return Boolean(readSession()?.token ?? getStoredAccessToken())
 }
 
 export function hasSharedLedgerMembershipAccess() {
@@ -450,6 +457,7 @@ export async function registerSharedLedgerAccount(payload = {}) {
     method: 'POST',
     body: payload,
     auth: false,
+    useAuthStorage: true,
   })
   return persistAuthResponse(data)
 }
@@ -459,6 +467,7 @@ export async function loginSharedLedgerAccount(payload = {}) {
     method: 'POST',
     body: payload,
     auth: false,
+    useAuthStorage: true,
   })
   return persistAuthResponse(data)
 }
@@ -478,6 +487,7 @@ export async function loginSharedLedgerWithGoogle(payload = {}) {
     method: 'POST',
     body: payload,
     auth: purpose === 'link',
+    useAuthStorage: purpose !== 'link',
   })
   return persistAuthResponse(data)
 }
@@ -495,6 +505,7 @@ export async function resetSharedLedgerPassword(payload = {}) {
     method: 'POST',
     body: payload,
     auth: false,
+    useAuthStorage: true,
   })
   return persistAuthResponse(data)
 }
@@ -503,6 +514,7 @@ export async function changeSharedLedgerPassword(payload = {}) {
   const data = await requestJson('/api/auth/password/change', {
     method: 'POST',
     body: payload,
+    useAuthStorage: true,
   })
   return persistAuthResponse(data)
 }
@@ -523,7 +535,19 @@ export async function refreshSharedLedgerSession() {
 
 export async function restoreSharedLedgerSession({ force = false } = {}) {
   const session = readSession()
-  if (!session?.token) return null
+  if (!session?.token) {
+    if (!hasPersistedAuthIdentity() && !shouldSendAuthCredentials()) return null
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return null
+    if (!force && Date.now() - lastSessionRestoreAt < SESSION_RESTORE_COOLDOWN_MS) return null
+    if (!ongoingSessionRestorePromise) {
+      lastSessionRestoreAt = Date.now()
+      ongoingSessionRestorePromise = tryRefreshSessionOnce()
+        .finally(() => {
+          ongoingSessionRestorePromise = null
+        })
+    }
+    return ongoingSessionRestorePromise
+  }
 
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     return session
@@ -538,7 +562,7 @@ export async function restoreSharedLedgerSession({ force = false } = {}) {
     lastSessionRestoreAt = nowMs
     ongoingSessionRestorePromise = (async () => {
       try {
-        if (session.refreshToken) {
+        if (session.refreshToken || shouldSendAuthCredentials()) {
           // Reuse the shared refresh pipeline so app restore and page refresh
           // never rotate the same refresh token in parallel.
           return await tryRefreshSessionOnce()
@@ -561,12 +585,12 @@ export async function restoreSharedLedgerSession({ force = false } = {}) {
 export async function logoutSharedLedgerAccount() {
   try {
     const session = readSession()
-    if (session?.token) {
+    if (session?.token || hasPersistedAuthIdentity() || shouldSendAuthCredentials()) {
       await requestJson('/api/auth/logout', {
         method: 'POST',
-        body: {
-          refreshToken: session.refreshToken ?? '',
-        },
+        body: session?.refreshToken ? { refreshToken: session.refreshToken } : {},
+        useAuthStorage: true,
+        auth: Boolean(session?.token),
       })
     }
   } catch {
