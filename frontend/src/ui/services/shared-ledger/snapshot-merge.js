@@ -451,6 +451,126 @@ export function mergeSharedLedgerSnapshots(localSnapshot, remoteSnapshot, option
   })
 }
 
+function rowEquals(leftRow, rightRow) {
+  return JSON.stringify(leftRow) === JSON.stringify(rightRow)
+}
+
+export function threeWayMergeSnapshots(baseSnapshot, localSnapshot, remoteSnapshot, options = {}) {
+  const normalizedBase = canonicalizeSnapshot(baseSnapshot)
+  const normalizedLocal = canonicalizeSnapshot(localSnapshot)
+  const normalizedRemote = canonicalizeSnapshot(remoteSnapshot)
+  const ledgerId = normalizeText(normalizedLocal.ledger_id || normalizedRemote.ledger_id || normalizedBase.ledger_id)
+
+  if (
+    normalizedLocal.ledger_id
+    && normalizedRemote.ledger_id
+    && normalizedLocal.ledger_id !== normalizedRemote.ledger_id
+  ) {
+    throw new Error('共同帳本快照 ledger_id 不一致，無法合併')
+  }
+
+  const prefer = options?.prefer === 'local' ? 'local' : 'remote'
+  const tableNames = getAllTableNames(normalizedLocal, normalizedRemote)
+  const combinedTombstones = buildTombstoneMap([
+    ...listTableRows(normalizedBase, 'deleted_log'),
+    ...listTableRows(normalizedLocal, 'deleted_log'),
+    ...listTableRows(normalizedRemote, 'deleted_log'),
+  ])
+  const mergedTables = {}
+  const conflicts = []
+
+  for (const tableName of tableNames) {
+    const baseRowMap = new Map()
+    for (const [index, row] of listTableRows(normalizedBase, tableName).entries()) {
+      baseRowMap.set(getRowKey(tableName, row, index), cloneJson(row))
+    }
+
+    const localRowMap = new Map()
+    for (const [index, row] of listTableRows(normalizedLocal, tableName).entries()) {
+      localRowMap.set(getRowKey(tableName, row, index), cloneJson(row))
+    }
+
+    const remoteRowMap = new Map()
+    for (const [index, row] of listTableRows(normalizedRemote, tableName).entries()) {
+      remoteRowMap.set(getRowKey(tableName, row, index), cloneJson(row))
+    }
+
+    const allKeys = new Set([...baseRowMap.keys(), ...localRowMap.keys(), ...remoteRowMap.keys()])
+    const mergedRows = []
+
+    for (const rowKey of allKeys) {
+      const baseRow = baseRowMap.get(rowKey) ?? null
+      const localRow = localRowMap.get(rowKey) ?? null
+      const remoteRow = remoteRowMap.get(rowKey) ?? null
+
+      let chosenRow = null
+      let isConflict = false
+
+      if (rowEquals(localRow, baseRow)) {
+        chosenRow = remoteRow
+      } else if (rowEquals(remoteRow, baseRow)) {
+        chosenRow = localRow
+      } else if (rowEquals(localRow, remoteRow)) {
+        chosenRow = localRow
+      } else {
+        isConflict = true
+        const localUpdatedMs = getRowUpdatedAt(localRow)
+        const remoteUpdatedMs = getRowUpdatedAt(remoteRow)
+        if (localUpdatedMs !== remoteUpdatedMs) {
+          chosenRow = prefer === 'local'
+            ? (localUpdatedMs >= remoteUpdatedMs ? localRow : remoteRow)
+            : (remoteUpdatedMs >= localUpdatedMs ? remoteRow : localRow)
+        } else {
+          chosenRow = prefer === 'local' ? localRow : remoteRow
+        }
+        conflicts.push({
+          tableName,
+          rowKey,
+          baseRow,
+          localRow,
+          remoteRow,
+          chosenRow,
+          resolution: prefer,
+        })
+      }
+
+      if (!chosenRow) continue
+
+      const tombstoneKey = `${tableName}::${rowKey}`
+      const tombstone = combinedTombstones.get(tombstoneKey)
+      const rowUpdatedMs = getRowUpdatedAt(chosenRow)
+      const deletedMs = toEpochMs(tombstone?.deleted_at)
+
+      if (tombstone && Number.isFinite(deletedMs) && deletedMs >= rowUpdatedMs) {
+        continue
+      }
+
+      if (tombstone && rowUpdatedMs > deletedMs) {
+        combinedTombstones.delete(tombstoneKey)
+      }
+
+      mergedRows.push(chosenRow)
+    }
+
+    mergedTables[tableName] = sortRows(tableName, mergedRows)
+  }
+
+  mergedTables.deleted_log = sortDeletedLogRows(Array.from(combinedTombstones.values()))
+
+  const mergedSnapshot = canonicalizeSnapshot({
+    schema_version: normalizedRemote.schema_version ?? normalizedLocal.schema_version ?? normalizedBase.schema_version ?? null,
+    ledger_id: ledgerId,
+    exported_at: new Date().toISOString(),
+    tables: mergedTables,
+  })
+
+  return {
+    mergedSnapshot,
+    conflicts,
+    hasConflicts: conflicts.length > 0,
+  }
+}
+
 export function areSharedLedgerSnapshotsEquivalent(leftSnapshot, rightSnapshot) {
   const normalizedLeft = canonicalizeSnapshot(leftSnapshot)
   const normalizedRight = canonicalizeSnapshot(rightSnapshot)

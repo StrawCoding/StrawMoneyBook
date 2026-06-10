@@ -5,6 +5,7 @@ import {
   areSharedLedgerSnapshotsEquivalent,
   mergeSharedLedgerSnapshots,
   normalizeSharedLedgerSnapshot,
+  threeWayMergeSnapshots,
 } from '../src/ui/services/shared-ledger/snapshot-merge.js'
 import { isLocalOnlyAppSettingKey } from '../src/ui/services/local-only-app-settings.js'
 
@@ -306,6 +307,12 @@ test('normalizeSharedLedgerSnapshot nulls optional shared-ledger foreign keys wh
   assert.equal(reimbursementItem.account_id, null)
 })
 
+const categoryGroupFixture = [{
+  id: 'group_expense',
+  name: '支出',
+  updated_at: '2026-03-19T08:00:00.000Z',
+}]
+
 test('isLocalOnlyAppSettingKey excludes bookkeeping reminder settings from shared sync', () => {
   assert.equal(isLocalOnlyAppSettingKey('bookkeeping.reminder.settings.v1'), true, '記帳提醒設定應被排除在同步外')
   assert.equal(isLocalOnlyAppSettingKey('bookkeeping.streak.v1'), true, '所有 bookkeeping. 前綴設定都應被排除')
@@ -315,4 +322,196 @@ test('isLocalOnlyAppSettingKey excludes bookkeeping reminder settings from share
   assert.equal(isLocalOnlyAppSettingKey('transaction.addon_templates'), false, '一般交易設定不應被排除')
   assert.equal(isLocalOnlyAppSettingKey('ai_bookkeeping.auto_fill_rules'), false, 'AI 設定不應被排除')
   assert.equal(isLocalOnlyAppSettingKey('exchange_rate.settings'), false, '匯率設定不應被排除')
+})
+
+test('threeWayMergeSnapshots: local unchanged, remote changed → take remote', () => {
+  const base = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '食物',
+      updated_at: '2026-03-19T09:00:00.000Z',
+    }],
+  })
+  const local = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '食物',
+      updated_at: '2026-03-19T09:00:00.000Z',
+    }],
+  })
+  const remote = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '餐飲',
+      updated_at: '2026-03-19T11:00:00.000Z',
+    }],
+  })
+
+  const { mergedSnapshot, hasConflicts } = threeWayMergeSnapshots(base, local, remote)
+  assert.equal(hasConflicts, false)
+  assert.equal(mergedSnapshot.tables.categories[0]?.name, '餐飲')
+})
+
+test('threeWayMergeSnapshots: remote unchanged, local changed → take local', () => {
+  const base = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '食物',
+      updated_at: '2026-03-19T09:00:00.000Z',
+    }],
+  })
+  const local = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '本地新名稱',
+      updated_at: '2026-03-19T12:00:00.000Z',
+    }],
+  })
+  const remote = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '食物',
+      updated_at: '2026-03-19T09:00:00.000Z',
+    }],
+  })
+
+  const { mergedSnapshot, hasConflicts } = threeWayMergeSnapshots(base, local, remote)
+  assert.equal(hasConflicts, false)
+  assert.equal(mergedSnapshot.tables.categories[0]?.name, '本地新名稱')
+})
+
+test('threeWayMergeSnapshots: both changed same row → conflict, prefer remote', () => {
+  const base = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '食物',
+      updated_at: '2026-03-19T09:00:00.000Z',
+    }],
+  })
+  const local = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '本地食物',
+      updated_at: '2026-03-19T10:00:00.000Z',
+    }],
+  })
+  const remote = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '遠端食物',
+      updated_at: '2026-03-19T11:00:00.000Z',
+    }],
+  })
+
+  const { mergedSnapshot, hasConflicts, conflicts } = threeWayMergeSnapshots(base, local, remote, { prefer: 'remote' })
+  assert.equal(hasConflicts, true)
+  assert.equal(conflicts.length, 1)
+  assert.equal(mergedSnapshot.tables.categories[0]?.name, '遠端食物')
+})
+
+test('threeWayMergeSnapshots: both changed same row → conflict, prefer local', () => {
+  const base = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '食物',
+      updated_at: '2026-03-19T09:00:00.000Z',
+    }],
+  })
+  const local = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '本地食物',
+      updated_at: '2026-03-19T12:00:00.000Z',
+    }],
+  })
+  const remote = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '遠端食物',
+      updated_at: '2026-03-19T11:00:00.000Z',
+    }],
+  })
+
+  const { mergedSnapshot, hasConflicts } = threeWayMergeSnapshots(base, local, remote, { prefer: 'local' })
+  assert.equal(hasConflicts, true)
+  assert.equal(mergedSnapshot.tables.categories[0]?.name, '本地食物')
+})
+
+test('threeWayMergeSnapshots: local deleted, remote unchanged → keep deleted (tombstone wins)', () => {
+  const base = buildSnapshot({
+    accounts: [{
+      id: 'acc_1',
+      name: 'Cash',
+      updated_at: '2026-03-19T09:00:00.000Z',
+    }],
+  })
+  const local = buildSnapshot({
+    accounts: [],
+    deleted_log: [{
+      id: 1,
+      ledger_id: 'ledger_sync_test',
+      table_name: 'accounts',
+      row_pk: 'acc_1',
+      payload_json: '{"id":"acc_1"}',
+      deleted_at: '2026-03-19T12:00:00.000Z',
+    }],
+  })
+  const remote = buildSnapshot({
+    accounts: [{
+      id: 'acc_1',
+      name: 'Cash',
+      updated_at: '2026-03-19T09:00:00.000Z',
+    }],
+  })
+
+  const { mergedSnapshot, hasConflicts } = threeWayMergeSnapshots(base, local, remote)
+  assert.equal(hasConflicts, false)
+  assert.equal(mergedSnapshot.tables.accounts.length, 0)
+})
+
+test('threeWayMergeSnapshots: remote added row, base empty → include new row', () => {
+  const base = buildSnapshot({})
+  const local = buildSnapshot({})
+  const remote = buildSnapshot({
+    account_groups: [{
+      id: 'group_assets',
+      name: '資產',
+      updated_at: '2026-03-19T08:00:00.000Z',
+    }],
+    accounts: [{
+      id: 'acc_new',
+      group_id: 'group_assets',
+      name: 'New Account',
+      updated_at: '2026-03-19T10:00:00.000Z',
+    }],
+  })
+
+  const { mergedSnapshot, hasConflicts } = threeWayMergeSnapshots(base, local, remote)
+  assert.equal(hasConflicts, false)
+  assert.equal(mergedSnapshot.tables.accounts.length, 1)
+  assert.equal(mergedSnapshot.tables.accounts[0]?.name, 'New Account')
 })

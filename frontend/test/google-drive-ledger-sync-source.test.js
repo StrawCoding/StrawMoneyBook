@@ -20,3 +20,13 @@ test('Google Drive 帳本同步替換本機帳本失敗時會用替換前備份�
   assert.match(source, /try \{\s*if \(existingLedger\) \{\s*await purgeLedger\(requestedLedgerId\)\s*\}/)
   assert.match(source, /catch \(error\) \{\s*if \(localBackupText\) \{\s*await restoreLocalLedgerFromBackup\(requestedLedgerId, localBackupText, existingLedger\)/)
 })
+
+test('Google Drive 帳本同步拉回時使用三方合併與 base snapshot，避免直接覆蓋本機未上傳變更', () => {
+  assert.match(source, /GOOGLE_LEDGER_SYNC_BASE_SNAPSHOT_KEY/)
+  assert.match(source, /threeWayMergeSnapshots/)
+  assert.match(source, /function resolvePullSnapshot/)
+  assert.match(source, /mergeSharedLedgerSnapshots/)
+  assert.match(source, /setBaseSnapshot\(normalizedLedgerId, snapshot\)/)
+  assert.match(source, /setBaseSnapshot\(normalizedLedgerId, mergeMeta\.snapshot\)/)
+  assert.match(source, /lastConflictCount/)
+})

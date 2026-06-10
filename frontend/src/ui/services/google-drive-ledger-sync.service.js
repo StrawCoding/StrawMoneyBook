@@ -19,9 +19,14 @@ import {
   reauth,
 } from '@/services/einvoice/auth'
 import { isLocalOnlyAppSettingKey } from '@/ui/services/local-only-app-settings'
+import {
+  mergeSharedLedgerSnapshots,
+  threeWayMergeSnapshots,
+} from '@/ui/services/shared-ledger/snapshot-merge.js'
 
 const GOOGLE_LEDGER_SYNC_STORAGE_KEY = 'straw.google_drive_ledger_sync_state'
 const GOOGLE_LEDGER_SYNC_DIRTY_KEY = 'straw.google_drive_ledger_sync_dirty_queue'
+const GOOGLE_LEDGER_SYNC_BASE_SNAPSHOT_KEY = 'straw.google_drive_ledger_sync_base_snapshot'
 const GOOGLE_LEDGER_SYNC_MUTE_MS = 15000
 const AUTO_PUSH_DEBOUNCE_MS = 1000
 const MEMBERSHIP_TIER_MEMBER = 'member'
@@ -88,6 +93,34 @@ function writeLocalStorageObject(key, value) {
   localStorage.setItem(key, JSON.stringify(Object.fromEntries(entries)))
 }
 
+function readBaseSnapshotMap() {
+  return readLocalStorageObject(GOOGLE_LEDGER_SYNC_BASE_SNAPSHOT_KEY)
+}
+
+function writeBaseSnapshotMap(map) {
+  writeLocalStorageObject(GOOGLE_LEDGER_SYNC_BASE_SNAPSHOT_KEY, map)
+}
+
+function getBaseSnapshot(ledgerId) {
+  return readBaseSnapshotMap()[String(ledgerId ?? '').trim()] ?? null
+}
+
+function setBaseSnapshot(ledgerId, snapshot) {
+  const map = readBaseSnapshotMap()
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId) return
+  if (snapshot) {
+    map[normalizedLedgerId] = cloneJson(snapshot)
+  } else {
+    delete map[normalizedLedgerId]
+  }
+  writeBaseSnapshotMap(map)
+}
+
+function clearBaseSnapshot(ledgerId) {
+  setBaseSnapshot(ledgerId, null)
+}
+
 function buildDefaultState() {
   return {
     enabled: false,
@@ -102,6 +135,7 @@ function buildDefaultState() {
     lastRemoteModifiedAt: '',
     lastSyncStatus: 'idle',
     lastError: '',
+    lastConflictCount: 0,
   }
 }
 
@@ -123,6 +157,7 @@ function normalizeState(raw) {
     lastRemoteModifiedAt: String(raw.lastRemoteModifiedAt ?? '').trim(),
     lastSyncStatus: String(raw.lastSyncStatus ?? 'idle').trim() || 'idle',
     lastError: String(raw.lastError ?? '').trim(),
+    lastConflictCount: Math.max(0, Number(raw.lastConflictCount ?? 0) || 0),
   }
 }
 
@@ -435,10 +470,70 @@ async function pushLedgerToGoogleDrive(ledgerId, state, options = {}) {
     lastError: '',
   })
   clearLedgerDirty(normalizedLedgerId)
+  setBaseSnapshot(normalizedLedgerId, snapshot)
   return {
     action: 'push',
     state: nextState,
     remoteModifiedAt: nextState.lastRemoteModifiedAt,
+  }
+}
+
+function resolvePullSnapshot({
+  baseSnapshot,
+  localSnapshot,
+  remoteSnapshot,
+  dirtyMarkedAt,
+}) {
+  if (baseSnapshot) {
+    const { mergedSnapshot, hasConflicts, conflicts } = threeWayMergeSnapshots(
+      baseSnapshot,
+      localSnapshot,
+      remoteSnapshot,
+      { prefer: 'remote' },
+    )
+    return {
+      snapshot: mergedSnapshot,
+      hasConflicts,
+      conflictCount: conflicts.length,
+      mergeMode: 'three_way',
+    }
+  }
+
+  if (dirtyMarkedAt) {
+    const mergedSnapshot = mergeSharedLedgerSnapshots(localSnapshot, remoteSnapshot, { prefer: 'remote' })
+    return {
+      snapshot: mergedSnapshot,
+      hasConflicts: false,
+      conflictCount: 0,
+      mergeMode: 'two_way',
+    }
+  }
+
+  return {
+    snapshot: remoteSnapshot,
+    hasConflicts: false,
+    conflictCount: 0,
+    mergeMode: 'remote_only',
+  }
+}
+
+async function finalizePullResult(ledgerId, replaced, mergeMeta) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  setBaseSnapshot(normalizedLedgerId, mergeMeta.snapshot)
+  const nextState = await setGoogleDriveLedgerSyncState(normalizedLedgerId, {
+    ...replaced.state,
+    lastConflictCount: mergeMeta.conflictCount,
+    lastSyncStatus: mergeMeta.hasConflicts ? 'conflict_resolved' : 'ok',
+    lastError: '',
+  })
+  return {
+    action: 'pull',
+    state: nextState,
+    ledgerId: replaced.ledgerId,
+    imported: replaced.imported,
+    hasConflicts: mergeMeta.hasConflicts,
+    conflictCount: mergeMeta.conflictCount,
+    mergeMode: mergeMeta.mergeMode,
   }
 }
 
@@ -460,18 +555,22 @@ async function pullLedgerFromGoogleDrive(ledgerId, state, options = {}) {
     reauth: reauthHandler,
     fileId: remoteFile.id,
   })
-  const payload = JSON.parse(jsonText)
-  const replaced = await replaceLocalLedgerWithRemoteSnapshot(payload, normalizedLedgerId, {
+  const remoteSnapshot = JSON.parse(jsonText)
+  const baseSnapshot = getBaseSnapshot(normalizedLedgerId)
+  const localSnapshot = sanitizeSnapshotForGoogleDriveSync(await exportLedgerJson(normalizedLedgerId))
+  const dirtyMarkedAt = getLedgerDirtyMarkedAt(normalizedLedgerId)
+  const mergeMeta = resolvePullSnapshot({
+    baseSnapshot,
+    localSnapshot,
+    remoteSnapshot,
+    dirtyMarkedAt,
+  })
+  const replaced = await replaceLocalLedgerWithRemoteSnapshot(mergeMeta.snapshot, normalizedLedgerId, {
     ...state,
     ...buildStatePatchFromProfile(profile),
   }, remoteFile)
 
-  return {
-    action: 'pull',
-    state: replaced.state,
-    ledgerId: replaced.ledgerId,
-    imported: replaced.imported,
-  }
+  return finalizePullResult(normalizedLedgerId, replaced, mergeMeta)
 }
 
 function shouldPullRemote(state, remoteFile, dirtyMarkedAt) {
@@ -525,6 +624,7 @@ export async function setGoogleDriveLedgerSyncEnabled(ledgerId, enabled, options
   const current = await getGoogleDriveLedgerSyncState(normalizedLedgerId)
   if (!enabled) {
     clearLedgerDirty(normalizedLedgerId)
+    clearBaseSnapshot(normalizedLedgerId)
     return setGoogleDriveLedgerSyncState(normalizedLedgerId, {
       ...current,
       enabled: false,

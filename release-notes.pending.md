@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (SMB-230) Google Drive 帳本同步導入衝突合併機制：新增 base snapshot 快取與三方合併（base / local / remote），pull 時不再直接覆蓋本機未上傳變更；若尚無 base 但本機有 dirty 變更則以雙向合併保留雙方修改。衝突採較新變更（last-write-wins），設定頁顯示衝突筆數與 warning toast。新增 `threeWayMergeSnapshots` 單元測試與 google-drive-ledger-sync source regression 測試；三語 i18n。
+
 ---
 
 ## v1.3.3

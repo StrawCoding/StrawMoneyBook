@@ -64,6 +64,15 @@
                   )
                 }}
               </p>
+              <p v-if="item.state.lastConflictCount > 0" class="conflict-hint compact">
+                {{
+                  t(
+                    'settings_google_sync.conflict_warning',
+                    { count: item.state.lastConflictCount },
+                    '上次同步有 {count} 筆衝突已自動合併（採較新變更）',
+                  )
+                }}
+              </p>
             </div>
 
             <div class="sync-ledger-actions">
@@ -235,7 +244,20 @@ async function syncGoogleLedgerItem(item) {
         await ledgerStore.refresh()
       }
       await refreshGoogleLedgerSyncBindings()
-      uiStore.pushToast(t('settings_google_sync.toast.pulled', '已從 Google Drive 拉回最新帳本'))
+      if (result.hasConflicts) {
+        uiStore.pushToast(
+          t(
+            'settings_google_sync.toast.merged_with_conflicts',
+            { count: result.conflictCount ?? result.state?.lastConflictCount ?? 0 },
+            '已合併同步，{count} 筆衝突已採較新變更',
+          ),
+          'warning',
+        )
+      } else if (result.mergeMode === 'two_way') {
+        uiStore.pushToast(t('settings_google_sync.toast.pulled_merged', '已合併本機與遠端變更並同步'))
+      } else {
+        uiStore.pushToast(t('settings_google_sync.toast.pulled', '已從 Google Drive 拉回最新帳本'))
+      }
       return
     }
     if (result.action === 'push') {
@@ -354,6 +376,9 @@ h3 {
 }
 .compact {
   margin: 0;
+}
+.conflict-hint {
+  color: color-mix(in srgb, var(--warning, #f59e0b) 85%, var(--text) 15%);
 }
 @keyframes panel-sweep {
   from {
