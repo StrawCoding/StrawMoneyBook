@@ -735,6 +735,34 @@ export async function listPendingSharedLedgerInvitations() {
   return requestJson('/api/shared-ledgers/invitations/pending')
 }
 
+export async function listSharedLedgerOutgoingInvitations(sharedLedgerId) {
+  const normalizedId = String(sharedLedgerId ?? '').trim()
+  if (!normalizedId) throw new Error(t('shared_ledger.error.missing_ledger_id'))
+  return requestJson(`/api/shared-ledgers/${normalizedId}/invitations`)
+}
+
+export async function inviteSharedLedgerByEmail(sharedLedgerId, email) {
+  const normalizedId = String(sharedLedgerId ?? '').trim()
+  const normalizedEmail = String(email ?? '').trim()
+  if (!normalizedId) throw new Error(t('shared_ledger.error.missing_ledger_id'))
+  if (!normalizedEmail) throw new Error(t('shared_ledger.error.missing_invite_email'))
+  return requestJson(`/api/shared-ledgers/${normalizedId}/invitations`, {
+    method: 'POST',
+    body: { email: normalizedEmail },
+  })
+}
+
+export async function resendSharedLedgerInvitation(sharedLedgerId, invitationId) {
+  const normalizedLedgerId = String(sharedLedgerId ?? '').trim()
+  const normalizedInvitationId = String(invitationId ?? '').trim()
+  if (!normalizedLedgerId) throw new Error(t('shared_ledger.error.missing_ledger_id'))
+  if (!normalizedInvitationId) throw new Error(t('shared_ledger.error.missing_invitation_id'))
+  return requestJson(`/api/shared-ledgers/${normalizedLedgerId}/invitations/${normalizedInvitationId}/resend`, {
+    method: 'POST',
+    body: {},
+  })
+}
+
 export async function acceptSharedLedgerInvitation(invitationId) {
   const normalizedId = String(invitationId ?? '').trim()
   if (!normalizedId) throw new Error(t('shared_ledger.error.missing_invitation_id'))

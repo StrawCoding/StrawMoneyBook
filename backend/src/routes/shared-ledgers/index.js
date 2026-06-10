@@ -10,7 +10,9 @@ import { handleActivateFirstTrial } from './trial-handlers.js'
 import {
   handleAcceptInvitation,
   handleInviteByEmail,
+  handleListOutgoingInvitations,
   handlePendingInvitations,
+  handleResendInvitation,
 } from './invitation-handlers.js'
 import {
   handleCreate,
@@ -76,10 +78,28 @@ const SHARED_LEDGER_ROUTES = Object.freeze([
     handler: (req, res, user) => handleJoin(req, res, user),
   },
   {
+    name: 'list_outgoing_invitations',
+    method: 'GET',
+    pattern: [':sharedLedgerId', 'invitations'],
+    handler: (req, res, user, params) => handleListOutgoingInvitations(req, res, user, params.sharedLedgerId),
+  },
+  {
     name: 'invite_by_email',
     method: 'POST',
     pattern: [':sharedLedgerId', 'invitations'],
     handler: (req, res, user, params) => handleInviteByEmail(req, res, user, params.sharedLedgerId),
+  },
+  {
+    name: 'resend_invitation',
+    method: 'POST',
+    pattern: [':sharedLedgerId', 'invitations', ':invitationId', 'resend'],
+    handler: (req, res, user, params) => handleResendInvitation(
+      req,
+      res,
+      user,
+      params.sharedLedgerId,
+      params.invitationId,
+    ),
   },
   {
     name: 'detail',

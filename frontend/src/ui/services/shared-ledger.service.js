@@ -7,8 +7,10 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { isLocalOnlyAppSettingKey } from '@/ui/services/local-only-app-settings'
 import {
   areSharedLedgerSnapshotsEquivalent,
+  buildMergeLog,
   mergeSharedLedgerSnapshots,
   normalizeSharedLedgerSnapshot,
+  threeWayMergeSnapshots,
 } from '@/ui/services/shared-ledger/snapshot-merge'
 import {
   acceptSharedLedgerInvitation,
@@ -19,14 +21,18 @@ import {
   getSharedLedgerSnapshot,
   hasSharedLedgerMembershipAccess,
   isSharedLedgerAuthenticated,
+  inviteSharedLedgerByEmail,
   joinSharedLedger,
   listPendingSharedLedgerInvitations,
+  listSharedLedgerOutgoingInvitations,
   listSharedLedgers,
   pushSharedLedgerSnapshot,
+  resendSharedLedgerInvitation,
 } from '@/services/shared-ledger/backend'
 
 const SHARED_LEDGER_META_KEY = 'shared_ledger_meta'
 const DIRTY_QUEUE_STORAGE_KEY = 'straw.shared_ledger_dirty_queue'
+const BASE_SNAPSHOT_STORAGE_KEY = 'straw.shared_ledger_base_snapshot'
 const AUTO_PUSH_DEBOUNCE_MS = 800
 const IMPORT_SYNC_MUTE_MS = 15000
 
@@ -100,6 +106,48 @@ function listDirtyLedgerIds() {
   return Object.keys(readDirtyLedgerQueue())
 }
 
+function readBaseSnapshotMap() {
+  if (typeof localStorage === 'undefined') return {}
+  try {
+    const parsed = JSON.parse(localStorage.getItem(BASE_SNAPSHOT_STORAGE_KEY) || '{}')
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeBaseSnapshotMap(map) {
+  if (typeof localStorage === 'undefined') return
+  const entries = Object.entries(map ?? {})
+    .map(([ledgerId, snapshot]) => [String(ledgerId ?? '').trim(), snapshot])
+    .filter(([ledgerId, snapshot]) => Boolean(ledgerId) && snapshot && typeof snapshot === 'object')
+  if (!entries.length) {
+    localStorage.removeItem(BASE_SNAPSHOT_STORAGE_KEY)
+    return
+  }
+  localStorage.setItem(BASE_SNAPSHOT_STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)))
+}
+
+function getBaseSnapshot(ledgerId) {
+  return readBaseSnapshotMap()[String(ledgerId ?? '').trim()] ?? null
+}
+
+function setBaseSnapshot(ledgerId, snapshot) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId) return
+  const map = readBaseSnapshotMap()
+  if (snapshot) {
+    map[normalizedLedgerId] = cloneJson(snapshot)
+  } else {
+    delete map[normalizedLedgerId]
+  }
+  writeBaseSnapshotMap(map)
+}
+
+function clearBaseSnapshot(ledgerId) {
+  setBaseSnapshot(ledgerId, null)
+}
+
 function sanitizeSnapshotForSharedSync(snapshot) {
   const normalized = cloneJson(snapshot)
   if (!normalized || typeof normalized !== 'object') {
@@ -166,6 +214,7 @@ export async function clearSharedLedgerMeta(ledgerId) {
   if (!normalizedLedgerId) return
   await removeSetting(normalizedLedgerId, SHARED_LEDGER_META_KEY)
   clearLedgerDirty(normalizedLedgerId)
+  clearBaseSnapshot(normalizedLedgerId)
 }
 
 export async function setSharedLedgerAutoSyncEnabled(ledgerId, enabled) {
@@ -237,6 +286,7 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
   }
 
   const now = nowIso()
+  setBaseSnapshot(ledgerId, normalizedSnapshot)
   const nextMeta = await setSharedLedgerMeta(imported.ledgerId, item, {
     auto_sync_enabled: existingMeta?.auto_sync_enabled ?? true,
     last_synced_at: now,
@@ -269,6 +319,7 @@ export async function publishLedgerAsShared(ledgerId, options = {}) {
     auto_sync_enabled: true,
   })
   clearLedgerDirty(normalizedLedgerId)
+  setBaseSnapshot(normalizedLedgerId, snapshot)
 
   return {
     item: result.item,
@@ -289,6 +340,7 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
   const snapshot = sanitizeSnapshotForSharedSync(await exportLedgerJson(normalizedLedgerId))
   let result = null
   let resolvedSnapshot = null
+  let mergeMeta = null
 
   try {
     result = await pushSharedLedgerSnapshot(meta.shared_ledger_id, {
@@ -305,9 +357,36 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
 
     const remote = await getSharedLedgerSnapshot(meta.shared_ledger_id)
     const remoteSnapshot = sanitizeSnapshotForSharedSync(remote.snapshot)
-    const mergedSnapshot = mergeSharedLedgerSnapshots(snapshot, remoteSnapshot, {
-      prefer: 'remote',
-    })
+    const baseSnapshot = getBaseSnapshot(normalizedLedgerId)
+
+    let mergedSnapshot = null
+    let conflicts = []
+    let hasConflicts = false
+    let mergeMode = 'two_way'
+
+    if (baseSnapshot) {
+      const threeWay = threeWayMergeSnapshots(baseSnapshot, snapshot, remoteSnapshot, { prefer: 'remote' })
+      mergedSnapshot = threeWay.mergedSnapshot
+      conflicts = threeWay.conflicts
+      hasConflicts = threeWay.hasConflicts
+      mergeMode = 'three_way'
+    } else {
+      const twoWay = mergeSharedLedgerSnapshots(snapshot, remoteSnapshot, {
+        prefer: 'remote',
+        detectConflicts: true,
+      })
+      mergedSnapshot = twoWay.mergedSnapshot
+      conflicts = twoWay.conflicts
+      hasConflicts = twoWay.hasConflicts
+      mergeMode = 'two_way'
+    }
+
+    mergeMeta = {
+      hasConflicts,
+      conflictCount: conflicts.length,
+      mergeMode,
+      mergeLog: buildMergeLog(conflicts, { prefer: 'remote', mergeMode }),
+    }
 
     if (areSharedLedgerSnapshotsEquivalent(mergedSnapshot, remoteSnapshot)) {
       const synced = await replaceLocalLedgerWithSnapshot(remoteSnapshot, remote.item, meta, {
@@ -318,6 +397,7 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
         meta: synced.meta,
         merged: true,
         pulled: true,
+        ...mergeMeta,
       }
     }
 
@@ -344,11 +424,13 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
     last_pulled_at: resolvedSnapshot ? now : (meta.last_pulled_at ?? null),
   })
   clearLedgerDirty(normalizedLedgerId)
+  setBaseSnapshot(normalizedLedgerId, resolvedSnapshot ?? snapshot)
 
   return {
     item: result.item,
     meta: nextMeta,
     merged: Boolean(resolvedSnapshot),
+    ...mergeMeta,
   }
 }
 
@@ -362,19 +444,24 @@ export async function pullSharedLedgerToLocal(ledgerId) {
   }
 
   const result = await getSharedLedgerSnapshot(meta.shared_ledger_id)
-  return replaceLocalLedgerWithSnapshot(result.snapshot, result.item, meta)
+  const synced = await replaceLocalLedgerWithSnapshot(result.snapshot, result.item, meta)
+  setBaseSnapshot(normalizedLedgerId, result.snapshot)
+  return synced
 }
 
 export async function importRemoteSharedLedgerToLocal(sharedLedgerId) {
   const result = await getSharedLedgerSnapshot(sharedLedgerId)
   const existingMeta = await getSharedLedgerMeta(String(result?.item?.ledger_id ?? ''))
-  return replaceLocalLedgerWithSnapshot(result.snapshot, result.item, existingMeta)
+  const synced = await replaceLocalLedgerWithSnapshot(result.snapshot, result.item, existingMeta)
+  setBaseSnapshot(synced.ledgerId, result.snapshot)
+  return synced
 }
 
 export async function acceptSharedLedgerInvitationToLocal(invitationId) {
   const result = await acceptSharedLedgerInvitation(invitationId)
   const existingMeta = await getSharedLedgerMeta(String(result?.item?.ledger_id ?? ''))
   const imported = await replaceLocalLedgerWithSnapshot(result.snapshot, result.item, existingMeta)
+  setBaseSnapshot(imported.ledgerId, result.snapshot)
   return {
     ...result,
     ...imported,
@@ -385,6 +472,7 @@ export async function joinSharedLedgerByLinkToLocal(inviteCodeOrLink) {
   const result = await joinSharedLedger(inviteCodeOrLink)
   const existingMeta = await getSharedLedgerMeta(String(result?.item?.ledger_id ?? ''))
   const imported = await replaceLocalLedgerWithSnapshot(result.snapshot, result.item, existingMeta)
+  setBaseSnapshot(imported.ledgerId, result.snapshot)
   return {
     ...result,
     ...imported,
@@ -402,6 +490,19 @@ export async function listRemoteSharedLedgers() {
 export async function listRemotePendingSharedLedgerInvitations() {
   const data = await listPendingSharedLedgersSafe()
   return data.items
+}
+
+export async function listOutgoingSharedLedgerInvitations(sharedLedgerId) {
+  const data = await listSharedLedgerOutgoingInvitations(sharedLedgerId)
+  return Array.isArray(data?.items) ? data.items : []
+}
+
+export async function inviteRemoteSharedLedgerByEmail(sharedLedgerId, email) {
+  return inviteSharedLedgerByEmail(sharedLedgerId, email)
+}
+
+export async function resendRemoteSharedLedgerInvitation(sharedLedgerId, invitationId) {
+  return resendSharedLedgerInvitation(sharedLedgerId, invitationId)
 }
 
 async function listPendingSharedLedgersSafe() {

@@ -27,6 +27,96 @@ function buildInviteUrl(inviteCode) {
   return `${base}?inviteCode=${encodeURIComponent(normalizedCode)}`
 }
 
+function normalizeEmailDeliveryError(error) {
+  return String(error?.message ?? error ?? '邀請 Email 寄送失敗').trim().slice(0, 240)
+}
+
+function buildEmailDeliveryPayload(delivery = {}) {
+  return {
+    status: String(delivery.status ?? 'pending'),
+    sent_at: String(delivery.sent_at ?? ''),
+    error: String(delivery.error ?? ''),
+    attempted_at: String(delivery.attempted_at ?? ''),
+  }
+}
+
+function applyEmailDeliveryToInvitation(invitation, delivery) {
+  invitation.email_delivery_status = delivery.status
+  invitation.email_sent_at = delivery.sent_at
+  invitation.email_last_error = delivery.error
+  invitation.email_last_attempt_at = delivery.attempted_at
+}
+
+async function deliverSharedLedgerInvitationEmail(sharedLedger, invitation, user) {
+  const attemptedAt = nowIso()
+  const email = String(invitation?.email ?? '').trim().toLowerCase()
+  const logContext = {
+    sharedLedgerId: String(sharedLedger?.id ?? ''),
+    invitationId: String(invitation?.id ?? ''),
+    email,
+  }
+
+  if (!isMailTransportConfigured()) {
+    const delivery = {
+      status: 'not_configured',
+      sent_at: '',
+      error: '目前尚未設定寄信服務',
+      attempted_at: attemptedAt,
+    }
+    console.warn('[shared-ledger] invitation email skipped (mail transport not configured)', logContext)
+    return delivery
+  }
+
+  try {
+    const inviterDisplayName = String(user?.display_name ?? user?.email ?? user?.account ?? '').trim()
+    const inviteUrl = buildInviteUrl(sharedLedger?.invite_code)
+    await sendSharedLedgerInvitationEmail({
+      email,
+      inviterDisplayName,
+      ledgerName: sharedLedger?.name ?? '',
+      inviteUrl,
+    })
+    const delivery = {
+      status: 'sent',
+      sent_at: attemptedAt,
+      error: '',
+      attempted_at: attemptedAt,
+    }
+    console.info('[shared-ledger] invitation email sent', logContext)
+    return delivery
+  } catch (error) {
+    const delivery = {
+      status: 'failed',
+      sent_at: '',
+      error: normalizeEmailDeliveryError(error),
+      attempted_at: attemptedAt,
+    }
+    console.error('[shared-ledger] invitation email failed', {
+      ...logContext,
+      error: delivery.error,
+    })
+    return delivery
+  }
+}
+
+async function persistInvitationEmailDelivery(sharedLedgerId, invitationId, delivery) {
+  await updateStore(async (data) => {
+    const sharedLedger = findSharedLedger(data, sharedLedgerId)
+    if (!sharedLedger) return
+    const invitation = (sharedLedger.invitations ?? []).find((item) => String(item.id) === String(invitationId))
+    if (!invitation) return
+    applyEmailDeliveryToInvitation(invitation, delivery)
+    sharedLedger.updated_at = nowIso()
+  })
+}
+
+function findPendingInvitation(sharedLedger, invitationId) {
+  return (sharedLedger?.invitations ?? []).find((item) => (
+    String(item.id) === String(invitationId)
+    && String(item?.status ?? 'pending') === 'pending'
+  )) ?? null
+}
+
 export async function handleInviteByEmail(req, res, user, sharedLedgerId) {
   const body = parseBody(req)
   const email = validateEmail(body.email)
@@ -59,6 +149,10 @@ export async function handleInviteByEmail(req, res, user, sharedLedgerId) {
       status: 'pending',
       created_at: nowIso(),
       accepted_at: '',
+      email_delivery_status: 'pending',
+      email_sent_at: '',
+      email_last_error: '',
+      email_last_attempt_at: '',
     }
     sharedLedger.invitations = [...(sharedLedger.invitations ?? []), invitation]
     sharedLedger.updated_at = nowIso()
@@ -69,22 +163,59 @@ export async function handleInviteByEmail(req, res, user, sharedLedgerId) {
   const data = await readStore()
   const sharedLedger = findSharedLedger(data, sharedLedgerId)
   const invitation = (sharedLedger?.invitations ?? []).find((item) => String(item.id) === String(invitationId))
+  const delivery = await deliverSharedLedgerInvitationEmail(sharedLedger, invitation, user)
+  await persistInvitationEmailDelivery(sharedLedgerId, invitationId, delivery)
 
-  if (isMailTransportConfigured()) {
-    const inviterDisplayName = String(user?.display_name ?? user?.email ?? user?.account ?? '').trim()
-    const inviteUrl = buildInviteUrl(sharedLedger?.invite_code)
-    sendSharedLedgerInvitationEmail({
-      email,
-      inviterDisplayName,
-      ledgerName: sharedLedger?.name ?? '',
-      inviteUrl,
-    }).catch((err) => {
-      console.warn('[shared-ledger] invitation email failed', email, err?.message ?? err)
-    })
-  }
+  const refreshedData = await readStore()
+  const refreshedLedger = findSharedLedger(refreshedData, sharedLedgerId)
+  const refreshedInvitation = (refreshedLedger?.invitations ?? []).find((item) => String(item.id) === String(invitationId))
 
   sendJson(res, 201, {
-    invitation: buildSharedLedgerInvitationSummary(sharedLedger, invitation, data),
+    invitation: buildSharedLedgerInvitationSummary(refreshedLedger, refreshedInvitation, refreshedData),
+    email_delivery: buildEmailDeliveryPayload(delivery),
+  })
+}
+
+export async function handleListOutgoingInvitations(req, res, user, sharedLedgerId) {
+  const data = await readStore()
+  const sharedLedger = findSharedLedger(data, sharedLedgerId)
+  if (!sharedLedger || !isSharedLedgerMember(sharedLedger, user.id)) {
+    sendJson(res, 404, {
+      error: 'shared_ledger_not_found',
+      message: '找不到共同帳本',
+    })
+    return
+  }
+
+  const items = (Array.isArray(sharedLedger.invitations) ? sharedLedger.invitations : [])
+    .filter((invitation) => String(invitation?.status ?? 'pending') === 'pending')
+    .map((invitation) => buildSharedLedgerInvitationSummary(sharedLedger, invitation, data))
+
+  sendJson(res, 200, { items })
+}
+
+export async function handleResendInvitation(req, res, user, sharedLedgerId, invitationId) {
+  const data = await readStore()
+  const sharedLedger = findSharedLedger(data, sharedLedgerId)
+  if (!sharedLedger || !isSharedLedgerMember(sharedLedger, user.id)) {
+    throw new Error('找不到共同帳本')
+  }
+
+  const invitation = findPendingInvitation(sharedLedger, invitationId)
+  if (!invitation) {
+    throw new Error('找不到待重新寄送的邀請')
+  }
+
+  const delivery = await deliverSharedLedgerInvitationEmail(sharedLedger, invitation, user)
+  await persistInvitationEmailDelivery(sharedLedgerId, invitationId, delivery)
+
+  const refreshedData = await readStore()
+  const refreshedLedger = findSharedLedger(refreshedData, sharedLedgerId)
+  const refreshedInvitation = findPendingInvitation(refreshedLedger, invitationId)
+
+  sendJson(res, 200, {
+    invitation: buildSharedLedgerInvitationSummary(refreshedLedger, refreshedInvitation, refreshedData),
+    email_delivery: buildEmailDeliveryPayload(delivery),
   })
 }
 

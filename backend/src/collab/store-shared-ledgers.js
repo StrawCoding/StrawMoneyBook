@@ -64,6 +64,10 @@ export function buildSharedLedgerInvitationSummary(sharedLedger, invitation, dat
     invited_by_display_name: invitedByUser?.display_name || invitedByUser?.email || invitedByUser?.account || '',
     created_at: String(invitation?.created_at ?? ''),
     accepted_at: String(invitation?.accepted_at ?? ''),
+    email_delivery_status: String(invitation?.email_delivery_status ?? 'pending'),
+    email_sent_at: String(invitation?.email_sent_at ?? ''),
+    email_last_error: String(invitation?.email_last_error ?? ''),
+    email_last_attempt_at: String(invitation?.email_last_attempt_at ?? ''),
   }
 }
 

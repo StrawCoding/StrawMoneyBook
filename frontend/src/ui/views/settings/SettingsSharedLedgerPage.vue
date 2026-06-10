@@ -227,6 +227,75 @@
                 <p class="muted compact">
                   {{ t('settings_shared_ledgers.share_link_hint', '把這個連結傳給對方後，對方點擊即可開啟 app；登入並啟用會員後會直接加入共同帳本。') }}
                 </p>
+
+                <div class="email-invite-box">
+                  <label class="field">
+                    {{ t('settings_shared_ledgers.email_invite', 'Email 邀請') }}
+                    <input
+                      v-model.trim="inviteEmailInput"
+                      class="input"
+                      type="email"
+                      autocomplete="email"
+                      inputmode="email"
+                      maxlength="120"
+                      :placeholder="t('settings_shared_ledgers.email_invite_placeholder', '輸入對方 Email')"
+                      :disabled="emailInviteBusy || apiUnavailable"
+                    />
+                  </label>
+                  <div class="remote-actions email-invite-actions">
+                    <button
+                      class="btn primary"
+                      :disabled="emailInviteBusy || apiUnavailable || !inviteEmailInput"
+                      @click="sendEmailInvite"
+                    >
+                      {{
+                        emailInviteBusy
+                          ? t('settings_shared_ledgers.email_invite_sending', '寄送中...')
+                          : t('settings_shared_ledgers.email_invite_send', '寄送邀請')
+                      }}
+                    </button>
+                  </div>
+                </div>
+
+                <p class="muted compact">
+                  {{ t('settings_shared_ledgers.email_invite_hint', '若 Email 寄送失敗，邀請仍會保留，可稍後重發或改分享加入連結。') }}
+                </p>
+
+                <div v-if="outgoingInvitations.length" class="stack internal-stack">
+                  <strong>{{ t('settings_shared_ledgers.email_invite_pending', '待加入的 Email 邀請') }}</strong>
+                  <ul class="remote-list">
+                    <li v-for="item in outgoingInvitations" :key="item.id" class="remote-item">
+                      <div class="remote-main">
+                        <div class="stack internal-stack">
+                          <strong>{{ item.email }}</strong>
+                          <p class="muted compact">
+                            {{ t('settings_shared_ledgers.email_invite_sent_at', { time: formatDateTime(item.created_at) }, '建立時間：{time}') }}
+                          </p>
+                          <p class="email-delivery-status" :class="`status-${item.email_delivery_status || 'pending'}`">
+                            {{ getEmailDeliveryLabel(item) }}
+                          </p>
+                          <p v-if="item.email_last_error" class="email-delivery-error compact">
+                            {{ item.email_last_error }}
+                          </p>
+                        </div>
+                        <div class="remote-actions">
+                          <button
+                            v-if="canResendEmailInvite(item)"
+                            class="btn"
+                            :disabled="resendInviteBusyId === item.id || apiUnavailable"
+                            @click="resendEmailInvite(item)"
+                          >
+                            {{
+                              resendInviteBusyId === item.id
+                                ? t('settings_shared_ledgers.email_invite_resending', '重發中...')
+                                : t('settings_shared_ledgers.email_invite_resend', '重發邀請')
+                            }}
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
               </template>
 
               <template v-else>
@@ -348,8 +417,11 @@ import {
   importRemoteSharedLedgerToLocal,
   joinSharedLedgerByLinkToLocal,
   listLocalSharedLedgerBindings,
+  inviteRemoteSharedLedgerByEmail,
+  listOutgoingSharedLedgerInvitations,
   listRemoteSharedLedgers,
   publishLedgerAsShared,
+  resendRemoteSharedLedgerInvitation,
   setSharedLedgerAutoSyncEnabled,
   stopSharingLocalLedger,
   stopSharingRemoteSharedLedger,
@@ -375,6 +447,10 @@ const remoteItemBusyId = ref('')
 const remoteDeleteBusyId = ref('')
 const invitationBusyId = ref('')
 const shareLinkBusy = ref('')
+const inviteEmailInput = ref('')
+const outgoingInvitations = ref([])
+const emailInviteBusy = ref(false)
+const resendInviteBusyId = ref('')
 const trialActivating = ref(false)
 const pendingInviteLinkCode = ref(getPendingSharedLedgerInviteCode())
 const inviteLinkJoining = ref(false)
@@ -420,6 +496,7 @@ const currentRemoteLedger = computed(() => {
 })
 const currentInviteCode = computed(() => String(currentRemoteLedger.value?.invite_code ?? activeLedgerMeta.value?.invite_code ?? '').trim())
 const currentShareLink = computed(() => buildSharedLedgerInviteLink(currentInviteCode.value))
+const activeSharedLedgerId = computed(() => String(activeLedgerMeta.value?.shared_ledger_id ?? '').trim())
 const canJoinPendingInviteLink = computed(() => Boolean(
   pendingInviteLinkCode.value
   && sessionUser.value
@@ -492,6 +569,7 @@ async function loadRemoteLedgers() {
   if (!sessionUser.value || apiUnavailable.value || !hasMembershipAccess.value) {
     remoteLedgers.value = []
     pendingInvitations.value = []
+    outgoingInvitations.value = []
     return
   }
 
@@ -500,10 +578,107 @@ async function loadRemoteLedgers() {
     const data = await listRemoteSharedLedgers()
     remoteLedgers.value = Array.isArray(data?.items) ? data.items : []
     pendingInvitations.value = Array.isArray(data?.pendingInvitations) ? data.pendingInvitations : []
+    await loadOutgoingInvitations()
   } catch (error) {
     uiStore.pushToast(error.message || t('settings_shared_ledgers.load_failed', '載入共同帳本失敗'), 'error')
   } finally {
     remoteLoading.value = false
+  }
+}
+
+async function loadOutgoingInvitations() {
+  const sharedLedgerId = activeSharedLedgerId.value
+  if (!sharedLedgerId || apiUnavailable.value || !hasMembershipAccess.value) {
+    outgoingInvitations.value = []
+    return
+  }
+
+  try {
+    outgoingInvitations.value = await listOutgoingSharedLedgerInvitations(sharedLedgerId)
+  } catch (error) {
+    console.warn('[shared-ledger] load outgoing invitations failed', error)
+    outgoingInvitations.value = []
+  }
+}
+
+function getEmailDeliveryStatus(item) {
+  return String(item?.email_delivery_status ?? 'pending').trim().toLowerCase()
+}
+
+function getEmailDeliveryLabel(item) {
+  const status = getEmailDeliveryStatus(item)
+  if (status === 'sent') {
+    return t('settings_shared_ledgers.email_delivery.sent', 'Email 已寄出')
+  }
+  if (status === 'failed') {
+    return t('settings_shared_ledgers.email_delivery.failed', 'Email 寄送失敗')
+  }
+  if (status === 'not_configured') {
+    return t('settings_shared_ledgers.email_delivery.not_configured', 'Email 服務尚未設定')
+  }
+  return t('settings_shared_ledgers.email_delivery.pending', 'Email 寄送處理中')
+}
+
+function canResendEmailInvite(item) {
+  const status = getEmailDeliveryStatus(item)
+  return status === 'failed' || status === 'not_configured'
+}
+
+function pushEmailInviteDeliveryToast(delivery) {
+  const status = String(delivery?.status ?? '').trim().toLowerCase()
+  if (status === 'sent') {
+    uiStore.pushToast(t('settings_shared_ledgers.toast.email_invite_sent', '邀請 Email 已寄出'))
+    return
+  }
+  if (status === 'failed') {
+    uiStore.pushToast(
+      delivery?.error || t('settings_shared_ledgers.toast.email_invite_failed', '邀請 Email 寄送失敗'),
+      'error',
+    )
+    return
+  }
+  if (status === 'not_configured') {
+    uiStore.pushToast(
+      t('settings_shared_ledgers.toast.email_invite_not_configured', '邀請已建立，但伺服器尚未設定 Email 寄送服務，請改分享加入連結或稍後重發'),
+      'error',
+    )
+    return
+  }
+  uiStore.pushToast(t('settings_shared_ledgers.toast.email_invite_created', '邀請已建立'))
+}
+
+async function sendEmailInvite() {
+  const sharedLedgerId = activeSharedLedgerId.value
+  const email = String(inviteEmailInput.value ?? '').trim()
+  if (!sharedLedgerId || !email || apiUnavailable.value || emailInviteBusy.value) return
+
+  emailInviteBusy.value = true
+  try {
+    const result = await inviteRemoteSharedLedgerByEmail(sharedLedgerId, email)
+    inviteEmailInput.value = ''
+    await loadOutgoingInvitations()
+    pushEmailInviteDeliveryToast(result?.email_delivery)
+  } catch (error) {
+    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.email_invite_failed', '邀請 Email 寄送失敗'), 'error')
+  } finally {
+    emailInviteBusy.value = false
+  }
+}
+
+async function resendEmailInvite(item) {
+  const sharedLedgerId = activeSharedLedgerId.value
+  const invitationId = String(item?.id ?? '').trim()
+  if (!sharedLedgerId || !invitationId || apiUnavailable.value) return
+
+  resendInviteBusyId.value = invitationId
+  try {
+    const result = await resendRemoteSharedLedgerInvitation(sharedLedgerId, invitationId)
+    await loadOutgoingInvitations()
+    pushEmailInviteDeliveryToast(result?.email_delivery)
+  } catch (error) {
+    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.email_invite_resend_failed', '重發邀請 Email 失敗'), 'error')
+  } finally {
+    resendInviteBusyId.value = ''
   }
 }
 
@@ -828,6 +1003,13 @@ watch(
 )
 
 watch(
+  () => activeSharedLedgerId.value,
+  () => {
+    void loadOutgoingInvitations()
+  },
+)
+
+watch(
   () => [route.query.inviteCode, route.query.invite_code, route.query.code],
   () => {
     void syncPendingInviteCodeFromRoute()
@@ -1014,6 +1196,32 @@ p {
 
 .share-link-actions {
   align-items: stretch;
+}
+
+.email-invite-box,
+.email-invite-actions {
+  align-items: end;
+}
+
+.email-delivery-status {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.email-delivery-status.status-sent {
+  color: #1b8f6a;
+}
+
+.email-delivery-status.status-failed,
+.email-delivery-status.status-not_configured {
+  color: #c62828;
+}
+
+.email-delivery-error {
+  margin: 0;
+  color: #c62828;
+  word-break: break-word;
 }
 
 .link-code {

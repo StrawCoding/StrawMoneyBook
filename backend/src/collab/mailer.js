@@ -24,8 +24,12 @@ function isFalsy(value) {
   return value === '0' || value === 'false' || value === 'no' || value === 'off'
 }
 
+function readSmtpJsonTransportFlag() {
+  return String(process.env.SMTP_JSON_TRANSPORT ?? SMTP_JSON_TRANSPORT).trim().toLowerCase()
+}
+
 function hasConfiguredTransport() {
-  if (isTruthy(SMTP_JSON_TRANSPORT)) return true
+  if (isTruthy(readSmtpJsonTransportFlag())) return true
   if (SMTP_URL) return true
   return Boolean(SMTP_HOST && SMTP_FROM)
 }
@@ -34,7 +38,7 @@ async function getTransporter() {
   if (transporterPromise) return transporterPromise
 
   transporterPromise = Promise.resolve().then(() => {
-    if (isTruthy(SMTP_JSON_TRANSPORT)) {
+    if (isTruthy(readSmtpJsonTransportFlag())) {
       return nodemailer.createTransport({
         jsonTransport: true,
       })
