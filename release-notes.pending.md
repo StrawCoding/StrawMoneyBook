@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- (SMB-230) Google Drive 帳本同步導入衝突合併機制：新增 base snapshot 快取與三方合併（base / local / remote），pull 時不再直接覆蓋本機未上傳變更；若尚無 base 但本機有 dirty 變更則以雙向合併保留雙方修改。衝突採較新變更（last-write-wins），設定頁顯示衝突筆數與 warning toast。新增 `threeWayMergeSnapshots` 單元測試與 google-drive-ledger-sync source regression 測試；三語 i18n。
-
 ---
+
+## v1.3.4
+- (SMB-230) Google Drive 帳本同步導入衝突合併機制：新增 base snapshot 快取與三方合併（base / local / remote），pull 時不再直接覆蓋本機未上傳變更；若尚無 base 但本機有 dirty 變更則以雙向合併保留雙方修改。衝突採較新變更（last-write-wins），設定頁顯示衝突筆數與 warning toast。新增 `threeWayMergeSnapshots` 單元測試與 google-drive-ledger-sync source regression 測試；三語 i18n。
 
 ## v1.3.3
 - (SMB-226) 載具重建：依技術文檔 §3.3.2 補齊載具名稱→交易標籤（`buildCarrierTagsJson` + `importSelectedInvoices` 寫入 `tagsJson`）；Step 3 發票清單與 Step 4 確認預覽新增載具 chip（`carrier-chip` / `preview-carrier`）；新增 `einvoice.step3.carrier_label` 三語 i18n；新增 `test/einvoice-carrier.test.js`（5 案例）與 `einvoice-import.test.js` 載具標籤串接測試（2 案例）；Playwright mobile 驗證 Step3 顯示 2 個「手機條碼」chip、Step4 預覽 2 個載具 pill、無相關 console error
