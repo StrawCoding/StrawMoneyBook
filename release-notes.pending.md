@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- (SMB-232) 後端 `updateStore` 全量讀寫瓶頸優化：原本每次 mutation 都會把所有 users / shared_ledgers / referrals 全量 upsert，並對三張表各做一次 `SELECT id` 全表掃描比對刪除，寫入量隨資料量線性成長。改為在 `store.js` 載入時以 id → 序列化快照建立 baseline（`buildStoreBaseline`），寫回時只 upsert「新增或實際變更」的 record、只刪除「實際被移除」的 record，全部仍包在單一 SQLite transaction 內確保原子性，並移除三次全表刪除掃描。mutator API 完全不變，15+ 呼叫端零改動。新增 `backend/test/update-store-row-level.test.js`（用第二連線 trigger 計數驗證單筆變更只觸發 1 次寫入、刪除只移除目標 row），backend 全測試 61 案例綠燈。
-
 ---
+
+## v1.3.10
+- (SMB-232) 後端 `updateStore` 全量讀寫瓶頸優化：原本每次 mutation 都會把所有 users / shared_ledgers / referrals 全量 upsert，並對三張表各做一次 `SELECT id` 全表掃描比對刪除，寫入量隨資料量線性成長。改為在 `store.js` 載入時以 id → 序列化快照建立 baseline（`buildStoreBaseline`），寫回時只 upsert「新增或實際變更」的 record、只刪除「實際被移除」的 record，全部仍包在單一 SQLite transaction 內確保原子性，並移除三次全表刪除掃描。mutator API 完全不變，15+ 呼叫端零改動。新增 `backend/test/update-store-row-level.test.js`（用第二連線 trigger 計數驗證單筆變更只觸發 1 次寫入、刪除只移除目標 row），backend 全測試 61 案例綠燈。
 
 ## v1.3.9
 - (SMB-229) 共享帳本角色權限系統：引入 Owner / Admin / Member / Viewer 四種角色與集中式權限矩陣（`store-shared-ledgers.js`）。Owner 擁有全部權限並可轉移所有權；Admin 可上傳快照與邀請成員、調整 Member/Viewer 角色；Member 可上傳但不可邀請；Viewer 唯讀只能下載。後端每個敏感 endpoint 都改為依角色檢查：snapshot push 禁止 Viewer（403）、Email 邀請與重發禁止 Member/Viewer（403）；新增 `POST /:id/members/:userId/role`（改角色）與 `POST /:id/transfer`（轉移所有權）端點，帳本 detail 回傳成員清單，summary 附帶 `permissions`。前端 `SettingsSharedLedgerPage.vue` 依角色顯示/隱藏分享連結與 Email 邀請、新增「成員與角色」管理區（改角色下拉、轉移所有權）與唯讀提示；背景自動同步對 Viewer 跳過上傳，被降級為 Viewer 時清除 dirty 佇列避免重試風暴。新增後端單元與路由整合測試（權限矩陣、role 指派治理、Viewer 禁 push、Member 禁 invite、改角色、轉移所有權），三語 i18n。
