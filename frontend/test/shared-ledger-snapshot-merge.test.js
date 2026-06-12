@@ -493,6 +493,235 @@ test('threeWayMergeSnapshots: local deleted, remote unchanged → keep deleted (
   assert.equal(mergedSnapshot.tables.accounts.length, 0)
 })
 
+const accountGroupFixture = [{
+  id: 'group_cash',
+  name: '現金',
+  updated_at: '2026-03-19T08:00:00.000Z',
+}]
+
+test('mergeSharedLedgerSnapshots with detectConflicts returns structured merge result (SMB-236)', () => {
+  const local = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '本地名稱',
+      updated_at: '2026-03-19T09:00:00.000Z',
+    }],
+  })
+  const remote = buildSnapshot({
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '遠端名稱',
+      updated_at: '2026-03-19T09:00:00.000Z',
+    }],
+  })
+
+  const result = mergeSharedLedgerSnapshots(local, remote, { detectConflicts: true })
+  assert.equal(typeof result.mergedSnapshot, 'object')
+  assert.equal(Array.isArray(result.conflicts), true)
+  assert.equal(typeof result.hasConflicts, 'boolean')
+  assert.equal(result.mergedSnapshot.tables.categories[0]?.name, '遠端名稱')
+})
+
+test('mergeSharedLedgerSnapshots detects cross-table account coherence conflicts (SMB-236)', () => {
+  const local = buildSnapshot({
+    account_groups: accountGroupFixture,
+    accounts: [{
+      id: 'acc_cash',
+      group_id: 'group_cash',
+      name: '現金',
+      opening_balance_minor: 0,
+      updated_at: '2026-03-19T09:00:00.000Z',
+    }],
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '餐飲',
+      updated_at: '2026-03-19T08:00:00.000Z',
+    }],
+    transactions: [{
+      id: 'tx_local',
+      account_id: 'acc_cash',
+      category_id: 'cat_food',
+      amount_minor: -10000,
+      occurred_at: '2026-03-19T10:00:00.000Z',
+      updated_at: '2026-03-19T10:00:00.000Z',
+    }],
+  })
+  const remote = buildSnapshot({
+    account_groups: accountGroupFixture,
+    accounts: [{
+      id: 'acc_cash',
+      group_id: 'group_cash',
+      name: '現金',
+      opening_balance_minor: 500000,
+      updated_at: '2026-03-19T11:00:00.000Z',
+    }],
+  })
+
+  const { mergedSnapshot, hasConflicts, conflicts } = mergeSharedLedgerSnapshots(local, remote, {
+    detectConflicts: true,
+    prefer: 'remote',
+  })
+
+  assert.equal(hasConflicts, true)
+  assert.ok(conflicts.some((conflict) => conflict.conflictType === 'account_coherence'))
+  assert.equal(mergedSnapshot.tables.accounts[0]?.opening_balance_minor, 500000)
+  assert.equal(mergedSnapshot.tables.transactions.length, 0)
+})
+
+test('mergeSharedLedgerSnapshots keeps transfer legs atomic when both sides changed (SMB-236)', () => {
+  const local = buildSnapshot({
+    account_groups: accountGroupFixture,
+    accounts: [
+      {
+        id: 'acc_a',
+        group_id: 'group_cash',
+        name: 'A',
+        updated_at: '2026-03-19T08:00:00.000Z',
+      },
+      {
+        id: 'acc_b',
+        group_id: 'group_cash',
+        name: 'B',
+        updated_at: '2026-03-19T08:00:00.000Z',
+      },
+    ],
+    transactions: [
+      {
+        id: 'tx_out',
+        type: 'transfer',
+        transfer_group_id: 'xfer_1',
+        account_id: 'acc_a',
+        peer_account_id: 'acc_b',
+        amount_minor: -5000,
+        occurred_at: '2026-03-19T12:00:00.000Z',
+        updated_at: '2026-03-19T12:00:00.000Z',
+      },
+      {
+        id: 'tx_in',
+        type: 'transfer',
+        transfer_group_id: 'xfer_1',
+        account_id: 'acc_b',
+        peer_account_id: 'acc_a',
+        amount_minor: 5000,
+        occurred_at: '2026-03-19T09:00:00.000Z',
+        updated_at: '2026-03-19T09:00:00.000Z',
+      },
+    ],
+  })
+  const remote = buildSnapshot({
+    account_groups: accountGroupFixture,
+    accounts: [
+      {
+        id: 'acc_a',
+        group_id: 'group_cash',
+        name: 'A',
+        updated_at: '2026-03-19T08:00:00.000Z',
+      },
+      {
+        id: 'acc_b',
+        group_id: 'group_cash',
+        name: 'B',
+        updated_at: '2026-03-19T08:00:00.000Z',
+      },
+    ],
+    transactions: [
+      {
+        id: 'tx_out',
+        type: 'transfer',
+        transfer_group_id: 'xfer_1',
+        account_id: 'acc_a',
+        peer_account_id: 'acc_b',
+        amount_minor: -7000,
+        occurred_at: '2026-03-19T11:00:00.000Z',
+        updated_at: '2026-03-19T11:00:00.000Z',
+      },
+      {
+        id: 'tx_in',
+        type: 'transfer',
+        transfer_group_id: 'xfer_1',
+        account_id: 'acc_b',
+        peer_account_id: 'acc_a',
+        amount_minor: 7000,
+        occurred_at: '2026-03-19T11:30:00.000Z',
+        updated_at: '2026-03-19T11:30:00.000Z',
+      },
+    ],
+  })
+
+  const { mergedSnapshot, hasConflicts, conflicts } = mergeSharedLedgerSnapshots(local, remote, {
+    detectConflicts: true,
+    prefer: 'remote',
+  })
+
+  assert.equal(hasConflicts, true)
+  assert.ok(conflicts.some((conflict) => conflict.conflictType === 'transfer_group'))
+  const amounts = mergedSnapshot.tables.transactions.map((row) => row.amount_minor).sort((a, b) => a - b)
+  assert.deepEqual(amounts, [-5000, 5000])
+})
+
+test('threeWayMergeSnapshots detects cross-table account coherence conflicts (SMB-236)', () => {
+  const base = buildSnapshot({
+    account_groups: accountGroupFixture,
+    accounts: [{
+      id: 'acc_cash',
+      group_id: 'group_cash',
+      name: '現金',
+      opening_balance_minor: 0,
+      updated_at: '2026-03-19T08:00:00.000Z',
+    }],
+  })
+  const local = buildSnapshot({
+    account_groups: accountGroupFixture,
+    accounts: [{
+      id: 'acc_cash',
+      group_id: 'group_cash',
+      name: '現金',
+      opening_balance_minor: 0,
+      updated_at: '2026-03-19T08:00:00.000Z',
+    }],
+    category_groups: categoryGroupFixture,
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '餐飲',
+      updated_at: '2026-03-19T08:00:00.000Z',
+    }],
+    transactions: [{
+      id: 'tx_local',
+      account_id: 'acc_cash',
+      category_id: 'cat_food',
+      amount_minor: -10000,
+      occurred_at: '2026-03-19T10:00:00.000Z',
+      updated_at: '2026-03-19T10:00:00.000Z',
+    }],
+  })
+  const remote = buildSnapshot({
+    account_groups: accountGroupFixture,
+    accounts: [{
+      id: 'acc_cash',
+      group_id: 'group_cash',
+      name: '現金',
+      opening_balance_minor: 500000,
+      updated_at: '2026-03-19T11:00:00.000Z',
+    }],
+  })
+
+  const { mergedSnapshot, hasConflicts, conflicts } = threeWayMergeSnapshots(base, local, remote, {
+    prefer: 'remote',
+  })
+
+  assert.equal(hasConflicts, true)
+  assert.ok(conflicts.some((conflict) => conflict.conflictType === 'account_coherence'))
+  assert.equal(mergedSnapshot.tables.accounts[0]?.opening_balance_minor, 500000)
+  assert.equal(mergedSnapshot.tables.transactions.length, 0)
+})
+
 test('threeWayMergeSnapshots: remote added row, base empty → include new row', () => {
   const base = buildSnapshot({})
   const local = buildSnapshot({})

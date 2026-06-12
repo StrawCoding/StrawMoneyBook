@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.8
+- (SMB-236) 修復共同帳本 / Google Drive 快照合併仍可能靜默跨表覆蓋：`snapshot-merge.js` 新增 merge unit（帳戶連帶交易、轉帳雙腿、借貸還款、請款與預支 bundle），偵測到同一 unit 內本機與遠端混用時改為 all-or-nothing 整組採用較新一方並記錄衝突；`mergeSharedLedgerSnapshots` 補上 `detectConflicts` 結構化回傳，Google Drive 雙向合併與共同帳本 version conflict 路徑都會回報衝突筆數。新增 cross-table 單元測試與 google-drive source regression。
+
 ## v1.3.7
 - (SMB-235) 修復 Google 帳號切換後可能靜默推送到不同帳號：`ensureGoogleAccess` 以綁定 `accountEmail` 比對目前 Google profile，不符時拋出 `GOOGLE_ACCOUNT_SWITCHED` 並阻擋 push/pull；背景同步改寫入 `pendingAccountSwitch` + `account_mismatch` 狀態、記錄 `[google-ledger-sync] account switched` log，並透過 `google-ledger-sync:account-switched` 事件顯示 warning toast。`SettingsGoogleDriveLedgerSyncPage.vue` 顯示綁定帳號與待確認切換提示，手動同步/啟用時以確認對話框要求改綁定後才繼續。補齊三語 i18n；新增 google-drive-ledger-sync source regression 測試。
 

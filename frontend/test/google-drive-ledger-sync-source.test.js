@@ -26,6 +26,7 @@ test('Google Drive 帳本同步拉回時使用三方合併與 base snapshot，�
   assert.match(source, /threeWayMergeSnapshots/)
   assert.match(source, /function resolvePullSnapshot/)
   assert.match(source, /mergeSharedLedgerSnapshots/)
+  assert.match(source, /detectConflicts: true/)
   assert.match(source, /setBaseSnapshot\(normalizedLedgerId, snapshot\)/)
   assert.match(source, /setBaseSnapshot\(normalizedLedgerId, mergeMeta\.snapshot\)/)
   assert.match(source, /lastConflictCount/)

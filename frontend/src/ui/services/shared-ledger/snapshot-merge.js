@@ -308,20 +308,330 @@ function buildTombstoneMap(rows = []) {
   return tombstoneMap
 }
 
+function rowEquals(leftRow, rightRow) {
+  return JSON.stringify(leftRow) === JSON.stringify(rightRow)
+}
+
 function pickPreferredRow(leftRow, rightRow, preferredSource = 'remote') {
-  if (!leftRow) return rightRow ? cloneJson(rightRow) : null
-  if (!rightRow) return cloneJson(leftRow)
+  return pickPreferredRowWithSource(leftRow, rightRow, preferredSource).row
+}
+
+function decisionKey(tableName, rowKey) {
+  return `${tableName}::${rowKey}`
+}
+
+function pickPreferredRowWithSource(leftRow, rightRow, preferredSource = 'remote') {
+  if (!leftRow && !rightRow) return { row: null, source: 'none' }
+  if (!leftRow) return { row: cloneJson(rightRow), source: 'remote' }
+  if (!rightRow) return { row: cloneJson(leftRow), source: 'local' }
+  if (rowEquals(leftRow, rightRow)) return { row: cloneJson(leftRow), source: 'same' }
 
   const leftUpdatedMs = getRowUpdatedAt(leftRow)
   const rightUpdatedMs = getRowUpdatedAt(rightRow)
-  if (leftUpdatedMs !== rightUpdatedMs) {
-    return cloneJson(leftUpdatedMs > rightUpdatedMs ? leftRow : rightRow)
+  if (leftUpdatedMs > rightUpdatedMs) {
+    return { row: cloneJson(leftRow), source: 'local' }
+  }
+  if (rightUpdatedMs > leftUpdatedMs) {
+    return { row: cloneJson(rightRow), source: 'remote' }
   }
 
-  if (preferredSource === 'local') {
-    return cloneJson(leftRow)
+  const source = preferredSource === 'local' ? 'local' : 'remote'
+  return {
+    row: cloneJson(source === 'local' ? leftRow : rightRow),
+    source,
   }
-  return cloneJson(rightRow)
+}
+
+function findRowInTables(tables, tableName, rowKey) {
+  for (const [index, row] of listTableRows({ tables }, tableName).entries()) {
+    if (getRowKey(tableName, row, index) === rowKey) {
+      return row
+    }
+  }
+  return null
+}
+
+function addMergeUnitMember(unitMap, type, unitKey, tableName, rowKey) {
+  const normalizedUnitKey = normalizeText(unitKey)
+  if (!normalizedUnitKey || !tableName || !rowKey) return
+
+  const mapKey = `${type}::${normalizedUnitKey}`
+  if (!unitMap.has(mapKey)) {
+    unitMap.set(mapKey, {
+      type,
+      unitKey: normalizedUnitKey,
+      members: [],
+    })
+  }
+
+  const unit = unitMap.get(mapKey)
+  if (!unit.members.some((member) => member.tableName === tableName && member.rowKey === rowKey)) {
+    unit.members.push({ tableName, rowKey })
+  }
+}
+
+function collectMergeUnits(localTables, remoteTables) {
+  const unitMap = new Map()
+
+  for (const tables of [localTables, remoteTables]) {
+    for (const row of listTableRows({ tables }, 'transactions')) {
+      const transferGroupId = normalizeText(row?.transfer_group_id)
+      if (!transferGroupId) continue
+      const rowKey = getRowKey('transactions', row)
+      addMergeUnitMember(unitMap, 'transfer_group', transferGroupId, 'transactions', rowKey)
+    }
+  }
+
+  const accountIds = new Set()
+  for (const tables of [localTables, remoteTables]) {
+    for (const row of listTableRows({ tables }, 'accounts')) {
+      const accountId = normalizeText(row?.id)
+      if (accountId) accountIds.add(accountId)
+    }
+  }
+
+  for (const accountId of accountIds) {
+    for (const tables of [localTables, remoteTables]) {
+      const accountRow = listTableRows({ tables }, 'accounts')
+        .find((row) => normalizeText(row?.id) === accountId)
+      if (accountRow) {
+        addMergeUnitMember(
+          unitMap,
+          'account_coherence',
+          accountId,
+          'accounts',
+          getRowKey('accounts', accountRow),
+        )
+      }
+
+      for (const row of listTableRows({ tables }, 'transactions')) {
+        if (
+          normalizeText(row?.account_id) === accountId
+          || normalizeText(row?.peer_account_id) === accountId
+        ) {
+          addMergeUnitMember(
+            unitMap,
+            'account_coherence',
+            accountId,
+            'transactions',
+            getRowKey('transactions', row),
+          )
+        }
+      }
+    }
+  }
+
+  for (const tables of [localTables, remoteTables]) {
+    for (const payment of listTableRows({ tables }, 'loan_payments')) {
+      const unitKey = normalizeText(payment?.id) || getRowKey('loan_payments', payment)
+      addMergeUnitMember(unitMap, 'loan_payment_bundle', unitKey, 'loan_payments', getRowKey('loan_payments', payment))
+
+      for (const txId of [payment?.generated_tx_id, payment?.generated_interest_tx_id]) {
+        const normalizedTxId = normalizeText(txId)
+        if (!normalizedTxId) continue
+        const txRow = listTableRows({ tables }, 'transactions')
+          .find((row) => normalizeText(row?.id) === normalizedTxId)
+        if (txRow) {
+          addMergeUnitMember(
+            unitMap,
+            'loan_payment_bundle',
+            unitKey,
+            'transactions',
+            getRowKey('transactions', txRow),
+          )
+        }
+      }
+    }
+  }
+
+  for (const tables of [localTables, remoteTables]) {
+    for (const reimbursement of listTableRows({ tables }, 'reimbursements')) {
+      const reimbursementId = normalizeText(reimbursement?.id)
+      if (!reimbursementId) continue
+      addMergeUnitMember(
+        unitMap,
+        'reimbursement_bundle',
+        reimbursementId,
+        'reimbursements',
+        getRowKey('reimbursements', reimbursement),
+      )
+
+      for (const item of listTableRows({ tables }, 'reimbursement_items')) {
+        if (normalizeText(item?.reimbursement_id) !== reimbursementId) continue
+        addMergeUnitMember(
+          unitMap,
+          'reimbursement_bundle',
+          reimbursementId,
+          'reimbursement_items',
+          getRowKey('reimbursement_items', item),
+        )
+      }
+    }
+  }
+
+  for (const tables of [localTables, remoteTables]) {
+    for (const advance of listTableRows({ tables }, 'reimbursement_advances')) {
+      const advanceId = normalizeText(advance?.id)
+      if (!advanceId) continue
+      addMergeUnitMember(
+        unitMap,
+        'advance_bundle',
+        advanceId,
+        'reimbursement_advances',
+        getRowKey('reimbursement_advances', advance),
+      )
+
+      for (const usage of listTableRows({ tables }, 'reimbursement_advance_usages')) {
+        if (normalizeText(usage?.advance_id) !== advanceId) continue
+        addMergeUnitMember(
+          unitMap,
+          'advance_bundle',
+          advanceId,
+          'reimbursement_advance_usages',
+          getRowKey('reimbursement_advance_usages', usage),
+        )
+      }
+    }
+  }
+
+  return Array.from(unitMap.values())
+}
+
+function pickUnitWinningSource(unit, localTables, remoteTables, prefer) {
+  let localMax = 0
+  let remoteMax = 0
+
+  for (const member of unit.members) {
+    const localRow = findRowInTables(localTables, member.tableName, member.rowKey)
+    const remoteRow = findRowInTables(remoteTables, member.tableName, member.rowKey)
+    if (localRow) localMax = Math.max(localMax, getRowUpdatedAt(localRow))
+    if (remoteRow) remoteMax = Math.max(remoteMax, getRowUpdatedAt(remoteRow))
+  }
+
+  if (localMax > remoteMax) return 'local'
+  if (remoteMax > localMax) return 'remote'
+  return prefer === 'local' ? 'local' : 'remote'
+}
+
+function setMergedTableRow(mergedTables, tableName, rowKey, row) {
+  const nextRows = (mergedTables[tableName] ?? [])
+    .filter((existingRow, index) => getRowKey(tableName, existingRow, index) !== rowKey)
+  if (row) nextRows.push(cloneJson(row))
+  mergedTables[tableName] = sortRows(tableName, nextRows)
+}
+
+function resolveCrossTableConflicts({
+  mergedTables,
+  rowDecisions,
+  localTables,
+  remoteTables,
+  prefer,
+}) {
+  const conflicts = []
+  const nextTables = { ...mergedTables }
+
+  for (const unit of collectMergeUnits(localTables, remoteTables)) {
+    const activeSources = new Set()
+    for (const member of unit.members) {
+      const decision = rowDecisions.get(decisionKey(member.tableName, member.rowKey))
+      if (decision?.source === 'local' || decision?.source === 'remote') {
+        activeSources.add(decision.source)
+      }
+    }
+    if (activeSources.size < 2) continue
+
+    const winningSource = pickUnitWinningSource(unit, localTables, remoteTables, prefer)
+    conflicts.push({
+      tableName: unit.members[0]?.tableName ?? '',
+      rowKey: unit.unitKey,
+      conflictType: unit.type,
+      unitKey: unit.unitKey,
+      resolution: winningSource,
+    })
+
+    const sourceTables = winningSource === 'local' ? localTables : remoteTables
+    for (const member of unit.members) {
+      const winnerRow = findRowInTables(sourceTables, member.tableName, member.rowKey)
+      setMergedTableRow(nextTables, member.tableName, member.rowKey, winnerRow)
+      rowDecisions.set(decisionKey(member.tableName, member.rowKey), {
+        source: winnerRow ? winningSource : 'none',
+        row: winnerRow ? cloneJson(winnerRow) : null,
+      })
+    }
+  }
+
+  return { conflicts, mergedTables: nextTables }
+}
+
+function applyTombstonesToMergedRows(tableName, rowMap, tombstoneMap) {
+  const mergedRows = []
+  for (const [rowKey, row] of rowMap.entries()) {
+    const tombstoneKey = `${tableName}::${rowKey}`
+    const tombstone = tombstoneMap.get(tombstoneKey)
+    const rowUpdatedMs = getRowUpdatedAt(row)
+    const deletedMs = toEpochMs(tombstone?.deleted_at)
+
+    if (tombstone && Number.isFinite(deletedMs) && deletedMs >= rowUpdatedMs) {
+      continue
+    }
+
+    if (tombstone && rowUpdatedMs > deletedMs) {
+      tombstoneMap.delete(tombstoneKey)
+    }
+
+    mergedRows.push(row)
+  }
+  return sortRows(tableName, mergedRows)
+}
+
+function mergeSnapshotTablesTwoWay(normalizedLocalSnapshot, normalizedRemoteSnapshot, options = {}) {
+  const preferredSource = options?.prefer === 'local' ? 'local' : 'remote'
+  const tableNames = getAllTableNames(normalizedLocalSnapshot, normalizedRemoteSnapshot)
+  const combinedTombstones = buildTombstoneMap([
+    ...listTableRows(normalizedLocalSnapshot, 'deleted_log'),
+    ...listTableRows(normalizedRemoteSnapshot, 'deleted_log'),
+  ])
+  const mergedTables = {}
+  const rowDecisions = new Map()
+
+  for (const tableName of tableNames) {
+    const rowMap = new Map()
+
+    for (const [index, row] of listTableRows(normalizedLocalSnapshot, tableName).entries()) {
+      const rowKey = getRowKey(tableName, row, index)
+      const clonedRow = cloneJson(row)
+      rowMap.set(rowKey, clonedRow)
+      rowDecisions.set(decisionKey(tableName, rowKey), { source: 'local', row: clonedRow })
+    }
+
+    for (const [index, row] of listTableRows(normalizedRemoteSnapshot, tableName).entries()) {
+      const rowKey = getRowKey(tableName, row, index)
+      const picked = pickPreferredRowWithSource(rowMap.get(rowKey), row, preferredSource)
+      if (picked.row) {
+        rowMap.set(rowKey, picked.row)
+      } else {
+        rowMap.delete(rowKey)
+      }
+      rowDecisions.set(decisionKey(tableName, rowKey), picked)
+    }
+
+    mergedTables[tableName] = applyTombstonesToMergedRows(tableName, rowMap, combinedTombstones)
+  }
+
+  mergedTables.deleted_log = sortDeletedLogRows(Array.from(combinedTombstones.values()))
+
+  const crossTable = resolveCrossTableConflicts({
+    mergedTables,
+    rowDecisions,
+    localTables: normalizedLocalSnapshot.tables,
+    remoteTables: normalizedRemoteSnapshot.tables,
+    prefer: preferredSource,
+  })
+
+  return {
+    mergedTables: crossTable.mergedTables,
+    conflicts: crossTable.conflicts,
+  }
 }
 
 function canonicalizeSnapshot(snapshot) {
@@ -396,63 +706,28 @@ export function mergeSharedLedgerSnapshots(localSnapshot, remoteSnapshot, option
     throw new Error('共同帳本快照 ledger_id 不一致，無法合併')
   }
 
-  const preferredSource = options?.prefer === 'local' ? 'local' : 'remote'
-  const tableNames = getAllTableNames(normalizedLocalSnapshot, normalizedRemoteSnapshot)
-  const combinedTombstones = buildTombstoneMap([
-    ...listTableRows(normalizedLocalSnapshot, 'deleted_log'),
-    ...listTableRows(normalizedRemoteSnapshot, 'deleted_log'),
-  ])
-  const mergedTables = {}
+  const { mergedTables, conflicts } = mergeSnapshotTablesTwoWay(
+    normalizedLocalSnapshot,
+    normalizedRemoteSnapshot,
+    options,
+  )
 
-  for (const tableName of tableNames) {
-    const rowMap = new Map()
-
-    for (const [index, row] of listTableRows(normalizedLocalSnapshot, tableName).entries()) {
-      rowMap.set(getRowKey(tableName, row, index), cloneJson(row))
-    }
-
-    for (const [index, row] of listTableRows(normalizedRemoteSnapshot, tableName).entries()) {
-      const rowKey = getRowKey(tableName, row, index)
-      const currentRow = rowMap.get(rowKey)
-      rowMap.set(
-        rowKey,
-        pickPreferredRow(currentRow, row, preferredSource === 'local' ? 'local' : 'remote'),
-      )
-    }
-
-    const mergedRows = []
-    for (const [rowKey, row] of rowMap.entries()) {
-      const tombstoneKey = `${tableName}::${rowKey}`
-      const tombstone = combinedTombstones.get(tombstoneKey)
-      const rowUpdatedMs = getRowUpdatedAt(row)
-      const deletedMs = toEpochMs(tombstone?.deleted_at)
-
-      if (tombstone && Number.isFinite(deletedMs) && deletedMs >= rowUpdatedMs) {
-        continue
-      }
-
-      if (tombstone && rowUpdatedMs > deletedMs) {
-        combinedTombstones.delete(tombstoneKey)
-      }
-
-      mergedRows.push(row)
-    }
-
-    mergedTables[tableName] = sortRows(tableName, mergedRows)
-  }
-
-  mergedTables.deleted_log = sortDeletedLogRows(Array.from(combinedTombstones.values()))
-
-  return canonicalizeSnapshot({
+  const mergedSnapshot = canonicalizeSnapshot({
     schema_version: normalizedRemoteSnapshot.schema_version ?? normalizedLocalSnapshot.schema_version ?? null,
     ledger_id: ledgerId,
     exported_at: new Date().toISOString(),
     tables: mergedTables,
   })
-}
 
-function rowEquals(leftRow, rightRow) {
-  return JSON.stringify(leftRow) === JSON.stringify(rightRow)
+  if (options?.detectConflicts) {
+    return {
+      mergedSnapshot,
+      conflicts,
+      hasConflicts: conflicts.length > 0,
+    }
+  }
+
+  return mergedSnapshot
 }
 
 export function threeWayMergeSnapshots(baseSnapshot, localSnapshot, remoteSnapshot, options = {}) {
@@ -478,6 +753,7 @@ export function threeWayMergeSnapshots(baseSnapshot, localSnapshot, remoteSnapsh
   ])
   const mergedTables = {}
   const conflicts = []
+  const rowDecisions = new Map()
 
   for (const tableName of tableNames) {
     const baseRowMap = new Map()
@@ -496,7 +772,7 @@ export function threeWayMergeSnapshots(baseSnapshot, localSnapshot, remoteSnapsh
     }
 
     const allKeys = new Set([...baseRowMap.keys(), ...localRowMap.keys(), ...remoteRowMap.keys()])
-    const mergedRows = []
+    const rowMap = new Map()
 
     for (const rowKey of allKeys) {
       const baseRow = baseRowMap.get(rowKey) ?? null
@@ -504,24 +780,29 @@ export function threeWayMergeSnapshots(baseSnapshot, localSnapshot, remoteSnapsh
       const remoteRow = remoteRowMap.get(rowKey) ?? null
 
       let chosenRow = null
-      let isConflict = false
+      let chosenSource = 'same'
 
       if (rowEquals(localRow, baseRow)) {
         chosenRow = remoteRow
+        chosenSource = remoteRow && !rowEquals(remoteRow, baseRow) ? 'remote' : 'same'
       } else if (rowEquals(remoteRow, baseRow)) {
         chosenRow = localRow
+        chosenSource = localRow && !rowEquals(localRow, baseRow) ? 'local' : 'same'
       } else if (rowEquals(localRow, remoteRow)) {
         chosenRow = localRow
+        chosenSource = 'same'
       } else {
-        isConflict = true
         const localUpdatedMs = getRowUpdatedAt(localRow)
         const remoteUpdatedMs = getRowUpdatedAt(remoteRow)
         if (localUpdatedMs !== remoteUpdatedMs) {
+          const remoteWins = remoteUpdatedMs > localUpdatedMs
           chosenRow = prefer === 'local'
             ? (localUpdatedMs >= remoteUpdatedMs ? localRow : remoteRow)
             : (remoteUpdatedMs >= localUpdatedMs ? remoteRow : localRow)
+          chosenSource = remoteWins ? 'remote' : 'local'
         } else {
           chosenRow = prefer === 'local' ? localRow : remoteRow
+          chosenSource = prefer
         }
         conflicts.push({
           tableName,
@@ -534,34 +815,34 @@ export function threeWayMergeSnapshots(baseSnapshot, localSnapshot, remoteSnapsh
         })
       }
 
-      if (!chosenRow) continue
-
-      const tombstoneKey = `${tableName}::${rowKey}`
-      const tombstone = combinedTombstones.get(tombstoneKey)
-      const rowUpdatedMs = getRowUpdatedAt(chosenRow)
-      const deletedMs = toEpochMs(tombstone?.deleted_at)
-
-      if (tombstone && Number.isFinite(deletedMs) && deletedMs >= rowUpdatedMs) {
+      if (!chosenRow) {
+        rowDecisions.set(decisionKey(tableName, rowKey), { source: 'none', row: null })
         continue
       }
 
-      if (tombstone && rowUpdatedMs > deletedMs) {
-        combinedTombstones.delete(tombstoneKey)
-      }
-
-      mergedRows.push(chosenRow)
+      rowMap.set(rowKey, chosenRow)
+      rowDecisions.set(decisionKey(tableName, rowKey), { source: chosenSource, row: chosenRow })
     }
 
-    mergedTables[tableName] = sortRows(tableName, mergedRows)
+    mergedTables[tableName] = applyTombstonesToMergedRows(tableName, rowMap, combinedTombstones)
   }
 
   mergedTables.deleted_log = sortDeletedLogRows(Array.from(combinedTombstones.values()))
+
+  const crossTable = resolveCrossTableConflicts({
+    mergedTables,
+    rowDecisions,
+    localTables: normalizedLocal.tables,
+    remoteTables: normalizedRemote.tables,
+    prefer,
+  })
+  conflicts.push(...crossTable.conflicts)
 
   const mergedSnapshot = canonicalizeSnapshot({
     schema_version: normalizedRemote.schema_version ?? normalizedLocal.schema_version ?? normalizedBase.schema_version ?? null,
     ledger_id: ledgerId,
     exported_at: new Date().toISOString(),
-    tables: mergedTables,
+    tables: crossTable.mergedTables,
   })
 
   return {
@@ -582,6 +863,8 @@ export function buildMergeLog(conflicts = [], options = {}) {
     conflicts: normalizedConflicts.map((conflict) => ({
       tableName: normalizeText(conflict?.tableName),
       rowKey: normalizeText(conflict?.rowKey),
+      conflictType: normalizeText(conflict?.conflictType) || 'row',
+      unitKey: normalizeText(conflict?.unitKey),
       resolution: normalizeText(conflict?.resolution) || prefer,
     })),
     recordedAt: new Date().toISOString(),

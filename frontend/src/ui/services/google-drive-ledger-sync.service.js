@@ -593,11 +593,14 @@ function resolvePullSnapshot({
   }
 
   if (dirtyMarkedAt) {
-    const mergedSnapshot = mergeSharedLedgerSnapshots(localSnapshot, remoteSnapshot, { prefer: 'remote' })
+    const twoWay = mergeSharedLedgerSnapshots(localSnapshot, remoteSnapshot, {
+      prefer: 'remote',
+      detectConflicts: true,
+    })
     return {
-      snapshot: mergedSnapshot,
-      hasConflicts: false,
-      conflictCount: 0,
+      snapshot: twoWay.mergedSnapshot,
+      hasConflicts: twoWay.hasConflicts,
+      conflictCount: twoWay.conflicts.length,
       mergeMode: 'two_way',
     }
   }
