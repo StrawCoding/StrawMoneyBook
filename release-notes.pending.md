@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- (SMB-237) 報銷項目可自訂報銷金額：報銷清單未報銷項目新增「報銷金額」設定（底部輸入面板，可輸入元為單位的報銷金額或一鍵重設為原始支出），交易表新增 `reimburse_target_minor` 欄位（migration 036）儲存設定值。設定後匯出 CSV、請款單導入與報銷待處理 / 已報銷金額計算都改以設定金額為準（未設定時維持以原始支出計算的舊行為）；匯出 CSV 另新增「報銷金額」欄位。新增 `reimbursement-claim-amount.test.js`（含 alias loader 行為測試 9 案例）與 db-migrate 註冊測試。
-
 ---
+
+## v1.3.11
+- (SMB-237) 報銷項目可自訂報銷金額：報銷清單未報銷項目新增「報銷金額」設定（底部輸入面板，可輸入元為單位的報銷金額或一鍵重設為原始支出），交易表新增 `reimburse_target_minor` 欄位（migration 036）儲存設定值。設定後匯出 CSV、請款單導入與報銷待處理 / 已報銷金額計算都改以設定金額為準（未設定時維持以原始支出計算的舊行為）；匯出 CSV 另新增「報銷金額」欄位。新增 `reimbursement-claim-amount.test.js`（含 alias loader 行為測試 9 案例）與 db-migrate 註冊測試。
 
 ## v1.3.10
 - (SMB-232) 後端 `updateStore` 全量讀寫瓶頸優化：原本每次 mutation 都會把所有 users / shared_ledgers / referrals 全量 upsert，並對三張表各做一次 `SELECT id` 全表掃描比對刪除，寫入量隨資料量線性成長。改為在 `store.js` 載入時以 id → 序列化快照建立 baseline（`buildStoreBaseline`），寫回時只 upsert「新增或實際變更」的 record、只刪除「實際被移除」的 record，全部仍包在單一 SQLite transaction 內確保原子性，並移除三次全表刪除掃描。mutator API 完全不變，15+ 呼叫端零改動。新增 `backend/test/update-store-row-level.test.js`（用第二連線 trigger 計數驗證單筆變更只觸發 1 次寫入、刪除只移除目標 row），backend 全測試 61 案例綠燈。
