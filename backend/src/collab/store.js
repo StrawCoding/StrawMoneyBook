@@ -20,11 +20,20 @@ import {
 } from './store-membership.js'
 import {
   buildSharedLedgerInvitationSummary as buildSharedLedgerInvitationSummaryValue,
+  buildSharedLedgerMemberList as buildSharedLedgerMemberListValue,
   buildSharedLedgerSummary as buildSharedLedgerSummaryValue,
+  canAssignMemberRole,
+  canInviteMembers,
+  canManageMembers,
+  canPushSnapshot,
+  canTransferOwnership,
   findPendingInvitationForEmail as findPendingInvitationForEmailValue,
   getMemberRole as getMemberRoleValue,
+  getSharedLedgerPermissions,
   isSharedLedgerMember as isSharedLedgerMemberValue,
   listPendingSharedLedgerInvitationsForUser as listPendingSharedLedgerInvitationsForUserValue,
+  normalizeRole,
+  SHARED_LEDGER_ROLES,
   validateSnapshot as validateSnapshotValue,
 } from './store-shared-ledgers.js'
 
@@ -795,6 +804,10 @@ function buildSharedLedgerInvitationSummary(sharedLedger, invitation, data) {
   return buildSharedLedgerInvitationSummaryValue(sharedLedger, invitation, data, { findUserById })
 }
 
+function buildSharedLedgerMemberList(sharedLedger, data) {
+  return buildSharedLedgerMemberListValue(sharedLedger, data, { findUserById })
+}
+
 function listPendingSharedLedgerInvitationsForUser(data, user) {
   return listPendingSharedLedgerInvitationsForUserValue(data, user, {
     normalizeEmail,
@@ -930,7 +943,13 @@ export {
   applyMembershipGrant,
   buildPublicUserProfile,
   buildSharedLedgerInvitationSummary,
+  buildSharedLedgerMemberList,
   buildSharedLedgerSummary,
+  canAssignMemberRole,
+  canInviteMembers,
+  canManageMembers,
+  canPushSnapshot,
+  canTransferOwnership,
   createAuthNonce,
   createId,
   createInviteCode,
@@ -949,6 +968,9 @@ export {
   hashSensitiveToken,
   getMemberRole,
   getMembershipGrantSummary,
+  getSharedLedgerPermissions,
+  normalizeRole,
+  SHARED_LEDGER_ROLES,
   isAdminEmail,
   isAdminUser,
   isSharedLedgerMember,

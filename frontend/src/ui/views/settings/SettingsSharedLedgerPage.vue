@@ -172,9 +172,12 @@
                 <div class="info-block">
                   <strong>{{ currentRemoteLedger?.name || activeLedgerMeta.remote_name || '-' }}</strong>
                   <p class="muted compact">
-                    {{ t('settings_shared_ledgers.remote_meta', { role: currentRemoteLedger?.role || activeLedgerMeta.role || '-' }, '{role}') }}
+                    {{ t('settings_shared_ledgers.my_role', '我的角色') }}：{{ getRoleLabel(currentRole) }}
                   </p>
-                  <p class="muted compact">
+                  <p v-if="currentRole === 'viewer'" class="muted compact">
+                    {{ t('settings_shared_ledgers.viewer_hint', '你是唯讀成員，只能下載最新資料，無法上傳變更或邀請成員。') }}
+                  </p>
+                  <p v-else class="muted compact">
                     {{ t('settings_shared_ledgers.auto_sync_hint', '已啟用背景同步：本機變更會自動上傳，並在開啟 App 時檢查遠端最新資料。') }}
                   </p>
                 </div>
@@ -194,6 +197,7 @@
                   <span>{{ t('settings_shared_ledgers.auto_sync', '資料變更後自動同步') }}</span>
                 </label>
 
+                <template v-if="canInviteMembers">
                 <div class="share-link-box">
                   <label class="field">
                     {{ t('settings_shared_ledgers.share_link', '共享加入連結') }}
@@ -295,6 +299,51 @@
                       </div>
                     </li>
                   </ul>
+                </div>
+                </template>
+
+                <div v-if="canManageMembers" class="stack internal-stack member-manage-box">
+                  <div class="section-head">
+                    <strong>{{ t('settings_shared_ledgers.members_title', '成員與角色') }}</strong>
+                    <button class="btn" :disabled="membersLoading || apiUnavailable" @click="loadLedgerMembers">
+                      {{ membersLoading ? t('settings_shared_ledgers.loading', '載入中...') : t('settings_shared_ledgers.refresh', '重新整理') }}
+                    </button>
+                  </div>
+                  <ul v-if="ledgerMembers.length" class="remote-list">
+                    <li v-for="member in ledgerMembers" :key="member.user_id" class="remote-item">
+                      <div class="remote-main">
+                        <div class="stack internal-stack">
+                          <strong>{{ member.display_name || member.email || member.user_id }}</strong>
+                          <p class="muted compact">{{ member.email }}</p>
+                          <p class="muted compact">{{ t('settings_shared_ledgers.member_role', '角色') }}：{{ getRoleLabel(member.role) }}</p>
+                        </div>
+                        <div class="remote-actions">
+                          <select
+                            v-if="!member.is_owner"
+                            class="input role-select"
+                            :value="member.role"
+                            :disabled="memberRoleBusyId === member.user_id || apiUnavailable"
+                            @change="changeMemberRole(member, $event.target.value)"
+                          >
+                            <option v-for="roleOption in getAssignableRoles(member)" :key="roleOption" :value="roleOption">
+                              {{ getRoleLabel(roleOption) }}
+                            </option>
+                          </select>
+                          <button
+                            v-if="canTransferOwnership && !member.is_owner"
+                            class="btn"
+                            :disabled="memberTransferBusyId === member.user_id || apiUnavailable"
+                            @click="transferOwnership(member)"
+                          >
+                            {{ t('settings_shared_ledgers.transfer_ownership', '轉移所有權') }}
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  </ul>
+                  <p v-else class="muted compact">
+                    {{ t('settings_shared_ledgers.members_empty', '目前只有你一位成員。') }}
+                  </p>
                 </div>
               </template>
 
@@ -420,11 +469,14 @@ import {
   inviteRemoteSharedLedgerByEmail,
   listOutgoingSharedLedgerInvitations,
   listRemoteSharedLedgers,
+  listSharedLedgerMembers,
   publishLedgerAsShared,
   resendRemoteSharedLedgerInvitation,
   setSharedLedgerAutoSyncEnabled,
   stopSharingLocalLedger,
   stopSharingRemoteSharedLedger,
+  transferRemoteSharedLedgerOwnership,
+  updateRemoteSharedLedgerMemberRole,
 } from '@/ui/services/shared-ledger.service'
 
 const route = useRoute()
@@ -452,6 +504,11 @@ const outgoingInvitations = ref([])
 const emailInviteBusy = ref(false)
 const resendInviteBusyId = ref('')
 const trialActivating = ref(false)
+const ledgerMembers = ref([])
+const membersLoading = ref(false)
+const memberRoleBusyId = ref('')
+const memberTransferBusyId = ref('')
+const ASSIGNABLE_ROLES = ['admin', 'member', 'viewer']
 const pendingInviteLinkCode = ref(getPendingSharedLedgerInviteCode())
 const inviteLinkJoining = ref(false)
 const lastAutoJoinInviteCode = ref('')
@@ -497,6 +554,11 @@ const currentRemoteLedger = computed(() => {
 const currentInviteCode = computed(() => String(currentRemoteLedger.value?.invite_code ?? activeLedgerMeta.value?.invite_code ?? '').trim())
 const currentShareLink = computed(() => buildSharedLedgerInviteLink(currentInviteCode.value))
 const activeSharedLedgerId = computed(() => String(activeLedgerMeta.value?.shared_ledger_id ?? '').trim())
+const currentPermissions = computed(() => currentRemoteLedger.value?.permissions ?? {})
+const currentRole = computed(() => String(currentRemoteLedger.value?.role ?? activeLedgerMeta.value?.role ?? '').trim().toLowerCase())
+const canInviteMembers = computed(() => Boolean(currentPermissions.value.can_invite))
+const canManageMembers = computed(() => Boolean(currentPermissions.value.can_manage_members))
+const canTransferOwnership = computed(() => Boolean(currentPermissions.value.can_transfer_ownership))
 const canJoinPendingInviteLink = computed(() => Boolean(
   pendingInviteLinkCode.value
   && sessionUser.value
@@ -579,6 +641,7 @@ async function loadRemoteLedgers() {
     remoteLedgers.value = Array.isArray(data?.items) ? data.items : []
     pendingInvitations.value = Array.isArray(data?.pendingInvitations) ? data.pendingInvitations : []
     await loadOutgoingInvitations()
+    await loadLedgerMembers()
   } catch (error) {
     uiStore.pushToast(error.message || t('settings_shared_ledgers.load_failed', '載入共同帳本失敗'), 'error')
   } finally {
@@ -598,6 +661,80 @@ async function loadOutgoingInvitations() {
   } catch (error) {
     console.warn('[shared-ledger] load outgoing invitations failed', error)
     outgoingInvitations.value = []
+  }
+}
+
+function getRoleLabel(role) {
+  const normalized = String(role ?? '').trim().toLowerCase()
+  if (normalized === 'owner') return t('settings_shared_ledgers.role.owner', '擁有者')
+  if (normalized === 'admin') return t('settings_shared_ledgers.role.admin', '管理員')
+  if (normalized === 'viewer') return t('settings_shared_ledgers.role.viewer', '唯讀成員')
+  return t('settings_shared_ledgers.role.member', '一般成員')
+}
+
+function getAssignableRoles(member) {
+  // Admins can only toggle member<->viewer; owners can assign admin/member/viewer.
+  if (canTransferOwnership.value) return ASSIGNABLE_ROLES
+  const current = String(member?.role ?? '').trim().toLowerCase()
+  if (current === 'admin') return ['admin']
+  return ['member', 'viewer']
+}
+
+async function loadLedgerMembers() {
+  const sharedLedgerId = activeSharedLedgerId.value
+  if (!sharedLedgerId || apiUnavailable.value || !hasMembershipAccess.value || !canManageMembers.value) {
+    ledgerMembers.value = []
+    return
+  }
+
+  membersLoading.value = true
+  try {
+    const data = await listSharedLedgerMembers(sharedLedgerId)
+    ledgerMembers.value = Array.isArray(data?.members) ? data.members : []
+  } catch (error) {
+    console.warn('[shared-ledger] load members failed', error)
+    ledgerMembers.value = []
+  } finally {
+    membersLoading.value = false
+  }
+}
+
+async function changeMemberRole(member, nextRole) {
+  const sharedLedgerId = activeSharedLedgerId.value
+  const memberUserId = String(member?.user_id ?? '').trim()
+  const normalizedRole = String(nextRole ?? '').trim().toLowerCase()
+  if (!sharedLedgerId || !memberUserId || !normalizedRole || apiUnavailable.value) return
+  if (normalizedRole === String(member?.role ?? '').trim().toLowerCase()) return
+
+  memberRoleBusyId.value = memberUserId
+  try {
+    const result = await updateRemoteSharedLedgerMemberRole(sharedLedgerId, memberUserId, normalizedRole)
+    ledgerMembers.value = Array.isArray(result?.members) ? result.members : ledgerMembers.value
+    uiStore.pushToast(t('settings_shared_ledgers.toast.role_updated', '成員角色已更新'))
+  } catch (error) {
+    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.role_update_failed', '更新成員角色失敗'), 'error')
+    await loadLedgerMembers()
+  } finally {
+    memberRoleBusyId.value = ''
+  }
+}
+
+function transferOwnership(member) {
+  const memberUserId = String(member?.user_id ?? '').trim()
+  if (!memberUserId || !canTransferOwnership.value || apiUnavailable.value) return
+  confirmDialog.value = {
+    open: true,
+    mode: 'transfer-ownership',
+    title: t('settings_shared_ledgers.transfer_ownership', '轉移所有權'),
+    message: t(
+      'settings_shared_ledgers.transfer_ownership_confirm',
+      { name: member?.display_name || member?.email || '-' },
+      '轉移所有權後，你會變成管理員，{name} 將成為新的擁有者。是否繼續？',
+    ),
+    confirmText: t('settings_shared_ledgers.transfer_ownership', '轉移所有權'),
+    loadingText: t('settings_shared_ledgers.transferring_ownership', '轉移中...'),
+    loading: false,
+    item: member,
   }
 }
 
@@ -941,6 +1078,21 @@ async function confirmDialogAction() {
       return
     }
 
+    if (confirmDialog.value.mode === 'transfer-ownership') {
+      const member = confirmDialog.value.item
+      const memberUserId = String(member?.user_id ?? '').trim()
+      const sharedLedgerId = activeSharedLedgerId.value
+      if (!memberUserId || !sharedLedgerId) throw new Error('缺少成員 ID')
+      memberTransferBusyId.value = memberUserId
+      const result = await transferRemoteSharedLedgerOwnership(sharedLedgerId, memberUserId)
+      ledgerMembers.value = Array.isArray(result?.members) ? result.members : ledgerMembers.value
+      resetConfirmDialog()
+      memberTransferBusyId.value = ''
+      refreshSharedLedgerViewInBackground()
+      uiStore.pushToast(t('settings_shared_ledgers.toast.ownership_transferred', '帳本所有權已轉移'))
+      return
+    }
+
     if (confirmDialog.value.mode === 'remote-unshare') {
       const item = confirmDialog.value.item
       const sharedLedgerId = String(item?.id ?? '').trim()
@@ -971,6 +1123,7 @@ async function confirmDialogAction() {
   } finally {
     ledgerActionBusy.value = ''
     remoteDeleteBusyId.value = ''
+    memberTransferBusyId.value = ''
   }
 }
 
@@ -1006,6 +1159,7 @@ watch(
   () => activeSharedLedgerId.value,
   () => {
     void loadOutgoingInvitations()
+    void loadLedgerMembers()
   },
 )
 
@@ -1201,6 +1355,15 @@ p {
 .email-invite-box,
 .email-invite-actions {
   align-items: end;
+}
+
+.member-manage-box {
+  padding-top: 4px;
+}
+
+.role-select {
+  min-width: 120px;
+  flex: 0 0 auto;
 }
 
 .email-delivery-status {

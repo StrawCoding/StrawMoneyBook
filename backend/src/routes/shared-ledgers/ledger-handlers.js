@@ -1,11 +1,19 @@
 import {
+  buildSharedLedgerMemberList,
   buildSharedLedgerSummary,
+  canAssignMemberRole,
+  canManageMembers,
+  canPushSnapshot,
+  canTransferOwnership,
+  createForbiddenError,
   createId,
   createInviteCode,
   findSharedLedger,
+  getMemberRole,
   isSharedLedgerMember,
   listPendingSharedLedgerInvitationsForUser,
   listSharedLedgersForUser,
+  normalizeRole,
   normalizeText,
   nowIso,
   parseBody,
@@ -110,6 +118,7 @@ export async function handleDetail(req, res, user, sharedLedgerId) {
 
   sendJson(res, 200, {
     item: buildSharedLedgerSummary(sharedLedger, user.id, data),
+    members: buildSharedLedgerMemberList(sharedLedger, data),
   })
 }
 
@@ -141,6 +150,10 @@ export async function handleSnapshotPush(req, res, user, sharedLedgerId) {
     const sharedLedger = findSharedLedger(data, sharedLedgerId)
     if (!sharedLedger || !isSharedLedgerMember(sharedLedger, user.id)) {
       throw new Error('找不到共同帳本')
+    }
+
+    if (!canPushSnapshot(getMemberRole(sharedLedger, user.id))) {
+      throw createForbiddenError('唯讀成員無法上傳共同帳本變更')
     }
 
     if (snapshotInfo.ledgerId !== String(sharedLedger.ledger_id ?? '')) {
@@ -200,5 +213,96 @@ export async function handleDelete(req, res, user, sharedLedgerId) {
     removed: true,
     mode: result.mode,
     shared_ledger_id: result.sharedLedgerId,
+  })
+}
+
+export async function handleUpdateMemberRole(req, res, user, sharedLedgerId, memberUserId) {
+  const body = parseBody(req)
+  const nextRole = normalizeRole(body.role)
+  const targetUserId = String(memberUserId ?? '').trim()
+  if (!targetUserId) {
+    throw new Error('缺少成員 ID')
+  }
+
+  const savedId = await updateStore(async (data) => {
+    const sharedLedger = findSharedLedger(data, sharedLedgerId)
+    if (!sharedLedger || !isSharedLedgerMember(sharedLedger, user.id)) {
+      throw new Error('找不到共同帳本')
+    }
+
+    const actorRole = getMemberRole(sharedLedger, user.id)
+    if (!canManageMembers(actorRole)) {
+      throw createForbiddenError('沒有權限調整成員角色')
+    }
+
+    if (String(targetUserId) === String(user.id)) {
+      throw createForbiddenError('無法調整自己的角色')
+    }
+
+    const targetMember = (sharedLedger.members ?? []).find((member) => String(member?.user_id ?? '') === targetUserId)
+    if (!targetMember) {
+      throw new Error('找不到該成員')
+    }
+
+    if (!canAssignMemberRole(actorRole, targetMember.role, nextRole)) {
+      throw createForbiddenError('沒有權限將該成員設定為此角色')
+    }
+
+    targetMember.role = nextRole
+    sharedLedger.updated_at = nowIso()
+    sharedLedger.updated_by_user_id = user.id
+    return sharedLedger.id
+  })
+
+  const data = await readStore()
+  const saved = findSharedLedger(data, savedId)
+  sendJson(res, 200, {
+    item: buildSharedLedgerSummary(saved, user.id, data),
+    members: buildSharedLedgerMemberList(saved, data),
+  })
+}
+
+export async function handleTransferOwnership(req, res, user, sharedLedgerId) {
+  const body = parseBody(req)
+  const targetUserId = String(body.targetUserId ?? body.target_user_id ?? '').trim()
+  if (!targetUserId) {
+    throw new Error('缺少要轉移的成員 ID')
+  }
+
+  const savedId = await updateStore(async (data) => {
+    const sharedLedger = findSharedLedger(data, sharedLedgerId)
+    if (!sharedLedger || !isSharedLedgerMember(sharedLedger, user.id)) {
+      throw new Error('找不到共同帳本')
+    }
+
+    if (!canTransferOwnership(getMemberRole(sharedLedger, user.id))) {
+      throw createForbiddenError('只有擁有者可以轉移帳本所有權')
+    }
+
+    if (String(targetUserId) === String(user.id)) {
+      throw createForbiddenError('無法將所有權轉移給自己')
+    }
+
+    const targetMember = (sharedLedger.members ?? []).find((member) => String(member?.user_id ?? '') === targetUserId)
+    if (!targetMember) {
+      throw new Error('找不到該成員')
+    }
+
+    const currentOwner = (sharedLedger.members ?? []).find((member) => String(member?.user_id ?? '') === String(user.id))
+    if (currentOwner) {
+      currentOwner.role = 'admin'
+    }
+    targetMember.role = 'owner'
+    sharedLedger.owner_user_id = targetUserId
+    sharedLedger.updated_at = nowIso()
+    sharedLedger.updated_by_user_id = user.id
+    return sharedLedger.id
+  })
+
+  const data = await readStore()
+  const saved = findSharedLedger(data, savedId)
+  sendJson(res, 200, {
+    item: buildSharedLedgerSummary(saved, user.id, data),
+    members: buildSharedLedgerMemberList(saved, data),
   })
 }

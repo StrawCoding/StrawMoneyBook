@@ -771,6 +771,29 @@ export async function acceptSharedLedgerInvitation(invitationId) {
   })
 }
 
+export async function updateSharedLedgerMemberRole(sharedLedgerId, memberUserId, role) {
+  const normalizedLedgerId = String(sharedLedgerId ?? '').trim()
+  const normalizedMemberId = String(memberUserId ?? '').trim()
+  const normalizedRole = String(role ?? '').trim().toLowerCase()
+  if (!normalizedLedgerId) throw new Error(t('shared_ledger.error.missing_ledger_id'))
+  if (!normalizedMemberId) throw new Error(t('shared_ledger.error.missing_member_id'))
+  return requestJson(`/api/shared-ledgers/${normalizedLedgerId}/members/${normalizedMemberId}/role`, {
+    method: 'POST',
+    body: { role: normalizedRole },
+  })
+}
+
+export async function transferSharedLedgerOwnership(sharedLedgerId, targetUserId) {
+  const normalizedLedgerId = String(sharedLedgerId ?? '').trim()
+  const normalizedTargetId = String(targetUserId ?? '').trim()
+  if (!normalizedLedgerId) throw new Error(t('shared_ledger.error.missing_ledger_id'))
+  if (!normalizedTargetId) throw new Error(t('shared_ledger.error.missing_member_id'))
+  return requestJson(`/api/shared-ledgers/${normalizedLedgerId}/transfer`, {
+    method: 'POST',
+    body: { targetUserId: normalizedTargetId },
+  })
+}
+
 export async function getReferralSummary() {
   const data = await requestJson('/api/referrals/me')
   updateSessionUser(data.user)

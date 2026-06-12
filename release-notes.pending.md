@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.9
+- (SMB-229) 共享帳本角色權限系統：引入 Owner / Admin / Member / Viewer 四種角色與集中式權限矩陣（`store-shared-ledgers.js`）。Owner 擁有全部權限並可轉移所有權；Admin 可上傳快照與邀請成員、調整 Member/Viewer 角色；Member 可上傳但不可邀請；Viewer 唯讀只能下載。後端每個敏感 endpoint 都改為依角色檢查：snapshot push 禁止 Viewer（403）、Email 邀請與重發禁止 Member/Viewer（403）；新增 `POST /:id/members/:userId/role`（改角色）與 `POST /:id/transfer`（轉移所有權）端點，帳本 detail 回傳成員清單，summary 附帶 `permissions`。前端 `SettingsSharedLedgerPage.vue` 依角色顯示/隱藏分享連結與 Email 邀請、新增「成員與角色」管理區（改角色下拉、轉移所有權）與唯讀提示；背景自動同步對 Viewer 跳過上傳，被降級為 Viewer 時清除 dirty 佇列避免重試風暴。新增後端單元與路由整合測試（權限矩陣、role 指派治理、Viewer 禁 push、Member 禁 invite、改角色、轉移所有權），三語 i18n。
+
 ## v1.3.8
 - (SMB-236) 修復共同帳本 / Google Drive 快照合併仍可能靜默跨表覆蓋：`snapshot-merge.js` 新增 merge unit（帳戶連帶交易、轉帳雙腿、借貸還款、請款與預支 bundle），偵測到同一 unit 內本機與遠端混用時改為 all-or-nothing 整組採用較新一方並記錄衝突；`mergeSharedLedgerSnapshots` 補上 `detectConflicts` 結構化回傳，Google Drive 雙向合併與共同帳本 version conflict 路徑都會回報衝突筆數。新增 cross-table 單元測試與 google-drive source regression。
 

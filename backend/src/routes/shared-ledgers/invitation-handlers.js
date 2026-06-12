@@ -3,10 +3,13 @@ import {
   buildPublicUserProfile,
   buildSharedLedgerInvitationSummary,
   buildSharedLedgerSummary,
+  canInviteMembers,
+  createForbiddenError,
   createId,
   findPendingInvitationForEmail,
   findSharedLedger,
   findUserByEmail,
+  getMemberRole,
   isSharedLedgerMember,
   listPendingSharedLedgerInvitationsForUser,
   normalizeText,
@@ -128,6 +131,10 @@ export async function handleInviteByEmail(req, res, user, sharedLedgerId) {
       throw new Error('找不到共同帳本')
     }
 
+    if (!canInviteMembers(getMemberRole(sharedLedger, user.id))) {
+      throw createForbiddenError('沒有權限邀請新成員')
+    }
+
     if (email === currentUserEmail) {
       throw new Error('不可邀請自己')
     }
@@ -199,6 +206,10 @@ export async function handleResendInvitation(req, res, user, sharedLedgerId, inv
   const sharedLedger = findSharedLedger(data, sharedLedgerId)
   if (!sharedLedger || !isSharedLedgerMember(sharedLedger, user.id)) {
     throw new Error('找不到共同帳本')
+  }
+
+  if (!canInviteMembers(getMemberRole(sharedLedger, user.id))) {
+    throw createForbiddenError('沒有權限重新寄送邀請')
   }
 
   const invitation = findPendingInvitation(sharedLedger, invitationId)

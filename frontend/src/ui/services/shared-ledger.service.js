@@ -28,7 +28,16 @@ import {
   listSharedLedgers,
   pushSharedLedgerSnapshot,
   resendSharedLedgerInvitation,
+  transferSharedLedgerOwnership,
+  updateSharedLedgerMemberRole,
 } from '@/services/shared-ledger/backend'
+
+// Mirror of the backend permission matrix in store-shared-ledgers.js so the
+// client can skip pushes that the server would reject (viewer = read-only).
+export function sharedLedgerRoleCanPush(role) {
+  const normalized = String(role ?? '').trim().toLowerCase()
+  return normalized === 'owner' || normalized === 'admin' || normalized === 'member'
+}
 
 const SHARED_LEDGER_META_KEY = 'shared_ledger_meta'
 const DIRTY_QUEUE_STORAGE_KEY = 'straw.shared_ledger_dirty_queue'
@@ -336,6 +345,12 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
     throw new Error('此帳本尚未綁定共同帳本')
   }
 
+  if (!sharedLedgerRoleCanPush(meta.role)) {
+    const error = new Error('唯讀成員無法上傳共同帳本變更')
+    error.code = 'shared_ledger_forbidden'
+    throw error
+  }
+
   const ledger = await getLedger(normalizedLedgerId)
   const snapshot = sanitizeSnapshotForSharedSync(await exportLedgerJson(normalizedLedgerId))
   let result = null
@@ -505,6 +520,22 @@ export async function resendRemoteSharedLedgerInvitation(sharedLedgerId, invitat
   return resendSharedLedgerInvitation(sharedLedgerId, invitationId)
 }
 
+export async function listSharedLedgerMembers(sharedLedgerId) {
+  const data = await getSharedLedgerDetail(sharedLedgerId)
+  return {
+    item: data?.item ?? null,
+    members: Array.isArray(data?.members) ? data.members : [],
+  }
+}
+
+export async function updateRemoteSharedLedgerMemberRole(sharedLedgerId, memberUserId, role) {
+  return updateSharedLedgerMemberRole(sharedLedgerId, memberUserId, role)
+}
+
+export async function transferRemoteSharedLedgerOwnership(sharedLedgerId, targetUserId) {
+  return transferSharedLedgerOwnership(sharedLedgerId, targetUserId)
+}
+
 async function listPendingSharedLedgersSafe() {
   const data = await listPendingSharedLedgerInvitations()
   return {
@@ -549,7 +580,7 @@ async function syncSingleDirtyLedger(ledgerId) {
   }
 
   const meta = await getSharedLedgerMeta(normalizedLedgerId)
-  if (!meta?.shared_ledger_id || meta.auto_sync_enabled === false) {
+  if (!meta?.shared_ledger_id || meta.auto_sync_enabled === false || !sharedLedgerRoleCanPush(meta.role)) {
     clearLedgerDirty(normalizedLedgerId)
     return false
   }
@@ -579,6 +610,10 @@ async function flushDirtyLedgers(pinia) {
     try {
       await syncSingleDirtyLedger(ledgerId)
     } catch (error) {
+      if (String(error?.code ?? '') === 'shared_ledger_forbidden') {
+        // Role was downgraded to viewer remotely; stop retrying this ledger.
+        clearLedgerDirty(ledgerId)
+      }
       console.warn('[shared-ledger] dirty sync failed', ledgerId, error)
     }
   }
@@ -635,7 +670,7 @@ export function scheduleActiveSharedLedgerAutoSync(pinia, delayMs = AUTO_PUSH_DE
     if (!activeLedgerId || isAutoSyncMuted(activeLedgerId)) return
 
     const meta = await getSharedLedgerMeta(activeLedgerId)
-    if (!meta?.shared_ledger_id || meta.auto_sync_enabled === false) return
+    if (!meta?.shared_ledger_id || meta.auto_sync_enabled === false || !sharedLedgerRoleCanPush(meta.role)) return
 
     markLedgerDirty(activeLedgerId)
     void runSharedLedgerBackgroundSyncNow(pinia)

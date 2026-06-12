@@ -500,6 +500,15 @@ App 開啟、回到前景、切換帳本與儲存訂閱項目後，會檢查目�
 
 SMB-188 / v1.2.4 後，PostSetupIntroPage 新增了「共同帳本」專屬步驟，讓首次設定的使用者能在導覽中直接了解並前往相關設定。
 
+SMB-229 / v1.3.9 後，共享帳本導入角色權限系統，區分 Owner / Admin / Member / Viewer 四種角色，並以集中式權限矩陣（`backend/src/collab/store-shared-ledgers.js` 的 `getSharedLedgerPermissions`）作為前後端共用的單一事實來源：
+
+- Owner：全部權限，可上傳、邀請、調整成員角色、轉移所有權、刪除帳本。
+- Admin：可上傳快照、Email 邀請與重發、調整 Member/Viewer 角色（不可動其他 Admin/Owner，亦不可建立 Admin）。
+- Member：可上傳快照，但不可邀請成員。
+- Viewer：唯讀，只能下載（pull）最新快照，不能上傳變更或邀請。
+
+後端每個敏感 endpoint 都依角色檢查：`handleSnapshotPush` 禁止 Viewer 上傳（回 403 `shared_ledger_forbidden`）、`handleInviteByEmail` / `handleResendInvitation` 禁止 Member 與 Viewer 邀請；新增 `POST /api/shared-ledgers/:id/members/:userId/role`（改角色，受 `canAssignMemberRole` 治理）與 `POST /api/shared-ledgers/:id/transfer`（轉移所有權：目標升為 Owner，原 Owner 降為 Admin）。帳本 detail 回傳成員清單（`buildSharedLedgerMemberList`），summary 附帶 `permissions`。前端 `SettingsSharedLedgerPage.vue` 依 `permissions` 顯示/隱藏分享連結與 Email 邀請，新增「成員與角色」管理區（角色下拉、轉移所有權確認對話框）與 Viewer 唯讀提示；背景自動同步對 Viewer 跳過上傳，若被遠端降級為 Viewer，dirty 同步遇 403 會清除佇列避免重試風暴。
+
 ### 6.3 Google Drive 帳本同步
 
 這個功能和「備份」不同。

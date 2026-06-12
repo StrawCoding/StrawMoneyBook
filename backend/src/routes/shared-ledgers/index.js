@@ -22,6 +22,8 @@ import {
   handleList,
   handleSnapshotFetch,
   handleSnapshotPush,
+  handleTransferOwnership,
+  handleUpdateMemberRole,
 } from './ledger-handlers.js'
 
 function matchSegments(pattern = [], segments = []) {
@@ -99,6 +101,24 @@ const SHARED_LEDGER_ROUTES = Object.freeze([
       user,
       params.sharedLedgerId,
       params.invitationId,
+    ),
+  },
+  {
+    name: 'transfer_ownership',
+    method: 'POST',
+    pattern: [':sharedLedgerId', 'transfer'],
+    handler: (req, res, user, params) => handleTransferOwnership(req, res, user, params.sharedLedgerId),
+  },
+  {
+    name: 'update_member_role',
+    method: 'POST',
+    pattern: [':sharedLedgerId', 'members', ':memberUserId', 'role'],
+    handler: (req, res, user, params) => handleUpdateMemberRole(
+      req,
+      res,
+      user,
+      params.sharedLedgerId,
+      params.memberUserId,
     ),
   },
   {

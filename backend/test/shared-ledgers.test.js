@@ -310,3 +310,174 @@ test('invite by email creates invitation record and returns 201', async () => {
   assert.equal(res.body?.invitation?.email, 'invited@example.com')
   assert.equal(res.body?.invitation?.status, 'pending')
 })
+
+async function createSessionFor(user) {
+  return createLoginSession(user, {
+    issuedByProvider: 'password',
+    ipAddress: '127.0.0.1',
+    userAgent: 'node:test',
+  })
+}
+
+async function createLedgerWithMembers(ownerId, members, inviteCode) {
+  const ledgerId = createId('ledger')
+  return updateStore(async (data) => {
+    const now = nowIso()
+    const record = {
+      id: createId('shared_ledger'),
+      ledger_id: ledgerId,
+      name: 'Role Ledger',
+      invite_code: inviteCode,
+      owner_user_id: ownerId,
+      members,
+      invitations: [],
+      snapshot: {
+        ledger_id: ledgerId,
+        tables: { ledgers: [{ id: ledgerId, name: 'Role Ledger' }] },
+      },
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      updated_by_user_id: ownerId,
+    }
+    data.shared_ledgers.push(record)
+    return record
+  })
+}
+
+test('viewer cannot push snapshot (403 forbidden)', async () => {
+  const owner = await createMemberUser('role-owner-1@example.com')
+  const viewer = await createMemberUser('role-viewer-1@example.com')
+  const now = nowIso()
+  const ledger = await createLedgerWithMembers(owner.id, [
+    { user_id: owner.id, role: 'owner', joined_at: now },
+    { user_id: viewer.id, role: 'viewer', joined_at: now },
+  ], 'ROLEVWR1')
+
+  const session = await createSessionFor(viewer)
+  const req = {
+    method: 'POST',
+    url: `/api/shared-ledgers/${ledger.id}/snapshot`,
+    headers: { host: 'localhost', authorization: `Bearer ${session.accessToken}` },
+    body: JSON.stringify({
+      baseVersion: 1,
+      snapshot: { ledger_id: ledger.ledger_id, tables: { ledgers: [{ id: ledger.ledger_id, name: 'Hacked' }] } },
+    }),
+  }
+  const res = createMockResponse(req)
+  await sharedLedgersHandler(req, res)
+
+  assert.equal(res.statusCode, 403)
+  assert.equal(res.body?.error, 'shared_ledger_forbidden')
+})
+
+test('member cannot invite but admin can', async () => {
+  const owner = await createMemberUser('role-owner-2@example.com')
+  const adminUser = await createMemberUser('role-admin-2@example.com')
+  const memberUser = await createMemberUser('role-member-2@example.com')
+  const now = nowIso()
+  const ledger = await createLedgerWithMembers(owner.id, [
+    { user_id: owner.id, role: 'owner', joined_at: now },
+    { user_id: adminUser.id, role: 'admin', joined_at: now },
+    { user_id: memberUser.id, role: 'member', joined_at: now },
+  ], 'ROLEINV2')
+
+  const memberSession = await createSessionFor(memberUser)
+  const memberReq = {
+    method: 'POST',
+    url: `/api/shared-ledgers/${ledger.id}/invitations`,
+    headers: { host: 'localhost', authorization: `Bearer ${memberSession.accessToken}` },
+    body: JSON.stringify({ email: 'new-invitee-2@example.com' }),
+  }
+  const memberRes = createMockResponse(memberReq)
+  await sharedLedgersHandler(memberReq, memberRes)
+  assert.equal(memberRes.statusCode, 403)
+  assert.equal(memberRes.body?.error, 'shared_ledger_forbidden')
+
+  const adminSession = await createSessionFor(adminUser)
+  const adminReq = {
+    method: 'POST',
+    url: `/api/shared-ledgers/${ledger.id}/invitations`,
+    headers: { host: 'localhost', authorization: `Bearer ${adminSession.accessToken}` },
+    body: JSON.stringify({ email: 'new-invitee-2@example.com' }),
+  }
+  const adminRes = createMockResponse(adminReq)
+  await sharedLedgersHandler(adminReq, adminRes)
+  assert.equal(adminRes.statusCode, 201)
+})
+
+test('owner can update member role and demoted viewer loses push', async () => {
+  const owner = await createMemberUser('role-owner-3@example.com')
+  const memberUser = await createMemberUser('role-member-3@example.com')
+  const now = nowIso()
+  const ledger = await createLedgerWithMembers(owner.id, [
+    { user_id: owner.id, role: 'owner', joined_at: now },
+    { user_id: memberUser.id, role: 'member', joined_at: now },
+  ], 'ROLEUPD3')
+
+  const ownerSession = await createSessionFor(owner)
+  const roleReq = {
+    method: 'POST',
+    url: `/api/shared-ledgers/${ledger.id}/members/${memberUser.id}/role`,
+    headers: { host: 'localhost', authorization: `Bearer ${ownerSession.accessToken}` },
+    body: JSON.stringify({ role: 'viewer' }),
+  }
+  const roleRes = createMockResponse(roleReq)
+  await sharedLedgersHandler(roleReq, roleRes)
+  assert.equal(roleRes.statusCode, 200)
+  const updatedMember = (roleRes.body?.members ?? []).find((m) => m.user_id === memberUser.id)
+  assert.equal(updatedMember?.role, 'viewer')
+
+  const memberSession = await createSessionFor(memberUser)
+  const pushReq = {
+    method: 'POST',
+    url: `/api/shared-ledgers/${ledger.id}/snapshot`,
+    headers: { host: 'localhost', authorization: `Bearer ${memberSession.accessToken}` },
+    body: JSON.stringify({
+      baseVersion: 1,
+      snapshot: { ledger_id: ledger.ledger_id, tables: { ledgers: [{ id: ledger.ledger_id, name: 'x' }] } },
+    }),
+  }
+  const pushRes = createMockResponse(pushReq)
+  await sharedLedgersHandler(pushReq, pushRes)
+  assert.equal(pushRes.statusCode, 403)
+})
+
+test('owner transfers ownership and is demoted to admin', async () => {
+  const owner = await createMemberUser('role-owner-4@example.com')
+  const memberUser = await createMemberUser('role-member-4@example.com')
+  const now = nowIso()
+  const ledger = await createLedgerWithMembers(owner.id, [
+    { user_id: owner.id, role: 'owner', joined_at: now },
+    { user_id: memberUser.id, role: 'member', joined_at: now },
+  ], 'ROLEXFR4')
+
+  const ownerSession = await createSessionFor(owner)
+  const transferReq = {
+    method: 'POST',
+    url: `/api/shared-ledgers/${ledger.id}/transfer`,
+    headers: { host: 'localhost', authorization: `Bearer ${ownerSession.accessToken}` },
+    body: JSON.stringify({ targetUserId: memberUser.id }),
+  }
+  const transferRes = createMockResponse(transferReq)
+  await sharedLedgersHandler(transferReq, transferRes)
+  assert.equal(transferRes.statusCode, 200)
+
+  const members = transferRes.body?.members ?? []
+  const newOwner = members.find((m) => m.user_id === memberUser.id)
+  const oldOwner = members.find((m) => m.user_id === owner.id)
+  assert.equal(newOwner?.role, 'owner')
+  assert.equal(newOwner?.is_owner, true)
+  assert.equal(oldOwner?.role, 'admin')
+
+  // Old owner (now admin) can no longer transfer ownership.
+  const retryReq = {
+    method: 'POST',
+    url: `/api/shared-ledgers/${ledger.id}/transfer`,
+    headers: { host: 'localhost', authorization: `Bearer ${ownerSession.accessToken}` },
+    body: JSON.stringify({ targetUserId: owner.id }),
+  }
+  const retryRes = createMockResponse(retryReq)
+  await sharedLedgersHandler(retryReq, retryRes)
+  assert.equal(retryRes.statusCode, 403)
+})

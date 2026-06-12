@@ -8,16 +8,27 @@ import {
 import {
   applyMembershipGrant,
   buildSharedLedgerInvitationSummary,
+  buildSharedLedgerMemberList,
   buildSharedLedgerSummary,
+  canAssignMemberRole,
+  canInviteMembers,
+  canManageMembers,
+  canPushSnapshot,
+  canTransferOwnership,
   createId,
   createInviteCode,
   findPendingInvitationForEmail,
   findUserByEmail,
+  findUserById,
+  getMemberRole,
   getMembershipGrantSummary,
+  getSharedLedgerPermissions,
   isSharedLedgerMember,
   listPendingSharedLedgerInvitationsForUser,
+  normalizeRole,
   nowIso,
   readStore,
+  SHARED_LEDGER_ROLES,
   updateStore,
   validateEmail,
   validateSnapshot,
@@ -30,6 +41,13 @@ export const SHARED_LEDGER_FIRST_TRIAL_SOURCE = 'shared_ledger_first_trial'
 
 export function findSharedLedger(data, sharedLedgerId) {
   return data.shared_ledgers.find((item) => String(item.id) === String(sharedLedgerId)) ?? null
+}
+
+export function createForbiddenError(message) {
+  const error = new Error(message || '沒有權限執行此操作')
+  error.code = 'shared_ledger_forbidden'
+  error.status = 403
+  return error
 }
 
 export function listSharedLedgersForUser(data, userId) {
@@ -62,20 +80,31 @@ export {
   applyMembershipGrant,
   buildPublicUserProfile,
   buildSharedLedgerInvitationSummary,
+  buildSharedLedgerMemberList,
   buildSharedLedgerSummary,
+  canAssignMemberRole,
+  canInviteMembers,
+  canManageMembers,
+  canPushSnapshot,
+  canTransferOwnership,
   createId,
   createInviteCode,
   findPendingInvitationForEmail,
   findUserByEmail,
+  findUserById,
+  getMemberRole,
+  getSharedLedgerPermissions,
   isSharedLedgerMember,
   listPendingSharedLedgerInvitationsForUser,
   methodGuard,
+  normalizeRole,
   normalizeText,
   nowIso,
   parseBody,
   readStore,
   requireAuthenticatedUser,
   sendJson,
+  SHARED_LEDGER_ROLES,
   splitPathSegments,
   updateStore,
   validateEmail,
