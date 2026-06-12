@@ -33,6 +33,7 @@ import {
   scheduleActiveSharedLedgerAutoSync,
 } from '@/ui/services/shared-ledger.service'
 import {
+  GOOGLE_LEDGER_SYNC_ACCOUNT_SWITCH_EVENT,
   initGoogleDriveLedgerSync,
   runGoogleDriveLedgerBackgroundSyncNow,
   scheduleActiveGoogleDriveLedgerSync,
@@ -435,6 +436,21 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
   restoreSharedLedgerSessionInBackground('app_start', { force: true })
   initSharedLedgerBackgroundSync(pinia)
   initGoogleDriveLedgerSync(pinia)
+
+  addWindowListener(GOOGLE_LEDGER_SYNC_ACCOUNT_SWITCH_EVENT, (event) => {
+    const detail = event?.detail && typeof event.detail === 'object' ? event.detail : {}
+    useUiStore(pinia).pushToast(
+      translateMessage(
+        'settings_google_sync.toast.account_switched_blocked',
+        {
+          bound: String(detail.boundEmail ?? '').trim() || '-',
+          current: String(detail.currentEmail ?? '').trim() || '-',
+        },
+        `Google 帳號已切換（綁定：${String(detail.boundEmail ?? '').trim() || '-'}，目前：${String(detail.currentEmail ?? '').trim() || '-'}），同步已暫停，請到帳本同步頁確認`,
+      ),
+      'warning',
+    )
+  })
 
   addWindowListener('app:data-mutated', () => {
     scheduleAutoBackupOnDataChange(runtimeState, pinia, windowObject)

@@ -30,3 +30,28 @@ test('Google Drive 帳本同步拉回時使用三方合併與 base snapshot，�
   assert.match(source, /setBaseSnapshot\(normalizedLedgerId, mergeMeta\.snapshot\)/)
   assert.match(source, /lastConflictCount/)
 })
+
+test('Google Drive 帳本同步會偵測 Google 帳號切換、記錄 pending 狀態並阻擋背景靜默推送', () => {
+  assert.match(source, /boundEmail: state\.accountEmail/)
+  assert.match(source, /switchError\.code = 'GOOGLE_ACCOUNT_SWITCHED'/)
+  assert.match(source, /settings_google_sync\.error\.account_switched/)
+  assert.match(source, /function recordAccountSwitchMismatch/)
+  assert.match(source, /pendingAccountSwitch/)
+  assert.match(source, /GOOGLE_LEDGER_SYNC_ACCOUNT_SWITCH_EVENT/)
+  assert.match(source, /console\.info\('\[google-ledger-sync\] account switch/)
+  assert.match(source, /lastSyncStatus: 'account_mismatch'/)
+  assert.match(source, /export async function clearPendingAccountSwitch/)
+})
+
+test('Google Drive 帳本同步設定頁會顯示綁定帳號並在帳號切換時要求確認', () => {
+  const pageSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/views/settings/SettingsGoogleDriveLedgerSyncPage.vue'),
+    'utf8',
+  )
+  assert.match(pageSource, /settings_google_sync\.bound_account/)
+  assert.match(pageSource, /settings_google_sync\.pending_account_switch/)
+  assert.match(pageSource, /settings_google_sync\.confirm\.switch_account/)
+  assert.match(pageSource, /confirmAccountSwitchRebind/)
+  assert.match(pageSource, /clearPendingAccountSwitch/)
+  assert.match(pageSource, /GOOGLE_LEDGER_SYNC_ACCOUNT_SWITCH_EVENT/)
+})

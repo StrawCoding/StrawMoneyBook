@@ -571,6 +571,23 @@ export function threeWayMergeSnapshots(baseSnapshot, localSnapshot, remoteSnapsh
   }
 }
 
+export function buildMergeLog(conflicts = [], options = {}) {
+  const prefer = options?.prefer === 'local' ? 'local' : 'remote'
+  const mergeMode = normalizeText(options?.mergeMode) || 'unknown'
+  const normalizedConflicts = Array.isArray(conflicts) ? conflicts : []
+  return {
+    mergeMode,
+    prefer,
+    conflictCount: normalizedConflicts.length,
+    conflicts: normalizedConflicts.map((conflict) => ({
+      tableName: normalizeText(conflict?.tableName),
+      rowKey: normalizeText(conflict?.rowKey),
+      resolution: normalizeText(conflict?.resolution) || prefer,
+    })),
+    recordedAt: new Date().toISOString(),
+  }
+}
+
 export function areSharedLedgerSnapshotsEquivalent(leftSnapshot, rightSnapshot) {
   const normalizedLeft = canonicalizeSnapshot(leftSnapshot)
   const normalizedRight = canonicalizeSnapshot(rightSnapshot)

@@ -27,6 +27,7 @@ import {
 const GOOGLE_LEDGER_SYNC_STORAGE_KEY = 'straw.google_drive_ledger_sync_state'
 const GOOGLE_LEDGER_SYNC_DIRTY_KEY = 'straw.google_drive_ledger_sync_dirty_queue'
 const GOOGLE_LEDGER_SYNC_BASE_SNAPSHOT_KEY = 'straw.google_drive_ledger_sync_base_snapshot'
+export const GOOGLE_LEDGER_SYNC_ACCOUNT_SWITCH_EVENT = 'google-ledger-sync:account-switched'
 const GOOGLE_LEDGER_SYNC_MUTE_MS = 15000
 const AUTO_PUSH_DEBOUNCE_MS = 1000
 const MEMBERSHIP_TIER_MEMBER = 'member'
@@ -129,6 +130,7 @@ function buildDefaultState() {
     accountEmail: '',
     accountName: '',
     accountImageUrl: '',
+    pendingAccountSwitch: null,
     lastSyncedAt: '',
     lastPushedAt: '',
     lastPulledAt: '',
@@ -136,6 +138,19 @@ function buildDefaultState() {
     lastSyncStatus: 'idle',
     lastError: '',
     lastConflictCount: 0,
+  }
+}
+
+function normalizePendingAccountSwitch(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const boundEmail = String(raw.boundEmail ?? '').trim()
+  const currentEmail = String(raw.currentEmail ?? '').trim()
+  const detectedAt = String(raw.detectedAt ?? '').trim()
+  if (!boundEmail && !currentEmail) return null
+  return {
+    boundEmail,
+    currentEmail,
+    detectedAt,
   }
 }
 
@@ -151,6 +166,7 @@ function normalizeState(raw) {
     accountEmail: String(raw.accountEmail ?? '').trim(),
     accountName: String(raw.accountName ?? '').trim(),
     accountImageUrl: String(raw.accountImageUrl ?? '').trim(),
+    pendingAccountSwitch: normalizePendingAccountSwitch(raw.pendingAccountSwitch),
     lastSyncedAt: String(raw.lastSyncedAt ?? '').trim(),
     lastPushedAt: String(raw.lastPushedAt ?? '').trim(),
     lastPulledAt: String(raw.lastPulledAt ?? '').trim(),
@@ -324,6 +340,10 @@ async function ensureGoogleAccess({ interactive = false, preferredEmail = '', bo
   const profile = normalizeProfile(getCachedGoogleProfile())
   const normalizedBoundEmail = normalizeEmail(boundEmail)
   if (normalizedBoundEmail && normalizeEmail(profile.email) !== normalizedBoundEmail) {
+    console.info('[google-ledger-sync] account switch detected', {
+      boundEmail,
+      currentEmail: profile.email || '',
+    })
     const switchError = new Error(
       t(
         'settings_google_sync.error.account_switched',
@@ -354,6 +374,62 @@ function buildStatePatchFromProfile(profile) {
     accountName: String(profile?.name ?? '').trim(),
     accountImageUrl: String(profile?.imageUrl ?? '').trim(),
   }
+}
+
+function buildPendingAccountSwitch(boundEmail, currentEmail) {
+  return {
+    boundEmail: String(boundEmail ?? '').trim(),
+    currentEmail: String(currentEmail ?? '').trim(),
+    detectedAt: nowIso(),
+  }
+}
+
+function emitAccountSwitchEvent(ledgerId, pendingAccountSwitch) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(GOOGLE_LEDGER_SYNC_ACCOUNT_SWITCH_EVENT, {
+    detail: {
+      ledgerId: String(ledgerId ?? '').trim(),
+      ...pendingAccountSwitch,
+    },
+  }))
+}
+
+async function recordAccountSwitchMismatch(ledgerId, state, error) {
+  if (error?.code !== 'GOOGLE_ACCOUNT_SWITCHED') return state
+  const pendingAccountSwitch = buildPendingAccountSwitch(
+    error.boundEmail ?? state?.accountEmail,
+    error.currentEmail,
+  )
+  console.info('[google-ledger-sync] account switched', {
+    ledgerId: String(ledgerId ?? '').trim(),
+    boundEmail: pendingAccountSwitch.boundEmail,
+    currentEmail: pendingAccountSwitch.currentEmail,
+    detectedAt: pendingAccountSwitch.detectedAt,
+  })
+  const nextState = await setGoogleDriveLedgerSyncState(ledgerId, {
+    ...state,
+    pendingAccountSwitch,
+    lastSyncStatus: 'account_mismatch',
+    lastError: String(error?.message ?? error ?? '').trim()
+      || t('settings_google_sync.error.account_switched', {
+        bound: pendingAccountSwitch.boundEmail || '-',
+        current: pendingAccountSwitch.currentEmail || '-',
+      }, `Google 帳號已切換（綁定：${pendingAccountSwitch.boundEmail || '-'}，目前：${pendingAccountSwitch.currentEmail || '-' }）`),
+  })
+  emitAccountSwitchEvent(ledgerId, pendingAccountSwitch)
+  return nextState
+}
+
+export async function clearPendingAccountSwitch(ledgerId) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId) return buildDefaultState()
+  const current = await getGoogleDriveLedgerSyncState(normalizedLedgerId)
+  return setGoogleDriveLedgerSyncState(normalizedLedgerId, {
+    ...current,
+    pendingAccountSwitch: null,
+    lastSyncStatus: current.lastSyncStatus === 'account_mismatch' ? 'idle' : current.lastSyncStatus,
+    lastError: current.lastSyncStatus === 'account_mismatch' ? '' : current.lastError,
+  })
 }
 
 export async function getGoogleDriveLedgerSyncState(ledgerId) {
@@ -479,6 +555,7 @@ async function pushLedgerToGoogleDrive(ledgerId, state, options = {}) {
     enabled: true,
     fileId: String(uploaded?.fileId ?? state.fileId ?? '').trim(),
     filename: buildRemoteFilename(normalizedLedgerId),
+    pendingAccountSwitch: null,
     lastSyncedAt: now,
     lastPushedAt: now,
     lastRemoteModifiedAt: String(uploaded?.modifiedTime ?? now).trim(),
@@ -538,6 +615,7 @@ async function finalizePullResult(ledgerId, replaced, mergeMeta) {
   setBaseSnapshot(normalizedLedgerId, mergeMeta.snapshot)
   const nextState = await setGoogleDriveLedgerSyncState(normalizedLedgerId, {
     ...replaced.state,
+    pendingAccountSwitch: null,
     lastConflictCount: mergeMeta.conflictCount,
     lastSyncStatus: mergeMeta.hasConflicts ? 'conflict_resolved' : 'ok',
     lastError: '',
@@ -700,12 +778,16 @@ export async function syncGoogleDriveLedgerNow(ledgerId, options = {}) {
   try {
     return await resolveSyncAction(normalizedLedgerId, state, options)
   } catch (error) {
-    await setGoogleDriveLedgerSyncState(normalizedLedgerId, {
-      ...state,
-      lastSyncStatus: 'error',
-      lastError: String(error?.message ?? error ?? '').trim()
-        || t('settings_google_sync.error.sync_failed', null, '帳本同步失敗'),
-    })
+    if (error?.code === 'GOOGLE_ACCOUNT_SWITCHED') {
+      await recordAccountSwitchMismatch(normalizedLedgerId, state, error)
+    } else {
+      await setGoogleDriveLedgerSyncState(normalizedLedgerId, {
+        ...state,
+        lastSyncStatus: 'error',
+        lastError: String(error?.message ?? error ?? '').trim()
+          || t('settings_google_sync.error.sync_failed', null, '帳本同步失敗'),
+      })
+    }
     throw error
   } finally {
     syncingLedgerIds.delete(normalizedLedgerId)
@@ -727,7 +809,11 @@ async function syncSingleDirtyLedger(ledgerId) {
     const result = await syncGoogleDriveLedgerNow(normalizedLedgerId, { interactiveAuth: false })
     return { changed: result.action === 'pull', pulledLedgerId: result.ledgerId ?? normalizedLedgerId }
   } catch (error) {
-    console.warn('[google-ledger-sync] dirty sync failed', normalizedLedgerId, error)
+    if (error?.code === 'GOOGLE_ACCOUNT_SWITCHED') {
+      await recordAccountSwitchMismatch(normalizedLedgerId, state, error)
+    } else {
+      console.warn('[google-ledger-sync] dirty sync failed', normalizedLedgerId, error)
+    }
     return { changed: false }
   }
 }
@@ -773,7 +859,11 @@ async function syncEnabledLedgersLatest(pinia) {
         pulledLedgerIds.push(ledgerId)
       }
     } catch (error) {
-      console.warn('[google-ledger-sync] latest sync failed', ledgerId, error)
+      if (error?.code === 'GOOGLE_ACCOUNT_SWITCHED') {
+        await recordAccountSwitchMismatch(ledgerId, binding.state, error)
+      } else {
+        console.warn('[google-ledger-sync] latest sync failed', ledgerId, error)
+      }
     }
   }
 

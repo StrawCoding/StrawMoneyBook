@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.7
+- (SMB-235) 修復 Google 帳號切換後可能靜默推送到不同帳號：`ensureGoogleAccess` 以綁定 `accountEmail` 比對目前 Google profile，不符時拋出 `GOOGLE_ACCOUNT_SWITCHED` 並阻擋 push/pull；背景同步改寫入 `pendingAccountSwitch` + `account_mismatch` 狀態、記錄 `[google-ledger-sync] account switched` log，並透過 `google-ledger-sync:account-switched` 事件顯示 warning toast。`SettingsGoogleDriveLedgerSyncPage.vue` 顯示綁定帳號與待確認切換提示，手動同步/啟用時以確認對話框要求改綁定後才繼續。補齊三語 i18n；新增 google-drive-ledger-sync source regression 測試。
+
 ## v1.3.6
 - (SMB-234) 修復共同帳本 Email 邀請寄失敗無提示：後端改為同步寄信並回傳 `email_delivery` 狀態（sent / failed / not_configured），邀請紀錄保存寄送狀態與錯誤訊息並寫入 server log；新增列出待加入邀請與重發 API；`SettingsSharedLedgerPage.vue` 補上 Email 邀請輸入、待加入清單、寄送狀態與成功 / 失敗 toast，失敗時可重發。新增 backend `shared-ledger-invitation-email.test.js` 與 frontend source regression 測試。
 - (SMB-233) 修復 Web 版 auth token 存 localStorage 的 XSS 竊取風險：refresh token 改由後端 HttpOnly cookie（`X-Straw-Auth-Storage: cookie` + `credentials: include`）管理，access token 僅保留在記憶體，使用者資料改存 sessionStorage 且不再持久化 token；登入 / 註冊 / refresh / logout 端點支援 cookie 模式並自動遷移清除舊版 localStorage session；後端補 `Access-Control-Allow-Credentials`、CORS 允許 `X-Straw-Auth-Storage`；前端 `index.html` 加入 CSP meta。新增 `auth-cookies.test.js`、`auth-session-storage.test.js` 與 source regression 測試。
