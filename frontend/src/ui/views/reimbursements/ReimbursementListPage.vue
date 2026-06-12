@@ -77,9 +77,21 @@
               </small>
               <button class="btn" @click.stop="openOffsetAbout(tx)">抵消明細</button>
             </div>
+            <div v-if="hasCustomClaimAmount(tx)" class="row claim-row">
+              <small class="claim-pill">
+                報銷金額 <MoneyText :value-minor="claimableMinorOfTx(tx)" />
+              </small>
+            </div>
           </div>
 
           <div class="entry-actions">
+            <button
+              v-if="tab === 'pending'"
+              class="btn entry-action-btn"
+              @click.stop="openClaimAmountSheet(tx)"
+            >
+              報銷金額
+            </button>
             <button
               v-if="tab === 'pending'"
               class="btn entry-action-btn"
@@ -266,6 +278,32 @@
         </button>
       </template>
     </InputBottomSheet>
+
+    <InputBottomSheet
+      :open="isClaimAmountOpen"
+      title="設定報銷金額"
+      :body-class="'stack form-wrap'"
+      :sheet-class="'sheet'"
+      :show-footer="true"
+      @close="closeClaimAmountSheet"
+    >
+      <p v-if="claimAmountTargetTx" class="muted claim-hint">
+        原始支出 <MoneyText :value-minor="originalMinorOfTx(claimAmountTargetTx)" />，可設定實際報銷（請款）金額，匯出與請款單將以此金額計算。
+      </p>
+      <label>
+        報銷金額（元）
+        <input v-model.number="claimAmountForm.amountMajor" type="number" min="0" step="1" class="input" />
+      </label>
+      <button class="btn claim-reset-btn" type="button" @click="useOriginalClaimAmount">
+        重設為原始支出
+      </button>
+      <template #footer>
+        <button class="btn" :disabled="savingClaimAmount" @click="closeClaimAmountSheet">取消</button>
+        <button class="btn primary" :disabled="savingClaimAmount" @click="confirmClaimAmount">
+          {{ savingClaimAmount ? '儲存中...' : '確認' }}
+        </button>
+      </template>
+    </InputBottomSheet>
   </section>
 </template>
 
@@ -287,6 +325,7 @@ import { useI18n } from '@/ui/services/i18n.service'
 import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon } from '@/ui/utils/system-transaction-presenter'
 import {
+  reimbursementClaimableMinor,
   reimbursementOriginalMinor,
   reimbursementPendingMinor,
   reimbursementReimbursedMinor,
@@ -313,6 +352,12 @@ const tab = ref(route.query.tab === 'reimbursed' ? 'reimbursed' : 'pending')
 const isSettleOpen = ref(false)
 const isActionSheetOpen = ref(false)
 const isAdvanceOpen = ref(false)
+const isClaimAmountOpen = ref(false)
+const savingClaimAmount = ref(false)
+const claimAmountTargetTx = ref(null)
+const claimAmountForm = reactive({
+  amountMajor: 0,
+})
 const settleMode = ref('single')
 const settleTargetTx = ref(null)
 const settlingBatch = ref(false)
@@ -708,6 +753,61 @@ function originalMinorOfTx(tx) {
   return reimbursementOriginalMinor(tx)
 }
 
+function claimableMinorOfTx(tx) {
+  return reimbursementClaimableMinor(tx)
+}
+
+function hasCustomClaimAmount(tx) {
+  const raw = tx?.reimburse_target_minor
+  if (raw === null || raw === undefined || raw === '') return false
+  return Math.round(Number(raw)) !== originalMinorOfTx(tx)
+}
+
+function openClaimAmountSheet(tx) {
+  if (!tx?.id) return
+  claimAmountTargetTx.value = tx
+  claimAmountForm.amountMajor = claimableMinorOfTx(tx) / 100
+  isClaimAmountOpen.value = true
+}
+
+function closeClaimAmountSheet() {
+  if (savingClaimAmount.value) return
+  isClaimAmountOpen.value = false
+  claimAmountTargetTx.value = null
+}
+
+function useOriginalClaimAmount() {
+  if (!claimAmountTargetTx.value) return
+  claimAmountForm.amountMajor = originalMinorOfTx(claimAmountTargetTx.value) / 100
+}
+
+async function confirmClaimAmount() {
+  const target = claimAmountTargetTx.value
+  if (!target?.id || savingClaimAmount.value) return
+
+  const amountMinor = Math.max(0, Math.round(Number(claimAmountForm.amountMajor ?? 0) * 100))
+  if (!Number.isFinite(amountMinor) || amountMinor <= 0) {
+    uiStore.pushToast('報銷金額必須大於 0', 'error')
+    return
+  }
+
+  savingClaimAmount.value = true
+  try {
+    // Storing the original amount means "use original" -> reset to null so future
+    // edits to the original expense keep tracking it.
+    const targetMinor = amountMinor === originalMinorOfTx(target) ? null : amountMinor
+    await reimbursementStore.setClaimAmount(target.id, targetMinor)
+    pruneSelectedIds()
+    uiStore.pushToast('報銷金額已更新')
+    isClaimAmountOpen.value = false
+    claimAmountTargetTx.value = null
+  } catch (error) {
+    uiStore.pushToast(error.message ?? '更新失敗', 'error')
+  } finally {
+    savingClaimAmount.value = false
+  }
+}
+
 function reimbursedMinorOfTx(tx) {
   return reimbursementReimbursedMinor(tx)
 }
@@ -727,6 +827,7 @@ function buildClaimSheetExportPayload() {
   const statusLabel = tab.value === 'pending' ? '未報銷' : '已報銷'
   const rows = rowsSource.map((tx) => {
     const amountMinor = originalMinorOfTx(tx)
+    const claimableMinor = claimableMinorOfTx(tx)
     const reimbursedMinor = reimbursedMinorOfTx(tx)
     const claimMinor = claimMinorOfTx(tx)
     return {
@@ -735,12 +836,14 @@ function buildClaimSheetExportPayload() {
       分類: tx.category_name || '',
       備註: noteTextOfTx(tx),
       原始支出: toAmountMajorText(amountMinor),
+      報銷金額: toAmountMajorText(claimableMinor),
       已報銷: toAmountMajorText(reimbursedMinor),
       本次請款: toAmountMajorText(claimMinor),
     }
   })
 
   const totalAmountMinor = rowsSource.reduce((sum, tx) => sum + originalMinorOfTx(tx), 0)
+  const totalClaimableMinor = rowsSource.reduce((sum, tx) => sum + claimableMinorOfTx(tx), 0)
   const totalReimbursedMinor = rowsSource.reduce((sum, tx) => sum + reimbursedMinorOfTx(tx), 0)
   const totalClaimMinor = rowsSource.reduce((sum, tx) => sum + claimMinorOfTx(tx), 0)
   rows.push({
@@ -749,11 +852,12 @@ function buildClaimSheetExportPayload() {
     分類: '',
     備註: '',
     原始支出: toAmountMajorText(totalAmountMinor),
+    報銷金額: toAmountMajorText(totalClaimableMinor),
     已報銷: toAmountMajorText(totalReimbursedMinor),
     本次請款: toAmountMajorText(totalClaimMinor),
   })
 
-  const headers = ['狀態', '交易日期', '分類', '備註', '原始支出', '已報銷', '本次請款']
+  const headers = ['狀態', '交易日期', '分類', '備註', '原始支出', '報銷金額', '已報銷', '本次請款']
   const csvText = rowsToCsv(rows, headers)
   return {
     rowsSource,
@@ -968,6 +1072,11 @@ watch(tab, () => {
 })
 
 function onRequestCloseOverlay(event) {
+  if (isClaimAmountOpen.value) {
+    closeClaimAmountSheet()
+    event.preventDefault()
+    return
+  }
   if (isAdvanceOpen.value) {
     closeAdvanceSheet()
     event.preventDefault()

@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (SMB-237) 報銷項目可自訂報銷金額：報銷清單未報銷項目新增「報銷金額」設定（底部輸入面板，可輸入元為單位的報銷金額或一鍵重設為原始支出），交易表新增 `reimburse_target_minor` 欄位（migration 036）儲存設定值。設定後匯出 CSV、請款單導入與報銷待處理 / 已報銷金額計算都改以設定金額為準（未設定時維持以原始支出計算的舊行為）；匯出 CSV 另新增「報銷金額」欄位。新增 `reimbursement-claim-amount.test.js`（含 alias loader 行為測試 9 案例）與 db-migrate 註冊測試。
+
 ---
 
 ## v1.3.10

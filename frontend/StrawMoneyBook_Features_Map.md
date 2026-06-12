@@ -16,7 +16,7 @@
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細；v1.2.6 後若借貸設有預設利息，單筆新增 / 編輯還款會阻擋超過本金加預設利息的目標總額；v1.2.22 / SMB-214 後還款支援利息功能：輸入金額超過剩餘本金時，超出部分自動計為利息並建立對應利息交易（借出方向為利息收入、借入方向為利息支出），還款表單即時顯示利息預覽；v1.2.15 / SMB-210 後借出 / 借入建立與所有還款、利息交易預設不計入收支分析與預算統計）
 - 借貸建立後可於借貸明細變更「建立入帳帳戶」，會直接修正該筆初始借入 / 借出交易的帳戶歸屬
 - SMB-225 / v1.2.51 後對象明細頁（`LoanCounterpartyDetailPage.vue`，有匯出 CSV 按鈕的同一頁）在 header 與 summary 之間**獨立**呈現「新增該對象借出 / 新增該對象借入」兩顆 primary 按鈕（容器 `.counterparty-create-actions`，desktop flex 並排、`@media 480px` 切 column 並 reset `flex: 0 0 auto` 保留正常按鈕高度）→ `openCreateSheet('lend' | 'borrow')`，鎖定方向、自動帶入對象名稱與預設帳戶，沿用既有 `loanStore.create` 主路徑。v1.2.50 把兩顆按鈕放進 header 內部 `.head-actions` 時被全域 `header.row:has(.back-btn)` iOS-nav grid 規則（`global.css` 469-527）擠進同一 grid cell 隱藏，v1.2.51 改放在 header 外的獨立 row 避開該規則。v1.2.49 放錯到 `LoanDetailPage` 的快速入口仍維持還原狀態
-- 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出；請款單導入報銷改由獨立頁面選取，支援全選 / 取消全選；SMB-222 Restart / v1.2.45 後「導入借入」改為「導入借出」：只列尚未完成的借出（`loans.direction='lend'` 且 `status NOT IN ('settled','void')`，setup 交易為 `origin_type='loan_payment'` AND `type='expense'`），完成請款單時對應借出會被整套消除（軟刪 loan_payment 來源交易、刪除 loan_payments 還款、軟刪 loans），請款單從 paid 退回 draft 或刪除 paid 請款單時會復原借出與 setup 交易；SMB-222 Restart / v1.2.44 後請款單導入借出 / 借貸入帳交易拆出獨立區塊與獨立頁面 (`/claim-sheets/:id/import-borrow-loans`)，與導入報銷不再混在同一份候選列表，請款單建立 / 編輯表單同時提供「導入報銷」與「導入借出」兩個區塊與按鈕，draft session 也分開保存兩種選取，請款單編輯儲存時 borrow_loan 改透過 `buildClaimSheetImportedClaimItem` 正確寫入 `entry_type=income`，不會被誤存為 expense；SMB-150 後從導入報銷頁返回時會固定回到原本的新增 / 編輯請款單流程，不再直接跳出請款單；完成請款單會讓匯入報銷項目回到已報銷狀態，不再留在未報銷；還原後重新完成不會因舊入帳交易冪等鍵撞唯一鍵；SMB-148 後代收管理會保留部分抵扣但仍有可用餘額的代收，只有完全未抵扣項目可直接刪除）
+- 報銷與請款管理（可報銷交易、代收抵扣、請款單建立 / 完成 / 匯出；請款單導入報銷改由獨立頁面選取，支援全選 / 取消全選；SMB-222 Restart / v1.2.45 後「導入借入」改為「導入借出」：只列尚未完成的借出（`loans.direction='lend'` 且 `status NOT IN ('settled','void')`，setup 交易為 `origin_type='loan_payment'` AND `type='expense'`），完成請款單時對應借出會被整套消除（軟刪 loan_payment 來源交易、刪除 loan_payments 還款、軟刪 loans），請款單從 paid 退回 draft 或刪除 paid 請款單時會復原借出與 setup 交易；SMB-222 Restart / v1.2.44 後請款單導入借出 / 借貸入帳交易拆出獨立區塊與獨立頁面 (`/claim-sheets/:id/import-borrow-loans`)，與導入報銷不再混在同一份候選列表，請款單建立 / 編輯表單同時提供「導入報銷」與「導入借出」兩個區塊與按鈕，draft session 也分開保存兩種選取，請款單編輯儲存時 borrow_loan 改透過 `buildClaimSheetImportedClaimItem` 正確寫入 `entry_type=income`，不會被誤存為 expense；SMB-150 後從導入報銷頁返回時會固定回到原本的新增 / 編輯請款單流程，不再直接跳出請款單；完成請款單會讓匯入報銷項目回到已報銷狀態，不再留在未報銷；還原後重新完成不會因舊入帳交易冪等鍵撞唯一鍵；SMB-148 後代收管理會保留部分抵扣但仍有可用餘額的代收，只有完全未抵扣項目可直接刪除；SMB-237 / v1.3.11 後報銷清單未報銷項目可透過「報銷金額」設定底部面板自訂實際報銷金額（存於交易 `reimburse_target_minor` 欄位，migration 036），設定後匯出 CSV（新增「報銷金額」欄）、請款單導入金額與報銷待處理 / 已報銷計算都以設定金額為準，未設定時維持以原始支出計算的舊行為，可一鍵重設回原始支出）
 - 存錢罐、訂閱追蹤與自動存提
 - 訂閱追蹤的扣款日以當天開始為扣款時間點；進入扣款日後仍可標示本期已到期，但「下次扣款」會直接推進到下一個週期，且排程日期以 App 預設時區正規化，避免 UTC / CI 環境把台北時間午夜誤判成前一天；v1.2.6 後訂閱自動扣款與存錢罐自動存入的到期日判斷會使用帳本時區，App 開啟 / 回前景 / 帳本切換與儲存訂閱後會對今日到期項目建立冪等支出交易
 - AI 自動記帳（文字解析、語音輸入、會員次數限制）
@@ -258,7 +258,7 @@
 | `transaction.store.js` | 交易載入、新增、更新、刪除、首頁篩選與關聯刷新 |
 | `budget.store.js` | 月預算、預算項目、保留金額、整月預算存款設定與補跑偏好 |
 | `loan.store.js` | 借貸清單、還款、作廢、明細 |
-| `reimbursement.store.js` | 報銷列表與報銷狀態處理；已完成請款單匯入項目會透過 `reimbursed_minor` 分入已報銷 |
+| `reimbursement.store.js` | 報銷列表與報銷狀態處理；已完成請款單匯入項目會透過 `reimbursed_minor` 分入已報銷；SMB-237 後 `setClaimAmount` action 可設定 / 重設報銷項目的自訂報銷金額（`reimburse_target_minor`） |
 | `addon-template.store.js` | 附加項目模板讀取與快取 |
 | `ui.store.js` | 全域 UI 狀態（Toast 等） |
 
@@ -275,7 +275,7 @@
 | `budget-reserve.service.js` | 依帳本月份 / 時區 / 日均規則即時計算保留金額 |
 | `budget-save.service.js` | 預算剩餘額自動結算、補跑、delta/manual 補差 |
 | `loan.service.js` | 借貸建立、還款、作廢；單筆新增 / 編輯還款會阻擋超過借貸剩餘金額 |
-| `reimbursement.service.js` | 報銷流程、報銷入帳、請款單完成 / 還原後的匯入報銷狀態同步、隱藏分類處理 |
+| `reimbursement.service.js` | 報銷流程、報銷入帳、請款單完成 / 還原後的匯入報銷狀態同步、隱藏分類處理；SMB-237 後 `setReimbursableExpenseClaimAmount` 設定 / 重設可報銷交易的 `reimburse_target_minor`（自訂報銷金額） |
 | `savings-jar.service.js` | 存錢罐存提與目標管理 |
 | `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程（含 `repeats: true` 確保每日重複觸發）、連續記帳成就統計、原生通知同步逾時保護、全帳本同步去重、同步序列化避免實機儲存卡死、Android Local Notifications plugin proxy 相容性處理、exact alarm 檢查與系統設定導引 |
 | `savings-jar-auto-save.service.js` | 存錢罐自動存入 / 定期儲蓄流程；到期日判斷與入帳時間使用帳本時區 |

@@ -21,7 +21,7 @@ import migration019 from '@/core/db/migrations/019_bank_transaction_metadata.sql
 // The schema changes from those drafts were either reverted or merged into adjacent migrations.
 // Do NOT reuse version numbers 20 or 21 — doing so would skip execution on devices that already
 // have schema_migrations rows for those versions, causing a schema split between new and existing installs.
-// Next available version: 35.
+// Next available version: 37.
 import migration023 from '@/core/db/migrations/023_reimbursement_item_advance_source.sql?raw'
 import migration024 from '@/core/db/migrations/024_savings_jars_auto_save.sql?raw'
 import migration025 from '@/core/db/migrations/025_budget_save.sql?raw'
@@ -33,6 +33,7 @@ import migration032 from '@/core/db/migrations/032_einvoice_import.sql?raw'
 import migration033 from '@/core/db/migrations/033_einvoice_credential_password_iv.sql?raw'
 import migration034 from '@/core/db/migrations/034_budget_containers.sql?raw'
 import migration035 from '@/core/db/migrations/035_category_default_flags.sql?raw'
+import migration036 from '@/core/db/migrations/036_transaction_reimburse_target.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -66,6 +67,7 @@ const MIGRATIONS = [
   { version: 33, name: 'einvoice_credential_password_iv', sql: migration033 },
   { version: 34, name: 'budget_containers', sql: migration034 },
   { version: 35, name: 'category_default_flags', sql: migration035 },
+  { version: 36, name: 'transaction_reimburse_target', sql: migration036 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'

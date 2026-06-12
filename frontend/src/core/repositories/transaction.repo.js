@@ -487,6 +487,7 @@ export async function listReimbursementTransactions(ledgerId, state) {
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.account_id, t.category_id, t.amount_minor,
             t.occurred_at, t.note, t.is_reimbursable, t.reimbursement_state, t.reimbursed_at,
+            t.reimburse_target_minor,
             t.include_in_budget, t.include_in_analysis, c.name AS category_name,
             (
               SELECT rt.id
@@ -627,6 +628,28 @@ export async function getPaidClaimItemMinorByTransactionId(ledgerId, expenseTxId
   )
 
   return Math.max(0, Math.round(Number(firstRow(result)?.claim_reimbursed_minor ?? 0)))
+}
+
+function normalizeReimburseTargetMinor(value) {
+  if (value === null || value === undefined || value === '') return null
+  const numeric = Math.round(Number(value))
+  if (!Number.isFinite(numeric) || numeric < 0) return null
+  return numeric
+}
+
+export async function updateTransactionReimburseTargetMinor(ledgerId, txId, targetMinor) {
+  assertLedgerId(ledgerId)
+
+  await run(
+    `UPDATE transactions
+     SET reimburse_target_minor = ?,
+         updated_at = ?
+     WHERE ledger_id = ?
+       AND id = ?
+       AND deleted_at IS NULL
+       AND is_reimbursable = 1;`,
+    [normalizeReimburseTargetMinor(targetMinor), nowIso(), ledgerId, txId],
+  )
 }
 
 export async function markTransactionReimbursed(ledgerId, txId, reimbursed) {
@@ -875,8 +898,8 @@ export async function addTransaction(ledgerId, input) {
       ledger_id, id, type, transfer_group_id, account_id, peer_account_id,
       category_id, amount_minor, occurred_at, note, location, tags_json, origin_type,
       external_ref_id, idempotency_key, is_reimbursable, reimbursement_state,
-      reimbursed_at, include_in_budget, include_in_analysis, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      reimbursed_at, reimburse_target_minor, include_in_budget, include_in_analysis, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       ledgerId,
       id,
@@ -896,6 +919,7 @@ export async function addTransaction(ledgerId, input) {
       input.isReimbursable ? 1 : 0,
       input.reimbursementState ?? 'none',
       input.reimbursedAt ?? null,
+      normalizeReimburseTargetMinor(input.reimburseTargetMinor),
       input.includeInBudget === false ? 0 : 1,
       input.includeInAnalysis === false ? 0 : 1,
       now,

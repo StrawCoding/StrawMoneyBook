@@ -9,6 +9,7 @@ import {
   createReimbursementAdvanceEntry,
   deleteReimbursementAdvanceEntry,
   listReimbursementAdvancesData,
+  setReimbursableExpenseClaimAmount,
   settleReimbursableExpense,
 } from '@/core/services/reimbursement.service'
 import {
@@ -69,6 +70,18 @@ export const useReimbursementStore = defineStore('reimbursement', {
       const ledgerStore = useLedgerStore()
       await markTransactionReimbursed(ledgerStore.activeLedgerId, txId, true)
       await this.load()
+    },
+
+    async setClaimAmount(txId, targetMinor, options = {}) {
+      const ledgerStore = useLedgerStore()
+      const result = await setReimbursableExpenseClaimAmount(ledgerStore.activeLedgerId, {
+        txId,
+        targetMinor,
+      })
+      if (!options?.skipReload) {
+        await this.load()
+      }
+      return result
     },
 
     async settle(txId, payload = {}, options = {}) {

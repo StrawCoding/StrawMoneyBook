@@ -14,17 +14,36 @@ export function reimbursementOriginalMinor(tx) {
   return Math.max(0, settledMinor - addonDeltaMinor)
 }
 
-export function reimbursementReimbursedMinor(tx) {
+function normalizeReimburseTargetMinor(value) {
+  if (value === null || value === undefined || value === '') return null
+  const numeric = Math.round(Number(value))
+  if (!Number.isFinite(numeric) || numeric < 0) return null
+  return numeric
+}
+
+// SMB-237: a reimbursable expense can carry a custom "報銷金額" (claim target)
+// stored in `reimburse_target_minor`. When set, claim sheet import and exports
+// use this amount instead of the full original expense; when unset it falls back
+// to the original expense amount (the previous behaviour).
+export function reimbursementClaimableMinor(tx) {
   const originalMinor = reimbursementOriginalMinor(tx)
+  if (!Number(tx?.is_reimbursable)) return originalMinor
+  const target = normalizeReimburseTargetMinor(tx?.reimburse_target_minor)
+  if (target === null) return originalMinor
+  return target
+}
+
+export function reimbursementReimbursedMinor(tx) {
+  const claimableMinor = reimbursementClaimableMinor(tx)
   const reimbursedMinor = absMinor(tx?.reimbursed_minor)
   if (reimbursedMinor <= 0) return 0
-  return Math.min(reimbursedMinor, originalMinor || reimbursedMinor)
+  return Math.min(reimbursedMinor, claimableMinor || reimbursedMinor)
 }
 
 export function reimbursementPendingMinor(tx) {
-  const originalMinor = reimbursementOriginalMinor(tx)
+  const claimableMinor = reimbursementClaimableMinor(tx)
   const reimbursedMinor = reimbursementReimbursedMinor(tx)
-  return Math.max(0, originalMinor - reimbursedMinor)
+  return Math.max(0, claimableMinor - reimbursedMinor)
 }
 
 export function reimbursementNoteText(tx) {
@@ -55,12 +74,14 @@ function parseAdvanceUsageMap(rawValue) {
 export function withReimbursementDerivedFields(tx) {
   if (!tx || typeof tx !== 'object') return tx
   const originalMinor = reimbursementOriginalMinor(tx)
+  const claimableMinor = reimbursementClaimableMinor(tx)
   const reimbursedMinor = reimbursementReimbursedMinor(tx)
   return {
     ...tx,
     original_amount_minor: originalMinor,
+    claimable_amount_minor: claimableMinor,
     reimbursed_display_minor: reimbursedMinor,
-    pending_amount_minor: Math.max(0, originalMinor - reimbursedMinor),
+    pending_amount_minor: Math.max(0, claimableMinor - reimbursedMinor),
     note_plain: reimbursementNoteText(tx),
     advance_ids: parseAdvanceIds(tx?.advance_ids_csv),
     advance_usage_map: parseAdvanceUsageMap(tx?.advance_usage_pairs),

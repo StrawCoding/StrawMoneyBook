@@ -11,6 +11,7 @@ import {
   restoreSoftDeletedTransactionsByOriginRef,
   softDeleteTransactionsByOriginRef,
   softDeleteTransactionById,
+  updateTransactionReimburseTargetMinor,
 } from '@/core/repositories/transaction.repo'
 import {
   getLoanById,
@@ -316,6 +317,37 @@ export async function loadReimbursementDashboard(ledgerId) {
 
 export async function listReimbursementAdvancesData(ledgerId) {
   return listReimbursementAdvances(ledgerId, { activeOnly: false })
+}
+
+// SMB-237: set / clear the custom reimbursement amount (claim target) of a
+// reimbursable expense. Passing null (or omitting targetMinor) resets it back to
+// the original expense amount. Claim sheet import and exports use this value.
+export async function setReimbursableExpenseClaimAmount(ledgerId, payload = {}) {
+  const txId = String(payload?.txId ?? '').trim()
+  if (!txId) {
+    throw new Error('txId 為必填')
+  }
+
+  const sourceTx = await findTransactionRecordById(ledgerId, txId)
+  if (!sourceTx) {
+    throw new Error('找不到來源交易')
+  }
+  if (!Number(sourceTx.is_reimbursable)) {
+    throw new Error('此交易不是可報銷項目')
+  }
+
+  const rawTarget = payload?.targetMinor
+  let targetMinor = null
+  if (rawTarget !== null && rawTarget !== undefined && rawTarget !== '') {
+    const numeric = Math.round(Number(rawTarget))
+    if (!Number.isFinite(numeric) || numeric < 0) {
+      throw new Error('報銷金額必須為大於或等於 0 的數字')
+    }
+    targetMinor = numeric
+  }
+
+  await updateTransactionReimburseTargetMinor(ledgerId, txId, targetMinor)
+  return { txId, targetMinor }
 }
 
 export async function createReimbursementAdvanceEntry(ledgerId, payload = {}) {
