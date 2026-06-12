@@ -535,7 +535,27 @@ function loadStoreFromDatabase(db) {
   }
 }
 
-function persistStoreToDatabase(db, data) {
+function indexRecordsById(records, normalizer) {
+  const map = new Map()
+  if (!Array.isArray(records)) return map
+  for (const record of records) {
+    const normalized = normalizer(record)
+    map.set(String(normalized.id), JSON.stringify(normalized))
+  }
+  return map
+}
+
+// Snapshot the store state at load time so the next write only touches records
+// that actually changed. Keyed by id -> serialized (normalized) record.
+function buildStoreBaseline(data) {
+  return {
+    users: indexRecordsById(data?.users, normalizeUserRecord),
+    shared_ledgers: indexRecordsById(data?.shared_ledgers, normalizeSharedLedgerRecord),
+    referrals: indexRecordsById(data?.referrals, normalizeReferralRecord),
+  }
+}
+
+function prepareStoreWriteStatements(db) {
   const upsertUser = db.prepare(`
     INSERT INTO users (
       id, email, account, email_verified, display_name, avatar_url, referral_code,
@@ -624,6 +644,49 @@ function persistStoreToDatabase(db, data) {
   const deleteSharedLedgersById = db.prepare('DELETE FROM shared_ledgers WHERE id = ?')
   const deleteReferralsById = db.prepare('DELETE FROM referrals WHERE id = ?')
 
+  return {
+    upsertUser,
+    upsertSharedLedger,
+    upsertReferral,
+    deleteUsersById,
+    deleteSharedLedgersById,
+    deleteReferralsById,
+  }
+}
+
+function bindUserRow(statement, user) {
+  statement.run({
+    ...user,
+    membership_grants_json: JSON.stringify(Array.isArray(user.membership_grants) ? user.membership_grants : []),
+    email_verified: user.email_verified ? 1 : 0,
+    must_change_password: user.must_change_password ? 1 : 0,
+    password_reset_required: user.password_reset_required ? 1 : 0,
+  })
+}
+
+function bindSharedLedgerRow(statement, sharedLedger) {
+  statement.run({
+    ...sharedLedger,
+    members_json: JSON.stringify(Array.isArray(sharedLedger.members) ? sharedLedger.members : []),
+    invitations_json: JSON.stringify(Array.isArray(sharedLedger.invitations) ? sharedLedger.invitations : []),
+    snapshot_json: JSON.stringify(sharedLedger.snapshot ?? {}),
+    version: Number(sharedLedger.version ?? 0),
+  })
+}
+
+// Writes the store back to SQLite inside a single transaction.
+//
+// When a `baseline` (id -> serialized record snapshot taken at load time) is
+// supplied, only records that were added or actually changed get upserted, and
+// only records that were removed get deleted. This avoids the O(N) full-table
+// re-upsert + full-table delete scan that previously ran on every mutation,
+// which was the root cause of the updateStore read/write bottleneck.
+//
+// Without a baseline (e.g. legacy JSON migration) it performs a full write and
+// reconciles deletions by scanning the existing rows.
+function writeStoreToDatabase(db, data, baseline = null) {
+  const statements = prepareStoreWriteStatements(db)
+
   const writeTransaction = db.transaction((nextData) => {
     const nextUsers = Array.isArray(nextData?.users) ? nextData.users.map(normalizeUserRecord) : []
     const nextSharedLedgers = Array.isArray(nextData?.shared_ledgers)
@@ -635,50 +698,61 @@ function persistStoreToDatabase(db, data) {
     const nextSharedLedgerIds = new Set(nextSharedLedgers.map((item) => String(item.id)))
     const nextReferralIds = new Set(nextReferrals.map((item) => String(item.id)))
 
+    const isUnchanged = (table, record) => {
+      if (!baseline) return false
+      const previous = baseline[table]?.get(String(record.id))
+      return previous !== undefined && previous === JSON.stringify(record)
+    }
+
     for (const user of nextUsers) {
-      upsertUser.run({
-        ...user,
-        membership_grants_json: JSON.stringify(Array.isArray(user.membership_grants) ? user.membership_grants : []),
-        email_verified: user.email_verified ? 1 : 0,
-        must_change_password: user.must_change_password ? 1 : 0,
-        password_reset_required: user.password_reset_required ? 1 : 0,
-      })
+      if (isUnchanged('users', user)) continue
+      bindUserRow(statements.upsertUser, user)
     }
 
     for (const sharedLedger of nextSharedLedgers) {
-      upsertSharedLedger.run({
-        ...sharedLedger,
-        members_json: JSON.stringify(Array.isArray(sharedLedger.members) ? sharedLedger.members : []),
-        invitations_json: JSON.stringify(Array.isArray(sharedLedger.invitations) ? sharedLedger.invitations : []),
-        snapshot_json: JSON.stringify(sharedLedger.snapshot ?? {}),
-        version: Number(sharedLedger.version ?? 0),
-      })
+      if (isUnchanged('shared_ledgers', sharedLedger)) continue
+      bindSharedLedgerRow(statements.upsertSharedLedger, sharedLedger)
     }
 
     for (const referral of nextReferrals) {
-      upsertReferral.run(referral)
+      if (isUnchanged('referrals', referral)) continue
+      statements.upsertReferral.run(referral)
     }
 
-    for (const row of db.prepare('SELECT id FROM referrals').all()) {
-      if (!nextReferralIds.has(String(row.id))) {
-        deleteReferralsById.run(String(row.id))
+    if (baseline) {
+      for (const id of baseline.referrals.keys()) {
+        if (!nextReferralIds.has(id)) statements.deleteReferralsById.run(id)
       }
-    }
-
-    for (const row of db.prepare('SELECT id FROM shared_ledgers').all()) {
-      if (!nextSharedLedgerIds.has(String(row.id))) {
-        deleteSharedLedgersById.run(String(row.id))
+      for (const id of baseline.shared_ledgers.keys()) {
+        if (!nextSharedLedgerIds.has(id)) statements.deleteSharedLedgersById.run(id)
       }
-    }
-
-    for (const row of db.prepare('SELECT id FROM users').all()) {
-      if (!nextUserIds.has(String(row.id))) {
-        deleteUsersById.run(String(row.id))
+      for (const id of baseline.users.keys()) {
+        if (!nextUserIds.has(id)) statements.deleteUsersById.run(id)
+      }
+    } else {
+      for (const row of db.prepare('SELECT id FROM referrals').all()) {
+        if (!nextReferralIds.has(String(row.id))) {
+          statements.deleteReferralsById.run(String(row.id))
+        }
+      }
+      for (const row of db.prepare('SELECT id FROM shared_ledgers').all()) {
+        if (!nextSharedLedgerIds.has(String(row.id))) {
+          statements.deleteSharedLedgersById.run(String(row.id))
+        }
+      }
+      for (const row of db.prepare('SELECT id FROM users').all()) {
+        if (!nextUserIds.has(String(row.id))) {
+          statements.deleteUsersById.run(String(row.id))
+        }
       }
     }
   })
 
   writeTransaction(data)
+}
+
+function persistStoreToDatabase(db, data) {
+  writeStoreToDatabase(db, data, null)
 }
 
 async function migrateLegacyJsonIfNeeded(db) {
@@ -737,8 +811,9 @@ export async function updateStore(mutator) {
   updateQueue = updateQueue.catch(() => null).then(async () => {
     const db = await ensureDatabase()
     const data = loadStoreFromDatabase(db)
+    const baseline = buildStoreBaseline(data)
     result = await mutator(data)
-    persistStoreToDatabase(db, data)
+    writeStoreToDatabase(db, data, baseline)
   })
   await updateQueue
   return result

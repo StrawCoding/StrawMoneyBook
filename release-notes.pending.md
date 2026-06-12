@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (SMB-232) 後端 `updateStore` 全量讀寫瓶頸優化：原本每次 mutation 都會把所有 users / shared_ledgers / referrals 全量 upsert，並對三張表各做一次 `SELECT id` 全表掃描比對刪除，寫入量隨資料量線性成長。改為在 `store.js` 載入時以 id → 序列化快照建立 baseline（`buildStoreBaseline`），寫回時只 upsert「新增或實際變更」的 record、只刪除「實際被移除」的 record，全部仍包在單一 SQLite transaction 內確保原子性，並移除三次全表刪除掃描。mutator API 完全不變，15+ 呼叫端零改動。新增 `backend/test/update-store-row-level.test.js`（用第二連線 trigger 計數驗證單筆變更只觸發 1 次寫入、刪除只移除目標 row），backend 全測試 61 案例綠燈。
+
 ---
 
 ## v1.3.9

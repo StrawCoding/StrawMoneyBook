@@ -361,7 +361,7 @@ UI composable 目錄：`src/ui/composables/`
 | `routes/shared-ledgers.js` | shared-ledgers 路由入口 re-export；實作已拆到 `routes/shared-ledgers/` 模組目錄 |
 | `routes/shared-ledgers/` | 共同帳本建立、查詢、快照上傳下載、Email 邀請、接受邀請、試用與同步 action handlers；SMB-229 / v1.3.9 後依角色權限矩陣（`collab/store-shared-ledgers.js`）檢查每個 endpoint（Viewer 禁 push、Member/Viewer 禁 invite），並新增改角色 `POST /:id/members/:userId/role` 與轉移所有權 `POST /:id/transfer` |
 | `routes/referrals.js` | 邀請碼資訊、邀請碼兌換、會員獎勵發放 |
-| `collab/store.js` | 本機 JSON store、使用者資料、共同帳本、邀請、會員加成資料、access token / auth session |
+| `collab/store.js` | 本機 SQLite store、使用者資料、共同帳本、邀請、會員加成資料、access token / auth session；SMB-232 / v1.3.10 後 `updateStore` 改為 row-level 差異寫入：載入時建立 id→序列化快照 baseline，寫回時只 upsert 新增/變更的 record、只刪除被移除的 record，全部包在單一 SQLite transaction，移除每次 mutation 全量 upsert 與全表刪除掃描的瓶頸（mutator API 不變） |
 | `collab/auth-store.js` | 帳號、密碼、auth provider、會員 grant、Google Play 同步後的 public profile 會員狀態、refresh session 邏輯 |
 | `collab/admin-store.js` | 管理員總覽、client log、會員管理 |
 | `collab/auth-session.js` | Bearer token 驗證、登入狀態檢查、管理員權限檢查 |
