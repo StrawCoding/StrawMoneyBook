@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.12
+- (SMB-238) 修復帳號頁 Google 登入準備階段在 `https://localhost`（Capacitor WebView）連線 `api.strawmb.com` 時出現 `shared_ledger_network_error`：SMB-233 後所有共同帳本 API 請求都帶 `credentials: include`，但 `POST /api/auth/google/prepare`（login 用途）其實不需要 cookie，跨域時瀏覽器會因 `Access-Control-Allow-Origin: *` 與 credentials 不相容而直接 Failed to fetch。前端改為僅在明確 `useAuthStorage: true` 的登入 / refresh / logout 才附帶 cookie auth header 與 `credentials: include`；後端 `http.js` 在收到 `X-Straw-Auth-Storage: cookie` 時改回反射實際 Origin 並附 `Access-Control-Allow-Credentials`，匿名跨域仍維持 `*`；補上 `https://localhost` 等 Capacitor / HTTPS 本機開發 Origin。帳號頁 `refreshGoogleButtonUi` 也會捕捉 prepare 失敗並顯示 toast，不再留下未處理 rejection。新增 `shared-ledger-cookie-auth-cors-source.test.js` 與 `backend/test/http-cors.test.js`。
+
 ## v1.3.11
 - (SMB-237) 報銷項目可自訂報銷金額：報銷清單未報銷項目新增「報銷金額」設定（底部輸入面板，可輸入元為單位的報銷金額或一鍵重設為原始支出），交易表新增 `reimburse_target_minor` 欄位（migration 036）儲存設定值。設定後匯出 CSV、請款單導入與報銷待處理 / 已報銷金額計算都改以設定金額為準（未設定時維持以原始支出計算的舊行為）；匯出 CSV 另新增「報銷金額」欄位。新增 `reimbursement-claim-amount.test.js`（含 alias loader 行為測試 9 案例）與 db-migrate 註冊測試。
 

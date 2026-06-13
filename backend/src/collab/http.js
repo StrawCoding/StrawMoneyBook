@@ -2,6 +2,7 @@ const PROD_ALLOWED_ORIGINS = [
   'https://strawmb.com',
   'https://www.strawmb.com',
   'https://api.strawmb.com',
+  'https://localhost',
   'capacitor://localhost',
   'ionic://localhost',
 ]
@@ -10,8 +11,12 @@ const DEV_ALLOWED_ORIGINS = [
   ...PROD_ALLOWED_ORIGINS,
   'http://127.0.0.1:5173',
   'http://localhost:5173',
+  'https://127.0.0.1:5173',
+  'https://localhost:5173',
   'http://127.0.0.1:4173',
   'http://localhost:4173',
+  'https://127.0.0.1:4173',
+  'https://localhost:4173',
   'http://127.0.0.1:8787',
   'http://localhost:8787',
 ]
@@ -106,21 +111,36 @@ function setSecurityHeaders(res) {
   }
 }
 
+function wantsCredentialedCors(req) {
+  const header = String(
+    req?.headers?.['x-straw-auth-storage']
+    ?? req?.headers?.['X-Straw-Auth-Storage']
+    ?? '',
+  ).trim()
+  return header === 'cookie'
+}
+
 function setCorsHeaders(res) {
   const req = res.__request
   const origin = getRequestOrigin(req)
   setSecurityHeaders(res)
   res.setHeader('Vary', 'Origin')
-  if (ALLOW_ALL_ORIGINS) {
+  const credentialed = wantsCredentialedCors(req)
+  const originAllowed = Boolean(origin) && (ALLOW_ALL_ORIGINS || isOriginAllowed(req))
+
+  if (origin && originAllowed && (credentialed || !ALLOW_ALL_ORIGINS)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    if (credentialed || !ALLOW_ALL_ORIGINS) {
+      res.setHeader('Access-Control-Allow-Credentials', 'true')
+    }
+  } else if (ALLOW_ALL_ORIGINS) {
     res.setHeader('Access-Control-Allow-Origin', '*')
   } else if (origin && isOriginAllowed(req)) {
     res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Access-Control-Allow-Credentials', 'true')
   }
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-Straw-Client-Key, X-Straw-Auth-Storage')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
-  if (!ALLOW_ALL_ORIGINS && origin && isOriginAllowed(req)) {
-    res.setHeader('Access-Control-Allow-Credentials', 'true')
-  }
 }
 
 function sendJson(res, statusCode, payload) {

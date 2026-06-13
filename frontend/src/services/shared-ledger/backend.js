@@ -68,6 +68,10 @@ function createMissingApiError() {
   return error
 }
 
+function shouldAttachCookieAuthToRequest(useAuthStorage = false) {
+  return Boolean(useAuthStorage) && shouldSendAuthCredentials()
+}
+
 function describeNetworkFailure(requestUrl, error) {
   const pageOrigin = typeof window !== 'undefined' ? String(window.location?.origin ?? '').trim() : ''
   const online = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean'
@@ -85,7 +89,7 @@ function describeNetworkFailure(requestUrl, error) {
   }
   if (pageOrigin) {
     reasonParts.push(t('shared_ledger.error.page_origin', { origin: pageOrigin }))
-    if (/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(pageOrigin) && /^https:\/\/api\.strawmb\.com(?:\/|$)/i.test(String(requestUrl ?? '').trim())) {
+    if (/^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(pageOrigin) && /^https:\/\/api\.strawmb\.com(?:\/|$)/i.test(String(requestUrl ?? '').trim())) {
       reasonParts.push(t('shared_ledger.error.localhost_fetch_hint'))
     }
   }
@@ -241,8 +245,9 @@ async function requestJson(path, { method = 'GET', body, auth = true, _retried =
     throw createMissingApiError()
   }
 
+  const attachCookieAuth = shouldAttachCookieAuthToRequest(useAuthStorage)
   const headers = {
-    ...((useAuthStorage || shouldSendAuthCredentials()) ? getAuthStorageHeaders() : {}),
+    ...(attachCookieAuth ? getAuthStorageHeaders() : {}),
   }
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json'
@@ -269,7 +274,7 @@ async function requestJson(path, { method = 'GET', body, auth = true, _retried =
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
-      credentials: (useAuthStorage || shouldSendAuthCredentials()) ? 'include' : 'same-origin',
+      credentials: attachCookieAuth ? 'include' : 'same-origin',
       signal: controller?.signal,
     })
   } catch (error) {
@@ -330,11 +335,12 @@ async function requestJson(path, { method = 'GET', body, auth = true, _retried =
   return data
 }
 
-async function requestFormData(path, { method = 'POST', body, auth = false } = {}) {
+async function requestFormData(path, { method = 'POST', body, auth = false, useAuthStorage = false } = {}) {
   if (shouldRequireExplicitApiBase()) {
     throw createMissingApiError()
   }
 
+  const attachCookieAuth = shouldAttachCookieAuthToRequest(useAuthStorage)
   const headers = {}
   if (auth) {
     const token = readSession()?.token ?? getStoredAccessToken()
@@ -357,7 +363,7 @@ async function requestFormData(path, { method = 'POST', body, auth = false } = {
       method,
       headers,
       body,
-      credentials: shouldSendAuthCredentials() ? 'include' : 'same-origin',
+      credentials: attachCookieAuth ? 'include' : 'same-origin',
       signal: controller?.signal,
     })
   } catch (error) {

@@ -1022,7 +1022,15 @@ async function refreshGoogleButtonUi() {
   const purpose = shouldRenderPasswordVerification
     ? 'password_change'
     : (sessionUser.value ? 'link' : 'login')
-  const challenge = await loadGoogleChallenge(purpose)
+  let challenge = null
+  try {
+    challenge = await loadGoogleChallenge(purpose)
+  } catch (error) {
+    clearGoogleButtonHost()
+    clearGooglePasswordButtonHost()
+    uiStore.pushToast(toGoogleErrorMessage(error, t('settings_account.google_login_failed', 'Google 登入失敗')), 'error')
+    return
+  }
   if (!challenge) {
     clearGoogleButtonHost()
     clearGooglePasswordButtonHost()

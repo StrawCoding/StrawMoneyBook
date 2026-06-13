@@ -10,7 +10,8 @@ const storageSource = readFileSync(join(root, 'src/services/shared-ledger/auth-s
 
 test('SMB-233: shared-ledger backend uses cookie auth storage instead of persisting tokens in localStorage', () => {
   assert.match(backendSource, /getAuthStorageHeaders\(/)
-  assert.match(backendSource, /credentials:\s*\(useAuthStorage \|\| shouldSendAuthCredentials\(\)\) \? 'include' : 'same-origin'/)
+  assert.match(backendSource, /shouldAttachCookieAuthToRequest\(/)
+  assert.match(backendSource, /credentials: attachCookieAuth \? 'include' : 'same-origin'/)
   assert.doesNotMatch(backendSource, /localStorage\.setItem\(SESSION_STORAGE_KEY/)
   assert.doesNotMatch(backendSource, /localStorage\.setItem\(SHARED_LEDGER_SESSION_STORAGE_KEY/)
 })
