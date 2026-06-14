@@ -116,8 +116,25 @@ function wantsCredentialedCors(req) {
     req?.headers?.['x-straw-auth-storage']
     ?? req?.headers?.['X-Straw-Auth-Storage']
     ?? '',
-  ).trim()
-  return header === 'cookie'
+  ).trim().toLowerCase()
+  if (header === 'cookie') return true
+
+  // A CORS preflight (OPTIONS) request never carries the actual custom request
+  // header; the browser only advertises it via Access-Control-Request-Headers.
+  // We must still treat the preflight as credentialed so the response reflects a
+  // specific Origin + Access-Control-Allow-Credentials. Returning a wildcard
+  // ACAO here makes the browser reject the subsequent credentialed request
+  // (credentials: include) → Failed to fetch → shared_ledger_network_error.
+  const requestedHeaders = String(
+    req?.headers?.['access-control-request-headers']
+    ?? req?.headers?.['Access-Control-Request-Headers']
+    ?? '',
+  ).toLowerCase()
+  if (!requestedHeaders) return false
+  return requestedHeaders
+    .split(',')
+    .map((name) => name.trim())
+    .includes('x-straw-auth-storage')
 }
 
 function setCorsHeaders(res) {

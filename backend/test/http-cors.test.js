@@ -55,6 +55,72 @@ test('SMB-238: cookie auth requests reflect origin with credentials even when AL
   }
 })
 
+test('SMB-238: credentialed CORS preflight reflects origin + credentials even when ALLOW_ALL_ORIGINS is enabled', async () => {
+  const previousAllowedOrigins = process.env.ALLOWED_ORIGINS
+  const previousNodeEnv = process.env.NODE_ENV
+  process.env.ALLOWED_ORIGINS = '*'
+  process.env.NODE_ENV = 'production'
+
+  try {
+    const httpModule = await import(`../src/collab/http.js?cors-preflight-test=${Date.now()}`)
+    // A real browser preflight never carries the actual X-Straw-Auth-Storage
+    // header; it advertises it via Access-Control-Request-Headers instead.
+    const req = {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://localhost',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type,x-straw-auth-storage',
+      },
+    }
+    const res = createMockResponse(req)
+
+    const handled = httpModule.methodGuard(req, res, ['POST'])
+
+    assert.equal(handled, true)
+    assert.equal(res.statusCode, 204)
+    assert.equal(res.getHeader('access-control-allow-origin'), 'https://localhost')
+    assert.equal(res.getHeader('access-control-allow-credentials'), 'true')
+  } finally {
+    if (previousAllowedOrigins === undefined) delete process.env.ALLOWED_ORIGINS
+    else process.env.ALLOWED_ORIGINS = previousAllowedOrigins
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = previousNodeEnv
+  }
+})
+
+test('SMB-238: anonymous CORS preflight keeps wildcard ACAO when ALLOW_ALL_ORIGINS is enabled', async () => {
+  const previousAllowedOrigins = process.env.ALLOWED_ORIGINS
+  const previousNodeEnv = process.env.NODE_ENV
+  process.env.ALLOWED_ORIGINS = '*'
+  process.env.NODE_ENV = 'production'
+
+  try {
+    const httpModule = await import(`../src/collab/http.js?cors-preflight-anon-test=${Date.now()}`)
+    const req = {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://localhost',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type',
+      },
+    }
+    const res = createMockResponse(req)
+
+    const handled = httpModule.methodGuard(req, res, ['POST'])
+
+    assert.equal(handled, true)
+    assert.equal(res.statusCode, 204)
+    assert.equal(res.getHeader('access-control-allow-origin'), '*')
+    assert.equal(res.getHeader('access-control-allow-credentials'), undefined)
+  } finally {
+    if (previousAllowedOrigins === undefined) delete process.env.ALLOWED_ORIGINS
+    else process.env.ALLOWED_ORIGINS = previousAllowedOrigins
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = previousNodeEnv
+  }
+})
+
 test('SMB-238: anonymous cross-origin requests keep wildcard ACAO when ALLOW_ALL_ORIGINS is enabled', async () => {
   const previousAllowedOrigins = process.env.ALLOWED_ORIGINS
   const previousNodeEnv = process.env.NODE_ENV

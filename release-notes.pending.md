@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (SMB-238) 修復帳號頁實際 Google 登入提交 `POST /api/auth/google` 在 `https://localhost`（Capacitor WebView）跨域連線正式 API 時仍出現 `shared_ledger_network_error`：v1.3.12 後登入提交會以 `useAuthStorage: true` 帶 `X-Straw-Auth-Storage: cookie` + `credentials: include`，但瀏覽器送出的 CORS preflight（`OPTIONS`）並不會帶這個自訂 header，而是改用 `Access-Control-Request-Headers` 通告。後端 `http.js` 的 `wantsCredentialedCors()` 只檢查實際 `X-Straw-Auth-Storage` header，preflight 偵測不到 → 在 `ALLOW_ALL_ORIGINS=*` 時回 `Access-Control-Allow-Origin: *` 且無 `Access-Control-Allow-Credentials`，瀏覽器因 credentialed 請求收到 wildcard ACAO 而拒絕 preflight → Failed to fetch。修正 `wantsCredentialedCors()` 在 preflight 時改從 `Access-Control-Request-Headers` 偵測 `x-straw-auth-storage`，使 preflight 也能反射實際 Origin 並附 `Access-Control-Allow-Credentials: true`；匿名 preflight（如 `/api/auth/google/prepare`）仍維持 `*`。新增 `backend/test/http-cors.test.js` 兩個 preflight 案例（credentialed 反射 Origin + credentials、匿名維持 wildcard）。
+
 ---
 
 ## v1.3.12
