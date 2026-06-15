@@ -150,8 +150,17 @@ export function readPersistedAuthSession() {
   migrateLegacyPersistedSession()
 
   const user = readStoredUser()
+  if (!user) return null
+
   const token = getStoredAccessToken()
-  if (!token || !user) return null
+  if (!token && usesCookieAuthStorage()) {
+    return {
+      token: '',
+      refreshToken: '',
+      user,
+    }
+  }
+  if (!token) return null
 
   return {
     token,

@@ -71,6 +71,36 @@ test('buildRefreshTokenCookie uses HttpOnly and auth path', () => {
   assert.match(cookie, /Secure/)
 })
 
+test('SMB-238: Capacitor https://localhost origin uses cross-site refresh cookie policy', () => {
+  const cookie = buildRefreshTokenCookie('refresh-123', {
+    req: {
+      headers: {
+        origin: 'https://localhost',
+        host: 'api.strawmb.com',
+      },
+    },
+    maxAgeSec: 3600,
+  })
+
+  assert.match(cookie, /SameSite=None/)
+  assert.match(cookie, /Secure/)
+})
+
+test('SMB-238: same-host local dev origin keeps lax refresh cookie policy', () => {
+  const cookie = buildRefreshTokenCookie('refresh-123', {
+    req: {
+      headers: {
+        origin: 'http://localhost:5173',
+        host: 'localhost:5173',
+      },
+    },
+    maxAgeSec: 3600,
+  })
+
+  assert.match(cookie, /SameSite=Lax/)
+  assert.doesNotMatch(cookie, /SameSite=None/)
+})
+
 test('buildClearRefreshTokenCookie expires refresh cookie', () => {
   const cookie = buildClearRefreshTokenCookie({
     headers: { origin: 'http://localhost:5173' },

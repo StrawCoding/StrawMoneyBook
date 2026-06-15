@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.14
+- (SMB-238) 修復 Capacitor `https://localhost` 登入後會員自動被登出：v1.3.13 雖修好 Google 登入 CORS preflight，但 `auth-cookies.js` 的 `shouldUseCrossSiteCookie()` 把 `localhost` Origin 誤判為同站，refresh HttpOnly cookie 被設成 `SameSite=Lax`；從 `https://localhost` 跨域 `fetch` 到 `api.strawmb.com` 時瀏覽器不會帶此 cookie → `POST /api/auth/refresh` 回 `refresh_token_required` → 前端 `clearSession()` 清空 session。改為比對請求 Origin 與 API `Host` 是否相同來決定 `SameSite`（跨站改 `SameSite=None; Secure`）；前端 `readPersistedAuthSession` 在 cookie 模式下保留 sessionStorage 使用者資料，重載後靜默 refresh 期間不再誤顯示已登出。新增 `auth-cookies.test.js` Capacitor / 本機 dev 案例與 `auth-session-storage.test.js` 重載情境測試。
+
 ## v1.3.13
 - (SMB-238) 修復帳號頁實際 Google 登入提交 `POST /api/auth/google` 在 `https://localhost`（Capacitor WebView）跨域連線正式 API 時仍出現 `shared_ledger_network_error`：v1.3.12 後登入提交會以 `useAuthStorage: true` 帶 `X-Straw-Auth-Storage: cookie` + `credentials: include`，但瀏覽器送出的 CORS preflight（`OPTIONS`）並不會帶這個自訂 header，而是改用 `Access-Control-Request-Headers` 通告。後端 `http.js` 的 `wantsCredentialedCors()` 只檢查實際 `X-Straw-Auth-Storage` header，preflight 偵測不到 → 在 `ALLOW_ALL_ORIGINS=*` 時回 `Access-Control-Allow-Origin: *` 且無 `Access-Control-Allow-Credentials`，瀏覽器因 credentialed 請求收到 wildcard ACAO 而拒絕 preflight → Failed to fetch。修正 `wantsCredentialedCors()` 在 preflight 時改從 `Access-Control-Request-Headers` 偵測 `x-straw-auth-storage`，使 preflight 也能反射實際 Origin 並附 `Access-Control-Allow-Credentials: true`；匿名 preflight（如 `/api/auth/google/prepare`）仍維持 `*`。新增 `backend/test/http-cors.test.js` 兩個 preflight 案例（credentialed 反射 Origin + credentials、匿名維持 wildcard）。
 

@@ -73,6 +73,38 @@ test('writePersistedAuthSession keeps tokens in memory and user in sessionStorag
   }
 })
 
+test('SMB-238: readPersistedAuthSession keeps stored user after memory token is cleared in cookie mode', () => {
+  const localStorageRef = createStorage()
+  const sessionStorageRef = createStorage()
+
+  const originalLocalStorage = globalThis.localStorage
+  const originalSessionStorage = globalThis.sessionStorage
+  globalThis.localStorage = localStorageRef
+  globalThis.sessionStorage = sessionStorageRef
+
+  try {
+    writePersistedAuthSession({
+      token: 'access-token',
+      refreshToken: 'refresh-token',
+      user: { id: 'user_1', email: 'user@example.com' },
+    })
+    clearPersistedAuthSession()
+    sessionStorageRef.setItem(
+      SHARED_LEDGER_USER_STORAGE_KEY,
+      JSON.stringify({ id: 'user_1', email: 'user@example.com' }),
+    )
+
+    const session = readPersistedAuthSession()
+    assert.equal(session?.token, '')
+    assert.equal(session?.refreshToken, '')
+    assert.equal(session?.user?.id, 'user_1')
+  } finally {
+    clearPersistedAuthSession()
+    globalThis.localStorage = originalLocalStorage
+    globalThis.sessionStorage = originalSessionStorage
+  }
+})
+
 test('migrateLegacyPersistedSession removes tokens from legacy localStorage session', () => {
   const localStorageRef = createStorage({
     [SHARED_LEDGER_SESSION_STORAGE_KEY]: JSON.stringify({

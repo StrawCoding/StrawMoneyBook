@@ -10,13 +10,26 @@ function isProduction() {
   return String(process.env.NODE_ENV ?? '').trim() === 'production'
 }
 
+function getRequestApiHost(req) {
+  const hostHeader = String(req?.headers?.host ?? '').trim()
+  if (!hostHeader) return ''
+  return hostHeader.split(':')[0].trim().toLowerCase()
+}
+
 function shouldUseCrossSiteCookie(req) {
   const origin = getRequestOrigin(req)
   if (!origin) return true
   try {
-    const parsed = new URL(origin)
-    const hostname = String(parsed.hostname ?? '').trim().toLowerCase()
-    return hostname !== 'api.strawmb.com' && hostname !== 'localhost' && hostname !== '127.0.0.1'
+    const parsedOrigin = new URL(origin)
+    const originHost = String(parsedOrigin.hostname ?? '').trim().toLowerCase()
+    const apiHost = getRequestApiHost(req)
+    if (!apiHost) return true
+    // Compare request Origin with the API host. Capacitor WebView uses
+    // https://localhost while production API is api.strawmb.com — that is
+    // cross-site and requires SameSite=None for credentialed fetch to send
+    // the refresh cookie back. The old localhost whitelist incorrectly used
+    // SameSite=Lax, so refresh failed after login and cleared the session.
+    return originHost !== apiHost
   } catch {
     return true
   }
