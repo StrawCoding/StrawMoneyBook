@@ -9,6 +9,7 @@ CHANGELOGS_DIR = File.join(__dir__, "metadata", "android", "zh-TW", "changelogs"
 PLAY_EDIT_CONFLICT_MESSAGE = "A change was made to the application outside of this Edit, please create a new edit."
 PLAY_UPLOAD_MAX_ATTEMPTS = 3
 PLAY_UPLOAD_RETRY_DELAY_SECONDS = 15
+PLAY_CONSOLE_MAX_LENGTH = 500
 
 def require_env!(key)
   value = ENV[key].to_s.strip
@@ -76,6 +77,11 @@ def read_pending_note_lines(notes_path)
   lines
 end
 
+def format_for_play_console(lines, max_length = PLAY_CONSOLE_MAX_LENGTH)
+  joined = lines.join("\n")
+  joined.length <= max_length ? joined : joined.slice(0, max_length)
+end
+
 def prepare_play_changelogs(version_name, notes_path = PENDING_RELEASE_NOTES_PATH)
   return false if version_name.to_s.strip.empty?
   return false unless File.exist?(notes_path)
@@ -84,9 +90,10 @@ def prepare_play_changelogs(version_name, notes_path = PENDING_RELEASE_NOTES_PAT
   return false if lines.empty?
 
   version_code = version_code_from_name(version_name)
+  changelog = format_for_play_console(lines)
   FileUtils.mkdir_p(CHANGELOGS_DIR)
-  File.write(File.join(CHANGELOGS_DIR, "#{version_code}.txt"), lines.join("\n"))
-  UI.message("[release-notes] Loaded #{lines.length} line(s) for version code #{version_code}")
+  File.write(File.join(CHANGELOGS_DIR, "#{version_code}.txt"), changelog)
+  UI.message("[release-notes] Loaded #{lines.length} line(s) for version code #{version_code} (#{changelog.length}/#{PLAY_CONSOLE_MAX_LENGTH} chars)")
   true
 end
 
