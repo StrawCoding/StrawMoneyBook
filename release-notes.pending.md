@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- 修復請款單完成時含「借出收回」項目會導致金額重複計算：完成入帳不再把借出整套刪除，改以 `addLoanRepayment` 建立收回交易並將借出標記為 `settled`；報銷入帳金額 `reimbursementCashMinor` 會扣除借出收回項目，避免同一本金同時出現在報銷入帳與借出刪除兩條路徑。paid→draft / 刪除已付請款改為沖銷請款期間建立的還款紀錄；完成對話框的入帳預覽與帳戶必填條件同步排除借出收回金額；三語 i18n 改為「完成請款後借出以收回方式結清」。新增 `claim-sheet-borrow-loan-settle-source.test.js` 並更新 borrow_loan import source regression。
-
 ---
+
+## v1.3.15
+- 修復請款單完成時含「借出收回」項目會導致金額重複計算：完成入帳不再把借出整套刪除，改以 `addLoanRepayment` 建立收回交易並將借出標記為 `settled`；報銷入帳金額 `reimbursementCashMinor` 會扣除借出收回項目，避免同一本金同時出現在報銷入帳與借出刪除兩條路徑。paid→draft / 刪除已付請款改為沖銷請款期間建立的還款紀錄；完成對話框的入帳預覽與帳戶必填條件同步排除借出收回金額；三語 i18n 改為「完成請款後借出以收回方式結清」。新增 `claim-sheet-borrow-loan-settle-source.test.js` 並更新 borrow_loan import source regression。
 
 ## v1.3.14
 - (SMB-238) 修復 Capacitor `https://localhost` 登入後會員自動被登出：v1.3.13 雖修好 Google 登入 CORS preflight，但 `auth-cookies.js` 的 `shouldUseCrossSiteCookie()` 把 `localhost` Origin 誤判為同站，refresh HttpOnly cookie 被設成 `SameSite=Lax`；從 `https://localhost` 跨域 `fetch` 到 `api.strawmb.com` 時瀏覽器不會帶此 cookie → `POST /api/auth/refresh` 回 `refresh_token_required` → 前端 `clearSession()` 清空 session。改為比對請求 Origin 與 API `Host` 是否相同來決定 `SameSite`（跨站改 `SameSite=None; Secure`）；前端 `readPersistedAuthSession` 在 cookie 模式下保留 sessionStorage 使用者資料，重載後靜默 refresh 期間不再誤顯示已登出。新增 `auth-cookies.test.js` Capacitor / 本機 dev 案例與 `auth-session-storage.test.js` 重載情境測試。
