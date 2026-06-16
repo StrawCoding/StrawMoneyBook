@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (CSP / SMB-233 回歸) 修復 Web 版電子發票「載具」及所有依賴資料庫的功能在瀏覽器中完全失效：v1.3.5（SMB-233 XSS 防護）加入的 CSP `<meta>` 中 `script-src 'self'` 未允許 WebAssembly 編譯，導致 web 版 SQLite 引擎 jeep-sqlite 的 `WebAssembly.instantiate()` 被 CSP 擋下並 `Aborted`、連 fallback ArrayBuffer 實例化也失敗，`ensureWebSqliteStoreReady()` 無法初始化 web store。載具流程所依賴的憑證加密儲存（`saveEInvoiceCredential` / `loadEInvoiceCredential`）、已匯入發票去重、匯入時建立支出交易（`createExpense` 寫入載具標籤）等 DB 操作在 web 端全數無法運作。修正：於 `script-src` 加入 `'wasm-unsafe-eval'`（僅允許 WebAssembly 編譯，仍封鎖 JS `eval()`，完整保留 SMB-233 的 XSS 防護）。Playwright 驗證載入 `/einvoice-import` 後 jeep-sqlite `getVersion` 成功、Pinia 各 store 正常安裝、WASM/CSP 編譯錯誤全數消除；539 個前端測試全綠、`npm run build:web` 通過且建置後 `dist/index.html` 確認為 `script-src 'self' 'wasm-unsafe-eval'`。
+
 ---
 
 ## v1.3.15
