@@ -60,6 +60,7 @@ Thumbs.db
 .idea/
 .claude/
 .cursor/
+.hermes/
 
 # Large local model artifacts
 speech-stt-service/models/

@@ -158,13 +158,16 @@ test('SMB-222 v1.2.45: claim sheet i18n strings rename borrow_loan import to len
   assert.doesNotMatch(i18nServiceSource, /'claim_sheet\.form\.import_borrow_loans': '導入借入'/)
 })
 
-test('SMB-222 v1.2.45: completing reimbursement clears imported lent loans and reverting restores them', () => {
-  assert.match(reimbursementServiceSource, /function clearBorrowLoanClaimSources/)
-  assert.match(reimbursementServiceSource, /function restoreBorrowLoanClaimSources/)
-  assert.match(reimbursementServiceSource, /await clearBorrowLoanClaimSources\(ledgerId, claimItems\)/)
-  assert.match(reimbursementServiceSource, /await restoreBorrowLoanClaimSources\(ledgerId, claimItems\)/)
-  assert.match(reimbursementServiceSource, /restoreSoftDeletedLoanById/)
-  assert.match(reimbursementServiceSource, /restoreSoftDeletedTransactionsByOriginRef/)
+test('SMB-222 v1.2.45: completing reimbursement settles imported lent loans and reverting restores active status', () => {
+  assert.match(reimbursementServiceSource, /function settleBorrowLoanClaimItems/)
+  assert.match(reimbursementServiceSource, /function revertBorrowLoanClaimSettlements/)
+  assert.match(reimbursementServiceSource, /await settleBorrowLoanClaimItems\(ledgerId, claim, claimItems, payload\)/)
+  assert.match(reimbursementServiceSource, /await revertBorrowLoanClaimSettlements\(ledgerId, claim, claimItems\)/)
+  assert.match(reimbursementServiceSource, /addLoanRepayment/)
+  assert.match(reimbursementServiceSource, /deleteLoanRepaymentByTransactionId/)
+  assert.match(reimbursementServiceSource, /advanceResult\.cashAmountMinor - claimAdvanceMinor - borrowLoanMinor/)
+  assert.doesNotMatch(reimbursementServiceSource, /function clearBorrowLoanClaimSources/)
+  assert.doesNotMatch(reimbursementServiceSource, /function restoreBorrowLoanClaimSources/)
 })
 
 test('SMB-222 v1.2.48: importable lent loan query exposes loan note / start_date / principal for title rendering', () => {

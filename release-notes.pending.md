@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 修復請款單完成時含「借出收回」項目會導致金額重複計算：完成入帳不再把借出整套刪除，改以 `addLoanRepayment` 建立收回交易並將借出標記為 `settled`；報銷入帳金額 `reimbursementCashMinor` 會扣除借出收回項目，避免同一本金同時出現在報銷入帳與借出刪除兩條路徑。paid→draft / 刪除已付請款改為沖銷請款期間建立的還款紀錄；完成對話框的入帳預覽與帳戶必填條件同步排除借出收回金額；三語 i18n 改為「完成請款後借出以收回方式結清」。新增 `claim-sheet-borrow-loan-settle-source.test.js` 並更新 borrow_loan import source regression。
+
 ---
 
 ## v1.3.14

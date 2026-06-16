@@ -28,6 +28,7 @@ import {
 } from '@/core/repositories/loan.repo'
 import {
   addTransaction,
+  findTransactionByIdempotencyKey,
   softDeleteTransactionById,
   softDeleteTransactionsByOriginRef,
   updateTransactionById,
@@ -283,6 +284,27 @@ async function addLoanRepaymentInternal(ledgerId, payload) {
     throw new Error('已作廢借貸不可還款')
   }
 
+  const idempotencyKey = String(payload.idempotencyKey ?? '').trim()
+  if (idempotencyKey) {
+    const existingTx = await findTransactionByIdempotencyKey(ledgerId, idempotencyKey)
+    if (existingTx?.id) {
+      const payment = await getLoanPaymentByGeneratedTransactionId(ledgerId, existingTx.id)
+      const paidMinor = Number(loan.paid_minor ?? 0)
+      const targetTotalMinor = Number(loan.target_total_minor ?? loan.principal_minor ?? 0)
+      return {
+        loanId: loan.id,
+        paymentId: payment?.id ?? null,
+        txId: existingTx.id,
+        interestTxId: payment?.generated_interest_tx_id ?? null,
+        status: loan.status,
+        principalComponentMinor: Math.max(0, Math.round(Number(payment?.principal_component_minor ?? 0))),
+        interestComponentMinor: Math.max(0, Math.round(Number(payment?.interest_component_minor ?? 0))),
+        remainingMinor: Math.max(0, targetTotalMinor - paidMinor),
+        alreadyProcessed: true,
+      }
+    }
+  }
+
   const paidMinor = Number(loan.paid_minor ?? 0)
   const principalMinor = Number(loan.principal_minor ?? 0)
   const presetInterestMinor = Number(loan.preset_interest_minor ?? 0)
@@ -315,6 +337,7 @@ async function addLoanRepaymentInternal(ledgerId, payload) {
       note: noteBase,
       originType: 'loan_payment',
       externalRefId: loan.id,
+      idempotencyKey: idempotencyKey || undefined,
       includeInBudget: false,
       includeInAnalysis: false,
     })

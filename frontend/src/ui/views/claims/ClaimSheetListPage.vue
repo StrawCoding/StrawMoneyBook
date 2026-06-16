@@ -426,7 +426,13 @@ const selectedCompleteAdvanceCapacityMinor = computed(() => {
 
 const completeCashMinor = computed(() => {
   const claimTotalMinor = Math.max(0, Math.round(Number(completeTarget.value?.total_minor ?? 0)))
-  return Math.max(0, claimTotalMinor - selectedCompleteAdvanceCapacityMinor.value)
+  return Math.max(
+    0,
+    claimTotalMinor
+      - selectedCompleteAdvanceCapacityMinor.value
+      - completeClaimAdvanceMinor.value
+      - completeBorrowLoanMinor.value,
+  )
 })
 
 const completeClaimAdvanceMinor = computed(() => {
@@ -436,7 +442,19 @@ const completeClaimAdvanceMinor = computed(() => {
   }, 0)
 })
 
-const completeRequiresAccount = computed(() => completeCashMinor.value > 0 || completeClaimAdvanceMinor.value > 0)
+const completeBorrowLoanMinor = computed(() => {
+  return completeItems.value.reduce((sum, item) => {
+    const txId = String(item?.transaction_id ?? '').trim()
+    if (!txId || String(item?.entry_type ?? '') !== 'income') return sum
+    return sum + Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
+  }, 0)
+})
+
+const completeRequiresAccount = computed(() => (
+  completeCashMinor.value > 0
+  || completeClaimAdvanceMinor.value > 0
+  || completeBorrowLoanMinor.value > 0
+))
 
 const pendingClaimMinor = computed(() => {
   return dashboard.value.claims

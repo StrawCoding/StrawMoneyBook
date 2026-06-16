@@ -8,17 +8,14 @@ import {
   findReimbursementSettlementIncomeTx,
   getPaidClaimItemMinorByTransactionId,
   markTransactionReimbursed,
-  restoreSoftDeletedTransactionsByOriginRef,
   softDeleteTransactionsByOriginRef,
   softDeleteTransactionById,
   updateTransactionReimburseTargetMinor,
 } from '@/core/repositories/transaction.repo'
 import {
-  getLoanById,
-  restoreSoftDeletedLoanById,
-  softDeleteLoanById,
-  deleteLoanPaymentsByLoanId,
-} from '@/core/repositories/loan.repo'
+  addLoanRepayment,
+  deleteLoanRepaymentByTransactionId,
+} from '@/core/services/loan.service'
 import {
   listAccounts,
 } from '@/core/repositories/account.repo'
@@ -580,6 +577,26 @@ function listClaimAdvanceItems(claimItems = []) {
   })
 }
 
+function listClaimBorrowLoanItems(claimItems = []) {
+  return claimItems.filter((item) => isBorrowLoanClaimItem(item))
+}
+
+function sumClaimBorrowLoanMinor(claimItems = []) {
+  return listClaimBorrowLoanItems(claimItems).reduce((sum, item) => {
+    return sum + Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
+  }, 0)
+}
+
+async function resolveBorrowLoanIdFromClaimItem(ledgerId, item) {
+  const txId = String(item?.transaction_id ?? '').trim()
+  if (!txId) return ''
+  const record = await findTransactionExternalRefIncludingDeleted(ledgerId, txId)
+  const originType = String(record?.origin_type ?? '').trim()
+  const externalRefId = String(record?.external_ref_id ?? '').trim()
+  if (!externalRefId || originType !== 'loan_payment') return ''
+  return externalRefId
+}
+
 async function applyClaimAdvanceUsages(ledgerId, claimItems, totalMinor, selectedAdvanceIds = []) {
   const normalizedIds = normalizeAdvanceIds(selectedAdvanceIds)
   if (!normalizedIds.length || totalMinor <= 0) {
@@ -678,17 +695,21 @@ export async function markReimbursementPaid(ledgerId, payload) {
     const claimAdvanceMinor = claimAdvanceItems.reduce((sum, item) => {
       return sum + Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
     }, 0)
+    const borrowLoanMinor = sumClaimBorrowLoanMinor(claimItems)
     const advanceResult = await applyClaimAdvanceUsages(
       ledgerId,
       claimItems,
       totalMinor,
       payload.selectedAdvanceIds,
     )
-    const reimbursementCashMinor = Math.max(0, advanceResult.cashAmountMinor - claimAdvanceMinor)
+    const reimbursementCashMinor = Math.max(
+      0,
+      advanceResult.cashAmountMinor - claimAdvanceMinor - borrowLoanMinor,
+    )
     let txId = ''
     const createdAdvanceIds = []
 
-    if (claimAdvanceMinor > 0 && !payload.accountId) {
+    if ((claimAdvanceMinor > 0 || borrowLoanMinor > 0) && !payload.accountId) {
       throw new Error('請選擇入帳帳戶')
     }
 
@@ -732,12 +753,18 @@ export async function markReimbursementPaid(ledgerId, payload) {
       }
     }
 
+    const settlementResult = await settleBorrowLoanClaimItems(ledgerId, claim, claimItems, payload)
+    for (const repayment of settlementResult.repaymentResults) {
+      if (!txId && repayment?.txId) {
+        txId = repayment.txId
+      }
+    }
+
     const updated = await setReimbursementPaid(ledgerId, claim.id, {
       paidTxId: txId || null,
       idempotencyKey,
     })
     await syncLinkedReimbursableTransactions()
-    const clearedLoanIds = await clearBorrowLoanClaimSources(ledgerId, claimItems)
 
     return {
       alreadyProcessed: false,
@@ -745,52 +772,71 @@ export async function markReimbursementPaid(ledgerId, payload) {
       paidTxId: txId,
       createdAdvanceIds,
       claimAdvanceMinor,
+      borrowLoanMinor,
       usedAdvanceMinor: advanceResult.usedAdvanceMinor,
       usedAdvanceIds: advanceResult.usedAdvanceIds,
       cashAmountMinor: reimbursementCashMinor,
-      clearedLoanIds,
+      settledLoanIds: settlementResult.settledLoanIds,
+      loanRepaymentResults: settlementResult.repaymentResults,
     }
   })
 }
 
-async function resolveBorrowLoanIdsFromClaimItems(ledgerId, claimItems = []) {
-  const loanIds = new Set()
-  for (const item of claimItems) {
-    if (!isBorrowLoanClaimItem(item)) continue
-    const txId = String(item?.transaction_id ?? '').trim()
-    if (!txId) continue
-    const record = await findTransactionExternalRefIncludingDeleted(ledgerId, txId)
-    const originType = String(record?.origin_type ?? '').trim()
-    const externalRefId = String(record?.external_ref_id ?? '').trim()
-    if (!externalRefId || originType !== 'loan_payment') continue
-    loanIds.add(externalRefId)
+async function settleBorrowLoanClaimItems(ledgerId, claim, claimItems = [], payload = {}) {
+  const borrowItems = listClaimBorrowLoanItems(claimItems)
+  const settledLoanIds = []
+  const repaymentResults = []
+  if (!borrowItems.length) {
+    return { settledLoanIds, repaymentResults }
   }
-  return Array.from(loanIds)
+
+  if (!payload.accountId) {
+    throw new Error('請選擇入帳帳戶')
+  }
+
+  const idempotencyBase = `reim_paid_${claim.id}`
+  const paidAt = payload.paidAt ?? nowIso()
+  const note = payload.note ?? `請款單收回：${claim.title}`
+
+  for (const item of borrowItems) {
+    const amountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
+    if (amountMinor <= 0) continue
+
+    const loanId = await resolveBorrowLoanIdFromClaimItem(ledgerId, item)
+    if (!loanId) continue
+
+    const repayment = await addLoanRepayment(ledgerId, {
+      loanId,
+      amountMinor,
+      accountId: payload.accountId,
+      paidAt,
+      note,
+      idempotencyKey: `${idempotencyBase}:loan_repay:${loanId}`,
+    })
+
+    settledLoanIds.push(loanId)
+    repaymentResults.push(repayment)
+  }
+
+  return { settledLoanIds, repaymentResults }
 }
 
-async function clearBorrowLoanClaimSources(ledgerId, claimItems = []) {
-  const loanIds = await resolveBorrowLoanIdsFromClaimItems(ledgerId, claimItems)
-  const clearedLoanIds = []
-  for (const loanId of loanIds) {
-    const loan = await getLoanById(ledgerId, loanId)
-    if (!loan) continue
-    await softDeleteTransactionsByOriginRef(ledgerId, 'loan_payment', loanId)
-    await deleteLoanPaymentsByLoanId(ledgerId, loanId)
-    await softDeleteLoanById(ledgerId, loanId)
-    clearedLoanIds.push(loanId)
-  }
-  return clearedLoanIds
-}
+async function revertBorrowLoanClaimSettlements(ledgerId, claim, claimItems = []) {
+  const revertedLoanIds = []
+  const idempotencyBase = `reim_paid_${claim.id}`
 
-async function restoreBorrowLoanClaimSources(ledgerId, claimItems = []) {
-  const loanIds = await resolveBorrowLoanIdsFromClaimItems(ledgerId, claimItems)
-  const restoredLoanIds = []
-  for (const loanId of loanIds) {
-    await restoreSoftDeletedLoanById(ledgerId, loanId)
-    await restoreSoftDeletedTransactionsByOriginRef(ledgerId, 'loan_payment', loanId)
-    restoredLoanIds.push(loanId)
+  for (const item of listClaimBorrowLoanItems(claimItems)) {
+    const loanId = await resolveBorrowLoanIdFromClaimItem(ledgerId, item)
+    if (!loanId) continue
+
+    const existingTx = await findTransactionByIdempotencyKey(ledgerId, `${idempotencyBase}:loan_repay:${loanId}`)
+    if (!existingTx?.id) continue
+
+    await deleteLoanRepaymentByTransactionId(ledgerId, existingTx.id)
+    revertedLoanIds.push(loanId)
   }
-  return restoredLoanIds
+
+  return revertedLoanIds
 }
 
 async function syncReimbursableExpenseState(ledgerId, expenseTxId) {
@@ -842,7 +888,7 @@ async function deleteAdvanceUsageRecords(ledgerId, usages, options = {}) {
 }
 
 async function revertPaidClaimEffects(ledgerId, claim, claimItems = []) {
-  const restoredLoanIds = await restoreBorrowLoanClaimSources(ledgerId, claimItems)
+  const revertedLoanIds = await revertBorrowLoanClaimSettlements(ledgerId, claim, claimItems)
 
   for (const item of claimItems) {
     const txId = String(item?.transaction_id ?? '').trim()
@@ -872,7 +918,7 @@ async function revertPaidClaimEffects(ledgerId, claim, claimItems = []) {
       .map((item) => String(item?.transaction_id ?? '').trim())
       .filter(Boolean),
     deletedAdvanceIds: generatedAdvances.map((item) => item.id),
-    restoredLoanIds,
+    revertedLoanIds,
   }
 }
 
