@@ -201,3 +201,19 @@ test('電子發票 debug trace 使用遮罩手機條碼而非舊手機號碼欄�
   assert.match(debugPageSource, /debug_page\.key\.einvoice_carrier_barcode/)
   assert.doesNotMatch(debugPageSource, /einvoice_phone/)
 })
+
+test('電子發票 Step3 發票列表顯示載具 chip（SMB-226）', () => {
+  const source = read('src/ui/views/einvoice/EInvoiceStep3Select.vue')
+
+  assert.match(source, /v-if="inv\.carrierName"/)
+  assert.match(source, /carrier-chip/)
+  assert.match(source, /einvoice\.step3\.carrier_label/)
+})
+
+test('電子發票 Step4 確認頁預覽顯示載具名稱（SMB-226）', () => {
+  const source = read('src/ui/views/einvoice/EInvoiceStep4Confirm.vue')
+
+  assert.match(source, /v-if="inv\.carrierName"/)
+  assert.match(source, /preview-carrier/)
+  assert.match(source, /einvoice\.step3\.carrier_label/)
+})
