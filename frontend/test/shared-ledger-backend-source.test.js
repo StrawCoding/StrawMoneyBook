@@ -11,10 +11,10 @@ const sharedLedgerBackendSource = readFileSync(
 test('shared ledger session restore reuses the shared refresh pipeline', () => {
   assert.match(
     sharedLedgerBackendSource,
-    /if \(session\.refreshToken\) \{\s+\/\/ Reuse the shared refresh pipeline[\s\S]*?return await tryRefreshSessionOnce\(\)/,
+    /if \(session\.refreshToken \|\| shouldSendAuthCredentials\(\)\) \{\s+\/\/ Reuse the shared refresh pipeline[\s\S]*?return await tryRefreshSessionOnce\(\)/,
   )
   assert.doesNotMatch(
     sharedLedgerBackendSource,
-    /if \(session\.refreshToken\) \{\s+return await performRefreshRequest\(\)/,
+    /if \(session\.refreshToken(?: \|\| shouldSendAuthCredentials\(\))?\) \{\s+return await performRefreshRequest\(\)/,
   )
 })
