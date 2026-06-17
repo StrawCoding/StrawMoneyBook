@@ -18,8 +18,15 @@ test('SMB-233: shared-ledger backend uses cookie auth storage instead of persist
 
 test('SMB-233: auth session storage keeps refresh token out of web storage', () => {
   assert.match(storageSource, /usesCookieAuthStorage\(\)/)
-  assert.match(storageSource, /setStoredRefreshToken\(''\)/)
+  assert.match(storageSource, /NATIVE_REFRESH_TOKEN_STORAGE_KEY/)
+  assert.match(storageSource, /shouldPersistNativeRefreshToken\(/)
   assert.match(storageSource, /SHARED_LEDGER_USER_STORAGE_KEY/)
+})
+
+test('SMB-242: auth session storage persists native refresh token backup key', () => {
+  assert.match(storageSource, /NATIVE_REFRESH_TOKEN_STORAGE_KEY/)
+  assert.match(storageSource, /getNativeClientPlatformHeaderValue\(/)
+  assert.match(storageSource, /getStoredRefreshToken\([\s\S]*localStorageRef\.getItem\(NATIVE_REFRESH_TOKEN_STORAGE_KEY\)/)
 })
 
 test('SMB-239: native user profile persists in localStorage after app restart', () => {

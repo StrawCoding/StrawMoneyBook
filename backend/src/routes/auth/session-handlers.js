@@ -4,6 +4,7 @@ import {
   extractRefreshTokenFromRequest,
   setRefreshTokenCookie,
   usesCookieAuthStorage,
+  usesNativeClientAuthBackup,
 } from '../../collab/auth-cookies.js'
 import {
   assertLoginAllowed,
@@ -242,6 +243,7 @@ export async function handleRefresh(req, res) {
   const session = await rotateRefreshSession(refreshToken, context)
   const publicProfile = await buildPublicUserProfile(session.user)
   const cookieMode = usesCookieAuthStorage(req)
+  const nativeClientBackup = cookieMode && usesNativeClientAuthBackup(req)
 
   await writeAuthAuditLog({
     userId: session.user.id,
@@ -264,6 +266,7 @@ export async function handleRefresh(req, res) {
     publicProfile,
   }, {
     cookieMode,
+    nativeClientBackup,
   }))
 }
 

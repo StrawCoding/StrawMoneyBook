@@ -44,3 +44,10 @@ test('SMB-239: refreshSharedLedgerSession restores cookie session when access to
   assert.match(refreshBlock, /shouldSendAuthCredentials\(\)/)
   assert.match(refreshBlock, /restoreSharedLedgerSession\(\{ force: true \}\)/)
 })
+
+test('SMB-242: refresh auth failures clear tokens without wiping persisted user profile', () => {
+  assert.match(backendSource, /function clearAuthTokens\(/)
+  assert.match(backendSource, /function shouldClearSessionOnRefreshFailure\(/)
+  assert.match(backendSource, /clearAuthTokens\(\)/)
+  assert.match(backendSource, /NATIVE_CLIENT_HEADER|getAuthStorageHeaders\(/)
+})

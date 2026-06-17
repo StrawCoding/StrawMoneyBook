@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.21
+- (SMB-242) 修復重新開啟 App 後帳號被登出：Android / iOS 在 cookie 模式除 HttpOnly refresh cookie 外，另以 `X-Straw-Native-Client` 取得 body refresh token 備份至 `localStorage`（僅 native）；冷啟動 refresh 失敗時改 `clearAuthTokens()` 保留使用者 profile，不再 `clearSession()` 整包清空；帳號頁 session listener 在 token 清空時仍顯示已儲存 profile。後端 `buildAuthSessionResponse` 於 native cookie 模式同步回傳 `refresh_token` 供備援。驗證：`auth-cookies.test.js`、`auth-session-storage*.test.js`、`shared-ledger-cookie-auth-cors-source.test.js`、backend 全測試、前端 `test:node`。
+
 ## v1.3.20
 - (SMB-241) 修復第一銀行同步圖形驗證失敗與登入頁非電腦版：`BankAutomationActivity` WebView 改為 1280px 桌面 viewport、`loadWithOverviewMode(false)` 與桌面 Chrome UA；登入前以 `ensureDesktopLoginPage` 注入 viewport 並驗證 `captchaLoginArea` / `code_verify` / `vrfyCode` 等桌面 DOM，不符則重載並回報 `first_bank_login_page_mismatch`；驗證碼 canvas 過小時改以 cookie 直接下載圖片並加強 OCR 放大變體。驗證：`FirstBankAutomationCaptchaTest`、`bank-sync-android-source.test.js`、既有 bank-sync 測試通過。
 

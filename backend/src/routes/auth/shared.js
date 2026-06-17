@@ -3,6 +3,7 @@ import {
   clearRefreshTokenCookie,
   setRefreshTokenCookie,
   usesCookieAuthStorage,
+  usesNativeClientAuthBackup,
 } from '../../collab/auth-cookies.js'
 import { requireAuthenticatedUser } from '../../collab/auth-session.js'
 import { verifyGoogleIdToken } from '../../collab/google-id-token.js'
@@ -234,6 +235,7 @@ export async function sendAuthSession(res, user, {
   })
   const publicProfile = await buildPublicUserProfile(session.user)
   const cookieMode = usesCookieAuthStorage(req ?? res?.__request ?? null)
+  const nativeClientBackup = cookieMode && usesNativeClientAuthBackup(req ?? res?.__request ?? null)
 
   if (cookieMode) {
     setRefreshTokenCookie(res, session.refreshToken, {
@@ -247,6 +249,7 @@ export async function sendAuthSession(res, user, {
     publicProfile,
   }, {
     cookieMode,
+    nativeClientBackup,
     extra,
   }))
 }

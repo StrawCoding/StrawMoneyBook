@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   AUTH_STORAGE_COOKIE_MODE,
   AUTH_STORAGE_HEADER,
+  NATIVE_CLIENT_HEADER,
   REFRESH_TOKEN_COOKIE_NAME,
   buildAuthSessionResponse,
   buildClearRefreshTokenCookie,
@@ -11,6 +12,7 @@ import {
   extractRefreshTokenFromRequest,
   parseCookieHeader,
   usesCookieAuthStorage,
+  usesNativeClientAuthBackup,
 } from '../src/collab/auth-cookies.js'
 
 test('parseCookieHeader decodes refresh token cookie values', () => {
@@ -123,6 +125,31 @@ test('buildAuthSessionResponse omits refresh token in cookie mode', () => {
   assert.equal(payload.token, 'access-1')
   assert.equal(payload.user.id, 'user_1')
   assert.equal(payload.refresh_token, undefined)
+})
+
+test('SMB-242: buildAuthSessionResponse includes refresh token for native cookie backup', () => {
+  const payload = buildAuthSessionResponse({
+    accessToken: 'access-1',
+    expiresInSec: 900,
+    refreshToken: 'refresh-1',
+    refreshExpiresInSec: 3600,
+    refreshTokenExpiresAt: '2099-01-01T00:00:00.000Z',
+    publicProfile: { id: 'user_1' },
+  }, { cookieMode: true, nativeClientBackup: true })
+
+  assert.equal(payload.refresh_token, 'refresh-1')
+})
+
+test('usesNativeClientAuthBackup detects native client header', () => {
+  assert.equal(
+    usesNativeClientAuthBackup({
+      headers: {
+        [NATIVE_CLIENT_HEADER]: 'android',
+      },
+    }),
+    true,
+  )
+  assert.equal(usesNativeClientAuthBackup({ headers: {} }), false)
 })
 
 test('buildAuthSessionResponse keeps refresh token in legacy body mode', () => {

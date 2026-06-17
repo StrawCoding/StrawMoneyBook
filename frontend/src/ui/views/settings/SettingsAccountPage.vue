@@ -1361,7 +1361,7 @@ let unsubscribeSession = null
 
 onMounted(() => {
   unsubscribeSession = subscribeSharedLedgerSession((session) => {
-    sessionUser.value = session?.user ?? null
+    sessionUser.value = session?.user ?? getSharedLedgerSession()?.user ?? null
     clearGooglePasswordVerification()
     syncProfileFormFromSession()
     profileSavedMessage.value = ''

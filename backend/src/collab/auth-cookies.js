@@ -3,6 +3,7 @@ import { getRequestOrigin } from './http.js'
 export const REFRESH_TOKEN_COOKIE_NAME = 'straw_refresh_token'
 export const AUTH_STORAGE_HEADER = 'x-straw-auth-storage'
 export const AUTH_STORAGE_COOKIE_MODE = 'cookie'
+export const NATIVE_CLIENT_HEADER = 'x-straw-native-client'
 
 const REFRESH_COOKIE_PATH = '/api/auth'
 
@@ -59,6 +60,15 @@ export function usesCookieAuthStorage(req) {
   return String(req?.headers?.[AUTH_STORAGE_HEADER] ?? req?.headers?.[AUTH_STORAGE_HEADER.toUpperCase()] ?? '')
     .trim()
     .toLowerCase() === AUTH_STORAGE_COOKIE_MODE
+}
+
+export function usesNativeClientAuthBackup(req) {
+  const platform = String(
+    req?.headers?.[NATIVE_CLIENT_HEADER]
+    ?? req?.headers?.[NATIVE_CLIENT_HEADER.toUpperCase()]
+    ?? '',
+  ).trim().toLowerCase()
+  return platform === 'android' || platform === 'ios'
 }
 
 export function extractRefreshTokenFromRequest(req, body = {}) {
@@ -137,6 +147,7 @@ export function clearRefreshTokenCookie(res, req) {
 
 export function buildAuthSessionResponse(session, {
   cookieMode = false,
+  nativeClientBackup = false,
   extra = {},
 } = {}) {
   const payload = {
@@ -148,7 +159,7 @@ export function buildAuthSessionResponse(session, {
     ...extra,
   }
 
-  if (!cookieMode) {
+  if (!cookieMode || nativeClientBackup) {
     payload.refresh_token = session.refreshToken
     payload.refresh_token_expires_in = session.refreshExpiresInSec
     payload.refresh_token_expires_at = session.refreshTokenExpiresAt

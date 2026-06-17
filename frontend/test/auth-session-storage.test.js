@@ -4,12 +4,15 @@ import assert from 'node:assert/strict'
 import {
   AUTH_STORAGE_COOKIE_MODE,
   AUTH_STORAGE_HEADER,
+  NATIVE_CLIENT_HEADER,
+  NATIVE_REFRESH_TOKEN_STORAGE_KEY,
   SHARED_LEDGER_SESSION_STORAGE_KEY,
   SHARED_LEDGER_USER_STORAGE_KEY,
   clearPersistedAuthSession,
   getAuthStorageHeaders,
   migrateLegacyPersistedSession,
   readPersistedAuthSession,
+  shouldPersistNativeRefreshToken,
   shouldSendAuthCredentials,
   shouldPersistUserProfileInLocalStorage,
   writePersistedAuthSession,
@@ -43,6 +46,11 @@ test('SMB-239: native platforms persist user profile in localStorage, web keeps 
   assert.equal(shouldPersistUserProfileInLocalStorage('android'), true)
   assert.equal(shouldPersistUserProfileInLocalStorage('ios'), true)
   assert.equal(shouldPersistUserProfileInLocalStorage('web'), false)
+})
+
+test('SMB-242: native platforms persist refresh token backup in localStorage', () => {
+  assert.equal(shouldPersistNativeRefreshToken('android'), true)
+  assert.equal(shouldPersistNativeRefreshToken('web'), false)
 })
 
 test('writePersistedAuthSession keeps tokens in memory and user in sessionStorage only', () => {

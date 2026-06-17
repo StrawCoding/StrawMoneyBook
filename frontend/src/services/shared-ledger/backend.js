@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { translateMessage } from '@/ui/services/i18n.service'
 import {
   clearPersistedAuthSession,
+  clearStoredTokens,
   getAuthStorageHeaders,
   getStoredAccessToken,
   getStoredRefreshToken,
@@ -140,19 +141,31 @@ function normalizeSessionUser(nextUser, previousUser = null) {
 }
 
 function writeSession(session) {
-  if (!session?.token || !session?.user) {
+  if (!session?.user) {
+    clearPersistedAuthSession()
+    notifySessionListeners(null)
+    return null
+  }
+  if (!session?.token && !shouldSendAuthCredentials()) {
     clearPersistedAuthSession()
     notifySessionListeners(null)
     return null
   }
   const previous = readSession()
   const nextSession = writePersistedAuthSession({
-    token: session.token,
+    token: String(session.token ?? '').trim(),
     refreshToken: String(session.refreshToken ?? '').trim(),
     user: normalizeSessionUser(session.user, previous?.user ?? null),
   })
   notifySessionListeners(nextSession)
   return nextSession
+}
+
+function clearAuthTokens() {
+  ongoingRefreshPromise = null
+  clearStoredTokens()
+  const session = readSession()
+  notifySessionListeners(session?.user ? session : null)
 }
 
 function clearSession() {
@@ -218,6 +231,16 @@ async function performRefreshRequest() {
   return writeSession(buildAuthResponseSession(data, session))
 }
 
+function shouldClearSessionOnRefreshFailure(error) {
+  const code = String(error?.code ?? '').trim()
+  const status = Number(error?.status ?? 0)
+  if (shouldPreserveSessionOnRefreshFailure(error)) return false
+  if (status === 401 || code === 'refresh_token_required' || code === 'refresh_token_invalid' || code === 'refresh_token_revoked') {
+    return false
+  }
+  return status >= 400
+}
+
 async function tryRefreshSessionOnce({ allowRetry = true } = {}) {
   if (!allowRetry) return null
   const session = readSession()
@@ -227,8 +250,10 @@ async function tryRefreshSessionOnce({ allowRetry = true } = {}) {
   if (!ongoingRefreshPromise) {
     ongoingRefreshPromise = performRefreshRequest()
       .catch((error) => {
-        if (!shouldPreserveSessionOnRefreshFailure(error)) {
+        if (shouldClearSessionOnRefreshFailure(error)) {
           clearSession()
+        } else {
+          clearAuthTokens()
         }
         throw error
       })
@@ -411,11 +436,12 @@ function persistAuthResponse(data) {
 
 function updateSessionUser(user) {
   const session = readSession()
-  if (!session?.token || !user) return null
+  if (!user) return null
+  if (!session?.user && !hasPersistedAuthIdentity()) return null
   return writeSession({
-    token: session.token,
-    refreshToken: String(session.refreshToken ?? '').trim(),
-    user: normalizeSessionUser(user, session.user),
+    token: String(session?.token ?? getStoredAccessToken() ?? '').trim(),
+    refreshToken: String(session?.refreshToken ?? getStoredRefreshToken() ?? '').trim(),
+    user: normalizeSessionUser(user, session?.user ?? null),
   })
 }
 
@@ -432,7 +458,10 @@ export function getSharedLedgerSession() {
 }
 
 export function isSharedLedgerAuthenticated() {
-  return Boolean(readSession()?.token ?? getStoredAccessToken())
+  const session = readSession()
+  if (Boolean(session?.token ?? getStoredAccessToken())) return true
+  if (shouldSendAuthCredentials() && hasPersistedAuthIdentity()) return true
+  return false
 }
 
 export function hasSharedLedgerMembershipAccess() {

@@ -3,7 +3,9 @@ import { Capacitor } from '@capacitor/core'
 export const SHARED_LEDGER_SESSION_STORAGE_KEY = 'straw.shared_ledger_session'
 export const AUTH_STORAGE_HEADER = 'X-Straw-Auth-Storage'
 export const AUTH_STORAGE_COOKIE_MODE = 'cookie'
+export const NATIVE_CLIENT_HEADER = 'X-Straw-Native-Client'
 export const SHARED_LEDGER_USER_STORAGE_KEY = 'straw.shared_ledger_user.v2'
+export const NATIVE_REFRESH_TOKEN_STORAGE_KEY = 'straw.shared_ledger_native_refresh.v1'
 
 let memoryAccessToken = ''
 let memoryRefreshToken = ''
@@ -30,9 +32,14 @@ export function usesCookieAuthStorage() {
 
 export function getAuthStorageHeaders() {
   if (!usesCookieAuthStorage()) return {}
-  return {
+  const headers = {
     [AUTH_STORAGE_HEADER]: AUTH_STORAGE_COOKIE_MODE,
   }
+  const nativeClient = getNativeClientPlatformHeaderValue()
+  if (nativeClient) {
+    headers[NATIVE_CLIENT_HEADER] = nativeClient
+  }
+  return headers
 }
 
 export function shouldSendAuthCredentials() {
@@ -44,7 +51,11 @@ export function getStoredAccessToken() {
 }
 
 export function getStoredRefreshToken() {
-  return memoryRefreshToken
+  if (memoryRefreshToken) return memoryRefreshToken
+  if (!shouldPersistNativeRefreshToken()) return ''
+  const localStorageRef = getLocalStorageRef()
+  if (!localStorageRef) return ''
+  return String(localStorageRef.getItem(NATIVE_REFRESH_TOKEN_STORAGE_KEY) ?? '').trim()
 }
 
 export function setStoredAccessToken(token) {
@@ -52,12 +63,28 @@ export function setStoredAccessToken(token) {
 }
 
 export function setStoredRefreshToken(token) {
-  memoryRefreshToken = String(token ?? '').trim()
+  const normalized = String(token ?? '').trim()
+  if (!shouldPersistNativeRefreshToken()) {
+    memoryRefreshToken = usesCookieAuthStorage() ? '' : normalized
+    const localStorageRef = getLocalStorageRef()
+    localStorageRef?.removeItem(NATIVE_REFRESH_TOKEN_STORAGE_KEY)
+    return
+  }
+  memoryRefreshToken = normalized
+  const localStorageRef = getLocalStorageRef()
+  if (!localStorageRef) return
+  if (!normalized) {
+    localStorageRef.removeItem(NATIVE_REFRESH_TOKEN_STORAGE_KEY)
+    return
+  }
+  localStorageRef.setItem(NATIVE_REFRESH_TOKEN_STORAGE_KEY, normalized)
 }
 
 export function clearStoredTokens() {
   memoryAccessToken = ''
   memoryRefreshToken = ''
+  const localStorageRef = getLocalStorageRef()
+  localStorageRef?.removeItem(NATIVE_REFRESH_TOKEN_STORAGE_KEY)
 }
 
 function parseStoredUser(rawValue) {
@@ -177,17 +204,18 @@ export function readPersistedAuthSession() {
 }
 
 export function writePersistedAuthSession(session) {
-  if (!session?.token || !session?.user) {
+  if (!session?.user) {
+    clearPersistedAuthSession()
+    return null
+  }
+  const token = String(session?.token ?? '').trim()
+  if (!token && !usesCookieAuthStorage()) {
     clearPersistedAuthSession()
     return null
   }
 
-  setStoredAccessToken(session.token)
-  if (!usesCookieAuthStorage()) {
-    setStoredRefreshToken(session.refreshToken ?? '')
-  } else {
-    setStoredRefreshToken('')
-  }
+  setStoredAccessToken(token)
+  setStoredRefreshToken(session.refreshToken ?? '')
   writeStoredUser(session.user)
 
   return {
@@ -215,4 +243,14 @@ export function isNativePlatform() {
 export function shouldPersistUserProfileInLocalStorage(platform = Capacitor.getPlatform()) {
   const normalized = String(platform ?? '').trim().toLowerCase()
   return normalized === 'android' || normalized === 'ios'
+}
+
+export function shouldPersistNativeRefreshToken(platform = Capacitor.getPlatform()) {
+  return shouldPersistUserProfileInLocalStorage(platform)
+}
+
+export function getNativeClientPlatformHeaderValue(platform = Capacitor.getPlatform()) {
+  const normalized = String(platform ?? '').trim().toLowerCase()
+  if (normalized === 'android' || normalized === 'ios') return normalized
+  return ''
 }
