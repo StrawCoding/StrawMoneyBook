@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.24
+- (SMB-245) 修復生產環境電子發票爬蟲 Playwright 找不到系統 Chrome（`/opt/google/chrome/chrome`）：`playwright-cli.json` 改為 `browserName: chromium` 使用 Playwright 內建 Chromium；後端新增 `@playwright/cli` 依賴、`playwright:install-browsers` 與 `deploy:copy` 後自動 `npm install` + 安裝 Chromium 至 `.server-data/playwright-browsers`；容器以 root 執行時另跑 `playwright install-deps chromium` 補齊 headless 所需系統函式庫（如 libnspr4.so）；`playwright-provider.js` 改走本機 `npx playwright-cli` 並預設 `PLAYWRIGHT_BROWSERS_PATH`。新增 `einvoice-playwright-config-source.test.js` 回歸案例。
+
 ## v1.3.23
 - (SMB-244) 修復 Capacitor Google 登入 `POST /api/auth/google` 在 SMB-243 CORP 修復後仍 Failed to fetch：SMB-242 起 native 登入/refresh 會帶 `X-Straw-Native-Client`，但 `http.js` 的 `Access-Control-Allow-Headers` 未列入此標頭，Android/iOS credentialed 預檢被瀏覽器拒絕。補上 `X-Straw-Native-Client` 並讓 preflight 偵測此標頭時維持 credentialed CORS。新增 `http-cors.test.js` SMB-244 回歸案例。
 

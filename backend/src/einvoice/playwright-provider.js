@@ -18,6 +18,7 @@ const PLAYWRIGHT_SESSION_TTL_MS = 5 * 60 * 1000
 const PLAYWRIGHT_MAX_BUFFER_BYTES = 4 * 1024 * 1024
 const PLAYWRIGHT_DEFAULT_TIMEOUT_MS = 60_000
 const PLAYWRIGHT_CLI_CONFIG_PATH = fileURLToPath(new URL('../../playwright-cli.json', import.meta.url))
+const PLAYWRIGHT_BROWSERS_PATH = normalizeText(process.env.PLAYWRIGHT_BROWSERS_PATH) || '.server-data/playwright-browsers'
 
 const DEFAULT_LOGIN_URL = 'https://www.einvoice.nat.gov.tw/accounts/login'
 const DEFAULT_QUERY_URL = 'https://www.einvoice.nat.gov.tw/portal/btc/mobile/btc502w/search'
@@ -91,9 +92,18 @@ function execFileAsync(file, args, options = {}) {
   })
 }
 
+function getPlaywrightExecEnv() {
+  return {
+    ...process.env,
+    PLAYWRIGHT_BROWSERS_PATH,
+  }
+}
+
 async function runPlaywrightCli(args = []) {
   const safeArgs = Array.isArray(args) ? args.filter((item) => String(item ?? '').length > 0) : []
-  return execFileAsync('npx', ['--yes', '--package', '@playwright/cli', 'playwright-cli', '--config', PLAYWRIGHT_CLI_CONFIG_PATH, ...safeArgs])
+  return execFileAsync('npx', ['playwright-cli', '--config', PLAYWRIGHT_CLI_CONFIG_PATH, ...safeArgs], {
+    env: getPlaywrightExecEnv(),
+  })
 }
 
 function extractLastJsonObject(rawOutput) {

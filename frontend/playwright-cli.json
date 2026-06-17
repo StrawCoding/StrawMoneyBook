@@ -1,7 +1,9 @@
 {
   "browser": {
+    "browserName": "chromium",
     "launchOptions": {
-      "chromiumSandbox": false
+      "chromiumSandbox": false,
+      "headless": true
     }
   }
 }
