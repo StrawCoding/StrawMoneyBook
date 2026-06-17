@@ -131,10 +131,11 @@ function wantsCredentialedCors(req) {
     ?? '',
   ).toLowerCase()
   if (!requestedHeaders) return false
-  return requestedHeaders
+  const normalizedHeaders = requestedHeaders
     .split(',')
     .map((name) => name.trim())
-    .includes('x-straw-auth-storage')
+  return normalizedHeaders.includes('x-straw-auth-storage')
+    || normalizedHeaders.includes('x-straw-native-client')
 }
 
 function isCrossSiteApiRequest(req) {
@@ -180,7 +181,7 @@ function setCorsHeaders(res) {
     res.setHeader('Access-Control-Allow-Origin', origin)
     res.setHeader('Access-Control-Allow-Credentials', 'true')
   }
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-Straw-Client-Key, X-Straw-Auth-Storage')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-Straw-Client-Key, X-Straw-Auth-Storage, X-Straw-Native-Client')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
 }
 

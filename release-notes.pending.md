@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.23
+- (SMB-244) 修復 Capacitor Google 登入 `POST /api/auth/google` 在 SMB-243 CORP 修復後仍 Failed to fetch：SMB-242 起 native 登入/refresh 會帶 `X-Straw-Native-Client`，但 `http.js` 的 `Access-Control-Allow-Headers` 未列入此標頭，Android/iOS credentialed 預檢被瀏覽器拒絕。補上 `X-Straw-Native-Client` 並讓 preflight 偵測此標頭時維持 credentialed CORS。新增 `http-cors.test.js` SMB-244 回歸案例。
+
 ## v1.3.22
 - (SMB-243) 修復 Capacitor `https://localhost` Google 登入 `POST /api/auth/google` 仍出現 Failed to fetch：v1.3.13 後 CORS preflight 與 ACAO 已正確，但後端 `http.js` 一律回 `Cross-Origin-Resource-Policy: same-site`，瀏覽器在跨站（localhost → api.strawmb.com）讀取回應時仍被 CORP 擋下。改為跨站 API 請求回 `Cross-Origin-Resource-Policy: cross-origin`（含 credentialed 與匿名 prepare）。新增 `backend/test/http-cors.test.js` SMB-243 回歸案例。
 

@@ -36,6 +36,7 @@ test('SMB-238: backend CORS reflects origin for cookie auth even when ALLOW_ALL_
   assert.match(httpSource, /function wantsCredentialedCors\(req\)/)
   assert.match(httpSource, /'https:\/\/localhost'/)
   assert.match(httpSource, /credentialed \|\| !ALLOW_ALL_ORIGINS/)
+  assert.match(httpSource, /X-Straw-Native-Client/)
 })
 
 test('SMB-239: refreshSharedLedgerSession restores cookie session when access token is missing', () => {

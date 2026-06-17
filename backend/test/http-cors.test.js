@@ -178,3 +178,41 @@ test('SMB-243: Capacitor origin auth/google POST uses cross-origin CORP with cre
     else process.env.NODE_ENV = previousNodeEnv
   }
 })
+
+test('SMB-244: native client header is allowed in credentialed CORS preflight', async () => {
+  const previousAllowedOrigins = process.env.ALLOWED_ORIGINS
+  const previousNodeEnv = process.env.NODE_ENV
+  process.env.ALLOWED_ORIGINS = '*'
+  process.env.NODE_ENV = 'production'
+
+  try {
+    const httpModule = await import(`../src/collab/http.js?cors-native-client-test=${Date.now()}`)
+    const req = {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://localhost',
+        host: 'api.strawmb.com',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type,x-straw-auth-storage,x-straw-native-client',
+      },
+    }
+    const res = createMockResponse(req)
+
+    const handled = httpModule.methodGuard(req, res, ['POST'])
+
+    assert.equal(handled, true)
+    assert.equal(res.statusCode, 204)
+    assert.equal(res.getHeader('access-control-allow-origin'), 'https://localhost')
+    assert.equal(res.getHeader('access-control-allow-credentials'), 'true')
+    assert.match(
+      String(res.getHeader('access-control-allow-headers') ?? ''),
+      /x-straw-native-client/i,
+    )
+    assert.equal(res.getHeader('cross-origin-resource-policy'), 'cross-origin')
+  } finally {
+    if (previousAllowedOrigins === undefined) delete process.env.ALLOWED_ORIGINS
+    else process.env.ALLOWED_ORIGINS = previousAllowedOrigins
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = previousNodeEnv
+  }
+})
