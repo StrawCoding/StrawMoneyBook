@@ -1,9 +1,10 @@
 # Pending Release Notes
 
+---
+
+## v1.3.19
 - 修復載具同步憑證格式錯誤：財政部 scrape 登入改為「手機號碼 + 密碼」（非手機條碼 / 查詢碼）；後端 Playwright provider 改走 `accounts/login` 後再查詢發票；設定頁欄位與驗證（09 開頭 10 碼 + 至少 4 位密碼）及三語 i18n 同步更新。
 - 修復第一銀行同步驗證碼辨識失敗：OCR 全失敗時改拋 `first_bank_captcha_manual_required` 並回傳驗證碼圖；建立連線頁新增手動輸入 4 碼重試；若使用者已填驗證碼則優先採用手動輸入、跳過 OCR。後端 einvoice 路由測試 9/9、前端載具/銀行同步 source 測試、Android `FirstBankAutomationCaptchaTest` 通過。
-
----
 
 ## v1.3.18
 - (SMB-239) 修復 Android / iOS 冷啟動後會員登入狀態無法保持：Capacitor WebView 在 process 結束後會清空 `sessionStorage`，v1.3.14 雖能在同 session 重載時保留使用者快取，但 App 完全重啟後 profile 與 access token 皆遺失，設定 / 會員頁呼叫 `refreshSharedLedgerSession()` 又因無 token 直接回傳 null 而不觸發 HttpOnly cookie 靜默 refresh，導致誤顯示未登入。`auth-session-storage.js` 改為在 native 平台把使用者 profile（不含 token）存進 `localStorage`，Web 仍只用 `sessionStorage`；`refreshSharedLedgerSession()` 在 cookie 模式且 access token 已清空時改委派 `restoreSharedLedgerSession({ force: true })`。新增 `auth-session-storage.test.js`、`auth-session-storage-source.test.js`、`shared-ledger-cookie-auth-cors-source.test.js` 回歸案例。
