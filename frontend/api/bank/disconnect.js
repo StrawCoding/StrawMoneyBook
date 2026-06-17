@@ -1,5 +1,14 @@
 import { disconnectFirstBankAuth } from './_first-bank-provider.js'
-import { clientGuard, isFirstBankProvider, methodGuard, normalizeProvider, parseBody, sendJson } from './_utils.js'
+import {
+  clientGuard,
+  createUnsupportedProviderMessage,
+  isFirstBankProvider,
+  methodGuard,
+  normalizeProvider,
+  parseBody,
+  sendJson,
+  unsupportedProviderGuard,
+} from './_utils.js'
 
 export default async function handler(req, res) {
   if (methodGuard(req, res)) return
@@ -10,6 +19,8 @@ export default async function handler(req, res) {
     sendJson(res, 400, { error: 'missing_provider', message: 'provider is required' })
     return
   }
+
+  if (unsupportedProviderGuard(provider, res)) return
 
   if (isFirstBankProvider(provider)) {
     try {
@@ -24,9 +35,8 @@ export default async function handler(req, res) {
     return
   }
 
-  sendJson(res, 200, {
-    ok: true,
-    provider,
-    disconnected_at: new Date().toISOString(),
+  sendJson(res, 501, {
+    error: 'provider_not_supported',
+    message: createUnsupportedProviderMessage(provider),
   })
 }

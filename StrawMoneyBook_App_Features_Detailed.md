@@ -697,14 +697,16 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 
 ### 9.1 銀行同步現況
 
-銀行同步相關頁面與流程已存在，但目前需要分清楚「能力存在」與「實際開放條件」：
+銀行同步已改為可透過環境變數 `VITE_BANK_SYNC_FEATURE_ENABLED` 啟用的會員功能：
 
-- 屬於會員功能
-- 入口受 feature flag / API 設定控制
-- 頁面文案已標示 sandbox 性質
-- 可建立銀行連線、查看同步狀態、管理要同步的帳戶
+- 屬於會員功能（`assertCanUseBankSync()`）
+- 目前支援 **Android App 第一銀行本地同步**（非 Open Banking）
+- 已移除 Sandbox / Mock 生產路徑；舊測試連線會在 UI 標示為已停用
+- 建立連線改為引導式流程：選擇銀行 → 登入 → 帳戶對應 → 首次同步
+- 匯入前會進入待匯入清單，需手動審核後才寫入記帳交易
+- 多銀行 Provider 接口保留（`VITE_BANK_SYNC_PROVIDERS_JSON`），後續可擴充
 
-所以這不是完全未做，而是屬於已建流程、仍受條件控制的功能。
+所以這不是完全未做，而是已建流程、以會員 + Android 第一銀行為主的受控功能。
 
 ## 10. 使用者輪廓
 

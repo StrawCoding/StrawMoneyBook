@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StrawMoneyBook 載具同步（網頁爬蟲）實作報告 v1.3.16</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --text: #1a1f2e;
+      --muted: #5b6475;
+      --line: #dde3ea;
+      --primary: #0f6b4c;
+      --primary-soft: #e8f5ef;
+      --warn: #8a4b00;
+      --warn-bg: #fff6e8;
+      --ok: #0f7a3f;
+      --ok-bg: #eaf8ef;
+      --danger: #b3261e;
+      --danger-bg: #fdecea;
+      --radius: 14px;
+      --shadow: 0 10px 30px rgba(20, 30, 50, 0.08);
+      --code-bg: #f0f3f7;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang TC", "Noto Sans TC", sans-serif;
+      background: linear-gradient(180deg, #eef3f7 0%, var(--bg) 220px, var(--bg) 100%);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+
+    header.hero {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) + 4px);
+      box-shadow: var(--shadow);
+      padding: 28px 32px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: -0.02em;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .badge.ok { background: var(--ok-bg); color: var(--ok); }
+    .badge.warn { background: var(--warn-bg); color: var(--warn); }
+    .badge.info { background: var(--primary-soft); color: var(--primary); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 24px 0;
+    }
+
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat .label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .stat .value {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    section.card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px 28px;
+      margin-bottom: 18px;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 20px;
+      color: var(--primary);
+    }
+
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+    }
+
+    p { margin: 0 0 12px; }
+
+    ul, ol { margin: 0 0 12px; padding-left: 22px; }
+    li { margin-bottom: 6px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin: 12px 0;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    code, pre {
+      font-family: ui-monospace, "Cascadia Code", "SF Mono", monospace;
+      font-size: 13px;
+    }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+
+    .flow {
+      background: var(--code-bg);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 16px;
+      font-size: 13px;
+      line-height: 1.8;
+      white-space: pre-wrap;
+    }
+
+    .callout {
+      border-left: 4px solid var(--primary);
+      background: var(--primary-soft);
+      padding: 12px 16px;
+      border-radius: 0 10px 10px 0;
+      margin: 12px 0;
+    }
+
+    .callout.warn {
+      border-left-color: var(--warn);
+      background: var(--warn-bg);
+    }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 32px;
+    }
+
+    @media print {
+      body { background: #fff; }
+      .wrap { max-width: none; padding: 0; }
+      section.card, header.hero, .stat { box-shadow: none; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1>載具同步（網頁爬蟲）實作報告</h1>
+      <p>StrawMoneyBook — 以後端 Playwright 完全取代財政部官方 API，採「自動抓取 → 本機待審核佇列 → 使用者確認匯入」流程。</p>
+      <div class="meta">
+        <span>版本：<strong>v1.3.16</strong></span>
+        <span>報告日期：2026-06-17</span>
+        <span class="badge ok">實作完成</span>
+        <span class="badge info">測試全綠</span>
+        <span class="badge warn">生產需啟用 Playwright</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="stat">
+        <div class="label">後端單元測試</div>
+        <div class="value">69 / 69</div>
+      </div>
+      <div class="stat">
+        <div class="label">前端單元測試</div>
+        <div class="value">559 / 559</div>
+      </div>
+      <div class="stat">
+        <div class="label">載具同步專項測試</div>
+        <div class="value">23 / 23</div>
+      </div>
+      <div class="stat">
+        <div class="label">Playwright UI Smoke</div>
+        <div class="value">通過</div>
+      </div>
+    </div>
+
+    <section class="card">
+      <h2>1. 目標與決策</h2>
+      <table>
+        <thead>
+          <tr><th>項目</th><th>決策</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>與官方 API 關係</td>
+            <td><strong>完全取代</strong> — 不再依賴 <code>EINVOICE_APP_ID</code> / <code>EINVOICE_API_KEY</code></td>
+          </tr>
+          <tr>
+            <td>產品模型</td>
+            <td>類似銀行同步：<strong>抓取 → 待審核佇列 → 勾選匯入</strong>（不自動入帳）</td>
+          </tr>
+          <tr>
+            <td>爬蟲技術</td>
+            <td>後端 <strong>Playwright</strong>（禁止 App 內嵌 WebView，吸取 SMB-209 教訓）</td>
+          </tr>
+          <tr>
+            <td>憑證儲存</td>
+            <td>手機條碼 + 查詢碼僅<strong>本機 AES-256-GCM 加密</strong>；後端 session 暫存 5 分鐘</td>
+          </tr>
+          <tr>
+            <td>會員限制</td>
+            <td>同步與匯入需會員資格（與銀行同步 gating 一致）</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>2. 架構總覽</h2>
+      <div class="flow">┌─────────────────────────────────────────────────────────────┐
+│  Frontend (Capacitor / Web)                                  │
+│  SettingsCarrierSyncPage → carrier-sync.service.js             │
+│       ↓ 本機 SQLite                                            │
+│  einvoice_sync_config / einvoice_pending_invoices              │
+│       ↓ importSelectedInvoices()                               │
+│  einvoice_invoice_imports + transactions                       │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ HTTPS + X-Straw-Client-Key
+┌──────────────────────────▼──────────────────────────────────┐
+│  Backend Node                                                │
+│  /api/einvoice/scrape/* → playwright-provider.js              │
+│       ↓ headless Chromium                                    │
+│  財政部電子發票整合服務網站（可設定 PORTAL URL / selectors）    │
+└─────────────────────────────────────────────────────────────┘</div>
+    </section>
+
+    <section class="card">
+      <h2>3. 後端 API</h2>
+      <table>
+        <thead>
+          <tr><th>Method</th><th>Path</th><th>用途</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>POST</td><td><code>/api/einvoice/scrape/start</code></td><td>建立 Playwright session；回傳 <code>needs_captcha</code>、驗證碼圖 base64</td></tr>
+          <tr><td>POST</td><td><code>/api/einvoice/scrape/captcha</code></td><td>提交圖形驗證碼</td></tr>
+          <tr><td>POST</td><td><code>/api/einvoice/scrape/query</code></td><td>查詢日期區間內發票清單</td></tr>
+          <tr><td>POST</td><td><code>/api/einvoice/scrape/cancel</code></td><td>釋放 session</td></tr>
+          <tr><td>POST</td><td><code>/api/einvoice/query-invoices</code></td><td>相容 alias（內部走 scrape 流程）</td></tr>
+        </tbody>
+      </table>
+
+      <h3>主要檔案</h3>
+      <ul>
+        <li><code>backend/src/einvoice/playwright-provider.js</code> — 真實爬蟲</li>
+        <li><code>backend/src/einvoice/mock-provider.js</code> — 測試 / 開發 mock</li>
+        <li><code>backend/src/einvoice/provider.js</code> — provider 切換</li>
+        <li><code>backend/src/routes/einvoice.js</code> — HTTP 路由與驗證</li>
+      </ul>
+
+      <h3>環境變數</h3>
+      <table>
+        <thead>
+          <tr><th>變數</th><th>說明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>EINVOICE_CLIENT_SHARED_KEY</code></td><td>必填；前端以 <code>X-Straw-Client-Key</code> 驗證</td></tr>
+          <tr><td><code>EINVOICE_SCRAPE_USE_PLAYWRIGHT=1</code></td><td>生產啟用真實 Playwright（未設則預設 mock）</td></tr>
+          <tr><td><code>EINVOICE_SCRAPE_MOCK=1</code></td><td>強制使用 mock（測試用）</td></tr>
+          <tr><td><code>EINVOICE_PORTAL_LOGIN_URL</code></td><td>財政部查詢入口 URL（可覆寫）</td></tr>
+          <tr><td><code>EINVOICE_SCRAPE_SELECTORS_JSON</code></td><td>DOM selector 覆寫（JSON）</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>4. 前端實作</h2>
+
+      <h3>資料庫（Migration 037）</h3>
+      <ul>
+        <li><code>einvoice_sync_config</code> — 自動同步、回看天數、預設帳戶/分類、上次同步狀態</li>
+        <li><code>einvoice_pending_invoices</code> — 待審核佇列（pending / imported / dismissed）</li>
+        <li><code>einvoice_sync_runs</code> — 同步執行紀錄</li>
+      </ul>
+
+      <h3>服務層</h3>
+      <ul>
+        <li><code>frontend/src/services/einvoice/scrape-api.js</code> — 後端 scrape API 客戶端</li>
+        <li><code>frontend/src/services/einvoice/carrier-sync.service.js</code> — 同步編排、去重、自動同步</li>
+        <li><code>frontend/src/core/repositories/einvoice-sync.repo.js</code> — 本機資料存取</li>
+      </ul>
+
+      <h3>UI 入口</h3>
+      <ul>
+        <li>設定 → <strong>載具同步</strong>（<code>/settings/carrier-sync</code>）</li>
+        <li>功能列表「電子發票匯入」→ 同上</li>
+        <li><code>/einvoice-import</code> → 重新導向至載具同步頁</li>
+      </ul>
+
+      <h3>使用者流程</h3>
+      <ol>
+        <li>輸入手機條碼與查詢碼（可加密記住）</li>
+        <li>設定自動同步、回看天數、預設匯入帳戶/分類</li>
+        <li>點「立即同步」— 若需驗證碼則顯示對話框</li>
+        <li>在「待審核發票」勾選 → 匯入或略過</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>5. 去重規則</h2>
+      <ul>
+        <li>已存在於 <code>einvoice_invoice_imports</code> → 跳過</li>
+        <li>待審核佇列中 status = pending → 跳過</li>
+        <li>status = dismissed → 不再顯示</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>6. 錯誤碼對照</h2>
+      <table>
+        <thead>
+          <tr><th>錯誤碼</th><th>HTTP</th><th>處理方式</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>einvoice_captcha_required</code></td><td>409</td><td>顯示驗證碼輸入對話框</td></tr>
+          <tr><td><code>einvoice_captcha_invalid</code></td><td>400</td><td>提示重新輸入驗證碼</td></tr>
+          <tr><td><code>einvoice_auth_failed</code></td><td>401</td><td>檢查條碼與查詢碼</td></tr>
+          <tr><td><code>einvoice_session_expired</code></td><td>410</td><td>重新開始同步</td></tr>
+          <tr><td><code>einvoice_portal_changed</code></td><td>502</td><td>官方網站改版，需更新 selector</td></tr>
+          <tr><td><code>einvoice_result_too_large</code></td><td>413</td><td>縮小日期區間（上限 62 天 / 20 頁）</td></tr>
+          <tr><td><code>einvoice_scrape_timeout</code></td><td>504</td><td>重試或縮小查詢範圍</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>7. 測試結果</h2>
+      <table>
+        <thead>
+          <tr><th>測試套件</th><th>指令</th><th>結果</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>後端全部</td>
+            <td><code>cd backend && npm test</code></td>
+            <td><span class="badge ok">69 通過</span></td>
+          </tr>
+          <tr>
+            <td>後端 einvoice 路由</td>
+            <td><code>npm test -- test/einvoice-routes.test.js</code></td>
+            <td><span class="badge ok">9 通過</span>（含 captcha 流程、auth 失敗、cancel）</td>
+          </tr>
+          <tr>
+            <td>前端 node 測試</td>
+            <td><code>cd frontend && npm run test:node</code></td>
+            <td><span class="badge ok">559 通過</span></td>
+          </tr>
+          <tr>
+            <td>載具同步專項</td>
+            <td><code>test/einvoice-carrier-sync.test.js</code> + <code>einvoice-redesign.test.js</code></td>
+            <td><span class="badge ok">23 通過</span></td>
+          </tr>
+          <tr>
+            <td>Web 建置</td>
+            <td><code>npm run build:web</code></td>
+            <td><span class="badge ok">通過</span></td>
+          </tr>
+          <tr>
+            <td>Playwright UI Smoke</td>
+            <td><code>node scripts/playwright-carrier-sync-settings.mjs</code></td>
+            <td><span class="badge ok">通過</span>（<code>/settings/carrier-sync</code> 可載入）</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>8. 部署檢查清單</h2>
+      <ol>
+        <li>後端設定 <code>EINVOICE_CLIENT_SHARED_KEY</code>；前端設定 <code>VITE_EINVOICE_CLIENT_SHARED_KEY</code></li>
+        <li>生產啟用：<code>EINVOICE_SCRAPE_USE_PLAYWRIGHT=1</code></li>
+        <li>伺服器安裝 Chromium：<code>npx playwright install chromium</code></li>
+        <li>確認 <code>EINVOICE_PORTAL_LOGIN_URL</code> 指向正確的財政部查詢頁</li>
+        <li>若官方改版 DOM，更新 <code>EINVOICE_SCRAPE_SELECTORS_JSON</code></li>
+        <li>建議每週執行真實爬蟲 smoke，及早發現 selector 失效</li>
+      </ol>
+
+      <div class="callout warn">
+        <strong>注意：</strong>開發與 CI 預設使用 mock provider，不會連線財政部真實網站。上線前務必在 staging 以真實載具驗證 Playwright 流程。
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>9. 風險與緩解</h2>
+      <table>
+        <thead>
+          <tr><th>風險</th><th>緩解</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>財政部改版 DOM</td><td>selector 集中定義 + <code>einvoice_portal_changed</code> 明確失敗；可 JSON 覆寫</td></tr>
+          <tr><td>驗證碼 / 反爬</td><td>人工輸入驗證碼；嚴格 rate limit；不做 OCR</td></tr>
+          <tr><td>WebView 被封</td><td>僅後端 Playwright，不在 App 內爬</td></tr>
+          <tr><td>查詢碼傳輸</td><td>HTTPS + 短期 session；server log 不記錄查詢碼</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>10. 變更檔案索引</h2>
+      <table>
+        <thead>
+          <tr><th>類別</th><th>路徑</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>後端爬蟲</td><td><code>backend/src/einvoice/*.js</code></td></tr>
+          <tr><td>後端路由</td><td><code>backend/src/routes/einvoice.js</code></td></tr>
+          <tr><td>後端測試</td><td><code>backend/test/einvoice-routes.test.js</code></td></tr>
+          <tr><td>DB Migration</td><td><code>frontend/src/core/db/migrations/037_einvoice_carrier_sync.sql</code></td></tr>
+          <tr><td>Repository</td><td><code>frontend/src/core/repositories/einvoice-sync.repo.js</code></td></tr>
+          <tr><td>Service</td><td><code>frontend/src/services/einvoice/carrier-sync.service.js</code>、<code>scrape-api.js</code></td></tr>
+          <tr><td>設定頁 UI</td><td><code>frontend/src/ui/views/settings/SettingsCarrierSyncPage.vue</code></td></tr>
+          <tr><td>路由</td><td><code>frontend/src/ui/router/index.js</code></td></tr>
+          <tr><td>i18n</td><td><code>frontend/src/ui/services/i18n.service.js</code>（繁中 / 英 / 日）</td></tr>
+          <tr><td>前端測試</td><td><code>frontend/test/einvoice-carrier-sync.test.js</code></td></tr>
+          <tr><td>Playwright Smoke</td><td><code>frontend/scripts/playwright-carrier-sync-settings.mjs</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer>
+      StrawMoneyBook 載具同步實作報告 · 產生於 2026-06-17 · 專案路徑：StrawMoneyBook/docs/carrier-sync-scrape-report.html
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,24 +1,20 @@
 import { Capacitor } from '@capacitor/core'
 import { translateMessage } from '../../ui/services/i18n.service.js'
 import {
-  createLocalMockBankLinkSession,
-  disconnectLocalMockBankAuth,
-  exchangeLocalMockBankAuth,
-  markImportedLocalMockTransactions,
-  syncLocalMockBankTransactions,
-} from './local-mock-backend.js'
-import {
   connectNativeFirstBank,
   disconnectNativeBankConnection,
   isNativeBankAutomationRuntimeSupported,
   syncNativeFirstBank,
 } from './native-automation.js'
-import { isFirstBankProviderId, isMockProviderId } from './shared.js'
+import { isFirstBankProviderId } from './shared.js'
 
 const IMPORT_META_ENV = import.meta.env ?? {}
 const DEFAULT_BANK_API_BASE = String(IMPORT_META_ENV.VITE_BANK_SYNC_API_BASE_URL ?? '').trim()
 const BANK_SYNC_CLIENT_SHARED_KEY = String(IMPORT_META_ENV.VITE_BANK_SYNC_CLIENT_SHARED_KEY ?? '').trim()
-const BANK_SYNC_FEATURE_ENABLED = false
+const BANK_SYNC_FEATURE_ENABLED = parseBooleanEnv(
+  IMPORT_META_ENV.VITE_BANK_SYNC_FEATURE_ENABLED,
+  false,
+)
 // Keep unsupported real-bank connectors opt-in only.
 const BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS = parseBooleanEnv(
   IMPORT_META_ENV.VITE_BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS,
@@ -27,11 +23,6 @@ const BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS = parseBooleanEnv(
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
 const PROVIDERS_FALLBACK = [
-  {
-    id: 'mock_bank_tw',
-    name: 'Mock Bank TW (Sandbox)',
-    country: 'TW',
-  },
   {
     id: 'first_bank_tw',
     name: 'First Bank i-Bank',
@@ -50,7 +41,6 @@ function isNativeFirstBankProvider(providerId) {
 }
 
 function shouldExposeProvider(providerId) {
-  if (isMockProviderId(providerId)) return true
   if (isFirstBankProviderId(providerId)) {
     return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS && isNativeBankAutomationRuntimeSupported()
   }
@@ -72,25 +62,23 @@ function shouldRequireExplicitBankApiBase() {
   return Capacitor.getPlatform() !== 'web'
 }
 
-function canUseLocalMockBankSync() {
-  if (DEFAULT_BANK_API_BASE) return false
-  if (Capacitor.getPlatform() === 'web') return false
-  const providers = parseProviderListFromEnv().filter((item) => shouldExposeProvider(item.id))
-  return providers.length > 0 && providers.every((item) => isMockProviderId(item.id))
-}
-
 function createMissingBankApiError() {
   const platform = Capacitor.getPlatform()
-  const message = platform === 'web'
-    ? t('bank_sync.error.api_unavailable_web')
-    : t('bank_sync.error.api_unavailable_native')
+  let message
+  if (platform === 'web') {
+    message = t('bank_sync.error.api_unavailable_web')
+  } else if (!isNativeBankAutomationRuntimeSupported()) {
+    message = t('bank_sync.error.android_only')
+  } else {
+    message = t('bank_sync.error.api_unavailable_native')
+  }
   const error = new Error(message)
   error.code = 'bank_sync_api_unavailable'
   return error
 }
 
 function createBankSyncDisabledError() {
-  const error = new Error('銀行同步功能目前已暫時關閉')
+  const error = new Error(t('bank_sync.error.feature_disabled', '銀行同步功能目前已暫時關閉'))
   error.code = 'bank_sync_feature_disabled'
   return error
 }
@@ -100,9 +88,14 @@ function assertBankSyncFeatureEnabled() {
   throw createBankSyncDisabledError()
 }
 
+export function isBankSyncPlatformSupported() {
+  return isNativeBankAutomationRuntimeSupported() || Boolean(DEFAULT_BANK_API_BASE)
+}
+
 export function isBankSyncApiConfigured() {
   if (!BANK_SYNC_FEATURE_ENABLED) return false
-  return canUseLocalMockBankSync() || !shouldRequireExplicitBankApiBase()
+  if (isNativeBankAutomationRuntimeSupported() && listBankProviders().length > 0) return true
+  return !shouldRequireExplicitBankApiBase()
 }
 
 export function isBankSyncFeatureEnabled() {
@@ -148,24 +141,6 @@ async function postJson(path, payload) {
     }
     if (path === '/api/bank/disconnect') {
       return disconnectNativeBankConnection(payload)
-    }
-  }
-
-  if (canUseLocalMockBankSync()) {
-    if (path === '/api/bank/link_session' && isMockProviderId(payload?.provider)) {
-      return createLocalMockBankLinkSession(payload)
-    }
-    if (path === '/api/bank/exchange' && isMockProviderId(payload?.provider)) {
-      return exchangeLocalMockBankAuth(payload)
-    }
-    if (path === '/api/bank/sync' && isMockProviderId(payload?.provider)) {
-      return syncLocalMockBankTransactions(payload)
-    }
-    if (path === '/api/bank/disconnect' && isMockProviderId(payload?.provider)) {
-      return disconnectLocalMockBankAuth(payload)
-    }
-    if (path === '/api/bank/mark_imported') {
-      return markImportedLocalMockTransactions(payload)
     }
   }
 

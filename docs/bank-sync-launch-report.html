@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StrawMoneyBook 銀行同步上線報告 v1.3.17</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --text: #1a1f2e;
+      --muted: #5b6475;
+      --line: #dde3ea;
+      --primary: #0f6b4c;
+      --primary-soft: #e8f5ef;
+      --warn: #8a4b00;
+      --warn-bg: #fff6e8;
+      --ok: #0f7a3f;
+      --ok-bg: #eaf8ef;
+      --danger: #b3261e;
+      --danger-bg: #fdecea;
+      --radius: 14px;
+      --shadow: 0 10px 30px rgba(20, 30, 50, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang TC", "Noto Sans TC", sans-serif;
+      background: linear-gradient(180deg, #eef3f7 0%, var(--bg) 220px, var(--bg) 100%);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+
+    header.hero {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) + 4px);
+      box-shadow: var(--shadow);
+      padding: 28px 32px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: -0.02em;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .badge.ok { background: var(--ok-bg); color: var(--ok); }
+    .badge.warn { background: var(--warn-bg); color: var(--warn); }
+    .badge.info { background: var(--primary-soft); color: var(--primary); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin: 24px 0;
+    }
+
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat .label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .stat .value {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    section.card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px 28px;
+      margin-bottom: 18px;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 20px;
+      color: var(--primary);
+    }
+
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+    }
+
+    p, li { font-size: 15px; }
+    ul { padding-left: 20px; }
+    li + li { margin-top: 6px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f8fafc;
+      font-weight: 700;
+    }
+
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+    }
+
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 12px;
+      padding: 16px;
+      overflow-x: auto;
+      line-height: 1.5;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .flow-step {
+      background: var(--primary-soft);
+      border: 1px solid #c9e8d8;
+      border-radius: 12px;
+      padding: 12px 14px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .flow-arrow {
+      display: none;
+    }
+
+    .result-pass { color: var(--ok); font-weight: 700; }
+    .result-note { color: var(--muted); font-size: 13px; }
+
+    footer {
+      margin-top: 28px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    @media print {
+      body { background: #fff; }
+      .wrap { max-width: none; padding: 0; }
+      section.card, header.hero, .stat { box-shadow: none; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1>StrawMoneyBook 銀行同步上線報告</h1>
+      <p style="margin: 0 0 14px; color: var(--muted); max-width: 72ch;">
+        本報告整理銀行同步功能由 Sandbox 轉為會員限定、Android 第一銀行本地同步的實作成果、測試結果與發版注意事項。
+      </p>
+      <div class="meta">
+        <span><strong>版本：</strong> v1.3.17（pending）</span>
+        <span><strong>報告日期：</strong> 2026-06-17</span>
+        <span><strong>範圍：</strong> 會員限定 · Android 第一銀行</span>
+        <span class="badge ok">計畫項目已完成</span>
+        <span class="badge info">Mock 生產路徑已移除</span>
+        <span class="badge warn">Web 僅顯示平台限制</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="stat">
+        <div class="label">銀行同步單元測試</div>
+        <div class="value result-pass">33 / 33</div>
+        <div class="result-note">bank-sync*.test.js 全數通過</div>
+      </div>
+      <div class="stat">
+        <div class="label">Web 建置</div>
+        <div class="value result-pass">通過</div>
+        <div class="result-note">npm run build:web</div>
+      </div>
+      <div class="stat">
+        <div class="label">Smoke 測試</div>
+        <div class="value result-pass">通過</div>
+        <div class="result-note">含 simulate:first-bank-provider</div>
+      </div>
+      <div class="stat">
+        <div class="label">Playwright 檢查</div>
+        <div class="value result-pass">通過</div>
+        <div class="result-note">Web 預覽會導向設定頁（預期）</div>
+      </div>
+    </div>
+
+    <section class="card">
+      <h2>1. 目標與結論</h2>
+      <ul>
+        <li><strong>啟用上線：</strong>以 <code>VITE_BANK_SYNC_FEATURE_ENABLED</code> 環境變數控制功能開關，取代硬編碼關閉。</li>
+        <li><strong>移除 Sandbox：</strong>生產路徑不再暴露 <code>mock_bank_tw</code>；舊測試連線在 UI 標示為已停用。</li>
+        <li><strong>UX 優化：</strong>新增建立連線 Wizard、批次帳戶儲存、待匯入 badge、進階設定收合。</li>
+        <li><strong>保留擴充性：</strong>Provider registry（<code>VITE_BANK_SYNC_PROVIDERS_JSON</code>）與 native / remote API 抽象層維持不變。</li>
+        <li><strong>開放對象：</strong>會員限定；真實同步目前僅支援 <strong>Android App + 第一銀行</strong>。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>2. 架構與資料流</h2>
+      <div class="flow">
+        <div class="flow-step">設定頁入口<br><small>isBankSyncFeatureEnabled()</small></div>
+        <div class="flow-step">建立 Wizard<br><small>登入 → 對應 → 首次同步</small></div>
+        <div class="flow-step">bank-sync.service<br><small>同步 / 匯入規則</small></div>
+        <div class="flow-step">backend.js<br><small>路由至 Native</small></div>
+        <div class="flow-step">BankAutomationPlugin<br><small>Android OCR + 網銀</small></div>
+        <div class="flow-step">SQLite Mirror<br><small>待匯入審核</small></div>
+      </div>
+      <h3>匯入策略</h3>
+      <p>維持<strong>手動審核匯入</strong>：同步後交易進入待匯入清單，使用者確認後才寫入 <code>transactions</code>（<code>origin_type = import</code>）。</p>
+    </section>
+
+    <section class="card">
+      <h2>3. 建立連線 Wizard（4 步驟）</h2>
+      <div class="flow">
+        <div class="flow-step">Step 1<br>選擇銀行</div>
+        <div class="flow-step">Step 2<br>登入與起始日</div>
+        <div class="flow-step">Step 3<br>批次帳戶對應</div>
+        <div class="flow-step">Step 4<br>首次同步</div>
+      </div>
+      <ul>
+        <li>僅顯示第一銀行，底部保留「更多銀行即將推出」佔位。</li>
+        <li>Step 3 使用 <code>saveBankAccountsSettings()</code> 一次儲存多個帳戶對應。</li>
+        <li>Step 4 自動呼叫 <code>syncBankConnectionNow()</code>，完成後導向連線詳情頁。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>4. 主要程式變更</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>區域</th>
+            <th>檔案</th>
+            <th>變更摘要</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Feature Flag</td>
+            <td><code>frontend/src/services/bank-sync/backend.js</code></td>
+            <td><code>VITE_BANK_SYNC_FEATURE_ENABLED</code>、Android-only 可用性判斷、移除 mock 路由</td>
+          </tr>
+          <tr>
+            <td>業務流程</td>
+            <td><code>frontend/src/ui/services/bank-sync.service.js</code></td>
+            <td>新增 <code>saveBankAccountsSettings</code>、<code>countBankReviewTransactionsByConnection</code>；移除 mock connect 分支</td>
+          </tr>
+          <tr>
+            <td>Serverless API</td>
+            <td><code>frontend/api/bank/*.js</code></td>
+            <td>mock provider 回應改為 501；僅支援 first_bank_tw</td>
+          </tr>
+          <tr>
+            <td>UI — 列表</td>
+            <td><code>SettingsBankSyncPage.vue</code></td>
+            <td>待匯入 badge、平台提示、舊 mock 連線停用橫幅</td>
+          </tr>
+          <tr>
+            <td>UI — 建立</td>
+            <td><code>SettingsBankSyncCreatePage.vue</code></td>
+            <td>重構為 4 步驟 Wizard</td>
+          </tr>
+          <tr>
+            <td>UI — 連線</td>
+            <td><code>SettingsBankSyncConnectionPage.vue</code></td>
+            <td>對應引導 banner、「全部儲存」、進階設定 accordion</td>
+          </tr>
+          <tr>
+            <td>i18n</td>
+            <td><code>frontend/src/ui/services/i18n.service.js</code></td>
+            <td>三語移除 sandbox 文案；新增生產導向免責聲明與 Android-only 提示</td>
+          </tr>
+          <tr>
+            <td>環境設定</td>
+            <td><code>frontend/.env</code>、<code>.env.production</code>、<code>.env.example</code></td>
+            <td>新增 bank sync feature flag 與 real provider opt-in 說明</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>5. 環境變數與啟用條件</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>變數</th>
+            <th>建議值（Android 發版）</th>
+            <th>說明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>VITE_BANK_SYNC_FEATURE_ENABLED</code></td>
+            <td><code>true</code></td>
+            <td>主功能開關；關閉時入口與路由 guard 皆隱藏</td>
+          </tr>
+          <tr>
+            <td><code>VITE_BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS</code></td>
+            <td><code>true</code></td>
+            <td>允許第一銀行真實 provider（opt-in）</td>
+          </tr>
+          <tr>
+            <td><code>VITE_BANK_SYNC_API_BASE_URL</code></td>
+            <td>可留空（Android native）</td>
+            <td>僅遠端 API 整合時需要；Android 本地自動化不需部署</td>
+          </tr>
+          <tr>
+            <td><code>VITE_BANK_SYNC_PROVIDERS_JSON</code></td>
+            <td>可選</td>
+            <td>覆寫 provider 清單；未設定時預設僅 first_bank_tw</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>功能可見條件（邏輯）</h3>
+      <pre>isBankSyncFeatureEnabled()
+  = VITE_BANK_SYNC_FEATURE_ENABLED === true
+  AND listBankProviders().length &gt; 0
+  AND（Android native 環境 OR 已設定遠端 API）</pre>
+    </section>
+
+    <section class="card">
+      <h2>6. 測試結果</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>測試項目</th>
+            <th>指令</th>
+            <th>結果</th>
+            <th>備註</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>銀行同步單元測試</td>
+            <td><code>node --test test/bank-sync*.test.js</code></td>
+            <td class="result-pass">33 通過 / 0 失敗</td>
+            <td>含 batch save、backend source、UI source、import/sync 流程</td>
+          </tr>
+          <tr>
+            <td>Web 建置</td>
+            <td><code>npm run build:web</code></td>
+            <td class="result-pass">通過</td>
+            <td>production bundle 含 <code>VITE_BANK_SYNC_FEATURE_ENABLED=true</code></td>
+          </tr>
+          <tr>
+            <td>Smoke</td>
+            <td><code>npm run test:smoke</code></td>
+            <td class="result-pass">通過</td>
+            <td>已移除 <code>simulate:bank-sync</code> mock flow</td>
+          </tr>
+          <tr>
+            <td>Playwright UI</td>
+            <td><code>npm run playwright:bank-sync</code></td>
+            <td class="result-pass">通過</td>
+            <td>Web 預覽無 Android provider，路由 guard 導向 /settings（預期）</td>
+          </tr>
+          <tr>
+            <td>Android 實機</td>
+            <td>封閉測試 track 手動驗證</td>
+            <td class="result-note">待發版後執行</td>
+            <td>第一銀行登入、OCR、同步、匯入、刪除連線</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>新增測試檔案</h3>
+      <ul>
+        <li><code>frontend/test/bank-sync-backend-source.test.js</code></li>
+        <li><code>frontend/test/bank-sync-ui-source.test.js</code></li>
+        <li><code>frontend/test/bank-sync-batch-accounts.test.js</code></li>
+        <li><code>frontend/scripts/playwright-bank-sync-settings.mjs</code></li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>7. 風險與發版檢查清單</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>風險</th>
+            <th>緩解措施</th>
+            <th>狀態</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>第一銀行網銀 UI 變更導致自動化失效</td>
+            <td>保留 bank-sync debug trace；錯誤狀態引導重新連線</td>
+            <td class="result-pass">已實作</td>
+          </tr>
+          <tr>
+            <td>非 Android 用戶誤以為可使用</td>
+            <td>明確 Android-only 文案；Web 不顯示可操作 CTA</td>
+            <td class="result-pass">已實作</td>
+          </tr>
+          <tr>
+            <td>憑證安全</td>
+            <td>secure-setting 加密；第一銀行 connect 後刪除暫存憑證</td>
+            <td class="result-pass">既有機制</td>
+          </tr>
+          <tr>
+            <td>商店審核 / 合規</td>
+            <td>會員限定、手動審核匯入、免責聲明對話框</td>
+            <td class="result-pass">已實作</td>
+          </tr>
+          <tr>
+            <td>舊 mock 連線資料殘留</td>
+            <td>列表頁標示「測試連線已停用」並引導刪除</td>
+            <td class="result-pass">已實作</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>發版前確認</h3>
+      <ul>
+        <li>Android CI / AAB build 帶 <code>VITE_BANK_SYNC_FEATURE_ENABLED=true</code></li>
+        <li>封閉測試 track 實機跑完整流程（登入 → 對應 → 同步 → 匯入）</li>
+        <li>確認會員 gating（免費用戶僅能看介紹，無法操作）</li>
+        <li>發版時將 <code>release-notes.pending.md</code> v1.3.17 條目一併上架</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>8. 文件更新</h2>
+      <ul>
+        <li><code>StrawMoneyBook_App_Features_Detailed.md</code> — §9 銀行同步（移除 sandbox 描述）</li>
+        <li><code>frontend/StrawMoneyBook_Features_Map.md</code> — 銀行同步入口與路由說明</li>
+        <li><code>release-notes.pending.md</code> — v1.3.17 變更摘要</li>
+      </ul>
+    </section>
+
+    <footer>
+      StrawMoneyBook · 銀行同步上線報告 · 產生時間 2026-06-17
+    </footer>
+  </div>
+</body>
+</html>

@@ -10,28 +10,14 @@ import { decryptCredential, encryptCredential } from './credential-crypto.js'
 import { EINVOICE_PLATFORM, createEInvoiceError, buildCarrierTagsJson } from './shared.js'
 import { traceEInvoiceScrape, traceEInvoiceImport } from '@/core/services/einvoice-debug.service.js'
 import { createExpense } from '@/core/services/transaction.service.js'
-import { Capacitor } from '@capacitor/core'
+import {
+  queryEInvoiceInvoicesAlias,
+  queryEInvoiceScrapeInvoices,
+  startEInvoiceScrapeSession,
+  submitEInvoiceScrapeCaptcha,
+} from './scrape-api.js'
 
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
-
-// ── Backend API base URL ──────────────────────────────────────────────────────
-
-const PROD_DEFAULT_API_BASE = 'https://api.strawmb.com'
-const EXPLICIT_API_BASE = String(import.meta.env.VITE_EINVOICE_API_BASE_URL ?? '').trim()
-const EINVOICE_CLIENT_SHARED_KEY = String(import.meta.env.VITE_EINVOICE_CLIENT_SHARED_KEY ?? '').trim()
-const EINVOICE_QUERY_TIMEOUT_MS = 35_000
-
-function getEInvoiceApiBase() {
-  if (EXPLICIT_API_BASE) return EXPLICIT_API_BASE
-  if (Capacitor.getPlatform() !== 'web') return PROD_DEFAULT_API_BASE
-  if (import.meta.env.PROD) return PROD_DEFAULT_API_BASE
-  return ''
-}
-
-function buildApiUrl(path) {
-  const base = getEInvoiceApiBase()
-  return base ? `${base.replace(/\/$/, '')}${path}` : path
-}
 
 // ── Device UUID (stable per-install key for credential encryption) ─────────────
 
@@ -93,55 +79,63 @@ export async function hasEInvoiceCredential() {
 
 // ── Invoice scraping via backend API ─────────────────────────────────────────
 
-export async function scrapeEInvoiceList(queryParams) {
+export async function scrapeEInvoiceList(queryParams, options = {}) {
   console.log('[EInvoice] 開始查詢發票 — 日期區間:', queryParams?.dateFrom, '~', queryParams?.dateTo)
   return traceEInvoiceScrape(
     { carrierBarcode: queryParams?.carrierBarcode, dateFrom: queryParams?.dateFrom, dateTo: queryParams?.dateTo },
     async () => {
-      const url = buildApiUrl('/api/einvoice/query-invoices')
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), EINVOICE_QUERY_TIMEOUT_MS)
-      try {
-        const headers = { 'Content-Type': 'application/json' }
-        if (EINVOICE_CLIENT_SHARED_KEY) {
-          headers['X-Straw-Client-Key'] = EINVOICE_CLIENT_SHARED_KEY
-        }
-        const response = await fetch(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            cardNo: String(queryParams?.carrierBarcode ?? '').trim(),
-            cardEncrypt: String(queryParams?.verificationCode ?? ''),
-            startDate: String(queryParams?.dateFrom ?? '').trim(),
-            endDate: String(queryParams?.dateTo ?? '').trim(),
-            onlyWinningInv: 'N',
-          }),
-          signal: controller.signal,
+      const cardNo = String(queryParams?.carrierBarcode ?? '').trim()
+      const cardEncrypt = String(queryParams?.verificationCode ?? '')
+      const startDate = String(queryParams?.dateFrom ?? '').trim()
+      const endDate = String(queryParams?.dateTo ?? '').trim()
+      const captchaCode = String(options?.captchaCode ?? queryParams?.captchaCode ?? '').trim()
+      let sessionId = String(options?.sessionId ?? queryParams?.sessionId ?? '').trim()
+
+      if (!sessionId) {
+        const start = await startEInvoiceScrapeSession({
+          cardNo,
+          cardEncrypt,
+          force_captcha: false,
         })
-        let data = null
-        try {
-          data = await response.json()
-        } catch {
-          data = null
+        sessionId = start.session_id
+        if (start.needs_captcha && !captchaCode) {
+          const error = createEInvoiceError(
+            t('einvoice.error.captcha_required', {}, '請輸入圖形驗證碼'),
+            'einvoice_captcha_required',
+          )
+          error.sessionId = sessionId
+          error.captchaImageBase64 = start.captcha_image_base64 ?? ''
+          throw error
         }
-        if (!response.ok) {
-          const errorCode = String(data?.error ?? 'einvoice_query_failed')
-          const errorMessage = String(data?.message ?? t('einvoice.error.scrape_failed', {}, '抓取發票失敗，請重試'))
-          throw createEInvoiceError(errorMessage, errorCode)
-        }
-        const list = Array.isArray(data?.invoices) ? data.invoices : []
-        console.log('[EInvoice] 查詢完成，API 回傳', list.length, '筆')
+      }
+
+      if (captchaCode) {
+        await submitEInvoiceScrapeCaptcha({ session_id: sessionId, captcha_code: captchaCode })
+      }
+
+      try {
+        const list = await queryEInvoiceScrapeInvoices({
+          session_id: sessionId,
+          cardNo,
+          cardEncrypt,
+          startDate,
+          endDate,
+          captcha_code: captchaCode || undefined,
+        }, { signal: options?.signal })
+        console.log('[EInvoice] 查詢完成，爬蟲回傳', list.length, '筆')
         return list
       } catch (err) {
-        if (err?.name === 'AbortError') {
-          throw createEInvoiceError(
-            t('einvoice.error.timeout', {}, '查詢逾時，請稍後再試'),
-            'einvoice_query_timeout',
-          )
+        if (options?.allowAliasFallback !== false && err?.code !== 'einvoice_captcha_required') {
+          const list = await queryEInvoiceInvoicesAlias({
+            cardNo,
+            cardEncrypt,
+            startDate,
+            endDate,
+          }, { signal: options?.signal })
+          console.log('[EInvoice] 查詢完成（alias），回傳', list.length, '筆')
+          return list
         }
         throw err
-      } finally {
-        clearTimeout(timeout)
       }
     },
   )

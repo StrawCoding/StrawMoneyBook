@@ -39,7 +39,7 @@
 - 官方網站 SEO / 品牌搜尋關鍵字（`../StrawMoneyBookWeb/index.html`：`StrawMoneyBook`、`稻草AI記帳`、`稻草記帳`、`AI記帳`、`對話記帳`、`自動記帳` 等）
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 先說明預先體驗價值再提供外開表單與內嵌 iframe；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell，並在官網 `public/terms-of-service/index.html`、`public/privacy-policy/index.html` 提供靜態直連頁，避免正式網域直接開啟法律文件路徑時因 SPA history fallback 未命中而回 404
-- 銀行同步（頁面與流程存在，受 feature flag、API 設定與會員資格控制）
+- 銀行同步（會員限定；`VITE_BANK_SYNC_FEATURE_ENABLED` 啟用後顯示；Android 第一銀行本地同步）
 - Android 原生能力（首頁小工具目錄（SMB-157）、安全鎖、Google Identity、語音輸入、銀行自動化；電子發票精靈頁 header 在 SMB-178 後收斂回共用 `.btn.back-btn`，和帳本同步頁相同採左側 chevron、置中標題、右側等寬保留位；CI 發版流程已確保 `frontend/android/gradlew` 具備可執行權限，避免 `bundleRelease` 在 checkout 後直接失敗；CI concurrency 只會取消 PR 的舊 run，`main` push 會排隊跑完，避免發版 commit 與清空 release notes commit 互相產生取消 annotation；VS Code workspace 會透過 `java.import.exclusions` 與 `java.project.excludedPaths` 排除 Android Gradle 原生目錄的一般 Java 掃描，避免 JDT LS 未載入 Android SDK / Capacitor classpath 時誤報 `android.*`、`com.getcapacitor.*`、JUnit、Tesseract 等套件不存在，Android 原生檢查仍以 Gradle / Android Studio 為準；`npm run gpr` 推送版本 tag 後，GitHub Actions 會建置 AAB、建立 GitHub Release，並透過 Fastlane 發布到 Google Play 封閉測試 track；若遇到 Play Console / 其他流程同時修改造成 edit 衝突，Fastlane 會重開 edit 有限次重試；SMB-183 後 `npm run gpr` 在 bump 前會先執行 `notes:check` 確認 `release-notes.pending.md` 檔案存在，pending notes 為空時只提示但仍允許發版；patch 發版會在成功後封存既有 notes，空 notes 不會建立空白版本區塊，minor 發版則使用 `npm run gpr:minor` 清空暫存檔並 push；GitHub Actions 建立 GitHub Release 時也會把暫存檔內容加入 release body，Fastlane 同步填入 Google Play changelog）
 - Android 桌面小工具共 5 種：月收支總覽（`StrawMoneyWidgetProvider`）、收支圓餅圖（`StrawMoneyPieChartWidgetProvider`）、收支長條圖（`StrawMoneyBarChartWidgetProvider`）、快速記帳（`StrawMoneyQuickAddWidgetProvider`）、AI 記帳（`StrawMoneyAiBookkeepingWidgetProvider`）；圖表類小工具點擊導向 `/analysis`，快速記帳導向 `/transactions/quick-add`，AI 記帳導向 `/ai-auto-bookkeeping`；資料由 JS 層 `home-widget.service.js` 透過 Capacitor HomeWidget plugin 同步當月收入/支出摘要至 SharedPreferences，Android 原生以 `HomeWidgetPlugin.java` 繪製圓餅圖與長條圖 Bitmap
 
@@ -156,7 +156,7 @@
 - 關於我們：`/settings/about`
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
-- 銀行同步：`/settings/bank-sync`（入口改由 `isBankSyncFeatureEnabled()` 控制；目前預設恢復為 mock/sandbox 流程）
+- 銀行同步：`/settings/bank-sync`（入口由 `isBankSyncFeatureEnabled()` 控制；需 `VITE_BANK_SYNC_FEATURE_ENABLED=true` 且 Android 第一銀行 provider 可用）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）

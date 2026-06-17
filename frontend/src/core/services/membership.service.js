@@ -866,10 +866,22 @@ export function hasBankSyncMembershipAccess(tierOverride = '') {
   return Number(maxBankSyncConnections) > 0 || maxBankSyncConnections === Number.POSITIVE_INFINITY
 }
 
+export function hasCarrierSyncMembershipAccess(tierOverride = '') {
+  return hasBankSyncMembershipAccess(tierOverride)
+}
+
 export function assertCanUseBankSync(tierOverride = '') {
   if (!hasBankSyncMembershipAccess(tierOverride)) {
     const error = createMembershipLimitError('銀行同步僅限會員使用', 'BANK_SYNC_ACCESS')
     notifyMembershipLimitReached('bank_sync', error)
+    throw error
+  }
+}
+
+export function assertCanUseCarrierSync(tierOverride = '') {
+  if (!hasCarrierSyncMembershipAccess(tierOverride)) {
+    const error = createMembershipLimitError('載具同步僅限會員使用', 'CARRIER_SYNC_ACCESS')
+    notifyMembershipLimitReached('carrier_sync', error)
     throw error
   }
 }

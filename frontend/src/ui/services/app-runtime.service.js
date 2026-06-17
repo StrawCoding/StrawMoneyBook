@@ -14,6 +14,7 @@ import {
 } from '@/ui/services/auto-backup-orchestrator.service'
 import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
 import { runBankSyncAutoRefreshIfDue } from '@/ui/services/bank-sync-auto-refresh.service'
+import { runCarrierSyncAutoRefreshInBackground } from '@/services/einvoice/carrier-sync.service.js'
 import { runExchangeRateAutoSyncIfDue } from '@/ui/services/exchange-rate.service'
 import { clearHomeWidgetSummary, syncHomeWidgetSummary } from '@/ui/services/home-widget.service'
 import { runBudgetSaveIfDue } from '@/core/services/budget-save.service'
@@ -422,6 +423,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
         restoreGoogleBackupForActiveLedgerInBackground(runtimeState, currentLedgerId, { runDueBackup: true })
         void runExchangeRateAutoSyncIfDue(currentLedgerId)
         triggerBankAutoRefresh(pinia, currentLedgerId, 'app_resume')
+        void runCarrierSyncAutoRefreshInBackground(currentLedgerId, 'app_resume')
         runSavingsJarAutoSaveInBackground(currentLedgerId, 'app_resume')
         runSubscriptionChargesInBackground(currentLedgerId, 'app_resume')
         runBudgetSaveInBackground(currentLedgerId, 'app_resume')

@@ -51,6 +51,7 @@ const settingGroups = computed(() => [
     { to: '/settings/auto-backup', labelKey: 'settings.auto_backup', descKey: 'settings.desc.auto_backup', icon: 'fa-solid fa-cloud-arrow-up' },
     { to: '/settings/google-drive-ledger-sync', labelKey: 'settings.google_drive_ledger_sync', descKey: 'settings.desc.google_drive_ledger_sync', icon: 'fa-solid fa-arrow-right-arrow-left' },
     ...(showBankSyncEntry ? [{ to: '/settings/bank-sync', labelKey: 'settings.bank_sync', descKey: 'settings.desc.bank_sync', icon: 'fa-solid fa-building-columns' }] : []),
+    { to: '/settings/carrier-sync', labelKey: 'settings.carrier_sync', descKey: 'settings.desc.carrier_sync', icon: 'fa-solid fa-receipt' },
   ],
   [
     { to: '/settings/language', labelKey: 'settings.language', descKey: 'settings.desc.language', icon: 'fa-solid fa-language' },

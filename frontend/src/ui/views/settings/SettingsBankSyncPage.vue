@@ -18,7 +18,7 @@
         </RouterLink>
       </div>
       <template v-else>
-        <p class="muted sandbox-note">{{ t('settings_bank_sync.sandbox_only') }}</p>
+        <p class="muted platform-note">{{ t('settings_bank_sync.platform_hint') }}</p>
         <p v-if="!bankSyncApiReady" class="muted bank-api-warning">{{ bankSyncApiMessage }}</p>
         <div class="row top-action-row">
           <RouterLink class="btn primary" :class="{ disabled: !bankSyncApiReady }" :to="bankSyncCreateLink">
@@ -41,8 +41,18 @@
           <h3>{{ connection.user_label || connection.provider }}</h3>
           <small class="muted">{{ connection.provider_connection_id }}</small>
         </div>
-        <span class="status-chip" :class="`status-${connection.status}`">{{ connectionStatusText(connection.status) }}</span>
+        <div class="chip-row">
+          <span v-if="connection.pendingReviewCount > 0" class="status-chip pending-badge">
+            {{ t('settings_bank_sync.summary.pending_review') }} {{ connection.pendingReviewCount }}
+          </span>
+          <span class="status-chip" :class="`status-${connection.status}`">{{ connectionStatusText(connection.status) }}</span>
+        </div>
       </header>
+
+      <article v-if="connection.isDeprecatedMock" class="deprecated-banner">
+        <strong>{{ t('settings_bank_sync.deprecated_mock_title') }}</strong>
+        <p class="muted compact">{{ t('settings_bank_sync.deprecated_mock_desc') }}</p>
+      </article>
 
       <ul class="meta-list">
         <li>
@@ -66,10 +76,13 @@
       <p v-if="connection.last_error" class="muted connection-error">
         {{ connection.last_error }}
       </p>
+      <p v-if="connection.needsReconnect" class="muted reconnect-hint">
+        {{ t('settings_bank_sync.connection.error_hint') }}
+      </p>
 
       <div class="row action-row">
         <RouterLink class="btn primary" :to="{ name: 'settings-bank-sync-connection', params: { id: connection.id } }">
-          {{ t('settings_bank_sync.actions.open_connection', '開啟銀行頁面') }}
+          {{ connection.pendingReviewCount > 0 ? t('settings_bank_sync.actions.review') : t('settings_bank_sync.actions.open_connection', '開啟銀行頁面') }}
         </RouterLink>
       </div>
     </article>
@@ -93,8 +106,9 @@ import AppDialog from '@/ui/components/common/AppDialog.vue'
 import { getMembershipTierSnapshot, hasBankSyncMembershipAccess as hasBankSyncMembershipAccessForTier, subscribeMembershipSnapshot } from '@/core/services/membership.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useI18n } from '@/ui/services/i18n.service'
-import { getBankSyncState } from '@/ui/services/bank-sync.service'
+import { countBankReviewTransactionsByConnection, getBankSyncState } from '@/ui/services/bank-sync.service'
 import { getBankSyncApiUnavailableMessage, isBankSyncApiConfigured } from '@/services/bank-sync/backend'
+import { isMockProviderId, shouldRequireReconnectForStoredBankConnection } from '@/services/bank-sync/shared'
 
 const { locale, t } = useI18n()
 const ledgerStore = useLedgerStore()
@@ -131,12 +145,19 @@ function acceptDisclaimer() {
   showDisclaimer.value = false
 }
 
-function normalizeConnectionForView(connection) {
+function normalizeConnectionForView(connection, pendingReviewCount = 0) {
   const accounts = Array.isArray(connection?.accounts) ? connection.accounts : []
   return {
     ...connection,
     accounts,
     enabledAccountCount: accounts.filter((account) => Boolean(Number(account?.enabled ?? 0))).length,
+    pendingReviewCount,
+    isDeprecatedMock: isMockProviderId(connection?.provider),
+    needsReconnect: shouldRequireReconnectForStoredBankConnection(
+      connection?.provider,
+      connection?.status,
+      connection?.last_error,
+    ),
   }
 }
 
@@ -149,7 +170,14 @@ async function reloadState() {
   loadingState.value = true
   try {
     const state = await getBankSyncState(ledgerStore.activeLedgerId)
-    connections.value = state.map(normalizeConnectionForView)
+    const bundles = await Promise.all(state.map(async (connection) => {
+      const pendingReviewCount = await countBankReviewTransactionsByConnection(
+        ledgerStore.activeLedgerId,
+        connection.id,
+      )
+      return normalizeConnectionForView(connection, pendingReviewCount)
+    }))
+    connections.value = bundles
   } finally {
     loadingState.value = false
   }
@@ -249,9 +277,10 @@ h3 {
   align-items: center;
 }
 
-.sandbox-note,
+.platform-note,
 .bank-api-warning,
-.connection-error {
+.connection-error,
+.reconnect-hint {
   margin: 0;
 }
 
@@ -260,7 +289,8 @@ h3 {
   opacity: 0.5;
 }
 
-.member-only-lock {
+.member-only-lock,
+.deprecated-banner {
   margin-top: 2px;
   padding: 12px;
   border-radius: 14px;
@@ -280,9 +310,14 @@ h3 {
   gap: 12px;
 }
 
-.title-wrap {
+.title-wrap,
+.chip-row {
   display: grid;
   gap: 4px;
+}
+
+.chip-row {
+  justify-items: end;
 }
 
 .meta-list {
@@ -305,6 +340,11 @@ h3 {
   font-size: 12px;
   font-weight: 700;
   background: color-mix(in srgb, var(--panel) 80%, transparent);
+}
+
+.pending-badge {
+  color: #8a4b00;
+  background: color-mix(in srgb, #f5a623 20%, transparent);
 }
 
 .status-active {

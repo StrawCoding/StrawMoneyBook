@@ -15,14 +15,12 @@ test('電子發票匯入改用命名階段，不再只顯示無名圓點', () =>
   assert.doesNotMatch(source, /v-for="n in 4"/)
 })
 
-test('電子發票匯入使用全螢幕流程，避免底部導覽覆蓋內容', () => {
+test('電子發票匯入路由改導向載具同步設定頁', () => {
   const router = read('src/ui/router/index.js')
-  const app = read('src/ui/App.vue')
 
-  assert.match(router, /name: 'einvoice-import',[\s\S]*hideAppChrome: true/)
-  assert.match(app, /const hideAppChrome = computed/)
-  assert.match(app, /<BottomNav v-if="hasLedgers && !isBooting && !showGuidedFlow && !hideAppChrome"/)
-  assert.match(app, /full-screen-route/)
+  assert.match(router, /name: 'einvoice-import',[\s\S]*redirect:\s*\{\s*name:\s*'settings-carrier-sync'\s*\}/)
+  assert.match(router, /name: 'settings-carrier-sync'/)
+  assert.match(router, /SettingsCarrierSyncPage\.vue/)
 })
 
 test('電子發票查詢流程具備取消、重試與狀態化錯誤回饋', () => {
@@ -127,22 +125,22 @@ test('電子發票 Step2 預設查詢區間不超過後端單次查詢上限', (
   assert.doesNotMatch(source, /setMonth\(from\.getMonth\(\) - 3\)/)
 })
 
-test('電子發票後端服務改用 HTTP API，停用 native WebView 自動化', () => {
+test('電子發票後端服務改用 Playwright scrape API，停用 native WebView 自動化', () => {
   const backendSource = read('src/services/einvoice/backend.js')
+  const scrapeApiSource = read('src/services/einvoice/scrape-api.js')
   const nativeSource = read('src/services/einvoice/native-automation.js')
   const packageSource = read('package.json')
   const mainActivity = read('android/app/src/main/java/com/strawcoding/strawmoneybook/MainActivity.java')
   const manifest = read('android/app/src/main/AndroidManifest.xml')
 
-  // backend uses HTTP fetch to API
-  assert.match(backendSource, /fetch\(url/)
-  assert.match(backendSource, /\/api\/einvoice\/query-invoices/)
-  assert.match(backendSource, /cardNo/)
-  assert.match(backendSource, /cardEncrypt/)
+  assert.match(backendSource, /startEInvoiceScrapeSession/)
+  assert.match(backendSource, /queryEInvoiceScrapeInvoices/)
+  assert.match(scrapeApiSource, /\/api\/einvoice\/scrape\/start/)
+  assert.match(scrapeApiSource, /\/api\/einvoice\/scrape\/query/)
+  assert.match(scrapeApiSource, /\/api\/einvoice\/query-invoices/)
 
-  // native automation is a no-op stub
   assert.match(nativeSource, /return false/)
-  assert.match(nativeSource, /disabled/)
+  assert.match(nativeSource, /Playwright scrape/)
   assert.doesNotMatch(nativeSource, /WebViewActivity\.start/)
   assert.doesNotMatch(nativeSource, /EInvoiceAutomationPlugin\.query/)
   assert.doesNotMatch(mainActivity, /EInvoiceAutomationPlugin/)

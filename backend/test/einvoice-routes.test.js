@@ -1,5 +1,6 @@
-import test from 'node:test'
+import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
+import { clearAllSessions } from '../src/einvoice/session-store.js'
 
 function makeResponse(req) {
   const headers = new Map()
@@ -48,20 +49,29 @@ async function callHandler(handler, body, url = '/api/einvoice/query-invoices', 
 }
 
 function setEInvoiceEnv() {
-  process.env.EINVOICE_APP_ID = 'app-id'
-  process.env.EINVOICE_API_KEY = 'api-key'
   process.env.EINVOICE_CLIENT_SHARED_KEY = 'client-key'
+  process.env.EINVOICE_SCRAPE_MOCK = '1'
+  process.env.NODE_ENV = 'test'
 }
 
 function clearEInvoiceEnv() {
-  delete process.env.EINVOICE_APP_ID
-  delete process.env.EINVOICE_API_KEY
   delete process.env.EINVOICE_CLIENT_SHARED_KEY
+  delete process.env.EINVOICE_SCRAPE_MOCK
 }
 
 const authHeaders = { 'x-straw-client-key': 'client-key' }
 
-test('einvoice route returns explicit configuration error when API credentials are missing', async () => {
+describe('einvoice routes', { concurrency: 1 }, () => {
+  beforeEach(() => {
+    clearAllSessions()
+    setEInvoiceEnv()
+  })
+
+  afterEach(() => {
+    clearEInvoiceEnv()
+  })
+
+  it('returns explicit configuration error when client key is missing', async () => {
   clearEInvoiceEnv()
   const { default: handler } = await import('../src/routes/einvoice.js?missing-config')
 
@@ -74,199 +84,140 @@ test('einvoice route returns explicit configuration error when API credentials a
 
   assert.equal(res.statusCode, 503)
   assert.equal(res.payload.error, 'einvoice_not_configured')
-})
-
-test('einvoice route rejects missing client shared key header before proxying', async () => {
-  setEInvoiceEnv()
-  const originalFetch = globalThis.fetch
-  let fetchCalled = false
-  globalThis.fetch = async () => {
-    fetchCalled = true
-    throw new Error('should not call fetch for unauthorized client')
-  }
-
-  try {
-    const { default: handler } = await import('../src/routes/einvoice.js?unauthorized')
-    const res = await callHandler(handler, {
-      cardNo: '/ABC1234',
-      cardEncrypt: '1234',
-      startDate: '2026-05-01',
-      endDate: '2026-05-18',
-    })
-
-    assert.equal(res.statusCode, 401)
-    assert.equal(res.payload.error, 'unauthorized_client')
-    assert.equal(fetchCalled, false)
-  } finally {
-    globalThis.fetch = originalFetch
-    clearEInvoiceEnv()
-  }
-})
-
-test('einvoice route validates mobile barcode before calling Ministry API', async () => {
-  setEInvoiceEnv()
-  const originalFetch = globalThis.fetch
-  let fetchCalled = false
-  globalThis.fetch = async () => {
-    fetchCalled = true
-    throw new Error('should not call fetch for invalid input')
-  }
-
-  try {
-    const { default: handler } = await import('../src/routes/einvoice.js?invalid-card')
-    const res = await callHandler(handler, {
-      cardNo: 'ABC1234',
-      cardEncrypt: '1234',
-      startDate: '2026-05-01',
-      endDate: '2026-05-18',
-    }, '/api/einvoice/query-invoices', authHeaders)
-
-    assert.equal(res.statusCode, 400)
-    assert.equal(res.payload.error, 'invalid_card_no')
-    assert.equal(fetchCalled, false)
-  } finally {
-    globalThis.fetch = originalFetch
-    clearEInvoiceEnv()
-  }
-})
-
-test('einvoice route accepts Ministry mobile barcode symbols before proxying', async () => {
-  setEInvoiceEnv()
-  const originalFetch = globalThis.fetch
-  let requestBody = ''
-  globalThis.fetch = async (_url, options) => {
-    requestBody = String(options?.body ?? '')
-    return {
-      ok: true,
-      async json() {
-        return { code: '200', v2InvPageCnt: 1, details: [] }
-      },
-    }
-  }
-
-  try {
-    const { default: handler } = await import('../src/routes/einvoice.js?symbol-card')
-    const res = await callHandler(handler, {
-      cardNo: '/A+.-123',
-      cardEncrypt: '1234',
-      startDate: '2026-05-01',
-      endDate: '2026-05-18',
-    }, '/api/einvoice/query-invoices', authHeaders)
-
-    assert.equal(res.statusCode, 200)
-    assert.match(requestBody, /cardNo=%2FA%2B\.-123/)
-  } finally {
-    globalThis.fetch = originalFetch
-    clearEInvoiceEnv()
-  }
-})
-
-test('einvoice route validates date range before calling Ministry API', async () => {
-  setEInvoiceEnv()
-  const originalFetch = globalThis.fetch
-  let fetchCalled = false
-  globalThis.fetch = async () => {
-    fetchCalled = true
-    throw new Error('should not call fetch for invalid date range')
-  }
-
-  try {
-    const { default: handler } = await import('../src/routes/einvoice.js?invalid-date-range')
-    const res = await callHandler(handler, {
-      cardNo: '/ABC1234',
-      cardEncrypt: '1234',
-      startDate: '2026-05-18',
-      endDate: '2026-05-01',
-    }, '/api/einvoice/query-invoices', authHeaders)
-
-    assert.equal(res.statusCode, 400)
-    assert.equal(res.payload.error, 'invalid_date_range')
-    assert.equal(fetchCalled, false)
-  } finally {
-    globalThis.fetch = originalFetch
-    clearEInvoiceEnv()
-  }
-})
-
-test('einvoice route maps Ministry API detail rows to app invoice records', async () => {
-  setEInvoiceEnv()
-  const originalFetch = globalThis.fetch
-  let requestBody = ''
-  globalThis.fetch = async (_url, options) => {
-    requestBody = String(options?.body ?? '')
-    return {
-      ok: true,
-      async json() {
-        return {
-          code: '200',
-          v2InvPageCnt: 1,
-          details: [
-            {
-              invNum: 'AB12345678',
-              amount: '1,250',
-              invDate: '2026/05/18',
-              sellerName: '測試商店',
-              invStatus: '已開立',
-            },
-          ],
-        }
-      },
-    }
-  }
-
-  try {
-    const { default: handler } = await import('../src/routes/einvoice.js?success')
-    const res = await callHandler(handler, {
-      cardNo: '/ABC1234',
-      cardEncrypt: '1234',
-      startDate: '2026-05-01',
-      endDate: '2026-05-18',
-    }, '/api/einvoice/query-invoices', authHeaders)
-
-    assert.equal(res.statusCode, 200)
-    assert.equal(res.payload.invoices.length, 1)
-    assert.deepEqual(res.payload.invoices[0], {
-      invoiceNumber: 'AB12345678',
-      amount: 1250,
-      invoiceDate: new Date('2026-05-18T00:00:00+08:00').getTime(),
-      merchantName: '測試商店',
-      carrierName: '手機條碼',
-      invStatus: '已開立',
-    })
-    assert.match(requestBody, /action=carrierInvChk/)
-    assert.match(requestBody, /cardNo=%2FABC1234/)
-    assert.match(requestBody, /cardEncrypt=1234/)
-    assert.match(requestBody, /startDate=2026%2F05%2F01/)
-  } finally {
-    globalThis.fetch = originalFetch
-    clearEInvoiceEnv()
-  }
-})
-
-test('einvoice route refuses silent truncation when Ministry API has too many pages', async () => {
-  setEInvoiceEnv()
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = async () => ({
-    ok: true,
-    async json() {
-      return { code: '200', v2InvPageCnt: 21, details: [] }
-    },
   })
 
-  try {
-    const { default: handler } = await import('../src/routes/einvoice.js?too-many-pages')
-    const res = await callHandler(handler, {
-      cardNo: '/ABC1234',
-      cardEncrypt: '1234',
-      startDate: '2026-05-01',
-      endDate: '2026-05-18',
-    }, '/api/einvoice/query-invoices', authHeaders)
+  it('rejects missing client shared key header before scraping', async () => {
+  const { default: handler } = await import('../src/routes/einvoice.js?unauthorized')
+  const res = await callHandler(handler, {
+    cardNo: '/ABC1234',
+    cardEncrypt: '1234',
+    startDate: '2026-05-01',
+    endDate: '2026-05-18',
+  })
 
-    assert.equal(res.statusCode, 413)
-    assert.equal(res.payload.error, 'einvoice_result_too_large')
-    assert.equal(res.payload.maxPages, 20)
-  } finally {
-    globalThis.fetch = originalFetch
-    clearEInvoiceEnv()
-  }
+  assert.equal(res.statusCode, 401)
+  assert.equal(res.payload.error, 'unauthorized_client')
+  })
+
+  it('validates mobile barcode before scraping', async () => {
+  const { default: handler } = await import('../src/routes/einvoice.js?invalid-card')
+  const res = await callHandler(handler, {
+    cardNo: 'ABC1234',
+    cardEncrypt: '1234',
+    startDate: '2026-05-01',
+    endDate: '2026-05-18',
+  }, '/api/einvoice/query-invoices', authHeaders)
+
+  assert.equal(res.statusCode, 400)
+  assert.equal(res.payload.error, 'invalid_card_no')
+  })
+
+  it('accepts Ministry mobile barcode symbols before scraping', async () => {
+  const { default: handler } = await import('../src/routes/einvoice.js?symbol-card')
+  const res = await callHandler(handler, {
+    cardNo: '/A+.-123',
+    cardEncrypt: '1234',
+    startDate: '2026-05-01',
+    endDate: '2026-05-18',
+  }, '/api/einvoice/query-invoices', authHeaders)
+
+  assert.equal(res.statusCode, 200)
+  assert.ok(Array.isArray(res.payload.invoices))
+  })
+
+  it('validates date range before scraping', async () => {
+  const { default: handler } = await import('../src/routes/einvoice.js?invalid-date-range')
+  const res = await callHandler(handler, {
+    cardNo: '/ABC1234',
+    cardEncrypt: '1234',
+    startDate: '2026-05-18',
+    endDate: '2026-05-01',
+  }, '/api/einvoice/query-invoices', authHeaders)
+
+  assert.equal(res.statusCode, 400)
+  assert.equal(res.payload.error, 'invalid_date_range')
+  })
+
+  it('maps scrape rows to app invoice records via query-invoices alias', async () => {
+  const { default: handler } = await import('../src/routes/einvoice.js?success')
+  const res = await callHandler(handler, {
+    cardNo: '/ABC1234',
+    cardEncrypt: '1234',
+    startDate: '2026-05-01',
+    endDate: '2026-05-18',
+  }, '/api/einvoice/query-invoices', authHeaders)
+
+  assert.equal(res.statusCode, 200)
+  assert.ok(res.payload.invoices.length >= 1)
+  assert.equal(res.payload.invoices[0].carrierName, '手機條碼')
+  assert.ok(res.payload.invoices[0].invoiceNumber.startsWith('MOCK'))
+  })
+
+  it('scrape flow supports captcha then query', async () => {
+  const { default: handler } = await import('../src/routes/einvoice.js?scrape-flow')
+
+  const startRes = await callHandler(handler, {
+    cardNo: '/ABC1234',
+    cardEncrypt: '1234',
+    force_captcha: true,
+  }, '/api/einvoice/scrape/start', authHeaders)
+
+  assert.equal(startRes.statusCode, 200)
+  assert.equal(startRes.payload.needs_captcha, true)
+  assert.ok(startRes.payload.session_id)
+
+  const captchaRes = await callHandler(handler, {
+    session_id: startRes.payload.session_id,
+    captcha_code: 'ABCD',
+  }, '/api/einvoice/scrape/captcha', authHeaders)
+
+  assert.equal(captchaRes.statusCode, 200)
+  assert.equal(captchaRes.payload.ok, true)
+
+  const queryRes = await callHandler(handler, {
+    session_id: startRes.payload.session_id,
+    cardNo: '/ABC1234',
+    cardEncrypt: '1234',
+    startDate: '2026-05-01',
+    endDate: '2026-05-18',
+  }, '/api/einvoice/scrape/query', authHeaders)
+
+  assert.equal(queryRes.statusCode, 200)
+  assert.ok(queryRes.payload.invoices.length >= 1)
+  })
+
+  it('scrape query maps auth failure from mock provider', async () => {
+  const { default: handler } = await import('../src/routes/einvoice.js?auth-fail')
+  const startRes = await callHandler(handler, {
+    cardNo: '/ABC1234',
+    cardEncrypt: 'badauth',
+    force_captcha: false,
+  }, '/api/einvoice/scrape/start', authHeaders)
+
+  const queryRes = await callHandler(handler, {
+    session_id: startRes.payload.session_id,
+    cardNo: '/ABC1234',
+    cardEncrypt: 'badauth',
+    startDate: '2026-05-01',
+    endDate: '2026-05-18',
+  }, '/api/einvoice/scrape/query', authHeaders)
+
+  assert.equal(queryRes.statusCode, 401)
+  assert.equal(queryRes.payload.error, 'einvoice_auth_failed')
+  })
+
+  it('scrape cancel releases session', async () => {
+  const { default: handler } = await import('../src/routes/einvoice.js?cancel')
+  const startRes = await callHandler(handler, {
+    cardNo: '/ABC1234',
+    cardEncrypt: '1234',
+  }, '/api/einvoice/scrape/start', authHeaders)
+
+  const cancelRes = await callHandler(handler, {
+    session_id: startRes.payload.session_id,
+  }, '/api/einvoice/scrape/cancel', authHeaders)
+
+  assert.equal(cancelRes.statusCode, 200)
+  assert.equal(cancelRes.payload.ok, true)
+  })
 })

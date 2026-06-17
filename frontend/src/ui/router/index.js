@@ -191,10 +191,15 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
+      path: '/settings/carrier-sync',
+      name: 'settings-carrier-sync',
+      component: () => import('@/ui/views/settings/SettingsCarrierSyncPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
       path: '/einvoice-import',
       name: 'einvoice-import',
-      component: () => import('@/ui/views/einvoice/EInvoiceImportWizardPage.vue'),
-      meta: { tab: 'features', hideAppChrome: true },
+      redirect: { name: 'settings-carrier-sync' },
     },
     {
       path: '/settings/ledgers',

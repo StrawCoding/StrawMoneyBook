@@ -2,6 +2,10 @@
 
 ---
 
+## v1.3.17
+- 銀行同步上線（會員限定）：`VITE_BANK_SYNC_FEATURE_ENABLED` 控制功能開關；生產路徑移除 Sandbox / Mock provider，僅保留第一銀行 Android 本地同步與多銀行 Provider 擴充接口。新增建立連線 Wizard（選銀行 → 登入 → 批次帳戶對應 → 首次同步）、列表待匯入 badge、連線頁「全部儲存」與進階設定收合、舊 Mock 連線停用提示；三語 i18n 改為生產導向免責聲明與 Android-only 提示。新增 `saveBankAccountsSettings`、`countBankReviewTransactionsByConnection`；`test:smoke` 改以 `simulate:first-bank-provider` 取代 mock flow。新增 `bank-sync-backend-source.test.js`、`bank-sync-ui-source.test.js`、`bank-sync-batch-accounts.test.js` 與 `playwright:bank-sync` 腳本。
+- 載具同步（會員限定）：新增 `/settings/carrier-sync` 設定頁與 `carrier-sync.service.js`，透過 scrape API 拉取財政部載具發票、pending 佇列審核後匯入；migration 037 建立 `einvoice_sync_config` / `einvoice_pending_invoices` / `einvoice_sync_runs`；支援自動同步、驗證碼對話框、預設帳戶/分類與背景 refresh。後端 `einvoice` 路由改為 provider 模組化（`backend/src/einvoice/*`）。新增 `einvoice-carrier-sync.test.js`、`playwright:carrier-sync` 腳本。
+
 ## v1.3.16
 - (CSP / SMB-233 回歸) 修復 Web 版電子發票「載具」及所有依賴資料庫的功能在瀏覽器中完全失效：v1.3.5（SMB-233 XSS 防護）加入的 CSP `<meta>` 中 `script-src 'self'` 未允許 WebAssembly 編譯，導致 web 版 SQLite 引擎 jeep-sqlite 的 `WebAssembly.instantiate()` 被 CSP 擋下並 `Aborted`、連 fallback ArrayBuffer 實例化也失敗，`ensureWebSqliteStoreReady()` 無法初始化 web store。載具流程所依賴的憑證加密儲存（`saveEInvoiceCredential` / `loadEInvoiceCredential`）、已匯入發票去重、匯入時建立支出交易（`createExpense` 寫入載具標籤）等 DB 操作在 web 端全數無法運作。修正：於 `script-src` 加入 `'wasm-unsafe-eval'`（僅允許 WebAssembly 編譯，仍封鎖 JS `eval()`，完整保留 SMB-233 的 XSS 防護）。Playwright 驗證載入 `/einvoice-import` 後 jeep-sqlite `getVersion` 成功、Pinia 各 store 正常安裝、WASM/CSP 編譯錯誤全數消除；539 個前端測試全綠、`npm run build:web` 通過且建置後 `dist/index.html` 確認為 `script-src 'self' 'wasm-unsafe-eval'`。
 

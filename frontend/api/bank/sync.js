@@ -1,11 +1,10 @@
 import { syncFirstBankTransactions } from './_first-bank-provider.js'
-import { syncMockTransactions } from './_mock-provider.js'
 import {
   clientGuard,
+  createUnsupportedProviderMessage,
   isFirstBankProvider,
   methodGuard,
   normalizeProvider,
-  normalizeText,
   parseBody,
   sendJson,
   unsupportedProviderGuard,
@@ -36,15 +35,8 @@ export default async function handler(req, res) {
     return
   }
 
-  const connectionId = normalizeText(body.connection_id)
-  if (!connectionId) {
-    sendJson(res, 400, { error: 'missing_connection_id', message: 'connection_id is required' })
-    return
-  }
-
-  const payload = syncMockTransactions({
-    cursor: normalizeText(body.cursor || body.next_cursor),
-    accountIds: Array.isArray(body.account_ids) ? body.account_ids : [],
+  sendJson(res, 501, {
+    error: 'provider_not_supported',
+    message: createUnsupportedProviderMessage(provider),
   })
-  sendJson(res, 200, payload)
 }

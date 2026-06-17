@@ -18,27 +18,32 @@
       </RouterLink>
     </article>
 
-    <article v-else class="card panel">
-      <header class="row panel-head">
-        <h3>{{ t('settings_bank_sync_create.form_title') }}</h3>
-        <button class="btn primary" :disabled="!canSubmit || submitting || !bankSyncApiReady" @click="submit">
-          {{ submitting ? t('settings_bank_sync_create.creating') : t('settings_bank_sync_create.create') }}
-        </button>
-      </header>
+    <template v-else>
+      <article class="card panel wizard-head">
+        <div class="step-indicator">
+          <span
+            v-for="step in 4"
+            :key="step"
+            class="step-dot"
+            :class="{ active: currentStep === step, done: currentStep > step }"
+          />
+        </div>
+        <h3>{{ stepTitle }}</h3>
+      </article>
 
-      <label class="field">
-        {{ t('settings_bank_sync_create.bank_provider') }}
-        <CustomSelect v-model="form.providerId" :options="providerOptions" />
-      </label>
+      <article v-if="currentStep === 1" class="card panel">
+        <p class="muted">{{ t('settings_bank_sync.platform_hint') }}</p>
+        <div v-for="provider in providerOptions" :key="provider.value" class="provider-card selected">
+          <strong>{{ provider.label }}</strong>
+        </div>
+        <p class="muted coming-soon">{{ t('settings_bank_sync_create.wizard.coming_soon') }}</p>
+        <div class="row action-row">
+          <button class="btn primary" @click="goToStep(2)">{{ t('settings_bank_sync_create.wizard.next') }}</button>
+        </div>
+      </article>
 
-      <p v-if="isMockProviderSelected" class="muted hint-block">
-        {{ t('settings_bank_sync_create.mock_hint') }}
-      </p>
-
-      <template v-if="isFirstBankSelected">
-        <p class="muted hint-block">
-          {{ t('settings_bank_sync_create.first_bank_hint') }}
-        </p>
+      <article v-else-if="currentStep === 2" class="card panel">
+        <p class="muted hint-block">{{ t('settings_bank_sync_create.first_bank_hint') }}</p>
 
         <label class="field">
           {{ t('settings_bank_sync_create.initial_sync_start_date') }}
@@ -77,8 +82,46 @@
           <strong>{{ progressText }}</strong>
           <small class="muted">{{ t('settings_bank_sync_create.discovery_hint') }}</small>
         </article>
-      </template>
-    </article>
+
+        <div class="row action-row">
+          <button class="btn" :disabled="submitting" @click="goToStep(1)">{{ t('settings_bank_sync_create.wizard.back') }}</button>
+          <button class="btn primary" :disabled="!canSubmitLogin || submitting" @click="submitLogin">
+            {{ submitting ? t('settings_bank_sync_create.creating') : t('settings_bank_sync_create.wizard.next') }}
+          </button>
+        </div>
+      </article>
+
+      <article v-else-if="currentStep === 3" class="card panel">
+        <p class="muted">{{ t('settings_bank_sync.account_sync.desc') }}</p>
+        <div v-for="account in accountDrafts" :key="account.id" class="account-row">
+          <label class="check-row account-enable">
+            <input v-model="account.enabledBool" type="checkbox" />
+            <span>{{ account.account_name }}（{{ account.account_mask || '-' }}）</span>
+          </label>
+          <label class="field">
+            {{ t('settings_bank_sync.account_sync.target_account') }}
+            <CustomSelect v-model="account.mappedAccountIdDraft" :options="ledgerAccountOptions" :placeholder="t('settings_bank_sync.account_sync.choose_account')" />
+          </label>
+          <label class="field">
+            {{ t('settings_bank_sync.account_sync.display_name') }}
+            <input v-model.trim="account.userLabelDraft" class="input" type="text" :placeholder="t('settings_bank_sync.account_sync.display_name_placeholder')" />
+          </label>
+        </div>
+        <div class="row action-row">
+          <button class="btn" :disabled="savingAccounts" @click="goToStep(2)">{{ t('settings_bank_sync_create.wizard.back') }}</button>
+          <button class="btn primary" :disabled="!canSaveAccounts || savingAccounts" @click="saveAccountsAndContinue">
+            {{ savingAccounts ? t('settings_bank_sync.common.saving') : t('settings_bank_sync_create.wizard.next') }}
+          </button>
+        </div>
+      </article>
+
+      <article v-else-if="currentStep === 4" class="card panel">
+        <p class="muted">{{ t('settings_bank_sync_create.wizard.syncing_first') }}</p>
+        <article v-if="progressText" class="progress-panel">
+          <strong>{{ progressText }}</strong>
+        </article>
+      </article>
+    </template>
 
     <AppDialog
       :open="confirmDialogOpen"
@@ -87,7 +130,7 @@
       :confirm-text="t('settings_bank_sync_create.create')"
       :loading="submitting"
       @close="confirmDialogOpen = false"
-      @confirm="confirmSubmit"
+      @confirm="confirmSubmitLogin"
     />
   </section>
 </template>
@@ -99,25 +142,36 @@ import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import { getMembershipTierSnapshot, hasBankSyncMembershipAccess as hasBankSyncMembershipAccessForTier, subscribeMembershipSnapshot } from '@/core/services/membership.service'
-import { connectBankProvider, getBankProviderOptions } from '@/ui/services/bank-sync.service'
+import {
+  connectBankProvider,
+  getBankProviderOptions,
+  saveBankAccountsSettings,
+  syncBankConnectionNow,
+} from '@/ui/services/bank-sync.service'
 import { getBankSyncApiUnavailableMessage, isBankSyncApiConfigured } from '@/services/bank-sync/backend'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const router = useRouter()
 const ledgerStore = useLedgerStore()
+const accountStore = useAccountStore()
 const uiStore = useUiStore()
 const { t } = useI18n()
 const bankSyncApiReady = isBankSyncApiConfigured()
 const bankSyncApiMessage = computed(() => getBankSyncApiUnavailableMessage())
 
+const currentStep = ref(1)
 const submitting = ref(false)
+const savingAccounts = ref(false)
 const progressText = ref('')
 const confirmDialogOpen = ref(false)
 const pickerHour = ref(0)
 const pickerMinute = ref(0)
 const membershipTier = ref(getMembershipTierSnapshot())
+const createdConnection = ref(null)
+const accountDrafts = ref([])
 
 function defaultInitialSyncStartDate() {
   const date = new Date()
@@ -144,17 +198,18 @@ const providerOptions = computed(() => {
     label: item.country ? `${item.name} (${item.country})` : item.name,
   }))
 })
-const isMockProviderSelected = computed(() => {
-  return String(form.providerId ?? '').trim().toLowerCase() === 'mock_bank_tw'
-    || String(form.providerId ?? '').trim().toLowerCase() === 'mock'
-})
-const isFirstBankSelected = computed(() => {
-  return String(form.providerId ?? '').trim().toLowerCase() === 'first_bank_tw'
-})
 const hasBankSyncMembershipAccess = computed(() => hasBankSyncMembershipAccessForTier(membershipTier.value))
-const canSubmit = computed(() => {
-  if (!hasBankSyncMembershipAccess.value || !ledgerStore.activeLedgerId || !String(form.providerId ?? '').trim()) return false
-  if (!isFirstBankSelected.value) return true
+const stepTitle = computed(() => {
+  const titles = {
+    1: t('settings_bank_sync_create.wizard.step1_title'),
+    2: t('settings_bank_sync_create.wizard.step2_title'),
+    3: t('settings_bank_sync_create.wizard.step3_title'),
+    4: t('settings_bank_sync_create.wizard.step4_title'),
+  }
+  return titles[currentStep.value] || ''
+})
+const canSubmitLogin = computed(() => {
+  if (!ledgerStore.activeLedgerId || !String(form.providerId ?? '').trim()) return false
   return Boolean(
     String(form.initialSyncStartDate ?? '').trim()
     && String(form.nationalId ?? '').trim()
@@ -163,27 +218,35 @@ const canSubmit = computed(() => {
     && String(form.password ?? '').trim(),
   )
 })
+const ledgerAccountOptions = computed(() => {
+  const options = accountStore.accounts.map((account) => ({
+    value: account.id,
+    label: account.name,
+  }))
+  return [{ value: '__none__', label: t('settings_bank_sync.account_sync.no_target') }, ...options]
+})
+const canSaveAccounts = computed(() => {
+  return accountDrafts.value.some((account) => {
+    const mappedAccountId = String(account.mappedAccountIdDraft ?? '').trim()
+    return account.enabledBool && mappedAccountId && mappedAccountId !== '__none__'
+  })
+})
 const confirmMessage = computed(() => {
   const providerLabel = providerOptions.value.find((item) => item.value === form.providerId)?.label || form.providerId
-  if (!isFirstBankSelected.value) {
-    return t(
-      'settings_bank_sync_create.confirm.generic_message',
-      `確認要新增「${providerLabel}」銀行連線嗎？`,
-    )
-  }
   return t(
     'settings_bank_sync_create.confirm.first_bank_message',
     `確認要以 ${providerLabel} 建立銀行連線，並從 ${form.initialSyncStartDate} 開始同步嗎？`,
   )
 })
 
-onMounted(() => {
+onMounted(async () => {
   unsubscribeMembership = subscribeMembershipSnapshot((next) => {
     membershipTier.value = String(next?.tier ?? getMembershipTierSnapshot())
   }, { emitCurrent: true })
   if (!form.providerId) {
     form.providerId = providerOptions.value[0]?.value ?? ''
   }
+  await accountStore.load()
 })
 
 let unsubscribeMembership = null
@@ -193,6 +256,20 @@ onBeforeUnmount(() => {
     unsubscribeMembership()
   }
 })
+
+function goToStep(step) {
+  currentStep.value = step
+}
+
+function normalizeAccountDrafts(connection) {
+  const accounts = Array.isArray(connection?.accounts) ? connection.accounts : []
+  accountDrafts.value = accounts.map((account) => ({
+    ...account,
+    enabledBool: Boolean(Number(account?.enabled ?? 1)),
+    mappedAccountIdDraft: String(account?.mapped_account_id ?? '__none__') || '__none__',
+    userLabelDraft: String(account?.user_label ?? account?.account_name ?? ''),
+  }))
+}
 
 function resolveCreateErrorMessage(error, fallbackKey) {
   if (error?.code === 'bank_sync_api_unavailable') return bankSyncApiMessage.value
@@ -240,23 +317,23 @@ function startSubmitProgress() {
   }
 }
 
-async function submit() {
+function submitLogin() {
   if (!bankSyncApiReady) {
     uiStore.pushToast(bankSyncApiMessage.value, 'error')
     return
   }
   if (!hasBankSyncMembershipAccess.value) {
-    await router.push({ name: 'settings-membership-benefits', query: { from: 'bank_sync' } })
+    void router.push({ name: 'settings-membership-benefits', query: { from: 'bank_sync' } })
     return
   }
-  if (!canSubmit.value || submitting.value) return
+  if (!canSubmitLogin.value || submitting.value) return
   confirmDialogOpen.value = true
 }
 
-async function confirmSubmit() {
-  if (!canSubmit.value || submitting.value) return
+async function confirmSubmitLogin() {
+  if (!canSubmitLogin.value || submitting.value) return
   submitting.value = true
-  const stopProgress = isFirstBankSelected.value ? startSubmitProgress() : () => {}
+  const stopProgress = startSubmitProgress()
   try {
     const connection = await connectBankProvider(ledgerStore.activeLedgerId, form.providerId, {
       initialSyncStartDate: form.initialSyncStartDate,
@@ -266,19 +343,46 @@ async function confirmSubmit() {
       password: form.password,
     })
 
-    uiStore.pushToast(t('settings_bank_sync_create.toast.created'))
+    createdConnection.value = connection
+    normalizeAccountDrafts(connection)
     confirmDialogOpen.value = false
-    await router.push({
-      name: 'settings-bank-sync-connection',
-      params: {
-        id: connection.id,
-      },
-    })
+    uiStore.pushToast(t('settings_bank_sync_create.toast.created'))
+    goToStep(3)
   } catch (error) {
     uiStore.pushToast(resolveCreateErrorMessage(error, 'settings_bank_sync_create.toast.create_failed'), 'error')
   } finally {
     stopProgress()
     submitting.value = false
+  }
+}
+
+async function saveAccountsAndContinue() {
+  if (!createdConnection.value || !canSaveAccounts.value || savingAccounts.value) return
+  savingAccounts.value = true
+  try {
+    await saveBankAccountsSettings(
+      ledgerStore.activeLedgerId,
+      accountDrafts.value.map((account) => ({
+        bankAccountId: account.id,
+        enabled: account.enabledBool,
+        mappedAccountId: account.mappedAccountIdDraft === '__none__' ? null : account.mappedAccountIdDraft,
+        userLabel: account.userLabelDraft,
+      })),
+    )
+    goToStep(4)
+    progressText.value = t('settings_bank_sync_create.progress.syncing_transactions')
+    const result = await syncBankConnectionNow(ledgerStore.activeLedgerId, createdConnection.value.id)
+    uiStore.pushToast(t('settings_bank_sync.toast.sync_done', { added: result.added.length, modified: result.modified.length }))
+    await router.push({
+      name: 'settings-bank-sync-connection',
+      params: { id: createdConnection.value.id },
+    })
+  } catch (error) {
+    uiStore.pushToast(resolveCreateErrorMessage(error, 'settings_bank_sync.toast.sync_failed'), 'error')
+    goToStep(3)
+  } finally {
+    progressText.value = ''
+    savingAccounts.value = false
   }
 }
 </script>
@@ -290,14 +394,14 @@ async function confirmSubmit() {
   gap: 10px;
 }
 
-.warning-panel {
+.warning-panel,
+.wizard-head {
   gap: 8px;
 }
 
-.page-head,
-.panel-head {
-  align-items: center;
+.page-head {
   justify-content: space-between;
+  align-items: center;
 }
 
 h2,
@@ -323,16 +427,61 @@ h3 {
   color: var(--muted);
 }
 
-.hint-block {
+.hint-block,
+.coming-soon {
   margin: 0;
 }
 
-.progress-panel {
+.progress-panel,
+.provider-card {
   border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
   border-radius: 12px;
   background: color-mix(in srgb, var(--panel) 84%, transparent);
   padding: 12px;
+}
+
+.provider-card.selected {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--line));
+}
+
+.step-indicator {
+  display: flex;
+  gap: 8px;
+}
+
+.step-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 30%, transparent);
+}
+
+.step-dot.active,
+.step-dot.done {
+  background: var(--primary);
+}
+
+.action-row {
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.account-row {
   display: grid;
-  gap: 6px;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+
+.account-row:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>

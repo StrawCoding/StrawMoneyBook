@@ -23,6 +23,10 @@
     </article>
 
     <template v-else-if="connection">
+      <article v-if="!hasSyncableAccount(connection)" class="card panel mapping-banner">
+        <p class="muted">{{ t('settings_bank_sync.account_sync.mapping_banner') }}</p>
+      </article>
+
       <article class="card panel connection-card">
         <header class="row connection-head">
           <div class="title-wrap">
@@ -70,7 +74,17 @@
 
       <article class="card panel">
         <section class="sub-panel">
-          <h4>{{ t('settings_bank_sync.account_sync.title') }}</h4>
+          <div class="row section-head">
+            <h4>{{ t('settings_bank_sync.account_sync.title') }}</h4>
+            <button
+              class="btn"
+              :disabled="savingAllAccounts"
+              :aria-busy="savingAllAccounts"
+              @click="saveAllAccounts(connection.id)"
+            >
+              {{ savingAllAccounts ? t('settings_bank_sync.common.saving') : t('settings_bank_sync.account_sync.save_all') }}
+            </button>
+          </div>
           <p class="muted">{{ t('settings_bank_sync.account_sync.desc') }}</p>
           <div v-for="account in connection.accounts" :key="account.id" class="account-row">
             <label class="check-row account-enable">
@@ -99,7 +113,13 @@
         </section>
       </article>
 
-      <article class="card panel">
+      <article class="card panel accordion-panel">
+        <button class="accordion-toggle" type="button" @click="showAdvancedSettings = !showAdvancedSettings">
+          <span>{{ t('settings_bank_sync.advanced_settings') }}</span>
+          <span>{{ showAdvancedSettings ? '−' : '+' }}</span>
+        </button>
+
+        <template v-if="showAdvancedSettings">
         <section class="sub-panel">
           <h4>{{ t('settings_bank_sync.rule.title') }}</h4>
           <div class="rule-grid">
@@ -133,9 +153,7 @@
             </button>
           </div>
         </section>
-      </article>
 
-      <article class="card panel">
         <section class="sub-panel">
           <h4>{{ t('settings_bank_sync.import_rule.title', '銀行匯入自動規則') }}</h4>
           <p class="muted">
@@ -147,6 +165,7 @@
             </RouterLink>
           </div>
         </section>
+        </template>
       </article>
 
       <article class="card panel review-panel">
@@ -234,6 +253,7 @@ import {
   listBankReviewTransactions,
   markBankReviewTransactionsSeen,
   saveBankAccountSettings,
+  saveBankAccountsSettings,
   saveBankSyncRuleSettings,
   syncBankConnectionNow,
 } from '@/ui/services/bank-sync.service'
@@ -252,7 +272,9 @@ const loadingState = ref(false)
 const syncingConnectionId = ref('')
 const disconnectingConnectionId = ref('')
 const savingAccountId = ref('')
+const savingAllAccounts = ref(false)
 const savingRuleConnectionId = ref('')
+const showAdvancedSettings = ref(false)
 const reviewLoading = ref(false)
 const importing = ref(false)
 const markingSeen = ref(false)
@@ -420,6 +442,29 @@ async function saveAccount(connectionId, account) {
   }
 }
 
+async function saveAllAccounts(connectionId) {
+  if (!connection.value) return
+  savingAllAccounts.value = true
+  try {
+    await saveBankAccountsSettings(
+      ledgerStore.activeLedgerId,
+      connection.value.accounts.map((account) => ({
+        bankAccountId: account.id,
+        enabled: account.enabledBool,
+        mappedAccountId: account.mappedAccountIdDraft === '__none__' ? null : account.mappedAccountIdDraft,
+        userLabel: account.userLabelDraft,
+      })),
+    )
+    uiStore.pushToast(t('settings_bank_sync.toast.account_saved'))
+    await loadConnection({ loadReviewAfter: false })
+    await loadReview(connectionId)
+  } catch (error) {
+    uiStore.pushToast(resolveBankSyncErrorMessage(error, 'settings_bank_sync.toast.account_save_failed'), 'error')
+  } finally {
+    savingAllAccounts.value = false
+  }
+}
+
 async function saveRule(currentConnection) {
   savingRuleConnectionId.value = currentConnection.id
   try {
@@ -488,8 +533,12 @@ async function importSelected() {
   try {
     const result = await importSelectedBankTransactions(ledgerStore.activeLedgerId, selectedReviewIds.value)
     uiStore.pushToast(t('settings_bank_sync.toast.import_done', { imported: result.importedCount, skipped: result.skippedCount }))
-    await transactionStore.refreshAfterWriteSafe(2500)
-    await loadReview(connection.value?.id)
+    if (result.importedCount > 0) {
+      await router.push({ name: 'transaction-search' })
+    } else {
+      await transactionStore.refreshAfterWriteSafe(2500)
+      await loadReview(connection.value?.id)
+    }
   } catch (error) {
     uiStore.pushToast(resolveBankSyncErrorMessage(error, 'settings_bank_sync.toast.import_failed'), 'error')
   } finally {
@@ -614,6 +663,34 @@ h4 {
 .title-icon {
   font-size: 18px;
   color: var(--primary-soft);
+}
+
+.mapping-banner {
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
+}
+
+.section-head {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.accordion-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.accordion-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
 }
 
 .connection-card,

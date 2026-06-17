@@ -54,7 +54,6 @@ function isMockProvider(provider) {
 }
 
 function isSupportedProvider(provider) {
-  if (isMockProvider(provider)) return true
   if (isFirstBankProvider(provider)) return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS
   return false
 }
@@ -63,13 +62,13 @@ function createUnsupportedProviderMessage(provider) {
   const normalized = normalizeProvider(provider)
   if (!normalized) {
     return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS
-      ? '目前支援 Mock Bank TW (Sandbox) 與 First Bank TW。'
-      : '目前僅支援 Mock Bank TW (Sandbox)。'
+      ? '目前支援 First Bank TW。'
+      : '目前尚未開放任何銀行 provider。'
   }
   if (BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS) {
-    return `provider "${normalized}" 目前未開放；請改用 Mock Bank TW (Sandbox) 或 First Bank TW。`
+    return `provider "${normalized}" 目前未開放；請改用 First Bank TW。`
   }
-  return `provider "${normalized}" 目前未開放；請改用 Mock Bank TW (Sandbox)。`
+  return `provider "${normalized}" 目前未開放。`
 }
 
 function unsupportedProviderGuard(provider, res) {
@@ -133,6 +132,7 @@ function simpleHash(input) {
 
 export {
   clientGuard,
+  createUnsupportedProviderMessage,
   isFirstBankProvider,
   isMockProvider,
   isClientAuthorized,
