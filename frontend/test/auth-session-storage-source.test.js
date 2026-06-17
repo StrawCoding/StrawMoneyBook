@@ -21,3 +21,8 @@ test('SMB-233: auth session storage keeps refresh token out of web storage', () 
   assert.match(storageSource, /setStoredRefreshToken\(''\)/)
   assert.match(storageSource, /SHARED_LEDGER_USER_STORAGE_KEY/)
 })
+
+test('SMB-239: native user profile persists in localStorage after app restart', () => {
+  assert.match(storageSource, /shouldPersistUserProfileInLocalStorage\(/)
+  assert.match(storageSource, /localStorageRef\?\.setItem\(SHARED_LEDGER_USER_STORAGE_KEY/)
+})

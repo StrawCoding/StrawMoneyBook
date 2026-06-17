@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.18
+- (SMB-239) 修復 Android / iOS 冷啟動後會員登入狀態無法保持：Capacitor WebView 在 process 結束後會清空 `sessionStorage`，v1.3.14 雖能在同 session 重載時保留使用者快取，但 App 完全重啟後 profile 與 access token 皆遺失，設定 / 會員頁呼叫 `refreshSharedLedgerSession()` 又因無 token 直接回傳 null 而不觸發 HttpOnly cookie 靜默 refresh，導致誤顯示未登入。`auth-session-storage.js` 改為在 native 平台把使用者 profile（不含 token）存進 `localStorage`，Web 仍只用 `sessionStorage`；`refreshSharedLedgerSession()` 在 cookie 模式且 access token 已清空時改委派 `restoreSharedLedgerSession({ force: true })`。新增 `auth-session-storage.test.js`、`auth-session-storage-source.test.js`、`shared-ledger-cookie-auth-cors-source.test.js` 回歸案例。
+
 ## v1.3.17
 - 銀行同步上線（會員限定）：`VITE_BANK_SYNC_FEATURE_ENABLED` 控制功能開關；生產路徑移除 Sandbox / Mock provider，僅保留第一銀行 Android 本地同步與多銀行 Provider 擴充接口。新增建立連線 Wizard（選銀行 → 登入 → 批次帳戶對應 → 首次同步）、列表待匯入 badge、連線頁「全部儲存」與進階設定收合、舊 Mock 連線停用提示；三語 i18n 改為生產導向免責聲明與 Android-only 提示。新增 `saveBankAccountsSettings`、`countBankReviewTransactionsByConnection`；`test:smoke` 改以 `simulate:first-bank-provider` 取代 mock flow。新增 `bank-sync-backend-source.test.js`、`bank-sync-ui-source.test.js`、`bank-sync-batch-accounts.test.js` 與 `playwright:bank-sync` 腳本。
 - 載具同步（會員限定）：新增 `/settings/carrier-sync` 設定頁與 `carrier-sync.service.js`，透過 scrape API 拉取財政部載具發票、pending 佇列審核後匯入；migration 037 建立 `einvoice_sync_config` / `einvoice_pending_invoices` / `einvoice_sync_runs`；支援自動同步、驗證碼對話框、預設帳戶/分類與背景 refresh。後端 `einvoice` 路由改為 provider 模組化（`backend/src/einvoice/*`）。新增 `einvoice-carrier-sync.test.js`、`playwright:carrier-sync` 腳本。

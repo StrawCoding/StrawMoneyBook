@@ -37,3 +37,10 @@ test('SMB-238: backend CORS reflects origin for cookie auth even when ALLOW_ALL_
   assert.match(httpSource, /'https:\/\/localhost'/)
   assert.match(httpSource, /credentialed \|\| !ALLOW_ALL_ORIGINS/)
 })
+
+test('SMB-239: refreshSharedLedgerSession restores cookie session when access token is missing', () => {
+  const refreshBlock = backendSource.match(/export async function refreshSharedLedgerSession[\s\S]*?^}/m)?.[0] ?? ''
+  assert.match(refreshBlock, /if \(!session\?\.token\)/)
+  assert.match(refreshBlock, /shouldSendAuthCredentials\(\)/)
+  assert.match(refreshBlock, /restoreSharedLedgerSession\(\{ force: true \}\)/)
+})

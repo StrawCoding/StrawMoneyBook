@@ -95,8 +95,15 @@ export function writeStoredUser(user) {
   }
 
   const serialized = JSON.stringify(normalizedUser)
-  sessionStorageRef?.setItem(SHARED_LEDGER_USER_STORAGE_KEY, serialized)
-  localStorageRef?.removeItem(SHARED_LEDGER_USER_STORAGE_KEY)
+  if (shouldPersistUserProfileInLocalStorage()) {
+    // Native WebView clears sessionStorage on process death; keep profile in
+    // localStorage (tokens stay in memory + HttpOnly cookie only).
+    localStorageRef?.setItem(SHARED_LEDGER_USER_STORAGE_KEY, serialized)
+    sessionStorageRef?.removeItem(SHARED_LEDGER_USER_STORAGE_KEY)
+  } else {
+    sessionStorageRef?.setItem(SHARED_LEDGER_USER_STORAGE_KEY, serialized)
+    localStorageRef?.removeItem(SHARED_LEDGER_USER_STORAGE_KEY)
+  }
   return normalizedUser
 }
 
@@ -203,4 +210,9 @@ export function clearPersistedAuthSession() {
 export function isNativePlatform() {
   const platform = Capacitor.getPlatform()
   return platform === 'android' || platform === 'ios'
+}
+
+export function shouldPersistUserProfileInLocalStorage(platform = Capacitor.getPlatform()) {
+  const normalized = String(platform ?? '').trim().toLowerCase()
+  return normalized === 'android' || normalized === 'ios'
 }

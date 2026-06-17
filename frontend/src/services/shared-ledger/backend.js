@@ -527,7 +527,12 @@ export async function changeSharedLedgerPassword(payload = {}) {
 
 export async function refreshSharedLedgerSession() {
   const session = readSession()
-  if (!session?.token) return null
+  if (!session?.token) {
+    if (shouldSendAuthCredentials()) {
+      return restoreSharedLedgerSession({ force: true })
+    }
+    return null
+  }
   try {
     const data = await requestJson('/api/auth/me')
     return updateSessionUser(data.user)

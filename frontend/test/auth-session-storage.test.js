@@ -11,6 +11,7 @@ import {
   migrateLegacyPersistedSession,
   readPersistedAuthSession,
   shouldSendAuthCredentials,
+  shouldPersistUserProfileInLocalStorage,
   writePersistedAuthSession,
 } from '../src/services/shared-ledger/auth-session-storage.js'
 
@@ -36,6 +37,12 @@ test('cookie auth headers are always enabled for shared-ledger auth', () => {
   assert.deepEqual(getAuthStorageHeaders(), {
     [AUTH_STORAGE_HEADER]: AUTH_STORAGE_COOKIE_MODE,
   })
+})
+
+test('SMB-239: native platforms persist user profile in localStorage, web keeps sessionStorage', () => {
+  assert.equal(shouldPersistUserProfileInLocalStorage('android'), true)
+  assert.equal(shouldPersistUserProfileInLocalStorage('ios'), true)
+  assert.equal(shouldPersistUserProfileInLocalStorage('web'), false)
 })
 
 test('writePersistedAuthSession keeps tokens in memory and user in sessionStorage only', () => {
