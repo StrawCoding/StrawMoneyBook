@@ -86,6 +86,15 @@ public class FirstBankAutomationCaptchaTest {
     }
 
     @Test
+    public void extractPngBase64FromDataUrlReturnsPayloadWithoutPrefix() {
+        String dataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5WCr8AAAAASUVORK5CYII=";
+        assertEquals(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5WCr8AAAAASUVORK5CYII=",
+            FirstBankAutomation.extractPngBase64FromDataUrl(dataUrl)
+        );
+    }
+
+    @Test
     public void emptyCaptchaSnapshotDefaultsToMissingImageReason() {
         FirstBankAutomation.CaptchaSnapshot snapshot = FirstBankAutomation.emptyCaptchaSnapshot("image_missing");
         assertFalse(snapshot.ready);

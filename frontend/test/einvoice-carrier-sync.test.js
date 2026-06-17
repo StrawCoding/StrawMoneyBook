@@ -31,6 +31,14 @@ test('carrier-sync service 串接 scrape API 與 pending 佇列', () => {
   assert.match(source, /startEInvoiceScrapeSession/)
 })
 
+test('載具同步設定頁使用手機號碼與密碼欄位', () => {
+  const source = read('src/ui/views/settings/SettingsCarrierSyncPage.vue')
+  assert.match(source, /carrierPhone/)
+  assert.match(source, /carrierPassword/)
+  assert.match(source, /settings_carrier_sync\.phone/)
+  assert.match(source, /isValidCarrierPhone/)
+})
+
 test('載具同步設定頁具備 review panel 與 captcha dialog', () => {
   const source = read('src/ui/views/settings/SettingsCarrierSyncPage.vue')
   assert.match(source, /review-panel/)

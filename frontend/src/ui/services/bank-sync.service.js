@@ -480,6 +480,7 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
         repeatSeq: normalizeText(options.repeatSeq || '0'),
         userCode: normalizeText(options.code),
         password: String(options.password ?? ''),
+        captchaCode: normalizeText(options.captchaCode),
         initialSyncStartDate: normalizeDateInput(options.initialSyncStartDate),
       })
       traceContext.attachDebugTrace(exchanged?.debugTrace)

@@ -35,11 +35,17 @@ export async function ensureNativeBankAutomationAvailable() {
 }
 
 function normalizePluginError(error, fallbackMessage) {
-  return createNativeBankAutomationError(
+  const normalized = createNativeBankAutomationError(
     String(error?.message ?? fallbackMessage ?? 'Bank automation failed'),
     String(error?.code ?? '').trim() || 'bank_automation_failed',
     error?.data,
   )
+  const errorData = error?.data?.errorData
+  if (errorData && typeof errorData === 'object') {
+    normalized.data = errorData
+    normalized.captchaImageBase64 = String(errorData.captchaImageBase64 ?? '').trim()
+  }
+  return normalized
 }
 
 export async function connectNativeFirstBank(payload = {}) {

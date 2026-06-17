@@ -25,18 +25,38 @@ export function formatPortalDate(dateStr) {
   return String(dateStr ?? '').replace(/-/g, '/')
 }
 
+export function normalizeCarrierPhone(phone) {
+  let raw = String(phone ?? '').trim().replace(/[\s-]/g, '')
+  if (raw.startsWith('+886')) raw = `0${raw.slice(4)}`
+  if (/^886\d{9}$/.test(raw)) raw = `0${raw.slice(3)}`
+  return raw
+}
+
+export function validateScrapeCredentials({ cardNo, cardEncrypt }) {
+  const phone = normalizeCarrierPhone(cardNo)
+  const password = String(cardEncrypt ?? '').trim()
+
+  if (!phone || !password) {
+    return { error: 'missing_params', message: '缺少必要參數（手機號碼、密碼）' }
+  }
+
+  if (!/^09\d{8}$/.test(phone)) {
+    return {
+      error: 'invalid_phone',
+      message: '手機號碼格式錯誤，應為 09 開頭的 10 碼數字（例：0912345678）',
+    }
+  }
+
+  if (password.length < 4) {
+    return { error: 'invalid_password', message: '密碼至少需要 4 位' }
+  }
+
+  return null
+}
+
 export function validateQueryInput({ cardNo, cardEncrypt, startDate, endDate }) {
-  if (!cardNo || !cardEncrypt || !startDate || !endDate) {
-    return { error: 'missing_params', message: '缺少必要參數（cardNo、cardEncrypt、startDate、endDate）' }
-  }
-
-  if (!/^\/[A-Za-z0-9+.\-]{7}$/.test(cardNo)) {
-    return { error: 'invalid_card_no', message: '手機條碼格式錯誤，應為 / 開頭接 7 位英數字或 + . - 符號（如 /ABC1234）' }
-  }
-
-  if (!/^[A-Za-z0-9!#$%&()*+,.\-/:;<=>?@[\]^_`{|}~]{4,32}$/.test(cardEncrypt)) {
-    return { error: 'invalid_card_encrypt', message: '手機條碼驗證碼格式錯誤，請確認長度與內容後再試' }
-  }
+  const credentialError = validateScrapeCredentials({ cardNo, cardEncrypt })
+  if (credentialError) return credentialError
 
   const from = parseInputDate(startDate)
   const to = parseInputDate(endDate)
@@ -52,4 +72,13 @@ export function validateQueryInput({ cardNo, cardEncrypt, startDate, endDate }) 
   }
 
   return null
+}
+
+export function toRocDate(dateStr) {
+  const parsed = parseInputDate(dateStr)
+  if (!parsed) return String(dateStr ?? '').replace(/-/g, '')
+  const rocYear = parsed.getUTCFullYear() - 1911
+  const month = String(parsed.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(parsed.getUTCDate()).padStart(2, '0')
+  return `${String(rocYear).padStart(3, '0')}${month}${day}`
 }

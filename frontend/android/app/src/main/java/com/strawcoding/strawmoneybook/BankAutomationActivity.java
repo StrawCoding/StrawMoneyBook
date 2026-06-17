@@ -31,6 +31,7 @@ public class BankAutomationActivity extends Activity {
     public static final String EXTRA_ERROR_CODE = "bank_automation.error_code";
     public static final String EXTRA_ERROR_MESSAGE = "bank_automation.error_message";
     public static final String EXTRA_DEBUG_TRACE_JSON = "bank_automation.debug_trace_json";
+    public static final String EXTRA_ERROR_DATA_JSON = "bank_automation.error_data_json";
 
     private static final long AUTOMATION_TIMEOUT_MS = 90_000L;
     private static final Object BUSY_LOCK = new Object();
@@ -187,6 +188,7 @@ public class BankAutomationActivity extends Activity {
             Intent result = new Intent();
             result.putExtra(EXTRA_ERROR_CODE, error.getCode());
             result.putExtra(EXTRA_ERROR_MESSAGE, error.getMessage());
+            result.putExtra(EXTRA_ERROR_DATA_JSON, error.getData().toString());
             result.putExtra(
                 EXTRA_DEBUG_TRACE_JSON,
                 debugTrace == null ? "{}" : debugTrace.toJson(error.getCode(), error.getMessage()).toString()

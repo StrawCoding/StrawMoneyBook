@@ -146,7 +146,7 @@ final class FirstBankAutomation {
         debugTrace.record("load_login_page", "running", "Loading First Bank login page");
         session.loadUrl(LOGIN_URL);
         debugTrace.record("load_login_page", "ok", "Login page loaded");
-        performLogin(activity, session, debugTrace, nationalId, repeatSeq, userCode, password);
+        performLogin(activity, session, debugTrace, nationalId, repeatSeq, userCode, password, normalizeCaptchaString(payload.optString("captchaCode", "")));
         debugTrace.record("login_complete", "ok", "Login completed");
         debugTrace.record("load_frame_page", "running", "Loading account frame page");
         session.loadUrl(FRAME_URL);
@@ -237,7 +237,8 @@ final class FirstBankAutomation {
                             state.optString("nationalId"),
                             state.optString("repeatSeq", "0"),
                             state.optString("userCode"),
-                            state.optString("password")
+                            state.optString("password"),
+                            ""
                         );
                         session.loadUrl(FRAME_URL);
                         debugTrace.record("silent_relogin", "ok", "Silent relogin completed");
@@ -260,7 +261,8 @@ final class FirstBankAutomation {
                             state.optString("nationalId"),
                             state.optString("repeatSeq", "0"),
                             state.optString("userCode"),
-                            state.optString("password")
+                            state.optString("password"),
+                            ""
                         );
                         debugTrace.record("silent_relogin", "ok", "Silent relogin after query completed");
                         reloginAttempted = true;
@@ -318,8 +320,11 @@ final class FirstBankAutomation {
         session.clearSessionCookies();
     }
 
-    private static void performLogin(Activity activity, BrowserSession session, BankAutomationDebugTrace debugTrace, String nationalId, String repeatSeq, String userCode, String password) throws Exception {
+    private static void performLogin(Activity activity, BrowserSession session, BankAutomationDebugTrace debugTrace, String nationalId, String repeatSeq, String userCode, String password, String manualCaptcha) throws Exception {
         boolean hasRecognizedCaptcha = false;
+        String lastCaptchaDataUrl = "";
+        String normalizedManualCaptcha = normalizeCaptchaString(manualCaptcha);
+        boolean manualCaptchaPending = normalizedManualCaptcha.length() == CAPTCHA_EXPECTED_LENGTH;
         debugTrace.record("captcha_wait_ready", "running", "Waiting for captcha image");
         try {
             CaptchaSnapshot initialSnapshot = session.waitForCaptchaReady("");
@@ -353,10 +358,19 @@ final class FirstBankAutomation {
                 }
             }
             String captchaDataUrl = session.captureCaptchaDataUrl();
+            lastCaptchaDataUrl = captchaDataUrl;
             JSONObject attemptDetails = new JSONObject();
             putJsonValue(attemptDetails, "attempt", attempt + 1);
             debugTrace.record("captcha_capture", "ok", "Captured captcha image", attemptDetails);
-            String captchaText = recognizeCaptcha(activity, debugTrace, attempt + 1, captchaDataUrl);
+            String captchaText;
+            if (manualCaptchaPending) {
+                captchaText = normalizedManualCaptcha;
+                manualCaptchaPending = false;
+                putJsonValue(attemptDetails, "source", "manual");
+                debugTrace.record("captcha_manual", "ok", "Using user-provided captcha code", attemptDetails);
+            } else {
+                captchaText = recognizeCaptcha(activity, debugTrace, attempt + 1, captchaDataUrl);
+            }
             if (captchaText.length() != CAPTCHA_EXPECTED_LENGTH) {
                 putJsonValue(attemptDetails, "captchaLength", captchaText.length());
                 debugTrace.record("captcha_attempt", "error", "OCR did not produce a valid 4-char code", attemptDetails);
@@ -376,9 +390,31 @@ final class FirstBankAutomation {
         }
 
         if (!hasRecognizedCaptcha) {
-            throw new BankAutomationException("first_bank_captcha_ocr_failed", "First Bank CAPTCHA recognition failed");
+            throw buildManualCaptchaRequiredException(lastCaptchaDataUrl);
         }
         throw new BankAutomationException("first_bank_login_failed", "First Bank login failed");
+    }
+
+    private static BankAutomationException buildManualCaptchaRequiredException(String dataUrl) throws JSONException {
+        JSONObject data = new JSONObject();
+        String base64 = extractPngBase64FromDataUrl(dataUrl);
+        if (!base64.isEmpty()) {
+            data.put("captchaImageBase64", base64);
+        }
+        BankAutomationException error = new BankAutomationException(
+            "first_bank_captcha_manual_required",
+            "First Bank captcha recognition failed. Please enter the captcha manually."
+        );
+        error.attachData(data);
+        return error;
+    }
+
+    static String extractPngBase64FromDataUrl(String dataUrl) {
+        String normalized = normalizeText(dataUrl);
+        if (!isCaptchaDataUrlUsable(normalized)) return "";
+        int commaIndex = normalized.indexOf(',');
+        if (commaIndex < 0) return "";
+        return normalized.substring(commaIndex + 1).trim();
     }
 
     private static void openMyAccounts(BrowserSession session, BankAutomationDebugTrace debugTrace) throws Exception {

@@ -78,6 +78,19 @@
           <input v-model="form.password" class="input" type="password" maxlength="40" />
         </label>
 
+        <article v-if="showCaptchaPanel" class="captcha-panel">
+          <label class="field">
+            {{ t('settings_bank_sync_create.captcha_image') }}
+            <img v-if="captchaImageSrc" :src="captchaImageSrc" alt="captcha" class="captcha-image" />
+            <p v-else class="muted">{{ t('settings_bank_sync_create.captcha.empty') }}</p>
+          </label>
+          <label class="field">
+            {{ t('settings_bank_sync_create.captcha_code') }}
+            <input v-model.trim="form.captchaCode" class="input" type="text" maxlength="4" inputmode="text" autocomplete="one-time-code" />
+          </label>
+          <p class="muted">{{ t('settings_bank_sync_create.error.first_bank_captcha_manual_required') }}</p>
+        </article>
+
         <article v-if="progressText" class="progress-panel">
           <strong>{{ progressText }}</strong>
           <small class="muted">{{ t('settings_bank_sync_create.discovery_hint') }}</small>
@@ -167,6 +180,8 @@ const submitting = ref(false)
 const savingAccounts = ref(false)
 const progressText = ref('')
 const confirmDialogOpen = ref(false)
+const showCaptchaPanel = ref(false)
+const captchaImageSrc = ref('')
 const pickerHour = ref(0)
 const pickerMinute = ref(0)
 const membershipTier = ref(getMembershipTierSnapshot())
@@ -189,6 +204,7 @@ const form = reactive({
   repeatSeq: '0',
   code: '',
   password: '',
+  captchaCode: '',
 })
 
 const backLink = { name: 'settings-bank-sync' }
@@ -283,6 +299,7 @@ function resolveCreateErrorMessage(error, fallbackKey) {
     first_bank_password_required: t('settings_bank_sync_create.error.first_bank_password_required'),
     first_bank_initial_start_date_required: t('settings_bank_sync_create.error.first_bank_initial_start_date_required'),
     first_bank_captcha_ocr_failed: t('settings_bank_sync_create.error.first_bank_captcha_ocr_failed'),
+    first_bank_captcha_manual_required: t('settings_bank_sync_create.error.first_bank_captcha_manual_required'),
     first_bank_login_failed: t('settings_bank_sync_create.error.first_bank_login_failed'),
     first_bank_account_list_not_found: t('settings_bank_sync_create.error.first_bank_account_list_not_found'),
     first_bank_legacy_reconnect_required: t('settings_bank_sync_create.error.first_bank_legacy_reconnect_required'),
@@ -327,6 +344,10 @@ function submitLogin() {
     return
   }
   if (!canSubmitLogin.value || submitting.value) return
+  if (showCaptchaPanel.value && form.captchaCode.trim().length !== 4) {
+    uiStore.pushToast(t('settings_bank_sync_create.error.first_bank_credentials_required'), 'error')
+    return
+  }
   confirmDialogOpen.value = true
 }
 
@@ -341,14 +362,27 @@ async function confirmSubmitLogin() {
       repeatSeq: form.repeatSeq,
       code: form.code,
       password: form.password,
+      captchaCode: form.captchaCode,
     })
 
     createdConnection.value = connection
     normalizeAccountDrafts(connection)
     confirmDialogOpen.value = false
+    showCaptchaPanel.value = false
+    captchaImageSrc.value = ''
+    form.captchaCode = ''
     uiStore.pushToast(t('settings_bank_sync_create.toast.created'))
     goToStep(3)
   } catch (error) {
+    if (error?.code === 'first_bank_captcha_manual_required') {
+      showCaptchaPanel.value = true
+      captchaImageSrc.value = error.captchaImageBase64
+        ? `data:image/png;base64,${error.captchaImageBase64}`
+        : ''
+      confirmDialogOpen.value = false
+      uiStore.pushToast(resolveCreateErrorMessage(error, 'settings_bank_sync_create.error.first_bank_captcha_manual_required'), 'warning')
+      return
+    }
     uiStore.pushToast(resolveCreateErrorMessage(error, 'settings_bank_sync_create.toast.create_failed'), 'error')
   } finally {
     stopProgress()
@@ -483,5 +517,19 @@ h3 {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.captcha-panel {
+  border: 1px solid color-mix(in srgb, var(--warning, #f59e0b) 35%, var(--line));
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.captcha-image {
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
 </style>

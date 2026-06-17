@@ -1,5 +1,8 @@
 # Pending Release Notes
 
+- 修復載具同步憑證格式錯誤：財政部 scrape 登入改為「手機號碼 + 密碼」（非手機條碼 / 查詢碼）；後端 Playwright provider 改走 `accounts/login` 後再查詢發票；設定頁欄位與驗證（09 開頭 10 碼 + 至少 4 位密碼）及三語 i18n 同步更新。
+- 修復第一銀行同步驗證碼辨識失敗：OCR 全失敗時改拋 `first_bank_captcha_manual_required` 並回傳驗證碼圖；建立連線頁新增手動輸入 4 碼重試；若使用者已填驗證碼則優先採用手動輸入、跳過 OCR。後端 einvoice 路由測試 9/9、前端載具/銀行同步 source 測試、Android `FirstBankAutomationCaptchaTest` 通過。
+
 ---
 
 ## v1.3.18

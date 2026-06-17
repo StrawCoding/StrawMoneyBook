@@ -703,10 +703,16 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - 目前支援 **Android App 第一銀行本地同步**（非 Open Banking）
 - 已移除 Sandbox / Mock 生產路徑；舊測試連線會在 UI 標示為已停用
 - 建立連線改為引導式流程：選擇銀行 → 登入 → 帳戶對應 → 首次同步
+- 第一銀行驗證碼 OCR 全失敗時（v1.3.19），建立連線頁會顯示驗證碼圖與手動輸入框，使用者輸入 4 碼後可重試；若已先手動填寫則跳過 OCR
 - 匯入前會進入待匯入清單，需手動審核後才寫入記帳交易
 - 多銀行 Provider 接口保留（`VITE_BANK_SYNC_PROVIDERS_JSON`），後續可擴充
 
 所以這不是完全未做，而是已建流程、以會員 + Android 第一銀行為主的受控功能。
+
+### 9.2 載具同步（v1.3.17 起，v1.3.19 憑證格式修正）
+
+- 會員限定功能：`/settings/carrier-sync` 設定頁透過 backend scrape API 拉取財政部載具發票，pending 佇列審核後匯入
+- v1.3.19 修正：財政部平台登入憑證為「手機號碼 + 密碼」（09 開頭 10 碼 + 至少 4 位密碼），非手機條碼 `/XXXXXXX` 與查詢碼；後端 Playwright 改走官方 `accounts/login` 後再查詢發票
 
 ## 10. 使用者輪廓
 

@@ -26,6 +26,12 @@ test('bank sync create page uses wizard steps and batch account mapping', () => 
   assert.doesNotMatch(createPageSource, /mock_hint/)
 })
 
+test('bank sync create page supports manual captcha fallback', () => {
+  assert.match(createPageSource, /showCaptchaPanel/)
+  assert.match(createPageSource, /first_bank_captcha_manual_required/)
+  assert.match(createPageSource, /form\.captchaCode/)
+})
+
 test('bank sync list page shows pending review badge and deprecated mock banner', () => {
   assert.match(listPageSource, /pendingReviewCount/)
   assert.match(listPageSource, /settings_bank_sync\.summary\.pending_review/)

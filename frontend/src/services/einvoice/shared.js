@@ -23,3 +23,14 @@ export function buildCarrierTagsJson(carrierName) {
   if (!name) return null
   return JSON.stringify([name])
 }
+
+export function normalizeCarrierPhone(phone) {
+  let raw = String(phone ?? '').trim().replace(/[\s-]/g, '')
+  if (raw.startsWith('+886')) raw = `0${raw.slice(4)}`
+  if (/^886\d{9}$/.test(raw)) raw = `0${raw.slice(3)}`
+  return raw
+}
+
+export function isValidCarrierPhone(phone) {
+  return /^09\d{8}$/.test(normalizeCarrierPhone(phone))
+}

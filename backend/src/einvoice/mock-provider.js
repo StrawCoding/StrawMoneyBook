@@ -96,7 +96,7 @@ export async function queryScrapeInvoices(payload = {}) {
   const cardNo = String(payload.cardNo ?? record.cardNo ?? '').trim()
   const cardEncrypt = String(payload.cardEncrypt ?? record.cardEncrypt ?? '').trim()
   if (cardEncrypt.toLowerCase() === 'badauth') {
-    const error = new Error('驗證失敗，請確認手機條碼與查詢碼是否正確')
+    const error = new Error('驗證失敗，請確認手機號碼與密碼是否正確')
     error.code = 'einvoice_auth_failed'
     throw error
   }

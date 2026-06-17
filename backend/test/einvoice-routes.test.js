@@ -76,8 +76,8 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   const { default: handler } = await import('../src/routes/einvoice.js?missing-config')
 
   const res = await callHandler(handler, {
-    cardNo: '/ABC1234',
-    cardEncrypt: '1234',
+    cardNo: '0910047171',
+    cardEncrypt: 'Swxd3167@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   }, '/api/einvoice/query-invoices', authHeaders)
@@ -89,8 +89,8 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   it('rejects missing client shared key header before scraping', async () => {
   const { default: handler } = await import('../src/routes/einvoice.js?unauthorized')
   const res = await callHandler(handler, {
-    cardNo: '/ABC1234',
-    cardEncrypt: '1234',
+    cardNo: '0910047171',
+    cardEncrypt: 'Swxd3167@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   })
@@ -99,7 +99,7 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   assert.equal(res.payload.error, 'unauthorized_client')
   })
 
-  it('validates mobile barcode before scraping', async () => {
+  it('validates carrier phone before scraping', async () => {
   const { default: handler } = await import('../src/routes/einvoice.js?invalid-card')
   const res = await callHandler(handler, {
     cardNo: 'ABC1234',
@@ -109,14 +109,14 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   }, '/api/einvoice/query-invoices', authHeaders)
 
   assert.equal(res.statusCode, 400)
-  assert.equal(res.payload.error, 'invalid_card_no')
+  assert.equal(res.payload.error, 'invalid_phone')
   })
 
-  it('accepts Ministry mobile barcode symbols before scraping', async () => {
+  it('accepts Taiwan mobile phone before scraping', async () => {
   const { default: handler } = await import('../src/routes/einvoice.js?symbol-card')
   const res = await callHandler(handler, {
-    cardNo: '/A+.-123',
-    cardEncrypt: '1234',
+    cardNo: '0910047171',
+    cardEncrypt: 'Swxd3167@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   }, '/api/einvoice/query-invoices', authHeaders)
@@ -128,8 +128,8 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   it('validates date range before scraping', async () => {
   const { default: handler } = await import('../src/routes/einvoice.js?invalid-date-range')
   const res = await callHandler(handler, {
-    cardNo: '/ABC1234',
-    cardEncrypt: '1234',
+    cardNo: '0910047171',
+    cardEncrypt: 'Swxd3167@',
     startDate: '2026-05-18',
     endDate: '2026-05-01',
   }, '/api/einvoice/query-invoices', authHeaders)
@@ -141,8 +141,8 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   it('maps scrape rows to app invoice records via query-invoices alias', async () => {
   const { default: handler } = await import('../src/routes/einvoice.js?success')
   const res = await callHandler(handler, {
-    cardNo: '/ABC1234',
-    cardEncrypt: '1234',
+    cardNo: '0910047171',
+    cardEncrypt: 'Swxd3167@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   }, '/api/einvoice/query-invoices', authHeaders)
@@ -157,8 +157,8 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   const { default: handler } = await import('../src/routes/einvoice.js?scrape-flow')
 
   const startRes = await callHandler(handler, {
-    cardNo: '/ABC1234',
-    cardEncrypt: '1234',
+    cardNo: '0910047171',
+    cardEncrypt: 'Swxd3167@',
     force_captcha: true,
   }, '/api/einvoice/scrape/start', authHeaders)
 
@@ -176,8 +176,8 @@ describe('einvoice routes', { concurrency: 1 }, () => {
 
   const queryRes = await callHandler(handler, {
     session_id: startRes.payload.session_id,
-    cardNo: '/ABC1234',
-    cardEncrypt: '1234',
+    cardNo: '0910047171',
+    cardEncrypt: 'Swxd3167@',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
   }, '/api/einvoice/scrape/query', authHeaders)
@@ -189,14 +189,14 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   it('scrape query maps auth failure from mock provider', async () => {
   const { default: handler } = await import('../src/routes/einvoice.js?auth-fail')
   const startRes = await callHandler(handler, {
-    cardNo: '/ABC1234',
+    cardNo: '0910047171',
     cardEncrypt: 'badauth',
     force_captcha: false,
   }, '/api/einvoice/scrape/start', authHeaders)
 
   const queryRes = await callHandler(handler, {
     session_id: startRes.payload.session_id,
-    cardNo: '/ABC1234',
+    cardNo: '0910047171',
     cardEncrypt: 'badauth',
     startDate: '2026-05-01',
     endDate: '2026-05-18',
@@ -209,8 +209,8 @@ describe('einvoice routes', { concurrency: 1 }, () => {
   it('scrape cancel releases session', async () => {
   const { default: handler } = await import('../src/routes/einvoice.js?cancel')
   const startRes = await callHandler(handler, {
-    cardNo: '/ABC1234',
-    cardEncrypt: '1234',
+    cardNo: '0910047171',
+    cardEncrypt: 'Swxd3167@',
   }, '/api/einvoice/scrape/start', authHeaders)
 
   const cancelRes = await callHandler(handler, {

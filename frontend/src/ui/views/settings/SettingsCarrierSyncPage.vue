@@ -28,14 +28,14 @@
 
     <template v-if="hasCarrierAccess">
       <article class="card panel">
-        <h3>{{ t('einvoice.step1.title') }}</h3>
-        <p class="muted">{{ t('einvoice.step1.desc') }}</p>
+        <h3>{{ t('settings_carrier_sync.credentials_title') }}</h3>
+        <p class="muted">{{ t('settings_carrier_sync.credentials_desc') }}</p>
 
-        <label class="field-label">{{ t('einvoice.step1.carrier_barcode') }}</label>
-        <input v-model="carrierBarcode" class="field-input" type="text" autocomplete="username" />
+        <label class="field-label">{{ t('settings_carrier_sync.phone') }}</label>
+        <input v-model="carrierPhone" class="field-input" type="tel" inputmode="tel" autocomplete="username" />
 
-        <label class="field-label mt">{{ t('einvoice.step1.verification_code') }}</label>
-        <input v-model="verificationCode" class="field-input" type="password" autocomplete="current-password" />
+        <label class="field-label mt">{{ t('settings_carrier_sync.password') }}</label>
+        <input v-model="carrierPassword" class="field-input" type="password" autocomplete="current-password" />
 
         <label class="remember-row mt">
           <input v-model="rememberCredentials" type="checkbox" />
@@ -166,6 +166,7 @@ import {
   saveEInvoiceCredential,
 } from '@/services/einvoice/backend.js'
 import { isEInvoiceApiConfigured } from '@/services/einvoice/scrape-api.js'
+import { isValidCarrierPhone, normalizeCarrierPhone } from '@/services/einvoice/shared.js'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -183,8 +184,8 @@ const hasCarrierAccess = computed(() => hasCarrierSyncMembershipAccess(membershi
 const apiReady = computed(() => isEInvoiceApiConfigured())
 const apiMessage = computed(() => t('settings_carrier_sync.api_unavailable'))
 
-const carrierBarcode = ref('')
-const verificationCode = ref('')
+const carrierPhone = ref('')
+const carrierPassword = ref('')
 const rememberCredentials = ref(true)
 const autoSyncEnabled = ref(false)
 const lookbackDays = ref(7)
@@ -204,15 +205,15 @@ const captchaSessionId = ref('')
 
 const accounts = computed(() => accountStore.accounts ?? [])
 const expenseCategories = computed(() => categoryStore.expenseCategories ?? [])
-const canSync = computed(() => apiReady.value && /^\/[A-Za-z0-9+.\-]{7}$/.test(carrierBarcode.value.trim()) && verificationCode.value.trim().length >= 4)
+const canSync = computed(() => apiReady.value && isValidCarrierPhone(carrierPhone.value) && carrierPassword.value.trim().length >= 4)
 
 let unsubscribeMembership = null
 
 async function loadCredential() {
   const saved = await loadEInvoiceCredential()
   if (!saved) return
-  carrierBarcode.value = saved.carrierBarcode
-  verificationCode.value = saved.verificationCode
+  carrierPhone.value = saved.carrierBarcode
+  carrierPassword.value = saved.verificationCode
   rememberCredentials.value = true
 }
 
@@ -245,7 +246,10 @@ async function saveConfig() {
 
 async function persistCredentialIfNeeded() {
   if (!rememberCredentials.value) return
-  await saveEInvoiceCredential(carrierBarcode.value, verificationCode.value)
+  await saveEInvoiceCredential(
+    normalizeCarrierPhone(carrierPhone.value),
+    carrierPassword.value,
+  )
 }
 
 async function handleSyncNow() {
@@ -255,8 +259,8 @@ async function handleSyncNow() {
   try {
     await persistCredentialIfNeeded()
     const result = await syncCarrierInvoicesNow({
-      carrierBarcode: carrierBarcode.value,
-      verificationCode: verificationCode.value,
+      carrierBarcode: normalizeCarrierPhone(carrierPhone.value),
+      verificationCode: carrierPassword.value,
       ledgerId: ledgerStore.activeLedgerId,
     })
     syncMessage.value = t('settings_carrier_sync.sync_result', {
@@ -289,8 +293,8 @@ async function submitCaptchaAndSync() {
   syncing.value = true
   try {
     const result = await syncCarrierInvoicesNow({
-      carrierBarcode: carrierBarcode.value,
-      verificationCode: verificationCode.value,
+      carrierBarcode: normalizeCarrierPhone(carrierPhone.value),
+      verificationCode: carrierPassword.value,
       captchaCode: captchaCode.value,
       sessionId: captchaSessionId.value,
       ledgerId: ledgerStore.activeLedgerId,
@@ -340,8 +344,8 @@ async function handleDismissSelected() {
 
 async function handleClearCredential() {
   await clearEInvoiceCredential()
-  carrierBarcode.value = ''
-  verificationCode.value = ''
+  carrierPhone.value = ''
+  carrierPassword.value = ''
   rememberCredentials.value = false
   uiStore.pushToast(t('einvoice.step1.clear_saved_done'))
 }

@@ -71,10 +71,18 @@ public class BankAutomationPlugin extends Plugin {
         String payloadText = data == null ? "" : String.valueOf(data.getStringExtra(BankAutomationActivity.EXTRA_RESULT_JSON));
         String errorCode = data == null ? "" : String.valueOf(data.getStringExtra(BankAutomationActivity.EXTRA_ERROR_CODE));
         String errorMessage = data == null ? "" : String.valueOf(data.getStringExtra(BankAutomationActivity.EXTRA_ERROR_MESSAGE));
+        String errorDataText = data == null ? "" : String.valueOf(data.getStringExtra(BankAutomationActivity.EXTRA_ERROR_DATA_JSON));
         String debugTraceText = data == null ? "" : String.valueOf(data.getStringExtra(BankAutomationActivity.EXTRA_DEBUG_TRACE_JSON));
 
         if (activityResult.getResultCode() != Activity.RESULT_OK) {
             JSObject errorData = new JSObject();
+            if (errorDataText != null && !errorDataText.trim().isEmpty()) {
+                try {
+                    errorData.put("errorData", JSObject.fromJSONObject(new JSONObject(errorDataText)));
+                } catch (JSONException ignored) {
+                    // Keep reject payload best-effort only.
+                }
+            }
             if (debugTraceText != null && !debugTraceText.trim().isEmpty()) {
                 try {
                     errorData.put("debugTrace", JSObject.fromJSONObject(new JSONObject(debugTraceText)));
