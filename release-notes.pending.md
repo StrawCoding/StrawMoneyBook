@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.22
+- (SMB-243) 修復 Capacitor `https://localhost` Google 登入 `POST /api/auth/google` 仍出現 Failed to fetch：v1.3.13 後 CORS preflight 與 ACAO 已正確，但後端 `http.js` 一律回 `Cross-Origin-Resource-Policy: same-site`，瀏覽器在跨站（localhost → api.strawmb.com）讀取回應時仍被 CORP 擋下。改為跨站 API 請求回 `Cross-Origin-Resource-Policy: cross-origin`（含 credentialed 與匿名 prepare）。新增 `backend/test/http-cors.test.js` SMB-243 回歸案例。
+
 ## v1.3.21
 - (SMB-242) 修復重新開啟 App 後帳號被登出：Android / iOS 在 cookie 模式除 HttpOnly refresh cookie 外，另以 `X-Straw-Native-Client` 取得 body refresh token 備份至 `localStorage`（僅 native）；冷啟動 refresh 失敗時改 `clearAuthTokens()` 保留使用者 profile，不再 `clearSession()` 整包清空；帳號頁 session listener 在 token 清空時仍顯示已儲存 profile。後端 `buildAuthSessionResponse` 於 native cookie 模式同步回傳 `refresh_token` 供備援。驗證：backend 71/71、frontend test:node 569/569；已 deploy:copy + 重啟 StrawMB。
 

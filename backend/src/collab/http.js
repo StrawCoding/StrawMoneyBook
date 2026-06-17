@@ -98,13 +98,13 @@ function isOriginAllowed(req) {
   return isAllowedStawmbOrigin(origin)
 }
 
-function setSecurityHeaders(res) {
+function setSecurityHeaders(res, { crossOriginResourcePolicy = 'same-site' } = {}) {
   res.setHeader('Cache-Control', 'no-store')
   res.setHeader('Referrer-Policy', 'no-referrer')
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('X-Frame-Options', 'DENY')
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()')
-  res.setHeader('Cross-Origin-Resource-Policy', 'same-site')
+  res.setHeader('Cross-Origin-Resource-Policy', crossOriginResourcePolicy)
   res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
@@ -137,15 +137,39 @@ function wantsCredentialedCors(req) {
     .includes('x-straw-auth-storage')
 }
 
+function isCrossSiteApiRequest(req) {
+  const origin = getRequestOrigin(req)
+  if (!origin || !isOriginAllowed(req)) return false
+  try {
+    const originHost = new URL(origin).host.toLowerCase()
+    const apiHost = String(req?.headers?.host ?? '').trim().toLowerCase()
+    if (!apiHost) return true
+    return originHost !== apiHost
+  } catch {
+    return false
+  }
+}
+
 function setCorsHeaders(res) {
   const req = res.__request
   const origin = getRequestOrigin(req)
-  setSecurityHeaders(res)
   res.setHeader('Vary', 'Origin')
   const credentialed = wantsCredentialedCors(req)
   const originAllowed = Boolean(origin) && (ALLOW_ALL_ORIGINS || isOriginAllowed(req))
+  const reflectsCrossOrigin = Boolean(
+    origin
+    && originAllowed
+    && (credentialed || !ALLOW_ALL_ORIGINS),
+  )
 
-  if (origin && originAllowed && (credentialed || !ALLOW_ALL_ORIGINS)) {
+  // Capacitor / web clients load from https://localhost while the API lives on
+  // api.strawmb.com. CORS may allow the response, but CORP: same-site still
+  // blocks cross-site fetch() from reading it → Failed to fetch.
+  setSecurityHeaders(res, {
+    crossOriginResourcePolicy: isCrossSiteApiRequest(req) ? 'cross-origin' : 'same-site',
+  })
+
+  if (reflectsCrossOrigin) {
     res.setHeader('Access-Control-Allow-Origin', origin)
     if (credentialed || !ALLOW_ALL_ORIGINS) {
       res.setHeader('Access-Control-Allow-Credentials', 'true')

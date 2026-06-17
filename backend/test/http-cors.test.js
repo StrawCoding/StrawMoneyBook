@@ -47,6 +47,7 @@ test('SMB-238: cookie auth requests reflect origin with credentials even when AL
 
     assert.equal(res.getHeader('access-control-allow-origin'), 'https://localhost')
     assert.equal(res.getHeader('access-control-allow-credentials'), 'true')
+    assert.equal(res.getHeader('cross-origin-resource-policy'), 'cross-origin')
   } finally {
     if (previousAllowedOrigins === undefined) delete process.env.ALLOWED_ORIGINS
     else process.env.ALLOWED_ORIGINS = previousAllowedOrigins
@@ -55,7 +56,7 @@ test('SMB-238: cookie auth requests reflect origin with credentials even when AL
   }
 })
 
-test('SMB-238: credentialed CORS preflight reflects origin + credentials even when ALLOW_ALL_ORIGINS is enabled', async () => {
+test('SMB-243: credentialed CORS preflight reflects origin + credentials even when ALLOW_ALL_ORIGINS is enabled', async () => {
   const previousAllowedOrigins = process.env.ALLOWED_ORIGINS
   const previousNodeEnv = process.env.NODE_ENV
   process.env.ALLOWED_ORIGINS = '*'
@@ -81,6 +82,7 @@ test('SMB-238: credentialed CORS preflight reflects origin + credentials even wh
     assert.equal(res.statusCode, 204)
     assert.equal(res.getHeader('access-control-allow-origin'), 'https://localhost')
     assert.equal(res.getHeader('access-control-allow-credentials'), 'true')
+    assert.equal(res.getHeader('cross-origin-resource-policy'), 'cross-origin')
   } finally {
     if (previousAllowedOrigins === undefined) delete process.env.ALLOWED_ORIGINS
     else process.env.ALLOWED_ORIGINS = previousAllowedOrigins
@@ -89,7 +91,7 @@ test('SMB-238: credentialed CORS preflight reflects origin + credentials even wh
   }
 })
 
-test('SMB-238: anonymous CORS preflight keeps wildcard ACAO when ALLOW_ALL_ORIGINS is enabled', async () => {
+test('SMB-243: anonymous CORS preflight keeps wildcard ACAO when ALLOW_ALL_ORIGINS is enabled', async () => {
   const previousAllowedOrigins = process.env.ALLOWED_ORIGINS
   const previousNodeEnv = process.env.NODE_ENV
   process.env.ALLOWED_ORIGINS = '*'
@@ -113,6 +115,7 @@ test('SMB-238: anonymous CORS preflight keeps wildcard ACAO when ALLOW_ALL_ORIGI
     assert.equal(res.statusCode, 204)
     assert.equal(res.getHeader('access-control-allow-origin'), '*')
     assert.equal(res.getHeader('access-control-allow-credentials'), undefined)
+    assert.equal(res.getHeader('cross-origin-resource-policy'), 'cross-origin')
   } finally {
     if (previousAllowedOrigins === undefined) delete process.env.ALLOWED_ORIGINS
     else process.env.ALLOWED_ORIGINS = previousAllowedOrigins
@@ -121,7 +124,7 @@ test('SMB-238: anonymous CORS preflight keeps wildcard ACAO when ALLOW_ALL_ORIGI
   }
 })
 
-test('SMB-238: anonymous cross-origin requests keep wildcard ACAO when ALLOW_ALL_ORIGINS is enabled', async () => {
+test('SMB-243: anonymous cross-origin requests keep wildcard ACAO when ALLOW_ALL_ORIGINS is enabled', async () => {
   const previousAllowedOrigins = process.env.ALLOWED_ORIGINS
   const previousNodeEnv = process.env.NODE_ENV
   process.env.ALLOWED_ORIGINS = '*'
@@ -139,6 +142,35 @@ test('SMB-238: anonymous cross-origin requests keep wildcard ACAO when ALLOW_ALL
 
     assert.equal(res.getHeader('access-control-allow-origin'), '*')
     assert.equal(res.getHeader('access-control-allow-credentials'), undefined)
+    assert.equal(res.getHeader('cross-origin-resource-policy'), 'cross-origin')
+  } finally {
+    if (previousAllowedOrigins === undefined) delete process.env.ALLOWED_ORIGINS
+    else process.env.ALLOWED_ORIGINS = previousAllowedOrigins
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = previousNodeEnv
+  }
+})
+
+test('SMB-243: Capacitor origin auth/google POST uses cross-origin CORP with credentialed CORS', async () => {
+  const previousAllowedOrigins = process.env.ALLOWED_ORIGINS
+  const previousNodeEnv = process.env.NODE_ENV
+  process.env.ALLOWED_ORIGINS = '*'
+  process.env.NODE_ENV = 'production'
+
+  try {
+    const httpModule = await import(`../src/collab/http.js?corp-test=${Date.now()}`)
+    const res = createMockResponse({
+      headers: {
+        origin: 'capacitor://localhost',
+        'x-straw-auth-storage': 'cookie',
+      },
+    })
+
+    httpModule.sendJson(res, 400, { error: 'google_token_required' })
+
+    assert.equal(res.getHeader('access-control-allow-origin'), 'capacitor://localhost')
+    assert.equal(res.getHeader('access-control-allow-credentials'), 'true')
+    assert.equal(res.getHeader('cross-origin-resource-policy'), 'cross-origin')
   } finally {
     if (previousAllowedOrigins === undefined) delete process.env.ALLOWED_ORIGINS
     else process.env.ALLOWED_ORIGINS = previousAllowedOrigins
