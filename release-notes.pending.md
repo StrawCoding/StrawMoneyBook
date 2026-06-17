@@ -3,6 +3,7 @@
 ---
 
 ## v1.3.19
+- (SMB-240) 修復電子發票爬蟲「尚未設定（缺少 EINVOICE_CLIENT_SHARED_KEY）」：後端 production env 補上 `EINVOICE_CLIENT_SHARED_KEY` 與 `EINVOICE_SCRAPE_USE_PLAYWRIGHT=1` 並重啟 StrawMB；前端 `.env.production` 同步 `VITE_EINVOICE_CLIENT_SHARED_KEY`。驗證：無 key 回 401、有 key 進入參數驗證；backend einvoice 9/9、前端 564/564。
 - 修復載具同步憑證格式錯誤：財政部 scrape 登入改為「手機號碼 + 密碼」（非手機條碼 / 查詢碼）；後端 Playwright provider 改走 `accounts/login` 後再查詢發票；設定頁欄位與驗證（09 開頭 10 碼 + 至少 4 位密碼）及三語 i18n 同步更新。
 - 修復第一銀行同步驗證碼辨識失敗：OCR 全失敗時改拋 `first_bank_captcha_manual_required` 並回傳驗證碼圖；建立連線頁新增手動輸入 4 碼重試；若使用者已填驗證碼則優先採用手動輸入、跳過 OCR。後端 einvoice 路由測試 9/9、前端載具/銀行同步 source 測試、Android `FirstBankAutomationCaptchaTest` 通過。
 
