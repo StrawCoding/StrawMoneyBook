@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.20
+- (SMB-241) 修復第一銀行同步圖形驗證失敗與登入頁非電腦版：`BankAutomationActivity` WebView 改為 1280px 桌面 viewport、`loadWithOverviewMode(false)` 與桌面 Chrome UA；登入前以 `ensureDesktopLoginPage` 注入 viewport 並驗證 `captchaLoginArea` / `code_verify` / `vrfyCode` 等桌面 DOM，不符則重載並回報 `first_bank_login_page_mismatch`；驗證碼 canvas 過小時改以 cookie 直接下載圖片並加強 OCR 放大變體。驗證：`FirstBankAutomationCaptchaTest`、`bank-sync-android-source.test.js`、既有 bank-sync 測試通過。
+
 ## v1.3.19
 - (SMB-240) 修復電子發票爬蟲「尚未設定（缺少 EINVOICE_CLIENT_SHARED_KEY）」：後端 production env 補上 `EINVOICE_CLIENT_SHARED_KEY` 與 `EINVOICE_SCRAPE_USE_PLAYWRIGHT=1` 並重啟 StrawMB；前端 `.env.production` 同步 `VITE_EINVOICE_CLIENT_SHARED_KEY`。驗證：無 key 回 401、有 key 進入參數驗證；backend einvoice 9/9、前端 564/564。
 - 修復載具同步憑證格式錯誤：財政部 scrape 登入改為「手機號碼 + 密碼」（非手機條碼 / 查詢碼）；後端 Playwright provider 改走 `accounts/login` 後再查詢發票；設定頁欄位與驗證（09 開頭 10 碼 + 至少 4 位密碼）及三語 i18n 同步更新。

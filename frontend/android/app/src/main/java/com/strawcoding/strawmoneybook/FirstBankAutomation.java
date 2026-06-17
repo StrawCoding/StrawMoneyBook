@@ -23,9 +23,13 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -51,6 +55,7 @@ final class FirstBankAutomation {
     private static final int CAPTCHA_EXPECTED_LENGTH = 4;
     private static final int CAPTCHA_MAX_AMBIGUOUS_VARIANTS = 64;
     private static final int CAPTCHA_MIN_TARGET_HEIGHT = 108;
+    private static final int CAPTCHA_MIN_CAPTURE_HEIGHT = 20;
     private static final int CAPTCHA_MIN_DATA_URL_LENGTH = 64;
     private static final long CAPTCHA_READY_TIMEOUT_MS = 12_000L;
     private static final long CAPTCHA_READY_POLL_MS = 250L;
@@ -321,6 +326,7 @@ final class FirstBankAutomation {
     }
 
     private static void performLogin(Activity activity, BrowserSession session, BankAutomationDebugTrace debugTrace, String nationalId, String repeatSeq, String userCode, String password, String manualCaptcha) throws Exception {
+        ensureDesktopLoginPage(session, debugTrace);
         boolean hasRecognizedCaptcha = false;
         String lastCaptchaDataUrl = "";
         String normalizedManualCaptcha = normalizeCaptchaString(manualCaptcha);
@@ -393,6 +399,28 @@ final class FirstBankAutomation {
             throw buildManualCaptchaRequiredException(lastCaptchaDataUrl);
         }
         throw new BankAutomationException("first_bank_login_failed", "First Bank login failed");
+    }
+
+    private static void ensureDesktopLoginPage(BrowserSession session, BankAutomationDebugTrace debugTrace) throws Exception {
+        session.applyDesktopViewport();
+        JSONObject probe = session.probeDesktopLoginPage();
+        if (probe.optBoolean("ready", false)) {
+            debugTrace.record("desktop_login_page", "ok", "Desktop login page is ready", probe);
+            return;
+        }
+        debugTrace.record("desktop_login_page", "running", "Login page did not match desktop layout; reloading", probe);
+        session.applyDesktopViewport();
+        session.reloadCurrentUrl();
+        probe = session.probeDesktopLoginPage();
+        if (!probe.optBoolean("ready", false)) {
+            BankAutomationException error = new BankAutomationException(
+                "first_bank_login_page_mismatch",
+                "First Bank login page does not match desktop layout"
+            );
+            error.attachData(probe);
+            throw error;
+        }
+        debugTrace.record("desktop_login_page", "ok", "Desktop login page ready after reload", probe);
     }
 
     private static BankAutomationException buildManualCaptchaRequiredException(String dataUrl) throws JSONException {
@@ -553,6 +581,11 @@ final class FirstBankAutomation {
         variants.add(preprocessCaptcha(standardTrim, 140, false, 1.45f));
         variants.add(preprocessCaptcha(standardTrim, 170, false, 1.55f));
         variants.add(preprocessCaptcha(standardTrim, 140, true, 1.45f));
+        if (source.getHeight() < CAPTCHA_MIN_CAPTURE_HEIGHT || source.getWidth() < 80) {
+            variants.add(preprocessCaptcha(source, 120, false, 2.20f));
+            variants.add(preprocessCaptcha(conservativeTrim, 150, false, 2.40f));
+            variants.add(preprocessCaptcha(conservativeTrim, 150, true, 2.40f));
+        }
         return variants;
     }
 
@@ -964,6 +997,109 @@ final class FirstBankAutomation {
                 dataUrl = '';
               }
               return buildSnapshot(candidate, dataUrl, dataUrl ? '' : 'canvas_blocked');
+            })();
+            """;
+    }
+
+    static String buildEnsureDesktopViewportScript() {
+        int width = BankAutomationActivity.DESKTOP_VIEWPORT_WIDTH;
+        return String.format(Locale.US, """
+            (() => {
+              const width = %d;
+              function patchDoc(doc) {
+                if (!doc) return;
+                let meta = doc.querySelector('meta[name="viewport"]');
+                if (!meta) {
+                  meta = doc.createElement('meta');
+                  meta.setAttribute('name', 'viewport');
+                  if (doc.head) {
+                    doc.head.appendChild(meta);
+                  }
+                }
+                meta.setAttribute('content', `width=${width}, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0`);
+              }
+              function visit(win) {
+                if (!win) return;
+                try {
+                  patchDoc(win.document);
+                  for (let index = 0; index < win.frames.length; index += 1) {
+                    visit(win.frames[index]);
+                  }
+                } catch (_error) {}
+              }
+              visit(window);
+              return true;
+            })();
+            """, width);
+    }
+
+    static String buildDesktopLoginPageProbeScript() {
+        return """
+            (() => {
+              function text(value) { return String(value ?? '').trim(); }
+              function byId(doc, id) {
+                try {
+                  if (doc && typeof doc.getElementById === 'function') {
+                    const found = doc.getElementById(id);
+                    if (found) return found;
+                  }
+                  return doc ? doc.querySelector(`#${id}`) : null;
+                } catch (_error) {
+                  return null;
+                }
+              }
+              function collectEntries() {
+                const found = [];
+                const seen = new Set();
+                function visit(win, depth) {
+                  if (!win || seen.has(win)) return;
+                  seen.add(win);
+                  try {
+                    const doc = win.document;
+                    found.push({ doc, depth, url: text(win.location?.href || doc?.URL || '') });
+                    for (let index = 0; index < win.frames.length; index += 1) {
+                      visit(win.frames[index], depth + 1);
+                    }
+                  } catch (_error) {}
+                }
+                visit(window, 0);
+                return found.filter((entry) => Boolean(entry.doc));
+              }
+              const entries = collectEntries();
+              let hasLoginForm = false;
+              let hasCaptchaImage = false;
+              let hasCaptchaLoginArea = false;
+              let hasVrfyCode = false;
+              let mobileHint = false;
+              for (const entry of entries) {
+                const doc = entry.doc;
+                if (byId(doc, 'loginCustIdFake') || byId(doc, 'usrIdInput') || byId(doc, 'pwd')) {
+                  hasLoginForm = true;
+                }
+                if (byId(doc, 'code_verify') || doc.querySelector('img[src*="code_verify"]')) {
+                  hasCaptchaImage = true;
+                }
+                if (byId(doc, 'captchaLoginArea')) {
+                  hasCaptchaLoginArea = true;
+                }
+                if (byId(doc, 'vrfyCode')) {
+                  hasVrfyCode = true;
+                }
+                const blob = `${text(doc.title)} ${text(doc.body?.innerText || '')}`;
+                if (/手機版|行動版|行動銀行|mobile\\s*bank/i.test(blob)) {
+                  mobileHint = true;
+                }
+              }
+              const ready = hasLoginForm && hasCaptchaImage && hasCaptchaLoginArea && hasVrfyCode && !mobileHint;
+              return {
+                ready,
+                hasLoginForm,
+                hasCaptchaImage,
+                hasCaptchaLoginArea,
+                hasVrfyCode,
+                mobileHint,
+                entryCount: entries.length,
+              };
             })();
             """;
     }
@@ -1755,6 +1891,36 @@ final class FirstBankAutomation {
                   }
                 })();
                 """, 15_000L, 300L, "first_bank_dom_ready_timeout", "First Bank page did not become ready in time");
+            applyDesktopViewport();
+        }
+
+        void reloadCurrentUrl() throws Exception {
+            String currentUrl = normalizeText(callOnUiThreadAndWait(webView::getUrl));
+            if (currentUrl.isEmpty() || "about:blank".equalsIgnoreCase(currentUrl)) {
+                loadUrl(LOGIN_URL);
+                return;
+            }
+            CountDownLatch latch = new CountDownLatch(1);
+            navigationLatchRef.set(latch);
+            runOnUiThreadAndWait(() -> webView.reload());
+            waitForNavigation(currentUrl, latch);
+            applyDesktopViewport();
+        }
+
+        void applyDesktopViewport() {
+            try {
+                evaluateJavaScript(buildEnsureDesktopViewportScript());
+            } catch (Exception error) {
+                Log.d(TAG, "Failed to apply desktop viewport", error);
+            }
+        }
+
+        JSONObject probeDesktopLoginPage() throws Exception {
+            Object result = evaluateJavaScript(buildDesktopLoginPageProbeScript());
+            if (result instanceof JSONObject) {
+                return (JSONObject) result;
+            }
+            return new JSONObject();
         }
 
         private void waitForNavigation(String requestedUrl, CountDownLatch latch) throws BankAutomationException {
@@ -1838,7 +2004,95 @@ final class FirstBankAutomation {
             if (!snapshot.ready) {
                 snapshot = waitForCaptchaReady("");
             }
+            if (snapshot.ready && snapshot.height >= CAPTCHA_MIN_CAPTURE_HEIGHT && isCaptchaDataUrlUsable(snapshot.dataUrl)) {
+                return snapshot.dataUrl;
+            }
+            String fetched = fetchCaptchaImageDataUrl(snapshot);
+            if (isCaptchaDataUrlUsable(fetched)) {
+                return fetched;
+            }
             return snapshot.ready ? snapshot.dataUrl : "";
+        }
+
+        private String fetchCaptchaImageDataUrl(CaptchaSnapshot snapshot) {
+            String src = normalizeText(snapshot.currentSrc);
+            if (src.isEmpty()) {
+                src = normalizeText(snapshot.src);
+            }
+            if (src.isEmpty()) {
+                return "";
+            }
+            try {
+                String baseUrl = normalizeText(snapshot.frameUrl);
+                if (baseUrl.isEmpty()) {
+                    baseUrl = LOGIN_URL;
+                }
+                String resolvedUrl = resolveAbsoluteUrl(baseUrl, src);
+                byte[] bytes = downloadBinary(resolvedUrl);
+                if (bytes == null || bytes.length == 0) {
+                    return "";
+                }
+                String mimeType = guessImageMimeType(bytes, src);
+                return "data:" + mimeType + ";base64," + Base64.encodeToString(bytes, Base64.NO_WRAP);
+            } catch (Exception error) {
+                Log.d(TAG, "Direct captcha fetch failed", error);
+                return "";
+            }
+        }
+
+        private byte[] downloadBinary(String urlText) throws IOException, BankAutomationException {
+            URL url = new URL(urlText);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setInstanceFollowRedirects(true);
+            connection.setConnectTimeout(12_000);
+            connection.setReadTimeout(12_000);
+            connection.setRequestProperty("User-Agent", webView.getSettings().getUserAgentString());
+            String cookies = captureCookies();
+            if (!cookies.isEmpty()) {
+                connection.setRequestProperty("Cookie", cookies);
+            }
+            connection.setRequestProperty("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8");
+            try {
+                int status = connection.getResponseCode();
+                if (status < 200 || status >= 300) {
+                    throw new IOException("HTTP " + status);
+                }
+                try (InputStream input = connection.getInputStream(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                    byte[] buffer = new byte[8192];
+                    int read;
+                    while ((read = input.read(buffer)) >= 0) {
+                        output.write(buffer, 0, read);
+                    }
+                    return output.toByteArray();
+                }
+            } finally {
+                connection.disconnect();
+            }
+        }
+
+        private String resolveAbsoluteUrl(String baseUrl, String src) {
+            try {
+                return new URL(new URL(baseUrl), src).toString();
+            } catch (Exception error) {
+                return normalizeText(src);
+            }
+        }
+
+        private static String guessImageMimeType(byte[] bytes, String src) {
+            String lowerSrc = normalizeText(src).toLowerCase(Locale.US);
+            if (lowerSrc.endsWith(".jpg") || lowerSrc.endsWith(".jpeg")) {
+                return "image/jpeg";
+            }
+            if (lowerSrc.endsWith(".gif")) {
+                return "image/gif";
+            }
+            if (bytes.length >= 3
+                && (bytes[0] & 0xFF) == 0xFF
+                && (bytes[1] & 0xFF) == 0xD8
+                && (bytes[2] & 0xFF) == 0xFF) {
+                return "image/jpeg";
+            }
+            return "image/png";
         }
 
         CaptchaSnapshot refreshCaptcha() throws Exception {

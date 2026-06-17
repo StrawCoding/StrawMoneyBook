@@ -300,6 +300,7 @@ function resolveCreateErrorMessage(error, fallbackKey) {
     first_bank_initial_start_date_required: t('settings_bank_sync_create.error.first_bank_initial_start_date_required'),
     first_bank_captcha_ocr_failed: t('settings_bank_sync_create.error.first_bank_captcha_ocr_failed'),
     first_bank_captcha_manual_required: t('settings_bank_sync_create.error.first_bank_captcha_manual_required'),
+    first_bank_login_page_mismatch: t('settings_bank_sync_create.error.first_bank_login_page_mismatch'),
     first_bank_login_failed: t('settings_bank_sync_create.error.first_bank_login_failed'),
     first_bank_account_list_not_found: t('settings_bank_sync_create.error.first_bank_account_list_not_found'),
     first_bank_legacy_reconnect_required: t('settings_bank_sync_create.error.first_bank_legacy_reconnect_required'),

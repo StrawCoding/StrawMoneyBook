@@ -72,6 +72,7 @@ export function isBankCredentialAuthError(error) {
   const message = normalizeText(error?.message ?? error).toLowerCase()
   if ([
     'first_bank_login_failed',
+    'first_bank_login_page_mismatch',
     'first_bank_session_expired',
     'first_bank_password_required',
     'first_bank_user_code_required',

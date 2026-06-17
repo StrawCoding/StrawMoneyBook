@@ -1,0 +1,29 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const bankAutomationActivitySource = readFileSync(
+  resolve(import.meta.dirname, '../android/app/src/main/java/com/strawcoding/strawmoneybook/BankAutomationActivity.java'),
+  'utf8',
+)
+
+const firstBankAutomationSource = readFileSync(
+  resolve(import.meta.dirname, '../android/app/src/main/java/com/strawcoding/strawmoneybook/FirstBankAutomation.java'),
+  'utf8',
+)
+
+test('bank automation activity forces desktop viewport for first bank webview', () => {
+  assert.match(bankAutomationActivitySource, /DESKTOP_VIEWPORT_WIDTH = 1280/)
+  assert.match(bankAutomationActivitySource, /setLoadWithOverviewMode\(false\)/)
+  assert.match(bankAutomationActivitySource, /setInitialScale\(100\)/)
+  assert.match(bankAutomationActivitySource, /Windows NT 10\.0; Win64; x64/)
+})
+
+test('first bank automation validates desktop login page and improves captcha capture', () => {
+  assert.match(firstBankAutomationSource, /buildEnsureDesktopViewportScript/)
+  assert.match(firstBankAutomationSource, /buildDesktopLoginPageProbeScript/)
+  assert.match(firstBankAutomationSource, /ensureDesktopLoginPage/)
+  assert.match(firstBankAutomationSource, /first_bank_login_page_mismatch/)
+  assert.match(firstBankAutomationSource, /fetchCaptchaImageDataUrl/)
+})

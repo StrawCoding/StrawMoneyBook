@@ -21,6 +21,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class BankAutomationActivity extends Activity {
+    static final int DESKTOP_VIEWPORT_WIDTH = 1280;
+
     public static final String ACTION_CONNECT_FIRST_BANK = "connect_first_bank";
     public static final String ACTION_SYNC_FIRST_BANK = "sync_first_bank";
     public static final String ACTION_DISCONNECT_CONNECTION = "disconnect_connection";
@@ -78,7 +80,7 @@ public class BankAutomationActivity extends Activity {
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.TRANSPARENT);
         root.addView(webView, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
+            DESKTOP_VIEWPORT_WIDTH,
             ViewGroup.LayoutParams.MATCH_PARENT
         ));
         setContentView(root);
@@ -118,12 +120,16 @@ public class BankAutomationActivity extends Activity {
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         settings.setSupportMultipleWindows(false);
         settings.setUseWideViewPort(true);
-        settings.setLoadWithOverviewMode(true);
+        settings.setLoadWithOverviewMode(false);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
+        settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+        settings.setSupportZoom(false);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
 
+        nextWebView.setInitialScale(100);
         nextWebView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onJsAlert(WebView view, String url, String message, JsResult result) {

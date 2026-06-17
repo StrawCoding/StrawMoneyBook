@@ -135,4 +135,20 @@ public class FirstBankAutomationCaptchaTest {
             0
         ));
     }
+
+    @Test
+    public void desktopViewportScriptTargetsDesktopWidth() {
+        String script = FirstBankAutomation.buildEnsureDesktopViewportScript();
+        assertTrue(script.contains("const width = 1280"));
+        assertTrue(script.contains("initial-scale=1.0"));
+    }
+
+    @Test
+    public void desktopLoginPageProbeRequiresDesktopMarkers() {
+        String script = FirstBankAutomation.buildDesktopLoginPageProbeScript();
+        assertTrue(script.contains("captchaLoginArea"));
+        assertTrue(script.contains("code_verify"));
+        assertTrue(script.contains("vrfyCode"));
+        assertTrue(script.contains("mobileHint"));
+    }
 }
