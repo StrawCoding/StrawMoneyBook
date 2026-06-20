@@ -1,5 +1,23 @@
 import { listBorrowLoanImportTransactions } from '@/core/repositories/loan.repo'
 
+function parsePresetInterestMinor(rawRule) {
+  if (!rawRule) return 0
+  try {
+    const parsed = JSON.parse(String(rawRule))
+    return Math.max(0, Math.round(Number(parsed?.presetInterestMinor ?? 0)))
+  } catch {
+    return 0
+  }
+}
+
+function computeLoanRemainingMinor(tx) {
+  const principalMinor = Math.max(0, Number(tx?.loan_principal_minor ?? 0))
+  const paidMinor = Math.max(0, Number(tx?.loan_paid_minor ?? 0))
+  const presetInterestMinor = parsePresetInterestMinor(tx?.loan_interest_rule_json)
+  const targetTotalMinor = principalMinor + presetInterestMinor
+  return Math.max(0, targetTotalMinor - paidMinor)
+}
+
 function annotateReimbursementImportTx(tx) {
   return {
     ...tx,
@@ -19,6 +37,8 @@ function annotateBorrowLoanImportTx(tx) {
     loan_principal_minor: Number.isFinite(Number(tx?.loan_principal_minor))
       ? Number(tx?.loan_principal_minor)
       : null,
+    loan_paid_minor: Math.max(0, Number(tx?.loan_paid_minor ?? 0)),
+    loan_remaining_minor: computeLoanRemainingMinor(tx),
     counterparty_name: String(tx?.counterparty_name ?? '').trim(),
     note_plain: String(tx?.note ?? '').trim(),
   }

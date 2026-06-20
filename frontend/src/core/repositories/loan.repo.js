@@ -384,6 +384,13 @@ export async function listBorrowLoanImportTransactions(ledgerId) {
        l.note AS loan_note,
        l.start_date AS loan_start_date,
        l.principal_minor AS loan_principal_minor,
+       l.interest_rule_json AS loan_interest_rule_json,
+       (
+         SELECT COALESCE(SUM(lp.amount_minor), 0)
+         FROM loan_payments lp
+         WHERE lp.ledger_id = l.ledger_id
+           AND lp.loan_id = l.id
+       ) AS loan_paid_minor,
        cp.name AS counterparty_name
      FROM transactions t
      LEFT JOIN loans l

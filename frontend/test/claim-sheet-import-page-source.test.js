@@ -214,6 +214,19 @@ test('SMB-222 v1.2.48: claim sheet imported title never leaks the raw transactio
   )
 })
 
+test('SMB-247 v1.3.25: borrow loan import amount uses remaining balance after partial repayments', () => {
+  assert.match(loanRepoSource, /l\.interest_rule_json AS loan_interest_rule_json/)
+  assert.match(loanRepoSource, /AS loan_paid_minor/)
+  assert.match(claimImportServiceSource, /loan_paid_minor/)
+  assert.match(claimImportServiceSource, /loan_remaining_minor/)
+  assert.match(claimImportServiceSource, /computeLoanRemainingMinor/)
+  const claimImportUtilSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/utils/claim-sheet-import.js'),
+    'utf8',
+  )
+  assert.match(claimImportUtilSource, /loan_remaining_minor/)
+})
+
 test('SMB-222 v1.2.48: imported_*_item i18n strings no longer interpolate {id} in any locale', () => {
   // zh-TW
   assert.match(i18nServiceSource, /'claim_sheet\.form\.imported_reimbursement_item': '未命名報銷'/)

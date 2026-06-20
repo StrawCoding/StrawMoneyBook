@@ -78,9 +78,13 @@ export function claimSheetImportedEntryLabel(tx, t) {
 }
 
 export function claimSheetImportedAmountMinor(tx) {
-  return claimSheetImportKindFromTx(tx) === 'borrow_loan'
-    ? absMinor(tx?.amount_minor)
-    : reimbursementPendingMinor(tx)
+  if (claimSheetImportKindFromTx(tx) === 'borrow_loan') {
+    if (Number.isFinite(Number(tx?.loan_remaining_minor))) {
+      return absMinor(tx.loan_remaining_minor)
+    }
+    return absMinor(tx?.amount_minor)
+  }
+  return reimbursementPendingMinor(tx)
 }
 
 export function claimSheetImportedEntryType(tx) {

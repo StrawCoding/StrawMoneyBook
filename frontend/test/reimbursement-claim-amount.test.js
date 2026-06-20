@@ -78,3 +78,31 @@ test('derived fields expose the claimable amount and target-based pending', () =
   assert.equal(derived.claimable_amount_minor, 8000)
   assert.equal(derived.pending_amount_minor, 6000)
 })
+
+test('claim sheet borrow loan import uses remaining balance after partial repayments', () => {
+  const tx = {
+    id: 'tx_loan_1',
+    claimImportKind: 'borrow_loan',
+    amount_minor: 10000,
+    loan_principal_minor: 10000,
+    loan_paid_minor: 3000,
+    loan_remaining_minor: 7000,
+  }
+  assert.equal(claimSheetImportedAmountMinor(tx), 7000)
+  const item = buildClaimSheetImportedClaimItem(tx, (key) => key)
+  assert.equal(item.amountMinor, 7000)
+})
+
+test('claim sheet borrow loan import includes preset interest in remaining balance', () => {
+  const tx = {
+    id: 'tx_loan_2',
+    claimImportKind: 'borrow_loan',
+    amount_minor: 10000,
+    loan_principal_minor: 10000,
+    loan_paid_minor: 3000,
+    loan_remaining_minor: 7500,
+  }
+  assert.equal(claimSheetImportedAmountMinor(tx), 7500)
+  const item = buildClaimSheetImportedClaimItem(tx, (key) => key)
+  assert.equal(item.amountMinor, 7500)
+})
