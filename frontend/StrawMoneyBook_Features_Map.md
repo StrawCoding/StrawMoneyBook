@@ -167,7 +167,7 @@
 - 關於我們：`/settings/about`
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
-- 銀行同步：`/settings/bank-sync`（入口由 `isBankSyncFeatureEnabled()` 控制；需 `VITE_BANK_SYNC_FEATURE_ENABLED=true` 且 Android 第一銀行 provider 可用；v1.3.19 第一銀行 OCR 失敗時建立連線頁可手動輸入驗證碼重試；v1.3.20 SMB-241 強制桌面 viewport 與驗證碼直連下載；v1.3.31 / SMB-253 第一銀行登入頁錨點合約自檢納入排程監控）
+- 銀行同步：`/settings/bank-sync`（入口由 `isBankSyncFeatureEnabled()` 控制；需 `VITE_BANK_SYNC_FEATURE_ENABLED=true` 且 Android 第一銀行 provider 可用；v1.3.19 第一銀行 OCR 失敗時建立連線頁可手動輸入驗證碼重試；v1.3.20 SMB-241 強制桌面 viewport 與驗證碼直連下載；v1.3.31 / SMB-253 第一銀行登入頁錨點合約自檢納入排程監控；v1.3.32 / SMB-252 WebView JSON 攔截 + CSV 帳單匯入退路）
 - 載具同步：`/settings/carrier-sync`（會員限定；v1.3.19 憑證為財政部平台手機號碼 + 密碼；v1.3.30 後端 Playwright 改 SPA JSON 攔截 + captcha token；v1.3.31 / SMB-253 合約自檢接 cron/CI，失敗分類統計 + log/Plane 告警）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 

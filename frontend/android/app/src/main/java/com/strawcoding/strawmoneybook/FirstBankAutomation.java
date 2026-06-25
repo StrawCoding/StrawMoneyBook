@@ -15,6 +15,8 @@ import android.util.Base64;
 import android.util.Log;
 import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
@@ -23,6 +25,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -30,6 +33,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -57,6 +61,7 @@ final class FirstBankAutomation {
     private static final int CAPTCHA_MIN_TARGET_HEIGHT = 108;
     private static final int CAPTCHA_MIN_CAPTURE_HEIGHT = 20;
     private static final int CAPTCHA_MIN_DATA_URL_LENGTH = 64;
+    private static final int CAPTCHA_MIN_CONFIDENCE = 55;
     private static final long CAPTCHA_READY_TIMEOUT_MS = 12_000L;
     private static final long CAPTCHA_READY_POLL_MS = 250L;
     private static final long CAPTCHA_REFRESH_FALLBACK_READY_MS = 1_500L;
@@ -156,6 +161,7 @@ final class FirstBankAutomation {
         debugTrace.record("load_frame_page", "running", "Loading account frame page");
         session.loadUrl(FRAME_URL);
         debugTrace.record("load_frame_page", "ok", "Frame page loaded");
+        ensureFramePortalContract(session, debugTrace);
         openMyAccounts(session, debugTrace);
         JSONArray accounts = discoverAccounts(session);
         if (accounts.length() == 0) {
@@ -423,6 +429,20 @@ final class FirstBankAutomation {
         debugTrace.record("desktop_login_page", "ok", "Desktop login page ready after reload", probe);
     }
 
+    private static void ensureFramePortalContract(BrowserSession session, BankAutomationDebugTrace debugTrace) throws Exception {
+        JSONObject probe = session.probeFramePortalContract();
+        if (probe.optBoolean("ready", false)) {
+            debugTrace.record("frame_portal_contract", "ok", "Frame portal contract anchors are ready", probe);
+            return;
+        }
+        BankAutomationException error = new BankAutomationException(
+            "first_bank_portal_contract_failed",
+            "First Bank portal contract anchors are missing (My Accounts / transaction table anchors)"
+        );
+        error.attachData(probe);
+        throw error;
+    }
+
     private static BankAutomationException buildManualCaptchaRequiredException(String dataUrl) throws JSONException {
         JSONObject data = new JSONObject();
         String base64 = extractPngBase64FromDataUrl(dataUrl);
@@ -477,6 +497,7 @@ final class FirstBankAutomation {
     }
 
     private static void queryTransactions(BrowserSession session, String startDateBank, String endDateBank) throws Exception {
+        session.clearTransactionInterceptBuffer();
         if (!session.submitTransactionQuery(startDateBank, endDateBank)) {
             throw new BankAutomationException("first_bank_transaction_query_failed", "First Bank transaction query form was not found");
         }
@@ -486,6 +507,15 @@ final class FirstBankAutomation {
     }
 
     private static JSONArray parseTransactions(BrowserSession session, String accountId, String startDateBank, String endDateBank) throws Exception {
+        JSONArray fromJson = parseTransactionsFromInterceptedJson(
+            session.getTransactionInterceptPayloads(),
+            accountId,
+            startDateBank,
+            endDateBank
+        );
+        if (fromJson.length() > 0) {
+            return fromJson;
+        }
         Object result = session.evaluateJavaScript(buildParseTransactionsScript(accountId, startDateBank, endDateBank));
         if (!(result instanceof JSONArray)) {
             return new JSONArray();
@@ -529,6 +559,9 @@ final class FirstBankAutomation {
         List<TesseractBridge.RecognitionCandidate> recognitions = TesseractBridge.recognizeCaptchaCandidates(activity, variants);
         List<WeightedCaptchaCandidate> weightedCandidates = new ArrayList<>();
         for (TesseractBridge.RecognitionCandidate recognition : recognitions) {
+            if (recognition.confidence < CAPTCHA_MIN_CONFIDENCE) {
+                continue;
+            }
             weightedCandidates.add(new WeightedCaptchaCandidate(
                 recognition.text,
                 recognition.confidence,
@@ -1102,6 +1135,295 @@ final class FirstBankAutomation {
               };
             })();
             """;
+    }
+
+    static String buildFramePortalContractProbeScript() {
+        return """
+            (() => {
+              function text(value) { return String(value ?? '').trim(); }
+              function collectWindows() {
+                const wins = [];
+                const seen = new Set();
+                function visit(win) {
+                  if (!win || seen.has(win)) return;
+                  seen.add(win);
+                  wins.push(win);
+                  try {
+                    for (let index = 0; index < win.frames.length; index += 1) {
+                      visit(win.frames[index]);
+                    }
+                  } catch (_error) {}
+                }
+                visit(window);
+                return wins;
+              }
+              let hasMyAccounts = false;
+              let hasTransactionTableAnchor = false;
+              for (const win of collectWindows()) {
+                try {
+                  const doc = win.document;
+                  if (!doc) continue;
+                  const link = Array.from(doc.querySelectorAll('a')).find((anchor) => /我的帳戶/.test(text(anchor.textContent)));
+                  if (link) hasMyAccounts = true;
+                  if (doc.querySelector('table.CnbTable')) hasTransactionTableAnchor = true;
+                } catch (_error) {}
+              }
+              return {
+                ready: hasMyAccounts,
+                hasMyAccounts,
+                hasTransactionTableAnchor,
+              };
+            })();
+            """;
+    }
+
+    static boolean isTransactionInterceptCandidate(String url) {
+        String normalized = normalizeText(url).toLowerCase(Locale.US);
+        if (!normalized.contains("ibank.firstbank.com.tw")) {
+            return false;
+        }
+        return normalized.contains("010103")
+            || normalized.contains(".json")
+            || normalized.contains("/json")
+            || normalized.contains("txn")
+            || normalized.contains("trans")
+            || normalized.contains("detail")
+            || normalized.contains("query");
+    }
+
+    static boolean looksLikeTransactionJsonPayload(String body) {
+        String normalized = normalizeText(body);
+        if (normalized.length() < 2) return false;
+        char first = normalized.charAt(0);
+        return first == '{' || first == '[';
+    }
+
+    static JSONArray parseTransactionsFromInterceptedJson(List<String> payloads, String accountId, String startDateBank, String endDateBank) {
+        JSONArray merged = new JSONArray();
+        if (payloads == null || payloads.isEmpty()) {
+            return merged;
+        }
+        Set<String> seen = new LinkedHashSet<>();
+        for (String payload : payloads) {
+            if (!looksLikeTransactionJsonPayload(payload)) continue;
+            try {
+                JSONArray items = parseTransactionJsonPayload(payload, accountId, startDateBank, endDateBank);
+                for (int index = 0; index < items.length(); index += 1) {
+                    JSONObject item = items.optJSONObject(index);
+                    if (item == null) continue;
+                    String key = normalizeText(item.optString("providerAccountId"))
+                        + ":" + normalizeText(item.optString("providerTransactionId"));
+                    if (key.equals(":") || seen.contains(key)) continue;
+                    seen.add(key);
+                    merged.put(item);
+                }
+            } catch (Exception error) {
+                if (!normalizeText(error.getMessage()).isEmpty()) {
+                    // Avoid android.util.Log in JVM unit tests; failures fall back to DOM parsing.
+                }
+            }
+        }
+        return merged;
+    }
+
+    static JSONArray parseTransactionJsonPayload(String payload, String accountId, String startDateBank, String endDateBank) throws JSONException {
+        Object parsed = new JSONTokener(payload).nextValue();
+        JSONArray rows = new JSONArray();
+        collectTransactionJsonRows(parsed, rows);
+        JSONArray normalized = new JSONArray();
+        for (int index = 0; index < rows.length(); index += 1) {
+            JSONObject item = normalizeInterceptedTransactionRow(rows.optJSONObject(index), accountId, startDateBank, endDateBank);
+            if (item != null) {
+                normalized.put(item);
+            }
+        }
+        return normalized;
+    }
+
+    private static void collectTransactionJsonRows(Object node, JSONArray out) throws JSONException {
+        if (node instanceof JSONArray) {
+            JSONArray array = (JSONArray) node;
+            for (int index = 0; index < array.length(); index += 1) {
+                Object child = array.opt(index);
+                if (child instanceof JSONObject) {
+                    JSONObject object = (JSONObject) child;
+                    if (looksLikeTransactionObject(object)) {
+                        out.put(object);
+                        continue;
+                    }
+                }
+                collectTransactionJsonRows(child, out);
+            }
+            return;
+        }
+        if (!(node instanceof JSONObject)) {
+            return;
+        }
+        JSONObject object = (JSONObject) node;
+        if (looksLikeTransactionObject(object)) {
+            out.put(object);
+        }
+        JSONArray keys = object.names();
+        if (keys == null) return;
+        for (int index = 0; index < keys.length(); index += 1) {
+            collectTransactionJsonRows(object.opt(keys.optString(index)), out);
+        }
+    }
+
+    static boolean looksLikeTransactionObject(JSONObject object) {
+        if (object == null) return false;
+        boolean hasDate = hasAnyKey(object, "txnDate", "transDate", "postedAt", "bookedAt", "交易日期", "日期", "date");
+        boolean hasAmount = hasAnyKey(object, "amount", "amountMinor", "txnAmt", "debit", "credit", "支出", "存入", "amt");
+        return hasDate && hasAmount;
+    }
+
+    private static boolean hasAnyKey(JSONObject object, String... keys) {
+        for (String key : keys) {
+            if (!normalizeText(object.optString(key)).isEmpty()) {
+                return true;
+            }
+            if (object.has(key) && !object.isNull(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static JSONObject normalizeInterceptedTransactionRow(JSONObject row, String accountId, String startDateBank, String endDateBank) throws JSONException {
+        if (row == null) return null;
+        String postedAtText = firstNonEmpty(
+            row.optString("postedAt"),
+            row.optString("bookedAt"),
+            row.optString("txnDate"),
+            row.optString("transDate"),
+            row.optString("交易日期"),
+            row.optString("日期"),
+            row.optString("date")
+        );
+        long debitMinor = parseMinorAmount(firstNonEmpty(
+            row.optString("debit"),
+            row.optString("支出"),
+            row.optString("提出"),
+            row.optString("debitAmt")
+        ));
+        long creditMinor = parseMinorAmount(firstNonEmpty(
+            row.optString("credit"),
+            row.optString("存入"),
+            row.optString("creditAmt")
+        ));
+        long amountMinor = creditMinor != 0
+            ? creditMinor
+            : (debitMinor != 0 ? debitMinor * -1 : parseMinorAmount(firstNonEmpty(
+                row.optString("amountMinor"),
+                row.optString("amount"),
+                row.optString("txnAmt"),
+                row.optString("amt")
+            )));
+        if (postedAtText.isEmpty() || amountMinor == 0) {
+            return null;
+        }
+        String summary = firstNonEmpty(
+            row.optString("summary"),
+            row.optString("摘要"),
+            row.optString("description"),
+            row.optString("memo")
+        );
+        String note = firstNonEmpty(row.optString("note"), row.optString("備註"));
+        String transactionType = firstNonEmpty(row.optString("transactionType"), row.optString("交易類別"), row.optString("type"));
+        String statusText = firstNonEmpty(row.optString("status"), row.optString("狀態"), "正常");
+        long balanceMinor = parseMinorAmount(firstNonEmpty(row.optString("balance"), row.optString("balanceMinor"), row.optString("餘額")));
+        String postedAt = parsePostedAtIso(postedAtText);
+        String providerTransactionId = firstNonEmpty(
+            row.optString("providerTransactionId"),
+            row.optString("id"),
+            row.optString("txnId")
+        );
+        if (providerTransactionId.isEmpty()) {
+            providerTransactionId = "fbtxn_" + simpleHash(accountId + "|" + postedAtText + "|" + amountMinor + "|" + summary + "|" + note);
+        }
+        JSONObject item = new JSONObject();
+        item.put("providerTransactionId", providerTransactionId);
+        item.put("providerAccountId", accountId);
+        item.put("postedAt", postedAt.isEmpty() ? nowIso() : postedAt);
+        item.put("amountMinor", amountMinor);
+        if (balanceMinor != 0) {
+            item.put("balanceMinor", balanceMinor);
+        } else {
+            item.put("balanceMinor", JSONObject.NULL);
+        }
+        item.put("currency", "TWD");
+        item.put("transactionType", transactionType);
+        item.put("note", note.isEmpty() ? JSONObject.NULL : note);
+        item.put("summary", summary.isEmpty() ? JSONObject.NULL : summary);
+        item.put("description", summary.isEmpty() ? (transactionType.isEmpty() ? (note.isEmpty() ? "First Bank transaction" : note) : transactionType) : summary);
+        item.put("merchant", note);
+        item.put("status", statusText.toLowerCase(Locale.US).contains("reversed") || statusText.contains("沖銷") ? "reversed" : "posted");
+        JSONObject raw = new JSONObject();
+        JSONArray names = row.names();
+        if (names != null) {
+            for (int index = 0; index < names.length(); index += 1) {
+                String key = names.optString(index);
+                raw.put(key, row.opt(key));
+            }
+        }
+        raw.put("accountId", accountId);
+        raw.put("rangeStart", startDateBank);
+        raw.put("rangeEnd", endDateBank);
+        raw.put("source", "intercepted_json");
+        item.put("rawJson", raw.toString());
+        return item;
+    }
+
+    private static String firstNonEmpty(String... values) {
+        if (values == null) return "";
+        for (String value : values) {
+            String normalized = normalizeText(value);
+            if (!normalized.isEmpty()) {
+                return normalized;
+            }
+        }
+        return "";
+    }
+
+    private static long parseMinorAmount(String value) {
+        String source = normalizeText(value);
+        if (source.isEmpty()) return 0L;
+        boolean negative = source.contains("(") || source.startsWith("-");
+        String numeric = source.replaceAll("[^0-9.]", "");
+        if (numeric.isEmpty()) return 0L;
+        double amount = Double.parseDouble(numeric);
+        if (!Double.isFinite(amount) || amount == 0d) return 0L;
+        long minor = Math.round(amount * 100d);
+        return negative ? minor * -1L : minor;
+    }
+
+    private static String parsePostedAtIso(String value) {
+        String source = normalizeText(value);
+        if (source.isEmpty()) return "";
+        java.util.regex.Matcher match = java.util.regex.Pattern
+            .compile("(\\d{2,4})[/-](\\d{1,2})[/-](\\d{1,2})(?:\\s+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?)?")
+            .matcher(source);
+        if (!match.find()) return "";
+        int year = Integer.parseInt(match.group(1));
+        if (year < 1000) year += 1911;
+        int month = Integer.parseInt(match.group(2));
+        int day = Integer.parseInt(match.group(3));
+        int hour = match.group(4) == null ? 0 : Integer.parseInt(match.group(4));
+        int minute = match.group(5) == null ? 0 : Integer.parseInt(match.group(5));
+        int second = match.group(6) == null ? 0 : Integer.parseInt(match.group(6));
+        LocalDate date = LocalDate.of(year, month, day);
+        Instant instant = date.atTime(hour, minute, second).atZone(TAIPEI_ZONE).toInstant();
+        return instant.toString();
+    }
+
+    private static String simpleHash(String input) {
+        String source = input == null ? "" : input;
+        long hash = 2166136261L;
+        for (int index = 0; index < source.length(); index += 1) {
+            hash ^= source.charAt(index);
+            hash *= 16777619L;
+        }
+        return Long.toUnsignedString(hash, 36);
     }
 
     static String buildFrameAwareLoginPageScript() {
@@ -1845,6 +2167,7 @@ final class FirstBankAutomation {
         private final AtomicReference<String> lastFinishedUrlRef = new AtomicReference<>("");
         private volatile CaptchaSnapshot lastCaptchaSnapshot = emptyCaptchaSnapshot("image_missing");
         private volatile String lastCaptchaSignatureBeforeRefresh = "";
+        private final List<String> transactionInterceptPayloads = new ArrayList<>();
 
         BrowserSession(Activity activity, WebView webView) throws BankAutomationException {
             this.activity = activity;
@@ -1868,7 +2191,116 @@ final class FirstBankAutomation {
                         latch.countDown();
                     }
                 }
+
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                    if (request == null) {
+                        return super.shouldInterceptRequest(view, request);
+                    }
+                    try {
+                        WebResourceResponse intercepted = interceptTransactionRequest(request);
+                        if (intercepted != null) {
+                            return intercepted;
+                        }
+                    } catch (Exception error) {
+                        Log.d(TAG, "Transaction intercept failed", error);
+                    }
+                    return super.shouldInterceptRequest(view, request);
+                }
             }));
+        }
+
+        void clearTransactionInterceptBuffer() {
+            synchronized (transactionInterceptPayloads) {
+                transactionInterceptPayloads.clear();
+            }
+        }
+
+        List<String> getTransactionInterceptPayloads() {
+            synchronized (transactionInterceptPayloads) {
+                return new ArrayList<>(transactionInterceptPayloads);
+            }
+        }
+
+        private WebResourceResponse interceptTransactionRequest(WebResourceRequest request) throws IOException, BankAutomationException {
+            String url = request.getUrl() == null ? "" : request.getUrl().toString();
+            if (!isTransactionInterceptCandidate(url)) {
+                return null;
+            }
+            String method = normalizeText(request.getMethod());
+            if (method.isEmpty()) {
+                method = "GET";
+            }
+            HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setInstanceFollowRedirects(true);
+            connection.setConnectTimeout(12_000);
+            connection.setReadTimeout(12_000);
+            connection.setRequestMethod(method);
+            connection.setRequestProperty("User-Agent", webView.getSettings().getUserAgentString());
+            String cookies = captureCookies();
+            if (!cookies.isEmpty()) {
+                connection.setRequestProperty("Cookie", cookies);
+            }
+            Map<String, String> requestHeaders = request.getRequestHeaders();
+            if (requestHeaders != null) {
+                for (Map.Entry<String, String> entry : requestHeaders.entrySet()) {
+                    String key = normalizeText(entry.getKey());
+                    if (key.isEmpty()) continue;
+                    if ("cookie".equalsIgnoreCase(key)) continue;
+                    connection.setRequestProperty(key, entry.getValue());
+                }
+            }
+            int statusCode = connection.getResponseCode();
+            InputStream stream = statusCode >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            byte[] body = readAllBytes(stream);
+            String mimeType = normalizeText(connection.getContentType());
+            if (mimeType.contains(";")) {
+                mimeType = mimeType.substring(0, mimeType.indexOf(';')).trim();
+            }
+            if (mimeType.isEmpty()) {
+                mimeType = "text/html";
+            }
+            String encoding = connection.getContentEncoding();
+            if (encoding == null || encoding.isEmpty()) {
+                encoding = "UTF-8";
+            }
+            String payload = new String(body, StandardCharsets.UTF_8);
+            if (looksLikeTransactionJsonPayload(payload)) {
+                synchronized (transactionInterceptPayloads) {
+                    transactionInterceptPayloads.add(payload);
+                }
+            }
+            Map<String, String> responseHeaders = new LinkedHashMap<>();
+            for (Map.Entry<String, List<String>> entry : connection.getHeaderFields().entrySet()) {
+                if (entry.getKey() == null || entry.getValue() == null || entry.getValue().isEmpty()) continue;
+                responseHeaders.put(entry.getKey(), entry.getValue().get(0));
+            }
+            String reasonPhrase = connection.getResponseMessage();
+            if (reasonPhrase == null) {
+                reasonPhrase = "";
+            }
+            return new WebResourceResponse(
+                mimeType,
+                encoding,
+                statusCode,
+                reasonPhrase,
+                responseHeaders,
+                new ByteArrayInputStream(body)
+            );
+        }
+
+        private static byte[] readAllBytes(InputStream input) throws IOException {
+            if (input == null) {
+                return new byte[0];
+            }
+            try (InputStream stream = input; ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = stream.read(buffer)) >= 0) {
+                    output.write(buffer, 0, read);
+                }
+                return output.toByteArray();
+            }
         }
 
         void loadUrl(String url) throws BankAutomationException {
@@ -1917,6 +2349,14 @@ final class FirstBankAutomation {
 
         JSONObject probeDesktopLoginPage() throws Exception {
             Object result = evaluateJavaScript(buildDesktopLoginPageProbeScript());
+            if (result instanceof JSONObject) {
+                return (JSONObject) result;
+            }
+            return new JSONObject();
+        }
+
+        JSONObject probeFramePortalContract() throws Exception {
+            Object result = evaluateJavaScript(buildFramePortalContractProbeScript());
             if (result instanceof JSONObject) {
                 return (JSONObject) result;
             }

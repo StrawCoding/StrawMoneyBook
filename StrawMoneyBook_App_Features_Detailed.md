@@ -706,6 +706,7 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - 建立連線改為引導式流程：選擇銀行 → 登入 → 帳戶對應 → 首次同步
 - 第一銀行驗證碼 OCR 全失敗時（v1.3.19），建立連線頁會顯示驗證碼圖與手動輸入框，使用者輸入 4 碼後可重試；若已先手動填寫則跳過 OCR
 - v1.3.20（SMB-241）：Android 銀行自動化 WebView 強制 1280px 桌面 viewport 與登入頁 DOM 探測，避免載入行動版登入頁導致驗證碼過小或 OCR 失敗；canvas 擷取過小時改以 cookie 直接下載驗證碼圖
+- v1.3.32（SMB-252）P1 銀行同步硬化：Android `FirstBankAutomation` 以 `shouldInterceptRequest` 優先攔截交易 JSON（DOM `table.CnbTable` 降備援）、OCR 信心門檻 + 全失敗回圖手填、frame 合約自檢（`#code_verify` /「我的帳戶」）；銀行連線頁新增「匯入銀行帳單 CSV」退路（`bank-statement-csv.js` → 待匯入審核管線）
 - 匯入前會進入待匯入清單，需手動審核後才寫入記帳交易
 - 多銀行 Provider 接口保留（`VITE_BANK_SYNC_PROVIDERS_JSON`），後續可擴充
 

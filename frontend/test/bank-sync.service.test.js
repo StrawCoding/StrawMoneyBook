@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import { resetBankSyncDebugTraceForTest } from '../src/core/services/bank-sync-debug.service.js'
 import {
+  importBankStatementCsv,
   importSelectedBankTransactions,
   resetBankSyncServiceDependenciesForTest,
   setBankSyncServiceDependenciesForTest,
@@ -288,4 +289,36 @@ test('syncBankConnectionNow allows retry for stored transient errors and clears 
     lastSyncStatus: 'ok',
     lastError: '',
   }])
+})
+
+test('importBankStatementCsv upserts parsed rows into bank mirror tables', async () => {
+  let upsertPayload = null
+
+  setBankSyncServiceDependenciesForTest(createBaseDependencies({
+    findBankConnectionById: async () => createBankConnection(),
+    listBankAccountsByConnection: async () => [createSyncableAccount({
+      id: 'bank-account-1',
+      provider_account_id: '29168214193',
+      account_name: 'First Bank',
+    })],
+    upsertBankTransactions: async (_ledgerId, _connectionId, rows) => {
+      upsertPayload = rows
+      return {
+        addedIds: ['btx-1'],
+        modifiedIds: [],
+        touchedIds: ['btx-1'],
+      }
+    },
+  }))
+
+  const csv = `交易日期,摘要,支出,存入,餘額
+2026/03/07,薪資入帳,,50000,80000`
+
+  const result = await importBankStatementCsv('ledger-1', 'conn-1', 'bank-account-1', csv)
+
+  assert.equal(result.addedCount, 1)
+  assert.equal(upsertPayload.length, 1)
+  assert.equal(upsertPayload[0].bankAccountId, 'bank-account-1')
+  assert.equal(upsertPayload[0].amountMinor, 5000000)
+  assert.match(upsertPayload[0].providerTransactionId, /^fbcsv_/)
 })

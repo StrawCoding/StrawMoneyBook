@@ -168,6 +168,23 @@
         </template>
       </article>
 
+      <article class="card panel">
+        <section class="sub-panel">
+          <h4>{{ t('settings_bank_sync.csv_import.title') }}</h4>
+          <p class="muted">{{ t('settings_bank_sync.csv_import.desc') }}</p>
+          <label class="field">
+            {{ t('settings_bank_sync.csv_import.account') }}
+            <CustomSelect v-model="csvImportBankAccountId" :options="csvImportAccountOptions" :placeholder="t('settings_bank_sync.csv_import.choose_account')" />
+          </label>
+          <input ref="csvInputRef" class="input" type="file" accept=".csv,text/csv" @change="onImportCsvFile" />
+          <div class="row action-row">
+            <button class="btn" :disabled="importingCsv || !csvImportBankAccountId" :aria-busy="importingCsv" @click="openCsvImportPicker">
+              {{ importingCsv ? t('settings_bank_sync.csv_import.importing') : t('settings_bank_sync.csv_import.import') }}
+            </button>
+          </div>
+        </section>
+      </article>
+
       <article class="card panel review-panel">
         <header class="row review-head">
           <h3>{{ t('settings_bank_sync.review.title', { name: connection.user_label || connection.provider }) }}</h3>
@@ -249,6 +266,7 @@ import { shouldRequireReconnectForStoredBankConnection } from '@/services/bank-s
 import {
   disconnectBankConnection,
   getBankSyncConnectionDetail,
+  importBankStatementCsv,
   importSelectedBankTransactions,
   listBankReviewTransactions,
   markBankReviewTransactionsSeen,
@@ -281,6 +299,9 @@ const markingSeen = ref(false)
 const reviewRows = ref([])
 const selectedReviewIds = ref([])
 const disconnectDialogOpen = ref(false)
+const csvInputRef = ref(null)
+const csvImportBankAccountId = ref('')
+const importingCsv = ref(false)
 const membershipTier = ref(getMembershipTierSnapshot())
 
 const pageTitle = computed(() => {
@@ -307,6 +328,14 @@ const ledgerAccountOptions = computed(() => {
     label: account.name,
   }))
   return [{ value: '__none__', label: t('settings_bank_sync.account_sync.no_target') }, ...options]
+})
+
+const csvImportAccountOptions = computed(() => {
+  const accounts = Array.isArray(connection.value?.accounts) ? connection.value.accounts : []
+  return accounts.map((account) => ({
+    value: account.id,
+    label: `${account.account_name}（${account.account_mask || '-'}）`,
+  }))
 })
 
 const selectedReviewIdSet = computed(() => new Set(selectedReviewIds.value))
@@ -377,6 +406,9 @@ async function loadConnection({ loadReviewAfter = true } = {}) {
     await accountStore.load()
     const detail = await getBankSyncConnectionDetail(ledgerStore.activeLedgerId, connectionId)
     connection.value = normalizeConnectionForView(detail)
+    if (!csvImportBankAccountId.value && connection.value?.accounts?.length) {
+      csvImportBankAccountId.value = connection.value.accounts[0].id
+    }
     if (connection.value && loadReviewAfter) {
       await loadReview(connection.value.id)
     } else if (!connection.value) {
@@ -482,6 +514,45 @@ async function saveRule(currentConnection) {
     uiStore.pushToast(resolveBankSyncErrorMessage(error, 'settings_bank_sync.toast.rule_save_failed'), 'error')
   } finally {
     savingRuleConnectionId.value = ''
+  }
+}
+
+function openCsvImportPicker() {
+  csvInputRef.value?.click()
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.onerror = () => reject(reader.error ?? new Error('read failed'))
+    reader.readAsText(file)
+  })
+}
+
+async function onImportCsvFile(event) {
+  const file = event?.target?.files?.[0]
+  event.target.value = ''
+  if (!file || !connection.value || !csvImportBankAccountId.value) return
+
+  importingCsv.value = true
+  try {
+    const csvText = await readFileAsText(file)
+    const result = await importBankStatementCsv(
+      ledgerStore.activeLedgerId,
+      connection.value.id,
+      csvImportBankAccountId.value,
+      csvText,
+    )
+    uiStore.pushToast(t('settings_bank_sync.toast.csv_import_done', {
+      added: result.addedCount,
+      skipped: result.skippedCount,
+    }))
+    await loadReview(connection.value.id)
+  } catch (error) {
+    uiStore.pushToast(resolveBankSyncErrorMessage(error, 'settings_bank_sync.toast.csv_import_failed'), 'error')
+  } finally {
+    importingCsv.value = false
   }
 }
 

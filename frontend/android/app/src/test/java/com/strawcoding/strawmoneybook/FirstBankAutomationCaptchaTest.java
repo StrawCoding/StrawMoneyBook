@@ -51,6 +51,15 @@ public class FirstBankAutomationCaptchaTest {
     }
 
     @Test
+    public void transactionInterceptHelpersDetectJsonPayloadsAndUrls() {
+        assertTrue(FirstBankAutomation.isTransactionInterceptCandidate(
+            "https://ibank.firstbank.com.tw/NetBank/2/010103.html?acnt=123"
+        ));
+        assertTrue(FirstBankAutomation.looksLikeTransactionJsonPayload("{\"rows\":[]}"));
+        assertFalse(FirstBankAutomation.looksLikeTransactionJsonPayload("<html></html>"));
+    }
+
+    @Test
     public void expandCaptchaAmbiguousCandidatesIncludesCommonLookalikes() {
         List<String> candidates = FirstBankAutomation.expandCaptchaAmbiguousCandidates("0S1B");
 
@@ -150,5 +159,12 @@ public class FirstBankAutomationCaptchaTest {
         assertTrue(script.contains("code_verify"));
         assertTrue(script.contains("vrfyCode"));
         assertTrue(script.contains("mobileHint"));
+    }
+
+    @Test
+    public void framePortalContractProbeRequiresMyAccountsAnchor() {
+        String script = FirstBankAutomation.buildFramePortalContractProbeScript();
+        assertTrue(script.contains("我的帳戶"));
+        assertTrue(script.contains("table.CnbTable"));
     }
 }

@@ -734,6 +734,51 @@ export async function listBankReviewTransactions(ledgerId, options = {}) {
   }))
 }
 
+export async function importBankStatementCsv(ledgerId, connectionId, bankAccountId, csvText) {
+  assertLedgerId(ledgerId)
+  await dependencies.assertCanUseBankSync()
+  const connection = await dependencies.findBankConnectionById(ledgerId, connectionId)
+  if (!connection) throw new Error('找不到銀行連結')
+
+  const accounts = await dependencies.listBankAccountsByConnection(ledgerId, connectionId)
+  const account = accounts.find((item) => normalizeText(item.id) === normalizeText(bankAccountId))
+  if (!account) throw new Error('找不到銀行帳戶')
+
+  const { parseBankStatementCsv } = await import('../../services/bank-sync/bank-statement-csv.js')
+  const parsedRows = parseBankStatementCsv(csvText, {
+    provider: connection.provider,
+    providerAccountId: account.provider_account_id,
+  })
+  if (!parsedRows.length) {
+    return { addedCount: 0, skippedCount: 0, touchedIds: [] }
+  }
+
+  const rowsToUpsert = parsedRows.map((item) => ({
+    bankAccountId: account.id,
+    providerTransactionId: item.providerTransactionId,
+    postedAt: item.postedAt,
+    amountMinor: item.amountMinor,
+    balanceMinor: item.balanceMinor,
+    currency: item.currency,
+    transactionType: item.transactionType,
+    note: item.note,
+    summary: item.summary,
+    description: item.description,
+    merchant: item.merchant,
+    status: item.status,
+    rawJson: item.rawJson,
+  }))
+
+  const upsertRes = await dependencies.upsertBankTransactions(ledgerId, connectionId, rowsToUpsert)
+  return {
+    addedCount: upsertRes.addedIds.length,
+    skippedCount: Math.max(0, parsedRows.length - upsertRes.touchedIds.length),
+    touchedIds: upsertRes.touchedIds,
+    addedIds: upsertRes.addedIds,
+    modifiedIds: upsertRes.modifiedIds,
+  }
+}
+
 export async function importSelectedBankTransactions(ledgerId, bankTransactionIds = []) {
   assertLedgerId(ledgerId)
   await dependencies.assertCanUseBankSync()

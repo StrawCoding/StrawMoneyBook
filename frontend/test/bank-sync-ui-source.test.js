@@ -45,3 +45,9 @@ test('bank sync connection page supports save all and advanced accordion', () =>
   assert.match(connectionPageSource, /showAdvancedSettings/)
   assert.match(connectionPageSource, /settings_bank_sync\.account_sync\.mapping_banner/)
 })
+
+test('bank sync connection page supports bank statement csv import fallback', () => {
+  assert.match(connectionPageSource, /importBankStatementCsv/)
+  assert.match(connectionPageSource, /settings_bank_sync\.csv_import\.title/)
+  assert.match(connectionPageSource, /onImportCsvFile/)
+})

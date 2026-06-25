@@ -3,6 +3,7 @@ import {
   getFirstBankAnchors,
   getFirstBankBaseUrl,
   getFirstBankCaptchaUrl,
+  getFirstBankFrameUrl,
   getFirstBankLoginAreaUrl,
   getFirstBankLoginUrl,
 } from '../src/bank/portal-config.js'
@@ -82,13 +83,28 @@ export async function runFirstBankPortalContractCheck() {
       }
     }
 
+    let framePage = null
+    let hasMyAccountsAnchor = false
+    try {
+      const frameUrl = getFirstBankFrameUrl()
+      framePage = await fetchText(frameUrl, loginUrl)
+      const frameHtml = framePage.text ?? ''
+      hasMyAccountsAnchor = /我的帳戶/.test(frameHtml)
+    } catch (error) {
+      framePage = {
+        ok: false,
+        error: String(error?.message ?? error),
+      }
+    }
+
     const ok = Boolean(
       loginPage.ok
       && anchors.loginForm
       && anchors.codeVerify
       && anchors.captchaLoginArea
       && anchors.vrfyCode
-      && captchaFetch?.ok,
+      && captchaFetch?.ok
+      && hasMyAccountsAnchor,
     )
 
     return {
@@ -99,6 +115,11 @@ export async function runFirstBankPortalContractCheck() {
       anchors,
       mobileHint,
       captchaFetch,
+      frame: {
+        ok: Boolean(framePage?.ok),
+        status: framePage?.status,
+        hasMyAccountsAnchor,
+      },
     }
   } catch (error) {
     return {

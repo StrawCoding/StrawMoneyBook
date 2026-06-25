@@ -27,3 +27,17 @@ test('first bank automation validates desktop login page and improves captcha ca
   assert.match(firstBankAutomationSource, /first_bank_login_page_mismatch/)
   assert.match(firstBankAutomationSource, /fetchCaptchaImageDataUrl/)
 })
+
+test('first bank automation intercepts transaction json before dom fallback', () => {
+  assert.match(firstBankAutomationSource, /shouldInterceptRequest/)
+  assert.match(firstBankAutomationSource, /clearTransactionInterceptBuffer/)
+  assert.match(firstBankAutomationSource, /parseTransactionsFromInterceptedJson/)
+  assert.match(firstBankAutomationSource, /table\.CnbTable/)
+})
+
+test('first bank automation enforces captcha ocr confidence threshold and portal contract anchors', () => {
+  assert.match(firstBankAutomationSource, /CAPTCHA_MIN_CONFIDENCE/)
+  assert.match(firstBankAutomationSource, /buildFramePortalContractProbeScript/)
+  assert.match(firstBankAutomationSource, /ensureFramePortalContract/)
+  assert.match(firstBankAutomationSource, /我的帳戶/)
+})

@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.32
+- (SMB-252) P1 銀行同步 WebView 爬蟲硬化 + CSV 匯入退路：`FirstBankAutomation.java` 以 `shouldInterceptRequest` 優先攔截交易明細 JSON（`parseTransactionsFromInterceptedJson`），`table.CnbTable` DOM 降備援；OCR 新增 `CAPTCHA_MIN_CONFIDENCE` 門檻，全失敗仍回圖手填；連線流程加入 frame 合約自檢（`#code_verify` 登入探測 +「我的帳戶」錨點）；銀行連線頁新增「匯入銀行帳單 CSV」接既有審核→去重→匯入管線（`bank-statement-csv.js`、`importBankStatementCsv`）。`first-bank-portal-contract-check.mjs` 補 frame 頁「我的帳戶」探測。驗證：frontend `test:node`（含 bank-statement-csv / bank-sync-android-source / bank-sync.service）、Android `FirstBankAutomationCaptchaTest`、`playwright:bank-sync`。
+
 ## v1.3.31
 - (SMB-253) P2 同步合約自檢排程：新增 `sync-contract-check-run.mjs` 編排載具（`einvoice-portal-contract-check.mjs`）與第一銀行錨點（`first-bank-portal-contract-check.mjs`）自檢；失敗分類碼 `portal_changed` / `captcha` / `auth` / `timeout` 累計至 `.server-data/sync-contract-check-stats.json`；失敗時寫入 `log.wastebase.xyz/issues/SMB-253` 並節流 Plane comment（`SYNC_CONTRACT_ALERT_PLANE_ISSUE`）。新增 GitHub Actions 每日 workflow 與 `sync-contract-check-cron.sh` 供主機 cron。驗證：`cd backend && npm test` 90/90、手動 contract-check、模擬 selector drift 單元測試觸發告警分類。
 
