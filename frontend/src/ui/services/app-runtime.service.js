@@ -23,6 +23,8 @@ import { runSavingsJarAutoSaveIfDue } from '@/core/services/savings-jar-auto-sav
 import { runSubscriptionChargesIfDue } from '@/core/services/subscription-charge.service'
 import { syncBookkeepingRemindersForAllLedgers } from '@/ui/services/bookkeeping-reminder.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
+import { loadUiLayout } from '@/ui/services/ui-layout.service'
+import { syncUiLayoutFromStorage } from '@/ui/composables/useUiLayout'
 import { initLocalePreference, translateMessage } from '@/ui/services/i18n.service'
 import { getPreferredBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
 import { resolveRouteFromAppUrl as resolveAppUrlRoute } from '@/ui/services/app-url-route'
@@ -48,6 +50,8 @@ const AUTO_BACKUP_STATE_UPDATED_EVENT = 'app:auto-backup-state-updated'
 
 export function initializeAppEnvironment() {
   loadThemeColor()
+  loadUiLayout()
+  syncUiLayoutFromStorage()
   initLocalePreference()
 }
 

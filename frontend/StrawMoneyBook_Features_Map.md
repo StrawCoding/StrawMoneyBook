@@ -64,6 +64,7 @@
 | `/transactions/:id` | `src/ui/views/TransactionAboutPage.vue` | 交易明細（含退款/關聯） |
 | `/transactions/:id/edit` | `src/ui/views/TransactionEditPage.vue` | 交易編輯（SMB-217 後改用 AmountCalculatorInput 計算機輸入） |
 | `/features` | `src/ui/views/FeatureListPage.vue` | 功能列表入口頁 |
+| `/more` | `src/ui/views/MorePage.vue` | 現代版「更多」頁：待辦摘要、模組格、設定捷徑（SMB-248） |
 | `/welcome/intro` | `src/ui/views/PostSetupIntroPage.vue` | 初始設定後導覽頁（含特色功能、帳號登入、共同帳本、帳本同步、會員邀請碼；SMB-188 / v1.2.4 後新增共同帳本與帳本同步兩個步驟；SMB-215 / v1.2.27 後共同帳本步驟另外提供「恢復備份」與「帳本同步」快速按鈕） |
 | `/welcome` (隱含 route，由 `App.vue` shouldShowWelcomePage 控制) | `src/ui/views/WelcomePage.vue` | 初始 setup wizard 三步（語言 / 建立帳本 / 建立帳戶）；SMB-215 Restart / v1.3.1 後 step 2「建立帳本」在「已有共同帳本？登入並加入」secondary-link 旁新增「恢復備份 / 帳本同步」兩顆按鈕（僅 `!hasLedgers` 時顯示）。SMB-215 Restart / v1.3.2 後修正目的地：「恢復備份」→ `/settings/auto-backup`（自動備份頁，含 Google Drive / WebDAV 登入 + 立即還原；Tester 反饋「需要有自動備份的項目」）；「帳本同步」維持 `/settings/google-drive-ledger-sync`。`settings-auto-backup` + `settings-google-drive-ledger-sync` 兩 route 帶 `meta.allowWithoutSetup: true`，`settings-data-management` 的 v1.3.1 allowWithoutSetup 已還原 |
 | `/ai-auto-bookkeeping` | `src/ui/views/BookkeepingPage.vue` | AI 記帳模式（內嵌 `AiAutoBookkeepingPage.vue`） |
@@ -120,14 +121,32 @@
 
 ## 2.1 主要導覽流程
 
+### 介面風格（SMB-248 / `src/ui/services/ui-layout.service.js`）
+
+- localStorage key：`strawmoneybook.ui.layout`；值 `traditional` | `modern`，**預設 `modern`**
+- 設定 → 個人化 →「介面風格」：與配色主題獨立，可任意組合
+- **傳統版**：維持 5 tab（首頁 / 分析 / 資產 / 功能 / 設定）+ 首頁 FAB + 四段期間篩選首頁
+- **現代版**：4 tab + 中央記帳 CTA（首頁 / 分析 / 記帳 / 資產 / 更多）；首頁改 `HomeModernView`（Hero 可支配餘額、KPI chips、預算環、快捷列、可折疊資產快照；無 FAB）；設定與原功能列表入口收斂至 `/more`
+
 ### 底部導覽（`src/ui/components/layout/BottomNav.vue`）
+
+**傳統版**
 
 - 首頁：`/`
 - 分析：`/analysis`
 - 資產：`/assets`
+- 功能：`/features`
 - 設定：`/settings`
 
-### 首頁內導覽（`src/ui/views/home.vue`）
+**現代版**
+
+- 首頁：`/`
+- 分析：`/analysis`
+- 中央記帳 CTA：導向上次記帳模式（預設 `/transactions/quick-add`）
+- 資產：`/assets`
+- 更多：`/more`（內含待辦摘要、模組格、設定捷徑；`/settings` 與 `/features` 亦高亮此 tab）
+
+### 首頁內導覽（`src/ui/views/home.vue` / `src/ui/components/home/HomeModernView.vue`）
 
 - 快速新增：導向「上次使用的記帳模式」；首次預設 `/transactions/quick-add`
 - 功能列表：`/features`

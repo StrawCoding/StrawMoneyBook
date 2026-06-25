@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.26 (pending)
+- (SMB-248) 介面風格切換 Phase 1：新增 `ui-layout.service.js`（`strawmoneybook.ui.layout`，`traditional` | `modern`，預設 modern）；設定 → 個人化可選「介面風格」（與主題配色獨立）。現代版底部導覽改為 4 tab + 中央記帳 CTA；首頁改 Hero 可支配餘額、KPI chips、預算環、快捷列、可折疊資產快照並移除 FAB；新增 `/more` 更多頁（待辦摘要、模組格、設定捷徑）。傳統版維持 5 tab + FAB + 四段期間首頁。新增 `ui-layout.service.test.js`、`ui-layout-source.test.js`、`playwright:ui-layout` 腳本。
+
 ## v1.3.25
 - (SMB-247) 修復請款單「導入借出」在借出已有部分歸還時仍顯示原始本金全額：底層 `listBorrowLoanImportTransactions` 多帶 `loan_paid_minor` 與 `loan_interest_rule_json`，`claim-sheet-import.service.js` 計算 `loan_remaining_minor = 本金 + 預設利息 − 已還金額`，`claimSheetImportedAmountMinor` 改以剩餘未收回為準，完成請款時寫入 claim item 與 `addLoanRepayment` 的金額亦同步正確。新增 `reimbursement-claim-amount.test.js` 與 `claim-sheet-import-page-source.test.js` SMB-247 回歸案例。
 

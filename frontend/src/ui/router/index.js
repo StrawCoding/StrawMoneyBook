@@ -103,6 +103,12 @@ const router = createRouter({
       meta: { tab: 'features' },
     },
     {
+      name: 'more',
+      path: '/more',
+      component: () => import('@/ui/views/MorePage.vue'),
+      meta: { tab: 'more' },
+    },
+    {
       name: 'post-setup-intro',
       path: '/welcome/intro',
       component: () => import('@/ui/views/PostSetupIntroPage.vue'),
@@ -241,7 +247,7 @@ const router = createRouter({
       path: '/settings/personalization',
       name: 'settings-personalization',
       component: () => import('@/ui/views/settings/SettingsPersonalizationPage.vue'),
-      meta: { tab: 'settings' },
+      meta: { tab: 'settings', allowWithoutSetup: true },
     },
     {
       path: '/settings/language',

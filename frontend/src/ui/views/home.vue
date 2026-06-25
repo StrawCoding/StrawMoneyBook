@@ -1,5 +1,6 @@
 <template>
-  <div class="view-root">
+  <HomeModernView v-if="isModern" />
+  <div v-else class="view-root">
     <section class="stack">
     <article class="card ledger-card">
       <header class="row">
@@ -70,7 +71,9 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import HomeModernView from '@/ui/components/home/HomeModernView.vue'
 import HomeAssetSummaryCard from '@/ui/components/home/HomeAssetSummaryCard.vue'
+import { useUiLayout } from '@/ui/composables/useUiLayout'
 import HomeBudgetSummaryCard from '@/ui/components/home/HomeBudgetSummaryCard.vue'
 import HomeTransactionFeed from '@/ui/components/home/HomeTransactionFeed.vue'
 import LedgerSwitcher from '@/ui/components/common/LedgerSwitcher.vue'
@@ -85,6 +88,7 @@ import { monthKeyFromDate, dateKeyFromDate } from '@/core/utils/id'
 
 const route = useRoute()
 const router = useRouter()
+const { isModern } = useUiLayout()
 const ledgerStore = useLedgerStore()
 const budgetStore = useBudgetStore()
 const transactionStore = useTransactionStore()
