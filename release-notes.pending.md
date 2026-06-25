@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.28
+- (SMB-249) 移除 SMB-248「現代介面」Phase 1：刪除 `ui-layout.service.js`、`useUiLayout.js`、`HomeModernView.vue`、`MorePage.vue` 與相關測試／Playwright 腳本；恢復僅傳統 5 tab + 首頁 FAB 版面；設定 → 個人化移除「介面風格」；不再讀寫 localStorage `strawmoneybook.ui.layout`；保留 `useHomePeriodFilter` 與配色主題系統。
+
 ## v1.3.27
 - (SMB-248) 修復介面風格 Phase 1 回歸：補註冊 FontAwesome `faPlus` / `faEllipsis`；現代首頁保留傳統版四段期間篩選、`HomeAssetSummaryCard`、`HomeBudgetSummaryCard`；`/more` 模組格補上帳本同步；抽出 `useHomePeriodFilter` composable；強化 `ui-layout-source.test.js`（icon 註冊稽核）與 `playwright:ui-layout`（完成 onboarding 後驗證 BottomNav icon、現代首頁、更多頁與傳統/現代切換）。
 

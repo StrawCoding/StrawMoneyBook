@@ -6,24 +6,6 @@
     </header>
     <article class="card panel">
       <div class="stack section-block">
-        <h3>{{ t('personalization.ui_layout') }}</h3>
-        <div class="layout-switch">
-          <button
-            v-for="layoutOption in layoutOptions"
-            :key="layoutOption.id"
-            type="button"
-            class="layout-btn"
-            :class="{ active: selectedLayout === layoutOption.id }"
-            :data-testid="`ui-layout-${layoutOption.id}`"
-            @click="pickLayout(layoutOption.id)"
-          >
-            <strong>{{ t(layoutOption.nameKey, layoutOption.id) }}</strong>
-            <small>{{ t(layoutOption.descriptionKey, '') }}</small>
-          </button>
-        </div>
-      </div>
-
-      <div class="stack section-block">
         <h3>{{ t('personalization.theme_scheme') }}</h3>
         <div class="scheme-grid">
           <button
@@ -90,29 +72,17 @@ import {
   saveThemeScheme,
   saveThemeColor,
 } from '@/ui/services/theme.service'
-import { listUiLayouts, saveUiLayout } from '@/ui/services/ui-layout.service'
-import { useUiLayout } from '@/ui/composables/useUiLayout'
 
 const uiStore = useUiStore()
 const { t } = useI18n()
-const { layout, previewLayout } = useUiLayout()
 const schemes = listThemeSchemes()
-const layoutOptions = listUiLayouts()
 const initialTheme = getCurrentThemePreference()
 const primary = ref(initialTheme.primary)
 const selectedSchemeId = ref(initialTheme.schemeId)
-const selectedLayout = ref(layout.value)
 const paletteColors = buildPaletteColors()
 
 function applyColor() {
   primary.value = applyThemeColor(primary.value)
-}
-
-function pickLayout(layoutId) {
-  selectedLayout.value = layoutId
-  previewLayout(layoutId)
-  saveUiLayout(layoutId)
-  layout.value = layoutId
 }
 
 function pickScheme(schemeId) {
@@ -127,9 +97,6 @@ function pickPaletteColor(color) {
 }
 
 function saveTheme() {
-  saveUiLayout(selectedLayout.value)
-  layout.value = selectedLayout.value
-
   const customPrimary = primary.value
   const applied = saveThemeScheme(selectedSchemeId.value)
   selectedSchemeId.value = applied.schemeId
@@ -257,30 +224,6 @@ label {
 }
 .section-block {
   gap: 10px
-}
-.layout-switch {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.layout-btn {
-  border: 1px solid var(--field-border);
-  border-radius: 12px;
-  background: var(--bg-soft);
-  color: var(--text);
-  text-align: left;
-  padding: 12px;
-  display: grid;
-  gap: 4px;
-  cursor: pointer;
-}
-.layout-btn.active {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent) inset;
-}
-.layout-btn small {
-  color: var(--muted);
-  font-size: 11px;
 }
 .scheme-grid {
   display: grid;

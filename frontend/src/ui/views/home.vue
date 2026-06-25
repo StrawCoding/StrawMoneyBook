@@ -1,6 +1,5 @@
 <template>
-  <HomeModernView v-if="isModern" />
-  <div v-else class="view-root">
+  <div class="view-root">
     <section class="stack">
       <article class="card ledger-card">
         <header class="row">
@@ -70,9 +69,7 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
-import HomeModernView from '@/ui/components/home/HomeModernView.vue'
 import HomeAssetSummaryCard from '@/ui/components/home/HomeAssetSummaryCard.vue'
-import { useUiLayout } from '@/ui/composables/useUiLayout'
 import { useHomePeriodFilter } from '@/ui/composables/useHomePeriodFilter'
 import HomeBudgetSummaryCard from '@/ui/components/home/HomeBudgetSummaryCard.vue'
 import HomeTransactionFeed from '@/ui/components/home/HomeTransactionFeed.vue'
@@ -83,7 +80,6 @@ import { useI18n } from '@/ui/services/i18n.service'
 import { getPreferredBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
 
 const router = useRouter()
-const { isModern } = useUiLayout()
 const budgetStore = useBudgetStore()
 const { t } = useI18n()
 

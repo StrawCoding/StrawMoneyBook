@@ -150,9 +150,7 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 
 ### 3.1 首頁總覽
 
-SMB-248 後支援「介面風格」切換（設定 → 個人化 → 介面風格；localStorage `strawmoneybook.ui.layout`，預設現代）。配色主題與介面風格可任意組合。
-
-**傳統版首頁**（`src/ui/views/home.vue`）維持既有行為：
+**首頁**（`src/ui/views/home.vue`）提供：
 
 - 帳本切換
 - 全部 / 年 / 月 / 日 範圍切換
@@ -161,24 +159,7 @@ SMB-248 後支援「介面風格」切換（設定 → 個人化 → 介面風�
 - 交易清單
 - 浮動快速記帳按鈕（FAB）
 
-**現代版首頁**（`src/ui/components/home/HomeModernView.vue`）在保留傳統版全部功能區塊的前提下，疊加現代儀表板元件（預設鎖定本月，仍可切換全部 / 年 / 月 / 日）：
-
-- 四段期間篩選 + 日期 picker +「回到本月 / 本年 / 本日」（共用 `useHomePeriodFilter` composable）
-- `HomeAssetSummaryCard`（收支 split 卡、可點擊篩選交易類型）
-- `HomeBudgetSummaryCard`（日 / 週 / 月 swipe 多模式預算簡表）
-- Hero：本月可支配餘額（當月收支淨額）與 KPI chips（收入 / 支出 / 預算使用率）
-- 預算環：月預算進度與剩餘金額
-- 快捷列：AI 記帳、掃發票、轉帳、分析
-- 可折疊資產快照：總資產、可支配、負債摘要
-- 交易流（`HomeTransactionFeed`）；**移除 FAB**，改由底部中央記帳 CTA
-
-**更多頁**（`/more`，`MorePage.vue`）整合原功能列表與設定捷徑：
-
-- 待辦摘要：待報銷筆數、借出未收回、訂閱即將扣款、備份狀態
-- 模組格：帳本同步、報銷、借貸、請款、訂閱、存錢罐、預算、載具、交易搜尋（涵蓋原 `/features` 全部入口）
-- 設定捷徑與搜尋過濾
-
-這代表使用者可以在同一頁（傳統版）或在現代版儀表板 + 底部記帳 CTA 完成「看本期狀況 + 直接補帳」。
+期間篩選邏輯由 `useHomePeriodFilter` composable 管理。
 
 另外，首頁在「全部」範圍下已改為只先載入最近 3000 筆交易，避免大型帳本一次把全部歷史資料灌進畫面造成明顯卡頓；需要完整歷史資料時，仍以交易搜尋、分析與報表頁的完整查詢為主。
 
