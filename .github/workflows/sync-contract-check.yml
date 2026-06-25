@@ -1,0 +1,33 @@
+name: Sync Contract Check
+
+on:
+  schedule:
+    - cron: '17 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  sync-contract-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run playwright:install-browsers
+      - name: Run sync contract checks
+        run: node scripts/sync-contract-check-run.mjs
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: .server-data/playwright-browsers
+          SYNC_CONTRACT_DISABLE_PLANE_ALERT: "true"

@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.31
+- (SMB-253) P2 同步合約自檢排程：新增 `sync-contract-check-run.mjs` 編排載具（`einvoice-portal-contract-check.mjs`）與第一銀行錨點（`first-bank-portal-contract-check.mjs`）自檢；失敗分類碼 `portal_changed` / `captcha` / `auth` / `timeout` 累計至 `.server-data/sync-contract-check-stats.json`；失敗時寫入 `log.wastebase.xyz/issues/SMB-253` 並節流 Plane comment（`SYNC_CONTRACT_ALERT_PLANE_ISSUE`）。新增 GitHub Actions 每日 workflow 與 `sync-contract-check-cron.sh` 供主機 cron。驗證：`cd backend && npm test` 90/90、手動 contract-check、模擬 selector drift 單元測試觸發告警分類。
+
 ## v1.3.30
 - (SMB-251) P0 載具同步治本改寫：財政部 2026-06 Vue SPA + OAuth2 後，`playwright-provider.js` 改為 captcha JSON API（`act002i/captcha` 回 `{token,image}`，session 存 token、移除 DOM 截圖）、實測選擇器 `#mobile_phone/#password/#captcha/#submitBtn`（`EINVOICE_SCRAPE_SELECTORS_JSON` 可覆寫）、OAuth 登入後以 `page.on('response')` 攔截查詢 JSON → `normalizeInvoiceList`（DOM 降備援）、跨月 + 62 天視窗自動切分。新增 `portal-config.js`、`portal-json.js`、`einvoice-portal-contract-check.mjs` 與 `einvoice-portal-json.test.js` / 更新 `einvoice-playwright-config-source.test.js`。驗證：`cd backend && npm test` 82/82、contract-check、deploy:copy + StrawMB restart、Playwright 載具設定頁。
 

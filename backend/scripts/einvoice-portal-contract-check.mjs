@@ -117,7 +117,7 @@ async function checkLoginSelectors(loginUrl, selectors) {
 }`)
 }
 
-async function main() {
+export async function runEinvoicePortalContractCheck() {
   const loginUrl = getLoginUrl()
   const captchaApiUrl = getCaptchaApiUrl()
   const selectors = getSelectors()
@@ -145,24 +145,21 @@ async function main() {
     }
 
     const ok = Boolean(captchaCheck?.ok && selectorCheck?.ok)
-    const payload = {
+    return {
       ok,
       checkedAt: new Date().toISOString(),
       checks,
       captchaCheck,
       selectorCheck,
     }
-    console.log(JSON.stringify(payload, null, 2))
-    process.exitCode = ok ? 0 : 1
   } catch (error) {
-    console.log(JSON.stringify({
+    return {
       ok: false,
       checkedAt: new Date().toISOString(),
       checks,
       error: String(error?.message ?? error),
       stderr: String(error?.stderr ?? '').slice(0, 500),
-    }, null, 2))
-    process.exitCode = 1
+    }
   } finally {
     try {
       await runPlaywrightCli(['close'])
@@ -172,4 +169,12 @@ async function main() {
   }
 }
 
-main()
+async function main() {
+  const payload = await runEinvoicePortalContractCheck()
+  console.log(JSON.stringify(payload, null, 2))
+  process.exitCode = payload.ok ? 0 : 1
+}
+
+if (import.meta.url === new URL(process.argv[1], 'file:').href) {
+  main()
+}

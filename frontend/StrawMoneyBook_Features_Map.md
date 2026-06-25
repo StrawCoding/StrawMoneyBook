@@ -167,8 +167,8 @@
 - 關於我們：`/settings/about`
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
-- 銀行同步：`/settings/bank-sync`（入口由 `isBankSyncFeatureEnabled()` 控制；需 `VITE_BANK_SYNC_FEATURE_ENABLED=true` 且 Android 第一銀行 provider 可用；v1.3.19 第一銀行 OCR 失敗時建立連線頁可手動輸入驗證碼重試；v1.3.20 SMB-241 強制桌面 viewport 與驗證碼直連下載）
-- 載具同步：`/settings/carrier-sync`（會員限定；v1.3.19 憑證為財政部平台手機號碼 + 密碼；v1.3.30 後端 Playwright 改 SPA JSON 攔截 + captcha token）
+- 銀行同步：`/settings/bank-sync`（入口由 `isBankSyncFeatureEnabled()` 控制；需 `VITE_BANK_SYNC_FEATURE_ENABLED=true` 且 Android 第一銀行 provider 可用；v1.3.19 第一銀行 OCR 失敗時建立連線頁可手動輸入驗證碼重試；v1.3.20 SMB-241 強制桌面 viewport 與驗證碼直連下載；v1.3.31 / SMB-253 第一銀行登入頁錨點合約自檢納入排程監控）
+- 載具同步：`/settings/carrier-sync`（會員限定；v1.3.19 憑證為財政部平台手機號碼 + 密碼；v1.3.30 後端 Playwright 改 SPA JSON 攔截 + captcha token；v1.3.31 / SMB-253 合約自檢接 cron/CI，失敗分類統計 + log/Plane 告警）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）
@@ -381,6 +381,8 @@ UI composable 目錄：`src/ui/composables/`
 | `collab/admin-store.js` | 管理員總覽、client log、會員管理 |
 | `collab/auth-session.js` | Bearer token 驗證、登入狀態檢查、管理員權限檢查 |
 | `collab/http.js` | backend 路由共用的 request/response helper，含 path segment parsing、method/body guard 與 route error serialization |
+
+**同步合約自檢（SMB-253 / v1.3.31）**：`../backend/scripts/sync-contract-check-run.mjs` 編排載具 + 第一銀行錨點探測；`einvoice-portal-contract-check.mjs`、`first-bank-portal-contract-check.mjs`；失敗分類與統計在 `src/sync/contract-failure-classifier.js`、`contract-check-stats.js`；主機 cron 用 `sync-contract-check-cron.sh`，CI 用 `.github/workflows/sync-contract-check.yml`；告警寫 `log.wastebase.xyz/issues/SMB-253` 並節流 Plane comment。
 
 ## 9. Repository（資料存取層）對應
 

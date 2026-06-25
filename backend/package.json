@@ -10,6 +10,9 @@
     "start": "node --env-file-if-exists=/.env --env-file-if-exists=.env src/server.js",
     "test": "node --test",
     "check": "node --test",
+    "contract-check": "node scripts/sync-contract-check-run.mjs",
+    "contract-check:einvoice": "node scripts/einvoice-portal-contract-check.mjs",
+    "contract-check:first-bank": "node scripts/first-bank-portal-contract-check.mjs",
     "playwright:install-browsers": "PLAYWRIGHT_INSTALL_BROWSERS=1 node scripts/ensure-playwright-browsers.mjs",
     "postinstall": "node scripts/ensure-playwright-browsers.mjs",
     "deploy:copy": "mkdir -p /mnt/data/Data/serviceApps/StrawMB && find /mnt/data/Data/serviceApps/StrawMB -mindepth 1 -maxdepth 1 ! -name .server-data -exec rm -rf {} + && rsync -a --exclude node_modules --exclude .server-data ./ /mnt/data/Data/serviceApps/StrawMB/ && cd /mnt/data/Data/serviceApps/StrawMB && PLAYWRIGHT_INSTALL_BROWSERS=1 PLAYWRIGHT_BROWSERS_PATH=.server-data/playwright-browsers npm install"
