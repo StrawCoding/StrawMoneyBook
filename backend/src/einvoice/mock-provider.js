@@ -41,6 +41,7 @@ export async function startScrapeSession(payload = {}) {
   const needsCaptcha = payload.force_captcha !== false
   createSessionRecord(sessionId, {
     needsCaptcha,
+    captchaToken: 'mock_captcha_token',
     cardNo: payload.cardNo ?? '',
     cardEncrypt: payload.cardEncrypt ?? '',
     metadata: { provider: 'mock' },

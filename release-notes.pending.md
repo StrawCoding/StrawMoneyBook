@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.30
+- (SMB-251) P0 載具同步治本改寫：財政部 2026-06 Vue SPA + OAuth2 後，`playwright-provider.js` 改為 captcha JSON API（`act002i/captcha` 回 `{token,image}`，session 存 token、移除 DOM 截圖）、實測選擇器 `#mobile_phone/#password/#captcha/#submitBtn`（`EINVOICE_SCRAPE_SELECTORS_JSON` 可覆寫）、OAuth 登入後以 `page.on('response')` 攔截查詢 JSON → `normalizeInvoiceList`（DOM 降備援）、跨月 + 62 天視窗自動切分。新增 `portal-config.js`、`portal-json.js`、`einvoice-portal-contract-check.mjs` 與 `einvoice-portal-json.test.js` / 更新 `einvoice-playwright-config-source.test.js`。驗證：`cd backend && npm test` 82/82、contract-check、deploy:copy + StrawMB restart、Playwright 載具設定頁。
+
 ## v1.3.29
 - (SMB-250) 介面風格切換 Phase 1（Apple HIG）：新增 `ui-layout.service.js`（`strawmoneybook.ui.layout`，`traditional` | `modern`，預設 modern）與 `useUiLayout` composable；`app-runtime` 啟動載入並設定 `document.documentElement.dataset.uiLayout`。設定 → 個人化新增「介面風格」（與配色主題獨立、即時持久化）。現代版以 `apple-ui.css` 套用 Large Title、Inset Grouped、Segmented Control、list row + chevron 視覺；**保留**傳統 5 tab + FAB + 首頁全部區塊（帳本切換、四段期間篩選、資產卡、預算卡、交易流）。傳統版零行為變更。新增 `ui-layout.service.test.js`、`ui-layout-source.test.js`、`playwright:ui-layout`。
 

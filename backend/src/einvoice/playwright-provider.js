@@ -3,6 +3,15 @@ import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { normalizeInvoiceList } from './normalize.js'
 import {
+  getCaptchaApiUrl,
+  getCaptchaTokenField,
+  getLoginUrl,
+  getQueryApiPattern,
+  getQueryUrl,
+  getSelectors,
+} from './portal-config.js'
+import { extractInvoicesFromJsonPayloads, mergeQueryWindows } from './portal-json.js'
+import {
   createSessionRecord,
   deleteSessionRecord,
   getSessionRecord,
@@ -19,49 +28,12 @@ const PLAYWRIGHT_MAX_BUFFER_BYTES = 4 * 1024 * 1024
 const PLAYWRIGHT_DEFAULT_TIMEOUT_MS = 60_000
 const PLAYWRIGHT_CLI_CONFIG_PATH = fileURLToPath(new URL('../../playwright-cli.json', import.meta.url))
 const PLAYWRIGHT_BROWSERS_PATH = normalizeText(process.env.PLAYWRIGHT_BROWSERS_PATH) || '.server-data/playwright-browsers'
-
-const DEFAULT_LOGIN_URL = 'https://www.einvoice.nat.gov.tw/accounts/login'
-const DEFAULT_QUERY_URL = 'https://www.einvoice.nat.gov.tw/portal/btc/mobile/btc502w/search'
-const DEFAULT_SELECTORS = {
-  phone: '#mobile_phone, input[name="mobile_phone"], #loginPhone, #phoneNo, #phone, input[name="phoneNo"], input[type="tel"], input[inputmode="tel"]',
-  password: '#loginPass, #passwd, #password, input[type="password"]',
-  captchaInput: '#captcha, #captchaCode, #verifyCode, input[name="captcha"], input[name="verifyCode"], input[maxlength="4"]',
-  captchaImage: '#imgVerify, img[id*="captcha"], img[src*="captcha"], img[src*="verify"], img[alt*="驗證碼"]',
-  loginButton: 'button[type="submit"], input[type="submit"], #btnLogin, .btn-login',
-  startDate: 'input[name="startDate"], #startDate, input[id="startDate"], input[name*="start"]',
-  endDate: 'input[name="endDate"], #endDate, input[id="endDate"], input[name*="end"]',
-  submitButton: 'input[type="submit"], button[type="submit"], #btnQuery, a.btn-query',
-  invoiceRows: 'table tbody tr, .invoice-row, [data-invoice-number]',
-  nextPage: 'a.next, .pagination a:has-text("下一頁"), a[title="下一頁"]',
-  authError: '.error, .alert-danger, .msg-error, [class*="error"]',
-}
+const LOGIN_WAIT_MS = Number(process.env.EINVOICE_PORTAL_LOGIN_WAIT_MS) > 0
+  ? Number(process.env.EINVOICE_PORTAL_LOGIN_WAIT_MS)
+  : 5000
 
 function normalizeText(value) {
   return String(value ?? '').trim()
-}
-
-function parseJsonMap(raw) {
-  const text = normalizeText(raw)
-  if (!text) return {}
-  try {
-    const parsed = JSON.parse(text)
-    return parsed && typeof parsed === 'object' ? parsed : {}
-  } catch {
-    return {}
-  }
-}
-
-function getLoginUrl() {
-  return normalizeText(process.env.EINVOICE_PORTAL_LOGIN_URL) || DEFAULT_LOGIN_URL
-}
-
-function getQueryUrl() {
-  return normalizeText(process.env.EINVOICE_PORTAL_QUERY_URL) || DEFAULT_QUERY_URL
-}
-
-function getSelectors() {
-  const fromEnv = parseJsonMap(process.env.EINVOICE_SCRAPE_SELECTORS_JSON)
-  return { ...DEFAULT_SELECTORS, ...fromEnv }
 }
 
 function createSessionId() {
@@ -96,18 +68,34 @@ function getPlaywrightExecEnv() {
   return {
     ...process.env,
     PLAYWRIGHT_BROWSERS_PATH,
+    PLAYWRIGHT_MCP_CONFIG: PLAYWRIGHT_CLI_CONFIG_PATH,
+    PLAYWRIGHT_MCP_HEADLESS: process.env.PLAYWRIGHT_MCP_HEADLESS ?? 'true',
   }
 }
 
-async function runPlaywrightCli(args = []) {
+async function runPlaywrightCli(sessionId, args = []) {
+  const safeSessionId = normalizeText(sessionId)
   const safeArgs = Array.isArray(args) ? args.filter((item) => String(item ?? '').length > 0) : []
-  return execFileAsync('npx', ['playwright-cli', '--config', PLAYWRIGHT_CLI_CONFIG_PATH, ...safeArgs], {
+  if (!safeSessionId) {
+    throw new Error('playwright session id is required')
+  }
+  return execFileAsync('npx', ['playwright-cli', `-s=${safeSessionId}`, ...safeArgs], {
     env: getPlaywrightExecEnv(),
   })
 }
 
 function extractLastJsonObject(rawOutput) {
-  const lines = String(rawOutput ?? '')
+  const text = String(rawOutput ?? '')
+  const resultMatch = text.match(/### Result\s*\n(\{[\s\S]*?\}|\[[\s\S]*?\])(?:\n|$)/m)
+  if (resultMatch) {
+    try {
+      return JSON.parse(resultMatch[1])
+    } catch {
+      // continue
+    }
+  }
+
+  const lines = text
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
@@ -138,7 +126,7 @@ function normalizeRunCode(code) {
 }
 
 async function runPlaywrightJson(sessionId, code) {
-  const result = await runPlaywrightCli(['--session', sessionId, 'run-code', normalizeRunCode(code)])
+  const result = await runPlaywrightCli(sessionId, ['run-code', normalizeRunCode(code)])
   return extractLastJsonObject(result.stdout)
 }
 
@@ -146,89 +134,68 @@ async function closePlaywrightSession(sessionId) {
   const safeSessionId = normalizeText(sessionId)
   if (!safeSessionId) return
   try {
-    await runPlaywrightCli(['--session', safeSessionId, 'close'])
+    await runPlaywrightCli(safeSessionId, ['close'])
   } catch {
     // ignore close errors
   }
 }
 
 async function openPortalPage(sessionId, portalUrl) {
-  await runPlaywrightCli(['--session', sessionId, 'open', portalUrl])
+  await runPlaywrightCli(sessionId, ['open', portalUrl])
 }
 
-async function captureCaptcha(sessionId, selectors) {
-  const payload = { selector: selectors.captchaImage }
-  const code = `
-const payload = ${JSON.stringify(payload)};
-await page.waitForLoadState('domcontentloaded');
-const image = await page.$(payload.selector);
-if (!image) {
-  return { ok: false, reason: 'captcha_not_found' };
-}
-await page.waitForFunction((selector) => {
-  const img = document.querySelector(selector);
-  return Boolean(img && img.complete && Number(img.naturalWidth) > 0);
-}, payload.selector, { timeout: 10000 }).catch(() => null);
-const screenshotBytes = await image.screenshot({ type: 'png' });
-const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-let screenshot = '';
-for (let index = 0; index < screenshotBytes.length; index += 3) {
-  const byte1 = screenshotBytes[index];
-  const byte2 = index + 1 < screenshotBytes.length ? screenshotBytes[index + 1] : 0;
-  const byte3 = index + 2 < screenshotBytes.length ? screenshotBytes[index + 2] : 0;
-  const chunk = (byte1 << 16) | (byte2 << 8) | byte3;
-  screenshot += base64Chars[(chunk >> 18) & 63];
-  screenshot += base64Chars[(chunk >> 12) & 63];
-  screenshot += index + 1 < screenshotBytes.length ? base64Chars[(chunk >> 6) & 63] : '=';
-  screenshot += index + 2 < screenshotBytes.length ? base64Chars[chunk & 63] : '=';
-}
-return { ok: true, base64: screenshot };
-`
-  const response = await runPlaywrightJson(sessionId, code)
-  if (!response || response.ok !== true) {
-    return { base64: '' }
-  }
-  return { base64: normalizeText(response.base64) }
-}
-
-async function detectCaptchaRequired(sessionId, selectors) {
-  const code = `
-const selectors = ${JSON.stringify(selectors)};
-const image = await page.$(selectors.captchaImage);
-const input = await page.$(selectors.captchaInput);
-return { needsCaptcha: Boolean(image && input) };
-`
-  const response = await runPlaywrightJson(sessionId, code)
-  return Boolean(response?.needsCaptcha)
+function portalChangedError(message = '官方網站版面可能已更新，請稍後再試') {
+  const error = new Error(message)
+  error.code = 'einvoice_portal_changed'
+  return error
 }
 
 async function prepareLoginPage(sessionId, selectors) {
   const code = `
 const selectors = ${JSON.stringify(selectors)};
 await page.waitForLoadState('domcontentloaded');
-const carrierSelectors = [
-  '[data-target*="phone"]',
-  '[data-carrier-type*="phone"]',
-  'a[href*="mobile"]',
-  'button:has-text("手機條碼")',
-  'label:has-text("手機條碼")',
-];
-for (const selector of carrierSelectors) {
-  const el = await page.$(selector);
-  if (!el) continue;
-  await el.click().catch(() => null);
-  await page.waitForTimeout(400);
-  break;
+const carrierTab = await page.$(selectors.carrierTab);
+if (carrierTab) {
+  await carrierTab.click().catch(() => null);
+  await page.waitForTimeout(500);
 }
 const phone = await page.$(selectors.phone);
 const password = await page.$(selectors.password);
-return { ok: Boolean(phone && password) };
+const captchaInput = await page.$(selectors.captchaInput);
+return { ok: Boolean(phone && password && captchaInput) };
 `
   const response = await runPlaywrightJson(sessionId, code)
   if (!response?.ok) {
-    const error = new Error('官方網站版面可能已更新，請稍後再試')
-    error.code = 'einvoice_portal_changed'
-    throw error
+    throw portalChangedError()
+  }
+}
+
+async function fetchCaptchaFromApi(sessionId, captchaApiUrl, captchaTokenField) {
+  const payload = { captchaApiUrl, captchaTokenField }
+  const code = `
+const payload = ${JSON.stringify(payload)};
+const response = await page.evaluate(async (config) => {
+  const res = await fetch(config.captchaApiUrl, { credentials: 'include', method: 'GET' });
+  if (!res.ok) {
+    return { ok: false, reason: 'captcha_http_' + res.status };
+  }
+  const data = await res.json();
+  const token = data?.[config.captchaTokenField] ?? data?.token ?? '';
+  const image = data?.image ?? data?.img ?? '';
+  if (!token || !image) {
+    return { ok: false, reason: 'captcha_shape_invalid' };
+  }
+  return { ok: true, token: String(token), base64: String(image) };
+}, payload);
+return response;
+`
+  const response = await runPlaywrightJson(sessionId, code)
+  if (!response || response.ok !== true) {
+    throw portalChangedError('無法取得圖形驗證碼，官方網站可能已更新')
+  }
+  return {
+    token: normalizeText(response.token),
+    base64: normalizeText(response.base64),
   }
 }
 
@@ -254,34 +221,67 @@ if (payload.values.captchaCode && payload.selectors.captchaInput) {
   const captchaInput = await page.$(payload.selectors.captchaInput);
   if (captchaInput) setValue(captchaInput, payload.values.captchaCode);
 }
+if (payload.values.captchaToken) {
+  await page.evaluate((token) => {
+    window.__SMB_EINVOICE_CAPTCHA_TOKEN__ = token;
+  }, payload.values.captchaToken);
+}
 return { ok: true };
 `
   const response = await runPlaywrightJson(sessionId, code)
   if (!response || response.ok !== true) {
-    const error = new Error('官方網站版面可能已更新，請稍後再試')
-    error.code = response?.reason === 'portal_changed' ? 'einvoice_portal_changed' : 'einvoice_scrape_failed'
+    const error = portalChangedError()
+    if (response?.reason === 'portal_changed') error.code = 'einvoice_portal_changed'
+    else error.code = 'einvoice_scrape_failed'
     throw error
   }
 }
 
-async function submitLoginForm(sessionId, selectors) {
+async function submitLoginForm(sessionId, selectors, captchaToken, captchaTokenField) {
+  const payload = {
+    selectors,
+    captchaToken,
+    captchaTokenField,
+    loginWaitMs: LOGIN_WAIT_MS,
+  }
   const code = `
-const selectors = ${JSON.stringify(selectors)};
-const button = await page.$(selectors.loginButton);
+const payload = ${JSON.stringify(payload)};
+await page.route('**/*', async (route) => {
+  const request = route.request();
+  const url = request.url();
+  if (!url.includes('/act/login/api/') || request.method() !== 'POST') {
+    await route.continue();
+    return;
+  }
+  const headers = { ...request.headers() };
+  let postData = request.postData() || '';
+  try {
+    const body = postData ? JSON.parse(postData) : {};
+    if (payload.captchaToken) {
+      body[payload.captchaTokenField] = payload.captchaToken;
+      body.captchaToken = payload.captchaToken;
+      body.token = payload.captchaToken;
+      postData = JSON.stringify(body);
+    }
+    await route.continue({ headers, postData });
+  } catch {
+    await route.continue();
+  }
+});
+const button = await page.$(payload.selectors.loginButton);
 if (!button) {
   return { ok: false, reason: 'portal_changed' };
 }
 await button.click();
-await page.waitForTimeout(2200);
-const authError = await page.$(selectors.authError);
-const authText = authError ? (await authError.innerText()).trim() : '';
-return { ok: true, authText, url: page.url() };
+await page.waitForTimeout(payload.loginWaitMs);
+const authError = await page.$(payload.selectors.authError);
+const authText = authError ? (await authError.innerText()).catch(() => '') : '';
+const currentUrl = page.url();
+return { ok: true, authText: String(authText || '').trim(), url: currentUrl };
 `
   const response = await runPlaywrightJson(sessionId, code)
   if (!response || response.ok !== true) {
-    const error = new Error('官方網站版面可能已更新，請稍後再試')
-    error.code = 'einvoice_portal_changed'
-    throw error
+    throw portalChangedError()
   }
   const authText = normalizeText(response.authText)
   const currentUrl = normalizeText(response.url)
@@ -297,10 +297,45 @@ return { ok: true, authText, url: page.url() };
   }
 }
 
-async function fillQueryForm(sessionId, selectors, values) {
-  const payload = { selectors, values }
+async function navigateToQueryPage(sessionId, selectors, queryUrl) {
+  const payload = { selectors, queryUrl }
   const code = `
 const payload = ${JSON.stringify(payload)};
+if (payload.queryUrl && payload.queryUrl !== page.url()) {
+  await page.goto(payload.queryUrl, { waitUntil: 'domcontentloaded' }).catch(() => null);
+}
+const nav = await page.$(payload.selectors.queryNavLink);
+if (nav) {
+  await nav.click().catch(() => null);
+  await page.waitForTimeout(1200);
+}
+await page.waitForLoadState('domcontentloaded');
+return { ok: true, url: page.url() };
+`
+  await runPlaywrightJson(sessionId, code)
+}
+
+async function queryInvoicesForWindow(sessionId, selectors, queryApiPatternSource, values) {
+  const payload = {
+    selectors,
+    values,
+    queryApiPatternSource,
+    timeoutMs: 30_000,
+  }
+  const code = `
+const payload = ${JSON.stringify(payload)};
+const pattern = new RegExp(payload.queryApiPatternSource, 'i');
+const captured = [];
+page.on('response', async (response) => {
+  const url = response.url();
+  const contentType = response.headers()['content-type'] || '';
+  if (!pattern.test(url) || !contentType.includes('json')) return;
+  try {
+    captured.push(await response.json());
+  } catch {
+    // ignore malformed JSON
+  }
+});
 function setValue(el, value) {
   if (!el) return;
   el.focus();
@@ -315,36 +350,27 @@ if (!startEl || !endEl) {
 }
 setValue(startEl, payload.values.startDate);
 setValue(endEl, payload.values.endDate);
-return { ok: true };
-`
-  const response = await runPlaywrightJson(sessionId, code)
-  if (!response || response.ok !== true) {
-    const error = new Error('官方網站版面可能已更新，請稍後再試')
-    error.code = response?.reason === 'portal_changed' ? 'einvoice_portal_changed' : 'einvoice_scrape_failed'
-    throw error
-  }
-}
-
-async function submitQueryForm(sessionId, selectors) {
-  const code = `
-const selectors = ${JSON.stringify(selectors)};
-const button = await page.$(selectors.submitButton);
+const button = await page.$(payload.selectors.submitButton);
 if (!button) {
-  return { ok: false, reason: 'portal_changed' };
+  return { ok: false, reason: 'portal_changed', missing: 'submitButton' };
 }
+const waitForQuery = page.waitForResponse(
+  (response) => pattern.test(response.url()) && (response.headers()['content-type'] || '').includes('json'),
+  { timeout: payload.timeoutMs },
+).catch(() => null);
 await button.click();
-await page.waitForTimeout(1800);
-return { ok: true, url: page.url() };
+await waitForQuery;
+await page.waitForTimeout(1200);
+return { ok: true, captured };
 `
   const response = await runPlaywrightJson(sessionId, code)
   if (!response || response.ok !== true) {
-    const error = new Error('官方網站版面可能已更新，請稍後再試')
-    error.code = 'einvoice_portal_changed'
-    throw error
+    throw portalChangedError('找不到發票查詢表單，官方網站版面可能已更新')
   }
+  return Array.isArray(response.captured) ? response.captured : []
 }
 
-async function extractInvoicesFromPage(sessionId, selectors) {
+async function extractInvoicesFromDom(sessionId, selectors) {
   const code = `
 const selectors = ${JSON.stringify(selectors)};
 const rows = await page.$$(selectors.invoiceRows);
@@ -364,38 +390,18 @@ for (const row of rows) {
     carrierName: '手機條碼',
   });
 }
-const next = await page.$(selectors.nextPage);
-return { invoices, hasNext: Boolean(next) };
+return { invoices };
 `
   const response = await runPlaywrightJson(sessionId, code)
-  if (!response || !Array.isArray(response.invoices)) {
-    const error = new Error('無法解析發票列表，官方網站版面可能已更新')
-    error.code = 'einvoice_portal_changed'
-    throw error
-  }
-  return {
-    invoices: response.invoices,
-    hasNext: Boolean(response.hasNext),
-  }
-}
-
-async function clickNextPage(sessionId, selectors) {
-  const code = `
-const selectors = ${JSON.stringify(selectors)};
-const next = await page.$(selectors.nextPage);
-if (!next) return { ok: false };
-await next.click();
-await page.waitForTimeout(1200);
-return { ok: true };
-`
-  const response = await runPlaywrightJson(sessionId, code)
-  return Boolean(response?.ok)
+  return Array.isArray(response?.invoices) ? response.invoices : []
 }
 
 export async function startScrapeSession(payload = {}) {
   const sessionId = normalizeText(payload.session_id) || createSessionId()
   const loginUrl = getLoginUrl()
   const selectors = getSelectors()
+  const captchaApiUrl = getCaptchaApiUrl()
+  const captchaTokenField = getCaptchaTokenField()
   const refreshCaptcha = Boolean(payload.refresh_captcha)
 
   if (!refreshCaptcha || !normalizeText(payload.session_id)) {
@@ -403,19 +409,19 @@ export async function startScrapeSession(payload = {}) {
     await prepareLoginPage(sessionId, selectors)
   }
 
-  const needsCaptcha = await detectCaptchaRequired(sessionId, selectors)
-  const captcha = needsCaptcha ? await captureCaptcha(sessionId, selectors) : { base64: '' }
+  const captcha = await fetchCaptchaFromApi(sessionId, captchaApiUrl, captchaTokenField)
 
   createSessionRecord(sessionId, {
-    needsCaptcha,
+    needsCaptcha: true,
+    captchaToken: captcha.token,
     cardNo: normalizeCarrierPhone(payload.cardNo ?? ''),
     cardEncrypt: payload.cardEncrypt ?? '',
-    metadata: { provider: 'playwright', loginUrl },
+    metadata: { provider: 'playwright', loginUrl, captchaApiUrl },
   })
 
   return {
     session_id: sessionId,
-    needs_captcha: needsCaptcha,
+    needs_captcha: true,
     captcha_image_base64: captcha.base64,
     expires_at: new Date(Date.now() + PLAYWRIGHT_SESSION_TTL_MS).toISOString(),
   }
@@ -449,9 +455,7 @@ return { ok: true };
 `
   const response = await runPlaywrightJson(sessionId, code)
   if (!response || response.ok !== true) {
-    const error = new Error('驗證碼欄位不存在，官方網站版面可能已更新')
-    error.code = 'einvoice_portal_changed'
-    throw error
+    throw portalChangedError('驗證碼欄位不存在，官方網站版面可能已更新')
   }
 
   updateSessionRecord(sessionId, { captchaSubmitted: true, needsCaptcha: false })
@@ -475,40 +479,55 @@ export async function queryScrapeInvoices(payload = {}) {
   const selectors = getSelectors()
   const phone = normalizeCarrierPhone(payload.cardNo ?? record.cardNo ?? '')
   const password = String(payload.cardEncrypt ?? record.cardEncrypt ?? '').trim()
-  const startDate = toRocDate(payload.startDate)
-  const endDate = toRocDate(payload.endDate)
+  const startDate = String(payload.startDate ?? '').trim()
+  const endDate = String(payload.endDate ?? '').trim()
   const queryUrl = getQueryUrl()
+  const queryApiPattern = getQueryApiPattern()
+  const captchaToken = normalizeText(record.captchaToken)
+  const captchaTokenField = getCaptchaTokenField()
+  const windows = mergeQueryWindows(startDate, endDate)
 
   try {
     await fillLoginForm(sessionId, selectors, {
       phone,
       password,
       captchaCode: String(payload.captcha_code ?? ''),
+      captchaToken,
     })
-    await submitLoginForm(sessionId, selectors)
+    await submitLoginForm(sessionId, selectors, captchaToken, captchaTokenField)
 
-    await runPlaywrightCli(['--session', sessionId, 'open', queryUrl])
-    await pageWaitForQueryForm(sessionId, selectors)
-    await fillQueryForm(sessionId, selectors, { startDate, endDate })
-    await submitQueryForm(sessionId, selectors)
+    await navigateToQueryPage(sessionId, selectors, queryUrl)
 
     const allInvoices = []
-    let page = 1
-    while (page <= MAX_PAGES) {
-      const { invoices, hasNext } = await extractInvoicesFromPage(sessionId, selectors)
-      allInvoices.push(...invoices)
-      if (!hasNext || page >= MAX_PAGES) break
-      const moved = await clickNextPage(sessionId, selectors)
-      if (!moved) break
-      page += 1
-    }
+    const seen = new Set()
 
-    if (page >= MAX_PAGES) {
-      const error = new Error('查詢結果過多，請縮小日期範圍後再試')
-      error.code = 'einvoice_result_too_large'
-      error.totalPages = page
-      error.maxPages = MAX_PAGES
-      throw error
+    for (const window of windows) {
+      const rocStart = toRocDate(window.startDate)
+      const rocEnd = toRocDate(window.endDate)
+      const captured = await queryInvoicesForWindow(sessionId, selectors, queryApiPattern.source, {
+        startDate: rocStart,
+        endDate: rocEnd,
+      })
+
+      let invoices = extractInvoicesFromJsonPayloads(captured)
+      if (invoices.length === 0) {
+        invoices = await extractInvoicesFromDom(sessionId, selectors)
+      }
+
+      for (const invoice of invoices) {
+        const number = String(invoice.invoiceNumber ?? '').trim()
+        if (!number || seen.has(number)) continue
+        seen.add(number)
+        allInvoices.push(invoice)
+      }
+
+      if (allInvoices.length >= MAX_PAGES * 20) {
+        const error = new Error('查詢結果過多，請縮小日期範圍後再試')
+        error.code = 'einvoice_result_too_large'
+        error.totalPages = Math.ceil(allInvoices.length / 20)
+        error.maxPages = MAX_PAGES
+        throw error
+      }
     }
 
     updateSessionRecord(sessionId, { cardNo: phone, cardEncrypt: password })
@@ -516,22 +535,6 @@ export async function queryScrapeInvoices(payload = {}) {
   } finally {
     await closePlaywrightSession(sessionId)
     deleteSessionRecord(sessionId)
-  }
-}
-
-async function pageWaitForQueryForm(sessionId, selectors) {
-  const code = `
-const selectors = ${JSON.stringify(selectors)};
-await page.waitForLoadState('domcontentloaded');
-const startEl = await page.$(selectors.startDate);
-const endEl = await page.$(selectors.endDate);
-return { ok: Boolean(startEl && endEl) };
-`
-  const response = await runPlaywrightJson(sessionId, code)
-  if (!response?.ok) {
-    const error = new Error('找不到發票查詢表單，官方網站版面可能已更新')
-    error.code = 'einvoice_portal_changed'
-    throw error
   }
 }
 

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>銀行同步 / 載具同步 爬蟲治本計畫與線上驗證</title>
+<style>
+  :root{
+    --accent:#f5a623; --accent-d:#d98c10; --ink:#26211a; --muted:#7a7264;
+    --paper:#faf7f2; --card:#ffffff; --line:#ece6db; --ok:#2f8f57; --bad:#c0492f;
+    --code-bg:#f4f0e8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,"Segoe UI","Noto Sans TC","PingFang TC",sans-serif;
+    line-height:1.7;font-size:16px}
+  .wrap{max-width:920px;margin:0 auto;padding:40px 22px 80px}
+  header.top{border-bottom:3px solid var(--accent);padding-bottom:20px;margin-bottom:8px}
+  .kicker{font-size:13px;letter-spacing:.12em;color:var(--accent-d);font-weight:700;text-transform:uppercase}
+  h1{font-size:27px;margin:8px 0 6px;line-height:1.35}
+  .sub{color:var(--muted);font-size:14px}
+  h2{font-size:20px;margin:38px 0 12px;padding-left:12px;border-left:4px solid var(--accent)}
+  h3{font-size:16px;margin:22px 0 8px}
+  p{margin:10px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:680px){.grid{grid-template-columns:1fr}}
+  .tag{display:inline-block;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;vertical-align:middle}
+  .tag.ok{background:#e7f3ec;color:var(--ok)} .tag.bad{background:#f7e7e3;color:var(--bad)}
+  .tag.warn{background:#fdf2dc;color:var(--accent-d)}
+  code,kbd{background:var(--code-bg);border-radius:5px;padding:1px 6px;font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:13.5px}
+  pre{background:#2a2620;color:#f3ead6;border-radius:10px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
+  pre code{background:none;color:inherit;padding:0}
+  ul{margin:8px 0 8px;padding-left:22px} li{margin:5px 0}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14.5px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:#f6f1e8;font-weight:700}
+  .evi{background:#fbfaf6;border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:8px;padding:12px 14px;margin:10px 0;font-size:14px}
+  .root{border-left-color:var(--bad)}
+  .step{counter-reset:none}
+  .phase-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .pill{font-size:12px;font-weight:700;background:var(--accent);color:#3a2c08;padding:2px 10px;border-radius:999px}
+  .muted{color:var(--muted)}
+  footer{margin-top:50px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+  .checkrow{display:flex;gap:10px;align-items:flex-start;margin:6px 0}
+  .checkrow b{color:var(--ok)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="kicker">StrawMoneyBook · 同步穩定性</div>
+  <h1>銀行同步 / 載具同步：爬蟲治本計畫與線上實測驗證</h1>
+  <div class="sub">產出日期 2026-06-26 · 限制條件：手邊資源僅能採爬蟲方式 · 驗證方式：對財政部線上環境真實瀏覽器實測</div>
+</header>
+
+<div class="card">
+  <p style="margin-top:4px"><strong>一句話結論：</strong>之所以「修了又壞」，不是 bug 沒修乾淨，而是<strong>抓資料的方式選錯了</strong>——一直在解析「會隨官方改版而變的畫面 DOM」。在仍只用爬蟲的前提下，治本做法是改抓<strong>網頁自己呼叫的 JSON API（網路攔截）</strong>，瀏覽器只留給「登入 + 圖形驗證碼」。本計畫已對官方線上環境逐項實測驗證。</p>
+</div>
+
+<h2>一、線上驗證結果（已實測，非推測）</h2>
+<p class="muted">用真實 Chromium 連 <code>www.einvoice.nat.gov.tw</code>（curl 會被 WAF 擋 <code>403</code>，故必用瀏覽器）。以下每一條都附實測證據。</p>
+
+<div class="evi">
+  <span class="tag ok">已驗證</span> <strong>官方站已改為 Vue/Vite SPA，資料走 JSON API。</strong>
+  載入時抓到 <code>assets/index.*.js</code>、<code>vendor.*.js</code>，資料來自獨立主機
+  <code>service-mc.einvoice.nat.gov.tw</code> / <code>service-m.einvoice.nat.gov.tw</code>，路徑樣式 <code>/act/login/api/...</code>、<code>/ptl/portal/api/...</code>。
+</div>
+
+<div class="evi">
+  <span class="tag ok">已驗證</span> <strong>登入頁真實選擇器（取代現行猜測式選擇器）。</strong>
+  <code>#mobile_phone</code>（maxlength 10 / inputmode numeric）、<code>#password</code>（placeholder「驗證碼(密碼)」）、
+  <code>#captcha</code>、登入鈕 <code>#submitBtn</code>、身分分頁鈕文字「手機條碼 / 自然人憑證 / 行動自然人憑證」。
+</div>
+
+<div class="evi">
+  <span class="tag ok">已驗證</span> <strong>圖形驗證碼已改成 JSON API，且必須帶 token。</strong>
+  <code>GET service-mc.einvoice.nat.gov.tw/act/login/api/act002i/captcha</code> 回
+  <code>{ token:"L_CAPTCHA_&lt;uuid&gt;", image:&lt;base64 png&gt; }</code>（HTTP 200）。
+  下圖為本次實測「直接從該 API 抓回並解碼」的驗證碼圖，清晰可辨——證明<strong>不需要再截畫面 DOM 圖片</strong>：
+  <div style="margin-top:10px"><img alt="實測抓回的官方圖形驗證碼" style="height:44px;background:#fff;border:1px solid #e7e2d8;border-radius:6px;padding:4px 8px;vertical-align:middle" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJYAAAAoCAYAAAAcwQPnAAAKH0lEQVR4Xu2cBZAtVxGGf9whOIXtBgnuUFhgN4RghZPC5YVCKrhTFJAXCCR4YUXhBAIpnOCeLASCBHffRYIECe7WX/X229k+I3dmyObey/2rvkremZ65Z2aO9OnTs9J43cA4zPiYsWH8wfjL5v9/2niusWKcwc0H6VrGU4wPy6/7R+Ofxm+MbxlvNB5iXHTTvk4XNPaT273UONb4ovED49fGP4w/G780vm2813iOcQvjLOrWOYy7Gi8zPmmcZPxeXk/+y79PMF5u3N04p5+2UNaq8SnjPxPyNfmL7SNe6okqr9XEv+QNYl9OTsq2ffitsVv1jeHs8kZPY8/ntfEn42nyBpmVbccwMzqdcYj8JeabmIRnqVtnNV6j8tw+ZOXjQ/iqsaQtXUg+6mW7PnzZuIi2K9uMYWb0dJWV78vz1Sx68PEqz+lLVj4+lC8ZZ5Z3MKa8fHwITJGn15by8THMhO6osuJDubPq9TaVtkPIysfHcLDcT8rlY7iHtpSPjWHqdSbjeyorHuBv4UMx4sBNjM/U2AU/N86r7brv5rEmcNQfblzN2Etepwsb+xtPNb5bsc2K8nX5dHxb+bRGXRmBLil3vifx6daMd9eUBzjszzMuL/fBLif/TcqzbcD1QvnYGKZeB6qsdPB142xbpnvEQ/2mSvvgCVumuoB8RZltgsM12cqSRsYKNYuyA+RTWJvOaByj8ver0Cl+UlMePFv1eqZK2+DHFbt8bAxTr1errHRw74pd1kEq7QNGmHjRNLJ8PKD376SuoLIOVf5u/K2mPNhH9aI82wZcL5SPBXMpRqV8o8HyllmhvVXaV7mefCT6Uc0xIP5TNxqemmJqzPWo8jN5bCqXB031pTzbBr+r2OVjwVzqVypvNOBFNIngYravgs90/ZrygFXoTgvfKNejyjuMz9aUB00jFr5Wtg0IJofysWAuxfCfbzQY07COMh5VUx4Q7CSutct4izzyTnCRKDmj3HHyuFrTy+wrpuajVdajys2NJ9WUB00+FpH8bBtU/c18LHit8RV5J2engMDtuvwZPMO4mbp9yKnTySpvNFiq2GV1TYVfkDeYXB6wBfOLmvIMAds3GOdXf8WqkAUKTn6+dhW2gxAr2qZ6sfqjcTFCMf1dVu64N60KmVrPoy3l433Ab92lGRININ9EcK+KXdZ9VNpXWZcHHXP5UDaMq6hb+bwucK4ZGasjAvuk+EbZtg+MOtfVdmWbIbzTOJdmQGwm58oHbHUwXWXRW9ucfmAj+Yc15WNg6Z63SbLyOU2cIt8nbNrgZjT6oMrzJuH9xqVVKtsN5SNqd1OmQvSqXPEqbG+syGNXsKrJNqnxFcb2+jpwsNuU7dvADcA/ampcNA4yLPJ5bWB/KU6uUbYdw2mx+Omt96is+FiYCpp8jyqf0FbDJVq+qu69umurWdl2EugAbOWECOqy+Bi6Ic95nJ/9wjjOaE78EFeDlSp+GLsNNPA7GB+q2DbBIudimnJd3PipysqPYV0+3eTyKk1TLWUcy/ZBWyZFtp2Uf8v9RqZAptx8fAisbqtTIiM9e6k0oi4RrsnXyzxyj/UU6+r63z1QYFHQ5WO1LQ6I+mf74HMVuzbhC15Cnv/1Enkvz9eqQrijbd+U32VEIa2GLSJGttvIY1XZNiBfbZKEwjodqfJ6VfABZ0JkY75Jk00B7Kk9oKY8eLO6V4VLataySvuAPb0hGjMaMWU3OcyMQGsqzwkeuMeyn7r8X7JkZ0rM+4fKYz80IFKS6c3r8gZDKggPeVXlzQaPkMefcnmVpheF2gKwBHWH6k4qrzcJK5zcohurPCf4aMWuj/A587WqkN06l8LXyTcb0NvaIu/Q1rDa9vXIXx+qc6u83iSwuGhTWyMgoj5EbdeEuWxY5IkzJeWbBXwrNqBvWHOsypKatazSPsBvGSqCi/l6k9C0AR2i4eVzgqEjLBv5+VpV8AfnTi9WeaPB4zdtiGav1xwPhjrvr6zY9dXQbNkbcXKL2qZCtnb4GAQfr4/YQ8zXqkKYaOp1nNxn6hIjUVtiG2kn59tj7dHtbBMMDTfgJyEyWe+5aT+JLqPmNJ4u8DebwgSsENdUnhNEQJntIzok9ejSg1VeJ8PiaeoVlf2G8WR5D4xlNQE80oZxyPk2L99glV3aLpbk+ETZLmC1xW9VI/ttAVI2Y+MFRxm+Bjn1D5Lv87HtQ2PDjnvYT/6hBwuQfL0+kFJze/k90cEIgBJu6NqJ4HlW/82qm1ABsSrCPFyH50y9Sa1+X7KvA78tp4BPpXLFh/BW1YspL9sOhThSKB8bC59s0Uhz+Ri4HrG0XD6WmRitUK54Xz6u+o80Q6Sl5HP6woegVeXjY2AhQjrMQ2uOjeFhcuXyMbxQM6Rc+T6w79Xl5+DI80DyuZPA1LFbZbJbthsKgdxlbemxmixI3AZbRLGIQfn4EFhd7taMCT+HzU8eSL6hJvA5DuDkHiJLk8+98rWawH9Z5cQaZdu+ELbYpe0flYauKQ9s9nkeAY5+3ijHR+XjkZNU2nfBZv675NeYWS3JA5v4SzjKkaXAPtuGvPEdalzDzQcJR5XvE18gb5ys1P4q/0yMGBgv5jC5I94mtqBW5Sso9gJpCHwa/325c8sqjF4euWEnGK+SL0L20WQiAxUn+3XG5+Wb9dSTEQ3/iVACI97r5c9tbz+tVVeST7nU5Xj5/cdzZoFB4+OaR8oXJFOfxXBai1VarKYWWqhTROFJD+GrnNsZ95d/lIBPReLbsSozTumZ9FJCEfTQDfkISbiD3nqifIRZk/+ZI5bgpOWSR3+0PHhIoJSRipGPhL3D5X8hht/GvyGthNx6NoEPkse87iIPkt5aPi0zchL8ZAuK6Y/0Z5x4kvVYzRECIC5HxB4/sm7aXGhCMarwiftVjZvKk+B4SUfIh28+G2cK21B3Kso8wjQYUzd/g4sVJVkTZBvgPxLcJW2IdBqmOjoWcSue29vlGSRHyRc9/N0tgqb4XwSeWfnuln/d8xj5NHywcT95vhjv4kB5B76V/P2syN2G68j9sCvKo/zL8uRBXIa95HHCpiDvqSqmKEaQIQ7rgtmC1HF83R0RI9WQZTaj1rp8i4VeyRTFtISTTA/bXz7FMAryG/Qaeg8RfaLY9Kol+VYHvY1ex6qKqXVF3itvKe+l9Na7yfcS6cX0ZmJFj5b38kPkjj+9n1HgRfIYGqMDowRTM6MG9fyA3OFnVGF0wTnn+z5GHRYAONWMRoxKbFWRPjTk+UwrOypGLB7eyfLlOMM4LwM/5oly/4kXzM47fgj+1f+b8LPIF8Pvwv+iw5DezfPAP7uyfNWM37avfEsJfw6/jp0D0pPx9/D7iKDjB+JqPE7+jPET6Zh8w8hWFH7kK+SrRPxL/Mxj5Bvb+J9r8m0w/FL8U/zZ78hdFfxX3uUpcr+WVTKNamjGxWAxHTKqLDTf2rFpcKGFFlpooYXmSP8FlKKONL/ZgZoAAAAASUVORK5CYII="></div>
+</div>
+
+<div class="evi">
+  <span class="tag ok">已驗證</span> <strong>登入是 OAuth2 / SSO 流程。</strong>
+  攔到 <code>/act/login/api/proxy/login</code> → <code>/sso/login/oauth2/auth</code>；「手機條碼發票查詢」選單需登入後才開放（未登入點擊回首頁）。
+</div>
+
+<h2>二、根因：為何反覆「修了又壞」</h2>
+<div class="card root" style="border-left:4px solid var(--bad)">
+  <p>現行 <code>backend/src/einvoice/playwright-provider.js</code> 的四個致命假設，全部與「已改版的新站」不符：</p>
+  <table>
+    <tr><th>現行做法</th><th>線上實況</th><th>後果</th></tr>
+    <tr><td>查詢 URL 寫死舊站 <code>.../portal/btc/mobile/btc502w/search</code></td><td>新站已無此路徑（SPA）</td><td>進不了查詢頁</td></tr>
+    <tr><td>用一長串猜測選擇器解析 <code>table tbody tr</code> + regex</td><td>SPA 表格結構/class 隨改版變</td><td>解不到發票，打地鼠</td></tr>
+    <tr><td>截 DOM <code>&lt;img&gt;</code> 當驗證碼、送出<strong>不帶 token</strong></td><td>captcha 改 JSON API、需 token 綁定</td><td>驗證碼必失敗</td></tr>
+    <tr><td>登入未走 OAuth2</td><td>新站為 OAuth2 / SSO</td><td>登入流程斷裂</td></tr>
+  </table>
+  <p style="margin-bottom:2px">歷次修復（v1.3.16 / 17 / 19 / 24、SMB-240 / 245…）<strong>都只是換選擇器</strong>，從未改變「抓資料的方式」，所以一直壞。銀行端 <code>FirstBankAutomation.java</code> 同屬此類（解析 <code>table.CnbTable</code> / 座標點擊 + OCR）。</p>
+</div>
+
+<h2>三、治本策略（仍在爬蟲範圍內）</h2>
+<div class="grid">
+  <div class="card"><h3 style="margin-top:0">1 · 抓 JSON 而非 DOM</h3><p class="muted" style="margin:0">用 <code>page.on('response')</code> 攔截網頁自己發出的查詢 XHR，拿結構化 JSON；DOM/CSS 改版不再壞，只有官方 API 合約改變才會（罕見且可監控）。</p></div>
+  <div class="card"><h3 style="margin-top:0">2 · 瀏覽器只做登入</h3><p class="muted" style="margin:0">瀏覽器只負責 OAuth 登入與顯示/輸入圖形驗證碼；captcha 走 JSON API 取 <code>{token,image}</code>，送出時帶 token。</p></div>
+  <div class="card"><h3 style="margin-top:0">3 · 全面設定化</h3><p class="muted" style="margin:0">URL / 選擇器 / endpoint pattern 全走 env 可覆寫；未來官方小改版＝改設定，不必改碼、不必重新發版。</p></div>
+  <div class="card"><h3 style="margin-top:0">4 · 排程合約自檢</h3><p class="muted" style="margin:0">定時打登入頁 + captcha API 斷言形狀，<strong>drift 在使用者踩到前先告警</strong>——這就是終結打地鼠的機制。</p></div>
+</div>
+
+<h2>四、實作計畫（交 autocoder，Hermes 審核）</h2>
+
+<div class="phase-h"><span class="pill">Phase 0</span><h3 style="margin:18px 0 4px">載具：改寫為 SPA + JSON 攔截 + captcha token <span class="tag ok">已線上驗證</span></h3></div>
+<ul>
+  <li><strong>0.1 合約自檢腳本</strong> <code>backend/scripts/einvoice-portal-contract-check.mjs</code>：斷言 <code>#mobile_phone/#password/#captcha</code> 存在、captcha API 回 <code>{token,image}</code>。</li>
+  <li><strong>0.2 captcha 走 JSON API（帶 token）</strong>：改 <code>playwright-provider.js</code> + <code>session-store.js</code> 存 token；移除截圖邏輯。</li>
+  <li><strong>0.3 登入走 OAuth2 + 正確選擇器</strong>：更新 <code>DEFAULT_SELECTORS</code> 為實測值並全 env 可覆寫，登入後等 SSO redirect 完成。</li>
+  <li><strong>0.4 查詢改網路攔截 JSON</strong>：<code>page.on('response')</code> 收載具查詢回應 → 交既有 <code>normalizeInvoiceList</code>；DOM 解析降為備援。</li>
+  <li><strong>0.5 跨月切分 + 錯誤碼對映</strong>：沿用 62 天上限自動切分，補友善錯誤訊息。</li>
+</ul>
+
+<div class="phase-h"><span class="pill">Phase 1</span><h3 style="margin:18px 0 4px">銀行：WebView 爬蟲硬化 <span class="tag warn">需真機驗證</span></h3></div>
+<p class="muted" style="margin-top:0">銀行端無官方 API、需 Android WebView + 真實 i-Bank 帳密，無法在伺服器環境線上驗證；以下為原始碼審查結論，實作後須在裝置/模擬器實測。</p>
+<ul>
+  <li><strong>1.1</strong> 以 <code>shouldInterceptRequest</code> 優先攔截交易明細網路回應，DOM（<code>table.CnbTable</code>）降為備援。</li>
+  <li><strong>1.2</strong> 強化 OCR 前處理與信心門檻；沿用 v1.3.19 已加的「OCR 全失敗 → 回圖讓使用者手填」備援並優先採手填。</li>
+  <li><strong>1.3</strong> 銀行端合約自檢：定期斷言 <code>#code_verify</code>、「我的帳戶」連結、<code>table.CnbTable</code> 等錨點存在。</li>
+  <li><strong>1.4</strong> 「匯入銀行帳單（CSV）」並存退路（合法、無驗證碼），接既有審核→去重→匯入管線。</li>
+</ul>
+
+<div class="phase-h"><span class="pill">Phase 2</span><h3 style="margin:18px 0 4px">防打地鼠機制</h3></div>
+<ul>
+  <li>合約自檢接 cron / CI，失敗即告警（log.wastebase.xyz / Plane comment）。</li>
+  <li>失敗分類碼統計（portal_changed / captcha / auth / timeout），量化最常壞的環節。</li>
+</ul>
+
+<h2>五、關鍵實作片段（攔截 JSON，治本核心）</h2>
+<pre><code>// queryScrapeInvoices：抓「網頁自己呼叫的 JSON」，而非解析畫面表格
+const captured = []
+page.on('response', async (res) =&gt; {
+  const url = res.url()
+  if (QUERY_API_PATTERN.test(url) &amp;&amp;
+      (res.headers()['content-type'] || '').includes('json')) {
+    try { captured.push(await res.json()) } catch {}
+  }
+})
+// 在頁面觸發查詢（填日期 + 送出），網頁會自己打它的 API
+await fillQueryForm(...); await submitQueryForm(...)
+await page.waitForResponse(r =&gt; QUERY_API_PATTERN.test(r.url()), { timeout: 30000 })
+const invoices = normalizeInvoiceList(extractFromJson(captured))  // 不碰 CSS
+</code></pre>
+
+<h2>六、驗證計畫（每階段完成後）</h2>
+<div class="card">
+  <div class="checkrow"><b>✓</b><div>後端單元 / 路由：<code>cd backend &amp;&amp; npm test</code>（einvoice 套件全綠）</div></div>
+  <div class="checkrow"><b>✓</b><div>合約自檢：<code>node backend/scripts/einvoice-portal-contract-check.mjs</code> → <code>ok:true</code></div></div>
+  <div class="checkrow"><b>✓</b><div>端到端（需測試載具帳號）：<code>/scrape/start</code> → 輸入驗證碼 → <code>/scrape/query</code> 回真實發票</div></div>
+  <div class="checkrow"><b>✓</b><div>部署：改 <code>backend/</code> 後 <code>npm run deploy:copy</code> → 重啟 Docker <code>StrawMB</code></div></div>
+  <div class="checkrow"><b>✓</b><div>網頁元件：Playwright 驗證載具 / 銀行設定頁（依使用者規則）</div></div>
+</div>
+
+<h2>七、風險與已知限制（誠實揭露）</h2>
+<table>
+  <tr><th>項目</th><th>說明 / 對策</th></tr>
+  <tr><td>載具查詢 API 確切 endpoint</td><td>需「登入後」才出現（lazy chunk）；實作首跑須用測試帳號攔截一次以鎖定 pattern（攔截機制已備）。</td></tr>
+  <tr><td>OAuth2 風控</td><td>若加裝置指紋，headless 可能被擋；必要時改 <code>headless:false</code> + persistent context。</td></tr>
+  <tr><td>銀行端</td><td>需真機 / 模擬器驗證，伺服器環境無法完成。</td></tr>
+  <tr><td>更穩解</td><td>申請官方免費 appID 走正式 API 仍最穩；惟使用者已表明資源限制只能爬蟲，故本計畫以爬蟲治本為主。</td></tr>
+</table>
+
+<h2>八、下一步（依 SOP）</h2>
+<p>建議照 Plane SOP 開三張 issue（標題附版本號）：<strong>P0 載具治本改寫</strong>、<strong>P1 銀行硬化</strong>、<strong>P2 合約自檢</strong>，移至 In Progress → 交既有 autocoder（Cursor CLI）實作 → Hermes 審核、部署、驗證、寫 comment + 版本 label → In Review。需要的話我可直接幫你建這三張 issue。</p>
+
+<footer>
+  StrawMoneyBook · 同步穩定性治本計畫 · 線上驗證於 2026-06-26（財政部電子發票整合服務平台）<br>
+  計畫原始檔：<code>.hermes/plans/2026-06-26_021600-sync-scrape-hardening.md</code> · 本報告：<code>docs/sync-scrape-hardening-plan.html</code>
+</footer>
+
+</div>
+</body>
+</html>

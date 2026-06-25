@@ -18,6 +18,7 @@ export function createSessionRecord(sessionId, data = {}) {
     status: 'open',
     needsCaptcha: Boolean(data.needsCaptcha),
     captchaSubmitted: Boolean(data.captchaSubmitted),
+    captchaToken: String(data.captchaToken ?? ''),
     cardNo: String(data.cardNo ?? ''),
     cardEncrypt: String(data.cardEncrypt ?? ''),
     metadata: data.metadata && typeof data.metadata === 'object' ? { ...data.metadata } : {},
