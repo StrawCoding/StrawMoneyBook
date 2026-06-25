@@ -2,7 +2,7 @@
 
 ---
 
-## v1.3.26 (pending)
+## v1.3.26
 - (SMB-248) 介面風格切換 Phase 1：新增 `ui-layout.service.js`（`strawmoneybook.ui.layout`，`traditional` | `modern`，預設 modern）；設定 → 個人化可選「介面風格」（與主題配色獨立）。現代版底部導覽改為 4 tab + 中央記帳 CTA；首頁改 Hero 可支配餘額、KPI chips、預算環、快捷列、可折疊資產快照並移除 FAB；新增 `/more` 更多頁（待辦摘要、模組格、設定捷徑）。傳統版維持 5 tab + FAB + 四段期間首頁。新增 `ui-layout.service.test.js`、`ui-layout-source.test.js`、`playwright:ui-layout` 腳本。
 
 ## v1.3.25
