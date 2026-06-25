@@ -135,6 +135,14 @@ const backupStatusLabel = computed(() => {
 
 const modules = computed(() => ([
   {
+    to: '/settings/google-drive-ledger-sync',
+    label: t('more_page.module.google_drive_sync'),
+    hint: t('feature_list.google_drive_sync'),
+    icon: 'fa-solid fa-cloud-arrow-up',
+    badge: '',
+    searchText: 'google drive sync 帳本同步',
+  },
+  {
     to: '/reimbursements',
     label: t('more_page.module.reimbursements'),
     hint: t('feature_list.reimbursements'),

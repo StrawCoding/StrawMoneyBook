@@ -6,6 +6,54 @@
           <h3>{{ t('home_page.current_ledger') }}</h3>
         </header>
         <LedgerSwitcher class="ledger-switcher-wrap" />
+        <div class="period-tabs">
+          <button
+            v-for="mode in filterModes"
+            :key="mode.value"
+            class="btn tab-btn"
+            :class="{ primary: filterMode === mode.value }"
+            @click="switchFilterMode(mode.value)"
+          >
+            {{ mode.label }}
+          </button>
+        </div>
+        <div class="row month-row">
+          <span class="muted">{{ t('home_page.range_label') }}</span>
+          <div class="all-range">{{ filterMode === 'all' ? t('home_page.all_transactions') : displayRange }}</div>
+        </div>
+        <transition name="collapse-fade">
+          <div v-if="filterMode !== 'all'" class="picker-row">
+            <transition name="fade-scale" mode="out-in">
+              <HomeRangePicker
+                v-if="filterMode === 'month'"
+                key="month"
+                mode="month"
+                :month="selectedMonth"
+                class="picker-input"
+                @update:month="pickMonth"
+              />
+              <HomeRangePicker
+                v-else-if="filterMode === 'day'"
+                key="day"
+                mode="day"
+                :day="selectedDay"
+                class="picker-input"
+                @update:day="pickDay"
+              />
+              <HomeRangePicker
+                v-else
+                key="year"
+                mode="year"
+                :year="selectedYear"
+                class="picker-input"
+                @update:year="pickYear"
+              />
+            </transition>
+            <button class="btn quick-btn" :disabled="budgetStore.loading" @click="goCurrentRange">
+              {{ currentRangeLabel }}
+            </button>
+          </div>
+        </transition>
       </article>
 
       <article class="card hero-card" data-testid="home-modern-hero">
@@ -25,6 +73,9 @@
           <span class="kpi-chip budget">{{ t('home_modern.budget_kpi', { percent: budgetUsedPercent }) }}</span>
         </div>
       </article>
+
+      <HomeAssetSummaryCard />
+      <HomeBudgetSummaryCard />
 
       <article class="card budget-ring-card">
         <header class="row budget-ring-head">
@@ -58,7 +109,7 @@
           <span>{{ t('home_modern.quick_einvoice') }}</span>
         </RouterLink>
         <RouterLink class="quick-btn" :to="transferQuickAddPath">
-          <font-awesome-icon icon="fa-solid fa-right-left" />
+          <font-awesome-icon icon="fa-solid fa-arrow-right-arrow-left" />
           <span>{{ t('home_modern.quick_transfer') }}</span>
         </RouterLink>
         <RouterLink class="quick-btn" to="/analysis">
@@ -101,9 +152,13 @@
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import BudgetMiniPie from '@/ui/components/budget/BudgetMiniPie.vue'
+import HomeAssetSummaryCard from '@/ui/components/home/HomeAssetSummaryCard.vue'
+import HomeBudgetSummaryCard from '@/ui/components/home/HomeBudgetSummaryCard.vue'
 import HomeTransactionFeed from '@/ui/components/home/HomeTransactionFeed.vue'
 import LedgerSwitcher from '@/ui/components/common/LedgerSwitcher.vue'
+import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
+import { useHomePeriodFilter } from '@/ui/composables/useHomePeriodFilter'
 import { AI_BOOKKEEPING_PATH } from '@/ui/services/bookkeeping-mode.service'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
@@ -114,7 +169,6 @@ import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { calculateAssetSummary } from '@/core/utils/assets-summary'
-import { monthKeyFromDate } from '@/core/utils/id'
 import { getEffectiveTransactionAmountMinor, isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 
 const ledgerStore = useLedgerStore()
@@ -125,6 +179,21 @@ const loanStore = useLoanStore()
 const reimbursementStore = useReimbursementStore()
 const uiStore = useUiStore()
 const { t } = useI18n()
+
+const {
+  filterMode,
+  selectedMonth,
+  selectedDay,
+  selectedYear,
+  filterModes,
+  displayRange,
+  currentRangeLabel,
+  switchFilterMode,
+  goCurrentRange,
+  pickMonth,
+  pickDay,
+  pickYear,
+} = useHomePeriodFilter()
 
 const assetSnapshotOpen = ref(false)
 const transferQuickAddPath = '/transactions/quick-add?type=transfer'
@@ -163,21 +232,18 @@ watch(
   () => ledgerStore.activeLedgerId,
   (ledgerId) => {
     if (!ledgerId) return
-    void syncModernHome()
+    void syncModernHomeAssets()
   },
   { immediate: true },
 )
 
-async function syncModernHome() {
-  const monthKey = monthKeyFromDate(new Date())
+async function syncModernHomeAssets() {
   try {
     await Promise.all([
-      budgetStore.monthKey === monthKey ? Promise.resolve() : budgetStore.loadMonth(monthKey),
       loanStore.load().catch(() => null),
       reimbursementStore.load().catch(() => null),
       accountStore.accounts.length ? Promise.resolve() : accountStore.load().catch(() => null),
     ])
-    await transactionStore.loadHomeMonth(monthKey)
   } catch (error) {
     uiStore.pushToast(error.message ?? t('home_page.toast.load_failed'), 'error')
   }
@@ -195,6 +261,57 @@ async function syncModernHome() {
   margin-top: 12px;
   position: relative;
   z-index: 20;
+}
+.month-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.period-tabs {
+  margin-top: 14px;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: var(--input-bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.tab-btn {
+  flex: 1;
+  padding: 7px 0;
+  border-radius: var(--radius-xs);
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: all var(--anim-fast) var(--anim-standard);
+}
+.tab-btn.primary {
+  background: var(--btn-bg);
+  color: var(--primary);
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
+}
+.all-range {
+  font-weight: 700;
+  font-size: 15px;
+}
+.picker-row {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.picker-input {
+  flex: 1;
+}
+.quick-btn {
+  white-space: nowrap;
 }
 .hero-card {
   padding: 18px 16px;
@@ -264,7 +381,7 @@ async function syncModernHome() {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
-.quick-btn {
+.quick-row .quick-btn {
   display: grid;
   gap: 6px;
   justify-items: center;
@@ -278,7 +395,7 @@ async function syncModernHome() {
   font-size: 11px;
   font-weight: 600;
 }
-.quick-btn svg {
+.quick-row .quick-btn svg {
   font-size: 18px;
   color: var(--primary);
 }

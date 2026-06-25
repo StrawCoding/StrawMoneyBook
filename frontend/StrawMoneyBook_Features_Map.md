@@ -126,7 +126,7 @@
 - localStorage key：`strawmoneybook.ui.layout`；值 `traditional` | `modern`，**預設 `modern`**
 - 設定 → 個人化 →「介面風格」：與配色主題獨立，可任意組合
 - **傳統版**：維持 5 tab（首頁 / 分析 / 資產 / 功能 / 設定）+ 首頁 FAB + 四段期間篩選首頁
-- **現代版**：4 tab + 中央記帳 CTA（首頁 / 分析 / 記帳 / 資產 / 更多）；首頁改 `HomeModernView`（Hero 可支配餘額、KPI chips、預算環、快捷列、可折疊資產快照；無 FAB）；設定與原功能列表入口收斂至 `/more`
+- **現代版**：4 tab + 中央記帳 CTA（首頁 / 分析 / 記帳 / 資產 / 更多）；首頁 `HomeModernView` 在 Hero / KPI / 預算環 / 快捷列 / 可折疊資產快照之上，**仍保留**傳統版四段期間篩選、`HomeAssetSummaryCard`、`HomeBudgetSummaryCard` 與 `HomeTransactionFeed`（無 FAB）；設定與原功能列表入口收斂至 `/more`（模組格含帳本同步）
 
 ### 底部導覽（`src/ui/components/layout/BottomNav.vue`）
 
