@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.29
+- (SMB-250) 介面風格切換 Phase 1（Apple HIG）：新增 `ui-layout.service.js`（`strawmoneybook.ui.layout`，`traditional` | `modern`，預設 modern）與 `useUiLayout` composable；`app-runtime` 啟動載入並設定 `document.documentElement.dataset.uiLayout`。設定 → 個人化新增「介面風格」（與配色主題獨立、即時持久化）。現代版以 `apple-ui.css` 套用 Large Title、Inset Grouped、Segmented Control、list row + chevron 視覺；**保留**傳統 5 tab + FAB + 首頁全部區塊（帳本切換、四段期間篩選、資產卡、預算卡、交易流）。傳統版零行為變更。新增 `ui-layout.service.test.js`、`ui-layout-source.test.js`、`playwright:ui-layout`。
+
 ## v1.3.28
 - (SMB-249) 移除 SMB-248「現代介面」Phase 1：刪除 `ui-layout.service.js`、`useUiLayout.js`、`HomeModernView.vue`、`MorePage.vue` 與相關測試／Playwright 腳本；恢復僅傳統 5 tab + 首頁 FAB 版面；設定 → 個人化移除「介面風格」；不再讀寫 localStorage `strawmoneybook.ui.layout`；保留 `useHomePeriodFilter` 與配色主題系統。
 

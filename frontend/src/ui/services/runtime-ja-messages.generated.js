@@ -262,6 +262,7 @@ export const RUNTIME_JA_MESSAGES_GENERATED = {
   "settings_data.toast.reset_done": "全データリセット",
   "settings_data.toast.reset_failed": "リセットに失敗しました",
   "personalization.title": "パーソナライゼーション",
+  "personalization.ui_layout": "画面スタイル",
   "personalization.theme_scheme": "テーマスキーム",
   "personalization.primary_color": "テーマの原色",
   "personalization.font_size": "フォントサイズ",

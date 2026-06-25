@@ -1,5 +1,5 @@
 <template>
-  <section class="stack">
+  <section class="stack assets-page">
     <header class="row page-header">
       <h2 class="page-title">{{ t('assets_page.title') }}</h2>
       <RouterLink class="btn" to="/assets/accounts">{{ t('assets_page.manage') }}</RouterLink>

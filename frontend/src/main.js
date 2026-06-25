@@ -180,6 +180,7 @@ import {
 import { translateMessage } from '@/ui/services/i18n.service'
 import { installGlobalErrorLogging } from '@/ui/services/error-log.service'
 import '@/ui/assets/css/global.css'
+import '@/ui/assets/css/apple-ui.css'
 
 const wandMagicSparklesAliasIcon = {
   ...faWandMagicSparkles,

@@ -1,8 +1,8 @@
 <template>
-  <section class="stack">
+  <section class="stack feature-list-page">
     <article class="card panel">
       <header class="row">
-        <h2>{{ t('feature_list.title') }}</h2>
+        <h2 class="feature-list-page-title">{{ t('feature_list.title') }}</h2>
       </header>
       <nav class="feature-list">
         <RouterLink v-for="feature in features" :key="feature.to" class="feature-link" :to="feature.to">

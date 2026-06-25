@@ -1,12 +1,13 @@
 <template>
-  <div class="view-root">
+  <div class="view-root" :class="{ 'home-modern': isModern }" data-testid="home-view">
+    <h1 class="home-large-title">{{ t('nav.home') }}</h1>
     <section class="stack">
       <article class="card ledger-card">
         <header class="row">
           <h3>{{ t('home_page.current_ledger') }}</h3>
         </header>
-        <LedgerSwitcher class="ledger-switcher-wrap" />
-        <div class="period-tabs">
+        <LedgerSwitcher class="ledger-switcher-wrap" data-testid="home-ledger-switcher" />
+        <div class="period-tabs" data-testid="home-period-filter">
           <button
             v-for="mode in filterModes"
             :key="mode.value"
@@ -56,12 +57,12 @@
         </transition>
       </article>
 
-      <HomeAssetSummaryCard />
-      <HomeBudgetSummaryCard />
-      <HomeTransactionFeed />
+      <HomeAssetSummaryCard data-testid="home-asset-summary" />
+      <HomeBudgetSummaryCard data-testid="home-budget-summary" />
+      <HomeTransactionFeed data-testid="home-transaction-feed" />
 
       <teleport to="body">
-        <button class="fab btn primary" @click="openQuickAdd">{{ t('home_page.quick_add') }}</button>
+        <button class="fab btn primary" data-testid="home-fab" @click="openQuickAdd">{{ t('home_page.quick_add') }}</button>
       </teleport>
     </section>
   </div>
@@ -70,6 +71,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import HomeAssetSummaryCard from '@/ui/components/home/HomeAssetSummaryCard.vue'
+import { useUiLayout } from '@/ui/composables/useUiLayout'
 import { useHomePeriodFilter } from '@/ui/composables/useHomePeriodFilter'
 import HomeBudgetSummaryCard from '@/ui/components/home/HomeBudgetSummaryCard.vue'
 import HomeTransactionFeed from '@/ui/components/home/HomeTransactionFeed.vue'
@@ -82,6 +84,7 @@ import { getPreferredBookkeepingPath } from '@/ui/services/bookkeeping-mode.serv
 const router = useRouter()
 const budgetStore = useBudgetStore()
 const { t } = useI18n()
+const { isModern } = useUiLayout()
 
 const {
   filterMode,

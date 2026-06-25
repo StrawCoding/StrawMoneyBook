@@ -1,5 +1,5 @@
 <template>
-  <section class="stack">
+  <section class="stack settings-page">
     <h2>{{ t('settings.title') }}</h2>
 
     <RouterLink class="card panel account-card" to="/settings/account">

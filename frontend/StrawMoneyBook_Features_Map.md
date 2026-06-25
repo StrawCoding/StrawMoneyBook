@@ -33,7 +33,7 @@
 - SMB-224 Restart / v1.2.47：再修復 v1.2.46 部署後 Tester 仍回報 `GOOGLE_EXCHANGE_005`：production env `GOOGLE_OAUTH_CLIENT_SECRET` 被誤設成 client_id 值（結尾為 `.apps.googleusercontent.com`，而非 `GOCSPX-` 開頭的 web client secret），導致 Google 一律以 `invalid_client / "client secret is invalid"` 拒絕。backend 與 api.strawmb.com serverless 的 OAuth exchange / refresh 端點現在會偵測這種 client-id 形狀的 secret 並視為 missing，回應 `GOOGLE_EXCHANGE_004 / GOOGLE_REFRESH_004 missing_google_oauth_env`，錯誤訊息直接指出該 env 應使用 `GOCSPX-` 開頭的 secret；伺服器啟動時也會 `console.error` 明確警告；前端 `normalizeGoogleAuthError` 將 `missing_google_oauth_env / invalid_client / client secret is invalid` 映射為「Google 自動備份後端設定錯誤，請通知管理員」訊息。
 - 記帳提醒與成就表（每日固定提醒、通知權限 / 精準提醒狀態、連續記帳天數、最長連續與累計記帳日）
 - 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
-- 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本；SMB-154 / 0.26.5 後設定首頁、登入 / 註冊與共同帳本相關頁面使用到的主要介面文案皆已納入 zh-TW / en / ja 正式 i18n key，避免切換英文 / 日文時依賴繁中 fallback；手動重設全部資料前會先嘗試建立 recovery JSON 備份，備份失敗時仍保留錯誤紀錄並繼續既有重設流程；SMB-190 / v1.2.5 後資料管理的 JSON / CSV 匯出檔名會加入時間戳，避免重複匯出覆蓋同一路徑檔案；SMB-216 / v1.2.29 後資料管理的還原備份、CSV 匯入與重設資料等可能超過 3 秒的流程會顯示含百分比的加載動畫，避免使用者誤以為卡住；SMB-221 / v1.2.40 後所有設定子頁面的標題加入與功能對應的 Font Awesome icon，與「關於我們」頁面一致的視覺風格）
+- 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本；SMB-154 / 0.26.5 後設定首頁、登入 / 註冊與共同帳本相關頁面使用到的主要介面文案皆已納入 zh-TW / en / ja 正式 i18n key，避免切換英文 / 日文時依賴繁中 fallback；手動重設全部資料前會先嘗試建立 recovery JSON 備份，備份失敗時仍保留錯誤紀錄並繼續既有重設流程；SMB-190 / v1.2.5 後資料管理的 JSON / CSV 匯出檔名會加入時間戳，避免重複匯出覆蓋同一路徑檔案；SMB-216 / v1.2.29 後資料管理的還原備份、CSV 匯入與重設資料等可能超過 3 秒的流程會顯示含百分比的加載動畫，避免使用者誤以為卡住；SMB-221 / v1.2.40 後所有設定子頁面的標題加入與功能對應的 Font Awesome icon，與「關於我們」頁面一致的視覺風格；SMB-250 / v1.3.29 後設定 → 個人化新增「介面風格」切換（傳統 / 現代，預設現代），與配色主題獨立；現代版以 `apple-ui.css` 套用 Apple HIG 視覺（Large Title、Inset Grouped、Segmented Control、list row + chevron），**保留** 5 tab 底部導覽、首頁 FAB 與全部功能區塊，傳統版維持 v1.3.28 行為）
 - 子頁 header 標準（SMB-178）：含返回鍵的頁面主 header 採帳本同步頁樣式，直接放在頁面容器下，不包在 `card panel` 內容區塊內；全域 `.back-btn` 以 40px chevron icon 呈現，標題置中；新增 / 主要操作按鈕改放在第一個內容卡的 `panel-head` 右側，和存錢罐頁一致
 - 關於與聯絡入口（官網、Facebook、Instagram、Threads、Email、隱私權政策）
 - 官方網站 SEO / 品牌搜尋關鍵字（`../StrawMoneyBookWeb/index.html`：`StrawMoneyBook`、`稻草AI記帳`、`稻草記帳`、`AI記帳`、`對話記帳`、`自動記帳` 等）
@@ -108,7 +108,7 @@
 | `/settings/auto-fill-rules/new` | `src/ui/views/settings/SettingsAutoFillRuleEditPage.vue` | 建立自動識別規則 |
 | `/settings/auto-fill-rules/:id` | `src/ui/views/settings/SettingsAutoFillRuleEditPage.vue` | 編輯自動識別規則 |
 | `/settings/addon-templates` | `src/ui/views/settings/SettingsAddonTemplatePage.vue` | 附加項目模板 |
-| `/settings/personalization` | `src/ui/views/settings/SettingsPersonalizationPage.vue` | 主題與個人化 |
+| `/settings/personalization` | `src/ui/views/settings/SettingsPersonalizationPage.vue` | 介面風格（傳統 / 現代）與主題配色 |
 | `/settings/language` | `src/ui/views/settings/SettingsLanguagePage.vue` | 語言設定 |
 | `/settings/security` | `src/ui/views/settings/SettingsSecurityPage.vue` | 安全鎖 |
 | `/settings/membership-benefits` | `src/ui/views/settings/SettingsMembershipBenefitsPage.vue` | 會員權益 |
@@ -127,6 +127,15 @@
 - 資產：`/assets`
 - 功能：`/features`
 - 設定：`/settings`
+- SMB-250 / v1.3.29：現代介面風格僅調整 `apple-ui.css` 視覺（blur、active pill），**維持上述 5 tab**；首頁 FAB 不變；禁止重新引入 SMB-248 的 4 tab + `/more` 或移除 FAB
+
+### 介面風格（`src/ui/services/ui-layout.service.js` + `src/ui/composables/useUiLayout.js`）
+
+- localStorage key：`strawmoneybook.ui.layout`；值 `traditional` | `modern`，預設 `modern`
+- 啟動時由 `app-runtime.service.js` → `initializeAppEnvironment()` 呼叫 `loadUiLayout()`，並設定 `document.documentElement.dataset.uiLayout`
+- 現代版樣式：`src/ui/assets/css/apple-ui.css`（Large Title、Inset Grouped List、Segmented Control、list row + chevron、0.5px separator）
+- 設定入口：設定 → 個人化 →「介面風格」；與 `theme.service.js` 配色主題獨立、可任意組合
+- 測試：`test/ui-layout.service.test.js`、`test/ui-layout-source.test.js`、`npm run playwright:ui-layout`
 
 ### 首頁內導覽（`src/ui/views/home.vue`）
 
@@ -328,6 +337,7 @@ UI 服務目錄：`src/ui/services/`
 | `secure-setting.service.js` | 敏感設定值加密儲存（AES-GCM） |
 | `security-lock.service.js` | 生物辨識/系統憑證安全鎖整合 |
 | `theme.service.js` | 主題色、配色方案與字體縮放套用 |
+| `ui-layout.service.js` | 介面風格（傳統 / 現代）讀寫與 `dataset.uiLayout` 套用 |
 | `app-update.service.js` | App 版本檢查與商店連結；Android AAB 發版版本碼由 `android/app/build.gradle` 依最終 `versionName` 自動推導（`1,000,000 + major * 1,000,000 + minor * 1,000 + patch`，保留 Play 歷史版本碼升級空間），仍可由 `CI_VERSION_CODE` 覆蓋；Play 發版流程若存在 `mapping.txt` 也會一併上傳去模糊化檔；Fastlane `closed_testing` lane 預設發布到 Google Play `alpha` 封閉測試 track，可用 GitHub Actions 變數 `PLAY_CLOSED_TESTING_TRACK` 指定其他封閉測試 track，並會針對 Google Play edit 被外部變更的暫時性衝突重開 edit 重試 |
 | `i18n.service.js` | 多語系文案管理 |
 | `setup-flow.service.js` | 是否顯示 Welcome / setup 流程判定 |
@@ -342,6 +352,8 @@ UI composable 目錄：`src/ui/composables/`
 |---|---|
 | `useTransactionSearchPage.js` | 交易搜尋頁 filter、批量選取、批量編輯 sheet、摘要與搜尋結果協調 |
 | `useAppShellRuntime.js` | App shell boot 狀態、route transition key、視窗高度鎖定、安全鎖 lifecycle、更新提示協調 |
+| `useUiLayout.js` | 介面風格 reactive 狀態、預覽切換與 storage 同步 |
+| `useHomePeriodFilter.js` | 首頁四段期間篩選、日期 picker 與交易 / 預算同步 |
 
 共享帳本 API 服務目錄：`src/services/shared-ledger/`
 
