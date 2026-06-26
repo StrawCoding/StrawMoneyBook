@@ -137,7 +137,7 @@
 
 [data-ui-layout='modern'] .settings-page .setting-group .item-link {
   min-height: var(--apple-row-min-height);
-  padding: 12px 14px;
+  padding: 8px 14px;
   border: none;
   border-radius: 0;
   background: transparent;

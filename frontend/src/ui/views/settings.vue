@@ -148,6 +148,7 @@ h2 {
   align-items: center;
   gap: 10px;
   padding: 4px 0;
+  min-height: 44px;
   text-decoration: none;
   color: var(--text);
   font-weight: 700
@@ -158,11 +159,11 @@ h2 {
 }
 .item-copy small {
   font-weight: 500;
-  line-height: 1.35;
+  line-height: 1.3;
 }
 .item-link + .item-link {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px solid var(--line, var(--field-border))
 }
 .item-icon {

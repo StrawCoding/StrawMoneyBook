@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.33
+- (SMB-254) 記帳設定頁面（`/settings`）項目列高度調小、清單更緊湊：現代版（預設）設定列 `apple-ui.css` 垂直 padding 由 `12px 14px` 改為 `8px 14px`，量測列高自 63px 降至 54px（約 -14%）；傳統版 `settings.vue` 列間分隔由 `margin-top/padding-top: 12px` 收斂為 `8px`、描述行高 1.35→1.3。兩種版型皆保留 `min-height: 44px` 點擊區（不破壞觸控/可讀性），水平 padding 與 safe-area 不變。新增 `settings-page-compact-rows-source.test.js` 鎖定 compact padding + 44px tap target；Playwright 於真實 `/settings` route + app shell 量測現代 63→54px、傳統 45-50px，皆維持 44px 最小點擊高度。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
+
 ## v1.3.32
 - (SMB-252) P1 銀行同步 WebView 爬蟲硬化 + CSV 匯入退路：`FirstBankAutomation.java` 以 `shouldInterceptRequest` 優先攔截交易明細 JSON（`parseTransactionsFromInterceptedJson`），`table.CnbTable` DOM 降備援；OCR 新增 `CAPTCHA_MIN_CONFIDENCE` 門檻，全失敗仍回圖手填；連線流程加入 frame 合約自檢（`#code_verify` 登入探測 +「我的帳戶」錨點）；銀行連線頁新增「匯入銀行帳單 CSV」接既有審核→去重→匯入管線（`bank-statement-csv.js`、`importBankStatementCsv`）。`first-bank-portal-contract-check.mjs` 補 frame 頁「我的帳戶」探測。驗證：frontend `test:node`（含 bank-statement-csv / bank-sync-android-source / bank-sync.service）、Android `FirstBankAutomationCaptchaTest`、`playwright:bank-sync`。
 
