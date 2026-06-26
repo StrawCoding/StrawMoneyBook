@@ -695,6 +695,12 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 - 防止他人直接看到財務資料
 - 保護同步、備份等敏感設定資訊
 
+### 8.4 後端部署與 native 依賴安裝（SMB-256 / v1.3.37）
+
+後端部署腳本 `backend/package.json` 的 `deploy:copy` 會先把後端原始碼 rsync 到 `/mnt/data/Data/serviceApps/StrawMB`，再呼叫 `backend/scripts/deploy-production-install.mjs` 安裝 production 依賴。關鍵在於 native binding（`better-sqlite3`）是綁定 Node ABI 與 glibc 的：若直接在部署主機 Node 上 `npm install`，編出的 binding 會對應主機的 ABI / glibc，與 StrawMB 容器執行的 Node（目前 `1panel/node:25.8.0`，ABI 141）不符，部署 / 重啟窗口期間後端載入 binding 就會噴 `Module did not self-register` / `NODE_MODULE_VERSION` mismatch / `ERR_DLOPEN_FAILED`（穩態時容器啟動會自行重新 `npm install` 而恢復，但窗口期會短暫崩潰）。
+
+治本作法是 `deploy-production-install.mjs` 在與 StrawMB 完全相同的容器 image 內安裝 native 依賴：它從 `/opt/1panel/runtime/node/StrawMB/.env` 讀取 `NODE_VERSION` / `CODE_DIR` / `CONTAINER_PACKAGE_URL`，以 `docker run --rm` 掛載部署目錄到對應的 `1panel/node:<NODE_VERSION>` image 內執行 `npm install`，安裝後再於同一 image 內驗證 `require('better-sqlite3')` 可載入並查詢；docker 不可用時直接中止而非退回 host install。如此一來 deploy:copy 產出的 binding 與容器執行階段的 ABI / glibc 一致，部署窗口不再出現 self-register 錯誤。
+
 ## 9. 銀行同步
 
 ### 9.1 銀行同步現況

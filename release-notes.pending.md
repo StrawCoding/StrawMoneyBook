@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (SMB-256) 修復部署 / 重啟窗口期間後端 better-sqlite3 `Module did not self-register` / `NODE_MODULE_VERSION` mismatch / `ERR_DLOPEN_FAILED`：根因為 `backend/package.json` 的 `deploy:copy` 直接在部署主機 Node（ABI 137、較新 glibc）跑 `npm install`，編出的 native binding 與 StrawMB 容器 Node v25.8.0（ABI 141）不符；穩態時容器啟動會自行 `npm install` 重建故正常，但部署窗口會短暫載入 host ABI binding 而崩潰。治本：新增 `backend/scripts/deploy-production-install.mjs`，改在與 StrawMB 相同的 `1panel/node:<NODE_VERSION>` 容器 image 內安裝 native 依賴（讀 `/opt/1panel/runtime/node/StrawMB/.env` 的 NODE_VERSION / CODE_DIR / CONTAINER_PACKAGE_URL，可用 STRAWMB_NODE_IMAGE/VERSION/DEPLOY_DIR/RUNTIME_ENV 覆寫），安裝後於同一 image 內驗證 `require('better-sqlite3')` 可載入並查詢；docker 不可用時直接中止而非退回 host install。`deploy:copy` 改為 rsync 後呼叫此腳本，並新增 `deploy:install` 別名。可重現驗證：host 編譯之 binding（`node_register_module_v137`）在容器內 require 失敗（ERR_DLOPEN_FAILED GLIBC_2.38），改在容器內安裝後輸出 `node_register_module_v141` 且 require + query OK。驗證：backend `npm test` 94/94（新增 `deploy-production-install-source.test.js` 4 案例）；已執行 `npm run deploy:copy`（容器內安裝 + 驗證 better-sqlite3 OK on node v25.8.0 ABI 141）並重啟 StrawMB，啟動 log 無 self-register / NODE_MODULE_VERSION / ERR_DLOPEN，後端 listening on 8787。屬 infra / 部署腳本修復，無 web UI 變更，未跑 Playwright。
+
 ---
 
 ## v1.3.36
