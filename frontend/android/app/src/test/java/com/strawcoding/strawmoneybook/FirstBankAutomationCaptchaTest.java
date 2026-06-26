@@ -179,4 +179,30 @@ public class FirstBankAutomationCaptchaTest {
         assertTrue(script.contains("我的帳戶"));
         assertTrue(script.contains("table.CnbTable"));
     }
+
+    @Test
+    public void loginResponseDiagnosticsScriptCapturesRealBankResponse() {
+        String script = FirstBankAutomation.buildLoginResponseDiagnosticsScript();
+        assertTrue(script.contains("__bankAutoAlerts"));
+        assertTrue(script.contains("alertText"));
+        assertTrue(script.contains("modalText"));
+        assertTrue(script.contains("replyText"));
+        assertTrue(script.contains("訊息回覆頁"));
+    }
+
+    @Test
+    public void summarizeLoginFailureSurfacesBankAlertText() {
+        String summary = FirstBankAutomation.summarizeLoginFailure(
+            "Please enterID No./Registration No.!",
+            "",
+            ""
+        );
+        assertTrue(summary.contains("alert: Please enterID No./Registration No.!"));
+    }
+
+    @Test
+    public void summarizeLoginFailureFallsBackWhenNoBankMessageCaptured() {
+        String summary = FirstBankAutomation.summarizeLoginFailure("", "", "");
+        assertTrue(summary.contains("no explicit bank message captured"));
+    }
 }

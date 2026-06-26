@@ -42,6 +42,23 @@ test('first bank automation enforces captcha ocr confidence threshold and portal
   assert.match(firstBankAutomationSource, /我的帳戶/)
 })
 
+test('SMB-252 Restart submit fills hidden real login fields and surfaces real bank response', () => {
+  // 治本：doLogin() 讀的是 type=hidden 的 #loginCustId 真值欄位（#loginCustIdFake 僅可見代理）。
+  assert.match(firstBankAutomationSource, /setFieldByName\('loginCustId', nationalId\)/)
+  assert.match(firstBankAutomationSource, /setFieldByName\('usrId', userCode\)/)
+  assert.match(firstBankAutomationSource, /setFieldByName\('pwd', password\)/)
+  assert.match(firstBankAutomationSource, /setFieldByName\('vrfyCode', captcha\)/)
+  // 攔截銀行端 alert() 以避免阻塞並保留診斷文字。
+  assert.match(firstBankAutomationSource, /__bankAutoAlerts/)
+  // 送出改成偵測實際存在的登入函式（clickArea→doLogin），不再假設只有 clickArea。
+  assert.match(firstBankAutomationSource, /target\.win\.doLogin/)
+  // 失敗時攤開銀行真實回應，取代籠統的「停在登入頁」訊息。
+  assert.match(firstBankAutomationSource, /buildLoginResponseDiagnosticsScript/)
+  assert.match(firstBankAutomationSource, /captureLoginResponseDiagnostics/)
+  assert.match(firstBankAutomationSource, /summarizeLoginFailure/)
+  assert.doesNotMatch(firstBankAutomationSource, /Login response still stayed on login page/)
+})
+
 test('SMB-252 desktop login readiness depends only on functional anchors, not mobileHint text', () => {
   // 治本：ready 只依功能錨點；不得再因頁面文字提及 Mobile Bank 而誤判為手機版攔阻。
   assert.match(

@@ -397,7 +397,15 @@ final class FirstBankAutomation {
                 debugTrace.record("submit_login", "ok", "Login succeeded", attemptDetails);
                 return;
             }
-            debugTrace.record("submit_login", "error", "Login response still stayed on login page", attemptDetails);
+            // 治本診斷：攤開銀行端真實回應（alert / 訊息回覆頁 / 欄位驗證），取代籠統的「停在登入頁」。
+            JSONObject diagnostics = session.captureLoginResponseDiagnostics();
+            mergeJsonDetails(attemptDetails, diagnostics);
+            String bankMessage = summarizeLoginFailure(
+                diagnostics.optString("alertText", ""),
+                diagnostics.optString("modalText", ""),
+                diagnostics.optString("replyText", "")
+            );
+            debugTrace.record("submit_login", "error", bankMessage, attemptDetails);
             session.loadUrl(LOGIN_URL);
         }
 
@@ -1666,11 +1674,52 @@ final class FirstBankAutomation {
                 input.dispatchEvent(new Event('change', { bubbles: true }));
                 return true;
               }
+              function setFieldByName(name, value) {
+                let input = byId(target.doc, name);
+                if (!input) {
+                  try {
+                    const named = target.doc.getElementsByName(name);
+                    if (named && named.length) input = named[0];
+                  } catch (_error) {}
+                }
+                if (!input) return false;
+                try { input.removeAttribute('readonly'); } catch (_error) {}
+                input.value = value;
+                try {
+                  input.dispatchEvent(new Event('input', { bubbles: true }));
+                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                } catch (_error) {}
+                return true;
+              }
+              function installAlertCapture(win) {
+                try {
+                  if (!Array.isArray(win.__bankAutoAlerts)) { win.__bankAutoAlerts = []; }
+                  if (!win.__bankAutoAlertHook) {
+                    win.__bankAutoAlertOriginal = typeof win.alert === 'function' ? win.alert : null;
+                    win.alert = function (message) {
+                      try { win.__bankAutoAlerts.push(text(message)); } catch (_error) {}
+                      return undefined;
+                    };
+                    win.__bankAutoAlertHook = true;
+                  }
+                } catch (_error) {}
+              }
+              // 攔截銀行端 alert() 錯誤訊息：避免原生對話框阻塞自動化，並保留真實診斷文字。
+              entries.forEach((entry) => installAlertCapture(entry.win));
+              installAlertCapture(window);
+              // 可見欄位（維持 UI 與遮罩顯示一致）。
               setInput('#loginCustIdFake', nationalId);
               setInput('#loginCustSeq, #loginCustIdRptSeq', repeatSeq);
               setInput('#usrIdInput', userCode);
               setInput('#pwd', password);
               setInput('#vrfyCode', captcha);
+              // 治本：直接寫入 doLogin() 真正讀取的隱藏/實名欄位，不依賴 attachIdBehavior 的遮罩同步時序。
+              // 第一銀行電腦版 #loginCustId 為 type=hidden 真值欄位（#loginCustIdFake 僅為可見代理）。
+              setFieldByName('loginCustId', nationalId);
+              setFieldByName('loginCustIdRptSeq', repeatSeq);
+              setFieldByName('usrId', userCode);
+              setFieldByName('pwd', password);
+              setFieldByName('vrfyCode', captcha);
               const coords = (() => {
                 const area = target.doc.querySelector('area[href*="clickArea"], area[onclick*="clickArea"]');
                 if (!area) return { x: '160', y: '27' };
@@ -1690,8 +1739,14 @@ final class FirstBankAutomation {
               if (positionInput) {
                 positionInput.value = `${coords.x},${coords.y}`;
               }
+              // 送出：優先呼叫第一銀行真正的登入入口 clickArea()（內部會帶座標並呼叫 doLogin()）。
               if (typeof target.win.clickArea === 'function') {
                 target.win.clickArea();
+                return true;
+              }
+              // 若頁面改版未提供 clickArea，直接呼叫實際登入函式 doLogin()，避免空轉。
+              if (typeof target.win.doLogin === 'function') {
+                target.win.doLogin();
                 return true;
               }
               const img = byId(target.doc, 'captchaLoginArea');
@@ -1713,6 +1768,132 @@ final class FirstBankAutomation {
               return false;
             })();
             """, quoteJs(nationalId), quoteJs(repeatSeq), quoteJs(userCode), quoteJs(password), quoteJs(captchaText));
+    }
+
+    static String buildLoginResponseDiagnosticsScript() {
+        return """
+            (() => {
+              function text(value) { return String(value ?? '').trim(); }
+              function collectEntries() {
+                const found = [];
+                const seen = new Set();
+                function visit(win) {
+                  if (!win || seen.has(win)) return;
+                  seen.add(win);
+                  try {
+                    found.push({ win, doc: win.document });
+                    for (let index = 0; index < win.frames.length; index += 1) {
+                      visit(win.frames[index]);
+                    }
+                  } catch (_error) {}
+                }
+                visit(window);
+                return found.filter((entry) => Boolean(entry.doc));
+              }
+              const entries = collectEntries();
+              const alerts = [];
+              const modalMessages = [];
+              let replyText = '';
+              let onLoginPage = false;
+              let url = '';
+              entries.forEach((entry) => {
+                try {
+                  const win = entry.win;
+                  const doc = entry.doc;
+                  if (!url) url = text(win.location?.href || doc.URL || '');
+                  if (Array.isArray(win.__bankAutoAlerts)) {
+                    win.__bankAutoAlerts.forEach((message) => {
+                      const value = text(message);
+                      if (value) alerts.push(value);
+                    });
+                  }
+                  ['#login-msg .pop-out-title', '#login-msg .pop-content', '#alertMsgContent', '#alertMsg', '.pop-content']
+                    .forEach((selector) => {
+                      try {
+                        doc.querySelectorAll(selector).forEach((node) => {
+                          if (node.offsetParent === null && node.getClientRects().length === 0) return;
+                          const value = text(node.innerText || node.textContent || '');
+                          if (value) modalMessages.push(value);
+                        });
+                      } catch (_error) {}
+                    });
+                  const blob = `${text(doc.title)} ${text(doc.body?.innerText)}`;
+                  if (/訊息回覆頁|系統回覆訊息|登入失敗|資料錯誤/.test(blob)) {
+                    replyText = text(doc.body?.innerText).slice(0, 600);
+                  }
+                  if (doc.getElementById('loginCustId') || doc.getElementById('vrfyCode') || doc.getElementById('loginCustIdFake')) {
+                    onLoginPage = true;
+                  }
+                } catch (_error) {}
+              });
+              function dedupe(list) { return Array.from(new Set(list.filter(Boolean))); }
+              return {
+                url,
+                onLoginPage,
+                alertText: dedupe(alerts).join(' | ').slice(0, 600),
+                modalText: dedupe(modalMessages).join(' | ').slice(0, 600),
+                replyText,
+              };
+            })();
+            """;
+    }
+
+    static String buildLoginErrorVisibleScript() {
+        return """
+            (() => {
+              function text(value) { return String(value ?? '').trim(); }
+              function collectEntries() {
+                const found = [];
+                const seen = new Set();
+                function visit(win) {
+                  if (!win || seen.has(win)) return;
+                  seen.add(win);
+                  try {
+                    found.push({ win, doc: win.document });
+                    for (let index = 0; index < win.frames.length; index += 1) {
+                      visit(win.frames[index]);
+                    }
+                  } catch (_error) {}
+                }
+                visit(window);
+                return found.filter((entry) => Boolean(entry.doc));
+              }
+              return collectEntries().some((entry) => {
+                try {
+                  if (Array.isArray(entry.win.__bankAutoAlerts) && entry.win.__bankAutoAlerts.some((message) => text(message))) {
+                    return true;
+                  }
+                  const modal = entry.doc.querySelector('#login-msg .pop-content');
+                  if (modal && (modal.offsetParent !== null || modal.getClientRects().length > 0) && text(modal.innerText || modal.textContent || '')) {
+                    return true;
+                  }
+                  return false;
+                } catch (_error) {
+                  return false;
+                }
+              });
+            })();
+            """;
+    }
+
+    static String summarizeLoginFailure(String alertText, String modalText, String replyText) {
+        String alert = normalizeText(alertText);
+        String modal = normalizeText(modalText);
+        String reply = normalizeText(replyText);
+        StringBuilder summary = new StringBuilder("First Bank login rejected");
+        if (!alert.isEmpty()) {
+            summary.append("; alert: ").append(alert);
+        }
+        if (!modal.isEmpty()) {
+            summary.append("; modal: ").append(modal);
+        }
+        if (!reply.isEmpty()) {
+            summary.append("; reply: ").append(reply);
+        }
+        if (alert.isEmpty() && modal.isEmpty() && reply.isEmpty()) {
+            summary.append("; no explicit bank message captured (still on login page)");
+        }
+        return summary.toString();
     }
 
     static CaptchaSnapshot parseCaptchaSnapshot(Object value) {
@@ -2567,9 +2748,21 @@ final class FirstBankAutomation {
                 if (!isLoginPage() && Boolean.TRUE.equals(evaluateJavaScript(buildReplyMessagePageScript()))) {
                     return false;
                 }
+                // 提早歸因：若銀行端已拋出 alert / 錯誤對話框（如驗證碼錯、欄位未填），不再空等 15 秒。
+                if (Boolean.TRUE.equals(evaluateJavaScript(buildLoginErrorVisibleScript()))) {
+                    return false;
+                }
                 sleep(600L);
             }
             return false;
+        }
+
+        JSONObject captureLoginResponseDiagnostics() throws Exception {
+            Object result = evaluateJavaScript(buildLoginResponseDiagnosticsScript());
+            if (result instanceof JSONObject) {
+                return (JSONObject) result;
+            }
+            return new JSONObject();
         }
 
         void openMyAccounts() throws Exception {

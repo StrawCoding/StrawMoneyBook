@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (SMB-252 Restart) 第一銀行 Android 同步登入「送出後仍停在登入頁→退回 OCR 空轉→login_failed」治本（v1.3.34 修好誤判手機版後，失敗點往後移到登入送出/驗證碼階段）。根因（已比對線上 `ibank.firstbank.com.tw/NetBank/index103.html` 真實表單）：`doLogin()` 讀取的是 `type="hidden"` 的 `#loginCustId`（真值欄位），`#loginCustIdFake` 僅為可見代理、由 `attachIdBehavior` 的遮罩事件「不可靠地」同步；`FirstBankAutomation.java` 的 `buildSubmitLoginScript` 過去只設 `*Fake` 欄位的 `.value`，隱藏 `#loginCustId` 可能為空 → `doLogin()` 跳 `alert('Please enter ID')` 中止 → 從未真正送出 → 停在登入頁；失敗又被籠統記為「Login response still stayed on login page」，無法歸因。治本：(1) 直接寫入 `doLogin()` 真正讀取的隱藏/實名欄位 `loginCustId`/`loginCustIdRptSeq`/`usrId`/`pwd`/`vrfyCode`（`setFieldByName`），不再依賴遮罩同步時序；(2) 送出改成 `clickArea()`→備援 `doLogin()`，不再假設只有 `clickArea()`；(3) 攤開銀行真實回應：送出時攔截 `window.alert()`（避免原生對話框阻塞、保留訊息）並新增 `buildLoginResponseDiagnosticsScript`／`captureLoginResponseDiagnostics`，把 alert／訊息回覆頁／欄位驗證文字寫入 debug trace，`summarizeLoginFailure` 取代籠統訊息；(4) `waitForLoginSuccess` 偵測到 alert/錯誤對話框即提早歸因，不再空等 15 秒。驗證：`cd frontend && npm run test:node` 609/609 全綠（新增 `bank-sync-android-source.test.js` SMB-252 Restart 案例鎖定隱藏欄位填值/alert 攔截/doLogin 備援/診斷）、Android `FirstBankAutomationCaptchaTest` 24/24 通過（新增診斷腳本與 `summarizeLoginFailure` 案例）、`npm run build`（vite + cap sync + assembleRelease）產出 APK versionName 1.3.36。屬 Android 原生修復，已重建 APK 始能 ship 至裝置；未更動 `./backend`，未執行 deploy:copy / StrawMB restart。需 Android 真機/模擬器以真實 i-Bank 憑證實測登入送出。
+
 ---
 
 ## v1.3.35
