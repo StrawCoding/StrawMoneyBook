@@ -197,6 +197,80 @@ export async function deleteReimbursementItemsByReimbursementId(ledgerId, reimbu
   )
 }
 
+export async function listDraftTransactionImportItemsByTransactionIds(ledgerId, transactionIds = []) {
+  assertLedgerId(ledgerId)
+  const ids = Array.from(new Set(transactionIds.map((value) => String(value ?? '').trim()).filter(Boolean)))
+  if (!ids.length) return []
+
+  const placeholders = ids.map(() => '?').join(', ')
+  const result = await query(
+    `SELECT
+       ri.ledger_id,
+       ri.id,
+       ri.reimbursement_id,
+       ri.source_type,
+       ri.entry_type,
+       ri.transaction_id,
+       ri.category_id,
+       ri.account_id,
+       ri.description,
+       ri.amount_minor,
+       ri.occurred_at,
+       r.status AS reimbursement_status,
+       r.title AS reimbursement_title
+     FROM reimbursement_items ri
+     INNER JOIN reimbursements r
+       ON r.ledger_id = ri.ledger_id
+      AND r.id = ri.reimbursement_id
+     WHERE ri.ledger_id = ?
+       AND r.deleted_at IS NULL
+       AND r.status = 'draft'
+       AND ri.transaction_id IN (${placeholders})
+     ORDER BY r.updated_at DESC, ri.created_at ASC;`,
+    [ledgerId, ...ids],
+  )
+
+  return rowsOf(result)
+}
+
+export async function updateReimbursementItemById(ledgerId, itemId, input = {}) {
+  assertLedgerId(ledgerId)
+  const normalizedItemId = String(itemId ?? '').trim()
+  if (!normalizedItemId) {
+    throw new Error('itemId 為必填')
+  }
+
+  const now = nowIso()
+  await run(
+    `UPDATE reimbursement_items
+     SET description = ?,
+         amount_minor = ?,
+         updated_at = ?
+     WHERE ledger_id = ?
+       AND id = ?;`,
+    [
+      input.description ?? null,
+      input.amountMinor,
+      now,
+      ledgerId,
+      normalizedItemId,
+    ],
+  )
+}
+
+export async function deleteReimbursementItemById(ledgerId, itemId) {
+  assertLedgerId(ledgerId)
+  const normalizedItemId = String(itemId ?? '').trim()
+  if (!normalizedItemId) return
+
+  await run(
+    `DELETE FROM reimbursement_items
+     WHERE ledger_id = ?
+       AND id = ?;`,
+    [ledgerId, normalizedItemId],
+  )
+}
+
 export async function listReimbursementAdvances(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   const activeOnly = options?.activeOnly !== false

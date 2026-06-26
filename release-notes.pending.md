@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.35
+- (SMB-255) 草稿請款單導入報銷項目自動同步：新增 `claim-sheet-draft-sync.service.js` 與 `claim-sheet-draft-sync.js`，當來源可報銷交易修改 `reimburse_target_minor`、刪除、取消可報銷、直接報銷入帳或 pending=0 時，自動更新或移除 **draft** 請款單內對應的 reimbursement import items 並 `recomputeReimbursementTotal`；`paid` 請款單不受影響。掛載點：`setReimbursableExpenseClaimAmount`、`settleReimbursableExpense`、`cancelReimbursableExpenseSettlement`、`deleteManualTransaction`、取消可報銷編輯、批量取消可報銷；`getReimbursementDetail` 載入草稿時 lazy reconcile。新增 `reimbursement-claim-sheet-sync.test.js`（14 案例）。驗證：`cd frontend && npm run test:node` 608/608 全綠。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
+
 ## v1.3.34
 - (SMB-252 Restart) 修復第一銀行 Android 同步在 v1.3.32 desktop 硬化後誤判電腦版登入頁為手機版（`first_bank_login_page_mismatch`）：`FirstBankAutomation.java` 的 `buildDesktopLoginContractProbeScript()`（桌面登入頁探測）原以頁面文字 `/手機版|行動版|行動銀行|mobile\s*bank/` 推斷 `mobileHint`，並把 `!mobileHint` 當作 `ready` 的攔阻條件。但第一銀行**電腦版**登入頁（`ibank.firstbank.com.tw/NetBank/index103.html`）文字本身就含「Mobile Bank」（指向行動銀行 App 的連結），導致 `hasLoginForm/hasCaptchaImage/hasCaptchaLoginArea/hasVrfyCode` 四個功能錨點齊全時仍因 `mobileHint=true` → `ready=false` 被中止，連驗證碼步驟都進不去。治本：(1) `ready` 只依功能錨點 `hasLoginForm && hasCaptchaImage && hasCaptchaLoginArea && hasVrfyCode`，移除 `!mobileHint`；(2) `mobileHint` 改為**非攔阻診斷欄位**，依版面結構（行動版 `meta[name=viewport]` `width=device-width` 標記且缺少 desktop 功能錨點）推斷，不再用頁面文字；新增 `hasMobileViewport` 診斷欄位回傳。驗證：frontend `test:node` 594/594（新增 `bank-sync-android-source.test.js` SMB-252 案例鎖定 ready 不含 `!mobileHint`、不用文字判斷）、Android `FirstBankAutomationCaptchaTest`（新增 `desktopLoginPageReadinessIgnoresMobileHint`）通過、`npm run build:web` 成功、`npm run playwright:bank-sync` 成功。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
 

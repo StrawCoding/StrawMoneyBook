@@ -13,6 +13,10 @@ import {
   updateTransactionReimburseTargetMinor,
 } from '@/core/repositories/transaction.repo'
 import {
+  reconcileDraftClaimSheetImportItems,
+  syncDraftClaimSheetsForTransaction,
+} from '@/core/services/claim-sheet-draft-sync.service'
+import {
   addLoanRepayment,
   deleteLoanRepaymentByTransactionId,
 } from '@/core/services/loan.service'
@@ -56,6 +60,7 @@ import {
   updateReimbursementStatus,
 } from '@/core/repositories/reimbursement.repo'
 import { assertCanCreateReimbursement, isFreeTier } from '@/core/services/membership.service'
+import { isReimbursementImportClaimItem } from '@/core/utils/claim-sheet-draft-sync'
 
 const ADDON_NOTE_PREFIX = '【附加項目】'
 
@@ -344,6 +349,7 @@ export async function setReimbursableExpenseClaimAmount(ledgerId, payload = {}) 
   }
 
   await updateTransactionReimburseTargetMinor(ledgerId, txId, targetMinor)
+  await syncDraftClaimSheetsForTransaction(ledgerId, txId)
   return { txId, targetMinor }
 }
 
@@ -509,6 +515,17 @@ export async function getReimbursementDetail(ledgerId, reimbursementId) {
   const claim = await getReimbursementById(ledgerId, reimbursementId)
   if (!claim) {
     throw new Error('找不到資料')
+  }
+
+  if (String(claim.status ?? 'draft') === 'draft') {
+    const itemsBefore = await listReimbursementItems(ledgerId, reimbursementId)
+    const txIds = itemsBefore
+      .filter((item) => isReimbursementImportClaimItem(item))
+      .map((item) => String(item?.transaction_id ?? '').trim())
+      .filter(Boolean)
+    if (txIds.length) {
+      await reconcileDraftClaimSheetImportItems(ledgerId, { txIds })
+    }
   }
 
   const items = await listReimbursementItems(ledgerId, reimbursementId)
@@ -1120,6 +1137,8 @@ export async function settleReimbursableExpense(ledgerId, payload) {
 
     const copiedResult = await copyExpenseToTargetLedgers(ledgerId, sourceTx, payload)
 
+    await syncDraftClaimSheetsForTransaction(ledgerId, payload.txId)
+
     return {
       marked: true,
       createdIncome: Boolean(incomeTxId),
@@ -1185,6 +1204,8 @@ export async function cancelReimbursableExpenseSettlement(ledgerId, txId) {
     const restoredAdvanceMinor = restoredUsages.reduce((sum, item) => {
       return sum + Math.max(0, Math.round(Number(item.amount_minor ?? 0)))
     }, 0)
+
+    await syncDraftClaimSheetsForTransaction(ledgerId, txId)
 
     return {
       unmarked: true,

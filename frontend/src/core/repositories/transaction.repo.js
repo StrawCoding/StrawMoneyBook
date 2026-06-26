@@ -573,6 +573,100 @@ export async function listReimbursementTransactions(ledgerId, state) {
   return rowsOf(result)
 }
 
+export async function findReimbursementTransactionById(ledgerId, txId) {
+  assertLedgerId(ledgerId)
+  const normalizedTxId = String(txId ?? '').trim()
+  if (!normalizedTxId) return null
+
+  const result = await query(
+    `SELECT t.ledger_id, t.id, t.type, t.account_id, t.category_id, t.amount_minor,
+            t.occurred_at, t.note, t.is_reimbursable, t.reimbursement_state, t.reimbursed_at,
+            t.reimburse_target_minor,
+            t.include_in_budget, t.include_in_analysis, c.name AS category_name,
+            (
+              SELECT rt.id
+              FROM transactions rt
+              WHERE rt.ledger_id = t.ledger_id
+                AND rt.deleted_at IS NULL
+                AND rt.type = 'income'
+                AND rt.origin_type = 'reimbursement'
+                AND rt.external_ref_id = t.id
+              ORDER BY rt.created_at DESC
+              LIMIT 1
+            ) AS reimbursed_tx_id,
+            (
+              SELECT rt.account_id
+              FROM transactions rt
+              WHERE rt.ledger_id = t.ledger_id
+                AND rt.deleted_at IS NULL
+                AND rt.type = 'income'
+                AND rt.origin_type = 'reimbursement'
+                AND rt.external_ref_id = t.id
+              ORDER BY rt.created_at DESC
+              LIMIT 1
+            ) AS reimbursed_account_id,
+            COALESCE((
+              SELECT SUM(u.amount_minor)
+              FROM reimbursement_advance_usages u
+              WHERE u.ledger_id = t.ledger_id
+                AND u.expense_tx_id = t.id
+            ), 0) AS advance_used_minor,
+            COALESCE((
+              SELECT GROUP_CONCAT(u.advance_id, ',')
+              FROM reimbursement_advance_usages u
+              WHERE u.ledger_id = t.ledger_id
+                AND u.expense_tx_id = t.id
+            ), '') AS advance_ids_csv,
+            COALESCE((
+              SELECT GROUP_CONCAT(u.advance_id || ':' || u.amount_minor, ',')
+              FROM reimbursement_advance_usages u
+              WHERE u.ledger_id = t.ledger_id
+                AND u.expense_tx_id = t.id
+            ), '') AS advance_usage_pairs,
+            COALESCE((
+              SELECT SUM(rt.amount_minor)
+              FROM transactions rt
+              WHERE rt.ledger_id = t.ledger_id
+                AND rt.deleted_at IS NULL
+                AND rt.type = 'income'
+                AND rt.origin_type = 'reimbursement'
+                AND rt.external_ref_id = t.id
+            ), 0) AS cash_reimbursed_minor,
+            ${paidClaimItemMinorSql('t')} AS claim_reimbursed_minor,
+            COALESCE((
+              SELECT SUM(rt.amount_minor)
+              FROM transactions rt
+              WHERE rt.ledger_id = t.ledger_id
+                AND rt.deleted_at IS NULL
+                AND rt.type = 'income'
+                AND rt.origin_type = 'reimbursement'
+                AND rt.external_ref_id = t.id
+            ), 0)
+            +
+            COALESCE((
+              SELECT SUM(u.amount_minor)
+              FROM reimbursement_advance_usages u
+              WHERE u.ledger_id = t.ledger_id
+                AND u.expense_tx_id = t.id
+            ), 0)
+            +
+            ${paidClaimItemMinorSql('t')} AS reimbursed_minor
+     FROM transactions t
+     LEFT JOIN categories c
+       ON c.ledger_id = t.ledger_id
+      AND c.id = t.category_id
+     WHERE t.ledger_id = ?
+       AND t.id = ?
+       AND t.deleted_at IS NULL
+       AND t.type = 'expense'
+       AND t.is_reimbursable = 1
+     LIMIT 1;`,
+    [ledgerId, normalizedTxId],
+  )
+
+  return firstRow(result)
+}
+
 export async function countReimbursableTransactions(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   const excludeTxId = String(options?.excludeTxId ?? '').trim()
@@ -741,7 +835,8 @@ export async function findTransactionRecordById(ledgerId, txId) {
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id, t.category_id,
             t.amount_minor, t.occurred_at, t.note, t.origin_type, t.external_ref_id,
-            t.is_reimbursable, t.reimbursement_state, t.include_in_budget, t.include_in_analysis,
+            t.is_reimbursable, t.reimbursement_state, t.reimburse_target_minor,
+            t.include_in_budget, t.include_in_analysis,
             CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
             ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
             c.name AS category_name, c.kind AS category_kind, c.icon AS category_icon,

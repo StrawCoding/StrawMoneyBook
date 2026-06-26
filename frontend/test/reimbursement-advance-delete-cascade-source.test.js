@@ -34,5 +34,5 @@ test('reimbursement service removes advance records and usages when their source
 test('transaction deletion cascades into reimbursement advance cleanup before soft deleting transactions', () => {
   assert.match(transactionServiceSource, /import\s+\{\s*withTransaction\s*\}\s+from '@\/core\/db\/sqlite'/)
   assert.match(transactionServiceSource, /removeReimbursementAdvanceEffectsBySourceTransaction/)
-  assert.match(transactionServiceSource, /await withTransaction\(async \(\) => \{\s+for \(const relatedTxId of cascadeDeleteIds\) \{\s+await removeAdvanceUsagesForExpenseTransaction\(ledgerId, relatedTxId\)\s+await removeReimbursementAdvanceEffectsBySourceTransaction\(ledgerId, relatedTxId\)\s+await softDeleteTransactionById\(ledgerId, relatedTxId\)\s+\}\s+\}\)/)
+  assert.match(transactionServiceSource, /await withTransaction\(async \(\) => \{[\s\S]*for \(const relatedTxId of cascadeDeleteIds\) \{[\s\S]*await removeAdvanceUsagesForExpenseTransaction\(ledgerId, relatedTxId\)[\s\S]*await removeReimbursementAdvanceEffectsBySourceTransaction\(ledgerId, relatedTxId\)[\s\S]*await softDeleteTransactionById\(ledgerId, relatedTxId\)[\s\S]*await reconcileDraftClaimSheetImportItems\(ledgerId, \{ txIds: cascadeDeleteIds \}\)/)
 })

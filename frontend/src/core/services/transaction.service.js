@@ -33,6 +33,7 @@ import {
   removeAdvanceUsagesForExpenseTransaction,
   removeReimbursementAdvanceEffectsBySourceTransaction,
 } from '@/core/services/reimbursement.service'
+import { reconcileDraftClaimSheetImportItems } from '@/core/services/claim-sheet-draft-sync.service'
 
 const TRANSACTION_FAILURE_TRACE_MAX_ENTRIES = 60
 const transactionFailureTraceListeners = new Set()
@@ -552,6 +553,10 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
     includeInBudget: isRefundTransaction ? false : payload.includeInBudget !== false,
     includeInAnalysis: isRefundTransaction ? false : payload.includeInAnalysis !== false,
   })
+
+  if (!isReimbursable && Boolean(Number(currentTx?.is_reimbursable ?? 0))) {
+    await reconcileDraftClaimSheetImportItems(ledgerId, { txIds: [txId] })
+  }
 }
 
 export async function deleteManualTransaction(ledgerId, txId) {
@@ -584,6 +589,7 @@ export async function deleteManualTransaction(ledgerId, txId) {
       await removeReimbursementAdvanceEffectsBySourceTransaction(ledgerId, relatedTxId)
       await softDeleteTransactionById(ledgerId, relatedTxId)
     }
+    await reconcileDraftClaimSheetImportItems(ledgerId, { txIds: cascadeDeleteIds })
   })
 }
 
@@ -648,6 +654,15 @@ export async function batchPatchTransactions(ledgerId, txIds, rawPatch = {}) {
 
   for (const target of targets) {
     await updateTransactionById(ledgerId, target.txId, target.input)
+  }
+
+  const draftSyncTxIds = targets
+    .filter(({ currentTx, input }) => {
+      return Boolean(Number(currentTx?.is_reimbursable ?? 0)) && !input.isReimbursable
+    })
+    .map(({ txId }) => txId)
+  if (draftSyncTxIds.length) {
+    await reconcileDraftClaimSheetImportItems(ledgerId, { txIds: draftSyncTxIds })
   }
 
   return {

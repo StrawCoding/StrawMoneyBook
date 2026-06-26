@@ -37,6 +37,7 @@ StrawMoneyBook 的特色不在單一功能，而在於把同一筆金流後續�
 - 借出 / 借入可形成待追蹤債權債務
 - 暫時存起來的錢可放進存錢罐，不混入可支配餘額
 - 請款單可匯入報銷資料並在完成後回寫狀態
+- SMB-255 / v1.3.35 後草稿請款單會自動同步導入報銷項目：當來源可報銷交易修改 `reimburse_target_minor`、刪除、取消可報銷、直接報銷入帳或 pending 金額變 0 時，`claim-sheet-draft-sync.service.js` 的 `reconcileDraftClaimSheetImportItems` 會只更新 `status='draft'` 請款單內對應的 reimbursement import items（更新 `amount_minor` / 描述或移除幽靈項目）並 `recomputeReimbursementTotal`；`paid` 請款單不受影響；`getReimbursementDetail` 載入草稿時亦會 lazy reconcile 作為安全網
 - SMB-247 / v1.3.25 後請款單「導入借出」匯入金額改為剩餘未收回：`listBorrowLoanImportTransactions` 多帶 `loan_paid_minor` 與 `loan_interest_rule_json`，`claim-sheet-import.service.js` 計算 `loan_remaining_minor = 本金 + 預設利息 − 已還金額`，`claimSheetImportedAmountMinor` 與完成請款時寫入 claim item 的金額皆以剩餘未收回為準，不再固定使用 setup 交易原始本金
 - SMB-222 Restart / v1.2.48 後請款單「導入借出」清單與已導入借出 claim item 不再顯示交易 UUID：底層 `listBorrowLoanImportTransactions` 多帶 `loans.note / loans.start_date / loans.principal_minor`，前端 `claimSheetImportedTitle` 改為依「往來對象名稱 · 借出備註 → 往來對象 → 借出備註 → 交易備註 → 借出建立日期搭配 i18n → 純 i18n fallback」順序組合，三語 `imported_borrow_loan_item` 翻譯改為「未命名借出 / Untitled lent loan / 名称未設定の貸出」（並同步處理 `imported_reimbursement_item`），完全移除 `t(..., { id: tx.id })` 路徑，使用者再也不會看到 `借出 abc-uuid-1234` 這種系統 ID
 - 請款單的導入報銷流程已改為獨立頁面選取，原本建立 / 編輯表單只保留導入按鈕與已選摘要；導入頁可全選或取消全選；SMB-222 Restart / v1.2.44 後請款單導入借出 / 借貸入帳交易已拆出獨立區塊與獨立頁面 (`/claim-sheets/:id/import-borrow-loans` → `ClaimSheetImportBorrowLoanPage.vue`)，不再與導入報銷混在同一份候選列表，建立 / 編輯請款單表單同時顯示「導入報銷」與「導入借出」兩個區塊與兩個專屬按鈕，draft session 也分別保存 `importTxIds` 與 `borrowLoanImportTxIds`；請款單編輯儲存時 borrow_loan 改透過 `buildClaimSheetImportedClaimItem` 正確寫入 `entry_type=income`，不會被誤存為 expense；SMB-222 Restart / v1.2.45 後「導入借入」改為「導入借出」：可導入候選只列出尚未完成的借出（`loans.direction='lend'` 且 `status NOT IN ('settled','void')`、`origin_type='loan_payment'` 的 setup expense 交易，且尚無任何 loan_payment 還款引用該 setup 交易）；完成請款單時會把 borrow_loan 類型 claim items（`source_type='transaction'` 且 `entry_type='income'`）對應的借出整套消除（透過 `clearBorrowLoanClaimSources` 軟刪 loan_payment 來源交易、刪除 loan_payments 還款記錄、軟刪 loans），請款單從 paid 退回 draft 或刪除已 paid 請款單時 `restoreBorrowLoanClaimSources` 會復原這些借出與 setup 交易；繁中 / 英文 / 日文 i18n 改為借出 / lent loan / 貸出，hint 改為「只列出未完成的借出；完成請款單後對應的借出將被消除」；新增請款單時會暫存表單內容再回到原建立流程；SMB-150 後導入頁返回不再依賴瀏覽器歷史，而是固定回到原本的新增 / 編輯請款單流程，避免直接跳離請款單
@@ -432,7 +433,7 @@ SMB-148 後，代收管理頁會保留「已部分抵扣但仍有可用餘額」
 - 完成請款
 - 檢視請款單細節
 
-這讓使用者能把零散的報銷彙整成真正可提交的請款資料。請款單完成後，匯入的原報銷交易會被視為已報銷，報銷清單、資產頁未報銷金額與狀態同步邏輯都會採用同一個已完成請款單來源；若請款單還原後再次完成，先前軟刪的入帳交易也會釋放冪等鍵，避免同一張請款單重新入帳時撞到唯一鍵。
+這讓使用者能把零散的報銷彙整成真正可提交的請款資料。請款單完成後，匯入的原報銷交易會被視為已報銷，報銷清單、資產頁未報銷金額與狀態同步邏輯都會採用同一個已完成請款單來源；若請款單還原後再次完成，先前軟刪的入帳交易也會釋放冪等鍵，避免同一張請款單重新入帳時撞到唯一鍵。SMB-255 / v1.3.35 後，草稿請款單內已導入的報銷項目會在來源交易變更時自動同步，不需使用者手動重新儲存請款單。
 
 ### 5.4 存錢罐
 
