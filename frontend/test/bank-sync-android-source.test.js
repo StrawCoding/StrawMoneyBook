@@ -41,3 +41,16 @@ test('first bank automation enforces captcha ocr confidence threshold and portal
   assert.match(firstBankAutomationSource, /ensureFramePortalContract/)
   assert.match(firstBankAutomationSource, /我的帳戶/)
 })
+
+test('SMB-252 desktop login readiness depends only on functional anchors, not mobileHint text', () => {
+  // 治本：ready 只依功能錨點；不得再因頁面文字提及 Mobile Bank 而誤判為手機版攔阻。
+  assert.match(
+    firstBankAutomationSource,
+    /const ready = hasLoginForm && hasCaptchaImage && hasCaptchaLoginArea && hasVrfyCode;/,
+  )
+  assert.doesNotMatch(firstBankAutomationSource, /&& !mobileHint/)
+  // mobileHint 不得再用「Mobile Bank / 行動銀行」等頁面文字推斷（會誤判電腦版登入頁）。
+  assert.doesNotMatch(firstBankAutomationSource, /手機版\|行動版\|行動銀行\|mobile/)
+  // mobileHint 改為依版面結構（行動版 viewport 標記）的非攔阻診斷欄位。
+  assert.match(firstBankAutomationSource, /hasMobileViewport/)
+})

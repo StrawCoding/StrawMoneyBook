@@ -162,6 +162,18 @@ public class FirstBankAutomationCaptchaTest {
     }
 
     @Test
+    public void desktopLoginPageReadinessIgnoresMobileHint() {
+        // SMB-252 治本：ready 只依功能錨點，mobileHint 為非攔阻診斷欄位。
+        String script = FirstBankAutomation.buildDesktopLoginPageProbeScript();
+        assertTrue(
+            script.contains("const ready = hasLoginForm && hasCaptchaImage && hasCaptchaLoginArea && hasVrfyCode;")
+        );
+        assertFalse(script.contains("&& !mobileHint"));
+        assertFalse(script.contains("mobile\\s*bank"));
+        assertTrue(script.contains("hasMobileViewport"));
+    }
+
+    @Test
     public void framePortalContractProbeRequiresMyAccountsAnchor() {
         String script = FirstBankAutomation.buildFramePortalContractProbeScript();
         assertTrue(script.contains("我的帳戶"));

@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.34
+- (SMB-252 Restart) 修復第一銀行 Android 同步在 v1.3.32 desktop 硬化後誤判電腦版登入頁為手機版（`first_bank_login_page_mismatch`）：`FirstBankAutomation.java` 的 `buildDesktopLoginContractProbeScript()`（桌面登入頁探測）原以頁面文字 `/手機版|行動版|行動銀行|mobile\s*bank/` 推斷 `mobileHint`，並把 `!mobileHint` 當作 `ready` 的攔阻條件。但第一銀行**電腦版**登入頁（`ibank.firstbank.com.tw/NetBank/index103.html`）文字本身就含「Mobile Bank」（指向行動銀行 App 的連結），導致 `hasLoginForm/hasCaptchaImage/hasCaptchaLoginArea/hasVrfyCode` 四個功能錨點齊全時仍因 `mobileHint=true` → `ready=false` 被中止，連驗證碼步驟都進不去。治本：(1) `ready` 只依功能錨點 `hasLoginForm && hasCaptchaImage && hasCaptchaLoginArea && hasVrfyCode`，移除 `!mobileHint`；(2) `mobileHint` 改為**非攔阻診斷欄位**，依版面結構（行動版 `meta[name=viewport]` `width=device-width` 標記且缺少 desktop 功能錨點）推斷，不再用頁面文字；新增 `hasMobileViewport` 診斷欄位回傳。驗證：frontend `test:node` 594/594（新增 `bank-sync-android-source.test.js` SMB-252 案例鎖定 ready 不含 `!mobileHint`、不用文字判斷）、Android `FirstBankAutomationCaptchaTest`（新增 `desktopLoginPageReadinessIgnoresMobileHint`）通過、`npm run build:web` 成功、`npm run playwright:bank-sync` 成功。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
+
 ## v1.3.33
 - (SMB-254) 記帳設定頁面（`/settings`）項目列高度調小、清單更緊湊：現代版（預設）設定列 `apple-ui.css` 垂直 padding 由 `12px 14px` 改為 `8px 14px`，量測列高自 63px 降至 54px（約 -14%）；傳統版 `settings.vue` 列間分隔由 `margin-top/padding-top: 12px` 收斂為 `8px`、描述行高 1.35→1.3。兩種版型皆保留 `min-height: 44px` 點擊區（不破壞觸控/可讀性），水平 padding 與 safe-area 不變。新增 `settings-page-compact-rows-source.test.js` 鎖定 compact padding + 44px tap target；Playwright 於真實 `/settings` route + app shell 量測現代 63→54px、傳統 45-50px，皆維持 44px 最小點擊高度。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
 

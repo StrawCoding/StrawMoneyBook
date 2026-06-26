@@ -1103,7 +1103,7 @@ final class FirstBankAutomation {
               let hasCaptchaImage = false;
               let hasCaptchaLoginArea = false;
               let hasVrfyCode = false;
-              let mobileHint = false;
+              let hasMobileViewport = false;
               for (const entry of entries) {
                 const doc = entry.doc;
                 if (byId(doc, 'loginCustIdFake') || byId(doc, 'usrIdInput') || byId(doc, 'pwd')) {
@@ -1118,18 +1118,26 @@ final class FirstBankAutomation {
                 if (byId(doc, 'vrfyCode')) {
                   hasVrfyCode = true;
                 }
-                const blob = `${text(doc.title)} ${text(doc.body?.innerText || '')}`;
-                if (/手機版|行動版|行動銀行|mobile\\s*bank/i.test(blob)) {
-                  mobileHint = true;
-                }
+                try {
+                  const viewport = doc.querySelector('meta[name="viewport"]');
+                  const viewportContent = text(viewport && viewport.getAttribute ? viewport.getAttribute('content') : '');
+                  if (/width\\s*=\\s*device-width/i.test(viewportContent)) {
+                    hasMobileViewport = true;
+                  }
+                } catch (_error) {}
               }
-              const ready = hasLoginForm && hasCaptchaImage && hasCaptchaLoginArea && hasVrfyCode && !mobileHint;
+              // 治本（SMB-252）：頁面可用性只依 desktop 功能錨點判定；
+              // 不可因頁面文字提及「Mobile Bank / 行動銀行」就誤判為手機版而攔阻。
+              const ready = hasLoginForm && hasCaptchaImage && hasCaptchaLoginArea && hasVrfyCode;
+              // mobileHint 改為非攔阻診斷欄位：依版面結構（行動版 viewport 標記且缺少 desktop 功能錨點）推斷，不影響 ready。
+              const mobileHint = hasMobileViewport && !(hasLoginForm && hasCaptchaLoginArea && hasVrfyCode);
               return {
                 ready,
                 hasLoginForm,
                 hasCaptchaImage,
                 hasCaptchaLoginArea,
                 hasVrfyCode,
+                hasMobileViewport,
                 mobileHint,
                 entryCount: entries.length,
               };
