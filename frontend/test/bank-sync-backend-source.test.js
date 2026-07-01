@@ -36,6 +36,7 @@ test('bank sync backend no longer routes local mock provider in production clien
 test('bank sync service exposes batch account save helper', () => {
   assert.match(serviceSource, /export async function saveBankAccountsSettings/)
   assert.match(serviceSource, /export async function countBankReviewTransactionsByConnection/)
+  assert.match(serviceSource, /countBankTransactionsForReview/)
 })
 
 test('bank sync API utils no longer treat mock provider as supported', () => {

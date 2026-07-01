@@ -193,8 +193,8 @@
           </button>
         </header>
 
-        <div v-if="!reviewRows.length" class="muted">{{ t('settings_bank_sync.review.empty') }}</div>
-        <template v-else>
+        <div v-if="!reviewRows.length && !reviewLoading" class="muted">{{ t('settings_bank_sync.review.empty') }}</div>
+        <template v-else-if="reviewRows.length">
           <div class="row review-action-row">
             <button class="btn" @click="selectAllReviewRows">{{ t('settings_bank_sync.review.select_all') }}</button>
             <button class="btn" @click="clearReviewSelection">{{ t('settings_bank_sync.review.select_none') }}</button>
@@ -235,6 +235,19 @@
               </div>
             </li>
           </ul>
+
+          <nav v-if="reviewTotal > 0" class="pagination-bar" aria-label="銀行待匯入分頁">
+            <button class="btn" :disabled="!canGoPreviousReviewPage" @click="goPreviousReviewPage">
+              {{ t('common.previous_page') }}
+            </button>
+            <span class="muted page-status">
+              {{ t('common.page_status', { page: reviewPage, totalPages: reviewTotalPages }) }}
+              ・{{ t('common.page_range', { start: reviewPageStart, end: reviewPageEnd, total: reviewTotal }) }}
+            </span>
+            <button class="btn" :disabled="!canGoNextReviewPage" @click="goNextReviewPage">
+              {{ t('common.next_page') }}
+            </button>
+          </nav>
         </template>
       </article>
     </template>
@@ -297,6 +310,9 @@ const reviewLoading = ref(false)
 const importing = ref(false)
 const markingSeen = ref(false)
 const reviewRows = ref([])
+const reviewPage = ref(1)
+const reviewTotal = ref(0)
+const reviewTotalPages = ref(1)
 const selectedReviewIds = ref([])
 const disconnectDialogOpen = ref(false)
 const csvInputRef = ref(null)
@@ -339,6 +355,14 @@ const csvImportAccountOptions = computed(() => {
 })
 
 const selectedReviewIdSet = computed(() => new Set(selectedReviewIds.value))
+
+const canGoPreviousReviewPage = computed(() => reviewPage.value > 1)
+const canGoNextReviewPage = computed(() => reviewPage.value < reviewTotalPages.value)
+const reviewPageStart = computed(() => {
+  if (!reviewTotal.value) return 0
+  return ((reviewPage.value - 1) * 300) + 1
+})
+const reviewPageEnd = computed(() => Math.min(reviewTotal.value, reviewPage.value * 300))
 
 function resolveBankSyncErrorMessage(error, fallbackKey) {
   if (error?.code === 'bank_sync_api_unavailable') return getBankSyncApiUnavailableMessage()
@@ -556,25 +580,42 @@ async function onImportCsvFile(event) {
   }
 }
 
-async function loadReview(connectionId) {
+async function loadReview(connectionId, options = {}) {
   if (!connectionId) {
     reviewRows.value = []
+    reviewTotal.value = 0
+    reviewTotalPages.value = 1
+    reviewPage.value = 1
     selectedReviewIds.value = []
     return
   }
+  const nextPage = Number(options.page ?? reviewPage.value) || 1
   reviewLoading.value = true
   try {
-    const rows = await listBankReviewTransactions(ledgerStore.activeLedgerId, {
+    const result = await listBankReviewTransactions(ledgerStore.activeLedgerId, {
       connectionId,
       includeImported: false,
-      limit: 300,
+      page: nextPage,
     })
-    reviewRows.value = rows
-    selectedReviewIds.value = rows.filter((item) => item.defaultSelected).map((item) => item.id)
-    await markBankReviewTransactionsSeen(ledgerStore.activeLedgerId, rows.map((item) => item.id))
+    reviewPage.value = result.page
+    reviewTotal.value = result.total
+    reviewTotalPages.value = result.totalPages
+    reviewRows.value = result.items
+    selectedReviewIds.value = result.items.filter((item) => item.defaultSelected).map((item) => item.id)
+    await markBankReviewTransactionsSeen(ledgerStore.activeLedgerId, result.items.map((item) => item.id))
   } finally {
     reviewLoading.value = false
   }
+}
+
+function goPreviousReviewPage() {
+  if (!canGoPreviousReviewPage.value || !connection.value?.id) return
+  loadReview(connection.value.id, { page: reviewPage.value - 1 })
+}
+
+function goNextReviewPage() {
+  if (!canGoNextReviewPage.value || !connection.value?.id) return
+  loadReview(connection.value.id, { page: reviewPage.value + 1 })
 }
 
 function selectAllReviewRows() {
@@ -891,6 +932,19 @@ h4 {
 .item-body {
   display: grid;
   gap: 4px;
+}
+
+.pagination-bar {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-status {
+  text-align: center;
+  min-width: 0;
 }
 
 .status-chip {

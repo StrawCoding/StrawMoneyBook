@@ -239,7 +239,7 @@ const selectedDaySpentMinor = computed(() => {
     transactionStore.homeFilterMode === 'day'
     || (transactionStore.homeFilterMode === 'month' && transactionStore.homeFilterKey === budgetStore.monthKey)
   )
-    ? transactionStore.homeRecent
+    ? transactionStore.homeBudgetDayTransactions
     : transactionStore.recent
 
   return transactions.reduce((total, tx) => {

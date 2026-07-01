@@ -1,5 +1,7 @@
 import {
+  HOME_TRANSACTION_PAGE_SIZE,
   listAllTransactions,
+  listHomeTransactionsPage,
   listTransactionsByAccount,
   listTransactionsByAccountPage,
   listTransactionsByDay,
@@ -7,9 +9,11 @@ import {
   listTransactionSearchPage,
   listTransactionsByYear,
 } from '@/core/repositories/transaction.repo'
+import { getEffectiveTransactionAmountMinor, isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 
 const SCOPE_MODES = new Set(['all', 'year', 'month', 'day'])
 export const TRANSACTION_PAGE_SIZE = 300
+export const HOME_TRANSACTION_PAGE_SIZE_EXPORT = HOME_TRANSACTION_PAGE_SIZE
 
 export function normalizeTransactionScopeMode(value, fallback = 'all') {
   const normalized = String(value ?? '').trim().toLowerCase()
@@ -48,6 +52,65 @@ export async function listTransactionsByScope(ledgerId, {
 
 export async function listTransactionsForAnalysis(ledgerId, options = {}) {
   return listTransactionsByScope(ledgerId, options)
+}
+
+export async function listTransactionsForHome(ledgerId, options = {}) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId) {
+    return { items: [], total: 0, page: 1, pageSize: HOME_TRANSACTION_PAGE_SIZE, totalPages: 1 }
+  }
+
+  const page = normalizePage(options.page)
+  const pageSize = HOME_TRANSACTION_PAGE_SIZE
+  const result = await listHomeTransactionsPage(normalizedLedgerId, {
+    mode: normalizeTransactionScopeMode(options.mode, 'month'),
+    key: String(options.key ?? '').trim(),
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+  })
+  const total = Number(result.total ?? 0)
+  return {
+    items: result.items ?? [],
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  }
+}
+
+export async function summarizeHomeAssetTotals(ledgerId, options = {}) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  if (!normalizedLedgerId) {
+    return { incomeMinor: 0, expenseMinor: 0 }
+  }
+
+  let page = 1
+  let incomeMinor = 0
+  let expenseMinor = 0
+
+  while (true) {
+    const result = await listTransactionsForHome(normalizedLedgerId, {
+      mode: options.mode,
+      key: options.key,
+      page,
+    })
+
+    for (const tx of result.items ?? []) {
+      if (!isCountableForIncomeExpense(tx)) continue
+      if (String(tx?.origin_type ?? '') === 'loan_payment') continue
+      const amount = getEffectiveTransactionAmountMinor(tx)
+      if (tx.type === 'income') {
+        incomeMinor += amount
+      } else if (tx.type === 'expense') {
+        expenseMinor += Math.abs(amount)
+      }
+    }
+
+    if (page >= result.totalPages) break
+    page += 1
+  }
+
+  return { incomeMinor, expenseMinor }
 }
 
 export async function listTransactionsForSearch(ledgerId, options = {}) {

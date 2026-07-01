@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia'
 import {
   listRecentTransactions,
-  listTransactionsByMonth,
-  listTransactionsByYear,
   listTransactionsByDay,
-  listAllTransactions,
 } from '@/core/repositories/transaction.repo'
+import {
+  listTransactionsForHome,
+  summarizeHomeAssetTotals,
+} from '@/core/services/transaction-query.service'
 import {
   createExpense,
   createIncome,
@@ -19,8 +20,36 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 
-// 首頁「全部」模式的顯示上限，避免超大帳本一次載入幾千筆造成 UI 卡頓
-const HOME_ALL_TRANSACTIONS_DISPLAY_LIMIT = 3000
+function resolveHomeBudgetDayKey(mode, key, budgetMonthKey = '') {
+  const normalizedMode = String(mode ?? '').trim()
+  const normalizedKey = String(key ?? '').trim()
+  const normalizedBudgetMonthKey = String(budgetMonthKey ?? '').trim()
+
+  if (normalizedMode === 'day' && /^\d{4}-\d{2}-\d{2}$/.test(normalizedKey)) {
+    return normalizedKey
+  }
+
+  if (
+    normalizedMode === 'month'
+    && normalizedKey
+    && normalizedBudgetMonthKey
+    && normalizedKey === normalizedBudgetMonthKey
+    && /^\d{4}-\d{2}$/.test(normalizedKey)
+  ) {
+    const now = new Date()
+    const [yearText, monthText] = normalizedKey.split('-')
+    const year = Number(yearText)
+    const month = Number(monthText)
+    const daysInMonth = new Date(year, month, 0).getDate()
+    const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1
+    const day = isCurrentMonth
+      ? now.getDate()
+      : Math.min(Math.max(1, now.getDate()), daysInMonth)
+    return `${yearText}-${monthText}-${String(day).padStart(2, '0')}`
+  }
+
+  return ''
+}
 
 export const useTransactionStore = defineStore('transaction', {
   state: () => ({
@@ -29,6 +58,12 @@ export const useTransactionStore = defineStore('transaction', {
     homeFilterMode: '',
     homeFilterKey: '',
     homeTypeFilter: 'all',
+    homePage: 1,
+    homeTotal: 0,
+    homeTotalPages: 1,
+    homeIncomeMinor: 0,
+    homeExpenseMinor: 0,
+    homeBudgetDayTransactions: [],
     loading: false,
     homeLoading: false,
     filter: {
@@ -75,18 +110,37 @@ export const useTransactionStore = defineStore('transaction', {
       await this.loadHomeByFilter('all', '')
     },
 
-    async loadHomeByFilter(mode, key) {
+    async loadHomeAll(page = 1) {
+      await this.loadHomeByFilter('all', '', page)
+    },
+
+    async loadHomePage(page) {
+      if (!this.homeFilterMode) return
+      await this.loadHomeByFilter(this.homeFilterMode, this.homeFilterKey, page)
+    },
+
+    async loadHomeByFilter(mode, key, page = 1) {
       const ledgerStore = useLedgerStore()
       const ledgerId = ledgerStore.activeLedgerId
       const normalizedMode = ['all', 'year', 'month', 'day'].includes(mode) ? mode : 'month'
       const normalizedKey = String(key ?? '')
+      const normalizedPage = Math.max(1, Math.trunc(Number(page)) || 1)
 
       if (normalizedMode !== 'all' && !normalizedKey) {
         this.homeFilterMode = ''
         this.homeFilterKey = ''
         this.homeRecent = []
+        this.homePage = 1
+        this.homeTotal = 0
+        this.homeTotalPages = 1
+        this.homeIncomeMinor = 0
+        this.homeExpenseMinor = 0
+        this.homeBudgetDayTransactions = []
         return
       }
+
+      const filterChanged = this.homeFilterMode !== normalizedMode || this.homeFilterKey !== normalizedKey
+      const targetPage = filterChanged ? 1 : normalizedPage
 
       this.homeFilterMode = normalizedMode
       this.homeFilterKey = normalizedKey
@@ -94,19 +148,32 @@ export const useTransactionStore = defineStore('transaction', {
 
       this.homeLoading = true
       try {
-        if (normalizedMode === 'all') {
-          this.homeRecent = await listAllTransactions(ledgerId, { limit: HOME_ALL_TRANSACTIONS_DISPLAY_LIMIT })
-          return
+        const budgetStore = useBudgetStore()
+        const [pageResult, assetTotals, budgetDayKey] = await Promise.all([
+          listTransactionsForHome(ledgerId, {
+            mode: normalizedMode,
+            key: normalizedKey,
+            page: targetPage,
+          }),
+          summarizeHomeAssetTotals(ledgerId, {
+            mode: normalizedMode,
+            key: normalizedKey,
+          }),
+          Promise.resolve(resolveHomeBudgetDayKey(normalizedMode, normalizedKey, budgetStore.monthKey)),
+        ])
+
+        this.homeRecent = pageResult.items ?? []
+        this.homePage = pageResult.page ?? targetPage
+        this.homeTotal = Number(pageResult.total ?? 0)
+        this.homeTotalPages = pageResult.totalPages ?? 1
+        this.homeIncomeMinor = Number(assetTotals.incomeMinor ?? 0)
+        this.homeExpenseMinor = Number(assetTotals.expenseMinor ?? 0)
+
+        if (budgetDayKey) {
+          this.homeBudgetDayTransactions = await listTransactionsByDay(ledgerId, budgetDayKey)
+        } else {
+          this.homeBudgetDayTransactions = []
         }
-        if (normalizedMode === 'year') {
-          this.homeRecent = await listTransactionsByYear(ledgerId, normalizedKey)
-          return
-        }
-        if (normalizedMode === 'day') {
-          this.homeRecent = await listTransactionsByDay(ledgerId, normalizedKey)
-          return
-        }
-        this.homeRecent = await listTransactionsByMonth(ledgerId, normalizedKey)
       } finally {
         this.homeLoading = false
       }
@@ -225,7 +292,7 @@ export const useTransactionStore = defineStore('transaction', {
       const jobs = [this.loadRecent(), accountStore.load(), budgetStore.loadMonth(budgetStore.monthKey)]
 
       if (this.homeFilterMode) {
-        jobs.push(this.loadHomeByFilter(this.homeFilterMode, this.homeFilterKey))
+        jobs.push(this.loadHomeByFilter(this.homeFilterMode, this.homeFilterKey, this.homePage))
       }
 
       await Promise.all(jobs)

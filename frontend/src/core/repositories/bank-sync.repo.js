@@ -597,47 +597,92 @@ export async function upsertBankTransactions(ledgerId, connectionId, transaction
   return { addedIds, modifiedIds, touchedIds }
 }
 
-export async function listBankTransactionsForReview(ledgerId, options = {}) {
-  assertLedgerId(ledgerId)
+export const BANK_REVIEW_PAGE_SIZE = 300
+
+function normalizeBankReviewLimit(value, fallback = BANK_REVIEW_PAGE_SIZE) {
+  const numeric = Math.trunc(Number(value))
+  if (!Number.isFinite(numeric) || numeric <= 0) return fallback
+  return Math.min(numeric, BANK_REVIEW_PAGE_SIZE)
+}
+
+function normalizeBankReviewOffset(value) {
+  const numeric = Math.trunc(Number(value))
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0
+}
+
+function buildBankReviewFilter(ledgerId, options = {}) {
   const includeImported = Boolean(options.includeImported)
   const connectionId = normalizeText(options.connectionId)
-  const limit = Math.max(1, Math.min(500, Math.round(Number(options.limit ?? 200) || 200))
-  )
-
-  const values = [ledgerId, includeImported ? 1 : 0, limit]
+  const values = [ledgerId, includeImported ? 1 : 0]
   let connectionClause = ''
   if (connectionId) {
     connectionClause = ' AND bt.connection_id = ?'
-    values.splice(2, 0, connectionId)
+    values.push(connectionId)
   }
+  return {
+    whereSql: `bt.ledger_id = ?
+       AND (? = 1 OR bt.imported = 0)${connectionClause}`,
+    values,
+  }
+}
 
+export async function countBankTransactionsForReview(ledgerId, options = {}) {
+  assertLedgerId(ledgerId)
+  const { whereSql, values } = buildBankReviewFilter(ledgerId, options)
   const result = await query(
-    `SELECT bt.ledger_id, bt.id, bt.connection_id, bt.bank_account_id, bt.provider_transaction_id,
-            bt.posted_at, bt.amount_minor, bt.currency, bt.description, bt.merchant, bt.status,
-            bt.transaction_type, bt.note, bt.summary, bt.balance_minor, bt.seen_in_app,
-            bt.imported, bt.imported_txn_id, bt.first_seen_at, bt.last_seen_at, bt.updated_at,
-            ba.provider_account_id, ba.account_name AS bank_account_name, ba.user_label AS bank_account_user_label, ba.account_mask AS bank_account_mask,
-            ba.mapped_account_id, a.name AS mapped_account_name,
-            bc.provider, bc.user_label AS connection_user_label
+    `SELECT COUNT(*) AS total
      FROM bank_transactions bt
-     INNER JOIN bank_accounts ba
-       ON ba.ledger_id = bt.ledger_id
-      AND ba.id = bt.bank_account_id
-     INNER JOIN bank_connections bc
-       ON bc.ledger_id = bt.ledger_id
-      AND bc.id = bt.connection_id
-     LEFT JOIN accounts a
-       ON a.ledger_id = ba.ledger_id
-      AND a.id = ba.mapped_account_id
-      AND a.deleted_at IS NULL
-     WHERE bt.ledger_id = ?
-       AND (? = 1 OR bt.imported = 0)
-       ${connectionClause}
-     ORDER BY bt.posted_at DESC, bt.updated_at DESC
-     LIMIT ?;`,
+     WHERE ${whereSql};`,
     values,
   )
-  return rowsOf(result)
+  return Number(firstRow(result)?.total ?? 0)
+}
+
+export async function listBankTransactionsForReview(ledgerId, options = {}) {
+  assertLedgerId(ledgerId)
+  const limit = normalizeBankReviewLimit(options.limit, BANK_REVIEW_PAGE_SIZE)
+  const offset = normalizeBankReviewOffset(options.offset)
+  const { whereSql, values } = buildBankReviewFilter(ledgerId, options)
+
+  const [itemsResult, countResult] = await Promise.all([
+    query(
+      `SELECT bt.ledger_id, bt.id, bt.connection_id, bt.bank_account_id, bt.provider_transaction_id,
+              bt.posted_at, bt.amount_minor, bt.currency, bt.description, bt.merchant, bt.status,
+              bt.transaction_type, bt.note, bt.summary, bt.balance_minor, bt.seen_in_app,
+              bt.imported, bt.imported_txn_id, bt.first_seen_at, bt.last_seen_at, bt.updated_at,
+              ba.provider_account_id, ba.account_name AS bank_account_name, ba.user_label AS bank_account_user_label, ba.account_mask AS bank_account_mask,
+              ba.mapped_account_id, a.name AS mapped_account_name,
+              bc.provider, bc.user_label AS connection_user_label
+       FROM bank_transactions bt
+       INNER JOIN bank_accounts ba
+         ON ba.ledger_id = bt.ledger_id
+        AND ba.id = bt.bank_account_id
+       INNER JOIN bank_connections bc
+         ON bc.ledger_id = bt.ledger_id
+        AND bc.id = bt.connection_id
+       LEFT JOIN accounts a
+         ON a.ledger_id = ba.ledger_id
+        AND a.id = ba.mapped_account_id
+        AND a.deleted_at IS NULL
+       WHERE ${whereSql}
+       ORDER BY bt.posted_at DESC, bt.updated_at DESC
+       LIMIT ? OFFSET ?;`,
+      [...values, limit, offset],
+    ),
+    query(
+      `SELECT COUNT(*) AS total
+       FROM bank_transactions bt
+       WHERE ${whereSql};`,
+      values,
+    ),
+  ])
+
+  return {
+    items: rowsOf(itemsResult),
+    total: Number(firstRow(countResult)?.total ?? 0),
+    limit,
+    offset,
+  }
 }
 
 export async function listBankTransactionsByIds(ledgerId, ids = []) {

@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.38
+- (SMB-257) 首頁交易列表分頁載入（每頁最多 300 筆）：首頁交易流在全部 / 年 / 月 / 日範圍改為 `listHomeTransactionsPage` SQL `LIMIT/OFFSET` 分頁（`HOME_TRANSACTION_PAGE_SIZE = 300`），移除 `HOME_ALL_TRANSACTIONS_DISPLAY_LIMIT = 3000` 一次載入上限；交易流 badge 改顯示 SQL `COUNT` 總筆數並提供上一頁 / 下一頁控制。收支摘要卡改由 `summarizeHomeAssetTotals` 以每批 300 筆分批彙總，預算簡表日均已用改以 `homeBudgetDayTransactions`（單日查詢）計算，避免分頁後摘要失真。與 SMB-155 交易搜尋 / 帳戶明細、銀行待匯入審核分頁行為一致。驗證：`home-transaction-pagination-source.test.js` + `transaction-pagination-source.test.js` + `bank-review-pagination-source.test.js` 全綠、`npm run build:web` 成功、`playwright:ui-layout` 首頁區塊驗證通過。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
+
 ## v1.3.37
 - (SMB-256) 修復部署 / 重啟窗口期間後端 better-sqlite3 `Module did not self-register` / `NODE_MODULE_VERSION` mismatch / `ERR_DLOPEN_FAILED`：根因為 `backend/package.json` 的 `deploy:copy` 直接在部署主機 Node（ABI 137、較新 glibc）跑 `npm install`，編出的 native binding 與 StrawMB 容器 Node v25.8.0（ABI 141）不符；穩態時容器啟動會自行 `npm install` 重建故正常，但部署窗口會短暫載入 host ABI binding 而崩潰。治本：新增 `backend/scripts/deploy-production-install.mjs`，改在與 StrawMB 相同的 `1panel/node:<NODE_VERSION>` 容器 image 內安裝 native 依賴（讀 `/opt/1panel/runtime/node/StrawMB/.env` 的 NODE_VERSION / CODE_DIR / CONTAINER_PACKAGE_URL，可用 STRAWMB_NODE_IMAGE/VERSION/DEPLOY_DIR/RUNTIME_ENV 覆寫），安裝後於同一 image 內驗證 `require('better-sqlite3')` 可載入並查詢；docker 不可用時直接中止而非退回 host install。`deploy:copy` 改為 rsync 後呼叫此腳本，並新增 `deploy:install` 別名。可重現驗證：host 編譯之 binding（`node_register_module_v137`）在容器內 require 失敗（ERR_DLOPEN_FAILED GLIBC_2.38），改在容器內安裝後輸出 `node_register_module_v141` 且 require + query OK。驗證：backend `npm test` 94/94（新增 `deploy-production-install-source.test.js` 4 案例）；已執行 `npm run deploy:copy`（容器內安裝 + 驗證 better-sqlite3 OK on node v25.8.0 ABI 141）並重啟 StrawMB，啟動 log 無 self-register / NODE_MODULE_VERSION / ERR_DLOPEN，後端 listening on 8787。屬 infra / 部署腳本修復，無 web UI 變更，未跑 Playwright。
 

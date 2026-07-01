@@ -95,6 +95,11 @@ async function defaultListBankTransactionsForReview(...args) {
   return mod.listBankTransactionsForReview(...args)
 }
 
+async function defaultCountBankTransactionsForReview(...args) {
+  const mod = await import('../../core/repositories/bank-sync.repo.js')
+  return mod.countBankTransactionsForReview(...args)
+}
+
 async function defaultListEnabledBankAccountsByConnection(...args) {
   const mod = await import('../../core/repositories/bank-sync.repo.js')
   return mod.listEnabledBankAccountsByConnection(...args)
@@ -359,6 +364,7 @@ const defaultDependencies = {
   listBankProviders,
   listBankTransactionsByIds: defaultListBankTransactionsByIds,
   listBankTransactionsForReview: defaultListBankTransactionsForReview,
+  countBankTransactionsForReview: defaultCountBankTransactionsForReview,
   listEnabledBankAccountsByConnection: defaultListEnabledBankAccountsByConnection,
   markBankTransactionsImported: defaultMarkBankTransactionsImported,
   markBankTransactionsSeen: defaultMarkBankTransactionsSeen,
@@ -548,12 +554,10 @@ export async function countBankReviewTransactionsByConnection(ledgerId, connecti
   await dependencies.assertCanUseBankSync()
   const normalizedConnectionId = normalizeText(connectionId)
   if (!normalizedConnectionId) return 0
-  const rows = await dependencies.listBankTransactionsForReview(ledgerId, {
+  return dependencies.countBankTransactionsForReview(ledgerId, {
     connectionId: normalizedConnectionId,
     includeImported: false,
-    limit: 10000,
   })
-  return rows.length
 }
 
 export async function saveBankSyncRuleSettings(ledgerId, connectionId, patch = {}) {
@@ -721,17 +725,45 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
   })
 }
 
+function normalizeBankReviewPage(value) {
+  const numeric = Math.trunc(Number(value))
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 1
+}
+
 export async function listBankReviewTransactions(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   await dependencies.assertCanUseBankSync()
-  const rows = await dependencies.listBankTransactionsForReview(ledgerId, options)
-  if (!options.connectionId) return rows
+  const { BANK_REVIEW_PAGE_SIZE } = await import('../../core/repositories/bank-sync.repo.js')
+  const page = normalizeBankReviewPage(options.page)
+  const pageSize = BANK_REVIEW_PAGE_SIZE
+  const result = await dependencies.listBankTransactionsForReview(ledgerId, {
+    ...options,
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+  })
+  const total = Number(result.total ?? 0)
+  const items = Array.isArray(result.items) ? result.items : []
+  if (!options.connectionId) {
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    }
+  }
   const rule = await dependencies.getBankSyncRule(ledgerId, options.connectionId)
   const normalizedRule = normalizeRuleInput(rule)
-  return rows.map((item) => ({
-    ...item,
-    defaultSelected: !item.imported && applyRuleToBankTransaction(item, normalizedRule),
-  }))
+  return {
+    items: items.map((item) => ({
+      ...item,
+      defaultSelected: !item.imported && applyRuleToBankTransaction(item, normalizedRule),
+    })),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  }
 }
 
 export async function importBankStatementCsv(ledgerId, connectionId, bankAccountId, csvText) {

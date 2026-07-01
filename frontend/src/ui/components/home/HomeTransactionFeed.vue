@@ -10,7 +10,7 @@
           <font-awesome-icon icon="fa-solid fa-calendar" />
         </RouterLink>
       </div>
-      <span class="badge tx-count-badge">{{ t('home_tx.badge_count', { month: monthLabel, count: visibleHomeTransactions.length }) }}</span>
+      <span class="badge tx-count-badge">{{ t('home_tx.badge_count', { month: monthLabel, count: transactionStore.homeTotal }) }}</span>
     </header>
 
     <ul class="tx-list">
@@ -71,6 +71,19 @@
       </li>
     </ul>
 
+    <nav v-if="transactionStore.homeTotal > 0" class="pagination-bar" aria-label="首頁交易分頁">
+      <button class="btn" :disabled="!canGoPreviousHomePage" @click="goPreviousHomePage">
+        {{ t('common.previous_page') }}
+      </button>
+      <span class="muted page-status">
+        {{ t('common.page_status', { page: transactionStore.homePage, totalPages: transactionStore.homeTotalPages }) }}
+        ・{{ t('common.page_range', { start: homePageStart, end: homePageEnd, total: transactionStore.homeTotal }) }}
+      </span>
+      <button class="btn" :disabled="!canGoNextHomePage" @click="goNextHomePage">
+        {{ t('common.next_page') }}
+      </button>
+    </nav>
+
   </article>
 </template>
 
@@ -79,6 +92,7 @@ import { computed } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
+import { HOME_TRANSACTION_PAGE_SIZE } from '@/core/repositories/transaction.repo'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
@@ -112,6 +126,28 @@ const visibleHomeTransactions = computed(() => {
   }
   return transactionStore.homeRecent
 })
+
+const homePageStart = computed(() => {
+  if (transactionStore.homeTotal <= 0) return 0
+  return ((transactionStore.homePage - 1) * HOME_TRANSACTION_PAGE_SIZE) + 1
+})
+
+const homePageEnd = computed(() => {
+  return Math.min(transactionStore.homeTotal, transactionStore.homePage * HOME_TRANSACTION_PAGE_SIZE)
+})
+
+const canGoPreviousHomePage = computed(() => transactionStore.homePage > 1)
+const canGoNextHomePage = computed(() => transactionStore.homePage < transactionStore.homeTotalPages)
+
+async function goPreviousHomePage() {
+  if (!canGoPreviousHomePage.value) return
+  await transactionStore.loadHomePage(transactionStore.homePage - 1)
+}
+
+async function goNextHomePage() {
+  if (!canGoNextHomePage.value) return
+  await transactionStore.loadHomePage(transactionStore.homePage + 1)
+}
 
 const groupedRecentTransactions = computed(() => {
   const grouped = []
@@ -462,4 +498,18 @@ h3 {
   display: inline-flex;
   align-items: center;
   justify-content: center
+}
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.page-status {
+  flex: 1;
+  text-align: center;
+  min-width: 10rem;
+  line-height: 1.4;
 }</style>

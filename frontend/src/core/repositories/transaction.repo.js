@@ -337,6 +337,77 @@ export async function listAllTransactions(ledgerId, { limit, offset = 0 } = {}) 
   return rowsOf(result)
 }
 
+export const HOME_TRANSACTION_PAGE_SIZE = 300
+
+function normalizeHomeTransactionLimit(value, fallback = HOME_TRANSACTION_PAGE_SIZE) {
+  const numeric = Math.trunc(Number(value))
+  if (!Number.isFinite(numeric) || numeric <= 0) return fallback
+  return Math.min(numeric, HOME_TRANSACTION_PAGE_SIZE)
+}
+
+function buildHomeScopeFilterClauses(mode, key) {
+  const normalizedMode = ['all', 'year', 'month', 'day'].includes(mode) ? mode : 'month'
+  const normalizedKey = String(key ?? '').trim()
+  const clauses = ['t.ledger_id = ?', 't.deleted_at IS NULL']
+  const values = []
+
+  if (normalizedMode === 'year') {
+    if (!normalizedKey) return null
+    const { startUtc, endUtc } = yearRangeUtc(normalizedKey)
+    clauses.push('t.occurred_at >= ?', 't.occurred_at < ?')
+    values.push(startUtc, endUtc)
+  } else if (normalizedMode === 'month') {
+    if (!normalizedKey) return null
+    const { startUtc, endUtc } = monthRangeUtc(normalizedKey)
+    clauses.push('t.occurred_at >= ?', 't.occurred_at < ?')
+    values.push(startUtc, endUtc)
+  } else if (normalizedMode === 'day') {
+    if (!normalizedKey) return null
+    const { startUtc, endUtc } = dayRangeUtc(normalizedKey)
+    clauses.push('t.occurred_at >= ?', 't.occurred_at < ?')
+    values.push(startUtc, endUtc)
+  }
+
+  return { mode: normalizedMode, clauses, values }
+}
+
+export async function listHomeTransactionsPage(ledgerId, options = {}) {
+  assertLedgerId(ledgerId)
+  const scope = buildHomeScopeFilterClauses(options.mode, options.key)
+  if (!scope) {
+    return { items: [], total: 0, limit: HOME_TRANSACTION_PAGE_SIZE, offset: 0 }
+  }
+
+  const limit = normalizeHomeTransactionLimit(options.limit, HOME_TRANSACTION_PAGE_SIZE)
+  const offset = normalizeOffset(options.offset)
+  const whereSql = scope.clauses.join('\n       AND ')
+  const params = [ledgerId, ...scope.values]
+
+  const [itemsResult, countResult] = await Promise.all([
+    query(
+      `${transactionListSelectSql()}
+       WHERE ${whereSql}
+       ${transactionListOrderSql()}
+       LIMIT ? OFFSET ?;`,
+      [...params, limit, offset],
+    ),
+    query(
+      `SELECT COUNT(*) AS total
+       FROM transactions t
+       ${transactionListLookupJoinsSql()}
+       WHERE ${whereSql};`,
+      params,
+    ),
+  ])
+
+  return {
+    items: rowsOf(itemsResult),
+    total: Number(firstRow(countResult)?.total ?? 0),
+    limit,
+    offset,
+  }
+}
+
 export async function listTransactionSearchPage(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   const limit = normalizeLimit(options.limit, 300)
