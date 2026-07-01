@@ -97,7 +97,7 @@
 | `/settings/bank-sync` | `src/ui/views/settings/SettingsBankSyncPage.vue` | 銀行同步管理 |
 | `/settings/bank-sync/new` | `src/ui/views/settings/SettingsBankSyncCreatePage.vue` | 新增銀行連線 |
 | `/settings/bank-sync/:id` | `src/ui/views/settings/SettingsBankSyncConnectionPage.vue` | 單一銀行連線設定 / 狀態 |
-| `/settings/carrier-sync` | `src/ui/views/settings/SettingsCarrierSyncPage.vue` | 載具同步設定（v1.3.19：憑證改為財政部平台手機號碼 + 密碼；v1.3.30 / SMB-251：後端 scrape 改 SPA JSON 攔截 + captcha token API；v1.3.39 / SMB-258：Cloudflare challenge 等待 + 前端 network_failed i18n） |
+| `/settings/carrier-sync` | `src/ui/views/settings/SettingsCarrierSyncPage.vue` | 載具同步設定（v1.3.19：憑證改為財政部平台手機號碼 + 密碼；v1.3.30 / SMB-251：後端 scrape 改 SPA JSON 攔截 + captcha token API；v1.3.40 / SMB-258：Cloudflare challenge 等待 + 前端 network_failed i18n） |
 | `/settings/ledgers` | `src/ui/views/settings/SettingsLedgerPage.vue` | 帳本管理 |
 | `/settings/shared-ledgers` | `src/ui/views/settings/SettingsSharedLedgerPage.vue` | 共同帳本、Email 邀請、接受邀請與同步；SMB-229 / v1.3.9 後依角色（Owner/Admin/Member/Viewer）顯示/隱藏分享連結與 Email 邀請，並提供「成員與角色」管理區（改角色、轉移所有權）與 Viewer 唯讀提示 |
 | `/settings/ledgers/:id` | `src/ui/views/settings/SettingsLedgerDetailPage.vue` | 帳本明細編輯/刪除 |
@@ -168,7 +168,7 @@
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
 - 銀行同步：`/settings/bank-sync`（入口由 `isBankSyncFeatureEnabled()` 控制；需 `VITE_BANK_SYNC_FEATURE_ENABLED=true` 且 Android 第一銀行 provider 可用；v1.3.19 第一銀行 OCR 失敗時建立連線頁可手動輸入驗證碼重試；v1.3.20 SMB-241 強制桌面 viewport 與驗證碼直連下載；v1.3.31 / SMB-253 第一銀行登入頁錨點合約自檢納入排程監控；v1.3.32 / SMB-252 WebView JSON 攔截 + CSV 帳單匯入退路；v1.3.34 / SMB-252 Restart：桌面登入頁探測 `ready` 只依功能錨點，`mobileHint` 改為依 viewport 版面結構的非攔阻診斷，修復電腦版頁含「Mobile Bank」字樣被誤判為手機版的回歸；v1.3.36 / SMB-252 Restart：登入送出治本——直接寫入 `doLogin()` 真正讀取的隱藏欄位 `#loginCustId` 等（`setFieldByName`，不再只填 `*Fake`）、送出 `clickArea()`→備援 `doLogin()`、攔截 `window.alert()` 並把銀行真實回應寫入 debug trace（`captureLoginResponseDiagnostics` / `summarizeLoginFailure`），`waitForLoginSuccess` 提早歸因不空等）
-- 載具同步：`/settings/carrier-sync`（會員限定；v1.3.19 憑證為財政部平台手機號碼 + 密碼；v1.3.30 後端 Playwright 改 SPA JSON 攔截 + captcha token；v1.3.31 / SMB-253 合約自檢接 cron/CI，失敗分類統計 + log/Plane 告警；v1.3.39 / SMB-258 Cloudflare 挑戰等待 + scrape-api 網路錯誤 i18n）
+- 載具同步：`/settings/carrier-sync`（會員限定；v1.3.19 憑證為財政部平台手機號碼 + 密碼；v1.3.30 後端 Playwright 改 SPA JSON 攔截 + captcha token；v1.3.31 / SMB-253 合約自檢接 cron/CI，失敗分類統計 + log/Plane 告警；v1.3.40 / SMB-258 Cloudflare 挑戰等待 + scrape-api 網路錯誤 i18n）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）

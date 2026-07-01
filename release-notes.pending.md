@@ -1,9 +1,7 @@
 # Pending Release Notes
 
----
-
-## v1.3.39
-- (SMB-258) 修復載具同步 `Failed to fetch` / HTTP 502 `einvoice_portal_changed`：根因為財政部 `www.einvoice.nat.gov.tw` 登入頁 Cloudflare bot challenge（`Just a moment...`）阻擋 headless Playwright，`prepareLoginPage()` 找不到 `#mobile_phone` 等選擇器。治本：`playwright-cli.json` 加入真實 Chrome UA、`--disable-blink-features=AutomationControlled` 與 `scripts/playwright-portal-init.js` 反偵測；新增 `portal-cloudflare.js` 共用等待 challenge 完成後再輪詢登入選擇器（contract-check 同步）；逾時回 `einvoice_cloudflare_timeout`（504）。前端 `scrape-api.js` 將 fetch 網路層 `Failed to fetch` 映射為 `einvoice.error.network_failed` 三語 i18n。驗證：`einvoice-portal-contract-check.mjs` ok、`cd backend && npm test`、`cd frontend && npm run test:node`、`playwright:carrier-sync`、deploy:copy + StrawMB restart。
+## v1.3.40
+- (SMB-258) 修復載具同步 `Failed to fetch` / HTTP 502 `einvoice_portal_changed`：根因為財政部 `www.einvoice.nat.gov.tw` 登入頁 Cloudflare bot challenge（`Just a moment...`）阻擋 headless Playwright，`prepareLoginPage()` 找不到 `#mobile_phone` 等選擇器。治本：`playwright-cli.json` 加入真實 Chrome UA、`--disable-blink-features=AutomationControlled` 與 `scripts/playwright-portal-init.js` 反偵測；新增 `portal-cloudflare.js` 共用等待 challenge 完成後再輪詢登入選擇器（contract-check 同步）；逾時回 `einvoice_cloudflare_timeout`（504）。前端 `scrape-api.js` 將 fetch 網路層 `Failed to fetch` 映射為 `einvoice.error.network_failed` 三語 i18n。驗證：`einvoice-portal-contract-check.mjs` ok、`cd backend && npm test` 97/97、`cd frontend && npm run test:node` 616/616、`playwright:carrier-sync`、deploy:copy + StrawMB restart。
 
 ## v1.3.38
 - (SMB-257) 首頁交易列表分頁載入（每頁最多 300 筆）：首頁交易流在全部 / 年 / 月 / 日範圍改為 `listHomeTransactionsPage` SQL `LIMIT/OFFSET` 分頁（`HOME_TRANSACTION_PAGE_SIZE = 300`），移除 `HOME_ALL_TRANSACTIONS_DISPLAY_LIMIT = 3000` 一次載入上限；交易流 badge 改顯示 SQL `COUNT` 總筆數並提供上一頁 / 下一頁控制。收支摘要卡改由 `summarizeHomeAssetTotals` 以每批 300 筆分批彙總，預算簡表日均已用改以 `homeBudgetDayTransactions`（單日查詢）計算，避免分頁後摘要失真。與 SMB-155 交易搜尋 / 帳戶明細、銀行待匯入審核分頁行為一致。驗證：`home-transaction-pagination-source.test.js` + `transaction-pagination-source.test.js` + `bank-review-pagination-source.test.js` 全綠、`npm run build:web` 成功、`playwright:ui-layout` 首頁區塊驗證通過。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
