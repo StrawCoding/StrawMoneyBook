@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core'
+import { translateMessage } from '@/ui/services/i18n.service.js'
 import { createEInvoiceError } from './shared.js'
 
 const PROD_DEFAULT_API_BASE = 'https://api.strawmb.com'
@@ -18,18 +19,38 @@ function buildApiUrl(path) {
   return base ? `${base.replace(/\/$/, '')}${path}` : path
 }
 
+function isFetchNetworkError(err) {
+  if (!(err instanceof TypeError)) return false
+  const message = String(err?.message ?? '')
+  return message === 'Failed to fetch'
+    || /NetworkError|Load failed|network error/i.test(message)
+}
+
+function mapFetchNetworkError(err) {
+  if (!isFetchNetworkError(err)) return err
+  return createEInvoiceError(
+    translateMessage('einvoice.error.network_failed', {}, '無法連線電子發票服務，請檢查網路後再試'),
+    'einvoice_network_failed',
+  )
+}
+
 async function postEInvoiceApi(path, body, { signal } = {}) {
   const headers = { 'Content-Type': 'application/json' }
   if (EINVOICE_CLIENT_SHARED_KEY) {
     headers['X-Straw-Client-Key'] = EINVOICE_CLIENT_SHARED_KEY
   }
 
-  const response = await fetch(buildApiUrl(path), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body ?? {}),
-    signal,
-  })
+  let response
+  try {
+    response = await fetch(buildApiUrl(path), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body ?? {}),
+      signal,
+    })
+  } catch (err) {
+    throw mapFetchNetworkError(err)
+  }
 
   let data = null
   try {

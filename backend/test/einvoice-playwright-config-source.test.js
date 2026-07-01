@@ -15,6 +15,7 @@ import {
 const repoRoot = resolve(import.meta.dirname, '..')
 const providerSource = readFileSync(resolve(repoRoot, 'src/einvoice/playwright-provider.js'), 'utf8')
 const contractCheckSource = readFileSync(resolve(repoRoot, 'scripts/einvoice-portal-contract-check.mjs'), 'utf8')
+const playwrightConfigSource = readFileSync(resolve(repoRoot, 'playwright-cli.json'), 'utf8')
 
 test('SMB-251: portal config uses verified SPA selectors and captcha API', () => {
   const selectors = getSelectors()
@@ -56,4 +57,15 @@ test('SMB-251: default portal constants match 2026-06 verification', () => {
   assert.equal(DEFAULT_SELECTORS.loginButton, '#submitBtn')
   assert.match(DEFAULT_CAPTCHA_API_URL, /service-mc\.einvoice\.nat\.gov\.tw\/act\/login\/api\/act002i\/captcha/)
   assert.match(DEFAULT_LOGIN_URL, /einvoice\.nat\.gov\.tw/)
+})
+
+test('SMB-258: playwright config bypasses Cloudflare bot detection for portal login', () => {
+  assert.match(providerSource, /portal-cloudflare\.js/)
+  assert.match(providerSource, /buildWaitForLoginSelectorsRunCode/)
+  assert.match(providerSource, /einvoice_cloudflare_timeout/)
+  assert.match(contractCheckSource, /portal-cloudflare\.js/)
+  assert.match(contractCheckSource, /buildWaitForLoginSelectorsRunCode/)
+  assert.match(playwrightConfigSource, /playwright-portal-init\.js/)
+  assert.match(playwrightConfigSource, /AutomationControlled/)
+  assert.match(playwrightConfigSource, /Chrome\/131/)
 })

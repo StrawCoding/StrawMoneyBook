@@ -7,6 +7,7 @@ import {
   getLoginUrl,
   getSelectors,
 } from '../src/einvoice/portal-config.js'
+import { buildWaitForLoginSelectorsRunCode } from '../src/einvoice/portal-cloudflare.js'
 
 const execFileAsync = promisify(execFile)
 const backendRoot = fileURLToPath(new URL('..', import.meta.url))
@@ -85,36 +86,8 @@ async function fetchCaptchaContract(captchaApiUrl) {
 
 async function checkLoginSelectors(loginUrl, selectors) {
   await runPlaywrightCli(['open', loginUrl])
-  return runCode(`async (page) => {
-    const selectors = ${JSON.stringify(selectors)};
-    const waitMs = ${SELECTOR_WAIT_MS};
-    await page.waitForLoadState('domcontentloaded');
-  const deadline = Date.now() + waitMs;
-  let found = { phone: false, password: false, captcha: false, submit: false };
-  while (Date.now() < deadline) {
-    const title = await page.title();
-    if (!/Just a moment/i.test(title)) {
-      const carrierTab = await page.$(selectors.carrierTab);
-      if (carrierTab) await carrierTab.click().catch(() => null);
-      await page.waitForTimeout(500);
-    }
-    found = {
-      phone: Boolean(await page.$(selectors.phone)),
-      password: Boolean(await page.$(selectors.password)),
-      captcha: Boolean(await page.$(selectors.captchaInput)),
-      submit: Boolean(await page.$(selectors.loginButton)),
-    };
-    if (found.phone && found.password && found.captcha && found.submit) break;
-    await page.waitForTimeout(1000);
-  }
-  const title = await page.title();
-  return {
-    ok: Boolean(found.phone && found.password && found.captcha && found.submit),
-    found,
-    title,
-    cloudflareChallenge: /Just a moment/i.test(title),
-  };
-}`)
+  const code = `async (page) => {\n${buildWaitForLoginSelectorsRunCode(selectors, SELECTOR_WAIT_MS)}\n}`
+  return runCode(code)
 }
 
 export async function runEinvoicePortalContractCheck() {

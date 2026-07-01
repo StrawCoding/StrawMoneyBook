@@ -10,6 +10,7 @@ import {
   getQueryUrl,
   getSelectors,
 } from './portal-config.js'
+import { buildWaitForLoginSelectorsRunCode } from './portal-cloudflare.js'
 import { extractInvoicesFromJsonPayloads, mergeQueryWindows } from './portal-json.js'
 import {
   createSessionRecord,
@@ -150,21 +151,17 @@ function portalChangedError(message = '官方網站版面可能已更新，請�
   return error
 }
 
-async function prepareLoginPage(sessionId, selectors) {
-  const code = `
-const selectors = ${JSON.stringify(selectors)};
-await page.waitForLoadState('domcontentloaded');
-const carrierTab = await page.$(selectors.carrierTab);
-if (carrierTab) {
-  await carrierTab.click().catch(() => null);
-  await page.waitForTimeout(500);
+function cloudflareTimeoutError() {
+  const error = new Error('官方網站安全驗證逾時，請稍後再試')
+  error.code = 'einvoice_cloudflare_timeout'
+  return error
 }
-const phone = await page.$(selectors.phone);
-const password = await page.$(selectors.password);
-const captchaInput = await page.$(selectors.captchaInput);
-return { ok: Boolean(phone && password && captchaInput) };
-`
-  const response = await runPlaywrightJson(sessionId, code)
+
+async function prepareLoginPage(sessionId, selectors) {
+  const response = await runPlaywrightJson(sessionId, buildWaitForLoginSelectorsRunCode(selectors))
+  if (response?.cloudflareChallenge) {
+    throw cloudflareTimeoutError()
+  }
   if (!response?.ok) {
     throw portalChangedError()
   }

@@ -721,12 +721,13 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 
 所以這不是完全未做，而是已建流程、以會員 + Android 第一銀行為主的受控功能。
 
-### 9.2 載具同步（v1.3.17 起，v1.3.19 憑證格式修正，v1.3.30 SPA 治本改寫）
+### 9.2 載具同步（v1.3.17 起，v1.3.19 憑證格式修正，v1.3.30 SPA 治本改寫，v1.3.39 Cloudflare 挑戰修復）
 
 - 會員限定功能：`/settings/carrier-sync` 設定頁透過 backend scrape API 拉取財政部載具發票，pending 佇列審核後匯入
 - v1.3.19 修正：財政部平台登入憑證為「手機號碼 + 密碼」（09 開頭 10 碼 + 至少 4 位密碼），非手機條碼 `/XXXXXXX` 與查詢碼；後端 Playwright 改走官方 `accounts/login` 後再查詢發票
 - v1.3.30（SMB-251）治本改寫：財政部 2026-06 新版 Vue SPA + OAuth2 後，Playwright provider 不再解析 DOM 表格或截圖驗證碼；改為 (1) 以 JSON API `service-mc.einvoice.nat.gov.tw/act/login/api/act002i/captcha` 取得 `{token,image}` 並在 session 保存 token；(2) 登入使用實測選擇器 `#mobile_phone` / `#password` / `#captcha` / `#submitBtn`（全 env 可覆寫）；(3) 查詢以 `page.on('response')` 攔截官方 JSON API 並交 `normalizeInvoiceList`，DOM 解析降為備援；(4) 跨月 + 62 天視窗自動切分查詢；(5) 新增 `backend/scripts/einvoice-portal-contract-check.mjs` 合約自檢腳本。登入 / 查詢 URL、選擇器、API pattern 皆可透過 `EINVOICE_PORTAL_*` / `EINVOICE_SCRAPE_SELECTORS_JSON` 覆寫
 - v1.3.31（SMB-253）P2 防打地鼠：合約自檢接 cron / CI（`sync-contract-check-run.mjs`、`sync-contract-check-cron.sh`、`.github/workflows/sync-contract-check.yml`）；失敗時告警至 `log.wastebase.xyz/issues/SMB-253` 並節流 Plane comment；失敗分類碼（portal_changed / captcha / auth / timeout）累計統計；第一銀行登入頁錨點（`#code_verify`、`captchaLoginArea`、`vrfyCode` 等）由 `first-bank-portal-contract-check.mjs` 定期探測
+- v1.3.39（SMB-258）修復財政部登入頁 Cloudflare bot challenge 阻擋 headless Playwright 導致載具同步 `Failed to fetch` / `einvoice_portal_changed`：`playwright-cli.json` 加入真實 Chrome UA、`AutomationControlled` 關閉與 `playwright-portal-init.js` 反偵測腳本；`portal-cloudflare.js` 共用等待 challenge 完成後再探測 `#mobile_phone` 等選擇器；逾時回 `einvoice_cloudflare_timeout`（504）。前端 `scrape-api.js` 將 fetch 網路層 `Failed to fetch` 映射為 `einvoice.error.network_failed` 三語 i18n，不再露出原生錯誤字串
 
 ## 10. 使用者輪廓
 

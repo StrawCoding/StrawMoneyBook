@@ -152,6 +152,17 @@ test('電子發票後端服務改用 Playwright scrape API，停用 native WebVi
   assert.equal(existsSync(new URL('../scripts/simulate-einvoice-login-flow.mjs', import.meta.url)), false)
 })
 
+test('SMB-258: scrape API maps fetch network errors to einvoice i18n message', () => {
+  const scrapeApiSource = read('src/services/einvoice/scrape-api.js')
+  const i18nSource = read('src/ui/services/i18n.service.js')
+
+  assert.match(scrapeApiSource, /mapFetchNetworkError/)
+  assert.match(scrapeApiSource, /Failed to fetch/)
+  assert.match(scrapeApiSource, /einvoice\.error\.network_failed/)
+  const matches = i18nSource.match(/'einvoice\.error\.network_failed':/g) ?? []
+  assert.equal(matches.length, 3, 'einvoice.error.network_failed should exist in zh-TW, en, ja')
+})
+
 test('新增電子發票流程文字具備繁中、英文、日文 i18n', () => {
   const source = read('src/ui/services/i18n.service.js')
   const keys = [

@@ -76,6 +76,11 @@ function mapProviderError(error, res) {
     return
   }
 
+  if (code === 'einvoice_cloudflare_timeout') {
+    sendJson(res, 504, { error: code, message })
+    return
+  }
+
   if (code === 'einvoice_scrape_timeout' || error?.name === 'AbortError') {
     sendJson(res, 504, {
       error: 'einvoice_scrape_timeout',
