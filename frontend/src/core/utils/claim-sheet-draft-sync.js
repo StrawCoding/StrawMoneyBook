@@ -49,8 +49,17 @@ export function shouldSyncDraftClaimItem(item, tx) {
 
   const currentAmount = Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
   const currentDescription = String(item?.description ?? '').trim()
-  const shouldUpdate = currentAmount !== sync.amountMinor || currentDescription !== sync.description
-  return { shouldRemove: false, shouldUpdate, sync }
+  const maxAmount = sync.amountMinor
+  const nextAmount = Math.min(currentAmount, maxAmount)
+  const shouldUpdate = nextAmount !== currentAmount || currentDescription !== sync.description
+  return {
+    shouldRemove: false,
+    shouldUpdate,
+    sync: {
+      ...sync,
+      amountMinor: nextAmount,
+    },
+  }
 }
 
 export function reconcileDraftClaimItemRows(draftItems = [], txById = {}) {

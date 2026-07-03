@@ -77,7 +77,7 @@ export function claimSheetImportedEntryLabel(tx, t) {
     : t('claim_sheet.entry_type.expense')
 }
 
-export function claimSheetImportedAmountMinor(tx) {
+export function claimSheetImportedMaxAmountMinor(tx) {
   if (claimSheetImportKindFromTx(tx) === 'borrow_loan') {
     if (Number.isFinite(Number(tx?.loan_remaining_minor))) {
       return absMinor(tx.loan_remaining_minor)
@@ -85,6 +85,20 @@ export function claimSheetImportedAmountMinor(tx) {
     return absMinor(tx?.amount_minor)
   }
   return reimbursementPendingMinor(tx)
+}
+
+export function claimSheetImportedAmountMinor(tx) {
+  return claimSheetImportedMaxAmountMinor(tx)
+}
+
+export function resolveClaimSheetImportedAmountMinor(tx, overrideMinor = null) {
+  const maxMinor = claimSheetImportedMaxAmountMinor(tx)
+  if (overrideMinor === null || overrideMinor === undefined || overrideMinor === '') {
+    return maxMinor
+  }
+  const normalized = Math.max(0, Math.round(Number(overrideMinor)))
+  if (normalized <= 0) return 0
+  return Math.min(maxMinor, normalized)
 }
 
 export function claimSheetImportedEntryType(tx) {
@@ -111,8 +125,9 @@ export function buildClaimSheetImportedDraftTx(item) {
   }
 }
 
-export function buildClaimSheetImportedClaimItem(tx, t) {
+export function buildClaimSheetImportedClaimItem(tx, t, options = {}) {
   const kind = claimSheetImportKindFromTx(tx)
+  const amountMinor = resolveClaimSheetImportedAmountMinor(tx, options.amountMinor ?? null)
   return {
     entryType: claimSheetImportedEntryType(tx),
     sourceType: 'transaction',
@@ -120,8 +135,30 @@ export function buildClaimSheetImportedClaimItem(tx, t) {
     categoryId: tx?.category_id ?? null,
     accountId: tx?.account_id ?? null,
     description: claimSheetImportedTitle(tx, t),
-    amountMinor: claimSheetImportedAmountMinor(tx),
+    amountMinor,
     occurredAt: tx?.occurred_at,
     claimImportKind: kind,
   }
+}
+
+export function normalizeImportAmountOverrideMap(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const out = {}
+  for (const [key, value] of Object.entries(raw)) {
+    const txId = String(key ?? '').trim()
+    if (!txId) continue
+    const major = Number(value)
+    if (!Number.isFinite(major) || major < 0) continue
+    out[txId] = major
+  }
+  return out
+}
+
+export function resolveImportedTxAmountMinor(tx, overrideMap = {}) {
+  const txId = String(tx?.id ?? '').trim()
+  const overrideMajor = overrideMap[txId]
+  if (overrideMajor === undefined) {
+    return claimSheetImportedMaxAmountMinor(tx)
+  }
+  return resolveClaimSheetImportedAmountMinor(tx, Math.round(overrideMajor * 100))
 }

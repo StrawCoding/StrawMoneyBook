@@ -133,13 +133,24 @@ test('claim import service exposes separate reimbursement and borrow loan listin
 test('claim sheet draft session persists reimbursement and borrow loan ids separately', () => {
   assert.match(draftSessionSource, /borrowLoanImportTxIds: normalizeIdList\(payload\.borrowLoanImportTxIds\)/)
   assert.match(draftSessionSource, /borrowLoanImportTxIds: normalizeIdList\(parsed\?\.borrowLoanImportTxIds\)/)
+  assert.match(draftSessionSource, /importAmountOverrides: normalizeImportAmountOverrideMap/)
+  assert.match(draftSessionSource, /borrowLoanImportAmountOverrides: normalizeImportAmountOverrideMap/)
   assert.match(claimImportSource, /saveClaimSheetDraftSession\(\{[\s\S]*importTxIds: selectedTxIds\.value/)
   assert.match(claimImportBorrowLoanSource, /saveClaimSheetDraftSession\(\{[\s\S]*borrowLoanImportTxIds: selectedTxIds\.value/)
 })
 
+test('SMB-259: claim import pages expose per-item amount inputs for partial claim amounts', () => {
+  assert.match(claimImportSource, /importAmountOverrides/)
+  assert.match(claimImportSource, /resolveImportedTxAmountMinor/)
+  assert.match(claimImportSource, /import-amount-input/)
+  assert.match(claimImportBorrowLoanSource, /importAmountOverrides/)
+  assert.match(claimImportBorrowLoanSource, /resolveImportedTxAmountMinor/)
+  assert.match(claimImportBorrowLoanSource, /import-amount-input/)
+})
+
 test('claim edit page persists imported borrow loan items with proper income entry type', () => {
   assert.match(claimEditSource, /buildImportedBorrowLoanClaimItems/)
-  assert.match(claimEditSource, /buildClaimSheetImportedClaimItem\(tx, t\)/)
+  assert.match(claimEditSource, /buildClaimSheetImportedClaimItem\(tx, t, \{/)
   assert.doesNotMatch(claimEditSource, /entryType: 'expense',\s*sourceType: 'transaction',\s*transactionId: tx\.id/)
 })
 
@@ -225,6 +236,23 @@ test('SMB-247 v1.3.25: borrow loan import amount uses remaining balance after pa
     'utf8',
   )
   assert.match(claimImportUtilSource, /loan_remaining_minor/)
+})
+
+test('SMB-259: claim import pages let users edit per-item claim amounts with draft session overrides', () => {
+  assert.match(draftSessionSource, /importAmountOverrides: normalizeImportAmountOverrideMap\(payload\.importAmountOverrides\)/)
+  assert.match(draftSessionSource, /borrowLoanImportAmountOverrides: normalizeImportAmountOverrideMap\(payload\.borrowLoanImportAmountOverrides\)/)
+  assert.match(claimImportSource, /v-model\.number="importAmountOverrides\[String\(tx\.id\)\]"/)
+  assert.match(claimImportSource, /resolveImportedTxAmountMinor\(tx, importAmountOverrides\.value\)/)
+  assert.match(claimImportSource, /importAmountOverrides: importAmountOverrides\.value/)
+  assert.match(claimImportBorrowLoanSource, /v-model\.number="importAmountOverrides\[String\(tx\.id\)\]"/)
+  assert.match(claimImportBorrowLoanSource, /borrowLoanImportAmountOverrides: importAmountOverrides\.value/)
+  assert.match(claimListSource, /importAmountOverrides: createForm\.importAmountOverrides/)
+  assert.match(claimListSource, /borrowLoanImportAmountOverrides: createForm\.borrowLoanImportAmountOverrides/)
+  assert.match(i18nServiceSource, /'claim_sheet\.import\.pending_amount': '待請款'/)
+  assert.match(claimImportSource, /selectedImportAmountsValid/)
+  assert.match(claimImportBorrowLoanSource, /selectedImportAmountsValid/)
+  assert.match(claimImportSource, /\.filter\(\(item\) => item\.amountMinor > 0\)/)
+  assert.match(i18nServiceSource, /'claim_sheet\.import\.remaining_amount': '剩餘未收回'/)
 })
 
 test('SMB-222 v1.2.48: imported_*_item i18n strings no longer interpolate {id} in any locale', () => {

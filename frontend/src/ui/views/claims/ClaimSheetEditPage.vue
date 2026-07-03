@@ -154,7 +154,8 @@ import {
   buildClaimSheetImportedClaimItem,
   buildClaimSheetImportedDraftTx,
   claimSheetImportKindFromClaimItem,
-  claimSheetImportedAmountMinor,
+  claimSheetImportedMaxAmountMinor,
+  resolveClaimSheetImportedAmountMinor,
 } from '@/ui/utils/claim-sheet-import'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { useI18n } from '@/ui/services/i18n.service'
@@ -276,7 +277,7 @@ const draftTotalMinor = computed(() => {
     totalMinor += pendingMinorOfTx(tx)
   }
   for (const tx of importedBorrowLoanItems.value) {
-    totalMinor += claimSheetImportedAmountMinor(tx)
+    totalMinor += pendingBorrowLoanMinorOfTx(tx)
   }
   for (const item of form.manualItems) {
     const amountMinor = Math.max(0, Math.round(Number(item.amountMajor ?? 0) * 100))
@@ -289,7 +290,7 @@ const draftTotalMinor = computed(() => {
 const importedTotalMinor = computed(() => importedItems.value.reduce((sum, tx) => sum + pendingMinorOfTx(tx), 0))
 
 const importedBorrowLoanTotalMinor = computed(() => {
-  return importedBorrowLoanItems.value.reduce((sum, tx) => sum + claimSheetImportedAmountMinor(tx), 0)
+  return importedBorrowLoanItems.value.reduce((sum, tx) => sum + pendingBorrowLoanMinorOfTx(tx), 0)
 })
 
 const canSaveClaim = computed(() => {
@@ -401,8 +402,20 @@ function onManualEntryTypeChange(item, nextType) {
   item.categoryId = ensureCategoryIdByEntryType(item.entryType, item.categoryId)
 }
 
+function resolveSavedImportAmountMinor(tx) {
+  const savedMinor = Math.max(0, Math.round(Number(tx?.amount_minor ?? 0)))
+  if (savedMinor > 0) {
+    return resolveClaimSheetImportedAmountMinor(tx, savedMinor)
+  }
+  return claimSheetImportedMaxAmountMinor(tx)
+}
+
 function pendingMinorOfTx(tx) {
-  return claimSheetImportedAmountMinor(tx)
+  return resolveSavedImportAmountMinor(tx)
+}
+
+function pendingBorrowLoanMinorOfTx(tx) {
+  return resolveSavedImportAmountMinor(tx)
 }
 
 function buildManualClaimItems() {
@@ -433,11 +446,15 @@ function buildManualClaimItems() {
 }
 
 function buildImportedClaimItems() {
-  return importedItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t))
+  return importedItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t, {
+    amountMinor: resolveSavedImportAmountMinor(tx),
+  }))
 }
 
 function buildImportedBorrowLoanClaimItems() {
-  return importedBorrowLoanItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t))
+  return importedBorrowLoanItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t, {
+    amountMinor: resolveSavedImportAmountMinor(tx),
+  }))
 }
 
 function fillFormFromDetail(detail) {

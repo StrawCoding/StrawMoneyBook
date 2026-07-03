@@ -329,8 +329,13 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import {
   buildClaimSheetImportedClaimItem,
   claimSheetImportKindFromClaimItem,
-  claimSheetImportedAmountMinor,
+  claimSheetImportedMaxAmountMinor,
+  resolveClaimSheetImportedAmountMinor,
+  resolveImportedTxAmountMinor,
 } from '@/ui/utils/claim-sheet-import'
+import {
+  buildImportAmountOverrideMapFromClaimItems,
+} from '@/ui/utils/claim-sheet-import-amount-overrides'
 
 const route = useRoute()
 const router = useRouter()
@@ -361,6 +366,8 @@ const createForm = reactive({
   note: '',
   importTxIds: [],
   borrowLoanImportTxIds: [],
+  importAmountOverrides: {},
+  borrowLoanImportAmountOverrides: {},
   manualItems: [],
 })
 const completeForm = reactive({
@@ -494,7 +501,7 @@ const draftTotalMinor = computed(() => {
     totalMinor += pendingMinorOfTx(tx)
   }
   for (const tx of importedBorrowLoanItems.value) {
-    totalMinor += claimSheetImportedAmountMinor(tx)
+    totalMinor += pendingBorrowLoanMinorOfTx(tx)
   }
   for (const item of createForm.manualItems) {
     const amountMinor = Math.max(0, Math.round(Number(item.amountMajor ?? 0) * 100))
@@ -507,7 +514,7 @@ const draftTotalMinor = computed(() => {
 const importedTotalMinor = computed(() => importedItems.value.reduce((sum, tx) => sum + pendingMinorOfTx(tx), 0))
 
 const importedBorrowLoanTotalMinor = computed(() => {
-  return importedBorrowLoanItems.value.reduce((sum, tx) => sum + claimSheetImportedAmountMinor(tx), 0)
+  return importedBorrowLoanItems.value.reduce((sum, tx) => sum + pendingBorrowLoanMinorOfTx(tx), 0)
 })
 
 const canCreateClaim = computed(() => {
@@ -568,6 +575,8 @@ function resetCreateForm() {
   createForm.note = ''
   createForm.importTxIds = []
   createForm.borrowLoanImportTxIds = []
+  createForm.importAmountOverrides = {}
+  createForm.borrowLoanImportAmountOverrides = {}
   createForm.manualItems = []
   addManualItem()
 }
@@ -653,7 +662,11 @@ async function reloadImportableTxs() {
 }
 
 function pendingMinorOfTx(tx) {
-  return claimSheetImportedAmountMinor(tx)
+  return resolveImportedTxAmountMinor(tx, createForm.importAmountOverrides)
+}
+
+function pendingBorrowLoanMinorOfTx(tx) {
+  return resolveImportedTxAmountMinor(tx, createForm.borrowLoanImportAmountOverrides)
 }
 
 function formatTime(iso) {
@@ -718,6 +731,8 @@ function restoreCreateFormFromSession() {
   createForm.note = session.note
   createForm.importTxIds = session.importTxIds
   createForm.borrowLoanImportTxIds = session.borrowLoanImportTxIds
+  createForm.importAmountOverrides = { ...session.importAmountOverrides }
+  createForm.borrowLoanImportAmountOverrides = { ...session.borrowLoanImportAmountOverrides }
   createForm.manualItems = session.manualItems.length ? session.manualItems : []
   if (!createForm.manualItems.length) addManualItem()
 }
@@ -729,6 +744,8 @@ function persistDraftSession() {
     note: createForm.note,
     importTxIds: createForm.importTxIds,
     borrowLoanImportTxIds: createForm.borrowLoanImportTxIds,
+    importAmountOverrides: createForm.importAmountOverrides,
+    borrowLoanImportAmountOverrides: createForm.borrowLoanImportAmountOverrides,
     manualItems: cloneManualItemsForSession(),
   })
 }
@@ -799,11 +816,15 @@ function buildManualClaimItems() {
 }
 
 function buildImportedClaimItems() {
-  return importedItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t))
+  return importedItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t, {
+    amountMinor: resolveImportedTxAmountMinor(tx, createForm.importAmountOverrides),
+  }))
 }
 
 function buildImportedBorrowLoanClaimItems() {
-  return importedBorrowLoanItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t))
+  return importedBorrowLoanItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t, {
+    amountMinor: resolveImportedTxAmountMinor(tx, createForm.borrowLoanImportAmountOverrides),
+  }))
 }
 
 function fillCreateFormFromDetail(detail) {
@@ -824,6 +845,14 @@ function fillCreateFormFromDetail(detail) {
       return claimSheetImportKindFromClaimItem(item) === 'borrow_loan'
     })
     .map((item) => String(item.transaction_id))
+  createForm.importAmountOverrides = buildImportAmountOverrideMapFromClaimItems(
+    detail.items.filter((item) => claimSheetImportKindFromClaimItem(item) === 'reimbursement'),
+    'reimbursement',
+  )
+  createForm.borrowLoanImportAmountOverrides = buildImportAmountOverrideMapFromClaimItems(
+    detail.items.filter((item) => claimSheetImportKindFromClaimItem(item) === 'borrow_loan'),
+    'borrow_loan',
+  )
   createForm.manualItems = detail.items
     .filter((item) => !String(item?.transaction_id ?? '').trim())
     .map((item) => {

@@ -42,8 +42,25 @@
             <small v-if="tx.note_plain" class="muted">{{ tx.note_plain }}</small>
             <small v-if="importedTxPresentation(tx).categoryName" class="muted">{{ importedTxPresentation(tx).categoryName }}</small>
             <small class="muted">{{ formatTime(tx.occurred_at) }}</small>
+            <small v-if="isSelectedTx(tx)" class="muted">
+              {{ t('claim_sheet.import.pending_amount') }}
+              <MoneyText :value-minor="maxMinorOfTx(tx)" />
+            </small>
           </span>
-          <MoneyText :value-minor="pendingMinorOfTx(tx)" />
+          <div class="import-amount-col">
+            <input
+              v-if="isSelectedTx(tx)"
+              v-model.number="importAmountOverrides[String(tx.id)]"
+              class="input import-amount-input"
+              type="number"
+              min="0"
+              :max="maxMinorOfTx(tx) / 100"
+              step="1"
+              :placeholder="t('claim_sheet.form.amount')"
+              @change="clampAmountOverride(tx)"
+            />
+            <MoneyText v-else :value-minor="maxMinorOfTx(tx)" />
+          </div>
         </label>
       </div>
       <p v-else class="muted">{{ t('claim_sheet.form.no_importable') }}</p>
@@ -59,7 +76,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { getReimbursementDetail, updateReimbursementDraft } from '@/core/services/reimbursement.service'
@@ -69,8 +86,15 @@ import {
   buildClaimSheetImportedClaimItem,
   buildClaimSheetImportedDraftTx,
   claimSheetImportKindFromClaimItem,
-  claimSheetImportedAmountMinor,
+  claimSheetImportedMaxAmountMinor,
+  resolveImportedTxAmountMinor,
 } from '@/ui/utils/claim-sheet-import'
+import {
+  buildImportAmountOverrideMapFromClaimItems,
+  clampImportAmountOverridesForTxs,
+  pruneImportAmountOverrides,
+  seedImportAmountOverrides,
+} from '@/ui/utils/claim-sheet-import-amount-overrides'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -97,6 +121,7 @@ const claim = ref(null)
 const claimItems = ref([])
 const importableTxs = ref([])
 const selectedTxIds = ref([])
+const importAmountOverrides = ref({})
 const draftSession = ref(null)
 
 const claimId = computed(() => String(route.params.id ?? '').trim())
@@ -145,7 +170,10 @@ const selectedImportedItems = computed(() => {
 })
 
 const selectedTotalMinor = computed(() => {
-  return selectedImportedItems.value.reduce((sum, tx) => sum + claimSheetImportedAmountMinor(tx), 0)
+  return selectedImportedItems.value.reduce(
+    (sum, tx) => sum + resolveImportedTxAmountMinor(tx, importAmountOverrides.value),
+    0,
+  )
 })
 
 const allImportableSelected = computed(() => {
@@ -157,7 +185,15 @@ const allImportableSelected = computed(() => {
 
 const manualClaimItems = computed(() => preservedManualClaimItems())
 
+const selectedImportAmountsValid = computed(() => {
+  if (!selectedImportedItems.value.length) return true
+  return selectedImportedItems.value.every(
+    (tx) => resolveImportedTxAmountMinor(tx, importAmountOverrides.value) > 0,
+  )
+})
+
 const canSaveSelection = computed(() => {
+  if (!selectedImportAmountsValid.value) return false
   if (isNewDraft.value) return true
   return (
     selectedImportedItems.value.length > 0
@@ -170,8 +206,24 @@ onMounted(() => {
   void loadPage()
 })
 
-function pendingMinorOfTx(tx) {
-  return claimSheetImportedAmountMinor(tx)
+watch(selectedTxIds, (ids) => {
+  importAmountOverrides.value = seedImportAmountOverrides(
+    editableImportedTxs.value.filter((tx) => ids.includes(String(tx.id))),
+    importAmountOverrides.value,
+  )
+  importAmountOverrides.value = pruneImportAmountOverrides(importAmountOverrides.value, ids)
+}, { deep: true })
+
+function isSelectedTx(tx) {
+  return selectedTxIds.value.includes(String(tx?.id ?? '').trim())
+}
+
+function maxMinorOfTx(tx) {
+  return claimSheetImportedMaxAmountMinor(tx)
+}
+
+function clampAmountOverride(tx) {
+  importAmountOverrides.value = clampImportAmountOverridesForTxs(importAmountOverrides.value, [tx])
 }
 
 function formatTime(iso) {
@@ -229,9 +281,12 @@ async function loadPage() {
           note: '',
           importTxIds: [],
           borrowLoanImportTxIds: [],
+          importAmountOverrides: {},
+          borrowLoanImportAmountOverrides: {},
           manualItems: [],
         }
         selectedTxIds.value = [...draftSession.value.importTxIds]
+        importAmountOverrides.value = { ...draftSession.value.importAmountOverrides }
       }
       return
     }
@@ -247,9 +302,16 @@ async function loadPage() {
         note: '',
         importTxIds: [],
         borrowLoanImportTxIds: [],
+        importAmountOverrides: {},
+        borrowLoanImportAmountOverrides: {},
         manualItems: [],
       }
       selectedTxIds.value = [...draftSession.value.importTxIds]
+      importAmountOverrides.value = { ...draftSession.value.importAmountOverrides }
+      importAmountOverrides.value = clampImportAmountOverridesForTxs(
+        importAmountOverrides.value,
+        editableImportedTxs.value,
+      )
       return
     }
 
@@ -262,6 +324,14 @@ async function loadPage() {
     claim.value = detail.claim ?? null
     claimItems.value = Array.isArray(detail.items) ? detail.items : []
     selectedTxIds.value = currentKindClaimItems.value.map((item) => String(item.transaction_id))
+    importAmountOverrides.value = buildImportAmountOverrideMapFromClaimItems(
+      currentKindClaimItems.value,
+      CURRENT_KIND,
+    )
+    importAmountOverrides.value = clampImportAmountOverridesForTxs(
+      importAmountOverrides.value,
+      editableImportedTxs.value,
+    )
   } catch (error) {
     uiStore.pushToast(error.message ?? t('claim_sheet.toast.load_failed'), 'error')
   } finally {
@@ -270,7 +340,11 @@ async function loadPage() {
 }
 
 function buildImportedClaimItems() {
-  return selectedImportedItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t))
+  return selectedImportedItems.value
+    .map((tx) => buildClaimSheetImportedClaimItem(tx, t, {
+      amountMinor: resolveImportedTxAmountMinor(tx, importAmountOverrides.value),
+    }))
+    .filter((item) => item.amountMinor > 0)
 }
 
 function preservedManualClaimItems() {
@@ -297,6 +371,7 @@ async function saveSelection() {
         ...session,
         importTxIds: selectedTxIds.value,
         borrowLoanImportTxIds: session.borrowLoanImportTxIds ?? [],
+        importAmountOverrides: importAmountOverrides.value,
       })
       await router.replace(returnLink.value)
       return
@@ -364,9 +439,21 @@ h2 {
   border-radius: 10px;
   padding: 10px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(88px, 120px);
   gap: 8px;
   align-items: center;
+}
+
+.import-amount-col {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.import-amount-input {
+  width: 100%;
+  min-width: 0;
+  text-align: right;
 }
 
 .import-item-text {

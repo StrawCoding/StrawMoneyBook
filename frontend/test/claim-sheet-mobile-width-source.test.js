@@ -38,7 +38,7 @@ test('claim sheet detail page wraps long content instead of overflowing', () => 
 })
 
 test('claim sheet edit and import pages use shrinkable import columns and wrapping copy', () => {
-  assert.match(claimImportSource, /grid-template-columns: auto minmax\(0, 1fr\) auto;/)
+  assert.match(claimImportSource, /grid-template-columns: auto minmax\(0, 1fr\) minmax\(88px, 120px\);/)
   assert.match(claimEditSource, /\.manual-item-preview \{[\s\S]*min-width: 0;/)
   assert.match(claimEditSource, /\.manual-item-preview small,[\s\S]*overflow-wrap: anywhere;/)
   assert.match(claimImportSource, /\.import-item-text small,[\s\S]*overflow-wrap: anywhere;/)

@@ -92,6 +92,39 @@ test('resolveReimbursementImportSync removes fully reimbursed transactions', () 
   })
 })
 
+test('SMB-259: draft sync caps partial import amount when pending drops but keeps it when still above', () => {
+  const tx = {
+    is_reimbursable: 1,
+    amount_minor: -10000,
+    reimbursed_minor: 0,
+  }
+  const unchanged = shouldSyncDraftClaimItem(
+    {
+      source_type: 'transaction',
+      entry_type: 'expense',
+      amount_minor: 5000,
+      description: '未命名報銷',
+    },
+    tx,
+  )
+  assert.equal(unchanged.shouldUpdate, false)
+
+  const capped = shouldSyncDraftClaimItem(
+    {
+      source_type: 'transaction',
+      entry_type: 'expense',
+      amount_minor: 8000,
+      description: '未命名報銷',
+    },
+    {
+      ...tx,
+      reimbursed_minor: 5000,
+    },
+  )
+  assert.equal(capped.shouldUpdate, true)
+  assert.equal(capped.sync.amountMinor, 5000)
+})
+
 test('shouldSyncDraftClaimItem only updates when amount or description changed', () => {
   const tx = {
     is_reimbursable: 1,
