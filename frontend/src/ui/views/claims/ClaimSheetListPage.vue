@@ -183,6 +183,39 @@
                     {{ t('claim_sheet.import.open') }}
                   </button>
                 </div>
+                <div v-if="importedItems.length" class="imported-claim-list">
+                  <div v-for="tx in importedItems" :key="tx.id" class="imported-claim-item">
+                    <div class="imported-claim-item-preview">
+                      <div class="imported-claim-item-main">
+                        <font-awesome-icon
+                          v-if="importedTxPresentation(tx).icon"
+                          :icon="importedTxPresentation(tx).icon"
+                          class="item-leading-icon"
+                        />
+                        <strong>{{ importedTxPresentation(tx).title }}</strong>
+                      </div>
+                      <small v-if="importedTxPresentation(tx).categoryName" class="muted">
+                        {{ importedTxPresentation(tx).categoryName }}
+                      </small>
+                    </div>
+                    <small class="muted">
+                      {{ t('claim_sheet.import.pending_amount') }}
+                      <MoneyText :value-minor="maxMinorOfReimbursementTx(tx)" />
+                    </small>
+                    <label>
+                      {{ t('claim_sheet.form.this_claim_amount') }}
+                      <input
+                        v-model.number="createForm.importAmountOverrides[String(tx.id)]"
+                        class="input"
+                        type="number"
+                        min="0"
+                        :max="maxMinorOfReimbursementTx(tx) / 100"
+                        step="1"
+                        @change="clampReimbursementAmountOverride(tx)"
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
 
               <div class="stack sub-section">
@@ -198,6 +231,39 @@
                   <button type="button" class="btn" @click="openBorrowLoanImportPageFromCreateSheet">
                     {{ t('claim_sheet.import.open_borrow_loan') }}
                   </button>
+                </div>
+                <div v-if="importedBorrowLoanItems.length" class="imported-claim-list">
+                  <div v-for="tx in importedBorrowLoanItems" :key="tx.id" class="imported-claim-item">
+                    <div class="imported-claim-item-preview">
+                      <div class="imported-claim-item-main">
+                        <font-awesome-icon
+                          v-if="importedBorrowLoanPresentation(tx).icon"
+                          :icon="importedBorrowLoanPresentation(tx).icon"
+                          class="item-leading-icon"
+                        />
+                        <strong>{{ importedBorrowLoanPresentation(tx).title }}</strong>
+                      </div>
+                      <small v-if="importedBorrowLoanPresentation(tx).categoryName" class="muted">
+                        {{ importedBorrowLoanPresentation(tx).categoryName }}
+                      </small>
+                    </div>
+                    <small class="muted">
+                      {{ t('claim_sheet.import.remaining_amount') }}
+                      <MoneyText :value-minor="maxMinorOfBorrowLoanTx(tx)" />
+                    </small>
+                    <label>
+                      {{ t('claim_sheet.form.this_claim_amount') }}
+                      <input
+                        v-model.number="createForm.borrowLoanImportAmountOverrides[String(tx.id)]"
+                        class="input"
+                        type="number"
+                        min="0"
+                        :max="maxMinorOfBorrowLoanTx(tx) / 100"
+                        step="1"
+                        @change="clampBorrowLoanAmountOverride(tx)"
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
 
@@ -302,7 +368,6 @@ import { useUiStore } from '@/ui/stores/ui.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
-import { reimbursementPendingMinor } from '@/ui/utils/reimbursement-item'
 import {
   buildClaimCategoryLookup,
   presentClaimManualFormItem,
@@ -330,11 +395,13 @@ import {
   buildClaimSheetImportedClaimItem,
   claimSheetImportKindFromClaimItem,
   claimSheetImportedMaxAmountMinor,
-  resolveClaimSheetImportedAmountMinor,
   resolveImportedTxAmountMinor,
 } from '@/ui/utils/claim-sheet-import'
 import {
   buildImportAmountOverrideMapFromClaimItems,
+  clampImportAmountOverridesForTxs,
+  pruneImportAmountOverrides,
+  seedImportAmountOverrides,
 } from '@/ui/utils/claim-sheet-import-amount-overrides'
 
 const route = useRoute()
@@ -526,7 +593,12 @@ const canCreateClaim = computed(() => {
     if (item.entryType === 'advance') return true
     return Boolean(String(item.categoryId ?? '').trim())
   })
-  return hasTitle && (hasImported || hasManual) && manualCategoriesReady
+  const importedAmountsValid = importedItems.value.every(
+    (tx) => resolveImportedTxAmountMinor(tx, createForm.importAmountOverrides) > 0,
+  ) && importedBorrowLoanItems.value.every(
+    (tx) => resolveImportedTxAmountMinor(tx, createForm.borrowLoanImportAmountOverrides) > 0,
+  )
+  return hasTitle && (hasImported || hasManual) && manualCategoriesReady && importedAmountsValid
 })
 
 const canCompleteClaim = computed(() => {
@@ -566,6 +638,33 @@ watch(
     void openEditSheetFromRoute()
   },
   { immediate: true },
+)
+
+watch(
+  () => createForm.importTxIds,
+  (ids) => {
+    createForm.importAmountOverrides = seedImportAmountOverrides(
+      importedItems.value,
+      createForm.importAmountOverrides,
+    )
+    createForm.importAmountOverrides = pruneImportAmountOverrides(createForm.importAmountOverrides, ids)
+  },
+  { deep: true },
+)
+
+watch(
+  () => createForm.borrowLoanImportTxIds,
+  (ids) => {
+    createForm.borrowLoanImportAmountOverrides = seedImportAmountOverrides(
+      importedBorrowLoanItems.value,
+      createForm.borrowLoanImportAmountOverrides,
+    )
+    createForm.borrowLoanImportAmountOverrides = pruneImportAmountOverrides(
+      createForm.borrowLoanImportAmountOverrides,
+      ids,
+    )
+  },
+  { deep: true },
 )
 
 function resetCreateForm() {
@@ -667,6 +766,36 @@ function pendingMinorOfTx(tx) {
 
 function pendingBorrowLoanMinorOfTx(tx) {
   return resolveImportedTxAmountMinor(tx, createForm.borrowLoanImportAmountOverrides)
+}
+
+function maxMinorOfReimbursementTx(tx) {
+  return claimSheetImportedMaxAmountMinor(tx)
+}
+
+function maxMinorOfBorrowLoanTx(tx) {
+  return claimSheetImportedMaxAmountMinor(tx)
+}
+
+function clampReimbursementAmountOverride(tx) {
+  createForm.importAmountOverrides = clampImportAmountOverridesForTxs(
+    createForm.importAmountOverrides,
+    [tx],
+  )
+}
+
+function clampBorrowLoanAmountOverride(tx) {
+  createForm.borrowLoanImportAmountOverrides = clampImportAmountOverridesForTxs(
+    createForm.borrowLoanImportAmountOverrides,
+    [tx],
+  )
+}
+
+function importedTxPresentation(tx) {
+  return presentImportedClaimTx(tx, claimCategoryLookup.value, t)
+}
+
+function importedBorrowLoanPresentation(tx) {
+  return presentImportedClaimTx(tx, claimCategoryLookup.value, t)
 }
 
 function formatTime(iso) {
@@ -818,13 +947,13 @@ function buildManualClaimItems() {
 function buildImportedClaimItems() {
   return importedItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t, {
     amountMinor: resolveImportedTxAmountMinor(tx, createForm.importAmountOverrides),
-  }))
+  })).filter((item) => item.amountMinor > 0)
 }
 
 function buildImportedBorrowLoanClaimItems() {
   return importedBorrowLoanItems.value.map((tx) => buildClaimSheetImportedClaimItem(tx, t, {
     amountMinor: resolveImportedTxAmountMinor(tx, createForm.borrowLoanImportAmountOverrides),
-  }))
+  })).filter((item) => item.amountMinor > 0)
 }
 
 function fillCreateFormFromDetail(detail) {
@@ -852,6 +981,14 @@ function fillCreateFormFromDetail(detail) {
   createForm.borrowLoanImportAmountOverrides = buildImportAmountOverrideMapFromClaimItems(
     detail.items.filter((item) => claimSheetImportKindFromClaimItem(item) === 'borrow_loan'),
     'borrow_loan',
+  )
+  createForm.importAmountOverrides = clampImportAmountOverridesForTxs(
+    createForm.importAmountOverrides,
+    importedItems.value,
+  )
+  createForm.borrowLoanImportAmountOverrides = clampImportAmountOverridesForTxs(
+    createForm.borrowLoanImportAmountOverrides,
+    importedBorrowLoanItems.value,
   )
   createForm.manualItems = detail.items
     .filter((item) => !String(item?.transaction_id ?? '').trim())
@@ -1026,10 +1163,6 @@ function advanceCategoryIcon(advance) {
 
 function manualItemPresentation(item) {
   return presentClaimManualFormItem(item, claimCategoryLookup.value, t)
-}
-
-function importedTxPresentation(tx) {
-  return presentImportedClaimTx(tx, claimCategoryLookup.value, t)
 }
 
 async function loadCompleteItems(claimId) {
@@ -1258,6 +1391,32 @@ h3 {
 .import-summary {
   display: grid;
   gap: 4px;
+  min-width: 0;
+}
+
+.imported-claim-list {
+  display: grid;
+  gap: 8px;
+}
+
+.imported-claim-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.imported-claim-item-preview {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.imported-claim-item-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 

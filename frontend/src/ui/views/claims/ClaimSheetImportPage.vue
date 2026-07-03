@@ -48,17 +48,18 @@
             </small>
           </span>
           <div class="import-amount-col">
-            <input
-              v-if="isSelectedTx(tx)"
-              v-model.number="importAmountOverrides[String(tx.id)]"
-              class="input import-amount-input"
-              type="number"
-              min="0"
-              :max="maxMinorOfTx(tx) / 100"
-              step="1"
-              :placeholder="t('claim_sheet.form.amount')"
-              @change="clampAmountOverride(tx)"
-            />
+            <label v-if="isSelectedTx(tx)" class="import-amount-label">
+              {{ t('claim_sheet.form.this_claim_amount') }}
+              <input
+                v-model.number="importAmountOverrides[String(tx.id)]"
+                class="input import-amount-input"
+                type="number"
+                min="0"
+                :max="maxMinorOfTx(tx) / 100"
+                step="1"
+                @change="clampAmountOverride(tx)"
+              />
+            </label>
             <MoneyText v-else :value-minor="maxMinorOfTx(tx)" />
           </div>
         </label>
@@ -448,6 +449,15 @@ h2 {
   display: grid;
   justify-items: end;
   gap: 4px;
+}
+
+.import-amount-label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  justify-items: end;
+  width: 100%;
 }
 
 .import-amount-input {

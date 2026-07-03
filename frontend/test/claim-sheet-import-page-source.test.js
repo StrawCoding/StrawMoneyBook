@@ -238,6 +238,18 @@ test('SMB-247 v1.3.25: borrow loan import amount uses remaining balance after pa
   assert.match(claimImportUtilSource, /loan_remaining_minor/)
 })
 
+test('SMB-259 Restart: claim sheet create/edit forms expose per-item this claim amount inputs', () => {
+  assert.match(claimListSource, /claim_sheet\.form\.this_claim_amount/)
+  assert.match(claimEditSource, /claim_sheet\.form\.this_claim_amount/)
+  assert.match(claimListSource, /createForm\.importAmountOverrides/)
+  assert.match(claimEditSource, /form\.importAmountOverrides/)
+  assert.match(claimListSource, /imported-claim-item/)
+  assert.match(claimEditSource, /imported-claim-item/)
+  assert.match(claimListSource, /clampReimbursementAmountOverride/)
+  assert.match(claimEditSource, /clampBorrowLoanAmountOverride/)
+  assert.match(i18nServiceSource, /'claim_sheet\.form\.this_claim_amount': '本次請款金額'/)
+})
+
 test('SMB-259: claim import pages let users edit per-item claim amounts with draft session overrides', () => {
   assert.match(draftSessionSource, /importAmountOverrides: normalizeImportAmountOverrideMap\(payload\.importAmountOverrides\)/)
   assert.match(draftSessionSource, /borrowLoanImportAmountOverrides: normalizeImportAmountOverrideMap\(payload\.borrowLoanImportAmountOverrides\)/)
@@ -248,6 +260,8 @@ test('SMB-259: claim import pages let users edit per-item claim amounts with dra
   assert.match(claimImportBorrowLoanSource, /borrowLoanImportAmountOverrides: importAmountOverrides\.value/)
   assert.match(claimListSource, /importAmountOverrides: createForm\.importAmountOverrides/)
   assert.match(claimListSource, /borrowLoanImportAmountOverrides: createForm\.borrowLoanImportAmountOverrides/)
+  assert.match(claimImportSource, /claim_sheet\.form\.this_claim_amount/)
+  assert.match(claimImportBorrowLoanSource, /claim_sheet\.form\.this_claim_amount/)
   assert.match(i18nServiceSource, /'claim_sheet\.import\.pending_amount': '待請款'/)
   assert.match(claimImportSource, /selectedImportAmountsValid/)
   assert.match(claimImportBorrowLoanSource, /selectedImportAmountsValid/)
