@@ -1,7 +1,9 @@
 # Pending Release Notes
-- (UI/UX Phase 2) 介面風格「現代」視覺層全面精煉（Apple HIG + Claude Design 外殼）：現代模式隱藏重複品牌 top-bar，改由各頁 Large Title 承載導覽；`apple-ui.css` Phase 2 套用 flat inset grouped（首頁帳本／資產／預算／交易流、資產頁摘要列、分析 segmented 間距）；底部導覽改實心底欄（移除 backdrop blur 與 active 光暈）；FAB 改柔和陰影無 primary glow。傳統版與 5 tab + FAB + 首頁全區塊行為不變。驗證：`ui-layout-source.test.js` Phase 2 案例 + `npm run test:node` + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
 
 ---
+
+## v1.3.43
+- (UI/UX Phase 2) 介面風格「現代」視覺層全面精煉（Apple HIG + Claude Design 外殼）：現代模式隱藏重複品牌 top-bar，改由各頁 Large Title 承載導覽；`apple-ui.css` Phase 2 套用 flat inset grouped（首頁帳本／資產／預算／交易流、資產頁摘要列、分析 segmented 間距）；底部導覽改實心底欄（移除 backdrop blur 與 active 光暈）；FAB 改柔和陰影無 primary glow。傳統版與 5 tab + FAB + 首頁全區塊行為不變。驗證：`ui-layout-source.test.js` Phase 2 案例 + `npm run test:node` + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
 
 ## v1.3.42
 - (SMB-259 Restart) 請款單分批請款 UX 修正：Tester 回報「不是導入金額而是請款單可以分批請款」——v1.3.41 僅在導入選取頁提供金額輸入，請款單建立／編輯表單只有筆數與總計。本次在 `ClaimSheetListPage.vue`（建立 sheet）與 `ClaimSheetEditPage.vue` 為已導入報銷／借出項目新增逐筆「本次請款金額」輸入（顯示待請款／剩餘未收回上限），總計與儲存以自訂金額為準；編輯頁補上 `importAmountOverrides` / `borrowLoanImportAmountOverrides` 狀態與 seed/clamp 邏輯。導入選取頁標籤改為 `claim_sheet.form.this_claim_amount`（本次請款金額）取代泛用「金額」。驗證：`claim-sheet-import-page-source.test.js` SMB-259 Restart 案例 + `claim-sheet-import-amount.test.js` + `reimbursement-claim-sheet-sync.test.js` + `npm run test:node` 全綠 + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
