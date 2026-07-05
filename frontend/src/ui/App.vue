@@ -1,6 +1,14 @@
 <template>
-  <div class="app-shell" :class="{ booting: isBooting, 'welcome-mode': showGuidedFlow, 'full-screen-route': hideAppChrome }">
-    <header v-if="!isBooting && !showGuidedFlow && !hideAppChrome" class="top-bar">
+  <div
+    class="app-shell"
+    :class="{
+      booting: isBooting,
+      'welcome-mode': showGuidedFlow,
+      'full-screen-route': hideAppChrome,
+      'modern-shell': isModern && hasLedgers && !showGuidedFlow && !hideAppChrome,
+    }"
+  >
+    <header v-if="showTopBar" class="top-bar">
       <div class="title-wrap">
         <img class="brand-logo" :src="BRAND_LOGO_URL" alt="StrawMoneyBook logo" />
         <div class="brand-text">
@@ -81,9 +89,11 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useAppShellRuntime } from '@/ui/composables/useAppShellRuntime'
+import { useUiLayout } from '@/ui/composables/useUiLayout'
 import { isAppShellBooting } from '@/ui/composables/app-shell-runtime.helpers'
 
 const route = useRoute()
+const { isModern } = useUiLayout()
 const ledgerStore = useLedgerStore()
 const accountStore = useAccountStore()
 const uiStore = useUiStore()
@@ -105,6 +115,11 @@ const showWelcomePage = computed(() => shouldShowWelcomePage({
   routeName: route.name,
 }))
 const showGuidedFlow = computed(() => showWelcomePage.value || route.name === 'post-setup-intro')
+const showTopBar = computed(() => {
+  if (isBooting.value || showGuidedFlow.value || hideAppChrome.value) return false
+  if (isModern.value && hasLedgers.value) return false
+  return true
+})
 const {
   routeStageRef,
   routeTransitioning,

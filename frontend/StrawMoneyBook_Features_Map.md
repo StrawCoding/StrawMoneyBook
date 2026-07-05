@@ -127,13 +127,14 @@
 - 資產：`/assets`
 - 功能：`/features`
 - 設定：`/settings`
-- SMB-250 / v1.3.29：現代介面風格僅調整 `apple-ui.css` 視覺（blur、active pill），**維持上述 5 tab**；首頁 FAB 不變；禁止重新引入 SMB-248 的 4 tab + `/more` 或移除 FAB
+- SMB-250 / v1.3.29：現代介面風格僅調整 `apple-ui.css` 視覺，**維持上述 5 tab**；首頁 FAB 不變；禁止重新引入 SMB-248 的 4 tab + `/more` 或移除 FAB
+- v1.3.43 Phase 2：現代版隱藏重複 top-bar、flat inset grouped 首頁／資產／分析、實心底欄（無 blur／active 光暈）、FAB 無 primary glow
 
 ### 介面風格（`src/ui/services/ui-layout.service.js` + `src/ui/composables/useUiLayout.js`）
 
 - localStorage key：`strawmoneybook.ui.layout`；值 `traditional` | `modern`，預設 `modern`
 - 啟動時由 `app-runtime.service.js` → `initializeAppEnvironment()` 呼叫 `loadUiLayout()`，並設定 `document.documentElement.dataset.uiLayout`
-- 現代版樣式：`src/ui/assets/css/apple-ui.css`（Large Title、Inset Grouped List、Segmented Control、list row + chevron、0.5px separator）
+- 現代版樣式：`src/ui/assets/css/apple-ui.css`（Large Title、Inset Grouped List、Segmented Control、list row + chevron、0.5px separator；v1.3.43 Phase 2 加 flat shell、實心底欄、首頁交易流 inset 列）
 - 設定入口：設定 → 個人化 →「介面風格」；與 `theme.service.js` 配色主題獨立、可任意組合
 - 測試：`test/ui-layout.service.test.js`、`test/ui-layout-source.test.js`、`npm run playwright:ui-layout`
 
