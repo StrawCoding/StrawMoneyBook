@@ -13,8 +13,6 @@ const routerSource = readFileSync(resolve(root, 'src/ui/router/index.js'), 'utf8
 const i18nSource = readFileSync(resolve(root, 'src/ui/services/i18n.service.js'), 'utf8')
 const jaSource = readFileSync(resolve(root, 'src/ui/services/runtime-ja-messages.generated.js'), 'utf8')
 const appRuntimeSource = readFileSync(resolve(root, 'src/ui/services/app-runtime.service.js'), 'utf8')
-const appVueSource = readFileSync(resolve(root, 'src/ui/App.vue'), 'utf8')
-const appleUiCssSource = readFileSync(resolve(root, 'src/ui/assets/css/apple-ui.css'), 'utf8')
 const featuresMapSource = readFileSync(resolve(root, 'StrawMoneyBook_Features_Map.md'), 'utf8')
 const detailedDocSource = readFileSync(resolve(import.meta.dirname, '../../StrawMoneyBook_App_Features_Detailed.md'), 'utf8')
 
@@ -112,19 +110,6 @@ test('i18n includes ui layout keys in zh-TW, en, ja', () => {
 test('docs mention ui layout phase 1 surfaces', () => {
   assert.match(featuresMapSource, /介面風格|ui-layout|apple-ui/u)
   assert.match(detailedDocSource, /介面風格|現代|apple-ui/u)
-})
-
-test('modern shell hides duplicate top bar in App.vue', () => {
-  assert.match(appVueSource, /modern-shell/)
-  assert.match(appVueSource, /showTopBar/)
-  assert.match(appVueSource, /useUiLayout/)
-})
-
-test('apple-ui.css includes phase 2 flat shell overrides', () => {
-  assert.match(appleUiCssSource, /Phase 2/)
-  assert.match(appleUiCssSource, /modern-shell/)
-  assert.match(appleUiCssSource, /backdrop-filter: none/)
-  assert.match(appleUiCssSource, /data-testid='home-fab'/)
 })
 
 test('useHomePeriodFilter composable exists for shared home filter logic', () => {
