@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.45
+- (SMB-260) 共同預算池（Budget Container）完整實作：migration 034 已存在，本次補齊 `budget.repo.js` 容器 CRUD 與 `budget_container_id` 讀寫、`budget.service.js` snapshot / save / remove、`budget.store.js` 2B 月總額與 3C 超支 getter、`budget-save.service.js` 池層 `budget_container_month` 結算與總預算存款排除池內分類；預算頁新增 `BudgetContainerSheet.vue`、分組列表（池卡片 + 未入池）、項目可選所屬池；首頁 `HomeBudgetSummaryCard` 月模式對齊 `isMonthOver`；三語 i18n `budgeting.container.*`。驗證：`npm run test:node` 636/636 + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
+
 ## v1.3.44
 - (Revert) 還原 v1.3.43 Phase 2 UI/UX 改動，恢復 v1.3.42 現代介面視覺：`App.vue` 恢復 top-bar 顯示；`apple-ui.css` 移除 Phase 2 flat inset grouped、實心底欄、FAB 無光暈等變更；`i18n.service.js` 與 `ui-layout-source.test.js` 同步還原。5 tab + FAB + 首頁全區塊行為不變。驗證：`npm run test:node` 628/628 + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
 

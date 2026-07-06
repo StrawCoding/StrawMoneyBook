@@ -13,6 +13,10 @@ const defaultDependencies = {
     const mod = await import('../repositories/budget.repo.js')
     return mod.listBudgetItems(...args)
   },
+  async listBudgetContainers(...args) {
+    const mod = await import('../repositories/budget.repo.js')
+    return mod.listBudgetContainers(...args)
+  },
   async computeBudgetSpentByCategory(...args) {
     const mod = await import('../repositories/budget.repo.js')
     return mod.computeBudgetSpentByCategory(...args)
@@ -342,6 +346,13 @@ function readBudgetSaveConfig(raw = {}, mode = 'item') {
       targetAccountId: normalizeText(raw?.budget_save_total_target_account_id),
     }
   }
+  if (mode === 'container') {
+    return {
+      enabled: normalizeBudgetSaveEnabled(raw?.budget_save_enabled),
+      sourceAccountId: normalizeText(raw?.budget_save_source_account_id),
+      targetAccountId: normalizeText(raw?.budget_save_target_account_id),
+    }
+  }
   return {
     enabled: normalizeBudgetSaveEnabled(raw?.budget_save_enabled),
     sourceAccountId: normalizeText(raw?.budget_save_source_account_id),
@@ -541,6 +552,7 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
     if (!budgetMonthKey) continue
 
     const items = await dependencies.listBudgetItems(ledgerId, budget.id)
+    const containers = await dependencies.listBudgetContainers(ledgerId, budget.id)
     const { startUtc: budgetMonthStartUtc, endUtc: budgetMonthEndUtc } = monthRangeUtc(budgetMonthKey, ledgerTimeZone)
     const monthlySpentMap = buildSpentMinorMap(
       await dependencies.computeBudgetSpentByCategory(ledgerId, budgetMonthStartUtc, budgetMonthEndUtc),
@@ -562,8 +574,18 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
         .map(([categoryId]) => categoryId),
     )
 
+    const containerSaveEnabledIds = new Set(
+      containers
+        .filter((container) => normalizeBudgetSaveEnabled(container?.budget_save_enabled))
+        .map((container) => String(container.id)),
+    )
+
     for (const item of items) {
       if (!normalizeBudgetSaveEnabled(item?.budget_save_enabled)) continue
+      const parentContainerId = normalizeText(item?.budget_container_id)
+      if (parentContainerId && containerSaveEnabledIds.has(parentContainerId)) {
+        continue
+      }
       const categoryId = normalizeText(item?.category_id)
       const config = readBudgetSaveConfig(item, 'item')
       const scopeRefId = String(item.id)
@@ -654,6 +676,49 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
       }
     }
 
+    for (const container of containers) {
+      if (!normalizeBudgetSaveEnabled(container?.budget_save_enabled)) continue
+      if (compareMonthKey(budgetMonthKey, currentMonthKey) >= 0) continue
+
+      const config = readBudgetSaveConfig(container, 'container')
+      const scopeRefId = String(container.id)
+      const containerLabel = normalizeText(container?.name) || scopeRefId
+      const configStatus = buildConfigStatus(config, accountMap)
+      if (!configStatus.valid) {
+        await recordNonTransferSettlement({
+          scopeType: 'budget_container_month',
+          scopeRefId,
+          periodKey: budgetMonthKey,
+          config,
+          status: 'invalid_config',
+          lastError: configStatus.reason,
+        })
+        continue
+      }
+
+      const childItems = items.filter(
+        (item) => String(item?.budget_container_id ?? '') === scopeRefId,
+      )
+      let containerSpentMinor = 0
+      for (const item of childItems) {
+        const categoryId = normalizeText(item?.category_id)
+        if (!categoryId) continue
+        containerSpentMinor += Number(monthlySpentMap.get(categoryId) ?? 0)
+      }
+      const containerAmountMinor = Math.max(0, Math.round(Number(container?.amount_minor ?? 0) || 0))
+      const expectedAmountMinor = Math.max(0, containerAmountMinor - containerSpentMinor)
+
+      await finalizeSettlement({
+        scopeType: 'budget_container_month',
+        scopeRefId,
+        periodKey: budgetMonthKey,
+        expectedAmountMinor,
+        configStatus,
+        label: `${containerLabel} ${budgetMonthKey}`,
+        dueDateKey: buildMonthLastDayKey(budgetMonthKey),
+      })
+    }
+
     const totalConfig = readBudgetSaveConfig(budget, 'total')
     if (!totalConfig.enabled || compareMonthKey(budgetMonthKey, currentMonthKey) >= 0) {
       continue
@@ -676,6 +741,14 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
     for (const [categoryId, categoryItems] of itemsByCategory.entries()) {
       if (categoryItems.some((item) => normalizeBudgetSaveEnabled(item?.budget_save_enabled))) {
         excludedCategoryIds.add(categoryId)
+      }
+    }
+    for (const container of containers) {
+      if (!normalizeBudgetSaveEnabled(container?.budget_save_enabled)) continue
+      for (const item of items) {
+        if (String(item?.budget_container_id ?? '') !== String(container.id)) continue
+        const categoryId = normalizeText(item?.category_id)
+        if (categoryId) excludedCategoryIds.add(categoryId)
       }
     }
 

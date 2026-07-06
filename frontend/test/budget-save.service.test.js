@@ -307,3 +307,64 @@ test('budget save records failed settlement when source balance is insufficient'
   assert.equal(deps.settlements.get('budget_item_month:bi_food:2026-02')?.status, 'failed')
   assert.equal(deps.settlements.get('budget_item_month:bi_food:2026-02')?.last_error, 'insufficient_balance')
 })
+
+test('budget save settles shared budget pool month surplus with budget_container_month scope', async () => {
+  const transferCalls = []
+  setBudgetSaveDependenciesForTest(createBaseDependencies({
+    async listBudgetsWithSaveRules() {
+      return [{ id: 'budget_feb', month_key: '2026-02' }]
+    },
+    async listBudgetContainers() {
+      return [{
+        id: 'bc_life',
+        name: '生活費',
+        amount_minor: 300000,
+        budget_save_enabled: 1,
+        budget_save_target_account_id: 'jar_trip',
+        budget_save_source_account_id: 'acc_main',
+      }]
+    },
+    async listBudgetItems() {
+      return [
+        {
+          id: 'bi_food',
+          category_id: 'cat_food',
+          budget_container_id: 'bc_life',
+          amount_minor: 150000,
+          amount_mode: 'fixed',
+          day_rule_unit: 'none',
+          day_rule_values_json: '[]',
+          budget_save_enabled: 0,
+        },
+        {
+          id: 'bi_transport',
+          category_id: 'cat_transport',
+          budget_container_id: 'bc_life',
+          amount_minor: 80000,
+          amount_mode: 'fixed',
+          day_rule_unit: 'none',
+          day_rule_values_json: '[]',
+          budget_save_enabled: 0,
+        },
+      ]
+    },
+    async computeBudgetSpentByCategory() {
+      return [
+        { category_id: 'cat_food', spent_minor: 120000 },
+        { category_id: 'cat_transport', spent_minor: 50000 },
+      ]
+    },
+    async createTransfer(_ledgerId, payload) {
+      transferCalls.push(payload)
+      return { transferGroupId: 'tf_container' }
+    },
+  }))
+
+  const result = await runBudgetSaveIfDue('ledger_1', {
+    now: new Date('2026-03-15T09:00:00+08:00'),
+  })
+
+  assert.equal(result.createdCount, 1)
+  assert.equal(transferCalls[0].amountMinor, 130000)
+  assert.match(transferCalls[0].note, /^預算存款：生活費 2026-02$/)
+})

@@ -18,6 +18,10 @@ const defaultDependencies = {
     const mod = await import('../repositories/budget.repo.js')
     return mod.deleteBudgetContainersByBudget(...args)
   },
+  async deleteBudgetContainer(...args) {
+    const mod = await import('../repositories/budget.repo.js')
+    return mod.deleteBudgetContainer(...args)
+  },
   async listBudgetContainers(...args) {
     const mod = await import('../repositories/budget.repo.js')
     return mod.listBudgetContainers(...args)
@@ -325,11 +329,12 @@ export async function saveBudgetSavePreferences(ledgerId, input = {}) {
 export async function loadBudgetSnapshot(ledgerId, monthKey) {
   const budget = await ensureBudgetForMonth(ledgerId, monthKey)
   const { startUtc, endUtc } = monthRangeUtc(monthKey)
-  const [rawItems, spentRows, usedOccurrenceRows, budgetSavePreferences] = await Promise.all([
+  const [rawItems, spentRows, usedOccurrenceRows, budgetSavePreferences, rawContainers] = await Promise.all([
     dependencies.listBudgetItems(ledgerId, budget.id),
     dependencies.computeBudgetSpentByCategory(ledgerId, startUtc, endUtc),
     dependencies.listBudgetUsageDaysByCategory(ledgerId, startUtc, endUtc),
     getBudgetSavePreferences(ledgerId),
+    dependencies.listBudgetContainers(ledgerId, budget.id),
   ])
   const usedDaysMap = new Map()
   for (const row of usedOccurrenceRows) {
@@ -346,6 +351,7 @@ export async function loadBudgetSnapshot(ledgerId, monthKey) {
   return {
     budget,
     items,
+    containers: rawContainers,
     spentRows,
     budgetSavePreferences,
   }
@@ -373,10 +379,11 @@ export async function saveBudgetItem(ledgerId, monthKey, payload) {
   }
 
   const budgetSave = await assertValidBudgetSaveConfig(ledgerId, normalizeBudgetSaveConfig(payload))
+  const budgetContainerId = normalizeText(payload.budgetContainerId) || null
   if (budgetSave.enabled) {
-    if (payload.budgetContainerId) {
+    if (budgetContainerId) {
       const containers = await dependencies.listBudgetContainers(ledgerId, budget.id)
-      const parentContainer = containers.find((c) => String(c?.id ?? '') === String(payload.budgetContainerId))
+      const parentContainer = containers.find((c) => String(c?.id ?? '') === String(budgetContainerId))
       if (parentContainer && normalizeBudgetSaveEnabled(parentContainer?.budget_save_enabled)) {
         throw createBudgetError('budgeting.budget_save.error.parent_conflict')
       }
@@ -391,12 +398,21 @@ export async function saveBudgetItem(ledgerId, monthKey, payload) {
     }
   }
 
+  if (budgetContainerId) {
+    const containers = await dependencies.listBudgetContainers(ledgerId, budget.id)
+    const container = containers.find((c) => String(c?.id ?? '') === String(budgetContainerId))
+    if (!container) {
+      throw createBudgetError('budgeting.container.error.not_found')
+    }
+  }
+
   const id = await dependencies.upsertBudgetItem(ledgerId, {
     id: payload.id,
     budgetId: budget.id,
     scopeType: 'category',
     categoryId: payload.categoryId,
     categoryGroupId: null,
+    budgetContainerId,
     amountMinor,
     amountMode,
     dayRuleUnit,
@@ -423,6 +439,10 @@ export async function saveBudgetTotalConfig(ledgerId, monthKey, payload = {}) {
 
 export async function saveBudgetContainer(ledgerId, monthKey, payload) {
   const budget = await ensureBudgetForMonth(ledgerId, monthKey)
+  const name = normalizeText(payload.name)
+  if (!name) {
+    throw createBudgetError('budgeting.container.error.name_required')
+  }
 
   const budgetSave = await assertValidBudgetSaveConfig(ledgerId, normalizeBudgetSaveConfig(payload))
   if (budgetSave.enabled) {
@@ -439,7 +459,7 @@ export async function saveBudgetContainer(ledgerId, monthKey, payload) {
   return dependencies.upsertBudgetContainer(ledgerId, {
     id: payload.id,
     budgetId: budget.id,
-    name: normalizeText(payload.name),
+    name,
     amountMinor: Math.max(0, Math.round(Number(payload.amountMinor))),
     budgetSaveEnabled: budgetSave.enabled,
     budgetSaveTargetAccountId: budgetSave.targetAccountId,
@@ -451,6 +471,11 @@ export async function saveBudgetContainer(ledgerId, monthKey, payload) {
 export async function removeBudgetItem(ledgerId, budgetItemId) {
   if (!budgetItemId) return
   await dependencies.deleteBudgetItem(ledgerId, budgetItemId)
+}
+
+export async function removeBudgetContainer(ledgerId, containerId) {
+  if (!containerId) return
+  await dependencies.deleteBudgetContainer(ledgerId, containerId)
 }
 
 export async function copyPreviousMonthBudget(ledgerId, monthKey, options = {}) {

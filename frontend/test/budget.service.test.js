@@ -125,6 +125,35 @@ test('saveBudgetItem rejects child auto save when parent container auto save is 
   )
 })
 
+test('saveBudgetItem persists budgetContainerId when container exists', async () => {
+  const upsertCalls = []
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      return { id: 'budget_current', month_key: monthKey }
+    },
+    async listBudgetItems() {
+      return []
+    },
+    async listBudgetContainers() {
+      return [{ id: 'bc_life', name: '生活費' }]
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      upsertCalls.push(payload)
+      return 'bi_food'
+    },
+  })
+
+  const id = await saveBudgetItem('ledger_1', '2026-03', {
+    categoryId: 'cat_food',
+    budgetContainerId: 'bc_life',
+    amountMinor: 10000,
+  })
+
+  assert.equal(id, 'bi_food')
+  assert.equal(upsertCalls.length, 1)
+  assert.equal(upsertCalls[0].budgetContainerId, 'bc_life')
+})
+
 test('saveBudgetContainer rejects auto save when a child item already saves', async () => {
   setBudgetServiceDependenciesForTest({
     async getBudgetByMonth(_ledgerId, monthKey) {

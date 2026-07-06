@@ -127,6 +127,13 @@ export async function listBudgetsWithSaveRules(ledgerId) {
              AND bi.budget_id = b.id
              AND bi.budget_save_enabled = 1
          )
+         OR EXISTS (
+           SELECT 1
+           FROM budget_containers bc
+           WHERE bc.ledger_id = b.ledger_id
+             AND bc.budget_id = b.id
+             AND bc.budget_save_enabled = 1
+         )
        )
      ORDER BY b.month_key ASC, b.created_at ASC;`,
     [ledgerId],
@@ -134,9 +141,79 @@ export async function listBudgetsWithSaveRules(ledgerId) {
   return rowsOf(result)
 }
 
+export async function listBudgetContainers(ledgerId, budgetId) {
+  assertLedgerId(ledgerId)
+  const result = await query(
+    `SELECT ledger_id, id, budget_id, name, amount_minor,
+            budget_save_enabled, budget_save_target_account_id, budget_save_source_account_id,
+            sort_order, created_at, updated_at
+     FROM budget_containers
+     WHERE ledger_id = ? AND budget_id = ?
+     ORDER BY sort_order ASC, created_at ASC;`,
+    [ledgerId, budgetId],
+  )
+  return rowsOf(result)
+}
+
+export async function upsertBudgetContainer(ledgerId, input) {
+  assertLedgerId(ledgerId)
+  const now = nowIso()
+  const id = input.id ?? createId('bc')
+
+  await run(
+    `INSERT INTO budget_containers (
+      ledger_id, id, budget_id, name, amount_minor,
+      budget_save_enabled, budget_save_target_account_id, budget_save_source_account_id,
+      sort_order, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(ledger_id, id) DO UPDATE SET
+      name = excluded.name,
+      amount_minor = excluded.amount_minor,
+      budget_save_enabled = excluded.budget_save_enabled,
+      budget_save_target_account_id = excluded.budget_save_target_account_id,
+      budget_save_source_account_id = excluded.budget_save_source_account_id,
+      sort_order = excluded.sort_order,
+      updated_at = excluded.updated_at;`,
+    [
+      ledgerId,
+      id,
+      input.budgetId,
+      input.name,
+      Math.max(0, Math.round(Number(input.amountMinor ?? 0))),
+      normalizeBudgetSaveEnabled(input.budgetSaveEnabled),
+      normalizeBudgetSaveAccountId(input.budgetSaveTargetAccountId),
+      normalizeBudgetSaveAccountId(input.budgetSaveSourceAccountId),
+      input.sortOrder ?? 0,
+      now,
+      now,
+    ],
+  )
+
+  return id
+}
+
+export async function deleteBudgetContainer(ledgerId, containerId) {
+  assertLedgerId(ledgerId)
+  if (!containerId) return
+  const now = nowIso()
+  await run(
+    `UPDATE budget_items
+     SET budget_container_id = NULL, updated_at = ?
+     WHERE ledger_id = ? AND budget_container_id = ?;`,
+    [now, ledgerId, containerId],
+  )
+  await run('DELETE FROM budget_containers WHERE ledger_id = ? AND id = ?;', [ledgerId, containerId])
+}
+
+export async function deleteBudgetContainersByBudget(ledgerId, budgetId) {
+  assertLedgerId(ledgerId)
+  await run('DELETE FROM budget_containers WHERE ledger_id = ? AND budget_id = ?;', [ledgerId, budgetId])
+}
+
 export async function listBudgetItems(ledgerId, budgetId) {
   const result = await query(
     `SELECT bi.ledger_id, bi.id, bi.budget_id, bi.scope_type, bi.category_id, bi.category_group_id,
+            bi.budget_container_id,
             bi.amount_minor, bi.amount_mode, bi.day_rule_unit, bi.day_rule_values_json,
             bi.budget_save_enabled, bi.budget_save_target_account_id, bi.budget_save_source_account_id,
             bi.sort_order AS sort_order, c.name AS category_name
@@ -159,14 +236,16 @@ export async function upsertBudgetItem(ledgerId, input) {
   await run(
     `INSERT INTO budget_items (
       ledger_id, id, budget_id, scope_type, category_id, category_group_id,
+      budget_container_id,
       amount_minor, amount_mode, day_rule_unit, day_rule_values_json,
       budget_save_enabled, budget_save_target_account_id, budget_save_source_account_id,
       sort_order, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(ledger_id, id) DO UPDATE SET
       scope_type = excluded.scope_type,
       category_id = excluded.category_id,
       category_group_id = excluded.category_group_id,
+      budget_container_id = excluded.budget_container_id,
       amount_minor = excluded.amount_minor,
       amount_mode = excluded.amount_mode,
       day_rule_unit = excluded.day_rule_unit,
@@ -183,6 +262,7 @@ export async function upsertBudgetItem(ledgerId, input) {
       input.scopeType,
       input.categoryId ?? null,
       input.categoryGroupId ?? null,
+      input.budgetContainerId ?? null,
       input.amountMinor,
       input.amountMode ?? 'fixed',
       input.dayRuleUnit ?? 'none',

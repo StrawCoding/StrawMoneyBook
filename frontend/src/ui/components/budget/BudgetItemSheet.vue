@@ -18,6 +18,11 @@
       />
     </label>
 
+    <label v-if="containerOptions.length">
+      {{ t('budgeting.container.item_field') }}
+      <CustomSelect v-model="model.budgetContainerId" :options="containerOptions" />
+    </label>
+
     <label>
       {{ t('budgeting.amount_mode') }}
       <CustomSelect v-model="model.amountMode" :options="amountModeOptions" />
@@ -177,6 +182,14 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  containers: {
+    type: Array,
+    default: () => [],
+  },
+  containerBudgetSaveEnabledIds: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['close', 'save'])
@@ -185,6 +198,7 @@ const { t } = useI18n()
 const model = reactive({
   id: '',
   categoryId: '',
+  budgetContainerId: '',
   amountMajor: null,
   amountMode: 'fixed',
   dayRuleUnit: 'weekday',
@@ -230,6 +244,21 @@ const monthdayPickerDay = computed(() => {
   return toDayKey(monthdayPreview.year, monthdayPreview.month, clampDayToMonth(monthdayPreview.year, monthdayPreview.month, fallbackDay))
 })
 const duplicateCategoryIdSet = computed(() => new Set((props.duplicateCategoryIds ?? []).map((value) => String(value ?? '').trim()).filter(Boolean)))
+const containerBudgetSaveEnabledIdSet = computed(() => new Set(
+  (props.containerBudgetSaveEnabledIds ?? []).map((value) => String(value ?? '').trim()).filter(Boolean),
+))
+const containerOptions = computed(() => {
+  const options = [{ value: '', label: t('budgeting.container.none') }]
+  for (const container of props.containers ?? []) {
+    const id = String(container?.id ?? '').trim()
+    if (!id) continue
+    options.push({
+      value: id,
+      label: String(container?.name ?? '').trim() || id,
+    })
+  }
+  return options
+})
 const budgetSaveModeLabel = computed(() => (
   model.amountMode === 'daily_average'
     ? t('budgeting.budget_save.mode.daily')
@@ -253,6 +282,13 @@ const budgetSaveInvalidReason = computed(() => {
   if (duplicateCategoryIdSet.value.has(String(model.categoryId ?? '').trim())) {
     return t('budgeting.budget_save.error.conflict')
   }
+  if (
+    model.budgetSaveEnabled
+    && model.budgetContainerId
+    && containerBudgetSaveEnabledIdSet.value.has(String(model.budgetContainerId))
+  ) {
+    return t('budgeting.budget_save.error.parent_conflict')
+  }
   if (!budgetSaveTargetOptions.value.length) return t('budgeting.budget_save.error.target_invalid')
   if (!String(model.budgetSaveTargetAccountId ?? '').trim()) return t('budgeting.budget_save.error.target_required')
   if (!budgetSaveSourceOptions.value.length) return t('budgeting.budget_save.error.source_invalid')
@@ -272,6 +308,7 @@ watch(
     if (props.item) {
       model.id = props.item.id
       model.categoryId = props.item.category_id ?? ''
+      model.budgetContainerId = String(props.item.budget_container_id ?? '')
       model.amountMajor = Number(props.item.amount_minor ?? 0) / 100
       model.amountMode = normalizeAmountMode(props.item.amount_mode)
       model.dayRuleUnit = normalizeDayRuleUnit(props.item.day_rule_unit)
@@ -285,6 +322,7 @@ watch(
 
     model.id = ''
     model.categoryId = categoryOptions.value[0]?.id ?? ''
+    model.budgetContainerId = ''
     model.amountMajor = null
     model.amountMode = 'fixed'
     model.dayRuleUnit = 'weekday'
@@ -431,6 +469,7 @@ function onSave() {
   emit('save', {
     id: model.id || undefined,
     categoryId: model.categoryId,
+    budgetContainerId: String(model.budgetContainerId ?? '').trim() || null,
     amountMinor: Math.round(Number(model.amountMajor ?? 0) * 100),
     amountMode: model.amountMode,
     dayRuleUnit: model.amountMode === 'daily_average' ? model.dayRuleUnit : 'none',

@@ -266,6 +266,9 @@ function calcMetricSet(mode) {
   const currentReservedMinor = mode === 'daily' ? selectedDailyReservedMinor.value : reservedMinor.value
   const usedRatio = budgetMinor > 0 ? spentMinor / budgetMinor : 0
   const safeRatio = Number.isFinite(usedRatio) ? usedRatio : 0
+  const isOverBudget = mode === 'monthly'
+    ? budgetStore.isMonthOver
+    : (budgetMinor > 0 && safeRatio > 1)
   return {
     budgetMinor,
     spentMinor,
@@ -273,7 +276,7 @@ function calcMetricSet(mode) {
     reservedMinor: currentReservedMinor,
     usedRatio: safeRatio,
     usedPercentLabel: `${Math.round(safeRatio * 100)}%`,
-    isOverBudget: budgetMinor > 0 && safeRatio > 1,
+    isOverBudget,
   }
 }
 

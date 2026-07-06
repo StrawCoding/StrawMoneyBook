@@ -15,7 +15,7 @@
         />
       </header>
 
-      <div class="stack stat">
+      <div class="stack stat" :class="{ 'month-over': budgetStore.isMonthOver }">
         <div class="row">
           <span class="muted">{{ t('budgeting.budget_total') }}</span>
           <MoneyText :value-minor="budgetStore.totalBudgetMinor" />
@@ -46,6 +46,7 @@
 
       <div class="row action-row">
         <button class="btn" @click="copyPreviousMonth">{{ t('budgeting.copy_previous') }}</button>
+        <button class="btn" @click="openCreateContainer">{{ t('budgeting.container.add') }}</button>
         <button class="btn primary" @click="openCreate">{{ t('budgeting.add_item') }}</button>
       </div>
     </article>
@@ -56,46 +57,95 @@
         <span class="badge">{{ t('budgeting.items_count', { count: budgetStore.items.length }) }}</span>
       </header>
 
-      <ul class="list">
-        <li v-for="item in budgetStore.items" :key="item.id" class="item-row">
-          <button type="button" class="item-card-btn" @click="openItemDetail(item)">
-            <div class="item-main">
-              <BudgetMiniPie
-                :ratio="itemUsedRatio(item)"
-                :over="isItemOverBudget(item)"
-                :percent-label="itemUsedPercentLabel(item)"
-                :subtitle="t('budgeting.used')"
-              />
-
-              <div class="item-content">
-                <div class="row">
-                  <span>{{ categoryName(item.category_id) }}</span>
-                  <MoneyText :value-minor="itemBudgetMinor(item)" />
-                </div>
-                <small v-if="isDailyAverageItem(item)" class="muted item-rule-hint">{{ itemDailyRuleSummary(item) }}</small>
-                <div v-if="itemBudgetSaveEnabled(item)" class="row budget-save-inline-row">
-                  <span class="budget-save-chip" :class="{ invalid: Boolean(itemBudgetSaveIssue(item)) }">
-                    {{ itemBudgetSaveModeLabel(item) }}
-                  </span>
-                  <small class="muted budget-save-inline-copy">{{ itemBudgetSaveSummary(item) }}</small>
-                </div>
-                <p v-if="itemBudgetSaveIssue(item)" class="error-text">{{ itemBudgetSaveIssue(item) }}</p>
-                <div class="row budget-line budget-summary-line">
-                  <div class="budget-side remain-line">
-                    <small class="budget-label">{{ t('budgeting.remaining') }}</small>
-                    <small class="budget-value">{{ formatMajor(itemRemainMinor(item)) }}</small>
+      <div class="grouped-list">
+        <section
+          v-for="section in budgetStore.groupedBudgetSections"
+          :key="section.type === 'container' ? section.container.id : 'unassigned'"
+          class="budget-section"
+        >
+          <header v-if="section.type === 'container'" class="container-head">
+            <button type="button" class="container-toggle" @click="toggleContainerExpanded(section.container.id)">
+              <div class="container-title-row">
+                <strong>{{ section.container.name }}</strong>
+                <span class="budget-save-chip" v-if="containerBudgetSaveEnabled(section.container)">
+                  {{ t('budgeting.budget_save.mode.monthly') }}
+                </span>
+              </div>
+              <div class="row container-summary-line">
+                <BudgetMiniPie
+                  :ratio="containerUsedRatio(section.container)"
+                  :over="section.container.isOver"
+                  :percent-label="containerUsedPercentLabel(section.container)"
+                  :subtitle="t('budgeting.used')"
+                />
+                <div class="container-stats">
+                  <div class="row">
+                    <span class="muted">{{ t('budgeting.budget_total') }}</span>
+                    <MoneyText :value-minor="section.container.amount_minor" />
                   </div>
-                  <div class="budget-side used-line">
-                    <small class="budget-label">{{ t('budgeting.used') }}</small>
-                    <small class="budget-value">{{ formatMajor(itemSpentMinor(item.category_id)) }}</small>
+                  <div class="row">
+                    <span class="muted">{{ t('budgeting.used') }}</span>
+                    <MoneyText :value-minor="section.container.spentMinor" />
+                  </div>
+                  <div class="row">
+                    <span class="muted">{{ t('budgeting.remaining') }}</span>
+                    <MoneyText :value-minor="section.container.remainMinor" />
                   </div>
                 </div>
               </div>
+            </button>
+            <div class="container-actions">
+              <button type="button" class="btn" @click="openContainerDetail(section.container)">{{ t('budgeting.container.view') }}</button>
             </div>
-          </button>
-        </li>
-        <li v-if="budgetStore.items.length === 0" class="muted">{{ t('budgeting.empty') }}</li>
-      </ul>
+          </header>
+
+          <h4 v-else class="unassigned-title">{{ t('budgeting.container.unassigned_title') }}</h4>
+
+          <ul v-show="section.type !== 'container' || isContainerExpanded(section.container.id)" class="list">
+            <li v-for="item in section.items" :key="item.id" class="item-row">
+              <button type="button" class="item-card-btn" @click="openItemDetail(item)">
+                <div class="item-main">
+                  <BudgetMiniPie
+                    :ratio="itemUsedRatio(item)"
+                    :over="budgetStore.isItemOver(item)"
+                    :percent-label="itemUsedPercentLabel(item)"
+                    :subtitle="t('budgeting.used')"
+                  />
+
+                  <div class="item-content">
+                    <div class="row">
+                      <span>{{ categoryName(item.category_id) }}</span>
+                      <MoneyText :value-minor="itemBudgetMinor(item)" />
+                    </div>
+                    <small v-if="isDailyAverageItem(item)" class="muted item-rule-hint">{{ itemDailyRuleSummary(item) }}</small>
+                    <div v-if="itemBudgetSaveEnabled(item)" class="row budget-save-inline-row">
+                      <span class="budget-save-chip" :class="{ invalid: Boolean(itemBudgetSaveIssue(item)) }">
+                        {{ itemBudgetSaveModeLabel(item) }}
+                      </span>
+                      <small class="muted budget-save-inline-copy">{{ itemBudgetSaveSummary(item) }}</small>
+                    </div>
+                    <p v-if="itemBudgetSaveIssue(item)" class="error-text">{{ itemBudgetSaveIssue(item) }}</p>
+                    <div class="row budget-line budget-summary-line">
+                      <div class="budget-side remain-line">
+                        <small class="budget-label">{{ t('budgeting.remaining') }}</small>
+                        <small class="budget-value">{{ formatMajor(itemRemainMinor(item)) }}</small>
+                      </div>
+                      <div class="budget-side used-line">
+                        <small class="budget-label">{{ t('budgeting.used') }}</small>
+                        <small class="budget-value">{{ formatMajor(itemSpentMinor(item.category_id)) }}</small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </button>
+            </li>
+          </ul>
+        </section>
+
+        <p v-if="budgetStore.items.length === 0 && budgetStore.containers.length === 0" class="muted empty-copy">
+          {{ t('budgeting.empty') }}
+        </p>
+      </div>
     </article>
 
     <InputBottomSheet
@@ -258,8 +308,67 @@
       :savings-jar-accounts="accountStore.savingsJarAccounts"
       :regular-accounts="accountStore.regularAccounts"
       :duplicate-category-ids="duplicateBudgetSaveCategoryIds"
+      :containers="budgetStore.containers"
+      :container-budget-save-enabled-ids="containerBudgetSaveEnabledIds"
       @close="closeSheet"
       @save="saveItem"
+    />
+
+    <BudgetContainerSheet
+      :open="isContainerSheetOpen"
+      :container="editingContainer"
+      :account-groups="accountStore.groups"
+      :savings-jar-accounts="accountStore.savingsJarAccounts"
+      :regular-accounts="accountStore.regularAccounts"
+      :has-child-budget-save="containerSheetHasChildBudgetSave"
+      @close="closeContainerSheet"
+      @save="saveContainer"
+    />
+
+    <InputBottomSheet
+      :open="isContainerDetailOpen"
+      :title="detailContainer ? detailContainer.name : t('budgeting.container.title')"
+      :body-class="'stack detail-sheet-body'"
+      :show-footer="true"
+      :close-text="t('budgeting.sheet.close')"
+      @close="closeContainerDetail"
+    >
+      <template v-if="detailContainer">
+        <div class="detail-block">
+          <small class="muted">{{ t('budgeting.container.amount') }}</small>
+          <strong>{{ formatMajor(detailContainer.amount_minor) }}</strong>
+        </div>
+        <div class="detail-row-grid">
+          <div class="detail-block">
+            <small class="muted">{{ t('budgeting.used') }}</small>
+            <strong>{{ formatMajor(detailContainerStats?.spentMinor ?? 0) }}</strong>
+          </div>
+          <div class="detail-block">
+            <small class="muted">{{ t('budgeting.remaining') }}</small>
+            <strong>{{ formatMajor(detailContainerStats?.remainMinor ?? 0) }}</strong>
+          </div>
+        </div>
+        <div class="detail-block">
+          <small class="muted">{{ t('budgeting.budget_save.title') }}</small>
+          <strong>{{ containerBudgetSaveEnabled(detailContainer) ? t('budgeting.budget_save.enabled') : t('budgeting.budget_save.disabled') }}</strong>
+        </div>
+      </template>
+
+      <template #footer>
+        <button class="btn" @click="requestDeleteContainerFromDetail">{{ t('budgeting.delete') }}</button>
+        <button class="btn primary" @click="editContainerFromDetail">{{ t('budgeting.edit') }}</button>
+      </template>
+    </InputBottomSheet>
+
+    <AppDialog
+      :open="deleteContainerDialogOpen"
+      :title="t('budgeting.container.delete_title')"
+      :message="t('budgeting.container.confirm_delete')"
+      :cancel-text="t('common.cancel')"
+      :confirm-text="t('budgeting.delete')"
+      :loading="deleteContainerLoading"
+      @close="closeDeleteContainerDialog"
+      @confirm="confirmDeleteContainer"
     />
 
     <AppDialog
@@ -284,6 +393,7 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import BudgetItemSheet from '@/ui/components/budget/BudgetItemSheet.vue'
+import BudgetContainerSheet from '@/ui/components/budget/BudgetContainerSheet.vue'
 import BudgetMiniPie from '@/ui/components/budget/BudgetMiniPie.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
@@ -300,6 +410,14 @@ const { t, locale } = useI18n()
 
 const isSheetOpen = ref(false)
 const editingItem = ref(null)
+const isContainerSheetOpen = ref(false)
+const editingContainer = ref(null)
+const detailContainer = ref(null)
+const isContainerDetailOpen = ref(false)
+const deleteContainerDialogOpen = ref(false)
+const deleteContainerLoading = ref(false)
+const pendingDeleteContainerId = ref('')
+const expandedContainerIds = ref(new Set())
 const detailItem = ref(null)
 const isItemDetailOpen = ref(false)
 const deleteDialogOpen = ref(false)
@@ -325,11 +443,36 @@ const budgetErrorKeys = new Set([
   'budgeting.budget_save.error.source_invalid',
   'budgeting.budget_save.error.currency_mismatch',
   'budgeting.budget_save.error.conflict',
+  'budgeting.budget_save.error.parent_conflict',
+  'budgeting.budget_save.error.group_conflict',
+  'budgeting.container.error.name_required',
+  'budgeting.container.error.not_found',
 ])
 const retroactiveModeOptions = computed(() => ([
   { value: 'manual', label: t('budgeting.budget_save.retroactive.manual') },
   { value: 'delta', label: t('budgeting.budget_save.retroactive.delta') },
 ]))
+
+const containerBudgetSaveEnabledIds = computed(() => (
+  budgetStore.containers
+    .filter((container) => Number(container?.budget_save_enabled ?? 0) === 1)
+    .map((container) => container.id)
+))
+
+const containerSheetHasChildBudgetSave = computed(() => {
+  const containerId = String(editingContainer.value?.id ?? '').trim()
+  if (!containerId) return false
+  return budgetStore.items.some(
+    (item) => String(item?.budget_container_id ?? '') === containerId
+      && Number(item?.budget_save_enabled ?? 0) === 1,
+  )
+})
+
+const detailContainerStats = computed(() => {
+  const containerId = String(detailContainer.value?.id ?? '').trim()
+  if (!containerId) return null
+  return budgetStore.containersWithStats.find((entry) => String(entry.id) === containerId) ?? null
+})
 
 const duplicateBudgetSaveCategoryIds = computed(() => {
   const grouped = new Map()
@@ -430,6 +573,18 @@ watch(
 )
 
 watch(
+  () => budgetStore.containers.map((container) => container.id),
+  (containerIds) => {
+    const next = new Set(expandedContainerIds.value)
+    for (const containerId of containerIds) {
+      next.add(String(containerId))
+    }
+    expandedContainerIds.value = next
+  },
+  { immediate: true },
+)
+
+watch(
   () => totalSaveTargetOptions.value,
   (options) => {
     if (!totalSaveForm.enabled) return
@@ -493,7 +648,101 @@ function itemUsedPercentLabel(item) {
 }
 
 function isItemOverBudget(item) {
-  return itemBudgetMinor(item) > 0 && itemUsedRatio(item) > 1
+  return budgetStore.isItemOver(item)
+}
+
+function containerBudgetSaveEnabled(container) {
+  return Number(container?.budget_save_enabled ?? 0) === 1
+}
+
+function containerUsedRatio(container) {
+  const amountMinor = Number(container?.amount_minor ?? 0)
+  if (!Number.isFinite(amountMinor) || amountMinor <= 0) return 0
+  const ratio = Number(container?.spentMinor ?? 0) / amountMinor
+  return Number.isFinite(ratio) ? ratio : 0
+}
+
+function containerUsedPercentLabel(container) {
+  return `${Math.round(containerUsedRatio(container) * 100)}%`
+}
+
+function isContainerExpanded(containerId) {
+  return expandedContainerIds.value.has(String(containerId))
+}
+
+function toggleContainerExpanded(containerId) {
+  const key = String(containerId)
+  const next = new Set(expandedContainerIds.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedContainerIds.value = next
+}
+
+function openCreateContainer() {
+  editingContainer.value = null
+  isContainerSheetOpen.value = true
+}
+
+function openContainerDetail(container) {
+  detailContainer.value = container
+  isContainerDetailOpen.value = true
+}
+
+function closeContainerDetail() {
+  isContainerDetailOpen.value = false
+  detailContainer.value = null
+}
+
+function editContainerFromDetail() {
+  if (!detailContainer.value) return
+  const container = detailContainer.value
+  closeContainerDetail()
+  editingContainer.value = container
+  isContainerSheetOpen.value = true
+}
+
+function closeContainerSheet() {
+  isContainerSheetOpen.value = false
+  editingContainer.value = null
+}
+
+async function saveContainer(payload) {
+  try {
+    await budgetStore.upsertContainer(payload)
+    uiStore.pushToast(t('budgeting.container.toast.saved'))
+    closeContainerSheet()
+  } catch (error) {
+    uiStore.pushToast(resolveBudgetErrorMessage(error), 'error')
+  }
+}
+
+function requestDeleteContainerFromDetail() {
+  const containerId = String(detailContainer.value?.id ?? '').trim()
+  if (!containerId) return
+  closeContainerDetail()
+  pendingDeleteContainerId.value = containerId
+  deleteContainerDialogOpen.value = true
+}
+
+function closeDeleteContainerDialog() {
+  if (deleteContainerLoading.value) return
+  deleteContainerDialogOpen.value = false
+  pendingDeleteContainerId.value = ''
+}
+
+async function confirmDeleteContainer() {
+  if (!pendingDeleteContainerId.value || deleteContainerLoading.value) return
+  deleteContainerLoading.value = true
+  try {
+    await budgetStore.deleteContainer(pendingDeleteContainerId.value)
+    uiStore.pushToast(t('budgeting.container.toast.deleted'))
+    deleteContainerDialogOpen.value = false
+    pendingDeleteContainerId.value = ''
+  } catch (error) {
+    uiStore.pushToast(error.message ?? t('budgeting.toast.delete_failed'), 'error')
+  } finally {
+    deleteContainerLoading.value = false
+  }
 }
 
 function isDailyAverageItem(item) {
@@ -719,6 +968,61 @@ h2, h3 {
 }
 .stat {
   margin-top: 10px
+}
+.stat.month-over .remain-line,
+.stat.month-over .remain-value {
+  color: var(--danger, #d14343);
+}
+.grouped-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 14px;
+}
+.budget-section {
+  display: grid;
+  gap: 8px;
+}
+.container-head {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 94%, var(--surface-soft-accent) 6%);
+}
+.container-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+}
+.container-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.container-summary-line {
+  align-items: center;
+  gap: 10px;
+}
+.container-stats {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+.container-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.unassigned-title {
+  margin: 0;
+  font-size: 14px;
+}
+.empty-copy {
+  margin: 0;
 }
 .budget-save-panel {
   margin-top: 14px;
