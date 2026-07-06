@@ -16,17 +16,26 @@
       </header>
 
       <div class="stack stat" :class="{ 'month-over': budgetStore.isMonthOver }">
-        <div class="row">
-          <span class="muted">{{ t('budgeting.budget_total') }}</span>
-          <MoneyText :value-minor="budgetStore.totalBudgetMinor" />
-        </div>
-        <div class="row">
-          <span class="muted">{{ t('budgeting.used') }}</span>
-          <MoneyText :value-minor="budgetStore.totalSpentMinor" />
-        </div>
-        <div class="row">
-          <span class="muted">{{ t('budgeting.remaining') }}</span>
-          <MoneyText :value-minor="budgetStore.remainMinor" />
+        <BudgetProgressBar
+          :ratio="monthUsedRatio"
+          :over="budgetStore.isMonthOver"
+          :percent-label="monthUsedPercentLabel"
+          :subtitle="t('budgeting.used')"
+          :aria-label="t('budgeting.monthly_budget')"
+        />
+        <div class="stat-grid">
+          <div class="stat-cell">
+            <span class="muted">{{ t('budgeting.budget_total') }}</span>
+            <MoneyText :value-minor="budgetStore.totalBudgetMinor" />
+          </div>
+          <div class="stat-cell">
+            <span class="muted">{{ t('budgeting.used') }}</span>
+            <MoneyText :value-minor="budgetStore.totalSpentMinor" />
+          </div>
+          <div class="stat-cell" :class="{ 'remain-over': budgetStore.isMonthOver }">
+            <span class="muted">{{ t('budgeting.remaining') }}</span>
+            <MoneyText :value-minor="budgetStore.remainMinor" />
+          </div>
         </div>
       </div>
 
@@ -70,27 +79,30 @@
                 <span class="budget-save-chip" v-if="containerBudgetSaveEnabled(section.container)">
                   {{ t('budgeting.budget_save.mode.monthly') }}
                 </span>
+                <span class="budget-save-chip pool-period-chip">
+                  {{ containerPeriodLabel(section.container) }}
+                </span>
               </div>
-              <div class="row container-summary-line">
-                <BudgetMiniPie
-                  :ratio="containerUsedRatio(section.container)"
-                  :over="section.container.isOver"
-                  :percent-label="containerUsedPercentLabel(section.container)"
-                  :subtitle="t('budgeting.used')"
-                />
-                <div class="container-stats">
-                  <div class="row">
-                    <span class="muted">{{ t('budgeting.budget_total') }}</span>
-                    <MoneyText :value-minor="section.container.amount_minor" />
-                  </div>
-                  <div class="row">
-                    <span class="muted">{{ t('budgeting.used') }}</span>
-                    <MoneyText :value-minor="section.container.spentMinor" />
-                  </div>
-                  <div class="row">
-                    <span class="muted">{{ t('budgeting.remaining') }}</span>
-                    <MoneyText :value-minor="section.container.remainMinor" />
-                  </div>
+              <BudgetProgressBar
+                class="container-progress"
+                :ratio="containerUsedRatio(section.container)"
+                :over="section.container.isOver"
+                :percent-label="containerUsedPercentLabel(section.container)"
+                :subtitle="t('budgeting.used')"
+                :aria-label="section.container.name"
+              />
+              <div class="container-stats">
+                <div class="stat-cell">
+                  <span class="muted">{{ containerBudgetLabel(section.container) }}</span>
+                  <MoneyText :value-minor="section.container.budgetMinor ?? section.container.amount_minor" />
+                </div>
+                <div class="stat-cell">
+                  <span class="muted">{{ t('budgeting.used') }}</span>
+                  <MoneyText :value-minor="section.container.spentMinor" />
+                </div>
+                <div class="stat-cell" :class="{ 'remain-over': section.container.isOver }">
+                  <span class="muted">{{ t('budgeting.remaining') }}</span>
+                  <MoneyText :value-minor="section.container.remainMinor" />
                 </div>
               </div>
             </button>
@@ -103,38 +115,43 @@
 
           <ul v-show="section.type !== 'container' || isContainerExpanded(section.container.id)" class="list">
             <li v-for="item in section.items" :key="item.id" class="item-row">
-              <button type="button" class="item-card-btn" @click="openItemDetail(item)">
-                <div class="item-main">
-                  <BudgetMiniPie
-                    :ratio="itemUsedRatio(item)"
-                    :over="budgetStore.isItemOver(item)"
-                    :percent-label="itemUsedPercentLabel(item)"
-                    :subtitle="t('budgeting.used')"
-                  />
+              <button
+                type="button"
+                class="item-card-btn"
+                :class="{ 'item-over': isItemOverBudget(item) }"
+                @click="openItemDetail(item)"
+              >
+                <div class="item-header row">
+                  <span class="item-category">{{ categoryName(item.category_id) }}</span>
+                  <MoneyText class="item-budget-amount" :value-minor="itemBudgetMinor(item)" />
+                </div>
 
-                  <div class="item-content">
-                    <div class="row">
-                      <span>{{ categoryName(item.category_id) }}</span>
-                      <MoneyText :value-minor="itemBudgetMinor(item)" />
-                    </div>
-                    <small v-if="isDailyAverageItem(item)" class="muted item-rule-hint">{{ itemDailyRuleSummary(item) }}</small>
-                    <div v-if="itemBudgetSaveEnabled(item)" class="row budget-save-inline-row">
-                      <span class="budget-save-chip" :class="{ invalid: Boolean(itemBudgetSaveIssue(item)) }">
-                        {{ itemBudgetSaveModeLabel(item) }}
-                      </span>
-                      <small class="muted budget-save-inline-copy">{{ itemBudgetSaveSummary(item) }}</small>
-                    </div>
-                    <p v-if="itemBudgetSaveIssue(item)" class="error-text">{{ itemBudgetSaveIssue(item) }}</p>
-                    <div class="row budget-line budget-summary-line">
-                      <div class="budget-side remain-line">
-                        <small class="budget-label">{{ t('budgeting.remaining') }}</small>
-                        <small class="budget-value">{{ formatMajor(itemRemainMinor(item)) }}</small>
-                      </div>
-                      <div class="budget-side used-line">
-                        <small class="budget-label">{{ t('budgeting.used') }}</small>
-                        <small class="budget-value">{{ formatMajor(itemSpentMinor(item.category_id)) }}</small>
-                      </div>
-                    </div>
+                <BudgetProgressBar
+                  class="item-progress"
+                  :ratio="itemUsedRatio(item)"
+                  :over="isItemOverBudget(item)"
+                  :percent-label="itemUsedPercentLabel(item)"
+                  :subtitle="t('budgeting.used')"
+                  :aria-label="categoryName(item.category_id)"
+                />
+
+                <small v-if="isDailyAverageItem(item)" class="muted item-rule-hint">{{ itemDailyRuleSummary(item) }}</small>
+                <div v-if="itemBudgetSaveEnabled(item)" class="row budget-save-inline-row">
+                  <span class="budget-save-chip" :class="{ invalid: Boolean(itemBudgetSaveIssue(item)) }">
+                    {{ itemBudgetSaveModeLabel(item) }}
+                  </span>
+                  <small class="muted budget-save-inline-copy">{{ itemBudgetSaveSummary(item) }}</small>
+                </div>
+                <p v-if="itemBudgetSaveIssue(item)" class="error-text">{{ itemBudgetSaveIssue(item) }}</p>
+
+                <div class="item-footer">
+                  <div class="footer-stat remain-line">
+                    <small class="budget-label">{{ t('budgeting.remaining') }}</small>
+                    <strong class="budget-value">{{ formatMajor(itemRemainMinor(item)) }}</strong>
+                  </div>
+                  <div class="footer-stat used-line">
+                    <small class="budget-label">{{ t('budgeting.used') }}</small>
+                    <strong class="budget-value">{{ formatMajor(itemSpentMinor(item.category_id)) }}</strong>
                   </div>
                 </div>
               </button>
@@ -317,6 +334,7 @@
     <BudgetContainerSheet
       :open="isContainerSheetOpen"
       :container="editingContainer"
+      :child-items="containerSheetChildItems"
       :account-groups="accountStore.groups"
       :savings-jar-accounts="accountStore.savingsJarAccounts"
       :regular-accounts="accountStore.regularAccounts"
@@ -394,7 +412,7 @@ import { useUiStore } from '@/ui/stores/ui.store'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import BudgetItemSheet from '@/ui/components/budget/BudgetItemSheet.vue'
 import BudgetContainerSheet from '@/ui/components/budget/BudgetContainerSheet.vue'
-import BudgetMiniPie from '@/ui/components/budget/BudgetMiniPie.vue'
+import BudgetProgressBar from '@/ui/components/budget/BudgetProgressBar.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
@@ -465,6 +483,14 @@ const containerSheetHasChildBudgetSave = computed(() => {
   return budgetStore.items.some(
     (item) => String(item?.budget_container_id ?? '') === containerId
       && Number(item?.budget_save_enabled ?? 0) === 1,
+  )
+})
+
+const containerSheetChildItems = computed(() => {
+  const containerId = String(editingContainer.value?.id ?? '').trim()
+  if (!containerId) return []
+  return budgetStore.items.filter(
+    (item) => String(item?.budget_container_id ?? '') === containerId,
   )
 })
 
@@ -644,8 +670,20 @@ function itemUsedRatio(item) {
 }
 
 function itemUsedPercentLabel(item) {
-  return `${Math.round(itemUsedRatio(item) * 100)}%`
+  const budgetMinor = itemBudgetMinor(item)
+  if (!budgetMinor) return '0%'
+  const ratio = itemSpentMinor(item.category_id) / budgetMinor
+  return `${Math.round((Number.isFinite(ratio) ? ratio : 0) * 100)}%`
 }
+
+const monthUsedRatio = computed(() => {
+  const budgetMinor = Number(budgetStore.totalBudgetMinor ?? 0)
+  if (!Number.isFinite(budgetMinor) || budgetMinor <= 0) return 0
+  const ratio = Number(budgetStore.totalSpentMinor ?? 0) / budgetMinor
+  return Number.isFinite(ratio) ? ratio : 0
+})
+
+const monthUsedPercentLabel = computed(() => `${Math.round(monthUsedRatio.value * 100)}%`)
 
 function isItemOverBudget(item) {
   return budgetStore.isItemOver(item)
@@ -655,8 +693,20 @@ function containerBudgetSaveEnabled(container) {
   return Number(container?.budget_save_enabled ?? 0) === 1
 }
 
+function containerPeriodLabel(container) {
+  return String(container?.period_mode ?? container?.periodMode ?? '').trim() === 'daily'
+    ? t('budgeting.container.period_mode.daily')
+    : t('budgeting.container.period_mode.monthly')
+}
+
+function containerBudgetLabel(container) {
+  return String(container?.period_mode ?? container?.periodMode ?? '').trim() === 'daily'
+    ? t('budgeting.container.amount_daily')
+    : t('budgeting.budget_total')
+}
+
 function containerUsedRatio(container) {
-  const amountMinor = Number(container?.amount_minor ?? 0)
+  const amountMinor = Number(container?.budgetMinor ?? container?.amount_minor ?? 0)
   if (!Number.isFinite(amountMinor) || amountMinor <= 0) return 0
   const ratio = Number(container?.spentMinor ?? 0) / amountMinor
   return Number.isFinite(ratio) ? ratio : 0
@@ -967,11 +1017,28 @@ h2, h3 {
   font-size: 24px
 }
 .stat {
-  margin-top: 10px
+  margin-top: 10px;
+  gap: 12px;
 }
-.stat.month-over .remain-line,
-.stat.month-over .remain-value {
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.stat-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.stat-cell .muted {
+  font-size: 11px;
+}
+.stat-cell.remain-over,
+.stat.month-over .remain-over {
   color: var(--danger, #d14343);
+}
+.container-progress {
+  margin-top: 4px;
 }
 .grouped-list {
   margin-top: 12px;
@@ -1005,13 +1072,13 @@ h2, h3 {
   margin-bottom: 8px;
 }
 .container-summary-line {
-  align-items: center;
+  display: grid;
   gap: 10px;
 }
 .container-stats {
-  flex: 1;
   display: grid;
-  gap: 4px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 .container-actions {
   display: flex;
@@ -1084,27 +1151,50 @@ h2, h3 {
   gap: 8px
 }
 .item-row {
-  border-radius: 10px;
+  border-radius: 12px;
 }
 .item-card-btn {
   width: 100%;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: transparent;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  background: color-mix(in srgb, var(--card) 96%, var(--surface-soft-accent) 4%);
   color: inherit;
   text-align: left;
-}
-.item-main {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px
-}
-.item-content {
   display: grid;
   gap: 8px;
-  min-width: 0
+  transition: border-color var(--anim-fast) var(--anim-standard), background-color var(--anim-fast) var(--anim-standard);
+}
+.item-card-btn.item-over {
+  border-color: color-mix(in srgb, var(--danger, #d14343) 34%, var(--border) 66%);
+  background: color-mix(in srgb, var(--danger, #d14343) 5%, var(--card) 95%);
+}
+.item-header {
+  align-items: baseline;
+  gap: 8px;
+}
+.item-category {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.item-budget-amount {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+.item-progress {
+  width: 100%;
+}
+.item-footer {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.footer-stat {
+  display: grid;
+  gap: 2px;
 }
 .item-rule-hint {
   display: block
@@ -1156,21 +1246,13 @@ h2, h3 {
 .switch-row.active .switch-thumb {
   transform: translate3d(20px, 0, 0);
 }
-.budget-line {
-  justify-content: space-between;
-  font-weight: 700
-}
-.budget-summary-line {
-  gap: 12px
-}
-.budget-side {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px
-}
 .budget-label,
 .budget-value {
-  font-size: 12px
+  font-size: 12px;
+  line-height: 1.2;
+}
+.budget-value {
+  font-weight: 700;
 }
 .used-line {
   color: var(--chart-budget-used, var(--danger, #d14343))

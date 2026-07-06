@@ -95,6 +95,35 @@ function normalizeAmountMode(value) {
   return value === 'daily_average' ? 'daily_average' : 'fixed'
 }
 
+function normalizeContainerPeriodMode(value) {
+  return String(value ?? '').trim() === 'daily' ? 'daily' : 'monthly'
+}
+
+export function daysInMonthForKey(monthKey) {
+  const matched = /^(\d{4})-(\d{2})$/.exec(String(monthKey ?? '').trim())
+  if (!matched) return 30
+  const year = Number(matched[1])
+  const monthIndex = Number(matched[2]) - 1
+  if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11) return 30
+  return new Date(year, monthIndex + 1, 0).getDate()
+}
+
+export function resolveContainerMonthlyAmountMinor(container, monthKey) {
+  const amountMinor = Math.max(0, Math.round(Number(container?.amount_minor ?? 0)))
+  if (normalizeContainerPeriodMode(container?.period_mode) !== 'daily') return amountMinor
+  return amountMinor * daysInMonthForKey(monthKey)
+}
+
+function todayRangeUtc() {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0)
+  return {
+    startUtc: start.toISOString(),
+    endUtc: end.toISOString(),
+  }
+}
+
 function normalizeDayRuleUnit(value) {
   if (value === 'weekday') return 'weekday'
   if (value === 'monthday') return 'monthday'
@@ -329,9 +358,11 @@ export async function saveBudgetSavePreferences(ledgerId, input = {}) {
 export async function loadBudgetSnapshot(ledgerId, monthKey) {
   const budget = await ensureBudgetForMonth(ledgerId, monthKey)
   const { startUtc, endUtc } = monthRangeUtc(monthKey)
-  const [rawItems, spentRows, usedOccurrenceRows, budgetSavePreferences, rawContainers] = await Promise.all([
+  const { startUtc: todayStartUtc, endUtc: todayEndUtc } = todayRangeUtc()
+  const [rawItems, spentRows, todaySpentRows, usedOccurrenceRows, budgetSavePreferences, rawContainers] = await Promise.all([
     dependencies.listBudgetItems(ledgerId, budget.id),
     dependencies.computeBudgetSpentByCategory(ledgerId, startUtc, endUtc),
+    dependencies.computeBudgetSpentByCategory(ledgerId, todayStartUtc, todayEndUtc),
     dependencies.listBudgetUsageDaysByCategory(ledgerId, startUtc, endUtc),
     getBudgetSavePreferences(ledgerId),
     dependencies.listBudgetContainers(ledgerId, budget.id),
@@ -353,6 +384,7 @@ export async function loadBudgetSnapshot(ledgerId, monthKey) {
     items,
     containers: rawContainers,
     spentRows,
+    todaySpentRows,
     budgetSavePreferences,
   }
 }
@@ -464,6 +496,7 @@ export async function saveBudgetContainer(ledgerId, monthKey, payload) {
     budgetSaveEnabled: budgetSave.enabled,
     budgetSaveTargetAccountId: budgetSave.targetAccountId,
     budgetSaveSourceAccountId: budgetSave.sourceAccountId,
+    periodMode: normalizeContainerPeriodMode(payload.periodMode),
     sortOrder: payload.sortOrder ?? 0,
   })
 }
@@ -509,6 +542,7 @@ export async function copyPreviousMonthBudget(ledgerId, monthKey, options = {}) 
       budgetSaveEnabled: Number(container.budget_save_enabled ?? 0) === 1,
       budgetSaveTargetAccountId: container.budget_save_target_account_id,
       budgetSaveSourceAccountId: container.budget_save_source_account_id,
+      periodMode: normalizeContainerPeriodMode(container.period_mode),
       sortOrder: index,
     })
   }

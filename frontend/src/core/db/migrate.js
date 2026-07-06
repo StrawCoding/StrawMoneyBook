@@ -35,6 +35,7 @@ import migration034 from '@/core/db/migrations/034_budget_containers.sql?raw'
 import migration035 from '@/core/db/migrations/035_category_default_flags.sql?raw'
 import migration036 from '@/core/db/migrations/036_transaction_reimburse_target.sql?raw'
 import migration037 from '@/core/db/migrations/037_einvoice_carrier_sync.sql?raw'
+import migration038 from '@/core/db/migrations/038_budget_container_period_mode.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -70,6 +71,7 @@ const MIGRATIONS = [
   { version: 35, name: 'category_default_flags', sql: migration035 },
   { version: 36, name: 'transaction_reimburse_target', sql: migration036 },
   { version: 37, name: 'einvoice_carrier_sync', sql: migration037 },
+  { version: 38, name: 'budget_container_period_mode', sql: migration038 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'

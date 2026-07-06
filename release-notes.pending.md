@@ -2,6 +2,12 @@
 
 ---
 
+## v1.3.47
+- 預算頁預算項目改為橫向進度條呈現（新增 `BudgetProgressBar.vue`），取代列表內 `BudgetMiniPie` 圓餅圖；月總覽、共同預算池、各分類項目皆採進度條 + 三欄統計格，超支時邊框/填色轉警示紅。首頁預算簡表仍保留圓餅圖。驗證：`npm run test:node` + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
+
+## v1.3.46
+- 共同預算池增強：新增/編輯池可選「月池」或「日池」（migration 038 `period_mode`）；金額欄旁新增「子預算加總」按鈕，一鍵帶入已綁定子項目的 `resolved_amount` 加總；日池以當日支出比對池日額、月總額公式以日額×當月天數計入 2B；池層預算存款結算同步採月化日池金額。驗證：`npm run test:node` 637/637 + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
+
 ## v1.3.45
 - (SMB-260) 共同預算池（Budget Container）完整實作：migration 034 已存在，本次補齊 `budget.repo.js` 容器 CRUD 與 `budget_container_id` 讀寫、`budget.service.js` snapshot / save / remove、`budget.store.js` 2B 月總額與 3C 超支 getter、`budget-save.service.js` 池層 `budget_container_month` 結算與總預算存款排除池內分類；預算頁新增 `BudgetContainerSheet.vue`、分組列表（池卡片 + 未入池）、項目可選所屬池；首頁 `HomeBudgetSummaryCard` 月模式對齊 `isMonthOver`；三語 i18n `budgeting.container.*`。驗證：`npm run test:node` 636/636 + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
 

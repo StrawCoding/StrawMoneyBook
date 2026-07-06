@@ -2,8 +2,8 @@ import { query, run } from '../db/sqlite.js'
 import { createId, nowIso } from '../utils/id.js'
 import { assertLedgerId, firstRow, rowsOf } from './base.repo.js'
 
-function normalizeBudgetSaveEnabled(value) {
-  return Number(value) === 1 ? 1 : 0
+function normalizePeriodMode(value) {
+  return String(value ?? '').trim() === 'daily' ? 'daily' : 'monthly'
 }
 
 function normalizeBudgetSaveAccountId(value) {
@@ -146,7 +146,7 @@ export async function listBudgetContainers(ledgerId, budgetId) {
   const result = await query(
     `SELECT ledger_id, id, budget_id, name, amount_minor,
             budget_save_enabled, budget_save_target_account_id, budget_save_source_account_id,
-            sort_order, created_at, updated_at
+            period_mode, sort_order, created_at, updated_at
      FROM budget_containers
      WHERE ledger_id = ? AND budget_id = ?
      ORDER BY sort_order ASC, created_at ASC;`,
@@ -164,14 +164,15 @@ export async function upsertBudgetContainer(ledgerId, input) {
     `INSERT INTO budget_containers (
       ledger_id, id, budget_id, name, amount_minor,
       budget_save_enabled, budget_save_target_account_id, budget_save_source_account_id,
-      sort_order, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      period_mode, sort_order, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(ledger_id, id) DO UPDATE SET
       name = excluded.name,
       amount_minor = excluded.amount_minor,
       budget_save_enabled = excluded.budget_save_enabled,
       budget_save_target_account_id = excluded.budget_save_target_account_id,
       budget_save_source_account_id = excluded.budget_save_source_account_id,
+      period_mode = excluded.period_mode,
       sort_order = excluded.sort_order,
       updated_at = excluded.updated_at;`,
     [
@@ -183,6 +184,7 @@ export async function upsertBudgetContainer(ledgerId, input) {
       normalizeBudgetSaveEnabled(input.budgetSaveEnabled),
       normalizeBudgetSaveAccountId(input.budgetSaveTargetAccountId),
       normalizeBudgetSaveAccountId(input.budgetSaveSourceAccountId),
+      normalizePeriodMode(input.periodMode),
       input.sortOrder ?? 0,
       now,
       now,

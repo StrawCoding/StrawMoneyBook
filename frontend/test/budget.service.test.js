@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   copyPreviousMonthBudget,
   resetBudgetServiceDependenciesForTest,
+  resolveContainerMonthlyAmountMinor,
   saveBudgetContainer,
   saveBudgetItem,
   setBudgetServiceDependenciesForTest,
@@ -183,5 +184,16 @@ test('saveBudgetContainer rejects auto save when a child item already saves', as
       budgetSaveSourceAccountId: 'acc_main',
     }),
     { code: 'budgeting.budget_save.error.group_conflict' },
+  )
+})
+
+test('resolveContainerMonthlyAmountMinor multiplies daily pool amount by days in month', () => {
+  assert.equal(
+    resolveContainerMonthlyAmountMinor({ amount_minor: 10000, period_mode: 'daily' }, '2026-03'),
+    310000,
+  )
+  assert.equal(
+    resolveContainerMonthlyAmountMinor({ amount_minor: 10000, period_mode: 'monthly' }, '2026-03'),
+    10000,
   )
 })

@@ -14,8 +14,43 @@
     </label>
 
     <label>
-      {{ t('budgeting.container.amount') }}
-      <input v-model.number="model.amountMajor" class="input" type="number" min="0" step="1" />
+      {{ t('budgeting.container.period_mode') }}
+      <div class="period-mode-row">
+        <button
+          type="button"
+          class="period-mode-btn"
+          :class="{ active: model.periodMode === 'monthly' }"
+          @click="model.periodMode = 'monthly'"
+        >
+          {{ t('budgeting.container.period_mode.monthly') }}
+        </button>
+        <button
+          type="button"
+          class="period-mode-btn"
+          :class="{ active: model.periodMode === 'daily' }"
+          @click="model.periodMode = 'daily'"
+        >
+          {{ t('budgeting.container.period_mode.daily') }}
+        </button>
+      </div>
+    </label>
+
+    <label>
+      {{ containerAmountLabel }}
+      <div class="amount-row">
+        <input v-model.number="model.amountMajor" class="input" type="number" min="0" step="1" />
+        <button
+          type="button"
+          class="btn"
+          :disabled="!canFillChildSum"
+          @click="fillChildBudgetSum"
+        >
+          {{ t('budgeting.container.fill_child_sum') }}
+        </button>
+      </div>
+      <small v-if="childSumMajor > 0" class="muted">
+        {{ t('budgeting.container.child_sum_hint', { amount: childSumMajor }) }}
+      </small>
     </label>
 
     <div class="field-card">
@@ -91,6 +126,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  childItems: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['close', 'save'])
@@ -100,10 +139,34 @@ const model = reactive({
   id: '',
   name: '',
   amountMajor: null,
+  periodMode: 'monthly',
   budgetSaveEnabled: false,
   budgetSaveTargetAccountId: '',
   budgetSaveSourceAccountId: '',
 })
+
+const containerAmountLabel = computed(() => (
+  model.periodMode === 'daily'
+    ? t('budgeting.container.amount_daily')
+    : t('budgeting.container.amount')
+))
+
+const childSumMinor = computed(() => (
+  (props.childItems ?? []).reduce((total, item) => {
+    const resolved = Number(item?.resolved_amount_minor ?? item?.amount_minor ?? 0)
+    if (!Number.isFinite(resolved) || resolved <= 0) return total
+    return total + Math.round(resolved)
+  }, 0)
+))
+
+const childSumMajor = computed(() => Math.round(childSumMinor.value) / 100)
+
+const canFillChildSum = computed(() => childSumMinor.value > 0)
+
+function fillChildBudgetSum() {
+  if (!canFillChildSum.value) return
+  model.amountMajor = childSumMajor.value
+}
 
 const budgetSaveTargetGroups = computed(() => (
   buildAccountOptionGroups(props.accountGroups, props.savingsJarAccounts)
@@ -146,6 +209,7 @@ watch(
       model.id = props.container.id
       model.name = props.container.name ?? ''
       model.amountMajor = Number(props.container.amount_minor ?? 0) / 100
+      model.periodMode = String(props.container.period_mode ?? '').trim() === 'daily' ? 'daily' : 'monthly'
       model.budgetSaveEnabled = Number(props.container.budget_save_enabled ?? 0) === 1
       model.budgetSaveTargetAccountId = String(props.container.budget_save_target_account_id ?? '')
       model.budgetSaveSourceAccountId = String(props.container.budget_save_source_account_id ?? '')
@@ -155,6 +219,7 @@ watch(
     model.id = ''
     model.name = ''
     model.amountMajor = null
+    model.periodMode = 'monthly'
     model.budgetSaveEnabled = false
     model.budgetSaveTargetAccountId = String(props.savingsJarAccounts?.[0]?.id ?? '')
     model.budgetSaveSourceAccountId = ''
@@ -190,6 +255,7 @@ function onSave() {
     id: model.id || undefined,
     name: String(model.name ?? '').trim(),
     amountMinor: Math.round(Number(model.amountMajor ?? 0) * 100),
+    periodMode: model.periodMode === 'daily' ? 'daily' : 'monthly',
     budgetSaveEnabled: model.budgetSaveEnabled,
     budgetSaveTargetAccountId: model.budgetSaveEnabled ? model.budgetSaveTargetAccountId : null,
     budgetSaveSourceAccountId: model.budgetSaveEnabled ? model.budgetSaveSourceAccountId : null,
@@ -210,6 +276,31 @@ label {
   gap: 6px;
   font-size: 13px;
   color: var(--muted)
+}
+.period-mode-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.period-mode-btn {
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.period-mode-btn.active {
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--field-border) 54%);
+  background: color-mix(in srgb, var(--primary) 10%, var(--card) 90%);
+  color: var(--primary);
+}
+.amount-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
 }
 .budget-save-copy {
   margin: 0;

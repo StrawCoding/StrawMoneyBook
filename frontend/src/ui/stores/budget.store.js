@@ -3,6 +3,7 @@ import { monthKeyFromDate } from '@/core/utils/id'
 import {
   copyPreviousMonthBudget,
   removeBudgetContainer,
+  resolveContainerMonthlyAmountMinor,
   saveBudgetContainer,
   saveBudgetSavePreferences as saveBudgetSavePreferencesService,
   saveBudgetTotalConfig as saveBudgetTotalConfigService,
@@ -38,6 +39,10 @@ function isItemInContainer(item) {
   return Boolean(String(item?.budget_container_id ?? '').trim())
 }
 
+function normalizeContainerPeriodMode(value) {
+  return String(value ?? '').trim() === 'daily' ? 'daily' : 'monthly'
+}
+
 export const useBudgetStore = defineStore('budget', {
   state: () => ({
     monthKey: monthKeyFromDate(),
@@ -45,6 +50,7 @@ export const useBudgetStore = defineStore('budget', {
     items: [],
     containers: [],
     spentMap: {},
+    todaySpentMap: {},
     budgetSavePreferences: {
       retroactiveMode: 'manual',
     },
@@ -58,7 +64,7 @@ export const useBudgetStore = defineStore('budget', {
 
     totalBudgetMinor(state) {
       const containerTotal = state.containers.reduce(
-        (total, container) => total + toFiniteMinor(container.amount_minor),
+        (total, container) => total + resolveContainerMonthlyAmountMinor(container, state.monthKey),
         0,
       )
       const unassignedTotal = state.items
@@ -94,17 +100,27 @@ export const useBudgetStore = defineStore('budget', {
         const childItems = state.items.filter(
           (item) => String(item?.budget_container_id ?? '') === String(container.id),
         )
+        const isDailyPool = normalizeContainerPeriodMode(container.period_mode) === 'daily'
         const spentMinor = childItems.reduce(
-          (total, item) => total + toFiniteMinor(state.spentMap[item.category_id]),
+          (total, item) => total + toFiniteMinor(
+            isDailyPool
+              ? state.todaySpentMap[item.category_id]
+              : state.spentMap[item.category_id],
+          ),
           0,
         )
         const amountMinor = toFiniteMinor(container.amount_minor)
+        const budgetMinor = isDailyPool
+          ? amountMinor
+          : resolveContainerMonthlyAmountMinor(container, state.monthKey)
         return {
           ...container,
           items: childItems,
+          periodMode: normalizeContainerPeriodMode(container.period_mode),
           spentMinor,
-          remainMinor: amountMinor - spentMinor,
-          isOver: amountMinor > 0 && spentMinor > amountMinor,
+          budgetMinor,
+          remainMinor: budgetMinor - spentMinor,
+          isOver: budgetMinor > 0 && spentMinor > budgetMinor,
         }
       })
     },
@@ -191,7 +207,14 @@ export const useBudgetStore = defineStore('budget', {
           spentMap[row.category_id] = toFiniteMinor(row.spent_minor)
         }
 
+        const todaySpentMap = {}
+        for (const row of snapshot.todaySpentRows ?? []) {
+          if (!row.category_id) continue
+          todaySpentMap[row.category_id] = toFiniteMinor(row.spent_minor)
+        }
+
         this.spentMap = spentMap
+        this.todaySpentMap = todaySpentMap
       } finally {
         this.loading = false
       }

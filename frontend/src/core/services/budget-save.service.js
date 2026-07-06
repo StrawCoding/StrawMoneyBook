@@ -1,4 +1,4 @@
-import { getBudgetSavePreferences } from './budget.service.js'
+import { getBudgetSavePreferences, resolveContainerMonthlyAmountMinor } from './budget.service.js'
 
 const defaultDependencies = {
   async getLedger(...args) {
@@ -705,7 +705,7 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
         if (!categoryId) continue
         containerSpentMinor += Number(monthlySpentMap.get(categoryId) ?? 0)
       }
-      const containerAmountMinor = Math.max(0, Math.round(Number(container?.amount_minor ?? 0) || 0))
+      const containerAmountMinor = resolveContainerMonthlyAmountMinor(container, budgetMonthKey)
       const expectedAmountMinor = Math.max(0, containerAmountMinor - containerSpentMinor)
 
       await finalizeSettlement({
