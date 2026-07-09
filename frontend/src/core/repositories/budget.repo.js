@@ -11,6 +11,10 @@ function normalizeBudgetSaveAccountId(value) {
   return normalized || null
 }
 
+function normalizeBudgetSaveEnabled(value) {
+  return value === true || value === 1 || value === '1'
+}
+
 function buildBudgetSaveSettlementId(scopeType, scopeRefId, periodKey) {
   return `${String(scopeType ?? '').trim()}:${String(scopeRefId ?? '').trim()}:${String(periodKey ?? '').trim()}`
 }

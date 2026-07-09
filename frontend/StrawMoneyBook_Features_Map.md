@@ -506,6 +506,7 @@ UI composable 目錄：`src/ui/composables/`
 - 類別（0）：無
 - 補充：除原本的 budgets / budget_items 讀寫外，現在也承接整月預算存款設定、待結算 budget 篩選與 `budget_save_settlements` 結算紀錄。
 - 補充：`listBudgetItems()` 在 join `categories` 時已明確使用 `bi.sort_order AS sort_order`，避免建立新帳本後初始化預算快照時出現 ambiguous column error。
+- 補充（SMB-261 / v1.3.50）：repo 層補上 `normalizeBudgetSaveEnabled`，寫入整月 / 項目 / 共同預算池預算存款開關時不再 ReferenceError。
 
 ### `src/core/repositories/category.repo.js`
 - 函數（20）：`archiveCategoriesByGroup`, `archiveCategory`, `archiveCategoryGroup`, `countBudgetItemReferencesByGroup`, `countCategoryTransactions`, `countCategoryTransactionsByGroup`, `createCategory`, `createCategoryGroup`, `deleteCategoriesByGroup`, `deleteCategoryGroupById`, `deleteCategoryGroupIfUnused`, `deleteCategoryIfUnused`, `findFirstCategoryByKind`, `listCategories`, `listCategoryGroups`, `normalizeCategoryIcon`, `updateCategoryGroupSortOrdersByKind`, `updateCategoryIcon`, `updateCategoryProfile`, `updateCategorySortOrdersByGroup`

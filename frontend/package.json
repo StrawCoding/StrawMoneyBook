@@ -1,6 +1,6 @@
 {
   "name": "strawmoneybook",
-  "version": "1.3.49",
+  "version": "1.3.50",
   "private": true,
   "type": "module",
   "engines": {
@@ -30,6 +30,7 @@
     "simulate:bank-sync": "node scripts/simulate-bank-sync-mock-flow.mjs",
     "simulate:first-bank-provider": "node scripts/test-first-bank-provider.mjs",
     "playwright:bank-sync": "node scripts/playwright-bank-sync-settings.mjs",
+    "playwright:budget-save": "node scripts/playwright-budget-save.mjs",
     "playwright:ui-layout": "node scripts/playwright-ui-layout.mjs",
     "audit:i18n": "node scripts/audit-i18n.mjs",
     "audit:i18n:hardcoded": "node scripts/audit-i18n-hardcoded.mjs",

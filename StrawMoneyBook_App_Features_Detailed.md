@@ -279,6 +279,7 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 - 超支判讀
 - 預算剩餘額自動存入存錢罐
 - SMB-260 / v1.3.45 後新增「共同預算池」：可命名並手動設定池總額，綁定多個分類預算（一項最多一池）；首頁 / 月預算總額採 2B 公式（各池 amount + 未入池項目 resolved_amount，入池分類子預算不重複計入）；分類 / 池 / 月總三層各自判斷超支（3C）；池可啟用池層預算存款（`budget_container_month` 月底結算 = max(0, 池總額 − 綁定分類當月支出)），並與分類預算存款互斥；v1.3.48 日池可在池表單直接多選分類，綁定分類不需子預算金額，首頁日模式納入日池日額；複製上月、匯出 / 匯入與共同帳本 snapshot 皆含 `budget_containers`
+- SMB-261 / v1.3.50：`budget.repo.js` 補上 `normalizeBudgetSaveEnabled`，修復 `/budget` 儲存預算存款或切換共同預算池存款開關時 `normalizeBudgetSaveEnabled is not defined` 連續 toast 報錯；三模組（repo / service / save.service）布林正規化邏輯已對齊
 - SMB-151 後，預算項目的「日期」分配已改用與首頁查看範圍相同的 `HomeRangePicker` 日期選擇器，並在預算項目情境啟用日曆複選：使用者可在一致的日期 bottom sheet 直接點選多個分配日，系統再轉成每月日號規則，不再只是 1~31 的純數字格或另一套自製月曆，降低選錯分配日期的機率
 
 此外，分類預算不只支援固定月額，還支援更進階的日均規則：

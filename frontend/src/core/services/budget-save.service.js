@@ -70,7 +70,7 @@ function normalizeCurrencyCode(value, fallback = 'TWD') {
 }
 
 function normalizeBudgetSaveEnabled(value) {
-  return Number(value) === 1 || value === true
+  return value === true || value === 1 || value === '1'
 }
 
 function normalizeAmountMode(value) {

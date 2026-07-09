@@ -69,3 +69,13 @@ test('budget item sheet exposes item-level budget save controls', () => {
 test('budget repo qualifies joined sort_order columns to avoid ambiguous column errors', () => {
   assert.match(budgetRepoSource, /bi\.sort_order AS sort_order, c\.name AS category_name/)
 })
+
+test('budget repo defines normalizeBudgetSaveEnabled for budget save writes', () => {
+  assert.match(
+    budgetRepoSource,
+    /function normalizeBudgetSaveEnabled\(value\) \{\s*return value === true \|\| value === 1 \|\| value === '1'\s*\}/,
+  )
+  assert.match(budgetRepoSource, /normalizeBudgetSaveEnabled\(input\.budgetSaveTotalEnabled\)/)
+  assert.match(budgetRepoSource, /normalizeBudgetSaveEnabled\(input\.budgetSaveEnabled\)/)
+  assert.match(budgetRepoSource, /normalizeBudgetSaveEnabled\(input\.enabled\)/)
+})

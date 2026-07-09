@@ -2,9 +2,14 @@ import assert from 'node:assert/strict'
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { setTimeout as delay } from 'node:timers/promises'
+import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 
 const execFileAsync = promisify(execFile)
 const frontendDir = '/mnt/data/code/project/StrawCoding/StrawMoneyBook/frontend'
+const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
+const defaultBrowsersPath = resolve(repoRoot, 'backend/.server-data/playwright-browsers')
+const playwrightConfigPath = resolve(fileURLToPath(new URL('../playwright-cli.json', import.meta.url)))
 const previewPort = Number(process.env.UI_LAYOUT_PLAYWRIGHT_PORT || 4174)
 const baseUrl = `http://127.0.0.1:${previewPort}`
 
@@ -19,7 +24,11 @@ async function runPlaywrightCli(args, { raw = false } = {}) {
   ]
   return execFileAsync('npx', cliArgs, {
     cwd: frontendDir,
-    env: process.env,
+    env: {
+      ...process.env,
+      PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || defaultBrowsersPath,
+      PLAYWRIGHT_MCP_CONFIG: process.env.PLAYWRIGHT_MCP_CONFIG || playwrightConfigPath,
+    },
     maxBuffer: 4 * 1024 * 1024,
     timeout: 180000,
   })

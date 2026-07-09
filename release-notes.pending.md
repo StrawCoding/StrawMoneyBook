@@ -2,6 +2,9 @@
 
 ---
 
+## v1.3.50
+- 修復預算頁 `/budget` 儲存時 `normalizeBudgetSaveEnabled is not defined`：於 `budget.repo.js` 補上遺漏的布林正規化函式，並與 `budget.service.js` / `budget-save.service.js` 對齊同一實作，避免啟用預算存款或共同預算池時 toast 連續報錯。驗證：`budget-save-source.test.js` 回歸 + `npm run test:node` + `npm run build:web` + `playwright:budget-save`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
+
 ## v1.3.49
 - (v1.3.48) 共同預算池日池增強：新增/編輯日池可直接多選池內分類，綁定分類不需再設子預算金額（`amount_minor=0`、以池日額共用）；`BudgetContainerSheet` 日池分類選取、`BudgetItemSheet` 日池綁定隱藏金額欄、預算列表子項顯示「共用日池」、首頁預算簡表日模式納入日池日額與綁定分類支出。驗證：`npm run test:node` + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
 - (v1.3.47) 預算頁預算項目改為橫向進度條呈現（新增 `BudgetProgressBar.vue`），取代列表內 `BudgetMiniPie` 圓餅圖；月總覽、共同預算池、各分類項目皆採進度條 + 三欄統計格，超支時邊框/填色轉警示紅。首頁預算簡表仍保留圓餅圖。驗證：`npm run test:node` + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
