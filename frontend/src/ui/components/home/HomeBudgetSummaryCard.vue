@@ -33,7 +33,7 @@
                 <span class="muted">{{ t('home_budget_summary.used') }}</span>
                 <MoneyText :value-minor="modeMetrics[mode.key].spentMinor" />
               </div>
-              <div v-if="mode.key === 'daily'" class="line">
+              <div class="line">
                 <span class="muted">{{ t('budgeting.reserved') }}</span>
                 <MoneyText :value-minor="modeMetrics[mode.key].reservedMinor" />
               </div>

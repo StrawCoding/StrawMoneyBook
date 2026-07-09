@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 首頁預算簡表月均模式補上「保留金額」列：與文件一致，月/日模式皆顯示日均規則尚未到來的保留額（月均含當日、日模式不含選定日）。驗證：`npm run test:node` + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
+
 ---
 
 ## v1.3.52

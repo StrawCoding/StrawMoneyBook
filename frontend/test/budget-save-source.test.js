@@ -50,12 +50,12 @@ test('budgeting page exposes detail-first budget item and total save flows', () 
   assert.match(budgetingSource, /:groups="totalSaveSourceGroups"/)
 })
 
-test('home budget summary shows reserved amount only in daily mode', () => {
+test('home budget summary shows reserved amount in monthly and daily modes', () => {
   assert.match(homeBudgetSummarySource, /t\('budgeting\.reserved'\)/)
   assert.match(homeBudgetSummarySource, /budgetStore\.reservedMinor/)
   assert.match(homeBudgetSummarySource, /budgetStore\.reservedMinorByDate\(monthDateMeta\.value\.selectedDate, \{ includeReferenceDay: false \}\)/)
   assert.match(homeBudgetSummarySource, /reservedMinor: currentReservedMinor/)
-  assert.match(homeBudgetSummarySource, /v-if="mode\.key === 'daily'"[\s\S]*budgeting\.reserved/)
+  assert.doesNotMatch(homeBudgetSummarySource, /v-if="mode\.key === 'daily'"[\s\S]*budgeting\.reserved/)
 })
 
 test('budget item sheet exposes item-level budget save controls', () => {
