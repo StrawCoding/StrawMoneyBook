@@ -367,6 +367,7 @@ test('ci workflow warms Android bundleRelease cache on main so tag releases can 
   assert.match(ciWorkflow, /test -f \.\.\/release-notes\.pending\.md/)
   assert.match(ciWorkflow, /name: Validate release version matches latest git tag/)
   assert.match(ciWorkflow, /run: npm run release:sync-check/)
+  assert.match(ciWorkflow, /fetch-depth:\s*0/)
   assert.match(ciWorkflow, /name: Prepare Android release files for cache warmup/)
   assert.match(ciWorkflow, /if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/)
   assert.match(ciWorkflow, /run: npm run prepare:android:release/)
