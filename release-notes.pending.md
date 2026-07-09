@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- 首頁預算簡表月均模式補上「保留金額」列：與文件一致，月/日模式皆顯示日均規則尚未到來的保留額（月均含當日、日模式不含選定日）。驗證：`npm run test:node` + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
-
 ---
+
+## v1.3.53
+- 首頁預算簡表月均模式補上「保留金額」列：與文件一致，月/日模式皆顯示日均規則尚未到來的保留額（月均含當日、日模式不含選定日）。驗證：`npm run test:node` + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
 
 ## v1.3.52
 - 修復 CI `release:sync-check` 在 GitHub Actions 淺層 checkout 下找不到 git tag：`frontend` job checkout 改 `fetch-depth: 0` 以取得完整 tag 歷史。驗證：本地 `npm run release:sync-check` + CI。屬 devops，無使用者可見變更。
