@@ -114,6 +114,124 @@ export function resolveContainerMonthlyAmountMinor(container, monthKey) {
   return amountMinor * daysInMonthForKey(monthKey)
 }
 
+export function isDailyPoolContainer(container) {
+  return normalizeContainerPeriodMode(container?.period_mode ?? container?.periodMode) === 'daily'
+}
+
+export function isDailyPoolChildItem(item, containers = []) {
+  const containerId = normalizeText(item?.budget_container_id)
+  if (!containerId) return false
+  const container = (containers ?? []).find((entry) => String(entry?.id ?? '') === containerId)
+  return Boolean(container) && isDailyPoolContainer(container)
+}
+
+function normalizeCategoryIdList(values) {
+  return Array.from(
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => normalizeText(value))
+        .filter(Boolean),
+    ),
+  )
+}
+
+async function syncDailyPoolCategoryItems(ledgerId, budgetId, containerId, categoryIds) {
+  const normalizedCategoryIds = normalizeCategoryIdList(categoryIds)
+  const items = await dependencies.listBudgetItems(ledgerId, budgetId)
+  const selectedCategoryIdSet = new Set(normalizedCategoryIds)
+  const existingByCategoryId = new Map()
+
+  for (const item of items) {
+    const categoryId = normalizeText(item?.category_id)
+    if (!categoryId) continue
+    if (!existingByCategoryId.has(categoryId)) {
+      existingByCategoryId.set(categoryId, item)
+      continue
+    }
+    const current = existingByCategoryId.get(categoryId)
+    const currentInPool = String(current?.budget_container_id ?? '') === String(containerId)
+    const nextInPool = String(item?.budget_container_id ?? '') === String(containerId)
+    if (!currentInPool && nextInPool) {
+      existingByCategoryId.set(categoryId, item)
+    }
+  }
+
+  for (const categoryId of normalizedCategoryIds) {
+    const existing = existingByCategoryId.get(categoryId)
+    if (existing) {
+      await dependencies.upsertBudgetItem(ledgerId, {
+        id: existing.id,
+        budgetId,
+        scopeType: 'category',
+        categoryId,
+        categoryGroupId: null,
+        budgetContainerId: containerId,
+        amountMinor: 0,
+        amountMode: 'fixed',
+        dayRuleUnit: 'none',
+        dayRuleValuesJson: '[]',
+        budgetSaveEnabled: normalizeBudgetSaveEnabled(existing?.budget_save_enabled),
+        budgetSaveTargetAccountId: existing?.budget_save_target_account_id ?? null,
+        budgetSaveSourceAccountId: existing?.budget_save_source_account_id ?? null,
+        sortOrder: existing?.sort_order ?? 0,
+      })
+      continue
+    }
+
+    await dependencies.upsertBudgetItem(ledgerId, {
+      budgetId,
+      scopeType: 'category',
+      categoryId,
+      categoryGroupId: null,
+      budgetContainerId: containerId,
+      amountMinor: 0,
+      amountMode: 'fixed',
+      dayRuleUnit: 'none',
+      dayRuleValuesJson: '[]',
+      budgetSaveEnabled: false,
+      budgetSaveTargetAccountId: null,
+      budgetSaveSourceAccountId: null,
+      sortOrder: 0,
+    })
+  }
+
+  for (const item of items) {
+    if (String(item?.budget_container_id ?? '') !== String(containerId)) continue
+    const categoryId = normalizeText(item?.category_id)
+    if (!categoryId || selectedCategoryIdSet.has(categoryId)) continue
+
+    const amountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
+    const hasBudgetSave = normalizeBudgetSaveEnabled(item?.budget_save_enabled)
+    if (amountMinor <= 0 && !hasBudgetSave) {
+      await dependencies.deleteBudgetItem(ledgerId, item.id)
+      continue
+    }
+
+    await dependencies.upsertBudgetItem(ledgerId, {
+      id: item.id,
+      budgetId,
+      scopeType: 'category',
+      categoryId,
+      categoryGroupId: null,
+      budgetContainerId: null,
+      amountMinor,
+      amountMode: normalizeAmountMode(item?.amount_mode),
+      dayRuleUnit: normalizeAmountMode(item?.amount_mode) === 'daily_average'
+        ? normalizeDayRuleUnit(item?.day_rule_unit)
+        : 'none',
+      dayRuleValuesJson: JSON.stringify(
+        normalizeAmountMode(item?.amount_mode) === 'daily_average'
+          ? normalizeDayRuleValues(item?.day_rule_values ?? item?.day_rule_values_json, normalizeDayRuleUnit(item?.day_rule_unit))
+          : [],
+      ),
+      budgetSaveEnabled: hasBudgetSave,
+      budgetSaveTargetAccountId: item?.budget_save_target_account_id ?? null,
+      budgetSaveSourceAccountId: item?.budget_save_source_account_id ?? null,
+      sortOrder: item?.sort_order ?? 0,
+    })
+  }
+}
+
 function todayRangeUtc() {
   const now = new Date()
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
@@ -488,7 +606,7 @@ export async function saveBudgetContainer(ledgerId, monthKey, payload) {
     }
   }
 
-  return dependencies.upsertBudgetContainer(ledgerId, {
+  const containerId = await dependencies.upsertBudgetContainer(ledgerId, {
     id: payload.id,
     budgetId: budget.id,
     name,
@@ -499,6 +617,12 @@ export async function saveBudgetContainer(ledgerId, monthKey, payload) {
     periodMode: normalizeContainerPeriodMode(payload.periodMode),
     sortOrder: payload.sortOrder ?? 0,
   })
+
+  if (normalizeContainerPeriodMode(payload.periodMode) === 'daily' && Array.isArray(payload.categoryIds)) {
+    await syncDailyPoolCategoryItems(ledgerId, budget.id, containerId, payload.categoryIds)
+  }
+
+  return containerId
 }
 
 export async function removeBudgetItem(ledgerId, budgetItemId) {

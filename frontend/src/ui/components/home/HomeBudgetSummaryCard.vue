@@ -70,6 +70,7 @@ import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { getEffectiveTransactionAmountMinor, isCountableForBudget } from '@/ui/utils/refund-transaction'
+import { isDailyPoolContainer } from '@/core/services/budget.service'
 
 const budgetStore = useBudgetStore()
 const transactionStore = useTransactionStore()
@@ -211,24 +212,52 @@ const activeDailyBudgetItems = computed(() => {
   const { selectedDate } = monthDateMeta.value
   return budgetStore.items.filter((item) => {
     if (normalizeAmountMode(item?.amount_mode) !== 'daily_average') return false
+    if (String(item?.budget_container_id ?? '').trim()) return false
     return isBudgetItemActiveOnDate(item, selectedDate)
   })
 })
 
-const activeDailyBudgetCategoryIds = computed(() => {
-  return new Set(
-    activeDailyBudgetItems.value
-      .map((item) => String(item?.category_id ?? '').trim())
-      .filter(Boolean),
-  )
+const dailyPoolContainers = computed(() => (
+  (budgetStore.containers ?? []).filter((container) => isDailyPoolContainer(container))
+))
+
+const dailyPoolCategoryIds = computed(() => {
+  const ids = new Set()
+  for (const container of dailyPoolContainers.value) {
+    for (const item of budgetStore.items) {
+      if (String(item?.budget_container_id ?? '') !== String(container.id)) continue
+      const categoryId = String(item?.category_id ?? '').trim()
+      if (categoryId) ids.add(categoryId)
+    }
+  }
+  return ids
 })
 
+const activeDailyBudgetCategoryIds = computed(() => {
+  const ids = new Set(dailyPoolCategoryIds.value)
+  for (const categoryId of activeDailyBudgetItems.value
+    .map((item) => String(item?.category_id ?? '').trim())
+    .filter(Boolean)) {
+    ids.add(categoryId)
+  }
+  return ids
+})
+
+const dailyPoolBudgetMinor = computed(() => (
+  dailyPoolContainers.value.reduce((total, container) => {
+    const amountMinor = Number(container?.amount_minor ?? 0)
+    if (!Number.isFinite(amountMinor) || amountMinor <= 0) return total
+    return total + Math.round(amountMinor)
+  }, 0)
+))
+
 const dailyBudgetMinor = computed(() => {
-  return activeDailyBudgetItems.value.reduce((total, item) => {
+  const itemTotal = activeDailyBudgetItems.value.reduce((total, item) => {
     const baseAmountMinor = Number(item?.amount_minor ?? 0)
     if (!Number.isFinite(baseAmountMinor) || baseAmountMinor <= 0) return total
     return total + Math.round(baseAmountMinor)
   }, 0)
+  return itemTotal + dailyPoolBudgetMinor.value
 })
 
 const selectedDaySpentMinor = computed(() => {

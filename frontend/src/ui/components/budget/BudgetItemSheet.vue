@@ -18,22 +18,26 @@
       />
     </label>
 
-    <label v-if="containerOptions.length">
+    <label v-if="containerOptions.length && !isDailyPoolBinding">
       {{ t('budgeting.container.item_field') }}
       <CustomSelect v-model="model.budgetContainerId" :options="containerOptions" />
     </label>
 
-    <label>
+    <p v-if="isDailyPoolBinding" class="muted pool-binding-hint">
+      {{ t('budgeting.container.daily_pool_item_hint') }}
+    </p>
+
+    <label v-if="!isDailyPoolBinding">
       {{ t('budgeting.amount_mode') }}
       <CustomSelect v-model="model.amountMode" :options="amountModeOptions" />
     </label>
 
-    <label v-if="model.amountMode === 'daily_average'">
+    <label v-if="model.amountMode === 'daily_average' && !isDailyPoolBinding">
       {{ t('budgeting.rule_unit') }}
       <CustomSelect v-model="model.dayRuleUnit" :options="dayRuleUnitOptions" />
     </label>
 
-    <div v-if="model.amountMode === 'daily_average' && model.dayRuleUnit === 'weekday'" class="stack rule-wrap">
+    <div v-if="model.amountMode === 'daily_average' && model.dayRuleUnit === 'weekday' && !isDailyPoolBinding" class="stack rule-wrap">
       <div class="row day-rule-quick-row">
         <button type="button" class="btn" @click="applyWeekdayPreset('weekdays')">{{ t('budgeting.sheet.rule_weekdays') }}</button>
         <button type="button" class="btn" @click="applyWeekdayPreset('weekends')">{{ t('budgeting.sheet.rule_weekends') }}</button>
@@ -55,7 +59,7 @@
       <small class="muted">{{ t('budgeting.sheet.weekday_help') }}</small>
     </div>
 
-    <div v-if="model.amountMode === 'daily_average' && model.dayRuleUnit === 'monthday'" class="stack rule-wrap">
+    <div v-if="model.amountMode === 'daily_average' && model.dayRuleUnit === 'monthday' && !isDailyPoolBinding" class="stack rule-wrap">
       <div class="monthday-picker">
         <label class="monthday-range-field">
           <span>{{ t('budgeting.sheet.monthday_pick_label') }}</span>
@@ -87,12 +91,12 @@
       <small class="muted">{{ t('budgeting.sheet.monthday_help') }}</small>
     </div>
 
-    <label>
+    <label v-if="!isDailyPoolBinding">
       {{ model.amountMode === 'daily_average' ? t('budgeting.sheet.daily_amount_label') : t('budgeting.sheet.amount_label') }}
       <input v-model.number="model.amountMajor" class="input" type="number" min="0" step="1" />
     </label>
 
-    <small v-if="model.amountMode === 'daily_average'" class="muted">
+    <small v-if="model.amountMode === 'daily_average' && !isDailyPoolBinding" class="muted">
       {{ t('budgeting.sheet.selected_days', { values: selectedDayRuleLabel || '-' }) }}
     </small>
 
@@ -259,6 +263,12 @@ const containerOptions = computed(() => {
   }
   return options
 })
+const selectedContainer = computed(() => (
+  (props.containers ?? []).find((container) => String(container?.id ?? '') === String(model.budgetContainerId ?? '')) ?? null
+))
+const isDailyPoolBinding = computed(() => (
+  String(selectedContainer.value?.period_mode ?? selectedContainer.value?.periodMode ?? '').trim() === 'daily'
+))
 const budgetSaveModeLabel = computed(() => (
   model.amountMode === 'daily_average'
     ? t('budgeting.budget_save.mode.daily')
@@ -340,6 +350,18 @@ watch(
     syncMonthdayPreview(value)
   },
   { immediate: true },
+)
+
+watch(
+  () => model.budgetContainerId,
+  () => {
+    if (!isDailyPoolBinding.value) return
+    model.amountMode = 'fixed'
+    model.amountMajor = 0
+    model.dayRuleUnit = 'weekday'
+    model.dayRuleValues = []
+    model.budgetSaveEnabled = false
+  },
 )
 
 watch(
@@ -466,17 +488,18 @@ function toggleMonthdayFromCalendar(payload) {
 
 function onSave() {
   if (budgetSaveInvalidReason.value) return
+  const poolBinding = isDailyPoolBinding.value
   emit('save', {
     id: model.id || undefined,
     categoryId: model.categoryId,
     budgetContainerId: String(model.budgetContainerId ?? '').trim() || null,
-    amountMinor: Math.round(Number(model.amountMajor ?? 0) * 100),
-    amountMode: model.amountMode,
-    dayRuleUnit: model.amountMode === 'daily_average' ? model.dayRuleUnit : 'none',
-    dayRuleValues: model.amountMode === 'daily_average' ? [...model.dayRuleValues] : [],
-    budgetSaveEnabled: model.budgetSaveEnabled,
-    budgetSaveTargetAccountId: model.budgetSaveEnabled ? model.budgetSaveTargetAccountId : null,
-    budgetSaveSourceAccountId: model.budgetSaveEnabled ? model.budgetSaveSourceAccountId : null,
+    amountMinor: poolBinding ? 0 : Math.round(Number(model.amountMajor ?? 0) * 100),
+    amountMode: poolBinding ? 'fixed' : model.amountMode,
+    dayRuleUnit: poolBinding ? 'none' : (model.amountMode === 'daily_average' ? model.dayRuleUnit : 'none'),
+    dayRuleValues: poolBinding ? [] : (model.amountMode === 'daily_average' ? [...model.dayRuleValues] : []),
+    budgetSaveEnabled: poolBinding ? false : model.budgetSaveEnabled,
+    budgetSaveTargetAccountId: poolBinding ? null : (model.budgetSaveEnabled ? model.budgetSaveTargetAccountId : null),
+    budgetSaveSourceAccountId: poolBinding ? null : (model.budgetSaveEnabled ? model.budgetSaveSourceAccountId : null),
   })
 }
 
@@ -552,6 +575,9 @@ label {
   color: var(--muted)
 }
 .budget-save-copy {
+  margin: 0;
+}
+.pool-binding-hint {
   margin: 0;
 }
 .category-trigger {

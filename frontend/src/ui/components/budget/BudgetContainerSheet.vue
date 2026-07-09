@@ -35,11 +35,38 @@
       </div>
     </label>
 
+    <label v-if="model.periodMode === 'daily'">
+      {{ t('budgeting.container.categories_field') }}
+      <div class="category-picker">
+        <section
+          v-for="group in categoryPickerGroups"
+          :key="group.id"
+          class="category-group"
+        >
+          <div class="category-group-title">{{ group.name }}</div>
+          <div class="category-chip-grid">
+            <button
+              v-for="category in group.categories"
+              :key="category.id"
+              type="button"
+              class="category-chip"
+              :class="{ active: model.categoryIds.includes(category.id) }"
+              @click="toggleCategory(category.id)"
+            >
+              {{ category.name }}
+            </button>
+          </div>
+        </section>
+      </div>
+      <small class="muted">{{ t('budgeting.container.daily_pool_category_hint') }}</small>
+    </label>
+
     <label>
       {{ containerAmountLabel }}
       <div class="amount-row">
         <input v-model.number="model.amountMajor" class="input" type="number" min="0" step="1" />
         <button
+          v-if="model.periodMode !== 'daily'"
           type="button"
           class="btn"
           :disabled="!canFillChildSum"
@@ -130,6 +157,14 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  categories: {
+    type: Array,
+    default: () => [],
+  },
+  categoryGroups: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['close', 'save'])
@@ -140,9 +175,22 @@ const model = reactive({
   name: '',
   amountMajor: null,
   periodMode: 'monthly',
+  categoryIds: [],
   budgetSaveEnabled: false,
   budgetSaveTargetAccountId: '',
   budgetSaveSourceAccountId: '',
+})
+
+const categoryPickerGroups = computed(() => {
+  if ((props.categoryGroups ?? []).length > 0) {
+    return props.categoryGroups.filter((group) => Array.isArray(group.categories) && group.categories.length > 0)
+  }
+  if (!(props.categories ?? []).length) return []
+  return [{
+    id: '__default__',
+    name: t('budgeting.sheet.category'),
+    categories: props.categories,
+  }]
 })
 
 const containerAmountLabel = computed(() => (
@@ -162,6 +210,15 @@ const childSumMinor = computed(() => (
 const childSumMajor = computed(() => Math.round(childSumMinor.value) / 100)
 
 const canFillChildSum = computed(() => childSumMinor.value > 0)
+
+function toggleCategory(categoryId) {
+  const key = String(categoryId ?? '').trim()
+  if (!key) return
+  const next = new Set(model.categoryIds.map((value) => String(value)))
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  model.categoryIds = Array.from(next)
+}
 
 function fillChildBudgetSum() {
   if (!canFillChildSum.value) return
@@ -210,6 +267,9 @@ watch(
       model.name = props.container.name ?? ''
       model.amountMajor = Number(props.container.amount_minor ?? 0) / 100
       model.periodMode = String(props.container.period_mode ?? '').trim() === 'daily' ? 'daily' : 'monthly'
+      model.categoryIds = (props.childItems ?? [])
+        .map((item) => String(item?.category_id ?? '').trim())
+        .filter(Boolean)
       model.budgetSaveEnabled = Number(props.container.budget_save_enabled ?? 0) === 1
       model.budgetSaveTargetAccountId = String(props.container.budget_save_target_account_id ?? '')
       model.budgetSaveSourceAccountId = String(props.container.budget_save_source_account_id ?? '')
@@ -220,6 +280,7 @@ watch(
     model.name = ''
     model.amountMajor = null
     model.periodMode = 'monthly'
+    model.categoryIds = []
     model.budgetSaveEnabled = false
     model.budgetSaveTargetAccountId = String(props.savingsJarAccounts?.[0]?.id ?? '')
     model.budgetSaveSourceAccountId = ''
@@ -256,6 +317,7 @@ function onSave() {
     name: String(model.name ?? '').trim(),
     amountMinor: Math.round(Number(model.amountMajor ?? 0) * 100),
     periodMode: model.periodMode === 'daily' ? 'daily' : 'monthly',
+    categoryIds: model.periodMode === 'daily' ? [...model.categoryIds] : undefined,
     budgetSaveEnabled: model.budgetSaveEnabled,
     budgetSaveTargetAccountId: model.budgetSaveEnabled ? model.budgetSaveTargetAccountId : null,
     budgetSaveSourceAccountId: model.budgetSaveEnabled ? model.budgetSaveSourceAccountId : null,
@@ -301,6 +363,37 @@ label {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
+}
+.category-picker {
+  display: grid;
+  gap: 10px;
+}
+.category-group {
+  display: grid;
+  gap: 6px;
+}
+.category-group-title {
+  font-size: 12px;
+  color: var(--muted);
+}
+.category-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.category-chip {
+  border: 1px solid var(--field-border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.category-chip.active {
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--field-border) 54%);
+  background: color-mix(in srgb, var(--primary) 10%, var(--card) 90%);
+  color: var(--primary);
 }
 .budget-save-copy {
   margin: 0;

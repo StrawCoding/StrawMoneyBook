@@ -63,6 +63,13 @@ test('budget container sheet exposes pool amount and savings controls', () => {
   assert.match(containerSheetSource, /budgeting\.container\.period_mode/)
   assert.match(containerSheetSource, /budgeting\.container\.fill_child_sum/)
   assert.match(containerSheetSource, /budgeting\.container\.budget_save_hint/)
+  assert.match(containerSheetSource, /budgeting\.container\.categories_field/)
+  assert.match(containerSheetSource, /model\.categoryIds/)
+})
+
+test('budget item sheet hides amount fields for daily pool bindings', () => {
+  assert.match(itemSheetSource, /isDailyPoolBinding/)
+  assert.match(itemSheetSource, /budgeting\.container\.daily_pool_item_hint/)
 })
 
 test('budgeting page uses progress bars for budget items and pools', () => {

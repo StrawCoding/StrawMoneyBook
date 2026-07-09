@@ -197,3 +197,72 @@ test('resolveContainerMonthlyAmountMinor multiplies daily pool amount by days in
     10000,
   )
 })
+
+test('saveBudgetContainer syncs daily pool categories without child budget amounts', async () => {
+  const upsertItemCalls = []
+  const deleteItemCalls = []
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      return { id: 'budget_current', month_key: monthKey }
+    },
+    async listBudgetItems() {
+      return [{
+        id: 'bi_food',
+        category_id: 'cat_food',
+        budget_container_id: 'bc_daily',
+        amount_minor: 0,
+        amount_mode: 'fixed',
+        day_rule_unit: 'none',
+        day_rule_values_json: '[]',
+        budget_save_enabled: 0,
+        sort_order: 0,
+      }, {
+        id: 'bi_transport',
+        category_id: 'cat_transport',
+        budget_container_id: 'bc_daily',
+        amount_minor: 0,
+        amount_mode: 'fixed',
+        day_rule_unit: 'none',
+        day_rule_values_json: '[]',
+        budget_save_enabled: 0,
+        sort_order: 1,
+      }]
+    },
+    async upsertBudgetContainer() {
+      return 'bc_daily'
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      upsertItemCalls.push(payload)
+      return payload.id ?? `bi_${upsertItemCalls.length}`
+    },
+    async deleteBudgetItem(_ledgerId, itemId) {
+      deleteItemCalls.push(itemId)
+    },
+  })
+
+  await saveBudgetContainer('ledger_1', '2026-03', {
+    id: 'bc_daily',
+    name: '日用',
+    amountMinor: 50000,
+    periodMode: 'daily',
+    categoryIds: ['cat_food', 'cat_fun'],
+    budgetSaveEnabled: false,
+  })
+
+  assert.equal(deleteItemCalls.length, 1)
+  assert.equal(deleteItemCalls[0], 'bi_transport')
+  assert.equal(upsertItemCalls.length, 2)
+  assert.deepEqual(
+    upsertItemCalls.map((call) => ({
+      categoryId: call.categoryId,
+      budgetContainerId: call.budgetContainerId,
+      amountMinor: call.amountMinor,
+      amountMode: call.amountMode,
+    })),
+    [
+      { categoryId: 'cat_food', budgetContainerId: 'bc_daily', amountMinor: 0, amountMode: 'fixed' },
+      { categoryId: 'cat_fun', budgetContainerId: 'bc_daily', amountMinor: 0, amountMode: 'fixed' },
+    ],
+  )
+})

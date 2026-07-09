@@ -10,6 +10,7 @@ import {
   loadBudgetSnapshot,
   removeBudgetItem,
   saveBudgetItem,
+  isDailyPoolChildItem,
 } from '@/core/services/budget.service'
 import { computeReservedMinor } from '@/core/services/budget-reserve.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -170,6 +171,10 @@ export const useBudgetStore = defineStore('budget', {
     },
 
     isItemOver(item) {
+      if (isDailyPoolChildItem(item, this.containers)) {
+        const containerId = String(item?.budget_container_id ?? '').trim()
+        return this.isContainerOver(containerId)
+      }
       const budgetMinor = itemResolvedMinor(item)
       if (budgetMinor <= 0) return false
       return this.itemSpentMinor(item?.category_id) > budgetMinor

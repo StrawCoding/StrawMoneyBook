@@ -123,10 +123,18 @@
               >
                 <div class="item-header row">
                   <span class="item-category">{{ categoryName(item.category_id) }}</span>
-                  <MoneyText class="item-budget-amount" :value-minor="itemBudgetMinor(item)" />
+                  <span v-if="isDailyPoolChild(item)" class="pool-child-label muted">
+                    {{ t('budgeting.container.daily_pool_child_label') }}
+                  </span>
+                  <MoneyText
+                    v-else
+                    class="item-budget-amount"
+                    :value-minor="itemBudgetMinor(item)"
+                  />
                 </div>
 
                 <BudgetProgressBar
+                  v-if="!isDailyPoolChild(item)"
                   class="item-progress"
                   :ratio="itemUsedRatio(item)"
                   :over="isItemOverBudget(item)"
@@ -134,6 +142,9 @@
                   :subtitle="t('budgeting.used')"
                   :aria-label="categoryName(item.category_id)"
                 />
+                <p v-else class="muted pool-child-spent">
+                  {{ t('budgeting.used') }} {{ formatMajor(itemSpentMinorForItem(item)) }}
+                </p>
 
                 <small v-if="isDailyAverageItem(item)" class="muted item-rule-hint">{{ itemDailyRuleSummary(item) }}</small>
                 <div v-if="itemBudgetSaveEnabled(item)" class="row budget-save-inline-row">
@@ -145,13 +156,13 @@
                 <p v-if="itemBudgetSaveIssue(item)" class="error-text">{{ itemBudgetSaveIssue(item) }}</p>
 
                 <div class="item-footer">
-                  <div class="footer-stat remain-line">
+                  <div v-if="!isDailyPoolChild(item)" class="footer-stat remain-line">
                     <small class="budget-label">{{ t('budgeting.remaining') }}</small>
                     <strong class="budget-value">{{ formatMajor(itemRemainMinor(item)) }}</strong>
                   </div>
                   <div class="footer-stat used-line">
                     <small class="budget-label">{{ t('budgeting.used') }}</small>
-                    <strong class="budget-value">{{ formatMajor(itemSpentMinor(item.category_id)) }}</strong>
+                    <strong class="budget-value">{{ formatMajor(itemSpentMinorForItem(item)) }}</strong>
                   </div>
                 </div>
               </button>
@@ -335,6 +346,8 @@
       :open="isContainerSheetOpen"
       :container="editingContainer"
       :child-items="containerSheetChildItems"
+      :categories="categoryStore.expenseCategories"
+      :category-groups="categoryStore.expenseCategoryGroups"
       :account-groups="accountStore.groups"
       :savings-jar-accounts="accountStore.savingsJarAccounts"
       :regular-accounts="accountStore.regularAccounts"
@@ -419,6 +432,7 @@ import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
+import { isDailyPoolChildItem } from '@/core/services/budget.service'
 
 const budgetStore = useBudgetStore()
 const accountStore = useAccountStore()
@@ -574,7 +588,7 @@ const detailItemAmountLabel = computed(() => {
 })
 
 const detailItemUsedLabel = computed(() => (
-  detailItem.value ? formatMajor(itemSpentMinor(detailItem.value.category_id)) : '-'
+  detailItem.value ? formatMajor(itemSpentMinorForItem(detailItem.value)) : '-'
 ))
 
 const detailItemRemainingLabel = computed(() => (
@@ -646,7 +660,23 @@ function itemSpentMinor(categoryId) {
   return Number.isFinite(spentMinor) ? spentMinor : 0
 }
 
+function itemTodaySpentMinor(categoryId) {
+  const spentMinor = Number(budgetStore.todaySpentMap[categoryId] ?? 0)
+  return Number.isFinite(spentMinor) ? spentMinor : 0
+}
+
+function isDailyPoolChild(item) {
+  return isDailyPoolChildItem(item, budgetStore.containers)
+}
+
+function itemSpentMinorForItem(item) {
+  return isDailyPoolChild(item)
+    ? itemTodaySpentMinor(item?.category_id)
+    : itemSpentMinor(item?.category_id)
+}
+
 function itemBudgetMinor(item) {
+  if (isDailyPoolChild(item)) return 0
   const budgetMinor = Number(item?.resolved_amount_minor ?? item?.amount_minor ?? 0)
   if (!Number.isFinite(budgetMinor)) return 0
   return Math.max(0, budgetMinor)
@@ -659,6 +689,7 @@ function itemBaseMinor(item) {
 }
 
 function itemRemainMinor(item) {
+  if (isDailyPoolChild(item)) return 0
   return itemBudgetMinor(item) - itemSpentMinor(item?.category_id)
 }
 
