@@ -692,7 +692,7 @@ UI composable 目錄：`src/ui/composables/`
 - 函數（0）：無
 - 變數（7）：`budgetStore`, `isOverBudget`, `pieStyle`, `totalBudgetMinor`, `totalSpentMinor`, `usedPercentLabel`, `usedRatio`
 - 類別（0）：無
-- 補充：首頁預算簡表的月模式與日模式都會顯示保留金額；日模式使用目前選定日期之後尚未到來的 `daily_average` 保留額，不含今天已生效的日均額度。
+- 補充：首頁預算簡表的月模式與日模式都會顯示保留金額；月模式含未入池 `daily_average` 規則日預留額（含當日）與共同預算日池剩餘日 × 池日額，並以帳本時區判斷「今天」；日模式使用目前選定日期之後尚未到來的 `daily_average` 保留額，不含今天已生效的日均額度。
 
 ### `src/ui/components/home/HomeTransactionEditSheet.vue`
 - 函數（34）：`addAddonRow`, `addonLabelOf`, `addonOptionIdByLabel`, `addonTotalDeltaMajorFromNote`, `applyOperator`, `closeCategoryPicker`, `closeDeleteConfirm`, `collectAppliedAddonItems`, `confirmRemove`, `createAddonRow`, `defaultAddonOption`, `defaultCategoryId`, `ensureInCategories`, `evaluateExpression`, `formatAmountInput`, `handleAmountInput`, `isFormulaExpression`, `isOperator`, `onAddonOptionChange`, `onRequestCloseOverlay`, `openCategoryPicker`, `parseAddonRowsFromNote`, `pickCategory`, `precedence`, `pressCalcKey`, `remove`, `removeAddonRow`, `round2`, `setCategoryPickerParent`, `submit`, `syncAmountFromInput`, `syncCategoryPickerParent`, `toDateInput`, `toOccurredAtIso`
