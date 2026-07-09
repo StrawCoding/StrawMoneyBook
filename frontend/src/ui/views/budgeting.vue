@@ -36,6 +36,10 @@
             <span class="muted">{{ t('budgeting.remaining') }}</span>
             <MoneyText :value-minor="budgetStore.remainMinor" />
           </div>
+          <div class="stat-cell">
+            <span class="muted">{{ t('budgeting.reserved') }}</span>
+            <MoneyText :value-minor="budgetStore.reservedMinor" />
+          </div>
         </div>
       </div>
 

@@ -53,7 +53,11 @@ function parseMonthKey(monthKey) {
   return { year, month }
 }
 
-function getDatePartsInTimeZone(value, timeZone) {
+function normalizeContainerPeriodMode(value) {
+  return String(value ?? '').trim() === 'daily' ? 'daily' : 'monthly'
+}
+
+export function getDatePartsInTimeZone(value, timeZone) {
   const date = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(date.getTime())) return null
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -125,6 +129,36 @@ function countPendingRuleDays(item, monthKey, referenceDate, timeZone, options =
   return total
 }
 
+export function countRemainingCalendarDaysInMonth(monthKey, referenceDate, timeZone, options = {}) {
+  const monthInfo = parseMonthKey(monthKey)
+  const referenceParts = getDatePartsInTimeZone(referenceDate, timeZone)
+  if (!monthInfo || !referenceParts) return 0
+
+  const daysInMonth = new Date(monthInfo.year, monthInfo.month, 0).getDate()
+  const monthSortKey = monthInfo.year * 100 + monthInfo.month
+  const referenceSortKey = referenceParts.year * 100 + referenceParts.month
+  if (monthSortKey < referenceSortKey) return 0
+  if (monthSortKey > referenceSortKey) return daysInMonth
+
+  const startDay = options.includeReferenceDay === false
+    ? referenceParts.day + 1
+    : referenceParts.day
+  if (startDay > daysInMonth) return 0
+  return daysInMonth - startDay + 1
+}
+
+export function computeDailyPoolReservedMinor(containers = [], monthKey, referenceDate, timeZone, options = {}) {
+  const remainingDays = countRemainingCalendarDaysInMonth(monthKey, referenceDate, timeZone, options)
+  if (remainingDays <= 0) return 0
+
+  return (containers ?? []).reduce((total, container) => {
+    if (normalizeContainerPeriodMode(container?.period_mode) !== 'daily') return total
+    const amountMinor = Math.max(0, Math.round(Number(container?.amount_minor ?? 0) || 0))
+    if (amountMinor <= 0) return total
+    return total + (amountMinor * remainingDays)
+  }, 0)
+}
+
 export function computeReservedMinor(items = [], monthKey, referenceDate = new Date(), timeZone, options = {}) {
   return (items ?? []).reduce((total, item) => {
     const amountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0) || 0))
@@ -132,4 +166,17 @@ export function computeReservedMinor(items = [], monthKey, referenceDate = new D
     const pendingCount = countPendingRuleDays(item, monthKey, referenceDate, timeZone, options)
     return total + (amountMinor * pendingCount)
   }, 0)
+}
+
+export function computeMonthlyReservedMinor(
+  items = [],
+  containers = [],
+  monthKey,
+  referenceDate = new Date(),
+  timeZone,
+  options = {},
+) {
+  const dailyAverageReserved = computeReservedMinor(items, monthKey, referenceDate, timeZone, options)
+  const dailyPoolReserved = computeDailyPoolReservedMinor(containers, monthKey, referenceDate, timeZone, options)
+  return dailyAverageReserved + dailyPoolReserved
 }

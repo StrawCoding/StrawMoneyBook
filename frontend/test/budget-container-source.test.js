@@ -39,7 +39,7 @@ test('budget repo exposes shared budget container CRUD and item binding columns'
 test('budget store uses 2B total formula and grouped sections', () => {
   assert.match(budgetStoreSource, /containers:/)
   assert.match(budgetStoreSource, /filter\(\(item\) => !isItemInContainer\(item\)\)/)
-  assert.match(budgetStoreSource, /groupedBudgetSections/)
+  assert.match(budgetStoreSource, /computeMonthlyReservedMinor/)
   assert.match(budgetStoreSource, /isMonthOver/)
 })
 

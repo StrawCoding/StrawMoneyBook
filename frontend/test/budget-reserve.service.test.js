@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { computeReservedMinor } from '../src/core/services/budget-reserve.service.js'
+import { computeReservedMinor, computeDailyPoolReservedMinor, computeMonthlyReservedMinor } from '../src/core/services/budget-reserve.service.js'
 
 const DAILY_ITEM = {
   amount_mode: 'daily_average',
@@ -63,4 +63,29 @@ test('computeReservedMinor returns zero for past months and ignores fixed budget
   )
 
   assert.equal(reservedMinor, 0)
+})
+
+test('computeDailyPoolReservedMinor counts remaining calendar days for daily pools', () => {
+  const reservedMinor = computeDailyPoolReservedMinor(
+    [{ period_mode: 'daily', amount_minor: 1000 }],
+    '2026-07',
+    new Date('2026-07-10T12:00:00+08:00'),
+    'Asia/Taipei',
+    { includeReferenceDay: true },
+  )
+
+  assert.equal(reservedMinor, 22000)
+})
+
+test('computeMonthlyReservedMinor combines daily average items and daily pools', () => {
+  const reservedMinor = computeMonthlyReservedMinor(
+    [DAILY_ITEM],
+    [{ period_mode: 'daily', amount_minor: 1000 }],
+    '2026-07',
+    new Date('2026-07-10T12:00:00+08:00'),
+    'Asia/Taipei',
+    { includeReferenceDay: true },
+  )
+
+  assert.equal(reservedMinor, 23500)
 })

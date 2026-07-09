@@ -12,7 +12,7 @@ import {
   saveBudgetItem,
   isDailyPoolChildItem,
 } from '@/core/services/budget.service'
-import { computeReservedMinor } from '@/core/services/budget-reserve.service'
+import { computeMonthlyReservedMinor } from '@/core/services/budget-reserve.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 
 function toFiniteMinor(value) {
@@ -148,7 +148,14 @@ export const useBudgetStore = defineStore('budget', {
       const timeZone = normalizeTimeZone(ledgerStore.activeLedger?.timezone)
       const reserveItems = state.items.filter((item) => !isItemInContainer(item))
       return (referenceDate = new Date(), options = {}) => (
-        computeReservedMinor(reserveItems, state.monthKey, referenceDate, timeZone, options)
+        computeMonthlyReservedMinor(
+          reserveItems,
+          state.containers,
+          state.monthKey,
+          referenceDate,
+          timeZone,
+          options,
+        )
       )
     },
 

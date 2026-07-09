@@ -2,6 +2,8 @@
 
 ---
 
+- 修復首頁月均「保留金額」不正確：共同預算日池納入月保留計算（剩餘日 × 池日額，含當日）；`monthDateMeta` 改以帳本時區判斷「今天」與選定日，與 `budget-reserve.service` 一致；預算頁月摘要恢復保留金額列。驗證：`npm run test:node` + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
+
 ## v1.3.53
 - 首頁預算簡表月均模式補上「保留金額」列：與文件一致，月/日模式皆顯示日均規則尚未到來的保留額（月均含當日、日模式不含選定日）。驗證：`npm run test:node` + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
 

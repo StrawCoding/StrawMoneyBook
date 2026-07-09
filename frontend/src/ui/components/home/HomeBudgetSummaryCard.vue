@@ -71,9 +71,12 @@ import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { getEffectiveTransactionAmountMinor, isCountableForBudget } from '@/ui/utils/refund-transaction'
 import { isDailyPoolContainer } from '@/core/services/budget.service'
+import { getDatePartsInTimeZone } from '@/core/services/budget-reserve.service'
+import { useLedgerStore } from '@/ui/stores/ledger.store'
 
 const budgetStore = useBudgetStore()
 const transactionStore = useTransactionStore()
+const ledgerStore = useLedgerStore()
 const { t } = useI18n()
 const displayModes = computed(() => ([
   { key: 'monthly', label: t('home_budget_summary.mode.monthly') },
@@ -168,10 +171,26 @@ function parseDayKey(dayKey) {
   return parsed
 }
 
+function ledgerTimeZone() {
+  const timeZone = String(ledgerStore.activeLedger?.timezone ?? '').trim()
+  return timeZone || 'Asia/Taipei'
+}
+
+function ledgerTodayParts(referenceDate = new Date()) {
+  return getDatePartsInTimeZone(referenceDate, ledgerTimeZone())
+}
+
+function dateFromLedgerParts(parts) {
+  if (!parts) return new Date()
+  return new Date(parts.year, parts.month - 1, parts.day)
+}
+
 const totalBudgetMinor = computed(() => toFiniteNonNegative(budgetStore.totalBudgetMinor))
 const totalSpentMinor = computed(() => toFiniteNonNegative(budgetStore.totalSpentMinor))
 const remainMinor = computed(() => Number(budgetStore.remainMinor ?? 0))
-const reservedMinor = computed(() => toFiniteNonNegative(budgetStore.reservedMinor))
+const selectedMonthlyReservedMinor = computed(() => (
+  toFiniteNonNegative(budgetStore.reservedMinorByDate(new Date(), { includeReferenceDay: true }))
+))
 const selectedHomeDayDate = computed(() => {
   if (transactionStore.homeFilterMode !== 'day') return null
   return parseDayKey(transactionStore.homeFilterKey)
@@ -180,9 +199,13 @@ const selectedHomeDayDate = computed(() => {
 const monthDateMeta = computed(() => {
   const monthKey = String(budgetStore.monthKey ?? '').trim()
   const matched = /^(\d{4})-(\d{2})$/.exec(monthKey)
-  const now = new Date()
-  const year = Number(matched?.[1] ?? now.getFullYear())
-  const monthIndex = Math.max(0, Number(matched?.[2] ?? now.getMonth() + 1) - 1)
+  const nowParts = ledgerTodayParts() ?? {
+    year: new Date().getFullYear(),
+    month: new Date().getMonth() + 1,
+    day: new Date().getDate(),
+  }
+  const year = Number(matched?.[1] ?? nowParts.year)
+  const monthIndex = Math.max(0, Number(matched?.[2] ?? nowParts.month) - 1)
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
   const selectedHomeDay = selectedHomeDayDate.value
   const hasSelectedHomeDay = Boolean(
@@ -193,18 +216,18 @@ const monthDateMeta = computed(() => {
   const selectedHomeDayValue = hasSelectedHomeDay
     ? Math.min(Math.max(1, selectedHomeDay.getDate()), daysInMonth)
     : 0
-  const isCurrentMonth = year === now.getFullYear() && monthIndex === now.getMonth()
+  const isCurrentMonth = year === nowParts.year && monthIndex === nowParts.month - 1
   const elapsedDays = hasSelectedHomeDay
     ? selectedHomeDayValue
-    : (isCurrentMonth ? Math.min(now.getDate(), daysInMonth) : daysInMonth)
+    : (isCurrentMonth ? Math.min(nowParts.day, daysInMonth) : daysInMonth)
   const selectedDay = hasSelectedHomeDay
     ? selectedHomeDayValue
-    : (isCurrentMonth ? elapsedDays : Math.min(Math.max(1, now.getDate()), daysInMonth))
+    : (isCurrentMonth ? elapsedDays : Math.min(Math.max(1, nowParts.day), daysInMonth))
   return {
     year,
     monthIndex,
     daysInMonth: Math.max(1, daysInMonth),
-    selectedDate: new Date(year, monthIndex, selectedDay),
+    selectedDate: dateFromLedgerParts({ year, month: monthIndex + 1, day: selectedDay }),
   }
 })
 
@@ -292,7 +315,7 @@ function calcMetricSet(mode) {
   const budgetMinor = mode === 'daily' ? dailyBudgetMinor.value : totalBudgetMinor.value
   const spentMinor = mode === 'daily' ? dailySpentMinor.value : totalSpentMinor.value
   const currentRemainMinor = mode === 'daily' ? dailyRemainMinor.value : remainMinor.value
-  const currentReservedMinor = mode === 'daily' ? selectedDailyReservedMinor.value : reservedMinor.value
+  const currentReservedMinor = mode === 'daily' ? selectedDailyReservedMinor.value : selectedMonthlyReservedMinor.value
   const usedRatio = budgetMinor > 0 ? spentMinor / budgetMinor : 0
   const safeRatio = Number.isFinite(usedRatio) ? usedRatio : 0
   const isOverBudget = mode === 'monthly'
