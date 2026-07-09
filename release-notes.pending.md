@@ -1,5 +1,9 @@
 # Pending Release Notes
 
+<!-- 在此 header 下方新增 `- ...` 條目。禁止手動加入 ---；gpr notes:archive 才會建立 history 區。 -->
+
+- 發版流程硬化（治本防「code 已推、Release/Play 沒跟上」）：新增 `release:sync-check`（`package.json` version 必須等於最新 `v*` tag）、`closeout:pre` / `closeout:verify` 閘門；CI main push 自動跑 sync-check；`release-notes.mjs` 拒絕「只有 `---`、無 pending 條目」的錯誤結構並過濾 HTML 註解。Hermes closeout 一鍵腳本 `strawmb_closeout.sh` 與 skill SOP 已同步。驗證：`npm run test:node` 648/648 + `npm run closeout:verify`。屬 devops/發版管線，無使用者可見 UI 變更，未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
+
 ---
 
 ## v1.3.50

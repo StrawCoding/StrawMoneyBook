@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import {
   readValidNoteLines,
   getReleaseNotesStatus,
+  validatePendingNotesStructure,
   formatForPlayConsole,
   resetNotesFile,
   clearAndPushNotes,
@@ -41,7 +42,35 @@ test('readValidNoteLines returns empty array when file is blank', () => {
 
 test('getReleaseNotesStatus allows an existing file with no pending note lines', () => {
   const filePath = tempFile('# Pending Release Notes\n')
-  assert.deepEqual(getReleaseNotesStatus(filePath), { exists: true, lineCount: 0 })
+  assert.deepEqual(getReleaseNotesStatus(filePath), {
+    exists: true,
+    lineCount: 0,
+    hasHistory: false,
+    separatorTooEarly: false,
+  })
+})
+
+test('validatePendingNotesStructure rejects --- separator with no pending notes and no history', () => {
+  const filePath = tempFile('# Pending Release Notes\n\n---\n')
+  const validation = validatePendingNotesStructure(filePath)
+  assert.equal(validation.ok, false)
+  assert.match(validation.message, /Add `- \.\.\.` lines below the header/)
+})
+
+test('validatePendingNotesStructure allows archived history with empty pending section', () => {
+  const filePath = tempFile([
+    '# Pending Release Notes',
+    '',
+    '---',
+    '',
+    '## v1.3.50',
+    '- archived note',
+    '',
+  ].join('\n'))
+  const validation = validatePendingNotesStructure(filePath)
+  assert.equal(validation.ok, true)
+  assert.equal(validation.lineCount, 0)
+  assert.equal(validation.hasHistory, true)
 })
 
 test('readValidNoteLines strips header lines and blank lines, returns content', () => {

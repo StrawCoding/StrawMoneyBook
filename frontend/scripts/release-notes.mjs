@@ -31,13 +31,70 @@ export function readValidNoteLines(filePath = NOTES_FILE_PATH) {
   return pending
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'))
+    .filter((line) => {
+      if (!line) return false
+      if (line.startsWith('#')) return false
+      if (line.startsWith('<!--')) return false
+      return true
+    })
 }
 
 export function getReleaseNotesStatus(filePath = NOTES_FILE_PATH) {
+  const content = existsSync(filePath) ? readFileSync(filePath, 'utf8') : ''
+  const lineCount = readValidNoteLines(filePath).length
+  const hasHistory = /(?:^|\n)## v\d/.test(content)
+  const hasBareSeparator = /\n---\n/.test(content)
+  const separatorTooEarly = lineCount === 0 && hasBareSeparator && !hasHistory
+
   return {
     exists: existsSync(filePath),
-    lineCount: readValidNoteLines(filePath).length,
+    lineCount,
+    hasHistory,
+    separatorTooEarly,
+  }
+}
+
+export function validatePendingNotesStructure(filePath = NOTES_FILE_PATH) {
+  const exists = existsSync(filePath)
+  const content = exists ? readFileSync(filePath, 'utf8') : ''
+  const lineCount = exists ? readValidNoteLines(filePath).length : 0
+  const hasVersionHistory = /(?:^|\n)## v\d/.test(content)
+  const hasBareSeparator = /\n---\n/.test(content)
+
+  if (!exists) {
+    return {
+      ok: false,
+      exists: false,
+      lineCount: 0,
+      hasHistory: false,
+      separatorTooEarly: false,
+      message: 'release-notes.pending.md not found. Create the file before publishing.',
+    }
+  }
+
+  if (lineCount === 0 && hasBareSeparator && !hasVersionHistory) {
+    return {
+      ok: false,
+      exists: true,
+      lineCount,
+      hasHistory: false,
+      separatorTooEarly: true,
+      message: [
+        'release-notes.pending.md has a --- separator but no pending bullet notes.',
+        'Add `- ...` lines below the header and keep --- out of the file until gpr archives notes.',
+      ].join(' '),
+    }
+  }
+
+  return {
+    ok: true,
+    exists: true,
+    lineCount,
+    hasHistory: hasVersionHistory,
+    separatorTooEarly: false,
+    message: lineCount === 0
+      ? 'Pending release notes are empty (allowed, but consider documenting this release).'
+      : `Found ${lineCount} pending release note line(s).`,
   }
 }
 
@@ -163,17 +220,17 @@ export function main(argv = process.argv.slice(2)) {
 
   if (argv.includes('--check')) {
     console.log('[release-notes] Reading pending release notes...')
-    const status = getReleaseNotesStatus(NOTES_FILE_PATH)
-    if (!status.exists) {
-      console.error('[release-notes] ERROR: release-notes.pending.md not found. Create the file and add release notes before publishing.')
+    const validation = validatePendingNotesStructure(NOTES_FILE_PATH)
+    if (!validation.ok) {
+      console.error(`[release-notes] ERROR: ${validation.message}`)
       process.exitCode = 1
       return
     }
-    if (status.lineCount === 0) {
-      console.warn('[release-notes] WARNING: release-notes.pending.md is empty. Publishing will continue without custom release notes.')
+    if (validation.lineCount === 0) {
+      console.warn(`[release-notes] WARNING: ${validation.message}`)
       return
     }
-    console.log(`[release-notes] Found ${status.lineCount} release note line(s). Ready to publish.`)
+    console.log(`[release-notes] ${validation.message} Ready to publish.`)
     return
   }
 

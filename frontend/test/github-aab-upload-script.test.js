@@ -77,6 +77,18 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
     'node scripts/release-notes.mjs --archive',
   )
   assert.equal(
+    packageJson.scripts['release:sync-check'],
+    'node scripts/release-sync-check.mjs',
+  )
+  assert.equal(
+    packageJson.scripts['closeout:pre'],
+    'npm run notes:check && npm run release:sync-check',
+  )
+  assert.equal(
+    packageJson.scripts['closeout:verify'],
+    'npm run test:node && npm run build:web && npm run closeout:pre',
+  )
+  assert.equal(
     packageJson.scripts.gpr,
     'npm run notes:check && npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag && npm run notes:archive',
   )
@@ -353,6 +365,8 @@ test('ci workflow warms Android bundleRelease cache on main so tag releases can 
   assert.match(ciWorkflow, /cache-encryption-key:\s*\$\{\{ secrets\.GRADLE_ENCRYPTION_KEY \}\}/)
   assert.match(ciWorkflow, /name: Validate release notes pending file exists/)
   assert.match(ciWorkflow, /test -f \.\.\/release-notes\.pending\.md/)
+  assert.match(ciWorkflow, /name: Validate release version matches latest git tag/)
+  assert.match(ciWorkflow, /run: npm run release:sync-check/)
   assert.match(ciWorkflow, /name: Prepare Android release files for cache warmup/)
   assert.match(ciWorkflow, /if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/)
   assert.match(ciWorkflow, /run: npm run prepare:android:release/)

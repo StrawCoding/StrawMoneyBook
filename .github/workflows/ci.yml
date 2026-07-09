@@ -58,6 +58,9 @@ jobs:
       - run: npm run check
       - name: Validate release notes pending file exists
         run: test -f ../release-notes.pending.md || (echo "release-notes.pending.md is missing from repo root" && exit 1)
+      - name: Validate release version matches latest git tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: npm run release:sync-check
       - name: Prepare Android release files for cache warmup
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: npm run prepare:android:release
