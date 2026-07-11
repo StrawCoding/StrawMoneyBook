@@ -47,6 +47,40 @@ test('載具同步設定頁具備 review panel 與 captcha dialog', () => {
   assert.match(source, /importPendingCarrierInvoices/)
 })
 
+test('SMB-265: captcha dialog close and unmount cancel backend scrape session', () => {
+  const source = read('src/ui/views/settings/SettingsCarrierSyncPage.vue')
+  assert.match(source, /cancelCarrierSyncSession/)
+  assert.match(source, /async function closeCaptchaDialog\(\)/)
+  assert.match(source, /await cancelCarrierSyncSession\(sessionId\)\.catch\(\(\) => null\)/)
+  assert.match(source, /onBeforeUnmount\(\(\) => \{/)
+  assert.match(source, /void cancelCarrierSyncSession\(sessionId\)\.catch\(\(\) => null\)/)
+})
+
+test('SMB-265: captcha-required state is not overwritten as generic error', () => {
+  const source = read('src/services/einvoice/carrier-sync.service.js')
+  assert.match(source, /if \(error\?\.code === 'einvoice_captcha_required'\)/)
+  assert.match(source, /status:\s*'captcha_required'/)
+  assert.match(source, /lastSyncStatus:\s*'captcha_required'/)
+  assert.match(source, /lastError:\s*null/)
+})
+
+test('SMB-265: scrape API sends existing auth session with e-invoice requests', () => {
+  const source = read('src/services/einvoice/scrape-api.js')
+  assert.match(source, /refreshSharedLedgerSession/)
+  assert.match(source, /getSharedLedgerSession/)
+  assert.match(source, /getAuthStorageHeaders/)
+  assert.match(source, /headers\.Authorization = `Bearer \$\{token\}`/)
+  assert.match(source, /credentials:\s*shouldSendAuthCredentials\(\) \? 'include' : 'same-origin'/)
+})
+
+test('SMB-265: legacy barcode credentials prompt re-entry instead of silent reuse', () => {
+  const pageSource = read('src/ui/views/settings/SettingsCarrierSyncPage.vue')
+  const i18nSource = read('src/ui/services/i18n.service.js')
+  assert.match(pageSource, /!isValidCarrierPhone\(saved\.carrierBarcode\)/)
+  assert.match(pageSource, /settings_carrier_sync\.legacy_credentials_reenter/)
+  assert.match(i18nSource, /settings_carrier_sync\.legacy_credentials_reenter/)
+})
+
 test('設定選單與功能列表導向載具同步頁', () => {
   const settings = read('src/ui/views/settings.vue')
   const features = read('src/ui/views/FeatureListPage.vue')
@@ -64,6 +98,7 @@ test('載具同步 i18n 具備繁中、英文、日文三語', () => {
     'settings_carrier_sync.review.title',
     'settings_carrier_sync.captcha.title',
     'settings_carrier_sync.auto_sync',
+    'settings_carrier_sync.legacy_credentials_reenter',
   ]
 
   for (const key of keys) {

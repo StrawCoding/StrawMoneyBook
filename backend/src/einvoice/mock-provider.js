@@ -94,22 +94,26 @@ export async function queryScrapeInvoices(payload = {}) {
     throw error
   }
 
-  const cardNo = String(payload.cardNo ?? record.cardNo ?? '').trim()
-  const cardEncrypt = String(payload.cardEncrypt ?? record.cardEncrypt ?? '').trim()
-  if (cardEncrypt.toLowerCase() === 'badauth') {
-    const error = new Error('驗證失敗，請確認手機號碼與密碼是否正確')
-    error.code = 'einvoice_auth_failed'
-    throw error
+  try {
+    const cardNo = String(payload.cardNo ?? record.cardNo ?? '').trim()
+    const cardEncrypt = String(payload.cardEncrypt ?? record.cardEncrypt ?? '').trim()
+    if (cardEncrypt.toLowerCase() === 'badauth') {
+      const error = new Error('驗證失敗，請確認手機號碼與密碼是否正確')
+      error.code = 'einvoice_auth_failed'
+      throw error
+    }
+
+    updateSessionRecord(sessionId, { cardNo, cardEncrypt })
+    const invoices = buildMockInvoices({
+      cardNo,
+      startDate: payload.startDate,
+      endDate: payload.endDate,
+    })
+
+    return { invoices }
+  } finally {
+    deleteSessionRecord(sessionId)
   }
-
-  updateSessionRecord(sessionId, { cardNo, cardEncrypt })
-  const invoices = buildMockInvoices({
-    cardNo,
-    startDate: payload.startDate,
-    endDate: payload.endDate,
-  })
-
-  return { invoices }
 }
 
 export async function cancelScrapeSession(payload = {}) {

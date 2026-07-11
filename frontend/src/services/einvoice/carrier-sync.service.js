@@ -155,6 +155,21 @@ export async function syncCarrierInvoicesNow({
       }
     },
   ).catch(async (error) => {
+    if (error?.code === 'einvoice_captcha_required') {
+      await insertEInvoiceSyncRun({
+        id: syncRunId,
+        startedAt,
+        finishedAt: Date.now(),
+        status: 'captcha_required',
+        errorCode: 'einvoice_captcha_required',
+        errorMessage: String(error?.message ?? '請輸入圖形驗證碼'),
+      })
+      await upsertEInvoiceSyncConfig({
+        lastSyncStatus: 'captcha_required',
+        lastError: null,
+      })
+      throw error
+    }
     await insertEInvoiceSyncRun({
       id: syncRunId,
       startedAt,

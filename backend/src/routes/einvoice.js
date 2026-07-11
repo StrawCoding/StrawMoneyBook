@@ -1,5 +1,9 @@
 import { timingSafeEqual } from 'node:crypto'
-import { methodGuard, normalizePath, parseBody, sendJson } from '../collab/http.js'
+import { requireAuthenticatedUser } from '../collab/auth-session.js'
+import { buildPublicUserProfile } from '../collab/auth-store.js'
+import { getCurrentSessionFamilyId } from './auth/shared.js'
+import { getClientIp, methodGuard, normalizePath, parseBody, sendJson } from '../collab/http.js'
+import { getMembershipGrantSummary } from '../collab/store.js'
 import {
   cancelScrapeSession,
   queryInvoicesWithScrapeFlow,
@@ -7,9 +11,23 @@ import {
   startScrapeSession,
   submitScrapeCaptcha,
 } from '../einvoice/provider.js'
+import { subscribeSessionReleased } from '../einvoice/session-store.js'
 import { validateQueryInput } from '../einvoice/validation.js'
 
 const EINVOICE_CLIENT_SHARED_KEY = String(process.env.EINVOICE_CLIENT_SHARED_KEY ?? '').trim()
+const EINVOICE_USER_RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.EINVOICE_USER_RATE_LIMIT_WINDOW_MS ?? 10 * 60_000) || 0)
+const EINVOICE_USER_RATE_LIMIT_MAX_REQUESTS = Math.max(1, Number(process.env.EINVOICE_USER_RATE_LIMIT_MAX_REQUESTS ?? 8) || 0)
+const EINVOICE_SESSION_RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.EINVOICE_SESSION_RATE_LIMIT_WINDOW_MS ?? 10 * 60_000) || 0)
+const EINVOICE_SESSION_RATE_LIMIT_MAX_REQUESTS = Math.max(1, Number(process.env.EINVOICE_SESSION_RATE_LIMIT_MAX_REQUESTS ?? 6) || 0)
+const EINVOICE_CONCURRENT_SESSIONS_PER_USER = Math.max(1, Number(process.env.EINVOICE_CONCURRENT_SESSIONS_PER_USER ?? 1) || 0)
+
+const routeRateLimitBuckets = new Map()
+const activeSessionOwners = new Map()
+const activeSessionsByUser = new Map()
+
+subscribeSessionReleased((record) => {
+  unregisterActiveScrapeSession(record?.sessionId)
+})
 
 function secureEquals(left, right) {
   const leftBytes = Buffer.from(String(left ?? ''), 'utf8')
@@ -30,6 +48,127 @@ function isClientAuthorized(req) {
 
 function isConfigured() {
   return Boolean(EINVOICE_CLIENT_SHARED_KEY)
+}
+
+function consumeRouteRateLimit(key, maxRequests, windowMs) {
+  const safeKey = String(key ?? '').trim()
+  if (!safeKey) return null
+  const nowMs = Date.now()
+  const bucket = routeRateLimitBuckets.get(safeKey)
+  if (!bucket || bucket.resetAt <= nowMs) {
+    routeRateLimitBuckets.set(safeKey, {
+      count: 1,
+      resetAt: nowMs + windowMs,
+    })
+    return null
+  }
+  if (bucket.count >= maxRequests) {
+    return {
+      retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - nowMs) / 1000)),
+    }
+  }
+  bucket.count += 1
+  return null
+}
+
+function sendRateLimited(res, retryAfterSeconds) {
+  res.setHeader('Retry-After', String(retryAfterSeconds))
+  sendJson(res, 429, {
+    error: 'einvoice_rate_limited',
+    message: '電子發票同步請求過於頻繁，請稍後再試',
+    retry_after_seconds: retryAfterSeconds,
+  })
+}
+
+function unregisterActiveScrapeSession(sessionId) {
+  const id = String(sessionId ?? '').trim()
+  if (!id) return
+  const userId = activeSessionOwners.get(id)
+  activeSessionOwners.delete(id)
+  if (!userId) return
+  const sessions = activeSessionsByUser.get(userId)
+  if (!sessions) return
+  sessions.delete(id)
+  if (!sessions.size) activeSessionsByUser.delete(userId)
+}
+
+function registerActiveScrapeSession(sessionId, userId) {
+  const id = String(sessionId ?? '').trim()
+  const ownerId = String(userId ?? '').trim()
+  if (!id || !ownerId) return
+  activeSessionOwners.set(id, ownerId)
+  const sessions = activeSessionsByUser.get(ownerId) ?? new Set()
+  sessions.add(id)
+  activeSessionsByUser.set(ownerId, sessions)
+}
+
+function hasConcurrentScrapeCapacity(userId) {
+  const sessions = activeSessionsByUser.get(String(userId ?? '').trim())
+  return !sessions || sessions.size < EINVOICE_CONCURRENT_SESSIONS_PER_USER
+}
+
+async function requireEInvoiceAccess(req, res, pathname) {
+  if (!isClientAuthorized(req)) {
+    sendJson(res, 401, { error: 'unauthorized_client', message: 'missing or invalid x-straw-client-key' })
+    return null
+  }
+
+  const user = await requireAuthenticatedUser(req, res, sendJson)
+  if (!user) return null
+
+  const membership = getMembershipGrantSummary(user)
+  if (!membership.active) {
+    sendJson(res, 403, {
+      error: 'membership_required',
+      message: '載具同步僅限會員使用',
+      user: await buildPublicUserProfile(user),
+    })
+    return null
+  }
+
+  const userLimit = consumeRouteRateLimit(
+    `user:${user.id}`,
+    EINVOICE_USER_RATE_LIMIT_MAX_REQUESTS,
+    EINVOICE_USER_RATE_LIMIT_WINDOW_MS,
+  )
+  if (userLimit) {
+    sendRateLimited(res, userLimit.retryAfterSeconds)
+    return null
+  }
+
+  const sessionFamilyId = getCurrentSessionFamilyId(req)
+  if (sessionFamilyId) {
+    const sessionLimit = consumeRouteRateLimit(
+      `session:${sessionFamilyId}`,
+      EINVOICE_SESSION_RATE_LIMIT_MAX_REQUESTS,
+      EINVOICE_SESSION_RATE_LIMIT_WINDOW_MS,
+    )
+    if (sessionLimit) {
+      sendRateLimited(res, sessionLimit.retryAfterSeconds)
+      return null
+    }
+  }
+
+  const clientIp = getClientIp(req)
+  const ipLimit = consumeRouteRateLimit(
+    `ip-route:${clientIp}`,
+    EINVOICE_USER_RATE_LIMIT_MAX_REQUESTS,
+    EINVOICE_USER_RATE_LIMIT_WINDOW_MS,
+  )
+  if (ipLimit) {
+    sendRateLimited(res, ipLimit.retryAfterSeconds)
+    return null
+  }
+
+  if (pathname === '/scrape/start' && !hasConcurrentScrapeCapacity(user.id)) {
+    sendJson(res, 429, {
+      error: 'einvoice_concurrent_limit',
+      message: '已有載具同步工作進行中，請先完成或取消後再試',
+    })
+    return null
+  }
+
+  return user
 }
 
 function mapProviderError(error, res) {
@@ -177,18 +316,17 @@ export default async function einvoiceHandler(req, res) {
     return
   }
 
-  if (!isClientAuthorized(req)) {
-    sendJson(res, 401, { error: 'unauthorized_client', message: 'missing or invalid x-straw-client-key' })
-    return
-  }
-
   try {
+    const user = await requireEInvoiceAccess(req, res, pathname)
+    if (!user) return
+
     const body = parseBody(req)
     let result
 
     switch (pathname) {
       case '/scrape/start':
         result = await handleScrapeStart(body)
+        registerActiveScrapeSession(result?.session_id, user.id)
         sendJson(res, 200, result)
         return
       case '/scrape/captcha':
@@ -197,6 +335,7 @@ export default async function einvoiceHandler(req, res) {
         return
       case '/scrape/query':
         result = await handleScrapeQuery(body)
+        unregisterActiveScrapeSession(body.session_id)
         if (result?.error) {
           sendJson(res, 400, result.error)
           return
@@ -205,6 +344,7 @@ export default async function einvoiceHandler(req, res) {
         return
       case '/scrape/cancel':
         result = await handleScrapeCancel(body)
+        unregisterActiveScrapeSession(body.session_id)
         sendJson(res, 200, result)
         return
       case '/query-invoices':

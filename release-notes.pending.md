@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (SMB-265) 載具同步可靠性與安全硬化：Playwright CLI timeout 會大於 Cloudflare / selector wait，Cloudflare challenge 逾時穩定回 `einvoice_cloudflare_timeout` / HTTP 504；captcha dialog 關閉、submit 失敗、頁面卸載、查詢完成、取消與 TTL purge 都會釋放後端 scrape / Playwright session；`einvoice_captcha_required` 保留為 `captcha_required`，不再被通用 catch 覆寫為 `error`；`/api/einvoice/*` 除 client shared key 外強制既有 auth session + 有效會員 grant，並加入 user / IP / session rate limit 與每使用者一個 scrape session 併發限制；前端 scrape API 會附 auth session，舊手機條碼 / 查詢碼憑證會提示重新輸入財政部平台手機號碼與密碼。新增 Cloudflare timeout、cancel cleanup、captcha state、auth/rate/concurrency、legacy credential 回歸測試。
+
 ---
 
 - 修復首頁月均「保留金額」不正確：共同預算日池納入月保留計算（剩餘日 × 池日額，含當日）；`monthDateMeta` 改以帳本時區判斷「今天」與選定日，與 `budget-reserve.service` 一致；預算頁月摘要恢復保留金額列。驗證：`npm run test:node` + `npm run build:web` + `playwright:ui-layout`。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。

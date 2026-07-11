@@ -10,12 +10,12 @@ import {
   getQueryUrl,
   getSelectors,
 } from './portal-config.js'
-import { buildWaitForLoginSelectorsRunCode } from './portal-cloudflare.js'
+import { buildWaitForLoginSelectorsRunCode, getPortalSelectorWaitMs } from './portal-cloudflare.js'
 import { extractInvoicesFromJsonPayloads, mergeQueryWindows } from './portal-json.js'
 import {
   createSessionRecord,
-  deleteSessionRecord,
   getSessionRecord,
+  releaseSessionRecord,
   updateSessionRecord,
 } from './session-store.js'
 import {
@@ -49,7 +49,7 @@ function execFileAsync(file, args, options = {}) {
       {
         env: process.env,
         maxBuffer: PLAYWRIGHT_MAX_BUFFER_BYTES,
-        timeout: PLAYWRIGHT_DEFAULT_TIMEOUT_MS,
+        timeout: getPlaywrightCliTimeoutMs(),
         ...options,
       },
       (error, stdout, stderr) => {
@@ -63,6 +63,14 @@ function execFileAsync(file, args, options = {}) {
       },
     )
   })
+}
+
+export function getPlaywrightCliTimeoutMs() {
+  const configured = Number(process.env.EINVOICE_PLAYWRIGHT_CLI_TIMEOUT_MS)
+  const selectorWaitMs = getPortalSelectorWaitMs()
+  const minimumTimeoutMs = selectorWaitMs + 15_000
+  if (configured > 0) return Math.max(configured, minimumTimeoutMs)
+  return Math.max(PLAYWRIGHT_DEFAULT_TIMEOUT_MS, minimumTimeoutMs)
 }
 
 function getPlaywrightExecEnv() {
@@ -414,6 +422,9 @@ export async function startScrapeSession(payload = {}) {
     cardNo: normalizeCarrierPhone(payload.cardNo ?? ''),
     cardEncrypt: payload.cardEncrypt ?? '',
     metadata: { provider: 'playwright', loginUrl, captchaApiUrl },
+    cleanup: async () => {
+      await closePlaywrightSession(sessionId)
+    },
   })
 
   return {
@@ -530,16 +541,14 @@ export async function queryScrapeInvoices(payload = {}) {
     updateSessionRecord(sessionId, { cardNo: phone, cardEncrypt: password })
     return { invoices: normalizeInvoiceList(allInvoices) }
   } finally {
-    await closePlaywrightSession(sessionId)
-    deleteSessionRecord(sessionId)
+    await releaseSessionRecord(sessionId, 'completed')
   }
 }
 
 export async function cancelScrapeSession(payload = {}) {
   const sessionId = String(payload.session_id ?? '').trim()
   if (sessionId) {
-    await closePlaywrightSession(sessionId)
-    deleteSessionRecord(sessionId)
+    await releaseSessionRecord(sessionId, 'cancelled')
   }
   return { ok: true }
 }

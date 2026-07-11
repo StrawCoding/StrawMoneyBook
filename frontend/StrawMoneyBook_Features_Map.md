@@ -97,7 +97,7 @@
 | `/settings/bank-sync` | `src/ui/views/settings/SettingsBankSyncPage.vue` | 銀行同步管理 |
 | `/settings/bank-sync/new` | `src/ui/views/settings/SettingsBankSyncCreatePage.vue` | 新增銀行連線 |
 | `/settings/bank-sync/:id` | `src/ui/views/settings/SettingsBankSyncConnectionPage.vue` | 單一銀行連線設定 / 狀態 |
-| `/settings/carrier-sync` | `src/ui/views/settings/SettingsCarrierSyncPage.vue` | 載具同步設定（v1.3.19：憑證改為財政部平台手機號碼 + 密碼；v1.3.30 / SMB-251：後端 scrape 改 SPA JSON 攔截 + captcha token API；v1.3.40 / SMB-258：Cloudflare challenge 等待 + 前端 network_failed i18n） |
+| `/settings/carrier-sync` | `src/ui/views/settings/SettingsCarrierSyncPage.vue` | 載具同步設定（v1.3.19：憑證改為財政部平台手機號碼 + 密碼；v1.3.30 / SMB-251：後端 scrape 改 SPA JSON 攔截 + captcha token API；v1.3.40 / SMB-258：Cloudflare challenge 等待 + 前端 network_failed i18n；SMB-265：前端 scrape API 附既有 auth session，captcha 關閉 / 卸載 / submit 失敗會 cancel 後端 session，舊手機條碼 / 查詢碼憑證提示重新輸入；後端強制 auth + membership、user/IP/session rate limit、併發限制與 TTL cleanup） |
 | `/settings/ledgers` | `src/ui/views/settings/SettingsLedgerPage.vue` | 帳本管理 |
 | `/settings/shared-ledgers` | `src/ui/views/settings/SettingsSharedLedgerPage.vue` | 共同帳本、Email 邀請、接受邀請與同步；SMB-229 / v1.3.9 後依角色（Owner/Admin/Member/Viewer）顯示/隱藏分享連結與 Email 邀請，並提供「成員與角色」管理區（改角色、轉移所有權）與 Viewer 唯讀提示 |
 | `/settings/ledgers/:id` | `src/ui/views/settings/SettingsLedgerDetailPage.vue` | 帳本明細編輯/刪除 |

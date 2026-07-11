@@ -158,6 +158,7 @@ import {
   getCarrierSyncState,
   importPendingCarrierInvoices,
   saveCarrierSyncConfig,
+  cancelCarrierSyncSession,
   syncCarrierInvoicesNow,
 } from '@/services/einvoice/carrier-sync.service.js'
 import {
@@ -212,6 +213,13 @@ let unsubscribeMembership = null
 async function loadCredential() {
   const saved = await loadEInvoiceCredential()
   if (!saved) return
+  if (!isValidCarrierPhone(saved.carrierBarcode)) {
+    carrierPhone.value = ''
+    carrierPassword.value = ''
+    rememberCredentials.value = false
+    syncMessage.value = t('settings_carrier_sync.legacy_credentials_reenter')
+    return
+  }
   carrierPhone.value = saved.carrierBarcode
   carrierPassword.value = saved.verificationCode
   rememberCredentials.value = true
@@ -289,6 +297,7 @@ async function handleSyncNow() {
 }
 
 async function submitCaptchaAndSync() {
+  const submittedSessionId = captchaSessionId.value
   showCaptchaDialog.value = false
   syncing.value = true
   try {
@@ -296,23 +305,36 @@ async function submitCaptchaAndSync() {
       carrierBarcode: normalizeCarrierPhone(carrierPhone.value),
       verificationCode: carrierPassword.value,
       captchaCode: captchaCode.value,
-      sessionId: captchaSessionId.value,
+      sessionId: submittedSessionId,
       ledgerId: ledgerStore.activeLedgerId,
     })
     captchaCode.value = ''
+    captchaImageSrc.value = ''
+    captchaSessionId.value = ''
     pendingRows.value = result.pending
     await reloadState()
     uiStore.pushToast(t('settings_carrier_sync.toast.synced'))
   } catch (error) {
+    if (submittedSessionId) {
+      await cancelCarrierSyncSession(submittedSessionId).catch(() => null)
+    }
+    captchaImageSrc.value = ''
+    captchaSessionId.value = ''
     uiStore.pushToast(error?.message || t('settings_carrier_sync.sync_failed'), 'error')
   } finally {
     syncing.value = false
   }
 }
 
-function closeCaptchaDialog() {
+async function closeCaptchaDialog() {
+  const sessionId = captchaSessionId.value
   showCaptchaDialog.value = false
   captchaCode.value = ''
+  captchaImageSrc.value = ''
+  captchaSessionId.value = ''
+  if (sessionId) {
+    await cancelCarrierSyncSession(sessionId).catch(() => null)
+  }
 }
 
 async function handleImportSelected() {
@@ -397,6 +419,11 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (typeof unsubscribeMembership === 'function') unsubscribeMembership()
+  const sessionId = captchaSessionId.value
+  captchaSessionId.value = ''
+  if (sessionId) {
+    void cancelCarrierSyncSession(sessionId).catch(() => null)
+  }
 })
 </script>
 

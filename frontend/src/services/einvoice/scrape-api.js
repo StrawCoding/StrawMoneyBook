@@ -1,5 +1,7 @@
 import { Capacitor } from '@capacitor/core'
 import { translateMessage } from '@/ui/services/i18n.service.js'
+import { refreshSharedLedgerSession, getSharedLedgerSession } from '@/services/shared-ledger/backend.js'
+import { getAuthStorageHeaders, shouldSendAuthCredentials } from '@/services/shared-ledger/auth-session-storage.js'
 import { createEInvoiceError } from './shared.js'
 
 const PROD_DEFAULT_API_BASE = 'https://api.strawmb.com'
@@ -35,9 +37,17 @@ function mapFetchNetworkError(err) {
 }
 
 async function postEInvoiceApi(path, body, { signal } = {}) {
-  const headers = { 'Content-Type': 'application/json' }
+  const session = await refreshSharedLedgerSession().catch(() => getSharedLedgerSession())
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(shouldSendAuthCredentials() ? getAuthStorageHeaders() : {}),
+  }
   if (EINVOICE_CLIENT_SHARED_KEY) {
     headers['X-Straw-Client-Key'] = EINVOICE_CLIENT_SHARED_KEY
+  }
+  const token = String(session?.token ?? '').trim()
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
   }
 
   let response
@@ -46,6 +56,7 @@ async function postEInvoiceApi(path, body, { signal } = {}) {
       method: 'POST',
       headers,
       body: JSON.stringify(body ?? {}),
+      credentials: shouldSendAuthCredentials() ? 'include' : 'same-origin',
       signal,
     })
   } catch (err) {
