@@ -16,7 +16,7 @@
   - 結果：0 exit code，無輸出。
 - `cd frontend && npm run test:node`
   - 結果：0 exit code。
-  - 摘要：`# tests 665`, `# pass 665`, `# fail 0`。
+  - 摘要：`# tests 666`, `# pass 666`, `# fail 0`。
 - `cd frontend && npm run build:web`
   - 結果：0 exit code。
   - 摘要：Vite production build completed；仍有既有 dynamic import / chunk size warnings。
