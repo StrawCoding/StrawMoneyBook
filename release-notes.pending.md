@@ -1,6 +1,6 @@
 # Pending Release Notes
 
-- (SMB-268) 預算新增支援跨月共同預算池：新增池可選「套用至月份」跨月／跨年建立，服務層仍維持每月獨立 budget/container 並在寫入前檢查目標月份同名衝突，避免 partial write；月池維持每月金額，日池維持每日費率並依各月天數計算。新增 node service/source tests 與 `playwright:budget-cross-month` app-shell 流程。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
+- (SMB-268) 預算新增支援跨月共同預算池：新增池可選「套用至月份」跨月／跨年建立，服務層仍維持每月獨立 budget/container 並在寫入前檢查目標月份同名衝突，避免 partial write；月池維持每月金額，日池維持每日費率並依各月天數計算，日池 range 寫入失敗時會清掉新建 child item 並還原原本項目。新增 node service/source tests 與 `playwright:budget-cross-month` app-shell 流程。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
 
 ---
 

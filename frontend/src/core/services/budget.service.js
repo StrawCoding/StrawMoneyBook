@@ -168,6 +168,33 @@ function normalizeCategoryIdList(values) {
   )
 }
 
+function buildBudgetItemWritePayloadFromRow(item) {
+  const amountMode = normalizeAmountMode(item?.amount_mode)
+  const dayRuleUnit = amountMode === 'daily_average'
+    ? normalizeDayRuleUnit(item?.day_rule_unit)
+    : 'none'
+  return {
+    id: item.id,
+    budgetId: item.budget_id,
+    scopeType: item.scope_type ?? 'category',
+    categoryId: item.category_id ?? null,
+    categoryGroupId: item.category_group_id ?? null,
+    budgetContainerId: item.budget_container_id ?? null,
+    amountMinor: Math.max(0, Math.round(Number(item?.amount_minor ?? 0))),
+    amountMode,
+    dayRuleUnit,
+    dayRuleValuesJson: JSON.stringify(
+      amountMode === 'daily_average'
+        ? normalizeDayRuleValues(item?.day_rule_values ?? item?.day_rule_values_json, dayRuleUnit)
+        : [],
+    ),
+    budgetSaveEnabled: normalizeBudgetSaveEnabled(item?.budget_save_enabled),
+    budgetSaveTargetAccountId: item?.budget_save_target_account_id ?? null,
+    budgetSaveSourceAccountId: item?.budget_save_source_account_id ?? null,
+    sortOrder: item?.sort_order ?? 0,
+  }
+}
+
 async function syncDailyPoolCategoryItems(ledgerId, budgetId, containerId, categoryIds) {
   const normalizedCategoryIds = normalizeCategoryIdList(categoryIds)
   const items = await dependencies.listBudgetItems(ledgerId, budgetId)
@@ -262,6 +289,35 @@ async function syncDailyPoolCategoryItems(ledgerId, budgetId, containerId, categ
       budgetSaveSourceAccountId: item?.budget_save_source_account_id ?? null,
       sortOrder: item?.sort_order ?? 0,
     })
+  }
+}
+
+async function rollbackDailyPoolCategoryItems(ledgerId, state, containerId, categoryIds) {
+  if (!state?.budget?.id) return
+  const normalizedCategoryIds = normalizeCategoryIdList(categoryIds)
+  if (!normalizedCategoryIds.length) return
+
+  const previousByCategoryId = new Map()
+  for (const item of state.items ?? []) {
+    const categoryId = normalizeText(item?.category_id)
+    if (!categoryId || !normalizedCategoryIds.includes(categoryId)) continue
+    if (!previousByCategoryId.has(categoryId)) previousByCategoryId.set(categoryId, item)
+  }
+
+  const currentItems = await dependencies.listBudgetItems(ledgerId, state.budget.id)
+  for (const categoryId of normalizedCategoryIds) {
+    const previous = previousByCategoryId.get(categoryId)
+    const current = currentItems.find((item) => (
+      normalizeText(item?.category_id) === categoryId
+      && String(item?.budget_container_id ?? '') === String(containerId)
+    ))
+    if (!previous && current?.id) {
+      await dependencies.deleteBudgetItem(ledgerId, current.id)
+      continue
+    }
+    if (previous?.id) {
+      await dependencies.upsertBudgetItem(ledgerId, buildBudgetItemWritePayloadFromRow(previous))
+    }
   }
 }
 
@@ -732,20 +788,30 @@ export async function saveBudgetContainerRange(ledgerId, startMonthKey, endMonth
   }
 
   const containerIds = []
+  const touchedStates = []
   try {
     for (const state of monthStates) {
       const budget = state.budget ?? await ensureBudgetForMonth(ledgerId, state.monthKey)
+      state.budget = budget
       const containerId = createId('bc')
       const savedContainerId = await dependencies.upsertBudgetContainer(
         ledgerId,
         buildBudgetContainerWritePayload(budget, normalizedPayload, containerId),
       )
       containerIds.push(savedContainerId)
+      touchedStates.push({ state, containerId: savedContainerId })
       if (normalizedPayload.periodMode === 'daily' && Array.isArray(payload.categoryIds)) {
         await syncDailyPoolCategoryItems(ledgerId, budget.id, savedContainerId, normalizedPayload.categoryIds)
       }
     }
   } catch (error) {
+    if (normalizedPayload.periodMode === 'daily' && Array.isArray(payload.categoryIds)) {
+      await Promise.allSettled(
+        touchedStates.map(({ state, containerId }) => (
+          rollbackDailyPoolCategoryItems(ledgerId, state, containerId, normalizedPayload.categoryIds)
+        )),
+      )
+    }
     await Promise.allSettled(
       containerIds.map((containerId) => dependencies.deleteBudgetContainer(ledgerId, containerId)),
     )

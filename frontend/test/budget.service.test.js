@@ -455,6 +455,128 @@ test('saveBudgetContainerRange rejects daily pool savings conflict before writin
   assert.deepEqual(upsertItemCalls, [])
 })
 
+test('saveBudgetContainerRange rolls back daily pool child item mutations when later month write fails', async () => {
+  const itemsByBudgetId = new Map([
+    ['budget_2026-01', [{
+      id: 'bi_rent_existing',
+      budget_id: 'budget_2026-01',
+      scope_type: 'category',
+      category_id: 'cat_rent',
+      category_group_id: null,
+      budget_container_id: null,
+      amount_minor: 50000,
+      amount_mode: 'fixed',
+      day_rule_unit: 'none',
+      day_rule_values_json: '[]',
+      budget_save_enabled: 0,
+      budget_save_target_account_id: null,
+      budget_save_source_account_id: null,
+      sort_order: 7,
+    }]],
+    ['budget_2026-02', []],
+  ])
+  const deletedItemIds = []
+  const deletedContainerIds = []
+  const restoredItemCalls = []
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      return { id: `budget_${monthKey}`, month_key: monthKey }
+    },
+    async listBudgetContainers() {
+      return []
+    },
+    async listBudgetItems(_ledgerId, budgetId) {
+      return (itemsByBudgetId.get(budgetId) ?? []).map((item) => ({ ...item }))
+    },
+    async upsertBudgetContainer(_ledgerId, payload) {
+      return payload.id
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      if (payload.budgetId === 'budget_2026-02') {
+        throw new Error('simulated child item failure')
+      }
+
+      const id = payload.id ?? 'bi_food_created'
+      const next = {
+        id,
+        budget_id: payload.budgetId,
+        scope_type: payload.scopeType,
+        category_id: payload.categoryId,
+        category_group_id: payload.categoryGroupId,
+        budget_container_id: payload.budgetContainerId,
+        amount_minor: payload.amountMinor,
+        amount_mode: payload.amountMode,
+        day_rule_unit: payload.dayRuleUnit,
+        day_rule_values_json: payload.dayRuleValuesJson,
+        budget_save_enabled: payload.budgetSaveEnabled ? 1 : 0,
+        budget_save_target_account_id: payload.budgetSaveTargetAccountId,
+        budget_save_source_account_id: payload.budgetSaveSourceAccountId,
+        sort_order: payload.sortOrder,
+      }
+      const rows = itemsByBudgetId.get(payload.budgetId) ?? []
+      const index = rows.findIndex((item) => item.id === id)
+      if (index >= 0) rows[index] = next
+      else rows.push(next)
+      itemsByBudgetId.set(payload.budgetId, rows)
+
+      if (id === 'bi_rent_existing' && payload.amountMinor === 50000) {
+        restoredItemCalls.push(payload)
+      }
+      return id
+    },
+    async deleteBudgetItem(_ledgerId, itemId) {
+      deletedItemIds.push(itemId)
+      for (const [budgetId, rows] of itemsByBudgetId.entries()) {
+        itemsByBudgetId.set(budgetId, rows.filter((item) => item.id !== itemId))
+      }
+    },
+    async deleteBudgetContainer(_ledgerId, containerId) {
+      deletedContainerIds.push(containerId)
+      for (const [budgetId, rows] of itemsByBudgetId.entries()) {
+        itemsByBudgetId.set(
+          budgetId,
+          rows.map((item) => (
+            String(item.budget_container_id ?? '') === String(containerId)
+              ? { ...item, budget_container_id: null }
+              : item
+          )),
+        )
+      }
+    },
+  })
+
+  await assert.rejects(
+    saveBudgetContainerRange('ledger_1', '2026-01', '2026-02', {
+      name: '日用',
+      amountMinor: 10000,
+      periodMode: 'daily',
+      categoryIds: ['cat_food', 'cat_rent'],
+    }),
+    /simulated child item failure/,
+  )
+
+  assert.deepEqual(deletedItemIds, ['bi_food_created'])
+  assert.equal(deletedContainerIds.length, 2)
+  assert.equal(restoredItemCalls.length, 1)
+  assert.deepEqual(itemsByBudgetId.get('budget_2026-01'), [{
+    id: 'bi_rent_existing',
+    budget_id: 'budget_2026-01',
+    scope_type: 'category',
+    category_id: 'cat_rent',
+    category_group_id: null,
+    budget_container_id: null,
+    amount_minor: 50000,
+    amount_mode: 'fixed',
+    day_rule_unit: 'none',
+    day_rule_values_json: '[]',
+    budget_save_enabled: 0,
+    budget_save_target_account_id: null,
+    budget_save_source_account_id: null,
+    sort_order: 7,
+  }])
+})
+
 test('saveBudgetContainer syncs daily pool categories without child budget amounts', async () => {
   const upsertItemCalls = []
   const deleteItemCalls = []
