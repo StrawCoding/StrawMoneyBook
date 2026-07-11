@@ -34,6 +34,7 @@
     "simulate:first-bank-provider": "node scripts/test-first-bank-provider.mjs",
     "playwright:bank-sync": "node scripts/playwright-bank-sync-settings.mjs",
     "playwright:budget-save": "node scripts/playwright-budget-save.mjs",
+    "playwright:budget-cross-month": "node scripts/playwright-budget-cross-month.mjs",
     "playwright:ui-layout": "node scripts/playwright-ui-layout.mjs",
     "audit:i18n": "node scripts/audit-i18n.mjs",
     "audit:i18n:hardcoded": "node scripts/audit-i18n-hardcoded.mjs",

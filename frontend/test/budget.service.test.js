@@ -3,15 +3,34 @@ import assert from 'node:assert/strict'
 
 import {
   copyPreviousMonthBudget,
+  listInclusiveMonthKeys,
   resetBudgetServiceDependenciesForTest,
   resolveContainerMonthlyAmountMinor,
   saveBudgetContainer,
+  saveBudgetContainerRange,
   saveBudgetItem,
   setBudgetServiceDependenciesForTest,
 } from '../src/core/services/budget.service.js'
 
 afterEach(() => {
   resetBudgetServiceDependenciesForTest()
+})
+
+test('listInclusiveMonthKeys returns deterministic inclusive ranges without Date timezone conversion', () => {
+  assert.deepEqual(listInclusiveMonthKeys('2026-01', '2026-01'), ['2026-01'])
+  assert.deepEqual(listInclusiveMonthKeys('2026-01', '2026-03'), ['2026-01', '2026-02', '2026-03'])
+  assert.deepEqual(listInclusiveMonthKeys('2026-11', '2027-01'), ['2026-11', '2026-12', '2027-01'])
+})
+
+test('listInclusiveMonthKeys rejects invalid or reversed month ranges', () => {
+  assert.throws(
+    () => listInclusiveMonthKeys('2026-1', '2026-03'),
+    { code: 'budgeting.container.error.invalid_month_range' },
+  )
+  assert.throws(
+    () => listInclusiveMonthKeys('2026-04', '2026-03'),
+    { code: 'budgeting.container.error.invalid_month_range' },
+  )
 })
 
 test('copyPreviousMonthBudget preserves budget save settings on items and total config', async () => {
@@ -160,6 +179,9 @@ test('saveBudgetContainer rejects auto save when a child item already saves', as
     async getBudgetByMonth(_ledgerId, monthKey) {
       return { id: 'budget_current', month_key: monthKey }
     },
+    async listBudgetContainers() {
+      return [{ id: 'bc_life', name: '生活費' }]
+    },
     async listBudgetItems() {
       return [{ id: 'bi_food', budget_container_id: 'bc_life', budget_save_enabled: 1 }]
     },
@@ -198,6 +220,241 @@ test('resolveContainerMonthlyAmountMinor multiplies daily pool amount by days in
   )
 })
 
+test('saveBudgetContainerRange creates independent fixed monthly pools across months', async () => {
+  const createdBudgets = []
+  const upsertContainerCalls = []
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      return { id: `budget_${monthKey}`, month_key: monthKey }
+    },
+    async listBudgetContainers() {
+      return []
+    },
+    async listBudgetItems() {
+      return []
+    },
+    async upsertBudgetContainer(_ledgerId, payload) {
+      upsertContainerCalls.push(payload)
+      return payload.id
+    },
+    async createBudget(_ledgerId, payload) {
+      createdBudgets.push(payload)
+      return { id: `budget_${payload.monthKey}`, month_key: payload.monthKey }
+    },
+  })
+
+  const result = await saveBudgetContainerRange('ledger_1', '2026-01', '2026-03', {
+    name: '生活費',
+    amountMinor: 100000,
+    periodMode: 'monthly',
+  })
+
+  assert.deepEqual(result.monthKeys, ['2026-01', '2026-02', '2026-03'])
+  assert.equal(result.containerIds.length, 3)
+  assert.equal(new Set(result.containerIds).size, 3)
+  assert.deepEqual(createdBudgets, [])
+  assert.deepEqual(
+    upsertContainerCalls.map((call) => ({
+      budgetId: call.budgetId,
+      name: call.name,
+      amountMinor: call.amountMinor,
+      periodMode: call.periodMode,
+    })),
+    [
+      { budgetId: 'budget_2026-01', name: '生活費', amountMinor: 100000, periodMode: 'monthly' },
+      { budgetId: 'budget_2026-02', name: '生活費', amountMinor: 100000, periodMode: 'monthly' },
+      { budgetId: 'budget_2026-03', name: '生活費', amountMinor: 100000, periodMode: 'monthly' },
+    ],
+  )
+})
+
+test('saveBudgetContainerRange copies daily pool bindings and keeps per-month day counts independent', async () => {
+  const upsertItemCalls = []
+  const upsertContainerCalls = []
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      return { id: `budget_${monthKey}`, month_key: monthKey }
+    },
+    async listBudgetContainers() {
+      return []
+    },
+    async listBudgetItems() {
+      return []
+    },
+    async upsertBudgetContainer(_ledgerId, payload) {
+      upsertContainerCalls.push(payload)
+      return payload.id
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      upsertItemCalls.push(payload)
+      return payload.id ?? `bi_${upsertItemCalls.length}`
+    },
+    async deleteBudgetItem() {},
+  })
+
+  const result = await saveBudgetContainerRange('ledger_1', '2026-02', '2026-03', {
+    name: '日用',
+    amountMinor: 10000,
+    periodMode: 'daily',
+    categoryIds: ['cat_food'],
+  })
+
+  assert.deepEqual(result.monthKeys, ['2026-02', '2026-03'])
+  assert.equal(upsertContainerCalls.length, 2)
+  assert.equal(upsertItemCalls.length, 2)
+  assert.deepEqual(
+    upsertItemCalls.map((call) => ({ budgetId: call.budgetId, categoryId: call.categoryId, amountMinor: call.amountMinor })),
+    [
+      { budgetId: 'budget_2026-02', categoryId: 'cat_food', amountMinor: 0 },
+      { budgetId: 'budget_2026-03', categoryId: 'cat_food', amountMinor: 0 },
+    ],
+  )
+  assert.equal(resolveContainerMonthlyAmountMinor({ amount_minor: 10000, period_mode: 'daily' }, '2026-02'), 280000)
+  assert.equal(resolveContainerMonthlyAmountMinor({ amount_minor: 10000, period_mode: 'daily' }, '2026-03'), 310000)
+})
+
+test('saveBudgetContainerRange copies budget save configuration to every generated month', async () => {
+  const upsertContainerCalls = []
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      return { id: `budget_${monthKey}`, month_key: monthKey }
+    },
+    async listBudgetContainers() {
+      return []
+    },
+    async listBudgetItems() {
+      return []
+    },
+    async findAccountById(_ledgerId, accountId) {
+      return { id: accountId, currency_code: 'TWD' }
+    },
+    async isSavingsJarAccount(_ledgerId, accountId) {
+      return accountId === 'jar_trip'
+    },
+    async upsertBudgetContainer(_ledgerId, payload) {
+      upsertContainerCalls.push(payload)
+      return payload.id
+    },
+  })
+
+  await saveBudgetContainerRange('ledger_1', '2026-11', '2027-01', {
+    name: '旅費',
+    amountMinor: 200000,
+    budgetSaveEnabled: true,
+    budgetSaveTargetAccountId: 'jar_trip',
+    budgetSaveSourceAccountId: 'acc_main',
+  })
+
+  assert.equal(upsertContainerCalls.length, 3)
+  assert.deepEqual(
+    upsertContainerCalls.map((call) => ({
+      budgetId: call.budgetId,
+      budgetSaveEnabled: call.budgetSaveEnabled,
+      target: call.budgetSaveTargetAccountId,
+      source: call.budgetSaveSourceAccountId,
+    })),
+    [
+      { budgetId: 'budget_2026-11', budgetSaveEnabled: true, target: 'jar_trip', source: 'acc_main' },
+      { budgetId: 'budget_2026-12', budgetSaveEnabled: true, target: 'jar_trip', source: 'acc_main' },
+      { budgetId: 'budget_2027-01', budgetSaveEnabled: true, target: 'jar_trip', source: 'acc_main' },
+    ],
+  )
+})
+
+test('saveBudgetContainerRange rejects middle-month name collision before writing any container', async () => {
+  const upsertContainerCalls = []
+  const createBudgetCalls = []
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      return { id: `budget_${monthKey}`, month_key: monthKey }
+    },
+    async listBudgetContainers(_ledgerId, budgetId) {
+      if (budgetId === 'budget_2026-02') return [{ id: 'bc_existing', name: '生活費' }]
+      return []
+    },
+    async listBudgetItems() {
+      return []
+    },
+    async upsertBudgetContainer(_ledgerId, payload) {
+      upsertContainerCalls.push(payload)
+      return payload.id
+    },
+    async createBudget(_ledgerId, payload) {
+      createBudgetCalls.push(payload)
+      return { id: `budget_${payload.monthKey}`, month_key: payload.monthKey }
+    },
+  })
+
+  await assert.rejects(
+    saveBudgetContainerRange('ledger_1', '2026-01', '2026-03', {
+      name: '生活費',
+      amountMinor: 100000,
+    }),
+    (error) => {
+      assert.equal(error.code, 'budgeting.container.error.name_conflict_range')
+      assert.deepEqual(error.monthKeys, ['2026-02'])
+      return true
+    },
+  )
+
+  assert.deepEqual(upsertContainerCalls, [])
+  assert.deepEqual(createBudgetCalls, [])
+})
+
+test('saveBudgetContainerRange rejects daily pool savings conflict before writing any target month', async () => {
+  const upsertContainerCalls = []
+  const upsertItemCalls = []
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      return { id: `budget_${monthKey}`, month_key: monthKey }
+    },
+    async listBudgetContainers() {
+      return []
+    },
+    async listBudgetItems(_ledgerId, budgetId) {
+      if (budgetId === 'budget_2026-03') {
+        return [{ id: 'bi_food', category_id: 'cat_food', budget_save_enabled: 1 }]
+      }
+      return []
+    },
+    async findAccountById(_ledgerId, accountId) {
+      return { id: accountId, currency_code: 'TWD' }
+    },
+    async isSavingsJarAccount(_ledgerId, accountId) {
+      return accountId === 'jar_trip'
+    },
+    async upsertBudgetContainer(_ledgerId, payload) {
+      upsertContainerCalls.push(payload)
+      return payload.id
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      upsertItemCalls.push(payload)
+      return payload.id
+    },
+  })
+
+  await assert.rejects(
+    saveBudgetContainerRange('ledger_1', '2026-02', '2026-03', {
+      name: '日用',
+      amountMinor: 10000,
+      periodMode: 'daily',
+      categoryIds: ['cat_food'],
+      budgetSaveEnabled: true,
+      budgetSaveTargetAccountId: 'jar_trip',
+      budgetSaveSourceAccountId: 'acc_main',
+    }),
+    { code: 'budgeting.budget_save.error.group_conflict' },
+  )
+
+  assert.deepEqual(upsertContainerCalls, [])
+  assert.deepEqual(upsertItemCalls, [])
+})
+
 test('saveBudgetContainer syncs daily pool categories without child budget amounts', async () => {
   const upsertItemCalls = []
   const deleteItemCalls = []
@@ -205,6 +462,9 @@ test('saveBudgetContainer syncs daily pool categories without child budget amoun
   setBudgetServiceDependenciesForTest({
     async getBudgetByMonth(_ledgerId, monthKey) {
       return { id: 'budget_current', month_key: monthKey }
+    },
+    async listBudgetContainers() {
+      return [{ id: 'bc_daily', name: '日用' }]
     },
     async listBudgetItems() {
       return [{

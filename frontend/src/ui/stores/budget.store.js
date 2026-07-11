@@ -5,6 +5,7 @@ import {
   removeBudgetContainer,
   resolveContainerMonthlyAmountMinor,
   saveBudgetContainer,
+  saveBudgetContainerRange,
   saveBudgetSavePreferences as saveBudgetSavePreferencesService,
   saveBudgetTotalConfig as saveBudgetTotalConfigService,
   loadBudgetSnapshot,
@@ -240,7 +241,12 @@ export const useBudgetStore = defineStore('budget', {
 
     async upsertContainer(payload) {
       const ledgerStore = useLedgerStore()
-      await saveBudgetContainer(ledgerStore.activeLedgerId, this.monthKey, payload)
+      const applyThroughMonth = String(payload?.applyThroughMonth ?? '').trim()
+      if (applyThroughMonth && !payload?.id) {
+        await saveBudgetContainerRange(ledgerStore.activeLedgerId, this.monthKey, applyThroughMonth, payload)
+      } else {
+        await saveBudgetContainer(ledgerStore.activeLedgerId, this.monthKey, payload)
+      }
       await this.loadMonth(this.monthKey)
     },
 

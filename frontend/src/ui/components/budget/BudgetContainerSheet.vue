@@ -35,6 +35,19 @@
       </div>
     </label>
 
+    <label v-if="!model.id">
+      {{ t('budgeting.container.apply_through_month') }}
+      <input
+        v-model="model.applyThroughMonth"
+        class="input"
+        type="month"
+        :min="budgetMonthInputMin"
+      />
+      <small class="muted">
+        {{ t('budgeting.container.apply_through_month_hint', { month: budgetMonthLabel }) }}
+      </small>
+    </label>
+
     <label v-if="model.periodMode === 'daily'">
       {{ t('budgeting.container.categories_field') }}
       <div class="category-picker">
@@ -137,6 +150,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  budgetMonth: {
+    type: String,
+    default: '',
+  },
   accountGroups: {
     type: Array,
     default: () => [],
@@ -175,6 +192,7 @@ const model = reactive({
   name: '',
   amountMajor: null,
   periodMode: 'monthly',
+  applyThroughMonth: '',
   categoryIds: [],
   budgetSaveEnabled: false,
   budgetSaveTargetAccountId: '',
@@ -198,6 +216,9 @@ const containerAmountLabel = computed(() => (
     ? t('budgeting.container.amount_daily')
     : t('budgeting.container.amount')
 ))
+
+const budgetMonthInputMin = computed(() => String(props.budgetMonth ?? '').trim())
+const budgetMonthLabel = computed(() => budgetMonthInputMin.value || '-')
 
 const childSumMinor = computed(() => (
   (props.childItems ?? []).reduce((total, item) => {
@@ -267,6 +288,7 @@ watch(
       model.name = props.container.name ?? ''
       model.amountMajor = Number(props.container.amount_minor ?? 0) / 100
       model.periodMode = String(props.container.period_mode ?? '').trim() === 'daily' ? 'daily' : 'monthly'
+      model.applyThroughMonth = ''
       model.categoryIds = (props.childItems ?? [])
         .map((item) => String(item?.category_id ?? '').trim())
         .filter(Boolean)
@@ -280,6 +302,7 @@ watch(
     model.name = ''
     model.amountMajor = null
     model.periodMode = 'monthly'
+    model.applyThroughMonth = ''
     model.categoryIds = []
     model.budgetSaveEnabled = false
     model.budgetSaveTargetAccountId = String(props.savingsJarAccounts?.[0]?.id ?? '')
@@ -317,6 +340,7 @@ function onSave() {
     name: String(model.name ?? '').trim(),
     amountMinor: Math.round(Number(model.amountMajor ?? 0) * 100),
     periodMode: model.periodMode === 'daily' ? 'daily' : 'monthly',
+    applyThroughMonth: model.id ? undefined : String(model.applyThroughMonth ?? '').trim() || undefined,
     categoryIds: model.periodMode === 'daily' ? [...model.categoryIds] : undefined,
     budgetSaveEnabled: model.budgetSaveEnabled,
     budgetSaveTargetAccountId: model.budgetSaveEnabled ? model.budgetSaveTargetAccountId : null,

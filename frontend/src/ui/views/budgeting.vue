@@ -349,6 +349,7 @@
     <BudgetContainerSheet
       :open="isContainerSheetOpen"
       :container="editingContainer"
+      :budget-month="budgetStore.monthKey"
       :child-items="containerSheetChildItems"
       :categories="categoryStore.expenseCategories"
       :category-groups="categoryStore.expenseCategoryGroups"
@@ -483,6 +484,9 @@ const budgetErrorKeys = new Set([
   'budgeting.budget_save.error.group_conflict',
   'budgeting.container.error.name_required',
   'budgeting.container.error.not_found',
+  'budgeting.container.error.invalid_month_range',
+  'budgeting.container.error.name_conflict',
+  'budgeting.container.error.name_conflict_range',
 ])
 const retroactiveModeOptions = computed(() => ([
   { value: 'manual', label: t('budgeting.budget_save.retroactive.manual') },
@@ -873,6 +877,10 @@ function formatMajor(amountMinor) {
 
 function resolveBudgetErrorMessage(error) {
   const key = String(error?.code ?? error?.message ?? '').trim()
+  if (key === 'budgeting.container.error.name_conflict_range') {
+    const months = Array.isArray(error?.monthKeys) ? error.monthKeys.join(', ') : ''
+    return t(key, { months })
+  }
   if (budgetErrorKeys.has(key)) return t(key)
   return error?.message ?? t('budgeting.toast.save_failed')
 }

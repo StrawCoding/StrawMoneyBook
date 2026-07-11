@@ -41,6 +41,7 @@ test('budget store uses 2B total formula and grouped sections', () => {
   assert.match(budgetStoreSource, /filter\(\(item\) => !isItemInContainer\(item\)\)/)
   assert.match(budgetStoreSource, /computeMonthlyReservedMinor/)
   assert.match(budgetStoreSource, /isMonthOver/)
+  assert.match(budgetStoreSource, /saveBudgetContainerRange/)
 })
 
 test('budgeting page exposes shared budget pool UI flows', () => {
@@ -65,6 +66,14 @@ test('budget container sheet exposes pool amount and savings controls', () => {
   assert.match(containerSheetSource, /budgeting\.container\.budget_save_hint/)
   assert.match(containerSheetSource, /budgeting\.container\.categories_field/)
   assert.match(containerSheetSource, /model\.categoryIds/)
+})
+
+test('budget container sheet exposes creation-only cross-month apply-through control', () => {
+  assert.match(budgetingSource, /:budget-month="budgetStore\.monthKey"/)
+  assert.match(containerSheetSource, /v-if="!model\.id"/)
+  assert.match(containerSheetSource, /budgeting\.container\.apply_through_month/)
+  assert.match(containerSheetSource, /type="month"/)
+  assert.match(containerSheetSource, /applyThroughMonth/)
 })
 
 test('budget item sheet hides amount fields for daily pool bindings', () => {
