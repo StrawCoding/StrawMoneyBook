@@ -55,6 +55,8 @@ public class FirstBankAutomationCaptchaTest {
         assertTrue(FirstBankAutomation.isTransactionInterceptCandidate(
             "https://ibank.firstbank.com.tw/NetBank/2/010103.html?acnt=123"
         ));
+        assertTrue(FirstBankAutomation.shouldReplayTransactionInterceptRequest("GET"));
+        assertFalse(FirstBankAutomation.shouldReplayTransactionInterceptRequest("POST"));
         assertTrue(FirstBankAutomation.looksLikeTransactionJsonPayload("{\"rows\":[]}"));
         assertFalse(FirstBankAutomation.looksLikeTransactionJsonPayload("<html></html>"));
     }
@@ -174,10 +176,25 @@ public class FirstBankAutomationCaptchaTest {
     }
 
     @Test
-    public void framePortalContractProbeRequiresMyAccountsAnchor() {
+    public void framePortalContractProbePrefersStructuralAnchors() {
         String script = FirstBankAutomation.buildFramePortalContractProbeScript();
+        assertTrue(script.contains("hasMyAccountsStructuralAnchor"));
+        assertTrue(script.contains("hasMyAccountsTextFallback"));
+        assertTrue(script.contains("openIt"));
+        assertTrue(script.contains("overview-account"));
         assertTrue(script.contains("我的帳戶"));
+        assertTrue(script.contains("My Accounts"));
         assertTrue(script.contains("table.CnbTable"));
+    }
+
+    @Test
+    public void postLoginLandingReadyProbeUsesStructuralAnchorsBeforeTextFallback() {
+        String script = FirstBankAutomation.buildPostLoginLandingReadyScript();
+        assertTrue(script.contains("hasPostLoginStructuralAnchor"));
+        assertTrue(script.contains("hasPostLoginTextFallback"));
+        assertTrue(script.contains("openIt"));
+        assertTrue(script.contains("overview-account"));
+        assertTrue(script.contains("My Accounts"));
     }
 
     @Test

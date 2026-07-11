@@ -73,6 +73,7 @@ export function isBankCredentialAuthError(error) {
   if ([
     'first_bank_login_failed',
     'first_bank_login_page_mismatch',
+    'first_bank_portal_contract_failed',
     'first_bank_session_expired',
     'first_bank_password_required',
     'first_bank_user_code_required',
@@ -95,6 +96,34 @@ export function isBankCredentialAuthError(error) {
     || message.includes('登入失敗')
     || message.includes('逾時')
   )
+}
+
+export function classifyFirstBankSyncFailure(error) {
+  const code = normalizeText(error?.code).toLowerCase()
+  const message = normalizeText(error?.message ?? error).toLowerCase()
+  if ([
+    'first_bank_login_page_mismatch',
+    'first_bank_portal_contract_failed',
+    'first_bank_account_list_not_found',
+    'first_bank_my_accounts_trigger_missing',
+    'first_bank_transaction_query_failed',
+  ].includes(code)) {
+    return 'portal_changed'
+  }
+  if (isBankCredentialAuthError(error)) {
+    return 'reconnect'
+  }
+  if (
+    code.includes('timeout')
+    || code.includes('temporarily')
+    || message.includes('timeout')
+    || message.includes('timed out')
+    || message.includes('暫時')
+    || message.includes('稍後')
+  ) {
+    return 'retry'
+  }
+  return 'retry'
 }
 
 export function shouldRequireReconnectAfterBankSyncError(providerId, error) {

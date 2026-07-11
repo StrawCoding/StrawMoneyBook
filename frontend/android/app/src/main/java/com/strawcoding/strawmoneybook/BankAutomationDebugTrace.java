@@ -104,13 +104,15 @@ final class BankAutomationDebugTrace {
             case "first_bank_login_trigger_missing":
                 return "登入按鈕或 clickArea 觸發點可能變更，請檢查登入頁 DOM。";
             case "first_bank_account_list_not_found":
-                return "登入後未成功進入我的帳戶或帳號列表頁，請檢查 open_my_accounts 與 discover_accounts。";
+                return "登入後未成功進入帳戶總覽或帳號列表頁，請檢查 open_my_accounts 的 URL/function/ID/table structural anchors 與中英文文字備援。";
             case "first_bank_my_accounts_trigger_missing":
-                return "frame 頁面尚未載入出 openIt 或「我的帳戶」連結，請檢查 frame 載入時序與 open_my_accounts。";
+                return "frame 頁面尚未載入帳戶總覽入口，請檢查 openIt、overview-account/tab1、table.CnbTable、010103 連結與中英文文字備援。";
+            case "first_bank_portal_contract_failed":
+                return "第一銀行入口結構錨點已變更，請檢查 frame_portal_contract 的 URL/function/ID/table predicates；使用者可稍後重試，若持續失敗請回報更新 App。";
             case "first_bank_session_expired":
                 return "銀行 session 已過期，請檢查 silent relogin 與 cookie restore。";
             case "first_bank_transaction_query_failed":
-                return "交易查詢頁可能未成功載入或 DOM 結構已變更，請檢查 transaction_query。";
+                return "交易查詢頁可能未成功載入或 DOM 結構已變更；POST 交易請求已安全放行不 replay，請檢查 transaction_query 與 DOM fallback。";
             case "bank_automation_timeout":
                 return "自動化流程超時，請從最後一個 step 判斷卡住位置。";
             default:

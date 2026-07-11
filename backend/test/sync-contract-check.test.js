@@ -61,6 +61,12 @@ test('SMB-253: failure classifier covers portal_changed / captcha / auth / timeo
 
   assert.equal(classifyBankContractFailure({
     ok: false,
+    anchors: { loginForm: true, codeVerify: true, captchaLoginArea: true, vrfyCode: true },
+    frame: { ok: true, hasStructuralAnchor: false, hasTextFallback: false },
+  }), 'portal_changed')
+
+  assert.equal(classifyBankContractFailure({
+    ok: false,
     error: 'fetch failed: 403 Forbidden',
   }), 'auth')
 
@@ -148,6 +154,10 @@ test('SMB-253: bank contract check asserts login anchors', () => {
   assert.match(bankCheckSource, /code_verify/)
   assert.match(bankCheckSource, /captchaLoginArea/)
   assert.match(bankCheckSource, /vrfyCode/)
+  assert.match(bankCheckSource, /hasStructuralAnchor/)
+  assert.match(bankCheckSource, /hasTextFallback/)
+  assert.match(bankCheckSource, /openIt/)
+  assert.match(bankCheckSource, /My Accounts/)
   assert.match(bankConfigSource, /ibank\.firstbank\.com\.tw/)
 })
 

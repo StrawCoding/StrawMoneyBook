@@ -1157,6 +1157,7 @@ final class FirstBankAutomation {
         return """
             (() => {
               function text(value) { return String(value ?? '').trim(); }
+              function href(value) { return text(value).toLowerCase(); }
               function collectWindows() {
                 const wins = [];
                 const seen = new Set();
@@ -1173,20 +1174,64 @@ final class FirstBankAutomation {
                 visit(window);
                 return wins;
               }
-              let hasMyAccounts = false;
+              function hasTransactionAnchor(doc) {
+                return Boolean(doc.querySelector('table.CnbTable, #txnStart, #txnEnd, #overview-account, #tab1'));
+              }
+              function findMyAccountsCandidate(win) {
+                const doc = win.document;
+                if (!doc) return null;
+                if (typeof win.openIt === 'function') {
+                  return { kind: 'function', anchor: 'openIt' };
+                }
+                const idAnchor = doc.querySelector('#overview-account, #tab1, a[href*="010103"], a[href*="010101"], a[onclick*="openIt"], a[onclick*="selectServiceHref"]');
+                if (idAnchor) {
+                  return { kind: 'structural', anchor: text(idAnchor.id || idAnchor.getAttribute('href') || idAnchor.getAttribute('onclick') || idAnchor.tagName) };
+                }
+                const tableAnchor = hasTransactionAnchor(doc);
+                if (tableAnchor) {
+                  return { kind: 'table', anchor: 'account-or-transaction-table' };
+                }
+                const textAnchor = Array.from(doc.querySelectorAll('a, button, input[type="button"], input[type="submit"]')).find((node) => {
+                  const label = text(node.textContent || node.value || node.getAttribute('title') || node.getAttribute('aria-label'));
+                  const target = href(node.getAttribute('href') || node.getAttribute('onclick') || '');
+                  return /我的帳戶|帳戶總覽|My Accounts|Account Overview/i.test(label)
+                    || /01010[13]|account|acct|overview/.test(target);
+                });
+                if (textAnchor) {
+                  return { kind: 'text', anchor: text(textAnchor.textContent || textAnchor.value || textAnchor.getAttribute('href') || textAnchor.getAttribute('onclick')) };
+                }
+                return null;
+              }
+              let hasMyAccountsStructuralAnchor = false;
+              let hasMyAccountsTextFallback = false;
               let hasTransactionTableAnchor = false;
+              let myAccountsAnchorKind = '';
+              let myAccountsAnchor = '';
               for (const win of collectWindows()) {
                 try {
                   const doc = win.document;
                   if (!doc) continue;
-                  const link = Array.from(doc.querySelectorAll('a')).find((anchor) => /我的帳戶/.test(text(anchor.textContent)));
-                  if (link) hasMyAccounts = true;
+                  const candidate = findMyAccountsCandidate(win);
+                  if (candidate) {
+                    if (candidate.kind === 'text') {
+                      hasMyAccountsTextFallback = true;
+                    } else {
+                      hasMyAccountsStructuralAnchor = true;
+                    }
+                    if (!myAccountsAnchorKind) myAccountsAnchorKind = candidate.kind;
+                    if (!myAccountsAnchor) myAccountsAnchor = candidate.anchor;
+                  }
                   if (doc.querySelector('table.CnbTable')) hasTransactionTableAnchor = true;
                 } catch (_error) {}
               }
+              const hasMyAccounts = hasMyAccountsStructuralAnchor || hasMyAccountsTextFallback;
               return {
                 ready: hasMyAccounts,
                 hasMyAccounts,
+                hasMyAccountsStructuralAnchor,
+                hasMyAccountsTextFallback,
+                myAccountsAnchorKind,
+                myAccountsAnchor,
                 hasTransactionTableAnchor,
               };
             })();
@@ -1212,6 +1257,14 @@ final class FirstBankAutomation {
         if (normalized.length() < 2) return false;
         char first = normalized.charAt(0);
         return first == '{' || first == '[';
+    }
+
+    static boolean shouldReplayTransactionInterceptRequest(String method) {
+        String normalized = normalizeText(method);
+        if (normalized.isEmpty()) {
+            normalized = "GET";
+        }
+        return "GET".equalsIgnoreCase(normalized);
     }
 
     static JSONArray parseTransactionsFromInterceptedJson(List<String> payloads, String accountId, String startDateBank, String endDateBank) {
@@ -1490,6 +1543,7 @@ final class FirstBankAutomation {
         return """
             (() => {
               function text(value) { return String(value ?? '').trim(); }
+              function href(value) { return text(value).toLowerCase(); }
               function collectEntries() {
                 const found = [];
                 const seen = new Set();
@@ -1510,6 +1564,24 @@ final class FirstBankAutomation {
               return collectEntries().some((entry) => {
                 try {
                   const doc = entry.doc;
+                  function hasPostLoginStructuralAnchor() {
+                    if (typeof entry.win.openIt === 'function') return true;
+                    if (doc.querySelector('#overview-account, #tab1, table.CnbTable, #txnStart, #txnEnd')) return true;
+                    return Array.from(doc.querySelectorAll('a, button, input[type="button"], input[type="submit"]')).some((node) => {
+                      const target = href(node.getAttribute('href') || node.getAttribute('onclick') || '');
+                      return /01010[13]|openit|selectservicehref|account|acct|overview/.test(target);
+                    });
+                  }
+                  function hasPostLoginTextFallback() {
+                    const bodyText = text(doc.body?.innerText || '');
+                    if (/帳戶總覽|我的帳戶|My Accounts|Account Overview/i.test(bodyText)) return true;
+                    return Array.from(doc.querySelectorAll('a, button, input[type="button"], input[type="submit"]')).some((node) => {
+                      const label = text(node.textContent || node.value || node.getAttribute('title') || node.getAttribute('aria-label'));
+                      return /我的帳戶|帳戶總覽|My Accounts|Account Overview/i.test(label);
+                    });
+                  }
+                  if (hasPostLoginStructuralAnchor()) return true;
+                  if (hasPostLoginTextFallback()) return true;
                   const bodyText = text(doc.body?.innerText || '');
                   if (/帳戶總覽|我的帳戶/.test(bodyText)) return true;
                   if (typeof entry.win.openIt === 'function') return true;
@@ -2420,6 +2492,9 @@ final class FirstBankAutomation {
             if (method.isEmpty()) {
                 method = "GET";
             }
+            if (!shouldReplayTransactionInterceptRequest(method)) {
+                return null;
+            }
             HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
             connection.setInstanceFollowRedirects(true);
             connection.setConnectTimeout(12_000);
@@ -2787,19 +2862,30 @@ final class FirstBankAutomation {
                   function text(value) {
                     return String(value ?? '').trim();
                   }
-                  for (const win of collectWindows()) {
-                    try {
-                      if (typeof win.openIt === 'function') {
-                        return true;
-                      }
-                    } catch (_error) {}
+                  function href(value) {
+                    return text(value).toLowerCase();
+                  }
+                  function findMyAccountsCandidate(win) {
+                    const doc = win.document;
+                    if (!doc) return null;
+                    if (typeof win.openIt === 'function') {
+                      return { kind: 'function' };
+                    }
+                    const structural = doc.querySelector('#overview-account, #tab1, table.CnbTable, a[href*="010103"], a[href*="010101"], a[onclick*="openIt"], a[onclick*="selectServiceHref"]');
+                    if (structural) {
+                      return { kind: 'structural' };
+                    }
+                    const textFallback = Array.from(doc.querySelectorAll('a, button, input[type="button"], input[type="submit"]')).find((node) => {
+                      const label = text(node.textContent || node.value || node.getAttribute('title') || node.getAttribute('aria-label'));
+                      const target = href(node.getAttribute('href') || node.getAttribute('onclick') || '');
+                      return /我的帳戶|帳戶總覽|My Accounts|Account Overview/i.test(label)
+                        || /01010[13]|account|acct|overview/.test(target);
+                    });
+                    return textFallback ? { kind: 'text' } : null;
                   }
                   for (const win of collectWindows()) {
                     try {
-                      const doc = win.document;
-                      if (!doc) continue;
-                      const link = Array.from(doc.querySelectorAll('a')).find((anchor) => /我的帳戶/.test(text(anchor.textContent)));
-                      if (link) {
+                      if (findMyAccountsCandidate(win)) {
                         return true;
                       }
                     } catch (_error) {}
@@ -2829,21 +2915,43 @@ final class FirstBankAutomation {
                   function text(value) {
                     return String(value ?? '').trim();
                   }
-                  for (const win of collectWindows()) {
-                    try {
-                      if (typeof win.openIt === 'function') {
-                        win.openIt();
-                        return true;
-                      }
-                    } catch (_error) {}
+                  function href(value) {
+                    return text(value).toLowerCase();
+                  }
+                  function clickNode(node) {
+                    if (!node) return false;
+                    if (typeof node.click === 'function') {
+                      node.click();
+                      return true;
+                    }
+                    return false;
+                  }
+                  function findMyAccountsCandidate(win) {
+                    const doc = win.document;
+                    if (!doc) return null;
+                    if (typeof win.openIt === 'function') {
+                      return { kind: 'function', run: () => win.openIt() };
+                    }
+                    const structural = doc.querySelector('a[href*="010103"], a[href*="010101"], a[onclick*="openIt"], a[onclick*="selectServiceHref"], button[onclick*="openIt"], input[onclick*="openIt"]');
+                    if (structural) {
+                      return { kind: 'structural', run: () => clickNode(structural) };
+                    }
+                    const existingOverview = doc.querySelector('#overview-account, #tab1, table.CnbTable');
+                    if (existingOverview) {
+                      return { kind: 'already-open', run: () => true };
+                    }
+                    const textFallback = Array.from(doc.querySelectorAll('a, button, input[type="button"], input[type="submit"]')).find((node) => {
+                      const label = text(node.textContent || node.value || node.getAttribute('title') || node.getAttribute('aria-label'));
+                      const target = href(node.getAttribute('href') || node.getAttribute('onclick') || '');
+                      return /我的帳戶|帳戶總覽|My Accounts|Account Overview/i.test(label)
+                        || /01010[13]|account|acct|overview/.test(target);
+                    });
+                    return textFallback ? { kind: 'text', run: () => clickNode(textFallback) } : null;
                   }
                   for (const win of collectWindows()) {
                     try {
-                      const doc = win.document;
-                      if (!doc) continue;
-                      const link = Array.from(doc.querySelectorAll('a')).find((anchor) => /我的帳戶/.test(text(anchor.textContent)));
-                      if (link) {
-                        link.click();
+                      const candidate = findMyAccountsCandidate(win);
+                      if (candidate && candidate.run()) {
                         return true;
                       }
                     } catch (_error) {}

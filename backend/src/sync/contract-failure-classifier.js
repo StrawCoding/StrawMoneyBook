@@ -50,6 +50,9 @@ export function classifyBankContractFailure(result) {
   const required = ['loginForm', 'codeVerify', 'captchaLoginArea', 'vrfyCode']
   const missingAnchor = required.some((key) => anchors[key] === false)
   if (missingAnchor) return 'portal_changed'
+  const frame = result?.frame ?? {}
+  if (frame.ok === false) return 'portal_changed'
+  if (frame.ok && frame.hasStructuralAnchor === false && frame.hasTextFallback === false) return 'portal_changed'
   if (result?.mobileHint && !anchors.loginForm) return 'portal_changed'
 
   if (result?.captchaFetch?.ok === false) return 'captcha'

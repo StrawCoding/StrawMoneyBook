@@ -35,11 +35,28 @@ test('first bank automation intercepts transaction json before dom fallback', ()
   assert.match(firstBankAutomationSource, /table\.CnbTable/)
 })
 
+test('SMB-266 first bank transaction intercept never replays POST without request body', () => {
+  assert.match(firstBankAutomationSource, /shouldReplayTransactionInterceptRequest/)
+  assert.match(firstBankAutomationSource, /"GET"\.equalsIgnoreCase\(normalized\)/)
+  assert.match(firstBankAutomationSource, /if \(!shouldReplayTransactionInterceptRequest\(method\)\) \{\s*return null;\s*\}/s)
+  assert.doesNotMatch(firstBankAutomationSource, /setDoOutput\(true\)/)
+})
+
 test('first bank automation enforces captcha ocr confidence threshold and portal contract anchors', () => {
   assert.match(firstBankAutomationSource, /CAPTCHA_MIN_CONFIDENCE/)
   assert.match(firstBankAutomationSource, /buildFramePortalContractProbeScript/)
   assert.match(firstBankAutomationSource, /ensureFramePortalContract/)
-  assert.match(firstBankAutomationSource, /我的帳戶/)
+  assert.match(firstBankAutomationSource, /hasMyAccountsStructuralAnchor/)
+  assert.match(firstBankAutomationSource, /hasMyAccountsTextFallback/)
+  assert.match(firstBankAutomationSource, /My Accounts/)
+})
+
+test('SMB-266 first bank my accounts navigation uses structural anchors before zh-TW text fallback', () => {
+  assert.match(firstBankAutomationSource, /findMyAccountsCandidate/)
+  assert.match(firstBankAutomationSource, /typeof win\.openIt === 'function'/)
+  assert.match(firstBankAutomationSource, /overview-account/)
+  assert.match(firstBankAutomationSource, /table\.CnbTable/)
+  assert.match(firstBankAutomationSource, /我的帳戶\|帳戶總覽\|My Accounts\|Account Overview/)
 })
 
 test('SMB-252 Restart submit fills hidden real login fields and surfaces real bank response', () => {

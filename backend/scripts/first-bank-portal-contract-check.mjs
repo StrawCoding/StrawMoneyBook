@@ -20,6 +20,19 @@ function hasAnchor(html, ids = []) {
   return ids.some((id) => new RegExp(`id=["']${id}["']`, 'i').test(html))
 }
 
+function hasFrameStructuralAnchor(html) {
+  return /openIt\s*\(/i.test(html)
+    || /selectServiceHref\s*\(/i.test(html)
+    || /id=["'](?:overview-account|tab1|txnStart|txnEnd)["']/i.test(html)
+    || /class=["'][^"']*\bCnbTable\b/i.test(html)
+    || /href=["'][^"']*01010[13]/i.test(html)
+    || /onclick=["'][^"']*(?:openIt|selectServiceHref|01010[13])/i.test(html)
+}
+
+function hasFrameTextFallback(html) {
+  return /我的帳戶|帳戶總覽|My Accounts|Account Overview/i.test(html)
+}
+
 async function fetchText(url, referer) {
   const response = await fetch(url, {
     method: 'GET',
@@ -84,12 +97,14 @@ export async function runFirstBankPortalContractCheck() {
     }
 
     let framePage = null
-    let hasMyAccountsAnchor = false
+    let hasStructuralAnchor = false
+    let hasTextFallback = false
     try {
       const frameUrl = getFirstBankFrameUrl()
       framePage = await fetchText(frameUrl, loginUrl)
       const frameHtml = framePage.text ?? ''
-      hasMyAccountsAnchor = /我的帳戶/.test(frameHtml)
+      hasStructuralAnchor = hasFrameStructuralAnchor(frameHtml)
+      hasTextFallback = hasFrameTextFallback(frameHtml)
     } catch (error) {
       framePage = {
         ok: false,
@@ -104,7 +119,7 @@ export async function runFirstBankPortalContractCheck() {
       && anchors.captchaLoginArea
       && anchors.vrfyCode
       && captchaFetch?.ok
-      && hasMyAccountsAnchor,
+      && (hasStructuralAnchor || hasTextFallback),
     )
 
     return {
@@ -118,7 +133,9 @@ export async function runFirstBankPortalContractCheck() {
       frame: {
         ok: Boolean(framePage?.ok),
         status: framePage?.status,
-        hasMyAccountsAnchor,
+        hasStructuralAnchor,
+        hasTextFallback,
+        hasMyAccountsAnchor: Boolean(hasStructuralAnchor || hasTextFallback),
       },
     }
   } catch (error) {

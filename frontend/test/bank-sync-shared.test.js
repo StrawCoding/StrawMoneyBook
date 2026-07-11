@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   buildImportedNote,
+  classifyFirstBankSyncFailure,
   createFirstBankProviderConnectionId,
   extractBankErrorCode,
   formatBankErrorForStorage,
@@ -86,6 +87,20 @@ test('shouldRequireReconnectAfterBankSyncError locks only first bank auth failur
   transientError.code = 'bank_upstream_temporarily_unavailable'
   assert.equal(shouldRequireReconnectAfterBankSyncError('first_bank_tw', transientError), false)
   assert.equal(shouldRequireReconnectAfterBankSyncError('mock_bank_tw', authError), false)
+})
+
+test('SMB-266 classifyFirstBankSyncFailure separates portal_changed, reconnect, and retry', () => {
+  const portalChangedError = new Error('First Bank portal contract anchors are missing')
+  portalChangedError.code = 'first_bank_portal_contract_failed'
+  assert.equal(classifyFirstBankSyncFailure(portalChangedError), 'portal_changed')
+
+  const reconnectError = new Error('First Bank login failed')
+  reconnectError.code = 'first_bank_login_failed'
+  assert.equal(classifyFirstBankSyncFailure(reconnectError), 'reconnect')
+
+  const retryError = new Error('First Bank page load timed out')
+  retryError.code = 'first_bank_navigation_timeout'
+  assert.equal(classifyFirstBankSyncFailure(retryError), 'retry')
 })
 
 test('shouldRequireReconnectForStoredBankConnection only locks stored auth errors', () => {

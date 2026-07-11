@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (SMB-266) 第一銀行 Android 同步可靠性硬化：登入後帳戶入口與 frame 合約探測改以 URL/function/ID/table structural anchors 優先（`openIt`、`overview-account`、`tab1`、`table.CnbTable`、010103/010101），中文「我的帳戶」與英文 My Accounts 只作備援；交易 JSON 攔截只 replay GET，POST 候選請求因無 request body 改安全放行，保留原 WebView 請求並走 DOM fallback，避免空 body replay 破壞銀行查詢；補 `portal_changed` / `retry` / `reconnect` 分類與 `debugHint` 可行動提示；backend 第一銀行 contract check 同步檢查 frame structural predicates。新增 Android JVM/source/backend classifier 回歸測試。已執行 `backend npm run deploy:copy` 並重啟 StrawMB，`/health` 正常；屬 Android 原生修復，已重建 release APK（versionName 1.3.55 / versionCode 2003055）。
+
 ---
 
 ## v1.3.55
