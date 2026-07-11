@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- (SMB-266) 第一銀行 Android 同步可靠性硬化：登入後帳戶入口與 frame 合約探測改以 URL/function/ID/table structural anchors 優先（`openIt`、`overview-account`、`tab1`、`table.CnbTable`、010103/010101），中文「我的帳戶」與英文 My Accounts 只作備援；交易 JSON 攔截只 replay GET，POST 候選請求因無 request body 改安全放行，保留原 WebView 請求並走 DOM fallback，避免空 body replay 破壞銀行查詢；補 `portal_changed` / `retry` / `reconnect` 分類與 `debugHint` 可行動提示；backend 第一銀行 contract check 同步檢查 frame structural predicates。新增 Android JVM/source/backend classifier 回歸測試。已執行 `backend npm run deploy:copy` 並重啟 StrawMB，`/health` 正常；屬 Android 原生修復，已重建 release APK（versionName 1.3.55 / versionCode 2003055）。
-
 ---
+
+## v1.3.56
+- (SMB-266) 第一銀行 Android 同步可靠性硬化：登入後帳戶入口與 frame 合約探測改以 URL/function/ID/table structural anchors 優先（`openIt`、`overview-account`、`tab1`、`table.CnbTable`、010103/010101），中文「我的帳戶」與英文 My Accounts 只作備援；交易 JSON 攔截只 replay GET，POST 候選請求因無 request body 改安全放行，保留原 WebView 請求並走 DOM fallback，避免空 body replay 破壞銀行查詢；補 `portal_changed` / `retry` / `reconnect` 分類與 `debugHint` 可行動提示；backend 第一銀行 contract check 同步檢查 frame structural predicates。新增 Android JVM/source/backend classifier 回歸測試。已執行 `backend npm run deploy:copy` 並重啟 StrawMB，`/health` 正常；屬 Android 原生修復，已重建 release APK（versionName 1.3.55 / versionCode 2003055）。
 
 ## v1.3.55
 - (SMB-265) 載具同步可靠性與安全硬化：Playwright CLI timeout 會大於 Cloudflare / selector wait，Cloudflare challenge 逾時穩定回 `einvoice_cloudflare_timeout` / HTTP 504；captcha dialog 關閉、submit 失敗、頁面卸載、查詢完成、取消與 TTL purge 都會釋放後端 scrape / Playwright session；`einvoice_captcha_required` 保留為 `captcha_required`，不再被通用 catch 覆寫為 `error`；`/api/einvoice/*` 除 client shared key 外強制既有 auth session + 有效會員 grant，並加入 user / IP / session rate limit 與每使用者一個 scrape session 併發限制；前端 scrape API 會附 auth session，舊手機條碼 / 查詢碼憑證會提示重新輸入財政部平台手機號碼與密碼。新增 Cloudflare timeout、cancel cleanup、captcha state、auth/rate/concurrency、legacy credential 回歸測試。
