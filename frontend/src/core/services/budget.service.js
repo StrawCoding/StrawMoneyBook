@@ -74,6 +74,10 @@ const defaultDependencies = {
     const mod = await import('../repositories/settings.repo.js')
     return mod.setSetting(...args)
   },
+  async getLedger(...args) {
+    const mod = await import('../repositories/ledger.repo.js')
+    return mod.getLedger(...args)
+  },
 }
 const dependencies = { ...defaultDependencies }
 
@@ -128,6 +132,17 @@ function normalizeBudgetPeriodMode(value) {
   return String(value ?? '').trim() === 'pay_cycle' ? 'pay_cycle' : 'calendar_month'
 }
 
+function normalizeLedgerTimeZone(value) {
+  const timeZone = normalizeText(value)
+  if (!timeZone) return 'Asia/Taipei'
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date('2026-01-01T00:00:00.000Z'))
+    return timeZone
+  } catch {
+    return 'Asia/Taipei'
+  }
+}
+
 function normalizePayDay(value) {
   return Math.min(31, Math.max(1, Math.trunc(Number(value ?? 1)) || 1))
 }
@@ -168,6 +183,51 @@ function shiftDayKey(dayKey, offsetDays) {
   const parts = parseDayKey(dayKey)
   if (!parts) return ''
   return new Date(Date.UTC(parts.year, parts.month - 1, parts.day + offsetDays)).toISOString().slice(0, 10)
+}
+
+function getZonedDateParts(dateLike, timeZone) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: normalizeLedgerTimeZone(timeZone),
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  })
+  const parts = formatter.formatToParts(dateLike instanceof Date ? dateLike : new Date(dateLike))
+  const read = (type) => Number(parts.find((item) => item.type === type)?.value ?? 0)
+  return {
+    year: read('year'),
+    month: read('month'),
+    day: read('day'),
+    hour: read('hour'),
+    minute: read('minute'),
+    second: read('second'),
+  }
+}
+
+function resolveZonedDateTimeUtcIso(parts, timeZone = 'Asia/Taipei') {
+  const desiredEpochMs = Date.UTC(
+    Number(parts?.year ?? 0),
+    Number(parts?.month ?? 1) - 1,
+    Number(parts?.day ?? 1),
+    Number(parts?.hour ?? 0),
+    Number(parts?.minute ?? 0),
+    Number(parts?.second ?? 0),
+  )
+  let resolvedEpochMs = desiredEpochMs
+
+  for (let index = 0; index < 3; index += 1) {
+    const actual = getZonedDateParts(resolvedEpochMs, timeZone)
+    const actualEpochMs = Date.UTC(actual.year, actual.month - 1, actual.day, actual.hour, actual.minute, actual.second)
+    const diffMs = desiredEpochMs - actualEpochMs
+    if (diffMs === 0) break
+    resolvedEpochMs += diffMs
+  }
+
+  return new Date(resolvedEpochMs).toISOString()
 }
 
 export function resolveCalendarBudgetPeriod(monthKey) {
@@ -458,13 +518,13 @@ async function rollbackDailyPoolCategoryItems(ledgerId, state, containerId, cate
   }
 }
 
-function todayRangeUtc() {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0)
+function todayRangeUtc(timeZone = 'Asia/Taipei') {
+  const nowParts = getZonedDateParts(new Date(), timeZone)
+  const todayKey = dayKeyFromParts(nowParts.year, nowParts.month, nowParts.day)
+  const tomorrow = parseDayKey(shiftDayKey(todayKey, 1))
   return {
-    startUtc: start.toISOString(),
-    endUtc: end.toISOString(),
+    startUtc: resolveZonedDateTimeUtcIso({ ...nowParts, hour: 0, minute: 0, second: 0 }, timeZone),
+    endUtc: resolveZonedDateTimeUtcIso({ ...tomorrow, hour: 0, minute: 0, second: 0 }, timeZone),
   }
 }
 
@@ -675,14 +735,13 @@ function resolveBudgetItemForMonth(item, monthKey, usedDays = []) {
   return resolveBudgetItemForPeriod(item, period, usedDays)
 }
 
-export function monthRangeUtc(monthKey) {
+export function monthRangeUtc(monthKey, timeZone = 'Asia/Taipei') {
   const [year, month] = monthKey.split('-').map((part) => Number(part))
-  const start = new Date(year, month - 1, 1, 0, 0, 0)
-  const end = new Date(year, month, 1, 0, 0, 0)
+  const next = shiftMonth(year, month, 1)
 
   return {
-    startUtc: start.toISOString(),
-    endUtc: end.toISOString(),
+    startUtc: resolveZonedDateTimeUtcIso({ year, month, day: 1, hour: 0, minute: 0, second: 0 }, timeZone),
+    endUtc: resolveZonedDateTimeUtcIso({ year: next.year, month: next.month, day: 1, hour: 0, minute: 0, second: 0 }, timeZone),
   }
 }
 
@@ -756,8 +815,10 @@ export async function loadBudgetSnapshot(ledgerId, monthKey) {
 
 export async function loadBudgetSnapshotForPeriod(ledgerId, period) {
   const budget = await ensureBudgetForPeriod(ledgerId, period)
-  const { startUtc, endUtc } = dateRangeUtc(period.startDate, period.endDate)
-  const { startUtc: todayStartUtc, endUtc: todayEndUtc } = todayRangeUtc()
+  const ledger = await dependencies.getLedger(ledgerId)
+  const ledgerTimeZone = normalizeLedgerTimeZone(ledger?.timezone)
+  const { startUtc, endUtc } = dateRangeUtc(period.startDate, period.endDate, ledgerTimeZone)
+  const { startUtc: todayStartUtc, endUtc: todayEndUtc } = todayRangeUtc(ledgerTimeZone)
   const [rawItems, spentRows, todaySpentRows, usedOccurrenceRows, budgetSavePreferences, rawContainers] = await Promise.all([
     dependencies.listBudgetItems(ledgerId, budget.id),
     dependencies.computeBudgetSpentByCategory(ledgerId, startUtc, endUtc),
@@ -789,15 +850,15 @@ export async function loadBudgetSnapshotForPeriod(ledgerId, period) {
   }
 }
 
-export function dateRangeUtc(startDate, endDate) {
+export function dateRangeUtc(startDate, endDate, timeZone = 'Asia/Taipei') {
   const start = parseDayKey(startDate)
   const end = parseDayKey(endDate)
-  if (!start || !end) return monthRangeUtc(monthKeyFromDate())
+  if (!start || !end) return monthRangeUtc(monthKeyFromDate(), timeZone)
   const endNext = shiftDayKey(endDate, 1)
   const endParts = parseDayKey(endNext)
   return {
-    startUtc: new Date(start.year, start.month - 1, start.day, 0, 0, 0).toISOString(),
-    endUtc: new Date(endParts.year, endParts.month - 1, endParts.day, 0, 0, 0).toISOString(),
+    startUtc: resolveZonedDateTimeUtcIso({ ...start, hour: 0, minute: 0, second: 0 }, timeZone),
+    endUtc: resolveZonedDateTimeUtcIso({ ...endParts, hour: 0, minute: 0, second: 0 }, timeZone),
   }
 }
 

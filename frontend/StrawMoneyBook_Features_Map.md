@@ -559,7 +559,7 @@ UI composable 目錄：`src/ui/composables/`
 - 函數（新增重點）：`resolveBudgetPeriodForLedger`, `previousBudgetPeriod`, `nextBudgetPeriod`, `loadBudgetSnapshotForPeriod`, `listInclusiveMonthKeys`, `saveBudgetContainerRange`, `saveBudgetItemRange`
 - 變數（0）：無
 - 類別（0）：無
-- 補充：service 會驗證預算存款的來源/目標帳戶、同分類衝突與 ledger-scoped `retroactiveMode`，並把整期預算存款與 item-level 預算存款設定一起帶進 snapshot / 複製上月流程。SMB-268 後 `listInclusiveMonthKeys` 以純 `YYYY-MM` 解析產生 inclusive month range；`saveBudgetContainerRange` 在不改資料表 schema 的前提下，將新共同預算池 fan-out 至每個目標月份的正常 budget/container，並在任何目標月份同名衝突時整批阻擋；`saveBudgetItemRange` 將新一般分類預算項目 fan-out 至每個目標月份的正常 budget item，保留金額模式、日期日均規則與預算存款設定，入池項目以目標月同名共同池對應，且在同分類衝突或目標月缺池時零寫入阻擋。SMB-269 後新增通用預算期間解析：曆月維持 `YYYY-MM`，發薪週期使用 `pay:YYYY-MM-DD:YYYY-MM-DD` 期間 key、起訖日與 mode，不搬移交易、不拆固定額；日額 / 日池依實際週期天數計算，指定日曆日規則只計算週期範圍內符合日期。
+- 補充：service 會驗證預算存款的來源/目標帳戶、同分類衝突與 ledger-scoped `retroactiveMode`，並把整期預算存款與 item-level 預算存款設定一起帶進 snapshot / 複製上月流程。SMB-268 後 `listInclusiveMonthKeys` 以純 `YYYY-MM` 解析產生 inclusive month range；`saveBudgetContainerRange` 在不改資料表 schema 的前提下，將新共同預算池 fan-out 至每個目標月份的正常 budget/container，並在任何目標月份同名衝突時整批阻擋；`saveBudgetItemRange` 將新一般分類預算項目 fan-out 至每個目標月份的正常 budget item，保留金額模式、日期日均規則與預算存款設定，入池項目以目標月同名共同池對應，且在同分類衝突或目標月缺池時零寫入阻擋。SMB-269 後新增通用預算期間解析：曆月維持 `YYYY-MM`，發薪週期使用 `pay:YYYY-MM-DD:YYYY-MM-DD` 期間 key、起訖日與 mode，不搬移交易、不拆固定額；日額 / 日池依實際週期天數計算，指定日曆日規則只計算週期範圍內符合日期；snapshot 的期間與今日花費查詢會以帳本時區轉 UTC，避免本地與 CI 執行環境時區不同造成交易歸期漂移。
 
 ### `src/core/services/budget-save.service.js`
 - 函數（1）：`runBudgetSaveIfDue`

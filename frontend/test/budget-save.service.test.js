@@ -368,3 +368,72 @@ test('budget save settles shared budget pool month surplus with budget_container
   assert.equal(transferCalls[0].amountMinor, 130000)
   assert.match(transferCalls[0].note, /^預算存款：生活費 2026-02$/)
 })
+
+test('budget save settles pay-cycle shared daily pools only after the inclusive period end', async () => {
+  const transferCalls = []
+  const spentRanges = []
+  const deps = createBaseDependencies({
+    async listBudgetsWithSaveRules() {
+      return [{
+        id: 'budget_pay',
+        month_key: 'pay:2026-02-25',
+        period_key: 'pay:2026-02-25:2026-03-24',
+        period_start_date: '2026-02-25',
+        period_end_date: '2026-03-24',
+        period_mode: 'pay_cycle',
+      }]
+    },
+    async listBudgetContainers() {
+      return [{
+        id: 'bc_daily',
+        name: '日用池',
+        amount_minor: 1000,
+        period_mode: 'daily',
+        budget_save_enabled: 1,
+        budget_save_target_account_id: 'jar_trip',
+        budget_save_source_account_id: 'acc_main',
+      }]
+    },
+    async listBudgetItems() {
+      return [{
+        id: 'bi_food',
+        category_id: 'cat_food',
+        budget_container_id: 'bc_daily',
+        amount_minor: 0,
+        amount_mode: 'fixed',
+        day_rule_unit: 'none',
+        day_rule_values_json: '[]',
+        budget_save_enabled: 0,
+      }]
+    },
+    async computeBudgetSpentByCategory(_ledgerId, startUtc, endUtc) {
+      spentRanges.push({ startUtc, endUtc })
+      return [{ category_id: 'cat_food', spent_minor: 3000 }]
+    },
+    async createTransfer(_ledgerId, payload) {
+      transferCalls.push(payload)
+      return { transferGroupId: `tf_${transferCalls.length}` }
+    },
+  })
+  setBudgetSaveDependenciesForTest(deps)
+
+  const beforeClose = await runBudgetSaveIfDue('ledger_1', {
+    now: new Date('2026-03-24T12:00:00+08:00'),
+  })
+
+  assert.equal(beforeClose.createdCount, 0)
+  assert.equal(transferCalls.length, 0)
+
+  const afterClose = await runBudgetSaveIfDue('ledger_1', {
+    now: new Date('2026-03-25T12:00:00+08:00'),
+  })
+
+  assert.equal(afterClose.createdCount, 1)
+  assert.equal(transferCalls[0].amountMinor, 25000)
+  assert.match(transferCalls[0].note, /^預算存款：日用池 2026-02-25~2026-03-24$/)
+  assert.equal(deps.settlements.get('budget_container_month:bc_daily:pay:2026-02-25:2026-03-24')?.status, 'settled')
+  assert.deepEqual(spentRanges.at(-1), {
+    startUtc: '2026-02-24T16:00:00.000Z',
+    endUtc: '2026-03-24T16:00:00.000Z',
+  })
+})

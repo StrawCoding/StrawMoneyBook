@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   copyPreviousMonthBudget,
+  dateRangeUtc,
   listInclusiveMonthKeys,
   loadBudgetSnapshotForPeriod,
   resetBudgetServiceDependenciesForTest,
@@ -72,6 +73,42 @@ test('resolveBudgetPeriodForLedger handles pay-cycle short months leap years and
   )
 })
 
+test('resolveBudgetPeriodForLedger treats pay day as the first inclusive day and the previous day as the prior period end', () => {
+  assert.deepEqual(
+    resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 25 }, '2026-03-25'),
+    {
+      mode: 'pay_cycle',
+      key: 'pay:2026-03-25:2026-04-24',
+      monthKey: 'pay:2026-03-25',
+      startDate: '2026-03-25',
+      endDate: '2026-04-24',
+      label: '2026-03-25~2026-04-24',
+      nextPayDate: '2026-04-25',
+    },
+  )
+  assert.equal(
+    resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 25 }, '2026-03-24').key,
+    'pay:2026-02-25:2026-03-24',
+  )
+})
+
+test('dateRangeUtc uses the ledger timezone instead of the CI runner timezone', () => {
+  assert.deepEqual(
+    dateRangeUtc('2026-02-25', '2026-03-24', 'Asia/Taipei'),
+    {
+      startUtc: '2026-02-24T16:00:00.000Z',
+      endUtc: '2026-03-24T16:00:00.000Z',
+    },
+  )
+  assert.deepEqual(
+    dateRangeUtc('2026-02-25', '2026-03-24', 'UTC'),
+    {
+      startUtc: '2026-02-25T00:00:00.000Z',
+      endUtc: '2026-03-25T00:00:00.000Z',
+    },
+  )
+})
+
 test('resolveContainerPeriodAmountMinor multiplies daily pools by actual pay-cycle days', () => {
   const period = resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 25 }, '2026-03-01')
   assert.equal(resolveContainerPeriodAmountMinor({ amount_minor: 1000, period_mode: 'daily' }, period), 28000)
@@ -109,6 +146,9 @@ test('loadBudgetSnapshotForPeriod uses pay-cycle date range and counts monthday 
     },
     async getSetting() {
       return null
+    },
+    async getLedger() {
+      return { id: 'ledger_1', timezone: 'Asia/Taipei' }
     },
     async createBudget() {
       throw new Error('should not create budget')
