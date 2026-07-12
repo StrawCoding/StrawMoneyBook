@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- (SMB-268) 預算新增支援跨月共同預算池與一般分類預算項目：新增池或新增分類項目可選「套用至月份」跨月／跨年建立，服務層仍維持每月獨立 budget/container/item 並在寫入前檢查目標月份衝突，避免 partial write；一般項目會保留金額模式、日期日均規則、預算存款設定與未入池 / 同名共同池對應，既有項目編輯仍只改目前月；月池維持每月金額，日池維持每日費率並依各月天數計算，日池 range 寫入失敗時會清掉新建 child item 並還原原本項目。新增 node service/source tests 與 `playwright:budget-cross-month` app-shell 流程。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
-
 ---
+
+## v1.3.57
+- (SMB-268) 預算新增支援跨月共同預算池與一般分類預算項目：新增池或新增分類項目可選「套用至月份」跨月／跨年建立，服務層仍維持每月獨立 budget/container/item 並在寫入前檢查目標月份衝突，避免 partial write；一般項目會保留金額模式、日期日均規則、預算存款設定與未入池 / 同名共同池對應，既有項目編輯仍只改目前月；月池維持每月金額，日池維持每日費率並依各月天數計算，日池 range 寫入失敗時會清掉新建 child item 並還原原本項目。新增 node service/source tests 與 `playwright:budget-cross-month` app-shell 流程。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
 
 ## v1.3.56
 - (SMB-266) 第一銀行 Android 同步可靠性硬化：登入後帳戶入口與 frame 合約探測改以 URL/function/ID/table structural anchors 優先（`openIt`、`overview-account`、`tab1`、`table.CnbTable`、010103/010101），中文「我的帳戶」與英文 My Accounts 只作備援；交易 JSON 攔截只 replay GET，POST 候選請求因無 request body 改安全放行，保留原 WebView 請求並走 DOM fallback，避免空 body replay 破壞銀行查詢；補 `portal_changed` / `retry` / `reconnect` 分類與 `debugHint` 可行動提示；backend 第一銀行 contract check 同步檢查 frame structural predicates。新增 Android JVM/source/backend classifier 回歸測試。已執行 `backend npm run deploy:copy` 並重啟 StrawMB，`/health` 正常；屬 Android 原生修復，已重建 release APK（versionName 1.3.55 / versionCode 2003055）。
