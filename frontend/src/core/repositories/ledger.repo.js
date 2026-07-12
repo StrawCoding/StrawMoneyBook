@@ -32,7 +32,9 @@ function isForeignKeyError(error) {
 
 export async function listLedgers() {
   const result = await query(
-    `SELECT id, name, currency_code, timezone, color, icon, sort_order, is_archived, created_at, updated_at
+    `SELECT id, name, currency_code, timezone, color, icon,
+            budget_period_mode, budget_pay_day,
+            sort_order, is_archived, created_at, updated_at
      FROM ledgers
      WHERE deleted_at IS NULL
      ORDER BY sort_order ASC, created_at ASC;`,
@@ -42,7 +44,9 @@ export async function listLedgers() {
 
 export async function getLedger(ledgerId) {
   const result = await query(
-    `SELECT id, name, currency_code, timezone, color, icon, sort_order, is_archived, created_at, updated_at
+    `SELECT id, name, currency_code, timezone, color, icon,
+            budget_period_mode, budget_pay_day,
+            sort_order, is_archived, created_at, updated_at
      FROM ledgers
      WHERE id = ? AND deleted_at IS NULL
      LIMIT 1;`,
@@ -59,8 +63,10 @@ export async function createLedger(input) {
 
   await run(
     `INSERT INTO ledgers (
-      id, name, currency_code, timezone, color, icon, sort_order, is_archived, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?);`,
+      id, name, currency_code, timezone, color, icon,
+      budget_period_mode, budget_pay_day,
+      sort_order, is_archived, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?);`,
     [
       id,
       input.name,
@@ -68,6 +74,8 @@ export async function createLedger(input) {
       input.timezone ?? 'Asia/Taipei',
       input.color ?? null,
       input.icon ?? null,
+      input.budgetPeriodMode === 'pay_cycle' ? 'pay_cycle' : 'calendar_month',
+      Math.min(31, Math.max(1, Math.trunc(Number(input.budgetPayDay ?? 1)) || 1)),
       input.sortOrder ?? nextSortOrder,
       now,
       now,
@@ -79,6 +87,20 @@ export async function createLedger(input) {
 
 export async function renameLedger(ledgerId, name) {
   await run('UPDATE ledgers SET name = ?, updated_at = ? WHERE id = ?;', [name, nowIso(), ledgerId])
+  return getLedger(ledgerId)
+}
+
+export async function updateLedgerBudgetPeriodSettings(ledgerId, input = {}) {
+  const mode = String(input.budgetPeriodMode ?? '').trim() === 'pay_cycle' ? 'pay_cycle' : 'calendar_month'
+  const payDay = Math.min(31, Math.max(1, Math.trunc(Number(input.budgetPayDay ?? 1)) || 1))
+  await run(
+    `UPDATE ledgers
+     SET budget_period_mode = ?,
+         budget_pay_day = ?,
+         updated_at = ?
+     WHERE id = ? AND deleted_at IS NULL;`,
+    [mode, payDay, nowIso(), ledgerId],
+  )
   return getLedger(ledgerId)
 }
 

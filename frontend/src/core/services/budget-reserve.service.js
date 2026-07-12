@@ -129,6 +129,78 @@ function countPendingRuleDays(item, monthKey, referenceDate, timeZone, options =
   return total
 }
 
+function parseDayKey(dayKey) {
+  const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dayKey ?? '').trim())
+  if (!matched) return null
+  const year = Number(matched[1])
+  const month = Number(matched[2])
+  const day = Number(matched[3])
+  const date = new Date(year, month - 1, day)
+  if (
+    Number.isNaN(date.getTime())
+    || date.getFullYear() !== year
+    || date.getMonth() !== month - 1
+    || date.getDate() !== day
+  ) return null
+  return { year, month, day }
+}
+
+function daySortKey(parts) {
+  return parts.year * 10000 + parts.month * 100 + parts.day
+}
+
+function countMatchingRuleDaysInRange(startDate, endDate, unit, values, minDate = startDate) {
+  const start = parseDayKey(startDate)
+  const end = parseDayKey(endDate)
+  const min = parseDayKey(minDate)
+  if (!start || !end || !min || unit === 'none' || !Array.isArray(values) || values.length <= 0) return 0
+  const startMs = Date.UTC(start.year, start.month - 1, start.day)
+  const endMs = Date.UTC(end.year, end.month - 1, end.day)
+  if (endMs < startMs) return 0
+  const minKey = daySortKey(min)
+  const valueSet = new Set(values)
+  let total = 0
+  for (let ms = startMs; ms <= endMs; ms += 86400000) {
+    const date = new Date(ms)
+    const parts = { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() }
+    if (daySortKey(parts) < minKey) continue
+    if (unit === 'monthday') {
+      if (valueSet.has(parts.day)) total += 1
+      continue
+    }
+    const weekday = date.getUTCDay() === 0 ? 7 : date.getUTCDay()
+    if (valueSet.has(weekday)) total += 1
+  }
+  return total
+}
+
+function countPendingRuleDaysInPeriod(item, period, referenceDate, timeZone, options = {}) {
+  if (normalizeAmountMode(item?.amount_mode) !== 'daily_average') return 0
+  const referenceParts = getDatePartsInTimeZone(referenceDate, timeZone)
+  if (!period?.startDate || !period?.endDate || !referenceParts) return 0
+
+  const unit = normalizeDayRuleUnit(item?.day_rule_unit)
+  const values = normalizeDayRuleValues(item?.day_rule_values ?? item?.day_rule_values_json, unit)
+  if (unit === 'none' || values.length <= 0) return 0
+
+  const referenceKey = `${referenceParts.year}-${String(referenceParts.month).padStart(2, '0')}-${String(referenceParts.day).padStart(2, '0')}`
+  const minDate = options.includeReferenceDay === false
+    ? new Date(Date.UTC(referenceParts.year, referenceParts.month - 1, referenceParts.day + 1)).toISOString().slice(0, 10)
+    : referenceKey
+  const start = parseDayKey(period.startDate)
+  const end = parseDayKey(period.endDate)
+  const reference = parseDayKey(minDate)
+  if (!start || !end || !reference) return 0
+  if (daySortKey(reference) > daySortKey(end)) return 0
+  return countMatchingRuleDaysInRange(
+    period.startDate,
+    period.endDate,
+    unit,
+    values,
+    daySortKey(reference) > daySortKey(start) ? minDate : period.startDate,
+  )
+}
+
 export function countRemainingCalendarDaysInMonth(monthKey, referenceDate, timeZone, options = {}) {
   const monthInfo = parseMonthKey(monthKey)
   const referenceParts = getDatePartsInTimeZone(referenceDate, timeZone)
@@ -147,8 +219,38 @@ export function countRemainingCalendarDaysInMonth(monthKey, referenceDate, timeZ
   return daysInMonth - startDay + 1
 }
 
+export function countRemainingCalendarDaysInPeriod(period, referenceDate, timeZone, options = {}) {
+  const start = parseDayKey(period?.startDate)
+  const end = parseDayKey(period?.endDate)
+  const referenceParts = getDatePartsInTimeZone(referenceDate, timeZone)
+  if (!start || !end || !referenceParts) return 0
+  const referenceKey = options.includeReferenceDay === false
+    ? new Date(Date.UTC(referenceParts.year, referenceParts.month - 1, referenceParts.day + 1)).toISOString().slice(0, 10)
+    : `${referenceParts.year}-${String(referenceParts.month).padStart(2, '0')}-${String(referenceParts.day).padStart(2, '0')}`
+  const min = parseDayKey(referenceKey)
+  if (!min) return 0
+  const startMs = Date.UTC(start.year, start.month - 1, start.day)
+  const endMs = Date.UTC(end.year, end.month - 1, end.day)
+  const minMs = Date.UTC(min.year, min.month - 1, min.day)
+  const effectiveStartMs = Math.max(startMs, minMs)
+  if (effectiveStartMs > endMs) return 0
+  return Math.round((endMs - effectiveStartMs) / 86400000) + 1
+}
+
 export function computeDailyPoolReservedMinor(containers = [], monthKey, referenceDate, timeZone, options = {}) {
   const remainingDays = countRemainingCalendarDaysInMonth(monthKey, referenceDate, timeZone, options)
+  if (remainingDays <= 0) return 0
+
+  return (containers ?? []).reduce((total, container) => {
+    if (normalizeContainerPeriodMode(container?.period_mode) !== 'daily') return total
+    const amountMinor = Math.max(0, Math.round(Number(container?.amount_minor ?? 0) || 0))
+    if (amountMinor <= 0) return total
+    return total + (amountMinor * remainingDays)
+  }, 0)
+}
+
+export function computeDailyPoolReservedMinorForPeriod(containers = [], period, referenceDate, timeZone, options = {}) {
+  const remainingDays = countRemainingCalendarDaysInPeriod(period, referenceDate, timeZone, options)
   if (remainingDays <= 0) return 0
 
   return (containers ?? []).reduce((total, container) => {
@@ -178,5 +280,25 @@ export function computeMonthlyReservedMinor(
 ) {
   const dailyAverageReserved = computeReservedMinor(items, monthKey, referenceDate, timeZone, options)
   const dailyPoolReserved = computeDailyPoolReservedMinor(containers, monthKey, referenceDate, timeZone, options)
+  return dailyAverageReserved + dailyPoolReserved
+}
+
+export function computePeriodReservedMinor(
+  items = [],
+  containers = [],
+  period,
+  referenceDate = new Date(),
+  timeZone,
+  options = {},
+) {
+  if (!period?.startDate || !period?.endDate) {
+    return computeMonthlyReservedMinor(items, containers, period?.monthKey ?? period?.key, referenceDate, timeZone, options)
+  }
+  const dailyAverageReserved = (items ?? []).reduce((total, item) => {
+    const amountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0) || 0))
+    if (amountMinor <= 0) return total
+    return total + (amountMinor * countPendingRuleDaysInPeriod(item, period, referenceDate, timeZone, options))
+  }, 0)
+  const dailyPoolReserved = computeDailyPoolReservedMinorForPeriod(containers, period, referenceDate, timeZone, options)
   return dailyAverageReserved + dailyPoolReserved
 }

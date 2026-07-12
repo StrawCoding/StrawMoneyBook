@@ -7,12 +7,24 @@
 
     <article class="card panel">
       <header class="row">
-        <h3>{{ t('budgeting.monthly_budget') }}</h3>
+        <div>
+          <h3>{{ budgetPeriodTitle }}</h3>
+          <p v-if="isPayCycleMode" class="muted period-copy">
+            {{ t('budgeting.period.pay_cycle_range', { start: budgetStore.period?.startDate, end: budgetStore.period?.endDate }) }}
+            <span v-if="budgetStore.period?.nextPayDate"> · {{ t('budgeting.period.next_pay_day', { date: budgetStore.period.nextPayDate }) }}</span>
+          </p>
+        </div>
         <HomeRangePicker
+          v-if="!isPayCycleMode"
           mode="month"
           :month="budgetStore.monthKey"
           @update:month="pickMonth"
         />
+        <div v-else class="row period-nav">
+          <button type="button" class="btn" @click="budgetStore.goPreviousPeriod">{{ t('budgeting.period.previous') }}</button>
+          <button type="button" class="btn" @click="budgetStore.loadCurrentPeriod">{{ t('budgeting.period.current') }}</button>
+          <button type="button" class="btn" @click="budgetStore.goNextPeriod">{{ t('budgeting.period.next') }}</button>
+        </div>
       </header>
 
       <div class="stack stat" :class="{ 'month-over': budgetStore.isMonthOver }">
@@ -21,7 +33,7 @@
           :over="budgetStore.isMonthOver"
           :percent-label="monthUsedPercentLabel"
           :subtitle="t('budgeting.used')"
-          :aria-label="t('budgeting.monthly_budget')"
+          :aria-label="budgetPeriodTitle"
         />
         <div class="stat-grid">
           <div class="stat-cell">
@@ -58,7 +70,7 @@
       </section>
 
       <div class="row action-row">
-        <button class="btn" @click="copyPreviousMonth">{{ t('budgeting.copy_previous') }}</button>
+        <button v-if="!isPayCycleMode" class="btn" @click="copyPreviousMonth">{{ t('budgeting.copy_previous') }}</button>
         <button class="btn" @click="openCreateContainer">{{ t('budgeting.container.add') }}</button>
         <button class="btn primary" @click="openCreate">{{ t('budgeting.add_item') }}</button>
       </div>
@@ -427,6 +439,7 @@ import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useUiStore } from '@/ui/stores/ui.store'
+import { useLedgerStore } from '@/ui/stores/ledger.store'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import BudgetItemSheet from '@/ui/components/budget/BudgetItemSheet.vue'
 import BudgetContainerSheet from '@/ui/components/budget/BudgetContainerSheet.vue'
@@ -443,6 +456,7 @@ const budgetStore = useBudgetStore()
 const accountStore = useAccountStore()
 const categoryStore = useCategoryStore()
 const uiStore = useUiStore()
+const ledgerStore = useLedgerStore()
 const { t, locale } = useI18n()
 
 const isSheetOpen = ref(false)
@@ -494,6 +508,10 @@ const retroactiveModeOptions = computed(() => ([
   { value: 'manual', label: t('budgeting.budget_save.retroactive.manual') },
   { value: 'delta', label: t('budgeting.budget_save.retroactive.delta') },
 ]))
+const isPayCycleMode = computed(() => String(ledgerStore.activeLedger?.budget_period_mode ?? '') === 'pay_cycle')
+const budgetPeriodTitle = computed(() => (
+  isPayCycleMode.value ? t('budgeting.period.pay_cycle_budget') : t('budgeting.monthly_budget')
+))
 
 const containerBudgetSaveEnabledIds = computed(() => (
   budgetStore.containers
@@ -1333,6 +1351,15 @@ h2, h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.period-copy {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.period-nav {
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 label {
   display: grid;

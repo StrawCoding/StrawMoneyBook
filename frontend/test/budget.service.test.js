@@ -4,8 +4,11 @@ import assert from 'node:assert/strict'
 import {
   copyPreviousMonthBudget,
   listInclusiveMonthKeys,
+  loadBudgetSnapshotForPeriod,
   resetBudgetServiceDependenciesForTest,
+  resolveBudgetPeriodForLedger,
   resolveContainerMonthlyAmountMinor,
+  resolveContainerPeriodAmountMinor,
   saveBudgetContainer,
   saveBudgetContainerRange,
   saveBudgetItem,
@@ -32,6 +35,94 @@ test('listInclusiveMonthKeys rejects invalid or reversed month ranges', () => {
     () => listInclusiveMonthKeys('2026-04', '2026-03'),
     { code: 'budgeting.container.error.invalid_month_range' },
   )
+})
+
+test('resolveBudgetPeriodForLedger handles pay-cycle short months leap years and cross-year ranges', () => {
+  assert.deepEqual(
+    resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 25 }, '2026-03-01'),
+    {
+      mode: 'pay_cycle',
+      key: 'pay:2026-02-25:2026-03-24',
+      monthKey: 'pay:2026-02-25',
+      startDate: '2026-02-25',
+      endDate: '2026-03-24',
+      label: '2026-02-25~2026-03-24',
+      nextPayDate: '2026-03-25',
+    },
+  )
+  assert.equal(
+    resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 31 }, '2026-03-01').startDate,
+    '2026-02-28',
+  )
+  assert.equal(
+    resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 31 }, '2024-03-01').startDate,
+    '2024-02-29',
+  )
+  assert.deepEqual(
+    resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 30 }, '2027-01-05'),
+    {
+      mode: 'pay_cycle',
+      key: 'pay:2026-12-30:2027-01-29',
+      monthKey: 'pay:2026-12-30',
+      startDate: '2026-12-30',
+      endDate: '2027-01-29',
+      label: '2026-12-30~2027-01-29',
+      nextPayDate: '2027-01-30',
+    },
+  )
+})
+
+test('resolveContainerPeriodAmountMinor multiplies daily pools by actual pay-cycle days', () => {
+  const period = resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 25 }, '2026-03-01')
+  assert.equal(resolveContainerPeriodAmountMinor({ amount_minor: 1000, period_mode: 'daily' }, period), 28000)
+  assert.equal(resolveContainerPeriodAmountMinor({ amount_minor: 1000, period_mode: 'monthly' }, period), 1000)
+})
+
+test('loadBudgetSnapshotForPeriod uses pay-cycle date range and counts monthday rules inside range', async () => {
+  const calls = []
+  const period = resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 25 }, '2026-03-01')
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByPeriod(_ledgerId, periodKey) {
+      assert.equal(periodKey, 'pay:2026-02-25:2026-03-24')
+      return { id: 'budget_pay', period_key: periodKey, month_key: 'pay:2026-02-25' }
+    },
+    async listBudgetItems() {
+      return [{
+        id: 'bi_food',
+        category_id: 'cat_food',
+        amount_minor: 1000,
+        amount_mode: 'daily_average',
+        day_rule_unit: 'monthday',
+        day_rule_values_json: '[24,25,31]',
+      }]
+    },
+    async listBudgetContainers() {
+      return []
+    },
+    async computeBudgetSpentByCategory(_ledgerId, startUtc, endUtc) {
+      calls.push({ startUtc, endUtc })
+      return []
+    },
+    async listBudgetUsageDaysByCategory(_ledgerId, startUtc, endUtc) {
+      calls.push({ usageStartUtc: startUtc, usageEndUtc: endUtc })
+      return []
+    },
+    async getSetting() {
+      return null
+    },
+    async createBudget() {
+      throw new Error('should not create budget')
+    },
+  })
+
+  const snapshot = await loadBudgetSnapshotForPeriod('ledger_1', period)
+
+  assert.equal(snapshot.items[0].occurrence_count, 2)
+  assert.equal(snapshot.items[0].resolved_amount_minor, 2000)
+  assert.equal(calls[0].startUtc.slice(0, 10), '2026-02-24')
+  assert.equal(calls[0].endUtc.slice(0, 10), '2026-03-24')
+  assert.equal(calls[2].usageStartUtc.slice(0, 10), '2026-02-24')
+  assert.equal(calls[2].usageEndUtc.slice(0, 10), '2026-03-24')
 })
 
 test('copyPreviousMonthBudget preserves budget save settings on items and total config', async () => {

@@ -19,6 +19,15 @@ function buildBudgetSaveSettlementId(scopeType, scopeRefId, periodKey) {
   return `${String(scopeType ?? '').trim()}:${String(scopeRefId ?? '').trim()}:${String(periodKey ?? '').trim()}`
 }
 
+function normalizeBudgetPeriodMode(value) {
+  return String(value ?? '').trim() === 'pay_cycle' ? 'pay_cycle' : 'calendar_month'
+}
+
+function normalizePeriodKey(value, fallback) {
+  const normalized = String(value ?? '').trim()
+  return normalized || String(fallback ?? '').trim()
+}
+
 function refundedSourceExclusionSql(sourceAlias = 'transactions') {
   return `NOT EXISTS (
     SELECT 1
@@ -69,7 +78,12 @@ function budgetSpentMinorSql(sourceAlias = 'transactions') {
 export async function getBudgetByMonth(ledgerId, monthKey) {
   assertLedgerId(ledgerId)
   const result = await query(
-    `SELECT ledger_id, id, month_key, name,
+    `SELECT ledger_id, id, month_key,
+            COALESCE(period_key, month_key) AS period_key,
+            COALESCE(period_start_date, month_key || '-01') AS period_start_date,
+            COALESCE(period_end_date, date(month_key || '-01', '+1 month', '-1 day')) AS period_end_date,
+            COALESCE(period_mode, 'calendar_month') AS period_mode,
+            name,
             include_transfers, include_loan_repayments, include_reimbursed_expenses,
             budget_save_total_enabled, budget_save_total_target_account_id, budget_save_total_source_account_id,
             created_at, updated_at
@@ -81,6 +95,30 @@ export async function getBudgetByMonth(ledgerId, monthKey) {
   return firstRow(result)
 }
 
+export async function getBudgetByPeriod(ledgerId, periodKey) {
+  assertLedgerId(ledgerId)
+  const key = String(periodKey ?? '').trim()
+  if (!key) return null
+  const result = await query(
+    `SELECT ledger_id, id, month_key,
+            COALESCE(period_key, month_key) AS period_key,
+            COALESCE(period_start_date, month_key || '-01') AS period_start_date,
+            COALESCE(period_end_date, date(month_key || '-01', '+1 month', '-1 day')) AS period_end_date,
+            COALESCE(period_mode, 'calendar_month') AS period_mode,
+            name,
+            include_transfers, include_loan_repayments, include_reimbursed_expenses,
+            budget_save_total_enabled, budget_save_total_target_account_id, budget_save_total_source_account_id,
+            created_at, updated_at
+     FROM budgets
+     WHERE ledger_id = ?
+       AND COALESCE(period_key, month_key) = ?
+       AND deleted_at IS NULL
+     LIMIT 1;`,
+    [ledgerId, key],
+  )
+  return firstRow(result)
+}
+
 export async function createBudget(ledgerId, input) {
   assertLedgerId(ledgerId)
   const id = input.id ?? createId('budget')
@@ -88,15 +126,21 @@ export async function createBudget(ledgerId, input) {
 
   await run(
     `INSERT INTO budgets (
-      ledger_id, id, month_key, name,
+      ledger_id, id, month_key,
+      period_key, period_start_date, period_end_date, period_mode,
+      name,
       include_transfers, include_loan_repayments, include_reimbursed_expenses,
       budget_save_total_enabled, budget_save_total_target_account_id, budget_save_total_source_account_id,
       created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       ledgerId,
       id,
       input.monthKey,
+      normalizePeriodKey(input.periodKey, input.monthKey),
+      input.periodStartDate ?? null,
+      input.periodEndDate ?? null,
+      normalizeBudgetPeriodMode(input.periodMode),
       input.name ?? null,
       input.includeTransfers ? 1 : 0,
       input.includeLoanRepayments ? 1 : 0,
@@ -109,13 +153,18 @@ export async function createBudget(ledgerId, input) {
     ],
   )
 
-  return getBudgetByMonth(ledgerId, input.monthKey)
+  return getBudgetByPeriod(ledgerId, normalizePeriodKey(input.periodKey, input.monthKey))
 }
 
 export async function listBudgetsWithSaveRules(ledgerId) {
   assertLedgerId(ledgerId)
   const result = await query(
-    `SELECT b.ledger_id, b.id, b.month_key, b.name,
+    `SELECT b.ledger_id, b.id, b.month_key,
+            COALESCE(b.period_key, b.month_key) AS period_key,
+            COALESCE(b.period_start_date, b.month_key || '-01') AS period_start_date,
+            COALESCE(b.period_end_date, date(b.month_key || '-01', '+1 month', '-1 day')) AS period_end_date,
+            COALESCE(b.period_mode, 'calendar_month') AS period_mode,
+            b.name,
             b.include_transfers, b.include_loan_repayments, b.include_reimbursed_expenses,
             b.budget_save_total_enabled, b.budget_save_total_target_account_id, b.budget_save_total_source_account_id,
             b.created_at, b.updated_at
@@ -139,7 +188,7 @@ export async function listBudgetsWithSaveRules(ledgerId) {
              AND bc.budget_save_enabled = 1
          )
        )
-     ORDER BY b.month_key ASC, b.created_at ASC;`,
+     ORDER BY COALESCE(b.period_start_date, b.month_key || '-01') ASC, b.created_at ASC;`,
     [ledgerId],
   )
   return rowsOf(result)

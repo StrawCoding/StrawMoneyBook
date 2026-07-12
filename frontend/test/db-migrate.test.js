@@ -156,6 +156,13 @@ test('migrate registers the reimburse target migration', () => {
   assert.match(source, /\{ version: 36, name: 'transaction_reimburse_target', sql: migration036 \}/)
 })
 
+test('migrate registers the budget pay cycle migration', () => {
+  const source = readFileSync(resolve(import.meta.dirname, '../src/core/db/migrate.js'), 'utf8')
+
+  assert.match(source, /import migration039 from '@\/core\/db\/migrations\/039_budget_pay_cycle\.sql\?raw'/)
+  assert.match(source, /\{ version: 39, name: 'budget_pay_cycle', sql: migration039 \}/)
+})
+
 test('reimburse target migration adds the nullable column to transactions', () => {
   const source = readFileSync(
     resolve(import.meta.dirname, '../src/core/db/migrations/036_transaction_reimburse_target.sql'),
@@ -163,6 +170,18 @@ test('reimburse target migration adds the nullable column to transactions', () =
   )
 
   assert.match(source, /ALTER TABLE transactions ADD COLUMN reimburse_target_minor INTEGER;/)
+})
+
+test('budget pay cycle migration adds ledger settings and budget period columns', () => {
+  const source = readFileSync(
+    resolve(import.meta.dirname, '../src/core/db/migrations/039_budget_pay_cycle.sql'),
+    'utf8',
+  )
+
+  assert.match(source, /ALTER TABLE ledgers ADD COLUMN budget_period_mode/)
+  assert.match(source, /ALTER TABLE ledgers ADD COLUMN budget_pay_day/)
+  assert.match(source, /ALTER TABLE budgets ADD COLUMN period_key/)
+  assert.match(source, /CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_period_key/)
 })
 
 test('removed invoice carrier cleanup migration drops retired local data', () => {

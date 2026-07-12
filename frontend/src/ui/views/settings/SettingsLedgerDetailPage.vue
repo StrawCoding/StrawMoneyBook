@@ -18,6 +18,35 @@
         <input v-model="ledgerNameInput" class="input" type="text" maxlength="40" :placeholder="t('settings_ledger_detail.ledger_name_placeholder')" />
       </label>
 
+      <div class="field">
+        <span>{{ t('settings_ledger_detail.budget_period_mode') }}</span>
+        <div class="segmented">
+          <button
+            type="button"
+            class="segment"
+            :class="{ active: budgetPeriodModeInput === 'calendar_month' }"
+            @click="budgetPeriodModeInput = 'calendar_month'"
+          >
+            {{ t('settings_ledger_detail.budget_period_mode.calendar_month') }}
+          </button>
+          <button
+            type="button"
+            class="segment"
+            :class="{ active: budgetPeriodModeInput === 'pay_cycle' }"
+            @click="budgetPeriodModeInput = 'pay_cycle'"
+          >
+            {{ t('settings_ledger_detail.budget_period_mode.pay_cycle') }}
+          </button>
+        </div>
+        <small class="muted">{{ t('settings_ledger_detail.budget_period_mode_hint') }}</small>
+      </div>
+
+      <label v-if="budgetPeriodModeInput === 'pay_cycle'" class="field">
+        {{ t('settings_ledger_detail.budget_pay_day') }}
+        <input v-model.number="budgetPayDayInput" class="input" type="number" min="1" max="31" inputmode="numeric" />
+        <small class="muted">{{ t('settings_ledger_detail.budget_pay_day_hint') }}</small>
+      </label>
+
       <div class="row action-row">
         <button class="btn danger" :disabled="deleting" @click="removeLedgerRecord">
           {{ deleting ? t('settings_ledger_detail.processing') : t('settings_ledger_detail.delete_ledger') }}
@@ -60,6 +89,8 @@ const saving = ref(false)
 const deleting = ref(false)
 const deleteConfirmOpen = ref(false)
 const ledgerNameInput = ref('')
+const budgetPeriodModeInput = ref('calendar_month')
+const budgetPayDayInput = ref(1)
 
 const ledgerId = computed(() => String(route.params.id ?? ''))
 const ledger = computed(() => ledgerStore.ledgers.find((item) => item.id === ledgerId.value) ?? null)
@@ -68,7 +99,13 @@ const canSave = computed(() => {
   if (!ledger.value) return false
   const nextName = ledgerNameInput.value.trim()
   if (!nextName) return false
+  const nextMode = budgetPeriodModeInput.value === 'pay_cycle' ? 'pay_cycle' : 'calendar_month'
+  const currentMode = String(ledger.value.budget_period_mode ?? 'calendar_month')
+  const nextPayDay = Math.min(31, Math.max(1, Math.trunc(Number(budgetPayDayInput.value ?? 1)) || 1))
+  const currentPayDay = Math.min(31, Math.max(1, Math.trunc(Number(ledger.value.budget_pay_day ?? 1)) || 1))
   return nextName !== String(ledger.value.name ?? '')
+    || nextMode !== currentMode
+    || nextPayDay !== currentPayDay
 })
 
 watch(
@@ -76,6 +113,8 @@ watch(
   (next) => {
     if (!next) return
     ledgerNameInput.value = String(next.name ?? '')
+    budgetPeriodModeInput.value = String(next.budget_period_mode ?? '') === 'pay_cycle' ? 'pay_cycle' : 'calendar_month'
+    budgetPayDayInput.value = Math.min(31, Math.max(1, Math.trunc(Number(next.budget_pay_day ?? 1)) || 1))
   },
   { immediate: true },
 )
@@ -88,6 +127,17 @@ async function saveLedgerName() {
     const nextName = ledgerNameInput.value.trim()
     if (nextName !== String(ledger.value.name ?? '')) {
       await ledgerStore.renameLedger(ledgerId.value, nextName)
+    }
+    const nextMode = budgetPeriodModeInput.value === 'pay_cycle' ? 'pay_cycle' : 'calendar_month'
+    const nextPayDay = Math.min(31, Math.max(1, Math.trunc(Number(budgetPayDayInput.value ?? 1)) || 1))
+    if (
+      nextMode !== String(ledger.value.budget_period_mode ?? 'calendar_month')
+      || nextPayDay !== Math.min(31, Math.max(1, Math.trunc(Number(ledger.value.budget_pay_day ?? 1)) || 1))
+    ) {
+      await ledgerStore.updateBudgetPeriodSettings(ledgerId.value, {
+        budgetPeriodMode: nextMode,
+        budgetPayDay: nextPayDay,
+      })
     }
     uiStore.pushToast(t('settings_ledger_detail.toast.updated'))
     await router.push('/settings/ledgers')
@@ -170,5 +220,27 @@ h3 {
 .danger {
   background: var(--surface-danger);
   color: var(--danger-text);
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.segment {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 9px 10px;
+  font-size: 13px;
+}
+
+.segment.active {
+  border-color: var(--primary);
+  background: var(--primary-soft-bg);
+  color: var(--primary);
+  font-weight: 700;
 }
 </style>

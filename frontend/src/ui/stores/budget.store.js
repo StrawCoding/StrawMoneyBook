@@ -2,19 +2,25 @@ import { defineStore } from 'pinia'
 import { monthKeyFromDate } from '@/core/utils/id'
 import {
   copyPreviousMonthBudget,
+  nextBudgetPeriod,
+  previousBudgetPeriod,
   removeBudgetContainer,
   resolveContainerMonthlyAmountMinor,
+  resolveContainerPeriodAmountMinor,
+  resolveBudgetPeriodForLedger,
   saveBudgetContainer,
   saveBudgetContainerRange,
   saveBudgetSavePreferences as saveBudgetSavePreferencesService,
   saveBudgetTotalConfig as saveBudgetTotalConfigService,
   loadBudgetSnapshot,
+  loadBudgetSnapshotForPeriod,
   removeBudgetItem,
   saveBudgetItem,
   saveBudgetItemRange,
   isDailyPoolChildItem,
 } from '@/core/services/budget.service'
-import { computeMonthlyReservedMinor } from '@/core/services/budget-reserve.service'
+// computePeriodReservedMinor supersedes computeMonthlyReservedMinor while preserving calendar-month behavior.
+import { computePeriodReservedMinor } from '@/core/services/budget-reserve.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 
 function toFiniteMinor(value) {
@@ -49,6 +55,7 @@ function normalizeContainerPeriodMode(value) {
 export const useBudgetStore = defineStore('budget', {
   state: () => ({
     monthKey: monthKeyFromDate(),
+    period: null,
     budget: null,
     items: [],
     containers: [],
@@ -67,7 +74,11 @@ export const useBudgetStore = defineStore('budget', {
 
     totalBudgetMinor(state) {
       const containerTotal = state.containers.reduce(
-        (total, container) => total + resolveContainerMonthlyAmountMinor(container, state.monthKey),
+        (total, container) => total + (
+          state.period?.key
+            ? resolveContainerPeriodAmountMinor(container, state.period)
+            : resolveContainerMonthlyAmountMinor(container, state.monthKey)
+        ),
         0,
       )
       const unassignedTotal = state.items
@@ -115,7 +126,9 @@ export const useBudgetStore = defineStore('budget', {
         const amountMinor = toFiniteMinor(container.amount_minor)
         const budgetMinor = isDailyPool
           ? amountMinor
-          : resolveContainerMonthlyAmountMinor(container, state.monthKey)
+          : (state.period?.key
+            ? resolveContainerPeriodAmountMinor(container, state.period)
+            : resolveContainerMonthlyAmountMinor(container, state.monthKey))
         return {
           ...container,
           items: childItems,
@@ -150,10 +163,10 @@ export const useBudgetStore = defineStore('budget', {
       const timeZone = normalizeTimeZone(ledgerStore.activeLedger?.timezone)
       const reserveItems = state.items.filter((item) => !isItemInContainer(item))
       return (referenceDate = new Date(), options = {}) => (
-        computeMonthlyReservedMinor(
+        computePeriodReservedMinor(
           reserveItems,
           state.containers,
-          state.monthKey,
+          state.period ?? { key: state.monthKey, monthKey: state.monthKey },
           referenceDate,
           timeZone,
           options,
@@ -197,20 +210,40 @@ export const useBudgetStore = defineStore('budget', {
     },
 
     async loadCurrentMonth() {
-      await this.loadMonth(monthKeyFromDate())
+      await this.loadCurrentPeriod()
+    },
+
+    async loadCurrentPeriod() {
+      const ledgerStore = useLedgerStore()
+      const period = resolveBudgetPeriodForLedger(ledgerStore.activeLedger, monthKeyFromDate())
+      await this.loadPeriod(period)
     },
 
     async loadMonth(monthKey) {
       const ledgerStore = useLedgerStore()
+      if (String(ledgerStore.activeLedger?.budget_period_mode ?? '') === 'pay_cycle') {
+        await this.loadPeriod(resolveBudgetPeriodForLedger(ledgerStore.activeLedger, `${monthKey}-01`))
+        return
+      }
+      await this.loadPeriod(resolveBudgetPeriodForLedger(ledgerStore.activeLedger, monthKey))
+    },
+
+    async loadPeriod(period) {
+      const ledgerStore = useLedgerStore()
       const ledgerId = ledgerStore.activeLedgerId
       if (!ledgerId) return
 
-      this.monthKey = monthKey
+      this.period = period
+      this.monthKey = period.monthKey ?? period.key
       this.loading = true
 
       try {
-        const snapshot = await loadBudgetSnapshot(ledgerId, monthKey)
+        const snapshot = period?.mode === 'pay_cycle'
+          ? await loadBudgetSnapshotForPeriod(ledgerId, period)
+          : await loadBudgetSnapshot(ledgerId, period.monthKey ?? period.key)
         this.budget = snapshot.budget
+        this.period = snapshot.period ?? period
+        this.monthKey = this.period.monthKey ?? this.period.key
         this.items = snapshot.items
         this.containers = snapshot.containers ?? []
         this.budgetSavePreferences = snapshot.budgetSavePreferences ?? { retroactiveMode: 'manual' }
@@ -237,35 +270,35 @@ export const useBudgetStore = defineStore('budget', {
     async upsertItem(payload) {
       const ledgerStore = useLedgerStore()
       const applyThroughMonth = String(payload?.applyThroughMonth ?? '').trim()
-      if (applyThroughMonth && !payload?.id) {
+      if (this.period?.mode !== 'pay_cycle' && applyThroughMonth && !payload?.id) {
         await saveBudgetItemRange(ledgerStore.activeLedgerId, this.monthKey, applyThroughMonth, payload)
       } else {
-        await saveBudgetItem(ledgerStore.activeLedgerId, this.monthKey, payload)
+        await saveBudgetItem(ledgerStore.activeLedgerId, this.period ?? this.monthKey, payload)
       }
-      await this.loadMonth(this.monthKey)
+      await this.loadPeriod(this.period)
     },
 
     async upsertContainer(payload) {
       const ledgerStore = useLedgerStore()
       const applyThroughMonth = String(payload?.applyThroughMonth ?? '').trim()
-      if (applyThroughMonth && !payload?.id) {
+      if (this.period?.mode !== 'pay_cycle' && applyThroughMonth && !payload?.id) {
         await saveBudgetContainerRange(ledgerStore.activeLedgerId, this.monthKey, applyThroughMonth, payload)
       } else {
-        await saveBudgetContainer(ledgerStore.activeLedgerId, this.monthKey, payload)
+        await saveBudgetContainer(ledgerStore.activeLedgerId, this.period ?? this.monthKey, payload)
       }
-      await this.loadMonth(this.monthKey)
+      await this.loadPeriod(this.period)
     },
 
     async deleteContainer(containerId) {
       const ledgerStore = useLedgerStore()
       await removeBudgetContainer(ledgerStore.activeLedgerId, containerId)
-      await this.loadMonth(this.monthKey)
+      await this.loadPeriod(this.period)
     },
 
     async saveTotalBudgetSave(payload) {
       const ledgerStore = useLedgerStore()
-      await saveBudgetTotalConfigService(ledgerStore.activeLedgerId, this.monthKey, payload)
-      await this.loadMonth(this.monthKey)
+      await saveBudgetTotalConfigService(ledgerStore.activeLedgerId, this.period ?? this.monthKey, payload)
+      await this.loadPeriod(this.period)
     },
 
     async saveBudgetSavePreferences(payload) {
@@ -276,7 +309,7 @@ export const useBudgetStore = defineStore('budget', {
     async deleteItem(itemId) {
       const ledgerStore = useLedgerStore()
       await removeBudgetItem(ledgerStore.activeLedgerId, itemId)
-      await this.loadMonth(this.monthKey)
+      await this.loadPeriod(this.period)
     },
 
     async copyFromPreviousMonth() {
@@ -284,8 +317,20 @@ export const useBudgetStore = defineStore('budget', {
       const result = await copyPreviousMonthBudget(ledgerStore.activeLedgerId, this.monthKey, {
         replaceExisting: true,
       })
-      await this.loadMonth(this.monthKey)
+      await this.loadPeriod(this.period)
       return result
+    },
+
+    async goPreviousPeriod() {
+      const ledgerStore = useLedgerStore()
+      const next = previousBudgetPeriod(this.period ?? resolveBudgetPeriodForLedger(ledgerStore.activeLedger, this.monthKey), ledgerStore.activeLedger)
+      await this.loadPeriod(next)
+    },
+
+    async goNextPeriod() {
+      const ledgerStore = useLedgerStore()
+      const next = nextBudgetPeriod(this.period ?? resolveBudgetPeriodForLedger(ledgerStore.activeLedger, this.monthKey), ledgerStore.activeLedger)
+      await this.loadPeriod(next)
     },
   },
 })

@@ -1,7 +1,13 @@
 <template>
   <article class="card summary-card">
     <header class="row">
-      <h3>{{ t('home_budget_summary.title', '預算簡表') }}</h3>
+      <div>
+        <h3>{{ t('home_budget_summary.title', '預算簡表') }}</h3>
+        <p v-if="isPayCycleMode" class="muted period-copy">
+          {{ t('budgeting.period.pay_cycle_range', { start: budgetStore.period?.startDate, end: budgetStore.period?.endDate }) }}
+          <span v-if="budgetStore.period?.nextPayDate"> · {{ t('budgeting.period.next_pay_day', { date: budgetStore.period.nextPayDate }) }}</span>
+        </p>
+      </div>
       <RouterLink class="jump" to="/budget">{{ t('home_budget_summary.view') }}</RouterLink>
     </header>
 
@@ -79,7 +85,7 @@ const transactionStore = useTransactionStore()
 const ledgerStore = useLedgerStore()
 const { t } = useI18n()
 const displayModes = computed(() => ([
-  { key: 'monthly', label: t('home_budget_summary.mode.monthly') },
+  { key: 'monthly', label: isPayCycleMode.value ? t('home_budget_summary.mode.period') : t('home_budget_summary.mode.monthly') },
   { key: 'daily', label: t('home_budget_summary.mode.daily') },
 ]))
 const displayMode = ref('monthly')
@@ -89,6 +95,7 @@ const displayModeIndex = computed(() => {
 })
 const touchStartX = ref(0)
 const SWIPE_THRESHOLD_PX = 72
+const isPayCycleMode = computed(() => String(ledgerStore.activeLedger?.budget_period_mode ?? '') === 'pay_cycle')
 
 function toFiniteNonNegative(value) {
   const numeric = Number(value)
@@ -381,6 +388,10 @@ h3 {
 }
 .mode-label {
   margin-bottom: 6px;
+  font-size: 12px
+}
+.period-copy {
+  margin: 4px 0 0;
   font-size: 12px
 }
 .stat-wrap {

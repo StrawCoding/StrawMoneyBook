@@ -1,4 +1,8 @@
-import { getBudgetSavePreferences, resolveContainerMonthlyAmountMinor } from './budget.service.js'
+import {
+  getBudgetSavePreferences,
+  resolveCalendarBudgetPeriod,
+  resolveContainerPeriodAmountMinor,
+} from './budget.service.js'
 
 const defaultDependencies = {
   async getLedger(...args) {
@@ -192,6 +196,39 @@ function listMatchingDayKeys(monthKey, item) {
   return result
 }
 
+function parseDayKeyParts(dayKey) {
+  const matched = String(dayKey ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!matched) return null
+  return { year: Number(matched[1]), month: Number(matched[2]), day: Number(matched[3]) }
+}
+
+function listMatchingDayKeysInRange(startDate, endDate, item) {
+  const amountMode = normalizeAmountMode(item?.amount_mode)
+  if (amountMode !== 'daily_average') return []
+  const unit = normalizeDayRuleUnit(item?.day_rule_unit)
+  const values = normalizeDayRuleValues(item?.day_rule_values ?? item?.day_rule_values_json, unit)
+  if (unit === 'none' || values.length === 0) return []
+  const start = parseDayKeyParts(startDate)
+  const end = parseDayKeyParts(endDate)
+  if (!start || !end) return []
+  const startMs = Date.UTC(start.year, start.month - 1, start.day)
+  const endMs = Date.UTC(end.year, end.month - 1, end.day)
+  if (endMs < startMs) return []
+  const valueSet = new Set(values)
+  const result = []
+  for (let ms = startMs; ms <= endMs; ms += 86400000) {
+    const date = new Date(ms)
+    if (unit === 'monthday') {
+      if (!valueSet.has(date.getUTCDate())) continue
+    } else {
+      const weekday = date.getUTCDay() === 0 ? 7 : date.getUTCDay()
+      if (!valueSet.has(weekday)) continue
+    }
+    result.push(date.toISOString().slice(0, 10))
+  }
+  return result
+}
+
 function resolveItemMonthBudgetMinor(item, monthKey) {
   const amountMode = normalizeAmountMode(item?.amount_mode)
   const amountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0) || 0))
@@ -200,6 +237,13 @@ function resolveItemMonthBudgetMinor(item, monthKey) {
   const values = normalizeDayRuleValues(item?.day_rule_values ?? item?.day_rule_values_json, unit)
   if (unit === 'none' || values.length === 0) return 0
   return listMatchingDayKeys(monthKey, item).length * amountMinor
+}
+
+function resolveItemPeriodBudgetMinor(item, period) {
+  const amountMode = normalizeAmountMode(item?.amount_mode)
+  const amountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0) || 0))
+  if (amountMode !== 'daily_average') return amountMinor
+  return listMatchingDayKeysInRange(period.startDate, period.endDate, item).length * amountMinor
 }
 
 function buildSpentMinorMap(rows = []) {
@@ -299,6 +343,26 @@ function buildTransferNote(label) {
   return `預算存款：${label}`
 }
 
+function readBudgetPeriod(budget) {
+  const mode = normalizeText(budget?.period_mode) === 'pay_cycle' ? 'pay_cycle' : 'calendar_month'
+  const periodKey = normalizeText(budget?.period_key) || normalizeText(budget?.month_key)
+  if (mode === 'pay_cycle' && budget?.period_start_date && budget?.period_end_date) {
+    return {
+      mode,
+      key: periodKey,
+      monthKey: normalizeText(budget?.month_key),
+      startDate: normalizeText(budget?.period_start_date),
+      endDate: normalizeText(budget?.period_end_date),
+    }
+  }
+  return resolveCalendarBudgetPeriod(normalizeText(budget?.month_key))
+}
+
+function budgetPeriodLabel(period) {
+  if (period?.mode === 'pay_cycle') return `${period.startDate}~${period.endDate}`
+  return period?.monthKey ?? period?.key ?? ''
+}
+
 function normalizeFinalSettlementStatus(expectedAmountMinor) {
   return expectedAmountMinor > 0 ? 'settled' : 'skipped_no_surplus'
 }
@@ -376,7 +440,6 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
 
   const ledgerTimeZone = normalizeLedgerTimeZone(ledger?.timezone)
   const todayDayKey = buildDayKeyFromParts(getZonedDateParts(now, ledgerTimeZone))
-  const currentMonthKey = todayDayKey.slice(0, 7)
   const accountMap = new Map(accounts.map((account) => [String(account.id), account]))
   const balanceMap = new Map(balanceRows.map((row) => [String(row.id), Number(row.balance_minor ?? 0)]))
   const retroactiveMode = normalizeText(preferences?.retroactiveMode) === 'delta' ? 'delta' : 'manual'
@@ -548,12 +611,16 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
   }
 
   for (const budget of budgets) {
-    const budgetMonthKey = normalizeText(budget.month_key)
-    if (!budgetMonthKey) continue
+    const budgetPeriod = readBudgetPeriod(budget)
+    const budgetMonthKey = budgetPeriod.monthKey
+    const budgetPeriodKey = budgetPeriod.key
+    if (!budgetPeriodKey || !budgetPeriod.startDate || !budgetPeriod.endDate) continue
 
     const items = await dependencies.listBudgetItems(ledgerId, budget.id)
     const containers = await dependencies.listBudgetContainers(ledgerId, budget.id)
-    const { startUtc: budgetMonthStartUtc, endUtc: budgetMonthEndUtc } = monthRangeUtc(budgetMonthKey, ledgerTimeZone)
+    const periodEndNext = shiftDayKey(budgetPeriod.endDate, 1)
+    const { startUtc: budgetMonthStartUtc } = dayRangeUtc(budgetPeriod.startDate, ledgerTimeZone)
+    const { startUtc: budgetMonthEndUtc } = dayRangeUtc(periodEndNext, ledgerTimeZone)
     const monthlySpentMap = buildSpentMinorMap(
       await dependencies.computeBudgetSpentByCategory(ledgerId, budgetMonthStartUtc, budgetMonthEndUtc),
     )
@@ -593,7 +660,7 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
 
       if (conflictCategoryIds.has(categoryId)) {
         if (normalizeAmountMode(item?.amount_mode) === 'daily_average') {
-          const dueDayKeys = listMatchingDayKeys(budgetMonthKey, item).filter((dayKey) => dayKey < todayDayKey)
+          const dueDayKeys = listMatchingDayKeysInRange(budgetPeriod.startDate, budgetPeriod.endDate, item).filter((dayKey) => dayKey < todayDayKey)
           for (const periodKey of dueDayKeys) {
             await recordNonTransferSettlement({
               scopeType: 'budget_item_day',
@@ -604,11 +671,11 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
               lastError: 'budget_save_conflict',
             })
           }
-        } else if (compareMonthKey(budgetMonthKey, currentMonthKey) < 0) {
+        } else if (budgetPeriod.endDate < todayDayKey) {
           await recordNonTransferSettlement({
             scopeType: 'budget_item_month',
             scopeRefId,
-            periodKey: budgetMonthKey,
+            periodKey: budgetPeriodKey,
             config,
             status: 'conflict',
             lastError: 'budget_save_conflict',
@@ -620,7 +687,7 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
       const configStatus = buildConfigStatus(config, accountMap)
       if (!configStatus.valid) {
         if (normalizeAmountMode(item?.amount_mode) === 'daily_average') {
-          const dueDayKeys = listMatchingDayKeys(budgetMonthKey, item).filter((dayKey) => dayKey < todayDayKey)
+          const dueDayKeys = listMatchingDayKeysInRange(budgetPeriod.startDate, budgetPeriod.endDate, item).filter((dayKey) => dayKey < todayDayKey)
           for (const periodKey of dueDayKeys) {
             await recordNonTransferSettlement({
               scopeType: 'budget_item_day',
@@ -631,11 +698,11 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
               lastError: configStatus.reason,
             })
           }
-        } else if (compareMonthKey(budgetMonthKey, currentMonthKey) < 0) {
+        } else if (budgetPeriod.endDate < todayDayKey) {
           await recordNonTransferSettlement({
             scopeType: 'budget_item_month',
             scopeRefId,
-            periodKey: budgetMonthKey,
+            periodKey: budgetPeriodKey,
             config,
             status: 'invalid_config',
             lastError: configStatus.reason,
@@ -645,7 +712,7 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
       }
 
       if (normalizeAmountMode(item?.amount_mode) === 'daily_average') {
-        const dueDayKeys = listMatchingDayKeys(budgetMonthKey, item).filter((dayKey) => dayKey < todayDayKey)
+        const dueDayKeys = listMatchingDayKeysInRange(budgetPeriod.startDate, budgetPeriod.endDate, item).filter((dayKey) => dayKey < todayDayKey)
         for (const periodKey of dueDayKeys) {
           const daySpentMap = await loadSpentMinorMapForDay(periodKey)
           const expectedAmountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0) || 0) - Number(daySpentMap.get(categoryId) ?? 0))
@@ -662,23 +729,23 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
         continue
       }
 
-      if (compareMonthKey(budgetMonthKey, currentMonthKey) < 0) {
+      if (budgetPeriod.endDate < todayDayKey) {
         const expectedAmountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0) || 0) - Number(monthlySpentMap.get(categoryId) ?? 0))
         await finalizeSettlement({
           scopeType: 'budget_item_month',
           scopeRefId,
-          periodKey: budgetMonthKey,
+          periodKey: budgetPeriodKey,
           expectedAmountMinor,
           configStatus,
-          label: `${itemLabel} ${budgetMonthKey}`,
-          dueDateKey: buildMonthLastDayKey(budgetMonthKey),
+          label: `${itemLabel} ${budgetPeriodLabel(budgetPeriod)}`,
+          dueDateKey: budgetPeriod.endDate,
         })
       }
     }
 
     for (const container of containers) {
       if (!normalizeBudgetSaveEnabled(container?.budget_save_enabled)) continue
-      if (compareMonthKey(budgetMonthKey, currentMonthKey) >= 0) continue
+      if (budgetPeriod.endDate >= todayDayKey) continue
 
       const config = readBudgetSaveConfig(container, 'container')
       const scopeRefId = String(container.id)
@@ -688,7 +755,7 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
         await recordNonTransferSettlement({
           scopeType: 'budget_container_month',
           scopeRefId,
-          periodKey: budgetMonthKey,
+          periodKey: budgetPeriodKey,
           config,
           status: 'invalid_config',
           lastError: configStatus.reason,
@@ -705,22 +772,22 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
         if (!categoryId) continue
         containerSpentMinor += Number(monthlySpentMap.get(categoryId) ?? 0)
       }
-      const containerAmountMinor = resolveContainerMonthlyAmountMinor(container, budgetMonthKey)
+      const containerAmountMinor = resolveContainerPeriodAmountMinor(container, budgetPeriod)
       const expectedAmountMinor = Math.max(0, containerAmountMinor - containerSpentMinor)
 
       await finalizeSettlement({
         scopeType: 'budget_container_month',
         scopeRefId,
-        periodKey: budgetMonthKey,
+        periodKey: budgetPeriodKey,
         expectedAmountMinor,
         configStatus,
-        label: `${containerLabel} ${budgetMonthKey}`,
-        dueDateKey: buildMonthLastDayKey(budgetMonthKey),
+        label: `${containerLabel} ${budgetPeriodLabel(budgetPeriod)}`,
+        dueDateKey: budgetPeriod.endDate,
       })
     }
 
     const totalConfig = readBudgetSaveConfig(budget, 'total')
-    if (!totalConfig.enabled || compareMonthKey(budgetMonthKey, currentMonthKey) >= 0) {
+    if (!totalConfig.enabled || budgetPeriod.endDate >= todayDayKey) {
       continue
     }
 
@@ -729,7 +796,7 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
       await recordNonTransferSettlement({
         scopeType: 'budget_total_month',
         scopeRefId: String(budget.id),
-        periodKey: budgetMonthKey,
+        periodKey: budgetPeriodKey,
         config: totalConfig,
         status: 'invalid_config',
         lastError: totalConfigStatus.reason,
@@ -756,7 +823,7 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
     for (const [categoryId, categoryItems] of itemsByCategory.entries()) {
       if (excludedCategoryIds.has(categoryId)) continue
       const categoryBudgetMinor = categoryItems.reduce(
-        (total, item) => total + resolveItemMonthBudgetMinor(item, budgetMonthKey),
+        (total, item) => total + resolveItemPeriodBudgetMinor(item, budgetPeriod),
         0,
       )
       const categoryRemainMinor = Math.max(0, categoryBudgetMinor - Number(monthlySpentMap.get(categoryId) ?? 0))
@@ -766,11 +833,11 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
     await finalizeSettlement({
       scopeType: 'budget_total_month',
       scopeRefId: String(budget.id),
-      periodKey: budgetMonthKey,
+      periodKey: budgetPeriodKey,
       expectedAmountMinor: totalExpectedAmountMinor,
       configStatus: totalConfigStatus,
-      label: `${budgetMonthKey} 總預算`,
-      dueDateKey: buildMonthLastDayKey(budgetMonthKey),
+      label: `${budgetPeriodLabel(budgetPeriod)} 總預算`,
+      dueDateKey: budgetPeriod.endDate,
     })
   }
 

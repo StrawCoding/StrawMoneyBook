@@ -10,7 +10,7 @@
 - 記帳三模式（AI 記帳、手動快速新增、問答記帳；SMB-175 後手動快速新增的金額欄整合計算機，支援加減乘除四則運算並即時預覽結果）
 - 交易查詢（搜尋頁、日曆頁、交易明細頁、交易編輯頁；SMB-155 後搜尋交易改為 SQL 分頁載入，每頁 300 筆，關鍵字與日期篩選會先進資料查詢層後再取當頁資料，避免大型帳本一次載入全部交易；SMB-211 後交易搜尋的 SQL 關鍵字比對會納入借貸交易的畫面顯示條件與往來對象，例如借出、借入、歸還 / 還款與收回 / 收回借款，不再只能用 `loan_payment` 或備註命中借貸交易；SMB-189 / v1.2.5 後帳本載入會自動掃描並修復交易遺失帳戶 / peer 帳戶 / 分類引用、壞掉的轉帳群組、報銷總額 / 已付款狀態與借貸狀態；SMB-219 / v1.2.28 後交易編輯頁與首頁交易編輯 sheet 改選分類時會同步套用分類預設報銷、紀錄預算與紀錄收支設定，載入既有交易時保留原交易已儲存的記帳旗標）
 - 退款流程（交易明細可建立退款、選擇退款帳戶、指定扣除金額；SMB-149 後部分退款會以原交易扣除退款金額後的淨額納入首頁、預算、分析與列印報表，全額退款則歸零）
-- 預算管理（月預算、分類預算、共同預算池、日均規則、已用/剩餘/保留金額、預算剩餘自動存入存錢罐；SMB-260 / v1.3.45 後新增共同預算池：手動池總額、分類綁定、2B 月總額、3C 超支、池層 `budget_container_month` 預算存款；v1.3.48 日池可直接多選池內分類且綁定分類不需子預算金額，首頁日模式納入日池；SMB-268 後新增共同預算池與一般分類預算項目可用「套用至月份」跨月／跨年建立，服務層 fan-out 為每月獨立 budget/container/item，建立前檢查目標月份同名池或同分類項目衝突並避免 partial write，既有項目編輯仍只改目前月；SMB-151 後預算項目的「日期」分配改用與首頁查看範圍相同的 `HomeRangePicker` 日期選擇器，並在預算項目情境啟用日曆複選，點選多個日期後轉成每月日號規則，不再只是 1~31 純數字格或另一套自製月曆；SMB-153 後功能列表加入帶圖示的預算項目入口，可直接前往 `/budget`）
+- 預算管理（月預算、發薪週期預算、分類預算、共同預算池、日均規則、已用/剩餘/保留金額、預算剩餘自動存入存錢罐；SMB-260 / v1.3.45 後新增共同預算池：手動池總額、分類綁定、2B 月總額、3C 超支、池層 `budget_container_month` 預算存款；v1.3.48 日池可直接多選池內分類且綁定分類不需子預算金額，首頁日模式納入日池；SMB-268 後新增共同預算池與一般分類預算項目可用「套用至月份」跨月／跨年建立，服務層 fan-out 為每月獨立 budget/container/item，建立前檢查目標月份同名池或同分類項目衝突並避免 partial write，既有項目編輯仍只改目前月；SMB-269 後每個帳本可在曆月與發薪週期預算間切換，發薪週期由固定每月發薪日錨定，預算資料以 `period_key` / 起訖日 / mode 唯一識別，交易依實際日期落入週期，一般分類項目與共同預算池皆支援；SMB-151 後預算項目的「日期」分配改用與首頁查看範圍相同的 `HomeRangePicker` 日期選擇器，並在預算項目情境啟用日曆複選，點選多個日期後轉成每月日號規則，不再只是 1~31 純數字格或另一套自製月曆；SMB-153 後功能列表加入帶圖示的預算項目入口，可直接前往 `/budget`）
 - 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、列印 / PDF 版面；SMB-146 後支出分類分析會將正向附加項目拆成獨立分析列，主分類扣除該附加金額後仍維持總支出一致，分析明細與列印報表同步支援；圓餅圖已改為可點擊並提供 hover/press 回饋，尺寸也會隨較小螢幕縮放）
 - 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、群組內金額摘要；SMB-159 / SMB-160 後群組統計支援帳戶層級納入開關，並會依匯率 snapshot 將外幣帳戶換算為帳本幣別後加總；負向負債帳戶會以絕對值納入負債摘要，避免信用卡等帳戶方向差異造成低估；SMB-155 後帳戶明細交易紀錄改為每頁 300 筆，並用分頁前交易金額校正每筆交易後餘額）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細；v1.2.6 後若借貸設有預設利息，單筆新增 / 編輯還款會阻擋超過本金加預設利息的目標總額；v1.2.22 / SMB-214 後還款支援利息功能：輸入金額超過剩餘本金時，超出部分自動計為利息並建立對應利息交易（借出方向為利息收入、借入方向為利息支出），還款表單即時顯示利息預覽；v1.2.15 / SMB-210 後借出 / 借入建立與所有還款、利息交易預設不計入收支分析與預算統計）
@@ -53,7 +53,7 @@
 | `/open/shared-ledger` | redirect -> `/settings/shared-ledgers` | App URL 開啟共同帳本連結 |
 | `/shared-ledger/join` | redirect -> `/settings/shared-ledgers` | 共同帳本加入連結兼容入口 |
 | `/` | `src/ui/views/home.vue` | 首頁總覽、範圍篩選、快速新增 |
-| `/budget` | `src/ui/views/budgeting.vue` | 月預算、共同預算池、分類預算與預算存款管理 |
+| `/budget` | `src/ui/views/budgeting.vue` | 曆月 / 發薪週期預算、共同預算池、分類預算與預算存款管理 |
 | `/analysis` | `src/ui/views/analysis.vue` | 收支圖表分析（全部/年/月） |
 | `/analysis/category` | `src/ui/views/AnalysisCategoryDetailPage.vue` | 分類分析明細 |
 | `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 交易報表頁（CSV 匯出 + 列印 / PDF 版面） |
@@ -264,11 +264,11 @@
 
 | Store | 主要職責 |
 |---|---|
-| `ledger.store.js` | 活動帳本、帳本切換、帳本 CRUD；跨 store reset / reload / integrity repair 已轉移到 `src/ui/services/ledger-runtime.service.js` |
+| `ledger.store.js` | 活動帳本、帳本切換、帳本 CRUD、帳本預算期間模式與發薪日設定；跨 store reset / reload / integrity repair 已轉移到 `src/ui/services/ledger-runtime.service.js` |
 | `account.store.js` | 帳戶清單、餘額與群組統計；群組統計會讀取匯率 snapshot 並依帳戶 `include_in_group_statistics` 加總 |
 | `category.store.js` | 分類清單、群組、二級分類資料 |
 | `transaction.store.js` | 交易載入、新增、更新、刪除、首頁篩選與關聯刷新 |
-| `budget.store.js` | 月預算、共同預算池、預算項目、2B 月總額、3C 超支 getter、保留金額、整月預算存款設定與補跑偏好；新建共同預算池或一般分類預算項目帶 `applyThroughMonth` 時路由至跨月 range save，編輯仍只儲存當月 |
+| `budget.store.js` | 曆月 / 發薪週期預算、共同預算池、預算項目、2B 期間總額、3C 超支 getter、保留金額、整期預算存款設定與補跑偏好；新建共同預算池或一般分類預算項目帶 `applyThroughMonth` 時路由至曆月 range save，編輯仍只儲存目前期間 |
 | `loan.store.js` | 借貸清單、還款、作廢、明細 |
 | `reimbursement.store.js` | 報銷列表與報銷狀態處理；已完成請款單匯入項目會透過 `reimbursed_minor` 分入已報銷；SMB-237 後 `setClaimAmount` action 可設定 / 重設報銷項目的自訂報銷金額（`reimburse_target_minor`） |
 | `addon-template.store.js` | 附加項目模板讀取與快取 |
@@ -283,9 +283,9 @@
 | `bootstrap.service.js` | 啟動時資料庫初始化、schema recover 與 DB bootstrap；不再直接碰 UI stores |
 | `transaction.service.js` | 收入/支出/轉帳/退款建立、退款帳戶驗證、編輯驗證、刪除關聯交易（報銷/退款） |
 | `transaction-query.service.js` | 統一 `all / year / month / day / account / detail-related` 交易查詢策略，供分析、搜尋、日曆、交易明細、交易編輯與帳戶明細共用 |
-| `budget.service.js` | 預算快照、預算存款設定驗證、共同預算池與一般分類預算項目單月 / 跨月建立、複製上月預算 |
-| `budget-reserve.service.js` | 依帳本月份 / 時區 / 日均規則即時計算保留金額 |
-| `budget-save.service.js` | 預算剩餘額自動結算、補跑、delta/manual 補差 |
+| `budget.service.js` | 預算期間解析、預算快照、預算存款設定驗證、共同預算池與一般分類預算項目單期 / 曆月跨月建立、複製上月預算 |
+| `budget-reserve.service.js` | 依帳本預算期間 / 時區 / 日均規則即時計算保留金額 |
+| `budget-save.service.js` | 預算剩餘額自動結算、補跑、delta/manual 補差；曆月與發薪週期皆以期間結束後一次性結算 |
 | `loan.service.js` | 借貸建立、還款、作廢；單筆新增 / 編輯還款會阻擋超過借貸剩餘金額 |
 | `reimbursement.service.js` | 報銷流程、報銷入帳、請款單完成 / 還原後的匯入報銷狀態同步、隱藏分類處理；SMB-237 後 `setReimbursableExpenseClaimAmount` 設定 / 重設可報銷交易的 `reimburse_target_minor`（自訂報銷金額）；SMB-255 後在設定報銷金額、報銷入帳 / 取消入帳與載入草稿 detail 時觸發草稿請款單 import item 同步 |
 | `claim-sheet-draft-sync.service.js` | SMB-255 草稿請款單導入報銷項目自動同步：`reconcileDraftClaimSheetImportItems` 依最新交易 pending 更新或移除 draft claim items 並重算總額 |
@@ -556,16 +556,16 @@ UI composable 目錄：`src/ui/composables/`
 - 類別（0）：無
 
 ### `src/core/services/budget.service.js`
-- 函數（新增重點）：`listInclusiveMonthKeys`, `saveBudgetContainerRange`, `saveBudgetItemRange`
+- 函數（新增重點）：`resolveBudgetPeriodForLedger`, `previousBudgetPeriod`, `nextBudgetPeriod`, `loadBudgetSnapshotForPeriod`, `listInclusiveMonthKeys`, `saveBudgetContainerRange`, `saveBudgetItemRange`
 - 變數（0）：無
 - 類別（0）：無
-- 補充：service 會驗證預算存款的來源/目標帳戶、同分類衝突與 ledger-scoped `retroactiveMode`，並把整月預算存款與 item-level 預算存款設定一起帶進 snapshot / 複製上月流程。SMB-268 後 `listInclusiveMonthKeys` 以純 `YYYY-MM` 解析產生 inclusive month range；`saveBudgetContainerRange` 在不改資料表 schema 的前提下，將新共同預算池 fan-out 至每個目標月份的正常 budget/container，並在任何目標月份同名衝突時整批阻擋；`saveBudgetItemRange` 將新一般分類預算項目 fan-out 至每個目標月份的正常 budget item，保留金額模式、日期日均規則與預算存款設定，入池項目以目標月同名共同池對應，且在同分類衝突或目標月缺池時零寫入阻擋。
+- 補充：service 會驗證預算存款的來源/目標帳戶、同分類衝突與 ledger-scoped `retroactiveMode`，並把整期預算存款與 item-level 預算存款設定一起帶進 snapshot / 複製上月流程。SMB-268 後 `listInclusiveMonthKeys` 以純 `YYYY-MM` 解析產生 inclusive month range；`saveBudgetContainerRange` 在不改資料表 schema 的前提下，將新共同預算池 fan-out 至每個目標月份的正常 budget/container，並在任何目標月份同名衝突時整批阻擋；`saveBudgetItemRange` 將新一般分類預算項目 fan-out 至每個目標月份的正常 budget item，保留金額模式、日期日均規則與預算存款設定，入池項目以目標月同名共同池對應，且在同分類衝突或目標月缺池時零寫入阻擋。SMB-269 後新增通用預算期間解析：曆月維持 `YYYY-MM`，發薪週期使用 `pay:YYYY-MM-DD:YYYY-MM-DD` 期間 key、起訖日與 mode，不搬移交易、不拆固定額；日額 / 日池依實際週期天數計算，指定日曆日規則只計算週期範圍內符合日期。
 
 ### `src/core/services/budget-save.service.js`
 - 函數（1）：`runBudgetSaveIfDue`
 - 變數（0）：無
 - 類別（0）：無
-- 補充：背景流程依帳本時區補跑日結轉與月底結轉，支援 `manual` / `delta` 補差、無剩餘略過、來源餘額不足失敗記錄，以及同分類衝突排除。
+- 補充：背景流程依帳本時區補跑日結轉與期間結束結轉，支援 `manual` / `delta` 補差、無剩餘略過、來源餘額不足失敗記錄，以及同分類衝突排除。SMB-269 後固定額、共同池與整期總額在曆月月底或發薪週期結束後各結算一次，避免跨月週期重複存入。
 
 ### `src/core/services/export.service.js`
 - 函數（33）：`createCsvBlobUrl`, `createExcelBlobUrl`, `customRangeUtc`, `dayRangeUtc`, `downloadBlob`, `downloadCsvFile`, `downloadExcelFile`, `downloadJsonFile`, `exportAccountsCsv`, `exportAllLedgersJson`, `exportCategoriesCsv`, `exportLedgerJson`, `exportLedgerTransactionsCsv`, `exportLedgerTransactionsExcel`, `exportTransactionsCsv`, `getSchemaVersion`, `loadAccountBalanceBeforeMap`, `monthRangeUtc`, `rangeByMode`, `revokeBlobUrl`, `rowsFromLedgerTable`, `rowsToCsv`, `rowsToSpreadsheetXml`, `saveCsvFileToDevice`, `saveExcelFileToDevice`, `saveJsonFileToDevice`, `timestampForFilename`, `toCsvValue`, `toXmlValue`, `triggerDownloadFromUrl`, `utf8ToBase64`, `writeBase64FileToDevice`, `yearRangeUtc`
@@ -893,10 +893,10 @@ UI composable 目錄：`src/ui/composables/`
 - 類別（0）：無
 
 ### `src/ui/views/budgeting.vue`
-- 函數（22）：`categoryName`, `changeMonth`, `closeDeleteDialog`, `closeSheet`, `confirmRemoveItem`, `copyPreviousMonth`, `formatMajor`, `goCurrentMonth`, `isItemOverBudget`, `itemBudgetMinor`, `itemPieStyle`, `itemRemainMinor`, `itemSpentMinor`, `itemUsedPercentLabel`, `itemUsedRatio`, `monthKeyFromDate`, `numberFormatLocale`, `openCreate`, `openEdit`, `removeItem`, `saveItem`, `shiftMonthKey`
-- 變數（9）：`budgetStore`, `categoryStore`, `deleteDialogOpen`, `deleteLoading`, `displayMonth`, `editingItem`, `isSheetOpen`, `pendingDeleteItemId`, `uiStore`
+- 函數（新增重點）：`goPreviousPeriod`, `goCurrentPeriod`, `goNextPeriod`, `copyPreviousMonth`, `openCreate`, `openEdit`, `saveItem`, `removeItem`
+- 變數（新增重點）：`budgetStore`, `categoryStore`, `isPayCycleMode`, `periodLabel`, `nextPayDayLabel`, `deleteDialogOpen`, `isSheetOpen`, `uiStore`
 - 類別（0）：無
-- 補充：月摘要新增保留金額；分類預算列改為整列點擊先開唯讀詳情，再從詳情進入編輯 / 刪除；項目上的日結轉 / 月底結轉 chip 與 `A -> B` 來源 / 目標摘要改成同一行；整月總額預算存款也拆成摘要列 -> 詳情 sheet -> 設定 sheet 三段式流程，來源 / 目標帳戶同樣沿用快速新增的分組式 account picker。
+- 補充：月摘要新增保留金額；SMB-269 後若帳本使用發薪週期模式，頁首改顯示目前週期起訖日、上一期 / 本期 / 下一期與下次發薪日，並隱藏曆月 range picker 與複製上月入口；分類預算列改為整列點擊先開唯讀詳情，再從詳情進入編輯 / 刪除；項目上的日結轉 / 月底結轉 chip 與 `A -> B` 來源 / 目標摘要改成同一行；整期總額預算存款也拆成摘要列 -> 詳情 sheet -> 設定 sheet 三段式流程，來源 / 目標帳戶同樣沿用快速新增的分組式 account picker。
 - **(v1.0.9)**：頁面頂部新增 `header.row` 包含標題與 `RouterLink.btn.back-btn` 返回首頁（`/`）
 
 ### `src/ui/views/home.vue`

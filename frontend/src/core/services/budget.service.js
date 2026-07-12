@@ -34,6 +34,10 @@ const defaultDependencies = {
     const mod = await import('../repositories/budget.repo.js')
     return mod.getBudgetByMonth(...args)
   },
+  async getBudgetByPeriod(...args) {
+    const mod = await import('../repositories/budget.repo.js')
+    return mod.getBudgetByPeriod(...args)
+  },
   async listBudgetUsageDaysByCategory(...args) {
     const mod = await import('../repositories/budget.repo.js')
     return mod.listBudgetUsageDaysByCategory(...args)
@@ -120,6 +124,124 @@ function monthKeyFromIndex(index) {
   return `${year}-${String(month).padStart(2, '0')}`
 }
 
+function normalizeBudgetPeriodMode(value) {
+  return String(value ?? '').trim() === 'pay_cycle' ? 'pay_cycle' : 'calendar_month'
+}
+
+function normalizePayDay(value) {
+  return Math.min(31, Math.max(1, Math.trunc(Number(value ?? 1)) || 1))
+}
+
+function parseDayKey(dayKey) {
+  const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dayKey ?? '').trim())
+  if (!matched) return null
+  const year = Number(matched[1])
+  const month = Number(matched[2])
+  const day = Number(matched[3])
+  const date = new Date(year, month - 1, day)
+  if (
+    Number.isNaN(date.getTime())
+    || date.getFullYear() !== year
+    || date.getMonth() !== month - 1
+    || date.getDate() !== day
+  ) return null
+  return { year, month, day }
+}
+
+function dayKeyFromParts(year, month, day) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+function shiftMonth(year, month, offset) {
+  const index = year * 12 + (month - 1) + offset
+  return {
+    year: Math.floor(index / 12),
+    month: (index % 12) + 1,
+  }
+}
+
+function startDayForMonth(year, month, payDay) {
+  return Math.min(normalizePayDay(payDay), new Date(year, month, 0).getDate())
+}
+
+function shiftDayKey(dayKey, offsetDays) {
+  const parts = parseDayKey(dayKey)
+  if (!parts) return ''
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day + offsetDays)).toISOString().slice(0, 10)
+}
+
+export function resolveCalendarBudgetPeriod(monthKey) {
+  const parsed = parseMonthKey(monthKey)
+  const fallback = monthKeyFromDate()
+  const { year, month } = parsed ?? parseMonthKey(fallback)
+  const key = dayKeyFromParts(year, month, 1).slice(0, 7)
+  return {
+    mode: 'calendar_month',
+    key,
+    monthKey: key,
+    startDate: `${key}-01`,
+    endDate: dayKeyFromParts(year, month, new Date(year, month, 0).getDate()),
+    label: key,
+  }
+}
+
+export function resolvePayCycleBudgetPeriod(dateKeyOrDate = new Date(), payDay = 1) {
+  const dateKey = dateKeyOrDate instanceof Date
+    ? monthKeyFromDate(dateKeyOrDate) + `-${String(dateKeyOrDate.getDate()).padStart(2, '0')}`
+    : String(dateKeyOrDate ?? '').trim()
+  const parts = parseDayKey(dateKey) ?? parseDayKey(`${String(dateKey).slice(0, 7)}-01`) ?? parseDayKey(monthKeyFromDate() + '-01')
+  const currentStartDay = startDayForMonth(parts.year, parts.month, payDay)
+  const startMonth = parts.day >= currentStartDay
+    ? { year: parts.year, month: parts.month }
+    : shiftMonth(parts.year, parts.month, -1)
+  const nextMonth = shiftMonth(startMonth.year, startMonth.month, 1)
+  const startDate = dayKeyFromParts(
+    startMonth.year,
+    startMonth.month,
+    startDayForMonth(startMonth.year, startMonth.month, payDay),
+  )
+  const nextStartDate = dayKeyFromParts(
+    nextMonth.year,
+    nextMonth.month,
+    startDayForMonth(nextMonth.year, nextMonth.month, payDay),
+  )
+  const endDate = shiftDayKey(nextStartDate, -1)
+  return {
+    mode: 'pay_cycle',
+    key: `pay:${startDate}:${endDate}`,
+    monthKey: `pay:${startDate}`,
+    startDate,
+    endDate,
+    label: `${startDate}~${endDate}`,
+    nextPayDate: nextStartDate,
+  }
+}
+
+export function resolveBudgetPeriodForLedger(ledger, dateKeyOrMonth = monthKeyFromDate()) {
+  if (normalizeBudgetPeriodMode(ledger?.budget_period_mode) === 'pay_cycle') {
+    const dateKey = /^\d{4}-\d{2}$/.test(String(dateKeyOrMonth ?? '').trim())
+      ? `${dateKeyOrMonth}-01`
+      : dateKeyOrMonth
+    return resolvePayCycleBudgetPeriod(dateKey, ledger?.budget_pay_day)
+  }
+  return resolveCalendarBudgetPeriod(String(dateKeyOrMonth ?? '').slice(0, 7))
+}
+
+export function previousBudgetPeriod(period, ledger = {}) {
+  if (period?.mode === 'pay_cycle') {
+    return resolvePayCycleBudgetPeriod(shiftDayKey(period.startDate, -1), ledger?.budget_pay_day)
+  }
+  return resolveCalendarBudgetPeriod(previousMonthKey(period?.monthKey ?? period?.key))
+}
+
+export function nextBudgetPeriod(period, ledger = {}) {
+  if (period?.mode === 'pay_cycle') {
+    return resolvePayCycleBudgetPeriod(shiftDayKey(period.endDate, 1), ledger?.budget_pay_day)
+  }
+  const index = monthKeyIndex(period?.monthKey ?? period?.key)
+  return resolveCalendarBudgetPeriod(monthKeyFromIndex((index ?? monthKeyIndex(monthKeyFromDate())) + 1))
+}
+
 export function listInclusiveMonthKeys(startMonthKey, endMonthKey = startMonthKey) {
   const startIndex = monthKeyIndex(startMonthKey)
   const endIndex = monthKeyIndex(endMonthKey)
@@ -134,6 +256,15 @@ export function listInclusiveMonthKeys(startMonthKey, endMonthKey = startMonthKe
   return months
 }
 
+export function daysInPeriod(period) {
+  const start = parseDayKey(period?.startDate)
+  const end = parseDayKey(period?.endDate)
+  if (!start || !end) return 30
+  const startMs = Date.UTC(start.year, start.month - 1, start.day)
+  const endMs = Date.UTC(end.year, end.month - 1, end.day)
+  return Math.max(1, Math.round((endMs - startMs) / 86400000) + 1)
+}
+
 export function daysInMonthForKey(monthKey) {
   const parsed = parseMonthKey(monthKey)
   if (!parsed) return 30
@@ -145,6 +276,12 @@ export function resolveContainerMonthlyAmountMinor(container, monthKey) {
   const amountMinor = Math.max(0, Math.round(Number(container?.amount_minor ?? 0)))
   if (normalizeContainerPeriodMode(container?.period_mode) !== 'daily') return amountMinor
   return amountMinor * daysInMonthForKey(monthKey)
+}
+
+export function resolveContainerPeriodAmountMinor(container, period) {
+  const amountMinor = Math.max(0, Math.round(Number(container?.amount_minor ?? 0)))
+  if (normalizeContainerPeriodMode(container?.period_mode) !== 'daily') return amountMinor
+  return amountMinor * daysInPeriod(period)
 }
 
 export function isDailyPoolContainer(container) {
@@ -360,6 +497,27 @@ function normalizeDayRuleValues(rawValues, unit) {
   ).sort((a, b) => a - b)
 }
 
+function countDailyRuleOccurrencesInRange(startDate, endDate, unit, values) {
+  const start = parseDayKey(startDate)
+  const end = parseDayKey(endDate)
+  if (!start || !end || unit === 'none' || !Array.isArray(values) || !values.length) return 0
+  const startMs = Date.UTC(start.year, start.month - 1, start.day)
+  const endMs = Date.UTC(end.year, end.month - 1, end.day)
+  if (endMs < startMs) return 0
+  const valueSet = new Set(values)
+  let total = 0
+  for (let ms = startMs; ms <= endMs; ms += 86400000) {
+    const date = new Date(ms)
+    if (unit === 'monthday') {
+      if (valueSet.has(date.getUTCDate())) total += 1
+      continue
+    }
+    const weekday = date.getUTCDay() === 0 ? 7 : date.getUTCDay()
+    if (valueSet.has(weekday)) total += 1
+  }
+  return total
+}
+
 function countDailyRuleOccurrences(monthKey, unit, values) {
   if (!monthKey || unit === 'none' || !Array.isArray(values) || !values.length) return 0
 
@@ -482,7 +640,7 @@ async function assertValidBudgetSaveConfig(ledgerId, config) {
   }
 }
 
-function resolveBudgetItemForMonth(item, monthKey, usedDays = []) {
+function resolveBudgetItemForPeriod(item, period, usedDays = []) {
   const amountMode = normalizeAmountMode(item?.amount_mode)
   const dayRuleUnit = amountMode === 'daily_average' ? normalizeDayRuleUnit(item?.day_rule_unit) : 'none'
   const dayRuleValues = amountMode === 'daily_average'
@@ -490,7 +648,7 @@ function resolveBudgetItemForMonth(item, monthKey, usedDays = []) {
     : []
   const baseAmountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
   const occurrenceCount = amountMode === 'daily_average'
-    ? countDailyRuleOccurrences(monthKey, dayRuleUnit, dayRuleValues)
+    ? countDailyRuleOccurrencesInRange(period.startDate, period.endDate, dayRuleUnit, dayRuleValues)
     : 0
   const usedOccurrenceCount = amountMode === 'daily_average'
     ? countUsedOccurrencesByRule(usedDays, dayRuleUnit, dayRuleValues)
@@ -510,6 +668,11 @@ function resolveBudgetItemForMonth(item, monthKey, usedDays = []) {
     resolved_amount_minor: resolvedAmountMinor,
     budget_save_enabled: Number(item?.budget_save_enabled ?? 0) === 1,
   }
+}
+
+function resolveBudgetItemForMonth(item, monthKey, usedDays = []) {
+  const period = resolveCalendarBudgetPeriod(monthKey)
+  return resolveBudgetItemForPeriod(item, period, usedDays)
 }
 
 export function monthRangeUtc(monthKey) {
@@ -547,6 +710,31 @@ export async function ensureBudgetForMonth(ledgerId, monthKey) {
   return budget
 }
 
+export async function ensureBudgetForPeriod(ledgerId, period) {
+  const normalizedPeriod = period?.key ? period : resolveCalendarBudgetPeriod(period?.monthKey ?? monthKeyFromDate())
+  let budget = await dependencies.getBudgetByPeriod(ledgerId, normalizedPeriod.key)
+  if (!budget) {
+    budget = await dependencies.createBudget(ledgerId, {
+      monthKey: normalizedPeriod.mode === 'calendar_month' ? normalizedPeriod.monthKey : normalizedPeriod.monthKey,
+      periodKey: normalizedPeriod.key,
+      periodStartDate: normalizedPeriod.startDate,
+      periodEndDate: normalizedPeriod.endDate,
+      periodMode: normalizedPeriod.mode,
+      name: normalizedPeriod.mode === 'pay_cycle'
+        ? `${normalizedPeriod.startDate}～${normalizedPeriod.endDate} 預算`
+        : `${normalizedPeriod.monthKey} 月預算`,
+      includeTransfers: false,
+      includeLoanRepayments: false,
+      includeReimbursedExpenses: false,
+      budgetSaveTotalEnabled: false,
+      budgetSaveTotalTargetAccountId: null,
+      budgetSaveTotalSourceAccountId: null,
+    })
+  }
+
+  return budget
+}
+
 export async function getBudgetSavePreferences(ledgerId) {
   if (!ledgerId) {
     return normalizeBudgetSavePreferences()
@@ -563,8 +751,12 @@ export async function saveBudgetSavePreferences(ledgerId, input = {}) {
 }
 
 export async function loadBudgetSnapshot(ledgerId, monthKey) {
-  const budget = await ensureBudgetForMonth(ledgerId, monthKey)
-  const { startUtc, endUtc } = monthRangeUtc(monthKey)
+  return loadBudgetSnapshotForPeriod(ledgerId, resolveCalendarBudgetPeriod(monthKey))
+}
+
+export async function loadBudgetSnapshotForPeriod(ledgerId, period) {
+  const budget = await ensureBudgetForPeriod(ledgerId, period)
+  const { startUtc, endUtc } = dateRangeUtc(period.startDate, period.endDate)
   const { startUtc: todayStartUtc, endUtc: todayEndUtc } = todayRangeUtc()
   const [rawItems, spentRows, todaySpentRows, usedOccurrenceRows, budgetSavePreferences, rawContainers] = await Promise.all([
     dependencies.listBudgetItems(ledgerId, budget.id),
@@ -584,15 +776,28 @@ export async function loadBudgetSnapshot(ledgerId, monthKey) {
     }
     usedDaysMap.get(categoryId).push(occurredDay)
   }
-  const items = rawItems.map((item) => resolveBudgetItemForMonth(item, monthKey, usedDaysMap.get(String(item?.category_id ?? '').trim()) ?? []))
+  const items = rawItems.map((item) => resolveBudgetItemForPeriod(item, period, usedDaysMap.get(String(item?.category_id ?? '').trim()) ?? []))
 
   return {
     budget,
+    period,
     items,
     containers: rawContainers,
     spentRows,
     todaySpentRows,
     budgetSavePreferences,
+  }
+}
+
+export function dateRangeUtc(startDate, endDate) {
+  const start = parseDayKey(startDate)
+  const end = parseDayKey(endDate)
+  if (!start || !end) return monthRangeUtc(monthKeyFromDate())
+  const endNext = shiftDayKey(endDate, 1)
+  const endParts = parseDayKey(endNext)
+  return {
+    startUtc: new Date(start.year, start.month - 1, start.day, 0, 0, 0).toISOString(),
+    endUtc: new Date(endParts.year, endParts.month - 1, endParts.day, 0, 0, 0).toISOString(),
   }
 }
 
@@ -678,7 +883,9 @@ function assertBudgetItemCanSaveInMonth(items, containers, normalizedPayload, bu
 }
 
 export async function saveBudgetItem(ledgerId, monthKey, payload) {
-  const budget = await ensureBudgetForMonth(ledgerId, monthKey)
+  const budget = typeof monthKey === 'object'
+    ? await ensureBudgetForPeriod(ledgerId, monthKey)
+    : await ensureBudgetForMonth(ledgerId, monthKey)
   const normalizedPayload = await normalizeBudgetItemPayload(ledgerId, payload)
   const [items, containers] = await Promise.all([
     dependencies.listBudgetItems(ledgerId, budget.id),
@@ -791,14 +998,18 @@ export async function saveBudgetItemRange(ledgerId, startMonthKey, endMonthKey, 
 }
 
 export async function saveBudgetTotalConfig(ledgerId, monthKey, payload = {}) {
-  const budget = await ensureBudgetForMonth(ledgerId, monthKey)
+  const budget = typeof monthKey === 'object'
+    ? await ensureBudgetForPeriod(ledgerId, monthKey)
+    : await ensureBudgetForMonth(ledgerId, monthKey)
   const budgetSave = await assertValidBudgetSaveConfig(ledgerId, normalizeBudgetSaveConfig(payload))
   await dependencies.updateBudgetSaveTotalConfig(ledgerId, budget.id, {
     enabled: budgetSave.enabled,
     targetAccountId: budgetSave.targetAccountId,
     sourceAccountId: budgetSave.sourceAccountId,
   })
-  return dependencies.getBudgetByMonth(ledgerId, monthKey)
+  return typeof monthKey === 'object'
+    ? dependencies.getBudgetByPeriod(ledgerId, monthKey.key)
+    : dependencies.getBudgetByMonth(ledgerId, monthKey)
 }
 
 async function normalizeBudgetContainerPayload(ledgerId, payload = {}) {
@@ -852,7 +1063,9 @@ function assertNoBudgetSaveChildConflict(items, normalizedPayload, containerId =
 }
 
 export async function saveBudgetContainer(ledgerId, monthKey, payload) {
-  const budget = await ensureBudgetForMonth(ledgerId, monthKey)
+  const budget = typeof monthKey === 'object'
+    ? await ensureBudgetForPeriod(ledgerId, monthKey)
+    : await ensureBudgetForMonth(ledgerId, monthKey)
   const normalizedPayload = await normalizeBudgetContainerPayload(ledgerId, payload)
 
   const existingContainers = await dependencies.listBudgetContainers(ledgerId, budget.id)

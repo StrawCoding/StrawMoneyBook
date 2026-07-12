@@ -1,5 +1,12 @@
 import { defineStore, getActivePinia } from 'pinia'
-import { createLedger, deleteLedger, listLedgers, renameLedger, updateLedgerSortOrders } from '@/core/repositories/ledger.repo'
+import {
+  createLedger,
+  deleteLedger,
+  listLedgers,
+  renameLedger,
+  updateLedgerBudgetPeriodSettings,
+  updateLedgerSortOrders,
+} from '@/core/repositories/ledger.repo'
 import { ensureLedgerDefaults } from '@/core/services/seed.service'
 import { assertCanCreateLedger, getMembershipTierSnapshot, isFreeTier } from '@/core/services/membership.service'
 import { getCurrentLocale } from '@/ui/services/i18n.service'
@@ -122,6 +129,11 @@ export const useLedgerStore = defineStore('ledger', {
 
     async renameLedger(ledgerId, name) {
       await renameLedger(ledgerId, name)
+      await this.refresh()
+    },
+
+    async updateBudgetPeriodSettings(ledgerId, payload) {
+      await updateLedgerBudgetPeriodSettings(ledgerId, payload)
       await this.refresh()
     },
 
