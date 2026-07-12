@@ -11,6 +11,7 @@ import {
   loadBudgetSnapshot,
   removeBudgetItem,
   saveBudgetItem,
+  saveBudgetItemRange,
   isDailyPoolChildItem,
 } from '@/core/services/budget.service'
 import { computeMonthlyReservedMinor } from '@/core/services/budget-reserve.service'
@@ -235,7 +236,12 @@ export const useBudgetStore = defineStore('budget', {
 
     async upsertItem(payload) {
       const ledgerStore = useLedgerStore()
-      await saveBudgetItem(ledgerStore.activeLedgerId, this.monthKey, payload)
+      const applyThroughMonth = String(payload?.applyThroughMonth ?? '').trim()
+      if (applyThroughMonth && !payload?.id) {
+        await saveBudgetItemRange(ledgerStore.activeLedgerId, this.monthKey, applyThroughMonth, payload)
+      } else {
+        await saveBudgetItem(ledgerStore.activeLedgerId, this.monthKey, payload)
+      }
       await this.loadMonth(this.monthKey)
     },
 

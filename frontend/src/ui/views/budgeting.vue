@@ -482,8 +482,10 @@ const budgetErrorKeys = new Set([
   'budgeting.budget_save.error.conflict',
   'budgeting.budget_save.error.parent_conflict',
   'budgeting.budget_save.error.group_conflict',
+  'budgeting.budget_item.error.conflict_range',
   'budgeting.container.error.name_required',
   'budgeting.container.error.not_found',
+  'budgeting.container.error.not_found_range',
   'budgeting.container.error.invalid_month_range',
   'budgeting.container.error.name_conflict',
   'budgeting.container.error.name_conflict_range',
@@ -878,6 +880,10 @@ function formatMajor(amountMinor) {
 function resolveBudgetErrorMessage(error) {
   const key = String(error?.code ?? error?.message ?? '').trim()
   if (key === 'budgeting.container.error.name_conflict_range') {
+    const months = Array.isArray(error?.monthKeys) ? error.monthKeys.join(', ') : ''
+    return t(key, { months })
+  }
+  if (key === 'budgeting.budget_item.error.conflict_range' || key === 'budgeting.container.error.not_found_range') {
     const months = Array.isArray(error?.monthKeys) ? error.monthKeys.join(', ') : ''
     return t(key, { months })
   }

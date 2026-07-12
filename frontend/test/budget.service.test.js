@@ -9,6 +9,7 @@ import {
   saveBudgetContainer,
   saveBudgetContainerRange,
   saveBudgetItem,
+  saveBudgetItemRange,
   setBudgetServiceDependenciesForTest,
 } from '../src/core/services/budget.service.js'
 
@@ -172,6 +173,152 @@ test('saveBudgetItem persists budgetContainerId when container exists', async ()
   assert.equal(id, 'bi_food')
   assert.equal(upsertCalls.length, 1)
   assert.equal(upsertCalls[0].budgetContainerId, 'bc_life')
+})
+
+test('saveBudgetItemRange creates independent category budget items across years', async () => {
+  const upsertCalls = []
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      return { id: `budget_${monthKey}`, month_key: monthKey }
+    },
+    async listBudgetItems() {
+      return []
+    },
+    async listBudgetContainers() {
+      return []
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      upsertCalls.push(payload)
+      return payload.id
+    },
+  })
+
+  const result = await saveBudgetItemRange('ledger_1', '2026-11', '2027-01', {
+    categoryId: 'cat_food',
+    amountMinor: 120000,
+    amountMode: 'daily_average',
+    dayRuleUnit: 'weekday',
+    dayRuleValues: [1, 3, 5],
+  })
+
+  assert.deepEqual(result.monthKeys, ['2026-11', '2026-12', '2027-01'])
+  assert.equal(result.itemIds.length, 3)
+  assert.equal(new Set(result.itemIds).size, 3)
+  assert.deepEqual(
+    upsertCalls.map((call) => ({
+      budgetId: call.budgetId,
+      categoryId: call.categoryId,
+      amountMinor: call.amountMinor,
+      amountMode: call.amountMode,
+      dayRuleUnit: call.dayRuleUnit,
+      dayRuleValuesJson: call.dayRuleValuesJson,
+    })),
+    [
+      { budgetId: 'budget_2026-11', categoryId: 'cat_food', amountMinor: 120000, amountMode: 'daily_average', dayRuleUnit: 'weekday', dayRuleValuesJson: '[1,3,5]' },
+      { budgetId: 'budget_2026-12', categoryId: 'cat_food', amountMinor: 120000, amountMode: 'daily_average', dayRuleUnit: 'weekday', dayRuleValuesJson: '[1,3,5]' },
+      { budgetId: 'budget_2027-01', categoryId: 'cat_food', amountMinor: 120000, amountMode: 'daily_average', dayRuleUnit: 'weekday', dayRuleValuesJson: '[1,3,5]' },
+    ],
+  )
+})
+
+test('saveBudgetItemRange rejects invalid ranges before writing any item', async () => {
+  const upsertCalls = []
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth() {
+      throw new Error('should not read months')
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      upsertCalls.push(payload)
+      return payload.id
+    },
+  })
+
+  await assert.rejects(
+    saveBudgetItemRange('ledger_1', '2026-04', '2026-03', {
+      categoryId: 'cat_food',
+      amountMinor: 10000,
+    }),
+    { code: 'budgeting.container.error.invalid_month_range' },
+  )
+
+  assert.deepEqual(upsertCalls, [])
+})
+
+test('saveBudgetItemRange rejects existing same-category item before writing any target month', async () => {
+  const upsertCalls = []
+  const createBudgetCalls = []
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      return { id: `budget_${monthKey}`, month_key: monthKey }
+    },
+    async listBudgetItems(_ledgerId, budgetId) {
+      if (budgetId === 'budget_2026-12') {
+        return [{ id: 'bi_existing', category_id: 'cat_food' }]
+      }
+      return []
+    },
+    async listBudgetContainers() {
+      return []
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      upsertCalls.push(payload)
+      return payload.id
+    },
+    async createBudget(_ledgerId, payload) {
+      createBudgetCalls.push(payload)
+      return { id: `budget_${payload.monthKey}`, month_key: payload.monthKey }
+    },
+  })
+
+  await assert.rejects(
+    saveBudgetItemRange('ledger_1', '2026-11', '2027-01', {
+      categoryId: 'cat_food',
+      amountMinor: 10000,
+    }),
+    (error) => {
+      assert.equal(error.code, 'budgeting.budget_item.error.conflict_range')
+      assert.deepEqual(error.monthKeys, ['2026-12'])
+      return true
+    },
+  )
+
+  assert.deepEqual(upsertCalls, [])
+  assert.deepEqual(createBudgetCalls, [])
+})
+
+test('saveBudgetItemRange edits only the current month when payload has id', async () => {
+  const upsertCalls = []
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      assert.equal(monthKey, '2026-11')
+      return { id: 'budget_2026-11', month_key: monthKey }
+    },
+    async listBudgetItems() {
+      return [{ id: 'bi_food', category_id: 'cat_food' }]
+    },
+    async listBudgetContainers() {
+      return []
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      upsertCalls.push(payload)
+      return payload.id
+    },
+  })
+
+  const result = await saveBudgetItemRange('ledger_1', '2026-11', '2027-01', {
+    id: 'bi_food',
+    categoryId: 'cat_food',
+    amountMinor: 220000,
+  })
+
+  assert.deepEqual(result, { monthKeys: ['2026-11'], itemIds: ['bi_food'] })
+  assert.equal(upsertCalls.length, 1)
+  assert.equal(upsertCalls[0].budgetId, 'budget_2026-11')
+  assert.equal(upsertCalls[0].amountMinor, 220000)
 })
 
 test('saveBudgetContainer rejects auto save when a child item already saves', async () => {

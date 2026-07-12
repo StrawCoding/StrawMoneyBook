@@ -596,9 +596,7 @@ export async function loadBudgetSnapshot(ledgerId, monthKey) {
   }
 }
 
-export async function saveBudgetItem(ledgerId, monthKey, payload) {
-  const budget = await ensureBudgetForMonth(ledgerId, monthKey)
-
+async function normalizeBudgetItemPayload(ledgerId, payload = {}) {
   if (!payload.categoryId) {
     throw createBudgetError('budgeting.error.category_required')
   }
@@ -619,50 +617,177 @@ export async function saveBudgetItem(ledgerId, monthKey, payload) {
 
   const budgetSave = await assertValidBudgetSaveConfig(ledgerId, normalizeBudgetSaveConfig(payload))
   const budgetContainerId = normalizeText(payload.budgetContainerId) || null
-  if (budgetSave.enabled) {
+  return {
+    id: normalizeText(payload.id) || undefined,
+    categoryId: payload.categoryId,
+    amountMinor,
+    amountMode,
+    dayRuleUnit,
+    dayRuleValues,
+    budgetSave,
+    budgetContainerId,
+    sortOrder: payload.sortOrder ?? 0,
+  }
+}
+
+function buildBudgetItemWritePayload(budget, normalizedPayload, budgetContainerId = normalizedPayload.budgetContainerId, id = normalizedPayload.id) {
+  return {
+    id,
+    budgetId: budget.id,
+    scopeType: 'category',
+    categoryId: normalizedPayload.categoryId,
+    categoryGroupId: null,
+    budgetContainerId,
+    amountMinor: normalizedPayload.amountMinor,
+    amountMode: normalizedPayload.amountMode,
+    dayRuleUnit: normalizedPayload.dayRuleUnit,
+    dayRuleValuesJson: JSON.stringify(normalizedPayload.dayRuleValues),
+    budgetSaveEnabled: normalizedPayload.budgetSave.enabled,
+    budgetSaveTargetAccountId: normalizedPayload.budgetSave.targetAccountId,
+    budgetSaveSourceAccountId: normalizedPayload.budgetSave.sourceAccountId,
+    sortOrder: normalizedPayload.sortOrder,
+  }
+}
+
+function hasDuplicateBudgetItemCategory(items = [], normalizedPayload) {
+  return (items ?? []).some((item) => (
+    String(item?.id ?? '') !== String(normalizedPayload.id ?? '')
+    && String(item?.category_id ?? '') === String(normalizedPayload.categoryId ?? '')
+  ))
+}
+
+function assertBudgetItemCanSaveInMonth(items, containers, normalizedPayload, budgetContainerId = normalizedPayload.budgetContainerId) {
+  if (normalizedPayload.budgetSave.enabled) {
     if (budgetContainerId) {
-      const containers = await dependencies.listBudgetContainers(ledgerId, budget.id)
       const parentContainer = containers.find((c) => String(c?.id ?? '') === String(budgetContainerId))
       if (parentContainer && normalizeBudgetSaveEnabled(parentContainer?.budget_save_enabled)) {
         throw createBudgetError('budgeting.budget_save.error.parent_conflict')
       }
     }
-    const items = await dependencies.listBudgetItems(ledgerId, budget.id)
-    const duplicateExists = items.some((item) => (
-      String(item?.id ?? '') !== String(payload.id ?? '')
-      && String(item?.category_id ?? '') === String(payload.categoryId ?? '')
-    ))
-    if (duplicateExists) {
+    if (hasDuplicateBudgetItemCategory(items, normalizedPayload)) {
       throw createBudgetError('budgeting.budget_save.error.conflict')
     }
   }
 
   if (budgetContainerId) {
-    const containers = await dependencies.listBudgetContainers(ledgerId, budget.id)
     const container = containers.find((c) => String(c?.id ?? '') === String(budgetContainerId))
     if (!container) {
       throw createBudgetError('budgeting.container.error.not_found')
     }
   }
+}
+
+export async function saveBudgetItem(ledgerId, monthKey, payload) {
+  const budget = await ensureBudgetForMonth(ledgerId, monthKey)
+  const normalizedPayload = await normalizeBudgetItemPayload(ledgerId, payload)
+  const [items, containers] = await Promise.all([
+    dependencies.listBudgetItems(ledgerId, budget.id),
+    dependencies.listBudgetContainers(ledgerId, budget.id),
+  ])
+  assertBudgetItemCanSaveInMonth(items, containers, normalizedPayload)
 
   const id = await dependencies.upsertBudgetItem(ledgerId, {
-    id: payload.id,
-    budgetId: budget.id,
-    scopeType: 'category',
-    categoryId: payload.categoryId,
-    categoryGroupId: null,
-    budgetContainerId,
-    amountMinor,
-    amountMode,
-    dayRuleUnit,
-    dayRuleValuesJson: JSON.stringify(dayRuleValues),
-    budgetSaveEnabled: budgetSave.enabled,
-    budgetSaveTargetAccountId: budgetSave.targetAccountId,
-    budgetSaveSourceAccountId: budgetSave.sourceAccountId,
-    sortOrder: payload.sortOrder ?? 0,
+    ...buildBudgetItemWritePayload(budget, normalizedPayload),
+    id: normalizedPayload.id,
   })
 
   return id
+}
+
+function findEquivalentContainerForMonth(state, selectedContainer) {
+  if (!selectedContainer) return null
+  const selectedName = normalizeText(selectedContainer?.name)
+  if (!selectedName) return null
+  return (state.containers ?? []).find((container) => normalizeText(container?.name) === selectedName) ?? null
+}
+
+export async function saveBudgetItemRange(ledgerId, startMonthKey, endMonthKey, payload = {}) {
+  const monthKeys = listInclusiveMonthKeys(startMonthKey, endMonthKey || startMonthKey)
+  const normalizedPayload = await normalizeBudgetItemPayload(ledgerId, payload)
+  if (normalizedPayload.id) {
+    return {
+      monthKeys: [startMonthKey],
+      itemIds: [await saveBudgetItem(ledgerId, startMonthKey, payload)],
+    }
+  }
+
+  const monthStates = []
+  let selectedContainer = null
+  for (const monthKey of monthKeys) {
+    const budget = await dependencies.getBudgetByMonth(ledgerId, monthKey)
+    const [items, containers] = budget
+      ? await Promise.all([
+        dependencies.listBudgetItems(ledgerId, budget.id),
+        dependencies.listBudgetContainers(ledgerId, budget.id),
+      ])
+      : [[], []]
+    const state = { monthKey, budget, items, containers, budgetContainerId: null }
+    if (monthKey === startMonthKey && normalizedPayload.budgetContainerId) {
+      selectedContainer = containers.find((container) => String(container?.id ?? '') === String(normalizedPayload.budgetContainerId))
+      if (!selectedContainer) {
+        throw createBudgetError('budgeting.container.error.not_found')
+      }
+      state.budgetContainerId = normalizedPayload.budgetContainerId
+    }
+    monthStates.push(state)
+  }
+
+  const conflictMonthKeys = []
+  for (const state of monthStates) {
+    if (hasDuplicateBudgetItemCategory(state.items, normalizedPayload)) {
+      conflictMonthKeys.push(state.monthKey)
+    }
+  }
+  if (conflictMonthKeys.length > 0) {
+    const error = createBudgetError('budgeting.budget_item.error.conflict_range')
+    error.monthKeys = conflictMonthKeys
+    error.message = `${error.code}:${conflictMonthKeys.join(',')}`
+    throw error
+  }
+
+  if (normalizedPayload.budgetContainerId) {
+    const missingContainerMonthKeys = []
+    for (const state of monthStates) {
+      if (state.monthKey === startMonthKey) continue
+      const equivalentContainer = findEquivalentContainerForMonth(state, selectedContainer)
+      if (!equivalentContainer) {
+        missingContainerMonthKeys.push(state.monthKey)
+        continue
+      }
+      state.budgetContainerId = equivalentContainer.id
+    }
+    if (missingContainerMonthKeys.length > 0) {
+      const error = createBudgetError('budgeting.container.error.not_found_range')
+      error.monthKeys = missingContainerMonthKeys
+      error.message = `${error.code}:${missingContainerMonthKeys.join(',')}`
+      throw error
+    }
+  }
+
+  for (const state of monthStates) {
+    assertBudgetItemCanSaveInMonth(state.items, state.containers, normalizedPayload, state.budgetContainerId)
+  }
+
+  const itemIds = []
+  try {
+    for (const state of monthStates) {
+      const budget = state.budget ?? await ensureBudgetForMonth(ledgerId, state.monthKey)
+      state.budget = budget
+      const itemId = createId('bi')
+      const savedItemId = await dependencies.upsertBudgetItem(
+        ledgerId,
+        buildBudgetItemWritePayload(budget, normalizedPayload, state.budgetContainerId, itemId),
+      )
+      itemIds.push(savedItemId)
+    }
+  } catch (error) {
+    await Promise.allSettled(
+      itemIds.map((itemId) => dependencies.deleteBudgetItem(ledgerId, itemId)),
+    )
+    throw error
+  }
+
+  return { monthKeys, itemIds }
 }
 
 export async function saveBudgetTotalConfig(ledgerId, monthKey, payload = {}) {

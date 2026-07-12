@@ -23,6 +23,14 @@
       <CustomSelect v-model="model.budgetContainerId" :options="containerOptions" />
     </label>
 
+    <label v-if="!model.id">
+      {{ t('budgeting.sheet.apply_through_month') }}
+      <input v-model="model.applyThroughMonth" class="input" type="month" />
+      <small class="muted">
+        {{ t('budgeting.sheet.apply_through_month_hint', { month: budgetMonth || '-' }) }}
+      </small>
+    </label>
+
     <p v-if="isDailyPoolBinding" class="muted pool-binding-hint">
       {{ t('budgeting.container.daily_pool_item_hint') }}
     </p>
@@ -203,6 +211,7 @@ const model = reactive({
   id: '',
   categoryId: '',
   budgetContainerId: '',
+  applyThroughMonth: '',
   amountMajor: null,
   amountMode: 'fixed',
   dayRuleUnit: 'weekday',
@@ -319,6 +328,7 @@ watch(
       model.id = props.item.id
       model.categoryId = props.item.category_id ?? ''
       model.budgetContainerId = String(props.item.budget_container_id ?? '')
+      model.applyThroughMonth = ''
       model.amountMajor = Number(props.item.amount_minor ?? 0) / 100
       model.amountMode = normalizeAmountMode(props.item.amount_mode)
       model.dayRuleUnit = normalizeDayRuleUnit(props.item.day_rule_unit)
@@ -333,6 +343,7 @@ watch(
     model.id = ''
     model.categoryId = categoryOptions.value[0]?.id ?? ''
     model.budgetContainerId = ''
+    model.applyThroughMonth = ''
     model.amountMajor = null
     model.amountMode = 'fixed'
     model.dayRuleUnit = 'weekday'
@@ -493,6 +504,7 @@ function onSave() {
     id: model.id || undefined,
     categoryId: model.categoryId,
     budgetContainerId: String(model.budgetContainerId ?? '').trim() || null,
+    applyThroughMonth: model.id ? '' : String(model.applyThroughMonth ?? '').trim(),
     amountMinor: poolBinding ? 0 : Math.round(Number(model.amountMajor ?? 0) * 100),
     amountMode: poolBinding ? 'fixed' : model.amountMode,
     dayRuleUnit: poolBinding ? 'none' : (model.amountMode === 'daily_average' ? model.dayRuleUnit : 'none'),

@@ -169,6 +169,34 @@ async function createPool({ name, amount, applyThroughMonth = '', periodMode = '
   await delay(1200)
 }
 
+async function createBudgetItem({ amount, applyThroughMonth = '' }) {
+  await closeOpenOverlayIfAny()
+  await runPlaywrightCli(['click', "button:has-text('Add Item'), button:has-text('新增項目'), button:has-text('項目を追加')"])
+  await delay(700)
+  const categoryName = await evalPage(`() => document.querySelector('.form-wrap .custom-select .text')?.textContent?.trim() ?? ''`)
+  assert.ok(categoryName, 'budget item category should be preselected')
+  if (applyThroughMonth) {
+    await runPlaywrightCli(['fill', '.form-wrap input.input[type="month"]', applyThroughMonth])
+  }
+  await runPlaywrightCli(['fill', '.form-wrap input.input[type="number"]', String(amount)])
+  await runPlaywrightCli(['click', "button.btn.primary:has-text('Save'), button.btn.primary:has-text('儲存'), button.btn.primary:has-text('保存')"])
+  await delay(1200)
+  return categoryName
+}
+
+async function editBudgetItemAmount(categoryName, amount) {
+  await closeOpenOverlayIfAny()
+  await runPlaywrightCli(['click', `.item-card-btn:has-text("${escapeSelectorText(categoryName)}")`])
+  await delay(500)
+  await runPlaywrightCli(['click', "button.btn.primary:has-text('Edit'), button.btn.primary:has-text('編輯'), button.btn.primary:has-text('編集')"])
+  await delay(500)
+  const hasApplyThrough = await evalPage(`() => Boolean(document.querySelector('.form-wrap input.input[type="month"]'))`)
+  assert.equal(hasApplyThrough, false, 'editing an existing budget item must not show cross-month apply-through')
+  await runPlaywrightCli(['fill', '.form-wrap input.input[type="number"]', String(amount)])
+  await runPlaywrightCli(['click', "button.btn.primary:has-text('Save'), button.btn.primary:has-text('儲存'), button.btn.primary:has-text('保存')"])
+  await delay(1200)
+}
+
 async function readBudgetBody() {
   return evalPage(`() => document.body?.innerText ?? ''`)
 }
@@ -185,6 +213,10 @@ async function closeOpenOverlayIfAny() {
 
 function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function escapeSelectorText(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
 async function assertBudgetBodyContains(monthKey, text) {
@@ -264,6 +296,31 @@ try {
   await assertToastContains(/2026-12/u)
   await closeOpenOverlayIfAny()
   await assertBudgetBodyDoesNotContain('2027-01', 'Collision Pool')
+
+  await pickBudgetMonth('2027-11')
+  const crossItemCategory = await createBudgetItem({ amount: 1234, applyThroughMonth: '2028-01' })
+  await assertBudgetBodyContains('2027-11', crossItemCategory)
+  await assertBudgetBodyContains('2027-12', crossItemCategory)
+  await assertBudgetBodyContains('2028-01', crossItemCategory)
+
+  await pickBudgetMonth('2028-02')
+  await createBudgetItem({ amount: 777, applyThroughMonth: '2028-01' })
+  await assertToastContains(/套用月份格式不正確|invalid|開始月より前/u)
+  await closeOpenOverlayIfAny()
+
+  await pickBudgetMonth('2027-12')
+  await createBudgetItem({ amount: 555, applyThroughMonth: '2028-02' })
+  await assertToastContains(/2027-12/u)
+  await closeOpenOverlayIfAny()
+  await assertBudgetBodyDoesNotContain('2028-02', crossItemCategory)
+
+  await pickBudgetMonth('2027-12')
+  await editBudgetItemAmount(crossItemCategory, 2222)
+  let body = await readBudgetBody()
+  assert.match(body, /2,222|2222/u)
+  await pickBudgetMonth('2028-01')
+  body = await readBudgetBody()
+  assert.doesNotMatch(body, /2,222|2222/u)
 
   console.log('Budget cross-month Playwright flow passed')
 } finally {
