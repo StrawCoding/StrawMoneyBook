@@ -321,6 +321,83 @@ test('saveBudgetItemRange edits only the current month when payload has id', asy
   assert.equal(upsertCalls[0].amountMinor, 220000)
 })
 
+test('saveBudgetItemRange maps pooled items to same-name containers in each target month', async () => {
+  const upsertCalls = []
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      return { id: `budget_${monthKey}`, month_key: monthKey }
+    },
+    async listBudgetItems() {
+      return []
+    },
+    async listBudgetContainers(_ledgerId, budgetId) {
+      const monthKey = String(budgetId).replace('budget_', '')
+      return [{ id: `bc_life_${monthKey}`, name: '生活費' }]
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      upsertCalls.push(payload)
+      return payload.id
+    },
+  })
+
+  await saveBudgetItemRange('ledger_1', '2026-11', '2027-01', {
+    categoryId: 'cat_food',
+    budgetContainerId: 'bc_life_2026-11',
+    amountMinor: 120000,
+  })
+
+  assert.deepEqual(
+    upsertCalls.map((call) => ({
+      budgetId: call.budgetId,
+      budgetContainerId: call.budgetContainerId,
+      categoryId: call.categoryId,
+    })),
+    [
+      { budgetId: 'budget_2026-11', budgetContainerId: 'bc_life_2026-11', categoryId: 'cat_food' },
+      { budgetId: 'budget_2026-12', budgetContainerId: 'bc_life_2026-12', categoryId: 'cat_food' },
+      { budgetId: 'budget_2027-01', budgetContainerId: 'bc_life_2027-01', categoryId: 'cat_food' },
+    ],
+  )
+})
+
+test('saveBudgetItemRange rejects missing same-name container before writing pooled items', async () => {
+  const upsertCalls = []
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      return { id: `budget_${monthKey}`, month_key: monthKey }
+    },
+    async listBudgetItems() {
+      return []
+    },
+    async listBudgetContainers(_ledgerId, budgetId) {
+      const monthKey = String(budgetId).replace('budget_', '')
+      if (monthKey === '2026-12') return []
+      return [{ id: `bc_life_${monthKey}`, name: '生活費' }]
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      upsertCalls.push(payload)
+      return payload.id
+    },
+  })
+
+  await assert.rejects(
+    saveBudgetItemRange('ledger_1', '2026-11', '2027-01', {
+      categoryId: 'cat_food',
+      budgetContainerId: 'bc_life_2026-11',
+      amountMinor: 120000,
+    }),
+    (error) => {
+      assert.equal(error.code, 'budgeting.container.error.not_found_range')
+      assert.deepEqual(error.monthKeys, ['2026-12'])
+      return true
+    },
+  )
+
+  assert.deepEqual(upsertCalls, [])
+})
+
 test('saveBudgetContainer rejects auto save when a child item already saves', async () => {
   setBudgetServiceDependenciesForTest({
     async getBudgetByMonth(_ledgerId, monthKey) {
