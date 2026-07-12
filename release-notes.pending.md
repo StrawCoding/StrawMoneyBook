@@ -2,8 +2,10 @@
 
 ---
 
-## v1.3.57
+## v1.3.58
 - (SMB-269) 預算期間新增帳本層「發薪週期」模式：設定頁可選曆月或發薪週期並指定每月發薪日，29/30/31 遇短月會落在該月最後一天；預算資料層新增 `period_key`、起訖日與 mode，既有 `YYYY-MM` 月預算完整保留，發薪週期不把跨月資料拆成多筆月預算，交易依實際日期落入週期。一般分類預算項目與共同預算池皆支援發薪週期，固定額不拆帳，日均 / 日池依週期實際天數與範圍內指定日計算；預算頁與首頁預算卡顯示週期起訖、上一期 / 下一期與下次發薪日，交易清單、日曆與分析仍維持曆月查帳預設。新增 migration 039、service/store/UI/i18n、node tests 與 `playwright:budget-pay-cycle` app-shell 流程。
+
+## v1.3.57
 - (SMB-268) 預算新增支援跨月共同預算池與一般分類預算項目：新增池或新增分類項目可選「套用至月份」跨月／跨年建立，服務層仍維持每月獨立 budget/container/item 並在寫入前檢查目標月份衝突，避免 partial write；一般項目會保留金額模式、日期日均規則、預算存款設定與未入池 / 同名共同池對應，既有項目編輯仍只改目前月；月池維持每月金額，日池維持每日費率並依各月天數計算，日池 range 寫入失敗時會清掉新建 child item 並還原原本項目。新增 node service/source tests 與 `playwright:budget-cross-month` app-shell 流程。未更動 `./backend`，未執行 deploy:copy / StrawMB restart。
 
 ## v1.3.56
