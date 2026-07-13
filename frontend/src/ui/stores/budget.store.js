@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { dateKeyFromDate, monthKeyFromDate } from '@/core/utils/id'
+import { monthKeyFromDate } from '@/core/utils/id'
 import {
   copyPreviousMonthBudget,
   nextBudgetPeriod,
@@ -38,6 +38,33 @@ function normalizeTimeZone(value) {
   } catch {
     return 'Asia/Taipei'
   }
+}
+
+function dateKeyForTimeZone(timeZone = 'Asia/Taipei', referenceDate = new Date()) {
+  const normalizedTimeZone = normalizeTimeZone(timeZone)
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: normalizedTimeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  const parts = formatter.formatToParts(referenceDate)
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  const yearNumber = Number(values.year)
+  const monthNumber = Number(values.month)
+  const dayNumber = Number(values.day)
+  const year = String(yearNumber).padStart(4, '0')
+  const month = String(monthNumber).padStart(2, '0')
+  const day = String(dayNumber).padStart(2, '0')
+  return Number.isFinite(yearNumber)
+    && Number.isFinite(monthNumber)
+    && Number.isFinite(dayNumber)
+    && monthNumber >= 1
+    && monthNumber <= 12
+    && dayNumber >= 1
+    && dayNumber <= 31
+    ? `${year}-${month}-${day}`
+    : monthKeyFromDate(referenceDate) + `-${String(referenceDate.getDate()).padStart(2, '0')}`
 }
 
 function itemResolvedMinor(item) {
@@ -222,7 +249,10 @@ export const useBudgetStore = defineStore('budget', {
 
     async loadCurrentPeriod() {
       const ledgerStore = useLedgerStore()
-      const period = resolveBudgetPeriodForLedger(ledgerStore.activeLedger, dateKeyFromDate())
+      const period = resolveBudgetPeriodForLedger(
+        ledgerStore.activeLedger,
+        dateKeyForTimeZone(ledgerStore.activeLedger?.timezone),
+      )
       await this.loadPeriod(period)
     },
 

@@ -91,6 +91,22 @@ test('resolveBudgetPeriodForLedger treats pay day as the first inclusive day and
     resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 25 }, '2026-03-24').key,
     'pay:2026-02-25:2026-03-24',
   )
+  assert.equal(
+    resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 31 }, '2026-02-27').key,
+    'pay:2026-01-31:2026-02-27',
+  )
+  assert.equal(
+    resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 31 }, '2026-02-28').key,
+    'pay:2026-02-28:2026-03-30',
+  )
+  assert.equal(
+    resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 30 }, '2027-01-29').key,
+    'pay:2026-12-30:2027-01-29',
+  )
+  assert.equal(
+    resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 30 }, '2027-01-30').key,
+    'pay:2027-01-30:2027-02-27',
+  )
 })
 
 test('resolveBudgetPeriodForLedger preserves persisted pay-cycle month keys on startup reload', () => {

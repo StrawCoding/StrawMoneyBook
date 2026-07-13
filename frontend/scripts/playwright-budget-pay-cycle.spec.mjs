@@ -45,6 +45,15 @@ async (page) => {
   await assertBodyMatches(/Pay Cycle Budget|發薪週期預算|給与サイクル予算/u)
   await assertRangeVisible('2026-06-30', '2026-07-30')
   await assertBodyMatches(/Pay Cycle Pool/u)
+  await setAppDateIso('2026-07-30T23:59:00+08:00')
+  await triggerBudgetLifecycleRefresh()
+  await assertRangeVisible('2026-06-30', '2026-07-30')
+  await setAppDateIso('2026-07-31T00:00:00+08:00')
+  await triggerBudgetLifecycleRefresh()
+  await assertRangeVisible('2026-07-31', '2026-08-30')
+  await navigateToHome()
+  await assertRangeVisible('2026-07-31', '2026-08-30')
+  await navigateToBudget()
   await setAppDateIso('2026-08-01T12:00:00+08:00')
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 10000 })
   await navigateToBudget()
@@ -87,6 +96,14 @@ async (page) => {
     await page.evaluate((nextIso) => {
       localStorage.setItem('__smb_playwright_now', nextIso)
     }, iso)
+  }
+
+  async function triggerBudgetLifecycleRefresh() {
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event('focus'))
+      window.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForTimeout(1200)
   }
 
   async function completeOnboarding() {
@@ -271,7 +288,10 @@ async (page) => {
         && Boolean(document.querySelector('[data-testid=bottom-nav]'))
         && /Next pay day|下次發薪日|次の給与日/u.test(document.body?.innerText ?? '')
       ))
-      if (ready) return
+      if (ready) {
+        await triggerBudgetLifecycleRefresh()
+        return
+      }
       await page.waitForTimeout(500)
     }
     const body = String(await page.locator('body').textContent()).slice(0, 1200)
@@ -354,8 +374,13 @@ async (page) => {
   }
 
   async function assertRangeVisible(startDate, endDate) {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const body = await readBodyText()
+      if (body.includes(startDate) && body.includes(endDate)) return
+      await page.waitForTimeout(250)
+    }
     const body = await readBodyText()
-    assert(body.includes(startDate) && body.includes(endDate), `missing budget period range ${startDate}~${endDate}\n${body.slice(0, 1200)}`)
+    assert(false, `missing budget period range ${startDate}~${endDate}\n${body.slice(0, 1200)}`)
   }
 
   async function assertNoInvalidTimeValue(label) {

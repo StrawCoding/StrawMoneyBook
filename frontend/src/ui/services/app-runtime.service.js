@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
 import { ensureWebSqliteStoreReady } from '@/core/db/web-store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import {
   autoConnectGoogleBackup,
@@ -110,6 +111,15 @@ function triggerBankAutoRefresh(pinia, ledgerId, reason) {
 function runBookkeepingReminderSyncInBackground(reason) {
   void syncBookkeepingRemindersForAllLedgers().catch((error) => {
     console.warn(`[bookkeeping-reminder] background sync failed (${reason})`, error)
+  })
+}
+
+function reloadCurrentBudgetPeriodInBackground(pinia, reason) {
+  const ledgerStore = useLedgerStore(pinia)
+  const currentLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
+  if (!currentLedgerId) return
+  void useBudgetStore(pinia).loadCurrentPeriod().catch((error) => {
+    console.warn(`[budget-period] current period reload failed (${reason})`, error)
   })
 }
 
@@ -417,6 +427,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
     void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
       if (!isActive) return
       restoreSharedLedgerSessionInBackground('app_resume')
+      reloadCurrentBudgetPeriodInBackground(pinia, 'app_resume')
       scheduleMembershipWarmup('app_resume', windowObject)
       runBookkeepingReminderSyncInBackground('app_resume')
       windowObject?.dispatchEvent?.(new Event('app:check-update'))
@@ -470,8 +481,14 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
 
   addWindowListener('focus', () => {
     restoreSharedLedgerSessionInBackground('window_focus')
+    reloadCurrentBudgetPeriodInBackground(pinia, 'window_focus')
     void runSharedLedgerBackgroundSyncNow(pinia)
     void runGoogleDriveLedgerBackgroundSyncNow(pinia)
+  })
+
+  addWindowListener('visibilitychange', () => {
+    if (windowObject?.document?.visibilityState && windowObject.document.visibilityState !== 'visible') return
+    reloadCurrentBudgetPeriodInBackground(pinia, 'visibility_visible')
   })
 
   scheduleMembershipWarmup('app_start', windowObject)

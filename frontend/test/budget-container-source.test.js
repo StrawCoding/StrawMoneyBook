@@ -35,6 +35,10 @@ const transactionRepoSource = readFileSync(
   resolve(import.meta.dirname, '../src/core/repositories/transaction.repo.js'),
   'utf8',
 )
+const appRuntimeSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/services/app-runtime.service.js'),
+  'utf8',
+)
 
 test('budget repo exposes shared budget container CRUD and item binding columns', () => {
   assert.match(budgetRepoSource, /export async function listBudgetContainers/)
@@ -88,8 +92,9 @@ test('budgeting page saves ledger budget period settings from budget workflows',
 })
 
 test('budget store resolves startup pay-cycle period from the current date, not month start', () => {
-  assert.match(budgetStoreSource, /dateKeyFromDate/)
-  assert.match(budgetStoreSource, /resolveBudgetPeriodForLedger\(ledgerStore\.activeLedger,\s*dateKeyFromDate\(\)\)/)
+  assert.match(budgetStoreSource, /function dateKeyForTimeZone/)
+  assert.match(budgetStoreSource, /ledgerStore\.activeLedger\?\.timezone/)
+  assert.match(budgetStoreSource, /resolveBudgetPeriodForLedger\(\s*ledgerStore\.activeLedger,\s*dateKeyForTimeZone/)
   assert.doesNotMatch(budgetStoreSource, /resolveBudgetPeriodForLedger\(ledgerStore\.activeLedger,\s*monthKeyFromDate\(\)\)/)
 })
 
@@ -101,6 +106,15 @@ test('startup month sync never treats pay-cycle period keys as calendar months',
   assert.match(transactionRepoSource, /function parseMonthKey/)
   assert.match(transactionRepoSource, /if \(!range\) return \[\]/)
   assert.match(transactionRepoSource, /if \(!range\) return null/)
+})
+
+test('app lifecycle reloads the current budget period from today', () => {
+  assert.match(appRuntimeSource, /useBudgetStore/)
+  assert.match(appRuntimeSource, /reloadCurrentBudgetPeriodInBackground/)
+  assert.match(appRuntimeSource, /loadCurrentPeriod\(\)/)
+  assert.match(appRuntimeSource, /appStateChange/)
+  assert.match(appRuntimeSource, /window_focus/)
+  assert.match(appRuntimeSource, /visibilitychange/)
 })
 
 test('budget container sheet exposes pool amount and savings controls', () => {
