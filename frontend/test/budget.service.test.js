@@ -228,6 +228,60 @@ test('loadBudgetSnapshotForPeriod uses pay-cycle date range and counts daily rul
   assert.equal(calls[2].usageEndUtc.slice(0, 10), '2026-03-24')
 })
 
+test('loadBudgetSnapshotForPeriod reuses a budget created by a concurrent pay-cycle reload', async () => {
+  const period = resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 25 }, '2026-07-13')
+  const budget = { id: 'budget_pay', period_key: period.key, month_key: period.monthKey }
+  let lookupCount = 0
+  let createCount = 0
+  let releaseFirstCreate
+  const firstCreate = new Promise((resolve) => {
+    releaseFirstCreate = resolve
+  })
+
+  setBudgetServiceDependenciesForTest({
+    async getBudgetByPeriod() {
+      lookupCount += 1
+      return lookupCount <= 2 ? null : budget
+    },
+    async createBudget() {
+      createCount += 1
+      if (createCount === 1) {
+        await firstCreate
+        return budget
+      }
+      releaseFirstCreate()
+      await Promise.resolve()
+      throw new Error('UNIQUE constraint failed: budgets.ledger_id, budgets.month_key')
+    },
+    async getLedger() {
+      return { id: 'ledger_1', timezone: 'Asia/Taipei' }
+    },
+    async listBudgetItems() {
+      return []
+    },
+    async listBudgetContainers() {
+      return []
+    },
+    async computeBudgetSpentByCategory() {
+      return []
+    },
+    async listBudgetUsageDaysByCategory() {
+      return []
+    },
+    async getSetting() {
+      return null
+    },
+  })
+
+  const snapshots = await Promise.all([
+    loadBudgetSnapshotForPeriod('ledger_1', period),
+    loadBudgetSnapshotForPeriod('ledger_1', period),
+  ])
+
+  assert.equal(createCount, 2)
+  assert.deepEqual(snapshots.map((snapshot) => snapshot.budget.id), ['budget_pay', 'budget_pay'])
+})
+
 test('copyPreviousMonthBudget preserves budget save settings on items and total config', async () => {
   const upsertCalls = []
   const totalConfigCalls = []

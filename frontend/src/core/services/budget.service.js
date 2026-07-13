@@ -95,6 +95,12 @@ function createBudgetError(code) {
   return error
 }
 
+function isBudgetPeriodConflict(error) {
+  return /UNIQUE constraint failed: budgets\.ledger_id, budgets\.(?:month_key|period_key)/u.test(
+    String(error?.message ?? error),
+  )
+}
+
 function normalizeText(value) {
   return String(value ?? '').trim()
 }
@@ -782,22 +788,28 @@ export async function ensureBudgetForPeriod(ledgerId, period) {
   const normalizedPeriod = period?.key ? period : resolveCalendarBudgetPeriod(period?.monthKey ?? monthKeyFromDate())
   let budget = await dependencies.getBudgetByPeriod(ledgerId, normalizedPeriod.key)
   if (!budget) {
-    budget = await dependencies.createBudget(ledgerId, {
-      monthKey: normalizedPeriod.mode === 'calendar_month' ? normalizedPeriod.monthKey : normalizedPeriod.monthKey,
-      periodKey: normalizedPeriod.key,
-      periodStartDate: normalizedPeriod.startDate,
-      periodEndDate: normalizedPeriod.endDate,
-      periodMode: normalizedPeriod.mode,
-      name: normalizedPeriod.mode === 'pay_cycle'
-        ? `${normalizedPeriod.startDate}～${normalizedPeriod.endDate} 預算`
-        : `${normalizedPeriod.monthKey} 月預算`,
-      includeTransfers: false,
-      includeLoanRepayments: false,
-      includeReimbursedExpenses: false,
-      budgetSaveTotalEnabled: false,
-      budgetSaveTotalTargetAccountId: null,
-      budgetSaveTotalSourceAccountId: null,
-    })
+    try {
+      budget = await dependencies.createBudget(ledgerId, {
+        monthKey: normalizedPeriod.monthKey,
+        periodKey: normalizedPeriod.key,
+        periodStartDate: normalizedPeriod.startDate,
+        periodEndDate: normalizedPeriod.endDate,
+        periodMode: normalizedPeriod.mode,
+        name: normalizedPeriod.mode === 'pay_cycle'
+          ? `${normalizedPeriod.startDate}～${normalizedPeriod.endDate} 預算`
+          : `${normalizedPeriod.monthKey} 月預算`,
+        includeTransfers: false,
+        includeLoanRepayments: false,
+        includeReimbursedExpenses: false,
+        budgetSaveTotalEnabled: false,
+        budgetSaveTotalTargetAccountId: null,
+        budgetSaveTotalSourceAccountId: null,
+      })
+    } catch (error) {
+      if (!isBudgetPeriodConflict(error)) throw error
+      budget = await dependencies.getBudgetByPeriod(ledgerId, normalizedPeriod.key)
+      if (!budget) throw error
+    }
   }
 
   return budget

@@ -6,8 +6,10 @@ async (page) => {
     runtimeErrors.push(`pageerror: ${error?.message ?? error}`)
   })
   page.on('console', (message) => {
-    if (message.type() !== 'error') return
-    runtimeErrors.push(`console: ${message.text()}`)
+    const text = message.text()
+    if (message.type() === 'error' || /\[budget-period\].*failed/u.test(text)) {
+      runtimeErrors.push(`console: ${text}`)
+    }
   })
   const initialUrl = String(page.url())
   const baseOrigin = initialUrl.match(/^https?:\/\/[^/]+/u)?.[0] ?? 'http://127.0.0.1:4177'
@@ -64,6 +66,7 @@ async (page) => {
   await navigateToBudget()
   await assertRangeVisible('2026-02-28', '2026-03-30')
   await assertNoInvalidTimeValue('short-month pay-cycle reload')
+  await assertNoBudgetPeriodRuntimeFailure()
 
   function assert(condition, message) {
     if (!condition) throw new Error(message)
@@ -397,5 +400,10 @@ async (page) => {
       ...debugSnapshot.map((entry) => `${entry?.source ?? ''}: ${entry?.message ?? ''} ${entry?.routePath ?? ''}`),
     ].join('\n')
     assert(!/Invalid time value/u.test(evidence), `${label} surfaced Invalid time value\n${evidence}`)
+  }
+
+  async function assertNoBudgetPeriodRuntimeFailure() {
+    const evidence = runtimeErrors.join('\n')
+    assert(!/\[budget-period\].*failed/u.test(evidence), `budget period reload surfaced a runtime failure\n${evidence}`)
   }
 }
