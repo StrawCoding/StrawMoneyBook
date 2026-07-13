@@ -45,7 +45,7 @@
 - Pages deploy branch `Web-Page` commit：`ccaaabe61efda009821486e07ab606e5654901dc`。
 - App repo功能修復 commit：`c3365df53e4ef98613a1113fb98acd5dab6ddbc8`。
 - App repo前一版 stage report commit：`2cda456d5fa9a00610afdb1d23439241345a66f4`。
-- App repo最新驗證 report commit：`d0b2a5c361c6afa4e3653f27a343a3934458e198`。
+- App repo 09:04 CI 驗證基準 commit：`d0b2a5c361c6afa4e3653f27a343a3934458e198`。
 - 本階段未修改 `backend`，未執行 `backend npm run deploy:copy`，未重啟 StrawMB。
 - 未執行 `npm run gpr`，未修改版本號，未 tag / 發版。
 
