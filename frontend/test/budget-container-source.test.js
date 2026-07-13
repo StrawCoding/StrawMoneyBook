@@ -91,6 +91,20 @@ test('budgeting page saves ledger budget period settings from budget workflows',
   assert.match(budgetingSource, /shouldApplyBudgetPeriodSettings/)
 })
 
+test('ledger store applies budget period settings through budget service carry-forward', () => {
+  const ledgerStoreSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/stores/ledger.store.js'),
+    'utf8',
+  )
+  const budgetServiceSource = readFileSync(
+    resolve(import.meta.dirname, '../src/core/services/budget.service.js'),
+    'utf8',
+  )
+  assert.match(ledgerStoreSource, /applyLedgerBudgetPeriodSettings/)
+  assert.match(budgetServiceSource, /export async function applyLedgerBudgetPeriodSettings/)
+  assert.match(budgetServiceSource, /isBudgetPeriodStructureEmpty/)
+})
+
 test('budget store resolves startup pay-cycle period from the current date, not month start', () => {
   assert.match(budgetStoreSource, /resolveCurrentBudgetPeriodForLedger/)
   assert.match(budgetStoreSource, /ledgerStore\.activeLedger/)

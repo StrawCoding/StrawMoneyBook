@@ -103,6 +103,7 @@ async function assertSourceContract() {
     budgetContainerSheetVue,
     homeBudgetCardVue,
     budgetStore,
+    ledgerStore,
     budgetService,
     homePeriodFilter,
     transactionRepo,
@@ -116,6 +117,7 @@ async function assertSourceContract() {
     readFile(resolve(frontendDir, 'src/ui/components/budget/BudgetContainerSheet.vue'), 'utf8'),
     readFile(resolve(frontendDir, 'src/ui/components/home/HomeBudgetSummaryCard.vue'), 'utf8'),
     readFile(resolve(frontendDir, 'src/ui/stores/budget.store.js'), 'utf8'),
+    readFile(resolve(frontendDir, 'src/ui/stores/ledger.store.js'), 'utf8'),
     readFile(resolve(frontendDir, 'src/core/services/budget.service.js'), 'utf8'),
     readFile(resolve(frontendDir, 'src/ui/composables/useHomePeriodFilter.js'), 'utf8'),
     readFile(resolve(frontendDir, 'src/core/repositories/transaction.repo.js'), 'utf8'),
@@ -135,6 +137,9 @@ async function assertSourceContract() {
   assert.match(budgetContainerSheetVue, /ledgerBudgetPeriodSettings/)
   assert.match(budgetingVue, /updateBudgetPeriodSettings/)
   assert.match(budgetingVue, /shouldApplyBudgetPeriodSettings/)
+  assert.match(ledgerStore, /applyLedgerBudgetPeriodSettings/)
+  assert.match(budgetService, /applyLedgerBudgetPeriodSettings/)
+  assert.match(budgetService, /carryForwardBudgetPeriodStructure|isBudgetPeriodStructureEmpty/)
   assert.match(homeBudgetCardVue, /budgeting\.period\.next_pay_day/)
   assert.match(budgetStore, /resolveBudgetPeriodForLedger/)
   assert.match(budgetStore, /loadCurrentPeriod/)

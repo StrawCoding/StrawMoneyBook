@@ -4,9 +4,9 @@ import {
   deleteLedger,
   listLedgers,
   renameLedger,
-  updateLedgerBudgetPeriodSettings,
   updateLedgerSortOrders,
 } from '@/core/repositories/ledger.repo'
+import { applyLedgerBudgetPeriodSettings } from '@/core/services/budget.service'
 import { ensureLedgerDefaults } from '@/core/services/seed.service'
 import { assertCanCreateLedger, getMembershipTierSnapshot, isFreeTier } from '@/core/services/membership.service'
 import { getCurrentLocale } from '@/ui/services/i18n.service'
@@ -132,8 +132,8 @@ export const useLedgerStore = defineStore('ledger', {
       await this.refresh()
     },
 
-    async updateBudgetPeriodSettings(ledgerId, payload) {
-      await updateLedgerBudgetPeriodSettings(ledgerId, payload)
+    async updateBudgetPeriodSettings(ledgerId, payload, options = {}) {
+      await applyLedgerBudgetPeriodSettings(ledgerId, payload, options)
       await this.refresh()
     },
 

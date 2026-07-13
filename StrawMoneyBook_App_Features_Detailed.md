@@ -286,6 +286,7 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 - SMB-273 後，發薪週期會在發薪日邊界自動 rollover：發薪日前一天仍屬舊期，發薪日當天 00:00 起（含）會重新解析為新期。App 首次啟動、完整重啟、頁面 reload、Android 從背景回前景、web/app shell focus 與 visibility 回可見都會重新以帳本時區下的今天載入目前預算期間，首頁預算卡與預算頁不會停在上一期，也不需要使用者手動按上一期 / 下一期。固定額、已花費 / 剩餘、日均 weekday / monthday、共同日池與預算存款結算仍依解析後的實際週期起訖日計算，既有曆月模式與歷史發薪週期資料不搬移。
 - SMB-274 後，app-shell 同時觸發 focus 與 visibility reload 時，若兩個預算快照請求同時建立同一期資料，後到請求會讀回先完成建立的期間，而不會留下 SQLite `budgets.ledger_id, budgets.month_key` 唯一鍵 runtime error。其他資料庫錯誤仍正常回報。
 - SMB-275 後，預算期間的「今天」一律以帳本時區解析，不再依裝置 process timezone 或 persisted `pay:*` / 上次瀏覽月份推斷。`resolveCurrentBudgetPeriodForLedger()` 成為 cold launch、reload、Android resume、web focus / visibility 與預算頁進入時的唯一入口；發薪週期帳本的首頁月份篩選只影響交易清單，不會再把曆月 key 或月初日期覆寫成錯誤預算期間。lifecycle reload 成功後會廣播 `app:budget-period-sync`，首頁期間篩選與預算頁同步回到帳本時區的今天，曆月帳本仍預設目前曆月。補強跨時區、跨月、跨年、29/30/31 短月 Node regression，並延續 `playwright:budget-pay-cycle` app-shell 證據。
+- SMB-276 後，更改每月發薪日或切換曆月 / 發薪週期模式時，系統會先以舊帳本設定解析「今天」所在的目前期間並載入其預算結構，套用新設定後再解析新目前期間；若新舊 period key 不同且新期尚無使用者設定內容（無項目、無共同池、無整期預算存款設定），會自動將舊期的分類項目金額與日均規則、共同池與綁定、整期預算存款設定 carry-forward 到新期，已花費依新期日期範圍重算，交易與歷史期間資料不搬移也不覆寫。帳本詳細設定頁、預算項目 sheet、共同池 sheet 三條入口皆走同一 `applyLedgerBudgetPeriodSettings` 流程，避免改發薪日後預算頁跳到空殼。
 - SMB-261 / v1.3.50：`budget.repo.js` 補上 `normalizeBudgetSaveEnabled`，修復 `/budget` 儲存預算存款或切換共同預算池存款開關時 `normalizeBudgetSaveEnabled is not defined` 連續 toast 報錯；三模組（repo / service / save.service）布林正規化邏輯已對齊
 - SMB-151 後，預算項目的「日期」分配已改用與首頁查看範圍相同的 `HomeRangePicker` 日期選擇器，並在預算項目情境啟用日曆複選：使用者可在一致的日期 bottom sheet 直接點選多個分配日，系統再轉成每月日號規則，不再只是 1~31 的純數字格或另一套自製月曆，降低選錯分配日期的機率
 

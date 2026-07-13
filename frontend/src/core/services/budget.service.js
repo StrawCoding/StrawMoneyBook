@@ -78,6 +78,10 @@ const defaultDependencies = {
     const mod = await import('../repositories/ledger.repo.js')
     return mod.getLedger(...args)
   },
+  async updateLedgerBudgetPeriodSettings(...args) {
+    const mod = await import('../repositories/ledger.repo.js')
+    return mod.updateLedgerBudgetPeriodSettings(...args)
+  },
 }
 const dependencies = { ...defaultDependencies }
 
@@ -1339,5 +1343,173 @@ export async function copyPreviousMonthBudget(ledgerId, monthKey, options = {}) 
   return {
     copied: prevItems.length + prevContainers.length,
     fromMonth: prevKey,
+  }
+}
+
+function normalizeBudgetPeriodSettingsPayload(payload = {}) {
+  return {
+    budgetPeriodMode: normalizeBudgetPeriodMode(payload.budgetPeriodMode ?? payload.budget_period_mode),
+    budgetPayDay: normalizePayDay(payload.budgetPayDay ?? payload.budget_pay_day),
+  }
+}
+
+export function isBudgetPeriodStructureEmpty(items = [], containers = [], budget = null) {
+  const hasItems = Array.isArray(items) && items.length > 0
+  const hasContainers = Array.isArray(containers) && containers.length > 0
+  const hasTotalSaveConfig = Number(budget?.budget_save_total_enabled ?? 0) === 1
+    && Boolean(
+      String(budget?.budget_save_total_target_account_id ?? '').trim()
+      || String(budget?.budget_save_total_source_account_id ?? '').trim(),
+    )
+  return !hasItems && !hasContainers && !hasTotalSaveConfig
+}
+
+async function loadBudgetStructureForPeriod(ledgerId, period) {
+  const normalizedPeriod = period?.key ? period : resolveCalendarBudgetPeriod(period?.monthKey ?? monthKeyFromDate())
+  let budget = await dependencies.getBudgetByPeriod(ledgerId, normalizedPeriod.key)
+  if (!budget && normalizedPeriod.mode !== 'pay_cycle') {
+    budget = await dependencies.getBudgetByMonth(ledgerId, normalizedPeriod.monthKey)
+  }
+  if (!budget) return null
+
+  const [items, containers] = await Promise.all([
+    dependencies.listBudgetItems(ledgerId, budget.id),
+    dependencies.listBudgetContainers(ledgerId, budget.id),
+  ])
+
+  return {
+    budget,
+    period: normalizedPeriod,
+    items,
+    containers,
+  }
+}
+
+async function carryForwardBudgetPeriodStructure(ledgerId, sourceSnapshot, targetPeriod) {
+  const targetBudget = await ensureBudgetForPeriod(ledgerId, targetPeriod)
+  const { budget: sourceBudget, items: sourceItems, containers: sourceContainers } = sourceSnapshot
+
+  const containerIdMap = new Map()
+  for (const [index, container] of sourceContainers.entries()) {
+    const newId = createId('bc')
+    containerIdMap.set(container.id, newId)
+    await dependencies.upsertBudgetContainer(ledgerId, {
+      id: newId,
+      budgetId: targetBudget.id,
+      name: container.name,
+      amountMinor: Number(container.amount_minor),
+      budgetSaveEnabled: Number(container.budget_save_enabled ?? 0) === 1,
+      budgetSaveTargetAccountId: container.budget_save_target_account_id,
+      budgetSaveSourceAccountId: container.budget_save_source_account_id,
+      periodMode: normalizeContainerPeriodMode(container.period_mode),
+      sortOrder: index,
+    })
+  }
+
+  for (const [index, item] of sourceItems.entries()) {
+    const newContainerId = item.budget_container_id
+      ? (containerIdMap.get(item.budget_container_id) ?? null)
+      : null
+    await dependencies.upsertBudgetItem(ledgerId, {
+      id: createId('bi'),
+      budgetId: targetBudget.id,
+      scopeType: item.scope_type,
+      categoryId: item.category_id,
+      categoryGroupId: item.category_group_id,
+      budgetContainerId: newContainerId,
+      amountMinor: Number(item.amount_minor),
+      amountMode: normalizeAmountMode(item.amount_mode),
+      dayRuleUnit: normalizeDayRuleUnit(item.day_rule_unit),
+      dayRuleValuesJson: JSON.stringify(
+        normalizeDayRuleValues(item.day_rule_values_json, normalizeDayRuleUnit(item.day_rule_unit)),
+      ),
+      budgetSaveEnabled: Number(item.budget_save_enabled ?? 0) === 1,
+      budgetSaveTargetAccountId: item.budget_save_target_account_id,
+      budgetSaveSourceAccountId: item.budget_save_source_account_id,
+      sortOrder: index,
+    })
+  }
+
+  await dependencies.updateBudgetSaveTotalConfig(ledgerId, targetBudget.id, {
+    enabled: Number(sourceBudget.budget_save_total_enabled ?? 0) === 1,
+    targetAccountId: sourceBudget.budget_save_total_target_account_id,
+    sourceAccountId: sourceBudget.budget_save_total_source_account_id,
+  })
+
+  return {
+    carriedItems: sourceItems.length,
+    carriedContainers: sourceContainers.length,
+    sourcePeriodKey: sourceSnapshot.period?.key,
+    targetPeriodKey: targetPeriod.key,
+  }
+}
+
+export async function applyLedgerBudgetPeriodSettings(ledgerId, payload = {}, options = {}) {
+  if (!ledgerId) throw new Error('缺少帳本 ID')
+
+  const nextSettings = normalizeBudgetPeriodSettingsPayload(payload)
+  const referenceDate = options.referenceDate ?? new Date()
+  const ledger = await dependencies.getLedger(ledgerId)
+  if (!ledger) throw new Error('找不到帳本')
+
+  const currentSettings = normalizeBudgetPeriodSettingsPayload({
+    budgetPeriodMode: ledger.budget_period_mode,
+    budgetPayDay: ledger.budget_pay_day,
+  })
+  const settingsChanged = currentSettings.budgetPeriodMode !== nextSettings.budgetPeriodMode
+    || currentSettings.budgetPayDay !== nextSettings.budgetPayDay
+
+  const oldPeriod = resolveCurrentBudgetPeriodForLedger(ledger, referenceDate)
+  const oldSnapshot = settingsChanged
+    ? await loadBudgetStructureForPeriod(ledgerId, oldPeriod)
+    : null
+
+  const updatedLedger = await dependencies.updateLedgerBudgetPeriodSettings(ledgerId, {
+    budgetPeriodMode: nextSettings.budgetPeriodMode,
+    budgetPayDay: nextSettings.budgetPayDay,
+  })
+
+  const newPeriod = resolveCurrentBudgetPeriodForLedger(updatedLedger, referenceDate)
+  if (!settingsChanged || oldPeriod.key === newPeriod.key) {
+    return {
+      updatedLedger,
+      carriedForward: false,
+      oldPeriod,
+      newPeriod,
+    }
+  }
+
+  if (!oldSnapshot || isBudgetPeriodStructureEmpty(oldSnapshot.items, oldSnapshot.containers, oldSnapshot.budget)) {
+    return {
+      updatedLedger,
+      carriedForward: false,
+      oldPeriod,
+      newPeriod,
+    }
+  }
+
+  const targetBudget = await ensureBudgetForPeriod(ledgerId, newPeriod)
+  const [targetItems, targetContainers] = await Promise.all([
+    dependencies.listBudgetItems(ledgerId, targetBudget.id),
+    dependencies.listBudgetContainers(ledgerId, targetBudget.id),
+  ])
+
+  if (!isBudgetPeriodStructureEmpty(targetItems, targetContainers, targetBudget)) {
+    return {
+      updatedLedger,
+      carriedForward: false,
+      oldPeriod,
+      newPeriod,
+    }
+  }
+
+  const carryResult = await carryForwardBudgetPeriodStructure(ledgerId, oldSnapshot, newPeriod)
+
+  return {
+    updatedLedger,
+    carriedForward: true,
+    oldPeriod,
+    newPeriod,
+    ...carryResult,
   }
 }

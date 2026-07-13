@@ -2,8 +2,10 @@ import test, { afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  applyLedgerBudgetPeriodSettings,
   copyPreviousMonthBudget,
   dateRangeUtc,
+  isBudgetPeriodStructureEmpty,
   listInclusiveMonthKeys,
   loadBudgetSnapshotForPeriod,
   monthRangeUtc,
@@ -1190,4 +1192,443 @@ test('saveBudgetContainer syncs daily pool categories without child budget amoun
       { categoryId: 'cat_fun', budgetContainerId: 'bc_daily', amountMinor: 0, amountMode: 'fixed' },
     ],
   )
+})
+
+test('isBudgetPeriodStructureEmpty treats items, containers, and total save config as user content', () => {
+  assert.equal(isBudgetPeriodStructureEmpty([], [], { budget_save_total_enabled: 0 }), true)
+  assert.equal(isBudgetPeriodStructureEmpty([{ id: 'bi_1' }], [], null), false)
+  assert.equal(isBudgetPeriodStructureEmpty([], [{ id: 'bc_1' }], null), false)
+  assert.equal(
+    isBudgetPeriodStructureEmpty([], [], {
+      budget_save_total_enabled: 1,
+      budget_save_total_target_account_id: 'jar_trip',
+    }),
+    false,
+  )
+})
+
+test('applyLedgerBudgetPeriodSettings carries forward budget structure when payday change moves current period key', async () => {
+  const referenceDate = new Date('2026-07-13T12:00:00+08:00')
+  const budgetsByKey = new Map([
+    ['pay:2026-06-25:2026-07-24', {
+      id: 'budget_old',
+      period_key: 'pay:2026-06-25:2026-07-24',
+      budget_save_total_enabled: 1,
+      budget_save_total_target_account_id: 'jar_trip',
+      budget_save_total_source_account_id: 'acc_main',
+    }],
+  ])
+  const itemsByBudgetId = new Map([
+    ['budget_old', [{
+      id: 'bi_food',
+      scope_type: 'category',
+      category_id: 'cat_food',
+      category_group_id: null,
+      budget_container_id: 'bc_pool',
+      amount_minor: 120000,
+      amount_mode: 'fixed',
+      day_rule_unit: 'none',
+      day_rule_values_json: '[]',
+      budget_save_enabled: 0,
+      budget_save_target_account_id: null,
+      budget_save_source_account_id: null,
+      sort_order: 0,
+    }]],
+  ])
+  const containersByBudgetId = new Map([
+    ['budget_old', [{
+      id: 'bc_pool',
+      name: '生活費',
+      amount_minor: 250000,
+      budget_save_enabled: 0,
+      budget_save_target_account_id: null,
+      budget_save_source_account_id: null,
+      period_mode: 'monthly',
+      sort_order: 0,
+    }]],
+  ])
+  const upsertItemCalls = []
+  const upsertContainerCalls = []
+  const updateTotalConfigCalls = []
+  let ledgerState = {
+    id: 'ledger_1',
+    timezone: 'Asia/Taipei',
+    budget_period_mode: 'pay_cycle',
+    budget_pay_day: 25,
+  }
+
+  setBudgetServiceDependenciesForTest({
+    async getLedger() {
+      return { ...ledgerState }
+    },
+    async updateLedgerBudgetPeriodSettings(_ledgerId, input) {
+      ledgerState = {
+        ...ledgerState,
+        budget_period_mode: input.budgetPeriodMode,
+        budget_pay_day: input.budgetPayDay,
+      }
+      return { ...ledgerState }
+    },
+    async getBudgetByPeriod(_ledgerId, periodKey) {
+      return budgetsByKey.get(periodKey) ?? null
+    },
+    async getBudgetByMonth() {
+      return null
+    },
+    async createBudget(_ledgerId, payload) {
+      const budget = {
+        id: `budget_${payload.periodKey}`,
+        period_key: payload.periodKey,
+        month_key: payload.monthKey,
+        budget_save_total_enabled: 0,
+        budget_save_total_target_account_id: null,
+        budget_save_total_source_account_id: null,
+      }
+      budgetsByKey.set(payload.periodKey, budget)
+      itemsByBudgetId.set(budget.id, [])
+      containersByBudgetId.set(budget.id, [])
+      return budget
+    },
+    async listBudgetItems(_ledgerId, budgetId) {
+      return (itemsByBudgetId.get(budgetId) ?? []).map((item) => ({ ...item }))
+    },
+    async listBudgetContainers(_ledgerId, budgetId) {
+      return (containersByBudgetId.get(budgetId) ?? []).map((container) => ({ ...container }))
+    },
+    async upsertBudgetContainer(_ledgerId, payload) {
+      upsertContainerCalls.push(payload)
+      const rows = containersByBudgetId.get(payload.budgetId) ?? []
+      rows.push({
+        id: payload.id,
+        name: payload.name,
+        amount_minor: payload.amountMinor,
+        budget_save_enabled: payload.budgetSaveEnabled ? 1 : 0,
+        budget_save_target_account_id: payload.budgetSaveTargetAccountId,
+        budget_save_source_account_id: payload.budgetSaveSourceAccountId,
+        period_mode: payload.periodMode,
+        sort_order: payload.sortOrder,
+      })
+      containersByBudgetId.set(payload.budgetId, rows)
+      return payload.id
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      upsertItemCalls.push(payload)
+      const rows = itemsByBudgetId.get(payload.budgetId) ?? []
+      rows.push({
+        id: payload.id,
+        scope_type: payload.scopeType,
+        category_id: payload.categoryId,
+        category_group_id: payload.categoryGroupId,
+        budget_container_id: payload.budgetContainerId,
+        amount_minor: payload.amountMinor,
+        amount_mode: payload.amountMode,
+        day_rule_unit: payload.dayRuleUnit,
+        day_rule_values_json: payload.dayRuleValuesJson,
+        budget_save_enabled: payload.budgetSaveEnabled ? 1 : 0,
+        budget_save_target_account_id: payload.budgetSaveTargetAccountId,
+        budget_save_source_account_id: payload.budgetSaveSourceAccountId,
+        sort_order: payload.sortOrder,
+      })
+      itemsByBudgetId.set(payload.budgetId, rows)
+      return payload.id
+    },
+    async updateBudgetSaveTotalConfig(_ledgerId, budgetId, payload) {
+      updateTotalConfigCalls.push({ budgetId, ...payload })
+      const budget = [...budgetsByKey.values()].find((entry) => entry.id === budgetId)
+      if (budget) {
+        budget.budget_save_total_enabled = payload.enabled ? 1 : 0
+        budget.budget_save_total_target_account_id = payload.targetAccountId
+        budget.budget_save_total_source_account_id = payload.sourceAccountId
+      }
+    },
+    async computeBudgetSpentByCategory() {
+      return []
+    },
+    async listBudgetUsageDaysByCategory() {
+      return []
+    },
+    async getSetting() {
+      return null
+    },
+  })
+
+  const result = await applyLedgerBudgetPeriodSettings('ledger_1', {
+    budgetPeriodMode: 'pay_cycle',
+    budgetPayDay: 31,
+  }, { referenceDate })
+
+  assert.equal(result.carriedForward, true)
+  assert.equal(result.oldPeriod.key, 'pay:2026-06-25:2026-07-24')
+  assert.equal(result.newPeriod.key, 'pay:2026-06-30:2026-07-30')
+  assert.equal(upsertContainerCalls.length, 1)
+  assert.equal(upsertItemCalls.length, 1)
+  assert.equal(upsertItemCalls[0].categoryId, 'cat_food')
+  assert.equal(upsertItemCalls[0].amountMinor, 120000)
+  assert.equal(upsertContainerCalls[0].name, '生活費')
+  assert.deepEqual(updateTotalConfigCalls, [{
+    budgetId: 'budget_pay:2026-06-30:2026-07-30',
+    enabled: true,
+    targetAccountId: 'jar_trip',
+    sourceAccountId: 'acc_main',
+  }])
+  assert.equal(budgetsByKey.get('pay:2026-06-25:2026-07-24')?.id, 'budget_old')
+})
+
+test('applyLedgerBudgetPeriodSettings does not overwrite target period that already has user content', async () => {
+  const referenceDate = new Date('2026-07-13T12:00:00+08:00')
+  let ledgerState = {
+    id: 'ledger_1',
+    timezone: 'Asia/Taipei',
+    budget_period_mode: 'pay_cycle',
+    budget_pay_day: 25,
+  }
+
+  setBudgetServiceDependenciesForTest({
+    async getLedger() {
+      return { ...ledgerState }
+    },
+    async updateLedgerBudgetPeriodSettings(_ledgerId, input) {
+      ledgerState = {
+        ...ledgerState,
+        budget_period_mode: input.budgetPeriodMode,
+        budget_pay_day: input.budgetPayDay,
+      }
+      return { ...ledgerState }
+    },
+    async getBudgetByPeriod(_ledgerId, periodKey) {
+      if (periodKey === 'pay:2026-06-25:2026-07-24') {
+        return {
+          id: 'budget_old',
+          period_key: periodKey,
+          budget_save_total_enabled: 0,
+        }
+      }
+      if (periodKey === 'pay:2026-06-30:2026-07-30') {
+        return {
+          id: 'budget_new',
+          period_key: periodKey,
+          budget_save_total_enabled: 0,
+        }
+      }
+      return null
+    },
+    async getBudgetByMonth() {
+      return null
+    },
+    async createBudget() {
+      throw new Error('should not create budget when target already exists')
+    },
+    async listBudgetItems(_ledgerId, budgetId) {
+      if (budgetId === 'budget_old') {
+        return [{ id: 'bi_old', category_id: 'cat_food', amount_minor: 120000 }]
+      }
+      if (budgetId === 'budget_new') {
+        return [{ id: 'bi_new', category_id: 'cat_transport', amount_minor: 80000 }]
+      }
+      return []
+    },
+    async listBudgetContainers() {
+      return []
+    },
+    async upsertBudgetContainer() {
+      throw new Error('should not carry forward when target already has items')
+    },
+    async upsertBudgetItem() {
+      throw new Error('should not carry forward when target already has items')
+    },
+    async updateBudgetSaveTotalConfig() {
+      throw new Error('should not carry forward when target already has items')
+    },
+  })
+
+  const result = await applyLedgerBudgetPeriodSettings('ledger_1', {
+    budgetPeriodMode: 'pay_cycle',
+    budgetPayDay: 31,
+  }, { referenceDate })
+
+  assert.equal(result.carriedForward, false)
+})
+
+test('applyLedgerBudgetPeriodSettings carries forward when switching calendar month to pay cycle', async () => {
+  const referenceDate = new Date('2026-07-13T12:00:00+08:00')
+  const budgetsByKey = new Map([
+    ['2026-07', {
+      id: 'budget_july',
+      month_key: '2026-07',
+      period_key: '2026-07',
+      budget_save_total_enabled: 0,
+    }],
+  ])
+  const itemsByBudgetId = new Map([
+    ['budget_july', [{
+      id: 'bi_food',
+      scope_type: 'category',
+      category_id: 'cat_food',
+      category_group_id: null,
+      budget_container_id: null,
+      amount_minor: 300000,
+      amount_mode: 'daily_average',
+      day_rule_unit: 'weekday',
+      day_rule_values_json: '[1,2,3,4,5]',
+      budget_save_enabled: 0,
+      budget_save_target_account_id: null,
+      budget_save_source_account_id: null,
+      sort_order: 0,
+    }]],
+  ])
+  const upsertItemCalls = []
+  let ledgerState = {
+    id: 'ledger_1',
+    timezone: 'Asia/Taipei',
+    budget_period_mode: 'calendar_month',
+    budget_pay_day: 1,
+  }
+
+  setBudgetServiceDependenciesForTest({
+    async getLedger() {
+      return { ...ledgerState }
+    },
+    async updateLedgerBudgetPeriodSettings(_ledgerId, input) {
+      ledgerState = {
+        ...ledgerState,
+        budget_period_mode: input.budgetPeriodMode,
+        budget_pay_day: input.budgetPayDay,
+      }
+      return { ...ledgerState }
+    },
+    async getBudgetByPeriod(_ledgerId, periodKey) {
+      return budgetsByKey.get(periodKey) ?? null
+    },
+    async getBudgetByMonth(_ledgerId, monthKey) {
+      return budgetsByKey.get(monthKey) ?? null
+    },
+    async createBudget(_ledgerId, payload) {
+      const budget = {
+        id: `budget_${payload.periodKey}`,
+        period_key: payload.periodKey,
+        month_key: payload.monthKey,
+        budget_save_total_enabled: 0,
+      }
+      budgetsByKey.set(payload.periodKey, budget)
+      itemsByBudgetId.set(budget.id, [])
+      return budget
+    },
+    async listBudgetItems(_ledgerId, budgetId) {
+      return (itemsByBudgetId.get(budgetId) ?? []).map((item) => ({ ...item }))
+    },
+    async listBudgetContainers() {
+      return []
+    },
+    async upsertBudgetContainer() {
+      return 'bc_unused'
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      upsertItemCalls.push(payload)
+      return payload.id
+    },
+    async updateBudgetSaveTotalConfig() {},
+    async computeBudgetSpentByCategory() {
+      return []
+    },
+    async listBudgetUsageDaysByCategory() {
+      return []
+    },
+    async getSetting() {
+      return null
+    },
+  })
+
+  const result = await applyLedgerBudgetPeriodSettings('ledger_1', {
+    budgetPeriodMode: 'pay_cycle',
+    budgetPayDay: 25,
+  }, { referenceDate })
+
+  assert.equal(result.carriedForward, true)
+  assert.equal(result.oldPeriod.key, '2026-07')
+  assert.equal(result.newPeriod.key, 'pay:2026-06-25:2026-07-24')
+  assert.equal(upsertItemCalls.length, 1)
+  assert.equal(upsertItemCalls[0].amountMode, 'daily_average')
+  assert.equal(upsertItemCalls[0].dayRuleUnit, 'weekday')
+})
+
+test('applyLedgerBudgetPeriodSettings carries forward across short-month payday boundaries', async () => {
+  const referenceDate = new Date('2026-03-01T12:00:00+08:00')
+  const upsertItemCalls = []
+  let ledgerState = {
+    id: 'ledger_1',
+    timezone: 'Asia/Taipei',
+    budget_period_mode: 'pay_cycle',
+    budget_pay_day: 31,
+  }
+
+  setBudgetServiceDependenciesForTest({
+    async getLedger() {
+      return { ...ledgerState }
+    },
+    async updateLedgerBudgetPeriodSettings(_ledgerId, input) {
+      ledgerState = {
+        ...ledgerState,
+        budget_period_mode: input.budgetPeriodMode,
+        budget_pay_day: input.budgetPayDay,
+      }
+      return { ...ledgerState }
+    },
+    async getBudgetByPeriod(_ledgerId, periodKey) {
+      if (periodKey === 'pay:2026-02-28:2026-03-30') {
+        return { id: 'budget_old', period_key: periodKey, budget_save_total_enabled: 0 }
+      }
+      return null
+    },
+    async getBudgetByMonth() {
+      return null
+    },
+    async createBudget(_ledgerId, payload) {
+      return {
+        id: `budget_${payload.periodKey}`,
+        period_key: payload.periodKey,
+        budget_save_total_enabled: 0,
+      }
+    },
+    async listBudgetItems(_ledgerId, budgetId) {
+      if (budgetId === 'budget_old') {
+        return [{
+          id: 'bi_food',
+          scope_type: 'category',
+          category_id: 'cat_food',
+          category_group_id: null,
+          budget_container_id: null,
+          amount_minor: 90000,
+          amount_mode: 'fixed',
+          day_rule_unit: 'none',
+          day_rule_values_json: '[]',
+          budget_save_enabled: 0,
+          budget_save_target_account_id: null,
+          budget_save_source_account_id: null,
+          sort_order: 0,
+        }]
+      }
+      return []
+    },
+    async listBudgetContainers() {
+      return []
+    },
+    async upsertBudgetContainer() {
+      return 'bc_unused'
+    },
+    async upsertBudgetItem(_ledgerId, payload) {
+      upsertItemCalls.push(payload)
+      return payload.id
+    },
+    async updateBudgetSaveTotalConfig() {},
+  })
+
+  const result = await applyLedgerBudgetPeriodSettings('ledger_1', {
+    budgetPeriodMode: 'pay_cycle',
+    budgetPayDay: 30,
+  }, { referenceDate })
+
+  assert.equal(result.carriedForward, true)
+  assert.equal(result.oldPeriod.key, 'pay:2026-02-28:2026-03-30')
+  assert.equal(result.newPeriod.key, 'pay:2026-02-28:2026-03-29')
+  assert.equal(upsertItemCalls.length, 1)
 })

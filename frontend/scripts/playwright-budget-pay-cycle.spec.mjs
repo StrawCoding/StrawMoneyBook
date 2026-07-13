@@ -29,6 +29,11 @@ async (page) => {
   const itemCategory = await createBudgetItemWithPayCycle(25)
   await assertBodyMatches(/Pay Cycle Budget|發薪週期預算|給与サイクル予算/u)
   await assertRangeVisible('2026-06-25', '2026-07-24')
+  await assertBodyIncludes(itemCategory)
+  await editBudgetItemPayDay(itemCategory, 10)
+  await assertRangeVisible('2026-07-10', '2026-08-09')
+  await assertBodyIncludes(itemCategory)
+  await assertNoInvalidTimeValue('payday change preserve budget item')
   await assertBodyMatches(/Next pay day|下次發薪日|次の給与日/u)
   await navigateToHome()
   await assertBodyMatches(/Next pay day|下次發薪日|次の給与日/u)
@@ -36,7 +41,8 @@ async (page) => {
   await navigateToBudget()
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 10000 })
   await navigateToBudget()
-  await assertRangeVisible('2026-06-25', '2026-07-24')
+  await assertRangeVisible('2026-07-10', '2026-08-09')
+  await assertBodyIncludes(itemCategory)
   await assertNoInvalidTimeValue('budget pay-cycle reload')
 
   await editBudgetItemBackToCalendar(itemCategory)
@@ -330,6 +336,19 @@ async (page) => {
     return categoryName
   }
 
+  async function editBudgetItemPayDay(categoryName, payDay) {
+    await closeOpenOverlayIfAny()
+    await page.locator('.item-card-btn').filter({ hasText: categoryName }).click()
+    await page.waitForTimeout(500)
+    await page.locator('button.btn.primary').filter({ hasText: /Edit|編輯|編集/u }).click()
+    await page.waitForTimeout(700)
+    await page.getByTestId('budget-item-period-pay-cycle').click()
+    await page.getByTestId('budget-item-pay-day').fill(String(payDay))
+    await page.locator('.form-wrap input.input[type="number"]').last().fill('1200')
+    await page.locator('button.btn.primary').filter({ hasText: /Save|儲存|保存/u }).click()
+    await page.waitForTimeout(1800)
+  }
+
   async function editBudgetItemBackToCalendar(categoryName) {
     await closeOpenOverlayIfAny()
     await page.locator('.item-card-btn').filter({ hasText: categoryName }).click()
@@ -364,6 +383,11 @@ async (page) => {
 
   async function readBodyText() {
     return String(await page.locator('body').textContent())
+  }
+
+  async function assertBodyIncludes(text) {
+    const body = await readBodyText()
+    assert(body.includes(String(text)), `body did not include ${text}\n${body.slice(0, 1200)}`)
   }
 
   async function assertBodyMatches(pattern) {
