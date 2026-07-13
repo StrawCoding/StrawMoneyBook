@@ -2,6 +2,8 @@
 
 ---
 
+- (SMB-270) 修復正式 Android App 更新可見性：官方網站 `www.strawmb.com` / `strawmb.com` 補齊更新 manifest 與 Play fallback JSON，避免既有 App 更新檢查打到 GitHub Pages HTML 404；App repo 新增更新來源合約測試，鎖定 `app-update.json` 與 `frontend/package.json` 版本一致、預設 primary/fallback URL 與 HTML fallback 偵測。未修改版本號，未執行發版。
+
 ## v1.3.58
 - (SMB-269) 修復發薪週期預算在不同執行環境時區下的期間查詢漂移：預算 snapshot 的整期與今日花費查詢改以帳本時區轉 UTC，不再依 CI runner / 裝置 process timezone；補強發薪日含當天、下次發薪日前一天含在本期、共同日池期末後才結算與日均 / 日池保留額回歸測試。
 - (SMB-269) 預算期間新增帳本層「發薪週期」模式：設定頁可選曆月或發薪週期並指定每月發薪日，29/30/31 遇短月會落在該月最後一天；預算資料層新增 `period_key`、起訖日與 mode，既有 `YYYY-MM` 月預算完整保留，發薪週期不把跨月資料拆成多筆月預算，交易依實際日期落入週期。一般分類預算項目與共同預算池皆支援發薪週期，固定額不拆帳，日均 / 日池依週期實際天數與範圍內指定日計算；預算頁與首頁預算卡顯示週期起訖、上一期 / 下一期與下次發薪日，交易清單、日曆與分析仍維持曆月查帳預設。新增 migration 039、service/store/UI/i18n、node tests 與 `playwright:budget-pay-cycle` app-shell 流程。
