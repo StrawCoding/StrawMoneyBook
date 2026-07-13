@@ -9,6 +9,9 @@ import {
   monthRangeUtc,
   resetBudgetServiceDependenciesForTest,
   resolveBudgetPeriodForLedger,
+  resolveCurrentBudgetPeriodForLedger,
+  dateKeyForLedgerTimeZone,
+  monthKeyForLedgerTimeZone,
   resolveContainerMonthlyAmountMinor,
   resolveContainerPeriodAmountMinor,
   saveBudgetContainer,
@@ -125,6 +128,74 @@ test('resolveBudgetPeriodForLedger preserves persisted pay-cycle month keys on s
   assert.equal(
     resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 31 }, 'pay:2026-02-28:2026-03-30').key,
     'pay:2026-02-28:2026-03-30',
+  )
+})
+
+test('dateKeyForLedgerTimeZone and monthKeyForLedgerTimeZone use ledger timezone instead of device timezone', () => {
+  const referenceDate = new Date('2026-07-13T18:30:00.000Z')
+  assert.equal(dateKeyForLedgerTimeZone('Asia/Taipei', referenceDate), '2026-07-14')
+  assert.equal(monthKeyForLedgerTimeZone('Asia/Taipei', referenceDate), '2026-07')
+  assert.equal(dateKeyForLedgerTimeZone('UTC', referenceDate), '2026-07-13')
+  assert.equal(monthKeyForLedgerTimeZone('UTC', referenceDate), '2026-07')
+})
+
+test('resolveCurrentBudgetPeriodForLedger always resolves from ledger today and ignores stale pay keys', () => {
+  const ledger = { budget_period_mode: 'pay_cycle', budget_pay_day: 25, timezone: 'Asia/Taipei' }
+  const referenceDate = new Date('2026-07-13T12:00:00+08:00')
+  assert.deepEqual(
+    resolveCurrentBudgetPeriodForLedger(ledger, referenceDate),
+    {
+      mode: 'pay_cycle',
+      key: 'pay:2026-06-25:2026-07-24',
+      monthKey: 'pay:2026-06-25',
+      startDate: '2026-06-25',
+      endDate: '2026-07-24',
+      label: '2026-06-25~2026-07-24',
+      nextPayDate: '2026-07-25',
+    },
+  )
+  assert.equal(
+    resolveCurrentBudgetPeriodForLedger(ledger, new Date('2026-07-25T00:00:00+08:00')).key,
+    'pay:2026-07-25:2026-08-24',
+  )
+  assert.equal(
+    resolveCurrentBudgetPeriodForLedger(
+      { budget_period_mode: 'calendar_month', timezone: 'Asia/Taipei' },
+      referenceDate,
+    ).monthKey,
+    '2026-07',
+  )
+})
+
+test('resolveBudgetPeriodForLedger calendar mode ignores stale pay-cycle keys', () => {
+  const ledger = { budget_period_mode: 'calendar_month', timezone: 'Asia/Taipei' }
+  const monthKey = resolveBudgetPeriodForLedger(ledger, 'pay:2026-02-25').monthKey
+  assert.match(monthKey, /^\d{4}-\d{2}$/)
+  assert.doesNotMatch(monthKey, /^pay:/)
+})
+
+test('resolveCurrentBudgetPeriodForLedger handles pay-cycle short months and cross-year boundaries', () => {
+  const shortMonthLedger = { budget_period_mode: 'pay_cycle', budget_pay_day: 31, timezone: 'Asia/Taipei' }
+  assert.equal(
+    resolveCurrentBudgetPeriodForLedger(shortMonthLedger, new Date('2026-03-01T12:00:00+08:00')).startDate,
+    '2026-02-28',
+  )
+  assert.equal(
+    resolveCurrentBudgetPeriodForLedger(shortMonthLedger, new Date('2024-03-01T12:00:00+08:00')).startDate,
+    '2024-02-29',
+  )
+  const crossYearLedger = { budget_period_mode: 'pay_cycle', budget_pay_day: 30, timezone: 'Asia/Taipei' }
+  assert.deepEqual(
+    resolveCurrentBudgetPeriodForLedger(crossYearLedger, new Date('2027-01-05T12:00:00+08:00')),
+    {
+      mode: 'pay_cycle',
+      key: 'pay:2026-12-30:2027-01-29',
+      monthKey: 'pay:2026-12-30',
+      startDate: '2026-12-30',
+      endDate: '2027-01-29',
+      label: '2026-12-30~2027-01-29',
+      nextPayDate: '2027-01-30',
+    },
   )
 })
 

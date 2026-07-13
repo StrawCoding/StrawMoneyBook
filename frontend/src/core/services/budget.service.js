@@ -219,6 +219,16 @@ function getZonedDateParts(dateLike, timeZone) {
   }
 }
 
+export function dateKeyForLedgerTimeZone(timeZone = 'Asia/Taipei', referenceDate = new Date()) {
+  const parts = getZonedDateParts(referenceDate, timeZone)
+  return dayKeyFromParts(parts.year, parts.month, parts.day)
+}
+
+export function monthKeyForLedgerTimeZone(timeZone = 'Asia/Taipei', referenceDate = new Date()) {
+  const parts = getZonedDateParts(referenceDate, timeZone)
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}`
+}
+
 function resolveZonedDateTimeUtcIso(parts, timeZone = 'Asia/Taipei') {
   const desiredEpochMs = Date.UTC(
     Number(parts?.year ?? 0),
@@ -297,7 +307,18 @@ export function resolveBudgetPeriodForLedger(ledger, dateKeyOrMonth = monthKeyFr
       : normalized)
     return resolvePayCycleBudgetPeriod(dateKey, ledger?.budget_pay_day)
   }
-  return resolveCalendarBudgetPeriod(String(dateKeyOrMonth ?? '').slice(0, 7))
+  const slicedMonthKey = String(dateKeyOrMonth ?? '').slice(0, 7)
+  const calendarMonthKey = parseMonthKey(slicedMonthKey)
+    ? slicedMonthKey
+    : monthKeyForLedgerTimeZone(ledger?.timezone)
+  return resolveCalendarBudgetPeriod(calendarMonthKey)
+}
+
+export function resolveCurrentBudgetPeriodForLedger(ledger, referenceDate = new Date()) {
+  return resolveBudgetPeriodForLedger(
+    ledger,
+    dateKeyForLedgerTimeZone(ledger?.timezone, referenceDate),
+  )
 }
 
 export function previousBudgetPeriod(period, ledger = {}) {

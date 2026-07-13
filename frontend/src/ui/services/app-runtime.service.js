@@ -19,6 +19,7 @@ import { runCarrierSyncAutoRefreshInBackground } from '@/services/einvoice/carri
 import { runExchangeRateAutoSyncIfDue } from '@/ui/services/exchange-rate.service'
 import { clearHomeWidgetSummary, syncHomeWidgetSummary } from '@/ui/services/home-widget.service'
 import { runBudgetSaveIfDue } from '@/core/services/budget-save.service'
+import { APP_BUDGET_PERIOD_SYNC_EVENT } from '@/ui/composables/useHomePeriodFilter'
 import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { runSavingsJarAutoSaveIfDue } from '@/core/services/savings-jar-auto-save.service'
 import { runSubscriptionChargesIfDue } from '@/core/services/subscription-charge.service'
@@ -114,13 +115,17 @@ function runBookkeepingReminderSyncInBackground(reason) {
   })
 }
 
-function reloadCurrentBudgetPeriodInBackground(pinia, reason) {
+function reloadCurrentBudgetPeriodInBackground(pinia, reason, windowObject = globalThis.window) {
   const ledgerStore = useLedgerStore(pinia)
   const currentLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
   if (!currentLedgerId) return
-  void useBudgetStore(pinia).loadCurrentPeriod().catch((error) => {
-    console.warn(`[budget-period] current period reload failed (${reason})`, error)
-  })
+  void useBudgetStore(pinia).loadCurrentPeriod()
+    .then(() => {
+      windowObject?.dispatchEvent?.(new Event(APP_BUDGET_PERIOD_SYNC_EVENT))
+    })
+    .catch((error) => {
+      console.warn(`[budget-period] current period reload failed (${reason})`, error)
+    })
 }
 
 function clearAutoBackupDueTimer(runtimeState, windowObject = globalThis.window) {
@@ -493,6 +498,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
 
   scheduleMembershipWarmup('app_start', windowObject)
   runBookkeepingReminderSyncInBackground('app_start')
+  reloadCurrentBudgetPeriodInBackground(pinia, 'app_start', windowObject)
   if (ledgerStore.activeLedgerId) {
     runSavingsJarAutoSaveInBackground(ledgerStore.activeLedgerId, 'app_start')
     runSubscriptionChargesInBackground(ledgerStore.activeLedgerId, 'app_start')

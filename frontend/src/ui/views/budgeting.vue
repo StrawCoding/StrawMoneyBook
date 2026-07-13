@@ -437,7 +437,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useAccountStore } from '@/ui/stores/account.store'
@@ -455,6 +455,7 @@ import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
 import { isDailyPoolChildItem } from '@/core/services/budget.service'
+import { APP_BUDGET_PERIOD_SYNC_EVENT } from '@/ui/composables/useHomePeriodFilter'
 
 const budgetStore = useBudgetStore()
 const accountStore = useAccountStore()
@@ -683,6 +684,21 @@ watch(
   },
   { deep: true },
 )
+
+function refreshCurrentBudgetPeriod() {
+  void budgetStore.loadCurrentPeriod()
+}
+
+onMounted(() => {
+  refreshCurrentBudgetPeriod()
+  if (typeof window === 'undefined') return
+  window.addEventListener(APP_BUDGET_PERIOD_SYNC_EVENT, refreshCurrentBudgetPeriod)
+})
+
+onUnmounted(() => {
+  if (typeof window === 'undefined') return
+  window.removeEventListener(APP_BUDGET_PERIOD_SYNC_EVENT, refreshCurrentBudgetPeriod)
+})
 
 function pickMonth(monthKey) {
   if (!monthKey || monthKey === budgetStore.monthKey) return

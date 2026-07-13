@@ -92,16 +92,19 @@ test('budgeting page saves ledger budget period settings from budget workflows',
 })
 
 test('budget store resolves startup pay-cycle period from the current date, not month start', () => {
-  assert.match(budgetStoreSource, /function dateKeyForTimeZone/)
-  assert.match(budgetStoreSource, /ledgerStore\.activeLedger\?\.timezone/)
-  assert.match(budgetStoreSource, /resolveBudgetPeriodForLedger\(\s*ledgerStore\.activeLedger,\s*dateKeyForTimeZone/)
+  assert.match(budgetStoreSource, /resolveCurrentBudgetPeriodForLedger/)
+  assert.match(budgetStoreSource, /ledgerStore\.activeLedger/)
+  assert.doesNotMatch(budgetStoreSource, /dateKeyForTimeZone/)
   assert.doesNotMatch(budgetStoreSource, /resolveBudgetPeriodForLedger\(ledgerStore\.activeLedger,\s*monthKeyFromDate\(\)\)/)
 })
 
 test('startup month sync never treats pay-cycle period keys as calendar months', () => {
   assert.match(budgetStoreSource, /function normalizeBudgetMonthInput/)
   assert.match(budgetStoreSource, /\^pay:\(\\d\{4\}-\\d\{2\}-\\d\{2\}\)/)
-  assert.match(homePeriodFilterSource, /normalizeMonthKey\(budgetStore\.monthKey\) \|\| monthKeyFromDate/)
+  assert.match(homePeriodFilterSource, /monthKeyForLedgerTimeZone/)
+  assert.match(homePeriodFilterSource, /dateKeyForLedgerTimeZone/)
+  assert.match(homePeriodFilterSource, /APP_BUDGET_PERIOD_SYNC_EVENT/)
+  assert.match(homePeriodFilterSource, /isPayCycleLedger/)
   assert.doesNotMatch(homePeriodFilterSource, /ref\(budgetStore\.monthKey \|\| monthKeyFromDate/)
   assert.match(transactionRepoSource, /function parseMonthKey/)
   assert.match(transactionRepoSource, /if \(!range\) return \[\]/)
@@ -112,6 +115,8 @@ test('app lifecycle reloads the current budget period from today', () => {
   assert.match(appRuntimeSource, /useBudgetStore/)
   assert.match(appRuntimeSource, /reloadCurrentBudgetPeriodInBackground/)
   assert.match(appRuntimeSource, /loadCurrentPeriod\(\)/)
+  assert.match(appRuntimeSource, /APP_BUDGET_PERIOD_SYNC_EVENT/)
+  assert.match(appRuntimeSource, /app_start/)
   assert.match(appRuntimeSource, /appStateChange/)
   assert.match(appRuntimeSource, /window_focus/)
   assert.match(appRuntimeSource, /visibilitychange/)

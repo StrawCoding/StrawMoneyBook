@@ -1,5 +1,4 @@
 import { defineStore } from 'pinia'
-import { monthKeyFromDate } from '@/core/utils/id'
 import {
   copyPreviousMonthBudget,
   nextBudgetPeriod,
@@ -7,7 +6,9 @@ import {
   removeBudgetContainer,
   resolveContainerMonthlyAmountMinor,
   resolveContainerPeriodAmountMinor,
+  resolveCurrentBudgetPeriodForLedger,
   resolveBudgetPeriodForLedger,
+  monthKeyForLedgerTimeZone,
   saveBudgetContainer,
   saveBudgetContainerRange,
   saveBudgetSavePreferences as saveBudgetSavePreferencesService,
@@ -27,44 +28,6 @@ function toFiniteMinor(value) {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return 0
   return numeric
-}
-
-function normalizeTimeZone(value) {
-  const timeZone = String(value ?? '').trim()
-  if (!timeZone) return 'Asia/Taipei'
-  try {
-    new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date('2026-01-01T00:00:00.000Z'))
-    return timeZone
-  } catch {
-    return 'Asia/Taipei'
-  }
-}
-
-function dateKeyForTimeZone(timeZone = 'Asia/Taipei', referenceDate = new Date()) {
-  const normalizedTimeZone = normalizeTimeZone(timeZone)
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: normalizedTimeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-  const parts = formatter.formatToParts(referenceDate)
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
-  const yearNumber = Number(values.year)
-  const monthNumber = Number(values.month)
-  const dayNumber = Number(values.day)
-  const year = String(yearNumber).padStart(4, '0')
-  const month = String(monthNumber).padStart(2, '0')
-  const day = String(dayNumber).padStart(2, '0')
-  return Number.isFinite(yearNumber)
-    && Number.isFinite(monthNumber)
-    && Number.isFinite(dayNumber)
-    && monthNumber >= 1
-    && monthNumber <= 12
-    && dayNumber >= 1
-    && dayNumber <= 31
-    ? `${year}-${month}-${day}`
-    : monthKeyFromDate(referenceDate) + `-${String(referenceDate.getDate()).padStart(2, '0')}`
 }
 
 function itemResolvedMinor(item) {
@@ -88,7 +51,7 @@ function normalizeBudgetMonthInput(value) {
 
 export const useBudgetStore = defineStore('budget', {
   state: () => ({
-    monthKey: monthKeyFromDate(),
+    monthKey: monthKeyForLedgerTimeZone(),
     period: null,
     budget: null,
     items: [],
@@ -194,7 +157,7 @@ export const useBudgetStore = defineStore('budget', {
 
     reservedMinorByDate(state) {
       const ledgerStore = useLedgerStore()
-      const timeZone = normalizeTimeZone(ledgerStore.activeLedger?.timezone)
+      const timeZone = String(ledgerStore.activeLedger?.timezone ?? '').trim() || 'Asia/Taipei'
       const reserveItems = state.items.filter((item) => !isItemInContainer(item))
       return (referenceDate = new Date(), options = {}) => (
         computePeriodReservedMinor(
@@ -249,10 +212,7 @@ export const useBudgetStore = defineStore('budget', {
 
     async loadCurrentPeriod() {
       const ledgerStore = useLedgerStore()
-      const period = resolveBudgetPeriodForLedger(
-        ledgerStore.activeLedger,
-        dateKeyForTimeZone(ledgerStore.activeLedger?.timezone),
-      )
+      const period = resolveCurrentBudgetPeriodForLedger(ledgerStore.activeLedger)
       await this.loadPeriod(period)
     },
 
