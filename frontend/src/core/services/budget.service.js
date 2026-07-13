@@ -163,6 +163,11 @@ function parseDayKey(dayKey) {
   return { year, month, day }
 }
 
+function parsePayCycleMonthKey(value) {
+  const matched = /^pay:(\d{4}-\d{2}-\d{2})(?::\d{4}-\d{2}-\d{2})?$/.exec(String(value ?? '').trim())
+  return matched?.[1] ?? ''
+}
+
 function dayKeyFromParts(year, month, day) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
@@ -279,9 +284,11 @@ export function resolvePayCycleBudgetPeriod(dateKeyOrDate = new Date(), payDay =
 
 export function resolveBudgetPeriodForLedger(ledger, dateKeyOrMonth = monthKeyFromDate()) {
   if (normalizeBudgetPeriodMode(ledger?.budget_period_mode) === 'pay_cycle') {
-    const dateKey = /^\d{4}-\d{2}$/.test(String(dateKeyOrMonth ?? '').trim())
-      ? `${dateKeyOrMonth}-01`
-      : dateKeyOrMonth
+    const normalized = String(dateKeyOrMonth ?? '').trim()
+    const payCycleStartDate = parsePayCycleMonthKey(normalized)
+    const dateKey = payCycleStartDate || (/^\d{4}-\d{2}$/.test(normalized)
+      ? `${normalized}-01`
+      : normalized)
     return resolvePayCycleBudgetPeriod(dateKey, ledger?.budget_pay_day)
   }
   return resolveCalendarBudgetPeriod(String(dateKeyOrMonth ?? '').slice(0, 7))
@@ -736,7 +743,9 @@ function resolveBudgetItemForMonth(item, monthKey, usedDays = []) {
 }
 
 export function monthRangeUtc(monthKey, timeZone = 'Asia/Taipei') {
-  const [year, month] = monthKey.split('-').map((part) => Number(part))
+  const payCycleStartMonthKey = parsePayCycleMonthKey(monthKey).slice(0, 7)
+  const parsed = parseMonthKey(monthKey) ?? parseMonthKey(payCycleStartMonthKey) ?? parseMonthKey(monthKeyFromDate())
+  const { year, month } = parsed
   const next = shiftMonth(year, month, 1)
 
   return {

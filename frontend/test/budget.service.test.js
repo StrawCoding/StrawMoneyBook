@@ -6,6 +6,7 @@ import {
   dateRangeUtc,
   listInclusiveMonthKeys,
   loadBudgetSnapshotForPeriod,
+  monthRangeUtc,
   resetBudgetServiceDependenciesForTest,
   resolveBudgetPeriodForLedger,
   resolveContainerMonthlyAmountMinor,
@@ -92,6 +93,25 @@ test('resolveBudgetPeriodForLedger treats pay day as the first inclusive day and
   )
 })
 
+test('resolveBudgetPeriodForLedger preserves persisted pay-cycle month keys on startup reload', () => {
+  assert.deepEqual(
+    resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 25 }, 'pay:2026-06-25'),
+    {
+      mode: 'pay_cycle',
+      key: 'pay:2026-06-25:2026-07-24',
+      monthKey: 'pay:2026-06-25',
+      startDate: '2026-06-25',
+      endDate: '2026-07-24',
+      label: '2026-06-25~2026-07-24',
+      nextPayDate: '2026-07-25',
+    },
+  )
+  assert.equal(
+    resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 31 }, 'pay:2026-02-28:2026-03-30').key,
+    'pay:2026-02-28:2026-03-30',
+  )
+})
+
 test('dateRangeUtc uses the ledger timezone instead of the CI runner timezone', () => {
   assert.deepEqual(
     dateRangeUtc('2026-02-25', '2026-03-24', 'Asia/Taipei'),
@@ -107,6 +127,15 @@ test('dateRangeUtc uses the ledger timezone instead of the CI runner timezone', 
       endUtc: '2026-03-25T00:00:00.000Z',
     },
   )
+})
+
+test('monthRangeUtc does not throw Invalid time value for stale pay-cycle keys', () => {
+  assert.doesNotThrow(() => monthRangeUtc('pay:2026-06-25', 'Asia/Taipei'))
+  const range = monthRangeUtc('pay:2026-06-25', 'Asia/Taipei')
+  assert.deepEqual(range, {
+    startUtc: '2026-05-31T16:00:00.000Z',
+    endUtc: '2026-06-30T16:00:00.000Z',
+  })
 })
 
 test('resolveContainerPeriodAmountMinor multiplies daily pools by actual pay-cycle days', () => {

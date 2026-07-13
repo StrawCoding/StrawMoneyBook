@@ -3,9 +3,42 @@ import { createId, nowIso } from '@/core/utils/id'
 import { assertLedgerId, firstRow, rowsOf } from '@/core/repositories/base.repo'
 import { yieldToMainThread } from '@/core/utils/cooperative-yield'
 
+function parseMonthKey(monthKey) {
+  const matched = /^(\d{4})-(\d{2})$/.exec(String(monthKey ?? '').trim())
+  if (!matched) return null
+  const year = Number(matched[1])
+  const month = Number(matched[2])
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null
+  return { year, month }
+}
+
+function parseDayKey(dayKey) {
+  const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dayKey ?? '').trim())
+  if (!matched) return null
+  const year = Number(matched[1])
+  const month = Number(matched[2])
+  const day = Number(matched[3])
+  const date = new Date(year, month - 1, day)
+  if (
+    Number.isNaN(date.getTime())
+    || date.getFullYear() !== year
+    || date.getMonth() !== month - 1
+    || date.getDate() !== day
+  ) return null
+  return { year, month, day }
+}
+
+function parseYearKey(yearKey) {
+  const matched = /^(\d{4})$/.exec(String(yearKey ?? '').trim())
+  if (!matched) return null
+  const year = Number(matched[1])
+  return Number.isInteger(year) ? year : null
+}
 
 function monthRangeUtc(monthKey) {
-  const [year, month] = monthKey.split('-').map((part) => Number(part))
+  const parsed = parseMonthKey(monthKey)
+  if (!parsed) return null
+  const { year, month } = parsed
   const start = new Date(year, month - 1, 1, 0, 0, 0)
   const end = new Date(year, month, 1, 0, 0, 0)
 
@@ -16,7 +49,8 @@ function monthRangeUtc(monthKey) {
 }
 
 function yearRangeUtc(yearKey) {
-  const year = Number(yearKey)
+  const year = parseYearKey(yearKey)
+  if (year === null) return null
   const start = new Date(year, 0, 1, 0, 0, 0)
   const end = new Date(year + 1, 0, 1, 0, 0, 0)
   return {
@@ -26,7 +60,9 @@ function yearRangeUtc(yearKey) {
 }
 
 function dayRangeUtc(dayKey) {
-  const [year, month, day] = String(dayKey ?? '').split('-').map((part) => Number(part))
+  const parsed = parseDayKey(dayKey)
+  if (!parsed) return null
+  const { year, month, day } = parsed
   const start = new Date(year, month - 1, day, 0, 0, 0)
   const end = new Date(year, month - 1, day + 1, 0, 0, 0)
   return {
@@ -216,7 +252,9 @@ export async function listRecentTransactions(ledgerId, limit = 20) {
 export async function listTransactionsByMonth(ledgerId, monthKey) {
   assertLedgerId(ledgerId)
 
-  const { startUtc, endUtc } = monthRangeUtc(monthKey)
+  const range = monthRangeUtc(monthKey)
+  if (!range) return []
+  const { startUtc, endUtc } = range
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
             t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
@@ -247,7 +285,9 @@ export async function listTransactionsByMonth(ledgerId, monthKey) {
 
 export async function listTransactionsByYear(ledgerId, yearKey) {
   assertLedgerId(ledgerId)
-  const { startUtc, endUtc } = yearRangeUtc(yearKey)
+  const range = yearRangeUtc(yearKey)
+  if (!range) return []
+  const { startUtc, endUtc } = range
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
             t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
@@ -278,7 +318,9 @@ export async function listTransactionsByYear(ledgerId, yearKey) {
 
 export async function listTransactionsByDay(ledgerId, dayKey) {
   assertLedgerId(ledgerId)
-  const { startUtc, endUtc } = dayRangeUtc(dayKey)
+  const range = dayRangeUtc(dayKey)
+  if (!range) return []
+  const { startUtc, endUtc } = range
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id,
             t.category_id, t.amount_minor, t.occurred_at, t.note, t.location, t.tags_json,
@@ -353,17 +395,23 @@ function buildHomeScopeFilterClauses(mode, key) {
 
   if (normalizedMode === 'year') {
     if (!normalizedKey) return null
-    const { startUtc, endUtc } = yearRangeUtc(normalizedKey)
+    const range = yearRangeUtc(normalizedKey)
+    if (!range) return null
+    const { startUtc, endUtc } = range
     clauses.push('t.occurred_at >= ?', 't.occurred_at < ?')
     values.push(startUtc, endUtc)
   } else if (normalizedMode === 'month') {
     if (!normalizedKey) return null
-    const { startUtc, endUtc } = monthRangeUtc(normalizedKey)
+    const range = monthRangeUtc(normalizedKey)
+    if (!range) return null
+    const { startUtc, endUtc } = range
     clauses.push('t.occurred_at >= ?', 't.occurred_at < ?')
     values.push(startUtc, endUtc)
   } else if (normalizedMode === 'day') {
     if (!normalizedKey) return null
-    const { startUtc, endUtc } = dayRangeUtc(normalizedKey)
+    const range = dayRangeUtc(normalizedKey)
+    if (!range) return null
+    const { startUtc, endUtc } = range
     clauses.push('t.occurred_at >= ?', 't.occurred_at < ?')
     values.push(startUtc, endUtc)
   }

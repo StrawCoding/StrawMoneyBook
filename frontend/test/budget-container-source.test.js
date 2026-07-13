@@ -27,6 +27,14 @@ const homeBudgetSummarySource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/components/home/HomeBudgetSummaryCard.vue'),
   'utf8',
 )
+const homePeriodFilterSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/composables/useHomePeriodFilter.js'),
+  'utf8',
+)
+const transactionRepoSource = readFileSync(
+  resolve(import.meta.dirname, '../src/core/repositories/transaction.repo.js'),
+  'utf8',
+)
 
 test('budget repo exposes shared budget container CRUD and item binding columns', () => {
   assert.match(budgetRepoSource, /export async function listBudgetContainers/)
@@ -83,6 +91,16 @@ test('budget store resolves startup pay-cycle period from the current date, not 
   assert.match(budgetStoreSource, /dateKeyFromDate/)
   assert.match(budgetStoreSource, /resolveBudgetPeriodForLedger\(ledgerStore\.activeLedger,\s*dateKeyFromDate\(\)\)/)
   assert.doesNotMatch(budgetStoreSource, /resolveBudgetPeriodForLedger\(ledgerStore\.activeLedger,\s*monthKeyFromDate\(\)\)/)
+})
+
+test('startup month sync never treats pay-cycle period keys as calendar months', () => {
+  assert.match(budgetStoreSource, /function normalizeBudgetMonthInput/)
+  assert.match(budgetStoreSource, /\^pay:\(\\d\{4\}-\\d\{2\}-\\d\{2\}\)/)
+  assert.match(homePeriodFilterSource, /normalizeMonthKey\(budgetStore\.monthKey\) \|\| monthKeyFromDate/)
+  assert.doesNotMatch(homePeriodFilterSource, /ref\(budgetStore\.monthKey \|\| monthKeyFromDate/)
+  assert.match(transactionRepoSource, /function parseMonthKey/)
+  assert.match(transactionRepoSource, /if \(!range\) return \[\]/)
+  assert.match(transactionRepoSource, /if \(!range\) return null/)
 })
 
 test('budget container sheet exposes pool amount and savings controls', () => {

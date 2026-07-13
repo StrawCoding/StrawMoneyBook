@@ -17,8 +17,10 @@ function cloneErrorLogEntry(entry) {
     source: String(entry.source ?? ''),
     message: String(entry.message ?? ''),
     code: String(entry.code ?? ''),
+    stack: String(entry.stack ?? ''),
     routePath: String(entry.routePath ?? ''),
     component: String(entry.component ?? ''),
+    info: String(entry.info ?? ''),
     loggedAt: String(entry.loggedAt ?? ''),
   }
 }
@@ -29,8 +31,11 @@ function trimErrorLogEntries() {
 }
 
 function notifyErrorLogListeners() {
-  if (!errorLogListeners.size) return
   const snapshot = getErrorLogSnapshot()
+  if (typeof window !== 'undefined') {
+    window.__SMB_ERROR_LOG__ = snapshot
+  }
+  if (!errorLogListeners.size) return
   for (const listener of errorLogListeners) {
     try {
       listener(snapshot)
@@ -47,8 +52,10 @@ function appendErrorLog(error, context = {}) {
     source: String(context.source ?? ''),
     message: String(error?.message ?? error ?? ''),
     code: String(error?.code ?? ''),
+    stack: String(error?.stack ?? ''),
     routePath: String(context.routePath ?? ''),
     component: String(context.component ?? ''),
+    info: String(context.info ?? ''),
     loggedAt: new Date(nowMs).toISOString(),
   }
   errorLogEntries = [entry, ...errorLogEntries]

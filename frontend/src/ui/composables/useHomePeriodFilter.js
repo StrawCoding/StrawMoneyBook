@@ -18,7 +18,7 @@ export function useHomePeriodFilter() {
   const { t } = useI18n()
 
   const filterMode = ref('month')
-  const selectedMonth = ref(budgetStore.monthKey || monthKeyFromDate(new Date()))
+  const selectedMonth = ref(normalizeMonthKey(budgetStore.monthKey) || monthKeyFromDate(new Date()))
   const selectedDay = ref(dateKeyFromDate(new Date()))
   const selectedYear = ref(Number(new Date().getFullYear()))
 
@@ -96,8 +96,9 @@ export function useHomePeriodFilter() {
 
   async function switchFilterMode(nextMode) {
     filterMode.value = nextMode
-    if (nextMode === 'month' && budgetStore.monthKey) {
-      selectedMonth.value = budgetStore.monthKey
+    const budgetMonthKey = normalizeMonthKey(budgetStore.monthKey)
+    if (nextMode === 'month' && budgetMonthKey) {
+      selectedMonth.value = budgetMonthKey
     }
     await syncHomeTransactions()
   }

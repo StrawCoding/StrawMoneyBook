@@ -104,6 +104,9 @@ async function assertSourceContract() {
     homeBudgetCardVue,
     budgetStore,
     budgetService,
+    homePeriodFilter,
+    transactionRepo,
+    errorLogService,
     migrationSql,
   ] = await Promise.all([
     readFile(resolve(frontendDir, 'src/ui/views/budgeting.vue'), 'utf8'),
@@ -113,6 +116,9 @@ async function assertSourceContract() {
     readFile(resolve(frontendDir, 'src/ui/components/home/HomeBudgetSummaryCard.vue'), 'utf8'),
     readFile(resolve(frontendDir, 'src/ui/stores/budget.store.js'), 'utf8'),
     readFile(resolve(frontendDir, 'src/core/services/budget.service.js'), 'utf8'),
+    readFile(resolve(frontendDir, 'src/ui/composables/useHomePeriodFilter.js'), 'utf8'),
+    readFile(resolve(frontendDir, 'src/core/repositories/transaction.repo.js'), 'utf8'),
+    readFile(resolve(frontendDir, 'src/ui/services/error-log.service.js'), 'utf8'),
     readFile(resolve(frontendDir, 'src/core/db/migrations/039_budget_pay_cycle.sql'), 'utf8'),
   ])
 
@@ -130,7 +136,15 @@ async function assertSourceContract() {
   assert.match(homeBudgetCardVue, /budgeting\.period\.next_pay_day/)
   assert.match(budgetStore, /resolveBudgetPeriodForLedger/)
   assert.match(budgetStore, /loadCurrentPeriod/)
+  assert.match(budgetStore, /normalizeBudgetMonthInput/)
   assert.match(budgetService, /resolvePayCycleBudgetPeriod/)
+  assert.match(budgetService, /parsePayCycleMonthKey/)
+  assert.match(homePeriodFilter, /normalizeMonthKey\(budgetStore\.monthKey\) \|\| monthKeyFromDate/)
+  assert.match(transactionRepo, /function parseMonthKey/)
+  assert.match(transactionRepo, /if \(!range\) return \[\]/)
+  assert.match(transactionRepo, /if \(!range\) return null/)
+  assert.match(errorLogService, /window\.__SMB_ERROR_LOG__/)
+  assert.match(errorLogService, /stack: String/)
   assert.match(budgetService, /pay:/)
   assert.match(migrationSql, /period_key/)
   assert.match(migrationSql, /budget_period_mode/)

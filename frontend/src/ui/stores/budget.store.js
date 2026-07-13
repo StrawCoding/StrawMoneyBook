@@ -52,6 +52,13 @@ function normalizeContainerPeriodMode(value) {
   return String(value ?? '').trim() === 'daily' ? 'daily' : 'monthly'
 }
 
+function normalizeBudgetMonthInput(value) {
+  const text = String(value ?? '').trim()
+  const payCycleStartDate = /^pay:(\d{4}-\d{2}-\d{2})(?::\d{4}-\d{2}-\d{2})?$/.exec(text)?.[1]
+  if (payCycleStartDate) return payCycleStartDate
+  return /^\d{4}-\d{2}$/.test(text) ? `${text}-01` : text
+}
+
 export const useBudgetStore = defineStore('budget', {
   state: () => ({
     monthKey: monthKeyFromDate(),
@@ -222,7 +229,7 @@ export const useBudgetStore = defineStore('budget', {
     async loadMonth(monthKey) {
       const ledgerStore = useLedgerStore()
       if (String(ledgerStore.activeLedger?.budget_period_mode ?? '') === 'pay_cycle') {
-        await this.loadPeriod(resolveBudgetPeriodForLedger(ledgerStore.activeLedger, `${monthKey}-01`))
+        await this.loadPeriod(resolveBudgetPeriodForLedger(ledgerStore.activeLedger, normalizeBudgetMonthInput(monthKey)))
         return
       }
       await this.loadPeriod(resolveBudgetPeriodForLedger(ledgerStore.activeLedger, monthKey))

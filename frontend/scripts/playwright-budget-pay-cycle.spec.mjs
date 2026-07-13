@@ -1,6 +1,14 @@
 async (page) => {
   page.setDefaultTimeout(7000)
   page.setDefaultNavigationTimeout(10000)
+  const runtimeErrors = []
+  page.on('pageerror', (error) => {
+    runtimeErrors.push(`pageerror: ${error?.message ?? error}`)
+  })
+  page.on('console', (message) => {
+    if (message.type() !== 'error') return
+    runtimeErrors.push(`console: ${message.text()}`)
+  })
   const initialUrl = String(page.url())
   const baseOrigin = initialUrl.match(/^https?:\/\/[^/]+/u)?.[0] ?? 'http://127.0.0.1:4177'
   await installMockDate()
@@ -22,10 +30,12 @@ async (page) => {
   await assertBodyMatches(/Next pay day|下次發薪日|次の給与日/u)
   await navigateToHome()
   await assertBodyMatches(/Next pay day|下次發薪日|次の給与日/u)
+  await assertNoInvalidTimeValue('home pay-cycle startup')
   await navigateToBudget()
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 10000 })
   await navigateToBudget()
   await assertRangeVisible('2026-06-25', '2026-07-24')
+  await assertNoInvalidTimeValue('budget pay-cycle reload')
 
   await editBudgetItemBackToCalendar(itemCategory)
   await assertBodyMatches(/Monthly Budget|每月預算|月預算|月間予算/u)
@@ -39,10 +49,12 @@ async (page) => {
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 10000 })
   await navigateToBudget()
   await assertRangeVisible('2026-07-31', '2026-08-30')
+  await assertNoInvalidTimeValue('month-start pay-cycle reload')
   await setAppDateIso('2026-03-01T12:00:00+08:00')
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 10000 })
   await navigateToBudget()
   await assertRangeVisible('2026-02-28', '2026-03-30')
+  await assertNoInvalidTimeValue('short-month pay-cycle reload')
 
   function assert(condition, message) {
     if (!condition) throw new Error(message)
@@ -344,5 +356,21 @@ async (page) => {
   async function assertRangeVisible(startDate, endDate) {
     const body = await readBodyText()
     assert(body.includes(startDate) && body.includes(endDate), `missing budget period range ${startDate}~${endDate}\n${body.slice(0, 1200)}`)
+  }
+
+  async function assertNoInvalidTimeValue(label) {
+    await page.waitForTimeout(500)
+    const debugSnapshot = await page.evaluate(() => {
+      try {
+        return JSON.parse(JSON.stringify(window.__SMB_ERROR_LOG__ ?? []))
+      } catch {
+        return []
+      }
+    })
+    const evidence = [
+      ...runtimeErrors,
+      ...debugSnapshot.map((entry) => `${entry?.source ?? ''}: ${entry?.message ?? ''} ${entry?.routePath ?? ''}`),
+    ].join('\n')
+    assert(!/Invalid time value/u.test(evidence), `${label} surfaced Invalid time value\n${evidence}`)
   }
 }

@@ -2,6 +2,7 @@
 
 ---
 
+- (SMB-272) 修復 App 啟動期 `Invalid time value`：真機 debug 記錄顯示 routePath 空白，根因為發薪週期帳本在啟動 / reload 時可能保留 `budgetStore.monthKey = pay:YYYY-MM-DD`，首頁期間篩選把它當曆月 key 傳入交易查詢，`transaction.repo.js` 的月份 UTC range 對非法月份呼叫 `toISOString()` 而拋 `RangeError: Invalid time value`。修復：首頁月份篩選只接受 `YYYY-MM`，預算 store 可正規解析 persisted `pay:*` key，預算 service 的 pay-cycle parser 保留原週期語意，交易 repo 對非法年/月/日 key 回空結果而非拋錯；Debug Error Log snapshot 補保留 stack/source/route/info 並暴露診斷副本給 app-shell 驗證。新增 Node regression、source regression、`playwright:budget-pay-cycle` reload/pageerror/console 檢查；更新兩份功能文件。
 - (SMB-271) 預算項目流程可直接設定帳本預算期間：新增／編輯一般預算項目與共同預算池 sheet 皆新增「目前帳本預算期間」區塊，可切換曆月 / 發薪週期並設定每月發薪日；文案明確提示這是目前帳本層設定，會影響該帳本預算頁與首頁預算卡，不是單一項目的獨立週期。資料語意仍沿用 SMB-269 的 ledger-level `budget_period_mode` / `budget_pay_day`，不搬移既有曆月或發薪週期資料；新建項目 / 共同池若同時切週期會先套用帳本週期再建立，編輯既有項目 / 共同池則先保存目前項目再套用週期，避免意外搬動舊 period row。補三語 i18n、source regression、`playwright:budget-pay-cycle` 新增 / 編輯項目與共同池 app-shell workflow。
 - (SMB-270) 修復正式 Android App 更新可見性：官方網站 `www.strawmb.com` 補齊更新 manifest 與 Play fallback JSON，並將 App 內 secondary 更新來源改為 GitHub Pages 部署分支的 jsDelivr JSON mirror，避免 fallback 打到 GitHub Pages apex domain 的 HTML redirect；App repo 新增更新來源合約測試，鎖定 `app-update.json` 與 `frontend/package.json` 版本一致、預設 primary/fallback URL 與 HTML fallback 偵測。未修改版本號，未執行發版。
 
