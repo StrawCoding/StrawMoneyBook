@@ -47,7 +47,7 @@
 - 官網 repo `StrawMoneyBookWeb` main commit：`d163f75c7d016c52022e13ae31bd44df91d00aab`。
 - Pages deploy branch `Web-Page` commit：`ccaaabe61efda009821486e07ab606e5654901dc`。
 - App repo功能修復 commit：`c3365df53e4ef98613a1113fb98acd5dab6ddbc8`。
-- App repo fallback URL 修正 commit：`ff6baade8f1b9a481997419f4c6fff50fabd37f1`。
+- App repo fallback URL 修正 commit：`270d65f3c011188d6d451506e589b38172b9398f`。
 - App repo前一版 stage report commit：`2cda456d5fa9a00610afdb1d23439241345a66f4`。
 - App repo 09:04 CI 驗證基準 commit：`d0b2a5c361c6afa4e3653f27a343a3934458e198`。
 - 本階段未修改 `backend`，未執行 `backend npm run deploy:copy`，未重啟 StrawMB。
