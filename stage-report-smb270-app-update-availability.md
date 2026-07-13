@@ -17,6 +17,8 @@
 - root domain `https://strawmb.com/*` 仍由 GitHub Pages redirect 到 `www.strawmb.com/*`，已驗證 redirect 後為 JSON。
 
 ## 公開 endpoint curl 證據
+最後重驗時間：2026-07-13 08:52 Asia/Taipei。
+
 - `curl -fsS --max-time 20 https://www.strawmb.com/app-update.json`：
   - `{"latestVersion":"1.3.59","playUrl":"https://play.google.com/store/apps/details?id=com.strawcoding.strawmoneybook","message":""}`
 - `curl -fsS --max-time 20 https://www.strawmb.com/api/app-update/play`：
@@ -28,12 +30,12 @@
 
 ## 測試
 - App repo：
-  - `git diff --check`
+  - `git diff --check`：通過。
   - `cd frontend && npm run test:node`：686/686 pass。
   - `cd frontend && npm run build:web`：成功；僅既有 Vite chunk / dynamic import warnings。
   - GitHub Actions CI run `29215716963`：backend / frontend 成功。
 - 官網 repo：
-  - `git diff --check`
+  - `git diff --check`：通過。
   - `npm run check`：成功，包含 JSON endpoint 檢查與 Vite build。
   - GitHub Actions main workflow run `29215717106`：成功。
   - GitHub Pages deployment run `29215725036`：成功。
@@ -41,7 +43,8 @@
 ## 部署
 - 官網 repo `StrawMoneyBookWeb` main commit：`d163f75c7d016c52022e13ae31bd44df91d00aab`。
 - Pages deploy branch `Web-Page` commit：`ccaaabe61efda009821486e07ab606e5654901dc`。
-- App repo commit：`c3365df53e4ef98613a1113fb98acd5dab6ddbc8`。
+- App repo功能修復 commit：`c3365df53e4ef98613a1113fb98acd5dab6ddbc8`。
+- App repo前一版 stage report commit：`2cda456d5fa9a00610afdb1d23439241345a66f4`。
 - 本階段未修改 `backend`，未執行 `backend npm run deploy:copy`，未重啟 StrawMB。
 - 未執行 `npm run gpr`，未修改版本號，未 tag / 發版。
 
