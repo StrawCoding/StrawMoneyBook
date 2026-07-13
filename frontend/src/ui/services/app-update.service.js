@@ -4,11 +4,11 @@ import { Capacitor } from '@capacitor/core'
 import { AppUpdate, AppUpdateAvailability } from '@capawesome/capacitor-app-update'
 
 const DEFAULT_UPDATE_MANIFEST_URL = 'https://www.strawmb.com/app-update.json'
-const SECONDARY_UPDATE_MANIFEST_URL = 'https://strawmb.com/app-update.json'
+const SECONDARY_UPDATE_MANIFEST_URL = 'https://cdn.jsdelivr.net/gh/StrawCoding/StrawMoneyBookWeb@Web-Page/app-update.json'
 const LOCAL_UPDATE_MANIFEST_URL = '/app-update.json'
 const LOCAL_UPDATE_MANIFEST_RELATIVE_URL = './app-update.json'
 const DEFAULT_PLAY_VERSION_API_URL = 'https://www.strawmb.com/api/app-update/play'
-const SECONDARY_PLAY_VERSION_API_URL = 'https://strawmb.com/api/app-update/play'
+const SECONDARY_PLAY_VERSION_API_URL = 'https://cdn.jsdelivr.net/gh/StrawCoding/StrawMoneyBookWeb@Web-Page/api/app-update/play'
 const LOCAL_PLAY_VERSION_API_URL = '/api/app-update/play'
 const LOCAL_PLAY_VERSION_API_RELATIVE_URL = './api/app-update/play'
 const UPDATE_CHECK_SUCCESS_TTL_MS = 30 * 60 * 1000

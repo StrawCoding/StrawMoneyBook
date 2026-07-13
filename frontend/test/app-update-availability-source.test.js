@@ -29,7 +29,7 @@ test('SMB-270 Android update check uses official primary and fallback endpoints'
   )
   assert.match(
     appUpdateServiceSource,
-    /const SECONDARY_UPDATE_MANIFEST_URL = 'https:\/\/strawmb\.com\/app-update\.json'/,
+    /const SECONDARY_UPDATE_MANIFEST_URL = 'https:\/\/cdn\.jsdelivr\.net\/gh\/StrawCoding\/StrawMoneyBookWeb@Web-Page\/app-update\.json'/,
   )
   assert.match(
     appUpdateServiceSource,
@@ -37,7 +37,7 @@ test('SMB-270 Android update check uses official primary and fallback endpoints'
   )
   assert.match(
     appUpdateServiceSource,
-    /const SECONDARY_PLAY_VERSION_API_URL = 'https:\/\/strawmb\.com\/api\/app-update\/play'/,
+    /const SECONDARY_PLAY_VERSION_API_URL = 'https:\/\/cdn\.jsdelivr\.net\/gh\/StrawCoding\/StrawMoneyBookWeb@Web-Page\/api\/app-update\/play'/,
   )
 })
 

@@ -2,7 +2,7 @@
 
 ---
 
-- (SMB-270) 修復正式 Android App 更新可見性：官方網站 `www.strawmb.com` / `strawmb.com` 補齊更新 manifest 與 Play fallback JSON，避免既有 App 更新檢查打到 GitHub Pages HTML 404；App repo 新增更新來源合約測試，鎖定 `app-update.json` 與 `frontend/package.json` 版本一致、預設 primary/fallback URL 與 HTML fallback 偵測。未修改版本號，未執行發版。
+- (SMB-270) 修復正式 Android App 更新可見性：官方網站 `www.strawmb.com` 補齊更新 manifest 與 Play fallback JSON，並將 App 內 secondary 更新來源改為 GitHub Pages 部署分支的 jsDelivr JSON mirror，避免 fallback 打到 GitHub Pages apex domain 的 HTML redirect；App repo 新增更新來源合約測試，鎖定 `app-update.json` 與 `frontend/package.json` 版本一致、預設 primary/fallback URL 與 HTML fallback 偵測。未修改版本號，未執行發版。
 
 ## v1.3.58
 - (SMB-269) 修復發薪週期預算在不同執行環境時區下的期間查詢漂移：預算 snapshot 的整期與今日花費查詢改以帳本時區轉 UTC，不再依 CI runner / 裝置 process timezone；補強發薪日含當天、下次發薪日前一天含在本期、共同日池期末後才結算與日均 / 日池保留額回歸測試。

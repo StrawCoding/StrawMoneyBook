@@ -3,6 +3,7 @@
 ## 變更
 - App repo `StrawMoneyBook`：
   - 新增 `frontend/test/app-update-availability-source.test.js`，鎖定 `frontend/public/app-update.json` 的 `latestVersion` 與 `frontend/package.json` 版本一致，並檢查正式 primary/fallback 更新 URL、HTML fallback 偵測、Play API route 行為。
+  - 將 App 內 secondary 更新來源改為 GitHub Pages 部署分支的 jsDelivr JSON mirror，避免 `strawmb.com` apex domain 301 HTML body 被嚴格 JSON 驗證視為 fallback 失敗。
   - 更新 `release-notes.pending.md`，加入 SMB-270 pending release note。
 - 官網 repo `StrawMoneyBookWeb`：
   - 新增 `public/app-update.json`。
@@ -13,26 +14,28 @@
 - `frontend/package.json`：`1.3.59`。
 - `frontend/public/app-update.json`：`latestVersion = 1.3.59`。
 - 正式 primary manifest：`https://www.strawmb.com/app-update.json`。
-- 正式 fallback / Play API：`https://www.strawmb.com/api/app-update/play`。
-- root domain `https://strawmb.com/*` 仍由 GitHub Pages redirect 到 `www.strawmb.com/*`，已驗證 redirect 後為 JSON。
+- 正式 Play API / primary fallback：`https://www.strawmb.com/api/app-update/play`。
+- App secondary manifest：`https://cdn.jsdelivr.net/gh/StrawCoding/StrawMoneyBookWeb@Web-Page/app-update.json`。
+- App secondary Play API：`https://cdn.jsdelivr.net/gh/StrawCoding/StrawMoneyBookWeb@Web-Page/api/app-update/play`。
+- `https://strawmb.com/*` apex domain 由 GitHub Pages 回 301 HTML body；fetch 會跟隨 redirect，但不再作為 App secondary JSON source。
 
 ## 公開 endpoint curl 證據
-最後重驗時間：2026-07-13 09:04 Asia/Taipei。
+最後重驗時間：2026-07-13 09:21 Asia/Taipei。
 
 - `curl -fsS --max-time 20 https://www.strawmb.com/app-update.json`：
   - `{"latestVersion":"1.3.59","playUrl":"https://play.google.com/store/apps/details?id=com.strawcoding.strawmoneybook","message":""}`
 - `curl -fsS --max-time 20 https://www.strawmb.com/api/app-update/play`：
   - `{"appId":"com.strawcoding.strawmoneybook","latestVersion":"1.3.59","version":"1.3.59","playUrl":"https://play.google.com/store/apps/details?id=com.strawcoding.strawmoneybook","source":"official_site_static","message":""}`
-- `curl -fsS -L --max-time 20 https://strawmb.com/app-update.json`：
+- `curl -fsS --max-time 20 https://cdn.jsdelivr.net/gh/StrawCoding/StrawMoneyBookWeb@Web-Page/app-update.json`：
   - `{"latestVersion":"1.3.59","playUrl":"https://play.google.com/store/apps/details?id=com.strawcoding.strawmoneybook","message":""}`
-- `curl -fsS -L --max-time 20 https://strawmb.com/api/app-update/play`：
+- `curl -fsS --max-time 20 https://cdn.jsdelivr.net/gh/StrawCoding/StrawMoneyBookWeb@Web-Page/api/app-update/play`：
   - `{"appId":"com.strawcoding.strawmoneybook","latestVersion":"1.3.59","version":"1.3.59","playUrl":"https://play.google.com/store/apps/details?id=com.strawcoding.strawmoneybook","source":"official_site_static","message":""}`
 
 ## 測試
 - App repo：
   - `git diff --check`：通過。
-  - `cd frontend && npm run test:node`：686/686 pass（2026-07-13 09:04 重跑）。
-  - `cd frontend && npm run build:web`：成功（2026-07-13 09:04 重跑）；僅既有 Vite chunk / dynamic import warnings。
+  - `cd frontend && npm run test:node`：686/686 pass（2026-07-13 09:21 重跑）。
+  - `cd frontend && npm run build:web`：成功（2026-07-13 09:21 重跑）；僅既有 Vite chunk / dynamic import warnings。
   - GitHub Actions CI run `29216274369`（`d0b2a5c361c6afa4e3653f27a343a3934458e198`）：backend / frontend 成功。
 - 官網 repo：
   - `git diff --check`：通過。
@@ -44,6 +47,7 @@
 - 官網 repo `StrawMoneyBookWeb` main commit：`d163f75c7d016c52022e13ae31bd44df91d00aab`。
 - Pages deploy branch `Web-Page` commit：`ccaaabe61efda009821486e07ab606e5654901dc`。
 - App repo功能修復 commit：`c3365df53e4ef98613a1113fb98acd5dab6ddbc8`。
+- App repo fallback URL 修正 commit：`ff6baade8f1b9a481997419f4c6fff50fabd37f1`。
 - App repo前一版 stage report commit：`2cda456d5fa9a00610afdb1d23439241345a66f4`。
 - App repo 09:04 CI 驗證基準 commit：`d0b2a5c361c6afa4e3653f27a343a3934458e198`。
 - 本階段未修改 `backend`，未執行 `backend npm run deploy:copy`，未重啟 StrawMB。
