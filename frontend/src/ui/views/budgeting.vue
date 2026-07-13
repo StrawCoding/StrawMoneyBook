@@ -354,6 +354,8 @@
       :duplicate-category-ids="duplicateBudgetSaveCategoryIds"
       :containers="budgetStore.containers"
       :container-budget-save-enabled-ids="containerBudgetSaveEnabledIds"
+      :ledger-budget-period-mode="activeLedgerBudgetPeriodMode"
+      :ledger-budget-pay-day="activeLedgerBudgetPayDay"
       @close="closeSheet"
       @save="saveItem"
     />
@@ -369,6 +371,8 @@
       :savings-jar-accounts="accountStore.savingsJarAccounts"
       :regular-accounts="accountStore.regularAccounts"
       :has-child-budget-save="containerSheetHasChildBudgetSave"
+      :ledger-budget-period-mode="activeLedgerBudgetPeriodMode"
+      :ledger-budget-pay-day="activeLedgerBudgetPayDay"
       @close="closeContainerSheet"
       @save="saveContainer"
     />
@@ -509,6 +513,12 @@ const retroactiveModeOptions = computed(() => ([
   { value: 'delta', label: t('budgeting.budget_save.retroactive.delta') },
 ]))
 const isPayCycleMode = computed(() => String(ledgerStore.activeLedger?.budget_period_mode ?? '') === 'pay_cycle')
+const activeLedgerBudgetPeriodMode = computed(() => (
+  String(ledgerStore.activeLedger?.budget_period_mode ?? '') === 'pay_cycle'
+    ? 'pay_cycle'
+    : 'calendar_month'
+))
+const activeLedgerBudgetPayDay = computed(() => clampPayDay(ledgerStore.activeLedger?.budget_pay_day))
 const budgetPeriodTitle = computed(() => (
   isPayCycleMode.value ? t('budgeting.period.pay_cycle_budget') : t('budgeting.monthly_budget')
 ))
@@ -816,8 +826,17 @@ function closeContainerSheet() {
 }
 
 async function saveContainer(payload) {
+  const { ledgerBudgetPeriodSettings, ...containerPayload } = payload ?? {}
   try {
-    await budgetStore.upsertContainer(payload)
+    if (shouldApplyBudgetPeriodSettings(ledgerBudgetPeriodSettings) && !containerPayload.id) {
+      await applyBudgetPeriodSettings(ledgerBudgetPeriodSettings)
+      await budgetStore.upsertContainer(containerPayload)
+    } else {
+      await budgetStore.upsertContainer(containerPayload)
+      if (shouldApplyBudgetPeriodSettings(ledgerBudgetPeriodSettings)) {
+        await applyBudgetPeriodSettings(ledgerBudgetPeriodSettings)
+      }
+    }
     uiStore.pushToast(t('budgeting.container.toast.saved'))
     closeContainerSheet()
   } catch (error) {
@@ -978,8 +997,17 @@ function closeSheet() {
 }
 
 async function saveItem(payload) {
+  const { ledgerBudgetPeriodSettings, ...itemPayload } = payload ?? {}
   try {
-    await budgetStore.upsertItem(payload)
+    if (shouldApplyBudgetPeriodSettings(ledgerBudgetPeriodSettings) && !itemPayload.id) {
+      await applyBudgetPeriodSettings(ledgerBudgetPeriodSettings)
+      await budgetStore.upsertItem(itemPayload)
+    } else {
+      await budgetStore.upsertItem(itemPayload)
+      if (shouldApplyBudgetPeriodSettings(ledgerBudgetPeriodSettings)) {
+        await applyBudgetPeriodSettings(ledgerBudgetPeriodSettings)
+      }
+    }
     uiStore.pushToast(t('budgeting.toast.saved'))
     closeSheet()
   } catch (error) {
@@ -1070,6 +1098,34 @@ function openTotalBudgetSaveConfig() {
 function closeTotalBudgetSaveConfig() {
   if (totalSaveLoading.value) return
   isTotalBudgetSaveConfigOpen.value = false
+}
+
+function clampPayDay(value) {
+  const day = Math.trunc(Number(value))
+  if (!Number.isFinite(day)) return 1
+  return Math.min(31, Math.max(1, day))
+}
+
+function normalizeBudgetPeriodSettings(settings = {}) {
+  return {
+    budgetPeriodMode: String(settings?.budgetPeriodMode ?? '') === 'pay_cycle' ? 'pay_cycle' : 'calendar_month',
+    budgetPayDay: clampPayDay(settings?.budgetPayDay),
+  }
+}
+
+function shouldApplyBudgetPeriodSettings(settings = {}) {
+  if (!settings) return false
+  const next = normalizeBudgetPeriodSettings(settings)
+  return next.budgetPeriodMode !== activeLedgerBudgetPeriodMode.value
+    || next.budgetPayDay !== activeLedgerBudgetPayDay.value
+}
+
+async function applyBudgetPeriodSettings(settings = {}) {
+  const ledgerId = String(ledgerStore.activeLedgerId ?? '').trim()
+  if (!ledgerId) return
+  const next = normalizeBudgetPeriodSettings(settings)
+  await ledgerStore.updateBudgetPeriodSettings(ledgerId, next)
+  await budgetStore.loadCurrentPeriod()
 }
 </script>
 

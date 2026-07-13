@@ -58,6 +58,33 @@ test('budget item sheet exposes shared budget pool selector', () => {
   assert.match(itemSheetSource, /model\.budgetContainerId/)
 })
 
+test('budget item and pool sheets expose ledger budget period settings', () => {
+  for (const source of [itemSheetSource, containerSheetSource]) {
+    assert.match(source, /budgeting\.period\.sheet_title/)
+    assert.match(source, /budgeting\.period\.sheet_scope_hint/)
+    assert.match(source, /ledgerBudgetPeriodSettings/)
+    assert.match(source, /settings_ledger_detail\.budget_period_mode\.calendar_month/)
+    assert.match(source, /settings_ledger_detail\.budget_period_mode\.pay_cycle/)
+    assert.match(source, /settings_ledger_detail\.budget_pay_day/)
+  }
+  assert.match(itemSheetSource, /data-testid="budget-item-period-pay-cycle"/)
+  assert.match(containerSheetSource, /data-testid="budget-container-period-pay-cycle"/)
+})
+
+test('budgeting page saves ledger budget period settings from budget workflows', () => {
+  assert.match(budgetingSource, /:ledger-budget-period-mode="activeLedgerBudgetPeriodMode"/)
+  assert.match(budgetingSource, /:ledger-budget-pay-day="activeLedgerBudgetPayDay"/)
+  assert.match(budgetingSource, /updateBudgetPeriodSettings/)
+  assert.match(budgetingSource, /loadCurrentPeriod/)
+  assert.match(budgetingSource, /shouldApplyBudgetPeriodSettings/)
+})
+
+test('budget store resolves startup pay-cycle period from the current date, not month start', () => {
+  assert.match(budgetStoreSource, /dateKeyFromDate/)
+  assert.match(budgetStoreSource, /resolveBudgetPeriodForLedger\(ledgerStore\.activeLedger,\s*dateKeyFromDate\(\)\)/)
+  assert.doesNotMatch(budgetStoreSource, /resolveBudgetPeriodForLedger\(ledgerStore\.activeLedger,\s*monthKeyFromDate\(\)\)/)
+})
+
 test('budget container sheet exposes pool amount and savings controls', () => {
   assert.match(containerSheetSource, /budgeting\.container\.name/)
   assert.match(containerSheetSource, /budgeting\.container\.amount/)

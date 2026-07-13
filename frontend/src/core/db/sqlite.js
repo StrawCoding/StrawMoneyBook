@@ -63,6 +63,11 @@ function emitDataMutationEvent() {
   window.dispatchEvent(new Event('app:data-mutated'))
 }
 
+async function persistWebStoreAfterMutation() {
+  if (Capacitor.getPlatform() !== 'web') return
+  await sqlite.saveToStore(activeDbName)
+}
+
 function normalizeErrorMessage(error) {
   if (typeof error === 'string' && error.trim()) return error
 
@@ -267,6 +272,7 @@ export async function run(sql, values = []) {
   const conn = await getDatabase()
   const result = await conn.run(sql, values)
   if (isDataMutationSql(sql)) {
+    await persistWebStoreAfterMutation()
     emitDataMutationEvent()
   }
   return result

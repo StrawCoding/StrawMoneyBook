@@ -115,7 +115,7 @@ test('resolveContainerPeriodAmountMinor multiplies daily pools by actual pay-cyc
   assert.equal(resolveContainerPeriodAmountMinor({ amount_minor: 1000, period_mode: 'monthly' }, period), 1000)
 })
 
-test('loadBudgetSnapshotForPeriod uses pay-cycle date range and counts monthday rules inside range', async () => {
+test('loadBudgetSnapshotForPeriod uses pay-cycle date range and counts daily rules inside range', async () => {
   const calls = []
   const period = resolveBudgetPeriodForLedger({ budget_period_mode: 'pay_cycle', budget_pay_day: 25 }, '2026-03-01')
   setBudgetServiceDependenciesForTest({
@@ -124,17 +124,32 @@ test('loadBudgetSnapshotForPeriod uses pay-cycle date range and counts monthday 
       return { id: 'budget_pay', period_key: periodKey, month_key: 'pay:2026-02-25' }
     },
     async listBudgetItems() {
-      return [{
-        id: 'bi_food',
-        category_id: 'cat_food',
-        amount_minor: 1000,
-        amount_mode: 'daily_average',
-        day_rule_unit: 'monthday',
-        day_rule_values_json: '[24,25,31]',
-      }]
+      return [
+        {
+          id: 'bi_food',
+          category_id: 'cat_food',
+          amount_minor: 1000,
+          amount_mode: 'daily_average',
+          day_rule_unit: 'monthday',
+          day_rule_values_json: '[24,25,31]',
+        },
+        {
+          id: 'bi_commute',
+          category_id: 'cat_commute',
+          amount_minor: 700,
+          amount_mode: 'daily_average',
+          day_rule_unit: 'weekday',
+          day_rule_values_json: '[1]',
+        },
+      ]
     },
     async listBudgetContainers() {
-      return []
+      return [{
+        id: 'bc_daily',
+        name: '日池',
+        amount_minor: 500,
+        period_mode: 'daily',
+      }]
     },
     async computeBudgetSpentByCategory(_ledgerId, startUtc, endUtc) {
       calls.push({ startUtc, endUtc })
@@ -159,6 +174,9 @@ test('loadBudgetSnapshotForPeriod uses pay-cycle date range and counts monthday 
 
   assert.equal(snapshot.items[0].occurrence_count, 2)
   assert.equal(snapshot.items[0].resolved_amount_minor, 2000)
+  assert.equal(snapshot.items[1].occurrence_count, 4)
+  assert.equal(snapshot.items[1].resolved_amount_minor, 2800)
+  assert.equal(resolveContainerPeriodAmountMinor(snapshot.containers[0], snapshot.period), 14000)
   assert.equal(calls[0].startUtc.slice(0, 10), '2026-02-24')
   assert.equal(calls[0].endUtc.slice(0, 10), '2026-03-24')
   assert.equal(calls[2].usageStartUtc.slice(0, 10), '2026-02-24')

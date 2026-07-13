@@ -23,6 +23,46 @@
       <CustomSelect v-model="model.budgetContainerId" :options="containerOptions" />
     </label>
 
+    <div class="field-card budget-period-card" data-testid="budget-item-period-settings">
+      <div class="period-field-head">
+        <span>{{ t('budgeting.period.sheet_title') }}</span>
+        <small class="muted">{{ t('budgeting.period.sheet_scope_hint') }}</small>
+      </div>
+      <div class="ledger-period-mode-row" role="group" :aria-label="t('budgeting.period.sheet_title')">
+        <button
+          type="button"
+          class="ledger-period-mode-btn"
+          :class="{ active: model.ledgerBudgetPeriodMode === 'calendar_month' }"
+          data-testid="budget-item-period-calendar"
+          @click="model.ledgerBudgetPeriodMode = 'calendar_month'"
+        >
+          {{ t('settings_ledger_detail.budget_period_mode.calendar_month') }}
+        </button>
+        <button
+          type="button"
+          class="ledger-period-mode-btn"
+          :class="{ active: model.ledgerBudgetPeriodMode === 'pay_cycle' }"
+          data-testid="budget-item-period-pay-cycle"
+          @click="model.ledgerBudgetPeriodMode = 'pay_cycle'"
+        >
+          {{ t('settings_ledger_detail.budget_period_mode.pay_cycle') }}
+        </button>
+      </div>
+      <label v-if="model.ledgerBudgetPeriodMode === 'pay_cycle'">
+        {{ t('settings_ledger_detail.budget_pay_day') }}
+        <input
+          v-model.number="model.ledgerBudgetPayDay"
+          class="input"
+          type="number"
+          min="1"
+          max="31"
+          step="1"
+          data-testid="budget-item-pay-day"
+        />
+        <small class="muted">{{ t('budgeting.period.sheet_pay_day_hint') }}</small>
+      </label>
+    </div>
+
     <label v-if="!model.id">
       {{ t('budgeting.sheet.apply_through_month') }}
       <input v-model="model.applyThroughMonth" class="input" type="month" />
@@ -202,6 +242,14 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  ledgerBudgetPeriodMode: {
+    type: String,
+    default: 'calendar_month',
+  },
+  ledgerBudgetPayDay: {
+    type: [Number, String],
+    default: 1,
+  },
 })
 
 const emit = defineEmits(['close', 'save'])
@@ -219,6 +267,8 @@ const model = reactive({
   budgetSaveEnabled: false,
   budgetSaveTargetAccountId: '',
   budgetSaveSourceAccountId: '',
+  ledgerBudgetPeriodMode: 'calendar_month',
+  ledgerBudgetPayDay: 1,
 })
 const weekdayValues = [1, 2, 3, 4, 5, 6, 7]
 const monthdayValues = Array.from({ length: 31 }, (_, index) => index + 1)
@@ -325,6 +375,7 @@ watch(
     syncMonthdayPreview(props.budgetMonth)
 
     if (props.item) {
+      syncLedgerBudgetPeriodModel()
       model.id = props.item.id
       model.categoryId = props.item.category_id ?? ''
       model.budgetContainerId = String(props.item.budget_container_id ?? '')
@@ -351,6 +402,16 @@ watch(
     model.budgetSaveEnabled = false
     model.budgetSaveTargetAccountId = String(props.savingsJarAccounts?.[0]?.id ?? '')
     model.budgetSaveSourceAccountId = ''
+    syncLedgerBudgetPeriodModel()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => [props.ledgerBudgetPeriodMode, props.ledgerBudgetPayDay],
+  () => {
+    if (!props.open) return
+    syncLedgerBudgetPeriodModel()
   },
   { immediate: true },
 )
@@ -512,7 +573,24 @@ function onSave() {
     budgetSaveEnabled: poolBinding ? false : model.budgetSaveEnabled,
     budgetSaveTargetAccountId: poolBinding ? null : (model.budgetSaveEnabled ? model.budgetSaveTargetAccountId : null),
     budgetSaveSourceAccountId: poolBinding ? null : (model.budgetSaveEnabled ? model.budgetSaveSourceAccountId : null),
+    ledgerBudgetPeriodSettings: {
+      budgetPeriodMode: model.ledgerBudgetPeriodMode === 'pay_cycle' ? 'pay_cycle' : 'calendar_month',
+      budgetPayDay: clampPayDay(model.ledgerBudgetPayDay),
+    },
   })
+}
+
+function syncLedgerBudgetPeriodModel() {
+  model.ledgerBudgetPeriodMode = String(props.ledgerBudgetPeriodMode ?? '') === 'pay_cycle'
+    ? 'pay_cycle'
+    : 'calendar_month'
+  model.ledgerBudgetPayDay = clampPayDay(props.ledgerBudgetPayDay)
+}
+
+function clampPayDay(value) {
+  const day = Math.trunc(Number(value))
+  if (!Number.isFinite(day)) return 1
+  return Math.min(31, Math.max(1, day))
 }
 
 function syncMonthdayPreview(monthKey) {
@@ -579,6 +657,35 @@ h3 {
 .field-card {
   display: grid;
   gap: 8px;
+}
+.budget-period-card {
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--field-border) 78%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card) 92%, var(--surface-soft-accent) 8%);
+}
+.period-field-head {
+  display: grid;
+  gap: 4px;
+}
+.ledger-period-mode-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ledger-period-mode-btn {
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.ledger-period-mode-btn.active {
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--field-border) 54%);
+  background: color-mix(in srgb, var(--primary) 10%, var(--card) 90%);
+  color: var(--primary);
 }
 label {
   display: grid;

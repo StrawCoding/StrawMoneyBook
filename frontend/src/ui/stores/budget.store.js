@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { monthKeyFromDate } from '@/core/utils/id'
+import { dateKeyFromDate, monthKeyFromDate } from '@/core/utils/id'
 import {
   copyPreviousMonthBudget,
   nextBudgetPeriod,
@@ -215,7 +215,7 @@ export const useBudgetStore = defineStore('budget', {
 
     async loadCurrentPeriod() {
       const ledgerStore = useLedgerStore()
-      const period = resolveBudgetPeriodForLedger(ledgerStore.activeLedger, monthKeyFromDate())
+      const period = resolveBudgetPeriodForLedger(ledgerStore.activeLedger, dateKeyFromDate())
       await this.loadPeriod(period)
     },
 
