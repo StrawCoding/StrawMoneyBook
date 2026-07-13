@@ -20,7 +20,7 @@
 - `https://strawmb.com/*` apex domain 由 GitHub Pages 回 301 HTML body；fetch 會跟隨 redirect，但不再作為 App secondary JSON source。
 
 ## 公開 endpoint curl 證據
-最後重驗時間：2026-07-13 09:21 Asia/Taipei。
+最後重驗時間：2026-07-13 09:31 Asia/Taipei。
 
 - `curl -fsS --max-time 20 https://www.strawmb.com/app-update.json`：
   - `{"latestVersion":"1.3.59","playUrl":"https://play.google.com/store/apps/details?id=com.strawcoding.strawmoneybook","message":""}`
@@ -34,9 +34,13 @@
 ## 測試
 - App repo：
   - `git diff --check`：通過。
-  - `cd frontend && npm run test:node`：686/686 pass（2026-07-13 09:21 重跑）。
-  - `cd frontend && npm run build:web`：成功（2026-07-13 09:21 重跑）；僅既有 Vite chunk / dynamic import warnings。
+  - `cd frontend && npm run test:node`：686/686 pass（2026-07-13 09:31 重跑）。
+  - `cd frontend && npm run build:web`：成功（2026-07-13 09:31 重跑）；僅既有 Vite chunk / dynamic import warnings。
+  - Hermes 指定 endpoint parser：
+    - `curl -fsS --max-time 20 https://www.strawmb.com/app-update.json | node ...`：輸出 `1.3.59`。
+    - `curl -fsS --max-time 20 https://www.strawmb.com/api/app-update/play | node ...`：輸出含 `latestVersion:"1.3.59"` 與 `version:"1.3.59"` 的 JSON。
   - GitHub Actions CI run `29216274369`（`d0b2a5c361c6afa4e3653f27a343a3934458e198`）：backend / frontend 成功。
+  - GitHub Actions CI run `29217286037`（`fa6862cf7a6d63cbb94d16724703d6f30746d7f6`）：backend / frontend 成功。
 - 官網 repo：
   - `git diff --check`：通過。
   - `npm run check`：成功，包含 JSON endpoint 檢查與 Vite build。
@@ -50,6 +54,7 @@
 - App repo fallback URL 修正 commit：`270d65f3c011188d6d451506e589b38172b9398f`。
 - App repo前一版 stage report commit：`2cda456d5fa9a00610afdb1d23439241345a66f4`。
 - App repo 09:04 CI 驗證基準 commit：`d0b2a5c361c6afa4e3653f27a343a3934458e198`。
+- App repo 最新驗證文件 commit：`fa6862cf7a6d63cbb94d16724703d6f30746d7f6`。
 - 本階段未修改 `backend`，未執行 `backend npm run deploy:copy`，未重啟 StrawMB。
 - 未執行 `npm run gpr`，未修改版本號，未 tag / 發版。
 
