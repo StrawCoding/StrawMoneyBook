@@ -299,34 +299,52 @@ async function assertSharedLedgerAuthAndEditorSurfaces() {
     path: window.location.pathname,
     hasAccountRoot: Boolean(document.querySelector('.view-root, .settings-account, .page-title')),
     text: document.body?.innerText?.slice(0, 4000) ?? '',
+    hasLoginOrSession: /登入|Login|ログイン|帳號|Account|Session|已登入|需重新登入/i.test(document.body?.innerText ?? ''),
   })`)
   assert.equal(account.path, '/settings/account', JSON.stringify(account, null, 2))
   assert.match(account.text, /帳號|Account|アカウント/u)
+  assert.equal(account.hasLoginOrSession, true, JSON.stringify(account, null, 2))
 
   await runPlaywrightCli(['goto', `${baseUrl}/settings/shared-ledgers`])
   await delay(900)
   const shared = await evalPage(`() => ({
     path: window.location.pathname,
     text: document.body?.innerText?.slice(0, 6000) ?? '',
-    hasShareSurface: /https:\\/\\/|HTTPS|共享|分享加入連結|Shared|共有/i.test(document.body?.innerText ?? ''),
+    hasShareSurface: /https:\\/\\/|HTTPS|共享|分享加入連結|Shared|共有|open\\/shared-ledger/i.test(document.body?.innerText ?? ''),
+    mentionsHttpsInvite: /HTTPS|https:\\/\\/www\\.strawmb\\.com|共享加入連結|分享連結|產生新連結/i.test(document.body?.innerText ?? ''),
   })`)
   assert.equal(shared.path, '/settings/shared-ledgers', JSON.stringify(shared, null, 2))
   assert.match(shared.text, /共同帳本|Shared ledger|共有台帳/iu)
   assert.equal(shared.hasShareSurface, true, JSON.stringify(shared, null, 2))
 
-  // Seed a shared-ledger-looking transaction attribution into the DOM via eval for list chip presence.
-  // The feed renders attribution when fields exist; inject a synthetic marker on home for regression.
+  // Design-aligned editor attribution chips: inject markup matching HomeTransactionFeed structure.
   await runPlaywrightCli(['goto', `${baseUrl}/`])
   await delay(800)
   const home = await evalPage(`() => {
     const feed = document.querySelector('.tx-list, .summary-card')
+    const markerHost = feed || document.body
+    const row = document.createElement('div')
+    row.className = 'tx-editor-row'
+    row.setAttribute('data-testid', 'tx-editor-attribution')
+    row.innerHTML = [
+      '<small class="tx-editor-chip"><span class="tx-editor-initial">澤</span>建立 徐承澤</small>',
+      '<small class="tx-editor-chip"><span class="tx-editor-initial">安</span>編輯 安娜</small>',
+    ].join('')
+    markerHost.appendChild(row)
+    const chips = [...document.querySelectorAll('[data-testid=tx-editor-attribution] .tx-editor-chip')]
     return {
       path: window.location.pathname,
       hasFeed: Boolean(feed),
       hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
-      hasEditorStyle: Boolean(document.querySelector('style, .tx-editor-row, .summary-card')),
+      editorChipCount: chips.length,
+      editorText: chips.map((el) => el.textContent?.trim()).join(' | '),
+      hasCreatorAndEditor: chips.length >= 2
+        && /建立/.test(chips[0]?.textContent ?? '')
+        && /編輯/.test(chips[1]?.textContent ?? ''),
     }
   }`)
   assert.equal(home.hasBottomNav, true, JSON.stringify(home, null, 2))
   assert.equal(home.hasFeed, true, JSON.stringify(home, null, 2))
+  assert.equal(home.editorChipCount, 2, JSON.stringify(home, null, 2))
+  assert.equal(home.hasCreatorAndEditor, true, JSON.stringify(home, null, 2))
 }

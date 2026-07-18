@@ -499,15 +499,19 @@ h3 {
 .tx-editor-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   font-size: 11px;
   color: var(--muted);
+  background: color-mix(in srgb, var(--card) 70%, #121820 30%);
+  border: 1px solid color-mix(in srgb, var(--line, #2e3c4d) 80%, transparent);
+  border-radius: 999px;
+  padding: 2px 8px 2px 3px;
 }
 .tx-editor-initial {
   display: inline-grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 999px;
   font-size: 10px;
   font-weight: 700;

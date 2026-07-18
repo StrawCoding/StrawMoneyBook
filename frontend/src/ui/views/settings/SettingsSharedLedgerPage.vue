@@ -75,13 +75,45 @@
             <div class="profile-meta">
               <strong>{{ accountName }}</strong>
               <p class="muted compact">{{ sessionUser.email || sessionUser.account }}</p>
-              <p class="session-status-row">
-                <span class="session-pill" :class="sessionNeedsReauth ? 'expired' : 'ok'">
+              <p class="session-status-row" data-testid="shared-ledger-session-status">
+                <span
+                  class="session-pill"
+                  :class="sessionNeedsReauth ? 'expired' : 'ok'"
+                  data-testid="shared-ledger-session-pill"
+                >
                   {{
                     sessionNeedsReauth
-                      ? t('settings_shared_ledgers.session_needs_relogin', '需重新登入')
-                      : t('settings_shared_ledgers.session_active', 'Session 有效')
+                      ? t('settings_shared_ledgers.session_expired', '● 已過期')
+                      : t('settings_shared_ledgers.session_signed_in', '● 已登入')
                   }}
+                </span>
+                <span
+                  v-if="!sessionNeedsReauth"
+                  class="session-pill ok"
+                  data-testid="shared-ledger-session-valid-pill"
+                >
+                  {{ t('settings_shared_ledgers.session_active', 'Session 有效') }}
+                </span>
+                <span
+                  v-if="!sessionNeedsReauth && hasMembershipAccess"
+                  class="session-pill ok"
+                  data-testid="shared-ledger-auto-sync-pill"
+                >
+                  {{ t('settings_shared_ledgers.auto_sync_on', '自動同步開') }}
+                </span>
+                <span
+                  v-if="sessionNeedsReauth"
+                  class="session-pill danger"
+                  data-testid="shared-ledger-sync-paused-pill"
+                >
+                  {{ t('settings_shared_ledgers.sync_paused', '同步暫停') }}
+                </span>
+                <span
+                  v-if="sessionNeedsReauth"
+                  class="session-pill expired"
+                  data-testid="shared-ledger-needs-relogin-pill"
+                >
+                  {{ t('settings_shared_ledgers.session_needs_relogin', '需重新登入') }}
                 </span>
                 <span v-if="hasMembershipAccess" class="session-pill ok">
                   {{ t('settings_shared_ledgers.membership_badge', '會員') }}
@@ -1431,6 +1463,11 @@ p {
 .session-pill.expired {
   color: #8a3b00;
   background: color-mix(in srgb, #f0a202 18%, var(--card));
+}
+
+.session-pill.danger {
+  color: #9b1c2c;
+  background: color-mix(in srgb, #e85d6a 16%, var(--card));
 }
 
 .sync-status-box {

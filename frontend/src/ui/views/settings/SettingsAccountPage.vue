@@ -243,12 +243,44 @@
               <strong>{{ sessionUser.display_name || sessionUser.email }}</strong>
               <p class="muted compact">{{ sessionUser.email || sessionUser.account }}</p>
               <p class="session-status-row" data-testid="account-session-status">
-                <span class="session-pill" :class="sessionNeedsReauth ? 'expired' : 'ok'">
+                <span
+                  class="session-pill"
+                  :class="sessionNeedsReauth ? 'expired' : 'ok'"
+                  data-testid="account-session-pill"
+                >
                   {{
                     sessionNeedsReauth
-                      ? t('settings_account.session_needs_relogin', '需重新登入')
-                      : t('settings_account.session_active', '已登入 · Session 有效')
+                      ? t('settings_account.session_expired', '● 已過期')
+                      : t('settings_account.session_signed_in', '● 已登入')
                   }}
+                </span>
+                <span
+                  v-if="!sessionNeedsReauth"
+                  class="session-pill ok"
+                  data-testid="account-session-valid-pill"
+                >
+                  {{ t('settings_account.session_active', 'Session 有效') }}
+                </span>
+                <span
+                  v-if="!sessionNeedsReauth"
+                  class="session-pill ok"
+                  data-testid="account-auto-sync-pill"
+                >
+                  {{ t('settings_account.auto_sync_on', '自動同步開') }}
+                </span>
+                <span
+                  v-if="sessionNeedsReauth"
+                  class="session-pill danger"
+                  data-testid="account-sync-paused-pill"
+                >
+                  {{ t('settings_account.sync_paused', '同步暫停') }}
+                </span>
+                <span
+                  v-if="sessionNeedsReauth"
+                  class="session-pill expired"
+                  data-testid="account-needs-relogin-pill"
+                >
+                  {{ t('settings_account.session_needs_relogin', '需重新登入') }}
                 </span>
               </p>
               <p class="muted compact">
@@ -1558,6 +1590,11 @@ p {
 .session-pill.expired {
   color: #8a3b00;
   background: color-mix(in srgb, #f0a202 18%, var(--card));
+}
+
+.session-pill.danger {
+  color: #9b1c2c;
+  background: color-mix(in srgb, #e85d6a 16%, var(--card));
 }
 
 .google-auth-block {

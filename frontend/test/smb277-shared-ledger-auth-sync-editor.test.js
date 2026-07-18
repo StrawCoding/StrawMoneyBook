@@ -84,3 +84,34 @@ test('SMB-277: transaction editor attribution migration and helpers', () => {
   }, { currentUserId: 'u1', isSharedLedger: false })
   assert.equal(soloSelfHidden, null)
 })
+
+test('SMB-277: account/shared-ledger UI exposes design-aligned session sync pills', () => {
+  const accountPage = readFileSync(
+    join(root, 'src/ui/views/settings/SettingsAccountPage.vue'),
+    'utf8',
+  )
+  const sharedPage = readFileSync(
+    join(root, 'src/ui/views/settings/SettingsSharedLedgerPage.vue'),
+    'utf8',
+  )
+  const i18n = readFileSync(join(root, 'src/ui/services/i18n.service.js'), 'utf8')
+  const homeFeed = readFileSync(
+    join(root, 'src/ui/components/home/HomeTransactionFeed.vue'),
+    'utf8',
+  )
+  const aboutPage = readFileSync(join(root, 'src/ui/views/TransactionAboutPage.vue'), 'utf8')
+
+  assert.match(accountPage, /data-testid="account-session-status"/)
+  assert.match(accountPage, /settings_account\.auto_sync_on/)
+  assert.match(accountPage, /settings_account\.sync_paused/)
+  assert.match(sharedPage, /data-testid="shared-ledger-https-link"/)
+  assert.match(sharedPage, /settings_shared_ledgers\.auto_sync_on/)
+  assert.match(sharedPage, /settings_shared_ledgers\.sync_paused/)
+  assert.match(sharedPage, /https:\/\/www\.strawmb\.com\/open\/shared-ledger|共享加入連結（HTTPS）/)
+  assert.match(i18n, /'settings_account\.auto_sync_on':/)
+  assert.match(i18n, /'settings_shared_ledgers\.sync_paused':/)
+  assert.match(homeFeed, /data-testid="tx-editor-attribution"/)
+  assert.match(homeFeed, /home_tx\.editor_created/)
+  assert.match(aboutPage, /data-testid="tx-editor-history"/)
+  assert.match(aboutPage, /transaction_about\.collaboration/)
+})
