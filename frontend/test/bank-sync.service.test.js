@@ -19,6 +19,7 @@ function createTraceStub() {
 function createBaseDependencies(overrides = {}) {
   return {
     assertCanUseBankSync: async () => {},
+    hasBankSyncMembershipAccess: async () => true,
     markBankTransactionsImported: async () => {},
     markImportedBankTransactions: async () => {},
     traceBankSyncOperation: createTraceStub(),

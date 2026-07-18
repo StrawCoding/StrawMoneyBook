@@ -41,8 +41,10 @@ function isNativeFirstBankProvider(providerId) {
 }
 
 function shouldExposeProvider(providerId) {
+  // Feature visibility (settings entry / support matrix) must not require native runtime.
+  // Native connect/sync remains gated by isBankSyncNativeAutomationAvailable().
   if (isFirstBankProviderId(providerId)) {
-    return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS && isNativeBankAutomationRuntimeSupported()
+    return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS
   }
   return false
 }
@@ -92,20 +94,49 @@ export function isBankSyncPlatformSupported() {
   return isNativeBankAutomationRuntimeSupported() || Boolean(DEFAULT_BANK_API_BASE)
 }
 
+export function isBankSyncNativeAutomationAvailable() {
+  return BANK_SYNC_FEATURE_ENABLED
+    && BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS
+    && isNativeBankAutomationRuntimeSupported()
+}
+
 export function isBankSyncApiConfigured() {
   if (!BANK_SYNC_FEATURE_ENABLED) return false
-  if (isNativeBankAutomationRuntimeSupported() && listBankProviders().length > 0) return true
-  return !shouldRequireExplicitBankApiBase()
+  if (isBankSyncNativeAutomationAvailable()) return true
+  if (Boolean(DEFAULT_BANK_API_BASE) && listBankProviders().length > 0) return true
+  return false
 }
 
 export function isBankSyncFeatureEnabled() {
-  if (!BANK_SYNC_FEATURE_ENABLED) return false
-  return listBankProviders().length > 0
+  // Visibility only: keep settings entry + routes reachable so Web can show support matrix.
+  return BANK_SYNC_FEATURE_ENABLED
+}
+
+export function getBankSyncSupportMatrix() {
+  const platform = Capacitor.getPlatform()
+  const providers = listBankProviders()
+  return {
+    featureEnabled: BANK_SYNC_FEATURE_ENABLED,
+    platform,
+    androidOnly: true,
+    nativeAutomationAvailable: isBankSyncNativeAutomationAvailable(),
+    csvFallbackAvailable: true,
+    supportedBanks: providers.map((item) => ({
+      id: item.id,
+      name: item.name,
+      country: item.country,
+      platforms: ['android'],
+    })),
+    checkedAt: Date.now(),
+  }
 }
 
 export function getBankSyncApiUnavailableMessage() {
   if (!BANK_SYNC_FEATURE_ENABLED) {
     return createBankSyncDisabledError().message
+  }
+  if (!isNativeBankAutomationRuntimeSupported()) {
+    return t('bank_sync.error.android_only')
   }
   return createMissingBankApiError().message
 }

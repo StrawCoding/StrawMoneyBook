@@ -30,6 +30,11 @@ async function defaultAssertCanUseBankSync() {
   return mod.assertCanUseBankSync()
 }
 
+async function defaultHasBankSyncMembershipAccess() {
+  const mod = await import('../../core/services/membership.service.js')
+  return mod.hasBankSyncMembershipAccess()
+}
+
 async function defaultAddTransaction(...args) {
   const mod = await import('../../core/repositories/transaction.repo.js')
   return mod.addTransaction(...args)
@@ -349,6 +354,7 @@ const defaultDependencies = {
   addTransaction: defaultAddTransaction,
   addTransfer: defaultAddTransfer,
   assertCanUseBankSync: defaultAssertCanUseBankSync,
+  hasBankSyncMembershipAccess: defaultHasBankSyncMembershipAccess,
   clearBankMirrorDataByConnection: defaultClearBankMirrorDataByConnection,
   createBankLinkSession,
   deleteEncryptedSetting: defaultDeleteEncryptedSetting,
@@ -441,7 +447,8 @@ export async function prepareBankProviderLink(ledgerId, provider, options = {}) 
 
 export async function getBankSyncState(ledgerId) {
   assertLedgerId(ledgerId)
-  await dependencies.assertCanUseBankSync()
+  // Read path: free users stay on settings with availability panel; do not assert/navigate away.
+  if (!(await dependencies.hasBankSyncMembershipAccess())) return []
   const connections = await dependencies.listBankConnections(ledgerId)
   const bundles = []
   for (const connection of connections) {
@@ -452,7 +459,7 @@ export async function getBankSyncState(ledgerId) {
 
 export async function getBankSyncConnectionDetail(ledgerId, connectionId) {
   assertLedgerId(ledgerId)
-  await dependencies.assertCanUseBankSync()
+  if (!(await dependencies.hasBankSyncMembershipAccess())) return null
   const connection = await dependencies.findBankConnectionById(ledgerId, connectionId)
   if (!connection) return null
   return getConnectionBundle(ledgerId, connection)

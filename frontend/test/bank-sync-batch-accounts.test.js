@@ -16,6 +16,7 @@ test('saveBankAccountsSettings updates each bank account patch', async () => {
 
   setBankSyncServiceDependenciesForTest({
     assertCanUseBankSync: async () => {},
+    hasBankSyncMembershipAccess: async () => true,
     yieldToMainThread: async () => {},
     updateBankAccount: async (_ledgerId, bankAccountId, patch) => {
       updates.push({ bankAccountId, patch })

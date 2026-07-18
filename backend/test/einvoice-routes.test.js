@@ -151,6 +151,27 @@ describe('einvoice routes', { concurrency: 1 }, () => {
     clearEInvoiceEnv()
   })
 
+  it('GET /api/einvoice/health reports configured without claiming portal login success', async () => {
+    const { default: handler } = await import('../src/routes/einvoice.js?health-probe')
+    const req = {
+      method: 'GET',
+      url: '/api/einvoice/health',
+      headers: {
+        host: 'localhost',
+        origin: 'http://localhost:5173',
+      },
+      body: undefined,
+      socket: { remoteAddress: '127.0.0.1' },
+    }
+    const res = makeResponse(req)
+    await handler(req, res)
+    assert.equal(res.statusCode, 200)
+    assert.equal(res.payload.ok, true)
+    assert.equal(res.payload.configured, true)
+    assert.equal(res.payload.service, 'einvoice')
+    assert.equal(res.payload.note, 'health_ok_does_not_mean_portal_login_ok')
+  })
+
   it('returns explicit configuration error when client key is missing', async () => {
   clearEInvoiceEnv()
   const { default: handler } = await import('../src/routes/einvoice.js?missing-config')

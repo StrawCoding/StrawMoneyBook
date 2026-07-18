@@ -292,9 +292,22 @@ async function handleQueryInvoicesAlias(body) {
 }
 
 export default async function einvoiceHandler(req, res) {
+  const pathname = normalizePath(req, '/api/einvoice')
+
+  // Public readiness probe — does NOT prove portal login / scrape success.
+  if (pathname === '/health') {
+    if (methodGuard(req, res, ['GET'])) return
+    sendJson(res, 200, {
+      ok: true,
+      configured: isConfigured(),
+      service: 'einvoice',
+      note: 'health_ok_does_not_mean_portal_login_ok',
+    })
+    return
+  }
+
   if (methodGuard(req, res, ['POST'])) return
 
-  const pathname = normalizePath(req, '/api/einvoice')
   const supportedPaths = new Set([
     '/query-invoices',
     '/scrape/start',

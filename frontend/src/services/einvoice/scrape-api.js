@@ -122,3 +122,61 @@ export function isEInvoiceApiConfigured() {
   if (import.meta.env.PROD) return true
   return Boolean(getEInvoiceApiBase())
 }
+
+/**
+ * Lightweight health probe. HTTP 200 / configured=true means the API is reachable,
+ * NOT that portal login or scrape will succeed.
+ */
+export async function probeEInvoiceApiHealth({ signal } = {}) {
+  const checkedAt = Date.now()
+  if (!isEInvoiceApiConfigured()) {
+    return {
+      ok: false,
+      configured: false,
+      checkedAt,
+      errorCode: 'carrier_sync_api_not_configured',
+      note: 'health_ok_does_not_mean_portal_login_ok',
+    }
+  }
+
+  try {
+    const response = await fetch(buildApiUrl('/api/einvoice/health'), {
+      method: 'GET',
+      credentials: shouldSendAuthCredentials() ? 'include' : 'same-origin',
+      signal,
+    })
+    let data = null
+    try {
+      data = await response.json()
+    } catch {
+      data = null
+    }
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        configured: Boolean(data?.configured),
+        checkedAt,
+        errorCode: String(data?.error ?? `einvoice_health_http_${response.status}`),
+        note: 'health_ok_does_not_mean_portal_login_ok',
+      }
+    }
+
+    return {
+      ok: Boolean(data?.ok !== false),
+      configured: data?.configured !== false,
+      checkedAt,
+      errorCode: null,
+      note: String(data?.note ?? 'health_ok_does_not_mean_portal_login_ok'),
+    }
+  } catch (err) {
+    const mapped = mapFetchNetworkError(err)
+    return {
+      ok: false,
+      configured: isEInvoiceApiConfigured(),
+      checkedAt,
+      errorCode: String(mapped?.code ?? 'einvoice_network_failed'),
+      note: 'health_ok_does_not_mean_portal_login_ok',
+    }
+  }
+}

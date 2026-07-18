@@ -8,6 +8,52 @@
       <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
     </header>
 
+    <article class="card panel" data-testid="carrier-sync-availability">
+      <h3>{{ t('settings_carrier_sync.availability.title') }}</h3>
+      <p class="muted compact">{{ t('settings_carrier_sync.availability.desc') }}</p>
+      <ul class="availability-list">
+        <li
+          v-for="stage in availability.stages"
+          :key="stage.id"
+          class="availability-row"
+          :data-stage="stage.id"
+          :data-ok="stage.ok ? '1' : '0'"
+        >
+          <span class="availability-label">{{ t(`settings_carrier_sync.availability.stage.${stage.id}`) }}</span>
+          <strong :class="stage.ok ? 'status-ok' : 'status-blocked'">
+            {{ stage.ok ? t('settings_carrier_sync.availability.ok') : t('settings_carrier_sync.availability.blocked') }}
+          </strong>
+          <code v-if="stage.code" class="error-code">{{ stage.code }}</code>
+        </li>
+      </ul>
+      <p v-if="availability.errorCode" class="muted warning-text">
+        {{ t('settings_carrier_sync.availability.error_code', { code: availability.errorCode }) }}
+      </p>
+      <div class="row action-row">
+        <RouterLink
+          v-if="availability.recoveryCta === 'membership'"
+          class="btn primary"
+          to="/settings/membership-benefits"
+          data-testid="carrier-sync-recovery-cta"
+        >
+          {{ t('settings_carrier_sync.view_membership') }}
+        </RouterLink>
+        <button
+          v-else
+          class="btn primary"
+          type="button"
+          data-testid="carrier-sync-recovery-cta"
+          @click="handleRecoveryCta"
+        >
+          {{ carrierRecoveryCtaLabel }}
+        </button>
+      </div>
+      <p class="muted compact">
+        {{ t('settings_carrier_sync.availability.checked_at', { time: formatDateTime(availability.checkedAt) }) }}
+      </p>
+      <p class="muted compact">{{ t('settings_carrier_sync.availability.health_note') }}</p>
+    </article>
+
     <article class="card panel">
       <h3>{{ t('settings_carrier_sync.management_title') }}</h3>
       <p class="muted">{{ t('settings_carrier_sync.management_desc') }}</p>
@@ -142,7 +188,13 @@
     >
       <div class="captcha-panel">
         <img v-if="captchaImageSrc" :src="captchaImageSrc" alt="captcha" class="captcha-image" />
+        <p v-if="captchaExpired" class="muted warning-text">{{ t('settings_carrier_sync.captcha.expired') }}</p>
         <input v-model="captchaCode" class="field-input" :placeholder="t('settings_carrier_sync.captcha.placeholder')" />
+        <div class="row captcha-actions">
+          <button class="btn" type="button" :disabled="captchaRefreshing" @click="refreshCaptchaImage">
+            {{ captchaRefreshing ? t('settings_carrier_sync.captcha.refreshing') : t('settings_carrier_sync.captcha.refresh') }}
+          </button>
+        </div>
       </div>
     </AppDialog>
   </section>
@@ -159,6 +211,7 @@ import {
   importPendingCarrierInvoices,
   saveCarrierSyncConfig,
   cancelCarrierSyncSession,
+  refreshCarrierCaptchaSession,
   syncCarrierInvoicesNow,
 } from '@/services/einvoice/carrier-sync.service.js'
 import {
@@ -167,6 +220,10 @@ import {
   saveEInvoiceCredential,
 } from '@/services/einvoice/backend.js'
 import { isEInvoiceApiConfigured } from '@/services/einvoice/scrape-api.js'
+import {
+  assessCarrierSyncAvailability,
+  refreshCarrierApiHealthProbe,
+} from '@/services/einvoice/availability.js'
 import { isValidCarrierPhone, normalizeCarrierPhone } from '@/services/einvoice/shared.js'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
@@ -184,6 +241,8 @@ const membershipTier = ref(getMembershipTierSnapshot())
 const hasCarrierAccess = computed(() => hasCarrierSyncMembershipAccess(membershipTier.value))
 const apiReady = computed(() => isEInvoiceApiConfigured())
 const apiMessage = computed(() => t('settings_carrier_sync.api_unavailable'))
+const apiHealth = ref(null)
+const availability = ref(assessCarrierSyncAvailability({ membershipTier: membershipTier.value }))
 
 const carrierPhone = ref('')
 const carrierPassword = ref('')
@@ -203,12 +262,82 @@ const showCaptchaDialog = ref(false)
 const captchaCode = ref('')
 const captchaImageSrc = ref('')
 const captchaSessionId = ref('')
+const captchaRefreshing = ref(false)
+const captchaExpired = ref(false)
+const captchaOpenedAt = ref(0)
+const CAPTCHA_TTL_MS = 2 * 60 * 1000
+let captchaExpireTimer = null
 
 const accounts = computed(() => accountStore.accounts ?? [])
 const expenseCategories = computed(() => categoryStore.expenseCategories ?? [])
 const canSync = computed(() => apiReady.value && isValidCarrierPhone(carrierPhone.value) && carrierPassword.value.trim().length >= 4)
+const carrierRecoveryCtaLabel = computed(() => {
+  const cta = availability.value?.recoveryCta
+  if (cta === 'retry_health') return t('settings_carrier_sync.availability.cta.retry_health')
+  if (cta === 'enter_credentials') return t('settings_carrier_sync.availability.cta.enter_credentials')
+  if (cta === 'enter_captcha') return t('settings_carrier_sync.availability.cta.enter_captcha')
+  if (cta === 'retry_sync') return t('settings_carrier_sync.sync_now')
+  if (cta === 'open_review') return t('settings_carrier_sync.review.reload')
+  return t('settings_carrier_sync.availability.cta.retry_health')
+})
 
 let unsubscribeMembership = null
+
+function refreshAvailability(extra = {}) {
+  const lastError = String(syncConfig.value?.lastError ?? '').trim()
+  availability.value = assessCarrierSyncAvailability({
+    membershipTier: membershipTier.value,
+    apiHealth: apiHealth.value,
+    carrierPhone: carrierPhone.value,
+    hasPassword: Boolean(carrierPassword.value.trim()),
+    captchaRequired: showCaptchaDialog.value,
+    lastSyncStatus: syncConfig.value?.lastSyncStatus ?? '',
+    lastErrorCode: lastError ? 'einvoice_query_failed' : '',
+    pendingCount: pendingRows.value.length,
+    ...extra,
+  })
+}
+
+async function probeHealth() {
+  apiHealth.value = await refreshCarrierApiHealthProbe()
+  refreshAvailability()
+  return apiHealth.value
+}
+
+function handleRecoveryCta() {
+  const cta = availability.value?.recoveryCta
+  if (cta === 'retry_health') {
+    void probeHealth()
+    return
+  }
+  if (cta === 'enter_credentials') {
+    document.querySelector('.field-input')?.focus?.()
+    return
+  }
+  if (cta === 'enter_captcha' || cta === 'retry_sync') {
+    void handleSyncNow()
+    return
+  }
+  if (cta === 'open_review') {
+    void reloadPending()
+  }
+}
+
+function clearCaptchaExpireTimer() {
+  if (captchaExpireTimer) {
+    clearTimeout(captchaExpireTimer)
+    captchaExpireTimer = null
+  }
+}
+
+function armCaptchaExpireTimer() {
+  clearCaptchaExpireTimer()
+  captchaOpenedAt.value = Date.now()
+  captchaExpired.value = false
+  captchaExpireTimer = setTimeout(() => {
+    captchaExpired.value = true
+  }, CAPTCHA_TTL_MS)
+}
 
 async function loadCredential() {
   const saved = await loadEInvoiceCredential()
@@ -237,6 +366,7 @@ async function reloadState() {
       defaultAccountId.value = state.config.defaultAccountId ?? ''
       defaultCategoryId.value = state.config.defaultCategoryId ?? ''
     }
+    refreshAvailability()
   } finally {
     reviewLoading.value = false
   }
@@ -286,19 +416,49 @@ async function handleSyncNow() {
       captchaImageSrc.value = error.captchaImageBase64
         ? `data:image/png;base64,${error.captchaImageBase64}`
         : ''
+      captchaCode.value = ''
       showCaptchaDialog.value = true
+      armCaptchaExpireTimer()
+      refreshAvailability({ captchaRequired: true })
       return
     }
     syncMessage.value = error?.message || t('settings_carrier_sync.sync_failed')
     uiStore.pushToast(syncMessage.value, 'error')
+    refreshAvailability({ lastErrorCode: String(error?.code ?? 'einvoice_query_failed') })
   } finally {
     syncing.value = false
+  }
+}
+
+async function refreshCaptchaImage() {
+  if (captchaRefreshing.value) return
+  captchaRefreshing.value = true
+  try {
+    const previousSessionId = captchaSessionId.value
+    const refreshed = await refreshCarrierCaptchaSession({
+      carrierBarcode: normalizeCarrierPhone(carrierPhone.value),
+      verificationCode: carrierPassword.value,
+      previousSessionId,
+    })
+    captchaSessionId.value = refreshed.sessionId
+    captchaImageSrc.value = refreshed.captchaImageBase64
+      ? `data:image/png;base64,${refreshed.captchaImageBase64}`
+      : ''
+    captchaCode.value = ''
+    armCaptchaExpireTimer()
+    refreshAvailability({ captchaRequired: true })
+  } catch (error) {
+    uiStore.pushToast(error?.message || t('settings_carrier_sync.captcha.refresh_failed'), 'error')
+  } finally {
+    captchaRefreshing.value = false
   }
 }
 
 async function submitCaptchaAndSync() {
   const submittedSessionId = captchaSessionId.value
   showCaptchaDialog.value = false
+  captchaExpired.value = false
+  clearCaptchaExpireTimer()
   syncing.value = true
   try {
     const result = await syncCarrierInvoicesNow({
@@ -321,6 +481,7 @@ async function submitCaptchaAndSync() {
     captchaImageSrc.value = ''
     captchaSessionId.value = ''
     uiStore.pushToast(error?.message || t('settings_carrier_sync.sync_failed'), 'error')
+    refreshAvailability({ lastErrorCode: String(error?.code ?? 'einvoice_query_failed') })
   } finally {
     syncing.value = false
   }
@@ -332,6 +493,9 @@ async function closeCaptchaDialog() {
   captchaCode.value = ''
   captchaImageSrc.value = ''
   captchaSessionId.value = ''
+  captchaExpired.value = false
+  clearCaptchaExpireTimer()
+  refreshAvailability({ captchaRequired: false })
   if (sessionId) {
     await cancelCarrierSyncSession(sessionId).catch(() => null)
   }
@@ -409,16 +573,19 @@ function syncStatusText(status) {
 onMounted(async () => {
   unsubscribeMembership = subscribeMembershipSnapshot((snapshot) => {
     membershipTier.value = snapshot.tier
+    refreshAvailability()
   })
   await accountStore.load()
   await categoryStore.load()
   await loadCredential()
   await reloadState()
   await saveConfig()
+  await probeHealth()
 })
 
 onBeforeUnmount(() => {
   if (typeof unsubscribeMembership === 'function') unsubscribeMembership()
+  clearCaptchaExpireTimer()
   const sessionId = captchaSessionId.value
   captchaSessionId.value = ''
   if (sessionId) {
@@ -473,4 +640,29 @@ onBeforeUnmount(() => {
 .amount { color: var(--primary); }
 .captcha-panel { display: grid; gap: 10px; margin-top: 8px; }
 .captcha-image { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; }
+.captcha-actions { gap: 8px; }
+.availability-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.availability-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+}
+.availability-label {
+  color: var(--muted, #6b7280);
+  font-size: 13px;
+}
+.status-ok { color: var(--success, #059669); }
+.status-blocked { color: var(--warning, #d97706); }
+.error-code {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--muted, #6b7280);
+}
 </style>

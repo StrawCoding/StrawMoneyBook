@@ -213,6 +213,37 @@ export async function cancelCarrierSyncSession(sessionId = '') {
   await cancelEInvoiceScrapeSession({ session_id: sessionId })
 }
 
+/**
+ * Restart scrape session to refresh captcha image. Cancels prior session first.
+ */
+export async function refreshCarrierCaptchaSession({
+  carrierBarcode,
+  verificationCode,
+  previousSessionId = '',
+} = {}) {
+  await assertCanUseCarrierSync()
+  if (previousSessionId) {
+    await cancelEInvoiceScrapeSession({ session_id: previousSessionId }).catch(() => null)
+  }
+  const start = await startEInvoiceScrapeSession({
+    cardNo: carrierBarcode,
+    cardEncrypt: verificationCode,
+    force_captcha: true,
+  })
+  if (!start?.needs_captcha) {
+    return {
+      sessionId: start?.session_id ?? '',
+      captchaImageBase64: '',
+      needsCaptcha: false,
+    }
+  }
+  return {
+    sessionId: start.session_id,
+    captchaImageBase64: start.captcha_image_base64 ?? '',
+    needsCaptcha: true,
+  }
+}
+
 let autoSyncInFlight = false
 let lastAutoSyncAt = 0
 const AUTO_SYNC_COOLDOWN_MS = 5 * 60 * 1000

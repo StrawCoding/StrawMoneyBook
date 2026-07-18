@@ -5,6 +5,85 @@
       <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
     </header>
 
+    <article class="card panel" data-testid="bank-sync-availability">
+      <h3>{{ t('settings_bank_sync.availability.title') }}</h3>
+      <p class="muted compact">{{ t('settings_bank_sync.availability.desc') }}</p>
+      <ul class="availability-list">
+        <li v-for="stage in availability.stages" :key="stage.id" class="availability-row" :data-stage="stage.id" :data-ok="stage.ok ? '1' : '0'">
+          <span class="availability-label">{{ t(`settings_bank_sync.availability.stage.${stage.id}`) }}</span>
+          <strong :class="stage.ok ? 'status-ok' : 'status-blocked'">
+            {{ stage.ok ? t('settings_bank_sync.availability.ok') : t('settings_bank_sync.availability.blocked') }}
+          </strong>
+          <code v-if="stage.code" class="error-code">{{ stage.code }}</code>
+        </li>
+      </ul>
+      <p v-if="availability.errorCode" class="muted warning-text">
+        {{ t('settings_bank_sync.availability.error_code', { code: availability.errorCode }) }}
+      </p>
+      <div class="row top-action-row">
+        <RouterLink
+          v-if="availability.recoveryCta === 'membership'"
+          class="btn primary"
+          to="/settings/membership-benefits"
+          data-testid="bank-sync-recovery-cta"
+        >
+          {{ t('settings_bank_sync.view_membership', '查看會員權益') }}
+        </RouterLink>
+        <a
+          v-else-if="availability.recoveryCta === 'get_android_app'"
+          class="btn primary"
+          href="https://play.google.com/store/apps/details?id=com.strawcoding.strawmoneybook"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="bank-sync-recovery-cta"
+        >
+          {{ t('settings_bank_sync.availability.cta.get_android_app') }}
+        </a>
+        <button
+          v-else
+          class="btn primary"
+          type="button"
+          data-testid="bank-sync-recovery-cta"
+          @click="handleRecoveryCta"
+        >
+          {{ recoveryCtaLabel }}
+        </button>
+      </div>
+      <p class="muted compact checked-at">
+        {{ t('settings_bank_sync.availability.checked_at', { time: formatDateTime(availability.checkedAt) }) }}
+      </p>
+    </article>
+
+    <article class="card panel" data-testid="bank-sync-support-matrix">
+      <h3>{{ t('settings_bank_sync.support_matrix.title') }}</h3>
+      <p class="muted">{{ t('settings_bank_sync.support_matrix.desc') }}</p>
+      <ul class="meta-list">
+        <li>
+          <span class="muted">{{ t('settings_bank_sync.support_matrix.platform') }}</span>
+          <strong>{{ supportMatrix.platform }}</strong>
+        </li>
+        <li>
+          <span class="muted">{{ t('settings_bank_sync.support_matrix.android_only') }}</span>
+          <strong>{{ supportMatrix.androidOnly ? t('common.on') : t('common.off') }}</strong>
+        </li>
+        <li>
+          <span class="muted">{{ t('settings_bank_sync.support_matrix.native_ready') }}</span>
+          <strong>{{ supportMatrix.nativeAutomationAvailable ? t('settings_bank_sync.availability.ok') : t('settings_bank_sync.availability.blocked') }}</strong>
+        </li>
+        <li>
+          <span class="muted">{{ t('settings_bank_sync.support_matrix.supported_banks') }}</span>
+          <strong>{{ supportedBankNames }}</strong>
+        </li>
+        <li>
+          <span class="muted">{{ t('settings_bank_sync.support_matrix.csv_fallback') }}</span>
+          <strong>{{ supportMatrix.csvFallbackAvailable ? t('settings_bank_sync.availability.ok') : t('settings_bank_sync.availability.blocked') }}</strong>
+        </li>
+      </ul>
+      <p v-if="!supportMatrix.nativeAutomationAvailable" class="muted platform-note">
+        {{ t('settings_bank_sync.support_matrix.web_hint') }}
+      </p>
+    </article>
+
     <article class="card panel">
       <h3>{{ t('settings_bank_sync.management_title') }}</h3>
       <p class="muted">{{ t('settings_bank_sync.management_desc') }}</p>
@@ -101,19 +180,26 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import { getMembershipTierSnapshot, hasBankSyncMembershipAccess as hasBankSyncMembershipAccessForTier, subscribeMembershipSnapshot } from '@/core/services/membership.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { countBankReviewTransactionsByConnection, getBankSyncState } from '@/ui/services/bank-sync.service'
-import { getBankSyncApiUnavailableMessage, isBankSyncApiConfigured } from '@/services/bank-sync/backend'
+import {
+  getBankSyncApiUnavailableMessage,
+  getBankSyncSupportMatrix,
+  isBankSyncApiConfigured,
+} from '@/services/bank-sync/backend'
+import { assessBankSyncAvailability } from '@/services/bank-sync/availability'
 import { isMockProviderId, shouldRequireReconnectForStoredBankConnection } from '@/services/bank-sync/shared'
 
 const { locale, t } = useI18n()
+const router = useRouter()
 const ledgerStore = useLedgerStore()
-const bankSyncApiReady = isBankSyncApiConfigured()
+const bankSyncApiReady = computed(() => isBankSyncApiConfigured())
 const bankSyncApiMessage = computed(() => getBankSyncApiUnavailableMessage())
+const supportMatrix = ref(getBankSyncSupportMatrix())
 
 const DISCLAIMER_ACCEPTED_KEY = 'strawmoneybook.bank_sync.disclaimer.accepted'
 
@@ -121,17 +207,66 @@ const loadingState = ref(false)
 const connections = ref([])
 const showDisclaimer = ref(false)
 const membershipTier = ref(getMembershipTierSnapshot())
+const availability = ref(assessBankSyncAvailability({ membershipTier: membershipTier.value }))
 
 const hasBankSyncMembershipAccess = computed(() => hasBankSyncMembershipAccessForTier(membershipTier.value))
 const visibleConnections = computed(() => (hasBankSyncMembershipAccess.value ? connections.value : []))
+const supportedBankNames = computed(() => {
+  const banks = supportMatrix.value?.supportedBanks ?? []
+  if (!banks.length) return t('settings_bank_sync.support_matrix.none')
+  return banks.map((item) => item.name).join('、')
+})
 
 const bankSyncCreateLink = computed(() => {
-  return bankSyncApiReady ? { name: 'settings-bank-sync-create' } : { name: 'settings-bank-sync' }
+  return bankSyncApiReady.value ? { name: 'settings-bank-sync-create' } : { name: 'settings-bank-sync' }
+})
+
+const recoveryCtaLabel = computed(() => {
+  const cta = availability.value?.recoveryCta
+  if (cta === 'retry_check') return t('settings_bank_sync.availability.cta.retry_check')
+  if (cta === 'open_create') return t('settings_bank_sync.add_bank')
+  if (cta === 'retry_sync') return t('settings_bank_sync.refresh')
+  if (cta === 'open_review') return t('settings_bank_sync.actions.review')
+  return t('settings_bank_sync.availability.cta.retry_check')
 })
 
 const disclaimerMessage = computed(() => {
   return `${t('settings_bank_sync.disclaimer.line_1')}\n${t('settings_bank_sync.disclaimer.line_2')}`
 })
+
+function refreshAvailability(extra = {}) {
+  supportMatrix.value = getBankSyncSupportMatrix()
+  const pendingReviewCount = connections.value.reduce(
+    (sum, item) => sum + Number(item?.pendingReviewCount ?? 0),
+    0,
+  )
+  availability.value = assessBankSyncAvailability({
+    membershipTier: membershipTier.value,
+    hasCredentials: connections.value.some((item) => !item.isDeprecatedMock),
+    pendingReviewCount,
+    lastSyncStatus: connections.value[0]?.last_sync_status ?? '',
+    lastErrorCode: connections.value.find((item) => item.last_error)?.last_error
+      ? 'bank_sync_last_error'
+      : '',
+    ...extra,
+  })
+}
+
+function handleRecoveryCta() {
+  const cta = availability.value?.recoveryCta
+  if (cta === 'open_create' && bankSyncApiReady.value) {
+    void router.push({ name: 'settings-bank-sync-create' })
+    return
+  }
+  if (cta === 'open_review') {
+    const target = connections.value.find((item) => Number(item?.pendingReviewCount ?? 0) > 0)
+    if (target) {
+      void router.push({ name: 'settings-bank-sync-connection', params: { id: target.id } })
+      return
+    }
+  }
+  void reloadState()
+}
 
 function readDisclaimerAccepted() {
   if (typeof localStorage === 'undefined') return false
@@ -162,8 +297,9 @@ function normalizeConnectionForView(connection, pendingReviewCount = 0) {
 }
 
 async function reloadState() {
-  if (!bankSyncApiReady || !ledgerStore.activeLedgerId || !hasBankSyncMembershipAccess.value) {
+  if (!bankSyncApiReady.value || !ledgerStore.activeLedgerId || !hasBankSyncMembershipAccess.value) {
     connections.value = []
+    refreshAvailability()
     return
   }
 
@@ -178,6 +314,7 @@ async function reloadState() {
       return normalizeConnectionForView(connection, pendingReviewCount)
     }))
     connections.value = bundles
+    refreshAvailability()
   } finally {
     loadingState.value = false
   }
@@ -208,8 +345,10 @@ function syncStatusText(status) {
 onMounted(() => {
   unsubscribeMembership = subscribeMembershipSnapshot((next) => {
     membershipTier.value = String(next?.tier ?? getMembershipTierSnapshot())
+    refreshAvailability()
   }, { emitCurrent: true })
   showDisclaimer.value = hasBankSyncMembershipAccess.value && !readDisclaimerAccepted()
+  refreshAvailability()
   void reloadState()
 })
 
@@ -282,6 +421,49 @@ h3 {
 .connection-error,
 .reconnect-hint {
   margin: 0;
+}
+
+.availability-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.availability-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+}
+
+.availability-label {
+  color: var(--muted, #6b7280);
+  font-size: 13px;
+}
+
+.status-ok {
+  color: var(--success, #059669);
+}
+
+.status-blocked {
+  color: var(--warning, #d97706);
+}
+
+.error-code {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--muted, #6b7280);
+}
+
+.warning-text {
+  color: var(--warning, #d97706);
+}
+
+.checked-at {
+  margin: 0;
+  font-size: 12px;
 }
 
 .disabled {

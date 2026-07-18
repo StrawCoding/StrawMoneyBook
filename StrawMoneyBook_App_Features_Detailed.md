@@ -730,6 +730,7 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 
 - 屬於會員功能（`assertCanUseBankSync()`）
 - 目前支援 **Android App 第一銀行本地同步**（非 Open Banking）
+- SMB-278：`isBankSyncFeatureEnabled()` 只依 feature flag 控制設定入口與路由可視性；原生自動化另由 `isBankSyncNativeAutomationAvailable()` 閘控。Web／非 Android 進入 `/settings/bank-sync` 會顯示支援矩陣與可用性診斷（資格→平台→自動化／API→憑證→captcha→同步→審核），並提供單一 recovery CTA（例如取得 Android App），**不再因 provider 空列表靜默 redirect 回設定**
 - 已移除 Sandbox / Mock 生產路徑；舊測試連線會在 UI 標示為已停用
 - 建立連線改為引導式流程：選擇銀行 → 登入 → 帳戶對應 → 首次同步
 - 第一銀行驗證碼 OCR 全失敗時（v1.3.19），建立連線頁會顯示驗證碼圖與手動輸入框，使用者輸入 4 碼後可重試；若已先手動填寫則跳過 OCR
@@ -743,9 +744,10 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 
 所以這不是完全未做，而是已建流程、以會員 + Android 第一銀行為主的受控功能。
 
-### 9.2 載具同步（v1.3.17 起，v1.3.19 憑證格式修正，v1.3.30 SPA 治本改寫，v1.3.40 Cloudflare 挑戰修復，SMB-265 可靠性硬化）
+### 9.2 載具同步（v1.3.17 起，v1.3.19 憑證格式修正，v1.3.30 SPA 治本改寫，v1.3.40 Cloudflare 挑戰修復，SMB-265 可靠性硬化，SMB-278 可用性診斷）
 
 - 會員限定功能：`/settings/carrier-sync` 設定頁透過 backend scrape API 拉取財政部載具發票，pending 佇列審核後匯入
+- SMB-278：設定頁新增可用性診斷面板（資格→平台→API health→憑證→captcha→同步→審核／匯入），顯示去識別化錯誤碼與單一 recovery CTA；captcha 支援刷新、取消（cancel session）與到期提示；新增 `GET /api/einvoice/health`（health 200 僅代表服務可連線，**不可**當成財政部登入成功）；補回 `playwright:carrier-sync` 並要求 bypass onboarding 進入有 BottomNav 的 app-shell
 - v1.3.19 修正：財政部平台登入憑證為「手機號碼 + 密碼」（09 開頭 10 碼 + 至少 4 位密碼），非手機條碼 `/XXXXXXX` 與查詢碼；後端 Playwright 改走官方 `accounts/login` 後再查詢發票
 - v1.3.30（SMB-251）治本改寫：財政部 2026-06 新版 Vue SPA + OAuth2 後，Playwright provider 不再解析 DOM 表格或截圖驗證碼；改為 (1) 以 JSON API `service-mc.einvoice.nat.gov.tw/act/login/api/act002i/captcha` 取得 `{token,image}` 並在 session 保存 token；(2) 登入使用實測選擇器 `#mobile_phone` / `#password` / `#captcha` / `#submitBtn`（全 env 可覆寫）；(3) 查詢以 `page.on('response')` 攔截官方 JSON API 並交 `normalizeInvoiceList`，DOM 解析降為備援；(4) 跨月 + 62 天視窗自動切分查詢；(5) 新增 `backend/scripts/einvoice-portal-contract-check.mjs` 合約自檢腳本。登入 / 查詢 URL、選擇器、API pattern 皆可透過 `EINVOICE_PORTAL_*` / `EINVOICE_SCRAPE_SELECTORS_JSON` 覆寫
 - v1.3.31（SMB-253）P2 防打地鼠：合約自檢接 cron / CI（`sync-contract-check-run.mjs`、`sync-contract-check-cron.sh`、`.github/workflows/sync-contract-check.yml`）；失敗時告警至 `log.wastebase.xyz/issues/SMB-253` 並節流 Plane comment；失敗分類碼（portal_changed / captcha / auth / timeout）累計統計；第一銀行登入頁錨點（`#code_verify`、`captchaLoginArea`、`vrfyCode` 等）由 `first-bank-portal-contract-check.mjs` 定期探測
