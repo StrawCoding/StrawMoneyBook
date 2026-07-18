@@ -528,6 +528,13 @@ SMB-229 / v1.3.9 後，共享帳本導入角色權限系統，區分 Owner / Adm
 
 後端每個敏感 endpoint 都依角色檢查：`handleSnapshotPush` 禁止 Viewer 上傳（回 403 `shared_ledger_forbidden`）、`handleInviteByEmail` / `handleResendInvitation` 禁止 Member 與 Viewer 邀請；新增 `POST /api/shared-ledgers/:id/members/:userId/role`（改角色，受 `canAssignMemberRole` 治理）與 `POST /api/shared-ledgers/:id/transfer`（轉移所有權：目標升為 Owner，原 Owner 降為 Admin）。帳本 detail 回傳成員清單（`buildSharedLedgerMemberList`），summary 附帶 `permissions`。前端 `SettingsSharedLedgerPage.vue` 依 `permissions` 顯示/隱藏分享連結與 Email 邀請，新增「成員與角色」管理區（角色下拉、轉移所有權確認對話框）與 Viewer 唯讀提示；背景自動同步對 Viewer 跳過上傳，若被遠端降級為 Viewer，dirty 同步遇 403 會清除佇列避免重試風暴。
 
+SMB-277 後再補強共同帳本可用性：
+
+- 會員登入狀態：冷啟動／回前景靜默 refresh；失敗時保留 profile 並在帳號頁與共同帳本頁標「需重新登入」，禁止誤顯示未登入；背景同步在需重新登入時暫停。
+- HTTPS 共享連結為主路徑：產生／複製／系統分享皆強制 `https://www.strawmb.com/open/shared-ledger?...`；Owner/Admin 可 `POST /invite-code/rotate` 產生新連結；Email 邀請保留為次要路徑。
+- 同步狀態 UI：顯示上次同步時間、版本、錯誤與重試；Viewer 自動同步文案改為「自動下載最新資料」。
+- 交易編輯者標註：migration 040 為每筆交易保存 `created_by_*` / `updated_by_*`（user id + 顯示名快照）；新建／編輯／批量更新寫入目前登入者；共同帳本清單與詳情顯示建立者／最後編輯者；單人非共享帳本僅在有異於自己時顯示。
+
 ### 6.3 Google Drive 帳本同步
 
 這個功能和「備份」不同。

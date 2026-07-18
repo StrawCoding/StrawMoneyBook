@@ -46,6 +46,34 @@
 
       <p v-if="displayNote(transaction.note)" class="note">{{ displayNote(transaction.note) }}</p>
 
+      <div v-if="editorAttribution" class="editor-history" data-testid="tx-editor-history">
+        <header class="row">
+          <h4>{{ t('transaction_about.collaboration', '協作資訊') }}</h4>
+        </header>
+        <div class="editor-history-grid">
+          <div class="editor-history-item">
+            <small class="muted">{{ t('transaction_about.created_by', '建立') }}</small>
+            <div class="editor-history-person">
+              <span class="editor-initial">{{ editorAttribution.creatorInitial }}</span>
+              <div>
+                <strong>{{ editorAttribution.createdByName || '-' }}</strong>
+                <p class="muted compact">{{ formatTime(editorAttribution.createdAt || transaction.created_at) }}</p>
+              </div>
+            </div>
+          </div>
+          <div class="editor-history-item">
+            <small class="muted">{{ t('transaction_about.updated_by', '最後編輯') }}</small>
+            <div class="editor-history-person">
+              <span class="editor-initial">{{ editorAttribution.editorInitial }}</span>
+              <div>
+                <strong>{{ editorAttribution.updatedByName || '-' }}</strong>
+                <p class="muted compact">{{ formatTime(editorAttribution.updatedAt || transaction.updated_at) }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="row action-row">
         <button
           v-if="canCreateRefund"
@@ -156,6 +184,8 @@ import { useI18n } from '@/ui/services/i18n.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon, getSystemTransactionLabel, getSystemTransactionType } from '@/ui/utils/system-transaction-presenter'
+import { buildTransactionEditorAttributionView } from '@/core/services/transaction-editor-attribution'
+import { getSetting } from '@/core/repositories/settings.repo'
 
 const route = useRoute()
 const router = useRouter()
@@ -174,8 +204,14 @@ const refunding = ref(false)
 const refundSheetOpen = ref(false)
 const refundAccountId = ref('')
 const refundDeductAmountMajor = ref(0)
+const activeLedgerIsShared = ref(false)
+const currentUserId = ref('')
 
 const txId = computed(() => String(route.params.id ?? ''))
+const editorAttribution = computed(() => buildTransactionEditorAttributionView(transaction.value, {
+  currentUserId: currentUserId.value,
+  isSharedLedger: activeLedgerIsShared.value,
+}))
 
 const reimbursementSourceTx = computed(() => {
   const tx = transaction.value
@@ -319,6 +355,18 @@ onMounted(async () => {
   if (!categoryStore.categories.length) await categoryStore.load()
   if (!accountStore.accounts.length) await accountStore.load()
   if (!loanStore.items.length) await loanStore.load()
+  try {
+    const meta = await getSetting(String(ledgerStore.activeLedgerId ?? ''), 'shared_ledger_meta')
+    activeLedgerIsShared.value = Boolean(meta && typeof meta === 'object' && meta.shared_ledger_id)
+  } catch {
+    activeLedgerIsShared.value = false
+  }
+  try {
+    const { getSharedLedgerSession } = await import('@/services/shared-ledger/backend')
+    currentUserId.value = String(getSharedLedgerSession()?.user?.id ?? '')
+  } catch {
+    currentUserId.value = ''
+  }
   await load()
 })
 
@@ -538,6 +586,44 @@ h3 {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.4;
+}
+.editor-history {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+.editor-history h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.editor-history-grid {
+  display: grid;
+  gap: 10px;
+}
+.editor-history-item {
+  display: grid;
+  gap: 6px;
+}
+.editor-history-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.editor-history-person .compact {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+.editor-initial {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: color-mix(in srgb, var(--primary) 78%, #111 22%);
+  flex-shrink: 0;
 }
 .action-row {
   margin-top: 12px;

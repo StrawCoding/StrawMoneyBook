@@ -2,6 +2,7 @@
 
 ---
 
+- (SMB-277) 共同帳本治本：會員登入狀態在冷啟動／回前景／帳號頁／共同帳本頁一致；靜默 refresh 失敗時保留 profile 並標「需重新登入」，不再誤顯示未登入或清掉身分。帳本同步補可見狀態（上次同步／版本／錯誤）與重試；Viewer 自動同步文案改為只下載。共享改以 HTTPS 連結為主路徑（強制 `https://www.strawmb.com/open/shared-ledger?...`），支援複製／系統分享／產生新連結（rotate invite code）；Email 邀請仍保留。每筆交易新增 `created_by`／`updated_by`（user id + 顯示名快照），清單與詳情依設計稿標註建立者／最後編輯者；共同帳本設定／交易 UI 對齊設計稿並維持 FAB／首頁區塊。補前後端回歸與 Playwright（帳號／共同帳本頁）。
 - (SMB-276) 修復改發薪日或切換曆月／發薪週期後預算項目「跑掉」：套用新帳本預算期間設定前會先以舊設定解析今天所在的目前期間並載入其預算結構，套用後再解析新目前期間；若新舊 period key 不同且新期尚無使用者設定內容，會自動 carry-forward 分類項目金額／日均規則、共同池與綁定、整期預算存款設定到新期，已花費依新期日期範圍重算，交易與歷史期間資料不搬移；新期已有資料則不覆寫。帳本詳細設定、預算項目 sheet、共同池 sheet 三條入口行為一致。補 Node regression（改發薪日前後、跨月、短月 29/30/31、新期已有資料不重複、曆月↔發薪切換）與 `playwright:budget-pay-cycle`（從預算 sheet 改發薪日後仍看得到原項目）；更新兩份功能文件。
 - (SMB-275) 修復預算期間未依帳本時區「今天」自動更新：新增 `dateKeyForLedgerTimeZone` / `monthKeyForLedgerTimeZone` / `resolveCurrentBudgetPeriodForLedger()`，預算 store、app runtime、預算頁進入與 lifecycle reload 都改走此入口，不再沿用 persisted `pay:*` monthKey、固定月初或首頁上次瀏覽月份。發薪週期帳本的首頁月份篩選只載入交易，不會再以 `YYYY-MM` 或 `YYYY-MM-01` 覆寫目前預算期間；reload 成功後廣播 `app:budget-period-sync`，首頁期間篩選與預算頁同步回到帳本時區今天。曆月帳本遇到 stale `pay:*` key 會回退到帳本時區目前曆月。補 Node regression（跨時區、跨月、跨年、29/30/31 短月）與 `playwright:budget-pay-cycle` app-shell 證據；更新兩份功能文件。
 - (SMB-274) 修復發薪週期預算 app-shell runtime race：focus 與 visibility 回可見會同時重載目前預算期間，兩個 snapshot 請求可能同時判定尚未建立並插入同一期，觸發 `budgets.ledger_id, budgets.month_key` 唯一鍵錯誤。現在後到請求遇到該同期間唯一鍵衝突時會讀回先完成建立的 budget，其他資料庫錯誤仍照常回報；新增並行 snapshot Node regression，並讓 `playwright:budget-pay-cycle` 對 `[budget-period] ... failed` console warning 視為失敗。

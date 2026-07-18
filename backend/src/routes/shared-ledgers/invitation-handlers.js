@@ -23,11 +23,35 @@ import {
 
 const SHARED_LEDGER_INVITE_BASE = String(process.env.SHARED_LEDGER_INVITE_BASE_URL ?? 'https://www.strawmb.com/open/shared-ledger').trim()
 
+function enforceHttpsInviteBase(rawBase) {
+  const fallback = 'https://www.strawmb.com/open/shared-ledger'
+  const normalized = String(rawBase ?? '').trim() || fallback
+  let parsed
+  try {
+    parsed = new URL(normalized)
+  } catch {
+    return fallback
+  }
+  const host = String(parsed.hostname ?? '').trim().toLowerCase()
+  const isLocalHost = host === 'localhost' || host === '127.0.0.1'
+  if (parsed.protocol === 'http:' && !isLocalHost) {
+    parsed.protocol = 'https:'
+  }
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLocalHost)) {
+    return fallback
+  }
+  return `${parsed.origin}${parsed.pathname}`.replace(/\/$/, '') || fallback
+}
+
 function buildInviteUrl(inviteCode) {
   const normalizedCode = String(inviteCode ?? '').trim().toUpperCase()
   if (!normalizedCode) return ''
-  const base = SHARED_LEDGER_INVITE_BASE.replace(/\/$/, '')
-  return `${base}?inviteCode=${encodeURIComponent(normalizedCode)}`
+  const base = enforceHttpsInviteBase(SHARED_LEDGER_INVITE_BASE).replace(/\/$/, '')
+  const url = `${base}?inviteCode=${encodeURIComponent(normalizedCode)}`
+  if (!/^https:\/\//i.test(url) && !/^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//i.test(url)) {
+    return `https://www.strawmb.com/open/shared-ledger?inviteCode=${encodeURIComponent(normalizedCode)}`
+  }
+  return url
 }
 
 function normalizeEmailDeliveryError(error) {

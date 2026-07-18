@@ -37,6 +37,7 @@ import migration036 from '@/core/db/migrations/036_transaction_reimburse_target.
 import migration037 from '@/core/db/migrations/037_einvoice_carrier_sync.sql?raw'
 import migration038 from '@/core/db/migrations/038_budget_container_period_mode.sql?raw'
 import migration039 from '@/core/db/migrations/039_budget_pay_cycle.sql?raw'
+import migration040 from '@/core/db/migrations/040_transaction_editor_attribution.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -74,6 +75,7 @@ const MIGRATIONS = [
   { version: 37, name: 'einvoice_carrier_sync', sql: migration037 },
   { version: 38, name: 'budget_container_period_mode', sql: migration038 },
   { version: 39, name: 'budget_pay_cycle', sql: migration039 },
+  { version: 40, name: 'transaction_editor_attribution', sql: migration040 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'
@@ -152,6 +154,10 @@ const LEGACY_COLUMN_PATCHES = {
     'ALTER TABLE transactions ADD COLUMN deleted_at TEXT;',
     'ALTER TABLE transactions ADD COLUMN created_at TEXT;',
     'ALTER TABLE transactions ADD COLUMN updated_at TEXT;',
+    'ALTER TABLE transactions ADD COLUMN created_by_user_id TEXT;',
+    'ALTER TABLE transactions ADD COLUMN created_by_display_name TEXT;',
+    'ALTER TABLE transactions ADD COLUMN updated_by_user_id TEXT;',
+    'ALTER TABLE transactions ADD COLUMN updated_by_display_name TEXT;',
   ],
   transaction_attachments: [
     'ALTER TABLE transaction_attachments ADD COLUMN file_uri TEXT;',

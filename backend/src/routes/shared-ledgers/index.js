@@ -20,6 +20,7 @@ import {
   handleDetail,
   handleJoin,
   handleList,
+  handleRotateInviteCode,
   handleSnapshotFetch,
   handleSnapshotPush,
   handleTransferOwnership,
@@ -108,6 +109,12 @@ const SHARED_LEDGER_ROUTES = Object.freeze([
     method: 'POST',
     pattern: [':sharedLedgerId', 'transfer'],
     handler: (req, res, user, params) => handleTransferOwnership(req, res, user, params.sharedLedgerId),
+  },
+  {
+    name: 'rotate_invite_code',
+    method: 'POST',
+    pattern: [':sharedLedgerId', 'invite-code', 'rotate'],
+    handler: (req, res, user, params) => handleRotateInviteCode(req, res, user, params.sharedLedgerId),
   },
   {
     name: 'update_member_role',

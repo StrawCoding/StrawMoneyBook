@@ -160,7 +160,9 @@ function transactionListSelectSql() {
             t.reimbursed_at, t.include_in_budget, t.include_in_analysis,
             CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
             ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
-            t.created_at
+            t.created_by_user_id, t.created_by_display_name,
+            t.updated_by_user_id, t.updated_by_display_name,
+            t.created_at, t.updated_at
      FROM transactions t
      ${transactionListLookupJoinsSql()}`
 }
@@ -895,6 +897,8 @@ export async function updateTransactionById(ledgerId, txId, input) {
          reimbursement_state = ?,
          include_in_budget = ?,
          include_in_analysis = ?,
+         updated_by_user_id = COALESCE(?, updated_by_user_id),
+         updated_by_display_name = COALESCE(?, updated_by_display_name),
          updated_at = ?
      WHERE ledger_id = ?
        AND id = ?
@@ -910,6 +914,8 @@ export async function updateTransactionById(ledgerId, txId, input) {
       input.reimbursementState ?? 'none',
       input.includeInBudget === false ? 0 : 1,
       input.includeInAnalysis === false ? 0 : 1,
+      input.updatedByUserId ?? null,
+      input.updatedByDisplayName ?? null,
       nowIso(),
       ledgerId,
       txId,
@@ -958,9 +964,12 @@ export async function findTransactionRecordById(ledgerId, txId) {
             t.include_in_budget, t.include_in_analysis,
             CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
             ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
+            t.created_by_user_id, t.created_by_display_name,
+            t.updated_by_user_id, t.updated_by_display_name,
+            t.created_at, t.updated_at,
             c.name AS category_name, c.kind AS category_kind, c.icon AS category_icon,
             cg.name AS category_group_name, cg.kind AS category_group_kind,
-            a.name AS account_name
+            a.name AS account_name, a.currency_code AS account_currency_code
      FROM transactions t
      LEFT JOIN categories c
        ON c.ledger_id = t.ledger_id
@@ -1112,8 +1121,10 @@ export async function addTransaction(ledgerId, input) {
       ledger_id, id, type, transfer_group_id, account_id, peer_account_id,
       category_id, amount_minor, occurred_at, note, location, tags_json, origin_type,
       external_ref_id, idempotency_key, is_reimbursable, reimbursement_state,
-      reimbursed_at, reimburse_target_minor, include_in_budget, include_in_analysis, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      reimbursed_at, reimburse_target_minor, include_in_budget, include_in_analysis,
+      created_by_user_id, created_by_display_name, updated_by_user_id, updated_by_display_name,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       ledgerId,
       id,
@@ -1136,6 +1147,10 @@ export async function addTransaction(ledgerId, input) {
       normalizeReimburseTargetMinor(input.reimburseTargetMinor),
       input.includeInBudget === false ? 0 : 1,
       input.includeInAnalysis === false ? 0 : 1,
+      input.createdByUserId ?? null,
+      input.createdByDisplayName ?? null,
+      input.updatedByUserId ?? input.createdByUserId ?? null,
+      input.updatedByDisplayName ?? input.createdByDisplayName ?? null,
       now,
       now,
     ],
@@ -1159,6 +1174,12 @@ export async function addTransfer(ledgerId, input) {
   const outAmountMinor = (amountMinor + sourceExtraMinor) * -1
 
   return withTransaction(async () => {
+    const editorFields = {
+      createdByUserId: input.createdByUserId ?? null,
+      createdByDisplayName: input.createdByDisplayName ?? null,
+      updatedByUserId: input.updatedByUserId ?? input.createdByUserId ?? null,
+      updatedByDisplayName: input.updatedByDisplayName ?? input.createdByDisplayName ?? null,
+    }
     const outTxId = await addTransaction(ledgerId, {
       type: 'transfer',
       transferGroupId,
@@ -1170,6 +1191,7 @@ export async function addTransfer(ledgerId, input) {
       originType: input.originType ?? 'manual',
       externalRefId: input.externalRefId ?? null,
       idempotencyKey: input.idempotencyKey ? `${input.idempotencyKey}:out` : null,
+      ...editorFields,
     })
 
     const inTxId = await addTransaction(ledgerId, {
@@ -1183,28 +1205,33 @@ export async function addTransfer(ledgerId, input) {
       originType: input.originType ?? 'manual',
       externalRefId: input.externalRefId ?? null,
       idempotencyKey: input.idempotencyKey ? `${input.idempotencyKey}:in` : null,
+      ...editorFields,
     })
 
     return { transferGroupId, outTxId, inTxId }
   })
 }
 
-export async function batchPatchCategoryForTransactions(ledgerId, txIds, categoryId) {
+export async function batchPatchCategoryForTransactions(ledgerId, txIds, categoryId, editor = null) {
   assertLedgerId(ledgerId)
   if (!Array.isArray(txIds) || txIds.length === 0) return 0
 
   const now = nowIso()
+  const updatedByUserId = editor?.userId ?? null
+  const updatedByDisplayName = editor?.displayName ?? null
   let updated = 0
   for (const txId of txIds) {
     await run(
       `UPDATE transactions
        SET category_id = ?,
+           updated_by_user_id = COALESCE(?, updated_by_user_id),
+           updated_by_display_name = COALESCE(?, updated_by_display_name),
            updated_at = ?
        WHERE ledger_id = ?
          AND id = ?
          AND deleted_at IS NULL
          AND type NOT IN ('transfer', 'adjustment');`,
-      [categoryId ?? null, now, ledgerId, txId],
+      [categoryId ?? null, updatedByUserId, updatedByDisplayName, now, ledgerId, txId],
     )
     updated += 1
   }

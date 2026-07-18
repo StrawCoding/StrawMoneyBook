@@ -173,7 +173,7 @@ function buildSharedMeta(item, existingMeta = {}, patch = {}) {
     shared_ledger_id: String(item?.id ?? existingMeta?.shared_ledger_id ?? ''),
     ledger_id: String(item?.ledger_id ?? existingMeta?.ledger_id ?? ''),
     remote_name: String(item?.name ?? existingMeta?.remote_name ?? ''),
-    invite_code: String(item?.invite_code ?? existingMeta?.invite_code ?? ''),
+    invite_code: String(patch.invite_code ?? item?.invite_code ?? existingMeta?.invite_code ?? ''),
     role: String(item?.role ?? existingMeta?.role ?? ''),
     version: Number(item?.version ?? existingMeta?.version ?? 0),
     auto_sync_enabled: patch.auto_sync_enabled ?? existingMeta?.auto_sync_enabled ?? true,
@@ -181,6 +181,10 @@ function buildSharedMeta(item, existingMeta = {}, patch = {}) {
     last_synced_at: patch.last_synced_at ?? existingMeta?.last_synced_at ?? null,
     last_pulled_at: patch.last_pulled_at ?? existingMeta?.last_pulled_at ?? null,
     last_pushed_at: patch.last_pushed_at ?? existingMeta?.last_pushed_at ?? null,
+    last_sync_status: patch.last_sync_status ?? existingMeta?.last_sync_status ?? 'idle',
+    last_sync_error: patch.last_sync_error === undefined
+      ? (existingMeta?.last_sync_error ?? '')
+      : String(patch.last_sync_error ?? ''),
   }
 }
 
@@ -301,6 +305,8 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
     last_synced_at: now,
     last_pulled_at: metaPatch.last_pulled_at ?? now,
     last_pushed_at: metaPatch.last_pushed_at ?? existingMeta?.last_pushed_at ?? null,
+    last_sync_status: 'ok',
+    last_sync_error: '',
   })
 
   return {
@@ -587,8 +593,22 @@ async function syncSingleDirtyLedger(ledgerId) {
 
   syncingLedgerIds.add(normalizedLedgerId)
   try {
+    await setSharedLedgerMeta(normalizedLedgerId, meta, {
+      last_sync_status: 'syncing',
+      last_sync_error: '',
+    })
     await pushLocalLedgerToShared(normalizedLedgerId, { mergeOnConflict: true })
+    await setSharedLedgerMeta(normalizedLedgerId, meta, {
+      last_sync_status: 'ok',
+      last_sync_error: '',
+    })
     return true
+  } catch (error) {
+    await setSharedLedgerMeta(normalizedLedgerId, meta, {
+      last_sync_status: 'error',
+      last_sync_error: String(error?.message ?? error ?? '同步失敗').slice(0, 240),
+    }).catch(() => null)
+    throw error
   } finally {
     syncingLedgerIds.delete(normalizedLedgerId)
   }
@@ -633,13 +653,27 @@ async function syncActiveLedgerLatest(pinia) {
 
   syncingLedgerIds.add(activeLedgerId)
   try {
+    await setSharedLedgerMeta(activeLedgerId, meta, {
+      last_sync_status: 'syncing',
+      last_sync_error: '',
+    })
     const detail = await getSharedLedgerDetail(meta.shared_ledger_id)
     const remoteVersion = Number(detail?.item?.version ?? 0)
     const localVersion = Number(meta.version ?? 0)
-    if (remoteVersion <= localVersion) return
+    if (remoteVersion <= localVersion) {
+      await setSharedLedgerMeta(activeLedgerId, meta, {
+        last_sync_status: 'ok',
+        last_sync_error: '',
+      })
+      return
+    }
     await pullSharedLedgerToLocal(activeLedgerId)
     await ledgerStore.reloadActiveLedger()
   } catch (error) {
+    await setSharedLedgerMeta(activeLedgerId, meta, {
+      last_sync_status: 'error',
+      last_sync_error: String(error?.message ?? error ?? '同步失敗').slice(0, 240),
+    }).catch(() => null)
     console.warn('[shared-ledger] remote poll failed', activeLedgerId, error)
   } finally {
     syncingLedgerIds.delete(activeLedgerId)

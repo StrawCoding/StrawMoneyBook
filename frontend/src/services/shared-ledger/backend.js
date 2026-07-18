@@ -24,6 +24,8 @@ const API_DISPLAY_NAME = 'StrawMB API'
 let ongoingRefreshPromise = null
 let ongoingSessionRestorePromise = null
 let lastSessionRestoreAt = 0
+/** True when profile is kept but access/refresh credentials are invalid and re-login is required. */
+let sessionNeedsReauth = false
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
 function shouldUseSameOriginLocalApi() {
@@ -56,7 +58,27 @@ function shouldRequireExplicitApiBase() {
 }
 
 function getSharedLedgerInviteBase() {
-  return EXPLICIT_SHARED_LEDGER_INVITE_BASE || PROD_DEFAULT_SHARED_LEDGER_INVITE_BASE
+  const configured = EXPLICIT_SHARED_LEDGER_INVITE_BASE || PROD_DEFAULT_SHARED_LEDGER_INVITE_BASE
+  return enforceHttpsInviteBase(configured)
+}
+
+function enforceHttpsInviteBase(rawBase) {
+  const normalized = String(rawBase ?? '').trim() || PROD_DEFAULT_SHARED_LEDGER_INVITE_BASE
+  let parsed
+  try {
+    parsed = new URL(normalized)
+  } catch {
+    parsed = new URL(PROD_DEFAULT_SHARED_LEDGER_INVITE_BASE)
+  }
+  const host = String(parsed.hostname ?? '').trim().toLowerCase()
+  const isLocalHost = host === 'localhost' || host === '127.0.0.1'
+  if (parsed.protocol === 'http:' && !isLocalHost) {
+    parsed.protocol = 'https:'
+  }
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLocalHost)) {
+    return PROD_DEFAULT_SHARED_LEDGER_INVITE_BASE
+  }
+  return `${parsed.origin}${parsed.pathname}`.replace(/\/$/, '') || PROD_DEFAULT_SHARED_LEDGER_INVITE_BASE
 }
 
 function createMissingApiError() {
@@ -142,11 +164,13 @@ function normalizeSessionUser(nextUser, previousUser = null) {
 
 function writeSession(session) {
   if (!session?.user) {
+    sessionNeedsReauth = false
     clearPersistedAuthSession()
     notifySessionListeners(null)
     return null
   }
   if (!session?.token && !shouldSendAuthCredentials()) {
+    sessionNeedsReauth = false
     clearPersistedAuthSession()
     notifySessionListeners(null)
     return null
@@ -157,19 +181,28 @@ function writeSession(session) {
     refreshToken: String(session.refreshToken ?? '').trim(),
     user: normalizeSessionUser(session.user, previous?.user ?? null),
   })
+  if (nextSession?.token) {
+    sessionNeedsReauth = false
+  }
   notifySessionListeners(nextSession)
   return nextSession
 }
 
-function clearAuthTokens() {
+function clearAuthTokens({ markNeedsReauth = true } = {}) {
   ongoingRefreshPromise = null
   clearStoredTokens()
   const session = readSession()
+  if (markNeedsReauth && session?.user) {
+    sessionNeedsReauth = true
+  } else if (!session?.user) {
+    sessionNeedsReauth = false
+  }
   notifySessionListeners(session?.user ? session : null)
 }
 
 function clearSession() {
   ongoingRefreshPromise = null
+  sessionNeedsReauth = false
   clearPersistedAuthSession()
   notifySessionListeners(null)
 }
@@ -252,8 +285,10 @@ async function tryRefreshSessionOnce({ allowRetry = true } = {}) {
       .catch((error) => {
         if (shouldClearSessionOnRefreshFailure(error)) {
           clearSession()
+        } else if (shouldPreserveSessionOnRefreshFailure(error)) {
+          // Keep memory tokens + profile on network/5xx; do not mark needs-reauth.
         } else {
-          clearAuthTokens()
+          clearAuthTokens({ markNeedsReauth: true })
         }
         throw error
       })
@@ -457,11 +492,51 @@ export function getSharedLedgerSession() {
   return readSession()
 }
 
-export function isSharedLedgerAuthenticated() {
+export function hasSharedLedgerAccessCredentials() {
   const session = readSession()
   if (Boolean(session?.token ?? getStoredAccessToken())) return true
-  if (shouldSendAuthCredentials() && hasPersistedAuthIdentity()) return true
+  if (shouldSendAuthCredentials() && Boolean(getStoredRefreshToken())) return true
   return false
+}
+
+/**
+ * Profile retained after silent refresh failure — UI must show "needs re-login",
+ * never silently flip to logged-out.
+ */
+export function needsSharedLedgerReauth() {
+  const session = readSession()
+  if (!session?.user) return false
+  if (sessionNeedsReauth) return true
+  if (hasSharedLedgerAccessCredentials()) return false
+  // Cookie/native cold start with profile but no in-memory token yet is not
+  // "needs reauth" until restore/refresh actually fails.
+  return false
+}
+
+export function getSharedLedgerAuthStatus() {
+  const session = readSession()
+  const user = session?.user ?? null
+  const needsReauth = needsSharedLedgerReauth()
+  return {
+    user,
+    hasProfile: Boolean(user),
+    hasCredentials: hasSharedLedgerAccessCredentials(),
+    needsReauth,
+    membershipActive: Boolean(user?.membership_active),
+    // Keep profile-visible for UX; API callers should check credentials / needsReauth.
+    isAuthenticated: Boolean(user),
+    canUseApi: Boolean(user) && !needsReauth && (
+      Boolean(session?.token ?? getStoredAccessToken())
+      || shouldSendAuthCredentials()
+    ),
+  }
+}
+
+export function isSharedLedgerAuthenticated() {
+  const status = getSharedLedgerAuthStatus()
+  // Used by sync/API callers: profile retained after refresh failure must not
+  // keep background sync running until the user re-logs in.
+  return status.isAuthenticated && !status.needsReauth
 }
 
 export function hasSharedLedgerMembershipAccess() {
@@ -694,8 +769,19 @@ export function buildSharedLedgerInviteLink(inviteCode) {
   const normalizedInviteCode = extractSharedLedgerInviteCode(inviteCode)
   if (!normalizedInviteCode) return ''
   const url = new URL(getSharedLedgerInviteBase())
+  if (url.protocol !== 'https:') {
+    const host = String(url.hostname ?? '').trim().toLowerCase()
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1'
+    if (!(url.protocol === 'http:' && isLocalHost)) {
+      url.protocol = 'https:'
+    }
+  }
   url.searchParams.set('inviteCode', normalizedInviteCode)
-  return url.toString()
+  const link = url.toString()
+  if (!/^https:\/\//i.test(link) && !/^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//i.test(link)) {
+    return `${PROD_DEFAULT_SHARED_LEDGER_INVITE_BASE}?inviteCode=${encodeURIComponent(normalizedInviteCode)}`
+  }
+  return link
 }
 
 export function getPendingSharedLedgerInviteCode() {
@@ -732,6 +818,15 @@ export async function getSharedLedgerDetail(sharedLedgerId) {
   const normalizedId = String(sharedLedgerId ?? '').trim()
   if (!normalizedId) throw new Error(t('shared_ledger.error.missing_ledger_id'))
   return requestJson(`/api/shared-ledgers/${normalizedId}`)
+}
+
+export async function rotateSharedLedgerInviteCode(sharedLedgerId) {
+  const normalizedId = String(sharedLedgerId ?? '').trim()
+  if (!normalizedId) throw new Error(t('shared_ledger.error.missing_ledger_id'))
+  return requestJson(`/api/shared-ledgers/${normalizedId}/invite-code/rotate`, {
+    method: 'POST',
+    body: {},
+  })
 }
 
 export async function pushSharedLedgerSnapshot(sharedLedgerId, payload = {}) {

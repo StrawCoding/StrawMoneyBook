@@ -75,7 +75,25 @@
             <div class="profile-meta">
               <strong>{{ accountName }}</strong>
               <p class="muted compact">{{ sessionUser.email || sessionUser.account }}</p>
+              <p class="session-status-row">
+                <span class="session-pill" :class="sessionNeedsReauth ? 'expired' : 'ok'">
+                  {{
+                    sessionNeedsReauth
+                      ? t('settings_shared_ledgers.session_needs_relogin', '需重新登入')
+                      : t('settings_shared_ledgers.session_active', 'Session 有效')
+                  }}
+                </span>
+                <span v-if="hasMembershipAccess" class="session-pill ok">
+                  {{ t('settings_shared_ledgers.membership_badge', '會員') }}
+                </span>
+              </p>
               <p class="muted compact">{{ membershipStatusText }}</p>
+              <p v-if="sessionNeedsReauth" class="notice compact">
+                {{ t('settings_shared_ledgers.session_needs_relogin_hint', '登入狀態已過期，已保留帳號資料。請重新登入後再同步或共享帳本。') }}
+              </p>
+              <RouterLink v-if="sessionNeedsReauth" class="btn" to="/settings/account">
+                {{ t('settings_account.login_register', '前往登入 / 註冊') }}
+              </RouterLink>
             </div>
           </div>
         </article>
@@ -180,6 +198,34 @@
                   <p v-else class="muted compact">
                     {{ t('settings_shared_ledgers.auto_sync_hint', '已啟用背景同步：本機變更會自動上傳，並在開啟 App 時檢查遠端最新資料。') }}
                   </p>
+                  <div class="sync-status-box" data-testid="shared-ledger-sync-status">
+                    <p class="muted compact">
+                      {{ t('settings_shared_ledgers.sync_status', '同步狀態') }}：
+                      <strong>{{ syncStatusLabel }}</strong>
+                    </p>
+                    <p v-if="activeLedgerMeta?.last_synced_at" class="muted compact">
+                      {{ t('settings_shared_ledgers.last_synced_at', { time: formatDateTime(activeLedgerMeta.last_synced_at) }, '上次同步：{time}') }}
+                    </p>
+                    <p v-if="activeLedgerMeta?.version" class="muted compact">
+                      {{ t('settings_shared_ledgers.sync_version', { version: activeLedgerMeta.version }, '版本：{version}') }}
+                    </p>
+                    <p v-if="activeLedgerMeta?.last_sync_error" class="notice compact">
+                      {{ activeLedgerMeta.last_sync_error }}
+                    </p>
+                    <div class="remote-actions">
+                      <button
+                        class="btn"
+                        :disabled="Boolean(ledgerActionBusy) || apiUnavailable || sessionNeedsReauth || syncRetryBusy"
+                        @click="retryActiveLedgerSync"
+                      >
+                        {{
+                          syncRetryBusy
+                            ? t('settings_shared_ledgers.sync_retrying', '重試中...')
+                            : t('settings_shared_ledgers.sync_retry', '重試同步')
+                        }}
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="remote-actions">
@@ -194,13 +240,19 @@
 
                 <label class="checkbox-row">
                   <input :checked="activeLedgerMeta.auto_sync_enabled !== false" type="checkbox" @change="toggleAutoSync" />
-                  <span>{{ t('settings_shared_ledgers.auto_sync', '資料變更後自動同步') }}</span>
+                  <span>
+                    {{
+                      currentRole === 'viewer'
+                        ? t('settings_shared_ledgers.auto_sync_viewer', '自動下載最新資料')
+                        : t('settings_shared_ledgers.auto_sync', '資料變更後自動同步')
+                    }}
+                  </span>
                 </label>
 
                 <template v-if="canInviteMembers">
-                <div class="share-link-box">
+                <div class="share-link-box" data-testid="shared-ledger-https-link">
                   <label class="field">
-                    {{ t('settings_shared_ledgers.share_link', '共享加入連結') }}
+                    {{ t('settings_shared_ledgers.share_link', '共享加入連結（HTTPS）') }}
                     <input
                       :value="currentShareLink"
                       class="input"
@@ -210,19 +262,29 @@
                       @focus="$event.target.select()"
                     />
                   </label>
+                  <p class="muted compact https-link-guard">
+                    {{ t('settings_shared_ledgers.share_link_https_required', '連結必須為 https:// 正式網域；對方開啟後會登入並加入共同帳本。') }}
+                  </p>
                   <div class="remote-actions share-link-actions">
-                    <button class="btn primary" :disabled="shareLinkBusy || ledgerActionBusy || apiUnavailable || !currentShareLink" @click="shareCurrentLedgerLink">
+                    <button class="btn primary" :disabled="shareLinkBusy || ledgerActionBusy || apiUnavailable || !currentShareLink || sessionNeedsReauth" @click="shareCurrentLedgerLink">
                       {{
                         shareLinkBusy === 'share'
                           ? t('settings_shared_ledgers.sharing_link', '分享中...')
                           : t('settings_shared_ledgers.share_link_action', '分享連結')
                       }}
                     </button>
-                    <button class="btn" :disabled="shareLinkBusy || ledgerActionBusy || apiUnavailable || !currentShareLink" @click="copyCurrentLedgerLink">
+                    <button class="btn" :disabled="shareLinkBusy || ledgerActionBusy || apiUnavailable || !currentShareLink || sessionNeedsReauth" @click="copyCurrentLedgerLink">
                       {{
                         shareLinkBusy === 'copy'
                           ? t('settings_shared_ledgers.copying_link', '複製中...')
                           : t('settings_shared_ledgers.copy_link', '複製連結')
+                      }}
+                    </button>
+                    <button class="btn" :disabled="shareLinkBusy || ledgerActionBusy || apiUnavailable || sessionNeedsReauth" @click="regenerateCurrentLedgerLink">
+                      {{
+                        shareLinkBusy === 'rotate'
+                          ? t('settings_shared_ledgers.regenerating_link', '產生中...')
+                          : t('settings_shared_ledgers.regenerate_link', '產生新連結')
                       }}
                     </button>
                   </div>
@@ -455,10 +517,13 @@ import {
   clearPendingSharedLedgerInviteCode,
   getSharedLedgerApiUnavailableMessage,
   getPendingSharedLedgerInviteCode,
+  getSharedLedgerAuthStatus,
   getSharedLedgerSession,
   isSharedLedgerApiConfigured,
+  needsSharedLedgerReauth,
   rememberPendingSharedLedgerInviteCode,
   refreshSharedLedgerSession,
+  rotateSharedLedgerInviteCode,
   subscribeSharedLedgerSession,
 } from '@/services/shared-ledger/backend'
 import {
@@ -471,8 +536,11 @@ import {
   listRemoteSharedLedgers,
   listSharedLedgerMembers,
   publishLedgerAsShared,
+  pullSharedLedgerToLocal,
+  pushLocalLedgerToShared,
   resendRemoteSharedLedgerInvitation,
   setSharedLedgerAutoSyncEnabled,
+  setSharedLedgerMeta,
   stopSharingLocalLedger,
   stopSharingRemoteSharedLedger,
   transferRemoteSharedLedgerOwnership,
@@ -504,6 +572,8 @@ const outgoingInvitations = ref([])
 const emailInviteBusy = ref(false)
 const resendInviteBusyId = ref('')
 const trialActivating = ref(false)
+const syncRetryBusy = ref(false)
+const sessionNeedsReauth = ref(needsSharedLedgerReauth())
 const ledgerMembers = ref([])
 const membersLoading = ref(false)
 const memberRoleBusyId = ref('')
@@ -559,9 +629,17 @@ const currentRole = computed(() => String(currentRemoteLedger.value?.role ?? act
 const canInviteMembers = computed(() => Boolean(currentPermissions.value.can_invite))
 const canManageMembers = computed(() => Boolean(currentPermissions.value.can_manage_members))
 const canTransferOwnership = computed(() => Boolean(currentPermissions.value.can_transfer_ownership))
+const syncStatusLabel = computed(() => {
+  const status = String(activeLedgerMeta.value?.last_sync_status ?? 'idle').trim().toLowerCase()
+  if (status === 'syncing') return t('settings_shared_ledgers.sync_status_syncing', '同步中')
+  if (status === 'ok') return t('settings_shared_ledgers.sync_status_ok', '已同步')
+  if (status === 'error') return t('settings_shared_ledgers.sync_status_error', '同步失敗')
+  return t('settings_shared_ledgers.sync_status_idle', '待命')
+})
 const canJoinPendingInviteLink = computed(() => Boolean(
   pendingInviteLinkCode.value
   && sessionUser.value
+  && !sessionNeedsReauth.value
   && hasMembershipAccess.value
   && !apiUnavailable.value,
 ))
@@ -837,9 +915,12 @@ async function refreshSessionAndData() {
       sessionUser.value = getSharedLedgerSession()?.user ?? null
     }
   }
+  sessionNeedsReauth.value = needsSharedLedgerReauth()
 
   await refreshLocalBindings()
-  await loadRemoteLedgers()
+  if (sessionUser.value && !sessionNeedsReauth.value) {
+    await loadRemoteLedgers()
+  }
 }
 
 async function afterLedgerImported(ledgerId, routeHome = false) {
@@ -890,6 +971,10 @@ async function createSharedFromActiveLedger() {
 
 async function shareCurrentLedgerLink() {
   if (!currentShareLink.value || apiUnavailable.value) return
+  if (!String(currentShareLink.value).startsWith('https://')) {
+    uiStore.pushToast(t('settings_shared_ledgers.toast.link_https_required', '共享連結必須使用 HTTPS'), 'error')
+    return
+  }
   shareLinkBusy.value = 'share'
   try {
     if (typeof navigator !== 'undefined' && navigator.share) {
@@ -915,6 +1000,10 @@ async function shareCurrentLedgerLink() {
 
 async function copyCurrentLedgerLink() {
   if (!currentShareLink.value || apiUnavailable.value) return
+  if (!String(currentShareLink.value).startsWith('https://')) {
+    uiStore.pushToast(t('settings_shared_ledgers.toast.link_https_required', '共享連結必須使用 HTTPS'), 'error')
+    return
+  }
   shareLinkBusy.value = 'copy'
   try {
     await copyTextToClipboard(currentShareLink.value)
@@ -923,6 +1012,49 @@ async function copyCurrentLedgerLink() {
     uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.link_copy_failed', '複製共享連結失敗'), 'error')
   } finally {
     shareLinkBusy.value = ''
+  }
+}
+
+async function regenerateCurrentLedgerLink() {
+  const sharedLedgerId = activeSharedLedgerId.value
+  if (!sharedLedgerId || apiUnavailable.value || sessionNeedsReauth.value) return
+  shareLinkBusy.value = 'rotate'
+  try {
+    const result = await rotateSharedLedgerInviteCode(sharedLedgerId)
+    const nextInviteCode = String(result?.item?.invite_code ?? '').trim()
+    if (activeLedger.value?.id && nextInviteCode) {
+      await setSharedLedgerMeta(activeLedger.value.id, {
+        ...(activeLedgerMeta.value ?? {}),
+        ...result.item,
+      }, {
+        invite_code: nextInviteCode,
+      })
+    }
+    await loadRemoteLedgers()
+    uiStore.pushToast(t('settings_shared_ledgers.toast.link_regenerated', '已產生新的 HTTPS 共享連結，舊連結將失效'))
+  } catch (error) {
+    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.link_regenerate_failed', '產生新共享連結失敗'), 'error')
+  } finally {
+    shareLinkBusy.value = ''
+  }
+}
+
+async function retryActiveLedgerSync() {
+  if (!activeLedger.value?.id || apiUnavailable.value || sessionNeedsReauth.value) return
+  syncRetryBusy.value = true
+  try {
+    if (currentRole.value === 'viewer') {
+      await pullSharedLedgerToLocal(activeLedger.value.id)
+    } else {
+      await pushLocalLedgerToShared(activeLedger.value.id, { mergeOnConflict: true })
+    }
+    await refreshLocalBindings()
+    uiStore.pushToast(t('settings_shared_ledgers.toast.sync_retry_ok', '同步已完成'))
+  } catch (error) {
+    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.sync_retry_failed', '同步失敗，請稍後再試'), 'error')
+    await refreshLocalBindings()
+  } finally {
+    syncRetryBusy.value = false
   }
 }
 
@@ -1188,13 +1320,17 @@ let unsubscribeSession = null
 onMounted(() => {
   unsubscribeSession = subscribeSharedLedgerSession((session) => {
     sessionUser.value = session?.user ?? null
+    sessionNeedsReauth.value = needsSharedLedgerReauth()
     if (!sessionUser.value) {
       remoteLedgers.value = []
       pendingInvitations.value = []
       return
     }
-    void loadRemoteLedgers()
+    if (!sessionNeedsReauth.value) {
+      void loadRemoteLedgers()
+    }
   })
+  sessionNeedsReauth.value = getSharedLedgerAuthStatus().needsReauth
   void refreshSessionAndData()
 })
 
@@ -1269,6 +1405,45 @@ p {
 .field {
   display: grid;
   gap: 12px;
+}
+
+.session-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.session-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.session-pill.ok {
+  color: #0f6b4c;
+  background: color-mix(in srgb, #1b8f6a 16%, var(--card));
+}
+
+.session-pill.expired {
+  color: #8a3b00;
+  background: color-mix(in srgb, #f0a202 18%, var(--card));
+}
+
+.sync-status-box {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--muted) 10%, var(--card));
+}
+
+.https-link-guard {
+  margin: 0;
 }
 
 .field {

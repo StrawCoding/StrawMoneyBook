@@ -34,6 +34,11 @@ import {
   removeReimbursementAdvanceEffectsBySourceTransaction,
 } from '@/core/services/reimbursement.service'
 import { reconcileDraftClaimSheetImportItems } from '@/core/services/claim-sheet-draft-sync.service'
+import {
+  applyCreateEditorAttribution,
+  applyUpdateEditorAttribution,
+  resolveCurrentTransactionEditor,
+} from '@/core/services/transaction-editor-attribution'
 
 const TRANSACTION_FAILURE_TRACE_MAX_ENTRIES = 60
 const transactionFailureTraceListeners = new Set()
@@ -274,7 +279,7 @@ export async function createExpense(ledgerId, payload) {
       assertCanCreateReimbursement(reimbursableCount)
     }
 
-    return addTransaction(ledgerId, {
+    return addTransaction(ledgerId, applyCreateEditorAttribution({
       ...payload,
       type: 'expense',
       amountMinor: Math.abs(Number(payload.amountMinor)) * -1,
@@ -283,7 +288,7 @@ export async function createExpense(ledgerId, payload) {
       includeInBudget: payload.includeInBudget !== false,
       includeInAnalysis: payload.includeInAnalysis !== false,
       occurredAt: payload.occurredAt ?? new Date().toISOString(),
-    })
+    }, await resolveCurrentTransactionEditor()))
   })
 }
 
@@ -295,7 +300,7 @@ export async function createIncome(ledgerId, payload) {
     }
     await assertAccountAllowsDirectTransaction(ledgerId, payload.accountId)
 
-    return addTransaction(ledgerId, {
+    return addTransaction(ledgerId, applyCreateEditorAttribution({
       ...payload,
       type: 'income',
       amountMinor: Math.abs(Number(payload.amountMinor)),
@@ -304,7 +309,7 @@ export async function createIncome(ledgerId, payload) {
       includeInBudget: payload.includeInBudget !== false,
       includeInAnalysis: payload.includeInAnalysis !== false,
       occurredAt: payload.occurredAt ?? new Date().toISOString(),
-    })
+    }, await resolveCurrentTransactionEditor()))
   })
 }
 
@@ -318,7 +323,7 @@ export async function createAdjustment(ledgerId, payload) {
       throw new Error('adjustment amountMinor 不能為 0')
     }
 
-    return addTransaction(ledgerId, {
+    return addTransaction(ledgerId, applyCreateEditorAttribution({
       ...payload,
       type: 'adjustment',
       amountMinor: Number(payload.amountMinor),
@@ -327,7 +332,7 @@ export async function createAdjustment(ledgerId, payload) {
       includeInBudget: payload.includeInBudget !== false,
       includeInAnalysis: payload.includeInAnalysis !== false,
       occurredAt: payload.occurredAt ?? new Date().toISOString(),
-    })
+    }, await resolveCurrentTransactionEditor()))
   })
 }
 
@@ -429,13 +434,13 @@ export async function createTransfer(ledgerId, payload) {
       ? Math.round(toAmountMinorInput)
       : null
 
-    return addTransfer(ledgerId, {
+    return addTransfer(ledgerId, applyCreateEditorAttribution({
       ...payload,
       occurredAt: payload.occurredAt ?? new Date().toISOString(),
       amountMinor: Number(payload.amountMinor),
       sourceExtraMinor,
       toAmountMinor,
-    })
+    }, await resolveCurrentTransactionEditor()))
   })
 }
 
@@ -457,6 +462,7 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
     throw new Error('請選擇交易時間')
   }
   const isRefundTransaction = String(currentTx.origin_type ?? '').trim() === 'refund'
+  const editorPatch = applyUpdateEditorAttribution({}, await resolveCurrentTransactionEditor())
 
   if (payload.type === 'transfer') {
     const peerAccountId = String(payload.peerAccountId ?? '').trim()
@@ -490,6 +496,7 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
       reimbursementState: 'none',
       includeInBudget: payload.includeInBudget !== false,
       includeInAnalysis: payload.includeInAnalysis !== false,
+      ...editorPatch,
     }
 
     const outTx = members.find((item) => Number(item.amount_minor ?? 0) < 0) ?? members[0]
@@ -552,6 +559,7 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
     reimbursementState: isReimbursable ? 'pending' : 'none',
     includeInBudget: isRefundTransaction ? false : payload.includeInBudget !== false,
     includeInAnalysis: isRefundTransaction ? false : payload.includeInAnalysis !== false,
+    ...editorPatch,
   })
 
   if (!isReimbursable && Boolean(Number(currentTx?.is_reimbursable ?? 0))) {
@@ -596,7 +604,12 @@ export async function deleteManualTransaction(ledgerId, txId) {
 export async function batchPatchCategory(ledgerId, txIds, categoryId) {
   const validIds = (txIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean)
   if (!validIds.length) return 0
-  return batchPatchCategoryForTransactions(ledgerId, validIds, categoryId ?? null)
+  return batchPatchCategoryForTransactions(
+    ledgerId,
+    validIds,
+    categoryId ?? null,
+    await resolveCurrentTransactionEditor(),
+  )
 }
 
 export async function batchPatchTransactions(ledgerId, txIds, rawPatch = {}) {
@@ -652,8 +665,13 @@ export async function batchPatchTransactions(ledgerId, txIds, rawPatch = {}) {
     }
   }
 
+  const editor = await resolveCurrentTransactionEditor()
   for (const target of targets) {
-    await updateTransactionById(ledgerId, target.txId, target.input)
+    await updateTransactionById(
+      ledgerId,
+      target.txId,
+      applyUpdateEditorAttribution(target.input, editor),
+    )
   }
 
   const draftSyncTxIds = targets

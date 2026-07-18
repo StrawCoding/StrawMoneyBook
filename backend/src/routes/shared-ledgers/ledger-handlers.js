@@ -2,6 +2,7 @@ import {
   buildSharedLedgerMemberList,
   buildSharedLedgerSummary,
   canAssignMemberRole,
+  canInviteMembers,
   canManageMembers,
   canPushSnapshot,
   canTransferOwnership,
@@ -304,5 +305,29 @@ export async function handleTransferOwnership(req, res, user, sharedLedgerId) {
   sendJson(res, 200, {
     item: buildSharedLedgerSummary(saved, user.id, data),
     members: buildSharedLedgerMemberList(saved, data),
+  })
+}
+
+export async function handleRotateInviteCode(req, res, user, sharedLedgerId) {
+  const savedId = await updateStore(async (data) => {
+    const sharedLedger = findSharedLedger(data, sharedLedgerId)
+    if (!sharedLedger || !isSharedLedgerMember(sharedLedger, user.id)) {
+      throw new Error('找不到共同帳本')
+    }
+
+    if (!canInviteMembers(getMemberRole(sharedLedger, user.id))) {
+      throw createForbiddenError('只有 Owner / Admin 可以重新產生共享連結')
+    }
+
+    sharedLedger.invite_code = createInviteCode()
+    sharedLedger.updated_at = nowIso()
+    sharedLedger.updated_by_user_id = user.id
+    return sharedLedger.id
+  })
+
+  const data = await readStore()
+  const saved = findSharedLedger(data, savedId)
+  sendJson(res, 200, {
+    item: buildSharedLedgerSummary(saved, user.id, data),
   })
 }

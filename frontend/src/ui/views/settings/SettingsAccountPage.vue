@@ -242,8 +242,20 @@
             <div class="profile-meta">
               <strong>{{ sessionUser.display_name || sessionUser.email }}</strong>
               <p class="muted compact">{{ sessionUser.email || sessionUser.account }}</p>
+              <p class="session-status-row" data-testid="account-session-status">
+                <span class="session-pill" :class="sessionNeedsReauth ? 'expired' : 'ok'">
+                  {{
+                    sessionNeedsReauth
+                      ? t('settings_account.session_needs_relogin', '需重新登入')
+                      : t('settings_account.session_active', '已登入 · Session 有效')
+                  }}
+                </span>
+              </p>
               <p class="muted compact">
                 {{ membershipLabel }}
+              </p>
+              <p v-if="sessionNeedsReauth" class="notice compact">
+                {{ t('settings_account.session_needs_relogin_hint', '登入狀態已過期，已保留帳號資料。請重新登入後再繼續使用會員功能。') }}
               </p>
             </div>
           </div>
@@ -530,6 +542,7 @@ import {
   loginSharedLedgerAccount,
   loginSharedLedgerWithGoogle,
   logoutSharedLedgerAccount,
+  needsSharedLedgerReauth,
   prepareSharedLedgerGoogleAuth,
   redeemReferralCode,
   refreshSharedLedgerSession,
@@ -568,6 +581,7 @@ const resetSubmitting = ref(false)
 const forgotPasswordMode = ref(false)
 const resetRequestCooldownSeconds = ref(0)
 const sessionUser = ref(getSharedLedgerSession()?.user ?? null)
+const sessionNeedsReauth = ref(needsSharedLedgerReauth())
 const referralSummary = ref(null)
 const redeemCodeInput = ref('')
 const resetRequestMessage = ref('')
@@ -1146,6 +1160,7 @@ async function refreshSession() {
   } catch {
     sessionUser.value = getSharedLedgerSession()?.user ?? null
   }
+  sessionNeedsReauth.value = needsSharedLedgerReauth()
   syncProfileFormFromSession()
   if (!sessionMustChangePassword.value) {
     await loadReferralSummary()
@@ -1362,6 +1377,7 @@ let unsubscribeSession = null
 onMounted(() => {
   unsubscribeSession = subscribeSharedLedgerSession((session) => {
     sessionUser.value = session?.user ?? getSharedLedgerSession()?.user ?? null
+    sessionNeedsReauth.value = needsSharedLedgerReauth()
     clearGooglePasswordVerification()
     syncProfileFormFromSession()
     profileSavedMessage.value = ''
@@ -1516,6 +1532,32 @@ p {
 .profile-meta {
   display: grid;
   gap: 12px;
+}
+
+.session-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.session-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.session-pill.ok {
+  color: #0f6b4c;
+  background: color-mix(in srgb, #1b8f6a 16%, var(--card));
+}
+
+.session-pill.expired {
+  color: #8a3b00;
+  background: color-mix(in srgb, #f0a202 18%, var(--card));
 }
 
 .google-auth-block {

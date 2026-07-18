@@ -481,3 +481,38 @@ test('owner transfers ownership and is demoted to admin', async () => {
   await sharedLedgersHandler(retryReq, retryRes)
   assert.equal(retryRes.statusCode, 403)
 })
+
+test('SMB-277: owner can rotate invite code and viewer cannot', async () => {
+  const owner = await createMemberUser('rotate-owner@example.com')
+  const viewer = await createMemberUser('rotate-viewer@example.com')
+  const now = nowIso()
+  const ledger = await createLedgerWithMembers(owner.id, [
+    { user_id: owner.id, role: 'owner', joined_at: now },
+    { user_id: viewer.id, role: 'viewer', joined_at: now },
+  ], 'ROTATE01')
+
+  const ownerSession = await createSessionFor(owner)
+  const rotateReq = {
+    method: 'POST',
+    url: `/api/shared-ledgers/${ledger.id}/invite-code/rotate`,
+    headers: { host: 'localhost', authorization: `Bearer ${ownerSession.accessToken}` },
+    body: JSON.stringify({}),
+  }
+  const rotateRes = createMockResponse(rotateReq)
+  await sharedLedgersHandler(rotateReq, rotateRes)
+  assert.equal(rotateRes.statusCode, 200)
+  const nextCode = String(rotateRes.body?.item?.invite_code ?? '').trim()
+  assert.ok(nextCode)
+  assert.notEqual(nextCode, 'ROTATE01')
+
+  const viewerSession = await createSessionFor(viewer)
+  const viewerReq = {
+    method: 'POST',
+    url: `/api/shared-ledgers/${ledger.id}/invite-code/rotate`,
+    headers: { host: 'localhost', authorization: `Bearer ${viewerSession.accessToken}` },
+    body: JSON.stringify({}),
+  }
+  const viewerRes = createMockResponse(viewerReq)
+  await sharedLedgersHandler(viewerReq, viewerRes)
+  assert.equal(viewerRes.statusCode, 403)
+})

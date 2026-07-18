@@ -42,6 +42,22 @@
                 <small class="tx-time">{{ formatTime(tx?.occurred_at) }}</small>
                 <small class="tx-note">{{ noteText(tx) }}</small>
               </div>
+              <div v-if="editorAttributionOf(tx)" class="tx-editor-row" data-testid="tx-editor-attribution">
+                <small v-if="editorAttributionOf(tx).samePerson" class="tx-editor-chip">
+                  <span class="tx-editor-initial">{{ editorAttributionOf(tx).editorInitial }}</span>
+                  {{ t('home_tx.editor_same', { name: editorAttributionOf(tx).updatedByName }, '建立／編輯 {name}') }}
+                </small>
+                <template v-else>
+                  <small class="tx-editor-chip">
+                    <span class="tx-editor-initial">{{ editorAttributionOf(tx).creatorInitial }}</span>
+                    {{ t('home_tx.editor_created', { name: editorAttributionOf(tx).createdByName }, '建立 {name}') }}
+                  </small>
+                  <small class="tx-editor-chip">
+                    <span class="tx-editor-initial">{{ editorAttributionOf(tx).editorInitial }}</span>
+                    {{ t('home_tx.editor_updated', { name: editorAttributionOf(tx).updatedByName }, '編輯 {name}') }}
+                  </small>
+                </template>
+              </div>
             </div>
             <div class="tx-side">
               <div class="amount-line">
@@ -88,7 +104,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
@@ -96,17 +112,24 @@ import { HOME_TRANSACTION_PAGE_SIZE } from '@/core/repositories/transaction.repo
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
+import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { addonDeltaMajorFromNote, addonDeltaTagText, stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { useI18n } from '@/ui/services/i18n.service'
 import { getEffectiveTransactionAmountMinor, isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
+import { buildTransactionEditorAttributionView } from '@/core/services/transaction-editor-attribution'
+import { getSetting } from '@/core/repositories/settings.repo'
 
 const transactionStore = useTransactionStore()
 const categoryStore = useCategoryStore()
 const accountStore = useAccountStore()
 const loanStore = useLoanStore()
+const ledgerStore = useLedgerStore()
 const router = useRouter()
 const { t } = useI18n()
+const activeLedgerIsShared = ref(false)
+const currentUserId = ref('')
+
 
 const monthLabel = computed(() => {
   if (transactionStore.homeFilterMode === 'all') return t('home_page.all_transactions')
@@ -260,6 +283,37 @@ function formatTime(iso) {
     minute: '2-digit',
   })
 }
+
+function editorAttributionOf(tx) {
+  return buildTransactionEditorAttributionView(tx, {
+    currentUserId: currentUserId.value,
+    isSharedLedger: activeLedgerIsShared.value,
+  })
+}
+
+async function refreshSharedLedgerFlag() {
+  const ledgerId = String(ledgerStore.activeLedgerId ?? '').trim()
+  if (!ledgerId) {
+    activeLedgerIsShared.value = false
+    return
+  }
+  try {
+    const meta = await getSetting(ledgerId, 'shared_ledger_meta')
+    activeLedgerIsShared.value = Boolean(meta && typeof meta === 'object' && meta.shared_ledger_id)
+  } catch {
+    activeLedgerIsShared.value = false
+  }
+  try {
+    const { getSharedLedgerSession } = await import('@/services/shared-ledger/backend')
+    currentUserId.value = String(getSharedLedgerSession()?.user?.id ?? '')
+  } catch {
+    currentUserId.value = ''
+  }
+}
+
+onMounted(() => {
+  void refreshSharedLedgerFlag()
+})
 
 function noteText(tx) {
   return stripAddonSummaryFromNote(tx?.note).trim() || '-'
@@ -435,6 +489,30 @@ h3 {
   gap: 6px;
   min-width: 0;
   overflow: hidden;
+}
+.tx-editor-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.tx-editor-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.tx-editor-initial {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: color-mix(in srgb, var(--primary) 78%, #111 22%);
 }
 .tx-time {
   flex-shrink: 0;

@@ -99,7 +99,7 @@
 | `/settings/bank-sync/:id` | `src/ui/views/settings/SettingsBankSyncConnectionPage.vue` | 單一銀行連線設定 / 狀態 |
 | `/settings/carrier-sync` | `src/ui/views/settings/SettingsCarrierSyncPage.vue` | 載具同步設定（v1.3.19：憑證改為財政部平台手機號碼 + 密碼；v1.3.30 / SMB-251：後端 scrape 改 SPA JSON 攔截 + captcha token API；v1.3.40 / SMB-258：Cloudflare challenge 等待 + 前端 network_failed i18n；SMB-265：前端 scrape API 附既有 auth session，captcha 關閉 / 卸載 / submit 失敗會 cancel 後端 session，舊手機條碼 / 查詢碼憑證提示重新輸入；後端強制 auth + membership、user/IP/session rate limit、併發限制與 TTL cleanup） |
 | `/settings/ledgers` | `src/ui/views/settings/SettingsLedgerPage.vue` | 帳本管理 |
-| `/settings/shared-ledgers` | `src/ui/views/settings/SettingsSharedLedgerPage.vue` | 共同帳本、Email 邀請、接受邀請與同步；SMB-229 / v1.3.9 後依角色（Owner/Admin/Member/Viewer）顯示/隱藏分享連結與 Email 邀請，並提供「成員與角色」管理區（改角色、轉移所有權）與 Viewer 唯讀提示 |
+| `/settings/shared-ledgers` | `src/ui/views/settings/SettingsSharedLedgerPage.vue` | 共同帳本、HTTPS 共享連結（複製／分享／產生新連結）、Email 邀請、接受邀請與同步；SMB-229 角色權限；SMB-277 後帳號／共同帳本頁顯示 Session 有效或「需重新登入」、同步狀態（上次同步／版本／錯誤／重試），Viewer 自動同步文案改為只下載；分享連結強制 `https://www.strawmb.com/open/shared-ledger?...` |
 | `/settings/ledgers/:id` | `src/ui/views/settings/SettingsLedgerDetailPage.vue` | 帳本明細編輯/刪除 |
 | `/settings/categories` | `src/ui/views/settings/SettingsCategoryPage.vue` | 分類管理 |
 | `/settings/categories/:id` | `src/ui/views/settings/SettingsCategoryDetailPage.vue` | 分類明細編輯/刪除；SMB-212 後新增「預設記帳設定」區塊，可設定「預設紀錄收支」、「預設紀錄預算」、「預設報銷」三個開關；快速新增交易時選取該分類會自動套用此預設值 |
@@ -318,7 +318,7 @@ UI 服務目錄：`src/ui/services/`
 | `app-runtime.service.js` | App runtime side effects：背景排程、同步/備份啟動、Android back、網址恢復、前景事件協調；啟動 / 回前景 / 帳本切換時補跑存錢罐自動存入、訂閱今日扣款與預算存款 |
 | `ledger-runtime.service.js` | 帳本切換後的 cross-store reset / reload / integrity repair 與帳本生命周期協調 |
 | `membership-navigation.service.js` | 會員限制導頁與 membership benefits navigation，將 router side effect 留在 UI 層 |
-| `shared-ledger.service.js` | 共同帳本前端流程：建立、下載、上傳、自動同步、本機帳本綁定；SMB-229 / v1.3.9 後依角色（`sharedLedgerRoleCanPush`）跳過 Viewer 上傳、被降級時清 dirty 佇列，並提供成員角色更新與所有權轉移服務封裝 |
+| `shared-ledger.service.js` | 共同帳本前端流程：建立、下載、上傳、自動同步、本機帳本綁定；SMB-229 / v1.3.9 後依角色（`sharedLedgerRoleCanPush`）跳過 Viewer 上傳、被降級時清 dirty 佇列，並提供成員角色更新與所有權轉移服務封裝；SMB-277 後 meta 記錄 `last_sync_status` / `last_sync_error`，失敗可見並可重試 |
 | `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原、重新授權後自動清理 stale auto-check diagnostics；Google 授權失效時自動偵測並寫入 `error/reauth_required` 狀態使 UI 顯示重新授權警示；`resolveGoogleProfileForConnect` 在 silent token 失敗時必定觸發 `googleSignIn` 取得新 token（SMB-186 / v1.2.7） |
 | `webdav-backup.service.js` | WebDAV 備份連線、自動備份、還原 |
 | `auto-backup-orchestrator.service.js` | 自動備份 provider runner；統一手動備份、due check、資料變更備份的 provider lock、preflight 與 `completed / skipped / error` 結果格式，避免同帳本同 provider 同時執行造成狀態覆蓋 |
@@ -375,7 +375,7 @@ UI composable 目錄：`src/ui/composables/`
 | `routes/admin.js` | 管理員總覽、會員狀態調整、錯誤 log 審核、使用者刪除 |
 | `routes/client-logs.js` | 前端錯誤事件上報 |
 | `routes/shared-ledgers.js` | shared-ledgers 路由入口 re-export；實作已拆到 `routes/shared-ledgers/` 模組目錄 |
-| `routes/shared-ledgers/` | 共同帳本建立、查詢、快照上傳下載、Email 邀請、接受邀請、試用與同步 action handlers；SMB-229 / v1.3.9 後依角色權限矩陣（`collab/store-shared-ledgers.js`）檢查每個 endpoint（Viewer 禁 push、Member/Viewer 禁 invite），並新增改角色 `POST /:id/members/:userId/role` 與轉移所有權 `POST /:id/transfer` |
+| `routes/shared-ledgers/` | 共同帳本建立、查詢、快照上傳下載、Email 邀請、接受邀請、試用與同步 action handlers；SMB-229 / v1.3.9 後依角色權限矩陣（`collab/store-shared-ledgers.js`）檢查每個 endpoint（Viewer 禁 push、Member/Viewer 禁 invite），並新增改角色 `POST /:id/members/:userId/role` 與轉移所有權 `POST /:id/transfer`；SMB-277 新增 `POST /:id/invite-code/rotate`（Owner/Admin 產生新 HTTPS 共享連結）與邀請 URL HTTPS 強制 |
 | `routes/referrals.js` | 邀請碼資訊、邀請碼兌換、會員獎勵發放 |
 | `collab/store.js` | 本機 SQLite store、使用者資料、共同帳本、邀請、會員加成資料、access token / auth session；SMB-232 / v1.3.10 後 `updateStore` 改為 row-level 差異寫入：載入時建立 id→序列化快照 baseline，寫回時只 upsert 新增/變更的 record、只刪除被移除的 record，全部包在單一 SQLite transaction，移除每次 mutation 全量 upsert 與全表刪除掃描的瓶頸（mutator API 不變） |
 | `collab/auth-store.js` | 帳號、密碼、auth provider、會員 grant、Google Play 同步後的 public profile 會員狀態、refresh session 邏輯 |
