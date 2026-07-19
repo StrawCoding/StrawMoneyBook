@@ -299,11 +299,16 @@ async function assertSharedLedgerAuthAndEditorSurfaces() {
     path: window.location.pathname,
     hasAccountRoot: Boolean(document.querySelector('.view-root, .settings-account, .page-title')),
     text: document.body?.innerText?.slice(0, 4000) ?? '',
-    hasLoginOrSession: /登入|Login|ログイン|帳號|Account|Session|已登入|需重新登入/i.test(document.body?.innerText ?? ''),
+    hasLoginOrSession: /登入|Login|ログイン|帳號|Account|Session|已登入|需重新登入|恢復中|Restoring/i.test(document.body?.innerText ?? ''),
+    hasSessionStatusRow: Boolean(document.querySelector('[data-testid=account-session-status]'))
+      || /登入|Login|ログイン|註冊|Register/i.test(document.body?.innerText ?? ''),
+    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
   })`)
   assert.equal(account.path, '/settings/account', JSON.stringify(account, null, 2))
   assert.match(account.text, /帳號|Account|アカウント/u)
   assert.equal(account.hasLoginOrSession, true, JSON.stringify(account, null, 2))
+  assert.equal(account.hasSessionStatusRow, true, JSON.stringify(account, null, 2))
+  assert.equal(account.hasBottomNav, true, JSON.stringify(account, null, 2))
 
   await runPlaywrightCli(['goto', `${baseUrl}/settings/shared-ledgers`])
   await delay(900)
@@ -312,10 +317,14 @@ async function assertSharedLedgerAuthAndEditorSurfaces() {
     text: document.body?.innerText?.slice(0, 6000) ?? '',
     hasShareSurface: /https:\\/\\/|HTTPS|共享|分享加入連結|Shared|共有|open\\/shared-ledger/i.test(document.body?.innerText ?? ''),
     mentionsHttpsInvite: /HTTPS|https:\\/\\/www\\.strawmb\\.com|共享加入連結|分享連結|產生新連結/i.test(document.body?.innerText ?? ''),
+    hasSyncOrSessionSurface: /同步|Sync|同期|Session|登入|Login|ログイン|重試|需重新登入|恢復中/i.test(document.body?.innerText ?? ''),
+    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
   })`)
   assert.equal(shared.path, '/settings/shared-ledgers', JSON.stringify(shared, null, 2))
   assert.match(shared.text, /共同帳本|Shared ledger|共有台帳/iu)
   assert.equal(shared.hasShareSurface, true, JSON.stringify(shared, null, 2))
+  assert.equal(shared.hasSyncOrSessionSurface, true, JSON.stringify(shared, null, 2))
+  assert.equal(shared.hasBottomNav, true, JSON.stringify(shared, null, 2))
 
   // Design-aligned editor attribution chips: inject markup matching HomeTransactionFeed structure.
   await runPlaywrightCli(['goto', `${baseUrl}/`])

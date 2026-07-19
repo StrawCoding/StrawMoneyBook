@@ -6,6 +6,8 @@ export const AUTH_STORAGE_COOKIE_MODE = 'cookie'
 export const NATIVE_CLIENT_HEADER = 'X-Straw-Native-Client'
 export const SHARED_LEDGER_USER_STORAGE_KEY = 'straw.shared_ledger_user.v2'
 export const NATIVE_REFRESH_TOKEN_STORAGE_KEY = 'straw.shared_ledger_native_refresh.v1'
+/** Survives process death so cold start does not fake "Session valid" after refresh failure. */
+export const SHARED_LEDGER_NEEDS_REAUTH_KEY = 'straw.shared_ledger_needs_reauth.v1'
 
 let memoryAccessToken = ''
 let memoryRefreshToken = ''
@@ -85,6 +87,22 @@ export function clearStoredTokens() {
   memoryRefreshToken = ''
   const localStorageRef = getLocalStorageRef()
   localStorageRef?.removeItem(NATIVE_REFRESH_TOKEN_STORAGE_KEY)
+}
+
+export function readPersistedNeedsReauthFlag() {
+  const localStorageRef = getLocalStorageRef()
+  if (!localStorageRef) return false
+  return localStorageRef.getItem(SHARED_LEDGER_NEEDS_REAUTH_KEY) === '1'
+}
+
+export function writePersistedNeedsReauthFlag(value) {
+  const localStorageRef = getLocalStorageRef()
+  if (!localStorageRef) return
+  if (value) {
+    localStorageRef.setItem(SHARED_LEDGER_NEEDS_REAUTH_KEY, '1')
+    return
+  }
+  localStorageRef.removeItem(SHARED_LEDGER_NEEDS_REAUTH_KEY)
 }
 
 function parseStoredUser(rawValue) {
@@ -228,6 +246,7 @@ export function writePersistedAuthSession(session) {
 export function clearPersistedAuthSession() {
   clearStoredTokens()
   clearStoredUser()
+  writePersistedNeedsReauthFlag(false)
 
   const localStorageRef = getLocalStorageRef()
   const sessionStorageRef = getSessionStorageRef()

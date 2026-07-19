@@ -8,8 +8,10 @@ import {
   getStoredRefreshToken,
   hasPersistedAuthIdentity,
   readPersistedAuthSession,
+  readPersistedNeedsReauthFlag,
   shouldSendAuthCredentials,
   writePersistedAuthSession,
+  writePersistedNeedsReauthFlag,
 } from '@/services/shared-ledger/auth-session-storage'
 
 const PROD_DEFAULT_SHARED_LEDGER_API_BASE = 'https://api.strawmb.com'
@@ -26,7 +28,25 @@ let ongoingSessionRestorePromise = null
 let lastSessionRestoreAt = 0
 /** True when profile is kept but access/refresh credentials are invalid and re-login is required. */
 let sessionNeedsReauth = false
+try {
+  sessionNeedsReauth = readPersistedNeedsReauthFlag()
+} catch {
+  sessionNeedsReauth = false
+}
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
+
+function setNeedsReauthFlag(value) {
+  sessionNeedsReauth = Boolean(value)
+  try {
+    writePersistedNeedsReauthFlag(sessionNeedsReauth)
+  } catch {
+    // Ignore storage failures; in-memory flag still gates API/sync.
+  }
+}
+
+function getAccessToken() {
+  return String(readSession()?.token ?? getStoredAccessToken() ?? '').trim()
+}
 
 function shouldUseSameOriginLocalApi() {
   if (EXPLICIT_SHARED_LEDGER_API_BASE) return false
@@ -164,13 +184,13 @@ function normalizeSessionUser(nextUser, previousUser = null) {
 
 function writeSession(session) {
   if (!session?.user) {
-    sessionNeedsReauth = false
+    setNeedsReauthFlag(false)
     clearPersistedAuthSession()
     notifySessionListeners(null)
     return null
   }
   if (!session?.token && !shouldSendAuthCredentials()) {
-    sessionNeedsReauth = false
+    setNeedsReauthFlag(false)
     clearPersistedAuthSession()
     notifySessionListeners(null)
     return null
@@ -182,7 +202,7 @@ function writeSession(session) {
     user: normalizeSessionUser(session.user, previous?.user ?? null),
   })
   if (nextSession?.token) {
-    sessionNeedsReauth = false
+    setNeedsReauthFlag(false)
   }
   notifySessionListeners(nextSession)
   return nextSession
@@ -193,16 +213,16 @@ function clearAuthTokens({ markNeedsReauth = true } = {}) {
   clearStoredTokens()
   const session = readSession()
   if (markNeedsReauth && session?.user) {
-    sessionNeedsReauth = true
+    setNeedsReauthFlag(true)
   } else if (!session?.user) {
-    sessionNeedsReauth = false
+    setNeedsReauthFlag(false)
   }
   notifySessionListeners(session?.user ? session : null)
 }
 
 function clearSession() {
   ongoingRefreshPromise = null
-  sessionNeedsReauth = false
+  setNeedsReauthFlag(false)
   clearPersistedAuthSession()
   notifySessionListeners(null)
 }
@@ -501,42 +521,75 @@ export function hasSharedLedgerAccessCredentials() {
 
 /**
  * Profile retained after silent refresh failure — UI must show "needs re-login",
- * never silently flip to logged-out.
+ * never silently flip to logged-out. Flag is persisted so cold start after
+ * process death does not fake a valid session.
  */
 export function needsSharedLedgerReauth() {
   const session = readSession()
   if (!session?.user) return false
-  if (sessionNeedsReauth) return true
-  if (hasSharedLedgerAccessCredentials()) return false
-  // Cookie/native cold start with profile but no in-memory token yet is not
-  // "needs reauth" until restore/refresh actually fails.
+  if (sessionNeedsReauth || readPersistedNeedsReauthFlag()) {
+    sessionNeedsReauth = true
+    return true
+  }
   return false
 }
 
 export function getSharedLedgerAuthStatus() {
   const session = readSession()
   const user = session?.user ?? null
+  const accessToken = getAccessToken()
   const needsReauth = needsSharedLedgerReauth()
+  const restoring = Boolean(user)
+    && !needsReauth
+    && !accessToken
+    && (
+      Boolean(ongoingSessionRestorePromise)
+      || Boolean(ongoingRefreshPromise)
+      || hasSharedLedgerAccessCredentials()
+      || shouldSendAuthCredentials()
+    )
+  // Cookie mode alone must NOT imply API readiness — only a live access token
+  // can authorize shared-ledger API / background sync (cookies are auth-only).
+  const canUseApi = Boolean(user) && !needsReauth && Boolean(accessToken)
   return {
     user,
     hasProfile: Boolean(user),
     hasCredentials: hasSharedLedgerAccessCredentials(),
     needsReauth,
+    restoring,
     membershipActive: Boolean(user?.membership_active),
-    // Keep profile-visible for UX; API callers should check credentials / needsReauth.
+    // Keep profile-visible for UX; API callers must use canUseApi / ensure*.
     isAuthenticated: Boolean(user),
-    canUseApi: Boolean(user) && !needsReauth && (
-      Boolean(session?.token ?? getStoredAccessToken())
-      || shouldSendAuthCredentials()
-    ),
+    sessionValid: canUseApi,
+    canUseApi,
   }
 }
 
 export function isSharedLedgerAuthenticated() {
-  const status = getSharedLedgerAuthStatus()
-  // Used by sync/API callers: profile retained after refresh failure must not
-  // keep background sync running until the user re-logs in.
-  return status.isAuthenticated && !status.needsReauth
+  // Sync/API callers: require a usable access token. Profile retained after
+  // refresh failure (or cold start before restore) must not keep sync running.
+  return getSharedLedgerAuthStatus().canUseApi
+}
+
+/**
+ * Await silent restore when profile exists but access token is missing
+ * (cold start / process death / tab reload). Returns the latest auth status.
+ */
+export async function ensureSharedLedgerSessionReady({ force = false } = {}) {
+  let status = getSharedLedgerAuthStatus()
+  if (status.canUseApi || status.needsReauth) return status
+  if (!status.hasProfile && !hasSharedLedgerAccessCredentials() && !shouldSendAuthCredentials()) {
+    return status
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return status
+  }
+  try {
+    await restoreSharedLedgerSession({ force: force || !status.canUseApi })
+  } catch {
+    // restore path already marks needs-reauth on auth failure / preserves on network.
+  }
+  return getSharedLedgerAuthStatus()
 }
 
 export function hasSharedLedgerMembershipAccess() {

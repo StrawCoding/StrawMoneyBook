@@ -20,7 +20,14 @@ test('runtime service schedules recurring due checks for automatic backups', () 
 })
 
 test('backup due scheduler is refreshed on app resume, data changes, and ledger switches', () => {
-  assert.match(mainSource, /scheduleAutoBackupDueCheck\(runtimeState, pinia, windowObject\)\s*\n\s*}\s*\n\s*void runSharedLedgerBackgroundSyncNow/s)
+  assert.match(
+    mainSource,
+    /scheduleAutoBackupDueCheck\(runtimeState, pinia, windowObject\)\s*\n\s*}\s*\n\s*void syncActiveLedgerHomeWidget\(pinia\)/s,
+  )
+  assert.match(
+    mainSource,
+    /restoreSharedLedgerSessionInBackground\('app_resume'\)\.finally\(\(\) => \{\s*void runSharedLedgerBackgroundSyncNow\(pinia\)/s,
+  )
   assert.match(mainSource, /scheduleAutoBackupDueCheck\(runtimeState, pinia, windowObject, 30000\)/)
   assert.match(mainSource, /clearAutoBackupDueTimer\(runtimeState, windowObject\)\s*\n\s*return\s*\n\s*}\s*\n\s*restoreGoogleBackupForActiveLedgerInBackground/s)
   assert.match(mainSource, /restoreGoogleBackupForActiveLedgerInBackground\(runtimeState, normalizedLedgerId, \{\s*runDueBackup: true,\s*allowInteractive: false,/)

@@ -16,11 +16,11 @@ import {
   acceptSharedLedgerInvitation,
   createSharedLedger,
   deleteSharedLedger,
+  ensureSharedLedgerSessionReady,
   getSharedLedgerDetail,
   getSharedLedgerSession,
   getSharedLedgerSnapshot,
   hasSharedLedgerMembershipAccess,
-  isSharedLedgerAuthenticated,
   inviteSharedLedgerByEmail,
   joinSharedLedger,
   listPendingSharedLedgerInvitations,
@@ -57,6 +57,63 @@ function cloneJson(value) {
 
 function isOnline() {
   return typeof navigator === 'undefined' || navigator.onLine !== false
+}
+
+async function markActiveLedgerSyncGate(pinia, status, errorMessage) {
+  try {
+    const ledgerStore = useLedgerStore(pinia)
+    const activeLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
+    if (!activeLedgerId) return
+    const meta = await getSharedLedgerMeta(activeLedgerId)
+    if (!meta?.shared_ledger_id) return
+    const previousStatus = String(meta.last_sync_status ?? '').trim().toLowerCase()
+    const previousError = String(meta.last_sync_error ?? '').trim()
+    const nextError = String(errorMessage ?? '').trim().slice(0, 240)
+    if (previousStatus === status && previousError === nextError) return
+    await setSharedLedgerMeta(activeLedgerId, meta, {
+      last_sync_status: status,
+      last_sync_error: nextError,
+    })
+  } catch {
+    // Ignore meta write failures during gate checks.
+  }
+}
+
+async function assertSharedLedgerSyncAllowed(pinia) {
+  const auth = await ensureSharedLedgerSessionReady()
+  if (!auth.canUseApi) {
+    if (auth.needsReauth) {
+      await markActiveLedgerSyncGate(
+        pinia,
+        'paused_reauth',
+        '需重新登入後才能同步共同帳本',
+      )
+    } else if (auth.restoring || auth.hasProfile) {
+      await markActiveLedgerSyncGate(
+        pinia,
+        'paused_session',
+        '登入狀態恢復中，稍後自動重試同步',
+      )
+    }
+    return false
+  }
+  if (!hasSharedLedgerMembershipAccess()) {
+    await markActiveLedgerSyncGate(
+      pinia,
+      'paused_membership',
+      '需有效會員才能同步共同帳本',
+    )
+    return false
+  }
+  if (!isOnline()) {
+    await markActiveLedgerSyncGate(
+      pinia,
+      'paused_offline',
+      '目前離線，連上網路後將自動重試',
+    )
+    return false
+  }
+  return true
 }
 
 function readDirtyLedgerQueue() {
@@ -615,7 +672,7 @@ async function syncSingleDirtyLedger(ledgerId) {
 }
 
 async function flushDirtyLedgers(pinia) {
-  if (!isSharedLedgerAuthenticated() || !hasSharedLedgerMembershipAccess() || !isOnline()) return
+  if (!(await assertSharedLedgerSyncAllowed(pinia))) return
   const ledgerStore = useLedgerStore(pinia)
   const activeLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
   const dirtyLedgerIds = listDirtyLedgerIds()
@@ -640,7 +697,7 @@ async function flushDirtyLedgers(pinia) {
 }
 
 async function syncActiveLedgerLatest(pinia) {
-  if (!isSharedLedgerAuthenticated() || !hasSharedLedgerMembershipAccess() || !isOnline()) return
+  if (!(await assertSharedLedgerSyncAllowed(pinia))) return
 
   const ledgerStore = useLedgerStore(pinia)
   const activeLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
@@ -697,7 +754,15 @@ export function scheduleActiveSharedLedgerAutoSync(pinia, delayMs = AUTO_PUSH_DE
   }
   autoSyncTimer = window.setTimeout(async () => {
     autoSyncTimer = null
-    if (!isSharedLedgerAuthenticated() || !hasSharedLedgerMembershipAccess()) return
+    const auth = await ensureSharedLedgerSessionReady()
+    if (!auth.canUseApi || !hasSharedLedgerMembershipAccess()) {
+      if (auth.needsReauth) {
+        await markActiveLedgerSyncGate(pinia, 'paused_reauth', '需重新登入後才能同步共同帳本')
+      } else if (!hasSharedLedgerMembershipAccess() && auth.canUseApi) {
+        await markActiveLedgerSyncGate(pinia, 'paused_membership', '需有效會員才能同步共同帳本')
+      }
+      return
+    }
 
     const ledgerStore = useLedgerStore(pinia)
     const activeLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()

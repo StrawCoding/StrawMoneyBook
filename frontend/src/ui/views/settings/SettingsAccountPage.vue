@@ -255,21 +255,28 @@
                   }}
                 </span>
                 <span
-                  v-if="!sessionNeedsReauth"
+                  v-if="sessionValid"
                   class="session-pill ok"
                   data-testid="account-session-valid-pill"
                 >
                   {{ t('settings_account.session_active', 'Session 有效') }}
                 </span>
                 <span
-                  v-if="!sessionNeedsReauth"
+                  v-else-if="sessionRestoring"
+                  class="session-pill warn"
+                  data-testid="account-session-restoring-pill"
+                >
+                  {{ t('settings_account.session_restoring', 'Session 恢復中') }}
+                </span>
+                <span
+                  v-if="sessionValid"
                   class="session-pill ok"
                   data-testid="account-auto-sync-pill"
                 >
                   {{ t('settings_account.auto_sync_on', '自動同步開') }}
                 </span>
                 <span
-                  v-if="sessionNeedsReauth"
+                  v-if="sessionNeedsReauth || sessionRestoring"
                   class="session-pill danger"
                   data-testid="account-sync-paused-pill"
                 >
@@ -288,6 +295,9 @@
               </p>
               <p v-if="sessionNeedsReauth" class="notice compact">
                 {{ t('settings_account.session_needs_relogin_hint', '登入狀態已過期，已保留帳號資料。請重新登入後再繼續使用會員功能。') }}
+              </p>
+              <p v-else-if="sessionRestoring" class="notice compact">
+                {{ t('settings_account.session_restoring_hint', '正在恢復登入狀態，完成後會自動繼續同步。') }}
               </p>
             </div>
           </div>
@@ -569,6 +579,7 @@ import {
   changeSharedLedgerPassword,
   getReferralSummary,
   getSharedLedgerApiUnavailableMessage,
+  getSharedLedgerAuthStatus,
   getSharedLedgerSession,
   isSharedLedgerApiConfigured,
   loginSharedLedgerAccount,
@@ -614,6 +625,15 @@ const forgotPasswordMode = ref(false)
 const resetRequestCooldownSeconds = ref(0)
 const sessionUser = ref(getSharedLedgerSession()?.user ?? null)
 const sessionNeedsReauth = ref(needsSharedLedgerReauth())
+const sessionValid = ref(Boolean(getSharedLedgerAuthStatus().sessionValid))
+const sessionRestoring = ref(Boolean(getSharedLedgerAuthStatus().restoring))
+
+function syncSessionStatusFromAuth() {
+  const status = getSharedLedgerAuthStatus()
+  sessionNeedsReauth.value = Boolean(status.needsReauth)
+  sessionValid.value = Boolean(status.sessionValid)
+  sessionRestoring.value = Boolean(status.restoring)
+}
 const referralSummary = ref(null)
 const redeemCodeInput = ref('')
 const resetRequestMessage = ref('')
@@ -1192,7 +1212,7 @@ async function refreshSession() {
   } catch {
     sessionUser.value = getSharedLedgerSession()?.user ?? null
   }
-  sessionNeedsReauth.value = needsSharedLedgerReauth()
+  syncSessionStatusFromAuth()
   syncProfileFormFromSession()
   if (!sessionMustChangePassword.value) {
     await loadReferralSummary()
@@ -1409,7 +1429,7 @@ let unsubscribeSession = null
 onMounted(() => {
   unsubscribeSession = subscribeSharedLedgerSession((session) => {
     sessionUser.value = session?.user ?? getSharedLedgerSession()?.user ?? null
-    sessionNeedsReauth.value = needsSharedLedgerReauth()
+    syncSessionStatusFromAuth()
     clearGooglePasswordVerification()
     syncProfileFormFromSession()
     profileSavedMessage.value = ''
@@ -1585,6 +1605,11 @@ p {
 .session-pill.ok {
   color: #0f6b4c;
   background: color-mix(in srgb, #1b8f6a 16%, var(--card));
+}
+
+.session-pill.warn {
+  color: #6b5a00;
+  background: color-mix(in srgb, #e6c200 18%, var(--card));
 }
 
 .session-pill.expired {

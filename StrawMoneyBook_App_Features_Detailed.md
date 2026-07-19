@@ -535,6 +535,13 @@ SMB-277 後再補強共同帳本可用性：
 - 同步狀態 UI：顯示上次同步時間、版本、錯誤與重試；Viewer 自動同步文案改為「自動下載最新資料」。
 - 交易編輯者標註：migration 040 為每筆交易保存 `created_by_*` / `updated_by_*`（user id + 顯示名快照）；新建／編輯／批量更新寫入目前登入者；共同帳本清單與詳情顯示建立者／最後編輯者；單人非共享帳本僅在有異於自己時顯示。
 
+SMB-279 再修會員登入狀態與帳本同步回歸：
+
+- `needs-reauth` 寫入 `localStorage`，process death／冷啟動不再把「有 profile、無 access token」誤顯示成 Session 有效。
+- `canUseApi`／`isSharedLedgerAuthenticated` 改以實際 access token 為準；cookie mode 只負責 auth restore，不能單獨當成可同步。
+- 冷啟動、回前景與 `visibilitychange` 先 restore session，再跑共同帳本／Google Drive 背景同步。
+- 同步 gate（需重新登入／會員資格／離線／session 恢復中）寫入可見 `last_sync_status=paused_*` 與錯誤文案，帳號／共同帳本頁顯示「Session 恢復中」或「同步暫停」。
+
 ### 6.3 Google Drive 帳本同步
 
 這個功能和「備份」不同。

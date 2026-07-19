@@ -2,6 +2,7 @@
 
 ---
 
+- (SMB-279) 會員登入狀態與帳本同步回歸治本：`needs-reauth` 持久化避免冷啟動假「Session 有效」；`canUseApi`／背景同步改以實際 access token 為準（不再把 cookie mode 誤當已登入可用）；冷啟動／回前景／visibility 先 restore session 再同步；需重新登入／會員資格／離線／session 恢復中會寫入可見 `last_sync_status`（paused_*）並在帳號／共同帳本頁顯示恢復中或同步暫停，禁止 silently no-op。補 Node regression 與 Playwright 帳號／共同帳本 app-shell。
 - (SMB-278) 載具與銀行同步可用性治本：兩功能設定頁新增診斷流程（資格→平台／App→API health／自動化→憑證→captcha→同步→審核／匯入），顯示去識別化錯誤碼與單一 recovery CTA，不再把會員鎖定、Android-only、API timeout、登入錯誤一律呈現成籠統「無法使用」。銀行同步 feature flag 只控制入口可視性，Web 顯示可讀支援矩陣（Android-only、支援銀行、取得 App、CSV 退路）而不靜默 redirect；載具 captcha 支援刷新／取消／到期，並新增 `GET /api/einvoice/health`（明確標示 health≠登入成功）。補回 `playwright:carrier-sync`，與 `playwright:bank-sync` 皆 bypass onboarding 進有 BottomNav 的 app-shell 驗實際 route。
 - (SMB-277) 共同帳本治本：會員登入狀態在冷啟動／回前景／帳號頁／共同帳本頁一致；靜默 refresh 失敗時保留 profile 並標「需重新登入」，不再誤顯示未登入或清掉身分。帳本同步補可見狀態（上次同步／版本／錯誤）與重試；Viewer 自動同步文案改為只下載。共享改以 HTTPS 連結為主路徑（強制 `https://www.strawmb.com/open/shared-ledger?...`），支援複製／系統分享／產生新連結（rotate invite code）；Email 邀請仍保留。每筆交易新增 `created_by`／`updated_by`（user id + 顯示名快照），清單與詳情依設計稿標註建立者／最後編輯者；共同帳本設定／交易 UI 對齊設計稿並維持 FAB／首頁區塊。補前後端回歸與 Playwright（帳號／共同帳本頁）。
 - (SMB-276) 修復改發薪日或切換曆月／發薪週期後預算項目「跑掉」：套用新帳本預算期間設定前會先以舊設定解析今天所在的目前期間並載入其預算結構，套用後再解析新目前期間；若新舊 period key 不同且新期尚無使用者設定內容，會自動 carry-forward 分類項目金額／日均規則、共同池與綁定、整期預算存款設定到新期，已花費依新期日期範圍重算，交易與歷史期間資料不搬移；新期已有資料則不覆寫。帳本詳細設定、預算項目 sheet、共同池 sheet 三條入口行為一致。補 Node regression（改發薪日前後、跨月、短月 29/30/31、新期已有資料不重複、曆月↔發薪切換）與 `playwright:budget-pay-cycle`（從預算 sheet 改發薪日後仍看得到原項目）；更新兩份功能文件。

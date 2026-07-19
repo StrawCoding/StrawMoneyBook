@@ -340,7 +340,7 @@ function restoreGoogleBackupForActiveLedgerInBackground(runtimeState, ledgerId, 
 }
 
 function restoreSharedLedgerSessionInBackground(reason, { force = false } = {}) {
-  void restoreSharedLedgerSession({ force }).catch((error) => {
+  return restoreSharedLedgerSession({ force }).catch((error) => {
     const code = String(error?.code ?? '').trim()
     if (code === 'shared_ledger_api_unavailable') {
       return null
@@ -431,7 +431,10 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
 
     void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
       if (!isActive) return
-      restoreSharedLedgerSessionInBackground('app_resume')
+      void restoreSharedLedgerSessionInBackground('app_resume').finally(() => {
+        void runSharedLedgerBackgroundSyncNow(pinia)
+        void runGoogleDriveLedgerBackgroundSyncNow(pinia)
+      })
       reloadCurrentBudgetPeriodInBackground(pinia, 'app_resume')
       scheduleMembershipWarmup('app_resume', windowObject)
       runBookkeepingReminderSyncInBackground('app_resume')
@@ -447,15 +450,16 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
         runBudgetSaveInBackground(currentLedgerId, 'app_resume')
         scheduleAutoBackupDueCheck(runtimeState, pinia, windowObject)
       }
-      void runSharedLedgerBackgroundSyncNow(pinia)
-      void runGoogleDriveLedgerBackgroundSyncNow(pinia)
       void syncActiveLedgerHomeWidget(pinia)
     }).then((handle) => listenerHandles.push(handle))
   }
 
-  restoreSharedLedgerSessionInBackground('app_start', { force: true })
-  initSharedLedgerBackgroundSync(pinia)
-  initGoogleDriveLedgerSync(pinia)
+  // Restore session before first background sync so cold start does not race
+  // with empty memory tokens and silently no-op or 401-loop.
+  void restoreSharedLedgerSessionInBackground('app_start', { force: true }).finally(() => {
+    initSharedLedgerBackgroundSync(pinia)
+    initGoogleDriveLedgerSync(pinia)
+  })
 
   addWindowListener(GOOGLE_LEDGER_SYNC_ACCOUNT_SWITCH_EVENT, (event) => {
     const detail = event?.detail && typeof event.detail === 'object' ? event.detail : {}
@@ -485,14 +489,19 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
   })
 
   addWindowListener('focus', () => {
-    restoreSharedLedgerSessionInBackground('window_focus')
+    void restoreSharedLedgerSessionInBackground('window_focus').finally(() => {
+      void runSharedLedgerBackgroundSyncNow(pinia)
+      void runGoogleDriveLedgerBackgroundSyncNow(pinia)
+    })
     reloadCurrentBudgetPeriodInBackground(pinia, 'window_focus')
-    void runSharedLedgerBackgroundSyncNow(pinia)
-    void runGoogleDriveLedgerBackgroundSyncNow(pinia)
   })
 
   addWindowListener('visibilitychange', () => {
     if (windowObject?.document?.visibilityState && windowObject.document.visibilityState !== 'visible') return
+    void restoreSharedLedgerSessionInBackground('visibility_visible').finally(() => {
+      void runSharedLedgerBackgroundSyncNow(pinia)
+      void runGoogleDriveLedgerBackgroundSyncNow(pinia)
+    })
     reloadCurrentBudgetPeriodInBackground(pinia, 'visibility_visible')
   })
 

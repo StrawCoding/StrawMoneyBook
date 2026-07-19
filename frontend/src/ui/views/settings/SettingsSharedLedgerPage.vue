@@ -88,21 +88,28 @@
                   }}
                 </span>
                 <span
-                  v-if="!sessionNeedsReauth"
+                  v-if="sessionValid"
                   class="session-pill ok"
                   data-testid="shared-ledger-session-valid-pill"
                 >
                   {{ t('settings_shared_ledgers.session_active', 'Session 有效') }}
                 </span>
                 <span
-                  v-if="!sessionNeedsReauth && hasMembershipAccess"
+                  v-else-if="sessionRestoring"
+                  class="session-pill warn"
+                  data-testid="shared-ledger-session-restoring-pill"
+                >
+                  {{ t('settings_shared_ledgers.session_restoring', 'Session 恢復中') }}
+                </span>
+                <span
+                  v-if="sessionValid && hasMembershipAccess"
                   class="session-pill ok"
                   data-testid="shared-ledger-auto-sync-pill"
                 >
                   {{ t('settings_shared_ledgers.auto_sync_on', '自動同步開') }}
                 </span>
                 <span
-                  v-if="sessionNeedsReauth"
+                  v-if="sessionNeedsReauth || sessionRestoring || (sessionValid && !hasMembershipAccess)"
                   class="session-pill danger"
                   data-testid="shared-ledger-sync-paused-pill"
                 >
@@ -122,6 +129,9 @@
               <p class="muted compact">{{ membershipStatusText }}</p>
               <p v-if="sessionNeedsReauth" class="notice compact">
                 {{ t('settings_shared_ledgers.session_needs_relogin_hint', '登入狀態已過期，已保留帳號資料。請重新登入後再同步或共享帳本。') }}
+              </p>
+              <p v-else-if="sessionRestoring" class="notice compact">
+                {{ t('settings_shared_ledgers.session_restoring_hint', '正在恢復登入狀態，完成後會自動繼續同步。') }}
               </p>
               <RouterLink v-if="sessionNeedsReauth" class="btn" to="/settings/account">
                 {{ t('settings_account.login_register', '前往登入 / 註冊') }}
@@ -247,7 +257,7 @@
                     <div class="remote-actions">
                       <button
                         class="btn"
-                        :disabled="Boolean(ledgerActionBusy) || apiUnavailable || sessionNeedsReauth || syncRetryBusy"
+                        :disabled="Boolean(ledgerActionBusy) || apiUnavailable || sessionNeedsReauth || sessionRestoring || !sessionValid || syncRetryBusy"
                         @click="retryActiveLedgerSync"
                       >
                         {{
@@ -606,7 +616,16 @@ const resendInviteBusyId = ref('')
 const trialActivating = ref(false)
 const syncRetryBusy = ref(false)
 const sessionNeedsReauth = ref(needsSharedLedgerReauth())
+const sessionValid = ref(Boolean(getSharedLedgerAuthStatus().sessionValid))
+const sessionRestoring = ref(Boolean(getSharedLedgerAuthStatus().restoring))
 const ledgerMembers = ref([])
+
+function syncSessionStatusFromAuth() {
+  const status = getSharedLedgerAuthStatus()
+  sessionNeedsReauth.value = Boolean(status.needsReauth)
+  sessionValid.value = Boolean(status.sessionValid)
+  sessionRestoring.value = Boolean(status.restoring)
+}
 const membersLoading = ref(false)
 const memberRoleBusyId = ref('')
 const memberTransferBusyId = ref('')
@@ -666,11 +685,16 @@ const syncStatusLabel = computed(() => {
   if (status === 'syncing') return t('settings_shared_ledgers.sync_status_syncing', '同步中')
   if (status === 'ok') return t('settings_shared_ledgers.sync_status_ok', '已同步')
   if (status === 'error') return t('settings_shared_ledgers.sync_status_error', '同步失敗')
+  if (status === 'paused_reauth') return t('settings_shared_ledgers.sync_status_paused_reauth', '需重新登入')
+  if (status === 'paused_membership') return t('settings_shared_ledgers.sync_status_paused_membership', '需會員資格')
+  if (status === 'paused_offline') return t('settings_shared_ledgers.sync_status_paused_offline', '離線暫停')
+  if (status === 'paused_session') return t('settings_shared_ledgers.sync_status_paused_session', 'Session 恢復中')
   return t('settings_shared_ledgers.sync_status_idle', '待命')
 })
 const canJoinPendingInviteLink = computed(() => Boolean(
   pendingInviteLinkCode.value
   && sessionUser.value
+  && sessionValid.value
   && !sessionNeedsReauth.value
   && hasMembershipAccess.value
   && !apiUnavailable.value,
@@ -947,10 +971,10 @@ async function refreshSessionAndData() {
       sessionUser.value = getSharedLedgerSession()?.user ?? null
     }
   }
-  sessionNeedsReauth.value = needsSharedLedgerReauth()
+  syncSessionStatusFromAuth()
 
   await refreshLocalBindings()
-  if (sessionUser.value && !sessionNeedsReauth.value) {
+  if (sessionUser.value && sessionValid.value && !sessionNeedsReauth.value) {
     await loadRemoteLedgers()
   }
 }
@@ -1352,17 +1376,17 @@ let unsubscribeSession = null
 onMounted(() => {
   unsubscribeSession = subscribeSharedLedgerSession((session) => {
     sessionUser.value = session?.user ?? null
-    sessionNeedsReauth.value = needsSharedLedgerReauth()
+    syncSessionStatusFromAuth()
     if (!sessionUser.value) {
       remoteLedgers.value = []
       pendingInvitations.value = []
       return
     }
-    if (!sessionNeedsReauth.value) {
+    if (sessionValid.value && !sessionNeedsReauth.value) {
       void loadRemoteLedgers()
     }
   })
-  sessionNeedsReauth.value = getSharedLedgerAuthStatus().needsReauth
+  syncSessionStatusFromAuth()
   void refreshSessionAndData()
 })
 
@@ -1458,6 +1482,11 @@ p {
 .session-pill.ok {
   color: #0f6b4c;
   background: color-mix(in srgb, #1b8f6a 16%, var(--card));
+}
+
+.session-pill.warn {
+  color: #6b5a00;
+  background: color-mix(in srgb, #e6c200 18%, var(--card));
 }
 
 .session-pill.expired {
