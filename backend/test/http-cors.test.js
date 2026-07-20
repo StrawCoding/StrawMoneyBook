@@ -124,6 +124,39 @@ test('SMB-243: anonymous CORS preflight keeps wildcard ACAO when ALLOW_ALL_ORIGI
   }
 })
 
+test('SMB-280: Cookie-bearing einvoice health request reflects origin under ALLOW_ALL_ORIGINS', async () => {
+  const previousAllowedOrigins = process.env.ALLOWED_ORIGINS
+  const previousNodeEnv = process.env.NODE_ENV
+  process.env.ALLOWED_ORIGINS = '*'
+  process.env.NODE_ENV = 'production'
+
+  try {
+    const httpModule = await import(`../src/collab/http.js?cors-cookie-health=${Date.now()}`)
+    const res = createMockResponse({
+      headers: {
+        origin: 'https://www.strawmb.com',
+        cookie: 'straw_session=test',
+      },
+    })
+
+    httpModule.sendJson(res, 200, {
+      ok: true,
+      configured: true,
+      service: 'einvoice',
+      note: 'health_ok_does_not_mean_portal_login_ok',
+    })
+
+    assert.equal(res.getHeader('access-control-allow-origin'), 'https://www.strawmb.com')
+    assert.equal(res.getHeader('access-control-allow-credentials'), 'true')
+    assert.equal(res.getHeader('cross-origin-resource-policy'), 'cross-origin')
+  } finally {
+    if (previousAllowedOrigins === undefined) delete process.env.ALLOWED_ORIGINS
+    else process.env.ALLOWED_ORIGINS = previousAllowedOrigins
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = previousNodeEnv
+  }
+})
+
 test('SMB-243: anonymous cross-origin requests keep wildcard ACAO when ALLOW_ALL_ORIGINS is enabled', async () => {
   const previousAllowedOrigins = process.env.ALLOWED_ORIGINS
   const previousNodeEnv = process.env.NODE_ENV

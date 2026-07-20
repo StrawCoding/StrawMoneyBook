@@ -70,7 +70,8 @@ test('SMB-265: scrape API sends existing auth session with e-invoice requests', 
   assert.match(source, /getSharedLedgerSession/)
   assert.match(source, /getAuthStorageHeaders/)
   assert.match(source, /headers\.Authorization = `Bearer \$\{token\}`/)
-  assert.match(source, /credentials:\s*shouldSendAuthCredentials\(\) \? 'include' : 'same-origin'/)
+  assert.match(source, /credentials:\s*getEInvoiceCredentialsMode\(\)/)
+  assert.match(source, /getEInvoiceCredentialsMode\(\)[\s\S]*shouldSendAuthCredentials\(\) \? 'include' : 'same-origin'/)
 })
 
 test('SMB-265: legacy barcode credentials prompt re-entry instead of silent reuse', () => {

@@ -193,6 +193,11 @@ try {
   assert.equal(state.hasAvailability, true, 'availability panel required')
   assert.equal(state.hasRecoveryCta, true, 'single recovery CTA required')
   assert.match(state.bodyText, /載具|Carrier|可用性|Availability|会員|會員/u)
+  assert.doesNotMatch(
+    state.bodyText,
+    /\beinvoice_network_failed\b/,
+    'credentialed health probe must not false-report einvoice_network_failed on local preview',
+  )
 
   console.log('Carrier sync Playwright app-shell route check passed')
 } finally {

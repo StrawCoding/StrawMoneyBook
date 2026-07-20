@@ -203,6 +203,12 @@ try {
   assert.equal(state.hasSupportMatrix, true, 'support matrix required on web')
   assert.equal(state.hasRecoveryCta, true, 'single recovery CTA required')
   assert.match(state.bodyText, /銀行|Bank|支援|Support|Android|可用性|Availability/u)
+  assert.doesNotMatch(
+    state.bodyText,
+    /\bbank_sync_credentials_missing\b/,
+    'web/non-Android must not show bank_sync_credentials_missing (android_only / support matrix instead)',
+  )
+  assert.match(state.bodyText, /Android|android_only|支援矩陣|Support/u)
 
   console.log('Bank sync Playwright app-shell + support matrix check passed')
 } finally {

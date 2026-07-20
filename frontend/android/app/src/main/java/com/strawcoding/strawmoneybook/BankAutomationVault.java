@@ -45,9 +45,11 @@ public class BankAutomationVault {
     public void saveConnectionState(String connectionId, JSONObject state) {
         String normalized = normalizeKey(connectionId);
         if (normalized.isEmpty() || state == null) return;
+        // commit() so connect→immediate sync cannot race an unflushed apply()
+        // and mis-report native credentials as missing.
         sharedPreferences.edit()
             .putString(KEY_PREFIX_CONNECTION + normalized, state.toString())
-            .apply();
+            .commit();
     }
 
     public void deleteConnectionState(String connectionId) {
@@ -55,7 +57,7 @@ public class BankAutomationVault {
         if (normalized.isEmpty()) return;
         sharedPreferences.edit()
             .remove(KEY_PREFIX_CONNECTION + normalized)
-            .apply();
+            .commit();
     }
 
     private String normalizeKey(String value) {

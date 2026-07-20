@@ -19,11 +19,12 @@ test('SMB-278: bank sync feature visibility is not native-gated', () => {
 
 test('SMB-278: bank sync availability helper exposes diagnostic stages', () => {
   const source = read('src/services/bank-sync/availability.js')
+  const core = read('src/services/bank-sync/availability-core.js')
   assert.match(source, /export function assessBankSyncAvailability/)
-  assert.match(source, /membership/)
-  assert.match(source, /platform/)
-  assert.match(source, /bank_sync_android_only/)
-  assert.match(source, /recoveryCta/)
+  assert.match(core, /membership/)
+  assert.match(core, /platform/)
+  assert.match(core, /bank_sync_android_only/)
+  assert.match(core, /recoveryCta/)
 })
 
 test('SMB-278: bank sync settings page shows support matrix instead of silent redirect', () => {

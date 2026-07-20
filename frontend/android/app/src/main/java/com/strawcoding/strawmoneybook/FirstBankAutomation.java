@@ -195,8 +195,28 @@ final class FirstBankAutomation {
     }
 
     public static JSONObject sync(Activity activity, WebView webView, BankAutomationVault vault, BankAutomationDebugTrace debugTrace, JSONObject payload) throws Exception {
-        String connectionId = requireText(payload, "connectionId", "first_bank_connection_id_required", "First Bank connection ID is required");
+        String connectionId = normalizeText(payload.optString("connectionId"));
+        if (connectionId.isEmpty()) {
+            connectionId = normalizeText(payload.optString("connection_id"));
+        }
+        if (connectionId.isEmpty()) {
+            throw new BankAutomationException("first_bank_connection_id_required", "First Bank connection ID is required");
+        }
         JSONObject state = vault.getConnectionState(connectionId);
+        if (state == null) {
+            // Legacy rows may store vault under provider_connection_id while JS
+            // still passes the local DB id (or the reverse). Try the alternate key.
+            String alternateId = normalizeText(payload.optString("connection_id"));
+            if (alternateId.isEmpty()) {
+                alternateId = normalizeText(payload.optString("connectionId"));
+            }
+            if (!alternateId.isEmpty() && !alternateId.equals(connectionId)) {
+                state = vault.getConnectionState(alternateId);
+                if (state != null) {
+                    connectionId = alternateId;
+                }
+            }
+        }
         if (state == null) {
             throw new BankAutomationException("first_bank_legacy_reconnect_required", "First Bank native credentials are missing. Please reconnect this bank account.");
         }
@@ -307,7 +327,22 @@ final class FirstBankAutomation {
     }
 
     public static JSONObject disconnect(Activity activity, WebView webView, BankAutomationVault vault, BankAutomationDebugTrace debugTrace, JSONObject payload) throws Exception {
-        String connectionId = requireText(payload, "connectionId", "first_bank_connection_id_required", "First Bank connection ID is required");
+        String connectionId = normalizeText(payload.optString("connectionId"));
+        if (connectionId.isEmpty()) {
+            connectionId = normalizeText(payload.optString("connection_id"));
+        }
+        if (connectionId.isEmpty()) {
+            throw new BankAutomationException("first_bank_connection_id_required", "First Bank connection ID is required");
+        }
+        if (!vault.hasConnectionState(connectionId)) {
+            String alternateId = normalizeText(payload.optString("connection_id"));
+            if (alternateId.isEmpty()) {
+                alternateId = normalizeText(payload.optString("connectionId"));
+            }
+            if (!alternateId.isEmpty() && !alternateId.equals(connectionId) && vault.hasConnectionState(alternateId)) {
+                connectionId = alternateId;
+            }
+        }
         vault.deleteConnectionState(connectionId);
         BrowserSession session = new BrowserSession(activity, webView);
         debugTrace.record("clear_session_cookies", "running", "Clearing native session cookies");

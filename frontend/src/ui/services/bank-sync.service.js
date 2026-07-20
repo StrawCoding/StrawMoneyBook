@@ -632,10 +632,16 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
         }
       }
 
+      // Native vault keys are saved under provider_connection_id at connect time.
+      // Prefer that id so sync does not false-miss credentials after reconnect /
+      // legacy local DB ids diverge from the vault key.
+      const nativeVaultConnectionId = isNativeFirstBank
+        ? (normalizeText(connection.provider_connection_id) || normalizeText(connection.id))
+        : normalizeText(connection.id)
       const syncRes = await dependencies.syncBankTransactions({
         provider: connection.provider,
-        connectionId: connection.id,
-        connection_id: connection.provider_connection_id,
+        connectionId: nativeVaultConnectionId,
+        connection_id: nativeVaultConnectionId,
         mode: 'delta',
         cursor: normalizeText(connection.sync_cursor) || null,
         last_sync_at: normalizeText(connection.last_sync_at) || null,
@@ -958,10 +964,12 @@ export async function disconnectBankConnection(ledgerId, connectionId, options =
   }, async () => {
     try {
       if (isFirstBankProviderId(connection.provider)) {
+        const nativeVaultConnectionId = normalizeText(connection.provider_connection_id)
+          || normalizeText(connection.id)
         await dependencies.disconnectBankAuth({
           provider: connection.provider,
-          connectionId: connection.id,
-          connection_id: connection.provider_connection_id,
+          connectionId: nativeVaultConnectionId,
+          connection_id: nativeVaultConnectionId,
         })
       } else {
         await dependencies.disconnectBankAuth({

@@ -6,6 +6,8 @@ import {
   isBankSyncFeatureEnabled,
   isBankSyncNativeAutomationAvailable,
 } from './backend.js'
+import { isNativeBankAutomationRuntimeSupported } from './native-automation.js'
+import { buildBankSyncAvailabilityAssessment } from './availability-core.js'
 
 /**
  * Diagnostic availability flow for bank sync:
@@ -15,75 +17,32 @@ import {
 export function assessBankSyncAvailability({
   membershipTier = '',
   hasCredentials = false,
+  credentialsInvalid = false,
   captchaRequired = false,
   lastSyncStatus = '',
   pendingReviewCount = 0,
   lastErrorCode = '',
+  featureEnabled = isBankSyncFeatureEnabled(),
+  androidRuntime = isNativeBankAutomationRuntimeSupported(),
+  nativeAutomationAvailable = isBankSyncNativeAutomationAvailable(),
+  apiConfigured = isBankSyncApiConfigured(),
 } = {}) {
-  const matrix = getBankSyncSupportMatrix()
-  const membershipOk = hasBankSyncMembershipAccess(membershipTier)
-  const featureOk = isBankSyncFeatureEnabled()
-  const platformOk = isBankSyncNativeAutomationAvailable()
-  const apiOk = isBankSyncApiConfigured()
-  const syncOk = String(lastSyncStatus ?? '').toLowerCase() === 'ok'
-  const stages = [
-    {
-      id: 'membership',
-      ok: membershipOk,
-      code: membershipOk ? null : 'bank_sync_membership_required',
-      recovery: 'membership',
-    },
-    {
-      id: 'platform',
-      ok: featureOk && platformOk,
-      code: !featureOk
-        ? 'bank_sync_feature_disabled'
-        : (platformOk ? null : 'bank_sync_android_only'),
-      recovery: platformOk ? null : 'get_android_app',
-    },
-    {
-      id: 'api',
-      ok: apiOk,
-      code: apiOk ? null : 'bank_sync_api_unavailable',
-      recovery: 'retry_check',
-    },
-    {
-      id: 'credentials',
-      ok: !platformOk || hasCredentials,
-      code: (!platformOk || hasCredentials) ? null : 'bank_sync_credentials_missing',
-      recovery: 'open_create',
-    },
-    {
-      id: 'captcha',
-      ok: !captchaRequired,
-      code: captchaRequired ? 'bank_sync_captcha_required' : null,
-      recovery: captchaRequired ? 'enter_captcha' : null,
-    },
-    {
-      id: 'sync',
-      ok: !lastErrorCode && (syncOk || !hasCredentials),
-      code: lastErrorCode || (syncOk || !hasCredentials ? null : 'bank_sync_pending'),
-      recovery: lastErrorCode ? 'retry_sync' : null,
-    },
-    {
-      id: 'review',
-      ok: true,
-      code: pendingReviewCount > 0 ? 'bank_sync_pending_review' : null,
-      recovery: pendingReviewCount > 0 ? 'open_review' : null,
-      meta: { pendingReviewCount },
-    },
-  ]
-
-  const blocker = stages.find((stage) => !stage.ok) ?? null
-  return {
-    feature: 'bank_sync',
-    checkedAt: Date.now(),
+  return buildBankSyncAvailabilityAssessment({
+    membershipOk: hasBankSyncMembershipAccess(membershipTier),
+    featureEnabled,
+    androidRuntime,
+    nativeAutomationAvailable,
+    apiConfigured,
+    hasCredentials,
+    credentialsInvalid,
+    captchaRequired,
+    lastSyncStatus,
+    pendingReviewCount,
+    lastErrorCode,
     platform: Capacitor.getPlatform(),
-    matrix,
-    ready: stages.every((stage) => stage.ok || stage.id === 'review'),
-    blocker,
-    stages,
-    recoveryCta: blocker?.recovery ?? (pendingReviewCount > 0 ? 'open_review' : null),
-    errorCode: blocker?.code ?? null,
-  }
+    matrix: getBankSyncSupportMatrix(),
+    checkedAt: Date.now(),
+  })
 }
+
+export { buildBankSyncAvailabilityAssessment } from './availability-core.js'

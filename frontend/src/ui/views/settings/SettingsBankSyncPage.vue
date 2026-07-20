@@ -192,7 +192,11 @@ import {
   isBankSyncApiConfigured,
 } from '@/services/bank-sync/backend'
 import { assessBankSyncAvailability } from '@/services/bank-sync/availability'
-import { isMockProviderId, shouldRequireReconnectForStoredBankConnection } from '@/services/bank-sync/shared'
+import {
+  extractBankErrorCode,
+  isMockProviderId,
+  shouldRequireReconnectForStoredBankConnection,
+} from '@/services/bank-sync/shared'
 
 const { locale, t } = useI18n()
 const router = useRouter()
@@ -225,6 +229,7 @@ const recoveryCtaLabel = computed(() => {
   const cta = availability.value?.recoveryCta
   if (cta === 'retry_check') return t('settings_bank_sync.availability.cta.retry_check')
   if (cta === 'open_create') return t('settings_bank_sync.add_bank')
+  if (cta === 'reconnect') return t('settings_bank_sync.availability.cta.reconnect')
   if (cta === 'retry_sync') return t('settings_bank_sync.refresh')
   if (cta === 'open_review') return t('settings_bank_sync.actions.review')
   return t('settings_bank_sync.availability.cta.retry_check')
@@ -240,21 +245,27 @@ function refreshAvailability(extra = {}) {
     (sum, item) => sum + Number(item?.pendingReviewCount ?? 0),
     0,
   )
+  const activeConnections = connections.value.filter((item) => !item.isDeprecatedMock)
+  const reconnectTarget = activeConnections.find((item) => item.needsReconnect)
+  const lastErrorRaw = String(
+    reconnectTarget?.last_error
+    ?? activeConnections.find((item) => item.last_error)?.last_error
+    ?? '',
+  ).trim()
   availability.value = assessBankSyncAvailability({
     membershipTier: membershipTier.value,
-    hasCredentials: connections.value.some((item) => !item.isDeprecatedMock),
+    hasCredentials: activeConnections.length > 0,
+    credentialsInvalid: Boolean(reconnectTarget),
     pendingReviewCount,
-    lastSyncStatus: connections.value[0]?.last_sync_status ?? '',
-    lastErrorCode: connections.value.find((item) => item.last_error)?.last_error
-      ? 'bank_sync_last_error'
-      : '',
+    lastSyncStatus: activeConnections[0]?.last_sync_status ?? '',
+    lastErrorCode: extractBankErrorCode(lastErrorRaw) || lastErrorRaw,
     ...extra,
   })
 }
 
 function handleRecoveryCta() {
   const cta = availability.value?.recoveryCta
-  if (cta === 'open_create' && bankSyncApiReady.value) {
+  if ((cta === 'open_create' || cta === 'reconnect') && bankSyncApiReady.value) {
     void router.push({ name: 'settings-bank-sync-create' })
     return
   }

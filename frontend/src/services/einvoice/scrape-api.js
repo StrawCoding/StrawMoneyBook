@@ -21,25 +21,19 @@ function buildApiUrl(path) {
   return base ? `${base.replace(/\/$/, '')}${path}` : path
 }
 
-function isFetchNetworkError(err) {
-  if (!(err instanceof TypeError)) return false
-  const message = String(err?.message ?? '')
-  return message === 'Failed to fetch'
-    || /NetworkError|Load failed|network error/i.test(message)
+function getEInvoiceCredentialsMode() {
+  // Cookie-auth clients must send credentials:include AND the auth-storage header
+  // so the API reflects Origin + Allow-Credentials. Using include without that
+  // header yields ACAO:* under ALLOW_ALL_ORIGINS → browser Failed to fetch →
+  // false einvoice_network_failed.
+  return shouldSendAuthCredentials() ? 'include' : 'same-origin'
 }
 
-function mapFetchNetworkError(err) {
-  if (!isFetchNetworkError(err)) return err
-  return createEInvoiceError(
-    translateMessage('einvoice.error.network_failed', {}, '無法連線電子發票服務，請檢查網路後再試'),
-    'einvoice_network_failed',
-  )
-}
-
-async function postEInvoiceApi(path, body, { signal } = {}) {
+async function buildEInvoiceRequestHeaders({ includeJsonContentType = false } = {}) {
   const session = await refreshSharedLedgerSession().catch(() => getSharedLedgerSession())
   const headers = {
-    'Content-Type': 'application/json',
+    ...(includeJsonContentType ? { 'Content-Type': 'application/json' } : {}),
+    // Always attach cookie-auth markers when in cookie mode, including health GET.
     ...(shouldSendAuthCredentials() ? getAuthStorageHeaders() : {}),
   }
   if (EINVOICE_CLIENT_SHARED_KEY) {
@@ -49,6 +43,35 @@ async function postEInvoiceApi(path, body, { signal } = {}) {
   if (token) {
     headers.Authorization = `Bearer ${token}`
   }
+  return headers
+}
+
+function isAbortError(err) {
+  return err?.name === 'AbortError'
+    || (typeof DOMException !== 'undefined' && err instanceof DOMException && err.name === 'AbortError')
+}
+
+function isFetchNetworkError(err) {
+  if (isAbortError(err)) return false
+  if (!(err instanceof TypeError)) return false
+  const message = String(err?.message ?? '')
+  return message === 'Failed to fetch'
+    || /NetworkError|Load failed|network error/i.test(message)
+}
+
+function mapFetchNetworkError(err) {
+  if (isAbortError(err)) {
+    return createEInvoiceError('查詢逾時，請稍後再試', 'einvoice_query_timeout')
+  }
+  if (!isFetchNetworkError(err)) return err
+  return createEInvoiceError(
+    translateMessage('einvoice.error.network_failed', {}, '無法連線電子發票服務，請檢查網路後再試'),
+    'einvoice_network_failed',
+  )
+}
+
+async function postEInvoiceApi(path, body, { signal } = {}) {
+  const headers = await buildEInvoiceRequestHeaders({ includeJsonContentType: true })
 
   let response
   try {
@@ -56,7 +79,7 @@ async function postEInvoiceApi(path, body, { signal } = {}) {
       method: 'POST',
       headers,
       body: JSON.stringify(body ?? {}),
-      credentials: shouldSendAuthCredentials() ? 'include' : 'same-origin',
+      credentials: getEInvoiceCredentialsMode(),
       signal,
     })
   } catch (err) {
@@ -107,7 +130,7 @@ export async function queryEInvoiceInvoicesAlias(payload = {}, options = {}) {
     const data = await postEInvoiceApi('/api/einvoice/query-invoices', payload, { signal })
     return Array.isArray(data?.invoices) ? data.invoices : []
   } catch (err) {
-    if (err?.name === 'AbortError') {
+    if (isAbortError(err) || err?.code === 'einvoice_query_timeout') {
       throw createEInvoiceError('查詢逾時，請稍後再試', 'einvoice_query_timeout')
     }
     throw err
@@ -140,9 +163,11 @@ export async function probeEInvoiceApiHealth({ signal } = {}) {
   }
 
   try {
+    const headers = await buildEInvoiceRequestHeaders()
     const response = await fetch(buildApiUrl('/api/einvoice/health'), {
       method: 'GET',
-      credentials: shouldSendAuthCredentials() ? 'include' : 'same-origin',
+      headers,
+      credentials: getEInvoiceCredentialsMode(),
       signal,
     })
     let data = null

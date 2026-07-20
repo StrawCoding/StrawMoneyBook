@@ -283,6 +283,17 @@ const carrierRecoveryCtaLabel = computed(() => {
 
 let unsubscribeMembership = null
 
+function extractCarrierErrorCode(value) {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+  const colonIndex = text.indexOf(':')
+  if (colonIndex > 0) {
+    const code = text.slice(0, colonIndex).trim()
+    if (/^[a-z0-9_]+$/i.test(code)) return code
+  }
+  return ''
+}
+
 function refreshAvailability(extra = {}) {
   const lastError = String(syncConfig.value?.lastError ?? '').trim()
   availability.value = assessCarrierSyncAvailability({
@@ -292,7 +303,7 @@ function refreshAvailability(extra = {}) {
     hasPassword: Boolean(carrierPassword.value.trim()),
     captchaRequired: showCaptchaDialog.value,
     lastSyncStatus: syncConfig.value?.lastSyncStatus ?? '',
-    lastErrorCode: lastError ? 'einvoice_query_failed' : '',
+    lastErrorCode: extractCarrierErrorCode(lastError) || (lastError ? 'einvoice_query_failed' : ''),
     pendingCount: pendingRows.value.length,
     ...extra,
   })

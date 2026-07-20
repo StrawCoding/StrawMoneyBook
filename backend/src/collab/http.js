@@ -119,6 +119,19 @@ function wantsCredentialedCors(req) {
   ).trim().toLowerCase()
   if (header === 'cookie') return true
 
+  const nativeClient = String(
+    req?.headers?.['x-straw-native-client']
+    ?? req?.headers?.['X-Straw-Native-Client']
+    ?? '',
+  ).trim()
+  if (nativeClient) return true
+
+  // credentials:include always attaches Cookie when present. A health/GET probe
+  // that forgot X-Straw-Auth-Storage would otherwise get ACAO:* under
+  // ALLOW_ALL_ORIGINS and become Failed to fetch → einvoice_network_failed.
+  const cookie = String(req?.headers?.cookie ?? req?.headers?.Cookie ?? '').trim()
+  if (cookie) return true
+
   // A CORS preflight (OPTIONS) request never carries the actual custom request
   // header; the browser only advertises it via Access-Control-Request-Headers.
   // We must still treat the preflight as credentialed so the response reflects a

@@ -178,9 +178,13 @@ export async function syncCarrierInvoicesNow({
       errorCode: String(error?.code ?? 'einvoice_query_failed'),
       errorMessage: String(error?.message ?? '同步失敗'),
     })
+    const errorCode = String(error?.code ?? 'einvoice_query_failed').trim() || 'einvoice_query_failed'
+    const errorMessage = String(error?.message ?? '同步失敗').trim() || '同步失敗'
     await upsertEInvoiceSyncConfig({
       lastSyncStatus: 'error',
-      lastError: String(error?.message ?? '同步失敗'),
+      // Persist code:message so availability can surface the real stage code
+      // (e.g. einvoice_network_failed) instead of collapsing to query_failed.
+      lastError: `${errorCode}: ${errorMessage}`,
     })
     throw error
   })
