@@ -542,6 +542,12 @@ SMB-279 再修會員登入狀態與帳本同步回歸：
 - 冷啟動、回前景與 `visibilitychange` 先 restore session，再跑共同帳本／Google Drive 背景同步。
 - 同步 gate（需重新登入／會員資格／離線／session 恢復中）寫入可見 `last_sync_status=paused_*` 與錯誤文案，帳號／共同帳本頁顯示「Session 恢復中」或「同步暫停」。
 
+SMB-281 修復「無法取消共用帳本」：
+
+- Owner「取消共享」會刪除遠端共同帳本並清本機 binding；成員／Viewer「不再共享」只結束自己的成員關係，本機資料保留。
+- 會員資格過期時建立／邀請／同步仍鎖定，但設定頁會顯示本機共同帳本綁定與解除入口；後端 `DELETE /api/shared-ledgers/:id` 放行會員閘門，避免卡在無法離開。
+- 遠端已刪除或不存在時回 `already_gone`／前端仍清本機 meta；needs-reauth／session 恢復中不可靜默失敗，改顯示明確 toast；確認對話框 busy 結束後可再操作。
+
 ### 6.3 Google Drive 帳本同步
 
 這個功能和「備份」不同。

@@ -516,3 +516,158 @@ test('SMB-277: owner can rotate invite code and viewer cannot', async () => {
   await sharedLedgersHandler(viewerReq, viewerRes)
   assert.equal(viewerRes.statusCode, 403)
 })
+
+async function createExpiredMembershipUser(email) {
+  return updateStore(async (data) => {
+    const existing = findUserByEmail(data, email)
+    if (existing) {
+      existing.membership_grants = []
+      return existing
+    }
+    const now = nowIso()
+    const user = {
+      id: createId('user'),
+      email,
+      account: email,
+      email_verified: true,
+      display_name: email.split('@')[0],
+      avatar_url: '',
+      referral_code: createUniqueReferralCode(data),
+      referred_by_user_id: '',
+      referred_by_code: '',
+      referral_redeemed_at: '',
+      membership_grants: [],
+      login_failed_attempts: 0,
+      last_failed_login_at: '',
+      login_locked_until: '',
+      must_change_password: false,
+      temporary_password_issued_at: '',
+      password_reset_required: false,
+      password_reset_token_hash: '',
+      password_reset_requested_at: '',
+      password_reset_expires_at: '',
+      password_hash: 'hash',
+      password_salt: 'salt',
+      last_login_at: now,
+      created_at: now,
+      updated_at: now,
+    }
+    data.users.push(user)
+    return user
+  })
+}
+
+test('SMB-281: owner delete shared ledger removes it for everyone', async () => {
+  const owner = await createMemberUser('smb281-owner-delete@example.com')
+  const memberUser = await createMemberUser('smb281-member-delete@example.com')
+  const now = nowIso()
+  const ledger = await createLedgerWithMembers(owner.id, [
+    { user_id: owner.id, role: 'owner', joined_at: now },
+    { user_id: memberUser.id, role: 'member', joined_at: now },
+  ], 'DEL28101')
+
+  const ownerSession = await createSessionFor(owner)
+  const deleteReq = {
+    method: 'DELETE',
+    url: `/api/shared-ledgers/${ledger.id}`,
+    headers: { host: 'localhost', authorization: `Bearer ${ownerSession.accessToken}` },
+  }
+  const deleteRes = createMockResponse(deleteReq)
+  await sharedLedgersHandler(deleteReq, deleteRes)
+  assert.equal(deleteRes.statusCode, 200)
+  assert.equal(deleteRes.body?.removed, true)
+  assert.equal(deleteRes.body?.mode, 'owner_deleted')
+
+  const memberSession = await createSessionFor(memberUser)
+  const detailReq = {
+    method: 'GET',
+    url: `/api/shared-ledgers/${ledger.id}`,
+    headers: { host: 'localhost', authorization: `Bearer ${memberSession.accessToken}` },
+  }
+  const detailRes = createMockResponse(detailReq)
+  await sharedLedgersHandler(detailReq, detailRes)
+  assert.equal(detailRes.statusCode, 404)
+})
+
+test('SMB-281: member leave keeps shared ledger for owner', async () => {
+  const owner = await createMemberUser('smb281-owner-leave@example.com')
+  const memberUser = await createMemberUser('smb281-member-leave@example.com')
+  const now = nowIso()
+  const ledger = await createLedgerWithMembers(owner.id, [
+    { user_id: owner.id, role: 'owner', joined_at: now },
+    { user_id: memberUser.id, role: 'member', joined_at: now },
+  ], 'LEAVE281')
+
+  const memberSession = await createSessionFor(memberUser)
+  const leaveReq = {
+    method: 'DELETE',
+    url: `/api/shared-ledgers/${ledger.id}`,
+    headers: { host: 'localhost', authorization: `Bearer ${memberSession.accessToken}` },
+  }
+  const leaveRes = createMockResponse(leaveReq)
+  await sharedLedgersHandler(leaveReq, leaveRes)
+  assert.equal(leaveRes.statusCode, 200)
+  assert.equal(leaveRes.body?.mode, 'member_left')
+
+  const ownerSession = await createSessionFor(owner)
+  const detailReq = {
+    method: 'GET',
+    url: `/api/shared-ledgers/${ledger.id}`,
+    headers: { host: 'localhost', authorization: `Bearer ${ownerSession.accessToken}` },
+  }
+  const detailRes = createMockResponse(detailReq)
+  await sharedLedgersHandler(detailReq, detailRes)
+  assert.equal(detailRes.statusCode, 200)
+  const members = detailRes.body?.members ?? []
+  assert.equal(members.some((item) => item.user_id === memberUser.id), false)
+  assert.equal(members.some((item) => item.user_id === owner.id), true)
+})
+
+test('SMB-281: expired membership can still leave or unshare via DELETE', async () => {
+  const owner = await createMemberUser('smb281-owner-expired@example.com')
+  const expiredMember = await createExpiredMembershipUser('smb281-expired-member@example.com')
+  const now = nowIso()
+  const ledger = await createLedgerWithMembers(owner.id, [
+    { user_id: owner.id, role: 'owner', joined_at: now },
+    { user_id: expiredMember.id, role: 'member', joined_at: now },
+  ], 'EXP28101')
+
+  // Membership-gated list should fail for expired member.
+  const expiredSession = await createSessionFor(expiredMember)
+  const listReq = {
+    method: 'GET',
+    url: '/api/shared-ledgers',
+    headers: { host: 'localhost', authorization: `Bearer ${expiredSession.accessToken}` },
+  }
+  const listRes = createMockResponse(listReq)
+  await sharedLedgersHandler(listReq, listRes)
+  assert.equal(listRes.statusCode, 403)
+  assert.equal(listRes.body?.error, 'membership_required')
+
+  // Leave/unshare must still succeed without active membership.
+  const leaveReq = {
+    method: 'DELETE',
+    url: `/api/shared-ledgers/${ledger.id}`,
+    headers: { host: 'localhost', authorization: `Bearer ${expiredSession.accessToken}` },
+  }
+  const leaveRes = createMockResponse(leaveReq)
+  await sharedLedgersHandler(leaveReq, leaveRes)
+  assert.equal(leaveRes.statusCode, 200)
+  assert.equal(leaveRes.body?.mode, 'member_left')
+})
+
+test('SMB-281: deleting already-gone shared ledger returns already_gone', async () => {
+  const owner = await createMemberUser('smb281-owner-gone@example.com')
+  const session = await createSessionFor(owner)
+  const missingId = createId('shared_ledger')
+  const req = {
+    method: 'DELETE',
+    url: `/api/shared-ledgers/${missingId}`,
+    headers: { host: 'localhost', authorization: `Bearer ${session.accessToken}` },
+  }
+  const res = createMockResponse(req)
+  await sharedLedgersHandler(req, res)
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.body?.removed, true)
+  assert.equal(res.body?.mode, 'already_gone')
+})

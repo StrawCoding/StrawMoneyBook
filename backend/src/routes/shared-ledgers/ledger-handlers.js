@@ -188,8 +188,18 @@ export async function handleSnapshotPush(req, res, user, sharedLedgerId) {
 export async function handleDelete(req, res, user, sharedLedgerId) {
   const result = await updateStore(async (data) => {
     const sharedLedger = findSharedLedger(data, sharedLedgerId)
-    if (!sharedLedger || !isSharedLedgerMember(sharedLedger, user.id)) {
-      throw new Error('找不到共同帳本')
+    // Already gone / already left: treat as success so clients can clear local bindings.
+    if (!sharedLedger) {
+      return {
+        mode: 'already_gone',
+        sharedLedgerId: String(sharedLedgerId),
+      }
+    }
+    if (!isSharedLedgerMember(sharedLedger, user.id)) {
+      return {
+        mode: 'already_gone',
+        sharedLedgerId: String(sharedLedgerId),
+      }
     }
 
     const isOwner = String(sharedLedger.owner_user_id ?? '') === String(user.id)

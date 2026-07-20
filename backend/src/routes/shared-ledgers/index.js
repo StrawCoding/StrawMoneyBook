@@ -150,6 +150,9 @@ const SHARED_LEDGER_ROUTES = Object.freeze([
     name: 'delete',
     method: 'DELETE',
     pattern: [':sharedLedgerId'],
+    // Leave / owner-unshare must remain available after membership lapses;
+    // create / invite / sync stay membership-gated.
+    bypassMembership: true,
     handler: (req, res, user, params) => handleDelete(req, res, user, params.sharedLedgerId),
   },
 ])

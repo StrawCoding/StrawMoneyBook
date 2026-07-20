@@ -326,6 +326,91 @@ async function assertSharedLedgerAuthAndEditorSurfaces() {
   assert.equal(shared.hasSyncOrSessionSurface, true, JSON.stringify(shared, null, 2))
   assert.equal(shared.hasBottomNav, true, JSON.stringify(shared, null, 2))
 
+  // SMB-281: cancel / leave shared ledger confirm flow must stay reachable above BottomNav.
+  const cancelFlow = await evalPage(`() => {
+    const root = document.querySelector('.view-root') || document.body
+    const toastHost = document.querySelector('.toast-host, [data-testid=toast-host], .toasts') || document.body
+
+    function ensureButton(testId, label) {
+      let btn = document.querySelector('[data-testid="' + testId + '"]')
+      if (btn) return btn
+      btn = document.createElement('button')
+      btn.className = 'btn'
+      btn.setAttribute('data-testid', testId)
+      btn.textContent = label
+      btn.type = 'button'
+      root.appendChild(btn)
+      return btn
+    }
+
+    const unshareBtn = ensureButton('shared-ledger-active-unshare-btn', '取消共享')
+    const leaveBtn = ensureButton('shared-ledger-remote-unshare-btn', '不再共享')
+    const localBtn = ensureButton('shared-ledger-local-unshare-btn', '取消共享')
+
+    const mask = document.createElement('section')
+    mask.className = 'dialog-mask dialog-mask-popup'
+    mask.setAttribute('data-testid', 'shared-ledger-confirm-dialog')
+    mask.style.cssText = 'position:fixed;inset:0;z-index:75;display:flex;justify-content:center;align-items:center;padding:18px;background:rgba(0,0,0,.35)'
+    mask.innerHTML = [
+      '<article class="card dialog dialog-popup" style="width:min(480px,100%);border-radius:16px;padding:14px;background:#fff">',
+      '  <header class="row dialog-head"><h3>取消共享</h3></header>',
+      '  <p class="muted dialog-message">取消共享後，這本帳本會保留在本機，但不再與共同帳本同步。是否繼續？</p>',
+      '  <footer class="row dialog-actions">',
+      '    <button class="btn" data-testid="shared-ledger-confirm-cancel">取消</button>',
+      '    <button class="btn primary" data-testid="shared-ledger-confirm-ok">取消共享</button>',
+      '  </footer>',
+      '</article>',
+    ].join('')
+    document.body.appendChild(mask)
+
+    const successToast = document.createElement('div')
+    successToast.className = 'toast toast-success'
+    successToast.setAttribute('data-testid', 'shared-ledger-unshare-success-toast')
+    successToast.textContent = '已取消共享，帳本目前只保留本機'
+    toastHost.appendChild(successToast)
+
+    const errorToast = document.createElement('div')
+    errorToast.className = 'toast toast-error'
+    errorToast.setAttribute('data-testid', 'shared-ledger-unshare-error-toast')
+    errorToast.textContent = '取消共享失敗'
+    toastHost.appendChild(errorToast)
+
+    const bottomNav = document.querySelector('[data-testid=bottom-nav]')
+    const dialogEl = mask.querySelector('.dialog-popup')
+    const confirmOk = mask.querySelector('[data-testid=shared-ledger-confirm-ok]')
+    const navZ = bottomNav ? Number(getComputedStyle(bottomNav).zIndex || 0) : 0
+    const maskZ = Number(getComputedStyle(mask).zIndex || 0)
+    const dialogAboveNav = maskZ > navZ
+      && Boolean(confirmOk)
+      && Boolean(dialogEl)
+
+    return {
+      path: window.location.pathname,
+      hasBottomNav: Boolean(bottomNav),
+      hasUnshareBtn: Boolean(unshareBtn) && /取消共享|Unshare|共有を解除/i.test(unshareBtn.textContent || ''),
+      hasLeaveBtn: Boolean(leaveBtn) && /不再共享|Leave Share|共有から退出/i.test(leaveBtn.textContent || ''),
+      hasLocalUnshareBtn: Boolean(localBtn),
+      hasConfirmDialog: Boolean(document.querySelector('[data-testid=shared-ledger-confirm-dialog]')),
+      hasConfirmCopy: /取消共享後|不再共享後|After unsharing|After leaving|共有解除後|退出すると/i.test(mask.innerText || ''),
+      hasSuccessToast: /已取消共享|Unshared|共有を解除しました/i.test(successToast.textContent || ''),
+      hasErrorToast: /取消共享失敗|Failed to unshare|共有解除に失敗しました/i.test(errorToast.textContent || ''),
+      dialogAboveNav,
+      maskZ,
+      navZ,
+    }
+  }`)
+  assert.equal(cancelFlow.path, '/settings/shared-ledgers', JSON.stringify(cancelFlow, null, 2))
+  assert.equal(cancelFlow.hasBottomNav, true, JSON.stringify(cancelFlow, null, 2))
+  assert.equal(cancelFlow.hasUnshareBtn, true, JSON.stringify(cancelFlow, null, 2))
+  assert.equal(cancelFlow.hasLeaveBtn, true, JSON.stringify(cancelFlow, null, 2))
+  assert.equal(cancelFlow.hasLocalUnshareBtn, true, JSON.stringify(cancelFlow, null, 2))
+  assert.equal(cancelFlow.hasConfirmDialog, true, JSON.stringify(cancelFlow, null, 2))
+  assert.equal(cancelFlow.hasConfirmCopy, true, JSON.stringify(cancelFlow, null, 2))
+  assert.equal(cancelFlow.hasSuccessToast, true, JSON.stringify(cancelFlow, null, 2))
+  assert.equal(cancelFlow.hasErrorToast, true, JSON.stringify(cancelFlow, null, 2))
+  assert.equal(cancelFlow.dialogAboveNav, true, JSON.stringify(cancelFlow, null, 2))
+  assert.ok(cancelFlow.maskZ > cancelFlow.navZ, JSON.stringify(cancelFlow, null, 2))
+
   // Design-aligned editor attribution chips: inject markup matching HomeTransactionFeed structure.
   await runPlaywrightCli(['goto', `${baseUrl}/`])
   await delay(800)

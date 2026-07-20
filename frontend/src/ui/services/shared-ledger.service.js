@@ -28,6 +28,7 @@ import {
   listSharedLedgers,
   pushSharedLedgerSnapshot,
   resendSharedLedgerInvitation,
+  needsSharedLedgerReauth,
   transferSharedLedgerOwnership,
   updateSharedLedgerMemberRole,
 } from '@/services/shared-ledger/backend'
@@ -606,6 +607,59 @@ async function listPendingSharedLedgersSafe() {
   }
 }
 
+function createStopSharingError(message, code) {
+  const error = new Error(message)
+  error.code = code
+  return error
+}
+
+async function assertStopSharingSessionReady() {
+  if (needsSharedLedgerReauth()) {
+    throw createStopSharingError(
+      '登入狀態已過期，請重新登入後再取消共享或離開共同帳本',
+      'shared_ledger_needs_reauth',
+    )
+  }
+  const status = await ensureSharedLedgerSessionReady()
+  if (status?.needsReauth) {
+    throw createStopSharingError(
+      '登入狀態已過期，請重新登入後再取消共享或離開共同帳本',
+      'shared_ledger_needs_reauth',
+    )
+  }
+  if (!status?.canUseApi) {
+    throw createStopSharingError(
+      '目前無法連線共同帳本服務，請確認登入狀態後再試',
+      'shared_ledger_session_not_ready',
+    )
+  }
+}
+
+function isSharedLedgerAlreadyGoneError(error) {
+  const code = String(error?.code ?? '').trim().toLowerCase()
+  const status = Number(error?.status ?? 0)
+  const message = String(error?.message ?? '')
+  return status === 404
+    || code === 'shared_ledger_not_found'
+    || code === 'not_found'
+    || /找不到共同帳本|not found/i.test(message)
+}
+
+async function deleteSharedLedgerAllowingGone(sharedLedgerId) {
+  try {
+    return await deleteSharedLedger(sharedLedgerId)
+  } catch (error) {
+    if (isSharedLedgerAlreadyGoneError(error)) {
+      return {
+        removed: true,
+        mode: 'already_gone',
+        shared_ledger_id: String(sharedLedgerId),
+      }
+    }
+    throw error
+  }
+}
+
 export async function stopSharingLocalLedger(ledgerId) {
   const normalizedLedgerId = String(ledgerId ?? '').trim()
   if (!normalizedLedgerId) throw new Error('缺少帳本 ID')
@@ -615,7 +669,8 @@ export async function stopSharingLocalLedger(ledgerId) {
     throw new Error('此帳本尚未綁定共同帳本')
   }
 
-  const result = await deleteSharedLedger(meta.shared_ledger_id)
+  await assertStopSharingSessionReady()
+  const result = await deleteSharedLedgerAllowingGone(meta.shared_ledger_id)
   await clearSharedLedgerMeta(normalizedLedgerId)
   return result
 }
@@ -624,7 +679,8 @@ export async function stopSharingRemoteSharedLedger(sharedLedgerId, options = {}
   const normalizedSharedLedgerId = String(sharedLedgerId ?? '').trim()
   if (!normalizedSharedLedgerId) throw new Error('缺少共同帳本 ID')
 
-  const result = await deleteSharedLedger(normalizedSharedLedgerId)
+  await assertStopSharingSessionReady()
+  const result = await deleteSharedLedgerAllowingGone(normalizedSharedLedgerId)
   const localLedgerIds = Array.isArray(options?.localLedgerIds) ? options.localLedgerIds : []
   for (const ledgerId of localLedgerIds) {
     await clearSharedLedgerMeta(ledgerId)

@@ -2,6 +2,7 @@
 
 ---
 
+- (SMB-281) 修復無法取消共用帳本：Owner「取消共享」／成員「不再共享」確認流程可點且失敗可見 toast；會員資格暫停時仍可解除本機綁定並結束遠端成員關係；`DELETE /api/shared-ledgers/:id` 放行會員閘門並支援 already_gone；遠端不存在時仍清本機 binding，needs-reauth 不可靜默失敗。補 Node／backend／Playwright 回歸。
 - (SMB-280) 載具／銀行同步可見錯誤碼治本：`einvoice_network_failed` 不再因 cookie-auth health probe 缺 `X-Straw-Auth-Storage`（credentials:include + ACAO:*）誤報；health／scrape 請求統一帶 auth headers，後端 CORS 對 Cookie／native client 亦視為 credentialed。銀行 `bank_sync_credentials_missing` 僅在 Android 原生自動化可用且尚未建立連線時出現；Web／非 Android 改走 `bank_sync_android_only`／支援矩陣；建立連線後原生 vault 以 `commit()` 寫入並以 `provider_connection_id` 對齊讀回，避免「已建憑證仍顯示無憑證／legacy reconnect」。可用性面板保留單一 recovery CTA，並補 Node／Playwright 回歸。
 - (SMB-279) 會員登入狀態與帳本同步回歸治本：`needs-reauth` 持久化避免冷啟動假「Session 有效」；`canUseApi`／背景同步改以實際 access token 為準（不再把 cookie mode 誤當已登入可用）；冷啟動／回前景／visibility 先 restore session 再同步；需重新登入／會員資格／離線／session 恢復中會寫入可見 `last_sync_status`（paused_*）並在帳號／共同帳本頁顯示恢復中或同步暫停，禁止 silently no-op。補 Node regression 與 Playwright 帳號／共同帳本 app-shell。
 - (SMB-278) 載具與銀行同步可用性治本：兩功能設定頁新增診斷流程（資格→平台／App→API health／自動化→憑證→captcha→同步→審核／匯入），顯示去識別化錯誤碼與單一 recovery CTA，不再把會員鎖定、Android-only、API timeout、登入錯誤一律呈現成籠統「無法使用」。銀行同步 feature flag 只控制入口可視性，Web 顯示可讀支援矩陣（Android-only、支援銀行、取得 App、CSV 退路）而不靜默 redirect；載具 captcha 支援刷新／取消／到期，並新增 `GET /api/einvoice/health`（明確標示 health≠登入成功）。補回 `playwright:carrier-sync`，與 `playwright:bank-sync` 皆 bypass onboarding 進有 BottomNav 的 app-shell 驗實際 route。
