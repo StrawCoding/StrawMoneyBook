@@ -262,7 +262,7 @@ export function buildAccountBalanceBreakdown({
 
 export function buildPieStyle(items = []) {
   if (!items.length) {
-    return { background: 'conic-gradient(var(--chart-track) 0deg 360deg)' }
+    return { background: 'conic-gradient(#e2e8f0 0deg 360deg)' }
   }
 
   const total = items.reduce((sum, item) => sum + item.amountMinor, 0)

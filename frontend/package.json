@@ -37,6 +37,7 @@
     "playwright:budget-save": "node scripts/playwright-budget-save.mjs",
     "playwright:budget-cross-month": "node scripts/playwright-budget-cross-month.mjs",
     "playwright:budget-pay-cycle": "node scripts/playwright-budget-pay-cycle.mjs",
+    "playwright:analysis-export": "node scripts/playwright-analysis-export.mjs",
     "playwright:ui-layout": "node scripts/playwright-ui-layout.mjs",
     "audit:i18n": "node scripts/audit-i18n.mjs",
     "audit:i18n:hardcoded": "node scripts/audit-i18n-hardcoded.mjs",

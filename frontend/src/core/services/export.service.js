@@ -424,6 +424,23 @@ function exportTypeLabel(type) {
   return '調整'
 }
 
+function formatTagsForExport(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item ?? '').trim()).filter(Boolean).join('、')
+  }
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item ?? '').trim()).filter(Boolean).join('、')
+    }
+  } catch {
+    // fall through
+  }
+  return raw
+}
+
 function buildLedgerTransactionExportRows(sourceRows, accountBalanceMap) {
   const csvRows = []
   const excelRows = []
@@ -457,7 +474,7 @@ function buildLedgerTransactionExportRows(sourceRows, accountBalanceMap) {
     csvRows.push(baseRow)
     excelRows.push({
       ...baseRow,
-      交易標籤: row.origin_type ?? '',
+      交易標籤: formatTagsForExport(row.tags_json),
     })
   }
 
@@ -524,9 +541,11 @@ export async function getLedgerTransactionsExportData(ledgerId, options = {}) {
        ${refundDeductedMinorSql('t')} AS refund_deducted_minor,
        t.occurred_at,
        t.note,
+       t.tags_json,
        t.origin_type,
        t.amount_minor,
        a.name AS account_name,
+       a.icon AS account_icon,
        a.currency_code,
        l.name AS ledger_name,
        cg.name AS category_group_name,

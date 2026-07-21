@@ -4,7 +4,7 @@
       <header class="row">
         <h2>{{ t('analysis_page.title') }}</h2>
         <div class="header-actions">
-          <RouterLink class="btn icon-btn" :to="printLink">
+          <RouterLink class="btn icon-btn" :to="printLink" data-testid="analysis-print-link">
             <font-awesome-icon icon="fa-solid fa-print" />
           </RouterLink>
         </div>
@@ -26,80 +26,89 @@
       </transition>
     </article>
 
-    <article class="card panel">
-      <header class="row">
-        <h3>{{ t('analysis_page.type_analysis', { type: activeTypeLabel }) }}</h3>
-        <div class="header-metrics">
-          <span class="count-chip">{{ t('analysis_page.items_count', { count: activeCount }) }}</span>
-          <MoneyText :value-minor="activeTotalMinor" />
+    <article class="card panel" data-testid="analysis-big-numbers">
+      <div class="big-numbers">
+        <div class="big-card income">
+          <small>{{ t('analysis_page.type.income') }}</small>
+          <MoneyText :value-minor="incomeTotalMinor" tone="income" />
         </div>
-      </header>
-
-      <div class="type-tabs">
-        <button class="btn" :class="{ primary: analysisType === 'income' }" @click="analysisType = 'income'">{{ t('analysis_page.type.income') }}</button>
-        <button class="btn" :class="{ primary: analysisType === 'expense' }" @click="analysisType = 'expense'">{{ t('analysis_page.type.expense') }}</button>
+        <div class="big-card expense">
+          <small>{{ t('analysis_page.type.expense') }}</small>
+          <MoneyText :value-minor="expenseTotalMinor" tone="expense" />
+        </div>
+        <div class="big-card balance">
+          <small>{{ t('analysis_print.summary.balance') }}</small>
+          <MoneyText :value-minor="balanceMinor" :tone="balanceMinor >= 0 ? 'income' : 'expense'" />
+        </div>
       </div>
-
-      <transition name="fade-scale" mode="out-in">
-        <div :key="analysisType">
-          <template v-if="activeBreakdown.length">
-            <div class="chart-wrap">
-              <h4 class="chart-subtitle">{{ t('analysis_page.chart.pie') }}</h4>
-            </div>
-            <div class="chart-wrap">
-              <button
-                type="button"
-                class="pie-button"
-                :class="{ interactive: Boolean(activePieTarget) }"
-                :disabled="!activePieTarget"
-                :aria-label="activePieTarget ? `${activeTypeLabel} ${activePieTarget.name}` : activeTypeLabel"
-                @click="openCategoryBreakdownDetail(activePieTarget)"
-              >
-                <div class="pie" :style="activePieStyle">
-                  <div class="pie-hole">
-                    <div class="pie-total">{{ t('analysis_page.type_total', { type: activeTypeLabel }) }}</div>
-                    <MoneyText :value-minor="activeTotalMinor" />
-                  </div>
-                </div>
-              </button>
-            </div>
-            <div class="chart-wrap">
-              <h4 class="chart-subtitle">{{ t('analysis_page.chart.bar') }}</h4>
-            </div>
-            <ul class="bar-chart-list">
-              <li v-for="item in activeBarRows" :key="`${analysisType}-${item.id}-bar`">
-                <button type="button" class="bar-chart-item-btn" @click="openCategoryBreakdownDetail(item)">
-                  <div class="bar-chart-head">
-                    <div class="bar-chart-label">
-                      <span class="legend-dot" :style="{ background: item.color }"></span>
-                      <span class="legend-icon-wrap">
-                        <font-awesome-icon
-                          v-if="item.icon"
-                          :icon="item.icon"
-                          class="legend-icon"
-                        />
-                      </span>
-                      <span class="bar-chart-name">{{ item.name }}</span>
-                    </div>
-                    <span class="bar-chart-percent">{{ item.percent }}%</span>
-                  </div>
-                  <div class="bar-chart-track">
-                    <span class="bar-chart-fill" :style="{ width: `${item.barWidthPercent}%`, background: item.color }"></span>
-                  </div>
-                  <div class="bar-chart-stats">
-                    <MoneyText :value-minor="item.amountMinor" />
-                    <span class="bar-chart-count">{{ t('analysis_page.items_count', { count: item.count }) }}</span>
-                  </div>
-                </button>
-              </li>
-            </ul>
-          </template>
-          <p v-else class="muted no-data-tip">{{ t('analysis_page.no_data_for_type', { type: activeTypeLabel.toLowerCase() }) }}</p>
-        </div>
-      </transition>
     </article>
 
-    <article class="card panel">
+    <article class="card panel" data-testid="analysis-income-section">
+      <AnalysisIconizedChartPair
+        v-if="incomeBarRows.length"
+        :title="t('analysis_page.type_analysis', { type: t('analysis_page.type.income') })"
+        :total-label="t('analysis_page.type_total', { type: t('analysis_page.type.income') })"
+        :total-minor="incomeTotalMinor"
+        :count="incomeCount"
+        :items="incomeBarRows"
+        tone="income"
+        interactive
+        test-id="analysis-income-charts"
+        @select="(item) => openCategoryBreakdownDetail(item, 'income')"
+      />
+      <p v-else class="muted no-data-tip">{{ t('analysis_page.no_data_for_type', { type: t('analysis_page.type.income').toLowerCase() }) }}</p>
+    </article>
+
+    <article class="card panel" data-testid="analysis-expense-section">
+      <AnalysisIconizedChartPair
+        v-if="expenseBarRows.length"
+        :title="t('analysis_page.type_analysis', { type: t('analysis_page.type.expense') })"
+        :total-label="t('analysis_page.type_total', { type: t('analysis_page.type.expense') })"
+        :total-minor="expenseTotalMinor"
+        :count="expenseCount"
+        :items="expenseBarRows"
+        tone="expense"
+        interactive
+        test-id="analysis-expense-charts"
+        @select="(item) => openCategoryBreakdownDetail(item, 'expense')"
+      />
+      <p v-else class="muted no-data-tip">{{ t('analysis_page.no_data_for_type', { type: t('analysis_page.type.expense').toLowerCase() }) }}</p>
+    </article>
+
+    <article
+      v-if="budgetCards.length"
+      class="card panel"
+      data-testid="analysis-budget-cards"
+    >
+      <header class="row">
+        <h3>{{ t('analysis_print.budget_achievement') }}</h3>
+      </header>
+      <div class="budget-grid">
+        <article
+          v-for="card in budgetCards"
+          :key="card.id"
+          class="budget-card"
+          :class="{ over: card.isOver }"
+        >
+          <div class="budget-card-head">
+            <span class="icon-swatch" :style="{ background: card.isOver ? '#fa5252' : '#4dabf7' }">
+              <font-awesome-icon v-if="card.icon" :icon="card.icon" class="swatch-icon" />
+            </span>
+            <strong>{{ card.name }}</strong>
+            <span class="muted">{{ card.percent }}%</span>
+          </div>
+          <div class="budget-track">
+            <span class="budget-fill" :style="{ width: `${Math.min(100, card.percent)}%` }" />
+          </div>
+          <div class="budget-stats">
+            <span>{{ t('analysis_print.budget_spent') }} <MoneyText :value-minor="card.spentMinor" tone="expense" /></span>
+            <span>{{ t('analysis_print.budget_limit') }} <MoneyText :value-minor="card.budgetMinor" /></span>
+          </div>
+        </article>
+      </div>
+    </article>
+
+    <article class="card panel" data-testid="analysis-account-section">
       <header class="row">
         <h3>{{ t('analysis_page.scope.account') }}</h3>
         <div class="header-metrics">
@@ -120,63 +129,18 @@
         </button>
       </div>
 
-      <transition name="fade-scale" mode="out-in">
-        <div :key="`account-${accountAnalysisType}`">
-          <template v-if="accountActiveBreakdown.length">
-            <div class="chart-wrap">
-              <h4 class="chart-subtitle">{{ t('analysis_page.chart.pie') }}</h4>
-            </div>
-            <div class="chart-wrap">
-              <button
-                type="button"
-                class="pie-button"
-                :class="{ interactive: Boolean(accountActivePieTarget) }"
-                :disabled="!accountActivePieTarget"
-                :aria-label="accountActivePieTarget ? `${accountActiveTypeLabel} ${accountActivePieTarget.name}` : accountActiveTypeLabel"
-                @click="openAccountBreakdownDetail(accountActivePieTarget)"
-              >
-                <div class="pie" :style="accountActivePieStyle">
-                  <div class="pie-hole">
-                    <div class="pie-total">{{ t('analysis_page.type_total', { type: accountActiveTypeLabel }) }}</div>
-                    <MoneyText :value-minor="accountActiveTotalMinor" />
-                  </div>
-                </div>
-              </button>
-            </div>
-            <div class="chart-wrap">
-              <h4 class="chart-subtitle">{{ t('analysis_page.chart.bar') }}</h4>
-            </div>
-            <ul class="bar-chart-list">
-              <li v-for="item in accountActiveBarRows" :key="`account-${accountAnalysisType}-${item.id}-bar`">
-                <button type="button" class="bar-chart-item-btn" @click="openAccountBreakdownDetail(item)">
-                  <div class="bar-chart-head">
-                    <div class="bar-chart-label">
-                      <span class="legend-dot" :style="{ background: item.color }"></span>
-                      <span class="legend-icon-wrap">
-                        <font-awesome-icon
-                          v-if="item.icon"
-                          :icon="item.icon"
-                          class="legend-icon"
-                        />
-                      </span>
-                      <span class="bar-chart-name">{{ item.name }}</span>
-                    </div>
-                    <span class="bar-chart-percent">{{ item.percent }}%</span>
-                  </div>
-                  <div class="bar-chart-track">
-                    <span class="bar-chart-fill" :style="{ width: `${item.barWidthPercent}%`, background: item.color }"></span>
-                  </div>
-                  <div class="bar-chart-stats">
-                    <MoneyText :value-minor="item.amountMinor" />
-                    <span class="bar-chart-count">{{ t('analysis_page.items_count', { count: item.count }) }}</span>
-                  </div>
-                </button>
-              </li>
-            </ul>
-          </template>
-          <p v-else class="muted no-data-tip">{{ t('analysis_page.no_data_for_type', { type: accountActiveTypeLabel.toLowerCase() }) }}</p>
-        </div>
-      </transition>
+      <AnalysisIconizedChartPair
+        v-if="accountActiveBarRows.length"
+        :title="t('analysis_page.scope_type_analysis', { type: accountActiveTypeLabel, scope: '' })"
+        :total-label="t('analysis_page.type_total', { type: accountActiveTypeLabel })"
+        :total-minor="accountActiveTotalMinor"
+        :count="accountActiveCount"
+        :items="accountActiveBarRows"
+        interactive
+        test-id="analysis-account-charts"
+        @select="openAccountBreakdownDetail"
+      />
+      <p v-else class="muted no-data-tip">{{ t('analysis_page.no_data_for_type', { type: accountActiveTypeLabel.toLowerCase() }) }}</p>
     </article>
 
     <article v-if="showTimeBarChart" class="card panel">
@@ -187,6 +151,11 @@
           <MoneyText :value-minor="timeBarTotalMinor" />
         </div>
       </header>
+
+      <div class="type-tabs">
+        <button class="btn" :class="{ primary: analysisType === 'income' }" @click="analysisType = 'income'">{{ t('analysis_page.type.income') }}</button>
+        <button class="btn" :class="{ primary: analysisType === 'expense' }" @click="analysisType = 'expense'">{{ t('analysis_page.type.expense') }}</button>
+      </div>
 
       <div class="time-bar-chart">
         <button
@@ -210,7 +179,6 @@
         </button>
       </div>
     </article>
-
   </section>
 </template>
 
@@ -219,7 +187,9 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
+import AnalysisIconizedChartPair from '@/ui/components/analysis/AnalysisIconizedChartPair.vue'
 import { useAccountStore } from '@/ui/stores/account.store'
+import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
@@ -231,13 +201,17 @@ import {
   buildAccountBalanceBreakdown,
   buildBarRows,
   buildBreakdownRows,
-  buildPieStyle,
   buildTimeBarRows,
   isAddonBreakdownId,
   resolveTimeBarSearchRange,
 } from '@/core/utils/analysis-breakdown'
+import {
+  ANALYSIS_CHART_SWATCHES,
+  buildBudgetAchievementCards,
+} from '@/core/utils/analysis-report'
 
 const accountStore = useAccountStore()
+const budgetStore = useBudgetStore()
 const categoryStore = useCategoryStore()
 const ledgerStore = useLedgerStore()
 const uiStore = useUiStore()
@@ -250,58 +224,34 @@ const accountAnalysisType = ref('expense')
 const selectedYear = ref(new Date().getFullYear())
 const selectedMonth = ref(monthKeyFromDate(new Date()))
 const statsTransactions = ref([])
-const CHART_MULTI_COLOR_SWATCHES = [
-  'color-mix(in srgb, #ff6b6b 82%, var(--card) 18%)',
-  'color-mix(in srgb, #ffa94d 82%, var(--card) 18%)',
-  'color-mix(in srgb, #ffd43b 82%, var(--card) 18%)',
-  'color-mix(in srgb, #69db7c 82%, var(--card) 18%)',
-  'color-mix(in srgb, #38d9a9 82%, var(--card) 18%)',
-  'color-mix(in srgb, #4dabf7 82%, var(--card) 18%)',
-  'color-mix(in srgb, #748ffc 82%, var(--card) 18%)',
-  'color-mix(in srgb, #9775fa 82%, var(--card) 18%)',
-  'color-mix(in srgb, #cc5de8 82%, var(--card) 18%)',
-  'color-mix(in srgb, #f06595 82%, var(--card) 18%)',
-  'color-mix(in srgb, #a9e34b 82%, var(--card) 18%)',
-  'color-mix(in srgb, #66d9e8 82%, var(--card) 18%)',
-]
 
 const categoryNameMap = computed(() => {
   const map = new Map()
-  for (const category of categoryStore.categories) {
-    map.set(category.id, category.name)
-  }
+  for (const category of categoryStore.categories) map.set(category.id, category.name)
   return map
 })
 
 const categoryIconMap = computed(() => {
   const map = new Map()
-  for (const category of categoryStore.categories) {
-    map.set(category.id, String(category.icon ?? '').trim())
-  }
+  for (const category of categoryStore.categories) map.set(category.id, String(category.icon ?? '').trim())
   return map
 })
 
 const accountNameMap = computed(() => {
   const map = new Map()
-  for (const account of accountStore.accounts) {
-    map.set(account.id, account.name)
-  }
+  for (const account of accountStore.accounts) map.set(account.id, account.name)
   return map
 })
 
 const accountIconMap = computed(() => {
   const map = new Map()
-  for (const account of accountStore.accounts) {
-    map.set(account.id, String(account.icon ?? '').trim())
-  }
+  for (const account of accountStore.accounts) map.set(account.id, String(account.icon ?? '').trim())
   return map
 })
 
 const accountBalanceMap = computed(() => {
   const map = new Map()
-  for (const item of accountStore.balances) {
-    map.set(item.id, Number(item.balance_minor ?? 0))
-  }
+  for (const item of accountStore.balances) map.set(item.id, Number(item.balance_minor ?? 0))
   return map
 })
 
@@ -335,7 +285,7 @@ const incomeBreakdown = computed(() => buildBreakdownRows({
   getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
   getUncategorizedLabel: () => t('analysis_page.uncategorized'),
   getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
-  swatches: CHART_MULTI_COLOR_SWATCHES,
+  swatches: ANALYSIS_CHART_SWATCHES,
 }))
 const expenseBreakdown = computed(() => buildBreakdownRows({
   transactions: statsTransactions.value,
@@ -349,7 +299,7 @@ const expenseBreakdown = computed(() => buildBreakdownRows({
   getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
   getUncategorizedLabel: () => t('analysis_page.uncategorized'),
   getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
-  swatches: CHART_MULTI_COLOR_SWATCHES,
+  swatches: ANALYSIS_CHART_SWATCHES,
 }))
 const incomeAccountBreakdown = computed(() => buildBreakdownRows({
   transactions: statsTransactions.value,
@@ -363,7 +313,7 @@ const incomeAccountBreakdown = computed(() => buildBreakdownRows({
   getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
   getUncategorizedLabel: () => t('analysis_page.uncategorized'),
   getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
-  swatches: CHART_MULTI_COLOR_SWATCHES,
+  swatches: ANALYSIS_CHART_SWATCHES,
 }))
 const expenseAccountBreakdown = computed(() => buildBreakdownRows({
   transactions: statsTransactions.value,
@@ -377,32 +327,33 @@ const expenseAccountBreakdown = computed(() => buildBreakdownRows({
   getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
   getUncategorizedLabel: () => t('analysis_page.uncategorized'),
   getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
-  swatches: CHART_MULTI_COLOR_SWATCHES,
+  swatches: ANALYSIS_CHART_SWATCHES,
 }))
 const totalAccountBreakdown = computed(() => buildAccountBalanceBreakdown({
   accounts: accountStore.accounts,
   accountBalanceMap: accountBalanceMap.value,
-  swatches: CHART_MULTI_COLOR_SWATCHES,
+  swatches: ANALYSIS_CHART_SWATCHES,
 }))
 
 const incomeTotalMinor = computed(() => incomeBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
 const expenseTotalMinor = computed(() => expenseBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
+const balanceMinor = computed(() => incomeTotalMinor.value - expenseTotalMinor.value)
 const incomeCount = computed(() => incomeBreakdown.value.reduce((total, item) => total + item.count, 0))
 const expenseCount = computed(() => expenseBreakdown.value.reduce((total, item) => total + item.count, 0))
+const incomeBarRows = computed(() => buildBarRows(incomeBreakdown.value))
+const expenseBarRows = computed(() => buildBarRows(expenseBreakdown.value))
 const accountIncomeTotalMinor = computed(() => incomeAccountBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
 const accountExpenseTotalMinor = computed(() => expenseAccountBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
 const accountIncomeCount = computed(() => incomeAccountBreakdown.value.reduce((total, item) => total + item.count, 0))
 const accountExpenseCount = computed(() => expenseAccountBreakdown.value.reduce((total, item) => total + item.count, 0))
+const budgetCards = computed(() => buildBudgetAchievementCards({
+  items: budgetStore.items,
+  containers: budgetStore.containersWithStats,
+  spentMap: budgetStore.spentMap,
+  categoryNameMap: categoryNameMap.value,
+  categoryIconMap: categoryIconMap.value,
+}))
 
-const incomePieStyle = computed(() => buildPieStyle(incomeBreakdown.value))
-const expensePieStyle = computed(() => buildPieStyle(expenseBreakdown.value))
-const activeBreakdown = computed(() => (analysisType.value === 'income' ? incomeBreakdown.value : expenseBreakdown.value))
-const activeTotalMinor = computed(() => (analysisType.value === 'income' ? incomeTotalMinor.value : expenseTotalMinor.value))
-const activeCount = computed(() => (analysisType.value === 'income' ? incomeCount.value : expenseCount.value))
-const activePieStyle = computed(() => (analysisType.value === 'income' ? incomePieStyle.value : expensePieStyle.value))
-const activePieTarget = computed(() => activeBreakdown.value[0] ?? null)
-const activeBarRows = computed(() => buildBarRows(activeBreakdown.value))
-const activeTypeLabel = computed(() => (analysisType.value === 'income' ? t('analysis_page.type.income') : t('analysis_page.type.expense')))
 const timeBarRows = computed(() => buildTimeBarRows({
   transactions: statsTransactions.value,
   type: analysisType.value,
@@ -441,8 +392,6 @@ const accountActiveCount = computed(() => {
   if (accountAnalysisType.value === 'expense') return accountExpenseCount.value
   return totalAccountBreakdown.value.length
 })
-const accountActivePieStyle = computed(() => buildPieStyle(accountActiveBreakdown.value))
-const accountActivePieTarget = computed(() => accountActiveBreakdown.value.find((item) => !String(item?.id ?? '').startsWith('__')) ?? null)
 const accountActiveBarRows = computed(() => buildBarRows(accountActiveBreakdown.value))
 const accountActiveTypeLabel = computed(() =>
   accountAnalysisType.value === 'income'
@@ -460,11 +409,11 @@ function pickMonth(value) {
   selectedMonth.value = value
 }
 
-function openCategoryBreakdownDetail(item) {
+function openCategoryBreakdownDetail(item, type = analysisType.value) {
   if (!item?.id) return
   const isAddon = isAddonBreakdownId(item.id)
   const query = {
-    type: analysisType.value,
+    type,
     categoryId: isAddon ? '__addon__' : String(item.id),
     mode: mode.value,
     label: String(item.name ?? ''),
@@ -517,11 +466,12 @@ async function loadStatsTransactions() {
           ? selectedMonth.value
           : '',
     })
+    const budgetMonthKey = mode.value === 'month' ? selectedMonth.value : monthKeyFromDate(new Date())
+    await budgetStore.loadMonth(budgetMonthKey)
   } catch (error) {
     uiStore.pushToast(error.message ?? t('analysis_page.toast.load_failed'), 'error')
   }
 }
-
 </script>
 
 <style scoped>
@@ -549,286 +499,196 @@ async function loadStatsTransactions() {
   min-width: 0;
   max-width: 100%;
 }
+
 h2, h3 {
-  margin: 0
+  margin: 0;
 }
+
 .row {
   min-width: 0;
   flex-wrap: wrap;
 }
+
 .icon-btn {
   width: 36px;
   height: 36px;
   padding: 0;
   display: inline-flex;
   align-items: center;
-  justify-content: center
+  justify-content: center;
 }
-.header-actions {
+
+.header-actions,
+.header-metrics,
+.budget-card-head,
+.budget-stats {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  max-width: 100%;
 }
-.ai-btn {
-  padding-inline: 12px;
+
+.header-metrics,
+.budget-stats {
+  justify-content: space-between;
+  width: 100%;
 }
+
 .mode-tabs {
   margin-top: 10px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px
+  gap: 8px;
 }
+
 .picker-wrap {
-  margin-top: 10px
+  margin-top: 10px;
 }
+
 .type-tabs {
   margin-top: 10px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px
+  gap: 8px;
 }
+
 .account-type-tabs {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-.chart-wrap {
+
+.big-numbers,
+.budget-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.budget-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 12px;
-  display: flex;
-  justify-content: center
 }
-.chart-subtitle {
-  font-size: 14px;
-  color: var(--muted);
-  margin: 0
-}
-.pie {
-  width: min(220px, 56vw);
-  height: min(220px, 56vw);
-  border-radius: 50%;
+
+.big-card,
+.budget-card {
+  border: 1px solid var(--field-border);
+  border-radius: 14px;
+  padding: 12px;
   display: grid;
-  place-items: center;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent)
-}
-.pie-button {
-  border: none;
-  padding: 0;
-  background: transparent;
-  border-radius: 50%;
-}
-.pie-button.interactive {
-  cursor: pointer;
-  transition:
-    transform var(--anim-fast) var(--anim-standard),
-    filter var(--anim-fast) var(--anim-standard);
-}
-.pie-button.interactive:hover,
-.pie-button.interactive:focus-visible {
-  transform: translateY(-2px) scale(1.01);
-  filter: drop-shadow(0 10px 18px color-mix(in srgb, black 22%, transparent));
-}
-.pie-button.interactive:active {
-  transform: scale(0.985);
-}
-.pie-button:disabled {
-  cursor: default;
-}
-.pie-hole {
-  width: min(128px, 32vw);
-  height: min(128px, 32vw);
-  border-radius: 50%;
-  background: var(--surface-popover);
-  display: grid;
-  place-items: center;
-  text-align: center;
-  gap: 2px
-}
-.pie-total {
-  font-size: 12px;
-  color: var(--muted)
-}
-.header-metrics {
-  display: inline-flex;
-  align-items: center;
   gap: 8px;
-  min-width: 0;
-  max-width: 100%;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  background: color-mix(in srgb, var(--card) 90%, var(--surface-soft-accent) 10%);
 }
-.count-chip {
-  font-size: 12px;
-  color: var(--muted);
-  padding: 2px 8px;
+
+.big-card.income {
+  background: color-mix(in srgb, #40c057 10%, var(--card) 90%);
+}
+
+.big-card.expense {
+  background: color-mix(in srgb, #fa5252 10%, var(--card) 90%);
+}
+
+.budget-card.over {
+  border-color: color-mix(in srgb, #fa5252 45%, var(--field-border));
+}
+
+.budget-track {
+  height: 8px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  max-width: 100%;
+  overflow: hidden;
+  background: var(--chart-track);
 }
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%
+
+.budget-fill {
+  display: block;
+  height: 100%;
+  background: #4dabf7;
 }
-.legend-icon-wrap {
+
+.budget-card.over .budget-fill {
+  background: #fa5252;
+}
+
+.icon-swatch {
   width: 22px;
+  height: 22px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0
+  color: #fff;
+  flex: 0 0 auto;
 }
-.legend-icon {
-  font-size: 18px;
-  color: var(--primary-soft)
+
+.swatch-icon {
+  width: 12px;
+  height: 12px;
 }
-.bar-chart-list {
-  list-style: none;
-  margin: 14px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 8px
-}
-.bar-chart-item-btn {
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  display: grid;
-  gap: 8px;
-  text-align: left
-}
-.bar-chart-item-btn:hover {
-  border-color: color-mix(in srgb, var(--primary) 30%, var(--border) 70%);
-  background: color-mix(in srgb, var(--primary) 8%, transparent)
-}
-.bar-chart-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px
-}
-.bar-chart-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0
-}
-.bar-chart-name {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--muted)
-}
-.bar-chart-percent {
-  min-width: 42px;
-  text-align: right;
-  font-weight: 700
-}
-.bar-chart-track {
-  width: 100%;
-  height: 10px;
+
+.count-chip {
+  border: 1px solid var(--field-border);
   border-radius: 999px;
-  background: var(--chart-track);
-  overflow: hidden
-}
-.bar-chart-fill {
-  height: 100%;
-  display: block;
-  border-radius: 999px;
-  transition: width 220ms ease
-}
-.bar-chart-stats {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  padding: 2px 8px;
+  font-size: 12px;
   color: var(--muted);
-  font-size: 12px
 }
-.bar-chart-count {
-  min-width: 36px;
-  text-align: right
-}
+
 .no-data-tip {
-  margin: 16px 0 0
+  margin: 12px 0 0;
 }
+
 .time-bar-chart {
-  margin-top: 14px;
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  padding-bottom: 4px;
-  -webkit-overflow-scrolling: touch;
-}
-.time-bar-col {
-  border: none;
-  background: transparent;
-  padding: 0;
-  min-width: 68px;
-  flex: 0 0 68px;
-  max-width: 68px;
+  margin-top: 12px;
   display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(52px, 1fr);
   gap: 8px;
-  justify-items: center;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.time-bar-col {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: grid;
+  grid-template-rows: auto 120px auto auto;
+  gap: 6px;
+  align-items: end;
+  min-width: 52px;
   cursor: pointer;
+  padding: 0;
 }
-.time-bar-col:hover .time-bar-track,
-.time-bar-col:focus-visible .time-bar-track {
-  outline: none;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 32%, transparent);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 8%, var(--chart-track) 92%) 0%, var(--chart-track) 100%);
-}
+
 .time-bar-value {
   font-size: 11px;
-  color: var(--muted);
-  min-height: 32px;
-  width: 100%;
-  max-width: 100%;
-  display: grid;
-  align-items: end;
   text-align: center;
-  overflow: hidden;
+  min-height: 1.2em;
 }
+
 .time-bar-track {
-  width: 100%;
-  height: 180px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--chart-track) 60%, transparent) 0%, var(--chart-track) 100%);
+  height: 120px;
+  border-radius: 12px 12px 8px 8px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 8%, var(--chart-track) 92%) 0%, var(--chart-track) 100%);
   display: flex;
   align-items: flex-end;
-  padding: 6px;
+  overflow: hidden;
 }
+
 .time-bar-fill {
   width: 100%;
-  border-radius: 10px;
-  min-height: 0;
-  transition: height 220ms ease;
+  border-radius: 10px 10px 6px 6px;
+  min-height: 4px;
 }
-.time-bar-label {
-  font-size: 12px;
-  font-weight: 700;
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+
+.time-bar-label,
 .time-bar-count {
-  font-size: 11px;
-  white-space: nowrap;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: center;
+  font-size: 12px;
 }
-.placeholder {
-  min-height: 120px
-}</style>
+
+@media (max-width: 720px) {
+  .big-numbers,
+  .budget-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

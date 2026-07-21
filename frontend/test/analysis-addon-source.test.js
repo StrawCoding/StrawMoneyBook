@@ -17,7 +17,10 @@ test('analysis addon breakdown rows can navigate to detail pages', () => {
 })
 
 test('analysis print report uses shared breakdown rows so addon items are included', () => {
-  assert.match(printPageSource, /import \{ buildBreakdownRows \} from '@\/core\/utils\/analysis-breakdown'/)
+  assert.match(printPageSource, /buildBreakdownRows/)
+  assert.match(printPageSource, /from '@\/core\/utils\/analysis-breakdown'/)
   assert.match(printPageSource, /return buildBreakdownRows\(\{/)
   assert.match(printPageSource, /getAddonLabel: \(label\) => t\('analysis_page\.addon_item', \{ label \}\)/)
+  assert.match(printPageSource, /AnalysisReportDocument/)
+  assert.match(printPageSource, /buildAnalysisReportPdfFromElement/)
 })

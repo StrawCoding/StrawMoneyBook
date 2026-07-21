@@ -91,11 +91,16 @@ test('home budget summary uses a higher swipe threshold to reduce accidental pag
 })
 
 test('analysis page makes pie charts interactive with responsive sizing', () => {
-  assert.match(analysisPageSource, /class="pie-button"/)
-  assert.match(analysisPageSource, /openCategoryBreakdownDetail\(activePieTarget\)/)
-  assert.match(analysisPageSource, /openAccountBreakdownDetail\(accountActivePieTarget\)/)
-  assert.match(analysisPageSource, /width: min\(220px, 56vw\);/)
-  assert.match(analysisPageSource, /transform: translateY\(-2px\) scale\(1\.01\);/)
+  const chartPairSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/components/analysis/AnalysisIconizedChartPair.vue'),
+    'utf8',
+  )
+  assert.match(analysisPageSource, /AnalysisIconizedChartPair/)
+  assert.match(analysisPageSource, /@select="\(item\) => openCategoryBreakdownDetail\(item, 'income'\)"/)
+  assert.match(analysisPageSource, /@select="openAccountBreakdownDetail"/)
+  assert.match(chartPairSource, /class="pie-button"/)
+  assert.match(chartPairSource, /width: min\(220px, 100%\);/)
+  assert.match(chartPairSource, /interactive/)
 })
 
 test('SMB-178 subpage headers share the ledger sync back header style', () => {

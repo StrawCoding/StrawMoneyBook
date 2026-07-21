@@ -1,6 +1,6 @@
 <template>
   <section class="stack export-page">
-    <article class="card panel screen-only">
+    <article class="card panel screen-controls">
       <header class="row">
         <h2>{{ t('analysis_print.title') }}</h2>
         <RouterLink class="btn back-btn" to="/analysis">{{ t('common.back') }}</RouterLink>
@@ -38,212 +38,207 @@
       </div>
 
       <div class="action-row">
-        <button class="btn primary" :disabled="exporting" @click="exportCsv">
-          {{ exporting ? t('analysis_print.exporting') : t('analysis_print.export_csv') }}
+        <button
+          class="btn primary"
+          data-testid="analysis-export-pdf-btn"
+          :disabled="exportingPdf || loadingReport"
+          @click="exportPdf"
+        >
+          {{ exportingPdf ? t('analysis_print.exporting') : t('analysis_print.export_pdf') }}
+        </button>
+        <button class="btn" :disabled="exportingCsv" @click="exportCsv">
+          {{ exportingCsv ? t('analysis_print.exporting') : t('analysis_print.export_csv') }}
         </button>
         <button v-if="exportedUrl" class="btn" @click="openExportLink">{{ exportedActionLabel }}</button>
       </div>
 
-      <p v-if="exportedFilename" class="muted file-note">{{ t('analysis_print.file_label', { filename: exportedFilename }) }}</p>
+      <p
+        v-if="exportedFilename"
+        class="muted file-note"
+        data-testid="analysis-export-result"
+        :data-filename="exportedFilename"
+        :data-page-count="String(exportedPageCount || '')"
+      >
+        {{ t('analysis_print.file_label', { filename: exportedFilename }) }}
+      </p>
       <p v-if="exportedLocation" class="muted file-note">{{ t('analysis_print.location_label', { location: exportedLocation }) }}</p>
+      <p
+        v-if="lastExportError"
+        class="muted file-note"
+        data-testid="analysis-export-error"
+      >
+        {{ lastExportError }}
+      </p>
     </article>
 
-    <article class="card panel screen-only">
+    <article class="card panel preview-panel">
       <header class="row">
-        <h3>{{ t('analysis_print.fields_title') }}</h3>
-      </header>
-      <ul class="fields-list">
-        <li>{{ t('analysis_print.fields.item_1') }}</li>
-        <li>{{ t('analysis_print.fields.item_2') }}</li>
-        <li>{{ t('analysis_print.fields.item_3') }}</li>
-      </ul>
-    </article>
-
-    <article class="card panel report-panel print-only" id="analysis-print-report">
-      <header class="row report-head">
-        <div>
-          <h3>{{ t('analysis_print.export_pdf') }}</h3>
-          <p class="muted report-meta">{{ currentRangeLabel }}</p>
-        </div>
-        <span class="count-chip">{{ t('analysis_page.items_count', { count: reportRowCount }) }}</span>
+        <h3>{{ t('analysis_print.preview_title') }}</h3>
+        <span class="count-chip">{{ t('analysis_page.items_count', { count: detailRows.length }) }}</span>
       </header>
 
       <div v-if="loadingReport" class="muted loading-note">{{ t('app.loading') }}</div>
-
-      <template v-else>
-        <section class="summary-grid">
-          <article v-for="section in chartSections" :key="section.key" class="summary-card">
-            <small class="muted">{{ t('analysis_page.type_total', { type: section.label }) }}</small>
-            <MoneyText :value-minor="section.totalMinor" :tone="section.key" />
-            <small class="muted">{{ t('analysis_page.items_count', { count: section.count }) }}</small>
-          </article>
-        </section>
-
-        <section v-for="section in chartSections" :key="`${section.key}-chart`" class="chart-section">
-          <header class="row chart-head">
-            <h4>{{ t('analysis_page.type_analysis', { type: section.label }) }}</h4>
-            <span class="muted">{{ t('analysis_page.items_count', { count: section.count }) }}</span>
-          </header>
-
-          <template v-if="section.items.length">
-            <div class="chart-layout">
-              <div class="pie-panel">
-                <div class="chart-title">{{ t('analysis_page.chart.pie') }}</div>
-                <div class="pie" :style="section.pieStyle">
-                  <div class="pie-hole">
-                    <small class="muted">{{ t('analysis_page.type_total', { type: section.label }) }}</small>
-                    <MoneyText :value-minor="section.totalMinor" :tone="section.key" />
-                  </div>
-                </div>
-              </div>
-
-              <div class="legend-panel">
-                <div class="chart-title">{{ t('analysis_page.chart.bar') }}</div>
-                <ul class="bar-chart-list">
-                  <li v-for="item in section.items" :key="`${section.key}-${item.id}`" class="bar-chart-item">
-                    <div class="bar-chart-head">
-                      <div class="bar-chart-label">
-                        <span class="legend-dot" :style="{ background: item.color }"></span>
-                        <span v-if="item.icon" class="legend-icon-wrap">
-                          <font-awesome-icon :icon="item.icon" class="legend-icon" />
-                        </span>
-                        <span class="bar-chart-name">{{ item.name }}</span>
-                      </div>
-                      <span class="bar-chart-percent">{{ item.percent }}%</span>
-                    </div>
-                    <div class="bar-chart-track">
-                      <span class="bar-chart-fill" :style="{ width: `${item.barWidthPercent}%`, background: item.color }"></span>
-                    </div>
-                    <div class="bar-chart-stats">
-                      <MoneyText :value-minor="item.amountMinor" :tone="section.key" />
-                      <span class="muted">{{ t('analysis_page.items_count', { count: item.count }) }}</span>
-                    </div>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </template>
-
-          <p v-else class="muted no-data-tip">{{ t('analysis_page.no_data_for_type', { type: section.label.toLowerCase() }) }}</p>
-        </section>
-
-        <section class="table-section">
-          <header class="row chart-head">
-            <h4>{{ t('analysis_print.fields_title') }}</h4>
-            <span class="muted">{{ t('analysis_page.items_count', { count: reportRowCount }) }}</span>
-          </header>
-
-          <div class="table-wrap">
-            <table class="report-table">
-              <thead>
-                <tr>
-                  <th v-for="header in csvHeaders" :key="header">{{ header }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(row, index) in previewRows" :key="`row-${index}`">
-                  <td v-for="header in csvHeaders" :key="`${index}-${header}`">{{ row[header] }}</td>
-                </tr>
-                <tr v-if="!previewRows.length">
-                  <td :colspan="csvHeaders.length" class="empty-cell">{{ t('analysis_page.no_data_for_type', { type: t('analysis_print.mode.all') }) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </template>
+      <AnalysisReportDocument
+        v-else
+        ref="reportDocumentRef"
+        :title="t('analysis_print.export_pdf')"
+        :ledger-name="ledgerName"
+        :period-label="currentRangeLabel"
+        :exported-at-label="exportedAtLabel"
+        :currency-code="currencyCode"
+        :filter-label="filterLabel"
+        :income-items="incomeBarRows"
+        :expense-items="expenseBarRows"
+        :account-items="accountBarRows"
+        :budget-cards="budgetCards"
+        :detail-rows="detailRows"
+        :income-total-minor="incomeTotalMinor"
+        :expense-total-minor="expenseTotalMinor"
+        :income-count="incomeCount"
+        :expense-count="expenseCount"
+        :account-total-minor="accountTotalMinor"
+        :account-count="accountCount"
+      />
     </article>
   </section>
 </template>
 
 <script setup>
 import { Capacitor } from '@capacitor/core'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import MoneyText from '@/ui/components/common/MoneyText.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
+import AnalysisReportDocument from '@/ui/components/analysis/AnalysisReportDocument.vue'
+import { useAccountStore } from '@/ui/stores/account.store'
+import { useBudgetStore } from '@/ui/stores/budget.store'
+import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import {
-  CSV_HEADERS,
   createCsvBlobUrl,
+  createPdfBlobUrl,
   exportLedgerTransactionsCsv,
   getLedgerTransactionsExportData,
   openFileUrl,
   revokeBlobUrl,
   saveCsvFileToDevice,
+  savePdfFileToDevice,
   triggerDownloadFromUrl,
 } from '@/core/services/export.service'
+import { buildAnalysisReportPdfFromElement } from '@/core/services/analysis-report-pdf.service'
 import { useI18n } from '@/ui/services/i18n.service'
 import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 import { monthKeyFromDate } from '@/core/utils/id'
-import { buildBreakdownRows } from '@/core/utils/analysis-breakdown'
+import {
+  buildAccountBalanceBreakdown,
+  buildBarRows,
+  buildBreakdownRows,
+} from '@/core/utils/analysis-breakdown'
+import {
+  ANALYSIS_CHART_SWATCHES,
+  buildAnalysisDetailRows,
+  buildAnalysisReportPdfFilename,
+  buildBudgetAchievementCards,
+} from '@/core/utils/analysis-report'
 
 const route = useRoute()
+const accountStore = useAccountStore()
+const budgetStore = useBudgetStore()
+const categoryStore = useCategoryStore()
 const ledgerStore = useLedgerStore()
 const uiStore = useUiStore()
 const { t } = useI18n()
 
-const mode = ref(parseMode(String(route.query.mode || 'all')))
+const mode = ref(parseMode(String(route.query.mode || 'month')))
 const selectedYear = ref(Number(route.query.year || new Date().getFullYear()))
 const selectedMonth = ref(String(route.query.month || monthKeyFromDate(new Date())))
 const selectedDay = ref(String(route.query.day || dayKeyFromDate(new Date())))
 const startDate = ref(String(route.query.start || dayKeyFromDate(new Date())))
 const endDate = ref(String(route.query.end || dayKeyFromDate(new Date())))
-const exporting = ref(false)
+const exportingCsv = ref(false)
+const exportingPdf = ref(false)
 const loadingReport = ref(false)
 const reportData = ref(createEmptyReportData())
 const exportedUrl = ref('')
 const exportedFilename = ref('')
 const exportedLocation = ref('')
-const exportedIsDeviceLink = ref(false)
-const exportedActionLabel = computed(() => t('analysis_print.open_link'))
-const csvHeaders = CSV_HEADERS
-const CHART_MULTI_COLOR_SWATCHES = [
-  'color-mix(in srgb, #ff6b6b 82%, var(--card) 18%)',
-  'color-mix(in srgb, #ffa94d 82%, var(--card) 18%)',
-  'color-mix(in srgb, #ffd43b 82%, var(--card) 18%)',
-  'color-mix(in srgb, #69db7c 82%, var(--card) 18%)',
-  'color-mix(in srgb, #38d9a9 82%, var(--card) 18%)',
-  'color-mix(in srgb, #4dabf7 82%, var(--card) 18%)',
-  'color-mix(in srgb, #748ffc 82%, var(--card) 18%)',
-  'color-mix(in srgb, #9775fa 82%, var(--card) 18%)',
-  'color-mix(in srgb, #cc5de8 82%, var(--card) 18%)',
-  'color-mix(in srgb, #f06595 82%, var(--card) 18%)',
-]
+const exportedPageCount = ref(0)
+const lastExportError = ref('')
+const reportDocumentRef = ref(null)
+const exportedAtLabel = ref(formatDateTime(new Date()))
 
-const previewRows = computed(() => reportData.value.csvRows ?? [])
-const reportRowCount = computed(() => Number(reportData.value.rowCount ?? previewRows.value.length))
+const exportedActionLabel = computed(() => t('analysis_print.open_link'))
+const ledgerName = computed(() => reportData.value.ledgerName || ledgerStore.activeLedger?.name || '')
+const currencyCode = computed(() => String(ledgerStore.activeLedger?.currency_code ?? 'TWD'))
+const categoryNameMap = computed(() => {
+  const map = new Map()
+  for (const category of categoryStore.categories) map.set(category.id, category.name)
+  return map
+})
+const categoryIconMap = computed(() => {
+  const map = new Map()
+  for (const category of categoryStore.categories) map.set(category.id, String(category.icon ?? '').trim())
+  return map
+})
+const accountNameMap = computed(() => {
+  const map = new Map()
+  for (const account of accountStore.accounts) map.set(account.id, account.name)
+  return map
+})
+const accountIconMap = computed(() => {
+  const map = new Map()
+  for (const account of accountStore.accounts) map.set(account.id, String(account.icon ?? '').trim())
+  return map
+})
+const accountBalanceMap = computed(() => {
+  const map = new Map()
+  for (const item of accountStore.balances) map.set(item.id, Number(item.balance_minor ?? 0))
+  return map
+})
+
 const expenseBreakdown = computed(() => buildBreakdown('expense'))
 const incomeBreakdown = computed(() => buildBreakdown('income'))
+const accountBreakdown = computed(() => buildAccountBalanceBreakdown({
+  accounts: accountStore.accounts,
+  accountBalanceMap: accountBalanceMap.value,
+  swatches: ANALYSIS_CHART_SWATCHES,
+}))
+const expenseBarRows = computed(() => buildBarRows(expenseBreakdown.value))
+const incomeBarRows = computed(() => buildBarRows(incomeBreakdown.value))
+const accountBarRows = computed(() => buildBarRows(accountBreakdown.value))
 const expenseTotalMinor = computed(() => expenseBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
 const incomeTotalMinor = computed(() => incomeBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
 const expenseCount = computed(() => expenseBreakdown.value.reduce((total, item) => total + item.count, 0))
 const incomeCount = computed(() => incomeBreakdown.value.reduce((total, item) => total + item.count, 0))
-const chartSections = computed(() => [
-  {
-    key: 'expense',
-    label: t('analysis_page.type.expense'),
-    items: buildBarRows(expenseBreakdown.value),
-    totalMinor: expenseTotalMinor.value,
-    count: expenseCount.value,
-    pieStyle: buildPieStyle(expenseBreakdown.value),
+const accountTotalMinor = computed(() => accountBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
+const accountCount = computed(() => accountBreakdown.value.length)
+const budgetCards = computed(() => buildBudgetAchievementCards({
+  items: budgetStore.items,
+  containers: budgetStore.containersWithStats,
+  spentMap: budgetStore.spentMap,
+  categoryNameMap: categoryNameMap.value,
+  categoryIconMap: categoryIconMap.value,
+}))
+const detailRows = computed(() => buildAnalysisDetailRows(reportData.value.records ?? [], {
+  typeLabel: (type) => {
+    if (type === 'income') return t('analysis_page.type.income')
+    if (type === 'expense') return t('analysis_page.type.expense')
+    if (type === 'transfer') return t('transaction_about.type.transfer')
+    return t('transaction_about.type.adjustment')
   },
-  {
-    key: 'income',
-    label: t('analysis_page.type.income'),
-    items: buildBarRows(incomeBreakdown.value),
-    totalMinor: incomeTotalMinor.value,
-    count: incomeCount.value,
-    pieStyle: buildPieStyle(incomeBreakdown.value),
-  },
-])
+  uncategorizedLabel: t('analysis_page.uncategorized'),
+  unassignedAccountLabel: t('analysis_page.unassigned_account'),
+}))
 const currentRangeLabel = computed(() => {
   if (mode.value === 'year') return `${t('analysis_print.mode.year')}｜${selectedYear.value}`
   if (mode.value === 'month') return `${t('analysis_print.mode.month')}｜${selectedMonth.value}`
   if (mode.value === 'day') return `${t('analysis_print.mode.day')}｜${selectedDay.value}`
   if (mode.value === 'custom') return `${t('analysis_print.mode.custom')}｜${startDate.value} ~ ${endDate.value}`
   return t('analysis_print.all_hint')
+})
+const filterLabel = computed(() => {
+  if (mode.value === 'all') return ''
+  return currentRangeLabel.value
 })
 
 watch(
@@ -266,7 +261,7 @@ function createEmptyReportData() {
 }
 
 function parseMode(value) {
-  return ['all', 'year', 'month', 'day', 'custom'].includes(value) ? value : 'all'
+  return ['all', 'year', 'month', 'day', 'custom'].includes(value) ? value : 'month'
 }
 
 function pickYear(value) {
@@ -303,18 +298,27 @@ function buildExportOptions() {
 function validateRange(showToast = false) {
   if (mode.value !== 'custom') return true
   if (!startDate.value || !endDate.value) {
-    if (showToast) {
-      uiStore.pushToast(t('analysis_print.toast.choose_custom_range'), 'error')
-    }
+    if (showToast) uiStore.pushToast(t('analysis_print.toast.choose_custom_range'), 'error')
     return false
   }
   if (startDate.value > endDate.value) {
-    if (showToast) {
-      uiStore.pushToast(t('analysis_print.toast.invalid_custom_range'), 'error')
-    }
+    if (showToast) uiStore.pushToast(t('analysis_print.toast.invalid_custom_range'), 'error')
     return false
   }
   return true
+}
+
+async function ensureBudgetLoaded() {
+  const monthKey = mode.value === 'month'
+    ? selectedMonth.value
+    : mode.value === 'day'
+      ? String(selectedDay.value).slice(0, 7)
+      : monthKeyFromDate(new Date())
+  try {
+    await budgetStore.loadMonth(monthKey)
+  } catch {
+    // budget section is optional for report export
+  }
 }
 
 async function loadReportData() {
@@ -326,7 +330,11 @@ async function loadReportData() {
   }
 
   loadingReport.value = true
+  exportedAtLabel.value = formatDateTime(new Date())
   try {
+    if (!categoryStore.categories.length) await categoryStore.load?.()
+    if (!accountStore.accounts.length) await accountStore.load?.()
+    await ensureBudgetLoaded()
     reportData.value = await getLedgerTransactionsExportData(ledgerId, buildExportOptions())
   } catch (error) {
     reportData.value = createEmptyReportData()
@@ -334,6 +342,46 @@ async function loadReportData() {
   } finally {
     loadingReport.value = false
   }
+}
+
+function buildBreakdown(type) {
+  const categoryNameMapLocal = new Map()
+  const categoryIconMapLocal = new Map()
+  const accountNameMapLocal = new Map()
+  const accountIconMapLocal = new Map()
+
+  for (const [id, name] of categoryNameMap.value.entries()) categoryNameMapLocal.set(id, name)
+  for (const [id, icon] of categoryIconMap.value.entries()) categoryIconMapLocal.set(id, icon)
+  for (const [id, name] of accountNameMap.value.entries()) accountNameMapLocal.set(id, name)
+  for (const [id, icon] of accountIconMap.value.entries()) accountIconMapLocal.set(id, icon)
+
+  for (const tx of reportData.value.records ?? []) {
+    const categoryId = String(tx?.category_id ?? '').trim()
+    if (categoryId && !categoryNameMapLocal.has(categoryId)) {
+      categoryNameMapLocal.set(categoryId, String(tx?.category_name ?? '').trim())
+      categoryIconMapLocal.set(categoryId, String(tx?.category_icon ?? '').trim())
+    }
+    const accountId = String(tx?.account_id ?? '').trim()
+    if (accountId && !accountNameMapLocal.has(accountId)) {
+      accountNameMapLocal.set(accountId, String(tx?.account_name ?? '').trim())
+      accountIconMapLocal.set(accountId, String(tx?.account_icon ?? '').trim())
+    }
+  }
+
+  return buildBreakdownRows({
+    transactions: reportData.value.records ?? [],
+    type,
+    scope: 'category',
+    shouldIncludeTransaction: isCountableForIncomeExpense,
+    categoryNameMap: categoryNameMapLocal,
+    categoryIconMap: categoryIconMapLocal,
+    accountNameMap: accountNameMapLocal,
+    accountIconMap: accountIconMapLocal,
+    getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
+    getUncategorizedLabel: () => t('analysis_page.uncategorized'),
+    getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
+    swatches: ANALYSIS_CHART_SWATCHES,
+  })
 }
 
 async function exportCsv() {
@@ -344,10 +392,9 @@ async function exportCsv() {
   }
   if (!validateRange(true)) return
 
-  exporting.value = true
+  exportingCsv.value = true
   try {
     const result = await exportLedgerTransactionsCsv(ledgerId, buildExportOptions())
-
     exportedFilename.value = result.filename
     const deviceSave = await saveCsvFileToDevice(result.filename, result.csvText, { category: 'analysis' })
 
@@ -357,24 +404,76 @@ async function exportCsv() {
       exportedUrl.value = String(deviceSave.uri ?? '').trim()
         || String(deviceSave.openUrl ?? '').trim()
         || createCsvBlobUrl(result.csvText)
-      exportedIsDeviceLink.value = Boolean(String(deviceSave.uri ?? '').trim() || String(deviceSave.openUrl ?? '').trim())
       exportedLocation.value = deviceSave.location || t('analysis_print.device_location_default')
       uiStore.pushToast(t('analysis_print.toast.exported_saved', { count: result.rowCount, location: exportedLocation.value }))
       return
     }
 
-    exportedLocation.value = Capacitor.isNativePlatform()
-      ? 'App 內預覽'
-      : ''
+    exportedLocation.value = Capacitor.isNativePlatform() ? 'App 內預覽' : ''
     revokeBlobUrl(exportedUrl.value)
     exportedUrl.value = createCsvBlobUrl(result.csvText)
-    exportedIsDeviceLink.value = false
     openExportLink()
     uiStore.pushToast(t('analysis_print.toast.exported_downloaded', { count: result.rowCount }))
   } catch (error) {
     uiStore.pushToast(error.message ?? t('analysis_print.toast.export_failed'), 'error')
   } finally {
-    exporting.value = false
+    exportingCsv.value = false
+  }
+}
+
+async function exportPdf() {
+  const ledgerId = ledgerStore.activeLedgerId
+  if (!ledgerId) {
+    uiStore.pushToast(t('analysis_print.toast.no_ledger'), 'error')
+    return
+  }
+  if (!validateRange(true)) return
+
+  exportingPdf.value = true
+  lastExportError.value = ''
+  exportedAtLabel.value = formatDateTime(new Date())
+  try {
+    await nextTick()
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const element = reportDocumentRef.value?.getElement?.() || document.getElementById('analysis-report-document')
+    if (!element) {
+      throw new Error(t('analysis_print.toast.preview_missing'))
+    }
+
+    const options = buildExportOptions()
+    const filename = buildAnalysisReportPdfFilename(options)
+    const pdfFile = await buildAnalysisReportPdfFromElement(element, {
+      ...options,
+      filename,
+      pageLabel: (page, total) => t('analysis_print.page_label', { page, total }),
+    })
+
+    exportedFilename.value = pdfFile.filename
+    exportedPageCount.value = Number(pdfFile.pageCount ?? 0)
+    const deviceSave = await savePdfFileToDevice(pdfFile.filename, pdfFile.blob, { category: 'analysis' })
+    if (deviceSave.saved) {
+      revokeBlobUrl(exportedUrl.value)
+      exportedUrl.value = String(deviceSave.uri ?? '').trim()
+        || String(deviceSave.openUrl ?? '').trim()
+        || createPdfBlobUrl(pdfFile.blob)
+      exportedLocation.value = deviceSave.location || t('analysis_print.device_location_default')
+      uiStore.pushToast(t('analysis_print.toast.pdf_saved', {
+        filename: exportedFilename.value,
+        location: exportedLocation.value,
+      }))
+      return
+    }
+
+    exportedLocation.value = Capacitor.isNativePlatform() ? 'App 內預覽' : ''
+    revokeBlobUrl(exportedUrl.value)
+    exportedUrl.value = createPdfBlobUrl(pdfFile.blob)
+    triggerDownloadFromUrl(exportedUrl.value, pdfFile.filename)
+    uiStore.pushToast(t('analysis_print.toast.pdf_downloaded', { filename: pdfFile.filename }))
+  } catch (error) {
+    lastExportError.value = String(error?.message ?? error ?? t('analysis_print.toast.export_failed'))
+    uiStore.pushToast(lastExportError.value, 'error')
+  } finally {
+    exportingPdf.value = false
   }
 }
 
@@ -384,64 +483,6 @@ function openExportLink() {
   if (!opened && exportedFilename.value) {
     triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
   }
-}
-
-function buildBreakdown(type) {
-  const categoryNameMap = new Map()
-  const categoryIconMap = new Map()
-  for (const tx of reportData.value.records ?? []) {
-    const categoryId = String(tx?.category_id ?? '').trim()
-    if (!categoryId || categoryNameMap.has(categoryId)) continue
-    categoryNameMap.set(categoryId, String(tx?.category_name ?? '').trim())
-    categoryIconMap.set(categoryId, String(tx?.category_icon ?? '').trim())
-  }
-
-  return buildBreakdownRows({
-    transactions: reportData.value.records ?? [],
-    type,
-    scope: 'category',
-    shouldIncludeTransaction: isCountableForIncomeExpense,
-    categoryNameMap,
-    categoryIconMap,
-    getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
-    getUncategorizedLabel: () => t('analysis_page.uncategorized'),
-    swatches: CHART_MULTI_COLOR_SWATCHES,
-  })
-}
-
-function buildPieStyle(items) {
-  if (!items.length) {
-    return { background: 'conic-gradient(var(--chart-track) 0deg 360deg)' }
-  }
-
-  const total = items.reduce((sum, item) => sum + item.amountMinor, 0)
-  let cursor = 0
-  const segments = []
-
-  for (const item of items) {
-    const deg = (item.amountMinor / total) * 360
-    const start = cursor
-    const end = cursor + deg
-    segments.push(`${item.color} ${start}deg ${end}deg`)
-    cursor = end
-  }
-
-  return { background: `conic-gradient(${segments.join(', ')})` }
-}
-
-function buildBarRows(items) {
-  const source = Array.isArray(items) ? items : []
-  if (!source.length) return []
-
-  const maxAmount = source.reduce((max, item) => Math.max(max, Number(item?.amountMinor ?? 0) || 0), 0)
-  if (!Number.isFinite(maxAmount) || maxAmount <= 0) {
-    return source.map((item) => ({ ...item, barWidthPercent: 0 }))
-  }
-
-  return source.map((item) => ({
-    ...item,
-    barWidthPercent: Math.max(8, Math.round((item.amountMinor / maxAmount) * 100)),
-  }))
 }
 
 onBeforeUnmount(() => {
@@ -454,6 +495,16 @@ function dayKeyFromDate(date) {
   const d = String(date.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
 }
+
+function formatDateTime(date) {
+  return date.toLocaleString('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 </script>
 
 <style scoped>
@@ -462,8 +513,7 @@ function dayKeyFromDate(date) {
 }
 
 h2,
-h3,
-h4 {
+h3 {
   margin: 0;
 }
 
@@ -505,7 +555,6 @@ label {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  justify-content: flex-start;
 }
 
 .action-row > .btn {
@@ -520,194 +569,14 @@ label {
   word-break: break-word;
 }
 
-.fields-list {
-  margin: 12px 0 0;
-  padding-left: 20px;
-  display: grid;
-  gap: 6px;
-}
-
-.report-panel {
+.preview-panel {
   display: grid;
   gap: 14px;
-}
-
-.print-only {
-  display: none;
-}
-
-.report-head {
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.report-meta {
-  margin: 4px 0 0;
+  background: #f8fafc;
 }
 
 .loading-note {
   padding: 12px 0;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.summary-card {
-  border: 1px solid var(--field-border);
-  border-radius: 14px;
-  padding: 12px;
-  display: grid;
-  gap: 6px;
-  background: color-mix(in srgb, var(--card) 86%, var(--surface-soft-accent) 14%);
-}
-
-.chart-section {
-  display: grid;
-  gap: 10px;
-  break-inside: avoid;
-}
-
-.chart-head {
-  gap: 12px;
-}
-
-.chart-layout {
-  display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-  gap: 14px;
-  align-items: start;
-}
-
-.pie-panel,
-.legend-panel,
-.table-section {
-  border: 1px solid var(--field-border);
-  border-radius: 14px;
-  padding: 12px;
-  background: color-mix(in srgb, var(--card) 90%, var(--surface-soft-accent) 10%);
-}
-
-.chart-title {
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 10px;
-}
-
-.pie {
-  width: min(220px, 100%);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  position: relative;
-  margin: 0 auto;
-}
-
-.pie-hole {
-  position: absolute;
-  inset: 22%;
-  border-radius: 50%;
-  background: var(--card);
-  display: grid;
-  place-items: center;
-  text-align: center;
-  gap: 4px;
-  padding: 14px;
-}
-
-.bar-chart-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 10px;
-}
-
-.bar-chart-item {
-  display: grid;
-  gap: 6px;
-}
-
-.bar-chart-head,
-.bar-chart-stats,
-.bar-chart-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.bar-chart-label {
-  justify-content: flex-start;
-  min-width: 0;
-}
-
-.bar-chart-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bar-chart-track {
-  height: 10px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--field-border) 75%, var(--card) 25%);
-}
-
-.bar-chart-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-}
-
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  flex: 0 0 auto;
-}
-
-.legend-icon-wrap {
-  width: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-
-.legend-icon {
-  width: 14px;
-}
-
-.table-wrap {
-  overflow: auto;
-}
-
-.report-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-.report-table th,
-.report-table td {
-  border: 1px solid var(--field-border);
-  padding: 6px 8px;
-  text-align: left;
-  vertical-align: top;
-  white-space: pre-wrap;
-}
-
-.report-table th {
-  background: color-mix(in srgb, var(--card) 82%, var(--surface-soft-accent) 18%);
-}
-
-.empty-cell {
-  text-align: center;
-  color: var(--muted);
 }
 
 .count-chip {
@@ -719,66 +588,10 @@ label {
   white-space: nowrap;
 }
 
-.no-data-tip {
-  margin: 0;
-}
-
 @media (max-width: 720px) {
   .mode-tabs,
-  .summary-grid,
   .custom-grid {
     grid-template-columns: 1fr;
-  }
-
-  .chart-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-@page {
-  size: A4 landscape;
-  margin: 10mm;
-}
-
-@media print {
-  .screen-only {
-    display: none !important;
-  }
-
-  .print-only {
-    display: grid !important;
-  }
-
-  .export-page {
-    padding: 0;
-  }
-
-  .report-panel,
-  .pie-panel,
-  .legend-panel,
-  .table-section,
-  .summary-card {
-    border-color: #d6d6d6;
-    box-shadow: none;
-  }
-
-  .report-panel {
-    padding: 0;
-  }
-
-  .table-wrap {
-    overflow: visible;
-  }
-
-  .report-table {
-    font-size: 10px;
-  }
-
-  .pie,
-  .bar-chart-fill,
-  .legend-dot {
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
   }
 }
 </style>
