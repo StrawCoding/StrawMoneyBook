@@ -316,6 +316,56 @@ function relativeLuminance(channels) {
   return (0.2126 * toLinear(channels.r)) + (0.7152 * toLinear(channels.g)) + (0.0722 * toLinear(channels.b))
 }
 
+async function assertExportChromeDarkTheme() {
+  const state = await evalPage(`() => {
+    const page = document.querySelector('[data-testid=analysis-export-page]')
+    const controls = document.querySelector('[data-testid=analysis-export-controls]')
+    const previewChrome = document.querySelector('[data-testid=analysis-export-preview-chrome]')
+    const frame = document.querySelector('[data-testid=analysis-export-report-frame]')
+    const heading = controls?.querySelector('h2')
+    const chip = previewChrome?.querySelector('.count-chip')
+    const pdfBtn = document.querySelector('[data-testid=analysis-export-pdf-btn]')
+    const report = document.querySelector('[data-testid=analysis-report-document]')
+    return {
+      path: window.location.pathname,
+      themeMode: document.documentElement.dataset.themeMode || '',
+      appBg: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
+      pageBg: page ? getComputedStyle(page).backgroundColor : '',
+      controlsBg: controls ? getComputedStyle(controls).backgroundColor : '',
+      controlsColor: controls ? getComputedStyle(controls).color : '',
+      headingColor: heading ? getComputedStyle(heading).color : '',
+      previewChromeBg: previewChrome ? getComputedStyle(previewChrome).backgroundColor : '',
+      previewChromeColor: previewChrome ? getComputedStyle(previewChrome).color : '',
+      frameBg: frame ? getComputedStyle(frame).backgroundColor : '',
+      chipColor: chip ? getComputedStyle(chip).color : '',
+      btnBg: pdfBtn ? getComputedStyle(pdfBtn).backgroundColor : '',
+      btnColor: pdfBtn ? getComputedStyle(pdfBtn).color : '',
+      reportBg: report ? getComputedStyle(report).backgroundColor : '',
+      reportColor: report ? getComputedStyle(report).color : '',
+      exportColorScheme: report?.getAttribute('data-export-color-scheme') || '',
+    }
+  }`)
+
+  assert.ok(state.path.startsWith('/analysis/print'), JSON.stringify(state))
+  assert.equal(state.themeMode, 'dark', JSON.stringify(state))
+  assert.equal(state.exportColorScheme, 'light', JSON.stringify(state))
+
+  const controlsBgLum = relativeLuminance(parseRgbChannels(state.controlsBg))
+  const previewBgLum = relativeLuminance(parseRgbChannels(state.previewChromeBg))
+  const headingLum = relativeLuminance(parseRgbChannels(state.headingColor))
+  const chromeTextLum = relativeLuminance(parseRgbChannels(state.controlsColor))
+  const reportBgLum = relativeLuminance(parseRgbChannels(state.reportBg))
+  const reportTextLum = relativeLuminance(parseRgbChannels(state.reportColor))
+
+  assert.ok(controlsBgLum != null && controlsBgLum <= 0.45, `export chrome controls must be dark: ${JSON.stringify(state)} lum=${controlsBgLum}`)
+  assert.ok(previewBgLum != null && previewBgLum <= 0.45, `preview chrome must be dark: ${JSON.stringify(state)} lum=${previewBgLum}`)
+  assert.ok(headingLum != null && headingLum >= 0.55, `chrome heading must be light-on-dark: ${JSON.stringify(state)} lum=${headingLum}`)
+  assert.ok(chromeTextLum != null && chromeTextLum >= 0.55, `chrome text must be light-on-dark: ${JSON.stringify(state)} lum=${chromeTextLum}`)
+  assert.ok(reportBgLum != null && reportBgLum >= 0.72, `report body must stay light: ${JSON.stringify(state)} lum=${reportBgLum}`)
+  assert.ok(reportTextLum != null && reportTextLum <= 0.45, `report body text must stay dark: ${JSON.stringify(state)} lum=${reportTextLum}`)
+  return state
+}
+
 async function assertPrintPreviewLightTheme() {
   const state = await evalPage(`() => {
     const root = document.querySelector('[data-testid=analysis-report-document]')
@@ -350,6 +400,70 @@ async function assertPrintPreviewLightTheme() {
     const trackLum = relativeLuminance(parseRgbChannels(state.trackBg))
     assert.ok(trackLum != null && trackLum >= 0.55, `chart track must stay light: ${JSON.stringify(state)} lum=${trackLum}`)
   }
+  return state
+}
+
+async function assertPdfLayoutIntegrity() {
+  const state = await evalPage(`() => {
+    const root = document.querySelector('[data-testid=analysis-report-document]')
+    if (!root) return { ok: false, reason: 'missing report' }
+
+    const previous = {
+      width: root.style.width,
+      maxWidth: root.style.maxWidth,
+      minWidth: root.style.minWidth,
+      printLayout: root.getAttribute('data-print-layout'),
+    }
+    root.style.boxSizing = 'border-box'
+    root.style.width = '794px'
+    root.style.maxWidth = '794px'
+    root.style.minWidth = '794px'
+    root.setAttribute('data-print-layout', 'a4')
+
+    const pair = root.querySelector('.pair-layout')
+    const big = root.querySelector('.big-numbers')
+    const table = root.querySelector('.report-table')
+    const pairStyle = pair ? getComputedStyle(pair) : null
+    const bigStyle = big ? getComputedStyle(big) : null
+    const rect = root.getBoundingClientRect()
+
+    const result = {
+      ok: true,
+      printLayout: root.getAttribute('data-print-layout') || '',
+      width: Math.round(rect.width),
+      pairColumns: pairStyle?.gridTemplateColumns || '',
+      bigColumns: bigStyle?.gridTemplateColumns || '',
+      hasDetailTable: Boolean(table),
+      tableWidth: table ? Math.round(table.getBoundingClientRect().width) : 0,
+      scrollWidth: root.scrollWidth,
+      clientWidth: root.clientWidth,
+      hasIncomeCharts: Boolean(document.querySelector('[data-testid=analysis-report-income-charts]')),
+      hasExpenseCharts: Boolean(document.querySelector('[data-testid=analysis-report-expense-charts]')),
+      hasAccountCharts: Boolean(document.querySelector('[data-testid=analysis-report-account-charts]')),
+      hasBigNumbers: Boolean(document.querySelector('[data-testid=analysis-report-big-numbers]')),
+    }
+
+    root.style.width = previous.width
+    root.style.maxWidth = previous.maxWidth
+    root.style.minWidth = previous.minWidth
+    if (previous.printLayout == null) root.removeAttribute('data-print-layout')
+    else root.setAttribute('data-print-layout', previous.printLayout)
+
+    return result
+  }`)
+
+  assert.equal(state.ok, true, JSON.stringify(state))
+  assert.equal(state.printLayout, 'a4', JSON.stringify(state))
+  assert.ok(state.width >= 780 && state.width <= 810, `A4 capture width expected ~794: ${JSON.stringify(state)}`)
+  assert.ok(state.hasBigNumbers, JSON.stringify(state))
+  assert.ok(state.hasIncomeCharts || state.hasExpenseCharts, JSON.stringify(state))
+  assert.equal(state.hasAccountCharts, true, JSON.stringify(state))
+  assert.equal(state.hasDetailTable, true, JSON.stringify(state))
+  // Desktop A4 layout must keep multi-column grids (not stacked 1fr-only mobile).
+  assert.ok((state.pairColumns.match(/px|fr/g) || []).length >= 2, `pair layout must stay multi-column: ${JSON.stringify(state)}`)
+  assert.ok((state.bigColumns.match(/px|fr/g) || []).length >= 3, `big numbers must stay 3 columns: ${JSON.stringify(state)}`)
+  assert.ok(state.tableWidth > 500, `detail table must have usable width: ${JSON.stringify(state)}`)
+  assert.ok(state.scrollWidth <= state.clientWidth + 2, `report must not horizontally overflow under A4 width: ${JSON.stringify(state)}`)
   return state
 }
 
@@ -493,13 +607,17 @@ try {
 
   await openPrintPreview()
   await assertPrintPreviewCoverage()
+  const chromeDark = await assertExportChromeDarkTheme()
   const lightPreview = await assertPrintPreviewLightTheme()
+  const layout = await assertPdfLayoutIntegrity()
   const pdf = await downloadPdfAndAssert()
 
   console.log(JSON.stringify({
     ok: true,
     darkTheme,
+    chromeDark,
     lightPreview,
+    layout,
     seed,
     pdf,
   }, null, 2))

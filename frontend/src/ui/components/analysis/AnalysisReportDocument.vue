@@ -421,4 +421,40 @@ defineExpose({
     min-width: 0;
   }
 }
+
+/* PDF / print capture: force A4 desktop layout even on narrow viewports */
+.analysis-report-document[data-print-layout='a4'] {
+  width: 794px;
+  max-width: 794px;
+  min-width: 794px;
+}
+
+.analysis-report-document[data-print-layout='a4'] .big-numbers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.analysis-report-document[data-print-layout='a4'] .budget-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.analysis-report-document[data-print-layout='a4'] .report-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.analysis-report-document[data-print-layout='a4'] .meta-grid {
+  min-width: 220px;
+}
+
+.analysis-report-document[data-print-layout='a4'] .table-wrap {
+  overflow: visible;
+}
+
+.analysis-report-document[data-print-layout='a4'] .report-table {
+  table-layout: fixed;
+  width: 100%;
+}
 </style>

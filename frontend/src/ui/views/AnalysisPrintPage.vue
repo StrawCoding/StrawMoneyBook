@@ -1,6 +1,13 @@
 <template>
-  <section class="stack export-page">
-    <article class="card panel screen-controls">
+  <section
+    class="stack export-page"
+    data-testid="analysis-export-page"
+    data-export-chrome="app-theme"
+  >
+    <article
+      class="card panel screen-controls"
+      data-testid="analysis-export-controls"
+    >
       <header class="row">
         <h2>{{ t('analysis_print.title') }}</h2>
         <RouterLink class="btn back-btn" to="/analysis">{{ t('common.back') }}</RouterLink>
@@ -71,34 +78,42 @@
       </p>
     </article>
 
-    <article class="card panel preview-panel">
-      <header class="row">
+    <article
+      class="card panel preview-panel"
+      data-testid="analysis-export-preview-chrome"
+    >
+      <header class="row preview-chrome-head">
         <h3>{{ t('analysis_print.preview_title') }}</h3>
         <span class="count-chip">{{ t('analysis_page.items_count', { count: detailRows.length }) }}</span>
       </header>
 
       <div v-if="loadingReport" class="muted loading-note">{{ t('app.loading') }}</div>
-      <AnalysisReportDocument
+      <div
         v-else
-        ref="reportDocumentRef"
-        :title="t('analysis_print.export_pdf')"
-        :ledger-name="ledgerName"
-        :period-label="currentRangeLabel"
-        :exported-at-label="exportedAtLabel"
-        :currency-code="currencyCode"
-        :filter-label="filterLabel"
-        :income-items="incomeBarRows"
-        :expense-items="expenseBarRows"
-        :account-items="accountBarRows"
-        :budget-cards="budgetCards"
-        :detail-rows="detailRows"
-        :income-total-minor="incomeTotalMinor"
-        :expense-total-minor="expenseTotalMinor"
-        :income-count="incomeCount"
-        :expense-count="expenseCount"
-        :account-total-minor="accountTotalMinor"
-        :account-count="accountCount"
-      />
+        class="report-preview-frame"
+        data-testid="analysis-export-report-frame"
+      >
+        <AnalysisReportDocument
+          ref="reportDocumentRef"
+          :title="t('analysis_print.export_pdf')"
+          :ledger-name="ledgerName"
+          :period-label="currentRangeLabel"
+          :exported-at-label="exportedAtLabel"
+          :currency-code="currencyCode"
+          :filter-label="filterLabel"
+          :income-items="incomeBarRows"
+          :expense-items="expenseBarRows"
+          :account-items="accountBarRows"
+          :budget-cards="budgetCards"
+          :detail-rows="detailRows"
+          :income-total-minor="incomeTotalMinor"
+          :expense-total-minor="expenseTotalMinor"
+          :income-count="incomeCount"
+          :expense-count="expenseCount"
+          :account-total-minor="accountTotalMinor"
+          :account-count="accountCount"
+        />
+      </div>
     </article>
   </section>
 </template>
@@ -515,10 +530,19 @@ function formatDateTime(date) {
 h2,
 h3 {
   margin: 0;
+  color: var(--text);
 }
 
 .export-page {
   padding-bottom: 120px;
+  color: var(--text);
+}
+
+.screen-controls,
+.preview-panel {
+  background: var(--card);
+  color: var(--text);
+  border-color: var(--border);
 }
 
 .mode-tabs {
@@ -547,6 +571,7 @@ label {
 
 .all-hint {
   padding: 8px 0;
+  color: var(--muted);
 }
 
 .action-row {
@@ -567,18 +592,21 @@ label {
   margin: 8px 0 0;
   overflow-wrap: anywhere;
   word-break: break-word;
+  color: var(--muted);
 }
 
 .preview-panel {
   display: grid;
   gap: 14px;
-  color-scheme: light;
-  background: #f8fafc;
-  color: #0f172a;
+}
+
+.preview-chrome-head h3 {
+  color: var(--text);
 }
 
 .loading-note {
   padding: 12px 0;
+  color: var(--muted);
 }
 
 .count-chip {
@@ -587,7 +615,17 @@ label {
   padding: 4px 8px;
   font-size: 12px;
   color: var(--muted);
+  background: var(--bg-soft);
   white-space: nowrap;
+}
+
+/* Outer frame follows App theme; report body stays light-isolated */
+.report-preview-frame {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+  background: var(--bg-soft);
+  overflow: auto;
 }
 
 @media (max-width: 720px) {

@@ -66,36 +66,98 @@ test('budget achievement cards list every budget without collapsing into other',
   assert.equal(cards[1].percent, 20)
 })
 
+test('pdf slice plan keeps equal scale and does not stretch residual last page', async () => {
+  const {
+    computePdfSlicePlan,
+    prepareAnalysisReportElementForPdfCapture,
+    ANALYSIS_REPORT_PDF_PAGE,
+  } = await import('../src/core/utils/analysis-report-pdf-layout.js')
+
+  const a4WidthPt = 595.28
+  const a4HeightPt = 841.89
+  const canvasWidth = 794 * 2
+  const fullPagePx = canvasWidth * (a4HeightPt / a4WidthPt)
+  const canvasHeight = Math.round(fullPagePx * 1.4)
+
+  const plan = computePdfSlicePlan(canvasWidth, canvasHeight, a4WidthPt, a4HeightPt)
+  assert.equal(plan.pageCount, 2)
+  assert.ok(Math.abs(plan.pages[0].drawHeightPt - a4HeightPt) < 1)
+  assert.ok(plan.pages[1].drawHeightPt < a4HeightPt - 1)
+  assert.ok(plan.pages[1].drawHeightPt > a4HeightPt * 0.35)
+  assert.equal(plan.pages[0].sourceY, 0)
+  assert.equal(plan.pages[1].sourceY + plan.pages[1].sourceHeight, canvasHeight)
+
+  const el = {
+    style: {},
+    attrs: new Map(),
+    getAttribute(name) {
+      return this.attrs.has(name) ? this.attrs.get(name) : null
+    },
+    setAttribute(name, value) {
+      this.attrs.set(name, value)
+    },
+    removeAttribute(name) {
+      this.attrs.delete(name)
+    },
+  }
+  const prepared = prepareAnalysisReportElementForPdfCapture(el, { widthPx: ANALYSIS_REPORT_PDF_PAGE.WIDTH_PX })
+  assert.equal(el.style.width, '794px')
+  assert.equal(el.getAttribute(ANALYSIS_REPORT_PDF_PAGE.PRINT_LAYOUT_ATTR), ANALYSIS_REPORT_PDF_PAGE.PRINT_LAYOUT_VALUE)
+  prepared.restore()
+  assert.equal(el.getAttribute(ANALYSIS_REPORT_PDF_PAGE.PRINT_LAYOUT_ATTR), null)
+})
+
 test('analysis export/pdf wiring keeps html2canvas+jsPDF and shared iconized charts', () => {
   const pdfService = readFileSync(resolve(import.meta.dirname, '../src/core/services/analysis-report-pdf.service.js'), 'utf8')
   const printPage = readFileSync(resolve(import.meta.dirname, '../src/ui/views/AnalysisPrintPage.vue'), 'utf8')
   const analysisPage = readFileSync(resolve(import.meta.dirname, '../src/ui/views/analysis.vue'), 'utf8')
   const reportDocument = readFileSync(resolve(import.meta.dirname, '../src/ui/components/analysis/AnalysisReportDocument.vue'), 'utf8')
+  const chartPair = readFileSync(resolve(import.meta.dirname, '../src/ui/components/analysis/AnalysisIconizedChartPair.vue'), 'utf8')
   const breakdown = readFileSync(resolve(import.meta.dirname, '../src/core/utils/analysis-breakdown.js'), 'utf8')
   const exportService = readFileSync(resolve(import.meta.dirname, '../src/core/services/export.service.js'), 'utf8')
+  const appleUi = readFileSync(resolve(import.meta.dirname, '../src/ui/assets/css/apple-ui.css'), 'utf8')
   const packageJson = JSON.parse(readFileSync(resolve(import.meta.dirname, '../package.json'), 'utf8'))
 
   assert.match(pdfService, /import html2canvas from 'html2canvas'/)
   assert.match(pdfService, /import \{ jsPDF \} from 'jspdf'/)
   assert.match(pdfService, /buildAnalysisReportPdfFromElement/)
   assert.match(pdfService, /sliceCanvasToPdfPages/)
+  assert.match(pdfService, /computePdfSlicePlan/)
+  assert.match(pdfService, /prepareAnalysisReportElementForPdfCapture/)
   assert.match(pdfService, /sanitizeCloneForHtml2Canvas/)
   assert.match(pdfService, /applyAnalysisReportLightThemeInline/)
   assert.match(pdfService, /color-scheme:\s*light|ANALYSIS_REPORT_LIGHT_THEME|buildAnalysisReportLightThemeCssText/)
   assert.match(pdfService, /onclone:/)
+  assert.match(pdfService, /PRINT_LAYOUT_ATTR|data-print-layout/)
+  assert.match(
+    readFileSync(resolve(import.meta.dirname, '../src/core/utils/analysis-report-pdf-layout.js'), 'utf8'),
+    /PRINT_LAYOUT_ATTR:\s*'data-print-layout'/,
+  )
+  assert.match(
+    readFileSync(resolve(import.meta.dirname, '../src/core/utils/analysis-report-pdf-layout.js'), 'utf8'),
+    /export function computePdfSlicePlan/,
+  )
   assert.match(printPage, /AnalysisReportDocument/)
   assert.match(printPage, /buildAnalysisReportPdfFromElement/)
   assert.match(printPage, /交易報表_|buildAnalysisReportPdfFilename/)
   assert.match(printPage, /data-testid="analysis-export-pdf-btn"/)
-  assert.match(printPage, /color-scheme:\s*light/)
+  assert.match(printPage, /data-testid="analysis-export-controls"/)
+  assert.match(printPage, /data-testid="analysis-export-preview-chrome"/)
+  assert.match(printPage, /report-preview-frame/)
+  assert.match(printPage, /background:\s*var\(--card\)/)
+  assert.doesNotMatch(printPage, /\.preview-panel\s*\{[^}]*color-scheme:\s*light/)
+  assert.doesNotMatch(printPage, /\.preview-panel\s*\{[^}]*background:\s*#f8fafc/)
   assert.match(reportDocument, /analysis-report-light-scope/)
   assert.match(reportDocument, /data-export-color-scheme="light"/)
   assert.match(reportDocument, /color-scheme:\s*light/)
   assert.match(reportDocument, /applyAnalysisReportLightThemeInline/)
+  assert.match(reportDocument, /data-print-layout='a4'/)
+  assert.match(chartPair, /data-print-layout='a4'/)
   assert.match(breakdown, /hsl\(\$\{hue\.toFixed\(2\)\}deg 72% 58%\)/)
   assert.doesNotMatch(breakdown, /color-mix\(in srgb, hsl\(\$\{hue\.toFixed\(2\)\}deg[\s\S]*var\(--card\)/)
   assert.match(analysisPage, /AnalysisIconizedChartPair/)
   assert.match(analysisPage, /data-testid="analysis-income-charts"|test-id="analysis-income-charts"/)
+  assert.match(appleUi, /\.export-page \.mode-tabs/)
   assert.match(exportService, /a\.icon AS account_icon/)
   assert.match(exportService, /t\.tags_json/)
   assert.equal(packageJson.scripts['playwright:analysis-export'], 'node scripts/playwright-analysis-export.mjs')

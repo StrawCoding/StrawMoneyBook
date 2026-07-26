@@ -222,11 +222,13 @@
 /* ── Analysis / assets page shells ────────────────────────────── */
 
 [data-ui-layout='modern'] .analysis-page > .card.panel,
+[data-ui-layout='modern'] .export-page > .card.panel,
 [data-ui-layout='modern'] .assets-page > .card.panel {
   border-radius: var(--apple-inset-radius);
 }
 
 [data-ui-layout='modern'] .analysis-page .mode-tabs,
+[data-ui-layout='modern'] .export-page .mode-tabs,
 [data-ui-layout='modern'] .analysis-page .type-tabs {
   display: flex;
   gap: 0;
@@ -237,6 +239,7 @@
 }
 
 [data-ui-layout='modern'] .analysis-page .mode-tabs .btn,
+[data-ui-layout='modern'] .export-page .mode-tabs .btn,
 [data-ui-layout='modern'] .analysis-page .type-tabs .btn {
   flex: 1;
   border: none;
@@ -248,6 +251,7 @@
 }
 
 [data-ui-layout='modern'] .analysis-page .mode-tabs .btn.primary,
+[data-ui-layout='modern'] .export-page .mode-tabs .btn.primary,
 [data-ui-layout='modern'] .analysis-page .type-tabs .btn.primary {
   background: var(--card);
   color: var(--text);

@@ -297,3 +297,11 @@ function emitSelect(item) {
   }
 }
 </style>
+
+<style>
+/* Unscoped: parent report sets data-print-layout during PDF capture */
+#analysis-report-document[data-print-layout='a4'] .pair-layout,
+.analysis-report-document[data-print-layout='a4'] .pair-layout {
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) !important;
+}
+</style>

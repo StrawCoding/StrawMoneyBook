@@ -2,6 +2,7 @@
 
 ---
 
+- 匯出頁 Dark mode chrome 完成與 PDF 排版治本：Dark mode 下 `/analysis/print` 控制列／按鈕／狀態／預覽外框跟隨 App 深色主題，報表本體與 PDF 仍強制淺色；PDF 擷取前固定 A4 寬度＋桌面多欄 print-layout，等比分頁不再拉伸末頁。補 Node／`playwright:analysis-export` Dark chrome＋版面斷言。
 - 分析匯出 Dark mode 強制淺色：App 深色主題（含系統跟隨／手動深色）下，`/analysis/print` 報表預覽與一鍵 PDF 仍輸出白／淺底、深色文字、淺色圖表軌道；互動分析頁可維持深色。補 light-theme 隔離、html2canvas onclone 強制淺色、Node／`playwright:analysis-export` Dark mode 對比驗證。
 - 分析／匯出圖表重設與圖示化 PDF：`/analysis` 與 `/analysis/print` 統一資訊架構（大數字、收入／支出圖示化圓餅+長條、預算達成卡、帳戶占比、明細表含分類／帳戶 icon）；一鍵下載淺色全彩 PDF（html2canvas+jsPDF，檔名 `交易報表_YYYY-MM.pdf`，含頁碼）；補三語 i18n、Node 回歸與 `playwright:analysis-export`。
 - (SMB-281) 修復無法取消共用帳本：Owner「取消共享」／成員「不再共享」確認流程可點且失敗可見 toast；會員資格暫停時仍可解除本機綁定並結束遠端成員關係；`DELETE /api/shared-ledgers/:id` 放行會員閘門並支援 already_gone；遠端不存在時仍清本機 binding，needs-reauth 不可靜默失敗。補 Node／backend／Playwright 回歸。
