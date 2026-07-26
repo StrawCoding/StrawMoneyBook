@@ -2,8 +2,9 @@
   <article
     ref="rootEl"
     id="analysis-report-document"
-    class="analysis-report-document"
+    class="analysis-report-document analysis-report-light-scope"
     data-testid="analysis-report-document"
+    data-export-color-scheme="light"
   >
     <header class="report-header" data-testid="analysis-report-header">
       <div>
@@ -157,9 +158,10 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import AnalysisIconizedChartPair from '@/ui/components/analysis/AnalysisIconizedChartPair.vue'
+import { applyAnalysisReportLightThemeInline } from '@/core/utils/analysis-report-light-theme'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const props = defineProps({
@@ -213,6 +215,11 @@ const labels = computed(() => ({
   colTags: t('analysis_print.col.tags'),
 }))
 
+onMounted(() => {
+  // Beat App Dark mode CSS variables / color-scheme inheritance for export preview.
+  applyAnalysisReportLightThemeInline(rootEl.value, { important: true })
+})
+
 defineExpose({
   rootEl,
   getElement: () => rootEl.value,
@@ -221,11 +228,27 @@ defineExpose({
 
 <style scoped>
 .analysis-report-document {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-soft: #f8fafc;
   --card: #ffffff;
+  --card-elevated: #ffffff;
+  --text: #0f172a;
+  --text-soft: #334155;
   --muted: #64748b;
   --field-border: #dbe3f0;
+  --border: #dbe3f0;
+  --border-strong: #cbd5e1;
   --surface-soft-accent: #eef4ff;
+  --surface-muted: #f1f5f9;
   --chart-track: #e2e8f0;
+  --income-dark: #059669;
+  --expense-dark: #dc2626;
+  --income-light: #d1fae5;
+  --expense-light: #fee2e2;
+  --primary: #2563eb;
+  --btn-bg: #ffffff;
+  --input-bg: #ffffff;
   color: #0f172a;
   background: #ffffff;
   border: 1px solid #dbe3f0;

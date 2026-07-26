@@ -167,7 +167,8 @@ export function buildThemePalette(count, swatches = []) {
 
   for (let index = palette.length; index < safeCount; index += 1) {
     const hue = (index * 137.508) % 360
-    palette.push(`color-mix(in srgb, hsl(${hue.toFixed(2)}deg 82% 62%) 82%, var(--card) 18%)`)
+    // Solid HSL only — avoid color-mix(var(--card)) so Dark mode / html2canvas export stay print-friendly.
+    palette.push(`hsl(${hue.toFixed(2)}deg 72% 58%)`)
   }
 
   return palette

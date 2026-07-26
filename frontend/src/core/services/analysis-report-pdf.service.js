@@ -1,6 +1,10 @@
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 import { buildAnalysisReportPdfFilename } from '@/core/utils/analysis-report'
+import {
+  applyAnalysisReportLightThemeInline,
+  buildAnalysisReportLightThemeCssText,
+} from '@/core/utils/analysis-report-light-theme'
 
 const PAGE_WIDTH_PX = 794
 const PAGE_HEIGHT_PX = 1123
@@ -14,28 +18,29 @@ function clampPositive(value, fallback) {
   return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback
 }
 
-function sanitizeCloneForHtml2Canvas(clonedDoc) {
+export function sanitizeCloneForHtml2Canvas(clonedDoc) {
+  const root = clonedDoc.documentElement
+  if (root) {
+    root.dataset.themeMode = 'light'
+    applyAnalysisReportLightThemeInline(root, { important: true })
+  }
+  if (clonedDoc.body) {
+    applyAnalysisReportLightThemeInline(clonedDoc.body, { important: true })
+  }
+
   const style = clonedDoc.createElement('style')
-  style.textContent = `
-    :root, html, body {
-      --card: #ffffff !important;
-      --bg: #ffffff !important;
-      --bg-soft: #f8fafc !important;
-      --muted: #64748b !important;
-      --field-border: #dbe3f0 !important;
-      --surface-soft-accent: #eef4ff !important;
-      --chart-track: #e2e8f0 !important;
-      --income-dark: #059669 !important;
-      --expense-dark: #dc2626 !important;
-      --income-light: #34d399 !important;
-      --expense-light: #f87171 !important;
-      --text: #0f172a !important;
-      --primary: #2563eb !important;
-      --border: #dbe3f0 !important;
-      color-scheme: light !important;
-    }
-  `
+  style.setAttribute('data-analysis-report-light-theme', '1')
+  style.textContent = [
+    buildAnalysisReportLightThemeCssText(':root, html, body'),
+    buildAnalysisReportLightThemeCssText('#analysis-report-document, .analysis-report-document, .analysis-report-light-scope'),
+  ].join('\n')
   clonedDoc.head?.appendChild(style)
+
+  const report = clonedDoc.getElementById('analysis-report-document')
+    || clonedDoc.querySelector('.analysis-report-document')
+  if (report) {
+    applyAnalysisReportLightThemeInline(report, { important: true })
+  }
 
   const rewriteValue = (value) => {
     const text = String(value ?? '')

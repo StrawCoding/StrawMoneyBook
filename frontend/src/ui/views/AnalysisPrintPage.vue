@@ -572,7 +572,9 @@ label {
 .preview-panel {
   display: grid;
   gap: 14px;
+  color-scheme: light;
   background: #f8fafc;
+  color: #0f172a;
 }
 
 .loading-note {

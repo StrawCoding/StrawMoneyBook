@@ -259,6 +259,100 @@ async function openPrintPreview() {
   throw new Error('failed to open /analysis/print preview')
 }
 
+async function forceDarkTheme() {
+  return evalPage(`() => {
+    const preference = {
+      schemeId: 'charcoal',
+      primaryOverride: null,
+      fontScale: 1,
+    }
+    try {
+      localStorage.setItem('strawmoneybook.theme.preference', JSON.stringify(preference))
+    } catch {
+      // ignore
+    }
+
+    const root = document.documentElement
+    root.dataset.themeMode = 'dark'
+    root.style.colorScheme = 'dark'
+    root.style.setProperty('--bg', '#0d0d10')
+    root.style.setProperty('--bg-soft', '#131318')
+    root.style.setProperty('--card', '#1c1c22')
+    root.style.setProperty('--text', '#f0f0f5')
+    root.style.setProperty('--muted', '#9999b4')
+    root.style.setProperty('--border', 'rgba(255, 255, 255, 0.10)')
+    root.style.setProperty('--field-border', 'rgba(255, 255, 255, 0.16)')
+    root.style.setProperty('--btn-bg', '#26262f')
+    root.style.setProperty('--input-bg', '#16161d')
+    root.style.setProperty('--chart-track', '#2a2a33')
+    document.body?.style?.setProperty('background', '#0d0d10')
+    document.body?.style?.setProperty('color', '#f0f0f5')
+
+    return {
+      themeMode: root.dataset.themeMode || '',
+      colorScheme: root.style.colorScheme || '',
+      bg: getComputedStyle(root).getPropertyValue('--bg').trim(),
+      text: getComputedStyle(root).getPropertyValue('--text').trim(),
+    }
+  }`)
+}
+
+function parseRgbChannels(color) {
+  const match = String(color ?? '').match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)
+  if (!match) return null
+  return {
+    r: Number(match[1]),
+    g: Number(match[2]),
+    b: Number(match[3]),
+  }
+}
+
+function relativeLuminance(channels) {
+  if (!channels) return null
+  const toLinear = (channel) => {
+    const value = channel / 255
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  }
+  return (0.2126 * toLinear(channels.r)) + (0.7152 * toLinear(channels.g)) + (0.0722 * toLinear(channels.b))
+}
+
+async function assertPrintPreviewLightTheme() {
+  const state = await evalPage(`() => {
+    const root = document.querySelector('[data-testid=analysis-report-document]')
+    const heading = root?.querySelector('h2')
+    const track = root?.querySelector('.bar-chart-track, .budget-track')
+    const appBg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
+    return {
+      path: window.location.pathname,
+      themeMode: document.documentElement.dataset.themeMode || '',
+      appBg,
+      exportColorScheme: root?.getAttribute('data-export-color-scheme') || '',
+      reportBg: root ? getComputedStyle(root).backgroundColor : '',
+      reportColor: root ? getComputedStyle(root).color : '',
+      headingColor: heading ? getComputedStyle(heading).color : '',
+      trackBg: track ? getComputedStyle(track).backgroundColor : '',
+      hasLightScope: Boolean(root?.classList?.contains('analysis-report-light-scope')),
+    }
+  }`)
+
+  assert.ok(state.path.startsWith('/analysis/print'), JSON.stringify(state))
+  assert.equal(state.themeMode, 'dark', `app must stay dark while export is light: ${JSON.stringify(state)}`)
+  assert.equal(state.exportColorScheme, 'light', JSON.stringify(state))
+  assert.equal(state.hasLightScope, true, JSON.stringify(state))
+
+  const reportBgLum = relativeLuminance(parseRgbChannels(state.reportBg))
+  const reportTextLum = relativeLuminance(parseRgbChannels(state.reportColor))
+  const headingLum = relativeLuminance(parseRgbChannels(state.headingColor))
+  assert.ok(reportBgLum != null && reportBgLum >= 0.72, `report bg must be light: ${JSON.stringify(state)} lum=${reportBgLum}`)
+  assert.ok(reportTextLum != null && reportTextLum <= 0.45, `report text must be dark: ${JSON.stringify(state)} lum=${reportTextLum}`)
+  assert.ok(headingLum != null && headingLum <= 0.45, `heading text must be dark: ${JSON.stringify(state)} lum=${headingLum}`)
+  if (state.trackBg) {
+    const trackLum = relativeLuminance(parseRgbChannels(state.trackBg))
+    assert.ok(trackLum != null && trackLum >= 0.55, `chart track must stay light: ${JSON.stringify(state)} lum=${trackLum}`)
+  }
+  return state
+}
+
 async function assertPrintPreviewCoverage() {
   const state = await evalPage(`() => {
     const root = document.querySelector('[data-testid=analysis-report-document]')
@@ -274,7 +368,8 @@ async function assertPrintPreviewCoverage() {
       hasDetailTable: Boolean(document.querySelector('[data-testid=analysis-report-detail-table]')),
       detailHeaders: [...(document.querySelectorAll('[data-testid=analysis-report-detail-table] th') ?? [])].map((node) => node.textContent?.trim() ?? ''),
       iconCount: icons.length,
-      lightBg: getComputedStyle(root).backgroundColor,
+      lightBg: root ? getComputedStyle(root).backgroundColor : '',
+      exportColorScheme: root?.getAttribute('data-export-color-scheme') || '',
     }
   }`)
   assert.ok(state.path.startsWith('/analysis/print'), JSON.stringify(state))
@@ -285,6 +380,9 @@ async function assertPrintPreviewCoverage() {
   assert.equal(state.hasDetailTable, true, JSON.stringify(state))
   assert.ok(state.iconCount > 0, JSON.stringify(state))
   assert.ok(state.detailHeaders.length >= 7, JSON.stringify(state))
+  assert.equal(state.exportColorScheme, 'light', JSON.stringify(state))
+  const bgLum = relativeLuminance(parseRgbChannels(state.lightBg))
+  assert.ok(bgLum != null && bgLum >= 0.72, `preview must stay light: ${JSON.stringify(state)} lum=${bgLum}`)
   return state
 }
 
@@ -358,7 +456,7 @@ async function downloadPdfAndAssert() {
   throw new Error(`PDF export did not produce filename result: ${JSON.stringify(finalState)}`)
 }
 
-console.log('--- Playwright: analysis export chart redesign ---')
+console.log('--- Playwright: analysis export dark-mode light report ---')
 
 if (process.env.ANALYSIS_EXPORT_SKIP_BUILD === '1') {
   console.log('Skipping web build (ANALYSIS_EXPORT_SKIP_BUILD=1)')
@@ -384,6 +482,9 @@ try {
   await delay(1500)
   await completeOnboarding()
 
+  const darkTheme = await forceDarkTheme()
+  assert.equal(darkTheme.themeMode, 'dark', JSON.stringify(darkTheme))
+
   const seed = await seedAnalysisTransactions()
   assert.equal(seed.ok, true, JSON.stringify(seed))
 
@@ -392,10 +493,13 @@ try {
 
   await openPrintPreview()
   await assertPrintPreviewCoverage()
+  const lightPreview = await assertPrintPreviewLightTheme()
   const pdf = await downloadPdfAndAssert()
 
   console.log(JSON.stringify({
     ok: true,
+    darkTheme,
+    lightPreview,
     seed,
     pdf,
   }, null, 2))
