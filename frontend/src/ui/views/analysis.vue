@@ -1,14 +1,39 @@
 <template>
-  <section class="stack analysis-page">
+  <section class="stack analysis-page" data-testid="analysis-page" data-theme-aware="1">
     <article class="card panel">
       <header class="row">
         <h2>{{ t('analysis_page.title') }}</h2>
         <div class="header-actions">
-          <RouterLink class="btn icon-btn" :to="printLink" data-testid="analysis-print-link">
-            <font-awesome-icon icon="fa-solid fa-print" />
-          </RouterLink>
+          <button
+            type="button"
+            class="btn icon-btn"
+            data-testid="analysis-export-direct-btn"
+            :aria-label="t('analysis_print.export_pdf')"
+            :title="t('analysis_print.export_pdf')"
+            :disabled="exportingPdf"
+            @click="exportPdfDirect"
+          >
+            <font-awesome-icon icon="fa-solid fa-file-invoice" />
+          </button>
         </div>
       </header>
+      <p
+        v-if="exportedFilename"
+        class="muted export-result"
+        data-testid="analysis-export-result"
+        :data-filename="exportedFilename"
+        :data-page-count="String(exportedPageCount || '')"
+        :data-light-pdf="exportedLightPdf ? '1' : '0'"
+      >
+        {{ t('analysis_print.file_label', { filename: exportedFilename }) }}
+      </p>
+      <p
+        v-if="lastExportError"
+        class="muted export-result"
+        data-testid="analysis-export-error"
+      >
+        {{ lastExportError }}
+      </p>
 
       <div class="mode-tabs">
         <button class="btn" :class="{ primary: mode === 'all' }" @click="mode = 'all'">{{ t('analysis_page.mode.all') }}</button>
@@ -179,21 +204,59 @@
         </button>
       </div>
     </article>
+
+    <div
+      v-if="showExportCapture"
+      class="analysis-export-capture-host"
+      aria-hidden="true"
+      data-testid="analysis-export-capture-host"
+    >
+      <AnalysisReportDocument
+        ref="reportDocumentRef"
+        :title="t('analysis_print.export_pdf')"
+        :ledger-name="exportLedgerName"
+        :period-label="exportPeriodLabel"
+        :exported-at-label="exportedAtLabel"
+        :currency-code="exportCurrencyCode"
+        :filter-label="exportFilterLabel"
+        :income-items="incomeBarRows"
+        :expense-items="expenseBarRows"
+        :account-items="exportAccountBarRows"
+        :budget-cards="budgetCards"
+        :detail-rows="exportDetailRows"
+        :income-total-minor="incomeTotalMinor"
+        :expense-total-minor="expenseTotalMinor"
+        :income-count="incomeCount"
+        :expense-count="expenseCount"
+        :account-total-minor="exportAccountTotalMinor"
+        :account-count="exportAccountCount"
+      />
+    </div>
   </section>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { Capacitor } from '@capacitor/core'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
 import AnalysisIconizedChartPair from '@/ui/components/analysis/AnalysisIconizedChartPair.vue'
+import AnalysisReportDocument from '@/ui/components/analysis/AnalysisReportDocument.vue'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { listTransactionsForAnalysis } from '@/core/services/transaction-query.service'
+import {
+  createPdfBlobUrl,
+  getLedgerTransactionsExportData,
+  revokeBlobUrl,
+  savePdfFileToDevice,
+  triggerDownloadFromUrl,
+} from '@/core/services/export.service'
+import { buildAnalysisReportPdfFromElement } from '@/core/services/analysis-report-pdf.service'
 import { useI18n } from '@/ui/services/i18n.service'
 import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 import { monthKeyFromDate } from '@/core/utils/id'
@@ -207,6 +270,8 @@ import {
 } from '@/core/utils/analysis-breakdown'
 import {
   ANALYSIS_CHART_SWATCHES,
+  buildAnalysisDetailRows,
+  buildAnalysisReportPdfFilename,
   buildBudgetAchievementCards,
 } from '@/core/utils/analysis-report'
 
@@ -218,12 +283,32 @@ const uiStore = useUiStore()
 const router = useRouter()
 const { t } = useI18n()
 
+function formatDateTime(date) {
+  return date.toLocaleString('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 const mode = ref('month')
 const analysisType = ref('expense')
 const accountAnalysisType = ref('expense')
 const selectedYear = ref(new Date().getFullYear())
 const selectedMonth = ref(monthKeyFromDate(new Date()))
 const statsTransactions = ref([])
+const exportingPdf = ref(false)
+const showExportCapture = ref(false)
+const exportedFilename = ref('')
+const exportedPageCount = ref(0)
+const exportedUrl = ref('')
+const exportedLightPdf = ref(false)
+const lastExportError = ref('')
+const exportedAtLabel = ref(formatDateTime(new Date()))
+const exportDetailRows = ref([])
+const reportDocumentRef = ref(null)
 
 const categoryNameMap = computed(() => {
   const map = new Map()
@@ -255,15 +340,14 @@ const accountBalanceMap = computed(() => {
   return map
 })
 
-const printLink = computed(() => {
-  if (mode.value === 'year') {
-    return { path: '/analysis/print', query: { mode: 'year', year: String(selectedYear.value) } }
-  }
-  if (mode.value === 'month') {
-    return { path: '/analysis/print', query: { mode: 'month', month: selectedMonth.value } }
-  }
-  return { path: '/analysis/print', query: { mode: 'all' } }
+const exportLedgerName = computed(() => ledgerStore.activeLedger?.name || '')
+const exportCurrencyCode = computed(() => String(ledgerStore.activeLedger?.currency_code ?? 'TWD'))
+const exportPeriodLabel = computed(() => {
+  if (mode.value === 'year') return `${t('analysis_print.mode.year')}｜${selectedYear.value}`
+  if (mode.value === 'month') return `${t('analysis_print.mode.month')}｜${selectedMonth.value}`
+  return t('analysis_print.all_hint')
 })
+const exportFilterLabel = computed(() => (mode.value === 'all' ? '' : exportPeriodLabel.value))
 
 watch(
   () => [ledgerStore.activeLedgerId, mode.value, selectedYear.value, selectedMonth.value],
@@ -334,6 +418,9 @@ const totalAccountBreakdown = computed(() => buildAccountBalanceBreakdown({
   accountBalanceMap: accountBalanceMap.value,
   swatches: ANALYSIS_CHART_SWATCHES,
 }))
+const exportAccountBarRows = computed(() => buildBarRows(totalAccountBreakdown.value))
+const exportAccountTotalMinor = computed(() => totalAccountBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
+const exportAccountCount = computed(() => totalAccountBreakdown.value.length)
 
 const incomeTotalMinor = computed(() => incomeBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
 const expenseTotalMinor = computed(() => expenseBreakdown.value.reduce((total, item) => total + item.amountMinor, 0))
@@ -472,6 +559,96 @@ async function loadStatsTransactions() {
     uiStore.pushToast(error.message ?? t('analysis_page.toast.load_failed'), 'error')
   }
 }
+
+function buildExportOptions() {
+  return {
+    mode: mode.value,
+    yearKey: String(selectedYear.value),
+    monthKey: selectedMonth.value,
+    dayKey: selectedMonth.value ? `${selectedMonth.value}-01` : monthKeyFromDate(new Date()),
+    startDate: '',
+    endDate: '',
+  }
+}
+
+async function exportPdfDirect() {
+  const ledgerId = ledgerStore.activeLedgerId
+  if (!ledgerId) {
+    uiStore.pushToast(t('analysis_print.toast.no_ledger'), 'error')
+    return
+  }
+
+  exportingPdf.value = true
+  lastExportError.value = ''
+  exportedLightPdf.value = false
+  exportedAtLabel.value = formatDateTime(new Date())
+  showExportCapture.value = true
+
+  try {
+    const options = buildExportOptions()
+    const reportData = await getLedgerTransactionsExportData(ledgerId, options)
+    exportDetailRows.value = buildAnalysisDetailRows(reportData.records ?? [], {
+      typeLabel: (type) => {
+        if (type === 'income') return t('analysis_page.type.income')
+        if (type === 'expense') return t('analysis_page.type.expense')
+        if (type === 'transfer') return t('transaction_about.type.transfer')
+        return t('transaction_about.type.adjustment')
+      },
+      uncategorizedLabel: t('analysis_page.uncategorized'),
+      unassignedAccountLabel: t('analysis_page.unassigned_account'),
+    })
+
+    await nextTick()
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    const element = reportDocumentRef.value?.getElement?.()
+      || document.querySelector('[data-testid="analysis-export-capture-host"] [data-testid="analysis-report-document"]')
+      || document.getElementById('analysis-report-document')
+    if (!element) {
+      throw new Error(t('analysis_print.toast.preview_missing'))
+    }
+    const usedLightScheme = element.getAttribute('data-export-color-scheme') === 'light'
+
+    const filename = buildAnalysisReportPdfFilename(options)
+    const pdfFile = await buildAnalysisReportPdfFromElement(element, {
+      ...options,
+      filename,
+      pageLabel: (page, total) => t('analysis_print.page_label', { page, total }),
+    })
+
+    exportedFilename.value = pdfFile.filename
+    exportedPageCount.value = Number(pdfFile.pageCount ?? 0)
+    exportedLightPdf.value = usedLightScheme
+
+    const deviceSave = await savePdfFileToDevice(pdfFile.filename, pdfFile.blob, { category: 'analysis' })
+    if (deviceSave.saved) {
+      revokeBlobUrl(exportedUrl.value)
+      exportedUrl.value = String(deviceSave.uri ?? '').trim()
+        || String(deviceSave.openUrl ?? '').trim()
+        || createPdfBlobUrl(pdfFile.blob)
+      uiStore.pushToast(t('analysis_print.toast.pdf_saved', {
+        filename: exportedFilename.value,
+        location: deviceSave.location || t('analysis_print.device_location_default'),
+      }))
+      return
+    }
+
+    revokeBlobUrl(exportedUrl.value)
+    exportedUrl.value = createPdfBlobUrl(pdfFile.blob)
+    triggerDownloadFromUrl(exportedUrl.value, pdfFile.filename)
+    uiStore.pushToast(t('analysis_print.toast.pdf_downloaded', { filename: pdfFile.filename }))
+  } catch (error) {
+    lastExportError.value = String(error?.message ?? error ?? t('analysis_print.toast.export_failed'))
+    uiStore.pushToast(lastExportError.value, 'error')
+  } finally {
+    showExportCapture.value = false
+    exportingPdf.value = false
+  }
+}
+
+onBeforeUnmount(() => {
+  revokeBlobUrl(exportedUrl.value)
+})
 </script>
 
 <style scoped>
@@ -516,6 +693,21 @@ h2, h3 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.export-result {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+.analysis-export-capture-host {
+  position: fixed;
+  left: -12000px;
+  top: 0;
+  width: 794px;
+  pointer-events: none;
+  opacity: 1;
+  z-index: -1;
 }
 
 .header-actions,

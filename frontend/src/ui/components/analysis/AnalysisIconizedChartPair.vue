@@ -153,15 +153,15 @@ function emitSelect(item) {
 
 .pie-panel,
 .bar-panel {
-  border: 1px solid #dbe3f0;
+  border: 1px solid var(--field-border);
   border-radius: 14px;
   padding: 12px;
-  background: #f8fafc;
+  background: var(--bg-soft);
 }
 
 .chart-title {
   font-size: 13px;
-  color: #64748b;
+  color: var(--muted);
   margin-bottom: 10px;
 }
 
@@ -190,7 +190,7 @@ function emitSelect(item) {
   position: absolute;
   inset: 22%;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--card);
   display: grid;
   place-items: center;
   text-align: center;
@@ -256,7 +256,7 @@ function emitSelect(item) {
 .bar-chart-percent {
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
-  color: #64748b;
+  color: var(--muted);
 }
 
 .bar-chart-item {
@@ -278,7 +278,7 @@ function emitSelect(item) {
   height: 10px;
   border-radius: 999px;
   overflow: hidden;
-  background: #e2e8f0;
+  background: var(--chart-track);
 }
 
 .bar-chart-fill {
@@ -288,7 +288,7 @@ function emitSelect(item) {
 }
 
 .muted {
-  color: #64748b;
+  color: var(--muted);
 }
 
 @media (max-width: 720px) {

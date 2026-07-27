@@ -64,7 +64,24 @@ async function waitForBootAndMaybeSkipOnboarding() {
       welcome: Boolean(document.querySelector('.welcome-root')),
       intro: window.location.pathname.includes('/welcome/intro') || Boolean(document.querySelector('.intro-root')),
     })`)
-    if (state.hasBottomNav) return { ok: true, skipped: true }
+    if (state.hasBottomNav) {
+      const ready = await evalPage(`async () => {
+        const app = document.querySelector('#app')?.__vue_app__
+        const pinia = app?.config?.globalProperties?.$pinia
+        if (!pinia) return { ok: false }
+        const stores = [...pinia._s.values()]
+        const ledgerStore = stores.find((store) => store.$id === 'ledger')
+        const accountStore = stores.find((store) => store.$id === 'account')
+        const categoryStore = stores.find((store) => store.$id === 'category')
+        if (typeof ledgerStore?.load === 'function') await ledgerStore.load()
+        if (typeof accountStore?.load === 'function') await accountStore.load()
+        if (typeof categoryStore?.load === 'function') await categoryStore.load()
+        return {
+          ok: Boolean(ledgerStore?.activeLedgerId && accountStore?.accounts?.length && categoryStore?.categories?.length),
+        }
+      }`)
+      if (ready.ok) return { ok: true, skipped: true }
+    }
     if (!state.booting && (state.welcome || state.intro)) break
     await delay(500)
   }
@@ -86,7 +103,7 @@ async function completeOnboarding() {
 
   const welcome = await evalPage(`() => Boolean(document.querySelector('.welcome-root'))`)
   if (welcome) {
-    await runPlaywrightCli(['click', "button:has-text('Next')"])
+    await runPlaywrightCli(['click', "button:has-text('Next'), button:has-text('下一步'), button:has-text('次へ')"])
     await delay(900)
     await runPlaywrightCli(['fill', '.welcome-root input.input', `Playwright Ledger ${Date.now()}`])
     await runPlaywrightCli(['click', "button:has-text('Create Ledger'), button:has-text('建立帳本'), button:has-text('帳簿を作成')"])
@@ -112,7 +129,28 @@ async function completeOnboarding() {
       intro: window.location.pathname.includes('/welcome/intro') || Boolean(document.querySelector('.intro-root')),
       path: window.location.pathname,
     })`)
-    if (state.hasBottomNav) return { ok: true, skipped: false }
+    if (state.hasBottomNav) {
+      // Ensure ledger bootstrap finished before seed.
+      const ready = await evalPage(`async () => {
+        const app = document.querySelector('#app')?.__vue_app__
+        const pinia = app?.config?.globalProperties?.$pinia
+        if (!pinia) return { ok: false }
+        const stores = [...pinia._s.values()]
+        const ledgerStore = stores.find((store) => store.$id === 'ledger')
+        const accountStore = stores.find((store) => store.$id === 'account')
+        const categoryStore = stores.find((store) => store.$id === 'category')
+        if (typeof ledgerStore?.load === 'function') await ledgerStore.load()
+        if (typeof accountStore?.load === 'function') await accountStore.load()
+        if (typeof categoryStore?.load === 'function') await categoryStore.load()
+        return {
+          ok: Boolean(ledgerStore?.activeLedgerId && accountStore?.accounts?.length && categoryStore?.categories?.length),
+          ledgerId: ledgerStore?.activeLedgerId || null,
+          accounts: accountStore?.accounts?.length || 0,
+          categories: categoryStore?.categories?.length || 0,
+        }
+      }`)
+      if (ready.ok) return { ok: true, skipped: false, ...ready }
+    }
     if (state.intro) {
       await runPlaywrightCli(['click', "button:has-text('Start now'), button:has-text('先開始使用'), button:has-text('Skip'), button:has-text('今すぐ始める')"])
     }
@@ -126,80 +164,95 @@ async function completeOnboarding() {
 }
 
 async function seedAnalysisTransactions() {
-  return evalPage(`async () => {
-    const app = document.querySelector('#app')?.__vue_app__
-    if (!app) return { ok: false, reason: 'missing vue app' }
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const state = await evalPage(`async () => {
+      const app = document.querySelector('#app')?.__vue_app__
+      if (!app) return { ok: false, reason: 'missing vue app' }
 
-    let pinia = app.config?.globalProperties?.$pinia || null
-    const provides = app._context?.provides || {}
-    if (!pinia) {
-      for (const key of Reflect.ownKeys(provides)) {
-        const value = provides[key]
-        if (value && typeof value === 'object' && value.state && value._s) {
-          pinia = value
-          break
+      let pinia = app.config?.globalProperties?.$pinia || null
+      const provides = app._context?.provides || {}
+      if (!pinia) {
+        for (const key of Reflect.ownKeys(provides)) {
+          const value = provides[key]
+          if (value && typeof value === 'object' && value.state && value._s) {
+            pinia = value
+            break
+          }
         }
       }
-    }
-    if (!pinia) return { ok: false, reason: 'missing pinia' }
+      if (!pinia) return { ok: false, reason: 'missing pinia' }
 
-    const stores = [...pinia._s.values()]
-    const ledgerStore = stores.find((store) => store.$id === 'ledger')
-    const categoryStore = stores.find((store) => store.$id === 'category')
-    const accountStore = stores.find((store) => store.$id === 'account')
-    const transactionStore = stores.find((store) => store.$id === 'transaction')
-    if (!ledgerStore || !categoryStore || !accountStore || !transactionStore) {
-      return { ok: false, reason: 'missing stores', ids: stores.map((store) => store.$id) }
-    }
+      const stores = [...pinia._s.values()]
+      const ledgerStore = stores.find((store) => store.$id === 'ledger')
+      const categoryStore = stores.find((store) => store.$id === 'category')
+      const accountStore = stores.find((store) => store.$id === 'account')
+      const transactionStore = stores.find((store) => store.$id === 'transaction')
+      if (!ledgerStore || !categoryStore || !accountStore || !transactionStore) {
+        return { ok: false, reason: 'missing stores', ids: stores.map((store) => store.$id) }
+      }
 
-    if (typeof categoryStore.load === 'function') await categoryStore.load()
-    if (typeof accountStore.load === 'function') await accountStore.load()
+      if (typeof ledgerStore.load === 'function') await ledgerStore.load()
+      if (typeof categoryStore.load === 'function') await categoryStore.load()
+      if (typeof accountStore.load === 'function') await accountStore.load()
 
-    const ledgerId = ledgerStore.activeLedgerId
-    const accountId = accountStore.accounts?.[0]?.id
-    const expenseCategory = (categoryStore.categories || []).find((item) => item.kind === 'expense')
-      || categoryStore.categories?.[0]
-    const incomeCategory = (categoryStore.categories || []).find((item) => item.kind === 'income')
-      || categoryStore.categories?.[0]
-    if (!ledgerId || !accountId || !expenseCategory?.id) {
-      return { ok: false, reason: 'missing ledger/account/category' }
-    }
+      const ledgerId = ledgerStore.activeLedgerId
+      const accountId = accountStore.accounts?.[0]?.id
+      const expenseCategory = (categoryStore.categories || []).find((item) => item.kind === 'expense')
+        || categoryStore.categories?.[0]
+      const incomeCategory = (categoryStore.categories || []).find((item) => item.kind === 'income')
+        || categoryStore.categories?.[0]
+      if (!ledgerId || !accountId || !expenseCategory?.id) {
+        return {
+          ok: false,
+          reason: 'missing ledger/account/category',
+          ledgerId: ledgerId || null,
+          accountCount: accountStore.accounts?.length || 0,
+          categoryCount: categoryStore.categories?.length || 0,
+        }
+      }
 
-    const now = new Date()
-    const monthKey = \`\${now.getFullYear()}-\${String(now.getMonth() + 1).padStart(2, '0')}\`
-    const day = String(Math.min(28, now.getDate())).padStart(2, '0')
-    const occurredAt = \`\${monthKey}-\${day}T12:00:00.000Z\`
+      const now = new Date()
+      const monthKey = \`\${now.getFullYear()}-\${String(now.getMonth() + 1).padStart(2, '0')}\`
+      const day = String(Math.min(28, now.getDate())).padStart(2, '0')
+      const occurredAt = \`\${monthKey}-\${day}T12:00:00.000Z\`
 
-    await transactionStore.addExpense({
-      accountId,
-      categoryId: expenseCategory.id,
-      amountMinor: 8800,
-      occurredAt,
-      note: 'Playwright analysis expense',
-      tagsJson: JSON.stringify(['pw-expense']),
-      includeInAnalysis: true,
-      includeInBudget: true,
-    })
-    if (incomeCategory?.id) {
-      await transactionStore.addIncome({
+      await transactionStore.addExpense({
         accountId,
-        categoryId: incomeCategory.id,
-        amountMinor: 15000,
-        occurredAt: \`\${monthKey}-\${day}T11:00:00.000Z\`,
-        note: 'Playwright analysis income',
-        tagsJson: JSON.stringify(['pw-income']),
+        categoryId: expenseCategory.id,
+        amountMinor: 8800,
+        occurredAt,
+        note: 'Playwright analysis expense',
+        tagsJson: JSON.stringify(['pw-expense']),
         includeInAnalysis: true,
-        includeInBudget: false,
+        includeInBudget: true,
       })
-    }
+      if (incomeCategory?.id) {
+        await transactionStore.addIncome({
+          accountId,
+          categoryId: incomeCategory.id,
+          amountMinor: 15000,
+          occurredAt: \`\${monthKey}-\${day}T11:00:00.000Z\`,
+          note: 'Playwright analysis income',
+          tagsJson: JSON.stringify(['pw-income']),
+          includeInAnalysis: true,
+          includeInBudget: false,
+        })
+      }
 
-    return {
-      ok: true,
-      monthKey,
-      expenseIcon: String(expenseCategory.icon ?? ''),
-      accountIcon: String(accountStore.accounts?.[0]?.icon ?? ''),
+      return {
+        ok: true,
+        monthKey,
+        expenseIcon: String(expenseCategory.icon ?? ''),
+        accountIcon: String(accountStore.accounts?.[0]?.icon ?? ''),
+      }
+    }`)
+    if (state.ok) return state
+    if (state.reason !== 'missing ledger/account/category' && state.reason !== 'missing stores' && state.reason !== 'missing vue app' && state.reason !== 'missing pinia') {
+      return state
     }
-  }`)
+    await delay(500)
+  }
+  return { ok: false, reason: 'missing ledger/account/category after retries' }
 }
 
 async function navigateToAnalysis() {
@@ -233,18 +286,93 @@ async function assertAnalysisIconsVisible() {
       hasPieLegend: Boolean(pieLegend),
       hasBarList: Boolean(barList),
       hasIncomeOrExpense: Boolean(document.querySelector('[data-testid=analysis-income-section], [data-testid=analysis-expense-section]')),
+      hasDirectExport: Boolean(document.querySelector('[data-testid=analysis-export-direct-btn]')),
+      hasPrintLink: Boolean(document.querySelector('[data-testid=analysis-print-link]')),
     }
   }`)
   assert.equal(state.path, '/analysis', JSON.stringify(state))
   assert.equal(state.hasBottomNav, true, JSON.stringify(state))
   assert.equal(state.hasBigNumbers, true, JSON.stringify(state))
   assert.equal(state.hasIncomeOrExpense, true, JSON.stringify(state))
+  assert.equal(state.hasDirectExport, true, `main export must be direct button: ${JSON.stringify(state)}`)
+  assert.equal(state.hasPrintLink, false, `preview link must not be main UX: ${JSON.stringify(state)}`)
   assert.ok(state.iconCount > 0 || state.hasPieLegend || state.hasBarList, JSON.stringify(state))
   return state
 }
 
-async function openPrintPreview() {
-  await runPlaywrightCli(['click', '[data-testid=analysis-print-link]'])
+function parseRgbChannels(color) {
+  const match = String(color ?? '').match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)
+  if (!match) return null
+  return {
+    r: Number(match[1]),
+    g: Number(match[2]),
+    b: Number(match[3]),
+  }
+}
+
+function relativeLuminance(channels) {
+  if (!channels) return null
+  const toLinear = (channel) => {
+    const value = channel / 255
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  }
+  return (0.2126 * toLinear(channels.r)) + (0.7152 * toLinear(channels.g)) + (0.0722 * toLinear(channels.b))
+}
+
+async function assertAnalysisPageDarkTheme() {
+  const state = await evalPage(`() => {
+    const page = document.querySelector('[data-testid=analysis-page]')
+    const panel = document.querySelector('[data-testid=analysis-page] .card.panel, [data-testid=analysis-big-numbers]')
+    const heading = document.querySelector('[data-testid=analysis-page] h2')
+    const piePanel = document.querySelector('[data-testid=analysis-income-charts] .pie-panel, [data-testid=analysis-expense-charts] .pie-panel')
+    const pieHole = document.querySelector('[data-testid=analysis-income-charts] .pie-hole, [data-testid=analysis-expense-charts] .pie-hole')
+    const track = document.querySelector('[data-testid=analysis-income-charts] .bar-chart-track, [data-testid=analysis-expense-charts] .bar-chart-track, .budget-track, .time-bar-track')
+    const muted = document.querySelector('[data-testid=analysis-income-charts] .muted, [data-testid=analysis-expense-charts] .muted, [data-testid=analysis-page] .count-chip')
+    return {
+      path: window.location.pathname,
+      themeMode: document.documentElement.dataset.themeMode || '',
+      appBg: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
+      card: getComputedStyle(document.documentElement).getPropertyValue('--card').trim(),
+      text: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
+      pageBg: page ? getComputedStyle(page).backgroundColor : '',
+      panelBg: panel ? getComputedStyle(panel).backgroundColor : '',
+      headingColor: heading ? getComputedStyle(heading).color : '',
+      piePanelBg: piePanel ? getComputedStyle(piePanel).backgroundColor : '',
+      pieHoleBg: pieHole ? getComputedStyle(pieHole).backgroundColor : '',
+      trackBg: track ? getComputedStyle(track).backgroundColor : '',
+      mutedColor: muted ? getComputedStyle(muted).color : '',
+    }
+  }`)
+
+  assert.equal(state.path, '/analysis', JSON.stringify(state))
+  assert.equal(state.themeMode, 'dark', JSON.stringify(state))
+
+  const panelLum = relativeLuminance(parseRgbChannels(state.panelBg))
+  const headingLum = relativeLuminance(parseRgbChannels(state.headingColor))
+  const piePanelLum = relativeLuminance(parseRgbChannels(state.piePanelBg))
+  const pieHoleLum = relativeLuminance(parseRgbChannels(state.pieHoleBg))
+  const mutedLum = relativeLuminance(parseRgbChannels(state.mutedColor))
+
+  assert.ok(panelLum != null && panelLum <= 0.45, `analysis panel must be dark: ${JSON.stringify(state)} lum=${panelLum}`)
+  assert.ok(headingLum != null && headingLum >= 0.55, `analysis heading must be light-on-dark: ${JSON.stringify(state)} lum=${headingLum}`)
+  if (piePanelLum != null) {
+    assert.ok(piePanelLum <= 0.55, `chart panel must follow dark theme: ${JSON.stringify(state)} lum=${piePanelLum}`)
+  }
+  if (pieHoleLum != null) {
+    assert.ok(pieHoleLum <= 0.55, `pie hole must not stay hard-coded white: ${JSON.stringify(state)} lum=${pieHoleLum}`)
+  }
+  if (mutedLum != null) {
+    assert.ok(mutedLum >= 0.25, `muted text must remain readable on dark: ${JSON.stringify(state)} lum=${mutedLum}`)
+  }
+  return state
+}
+
+async function openAdvancedPrintRoute() {
+  await runPlaywrightCli(['eval', `() => {
+    window.history.pushState({}, '', '/analysis/print?mode=month')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+    return true
+  }`], { raw: true })
   await delay(1500)
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const state = await evalPage(`() => ({
@@ -256,7 +384,7 @@ async function openPrintPreview() {
     if (state.path.startsWith('/analysis/print') && state.hasPreview && state.hasPdfBtn) return state
     await delay(400)
   }
-  throw new Error('failed to open /analysis/print preview')
+  throw new Error('failed to open advanced /analysis/print route')
 }
 
 async function forceDarkTheme() {
@@ -295,25 +423,6 @@ async function forceDarkTheme() {
       text: getComputedStyle(root).getPropertyValue('--text').trim(),
     }
   }`)
-}
-
-function parseRgbChannels(color) {
-  const match = String(color ?? '').match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)
-  if (!match) return null
-  return {
-    r: Number(match[1]),
-    g: Number(match[2]),
-    b: Number(match[3]),
-  }
-}
-
-function relativeLuminance(channels) {
-  if (!channels) return null
-  const toLinear = (channel) => {
-    const value = channel / 255
-    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
-  }
-  return (0.2126 * toLinear(channels.r)) + (0.7152 * toLinear(channels.g)) + (0.0722 * toLinear(channels.b))
 }
 
 async function assertExportChromeDarkTheme() {
@@ -500,57 +609,96 @@ async function assertPrintPreviewCoverage() {
   return state
 }
 
-async function downloadPdfAndAssert() {
+async function exportPdfDirectAndAssert() {
   await runPlaywrightCli(['eval', `() => {
     window.__playwrightErrors = window.__playwrightErrors || []
+    window.__playwrightPaths = window.__playwrightPaths || []
     window.addEventListener('error', (event) => {
       window.__playwrightErrors.push(String(event?.error?.message ?? event?.message ?? 'unknown error'))
     })
     window.addEventListener('unhandledrejection', (event) => {
       window.__playwrightErrors.push(String(event?.reason?.message ?? event?.reason ?? 'unknown rejection'))
     })
+    const pushPath = () => {
+      window.__playwrightPaths.push(window.location.pathname)
+    }
+    pushPath()
+    window.addEventListener('popstate', pushPath)
+    const _pushState = history.pushState.bind(history)
+    history.pushState = (...args) => {
+      const result = _pushState(...args)
+      pushPath()
+      return result
+    }
     return true
   }`], { raw: true })
 
   const clickState = await evalPage(`() => {
-    const button = document.querySelector('[data-testid="analysis-export-pdf-btn"]')
-    if (!button) return { ok: false, reason: 'missing button' }
+    const button = document.querySelector('[data-testid="analysis-export-direct-btn"]')
+    if (!button) return { ok: false, reason: 'missing direct export button' }
     button.scrollIntoView({ block: 'center', inline: 'nearest' })
     button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
     return {
       ok: true,
       disabled: Boolean(button.disabled),
-      text: button.textContent?.trim() || '',
+      path: window.location.pathname,
     }
   }`)
   assert.equal(clickState.ok, true, JSON.stringify(clickState))
+  assert.equal(clickState.path, '/analysis', JSON.stringify(clickState))
 
+  let sawLightCapture = false
   for (let attempt = 0; attempt < 120; attempt += 1) {
     const state = await evalPage(`() => {
       const result = document.querySelector('[data-testid="analysis-export-result"]')
-      const button = document.querySelector('[data-testid="analysis-export-pdf-btn"]')
+      const button = document.querySelector('[data-testid="analysis-export-direct-btn"]')
+      const capture = document.querySelector('[data-testid="analysis-export-capture-host"]')
+      const report = capture?.querySelector('[data-testid="analysis-report-document"]')
+        || document.querySelector('[data-testid="analysis-report-document"]')
       const toasts = [...document.querySelectorAll('.toast, .toast-item, [class*="toast"]')]
         .map((node) => node.textContent?.trim() ?? '')
         .filter(Boolean)
       return {
+        path: window.location.pathname,
+        paths: window.__playwrightPaths ?? [],
         filename: result?.getAttribute('data-filename') || '',
         pageCount: Number(result?.getAttribute('data-page-count') || 0),
-        previewIconCount: document.querySelectorAll('[data-testid="analysis-report-document"] svg, [data-testid="analysis-report-document"] .swatch-icon').length,
+        hasCaptureHost: Boolean(capture),
+        exportColorScheme: report?.getAttribute('data-export-color-scheme') || '',
+        reportBg: report ? getComputedStyle(report).backgroundColor : '',
+        captureIconCount: report
+          ? report.querySelectorAll('svg, .swatch-icon').length
+          : 0,
         buttonDisabled: Boolean(button?.disabled),
-        buttonText: button?.textContent?.trim() || '',
         exportError: document.querySelector('[data-testid="analysis-export-error"]')?.textContent?.trim() || '',
         toasts,
         errors: window.__playwrightErrors ?? [],
       }
     }`)
+
+    assert.equal(state.path, '/analysis', `direct export must stay on /analysis: ${JSON.stringify(state)}`)
+    assert.ok(
+      !(state.paths || []).some((path) => String(path).startsWith('/analysis/print')),
+      `preview route must not be required: ${JSON.stringify(state)}`,
+    )
+
+    if (state.exportColorScheme === 'light' && state.reportBg) {
+      const reportBgLum = relativeLuminance(parseRgbChannels(state.reportBg))
+      if (reportBgLum != null && reportBgLum >= 0.72) sawLightCapture = true
+    }
+    if (state.captureIconCount > 0 && state.exportColorScheme === 'light') {
+      sawLightCapture = true
+    }
+
     if (state.exportError) {
       throw new Error(`PDF export error panel: ${JSON.stringify(state)}`)
     }
     if (state.filename) {
       assert.match(state.filename, /^交易報表_\d{4}-\d{2}\.pdf$/)
       assert.ok(state.pageCount >= 1, JSON.stringify(state))
-      assert.ok(state.previewIconCount > 0, JSON.stringify(state))
-      return state
+      const lightPdf = await evalPage(`() => document.querySelector('[data-testid="analysis-export-result"]')?.getAttribute('data-light-pdf') || ''`)
+      assert.equal(lightPdf, '1', `direct PDF must use light report capture: ${JSON.stringify({ ...state, lightPdf })}`)
+      return { ...state, sawLightCapture: true, lightPdf }
     }
     if (state.toasts.some((text) => /失敗|failed|missing|找不到/i.test(text))) {
       throw new Error(`PDF export failed via toast: ${JSON.stringify(state)}`)
@@ -561,8 +709,9 @@ async function downloadPdfAndAssert() {
     await delay(1000)
   }
   const finalState = await evalPage(`() => ({
+    path: window.location.pathname,
     filename: document.querySelector('[data-testid="analysis-export-result"]')?.getAttribute('data-filename') || '',
-    buttonText: document.querySelector('[data-testid="analysis-export-pdf-btn"]')?.textContent?.trim() || '',
+    buttonText: document.querySelector('[data-testid="analysis-export-direct-btn"]')?.textContent?.trim() || '',
     toasts: [...document.querySelectorAll('.toast, .toast-item, [class*="toast"]')].map((node) => node.textContent?.trim() ?? '').filter(Boolean),
     errors: window.__playwrightErrors ?? [],
     bodyText: document.body?.innerText?.slice(0, 2000) || '',
@@ -570,7 +719,7 @@ async function downloadPdfAndAssert() {
   throw new Error(`PDF export did not produce filename result: ${JSON.stringify(finalState)}`)
 }
 
-console.log('--- Playwright: analysis export dark-mode light report ---')
+console.log('--- Playwright: analysis direct export + dark mode ---')
 
 if (process.env.ANALYSIS_EXPORT_SKIP_BUILD === '1') {
   console.log('Skipping web build (ANALYSIS_EXPORT_SKIP_BUILD=1)')
@@ -593,7 +742,28 @@ const preview = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--
 try {
   await waitForPreviewReady()
   await runPlaywrightCli(['open', baseUrl])
-  await delay(1500)
+  await delay(800)
+  // Fresh app-shell for deterministic onboarding + seed.
+  await runPlaywrightCli(['eval', `async () => {
+    try {
+      localStorage.clear()
+      sessionStorage.clear()
+    } catch {
+      // ignore
+    }
+    if (window.indexedDB?.databases) {
+      const dbs = await window.indexedDB.databases()
+      await Promise.all((dbs || []).map((db) => new Promise((resolve) => {
+        const req = window.indexedDB.deleteDatabase(db.name)
+        req.onsuccess = () => resolve()
+        req.onerror = () => resolve()
+        req.onblocked = () => resolve()
+      })))
+    }
+    location.reload()
+    return true
+  }`], { raw: true })
+  await delay(2000)
   await completeOnboarding()
 
   const darkTheme = await forceDarkTheme()
@@ -604,17 +774,20 @@ try {
 
   await navigateToAnalysis()
   await assertAnalysisIconsVisible()
+  const analysisDark = await assertAnalysisPageDarkTheme()
+  const pdf = await exportPdfDirectAndAssert()
 
-  await openPrintPreview()
+  // Advanced/debug route still available, but not the main UX path.
+  await openAdvancedPrintRoute()
   await assertPrintPreviewCoverage()
   const chromeDark = await assertExportChromeDarkTheme()
   const lightPreview = await assertPrintPreviewLightTheme()
   const layout = await assertPdfLayoutIntegrity()
-  const pdf = await downloadPdfAndAssert()
 
   console.log(JSON.stringify({
     ok: true,
     darkTheme,
+    analysisDark,
     chromeDark,
     lightPreview,
     layout,
