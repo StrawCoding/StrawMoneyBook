@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { execFile, spawn } from 'node:child_process'
+import { promises as fs } from 'node:fs'
 import { promisify } from 'node:util'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 
 const execFileAsync = promisify(execFile)
 const frontendDir = '/mnt/data/code/project/StrawCoding/StrawMoneyBook/frontend'
@@ -12,6 +13,7 @@ const defaultBrowsersPath = resolve(repoRoot, 'backend/.server-data/playwright-b
 const playwrightConfigPath = resolve(fileURLToPath(new URL('../playwright-cli.json', import.meta.url)))
 const previewPort = Number(process.env.ANALYSIS_EXPORT_PLAYWRIGHT_PORT || 4182)
 const baseUrl = `http://127.0.0.1:${previewPort}`
+const playwrightCliDir = resolve(frontendDir, '.playwright-cli')
 
 async function runPlaywrightCli(args, { raw = false } = {}) {
   const cliArgs = [
@@ -719,6 +721,123 @@ async function exportPdfDirectAndAssert() {
   throw new Error(`PDF export did not produce filename result: ${JSON.stringify(finalState)}`)
 }
 
+async function findLatestExportedPdf(filename) {
+  const candidates = []
+  if (filename) {
+    candidates.push(resolve(playwrightCliDir, filename))
+    // Playwright download paths may normalize "_" to "-".
+    candidates.push(resolve(playwrightCliDir, String(filename).replaceAll('_', '-')))
+  }
+  for (const preferred of candidates) {
+    try {
+      await fs.access(preferred)
+      return preferred
+    } catch {
+      // try next
+    }
+  }
+  let entries = []
+  try {
+    entries = await fs.readdir(playwrightCliDir)
+  } catch {
+    return null
+  }
+  const pdfs = entries.filter((name) => /^交易報表[_-]\d{4}-\d{2}\.pdf$/i.test(name))
+  if (!pdfs.length) return null
+  const ranked = await Promise.all(pdfs.map(async (name) => {
+    const full = resolve(playwrightCliDir, name)
+    const stat = await fs.stat(full)
+    return { full, mtime: stat.mtimeMs }
+  }))
+  ranked.sort((a, b) => b.mtime - a.mtime)
+  return ranked[0]?.full || null
+}
+
+/**
+ * Render exported PDF pages and assert:
+ * - footer band on page 1 is mostly white (page number only; content not overlapping)
+ * - page 2+ top edge is not a mid-block fragment
+ */
+async function assertExportedPdfNoClip(filename) {
+  const pdfPath = await findLatestExportedPdf(filename)
+  assert.ok(pdfPath, `exported PDF not found for ${filename}`)
+
+  const outDir = resolve(frontendDir, '.playwright-cli/pdf-clip-check')
+  await fs.mkdir(outDir, { recursive: true })
+  for (const name of await fs.readdir(outDir)) {
+    if (name.endsWith('.png')) await fs.unlink(join(outDir, name))
+  }
+
+  try {
+    await execFileAsync('pdftoppm', ['-png', '-r', '110', pdfPath, join(outDir, 'page')], {
+      timeout: 60000,
+    })
+  } catch (error) {
+    throw new Error(`pdftoppm failed while checking PDF clip: ${error?.message || error}`)
+  }
+
+  const pages = (await fs.readdir(outDir))
+    .filter((name) => /^page-\d+\.png$/.test(name))
+    .sort((a, b) => Number(a.match(/\d+/)?.[0] || 0) - Number(b.match(/\d+/)?.[0] || 0))
+  assert.ok(pages.length >= 1, `no rendered PDF pages in ${outDir}`)
+
+  const py = await execFileAsync('python3', ['-c', `
+from pathlib import Path
+try:
+    from PIL import Image
+except ImportError:
+    import subprocess, sys
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pillow', '-q'])
+    from PIL import Image
+import json
+
+out = []
+root = Path(${JSON.stringify(outDir)})
+for path in sorted(root.glob('page-*.png'), key=lambda p: int(p.stem.split('-')[1])):
+    img = Image.open(path).convert('RGB')
+    w, h = img.size
+    footer = img.crop((0, h - 55, w, h))
+    top = img.crop((0, 0, w, 18))
+    def nw(region, thr=245):
+        return sum(1 for px in region.getdata() if not (px[0] > thr and px[1] > thr and px[2] > thr))
+    out.append({
+        'name': path.name,
+        'w': w,
+        'h': h,
+        'footer_nw': nw(footer),
+        'footer_pixels': footer.size[0] * footer.size[1],
+        'top_nw': nw(top),
+        'top_pixels': top.size[0] * top.size[1],
+    })
+print(json.dumps(out))
+`], { timeout: 60000, maxBuffer: 2 * 1024 * 1024 })
+
+  const metrics = JSON.parse(String(py.stdout || '[]'))
+  assert.ok(metrics.length >= 1, 'pdf clip metrics empty')
+
+  const page1 = metrics[0]
+  const footerRatio = page1.footer_nw / Math.max(1, page1.footer_pixels)
+  assert.ok(
+    footerRatio < 0.08,
+    `page 1 footer must stay mostly white (no content under page number): ${JSON.stringify(page1)} ratio=${footerRatio}`,
+  )
+
+  for (let i = 1; i < metrics.length; i += 1) {
+    const page = metrics[i]
+    const topRatio = page.top_nw / Math.max(1, page.top_pixels)
+    assert.ok(
+      topRatio < 0.35,
+      `page ${i + 1} top edge must not be a mid-block cut fragment: ${JSON.stringify(page)} ratio=${topRatio}`,
+    )
+  }
+
+  return {
+    pdfPath,
+    pageCount: metrics.length,
+    metrics,
+  }
+}
+
 console.log('--- Playwright: analysis direct export + dark mode ---')
 
 if (process.env.ANALYSIS_EXPORT_SKIP_BUILD === '1') {
@@ -776,6 +895,7 @@ try {
   await assertAnalysisIconsVisible()
   const analysisDark = await assertAnalysisPageDarkTheme()
   const pdf = await exportPdfDirectAndAssert()
+  const pdfNoClip = await assertExportedPdfNoClip(pdf.filename)
 
   // Advanced/debug route still available, but not the main UX path.
   await openAdvancedPrintRoute()
@@ -793,6 +913,7 @@ try {
     layout,
     seed,
     pdf,
+    pdfNoClip,
   }, null, 2))
 } finally {
   preview.kill('SIGTERM')

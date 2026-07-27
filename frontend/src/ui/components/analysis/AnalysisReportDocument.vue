@@ -457,4 +457,21 @@ defineExpose({
   table-layout: fixed;
   width: 100%;
 }
+
+.analysis-report-document[data-print-layout='a4'] .report-table th,
+.analysis-report-document[data-print-layout='a4'] .report-table td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.analysis-report-document[data-print-layout='a4'] .report-header,
+.analysis-report-document[data-print-layout='a4'] .big-numbers,
+.analysis-report-document[data-print-layout='a4'] .iconized-chart-pair,
+.analysis-report-document[data-print-layout='a4'] .budget-section,
+.analysis-report-document[data-print-layout='a4'] .budget-card,
+.analysis-report-document[data-print-layout='a4'] .table-section,
+.analysis-report-document[data-print-layout='a4'] .report-table tbody tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
 </style>

@@ -7,19 +7,25 @@ import {
 } from '@/core/utils/analysis-report-light-theme'
 import {
   ANALYSIS_REPORT_PDF_PAGE,
+  collectAnalysisReportPdfAvoidRanges,
   computePdfSlicePlan,
   prepareAnalysisReportElementForPdfCapture,
+  scaleAvoidRangesToCanvas,
 } from '@/core/utils/analysis-report-pdf-layout'
 
 const PAGE_WIDTH_PX = ANALYSIS_REPORT_PDF_PAGE.WIDTH_PX
 const PAGE_HEIGHT_PX = ANALYSIS_REPORT_PDF_PAGE.HEIGHT_PX
 const PRINT_LAYOUT_ATTR = ANALYSIS_REPORT_PDF_PAGE.PRINT_LAYOUT_ATTR
 const PRINT_LAYOUT_VALUE = ANALYSIS_REPORT_PDF_PAGE.PRINT_LAYOUT_VALUE
+const FOOTER_MARGIN_PT = ANALYSIS_REPORT_PDF_PAGE.FOOTER_MARGIN_PT
+const PAGE_MARGIN_PT = ANALYSIS_REPORT_PDF_PAGE.PAGE_MARGIN_PT
 
 export {
   ANALYSIS_REPORT_PDF_PAGE,
+  collectAnalysisReportPdfAvoidRanges,
   computePdfSlicePlan,
   prepareAnalysisReportElementForPdfCapture,
+  scaleAvoidRangesToCanvas,
 }
 
 async function waitForLayout() {
@@ -54,6 +60,8 @@ export function sanitizeCloneForHtml2Canvas(clonedDoc) {
     `#analysis-report-document[${PRINT_LAYOUT_ATTR}="${PRINT_LAYOUT_VALUE}"] .meta-grid { min-width: 220px !important; }`,
     `#analysis-report-document[${PRINT_LAYOUT_ATTR}="${PRINT_LAYOUT_VALUE}"] .table-wrap { overflow: visible !important; }`,
     `#analysis-report-document[${PRINT_LAYOUT_ATTR}="${PRINT_LAYOUT_VALUE}"] .report-table { table-layout: fixed !important; width: 100% !important; }`,
+    `#analysis-report-document[${PRINT_LAYOUT_ATTR}="${PRINT_LAYOUT_VALUE}"] .report-table th, #analysis-report-document[${PRINT_LAYOUT_ATTR}="${PRINT_LAYOUT_VALUE}"] .report-table td { overflow-wrap: anywhere !important; word-break: break-word !important; }`,
+    `#analysis-report-document[${PRINT_LAYOUT_ATTR}="${PRINT_LAYOUT_VALUE}"] .iconized-chart-pair, #analysis-report-document[${PRINT_LAYOUT_ATTR}="${PRINT_LAYOUT_VALUE}"] .big-numbers, #analysis-report-document[${PRINT_LAYOUT_ATTR}="${PRINT_LAYOUT_VALUE}"] .budget-section, #analysis-report-document[${PRINT_LAYOUT_ATTR}="${PRINT_LAYOUT_VALUE}"] .table-section { break-inside: avoid !important; page-break-inside: avoid !important; }`,
   ].join('\n')
   clonedDoc.head?.appendChild(style)
 
@@ -66,6 +74,7 @@ export function sanitizeCloneForHtml2Canvas(clonedDoc) {
     report.style.setProperty('max-width', `${PAGE_WIDTH_PX}px`, 'important')
     report.style.setProperty('min-width', `${PAGE_WIDTH_PX}px`, 'important')
     report.style.setProperty('box-sizing', 'border-box', 'important')
+    report.style.setProperty('overflow', 'visible', 'important')
   }
 
   const rewriteValue = (value) => {
@@ -147,14 +156,23 @@ export function sliceCanvasToPdfPages(canvas, pdf, {
   pageHeightPt,
   drawPageNumber,
   pageLabel = (page, total) => `${page} / ${total}`,
+  footerMarginPt = FOOTER_MARGIN_PT,
+  pageMarginPt = PAGE_MARGIN_PT,
+  avoidRangesCanvasPx = [],
 } = {}) {
-  const plan = computePdfSlicePlan(canvas.width, canvas.height, pageWidthPt, pageHeightPt)
+  const plan = computePdfSlicePlan(canvas.width, canvas.height, pageWidthPt, pageHeightPt, {
+    footerMarginPt,
+    pageMarginPt,
+    avoidRangesCanvasPx,
+  })
+  const margin = plan.pageMarginPt
+  const contentWidthPt = plan.contentWidthPt
 
   for (const page of plan.pages) {
     const pageCanvas = document.createElement('canvas')
+    // Content-only canvas (no forced full-page stretch); letterbox on PDF page.
     pageCanvas.width = canvas.width
-    // Full A4 page canvas height so content is never vertically stretched.
-    pageCanvas.height = Math.max(1, Math.ceil(plan.pageHeightPx))
+    pageCanvas.height = Math.max(1, Math.ceil(page.sourceHeight))
     const context = pageCanvas.getContext('2d')
     context.fillStyle = '#ffffff'
     context.fillRect(0, 0, pageCanvas.width, pageCanvas.height)
@@ -173,14 +191,19 @@ export function sliceCanvasToPdfPages(canvas, pdf, {
     if (page.pageIndex > 0) {
       pdf.addPage()
     }
+    // Full white page first, then place content inside margins.
+    pdf.setFillColor(255, 255, 255)
+    pdf.rect(0, 0, pageWidthPt, pageHeightPt, 'F')
+
     const imageData = pageCanvas.toDataURL('image/png')
-    // Always draw onto full page height; residual area stays white (no stretch).
-    pdf.addImage(imageData, 'PNG', 0, 0, pageWidthPt, pageHeightPt, undefined, 'FAST')
+    const drawHeightPt = page.sourceHeight / plan.pxPerPt
+    pdf.addImage(imageData, 'PNG', margin, margin, contentWidthPt, drawHeightPt, undefined, 'FAST')
 
     if (drawPageNumber !== false) {
       pdf.setFontSize(9)
       pdf.setTextColor(100)
-      pdf.text(pageLabel(page.pageIndex + 1, plan.pageCount), pageWidthPt / 2, pageHeightPt - 18, { align: 'center' })
+      const footerY = pageHeightPt - Math.max(10, Math.min(plan.footerMarginPt * 0.5, plan.footerMarginPt - 4))
+      pdf.text(pageLabel(page.pageIndex + 1, plan.pageCount), pageWidthPt / 2, footerY, { align: 'center' })
     }
   }
 
@@ -204,9 +227,17 @@ export async function buildAnalysisReportPdfFromElement(element, options = {}) {
     await waitForLayout()
 
     const captureWidth = prepared.widthPx
-    const captureHeight = clampPositive(element.scrollHeight, PAGE_HEIGHT_PX)
+    const captureHeight = clampPositive(
+      Math.max(element.scrollHeight || 0, element.offsetHeight || 0, element.getBoundingClientRect?.()?.height || 0),
+      PAGE_HEIGHT_PX,
+    )
+    const scale = options.scale ?? 2
+    const avoidRangesCssPx = options.avoidRangesCssPx
+      ?? collectAnalysisReportPdfAvoidRanges(element)
+    const avoidRangesCanvasPx = scaleAvoidRangesToCanvas(avoidRangesCssPx, scale)
+
     const canvas = await renderElementToCanvas(element, {
-      scale: options.scale ?? 2,
+      scale,
       width: captureWidth,
       height: captureHeight,
     })
@@ -224,6 +255,9 @@ export async function buildAnalysisReportPdfFromElement(element, options = {}) {
       pageHeightPt,
       drawPageNumber: options.drawPageNumber !== false,
       pageLabel: options.pageLabel,
+      footerMarginPt: options.footerMarginPt ?? FOOTER_MARGIN_PT,
+      pageMarginPt: options.pageMarginPt ?? PAGE_MARGIN_PT,
+      avoidRangesCanvasPx,
     })
 
     return {
@@ -234,6 +268,7 @@ export async function buildAnalysisReportPdfFromElement(element, options = {}) {
       captureHeight,
       canvasWidth: canvas.width,
       canvasHeight: canvas.height,
+      avoidRangeCount: avoidRangesCanvasPx.length,
     }
   } finally {
     prepared.restore()

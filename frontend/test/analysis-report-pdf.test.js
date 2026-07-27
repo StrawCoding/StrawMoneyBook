@@ -76,16 +76,25 @@ test('pdf slice plan keeps equal scale and does not stretch residual last page',
   const a4WidthPt = 595.28
   const a4HeightPt = 841.89
   const canvasWidth = 794 * 2
-  const fullPagePx = canvasWidth * (a4HeightPt / a4WidthPt)
-  const canvasHeight = Math.round(fullPagePx * 1.4)
+  const contentWidthPt = a4WidthPt - ANALYSIS_REPORT_PDF_PAGE.PAGE_MARGIN_PT * 2
+  const usablePagePx = canvasWidth * (
+    (a4HeightPt - ANALYSIS_REPORT_PDF_PAGE.FOOTER_MARGIN_PT - ANALYSIS_REPORT_PDF_PAGE.PAGE_MARGIN_PT)
+    / contentWidthPt
+  )
+  const fullPagePx = canvasWidth * (a4HeightPt / contentWidthPt)
+  const canvasHeight = Math.round(usablePagePx * 1.4)
 
   const plan = computePdfSlicePlan(canvasWidth, canvasHeight, a4WidthPt, a4HeightPt)
   assert.equal(plan.pageCount, 2)
-  assert.ok(Math.abs(plan.pages[0].drawHeightPt - a4HeightPt) < 1)
+  assert.ok(Math.abs(plan.pages[0].drawHeightPt - (a4HeightPt - ANALYSIS_REPORT_PDF_PAGE.FOOTER_MARGIN_PT - ANALYSIS_REPORT_PDF_PAGE.PAGE_MARGIN_PT)) < 1.5)
+  assert.ok(plan.pages[0].drawHeightPt < a4HeightPt - 10)
   assert.ok(plan.pages[1].drawHeightPt < a4HeightPt - 1)
-  assert.ok(plan.pages[1].drawHeightPt > a4HeightPt * 0.35)
+  assert.ok(plan.pages[1].drawHeightPt > a4HeightPt * 0.2)
   assert.equal(plan.pages[0].sourceY, 0)
   assert.equal(plan.pages[1].sourceY + plan.pages[1].sourceHeight, canvasHeight)
+  assert.ok(plan.footerMarginPt >= 24)
+  assert.ok(plan.pageMarginPt >= 10)
+  assert.ok(plan.usablePageHeightPx < fullPagePx)
 
   const el = {
     style: {},
@@ -102,9 +111,59 @@ test('pdf slice plan keeps equal scale and does not stretch residual last page',
   }
   const prepared = prepareAnalysisReportElementForPdfCapture(el, { widthPx: ANALYSIS_REPORT_PDF_PAGE.WIDTH_PX })
   assert.equal(el.style.width, '794px')
+  assert.equal(el.style.overflow, 'visible')
   assert.equal(el.getAttribute(ANALYSIS_REPORT_PDF_PAGE.PRINT_LAYOUT_ATTR), ANALYSIS_REPORT_PDF_PAGE.PRINT_LAYOUT_VALUE)
   prepared.restore()
   assert.equal(el.getAttribute(ANALYSIS_REPORT_PDF_PAGE.PRINT_LAYOUT_ATTR), null)
+})
+
+test('pdf slice plan avoids cutting through protected content ranges', async () => {
+  const {
+    computePdfSlicePlan,
+    resolvePdfPageBreak,
+    scaleAvoidRangesToCanvas,
+    ANALYSIS_REPORT_PDF_PAGE,
+  } = await import('../src/core/utils/analysis-report-pdf-layout.js')
+
+  const a4WidthPt = 595.28
+  const a4HeightPt = 841.89
+  const canvasWidth = 794 * 2
+  const contentWidthPt = a4WidthPt - ANALYSIS_REPORT_PDF_PAGE.PAGE_MARGIN_PT * 2
+  const usablePagePx = canvasWidth * (
+    (a4HeightPt - ANALYSIS_REPORT_PDF_PAGE.FOOTER_MARGIN_PT - ANALYSIS_REPORT_PDF_PAGE.PAGE_MARGIN_PT)
+    / contentWidthPt
+  )
+  // Place a protected block that straddles the naive first-page cut.
+  const blockTop = usablePagePx - 120
+  const blockBottom = usablePagePx + 220
+  const canvasHeight = Math.round(usablePagePx + 500)
+  const avoid = scaleAvoidRangesToCanvas([{ top: blockTop / 2, bottom: blockBottom / 2 }], 2)
+
+  const breakAt = resolvePdfPageBreak(0, usablePagePx, canvasHeight, avoid)
+  assert.ok(breakAt <= blockTop + 1, `break should move before protected block: ${breakAt} vs ${blockTop}`)
+  assert.ok(breakAt < usablePagePx, 'break should be earlier than naive page end')
+
+  const plan = computePdfSlicePlan(canvasWidth, canvasHeight, a4WidthPt, a4HeightPt, {
+    footerMarginPt: ANALYSIS_REPORT_PDF_PAGE.FOOTER_MARGIN_PT,
+    pageMarginPt: ANALYSIS_REPORT_PDF_PAGE.PAGE_MARGIN_PT,
+    avoidRangesCanvasPx: avoid,
+  })
+  assert.ok(plan.pageCount >= 2)
+  for (const page of plan.pages) {
+    const end = page.sourceY + page.sourceHeight
+    const cutsThrough = page.sourceY < blockTop - 0.5
+      && end > blockTop + 0.5
+      && end < blockBottom - 0.5
+    assert.equal(
+      cutsThrough,
+      false,
+      `page must not cut mid-block: ${JSON.stringify({ page, blockTop, blockBottom })}`,
+    )
+  }
+  assert.ok(
+    plan.pages.some((page) => Math.abs(page.sourceY - blockTop) <= 2 || (page.sourceY <= blockTop && page.sourceY + page.sourceHeight >= blockBottom)),
+    `protected block should land wholly on a page: ${JSON.stringify(plan.pages)}`,
+  )
 })
 
 test('analysis export/pdf wiring keeps html2canvas+jsPDF and shared iconized charts', () => {
@@ -124,11 +183,16 @@ test('analysis export/pdf wiring keeps html2canvas+jsPDF and shared iconized cha
   assert.match(pdfService, /sliceCanvasToPdfPages/)
   assert.match(pdfService, /computePdfSlicePlan/)
   assert.match(pdfService, /prepareAnalysisReportElementForPdfCapture/)
+  assert.match(pdfService, /collectAnalysisReportPdfAvoidRanges/)
+  assert.match(pdfService, /scaleAvoidRangesToCanvas/)
+  assert.match(pdfService, /FOOTER_MARGIN_PT|footerMarginPt/)
+  assert.match(pdfService, /PAGE_MARGIN_PT|pageMarginPt/)
   assert.match(pdfService, /sanitizeCloneForHtml2Canvas/)
   assert.match(pdfService, /applyAnalysisReportLightThemeInline/)
   assert.match(pdfService, /color-scheme:\s*light|ANALYSIS_REPORT_LIGHT_THEME|buildAnalysisReportLightThemeCssText/)
   assert.match(pdfService, /onclone:/)
   assert.match(pdfService, /PRINT_LAYOUT_ATTR|data-print-layout/)
+  assert.match(pdfService, /break-inside:\s*avoid|page-break-inside:\s*avoid/)
   assert.match(
     readFileSync(resolve(import.meta.dirname, '../src/core/utils/analysis-report-pdf-layout.js'), 'utf8'),
     /PRINT_LAYOUT_ATTR:\s*'data-print-layout'/,
@@ -136,6 +200,14 @@ test('analysis export/pdf wiring keeps html2canvas+jsPDF and shared iconized cha
   assert.match(
     readFileSync(resolve(import.meta.dirname, '../src/core/utils/analysis-report-pdf-layout.js'), 'utf8'),
     /export function computePdfSlicePlan/,
+  )
+  assert.match(
+    readFileSync(resolve(import.meta.dirname, '../src/core/utils/analysis-report-pdf-layout.js'), 'utf8'),
+    /export function collectAnalysisReportPdfAvoidRanges/,
+  )
+  assert.match(
+    readFileSync(resolve(import.meta.dirname, '../src/core/utils/analysis-report-pdf-layout.js'), 'utf8'),
+    /FOOTER_MARGIN_PT/,
   )
   assert.match(printPage, /AnalysisReportDocument/)
   assert.match(printPage, /buildAnalysisReportPdfFromElement/)

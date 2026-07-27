@@ -2,7 +2,7 @@
 
 ---
 
-- 匯出免報表預覽 + 分析頁 Dark mode：分析頁右上角改為一鍵直接匯出／下載 PDF（offscreen 淺色 `AnalysisReportDocument`，主路徑不再進 `/analysis/print` 預覽）；`/analysis` 圖表／卡片／文字完整跟隨 App Dark／Light；PDF 仍強制淺色列印友善（`交易報表_YYYY-MM.pdf`）。補 Node／`playwright:analysis-export`（Dark 分析頁 + 直出 PDF）。
+- 匯出免報表預覽 + 分析頁 Dark mode：分析頁右上角改為一鍵直接匯出／下載 PDF（offscreen 淺色 `AnalysisReportDocument`，主路徑不再進 `/analysis/print` 預覽）；`/analysis` 圖表／卡片／文字完整跟隨 App Dark／Light；PDF 仍強制淺色列印友善（`交易報表_YYYY-MM.pdf`）。PDF 分頁改為避開圖表／卡片／明細列中切斷並預留頁碼頁尾空白，避免區塊被裁切或頁碼疊字。補 Node／`playwright:analysis-export`（Dark 分析頁 + 直出 PDF + 無裁切斷言）。
 - 匯出頁 Dark mode chrome 完成與 PDF 排版治本：Dark mode 下 `/analysis/print` 控制列／按鈕／狀態／預覽外框跟隨 App 深色主題，報表本體與 PDF 仍強制淺色；PDF 擷取前固定 A4 寬度＋桌面多欄 print-layout，等比分頁不再拉伸末頁。補 Node／`playwright:analysis-export` Dark chrome＋版面斷言。
 - 分析匯出 Dark mode 強制淺色：App 深色主題（含系統跟隨／手動深色）下，`/analysis/print` 報表預覽與一鍵 PDF 仍輸出白／淺底、深色文字、淺色圖表軌道；互動分析頁可維持深色。補 light-theme 隔離、html2canvas onclone 強制淺色、Node／`playwright:analysis-export` Dark mode 對比驗證。
 - 分析／匯出圖表重設與圖示化 PDF：`/analysis` 與 `/analysis/print` 統一資訊架構（大數字、收入／支出圖示化圓餅+長條、預算達成卡、帳戶占比、明細表含分類／帳戶 icon）；一鍵下載淺色全彩 PDF（html2canvas+jsPDF，檔名 `交易報表_YYYY-MM.pdf`，含頁碼）；補三語 i18n、Node 回歸與 `playwright:analysis-export`。

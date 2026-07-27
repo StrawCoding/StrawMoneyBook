@@ -352,7 +352,7 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 - 圓餅圖尺寸會隨較窄螢幕縮放，避免固定 220px 在小裝置失衡
 - 互動分析頁完整跟隨 App Dark／Light mode（背景、文字、卡片、圖表軌道／文字、期間篩選與 BottomNav 共存）
 
-報表輸出除了 CSV，也支援分析頁一鍵 PDF（html2canvas + jsPDF，檔名 `交易報表_YYYY-MM.pdf`）：抬頭含帳本／期間／匯出時間／幣別／篩選；明細含日期、類型、分類+icon、帳戶+icon、金額、備註、標籤；全彩淺色列印友善、含頁碼、無浮水印。主 UX 按匯出即直接下載／分享，不必先進入 `/analysis/print` 預覽。App 為 Dark mode（含系統跟隨深色、手動深色）時，互動分析頁 `/analysis` 完整深色適配；PDF／offscreen 報表本體與 raster 仍強制淺色（白／淺底、深色文字、淺色圖表軌道），不受 App 深色 CSS 變數或 `prefers-color-scheme` 影響。進階 `/analysis/print` 的 chrome／控制列跟隨 App 深色，報表預覽本體仍淺色。PDF 匯出前會固定 A4 寬度並套用 `data-print-layout="a4"` 桌面多欄排版（大數字三欄、圖表雙欄、預算卡雙欄），再以等比切片分頁，避免窄視窗 mobile 堆疊或末頁被拉伸。適合：
+報表輸出除了 CSV，也支援分析頁一鍵 PDF（html2canvas + jsPDF，檔名 `交易報表_YYYY-MM.pdf`）：抬頭含帳本／期間／匯出時間／幣別／篩選；明細含日期、類型、分類+icon、帳戶+icon、金額、備註、標籤；全彩淺色列印友善、含頁碼、無浮水印。主 UX 按匯出即直接下載／分享，不必先進入 `/analysis/print` 預覽。App 為 Dark mode（含系統跟隨深色、手動深色）時，互動分析頁 `/analysis` 完整深色適配；PDF／offscreen 報表本體與 raster 仍強制淺色（白／淺底、深色文字、淺色圖表軌道），不受 App 深色 CSS 變數或 `prefers-color-scheme` 影響。進階 `/analysis/print` 的 chrome／控制列跟隨 App 深色，報表預覽本體仍淺色。PDF 匯出前會固定 A4 寬度並套用 `data-print-layout="a4"` 桌面多欄排版（大數字三欄、圖表雙欄、預算卡雙欄），再以等比切片分頁（避開圖表／卡片／明細列中切斷並預留頁碼頁尾空白），避免窄視窗 mobile 堆疊、末頁被拉伸，或區塊／圖表／文字被裁切。適合：
 
 - 月結
 - 對帳
