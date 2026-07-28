@@ -2,6 +2,7 @@
 
 ---
 
+- (smb287) 優化資料載入速度：首頁收支摘要改單次 SQL 彙總（不再分頁掃交易）、啟動／切帳本 critical path 先載帳戶／分類／目前預算並背景延遲完整性掃描與借貸／報銷／附加範本／recent、交易明細／編輯改關聯查詢、分析「全部」chunked＋讓出主執行緒、期間切換以 token 丟棄過期結果。補 Node source／語意回歸與 `playwright:ui-layout` 期間／分析進入計時證據；未改 backend。
 - (smb295) 同步類入口搬至功能頁「進階功能」：共同帳本、帳本同步、銀行同步、載具同步改由 `/features` 進階分區進入（保留既有 route／深度連結）；設定頁主清單不再列此四項，避免雙入口混亂。一般功能與進階功能分區分開，三語 i18n（`feature_list.advanced` 等），銀行同步仍受 feature flag 閘控。補 Node source／`playwright:ui-layout`（功能頁四入口導航 + 設定頁主清單不含四項）。
 - (smb294) 重新驗證並治本銀行／載具同步可用性：原生 vault 同步／中斷改傳 distinct local DB id 與 `provider_connection_id` 候選（`buildNativeVaultLookupIds` + `FirstBankAutomation.resolveVaultConnectionId`），避免兩邊傳同一值導致備援失效、誤報憑證缺失；載具／銀行設定頁維持可用性診斷與單一 recovery CTA，Playwright 補強多語 onboarding、錯誤碼分流與 seeded review list。外部 einvoice／first-bank contract-check 與 prod `/api/einvoice/health` 已記錄於 stage report（health≠真機登入成功）。
 - (smb290) 治本修復帳本同步／共享帳本嚴重資料錯誤：合併不再把帳戶 metadata 與全部交易綁成 `account_coherence`（避免遠端帳戶欄位更新抹掉本機未同步交易）；pull／已綁定下載改走 base／dirty 三方或雙向合併，禁止 hard-replace；父列 tombstone 遇較新子列會復活以免 FK prune 連鎖丟帳；衝突寫入可見 `conflict_resolved`／衝突數／merge log 與 toast；背景 poll 遇 dirty 改 push／merge。補 Node 資料集合一致性／衝突／復活測試與 `playwright:ui-layout` 同步狀態面。

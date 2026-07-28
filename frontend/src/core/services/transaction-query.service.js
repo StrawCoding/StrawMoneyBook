@@ -1,15 +1,17 @@
 import {
   HOME_TRANSACTION_PAGE_SIZE,
-  listAllTransactions,
+  listAllTransactionsChunked,
   listHomeTransactionsPage,
+  listRelatedTransactionsForDetail,
   listTransactionsByAccount,
   listTransactionsByAccountPage,
   listTransactionsByDay,
   listTransactionsByMonth,
   listTransactionSearchPage,
   listTransactionsByYear,
+  findTransactionListRowById,
+  summarizeHomeAssetTotalsByScope,
 } from '@/core/repositories/transaction.repo'
-import { getEffectiveTransactionAmountMinor, isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 
 const SCOPE_MODES = new Set(['all', 'year', 'month', 'day'])
 export const TRANSACTION_PAGE_SIZE = 300
@@ -47,7 +49,8 @@ export async function listTransactionsByScope(ledgerId, {
   if (normalizedMode === 'day') {
     return normalizedKey ? listTransactionsByDay(normalizedLedgerId, normalizedKey) : []
   }
-  return listAllTransactions(normalizedLedgerId)
+  // Chunked + yield keeps large "all" analysis loads from blocking the main thread.
+  return listAllTransactionsChunked(normalizedLedgerId)
 }
 
 export async function listTransactionsForAnalysis(ledgerId, options = {}) {
@@ -84,33 +87,10 @@ export async function summarizeHomeAssetTotals(ledgerId, options = {}) {
     return { incomeMinor: 0, expenseMinor: 0 }
   }
 
-  let page = 1
-  let incomeMinor = 0
-  let expenseMinor = 0
-
-  while (true) {
-    const result = await listTransactionsForHome(normalizedLedgerId, {
-      mode: options.mode,
-      key: options.key,
-      page,
-    })
-
-    for (const tx of result.items ?? []) {
-      if (!isCountableForIncomeExpense(tx)) continue
-      if (String(tx?.origin_type ?? '') === 'loan_payment') continue
-      const amount = getEffectiveTransactionAmountMinor(tx)
-      if (tx.type === 'income') {
-        incomeMinor += amount
-      } else if (tx.type === 'expense') {
-        expenseMinor += Math.abs(amount)
-      }
-    }
-
-    if (page >= result.totalPages) break
-    page += 1
-  }
-
-  return { incomeMinor, expenseMinor }
+  return summarizeHomeAssetTotalsByScope(normalizedLedgerId, {
+    mode: normalizeTransactionScopeMode(options.mode, 'month'),
+    key: String(options.key ?? '').trim(),
+  })
 }
 
 export async function listTransactionsForSearch(ledgerId, options = {}) {
@@ -180,10 +160,20 @@ export async function listTransactionPageForAccount(ledgerId, accountId, options
 }
 
 export async function loadTransactionDetailContext(ledgerId, txId) {
-  const allTransactions = await listTransactionsByScope(ledgerId, { mode: 'all' })
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
   const normalizedTxId = String(txId ?? '').trim()
+  if (!normalizedLedgerId || !normalizedTxId) {
+    return { allTransactions: [], transaction: null }
+  }
+
+  const transaction = await findTransactionListRowById(normalizedLedgerId, normalizedTxId)
+  if (!transaction) {
+    return { allTransactions: [], transaction: null }
+  }
+
+  const allTransactions = await listRelatedTransactionsForDetail(normalizedLedgerId, transaction)
   return {
     allTransactions,
-    transaction: allTransactions.find((item) => String(item?.id ?? '') === normalizedTxId) ?? null,
+    transaction,
   }
 }

@@ -64,6 +64,7 @@ export const useTransactionStore = defineStore('transaction', {
     homeIncomeMinor: 0,
     homeExpenseMinor: 0,
     homeBudgetDayTransactions: [],
+    homeLoadToken: 0,
     loading: false,
     homeLoading: false,
     filter: {
@@ -106,10 +107,6 @@ export const useTransactionStore = defineStore('transaction', {
       await this.loadHomeByFilter('day', dayKey)
     },
 
-    async loadHomeAll() {
-      await this.loadHomeByFilter('all', '')
-    },
-
     async loadHomeAll(page = 1) {
       await this.loadHomeByFilter('all', '', page)
     },
@@ -146,6 +143,8 @@ export const useTransactionStore = defineStore('transaction', {
       this.homeFilterKey = normalizedKey
       if (!ledgerId) return
 
+      const loadToken = this.homeLoadToken + 1
+      this.homeLoadToken = loadToken
       this.homeLoading = true
       try {
         const budgetStore = useBudgetStore()
@@ -162,6 +161,8 @@ export const useTransactionStore = defineStore('transaction', {
           Promise.resolve(resolveHomeBudgetDayKey(normalizedMode, normalizedKey, budgetStore.monthKey)),
         ])
 
+        if (this.homeLoadToken !== loadToken) return
+
         this.homeRecent = pageResult.items ?? []
         this.homePage = pageResult.page ?? targetPage
         this.homeTotal = Number(pageResult.total ?? 0)
@@ -170,12 +171,16 @@ export const useTransactionStore = defineStore('transaction', {
         this.homeExpenseMinor = Number(assetTotals.expenseMinor ?? 0)
 
         if (budgetDayKey) {
-          this.homeBudgetDayTransactions = await listTransactionsByDay(ledgerId, budgetDayKey)
+          const dayRows = await listTransactionsByDay(ledgerId, budgetDayKey)
+          if (this.homeLoadToken !== loadToken) return
+          this.homeBudgetDayTransactions = dayRows
         } else {
           this.homeBudgetDayTransactions = []
         }
       } finally {
-        this.homeLoading = false
+        if (this.homeLoadToken === loadToken) {
+          this.homeLoading = false
+        }
       }
     },
 

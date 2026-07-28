@@ -199,6 +199,89 @@ async function assertHomeBlocks() {
   assert.equal(result.hasFab, true, JSON.stringify(result, null, 2))
 }
 
+async function assertHomePeriodAndAnalysisLoadSpeed() {
+  await runPlaywrightCli(['goto', `${baseUrl}/`])
+  await delay(600)
+  await assertHomeBlocks()
+
+  const periodTiming = await evalPage(`async () => {
+    const filter = document.querySelector('[data-testid=home-period-filter]')
+    if (!filter) return { ok: false, reason: 'period filter missing' }
+    const buttons = [...filter.querySelectorAll('button')]
+    if (buttons.length < 2) return { ok: false, reason: 'period buttons missing' }
+
+    async function switchAndWait(button) {
+      const started = performance.now()
+      button.click()
+      const deadline = started + 5000
+      while (performance.now() < deadline) {
+        const loading = document.querySelector('[data-testid=home-transaction-feed] .loading, .home-loading')
+        const busy = Boolean(loading) && getComputedStyle(loading).display !== 'none'
+        if (!busy) break
+        await new Promise((resolve) => setTimeout(resolve, 16))
+      }
+      // Allow one frame for totals / feed to commit.
+      await new Promise((resolve) => requestAnimationFrame(() => resolve()))
+      return Math.round(performance.now() - started)
+    }
+
+    const samples = []
+    for (const button of buttons.slice(0, 4)) {
+      samples.push({
+        label: String(button.textContent || '').trim(),
+        ms: await switchAndWait(button),
+      })
+    }
+
+    const maxMs = samples.reduce((max, sample) => Math.max(max, sample.ms), 0)
+    return {
+      ok: true,
+      samples,
+      maxMs,
+      hasAssetSummary: Boolean(document.querySelector('[data-testid=home-asset-summary]')),
+      hasFeed: Boolean(document.querySelector('[data-testid=home-transaction-feed]')),
+      hasFab: Boolean(document.querySelector('[data-testid=home-fab]')),
+    }
+  }`)
+  assert.equal(periodTiming.ok, true, JSON.stringify(periodTiming, null, 2))
+  assert.equal(periodTiming.hasAssetSummary, true, JSON.stringify(periodTiming, null, 2))
+  assert.equal(periodTiming.hasFeed, true, JSON.stringify(periodTiming, null, 2))
+  assert.equal(periodTiming.hasFab, true, JSON.stringify(periodTiming, null, 2))
+  assert.ok(periodTiming.maxMs < 5000, `period switch too slow: ${JSON.stringify(periodTiming)}`)
+  console.log('[smb287] home period switch timing ms:', JSON.stringify(periodTiming.samples))
+
+  const analysisTiming = await evalPage(`async () => {
+    const started = performance.now()
+    const analysisTab = document.querySelector('[data-testid=bottom-nav-analysis], a[href="/analysis"]')
+    if (!analysisTab) return { ok: false, reason: 'analysis nav missing' }
+    analysisTab.click()
+    const deadline = started + 8000
+    while (performance.now() < deadline) {
+      if (window.location.pathname.includes('/analysis')
+        && document.querySelector('[data-testid=bottom-nav]')
+        && !document.querySelector('.boot-layer')) {
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 32))
+    }
+    const ms = Math.round(performance.now() - started)
+    return {
+      ok: window.location.pathname.includes('/analysis'),
+      ms,
+      path: window.location.pathname,
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+    }
+  }`)
+  assert.equal(analysisTiming.ok, true, JSON.stringify(analysisTiming, null, 2))
+  assert.equal(analysisTiming.hasBottomNav, true, JSON.stringify(analysisTiming, null, 2))
+  assert.ok(analysisTiming.ms < 8000, `analysis enter too slow: ${JSON.stringify(analysisTiming)}`)
+  console.log('[smb287] analysis enter timing ms:', analysisTiming.ms)
+
+  await runPlaywrightCli(['goto', `${baseUrl}/`])
+  await delay(500)
+  await assertHomeBlocks()
+}
+
 function parseCssRgb(color) {
   const value = String(color ?? '').trim()
   if (!value || value === 'transparent' || value === 'rgba(0, 0, 0, 0)') return null
@@ -501,6 +584,7 @@ try {
 
   await assertBottomNavIcons()
   await assertHomeBlocks()
+  await assertHomePeriodAndAnalysisLoadSpeed()
   await assertHomeIncomeExpenseLightAndDark()
   await assertRouteNavigation()
   await assertLayoutSwitch()

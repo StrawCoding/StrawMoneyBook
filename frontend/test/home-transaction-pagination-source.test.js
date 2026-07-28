@@ -38,7 +38,18 @@ test('SMB-257 home transaction repository fixes page size at 300 with SQL offset
 test('SMB-257 home transaction query service paginates all scope modes', () => {
   assert.match(transactionQueryServiceSource, /export async function listTransactionsForHome/)
   assert.match(transactionQueryServiceSource, /export async function summarizeHomeAssetTotals/)
+  assert.match(transactionQueryServiceSource, /summarizeHomeAssetTotalsByScope/)
   assert.match(transactionQueryServiceSource, /offset: \(page - 1\) \* pageSize/)
+  assert.doesNotMatch(transactionQueryServiceSource, /while \(true\)/)
+})
+
+test('smb287 home asset totals use SQL aggregate instead of page-scan', () => {
+  assert.match(transactionRepoSource, /export async function summarizeHomeAssetTotalsByScope/)
+  assert.match(transactionRepoSource, /income_minor/)
+  assert.match(transactionRepoSource, /expense_minor/)
+  assert.match(transactionRepoSource, /COALESCE\(t\.include_in_analysis, 1\) != 0/)
+  assert.match(transactionQueryServiceSource, /listAllTransactionsChunked/)
+  assert.match(transactionQueryServiceSource, /listRelatedTransactionsForDetail/)
 })
 
 test('SMB-257 transaction store tracks home pagination and asset totals separately from feed rows', () => {

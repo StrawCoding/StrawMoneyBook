@@ -13,7 +13,8 @@ const ledgerRuntimeSource = readFileSync(
 )
 
 test('SMB-189 ledger integrity auto repair covers detected ledger data errors', () => {
-  assert.match(ledgerRuntimeSource, /await ensureLedgerIntegrity\(normalizedLedgerId\)/)
+  assert.match(ledgerRuntimeSource, /ensureLedgerIntegrity\(normalizedLedgerId\)/)
+  assert.match(ledgerRuntimeSource, /scheduleDeferredLedgerHydration/)
   assert.match(repairServiceSource, /const REPAIR_ACCOUNT_ID = 'system_repair_account'/)
   assert.match(repairServiceSource, /SET account_id = \?/)
   assert.match(repairServiceSource, /SET peer_account_id = \?/)

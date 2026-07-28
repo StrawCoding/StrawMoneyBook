@@ -381,6 +381,102 @@ export async function listAllTransactions(ledgerId, { limit, offset = 0 } = {}) 
   return rowsOf(result)
 }
 
+const ANALYSIS_TRANSACTION_CHUNK_SIZE = 500
+
+export async function listAllTransactionsChunked(ledgerId, {
+  chunkSize = ANALYSIS_TRANSACTION_CHUNK_SIZE,
+} = {}) {
+  assertLedgerId(ledgerId)
+  const pageSize = Math.max(50, Math.min(1000, Math.trunc(Number(chunkSize)) || ANALYSIS_TRANSACTION_CHUNK_SIZE))
+  const items = []
+  let offset = 0
+
+  while (true) {
+    const page = await listAllTransactions(ledgerId, { limit: pageSize, offset })
+    items.push(...page)
+    if (page.length < pageSize) break
+    offset += pageSize
+    await yieldToMainThread()
+  }
+
+  return items
+}
+
+export async function findTransactionListRowById(ledgerId, txId) {
+  assertLedgerId(ledgerId)
+  const normalizedTxId = String(txId ?? '').trim()
+  if (!normalizedTxId) return null
+
+  const result = await query(
+    `${transactionListSelectSql()}
+     WHERE t.ledger_id = ?
+       AND t.id = ?
+       AND t.deleted_at IS NULL
+     LIMIT 1;`,
+    [ledgerId, normalizedTxId],
+  )
+  return firstRow(result)
+}
+
+export async function listRelatedTransactionsForDetail(ledgerId, transaction) {
+  assertLedgerId(ledgerId)
+  const tx = transaction && typeof transaction === 'object' ? transaction : null
+  if (!tx?.id) return []
+
+  const byId = new Map()
+  const absorb = (rows) => {
+    for (const row of rows ?? []) {
+      const id = String(row?.id ?? '').trim()
+      if (!id || id === String(tx.id) || byId.has(id)) continue
+      byId.set(id, row)
+    }
+  }
+
+  const transferGroupId = String(tx.transfer_group_id ?? '').trim()
+  if (transferGroupId) {
+    const transferResult = await query(
+      `${transactionListSelectSql()}
+       WHERE t.ledger_id = ?
+         AND t.transfer_group_id = ?
+         AND t.deleted_at IS NULL
+       ${transactionListOrderSql()};`,
+      [ledgerId, transferGroupId],
+    )
+    absorb(rowsOf(transferResult))
+  }
+
+  const externalRefId = String(tx.external_ref_id ?? '').trim()
+  if (externalRefId) {
+    const source = await findTransactionListRowById(ledgerId, externalRefId)
+    if (source) absorb([source])
+  }
+
+  const childrenResult = await query(
+    `${transactionListSelectSql()}
+     WHERE t.ledger_id = ?
+       AND t.external_ref_id = ?
+       AND t.deleted_at IS NULL
+     ${transactionListOrderSql()};`,
+    [ledgerId, String(tx.id)],
+  )
+  absorb(rowsOf(childrenResult))
+
+  if (String(tx.origin_type ?? '') === 'loan_payment' && externalRefId) {
+    const loanSiblingsResult = await query(
+      `${transactionListSelectSql()}
+       WHERE t.ledger_id = ?
+         AND t.origin_type = 'loan_payment'
+         AND t.external_ref_id = ?
+         AND t.deleted_at IS NULL
+       ${transactionListOrderSql()};`,
+      [ledgerId, externalRefId],
+    )
+    absorb(rowsOf(loanSiblingsResult))
+  }
+
+  return [tx, ...byId.values()]
+}
+
 export const HOME_TRANSACTION_PAGE_SIZE = 300
 
 function normalizeHomeTransactionLimit(value, fallback = HOME_TRANSACTION_PAGE_SIZE) {
@@ -421,6 +517,24 @@ function buildHomeScopeFilterClauses(mode, key) {
   return { mode: normalizedMode, clauses, values }
 }
 
+function homeIncomeExpenseEffectiveMinorSql(rowAlias = 'scoped') {
+  // Mirrors getEffectiveTransactionAmountMinor + getRefundDeductedMinor + isRefundTransaction.
+  return `(CASE
+    WHEN ${rowAlias}.origin_type = 'refund' THEN 0
+    WHEN ${rowAlias}.external_ref_id IS NOT NULL
+      AND TRIM(${rowAlias}.external_ref_id) != ''
+      AND (
+        ${rowAlias}.category_name = '退款'
+        OR ${rowAlias}.note LIKE '退款：%'
+        OR ${rowAlias}.note LIKE '退款:%'
+      ) THEN 0
+    WHEN ${rowAlias}.amount_minor = 0 THEN 0
+    WHEN ${rowAlias}.refund_applied_minor >= ABS(${rowAlias}.amount_minor) THEN 0
+    WHEN ${rowAlias}.amount_minor < 0 THEN -(ABS(${rowAlias}.amount_minor) - ${rowAlias}.refund_applied_minor)
+    ELSE ABS(${rowAlias}.amount_minor) - ${rowAlias}.refund_applied_minor
+  END)`
+}
+
 export async function listHomeTransactionsPage(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   const scope = buildHomeScopeFilterClauses(options.mode, options.key)
@@ -444,7 +558,6 @@ export async function listHomeTransactionsPage(ledgerId, options = {}) {
     query(
       `SELECT COUNT(*) AS total
        FROM transactions t
-       ${transactionListLookupJoinsSql()}
        WHERE ${whereSql};`,
       params,
     ),
@@ -455,6 +568,58 @@ export async function listHomeTransactionsPage(ledgerId, options = {}) {
     total: Number(firstRow(countResult)?.total ?? 0),
     limit,
     offset,
+  }
+}
+
+export async function summarizeHomeAssetTotalsByScope(ledgerId, options = {}) {
+  assertLedgerId(ledgerId)
+  const scope = buildHomeScopeFilterClauses(options.mode, options.key)
+  if (!scope) {
+    return { incomeMinor: 0, expenseMinor: 0 }
+  }
+
+  const whereSql = scope.clauses.join('\n       AND ')
+  const params = [ledgerId, ...scope.values]
+  const deductedSql = refundDeductedMinorSql('t')
+  const hasRefundLinkSql = `CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END`
+
+  const result = await query(
+    `SELECT
+       COALESCE(SUM(CASE WHEN scoped.type = 'income' THEN scoped.effective_minor ELSE 0 END), 0) AS income_minor,
+       COALESCE(SUM(CASE WHEN scoped.type = 'expense' THEN ABS(scoped.effective_minor) ELSE 0 END), 0) AS expense_minor
+     FROM (
+       SELECT
+         base.type AS type,
+         ${homeIncomeExpenseEffectiveMinorSql('base')} AS effective_minor
+       FROM (
+         SELECT
+           t.type AS type,
+           t.origin_type AS origin_type,
+           t.external_ref_id AS external_ref_id,
+           t.note AS note,
+           t.amount_minor AS amount_minor,
+           c.name AS category_name,
+           CASE
+             WHEN ${deductedSql} > 0 THEN MIN(ABS(t.amount_minor), ${deductedSql})
+             WHEN ${hasRefundLinkSql} = 1 THEN ABS(t.amount_minor)
+             ELSE 0
+           END AS refund_applied_minor
+         FROM transactions t
+         LEFT JOIN categories c
+           ON c.ledger_id = t.ledger_id
+          AND c.id = t.category_id
+         WHERE ${whereSql}
+           AND COALESCE(t.include_in_analysis, 1) != 0
+           AND COALESCE(t.origin_type, '') != 'loan_payment'
+       ) base
+     ) scoped;`,
+    params,
+  )
+
+  const row = firstRow(result)
+  return {
+    incomeMinor: Number(row?.income_minor ?? 0),
+    expenseMinor: Number(row?.expense_minor ?? 0),
   }
 }
 

@@ -6,7 +6,7 @@
 ## 1. 功能總覽
 
 - 多帳本管理（切換帳本、排序、帳本設定、活動帳本上下文刷新）
-- 首頁總覽（帳本切換、收支卡、預算簡表、交易流、浮動快速新增；收支卡收入／支出區塊背景與文字色跟隨主題 Light／Dark token，淺色模式不可沿用深色硬編碼底；SMB-257 後首頁交易流在全部 / 年 / 月 / 日範圍皆改為 SQL 分頁載入，每頁最多 300 筆，badge 顯示總筆數，收支摘要改由分批彙總計算，不再一次載入 3000 筆或整段期間全部交易；首頁交易流在無資料時會顯示空狀態與快速記帳入口，空狀態文案透過 i18n 維護並由 source test 防回歸，預算簡表滑動切換閾值已提高以降低誤觸）
+- 首頁總覽（帳本切換、收支卡、預算簡表、交易流、浮動快速新增；收支卡收入／支出區塊背景與文字色跟隨主題 Light／Dark token，淺色模式不可沿用深色硬編碼底；SMB-257 後首頁交易流在全部 / 年 / 月 / 日範圍皆改為 SQL 分頁載入，每頁最多 300 筆，badge 顯示總筆數；smb287 後收支摘要改由 `summarizeHomeAssetTotalsByScope` 單次 SQL 彙總（含退款淨額／`include_in_analysis`／排除 `loan_payment`），不再分頁掃完全部交易；啟動改為帳本 critical path（帳戶／分類／目前預算）先完成，完整性掃描與借貸／報銷／附加範本／recent 背景延遲載入；交易明細／編輯改載入關聯交易而非整本帳本；分析「全部」範圍改 chunked + 讓出主執行緒；首頁期間切換以 `homeLoadToken` 丟棄過期結果。空狀態文案透過 i18n 維護並由 source test 防回歸，預算簡表滑動切換閾值已提高以降低誤觸）
 - 記帳三模式（AI 記帳、手動快速新增、問答記帳；SMB-175 後手動快速新增的金額欄整合計算機，支援加減乘除四則運算並即時預覽結果）
 - 交易查詢（搜尋頁、日曆頁、交易明細頁、交易編輯頁；SMB-155 後搜尋交易改為 SQL 分頁載入，每頁 300 筆，關鍵字與日期篩選會先進資料查詢層後再取當頁資料，避免大型帳本一次載入全部交易；SMB-211 後交易搜尋的 SQL 關鍵字比對會納入借貸交易的畫面顯示條件與往來對象，例如借出、借入、歸還 / 還款與收回 / 收回借款，不再只能用 `loan_payment` 或備註命中借貸交易；SMB-189 / v1.2.5 後帳本載入會自動掃描並修復交易遺失帳戶 / peer 帳戶 / 分類引用、壞掉的轉帳群組、報銷總額 / 已付款狀態與借貸狀態；SMB-219 / v1.2.28 後交易編輯頁與首頁交易編輯 sheet 改選分類時會同步套用分類預設報銷、紀錄預算與紀錄收支設定，載入既有交易時保留原交易已儲存的記帳旗標）
 - 退款流程（交易明細可建立退款、選擇退款帳戶、指定扣除金額；SMB-149 後部分退款會以原交易扣除退款金額後的淨額納入首頁、預算、分析與列印報表，全額退款則歸零）
@@ -320,7 +320,7 @@ UI 服務目錄：`src/ui/services/`
 |---|---|
 | `app-bootstrap.service.js` | UI 啟動鏈協調：建立 Pinia store、接 core bootstrap 結果、處理 setup 前後 app boot 流程 |
 | `app-runtime.service.js` | App runtime side effects：背景排程、同步/備份啟動、Android back、網址恢復、前景事件協調；啟動 / 回前景 / 帳本切換時補跑存錢罐自動存入、訂閱今日扣款與預算存款 |
-| `ledger-runtime.service.js` | 帳本切換後的 cross-store reset / reload / integrity repair 與帳本生命周期協調 |
+| `ledger-runtime.service.js` | 帳本切換後的 cross-store reset / reload / integrity repair 與帳本生命周期協調；smb287 後 critical path 先載帳戶／分類／目前預算，完整性掃描與借貸／報銷／附加範本／recent 改背景延遲 hydrate |
 | `membership-navigation.service.js` | 會員限制導頁與 membership benefits navigation，將 router side effect 留在 UI 層 |
 | `shared-ledger.service.js` | 共同帳本前端流程：建立、下載、上傳、自動同步、本機帳本綁定；SMB-229 / v1.3.9 後依角色（`sharedLedgerRoleCanPush`）跳過 Viewer 上傳、被降級時清 dirty 佇列，並提供成員角色更新與所有權轉移服務封裝；SMB-277 後 meta 記錄 `last_sync_status` / `last_sync_error`，失敗可見並可重試；SMB-279 後背景同步先 `ensureSharedLedgerSessionReady`，需重新登入／會員／離線／session 恢復中寫入可見 `paused_*` 狀態，禁止 silently no-op；SMB-281 後 `stopSharingLocalLedger`／`stopSharingRemoteSharedLedger` 在取消共享／離開前檢查 session／needs-reauth，遠端已不存在時仍清本機 binding |
 | `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原、重新授權後自動清理 stale auto-check diagnostics；Google 授權失效時自動偵測並寫入 `error/reauth_required` 狀態使 UI 顯示重新授權警示；`resolveGoogleProfileForConnect` 在 silent token 失敗時必定觸發 `googleSignIn` 取得新 token（SMB-186 / v1.2.7） |
@@ -418,7 +418,7 @@ UI composable 目錄：`src/ui/composables/`
 - SQL 與資料結構調整，先改 repository，再檢查對應 store/action。
 - **日期工具統一使用 `src/core/utils/id.js` 的 `monthKeyFromDate` / `dateKeyFromDate`**，禁止在 view / service 內重複定義相同邏輯。
 - **多步驟刪除/寫入操作須包裝在 `withTransaction`（來自 `@/core/db/sqlite`）** 以確保資料完整性，參考 `transaction.service.js:deleteManualTransaction`。
-- `transaction.repo.js:listHomeTransactionsPage` 支援首頁全部 / 年 / 月 / 日範圍的 SQL `LIMIT/OFFSET` 分頁（`HOME_TRANSACTION_PAGE_SIZE = 300`）；`transaction-query.service.js:summarizeHomeAssetTotals` 以每批 300 筆分批彙總收支摘要，避免一次載入整段期間全部交易；`listAllTransactions` 仍支援可選 `{ limit, offset }` 供分析等完整查詢使用。
+- `transaction.repo.js:listHomeTransactionsPage` 支援首頁全部 / 年 / 月 / 日範圍的 SQL `LIMIT/OFFSET` 分頁（`HOME_TRANSACTION_PAGE_SIZE = 300`）；`summarizeHomeAssetTotalsByScope` 以單次 SQL 彙總收支（語意對齊退款淨額／分析旗標／排除借貸還款），`transaction-query.service.js:summarizeHomeAssetTotals` 改走此路徑；分析「全部」改 `listAllTransactionsChunked`；交易明細／編輯改 `listRelatedTransactionsForDetail`，避免一次載入整本帳本。
 - 若新增主頁功能，優先考慮：`home.vue` + `HomeTransactionFeed.vue` + `transaction.store.js`。
 - 若新增分析維度，優先考慮：`analysis.vue`、`analysis-breakdown.js` 與 `transaction-query.service.js`。
 - 若調整交易報表欄位或匯出格式，優先考慮：`analysis.vue`（主路徑一鍵 PDF）+ `AnalysisReportDocument.vue` + `analysis-report-pdf.service.js` + `analysis-report-light-theme.js` + `export.service.js`（及進階 `AnalysisPrintPage.vue`），並同步檢查分析頁共用圖示化圖表；互動分析頁須跟隨 Dark／Light；PDF 必須仍為淺色；PDF 須以 A4 print-layout 擷取並等比分頁且不得中切斷區塊；主 UX 不得強迫經過 `/analysis/print` 預覽。
