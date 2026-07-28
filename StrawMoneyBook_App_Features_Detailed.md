@@ -554,6 +554,14 @@ SMB-281 修復「無法取消共用帳本」：
 - 會員資格過期時建立／邀請／同步仍鎖定，但設定頁會顯示本機共同帳本綁定與解除入口；後端 `DELETE /api/shared-ledgers/:id` 放行會員閘門，避免卡在無法離開。
 - 遠端已刪除或不存在時回 `already_gone`／前端仍清本機 meta；needs-reauth／session 恢復中不可靜默失敗，改顯示明確 toast；確認對話框 busy 結束後可再操作。
 
+smb290 治本共享帳本／同步資料完整性：
+
+- 移除會把帳戶與全部相關交易綁成一組的 `account_coherence`（遠端只改帳戶欄位時不再抹掉本機未同步交易）。
+- `pullSharedLedgerToLocal`／已綁定下載改以 base snapshot 三方合併或 dirty 雙向合併，禁止 hard-replace 覆蓋未推送本機變更；合併後若仍有本機獨有變更會保持 dirty 並由編輯者推送。
+- 父列 tombstone 若子列較新，會從 payload 復活父列，避免 FK prune 連鎖丟帳。
+- 衝突採可重現 last-write／prefer 規則，並寫入可見 `last_sync_status=conflict_resolved`、`last_conflict_count`、`last_merge_log`；共同帳本頁狀態列與重試 toast 會提示。
+- 背景 poll 在 detail 請求期間若本機變 dirty，改走 push／merge，不硬拉遠端。
+
 ### 6.3 Google Drive 帳本同步
 
 這個功能和「備份」不同。

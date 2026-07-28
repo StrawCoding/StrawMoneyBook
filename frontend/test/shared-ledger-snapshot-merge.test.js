@@ -526,7 +526,7 @@ test('mergeSharedLedgerSnapshots with detectConflicts returns structured merge r
   assert.equal(result.mergedSnapshot.tables.categories[0]?.name, '遠端名稱')
 })
 
-test('mergeSharedLedgerSnapshots detects cross-table account coherence conflicts (SMB-236)', () => {
+test('mergeSharedLedgerSnapshots keeps local transactions when remote only updates account metadata (smb290)', () => {
   const local = buildSnapshot({
     account_groups: accountGroupFixture,
     accounts: [{
@@ -568,10 +568,12 @@ test('mergeSharedLedgerSnapshots detects cross-table account coherence conflicts
     prefer: 'remote',
   })
 
-  assert.equal(hasConflicts, true)
-  assert.ok(conflicts.some((conflict) => conflict.conflictType === 'account_coherence'))
+  assert.equal(hasConflicts, false)
+  assert.equal(conflicts.some((conflict) => conflict.conflictType === 'account_coherence'), false)
   assert.equal(mergedSnapshot.tables.accounts[0]?.opening_balance_minor, 500000)
-  assert.equal(mergedSnapshot.tables.transactions.length, 0)
+  assert.equal(mergedSnapshot.tables.transactions.length, 1)
+  assert.equal(mergedSnapshot.tables.transactions[0]?.id, 'tx_local')
+  assert.equal(mergedSnapshot.tables.transactions[0]?.amount_minor, -10000)
 })
 
 test('mergeSharedLedgerSnapshots keeps transfer legs atomic when both sides changed (SMB-236)', () => {
@@ -665,7 +667,7 @@ test('mergeSharedLedgerSnapshots keeps transfer legs atomic when both sides chan
   assert.deepEqual(amounts, [-5000, 5000])
 })
 
-test('threeWayMergeSnapshots detects cross-table account coherence conflicts (SMB-236)', () => {
+test('threeWayMergeSnapshots keeps local transactions when remote only updates account metadata (smb290)', () => {
   const base = buildSnapshot({
     account_groups: accountGroupFixture,
     accounts: [{
@@ -716,10 +718,12 @@ test('threeWayMergeSnapshots detects cross-table account coherence conflicts (SM
     prefer: 'remote',
   })
 
-  assert.equal(hasConflicts, true)
-  assert.ok(conflicts.some((conflict) => conflict.conflictType === 'account_coherence'))
+  assert.equal(hasConflicts, false)
+  assert.equal(conflicts.some((conflict) => conflict.conflictType === 'account_coherence'), false)
   assert.equal(mergedSnapshot.tables.accounts[0]?.opening_balance_minor, 500000)
-  assert.equal(mergedSnapshot.tables.transactions.length, 0)
+  assert.equal(mergedSnapshot.tables.transactions.length, 1)
+  assert.equal(mergedSnapshot.tables.transactions[0]?.id, 'tx_local')
+  assert.equal(mergedSnapshot.tables.transactions[0]?.amount_minor, -10000)
 })
 
 test('threeWayMergeSnapshots: remote added row, base empty → include new row', () => {

@@ -270,6 +270,89 @@ function pruneSharedLedgerSnapshotForeignKeys(tables) {
   return nextTables
 }
 
+function tryParseTombstonePayload(tombstone) {
+  try {
+    const parsed = JSON.parse(String(tombstone?.payload_json ?? '{}'))
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function maxChildUpdatedMs(rows = []) {
+  let maxMs = 0
+  for (const row of rows) {
+    maxMs = Math.max(maxMs, getRowUpdatedAt(row))
+  }
+  return maxMs
+}
+
+/**
+ * When a parent row was tombstoned but newer children still reference it,
+ * resurrect the parent from the tombstone payload so FK prune does not cascade
+ * delete surviving transactions / accounts / categories (smb290).
+ */
+function resurrectReferencedParentsFromTombstones(tables, tombstoneMap) {
+  const nextTables = { ...tables }
+
+  const ensureParentRow = (tableName, parentId, childRows) => {
+    const normalizedParentId = normalizeText(parentId)
+    if (!normalizedParentId) return
+    const existingIds = buildIdSet(nextTables[tableName])
+    if (existingIds.has(normalizedParentId)) return
+
+    const tombstoneKey = `${tableName}::${normalizedParentId}`
+    const tombstone = tombstoneMap.get(tombstoneKey)
+    if (!tombstone) return
+
+    const deletedMs = toEpochMs(tombstone.deleted_at)
+    const childMaxMs = maxChildUpdatedMs(childRows)
+    if (!Number.isFinite(deletedMs) || !(childMaxMs > deletedMs)) return
+
+    const payload = tryParseTombstonePayload(tombstone)
+    if (!payload) return
+
+    const restored = {
+      ...cloneJson(payload),
+      id: normalizedParentId,
+      updated_at: toIso(payload.updated_at) || toIso(childMaxMs) || new Date().toISOString(),
+    }
+    nextTables[tableName] = sortRows(tableName, [
+      ...listTableRows({ tables: nextTables }, tableName),
+      restored,
+    ])
+    tombstoneMap.delete(tombstoneKey)
+  }
+
+  for (const account of listTableRows({ tables: nextTables }, 'accounts')) {
+    ensureParentRow(
+      'account_groups',
+      account?.group_id,
+      [account, ...listTableRows({ tables: nextTables }, 'transactions').filter((tx) => (
+        normalizeText(tx?.account_id) === normalizeText(account?.id)
+        || normalizeText(tx?.peer_account_id) === normalizeText(account?.id)
+      ))],
+    )
+  }
+
+  for (const category of listTableRows({ tables: nextTables }, 'categories')) {
+    ensureParentRow(
+      'category_groups',
+      category?.group_id,
+      [category, ...listTableRows({ tables: nextTables }, 'transactions').filter((tx) => (
+        normalizeText(tx?.category_id) === normalizeText(category?.id)
+      ))],
+    )
+  }
+
+  for (const tx of listTableRows({ tables: nextTables }, 'transactions')) {
+    ensureParentRow('accounts', tx?.account_id, [tx])
+    ensureParentRow('categories', tx?.category_id, [tx])
+  }
+
+  return nextTables
+}
+
 function normalizeDeletedLogRow(row) {
   if (!row || typeof row !== 'object') return null
 
@@ -382,44 +465,11 @@ function collectMergeUnits(localTables, remoteTables) {
     }
   }
 
-  const accountIds = new Set()
-  for (const tables of [localTables, remoteTables]) {
-    for (const row of listTableRows({ tables }, 'accounts')) {
-      const accountId = normalizeText(row?.id)
-      if (accountId) accountIds.add(accountId)
-    }
-  }
-
-  for (const accountId of accountIds) {
-    for (const tables of [localTables, remoteTables]) {
-      const accountRow = listTableRows({ tables }, 'accounts')
-        .find((row) => normalizeText(row?.id) === accountId)
-      if (accountRow) {
-        addMergeUnitMember(
-          unitMap,
-          'account_coherence',
-          accountId,
-          'accounts',
-          getRowKey('accounts', accountRow),
-        )
-      }
-
-      for (const row of listTableRows({ tables }, 'transactions')) {
-        if (
-          normalizeText(row?.account_id) === accountId
-          || normalizeText(row?.peer_account_id) === accountId
-        ) {
-          addMergeUnitMember(
-            unitMap,
-            'account_coherence',
-            accountId,
-            'transactions',
-            getRowKey('transactions', row),
-          )
-        }
-      }
-    }
-  }
+  // NOTE (smb290): Do NOT bundle accounts with all referencing transactions as a
+  // single "account_coherence" unit. That made a newer remote account metadata
+  // edit wipe the other side's transactions (silent data loss). Account rows
+  // still merge by last-write-wins independently; only true atomic bundles
+  // (transfers / loan payments / reimbursements / advances) stay as units.
 
   for (const tables of [localTables, remoteTables]) {
     for (const payment of listTableRows({ tables }, 'loan_payments')) {
@@ -678,7 +728,8 @@ function canonicalizeSnapshot(snapshot) {
     tables[tableName] = sortRows(tableName, mergedRows)
   }
 
-  const prunedTables = pruneSharedLedgerSnapshotForeignKeys(tables)
+  const resurrectedTables = resurrectReferencedParentsFromTombstones(tables, tombstoneMap)
+  const prunedTables = pruneSharedLedgerSnapshotForeignKeys(resurrectedTables)
   prunedTables.deleted_log = sortDeletedLogRows(Array.from(tombstoneMap.values()))
 
   return {
@@ -887,4 +938,36 @@ export function areSharedLedgerSnapshotsEquivalent(leftSnapshot, rightSnapshot) 
   }
 
   return JSON.stringify(comparableLeft) === JSON.stringify(comparableRight)
+}
+
+/**
+ * Stable integrity fingerprint for sync acceptance tests (smb290).
+ * Counts rows and sums transaction amounts so merge/pull/push can prove
+ * no silent drop/duplication of bookkeeping data.
+ */
+export function summarizeSharedLedgerSnapshotIntegrity(snapshot) {
+  const normalized = canonicalizeSnapshot(snapshot)
+  const tables = normalized.tables ?? {}
+  const transactions = listTableRows({ tables }, 'transactions')
+  const amountMinorTotal = transactions.reduce((sum, row) => {
+    const amount = Number(row?.amount_minor)
+    return sum + (Number.isFinite(amount) ? amount : 0)
+  }, 0)
+
+  const countMap = {}
+  for (const tableName of getAllTableNames(normalized, null)) {
+    countMap[tableName] = listTableRows({ tables }, tableName).length
+  }
+  countMap.deleted_log = listTableRows({ tables }, 'deleted_log').length
+
+  return {
+    ledgerId: normalized.ledger_id,
+    rowCounts: countMap,
+    transactionCount: transactions.length,
+    transactionIds: transactions.map((row) => normalizeText(row?.id)).filter(Boolean).sort(),
+    amountMinorTotal,
+    accountIds: listTableRows({ tables }, 'accounts').map((row) => normalizeText(row?.id)).filter(Boolean).sort(),
+    categoryIds: listTableRows({ tables }, 'categories').map((row) => normalizeText(row?.id)).filter(Boolean).sort(),
+    budgetIds: listTableRows({ tables }, 'budgets').map((row) => normalizeText(row?.id)).filter(Boolean).sort(),
+  }
 }

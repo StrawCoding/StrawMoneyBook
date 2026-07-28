@@ -188,11 +188,16 @@ function writeBaseSnapshotMap(map) {
   const entries = Object.entries(map ?? {})
     .map(([ledgerId, snapshot]) => [String(ledgerId ?? '').trim(), snapshot])
     .filter(([ledgerId, snapshot]) => Boolean(ledgerId) && snapshot && typeof snapshot === 'object')
-  if (!entries.length) {
-    localStorage.removeItem(BASE_SNAPSHOT_STORAGE_KEY)
-    return
+  try {
+    if (!entries.length) {
+      localStorage.removeItem(BASE_SNAPSHOT_STORAGE_KEY)
+      return
+    }
+    localStorage.setItem(BASE_SNAPSHOT_STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)))
+  } catch (error) {
+    // Quota / private mode: keep sync working but fall back to two-way merge later.
+    console.warn('[shared-ledger] failed to persist base snapshot map', error)
   }
-  localStorage.setItem(BASE_SNAPSHOT_STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)))
 }
 
 function getBaseSnapshot(ledgerId) {
@@ -226,6 +231,71 @@ function sanitizeSnapshotForSharedSync(snapshot) {
   return normalizeSharedLedgerSnapshot(normalized)
 }
 
+function resolveSharedLedgerPullSnapshot({
+  baseSnapshot,
+  localSnapshot,
+  remoteSnapshot,
+  dirtyMarkedAt,
+}) {
+  if (baseSnapshot) {
+    const threeWay = threeWayMergeSnapshots(baseSnapshot, localSnapshot, remoteSnapshot, {
+      prefer: 'remote',
+    })
+    return {
+      snapshot: threeWay.mergedSnapshot,
+      hasConflicts: threeWay.hasConflicts,
+      conflictCount: threeWay.conflicts.length,
+      conflicts: threeWay.conflicts,
+      mergeMode: 'three_way',
+    }
+  }
+
+  if (dirtyMarkedAt) {
+    const twoWay = mergeSharedLedgerSnapshots(localSnapshot, remoteSnapshot, {
+      prefer: 'remote',
+      detectConflicts: true,
+    })
+    return {
+      snapshot: twoWay.mergedSnapshot,
+      hasConflicts: twoWay.hasConflicts,
+      conflictCount: twoWay.conflicts.length,
+      conflicts: twoWay.conflicts,
+      mergeMode: 'two_way',
+    }
+  }
+
+  return {
+    snapshot: remoteSnapshot,
+    hasConflicts: false,
+    conflictCount: 0,
+    conflicts: [],
+    mergeMode: 'remote_only',
+  }
+}
+
+function buildSyncStatusPatch(mergeMeta = null) {
+  if (!mergeMeta?.hasConflicts) {
+    return {
+      last_sync_status: 'ok',
+      last_sync_error: '',
+      last_conflict_count: 0,
+      last_merge_log: null,
+    }
+  }
+
+  const conflictCount = Number(mergeMeta.conflictCount ?? mergeMeta.conflicts?.length ?? 0) || 0
+  const mergeLog = mergeMeta.mergeLog || buildMergeLog(mergeMeta.conflicts ?? [], {
+    prefer: 'remote',
+    mergeMode: mergeMeta.mergeMode || 'unknown',
+  })
+  return {
+    last_sync_status: 'conflict_resolved',
+    last_sync_error: `已安全合併 ${conflictCount} 處衝突（可於同步狀態查看）`,
+    last_conflict_count: conflictCount,
+    last_merge_log: mergeLog,
+  }
+}
+
 function buildSharedMeta(item, existingMeta = {}, patch = {}) {
   return {
     shared_ledger_id: String(item?.id ?? existingMeta?.shared_ledger_id ?? ''),
@@ -243,6 +313,12 @@ function buildSharedMeta(item, existingMeta = {}, patch = {}) {
     last_sync_error: patch.last_sync_error === undefined
       ? (existingMeta?.last_sync_error ?? '')
       : String(patch.last_sync_error ?? ''),
+    last_conflict_count: patch.last_conflict_count === undefined
+      ? Number(existingMeta?.last_conflict_count ?? 0) || 0
+      : Number(patch.last_conflict_count ?? 0) || 0,
+    last_merge_log: patch.last_merge_log === undefined
+      ? (existingMeta?.last_merge_log ?? null)
+      : patch.last_merge_log,
   }
 }
 
@@ -363,8 +439,12 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
     last_synced_at: now,
     last_pulled_at: metaPatch.last_pulled_at ?? now,
     last_pushed_at: metaPatch.last_pushed_at ?? existingMeta?.last_pushed_at ?? null,
-    last_sync_status: 'ok',
-    last_sync_error: '',
+    last_sync_status: metaPatch.last_sync_status ?? 'ok',
+    last_sync_error: metaPatch.last_sync_error === undefined ? '' : metaPatch.last_sync_error,
+    last_conflict_count: metaPatch.last_conflict_count === undefined
+      ? 0
+      : metaPatch.last_conflict_count,
+    last_merge_log: metaPatch.last_merge_log === undefined ? null : metaPatch.last_merge_log,
   })
 
   return {
@@ -463,13 +543,16 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
     mergeMeta = {
       hasConflicts,
       conflictCount: conflicts.length,
+      conflicts,
       mergeMode,
       mergeLog: buildMergeLog(conflicts, { prefer: 'remote', mergeMode }),
     }
 
     if (areSharedLedgerSnapshotsEquivalent(mergedSnapshot, remoteSnapshot)) {
+      const statusPatch = buildSyncStatusPatch(mergeMeta)
       const synced = await replaceLocalLedgerWithSnapshot(remoteSnapshot, remote.item, meta, {
         last_pushed_at: meta.last_pushed_at ?? null,
+        ...statusPatch,
       })
       return {
         item: remote.item,
@@ -490,10 +573,12 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
   }
 
   const now = nowIso()
+  const statusPatch = buildSyncStatusPatch(mergeMeta)
   if (resolvedSnapshot) {
     await replaceLocalLedgerWithSnapshot(resolvedSnapshot, result.item, meta, {
       last_pulled_at: now,
       last_pushed_at: now,
+      ...statusPatch,
     })
   }
   const nextMeta = await setSharedLedgerMeta(normalizedLedgerId, result.item, {
@@ -501,6 +586,7 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
     last_synced_at: now,
     last_pushed_at: now,
     last_pulled_at: resolvedSnapshot ? now : (meta.last_pulled_at ?? null),
+    ...statusPatch,
   })
   clearLedgerDirty(normalizedLedgerId)
   setBaseSnapshot(normalizedLedgerId, resolvedSnapshot ?? snapshot)
@@ -513,7 +599,7 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
   }
 }
 
-export async function pullSharedLedgerToLocal(ledgerId) {
+export async function pullSharedLedgerToLocal(ledgerId, options = {}) {
   const normalizedLedgerId = String(ledgerId ?? '').trim()
   if (!normalizedLedgerId) throw new Error('缺少帳本 ID')
 
@@ -523,14 +609,65 @@ export async function pullSharedLedgerToLocal(ledgerId) {
   }
 
   const result = await getSharedLedgerSnapshot(meta.shared_ledger_id)
-  const synced = await replaceLocalLedgerWithSnapshot(result.snapshot, result.item, meta)
-  setBaseSnapshot(normalizedLedgerId, result.snapshot)
-  return synced
+  const remoteSnapshot = sanitizeSnapshotForSharedSync(result.snapshot)
+  const existingLedger = await getLedger(normalizedLedgerId)
+  const dirtyMarkedAt = readDirtyLedgerQueue()[normalizedLedgerId] || null
+  const baseSnapshot = getBaseSnapshot(normalizedLedgerId)
+
+  let mergeMeta = {
+    snapshot: remoteSnapshot,
+    hasConflicts: false,
+    conflictCount: 0,
+    conflicts: [],
+    mergeMode: 'remote_only',
+  }
+
+  // Never hard-replace over local changes: merge using base/dirty when present.
+  if (existingLedger && (dirtyMarkedAt || baseSnapshot || options.forceMerge)) {
+    const localSnapshot = sanitizeSnapshotForSharedSync(await exportLedgerJson(normalizedLedgerId))
+    mergeMeta = resolveSharedLedgerPullSnapshot({
+      baseSnapshot,
+      localSnapshot,
+      remoteSnapshot,
+      dirtyMarkedAt,
+    })
+  }
+
+  const statusPatch = buildSyncStatusPatch(mergeMeta)
+  const synced = await replaceLocalLedgerWithSnapshot(mergeMeta.snapshot, result.item, meta, statusPatch)
+  setBaseSnapshot(normalizedLedgerId, mergeMeta.snapshot)
+
+  // If merge kept local-only edits that remote lacks, editors must push them.
+  if (
+    sharedLedgerRoleCanPush(meta.role)
+    && !areSharedLedgerSnapshotsEquivalent(mergeMeta.snapshot, remoteSnapshot)
+  ) {
+    markLedgerDirty(normalizedLedgerId)
+  }
+
+  return {
+    ...synced,
+    merged: mergeMeta.mergeMode !== 'remote_only',
+    hasConflicts: mergeMeta.hasConflicts,
+    conflictCount: mergeMeta.conflictCount,
+    mergeMode: mergeMeta.mergeMode,
+    mergeLog: mergeMeta.hasConflicts
+      ? buildMergeLog(mergeMeta.conflicts, { prefer: 'remote', mergeMode: mergeMeta.mergeMode })
+      : null,
+  }
 }
 
 export async function importRemoteSharedLedgerToLocal(sharedLedgerId) {
   const result = await getSharedLedgerSnapshot(sharedLedgerId)
-  const existingMeta = await getSharedLedgerMeta(String(result?.item?.ledger_id ?? ''))
+  const ledgerId = String(result?.item?.ledger_id ?? '').trim()
+  const existingMeta = await getSharedLedgerMeta(ledgerId)
+  const existingLedger = ledgerId ? await getLedger(ledgerId) : null
+
+  // Already bound locally: pull with merge instead of silent overwrite.
+  if (existingLedger && existingMeta?.shared_ledger_id === String(sharedLedgerId)) {
+    return pullSharedLedgerToLocal(ledgerId)
+  }
+
   const synced = await replaceLocalLedgerWithSnapshot(result.snapshot, result.item, existingMeta)
   setBaseSnapshot(synced.ledgerId, result.snapshot)
   return synced
@@ -692,9 +829,14 @@ export function getSharedLedgerSessionUser() {
   return getSharedLedgerSession()?.user ?? null
 }
 
-async function syncSingleDirtyLedger(ledgerId) {
+async function syncSingleDirtyLedger(ledgerId, options = {}) {
   const normalizedLedgerId = String(ledgerId ?? '').trim()
-  if (!normalizedLedgerId || syncingLedgerIds.has(normalizedLedgerId) || isAutoSyncMuted(normalizedLedgerId)) {
+  if (!normalizedLedgerId || isAutoSyncMuted(normalizedLedgerId)) {
+    return false
+  }
+
+  const alreadyLocked = syncingLedgerIds.has(normalizedLedgerId)
+  if (alreadyLocked && !options.allowLocked) {
     return false
   }
 
@@ -704,16 +846,24 @@ async function syncSingleDirtyLedger(ledgerId) {
     return false
   }
 
-  syncingLedgerIds.add(normalizedLedgerId)
+  if (!alreadyLocked) syncingLedgerIds.add(normalizedLedgerId)
   try {
     await setSharedLedgerMeta(normalizedLedgerId, meta, {
       last_sync_status: 'syncing',
       last_sync_error: '',
     })
-    await pushLocalLedgerToShared(normalizedLedgerId, { mergeOnConflict: true })
-    await setSharedLedgerMeta(normalizedLedgerId, meta, {
-      last_sync_status: 'ok',
-      last_sync_error: '',
+    const result = await pushLocalLedgerToShared(normalizedLedgerId, { mergeOnConflict: true })
+    const statusPatch = buildSyncStatusPatch(result?.hasConflicts
+      ? {
+          hasConflicts: true,
+          conflictCount: result.conflictCount,
+          conflicts: result.conflicts,
+          mergeMode: result.mergeMode,
+          mergeLog: result.mergeLog,
+        }
+      : null)
+    await setSharedLedgerMeta(normalizedLedgerId, result?.item ?? meta, {
+      ...statusPatch,
     })
     return true
   } catch (error) {
@@ -723,7 +873,7 @@ async function syncSingleDirtyLedger(ledgerId) {
     }).catch(() => null)
     throw error
   } finally {
-    syncingLedgerIds.delete(normalizedLedgerId)
+    if (!alreadyLocked) syncingLedgerIds.delete(normalizedLedgerId)
   }
 }
 
@@ -771,16 +921,34 @@ async function syncActiveLedgerLatest(pinia) {
       last_sync_error: '',
     })
     const detail = await getSharedLedgerDetail(meta.shared_ledger_id)
+    // Race: local edits may have landed while the detail request was in flight.
+    // Prefer push/merge over hard pull so unpushed changes are never wiped.
+    if (hasDirtyLedger(activeLedgerId)) {
+      await syncSingleDirtyLedger(activeLedgerId, { allowLocked: true })
+      return
+    }
     const remoteVersion = Number(detail?.item?.version ?? 0)
     const localVersion = Number(meta.version ?? 0)
     if (remoteVersion <= localVersion) {
       await setSharedLedgerMeta(activeLedgerId, meta, {
-        last_sync_status: 'ok',
-        last_sync_error: '',
+        last_sync_status: String(meta.last_sync_status ?? '').trim().toLowerCase() === 'conflict_resolved'
+          ? 'conflict_resolved'
+          : 'ok',
+        last_sync_error: meta.last_sync_error ?? '',
       })
       return
     }
-    await pullSharedLedgerToLocal(activeLedgerId)
+    const pulled = await pullSharedLedgerToLocal(activeLedgerId)
+    if (hasDirtyLedger(activeLedgerId) && sharedLedgerRoleCanPush(meta.role)) {
+      await syncSingleDirtyLedger(activeLedgerId, { allowLocked: true })
+    } else {
+      await setSharedLedgerMeta(activeLedgerId, pulled?.meta ?? meta, {
+        last_sync_status: pulled?.hasConflicts ? 'conflict_resolved' : 'ok',
+        last_sync_error: pulled?.hasConflicts
+          ? `已安全合併 ${pulled.conflictCount ?? 0} 處衝突（可於同步狀態查看）`
+          : '',
+      })
+    }
     await ledgerStore.reloadActiveLedger()
   } catch (error) {
     await setSharedLedgerMeta(activeLedgerId, meta, {

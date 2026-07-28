@@ -751,6 +751,14 @@ const syncStatusLabel = computed(() => {
   const status = String(activeLedgerMeta.value?.last_sync_status ?? 'idle').trim().toLowerCase()
   if (status === 'syncing') return t('settings_shared_ledgers.sync_status_syncing', '同步中')
   if (status === 'ok') return t('settings_shared_ledgers.sync_status_ok', '已同步')
+  if (status === 'conflict_resolved') {
+    const count = Number(activeLedgerMeta.value?.last_conflict_count ?? 0) || 0
+    return t(
+      'settings_shared_ledgers.sync_status_conflict_resolved',
+      { count },
+      count > 0 ? `已合併衝突（${count}）` : '已合併衝突',
+    )
+  }
   if (status === 'error') return t('settings_shared_ledgers.sync_status_error', '同步失敗')
   if (status === 'paused_reauth') return t('settings_shared_ledgers.sync_status_paused_reauth', '需重新登入')
   if (status === 'paused_membership') return t('settings_shared_ledgers.sync_status_paused_membership', '需會員資格')
@@ -1187,13 +1195,25 @@ async function retryActiveLedgerSync() {
   if (!activeLedger.value?.id || apiUnavailable.value || sessionNeedsReauth.value) return
   syncRetryBusy.value = true
   try {
+    let result = null
     if (currentRole.value === 'viewer') {
-      await pullSharedLedgerToLocal(activeLedger.value.id)
+      result = await pullSharedLedgerToLocal(activeLedger.value.id)
     } else {
-      await pushLocalLedgerToShared(activeLedger.value.id, { mergeOnConflict: true })
+      result = await pushLocalLedgerToShared(activeLedger.value.id, { mergeOnConflict: true })
     }
     await refreshLocalBindings()
-    uiStore.pushToast(t('settings_shared_ledgers.toast.sync_retry_ok', '同步已完成'))
+    if (result?.hasConflicts) {
+      uiStore.pushToast(
+        t(
+          'settings_shared_ledgers.toast.sync_conflict_resolved',
+          { count: result.conflictCount ?? 0 },
+          '同步完成，已安全合併 {count} 處衝突',
+        ),
+        'warning',
+      )
+    } else {
+      uiStore.pushToast(t('settings_shared_ledgers.toast.sync_retry_ok', '同步已完成'))
+    }
   } catch (error) {
     uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.sync_retry_failed', '同步失敗，請稍後再試'), 'error')
     await refreshLocalBindings()

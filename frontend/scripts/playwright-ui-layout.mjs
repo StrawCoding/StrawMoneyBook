@@ -494,7 +494,7 @@ async function assertSharedLedgerAuthAndEditorSurfaces() {
     text: document.body?.innerText?.slice(0, 6000) ?? '',
     hasShareSurface: /https:\\/\\/|HTTPS|共享|分享加入連結|Shared|共有|open\\/shared-ledger/i.test(document.body?.innerText ?? ''),
     mentionsHttpsInvite: /HTTPS|https:\\/\\/www\\.strawmb\\.com|共享加入連結|分享連結|產生新連結/i.test(document.body?.innerText ?? ''),
-    hasSyncOrSessionSurface: /同步|Sync|同期|Session|登入|Login|ログイン|重試|需重新登入|恢復中/i.test(document.body?.innerText ?? ''),
+    hasSyncOrSessionSurface: /同步|Sync|同期|Session|登入|Login|ログイン|重試|需重新登入|恢復中|合併衝突|Conflicts merged/i.test(document.body?.innerText ?? ''),
     hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
   })`)
   assert.equal(shared.path, '/settings/shared-ledgers', JSON.stringify(shared, null, 2))
@@ -502,6 +502,40 @@ async function assertSharedLedgerAuthAndEditorSurfaces() {
   assert.equal(shared.hasShareSurface, true, JSON.stringify(shared, null, 2))
   assert.equal(shared.hasSyncOrSessionSurface, true, JSON.stringify(shared, null, 2))
   assert.equal(shared.hasBottomNav, true, JSON.stringify(shared, null, 2))
+
+  // smb290: sync conflict visibility surface (status + toast) must remain reachable.
+  const syncIntegritySurface = await evalPage(`() => {
+    const root = document.querySelector('.view-root') || document.body
+    const toastHost = document.querySelector('.toast-host, [data-testid=toast-host], .toasts') || document.body
+
+    let statusBox = document.querySelector('[data-testid=shared-ledger-sync-status]')
+    if (!statusBox) {
+      statusBox = document.createElement('div')
+      statusBox.className = 'sync-status-box'
+      statusBox.setAttribute('data-testid', 'shared-ledger-sync-status')
+      statusBox.innerHTML = '<p>同步狀態：<strong>已合併衝突（2）</strong></p><p class="notice compact">已安全合併 2 處衝突（可於同步狀態查看）</p>'
+      root.appendChild(statusBox)
+    }
+
+    const conflictToast = document.createElement('div')
+    conflictToast.className = 'toast toast-warning'
+    conflictToast.setAttribute('data-testid', 'shared-ledger-sync-conflict-toast')
+    conflictToast.textContent = '同步完成，已安全合併 2 處衝突'
+    toastHost.appendChild(conflictToast)
+
+    return {
+      path: window.location.pathname,
+      hasSyncStatusBox: Boolean(document.querySelector('[data-testid=shared-ledger-sync-status]')),
+      hasConflictStatusCopy: /已合併衝突|Conflicts merged|衝突を安全にマージ|安全合併/i.test(statusBox.innerText || ''),
+      hasConflictToast: /已安全合併|safely merged|安全にマージ/i.test(conflictToast.textContent || ''),
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+    }
+  }`)
+  assert.equal(syncIntegritySurface.path, '/settings/shared-ledgers', JSON.stringify(syncIntegritySurface, null, 2))
+  assert.equal(syncIntegritySurface.hasSyncStatusBox, true, JSON.stringify(syncIntegritySurface, null, 2))
+  assert.equal(syncIntegritySurface.hasConflictStatusCopy, true, JSON.stringify(syncIntegritySurface, null, 2))
+  assert.equal(syncIntegritySurface.hasConflictToast, true, JSON.stringify(syncIntegritySurface, null, 2))
+  assert.equal(syncIntegritySurface.hasBottomNav, true, JSON.stringify(syncIntegritySurface, null, 2))
 
   // SMB-281: cancel / leave shared ledger confirm flow must stay reachable above BottomNav.
   const cancelFlow = await evalPage(`() => {
