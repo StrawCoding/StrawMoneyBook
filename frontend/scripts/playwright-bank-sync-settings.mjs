@@ -82,7 +82,7 @@ async function completeOnboarding() {
 
   const welcome = await evalPage(`() => Boolean(document.querySelector('.welcome-root'))`)
   if (welcome) {
-    await runPlaywrightCli(['click', "button:has-text('Next')"])
+    await runPlaywrightCli(['click', "button:has-text('Next'), button:has-text('下一步'), button:has-text('次へ')"])
     await delay(900)
     await runPlaywrightCli(['fill', '.welcome-root input.input', `Bank Sync Ledger ${Date.now()}`])
     await runPlaywrightCli(['click', "button:has-text('Create Ledger'), button:has-text('建立帳本'), button:has-text('帳簿を作成')"])
@@ -94,12 +94,19 @@ async function completeOnboarding() {
     await delay(3000)
   }
 
+  const intro = await evalPage(`() => window.location.pathname.includes('/welcome/intro') || Boolean(document.querySelector('.intro-root'))`)
+  if (intro) {
+    await runPlaywrightCli(['click', "button:has-text('Start now'), button:has-text('先開始使用'), button:has-text('Skip'), button:has-text('今すぐ始める')"])
+    await delay(1500)
+  }
+
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const state = await evalPage(`() => ({
       hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
       welcome: Boolean(document.querySelector('.welcome-root')),
       intro: window.location.pathname.includes('/welcome/intro') || Boolean(document.querySelector('.intro-root')),
       path: window.location.pathname,
+      bodyText: document.body?.innerText?.slice(0, 240) ?? '',
     })`)
     if (state.intro) {
       await runPlaywrightCli(['click', "button:has-text('Start now'), button:has-text('先開始使用'), button:has-text('Skip'), button:has-text('今すぐ始める')"])
@@ -119,33 +126,25 @@ async function completeOnboarding() {
         return { ok: true, skipped: false }
       }
     }
+    if (state.welcome && attempt > 0 && attempt % 8 === 0) {
+      await runPlaywrightCli(['click', "button:has-text('Next'), button:has-text('下一步'), button:has-text('次へ'), button:has-text('Start'), button:has-text('開始使用')"])
+      await delay(800)
+    }
     await delay(500)
   }
-  throw new Error('failed to reach home app-shell with BottomNav')
+
+  const diagnostic = await evalPage(`() => ({
+    ok: false,
+    reason: 'bottom-nav missing after onboarding',
+    path: window.location.pathname,
+    hasWelcome: Boolean(document.querySelector('.welcome-root')),
+    hasIntro: window.location.pathname.includes('/welcome/intro') || Boolean(document.querySelector('.intro-root')),
+    bodyText: document.body?.innerText?.slice(0, 400) ?? '',
+  })`)
+  throw new Error(`failed to reach home app-shell with BottomNav: ${JSON.stringify(diagnostic)}`)
 }
 
-console.log('--- Playwright: bank sync settings (app-shell + support matrix) ---')
-console.log('Building web preview bundle...')
-await execFileAsync('npm', ['run', 'build:web'], {
-  cwd: frontendDir,
-  env: process.env,
-  maxBuffer: 8 * 1024 * 1024,
-  timeout: 300000,
-})
-
-const preview = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', String(previewPort), '--strictPort'], {
-  cwd: frontendDir,
-  stdio: 'ignore',
-  env: process.env,
-})
-
-try {
-  await waitForPreviewReady()
-  await runPlaywrightCli(['delete-data'])
-  await runPlaywrightCli(['open', `${baseUrl}/`])
-  const onboarding = await completeOnboarding()
-  assert.equal(onboarding.ok, true, JSON.stringify(onboarding, null, 2))
-
+async function openBankSyncPage() {
   await runPlaywrightCli(['goto', `${baseUrl}/settings`])
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const ready = await evalPage(`() => ({
@@ -179,21 +178,119 @@ try {
       && ready.hasBottomNav
       && !ready.welcome
     ) {
-      break
+      return
     }
     await delay(400)
   }
+  throw new Error('bank-sync page not ready')
+}
 
-  const state = await evalPage(`() => ({
-    path: window.location.pathname,
-    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
-    hasAvailability: Boolean(document.querySelector('[data-testid=bank-sync-availability]')),
-    hasSupportMatrix: Boolean(document.querySelector('[data-testid=bank-sync-support-matrix]')),
-    hasRecoveryCta: Boolean(document.querySelector('[data-testid=bank-sync-recovery-cta]')),
-    redirectedToSettingsOnly: window.location.pathname === '/settings',
-    bodyText: document.body?.innerText?.slice(0, 900) ?? '',
-    welcome: Boolean(document.querySelector('.welcome-root')),
-  })`)
+async function seedMembershipAndPendingConnection() {
+  await runPlaywrightCli(['eval', `() => {
+    localStorage.setItem('straw.playwright.hooks', '1')
+    localStorage.setItem('straw.membership.entitlement.v2', JSON.stringify({
+      lifetimeOwned: true,
+      monthlyLastVerifiedAt: '',
+      membershipCacheExpiresAt: 'forever',
+      lastSyncAt: new Date().toISOString(),
+      lastSyncStatus: 'ok',
+      lastKnownPlan: 'lifetime',
+    }))
+    window.location.href = ${JSON.stringify(`${baseUrl}/settings/bank-sync`)}
+    return true
+  }`], { raw: true })
+  await delay(2500)
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const ready = await evalPage(`() => ({
+      path: window.location.pathname,
+      hasAvailability: Boolean(document.querySelector('[data-testid=bank-sync-availability]')),
+      hasHook: Boolean(window.__SMB_PLAYWRIGHT_BANK_SYNC__),
+    })`)
+    if (ready.path === '/settings/bank-sync' && ready.hasAvailability && ready.hasHook) break
+    await delay(400)
+  }
+
+  let seeded = null
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    seeded = await evalPage(`() => {
+      const hook = window.__SMB_PLAYWRIGHT_BANK_SYNC__
+      if (!hook?.setConnections) return { ok: false, reason: 'missing playwright bank hook' }
+      const count = hook.setConnections([{
+        id: 'pw_bank_conn_1',
+        provider: 'first_bank',
+        provider_connection_id: 'first_bank_identity_seed',
+        status: 'active',
+        user_label: 'Playwright First Bank',
+        pendingReviewCount: 2,
+        last_sync_status: 'ok',
+        last_sync_at: '',
+        last_error: '',
+        isDeprecatedMock: false,
+        needsReconnect: false,
+        accounts: [],
+        enabledAccountCount: 0,
+      }])
+      const body = document.body?.innerText || ''
+      const hasLabel = /Playwright First Bank/u.test(body)
+      const hasMemberLock = Boolean(document.querySelector('.member-only-lock'))
+      return {
+        ok: count >= 1 && hasLabel,
+        count,
+        hasLabel,
+        hasMemberLock,
+        hasPending: /待審核|pending|Pending|レビュー|2/u.test(body),
+        bodySnippet: body.slice(0, 400),
+      }
+    }`)
+    if (seeded.ok) return seeded
+    await delay(400)
+  }
+  throw new Error(`failed to seed bank sync pending connection: ${JSON.stringify(seeded)}`)
+}
+
+console.log('--- Playwright: bank sync settings (app-shell + support matrix) ---')
+console.log('Building web preview bundle...')
+await execFileAsync('npm', ['run', 'build:web'], {
+  cwd: frontendDir,
+  env: process.env,
+  maxBuffer: 8 * 1024 * 1024,
+  timeout: 300000,
+})
+
+const preview = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', String(previewPort), '--strictPort'], {
+  cwd: frontendDir,
+  stdio: 'ignore',
+  env: process.env,
+})
+
+try {
+  await waitForPreviewReady()
+  await runPlaywrightCli(['delete-data'])
+  await runPlaywrightCli(['open', `${baseUrl}/`])
+  const onboarding = await completeOnboarding()
+  assert.equal(onboarding.ok, true, JSON.stringify(onboarding, null, 2))
+
+  await openBankSyncPage()
+
+  const state = await evalPage(`() => {
+    const stages = [...document.querySelectorAll('[data-testid=bank-sync-availability] [data-stage]')].map((el) => ({
+      id: el.getAttribute('data-stage'),
+      ok: el.getAttribute('data-ok') === '1',
+      code: el.querySelector('.error-code')?.textContent?.trim() || null,
+    }))
+    return {
+      path: window.location.pathname,
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+      hasAvailability: Boolean(document.querySelector('[data-testid=bank-sync-availability]')),
+      hasSupportMatrix: Boolean(document.querySelector('[data-testid=bank-sync-support-matrix]')),
+      hasRecoveryCta: Boolean(document.querySelector('[data-testid=bank-sync-recovery-cta]')),
+      redirectedToSettingsOnly: window.location.pathname === '/settings',
+      stages,
+      bodyText: document.body?.innerText?.slice(0, 1000) ?? '',
+      welcome: Boolean(document.querySelector('.welcome-root')),
+    }
+  }`)
 
   assert.equal(state.welcome, false, 'must bypass onboarding / welcome')
   assert.equal(state.redirectedToSettingsOnly, false, 'must not silently redirect away from bank-sync')
@@ -210,7 +307,27 @@ try {
   )
   assert.match(state.bodyText, /Android|android_only|支援矩陣|Support/u)
 
-  console.log('Bank sync Playwright app-shell + support matrix check passed')
+  const membershipOrPlatform = state.stages.find((stage) => !stage.ok)
+  assert.ok(membershipOrPlatform, 'web free/non-android must surface a clear blocker stage')
+  assert.ok(
+    ['bank_sync_membership_required', 'bank_sync_android_only'].includes(membershipOrPlatform.code),
+    `unexpected blocker code: ${membershipOrPlatform.code}`,
+  )
+
+  const seeded = await seedMembershipAndPendingConnection()
+  assert.equal(seeded.ok, true, JSON.stringify(seeded))
+
+  const seededState = await evalPage(`() => ({
+    bodyText: document.body?.innerText?.slice(0, 1200) ?? '',
+    hasPendingBadge: /待審核|pending|Pending|レビュー/u.test(document.body?.innerText || ''),
+    hasSeedLabel: /Playwright First Bank/u.test(document.body?.innerText || ''),
+    hasRecoveryCta: Boolean(document.querySelector('[data-testid=bank-sync-recovery-cta]')),
+  })`)
+  assert.equal(seededState.hasSeedLabel, true, `seeded connection label required: ${JSON.stringify(seededState)}`)
+  assert.equal(seededState.hasPendingBadge, true, 'seeded pending review badge required')
+  assert.equal(seededState.hasRecoveryCta, true, 'recovery CTA must remain after seeded review connection')
+
+  console.log('Bank sync Playwright app-shell + support matrix + seeded review check passed')
 } finally {
   preview.kill('SIGTERM')
 }

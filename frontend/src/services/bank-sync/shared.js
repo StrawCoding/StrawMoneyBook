@@ -37,6 +37,23 @@ export function createFirstBankProviderConnectionId({
   return `first_bank_identity_${simpleHash(`${normalizedNationalId}:${normalizedRepeatSeq}:${normalizedUserCode}`)}`
 }
 
+/**
+ * Native vault may be keyed by provider_connection_id OR local DB id (legacy).
+ * Always pass distinct candidates so Android can resolve without false
+ * bank_sync_credentials_missing / first_bank_legacy_reconnect_required.
+ */
+export function buildNativeVaultLookupIds(connection = {}) {
+  const localId = normalizeText(connection?.id)
+  const providerRef = normalizeText(connection?.provider_connection_id)
+  const primary = providerRef || localId
+  return {
+    connectionId: primary,
+    connection_id: localId || primary,
+    provider_connection_id: providerRef || primary,
+    local_connection_id: localId || primary,
+  }
+}
+
 export function buildImportedNoteParts(row = {}) {
   const transactionType = normalizeText(row?.transaction_type ?? row?.transactionType)
   const summary = normalizeText(row?.summary)

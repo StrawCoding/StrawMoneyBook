@@ -98,13 +98,15 @@ test('SMB-280: after credentials exist and sync idle, availability is ready', ()
 
 test('SMB-280: native vault uses provider_connection_id and commit()', () => {
   const service = read('src/ui/services/bank-sync.service.js')
+  const shared = read('src/services/bank-sync/shared.js')
   const vault = read('android/app/src/main/java/com/strawcoding/strawmoneybook/BankAutomationVault.java')
   const automation = read('android/app/src/main/java/com/strawcoding/strawmoneybook/FirstBankAutomation.java')
-  assert.match(service, /nativeVaultConnectionId/)
+  assert.match(shared, /buildNativeVaultLookupIds/)
+  assert.match(service, /buildNativeVaultLookupIds/)
   assert.match(service, /provider_connection_id/)
   assert.match(vault, /\.commit\(\)/)
   assert.doesNotMatch(vault, /\.apply\(\)/)
-  assert.match(automation, /payload\.optString\("connection_id"\)/)
+  assert.match(automation, /resolveVaultConnectionId|payload\.optString\("connection_id"\)/)
   assert.match(automation, /first_bank_legacy_reconnect_required/)
 })
 

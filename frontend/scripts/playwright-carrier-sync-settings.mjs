@@ -82,7 +82,7 @@ async function completeOnboarding() {
 
   const welcome = await evalPage(`() => Boolean(document.querySelector('.welcome-root'))`)
   if (welcome) {
-    await runPlaywrightCli(['click', "button:has-text('Next')"])
+    await runPlaywrightCli(['click', "button:has-text('Next'), button:has-text('下一步'), button:has-text('次へ')"])
     await delay(900)
     await runPlaywrightCli(['fill', '.welcome-root input.input', `Carrier Sync Ledger ${Date.now()}`])
     await runPlaywrightCli(['click', "button:has-text('Create Ledger'), button:has-text('建立帳本'), button:has-text('帳簿を作成')"])
@@ -94,19 +94,25 @@ async function completeOnboarding() {
     await delay(3000)
   }
 
+  const intro = await evalPage(`() => window.location.pathname.includes('/welcome/intro') || Boolean(document.querySelector('.intro-root'))`)
+  if (intro) {
+    await runPlaywrightCli(['click', "button:has-text('Start now'), button:has-text('先開始使用'), button:has-text('Skip'), button:has-text('今すぐ始める')"])
+    await delay(1500)
+  }
+
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const state = await evalPage(`() => ({
       hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
       welcome: Boolean(document.querySelector('.welcome-root')),
       intro: window.location.pathname.includes('/welcome/intro') || Boolean(document.querySelector('.intro-root')),
       path: window.location.pathname,
+      bodyText: document.body?.innerText?.slice(0, 240) ?? '',
     })`)
     if (state.intro) {
       await runPlaywrightCli(['click', "button:has-text('Start now'), button:has-text('先開始使用'), button:has-text('Skip'), button:has-text('今すぐ始める')"])
       await delay(1000)
       continue
     }
-    // Membership toast redirect can land here; force home before continuing.
     if (state.hasBottomNav && !state.welcome && !state.intro) {
       if (state.path === '/' || state.path === '/home') return { ok: true, skipped: false }
       await runPlaywrightCli(['goto', `${baseUrl}/`])
@@ -120,33 +126,25 @@ async function completeOnboarding() {
         return { ok: true, skipped: false }
       }
     }
+    if (state.welcome && attempt > 0 && attempt % 8 === 0) {
+      await runPlaywrightCli(['click', "button:has-text('Next'), button:has-text('下一步'), button:has-text('次へ'), button:has-text('Start'), button:has-text('開始使用')"])
+      await delay(800)
+    }
     await delay(500)
   }
-  throw new Error('failed to reach home app-shell with BottomNav')
+
+  const diagnostic = await evalPage(`() => ({
+    ok: false,
+    reason: 'bottom-nav missing after onboarding',
+    path: window.location.pathname,
+    hasWelcome: Boolean(document.querySelector('.welcome-root')),
+    hasIntro: window.location.pathname.includes('/welcome/intro') || Boolean(document.querySelector('.intro-root')),
+    bodyText: document.body?.innerText?.slice(0, 400) ?? '',
+  })`)
+  throw new Error(`failed to reach home app-shell with BottomNav: ${JSON.stringify(diagnostic)}`)
 }
 
-console.log('--- Playwright: carrier sync settings (app-shell) ---')
-console.log('Building web preview bundle...')
-await execFileAsync('npm', ['run', 'build:web'], {
-  cwd: frontendDir,
-  env: process.env,
-  maxBuffer: 8 * 1024 * 1024,
-  timeout: 300000,
-})
-
-const preview = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', String(previewPort), '--strictPort'], {
-  cwd: frontendDir,
-  stdio: 'ignore',
-  env: process.env,
-})
-
-try {
-  await waitForPreviewReady()
-  await runPlaywrightCli(['delete-data'])
-  await runPlaywrightCli(['open', `${baseUrl}/`])
-  const onboarding = await completeOnboarding()
-  assert.equal(onboarding.ok, true, JSON.stringify(onboarding, null, 2))
-
+async function openCarrierSyncPage() {
   await runPlaywrightCli(['goto', `${baseUrl}/settings`])
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const ready = await evalPage(`() => ({
@@ -173,33 +171,169 @@ try {
       welcome: Boolean(document.querySelector('.welcome-root')),
     })`)
     if (ready.path === '/settings/carrier-sync' && ready.hasAvailability && ready.hasBottomNav && !ready.welcome) {
-      break
+      return
     }
     await delay(400)
   }
+  throw new Error('carrier-sync page not ready')
+}
 
-  const state = await evalPage(`() => ({
-    path: window.location.pathname,
-    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
-    hasAvailability: Boolean(document.querySelector('[data-testid=carrier-sync-availability]')),
-    hasRecoveryCta: Boolean(document.querySelector('[data-testid=carrier-sync-recovery-cta]')),
-    bodyText: document.body?.innerText?.slice(0, 800) ?? '',
-    welcome: Boolean(document.querySelector('.welcome-root')),
-  })`)
+async function seedMembershipAndPendingReview() {
+  await runPlaywrightCli(['eval', `() => {
+    localStorage.setItem('straw.playwright.hooks', '1')
+    localStorage.setItem('straw.membership.entitlement.v2', JSON.stringify({
+      lifetimeOwned: true,
+      monthlyLastVerifiedAt: '',
+      membershipCacheExpiresAt: 'forever',
+      lastSyncAt: new Date().toISOString(),
+      lastSyncStatus: 'ok',
+      lastKnownPlan: 'lifetime',
+    }))
+    window.location.href = ${JSON.stringify(`${baseUrl}/settings/carrier-sync`)}
+    return true
+  }`], { raw: true })
+  await delay(2500)
 
-  assert.equal(state.welcome, false, 'must bypass onboarding / welcome')
-  assert.equal(state.path, '/settings/carrier-sync', JSON.stringify(state, null, 2))
-  assert.equal(state.hasBottomNav, true, 'must stay in app-shell with BottomNav')
-  assert.equal(state.hasAvailability, true, 'availability panel required')
-  assert.equal(state.hasRecoveryCta, true, 'single recovery CTA required')
-  assert.match(state.bodyText, /載具|Carrier|可用性|Availability|会員|會員/u)
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const ready = await evalPage(`() => ({
+      path: window.location.pathname,
+      hasReview: Boolean(document.querySelector('[data-testid=carrier-sync-review]')),
+      hasHook: Boolean(window.__SMB_PLAYWRIGHT_CARRIER_SYNC__),
+    })`)
+    if (ready.path === '/settings/carrier-sync' && ready.hasReview && ready.hasHook) break
+    await delay(400)
+  }
+
+  const seeded = await evalPage(`() => {
+    const hook = window.__SMB_PLAYWRIGHT_CARRIER_SYNC__
+    if (!hook?.setPendingRows) return { ok: false, reason: 'missing playwright carrier hook' }
+    const count = hook.setPendingRows([{
+      id: 'pw_einv_pending_1',
+      invoiceNumber: 'AB12345678',
+      amount: 128,
+      invoiceDate: Date.now(),
+      merchantName: 'Playwright Seed Shop',
+      carrierName: '手機條碼',
+      status: 'pending',
+      scrapedAt: Date.now(),
+      sourceSyncRunId: 'pw_seed_run',
+    }])
+    const availability = hook.getAvailability?.() || null
+    return {
+      ok: count >= 1,
+      count,
+      reviewCode: availability?.stages?.find((stage) => stage.id === 'review')?.code || null,
+      recoveryCta: availability?.recoveryCta || null,
+    }
+  }`)
+  if (!seeded.ok) throw new Error(`failed to seed carrier review list: ${JSON.stringify(seeded)}`)
+
+  let visible = null
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await delay(200)
+    visible = await evalPage(`() => {
+      const panel = document.querySelector('[data-testid=carrier-sync-review]')
+      const text = panel?.innerText || ''
+      const items = panel?.querySelectorAll('.review-item')?.length || 0
+      return {
+        ok: items >= 1 && /AB12345678|Playwright Seed Shop/u.test(text),
+        items,
+        text: text.slice(0, 300),
+      }
+    }`)
+    if (visible.ok) break
+  }
+  if (!visible?.ok) throw new Error(`seeded review list not visible: ${JSON.stringify(visible)}`)
+  return { ...seeded, ...visible }
+}
+
+console.log('--- Playwright: carrier sync settings (app-shell) ---')
+console.log('Building web preview bundle...')
+await execFileAsync('npm', ['run', 'build:web'], {
+  cwd: frontendDir,
+  env: process.env,
+  maxBuffer: 8 * 1024 * 1024,
+  timeout: 300000,
+})
+
+const preview = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', String(previewPort), '--strictPort'], {
+  cwd: frontendDir,
+  stdio: 'ignore',
+  env: process.env,
+})
+
+try {
+  await waitForPreviewReady()
+  await runPlaywrightCli(['delete-data'])
+  await runPlaywrightCli(['open', `${baseUrl}/`])
+  const onboarding = await completeOnboarding()
+  assert.equal(onboarding.ok, true, JSON.stringify(onboarding, null, 2))
+
+  await openCarrierSyncPage()
+
+  const freeState = await evalPage(`() => {
+    const stages = [...document.querySelectorAll('[data-testid=carrier-sync-availability] [data-stage]')].map((el) => ({
+      id: el.getAttribute('data-stage'),
+      ok: el.getAttribute('data-ok') === '1',
+      code: el.querySelector('.error-code')?.textContent?.trim() || null,
+    }))
+    return {
+      path: window.location.pathname,
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+      hasAvailability: Boolean(document.querySelector('[data-testid=carrier-sync-availability]')),
+      hasRecoveryCta: Boolean(document.querySelector('[data-testid=carrier-sync-recovery-cta]')),
+      stages,
+      bodyText: document.body?.innerText?.slice(0, 900) ?? '',
+      welcome: Boolean(document.querySelector('.welcome-root')),
+    }
+  }`)
+
+  assert.equal(freeState.welcome, false, 'must bypass onboarding / welcome')
+  assert.equal(freeState.path, '/settings/carrier-sync', JSON.stringify(freeState, null, 2))
+  assert.equal(freeState.hasBottomNav, true, 'must stay in app-shell with BottomNav')
+  assert.equal(freeState.hasAvailability, true, 'availability panel required')
+  assert.equal(freeState.hasRecoveryCta, true, 'single recovery CTA required')
+  assert.match(freeState.bodyText, /載具|Carrier|可用性|Availability|会員|會員/u)
   assert.doesNotMatch(
-    state.bodyText,
+    freeState.bodyText,
     /\beinvoice_network_failed\b/,
     'credentialed health probe must not false-report einvoice_network_failed on local preview',
   )
+  const membershipStage = freeState.stages.find((stage) => stage.id === 'membership')
+  assert.ok(membershipStage, 'membership stage required')
+  assert.equal(membershipStage.ok, false, 'free user must block on membership')
+  assert.equal(membershipStage.code, 'carrier_sync_membership_required')
 
-  console.log('Carrier sync Playwright app-shell route check passed')
+  const seeded = await seedMembershipAndPendingReview()
+  assert.equal(seeded.ok, true, JSON.stringify(seeded))
+
+  const memberState = await evalPage(`() => {
+    const review = document.querySelector('[data-testid=carrier-sync-review]')
+    const items = [...(review?.querySelectorAll('.review-item') || [])]
+    const stages = [...document.querySelectorAll('[data-testid=carrier-sync-availability] [data-stage]')].map((el) => ({
+      id: el.getAttribute('data-stage'),
+      ok: el.getAttribute('data-ok') === '1',
+      code: el.querySelector('.error-code')?.textContent?.trim() || null,
+    }))
+    return {
+      hasReview: Boolean(review),
+      reviewCount: items.length,
+      reviewText: review?.innerText?.slice(0, 400) ?? '',
+      stages,
+      hasRecoveryCta: Boolean(document.querySelector('[data-testid=carrier-sync-recovery-cta]')),
+      bodyText: document.body?.innerText?.slice(0, 900) ?? '',
+    }
+  }`)
+
+  assert.equal(memberState.hasReview, true, 'seeded membership must reveal review panel')
+  assert.ok(memberState.reviewCount >= 1, `seeded review list required: ${JSON.stringify(memberState)}`)
+  assert.match(memberState.reviewText, /AB12345678|Playwright Seed Shop/u)
+  const reviewStage = memberState.stages.find((stage) => stage.id === 'review')
+  assert.ok(reviewStage)
+  assert.equal(reviewStage.code, 'carrier_sync_pending_review')
+  assert.equal(memberState.hasRecoveryCta, true, 'recovery CTA must remain after seeded review')
+
+  console.log('Carrier sync Playwright app-shell route + availability + seeded review check passed')
 } finally {
   preview.kill('SIGTERM')
 }

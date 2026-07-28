@@ -195,29 +195,13 @@ final class FirstBankAutomation {
     }
 
     public static JSONObject sync(Activity activity, WebView webView, BankAutomationVault vault, BankAutomationDebugTrace debugTrace, JSONObject payload) throws Exception {
-        String connectionId = normalizeText(payload.optString("connectionId"));
-        if (connectionId.isEmpty()) {
-            connectionId = normalizeText(payload.optString("connection_id"));
-        }
+        String connectionId = resolveVaultConnectionId(vault, payload);
         if (connectionId.isEmpty()) {
             throw new BankAutomationException("first_bank_connection_id_required", "First Bank connection ID is required");
         }
         JSONObject state = vault.getConnectionState(connectionId);
         if (state == null) {
-            // Legacy rows may store vault under provider_connection_id while JS
-            // still passes the local DB id (or the reverse). Try the alternate key.
-            String alternateId = normalizeText(payload.optString("connection_id"));
-            if (alternateId.isEmpty()) {
-                alternateId = normalizeText(payload.optString("connectionId"));
-            }
-            if (!alternateId.isEmpty() && !alternateId.equals(connectionId)) {
-                state = vault.getConnectionState(alternateId);
-                if (state != null) {
-                    connectionId = alternateId;
-                }
-            }
-        }
-        if (state == null) {
+            // Candidate list already exhausted — keep legacy reconnect code for UI recovery.
             throw new BankAutomationException("first_bank_legacy_reconnect_required", "First Bank native credentials are missing. Please reconnect this bank account.");
         }
 
@@ -327,21 +311,9 @@ final class FirstBankAutomation {
     }
 
     public static JSONObject disconnect(Activity activity, WebView webView, BankAutomationVault vault, BankAutomationDebugTrace debugTrace, JSONObject payload) throws Exception {
-        String connectionId = normalizeText(payload.optString("connectionId"));
-        if (connectionId.isEmpty()) {
-            connectionId = normalizeText(payload.optString("connection_id"));
-        }
+        String connectionId = resolveVaultConnectionId(vault, payload);
         if (connectionId.isEmpty()) {
             throw new BankAutomationException("first_bank_connection_id_required", "First Bank connection ID is required");
-        }
-        if (!vault.hasConnectionState(connectionId)) {
-            String alternateId = normalizeText(payload.optString("connection_id"));
-            if (alternateId.isEmpty()) {
-                alternateId = normalizeText(payload.optString("connectionId"));
-            }
-            if (!alternateId.isEmpty() && !alternateId.equals(connectionId) && vault.hasConnectionState(alternateId)) {
-                connectionId = alternateId;
-            }
         }
         vault.deleteConnectionState(connectionId);
         BrowserSession session = new BrowserSession(activity, webView);
@@ -2186,6 +2158,40 @@ final class FirstBankAutomation {
             hash &= 0xffffffffL;
         }
         return "first_bank_identity_" + Long.toString(Math.abs(hash), 36);
+    }
+
+    /**
+     * Resolve the vault key across local DB id / provider_connection_id aliases.
+     * JS must pass distinct candidates; historically both connectionId and
+     * connection_id were set to the same value so the old single-alternate
+     * fallback never ran and false-reported credentials missing.
+     */
+    static String resolveVaultConnectionId(BankAutomationVault vault, JSONObject payload) throws Exception {
+        if (payload == null) return "";
+        String[] keys = new String[] {
+            "connectionId",
+            "connection_id",
+            "provider_connection_id",
+            "local_connection_id",
+            "localConnectionId",
+        };
+        java.util.LinkedHashSet<String> candidates = new java.util.LinkedHashSet<>();
+        for (String key : keys) {
+            String value = normalizeText(payload.optString(key));
+            if (!value.isEmpty()) candidates.add(value);
+        }
+        if (candidates.isEmpty()) return "";
+
+        String first = candidates.iterator().next();
+        if (vault == null) return first;
+
+        for (String candidate : candidates) {
+            if (vault.hasConnectionState(candidate)) {
+                return candidate;
+            }
+        }
+        // Prefer the first declared id when vault is cold / already cleared.
+        return first;
     }
 
     private static String requireText(JSONObject payload, String key, String code, String message) throws BankAutomationException {

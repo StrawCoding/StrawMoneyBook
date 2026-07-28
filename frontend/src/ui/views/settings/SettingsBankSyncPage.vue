@@ -353,14 +353,31 @@ function syncStatusText(status) {
   return t('settings_bank_sync.sync_status.idle')
 }
 
-onMounted(() => {
+onMounted(async () => {
   unsubscribeMembership = subscribeMembershipSnapshot((next) => {
     membershipTier.value = String(next?.tier ?? getMembershipTierSnapshot())
     refreshAvailability()
   }, { emitCurrent: true })
   showDisclaimer.value = hasBankSyncMembershipAccess.value && !readDisclaimerAccepted()
   refreshAvailability()
-  void reloadState()
+  await reloadState()
+  try {
+    if (localStorage.getItem('straw.playwright.hooks') === '1') {
+      window.__SMB_PLAYWRIGHT_BANK_SYNC__ = {
+        setConnections(rows = []) {
+          const normalized = (Array.isArray(rows) ? rows : []).map((row) => normalizeConnectionForView(row, Number(row?.pendingReviewCount ?? 0)))
+          connections.value = normalized
+          refreshAvailability()
+          return connections.value.length
+        },
+        getAvailability() {
+          return availability.value
+        },
+      }
+    }
+  } catch {
+    // ignore storage access failures
+  }
 })
 
 let unsubscribeMembership = null
@@ -368,6 +385,11 @@ let unsubscribeMembership = null
 onBeforeUnmount(() => {
   if (typeof unsubscribeMembership === 'function') {
     unsubscribeMembership()
+  }
+  try {
+    if (window.__SMB_PLAYWRIGHT_BANK_SYNC__) delete window.__SMB_PLAYWRIGHT_BANK_SYNC__
+  } catch {
+    // ignore
   }
 })
 

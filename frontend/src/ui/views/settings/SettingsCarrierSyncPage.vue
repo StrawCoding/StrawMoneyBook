@@ -136,7 +136,7 @@
         <p v-if="syncMessage" class="muted">{{ syncMessage }}</p>
       </article>
 
-      <article class="card panel review-panel">
+      <article class="card panel review-panel" data-testid="carrier-sync-review">
         <header class="row review-head">
           <h3>{{ t('settings_carrier_sync.review.title') }}</h3>
           <button class="btn" :disabled="reviewLoading" @click="reloadPending">
@@ -592,11 +592,32 @@ onMounted(async () => {
   await reloadState()
   await saveConfig()
   await probeHealth()
+  try {
+    if (localStorage.getItem('straw.playwright.hooks') === '1') {
+      window.__SMB_PLAYWRIGHT_CARRIER_SYNC__ = {
+        setPendingRows(rows = []) {
+          pendingRows.value = Array.isArray(rows) ? rows : []
+          refreshAvailability({ pendingCount: pendingRows.value.length })
+          return pendingRows.value.length
+        },
+        getAvailability() {
+          return availability.value
+        },
+      }
+    }
+  } catch {
+    // ignore storage access failures
+  }
 })
 
 onBeforeUnmount(() => {
   if (typeof unsubscribeMembership === 'function') unsubscribeMembership()
   clearCaptchaExpireTimer()
+  try {
+    if (window.__SMB_PLAYWRIGHT_CARRIER_SYNC__) delete window.__SMB_PLAYWRIGHT_CARRIER_SYNC__
+  } catch {
+    // ignore
+  }
   const sessionId = captchaSessionId.value
   captchaSessionId.value = ''
   if (sessionId) {

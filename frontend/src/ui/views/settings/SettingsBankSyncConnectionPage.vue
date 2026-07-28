@@ -185,7 +185,7 @@
         </section>
       </article>
 
-      <article class="card panel review-panel">
+      <article class="card panel review-panel" data-testid="bank-sync-review">
         <header class="row review-head">
           <h3>{{ t('settings_bank_sync.review.title', { name: connection.user_label || connection.provider }) }}</h3>
           <button class="btn" :disabled="reviewLoading" :aria-busy="reviewLoading" @click="loadReview(connection.id)">
