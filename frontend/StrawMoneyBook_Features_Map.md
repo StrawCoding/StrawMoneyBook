@@ -11,7 +11,7 @@
 - 交易查詢（搜尋頁、日曆頁、交易明細頁、交易編輯頁；SMB-155 後搜尋交易改為 SQL 分頁載入，每頁 300 筆，關鍵字與日期篩選會先進資料查詢層後再取當頁資料，避免大型帳本一次載入全部交易；SMB-211 後交易搜尋的 SQL 關鍵字比對會納入借貸交易的畫面顯示條件與往來對象，例如借出、借入、歸還 / 還款與收回 / 收回借款，不再只能用 `loan_payment` 或備註命中借貸交易；SMB-189 / v1.2.5 後帳本載入會自動掃描並修復交易遺失帳戶 / peer 帳戶 / 分類引用、壞掉的轉帳群組、報銷總額 / 已付款狀態與借貸狀態；SMB-219 / v1.2.28 後交易編輯頁與首頁交易編輯 sheet 改選分類時會同步套用分類預設報銷、紀錄預算與紀錄收支設定，載入既有交易時保留原交易已儲存的記帳旗標；smb292 後刪除交易成功一律 `replace` 回首頁並還原離開首頁前的 window 捲動（列表變短時 clamp），不可停在已刪除明細／空白頁；詳情頁若交易已不存在亦導回首頁）
 - 退款流程（交易明細可建立退款、選擇退款帳戶、指定扣除金額；SMB-149 後部分退款會以原交易扣除退款金額後的淨額納入首頁、預算、分析與列印報表，全額退款則歸零）
 - 預算管理（月預算、發薪週期預算、分類預算、共同預算池、日均規則、已用/剩餘/保留金額、預算剩餘自動存入存錢罐；SMB-260 / v1.3.45 後新增共同預算池：手動池總額、分類綁定、2B 月總額、3C 超支、池層 `budget_container_month` 預算存款；v1.3.48 日池可直接多選池內分類且綁定分類不需子預算金額，首頁日模式納入日池；SMB-268 後新增共同預算池與一般分類預算項目可用「套用至月份」跨月／跨年建立，服務層 fan-out 為每月獨立 budget/container/item，建立前檢查目標月份同名池或同分類項目衝突並避免 partial write，既有項目編輯仍只改目前月；SMB-269 後每個帳本可在曆月與發薪週期預算間切換，發薪週期由固定每月發薪日錨定，預算資料以 `period_key` / 起訖日 / mode 唯一識別，交易依實際日期落入週期，一般分類項目與共同預算池皆支援；SMB-271 後新增 / 編輯一般預算項目與共同預算池 sheet 也能直接設定目前帳本預算期間與每月發薪日，UI 會明確標示這是帳本層設定、切換影響該帳本預算頁與首頁預算卡，不會把每個項目改成獨立週期；SMB-272 後啟動 / reload 若保留 `pay:YYYY-MM-DD` 發薪週期 key，首頁月份篩選不再把它當 `YYYY-MM` 送進交易查詢，預算 store 會正規解析該 key，交易 repo 對非法年/月/日 key 回空結果而非拋 `Invalid time value`；SMB-273 後首次啟動、完整重啟、頁面 reload、Android resume、web/app shell focus 與 visibility 回可見都會重新載入今天的發薪週期，發薪日前一天仍是舊期、發薪日 00:00 起自動切到新期；SMB-274 後若 focus 與 visibility 同時建立同一預算期間，後到請求會讀回既有 row，不會產生唯一鍵 runtime error；SMB-275 後預算期間的「今天」一律以帳本時區解析，`resolveCurrentBudgetPeriodForLedger()` 成為 lifecycle reload 與預算頁進入入口，發薪週期帳本的首頁月份篩選不再覆寫預算期間，reload 成功後廣播 `app:budget-period-sync` 同步首頁篩選與預算頁；SMB-276 後改發薪日或切換曆月／發薪週期時，若新目前期間尚無使用者設定內容會自動 carry-forward 舊期預算結構到新期，避免預算頁跳到空殼，歷史期間與交易不搬移；SMB-151 後預算項目的「日期」分配改用與首頁查看範圍相同的 `HomeRangePicker` 日期選擇器，並在預算項目情境啟用日曆複選，點選多個日期後轉成每月日號規則，不再只是 1~31 純數字格或另一套自製月曆；SMB-153 後功能列表加入帶圖示的預算項目入口，可直接前往 `/budget`）
-- 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、分析頁一鍵直接圖示化 PDF；主路徑不經 `/analysis/print` 螢幕預覽，該路由僅保留進階／除錯；分析頁與報表文件共用圖示化圓餅／長條／明細欄位，PDF 以 html2canvas+jsPDF 產出 `交易報表_YYYY-MM.pdf` 淺色全彩報表；互動分析頁 `/analysis`（圖表、摘要、篩選、導覽 chrome）完整跟隨 App Dark／Light mode；即使 App 為 Dark mode／系統跟隨深色，PDF／offscreen 報表本體仍強制淺色列印友善（白／淺底、深色文字、淺色圖表軌道）；進階 `/analysis/print` 的 chrome 跟隨 App 深色、報表本體仍淺色；PDF 擷取前強制 A4 寬度與桌面多欄排版並等比分頁（避開圖表／卡片／明細列中切斷、預留頁碼頁尾，避免內容裁切）；SMB-146 後支出分類分析會將正向附加項目拆成獨立分析列，主分類扣除該附加金額後仍維持總支出一致；圓餅圖已改為可點擊並提供 hover/press 回饋，尺寸也會隨較小螢幕縮放）
+- 分析與報表（收入/支出圖表、分類/帳戶明細、CSV 匯出、分析頁一鍵直接圖示化 PDF 快捷；完整交易報表頁 `/analysis/print` 仍可由分析頁「交易報表」入口進入，提供全部/年/月/日/自訂期間客製化預覽，以及 PDF／CSV 匯出成功後的「開啟檔案」按鈕；分析頁與報表文件共用圖示化圓餅／長條／明細欄位，PDF 以 html2canvas+jsPDF 產出 `交易報表_YYYY-MM.pdf` 淺色全彩報表；互動分析頁 `/analysis`（圖表、摘要、篩選、導覽 chrome）完整跟隨 App Dark／Light mode；即使 App 為 Dark mode／系統跟隨深色，PDF／offscreen 報表本體仍強制淺色列印友善（白／淺底、深色文字、淺色圖表軌道）；`/analysis/print` 的 chrome 跟隨 App 深色、報表本體仍淺色；PDF 擷取前強制 A4 寬度與桌面多欄排版並等比分頁（避開圖表／卡片／明細列中切斷、預留頁碼頁尾，避免內容裁切）；SMB-146 後支出分類分析會將正向附加項目拆成獨立分析列，主分類扣除該附加金額後仍維持總支出一致；圓餅圖已改為可點擊並提供 hover/press 回饋，尺寸也會隨較小螢幕縮放）
 - 資產管理（帳戶餘額、帳戶群組、總資產 / 可支配 / 負債、群組內金額摘要；SMB-159 / SMB-160 後群組統計支援帳戶層級納入開關，並會依匯率 snapshot 將外幣帳戶換算為帳本幣別後加總；負向負債帳戶會以絕對值納入負債摘要，避免信用卡等帳戶方向差異造成低估；SMB-155 後帳戶明細交易紀錄改為每頁 300 筆，並用分頁前交易金額校正每筆交易後餘額）
 - 借貸管理（借出 / 借入、還款、作廢、往來對象明細；v1.2.6 後若借貸設有預設利息，單筆新增 / 編輯還款會阻擋超過本金加預設利息的目標總額；v1.2.22 / SMB-214 後還款支援利息功能：輸入金額超過剩餘本金時，超出部分自動計為利息並建立對應利息交易（借出方向為利息收入、借入方向為利息支出），還款表單即時顯示利息預覽；v1.2.15 / SMB-210 後借出 / 借入建立與所有還款、利息交易預設不計入收支分析與預算統計）
 - 借貸建立後可於借貸明細變更「建立入帳帳戶」，會直接修正該筆初始借入 / 借出交易的帳戶歸屬
@@ -56,9 +56,9 @@
 | `/shared-ledger/join` | redirect -> `/settings/shared-ledgers` | 共同帳本加入連結兼容入口 |
 | `/` | `src/ui/views/home.vue` | 首頁總覽、範圍篩選、快速新增 |
 | `/budget` | `src/ui/views/budgeting.vue` | 曆月 / 發薪週期預算、共同預算池、分類預算與預算存款管理 |
-| `/analysis` | `src/ui/views/analysis.vue` | 收支圖表分析（全部/年/月；圖示化圓餅／長條、大數字、預算達成卡、帳戶占比；跟隨 App Dark／Light；右上角一鍵直接匯出 PDF） |
+| `/analysis` | `src/ui/views/analysis.vue` | 收支圖表分析（全部/年/月；圖示化圓餅／長條、大數字、預算達成卡、帳戶占比；跟隨 App Dark／Light；右上角一鍵直接匯出 PDF +「交易報表」入口進 `/analysis/print`） |
 | `/analysis/category` | `src/ui/views/AnalysisCategoryDetailPage.vue` | 分類分析明細 |
-| `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 進階／除錯用交易報表頁（螢幕預覽 + PDF／CSV；主 UX 不經過此頁） |
+| `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 交易報表匯出頁（期間客製化 all/year/month/day/custom、螢幕預覽、PDF／CSV、匯出成功後「開啟檔案」；BottomNav／返回分析） |
 | `/transactions/search` | `src/ui/views/TransactionSearchPage.vue` | 交易搜尋（支援批量選取與批量編輯分類 / 備註 / 可報銷 / 預算 / 收支分析；SMB-155 後每頁 300 筆 SQL 分頁載入） |
 | `/transactions/quick-add` | `src/ui/views/BookkeepingPage.vue` | 手動快速新增模式（內嵌 `QuickAddPage.vue`） |
 | `/transactions/qna` | `src/ui/views/BookkeepingPage.vue` | 問答記帳模式（內嵌 `QnaBookkeepingPage.vue`） |
@@ -234,11 +234,13 @@
 | 支出圓餅圖 | `analysis.vue` + `src/core/utils/analysis-breakdown.js`（分類彙總 + 色盤；正向附加項目會以「附加項目」分析列納入） |
 | 帳戶分析（總額/收入/支出） | `analysis.vue` + `src/core/utils/analysis-breakdown.js`（帳戶彙總 + 色盤） |
 | 分類明細頁 | `analysis.vue` -> `/analysis/category` + `AnalysisCategoryDetailPage.vue` + `src/core/services/transaction-query.service.js`；支援附加項目分析列明細 |
-| 右上角匯出按鈕 | `analysis.vue` 一鍵直接匯出 PDF（offscreen `AnalysisReportDocument` + html2canvas/jsPDF；不經 `/analysis/print` 預覽） |
+| 右上角匯出按鈕 | `analysis.vue` 一鍵直接匯出 PDF（offscreen `AnalysisReportDocument` + html2canvas/jsPDF；快捷主路徑） |
+| 交易報表頁入口 | `analysis.vue` → `/analysis/print`（`data-testid=analysis-print-link`／`analysis_page.open_report`） |
 | AI 分析頁 | 已移除（不再提供 `/analysis/ai` 路由） |
-| 交易 CSV 匯出 | `src/ui/views/AnalysisPrintPage.vue` + `src/core/services/export.service.js`（進階路由） |
-| 列印 / PDF 版面 | `src/ui/views/AnalysisPrintPage.vue`（`print-only` 報表區塊） |
-| 匯出範圍 | `AnalysisPrintPage.vue`（全部/年/月/日/自訂） |
+| 交易 CSV 匯出 | `src/ui/views/AnalysisPrintPage.vue` + `src/core/services/export.service.js` |
+| 列印 / PDF 版面 | `src/ui/views/AnalysisPrintPage.vue`（預覽 + `AnalysisReportDocument`） |
+| 匯出範圍客製化 | `AnalysisPrintPage.vue`（全部/年/月/日/自訂；預覽與匯出對應所選範圍） |
+| 開啟檔案 | `AnalysisPrintPage.vue` + `export.service.js` `openFileUrl`（匯出成功後 `analysis_print.open_link`；失敗不顯示） |
 
 ## 5. 導覽與全域 UI
 
@@ -424,7 +426,7 @@ UI composable 目錄：`src/ui/composables/`
 - `transaction.repo.js:listHomeTransactionsPage` 支援首頁全部 / 年 / 月 / 日範圍的 SQL `LIMIT/OFFSET` 分頁（`HOME_TRANSACTION_PAGE_SIZE = 300`）；`summarizeHomeAssetTotalsByScope` 以單次 SQL 彙總收支（語意對齊退款淨額／分析旗標／排除借貸還款），`transaction-query.service.js:summarizeHomeAssetTotals` 改走此路徑；分析「全部」改 `listAllTransactionsChunked`；交易明細／編輯改 `listRelatedTransactionsForDetail`，避免一次載入整本帳本。
 - 若新增主頁功能，優先考慮：`home.vue` + `HomeTransactionFeed.vue` + `transaction.store.js`。
 - 若新增分析維度，優先考慮：`analysis.vue`、`analysis-breakdown.js` 與 `transaction-query.service.js`。
-- 若調整交易報表欄位或匯出格式，優先考慮：`analysis.vue`（主路徑一鍵 PDF）+ `AnalysisReportDocument.vue` + `analysis-report-pdf.service.js` + `analysis-report-light-theme.js` + `export.service.js`（及進階 `AnalysisPrintPage.vue`），並同步檢查分析頁共用圖示化圖表；互動分析頁須跟隨 Dark／Light；PDF 必須仍為淺色；PDF 須以 A4 print-layout 擷取並等比分頁且不得中切斷區塊；主 UX 不得強迫經過 `/analysis/print` 預覽。
+- 若調整交易報表欄位或匯出格式，優先考慮：`analysis.vue`（一鍵 PDF 快捷 + 報表頁入口）+ `AnalysisPrintPage.vue`（客製化期間／預覽／PDF／CSV／開啟檔案）+ `AnalysisReportDocument.vue` + `analysis-report-pdf.service.js` + `analysis-report-light-theme.js` + `export.service.js`（`openFileUrl`），並同步檢查分析頁共用圖示化圖表；互動分析頁須跟隨 Dark／Light；PDF 必須仍為淺色；PDF 須以 A4 print-layout 擷取並等比分頁且不得中切斷區塊；不得刪除 `/analysis/print` 路由或分析頁入口。
 - 若調整交易刪除邏輯，需同步檢查 `transaction.service.js` 的關聯刪除（退款/報銷）。
 - 若調整 App 開啟流程，需同步檢查 `main.js`、`app-bootstrap.service.js`、`app-runtime.service.js`、`useAppShellRuntime.js`、`google/auth.js` 與備份 service 的靜默登入流程。
 - 若調整帳本切換與 onboarding，需同步檢查 `ledger.store.js`、`ledger-runtime.service.js`、`setup-flow.service.js` 與相關 store reload 流程。

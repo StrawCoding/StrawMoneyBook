@@ -13,12 +13,37 @@
         <RouterLink class="btn back-btn" to="/analysis">{{ t('common.back') }}</RouterLink>
       </header>
 
-      <div class="mode-tabs">
-        <button class="btn" :class="{ primary: mode === 'all' }" @click="mode = 'all'">{{ t('analysis_print.mode.all') }}</button>
-        <button class="btn" :class="{ primary: mode === 'year' }" @click="mode = 'year'">{{ t('analysis_print.mode.year') }}</button>
-        <button class="btn" :class="{ primary: mode === 'month' }" @click="mode = 'month'">{{ t('analysis_print.mode.month') }}</button>
-        <button class="btn" :class="{ primary: mode === 'day' }" @click="mode = 'day'">{{ t('analysis_print.mode.day') }}</button>
-        <button class="btn" :class="{ primary: mode === 'custom' }" @click="mode = 'custom'">{{ t('analysis_print.mode.custom') }}</button>
+      <div class="mode-tabs" data-testid="analysis-export-mode-tabs">
+        <button
+          class="btn"
+          data-testid="analysis-export-mode-all"
+          :class="{ primary: mode === 'all' }"
+          @click="mode = 'all'"
+        >{{ t('analysis_print.mode.all') }}</button>
+        <button
+          class="btn"
+          data-testid="analysis-export-mode-year"
+          :class="{ primary: mode === 'year' }"
+          @click="mode = 'year'"
+        >{{ t('analysis_print.mode.year') }}</button>
+        <button
+          class="btn"
+          data-testid="analysis-export-mode-month"
+          :class="{ primary: mode === 'month' }"
+          @click="mode = 'month'"
+        >{{ t('analysis_print.mode.month') }}</button>
+        <button
+          class="btn"
+          data-testid="analysis-export-mode-day"
+          :class="{ primary: mode === 'day' }"
+          @click="mode = 'day'"
+        >{{ t('analysis_print.mode.day') }}</button>
+        <button
+          class="btn"
+          data-testid="analysis-export-mode-custom"
+          :class="{ primary: mode === 'custom' }"
+          @click="mode = 'custom'"
+        >{{ t('analysis_print.mode.custom') }}</button>
       </div>
 
       <div class="picker-wrap">
@@ -56,7 +81,12 @@
         <button class="btn" :disabled="exportingCsv" @click="exportCsv">
           {{ exportingCsv ? t('analysis_print.exporting') : t('analysis_print.export_csv') }}
         </button>
-        <button v-if="exportedUrl" class="btn" @click="openExportLink">{{ exportedActionLabel }}</button>
+        <button
+          v-if="exportedUrl"
+          class="btn"
+          data-testid="analysis-export-open-file-btn"
+          @click="openExportLink"
+        >{{ exportedActionLabel }}</button>
       </div>
 
       <p
@@ -486,6 +516,7 @@ async function exportPdf() {
     uiStore.pushToast(t('analysis_print.toast.pdf_downloaded', { filename: pdfFile.filename }))
   } catch (error) {
     lastExportError.value = String(error?.message ?? error ?? t('analysis_print.toast.export_failed'))
+    // Failed export must not present a new openable URL; keep prior successful URL if any.
     uiStore.pushToast(lastExportError.value, 'error')
   } finally {
     exportingPdf.value = false

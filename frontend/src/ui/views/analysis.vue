@@ -4,6 +4,15 @@
       <header class="row">
         <h2>{{ t('analysis_page.title') }}</h2>
         <div class="header-actions">
+          <RouterLink
+            class="btn"
+            data-testid="analysis-print-link"
+            :to="reportPageTo"
+            :aria-label="t('analysis_page.open_report')"
+            :title="t('analysis_page.open_report')"
+          >
+            {{ t('analysis_page.open_report') }}
+          </RouterLink>
           <button
             type="button"
             class="btn icon-btn"
@@ -27,6 +36,16 @@
       >
         {{ t('analysis_print.file_label', { filename: exportedFilename }) }}
       </p>
+      <div v-if="exportedUrl && exportedFilename" class="export-open-row">
+        <button
+          type="button"
+          class="btn"
+          data-testid="analysis-direct-open-file-btn"
+          @click="openExportLink"
+        >
+          {{ t('analysis_print.open_link') }}
+        </button>
+      </div>
       <p
         v-if="lastExportError"
         class="muted export-result"
@@ -238,7 +257,7 @@
 <script setup>
 import { Capacitor } from '@capacitor/core'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
 import AnalysisIconizedChartPair from '@/ui/components/analysis/AnalysisIconizedChartPair.vue'
@@ -252,6 +271,7 @@ import { listTransactionsForAnalysis } from '@/core/services/transaction-query.s
 import {
   createPdfBlobUrl,
   getLedgerTransactionsExportData,
+  openFileUrl,
   revokeBlobUrl,
   savePdfFileToDevice,
   triggerDownloadFromUrl,
@@ -348,6 +368,12 @@ const exportPeriodLabel = computed(() => {
   return t('analysis_print.all_hint')
 })
 const exportFilterLabel = computed(() => (mode.value === 'all' ? '' : exportPeriodLabel.value))
+const reportPageTo = computed(() => {
+  const query = { mode: mode.value === 'year' ? 'year' : mode.value === 'all' ? 'all' : 'month' }
+  if (query.mode === 'year') query.year = String(selectedYear.value)
+  if (query.mode === 'month') query.month = selectedMonth.value
+  return { path: '/analysis/print', query }
+})
 
 watch(
   () => [ledgerStore.activeLedgerId, mode.value, selectedYear.value, selectedMonth.value],
@@ -646,6 +672,14 @@ async function exportPdfDirect() {
   }
 }
 
+function openExportLink() {
+  if (!exportedUrl.value) return
+  const opened = openFileUrl(exportedUrl.value)
+  if (!opened && exportedFilename.value) {
+    triggerDownloadFromUrl(exportedUrl.value, exportedFilename.value)
+  }
+}
+
 onBeforeUnmount(() => {
   revokeBlobUrl(exportedUrl.value)
 })
@@ -698,6 +732,10 @@ h2, h3 {
 .export-result {
   margin: 8px 0 0;
   font-size: 12px;
+}
+
+.export-open-row {
+  margin-top: 8px;
 }
 
 .analysis-export-capture-host {

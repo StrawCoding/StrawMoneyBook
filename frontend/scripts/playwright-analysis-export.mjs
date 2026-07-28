@@ -297,7 +297,7 @@ async function assertAnalysisIconsVisible() {
   assert.equal(state.hasBigNumbers, true, JSON.stringify(state))
   assert.equal(state.hasIncomeOrExpense, true, JSON.stringify(state))
   assert.equal(state.hasDirectExport, true, `main export must be direct button: ${JSON.stringify(state)}`)
-  assert.equal(state.hasPrintLink, false, `preview link must not be main UX: ${JSON.stringify(state)}`)
+  assert.equal(state.hasPrintLink, true, `report page entry must remain reachable: ${JSON.stringify(state)}`)
   assert.ok(state.iconCount > 0 || state.hasPieLegend || state.hasBarList, JSON.stringify(state))
   return state
 }
@@ -369,12 +369,26 @@ async function assertAnalysisPageDarkTheme() {
   return state
 }
 
-async function openAdvancedPrintRoute() {
-  await runPlaywrightCli(['eval', `() => {
-    window.history.pushState({}, '', '/analysis/print?mode=month')
-    window.dispatchEvent(new PopStateEvent('popstate'))
-    return true
-  }`], { raw: true })
+async function openReportPageFromAnalysis() {
+  const hasLink = await evalPage(`() => Boolean(document.querySelector('[data-testid="analysis-print-link"]'))`)
+  assert.equal(hasLink, true, 'analysis-print-link must exist on /analysis')
+  try {
+    await runPlaywrightCli(['click', '[data-testid="analysis-print-link"]'])
+  } catch {
+    await evalPage(`() => {
+      const app = document.querySelector('#app')?.__vue_app__
+      const router = app?.config?.globalProperties?.$router
+      const link = document.querySelector('[data-testid="analysis-print-link"]')
+      const href = link?.getAttribute('href') || '/analysis/print'
+      if (router?.push) {
+        router.push(href)
+        return { via: 'router', href }
+      }
+      window.history.pushState({}, '', href)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+      return { via: 'history', href }
+    }`)
+  }
   await delay(1500)
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const state = await evalPage(`() => ({
@@ -382,11 +396,149 @@ async function openAdvancedPrintRoute() {
       hasPreview: Boolean(document.querySelector('[data-testid=analysis-report-document]')),
       hasPdfBtn: Boolean(document.querySelector('[data-testid=analysis-export-pdf-btn]')),
       hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+      hasModeTabs: Boolean(document.querySelector('[data-testid=analysis-export-mode-tabs]')),
+      hasBackToAnalysis: Boolean(document.querySelector('a.back-btn[href="/analysis"], a.back-btn[href*="/analysis"]')),
+      hasOpenFileBtn: Boolean(document.querySelector('[data-testid=analysis-export-open-file-btn]')),
     })`)
-    if (state.path.startsWith('/analysis/print') && state.hasPreview && state.hasPdfBtn) return state
+    if (state.path.startsWith('/analysis/print') && state.hasPreview && state.hasPdfBtn && state.hasModeTabs) {
+      return state
+    }
     await delay(400)
   }
-  throw new Error('failed to open advanced /analysis/print route')
+  throw new Error('failed to open /analysis/print from analysis entry')
+}
+
+async function customizeReportRangeAndAssert() {
+  const before = await evalPage(`() => ({
+    path: window.location.pathname,
+    period: document.querySelector('[data-testid=analysis-report-document] [data-testid=analysis-report-header]')?.textContent?.trim() || '',
+    modeMonth: Boolean(document.querySelector('[data-testid=analysis-export-mode-month].primary')),
+  })`)
+  assert.ok(before.path.startsWith('/analysis/print'), JSON.stringify(before))
+
+  await evalPage(`() => {
+    const customBtn = document.querySelector('[data-testid="analysis-export-mode-custom"]')
+    if (!customBtn) throw new Error('missing custom mode button')
+    customBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+    return true
+  }`)
+  await delay(1200)
+
+  const customState = await evalPage(`() => ({
+    path: window.location.pathname,
+    modeCustom: Boolean(document.querySelector('[data-testid=analysis-export-mode-custom].primary')),
+    hasCustomPickers: Boolean(document.querySelector('.custom-grid')),
+    period: document.querySelector('[data-testid=analysis-report-header]')?.textContent?.trim() || '',
+    hasOpenFileBtn: Boolean(document.querySelector('[data-testid=analysis-export-open-file-btn]')),
+  })`)
+  assert.equal(customState.modeCustom, true, JSON.stringify(customState))
+  assert.equal(customState.hasCustomPickers, true, JSON.stringify(customState))
+  assert.equal(customState.hasOpenFileBtn, false, `open file must not show before successful export: ${JSON.stringify(customState)}`)
+
+  await evalPage(`() => {
+    const yearBtn = document.querySelector('[data-testid="analysis-export-mode-year"]')
+    if (!yearBtn) throw new Error('missing year mode button')
+    yearBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+    return true
+  }`)
+  await delay(1200)
+
+  const yearState = await evalPage(`() => ({
+    modeYear: Boolean(document.querySelector('[data-testid=analysis-export-mode-year].primary')),
+    period: document.querySelector('[data-testid=analysis-report-header]')?.textContent?.trim() || '',
+    hasPreview: Boolean(document.querySelector('[data-testid=analysis-report-document]')),
+  })`)
+  assert.equal(yearState.modeYear, true, JSON.stringify(yearState))
+  assert.equal(yearState.hasPreview, true, JSON.stringify(yearState))
+  assert.ok(yearState.period.length > 0, JSON.stringify(yearState))
+
+  await evalPage(`() => {
+    const monthBtn = document.querySelector('[data-testid="analysis-export-mode-month"]')
+    if (!monthBtn) throw new Error('missing month mode button')
+    monthBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+    return true
+  }`)
+  await delay(1200)
+
+  return { before, customState, yearState }
+}
+
+async function exportPdfFromReportPageAndAssertOpenFile() {
+  await runPlaywrightCli(['eval', `() => {
+    window.__playwrightOpenCalls = []
+    window.__playwrightAnchorOpens = []
+    const originalOpen = window.open.bind(window)
+    window.open = (...args) => {
+      window.__playwrightOpenCalls.push(String(args[0] ?? ''))
+      try { return originalOpen(...args) } catch { return null }
+    }
+    const originalCreate = document.createElement.bind(document)
+    document.createElement = (tagName, options) => {
+      const el = originalCreate(tagName, options)
+      if (String(tagName).toLowerCase() === 'a') {
+        const originalClick = el.click.bind(el)
+        el.click = (...clickArgs) => {
+          window.__playwrightAnchorOpens.push(String(el.href || ''))
+          return originalClick(...clickArgs)
+        }
+      }
+      return el
+    }
+    return true
+  }`], { raw: true })
+
+  const clickState = await evalPage(`() => {
+    const button = document.querySelector('[data-testid="analysis-export-pdf-btn"]')
+    if (!button) return { ok: false, reason: 'missing pdf btn' }
+    button.scrollIntoView({ block: 'center', inline: 'nearest' })
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+    return { ok: true, path: window.location.pathname }
+  }`)
+  assert.equal(clickState.ok, true, JSON.stringify(clickState))
+  assert.ok(clickState.path.startsWith('/analysis/print'), JSON.stringify(clickState))
+
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const state = await evalPage(`() => {
+      const result = document.querySelector('[data-testid="analysis-export-result"]')
+      const openBtn = document.querySelector('[data-testid="analysis-export-open-file-btn"]')
+      return {
+        path: window.location.pathname,
+        filename: result?.getAttribute('data-filename') || '',
+        pageCount: Number(result?.getAttribute('data-page-count') || 0),
+        hasOpenFileBtn: Boolean(openBtn),
+        openBtnText: openBtn?.textContent?.trim() || '',
+        exportError: document.querySelector('[data-testid="analysis-export-error"]')?.textContent?.trim() || '',
+        buttonDisabled: Boolean(document.querySelector('[data-testid="analysis-export-pdf-btn"]')?.disabled),
+      }
+    }`)
+    if (state.exportError) {
+      throw new Error(`report page PDF export error: ${JSON.stringify(state)}`)
+    }
+    if (state.filename && state.hasOpenFileBtn) {
+      assert.match(state.filename, /^交易報表_\d{4}-\d{2}\.pdf$/)
+      assert.ok(state.pageCount >= 1, JSON.stringify(state))
+      assert.match(state.openBtnText, /開啟檔案|Open File|ファイルを開く/)
+
+      const openClick = await evalPage(`() => {
+        const openBtn = document.querySelector('[data-testid="analysis-export-open-file-btn"]')
+        if (!openBtn) return { ok: false, reason: 'missing open btn' }
+        openBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+        return {
+          ok: true,
+          openCalls: window.__playwrightOpenCalls ?? [],
+          anchorOpens: window.__playwrightAnchorOpens ?? [],
+        }
+      }`)
+      assert.equal(openClick.ok, true, JSON.stringify(openClick))
+      assert.ok(
+        (openClick.openCalls || []).length > 0 || (openClick.anchorOpens || []).length > 0,
+        `open file must trigger open/download: ${JSON.stringify(openClick)}`,
+      )
+      return { ...state, openClick }
+    }
+    await delay(1000)
+  }
+  throw new Error('report page PDF export did not show open-file button')
 }
 
 async function forceDarkTheme() {
@@ -838,7 +990,7 @@ print(json.dumps(out))
   }
 }
 
-console.log('--- Playwright: analysis direct export + dark mode ---')
+console.log('--- Playwright: analysis direct export + report page customize/open-file ---')
 
 if (process.env.ANALYSIS_EXPORT_SKIP_BUILD === '1') {
   console.log('Skipping web build (ANALYSIS_EXPORT_SKIP_BUILD=1)')
@@ -897,8 +1049,12 @@ try {
   const pdf = await exportPdfDirectAndAssert()
   const pdfNoClip = await assertExportedPdfNoClip(pdf.filename)
 
-  // Advanced/debug route still available, but not the main UX path.
-  await openAdvancedPrintRoute()
+  // Report page remains a first-class route: enter from analysis, customize, export, open file.
+  const reportEntry = await openReportPageFromAnalysis()
+  assert.equal(reportEntry.hasBottomNav, true, JSON.stringify(reportEntry))
+  assert.equal(reportEntry.hasModeTabs, true, JSON.stringify(reportEntry))
+  const customize = await customizeReportRangeAndAssert()
+  const reportExport = await exportPdfFromReportPageAndAssertOpenFile()
   await assertPrintPreviewCoverage()
   const chromeDark = await assertExportChromeDarkTheme()
   const lightPreview = await assertPrintPreviewLightTheme()
@@ -914,6 +1070,9 @@ try {
     seed,
     pdf,
     pdfNoClip,
+    reportEntry,
+    customize,
+    reportExport,
   }, null, 2))
 } finally {
   preview.kill('SIGTERM')

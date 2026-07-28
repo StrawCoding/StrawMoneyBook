@@ -391,6 +391,7 @@ export const RUNTIME_JA_MESSAGES_GENERATED = {
   "calendar_page.empty_day": "この日は取引がありません",
   "calendar_page.toast.load_failed": "カレンダートランザクションのロードに失敗しました",
   "analysis_page.title": "分析",
+  "analysis_page.open_report": "取引レポート",
   "analysis_page.mode.all": "全て",
   "analysis_page.mode.year": "年",
   "analysis_page.mode.month": "月",

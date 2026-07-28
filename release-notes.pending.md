@@ -2,6 +2,7 @@
 
 ---
 
+- (smb293) 保留交易報表頁並補客製化／開啟檔案：分析頁恢復「交易報表」入口進入 `/analysis/print`（BottomNav／返回分析仍在）；報表頁維持全部／年／月／日／自訂期間客製化，預覽與匯出對應所選範圍；PDF／CSV 匯出成功後顯示「開啟檔案」（`analysis_print.open_link`／`openFileUrl`），失敗不假顯示；分析頁一鍵直匯出 PDF 快捷保留。補 Node／`playwright:analysis-export`（入口→客製化→匯出→開檔，並確認一鍵直匯出未回歸）。
 - (smb292) 刪除交易後回首頁並保留滑動位置：交易編輯頁（及首頁編輯 sheet）刪除成功改為一律導向首頁，並還原離開首頁前的 window 捲動（列表變短時 clamp）；不再 `history.back` 停在已刪除明細。離開首頁時記住捲動；詳情頁若交易已不存在亦導回首頁。補 Node 回歸與 `playwright:ui-layout`（bypass onboarding → 首頁捲動 → 開啟／刪除交易 → 回首頁＋scroll 近似保留）。
 - (smb291) AI 記帳四則運算與保留詞不入備註：金額算式支援加減乘除（含 `× ÷`、優先序、空白與萬/千/百單位展開，例如 `100+50*2`、`1.5*2萬`、`2千+500`），並與手動快速新增計算機共用求值核心；已對應分類／帳戶／自動識別關鍵字的保留詞不再寫入備註，明確「備註／note／memo」標註內容仍保留。補 Node 算式／備註回歸與 `build:web`。
 - (smb289) 只保留現代 UI mode：取消傳統／現代雙模式切換，App 唯一 layout 為 modern（Apple HIG／`apple-ui.css`）；設定／個人化不再顯示介面風格切換；舊 `traditional` preference 啟動時安全遷移為 `modern`；保留 5 tab BottomNav、首頁全部區塊與 FAB。補 Node／`playwright:ui-layout`（無切換 UI、現代 layout、Light／Dark 抽樣、legacy 遷移）。
