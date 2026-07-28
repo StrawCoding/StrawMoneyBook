@@ -2,6 +2,7 @@
 
 ---
 
+- (smb292) 刪除交易後回首頁並保留滑動位置：交易編輯頁（及首頁編輯 sheet）刪除成功改為一律導向首頁，並還原離開首頁前的 window 捲動（列表變短時 clamp）；不再 `history.back` 停在已刪除明細。離開首頁時記住捲動；詳情頁若交易已不存在亦導回首頁。補 Node 回歸與 `playwright:ui-layout`（bypass onboarding → 首頁捲動 → 開啟／刪除交易 → 回首頁＋scroll 近似保留）。
 - (smb291) AI 記帳四則運算與保留詞不入備註：金額算式支援加減乘除（含 `× ÷`、優先序、空白與萬/千/百單位展開，例如 `100+50*2`、`1.5*2萬`、`2千+500`），並與手動快速新增計算機共用求值核心；已對應分類／帳戶／自動識別關鍵字的保留詞不再寫入備註，明確「備註／note／memo」標註內容仍保留。補 Node 算式／備註回歸與 `build:web`。
 - (smb289) 只保留現代 UI mode：取消傳統／現代雙模式切換，App 唯一 layout 為 modern（Apple HIG／`apple-ui.css`）；設定／個人化不再顯示介面風格切換；舊 `traditional` preference 啟動時安全遷移為 `modern`；保留 5 tab BottomNav、首頁全部區塊與 FAB。補 Node／`playwright:ui-layout`（無切換 UI、現代 layout、Light／Dark 抽樣、legacy 遷移）。
 - (smb288) 修復帳號／會員登入 Session：Web 冷啟動（tab 關閉清掉 sessionStorage）改以 localStorage auth hint 觸發 cookie 靜默 restore，恢復中不閃未登入表單；匿名不再因 cookie mode 恒 true 而每輪狂打 `/api/auth/refresh`；`needs-reauth` 保留 profile+hint；同步 schedule／gate 寫入可見 `paused_reauth`／`paused_membership`／`paused_offline`／`paused_session`（離線優先），帳號／共同帳本／設定頁顯示 Session 恢復中或需重新登入。補 Node／`playwright:ui-layout`；未改 backend 產品碼（CORS／SameSite 合約維持）。

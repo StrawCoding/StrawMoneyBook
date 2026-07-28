@@ -194,6 +194,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import AmountCalculatorInput from '@/ui/components/common/AmountCalculatorInput.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
@@ -205,6 +206,7 @@ import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import { returnHomeAfterTransactionDelete } from '@/ui/services/navigation-back.service'
 import {
   addonDeltaMajorFromNote,
   mergeAddonItemsToNote,
@@ -225,6 +227,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'saved'])
 
+const router = useRouter()
 const accountStore = useAccountStore()
 const categoryStore = useCategoryStore()
 const transactionStore = useTransactionStore()
@@ -510,6 +513,8 @@ async function confirmRemove() {
     deleteConfirmOpen.value = false
     emit('saved')
     emit('close')
+    // Stay on / restore home scroll (sheet is home-local; helper is a no-op navigate).
+    await returnHomeAfterTransactionDelete(router)
   } catch (error) {
     uiStore.pushToast(error.message ?? '刪除失敗', 'error')
   } finally {

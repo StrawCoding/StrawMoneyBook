@@ -181,7 +181,7 @@ import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { loadTransactionDetailContext } from '@/core/services/transaction-query.service'
 import { useI18n } from '@/ui/services/i18n.service'
-import { goBackOrFallback } from '@/ui/services/navigation-back.service'
+import { goBackOrFallback, returnHomeAfterTransactionDelete } from '@/ui/services/navigation-back.service'
 import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon, getSystemTransactionLabel, getSystemTransactionType } from '@/ui/utils/system-transaction-presenter'
 import { buildTransactionEditorAttributionView } from '@/core/services/transaction-editor-attribution'
@@ -382,6 +382,10 @@ async function load() {
     const detailContext = await loadTransactionDetailContext(ledgerId, txId.value)
     allTransactions.value = detailContext.allTransactions
     transaction.value = detailContext.transaction
+    // Deleted / missing tx must not leave a blank detail page (smb292 back-stack safety).
+    if (!transaction.value) {
+      await returnHomeAfterTransactionDelete(router)
+    }
   } catch (error) {
     uiStore.pushToast(error.message ?? t('transaction_about.toast.load_failed'), 'error')
   } finally {

@@ -116,6 +116,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { addonDeltaMajorFromNote, addonDeltaTagText, stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { useI18n } from '@/ui/services/i18n.service'
+import { rememberHomeScrollPosition } from '@/ui/services/route-scroll.service'
 import { getEffectiveTransactionAmountMinor, isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 import { buildTransactionEditorAttributionView } from '@/core/services/transaction-editor-attribution'
 import { getSetting } from '@/core/repositories/settings.repo'
@@ -335,6 +336,7 @@ function showAddonDeltaTag(tx) {
 
 function openEdit(tx) {
   if (!tx) return
+  rememberHomeScrollPosition()
   void router.push({ name: 'transaction-about', params: { id: tx.id } })
 }
 </script>

@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
 import { getSharedLedgerSession } from '@/services/shared-ledger/backend'
-import { queueDeferredScrollRestore } from '@/ui/services/route-scroll.service'
+import { isHomeRoute } from '@/ui/services/navigation-back.service'
+import { queueDeferredScrollRestore, rememberHomeScrollPosition } from '@/ui/services/route-scroll.service'
 
 if (typeof window !== 'undefined' && window.history && 'scrollRestoration' in window.history) {
   window.history.scrollRestoration = 'manual'
@@ -451,7 +452,11 @@ const ADMIN_ROUTE_NAMES = new Set([
   'settings-admin-user',
 ])
 
-router.beforeEach((to) => {
+router.beforeEach((to, from) => {
+  // Capture home window scroll before leaving so delete/edit return can restore it.
+  if (isHomeRoute(from) && !isHomeRoute(to)) {
+    rememberHomeScrollPosition()
+  }
   if (BANK_SYNC_ROUTE_NAMES.has(String(to.name ?? '')) && !isBankSyncFeatureEnabled()) {
     return { name: 'settings' }
   }

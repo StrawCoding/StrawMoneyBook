@@ -114,7 +114,14 @@
         </div>
 
         <footer class="row action-row">
-          <button class="btn danger" :class="{ busy: deleting }" :disabled="deleting || submitting" @click="openDeleteConfirm">
+          <button
+            type="button"
+            class="btn danger"
+            data-testid="transaction-edit-delete"
+            :class="{ busy: deleting }"
+            :disabled="deleting || submitting"
+            @click="openDeleteConfirm"
+          >
             {{ t('common.delete') }}
           </button>
           <div class="footer-actions">
@@ -243,7 +250,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { getCurrentLocale, useI18n } from '@/ui/services/i18n.service'
-import { goBackOrFallback } from '@/ui/services/navigation-back.service'
+import { goBackOrFallback, returnHomeAfterTransactionDelete } from '@/ui/services/navigation-back.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import {
   addonDeltaMajorFromNote,
@@ -891,7 +898,8 @@ async function confirmRemove() {
     await transactionStore.deleteTransaction(transaction.value.id)
     uiStore.pushToast(t('claim_sheet.toast.voided', '已刪除'))
     deleteConfirmOpen.value = false
-    await goBackOrFallback(router, '/')
+    // Always return to home and restore pre-leave scroll (smb292); never back into deleted detail.
+    await returnHomeAfterTransactionDelete(router)
   } catch (error) {
     uiStore.pushToast(error.message ?? t('transaction_edit.delete_failed', '刪除失敗'), 'error')
   } finally {

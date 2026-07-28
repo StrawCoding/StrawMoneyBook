@@ -199,6 +199,211 @@ async function assertHomeBlocks() {
   assert.equal(result.hasFab, true, JSON.stringify(result, null, 2))
 }
 
+async function seedHomeTransactionsForScroll(count = 18) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const state = await evalPage(`async () => {
+      const app = document.querySelector('#app')?.__vue_app__
+        || document.querySelector('#app')?._vnode?.component?.appContext?.app
+        || window.__VUE_APP__
+      if (!app) return { ok: false, reason: 'missing vue app' }
+      let pinia = app.config?.globalProperties?.$pinia
+      if (!pinia) {
+        const provides = app._context?.provides
+        if (provides) {
+          for (const value of Object.values(provides)) {
+            if (value && typeof value === 'object' && value._s instanceof Map) {
+              pinia = value
+              break
+            }
+          }
+        }
+      }
+      if (!pinia) return { ok: false, reason: 'missing pinia' }
+      const stores = [...pinia._s.values()]
+      const ledgerStore = stores.find((store) => store.$id === 'ledger')
+      const categoryStore = stores.find((store) => store.$id === 'category')
+      const accountStore = stores.find((store) => store.$id === 'account')
+      const transactionStore = stores.find((store) => store.$id === 'transaction')
+      if (!ledgerStore || !categoryStore || !accountStore || !transactionStore) {
+        return { ok: false, reason: 'missing stores' }
+      }
+      if (typeof ledgerStore.load === 'function') await ledgerStore.load()
+      if (typeof categoryStore.load === 'function') await categoryStore.load()
+      if (typeof accountStore.load === 'function') await accountStore.load()
+
+      const accountId = accountStore.accounts?.[0]?.id
+      const expenseCategory = (categoryStore.categories || []).find((item) => item.kind === 'expense')
+        || categoryStore.categories?.[0]
+      if (!accountId || !expenseCategory?.id) {
+        return { ok: false, reason: 'missing ledger/account/category' }
+      }
+
+      const now = new Date()
+      const monthKey = \`\${now.getFullYear()}-\${String(now.getMonth() + 1).padStart(2, '0')}\`
+      const seeded = []
+      for (let i = 0; i < ${count}; i += 1) {
+        const day = String(Math.max(1, Math.min(28, now.getDate() - (i % 10)))).padStart(2, '0')
+        const occurredAt = \`\${monthKey}-\${day}T\${String(10 + (i % 8)).padStart(2, '0')}:\${String(i % 60).padStart(2, '0')}:00.000Z\`
+        const created = await transactionStore.addExpense({
+          accountId,
+          categoryId: expenseCategory.id,
+          amountMinor: 1100 + i * 37,
+          occurredAt,
+          note: \`smb292 scroll seed #\${i + 1}\`,
+          includeInAnalysis: true,
+          includeInBudget: true,
+        })
+        seeded.push(String(created?.id ?? created?.txId ?? ''))
+      }
+      if (typeof transactionStore.loadHomeByFilter === 'function' && transactionStore.homeFilterMode) {
+        await transactionStore.loadHomeByFilter(
+          transactionStore.homeFilterMode,
+          transactionStore.homeFilterKey,
+          transactionStore.homePage || 1,
+        )
+      } else if (typeof transactionStore.loadHomePage === 'function') {
+        await transactionStore.loadHomePage(1)
+      } else if (typeof transactionStore.loadRecent === 'function') {
+        await transactionStore.loadRecent()
+      }
+      return { ok: true, seeded: seeded.filter(Boolean).length }
+    }`)
+    if (state.ok) return state
+    if (!['missing vue app', 'missing pinia', 'missing stores', 'missing ledger/account/category'].includes(state.reason)) {
+      return state
+    }
+    await delay(400)
+  }
+  return { ok: false, reason: 'seed failed after retries' }
+}
+
+async function assertDeleteTransactionReturnsHomeWithScroll() {
+  await runPlaywrightCli(['goto', `${baseUrl}/`])
+  await delay(800)
+  await assertHomeBlocks()
+
+  const seeded = await seedHomeTransactionsForScroll(18)
+  assert.equal(seeded.ok, true, JSON.stringify(seeded, null, 2))
+
+  await runPlaywrightCli(['goto', `${baseUrl}/`])
+  await delay(1200)
+  await assertHomeBlocks()
+
+  const prepared = await evalPage(`async () => {
+    let spacer = document.querySelector('[data-testid=smb292-scroll-spacer]')
+    if (!spacer) {
+      spacer = document.createElement('div')
+      spacer.setAttribute('data-testid', 'smb292-scroll-spacer')
+      spacer.style.height = '1600px'
+      spacer.style.width = '1px'
+      spacer.style.pointerEvents = 'none'
+      document.querySelector('[data-testid=home-view]')?.appendChild(spacer)
+    }
+
+    const app = document.querySelector('#app')?.__vue_app__
+    const router = app?.config?.globalProperties?.$router
+    const pinia = app?.config?.globalProperties?.$pinia
+    let txId = ''
+    if (pinia?._s) {
+      const stores = [...pinia._s.values()]
+      const txStore = stores.find((store) => store.$id === 'transaction')
+      if (txStore) {
+        if (typeof txStore.loadHomeByFilter === 'function' && txStore.homeFilterMode) {
+          await txStore.loadHomeByFilter(txStore.homeFilterMode, txStore.homeFilterKey, txStore.homePage || 1)
+        } else if (typeof txStore.loadRecent === 'function') {
+          await txStore.loadRecent()
+        }
+        txId = String(txStore.homeRecent?.[0]?.id || txStore.recent?.[0]?.id || '')
+      }
+    }
+
+    const targetTop = Math.min(720, Math.max(240, (document.documentElement.scrollHeight || 0) - window.innerHeight - 40))
+    window.scrollTo(0, targetTop)
+    await new Promise((resolve) => requestAnimationFrame(() => resolve()))
+    await new Promise((resolve) => setTimeout(resolve, 120))
+    const scrollY = window.scrollY
+    window.__smb292ExpectedScroll = scrollY
+    window.__STRAWMB_ROUTE_SCROLL__?.rememberHomeScrollPosition?.({ left: 0, top: scrollY })
+
+    if (!router || !txId) {
+      return {
+        ok: false,
+        reason: 'missing router/tx',
+        txId,
+        scrollY,
+        itemCount: document.querySelectorAll('[data-testid=home-transaction-feed] .tx-item').length,
+      }
+    }
+
+    await router.push({ name: 'transaction-edit', params: { id: txId } })
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    // Re-assert memory in case beforeEach overwrote with a transitional value.
+    window.__STRAWMB_ROUTE_SCROLL__?.rememberHomeScrollPosition?.({ left: 0, top: scrollY })
+    return {
+      ok: true,
+      scrollY,
+      path: window.location.pathname,
+      txId,
+      remembered: window.__STRAWMB_ROUTE_SCROLL__?.getRememberedHomeScrollPosition?.() ?? null,
+    }
+  }`)
+  assert.equal(prepared.ok, true, JSON.stringify(prepared, null, 2))
+  assert.ok(prepared.scrollY >= 200, JSON.stringify(prepared, null, 2))
+  assert.match(prepared.path, /\/edit$/, JSON.stringify(prepared, null, 2))
+
+  await delay(700)
+  const edit = await evalPage(`() => ({
+    path: window.location.pathname,
+    hasDelete: Boolean(document.querySelector('[data-testid=transaction-edit-delete]')),
+    remembered: window.__STRAWMB_ROUTE_SCROLL__?.getRememberedHomeScrollPosition?.() ?? null,
+  })`)
+  assert.match(edit.path, /\/edit$/, JSON.stringify(edit, null, 2))
+  assert.equal(edit.hasDelete, true, JSON.stringify(edit, null, 2))
+
+  await runPlaywrightCli(['click', '[data-testid=transaction-edit-delete]'])
+  await delay(500)
+  const confirmed = await evalPage(`() => {
+    const btn = document.querySelector('.dialog-popup button.primary, .dialog-sheet button.primary')
+      || [...document.querySelectorAll('button')].find((el) => /^(刪除|Delete|削除|確認刪除|Confirm Delete)$/u.test(String(el.textContent || '').trim()))
+    if (btn) btn.click()
+    return Boolean(btn)
+  }`)
+  assert.equal(confirmed, true, 'delete confirm button missing')
+  await delay(2000)
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const state = await evalPage(`() => ({
+      path: window.location.pathname,
+      hasHomeView: Boolean(document.querySelector('[data-testid=home-view]')),
+      homeNavActive: Boolean(document.querySelector('[data-testid=bottom-nav-home].active')),
+      scrollY: window.scrollY,
+      expected: Number(window.__smb292ExpectedScroll || 0),
+    })`)
+    if (state.path === '/' && state.hasHomeView && state.homeNavActive) {
+      const expected = Number(state.expected || prepared.scrollY)
+      const delta = Math.abs(Number(state.scrollY) - expected)
+      assert.ok(
+        delta <= 160 || state.scrollY >= Math.max(0, expected - 160),
+        `scroll should approximate pre-delete position: before=${expected} after=${state.scrollY} delta=${delta}`,
+      )
+      if (expected >= 200) {
+        assert.ok(state.scrollY >= 80, JSON.stringify({ prepared, state }, null, 2))
+      }
+      return
+    }
+    await delay(200)
+  }
+
+  const finalState = await evalPage(`() => ({
+    path: window.location.pathname,
+    hasHomeView: Boolean(document.querySelector('[data-testid=home-view]')),
+    homeNavActive: Boolean(document.querySelector('[data-testid=bottom-nav-home].active')),
+    scrollY: window.scrollY,
+    body: document.body?.innerText?.slice(0, 600) ?? '',
+  })`)
+  assert.fail(`delete→home+scroll restore failed: ${JSON.stringify(finalState, null, 2)}`)
+}
+
 async function assertHomePeriodAndAnalysisLoadSpeed() {
   await runPlaywrightCli(['goto', `${baseUrl}/`])
   await delay(600)
@@ -638,6 +843,7 @@ try {
   await assertHomeBlocks()
   await assertHomePeriodAndAnalysisLoadSpeed()
   await assertHomeIncomeExpenseLightAndDark()
+  await assertDeleteTransactionReturnsHomeWithScroll()
   await assertRouteNavigation()
   await assertModernLayoutOnly()
   await assertSharedLedgerAuthAndEditorSurfaces()
