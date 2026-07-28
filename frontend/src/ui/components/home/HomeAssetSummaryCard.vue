@@ -9,11 +9,12 @@
       </RouterLink>
     </header>
 
-    <!-- Income / Expense split -->
-    <div class="split-grid">
+    <!-- Income / Expense split — backgrounds follow theme tokens (Light / Dark) -->
+    <div class="split-grid" data-testid="home-income-expense-split">
       <button
         type="button"
         class="split-card income"
+        data-testid="home-income-block"
         :class="{ active: transactionStore.homeTypeFilter === 'income' }"
         @click="toggleTypeFilter('income')"
       >
@@ -34,6 +35,7 @@
       <button
         type="button"
         class="split-card expense"
+        data-testid="home-expense-block"
         :class="{ active: transactionStore.homeTypeFilter === 'expense' }"
         @click="toggleTypeFilter('expense')"
       >
@@ -179,12 +181,13 @@ function toggleTypeFilter(type) {
 }
 
 .split-card.income {
-  background: linear-gradient(135deg, #0a2015 0%, #0d2018 100%);
+  /* Must use theme tokens — hard-coded dark greens break Light mode contrast. */
+  background: var(--home-income-card-bg);
   border-color: color-mix(in srgb, var(--home-income-card-border) 50%, transparent);
 }
 
 .split-card.expense {
-  background: linear-gradient(135deg, #1f0a0a 0%, #1f0d0d 100%);
+  background: var(--home-expense-card-bg);
   border-color: color-mix(in srgb, var(--home-expense-card-border) 40%, transparent);
 }
 
@@ -238,9 +241,16 @@ function toggleTypeFilter(type) {
 .split-label {
   font-size: 11px;
   font-weight: 600;
-  color: var(--muted);
   letter-spacing: 0.03em;
   margin-bottom: 4px;
+}
+
+.split-card.income .split-label {
+  color: color-mix(in srgb, var(--home-income-card-value) 58%, var(--muted) 42%);
+}
+
+.split-card.expense .split-label {
+  color: color-mix(in srgb, var(--home-expense-card-value) 58%, var(--muted) 42%);
 }
 
 .split-value {

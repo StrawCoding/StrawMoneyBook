@@ -32,6 +32,8 @@
             type="button"
             class="scheme-btn"
             :class="{ active: scheme.id === selectedSchemeId }"
+            :data-testid="`theme-scheme-${scheme.id}`"
+            :data-theme-mode="scheme.mode"
             @click="pickScheme(scheme.id)"
           >
             <div class="scheme-preview" :style="previewStyleOf(scheme)">
@@ -69,7 +71,7 @@
       </label>
 
       <div class="row action-row">
-        <button class="btn primary" @click="saveTheme">{{ t('personalization.save_theme') }}</button>
+        <button class="btn primary" data-testid="theme-save" @click="saveTheme">{{ t('personalization.save_theme') }}</button>
         <button class="btn" @click="resetColor">{{ t('common.reset_default') }}</button>
       </div>
     </article>

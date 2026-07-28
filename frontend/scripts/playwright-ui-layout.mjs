@@ -10,7 +10,7 @@ const frontendDir = '/mnt/data/code/project/StrawCoding/StrawMoneyBook/frontend'
 const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const defaultBrowsersPath = resolve(repoRoot, 'backend/.server-data/playwright-browsers')
 const playwrightConfigPath = resolve(fileURLToPath(new URL('../playwright-cli.json', import.meta.url)))
-const previewPort = Number(process.env.UI_LAYOUT_PLAYWRIGHT_PORT || 4174)
+const previewPort = Number(process.env.UI_LAYOUT_PLAYWRIGHT_PORT || 4186)
 const baseUrl = `http://127.0.0.1:${previewPort}`
 
 async function runPlaywrightCli(args, { raw = false } = {}) {
@@ -86,7 +86,7 @@ async function completeOnboarding() {
 
   const welcome = await evalPage(`() => Boolean(document.querySelector('.welcome-root'))`)
   if (welcome) {
-    await runPlaywrightCli(['click', "button:has-text('Next')"])
+    await runPlaywrightCli(['click', "button:has-text('Next'), button:has-text('下一步'), button:has-text('次へ')"])
     await delay(900)
     await runPlaywrightCli(['fill', '.welcome-root input.input', `Playwright Ledger ${Date.now()}`])
     await runPlaywrightCli(['click', "button:has-text('Create Ledger'), button:has-text('建立帳本'), button:has-text('帳簿を作成')"])
@@ -111,13 +111,36 @@ async function completeOnboarding() {
       welcome: Boolean(document.querySelector('.welcome-root')),
       intro: window.location.pathname.includes('/welcome/intro') || Boolean(document.querySelector('.intro-root')),
       path: window.location.pathname,
+      bodyText: document.body?.innerText?.slice(0, 240) ?? '',
     })`)
-    if (state.hasBottomNav) return { ok: true, skipped: false }
     if (state.intro) {
       await runPlaywrightCli(['click', "button:has-text('Start now'), button:has-text('先開始使用'), button:has-text('Skip'), button:has-text('今すぐ始める')"])
+      await delay(1000)
+      continue
     }
-    if (state.welcome) {
-      return { ok: false, reason: 'still on welcome', path: state.path }
+    if (state.hasBottomNav && !state.welcome && !state.intro) {
+      if (state.path === '/' || state.path === '/home') return { ok: true, skipped: false }
+      await runPlaywrightCli(['goto', `${baseUrl}/`])
+      await delay(800)
+      const home = await evalPage(`() => ({
+        path: window.location.pathname,
+        hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+        welcome: Boolean(document.querySelector('.welcome-root')),
+      })`)
+      if (home.hasBottomNav && !home.welcome && (home.path === '/' || home.path === '/home')) {
+        return { ok: true, skipped: false }
+      }
+    }
+    // Stay on welcome only briefly — retry Next/create if step UI is still visible.
+    if (state.welcome && attempt > 0 && attempt % 8 === 0) {
+      const stepHint = await evalPage(`() => ({
+        hasNext: Boolean([...document.querySelectorAll('button')].find((btn) => /Next|下一步|次へ|Start|開始/.test(btn.textContent || ''))),
+        stepText: document.querySelector('.step-text')?.textContent ?? '',
+      })`)
+      if (stepHint.hasNext) {
+        await runPlaywrightCli(['click', "button:has-text('Next'), button:has-text('下一步'), button:has-text('次へ'), button:has-text('Start'), button:has-text('開始使用')"])
+        await delay(800)
+      }
     }
     await delay(500)
   }
@@ -174,6 +197,159 @@ async function assertHomeBlocks() {
   assert.equal(result.hasBudgetSummary, true, JSON.stringify(result, null, 2))
   assert.equal(result.hasTransactionFeed, true, JSON.stringify(result, null, 2))
   assert.equal(result.hasFab, true, JSON.stringify(result, null, 2))
+}
+
+function parseCssRgb(color) {
+  const value = String(color ?? '').trim()
+  if (!value || value === 'transparent' || value === 'rgba(0, 0, 0, 0)') return null
+  const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i)
+  if (hex) {
+    const raw = hex[1]
+    const full = raw.length === 3 ? raw.split('').map((ch) => ch + ch).join('') : raw
+    return {
+      r: Number.parseInt(full.slice(0, 2), 16),
+      g: Number.parseInt(full.slice(2, 4), 16),
+      b: Number.parseInt(full.slice(4, 6), 16),
+    }
+  }
+  const rgb = value.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i)
+  if (!rgb) return null
+  return {
+    r: Number(rgb[1]),
+    g: Number(rgb[2]),
+    b: Number(rgb[3]),
+  }
+}
+
+function relativeLuminance({ r, g, b }) {
+  const channel = (value) => {
+    const srgb = value / 255
+    return srgb <= 0.03928 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+}
+
+function contrastRatio(a, b) {
+  const la = relativeLuminance(a)
+  const lb = relativeLuminance(b)
+  const lighter = Math.max(la, lb)
+  const darker = Math.min(la, lb)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+async function applyThemeSchemeAndSave(schemeId) {
+  await runPlaywrightCli(['goto', `${baseUrl}/settings/personalization`])
+  await waitForAppShell({ expectPersonalization: true })
+  await runPlaywrightCli(['click', `[data-testid="theme-scheme-${schemeId}"]`])
+  await delay(400)
+  await runPlaywrightCli(['click', '[data-testid="theme-save"]'])
+  await delay(600)
+}
+
+async function assertHomeIncomeExpenseTheme({ expectMode }) {
+  await runPlaywrightCli(['goto', `${baseUrl}/`])
+  await delay(900)
+  await assertHomeBlocks()
+
+  const result = await evalPage(`() => {
+    const HARDCODED_DARK_FRAGMENTS = ['#0a2015', '#0d2018', '#1f0a0a', '#1f0d0d']
+    const root = document.documentElement
+    const income = document.querySelector('[data-testid=home-income-block]')
+    const expense = document.querySelector('[data-testid=home-expense-block]')
+    const split = document.querySelector('[data-testid=home-income-expense-split]')
+    if (!income || !expense || !split) {
+      return { ok: false, reason: 'income/expense blocks missing' }
+    }
+
+    function inspectBlock(el, kind) {
+      const style = getComputedStyle(el)
+      const label = el.querySelector('.split-label')
+      const value = el.querySelector('.split-value')
+      const labelStyle = label ? getComputedStyle(label) : null
+      const valueStyle = value ? getComputedStyle(value) : null
+      const rect = el.getBoundingClientRect()
+      const bgImage = String(style.backgroundImage || '')
+      const bgColor = String(style.backgroundColor || '')
+      const bgCombined = (bgImage + ' ' + bgColor).toLowerCase()
+      const usesHardcodedDark = HARDCODED_DARK_FRAGMENTS.some((fragment) => bgCombined.includes(fragment))
+      return {
+        kind,
+        visible: style.visibility !== 'hidden'
+          && style.display !== 'none'
+          && Number(style.opacity || '1') > 0.2
+          && rect.width >= 80
+          && rect.height >= 44,
+        text: (el.innerText || '').trim().slice(0, 80),
+        bgImage,
+        bgColor,
+        usesHardcodedDark,
+        labelColor: labelStyle?.color ?? '',
+        valueColor: valueStyle?.color ?? '',
+        overflow: style.overflow,
+        clipped: rect.width > 0 && (el.scrollWidth - el.clientWidth > 8 || el.scrollHeight - el.clientHeight > 8),
+        tokenBg: getComputedStyle(root).getPropertyValue('--home-' + kind + '-card-bg').trim(),
+        tokenValue: getComputedStyle(root).getPropertyValue('--home-' + kind + '-card-value').trim(),
+      }
+    }
+
+    return {
+      ok: true,
+      themeMode: root.dataset.themeMode ?? '',
+      income: inspectBlock(income, 'income'),
+      expense: inspectBlock(expense, 'expense'),
+      hasIncomeLabel: /收入|Income|収入/i.test(income.innerText || ''),
+      hasExpenseLabel: /支出|Expense|支出/i.test(expense.innerText || ''),
+    }
+  }`)
+
+  assert.equal(result.ok, true, JSON.stringify(result, null, 2))
+  assert.equal(result.themeMode, expectMode, JSON.stringify(result, null, 2))
+  assert.equal(result.hasIncomeLabel, true, JSON.stringify(result, null, 2))
+  assert.equal(result.hasExpenseLabel, true, JSON.stringify(result, null, 2))
+  assert.equal(result.income.visible, true, JSON.stringify(result.income, null, 2))
+  assert.equal(result.expense.visible, true, JSON.stringify(result.expense, null, 2))
+  assert.equal(result.income.clipped, false, JSON.stringify(result.income, null, 2))
+  assert.equal(result.expense.clipped, false, JSON.stringify(result.expense, null, 2))
+
+  if (expectMode === 'light') {
+    assert.equal(result.income.usesHardcodedDark, false, 'light income must not keep dark hard-coded bg')
+    assert.equal(result.expense.usesHardcodedDark, false, 'light expense must not keep dark hard-coded bg')
+    assert.match(String(result.income.tokenBg), /#DCFCE7|#F0FDF4|linear-gradient/i)
+    assert.match(String(result.expense.tokenBg), /#FEE2E2|#FEF2F2|linear-gradient/i)
+  } else {
+    assert.match(String(result.income.tokenBg), /#1B2E1D|#0d2018/i)
+    assert.match(String(result.expense.tokenBg), /#321F1F|#1f0d0d/i)
+  }
+
+  for (const block of [result.income, result.expense]) {
+    const valueRgb = parseCssRgb(block.valueColor) || parseCssRgb(block.tokenValue)
+    assert.ok(valueRgb, `missing value color for ${block.kind}: ${JSON.stringify(block)}`)
+    // Prefer comparing against an opaque sample from token/background color when gradient.
+    const bgSample = parseCssRgb(block.bgColor)
+      || parseCssRgb(block.tokenBg.match(/#([0-9a-f]{3,8})/i)?.[0] ?? '')
+      || (expectMode === 'light' ? { r: 240, g: 253, b: 244 } : { r: 27, g: 46, b: 29 })
+    const ratio = contrastRatio(valueRgb, bgSample)
+    assert.ok(ratio >= 2.8, `${block.kind} contrast too low (${ratio.toFixed(2)}): ${JSON.stringify(block)}`)
+  }
+}
+
+async function assertHomeIncomeExpenseLightAndDark() {
+  await applyThemeSchemeAndSave('morning-dew')
+  await assertHomeIncomeExpenseTheme({ expectMode: 'light' })
+
+  // Traditional layout must keep the same themed income/expense blocks.
+  await runPlaywrightCli(['goto', `${baseUrl}/settings/personalization`])
+  await waitForAppShell({ expectPersonalization: true })
+  await runPlaywrightCli(['click', '[data-testid="ui-layout-traditional"]'])
+  await delay(400)
+  await assertHomeIncomeExpenseTheme({ expectMode: 'light' })
+  await runPlaywrightCli(['goto', `${baseUrl}/settings/personalization`])
+  await waitForAppShell({ expectPersonalization: true })
+  await runPlaywrightCli(['click', '[data-testid="ui-layout-modern"]'])
+  await delay(400)
+
+  await applyThemeSchemeAndSave('charcoal')
+  await assertHomeIncomeExpenseTheme({ expectMode: 'dark' })
 }
 
 async function assertRouteNavigation() {
@@ -275,6 +451,7 @@ try {
 
   await assertBottomNavIcons()
   await assertHomeBlocks()
+  await assertHomeIncomeExpenseLightAndDark()
   await assertRouteNavigation()
   await assertLayoutSwitch()
   await assertSharedLedgerAuthAndEditorSurfaces()
