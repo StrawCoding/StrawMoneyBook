@@ -112,6 +112,23 @@
         </button>
       </article>
 
+      <article v-else-if="sessionRestoring && !sessionUser" class="card panel" data-testid="account-session-restoring-panel">
+        <header class="section-head">
+          <h3>{{ t('settings_account.session_restoring', 'Session 恢復中') }}</h3>
+        </header>
+        <p class="session-status-row" data-testid="account-session-status">
+          <span class="session-pill warn" data-testid="account-session-restoring-pill">
+            {{ t('settings_account.session_restoring', 'Session 恢復中') }}
+          </span>
+          <span class="session-pill danger" data-testid="account-sync-paused-pill">
+            {{ t('settings_account.sync_paused', '同步暫停') }}
+          </span>
+        </p>
+        <p class="notice compact">
+          {{ t('settings_account.session_restoring_hint', '正在恢復登入狀態，完成後會自動繼續同步。') }}
+        </p>
+      </article>
+
       <article v-else-if="!sessionUser" class="card panel">
         <header class="section-head">
           <h3>{{ authMode === 'login' ? t('settings_account.login', '登入') : t('settings_account.register', '註冊') }}</h3>

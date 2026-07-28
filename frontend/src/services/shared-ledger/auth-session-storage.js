@@ -8,6 +8,12 @@ export const SHARED_LEDGER_USER_STORAGE_KEY = 'straw.shared_ledger_user.v2'
 export const NATIVE_REFRESH_TOKEN_STORAGE_KEY = 'straw.shared_ledger_native_refresh.v1'
 /** Survives process death so cold start does not fake "Session valid" after refresh failure. */
 export const SHARED_LEDGER_NEEDS_REAUTH_KEY = 'straw.shared_ledger_needs_reauth.v1'
+/**
+ * Lightweight localStorage hint that a cookie / native session may still exist.
+ * Web profile stays in sessionStorage (XSS surface), but cold start after tab close
+ * must still know to attempt silent cookie refresh instead of flashing "logged out".
+ */
+export const SHARED_LEDGER_AUTH_HINT_KEY = 'straw.shared_ledger_auth_hint.v1'
 
 let memoryAccessToken = ''
 let memoryRefreshToken = ''
@@ -105,6 +111,22 @@ export function writePersistedNeedsReauthFlag(value) {
   localStorageRef.removeItem(SHARED_LEDGER_NEEDS_REAUTH_KEY)
 }
 
+export function readPersistedAuthHint() {
+  const localStorageRef = getLocalStorageRef()
+  if (!localStorageRef) return false
+  return localStorageRef.getItem(SHARED_LEDGER_AUTH_HINT_KEY) === '1'
+}
+
+export function writePersistedAuthHint(value) {
+  const localStorageRef = getLocalStorageRef()
+  if (!localStorageRef) return
+  if (value) {
+    localStorageRef.setItem(SHARED_LEDGER_AUTH_HINT_KEY, '1')
+    return
+  }
+  localStorageRef.removeItem(SHARED_LEDGER_AUTH_HINT_KEY)
+}
+
 function parseStoredUser(rawValue) {
   if (!rawValue) return null
   try {
@@ -198,6 +220,14 @@ export function hasPersistedAuthIdentity() {
   return Boolean(readStoredUser())
 }
 
+/** True when silent restore should be attempted (profile, native refresh, or cookie hint). */
+export function hasPersistedAuthRestoreCandidate() {
+  migrateLegacyPersistedSession()
+  if (readStoredUser()) return true
+  if (getStoredRefreshToken()) return true
+  return readPersistedAuthHint()
+}
+
 export function readPersistedAuthSession() {
   migrateLegacyPersistedSession()
 
@@ -235,6 +265,8 @@ export function writePersistedAuthSession(session) {
   setStoredAccessToken(token)
   setStoredRefreshToken(session.refreshToken ?? '')
   writeStoredUser(session.user)
+  // Successful auth (or retained identity) marks that cookie/native restore may apply later.
+  writePersistedAuthHint(true)
 
   return {
     token: getStoredAccessToken(),
@@ -247,6 +279,7 @@ export function clearPersistedAuthSession() {
   clearStoredTokens()
   clearStoredUser()
   writePersistedNeedsReauthFlag(false)
+  writePersistedAuthHint(false)
 
   const localStorageRef = getLocalStorageRef()
   const sessionStorageRef = getSessionStorageRef()

@@ -548,6 +548,13 @@ SMB-279 再修會員登入狀態與帳本同步回歸：
 - 冷啟動、回前景與 `visibilitychange` 先 restore session，再跑共同帳本／Google Drive 背景同步。
 - 同步 gate（需重新登入／會員資格／離線／session 恢復中）寫入可見 `last_sync_status=paused_*` 與錯誤文案，帳號／共同帳本頁顯示「Session 恢復中」或「同步暫停」。
 
+smb288 再修帳號／會員登入 Session（smb277／smb279 之後仍可見的回歸）：
+
+- Web profile 仍只放 `sessionStorage`（降低 XSS 持久化面），另以 `straw.shared_ledger_auth_hint.v1`（localStorage）記住曾登入；tab 關閉後冷啟動仍觸發 cookie 靜默 restore，帳號／共同帳本／設定頁顯示「Session 恢復中」而非閃未登入表單。
+- `ensureSharedLedgerSessionReady`／同步路徑不再因 cookie mode 恒 true 對匿名使用者每輪打 `/api/auth/refresh`；僅 hint／profile／native refresh／deferred retry／一次 force probe 才 restore。
+- `scheduleActiveSharedLedgerAutoSync` 與 sync gate 寫入可見 `paused_reauth`／`paused_membership`／`paused_offline`／`paused_session`（離線優先），禁止 silently no-op。
+- token 過期／靜默 refresh 失敗仍保留 profile + hint 並標「需重新登入」；CORS／SameSite／`X-Straw-Native-Client` 合約維持（本階未改 backend 產品碼）。
+
 SMB-281 修復「無法取消共用帳本」：
 
 - Owner「取消共享」會刪除遠端共同帳本並清本機 binding；成員／Viewer「不再共享」只結束自己的成員關係，本機資料保留。

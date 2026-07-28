@@ -2,14 +2,14 @@
   <section class="stack settings-page">
     <h2>{{ t('settings.title') }}</h2>
 
-    <RouterLink class="card panel account-card" to="/settings/account">
+    <RouterLink class="card panel account-card" to="/settings/account" data-testid="settings-account-card">
       <div class="account-avatar">
         <img v-if="sessionUser?.avatar_url" :src="sessionUser.avatar_url" alt="avatar" class="avatar-img" />
         <span v-else>{{ avatarLabel }}</span>
       </div>
       <div class="account-main">
-        <strong>{{ sessionUser?.display_name || t('settings_account.login_register') }}</strong>
-        <small class="muted">{{ sessionUser?.email || t('settings_account.login_hint') }}</small>
+        <strong>{{ accountCardTitle }}</strong>
+        <small class="muted">{{ accountCardHint }}</small>
       </div>
       <font-awesome-icon icon="fa-solid fa-chevron-down" class="account-arrow" />
     </RouterLink>
@@ -30,11 +30,41 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
-import { getSharedLedgerSession, refreshSharedLedgerSession, subscribeSharedLedgerSession } from '@/services/shared-ledger/backend'
+import {
+  getSharedLedgerAuthStatus,
+  getSharedLedgerSession,
+  refreshSharedLedgerSession,
+  subscribeSharedLedgerSession,
+} from '@/services/shared-ledger/backend'
 
 const { t } = useI18n()
 const sessionUser = ref(getSharedLedgerSession()?.user ?? null)
+const sessionRestoring = ref(Boolean(getSharedLedgerAuthStatus().restoring))
+const sessionNeedsReauth = ref(Boolean(getSharedLedgerAuthStatus().needsReauth))
 const showAdminEntry = computed(() => Boolean(sessionUser.value?.is_admin))
+const accountCardTitle = computed(() => {
+  if (sessionUser.value?.display_name) return sessionUser.value.display_name
+  if (sessionRestoring.value) return t('settings_account.session_restoring', 'Session 恢復中')
+  if (sessionNeedsReauth.value) return t('settings_account.session_needs_relogin', '需重新登入')
+  return t('settings_account.login_register')
+})
+const accountCardHint = computed(() => {
+  if (sessionUser.value?.email) return sessionUser.value.email
+  if (sessionRestoring.value) {
+    return t('settings_account.session_restoring_hint', '正在恢復登入狀態，完成後會自動繼續同步。')
+  }
+  if (sessionNeedsReauth.value) {
+    return t('settings_account.session_needs_relogin_hint', '登入狀態已過期，已保留帳號資料。請重新登入後再繼續使用會員功能。')
+  }
+  return t('settings_account.login_hint')
+})
+
+function syncAccountCardFromAuth(session = getSharedLedgerSession()) {
+  const status = getSharedLedgerAuthStatus()
+  sessionUser.value = session?.user ?? status.user ?? null
+  sessionRestoring.value = Boolean(status.restoring)
+  sessionNeedsReauth.value = Boolean(status.needsReauth)
+}
 // smb295: 共同帳本／帳本同步／銀行同步／載具同步主入口改至功能頁「進階功能」；
 // 設定頁不再列為主清單入口（深度連結與既有 route 仍可用）。
 const settingGroups = computed(() => [
@@ -71,14 +101,14 @@ let unsubscribeSession = null
 
 onMounted(() => {
   unsubscribeSession = subscribeSharedLedgerSession((session) => {
-    sessionUser.value = session?.user ?? null
+    syncAccountCardFromAuth(session)
   })
   void refreshSharedLedgerSession()
     .then((session) => {
-      sessionUser.value = session?.user ?? getSharedLedgerSession()?.user ?? null
+      syncAccountCardFromAuth(session ?? getSharedLedgerSession())
     })
     .catch(() => {
-      sessionUser.value = getSharedLedgerSession()?.user ?? null
+      syncAccountCardFromAuth(getSharedLedgerSession())
     })
 })
 

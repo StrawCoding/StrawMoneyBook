@@ -2,6 +2,7 @@
 
 ---
 
+- (smb288) 修復帳號／會員登入 Session：Web 冷啟動（tab 關閉清掉 sessionStorage）改以 localStorage auth hint 觸發 cookie 靜默 restore，恢復中不閃未登入表單；匿名不再因 cookie mode 恒 true 而每輪狂打 `/api/auth/refresh`；`needs-reauth` 保留 profile+hint；同步 schedule／gate 寫入可見 `paused_reauth`／`paused_membership`／`paused_offline`／`paused_session`（離線優先），帳號／共同帳本／設定頁顯示 Session 恢復中或需重新登入。補 Node／`playwright:ui-layout`；未改 backend 產品碼（CORS／SameSite 合約維持）。
 - (smb287) 優化資料載入速度：首頁收支摘要改單次 SQL 彙總（不再分頁掃交易）、啟動／切帳本 critical path 先載帳戶／分類／目前預算並背景延遲完整性掃描與借貸／報銷／附加範本／recent、交易明細／編輯改關聯查詢、分析「全部」chunked＋讓出主執行緒、期間切換以 token 丟棄過期結果。補 Node source／語意回歸與 `playwright:ui-layout` 期間／分析進入計時證據；未改 backend。
 - (smb295) 同步類入口搬至功能頁「進階功能」：共同帳本、帳本同步、銀行同步、載具同步改由 `/features` 進階分區進入（保留既有 route／深度連結）；設定頁主清單不再列此四項，避免雙入口混亂。一般功能與進階功能分區分開，三語 i18n（`feature_list.advanced` 等），銀行同步仍受 feature flag 閘控。補 Node source／`playwright:ui-layout`（功能頁四入口導航 + 設定頁主清單不含四項）。
 - (smb294) 重新驗證並治本銀行／載具同步可用性：原生 vault 同步／中斷改傳 distinct local DB id 與 `provider_connection_id` 候選（`buildNativeVaultLookupIds` + `FirstBankAutomation.resolveVaultConnectionId`），避免兩邊傳同一值導致備援失效、誤報憑證缺失；載具／銀行設定頁維持可用性診斷與單一 recovery CTA，Playwright 補強多語 onboarding、錯誤碼分流與 seeded review list。外部 einvoice／first-bank contract-check 與 prod `/api/einvoice/health` 已記錄於 stage report（health≠真機登入成功）。

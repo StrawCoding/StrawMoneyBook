@@ -7,9 +7,12 @@ import {
   getStoredAccessToken,
   getStoredRefreshToken,
   hasPersistedAuthIdentity,
+  hasPersistedAuthRestoreCandidate,
+  readPersistedAuthHint,
   readPersistedAuthSession,
   readPersistedNeedsReauthFlag,
   shouldSendAuthCredentials,
+  writePersistedAuthHint,
   writePersistedAuthSession,
   writePersistedNeedsReauthFlag,
 } from '@/services/shared-ledger/auth-session-storage'
@@ -26,6 +29,10 @@ const API_DISPLAY_NAME = 'StrawMB API'
 let ongoingRefreshPromise = null
 let ongoingSessionRestorePromise = null
 let lastSessionRestoreAt = 0
+/** One forced cookie probe per JS lifetime for pre-hint installs (Web tab close). */
+let anonymousCookieProbeDone = false
+/** Retry cookie restore this session after network/5xx without persisting a false hint. */
+let pendingCookieRestoreRetry = false
 /** True when profile is kept but access/refresh credentials are invalid and re-login is required. */
 let sessionNeedsReauth = false
 try {
@@ -214,14 +221,18 @@ function clearAuthTokens({ markNeedsReauth = true } = {}) {
   const session = readSession()
   if (markNeedsReauth && session?.user) {
     setNeedsReauthFlag(true)
+    // Keep auth hint so cold start still shows identity / needs-reauth, not a blank login form.
+    writePersistedAuthHint(true)
   } else if (!session?.user) {
     setNeedsReauthFlag(false)
+    writePersistedAuthHint(false)
   }
   notifySessionListeners(session?.user ? session : null)
 }
 
 function clearSession() {
   ongoingRefreshPromise = null
+  pendingCookieRestoreRetry = false
   setNeedsReauthFlag(false)
   clearPersistedAuthSession()
   notifySessionListeners(null)
@@ -302,12 +313,22 @@ async function tryRefreshSessionOnce({ allowRetry = true } = {}) {
 
   if (!ongoingRefreshPromise) {
     ongoingRefreshPromise = performRefreshRequest()
+      .then((nextSession) => {
+        pendingCookieRestoreRetry = false
+        return nextSession
+      })
       .catch((error) => {
         if (shouldClearSessionOnRefreshFailure(error)) {
+          pendingCookieRestoreRetry = false
           clearSession()
         } else if (shouldPreserveSessionOnRefreshFailure(error)) {
           // Keep memory tokens + profile on network/5xx; do not mark needs-reauth.
+          // Remember to retry this JS session if we still have no profile yet.
+          if (!readSession()?.user) {
+            pendingCookieRestoreRetry = true
+          }
         } else {
+          pendingCookieRestoreRetry = false
           clearAuthTokens({ markNeedsReauth: true })
         }
         throw error
@@ -539,14 +560,19 @@ export function getSharedLedgerAuthStatus() {
   const user = session?.user ?? null
   const accessToken = getAccessToken()
   const needsReauth = needsSharedLedgerReauth()
-  const restoring = Boolean(user)
-    && !needsReauth
+  const restoreInFlight = Boolean(ongoingSessionRestorePromise) || Boolean(ongoingRefreshPromise)
+  const hasRestoreCandidate = Boolean(user)
+    || hasSharedLedgerAccessCredentials()
+    || readPersistedAuthHint()
+    || pendingCookieRestoreRetry
+  // Restoring covers: profile without live token, cookie-hint cold start, or
+  // in-flight / deferred cookie probe — never fake "Session valid" or flash login.
+  const restoring = !needsReauth
     && !accessToken
     && (
-      Boolean(ongoingSessionRestorePromise)
-      || Boolean(ongoingRefreshPromise)
-      || hasSharedLedgerAccessCredentials()
-      || shouldSendAuthCredentials()
+      restoreInFlight
+      || (Boolean(user) && (hasSharedLedgerAccessCredentials() || shouldSendAuthCredentials()))
+      || (!user && (readPersistedAuthHint() || pendingCookieRestoreRetry))
     )
   // Cookie mode alone must NOT imply API readiness — only a live access token
   // can authorize shared-ledger API / background sync (cookies are auth-only).
@@ -555,6 +581,7 @@ export function getSharedLedgerAuthStatus() {
     user,
     hasProfile: Boolean(user),
     hasCredentials: hasSharedLedgerAccessCredentials(),
+    hasRestoreCandidate,
     needsReauth,
     restoring,
     membershipActive: Boolean(user?.membership_active),
@@ -578,7 +605,15 @@ export function isSharedLedgerAuthenticated() {
 export async function ensureSharedLedgerSessionReady({ force = false } = {}) {
   let status = getSharedLedgerAuthStatus()
   if (status.canUseApi || status.needsReauth) return status
-  if (!status.hasProfile && !hasSharedLedgerAccessCredentials() && !shouldSendAuthCredentials()) {
+  // Do not probe /api/auth/refresh for anonymous users with no hint/profile —
+  // cookie mode alone used to force a refresh on every sync tick.
+  if (
+    !status.hasProfile
+    && !hasSharedLedgerAccessCredentials()
+    && !readPersistedAuthHint()
+    && !pendingCookieRestoreRetry
+    && !hasPersistedAuthRestoreCandidate()
+  ) {
     return status
   }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -704,7 +739,17 @@ export async function refreshSharedLedgerSession() {
 export async function restoreSharedLedgerSession({ force = false } = {}) {
   const session = readSession()
   if (!session?.token) {
-    if (!hasPersistedAuthIdentity() && !shouldSendAuthCredentials()) return null
+    const canRestore = hasPersistedAuthIdentity()
+      || hasSharedLedgerAccessCredentials()
+      || readPersistedAuthHint()
+      || pendingCookieRestoreRetry
+      || hasPersistedAuthRestoreCandidate()
+    // Pre-hint Web installs: allow one forced cookie probe per JS lifetime when
+    // app_start passes force:true. Never probe solely because cookie mode is on.
+    if (!canRestore) {
+      if (!(force && shouldSendAuthCredentials() && !anonymousCookieProbeDone)) return null
+      anonymousCookieProbeDone = true
+    }
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return null
     if (!force && Date.now() - lastSessionRestoreAt < SESSION_RESTORE_COOLDOWN_MS) return null
     if (!ongoingSessionRestorePromise) {

@@ -34,17 +34,34 @@
                   : t('settings_shared_ledgers.join_by_link', '立即加入')
               }}
             </button>
-            <RouterLink v-if="!sessionUser" class="btn" to="/settings/account">
+            <RouterLink v-if="!sessionUser && !sessionRestoring" class="btn" to="/settings/account">
               {{ t('settings_account.login_register', '前往登入 / 註冊') }}
             </RouterLink>
-            <RouterLink v-else-if="!hasMembershipAccess" class="btn" to="/settings/membership-benefits">
+            <RouterLink v-else-if="sessionUser && !hasMembershipAccess" class="btn" to="/settings/membership-benefits">
               {{ t('settings_shared_ledgers.view_membership', '查看會員權益') }}
             </RouterLink>
           </div>
         </div>
       </article>
 
-      <article v-if="!sessionUser" class="card panel">
+      <article v-if="sessionRestoring && !sessionUser" class="card panel" data-testid="shared-ledger-session-restoring-panel">
+        <header class="section-head">
+          <h3>{{ t('settings_shared_ledgers.session_restoring', 'Session 恢復中') }}</h3>
+        </header>
+        <p class="session-status-row" data-testid="shared-ledger-session-status">
+          <span class="session-pill warn" data-testid="shared-ledger-session-restoring-pill">
+            {{ t('settings_shared_ledgers.session_restoring', 'Session 恢復中') }}
+          </span>
+          <span class="session-pill danger" data-testid="shared-ledger-sync-paused-pill">
+            {{ t('settings_shared_ledgers.sync_paused', '同步暫停') }}
+          </span>
+        </p>
+        <p class="notice compact">
+          {{ t('settings_shared_ledgers.session_restoring_hint', '正在恢復登入狀態，完成後會自動繼續同步。') }}
+        </p>
+      </article>
+
+      <article v-else-if="!sessionUser" class="card panel">
         <div class="profile-row">
           <div class="avatar-wrap">
             <div class="avatar-fallback">?</div>

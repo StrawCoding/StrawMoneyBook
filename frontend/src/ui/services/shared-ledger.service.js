@@ -81,6 +81,14 @@ async function markActiveLedgerSyncGate(pinia, status, errorMessage) {
 }
 
 async function assertSharedLedgerSyncAllowed(pinia) {
+  if (!isOnline()) {
+    await markActiveLedgerSyncGate(
+      pinia,
+      'paused_offline',
+      '目前離線，連上網路後將自動重試',
+    )
+    return false
+  }
   const auth = await ensureSharedLedgerSessionReady()
   if (!auth.canUseApi) {
     if (auth.needsReauth) {
@@ -89,7 +97,7 @@ async function assertSharedLedgerSyncAllowed(pinia) {
         'paused_reauth',
         '需重新登入後才能同步共同帳本',
       )
-    } else if (auth.restoring || auth.hasProfile) {
+    } else if (auth.restoring || auth.hasProfile || auth.hasRestoreCandidate) {
       await markActiveLedgerSyncGate(
         pinia,
         'paused_session',
@@ -103,14 +111,6 @@ async function assertSharedLedgerSyncAllowed(pinia) {
       pinia,
       'paused_membership',
       '需有效會員才能同步共同帳本',
-    )
-    return false
-  }
-  if (!isOnline()) {
-    await markActiveLedgerSyncGate(
-      pinia,
-      'paused_offline',
-      '目前離線，連上網路後將自動重試',
     )
     return false
   }
@@ -978,12 +978,18 @@ export function scheduleActiveSharedLedgerAutoSync(pinia, delayMs = AUTO_PUSH_DE
   }
   autoSyncTimer = window.setTimeout(async () => {
     autoSyncTimer = null
+    if (!isOnline()) {
+      await markActiveLedgerSyncGate(pinia, 'paused_offline', '目前離線，連上網路後將自動重試')
+      return
+    }
     const auth = await ensureSharedLedgerSessionReady()
     if (!auth.canUseApi || !hasSharedLedgerMembershipAccess()) {
       if (auth.needsReauth) {
         await markActiveLedgerSyncGate(pinia, 'paused_reauth', '需重新登入後才能同步共同帳本')
       } else if (!hasSharedLedgerMembershipAccess() && auth.canUseApi) {
         await markActiveLedgerSyncGate(pinia, 'paused_membership', '需有效會員才能同步共同帳本')
+      } else if (auth.restoring || auth.hasProfile || auth.hasRestoreCandidate) {
+        await markActiveLedgerSyncGate(pinia, 'paused_session', '登入狀態恢復中，稍後自動重試同步')
       }
       return
     }
