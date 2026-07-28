@@ -2,6 +2,7 @@
 
 ---
 
+- (smb291) AI 記帳四則運算與保留詞不入備註：金額算式支援加減乘除（含 `× ÷`、優先序、空白與萬/千/百單位展開，例如 `100+50*2`、`1.5*2萬`、`2千+500`），並與手動快速新增計算機共用求值核心；已對應分類／帳戶／自動識別關鍵字的保留詞不再寫入備註，明確「備註／note／memo」標註內容仍保留。補 Node 算式／備註回歸與 `build:web`。
 - (smb289) 只保留現代 UI mode：取消傳統／現代雙模式切換，App 唯一 layout 為 modern（Apple HIG／`apple-ui.css`）；設定／個人化不再顯示介面風格切換；舊 `traditional` preference 啟動時安全遷移為 `modern`；保留 5 tab BottomNav、首頁全部區塊與 FAB。補 Node／`playwright:ui-layout`（無切換 UI、現代 layout、Light／Dark 抽樣、legacy 遷移）。
 - (smb288) 修復帳號／會員登入 Session：Web 冷啟動（tab 關閉清掉 sessionStorage）改以 localStorage auth hint 觸發 cookie 靜默 restore，恢復中不閃未登入表單；匿名不再因 cookie mode 恒 true 而每輪狂打 `/api/auth/refresh`；`needs-reauth` 保留 profile+hint；同步 schedule／gate 寫入可見 `paused_reauth`／`paused_membership`／`paused_offline`／`paused_session`（離線優先），帳號／共同帳本／設定頁顯示 Session 恢復中或需重新登入。補 Node／`playwright:ui-layout`；未改 backend 產品碼（CORS／SameSite 合約維持）。
 - (smb287) 優化資料載入速度：首頁收支摘要改單次 SQL 彙總（不再分頁掃交易）、啟動／切帳本 critical path 先載帳戶／分類／目前預算並背景延遲完整性掃描與借貸／報銷／附加範本／recent、交易明細／編輯改關聯查詢、分析「全部」chunked＋讓出主執行緒、期間切換以 token 丟棄過期結果。補 Node source／語意回歸與 `playwright:ui-layout` 期間／分析進入計時證據；未改 backend。

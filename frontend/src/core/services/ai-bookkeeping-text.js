@@ -1,3 +1,8 @@
+import {
+  evaluateAmountExpression,
+  normalizeAmountExpressionSource,
+} from '../utils/amount-expression.js'
+
 export function normalizeText(value) {
   return String(value ?? '')
     .replace(/[，、。]/g, ' ')
@@ -50,7 +55,7 @@ function parseLooseNumber(rawValue) {
   return Number.isFinite(parsed) ? parsed : Number.NaN
 }
 
-const NOTE_LABEL_PATTERNS = [
+export const NOTE_LABEL_PATTERNS = [
   /備註/,
   /备注/,
   /註記|注記/,
@@ -59,13 +64,80 @@ const NOTE_LABEL_PATTERNS = [
   /\bnote\b/i,
 ]
 
-function isExplicitNoteContext(text, start, end = start) {
+const SCALE_UNIT_PATTERN = '萬|w|千|k|百'
+const CURRENCY_UNIT_PATTERN = '元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\\$|\\$|¥|￥'
+const FORMULA_OPERAND = `(?:\\d{1,3}(?:[,\\s]\\d{3})+|\\d+)(?:\\.\\d+)?\\s*(?:${SCALE_UNIT_PATTERN})?`
+const FORMULA_BODY = `(?:${FORMULA_OPERAND}\\s*[+\\-×÷*/xX]\\s*)+${FORMULA_OPERAND}`
+const FORMULA_WITH_UNIT_PATTERN = new RegExp(
+  `[+-]?${FORMULA_BODY}(?:\\s*(?:${CURRENCY_UNIT_PATTERN}))?`,
+  'gi',
+)
+
+/**
+ * Amount / formula tokens are only treated as "inside an explicit note"
+ * when a note label appears to the LEFT of the token. A trailing
+ * `備註：...` after a real amount must not hide that amount.
+ */
+export function isExplicitNoteContext(text, start, _end = start) {
   const source = String(text ?? '')
   const localStart = Math.max(0, Number(start) || 0)
-  const localEnd = Math.max(localStart, Number(end) || localStart)
-  const left = source.slice(Math.max(0, localStart - 18), localStart)
-  const around = source.slice(Math.max(0, localStart - 18), Math.min(source.length, localEnd + 4))
-  return includesAny(left, NOTE_LABEL_PATTERNS) || includesAny(around, NOTE_LABEL_PATTERNS)
+  const left = source.slice(Math.max(0, localStart - 24), localStart)
+  return includesAny(left, NOTE_LABEL_PATTERNS)
+}
+
+/**
+ * Remove explicit `備註：...` / `note:...` segments so amount parsers only
+ * see free transaction text. Optional category names stop the note body
+ * before a trailing `分類 金額` clause; otherwise a generic trailing
+ * `詞 金額` boundary is used.
+ */
+export function stripExplicitNoteLabeledSegments(text, categoryNames = []) {
+  const source = String(text ?? '')
+  const ranges = []
+  const labelPattern = /(?:備註|备注|註記|注記|\bmemo\b|\bremark\b|\bnote\b)\s*[:：]\s*/gi
+  const sortedCategoryNames = [...(categoryNames ?? [])]
+    .map((item) => String(item ?? '').trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+  const trailingAmountTail = String.raw`[+-]?(?:(?:\d+(?:\.\d+)?\s*(?:萬|w|千|k|百)?\s*[+\-×÷*/xX]\s*)*\d+(?:\.\d+)?\s*(?:萬|w|千|k|百|元|塊|塊錢)?)`
+
+  let matched = labelPattern.exec(source)
+  while (matched) {
+    const labelStart = matched.index
+    const bodyStart = labelStart + String(matched[0] ?? '').length
+    let bodyEnd = source.length
+    const afterLabel = source.slice(bodyStart)
+
+    for (const categoryName of sortedCategoryNames) {
+      const boundary = new RegExp(
+        `(?:^|[\\s，,])${escapeRegExp(categoryName)}\\s*${trailingAmountTail}`,
+        'i',
+      )
+      const found = afterLabel.search(boundary)
+      if (found >= 0) {
+        bodyEnd = bodyStart + found
+        break
+      }
+    }
+
+    if (bodyEnd === source.length) {
+      const genericBoundary = afterLabel.search(
+        new RegExp(`(?:^|[\\s，,])[\\u4e00-\\u9fffA-Za-z]{1,12}\\s*${trailingAmountTail}\\s*$`, 'i'),
+      )
+      if (genericBoundary >= 0) {
+        bodyEnd = bodyStart + genericBoundary
+      }
+    }
+
+    ranges.push({
+      start: labelStart,
+      end: Math.max(bodyEnd, labelStart + String(matched[0] ?? '').length),
+    })
+    matched = labelPattern.exec(source)
+  }
+
+  if (!ranges.length) return source
+  return stripTextByRanges(source, ranges)
 }
 
 export function includesAny(text, patterns) {
@@ -195,22 +267,23 @@ function isSafeDateOrTimeMatch(text, match) {
   const right = source[end] ?? ''
 
   if (/\d/.test(left) || /\d/.test(right)) return false
-  if (/[+\-*/]/.test(left) || /[+\-*/]/.test(right)) return false
+  if (/[+\-×÷*/]/.test(left) || /[+\-×÷*/]/.test(right)) return false
 
   return true
 }
 
 export function parseAmountMajor(text) {
-  const formulaAmount = parseFormulaAmountMajor(text)
+  const source = stripExplicitNoteLabeledSegments(text)
+  const formulaAmount = parseFormulaAmountMajor(source)
   if (Number.isFinite(formulaAmount) && formulaAmount > 0) {
     return formulaAmount
   }
 
   const withUnit = [
-    ...text.matchAll(
+    ...source.matchAll(
       /([+-]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\$|\$|¥|￥)/gi,
     ),
-  ].filter((item) => !isExplicitNoteContext(text, item.index, item.index + String(item[0] ?? '').length))
+  ].filter((item) => !isExplicitNoteContext(source, item.index, item.index + String(item[0] ?? '').length))
   if (withUnit.length > 0) {
     const target = withUnit[withUnit.length - 1]
     const raw = parseLooseNumber(target[1])
@@ -223,15 +296,15 @@ export function parseAmountMajor(text) {
     }
   }
 
-  const allNumbers = [...text.matchAll(/([+-]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)/g)]
-    .filter((item) => !isExplicitNoteContext(text, item.index, item.index + String(item[0] ?? '').length))
+  const allNumbers = [...source.matchAll(/([+-]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)/g)]
+    .filter((item) => !isExplicitNoteContext(source, item.index, item.index + String(item[0] ?? '').length))
     .map((item) => parseLooseNumber(item[1]))
     .filter((item) => Number.isFinite(item) && Math.abs(item) > 0)
     .map((item) => Math.abs(item))
 
   if (!allNumbers.length) return Number.NaN
 
-  const year = text.match(/(\d{4})\s*(?:[./-]|年)\s*(\d{1,2})\s*(?:[./-]|月)\s*(\d{1,2})(?:日)?/)?.[1]
+  const year = source.match(/(\d{4})\s*(?:[./-]|年)\s*(\d{1,2})\s*(?:[./-]|月)\s*(\d{1,2})(?:日)?/)?.[1]
   const yearNum = Number(year)
   const candidates = allNumbers.filter((value) => {
     if (Number.isFinite(yearNum) && value === yearNum) return false
@@ -245,20 +318,53 @@ export function parseAmountMajor(text) {
   return round2(candidate)
 }
 
+function scaleUnitFactor(unit) {
+  const normalized = String(unit ?? '').trim().toLowerCase()
+  if (normalized === '萬' || normalized === 'w') return 10000
+  if (normalized === '千' || normalized === 'k') return 1000
+  if (normalized === '百') return 100
+  return 1
+}
+
+function expandScaleUnitsInExpression(input) {
+  return String(input ?? '').replace(
+    /(\d+(?:\.\d+)?)\s*(萬|w|千|k|百)/gi,
+    (_, rawNumber, rawUnit) => {
+      const amount = Number(String(rawNumber).replace(/[,\s]/g, ''))
+      if (!Number.isFinite(amount)) return String(rawNumber)
+      return String(round2(amount * scaleUnitFactor(rawUnit)))
+    },
+  )
+}
+
+function stripTrailingCurrencyUnit(input) {
+  return String(input ?? '')
+    .replace(new RegExp(`(?:${CURRENCY_UNIT_PATTERN})\\s*$`, 'i'), '')
+    .trim()
+}
+
+function evaluateBookkeepingFormula(candidate) {
+  const withoutCurrency = stripTrailingCurrencyUnit(candidate)
+  const expanded = expandScaleUnitsInExpression(withoutCurrency)
+  const normalized = normalizeAmountExpressionSource(expanded)
+  if (!normalized) return null
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) return null
+  if (/^\d{1,2}\/\d{1,2}$/.test(normalized)) return null
+  if (!/[+\-*/]/.test(normalized)) return null
+  const value = evaluateAmountExpression(normalized)
+  if (!Number.isFinite(value) || value <= 0) return null
+  return round2(value)
+}
+
 function parseFormulaAmountMajor(text) {
-  const matches = [
-    ...String(text ?? '').matchAll(/(?:\d+(?:\.\d+)?\s*[+\-×÷*/]\s*)+\d+(?:\.\d+)?/g),
-  ]
+  const matches = [...String(text ?? '').matchAll(FORMULA_WITH_UNIT_PATTERN)]
 
   for (let index = matches.length - 1; index >= 0; index -= 1) {
     const candidate = String(matches[index]?.[0] ?? '').trim()
     const candidateStart = Number(matches[index]?.index ?? -1)
     if (!candidate) continue
     if (candidateStart >= 0 && isExplicitNoteContext(text, candidateStart, candidateStart + candidate.length)) continue
-    const normalized = candidate.replace(/\s+/g, '')
-    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) continue
-    if (/^\d{1,2}\/\d{1,2}$/.test(normalized)) continue
-    const value = evaluateArithmeticExpression(candidate)
+    const value = evaluateBookkeepingFormula(candidate)
     if (Number.isFinite(value) && value > 0) {
       return value
     }
@@ -268,19 +374,14 @@ function parseFormulaAmountMajor(text) {
 }
 
 function parseSignedFormulaAmountMajor(text) {
-  const matches = [
-    ...String(text ?? '').matchAll(/[+-]?(?:\d+(?:\.\d+)?\s*[+\-×÷*/]\s*)+\d+(?:\.\d+)?/g),
-  ]
+  const matches = [...String(text ?? '').matchAll(FORMULA_WITH_UNIT_PATTERN)]
 
   for (let index = matches.length - 1; index >= 0; index -= 1) {
     const candidate = String(matches[index]?.[0] ?? '').trim()
     const candidateStart = Number(matches[index]?.index ?? -1)
     if (!candidate) continue
     if (candidateStart >= 0 && isExplicitNoteContext(text, candidateStart, candidateStart + candidate.length)) continue
-    const normalized = candidate.replace(/\s+/g, '')
-    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) continue
-    if (/^\d{1,2}\/\d{1,2}$/.test(normalized)) continue
-    const value = evaluateArithmeticExpression(candidate)
+    const value = evaluateBookkeepingFormula(candidate)
     if (Number.isFinite(value) && value !== 0) {
       return round2(value)
     }
@@ -290,16 +391,17 @@ function parseSignedFormulaAmountMajor(text) {
 }
 
 export function parseSignedAmountMajor(text) {
-  const formulaAmount = parseSignedFormulaAmountMajor(text)
+  const source = stripExplicitNoteLabeledSegments(text)
+  const formulaAmount = parseSignedFormulaAmountMajor(source)
   if (Number.isFinite(formulaAmount) && formulaAmount !== 0) {
     return formulaAmount
   }
 
   const withUnit = [
-    ...String(text ?? '').matchAll(
+    ...String(source ?? '').matchAll(
       /([+-]?(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\$|\$|¥|￥)/gi,
     ),
-  ].filter((item) => !isExplicitNoteContext(text, item.index, item.index + String(item[0] ?? '').length))
+  ].filter((item) => !isExplicitNoteContext(source, item.index, item.index + String(item[0] ?? '').length))
   if (withUnit.length > 0) {
     const target = withUnit[withUnit.length - 1]
     const raw = parseLooseNumber(target[1])
@@ -312,78 +414,15 @@ export function parseSignedAmountMajor(text) {
     }
   }
 
-  const signedNumbers = [...String(text ?? '').matchAll(/([+-](?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)/g)]
-    .filter((item) => !isExplicitNoteContext(text, item.index, item.index + String(item[0] ?? '').length))
+  const signedNumbers = [...String(source ?? '').matchAll(/([+-](?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)/g)]
+    .filter((item) => !isExplicitNoteContext(source, item.index, item.index + String(item[0] ?? '').length))
     .map((item) => parseLooseNumber(item[1]))
     .filter((item) => Number.isFinite(item) && item !== 0)
   if (signedNumbers.length > 0) {
     return round2(signedNumbers[signedNumbers.length - 1])
   }
 
-  return parseAmountMajor(text)
-}
-
-function evaluateArithmeticExpression(input) {
-  const source = String(input ?? '').trim()
-  if (!source) return null
-  if (!/^[0-9+\-×÷*/.\s]+$/.test(source)) return null
-
-  const normalized = source.replaceAll('×', '*').replaceAll('÷', '/').replace(/\s+/g, '')
-  const tokens = normalized.match(/(\d+(?:\.\d+)?)|[+\-*/]/g)
-  if (!tokens?.length) return null
-
-  const nums = []
-  const ops = []
-  let expectingNumber = true
-
-  for (const token of tokens) {
-    if (['+', '-', '*', '/'].includes(token)) {
-      if (expectingNumber) {
-        if (token === '-' && nums.length === 0) {
-          nums.push(0)
-        } else {
-          return null
-        }
-      }
-      while (ops.length && arithmeticPrecedence(ops.at(-1)) >= arithmeticPrecedence(token)) {
-        if (!applyArithmeticOperator(nums, ops.pop())) return null
-      }
-      ops.push(token)
-      expectingNumber = true
-      continue
-    }
-
-    const num = Number(token)
-    if (!Number.isFinite(num)) return null
-    nums.push(num)
-    expectingNumber = false
-  }
-
-  if (expectingNumber) return null
-  while (ops.length) {
-    if (!applyArithmeticOperator(nums, ops.pop())) return null
-  }
-
-  const result = nums[0]
-  if (!Number.isFinite(result)) return null
-  return round2(Math.abs(result))
-}
-
-function arithmeticPrecedence(op) {
-  if (op === '+' || op === '-') return 1
-  if (op === '*' || op === '/') return 2
-  return 0
-}
-
-function applyArithmeticOperator(nums, op) {
-  if (nums.length < 2) return false
-  const b = nums.pop()
-  const a = nums.pop()
-  if (op === '/' && b === 0) return false
-  const result = op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b
-  if (!Number.isFinite(result)) return false
-  nums.push(result)
-  return true
+  return parseAmountMajor(source)
 }
 
 export function parseAmountWithUnit(rawAmount, rawUnit = '') {

@@ -4,6 +4,7 @@ import {
   normalizeText,
   parseAmountWithUnit,
   round2,
+  stripExplicitNoteLabeledSegments,
   stripTextSegments,
 } from './ai-bookkeeping-text.js'
 
@@ -182,16 +183,95 @@ function collectDuplicateAccountGroupNames(accounts) {
   return Array.from(result)
 }
 
+function collectReservedKeywords(context = {}) {
+  const keywords = []
+  const pushKeyword = (value) => {
+    const keyword = String(value ?? '').trim()
+    if (!keyword) return
+    if (keywords.some((item) => compactText(item) === compactText(keyword))) return
+    keywords.push(keyword)
+  }
+
+  for (const item of context.reservedKeywords ?? []) pushKeyword(item)
+  for (const item of context.matchedAutoFillKeywords ?? []) pushKeyword(item)
+
+  const autoFillKeyword = String(context.matchedAutoFillKeyword ?? context.autoFillKeyword ?? '').trim()
+  if (autoFillKeyword) {
+    const orPattern = /\s*(?:\bor\b|\|\||\||或者|或)\s*/i
+    const andPattern = /\s*(?:\band\b|&&|&|且|並且|并且|和|與)\s*/i
+    for (const group of autoFillKeyword.split(orPattern)) {
+      for (const token of group.split(andPattern)) pushKeyword(token)
+    }
+  }
+
+  return keywords.sort((a, b) => b.length - a.length)
+}
+
+function detachExplicitNoteSegments(text, categoryNames = []) {
+  const source = String(text ?? '')
+  const bodies = []
+  const labelPattern = /(?:備註|备注|註記|注記|\bmemo\b|\bremark\b|\bnote\b)\s*[:：]\s*/gi
+  const sortedCategoryNames = [...(categoryNames ?? [])]
+    .map((item) => String(item ?? '').trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+  const trailingAmountTail = String.raw`[+-]?(?:(?:\d+(?:\.\d+)?\s*(?:萬|w|千|k|百)?\s*[+\-×÷*/xX]\s*)*\d+(?:\.\d+)?\s*(?:萬|w|千|k|百|元|塊|塊錢)?)`
+
+  let matched = labelPattern.exec(source)
+  while (matched) {
+    const labelStart = matched.index
+    const bodyStart = labelStart + String(matched[0] ?? '').length
+    let bodyEnd = source.length
+    const afterLabel = source.slice(bodyStart)
+
+    for (const categoryName of sortedCategoryNames) {
+      const boundary = new RegExp(
+        `(?:^|[\\s，,])${escapeRegExp(categoryName)}\\s*${trailingAmountTail}`,
+        'i',
+      )
+      const found = afterLabel.search(boundary)
+      if (found >= 0) {
+        bodyEnd = bodyStart + found
+        break
+      }
+    }
+
+    if (bodyEnd === source.length) {
+      const genericBoundary = afterLabel.search(
+        new RegExp(`(?:^|[\\s，,])[\\u4e00-\\u9fffA-Za-z]{1,12}\\s*${trailingAmountTail}\\s*$`, 'i'),
+      )
+      if (genericBoundary >= 0) {
+        bodyEnd = bodyStart + genericBoundary
+      }
+    }
+
+    const body = source.slice(bodyStart, bodyEnd).trim()
+    if (body) bodies.push(body)
+    matched = labelPattern.exec(source)
+  }
+
+  return {
+    bodies,
+    remainder: stripExplicitNoteLabeledSegments(source, categoryNames),
+  }
+}
+
 export function extractSmartNoteText(text, context = {}) {
-  let note = String(text ?? '')
+  const categoryNames = (context.categories ?? [])
+    .map((item) => String(item?.name ?? '').trim())
+    .filter(Boolean)
+  const selectedCategoryName = String(context.selectedCategoryName ?? '').trim()
+  const allCategoryNames = selectedCategoryName
+    ? [selectedCategoryName, ...categoryNames.filter((name) => name !== selectedCategoryName)]
+    : categoryNames
+
+  const { bodies: explicitNoteBodies, remainder } = detachExplicitNoteSegments(text, allCategoryNames)
+  let note = remainder
   const accountNames = (context.accounts ?? [])
     .map((item) => String(item?.name ?? '').trim())
     .filter(Boolean)
   const duplicateAccountGroupNames = collectDuplicateAccountGroupNames(context.accounts)
-  const selectedCategoryName = String(context.selectedCategoryName ?? '').trim()
-  const categoryNames = (context.categories ?? [])
-    .map((item) => String(item?.name ?? '').trim())
-    .filter(Boolean)
+  const reservedKeywords = collectReservedKeywords(context)
 
   if (selectedCategoryName) {
     note = note.replace(new RegExp(escapeRegExp(selectedCategoryName), 'gi'), ' ')
@@ -207,9 +287,12 @@ export function extractSmartNoteText(text, context = {}) {
   for (const groupName of duplicateAccountGroupNames) {
     note = note.replace(new RegExp(escapeRegExp(groupName), 'gi'), ' ')
   }
+  for (const keyword of reservedKeywords) {
+    note = note.replace(new RegExp(escapeRegExp(keyword), 'gi'), ' ')
+  }
 
   const stripPatterns = [
-    /(?:[+-]?(?:\d+(?:\.\d+)?)\s*[+\-×÷*/]\s*)+[+-]?(?:\d+(?:\.\d+)?)\s*(萬|w|千|k|百|元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\$|\$|¥|￥)?/gi,
+    /(?:[+-]?(?:\d+(?:\.\d+)?)\s*(?:萬|w|千|k|百)?\s*[+\-×÷*/xX]\s*)+[+-]?(?:\d+(?:\.\d+)?)\s*(?:萬|w|千|k|百)?\s*(元|塊|塊錢|円|yen|jpy|usd|dollar|dollars|bucks|twd|ntd|nt\$|\$|¥|￥)?/gi,
     /\d{4}\s*(?:[./-]|年)\s*\d{1,2}\s*(?:[./-]|月)\s*\d{1,2}(?:日)?/g,
     /\d{1,2}\s*(?:[./-]|月)\s*\d{1,2}(?:日)?/g,
     /([01]?\d|2[0-3])\s*[:：]\s*([0-5]\d)\s*(am|pm|a\.m\.|p\.m\.|午前|午後)?/gi,
@@ -232,6 +315,14 @@ export function extractSmartNoteText(text, context = {}) {
     .replace(/[，。；、]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+
+  const preservedExplicit = explicitNoteBodies
+    .map((body) => normalizeText(body))
+    .filter(Boolean)
+    .join(' ')
+  if (preservedExplicit) {
+    note = `${note} ${preservedExplicit}`.trim()
+  }
 
   if (note.length > 36) {
     note = note.slice(0, 36).trim()

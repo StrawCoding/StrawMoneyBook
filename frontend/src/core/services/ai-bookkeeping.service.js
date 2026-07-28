@@ -1176,6 +1176,7 @@ export function parseAutoBookkeepingText(input, context = {}) {
     accounts,
     selectedCategoryName,
     categories: noteCategories,
+    matchedAutoFillKeyword: matchedAutoFillRule?.keyword ?? '',
   })
   let noteText = autoNote
   if (!noteText && matchedAutoFillRule?.note) {

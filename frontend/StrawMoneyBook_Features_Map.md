@@ -21,6 +21,7 @@
 - 訂閱追蹤的扣款日以當天開始為扣款時間點；進入扣款日後仍可標示本期已到期，但「下次扣款」會直接推進到下一個週期，且排程日期以 App 預設時區正規化，避免 UTC / CI 環境把台北時間午夜誤判成前一天；v1.2.6 後訂閱自動扣款與存錢罐自動存入的到期日判斷會使用帳本時區，App 開啟 / 回前景 / 帳本切換與儲存訂閱後會對今日到期項目建立冪等支出交易
 - AI 自動記帳（文字解析、語音輸入、會員次數限制）
 - AI 自動記帳支援金額加減公式且不會誤改交易日期，也不會把算式符號殘留進備註（例如 `120+20`、`120-20`）
+- smb291 後 AI 記帳金額四則運算與手動快速新增計算機共用 `amount-expression` 求值（含 `+ - * /`、`× ÷`、優先序、空白與萬/千/百單位展開，例如 `100+50*2`、`1.5*2萬`、`2千+500`）；已用來對應分類／帳戶／自動識別關鍵字的保留詞不會再寫入備註，但明確以「備註／note／memo」標註的內容會保留
 - AI 語音再解析若沒有辨識出新的備註內容，會保留目前表單中的既有備註
 - AI 自動記帳在 1.0.3 / SMB-163 後會把目前帳本的附加項目模板納入解析，像折價券、優惠、手續費等自訂模板名稱會自動拆成附加項目，不再殘留到備註或被誤當主金額
 - 交易新增 / 編輯在 1.0.3 / SMB-162 後允許主金額被附加項目完整抵消為 0 元；前端只阻擋附加後淨額為負數，與資料層允許 0 元交易的規則一致
@@ -210,12 +211,12 @@
 | 快速新增入口 | `src/ui/views/BookkeepingPage.vue` + `src/ui/services/bookkeeping-mode.service.js` |
 | 手動快速新增 | `src/ui/views/QuickAddPage.vue`（SMB-162 後附加項目抵消後可存 0 元交易；SMB-175 後金額欄整合計算機） |
 | 問答記帳 | `src/ui/views/QnaBookkeepingPage.vue` |
-| AI 記帳 | `src/ui/views/AiAutoBookkeepingPage.vue` + `src/core/services/ai-bookkeeping.service.js`（SMB-163 後解析帳本附加項目模板；SMB-162 後附加項目抵消後可存 0 元交易） |
+| AI 記帳 | `src/ui/views/AiAutoBookkeepingPage.vue` + `src/core/services/ai-bookkeeping.service.js`（SMB-163 後解析帳本附加項目模板；SMB-162 後附加項目抵消後可存 0 元交易；smb291 後四則運算／單位算式與保留詞不入備註） |
 | 快速新增附加資訊（備註/報銷/附加項目） | `src/ui/views/QuickAddPage.vue` |
 | 日期時間選擇 | `src/ui/components/common/DateTimePickerField.vue` |
 | 純時間選擇 | `src/ui/components/common/TimePickerField.vue` |
 | 共用輸入型 sheet 殼層 | `src/ui/components/common/InputBottomSheet.vue` |
-| 金額計算機輸入欄 | `src/ui/components/common/AmountCalculatorInput.vue`（SMB-175；邏輯層：`src/ui/utils/amount-calculator.js`） |
+| 金額計算機輸入欄 | `src/ui/components/common/AmountCalculatorInput.vue`（SMB-175；邏輯層：`src/ui/utils/amount-calculator.js` → 共用 `src/core/utils/amount-expression.js`，與 AI 記帳算式對齊） |
 | 交易搜尋頁（支援批量編輯分類、備註、可報銷、是否納入預算 / 收支分析） | `src/ui/views/TransactionSearchPage.vue` |
 | 交易日曆頁 | `src/ui/views/CalendarPage.vue` |
 | 功能列表頁 | `src/ui/views/FeatureListPage.vue` |

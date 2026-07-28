@@ -123,3 +123,106 @@ test('parseAutoBookkeepingText removes arithmetic formulas from note text while 
   assert.equal(result.draft?.amountMajor, 140)
   assert.equal(result.draft?.note ?? '', '朋友')
 })
+
+test('parseAutoBookkeepingText evaluates multi-operator formulas with precedence and unicode operators', () => {
+  const cases = [
+    ['午餐 100+50*2', 200],
+    ['午餐 100 + 50 × 2', 200],
+    ['午餐 200÷2', 100],
+    ['午餐 10*5+30', 80],
+    ['午餐 100×2÷4', 50],
+    ['午餐 12.5*4', 50],
+  ]
+
+  for (const [input, expected] of cases) {
+    const result = parseAutoBookkeepingText(input, buildContext())
+    assert.equal(result.draft?.amountMajor, expected, input)
+    assert.equal(result.draft?.note ?? '', '', input)
+  }
+})
+
+test('parseAutoBookkeepingText expands scale units inside arithmetic formulas', () => {
+  const cases = [
+    ['午餐 1.5*2萬', 30000],
+    ['午餐 2千+500', 2500],
+    ['午餐 3*2千', 6000],
+    ['午餐 10萬-5000', 95000],
+    ['午餐 100+50元', 150],
+  ]
+
+  for (const [input, expected] of cases) {
+    const result = parseAutoBookkeepingText(input, buildContext())
+    assert.equal(result.draft?.amountMajor, expected, input)
+    assert.equal(result.draft?.note ?? '', '', input)
+  }
+})
+
+test('parseAutoBookkeepingText keeps AI formula results aligned with amount calculator semantics', async () => {
+  const { evaluateAmountExpression } = await import('../src/ui/utils/amount-calculator.js')
+  const expressions = ['100+50*2', '10*5+30', '1+2*3+4/2', '100/4', '12.5*4']
+
+  for (const expression of expressions) {
+    const calculator = evaluateAmountExpression(expression)
+    const result = parseAutoBookkeepingText(`午餐 ${expression}`, buildContext())
+    assert.equal(result.draft?.amountMajor, calculator, expression)
+  }
+})
+
+test('parseAutoBookkeepingText strips matched auto-fill keywords from note while keeping free text', () => {
+  const result = parseAutoBookkeepingText('星巴克 150 買杯給同事', buildContext({
+    autoFillRules: [{
+      keyword: '星巴克',
+      type: 'expense',
+      categoryId: 'cat_food',
+      accountId: 'acc_cash',
+      amountMajor: 0,
+      note: '',
+    }],
+  }))
+
+  assert.equal(result.draft?.amountMajor, 150)
+  assert.equal(result.draft?.categoryId, 'cat_food')
+  assert.equal(result.draft?.accountId, 'acc_cash')
+  assert.doesNotMatch(result.draft?.note ?? '', /星巴克/)
+  assert.match(result.draft?.note ?? '', /買杯|給同事/)
+})
+
+test('parseAutoBookkeepingText strips matched category and account reserved words from note', () => {
+  const result = parseAutoBookkeepingText('玉山銀行 交通 80*2 加班回家', buildContext())
+
+  assert.equal(result.draft?.amountMajor, 160)
+  assert.equal(result.draft?.categoryId, 'cat_transport')
+  assert.equal(result.draft?.accountId, 'acc_bank')
+  assert.equal(result.draft?.note ?? '', '加班回家')
+})
+
+test('parseAutoBookkeepingText preserves explicit note bodies even when they contain reserved words', () => {
+  const context = buildContext({
+    autoFillRules: [{
+      keyword: '星巴克',
+      type: 'expense',
+      categoryId: 'cat_food',
+      accountId: 'acc_cash',
+      amountMajor: 0,
+      note: '',
+    }],
+  })
+
+  const trailing = parseAutoBookkeepingText('午餐 120 備註：星巴克好喝', context)
+  assert.equal(trailing.draft?.amountMajor, 120)
+  assert.equal(trailing.draft?.note ?? '', '星巴克好喝')
+
+  const leading = parseAutoBookkeepingText('備註：星巴克好喝 午餐 120', context)
+  assert.equal(leading.draft?.amountMajor, 120)
+  assert.equal(leading.draft?.note ?? '', '星巴克好喝')
+})
+
+test('parseAutoBookkeepingText keeps addon formulas independent from main arithmetic amount', () => {
+  const result = parseAutoBookkeepingText('午餐 100+50 手續費 10 朋友聚餐', buildContext())
+
+  assert.equal(result.draft?.amountMajor, 150)
+  assert.equal(result.draft?.addonItems?.length, 1)
+  assert.equal(result.draft?.addonItems?.[0]?.label, '手續費')
+  assert.equal(result.draft?.addonItems?.[0]?.deltaMajor, 10)
+  assert.equal(result.draft?.note ?? '', '朋友聚餐')
+})

@@ -227,10 +227,9 @@ const NOTE_LABEL_PATTERNS = [
 function isExplicitNoteContext(text, start, end = start) {
   const source = String(text ?? '')
   const localStart = Math.max(0, Number(start) || 0)
-  const localEnd = Math.max(localStart, Number(end) || localStart)
-  const left = source.slice(Math.max(0, localStart - 18), localStart)
-  const around = source.slice(Math.max(0, localStart - 18), Math.min(source.length, localEnd + 4))
-  return includesAny(left, NOTE_LABEL_PATTERNS) || includesAny(around, NOTE_LABEL_PATTERNS)
+  void end
+  const left = source.slice(Math.max(0, localStart - 24), localStart)
+  return includesAny(left, NOTE_LABEL_PATTERNS)
 }
 
 const AMOUNT_CONTEXT_PATTERNS = [/花/, /付/, /付款/, /支出/, /收入/, /入帳/, /金額/, /轉/, /匯/, /借/, /還/, /买|買/, /付費/, /pay|paid|spend|spent|income|expense|amount|transfer|wire/i, /支払|入金|出金|振込|送金/]
