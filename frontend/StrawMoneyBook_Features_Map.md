@@ -64,7 +64,7 @@
 | `/transactions/calendar` | `src/ui/views/CalendarPage.vue` | 交易日曆 |
 | `/transactions/:id` | `src/ui/views/TransactionAboutPage.vue` | 交易明細（含退款/關聯） |
 | `/transactions/:id/edit` | `src/ui/views/TransactionEditPage.vue` | 交易編輯（SMB-217 後改用 AmountCalculatorInput 計算機輸入） |
-| `/features` | `src/ui/views/FeatureListPage.vue` | 功能列表入口頁 |
+| `/features` | `src/ui/views/FeatureListPage.vue` | 功能列表入口頁（一般功能 + 進階功能分區；smb295 後共同帳本／帳本同步／銀行同步／載具同步主入口在進階功能） |
 | `/welcome/intro` | `src/ui/views/PostSetupIntroPage.vue` | 初始設定後導覽頁（含特色功能、帳號登入、共同帳本、帳本同步、會員邀請碼；SMB-188 / v1.2.4 後新增共同帳本與帳本同步兩個步驟；SMB-215 / v1.2.27 後共同帳本步驟另外提供「恢復備份」與「帳本同步」快速按鈕） |
 | `/welcome` (隱含 route，由 `App.vue` shouldShowWelcomePage 控制) | `src/ui/views/WelcomePage.vue` | 初始 setup wizard 三步（語言 / 建立帳本 / 建立帳戶）；SMB-215 Restart / v1.3.1 後 step 2「建立帳本」在「已有共同帳本？登入並加入」secondary-link 旁新增「恢復備份 / 帳本同步」兩顆按鈕（僅 `!hasLedgers` 時顯示）。SMB-215 Restart / v1.3.2 後修正目的地：「恢復備份」→ `/settings/auto-backup`（自動備份頁，含 Google Drive / WebDAV 登入 + 立即還原；Tester 反饋「需要有自動備份的項目」）；「帳本同步」維持 `/settings/google-drive-ledger-sync`。`settings-auto-backup` + `settings-google-drive-ledger-sync` 兩 route 帶 `meta.allowWithoutSetup: true`，`settings-data-management` 的 v1.3.1 allowWithoutSetup 已還原 |
 | `/ai-auto-bookkeeping` | `src/ui/views/BookkeepingPage.vue` | AI 記帳模式（內嵌 `AiAutoBookkeepingPage.vue`） |
@@ -151,14 +151,12 @@
 
 - 帳號卡片：`/settings/account`（顯示頭貼、名稱、帳號；未登入時導向登入 / 註冊）
 - 帳本管理：`/settings/ledgers`
-- 共同帳本：`/settings/shared-ledgers`
 - 分類管理：`/settings/categories`
 - 附加項目：`/settings/addon-templates`
 - 自動識別：`/settings/auto-fill-rules`
 - 匯率同步：`/settings/exchange-rate`
 - 資料管理：`/settings/data-management`
 - 自動備份：`/settings/auto-backup`
-- 帳本同步：`/settings/google-drive-ledger-sync`
 - 語言：`/settings/language`
 - 個人化：`/settings/personalization`
 - 安全鎖：`/settings/security`
@@ -168,13 +166,12 @@
 - 關於我們：`/settings/about`
 - 關於我們頁內含官網、Facebook、Instagram、Threads、Email、隱私權政策入口
 - 版本資訊：`/settings/version-info`
-- 銀行同步：`/settings/bank-sync`（入口由 `isBankSyncFeatureEnabled()`＝feature flag 控制可視性；原生自動化由 `isBankSyncNativeAutomationAvailable()` 另閘；Web／非 Android 顯示支援矩陣與 recovery CTA，不再因 provider 空列表靜默 redirect；需 `VITE_BANK_SYNC_FEATURE_ENABLED=true`；Android 第一銀行本地同步；v1.3.19 第一銀行 OCR 失敗時建立連線頁可手動輸入驗證碼重試；v1.3.20 SMB-241 強制桌面 viewport 與驗證碼直連下載；v1.3.31 / SMB-253 第一銀行登入頁錨點合約自檢納入排程監控；v1.3.32 / SMB-252 WebView JSON 攔截 + CSV 帳單匯入退路；v1.3.34 / SMB-252 Restart：桌面登入頁探測 `ready` 只依功能錨點，`mobileHint` 改為依 viewport 版面結構的非攔阻診斷，修復電腦版頁含「Mobile Bank」字樣被誤判為手機版的回歸；v1.3.36 / SMB-252 Restart：登入送出治本——直接寫入 `doLogin()` 真正讀取的隱藏欄位 `#loginCustId` 等（`setFieldByName`，不再只填 `*Fake`）、送出 `clickArea()`→備援 `doLogin()`、攔截 `window.alert()` 並把銀行真實回應寫入 debug trace（`captureLoginResponseDiagnostics` / `summarizeLoginFailure`），`waitForLoginSuccess` 提早歸因不空等；SMB-266 後登入後帳戶入口優先用 URL/function/ID/table structural anchors（`openIt`、`overview-account`、`tab1`、`table.CnbTable`、010103 連結），中文/英文文案只作備援；交易攔截只 replay GET，POST 候選請求安全放行改走原 WebView + DOM fallback；debug trace 與前端 shared classifier 可區分 `portal_changed` / `retry` / `reconnect`；SMB-278：可用性階段診斷 + 支援矩陣；SMB-280：`bank_sync_credentials_missing` 僅 Android 原生路徑且無連線時出現，vault `commit()` + `provider_connection_id` 對齊避免建完仍誤報無憑證；smb294：vault lookup 改傳 distinct local/provider 候選 + Playwright 錯誤碼／seeded review 驗收）
-- 載具同步：`/settings/carrier-sync`（會員限定；v1.3.19 憑證為財政部平台手機號碼 + 密碼；v1.3.30 後端 Playwright 改 SPA JSON 攔截 + captcha token；v1.3.31 / SMB-253 合約自檢接 cron/CI，失敗分類統計 + log/Plane 告警；v1.3.40 / SMB-258 Cloudflare 挑戰等待 + scrape-api 網路錯誤 i18n；SMB-278：可用性診斷、`/api/einvoice/health`、captcha 刷新／到期；SMB-280：health credentialed CORS 治本，消除誤報 `einvoice_network_failed`；smb294：可用性重驗 + Playwright seeded review）
 - 開發除錯：`/settings/developer-debug`（目前不在設定入口清單）
+- smb295：共同帳本／帳本同步／銀行同步／載具同步**不再**列於設定頁主清單；深度連結與既有 route 仍可開到同一功能頁（見下方「功能列表導覽」進階功能）
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）
 
-- 帳本同步：`/settings/google-drive-ledger-sync`
+#### 一般功能
 - 預算項目：`/budget`
 - 借貸：`/loans`
 - 報銷：`/reimbursements`
@@ -182,6 +179,12 @@
 - 存錢罐：`/savings-jars`
 - 訂閱：`/subscriptions`
 - 交易搜尋：`/transactions/search`
+
+#### 進階功能（`feature_list.advanced`）
+- 共同帳本：`/settings/shared-ledgers`
+- 帳本同步：`/settings/google-drive-ledger-sync`
+- 銀行同步：`/settings/bank-sync`（入口由 `isBankSyncFeatureEnabled()`＝feature flag 控制可視性；原生自動化由 `isBankSyncNativeAutomationAvailable()` 另閘；Web／非 Android 顯示支援矩陣與 recovery CTA，不再因 provider 空列表靜默 redirect；需 `VITE_BANK_SYNC_FEATURE_ENABLED=true`；Android 第一銀行本地同步；v1.3.19 第一銀行 OCR 失敗時建立連線頁可手動輸入驗證碼重試；v1.3.20 SMB-241 強制桌面 viewport 與驗證碼直連下載；v1.3.31 / SMB-253 第一銀行登入頁錨點合約自檢納入排程監控；v1.3.32 / SMB-252 WebView JSON 攔截 + CSV 帳單匯入退路；v1.3.34 / SMB-252 Restart：桌面登入頁探測 `ready` 只依功能錨點，`mobileHint` 改為依 viewport 版面結構的非攔阻診斷，修復電腦版頁含「Mobile Bank」字樣被誤判為手機版的回歸；v1.3.36 / SMB-252 Restart：登入送出治本——直接寫入 `doLogin()` 真正讀取的隱藏欄位 `#loginCustId` 等（`setFieldByName`，不再只填 `*Fake`）、送出 `clickArea()`→備援 `doLogin()`、攔截 `window.alert()` 並把銀行真實回應寫入 debug trace（`captureLoginResponseDiagnostics` / `summarizeLoginFailure`），`waitForLoginSuccess` 提早歸因不空等；SMB-266 後登入後帳戶入口優先用 URL/function/ID/table structural anchors（`openIt`、`overview-account`、`tab1`、`table.CnbTable`、010103 連結），中文/英文文案只作備援；交易攔截只 replay GET，POST 候選請求安全放行改走原 WebView + DOM fallback；debug trace 與前端 shared classifier 可區分 `portal_changed` / `retry` / `reconnect`；SMB-278：可用性階段診斷 + 支援矩陣；SMB-280：`bank_sync_credentials_missing` 僅 Android 原生路徑且無連線時出現，vault `commit()` + `provider_connection_id` 對齊避免建完仍誤報無憑證；smb294：vault lookup 改傳 distinct local/provider 候選 + Playwright 錯誤碼／seeded review 驗收）
+- 載具同步：`/settings/carrier-sync`（會員限定；標籤語意為載具同步／電子發票載具；v1.3.19 憑證為財政部平台手機號碼 + 密碼；v1.3.30 後端 Playwright 改 SPA JSON 攔截 + captcha token；v1.3.31 / SMB-253 合約自檢接 cron/CI，失敗分類統計 + log/Plane 告警；v1.3.40 / SMB-258 Cloudflare 挑戰等待 + scrape-api 網路錯誤 i18n；SMB-278：可用性診斷、`/api/einvoice/health`、captcha 刷新／到期；SMB-280：health credentialed CORS 治本，消除誤報 `einvoice_network_failed`；smb294：可用性重驗 + Playwright seeded review）
 
 ### 資產與分類導覽
 
@@ -424,7 +427,7 @@ UI composable 目錄：`src/ui/composables/`
 - 若調整帳本切換與 onboarding，需同步檢查 `ledger.store.js`、`ledger-runtime.service.js`、`setup-flow.service.js` 與相關 store reload 流程。
 - 若調整快速記帳入口，需同步檢查 `BookkeepingPage.vue`、`bookkeeping-mode.service.js`、首頁 FAB 與 Android 小工具導向。
 - 若調整會員限制或升級導流，需同步檢查 `membership.service.js`、`membership-navigation.service.js` 與 `SettingsMembershipBenefitsPage.vue`。
-- 若調整銀行同步入口，需同步檢查 `settings.vue` 的 `isBankSyncFeatureEnabled()`（feature 可視性）、`isBankSyncNativeAutomationAvailable()`（原生自動化）、銀行同步支援矩陣／可用性面板，以及 `/settings/bank-sync` 路由可達性（不可因 Web 無 native provider 靜默 redirect）。
+- 若調整銀行同步入口，需同步檢查 `FeatureListPage.vue` 進階功能區的 `isBankSyncFeatureEnabled()`（feature 可視性）、`isBankSyncNativeAutomationAvailable()`（原生自動化）、銀行同步支援矩陣／可用性面板，以及 `/settings/bank-sync` 路由可達性（不可因 Web 無 native provider 靜默 redirect）；設定頁主清單不再列銀行同步入口。
 - 若調整 Google Drive 帳本同步，需同步檢查 `SettingsGoogleDriveLedgerSyncPage.vue`、`google-drive-ledger-sync.service.js`、會員限制與活動帳本 reload 流程。
 - 若調整 App URL / invite link，需同步檢查 `app-url-route.js`、router redirect 與 `SettingsSharedLedgerPage.vue` 的 invite code 自動加入邏輯。
 - 若調整帳號 / 共同帳本 / 邀請碼 / 管理員流程，需同步檢查 `SettingsAccountPage.vue`、`SettingsSharedLedgerPage.vue`、`SettingsAdminPage.vue`、`src/services/shared-ledger/backend.js`、`src/services/shared-ledger/auth-session-storage.js`、`../backend/src/collab/auth-cookies.js`、`../backend/src/routes/route-table.js` 與 `../backend/src/routes/auth/`、`../backend/src/routes/shared-ledgers/`。SMB-233 / v1.3.5 後帳號 refresh token 不再存 `localStorage`，改由後端 HttpOnly cookie + 前端記憶體 access token；`auth-session-storage.js` 負責遷移舊 `straw.shared_ledger_session` 並只把 user profile 存進 `sessionStorage`。SMB-238 / v1.3.12 後 cookie auth 僅在 `useAuthStorage: true` 時附帶 header / `credentials: include`，`../backend/src/collab/http.js` 對 cookie auth 反射 Origin 並附 credentials CORS header。SMB-238 / v1.3.13 後 `wantsCredentialedCors()` 在 CORS preflight（`OPTIONS`）改檢查 `Access-Control-Request-Headers` 是否含 `x-straw-auth-storage`，確保 preflight 與實際請求一致反射 Origin + `Access-Control-Allow-Credentials`，匿名 preflight 仍維持 wildcard。SMB-238 / v1.3.14 後 `auth-cookies.js` 的 `shouldUseCrossSiteCookie()` 改比對 Origin 與 API `Host` 決定 refresh cookie `SameSite`（Capacitor `https://localhost` → `api.strawmb.com` 使用 `SameSite=None`），`readPersistedAuthSession` 在 cookie 模式下保留 sessionStorage user 供靜默 refresh。SMB-239 / v1.3.18 後 native 平台 user profile 改存 `localStorage`（Web 仍用 sessionStorage），`refreshSharedLedgerSession()` 在無 access token 時改委派 `restoreSharedLedgerSession({ force: true })`。
@@ -1078,7 +1081,7 @@ UI composable 目錄：`src/ui/composables/`
 
 ### 修改檔案
 - `src/core/db/migrate.js` — 加入 migration 032，SMB-174 後再加入 migration 033 補 `password_iv`
-- `src/ui/views/FeatureListPage.vue` — 加入「電子發票匯入」入口
+- `src/ui/views/FeatureListPage.vue` — smb295：進階功能區含共同帳本／帳本同步／銀行同步／載具同步；載具同步標籤取代舊「電子發票匯入」功能列表文案
 - `src/ui/router/index.js` — 加入 `/einvoice-import` 路由
 - `src/ui/services/i18n.service.js` — 加入 zh-TW / en / ja 翻譯
 - `src/main.js` — 電子發票精靈返回按鈕所需 `fa-chevron-left` 與密碼顯示切換所需 `fa-eye` / `fa-eye-slash` 納入 Font Awesome 全域註冊

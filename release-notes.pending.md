@@ -2,6 +2,7 @@
 
 ---
 
+- (smb295) 同步類入口搬至功能頁「進階功能」：共同帳本、帳本同步、銀行同步、載具同步改由 `/features` 進階分區進入（保留既有 route／深度連結）；設定頁主清單不再列此四項，避免雙入口混亂。一般功能與進階功能分區分開，三語 i18n（`feature_list.advanced` 等），銀行同步仍受 feature flag 閘控。補 Node source／`playwright:ui-layout`（功能頁四入口導航 + 設定頁主清單不含四項）。
 - (smb294) 重新驗證並治本銀行／載具同步可用性：原生 vault 同步／中斷改傳 distinct local DB id 與 `provider_connection_id` 候選（`buildNativeVaultLookupIds` + `FirstBankAutomation.resolveVaultConnectionId`），避免兩邊傳同一值導致備援失效、誤報憑證缺失；載具／銀行設定頁維持可用性診斷與單一 recovery CTA，Playwright 補強多語 onboarding、錯誤碼分流與 seeded review list。外部 einvoice／first-bank contract-check 與 prod `/api/einvoice/health` 已記錄於 stage report（health≠真機登入成功）。
 - (smb290) 治本修復帳本同步／共享帳本嚴重資料錯誤：合併不再把帳戶 metadata 與全部交易綁成 `account_coherence`（避免遠端帳戶欄位更新抹掉本機未同步交易）；pull／已綁定下載改走 base／dirty 三方或雙向合併，禁止 hard-replace；父列 tombstone 遇較新子列會復活以免 FK prune 連鎖丟帳；衝突寫入可見 `conflict_resolved`／衝突數／merge log 與 toast；背景 poll 遇 dirty 改 push／merge。補 Node 資料集合一致性／衝突／復活測試與 `playwright:ui-layout` 同步狀態面。
 - 修復淺色模式首頁收入／支出區塊：`HomeAssetSummaryCard` 收入／支出 split 改走主題 `--home-*-card-*` token（淺底＋深色可讀數字），不再硬編碼深色底導致 Light mode 對比失效／語意不清；Dark mode 與傳統／現代介面風格維持正確。補 source／`playwright:ui-layout`（強制 Light → 驗證區塊可見可讀 → 抽樣 Dark 未回歸）。

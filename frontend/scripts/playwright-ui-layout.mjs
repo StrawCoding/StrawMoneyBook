@@ -357,19 +357,69 @@ async function assertRouteNavigation() {
   await delay(800)
   let state = await evalPage(`() => ({
     path: window.location.pathname,
-    hasFeatureList: Boolean(document.querySelector('.feature-list-page')),
+    hasFeatureList: Boolean(document.querySelector('.feature-list-page, [data-testid=feature-list-page]')),
+    hasAdvancedSection: Boolean(document.querySelector('[data-testid=feature-list-advanced]')),
+    advancedTitle: document.querySelector('[data-testid=feature-list-advanced] .feature-section-title')?.textContent?.trim() ?? '',
+    links: {
+      shared: Boolean(document.querySelector('[data-testid=feature-link-shared-ledgers]')),
+      ledgerSync: Boolean(document.querySelector('[data-testid=feature-link-ledger-sync]')),
+      bankSync: Boolean(document.querySelector('[data-testid=feature-link-bank-sync]')),
+      carrierSync: Boolean(document.querySelector('[data-testid=feature-link-carrier-sync]')),
+    },
   })`)
   assert.equal(state.path, '/features', JSON.stringify(state, null, 2))
   assert.equal(state.hasFeatureList, true, JSON.stringify(state, null, 2))
+  assert.equal(state.hasAdvancedSection, true, JSON.stringify(state, null, 2))
+  assert.match(state.advancedTitle, /進階功能|Advanced|高度な機能/u)
+  assert.equal(state.links.shared, true, JSON.stringify(state, null, 2))
+  assert.equal(state.links.ledgerSync, true, JSON.stringify(state, null, 2))
+  assert.equal(state.links.bankSync, true, JSON.stringify(state, null, 2))
+  assert.equal(state.links.carrierSync, true, JSON.stringify(state, null, 2))
+
+  const advancedTargets = [
+    { testId: 'feature-link-shared-ledgers', path: '/settings/shared-ledgers', text: /共同帳本|Shared ledger|共有台帳/iu },
+    { testId: 'feature-link-ledger-sync', path: '/settings/google-drive-ledger-sync', text: /帳本同步|Ledger Sync|帳簿同期/iu },
+    { testId: 'feature-link-bank-sync', path: '/settings/bank-sync', text: /銀行同步|Bank Sync|銀行同期/iu },
+    { testId: 'feature-link-carrier-sync', path: '/settings/carrier-sync', text: /載具同步|Carrier Sync|載具同期/iu },
+  ]
+
+  for (const target of advancedTargets) {
+    await runPlaywrightCli(['goto', `${baseUrl}/features`])
+    await delay(600)
+    await runPlaywrightCli(['click', `[data-testid="${target.testId}"]`])
+    await delay(900)
+    const pageState = await evalPage(`() => ({
+      path: window.location.pathname,
+      text: document.body?.innerText?.slice(0, 4000) ?? '',
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+    })`)
+    assert.equal(pageState.path, target.path, JSON.stringify({ target, pageState }, null, 2))
+    assert.match(pageState.text, target.text)
+    assert.equal(pageState.hasBottomNav, true, JSON.stringify({ target, pageState }, null, 2))
+  }
 
   await runPlaywrightCli(['click', '[data-testid="bottom-nav-settings"]'])
   await delay(800)
   state = await evalPage(`() => ({
     path: window.location.pathname,
     hasSettingsPage: Boolean(document.querySelector('.settings-page')),
+    hrefs: Array.from(document.querySelectorAll('.settings-page a[href]')).map((el) => el.getAttribute('href') || ''),
+    text: document.body?.innerText?.slice(0, 6000) ?? '',
   })`)
   assert.equal(state.path, '/settings', JSON.stringify(state, null, 2))
   assert.equal(state.hasSettingsPage, true, JSON.stringify(state, null, 2))
+  for (const blocked of [
+    '/settings/shared-ledgers',
+    '/settings/google-drive-ledger-sync',
+    '/settings/bank-sync',
+    '/settings/carrier-sync',
+  ]) {
+    assert.equal(
+      state.hrefs.includes(blocked),
+      false,
+      `settings main list must not include ${blocked}: ${JSON.stringify(state.hrefs)}`,
+    )
+  }
 }
 
 async function waitForAppShell({ expectPersonalization = false } = {}) {

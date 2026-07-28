@@ -82,13 +82,14 @@ test('SMB-265: legacy barcode credentials prompt re-entry instead of silent reus
   assert.match(i18nSource, /settings_carrier_sync\.legacy_credentials_reenter/)
 })
 
-test('設定選單與功能列表導向載具同步頁', () => {
+test('功能列表導向載具同步頁；設定頁主清單不再列載具同步', () => {
   const settings = read('src/ui/views/settings.vue')
   const features = read('src/ui/views/FeatureListPage.vue')
   const router = read('src/ui/router/index.js')
 
-  assert.match(settings, /\/settings\/carrier-sync/)
+  assert.doesNotMatch(settings, /\/settings\/carrier-sync/)
   assert.match(features, /\/settings\/carrier-sync/)
+  assert.match(features, /feature_list\.carrier_sync|feature-link-carrier-sync/)
   assert.match(router, /settings-carrier-sync/)
 })
 

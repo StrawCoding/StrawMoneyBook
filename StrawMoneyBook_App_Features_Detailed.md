@@ -169,7 +169,7 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 
 `playwright:ui-layout` 會 bypass onboarding 進入 app-shell 首頁，強制 Light 主題後驗證收入／支出 block 可見、可讀、版面完整，並抽樣確認 Dark 主題未回歸；傳統／現代切換不得刪除 FAB 或任何既有首頁區塊。
 
-功能列表已加入預算項目入口，搭配圖示直接導向預算管理頁，讓使用者不只從底部導覽或首頁預算簡表進入預算設定。
+功能列表分為「一般功能」與「進階功能」兩區：一般功能含預算項目、借貸、報銷、請款單、存錢罐、訂閱、交易搜尋；進階功能（`feature_list.advanced`）含共同帳本、帳本同步、銀行同步（feature flag 閘控）、載具同步。預算項目入口搭配圖示直接導向預算管理頁。設定頁主清單不再列出上述四項進階同步入口（深度連結／舊 bookmark 仍可開到同一 route）。
 
 ### 3.2 交易記帳
 
@@ -968,7 +968,7 @@ StrawMoneyBook 的核心特色，不是「可以記帳」而已，而是把個�
   - **[測試] 新增 `test/einvoice-import.test.js`**：10 個單元測試案例，覆蓋空清單、全新匯入、去重跳過、全部重複、單筆 DB 失敗、全部失敗、混合情境、transactionId 固定為 null、merchantName 為 null、去重基準 Set 正確性；`node --test test/*.test.js` 382/382 通過。
 
 ### 入口
-- `功能列表` 頁面（FeatureListPage.vue）→「電子發票匯入」
-- 路由：`/einvoice-import`
+- `功能列表` 頁面（FeatureListPage.vue）→「進階功能」→「載具同步」（`/settings/carrier-sync`）
+- 電子發票匯入精靈路由：`/einvoice-import`（由載具同步流程進入，非設定頁主清單）
 - 精靈頁頂部返回按鈕使用全域 Font Awesome `fa-chevron-left` 註冊圖示；密碼欄顯示切換使用 `fa-eye` / `fa-eye-slash` 註冊圖示，避免頁面載入時出現空按鈕。
 - **SMB-167 (v1.0.9)**：Step 1 step-footer 補上「上一步」按鈕（原本只有「下一步」），與 Step 2–4 雙按鈕 pattern 對齊；點擊執行 `store.reset()` + `router.back()` 退出 wizard，與精靈頂部返回按鈕行為一致。

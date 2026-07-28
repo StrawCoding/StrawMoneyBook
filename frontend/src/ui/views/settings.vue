@@ -30,17 +30,16 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
-import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
 import { getSharedLedgerSession, refreshSharedLedgerSession, subscribeSharedLedgerSession } from '@/services/shared-ledger/backend'
 
 const { t } = useI18n()
-const showBankSyncEntry = isBankSyncFeatureEnabled()
 const sessionUser = ref(getSharedLedgerSession()?.user ?? null)
 const showAdminEntry = computed(() => Boolean(sessionUser.value?.is_admin))
+// smb295: 共同帳本／帳本同步／銀行同步／載具同步主入口改至功能頁「進階功能」；
+// 設定頁不再列為主清單入口（深度連結與既有 route 仍可用）。
 const settingGroups = computed(() => [
   [
     { to: '/settings/ledgers', labelKey: 'settings.ledger_management', descKey: 'settings.desc.ledger_management', icon: 'fa-solid fa-book' },
-    { to: '/settings/shared-ledgers', labelKey: 'settings.shared_ledgers', descKey: 'settings.desc.shared_ledgers', icon: 'fa-solid fa-users' },
     { to: '/settings/categories', labelKey: 'settings.category_management', descKey: 'settings.desc.category_management', icon: 'fa-solid fa-tags' },
     { to: '/settings/addon-templates', labelKey: 'settings.addon_templates', descKey: 'settings.desc.addon_templates', icon: 'fa-solid fa-receipt' },
     { to: '/settings/auto-fill-rules', labelKey: 'settings.auto_fill_rules', descKey: 'settings.desc.auto_fill_rules', icon: 'fa-solid fa-wand-magic-sparkles' },
@@ -49,9 +48,6 @@ const settingGroups = computed(() => [
   [
     { to: '/settings/data-management', labelKey: 'settings.data_management', descKey: 'settings.desc.data_management', icon: 'fa-solid fa-database' },
     { to: '/settings/auto-backup', labelKey: 'settings.auto_backup', descKey: 'settings.desc.auto_backup', icon: 'fa-solid fa-cloud-arrow-up' },
-    { to: '/settings/google-drive-ledger-sync', labelKey: 'settings.google_drive_ledger_sync', descKey: 'settings.desc.google_drive_ledger_sync', icon: 'fa-solid fa-arrow-right-arrow-left' },
-    ...(showBankSyncEntry ? [{ to: '/settings/bank-sync', labelKey: 'settings.bank_sync', descKey: 'settings.desc.bank_sync', icon: 'fa-solid fa-building-columns' }] : []),
-    { to: '/settings/carrier-sync', labelKey: 'settings.carrier_sync', descKey: 'settings.desc.carrier_sync', icon: 'fa-solid fa-receipt' },
   ],
   [
     { to: '/settings/language', labelKey: 'settings.language', descKey: 'settings.desc.language', icon: 'fa-solid fa-language' },
