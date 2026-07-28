@@ -1,7 +1,7 @@
 /*
- * Apple HIG Phase 1 — visual layer only.
- * Activated when document.documentElement.dataset.uiLayout === 'modern'.
- * Traditional layout keeps v1.3.28 behavior with zero overrides here.
+ * Apple HIG visual layer (modern-only UI).
+ * Always activated: document.documentElement.dataset.uiLayout === 'modern'.
+ * Legacy traditional preference is migrated to modern at boot.
  */
 
 [data-ui-layout='modern'] {

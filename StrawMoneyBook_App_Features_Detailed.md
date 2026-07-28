@@ -74,7 +74,7 @@ StrawMoneyBook 的特色不在單一功能，而在於把同一筆金流後續�
 
 SMB-190 / v1.2.5 後，資料管理頁手動匯出的全部帳本 JSON 與 CSV 檔名都會加入時間戳，避免在 Android 原生檔案儲存或瀏覽器下載時因固定檔名重複覆蓋，讓多次匯出可以保留各自的檔案版本。SMB-216 / v1.2.29 後，資料管理頁的恢復備份、CSV 匯入與重設資料這類可能超過 3 秒的流程會顯示含百分比的加載動畫與目前動作說明，讓使用者知道系統仍在處理而不是壞掉或卡住。
 
-這讓它更適合長期使用，而不是短期記帳後就難以維護。SMB-220 / v1.2.37 後，Debug 頁面新增 Error Log 紀錄區塊，所有 Vue 元件錯誤、全域 window 錯誤、未處理 Promise 拒絕與 toast 彈窗錯誤訊息都會同步記錄在 in-memory buffer（最多 100 筆），開發者可在設定 → 版本資訊 → Debug 頁面即時查看並一鍵匯出。SMB-221 / v1.2.40 後，所有設定子頁面的 h2 標題都加入與功能對應的 Font Awesome icon（class="title-icon"），與「關於我們」頁面一致的視覺風格。SMB-250 / v1.3.29 後，設定 → 個人化新增「介面風格」：傳統版維持 v1.3.28 的 5 tab + FAB + 首頁全部區塊；現代版以 Apple HIG 視覺語言（`apple-ui.css`：Large Title、Inset Grouped、Segmented Control、list row + chevron）重構層級，但**不刪**任何入口或首頁子元件（帳本切換、四段期間篩選、資產卡、預算卡、交易流、FAB）；與配色主題獨立，預設為現代。SMB-254 / v1.3.33 後，設定首頁（`/settings`）的清單項目列高度調小、清單更緊湊：現代版設定列（`apple-ui.css` 的 `[data-ui-layout='modern'] .settings-page .setting-group .item-link`）垂直 padding 由 `12px 14px` 改為 `8px 14px`，量測列高由 63px 降至 54px；傳統版（`settings.vue` scoped）列間分隔由 `margin-top/padding-top: 12px` 收斂為 `8px`、描述 `small` 行高 1.35→1.3。兩種版型皆保留每列 `min-height: 44px` 的最小點擊高度，水平 padding 與 safe-area 維持不變，因此縮小高度不影響觸控區域與可讀性。
+這讓它更適合長期使用，而不是短期記帳後就難以維護。SMB-220 / v1.2.37 後，Debug 頁面新增 Error Log 紀錄區塊，所有 Vue 元件錯誤、全域 window 錯誤、未處理 Promise 拒絕與 toast 彈窗錯誤訊息都會同步記錄在 in-memory buffer（最多 100 筆），開發者可在設定 → 版本資訊 → Debug 頁面即時查看並一鍵匯出。SMB-221 / v1.2.40 後，所有設定子頁面的 h2 標題都加入與功能對應的 Font Awesome icon（class="title-icon"），與「關於我們」頁面一致的視覺風格。SMB-250 / v1.3.29 後曾於設定 → 個人化提供「介面風格」雙模式；smb289 起**只保留現代 mode**：以 Apple HIG 視覺語言（`apple-ui.css`：Large Title、Inset Grouped、Segmented Control、list row + chevron）為唯一版面，移除設定／onboarding 的「傳統／現代」切換，舊 `traditional` preference 啟動時遷移為 `modern`；**不刪**任何入口或首頁子元件（帳本切換、四段期間篩選、資產卡、預算卡、交易流、FAB、BottomNav）；與配色主題（Light／Dark）獨立。SMB-254 / v1.3.33 後，設定首頁（`/settings`）的清單項目列高度調小、清單更緊湊：現代版設定列（`apple-ui.css` 的 `[data-ui-layout='modern'] .settings-page .setting-group .item-link`）垂直 padding 由 `12px 14px` 改為 `8px 14px`，量測列高由 63px 降至 54px；傳統版（`settings.vue` scoped）列間分隔由 `margin-top/padding-top: 12px` 收斂為 `8px`、描述 `small` 行高 1.35→1.3。兩種版型皆保留每列 `min-height: 44px` 的最小點擊高度，水平 padding 與 safe-area 維持不變，因此縮小高度不影響觸控區域與可讀性。
 
 另外，所有需要輸入資料的彈層已統一為共用 bottom sheet flow，桌面與手機都不再保留另一套輸入型 popover，包含表單 dialog、選單、日期與時間選擇器；`AppDialog` 以及各頁自製輸入 sheet 也都收斂到和快速記帳一致的 shared overlay / bottom-sheet primitives，Android 有底部導覽列 inset 的裝置也會一併吃到底部 safe area，且 sheet 卡片背景會直接延伸到底部，和 `BottomNav` 維持同一個底部基準。
 
@@ -156,7 +156,7 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 
 - 帳本切換
 - 全部 / 年 / 月 / 日 範圍切換
-- 當期收支摘要（`HomeAssetSummaryCard`：收入／支出區塊背景與數字色跟隨主題 `--home-*-card-*` Light／Dark token；淺色模式使用淺綠／淺紅底與深綠／深紅數字，禁止沿用深色硬編碼底；傳統／現代介面風格共用，切換主題後仍可辨識收入／支出語意）
+- 當期收支摘要（`HomeAssetSummaryCard`：收入／支出區塊背景與數字色跟隨主題 `--home-*-card-*` Light／Dark token；淺色模式使用淺綠／淺紅底與深綠／深紅數字，禁止沿用深色硬編碼底；現代介面風格下切換主題後仍可辨識收入／支出語意）
 - 預算摘要
 - 交易清單
 - 浮動快速記帳按鈕（FAB）
@@ -167,7 +167,7 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 
 首頁交易流若目前範圍沒有任何資料，現在會顯示明確空狀態與「立即記帳」入口，不再只剩一行靜態文字；空狀態文案透過 i18n 維護，source test 會同時檢查元件 key 與繁中內容，避免國際化後誤判功能消失；預算簡表左右滑動的切頁閾值也已提高，降低垂直捲動時誤切月均 / 當日可用的機率。
 
-`playwright:ui-layout` 會 bypass onboarding 進入 app-shell 首頁，強制 Light 主題後驗證收入／支出 block 可見、可讀、版面完整，並抽樣確認 Dark 主題未回歸；傳統／現代切換不得刪除 FAB 或任何既有首頁區塊。
+`playwright:ui-layout` 會 bypass onboarding 進入 app-shell 首頁，確認無傳統／現代切換 UI、畫面為現代 layout（`data-ui-layout=modern`）、首頁區塊／FAB／BottomNav 仍在；強制 Light 主題後驗證收入／支出 block 可見、可讀、版面完整，並抽樣確認 Dark 主題未回歸；legacy `traditional` preference 會遷移為 modern。
 
 功能列表分為「一般功能」與「進階功能」兩區：一般功能含預算項目、借貸、報銷、請款單、存錢罐、訂閱、交易搜尋；進階功能（`feature_list.advanced`）含共同帳本、帳本同步、銀行同步（feature flag 閘控）、載具同步。預算項目入口搭配圖示直接導向預算管理頁。設定頁主清單不再列出上述四項進階同步入口（深度連結／舊 bookmark 仍可開到同一 route）。
 

@@ -2,12 +2,13 @@
 
 ---
 
+- (smb289) 只保留現代 UI mode：取消傳統／現代雙模式切換，App 唯一 layout 為 modern（Apple HIG／`apple-ui.css`）；設定／個人化不再顯示介面風格切換；舊 `traditional` preference 啟動時安全遷移為 `modern`；保留 5 tab BottomNav、首頁全部區塊與 FAB。補 Node／`playwright:ui-layout`（無切換 UI、現代 layout、Light／Dark 抽樣、legacy 遷移）。
 - (smb288) 修復帳號／會員登入 Session：Web 冷啟動（tab 關閉清掉 sessionStorage）改以 localStorage auth hint 觸發 cookie 靜默 restore，恢復中不閃未登入表單；匿名不再因 cookie mode 恒 true 而每輪狂打 `/api/auth/refresh`；`needs-reauth` 保留 profile+hint；同步 schedule／gate 寫入可見 `paused_reauth`／`paused_membership`／`paused_offline`／`paused_session`（離線優先），帳號／共同帳本／設定頁顯示 Session 恢復中或需重新登入。補 Node／`playwright:ui-layout`；未改 backend 產品碼（CORS／SameSite 合約維持）。
 - (smb287) 優化資料載入速度：首頁收支摘要改單次 SQL 彙總（不再分頁掃交易）、啟動／切帳本 critical path 先載帳戶／分類／目前預算並背景延遲完整性掃描與借貸／報銷／附加範本／recent、交易明細／編輯改關聯查詢、分析「全部」chunked＋讓出主執行緒、期間切換以 token 丟棄過期結果。補 Node source／語意回歸與 `playwright:ui-layout` 期間／分析進入計時證據；未改 backend。
 - (smb295) 同步類入口搬至功能頁「進階功能」：共同帳本、帳本同步、銀行同步、載具同步改由 `/features` 進階分區進入（保留既有 route／深度連結）；設定頁主清單不再列此四項，避免雙入口混亂。一般功能與進階功能分區分開，三語 i18n（`feature_list.advanced` 等），銀行同步仍受 feature flag 閘控。補 Node source／`playwright:ui-layout`（功能頁四入口導航 + 設定頁主清單不含四項）。
 - (smb294) 重新驗證並治本銀行／載具同步可用性：原生 vault 同步／中斷改傳 distinct local DB id 與 `provider_connection_id` 候選（`buildNativeVaultLookupIds` + `FirstBankAutomation.resolveVaultConnectionId`），避免兩邊傳同一值導致備援失效、誤報憑證缺失；載具／銀行設定頁維持可用性診斷與單一 recovery CTA，Playwright 補強多語 onboarding、錯誤碼分流與 seeded review list。外部 einvoice／first-bank contract-check 與 prod `/api/einvoice/health` 已記錄於 stage report（health≠真機登入成功）。
 - (smb290) 治本修復帳本同步／共享帳本嚴重資料錯誤：合併不再把帳戶 metadata 與全部交易綁成 `account_coherence`（避免遠端帳戶欄位更新抹掉本機未同步交易）；pull／已綁定下載改走 base／dirty 三方或雙向合併，禁止 hard-replace；父列 tombstone 遇較新子列會復活以免 FK prune 連鎖丟帳；衝突寫入可見 `conflict_resolved`／衝突數／merge log 與 toast；背景 poll 遇 dirty 改 push／merge。補 Node 資料集合一致性／衝突／復活測試與 `playwright:ui-layout` 同步狀態面。
-- 修復淺色模式首頁收入／支出區塊：`HomeAssetSummaryCard` 收入／支出 split 改走主題 `--home-*-card-*` token（淺底＋深色可讀數字），不再硬編碼深色底導致 Light mode 對比失效／語意不清；Dark mode 與傳統／現代介面風格維持正確。補 source／`playwright:ui-layout`（強制 Light → 驗證區塊可見可讀 → 抽樣 Dark 未回歸）。
+- 修復淺色模式首頁收入／支出區塊：`HomeAssetSummaryCard` 收入／支出 split 改走主題 `--home-*-card-*` token（淺底＋深色可讀數字），不再硬編碼深色底導致 Light mode 對比失效／語意不清；Dark mode 與現代介面風格維持正確。補 source／`playwright:ui-layout`（強制 Light → 驗證區塊可見可讀 → 抽樣 Dark 未回歸）。
 - 匯出免報表預覽 + 分析頁 Dark mode：分析頁右上角改為一鍵直接匯出／下載 PDF（offscreen 淺色 `AnalysisReportDocument`，主路徑不再進 `/analysis/print` 預覽）；`/analysis` 圖表／卡片／文字完整跟隨 App Dark／Light；PDF 仍強制淺色列印友善（`交易報表_YYYY-MM.pdf`）。PDF 分頁改為避開圖表／卡片／明細列中切斷並預留頁碼頁尾空白，避免區塊被裁切或頁碼疊字。補 Node／`playwright:analysis-export`（Dark 分析頁 + 直出 PDF + 無裁切斷言）。
 - 匯出頁 Dark mode chrome 完成與 PDF 排版治本：Dark mode 下 `/analysis/print` 控制列／按鈕／狀態／預覽外框跟隨 App 深色主題，報表本體與 PDF 仍強制淺色；PDF 擷取前固定 A4 寬度＋桌面多欄 print-layout，等比分頁不再拉伸末頁。補 Node／`playwright:analysis-export` Dark chrome＋版面斷言。
 - 分析匯出 Dark mode 強制淺色：App 深色主題（含系統跟隨／手動深色）下，`/analysis/print` 報表預覽與一鍵 PDF 仍輸出白／淺底、深色文字、淺色圖表軌道；互動分析頁可維持深色。補 light-theme 隔離、html2canvas onclone 強制淺色、Node／`playwright:analysis-export` Dark mode 對比驗證。

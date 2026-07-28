@@ -27,30 +27,35 @@ function createStorage(initial = {}) {
   }
 }
 
-test('ui-layout.service defaults to modern and normalizes legacy values', () => {
-  assert.deepEqual(listUiLayouts().map((item) => item.id), ['traditional', 'modern'])
+test('ui-layout.service is modern-only and migrates legacy traditional', () => {
+  assert.deepEqual(listUiLayouts().map((item) => item.id), ['modern'])
   assert.equal(normalizeUiLayout(''), 'modern')
-  assert.equal(normalizeUiLayout('traditional'), 'traditional')
+  assert.equal(normalizeUiLayout('traditional'), 'modern')
   assert.equal(normalizeUiLayout('unexpected'), 'modern')
+  assert.equal(isModernUiLayout('traditional'), true)
 })
 
-test('ui-layout.service persists preference in localStorage', () => {
-  const localStorageRef = createStorage()
+test('ui-layout.service migrates stored traditional preference to modern', () => {
+  const localStorageRef = createStorage({ [STORAGE_KEY]: 'traditional' })
   const originalLocalStorage = globalThis.localStorage
   globalThis.localStorage = localStorageRef
 
   try {
-    saveUiLayout('traditional')
-    assert.equal(getCurrentUiLayout(), 'traditional')
-    assert.equal(isModernUiLayout(), false)
+    assert.equal(getCurrentUiLayout(), 'modern')
+    assert.equal(localStorageRef.getItem(STORAGE_KEY), 'modern')
 
-    saveUiLayout('modern')
+    saveUiLayout('traditional')
     assert.equal(getCurrentUiLayout(), 'modern')
     assert.equal(isModernUiLayout(), true)
     assert.equal(localStorageRef.getItem(STORAGE_KEY), 'modern')
 
     const applied = loadUiLayout()
     assert.equal(applied, 'modern')
+    if (typeof document !== 'undefined') {
+      assert.equal(document.documentElement.dataset.uiLayout, 'modern')
+    }
+
+    applyUiLayout('traditional')
     if (typeof document !== 'undefined') {
       assert.equal(document.documentElement.dataset.uiLayout, 'modern')
     }
