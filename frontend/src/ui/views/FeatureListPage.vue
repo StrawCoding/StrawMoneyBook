@@ -108,7 +108,7 @@ h2 {
   margin-top: 12px
 }
 .feature-section-title {
-  margin: 0 0 8px;
+  margin: 0 8px;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;

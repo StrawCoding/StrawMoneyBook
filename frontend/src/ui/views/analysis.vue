@@ -13,17 +13,6 @@
           >
             {{ t('analysis_page.open_report') }}
           </RouterLink>
-          <button
-            type="button"
-            class="btn icon-btn"
-            data-testid="analysis-export-direct-btn"
-            :aria-label="t('analysis_print.export_pdf')"
-            :title="t('analysis_print.export_pdf')"
-            :disabled="exportingPdf"
-            @click="exportPdfDirect"
-          >
-            <font-awesome-icon icon="fa-solid fa-file-invoice" />
-          </button>
         </div>
       </header>
       <p

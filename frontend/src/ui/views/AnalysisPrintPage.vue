@@ -107,44 +107,6 @@
         {{ lastExportError }}
       </p>
     </article>
-
-    <article
-      class="card panel preview-panel"
-      data-testid="analysis-export-preview-chrome"
-    >
-      <header class="row preview-chrome-head">
-        <h3>{{ t('analysis_print.preview_title') }}</h3>
-        <span class="count-chip">{{ t('analysis_page.items_count', { count: detailRows.length }) }}</span>
-      </header>
-
-      <div v-if="loadingReport" class="muted loading-note">{{ t('app.loading') }}</div>
-      <div
-        v-else
-        class="report-preview-frame"
-        data-testid="analysis-export-report-frame"
-      >
-        <AnalysisReportDocument
-          ref="reportDocumentRef"
-          :title="t('analysis_print.export_pdf')"
-          :ledger-name="ledgerName"
-          :period-label="currentRangeLabel"
-          :exported-at-label="exportedAtLabel"
-          :currency-code="currencyCode"
-          :filter-label="filterLabel"
-          :income-items="incomeBarRows"
-          :expense-items="expenseBarRows"
-          :account-items="accountBarRows"
-          :budget-cards="budgetCards"
-          :detail-rows="detailRows"
-          :income-total-minor="incomeTotalMinor"
-          :expense-total-minor="expenseTotalMinor"
-          :income-count="incomeCount"
-          :expense-count="expenseCount"
-          :account-total-minor="accountTotalMinor"
-          :account-count="accountCount"
-        />
-      </div>
-    </article>
   </section>
 </template>
 
