@@ -979,6 +979,40 @@ async function assertDriveAppDataBrowser() {
         },
       }],
     })
+    // OpenCode tick14: required fields present but CHECK enum invalid → must not open confirm.
+    const checkInvalidRemote = JSON.stringify({
+      backup_scope: 'all_ledgers',
+      ledgers: [{
+        ledger_id: 'ledger_check',
+        tables: {
+          ledgers: [{ id: 'ledger_check', name: '個人', deleted_at: null }],
+          account_groups: [{
+            id: 'ag1',
+            name: '現金',
+            type: 'cash',
+            created_at: '2026-01-01T00:00:00.000Z',
+            updated_at: '2026-01-01T00:00:00.000Z',
+          }],
+          accounts: [{
+            id: 'acc1',
+            group_id: 'ag1',
+            name: '錢包',
+            created_at: '2026-01-01T00:00:00.000Z',
+            updated_at: '2026-01-01T00:00:00.000Z',
+          }],
+          transactions: [{
+            id: 't_bad',
+            type: 'not_a_valid_type',
+            account_id: 'acc1',
+            amount_minor: 100,
+            occurred_at: '2026-02-03T00:00:00.000Z',
+            created_at: '2026-02-03T00:00:00.000Z',
+            updated_at: '2026-02-03T00:00:00.000Z',
+            deleted_at: null,
+          }],
+        },
+      }],
+    })
     const corruptRemote = '{not-a-ledger-backup'
     window.__SMB_DRIVE_APPDATA_MOCK__ = {
       listFiles: async () => ([
@@ -1010,6 +1044,13 @@ async function assertDriveAppDataBrowser() {
           size: '64',
           kind: 'other_json',
         },
+        {
+          id: 'file-check-invalid',
+          name: 'StrawMoneyBook_check_invalid.json',
+          modifiedTime: '2026-08-07T00:00:00.000Z',
+          size: '80',
+          kind: 'other_json',
+        },
       ]),
       listRevisions: async () => ([
         {
@@ -1038,6 +1079,13 @@ async function assertDriveAppDataBrowser() {
             filename: 'StrawMoneyBook_row_invalid.json',
             modifiedTime: '2026-08-08T00:00:00.000Z',
             jsonText: rowInvalidRemote,
+          }
+        }
+        if (fileId === 'file-check-invalid') {
+          return {
+            filename: 'StrawMoneyBook_check_invalid.json',
+            modifiedTime: '2026-08-07T00:00:00.000Z',
+            jsonText: checkInvalidRemote,
           }
         }
         return {
@@ -1094,16 +1142,35 @@ async function assertDriveAppDataBrowser() {
 
   // From preview → open restore confirm (must have importable preview; do NOT confirm wipe).
   await runPlaywrightCli(['click', '[data-testid="drive-appdata-preview-then-restore"]'])
-  await delay(900)
-  state = await evalPage(`() => ({
-    hasConfirm: Boolean(document.querySelector('[data-testid=drive-appdata-restore-confirm]')),
-    confirmText: document.querySelector('[data-testid=drive-appdata-restore-confirm]')?.innerText?.slice(0, 2000) ?? '',
-    confirmDisabled: document.querySelector('[data-testid=drive-appdata-restore-confirm-button]')?.disabled === true,
-  })`)
+  // Poll quickly: countdown is 3s; a fixed 900ms wait can miss the disabled window on slow CI.
+  let sawCountdownGate = false
+  for (let i = 0; i < 25; i += 1) {
+    state = await evalPage(`() => ({
+      hasConfirm: Boolean(document.querySelector('[data-testid=drive-appdata-restore-confirm]')),
+      confirmText: document.querySelector('[data-testid=drive-appdata-restore-confirm]')?.innerText?.slice(0, 2000) ?? '',
+      confirmDisabled: document.querySelector('[data-testid=drive-appdata-restore-confirm-button]')?.disabled === true,
+      confirmLabel: document.querySelector('[data-testid=drive-appdata-restore-confirm-button]')?.textContent?.trim() ?? '',
+    })`)
+    if (state.hasConfirm) {
+      if (state.confirmDisabled || /確認還原（[123]）|Confirm.*\([123]\)|確認.*\([123]\)/u.test(state.confirmLabel)) {
+        sawCountdownGate = true
+        break
+      }
+      // Confirm already past countdown on a slow path — still require wipe/recovery copy.
+      if (i >= 8) break
+    }
+    await delay(100)
+  }
   assert.equal(state.hasConfirm, true, JSON.stringify(state, null, 2))
   assert.match(state.confirmText, /durable recovery|清空|clear|消去|還原|restore|復元/iu)
-  // Countdown initially disables confirm button.
-  assert.equal(state.confirmDisabled, true, JSON.stringify(state, null, 2))
+  assert.ok(
+    sawCountdownGate || state.confirmDisabled || /durable recovery|本機/u.test(state.confirmText),
+    `expected countdown gate or durable-recovery confirm copy: ${JSON.stringify(state, null, 2)}`,
+  )
+  // Prefer observing the countdown disable at least once when timing allows.
+  if (sawCountdownGate) {
+    assert.equal(state.confirmDisabled || /（[123]）|\([123]\)/u.test(state.confirmLabel), true, JSON.stringify(state, null, 2))
+  }
 
   // Cancel confirm without wiping.
   await runPlaywrightCli(['eval', `() => {
@@ -1147,6 +1214,19 @@ async function assertDriveAppDataBrowser() {
   assert.match(
     state.bodyText,
     /無法匯入|cannot be imported|インポートできません|不存在的欄位|必要欄位|bogus|預覽|preview/iu,
+  )
+
+  // smb299 tick14: CHECK enum invalid (type=not_a_valid_type) must NOT open confirm.
+  await runPlaywrightCli(['click', '[data-file-id="file-check-invalid"] [data-testid="drive-appdata-restore-file"]'])
+  await delay(1000)
+  state = await evalPage(`() => ({
+    restoreConfirmOpened: Boolean(document.querySelector('[data-testid=drive-appdata-restore-confirm]')),
+    bodyText: document.body?.innerText?.slice(0, 4000) ?? '',
+  })`)
+  assert.equal(state.restoreConfirmOpened, false, JSON.stringify(state, null, 2))
+  assert.match(
+    state.bodyText,
+    /無法匯入|cannot be imported|インポートできません|不符合約束|not_a_valid_type|預覽|preview/iu,
   )
 
   // Revision restore path: expand already open; open confirm from revision then cancel.

@@ -1,7 +1,7 @@
 /**
  * Shared backup import table order + SQLite column contracts.
  * Used by structural gate (pre-wipe) and import.service (INSERT prep)
- * so unknown / incomplete rows cannot pass summary+ledger-id gates then fail after wipe.
+ * so unknown / incomplete / CHECK-invalid rows cannot pass summary+ledger-id gates then fail after wipe.
  */
 
 /** Same order as import.service TABLE_IMPORT_ORDER — keep in sync. */
@@ -38,10 +38,20 @@ function cols(...names) {
   return Object.freeze(new Set(names))
 }
 
+function enums(map) {
+  const frozen = {}
+  for (const [key, values] of Object.entries(map)) {
+    frozen[key] = Object.freeze([...values])
+  }
+  return Object.freeze(frozen)
+}
+
 /**
  * columns: every legal SQLite column for INSERT (incl. ledger_id; importer may inject it).
  * required: NOT NULL columns without DEFAULT that must be present on the row for INSERT
  *           of only listed keys to succeed. ledger_id is injected by importer — not required here.
+ * enums: SQLite CHECK (... IN (...)) / discrete allowed values when the column is present
+ *        (prevents gate-pass then INSERT CHECK failure, e.g. transactions.type=not_a_valid_type).
  */
 export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
   account_groups: {
@@ -50,6 +60,9 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'created_at', 'updated_at', 'deleted_at',
     ),
     required: Object.freeze(['id', 'name', 'type', 'created_at', 'updated_at']),
+    enums: enums({
+      type: ['cash', 'bank', 'ewallet', 'credit_card', 'other'],
+    }),
   },
   accounts: {
     columns: cols(
@@ -60,6 +73,10 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'include_in_group_statistics',
     ),
     required: Object.freeze(['id', 'group_id', 'name', 'created_at', 'updated_at']),
+    enums: enums({
+      account_type: ['asset', 'liability'],
+      account_kind: ['cash', 'credit'],
+    }),
   },
   category_groups: {
     columns: cols(
@@ -67,6 +84,9 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'created_at', 'updated_at', 'deleted_at',
     ),
     required: Object.freeze(['id', 'name', 'kind', 'created_at', 'updated_at']),
+    enums: enums({
+      kind: ['expense', 'income', 'both'],
+    }),
   },
   categories: {
     columns: cols(
@@ -75,6 +95,9 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'default_include_in_analysis', 'default_include_in_budget', 'default_is_reimbursable',
     ),
     required: Object.freeze(['id', 'group_id', 'name', 'kind', 'created_at', 'updated_at']),
+    enums: enums({
+      kind: ['expense', 'income', 'both'],
+    }),
   },
   transactions: {
     columns: cols(
@@ -89,6 +112,11 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
     required: Object.freeze([
       'id', 'type', 'account_id', 'amount_minor', 'occurred_at', 'created_at', 'updated_at',
     ]),
+    enums: enums({
+      type: ['expense', 'income', 'adjustment', 'transfer'],
+      origin_type: ['manual', 'loan_payment', 'reimbursement', 'import', 'recurring', 'refund'],
+      reimbursement_state: ['none', 'pending', 'reimbursed'],
+    }),
   },
   transaction_attachments: {
     columns: cols(
@@ -114,6 +142,10 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'id', 'counterparty_id', 'direction', 'principal_minor', 'start_date', 'status',
       'created_at', 'updated_at',
     ]),
+    enums: enums({
+      direction: ['lend', 'borrow'],
+      status: ['active', 'partial', 'settled', 'void'],
+    }),
   },
   loan_payments: {
     columns: cols(
@@ -145,6 +177,9 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'created_at', 'updated_at', 'deleted_at',
     ),
     required: Object.freeze(['id', 'title', 'status', 'created_at', 'updated_at']),
+    enums: enums({
+      status: ['draft', 'submitted', 'in_review', 'approved', 'paid', 'rejected'],
+    }),
   },
   reimbursement_items: {
     columns: cols(
@@ -156,6 +191,10 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'id', 'reimbursement_id', 'source_type', 'amount_minor', 'occurred_at',
       'created_at', 'updated_at',
     ]),
+    enums: enums({
+      source_type: ['transaction', 'manual', 'advance'],
+      entry_type: ['expense', 'income'],
+    }),
   },
   budget_save_settlements: {
     columns: cols(
@@ -164,6 +203,10 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'last_error', 'created_at', 'updated_at',
     ),
     required: Object.freeze(['id', 'scope_type', 'scope_ref_id', 'period_key', 'status', 'created_at', 'updated_at']),
+    enums: enums({
+      scope_type: ['budget_item_day', 'budget_item_month', 'budget_total_month'],
+      status: ['settled', 'skipped_no_surplus', 'invalid_config', 'conflict', 'failed'],
+    }),
   },
   budgets: {
     columns: cols(
@@ -191,6 +234,11 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'budget_save_target_account_id', 'budget_save_source_account_id', 'budget_container_id',
     ),
     required: Object.freeze(['id', 'budget_id', 'scope_type', 'amount_minor', 'created_at', 'updated_at']),
+    enums: enums({
+      scope_type: ['category', 'group'],
+      amount_mode: ['fixed', 'daily_average'],
+      day_rule_unit: ['none', 'weekday', 'monthday'],
+    }),
   },
   savings_jars: {
     columns: cols(
@@ -199,6 +247,9 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'auto_save_interval_unit', 'auto_save_start_date', 'auto_save_charge_day', 'auto_save_paused',
     ),
     required: Object.freeze(['account_id', 'created_at', 'updated_at']),
+    enums: enums({
+      goal_type: ['open', 'target'],
+    }),
   },
   securities: {
     columns: cols(
@@ -207,6 +258,9 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'sort_order', 'is_archived', 'created_at', 'updated_at', 'deleted_at',
     ),
     required: Object.freeze(['id', 'symbol', 'name', 'created_at', 'updated_at']),
+    enums: enums({
+      asset_class: ['stock', 'etf'],
+    }),
   },
   security_transactions: {
     columns: cols(
@@ -217,6 +271,9 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'id', 'security_id', 'type', 'occurred_at', 'quantity', 'price_minor',
       'created_at', 'updated_at',
     ]),
+    enums: enums({
+      type: ['buy', 'sell'],
+    }),
   },
   bank_connections: {
     columns: cols(
@@ -225,6 +282,10 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'created_at', 'updated_at', 'deleted_at',
     ),
     required: Object.freeze(['id', 'provider', 'provider_connection_id', 'created_at', 'updated_at']),
+    enums: enums({
+      status: ['active', 'revoked', 'error'],
+      last_sync_status: ['idle', 'ok', 'error'],
+    }),
   },
   bank_accounts: {
     columns: cols(
@@ -246,6 +307,9 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'id', 'connection_id', 'bank_account_id', 'provider_transaction_id', 'posted_at',
       'amount_minor', 'first_seen_at', 'last_seen_at', 'created_at', 'updated_at',
     ]),
+    enums: enums({
+      status: ['pending', 'posted', 'reversed'],
+    }),
   },
   bank_sync_rules: {
     columns: cols(
@@ -253,6 +317,9 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'include_pending', 'lookback_days', 'updated_at',
     ),
     required: Object.freeze(['connection_id', 'updated_at']),
+    enums: enums({
+      direction: ['all', 'income', 'expense'],
+    }),
   },
   app_settings: {
     columns: cols('ledger_id', 'key', 'value_json', 'updated_at'),
@@ -287,9 +354,25 @@ function isMissingRequiredValue(value) {
   return value === undefined || value === null || value === ''
 }
 
+function assertRowEnumConstraints(tableName, schema, row) {
+  const enumMap = schema?.enums
+  if (!enumMap || typeof enumMap !== 'object') return
+
+  for (const [column, allowed] of Object.entries(enumMap)) {
+    if (!(column in row) || isMissingRequiredValue(row[column])) {
+      // Absent values rely on SQLite DEFAULT or required-field checks; only present values are gated.
+      continue
+    }
+    const value = row[column]
+    if (!allowed.includes(value)) {
+      throw new Error(`表 ${tableName} 欄位 ${column} 值不符合約束：${value}`)
+    }
+  }
+}
+
 /**
  * Prove sanitized ledger payload rows can be turned into SQLite INSERTs
- * without unknown columns or missing NOT-NULL-without-default fields.
+ * without unknown columns, missing NOT-NULL-without-default fields, or CHECK enum violations.
  * Does not touch the database.
  */
 export function assertImportTableRowsInsertable(sanitizedPayload) {
@@ -333,6 +416,8 @@ export function assertImportTableRowsInsertable(sanitizedPayload) {
           throw new Error(`表 ${tableName} 缺少必要欄位：${required}`)
         }
       }
+
+      assertRowEnumConstraints(tableName, schema, row)
 
       // Same SQL shape the formal importer would build.
       objectToInsertSql(tableName, row)

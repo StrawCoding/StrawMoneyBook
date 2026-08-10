@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (smb299) OpenCode tick14 治本：匯入閘門補 SQLite CHECK enum（例 `transactions.type=not_a_valid_type` 在 wipe 前拒絕）；因 `withTransaction` 跨步驟非原子，wipe 後 import 失敗會**先再 wipe 清除部分匯入殘留**，再以 durable recovery 回灌，最終 DB＝wipe 前原狀（禁止「原本地＋殘缺雲端」）；Node 回歸驗證最終狀態標記與呼叫序 `wipe→import→wipe→rollback`；Playwright 覆蓋 CHECK 無效檔不開確認。
+
 ---
 
 ## v1.3.101

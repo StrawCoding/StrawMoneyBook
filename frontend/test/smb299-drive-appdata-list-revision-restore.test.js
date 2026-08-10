@@ -273,6 +273,8 @@ test('smb299: playwright ui-layout covers Drive appData list / select / revision
   assert.match(playwrightUiLayoutSource, /drive-appdata-restore-confirm-button/)
   assert.match(playwrightUiLayoutSource, /feature-link-drive-appdata-restore/)
   assert.match(playwrightUiLayoutSource, /not_importable|corrupt|drive-appdata-preview-not-importable|restoreConfirmOpened/)
+  assert.match(playwrightUiLayoutSource, /file-check-invalid|not_a_valid_type/)
+  assert.match(playwrightUiLayoutSource, /sawCountdownGate|confirmDisabled/)
 })
 
 test('smb299: restore orchestration requires importable preview and never wipes on gate failures', async () => {
@@ -406,6 +408,66 @@ test('smb299: restore orchestration requires importable preview and never wipes 
         && wipeCalled === false
         && imported === false
         && recoveryCalled === false
+      ),
+    )
+    assert.equal(wipeCalled, false)
+    assert.equal(recoveryCalled, false)
+  }
+
+  // OpenCode tick 14: complete required fields but CHECK enum violation (type=not_a_valid_type)
+  // must be rejected by pre-wipe gate — formal INSERT would fail with SQLite CHECK.
+  {
+    const checkConstraintReject = JSON.stringify(buildAllLedgersPayload({
+      ledgerName: '個人',
+      transactions: [
+        buildValidTransaction({ id: 't_bad_type', type: 'not_a_valid_type' }),
+      ],
+    }))
+    assert.equal(
+      summarizeBackupJsonText(checkConstraintReject).ok,
+      true,
+      'fixture must pass summary so CHECK-gate gap is real',
+    )
+    await assert.rejects(
+      async () => assertBackupJsonStructureImportable(checkConstraintReject),
+      (error) => /不符合約束|not_a_valid_type/i.test(String(error?.message ?? '')),
+    )
+    await assert.rejects(
+      async () => assertBackupJsonImportable(checkConstraintReject),
+      (error) => error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE && error?.silentWipeBlocked === true,
+    )
+
+    let wipeCalled = false
+    let imported = false
+    let recoveryCalled = false
+    let downloadCalled = false
+    await assert.rejects(
+      async () => runConfirmedDriveAppDataRestore({
+        preview: {
+          jsonText: checkConstraintReject,
+          filename: 'bad-type.json',
+          remoteSummary: summarizeBackupJsonText(checkConstraintReject),
+        },
+        downloadBackup: async () => {
+          downloadCalled = true
+          return { jsonText: checkConstraintReject, filename: 'bad-type.json' }
+        },
+        createRecoveryBackup: async () => {
+          recoveryCalled = true
+          return { verified: true, backupId: 'r-bad-type', byteLength: 8, storage: 'test' }
+        },
+        wipeFn: async () => { wipeCalled = true },
+        importBackupJson: async () => { imported = true },
+        restoreFromRecovery: async () => {},
+        source: 'unit.bad-type-check',
+      }),
+      (error) => (
+        (error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+          || error?.code === DRIVE_RESTORE_PREVIEW_REQUIRED_CODE)
+        && wipeCalled === false
+        && imported === false
+        && recoveryCalled === false
+        && downloadCalled === false
       ),
     )
     assert.equal(wipeCalled, false)
@@ -651,12 +713,14 @@ test('smb299: restore orchestration requires importable preview and never wipes 
     assert.equal(result.imported.firstLedgerId, 'new1')
   }
 
-  // Defense in depth: if import throws after wipe, restoreFromRecovery must run
-  // and local data must not stay cleared (IMPORT_FAILED_RESTORED).
+  // Defense in depth: if import throws after wipe, must wipe again (clear partial)
+  // THEN restoreFromRecovery — final DB equals wipe-前原狀 (not original+partial).
   {
     const {
       DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE,
+      runConfirmedWipeThenImportWithRecoveryRollback,
     } = await import('../src/core/services/drive-appdata-restore.service.js')
+
     const calls = []
     await assert.rejects(
       async () => runConfirmedDriveAppDataRestore({
@@ -693,7 +757,52 @@ test('smb299: restore orchestration requires importable preview and never wipes 
         && error?.silentWipeBlocked === true
       ),
     )
-    assert.deepEqual(calls, ['download', 'recovery', 'wipe', 'import', 'rollback'])
+    // Second wipe clears partial import residue before recovery rehydrate.
+    assert.deepEqual(calls, ['download', 'recovery', 'wipe', 'import', 'wipe', 'rollback'])
+
+    // Stateful proof: final DB marker equals pre-wipe original, not ORIGINAL+PARTIAL.
+    let db = {
+      marker: 'ORIGINAL_LOCAL',
+      txMonths: ['2026-05', '2026-08'],
+      ledgerIds: ['ledger_local'],
+    }
+    const originalSnapshot = structuredClone(db)
+    await assert.rejects(
+      async () => runConfirmedWipeThenImportWithRecoveryRollback({
+        createRecoveryBackup: async () => ({
+          verified: true,
+          backupId: 'r-final-state',
+          byteLength: 64,
+          storage: 'test',
+          _snapshot: structuredClone(db),
+        }),
+        wipeFn: async () => {
+          db = { marker: 'EMPTY', txMonths: [], ledgerIds: [] }
+        },
+        importFn: async () => {
+          // Simulate non-atomic multi-step import leaving residue then failing.
+          db = {
+            marker: 'PARTIAL_CLOUD',
+            txMonths: ['2026-02'],
+            ledgerIds: ['ledger_cloud_partial'],
+          }
+          throw new Error('CHECK constraint failed: type')
+        },
+        restoreFromRecovery: async (proof) => {
+          // Helper must have wiped residue first — restore sees EMPTY, not PARTIAL.
+          assert.deepEqual(db, { marker: 'EMPTY', txMonths: [], ledgerIds: [] })
+          db = structuredClone(proof._snapshot)
+        },
+        source: 'unit.final-db-equals-prewipe',
+      }),
+      (error) => (
+        error?.code === DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE
+        && error?.localDataRestoredFromRecovery === true
+      ),
+    )
+    assert.deepEqual(db, originalSnapshot)
+    assert.equal(db.marker, 'ORIGINAL_LOCAL')
+    assert.deepEqual(db.txMonths, ['2026-05', '2026-08'])
   }
 })
 
@@ -717,12 +826,20 @@ test('smb299: Drive restore gate shares formal importer structure + row INSERT c
   assert.match(restoreSource, /assertBackupJsonStructureImportable/)
   assert.match(restoreSource, /runConfirmedWipeThenImportWithRecoveryRollback/)
   assert.match(restoreSource, /restoreFromRecovery/)
+  // tick14: clear partial import residue before recovery rehydrate
+  assert.match(
+    restoreSource,
+    /await wipeFn\(\)[\s\S]*await restoreFromRecovery\(recoveryProof\)/,
+  )
+  assert.match(restoreSource, /partially-committed import residue|partial_clear_failed/)
   assert.match(gateSource, /resolveSourceLedger/)
   assert.match(gateSource, /assertImportTableRowsInsertable/)
   assert.match(gateSource, /JSON 缺少 ledger_id/)
   assert.match(gateSource, /JSON 缺少可匯入的帳本資料/)
   assert.match(schemaSource, /含不存在的欄位/)
   assert.match(schemaSource, /缺少必要欄位/)
+  assert.match(schemaSource, /不符合約束/)
+  assert.match(schemaSource, /not_a_valid_type|expense.*income.*adjustment.*transfer|enums/)
   assert.match(schemaSource, /bogus_column|BACKUP_IMPORT_TABLE_SCHEMA/)
   assert.match(importSource, /assertBackupJsonStructureImportable\(jsonText\)/)
   assert.match(importSource, /from '@\/core\/services\/backup-json-import-gate\.service'/)

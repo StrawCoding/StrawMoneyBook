@@ -1,7 +1,8 @@
 /**
  * Structural import gate shared by Drive restore wipe path and importBackupJsonAsNewLedgers.
  * Must reject payloads the formal importer would reject — BEFORE any local wipe.
- * Covers: parse, ledger identity, AND table-row INSERT contracts (unknown columns / required fields).
+ * Covers: parse, ledger identity, table-row INSERT contracts (unknown columns / required fields),
+ * and SQLite CHECK enum constraints (e.g. transactions.type).
  */
 
 import { normalizeSharedLedgerSnapshot } from '../../ui/services/shared-ledger/snapshot-merge.js'

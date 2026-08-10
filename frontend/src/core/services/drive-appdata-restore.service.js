@@ -134,6 +134,10 @@ export function isDriveRestorePreviewReady(preview) {
 /**
  * Wipe then import with mandatory durable-recovery rollback if import fails.
  * Callers must already have proven the import payload is gate-importable.
+ *
+ * Platform note: withTransaction() is NOT atomic across steps (web/native auto-commit).
+ * A mid-import failure can leave partially committed ledgers/rows. Therefore recovery
+ * MUST wipe again to clear residue before rehydrating wipe-前原狀 from durable proof.
  */
 export async function runConfirmedWipeThenImportWithRecoveryRollback({
   createRecoveryBackup,
@@ -166,6 +170,22 @@ export async function runConfirmedWipeThenImportWithRecoveryRollback({
         message: `備份匯入失敗且無法回滾（缺少 restoreFromRecovery）：${String(importError?.message ?? importError ?? '').trim() || 'import_failed'}`,
       })
     }
+
+    // Clear any partially-committed import residue before recovery rehydrate.
+    // Without this, restoreFromRecovery that only INSERT recovery JSON would leave
+    // original local data PLUS leftover cloud rows — not wipe-前原狀.
+    try {
+      await wipeFn()
+    } catch (clearError) {
+      const error = createDriveRestoreNotImportableError(importError, {
+        parseError: 'import_failed_partial_clear_failed',
+        message: `備份匯入失敗，且清除部分匯入殘留亦失敗：${String(clearError?.message ?? clearError ?? '').trim() || 'partial_clear_failed'}`,
+      })
+      error.localDataRestoredFromRecovery = false
+      error.clearError = clearError
+      throw error
+    }
+
     try {
       await restoreFromRecovery(recoveryProof)
     } catch (rollbackError) {
