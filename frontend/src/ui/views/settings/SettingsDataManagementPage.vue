@@ -28,8 +28,60 @@
         <li>
           <RouterLink class="link" to="/settings/google-drive-ledger-sync">{{ t('settings_data.recovery.link_drive_sync', 'Google Drive 帳本同步拉回') }}</RouterLink>
         </li>
+        <li>{{ t('settings_data.recovery.tip_local', '本機 IndexedDB recovery 備份可在下方列出、下載或還原（跨重啟仍在）。') }}</li>
         <li>{{ t('settings_data.recovery.tip_import', '下方 JSON 匯入會先要求確認並建立 recovery 備份後才清空本機。') }}</li>
         <li>{{ t('settings_data.recovery.tip_shared', '共同帳本伺服器綁定消失≠本機交易被刪；本機帳本仍在時請保留並重新加入／同步。') }}</li>
+      </ul>
+    </article>
+
+    <article class="card panel" data-testid="local-recovery-backups-panel">
+      <h3>{{ t('settings_data.local_recovery.title', '本機 recovery 備份') }}</h3>
+      <p class="muted">
+        {{ t('settings_data.local_recovery.desc', '完整 wipe 前寫入 IndexedDB 的 durable 備份。裝置檔／瀏覽器下載失敗時仍可由此下載或還原；記憶體暫存不算 durable。') }}
+      </p>
+      <div class="export-grid">
+        <button
+          class="btn"
+          data-testid="local-recovery-refresh"
+          :disabled="localRecoveryBusy"
+          @click="refreshLocalRecoveryBackups"
+        >
+          {{ t('settings_data.local_recovery.refresh', '重新整理') }}
+        </button>
+      </div>
+      <p v-if="!localRecoveryBackups.length" class="muted compact" data-testid="local-recovery-empty">
+        {{ t('settings_data.local_recovery.empty', '目前沒有可還原的本機 recovery 備份。') }}
+      </p>
+      <ul v-else class="local-recovery-items" data-testid="local-recovery-list">
+        <li
+          v-for="item in localRecoveryBackups"
+          :key="item.backupId"
+          class="local-recovery-item"
+          :data-backup-id="item.backupId"
+        >
+          <div class="local-recovery-meta">
+            <strong>{{ item.filename || item.backupId }}</strong>
+            <span class="muted compact">{{ formatLocalRecoveryMeta(item) }}</span>
+          </div>
+          <div class="local-recovery-actions">
+            <button
+              class="btn"
+              data-testid="local-recovery-download"
+              :disabled="localRecoveryBusy"
+              @click="downloadLocalRecoveryBackup(item.backupId)"
+            >
+              {{ t('settings_data.local_recovery.download', '下載') }}
+            </button>
+            <button
+              class="btn danger-btn"
+              data-testid="local-recovery-restore"
+              :disabled="localRecoveryBusy"
+              @click="openLocalRestoreConfirm(item.backupId)"
+            >
+              {{ t('settings_data.local_recovery.restore', '還原') }}
+            </button>
+          </div>
+        </li>
       </ul>
     </article>
 
@@ -175,6 +227,32 @@
         </section>
       </transition>
     </teleport>
+    <teleport to="body">
+      <transition name="overlay-fade">
+        <section v-if="isLocalRestoreConfirmOpen" class="sheet-mask reset-mask" @click.self="closeLocalRestoreConfirm">
+          <article class="card reset-dialog" data-testid="local-recovery-restore-confirm">
+            <header class="row">
+              <h3>{{ t('settings_data.local_recovery.confirm_title', '確認還原本機 recovery 備份') }}</h3>
+            </header>
+            <p class="muted">
+              {{ t('settings_data.local_recovery.confirm_desc', '會先建立目前狀態的 durable recovery 備份；失敗則中止、不清空本機。成功後才清空並以選定的 IndexedDB 備份還原。可取消。') }}
+            </p>
+            <p v-if="pendingLocalRestoreId" class="muted compact">{{ pendingLocalRestoreId }}</p>
+            <footer class="row action-row">
+              <button class="btn" @click="closeLocalRestoreConfirm">{{ t('common.cancel', 'Cancel') }}</button>
+              <button
+                class="btn danger-btn"
+                :disabled="localRestoreCountdown > 0 || localRecoveryBusy"
+                data-testid="local-recovery-restore-confirm-button"
+                @click="confirmLocalRestore"
+              >
+                {{ localRestoreConfirmLabel }}
+              </button>
+            </footer>
+          </article>
+        </section>
+      </transition>
+    </teleport>
   </section>
 </template>
 
@@ -209,7 +287,11 @@ import {
   readLastLedgerIntegrityScan,
   runConfirmedWipeAfterRecoveryBackup,
 } from '@/core/services/data-wipe-guard.service'
-import { createVerifiedRecoveryBackupBeforeWipe } from '@/core/services/recovery-backup.service'
+import {
+  createVerifiedRecoveryBackupBeforeWipe,
+  listVerifiedRecoveryBackups,
+  loadRecoveryBackupJsonText,
+} from '@/core/services/recovery-backup.service'
 import { repairLedgerData, scanLedgerIntegrity } from '@/core/services/repair.service'
 import { sumNumericValues } from '@/ui/services/ledger-runtime.helpers'
 import { resetDatabase } from '@/core/db/sqlite'
@@ -248,6 +330,12 @@ const integrityIssueCount = ref(0)
 const integrityStatusText = ref('')
 const lastExportPath = ref('')
 const operationProgress = ref(createIdleOperationProgress())
+const localRecoveryBackups = ref([])
+const localRecoveryBusy = ref(false)
+const isLocalRestoreConfirmOpen = ref(false)
+const localRestoreCountdown = ref(0)
+const pendingLocalRestoreId = ref('')
+let localRestoreTimerId = null
 let resetTimerId = null
 let importTimerId = null
 let repairTimerId = null
@@ -273,6 +361,14 @@ const repairConfirmLabel = computed(() => {
     return t('settings_data.integrity.confirm_countdown', { count: repairCountdown.value }, '確認修復（{count}）')
   }
   return t('settings_data.integrity.confirm', '確認修復')
+})
+
+const localRestoreConfirmLabel = computed(() => {
+  if (localRecoveryBusy.value) return t('settings_data.local_recovery.processing', '還原中...')
+  if (localRestoreCountdown.value > 0) {
+    return t('settings_data.local_recovery.confirm_countdown', { count: localRestoreCountdown.value }, '確認還原（{count}）')
+  }
+  return t('settings_data.local_recovery.confirm', '確認還原並清空本機')
 })
 
 const operationProgressTitle = computed(() => {
@@ -341,7 +437,7 @@ async function withOperationProgress(type, task) {
 }
 
 async function createResetRecoveryBackup() {
-  // smb297: durable IndexedDB/memory proof required — download-only is not enough.
+  // smb297: durable IndexedDB/filesystem proof required — download-only / memory are not enough.
   const proof = await createVerifiedRecoveryBackupBeforeWipe({
     purpose: 'reset',
     source: 'SettingsDataManagementPage.createResetRecoveryBackup',
@@ -354,9 +450,146 @@ async function createResetRecoveryBackup() {
     },
   })
   if (!lastExportPath.value && proof?.filename) {
-    lastExportPath.value = `Downloads/${proof.filename}`
+    lastExportPath.value = `recovery:${proof.storage}/${proof.filename}`
   }
+  await refreshLocalRecoveryBackups({ quiet: true })
   return proof
+}
+
+function formatLocalRecoveryMeta(item) {
+  const at = String(item?.at || '').trim() || '—'
+  const bytes = Number(item?.byteLength) || 0
+  const purpose = String(item?.purpose || '').trim() || 'wipe'
+  const storage = String(item?.storage || 'indexeddb').trim()
+  return `${at} · ${purpose} · ${storage} · ${bytes} bytes`
+}
+
+async function refreshLocalRecoveryBackups(options = {}) {
+  const quiet = Boolean(options.quiet)
+  localRecoveryBusy.value = true
+  try {
+    localRecoveryBackups.value = await listVerifiedRecoveryBackups()
+  } catch (error) {
+    localRecoveryBackups.value = []
+    if (!quiet) {
+      uiStore.pushToast(
+        error?.message || t('settings_data.local_recovery.toast_list_failed', '讀取本機 recovery 備份失敗'),
+        'error',
+      )
+    }
+  } finally {
+    localRecoveryBusy.value = false
+  }
+}
+
+async function downloadLocalRecoveryBackup(backupId) {
+  localRecoveryBusy.value = true
+  try {
+    const loaded = await loadRecoveryBackupJsonText(backupId)
+    const payload = JSON.parse(loaded.jsonText)
+    const filename = loaded.filename || `${loaded.backupId}.json`
+    const saved = await saveJsonFileToDevice(filename, payload, { category: 'recovery' })
+    if (saved?.saved && saved.location) {
+      lastExportPath.value = saved.location
+    } else {
+      downloadJsonFile(filename, payload)
+      lastExportPath.value = `Downloads/${filename}`
+    }
+    uiStore.pushToast(t('settings_data.local_recovery.toast_downloaded', '已下載本機 recovery 備份'))
+  } catch (error) {
+    uiStore.pushToast(
+      error?.message || t('settings_data.local_recovery.toast_download_failed', '下載本機 recovery 備份失敗'),
+      'error',
+    )
+  } finally {
+    localRecoveryBusy.value = false
+  }
+}
+
+function clearLocalRestoreTimer() {
+  if (localRestoreTimerId) {
+    window.clearInterval(localRestoreTimerId)
+    localRestoreTimerId = null
+  }
+}
+
+function openLocalRestoreConfirm(backupId) {
+  const id = String(backupId || '').trim()
+  if (!id) return
+  pendingLocalRestoreId.value = id
+  isLocalRestoreConfirmOpen.value = true
+  localRestoreCountdown.value = 3
+  clearLocalRestoreTimer()
+  localRestoreTimerId = window.setInterval(() => {
+    if (localRestoreCountdown.value <= 1) {
+      localRestoreCountdown.value = 0
+      clearLocalRestoreTimer()
+      return
+    }
+    localRestoreCountdown.value -= 1
+  }, 1000)
+}
+
+function closeLocalRestoreConfirm(options = {}) {
+  const force = Boolean(options.force)
+  if (localRecoveryBusy.value && !force) return
+  isLocalRestoreConfirmOpen.value = false
+  localRestoreCountdown.value = 0
+  pendingLocalRestoreId.value = ''
+  clearLocalRestoreTimer()
+}
+
+async function confirmLocalRestore() {
+  if (localRestoreCountdown.value > 0 || localRecoveryBusy.value) return
+  const backupId = String(pendingLocalRestoreId.value || '').trim()
+  if (!backupId) {
+    closeLocalRestoreConfirm({ force: true })
+    return
+  }
+
+  localRecoveryBusy.value = true
+  try {
+    const result = await withOperationProgress('importJson', async () => {
+      const loaded = await loadRecoveryBackupJsonText(backupId)
+      await runConfirmedWipeAfterRecoveryBackup({
+        createRecoveryBackup: createResetRecoveryBackup,
+        source: 'SettingsDataManagementPage.confirmLocalRestore',
+        i18nKey: 'settings_data.toast.recovery_backup_required',
+        wipeFn: () => resetDatabase({
+          confirmed: true,
+          reason: DATA_WIPE_REASON.USER_RESTORE_LOCAL_RECOVERY,
+          source: 'SettingsDataManagementPage.confirmLocalRestore',
+          note: backupId,
+        }),
+      })
+      const imported = await importBackupJsonAsNewLedgers(loaded.jsonText)
+      await ledgerStore.refresh()
+      if (imported.firstLedgerId) {
+        await ledgerStore.switchLedger(imported.firstLedgerId)
+      }
+      await refreshAllStores()
+      return imported
+    })
+    const importedCount = Number(result.importedLedgers?.length ?? 0)
+    const importedName = result.firstLedgerName || result.importedLedgers?.[0]?.ledgerName || ''
+    const importedLabel = importedCount > 1 ? `共 ${importedCount} 本` : importedName
+    uiStore.pushToast(
+      t('settings_data.local_recovery.toast_restored', { ledgerName: importedLabel }, '本機 recovery 還原完成：{ledgerName}'),
+    )
+    closeLocalRestoreConfirm({ force: true })
+    await refreshLocalRecoveryBackups({ quiet: true })
+  } catch (error) {
+    const recoveryMessage =
+      error?.code === RECOVERY_BACKUP_REQUIRED_CODE
+        ? t('settings_data.toast.recovery_backup_required', '本機 recovery 備份建立失敗，已中止清空本機資料。請先手動匯出後再重試。')
+        : ''
+    uiStore.pushToast(
+      recoveryMessage || error?.message || t('settings_data.local_recovery.toast_restore_failed', '本機 recovery 還原失敗'),
+      'error',
+    )
+  } finally {
+    localRecoveryBusy.value = false
+  }
 }
 
 function readFileAsText(file) {
@@ -585,6 +818,11 @@ function clearResetTimer() {
 }
 
 function onRequestCloseOverlay(event) {
+  if (isLocalRestoreConfirmOpen.value) {
+    closeLocalRestoreConfirm()
+    event.preventDefault()
+    return
+  }
   if (isRepairConfirmOpen.value) {
     closeRepairConfirm()
     event.preventDefault()
@@ -738,11 +976,13 @@ onMounted(() => {
   if (lastScan && String(lastScan.ledgerId ?? '') === String(ledgerStore.activeLedgerId ?? '')) {
     applyIntegrityScanResult(lastScan)
   }
+  void refreshLocalRecoveryBackups({ quiet: true })
 })
 
 onBeforeUnmount(() => {
   clearResetTimer()
   clearImportTimer()
+  clearLocalRestoreTimer()
   clearOperationProgressTimer()
   if (repairTimerId) {
     window.clearInterval(repairTimerId)
@@ -766,6 +1006,32 @@ onBeforeUnmount(() => {
 .recovery-list .link {
   color: var(--color-primary, #0a7);
   text-decoration: underline;
+}
+.local-recovery-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.local-recovery-item {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--color-border, rgba(127, 127, 127, 0.25));
+}
+.local-recovery-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.local-recovery-meta {
+  display: grid;
+  gap: 4px;
+}
+.local-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .compact {
   margin: 0;

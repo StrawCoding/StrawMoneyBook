@@ -253,14 +253,20 @@ test('smb297: Google/WebDAV restore orchestration never wipes when recovery back
   assert.equal(wipeCount, 1)
 })
 
-test('smb297: durable recovery backup rejects download-only and verifies persist', async () => {
+test('smb297: durable recovery backup rejects download-only, memory, and verifies persist', async () => {
   const {
     createVerifiedRecoveryBackupBeforeWipe,
     isVerifiedRecoveryBackupProof,
     persistVerifiedRecoveryBackup,
+    listVerifiedRecoveryBackups,
+    loadRecoveryBackupJsonText,
     setRecoveryBackupStorageForTests,
     resetRecoveryBackupStorageForTests,
   } = await import('../src/core/services/recovery-backup.service.js')
+  const {
+    requireRecoveryBackupBeforeWipe,
+    RECOVERY_BACKUP_REQUIRED_CODE,
+  } = await import('../src/core/services/data-wipe-guard.service.js')
 
   const store = new Map()
   setRecoveryBackupStorageForTests({
@@ -268,6 +274,8 @@ test('smb297: durable recovery backup rejects download-only and verifies persist
       store.set(record.backupId, record)
     },
     get: async (id) => store.get(id) || null,
+    list: async () => [...store.values()],
+    entries: () => store.entries(),
   })
   try {
     const proof = await createVerifiedRecoveryBackupBeforeWipe({
@@ -282,6 +290,16 @@ test('smb297: durable recovery backup rejects download-only and verifies persist
     assert.equal(isVerifiedRecoveryBackupProof(proof), true)
     assert.equal(proof.storage, 'test')
     assert.ok(store.has(proof.backupId))
+
+    const listed = await listVerifiedRecoveryBackups()
+    assert.equal(listed.length, 1)
+    assert.equal(listed[0].backupId, proof.backupId)
+    assert.equal(listed[0].hasPayload, true)
+    assert.equal('jsonText' in listed[0], false)
+
+    const loaded = await loadRecoveryBackupJsonText(proof.backupId)
+    assert.match(loaded.jsonText, /"l1"/)
+    assert.ok(Number(loaded.byteLength) > 0)
 
     await assert.rejects(
       async () => persistVerifiedRecoveryBackup({ purpose: 'x', data: null }),
@@ -303,11 +321,54 @@ test('smb297: durable recovery backup rejects download-only and verifies persist
         exportAllLedgersJson: async () => ({ ok: true }),
         downloadJsonFile: () => {},
       }),
-      /verify failed|persist failed|proof invalid/i,
+      /verify failed|persist failed|proof invalid|memory is not durable/i,
     )
   } finally {
     resetRecoveryBackupStorageForTests()
   }
+
+  // No IndexedDB / no test adapter: must fail closed (never unlock via in-process memory)
+  resetRecoveryBackupStorageForTests()
+  await assert.rejects(
+    async () => persistVerifiedRecoveryBackup({
+      purpose: 'wipe',
+      data: { ledgers: [{ id: 'x' }] },
+    }),
+    /durable persist failed|memory is not durable/i,
+  )
+
+  // Fake memory proof must never unlock wipe
+  assert.equal(
+    isVerifiedRecoveryBackupProof({
+      verified: true,
+      backupId: 'recovery_mem_1',
+      byteLength: 128,
+      storage: 'memory',
+    }),
+    false,
+  )
+  await assert.rejects(
+    async () => requireRecoveryBackupBeforeWipe(async () => ({
+      verified: true,
+      backupId: 'recovery_mem_1',
+      byteLength: 128,
+      storage: 'memory',
+    }), { source: 'smb297-memory' }),
+    (error) => (
+      error?.code === RECOVERY_BACKUP_REQUIRED_CODE
+      && error?.silentWipeBlocked === true
+    ),
+  )
+})
+
+test('smb297: data management exposes local recovery list/download/restore UX', () => {
+  assert.match(dataMgmtSource, /data-testid="local-recovery-backups-panel"/)
+  assert.match(dataMgmtSource, /listVerifiedRecoveryBackups/)
+  assert.match(dataMgmtSource, /loadRecoveryBackupJsonText/)
+  assert.match(dataMgmtSource, /DATA_WIPE_REASON\.USER_RESTORE_LOCAL_RECOVERY/)
+  assert.match(dataMgmtSource, /data-testid="local-recovery-restore-confirm"/)
+  assert.match(dataMgmtSource, /confirmLocalRestore/)
+  assert.match(dataMgmtSource, /downloadLocalRecoveryBackup/)
 })
 
 test('smb297: Google Drive sync blocks empty-remote hard replace over local txs', () => {

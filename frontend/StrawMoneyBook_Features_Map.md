@@ -567,11 +567,11 @@ UI composable 目錄：`src/ui/composables/`
 - 函數：`assertExplicitDataWipe`、`recordDataWipeAudit`、`assertExplicitLedgerRepair`、`recordLedgerIntegrityScan`、`recordLedgerRepairAudit`、`createLocalDatabaseIntegrityError`、`createEmptyRemoteReplaceBlockedError`、`countSnapshotActiveTransactions` 等
 - 變數（0）：無
 - 類別（0）：無
-- 補充（smb297）：完整 wipe 與破壞性 repair 皆需 `confirmed`＋合法 reason＋audit；wipe 前 `runConfirmedWipeAfterRecoveryBackup`／`requireRecoveryBackupBeforeWipe` 必須取得 **verified durable proof**（`recovery-backup.service` IndexedDB／可驗證 storage；download-only 不足），失敗→`RECOVERY_BACKUP_REQUIRED`；啟動僅 scan；Google Drive／共同帳本 sync replace `runIntegrityRepair:false`；JSON 匯入預設不自動 repair；禁止 silent rewrite。
+- 補充（smb297）：完整 wipe 與破壞性 repair 皆需 `confirmed`＋合法 reason＋audit；wipe 前 `runConfirmedWipeAfterRecoveryBackup`／`requireRecoveryBackupBeforeWipe` 必須取得 **verified durable proof**（僅 `indexeddb`／`filesystem`／`test`；**memory／download-only 不算**），失敗→`RECOVERY_BACKUP_REQUIRED`；資料管理頁可列出／下載／還原 IndexedDB recovery；啟動僅 scan；Google Drive／共同帳本 sync replace `runIntegrityRepair:false`；JSON 匯入預設不自動 repair；禁止 silent rewrite。
 
 ### `src/core/services/recovery-backup.service.js`
-- 函數：`createVerifiedRecoveryBackupBeforeWipe`、`persistVerifiedRecoveryBackup`、`isVerifiedRecoveryBackupProof`、`readVerifiedRecoveryBackup`
-- 補充（smb297）：wipe 前強制 durable recovery；裝置檔／瀏覽器下載僅 UX，不可單獨解鎖 `resetDatabase`。
+- 函數：`createVerifiedRecoveryBackupBeforeWipe`、`persistVerifiedRecoveryBackup`、`isVerifiedRecoveryBackupProof`、`listVerifiedRecoveryBackups`、`loadRecoveryBackupJsonText`、`loadRecoveryBackupPayload`、`readVerifiedRecoveryBackup`
+- 補充（smb297）：wipe 前強制 durable recovery；in-process memory 永不解鎖 wipe；裝置檔／瀏覽器下載僅 UX；IndexedDB 備份需可列出／下載／還原。
 
 ### `src/core/services/budget.service.js`
 - 函數（新增重點）：`resolveBudgetPeriodForLedger`, `previousBudgetPeriod`, `nextBudgetPeriod`, `loadBudgetSnapshotForPeriod`, `listInclusiveMonthKeys`, `saveBudgetContainerRange`, `saveBudgetItemRange`

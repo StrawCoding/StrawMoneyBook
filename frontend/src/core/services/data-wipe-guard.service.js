@@ -3,11 +3,14 @@
  * Any full DB wipe must pass an explicit, user-confirmed reason + audit trail.
  */
 
+import { isVerifiedRecoveryBackupProof as isDurableRecoveryProof } from './recovery-backup.service.js'
+
 export const DATA_WIPE_REASON = Object.freeze({
   USER_RESET_ALL: 'user_reset_all',
   USER_IMPORT_JSON: 'user_import_json',
   USER_RESTORE_GOOGLE_BACKUP: 'user_restore_google_backup',
   USER_RESTORE_WEBDAV_BACKUP: 'user_restore_webdav_backup',
+  USER_RESTORE_LOCAL_RECOVERY: 'user_restore_local_recovery',
 })
 
 export const LOCAL_DB_INTEGRITY_ERROR_CODE = 'LOCAL_DB_INTEGRITY'
@@ -140,20 +143,9 @@ export function createRecoveryBackupRequiredError(cause, options = {}) {
   return error
 }
 
-function isVerifiedRecoveryBackupProof(proof) {
-  return Boolean(
-    proof
-    && typeof proof === 'object'
-    && proof.verified === true
-    && Number(proof.byteLength) > 0
-    && String(proof.backupId || '').trim()
-    && String(proof.storage || '').trim(),
-  )
-}
-
 /**
  * Mandatory gate before resetDatabase / full wipe.
- * createBackup must return a verified durable proof — void / download-only does not count.
+ * createBackup must return a verified durable proof — void / download-only / memory do not count.
  */
 export async function requireRecoveryBackupBeforeWipe(createBackup, options = {}) {
   if (typeof createBackup !== 'function') {
@@ -166,9 +158,9 @@ export async function requireRecoveryBackupBeforeWipe(createBackup, options = {}
     if (cause?.code === RECOVERY_BACKUP_REQUIRED_CODE) throw cause
     throw createRecoveryBackupRequiredError(cause, options)
   }
-  if (!isVerifiedRecoveryBackupProof(proof)) {
+  if (!isDurableRecoveryProof(proof)) {
     throw createRecoveryBackupRequiredError(
-      new Error('recovery backup proof missing or unverified (download-only is not enough)'),
+      new Error('recovery backup proof missing or unverified (download-only / memory are not durable)'),
       options,
     )
   }
