@@ -19,6 +19,8 @@ export const LEDGER_CHILD_DELETE_ORDER = Object.freeze([
   'bank_accounts',
   'bank_connections',
   'transactions',
+  'security_transactions',
+  'securities',
   'savings_jars',
   'accounts',
   'account_groups',

@@ -7,6 +7,7 @@ export function calculateAssetSummary({
   receivableMinor = 0,
   payableMinor = 0,
   unreimbursedMinor = 0,
+  securitiesMarketValueMinor = 0,
 } = {}) {
   let disposableMinor = 0
   let liabilityMinor = 0
@@ -39,14 +40,18 @@ export function calculateAssetSummary({
     }
   }
 
+  const securitiesMinor = Math.max(0, Number(securitiesMarketValueMinor ?? 0))
+
   return {
     disposableMinor: Math.max(0, disposableMinor),
     liabilityMinor,
     advanceDeductedMinor,
+    securitiesMarketValueMinor: securitiesMinor,
     totalAssetMinor: Math.max(0, disposableMinor)
       + Number(receivableMinor ?? 0)
       - Number(payableMinor ?? 0)
-      + Number(unreimbursedMinor ?? 0),
+      + Number(unreimbursedMinor ?? 0)
+      + securitiesMinor,
     balanceMap,
     advanceMap,
   }

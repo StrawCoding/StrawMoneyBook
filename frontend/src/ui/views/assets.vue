@@ -40,6 +40,13 @@
           <small class="muted">{{ t('assets_page.liability') }}</small>
           <MoneyText :value-minor="liabilityMinor" />
         </div>
+        <button class="summary-item summary-link" @click="goSecurities">
+          <div class="row summary-head">
+            <small class="muted">{{ t('assets_page.securities') }}</small>
+            <small class="muted summary-hint">{{ t('assets_page.view') }}</small>
+          </div>
+          <MoneyText :value-minor="securitiesMarketValueMinor" />
+        </button>
         <button class="summary-item summary-link" @click="goLoans('lend')">
           <div class="row summary-head">
             <small class="muted">{{ t('assets_page.lend') }}</small>
@@ -120,7 +127,7 @@
           {{
             t(
               'assets_page.total_assets_formula',
-              '總資產 = 可支配 + 借出 - 借入 + 未報銷',
+              '總資產 = 可支配 + 借出 - 借入 + 未報銷 + 有價證券市值（計入者）',
             )
           }}
         </p>
@@ -147,7 +154,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
@@ -155,6 +162,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
+import { useSecurityStore } from '@/ui/stores/security.store'
 import LedgerSwitcher from '@/ui/components/common/LedgerSwitcher.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { calculateAssetSummary, isAssetAccountIncludedInTotals } from '@/core/utils/assets-summary'
@@ -165,6 +173,7 @@ const accountStore = useAccountStore()
 const ledgerStore = useLedgerStore()
 const loanStore = useLoanStore()
 const reimbursementStore = useReimbursementStore()
+const securityStore = useSecurityStore()
 const { t } = useI18n()
 const totalAssetsInfoOpen = ref(false)
 
@@ -173,10 +182,12 @@ const balanceMetrics = computed(() => calculateAssetSummary({
   receivableMinor: loanStore.summary.totalReceivable,
   payableMinor: loanStore.summary.totalPayable,
   unreimbursedMinor: reimbursementStore.pendingTotalMinor,
+  securitiesMarketValueMinor: securityStore.summary.includedMarketValueMinor,
 }))
 const disposableMinor = computed(() => balanceMetrics.value.disposableMinor)
 const liabilityMinor = computed(() => balanceMetrics.value.liabilityMinor)
 const totalAssetMinor = computed(() => balanceMetrics.value.totalAssetMinor)
+const securitiesMarketValueMinor = computed(() => Number(securityStore.summary.includedMarketValueMinor ?? 0))
 const activeCurrencyCode = computed(() => normalizeCurrencyCode(ledgerStore.activeLedger?.currency_code, 'TWD'))
 const deductedAdvanceLabel = computed(() => {
   const amountMinor = Number(balanceMetrics.value.advanceDeductedMinor ?? 0)
@@ -211,9 +222,14 @@ watch(
   () => {
     expandedInitialized.value = false
     expandedGroupIds.value = new Set()
+    void securityStore.load()
   },
   { immediate: true },
 )
+
+onMounted(() => {
+  void securityStore.load()
+})
 
 watch(
   groupSummaries,
@@ -282,6 +298,10 @@ function goLoans(tab) {
     name: 'loans',
     query: { tab },
   })
+}
+
+function goSecurities() {
+  router.push({ name: 'securities' })
 }
 
 function goReimbursements() {

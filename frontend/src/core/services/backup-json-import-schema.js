@@ -24,6 +24,8 @@ export const BACKUP_IMPORT_TABLE_ORDER = Object.freeze([
   'budget_containers',
   'budget_items',
   'savings_jars',
+  'securities',
+  'security_transactions',
   'bank_connections',
   'bank_accounts',
   'bank_transactions',
@@ -197,6 +199,24 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'auto_save_interval_unit', 'auto_save_start_date', 'auto_save_charge_day', 'auto_save_paused',
     ),
     required: Object.freeze(['account_id', 'created_at', 'updated_at']),
+  },
+  securities: {
+    columns: cols(
+      'ledger_id', 'id', 'symbol', 'name', 'market', 'asset_class', 'currency_code',
+      'include_in_assets', 'manual_price_minor', 'manual_price_at', 'price_source',
+      'sort_order', 'is_archived', 'created_at', 'updated_at', 'deleted_at',
+    ),
+    required: Object.freeze(['id', 'symbol', 'name', 'created_at', 'updated_at']),
+  },
+  security_transactions: {
+    columns: cols(
+      'ledger_id', 'id', 'security_id', 'type', 'occurred_at', 'quantity', 'price_minor',
+      'fee_minor', 'cash_account_id', 'note', 'created_at', 'updated_at', 'deleted_at',
+    ),
+    required: Object.freeze([
+      'id', 'security_id', 'type', 'occurred_at', 'quantity', 'price_minor',
+      'created_at', 'updated_at',
+    ]),
   },
   bank_connections: {
     columns: cols(

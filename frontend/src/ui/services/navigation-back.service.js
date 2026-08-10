@@ -16,6 +16,7 @@ const FALLBACK_RULES = [
   { prefix: '/settings/', fallback: '/settings' },
   { prefix: '/analysis/', fallback: '/analysis' },
   { prefix: '/budget/', fallback: '/budget' },
+  { prefix: '/assets/securities/', fallback: '/assets/securities' },
   { prefix: '/assets/', fallback: '/assets' },
   { prefix: '/loans', fallback: '/features' },
   { prefix: '/reimbursements', fallback: '/features' },

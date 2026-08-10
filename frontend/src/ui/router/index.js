@@ -436,6 +436,19 @@ const router = createRouter({
       meta: { tab: 'assets' },
     },
     {
+      name: 'securities',
+      path: '/assets/securities',
+      component: () => import('@/ui/views/securities/SecuritiesListPage.vue'),
+      meta: { tab: 'assets' },
+    },
+    {
+      name: 'security-detail',
+      path: '/assets/securities/:id',
+      component: () => import('@/ui/views/securities/SecurityDetailPage.vue'),
+      props: true,
+      meta: { tab: 'assets' },
+    },
+    {
       name: 'asset-account-group-detail',
       path: '/assets/account-groups/:id',
       component: () => import('@/ui/views/accounts/AssetAccountGroupDetailPage.vue'),

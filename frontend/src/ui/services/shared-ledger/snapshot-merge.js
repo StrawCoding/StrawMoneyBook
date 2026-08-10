@@ -18,6 +18,8 @@ const SNAPSHOT_TABLE_ORDER = [
   'budget_containers',
   'budget_items',
   'savings_jars',
+  'securities',
+  'security_transactions',
   'bank_connections',
   'bank_accounts',
   'bank_transactions',

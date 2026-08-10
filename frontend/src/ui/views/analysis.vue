@@ -152,6 +152,40 @@
       </div>
     </article>
 
+    <article class="card panel" data-testid="analysis-securities-section">
+      <header class="row">
+        <h3>{{ t('analysis_page.securities_title') }}</h3>
+        <div class="header-metrics">
+          <span class="count-chip">{{ t('analysis_page.items_count', { count: securityStore.summary.count }) }}</span>
+          <MoneyText :value-minor="securityStore.summary.totalMarketValueMinor" />
+        </div>
+      </header>
+      <div class="securities-summary-grid">
+        <div>
+          <small class="muted">{{ t('securities_page.market_value') }}</small>
+          <MoneyText :value-minor="securityStore.summary.totalMarketValueMinor" />
+        </div>
+        <div>
+          <small class="muted">{{ t('securities_page.invested') }}</small>
+          <MoneyText :value-minor="securityStore.summary.totalInvestedMinor" />
+        </div>
+        <div>
+          <small class="muted">{{ t('securities_page.delta') }}</small>
+          <MoneyText :value-minor="securityStore.summary.totalDeltaMinor" />
+        </div>
+      </div>
+      <ul v-if="securityAllocationRows.length" class="securities-alloc-list">
+        <li v-for="row in securityAllocationRows" :key="row.id" class="securities-alloc-row">
+          <span>{{ row.label }}</span>
+          <span class="row">
+            <small class="muted">{{ row.percent }}%</small>
+            <MoneyText :value-minor="row.amountMinor" />
+          </span>
+        </li>
+      </ul>
+      <p v-else class="muted no-data-tip">{{ t('analysis_page.securities_empty') }}</p>
+    </article>
+
     <article class="card panel" data-testid="analysis-account-section">
       <header class="row">
         <h3>{{ t('analysis_page.scope.account') }}</h3>
@@ -266,6 +300,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { useSecurityStore } from '@/ui/stores/security.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { listTransactionsForAnalysis } from '@/core/services/transaction-query.service'
 import {
@@ -297,6 +332,7 @@ import {
 
 const accountStore = useAccountStore()
 const budgetStore = useBudgetStore()
+const securityStore = useSecurityStore()
 const categoryStore = useCategoryStore()
 const ledgerStore = useLedgerStore()
 const uiStore = useUiStore()
@@ -467,6 +503,23 @@ const budgetCards = computed(() => buildBudgetAchievementCards({
   categoryIconMap: categoryIconMap.value,
 }))
 
+const securityAllocationRows = computed(() => {
+  const total = Math.max(0, Number(securityStore.summary.totalMarketValueMinor ?? 0))
+  return (securityStore.items ?? [])
+    .map((item) => {
+      const amountMinor = Math.max(0, Number(item?.position?.marketValueMinor ?? 0))
+      const percent = total > 0 ? Math.round((amountMinor / total) * 1000) / 10 : 0
+      return {
+        id: item.id,
+        label: `${item.symbol} ${item.name}`,
+        amountMinor,
+        percent,
+      }
+    })
+    .filter((row) => row.amountMinor > 0)
+    .sort((a, b) => b.amountMinor - a.amountMinor)
+})
+
 const timeBarRows = computed(() => buildTimeBarRows({
   transactions: statsTransactions.value,
   type: analysisType.value,
@@ -580,7 +633,10 @@ async function loadStatsTransactions() {
           : '',
     })
     const budgetMonthKey = mode.value === 'month' ? selectedMonth.value : monthKeyFromDate(new Date())
-    await budgetStore.loadMonth(budgetMonthKey)
+    await Promise.all([
+      budgetStore.loadMonth(budgetMonthKey),
+      securityStore.load(),
+    ])
   } catch (error) {
     uiStore.pushToast(error.message ?? t('analysis_page.toast.load_failed'), 'error')
   }
@@ -835,6 +891,41 @@ h2, h3 {
 
 .budget-card.over .budget-fill {
   background: #fa5252;
+}
+
+.securities-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.securities-summary-grid > div {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--input-bg);
+  display: grid;
+  gap: 4px;
+}
+
+.securities-alloc-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.securities-alloc-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--input-bg);
 }
 
 .icon-swatch {
