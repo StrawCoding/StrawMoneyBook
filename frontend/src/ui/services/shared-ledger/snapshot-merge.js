@@ -308,7 +308,12 @@ function ensurePreserveCategories(nextTables, report, categoryIds) {
   )
 }
 
-function pruneSharedLedgerSnapshotForeignKeys(tables) {
+/**
+ * smb297: Preserve child rows by synthesizing missing parents.
+ * Must not filter-drop attachments / loan payments / reimbursement /
+ * budget / savings / bank children (droppedChildRows stays 0).
+ */
+function preserveSharedLedgerSnapshotForeignKeys(tables) {
   const nextTables = { ...tables }
   const report = {
     synthesizedAccountGroups: 0,
@@ -1163,16 +1168,16 @@ function canonicalizeSnapshot(snapshot) {
   }
 
   const resurrectedTables = resurrectReferencedParentsFromTombstones(tables, tombstoneMap)
-  const prunedTables = pruneSharedLedgerSnapshotForeignKeys(resurrectedTables)
-  const fkPreserveReport = prunedTables.__fk_preserve_report || null
-  delete prunedTables.__fk_preserve_report
-  prunedTables.deleted_log = sortDeletedLogRows(Array.from(tombstoneMap.values()))
+  const preservedTables = preserveSharedLedgerSnapshotForeignKeys(resurrectedTables)
+  const fkPreserveReport = preservedTables.__fk_preserve_report || null
+  delete preservedTables.__fk_preserve_report
+  preservedTables.deleted_log = sortDeletedLogRows(Array.from(tombstoneMap.values()))
 
   const result = {
     schema_version: normalizedSnapshot.schema_version ?? null,
     ledger_id: normalizeText(normalizedSnapshot.ledger_id),
     exported_at: toIso(normalizedSnapshot.exported_at),
-    tables: prunedTables,
+    tables: preservedTables,
   }
   if (fkPreserveReport) {
     result.fk_preserve_report = fkPreserveReport

@@ -152,7 +152,7 @@ test('smb297: repair path never DELETE FROM transactions as FK shortcut', () => 
   assert.match(repairSource, /assertExplicitLedgerRepair/)
 })
 
-test('smb297: startup integrity is scan-only; prune preserves bookkeeping rows', () => {
+test('smb297: startup integrity is scan-only; FK preserve keeps bookkeeping rows', () => {
   const runtimeSource = readFileSync(
     resolve(import.meta.dirname, '../src/ui/services/ledger-runtime.service.js'),
     'utf8',
@@ -164,7 +164,7 @@ test('smb297: startup integrity is scan-only; prune preserves bookkeeping rows',
   assert.doesNotMatch(runtimeSource, /repairLedgerData\(/)
   assert.match(runtimeSource, /scanLedgerIntegrity/)
   assert.match(runtimeSource, /recordLedgerIntegrityScan/)
-  assert.match(mergeSource, /synthesizing missing parents|資料保全/i)
+  assert.match(mergeSource, /synthesizing missing parents|資料保全|preserveSharedLedgerSnapshotForeignKeys/i)
   assert.match(mergeSource, /assertSnapshotBookkeepingPreserved/)
   assert.match(mergeSource, /fk_preserve_report/)
 })
@@ -257,6 +257,44 @@ test('smb297: sync / shared replace never auto-run integrity repair', () => {
   // repair is opt-in only (=== true), not default-on
   assert.match(importSource, /runIntegrityRepair === true/)
   assert.doesNotMatch(importSource, /runIntegrityRepair !== false/)
+})
+
+test('smb297: FK preserve path must not filter-drop related child tables', () => {
+  const mergeSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/services/shared-ledger/snapshot-merge.js'),
+    'utf8',
+  )
+  assert.match(mergeSource, /function preserveSharedLedgerSnapshotForeignKeys/)
+  assert.doesNotMatch(mergeSource, /function pruneSharedLedgerSnapshotForeignKeys/)
+  // Historical silent wipe pattern: filter child rows then increment droppedChildRows.
+  assert.doesNotMatch(
+    mergeSource,
+    /droppedChildRows\s*\+=/,
+  )
+  assert.doesNotMatch(
+    mergeSource,
+    /transaction_attachments[\s\S]{0,220}\.filter\(\(row\)\s*=>\s*transactionIds\.has/,
+  )
+  assert.doesNotMatch(
+    mergeSource,
+    /loan_payments[\s\S]{0,280}\.filter\(\(row\)\s*=>\s*loanIds\.has/,
+  )
+  assert.match(mergeSource, /droppedChildRows\s*=\s*0/)
+})
+
+test('smb297: import default path leaves integrityCheck null (no silent repair)', async () => {
+  // Source contract: repairLedgerData is only reached under runIntegrityRepair === true.
+  const importSource = readFileSync(
+    resolve(import.meta.dirname, '../src/core/services/import.service.js'),
+    'utf8',
+  )
+  const repairBlock = importSource.match(
+    /if \(options\.runIntegrityRepair === true\) \{[\s\S]*?integrityCheck = \{[\s\S]*?\n\s*\}/,
+  )
+  assert.ok(repairBlock, 'expected opt-in integrity repair block')
+  assert.match(repairBlock[0], /repairLedgerData\(/)
+  // Outside the opt-in block, integrityCheck stays null (initialized before the if).
+  assert.match(importSource, /let integrityCheck = null\s*\n\s*if \(options\.runIntegrityRepair === true\)/)
 })
 
 test('smb297: normalize preserves FK associations and related child row counts', async () => {

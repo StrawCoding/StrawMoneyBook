@@ -264,7 +264,7 @@ function sanitizeSnapshotForGoogleDriveSync(snapshot) {
   const appSettings = Array.isArray(normalized?.tables?.app_settings) ? normalized.tables.app_settings : []
   normalized.tables.app_settings = appSettings.filter((row) => !isLocalOnlyAppSettingKey(row?.key))
   normalized.exported_at = new Date().toISOString()
-  // Same FK prune / optional-null path as shared-ledger (SMB-187 / smb296) before import.
+  // Same FK preserve path as shared-ledger (smb296／smb297): synthesize parents, keep children.
   return normalizeSharedLedgerSnapshot(normalized)
 }
 
