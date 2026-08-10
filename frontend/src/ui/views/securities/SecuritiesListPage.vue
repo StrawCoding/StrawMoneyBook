@@ -1,7 +1,7 @@
 <template>
-  <section class="stack securities-page">
+  <section class="stack securities-page" data-testid="securities-page">
     <header class="row page-head">
-      <h2 class="page-title">
+      <h2 class="page-title" data-testid="securities-page-title">
         <font-awesome-icon icon="fa-solid fa-chart-line" class="title-icon" />
         {{ t('securities_page.title') }}
       </h2>
@@ -11,7 +11,12 @@
     <article class="card panel">
       <header class="row panel-head">
         <h3>{{ t('securities_page.summary_title') }}</h3>
-        <button type="button" class="btn primary" @click="openCreate">{{ t('securities_page.add') }}</button>
+        <button
+          type="button"
+          class="btn primary"
+          data-testid="securities-add"
+          @click="openCreate"
+        >{{ t('securities_page.add') }}</button>
       </header>
       <div class="summary-grid">
         <div class="summary-item">

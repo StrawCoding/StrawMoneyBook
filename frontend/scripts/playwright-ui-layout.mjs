@@ -660,24 +660,82 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
   }`)
   assert.equal(securitiesSurface.analysisHasSecurities, true, JSON.stringify(securitiesSurface, null, 2))
 
-  await runPlaywrightCli(['goto', `${baseUrl}/assets/securities`])
-  await delay(700)
-  const securitiesPage = await evalPage(`() => ({
-    path: window.location.pathname,
-    title: document.querySelector('.securities-page .page-title')?.textContent?.trim() || '',
-    hasAdd: Boolean(document.querySelector('.securities-page .btn.primary')),
-    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
-    boot: Boolean(document.querySelector('.boot-layer')),
-  })`)
-  assert.equal(securitiesPage.path, '/assets/securities', JSON.stringify(securitiesPage, null, 2))
-  assert.equal(securitiesPage.hasBottomNav, true, JSON.stringify(securitiesPage, null, 2))
-  assert.equal(securitiesPage.boot, false, JSON.stringify(securitiesPage, null, 2))
-  assert.ok(securitiesPage.title.length > 0, JSON.stringify(securitiesPage, null, 2))
-  assert.equal(securitiesPage.hasAdd, true, JSON.stringify(securitiesPage, null, 2))
+  // Prefer SPA navigation (assets → securities) to avoid cold-boot flake after full reload.
+  // Fall back to gotoOrReopen + waitForAppShell if assets entry is missing.
+  const spaNav = await evalPage(`async () => {
+    const assetsTab = document.querySelector('[data-testid=bottom-nav-assets], a[href="/assets"]')
+    if (!assetsTab) return { ok: false, reason: 'assets_nav_missing' }
+    assetsTab.click()
+    const deadline = performance.now() + 8000
+    while (performance.now() < deadline) {
+      if (window.location.pathname.includes('/assets')
+        && document.querySelector('[data-testid=bottom-nav]')
+        && !document.querySelector('.boot-layer')) {
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 40))
+    }
+    const entry = document.querySelector('[data-testid=assets-securities-entry]')
+    if (!entry) {
+      return {
+        ok: false,
+        reason: 'securities_entry_missing',
+        path: window.location.pathname,
+      }
+    }
+    entry.click()
+    const navDeadline = performance.now() + 8000
+    while (performance.now() < navDeadline) {
+      if (window.location.pathname === '/assets/securities'
+        && document.querySelector('[data-testid=securities-page]')) {
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 40))
+    }
+    return {
+      ok: window.location.pathname === '/assets/securities'
+        && Boolean(document.querySelector('[data-testid=securities-page]')),
+      path: window.location.pathname,
+      hasPage: Boolean(document.querySelector('[data-testid=securities-page]')),
+    }
+  }`)
+
+  if (!spaNav.ok) {
+    await gotoOrReopen(`${baseUrl}/assets/securities`)
+    await waitForAppShell()
+  }
+
+  let securitiesPage = null
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    securitiesPage = await evalPage(`() => ({
+      path: window.location.pathname,
+      title: document.querySelector('[data-testid=securities-page-title], .securities-page .page-title')?.textContent?.trim() || '',
+      hasAdd: Boolean(document.querySelector('[data-testid=securities-add], .securities-page .btn.primary')),
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+      boot: Boolean(document.querySelector('.boot-layer')),
+      hasPage: Boolean(document.querySelector('[data-testid=securities-page], .securities-page')),
+    })`)
+    if (
+      securitiesPage.path === '/assets/securities'
+      && securitiesPage.hasBottomNav
+      && !securitiesPage.boot
+      && securitiesPage.hasPage
+      && securitiesPage.title.length > 0
+      && securitiesPage.hasAdd
+    ) {
+      break
+    }
+    await delay(250)
+  }
+  assert.equal(securitiesPage.path, '/assets/securities', JSON.stringify({ spaNav, securitiesPage }, null, 2))
+  assert.equal(securitiesPage.hasBottomNav, true, JSON.stringify({ spaNav, securitiesPage }, null, 2))
+  assert.equal(securitiesPage.boot, false, JSON.stringify({ spaNav, securitiesPage }, null, 2))
+  assert.ok(securitiesPage.title.length > 0, JSON.stringify({ spaNav, securitiesPage }, null, 2))
+  assert.equal(securitiesPage.hasAdd, true, JSON.stringify({ spaNav, securitiesPage }, null, 2))
   console.log('[securities] list page ok:', securitiesPage.title)
 
-  await runPlaywrightCli(['goto', `${baseUrl}/`])
-  await delay(500)
+  await gotoOrReopen(`${baseUrl}/`)
+  await waitForAppShell()
   await assertHomeBlocks()
 }
 

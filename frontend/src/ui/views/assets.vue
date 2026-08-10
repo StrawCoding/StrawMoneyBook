@@ -40,7 +40,12 @@
           <small class="muted">{{ t('assets_page.liability') }}</small>
           <MoneyText :value-minor="liabilityMinor" />
         </div>
-        <button class="summary-item summary-link" @click="goSecurities">
+        <button
+          class="summary-item summary-link"
+          type="button"
+          data-testid="assets-securities-entry"
+          @click="goSecurities"
+        >
           <div class="row summary-head">
             <small class="muted">{{ t('assets_page.securities') }}</small>
             <small class="muted summary-hint">{{ t('assets_page.view') }}</small>
