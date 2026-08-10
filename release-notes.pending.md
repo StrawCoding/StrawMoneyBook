@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- (smb299) 文件對齊 tick14／v1.3.102：Features Map／Detailed 明確記載 wipe 後 import 失敗「先再 wipe 清殘留再 recovery」與 **sql.js 實庫**最終列＝wipe 前快照（非原本地＋殘缺雲端），與已發佈閘門／回歸一致。
-
 ---
+
+## v1.3.103
+- (smb299) 文件對齊 tick14／v1.3.102：Features Map／Detailed 明確記載 wipe 後 import 失敗「先再 wipe 清殘留再 recovery」與 **sql.js 實庫**最終列＝wipe 前快照（非原本地＋殘缺雲端），與已發佈閘門／回歸一致。
 
 ## v1.3.102
 - (smb299) OpenCode tick14 治本：匯入閘門補 SQLite CHECK enum（例 `transactions.type=not_a_valid_type` 在 wipe 前拒絕）；因 `withTransaction` 跨步驟非原子，wipe 後 import 失敗會**先再 wipe 清除部分匯入殘留**，再以 durable recovery 回灌，最終 DB＝wipe 前原狀（禁止「原本地＋殘缺雲端」）；Node 回歸含狀態機呼叫序 `wipe→import→wipe→rollback`，並以 **sql.js 實庫**驗證失敗回滾後 ledger／交易列等於 wipe 前快照（不含殘缺雲端列）；Playwright 覆蓋 CHECK 無效檔不開確認。
