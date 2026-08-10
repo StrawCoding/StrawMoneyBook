@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- (smb299) 修復 `playwright:ui-layout` 證券頁冷啟動假失敗：有價證券列表改以資產頁 SPA 入口（`assets-securities-entry`）進入並等待 app shell／`data-testid=securities-page`；避免 `goto /assets/securities` 僅等 700ms 時底欄與標題尚未就緒的假陰性。smb299 Drive 列檔／選檔／revision 還原閘門不變。
-
 ---
+
+## v1.3.104
+- (smb299) 修復 `playwright:ui-layout` 證券頁冷啟動假失敗：有價證券列表改以資產頁 SPA 入口（`assets-securities-entry`）進入並等待 app shell／`data-testid=securities-page`；避免 `goto /assets/securities` 僅等 700ms 時底欄與標題尚未就緒的假陰性。smb299 Drive 列檔／選檔／revision 還原閘門不變。
 
 ## v1.3.103
 - (smb299) 文件對齊 tick14／v1.3.102：Features Map／Detailed 明確記載 wipe 後 import 失敗「先再 wipe 清殘留再 recovery」與 **sql.js 實庫**最終列＝wipe 前快照（非原本地＋殘缺雲端），與已發佈閘門／回歸一致。
