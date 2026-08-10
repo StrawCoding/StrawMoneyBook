@@ -183,6 +183,14 @@ function errorMessage(error, fallback) {
     return ''
   }
 
+  const i18nKey = String(error?.i18nKey ?? '').trim()
+  if (i18nKey === 'sqlite.error.foreign_key_constraint' || i18nKey === 'settings_google_sync.error.foreign_key_constraint') {
+    return t('settings_google_sync.error.foreign_key_constraint', '帳本同步失敗：資料關聯不一致。已阻擋寫入以避免損壞；請重試或先修復本機資料。')
+  }
+  if (error?.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' || Number(error?.numericCode) === 1811) {
+    return t('settings_google_sync.error.foreign_key_constraint', '帳本同步失敗：資料關聯不一致。已阻擋寫入以避免損壞；請重試或先修復本機資料。')
+  }
+
   const baseMessage = pick(
     error?.message,
     error?.error_description,

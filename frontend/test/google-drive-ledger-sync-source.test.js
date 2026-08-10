@@ -8,6 +8,11 @@ const source = readFileSync(
   'utf8',
 )
 
+test('Google Drive 帳本同步 sanitize 會做 FK prune（normalizeSharedLedgerSnapshot），避免匯入 1811', () => {
+  assert.match(source, /normalizeSharedLedgerSnapshot/)
+  assert.match(source, /return normalizeSharedLedgerSnapshot\(normalized\)/)
+})
+
 test('Google Drive 帳本同步拉回遠端快照前會驗證 ledger_id，避免錯帳本覆蓋本機資料', () => {
   assert.match(source, /function resolveSnapshotLedgerId\(snapshot\)/)
   assert.match(source, /const requestedLedgerId = String\(ledgerId \?\? ''\)\.trim\(\)/)

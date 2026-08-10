@@ -69,8 +69,11 @@ test('analysis light-theme source wiring covers print preview and pdf clone path
   assert.match(reportDocument, /analysis-report-light-scope/)
   assert.match(reportDocument, /color-scheme:\s*light/)
   assert.match(printPage, /data-testid="analysis-export-controls"/)
-  assert.match(printPage, /data-testid="analysis-export-preview-chrome"/)
-  assert.match(printPage, /background:\s*var\(--card\)/)
+  // smb293/smb296: visible preview chrome removed; light PDF capture uses offscreen host.
+  assert.doesNotMatch(printPage, /data-testid="analysis-export-preview-chrome"/)
+  assert.match(printPage, /data-testid="analysis-export-capture-host"/)
+  assert.match(printPage, /data-export-color-scheme="light"/)
+  assert.match(printPage, /background:\s*var\(--bg-soft\)/)
   assert.doesNotMatch(printPage, /\.preview-panel\s*\{[^}]*color-scheme:\s*light/)
   assert.match(playwright, /forceDarkTheme/)
   assert.match(playwright, /assertPrintPreviewLightTheme/)

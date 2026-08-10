@@ -21,6 +21,7 @@ import {
 import { isLocalOnlyAppSettingKey } from '@/ui/services/local-only-app-settings'
 import {
   mergeSharedLedgerSnapshots,
+  normalizeSharedLedgerSnapshot,
   threeWayMergeSnapshots,
 } from '@/ui/services/shared-ledger/snapshot-merge.js'
 
@@ -258,7 +259,8 @@ function sanitizeSnapshotForGoogleDriveSync(snapshot) {
   const appSettings = Array.isArray(normalized?.tables?.app_settings) ? normalized.tables.app_settings : []
   normalized.tables.app_settings = appSettings.filter((row) => !isLocalOnlyAppSettingKey(row?.key))
   normalized.exported_at = new Date().toISOString()
-  return normalized
+  // Same FK prune / optional-null path as shared-ledger (SMB-187 / smb296) before import.
+  return normalizeSharedLedgerSnapshot(normalized)
 }
 
 function resolveSnapshotLedgerId(snapshot) {

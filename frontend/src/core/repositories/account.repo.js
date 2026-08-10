@@ -1,5 +1,6 @@
 import { query, run } from '../db/sqlite.js'
 import { createId, nowIso } from '../utils/id.js'
+import { isForeignKeyError } from '../utils/sqlite-fk.js'
 import { assertLedgerId, rowsOf, firstRow } from './base.repo.js'
 
 function normalizeAccountIcon(icon) {
@@ -329,10 +330,60 @@ export async function countAccountTransactions(ledgerId, accountId) {
   const result = await query(
     `SELECT COUNT(*) AS count
      FROM transactions
-     WHERE ledger_id = ? AND account_id = ? AND deleted_at IS NULL;`,
-    [ledgerId, accountId],
+     WHERE ledger_id = ?
+       AND (account_id = ? OR peer_account_id = ?)
+       AND deleted_at IS NULL;`,
+    [ledgerId, accountId, accountId],
   )
   return Number(firstRow(result)?.count ?? 0)
+}
+
+/**
+ * Count every row that would block DELETE FROM accounts under PRAGMA foreign_keys.
+ * Includes soft-deleted transactions — RESTRICT still applies to those rows.
+ */
+export async function countAccountForeignKeyRefs(ledgerId, accountId) {
+  const counts = await Promise.all([
+    query(
+      `SELECT COUNT(*) AS count
+       FROM transactions
+       WHERE ledger_id = ?
+         AND (account_id = ? OR peer_account_id = ?);`,
+      [ledgerId, accountId, accountId],
+    ),
+    query(
+      `SELECT COUNT(*) AS count
+       FROM loan_payments
+       WHERE ledger_id = ? AND account_id = ?;`,
+      [ledgerId, accountId],
+    ),
+    query(
+      `SELECT COUNT(*) AS count
+       FROM reimbursement_advances
+       WHERE ledger_id = ? AND account_id = ?;`,
+      [ledgerId, accountId],
+    ),
+    query(
+      `SELECT COUNT(*) AS count
+       FROM reimbursement_items
+       WHERE ledger_id = ? AND account_id = ?;`,
+      [ledgerId, accountId],
+    ),
+    query(
+      `SELECT COUNT(*) AS count
+       FROM bank_accounts
+       WHERE ledger_id = ? AND mapped_account_id = ?;`,
+      [ledgerId, accountId],
+    ),
+    query(
+      `SELECT COUNT(*) AS count
+       FROM savings_jars
+       WHERE ledger_id = ? AND account_id = ?;`,
+      [ledgerId, accountId],
+    ),
+  ])
+
+  return counts.reduce((total, result) => total + Number(firstRow(result)?.count ?? 0), 0)
 }
 
 export async function archiveAccount(ledgerId, accountId) {
@@ -342,6 +393,19 @@ export async function archiveAccount(ledgerId, accountId) {
     ledgerId,
     accountId,
   ])
+}
+
+export async function softDeleteAccount(ledgerId, accountId) {
+  assertLedgerId(ledgerId)
+  const now = nowIso()
+  await run(
+    `UPDATE accounts
+     SET is_archived = 1,
+         deleted_at = ?,
+         updated_at = ?
+     WHERE ledger_id = ? AND id = ?;`,
+    [now, now, ledgerId, accountId],
+  )
 }
 
 export async function restoreAccount(ledgerId, accountId) {
@@ -358,14 +422,27 @@ export async function restoreAccount(ledgerId, accountId) {
 }
 
 export async function deleteAccountIfUnused(ledgerId, accountId) {
-  const count = await countAccountTransactions(ledgerId, accountId)
-  if (count > 0) {
+  const activeCount = await countAccountTransactions(ledgerId, accountId)
+  if (activeCount > 0) {
     await archiveAccount(ledgerId, accountId)
     return { archived: true, deleted: false }
   }
 
-  await run('DELETE FROM accounts WHERE ledger_id = ? AND id = ?;', [ledgerId, accountId])
-  return { archived: false, deleted: true }
+  const blockingRefs = await countAccountForeignKeyRefs(ledgerId, accountId)
+  if (blockingRefs > 0) {
+    // Soft-deleted txs / loans / bank maps still RESTRICT hard delete — archive+soft-delete instead of 1811.
+    await softDeleteAccount(ledgerId, accountId)
+    return { archived: true, deleted: false, blockedByForeignKeys: blockingRefs }
+  }
+
+  try {
+    await run('DELETE FROM accounts WHERE ledger_id = ? AND id = ?;', [ledgerId, accountId])
+    return { archived: false, deleted: true }
+  } catch (error) {
+    if (!isForeignKeyError(error)) throw error
+    await softDeleteAccount(ledgerId, accountId)
+    return { archived: true, deleted: false, blockedByForeignKeys: true }
+  }
 }
 
 export async function getAccountBalances(ledgerId, options = {}) {

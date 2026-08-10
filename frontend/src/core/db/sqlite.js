@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite'
 import { runMigrations } from '@/core/db/migrate'
 import { ensureWebSqliteStoreReady } from '@/core/db/web-store'
+import { rethrowAsForeignKeyError } from '@/core/utils/sqlite-fk'
 
 const PRIMARY_DB_NAME = 'straw_money_book'
 const RECOVERY_DB_NAME = 'straw_money_book_recovery'
@@ -270,12 +271,16 @@ export async function getDatabase() {
 
 export async function run(sql, values = []) {
   const conn = await getDatabase()
-  const result = await conn.run(sql, values)
-  if (isDataMutationSql(sql)) {
-    await persistWebStoreAfterMutation()
-    emitDataMutationEvent()
+  try {
+    const result = await conn.run(sql, values)
+    if (isDataMutationSql(sql)) {
+      await persistWebStoreAfterMutation()
+      emitDataMutationEvent()
+    }
+    return result
+  } catch (error) {
+    rethrowAsForeignKeyError(error)
   }
-  return result
 }
 
 export async function query(sql, values = []) {
@@ -285,7 +290,11 @@ export async function query(sql, values = []) {
 
 export async function execute(sql) {
   const conn = await getDatabase()
-  return conn.execute(sql)
+  try {
+    return await conn.execute(sql)
+  } catch (error) {
+    rethrowAsForeignKeyError(error)
+  }
 }
 
 export async function withTransaction(handler) {

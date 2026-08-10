@@ -3,6 +3,7 @@ import { getSetting, removeSetting, setSetting } from '@/core/repositories/setti
 import { exportLedgerJson } from '@/core/services/export.service'
 import { importLedgerJsonAsNewLedger } from '@/core/services/import.service'
 import { nowIso } from '@/core/utils/id'
+import { formatSyncForeignKeyError, rethrowAsForeignKeyError } from '@/core/utils/sqlite-fk'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { isLocalOnlyAppSettingKey } from '@/ui/services/local-only-app-settings'
 import {
@@ -429,7 +430,7 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
         console.error('[shared-ledger] failed to restore local ledger after snapshot import failure', restoreError)
       }
     }
-    throw error
+    rethrowAsForeignKeyError(error)
   }
 
   const now = nowIso()
@@ -869,7 +870,7 @@ async function syncSingleDirtyLedger(ledgerId, options = {}) {
   } catch (error) {
     await setSharedLedgerMeta(normalizedLedgerId, meta, {
       last_sync_status: 'error',
-      last_sync_error: String(error?.message ?? error ?? '同步失敗').slice(0, 240),
+      last_sync_error: formatSyncForeignKeyError(error),
     }).catch(() => null)
     throw error
   } finally {
@@ -953,7 +954,7 @@ async function syncActiveLedgerLatest(pinia) {
   } catch (error) {
     await setSharedLedgerMeta(activeLedgerId, meta, {
       last_sync_status: 'error',
-      last_sync_error: String(error?.message ?? error ?? '同步失敗').slice(0, 240),
+      last_sync_error: formatSyncForeignKeyError(error),
     }).catch(() => null)
     console.warn('[shared-ledger] remote poll failed', activeLedgerId, error)
   } finally {

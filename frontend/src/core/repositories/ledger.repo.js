@@ -1,5 +1,6 @@
 import { query, run } from '../db/sqlite.js'
 import { createId, nowIso } from '../utils/id.js'
+import { isForeignKeyError } from '../utils/sqlite-fk.js'
 import { firstRow, rowsOf } from './base.repo.js'
 
 const LEGACY_LEDGER_CHILD_DELETE_ORDER = [
@@ -14,6 +15,10 @@ const LEGACY_LEDGER_CHILD_DELETE_ORDER = [
   'budget_containers',
   'budgets',
   'loans',
+  'bank_transactions',
+  'bank_sync_rules',
+  'bank_accounts',
+  'bank_connections',
   'transactions',
   'savings_jars',
   'accounts',
@@ -24,11 +29,6 @@ const LEGACY_LEDGER_CHILD_DELETE_ORDER = [
   'app_settings',
   'deleted_log',
 ]
-
-function isForeignKeyError(error) {
-  const message = String(error?.message ?? error ?? '').toLowerCase()
-  return message.includes('foreign key')
-}
 
 export async function listLedgers() {
   const result = await query(

@@ -107,6 +107,34 @@
         {{ lastExportError }}
       </p>
     </article>
+
+    <div
+      class="analysis-export-capture-host"
+      aria-hidden="true"
+      data-testid="analysis-export-capture-host"
+      data-export-color-scheme="light"
+    >
+      <AnalysisReportDocument
+        ref="reportDocumentRef"
+        :title="t('analysis_print.export_pdf')"
+        :ledger-name="ledgerName"
+        :period-label="currentRangeLabel"
+        :exported-at-label="exportedAtLabel"
+        :currency-code="currencyCode"
+        :filter-label="filterLabel"
+        :income-items="incomeBarRows"
+        :expense-items="expenseBarRows"
+        :account-items="accountBarRows"
+        :budget-cards="budgetCards"
+        :detail-rows="detailRows"
+        :income-total-minor="incomeTotalMinor"
+        :expense-total-minor="expenseTotalMinor"
+        :income-count="incomeCount"
+        :expense-count="expenseCount"
+        :account-total-minor="accountTotalMinor"
+        :account-count="accountCount"
+      />
+    </div>
   </section>
 </template>
 
@@ -619,6 +647,15 @@ label {
   padding: 12px;
   background: var(--bg-soft);
   overflow: auto;
+}
+
+.analysis-export-capture-host {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 794px;
+  pointer-events: none;
+  opacity: 0;
 }
 
 @media (max-width: 720px) {

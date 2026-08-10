@@ -1232,7 +1232,14 @@ async function retryActiveLedgerSync() {
       uiStore.pushToast(t('settings_shared_ledgers.toast.sync_retry_ok', '同步已完成'))
     }
   } catch (error) {
-    uiStore.pushToast(error.message || t('settings_shared_ledgers.toast.sync_retry_failed', '同步失敗，請稍後再試'), 'error')
+    const fkMessage = error?.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' || Number(error?.numericCode) === 1811
+      || String(error?.i18nKey ?? '') === 'sqlite.error.foreign_key_constraint'
+      ? t('settings_shared_ledgers.error.foreign_key_constraint', '共同帳本同步失敗：資料關聯不一致。本機帳本已嘗試復原；請重試同步。')
+      : ''
+    uiStore.pushToast(
+      fkMessage || error.message || t('settings_shared_ledgers.toast.sync_retry_failed', '同步失敗，請稍後再試'),
+      'error',
+    )
     await refreshLocalBindings()
   } finally {
     syncRetryBusy.value = false

@@ -583,10 +583,8 @@ async function assertExportChromeDarkTheme() {
   const state = await evalPage(`() => {
     const page = document.querySelector('[data-testid=analysis-export-page]')
     const controls = document.querySelector('[data-testid=analysis-export-controls]')
-    const previewChrome = document.querySelector('[data-testid=analysis-export-preview-chrome]')
-    const frame = document.querySelector('[data-testid=analysis-export-report-frame]')
+    const captureHost = document.querySelector('[data-testid=analysis-export-capture-host]')
     const heading = controls?.querySelector('h2')
-    const chip = previewChrome?.querySelector('.count-chip')
     const pdfBtn = document.querySelector('[data-testid=analysis-export-pdf-btn]')
     const report = document.querySelector('[data-testid=analysis-report-document]')
     return {
@@ -597,10 +595,8 @@ async function assertExportChromeDarkTheme() {
       controlsBg: controls ? getComputedStyle(controls).backgroundColor : '',
       controlsColor: controls ? getComputedStyle(controls).color : '',
       headingColor: heading ? getComputedStyle(heading).color : '',
-      previewChromeBg: previewChrome ? getComputedStyle(previewChrome).backgroundColor : '',
-      previewChromeColor: previewChrome ? getComputedStyle(previewChrome).color : '',
-      frameBg: frame ? getComputedStyle(frame).backgroundColor : '',
-      chipColor: chip ? getComputedStyle(chip).color : '',
+      hasCaptureHost: Boolean(captureHost),
+      hasPreviewChrome: Boolean(document.querySelector('[data-testid=analysis-export-preview-chrome]')),
       btnBg: pdfBtn ? getComputedStyle(pdfBtn).backgroundColor : '',
       btnColor: pdfBtn ? getComputedStyle(pdfBtn).color : '',
       reportBg: report ? getComputedStyle(report).backgroundColor : '',
@@ -612,16 +608,16 @@ async function assertExportChromeDarkTheme() {
   assert.ok(state.path.startsWith('/analysis/print'), JSON.stringify(state))
   assert.equal(state.themeMode, 'dark', JSON.stringify(state))
   assert.equal(state.exportColorScheme, 'light', JSON.stringify(state))
+  assert.equal(state.hasCaptureHost, true, JSON.stringify(state))
+  assert.equal(state.hasPreviewChrome, false, JSON.stringify(state))
 
   const controlsBgLum = relativeLuminance(parseRgbChannels(state.controlsBg))
-  const previewBgLum = relativeLuminance(parseRgbChannels(state.previewChromeBg))
   const headingLum = relativeLuminance(parseRgbChannels(state.headingColor))
   const chromeTextLum = relativeLuminance(parseRgbChannels(state.controlsColor))
   const reportBgLum = relativeLuminance(parseRgbChannels(state.reportBg))
   const reportTextLum = relativeLuminance(parseRgbChannels(state.reportColor))
 
   assert.ok(controlsBgLum != null && controlsBgLum <= 0.45, `export chrome controls must be dark: ${JSON.stringify(state)} lum=${controlsBgLum}`)
-  assert.ok(previewBgLum != null && previewBgLum <= 0.45, `preview chrome must be dark: ${JSON.stringify(state)} lum=${previewBgLum}`)
   assert.ok(headingLum != null && headingLum >= 0.55, `chrome heading must be light-on-dark: ${JSON.stringify(state)} lum=${headingLum}`)
   assert.ok(chromeTextLum != null && chromeTextLum >= 0.55, `chrome text must be light-on-dark: ${JSON.stringify(state)} lum=${chromeTextLum}`)
   assert.ok(reportBgLum != null && reportBgLum >= 0.72, `report body must stay light: ${JSON.stringify(state)} lum=${reportBgLum}`)

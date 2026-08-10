@@ -1,6 +1,7 @@
 import { withTransaction, run } from '@/core/db/sqlite'
 import { createLedger, listLedgers } from '@/core/repositories/ledger.repo'
 import { createId } from '@/core/utils/id'
+import { rethrowAsForeignKeyError } from '@/core/utils/sqlite-fk'
 import { addTransaction } from '@/core/repositories/transaction.repo'
 import { assertCanCreateLedger } from '@/core/services/membership.service'
 import { repairLedgerData, scanLedgerIntegrity } from '@/core/services/repair.service'
@@ -11,6 +12,7 @@ import {
   listCategoryGroups,
   listCategories,
 } from '@/core/repositories/category.repo'
+import { normalizeSharedLedgerSnapshot } from '@/ui/services/shared-ledger/snapshot-merge'
 
 const TABLE_IMPORT_ORDER = [
   'account_groups',
@@ -165,70 +167,79 @@ export async function importLedgerJsonAsNewLedger(jsonText, options = {}) {
 }
 
 async function importLedgerPayloadAsNewLedger(payload, options = {}) {
-  const { sourceLedgerId, ledgerRow } = resolveSourceLedger(payload)
+  // Prune orphan / invalid FK refs before INSERT so SQLite never throws 1811 mid-import.
+  // Shared-ledger sync already canonicalize; backup / Google Drive / raw JSON paths need this too.
+  const sanitizedPayload = normalizeSharedLedgerSnapshot(payload)
+  const { sourceLedgerId, ledgerRow } = resolveSourceLedger(sanitizedPayload)
   const sourceLedgerName = normalizeLedgerName(ledgerRow.name, '匯入帳本')
   const importedLedgerName = resolveImportedLedgerName(sourceLedgerName, options)
 
   const existingLedgers = await listLedgers()
   assertCanCreateLedger(existingLedgers.length)
 
-  return withTransaction(async () => {
-    const importedLedger = await createLedger({
-      id: options.keepLedgerId ? sourceLedgerId : createId('ledger_import'),
-      name: importedLedgerName,
-      currencyCode: ledgerRow.currency_code ?? 'TWD',
-      timezone: ledgerRow.timezone ?? 'Asia/Taipei',
-      color: ledgerRow.color ?? null,
-      icon: ledgerRow.icon ?? null,
-    })
+  try {
+    return await withTransaction(async () => {
+      const importedLedger = await createLedger({
+        id: options.keepLedgerId ? sourceLedgerId : createId('ledger_import'),
+        name: importedLedgerName,
+        currencyCode: ledgerRow.currency_code ?? 'TWD',
+        timezone: ledgerRow.timezone ?? 'Asia/Taipei',
+        color: ledgerRow.color ?? null,
+        icon: ledgerRow.icon ?? null,
+      })
 
-    let insertedRows = 0
+      let insertedRows = 0
 
-    for (const tableName of TABLE_IMPORT_ORDER) {
-      const rows = normalizedRows(payload.tables, tableName)
-      for (const sourceRow of rows) {
-        const row = { ...sourceRow, ledger_id: importedLedger.id }
-        if (tableName === 'deleted_log') {
-          delete row.id
+      for (const tableName of TABLE_IMPORT_ORDER) {
+        const rows = normalizedRows(sanitizedPayload.tables, tableName)
+        for (const sourceRow of rows) {
+          const row = { ...sourceRow, ledger_id: importedLedger.id }
+          if (tableName === 'deleted_log') {
+            delete row.id
+          }
+
+          const { sql, values } = objectToInsertSql(tableName, row)
+          await run(sql, values)
+          insertedRows += 1
+        }
+      }
+
+      let integrityCheck = null
+      if (options.runIntegrityRepair !== false) {
+        const before = await scanLedgerIntegrity(importedLedger.id)
+        const beforeIssueCount = sumNumericValues(before)
+        let fixed = {}
+        let after = before
+
+        if (beforeIssueCount > 0) {
+          const repairResult = await repairLedgerData(importedLedger.id)
+          fixed = repairResult?.fixed ?? {}
+          after = repairResult?.after ?? before
         }
 
-        const { sql, values } = objectToInsertSql(tableName, row)
-        await run(sql, values)
-        insertedRows += 1
-      }
-    }
-
-    let integrityCheck = null
-    if (options.runIntegrityRepair !== false) {
-      const before = await scanLedgerIntegrity(importedLedger.id)
-      const beforeIssueCount = sumNumericValues(before)
-      let fixed = {}
-      let after = before
-
-      if (beforeIssueCount > 0) {
-        const repairResult = await repairLedgerData(importedLedger.id)
-        fixed = repairResult?.fixed ?? {}
-        after = repairResult?.after ?? before
+        integrityCheck = {
+          before,
+          after,
+          fixed,
+          beforeIssueCount,
+          afterIssueCount: sumNumericValues(after),
+          fixedCount: sumNumericValues(fixed),
+        }
       }
 
-      integrityCheck = {
-        before,
-        after,
-        fixed,
-        beforeIssueCount,
-        afterIssueCount: sumNumericValues(after),
-        fixedCount: sumNumericValues(fixed),
+      return {
+        ledgerId: importedLedger.id,
+        ledgerName: importedLedger.name,
+        insertedRows,
+        schemaVersion: sanitizedPayload.schema_version ?? null,
+        integrityCheck,
       }
-    }
-
-    return {
-      ledgerId: importedLedger.id,
-      ledgerName: importedLedger.name,
-      insertedRows,
-      schemaVersion: payload.schema_version ?? null,
-      integrityCheck,
-    }
-  })
+    })
+  } catch (error) {
+    rethrowAsForeignKeyError(error, {
+      i18nKey: 'sqlite.error.foreign_key_constraint',
+    })
+  }
 }
 
 export async function importBackupJsonAsNewLedgers(jsonText, options = {}) {

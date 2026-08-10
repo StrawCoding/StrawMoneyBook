@@ -1,5 +1,6 @@
 import { query, run } from '@/core/db/sqlite'
 import { createId, nowIso } from '@/core/utils/id'
+import { isForeignKeyError } from '@/core/utils/sqlite-fk'
 import { assertLedgerId, rowsOf, firstRow } from '@/core/repositories/base.repo'
 
 function normalizeCategoryIcon(input) {
@@ -133,12 +134,48 @@ export async function countCategoryTransactions(ledgerId, categoryId) {
   return Number(firstRow(result)?.count ?? 0)
 }
 
+export async function countCategoryForeignKeyRefs(ledgerId, categoryId) {
+  const counts = await Promise.all([
+    query(
+      `SELECT COUNT(*) AS count
+       FROM transactions
+       WHERE ledger_id = ? AND category_id = ?;`,
+      [ledgerId, categoryId],
+    ),
+    query(
+      `SELECT COUNT(*) AS count
+       FROM budget_items
+       WHERE ledger_id = ? AND category_id = ?;`,
+      [ledgerId, categoryId],
+    ),
+    query(
+      `SELECT COUNT(*) AS count
+       FROM reimbursement_items
+       WHERE ledger_id = ? AND category_id = ?;`,
+      [ledgerId, categoryId],
+    ),
+  ])
+  return counts.reduce((total, result) => total + Number(firstRow(result)?.count ?? 0), 0)
+}
+
 export async function archiveCategory(ledgerId, categoryId) {
   await run('UPDATE categories SET is_archived = 1, updated_at = ? WHERE ledger_id = ? AND id = ?;', [
     nowIso(),
     ledgerId,
     categoryId,
   ])
+}
+
+export async function softDeleteCategory(ledgerId, categoryId) {
+  const now = nowIso()
+  await run(
+    `UPDATE categories
+     SET is_archived = 1,
+         deleted_at = ?,
+         updated_at = ?
+     WHERE ledger_id = ? AND id = ?;`,
+    [now, now, ledgerId, categoryId],
+  )
 }
 
 export async function archiveCategoryGroup(ledgerId, groupId) {
@@ -201,8 +238,20 @@ export async function deleteCategoryIfUnused(ledgerId, categoryId) {
     return { archived: true, deleted: false }
   }
 
-  await run('DELETE FROM categories WHERE ledger_id = ? AND id = ?;', [ledgerId, categoryId])
-  return { archived: false, deleted: true }
+  const blockingRefs = await countCategoryForeignKeyRefs(ledgerId, categoryId)
+  if (blockingRefs > 0) {
+    await softDeleteCategory(ledgerId, categoryId)
+    return { archived: true, deleted: false, blockedByForeignKeys: blockingRefs }
+  }
+
+  try {
+    await run('DELETE FROM categories WHERE ledger_id = ? AND id = ?;', [ledgerId, categoryId])
+    return { archived: false, deleted: true }
+  } catch (error) {
+    if (!isForeignKeyError(error)) throw error
+    await softDeleteCategory(ledgerId, categoryId)
+    return { archived: true, deleted: false, blockedByForeignKeys: true }
+  }
 }
 
 export async function deleteCategoryGroupIfUnused(ledgerId, groupId) {

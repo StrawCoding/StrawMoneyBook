@@ -4,6 +4,17 @@
       <header class="row">
         <h2>{{ t('analysis_page.title') }}</h2>
         <div class="header-actions">
+          <button
+            type="button"
+            class="btn primary"
+            data-testid="analysis-export-direct-btn"
+            :disabled="exportingPdf"
+            :aria-label="t('analysis_print.export_pdf')"
+            :title="t('analysis_print.export_pdf')"
+            @click="exportPdfDirect"
+          >
+            {{ exportingPdf ? t('analysis_print.exporting') : t('analysis_print.export_pdf') }}
+          </button>
           <RouterLink
             class="btn"
             data-testid="analysis-print-link"

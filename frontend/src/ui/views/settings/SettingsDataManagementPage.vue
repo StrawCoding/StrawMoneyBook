@@ -330,7 +330,11 @@ async function onImportJsonFile(event) {
     const importedLabel = importedCount > 1 ? `共 ${importedCount} 本` : importedName
     uiStore.pushToast(`${t('settings_data.toast.import_json_done', { ledgerName: importedLabel })}${importIntegrityHint(result.importedLedgers?.[0])}`)
   } catch (error) {
-    uiStore.pushToast(error.message ?? t('settings_data.toast.import_json_failed'), 'error')
+    const fkMessage = error?.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' || Number(error?.numericCode) === 1811
+      || String(error?.i18nKey ?? '') === 'sqlite.error.foreign_key_constraint'
+      ? t('settings_data.toast.foreign_key_constraint', '資料關聯不一致，操作已中止。請檢查匯入檔或先修復帳本資料。')
+      : ''
+    uiStore.pushToast(fkMessage || error.message || t('settings_data.toast.import_json_failed'), 'error')
   } finally {
     if (jsonInputRef.value) jsonInputRef.value.value = ''
   }
