@@ -649,6 +649,33 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
   assert.ok(analysisTiming.ms < 8000, `analysis enter too slow: ${JSON.stringify(analysisTiming)}`)
   console.log('[smb287] analysis enter timing ms:', analysisTiming.ms)
 
+  const securitiesSurface = await evalPage(`async () => {
+    const analysisSection = document.querySelector('[data-testid=analysis-securities-section]')
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    return {
+      analysisHasSecurities: Boolean(analysisSection),
+      analysisPath: window.location.pathname,
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+    }
+  }`)
+  assert.equal(securitiesSurface.analysisHasSecurities, true, JSON.stringify(securitiesSurface, null, 2))
+
+  await runPlaywrightCli(['goto', `${baseUrl}/assets/securities`])
+  await delay(700)
+  const securitiesPage = await evalPage(`() => ({
+    path: window.location.pathname,
+    title: document.querySelector('.securities-page .page-title')?.textContent?.trim() || '',
+    hasAdd: Boolean(document.querySelector('.securities-page .btn.primary')),
+    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+    boot: Boolean(document.querySelector('.boot-layer')),
+  })`)
+  assert.equal(securitiesPage.path, '/assets/securities', JSON.stringify(securitiesPage, null, 2))
+  assert.equal(securitiesPage.hasBottomNav, true, JSON.stringify(securitiesPage, null, 2))
+  assert.equal(securitiesPage.boot, false, JSON.stringify(securitiesPage, null, 2))
+  assert.ok(securitiesPage.title.length > 0, JSON.stringify(securitiesPage, null, 2))
+  assert.equal(securitiesPage.hasAdd, true, JSON.stringify(securitiesPage, null, 2))
+  console.log('[securities] list page ok:', securitiesPage.title)
+
   await runPlaywrightCli(['goto', `${baseUrl}/`])
   await delay(500)
   await assertHomeBlocks()
