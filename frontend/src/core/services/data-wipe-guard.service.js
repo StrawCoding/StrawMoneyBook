@@ -177,11 +177,12 @@ export async function runConfirmedWipeAfterRecoveryBackup({
   source,
   i18nKey,
 } = {}) {
-  await requireRecoveryBackupBeforeWipe(createRecoveryBackup, { source, i18nKey })
+  const proof = await requireRecoveryBackupBeforeWipe(createRecoveryBackup, { source, i18nKey })
   if (typeof wipeFn !== 'function') {
     throw new Error('wipe function missing after recovery backup')
   }
-  return wipeFn()
+  await wipeFn()
+  return proof
 }
 
 export function countSnapshotActiveTransactions(snapshot) {

@@ -253,7 +253,10 @@ import {
   LEDGER_REPAIR_REASON,
   RECOVERY_BACKUP_REQUIRED_CODE,
 } from '@/core/services/data-wipe-guard.service'
-import { createVerifiedRecoveryBackupBeforeWipe } from '@/core/services/recovery-backup.service'
+import {
+  createVerifiedRecoveryBackupBeforeWipe,
+  loadRecoveryBackupJsonText,
+} from '@/core/services/recovery-backup.service'
 import {
   DRIVE_RESTORE_NOT_IMPORTABLE_CODE,
   DRIVE_RESTORE_PREVIEW_REQUIRED_CODE,
@@ -650,6 +653,19 @@ async function confirmRestore() {
         integrityRepairReason: LEDGER_REPAIR_REASON.USER_RESTORE_BACKUP,
         integrityRepairSource: 'DriveAppDataRestorePanel.confirmRestore',
       }),
+      // smb299 tick13: if import still fails after wipe, rehydrate from durable recovery.
+      restoreFromRecovery: async (proof) => {
+        const loaded = await loadRecoveryBackupJsonText(proof?.backupId)
+        if (!loaded?.jsonText) {
+          throw new Error('recovery rollback payload missing')
+        }
+        await importBackupJsonAsNewLedgers(loaded.jsonText, {
+          ledgerNameSuffix: '',
+          runIntegrityRepair: true,
+          integrityRepairReason: LEDGER_REPAIR_REASON.USER_RESTORE_BACKUP,
+          integrityRepairSource: 'DriveAppDataRestorePanel.restoreFromRecovery',
+        })
+      },
     })
     await ledgerStore.refresh()
     if (imported.firstLedgerId) {
@@ -681,6 +697,7 @@ async function confirmRestore() {
         : error?.code === DRIVE_RESTORE_PREVIEW_REQUIRED_CODE
           ? 'settings_auto_backup.drive_browser.preview_required'
           : error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+            || error?.code === 'DRIVE_RESTORE_IMPORT_FAILED_RESTORED'
             ? 'settings_auto_backup.drive_browser.not_importable'
             : 'settings_auto_backup.toast.google_restore_failed'
     uiStore.pushToast(errorMessage(error, t(toastKey)), 'error')

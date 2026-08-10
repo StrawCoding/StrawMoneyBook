@@ -29,7 +29,7 @@ test('smb297: JSON import requires confirm dialog and recovery backup before wip
   assert.match(source, /openImportConfirm/)
   assert.match(source, /DATA_WIPE_REASON\.USER_IMPORT_JSON/)
   assert.match(source, /settings_data\.recovery\.title/)
-  assert.match(source, /runConfirmedWipeAfterRecoveryBackup/)
+  assert.match(source, /runConfirmedWipeThenImportWithRecoveryRollback/)
   assert.match(source, /createRecoveryBackup:\s*createResetRecoveryBackup/)
   assert.doesNotMatch(source, /failed to create recovery backup before import wipe/)
 })

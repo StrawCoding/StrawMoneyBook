@@ -18,33 +18,10 @@ import {
   assertBackupJsonStructureImportable,
   resolveSourceLedger,
 } from '@/core/services/backup-json-import-gate.service'
-
-const TABLE_IMPORT_ORDER = [
-  'account_groups',
-  'accounts',
-  'category_groups',
-  'categories',
-  'transactions',
-  'transaction_attachments',
-  'counterparties',
-  'loans',
-  'loan_payments',
-  'reimbursement_advances',
-  'reimbursement_advance_usages',
-  'reimbursements',
-  'reimbursement_items',
-  'budget_save_settlements',
-  'budgets',
-  'budget_containers',
-  'budget_items',
-  'savings_jars',
-  'bank_connections',
-  'bank_accounts',
-  'bank_transactions',
-  'bank_sync_rules',
-  'app_settings',
-  'deleted_log',
-]
+import {
+  BACKUP_IMPORT_TABLE_ORDER,
+  objectToInsertSql,
+} from '@/core/services/backup-json-import-schema.js'
 
 function parseJson(text) {
   try {
@@ -129,26 +106,6 @@ function sumNumericValues(source) {
   return Object.values(source).reduce((total, value) => total + Number(value ?? 0), 0)
 }
 
-function toSafeSqlIdentifier(identifier, tableName) {
-  const value = String(identifier ?? '').trim()
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
-    throw new Error(`表 ${tableName} 欄位名稱不合法：${value}`)
-  }
-  return value
-}
-
-function objectToInsertSql(tableName, row) {
-  const keys = Object.keys(row).map((key) => toSafeSqlIdentifier(key, tableName))
-  if (!keys.length) {
-    throw new Error(`表 ${tableName} 缺少欄位資料`)
-  }
-
-  const placeholders = keys.map(() => '?').join(', ')
-  const sql = `INSERT INTO ${tableName} (${keys.join(', ')}) VALUES (${placeholders});`
-  const values = keys.map((key) => row[key])
-  return { sql, values }
-}
-
 export async function importLedgerJsonAsNewLedger(jsonText, options = {}) {
   const payload = parseJson(jsonText)
   return importLedgerPayloadAsNewLedger(payload, options)
@@ -178,7 +135,7 @@ async function importLedgerPayloadAsNewLedger(payload, options = {}) {
 
       let insertedRows = 0
 
-      for (const tableName of TABLE_IMPORT_ORDER) {
+      for (const tableName of BACKUP_IMPORT_TABLE_ORDER) {
         const rows = normalizedRows(sanitizedPayload.tables, tableName)
         for (const sourceRow of rows) {
           const row = { ...sourceRow, ledger_id: importedLedger.id }

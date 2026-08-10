@@ -289,7 +289,9 @@ import {
 import { importBackupJsonAsNewLedgers, importLedgerCsv } from '@/core/services/import.service'
 import {
   assertBackupJsonImportable,
+  DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE,
   DRIVE_RESTORE_NOT_IMPORTABLE_CODE,
+  runConfirmedWipeThenImportWithRecoveryRollback,
 } from '@/core/services/drive-appdata-restore.service'
 import {
   DATA_WIPE_REASON,
@@ -550,6 +552,14 @@ function closeLocalRestoreConfirm(options = {}) {
   clearLocalRestoreTimer()
 }
 
+async function restoreLocalFromRecoveryProof(proof) {
+  const loaded = await loadRecoveryBackupJsonText(proof?.backupId)
+  if (!loaded?.jsonText) {
+    throw new Error('recovery rollback payload missing')
+  }
+  await importBackupJsonAsNewLedgers(loaded.jsonText)
+}
+
 async function confirmLocalRestore() {
   if (localRestoreCountdown.value > 0 || localRecoveryBusy.value) return
   const backupId = String(pendingLocalRestoreId.value || '').trim()
@@ -562,9 +572,9 @@ async function confirmLocalRestore() {
   try {
     const result = await withOperationProgress('importJson', async () => {
       const loaded = await loadRecoveryBackupJsonText(backupId)
-      // smb299: prove formal importer structure before durable recovery / wipe.
+      // smb299: prove formal importer structure+rows before durable recovery / wipe.
       assertBackupJsonImportable(loaded?.jsonText)
-      await runConfirmedWipeAfterRecoveryBackup({
+      const { imported } = await runConfirmedWipeThenImportWithRecoveryRollback({
         createRecoveryBackup: createResetRecoveryBackup,
         source: 'SettingsDataManagementPage.confirmLocalRestore',
         i18nKey: 'settings_data.toast.recovery_backup_required',
@@ -574,8 +584,9 @@ async function confirmLocalRestore() {
           source: 'SettingsDataManagementPage.confirmLocalRestore',
           note: backupId,
         }),
+        importFn: () => importBackupJsonAsNewLedgers(loaded.jsonText),
+        restoreFromRecovery: restoreLocalFromRecoveryProof,
       })
-      const imported = await importBackupJsonAsNewLedgers(loaded.jsonText)
       await ledgerStore.refresh()
       if (imported.firstLedgerId) {
         await ledgerStore.switchLedger(imported.firstLedgerId)
@@ -598,6 +609,7 @@ async function confirmLocalRestore() {
         : ''
     const notImportableMessage =
       error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+      || error?.code === DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE
         ? (error?.message || t('settings_auto_backup.drive_browser.not_importable', '選定的備份無法匯入。已中止，不清空本機。'))
         : ''
     uiStore.pushToast(
@@ -743,10 +755,9 @@ async function confirmImportJson() {
   try {
     const result = await withOperationProgress('importJson', async () => {
       const text = await readFileAsText(file)
-      // smb299: prove formal importer structure before durable recovery / wipe.
+      // smb299: prove formal importer structure+rows before durable recovery / wipe.
       assertBackupJsonImportable(text)
-      // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
-      await runConfirmedWipeAfterRecoveryBackup({
+      const { imported } = await runConfirmedWipeThenImportWithRecoveryRollback({
         createRecoveryBackup: createResetRecoveryBackup,
         source: 'SettingsDataManagementPage.confirmImportJson',
         i18nKey: 'settings_data.toast.recovery_backup_required',
@@ -756,8 +767,9 @@ async function confirmImportJson() {
           source: 'SettingsDataManagementPage.confirmImportJson',
           note: pendingImportFileName.value,
         }),
+        importFn: () => importBackupJsonAsNewLedgers(text),
+        restoreFromRecovery: restoreLocalFromRecoveryProof,
       })
-      const imported = await importBackupJsonAsNewLedgers(text)
       await ledgerStore.refresh()
       if (imported.firstLedgerId) {
         await ledgerStore.switchLedger(imported.firstLedgerId)
@@ -777,6 +789,7 @@ async function confirmImportJson() {
         : ''
     const notImportableMessage =
       error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+      || error?.code === DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE
         ? (error?.message || t('settings_auto_backup.drive_browser.not_importable', '選定的備份無法匯入。已中止，不清空本機。'))
         : ''
     const fkMessage = error?.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' || Number(error?.numericCode) === 1811

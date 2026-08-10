@@ -614,7 +614,7 @@ SMB-188 / v1.2.4 後，PostSetupIntroPage 新增了「帳本同步（Google Driv
 - 資料變更時自動備份
 - 立即備份
 - 立即還原
-- **smb299**：Drive appDataFolder 列檔／選檔還原／revision 舊版還原（預覽帳本名稱、交易月份分佈、有效筆數；顯示較舊／較新與月份覆蓋警告；**預覽失敗或未通過正式 importer 結構閘門（非僅摘要）不得進入確認／wipe**；正式還原路徑先驗證可匯入再 durable recovery，recovery 失敗或下載不可匯入時中止不清空本機；禁止 silent wipe）。同閘門亦套用至 Google／WebDAV「立即還原」與資料管理 JSON／本機 recovery 還原（wipe 前拒絕缺 ledger_id／空帳本殼等不可匯入內容）。
+- **smb299**：Drive appDataFolder 列檔／選檔還原／revision 舊版還原（預覽帳本名稱、交易月份分佈、有效筆數；顯示較舊／較新與月份覆蓋警告；**預覽失敗或未通過正式 importer 結構＋資料列 INSERT 閘門（非僅摘要／非僅 ledger_id）不得進入確認／wipe**；正式還原路徑先驗證可匯入再 durable recovery，recovery 失敗或下載不可匯入時中止不清空本機；**wipe 後若 import 仍失敗則以 durable recovery 回滾**，禁止 silent wipe）。同閘門亦套用至 Google／WebDAV「立即還原」與資料管理 JSON／本機 recovery 還原（wipe 前拒絕缺 ledger_id／空帳本殼／未知欄位／缺必要欄位等不可匯入內容）。
 
 這是偏向保底、留存、災難復原的機制，和即時同步是不同層次的需求。
 

@@ -122,7 +122,10 @@ test('smb297: JSON import / reset / restore UX require confirm + recovery backup
   assert.match(dataMgmtSource, /isImportConfirmOpen/)
   assert.match(dataMgmtSource, /createResetRecoveryBackup/)
   assert.match(dataMgmtSource, /createVerifiedRecoveryBackupBeforeWipe/)
-  assert.match(dataMgmtSource, /runConfirmedWipeAfterRecoveryBackup/)
+  // Reset keeps direct wipe gate; JSON/local recovery restore use wipe→import+rollback helper
+  // which still calls runConfirmedWipeAfterRecoveryBackup internally.
+  assert.match(dataMgmtSource, /runConfirmedWipeAfterRecoveryBackup|runConfirmedWipeThenImportWithRecoveryRollback/)
+  assert.match(dataMgmtSource, /runConfirmedWipeThenImportWithRecoveryRollback/)
   assert.match(dataMgmtSource, /DATA_WIPE_REASON\.USER_IMPORT_JSON/)
   assert.match(dataMgmtSource, /DATA_WIPE_REASON\.USER_RESET_ALL/)
   assert.match(dataMgmtSource, /settings_data\.recovery\.title/)
@@ -136,11 +139,15 @@ test('smb297: JSON import / reset / restore UX require confirm + recovery backup
     dataMgmtSource,
     /runConfirmedWipeAfterRecoveryBackup\(\{[\s\S]*?createRecoveryBackup:\s*createResetRecoveryBackup[\s\S]*?wipeFn:\s*\(\)\s*=>\s*resetDatabase\(\{/,
   )
+  assert.match(
+    dataMgmtSource,
+    /runConfirmedWipeThenImportWithRecoveryRollback\(\{[\s\S]*?createRecoveryBackup:\s*createResetRecoveryBackup[\s\S]*?wipeFn:\s*\(\)\s*=>\s*resetDatabase\(\{/,
+  )
 
   assert.match(autoBackupSource, /openRestoreConfirm/)
   assert.match(autoBackupSource, /createRestoreRecoveryBackup/)
   assert.match(autoBackupSource, /createVerifiedRecoveryBackupBeforeWipe/)
-  assert.match(autoBackupSource, /runConfirmedWipeAfterRecoveryBackup/)
+  assert.match(autoBackupSource, /runConfirmedWipeThenImportWithRecoveryRollback/)
   assert.match(autoBackupSource, /DATA_WIPE_REASON\.USER_RESTORE_GOOGLE_BACKUP/)
   assert.match(autoBackupSource, /DATA_WIPE_REASON\.USER_RESTORE_WEBDAV_BACKUP/)
   assert.match(autoBackupSource, /data-testid="auto-backup-restore-confirm"/)
@@ -150,11 +157,11 @@ test('smb297: JSON import / reset / restore UX require confirm + recovery backup
   )
   assert.match(
     autoBackupSource,
-    /runConfirmedWipeAfterRecoveryBackup\(\{[\s\S]*?createRecoveryBackup:\s*createRestoreRecoveryBackup[\s\S]*?wipeFn:\s*\(\)\s*=>\s*resetDatabase\(\{/,
+    /runConfirmedWipeThenImportWithRecoveryRollback\(\{[\s\S]*?createRecoveryBackup:\s*createRestoreRecoveryBackup[\s\S]*?wipeFn:\s*\(\)\s*=>\s*resetDatabase\(\{/,
   )
-  // Google and WebDAV both use the orchestrated gate (not catch-and-continue).
+  // Google and WebDAV both use the orchestrated wipe→import+rollback gate (not catch-and-continue).
   assert.equal(
-    (autoBackupSource.match(/runConfirmedWipeAfterRecoveryBackup\(/g) || []).length,
+    (autoBackupSource.match(/runConfirmedWipeThenImportWithRecoveryRollback\(/g) || []).length,
     2,
   )
 })

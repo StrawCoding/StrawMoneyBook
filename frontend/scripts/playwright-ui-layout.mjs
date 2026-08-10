@@ -902,10 +902,53 @@ async function assertDriveAppDataBrowser() {
         ledger_id: 'ledger_remote',
         tables: {
           ledgers: [{ id: 'ledger_remote', name: '個人', deleted_at: null }],
+          account_groups: [{
+            id: 'ag1',
+            name: '現金',
+            type: 'cash',
+            created_at: '2026-01-01T00:00:00.000Z',
+            updated_at: '2026-01-01T00:00:00.000Z',
+          }],
+          accounts: [{
+            id: 'acc1',
+            group_id: 'ag1',
+            name: '錢包',
+            created_at: '2026-01-01T00:00:00.000Z',
+            updated_at: '2026-01-01T00:00:00.000Z',
+          }],
           transactions: [
-            { id: 't1', occurred_at: '2026-02-03T00:00:00.000Z', deleted_at: null },
-            { id: 't2', occurred_at: '2026-03-01T00:00:00.000Z', deleted_at: null },
+            {
+              id: 't1',
+              type: 'expense',
+              account_id: 'acc1',
+              amount_minor: 100,
+              occurred_at: '2026-02-03T00:00:00.000Z',
+              created_at: '2026-02-03T00:00:00.000Z',
+              updated_at: '2026-02-03T00:00:00.000Z',
+              deleted_at: null,
+            },
+            {
+              id: 't2',
+              type: 'expense',
+              account_id: 'acc1',
+              amount_minor: 200,
+              occurred_at: '2026-03-01T00:00:00.000Z',
+              created_at: '2026-03-01T00:00:00.000Z',
+              updated_at: '2026-03-01T00:00:00.000Z',
+              deleted_at: null,
+            },
           ],
+        },
+      }],
+    })
+    // OpenCode tick13 sample: summary+ledger ok but unknown column / missing required → must not open confirm.
+    const rowInvalidRemote = JSON.stringify({
+      backup_scope: 'all_ledgers',
+      ledgers: [{
+        ledger_id: 'l1',
+        tables: {
+          ledgers: [{ id: 'l1', name: 'x' }],
+          transactions: [{ id: 't1', bogus_column: 'x' }],
         },
       }],
     })
@@ -933,6 +976,13 @@ async function assertDriveAppDataBrowser() {
           size: '12',
           kind: 'other_json',
         },
+        {
+          id: 'file-row-invalid',
+          name: 'StrawMoneyBook_row_invalid.json',
+          modifiedTime: '2026-08-08T00:00:00.000Z',
+          size: '64',
+          kind: 'other_json',
+        },
       ]),
       listRevisions: async () => ([
         {
@@ -954,6 +1004,13 @@ async function assertDriveAppDataBrowser() {
             filename: 'StrawMoneyBook_corrupt.json',
             modifiedTime: '2026-08-09T00:00:00.000Z',
             jsonText: corruptRemote,
+          }
+        }
+        if (fileId === 'file-row-invalid') {
+          return {
+            filename: 'StrawMoneyBook_row_invalid.json',
+            modifiedTime: '2026-08-08T00:00:00.000Z',
+            jsonText: rowInvalidRemote,
           }
         }
         return {
@@ -1050,6 +1107,19 @@ async function assertDriveAppDataBrowser() {
   assert.match(
     state.bodyText,
     /無法匯入|cannot be imported|インポートできません|預覽|preview|プレビュー|解析/iu,
+  )
+
+  // smb299 tick13: summary+ledger-id ok but unknown/missing row fields must NOT open confirm.
+  await runPlaywrightCli(['click', '[data-file-id="file-row-invalid"] [data-testid="drive-appdata-restore-file"]'])
+  await delay(1000)
+  state = await evalPage(`() => ({
+    restoreConfirmOpened: Boolean(document.querySelector('[data-testid=drive-appdata-restore-confirm]')),
+    bodyText: document.body?.innerText?.slice(0, 4000) ?? '',
+  })`)
+  assert.equal(state.restoreConfirmOpened, false, JSON.stringify(state, null, 2))
+  assert.match(
+    state.bodyText,
+    /無法匯入|cannot be imported|インポートできません|不存在的欄位|必要欄位|bogus|預覽|preview/iu,
   )
 
   // Revision restore path: expand already open; open confirm from revision then cancel.

@@ -32,7 +32,7 @@ test('data management long-running restore/import/reset shows percentage loading
   assert.match(source, /operation-progress-fill/)
   assert.match(source, /role="progressbar"/)
   assert.match(source, /:aria-valuenow="operationProgress\.percent"/)
-  assert.match(source, /withOperationProgress\('importJson',[\s\S]*runConfirmedWipeAfterRecoveryBackup\(\{[\s\S]*wipeFn:\s*\(\)\s*=>\s*resetDatabase\(\{[\s\S]*await importBackupJsonAsNewLedgers\(text\)[\s\S]*await refreshAllStores\(\)/)
+  assert.match(source, /withOperationProgress\('importJson',[\s\S]*runConfirmedWipeThenImportWithRecoveryRollback\(\{[\s\S]*wipeFn:\s*\(\)\s*=>\s*resetDatabase\(\{[\s\S]*importFn:[\s\S]*importBackupJsonAsNewLedgers\(text\)[\s\S]*await refreshAllStores\(\)/)
   assert.match(source, /withOperationProgress\('resetAll',[\s\S]*runConfirmedWipeAfterRecoveryBackup\(\{[\s\S]*createRecoveryBackup:\s*createResetRecoveryBackup[\s\S]*wipeFn:\s*\(\)\s*=>\s*resetDatabase\(\{[\s\S]*await refreshAllStores\(\)/)
 })
 

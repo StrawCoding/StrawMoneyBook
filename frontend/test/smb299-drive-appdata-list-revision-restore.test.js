@@ -39,6 +39,20 @@ const playwrightUiLayoutSource = readFileSync(
   'utf8',
 )
 
+function buildValidTransaction(overrides = {}) {
+  return {
+    id: 't1',
+    type: 'expense',
+    account_id: 'acc_a',
+    amount_minor: 100,
+    occurred_at: '2026-02-03T10:00:00.000Z',
+    created_at: '2026-02-03T10:00:00.000Z',
+    updated_at: '2026-02-03T10:00:00.000Z',
+    deleted_at: null,
+    ...overrides,
+  }
+}
+
 function buildAllLedgersPayload({ ledgerName, transactions }) {
   return {
     schema_version: 1,
@@ -49,6 +63,20 @@ function buildAllLedgersPayload({ ledgerName, transactions }) {
         ledger_id: 'ledger_a',
         tables: {
           ledgers: [{ id: 'ledger_a', name: ledgerName, deleted_at: null }],
+          account_groups: [{
+            id: 'ag_a',
+            name: '現金',
+            type: 'cash',
+            created_at: '2026-01-01T00:00:00.000Z',
+            updated_at: '2026-01-01T00:00:00.000Z',
+          }],
+          accounts: [{
+            id: 'acc_a',
+            group_id: 'ag_a',
+            name: '錢包',
+            created_at: '2026-01-01T00:00:00.000Z',
+            updated_at: '2026-01-01T00:00:00.000Z',
+          }],
           transactions,
         },
       },
@@ -60,10 +88,14 @@ test('smb299: backup preview summarizes ledger names, months, and valid tx count
   const payload = buildAllLedgersPayload({
     ledgerName: '個人',
     transactions: [
-      { id: 't1', occurred_at: '2026-02-03T10:00:00.000Z', deleted_at: null },
-      { id: 't2', occurred_at: '2026-03-01T10:00:00.000Z', deleted_at: null },
-      { id: 't3', occurred_at: '2026-04-11T10:00:00.000Z', deleted_at: '2026-04-12T00:00:00.000Z' },
-      { id: 't4', occurred_at: '2026-04-20T10:00:00.000Z', deleted_at: null },
+      buildValidTransaction({ id: 't1', occurred_at: '2026-02-03T10:00:00.000Z' }),
+      buildValidTransaction({ id: 't2', occurred_at: '2026-03-01T10:00:00.000Z' }),
+      buildValidTransaction({
+        id: 't3',
+        occurred_at: '2026-04-11T10:00:00.000Z',
+        deleted_at: '2026-04-12T00:00:00.000Z',
+      }),
+      buildValidTransaction({ id: 't4', occurred_at: '2026-04-20T10:00:00.000Z' }),
     ],
   })
   const summary = summarizeBackupPayload(payload)
@@ -79,17 +111,17 @@ test('smb299: compareBackupSummaries warns when remote is older or narrower than
   const remote = summarizeBackupJsonText(JSON.stringify(buildAllLedgersPayload({
     ledgerName: '個人',
     transactions: [
-      { id: 't1', occurred_at: '2026-02-03T10:00:00.000Z', deleted_at: null },
-      { id: 't2', occurred_at: '2026-03-01T10:00:00.000Z', deleted_at: null },
+      buildValidTransaction({ id: 't1', occurred_at: '2026-02-03T10:00:00.000Z' }),
+      buildValidTransaction({ id: 't2', occurred_at: '2026-03-01T10:00:00.000Z' }),
     ],
   })))
   const local = summarizeBackupJsonText(JSON.stringify(buildAllLedgersPayload({
     ledgerName: '個人',
     transactions: [
-      { id: 't1', occurred_at: '2026-02-03T10:00:00.000Z', deleted_at: null },
-      { id: 't2', occurred_at: '2026-03-01T10:00:00.000Z', deleted_at: null },
-      { id: 't3', occurred_at: '2026-05-08T10:00:00.000Z', deleted_at: null },
-      { id: 't4', occurred_at: '2026-08-01T10:00:00.000Z', deleted_at: null },
+      buildValidTransaction({ id: 't1', occurred_at: '2026-02-03T10:00:00.000Z' }),
+      buildValidTransaction({ id: 't2', occurred_at: '2026-03-01T10:00:00.000Z' }),
+      buildValidTransaction({ id: 't3', occurred_at: '2026-05-08T10:00:00.000Z' }),
+      buildValidTransaction({ id: 't4', occurred_at: '2026-08-01T10:00:00.000Z' }),
     ],
   })))
   const comparison = compareBackupSummaries(remote, local, {
@@ -135,7 +167,7 @@ test('smb299: Drive list/revisions/download can be mocked without live Google', 
         status: 200,
         text: async () => JSON.stringify(buildAllLedgersPayload({
           ledgerName: 'mock-rev',
-          transactions: [{ id: 't1', occurred_at: '2026-02-01T00:00:00.000Z', deleted_at: null }],
+          transactions: [buildValidTransaction({ id: 't1', occurred_at: '2026-02-01T00:00:00.000Z' })],
         })),
       }
     }
@@ -196,10 +228,11 @@ test('smb299: Drive list/revisions/download can be mocked without live Google', 
 test('smb299: auto-backup / data-management / advanced expose Drive appData browser entry', () => {
   assert.match(autoBackupPageSource, /DriveAppDataRestorePanel/)
   assert.match(autoBackupPageSource, /drive-appdata-browser|DriveAppDataRestorePanel/)
-  // Classic Google/WebDAV restore also gates with formal importer structure before wipe.
+  // Classic Google/WebDAV restore also gates with formal importer structure before wipe,
+  // and uses shared wipe→import + recovery rollback helper.
   assert.match(
     autoBackupPageSource,
-    /assertBackupJsonImportable\(backup\?\.jsonText\)[\s\S]*runConfirmedWipeAfterRecoveryBackup/,
+    /assertBackupJsonImportable\(backup\?\.jsonText\)[\s\S]*runConfirmedWipeThenImportWithRecoveryRollback/,
   )
   assert.match(panelSource, /data-testid="drive-appdata-browser"/)
   assert.match(panelSource, /data-testid="drive-appdata-file-list"/)
@@ -211,6 +244,8 @@ test('smb299: auto-backup / data-management / advanced expose Drive appData brow
   assert.match(panelSource, /downloadJsonFile/)
   assert.match(panelSource, /createVerifiedRecoveryBackupBeforeWipe/)
   assert.match(panelSource, /assertDriveRestorePreviewReady|isDriveRestorePreviewReady/)
+  assert.match(panelSource, /restoreFromRecovery/)
+  assert.match(panelSource, /loadRecoveryBackupJsonText/)
   assert.match(panelSource, /importBackupJsonAsNewLedgers/)
   assert.match(panelSource, /USER_RESTORE_GOOGLE_BACKUP/)
   assert.match(panelSource, /warnIncompleteRemote|warn_incomplete/)
@@ -219,11 +254,11 @@ test('smb299: auto-backup / data-management / advanced expose Drive appData brow
   assert.match(dataMgmtSource, /#drive-appdata-browser/)
   assert.match(
     dataMgmtSource,
-    /assertBackupJsonImportable\(text\)[\s\S]*runConfirmedWipeAfterRecoveryBackup/,
+    /assertBackupJsonImportable\(text\)[\s\S]*runConfirmedWipeThenImportWithRecoveryRollback/,
   )
   assert.match(
     dataMgmtSource,
-    /assertBackupJsonImportable\(loaded\?\.jsonText\)[\s\S]*runConfirmedWipeAfterRecoveryBackup/,
+    /assertBackupJsonImportable\(loaded\?\.jsonText\)[\s\S]*runConfirmedWipeThenImportWithRecoveryRollback/,
   )
   assert.match(featureListSource, /feature-link-drive-appdata-restore/)
   assert.match(featureListSource, /#drive-appdata-browser/)
@@ -253,7 +288,7 @@ test('smb299: restore orchestration requires importable preview and never wipes 
 
   const goodJson = JSON.stringify(buildAllLedgersPayload({
     ledgerName: '個人',
-    transactions: [{ id: 't1', occurred_at: '2026-02-01T00:00:00.000Z', deleted_at: null }],
+    transactions: [buildValidTransaction({ id: 't1', occurred_at: '2026-02-01T00:00:00.000Z' })],
   }))
   const goodPreview = {
     jsonText: goodJson,
@@ -281,6 +316,101 @@ test('smb299: restore orchestration requires importable preview and never wipes 
     async () => assertDriveRestorePreviewReady({ jsonText: '{bad' }),
     (error) => error?.code === DRIVE_RESTORE_PREVIEW_REQUIRED_CODE,
   )
+
+  // OpenCode tick 13: summary+ledger-id ok, but row has unknown column / missing required fields
+  // → must block BEFORE durable recovery / wipe (not after).
+  {
+    const summaryAndLedgerOkButRowsReject = JSON.stringify({
+      backup_scope: 'all_ledgers',
+      ledgers: [{
+        ledger_id: 'l1',
+        tables: {
+          ledgers: [{ id: 'l1', name: 'x' }],
+          transactions: [{ id: 't1', bogus_column: 'x' }],
+        },
+      }],
+    })
+    assert.equal(
+      summarizeBackupJsonText(summaryAndLedgerOkButRowsReject).ok,
+      true,
+      'fixture must still pass summary-only so the row-gate gap is real',
+    )
+    // Identity-only resolve would pass; row INSERT contract must reject.
+    await assert.rejects(
+      async () => assertBackupJsonStructureImportable(summaryAndLedgerOkButRowsReject),
+      (error) => /不存在的欄位|必要欄位|bogus_column/i.test(String(error?.message ?? '')),
+    )
+    await assert.rejects(
+      async () => assertBackupJsonImportable(summaryAndLedgerOkButRowsReject),
+      (error) => error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE && error?.silentWipeBlocked === true,
+    )
+
+    let wipeCalled = false
+    let imported = false
+    let recoveryCalled = false
+    let downloadCalled = false
+    let rollbackCalled = false
+    await assert.rejects(
+      async () => runConfirmedDriveAppDataRestore({
+        preview: {
+          jsonText: summaryAndLedgerOkButRowsReject,
+          filename: 'StrawMoneyBook_all_ledgers.json',
+          remoteSummary: summarizeBackupJsonText(summaryAndLedgerOkButRowsReject),
+        },
+        downloadBackup: async () => {
+          downloadCalled = true
+          return { jsonText: summaryAndLedgerOkButRowsReject }
+        },
+        createRecoveryBackup: async () => {
+          recoveryCalled = true
+          return { verified: true, backupId: 'r-row', byteLength: 10, storage: 'test' }
+        },
+        wipeFn: async () => { wipeCalled = true },
+        importBackupJson: async () => { imported = true },
+        restoreFromRecovery: async () => { rollbackCalled = true },
+        source: 'unit.summary-ok-row-reject-preview',
+      }),
+      (error) => (
+        (error?.code === DRIVE_RESTORE_PREVIEW_REQUIRED_CODE
+          || error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE)
+        && wipeCalled === false
+        && imported === false
+        && recoveryCalled === false
+        && downloadCalled === false
+        && rollbackCalled === false
+      ),
+    )
+    assert.equal(wipeCalled, false)
+    assert.equal(recoveryCalled, false)
+    assert.equal(downloadCalled, false)
+
+    // Good preview, download returns row-invalid payload → block before recovery/wipe
+    wipeCalled = false
+    imported = false
+    recoveryCalled = false
+    await assert.rejects(
+      async () => runConfirmedDriveAppDataRestore({
+        preview: goodPreview,
+        downloadBackup: async () => ({ jsonText: summaryAndLedgerOkButRowsReject }),
+        createRecoveryBackup: async () => {
+          recoveryCalled = true
+          return { verified: true, backupId: 'r-row-dl', byteLength: 10, storage: 'test' }
+        },
+        wipeFn: async () => { wipeCalled = true },
+        importBackupJson: async () => { imported = true },
+        restoreFromRecovery: async () => { rollbackCalled = true },
+        source: 'unit.summary-ok-row-reject-download',
+      }),
+      (error) => (
+        error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+        && wipeCalled === false
+        && imported === false
+        && recoveryCalled === false
+      ),
+    )
+    assert.equal(wipeCalled, false)
+    assert.equal(recoveryCalled, false)
+  }
 
   // OpenCode tick 12: summary-ok but formal importer rejects → must block before wipe
   {
@@ -512,14 +642,62 @@ test('smb299: restore orchestration requires importable preview and never wipes 
           firstLedgerName: '個人',
         }
       },
+      restoreFromRecovery: async () => {
+        calls.push('rollback')
+      },
       source: 'unit.success',
     })
     assert.deepEqual(calls, ['download', 'recovery', 'wipe', 'import'])
     assert.equal(result.imported.firstLedgerId, 'new1')
   }
+
+  // Defense in depth: if import throws after wipe, restoreFromRecovery must run
+  // and local data must not stay cleared (IMPORT_FAILED_RESTORED).
+  {
+    const {
+      DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE,
+    } = await import('../src/core/services/drive-appdata-restore.service.js')
+    const calls = []
+    await assert.rejects(
+      async () => runConfirmedDriveAppDataRestore({
+        preview: goodPreview,
+        downloadBackup: async () => {
+          calls.push('download')
+          return goodPreview
+        },
+        createRecoveryBackup: async () => {
+          calls.push('recovery')
+          return {
+            verified: true,
+            backupId: 'r-rollback',
+            byteLength: 32,
+            storage: 'test',
+          }
+        },
+        wipeFn: async () => {
+          calls.push('wipe')
+        },
+        importBackupJson: async () => {
+          calls.push('import')
+          throw new Error('simulated sqlite row constraint')
+        },
+        restoreFromRecovery: async (proof) => {
+          calls.push('rollback')
+          assert.equal(proof?.backupId, 'r-rollback')
+        },
+        source: 'unit.import-fail-after-wipe-rollback',
+      }),
+      (error) => (
+        error?.code === DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE
+        && error?.localDataRestoredFromRecovery === true
+        && error?.silentWipeBlocked === true
+      ),
+    )
+    assert.deepEqual(calls, ['download', 'recovery', 'wipe', 'import', 'rollback'])
+  }
 })
 
-test('smb299: Drive restore gate shares formal importer structure checks (not summary-only)', () => {
+test('smb299: Drive restore gate shares formal importer structure + row INSERT checks', () => {
   const restoreSource = readFileSync(
     resolve(import.meta.dirname, '../src/core/services/drive-appdata-restore.service.js'),
     'utf8',
@@ -528,16 +706,27 @@ test('smb299: Drive restore gate shares formal importer structure checks (not su
     resolve(import.meta.dirname, '../src/core/services/backup-json-import-gate.service.js'),
     'utf8',
   )
+  const schemaSource = readFileSync(
+    resolve(import.meta.dirname, '../src/core/services/backup-json-import-schema.js'),
+    'utf8',
+  )
   const importSource = readFileSync(
     resolve(import.meta.dirname, '../src/core/services/import.service.js'),
     'utf8',
   )
   assert.match(restoreSource, /assertBackupJsonStructureImportable/)
+  assert.match(restoreSource, /runConfirmedWipeThenImportWithRecoveryRollback/)
+  assert.match(restoreSource, /restoreFromRecovery/)
   assert.match(gateSource, /resolveSourceLedger/)
+  assert.match(gateSource, /assertImportTableRowsInsertable/)
   assert.match(gateSource, /JSON 缺少 ledger_id/)
   assert.match(gateSource, /JSON 缺少可匯入的帳本資料/)
+  assert.match(schemaSource, /含不存在的欄位/)
+  assert.match(schemaSource, /缺少必要欄位/)
+  assert.match(schemaSource, /bogus_column|BACKUP_IMPORT_TABLE_SCHEMA/)
   assert.match(importSource, /assertBackupJsonStructureImportable\(jsonText\)/)
   assert.match(importSource, /from '@\/core\/services\/backup-json-import-gate\.service'/)
+  assert.match(importSource, /BACKUP_IMPORT_TABLE_ORDER/)
 })
 
 test('smb299: DriveAppDataRestorePanel wires durable recovery exporter (not empty options)', () => {

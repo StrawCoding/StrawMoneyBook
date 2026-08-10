@@ -312,15 +312,19 @@ import {
 import { importBackupJsonAsNewLedgers } from '@/core/services/import.service'
 import {
   assertBackupJsonImportable,
+  DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE,
   DRIVE_RESTORE_NOT_IMPORTABLE_CODE,
+  runConfirmedWipeThenImportWithRecoveryRollback,
 } from '@/core/services/drive-appdata-restore.service'
 import {
   DATA_WIPE_REASON,
   LEDGER_REPAIR_REASON,
   RECOVERY_BACKUP_REQUIRED_CODE,
-  runConfirmedWipeAfterRecoveryBackup,
 } from '@/core/services/data-wipe-guard.service'
-import { createVerifiedRecoveryBackupBeforeWipe } from '@/core/services/recovery-backup.service'
+import {
+  createVerifiedRecoveryBackupBeforeWipe,
+  loadRecoveryBackupJsonText,
+} from '@/core/services/recovery-backup.service'
 import { resetDatabase } from '@/core/db/sqlite'
 
 const ledgerStore = useLedgerStore()
@@ -806,15 +810,27 @@ async function confirmRestoreFromBackup() {
   await restoreFromGoogle()
 }
 
+async function restoreLocalFromRecoveryProof(proof) {
+  const loaded = await loadRecoveryBackupJsonText(proof?.backupId)
+  if (!loaded?.jsonText) {
+    throw new Error('recovery rollback payload missing')
+  }
+  await importBackupJsonAsNewLedgers(loaded.jsonText, {
+    ledgerNameSuffix: '',
+    runIntegrityRepair: true,
+    integrityRepairReason: LEDGER_REPAIR_REASON.USER_RESTORE_BACKUP,
+    integrityRepairSource: 'SettingsAutoBackupPage.restoreFromRecovery',
+  })
+}
+
 async function restoreFromWebdav() {
   if (!ledgerStore.activeLedgerId) return
   webdavRestoringNow.value = true
   try {
     const backup = await restoreWebdavBackupJson(ledgerStore.activeLedgerId)
-    // smb299: prove formal importer structure before durable recovery / wipe.
+    // smb299: prove formal importer structure+rows before durable recovery / wipe.
     assertBackupJsonImportable(backup?.jsonText)
-    // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
-    await runConfirmedWipeAfterRecoveryBackup({
+    const { imported } = await runConfirmedWipeThenImportWithRecoveryRollback({
       createRecoveryBackup: createRestoreRecoveryBackup,
       source: 'SettingsAutoBackupPage.restoreFromWebdav',
       i18nKey: 'settings_auto_backup.toast.recovery_backup_required',
@@ -823,12 +839,13 @@ async function restoreFromWebdav() {
         reason: DATA_WIPE_REASON.USER_RESTORE_WEBDAV_BACKUP,
         source: 'SettingsAutoBackupPage.restoreFromWebdav',
       }),
-    })
-    const imported = await importBackupJsonAsNewLedgers(backup.jsonText, {
-      ledgerNameSuffix: '',
-      runIntegrityRepair: true,
-      integrityRepairReason: LEDGER_REPAIR_REASON.USER_RESTORE_BACKUP,
-      integrityRepairSource: 'SettingsAutoBackupPage.restoreFromWebdav',
+      importFn: () => importBackupJsonAsNewLedgers(backup.jsonText, {
+        ledgerNameSuffix: '',
+        runIntegrityRepair: true,
+        integrityRepairReason: LEDGER_REPAIR_REASON.USER_RESTORE_BACKUP,
+        integrityRepairSource: 'SettingsAutoBackupPage.restoreFromWebdav',
+      }),
+      restoreFromRecovery: restoreLocalFromRecoveryProof,
     })
     await ledgerStore.refresh()
     if (imported.firstLedgerId) {
@@ -857,6 +874,7 @@ async function restoreFromWebdav() {
       error?.code === RECOVERY_BACKUP_REQUIRED_CODE
         ? 'settings_auto_backup.toast.recovery_backup_required'
         : error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+          || error?.code === DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE
           ? 'settings_auto_backup.drive_browser.not_importable'
           : 'settings_auto_backup.toast.webdav_restore_failed'
     uiStore.pushToast(errorMessage(error, t(toastKey)), 'error')
@@ -964,10 +982,9 @@ async function restoreFromGoogle() {
   googleRestoringNow.value = true
   try {
     const backup = await restoreGoogleBackupJson(ledgerStore.activeLedgerId)
-    // smb299: prove formal importer structure before durable recovery / wipe.
+    // smb299: prove formal importer structure+rows before durable recovery / wipe.
     assertBackupJsonImportable(backup?.jsonText)
-    // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
-    await runConfirmedWipeAfterRecoveryBackup({
+    const { imported } = await runConfirmedWipeThenImportWithRecoveryRollback({
       createRecoveryBackup: createRestoreRecoveryBackup,
       source: 'SettingsAutoBackupPage.restoreFromGoogle',
       i18nKey: 'settings_auto_backup.toast.recovery_backup_required',
@@ -976,12 +993,13 @@ async function restoreFromGoogle() {
         reason: DATA_WIPE_REASON.USER_RESTORE_GOOGLE_BACKUP,
         source: 'SettingsAutoBackupPage.restoreFromGoogle',
       }),
-    })
-    const imported = await importBackupJsonAsNewLedgers(backup.jsonText, {
-      ledgerNameSuffix: '',
-      runIntegrityRepair: true,
-      integrityRepairReason: LEDGER_REPAIR_REASON.USER_RESTORE_BACKUP,
-      integrityRepairSource: 'SettingsAutoBackupPage.restoreFromGoogle',
+      importFn: () => importBackupJsonAsNewLedgers(backup.jsonText, {
+        ledgerNameSuffix: '',
+        runIntegrityRepair: true,
+        integrityRepairReason: LEDGER_REPAIR_REASON.USER_RESTORE_BACKUP,
+        integrityRepairSource: 'SettingsAutoBackupPage.restoreFromGoogle',
+      }),
+      restoreFromRecovery: restoreLocalFromRecoveryProof,
     })
     await ledgerStore.refresh()
     if (imported.firstLedgerId) {
@@ -1011,6 +1029,7 @@ async function restoreFromGoogle() {
       error?.code === RECOVERY_BACKUP_REQUIRED_CODE
         ? 'settings_auto_backup.toast.recovery_backup_required'
         : error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+          || error?.code === DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE
           ? 'settings_auto_backup.drive_browser.not_importable'
           : 'settings_auto_backup.toast.google_restore_failed'
     uiStore.pushToast(errorMessage(error, t(toastKey)), 'error')

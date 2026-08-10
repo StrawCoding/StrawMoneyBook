@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (smb299) 補齊資料列 INSERT 可匯入閘門與 wipe 後回滾：`assertBackupJsonStructureImportable` 在 ledger 身分之外再驗證與正式 importer 同源的表欄位／必要欄位（未知欄位如 `bogus_column`、缺 type／account_id／amount_minor 等在 wipe 前拒絕）；`runConfirmedWipeThenImportWithRecoveryRollback` 於 wipe 後 import 失敗時以 durable recovery 回灌本機。Node／Playwright 覆蓋 tick13 fixture 與失敗不清空。
+
 ---
 
 ## v1.3.99

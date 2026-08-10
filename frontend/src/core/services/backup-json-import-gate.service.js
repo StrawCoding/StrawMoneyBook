@@ -1,9 +1,11 @@
 /**
  * Structural import gate shared by Drive restore wipe path and importBackupJsonAsNewLedgers.
  * Must reject payloads the formal importer would reject — BEFORE any local wipe.
+ * Covers: parse, ledger identity, AND table-row INSERT contracts (unknown columns / required fields).
  */
 
 import { normalizeSharedLedgerSnapshot } from '../../ui/services/shared-ledger/snapshot-merge.js'
+import { assertImportTableRowsInsertable } from './backup-json-import-schema.js'
 
 function parseJson(text) {
   try {
@@ -36,8 +38,19 @@ export function resolveSourceLedger(payload) {
 }
 
 /**
- * Prove jsonText would pass importBackupJsonAsNewLedgers structural checks
- * (parse + all_ledgers non-empty + each ledger resolveSourceLedger after normalize).
+ * Prove one ledger payload would pass formal importer checks before DB writes:
+ * resolveSourceLedger + row INSERT contracts (columns / required fields / SQL identifiers).
+ */
+export function assertLedgerPayloadImportable(ledgerPayload) {
+  const sanitizedPayload = normalizeSharedLedgerSnapshot(ledgerPayload)
+  resolveSourceLedger(sanitizedPayload)
+  assertImportTableRowsInsertable(sanitizedPayload)
+  return sanitizedPayload
+}
+
+/**
+ * Prove jsonText would pass importBackupJsonAsNewLedgers structural + row checks
+ * (parse + all_ledgers non-empty + each ledger identity + INSERT-prep).
  * Does not touch the database and must not be replaced by summary-only checks.
  *
  * @param {string} jsonText
@@ -48,8 +61,7 @@ export function assertBackupJsonStructureImportable(jsonText) {
   const allLedgersPayload = Array.isArray(payload?.ledgers) ? payload.ledgers : null
 
   if (!allLedgersPayload || payload?.backup_scope !== 'all_ledgers') {
-    const sanitizedPayload = normalizeSharedLedgerSnapshot(payload)
-    resolveSourceLedger(sanitizedPayload)
+    assertLedgerPayloadImportable(payload)
     return { mode: 'single', ledgerCount: 1 }
   }
 
@@ -58,8 +70,7 @@ export function assertBackupJsonStructureImportable(jsonText) {
   }
 
   for (const ledgerPayload of allLedgersPayload) {
-    const sanitizedPayload = normalizeSharedLedgerSnapshot(ledgerPayload)
-    resolveSourceLedger(sanitizedPayload)
+    assertLedgerPayloadImportable(ledgerPayload)
   }
 
   return { mode: 'all_ledgers', ledgerCount: allLedgersPayload.length }

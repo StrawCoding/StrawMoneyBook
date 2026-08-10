@@ -2,6 +2,7 @@
  * smb299: Drive appData 選檔／revision 還原编排。
  * 必須：完成可匯入預覽 → 再下載並驗證可匯入 → durable recovery → wipe → import。
  * 預覽失敗／不可匯入／recovery 失敗皆不得清空本機。
+ * wipe 後若 import 仍失敗：立即以 durable recovery 回灌本機（失敗不清空語意）。
  */
 
 import { summarizeBackupJsonText } from './backup-json-preview.service.js'
@@ -13,6 +14,7 @@ import {
 
 export const DRIVE_RESTORE_PREVIEW_REQUIRED_CODE = 'DRIVE_RESTORE_PREVIEW_REQUIRED'
 export const DRIVE_RESTORE_NOT_IMPORTABLE_CODE = 'DRIVE_RESTORE_NOT_IMPORTABLE'
+export const DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE = 'DRIVE_RESTORE_IMPORT_FAILED_RESTORED'
 
 export function createDriveRestorePreviewRequiredError(cause, options = {}) {
   const originalMessage = String(cause?.message ?? cause ?? '').trim()
@@ -42,10 +44,30 @@ export function createDriveRestoreNotImportableError(cause, options = {}) {
   return error
 }
 
+export function createDriveRestoreImportFailedRestoredError(cause, options = {}) {
+  const originalMessage = String(cause?.message ?? cause ?? '').trim()
+  const message =
+    String(options.message ?? '').trim()
+    || `雲端備份匯入失敗（${originalMessage || 'import_failed'}）。已從本機 durable recovery 回滾，本機資料未清空。`
+  const error = new Error(message)
+  error.code = DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE
+  error.i18nKey = options.i18nKey || 'settings_auto_backup.drive_browser.import_failed_restored'
+  error.originalMessage = originalMessage
+  error.localDataRestoredFromRecovery = true
+  error.silentWipeBlocked = true
+  if (cause && typeof cause === 'object') {
+    try {
+      error.cause = cause
+    } catch {
+      // ignore
+    }
+  }
+  return error
+}
+
 /**
- * Backup JSON must pass BOTH preview summary AND formal importer structure checks
- * before wipe is allowed. Summary-only is insufficient: payloads like
- * `{ backup_scope:'all_ledgers', ledgers:[{}] }` summarize as ok but importer rejects.
+ * Backup JSON must pass BOTH preview summary AND formal importer structure+row checks
+ * before wipe is allowed. Summary-only / ledger-id-only is insufficient.
  */
 export function assertBackupJsonImportable(jsonText, options = {}) {
   const text = String(jsonText ?? '')
@@ -110,9 +132,59 @@ export function isDriveRestorePreviewReady(preview) {
 }
 
 /**
+ * Wipe then import with mandatory durable-recovery rollback if import fails.
+ * Callers must already have proven the import payload is gate-importable.
+ */
+export async function runConfirmedWipeThenImportWithRecoveryRollback({
+  createRecoveryBackup,
+  wipeFn,
+  importFn,
+  restoreFromRecovery,
+  source,
+  i18nKey,
+} = {}) {
+  if (typeof importFn !== 'function') {
+    throw createDriveRestoreNotImportableError(new Error('import_missing'), {
+      parseError: 'import_missing',
+    })
+  }
+
+  const recoveryProof = await runConfirmedWipeAfterRecoveryBackup({
+    createRecoveryBackup,
+    wipeFn,
+    source,
+    i18nKey,
+  })
+
+  try {
+    const imported = await importFn()
+    return { imported, recoveryProof }
+  } catch (importError) {
+    if (typeof restoreFromRecovery !== 'function') {
+      throw createDriveRestoreNotImportableError(importError, {
+        parseError: 'import_failed_after_wipe_no_rollback',
+        message: `備份匯入失敗且無法回滾（缺少 restoreFromRecovery）：${String(importError?.message ?? importError ?? '').trim() || 'import_failed'}`,
+      })
+    }
+    try {
+      await restoreFromRecovery(recoveryProof)
+    } catch (rollbackError) {
+      const error = createDriveRestoreNotImportableError(importError, {
+        parseError: 'import_failed_rollback_failed',
+        message: `備份匯入失敗，且 durable recovery 回滾亦失敗：${String(rollbackError?.message ?? rollbackError ?? '').trim() || 'rollback_failed'}`,
+      })
+      error.localDataRestoredFromRecovery = false
+      error.rollbackError = rollbackError
+      throw error
+    }
+    throw createDriveRestoreImportFailedRestoredError(importError)
+  }
+}
+
+/**
  * Full restore path used by DriveAppDataRestorePanel.
- * Order is intentional: preview gate → download+importable gate → recovery → wipe → import.
- * Any failure before wipeFn must leave local data intact.
+ * Order: preview gate → download+importable gate → recovery → wipe → import.
+ * If import fails after wipe, restoreFromRecovery(proof) must rehydrate local data.
  */
 export async function runConfirmedDriveAppDataRestore({
   preview,
@@ -120,6 +192,7 @@ export async function runConfirmedDriveAppDataRestore({
   createRecoveryBackup,
   wipeFn,
   importBackupJson,
+  restoreFromRecovery,
   source,
   i18nKey,
 } = {}) {
@@ -157,13 +230,13 @@ export async function runConfirmedDriveAppDataRestore({
     i18nKey: 'settings_auto_backup.drive_browser.not_importable',
   })
 
-  await runConfirmedWipeAfterRecoveryBackup({
+  const { imported, recoveryProof } = await runConfirmedWipeThenImportWithRecoveryRollback({
     createRecoveryBackup,
     wipeFn,
+    importFn: () => importBackupJson(backup.jsonText),
+    restoreFromRecovery,
     source,
     i18nKey,
   })
-
-  const imported = await importBackupJson(backup.jsonText)
-  return { backup, imported }
+  return { backup, imported, recoveryProof }
 }
