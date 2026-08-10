@@ -290,7 +290,10 @@ function maxChildUpdatedMs(rows = []) {
 /**
  * When a parent row was tombstoned but newer children still reference it,
  * resurrect the parent from the tombstone payload so FK prune does not cascade
- * delete surviving transactions / accounts / categories (smb290).
+ * delete surviving transactions / accounts / categories (smb290 / smb296).
+ *
+ * Order is bottom-up: transactions → accounts/categories → groups.
+ * Resurrecting an account must also be able to resurrect its account_group.
  */
 function resurrectReferencedParentsFromTombstones(tables, tombstoneMap) {
   const nextTables = { ...tables }
@@ -324,6 +327,12 @@ function resurrectReferencedParentsFromTombstones(tables, tombstoneMap) {
     tombstoneMap.delete(tombstoneKey)
   }
 
+  for (const tx of listTableRows({ tables: nextTables }, 'transactions')) {
+    ensureParentRow('accounts', tx?.account_id, [tx])
+    ensureParentRow('accounts', tx?.peer_account_id, [tx])
+    ensureParentRow('categories', tx?.category_id, [tx])
+  }
+
   for (const account of listTableRows({ tables: nextTables }, 'accounts')) {
     ensureParentRow(
       'account_groups',
@@ -343,11 +352,6 @@ function resurrectReferencedParentsFromTombstones(tables, tombstoneMap) {
         normalizeText(tx?.category_id) === normalizeText(category?.id)
       ))],
     )
-  }
-
-  for (const tx of listTableRows({ tables: nextTables }, 'transactions')) {
-    ensureParentRow('accounts', tx?.account_id, [tx])
-    ensureParentRow('categories', tx?.category_id, [tx])
   }
 
   return nextTables

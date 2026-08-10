@@ -103,7 +103,6 @@ export async function scanLedgerIntegrity(ledgerId) {
          ON a.ledger_id = t.ledger_id
         AND a.id = t.account_id
        WHERE t.ledger_id = ?
-         AND t.deleted_at IS NULL
          AND a.id IS NULL;`,
       [ledgerId],
     ),
@@ -114,7 +113,6 @@ export async function scanLedgerIntegrity(ledgerId) {
          ON a.ledger_id = t.ledger_id
         AND a.id = t.peer_account_id
        WHERE t.ledger_id = ?
-         AND t.deleted_at IS NULL
          AND t.peer_account_id IS NOT NULL
          AND a.id IS NULL;`,
       [ledgerId],
@@ -126,7 +124,6 @@ export async function scanLedgerIntegrity(ledgerId) {
          ON c.ledger_id = t.ledger_id
         AND c.id = t.category_id
        WHERE t.ledger_id = ?
-         AND t.deleted_at IS NULL
          AND t.category_id IS NOT NULL
          AND c.id IS NULL;`,
       [ledgerId],
@@ -211,7 +208,6 @@ export async function repairLedgerData(ledgerId) {
          ON a.ledger_id = t.ledger_id
         AND a.id = t.account_id
        WHERE t.ledger_id = ?
-         AND t.deleted_at IS NULL
          AND a.id IS NULL;`,
       [ledgerId],
     )
@@ -223,7 +219,6 @@ export async function repairLedgerData(ledgerId) {
          ON a.ledger_id = t.ledger_id
         AND a.id = t.peer_account_id
        WHERE t.ledger_id = ?
-         AND t.deleted_at IS NULL
          AND t.peer_account_id IS NOT NULL
          AND a.id IS NULL;`,
       [ledgerId],
@@ -236,7 +231,6 @@ export async function repairLedgerData(ledgerId) {
          SET account_id = ?,
              updated_at = ?
          WHERE ledger_id = ?
-           AND deleted_at IS NULL
            AND NOT EXISTS (
              SELECT 1
              FROM accounts a
@@ -251,7 +245,6 @@ export async function repairLedgerData(ledgerId) {
          SET peer_account_id = ?,
              updated_at = ?
          WHERE ledger_id = ?
-           AND deleted_at IS NULL
            AND peer_account_id IS NOT NULL
            AND NOT EXISTS (
              SELECT 1
@@ -269,7 +262,6 @@ export async function repairLedgerData(ledgerId) {
            ON a.ledger_id = t.ledger_id
           AND a.id = t.account_id
          WHERE t.ledger_id = ?
-           AND t.deleted_at IS NULL
            AND a.id IS NULL;`,
         [ledgerId],
       )
@@ -280,7 +272,6 @@ export async function repairLedgerData(ledgerId) {
            ON a.ledger_id = t.ledger_id
           AND a.id = t.peer_account_id
          WHERE t.ledger_id = ?
-           AND t.deleted_at IS NULL
            AND t.peer_account_id IS NOT NULL
            AND a.id IS NULL;`,
         [ledgerId],
@@ -296,7 +287,6 @@ export async function repairLedgerData(ledgerId) {
          ON c.ledger_id = t.ledger_id
         AND c.id = t.category_id
        WHERE t.ledger_id = ?
-         AND t.deleted_at IS NULL
          AND t.category_id IS NOT NULL
          AND c.id IS NULL;`,
       [ledgerId],
@@ -308,7 +298,6 @@ export async function repairLedgerData(ledgerId) {
          SET category_id = NULL,
              updated_at = ?
          WHERE ledger_id = ?
-           AND deleted_at IS NULL
            AND category_id IS NOT NULL
            AND NOT EXISTS (
              SELECT 1
@@ -326,7 +315,6 @@ export async function repairLedgerData(ledgerId) {
            ON c.ledger_id = t.ledger_id
           AND c.id = t.category_id
          WHERE t.ledger_id = ?
-           AND t.deleted_at IS NULL
            AND t.category_id IS NOT NULL
            AND c.id IS NULL;`,
         [ledgerId],

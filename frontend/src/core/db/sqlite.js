@@ -2,38 +2,12 @@ import { Capacitor } from '@capacitor/core'
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite'
 import { runMigrations } from '@/core/db/migrate'
 import { ensureWebSqliteStoreReady } from '@/core/db/web-store'
+import { DATABASE_WIPE_DELETE_ORDER } from '@/core/utils/sqlite-delete-order'
 import { rethrowAsForeignKeyError } from '@/core/utils/sqlite-fk'
 
 const PRIMARY_DB_NAME = 'straw_money_book'
 const RECOVERY_DB_NAME = 'straw_money_book_recovery'
 const DB_VERSION = 1
-const RESET_TABLES = [
-  'transaction_attachments',
-  'loan_payments',
-  'reimbursement_advance_usages',
-  'reimbursement_advances',
-  'reimbursement_items',
-  'reimbursements',
-  'budget_save_settlements',
-  'budget_items',
-  'budget_containers',
-  'budgets',
-  'loans',
-  'bank_sync_rules',
-  'bank_transactions',
-  'bank_accounts',
-  'bank_connections',
-  'transactions',
-  'savings_jars',
-  'accounts',
-  'account_groups',
-  'categories',
-  'category_groups',
-  'counterparties',
-  'app_settings',
-  'deleted_log',
-  'ledgers',
-]
 
 const sqlite = new SQLiteConnection(CapacitorSQLite)
 let db = null
@@ -176,13 +150,14 @@ async function rebuildDatabase(dbName = activeDbName) {
     // wipe all data rows explicitly so "reset all data" still works.
     const conn = await openDatabaseConnection(dbName)
     try {
-      await conn.execute('PRAGMA foreign_keys = OFF;')
-      for (const table of RESET_TABLES) {
+      // Keep foreign_keys ON (smb296): wipe by child-first order instead of disabling constraints.
+      await conn.execute('PRAGMA foreign_keys = ON;')
+      for (const table of DATABASE_WIPE_DELETE_ORDER) {
         try {
           await conn.run(`DELETE FROM ${table};`)
         } catch (tableError) {
           if (!isNoSuchTableError(tableError)) {
-            throw tableError
+            rethrowAsForeignKeyError(tableError)
           }
         }
       }
@@ -190,12 +165,6 @@ async function rebuildDatabase(dbName = activeDbName) {
       const deleteMessage = normalizeErrorMessage(deleteError)
       const wipeMessage = normalizeErrorMessage(wipeError)
       throw new Error(`[sqlite] reset fallback failed; delete: ${deleteMessage}; wipe: ${wipeMessage}`)
-    } finally {
-      try {
-        await conn.execute('PRAGMA foreign_keys = ON;')
-      } catch {
-        // noop
-      }
     }
     return conn
   }

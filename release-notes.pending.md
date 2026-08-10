@@ -2,7 +2,7 @@
 
 ---
 
-- (smb296) 修復 FOREIGN KEY constraint failed（1811）：匯入／Google Drive／共同帳本寫入前統一 orphan prune 與失效可空引用清空；帳戶／分類刪除檢查含 soft-deleted 的 FK 引用，硬刪會觸發約束時改 soft-delete；SQLite 寫入層轉成 typed 錯誤與可理解 i18n，同步失敗狀態可見；維持 `PRAGMA foreign_keys=ON`，不以 silent no-op 假裝成功。補 sql.js 可重現 orphan→1811／normalize 後成功整合測試與 source 回歸。
+- (smb296) 修復 FOREIGN KEY constraint failed（1811）：匯入／Google Drive／共同帳本寫入前統一 orphan prune 與失效可空引用清空；帳戶／分類刪除檢查含 soft-deleted 的 FK 引用，硬刪會觸發約束時改 soft-delete；SQLite 寫入層轉成 typed 錯誤與可理解 i18n，同步失敗狀態可見；DB wipe／ledger purge 改 child-first 刪除且維持 `PRAGMA foreign_keys=ON`（禁止 OFF）；tombstone 父列復活改 bottom-up（交易→帳戶／分類→群組）避免復活帳戶後仍缺群組被 prune；repair 含 soft-deleted orphan。補 sql.js orphan／tombstone→1811／normalize 後成功整合測試與 source 回歸。
 - (smb293) 保留交易報表頁並補客製化／開啟檔案：分析頁恢復「交易報表」入口進入 `/analysis/print`（BottomNav／返回分析仍在）；報表頁維持全部／年／月／日／自訂期間客製化，預覽與匯出對應所選範圍；PDF／CSV 匯出成功後顯示「開啟檔案」（`analysis_print.open_link`／`openFileUrl`），失敗不假顯示；分析頁一鍵直匯出 PDF 快捷保留。補 Node／`playwright:analysis-export`（入口→客製化→匯出→開檔，並確認一鍵直匯出未回歸）。
 - (smb292) 刪除交易後回首頁並保留滑動位置：交易編輯頁（及首頁編輯 sheet）刪除成功改為一律導向首頁，並還原離開首頁前的 window 捲動（列表變短時 clamp）；不再 `history.back` 停在已刪除明細。離開首頁時記住捲動；詳情頁若交易已不存在亦導回首頁。補 Node 回歸與 `playwright:ui-layout`（bypass onboarding → 首頁捲動 → 開啟／刪除交易 → 回首頁＋scroll 近似保留）。
 - (smb291) AI 記帳四則運算與保留詞不入備註：金額算式支援加減乘除（含 `× ÷`、優先序、空白與萬/千/百單位展開，例如 `100+50*2`、`1.5*2萬`、`2千+500`），並與手動快速新增計算機共用求值核心；已對應分類／帳戶／自動識別關鍵字的保留詞不再寫入備註，明確「備註／note／memo」標註內容仍保留。補 Node 算式／備註回歸與 `build:web`。

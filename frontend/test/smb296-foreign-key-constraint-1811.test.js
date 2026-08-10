@@ -247,3 +247,93 @@ test('smb296: optional FK nulling keeps valid parent rows and drops invalid refs
     db.close()
   }
 })
+
+test('smb296: tombstoned parent with newer child resurrects then inserts without FOREIGN KEY 1811', async () => {
+  const SQL = await initSqlJs()
+  const snapshot = {
+    schema_version: 1,
+    ledger_id: 'ledger_fk',
+    tables: {
+      ledgers: [{ id: 'ledger_fk', name: 'FK' }],
+      account_groups: [],
+      accounts: [],
+      category_groups: [],
+      categories: [],
+      transactions: [{
+        id: 'tx_alive',
+        account_id: 'acc_tombstoned',
+        amount_minor: 80,
+        updated_at: '2026-08-10T12:00:00.000Z',
+      }],
+      transaction_attachments: [],
+      deleted_log: [
+        {
+          table_name: 'accounts',
+          row_pk: 'acc_tombstoned',
+          deleted_at: '2026-08-10T10:00:00.000Z',
+          payload_json: JSON.stringify({
+            id: 'acc_tombstoned',
+            group_id: 'group_cash',
+            name: '復活帳戶',
+            updated_at: '2026-08-10T09:00:00.000Z',
+          }),
+        },
+        {
+          table_name: 'account_groups',
+          row_pk: 'group_cash',
+          deleted_at: '2026-08-10T10:00:00.000Z',
+          payload_json: JSON.stringify({
+            id: 'group_cash',
+            name: '現金',
+            updated_at: '2026-08-10T08:00:00.000Z',
+          }),
+        },
+      ],
+    },
+  }
+
+  // Without normalize: missing account parent → FK 1811.
+  const rawDb = openFkDb(SQL)
+  let threw = false
+  try {
+    insertSnapshotRows(rawDb, {
+      ...snapshot,
+      tables: {
+        ...snapshot.tables,
+        account_groups: [{ id: 'group_cash', name: '現金' }],
+        accounts: [],
+      },
+    })
+  } catch (error) {
+    threw = true
+    assert.match(String(error?.message ?? error), /FOREIGN KEY|constraint failed|1811/i)
+  } finally {
+    rawDb.close()
+  }
+  assert.equal(threw, true)
+
+  const normalized = normalizeSharedLedgerSnapshot(snapshot)
+  assert.ok(normalized.tables.accounts.some((row) => row.id === 'acc_tombstoned'), 'account must resurrect from tombstone')
+  assert.ok(normalized.tables.account_groups.some((row) => row.id === 'group_cash'), 'group must resurrect after account')
+  assert.ok(normalized.tables.transactions.some((row) => row.id === 'tx_alive'))
+  assert.equal(
+    (normalized.tables.deleted_log ?? []).some((row) => row.row_pk === 'acc_tombstoned'),
+    false,
+    'resurrected account tombstone must be cleared',
+  )
+  assert.equal(
+    (normalized.tables.deleted_log ?? []).some((row) => row.row_pk === 'group_cash'),
+    false,
+    'resurrected group tombstone must be cleared',
+  )
+
+  const fixedDb = openFkDb(SQL)
+  try {
+    assert.doesNotThrow(() => insertSnapshotRows(fixedDb, normalized))
+    assert.equal(fixedDb.exec('SELECT COUNT(*) FROM account_groups;')[0].values[0][0], 1)
+    assert.equal(fixedDb.exec('SELECT COUNT(*) FROM accounts;')[0].values[0][0], 1)
+    assert.equal(fixedDb.exec('SELECT COUNT(*) FROM transactions;')[0].values[0][0], 1)
+  } finally {
+    fixedDb.close()
+  }
+})
