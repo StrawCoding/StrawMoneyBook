@@ -17,7 +17,8 @@ import {
 
 function groupTransactionsBySecurityId(transactions = []) {
   const map = new Map()
-  for (const tx of transactions ?? []) {
+  const rows = Array.isArray(transactions) ? transactions : []
+  for (const tx of rows) {
     const securityId = String(tx?.security_id ?? '').trim()
     if (!securityId) continue
     if (!map.has(securityId)) map.set(securityId, [])
@@ -27,11 +28,12 @@ function groupTransactionsBySecurityId(transactions = []) {
 }
 
 export async function loadSecuritiesDashboard(ledgerId) {
-  const [securities, transactions] = await Promise.all([
+  const [securitiesResult, transactionsResult] = await Promise.all([
     listSecurities(ledgerId),
     listAllSecurityTransactions(ledgerId),
   ])
-  const bySecurity = groupTransactionsBySecurityId(transactions)
+  const securities = Array.isArray(securitiesResult) ? securitiesResult : []
+  const bySecurity = groupTransactionsBySecurityId(transactionsResult)
   const items = securities.map((security) => {
     const position = buildSecurityPosition(security, bySecurity.get(security.id) ?? [])
     return {

@@ -1,6 +1,6 @@
 import { query, run } from '../db/sqlite.js'
 import { createId, nowIso } from '../utils/id.js'
-import { assertLedgerId, firstRow } from './base.repo.js'
+import { assertLedgerId, firstRow, rowsOf } from './base.repo.js'
 
 function normalizeSymbol(value) {
   return String(value ?? '').trim().toUpperCase()
@@ -21,16 +21,17 @@ function normalizeCurrency(value) {
 
 export async function listSecurities(ledgerId, { includeArchived = false } = {}) {
   assertLedgerId(ledgerId)
-  const rows = await query(
-    `SELECT *
-       FROM securities
-      WHERE ledger_id = ?
-        AND deleted_at IS NULL
-        ${includeArchived ? '' : 'AND is_archived = 0'}
-      ORDER BY sort_order ASC, updated_at DESC, name ASC;`,
-    [ledgerId],
+  return rowsOf(
+    await query(
+      `SELECT *
+         FROM securities
+        WHERE ledger_id = ?
+          AND deleted_at IS NULL
+          ${includeArchived ? '' : 'AND is_archived = 0'}
+        ORDER BY sort_order ASC, updated_at DESC, name ASC;`,
+      [ledgerId],
+    ),
   )
-  return rows ?? []
 }
 
 export async function findSecurityById(ledgerId, securityId) {
@@ -164,24 +165,28 @@ export async function listSecurityTransactions(ledgerId, securityId) {
   assertLedgerId(ledgerId)
   const id = String(securityId ?? '').trim()
   if (!id) return []
-  return await query(
-    `SELECT *
-       FROM security_transactions
-      WHERE ledger_id = ? AND security_id = ? AND deleted_at IS NULL
-      ORDER BY occurred_at DESC, created_at DESC;`,
-    [ledgerId, id],
-  ) ?? []
+  return rowsOf(
+    await query(
+      `SELECT *
+         FROM security_transactions
+        WHERE ledger_id = ? AND security_id = ? AND deleted_at IS NULL
+        ORDER BY occurred_at DESC, created_at DESC;`,
+      [ledgerId, id],
+    ),
+  )
 }
 
 export async function listAllSecurityTransactions(ledgerId) {
   assertLedgerId(ledgerId)
-  return await query(
-    `SELECT *
-       FROM security_transactions
-      WHERE ledger_id = ? AND deleted_at IS NULL
-      ORDER BY occurred_at DESC, created_at DESC;`,
-    [ledgerId],
-  ) ?? []
+  return rowsOf(
+    await query(
+      `SELECT *
+         FROM security_transactions
+        WHERE ledger_id = ? AND deleted_at IS NULL
+        ORDER BY occurred_at DESC, created_at DESC;`,
+      [ledgerId],
+    ),
+  )
 }
 
 export async function createSecurityTransaction(ledgerId, input = {}) {

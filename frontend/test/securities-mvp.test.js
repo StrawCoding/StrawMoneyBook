@@ -52,6 +52,23 @@ test('included securities market value feeds asset total', () => {
   assert.equal(summary.totalAssetMinor, 6000)
 })
 
+test('securities repo unwraps sqlite query.values via rowsOf', () => {
+  const root = resolve(import.meta.dirname, '..')
+  const repo = readFileSync(resolve(root, 'src/core/repositories/security.repo.js'), 'utf8')
+  assert.match(repo, /rowsOf/)
+  assert.match(repo, /listSecurities[\s\S]*rowsOf\(/)
+  assert.match(repo, /listAllSecurityTransactions[\s\S]*rowsOf\(/)
+  assert.match(repo, /listSecurityTransactions[\s\S]*rowsOf\(/)
+  assert.doesNotMatch(repo, /return rows \?\? \[\]/)
+  assert.doesNotMatch(repo, /\) \?\? \[\]/)
+})
+
+test('summarizeSecurityTransactions tolerates non-array query wrappers', () => {
+  const summary = summarizeSecurityTransactions({ values: [{ type: 'buy', quantity: 1, price_minor: 100, fee_minor: 0 }] })
+  assert.equal(summary.quantity, 0)
+  assert.equal(summary.investedMinor, 0)
+})
+
 test('securities migration and routes are wired', () => {
   const root = resolve(import.meta.dirname, '..')
   const migrate = readFileSync(resolve(root, 'src/core/db/migrate.js'), 'utf8')

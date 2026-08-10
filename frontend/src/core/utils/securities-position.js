@@ -10,8 +10,9 @@ export function normalizeSecurityTxType(value) {
 export function summarizeSecurityTransactions(transactions = []) {
   let quantity = 0
   let investedMinor = 0
+  const rows = Array.isArray(transactions) ? transactions : []
 
-  for (const tx of transactions ?? []) {
+  for (const tx of rows) {
     if (tx?.deleted_at) continue
     const qty = Math.trunc(Number(tx?.quantity ?? 0))
     if (!Number.isFinite(qty) || qty <= 0) continue
