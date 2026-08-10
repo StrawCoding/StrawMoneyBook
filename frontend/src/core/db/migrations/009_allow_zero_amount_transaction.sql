@@ -1,4 +1,29 @@
-PRAGMA foreign_keys = OFF;
+-- smb296: rebuild transactions under PRAGMA foreign_keys=ON.
+-- Composite child FKs use ON DELETE SET NULL / CASCADE; disabling foreign_keys is forbidden.
+-- Detach nullable refs + backup/delete CASCADE children, rebuild parent, then restore.
+PRAGMA foreign_keys = ON;
+
+DROP TABLE IF EXISTS _mig009_bak_tx_att;
+DROP TABLE IF EXISTS _mig009_bak_loan_gen;
+DROP TABLE IF EXISTS _mig009_bak_reimb_paid;
+DROP TABLE IF EXISTS _mig009_bak_reimb_item_tx;
+DROP TABLE IF EXISTS _mig009_bak_bank_imported;
+
+CREATE TABLE _mig009_bak_tx_att AS SELECT * FROM transaction_attachments;
+CREATE TABLE _mig009_bak_loan_gen AS
+  SELECT ledger_id, id, generated_tx_id FROM loan_payments WHERE generated_tx_id IS NOT NULL;
+CREATE TABLE _mig009_bak_reimb_paid AS
+  SELECT ledger_id, id, paid_tx_id FROM reimbursements WHERE paid_tx_id IS NOT NULL;
+CREATE TABLE _mig009_bak_reimb_item_tx AS
+  SELECT ledger_id, id, transaction_id FROM reimbursement_items WHERE transaction_id IS NOT NULL;
+CREATE TABLE _mig009_bak_bank_imported AS
+  SELECT ledger_id, id, imported_txn_id FROM bank_transactions WHERE imported_txn_id IS NOT NULL;
+
+UPDATE loan_payments SET generated_tx_id = NULL WHERE generated_tx_id IS NOT NULL;
+UPDATE reimbursements SET paid_tx_id = NULL WHERE paid_tx_id IS NOT NULL;
+UPDATE reimbursement_items SET transaction_id = NULL WHERE transaction_id IS NOT NULL;
+UPDATE bank_transactions SET imported_txn_id = NULL WHERE imported_txn_id IS NOT NULL;
+DELETE FROM transaction_attachments;
 
 CREATE TABLE IF NOT EXISTS transactions_new (
   ledger_id TEXT NOT NULL,
@@ -90,5 +115,53 @@ CREATE INDEX IF NOT EXISTS idx_tx_category_date ON transactions(ledger_id, categ
 CREATE INDEX IF NOT EXISTS idx_tx_transfer_group ON transactions(ledger_id, transfer_group_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tx_idempotency ON transactions(ledger_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_tx_reimbursement_state ON transactions(ledger_id, is_reimbursable, reimbursement_state, occurred_at DESC);
+
+INSERT INTO transaction_attachments SELECT * FROM _mig009_bak_tx_att;
+
+UPDATE loan_payments
+SET generated_tx_id = (
+  SELECT b.generated_tx_id FROM _mig009_bak_loan_gen b
+  WHERE b.ledger_id = loan_payments.ledger_id AND b.id = loan_payments.id
+)
+WHERE EXISTS (
+  SELECT 1 FROM _mig009_bak_loan_gen b
+  WHERE b.ledger_id = loan_payments.ledger_id AND b.id = loan_payments.id
+);
+
+UPDATE reimbursements
+SET paid_tx_id = (
+  SELECT b.paid_tx_id FROM _mig009_bak_reimb_paid b
+  WHERE b.ledger_id = reimbursements.ledger_id AND b.id = reimbursements.id
+)
+WHERE EXISTS (
+  SELECT 1 FROM _mig009_bak_reimb_paid b
+  WHERE b.ledger_id = reimbursements.ledger_id AND b.id = reimbursements.id
+);
+
+UPDATE reimbursement_items
+SET transaction_id = (
+  SELECT b.transaction_id FROM _mig009_bak_reimb_item_tx b
+  WHERE b.ledger_id = reimbursement_items.ledger_id AND b.id = reimbursement_items.id
+)
+WHERE EXISTS (
+  SELECT 1 FROM _mig009_bak_reimb_item_tx b
+  WHERE b.ledger_id = reimbursement_items.ledger_id AND b.id = reimbursement_items.id
+);
+
+UPDATE bank_transactions
+SET imported_txn_id = (
+  SELECT b.imported_txn_id FROM _mig009_bak_bank_imported b
+  WHERE b.ledger_id = bank_transactions.ledger_id AND b.id = bank_transactions.id
+)
+WHERE EXISTS (
+  SELECT 1 FROM _mig009_bak_bank_imported b
+  WHERE b.ledger_id = bank_transactions.ledger_id AND b.id = bank_transactions.id
+);
+
+DROP TABLE IF EXISTS _mig009_bak_tx_att;
+DROP TABLE IF EXISTS _mig009_bak_loan_gen;
+DROP TABLE IF EXISTS _mig009_bak_reimb_paid;
+DROP TABLE IF EXISTS _mig009_bak_reimb_item_tx;
+DROP TABLE IF EXISTS _mig009_bak_bank_imported;
 
 PRAGMA foreign_keys = ON;

@@ -3,16 +3,23 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
 
-function listJsFiles(dir, out = []) {
+function listProductSourceFiles(dir, out = []) {
   for (const name of readdirSync(dir)) {
     const full = join(dir, name)
     const st = statSync(full)
     if (st.isDirectory()) {
-      if (name === 'migrations' || name === 'node_modules') continue
-      listJsFiles(full, out)
+      if (name === 'node_modules') continue
+      listProductSourceFiles(full, out)
       continue
     }
-    if (name.endsWith('.js') || name.endsWith('.mjs') || name.endsWith('.vue')) out.push(full)
+    if (
+      name.endsWith('.js')
+      || name.endsWith('.mjs')
+      || name.endsWith('.vue')
+      || name.endsWith('.sql')
+    ) {
+      out.push(full)
+    }
   }
   return out
 }
@@ -101,12 +108,27 @@ test('smb296: purge／wipe 共用 child-first 刪除順序且不關閉 foreign_k
   assert.doesNotMatch(ledgerRepoSource, /PRAGMA foreign_keys\s*=\s*OFF/)
 })
 
-test('smb296: 產品執行期 JS/Vue（排除 migrations）不得 PRAGMA foreign_keys=OFF', () => {
+test('smb296: 產品碼含 migrations（runMigrations 註冊執行）皆不得 PRAGMA foreign_keys=OFF', () => {
   const srcRoot = resolve(import.meta.dirname, '../src')
   const offenders = []
-  for (const file of listJsFiles(srcRoot)) {
+  for (const file of listProductSourceFiles(srcRoot)) {
     const text = readFileSync(file, 'utf8')
     if (/PRAGMA\s+foreign_keys\s*=\s*OFF/i.test(text)) offenders.push(file)
   }
-  assert.deepEqual(offenders, [], `runtime sources still disable foreign_keys: ${offenders.join(', ')}`)
+  assert.deepEqual(offenders, [], `sources still disable foreign_keys: ${offenders.join(', ')}`)
+
+  const migration009 = readFileSync(
+    resolve(import.meta.dirname, '../src/core/db/migrations/009_allow_zero_amount_transaction.sql'),
+    'utf8',
+  )
+  const migration026 = readFileSync(
+    resolve(import.meta.dirname, '../src/core/db/migrations/026_transaction_origin_type_refund.sql'),
+    'utf8',
+  )
+  assert.match(migration009, /PRAGMA foreign_keys = ON/)
+  assert.match(migration026, /PRAGMA foreign_keys = ON/)
+  assert.match(migration009, /_mig009_bak_/)
+  assert.match(migration026, /_mig026_bak_/)
+  assert.doesNotMatch(migration009, /PRAGMA\s+foreign_keys\s*=\s*OFF/i)
+  assert.doesNotMatch(migration026, /PRAGMA\s+foreign_keys\s*=\s*OFF/i)
 })
