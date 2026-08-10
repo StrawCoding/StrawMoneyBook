@@ -33,7 +33,7 @@ test('data management long-running restore/import/reset shows percentage loading
   assert.match(source, /role="progressbar"/)
   assert.match(source, /:aria-valuenow="operationProgress\.percent"/)
   assert.match(source, /withOperationProgress\('importJson',[\s\S]*await resetDatabase\(\{[\s\S]*await importBackupJsonAsNewLedgers\(text\)[\s\S]*await refreshAllStores\(\)/)
-  assert.match(source, /withOperationProgress\('resetAll',[\s\S]*await createResetRecoveryBackup\(\)[\s\S]*await resetDatabase\(\{[\s\S]*await refreshAllStores\(\)/)
+  assert.match(source, /withOperationProgress\('resetAll',[\s\S]*await requireRecoveryBackupBeforeWipe\(createResetRecoveryBackup[\s\S]*await resetDatabase\(\{[\s\S]*await refreshAllStores\(\)/)
 })
 
 test('data management progress copy is covered by i18n and docs', () => {

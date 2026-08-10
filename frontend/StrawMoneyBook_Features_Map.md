@@ -34,7 +34,7 @@
 - SMB-224 Restart / v1.2.47：再修復 v1.2.46 部署後 Tester 仍回報 `GOOGLE_EXCHANGE_005`：production env `GOOGLE_OAUTH_CLIENT_SECRET` 被誤設成 client_id 值（結尾為 `.apps.googleusercontent.com`，而非 `GOCSPX-` 開頭的 web client secret），導致 Google 一律以 `invalid_client / "client secret is invalid"` 拒絕。backend 與 api.strawmb.com serverless 的 OAuth exchange / refresh 端點現在會偵測這種 client-id 形狀的 secret 並視為 missing，回應 `GOOGLE_EXCHANGE_004 / GOOGLE_REFRESH_004 missing_google_oauth_env`，錯誤訊息直接指出該 env 應使用 `GOCSPX-` 開頭的 secret；伺服器啟動時也會 `console.error` 明確警告；前端 `normalizeGoogleAuthError` 將 `missing_google_oauth_env / invalid_client / client secret is invalid` 映射為「Google 自動備份後端設定錯誤，請通知管理員」訊息。
 - 記帳提醒與成就表（每日固定提醒、通知權限 / 精準提醒狀態、連續記帳天數、最長連續與累計記帳日）
 - 會員邀請碼（邀請者 +7 天、被邀請者 +3 天，需先登入且不可重複邀請）
-- 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本；SMB-154 / 0.26.5 後設定首頁、登入 / 註冊與共同帳本相關頁面使用到的主要介面文案皆已納入 zh-TW / en / ja 正式 i18n key，避免切換英文 / 日文時依賴繁中 fallback；手動重設全部資料前會先嘗試建立 recovery JSON 備份，備份失敗時仍保留錯誤紀錄並繼續既有重設流程；SMB-190 / v1.2.5 後資料管理的 JSON / CSV 匯出檔名會加入時間戳，避免重複匯出覆蓋同一路徑檔案；SMB-216 / v1.2.29 後資料管理的還原備份、CSV 匯入與重設資料等可能超過 3 秒的流程會顯示含百分比的加載動畫，避免使用者誤以為卡住；SMB-221 / v1.2.40 後所有設定子頁面的標題加入與功能對應的 Font Awesome icon，與「關於我們」頁面一致的視覺風格；SMB-250 / v1.3.29 後曾於設定 → 個人化提供「介面風格」切換；smb289 起**只保留現代 mode**（`apple-ui.css` Apple HIG：Large Title、Inset Grouped、Segmented Control、list row + chevron），移除傳統／現代切換入口，舊 `traditional` preference 啟動時遷移為 `modern`；**保留** 5 tab 底部導覽、首頁 FAB 與全部功能區塊；SMB-254 / v1.3.33 後設定首頁（`/settings`）清單列高度調小、更緊湊：現代版設定列垂直 padding 由 `12px 14px` 收為 `8px 14px`（量測列高 63→54px），傳統版列間分隔由 12px 收為 8px、描述行高 1.35→1.3，兩種版型皆保留 `min-height: 44px` 點擊區與 safe-area）
+- 設定功能（資料管理、自動備份、帳本同步、匯率、自動識別、安全鎖、語言、會員、帳號、共同帳本；SMB-154 / 0.26.5 後設定首頁、登入 / 註冊與共同帳本相關頁面使用到的主要介面文案皆已納入 zh-TW / en / ja 正式 i18n key，避免切換英文 / 日文時依賴繁中 fallback；手動重設全部資料前會先建立 recovery JSON 備份，**備份失敗會中止清空**（不會繼續 reset）；SMB-190 / v1.2.5 後資料管理的 JSON / CSV 匯出檔名會加入時間戳，避免重複匯出覆蓋同一路徑檔案；SMB-216 / v1.2.29 後資料管理的還原備份、CSV 匯入與重設資料等可能超過 3 秒的流程會顯示含百分比的加載動畫，避免使用者誤以為卡住；SMB-221 / v1.2.40 後所有設定子頁面的標題加入與功能對應的 Font Awesome icon，與「關於我們」頁面一致的視覺風格；SMB-250 / v1.3.29 後曾於設定 → 個人化提供「介面風格」切換；smb289 起**只保留現代 mode**（`apple-ui.css` Apple HIG：Large Title、Inset Grouped、Segmented Control、list row + chevron），移除傳統／現代切換入口，舊 `traditional` preference 啟動時遷移為 `modern`；**保留** 5 tab 底部導覽、首頁 FAB 與全部功能區塊；SMB-254 / v1.3.33 後設定首頁（`/settings`）清單列高度調小、更緊湊：現代版設定列垂直 padding 由 `12px 14px` 收為 `8px 14px`（量測列高 63→54px），傳統版列間分隔由 12px 收為 8px、描述行高 1.35→1.3，兩種版型皆保留 `min-height: 44px` 點擊區與 safe-area）
 - 子頁 header 標準（SMB-178）：含返回鍵的頁面主 header 採帳本同步頁樣式，直接放在頁面容器下，不包在 `card panel` 內容區塊內；全域 `.back-btn` 以 40px chevron icon 呈現，標題置中；新增 / 主要操作按鈕改放在第一個內容卡的 `panel-head` 右側，和存錢罐頁一致
 - 關於與聯絡入口（官網、Facebook、Instagram、Threads、Email、隱私權政策）
 - 官方網站 SEO / 品牌搜尋關鍵字（`../StrawMoneyBookWeb/index.html`：`StrawMoneyBook`、`稻草AI記帳`、`稻草記帳`、`AI記帳`、`對話記帳`、`自動記帳` 等）
@@ -158,8 +158,8 @@
 - 附加項目：`/settings/addon-templates`
 - 自動識別：`/settings/auto-fill-rules`
 - 匯率同步：`/settings/exchange-rate`
-- 資料管理：`/settings/data-management`（smb297：還原指引＋帳本完整性掃描／明確修復（需倒數確認，禁啟動／同步靜默改寫）＋JSON 匯入／重設皆需確認倒數＋recovery 備份＋wipe audit；匯入預設不自動 repair；禁止 bootstrap／FK silent wipe）
-- 自動備份：`/settings/auto-backup`（smb297：Google／WebDAV「立即還原」需確認倒數＋recovery 備份後才清空本機；還原後 integrity repair 僅在此明示確認路徑以 `USER_RESTORE_BACKUP` 執行）
+- 資料管理：`/settings/data-management`（smb297：還原指引＋帳本完整性掃描／明確修復（需倒數確認，禁啟動／同步靜默改寫）＋JSON 匯入／重設皆需確認倒數＋**recovery 備份必須成功**（失敗→`RECOVERY_BACKUP_REQUIRED` 中止，禁 swallow 後 wipe）＋wipe audit；匯入預設不自動 repair；禁止 bootstrap／FK silent wipe）
+- 自動備份：`/settings/auto-backup`（smb297：Google／WebDAV「立即還原」需確認倒數＋**recovery 備份必須成功後才**清空本機；備份失敗中止、不呼叫 `resetDatabase`；還原後 integrity repair 僅在此明示確認路徑以 `USER_RESTORE_BACKUP` 執行）
 - Google Drive 帳本同步：`/settings/google-drive-ledger-sync`（smb297：本機有交易且遠端快照為空時阻擋 hard replace，狀態 `empty_remote_blocked`；sync replace **不**自動 `repairLedgerData`；FK preserve 合成缺失父列並保留子表筆數，禁止丟交易／關聯子列）
 - 語言：`/settings/language`
 - 個人化：`/settings/personalization`
@@ -567,7 +567,7 @@ UI composable 目錄：`src/ui/composables/`
 - 函數：`assertExplicitDataWipe`、`recordDataWipeAudit`、`assertExplicitLedgerRepair`、`recordLedgerIntegrityScan`、`recordLedgerRepairAudit`、`createLocalDatabaseIntegrityError`、`createEmptyRemoteReplaceBlockedError`、`countSnapshotActiveTransactions` 等
 - 變數（0）：無
 - 類別（0）：無
-- 補充（smb297）：完整 wipe 與破壞性 repair 皆需 `confirmed`＋合法 reason＋audit；啟動僅 scan；Google Drive／共同帳本 sync replace `runIntegrityRepair:false`；JSON 匯入預設不自動 repair；禁止 silent rewrite。
+- 補充（smb297）：完整 wipe 與破壞性 repair 皆需 `confirmed`＋合法 reason＋audit；wipe 前 `requireRecoveryBackupBeforeWipe`（失敗→`RECOVERY_BACKUP_REQUIRED`）；啟動僅 scan；Google Drive／共同帳本 sync replace `runIntegrityRepair:false`；JSON 匯入預設不自動 repair；禁止 silent rewrite。
 
 ### `src/core/services/budget.service.js`
 - 函數（新增重點）：`resolveBudgetPeriodForLedger`, `previousBudgetPeriod`, `nextBudgetPeriod`, `loadBudgetSnapshotForPeriod`, `listInclusiveMonthKeys`, `saveBudgetContainerRange`, `saveBudgetItemRange`

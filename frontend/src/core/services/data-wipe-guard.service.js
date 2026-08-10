@@ -113,6 +113,45 @@ export function listDataWipeAudit() {
   return readAuditStore()
 }
 
+export const RECOVERY_BACKUP_REQUIRED_CODE = 'RECOVERY_BACKUP_REQUIRED'
+
+/**
+ * smb297: Local recovery backup is mandatory before any full wipe.
+ * Backup failure must abort the wipe — never continue into resetDatabase.
+ */
+export function createRecoveryBackupRequiredError(cause, options = {}) {
+  const originalMessage = String(cause?.message ?? cause ?? '').trim()
+  const message =
+    String(options.message ?? '').trim()
+    || '本機 recovery 備份建立失敗，已中止清空本機資料。請先手動匯出備份後再重試還原／匯入／重設。'
+  const error = new Error(message)
+  error.code = RECOVERY_BACKUP_REQUIRED_CODE
+  error.i18nKey = options.i18nKey || 'settings_data.toast.recovery_backup_required'
+  error.source = String(options.source ?? '').trim()
+  error.originalMessage = originalMessage
+  error.silentWipeBlocked = true
+  if (cause && typeof cause === 'object') {
+    try {
+      error.cause = cause
+    } catch {
+      // older runtimes may reject assigning cause
+    }
+  }
+  return error
+}
+
+export async function requireRecoveryBackupBeforeWipe(createBackup, options = {}) {
+  if (typeof createBackup !== 'function') {
+    throw createRecoveryBackupRequiredError(new Error('recovery backup creator missing'), options)
+  }
+  try {
+    await createBackup()
+  } catch (cause) {
+    if (cause?.code === RECOVERY_BACKUP_REQUIRED_CODE) throw cause
+    throw createRecoveryBackupRequiredError(cause, options)
+  }
+}
+
 export function countSnapshotActiveTransactions(snapshot) {
   const rows = snapshot?.tables?.transactions
   if (!Array.isArray(rows)) return 0

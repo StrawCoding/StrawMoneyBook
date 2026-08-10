@@ -202,7 +202,13 @@ import {
   timestampForFilename,
 } from '@/core/services/export.service'
 import { importBackupJsonAsNewLedgers, importLedgerCsv } from '@/core/services/import.service'
-import { DATA_WIPE_REASON, LEDGER_REPAIR_REASON, readLastLedgerIntegrityScan } from '@/core/services/data-wipe-guard.service'
+import {
+  DATA_WIPE_REASON,
+  LEDGER_REPAIR_REASON,
+  RECOVERY_BACKUP_REQUIRED_CODE,
+  readLastLedgerIntegrityScan,
+  requireRecoveryBackupBeforeWipe,
+} from '@/core/services/data-wipe-guard.service'
 import { repairLedgerData, scanLedgerIntegrity } from '@/core/services/repair.service'
 import { sumNumericValues } from '@/ui/services/ledger-runtime.helpers'
 import { resetDatabase } from '@/core/db/sqlite'
@@ -479,11 +485,11 @@ async function confirmImportJson() {
   try {
     const result = await withOperationProgress('importJson', async () => {
       const text = await readFileAsText(file)
-      try {
-        await createResetRecoveryBackup()
-      } catch (backupError) {
-        console.warn('[data-management] failed to create recovery backup before import wipe', backupError)
-      }
+      // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
+      await requireRecoveryBackupBeforeWipe(createResetRecoveryBackup, {
+        source: 'SettingsDataManagementPage.confirmImportJson',
+        i18nKey: 'settings_data.toast.recovery_backup_required',
+      })
       await resetDatabase({
         confirmed: true,
         reason: DATA_WIPE_REASON.USER_IMPORT_JSON,
@@ -504,11 +510,18 @@ async function confirmImportJson() {
     uiStore.pushToast(`${t('settings_data.toast.import_json_done', { ledgerName: importedLabel })}${importIntegrityHint(result.importedLedgers?.[0])}`)
     closeImportConfirm({ force: true })
   } catch (error) {
+    const recoveryMessage =
+      error?.code === RECOVERY_BACKUP_REQUIRED_CODE
+        ? t('settings_data.toast.recovery_backup_required', '本機 recovery 備份建立失敗，已中止清空本機資料。請先手動匯出後再重試。')
+        : ''
     const fkMessage = error?.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' || Number(error?.numericCode) === 1811
       || String(error?.i18nKey ?? '') === 'sqlite.error.foreign_key_constraint'
       ? t('settings_data.toast.foreign_key_constraint', '資料關聯不一致，操作已中止。請檢查匯入檔或先修復帳本資料。')
       : ''
-    uiStore.pushToast(fkMessage || error.message || t('settings_data.toast.import_json_failed'), 'error')
+    uiStore.pushToast(
+      recoveryMessage || fkMessage || error.message || t('settings_data.toast.import_json_failed'),
+      'error',
+    )
   } finally {
     importingJson.value = false
   }
@@ -682,11 +695,11 @@ async function confirmResetAllData() {
   resettingAllData.value = true
   try {
     await withOperationProgress('resetAll', async () => {
-      try {
-        await createResetRecoveryBackup()
-      } catch (backupError) {
-        console.warn('[data-management] failed to create recovery backup before reset', backupError)
-      }
+      // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
+      await requireRecoveryBackupBeforeWipe(createResetRecoveryBackup, {
+        source: 'SettingsDataManagementPage.confirmResetAllData',
+        i18nKey: 'settings_data.toast.recovery_backup_required',
+      })
       await resetDatabase({
         confirmed: true,
         reason: DATA_WIPE_REASON.USER_RESET_ALL,
@@ -699,7 +712,11 @@ async function confirmResetAllData() {
     uiStore.pushToast(t('settings_data.toast.reset_done'))
     closeResetConfirm({ force: true })
   } catch (error) {
-    uiStore.pushToast(error.message ?? t('settings_data.toast.reset_failed'), 'error')
+    const message =
+      error?.code === RECOVERY_BACKUP_REQUIRED_CODE
+        ? t('settings_data.toast.recovery_backup_required', '本機 recovery 備份建立失敗，已中止清空本機資料。請先手動匯出後再重試。')
+        : (error.message ?? t('settings_data.toast.reset_failed'))
+    uiStore.pushToast(message, 'error')
   } finally {
     resettingAllData.value = false
   }

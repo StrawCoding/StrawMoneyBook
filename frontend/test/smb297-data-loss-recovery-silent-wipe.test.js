@@ -120,16 +120,65 @@ test('smb297: integrity error is typed and marks silent wipe blocked', () => {
 test('smb297: JSON import / reset / restore UX require confirm + recovery backup + wipe reason', () => {
   assert.match(dataMgmtSource, /isImportConfirmOpen/)
   assert.match(dataMgmtSource, /createResetRecoveryBackup/)
+  assert.match(dataMgmtSource, /requireRecoveryBackupBeforeWipe/)
   assert.match(dataMgmtSource, /DATA_WIPE_REASON\.USER_IMPORT_JSON/)
   assert.match(dataMgmtSource, /DATA_WIPE_REASON\.USER_RESET_ALL/)
   assert.match(dataMgmtSource, /settings_data\.recovery\.title/)
   assert.match(dataMgmtSource, /confirmed:\s*true/)
+  // Backup failure must abort — no swallow-then-wipe pattern.
+  assert.doesNotMatch(
+    dataMgmtSource,
+    /failed to create recovery backup before (import wipe|reset)/,
+  )
+  assert.match(
+    dataMgmtSource,
+    /requireRecoveryBackupBeforeWipe\(createResetRecoveryBackup[\s\S]*?await resetDatabase\(\{/,
+  )
 
   assert.match(autoBackupSource, /openRestoreConfirm/)
   assert.match(autoBackupSource, /createRestoreRecoveryBackup/)
+  assert.match(autoBackupSource, /requireRecoveryBackupBeforeWipe/)
   assert.match(autoBackupSource, /DATA_WIPE_REASON\.USER_RESTORE_GOOGLE_BACKUP/)
   assert.match(autoBackupSource, /DATA_WIPE_REASON\.USER_RESTORE_WEBDAV_BACKUP/)
   assert.match(autoBackupSource, /data-testid="auto-backup-restore-confirm"/)
+  assert.doesNotMatch(
+    autoBackupSource,
+    /failed to create recovery backup before (webdav|google) restore/,
+  )
+  assert.match(
+    autoBackupSource,
+    /requireRecoveryBackupBeforeWipe\(createRestoreRecoveryBackup[\s\S]*?await resetDatabase\(\{/,
+  )
+})
+
+test('smb297: recovery backup failure blocks wipe (typed RECOVERY_BACKUP_REQUIRED)', async () => {
+  const {
+    requireRecoveryBackupBeforeWipe,
+    createRecoveryBackupRequiredError,
+    RECOVERY_BACKUP_REQUIRED_CODE,
+  } = await import('../src/core/services/data-wipe-guard.service.js')
+
+  let wipeCalled = false
+  await assert.rejects(
+    async () => {
+      await requireRecoveryBackupBeforeWipe(async () => {
+        throw new Error('disk full')
+      }, { source: 'smb297-test' })
+      wipeCalled = true
+    },
+    (error) => (
+      error?.code === RECOVERY_BACKUP_REQUIRED_CODE
+      && error?.silentWipeBlocked === true
+      && /中止|not cleared|中止しました/i.test(String(error.message))
+    ),
+  )
+  assert.equal(wipeCalled, false)
+
+  const typed = createRecoveryBackupRequiredError(new Error('export failed'), {
+    source: 'unit',
+  })
+  assert.equal(typed.code, RECOVERY_BACKUP_REQUIRED_CODE)
+  assert.equal(typed.silentWipeBlocked, true)
 })
 
 test('smb297: Google Drive sync blocks empty-remote hard replace over local txs', () => {

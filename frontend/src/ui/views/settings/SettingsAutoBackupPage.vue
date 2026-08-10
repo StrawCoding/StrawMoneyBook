@@ -295,7 +295,12 @@ import {
   saveJsonFileToDevice,
 } from '@/core/services/export.service'
 import { importBackupJsonAsNewLedgers } from '@/core/services/import.service'
-import { DATA_WIPE_REASON, LEDGER_REPAIR_REASON } from '@/core/services/data-wipe-guard.service'
+import {
+  DATA_WIPE_REASON,
+  LEDGER_REPAIR_REASON,
+  RECOVERY_BACKUP_REQUIRED_CODE,
+  requireRecoveryBackupBeforeWipe,
+} from '@/core/services/data-wipe-guard.service'
 import { resetDatabase } from '@/core/db/sqlite'
 
 const ledgerStore = useLedgerStore()
@@ -783,11 +788,11 @@ async function restoreFromWebdav() {
   webdavRestoringNow.value = true
   try {
     const backup = await restoreWebdavBackupJson(ledgerStore.activeLedgerId)
-    try {
-      await createRestoreRecoveryBackup()
-    } catch (backupError) {
-      console.warn('[auto-backup] failed to create recovery backup before webdav restore', backupError)
-    }
+    // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
+    await requireRecoveryBackupBeforeWipe(createRestoreRecoveryBackup, {
+      source: 'SettingsAutoBackupPage.restoreFromWebdav',
+      i18nKey: 'settings_auto_backup.toast.recovery_backup_required',
+    })
     await resetDatabase({
       confirmed: true,
       reason: DATA_WIPE_REASON.USER_RESTORE_WEBDAV_BACKUP,
@@ -822,7 +827,11 @@ async function restoreFromWebdav() {
     )
     closeRestoreConfirm({ force: true })
   } catch (error) {
-    uiStore.pushToast(errorMessage(error, t('settings_auto_backup.toast.webdav_restore_failed')), 'error')
+    const toastKey =
+      error?.code === RECOVERY_BACKUP_REQUIRED_CODE
+        ? 'settings_auto_backup.toast.recovery_backup_required'
+        : 'settings_auto_backup.toast.webdav_restore_failed'
+    uiStore.pushToast(errorMessage(error, t(toastKey)), 'error')
   } finally {
     webdavRestoringNow.value = false
   }
@@ -927,11 +936,11 @@ async function restoreFromGoogle() {
   googleRestoringNow.value = true
   try {
     const backup = await restoreGoogleBackupJson(ledgerStore.activeLedgerId)
-    try {
-      await createRestoreRecoveryBackup()
-    } catch (backupError) {
-      console.warn('[auto-backup] failed to create recovery backup before google restore', backupError)
-    }
+    // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
+    await requireRecoveryBackupBeforeWipe(createRestoreRecoveryBackup, {
+      source: 'SettingsAutoBackupPage.restoreFromGoogle',
+      i18nKey: 'settings_auto_backup.toast.recovery_backup_required',
+    })
     await resetDatabase({
       confirmed: true,
       reason: DATA_WIPE_REASON.USER_RESTORE_GOOGLE_BACKUP,
@@ -967,7 +976,11 @@ async function restoreFromGoogle() {
     closeRestoreConfirm({ force: true })
   } catch (error) {
     console.error('[google-restore] failed', error)
-    uiStore.pushToast(errorMessage(error, t('settings_auto_backup.toast.google_restore_failed')), 'error')
+    const toastKey =
+      error?.code === RECOVERY_BACKUP_REQUIRED_CODE
+        ? 'settings_auto_backup.toast.recovery_backup_required'
+        : 'settings_auto_backup.toast.google_restore_failed'
+    uiStore.pushToast(errorMessage(error, t(toastKey)), 'error')
   } finally {
     googleRestoringNow.value = false
   }
