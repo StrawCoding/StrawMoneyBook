@@ -295,7 +295,7 @@ import {
   saveJsonFileToDevice,
 } from '@/core/services/export.service'
 import { importBackupJsonAsNewLedgers } from '@/core/services/import.service'
-import { DATA_WIPE_REASON } from '@/core/services/data-wipe-guard.service'
+import { DATA_WIPE_REASON, LEDGER_REPAIR_REASON } from '@/core/services/data-wipe-guard.service'
 import { resetDatabase } from '@/core/db/sqlite'
 
 const ledgerStore = useLedgerStore()
@@ -796,6 +796,8 @@ async function restoreFromWebdav() {
     const imported = await importBackupJsonAsNewLedgers(backup.jsonText, {
       ledgerNameSuffix: '',
       runIntegrityRepair: true,
+      integrityRepairReason: LEDGER_REPAIR_REASON.USER_RESTORE_BACKUP,
+      integrityRepairSource: 'SettingsAutoBackupPage.restoreFromWebdav',
     })
     await ledgerStore.refresh()
     if (imported.firstLedgerId) {
@@ -938,6 +940,8 @@ async function restoreFromGoogle() {
     const imported = await importBackupJsonAsNewLedgers(backup.jsonText, {
       ledgerNameSuffix: '',
       runIntegrityRepair: true,
+      integrityRepairReason: LEDGER_REPAIR_REASON.USER_RESTORE_BACKUP,
+      integrityRepairSource: 'SettingsAutoBackupPage.restoreFromGoogle',
     })
     await ledgerStore.refresh()
     if (imported.firstLedgerId) {

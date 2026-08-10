@@ -205,8 +205,12 @@ async function importLedgerPayloadAsNewLedger(payload, options = {}) {
         }
       }
 
+      // smb297: integrity repair is opt-in only. Sync / shared-ledger replace must NOT
+      // auto-pass confirmed:true — that silently rewrote account/category/transfer semantics.
+      // Callers that already completed a user wipe/restore countdown may set
+      // runIntegrityRepair:true with an explicit repair reason.
       let integrityCheck = null
-      if (options.runIntegrityRepair !== false) {
+      if (options.runIntegrityRepair === true) {
         const before = await scanLedgerIntegrity(importedLedger.id)
         const beforeIssueCount = sumNumericValues(before)
         let fixed = {}
@@ -215,8 +219,8 @@ async function importLedgerPayloadAsNewLedger(payload, options = {}) {
         if (beforeIssueCount > 0) {
           const repairResult = await repairLedgerData(importedLedger.id, {
             confirmed: true,
-            reason: LEDGER_REPAIR_REASON.USER_IMPORT_JSON,
-            source: 'import.service',
+            reason: options.integrityRepairReason || LEDGER_REPAIR_REASON.USER_IMPORT_JSON,
+            source: options.integrityRepairSource || 'import.service',
           })
           fixed = repairResult?.fixed ?? {}
           after = repairResult?.after ?? before

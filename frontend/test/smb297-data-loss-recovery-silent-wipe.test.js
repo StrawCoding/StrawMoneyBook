@@ -240,3 +240,178 @@ test('smb297: data management exposes explicit integrity repair UX', () => {
   assert.match(dataMgmtSource, /integrity-repair-confirm/)
   assert.match(dataMgmtSource, /repairLedgerData/)
 })
+
+test('smb297: sync / shared replace never auto-run integrity repair', () => {
+  assert.match(driveSyncSource, /runIntegrityRepair:\s*false/)
+  assert.doesNotMatch(driveSyncSource, /runIntegrityRepair:\s*true/)
+  const sharedSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/services/shared-ledger.service.js'),
+    'utf8',
+  )
+  assert.match(sharedSource, /runIntegrityRepair:\s*false/)
+  assert.doesNotMatch(sharedSource, /runIntegrityRepair:\s*true/)
+  const importSource = readFileSync(
+    resolve(import.meta.dirname, '../src/core/services/import.service.js'),
+    'utf8',
+  )
+  // repair is opt-in only (=== true), not default-on
+  assert.match(importSource, /runIntegrityRepair === true/)
+  assert.doesNotMatch(importSource, /runIntegrityRepair !== false/)
+})
+
+test('smb297: normalize preserves FK associations and related child row counts', async () => {
+  const {
+    normalizeSharedLedgerSnapshot,
+    assertSnapshotBookkeepingPreserved,
+  } = await import('../src/ui/services/shared-ledger/snapshot-merge.js')
+
+  const snapshot = {
+    schema_version: 18,
+    ledger_id: 'ledger_child_preserve',
+    tables: {
+      ledgers: [{ id: 'ledger_child_preserve', name: 'C' }],
+      account_groups: [{ id: 'g1', name: '現金' }],
+      accounts: [{ id: 'a1', group_id: 'g1', name: '錢包' }],
+      category_groups: [{ id: 'cg1', name: '支出' }],
+      categories: [{ id: 'c1', group_id: 'cg1', name: '餐飲' }],
+      counterparties: [{ id: 'cp1', name: '友人' }],
+      transactions: [
+        {
+          id: 't1',
+          account_id: 'a1',
+          category_id: 'c1',
+          peer_account_id: null,
+          amount_minor: 40,
+        },
+        {
+          id: 't2',
+          account_id: 'a1',
+          category_id: 'c1',
+          peer_account_id: 'a1',
+          amount_minor: 60,
+        },
+      ],
+      transaction_attachments: [
+        { id: 'att1', transaction_id: 't1', file_uri: 'file://a.jpg' },
+      ],
+      loans: [{ id: 'loan1', counterparty_id: 'cp1', principal_minor: 1000, status: 'active' }],
+      loan_payments: [
+        { id: 'lp1', loan_id: 'loan1', account_id: 'a1', amount_minor: 100 },
+      ],
+      reimbursement_advances: [
+        { id: 'adv1', account_id: 'a1', amount_minor: 200 },
+      ],
+      reimbursement_advance_usages: [
+        { id: 'usage1', advance_id: 'adv1', expense_tx_id: 't1', amount_minor: 50 },
+      ],
+      reimbursements: [{ id: 'rei1', title: '請款', status: 'open', total_minor: 40 }],
+      reimbursement_items: [
+        {
+          id: 'ri1',
+          reimbursement_id: 'rei1',
+          transaction_id: 't1',
+          category_id: 'c1',
+          account_id: 'a1',
+          amount_minor: 40,
+        },
+      ],
+      budgets: [{ id: 'b1', month_key: '2026-08' }],
+      budget_containers: [{ id: 'bc1', budget_id: 'b1', name: '池' }],
+      budget_items: [
+        {
+          id: 'bi1',
+          budget_id: 'b1',
+          scope_type: 'category',
+          category_id: 'c1',
+          amount_minor: 500,
+        },
+      ],
+      savings_jars: [{ id: 'jar1', account_id: 'a1', name: '存錢' }],
+      bank_connections: [{ id: 'conn1', provider: 'first_bank', display_name: '一銀' }],
+      bank_accounts: [
+        { id: 'ba1', connection_id: 'conn1', mapped_account_id: 'a1', display_name: '薪轉' },
+      ],
+      bank_transactions: [
+        {
+          id: 'bt1',
+          connection_id: 'conn1',
+          bank_account_id: 'ba1',
+          imported_txn_id: 't1',
+          amount_minor: 40,
+        },
+      ],
+      bank_sync_rules: [{ id: 'rule1', connection_id: 'conn1', pattern: '薪' }],
+    },
+  }
+
+  const normalized = normalizeSharedLedgerSnapshot(snapshot)
+  const proof = assertSnapshotBookkeepingPreserved(snapshot, normalized)
+  assert.equal(proof.preserved, true)
+  assert.equal(proof.associationsPreserved, true)
+  assert.equal(proof.childCountsPreserved, true)
+  assert.equal(proof.after.childCounts.transaction_attachments, 1)
+  assert.equal(proof.after.childCounts.loan_payments, 1)
+  assert.equal(proof.after.childCounts.reimbursement_items, 1)
+  assert.equal(proof.after.childCounts.budget_items, 1)
+  assert.equal(proof.after.childCounts.bank_transactions, 1)
+  assert.equal(normalized.fk_preserve_report?.droppedChildRows, 0)
+  assert.deepEqual(
+    proof.after.transactionAssociations.find((row) => row.id === 't1'),
+    {
+      id: 't1',
+      account_id: 'a1',
+      category_id: 'c1',
+      peer_account_id: null,
+      amount_minor: 40,
+    },
+  )
+})
+
+test('smb297: orphan child rows keep counts via parent synthesis (no droppedChildRows)', async () => {
+  const { normalizeSharedLedgerSnapshot } = await import(
+    '../src/ui/services/shared-ledger/snapshot-merge.js'
+  )
+  const orphanChildren = {
+    schema_version: 1,
+    ledger_id: 'ledger_orphan_children',
+    tables: {
+      ledgers: [{ id: 'ledger_orphan_children', name: 'O' }],
+      account_groups: [],
+      accounts: [],
+      category_groups: [],
+      categories: [],
+      transactions: [],
+      loan_payments: [
+        { id: 'lp_orphan', loan_id: 'loan_missing', account_id: 'acc_missing', amount_minor: 10 },
+      ],
+      savings_jars: [{ id: 'jar_orphan', account_id: 'acc_missing', name: '罐' }],
+      budget_items: [
+        {
+          id: 'bi_orphan',
+          budget_id: 'budget_missing',
+          scope_type: 'category',
+          category_id: 'cat_missing',
+          amount_minor: 1,
+        },
+      ],
+      bank_transactions: [
+        {
+          id: 'bt_orphan',
+          connection_id: 'conn_missing',
+          bank_account_id: 'ba_missing',
+          amount_minor: 1,
+        },
+      ],
+    },
+  }
+  const normalized = normalizeSharedLedgerSnapshot(orphanChildren)
+  assert.equal(normalized.tables.loan_payments.length, 1)
+  assert.equal(normalized.tables.savings_jars.length, 1)
+  assert.equal(normalized.tables.budget_items.length, 1)
+  assert.equal(normalized.tables.bank_transactions.length, 1)
+  assert.ok(normalized.tables.accounts.some((row) => row.id === 'acc_missing'))
+  assert.ok(normalized.tables.loans.some((row) => row.id === 'loan_missing'))
+  assert.ok(normalized.tables.budgets.some((row) => row.id === 'budget_missing'))
+  assert.ok(normalized.tables.bank_connections.some((row) => row.id === 'conn_missing'))
+  assert.equal(normalized.fk_preserve_report?.droppedChildRows, 0)
+})

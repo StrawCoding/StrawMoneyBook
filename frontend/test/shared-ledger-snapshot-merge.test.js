@@ -300,7 +300,7 @@ test('normalizeSharedLedgerSnapshot keeps healthy ledger bookkeeping identical (
   assert.equal(proof.after.amountMinorTotal, 200)
 })
 
-test('normalizeSharedLedgerSnapshot nulls optional shared-ledger foreign keys when referenced rows are missing (SMB-187)', () => {
+test('normalizeSharedLedgerSnapshot preserves optional bookkeeping refs via parent synthesis (smb297)', () => {
   const snapshot = buildSnapshot({
     account_groups: [{
       id: 'group_cash',
@@ -351,15 +351,20 @@ test('normalizeSharedLedgerSnapshot nulls optional shared-ledger foreign keys wh
   const reimbursement = normalized.tables.reimbursements.find((row) => row.id === 'rei_kept')
   const reimbursementItem = normalized.tables.reimbursement_items.find((row) => row.id === 'rei_item')
 
-  assert.equal(tx.peer_account_id, null)
-  // smb297: missing category is synthesized (preserve semantics) rather than nulled/dropped
+  // smb297: peer / category / account refs are synthesized — never silently unlinked or dropped
+  assert.equal(tx.peer_account_id, 'acc_missing')
+  assert.ok(normalized.tables.accounts.some((row) => row.id === 'acc_missing'))
   assert.equal(tx.category_id, 'cat_missing')
   assert.ok(normalized.tables.categories.some((row) => row.id === 'cat_missing'))
-  assert.equal(reimbursement.counterparty_id, null)
+  assert.equal(reimbursement.counterparty_id, 'cp_missing')
+  assert.ok(normalized.tables.counterparties.some((row) => row.id === 'cp_missing'))
+  // Missing transaction targets cannot be invented; optional tx refs may null, but child rows stay.
   assert.equal(reimbursement.paid_tx_id, null)
   assert.equal(reimbursementItem.transaction_id, null)
   assert.equal(reimbursementItem.category_id, 'cat_missing')
-  assert.equal(reimbursementItem.account_id, null)
+  assert.equal(reimbursementItem.account_id, 'acc_missing')
+  assert.equal(normalized.tables.reimbursement_items.length, 1)
+  assert.equal(normalized.fk_preserve_report?.droppedChildRows, 0)
 })
 
 const categoryGroupFixture = [{

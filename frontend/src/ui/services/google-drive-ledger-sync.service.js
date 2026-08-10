@@ -526,10 +526,11 @@ async function replaceLocalLedgerWithRemoteSnapshot(snapshot, ledgerId, state, r
       await purgeLedger(requestedLedgerId)
     }
 
+    // smb297: sync replace must not auto-repair ledger semantics without this-session consent.
     imported = await importLedgerJsonAsNewLedger(JSON.stringify(normalizedSnapshot), {
       keepLedgerId: true,
       ledgerName: String(normalizedSnapshot?.tables?.ledgers?.[0]?.name ?? existingLedger?.name ?? ''),
-      runIntegrityRepair: true,
+      runIntegrityRepair: false,
     })
   } catch (error) {
     if (localBackupText) {

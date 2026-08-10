@@ -201,7 +201,7 @@ test('smb296: orphan snapshot insert with FK ON throws FOREIGN KEY; normalize th
   }
 })
 
-test('smb296: optional FK nulling keeps valid parent rows and drops invalid refs before insert', async () => {
+test('smb296/smb297: missing optional parents are synthesized (peer/category) before insert', async () => {
   const SQL = await initSqlJs()
   const snapshot = {
     schema_version: 1,
@@ -226,10 +226,12 @@ test('smb296: optional FK nulling keeps valid parent rows and drops invalid refs
   const normalized = normalizeSharedLedgerSnapshot(snapshot)
   const tx = normalized.tables.transactions.find((row) => row.id === 'tx_ok')
   assert.ok(tx)
-  assert.equal(tx.peer_account_id, null)
-  // smb297: synthesize missing category instead of nulling required bookkeeping refs
+  // smb297: synthesize peer account instead of nulling transfer link
+  assert.equal(tx.peer_account_id, 'acc_missing')
+  assert.ok(normalized.tables.accounts.some((row) => row.id === 'acc_missing'))
   assert.equal(tx.category_id, 'cat_missing')
   assert.ok(normalized.tables.categories.some((row) => row.id === 'cat_missing'))
+  assert.equal(normalized.fk_preserve_report?.droppedChildRows, 0)
 
   const db = openFkDb(SQL)
   try {
@@ -245,7 +247,7 @@ test('smb296: optional FK nulling keeps valid parent rows and drops invalid refs
         }],
       },
     }))
-    assert.equal(db.exec('SELECT COUNT(*) FROM accounts;')[0].values[0][0], 1)
+    assert.equal(db.exec('SELECT COUNT(*) FROM accounts;')[0].values[0][0], 2)
     assert.equal(db.exec('SELECT COUNT(*) FROM transactions;')[0].values[0][0], 1)
   } finally {
     db.close()

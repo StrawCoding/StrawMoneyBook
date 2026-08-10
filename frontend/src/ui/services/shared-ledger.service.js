@@ -412,10 +412,11 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
       purgedExistingLedger = true
     }
 
+    // smb297: never auto-run repairLedgerData on sync replace — FK preserve + insert only.
     imported = await importLedgerJsonAsNewLedger(JSON.stringify(normalizedSnapshot), {
       keepLedgerId: true,
       ledgerName: String(item?.name ?? ''),
-      runIntegrityRepair: true,
+      runIntegrityRepair: false,
     })
   } catch (error) {
     if (purgedExistingLedger && existingSnapshot) {
@@ -424,7 +425,7 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
         await importLedgerJsonAsNewLedger(JSON.stringify(existingSnapshot), {
           keepLedgerId: true,
           ledgerName: existingLedger.name,
-          runIntegrityRepair: true,
+          runIntegrityRepair: false,
         })
       } catch (restoreError) {
         console.error('[shared-ledger] failed to restore local ledger after snapshot import failure', restoreError)
