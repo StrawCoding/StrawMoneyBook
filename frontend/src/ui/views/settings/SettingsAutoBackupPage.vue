@@ -299,8 +299,9 @@ import {
   DATA_WIPE_REASON,
   LEDGER_REPAIR_REASON,
   RECOVERY_BACKUP_REQUIRED_CODE,
-  requireRecoveryBackupBeforeWipe,
+  runConfirmedWipeAfterRecoveryBackup,
 } from '@/core/services/data-wipe-guard.service'
+import { createVerifiedRecoveryBackupBeforeWipe } from '@/core/services/recovery-backup.service'
 import { resetDatabase } from '@/core/db/sqlite'
 
 const ledgerStore = useLedgerStore()
@@ -734,12 +735,15 @@ async function backupNowToWebdav() {
 }
 
 async function createRestoreRecoveryBackup() {
-  const data = await exportAllLedgersJson()
-  const filename = `strawmoneybook-recovery-before-restore-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
-  const saved = await saveJsonFileToDevice(filename, data, { category: 'auto-backup' })
-  if (!(saved?.saved && saved.location)) {
-    downloadJsonFile(filename, data)
-  }
+  // smb297: durable IndexedDB/memory proof required — download-only is not enough.
+  return createVerifiedRecoveryBackupBeforeWipe({
+    purpose: 'restore',
+    source: 'SettingsAutoBackupPage.createRestoreRecoveryBackup',
+    category: 'auto-backup',
+    exportAllLedgersJson,
+    saveJsonFileToDevice,
+    downloadJsonFile,
+  })
 }
 
 function clearRestoreTimer() {
@@ -789,14 +793,15 @@ async function restoreFromWebdav() {
   try {
     const backup = await restoreWebdavBackupJson(ledgerStore.activeLedgerId)
     // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
-    await requireRecoveryBackupBeforeWipe(createRestoreRecoveryBackup, {
+    await runConfirmedWipeAfterRecoveryBackup({
+      createRecoveryBackup: createRestoreRecoveryBackup,
       source: 'SettingsAutoBackupPage.restoreFromWebdav',
       i18nKey: 'settings_auto_backup.toast.recovery_backup_required',
-    })
-    await resetDatabase({
-      confirmed: true,
-      reason: DATA_WIPE_REASON.USER_RESTORE_WEBDAV_BACKUP,
-      source: 'SettingsAutoBackupPage.restoreFromWebdav',
+      wipeFn: () => resetDatabase({
+        confirmed: true,
+        reason: DATA_WIPE_REASON.USER_RESTORE_WEBDAV_BACKUP,
+        source: 'SettingsAutoBackupPage.restoreFromWebdav',
+      }),
     })
     const imported = await importBackupJsonAsNewLedgers(backup.jsonText, {
       ledgerNameSuffix: '',
@@ -937,14 +942,15 @@ async function restoreFromGoogle() {
   try {
     const backup = await restoreGoogleBackupJson(ledgerStore.activeLedgerId)
     // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
-    await requireRecoveryBackupBeforeWipe(createRestoreRecoveryBackup, {
+    await runConfirmedWipeAfterRecoveryBackup({
+      createRecoveryBackup: createRestoreRecoveryBackup,
       source: 'SettingsAutoBackupPage.restoreFromGoogle',
       i18nKey: 'settings_auto_backup.toast.recovery_backup_required',
-    })
-    await resetDatabase({
-      confirmed: true,
-      reason: DATA_WIPE_REASON.USER_RESTORE_GOOGLE_BACKUP,
-      source: 'SettingsAutoBackupPage.restoreFromGoogle',
+      wipeFn: () => resetDatabase({
+        confirmed: true,
+        reason: DATA_WIPE_REASON.USER_RESTORE_GOOGLE_BACKUP,
+        source: 'SettingsAutoBackupPage.restoreFromGoogle',
+      }),
     })
     const imported = await importBackupJsonAsNewLedgers(backup.jsonText, {
       ledgerNameSuffix: '',

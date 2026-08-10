@@ -120,7 +120,8 @@ test('smb297: integrity error is typed and marks silent wipe blocked', () => {
 test('smb297: JSON import / reset / restore UX require confirm + recovery backup + wipe reason', () => {
   assert.match(dataMgmtSource, /isImportConfirmOpen/)
   assert.match(dataMgmtSource, /createResetRecoveryBackup/)
-  assert.match(dataMgmtSource, /requireRecoveryBackupBeforeWipe/)
+  assert.match(dataMgmtSource, /createVerifiedRecoveryBackupBeforeWipe/)
+  assert.match(dataMgmtSource, /runConfirmedWipeAfterRecoveryBackup/)
   assert.match(dataMgmtSource, /DATA_WIPE_REASON\.USER_IMPORT_JSON/)
   assert.match(dataMgmtSource, /DATA_WIPE_REASON\.USER_RESET_ALL/)
   assert.match(dataMgmtSource, /settings_data\.recovery\.title/)
@@ -132,12 +133,13 @@ test('smb297: JSON import / reset / restore UX require confirm + recovery backup
   )
   assert.match(
     dataMgmtSource,
-    /requireRecoveryBackupBeforeWipe\(createResetRecoveryBackup[\s\S]*?await resetDatabase\(\{/,
+    /runConfirmedWipeAfterRecoveryBackup\(\{[\s\S]*?createRecoveryBackup:\s*createResetRecoveryBackup[\s\S]*?wipeFn:\s*\(\)\s*=>\s*resetDatabase\(\{/,
   )
 
   assert.match(autoBackupSource, /openRestoreConfirm/)
   assert.match(autoBackupSource, /createRestoreRecoveryBackup/)
-  assert.match(autoBackupSource, /requireRecoveryBackupBeforeWipe/)
+  assert.match(autoBackupSource, /createVerifiedRecoveryBackupBeforeWipe/)
+  assert.match(autoBackupSource, /runConfirmedWipeAfterRecoveryBackup/)
   assert.match(autoBackupSource, /DATA_WIPE_REASON\.USER_RESTORE_GOOGLE_BACKUP/)
   assert.match(autoBackupSource, /DATA_WIPE_REASON\.USER_RESTORE_WEBDAV_BACKUP/)
   assert.match(autoBackupSource, /data-testid="auto-backup-restore-confirm"/)
@@ -147,13 +149,19 @@ test('smb297: JSON import / reset / restore UX require confirm + recovery backup
   )
   assert.match(
     autoBackupSource,
-    /requireRecoveryBackupBeforeWipe\(createRestoreRecoveryBackup[\s\S]*?await resetDatabase\(\{/,
+    /runConfirmedWipeAfterRecoveryBackup\(\{[\s\S]*?createRecoveryBackup:\s*createRestoreRecoveryBackup[\s\S]*?wipeFn:\s*\(\)\s*=>\s*resetDatabase\(\{/,
+  )
+  // Google and WebDAV both use the orchestrated gate (not catch-and-continue).
+  assert.equal(
+    (autoBackupSource.match(/runConfirmedWipeAfterRecoveryBackup\(/g) || []).length,
+    2,
   )
 })
 
 test('smb297: recovery backup failure blocks wipe (typed RECOVERY_BACKUP_REQUIRED)', async () => {
   const {
     requireRecoveryBackupBeforeWipe,
+    runConfirmedWipeAfterRecoveryBackup,
     createRecoveryBackupRequiredError,
     RECOVERY_BACKUP_REQUIRED_CODE,
   } = await import('../src/core/services/data-wipe-guard.service.js')
@@ -174,11 +182,132 @@ test('smb297: recovery backup failure blocks wipe (typed RECOVERY_BACKUP_REQUIRE
   )
   assert.equal(wipeCalled, false)
 
+  // download-only / void return must NOT unlock wipe
+  await assert.rejects(
+    async () => {
+      await requireRecoveryBackupBeforeWipe(async () => undefined, { source: 'smb297-void' })
+    },
+    (error) => error?.code === RECOVERY_BACKUP_REQUIRED_CODE && error?.silentWipeBlocked === true,
+  )
+  await assert.rejects(
+    async () => {
+      await requireRecoveryBackupBeforeWipe(async () => ({ verified: false }), {
+        source: 'smb297-unverified',
+      })
+    },
+    (error) => error?.code === RECOVERY_BACKUP_REQUIRED_CODE,
+  )
+
   const typed = createRecoveryBackupRequiredError(new Error('export failed'), {
     source: 'unit',
   })
   assert.equal(typed.code, RECOVERY_BACKUP_REQUIRED_CODE)
   assert.equal(typed.silentWipeBlocked, true)
+})
+
+test('smb297: Google/WebDAV restore orchestration never wipes when recovery backup fails', async () => {
+  const { runConfirmedWipeAfterRecoveryBackup, RECOVERY_BACKUP_REQUIRED_CODE } = await import(
+    '../src/core/services/data-wipe-guard.service.js'
+  )
+
+  for (const source of [
+    'SettingsAutoBackupPage.restoreFromGoogle',
+    'SettingsAutoBackupPage.restoreFromWebdav',
+  ]) {
+    let wipeCalled = false
+    await assert.rejects(
+      async () => runConfirmedWipeAfterRecoveryBackup({
+        source,
+        i18nKey: 'settings_auto_backup.toast.recovery_backup_required',
+        createRecoveryBackup: async () => {
+          throw new Error(`simulated recovery backup failure for ${source}`)
+        },
+        wipeFn: async () => {
+          wipeCalled = true
+        },
+      }),
+      (error) => (
+        error?.code === RECOVERY_BACKUP_REQUIRED_CODE
+        && error?.silentWipeBlocked === true
+        && wipeCalled === false
+      ),
+    )
+    assert.equal(wipeCalled, false, `${source} must not wipe after backup failure`)
+  }
+
+  // Success path: verified proof then wipe exactly once
+  let wipeCount = 0
+  await runConfirmedWipeAfterRecoveryBackup({
+    source: 'SettingsAutoBackupPage.restoreFromGoogle',
+    createRecoveryBackup: async () => ({
+      verified: true,
+      backupId: 'recovery_ok_1',
+      byteLength: 128,
+      storage: 'test',
+    }),
+    wipeFn: async () => {
+      wipeCount += 1
+      return 'wiped'
+    },
+  })
+  assert.equal(wipeCount, 1)
+})
+
+test('smb297: durable recovery backup rejects download-only and verifies persist', async () => {
+  const {
+    createVerifiedRecoveryBackupBeforeWipe,
+    isVerifiedRecoveryBackupProof,
+    persistVerifiedRecoveryBackup,
+    setRecoveryBackupStorageForTests,
+    resetRecoveryBackupStorageForTests,
+  } = await import('../src/core/services/recovery-backup.service.js')
+
+  const store = new Map()
+  setRecoveryBackupStorageForTests({
+    put: async (record) => {
+      store.set(record.backupId, record)
+    },
+    get: async (id) => store.get(id) || null,
+  })
+  try {
+    const proof = await createVerifiedRecoveryBackupBeforeWipe({
+      purpose: 'restore',
+      source: 'unit',
+      exportAllLedgersJson: async () => ({ ledgers: [{ id: 'l1' }], transactions: [{ id: 't1' }] }),
+      saveJsonFileToDevice: async () => ({ saved: false, reason: 'not-native' }),
+      downloadJsonFile: () => {
+        throw new Error('download blocked')
+      },
+    })
+    assert.equal(isVerifiedRecoveryBackupProof(proof), true)
+    assert.equal(proof.storage, 'test')
+    assert.ok(store.has(proof.backupId))
+
+    await assert.rejects(
+      async () => persistVerifiedRecoveryBackup({ purpose: 'x', data: null }),
+      /payload missing/,
+    )
+  } finally {
+    resetRecoveryBackupStorageForTests()
+  }
+
+  // Fail-closed storage: put succeeds but get cannot verify → must throw
+  setRecoveryBackupStorageForTests({
+    put: async () => {},
+    get: async () => null,
+  })
+  try {
+    await assert.rejects(
+      async () => createVerifiedRecoveryBackupBeforeWipe({
+        purpose: 'restore',
+        exportAllLedgersJson: async () => ({ ok: true }),
+        downloadJsonFile: () => {},
+      }),
+      /verify failed|persist failed|proof invalid/i,
+    )
+  } finally {
+    resetRecoveryBackupStorageForTests()
+  }
 })
 
 test('smb297: Google Drive sync blocks empty-remote hard replace over local txs', () => {

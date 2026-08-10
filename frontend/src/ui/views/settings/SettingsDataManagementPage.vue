@@ -207,8 +207,9 @@ import {
   LEDGER_REPAIR_REASON,
   RECOVERY_BACKUP_REQUIRED_CODE,
   readLastLedgerIntegrityScan,
-  requireRecoveryBackupBeforeWipe,
+  runConfirmedWipeAfterRecoveryBackup,
 } from '@/core/services/data-wipe-guard.service'
+import { createVerifiedRecoveryBackupBeforeWipe } from '@/core/services/recovery-backup.service'
 import { repairLedgerData, scanLedgerIntegrity } from '@/core/services/repair.service'
 import { sumNumericValues } from '@/ui/services/ledger-runtime.helpers'
 import { resetDatabase } from '@/core/db/sqlite'
@@ -340,15 +341,22 @@ async function withOperationProgress(type, task) {
 }
 
 async function createResetRecoveryBackup() {
-  const filename = `strawmoneybook-recovery-before-reset-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
-  const data = await exportAllLedgersJson()
-  const saved = await saveJsonFileToDevice(filename, data, { category: 'data-management' })
-  if (saved?.saved && saved.location) {
-    lastExportPath.value = saved.location
-    return
+  // smb297: durable IndexedDB/memory proof required — download-only is not enough.
+  const proof = await createVerifiedRecoveryBackupBeforeWipe({
+    purpose: 'reset',
+    source: 'SettingsDataManagementPage.createResetRecoveryBackup',
+    category: 'data-management',
+    exportAllLedgersJson,
+    saveJsonFileToDevice,
+    downloadJsonFile,
+    onDeviceSaved: (saved) => {
+      lastExportPath.value = saved.location
+    },
+  })
+  if (!lastExportPath.value && proof?.filename) {
+    lastExportPath.value = `Downloads/${proof.filename}`
   }
-  downloadJsonFile(filename, data)
-  lastExportPath.value = `Downloads/${filename}`
+  return proof
 }
 
 function readFileAsText(file) {
@@ -486,15 +494,16 @@ async function confirmImportJson() {
     const result = await withOperationProgress('importJson', async () => {
       const text = await readFileAsText(file)
       // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
-      await requireRecoveryBackupBeforeWipe(createResetRecoveryBackup, {
+      await runConfirmedWipeAfterRecoveryBackup({
+        createRecoveryBackup: createResetRecoveryBackup,
         source: 'SettingsDataManagementPage.confirmImportJson',
         i18nKey: 'settings_data.toast.recovery_backup_required',
-      })
-      await resetDatabase({
-        confirmed: true,
-        reason: DATA_WIPE_REASON.USER_IMPORT_JSON,
-        source: 'SettingsDataManagementPage.confirmImportJson',
-        note: pendingImportFileName.value,
+        wipeFn: () => resetDatabase({
+          confirmed: true,
+          reason: DATA_WIPE_REASON.USER_IMPORT_JSON,
+          source: 'SettingsDataManagementPage.confirmImportJson',
+          note: pendingImportFileName.value,
+        }),
       })
       const imported = await importBackupJsonAsNewLedgers(text)
       await ledgerStore.refresh()
@@ -696,14 +705,15 @@ async function confirmResetAllData() {
   try {
     await withOperationProgress('resetAll', async () => {
       // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
-      await requireRecoveryBackupBeforeWipe(createResetRecoveryBackup, {
+      await runConfirmedWipeAfterRecoveryBackup({
+        createRecoveryBackup: createResetRecoveryBackup,
         source: 'SettingsDataManagementPage.confirmResetAllData',
         i18nKey: 'settings_data.toast.recovery_backup_required',
-      })
-      await resetDatabase({
-        confirmed: true,
-        reason: DATA_WIPE_REASON.USER_RESET_ALL,
-        source: 'SettingsDataManagementPage.confirmResetAllData',
+        wipeFn: () => resetDatabase({
+          confirmed: true,
+          reason: DATA_WIPE_REASON.USER_RESET_ALL,
+          source: 'SettingsDataManagementPage.confirmResetAllData',
+        }),
       })
       localStorage.removeItem('straw.active_ledger_id')
       await ledgerStore.init()

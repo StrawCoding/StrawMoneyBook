@@ -140,16 +140,56 @@ export function createRecoveryBackupRequiredError(cause, options = {}) {
   return error
 }
 
+function isVerifiedRecoveryBackupProof(proof) {
+  return Boolean(
+    proof
+    && typeof proof === 'object'
+    && proof.verified === true
+    && Number(proof.byteLength) > 0
+    && String(proof.backupId || '').trim()
+    && String(proof.storage || '').trim(),
+  )
+}
+
+/**
+ * Mandatory gate before resetDatabase / full wipe.
+ * createBackup must return a verified durable proof — void / download-only does not count.
+ */
 export async function requireRecoveryBackupBeforeWipe(createBackup, options = {}) {
   if (typeof createBackup !== 'function') {
     throw createRecoveryBackupRequiredError(new Error('recovery backup creator missing'), options)
   }
+  let proof
   try {
-    await createBackup()
+    proof = await createBackup()
   } catch (cause) {
     if (cause?.code === RECOVERY_BACKUP_REQUIRED_CODE) throw cause
     throw createRecoveryBackupRequiredError(cause, options)
   }
+  if (!isVerifiedRecoveryBackupProof(proof)) {
+    throw createRecoveryBackupRequiredError(
+      new Error('recovery backup proof missing or unverified (download-only is not enough)'),
+      options,
+    )
+  }
+  return proof
+}
+
+/**
+ * Orchestrates: verified recovery backup → wipe. Used by Google/WebDAV restore and tests.
+ * Backup failure must never call wipeFn.
+ */
+export async function runConfirmedWipeAfterRecoveryBackup({
+  createRecoveryBackup,
+  wipeFn,
+  source,
+  i18nKey,
+} = {}) {
+  await requireRecoveryBackupBeforeWipe(createRecoveryBackup, { source, i18nKey })
+  if (typeof wipeFn !== 'function') {
+    throw new Error('wipe function missing after recovery backup')
+  }
+  return wipeFn()
 }
 
 export function countSnapshotActiveTransactions(snapshot) {
