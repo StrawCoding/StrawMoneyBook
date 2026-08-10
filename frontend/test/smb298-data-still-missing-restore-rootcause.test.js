@@ -116,6 +116,25 @@ test('smb298: official site app-update payload keeps manifest + play API aligned
   assert.equal(playApi.source, 'official_site_static')
 })
 
+test('smb298: playwright ui-layout guards parallel preview races and waits for home', () => {
+  const playwrightSource = readFileSync(
+    resolve(frontendRoot, 'scripts/playwright-ui-layout.mjs'),
+    'utf8',
+  )
+  assert.match(playwrightSource, /acquireUiLayoutMutex/)
+  assert.match(playwrightSource, /assertPreviewPortFree/)
+  assert.match(playwrightSource, /waitForHomeBlocks/)
+  assert.match(playwrightSource, /playwrightCliSession|PLAYWRIGHT_CLI_SESSION|smb-ui-layout-/)
+  assert.match(playwrightSource, /gotoOrReopen/)
+  assert.match(playwrightSource, /Refusing parallel runs|refusing to attach to a foreign/)
+  assert.match(playwrightSource, /strictPort race|leftover process/)
+  // assertDelete must wait for home shell, not only fixed delay.
+  assert.match(
+    playwrightSource,
+    /async function assertDeleteTransactionReturnsHomeWithScroll\(\)[\s\S]*?await assertHomeBlocks\(\)/,
+  )
+})
+
 test('smb298: syncOfficialSiteAppUpdateFiles writes web public manifests', () => {
   const writes = new Map()
   const files = new Map([

@@ -139,7 +139,7 @@
 - 現代版樣式：`src/ui/assets/css/apple-ui.css`（Large Title、Inset Grouped List、Segmented Control、list row + chevron、0.5px separator）
 - 設定／onboarding：**不再**提供「傳統／現代」切換；個人化頁僅主題配色（與 `theme.service.js` 獨立）
 - 功能完整保留：5 tab BottomNav、首頁全部區塊、FAB；禁止藉移除傳統 mode 刪功能
-- 測試：`test/ui-layout.service.test.js`、`test/ui-layout-source.test.js`、`npm run playwright:ui-layout`
+- 測試：`test/ui-layout.service.test.js`、`test/ui-layout-source.test.js`、`npm run playwright:ui-layout`（smb298：port mutex＋獨立 CLI session＋`waitForHomeBlocks`，禁並行搶 preview／default session）
 
 ### 首頁內導覽（`src/ui/views/home.vue`）
 

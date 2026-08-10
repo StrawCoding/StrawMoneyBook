@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFile, spawn } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import net from 'node:net'
 import { promisify } from 'node:util'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
@@ -14,6 +15,72 @@ const playwrightConfigPath = resolve(fileURLToPath(new URL('../playwright-cli.js
 const previewPort = Number(process.env.UI_LAYOUT_PLAYWRIGHT_PORT || 4186)
 const baseUrl = `http://127.0.0.1:${previewPort}`
 const browsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH || defaultBrowsersPath
+const lockDir = resolve(repoRoot, 'backend/.server-data')
+const lockPath = resolve(lockDir, `playwright-ui-layout-${previewPort}.lock`)
+// Isolate from concurrent closeout/verify playwright-cli "default" session (smb298 flake).
+const playwrightCliSession = process.env.PLAYWRIGHT_CLI_SESSION
+  || `smb-ui-layout-${previewPort}-${process.pid}`
+
+function acquireUiLayoutMutex() {
+  mkdirSync(lockDir, { recursive: true })
+  try {
+    const fd = openSync(lockPath, 'wx')
+    writeFileSync(fd, `${process.pid}\n${new Date().toISOString()}\n`)
+    return fd
+  } catch (error) {
+    if (error?.code === 'EEXIST') {
+      let holder = ''
+      try {
+        holder = String(readFileSync(lockPath, 'utf8')).trim()
+      } catch {
+        holder = '(unreadable)'
+      }
+      // Stale lock: previous run crashed without cleanup.
+      const holderPid = Number(String(holder).split('\n')[0] || 0)
+      if (holderPid > 1) {
+        try {
+          process.kill(holderPid, 0)
+        } catch {
+          try { unlinkSync(lockPath) } catch { /* ignore */ }
+          return acquireUiLayoutMutex()
+        }
+      }
+      throw new Error(
+        `playwright:ui-layout mutex busy on port ${previewPort} (holder=${holder.replace(/\n/g, ' | ')}). `
+        + 'Refusing parallel runs that share preview/delete-data and flake assertHomeBlocks.',
+      )
+    }
+    throw error
+  }
+}
+
+function releaseUiLayoutMutex(fd) {
+  try {
+    if (fd != null) closeSync(fd)
+  } catch {
+    // ignore
+  }
+  try {
+    unlinkSync(lockPath)
+  } catch {
+    // ignore
+  }
+}
+
+async function assertPreviewPortFree(port) {
+  await new Promise((resolvePort, reject) => {
+    const server = net.createServer()
+    server.once('error', (error) => {
+      reject(new Error(
+        `preview port ${port} already in use — refusing to attach to a foreign vite preview `
+        + `(strictPort race / leftover process). ${error.message}`,
+      ))
+    })
+    server.listen(port, '127.0.0.1', () => {
+      server.close(() => resolvePort())
+    })
+  })
+}
 
 function hasInstalledChromiumHeadlessShell(root = browsersPath) {
   try {
@@ -62,6 +129,8 @@ async function runPlaywrightCli(args, { raw = false } = {}) {
     '--package',
     '@playwright/cli',
     'playwright-cli',
+    '--session',
+    playwrightCliSession,
     ...(raw ? ['--raw'] : []),
     ...args,
   ]
@@ -71,10 +140,29 @@ async function runPlaywrightCli(args, { raw = false } = {}) {
       ...process.env,
       PLAYWRIGHT_BROWSERS_PATH: browsersPath,
       PLAYWRIGHT_MCP_CONFIG: process.env.PLAYWRIGHT_MCP_CONFIG || playwrightConfigPath,
+      PLAYWRIGHT_CLI_SESSION: playwrightCliSession,
     },
     maxBuffer: 4 * 1024 * 1024,
     timeout: 180000,
   })
+}
+
+function isBrowserNotOpenError(error) {
+  const blob = [
+    error?.message,
+    error?.stdout,
+    error?.stderr,
+  ].map((part) => String(part ?? '')).join('\n')
+  return /browser ['"]?default['"]? is not open|is not open, please run open first|run open first/i.test(blob)
+}
+
+async function gotoOrReopen(url) {
+  try {
+    await runPlaywrightCli(['goto', url])
+  } catch (error) {
+    if (!isBrowserNotOpenError(error)) throw error
+    await runPlaywrightCli(['open', url])
+  }
 }
 
 async function evalPage(script) {
@@ -222,8 +310,8 @@ async function assertBottomNavIcons() {
   assert.equal(result.hasFeaturesTab, true, 'features tab should remain in 5-tab layout')
 }
 
-async function assertHomeBlocks() {
-  const result = await evalPage(`() => ({
+async function readHomeBlockState() {
+  return evalPage(`() => ({
     hasHomeView: Boolean(document.querySelector('[data-testid=home-view]')),
     hasPeriodFilter: Boolean(document.querySelector('[data-testid=home-period-filter]')),
     hasAssetSummary: Boolean(document.querySelector('[data-testid=home-asset-summary]')),
@@ -231,8 +319,43 @@ async function assertHomeBlocks() {
     hasTransactionFeed: Boolean(document.querySelector('[data-testid=home-transaction-feed]')),
     hasFab: Boolean(document.querySelector('[data-testid=home-fab]')),
     welcome: Boolean(document.querySelector('.welcome-root')),
+    booting: Boolean(document.querySelector('.boot-layer')),
     layout: document.documentElement.dataset.uiLayout ?? '',
+    path: window.location.pathname,
+    bodyText: document.body?.innerText?.slice(0, 240) ?? '',
   })`)
+}
+
+function homeBlocksReady(state) {
+  return Boolean(
+    state
+    && !state.welcome
+    && !state.booting
+    && state.hasHomeView
+    && state.hasPeriodFilter
+    && state.hasAssetSummary
+    && state.hasBudgetSummary
+    && state.hasTransactionFeed
+    && state.hasFab,
+  )
+}
+
+async function waitForHomeBlocks({ attempts = 60, delayMs = 400 } = {}) {
+  let last = null
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    last = await readHomeBlockState()
+    if (homeBlocksReady(last)) return last
+    // Soft recovery: if we drifted off home after theme/settings hops, go back.
+    if (last && !last.booting && !last.welcome && last.path && last.path !== '/' && last.path !== '/home') {
+      await gotoOrReopen(`${baseUrl}/`)
+    }
+    await delay(delayMs)
+  }
+  assert.fail(`home blocks not ready: ${JSON.stringify(last, null, 2)}`)
+}
+
+async function assertHomeBlocks() {
+  const result = await waitForHomeBlocks()
   assert.equal(result.welcome, false, 'must not pass on welcome page')
   assert.equal(result.hasHomeView, true, JSON.stringify(result, null, 2))
   assert.equal(result.hasPeriodFilter, true, JSON.stringify(result, null, 2))
@@ -321,8 +444,9 @@ async function seedHomeTransactionsForScroll(count = 18) {
 }
 
 async function assertDeleteTransactionReturnsHomeWithScroll() {
-  await runPlaywrightCli(['goto', `${baseUrl}/`])
-  await delay(800)
+  // smb298: after theme hops, fixed 800ms was flaky under verify+closeout port races —
+  // wait for real home shell instead of assuming navigation settled.
+  await gotoOrReopen(`${baseUrl}/`)
   await assertHomeBlocks()
 
   const seeded = await seedHomeTransactionsForScroll(18)
@@ -569,7 +693,7 @@ function contrastRatio(a, b) {
 }
 
 async function applyThemeSchemeAndSave(schemeId) {
-  await runPlaywrightCli(['goto', `${baseUrl}/settings/personalization`])
+  await gotoOrReopen(`${baseUrl}/settings/personalization`)
   await waitForAppShell({ expectPersonalization: true })
   await runPlaywrightCli(['click', `[data-testid="theme-scheme-${schemeId}"]`])
   await delay(400)
@@ -578,8 +702,7 @@ async function applyThemeSchemeAndSave(schemeId) {
 }
 
 async function assertHomeIncomeExpenseTheme({ expectMode }) {
-  await runPlaywrightCli(['goto', `${baseUrl}/`])
-  await delay(900)
+  await gotoOrReopen(`${baseUrl}/`)
   await assertHomeBlocks()
 
   const result = await evalPage(`() => {
@@ -859,24 +982,52 @@ async function assertModernLayoutOnly() {
 
 console.log('--- Playwright: ui layout settings + home blocks ---')
 
-await ensurePlaywrightChromium()
+function stopPreviewProcess(child) {
+  if (!child?.pid) return
+  // vite is often a child of `npm run preview`; killing only npm can leave port 4186 occupied.
+  try {
+    spawn('pkill', ['-P', String(child.pid)], { stdio: 'ignore' })
+  } catch {
+    // ignore
+  }
+  try {
+    child.kill('SIGTERM')
+  } catch {
+    // ignore
+  }
+  try {
+    spawn('fuser', ['-k', `${previewPort}/tcp`], { stdio: 'ignore' })
+  } catch {
+    // ignore
+  }
+}
 
-console.log('Building web preview bundle...')
-await execFileAsync('npm', ['run', 'build:web'], {
-  cwd: frontendDir,
-  env: process.env,
-  maxBuffer: 8 * 1024 * 1024,
-  timeout: 300000,
-})
-
-const preview = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', String(previewPort), '--strictPort'], {
-  cwd: frontendDir,
-  stdio: 'ignore',
-  env: process.env,
-})
-
+const mutexFd = acquireUiLayoutMutex()
+let preview = null
 try {
+  await ensurePlaywrightChromium()
+  await assertPreviewPortFree(previewPort)
+
+  console.log('Building web preview bundle...')
+  await execFileAsync('npm', ['run', 'build:web'], {
+    cwd: frontendDir,
+    env: process.env,
+    maxBuffer: 8 * 1024 * 1024,
+    timeout: 300000,
+  })
+
+  preview = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', String(previewPort), '--strictPort'], {
+    cwd: frontendDir,
+    stdio: 'ignore',
+    env: process.env,
+  })
+
   await waitForPreviewReady()
+  if (preview.exitCode != null || preview.signalCode) {
+    throw new Error(
+      `vite preview died before tests started (code=${preview.exitCode} signal=${preview.signalCode})`,
+    )
+  }
 
   await runPlaywrightCli(['delete-data'])
   await runPlaywrightCli(['open', `${baseUrl}/`])
@@ -893,7 +1044,7 @@ try {
   await assertModernLayoutOnly()
   await assertSharedLedgerAuthAndEditorSurfaces()
 
-  await runPlaywrightCli(['goto', `${baseUrl}/settings/personalization`])
+  await gotoOrReopen(`${baseUrl}/settings/personalization`)
   const personalizationSnapshot = await runPlaywrightCli(['snapshot'])
   const personalizationText = String(personalizationSnapshot.stdout ?? '')
   assert.match(personalizationText, /Theme scheme|主題方案|テーマスキーム|Theme Scheme/u)
@@ -902,8 +1053,14 @@ try {
 
   console.log('UI layout Playwright smoke passed')
 } finally {
-  preview.kill('SIGTERM')
-  await delay(300)
+  try {
+    await runPlaywrightCli(['close'], { raw: true }).catch(() => {})
+  } catch {
+    // ignore
+  }
+  stopPreviewProcess(preview)
+  await delay(400)
+  releaseUiLayoutMutex(mutexFd)
 }
 
 async function assertSharedLedgerAuthAndEditorSurfaces() {
