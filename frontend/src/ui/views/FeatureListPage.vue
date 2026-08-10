@@ -76,6 +76,12 @@ const advancedFeatures = computed(() => ([
     icon: 'fa-solid fa-cloud-arrow-up',
     testId: 'feature-link-ledger-sync',
   },
+  {
+    to: '/settings/auto-backup#drive-appdata-browser',
+    label: t('feature_list.drive_appdata_restore', 'Drive 備份選檔／舊版還原'),
+    icon: 'fa-solid fa-clock-rotate-left',
+    testId: 'feature-link-drive-appdata-restore',
+  },
   ...(showBankSyncEntry
     ? [{
         to: '/settings/bank-sync',

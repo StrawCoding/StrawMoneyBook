@@ -54,6 +54,13 @@ test('smb295: feature list advanced section hosts four sync entries', () => {
   assert.match(i18nSource, /'feature_list\.advanced': '高度な機能'/)
 })
 
+test('smb299: advanced section also exposes Drive appData select/revision restore', () => {
+  assert.match(featureListSource, /feature-link-drive-appdata-restore/)
+  assert.match(featureListSource, /feature_list\.drive_appdata_restore/)
+  assert.match(featureListSource, /#drive-appdata-browser/)
+  assert.match(i18nSource, /'feature_list\.drive_appdata_restore': 'Drive 備份選檔／舊版還原'/)
+})
+
 test('smb295: settings main list no longer lists the four sync entries', () => {
   assert.doesNotMatch(settingsSource, /to: '\/settings\/shared-ledgers'/)
   assert.doesNotMatch(settingsSource, /to: '\/settings\/google-drive-ledger-sync'/)

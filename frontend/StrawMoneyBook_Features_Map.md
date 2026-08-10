@@ -159,7 +159,7 @@
 - 自動識別：`/settings/auto-fill-rules`
 - 匯率同步：`/settings/exchange-rate`
 - 資料管理：`/settings/data-management`（smb297：還原指引＋本機 IndexedDB recovery **列出／下載／還原**＋帳本完整性掃描／明確修復（需倒數確認，禁啟動／同步靜默改寫）＋JSON 匯入／重設皆需確認倒數＋**recovery 備份必須成功**（僅 `indexeddb`／`filesystem`／`test`；**memory／download-only 不算**；失敗→`RECOVERY_BACKUP_REQUIRED` 中止，禁 swallow 後 wipe）＋wipe audit；匯入預設不自動 repair；禁止 bootstrap／FK silent wipe；**smb298**：Welcome 空庫可 `allowWithoutSetup` 進入本機 recovery；空庫＋有 recovery 時顯示還原提示，避免只建新帳本）
-- 自動備份：`/settings/auto-backup`（smb297：Google／WebDAV「立即還原」需確認倒數＋**durable recovery 備份必須成功後才**清空本機；**memory／download-only 不算成功**；備份失敗中止、不呼叫 `resetDatabase`；還原後 integrity repair 僅在此明示確認路徑以 `USER_RESTORE_BACKUP` 執行）
+- 自動備份：`/settings/auto-backup`（smb297：Google／WebDAV「立即還原」需確認倒數＋**durable recovery 備份必須成功後才**清空本機；**memory／download-only 不算成功**；備份失敗中止、不呼叫 `resetDatabase`；還原後 integrity repair 僅在此明示確認路徑以 `USER_RESTORE_BACKUP` 執行；**smb299**：Drive appDataFolder **列出全部檔**（all_ledgers／sync_*／其他）＋預覽摘要（帳本／月份分佈／有效筆數）＋選檔／展開 **revision** 還原；還原前顯示較舊／較新與月份覆蓋警告；入口亦在資料管理還原指引與功能頁進階）
 - Google Drive 帳本同步：`/settings/google-drive-ledger-sync`（smb297：本機有交易且遠端快照為空時阻擋 hard replace，狀態 `empty_remote_blocked`；sync replace **不**自動 `repairLedgerData`；FK preserve 合成缺失父列並保留子表筆數，禁止丟交易／關聯子列）
 - 語言：`/settings/language`
 - 個人化：`/settings/personalization`
@@ -187,6 +187,7 @@
 #### 進階功能（`feature_list.advanced`）
 - 共同帳本：`/settings/shared-ledgers`
 - 帳本同步：`/settings/google-drive-ledger-sync`
+- Drive 備份選檔／舊版還原：`/settings/auto-backup#drive-appdata-browser`（smb299）
 - 銀行同步：`/settings/bank-sync`（入口由 `isBankSyncFeatureEnabled()`＝feature flag 控制可視性；原生自動化由 `isBankSyncNativeAutomationAvailable()` 另閘；Web／非 Android 顯示支援矩陣與 recovery CTA，不再因 provider 空列表靜默 redirect；需 `VITE_BANK_SYNC_FEATURE_ENABLED=true`；Android 第一銀行本地同步；v1.3.19 第一銀行 OCR 失敗時建立連線頁可手動輸入驗證碼重試；v1.3.20 SMB-241 強制桌面 viewport 與驗證碼直連下載；v1.3.31 / SMB-253 第一銀行登入頁錨點合約自檢納入排程監控；v1.3.32 / SMB-252 WebView JSON 攔截 + CSV 帳單匯入退路；v1.3.34 / SMB-252 Restart：桌面登入頁探測 `ready` 只依功能錨點，`mobileHint` 改為依 viewport 版面結構的非攔阻診斷，修復電腦版頁含「Mobile Bank」字樣被誤判為手機版的回歸；v1.3.36 / SMB-252 Restart：登入送出治本——直接寫入 `doLogin()` 真正讀取的隱藏欄位 `#loginCustId` 等（`setFieldByName`，不再只填 `*Fake`）、送出 `clickArea()`→備援 `doLogin()`、攔截 `window.alert()` 並把銀行真實回應寫入 debug trace（`captureLoginResponseDiagnostics` / `summarizeLoginFailure`），`waitForLoginSuccess` 提早歸因不空等；SMB-266 後登入後帳戶入口優先用 URL/function/ID/table structural anchors（`openIt`、`overview-account`、`tab1`、`table.CnbTable`、010103 連結），中文/英文文案只作備援；交易攔截只 replay GET，POST 候選請求安全放行改走原 WebView + DOM fallback；debug trace 與前端 shared classifier 可區分 `portal_changed` / `retry` / `reconnect`；SMB-278：可用性階段診斷 + 支援矩陣；SMB-280：`bank_sync_credentials_missing` 僅 Android 原生路徑且無連線時出現，vault `commit()` + `provider_connection_id` 對齊避免建完仍誤報無憑證；smb294：vault lookup 改傳 distinct local/provider 候選 + Playwright 錯誤碼／seeded review 驗收）
 - 載具同步：`/settings/carrier-sync`（會員限定；標籤語意為載具同步／電子發票載具；v1.3.19 憑證為財政部平台手機號碼 + 密碼；v1.3.30 後端 Playwright 改 SPA JSON 攔截 + captcha token；v1.3.31 / SMB-253 合約自檢接 cron/CI，失敗分類統計 + log/Plane 告警；v1.3.40 / SMB-258 Cloudflare 挑戰等待 + scrape-api 網路錯誤 i18n；SMB-278：可用性診斷、`/api/einvoice/health`、captcha 刷新／到期；SMB-280：health credentialed CORS 治本，消除誤報 `einvoice_network_failed`；smb294：可用性重驗 + Playwright seeded review）
 
@@ -331,7 +332,7 @@ UI 服務目錄：`src/ui/services/`
 | `google-drive-ledger-sync.service.js` / `shared-ledger.service.js` | smb297：`replaceLocalLedgerWith*` 一律 `runIntegrityRepair: false`；僅 FK preserve／INSERT，不在背景 sync 偽確認語意修復 |
 | `membership-navigation.service.js` | 會員限制導頁與 membership benefits navigation，將 router side effect 留在 UI 層 |
 | `shared-ledger.service.js` | 共同帳本前端流程：建立、下載、上傳、自動同步、本機帳本綁定；SMB-229 / v1.3.9 後依角色（`sharedLedgerRoleCanPush`）跳過 Viewer 上傳、被降級時清 dirty 佇列，並提供成員角色更新與所有權轉移服務封裝；SMB-277 後 meta 記錄 `last_sync_status` / `last_sync_error`，失敗可見並可重試；SMB-279／smb288 後背景同步先 `ensureSharedLedgerSessionReady`，需重新登入／會員／離線／session 恢復中寫入可見 `paused_*`（含 schedule 路徑），禁止 silently no-op；SMB-281 後 `stopSharingLocalLedger`／`stopSharingRemoteSharedLedger` 在取消共享／離開前檢查 session／needs-reauth，遠端已不存在時仍清本機 binding |
-| `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原、重新授權後自動清理 stale auto-check diagnostics；Google 授權失效時自動偵測並寫入 `error/reauth_required` 狀態使 UI 顯示重新授權警示；`resolveGoogleProfileForConnect` 在 silent token 失敗時必定觸發 `googleSignIn` 取得新 token（SMB-186 / v1.2.7） |
+| `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原、重新授權後自動清理 stale auto-check diagnostics；Google 授權失效時自動偵測並寫入 `error/reauth_required` 狀態使 UI 顯示重新授權警示；`resolveGoogleProfileForConnect` 在 silent token 失敗時必定觸發 `googleSignIn` 取得新 token（SMB-186 / v1.2.7）；**smb299** 另提供 `listGoogleAppDataFiles`／`listGoogleAppDataFileRevisions`／`previewGoogleAppDataBackup`／`restoreGoogleBackupJsonByTarget`（含月份摘要比較與 `__SMB_DRIVE_APPDATA_MOCK__` 測試鉤子） |
 | `webdav-backup.service.js` | WebDAV 備份連線、自動備份、還原 |
 | `auto-backup-orchestrator.service.js` | 自動備份 provider runner；統一手動備份、due check、資料變更備份的 provider lock、preflight 與 `completed / skipped / error` 結果格式，避免同帳本同 provider 同時執行造成狀態覆蓋 |
 | `app-runtime.service.js` + `SettingsAutoBackupPage.vue` | 背景自動備份 / 自動偵測完成後會送出含 `ledgerId / provider / mode / status / reason / checkedAt` 的 `app:auto-backup-state-updated`，讓設定頁即時重讀 Google / WebDAV provider 狀態；設定頁立即備份會透過 provider runner 先確認設定保存成功才執行，重讀時會保留尚未儲存的 WebDAV 密碼輸入，避免背景 refresh 把使用者輸入清空；手機 App 啟動與帳本切換的 Google 備份恢復只允許靜默授權，避免背景流程彈出互動登入；Google native OAuth exchange / refresh 預設使用 API 主機並由 backend `/api/google/oauth/*` 處理，不依賴官網靜態 host |
@@ -650,7 +651,7 @@ UI composable 目錄：`src/ui/composables/`
 - 類別（0）：無
 
 ### `src/services/google/drive-appdata-backup.js`
-- 函數（11）：`authHeaders`, `buildMultipartBody`, `createDriveFile`, `deleteDriveFile`, `downloadAppDataBackupText`, `ensureOk`, `fetchWithAuth`, `findFilesByName`, `listAppDataBackups`, `updateDriveFile`, `uploadBackupJsonToAppDataFolder`
+- 函數（12）：`authHeaders`, `buildMultipartBody`, `createDriveFile`, `deleteDriveFile`, `downloadAppDataBackupText`, `ensureOk`, `fetchWithAuth`, `findFilesByName`, `listAppDataBackups`, `listAppDataFileRevisions`, `updateDriveFile`, `uploadBackupJsonToAppDataFolder`
 - 變數（2）：`DRIVE_FILES_API`, `DRIVE_UPLOAD_API`
 - 類別（0）：無
 

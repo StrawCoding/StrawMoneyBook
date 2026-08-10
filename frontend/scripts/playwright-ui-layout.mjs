@@ -806,6 +806,7 @@ async function assertRouteNavigation() {
     links: {
       shared: Boolean(document.querySelector('[data-testid=feature-link-shared-ledgers]')),
       ledgerSync: Boolean(document.querySelector('[data-testid=feature-link-ledger-sync]')),
+      driveAppData: Boolean(document.querySelector('[data-testid=feature-link-drive-appdata-restore]')),
       bankSync: Boolean(document.querySelector('[data-testid=feature-link-bank-sync]')),
       carrierSync: Boolean(document.querySelector('[data-testid=feature-link-carrier-sync]')),
     },
@@ -816,12 +817,14 @@ async function assertRouteNavigation() {
   assert.match(state.advancedTitle, /進階功能|Advanced|高度な機能/u)
   assert.equal(state.links.shared, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.ledgerSync, true, JSON.stringify(state, null, 2))
+  assert.equal(state.links.driveAppData, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.bankSync, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.carrierSync, true, JSON.stringify(state, null, 2))
 
   const advancedTargets = [
     { testId: 'feature-link-shared-ledgers', path: '/settings/shared-ledgers', text: /共同帳本|Shared ledger|共有台帳/iu },
     { testId: 'feature-link-ledger-sync', path: '/settings/google-drive-ledger-sync', text: /帳本同步|Ledger Sync|帳簿同期/iu },
+    { testId: 'feature-link-drive-appdata-restore', path: '/settings/auto-backup', text: /Drive appData|Drive 備份|旧版復元|revision restore/iu },
     { testId: 'feature-link-bank-sync', path: '/settings/bank-sync', text: /銀行同步|Bank Sync|銀行同期/iu },
     { testId: 'feature-link-carrier-sync', path: '/settings/carrier-sync', text: /載具同步|Carrier Sync|載具同期/iu },
   ]
@@ -883,6 +886,131 @@ async function waitForAppShell({ expectPersonalization = false } = {}) {
     if (state.hasBottomNav) return state
   }
   throw new Error('app shell not ready')
+}
+
+async function assertDriveAppDataBrowser() {
+  // smb299: navigate first (full reload clears window), then inject Drive mock and refresh.
+  await runPlaywrightCli(['goto', `${baseUrl}/settings/auto-backup#drive-appdata-browser`])
+  await delay(900)
+
+  await runPlaywrightCli(['eval', `() => {
+    const incompleteRemote = JSON.stringify({
+      schema_version: 1,
+      exported_at: '2026-04-01T00:00:00.000Z',
+      backup_scope: 'all_ledgers',
+      ledgers: [{
+        ledger_id: 'ledger_remote',
+        tables: {
+          ledgers: [{ id: 'ledger_remote', name: '個人', deleted_at: null }],
+          transactions: [
+            { id: 't1', occurred_at: '2026-02-03T00:00:00.000Z', deleted_at: null },
+            { id: 't2', occurred_at: '2026-03-01T00:00:00.000Z', deleted_at: null },
+          ],
+        },
+      }],
+    })
+    window.__SMB_DRIVE_APPDATA_MOCK__ = {
+      listFiles: async () => ([
+        {
+          id: 'file-all',
+          name: 'StrawMoneyBook_all_ledgers.json',
+          modifiedTime: '2026-08-10T06:00:00.000Z',
+          size: '2048',
+          kind: 'all_ledgers',
+        },
+        {
+          id: 'file-sync',
+          name: 'StrawMoneyBook_sync_oldledger.json',
+          modifiedTime: '2026-05-01T00:00:00.000Z',
+          size: '1024',
+          kind: 'ledger_sync',
+        },
+      ]),
+      listRevisions: async () => ([
+        {
+          id: 'rev-new',
+          modifiedTime: '2026-08-10T06:00:00.000Z',
+          size: '2048',
+          keepForever: false,
+        },
+        {
+          id: 'rev-old',
+          modifiedTime: '2026-04-01T00:00:00.000Z',
+          size: '1800',
+          keepForever: true,
+        },
+      ]),
+      download: async ({ revisionId }) => ({
+        filename: 'StrawMoneyBook_all_ledgers.json',
+        modifiedTime: revisionId === 'rev-old' ? '2026-04-01T00:00:00.000Z' : '2026-08-10T06:00:00.000Z',
+        jsonText: incompleteRemote,
+      }),
+    }
+    return true
+  }`], { raw: true })
+
+  await runPlaywrightCli(['click', '[data-testid="drive-appdata-refresh"]'])
+  await delay(700)
+
+  let state = await evalPage(`() => ({
+    path: window.location.pathname,
+    welcome: Boolean(document.querySelector('.welcome-root')),
+    hasPanel: Boolean(document.querySelector('[data-testid=drive-appdata-browser]')),
+    hasList: Boolean(document.querySelector('[data-testid=drive-appdata-file-list]')),
+    fileCount: document.querySelectorAll('[data-testid=drive-appdata-file-list] > li').length,
+    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+    text: document.body?.innerText?.slice(0, 5000) ?? '',
+  })`)
+  assert.equal(state.path, '/settings/auto-backup', JSON.stringify(state, null, 2))
+  assert.equal(state.welcome, false, 'must not stop on welcome for drive appData browser')
+  assert.equal(state.hasPanel, true, JSON.stringify(state, null, 2))
+  assert.equal(state.hasList, true, JSON.stringify(state, null, 2))
+  assert.ok(state.fileCount >= 2, JSON.stringify(state, null, 2))
+  assert.equal(state.hasBottomNav, true, JSON.stringify(state, null, 2))
+  assert.match(state.text, /StrawMoneyBook_all_ledgers\\.json|all_ledgers|Drive appData/u)
+
+  await runPlaywrightCli(['click', '[data-file-kind="all_ledgers"] [data-testid="drive-appdata-toggle-revisions"]'])
+  await delay(700)
+  state = await evalPage(`() => ({
+    hasRevisionList: Boolean(document.querySelector('[data-testid=drive-appdata-revision-list]')),
+    revisionCount: document.querySelectorAll('[data-testid=drive-appdata-revision-list] [data-revision-id]').length,
+    hasRestoreRevision: Boolean(document.querySelector('[data-testid=drive-appdata-restore-revision]')),
+  })`)
+  assert.equal(state.hasRevisionList, true, JSON.stringify(state, null, 2))
+  assert.ok(state.revisionCount >= 2, JSON.stringify(state, null, 2))
+  assert.equal(state.hasRestoreRevision, true, JSON.stringify(state, null, 2))
+
+  await runPlaywrightCli(['click', '[data-file-kind="all_ledgers"] [data-testid="drive-appdata-preview"]'])
+  await delay(800)
+  state = await evalPage(`() => ({
+    hasPreview: Boolean(document.querySelector('[data-testid=drive-appdata-preview-dialog]')),
+    previewText: document.querySelector('[data-testid=drive-appdata-preview-dialog]')?.innerText?.slice(0, 2000) ?? '',
+  })`)
+  assert.equal(state.hasPreview, true, JSON.stringify(state, null, 2))
+  assert.match(state.previewText, /個人|Ledgers|帳簿|有效交易|Valid transactions|有効な取引/u)
+
+  // Close preview without wiping.
+  await runPlaywrightCli(['eval', `() => {
+    const closeBtn = Array.from(document.querySelectorAll('[data-testid=drive-appdata-preview-dialog] button'))
+      .find((btn) => /關閉|Close|閉じる/i.test(btn.textContent || ''))
+    if (closeBtn) closeBtn.click()
+    return Boolean(closeBtn)
+  }`], { raw: true })
+  await delay(400)
+
+  // Data management discoverability link.
+  await runPlaywrightCli(['goto', `${baseUrl}/settings/data-management`])
+  await delay(700)
+  state = await evalPage(`() => ({
+    path: window.location.pathname,
+    hasDriveLink: Boolean(document.querySelector('[data-testid=data-mgmt-drive-appdata-link]')),
+    href: document.querySelector('[data-testid=data-mgmt-drive-appdata-link]')?.getAttribute('href') || '',
+    welcome: Boolean(document.querySelector('.welcome-root')),
+  })`)
+  assert.equal(state.path, '/settings/data-management', JSON.stringify(state, null, 2))
+  assert.equal(state.welcome, false, JSON.stringify(state, null, 2))
+  assert.equal(state.hasDriveLink, true, JSON.stringify(state, null, 2))
+  assert.match(state.href, /auto-backup#drive-appdata-browser/)
 }
 
 async function assertModernLayoutOnly() {
@@ -1041,6 +1169,7 @@ try {
   await assertHomeIncomeExpenseLightAndDark()
   await assertDeleteTransactionReturnsHomeWithScroll()
   await assertRouteNavigation()
+  await assertDriveAppDataBrowser()
   await assertModernLayoutOnly()
   await assertSharedLedgerAuthAndEditorSurfaces()
 

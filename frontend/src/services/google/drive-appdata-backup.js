@@ -151,20 +151,83 @@ export async function uploadBackupJsonToAppDataFolder({ accessToken, reauth, fil
   }
 }
 
-export async function listAppDataBackups({ accessToken, reauth }) {
-  const fields = encodeURIComponent('files(id,name,modifiedTime,size)')
-  const url = `${DRIVE_FILES_API}?spaces=appDataFolder&fields=${fields}&orderBy=modifiedTime desc`
-  const response = await fetchWithAuth(accessToken, reauth, url, {
-    method: 'GET',
-    headers: authHeaders(accessToken),
-  })
-  await ensureOk(response, '讀取 Google 備份清單失敗')
-  const data = await response.json()
-  return Array.isArray(data?.files) ? data.files : []
+export async function listAppDataBackups({ accessToken, reauth, pageSize = 100 } = {}) {
+  const files = []
+  let pageToken = ''
+  const size = Math.min(1000, Math.max(1, Number(pageSize) || 100))
+  const fields = encodeURIComponent('nextPageToken,files(id,name,modifiedTime,size)')
+
+  do {
+    let url = `${DRIVE_FILES_API}?spaces=appDataFolder&fields=${fields}&orderBy=modifiedTime desc&pageSize=${size}`
+    if (pageToken) {
+      url += `&pageToken=${encodeURIComponent(pageToken)}`
+    }
+    const response = await fetchWithAuth(accessToken, reauth, url, {
+      method: 'GET',
+      headers: authHeaders(accessToken),
+    })
+    await ensureOk(response, '讀取 Google 備份清單失敗')
+    const data = await response.json()
+    const batch = Array.isArray(data?.files) ? data.files : []
+    files.push(...batch)
+    pageToken = String(data?.nextPageToken ?? '').trim()
+  } while (pageToken)
+
+  return files
 }
 
-export async function downloadAppDataBackupText({ accessToken, reauth, fileId }) {
-  const url = `${DRIVE_FILES_API}/${encodeURIComponent(fileId)}?alt=media`
+/**
+ * List Drive revisions for a single appDataFolder file.
+ * Fields: id / modifiedTime / size / keepForever.
+ */
+export async function listAppDataFileRevisions({ accessToken, reauth, fileId, pageSize = 200 } = {}) {
+  const normalizedFileId = String(fileId ?? '').trim()
+  if (!normalizedFileId) {
+    throw new Error('缺少 Google Drive 檔案 id')
+  }
+
+  const revisions = []
+  let pageToken = ''
+  const size = Math.min(1000, Math.max(1, Number(pageSize) || 200))
+  const fields = encodeURIComponent('nextPageToken,revisions(id,modifiedTime,size,keepForever)')
+
+  do {
+    let url = `${DRIVE_FILES_API}/${encodeURIComponent(normalizedFileId)}/revisions?fields=${fields}&pageSize=${size}`
+    if (pageToken) {
+      url += `&pageToken=${encodeURIComponent(pageToken)}`
+    }
+    const response = await fetchWithAuth(accessToken, reauth, url, {
+      method: 'GET',
+      headers: authHeaders(accessToken),
+    })
+    await ensureOk(response, '讀取 Google Drive 檔案版本失敗')
+    const data = await response.json()
+    const batch = Array.isArray(data?.revisions) ? data.revisions : []
+    revisions.push(...batch)
+    pageToken = String(data?.nextPageToken ?? '').trim()
+  } while (pageToken)
+
+  // Newest first for UI selection.
+  return revisions
+    .map((item) => ({
+      id: String(item?.id ?? '').trim(),
+      modifiedTime: String(item?.modifiedTime ?? '').trim(),
+      size: item?.size != null ? String(item.size) : '',
+      keepForever: Boolean(item?.keepForever),
+    }))
+    .filter((item) => item.id)
+    .sort((a, b) => String(b.modifiedTime).localeCompare(String(a.modifiedTime)))
+}
+
+export async function downloadAppDataBackupText({ accessToken, reauth, fileId, revisionId } = {}) {
+  const normalizedFileId = String(fileId ?? '').trim()
+  if (!normalizedFileId) {
+    throw new Error('缺少 Google Drive 檔案 id')
+  }
+  const normalizedRevisionId = String(revisionId ?? '').trim()
+  const url = normalizedRevisionId
+    ? `${DRIVE_FILES_API}/${encodeURIComponent(normalizedFileId)}/revisions/${encodeURIComponent(normalizedRevisionId)}?alt=media`
+    : `${DRIVE_FILES_API}/${encodeURIComponent(normalizedFileId)}?alt=media`
   const response = await fetchWithAuth(accessToken, reauth, url, {
     method: 'GET',
     headers: authHeaders(accessToken),

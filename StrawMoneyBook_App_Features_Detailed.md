@@ -173,7 +173,7 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 
 `playwright:ui-layout` 會 bypass onboarding 進入 app-shell 首頁，確認無傳統／現代切換 UI、畫面為現代 layout（`data-ui-layout=modern`）、首頁區塊／FAB／BottomNav 仍在；強制 Light 主題後驗證收入／支出 block 可見、可讀、版面完整，並抽樣確認 Dark 主題未回歸；legacy `traditional` preference 會遷移為 modern。
 
-功能列表分為「一般功能」與「進階功能」兩區：一般功能含預算項目、借貸、報銷、請款單、存錢罐、訂閱、交易搜尋；進階功能（`feature_list.advanced`）含共同帳本、帳本同步、銀行同步（feature flag 閘控）、載具同步。預算項目入口搭配圖示直接導向預算管理頁。設定頁主清單不再列出上述四項進階同步入口（深度連結／舊 bookmark 仍可開到同一 route）。
+功能列表分為「一般功能」與「進階功能」兩區：一般功能含預算項目、借貸、報銷、請款單、存錢罐、訂閱、交易搜尋；進階功能（`feature_list.advanced`）含共同帳本、帳本同步、Drive 備份選檔／舊版還原（smb299 → `/settings/auto-backup#drive-appdata-browser`）、銀行同步（feature flag 閘控）、載具同步。預算項目入口搭配圖示直接導向預算管理頁。設定頁主清單不再列出共同帳本／帳本同步／銀行同步／載具同步四項進階同步入口（深度連結／舊 bookmark 仍可開到同一 route）；自動備份仍在設定頁，並可從進階進入 Drive 選檔還原錨點。
 
 ### 3.2 交易記帳
 
@@ -612,6 +612,7 @@ SMB-188 / v1.2.4 後，PostSetupIntroPage 新增了「帳本同步（Google Driv
 - 資料變更時自動備份
 - 立即備份
 - 立即還原
+- **smb299**：Drive appDataFolder 列檔／選檔還原／revision 舊版還原（預覽帳本名稱、交易月份分佈、有效筆數；顯示較舊／較新與月份覆蓋警告；沿用 durable recovery＋倒數確認，禁止 silent wipe）
 
 這是偏向保底、留存、災難復原的機制，和即時同步是不同層次的需求。
 

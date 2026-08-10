@@ -270,6 +270,7 @@ export const RUNTIME_JA_MESSAGES_GENERATED = {
   "settings_data.recovery.desc": "ローカル帳簿の異常や共有帳簿のサーバー紐付け消失時は、自動消去に頼らず、次の復元経路を優先してください。",
   "settings_data.recovery.tip_export": "先に JSON バックアップを端末／Downloads にエクスポートしてください。",
   "settings_data.recovery.link_auto_backup": "自動バックアップ（Google Drive／WebDAV）ですぐ復元",
+  "settings_data.recovery.link_drive_appdata": "Drive appData の一覧／選択／旧版 revision 復元",
   "settings_data.recovery.link_drive_sync": "Google Drive 帳簿同期で取り込み",
   "settings_data.recovery.tip_local": "ローカル IndexedDB recovery バックアップは下で一覧・ダウンロード・復元できます（再起動後も残ります。メモリは durable ではありません）。",
   "settings_data.recovery.tip_import": "下の JSON インポートは確認と recovery バックアップ成功後にのみローカルを消去します。",

@@ -26,6 +26,13 @@
           <RouterLink class="link" to="/settings/auto-backup">{{ t('settings_data.recovery.link_auto_backup', '自動備份（Google Drive／WebDAV）立即還原') }}</RouterLink>
         </li>
         <li>
+          <RouterLink
+            class="link"
+            data-testid="data-mgmt-drive-appdata-link"
+            to="/settings/auto-backup#drive-appdata-browser"
+          >{{ t('settings_data.recovery.link_drive_appdata', 'Drive appData 列檔／選檔／舊版 revision 還原') }}</RouterLink>
+        </li>
+        <li>
           <RouterLink class="link" to="/settings/google-drive-ledger-sync">{{ t('settings_data.recovery.link_drive_sync', 'Google Drive 帳本同步拉回') }}</RouterLink>
         </li>
         <li>{{ t('settings_data.recovery.tip_local', '本機 IndexedDB recovery 備份可在下方列出、下載或還原（跨重啟仍在）。') }}</li>

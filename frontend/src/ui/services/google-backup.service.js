@@ -6,8 +6,14 @@ import { isAutoBackupDue, resolveAutoBackupIntervalHours } from '@/ui/services/a
 import {
   downloadAppDataBackupText,
   listAppDataBackups,
+  listAppDataFileRevisions,
   uploadBackupJsonToAppDataFolder,
 } from '@/services/google/drive-appdata-backup'
+import {
+  compareBackupSummaries,
+  summarizeBackupJsonText,
+  summarizeBackupPayload,
+} from '@/core/services/backup-json-preview.service'
 import { getSharedLedgerSession } from '@/services/shared-ledger/backend'
 import {
   getAccessToken,
@@ -78,6 +84,48 @@ function pickPreferredBackupFile(files) {
   if (!Array.isArray(files) || !files.length) return null
   const exact = files.find((item) => String(item?.name ?? '') === GOOGLE_BACKUP_FILENAME)
   return exact ?? files[0]
+}
+
+function normalizeDriveFileMeta(raw) {
+  return {
+    id: String(raw?.id ?? '').trim(),
+    name: String(raw?.name ?? '').trim(),
+    modifiedTime: String(raw?.modifiedTime ?? '').trim(),
+    size: raw?.size != null ? String(raw.size) : '',
+  }
+}
+
+function classifyDriveAppDataFile(name) {
+  const filename = String(name ?? '').trim()
+  if (filename === GOOGLE_BACKUP_FILENAME) return 'all_ledgers'
+  if (/^StrawMoneyBook_sync_.+\.json$/i.test(filename)) return 'ledger_sync'
+  if (/\.json$/i.test(filename)) return 'other_json'
+  return 'other'
+}
+
+function getDriveAppDataTestMock() {
+  if (typeof window === 'undefined') return null
+  const mock = window.__SMB_DRIVE_APPDATA_MOCK__
+  return mock && typeof mock === 'object' ? mock : null
+}
+
+async function resolveGoogleDriveAuth(ledgerId, options = {}) {
+  assertLedgerId(ledgerId)
+  ensureNativePlatform()
+  const interactiveAuth = options?.interactiveAuth !== false
+  const reauthHandler = () => reauth({
+    interactive: interactiveAuth,
+    requireRefreshToken: true,
+  })
+  const state = await getGoogleBackupState(ledgerId)
+  if (!state.connected) {
+    throw new Error(t('settings_auto_backup.error.google.connect_required'))
+  }
+  const accessToken = await getAccessToken({
+    interactive: interactiveAuth,
+    requireRefreshToken: true,
+  })
+  return { accessToken, reauthHandler, state }
 }
 
 function hasProfileIdentity(profile) {
@@ -421,22 +469,12 @@ export async function performGoogleBackup(ledgerId, options = {}) {
 
 export async function restoreGoogleBackupJson(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
-  ensureNativePlatform()
-  const interactiveAuth = options?.interactiveAuth !== false
-  const reauthHandler = () => reauth({
-    interactive: interactiveAuth,
-    requireRefreshToken: true,
-  })
-
-  const state = await getGoogleBackupState(ledgerId)
-  if (!state.connected) {
-    throw new Error(t('settings_auto_backup.error.google.connect_required'))
+  const mock = getDriveAppDataTestMock()
+  if (mock && typeof mock.restorePreferred === 'function') {
+    return mock.restorePreferred({ ledgerId, options })
   }
 
-  const accessToken = await getAccessToken({
-    interactive: interactiveAuth,
-    requireRefreshToken: true,
-  })
+  const { accessToken, reauthHandler } = await resolveGoogleDriveAuth(ledgerId, options)
   const files = await listAppDataBackups({ accessToken, reauth: reauthHandler })
   const target = pickPreferredBackupFile(files)
   if (!target?.id) {
@@ -452,7 +490,142 @@ export async function restoreGoogleBackupJson(ledgerId, options = {}) {
   return {
     filename: String(target.name ?? ''),
     modifiedTime: String(target.modifiedTime ?? ''),
+    fileId: String(target.id ?? ''),
+    revisionId: '',
     jsonText,
+  }
+}
+
+/**
+ * List every file in Google Drive appDataFolder (all_ledgers / sync_* / others).
+ * Playwright may inject `window.__SMB_DRIVE_APPDATA_MOCK__` to avoid native Drive.
+ */
+export async function listGoogleAppDataFiles(ledgerId, options = {}) {
+  assertLedgerId(ledgerId)
+  const mock = getDriveAppDataTestMock()
+  if (mock && typeof mock.listFiles === 'function') {
+    const files = await mock.listFiles({ ledgerId, options })
+    return (Array.isArray(files) ? files : []).map((item) => {
+      const meta = normalizeDriveFileMeta(item)
+      return {
+        ...meta,
+        kind: String(item?.kind ?? classifyDriveAppDataFile(meta.name)),
+      }
+    })
+  }
+
+  const { accessToken, reauthHandler } = await resolveGoogleDriveAuth(ledgerId, options)
+  const files = await listAppDataBackups({ accessToken, reauth: reauthHandler })
+  return files.map((item) => {
+    const meta = normalizeDriveFileMeta(item)
+    return {
+      ...meta,
+      kind: classifyDriveAppDataFile(meta.name),
+    }
+  })
+}
+
+export async function listGoogleAppDataFileRevisions(ledgerId, fileId, options = {}) {
+  assertLedgerId(ledgerId)
+  const normalizedFileId = String(fileId ?? '').trim()
+  if (!normalizedFileId) {
+    throw new Error(t('settings_auto_backup.error.google.restore_file_missing'))
+  }
+
+  const mock = getDriveAppDataTestMock()
+  if (mock && typeof mock.listRevisions === 'function') {
+    const revisions = await mock.listRevisions({ ledgerId, fileId: normalizedFileId, options })
+    return Array.isArray(revisions) ? revisions : []
+  }
+
+  const { accessToken, reauthHandler } = await resolveGoogleDriveAuth(ledgerId, options)
+  return listAppDataFileRevisions({
+    accessToken,
+    reauth: reauthHandler,
+    fileId: normalizedFileId,
+  })
+}
+
+export async function downloadGoogleAppDataBackup(ledgerId, target = {}, options = {}) {
+  assertLedgerId(ledgerId)
+  const fileId = String(target?.fileId ?? '').trim()
+  const revisionId = String(target?.revisionId ?? '').trim()
+  if (!fileId) {
+    throw new Error(t('settings_auto_backup.error.google.restore_file_missing'))
+  }
+
+  const mock = getDriveAppDataTestMock()
+  if (mock && typeof mock.download === 'function') {
+    const downloaded = await mock.download({ ledgerId, fileId, revisionId, options })
+    return {
+      fileId,
+      revisionId,
+      filename: String(downloaded?.filename ?? target?.filename ?? ''),
+      modifiedTime: String(downloaded?.modifiedTime ?? target?.modifiedTime ?? ''),
+      jsonText: String(downloaded?.jsonText ?? ''),
+    }
+  }
+
+  const { accessToken, reauthHandler } = await resolveGoogleDriveAuth(ledgerId, options)
+  const jsonText = await downloadAppDataBackupText({
+    accessToken,
+    reauth: reauthHandler,
+    fileId,
+    revisionId: revisionId || undefined,
+  })
+  return {
+    fileId,
+    revisionId,
+    filename: String(target?.filename ?? ''),
+    modifiedTime: String(target?.modifiedTime ?? ''),
+    jsonText,
+  }
+}
+
+/**
+ * Download a Drive file/revision, summarize contents, and compare against current local export.
+ */
+export async function previewGoogleAppDataBackup(ledgerId, target = {}, options = {}) {
+  const downloaded = await downloadGoogleAppDataBackup(ledgerId, target, options)
+  const remoteSummary = summarizeBackupJsonText(downloaded.jsonText)
+
+  let localSummary = summarizeBackupPayload(null)
+  let localExportedAt = ''
+  try {
+    const localPayload = await exportAllLedgersJson()
+    localSummary = summarizeBackupPayload(localPayload)
+    localExportedAt = String(localPayload?.exported_at ?? '').trim()
+  } catch (error) {
+    console.warn('[google-backup] local summary failed', error)
+  }
+
+  const comparison = compareBackupSummaries(remoteSummary, localSummary, {
+    remoteModifiedAt: downloaded.modifiedTime || remoteSummary.exportedAt,
+    localModifiedAt: localExportedAt || localSummary.exportedAt,
+  })
+
+  return {
+    ...downloaded,
+    remoteSummary,
+    localSummary,
+    comparison,
+  }
+}
+
+export async function restoreGoogleBackupJsonByTarget(ledgerId, target = {}, options = {}) {
+  const preview = await previewGoogleAppDataBackup(ledgerId, target, options)
+  if (!preview.jsonText) {
+    throw new Error(t('settings_auto_backup.error.google.restore_file_missing'))
+  }
+  return {
+    filename: preview.filename,
+    modifiedTime: preview.modifiedTime,
+    fileId: preview.fileId,
+    revisionId: preview.revisionId,
+    jsonText: preview.jsonText,
+    remoteSummary: preview.remoteSummary,
+    localSummary: preview.localSummary,
+    comparison: preview.comparison,
   }
 }
 

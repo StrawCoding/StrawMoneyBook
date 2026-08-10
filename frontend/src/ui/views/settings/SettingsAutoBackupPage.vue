@@ -103,7 +103,21 @@
         </li>
       </ul>
 
+      <p class="muted compact">
+        {{
+          t(
+            'settings_auto_backup.drive_browser.preferred_hint',
+            '上方「從備份還原」會取最新同名 all_ledgers 檔。若要選其他檔、sync_* 或 Drive revision 舊版，請使用下方列表。',
+          )
+        }}
+      </p>
     </article>
+
+    <DriveAppDataRestorePanel
+      :connected="Boolean(googleBackupState.connected)"
+      :ledger-id="ledgerStore.activeLedgerId || ''"
+    />
+
     <article class="card panel" :class="{ working: isWorking }">
       <h3>{{ t('settings_auto_backup.webdav_panel_title') }}</h3>
       <p class="muted">{{ t('settings_auto_backup.webdav_panel_desc') }}</p>
@@ -270,6 +284,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import DriveAppDataRestorePanel from '@/ui/components/settings/DriveAppDataRestorePanel.vue'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
