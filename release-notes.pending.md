@@ -1,5 +1,8 @@
 # Pending Release Notes
 
+---
+
+## v1.3.98
 - 修復輸入框／選擇器背景遺漏與帳戶選擇器未依分類：全域補齊 `--surface`／`--surface-soft`／`--text-secondary` 別名（對應 `--input-bg`／`--text-soft`），載具／電子發票 field 與金額計算機改用 `--input-bg`；帳戶選擇統一走 `groupedRegularAccounts`／`groupedAccounts`（含首頁編輯 sheet、借貸、報銷、訂閱、存錢罐、銀行對應；載具／發票預設帳戶改 optgroup）。補 Node source／單元回歸。
 - (smb299) Google Drive appDataFolder 列檔／選檔還原／revision 舊版：可列出全部 appData 檔（all_ledgers、sync_*、其他），預覽帳本名稱／交易月份分佈／有效筆數後選檔還原，並可展開單一檔的 Drive revisions 選舊版；**預覽必須成功且內容可匯入才開確認對話框**（不可匯入／預覽失敗禁止進入清空流程）；正式還原走 `runConfirmedDriveAppDataRestore`（可匯入預覽→再下載驗證→smb297 durable recovery 含 `exportAllLedgersJson`／device persist→wipe→import），recovery 失敗或下載不可匯入時中止不清空本機；並顯示較舊／較新與月份覆蓋警告。入口在自動備份頁、資料管理還原指引、功能頁進階。補 Node（orchestrator 成功路徑＋預覽／不可匯入／recovery 失敗均不清空）與 `playwright:ui-layout`（mock 列表／選檔／revision 展開／確認倒數／不可匯入檔不開確認，非 welcome 假陽性）。
 - (smb298) 資料仍不見／還原帳本與殘餘根因治本：Android `plugin-null` **禁止**再切到空的 `straw_money_book_recovery` 當 live DB（改重試 primary；開不起來才 `LOCAL_DB_INTEGRITY`，避免 primary 有資料卻顯示空帳本）；空庫＋本機 IndexedDB recovery 時 Welcome／toast 提示並導向資料管理還原（`allowWithoutSetup`）；gpr／gpr:minor 強制 `sync:official-site-app-update:push` 把 `app-update.json`＋`api/app-update/play` 同步到 StrawMoneyBookWeb `main`→Web-Page，禁止官方站再卡舊版；順便修復 SavingsJarListPage `autoSaveAccountOptions` TDZ（Cannot access before initialization）。`playwright:ui-layout` 加 port mutex／拒絕占用埠／獨立 CLI session／`waitForHomeBlocks`／preview 子行程清理，避免 verify 與 closeout 並行搶 4186 或踩掉 default session 造成假空白首頁。補 Node 合約／`playwright:ui-layout`。
@@ -31,8 +34,6 @@
 - (SMB-272) 修復 App 啟動期 `Invalid time value`：真機 debug 記錄顯示 routePath 空白，根因為發薪週期帳本在啟動 / reload 時可能保留 `budgetStore.monthKey = pay:YYYY-MM-DD`，首頁期間篩選把它當曆月 key 傳入交易查詢，`transaction.repo.js` 的月份 UTC range 對非法月份呼叫 `toISOString()` 而拋 `RangeError: Invalid time value`。修復：首頁月份篩選只接受 `YYYY-MM`，預算 store 可正規解析 persisted `pay:*` key，預算 service 的 pay-cycle parser 保留原週期語意，交易 repo 對非法年/月/日 key 回空結果而非拋錯；Debug Error Log snapshot 補保留 stack/source/route/info 並暴露診斷副本給 app-shell 驗證。新增 Node regression、source regression、`playwright:budget-pay-cycle` reload/pageerror/console 檢查；更新兩份功能文件。
 - (SMB-271) 預算項目流程可直接設定帳本預算期間：新增／編輯一般預算項目與共同預算池 sheet 皆新增「目前帳本預算期間」區塊，可切換曆月 / 發薪週期並設定每月發薪日；文案明確提示這是目前帳本層設定，會影響該帳本預算頁與首頁預算卡，不是單一項目的獨立週期。資料語意仍沿用 SMB-269 的 ledger-level `budget_period_mode` / `budget_pay_day`，不搬移既有曆月或發薪週期資料；新建項目 / 共同池若同時切週期會先套用帳本週期再建立，編輯既有項目 / 共同池則先保存目前項目再套用週期，避免意外搬動舊 period row。補三語 i18n、source regression、`playwright:budget-pay-cycle` 新增 / 編輯項目與共同池 app-shell workflow。
 - (SMB-270) 修復正式 Android App 更新可見性：官方網站 `www.strawmb.com` 補齊更新 manifest 與 Play fallback JSON，並將 App 內 secondary 更新來源改為 GitHub Pages 部署分支的 jsDelivr JSON mirror，避免 fallback 打到 GitHub Pages apex domain 的 HTML redirect；App repo 新增更新來源合約測試，鎖定 `app-update.json` 與 `frontend/package.json` 版本一致、預設 primary/fallback URL 與 HTML fallback 偵測。未修改版本號，未執行發版。
-
----
 
 ## v1.3.58
 - (SMB-269) 修復發薪週期預算在不同執行環境時區下的期間查詢漂移：預算 snapshot 的整期與今日花費查詢改以帳本時區轉 UTC，不再依 CI runner / 裝置 process timezone；補強發薪日含當天、下次發薪日前一天含在本期、共同日池期末後才結算與日均 / 日池保留額回歸測試。
