@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- (smb299) 修復功能頁進階列表加長後，最後一列（載具同步）被固定 BottomNav 遮擋導致點擊無效：`feature-link` 補 `scroll-margin-bottom`；`playwright:ui-layout` 進階入口改先 `scrollIntoView({block:'center'})` 並斷言列在 nav 上方再點（必要時 programmatic click fallback）。
-
 ---
+
+## v1.3.106
+- (smb299) 修復功能頁進階列表加長後，最後一列（載具同步）被固定 BottomNav 遮擋導致點擊無效：`feature-link` 補 `scroll-margin-bottom`；`playwright:ui-layout` 進階入口改先 `scrollIntoView({block:'center'})` 並斷言列在 nav 上方再點（必要時 programmatic click fallback）。
 
 ## v1.3.104
 - (smb299) 修復 `playwright:ui-layout` 證券頁冷啟動假失敗：有價證券列表改以資產頁 SPA 入口（`assets-securities-entry`）進入並等待 app shell／`data-testid=securities-page`；避免 `goto /assets/securities` 僅等 700ms 時底欄與標題尚未就緒的假陰性。smb299 Drive 列檔／選檔／revision 還原閘門不變。
