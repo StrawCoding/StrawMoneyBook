@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- (smb299) OpenCode tick14 治本：匯入閘門補 SQLite CHECK enum（例 `transactions.type=not_a_valid_type` 在 wipe 前拒絕）；因 `withTransaction` 跨步驟非原子，wipe 後 import 失敗會**先再 wipe 清除部分匯入殘留**，再以 durable recovery 回灌，最終 DB＝wipe 前原狀（禁止「原本地＋殘缺雲端」）；Node 回歸驗證最終狀態標記與呼叫序 `wipe→import→wipe→rollback`；Playwright 覆蓋 CHECK 無效檔不開確認。
-
 ---
+
+## v1.3.102
+- (smb299) OpenCode tick14 治本：匯入閘門補 SQLite CHECK enum（例 `transactions.type=not_a_valid_type` 在 wipe 前拒絕）；因 `withTransaction` 跨步驟非原子，wipe 後 import 失敗會**先再 wipe 清除部分匯入殘留**，再以 durable recovery 回灌，最終 DB＝wipe 前原狀（禁止「原本地＋殘缺雲端」）；Node 回歸含狀態機呼叫序 `wipe→import→wipe→rollback`，並以 **sql.js 實庫**驗證失敗回滾後 ledger／交易列等於 wipe 前快照（不含殘缺雲端列）；Playwright 覆蓋 CHECK 無效檔不開確認。
 
 ## v1.3.101
 - 新增有價證券 MVP：獨立模組（台股／ETF），資產頁入口 `/assets/securities`，支援標的、買賣流水＋手續費、手動市價、可選計入總資產；分析頁投資／證券摘要；共同帳本／備份含 `securities`／`security_transactions`；市價介面預留自動更新。補 Node 計算／配線回歸。
