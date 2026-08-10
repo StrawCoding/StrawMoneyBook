@@ -4,10 +4,21 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import test from 'node:test'
 
+import { executeMigrationSql } from '../src/core/db/migration-executor.js'
 import { splitSqlStatements } from '../src/core/db/sql-statements.js'
 
 const require = createRequire(import.meta.url)
 const initSqlJs = require('sql.js')
+
+function createSqlJsMigrationDb(rawDb) {
+  return {
+    async executeSet(items) {
+      for (const item of items) {
+        rawDb.run(item.statement, item.values ?? [])
+      }
+    },
+  }
+}
 
 const migration009 = readFileSync(
   resolve(import.meta.dirname, '../src/core/db/migrations/009_allow_zero_amount_transaction.sql'),
@@ -275,7 +286,8 @@ test('smb296: migration 009 rebuild keeps child FK refs under foreign_keys=ON (n
     }
     assert.equal(naiveFailed, true, 'naive DROP TABLE transactions must fail with FK ON')
 
-    assert.doesNotThrow(() => runSqlScript(db, migration009))
+    // Prefer the same executor path runMigrations uses (executeMigrationSql).
+    await executeMigrationSql(createSqlJsMigrationDb(db), migration009)
     assert.equal(db.exec('PRAGMA foreign_keys;')[0].values[0][0], 1)
     assertChildRefsIntact(db)
 
@@ -320,7 +332,7 @@ test('smb296: migration 026 rebuild preserves CASCADE/SET NULL children under fo
     }
     assert.equal(refundBlocked, true, 'pre-026 schema must reject refund origin_type')
 
-    assert.doesNotThrow(() => runSqlScript(db, migration026))
+    await executeMigrationSql(createSqlJsMigrationDb(db), migration026)
     assert.equal(db.exec('PRAGMA foreign_keys;')[0].values[0][0], 1)
     assertChildRefsIntact(db, { withAdvances: true })
 
@@ -334,6 +346,19 @@ test('smb296: migration 026 rebuild preserves CASCADE/SET NULL children under fo
           '2026-08-10T00:00:00.000Z', '2026-08-10T00:00:00.000Z', 0, 'none');`,
       )
     })
+  } finally {
+    db.close()
+  }
+})
+
+test('smb296: runSqlScript fallback matches executeMigrationSql for 009 under FK ON', async () => {
+  const SQL = await initSqlJs()
+  const db = new SQL.Database()
+  try {
+    seedPreRebuildSchema(db)
+    assert.doesNotThrow(() => runSqlScript(db, migration009))
+    assert.equal(db.exec('PRAGMA foreign_keys;')[0].values[0][0], 1)
+    assertChildRefsIntact(db)
   } finally {
     db.close()
   }

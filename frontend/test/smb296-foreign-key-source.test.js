@@ -117,6 +117,14 @@ test('smb296: 產品碼含 migrations（runMigrations 註冊執行）皆不得 P
   }
   assert.deepEqual(offenders, [], `sources still disable foreign_keys: ${offenders.join(', ')}`)
 
+  const migrateSource = readFileSync(
+    resolve(import.meta.dirname, '../src/core/db/migrate.js'),
+    'utf8',
+  )
+  const executorSource = readFileSync(
+    resolve(import.meta.dirname, '../src/core/db/migration-executor.js'),
+    'utf8',
+  )
   const migration009 = readFileSync(
     resolve(import.meta.dirname, '../src/core/db/migrations/009_allow_zero_amount_transaction.sql'),
     'utf8',
@@ -125,6 +133,16 @@ test('smb296: 產品碼含 migrations（runMigrations 註冊執行）皆不得 P
     resolve(import.meta.dirname, '../src/core/db/migrations/026_transaction_origin_type_refund.sql'),
     'utf8',
   )
+
+  // runMigrations registers these SQL files and executes them via executeMigrationSql.
+  assert.match(migrateSource, /009_allow_zero_amount_transaction\.sql/)
+  assert.match(migrateSource, /026_transaction_origin_type_refund\.sql/)
+  assert.match(migrateSource, /version:\s*9[\s\S]*allow_zero_amount_transaction/)
+  assert.match(migrateSource, /version:\s*26[\s\S]*transaction_origin_type_refund/)
+  assert.match(migrateSource, /await executeMigrationSql\(db, migration\.sql\)/)
+  assert.doesNotMatch(migrateSource, /PRAGMA\s+foreign_keys\s*=\s*OFF/i)
+  assert.doesNotMatch(executorSource, /PRAGMA\s+foreign_keys\s*=\s*OFF/i)
+
   assert.match(migration009, /PRAGMA foreign_keys = ON/)
   assert.match(migration026, /PRAGMA foreign_keys = ON/)
   assert.match(migration009, /_mig009_bak_/)

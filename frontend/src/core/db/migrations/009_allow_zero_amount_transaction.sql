@@ -3,6 +3,7 @@
 -- Detach nullable refs + backup/delete CASCADE children, rebuild parent, then restore.
 PRAGMA foreign_keys = ON;
 
+DROP TABLE IF EXISTS transactions_new;
 DROP TABLE IF EXISTS _mig009_bak_tx_att;
 DROP TABLE IF EXISTS _mig009_bak_loan_gen;
 DROP TABLE IF EXISTS _mig009_bak_reimb_paid;
