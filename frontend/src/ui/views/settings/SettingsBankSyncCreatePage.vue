@@ -113,7 +113,7 @@
           </label>
           <label class="field">
             {{ t('settings_bank_sync.account_sync.target_account') }}
-            <CustomSelect v-model="account.mappedAccountIdDraft" :options="ledgerAccountOptions" :placeholder="t('settings_bank_sync.account_sync.choose_account')" />
+            <CustomSelect v-model="account.mappedAccountIdDraft" :groups="ledgerAccountGroups" :placeholder="t('settings_bank_sync.account_sync.choose_account')" />
           </label>
           <label class="field">
             {{ t('settings_bank_sync.account_sync.display_name') }}
@@ -152,6 +152,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import { withLeadingAccountOption } from '@/ui/utils/account-option-groups'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import { getMembershipTierSnapshot, hasBankSyncMembershipAccess as hasBankSyncMembershipAccessForTier, subscribeMembershipSnapshot } from '@/core/services/membership.service'
@@ -234,12 +235,17 @@ const canSubmitLogin = computed(() => {
     && String(form.password ?? '').trim(),
   )
 })
+const ledgerAccountGroups = computed(() => {
+  return withLeadingAccountOption(
+    accountStore.groupedRegularAccounts,
+    {
+      value: '__none__',
+      label: t('settings_bank_sync.account_sync.no_target'),
+    },
+  )
+})
 const ledgerAccountOptions = computed(() => {
-  const options = accountStore.accounts.map((account) => ({
-    value: account.id,
-    label: account.name,
-  }))
-  return [{ value: '__none__', label: t('settings_bank_sync.account_sync.no_target') }, ...options]
+  return ledgerAccountGroups.value.flatMap((group) => group.options ?? [])
 })
 const canSaveAccounts = computed(() => {
   return accountDrafts.value.some((account) => {

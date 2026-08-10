@@ -107,7 +107,19 @@
         <label class="field-label mt">{{ t('settings_carrier_sync.default_account') }}</label>
         <select v-model="defaultAccountId" class="field-input" @change="saveConfig">
           <option value="">{{ t('settings_carrier_sync.no_default_account') }}</option>
-          <option v-for="account in accounts" :key="account.id" :value="account.id">{{ account.name }}</option>
+          <optgroup
+            v-for="group in accountOptionGroups"
+            :key="group.id"
+            :label="group.name"
+          >
+            <option
+              v-for="option in group.options"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </optgroup>
         </select>
 
         <label class="field-label mt">{{ t('settings_carrier_sync.default_category') }}</label>
@@ -268,7 +280,7 @@ const captchaOpenedAt = ref(0)
 const CAPTCHA_TTL_MS = 2 * 60 * 1000
 let captchaExpireTimer = null
 
-const accounts = computed(() => accountStore.accounts ?? [])
+const accountOptionGroups = computed(() => accountStore.groupedRegularAccounts)
 const expenseCategories = computed(() => categoryStore.expenseCategories ?? [])
 const canSync = computed(() => apiReady.value && isValidCarrierPhone(carrierPhone.value) && carrierPassword.value.trim().length >= 4)
 const carrierRecoveryCtaLabel = computed(() => {
@@ -638,10 +650,11 @@ onBeforeUnmount(() => {
 .field-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .field-input {
   width: 100%;
-  border: 1px solid var(--border);
+  border: 1px solid var(--field-border);
   border-radius: 10px;
   padding: 10px 12px;
-  background: var(--card);
+  background: var(--input-bg);
+  color: var(--text);
 }
 .mt { margin-top: 12px; }
 .remember-row { display: flex; align-items: center; gap: 8px; }

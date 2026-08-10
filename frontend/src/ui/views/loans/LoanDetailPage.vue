@@ -87,7 +87,7 @@
 
               <label>
                 帳戶
-                <CustomSelect v-model="repayForm.accountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="repayForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
 
               <label>
@@ -111,7 +111,7 @@
               <p class="muted">{{ loan?.counterparty_name }} / 目前帳戶 {{ loan?.setup_account_name || '—' }}</p>
               <label>
                 帳戶
-                <CustomSelect v-model="setupAccountForm.accountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="setupAccountForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
       <template #footer>
         <button class="btn" @click="closeSetupAccountSheet">取消</button>

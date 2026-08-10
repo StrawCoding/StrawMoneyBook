@@ -161,7 +161,7 @@
       <template v-if="jarForm.autoSaveEnabled">
         <label class="field">
           {{ t('savings_jar.auto_save.source_account') }}
-          <CustomSelect v-model="jarForm.autoSaveSourceAccountId" :options="autoSaveAccountOptions" />
+          <CustomSelect v-model="jarForm.autoSaveSourceAccountId" :groups="autoSaveAccountGroups" />
         </label>
 
         <label class="field">
@@ -242,7 +242,7 @@
 
       <label class="field">
         {{ t('savings_jar.field.source_account') }}
-        <CustomSelect v-model="flowForm.accountId" :options="flowAccountOptions" />
+        <CustomSelect v-model="flowForm.accountId" :groups="flowAccountGroups" />
       </label>
 
       <label class="field">
@@ -273,6 +273,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
 
 const accountStore = useAccountStore()
 const ledgerStore = useLedgerStore()
@@ -459,27 +460,19 @@ const savingJarRows = computed(() => {
 
 const currentEditingJar = computed(() => savingJarRows.value.find((item) => String(item.id ?? '') === String(editingJarId.value ?? '')) ?? null)
 const activeFlowJar = computed(() => savingJarRows.value.find((item) => item.id === flowJarId.value) ?? null)
-const flowAccountOptions = computed(() => {
+const flowAccountGroups = computed(() => {
   const jar = activeFlowJar.value
   if (!jar) return []
-  return accountStore.regularAccounts
-    .filter((item) => normalizeCurrencyCode(item.currency_code, jar.currencyCode) === jar.currencyCode)
-    .map((item) => ({
-      value: item.id,
-      label: item.name,
-      icon: item.icon || 'fa-solid fa-wallet',
-    }))
+  return buildAccountOptionGroups(accountStore.groups, accountStore.regularAccounts, {
+    currencyCode: jar.currencyCode,
+  })
 })
-const autoSaveAccountOptions = computed(() => {
+const flowAccountOptions = computed(() => flowAccountGroups.value.flatMap((group) => group.options ?? []))
+const autoSaveAccountGroups = computed(() => {
   const currencyCode = normalizeCurrencyCode(jarForm.currencyCode, ledgerStore.activeLedger?.currency_code || 'TWD')
-  return accountStore.regularAccounts
-    .filter((item) => normalizeCurrencyCode(item.currency_code, currencyCode) === currencyCode)
-    .map((item) => ({
-      value: item.id,
-      label: item.name,
-      icon: item.icon || 'fa-solid fa-wallet',
-    }))
+  return buildAccountOptionGroups(accountStore.groups, accountStore.regularAccounts, { currencyCode })
 })
+const autoSaveAccountOptions = computed(() => autoSaveAccountGroups.value.flatMap((group) => group.options ?? []))
 
 // smb298: watch MUST sit after autoSaveAccountOptions — earlier placement caused TDZ
 // (Cannot access 'autoSaveAccountOptions' before initialization) on Android client_error_logs.

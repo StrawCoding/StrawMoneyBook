@@ -94,7 +94,7 @@
             <div class="account-config">
               <label class="field">
                 {{ t('settings_bank_sync.account_sync.target_account') }}
-                <CustomSelect v-model="account.mappedAccountIdDraft" :options="ledgerAccountOptions" :placeholder="t('settings_bank_sync.account_sync.choose_account')" />
+                <CustomSelect v-model="account.mappedAccountIdDraft" :groups="ledgerAccountGroups" :placeholder="t('settings_bank_sync.account_sync.choose_account')" />
               </label>
               <label class="field">
                 {{ t('settings_bank_sync.account_sync.display_name') }}
@@ -275,6 +275,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import { withLeadingAccountOption } from '@/ui/utils/account-option-groups'
 import { shouldRequireReconnectForStoredBankConnection } from '@/services/bank-sync/shared'
 import {
   disconnectBankConnection,
@@ -338,12 +339,17 @@ const lookbackOptions = computed(() => [
   { value: 7, label: t('settings_bank_sync.lookback_days.option', { days: 7 }) },
 ])
 
+const ledgerAccountGroups = computed(() => {
+  return withLeadingAccountOption(
+    accountStore.groupedRegularAccounts,
+    {
+      value: '__none__',
+      label: t('settings_bank_sync.account_sync.no_target'),
+    },
+  )
+})
 const ledgerAccountOptions = computed(() => {
-  const options = accountStore.accounts.map((account) => ({
-    value: account.id,
-    label: account.name,
-  }))
-  return [{ value: '__none__', label: t('settings_bank_sync.account_sync.no_target') }, ...options]
+  return ledgerAccountGroups.value.flatMap((group) => group.options ?? [])
 })
 
 const csvImportAccountOptions = computed(() => {

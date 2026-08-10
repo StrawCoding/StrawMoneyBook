@@ -377,4 +377,32 @@ test('smb299: DriveAppDataRestorePanel wires durable recovery exporter (not empt
     panelSource,
     /createVerifiedRecoveryBackupBeforeWipe\(\{\s*source:[\s\S]*?category: 'auto-backup',\s*\}\)/,
   )
+  // Preview must succeed before confirm dialog + countdown; failure closes/never opens confirm.
+  assert.match(
+    panelSource,
+    /assertDriveRestorePreviewReady\(preview\)[\s\S]*?restoreConfirmOpen\.value = true[\s\S]*?startRestoreCountdown\(\)/,
+  )
+  assert.match(panelSource, /restoreConfirmOpen\.value = false[\s\S]*?uiStore\.pushToast\(pendingPreviewError/)
+})
+
+test('smb299: release-notes.pending keeps smb299 above history separator (notes:check non-empty)', async () => {
+  const notesPath = resolve(import.meta.dirname, '../../release-notes.pending.md')
+  const notes = readFileSync(notesPath, 'utf8')
+  const sepIndex = notes.indexOf('\n---\n')
+  assert.ok(sepIndex > 0, 'history separator --- must exist')
+  const pending = notes.slice(0, sepIndex)
+  const history = notes.slice(sepIndex + 1)
+  assert.match(pending, /\(smb299\).*runConfirmedDriveAppDataRestore/)
+  assert.match(pending, /預覽必須成功|importable preview|durable recovery/u)
+  assert.doesNotMatch(pending, /^## v\d/m)
+  assert.match(history, /^## v\d/m)
+
+  const { validatePendingNotesStructure, readValidNoteLines } = await import(
+    '../scripts/release-notes.mjs'
+  )
+  const status = validatePendingNotesStructure(notesPath)
+  assert.equal(status.ok, true, status.message)
+  assert.ok(status.lineCount > 0, status.message)
+  const lines = readValidNoteLines(notesPath)
+  assert.ok(lines.some((line) => /\(smb299\)/.test(line)), 'smb299 must be a pending note line')
 })

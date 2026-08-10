@@ -114,7 +114,7 @@
 
       <label>
         建立入帳帳戶
-        <CustomSelect v-model="createForm.accountId" :options="accountStore.accounts" />
+        <CustomSelect v-model="createForm.accountId" :groups="accountStore.groupedRegularAccounts" />
       </label>
 
       <label>

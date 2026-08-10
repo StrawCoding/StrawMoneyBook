@@ -61,7 +61,7 @@ function handleNext() {
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 15px;
-  background: var(--surface);
+  background: var(--input-bg);
   color: var(--text);
   box-sizing: border-box;
 }

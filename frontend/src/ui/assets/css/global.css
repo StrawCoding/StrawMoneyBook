@@ -47,7 +47,14 @@
   --badge-bg: color-mix(in srgb, var(--primary) 18%, transparent);
   --badge-text: var(--primary-soft);
 
-  /* Surfaces */
+  /* Surfaces
+   * --surface / --surface-soft are required aliases: many sheets historically
+   * referenced them without defining them, which dropped background paint.
+   * Form-like surfaces map to --input-bg so fields contrast against --card.
+   */
+  --surface: var(--input-bg);
+  --surface-soft: var(--input-bg);
+  --text-secondary: var(--text-soft);
   --surface-popover: color-mix(in srgb, var(--card-elevated) 92%, var(--bg) 8%);
   --surface-soft-accent: color-mix(in srgb, var(--card) 70%, var(--bg-soft) 30%);
   --surface-muted: color-mix(in srgb, var(--muted) 22%, var(--card) 78%);

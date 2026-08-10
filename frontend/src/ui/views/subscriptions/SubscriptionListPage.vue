@@ -100,7 +100,7 @@
 
       <label class="field">
         {{ t('subscription_page.account') }}
-        <CustomSelect v-model="form.accountId" :options="accountOptions" />
+        <CustomSelect v-model="form.accountId" :groups="accountOptionGroups" />
       </label>
 
       <label class="field">
@@ -203,10 +203,11 @@ const form = reactive({
 
 const activeLedgerId = computed(() => ledgerStore.activeLedgerId)
 const isFreePlan = computed(() => membershipTier.value === 'free')
-const accountOptions = computed(() => accountStore.accounts.map((item) => ({
+const accountOptions = computed(() => accountStore.regularAccounts.map((item) => ({
   value: item.id,
   label: item.name,
 })))
+const accountOptionGroups = computed(() => accountStore.groupedRegularAccounts)
 const categoryOptionGroups = computed(() => buildCategorySelectGroups(categoryStore, 'expense'))
 const categoryOptions = computed(() => getCategoryOptionsByType(categoryStore, 'expense'))
 const intervalOptions = computed(() => ([

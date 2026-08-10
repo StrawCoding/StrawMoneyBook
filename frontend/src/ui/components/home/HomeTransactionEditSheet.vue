@@ -45,7 +45,7 @@
     <div v-if="showCategory" class="inline-grid">
       <label>
         {{ t('common.account') }}
-        <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
+        <CustomSelect v-model="model.accountId" :groups="directAccountGroups" />
       </label>
 
       <label>
@@ -62,17 +62,17 @@
     <div v-else-if="model.type === 'transfer'" class="inline-grid">
       <label>
         {{ t('quick_add.field.from_account') }}
-        <CustomSelect v-model="model.accountId" :options="transferAccountOptions" />
+        <CustomSelect v-model="model.accountId" :groups="transferAccountGroups" />
       </label>
       <label>
         {{ t('quick_add.field.to_account') }}
-        <CustomSelect v-model="model.peerAccountId" :options="transferAccountOptions" />
+        <CustomSelect v-model="model.peerAccountId" :groups="transferAccountGroups" />
       </label>
     </div>
 
     <label v-else>
       {{ t('common.account') }}
-      <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
+      <CustomSelect v-model="model.accountId" :groups="directAccountGroups" />
     </label>
 
     <template #footer>
@@ -285,6 +285,8 @@ const visibleCategoryGroups = computed(() => {
 const categoryPickerGroups = computed(() => {
   return (visibleCategoryGroups.value ?? []).filter((group) => Array.isArray(group.categories) && group.categories.length > 0)
 })
+const directAccountGroups = computed(() => accountStore.groupedRegularAccounts)
+const transferAccountGroups = computed(() => accountStore.groupedAccounts)
 const directAccountOptions = computed(() => accountStore.regularAccounts)
 const transferAccountOptions = computed(() => accountStore.accounts)
 const addonOptionsByType = computed(() => {

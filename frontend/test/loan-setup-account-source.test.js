@@ -47,5 +47,8 @@ test('loan detail page exposes a setup-account editor', () => {
   assert.match(loanDetailSource, /建立入帳帳戶/)
   assert.match(loanDetailSource, /變更入帳帳戶/)
   assert.match(loanDetailSource, /loanStore\.updateSetupAccount\(\{/)
-  assert.match(loanDetailSource, /<CustomSelect v-model="setupAccountForm\.accountId" :options="accountStore\.accounts" \/>/)
+  assert.match(
+    loanDetailSource,
+    /<CustomSelect v-model="setupAccountForm\.accountId" :groups="accountStore\.groupedRegularAccounts" \/>/,
+  )
 })

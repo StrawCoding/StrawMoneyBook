@@ -336,7 +336,7 @@
               </div>
               <label v-if="completeRequiresAccount">
                 {{ t('claim_sheet.form.account') }}
-                <CustomSelect v-model="completeForm.accountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="completeForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
               <label>
                 {{ t('claim_sheet.form.complete_note') }}

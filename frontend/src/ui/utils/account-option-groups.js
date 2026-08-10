@@ -51,3 +51,21 @@ export function buildAccountOptionGroups(groups = [], accounts = [], options = {
 
   return groupedOptions
 }
+
+/** Prepend a sentinel option (e.g. 「不對應」) ahead of grouped account lists. */
+export function withLeadingAccountOption(groups = [], option = null, groupLabel = '') {
+  const value = String(option?.value ?? '').trim()
+  if (!value) return [...(groups ?? [])]
+  return [
+    {
+      id: `__leading_${value}`,
+      name: groupLabel || '',
+      options: [{
+        value,
+        label: option.label ?? value,
+        icon: option.icon ?? '',
+      }],
+    },
+    ...(groups ?? []),
+  ]
+}

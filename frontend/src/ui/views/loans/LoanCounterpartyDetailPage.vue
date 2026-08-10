@@ -233,7 +233,7 @@
 
               <label>
                 建立入帳帳戶
-                <CustomSelect v-model="createForm.accountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="createForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
 
               <label>
@@ -262,7 +262,7 @@
 
               <label>
                 帳戶
-                <CustomSelect v-model="repayForm.accountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="repayForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
 
               <label>
@@ -294,7 +294,7 @@
 
               <label>
                 帳戶
-                <CustomSelect v-model="batchRepayForm.accountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="batchRepayForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
 
               <label>

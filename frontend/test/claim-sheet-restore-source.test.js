@@ -51,7 +51,7 @@ test('claim sheet detail page exposes restore action for completed claims', () =
 })
 
 test('claim sheet completion account selector matches the shared account options used elsewhere', () => {
-  assert.match(claimListSource, /<CustomSelect v-model="completeForm\.accountId" :options="accountStore\.accounts" \/>/)
+  assert.match(claimListSource, /<CustomSelect v-model="completeForm\.accountId" :groups="accountStore\.groupedRegularAccounts" \/>/)
   assert.match(claimListSource, /return accountStore\.accounts\.some\(\(item\) => item\.id === String\(completeForm\.accountId \?\? ''\)\.trim\(\)\)/)
   assert.match(claimListSource, /completeForm\.accountId = String\(accountStore\.accounts\[0\]\?\.id \?\? ''\)/)
   assert.doesNotMatch(claimListSource, /claimAccountOptions/)

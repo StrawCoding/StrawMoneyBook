@@ -181,7 +181,7 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--surface-soft);
+  background: var(--input-bg);
   color: var(--text);
   display: flex;
   align-items: center;

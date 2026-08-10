@@ -30,7 +30,7 @@
     >
       <template v-if="normalizedGroups.length">
         <div v-for="group in normalizedGroups" :key="group.id" class="group">
-          <p class="group-label">{{ group.name }}</p>
+          <p v-if="String(group.name ?? '').trim()" class="group-label">{{ group.name }}</p>
           <button
             v-for="option in group.options"
             :key="`${group.id}-${String(option.value)}`"

@@ -22,9 +22,19 @@
         <label class="field-label">{{ t('einvoice.step4.account_label') }}</label>
         <select v-model="store.defaultAccountId" class="field-input">
           <option value="">{{ t('einvoice.step4.no_account') }}</option>
-          <option v-for="acc in regularAccounts" :key="acc.id" :value="acc.id">
-            {{ acc.name }}
-          </option>
+          <optgroup
+            v-for="group in accountOptionGroups"
+            :key="group.id"
+            :label="group.name"
+          >
+            <option
+              v-for="option in group.options"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </optgroup>
         </select>
 
         <label class="field-label mt">{{ t('einvoice.step4.category_label') }}</label>
@@ -90,6 +100,7 @@ const ledgerStore = useLedgerStore()
 const importError = ref('')
 
 const regularAccounts = computed(() => accountStore.regularAccounts ?? [])
+const accountOptionGroups = computed(() => accountStore.groupedRegularAccounts)
 const expenseCategories = computed(() => categoryStore.expenseCategories ?? [])
 
 function formatAmount(amount) {
@@ -153,11 +164,11 @@ function handleFinish() {
 .field-label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; }
 .field-input {
   width: 100%;
-  border: 1px solid var(--border);
+  border: 1px solid var(--field-border);
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 15px;
-  background: var(--surface);
+  background: var(--input-bg);
   color: var(--text);
   box-sizing: border-box;
 }

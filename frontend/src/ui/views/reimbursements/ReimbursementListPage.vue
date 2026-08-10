@@ -230,7 +230,7 @@
 
               <label v-if="settleMode === 'batch' || singleSettleCashMinor > 0">
                 入帳帳戶
-                <CustomSelect v-model="settleForm.accountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="settleForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
               <div class="copy-wrap">
                 <p class="copy-title">同步複製到其他帳本（可複選）</p>
@@ -265,7 +265,7 @@
               </label>
               <label>
                 代收帳戶
-                <CustomSelect v-model="advanceForm.accountId" :options="accountStore.accounts" />
+                <CustomSelect v-model="advanceForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
               <label>
                 備註
