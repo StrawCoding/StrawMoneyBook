@@ -196,6 +196,11 @@ test('smb299: Drive list/revisions/download can be mocked without live Google', 
 test('smb299: auto-backup / data-management / advanced expose Drive appData browser entry', () => {
   assert.match(autoBackupPageSource, /DriveAppDataRestorePanel/)
   assert.match(autoBackupPageSource, /drive-appdata-browser|DriveAppDataRestorePanel/)
+  // Classic Google/WebDAV restore also gates with formal importer structure before wipe.
+  assert.match(
+    autoBackupPageSource,
+    /assertBackupJsonImportable\(backup\?\.jsonText\)[\s\S]*runConfirmedWipeAfterRecoveryBackup/,
+  )
   assert.match(panelSource, /data-testid="drive-appdata-browser"/)
   assert.match(panelSource, /data-testid="drive-appdata-file-list"/)
   assert.match(panelSource, /data-testid="drive-appdata-revision-list"/)
@@ -212,6 +217,14 @@ test('smb299: auto-backup / data-management / advanced expose Drive appData brow
   assert.match(panelSource, /canConfirmRestore/)
   assert.match(dataMgmtSource, /data-testid="data-mgmt-drive-appdata-link"/)
   assert.match(dataMgmtSource, /#drive-appdata-browser/)
+  assert.match(
+    dataMgmtSource,
+    /assertBackupJsonImportable\(text\)[\s\S]*runConfirmedWipeAfterRecoveryBackup/,
+  )
+  assert.match(
+    dataMgmtSource,
+    /assertBackupJsonImportable\(loaded\?\.jsonText\)[\s\S]*runConfirmedWipeAfterRecoveryBackup/,
+  )
   assert.match(featureListSource, /feature-link-drive-appdata-restore/)
   assert.match(featureListSource, /#drive-appdata-browser/)
 })

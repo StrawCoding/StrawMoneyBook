@@ -288,6 +288,10 @@ import {
 } from '@/core/services/export.service'
 import { importBackupJsonAsNewLedgers, importLedgerCsv } from '@/core/services/import.service'
 import {
+  assertBackupJsonImportable,
+  DRIVE_RESTORE_NOT_IMPORTABLE_CODE,
+} from '@/core/services/drive-appdata-restore.service'
+import {
   DATA_WIPE_REASON,
   LEDGER_REPAIR_REASON,
   RECOVERY_BACKUP_REQUIRED_CODE,
@@ -558,6 +562,8 @@ async function confirmLocalRestore() {
   try {
     const result = await withOperationProgress('importJson', async () => {
       const loaded = await loadRecoveryBackupJsonText(backupId)
+      // smb299: prove formal importer structure before durable recovery / wipe.
+      assertBackupJsonImportable(loaded?.jsonText)
       await runConfirmedWipeAfterRecoveryBackup({
         createRecoveryBackup: createResetRecoveryBackup,
         source: 'SettingsDataManagementPage.confirmLocalRestore',
@@ -590,8 +596,12 @@ async function confirmLocalRestore() {
       error?.code === RECOVERY_BACKUP_REQUIRED_CODE
         ? t('settings_data.toast.recovery_backup_required', '本機 recovery 備份建立失敗，已中止清空本機資料。請先手動匯出後再重試。')
         : ''
+    const notImportableMessage =
+      error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+        ? (error?.message || t('settings_auto_backup.drive_browser.not_importable', '選定的備份無法匯入。已中止，不清空本機。'))
+        : ''
     uiStore.pushToast(
-      recoveryMessage || error?.message || t('settings_data.local_recovery.toast_restore_failed', '本機 recovery 還原失敗'),
+      recoveryMessage || notImportableMessage || error?.message || t('settings_data.local_recovery.toast_restore_failed', '本機 recovery 還原失敗'),
       'error',
     )
   } finally {
@@ -733,6 +743,8 @@ async function confirmImportJson() {
   try {
     const result = await withOperationProgress('importJson', async () => {
       const text = await readFileAsText(file)
+      // smb299: prove formal importer structure before durable recovery / wipe.
+      assertBackupJsonImportable(text)
       // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
       await runConfirmedWipeAfterRecoveryBackup({
         createRecoveryBackup: createResetRecoveryBackup,
@@ -763,12 +775,16 @@ async function confirmImportJson() {
       error?.code === RECOVERY_BACKUP_REQUIRED_CODE
         ? t('settings_data.toast.recovery_backup_required', '本機 recovery 備份建立失敗，已中止清空本機資料。請先手動匯出後再重試。')
         : ''
+    const notImportableMessage =
+      error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+        ? (error?.message || t('settings_auto_backup.drive_browser.not_importable', '選定的備份無法匯入。已中止，不清空本機。'))
+        : ''
     const fkMessage = error?.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' || Number(error?.numericCode) === 1811
       || String(error?.i18nKey ?? '') === 'sqlite.error.foreign_key_constraint'
       ? t('settings_data.toast.foreign_key_constraint', '資料關聯不一致，操作已中止。請檢查匯入檔或先修復帳本資料。')
       : ''
     uiStore.pushToast(
-      recoveryMessage || fkMessage || error.message || t('settings_data.toast.import_json_failed'),
+      recoveryMessage || notImportableMessage || fkMessage || error.message || t('settings_data.toast.import_json_failed'),
       'error',
     )
   } finally {

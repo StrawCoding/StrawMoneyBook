@@ -311,6 +311,10 @@ import {
 } from '@/core/services/export.service'
 import { importBackupJsonAsNewLedgers } from '@/core/services/import.service'
 import {
+  assertBackupJsonImportable,
+  DRIVE_RESTORE_NOT_IMPORTABLE_CODE,
+} from '@/core/services/drive-appdata-restore.service'
+import {
   DATA_WIPE_REASON,
   LEDGER_REPAIR_REASON,
   RECOVERY_BACKUP_REQUIRED_CODE,
@@ -807,6 +811,8 @@ async function restoreFromWebdav() {
   webdavRestoringNow.value = true
   try {
     const backup = await restoreWebdavBackupJson(ledgerStore.activeLedgerId)
+    // smb299: prove formal importer structure before durable recovery / wipe.
+    assertBackupJsonImportable(backup?.jsonText)
     // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
     await runConfirmedWipeAfterRecoveryBackup({
       createRecoveryBackup: createRestoreRecoveryBackup,
@@ -850,7 +856,9 @@ async function restoreFromWebdav() {
     const toastKey =
       error?.code === RECOVERY_BACKUP_REQUIRED_CODE
         ? 'settings_auto_backup.toast.recovery_backup_required'
-        : 'settings_auto_backup.toast.webdav_restore_failed'
+        : error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+          ? 'settings_auto_backup.drive_browser.not_importable'
+          : 'settings_auto_backup.toast.webdav_restore_failed'
     uiStore.pushToast(errorMessage(error, t(toastKey)), 'error')
   } finally {
     webdavRestoringNow.value = false
@@ -956,6 +964,8 @@ async function restoreFromGoogle() {
   googleRestoringNow.value = true
   try {
     const backup = await restoreGoogleBackupJson(ledgerStore.activeLedgerId)
+    // smb299: prove formal importer structure before durable recovery / wipe.
+    assertBackupJsonImportable(backup?.jsonText)
     // smb297: recovery backup failure must abort wipe — never swallow then resetDatabase.
     await runConfirmedWipeAfterRecoveryBackup({
       createRecoveryBackup: createRestoreRecoveryBackup,
@@ -1000,7 +1010,9 @@ async function restoreFromGoogle() {
     const toastKey =
       error?.code === RECOVERY_BACKUP_REQUIRED_CODE
         ? 'settings_auto_backup.toast.recovery_backup_required'
-        : 'settings_auto_backup.toast.google_restore_failed'
+        : error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+          ? 'settings_auto_backup.drive_browser.not_importable'
+          : 'settings_auto_backup.toast.google_restore_failed'
     uiStore.pushToast(errorMessage(error, t(toastKey)), 'error')
   } finally {
     googleRestoringNow.value = false

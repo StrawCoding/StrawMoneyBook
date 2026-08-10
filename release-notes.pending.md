@@ -1,5 +1,6 @@
 # Pending Release Notes
 
+- (smb299) 關聯路徑治本：Google／WebDAV「立即還原」與資料管理 JSON／本機 recovery 還原，皆在 durable recovery／wipe **之前**呼叫同源 `assertBackupJsonImportable`（摘要＋正式 importer 結構閘門）；不可匯入時中止不清空。
 - (smb299) 補齊選檔／revision 還原「實際可匯入」閘門：`assertBackupJsonImportable` 改為摘要 **＋** 與 `importBackupJsonAsNewLedgers` 同源的 `assertBackupJsonStructureImportable`（缺 ledger_id／空 ledgers／僅 tables 無帳本列等會在 wipe 前拒絕）；Node 回歸覆蓋「摘要通過但正式 importer 會拒」的 payload，確認失敗不清空且不進 durable recovery。
 - (smb299) 修復 notes:archive 後 closeout 假失敗：Node 回歸改為接受 smb299 閘門文案位於 pending **或** 已封存的 `## v*` history（不再強制 pending 非空）；避免 v1.3.98 封存後 `closeout:verify`／`test:node` 因結構測試失敗而卡住 mark PASS。產品還原閘門（durable recovery exporter、預覽成功才確認、不可匯入不清空）維持不變。
 
