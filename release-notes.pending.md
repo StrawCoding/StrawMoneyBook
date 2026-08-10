@@ -1,9 +1,10 @@
 # Pending Release Notes
 
+---
+
+## v1.3.101
 - 新增有價證券 MVP：獨立模組（台股／ETF），資產頁入口 `/assets/securities`，支援標的、買賣流水＋手續費、手動市價、可選計入總資產；分析頁投資／證券摘要；共同帳本／備份含 `securities`／`security_transactions`；市價介面預留自動更新。補 Node 計算／配線回歸。
 - (smb299) 補齊資料列 INSERT 可匯入閘門與 wipe 後回滾：`assertBackupJsonStructureImportable` 在 ledger 身分之外再驗證與正式 importer 同源的表欄位／必要欄位（未知欄位如 `bogus_column`、缺 type／account_id／amount_minor 等在 wipe 前拒絕）；`runConfirmedWipeThenImportWithRecoveryRollback` 於 wipe 後 import 失敗時以 durable recovery 回灌本機。Node／Playwright 覆蓋 tick13 fixture 與失敗不清空。
-
----
 
 ## v1.3.99
 - (smb299) 關聯路徑治本：Google／WebDAV「立即還原」與資料管理 JSON／本機 recovery 還原，皆在 durable recovery／wipe **之前**呼叫同源 `assertBackupJsonImportable`（摘要＋正式 importer 結構閘門）；不可匯入時中止不清空。
