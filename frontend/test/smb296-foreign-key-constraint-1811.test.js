@@ -182,9 +182,10 @@ test('smb296: orphan snapshot insert with FK ON throws FOREIGN KEY; normalize th
   assert.equal(threw, true, 'raw orphan insert must fail under PRAGMA foreign_keys=ON')
 
   const normalized = normalizeSharedLedgerSnapshot(orphan)
-  assert.equal(normalized.tables.accounts.length, 0)
-  assert.equal(normalized.tables.transactions.length, 0)
-  assert.equal(normalized.tables.transaction_attachments.length, 0)
+  assert.equal(normalized.tables.accounts.length, 1)
+  assert.equal(normalized.tables.transactions.length, 1)
+  assert.equal(normalized.tables.transaction_attachments.length, 1)
+  assert.ok(normalized.tables.account_groups.length >= 1)
 
   const fixedDb = openFkDb(SQL)
   try {
@@ -193,8 +194,8 @@ test('smb296: orphan snapshot insert with FK ON throws FOREIGN KEY; normalize th
     const accountCount = fixedDb.exec('SELECT COUNT(*) AS c FROM accounts;')[0].values[0][0]
     const txCount = fixedDb.exec('SELECT COUNT(*) AS c FROM transactions;')[0].values[0][0]
     assert.equal(ledgerCount, 1)
-    assert.equal(accountCount, 0)
-    assert.equal(txCount, 0)
+    assert.equal(accountCount, 1)
+    assert.equal(txCount, 1)
   } finally {
     fixedDb.close()
   }
@@ -226,7 +227,9 @@ test('smb296: optional FK nulling keeps valid parent rows and drops invalid refs
   const tx = normalized.tables.transactions.find((row) => row.id === 'tx_ok')
   assert.ok(tx)
   assert.equal(tx.peer_account_id, null)
-  assert.equal(tx.category_id, null)
+  // smb297: synthesize missing category instead of nulling required bookkeeping refs
+  assert.equal(tx.category_id, 'cat_missing')
+  assert.ok(normalized.tables.categories.some((row) => row.id === 'cat_missing'))
 
   const db = openFkDb(SQL)
   try {

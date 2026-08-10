@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   areSharedLedgerSnapshotsEquivalent,
+  assertSnapshotBookkeepingPreserved,
   mergeSharedLedgerSnapshots,
   normalizeSharedLedgerSnapshot,
   threeWayMergeSnapshots,
@@ -207,7 +208,7 @@ test('mergeSharedLedgerSnapshots removes a stale tombstone when a newer row is r
   assert.equal(merged.tables.deleted_log.length, 0)
 })
 
-test('normalizeSharedLedgerSnapshot prunes rows that would violate shared-ledger import foreign keys (SMB-187)', () => {
+test('normalizeSharedLedgerSnapshot preserves bookkeeping rows by synthesizing missing parents (smb297)', () => {
   const snapshot = buildSnapshot({
     account_groups: [],
     accounts: [{
@@ -241,10 +242,62 @@ test('normalizeSharedLedgerSnapshot prunes rows that would violate shared-ledger
 
   const normalized = normalizeSharedLedgerSnapshot(snapshot)
 
-  assert.equal(normalized.tables.accounts.length, 0)
-  assert.equal(normalized.tables.categories.length, 0)
-  assert.equal(normalized.tables.transactions.length, 0)
-  assert.equal(normalized.tables.transaction_attachments.length, 0)
+  assert.equal(normalized.tables.accounts.length, 1)
+  assert.equal(normalized.tables.categories.length, 1)
+  assert.equal(normalized.tables.transactions.length, 1)
+  assert.equal(normalized.tables.transactions[0]?.amount_minor, 100)
+  assert.equal(normalized.tables.transaction_attachments.length, 1)
+  assert.ok(normalized.tables.account_groups.some((row) => row.id === 'group_deleted'))
+  assert.ok(normalized.tables.category_groups.some((row) => row.id === 'cat_group_deleted'))
+  assert.ok(normalized.fk_preserve_report?.synthesizedAccountGroups >= 1)
+})
+
+test('normalizeSharedLedgerSnapshot keeps healthy ledger bookkeeping identical (smb297)', () => {
+  const snapshot = buildSnapshot({
+    account_groups: [{
+      id: 'group_cash',
+      name: '現金',
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }],
+    accounts: [{
+      id: 'acc_cash',
+      group_id: 'group_cash',
+      name: '現金',
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }],
+    category_groups: [{
+      id: 'group_expense',
+      name: '支出',
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }],
+    categories: [{
+      id: 'cat_food',
+      group_id: 'group_expense',
+      name: '餐飲',
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }],
+    transactions: [{
+      id: 'tx_1',
+      account_id: 'acc_cash',
+      category_id: 'cat_food',
+      amount_minor: 120,
+      occurred_at: '2026-05-13T10:00:00.000Z',
+      updated_at: '2026-05-13T10:00:00.000Z',
+    }, {
+      id: 'tx_2',
+      account_id: 'acc_cash',
+      category_id: 'cat_food',
+      amount_minor: 80,
+      occurred_at: '2026-05-13T11:00:00.000Z',
+      updated_at: '2026-05-13T11:00:00.000Z',
+    }],
+  })
+
+  const normalized = normalizeSharedLedgerSnapshot(snapshot)
+  const proof = assertSnapshotBookkeepingPreserved(snapshot, normalized)
+  assert.equal(proof.preserved, true)
+  assert.equal(proof.after.transactionCount, 2)
+  assert.equal(proof.after.amountMinorTotal, 200)
 })
 
 test('normalizeSharedLedgerSnapshot nulls optional shared-ledger foreign keys when referenced rows are missing (SMB-187)', () => {
@@ -299,11 +352,13 @@ test('normalizeSharedLedgerSnapshot nulls optional shared-ledger foreign keys wh
   const reimbursementItem = normalized.tables.reimbursement_items.find((row) => row.id === 'rei_item')
 
   assert.equal(tx.peer_account_id, null)
-  assert.equal(tx.category_id, null)
+  // smb297: missing category is synthesized (preserve semantics) rather than nulled/dropped
+  assert.equal(tx.category_id, 'cat_missing')
+  assert.ok(normalized.tables.categories.some((row) => row.id === 'cat_missing'))
   assert.equal(reimbursement.counterparty_id, null)
   assert.equal(reimbursement.paid_tx_id, null)
   assert.equal(reimbursementItem.transaction_id, null)
-  assert.equal(reimbursementItem.category_id, null)
+  assert.equal(reimbursementItem.category_id, 'cat_missing')
   assert.equal(reimbursementItem.account_id, null)
 })
 

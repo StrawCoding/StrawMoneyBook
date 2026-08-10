@@ -12,9 +12,14 @@ const ledgerRuntimeSource = readFileSync(
   'utf8',
 )
 
-test('SMB-189 ledger integrity auto repair covers detected ledger data errors', () => {
+test('smb297: ledger integrity on load is scan-only (no silent auto-repair rewrite)', () => {
   assert.match(ledgerRuntimeSource, /ensureLedgerIntegrity\(normalizedLedgerId\)/)
   assert.match(ledgerRuntimeSource, /scheduleDeferredLedgerHydration/)
+  assert.match(ledgerRuntimeSource, /scanLedgerIntegrity/)
+  assert.match(ledgerRuntimeSource, /Scan-only|no silent auto-repair/i)
+  assert.doesNotMatch(ledgerRuntimeSource, /repairLedgerData\(/)
+  assert.match(ledgerRuntimeSource, /app:ledger-integrity-issues/)
+  assert.match(repairServiceSource, /assertExplicitLedgerRepair/)
   assert.match(repairServiceSource, /const REPAIR_ACCOUNT_ID = 'system_repair_account'/)
   assert.match(repairServiceSource, /SET account_id = \?/)
   assert.match(repairServiceSource, /SET peer_account_id = \?/)

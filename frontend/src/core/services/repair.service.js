@@ -1,5 +1,10 @@
 import { query, run, withTransaction } from '@/core/db/sqlite'
 import { nowIso } from '@/core/utils/id'
+import {
+  assertExplicitLedgerRepair,
+  LEDGER_REPAIR_REASON,
+  recordLedgerRepairAudit,
+} from '@/core/services/data-wipe-guard.service'
 
 const REPAIR_ACCOUNT_GROUP_ID = 'system_repair_accounts'
 const REPAIR_ACCOUNT_ID = 'system_repair_account'
@@ -189,7 +194,13 @@ export async function scanLedgerIntegrity(ledgerId) {
   }
 }
 
-export async function repairLedgerData(ledgerId) {
+export async function repairLedgerData(ledgerId, options = {}) {
+  const repairAuth = assertExplicitLedgerRepair({
+    confirmed: options.confirmed === true,
+    reason: options.reason || LEDGER_REPAIR_REASON.USER_EXPLICIT,
+    source: options.source || 'repair.service',
+  })
+
   return withTransaction(async () => {
     const fixed = {
       orphanTxAccountFixed: 0,
@@ -410,7 +421,13 @@ export async function repairLedgerData(ledgerId) {
            ),
            updated_at = ?
        WHERE ledger_id = ?
-         AND deleted_at IS NULL;`,
+         AND deleted_at IS NULL
+         AND COALESCE(total_minor, 0) <> (
+             SELECT COALESCE(SUM(amount_minor), 0)
+             FROM reimbursement_items
+             WHERE ledger_id = reimbursements.ledger_id
+               AND reimbursement_id = reimbursements.id
+           );`,
       [nowIso(), ledgerId],
     )
 
@@ -475,6 +492,14 @@ export async function repairLedgerData(ledgerId) {
     }
 
     const after = await scanLedgerIntegrity(ledgerId)
+    const fixedCount = Object.values(fixed).reduce((sum, value) => sum + Number(value ?? 0), 0)
+    recordLedgerRepairAudit({
+      reason: repairAuth.reason,
+      source: repairAuth.source,
+      ledgerId,
+      confirmed: true,
+      fixedCount,
+    })
     return { fixed, after }
   })
 }

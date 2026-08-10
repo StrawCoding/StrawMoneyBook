@@ -158,9 +158,9 @@
 - 附加項目：`/settings/addon-templates`
 - 自動識別：`/settings/auto-fill-rules`
 - 匯率同步：`/settings/exchange-rate`
-- 資料管理：`/settings/data-management`（smb297：還原指引＋JSON 匯入／重設皆需確認倒數＋recovery 備份＋wipe audit；禁止 bootstrap／FK silent wipe）
+- 資料管理：`/settings/data-management`（smb297：還原指引＋帳本完整性掃描／明確修復（需倒數確認，禁啟動靜默改寫）＋JSON 匯入／重設皆需確認倒數＋recovery 備份＋wipe audit；禁止 bootstrap／FK silent wipe）
 - 自動備份：`/settings/auto-backup`（smb297：Google／WebDAV「立即還原」需確認倒數＋recovery 備份後才清空本機）
-- Google Drive 帳本同步：`/settings/google-drive-ledger-sync`（smb297：本機有交易且遠端快照為空時阻擋 hard replace，狀態 `empty_remote_blocked`）
+- Google Drive 帳本同步：`/settings/google-drive-ledger-sync`（smb297：本機有交易且遠端快照為空時阻擋 hard replace，狀態 `empty_remote_blocked`；FK preserve 合成缺失父列，禁止丟交易）
 - 語言：`/settings/language`
 - 個人化：`/settings/personalization`
 - 安全鎖：`/settings/security`
@@ -326,7 +326,7 @@ UI 服務目錄：`src/ui/services/`
 |---|---|
 | `app-bootstrap.service.js` | UI 啟動鏈協調：建立 Pinia store、接 core bootstrap 結果、處理 setup 前後 app boot 流程 |
 | `app-runtime.service.js` | App runtime side effects：背景排程、同步/備份啟動、Android back、網址恢復、前景事件協調；啟動 / 回前景 / 帳本切換時補跑存錢罐自動存入、訂閱今日扣款與預算存款 |
-| `ledger-runtime.service.js` | 帳本切換後的 cross-store reset / reload / integrity repair 與帳本生命周期協調；smb287 後 critical path 先載帳戶／分類／目前預算，完整性掃描與借貸／報銷／附加範本／recent 改背景延遲 hydrate |
+| `ledger-runtime.service.js` | 帳本切換後的 cross-store reset / reload／完整性掃描與帳本生命周期協調；smb287 後 critical path 先載帳戶／分類／目前預算，掃描與借貸／報銷／附加範本／recent 改背景延遲 hydrate；**smb297：scan-only，禁止啟動靜默 `repairLedgerData` 改寫語意**，異常改 toast＋資料管理明確修復 |
 | `membership-navigation.service.js` | 會員限制導頁與 membership benefits navigation，將 router side effect 留在 UI 層 |
 | `shared-ledger.service.js` | 共同帳本前端流程：建立、下載、上傳、自動同步、本機帳本綁定；SMB-229 / v1.3.9 後依角色（`sharedLedgerRoleCanPush`）跳過 Viewer 上傳、被降級時清 dirty 佇列，並提供成員角色更新與所有權轉移服務封裝；SMB-277 後 meta 記錄 `last_sync_status` / `last_sync_error`，失敗可見並可重試；SMB-279／smb288 後背景同步先 `ensureSharedLedgerSessionReady`，需重新登入／會員／離線／session 恢復中寫入可見 `paused_*`（含 schedule 路徑），禁止 silently no-op；SMB-281 後 `stopSharingLocalLedger`／`stopSharingRemoteSharedLedger` 在取消共享／離開前檢查 session／needs-reauth，遠端已不存在時仍清本機 binding |
 | `google-backup.service.js` | Google Drive AppData 備份連線、自動備份、還原、重新授權後自動清理 stale auto-check diagnostics；Google 授權失效時自動偵測並寫入 `error/reauth_required` 狀態使 UI 顯示重新授權警示；`resolveGoogleProfileForConnect` 在 silent token 失敗時必定觸發 `googleSignIn` 取得新 token（SMB-186 / v1.2.7） |
@@ -563,9 +563,10 @@ UI composable 目錄：`src/ui/composables/`
 ### `src/core/services/bootstrap.service.js`
 - 函數（1）：`bootstrapCoreDatabase`（smb297：禁 silent wipe；失敗 → `LOCAL_DB_INTEGRITY`）
 ### `src/core/services/data-wipe-guard.service.js`
-- 函數：`assertExplicitDataWipe`、`recordDataWipeAudit`、`createLocalDatabaseIntegrityError`、`createEmptyRemoteReplaceBlockedError`、`countSnapshotActiveTransactions` 等
+- 函數：`assertExplicitDataWipe`、`recordDataWipeAudit`、`assertExplicitLedgerRepair`、`recordLedgerIntegrityScan`、`recordLedgerRepairAudit`、`createLocalDatabaseIntegrityError`、`createEmptyRemoteReplaceBlockedError`、`countSnapshotActiveTransactions` 等
 - 變數（0）：無
 - 類別（0）：無
+- 補充（smb297）：完整 wipe 與破壞性 repair 皆需 `confirmed`＋合法 reason＋audit；啟動僅 scan、禁止 silent rewrite。
 
 ### `src/core/services/budget.service.js`
 - 函數（新增重點）：`resolveBudgetPeriodForLedger`, `previousBudgetPeriod`, `nextBudgetPeriod`, `loadBudgetSnapshotForPeriod`, `listInclusiveMonthKeys`, `saveBudgetContainerRange`, `saveBudgetItemRange`

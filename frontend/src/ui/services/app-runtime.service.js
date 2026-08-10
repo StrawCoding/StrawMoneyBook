@@ -476,6 +476,20 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
     )
   })
 
+  addWindowListener('app:ledger-integrity-issues', (event) => {
+    const detail = event?.detail && typeof event.detail === 'object' ? event.detail : {}
+    const count = Number(detail.issueCount ?? 0) || 0
+    if (count <= 0) return
+    useUiStore(pinia).pushToast(
+      translateMessage(
+        'settings_data.integrity.toast_detected',
+        { count },
+        '帳本完整性異常 {count} 項：系統未自動改寫。請至資料管理檢視／明確修復，或從備份還原。',
+      ),
+      'warning',
+    )
+  })
+
   addWindowListener('app:data-mutated', () => {
     scheduleAutoBackupOnDataChange(runtimeState, pinia, windowObject)
     scheduleAutoBackupDueCheck(runtimeState, pinia, windowObject, 30000)

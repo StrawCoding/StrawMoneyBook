@@ -149,4 +149,94 @@ test('smb297: repair path never DELETE FROM transactions as FK shortcut', () => 
   assert.doesNotMatch(repairSource, /DELETE\s+FROM\s+transactions/i)
   assert.match(repairSource, /ensureRepairAccount/)
   assert.match(repairSource, /orphanTxAccountFixed/)
+  assert.match(repairSource, /assertExplicitLedgerRepair/)
+})
+
+test('smb297: startup integrity is scan-only; prune preserves bookkeeping rows', () => {
+  const runtimeSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/services/ledger-runtime.service.js'),
+    'utf8',
+  )
+  const mergeSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/services/shared-ledger/snapshot-merge.js'),
+    'utf8',
+  )
+  assert.doesNotMatch(runtimeSource, /repairLedgerData\(/)
+  assert.match(runtimeSource, /scanLedgerIntegrity/)
+  assert.match(runtimeSource, /recordLedgerIntegrityScan/)
+  assert.match(mergeSource, /synthesizing missing parents|資料保全/i)
+  assert.match(mergeSource, /assertSnapshotBookkeepingPreserved/)
+  assert.match(mergeSource, /fk_preserve_report/)
+})
+
+test('smb297: healthy snapshot survives normalize with identical bookkeeping', async () => {
+  const {
+    normalizeSharedLedgerSnapshot,
+    assertSnapshotBookkeepingPreserved,
+  } = await import('../src/ui/services/shared-ledger/snapshot-merge.js')
+
+  const snapshot = {
+    schema_version: 18,
+    ledger_id: 'ledger_smb297',
+    tables: {
+      ledgers: [{ id: 'ledger_smb297', name: 'SMB297' }],
+      account_groups: [{ id: 'g1', name: '現金' }],
+      accounts: [{ id: 'a1', group_id: 'g1', name: '錢包' }],
+      category_groups: [{ id: 'cg1', name: '支出' }],
+      categories: [{ id: 'c1', group_id: 'cg1', name: '餐飲' }],
+      transactions: [
+        { id: 't1', account_id: 'a1', category_id: 'c1', amount_minor: 50 },
+        { id: 't2', account_id: 'a1', category_id: 'c1', amount_minor: 150 },
+      ],
+    },
+  }
+  const normalized = normalizeSharedLedgerSnapshot(snapshot)
+  const proof = assertSnapshotBookkeepingPreserved(snapshot, normalized)
+  assert.equal(proof.preserved, true)
+  assert.equal(proof.after.amountMinorTotal, 200)
+  assert.deepEqual(proof.after.transactionIds, ['t1', 't2'])
+})
+
+test('smb297: orphan parents are synthesized — transactions are not dropped', async () => {
+  const { normalizeSharedLedgerSnapshot } = await import('../src/ui/services/shared-ledger/snapshot-merge.js')
+  const orphan = {
+    schema_version: 1,
+    ledger_id: 'ledger_orphan',
+    tables: {
+      ledgers: [{ id: 'ledger_orphan', name: 'O' }],
+      account_groups: [],
+      accounts: [{ id: 'acc_x', group_id: 'missing_group', name: 'X' }],
+      category_groups: [],
+      categories: [],
+      transactions: [{ id: 'tx1', account_id: 'acc_x', amount_minor: 99 }],
+    },
+  }
+  const normalized = normalizeSharedLedgerSnapshot(orphan)
+  assert.equal(normalized.tables.transactions.length, 1)
+  assert.equal(normalized.tables.transactions[0].amount_minor, 99)
+  assert.equal(normalized.tables.accounts.length, 1)
+  assert.ok(normalized.tables.account_groups.some((row) => row.id === 'missing_group'))
+})
+
+test('smb297: explicit repair required; unconfirmed repair denied', async () => {
+  const { assertExplicitLedgerRepair, LEDGER_REPAIR_REASON } = await import(
+    '../src/core/services/data-wipe-guard.service.js'
+  )
+  assert.throws(
+    () => assertExplicitLedgerRepair({}),
+    (error) => error?.code === 'LEDGER_REPAIR_DENIED' && error?.silentRewriteBlocked === true,
+  )
+  const ok = assertExplicitLedgerRepair({
+    confirmed: true,
+    reason: LEDGER_REPAIR_REASON.USER_EXPLICIT,
+    source: 'test',
+  })
+  assert.equal(ok.reason, LEDGER_REPAIR_REASON.USER_EXPLICIT)
+})
+
+test('smb297: data management exposes explicit integrity repair UX', () => {
+  assert.match(dataMgmtSource, /data-integrity-panel/)
+  assert.match(dataMgmtSource, /LEDGER_REPAIR_REASON\.USER_EXPLICIT/)
+  assert.match(dataMgmtSource, /integrity-repair-confirm/)
+  assert.match(dataMgmtSource, /repairLedgerData/)
 })

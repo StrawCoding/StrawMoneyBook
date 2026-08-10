@@ -192,56 +192,240 @@ function cloneRowWithNullMissingRefs(row, fields = [], existingIds = new Set()) 
   return nextRow
 }
 
+const FK_PRESERVE_STAMP = Object.freeze({
+  created_at: '1970-01-01T00:00:00.000Z',
+  updated_at: '1970-01-01T00:00:00.000Z',
+})
+
+/**
+ * smb297: Prefer synthesizing missing parents over dropping bookkeeping rows.
+ * Dropping transactions/accounts to satisfy FK was a silent semantic wipe after
+ * update / sync sanitize / import normalize.
+ */
+function ensurePlaceholderRows(nextTables, tableName, ids, factory) {
+  const existing = buildIdSet(nextTables[tableName])
+  const additions = []
+  for (const id of ids) {
+    const normalizedId = normalizeText(id)
+    if (!normalizedId || existing.has(normalizedId)) continue
+    additions.push(factory(normalizedId))
+    existing.add(normalizedId)
+  }
+  if (additions.length === 0) return 0
+  nextTables[tableName] = sortRows(tableName, [
+    ...listTableRows({ tables: nextTables }, tableName),
+    ...additions,
+  ])
+  return additions.length
+}
+
+function collectReferencedIds(rows, field) {
+  const ids = new Set()
+  for (const row of rows) {
+    const id = normalizeText(row?.[field])
+    if (id) ids.add(id)
+  }
+  return ids
+}
+
 function pruneSharedLedgerSnapshotForeignKeys(tables) {
   const nextTables = { ...tables }
+  const report = {
+    synthesizedAccountGroups: 0,
+    synthesizedAccounts: 0,
+    synthesizedCategoryGroups: 0,
+    synthesizedCategories: 0,
+    synthesizedCounterparties: 0,
+    nulledOptionalRefs: 0,
+    droppedChildRows: 0,
+  }
 
-  nextTables.accounts = listTableRows({ tables: nextTables }, 'accounts')
-    .filter((row) => buildIdSet(nextTables.account_groups).has(normalizeText(row?.group_id)))
-  const accountIds = buildIdSet(nextTables.accounts)
+  // Keep accounts: synthesize missing account_groups instead of dropping accounts.
+  const accountRows = listTableRows({ tables: nextTables }, 'accounts')
+  report.synthesizedAccountGroups += ensurePlaceholderRows(
+    nextTables,
+    'account_groups',
+    collectReferencedIds(accountRows, 'group_id'),
+    (id) => ({
+      id,
+      name: '資料保全群組',
+      type: 'other',
+      sort_order: 9999,
+      is_archived: 1,
+      ...FK_PRESERVE_STAMP,
+    }),
+  )
+  nextTables.accounts = accountRows
+  let accountIds = buildIdSet(nextTables.accounts)
 
-  nextTables.categories = listTableRows({ tables: nextTables }, 'categories')
-    .filter((row) => buildIdSet(nextTables.category_groups).has(normalizeText(row?.group_id)))
-  const categoryIds = buildIdSet(nextTables.categories)
+  // Keep categories: synthesize missing category_groups.
+  const categoryRows = listTableRows({ tables: nextTables }, 'categories')
+  report.synthesizedCategoryGroups += ensurePlaceholderRows(
+    nextTables,
+    'category_groups',
+    collectReferencedIds(categoryRows, 'group_id'),
+    (id) => ({
+      id,
+      name: '資料保全分類群組',
+      type: 'expense',
+      sort_order: 9999,
+      is_archived: 1,
+      ...FK_PRESERVE_STAMP,
+    }),
+  )
+  nextTables.categories = categoryRows
+  let categoryIds = buildIdSet(nextTables.categories)
 
-  nextTables.transactions = listTableRows({ tables: nextTables }, 'transactions')
-    .map((row) => cloneRowWithNullMissingRefs(row, ['peer_account_id'], accountIds))
-    .map((row) => cloneRowWithNullMissingRefs(row, ['category_id'], categoryIds))
+  // Keep transactions: synthesize missing required account (+ group) instead of dropping.
+  const rawTransactions = listTableRows({ tables: nextTables }, 'transactions')
+  const missingAccountIds = [...collectReferencedIds(rawTransactions, 'account_id')]
+    .filter((id) => !accountIds.has(id))
+  if (missingAccountIds.length > 0) {
+    const preserveGroupId = 'system_fk_preserve_accounts'
+    report.synthesizedAccountGroups += ensurePlaceholderRows(
+      nextTables,
+      'account_groups',
+      [preserveGroupId],
+      (id) => ({
+        id,
+        name: '資料保全群組',
+        type: 'other',
+        sort_order: 9999,
+        is_archived: 1,
+        ...FK_PRESERVE_STAMP,
+      }),
+    )
+    report.synthesizedAccounts += ensurePlaceholderRows(
+      nextTables,
+      'accounts',
+      missingAccountIds,
+      (id) => ({
+        id,
+        group_id: preserveGroupId,
+        name: '資料保全帳戶',
+        account_type: 'asset',
+        account_kind: 'cash',
+        allow_negative: 1,
+        opening_balance_minor: 0,
+        currency_code: 'TWD',
+        include_in_assets: 0,
+        include_in_group_statistics: 0,
+        sort_order: 9999,
+        is_archived: 1,
+        ...FK_PRESERVE_STAMP,
+      }),
+    )
+    accountIds = buildIdSet(nextTables.accounts)
+  }
+
+  // Optional category_id: synthesize missing category so we do not silently null
+  // a real category reference when only the parent group was missing earlier.
+  const missingCategoryIds = [...collectReferencedIds(rawTransactions, 'category_id')]
+    .filter((id) => !categoryIds.has(id))
+  if (missingCategoryIds.length > 0) {
+    const preserveCatGroupId = 'system_fk_preserve_categories'
+    report.synthesizedCategoryGroups += ensurePlaceholderRows(
+      nextTables,
+      'category_groups',
+      [preserveCatGroupId],
+      (id) => ({
+        id,
+        name: '資料保全分類群組',
+        type: 'expense',
+        sort_order: 9999,
+        is_archived: 1,
+        ...FK_PRESERVE_STAMP,
+      }),
+    )
+    report.synthesizedCategories += ensurePlaceholderRows(
+      nextTables,
+      'categories',
+      missingCategoryIds,
+      (id) => ({
+        id,
+        group_id: preserveCatGroupId,
+        name: '資料保全分類',
+        type: 'expense',
+        sort_order: 9999,
+        is_archived: 1,
+        ...FK_PRESERVE_STAMP,
+      }),
+    )
+    categoryIds = buildIdSet(nextTables.categories)
+  }
+
+  nextTables.transactions = rawTransactions
+    .map((row) => {
+      const beforePeer = normalizeText(row?.peer_account_id)
+      let next = cloneRowWithNullMissingRefs(row, ['peer_account_id'], accountIds)
+      if (beforePeer && !normalizeText(next?.peer_account_id)) report.nulledOptionalRefs += 1
+      const categoryId = normalizeText(next?.category_id)
+      if (categoryId && !categoryIds.has(categoryId)) {
+        report.nulledOptionalRefs += 1
+        next = { ...next, category_id: null }
+      }
+      return next
+    })
     .filter((row) => accountIds.has(normalizeText(row?.account_id)))
   const transactionIds = buildIdSet(nextTables.transactions)
 
+  const attachmentsBefore = listTableRows({ tables: nextTables }, 'transaction_attachments').length
   nextTables.transaction_attachments = listTableRows({ tables: nextTables }, 'transaction_attachments')
     .filter((row) => transactionIds.has(normalizeText(row?.transaction_id)))
+  report.droppedChildRows += Math.max(0, attachmentsBefore - nextTables.transaction_attachments.length)
 
-  nextTables.loans = listTableRows({ tables: nextTables }, 'loans')
-    .filter((row) => buildIdSet(nextTables.counterparties).has(normalizeText(row?.counterparty_id)))
+  // Loans: synthesize counterparties instead of dropping loans.
+  const loanRows = listTableRows({ tables: nextTables }, 'loans')
+  report.synthesizedCounterparties += ensurePlaceholderRows(
+    nextTables,
+    'counterparties',
+    collectReferencedIds(loanRows, 'counterparty_id'),
+    (id) => ({
+      id,
+      name: '資料保全往來對象',
+      ...FK_PRESERVE_STAMP,
+    }),
+  )
+  nextTables.loans = loanRows
   const loanIds = buildIdSet(nextTables.loans)
 
+  const loanPaymentsBefore = listTableRows({ tables: nextTables }, 'loan_payments').length
   nextTables.loan_payments = listTableRows({ tables: nextTables }, 'loan_payments')
     .map((row) => cloneRowWithNullMissingRefs(row, ['generated_tx_id', 'generated_interest_tx_id'], transactionIds))
     .filter((row) => loanIds.has(normalizeText(row?.loan_id)) && accountIds.has(normalizeText(row?.account_id)))
+  report.droppedChildRows += Math.max(0, loanPaymentsBefore - nextTables.loan_payments.length)
 
+  const advancesBefore = listTableRows({ tables: nextTables }, 'reimbursement_advances').length
   nextTables.reimbursement_advances = listTableRows({ tables: nextTables }, 'reimbursement_advances')
     .map((row) => cloneRowWithNullMissingRefs(row, ['source_tx_id'], transactionIds))
     .filter((row) => accountIds.has(normalizeText(row?.account_id)))
+  report.droppedChildRows += Math.max(0, advancesBefore - nextTables.reimbursement_advances.length)
   const advanceIds = buildIdSet(nextTables.reimbursement_advances)
 
+  const usagesBefore = listTableRows({ tables: nextTables }, 'reimbursement_advance_usages').length
   nextTables.reimbursement_advance_usages = listTableRows({ tables: nextTables }, 'reimbursement_advance_usages')
     .filter((row) => advanceIds.has(normalizeText(row?.advance_id)) && transactionIds.has(normalizeText(row?.expense_tx_id)))
+  report.droppedChildRows += Math.max(0, usagesBefore - nextTables.reimbursement_advance_usages.length)
 
   nextTables.reimbursements = listTableRows({ tables: nextTables }, 'reimbursements')
     .map((row) => cloneRowWithNullMissingRefs(row, ['counterparty_id'], buildIdSet(nextTables.counterparties)))
     .map((row) => cloneRowWithNullMissingRefs(row, ['paid_tx_id'], transactionIds))
   const reimbursementIds = buildIdSet(nextTables.reimbursements)
 
+  const itemsBefore = listTableRows({ tables: nextTables }, 'reimbursement_items').length
   nextTables.reimbursement_items = listTableRows({ tables: nextTables }, 'reimbursement_items')
     .map((row) => cloneRowWithNullMissingRefs(row, ['transaction_id'], transactionIds))
     .map((row) => cloneRowWithNullMissingRefs(row, ['category_id'], categoryIds))
     .map((row) => cloneRowWithNullMissingRefs(row, ['account_id'], accountIds))
     .filter((row) => reimbursementIds.has(normalizeText(row?.reimbursement_id)))
+  report.droppedChildRows += Math.max(0, itemsBefore - nextTables.reimbursement_items.length)
 
+  const containersBefore = listTableRows({ tables: nextTables }, 'budget_containers').length
   nextTables.budget_containers = listTableRows({ tables: nextTables }, 'budget_containers')
     .filter((row) => buildIdSet(nextTables.budgets).has(normalizeText(row?.budget_id)))
+  report.droppedChildRows += Math.max(0, containersBefore - nextTables.budget_containers.length)
 
+  const budgetItemsBefore = listTableRows({ tables: nextTables }, 'budget_items').length
   nextTables.budget_items = listTableRows({ tables: nextTables }, 'budget_items')
     .filter((row) => buildIdSet(nextTables.budgets).has(normalizeText(row?.budget_id)))
     .filter((row) => {
@@ -250,23 +434,33 @@ function pruneSharedLedgerSnapshotForeignKeys(tables) {
       if (scopeType === 'group') return buildIdSet(nextTables.category_groups).has(normalizeText(row?.category_group_id))
       return true
     })
+  report.droppedChildRows += Math.max(0, budgetItemsBefore - nextTables.budget_items.length)
 
+  const jarsBefore = listTableRows({ tables: nextTables }, 'savings_jars').length
   nextTables.savings_jars = listTableRows({ tables: nextTables }, 'savings_jars')
     .filter((row) => accountIds.has(normalizeText(row?.account_id)))
+  report.droppedChildRows += Math.max(0, jarsBefore - nextTables.savings_jars.length)
 
+  const bankAccountsBefore = listTableRows({ tables: nextTables }, 'bank_accounts').length
   nextTables.bank_accounts = listTableRows({ tables: nextTables }, 'bank_accounts')
     .map((row) => cloneRowWithNullMissingRefs(row, ['mapped_account_id'], accountIds))
     .filter((row) => buildIdSet(nextTables.bank_connections).has(normalizeText(row?.connection_id)))
+  report.droppedChildRows += Math.max(0, bankAccountsBefore - nextTables.bank_accounts.length)
   const bankAccountIds = buildIdSet(nextTables.bank_accounts)
 
+  const bankTxBefore = listTableRows({ tables: nextTables }, 'bank_transactions').length
   nextTables.bank_transactions = listTableRows({ tables: nextTables }, 'bank_transactions')
     .map((row) => cloneRowWithNullMissingRefs(row, ['imported_txn_id'], transactionIds))
     .filter((row) => buildIdSet(nextTables.bank_connections).has(normalizeText(row?.connection_id)))
     .filter((row) => bankAccountIds.has(normalizeText(row?.bank_account_id)))
+  report.droppedChildRows += Math.max(0, bankTxBefore - nextTables.bank_transactions.length)
 
+  const bankRulesBefore = listTableRows({ tables: nextTables }, 'bank_sync_rules').length
   nextTables.bank_sync_rules = listTableRows({ tables: nextTables }, 'bank_sync_rules')
     .filter((row) => buildIdSet(nextTables.bank_connections).has(normalizeText(row?.connection_id)))
+  report.droppedChildRows += Math.max(0, bankRulesBefore - nextTables.bank_sync_rules.length)
 
+  nextTables.__fk_preserve_report = report
   return nextTables
 }
 
@@ -734,18 +928,71 @@ function canonicalizeSnapshot(snapshot) {
 
   const resurrectedTables = resurrectReferencedParentsFromTombstones(tables, tombstoneMap)
   const prunedTables = pruneSharedLedgerSnapshotForeignKeys(resurrectedTables)
+  const fkPreserveReport = prunedTables.__fk_preserve_report || null
+  delete prunedTables.__fk_preserve_report
   prunedTables.deleted_log = sortDeletedLogRows(Array.from(tombstoneMap.values()))
 
-  return {
+  const result = {
     schema_version: normalizedSnapshot.schema_version ?? null,
     ledger_id: normalizeText(normalizedSnapshot.ledger_id),
     exported_at: toIso(normalizedSnapshot.exported_at),
     tables: prunedTables,
   }
+  if (fkPreserveReport) {
+    result.fk_preserve_report = fkPreserveReport
+  }
+  return result
 }
 
 export function normalizeSharedLedgerSnapshot(snapshot) {
   return canonicalizeSnapshot(snapshot)
+}
+
+/**
+ * smb297: Prove bookkeeping rows survive normalize／FK preserve.
+ * Compares raw pre-normalize tables vs normalized tables (does not re-canonicalize `before`).
+ */
+export function assertSnapshotBookkeepingPreserved(beforeSnapshot, afterSnapshot) {
+  const listIds = (snapshot, tableName) => {
+    const rows = Array.isArray(snapshot?.tables?.[tableName]) ? snapshot.tables[tableName] : []
+    return rows.map((row) => normalizeText(row?.id)).filter(Boolean).sort()
+  }
+  const sumAmounts = (snapshot) => {
+    const rows = Array.isArray(snapshot?.tables?.transactions) ? snapshot.tables.transactions : []
+    return rows.reduce((sum, row) => {
+      const amount = Number(row?.amount_minor)
+      return sum + (Number.isFinite(amount) ? amount : 0)
+    }, 0)
+  }
+
+  const before = {
+    transactionCount: listIds(beforeSnapshot, 'transactions').length,
+    transactionIds: listIds(beforeSnapshot, 'transactions'),
+    amountMinorTotal: sumAmounts(beforeSnapshot),
+    accountIds: listIds(beforeSnapshot, 'accounts'),
+    categoryIds: listIds(beforeSnapshot, 'categories'),
+  }
+  const after = {
+    transactionCount: listIds(afterSnapshot, 'transactions').length,
+    transactionIds: listIds(afterSnapshot, 'transactions'),
+    amountMinorTotal: sumAmounts(afterSnapshot),
+    accountIds: listIds(afterSnapshot, 'accounts'),
+    categoryIds: listIds(afterSnapshot, 'categories'),
+  }
+
+  const preserved =
+    before.transactionCount === after.transactionCount
+    && before.amountMinorTotal === after.amountMinorTotal
+    && JSON.stringify(before.transactionIds) === JSON.stringify(after.transactionIds)
+    && before.accountIds.every((id) => after.accountIds.includes(id))
+    && before.categoryIds.every((id) => after.categoryIds.includes(id))
+
+  return {
+    preserved,
+    before,
+    after,
+    fkPreserveReport: afterSnapshot?.fk_preserve_report ?? null,
+  }
 }
 
 export function mergeSharedLedgerSnapshots(localSnapshot, remoteSnapshot, options = {}) {

@@ -6,7 +6,10 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
-import { repairLedgerData, scanLedgerIntegrity } from '@/core/services/repair.service'
+import { scanLedgerIntegrity } from '@/core/services/repair.service'
+import {
+  recordLedgerIntegrityScan,
+} from '@/core/services/data-wipe-guard.service'
 import {
   resolveInitialActiveLedgerId,
   sumNumericValues,
@@ -28,6 +31,11 @@ export function resetLedgerScopedStores(pinia) {
   DEFERRED_HYDRATION_LEDGER_IDS.clear()
 }
 
+/**
+ * smb297: Scan-only integrity check on ledger load.
+ * Never auto-call repairLedgerData — silent remaps (repair account / null category /
+ * unlink transfers) rewrite bookkeeping semantics after updates without consent.
+ */
 export async function ensureLedgerIntegrity(ledgerId) {
   const normalizedLedgerId = String(ledgerId ?? '').trim()
   if (!normalizedLedgerId || AUTO_CHECKED_LEDGER_IDS.has(normalizedLedgerId)) return null
@@ -37,30 +45,43 @@ export async function ensureLedgerIntegrity(ledgerId) {
   try {
     const before = await scanLedgerIntegrity(normalizedLedgerId)
     const beforeIssueCount = sumNumericValues(before)
-    if (beforeIssueCount <= 0) {
-      return { before, after: before, fixed: {} }
-    }
 
-    const repairResult = await repairLedgerData(normalizedLedgerId)
-    const fixedCount = sumNumericValues(repairResult?.fixed)
-    const afterIssueCount = sumNumericValues(repairResult?.after)
+    recordLedgerIntegrityScan({
+      ledgerId: normalizedLedgerId,
+      issueCount: beforeIssueCount,
+      issues: before,
+      autoRepaired: false,
+    })
 
-    if (fixedCount > 0 || afterIssueCount > 0) {
-      console.info('[ledger-runtime] auto repair completed', {
+    if (beforeIssueCount > 0) {
+      console.warn('[ledger-runtime] integrity issues detected (no silent auto-repair)', {
         ledgerId: normalizedLedgerId,
         beforeIssueCount,
-        fixedCount,
-        afterIssueCount,
+        before,
       })
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        const detail = {
+          ledgerId: normalizedLedgerId,
+          issueCount: beforeIssueCount,
+          issues: before,
+        }
+        if (typeof CustomEvent === 'function') {
+          window.dispatchEvent(new CustomEvent('app:ledger-integrity-issues', { detail }))
+        } else {
+          window.dispatchEvent(new Event('app:ledger-integrity-issues'))
+        }
+      }
     }
 
     return {
       before,
-      after: repairResult?.after ?? before,
-      fixed: repairResult?.fixed ?? {},
+      after: before,
+      fixed: {},
+      autoRepaired: false,
+      issueCount: beforeIssueCount,
     }
   } catch (error) {
-    console.warn('[ledger-runtime] auto repair skipped due to error', error)
+    console.warn('[ledger-runtime] integrity scan skipped due to error', error)
     return null
   }
 }
@@ -103,19 +124,10 @@ function scheduleDeferredLedgerHydration(ledgerId, pinia) {
     }
 
     try {
-      // Integrity remains part of ledger scoped loads; deferred so first paint is not blocked.
-      const repairResult = await ensureLedgerIntegrity(normalizedLedgerId)
+      // Scan-only; destructive repair requires explicit UX confirmation (data management).
+      await ensureLedgerIntegrity(normalizedLedgerId)
       if (String(useLedgerStore(pinia).activeLedgerId ?? '').trim() !== normalizedLedgerId) {
         return
-      }
-
-      const fixedCount = sumNumericValues(repairResult?.fixed)
-      if (fixedCount > 0) {
-        await Promise.all([
-          useAccountStore(pinia).load(),
-          useCategoryStore(pinia).load(),
-          useBudgetStore(pinia).loadCurrentMonth(),
-        ])
       }
 
       await hydrateSecondaryLedgerStores(pinia)

@@ -118,3 +118,84 @@ export function countSnapshotActiveTransactions(snapshot) {
   if (!Array.isArray(rows)) return 0
   return rows.filter((row) => !row?.deleted_at).length
 }
+
+export const LEDGER_REPAIR_REASON = Object.freeze({
+  USER_EXPLICIT: 'user_explicit_repair',
+  USER_IMPORT_JSON: 'user_import_integrity_repair',
+  USER_RESTORE_BACKUP: 'user_restore_integrity_repair',
+})
+
+const ALLOWED_REPAIR_REASONS = new Set(Object.values(LEDGER_REPAIR_REASON))
+const INTEGRITY_SCAN_KEY = 'straw.ledger_integrity_scan.v1'
+const REPAIR_AUDIT_KEY = 'straw.ledger_repair_audit.v1'
+export const LEDGER_REPAIR_DENIED_CODE = 'LEDGER_REPAIR_DENIED'
+
+export function assertExplicitLedgerRepair(options = {}) {
+  const reason = String(options.reason ?? '').trim()
+  const source = String(options.source ?? '').trim()
+  const confirmed = options.confirmed === true
+
+  if (!confirmed || !ALLOWED_REPAIR_REASONS.has(reason) || !source) {
+    const error = new Error(
+      '帳本修復被拒絕：缺少使用者確認。啟動／migration／orphan prune 不得靜默改寫帳本語意。',
+    )
+    error.code = LEDGER_REPAIR_DENIED_CODE
+    error.i18nKey = 'sqlite.error.ledger_repair_denied'
+    error.silentRewriteBlocked = true
+    throw error
+  }
+
+  return { reason, source, confirmed: true }
+}
+
+export function recordLedgerIntegrityScan(entry = {}) {
+  const next = {
+    at: String(entry.at ?? new Date().toISOString()),
+    ledgerId: String(entry.ledgerId ?? ''),
+    issueCount: Number(entry.issueCount ?? 0) || 0,
+    autoRepaired: entry.autoRepaired === true,
+    issues: entry.issues && typeof entry.issues === 'object' ? entry.issues : {},
+  }
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(INTEGRITY_SCAN_KEY, JSON.stringify(next))
+    } catch {
+      // best-effort
+    }
+  }
+  return next
+}
+
+export function readLastLedgerIntegrityScan() {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(INTEGRITY_SCAN_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+export function recordLedgerRepairAudit(entry = {}) {
+  const next = {
+    at: String(entry.at ?? new Date().toISOString()),
+    reason: String(entry.reason ?? ''),
+    source: String(entry.source ?? ''),
+    ledgerId: String(entry.ledgerId ?? ''),
+    confirmed: entry.confirmed === true,
+    fixedCount: Number(entry.fixedCount ?? 0) || 0,
+  }
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const prev = JSON.parse(localStorage.getItem(REPAIR_AUDIT_KEY) || '[]')
+      const list = Array.isArray(prev) ? prev : []
+      localStorage.setItem(REPAIR_AUDIT_KEY, JSON.stringify([next, ...list].slice(0, AUDIT_LIMIT)))
+    } catch {
+      // best-effort
+    }
+  }
+  if (typeof console !== 'undefined' && typeof console.info === 'function') {
+    console.info('[ledger-repair-audit]', next)
+  }
+  return next
+}

@@ -13,6 +13,7 @@ import {
   listCategories,
 } from '@/core/repositories/category.repo'
 import { normalizeSharedLedgerSnapshot } from '@/ui/services/shared-ledger/snapshot-merge'
+import { LEDGER_REPAIR_REASON } from '@/core/services/data-wipe-guard.service'
 
 const TABLE_IMPORT_ORDER = [
   'account_groups',
@@ -212,7 +213,11 @@ async function importLedgerPayloadAsNewLedger(payload, options = {}) {
         let after = before
 
         if (beforeIssueCount > 0) {
-          const repairResult = await repairLedgerData(importedLedger.id)
+          const repairResult = await repairLedgerData(importedLedger.id, {
+            confirmed: true,
+            reason: LEDGER_REPAIR_REASON.USER_IMPORT_JSON,
+            source: 'import.service',
+          })
           fixed = repairResult?.fixed ?? {}
           after = repairResult?.after ?? before
         }

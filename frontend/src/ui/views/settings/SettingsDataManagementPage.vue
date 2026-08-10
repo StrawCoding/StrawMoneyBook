@@ -33,6 +33,25 @@
       </ul>
     </article>
 
+    <article class="card panel" data-testid="data-integrity-panel">
+      <h3>{{ t('settings_data.integrity.title', '帳本完整性') }}</h3>
+      <p class="muted">{{ t('settings_data.integrity.desc', '更新／migration 後只會掃描，不會自動改寫交易。若偵測異常，可先匯出備份再明確執行修復。') }}</p>
+      <p v-if="integrityStatusText" class="muted compact" data-testid="data-integrity-status">{{ integrityStatusText }}</p>
+      <div class="export-grid">
+        <button class="btn" data-testid="data-integrity-scan" :disabled="integrityBusy" @click="scanIntegrity">
+          {{ t('settings_data.integrity.scan', '重新掃描') }}
+        </button>
+        <button
+          class="btn"
+          data-testid="data-integrity-repair"
+          :disabled="integrityBusy || integrityIssueCount <= 0"
+          @click="openRepairConfirm"
+        >
+          {{ t('settings_data.integrity.repair', '明確修復（需確認）') }}
+        </button>
+      </div>
+    </article>
+
     <article class="card panel">
       <h3>{{ t('settings_data.import.title') }}</h3>
       <div>
@@ -131,6 +150,31 @@
         </section>
       </transition>
     </teleport>
+    <teleport to="body">
+      <transition name="overlay-fade">
+        <section v-if="isRepairConfirmOpen" class="sheet-mask reset-mask" @click.self="closeRepairConfirm">
+          <article class="card reset-dialog" data-testid="integrity-repair-confirm-dialog">
+            <header class="row">
+              <h3>{{ t('settings_data.integrity.confirm_title', '確認修復帳本資料') }}</h3>
+            </header>
+            <p class="muted">
+              {{ t('settings_data.integrity.confirm_desc', '修復可能改寫孤立交易的帳戶／分類或轉帳群組。系統不會在啟動時自動執行。可取消；建議先匯出 JSON。') }}
+            </p>
+            <footer class="row action-row">
+              <button class="btn" @click="closeRepairConfirm">{{ t('common.cancel', 'Cancel') }}</button>
+              <button
+                class="btn primary"
+                :disabled="repairCountdown > 0 || integrityBusy"
+                data-testid="integrity-repair-confirm-button"
+                @click="confirmRepair"
+              >
+                {{ repairConfirmLabel }}
+              </button>
+            </footer>
+          </article>
+        </section>
+      </transition>
+    </teleport>
   </section>
 </template>
 
@@ -158,7 +202,9 @@ import {
   timestampForFilename,
 } from '@/core/services/export.service'
 import { importBackupJsonAsNewLedgers, importLedgerCsv } from '@/core/services/import.service'
-import { DATA_WIPE_REASON } from '@/core/services/data-wipe-guard.service'
+import { DATA_WIPE_REASON, LEDGER_REPAIR_REASON, readLastLedgerIntegrityScan } from '@/core/services/data-wipe-guard.service'
+import { repairLedgerData, scanLedgerIntegrity } from '@/core/services/repair.service'
+import { sumNumericValues } from '@/ui/services/ledger-runtime.helpers'
 import { resetDatabase } from '@/core/db/sqlite'
 import { useI18n } from '@/ui/services/i18n.service'
 
@@ -188,10 +234,16 @@ const importCountdown = ref(0)
 const importingJson = ref(false)
 const pendingImportFile = ref(null)
 const pendingImportFileName = ref('')
+const isRepairConfirmOpen = ref(false)
+const repairCountdown = ref(0)
+const integrityBusy = ref(false)
+const integrityIssueCount = ref(0)
+const integrityStatusText = ref('')
 const lastExportPath = ref('')
 const operationProgress = ref(createIdleOperationProgress())
 let resetTimerId = null
 let importTimerId = null
+let repairTimerId = null
 let operationProgressTimerId = null
 
 const resetConfirmLabel = computed(() => {
@@ -206,6 +258,14 @@ const importConfirmLabel = computed(() => {
     return t('settings_data.import.confirm_countdown', { count: importCountdown.value }, '確認匯入（{count}）')
   }
   return t('settings_data.import.confirm', '確認匯入並清空本機')
+})
+
+const repairConfirmLabel = computed(() => {
+  if (integrityBusy.value) return t('settings_data.integrity.processing', '修復中...')
+  if (repairCountdown.value > 0) {
+    return t('settings_data.integrity.confirm_countdown', { count: repairCountdown.value }, '確認修復（{count}）')
+  }
+  return t('settings_data.integrity.confirm', '確認修復')
 })
 
 const operationProgressTitle = computed(() => {
@@ -503,6 +563,11 @@ function clearResetTimer() {
 }
 
 function onRequestCloseOverlay(event) {
+  if (isRepairConfirmOpen.value) {
+    closeRepairConfirm()
+    event.preventDefault()
+    return
+  }
   if (isImportConfirmOpen.value) {
     closeImportConfirm()
     event.preventDefault()
@@ -511,6 +576,104 @@ function onRequestCloseOverlay(event) {
   if (!isResetConfirmOpen.value) return
   closeResetConfirm()
   event.preventDefault()
+}
+
+function applyIntegrityScanResult(scan) {
+  const issueCount = Number(scan?.issueCount ?? sumNumericValues(scan?.issues) ?? 0) || 0
+  integrityIssueCount.value = issueCount
+  if (issueCount <= 0) {
+    integrityStatusText.value = t('settings_data.integrity.status_ok', '目前帳本未偵測到完整性異常。')
+    return
+  }
+  integrityStatusText.value = t(
+    'settings_data.integrity.status_issues',
+    { count: issueCount },
+    '偵測到 {count} 項異常。啟動不會自動改寫；請先匯出備份後再明確修復，或改用還原路徑。',
+  )
+}
+
+async function scanIntegrity() {
+  const ledgerId = String(ledgerStore.activeLedgerId ?? '').trim()
+  if (!ledgerId) {
+    uiStore.pushToast(t('settings_data.integrity.no_ledger', '請先選擇帳本'), 'error')
+    return
+  }
+  integrityBusy.value = true
+  try {
+    const before = await scanLedgerIntegrity(ledgerId)
+    applyIntegrityScanResult({ issueCount: sumNumericValues(before), issues: before })
+    uiStore.pushToast(
+      integrityIssueCount.value > 0
+        ? t('settings_data.integrity.toast_issues', { count: integrityIssueCount.value }, '偵測到 {count} 項異常（未自動修復）')
+        : t('settings_data.integrity.toast_ok', '完整性掃描通過'),
+      integrityIssueCount.value > 0 ? 'warning' : 'success',
+    )
+  } catch (error) {
+    uiStore.pushToast(error.message ?? t('settings_data.integrity.toast_failed', '完整性掃描失敗'), 'error')
+  } finally {
+    integrityBusy.value = false
+  }
+}
+
+function openRepairConfirm() {
+  if (integrityIssueCount.value <= 0) return
+  isRepairConfirmOpen.value = true
+  repairCountdown.value = 3
+  if (repairTimerId) window.clearInterval(repairTimerId)
+  repairTimerId = window.setInterval(() => {
+    if (repairCountdown.value <= 1) {
+      repairCountdown.value = 0
+      if (repairTimerId) {
+        window.clearInterval(repairTimerId)
+        repairTimerId = null
+      }
+      return
+    }
+    repairCountdown.value -= 1
+  }, 1000)
+}
+
+function closeRepairConfirm() {
+  if (integrityBusy.value) return
+  isRepairConfirmOpen.value = false
+  repairCountdown.value = 0
+  if (repairTimerId) {
+    window.clearInterval(repairTimerId)
+    repairTimerId = null
+  }
+}
+
+async function confirmRepair() {
+  if (repairCountdown.value > 0 || integrityBusy.value) return
+  const ledgerId = String(ledgerStore.activeLedgerId ?? '').trim()
+  if (!ledgerId) {
+    uiStore.pushToast(t('settings_data.integrity.no_ledger', '請先選擇帳本'), 'error')
+    return
+  }
+  integrityBusy.value = true
+  try {
+    const result = await repairLedgerData(ledgerId, {
+      confirmed: true,
+      reason: LEDGER_REPAIR_REASON.USER_EXPLICIT,
+      source: 'SettingsDataManagementPage.confirmRepair',
+    })
+    const fixedCount = sumNumericValues(result?.fixed)
+    const afterCount = sumNumericValues(result?.after)
+    applyIntegrityScanResult({ issueCount: afterCount, issues: result?.after })
+    await refreshAllStores()
+    uiStore.pushToast(
+      t(
+        'settings_data.integrity.toast_repaired',
+        { fixed: fixedCount, remaining: afterCount },
+        '已明確修復 {fixed} 項，剩餘 {remaining} 項',
+      ),
+    )
+    closeRepairConfirm()
+  } catch (error) {
+    uiStore.pushToast(error.message ?? t('settings_data.integrity.toast_repair_failed', '修復失敗'), 'error')
+  } finally {
+    integrityBusy.value = false
+  }
 }
 
 async function confirmResetAllData() {
@@ -544,12 +707,20 @@ async function confirmResetAllData() {
 
 onMounted(() => {
   window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
+  const lastScan = readLastLedgerIntegrityScan()
+  if (lastScan && String(lastScan.ledgerId ?? '') === String(ledgerStore.activeLedgerId ?? '')) {
+    applyIntegrityScanResult(lastScan)
+  }
 })
 
 onBeforeUnmount(() => {
   clearResetTimer()
   clearImportTimer()
   clearOperationProgressTimer()
+  if (repairTimerId) {
+    window.clearInterval(repairTimerId)
+    repairTimerId = null
+  }
   window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
 })
 </script>
