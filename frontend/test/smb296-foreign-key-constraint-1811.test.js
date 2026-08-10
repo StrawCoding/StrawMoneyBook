@@ -8,6 +8,7 @@ import {
   SQLITE_FOREIGN_KEY_ERROR_CODE,
   SQLITE_FOREIGN_KEY_ERROR_NUMERIC,
 } from '../src/core/utils/sqlite-fk.js'
+import { DATABASE_WIPE_DELETE_ORDER } from '../src/core/utils/sqlite-delete-order.js'
 import { normalizeSharedLedgerSnapshot } from '../src/ui/services/shared-ledger/snapshot-merge.js'
 
 const require = createRequire(import.meta.url)
@@ -335,5 +336,59 @@ test('smb296: tombstoned parent with newer child resurrects then inserts without
     assert.equal(fixedDb.exec('SELECT COUNT(*) FROM transactions;')[0].values[0][0], 1)
   } finally {
     fixedDb.close()
+  }
+})
+
+test('smb296: child-first wipe succeeds with PRAGMA foreign_keys=ON (no OFF fallback)', async () => {
+  const SQL = await initSqlJs()
+  const db = openFkDb(SQL)
+  try {
+    db.run('INSERT INTO ledgers (id, name) VALUES (?, ?);', ['ledger_wipe', 'Wipe'])
+    db.run('INSERT INTO account_groups (ledger_id, id, name) VALUES (?, ?, ?);', [
+      'ledger_wipe',
+      'group_cash',
+      '現金',
+    ])
+    db.run('INSERT INTO accounts (ledger_id, id, group_id, name) VALUES (?, ?, ?, ?);', [
+      'ledger_wipe',
+      'acc_cash',
+      'group_cash',
+      '現金',
+    ])
+    db.run('INSERT INTO transactions (ledger_id, id, account_id, amount_minor) VALUES (?, ?, ?, ?);', [
+      'ledger_wipe',
+      'tx_1',
+      'acc_cash',
+      10,
+    ])
+    db.run(
+      'INSERT INTO transaction_attachments (ledger_id, id, transaction_id, file_uri) VALUES (?, ?, ?, ?);',
+      ['ledger_wipe', 'att_1', 'tx_1', 'file://a.jpg'],
+    )
+
+    // Parent-first delete would throw under FK ON — prove the regression path still fails.
+    let parentFirstThrew = false
+    try {
+      db.run('DELETE FROM accounts;')
+    } catch (error) {
+      parentFirstThrew = true
+      assert.match(String(error?.message ?? error), /FOREIGN KEY|constraint failed|1811/i)
+    }
+    assert.equal(parentFirstThrew, true, 'parent-first delete must fail with FK ON')
+
+    db.run('PRAGMA foreign_keys = ON;')
+    const wipeTables = DATABASE_WIPE_DELETE_ORDER.filter((table) =>
+      ['transaction_attachments', 'transactions', 'accounts', 'account_groups', 'ledgers'].includes(table),
+    )
+    assert.doesNotThrow(() => {
+      for (const table of wipeTables) {
+        db.run(`DELETE FROM ${table};`)
+      }
+    })
+    assert.equal(db.exec('SELECT COUNT(*) FROM ledgers;')[0].values[0][0], 0)
+    assert.equal(db.exec('SELECT COUNT(*) FROM accounts;')[0].values[0][0], 0)
+    assert.equal(db.exec('SELECT COUNT(*) FROM transactions;')[0].values[0][0], 0)
+  } finally {
+    db.close()
   }
 })

@@ -1,7 +1,21 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import test from 'node:test'
+
+function listJsFiles(dir, out = []) {
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name)
+    const st = statSync(full)
+    if (st.isDirectory()) {
+      if (name === 'migrations' || name === 'node_modules') continue
+      listJsFiles(full, out)
+      continue
+    }
+    if (name.endsWith('.js') || name.endsWith('.mjs') || name.endsWith('.vue')) out.push(full)
+  }
+  return out
+}
 
 const importSource = readFileSync(
   resolve(import.meta.dirname, '../src/core/services/import.service.js'),
@@ -85,4 +99,14 @@ test('smb296: purge／wipe 共用 child-first 刪除順序且不關閉 foreign_k
   assert.match(deleteOrderSource, /DATABASE_WIPE_DELETE_ORDER/)
   assert.match(ledgerRepoSource, /LEDGER_CHILD_DELETE_ORDER/)
   assert.doesNotMatch(ledgerRepoSource, /PRAGMA foreign_keys\s*=\s*OFF/)
+})
+
+test('smb296: 產品執行期 JS/Vue（排除 migrations）不得 PRAGMA foreign_keys=OFF', () => {
+  const srcRoot = resolve(import.meta.dirname, '../src')
+  const offenders = []
+  for (const file of listJsFiles(srcRoot)) {
+    const text = readFileSync(file, 'utf8')
+    if (/PRAGMA\s+foreign_keys\s*=\s*OFF/i.test(text)) offenders.push(file)
+  }
+  assert.deepEqual(offenders, [], `runtime sources still disable foreign_keys: ${offenders.join(', ')}`)
 })
