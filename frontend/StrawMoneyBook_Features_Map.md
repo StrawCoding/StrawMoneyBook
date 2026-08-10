@@ -183,6 +183,7 @@
 - 報銷：`/reimbursements`
 - 請款單：`/claim-sheets`
 - 存錢罐：`/savings-jars`
+- 有價證券：`/assets/securities`
 - 訂閱：`/subscriptions`
 - 交易搜尋：`/transactions/search`
 

@@ -24,6 +24,18 @@ const detailedDocSource = readFileSync(
   'utf8',
 )
 
+test('feature list exposes securities entry in general section', () => {
+  assert.match(featureListSource, /to: '\/assets\/securities'/)
+  assert.match(featureListSource, /feature_list\.securities/)
+  assert.match(featureListSource, /feature-link-securities/)
+  assert.match(featureListSource, /fa-solid fa-chart-line/)
+  assert.match(i18nSource, /'feature_list\.securities': '有價證券'/)
+  assert.match(i18nSource, /'feature_list\.securities': 'Securities'/)
+  assert.match(i18nSource, /'feature_list\.securities': '有価証券'/)
+  assert.match(featuresMapSource, /有價證券：`\/assets\/securities`/)
+  assert.match(detailedDocSource, /一般功能含預算項目[\s\S]*有價證券/)
+})
+
 test('feature list exposes budget items with an icon', () => {
   assert.match(featureListSource, /to: '\/budget'/)
   assert.match(featureListSource, /feature_list\.budget_items/)

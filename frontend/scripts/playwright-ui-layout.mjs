@@ -889,6 +889,7 @@ async function assertRouteNavigation() {
     hasAdvancedSection: Boolean(document.querySelector('[data-testid=feature-list-advanced]')),
     advancedTitle: document.querySelector('[data-testid=feature-list-advanced] .feature-section-title')?.textContent?.trim() ?? '',
     links: {
+      securities: Boolean(document.querySelector('[data-testid=feature-link-securities]')),
       shared: Boolean(document.querySelector('[data-testid=feature-link-shared-ledgers]')),
       ledgerSync: Boolean(document.querySelector('[data-testid=feature-link-ledger-sync]')),
       driveAppData: Boolean(document.querySelector('[data-testid=feature-link-drive-appdata-restore]')),
@@ -900,11 +901,43 @@ async function assertRouteNavigation() {
   assert.equal(state.hasFeatureList, true, JSON.stringify(state, null, 2))
   assert.equal(state.hasAdvancedSection, true, JSON.stringify(state, null, 2))
   assert.match(state.advancedTitle, /進階功能|Advanced|高度な機能/u)
+  assert.equal(state.links.securities, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.shared, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.ledgerSync, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.driveAppData, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.bankSync, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.carrierSync, true, JSON.stringify(state, null, 2))
+
+  // General: securities entry should open securities list above BottomNav.
+  {
+    const securitiesNav = await evalPage(`async () => {
+      const link = document.querySelector('[data-testid=feature-link-securities]')
+      if (!link) return { ok: false, reason: 'missing securities link' }
+      link.scrollIntoView({ block: 'center', inline: 'nearest' })
+      link.click()
+      const deadline = Date.now() + 5000
+      while (Date.now() < deadline) {
+        if (window.location.pathname === '/assets/securities'
+          && document.querySelector('[data-testid=securities-page], .securities-page')
+          && document.querySelector('[data-testid=bottom-nav]')) {
+          return {
+            ok: true,
+            path: window.location.pathname,
+            hasBottomNav: true,
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      return {
+        ok: false,
+        path: window.location.pathname,
+        hasSecuritiesPage: Boolean(document.querySelector('[data-testid=securities-page], .securities-page')),
+        hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+      }
+    }`)
+    assert.equal(securitiesNav.ok, true, JSON.stringify(securitiesNav, null, 2))
+    assert.equal(securitiesNav.path, '/assets/securities', JSON.stringify(securitiesNav, null, 2))
+  }
 
   const advancedTargets = [
     { testId: 'feature-link-shared-ledgers', path: '/settings/shared-ledgers', text: /共同帳本|Shared ledger|共有台帳/iu },
