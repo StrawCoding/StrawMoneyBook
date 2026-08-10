@@ -14,6 +14,10 @@ import {
 } from '@/core/repositories/category.repo'
 import { normalizeSharedLedgerSnapshot } from '@/ui/services/shared-ledger/snapshot-merge'
 import { LEDGER_REPAIR_REASON } from '@/core/services/data-wipe-guard.service'
+import {
+  assertBackupJsonStructureImportable,
+  resolveSourceLedger,
+} from '@/core/services/backup-json-import-gate.service'
 
 const TABLE_IMPORT_ORDER = [
   'account_groups',
@@ -109,23 +113,6 @@ function normalizedRows(tablePayload, tableName) {
   const rows = tablePayload?.[tableName]
   if (!Array.isArray(rows)) return []
   return rows
-}
-
-function resolveSourceLedger(payload) {
-  const sourceLedgerId = payload.ledger_id ?? payload?.tables?.ledgers?.[0]?.id
-  if (!sourceLedgerId) {
-    throw new Error('JSON 缺少 ledger_id')
-  }
-
-  const ledgerRow = payload?.tables?.ledgers?.find((row) => row.id === sourceLedgerId) ?? payload?.tables?.ledgers?.[0]
-  if (!ledgerRow) {
-    throw new Error('JSON 缺少 ledgers 資料')
-  }
-
-  return {
-    sourceLedgerId,
-    ledgerRow,
-  }
 }
 
 function resolveImportedLedgerName(sourceLedgerName, options = {}) {
@@ -252,6 +239,9 @@ async function importLedgerPayloadAsNewLedger(payload, options = {}) {
 }
 
 export async function importBackupJsonAsNewLedgers(jsonText, options = {}) {
+  // Structural gate shared with Drive restore wipe path (smb299): reject before DB writes.
+  assertBackupJsonStructureImportable(jsonText)
+
   const payload = parseJson(jsonText)
   const allLedgersPayload = Array.isArray(payload?.ledgers) ? payload.ledgers : null
 
@@ -266,10 +256,6 @@ export async function importBackupJsonAsNewLedgers(jsonText, options = {}) {
       schemaVersion: imported.schemaVersion ?? null,
       integrityCheck: imported.integrityCheck ?? null,
     }
-  }
-
-  if (!allLedgersPayload.length) {
-    throw new Error('JSON 缺少可匯入的帳本資料')
   }
 
   const importedLedgers = []
@@ -291,6 +277,8 @@ export async function importBackupJsonAsNewLedgers(jsonText, options = {}) {
     integrityCheck: null,
   }
 }
+
+export { assertBackupJsonStructureImportable, resolveSourceLedger }
 
 function parseCsvLine(line) {
   const values = []

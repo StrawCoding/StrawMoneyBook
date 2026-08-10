@@ -235,6 +235,7 @@ test('smb299: restore orchestration requires importable preview and never wipes 
     assertDriveRestorePreviewReady,
     runConfirmedDriveAppDataRestore,
   } = await import('../src/core/services/drive-appdata-restore.service.js')
+  const { assertBackupJsonStructureImportable } = await import('../src/core/services/backup-json-import-gate.service.js')
   const { RECOVERY_BACKUP_REQUIRED_CODE } = await import('../src/core/services/data-wipe-guard.service.js')
 
   const goodJson = JSON.stringify(buildAllLedgersPayload({
@@ -248,6 +249,7 @@ test('smb299: restore orchestration requires importable preview and never wipes 
   }
 
   assert.equal(assertBackupJsonImportable(goodJson).ok, true)
+  assert.equal(assertBackupJsonStructureImportable(goodJson).mode, 'all_ledgers')
   assert.equal(assertDriveRestorePreviewReady(goodPreview).jsonText, goodJson)
 
   await assert.rejects(
@@ -266,6 +268,142 @@ test('smb299: restore orchestration requires importable preview and never wipes 
     async () => assertDriveRestorePreviewReady({ jsonText: '{bad' }),
     (error) => error?.code === DRIVE_RESTORE_PREVIEW_REQUIRED_CODE,
   )
+
+  // OpenCode tick 12: summary-ok but formal importer rejects → must block before wipe
+  {
+    const summaryOkButImporterRejects = JSON.stringify({
+      schema_version: 1,
+      exported_at: '2026-08-10T14:07:00.000Z',
+      backup_scope: 'all_ledgers',
+      ledgers: [{}],
+    })
+    assert.equal(
+      summarizeBackupJsonText(summaryOkButImporterRejects).ok,
+      true,
+      'fixture must still pass summary-only so the gate gap is real',
+    )
+    await assert.rejects(
+      async () => assertBackupJsonStructureImportable(summaryOkButImporterRejects),
+      (error) => /ledger_id|ledgers/i.test(String(error?.message ?? '')),
+    )
+    await assert.rejects(
+      async () => assertBackupJsonImportable(summaryOkButImporterRejects),
+      (error) => error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE && error?.silentWipeBlocked === true,
+    )
+
+    // Preview carrying the bad payload → preview gate blocks; no download/recovery/wipe
+    {
+      let wipeCalled = false
+      let imported = false
+      let recoveryCalled = false
+      let downloadCalled = false
+      const badPreview = {
+        jsonText: summaryOkButImporterRejects,
+        filename: 'StrawMoneyBook_all_ledgers.json',
+        remoteSummary: summarizeBackupJsonText(summaryOkButImporterRejects),
+      }
+      await assert.rejects(
+        async () => runConfirmedDriveAppDataRestore({
+          preview: badPreview,
+          downloadBackup: async () => {
+            downloadCalled = true
+            return badPreview
+          },
+          createRecoveryBackup: async () => {
+            recoveryCalled = true
+            return {
+              verified: true,
+              backupId: 'r-structure',
+              byteLength: 10,
+              storage: 'test',
+            }
+          },
+          wipeFn: async () => { wipeCalled = true },
+          importBackupJson: async () => { imported = true },
+          source: 'unit.summary-ok-importer-reject-preview',
+        }),
+        (error) => (
+          (error?.code === DRIVE_RESTORE_PREVIEW_REQUIRED_CODE
+            || error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE)
+          && wipeCalled === false
+          && imported === false
+          && recoveryCalled === false
+          && downloadCalled === false
+        ),
+      )
+      assert.equal(wipeCalled, false)
+      assert.equal(imported, false)
+      assert.equal(recoveryCalled, false)
+      assert.equal(downloadCalled, false)
+    }
+
+    // Good preview, download returns summary-ok/importer-reject → block before recovery/wipe
+    {
+      let wipeCalled = false
+      let imported = false
+      let recoveryCalled = false
+      await assert.rejects(
+        async () => runConfirmedDriveAppDataRestore({
+          preview: goodPreview,
+          downloadBackup: async () => ({ jsonText: summaryOkButImporterRejects }),
+          createRecoveryBackup: async () => {
+            recoveryCalled = true
+            return {
+              verified: true,
+              backupId: 'r-structure-download',
+              byteLength: 10,
+              storage: 'test',
+            }
+          },
+          wipeFn: async () => { wipeCalled = true },
+          importBackupJson: async () => { imported = true },
+          source: 'unit.summary-ok-importer-reject-download',
+        }),
+        (error) => (
+          error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+          && wipeCalled === false
+          && imported === false
+          && recoveryCalled === false
+        ),
+      )
+      assert.equal(wipeCalled, false)
+      assert.equal(imported, false)
+      assert.equal(recoveryCalled, false)
+    }
+  }
+
+  // tables present (summary ok) but missing ledger_id → no wipe
+  {
+    const tablesWithoutLedgerId = JSON.stringify({
+      tables: {
+        transactions: [{ id: 't1', occurred_at: '2026-02-01T00:00:00.000Z', deleted_at: null }],
+      },
+    })
+    assert.equal(summarizeBackupJsonText(tablesWithoutLedgerId).ok, true)
+    let wipeCalled = false
+    let recoveryCalled = false
+    await assert.rejects(
+      async () => runConfirmedDriveAppDataRestore({
+        preview: goodPreview,
+        downloadBackup: async () => ({ jsonText: tablesWithoutLedgerId }),
+        createRecoveryBackup: async () => {
+          recoveryCalled = true
+          return {
+            verified: true,
+            backupId: 'r-no-ledger',
+            byteLength: 10,
+            storage: 'test',
+          }
+        },
+        wipeFn: async () => { wipeCalled = true },
+        importBackupJson: async () => ({ importedLedgers: [] }),
+        source: 'unit.tables-without-ledger-id',
+      }),
+      (error) => error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE && wipeCalled === false && recoveryCalled === false,
+    )
+    assert.equal(wipeCalled, false)
+    assert.equal(recoveryCalled, false)
+  }
 
   // Missing preview → no wipe
   {
@@ -366,6 +504,27 @@ test('smb299: restore orchestration requires importable preview and never wipes 
     assert.deepEqual(calls, ['download', 'recovery', 'wipe', 'import'])
     assert.equal(result.imported.firstLedgerId, 'new1')
   }
+})
+
+test('smb299: Drive restore gate shares formal importer structure checks (not summary-only)', () => {
+  const restoreSource = readFileSync(
+    resolve(import.meta.dirname, '../src/core/services/drive-appdata-restore.service.js'),
+    'utf8',
+  )
+  const gateSource = readFileSync(
+    resolve(import.meta.dirname, '../src/core/services/backup-json-import-gate.service.js'),
+    'utf8',
+  )
+  const importSource = readFileSync(
+    resolve(import.meta.dirname, '../src/core/services/import.service.js'),
+    'utf8',
+  )
+  assert.match(restoreSource, /assertBackupJsonStructureImportable/)
+  assert.match(gateSource, /resolveSourceLedger/)
+  assert.match(gateSource, /JSON 缺少 ledger_id/)
+  assert.match(gateSource, /JSON 缺少可匯入的帳本資料/)
+  assert.match(importSource, /assertBackupJsonStructureImportable\(jsonText\)/)
+  assert.match(importSource, /from '@\/core\/services\/backup-json-import-gate\.service'/)
 })
 
 test('smb299: DriveAppDataRestorePanel wires durable recovery exporter (not empty options)', () => {

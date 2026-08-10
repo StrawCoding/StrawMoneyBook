@@ -5,6 +5,7 @@
  */
 
 import { summarizeBackupJsonText } from './backup-json-preview.service.js'
+import { assertBackupJsonStructureImportable } from './backup-json-import-gate.service.js'
 import {
   RECOVERY_BACKUP_REQUIRED_CODE,
   runConfirmedWipeAfterRecoveryBackup,
@@ -42,7 +43,9 @@ export function createDriveRestoreNotImportableError(cause, options = {}) {
 }
 
 /**
- * Backup JSON must parse into at least one ledger payload before wipe is allowed.
+ * Backup JSON must pass BOTH preview summary AND formal importer structure checks
+ * before wipe is allowed. Summary-only is insufficient: payloads like
+ * `{ backup_scope:'all_ledgers', ledgers:[{}] }` summarize as ok but importer rejects.
  */
 export function assertBackupJsonImportable(jsonText, options = {}) {
   const text = String(jsonText ?? '')
@@ -57,6 +60,17 @@ export function assertBackupJsonImportable(jsonText, options = {}) {
     throw createDriveRestoreNotImportableError(new Error(summary.parseError || 'invalid_backup'), {
       ...options,
       parseError: summary.parseError || 'invalid_backup',
+    })
+  }
+  try {
+    assertBackupJsonStructureImportable(text)
+  } catch (error) {
+    if (error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE) {
+      throw error
+    }
+    throw createDriveRestoreNotImportableError(error, {
+      ...options,
+      parseError: String(error?.message ?? 'importer_structure_rejected').trim() || 'importer_structure_rejected',
     })
   }
   return summary
