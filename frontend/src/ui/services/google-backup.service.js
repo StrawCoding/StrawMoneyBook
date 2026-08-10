@@ -14,6 +14,7 @@ import {
   summarizeBackupJsonText,
   summarizeBackupPayload,
 } from '@/core/services/backup-json-preview.service'
+import { assertBackupJsonImportable } from '@/core/services/drive-appdata-restore.service'
 import { getSharedLedgerSession } from '@/services/shared-ledger/backend'
 import {
   getAccessToken,
@@ -617,6 +618,8 @@ export async function restoreGoogleBackupJsonByTarget(ledgerId, target = {}, opt
   if (!preview.jsonText) {
     throw new Error(t('settings_auto_backup.error.google.restore_file_missing'))
   }
+  // smb299 acceptance: refuse non-importable content before any wipe caller proceeds.
+  assertBackupJsonImportable(preview.jsonText)
   return {
     filename: preview.filename,
     modifiedTime: preview.modifiedTime,

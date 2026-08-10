@@ -167,11 +167,19 @@
                 <strong>{{ previewMonthsLabel }}</strong>
               </li>
             </ul>
+            <p v-if="previewPayload && !previewImportable" class="warn compact" data-testid="drive-appdata-preview-not-importable">
+              {{ t('settings_auto_backup.drive_browser.not_importable', '此檔／版本無法匯入（內容無法解析為帳本備份）。請另選檔或舊版。') }}
+            </p>
             <p v-if="previewAgeWarn" class="warn compact" data-testid="drive-appdata-age-warn">{{ previewAgeWarn }}</p>
             <p v-if="previewCoverageWarn" class="warn compact" data-testid="drive-appdata-coverage-warn">{{ previewCoverageWarn }}</p>
             <footer class="row action-row">
               <button class="btn" @click="closePreview">{{ t('common.close', '關閉') }}</button>
-              <button class="btn danger-btn" :disabled="busy" @click="confirmPreviewThenRestore">
+              <button
+                class="btn danger-btn"
+                data-testid="drive-appdata-preview-then-restore"
+                :disabled="busy || !previewImportable"
+                @click="confirmPreviewThenRestore"
+              >
                 {{ t('settings_auto_backup.drive_browser.preview_then_restore', '以此內容還原') }}
               </button>
             </footer>
@@ -201,6 +209,12 @@
               }}
             </p>
             <p class="muted compact">{{ pendingRestoreLabel }}</p>
+            <p v-if="pendingPreviewLoading" class="muted compact" data-testid="drive-appdata-confirm-preview-loading">
+              {{ t('settings_auto_backup.drive_browser.preview_preparing', '正在預覽並檢查可否匯入...') }}
+            </p>
+            <p v-else-if="pendingPreviewError" class="warn compact" data-testid="drive-appdata-confirm-preview-error">
+              {{ pendingPreviewError }}
+            </p>
             <p v-if="pendingAgeWarn" class="warn compact" data-testid="drive-appdata-confirm-age-warn">{{ pendingAgeWarn }}</p>
             <p v-if="pendingCoverageWarn" class="warn compact" data-testid="drive-appdata-confirm-coverage-warn">{{ pendingCoverageWarn }}</p>
             <footer class="row action-row">
@@ -208,7 +222,7 @@
               <button
                 class="btn danger-btn"
                 data-testid="drive-appdata-restore-confirm-button"
-                :disabled="restoreCountdown > 0 || restoring"
+                :disabled="!canConfirmRestore"
                 @click="confirmRestore"
               >
                 {{ restoreConfirmLabel }}
@@ -238,9 +252,20 @@ import {
   DATA_WIPE_REASON,
   LEDGER_REPAIR_REASON,
   RECOVERY_BACKUP_REQUIRED_CODE,
-  runConfirmedWipeAfterRecoveryBackup,
 } from '@/core/services/data-wipe-guard.service'
 import { createVerifiedRecoveryBackupBeforeWipe } from '@/core/services/recovery-backup.service'
+import {
+  DRIVE_RESTORE_NOT_IMPORTABLE_CODE,
+  DRIVE_RESTORE_PREVIEW_REQUIRED_CODE,
+  assertDriveRestorePreviewReady,
+  isDriveRestorePreviewReady,
+  runConfirmedDriveAppDataRestore,
+} from '@/core/services/drive-appdata-restore.service'
+import {
+  downloadJsonFile,
+  exportAllLedgersJson,
+  saveJsonFileToDevice,
+} from '@/core/services/export.service'
 import { resetDatabase } from '@/core/db/sqlite'
 
 const props = defineProps({
@@ -268,11 +293,22 @@ const restoreCountdown = ref(0)
 const restoring = ref(false)
 const pendingTarget = ref(null)
 const pendingPreview = ref(null)
+const pendingPreviewLoading = ref(false)
+const pendingPreviewError = ref('')
 let restoreTimerId = null
 
 const hasTestMock = computed(() => detectDriveAppDataMock())
 const canUseBrowser = computed(() => Boolean(props.connected || hasTestMock.value))
-const busy = computed(() => listing.value || restoring.value || Boolean(revisionLoadingId.value))
+const busy = computed(() => listing.value || restoring.value || Boolean(revisionLoadingId.value) || pendingPreviewLoading.value)
+const previewImportable = computed(() => isDriveRestorePreviewReady(previewPayload.value))
+const pendingImportable = computed(() => isDriveRestorePreviewReady(pendingPreview.value))
+const canConfirmRestore = computed(() => (
+  !restoring.value
+  && !pendingPreviewLoading.value
+  && !pendingPreviewError.value
+  && restoreCountdown.value <= 0
+  && pendingImportable.value
+))
 
 function detectDriveAppDataMock() {
   if (typeof window === 'undefined') return false
@@ -472,6 +508,12 @@ async function previewTarget(target) {
     previewTargetMeta.value = target
     previewPayload.value = preview
     previewOpen.value = true
+    if (!isDriveRestorePreviewReady(preview)) {
+      uiStore.pushToast(
+        t('settings_auto_backup.drive_browser.not_importable', '此檔／版本無法匯入（內容無法解析為帳本備份）。請另選檔或舊版。'),
+        'error',
+      )
+    }
   } catch (error) {
     uiStore.pushToast(
       errorMessage(error, t('settings_auto_backup.drive_browser.preview_failed', '預覽備份失敗')),
@@ -489,8 +531,17 @@ function closePreview() {
 function confirmPreviewThenRestore() {
   const target = previewTargetMeta.value
   const preview = previewPayload.value
+  try {
+    assertDriveRestorePreviewReady(preview)
+  } catch (error) {
+    uiStore.pushToast(
+      errorMessage(error, t('settings_auto_backup.drive_browser.preview_required', '請先完成可匯入的備份預覽後再還原。')),
+      'error',
+    )
+    return
+  }
   previewOpen.value = false
-  openRestoreConfirm(target, preview)
+  void openRestoreConfirm(target, preview)
 }
 
 function clearRestoreTimer() {
@@ -500,12 +551,7 @@ function clearRestoreTimer() {
   }
 }
 
-async function openRestoreConfirm(target, existingPreview = null) {
-  const ledgerId = resolveLedgerId()
-  if (!ledgerId || !target?.fileId) return
-  pendingTarget.value = { ...target }
-  pendingPreview.value = existingPreview
-  restoreConfirmOpen.value = true
+function startRestoreCountdown() {
   restoreCountdown.value = 3
   clearRestoreTimer()
   restoreTimerId = window.setInterval(() => {
@@ -516,15 +562,41 @@ async function openRestoreConfirm(target, existingPreview = null) {
     }
     restoreCountdown.value -= 1
   }, 1000)
+}
 
-  if (!existingPreview) {
-    try {
-      pendingPreview.value = await previewGoogleAppDataBackup(ledgerId, target)
-    } catch (error) {
-      // Preview failure must not unlock wipe; restore still requires successful download later.
-      console.warn('[drive-appdata] preview before confirm failed', error)
-      pendingPreview.value = null
+async function openRestoreConfirm(target, existingPreview = null) {
+  const ledgerId = resolveLedgerId()
+  if (!ledgerId || !target?.fileId) return
+
+  pendingTarget.value = { ...target }
+  pendingPreview.value = null
+  pendingPreviewError.value = ''
+  pendingPreviewLoading.value = true
+  restoreConfirmOpen.value = false
+  restoreCountdown.value = 0
+  clearRestoreTimer()
+
+  try {
+    let preview = existingPreview
+    if (!isDriveRestorePreviewReady(preview)) {
+      preview = await previewGoogleAppDataBackup(ledgerId, target)
     }
+    assertDriveRestorePreviewReady(preview)
+    pendingPreview.value = preview
+    pendingPreviewError.value = ''
+    restoreConfirmOpen.value = true
+    startRestoreCountdown()
+  } catch (error) {
+    console.warn('[drive-appdata] preview before confirm failed', error)
+    pendingPreview.value = null
+    pendingPreviewError.value = errorMessage(
+      error,
+      t('settings_auto_backup.drive_browser.preview_required', '請先完成可匯入的備份預覽後再還原。'),
+    )
+    restoreConfirmOpen.value = false
+    uiStore.pushToast(pendingPreviewError.value, 'error')
+  } finally {
+    pendingPreviewLoading.value = false
   }
 }
 
@@ -534,29 +606,36 @@ function closeRestoreConfirm(options = {}) {
   restoreCountdown.value = 0
   pendingTarget.value = null
   pendingPreview.value = null
+  pendingPreviewLoading.value = false
+  pendingPreviewError.value = ''
   clearRestoreTimer()
 }
 
 async function createRestoreRecoveryBackup() {
+  // smb297/smb299: must pass exporter + durable persist helpers — missing exporter always fails the gate.
   return createVerifiedRecoveryBackupBeforeWipe({
+    purpose: 'restore',
     source: 'DriveAppDataRestorePanel.confirmRestore',
     category: 'auto-backup',
+    exportAllLedgersJson,
+    saveJsonFileToDevice,
+    downloadJsonFile,
   })
 }
 
 async function confirmRestore() {
-  if (restoreCountdown.value > 0 || restoring.value) return
+  if (!canConfirmRestore.value) return
   const ledgerId = resolveLedgerId()
   const target = pendingTarget.value
+  const preview = pendingPreview.value
   if (!ledgerId || !target?.fileId) return
 
   restoring.value = true
   try {
-    const backup = await restoreGoogleBackupJsonByTarget(ledgerId, target)
-    if (backup.comparison?.warnIncompleteRemote || backup.comparison?.warnOlderRemote) {
-      // Warnings already shown in confirm dialog; proceed only after countdown confirm.
-    }
-    await runConfirmedWipeAfterRecoveryBackup({
+    assertDriveRestorePreviewReady(preview)
+    const { backup, imported } = await runConfirmedDriveAppDataRestore({
+      preview,
+      downloadBackup: () => restoreGoogleBackupJsonByTarget(ledgerId, target),
       createRecoveryBackup: createRestoreRecoveryBackup,
       source: 'DriveAppDataRestorePanel.confirmRestore',
       i18nKey: 'settings_auto_backup.toast.recovery_backup_required',
@@ -565,12 +644,12 @@ async function confirmRestore() {
         reason: DATA_WIPE_REASON.USER_RESTORE_GOOGLE_BACKUP,
         source: 'DriveAppDataRestorePanel.confirmRestore',
       }),
-    })
-    const imported = await importBackupJsonAsNewLedgers(backup.jsonText, {
-      ledgerNameSuffix: '',
-      runIntegrityRepair: true,
-      integrityRepairReason: LEDGER_REPAIR_REASON.USER_RESTORE_BACKUP,
-      integrityRepairSource: 'DriveAppDataRestorePanel.confirmRestore',
+      importBackupJson: (jsonText) => importBackupJsonAsNewLedgers(jsonText, {
+        ledgerNameSuffix: '',
+        runIntegrityRepair: true,
+        integrityRepairReason: LEDGER_REPAIR_REASON.USER_RESTORE_BACKUP,
+        integrityRepairSource: 'DriveAppDataRestorePanel.confirmRestore',
+      }),
     })
     await ledgerStore.refresh()
     if (imported.firstLedgerId) {
@@ -599,7 +678,11 @@ async function confirmRestore() {
     const toastKey =
       error?.code === RECOVERY_BACKUP_REQUIRED_CODE
         ? 'settings_auto_backup.toast.recovery_backup_required'
-        : 'settings_auto_backup.toast.google_restore_failed'
+        : error?.code === DRIVE_RESTORE_PREVIEW_REQUIRED_CODE
+          ? 'settings_auto_backup.drive_browser.preview_required'
+          : error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+            ? 'settings_auto_backup.drive_browser.not_importable'
+            : 'settings_auto_backup.toast.google_restore_failed'
     uiStore.pushToast(errorMessage(error, t(toastKey)), 'error')
   } finally {
     restoring.value = false

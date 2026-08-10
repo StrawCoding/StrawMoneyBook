@@ -909,6 +909,7 @@ async function assertDriveAppDataBrowser() {
         },
       }],
     })
+    const corruptRemote = '{not-a-ledger-backup'
     window.__SMB_DRIVE_APPDATA_MOCK__ = {
       listFiles: async () => ([
         {
@@ -925,6 +926,13 @@ async function assertDriveAppDataBrowser() {
           size: '1024',
           kind: 'ledger_sync',
         },
+        {
+          id: 'file-corrupt',
+          name: 'StrawMoneyBook_corrupt.json',
+          modifiedTime: '2026-08-09T00:00:00.000Z',
+          size: '12',
+          kind: 'other_json',
+        },
       ]),
       listRevisions: async () => ([
         {
@@ -940,11 +948,20 @@ async function assertDriveAppDataBrowser() {
           keepForever: true,
         },
       ]),
-      download: async ({ revisionId }) => ({
-        filename: 'StrawMoneyBook_all_ledgers.json',
-        modifiedTime: revisionId === 'rev-old' ? '2026-04-01T00:00:00.000Z' : '2026-08-10T06:00:00.000Z',
-        jsonText: incompleteRemote,
-      }),
+      download: async ({ fileId, revisionId }) => {
+        if (fileId === 'file-corrupt') {
+          return {
+            filename: 'StrawMoneyBook_corrupt.json',
+            modifiedTime: '2026-08-09T00:00:00.000Z',
+            jsonText: corruptRemote,
+          }
+        }
+        return {
+          filename: 'StrawMoneyBook_all_ledgers.json',
+          modifiedTime: revisionId === 'rev-old' ? '2026-04-01T00:00:00.000Z' : '2026-08-10T06:00:00.000Z',
+          jsonText: incompleteRemote,
+        }
+      },
     }
     return true
   }`], { raw: true })
@@ -985,16 +1002,70 @@ async function assertDriveAppDataBrowser() {
   state = await evalPage(`() => ({
     hasPreview: Boolean(document.querySelector('[data-testid=drive-appdata-preview-dialog]')),
     previewText: document.querySelector('[data-testid=drive-appdata-preview-dialog]')?.innerText?.slice(0, 2000) ?? '',
+    previewThenRestoreDisabled: document.querySelector('[data-testid=drive-appdata-preview-then-restore]')?.disabled === true,
   })`)
   assert.equal(state.hasPreview, true, JSON.stringify(state, null, 2))
   assert.match(state.previewText, /個人|Ledgers|帳簿|有效交易|Valid transactions|有効な取引/u)
+  assert.equal(state.previewThenRestoreDisabled, false, JSON.stringify(state, null, 2))
 
-  // Close preview without wiping.
+  // From preview → open restore confirm (must have importable preview; do NOT confirm wipe).
+  await runPlaywrightCli(['click', '[data-testid="drive-appdata-preview-then-restore"]'])
+  await delay(900)
+  state = await evalPage(`() => ({
+    hasConfirm: Boolean(document.querySelector('[data-testid=drive-appdata-restore-confirm]')),
+    confirmText: document.querySelector('[data-testid=drive-appdata-restore-confirm]')?.innerText?.slice(0, 2000) ?? '',
+    confirmDisabled: document.querySelector('[data-testid=drive-appdata-restore-confirm-button]')?.disabled === true,
+  })`)
+  assert.equal(state.hasConfirm, true, JSON.stringify(state, null, 2))
+  assert.match(state.confirmText, /durable recovery|清空|clear|消去|還原|restore|復元/iu)
+  // Countdown initially disables confirm button.
+  assert.equal(state.confirmDisabled, true, JSON.stringify(state, null, 2))
+
+  // Cancel confirm without wiping.
   await runPlaywrightCli(['eval', `() => {
-    const closeBtn = Array.from(document.querySelectorAll('[data-testid=drive-appdata-preview-dialog] button'))
-      .find((btn) => /關閉|Close|閉じる/i.test(btn.textContent || ''))
-    if (closeBtn) closeBtn.click()
-    return Boolean(closeBtn)
+    const cancelBtn = Array.from(document.querySelectorAll('[data-testid=drive-appdata-restore-confirm] button'))
+      .find((btn) => /取消|Cancel|キャンセル/i.test(btn.textContent || ''))
+    if (cancelBtn) cancelBtn.click()
+    return Boolean(cancelBtn)
+  }`], { raw: true })
+  await delay(500)
+  state = await evalPage(`() => ({
+    confirmGone: !document.querySelector('[data-testid=drive-appdata-restore-confirm]'),
+    welcome: Boolean(document.querySelector('.welcome-root')),
+    hasPanel: Boolean(document.querySelector('[data-testid=drive-appdata-browser]')),
+  })`)
+  assert.equal(state.confirmGone, true, JSON.stringify(state, null, 2))
+  assert.equal(state.welcome, false, JSON.stringify(state, null, 2))
+  assert.equal(state.hasPanel, true, JSON.stringify(state, null, 2))
+
+  // Corrupt / not-importable file must NOT open restore confirm.
+  await runPlaywrightCli(['click', '[data-file-id="file-corrupt"] [data-testid="drive-appdata-restore-file"]'])
+  await delay(1000)
+  state = await evalPage(`() => ({
+    restoreConfirmOpened: Boolean(document.querySelector('[data-testid=drive-appdata-restore-confirm]')),
+    previewNotImportable: Boolean(document.querySelector('[data-testid=drive-appdata-preview-not-importable]')),
+    bodyText: document.body?.innerText?.slice(0, 4000) ?? '',
+  })`)
+  assert.equal(state.restoreConfirmOpened, false, JSON.stringify(state, null, 2))
+  assert.match(
+    state.bodyText,
+    /無法匯入|cannot be imported|インポートできません|預覽|preview|プレビュー|解析/iu,
+  )
+
+  // Revision restore path: expand already open; open confirm from revision then cancel.
+  await runPlaywrightCli(['click', '[data-revision-id="rev-old"] [data-testid="drive-appdata-restore-revision"]'])
+  await delay(1000)
+  state = await evalPage(`() => ({
+    hasConfirm: Boolean(document.querySelector('[data-testid=drive-appdata-restore-confirm]')),
+    confirmText: document.querySelector('[data-testid=drive-appdata-restore-confirm]')?.innerText?.slice(0, 1600) ?? '',
+  })`)
+  assert.equal(state.hasConfirm, true, JSON.stringify(state, null, 2))
+  assert.match(state.confirmText, /rev-old|revision|舊版|旧版/iu)
+  await runPlaywrightCli(['eval', `() => {
+    const cancelBtn = Array.from(document.querySelectorAll('[data-testid=drive-appdata-restore-confirm] button'))
+      .find((btn) => /取消|Cancel|キャンセル/i.test(btn.textContent || ''))
+    if (cancelBtn) cancelBtn.click()
+    return Boolean(cancelBtn)
   }`], { raw: true })
   await delay(400)
 

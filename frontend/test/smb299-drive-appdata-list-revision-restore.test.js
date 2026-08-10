@@ -200,20 +200,181 @@ test('smb299: auto-backup / data-management / advanced expose Drive appData brow
   assert.match(panelSource, /data-testid="drive-appdata-file-list"/)
   assert.match(panelSource, /data-testid="drive-appdata-revision-list"/)
   assert.match(panelSource, /data-testid="drive-appdata-restore-confirm"/)
-  assert.match(panelSource, /runConfirmedWipeAfterRecoveryBackup/)
+  assert.match(panelSource, /runConfirmedDriveAppDataRestore/)
+  assert.match(panelSource, /exportAllLedgersJson/)
+  assert.match(panelSource, /saveJsonFileToDevice/)
+  assert.match(panelSource, /downloadJsonFile/)
+  assert.match(panelSource, /createVerifiedRecoveryBackupBeforeWipe/)
+  assert.match(panelSource, /assertDriveRestorePreviewReady|isDriveRestorePreviewReady/)
   assert.match(panelSource, /importBackupJsonAsNewLedgers/)
   assert.match(panelSource, /USER_RESTORE_GOOGLE_BACKUP/)
   assert.match(panelSource, /warnIncompleteRemote|warn_incomplete/)
+  assert.match(panelSource, /canConfirmRestore/)
   assert.match(dataMgmtSource, /data-testid="data-mgmt-drive-appdata-link"/)
   assert.match(dataMgmtSource, /#drive-appdata-browser/)
   assert.match(featureListSource, /feature-link-drive-appdata-restore/)
   assert.match(featureListSource, /#drive-appdata-browser/)
 })
 
-test('smb299: playwright ui-layout covers Drive appData list / select / revision expand', () => {
+test('smb299: playwright ui-layout covers Drive appData list / select / revision expand / restore gates', () => {
   assert.match(playwrightUiLayoutSource, /assertDriveAppDataBrowser/)
   assert.match(playwrightUiLayoutSource, /__SMB_DRIVE_APPDATA_MOCK__/)
   assert.match(playwrightUiLayoutSource, /drive-appdata-file-list/)
   assert.match(playwrightUiLayoutSource, /drive-appdata-revision-list/)
+  assert.match(playwrightUiLayoutSource, /drive-appdata-restore-confirm/)
+  assert.match(playwrightUiLayoutSource, /drive-appdata-restore-confirm-button/)
   assert.match(playwrightUiLayoutSource, /feature-link-drive-appdata-restore/)
+  assert.match(playwrightUiLayoutSource, /not_importable|corrupt|drive-appdata-preview-not-importable|restoreConfirmOpened/)
+})
+
+test('smb299: restore orchestration requires importable preview and never wipes on gate failures', async () => {
+  const {
+    DRIVE_RESTORE_NOT_IMPORTABLE_CODE,
+    DRIVE_RESTORE_PREVIEW_REQUIRED_CODE,
+    assertBackupJsonImportable,
+    assertDriveRestorePreviewReady,
+    runConfirmedDriveAppDataRestore,
+  } = await import('../src/core/services/drive-appdata-restore.service.js')
+  const { RECOVERY_BACKUP_REQUIRED_CODE } = await import('../src/core/services/data-wipe-guard.service.js')
+
+  const goodJson = JSON.stringify(buildAllLedgersPayload({
+    ledgerName: '個人',
+    transactions: [{ id: 't1', occurred_at: '2026-02-01T00:00:00.000Z', deleted_at: null }],
+  }))
+  const goodPreview = {
+    jsonText: goodJson,
+    filename: 'StrawMoneyBook_all_ledgers.json',
+    remoteSummary: summarizeBackupJsonText(goodJson),
+  }
+
+  assert.equal(assertBackupJsonImportable(goodJson).ok, true)
+  assert.equal(assertDriveRestorePreviewReady(goodPreview).jsonText, goodJson)
+
+  await assert.rejects(
+    async () => assertBackupJsonImportable('{not-json'),
+    (error) => error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE && error?.silentWipeBlocked === true,
+  )
+  await assert.rejects(
+    async () => assertBackupJsonImportable(JSON.stringify({ hello: 'world' })),
+    (error) => error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE,
+  )
+  await assert.rejects(
+    async () => assertDriveRestorePreviewReady(null),
+    (error) => error?.code === DRIVE_RESTORE_PREVIEW_REQUIRED_CODE && error?.silentWipeBlocked === true,
+  )
+  await assert.rejects(
+    async () => assertDriveRestorePreviewReady({ jsonText: '{bad' }),
+    (error) => error?.code === DRIVE_RESTORE_PREVIEW_REQUIRED_CODE,
+  )
+
+  // Missing preview → no wipe
+  {
+    let wipeCalled = false
+    let imported = false
+    await assert.rejects(
+      async () => runConfirmedDriveAppDataRestore({
+        preview: null,
+        downloadBackup: async () => goodPreview,
+        createRecoveryBackup: async () => ({
+          verified: true,
+          backupId: 'r1',
+          byteLength: 10,
+          storage: 'test',
+        }),
+        wipeFn: async () => { wipeCalled = true },
+        importBackupJson: async () => { imported = true },
+        source: 'unit.missing-preview',
+      }),
+      (error) => error?.code === DRIVE_RESTORE_PREVIEW_REQUIRED_CODE && wipeCalled === false && imported === false,
+    )
+    assert.equal(wipeCalled, false)
+  }
+
+  // Download returns non-importable → no wipe
+  {
+    let wipeCalled = false
+    await assert.rejects(
+      async () => runConfirmedDriveAppDataRestore({
+        preview: goodPreview,
+        downloadBackup: async () => ({ jsonText: 'not-a-backup' }),
+        createRecoveryBackup: async () => ({
+          verified: true,
+          backupId: 'r2',
+          byteLength: 10,
+          storage: 'test',
+        }),
+        wipeFn: async () => { wipeCalled = true },
+        importBackupJson: async () => ({ importedLedgers: [] }),
+        source: 'unit.bad-download',
+      }),
+      (error) => error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE && wipeCalled === false,
+    )
+    assert.equal(wipeCalled, false)
+  }
+
+  // Recovery backup failure → no wipe
+  {
+    let wipeCalled = false
+    await assert.rejects(
+      async () => runConfirmedDriveAppDataRestore({
+        preview: goodPreview,
+        downloadBackup: async () => goodPreview,
+        createRecoveryBackup: async () => {
+          throw new Error('simulated recovery failure')
+        },
+        wipeFn: async () => { wipeCalled = true },
+        importBackupJson: async () => ({ importedLedgers: [] }),
+        source: 'unit.recovery-fail',
+      }),
+      (error) => error?.code === RECOVERY_BACKUP_REQUIRED_CODE && wipeCalled === false,
+    )
+    assert.equal(wipeCalled, false)
+  }
+
+  // Success path: preview → download → recovery → wipe → import (once each)
+  {
+    const calls = []
+    const result = await runConfirmedDriveAppDataRestore({
+      preview: goodPreview,
+      downloadBackup: async () => {
+        calls.push('download')
+        return goodPreview
+      },
+      createRecoveryBackup: async () => {
+        calls.push('recovery')
+        return {
+          verified: true,
+          backupId: 'r3',
+          byteLength: 32,
+          storage: 'test',
+        }
+      },
+      wipeFn: async () => {
+        calls.push('wipe')
+      },
+      importBackupJson: async (jsonText) => {
+        calls.push('import')
+        assert.match(jsonText, /個人/)
+        return {
+          importedLedgers: [{ ledgerId: 'new1', ledgerName: '個人' }],
+          firstLedgerId: 'new1',
+          firstLedgerName: '個人',
+        }
+      },
+      source: 'unit.success',
+    })
+    assert.deepEqual(calls, ['download', 'recovery', 'wipe', 'import'])
+    assert.equal(result.imported.firstLedgerId, 'new1')
+  }
+})
+
+test('smb299: DriveAppDataRestorePanel wires durable recovery exporter (not empty options)', () => {
+  assert.match(
+    panelSource,
+    /createVerifiedRecoveryBackupBeforeWipe\(\{[\s\S]*?exportAllLedgersJson[\s\S]*?saveJsonFileToDevice[\s\S]*?downloadJsonFile[\s\S]*?\}\)/,
+  )
+  assert.doesNotMatch(
+    panelSource,
+    /createVerifiedRecoveryBackupBeforeWipe\(\{\s*source:[\s\S]*?category: 'auto-backup',\s*\}\)/,
+  )
 })

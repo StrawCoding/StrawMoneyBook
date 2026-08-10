@@ -612,7 +612,7 @@ SMB-188 / v1.2.4 後，PostSetupIntroPage 新增了「帳本同步（Google Driv
 - 資料變更時自動備份
 - 立即備份
 - 立即還原
-- **smb299**：Drive appDataFolder 列檔／選檔還原／revision 舊版還原（預覽帳本名稱、交易月份分佈、有效筆數；顯示較舊／較新與月份覆蓋警告；沿用 durable recovery＋倒數確認，禁止 silent wipe）
+- **smb299**：Drive appDataFolder 列檔／選檔還原／revision 舊版還原（預覽帳本名稱、交易月份分佈、有效筆數；顯示較舊／較新與月份覆蓋警告；**預覽失敗或不可匯入內容不得進入確認／wipe**；正式還原路徑先驗證可匯入再 durable recovery，recovery 失敗或下載不可匯入時中止不清空本機；禁止 silent wipe）
 
 這是偏向保底、留存、災難復原的機制，和即時同步是不同層次的需求。
 
