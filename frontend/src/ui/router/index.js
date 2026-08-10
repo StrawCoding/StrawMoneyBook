@@ -142,7 +142,10 @@ const router = createRouter({
       path: '/settings/data-management',
       name: 'settings-data-management',
       component: () => import('@/ui/views/settings/SettingsDataManagementPage.vue'),
-      meta: { tab: 'settings' },
+      // smb298: Welcome empty-ledger restore needs IndexedDB recovery list/download/restore.
+      // restore_backup_action still points to auto-backup; this allows the separate
+      // local_recovery_action link without bouncing back to Welcome.
+      meta: { tab: 'settings', allowWithoutSetup: true },
     },
     {
       path: '/settings/auto-backup',

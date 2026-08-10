@@ -90,11 +90,11 @@ test('aab script builds first and then uploads the artifact to GitHub', () => {
   )
   assert.equal(
     packageJson.scripts.gpr,
-    'npm run notes:check && npm run bump:patch && npm run sync:app-update-manifest && npm run release:git && npm run release:tag && npm run notes:archive',
+    'npm run notes:check && npm run bump:patch && npm run sync:app-update-manifest && npm run sync:official-site-app-update:push && npm run release:git && npm run release:tag && npm run notes:archive',
   )
   assert.equal(
     packageJson.scripts['gpr:minor'],
-    'npm run notes:check && npm run bump:minor && npm run sync:app-update-manifest && npm run release:git && npm run release:tag && npm run notes:clear',
+    'npm run notes:check && npm run bump:minor && npm run sync:app-update-manifest && npm run sync:official-site-app-update:push && npm run release:git && npm run release:tag && npm run notes:clear',
   )
   assert.equal(packageJson.scripts['bump:android:versionCode'], undefined)
   assert.equal(

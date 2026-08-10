@@ -10,14 +10,23 @@ import {
 import { DATABASE_WIPE_DELETE_ORDER } from '@/core/utils/sqlite-delete-order'
 import { rethrowAsForeignKeyError } from '@/core/utils/sqlite-fk'
 
-const PRIMARY_DB_NAME = 'straw_money_book'
-const RECOVERY_DB_NAME = 'straw_money_book_recovery'
+export const PRIMARY_DB_NAME = 'straw_money_book'
+/** @deprecated smb298: never open as live DB — empty recovery caused false "data missing". */
+export const RECOVERY_DB_NAME = 'straw_money_book_recovery'
 const DB_VERSION = 1
 
 const sqlite = new SQLiteConnection(CapacitorSQLite)
 let db = null
 let initPromise = null
 let activeDbName = PRIMARY_DB_NAME
+
+export function getActiveDatabaseName() {
+  return activeDbName
+}
+
+export function isUsingPrimaryDatabase() {
+  return activeDbName === PRIMARY_DB_NAME
+}
 
 function isDataMutationSql(sql) {
   const text = String(sql ?? '').trim()
@@ -179,15 +188,10 @@ async function rebuildDatabase(dbName = activeDbName) {
   }
 }
 
-async function openRecoveryDatabase() {
-  await closeAllConnectionsSafely()
-  db = null
-  return openDatabaseConnection(RECOVERY_DB_NAME)
-}
-
 /**
  * Full local DB wipe. Requires explicit user-confirmed reason (smb297).
  * Never call from bootstrap / FK repair / migration failure paths.
+ * Always targets the primary DB name (smb298: never wipe/switch to empty recovery DB).
  */
 export async function resetDatabase(options = {}) {
   const wipe = assertExplicitDataWipe(options)
@@ -198,7 +202,8 @@ export async function resetDatabase(options = {}) {
     note: String(options.note ?? '').slice(0, 240),
   })
   initPromise = null
-  return rebuildDatabase(activeDbName)
+  activeDbName = PRIMARY_DB_NAME
+  return rebuildDatabase(PRIMARY_DB_NAME)
 }
 
 export async function initDatabase() {
@@ -210,18 +215,30 @@ export async function initDatabase() {
 
     try {
       await ensureWebStoreReady()
-      return await openDatabaseConnection(activeDbName)
+      // smb298: always open primary — never fall through to empty recovery DB as live store.
+      return await openDatabaseConnection(PRIMARY_DB_NAME)
     } catch (error) {
-      // smb297: never silent-rebuild / wipe the primary DB on schema or FK errors.
-      // Plugin-null may open a separate recovery DB name without deleting the primary file.
+      // smb297/smb298: never silent-rebuild / wipe the primary DB on schema or FK errors.
+      // smb298 root-cause: plugin-null previously opened straw_money_book_recovery (empty),
+      // so users saw "data missing" while primary data remained orphaned. Do NOT open recovery.
       if (platform === 'android' && isPluginNullError(error)) {
         try {
-          console.warn('[sqlite] plugin null error, switching to recovery database (primary untouched)')
-          return await openRecoveryDatabase()
-        } catch (fallbackError) {
+          console.warn('[sqlite] plugin null on primary open — retrying primary (recovery empty-db fallback disabled)')
+          await closeAllConnectionsSafely()
+          db = null
+          return await openDatabaseConnection(PRIMARY_DB_NAME)
+        } catch (retryError) {
           initPromise = null
-          throw createLocalDatabaseIntegrityError(fallbackError, {
-            message: `[sqlite:${platform}] plugin null, recovery-db failed: ${normalizeErrorMessage(fallbackError)}`,
+          let primaryExists = false
+          try {
+            primaryExists = Boolean((await sqlite.isDatabase(PRIMARY_DB_NAME, false))?.result)
+          } catch {
+            primaryExists = false
+          }
+          throw createLocalDatabaseIntegrityError(retryError, {
+            message: primaryExists
+              ? `[sqlite:${platform}] plugin null: primary DB file exists but cannot open (empty recovery fallback disabled): ${normalizeErrorMessage(retryError)}`
+              : `[sqlite:${platform}] plugin null on primary open (empty recovery fallback disabled): ${normalizeErrorMessage(retryError)}`,
           })
         }
       }

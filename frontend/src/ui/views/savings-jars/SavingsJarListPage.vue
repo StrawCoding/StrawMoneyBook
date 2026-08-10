@@ -357,17 +357,6 @@ watch(
 )
 
 watch(
-  () => autoSaveAccountOptions.value,
-  (options) => {
-    const currentValue = String(jarForm.autoSaveSourceAccountId ?? '')
-    if (!jarForm.autoSaveEnabled) return
-    if (options.some((item) => String(item.value ?? '') === currentValue)) return
-    jarForm.autoSaveSourceAccountId = String(options[0]?.value ?? '')
-  },
-  { deep: true },
-)
-
-watch(
   () => jarForm.autoSaveStartDate,
   (value) => {
     if (jarForm.autoSaveIntervalUnit !== 'month') return
@@ -491,6 +480,20 @@ const autoSaveAccountOptions = computed(() => {
       icon: item.icon || 'fa-solid fa-wallet',
     }))
 })
+
+// smb298: watch MUST sit after autoSaveAccountOptions — earlier placement caused TDZ
+// (Cannot access 'autoSaveAccountOptions' before initialization) on Android client_error_logs.
+watch(
+  () => autoSaveAccountOptions.value,
+  (options) => {
+    const currentValue = String(jarForm.autoSaveSourceAccountId ?? '')
+    if (!jarForm.autoSaveEnabled) return
+    if (options.some((item) => String(item.value ?? '') === currentValue)) return
+    jarForm.autoSaveSourceAccountId = String(options[0]?.value ?? '')
+  },
+  { deep: true },
+)
+
 const isFreePlan = computed(() => isFreeTier())
 
 const jarTargetInvalid = computed(() => {

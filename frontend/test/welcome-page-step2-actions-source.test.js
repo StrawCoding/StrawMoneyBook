@@ -62,11 +62,13 @@ test('SMB-215 v1.3.2: WelcomePage step 2 exposes 恢復備份 (→ auto-backup) 
     step2,
     /<RouterLink v-if="!hasLedgers" class="btn secondary-link" to="\/settings\/auto-backup">[\s\S]*?welcome\.restore_backup_action/,
   )
-  // Must NOT point to the manual JSON/CSV import page anymore.
+  // smb298: local recovery may link to data-management, but restore_backup_action
+  // itself must stay on auto-backup (not the manual import page).
   assert.doesNotMatch(
     step2,
-    /<RouterLink[^>]+to="\/settings\/data-management"[^>]*>[\s\S]*?welcome\.restore_backup_action/,
+    /to="\/settings\/data-management"[\s\S]{0,220}welcome\.restore_backup_action/,
   )
+  assert.match(step2, /welcome\.local_recovery_action/)
   // Ledger-sync entry
   assert.match(
     step2,
@@ -76,7 +78,7 @@ test('SMB-215 v1.3.2: WelcomePage step 2 exposes 恢復備份 (→ auto-backup) 
   assert.match(step2, /welcome\.join_shared_ledger/)
 })
 
-test('SMB-215 v1.3.2: auto-backup + google-drive-ledger-sync routes have allowWithoutSetup: true; data-management does NOT (reverted)', () => {
+test('SMB-215 v1.3.2 + smb298: auto-backup + google-drive-ledger-sync + data-management allowWithoutSetup', () => {
   // Without allowWithoutSetup the buttons would be dead — App.vue would
   // immediately redirect back to WelcomePage because the user still has
   // 0 ledgers / 0 accounts when they click the button.
@@ -92,14 +94,13 @@ test('SMB-215 v1.3.2: auto-backup + google-drive-ledger-sync routes have allowWi
   assert.ok(syncBlock, 'settings-google-drive-ledger-sync route block must exist')
   assert.match(syncBlock, /allowWithoutSetup:\s*true/)
 
-  // settings-data-management's allowWithoutSetup was reverted in v1.3.2
-  // since the entry no longer points there. Keep the assertion narrow so
-  // a future contributor doesn't accidentally re-add it.
+  // smb298: local IndexedDB recovery list/restore from Welcome needs data-management
+  // reachable with 0 ledgers. restore_backup_action still points to auto-backup only.
   const dataMgmtBlock = routerSource.match(
     /name: 'settings-data-management'[\s\S]*?\},/,
   )?.[0]
   assert.ok(dataMgmtBlock, 'settings-data-management route block must exist')
-  assert.doesNotMatch(dataMgmtBlock, /allowWithoutSetup:\s*true/)
+  assert.match(dataMgmtBlock, /allowWithoutSetup:\s*true/)
 })
 
 test('SMB-215 v1.3.2: i18n welcome.restore_backup_action / welcome.ledger_sync_action exist in all three locales', () => {

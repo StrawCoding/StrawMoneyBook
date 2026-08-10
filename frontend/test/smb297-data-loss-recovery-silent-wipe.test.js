@@ -59,8 +59,9 @@ test('smb297: sqlite init never rebuilds primary DB on schema/FK; resetDatabase 
   assert.doesNotMatch(sqliteSource, /rebuilding local database/)
   assert.doesNotMatch(sqliteSource, /message\.includes\('code 1'\)/)
   assert.match(sqliteSource, /no silent wipe/)
-  // plugin-null may open recovery DB name without deleting primary
-  assert.match(sqliteSource, /primary untouched/)
+  // smb298: plugin-null retries primary; must NOT open empty recovery as live DB
+  assert.match(sqliteSource, /empty recovery fallback disabled|recovery empty-db fallback disabled/)
+  assert.doesNotMatch(sqliteSource, /switching to recovery database/)
 })
 
 test('smb297: assertExplicitDataWipe blocks silent / unconfirmed wipe reasons', () => {

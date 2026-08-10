@@ -48,6 +48,32 @@
             }}
           </p>
 
+          <aside
+            v-if="!hasLedgers && emptyRestoreHint.shouldPrompt"
+            class="empty-restore-banner"
+            data-testid="welcome-empty-restore-hint"
+          >
+            <p class="empty-restore-title">
+              {{ t('welcome.empty_restore.title', '偵測到本機還原備份') }}
+            </p>
+            <p class="muted empty-restore-copy">
+              {{
+                t(
+                  'welcome.empty_restore.body',
+                  { count: emptyRestoreHint.recoveryCount },
+                  '目前帳本為空，但本機有 {count} 份 IndexedDB recovery 備份。請先還原，勿急著建立新帳本覆蓋可還原資料。',
+                )
+              }}
+            </p>
+            <RouterLink
+              class="btn primary"
+              to="/settings/data-management"
+              data-testid="welcome-local-recovery-cta"
+            >
+              {{ t('welcome.local_recovery_action', '本機 recovery 還原') }}
+            </RouterLink>
+          </aside>
+
           <label class="field">
             {{ t('welcome.ledger_name') }}
             <input
@@ -79,6 +105,15 @@
           <RouterLink v-if="!hasLedgers" class="btn secondary-link" to="/settings/google-drive-ledger-sync">
             <font-awesome-icon icon="fa-solid fa-cloud-arrow-up" class="secondary-link-icon" />
             {{ t('welcome.ledger_sync_action', '帳本同步') }}
+          </RouterLink>
+          <RouterLink
+            v-if="!hasLedgers"
+            class="btn secondary-link"
+            to="/settings/data-management"
+            data-testid="welcome-local-recovery-link"
+          >
+            <font-awesome-icon icon="fa-solid fa-clock-rotate-left" class="secondary-link-icon" />
+            {{ t('welcome.local_recovery_action', '本機 recovery 還原') }}
           </RouterLink>
         </section>
 
@@ -147,10 +182,14 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { BRAND_LOGO_URL } from '@/ui/constants/brand-assets'
+import {
+  detectEmptyLedgerRestoreHint,
+  EMPTY_LEDGER_RESTORE_HINT_EVENT,
+} from '@/core/services/empty-ledger-restore-hint.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
@@ -171,6 +210,10 @@ const ledgerNameInput = ref('')
 const accountGroupNameInput = ref('')
 const accountNameInput = ref('')
 const accountCurrencyCodeInput = ref('TWD')
+const emptyRestoreHint = reactive({
+  shouldPrompt: false,
+  recoveryCount: 0,
+})
 
 const hasLedgers = computed(() => ledgerStore.ledgers.length > 0)
 const hasAccounts = computed(() => accountStore.accounts.length > 0)
@@ -181,12 +224,43 @@ const canGoNext = computed(() => {
   return hasAccounts.value
 })
 
+function applyEmptyRestoreHint(detail = {}) {
+  emptyRestoreHint.shouldPrompt = Boolean(detail.shouldPrompt)
+  emptyRestoreHint.recoveryCount = Number(detail.recoveryCount) || 0
+}
+
+async function refreshEmptyRestoreHint() {
+  const hint = await detectEmptyLedgerRestoreHint({
+    hasLedgers: hasLedgers.value,
+    hasAccounts: hasAccounts.value,
+  })
+  applyEmptyRestoreHint(hint)
+}
+
+function onEmptyRestoreHintEvent(event) {
+  applyEmptyRestoreHint(event?.detail || {})
+}
+
+onMounted(() => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener(EMPTY_LEDGER_RESTORE_HINT_EVENT, onEmptyRestoreHintEvent)
+  }
+  void refreshEmptyRestoreHint()
+})
+
+onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener(EMPTY_LEDGER_RESTORE_HINT_EVENT, onEmptyRestoreHintEvent)
+  }
+})
+
 watch(
   hasLedgers,
   (value) => {
     if (value && step.value < 3) {
       step.value = 3
     }
+    void refreshEmptyRestoreHint()
   },
   { immediate: true },
 )
@@ -421,6 +495,27 @@ h2,
 
 .create-btn {
   width: 100%;
+}
+
+.empty-restore-banner {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  background: color-mix(in srgb, var(--primary) 8%, var(--bg-soft));
+}
+
+.empty-restore-title {
+  margin: 0;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.empty-restore-copy {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .secondary-link {

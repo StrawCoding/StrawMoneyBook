@@ -158,7 +158,7 @@
 - 附加項目：`/settings/addon-templates`
 - 自動識別：`/settings/auto-fill-rules`
 - 匯率同步：`/settings/exchange-rate`
-- 資料管理：`/settings/data-management`（smb297：還原指引＋本機 IndexedDB recovery **列出／下載／還原**＋帳本完整性掃描／明確修復（需倒數確認，禁啟動／同步靜默改寫）＋JSON 匯入／重設皆需確認倒數＋**recovery 備份必須成功**（僅 `indexeddb`／`filesystem`／`test`；**memory／download-only 不算**；失敗→`RECOVERY_BACKUP_REQUIRED` 中止，禁 swallow 後 wipe）＋wipe audit；匯入預設不自動 repair；禁止 bootstrap／FK silent wipe）
+- 資料管理：`/settings/data-management`（smb297：還原指引＋本機 IndexedDB recovery **列出／下載／還原**＋帳本完整性掃描／明確修復（需倒數確認，禁啟動／同步靜默改寫）＋JSON 匯入／重設皆需確認倒數＋**recovery 備份必須成功**（僅 `indexeddb`／`filesystem`／`test`；**memory／download-only 不算**；失敗→`RECOVERY_BACKUP_REQUIRED` 中止，禁 swallow 後 wipe）＋wipe audit；匯入預設不自動 repair；禁止 bootstrap／FK silent wipe；**smb298**：Welcome 空庫可 `allowWithoutSetup` 進入本機 recovery；空庫＋有 recovery 時顯示還原提示，避免只建新帳本）
 - 自動備份：`/settings/auto-backup`（smb297：Google／WebDAV「立即還原」需確認倒數＋**durable recovery 備份必須成功後才**清空本機；**memory／download-only 不算成功**；備份失敗中止、不呼叫 `resetDatabase`；還原後 integrity repair 僅在此明示確認路徑以 `USER_RESTORE_BACKUP` 執行）
 - Google Drive 帳本同步：`/settings/google-drive-ledger-sync`（smb297：本機有交易且遠端快照為空時阻擋 hard replace，狀態 `empty_remote_blocked`；sync replace **不**自動 `repairLedgerData`；FK preserve 合成缺失父列並保留子表筆數，禁止丟交易／關聯子列）
 - 語言：`/settings/language`
@@ -290,7 +290,8 @@
 
 | Service | 功能 |
 |---|---|
-| `bootstrap.service.js` | 啟動時資料庫初始化（smb297：禁止 silent reset／rebuild；schema／FK 失敗改 typed `LOCAL_DB_INTEGRITY` 並提示還原路徑）；不再直接碰 UI stores |
+| `bootstrap.service.js` | 啟動時資料庫初始化（smb297：禁止 silent reset／rebuild；schema／FK 失敗改 typed `LOCAL_DB_INTEGRITY` 並提示還原路徑）；不再直接碰 UI stores；**smb298**：Android plugin-null **禁止**切空 recovery DB，改重試 primary |
+| `empty-ledger-restore-hint.service.js` | smb298：空庫＋IndexedDB recovery 偵測／事件；Welcome／toast 導向資料管理還原 |
 | `transaction.service.js` | 收入/支出/轉帳/退款建立、退款帳戶驗證、編輯驗證、刪除關聯交易（報銷/退款） |
 | `transaction-query.service.js` | 統一 `all / year / month / day / account / detail-related` 交易查詢策略，供分析、搜尋、日曆、交易明細、交易編輯與帳戶明細共用 |
 | `budget.service.js` | 預算期間解析、預算快照、預算存款設定驗證、共同預算池與一般分類預算項目單期 / 曆月跨月建立、複製上月預算；SMB-272 後可解析 `pay:YYYY-MM-DD` / `pay:YYYY-MM-DD:YYYY-MM-DD` persisted key，且月份 UTC range helper 不會讓非法 key 進入 `toISOString()`；SMB-273 regression 鎖定發薪日前一天仍為舊期、發薪日當天 00:00 起為新期，涵蓋跨月、跨年與 29/30/31 短月；SMB-275 後新增 `dateKeyForLedgerTimeZone` / `monthKeyForLedgerTimeZone` / `resolveCurrentBudgetPeriodForLedger()`，曆月模式遇到 stale `pay:*` key 會回退帳本時區目前曆月；SMB-276 後新增 `applyLedgerBudgetPeriodSettings` / `isBudgetPeriodStructureEmpty`，改發薪日或切換曆月／發薪週期時若新目前期間尚無使用者設定內容會 carry-forward 舊期預算結構 |
@@ -324,7 +325,7 @@ UI 服務目錄：`src/ui/services/`
 
 | Service | 功能 |
 |---|---|
-| `app-bootstrap.service.js` | UI 啟動鏈協調：建立 Pinia store、接 core bootstrap 結果、處理 setup 前後 app boot 流程 |
+| `app-bootstrap.service.js` | UI 啟動鏈協調：建立 Pinia store、接 core bootstrap 結果、處理 setup 前後 app boot 流程；**smb298**：無 active ledger 時偵測空庫＋recovery 並 emit 還原提示 |
 | `app-runtime.service.js` | App runtime side effects：背景排程、同步/備份啟動、Android back、網址恢復、前景事件協調；啟動 / 回前景 / 帳本切換時補跑存錢罐自動存入、訂閱今日扣款與預算存款 |
 | `ledger-runtime.service.js` | 帳本切換後的 cross-store reset / reload／完整性掃描與帳本生命周期協調；smb287 後 critical path 先載帳戶／分類／目前預算，掃描與借貸／報銷／附加範本／recent 改背景延遲 hydrate；**smb297：scan-only，禁止啟動靜默 `repairLedgerData` 改寫語意**，異常改 toast＋資料管理明確修復 |
 | `google-drive-ledger-sync.service.js` / `shared-ledger.service.js` | smb297：`replaceLocalLedgerWith*` 一律 `runIntegrityRepair: false`；僅 FK preserve／INSERT，不在背景 sync 偽確認語意修復 |
@@ -350,7 +351,7 @@ UI 服務目錄：`src/ui/services/`
 | `security-lock.service.js` | 生物辨識/系統憑證安全鎖整合 |
 | `theme.service.js` | 主題色、配色方案與字體縮放套用 |
 | `ui-layout.service.js` | 介面風格 modern-only；legacy traditional 遷移與 `dataset.uiLayout` 套用 |
-| `app-update.service.js` | App 版本檢查與商店連結；Android AAB 發版版本碼由 `android/app/build.gradle` 依最終 `versionName` 自動推導（`1,000,000 + major * 1,000,000 + minor * 1,000 + patch`，保留 Play 歷史版本碼升級空間），仍可由 `CI_VERSION_CODE` 覆蓋；Play 發版流程若存在 `mapping.txt` 也會一併上傳去模糊化檔；Fastlane `closed_testing` lane 預設發布到 Google Play `alpha` 封閉測試 track，可用 GitHub Actions 變數 `PLAY_CLOSED_TESTING_TRACK` 指定其他封閉測試 track，並會針對 Google Play edit 被外部變更的暫時性衝突重開 edit 重試 |
+| `app-update.service.js` | App 版本檢查與商店連結；Android AAB 發版版本碼由 `android/app/build.gradle` 依最終 `versionName` 自動推導（`1,000,000 + major * 1,000,000 + minor * 1,000 + patch`，保留 Play 歷史版本碼升級空間），仍可由 `CI_VERSION_CODE` 覆蓋；Play 發版流程若存在 `mapping.txt` 也會一併上傳去模糊化檔；Fastlane `closed_testing` lane 預設發布到 Google Play `alpha` 封閉測試 track，可用 GitHub Actions 變數 `PLAY_CLOSED_TESTING_TRACK` 指定其他封閉測試 track，並會針對 Google Play edit 被外部變更的暫時性衝突重開 edit 重試；**smb298**：`gpr`／`gpr:minor` 強制 `sync:official-site-app-update:push` 同步 StrawMoneyBookWeb `public/app-update.json`＋`api/app-update/play`（Pages→Web-Page／www.strawmb.com），禁止官方站卡舊版 |
 | `i18n.service.js` | 多語系文案管理 |
 | `setup-flow.service.js` | 是否顯示 Welcome / setup 流程判定 |
 | `post-setup-intro.service.js` | 設定完成後導覽旗標管理 |
@@ -562,7 +563,10 @@ UI composable 目錄：`src/ui/composables/`
 - 類別（0）：無
 
 ### `src/core/services/bootstrap.service.js`
-- 函數（1）：`bootstrapCoreDatabase`（smb297：禁 silent wipe；失敗 → `LOCAL_DB_INTEGRITY`）
+- 函數（1）：`bootstrapCoreDatabase`（smb297：禁 silent wipe；失敗 → `LOCAL_DB_INTEGRITY`；smb298：禁空 recovery DB live fallback）
+### `src/core/services/empty-ledger-restore-hint.service.js`
+- 函數：`detectEmptyLedgerRestoreHint`、`emitEmptyLedgerRestoreHint`
+- 補充（smb298）：空庫＋IndexedDB recovery → Welcome／toast 可見還原提示
 ### `src/core/services/data-wipe-guard.service.js`
 - 函數：`assertExplicitDataWipe`、`recordDataWipeAudit`、`assertExplicitLedgerRepair`、`recordLedgerIntegrityScan`、`recordLedgerRepairAudit`、`createLocalDatabaseIntegrityError`、`createEmptyRemoteReplaceBlockedError`、`countSnapshotActiveTransactions` 等
 - 變數（0）：無

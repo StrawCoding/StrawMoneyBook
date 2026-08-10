@@ -4,6 +4,7 @@ import { App as CapacitorApp } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { flushDeferredScrollRestore } from '@/ui/services/route-scroll.service'
 import { checkForAppUpdate, openGooglePlayStore } from '@/ui/services/app-update.service'
+import { EMPTY_LEDGER_RESTORE_HINT_EVENT } from '@/core/services/empty-ledger-restore-hint.service'
 import { initGoogleAuth, getAccessToken } from '@/services/einvoice/auth'
 import { canNavigateBackInApp } from '@/ui/services/navigation-back.service'
 import {
@@ -85,6 +86,20 @@ export function useAppShellRuntime({ t, uiStore }) {
 
   function onRequestCheckAppUpdate() {
     void checkAppUpdate({ force: true })
+  }
+
+  let emptyRestoreHintToasted = false
+  function onEmptyLedgerRestoreHint(event) {
+    if (emptyRestoreHintToasted) return
+    if (!event?.detail?.shouldPrompt) return
+    emptyRestoreHintToasted = true
+    uiStore.pushToast(
+      t(
+        'welcome.empty_restore.toast',
+        '帳本為空但偵測到本機 recovery 備份，請至資料管理還原。',
+      ),
+      'warning',
+    )
   }
 
   function handleRouteBeforeEnter() {
@@ -180,6 +195,7 @@ export function useAppShellRuntime({ t, uiStore }) {
 
   onMounted(() => {
     window.addEventListener('app:check-update', onRequestCheckAppUpdate)
+    window.addEventListener(EMPTY_LEDGER_RESTORE_HINT_EVENT, onEmptyLedgerRestoreHint)
     window.addEventListener('click', onBackButtonAnchorClick, true)
     window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
     void checkAppUpdate({ force: true })
@@ -224,6 +240,7 @@ export function useAppShellRuntime({ t, uiStore }) {
 
   onBeforeUnmount(() => {
     window.removeEventListener('app:check-update', onRequestCheckAppUpdate)
+    window.removeEventListener(EMPTY_LEDGER_RESTORE_HINT_EVENT, onEmptyLedgerRestoreHint)
     window.removeEventListener('click', onBackButtonAnchorClick, true)
     window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
     if (initialSecurityUnlockTimer !== null) {
