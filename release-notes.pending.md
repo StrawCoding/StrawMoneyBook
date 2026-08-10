@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (smb299) 文件對齊 tick14／v1.3.102：Features Map／Detailed 明確記載 wipe 後 import 失敗「先再 wipe 清殘留再 recovery」與 **sql.js 實庫**最終列＝wipe 前快照（非原本地＋殘缺雲端），與已發佈閘門／回歸一致。
+
 ---
 
 ## v1.3.102
