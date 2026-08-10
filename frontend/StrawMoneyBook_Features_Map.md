@@ -65,7 +65,7 @@
 | `/transactions/calendar` | `src/ui/views/CalendarPage.vue` | 交易日曆 |
 | `/transactions/:id` | `src/ui/views/TransactionAboutPage.vue` | 交易明細（含退款/關聯） |
 | `/transactions/:id/edit` | `src/ui/views/TransactionEditPage.vue` | 交易編輯（SMB-217 後改用 AmountCalculatorInput 計算機輸入） |
-| `/features` | `src/ui/views/FeatureListPage.vue` | 功能列表入口頁（一般功能 + 進階功能分區；smb295 後共同帳本／帳本同步／銀行同步／載具同步主入口在進階功能） |
+| `/features` | `src/ui/views/FeatureListPage.vue` | 功能列表入口頁（一般功能 + 進階功能分區；smb295 後共同帳本／帳本同步／銀行同步／載具同步主入口在進階功能；smb299 加 Drive 選檔／舊版還原後列高變長，`feature-link` 以 `scroll-margin-bottom` 避開固定 BottomNav） |
 | `/welcome/intro` | `src/ui/views/PostSetupIntroPage.vue` | 初始設定後導覽頁（含特色功能、帳號登入、共同帳本、帳本同步、會員邀請碼；SMB-188 / v1.2.4 後新增共同帳本與帳本同步兩個步驟；SMB-215 / v1.2.27 後共同帳本步驟另外提供「恢復備份」與「帳本同步」快速按鈕） |
 | `/welcome` (隱含 route，由 `App.vue` shouldShowWelcomePage 控制) | `src/ui/views/WelcomePage.vue` | 初始 setup wizard 三步（語言 / 建立帳本 / 建立帳戶）；SMB-215 Restart / v1.3.1 後 step 2「建立帳本」在「已有共同帳本？登入並加入」secondary-link 旁新增「恢復備份 / 帳本同步」兩顆按鈕（僅 `!hasLedgers` 時顯示）。SMB-215 Restart / v1.3.2 後修正目的地：「恢復備份」→ `/settings/auto-backup`（自動備份頁，含 Google Drive / WebDAV 登入 + 立即還原；Tester 反饋「需要有自動備份的項目」）；「帳本同步」維持 `/settings/google-drive-ledger-sync`。`settings-auto-backup` + `settings-google-drive-ledger-sync` 兩 route 帶 `meta.allowWithoutSetup: true`，`settings-data-management` 的 v1.3.1 allowWithoutSetup 已還原 |
 | `/ai-auto-bookkeeping` | `src/ui/views/BookkeepingPage.vue` | AI 記帳模式（內嵌 `AiAutoBookkeepingPage.vue`） |
@@ -141,7 +141,7 @@
 - 現代版樣式：`src/ui/assets/css/apple-ui.css`（Large Title、Inset Grouped List、Segmented Control、list row + chevron、0.5px separator）
 - 設定／onboarding：**不再**提供「傳統／現代」切換；個人化頁僅主題配色（與 `theme.service.js` 獨立）
 - 功能完整保留：5 tab BottomNav、首頁全部區塊、FAB；禁止藉移除傳統 mode 刪功能
-- 測試：`test/ui-layout.service.test.js`、`test/ui-layout-source.test.js`、`npm run playwright:ui-layout`（smb298：port mutex＋獨立 CLI session＋`waitForHomeBlocks`，禁並行搶 preview／default session；smb299：證券列表以資產頁 SPA 入口 `assets-securities-entry`＋`securities-page` testid 驗收，避免 `goto /assets/securities` 冷啟動假陰性）
+- 測試：`test/ui-layout.service.test.js`、`test/ui-layout-source.test.js`、`npm run playwright:ui-layout`（smb298：port mutex＋獨立 CLI session＋`waitForHomeBlocks`，禁並行搶 preview／default session；smb299：證券列表以資產頁 SPA 入口 `assets-securities-entry`＋`securities-page` testid 驗收；進階功能入口點擊前 `scrollIntoView({block:'center'})` 並斷言列在 BottomNav 上方，避免列表加長後末列（載具同步）被底欄攔截）
 
 ### 首頁內導覽（`src/ui/views/home.vue`）
 

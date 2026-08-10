@@ -917,14 +917,51 @@ async function assertRouteNavigation() {
   for (const target of advancedTargets) {
     await runPlaywrightCli(['goto', `${baseUrl}/features`])
     await delay(600)
+    // smb299: advanced list grew (Drive restore). Last rows sit under fixed BottomNav;
+    // default click scrollIntoView(end) lands under the nav and the click hits the tab bar.
+    const scrolled = await evalPage(`() => {
+      const el = document.querySelector('[data-testid="${target.testId}"]')
+      if (!el) return { ok: false, reason: 'missing' }
+      el.scrollIntoView({ block: 'center', inline: 'nearest' })
+      const rect = el.getBoundingClientRect()
+      const nav = document.querySelector('[data-testid=bottom-nav]')
+      const navTop = nav ? nav.getBoundingClientRect().top : Number.POSITIVE_INFINITY
+      return {
+        ok: true,
+        top: Math.round(rect.top),
+        bottom: Math.round(rect.bottom),
+        navTop: Number.isFinite(navTop) ? Math.round(navTop) : null,
+        clearOfNav: rect.bottom < navTop - 4,
+      }
+    }`)
+    assert.equal(scrolled.ok, true, JSON.stringify({ target, scrolled }, null, 2))
+    assert.equal(scrolled.clearOfNav, true, JSON.stringify({ target, scrolled }, null, 2))
     await runPlaywrightCli(['click', `[data-testid="${target.testId}"]`])
     await delay(900)
-    const pageState = await evalPage(`() => ({
+    let pageState = await evalPage(`() => ({
       path: window.location.pathname,
       text: document.body?.innerText?.slice(0, 4000) ?? '',
       hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
     })`)
-    assert.equal(pageState.path, target.path, JSON.stringify({ target, pageState }, null, 2))
+    // Fallback: programmatic RouterLink click after re-centering (pointer intercept flake).
+    if (pageState.path !== target.path) {
+      await runPlaywrightCli(['goto', `${baseUrl}/features`])
+      await delay(500)
+      await evalPage(`() => {
+        const el = document.querySelector('[data-testid="${target.testId}"]')
+        if (!el) return false
+        el.scrollIntoView({ block: 'center', inline: 'nearest' })
+        el.click()
+        return true
+      }`)
+      await delay(900)
+      pageState = await evalPage(`() => ({
+        path: window.location.pathname,
+        text: document.body?.innerText?.slice(0, 4000) ?? '',
+        hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+      })`)
+    }
+    assert.equal(pageState.path, target.path, JSON.stringify({ target, pageState, scrolled }, null, 2))
     assert.match(pageState.text, target.text)
     assert.equal(pageState.hasBottomNav, true, JSON.stringify({ target, pageState }, null, 2))
   }

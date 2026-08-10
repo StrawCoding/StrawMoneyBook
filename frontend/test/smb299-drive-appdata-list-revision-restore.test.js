@@ -279,6 +279,13 @@ test('smb299: playwright ui-layout covers Drive appData list / select / revision
   assert.match(playwrightUiLayoutSource, /not_importable|corrupt|drive-appdata-preview-not-importable|restoreConfirmOpened/)
   assert.match(playwrightUiLayoutSource, /file-check-invalid|not_a_valid_type/)
   assert.match(playwrightUiLayoutSource, /sawCountdownGate|confirmDisabled/)
+  // Advanced list + fixed BottomNav: scroll center before click; last row must clear nav.
+  assert.match(playwrightUiLayoutSource, /scrollIntoView\(\{\s*block:\s*'center'/)
+  assert.match(playwrightUiLayoutSource, /clearOfNav/)
+})
+
+test('smb299: feature list keeps last advanced rows clear of BottomNav (scroll-margin)', () => {
+  assert.match(featureListSource, /scroll-margin-bottom:\s*calc\(88px \+ var\(--navigation-bar-height\)\)/)
 })
 
 test('smb299: restore orchestration requires importable preview and never wipes on gate failures', async () => {

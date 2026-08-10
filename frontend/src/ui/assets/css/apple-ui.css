@@ -195,6 +195,8 @@
   border-bottom: var(--apple-separator);
   background: transparent;
   font-weight: 600;
+  scroll-margin-bottom: calc(88px + var(--navigation-bar-height));
+  scroll-margin-top: 24px;
 }
 
 [data-ui-layout='modern'] .feature-list-page .feature-link:last-child {

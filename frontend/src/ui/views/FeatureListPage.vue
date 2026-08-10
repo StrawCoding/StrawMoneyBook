@@ -134,7 +134,13 @@ h2 {
   border-radius: 10px;
   padding: 12px;
   background: var(--surface-soft-accent);
-  font-weight: 700
+  font-weight: 700;
+  /* Keep rows clear of fixed BottomNav when scrolled into view / focused. */
+  scroll-margin-bottom: calc(88px + var(--navigation-bar-height));
+  scroll-margin-top: 24px;
+}
+.feature-list-page {
+  padding-bottom: 12px;
 }
 .feature-icon-wrap {
   width: 36px;

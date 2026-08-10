@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (smb299) 修復功能頁進階列表加長後，最後一列（載具同步）被固定 BottomNav 遮擋導致點擊無效：`feature-link` 補 `scroll-margin-bottom`；`playwright:ui-layout` 進階入口改先 `scrollIntoView({block:'center'})` 並斷言列在 nav 上方再點（必要時 programmatic click fallback）。
+
 ---
 
 ## v1.3.104
