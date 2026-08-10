@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (smb299) 修復 notes:archive 後 closeout 假失敗：Node 回歸改為接受 smb299 閘門文案位於 pending **或** 已封存的 `## v*` history（不再強制 pending 非空）；避免 v1.3.98 封存後 `closeout:verify`／`test:node` 因結構測試失敗而卡住 mark PASS。產品還原閘門（durable recovery exporter、預覽成功才確認、不可匯入不清空）維持不變。
+
 ---
 
 ## v1.3.98

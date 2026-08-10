@@ -385,24 +385,30 @@ test('smb299: DriveAppDataRestorePanel wires durable recovery exporter (not empt
   assert.match(panelSource, /restoreConfirmOpen\.value = false[\s\S]*?uiStore\.pushToast\(pendingPreviewError/)
 })
 
-test('smb299: release-notes.pending keeps smb299 above history separator (notes:check non-empty)', async () => {
+test('smb299: release notes keep smb299 gate copy in pending or archived v* history', async () => {
   const notesPath = resolve(import.meta.dirname, '../../release-notes.pending.md')
   const notes = readFileSync(notesPath, 'utf8')
   const sepIndex = notes.indexOf('\n---\n')
   assert.ok(sepIndex > 0, 'history separator --- must exist')
   const pending = notes.slice(0, sepIndex)
   const history = notes.slice(sepIndex + 1)
-  assert.match(pending, /\(smb299\).*runConfirmedDriveAppDataRestore/)
-  assert.match(pending, /預覽必須成功|importable preview|durable recovery/u)
   assert.doesNotMatch(pending, /^## v\d/m)
   assert.match(history, /^## v\d/m)
 
-  const { validatePendingNotesStructure, readValidNoteLines } = await import(
-    '../scripts/release-notes.mjs'
+  const smb299Gate = /\(smb299\).*runConfirmedDriveAppDataRestore/
+  const smb299PreviewGate = /預覽必須成功|importable preview|durable recovery/u
+  const inPending = smb299Gate.test(pending) && smb299PreviewGate.test(pending)
+  const inHistory = smb299Gate.test(history) && smb299PreviewGate.test(history)
+  assert.ok(
+    inPending || inHistory,
+    'smb299 gate copy must exist in pending (pre-release) or archived ## v* history (post notes:archive)',
   )
+  // After notes:archive, pending may be empty; structure must still validate.
+  if (inPending) {
+    assert.doesNotMatch(pending, /^## v\d/m)
+  }
+
+  const { validatePendingNotesStructure } = await import('../scripts/release-notes.mjs')
   const status = validatePendingNotesStructure(notesPath)
   assert.equal(status.ok, true, status.message)
-  assert.ok(status.lineCount > 0, status.message)
-  const lines = readValidNoteLines(notesPath)
-  assert.ok(lines.some((line) => /\(smb299\)/.test(line)), 'smb299 must be a pending note line')
 })
