@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { execFile, spawn } from 'node:child_process'
+import { existsSync, readdirSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 
 const execFileAsync = promisify(execFile)
 const frontendDir = '/mnt/data/code/project/StrawCoding/StrawMoneyBook/frontend'
@@ -12,6 +13,48 @@ const defaultBrowsersPath = resolve(repoRoot, 'backend/.server-data/playwright-b
 const playwrightConfigPath = resolve(fileURLToPath(new URL('../playwright-cli.json', import.meta.url)))
 const previewPort = Number(process.env.UI_LAYOUT_PLAYWRIGHT_PORT || 4186)
 const baseUrl = `http://127.0.0.1:${previewPort}`
+const browsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH || defaultBrowsersPath
+
+function hasInstalledChromiumHeadlessShell(root = browsersPath) {
+  try {
+    const entries = readdirSync(root)
+    return entries.some((name) => {
+      if (!name.startsWith('chromium_headless_shell-')) return false
+      const binary = join(
+        root,
+        name,
+        'chrome-headless-shell-linux64',
+        'chrome-headless-shell',
+      )
+      return existsSync(binary)
+    })
+  } catch {
+    return false
+  }
+}
+
+async function ensurePlaywrightChromium() {
+  if (hasInstalledChromiumHeadlessShell()) return
+  console.log(`Playwright chromium missing under ${browsersPath}; installing...`)
+  await execFileAsync(
+    'npx',
+    ['--yes', '--package', '@playwright/cli', 'playwright-cli', 'install-browser', 'chromium'],
+    {
+      cwd: frontendDir,
+      env: {
+        ...process.env,
+        PLAYWRIGHT_BROWSERS_PATH: browsersPath,
+      },
+      maxBuffer: 8 * 1024 * 1024,
+      timeout: 600000,
+    },
+  )
+  assert.equal(
+    hasInstalledChromiumHeadlessShell(),
+    true,
+    `chromium headless shell still missing after install under ${browsersPath}`,
+  )
+}
 
 async function runPlaywrightCli(args, { raw = false } = {}) {
   const cliArgs = [
@@ -26,7 +69,7 @@ async function runPlaywrightCli(args, { raw = false } = {}) {
     cwd: frontendDir,
     env: {
       ...process.env,
-      PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || defaultBrowsersPath,
+      PLAYWRIGHT_BROWSERS_PATH: browsersPath,
       PLAYWRIGHT_MCP_CONFIG: process.env.PLAYWRIGHT_MCP_CONFIG || playwrightConfigPath,
     },
     maxBuffer: 4 * 1024 * 1024,
@@ -815,6 +858,8 @@ async function assertModernLayoutOnly() {
 }
 
 console.log('--- Playwright: ui layout settings + home blocks ---')
+
+await ensurePlaywrightChromium()
 
 console.log('Building web preview bundle...')
 await execFileAsync('npm', ['run', 'build:web'], {
