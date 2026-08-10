@@ -158,8 +158,8 @@
 - 附加項目：`/settings/addon-templates`
 - 自動識別：`/settings/auto-fill-rules`
 - 匯率同步：`/settings/exchange-rate`
-- 資料管理：`/settings/data-management`（smb297：還原指引＋帳本完整性掃描／明確修復（需倒數確認，禁啟動／同步靜默改寫）＋JSON 匯入／重設皆需確認倒數＋**recovery 備份必須成功**（失敗→`RECOVERY_BACKUP_REQUIRED` 中止，禁 swallow 後 wipe）＋wipe audit；匯入預設不自動 repair；禁止 bootstrap／FK silent wipe）
-- 自動備份：`/settings/auto-backup`（smb297：Google／WebDAV「立即還原」需確認倒數＋**durable recovery 備份必須成功後才**清空本機；瀏覽器 download-only 不算成功；備份失敗中止、不呼叫 `resetDatabase`；還原後 integrity repair 僅在此明示確認路徑以 `USER_RESTORE_BACKUP` 執行）
+- 資料管理：`/settings/data-management`（smb297：還原指引＋本機 IndexedDB recovery **列出／下載／還原**＋帳本完整性掃描／明確修復（需倒數確認，禁啟動／同步靜默改寫）＋JSON 匯入／重設皆需確認倒數＋**recovery 備份必須成功**（僅 `indexeddb`／`filesystem`／`test`；**memory／download-only 不算**；失敗→`RECOVERY_BACKUP_REQUIRED` 中止，禁 swallow 後 wipe）＋wipe audit；匯入預設不自動 repair；禁止 bootstrap／FK silent wipe）
+- 自動備份：`/settings/auto-backup`（smb297：Google／WebDAV「立即還原」需確認倒數＋**durable recovery 備份必須成功後才**清空本機；**memory／download-only 不算成功**；備份失敗中止、不呼叫 `resetDatabase`；還原後 integrity repair 僅在此明示確認路徑以 `USER_RESTORE_BACKUP` 執行）
 - Google Drive 帳本同步：`/settings/google-drive-ledger-sync`（smb297：本機有交易且遠端快照為空時阻擋 hard replace，狀態 `empty_remote_blocked`；sync replace **不**自動 `repairLedgerData`；FK preserve 合成缺失父列並保留子表筆數，禁止丟交易／關聯子列）
 - 語言：`/settings/language`
 - 個人化：`/settings/personalization`

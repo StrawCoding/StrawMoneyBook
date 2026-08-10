@@ -735,7 +735,7 @@ async function backupNowToWebdav() {
 }
 
 async function createRestoreRecoveryBackup() {
-  // smb297: durable IndexedDB/memory proof required — download-only is not enough.
+  // smb297: durable IndexedDB/filesystem proof required — memory / download-only are not enough.
   return createVerifiedRecoveryBackupBeforeWipe({
     purpose: 'restore',
     source: 'SettingsAutoBackupPage.createRestoreRecoveryBackup',

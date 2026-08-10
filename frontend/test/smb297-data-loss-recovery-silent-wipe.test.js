@@ -265,18 +265,22 @@ test('smb297: durable recovery backup rejects download-only, memory, and verifie
   } = await import('../src/core/services/recovery-backup.service.js')
   const {
     requireRecoveryBackupBeforeWipe,
+    runConfirmedWipeAfterRecoveryBackup,
     RECOVERY_BACKUP_REQUIRED_CODE,
   } = await import('../src/core/services/data-wipe-guard.service.js')
 
   const store = new Map()
-  setRecoveryBackupStorageForTests({
-    put: async (record) => {
-      store.set(record.backupId, record)
-    },
-    get: async (id) => store.get(id) || null,
-    list: async () => [...store.values()],
-    entries: () => store.entries(),
-  })
+  const bindDurableStore = () => {
+    setRecoveryBackupStorageForTests({
+      put: async (record) => {
+        store.set(record.backupId, record)
+      },
+      get: async (id) => store.get(id) || null,
+      list: async () => [...store.values()],
+      entries: () => store.entries(),
+    })
+  }
+  bindDurableStore()
   try {
     const proof = await createVerifiedRecoveryBackupBeforeWipe({
       purpose: 'restore',
@@ -300,6 +304,39 @@ test('smb297: durable recovery backup rejects download-only, memory, and verifie
     const loaded = await loadRecoveryBackupJsonText(proof.backupId)
     assert.match(loaded.jsonText, /"l1"/)
     assert.ok(Number(loaded.byteLength) > 0)
+
+    // Simulated process restart: clear in-process adapter binding, then rebind to the same
+    // durable Map. Records must still list/load so users can retrieve after wipe/import failure.
+    resetRecoveryBackupStorageForTests()
+    bindDurableStore()
+    const listedAfterRestart = await listVerifiedRecoveryBackups()
+    assert.equal(listedAfterRestart.length, 1)
+    assert.equal(listedAfterRestart[0].backupId, proof.backupId)
+    const loadedAfterRestart = await loadRecoveryBackupJsonText(proof.backupId)
+    assert.match(loadedAfterRestart.jsonText, /"t1"/)
+
+    // External file copy failure must NOT unlock via memory, and must NOT erase durable proof.
+    let wipeCalled = false
+    await runConfirmedWipeAfterRecoveryBackup({
+      source: 'smb297-external-copy-fail',
+      createRecoveryBackup: async () => createVerifiedRecoveryBackupBeforeWipe({
+        purpose: 'import',
+        exportAllLedgersJson: async () => ({ ledgers: [{ id: 'l2' }] }),
+        saveJsonFileToDevice: async () => {
+          throw new Error('external copy failed')
+        },
+        downloadJsonFile: () => {
+          throw new Error('browser download failed')
+        },
+      }),
+      wipeFn: async () => {
+        wipeCalled = true
+      },
+    })
+    assert.equal(wipeCalled, true)
+    const listedAfterExternalFail = await listVerifiedRecoveryBackups()
+    assert.ok(listedAfterExternalFail.length >= 2)
+    assert.ok(listedAfterExternalFail.every((row) => row.hasPayload === true))
 
     await assert.rejects(
       async () => persistVerifiedRecoveryBackup({ purpose: 'x', data: null }),
@@ -361,6 +398,21 @@ test('smb297: durable recovery backup rejects download-only, memory, and verifie
   )
 })
 
+test('smb297: recovery source forbids memory fallback and AutoBackup docs match durable kinds', () => {
+  const recoverySource = readFileSync(
+    resolve(import.meta.dirname, '../src/core/services/recovery-backup.service.js'),
+    'utf8',
+  )
+  assert.doesNotMatch(recoverySource, /MEMORY_FALLBACK/)
+  assert.doesNotMatch(recoverySource, /memoryFallbackMap/)
+  assert.doesNotMatch(recoverySource, /storage:\s*['"]memory['"]/)
+  assert.match(recoverySource, /memory is not durable proof/)
+  assert.match(recoverySource, /DURABLE_RECOVERY_STORAGE/)
+  assert.match(recoverySource, /listVerifiedRecoveryBackups/)
+  assert.match(autoBackupSource, /IndexedDB\/filesystem proof required/)
+  assert.doesNotMatch(autoBackupSource, /IndexedDB\/memory proof/)
+})
+
 test('smb297: data management exposes local recovery list/download/restore UX', () => {
   assert.match(dataMgmtSource, /data-testid="local-recovery-backups-panel"/)
   assert.match(dataMgmtSource, /listVerifiedRecoveryBackups/)
@@ -369,6 +421,8 @@ test('smb297: data management exposes local recovery list/download/restore UX', 
   assert.match(dataMgmtSource, /data-testid="local-recovery-restore-confirm"/)
   assert.match(dataMgmtSource, /confirmLocalRestore/)
   assert.match(dataMgmtSource, /downloadLocalRecoveryBackup/)
+  assert.match(dataMgmtSource, /refreshLocalRecoveryBackups/)
+  assert.match(dataMgmtSource, /onMounted\([\s\S]*refreshLocalRecoveryBackups/)
 })
 
 test('smb297: Google Drive sync blocks empty-remote hard replace over local txs', () => {
