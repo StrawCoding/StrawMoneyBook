@@ -17,11 +17,27 @@
       <p v-if="lastExportPath" class="muted export-path">輸出路徑：<code>{{ lastExportPath }}</code></p>
     </article>
 
+    <article class="card panel recovery-panel">
+      <h3>{{ t('settings_data.recovery.title', '資料還原指引') }}</h3>
+      <p class="muted">{{ t('settings_data.recovery.desc', '若本機帳本異常或共同帳本伺服器綁定遺失，請優先用下列可還原路徑，不要依賴自動清空。') }}</p>
+      <ul class="recovery-list muted">
+        <li>{{ t('settings_data.recovery.tip_export', '先匯出 JSON 備份到裝置／下載資料夾。') }}</li>
+        <li>
+          <RouterLink class="link" to="/settings/auto-backup">{{ t('settings_data.recovery.link_auto_backup', '自動備份（Google Drive／WebDAV）立即還原') }}</RouterLink>
+        </li>
+        <li>
+          <RouterLink class="link" to="/settings/google-drive-ledger-sync">{{ t('settings_data.recovery.link_drive_sync', 'Google Drive 帳本同步拉回') }}</RouterLink>
+        </li>
+        <li>{{ t('settings_data.recovery.tip_import', '下方 JSON 匯入會先要求確認並建立 recovery 備份後才清空本機。') }}</li>
+        <li>{{ t('settings_data.recovery.tip_shared', '共同帳本伺服器綁定消失≠本機交易被刪；本機帳本仍在時請保留並重新加入／同步。') }}</li>
+      </ul>
+    </article>
+
     <article class="card panel">
       <h3>{{ t('settings_data.import.title') }}</h3>
       <div>
         <p class="muted">{{ t('settings_data.import.json_desc') }}</p>
-        <input ref="jsonInputRef" type="file" accept="application/json" class="input" @change="onImportJsonFile" />
+        <input ref="jsonInputRef" type="file" accept="application/json" class="input" @change="onImportJsonFileSelected" />
       </div>
 
       <div>
@@ -88,6 +104,33 @@
         </section>
       </transition>
     </teleport>
+
+    <teleport to="body">
+      <transition name="overlay-fade">
+        <section v-if="isImportConfirmOpen" class="sheet-mask reset-mask" @click.self="closeImportConfirm">
+          <article class="card reset-dialog" data-testid="import-json-confirm-dialog">
+            <header class="row">
+              <h3>{{ t('settings_data.import.confirm_title', '確認匯入並清空本機資料') }}</h3>
+            </header>
+            <p class="muted">
+              {{ t('settings_data.import.confirm_desc', 'JSON 匯入會先建立 recovery 備份，再清空本機帳本並以檔案內容還原。可取消。') }}
+            </p>
+            <p v-if="pendingImportFileName" class="muted compact">{{ pendingImportFileName }}</p>
+            <footer class="row action-row">
+              <button class="btn" @click="closeImportConfirm">{{ t('common.cancel', 'Cancel') }}</button>
+              <button
+                class="btn danger-btn"
+                :disabled="importCountdown > 0 || importingJson"
+                data-testid="import-json-confirm-button"
+                @click="confirmImportJson"
+              >
+                {{ importConfirmLabel }}
+              </button>
+            </footer>
+          </article>
+        </section>
+      </transition>
+    </teleport>
   </section>
 </template>
 
@@ -115,6 +158,7 @@ import {
   timestampForFilename,
 } from '@/core/services/export.service'
 import { importBackupJsonAsNewLedgers, importLedgerCsv } from '@/core/services/import.service'
+import { DATA_WIPE_REASON } from '@/core/services/data-wipe-guard.service'
 import { resetDatabase } from '@/core/db/sqlite'
 import { useI18n } from '@/ui/services/i18n.service'
 
@@ -139,15 +183,29 @@ const csvInputRef = ref(null)
 const isResetConfirmOpen = ref(false)
 const resetCountdown = ref(0)
 const resettingAllData = ref(false)
+const isImportConfirmOpen = ref(false)
+const importCountdown = ref(0)
+const importingJson = ref(false)
+const pendingImportFile = ref(null)
+const pendingImportFileName = ref('')
 const lastExportPath = ref('')
 const operationProgress = ref(createIdleOperationProgress())
 let resetTimerId = null
+let importTimerId = null
 let operationProgressTimerId = null
 
 const resetConfirmLabel = computed(() => {
   if (resettingAllData.value) return t('settings_data.reset.processing')
   if (resetCountdown.value > 0) return t('settings_data.reset.confirm_countdown', { count: resetCountdown.value })
   return t('settings_data.reset.confirm')
+})
+
+const importConfirmLabel = computed(() => {
+  if (importingJson.value) return t('settings_data.import.processing', '匯入中...')
+  if (importCountdown.value > 0) {
+    return t('settings_data.import.confirm_countdown', { count: importCountdown.value }, '確認匯入（{count}）')
+  }
+  return t('settings_data.import.confirm', '確認匯入並清空本機')
 })
 
 const operationProgressTitle = computed(() => {
@@ -309,14 +367,69 @@ async function exportCsv(type) {
   }
 }
 
-async function onImportJsonFile(event) {
+async function onImportJsonFileSelected(event) {
   const file = event.target.files?.[0]
   if (!file) return
+  pendingImportFile.value = file
+  pendingImportFileName.value = String(file.name || '')
+  openImportConfirm()
+}
 
+function openImportConfirm() {
+  isImportConfirmOpen.value = true
+  importCountdown.value = 3
+  clearImportTimer()
+  importTimerId = window.setInterval(() => {
+    if (importCountdown.value <= 1) {
+      importCountdown.value = 0
+      clearImportTimer()
+      return
+    }
+    importCountdown.value -= 1
+  }, 1000)
+}
+
+function closeImportConfirm(options = {}) {
+  const force = Boolean(options.force)
+  if (importingJson.value && !force) return
+  isImportConfirmOpen.value = false
+  importCountdown.value = 0
+  clearImportTimer()
+  pendingImportFile.value = null
+  pendingImportFileName.value = ''
+  if (jsonInputRef.value) jsonInputRef.value.value = ''
+}
+
+function clearImportTimer() {
+  if (importTimerId) {
+    window.clearInterval(importTimerId)
+    importTimerId = null
+  }
+}
+
+async function confirmImportJson() {
+  if (importCountdown.value > 0 || importingJson.value) return
+  const file = pendingImportFile.value
+  if (!file) {
+    closeImportConfirm({ force: true })
+    return
+  }
+
+  importingJson.value = true
   try {
     const result = await withOperationProgress('importJson', async () => {
       const text = await readFileAsText(file)
-      await resetDatabase()
+      try {
+        await createResetRecoveryBackup()
+      } catch (backupError) {
+        console.warn('[data-management] failed to create recovery backup before import wipe', backupError)
+      }
+      await resetDatabase({
+        confirmed: true,
+        reason: DATA_WIPE_REASON.USER_IMPORT_JSON,
+        source: 'SettingsDataManagementPage.confirmImportJson',
+        note: pendingImportFileName.value,
+      })
       const imported = await importBackupJsonAsNewLedgers(text)
       await ledgerStore.refresh()
       if (imported.firstLedgerId) {
@@ -329,6 +442,7 @@ async function onImportJsonFile(event) {
     const importedName = result.firstLedgerName || result.importedLedgers?.[0]?.ledgerName || ''
     const importedLabel = importedCount > 1 ? `共 ${importedCount} 本` : importedName
     uiStore.pushToast(`${t('settings_data.toast.import_json_done', { ledgerName: importedLabel })}${importIntegrityHint(result.importedLedgers?.[0])}`)
+    closeImportConfirm({ force: true })
   } catch (error) {
     const fkMessage = error?.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' || Number(error?.numericCode) === 1811
       || String(error?.i18nKey ?? '') === 'sqlite.error.foreign_key_constraint'
@@ -336,7 +450,7 @@ async function onImportJsonFile(event) {
       : ''
     uiStore.pushToast(fkMessage || error.message || t('settings_data.toast.import_json_failed'), 'error')
   } finally {
-    if (jsonInputRef.value) jsonInputRef.value.value = ''
+    importingJson.value = false
   }
 }
 
@@ -389,6 +503,11 @@ function clearResetTimer() {
 }
 
 function onRequestCloseOverlay(event) {
+  if (isImportConfirmOpen.value) {
+    closeImportConfirm()
+    event.preventDefault()
+    return
+  }
   if (!isResetConfirmOpen.value) return
   closeResetConfirm()
   event.preventDefault()
@@ -405,7 +524,11 @@ async function confirmResetAllData() {
       } catch (backupError) {
         console.warn('[data-management] failed to create recovery backup before reset', backupError)
       }
-      await resetDatabase()
+      await resetDatabase({
+        confirmed: true,
+        reason: DATA_WIPE_REASON.USER_RESET_ALL,
+        source: 'SettingsDataManagementPage.confirmResetAllData',
+      })
       localStorage.removeItem('straw.active_ledger_id')
       await ledgerStore.init()
       await refreshAllStores()
@@ -425,6 +548,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearResetTimer()
+  clearImportTimer()
   clearOperationProgressTimer()
   window.removeEventListener('app:request-close-overlay', onRequestCloseOverlay)
 })
@@ -434,6 +558,19 @@ onBeforeUnmount(() => {
   padding: 14px;
   display: grid;
   gap: 10px
+}
+.recovery-list {
+  margin: 0;
+  padding-left: 1.2em;
+  display: grid;
+  gap: 6px;
+}
+.recovery-list .link {
+  color: var(--color-primary, #0a7);
+  text-decoration: underline;
+}
+.compact {
+  margin: 0;
 }
 h2 {
   margin: 0

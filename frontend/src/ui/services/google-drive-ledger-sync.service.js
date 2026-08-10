@@ -1,6 +1,11 @@
 import { getLedger, purgeLedger } from '@/core/repositories/ledger.repo'
 import { exportLedgerJson } from '@/core/services/export.service'
 import { importLedgerJsonAsNewLedger } from '@/core/services/import.service'
+import {
+  countSnapshotActiveTransactions,
+  createEmptyRemoteReplaceBlockedError,
+  EMPTY_REMOTE_REPLACE_BLOCKED_CODE,
+} from '@/core/services/data-wipe-guard.service'
 import { getMembershipTierSnapshot } from '@/core/services/membership.service'
 import { query, run } from '@/core/db/sqlite'
 import { nowIso } from '@/core/utils/id'
@@ -468,7 +473,7 @@ export async function listGoogleDriveLedgerSyncBindings(ledgers = []) {
   )
 }
 
-async function replaceLocalLedgerWithRemoteSnapshot(snapshot, ledgerId, state, remoteFile) {
+async function replaceLocalLedgerWithRemoteSnapshot(snapshot, ledgerId, state, remoteFile, options = {}) {
   const normalizedSnapshot = sanitizeSnapshotForGoogleDriveSync(snapshot)
   const requestedLedgerId = String(ledgerId ?? '').trim()
   if (!requestedLedgerId) {
@@ -489,6 +494,28 @@ async function replaceLocalLedgerWithRemoteSnapshot(snapshot, ledgerId, state, r
   const localBackupText = existingLedger
     ? JSON.stringify(sanitizeSnapshotForGoogleDriveSync(await exportLedgerJson(requestedLedgerId)), null, 2)
     : ''
+
+  // smb297: never silently replace a non-empty local ledger with an empty remote snapshot.
+  if (existingLedger && localBackupText && options.allowEmptyRemoteReplace !== true) {
+    let localTxCount = 0
+    try {
+      localTxCount = countSnapshotActiveTransactions(JSON.parse(localBackupText))
+    } catch {
+      localTxCount = 0
+    }
+    const remoteTxCount = countSnapshotActiveTransactions(normalizedSnapshot)
+    if (localTxCount > 0 && remoteTxCount === 0) {
+      throw createEmptyRemoteReplaceBlockedError({
+        localTransactionCount: localTxCount,
+        remoteTransactionCount: remoteTxCount,
+        message: t(
+          'settings_google_sync.error.empty_remote_replace_blocked',
+          { local: localTxCount, remote: remoteTxCount },
+          '遠端快照沒有交易（{remote}），但本機仍有 {local} 筆；已阻止覆蓋以避免 silent wipe。請改用合併同步或從備份還原。',
+        ),
+      })
+    }
+  }
 
   muteAutoSync(requestedLedgerId)
   clearLedgerDirty(requestedLedgerId)
@@ -788,7 +815,7 @@ export async function syncGoogleDriveLedgerNow(ledgerId, options = {}) {
     } else {
       await setGoogleDriveLedgerSyncState(normalizedLedgerId, {
         ...state,
-        lastSyncStatus: 'error',
+        lastSyncStatus: error?.code === EMPTY_REMOTE_REPLACE_BLOCKED_CODE ? 'empty_remote_blocked' : 'error',
         lastError: String(error?.message ?? error ?? '').trim()
           || t('settings_google_sync.error.sync_failed', null, '帳本同步失敗'),
       })

@@ -389,7 +389,20 @@ async function main() {
     console.error('[bootstrap] failed', error)
     const uiStore = useUiStore(pinia)
     const message = String(error?.message ?? translateMessage('common.unknown_error', '未知錯誤'))
-    uiStore.pushToast(translateMessage('app.init_failed', { message }, '初始化失敗：{message}'), 'error')
+    const integrityHint = error?.code === 'LOCAL_DB_INTEGRITY' || error?.silentWipeBlocked
+      ? translateMessage(
+        'app.local_db_integrity_hint',
+        '系統不會自動清空帳本。請至資料管理／自動備份／帳本同步還原，或明確執行「重設全部資料」。',
+      )
+      : ''
+    uiStore.pushToast(
+      translateMessage(
+        'app.init_failed',
+        { message: integrityHint ? `${message} ${integrityHint}` : message },
+        '初始化失敗：{message}',
+      ),
+      'error',
+    )
   }
 }
 

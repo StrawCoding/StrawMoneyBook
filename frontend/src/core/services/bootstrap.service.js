@@ -1,31 +1,26 @@
-import { initDatabase, resetDatabase } from '@/core/db/sqlite'
+import { initDatabase } from '@/core/db/sqlite'
+import { createLocalDatabaseIntegrityError } from '@/core/services/data-wipe-guard.service'
+import { isForeignKeyError } from '@/core/utils/sqlite-fk'
 
-function isRecoverableBootstrapError(error) {
-  const message = String(error?.message ?? error ?? '').toLowerCase()
-  return (
-    // Android: errors that escaped sqlite.js internal recovery (rebuild + recovery-db both failed)
-    message.includes('[sqlite:android]') ||
-    // Schema-level errors on other platforms (iOS, web) where sqlite.js has no internal recovery
-    message.includes('datatype mismatch') ||
-    message.includes('no such column') ||
-    message.includes('no such table') ||
-    message.includes('code20') ||
-    message.includes('code 20')
-    // NOTE: 'code 1' (SQLITE_ERROR) was intentionally removed — it is a generic SQLite error
-    // that covers unrelated failures (disk full, permission denied, SQL syntax errors, etc.)
-    // and caused the entire local database to be silently wiped on any SQL error.
-  )
-}
-
+/**
+ * smb297: bootstrap must NEVER call resetDatabase / rebuild.
+ * Schema / FK / migration failures surface as typed integrity errors so the
+ * user can restore from Google Drive / backup / import, or explicitly reset.
+ */
 export async function bootstrapCoreDatabase() {
   try {
     await initDatabase()
   } catch (error) {
-    if (!isRecoverableBootstrapError(error)) {
+    if (error?.code === 'LOCAL_DB_INTEGRITY' || error?.silentWipeBlocked) {
       throw error
     }
-
-    console.warn('[bootstrap] recoverable sqlite error, resetting local database')
-    await resetDatabase()
+    if (isForeignKeyError(error)) {
+      throw createLocalDatabaseIntegrityError(error, {
+        message:
+          '本機資料庫外鍵／關聯檢查失敗。系統不會自動清空帳本；請先修復、從備份還原，或至資料管理明確重設。',
+        i18nKey: 'app.local_db_integrity',
+      })
+    }
+    throw createLocalDatabaseIntegrityError(error)
   }
 }

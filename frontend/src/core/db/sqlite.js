@@ -2,6 +2,11 @@ import { Capacitor } from '@capacitor/core'
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite'
 import { runMigrations } from '@/core/db/migrate'
 import { ensureWebSqliteStoreReady } from '@/core/db/web-store'
+import {
+  assertExplicitDataWipe,
+  createLocalDatabaseIntegrityError,
+  recordDataWipeAudit,
+} from '@/core/services/data-wipe-guard.service'
 import { DATABASE_WIPE_DELETE_ORDER } from '@/core/utils/sqlite-delete-order'
 import { rethrowAsForeignKeyError } from '@/core/utils/sqlite-fk'
 
@@ -59,15 +64,19 @@ function normalizeErrorMessage(error) {
   return 'unknown sqlite error'
 }
 
-function isRecoverableSchemaError(error) {
+/**
+ * Schema-shape errors only. Intentionally excludes generic SQLITE_ERROR (`code 1`)
+ * and FOREIGN KEY / 1811 — those must never trigger a silent rebuild/wipe (smb297).
+ */
+function isSchemaShapeError(error) {
   const message = normalizeErrorMessage(error).toLowerCase()
+  if (/foreign\s*key|\b1811\b|sqlite_constraint_foreignkey/.test(message)) return false
   return (
     message.includes('datatype mismatch') ||
     message.includes('no such column') ||
     message.includes('no such table') ||
     message.includes('code20') ||
-    message.includes('code 20') ||
-    message.includes('code 1')
+    message.includes('code 20')
   )
 }
 
@@ -176,7 +185,18 @@ async function openRecoveryDatabase() {
   return openDatabaseConnection(RECOVERY_DB_NAME)
 }
 
-export async function resetDatabase() {
+/**
+ * Full local DB wipe. Requires explicit user-confirmed reason (smb297).
+ * Never call from bootstrap / FK repair / migration failure paths.
+ */
+export async function resetDatabase(options = {}) {
+  const wipe = assertExplicitDataWipe(options)
+  recordDataWipeAudit({
+    reason: wipe.reason,
+    source: wipe.source,
+    confirmed: true,
+    note: String(options.note ?? '').slice(0, 240),
+  })
   initPromise = null
   return rebuildDatabase(activeDbName)
 }
@@ -192,39 +212,29 @@ export async function initDatabase() {
       await ensureWebStoreReady()
       return await openDatabaseConnection(activeDbName)
     } catch (error) {
-      if (platform === 'android' && isRecoverableSchemaError(error)) {
-        try {
-          console.warn('[sqlite] detected recoverable schema error, rebuilding local database')
-          return await rebuildDatabase(activeDbName)
-        } catch (recoveryError) {
-          try {
-            console.warn('[sqlite] rebuild failed, switching to recovery database')
-            return await openRecoveryDatabase()
-          } catch (fallbackError) {
-            initPromise = null
-            const recoveryMessage = normalizeErrorMessage(recoveryError)
-            const fallbackMessage = normalizeErrorMessage(fallbackError)
-            throw new Error(
-              `[sqlite:${platform}] recovery failed after schema error: ${recoveryMessage}; recovery-db failed: ${fallbackMessage}`,
-            )
-          }
-        }
-      }
-
+      // smb297: never silent-rebuild / wipe the primary DB on schema or FK errors.
+      // Plugin-null may open a separate recovery DB name without deleting the primary file.
       if (platform === 'android' && isPluginNullError(error)) {
         try {
-          console.warn('[sqlite] plugin null error, switching to recovery database')
+          console.warn('[sqlite] plugin null error, switching to recovery database (primary untouched)')
           return await openRecoveryDatabase()
         } catch (fallbackError) {
           initPromise = null
-          const fallbackMessage = normalizeErrorMessage(fallbackError)
-          throw new Error(`[sqlite:${platform}] plugin null, recovery-db failed: ${fallbackMessage}`)
+          throw createLocalDatabaseIntegrityError(fallbackError, {
+            message: `[sqlite:${platform}] plugin null, recovery-db failed: ${normalizeErrorMessage(fallbackError)}`,
+          })
         }
       }
 
       initPromise = null
-      const message = normalizeErrorMessage(error)
-      throw new Error(`[sqlite:${platform}] ${message}`)
+      if (isSchemaShapeError(error)) {
+        throw createLocalDatabaseIntegrityError(error, {
+          message: `[sqlite:${platform}] schema integrity error (no silent wipe): ${normalizeErrorMessage(error)}`,
+        })
+      }
+      throw createLocalDatabaseIntegrityError(error, {
+        message: `[sqlite:${platform}] ${normalizeErrorMessage(error)}`,
+      })
     }
   })()
 

@@ -66,7 +66,7 @@
           :class="{ busy: googleRestoringNow }"
           :aria-busy="googleRestoringNow"
           :disabled="!googleBackupState.connected || googleRestoringNow"
-          @click="restoreFromGoogle"
+          @click="openRestoreConfirm('google')"
         >
           {{ googleRestoringNow ? t('settings_auto_backup.restoring') : t('settings_auto_backup.restore_now') }}
         </button>
@@ -190,7 +190,7 @@
           :class="{ busy: webdavRestoringNow }"
           :aria-busy="webdavRestoringNow"
           :disabled="!webdavBackupState.connected || webdavRestoringNow"
-          @click="restoreFromWebdav"
+          @click="openRestoreConfirm('webdav')"
         >
           {{ webdavRestoringNow ? t('settings_auto_backup.restoring') : t('settings_auto_backup.restore_now') }}
         </button>
@@ -227,6 +227,42 @@
         </li>
       </ul>
     </article>
+
+    <teleport to="body">
+      <transition name="overlay-fade">
+        <section
+          v-if="isRestoreConfirmOpen"
+          class="sheet-mask restore-mask"
+          data-testid="auto-backup-restore-confirm"
+          @click.self="closeRestoreConfirm"
+        >
+          <article class="card restore-dialog">
+            <header class="row">
+              <h3>{{ t('settings_auto_backup.restore.confirm_title', '確認還原並清空本機資料') }}</h3>
+            </header>
+            <p class="muted">
+              {{
+                t(
+                  'settings_auto_backup.restore.confirm_desc',
+                  '還原前會先建立本機 recovery 備份，再清空本機並以雲端備份內容還原。此動作可取消。',
+                )
+              }}
+            </p>
+            <footer class="row action-row">
+              <button class="btn" @click="closeRestoreConfirm">{{ t('common.cancel', 'Cancel') }}</button>
+              <button
+                class="btn danger-btn"
+                :disabled="restoreCountdown > 0 || googleRestoringNow || webdavRestoringNow"
+                data-testid="auto-backup-restore-confirm-button"
+                @click="confirmRestoreFromBackup"
+              >
+                {{ restoreConfirmLabel }}
+              </button>
+            </footer>
+          </article>
+        </section>
+      </transition>
+    </teleport>
   </section>
 </template>
 
@@ -253,7 +289,13 @@ import {
   updateWebdavBackupState,
 } from '@/ui/services/webdav-backup.service'
 import { runManualAutoBackupProvider } from '@/ui/services/auto-backup-orchestrator.service'
+import {
+  downloadJsonFile,
+  exportAllLedgersJson,
+  saveJsonFileToDevice,
+} from '@/core/services/export.service'
 import { importBackupJsonAsNewLedgers } from '@/core/services/import.service'
+import { DATA_WIPE_REASON } from '@/core/services/data-wipe-guard.service'
 import { resetDatabase } from '@/core/db/sqlite'
 
 const ledgerStore = useLedgerStore()
@@ -314,6 +356,10 @@ const googleDisconnecting = ref(false)
 const googleSavingSettings = ref(false)
 const googleBackingUpNow = ref(false)
 const googleRestoringNow = ref(false)
+const isRestoreConfirmOpen = ref(false)
+const restoreCountdown = ref(0)
+const pendingRestoreProvider = ref('')
+let restoreTimerId = null
 const intervalHourValues = [6, 12, 24, 48]
 const webdavIntervalOptions = computed(() =>
   intervalHourValues.map((hours) => ({
@@ -335,6 +381,16 @@ const isWorking = computed(() => {
     googleBackingUpNow.value ||
     googleRestoringNow.value
   )
+})
+
+const restoreConfirmLabel = computed(() => {
+  if (googleRestoringNow.value || webdavRestoringNow.value) {
+    return t('settings_auto_backup.restoring')
+  }
+  if (restoreCountdown.value > 0) {
+    return t('settings_auto_backup.restore.confirm_countdown', { count: restoreCountdown.value }, '確認還原（{count}）')
+  }
+  return t('settings_auto_backup.restore.confirm', '確認還原並清空本機')
 })
 
 function buildEmptyWebdavBackupState() {
@@ -672,12 +728,71 @@ async function backupNowToWebdav() {
   }
 }
 
+async function createRestoreRecoveryBackup() {
+  const data = await exportAllLedgersJson()
+  const filename = `strawmoneybook-recovery-before-restore-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+  const saved = await saveJsonFileToDevice(filename, data, { category: 'auto-backup' })
+  if (!(saved?.saved && saved.location)) {
+    downloadJsonFile(filename, data)
+  }
+}
+
+function clearRestoreTimer() {
+  if (restoreTimerId) {
+    window.clearInterval(restoreTimerId)
+    restoreTimerId = null
+  }
+}
+
+function openRestoreConfirm(provider) {
+  pendingRestoreProvider.value = provider === 'webdav' ? 'webdav' : 'google'
+  isRestoreConfirmOpen.value = true
+  restoreCountdown.value = 3
+  clearRestoreTimer()
+  restoreTimerId = window.setInterval(() => {
+    if (restoreCountdown.value <= 1) {
+      restoreCountdown.value = 0
+      clearRestoreTimer()
+      return
+    }
+    restoreCountdown.value -= 1
+  }, 1000)
+}
+
+function closeRestoreConfirm(options = {}) {
+  const force = Boolean(options.force)
+  if ((googleRestoringNow.value || webdavRestoringNow.value) && !force) return
+  isRestoreConfirmOpen.value = false
+  restoreCountdown.value = 0
+  pendingRestoreProvider.value = ''
+  clearRestoreTimer()
+}
+
+async function confirmRestoreFromBackup() {
+  if (restoreCountdown.value > 0 || googleRestoringNow.value || webdavRestoringNow.value) return
+  const provider = pendingRestoreProvider.value
+  if (provider === 'webdav') {
+    await restoreFromWebdav()
+    return
+  }
+  await restoreFromGoogle()
+}
+
 async function restoreFromWebdav() {
   if (!ledgerStore.activeLedgerId) return
   webdavRestoringNow.value = true
   try {
     const backup = await restoreWebdavBackupJson(ledgerStore.activeLedgerId)
-    await resetDatabase()
+    try {
+      await createRestoreRecoveryBackup()
+    } catch (backupError) {
+      console.warn('[auto-backup] failed to create recovery backup before webdav restore', backupError)
+    }
+    await resetDatabase({
+      confirmed: true,
+      reason: DATA_WIPE_REASON.USER_RESTORE_WEBDAV_BACKUP,
+      source: 'SettingsAutoBackupPage.restoreFromWebdav',
+    })
     const imported = await importBackupJsonAsNewLedgers(backup.jsonText, {
       ledgerNameSuffix: '',
       runIntegrityRepair: true,
@@ -703,6 +818,7 @@ async function restoreFromWebdav() {
         fileSuffix: usedFilename,
       }),
     )
+    closeRestoreConfirm({ force: true })
   } catch (error) {
     uiStore.pushToast(errorMessage(error, t('settings_auto_backup.toast.webdav_restore_failed')), 'error')
   } finally {
@@ -809,7 +925,16 @@ async function restoreFromGoogle() {
   googleRestoringNow.value = true
   try {
     const backup = await restoreGoogleBackupJson(ledgerStore.activeLedgerId)
-    await resetDatabase()
+    try {
+      await createRestoreRecoveryBackup()
+    } catch (backupError) {
+      console.warn('[auto-backup] failed to create recovery backup before google restore', backupError)
+    }
+    await resetDatabase({
+      confirmed: true,
+      reason: DATA_WIPE_REASON.USER_RESTORE_GOOGLE_BACKUP,
+      source: 'SettingsAutoBackupPage.restoreFromGoogle',
+    })
     const imported = await importBackupJsonAsNewLedgers(backup.jsonText, {
       ledgerNameSuffix: '',
       runIntegrityRepair: true,
@@ -835,6 +960,7 @@ async function restoreFromGoogle() {
         fileSuffix: usedFilename,
       }),
     )
+    closeRestoreConfirm({ force: true })
   } catch (error) {
     console.error('[google-restore] failed', error)
     uiStore.pushToast(errorMessage(error, t('settings_auto_backup.toast.google_restore_failed')), 'error')
@@ -851,6 +977,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearRestoreTimer()
   if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
     window.removeEventListener(AUTO_BACKUP_STATE_UPDATED_EVENT, handleAutoBackupStateUpdated)
   }
@@ -978,6 +1105,33 @@ h3 {
 }
 .link-panel {
   align-items: flex-start;
+}
+.sheet-mask.restore-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: color-mix(in srgb, #000 45%, transparent);
+}
+.restore-dialog {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+.restore-dialog .action-row {
+  justify-content: flex-end;
+  gap: 8px;
+}
+.overlay-fade-enter-active,
+.overlay-fade-leave-active {
+  transition: opacity 160ms ease;
+}
+.overlay-fade-enter-from,
+.overlay-fade-leave-to {
+  opacity: 0;
 }
 @keyframes panel-sweep {
   from {

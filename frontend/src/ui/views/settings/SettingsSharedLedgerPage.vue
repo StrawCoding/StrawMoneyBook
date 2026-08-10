@@ -601,6 +601,14 @@
 
             <p v-else class="muted compact">
               {{ t('settings_shared_ledgers.empty', '目前還沒有共同帳本。') }}
+              <span class="muted compact block">
+                {{
+                  t(
+                    'settings_shared_ledgers.empty_recovery_hint',
+                    '若伺服器共同帳本清單為空但本機仍有帳本／交易，代表伺服器綁定可能已遺失，並非本機 silent wipe。請保留本機資料，並改用自動備份／帳本同步／JSON 匯入還原或重新加入共享。',
+                  )
+                }}
+              </span>
             </p>
           </article>
         </template>
