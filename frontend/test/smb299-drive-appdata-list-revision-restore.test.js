@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -9,6 +10,9 @@ import {
   summarizeBackupJsonText,
   summarizeBackupPayload,
 } from '../src/core/services/backup-json-preview.service.js'
+
+const require = createRequire(import.meta.url)
+const initSqlJs = require('sql.js')
 
 const driveSource = readFileSync(
   resolve(import.meta.dirname, '../src/services/google/drive-appdata-backup.js'),
@@ -806,6 +810,177 @@ test('smb299: restore orchestration requires importable preview and never wipes 
   }
 })
 
+test('smb299: sql.js proves CHECK gate + wipe-before-recovery yields wipe-前 DB (not original+partial)', async () => {
+  const SQL = await initSqlJs()
+  const {
+    assertBackupJsonImportable,
+    DRIVE_RESTORE_NOT_IMPORTABLE_CODE,
+    DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE,
+    runConfirmedWipeThenImportWithRecoveryRollback,
+  } = await import('../src/core/services/drive-appdata-restore.service.js')
+
+  function openRestoreDb() {
+    const db = new SQL.Database()
+    db.run('PRAGMA foreign_keys = ON;')
+    db.run(`
+      CREATE TABLE ledgers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL
+      );
+      CREATE TABLE transactions (
+        ledger_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('expense','income','adjustment','transfer')),
+        amount_minor INTEGER NOT NULL,
+        occurred_month TEXT NOT NULL,
+        PRIMARY KEY (ledger_id, id),
+        FOREIGN KEY (ledger_id) REFERENCES ledgers(id) ON DELETE CASCADE
+      );
+    `)
+    return db
+  }
+
+  function readDbState(db) {
+    const ledgers = []
+    const ledgerRes = db.exec('SELECT id, name FROM ledgers ORDER BY id;')
+    if (ledgerRes[0]) {
+      for (const row of ledgerRes[0].values) {
+        ledgers.push({ id: row[0], name: row[1] })
+      }
+    }
+    const txs = []
+    const txRes = db.exec(
+      'SELECT ledger_id, id, type, amount_minor, occurred_month FROM transactions ORDER BY id;',
+    )
+    if (txRes[0]) {
+      for (const row of txRes[0].values) {
+        txs.push({
+          ledger_id: row[0],
+          id: row[1],
+          type: row[2],
+          amount_minor: row[3],
+          occurred_month: row[4],
+        })
+      }
+    }
+    return { ledgers, txs }
+  }
+
+  function wipeDb(db) {
+    db.run('DELETE FROM transactions;')
+    db.run('DELETE FROM ledgers;')
+  }
+
+  function seedOriginal(db) {
+    db.run('INSERT INTO ledgers (id, name) VALUES (?, ?);', ['ledger_local', '本機完整'])
+    db.run(
+      'INSERT INTO transactions (ledger_id, id, type, amount_minor, occurred_month) VALUES (?, ?, ?, ?, ?);',
+      ['ledger_local', 'tx_may', 'expense', 500, '2026-05'],
+    )
+    db.run(
+      'INSERT INTO transactions (ledger_id, id, type, amount_minor, occurred_month) VALUES (?, ?, ?, ?, ?);',
+      ['ledger_local', 'tx_aug', 'income', 800, '2026-08'],
+    )
+  }
+
+  function restoreSnapshot(db, snapshot) {
+    wipeDb(db)
+    for (const ledger of snapshot.ledgers) {
+      db.run('INSERT INTO ledgers (id, name) VALUES (?, ?);', [ledger.id, ledger.name])
+    }
+    for (const tx of snapshot.txs) {
+      db.run(
+        'INSERT INTO transactions (ledger_id, id, type, amount_minor, occurred_month) VALUES (?, ?, ?, ?, ?);',
+        [tx.ledger_id, tx.id, tx.type, tx.amount_minor, tx.occurred_month],
+      )
+    }
+  }
+
+  // Real SQLite CHECK rejects not_a_valid_type (gate must mirror this before wipe).
+  {
+    const probe = openRestoreDb()
+    probe.run('INSERT INTO ledgers (id, name) VALUES (?, ?);', ['l1', 'x'])
+    let checkThrew = false
+    try {
+      probe.run(
+        'INSERT INTO transactions (ledger_id, id, type, amount_minor, occurred_month) VALUES (?, ?, ?, ?, ?);',
+        ['l1', 'bad', 'not_a_valid_type', 1, '2026-02'],
+      )
+    } catch (error) {
+      checkThrew = true
+      assert.match(String(error?.message ?? error), /CHECK constraint failed/i)
+    }
+    assert.equal(checkThrew, true)
+    probe.close()
+
+    const checkConstraintReject = JSON.stringify(buildAllLedgersPayload({
+      ledgerName: '個人',
+      transactions: [buildValidTransaction({ id: 't_bad_type', type: 'not_a_valid_type' })],
+    }))
+    await assert.rejects(
+      async () => assertBackupJsonImportable(checkConstraintReject),
+      (error) => (
+        error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE
+        && /not_a_valid_type|不符合約束/i.test(String(error?.message ?? ''))
+      ),
+    )
+  }
+
+  // Orchestrator: wipe → partial committed cloud rows → CHECK fail → wipe residue → restore.
+  // Final sql.js DB must equal wipe-前 snapshot (not ORIGINAL+PARTIAL).
+  const db = openRestoreDb()
+  seedOriginal(db)
+  const originalSnapshot = readDbState(db)
+  assert.deepEqual(originalSnapshot.txs.map((t) => t.occurred_month).sort(), ['2026-05', '2026-08'])
+
+  await assert.rejects(
+    async () => runConfirmedWipeThenImportWithRecoveryRollback({
+      createRecoveryBackup: async () => ({
+        verified: true,
+        backupId: 'r-sqljs-final',
+        byteLength: 128,
+        storage: 'test',
+        _snapshot: structuredClone(originalSnapshot),
+      }),
+      wipeFn: async () => {
+        wipeDb(db)
+      },
+      importFn: async () => {
+        // Simulate non-atomic multi-step import: first ledger/rows commit, later CHECK fails.
+        db.run('INSERT INTO ledgers (id, name) VALUES (?, ?);', ['ledger_cloud', '殘缺雲端'])
+        db.run(
+          'INSERT INTO transactions (ledger_id, id, type, amount_minor, occurred_month) VALUES (?, ?, ?, ?, ?);',
+          ['ledger_cloud', 'tx_feb', 'expense', 100, '2026-02'],
+        )
+        assert.equal(readDbState(db).txs.length, 1)
+        // Real CHECK failure path the pre-wipe gate is meant to prevent, but defense-in-depth still rolls back.
+        db.run(
+          'INSERT INTO transactions (ledger_id, id, type, amount_minor, occurred_month) VALUES (?, ?, ?, ?, ?);',
+          ['ledger_cloud', 'tx_bad', 'not_a_valid_type', 1, '2026-03'],
+        )
+      },
+      restoreFromRecovery: async (proof) => {
+        // Helper must have wiped residue first — restore must see empty, not partial cloud.
+        assert.deepEqual(readDbState(db), { ledgers: [], txs: [] })
+        restoreSnapshot(db, proof._snapshot)
+      },
+      source: 'unit.sqljs-final-db-equals-prewipe',
+    }),
+    (error) => (
+      error?.code === DRIVE_RESTORE_IMPORT_FAILED_RESTORED_CODE
+      && error?.localDataRestoredFromRecovery === true
+    ),
+  )
+
+  assert.deepEqual(readDbState(db), originalSnapshot)
+  assert.deepEqual(
+    readDbState(db).txs.map((t) => t.id).sort(),
+    ['tx_aug', 'tx_may'],
+  )
+  assert.equal(readDbState(db).txs.some((t) => t.ledger_id === 'ledger_cloud'), false)
+  db.close()
+})
+
 test('smb299: Drive restore gate shares formal importer structure + row INSERT checks', () => {
   const restoreSource = readFileSync(
     resolve(import.meta.dirname, '../src/core/services/drive-appdata-restore.service.js'),
@@ -832,15 +1007,18 @@ test('smb299: Drive restore gate shares formal importer structure + row INSERT c
     /await wipeFn\(\)[\s\S]*await restoreFromRecovery\(recoveryProof\)/,
   )
   assert.match(restoreSource, /partially-committed import residue|partial_clear_failed/)
+  assert.match(restoreSource, /MUST wipe again to clear residue/)
   assert.match(gateSource, /resolveSourceLedger/)
   assert.match(gateSource, /assertImportTableRowsInsertable/)
   assert.match(gateSource, /JSON 缺少 ledger_id/)
   assert.match(gateSource, /JSON 缺少可匯入的帳本資料/)
+  assert.match(gateSource, /CHECK enum/)
   assert.match(schemaSource, /含不存在的欄位/)
   assert.match(schemaSource, /缺少必要欄位/)
   assert.match(schemaSource, /不符合約束/)
   assert.match(schemaSource, /not_a_valid_type|expense.*income.*adjustment.*transfer|enums/)
   assert.match(schemaSource, /bogus_column|BACKUP_IMPORT_TABLE_SCHEMA/)
+  assert.match(schemaSource, /assertRowEnumConstraints/)
   assert.match(importSource, /assertBackupJsonStructureImportable\(jsonText\)/)
   assert.match(importSource, /from '@\/core\/services\/backup-json-import-gate\.service'/)
   assert.match(importSource, /BACKUP_IMPORT_TABLE_ORDER/)
