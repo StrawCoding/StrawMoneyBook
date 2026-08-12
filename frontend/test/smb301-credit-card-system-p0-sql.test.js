@@ -326,8 +326,9 @@ test('sql.js formal path: refund→open posting; closed immutable; alloc same-ca
     (err) => err.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN',
   )
 
-  // ── Formal updateManualTransaction path (not raw SQL / not helper-only) ──
-  // Load findTransactionRecordById-shaped row from DB, gate, build fields, apply.
+  // ── Gate + field-builder unit path on sql.js (helpers only) ──
+  // Formal service entry coverage lives in smb301-credit-card-formal-edit-entry.test.js
+  // (spawns harness that actually calls updateManualTransaction + repo path).
   const recordCols = db.exec(
     `SELECT id, type, account_id, category_id, amount_minor, occurred_at, posted_at, note,
             origin_type, include_in_budget, include_in_analysis

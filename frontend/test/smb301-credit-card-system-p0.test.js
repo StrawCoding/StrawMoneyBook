@@ -150,7 +150,7 @@ test('migration / wiring mentions hard-contract identifiers', () => {
   assert.equal(toLocalIso(parseLocalIso('2026-08-13T10:11:12.003')).startsWith('2026-08-13T10:11:12'), true)
 })
 
-test('closed credit formal edit entry: updateManualTransaction gate allows pure occurred_at', async () => {
+test('closed credit gate helpers: allow pure occurred_at; forbid postedAt / slim row', async () => {
   const {
     assertUpdateManualCreditMutationAllowed,
     buildUpdateManualTransactionFields,
