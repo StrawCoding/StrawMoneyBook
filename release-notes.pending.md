@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 記帳相關帳戶／分類選擇器統一為 `CustomSelect`：載具同步預設帳戶／分類、電子發票確認步驟、信用卡還款來源帳戶皆改為分組選單；分類依母分類分組（與快速記帳一致）；空值以 `__none__` sentinel（CustomSelect 會過濾空字串）。
+
 ---
 
 ## v1.3.120

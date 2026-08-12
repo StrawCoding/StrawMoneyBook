@@ -20,32 +20,25 @@
         <p class="tx-section-label">{{ t('einvoice.step4.create_tx_label') }}</p>
 
         <label class="field-label">{{ t('einvoice.step4.account_label') }}</label>
-        <select v-model="store.defaultAccountId" class="field-input">
-          <option value="">{{ t('einvoice.step4.no_account') }}</option>
-          <optgroup
-            v-for="group in accountOptionGroups"
-            :key="group.id"
-            :label="group.name"
-          >
-            <option
-              v-for="option in group.options"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </optgroup>
-        </select>
+        <CustomSelect
+          v-model="defaultAccountId"
+          class="field-input-select"
+          :groups="accountSelectGroups"
+          :placeholder="t('einvoice.step4.no_account')"
+          data-testid="einvoice-default-account"
+        />
 
         <label class="field-label mt">{{ t('einvoice.step4.category_label') }}</label>
-        <select v-model="store.defaultCategoryId" class="field-input" :disabled="!store.defaultAccountId">
-          <option value="">{{ t('einvoice.step4.no_category') }}</option>
-          <option v-for="cat in expenseCategories" :key="cat.id" :value="cat.id">
-            {{ cat.name }}
-          </option>
-        </select>
+        <CustomSelect
+          v-model="defaultCategoryId"
+          class="field-input-select"
+          :groups="categorySelectGroups"
+          :placeholder="t('einvoice.step4.no_category')"
+          :disabled="!hasAccount"
+          data-testid="einvoice-default-category"
+        />
 
-        <p v-if="store.defaultAccountId && store.defaultCategoryId" class="tx-hint">
+        <p v-if="hasAccount && hasCategory" class="tx-hint">
           {{ t('einvoice.step4.tx_hint') }}
         </p>
       </div>
@@ -89,6 +82,11 @@ import { useCategoryStore } from '@/ui/stores/category.store.js'
 import { useLedgerStore } from '@/ui/stores/ledger.store.js'
 import { importSelectedInvoices } from '@/services/einvoice/backend.js'
 import { useI18n } from '@/ui/services/i18n.service'
+import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import { withLeadingAccountOption } from '@/ui/utils/account-option-groups'
+import { buildCategorySelectGroups } from '@/ui/utils/category-options'
+
+const NONE_OPTION = '__none__'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -99,9 +97,32 @@ const ledgerStore = useLedgerStore()
 
 const importError = ref('')
 
-const regularAccounts = computed(() => accountStore.regularAccounts ?? [])
-const accountOptionGroups = computed(() => accountStore.groupedRegularAccounts)
-const expenseCategories = computed(() => categoryStore.expenseCategories ?? [])
+const defaultAccountId = computed({
+  get: () => store.defaultAccountId || NONE_OPTION,
+  set: (value) => {
+    store.defaultAccountId = value === NONE_OPTION ? '' : value
+    if (!store.defaultAccountId) store.defaultCategoryId = ''
+  },
+})
+
+const defaultCategoryId = computed({
+  get: () => store.defaultCategoryId || NONE_OPTION,
+  set: (value) => {
+    store.defaultCategoryId = value === NONE_OPTION ? '' : value
+  },
+})
+
+const hasAccount = computed(() => Boolean(store.defaultAccountId))
+const hasCategory = computed(() => Boolean(store.defaultCategoryId))
+
+const accountSelectGroups = computed(() => withLeadingAccountOption(
+  accountStore.groupedRegularAccounts,
+  { value: NONE_OPTION, label: t('einvoice.step4.no_account') },
+))
+const categorySelectGroups = computed(() => withLeadingAccountOption(
+  buildCategorySelectGroups(categoryStore, 'expense'),
+  { value: NONE_OPTION, label: t('einvoice.step4.no_category') },
+))
 
 function formatAmount(amount) {
   return Number(amount).toLocaleString('zh-TW')
@@ -162,17 +183,10 @@ function handleFinish() {
 .preview-amount { font-weight: 700; color: var(--primary); }
 .tx-section-label { font-size: 13px; color: var(--text-secondary); margin: 0 0 14px; }
 .field-label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; }
-.field-input {
-  width: 100%;
-  border: 1px solid var(--field-border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 15px;
+.field-input-select { width: 100%; }
+.field-input-select :deep(.select.trigger) {
   background: var(--input-bg);
-  color: var(--text);
-  box-sizing: border-box;
 }
-.field-input:disabled { opacity: 0.4; }
 .mt { margin-top: 14px; }
 .tx-hint { font-size: 12px; color: var(--primary); margin: 10px 0 0; }
 .result-block {

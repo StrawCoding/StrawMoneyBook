@@ -105,28 +105,24 @@
         <input v-model.number="lookbackDays" class="field-input" type="number" min="1" max="14" @change="saveConfig" />
 
         <label class="field-label mt">{{ t('settings_carrier_sync.default_account') }}</label>
-        <select v-model="defaultAccountId" class="field-input" @change="saveConfig">
-          <option value="">{{ t('settings_carrier_sync.no_default_account') }}</option>
-          <optgroup
-            v-for="group in accountOptionGroups"
-            :key="group.id"
-            :label="group.name"
-          >
-            <option
-              v-for="option in group.options"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </optgroup>
-        </select>
+        <CustomSelect
+          v-model="defaultAccountId"
+          class="field-input-select"
+          :groups="accountSelectGroups"
+          :placeholder="t('settings_carrier_sync.no_default_account')"
+          data-testid="carrier-default-account"
+          @update:model-value="saveConfig"
+        />
 
         <label class="field-label mt">{{ t('settings_carrier_sync.default_category') }}</label>
-        <select v-model="defaultCategoryId" class="field-input" @change="saveConfig">
-          <option value="">{{ t('settings_carrier_sync.no_default_category') }}</option>
-          <option v-for="category in expenseCategories" :key="category.id" :value="category.id">{{ category.name }}</option>
-        </select>
+        <CustomSelect
+          v-model="defaultCategoryId"
+          class="field-input-select"
+          :groups="categorySelectGroups"
+          :placeholder="t('settings_carrier_sync.no_default_category')"
+          data-testid="carrier-default-category"
+          @update:model-value="saveConfig"
+        />
 
         <ul class="meta-list">
           <li>
@@ -242,6 +238,11 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import CustomSelect from '@/ui/components/common/CustomSelect.vue'
+import { withLeadingAccountOption } from '@/ui/utils/account-option-groups'
+import { buildCategorySelectGroups } from '@/ui/utils/category-options'
+
+const NONE_OPTION = '__none__'
 
 const { t } = useI18n()
 const ledgerStore = useLedgerStore()
@@ -261,8 +262,8 @@ const carrierPassword = ref('')
 const rememberCredentials = ref(true)
 const autoSyncEnabled = ref(false)
 const lookbackDays = ref(7)
-const defaultAccountId = ref('')
-const defaultCategoryId = ref('')
+const defaultAccountId = ref(NONE_OPTION)
+const defaultCategoryId = ref(NONE_OPTION)
 const syncConfig = ref(null)
 const pendingRows = ref([])
 const selectedIds = ref([])
@@ -280,8 +281,14 @@ const captchaOpenedAt = ref(0)
 const CAPTCHA_TTL_MS = 2 * 60 * 1000
 let captchaExpireTimer = null
 
-const accountOptionGroups = computed(() => accountStore.groupedRegularAccounts)
-const expenseCategories = computed(() => categoryStore.expenseCategories ?? [])
+const accountSelectGroups = computed(() => withLeadingAccountOption(
+  accountStore.groupedRegularAccounts,
+  { value: NONE_OPTION, label: t('settings_carrier_sync.no_default_account') },
+))
+const categorySelectGroups = computed(() => withLeadingAccountOption(
+  buildCategorySelectGroups(categoryStore, 'expense'),
+  { value: NONE_OPTION, label: t('settings_carrier_sync.no_default_category') },
+))
 const canSync = computed(() => apiReady.value && isValidCarrierPhone(carrierPhone.value) && carrierPassword.value.trim().length >= 4)
 const carrierRecoveryCtaLabel = computed(() => {
   const cta = availability.value?.recoveryCta
@@ -386,8 +393,8 @@ async function reloadState() {
     if (state.config) {
       autoSyncEnabled.value = state.config.autoSyncEnabled
       lookbackDays.value = state.config.lookbackDays
-      defaultAccountId.value = state.config.defaultAccountId ?? ''
-      defaultCategoryId.value = state.config.defaultCategoryId ?? ''
+      defaultAccountId.value = state.config.defaultAccountId || NONE_OPTION
+      defaultCategoryId.value = state.config.defaultCategoryId || NONE_OPTION
     }
     refreshAvailability()
   } finally {
@@ -400,8 +407,8 @@ async function saveConfig() {
     ledgerId: ledgerStore.activeLedgerId,
     autoSyncEnabled: autoSyncEnabled.value,
     lookbackDays: lookbackDays.value,
-    defaultAccountId: defaultAccountId.value || null,
-    defaultCategoryId: defaultCategoryId.value || null,
+    defaultAccountId: defaultAccountId.value === NONE_OPTION ? null : (defaultAccountId.value || null),
+    defaultCategoryId: defaultCategoryId.value === NONE_OPTION ? null : (defaultCategoryId.value || null),
   })
 }
 
@@ -656,6 +663,7 @@ onBeforeUnmount(() => {
   background: var(--input-bg);
   color: var(--text);
 }
+.field-input-select { width: 100%; }
 .mt { margin-top: 12px; }
 .remember-row { display: flex; align-items: center; gap: 8px; }
 .link-btn {

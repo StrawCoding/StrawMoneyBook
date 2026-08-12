@@ -140,9 +140,13 @@
     >
       <label class="field">
         {{ t('credit_cards_page.source_account') }}
-        <select v-model="repayForm.sourceAccountId" class="input" data-testid="credit-repay-source">
-          <option v-for="acc in cashAccounts" :key="acc.id" :value="acc.id">{{ acc.name }}</option>
-        </select>
+        <CustomSelect
+          v-model="repayForm.sourceAccountId"
+          class="input-select"
+          :groups="cashAccountGroups"
+          :placeholder="t('credit_cards_page.source_account')"
+          data-testid="credit-repay-source"
+        />
       </label>
       <label class="field">
         {{ t('credit_cards_page.mode') }}
@@ -166,6 +170,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
+import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { useCreditStore } from '@/ui/stores/credit.store'
 import { useAccountStore } from '@/ui/stores/account.store'
@@ -199,6 +204,7 @@ const repayForm = reactive({
 const cashAccounts = computed(() =>
   (accountStore.accounts || []).filter((a) => String(a.account_kind) !== 'credit' && !a.is_archived),
 )
+const cashAccountGroups = computed(() => accountStore.groupedAccounts)
 
 function formatPeriod(st) {
   return `${String(st.period_start_inclusive).slice(0, 10)} → ${String(st.period_end_exclusive).slice(0, 10)}`
@@ -292,6 +298,7 @@ onMounted(async () => {
 .remind-list { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
 .badge.danger { color: #b91c1c; font-size: 12px; margin-left: 6px; }
 .field { display: grid; gap: 6px; margin-bottom: 10px; }
+.input-select { width: 100%; }
 .toggle { display: flex; align-items: center; gap: 8px; }
 .credit-cards-page { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
 </style>

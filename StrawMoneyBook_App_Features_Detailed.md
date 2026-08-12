@@ -189,7 +189,7 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 - 手動快速新增
 - 問答記帳
 
-帳戶選擇器（含首頁編輯 sheet、借貸／報銷／訂閱／存錢罐／銀行對應，以及載具／電子發票預設帳戶）一律依帳戶群組呈現；表單輸入／選擇底色統一走 `--input-bg`（並保留 `--surface`／`--surface-soft` 別名以免歷史樣式掉底）。
+帳戶／分類選擇器（含首頁編輯 sheet、借貸／報銷／訂閱／存錢罐／銀行對應、載具／電子發票預設、信用卡還款來源）一律走 `CustomSelect` 依母分類／帳戶群組呈現；空值以 `__none__` sentinel（元件會過濾空字串）；表單輸入／選擇底色統一走 `--input-bg`（並保留 `--surface`／`--surface-soft` 別名以免歷史樣式掉底）。
 
 支援的交易型態包含：
 

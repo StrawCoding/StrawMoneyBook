@@ -1337,6 +1337,24 @@ async function assertRouteNavigation() {
     assert.equal(pageState.path, target.path, JSON.stringify({ target, pageState, scrolled }, null, 2))
     assert.match(pageState.text, target.text)
     assert.equal(pageState.hasBottomNav, true, JSON.stringify({ target, pageState }, null, 2))
+    if (target.path === '/settings/carrier-sync') {
+      const selectorState = await evalPage(`() => ({
+        locked: Boolean(document.querySelector('.member-only-lock')),
+        accountExists: Boolean(document.querySelector('[data-testid=carrier-default-account]')),
+        categoryExists: Boolean(document.querySelector('[data-testid=carrier-default-category]')),
+        accountIsCustom: Boolean(document.querySelector('[data-testid=carrier-default-account].custom-select')),
+        categoryIsCustom: Boolean(document.querySelector('[data-testid=carrier-default-category].custom-select')),
+        nativeAccountSelect: Boolean(document.querySelector('select[data-testid=carrier-default-account]')),
+      })`)
+      if (selectorState.accountExists || selectorState.categoryExists) {
+        assert.equal(selectorState.accountIsCustom, true, JSON.stringify(selectorState, null, 2))
+        assert.equal(selectorState.categoryIsCustom, true, JSON.stringify(selectorState, null, 2))
+        assert.equal(selectorState.nativeAccountSelect, false, JSON.stringify(selectorState, null, 2))
+        console.log('[carrier-sync] CustomSelect defaults ok')
+      } else {
+        console.log('[carrier-sync] defaults hidden (lock/unavailable):', selectorState.locked)
+      }
+    }
   }
 
   await runPlaywrightCli(['click', '[data-testid="bottom-nav-settings"]'])
