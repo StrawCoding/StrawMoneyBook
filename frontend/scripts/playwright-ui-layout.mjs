@@ -678,7 +678,8 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
     const lend = document.querySelector('[data-testid=assets-lend-entry]')
     const borrow = document.querySelector('[data-testid=assets-borrow-entry]')
     const entry = document.querySelector('[data-testid=assets-securities-entry]')
-    if (!lend || !borrow || !entry) {
+    const credit = document.querySelector('[data-testid=assets-credit-entry]')
+    if (!lend || !borrow || !entry || !credit) {
       return {
         ok: false,
         reason: 'securities_or_loan_entry_missing',
@@ -686,23 +687,32 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
         hasLend: Boolean(lend),
         hasBorrow: Boolean(borrow),
         hasSecurities: Boolean(entry),
+        hasCredit: Boolean(credit),
       }
     }
     const lendBox = lend.getBoundingClientRect()
     const borrowBox = borrow.getBoundingClientRect()
     const secBox = entry.getBoundingClientRect()
+    const creditBox = credit.getBoundingClientRect()
     const sameRow = Math.abs(lendBox.top - borrowBox.top) <= 8
     const securitiesBelow = secBox.top >= Math.max(lendBox.bottom, borrowBox.bottom) - 2
-    const securitiesFullWidth = entry.classList.contains('summary-securities')
-    if (!sameRow || !securitiesBelow || !securitiesFullWidth) {
+    const securitiesCreditSameRow = Math.abs(secBox.top - creditBox.top) <= 8
+    const securitiesLeftOfCredit = secBox.left < creditBox.left - 4
+    const hasSecuritiesClass = entry.classList.contains('summary-securities')
+    const hasCreditClass = credit.classList.contains('summary-credit')
+    if (!sameRow || !securitiesBelow || !securitiesCreditSameRow || !securitiesLeftOfCredit || !hasSecuritiesClass || !hasCreditClass) {
       return {
         ok: false,
         reason: 'assets_summary_layout',
         path: window.location.pathname,
         sameRow,
         securitiesBelow,
-        securitiesFullWidth,
-        tops: { lend: lendBox.top, borrow: borrowBox.top, securities: secBox.top },
+        securitiesCreditSameRow,
+        securitiesLeftOfCredit,
+        hasSecuritiesClass,
+        hasCreditClass,
+        tops: { lend: lendBox.top, borrow: borrowBox.top, securities: secBox.top, credit: creditBox.top },
+        lefts: { securities: secBox.left, credit: creditBox.left },
       }
     }
     entry.click()

@@ -103,10 +103,11 @@
         帳戶名稱
         <input v-model="accountNameInput" class="input" type="text" maxlength="40" placeholder="請輸入帳戶名稱" />
       </label>
-      <label class="field">
+      <label v-if="accountKindInput !== 'credit'" class="field">
         所屬群組
         <CustomSelect v-model="accountTargetGroupId" :options="groupOptions" placeholder="請選擇群組" />
       </label>
+      <p v-else class="muted credit-group-hint">信用卡不掛資產母分類；請至「信用卡」頁新增與管理。</p>
       <label class="field">
         帳戶 Icon
         <button class="icon-picker-btn" type="button" @click="openAccountIconPicker">
@@ -155,7 +156,7 @@
           <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
         </button>
       </div>
-      <div class="field">
+      <div v-if="accountKindInput !== 'credit'" class="field">
         <span>{{ t('account.include_in_group_statistics_label') }}</span>
         <button
           type="button"
@@ -230,9 +231,14 @@ watch(
   () => route.query,
   (query) => {
     if (queryText(query.openAccountDialog) !== '1') return
+    // 信用卡改由 /credit-cards 新增，不走資產母分類
+    if (normalizeAccountKind(queryText(query.accountKind)) === 'credit') {
+      router.replace({ name: 'credit-cards' })
+      return
+    }
     accountTargetGroupId.value = queryText(query.accountTargetGroupId) || accountStore.groups[0]?.id || ''
     accountNameInput.value = queryText(query.accountName)
-    accountKindInput.value = normalizeAccountKind(queryText(query.accountKind))
+    accountKindInput.value = 'cash'
     accountOpeningInput.value = queryText(query.accountOpening) || '0'
     accountCurrentDebtInput.value = queryText(query.accountCurrentDebt) || '0'
     accountCreditLimitInput.value = queryText(query.accountCreditLimit) || '0'
@@ -246,7 +252,11 @@ watch(
   { immediate: true },
 )
 
-const groupSummaries = computed(() => accountStore.groupSummaries)
+const groupSummaries = computed(() => {
+  return (accountStore.groupSummaries ?? []).filter((group) => {
+    return (accountItemsMap.value[group.id] ?? []).length > 0
+  })
+})
 
 watch(
   groupSummaries,
@@ -280,6 +290,8 @@ watch(
   (accounts) => {
     const nextMap = {}
     for (const account of accounts) {
+      // 信用卡不出現在資產母分類管理
+      if (String(account?.account_kind ?? '').toLowerCase() === 'credit') continue
       if (!nextMap[account.group_id]) nextMap[account.group_id] = []
       nextMap[account.group_id].push(account)
     }
@@ -320,7 +332,6 @@ function toggleGroup(groupId) {
 
 const accountKindOptions = computed(() => ([
   { value: 'cash', label: '現金帳戶' },
-  { value: 'credit', label: '信用帳戶' },
 ]))
 const accountAmountInvalid = computed(() => {
   const rawValue = accountKindInput.value === 'credit' ? accountCurrentDebtInput.value : accountOpeningInput.value

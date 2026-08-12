@@ -123,7 +123,7 @@ test('assets page keeps group totals inline within each account group instead of
   assert.doesNotMatch(assetsPageSource, /groupStatSummaries/)
 })
 
-test('assets summary places lend/borrow on one row and securities full-width at the bottom', () => {
+test('assets summary places lend/borrow then securities|credit side-by-side', () => {
   const gridMatch = assetsPageSource.match(/class="summary-grid">([\s\S]*?)<\/div>\s*<\/article>/)
   assert.ok(gridMatch, 'summary-grid block missing')
   const grid = gridMatch[1]
@@ -134,11 +134,18 @@ test('assets summary places lend/borrow on one row and securities full-width at 
   assert.ok(lendAt >= 0 && borrowAt >= 0 && securitiesAt >= 0)
   assert.ok(lendAt < borrowAt, 'lend must precede borrow on the same row')
   assert.ok(borrowAt < securitiesAt, 'securities must be after lend/borrow')
-  assert.ok(creditAt > securitiesAt, 'credit entry follows securities')
+  assert.ok(creditAt > securitiesAt, 'credit entry follows securities (right of securities)')
   assert.match(assetsPageSource, /summary-securities/)
   assert.match(assetsPageSource, /summary-credit/)
+  // 僅總資產全寬；有價證券與信用卡並排（左／右）
   assert.match(
     assetsPageSource,
-    /\.summary-total,\s*\n\.summary-securities,\s*\n\.summary-credit\s*\{\s*\n\s*grid-column:\s*1\s*\/\s*-1;/,
+    /\.summary-total\s*\{\s*\n\s*grid-column:\s*1\s*\/\s*-1;/,
   )
+  assert.doesNotMatch(
+    assetsPageSource,
+    /\.summary-total,\s*\n\.summary-securities,\s*\n\.summary-credit\s*\{/,
+  )
+  // 資產母分類列表排除信用卡
+  assert.match(assetsPageSource, /account_kind.*credit/)
 })

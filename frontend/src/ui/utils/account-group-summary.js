@@ -2,6 +2,10 @@ function isIncludedInGroupStatistics(account) {
   return Number(account?.include_in_group_statistics ?? 1) === 1
 }
 
+function isCreditAccount(account) {
+  return String(account?.account_kind ?? '').trim().toLowerCase() === 'credit'
+}
+
 function normalizeCurrencyCode(currencyCode, fallback = 'TWD') {
   const value = String(currencyCode ?? '').trim().toUpperCase()
   if (/^[A-Z]{3}$/.test(value)) return value
@@ -47,6 +51,8 @@ export function buildGroupSummaries(groups = [], accounts = [], balances = [], o
   const rates = options.rates ?? {}
 
   for (const account of accounts ?? []) {
+    // 信用卡不計入資產母分類統計（另有信用卡摘要）
+    if (isCreditAccount(account)) continue
     const groupId = account.group_id
     if (!accountsByGroup.has(groupId)) {
       accountsByGroup.set(groupId, [])

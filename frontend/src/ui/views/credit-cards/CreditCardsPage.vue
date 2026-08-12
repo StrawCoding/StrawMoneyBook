@@ -41,10 +41,21 @@
     <article class="card panel">
       <header class="row panel-head">
         <h3>{{ t('credit_cards_page.cards') }}</h3>
-        <button type="button" class="btn primary" data-testid="credit-purchase-open" @click="openPurchase">
-          {{ t('credit_cards_page.purchase') }}
-        </button>
+        <div class="header-actions">
+          <button type="button" class="btn primary" data-testid="credit-add-open" @click="openAddCard">
+            {{ t('credit_cards_page.add_card') }}
+          </button>
+        </div>
       </header>
+
+      <p class="muted tip" data-testid="credit-bookkeeping-hint">
+        {{ t('credit_cards_page.bookkeeping_hint') }}
+      </p>
+      <p class="bookkeeping-link-row">
+        <RouterLink class="btn" to="/transactions/quick-add?type=expense" data-testid="credit-goto-quick-add">
+          {{ t('credit_cards_page.goto_quick_add') }}
+        </RouterLink>
+      </p>
 
       <p v-if="!creditStore.cards.length" class="muted" data-testid="credit-cards-empty">
         {{ t('credit_cards_page.empty') }}
@@ -85,39 +96,37 @@
     </article>
 
     <InputBottomSheet
-      :open="purchaseOpen"
-      :title="t('credit_cards_page.purchase')"
+      :open="addOpen"
+      :title="t('credit_cards_page.add_card')"
       :close-text="t('common.close')"
       sheet-class="sheet credit-sheet"
-      @close="purchaseOpen = false"
+      @close="addOpen = false"
     >
       <label class="field">
-        {{ t('credit_cards_page.card') }}
-        <select v-model="purchaseForm.accountId" class="input" data-testid="credit-purchase-account">
-          <option v-for="card in creditStore.cards" :key="card.account.id" :value="card.account.id">
-            {{ card.account.name }}
-          </option>
-        </select>
+        {{ t('credit_cards_page.card_name') }}
+        <input v-model="addForm.name" class="input" maxlength="40" data-testid="credit-add-name" />
       </label>
       <label class="field">
-        {{ t('credit_cards_page.category') }}
-        <select v-model="purchaseForm.categoryId" class="input" data-testid="credit-purchase-category">
-          <option v-for="cat in expenseCategories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
-        </select>
+        {{ t('credit_cards_page.limit') }}
+        <input v-model="addForm.creditLimit" class="input" inputmode="decimal" data-testid="credit-add-limit" />
       </label>
       <label class="field">
-        {{ t('credit_cards_page.amount') }}
-        <input v-model="purchaseForm.amount" class="input" inputmode="decimal" data-testid="credit-purchase-amount" />
+        {{ t('credit_cards_page.current_debt') }}
+        <input v-model="addForm.currentDebt" class="input" inputmode="decimal" data-testid="credit-add-debt" />
       </label>
       <label class="field">
-        {{ t('credit_cards_page.occurred_at') }}
-        <input v-model="purchaseForm.occurredAt" type="datetime-local" class="input" />
+        {{ t('credit_cards_page.close_day') }}（1-31）
+        <input v-model="addForm.closeDay" class="input" type="number" min="1" max="31" data-testid="credit-add-close-day" />
       </label>
       <label class="field">
-        {{ t('credit_cards_page.posted_at') }}
-        <input v-model="purchaseForm.postedAt" type="datetime-local" class="input" data-testid="credit-purchase-posted-at" />
+        {{ t('credit_cards_page.due_day') }}（1-31）
+        <input v-model="addForm.dueDay" class="input" type="number" min="1" max="31" data-testid="credit-add-due-day" />
       </label>
-      <button type="button" class="btn primary" data-testid="credit-purchase-submit" @click="submitPurchase">
+      <label class="field">
+        {{ t('credit_cards_page.last4') }}
+        <input v-model="addForm.cardLast4" class="input" maxlength="4" inputmode="numeric" data-testid="credit-add-last4" />
+      </label>
+      <button type="button" class="btn primary" data-testid="credit-add-submit" @click="submitAddCard">
         {{ t('common.save') }}
       </button>
     </InputBottomSheet>
@@ -160,26 +169,25 @@ import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { useCreditStore } from '@/ui/stores/credit.store'
 import { useAccountStore } from '@/ui/stores/account.store'
-import { useCategoryStore } from '@/ui/stores/category.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const { t } = useI18n()
 const creditStore = useCreditStore()
 const accountStore = useAccountStore()
-const categoryStore = useCategoryStore()
 const uiStore = useUiStore()
 
-const purchaseOpen = ref(false)
 const repayOpen = ref(false)
+const addOpen = ref(false)
 const activeCardId = ref('')
 
-const purchaseForm = reactive({
-  accountId: '',
-  categoryId: '',
-  amount: '',
-  occurredAt: '',
-  postedAt: '',
+const addForm = reactive({
+  name: '',
+  creditLimit: '0',
+  currentDebt: '0',
+  closeDay: '25',
+  dueDay: '15',
+  cardLast4: '',
 })
 
 const repayForm = reactive({
@@ -188,31 +196,22 @@ const repayForm = reactive({
   amount: '',
 })
 
-const expenseCategories = computed(() =>
-  (categoryStore.categories || []).filter((c) => ['expense', 'both'].includes(String(c.kind))),
-)
-
 const cashAccounts = computed(() =>
   (accountStore.accounts || []).filter((a) => String(a.account_kind) !== 'credit' && !a.is_archived),
 )
-
-function toLocalInputValue(date = new Date()) {
-  const d = date instanceof Date ? date : new Date(date)
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
 function formatPeriod(st) {
   return `${String(st.period_start_inclusive).slice(0, 10)} → ${String(st.period_end_exclusive).slice(0, 10)}`
 }
 
-function openPurchase() {
-  purchaseForm.accountId = creditStore.cards[0]?.account?.id || ''
-  purchaseForm.categoryId = expenseCategories.value[0]?.id || ''
-  purchaseForm.amount = ''
-  purchaseForm.occurredAt = toLocalInputValue()
-  purchaseForm.postedAt = purchaseForm.occurredAt
-  purchaseOpen.value = true
+function openAddCard() {
+  addForm.name = ''
+  addForm.creditLimit = '0'
+  addForm.currentDebt = '0'
+  addForm.closeDay = '25'
+  addForm.dueDay = '15'
+  addForm.cardLast4 = ''
+  addOpen.value = true
 }
 
 function openRepay(card) {
@@ -227,18 +226,24 @@ async function onToggleHome(enabled) {
   await creditStore.setHomeCardEnabled(enabled)
 }
 
-async function submitPurchase() {
+async function submitAddCard() {
   try {
-    const amountMinor = Math.round(Math.abs(Number(purchaseForm.amount)) * 100)
-    await creditStore.purchase({
-      accountId: purchaseForm.accountId,
-      categoryId: purchaseForm.categoryId,
-      amountMinor,
-      occurredAt: new Date(purchaseForm.occurredAt).toISOString(),
-      postedAt: new Date(purchaseForm.postedAt).toISOString(),
+    const name = String(addForm.name || '').trim()
+    if (!name) {
+      uiStore.pushToast(t('credit_cards_page.card_name_required'), 'error')
+      return
+    }
+    await creditStore.createCard({
+      name,
+      creditLimitMajor: Number(addForm.creditLimit),
+      currentDebtMajor: Number(addForm.currentDebt),
+      statementCloseDay: Number(addForm.closeDay),
+      paymentDueDay: Number(addForm.dueDay),
+      cardLast4: addForm.cardLast4,
     })
-    purchaseOpen.value = false
-    uiStore.pushToast(t('credit_cards_page.purchase_ok'), 'success')
+    await accountStore.load?.()
+    addOpen.value = false
+    uiStore.pushToast(t('credit_cards_page.add_ok'), 'success')
   } catch (error) {
     uiStore.pushToast(error?.message || String(error), 'error')
   }
@@ -263,7 +268,6 @@ async function submitRepay() {
 onMounted(async () => {
   await Promise.all([
     accountStore.load?.() || Promise.resolve(),
-    categoryStore.load?.() || Promise.resolve(),
     creditStore.load(),
   ])
 })
@@ -275,7 +279,9 @@ onMounted(async () => {
 .title-icon { opacity: 0.85; }
 .panel { padding: 14px; }
 .panel-head { align-items: center; justify-content: space-between; gap: 8px; }
+.header-actions { display: inline-flex; gap: 8px; flex-wrap: wrap; }
 .tip { margin: 4px 0 0; font-size: 12px; }
+.bookkeeping-link-row { margin: 8px 0 12px; }
 .card-block { padding: 12px 0; border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
 .card-block:first-of-type { border-top: 0; }
 .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }

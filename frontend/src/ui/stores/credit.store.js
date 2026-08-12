@@ -3,6 +3,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import {
   createCreditPurchase,
   createCreditRepayment,
+  createCreditCardAccount,
   isCreditHomeCardEnabled,
   loadCreditCardDashboard,
   runCreditStatementRollovers,
@@ -44,6 +45,14 @@ export const useCreditStore = defineStore('credit', {
       if (!ledgerStore.activeLedgerId) return
       await setCreditHomeCardEnabled(ledgerStore.activeLedgerId, enabled)
       this.homeCardEnabled = Boolean(enabled)
+    },
+
+    async createCard(payload) {
+      const ledgerStore = useLedgerStore()
+      if (!ledgerStore.activeLedgerId) throw new Error('尚未選擇帳本')
+      const account = await createCreditCardAccount(ledgerStore.activeLedgerId, payload)
+      await this.load()
+      return account
     },
 
     async purchase(payload) {

@@ -241,7 +241,6 @@ const deductedAdvanceLabel = computed(() => {
   }).format(amountMajor)
 })
 
-const groupSummaries = computed(() => accountStore.groupSummaries)
 const expandedGroupIds = ref(new Set())
 const expandedInitialized = ref(false)
 const expandedStateStorageKey = 'assets-page:expanded-group-ids'
@@ -249,6 +248,8 @@ const expandedStateStorageKey = 'assets-page:expanded-group-ids'
 const groupedAccounts = computed(() => {
   const map = new Map()
   for (const account of accountStore.accounts) {
+    // 信用卡不進資產母分類列表；改由摘要「信用卡」入口管理
+    if (String(account?.account_kind ?? '').toLowerCase() === 'credit') continue
     const groupId = account.group_id
     if (!map.has(groupId)) {
       map.set(groupId, [])
@@ -256,6 +257,13 @@ const groupedAccounts = computed(() => {
     map.get(groupId).push(account)
   }
   return map
+})
+
+/** 資產頁群組：信用卡已自 groupSummaries 排除；隱藏空群組 */
+const groupSummaries = computed(() => {
+  return (accountStore.groupSummaries ?? []).filter((group) => {
+    return (groupedAccounts.value.get(group.id) ?? []).length > 0
+  })
 })
 
 watch(
@@ -439,10 +447,14 @@ h3 {
   gap: 6px;
 }
 
-.summary-total,
+.summary-total {
+  grid-column: 1 / -1;
+}
+
+/* 有價證券左、信用卡右（與 lend/borrow 同列雙欄） */
 .summary-securities,
 .summary-credit {
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 
 .summary-note {

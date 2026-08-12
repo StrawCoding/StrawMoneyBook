@@ -1,6 +1,6 @@
 import { createId } from '@/core/utils/id'
 import { assertLedgerId } from '@/core/repositories/base.repo'
-import { findAccountById, updateAccountProfile, listAccounts } from '@/core/repositories/account.repo'
+import { findAccountById, updateAccountProfile, listAccounts, listAccountGroups, createAccountGroup, createAccount } from '@/core/repositories/account.repo'
 import { addTransaction, addTransfer } from '@/core/repositories/transaction.repo'
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
 import { withTransaction } from '@/core/db/sqlite'
@@ -133,6 +133,77 @@ export async function ensureCreditProfileDefaults(ledgerId, accountId) {
     })
   }
   return { ...account, ...defaults, statement_close_day: needClose ? defaults.statementCloseDay : account.statement_close_day, payment_due_day: needDue ? defaults.paymentDueDay : account.payment_due_day }
+}
+
+/**
+ * 新增信用卡帳戶（不需使用者選母分類；內部掛第一個群組僅滿足 schema NOT NULL）。
+ * 建立後確保 credit profile + open statement，可立即記帳／刷卡。
+ */
+export async function createCreditCardAccount(ledgerId, payload = {}) {
+  assertLedgerId(ledgerId)
+  await assertNoVirtualAccrualAccounts(ledgerId)
+
+  const name = String(payload.name ?? '').trim()
+  if (!name) throw new Error('請輸入信用卡名稱')
+
+  const existingAccounts = await listAccounts(ledgerId)
+  const { assertCanCreateAccount } = await import('@/core/services/membership.service')
+  assertCanCreateAccount(
+    (existingAccounts ?? []).filter((item) => !String(item?.savings_jar_goal_type ?? '').trim()).length,
+  )
+
+  const groups = await listAccountGroups(ledgerId)
+  let groupId = String(payload.groupId ?? groups?.[0]?.id ?? '').trim()
+  if (!groupId) {
+    const created = await createAccountGroup(ledgerId, {
+      name: '帳戶',
+      sortOrder: 0,
+    })
+    groupId = created.id
+  }
+
+  const creditLimitMajor = Number(payload.creditLimitMajor ?? payload.creditLimitMinor / 100)
+  const creditLimitMinor = Number.isFinite(Number(payload.creditLimitMinor))
+    ? Math.max(0, Math.round(Number(payload.creditLimitMinor)))
+    : Math.max(0, Math.round(Math.abs(Number.isFinite(creditLimitMajor) ? creditLimitMajor : 0) * 100))
+
+  const currentDebtMajor = Number(payload.currentDebtMajor ?? 0)
+  const openingBalanceMinor = Number.isFinite(Number(payload.openingBalanceMinor))
+    ? Math.round(Number(payload.openingBalanceMinor))
+    : Math.round(Math.abs(Number.isFinite(currentDebtMajor) ? currentDebtMajor : 0) * 100) * -1
+
+  const closeDay = normalizeCloseDay(payload.statementCloseDay ?? payload.closeDay, 25)
+  const dueDay = normalizeDueDay(payload.paymentDueDay ?? payload.dueDay, 15)
+  const reminderRaw = payload.repaymentReminderDay
+  const repaymentReminderDay = reminderRaw === '' || reminderRaw == null
+    ? dueDay
+    : normalizeDueDay(reminderRaw, dueDay)
+
+  const created = await createAccount(ledgerId, {
+    groupId,
+    name,
+    accountType: 'asset',
+    accountKind: 'credit',
+    allowNegative: true,
+    openingBalanceMinor,
+    currencyCode: payload.currencyCode || 'TWD',
+    icon: payload.icon || 'fa-solid fa-credit-card',
+    creditLimitMinor,
+    repaymentReminderDay,
+    statementCloseDay: closeDay,
+    paymentDueDay: dueDay,
+    cardLast4: payload.cardLast4,
+    issuer: payload.issuer,
+    // 不計入資產母分類統計；負債另由信用卡摘要呈現
+    includeInAssets: payload.includeInAssets ?? true,
+    includeInGroupStatistics: false,
+    sortOrder: payload.sortOrder ?? 0,
+  })
+
+  await ensureCreditProfileDefaults(ledgerId, created.id)
+  const account = await findAccountById(ledgerId, created.id)
+  await ensureOpenStatementForAccount(ledgerId, account, new Date())
+  return account
 }
 
 async function ensureOpenStatementForAccount(ledgerId, account, now = new Date()) {

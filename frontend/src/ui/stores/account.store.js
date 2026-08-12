@@ -26,13 +26,22 @@ function isSavingsJarAccount(account) {
   return Boolean(String(account?.savings_jar_goal_type ?? '').trim())
 }
 
-function buildGroupedAccounts(groups, accounts, { includeSavings = true } = {}) {
+function isCreditAccount(account) {
+  return String(account?.account_kind ?? '').trim().toLowerCase() === 'credit'
+}
+
+function buildGroupedAccounts(groups, accounts, { includeSavings = true, includeCredit = true, creditGroupLabel = '信用卡' } = {}) {
   const filteredAccounts = includeSavings
     ? [...(accounts ?? [])]
     : (accounts ?? []).filter((account) => !isSavingsJarAccount(account))
 
+  const cashAccounts = filteredAccounts.filter((account) => !isCreditAccount(account))
+  const creditAccounts = includeCredit
+    ? filteredAccounts.filter((account) => isCreditAccount(account))
+    : []
+
   const accountsByGroupId = new Map()
-  for (const account of filteredAccounts) {
+  for (const account of cashAccounts) {
     const groupId = account.group_id
     if (!accountsByGroupId.has(groupId)) {
       accountsByGroupId.set(groupId, [])
@@ -57,12 +66,25 @@ function buildGroupedAccounts(groups, accounts, { includeSavings = true } = {}) 
     includedGroupIds.add(group.id)
   }
 
-  const orphanAccounts = filteredAccounts.filter((account) => !includedGroupIds.has(account.group_id))
+  const orphanAccounts = cashAccounts.filter((account) => !includedGroupIds.has(account.group_id))
   if (orphanAccounts.length) {
     grouped.push({
       id: '__ungrouped__',
       name: '未分組',
       options: orphanAccounts.map((account) => ({
+        value: account.id,
+        label: account.name,
+        icon: account.icon,
+      })),
+    })
+  }
+
+  // 信用卡不掛在現金母分類下；獨立「信用卡」區供記帳選用
+  if (creditAccounts.length) {
+    grouped.push({
+      id: '__credit_cards__',
+      name: creditGroupLabel,
+      options: creditAccounts.map((account) => ({
         value: account.id,
         label: account.name,
         icon: account.icon,
@@ -110,11 +132,13 @@ export const useAccountStore = defineStore('account', {
     },
 
     groupedAccounts(state) {
-      return buildGroupedAccounts(state.groups, state.accounts)
+      // 轉帳不混入信用卡（還款走信用卡模組）
+      return buildGroupedAccounts(state.groups, state.accounts, { includeCredit: false })
     },
 
     groupedRegularAccounts(state) {
-      return buildGroupedAccounts(state.groups, state.accounts, { includeSavings: false })
+      // 收支記帳可選信用卡；獨立「信用卡」區，不掛現金母分類
+      return buildGroupedAccounts(state.groups, state.accounts, { includeSavings: false, includeCredit: true })
     },
   },
 

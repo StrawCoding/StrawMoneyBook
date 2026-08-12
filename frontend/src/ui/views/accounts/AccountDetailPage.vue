@@ -31,10 +31,11 @@
           </button>
         </div>
 
-        <label class="field">
+        <label v-if="!isCreditAccount" class="field">
           所屬群組
           <CustomSelect v-model="editGroupId" :options="groupOptions" placeholder="請選擇群組" />
         </label>
+        <p v-else class="muted">信用卡不掛資產母分類；群組僅供內部儲存。</p>
 
         <label class="field">
           帳號類型
@@ -87,7 +88,7 @@
             <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
           </button>
         </div>
-        <div class="field">
+        <div v-if="!isCreditAccount" class="field">
           <span>{{ t('account.include_in_group_statistics_label') }}</span>
           <button
             type="button"
@@ -161,7 +162,7 @@
             <small class="muted">{{ t('account.include_in_assets_label') }}</small>
             <span>{{ accountIncludeInAssetsLabel }}</span>
           </div>
-          <div class="detail-row">
+          <div v-if="!isCreditAccount" class="detail-row">
             <small class="muted">{{ t('account.include_in_group_statistics_label') }}</small>
             <span>{{ accountIncludeInGroupStatisticsLabel }}</span>
           </div>
