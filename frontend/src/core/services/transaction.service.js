@@ -39,6 +39,7 @@ import {
   applyUpdateEditorAttribution,
   resolveCurrentTransactionEditor,
 } from '@/core/services/transaction-editor-attribution'
+import { chooseRefundFormalPath } from '@/core/utils/credit-card-apply'
 
 const TRANSACTION_FAILURE_TRACE_MAX_ENTRIES = 60
 const transactionFailureTraceListeners = new Set()
@@ -416,7 +417,7 @@ export async function createRefundAdjustment(ledgerId, payload = {}) {
   }
 
   // Formal credit refund: write adjustment posting into current OPEN statement.
-  if (String(targetAccount.account_kind) === 'credit') {
+  if (chooseRefundFormalPath(targetAccount.account_kind) === 'credit_open_posting') {
     const { createCreditRefundAdjustment } = await import('@/core/services/credit.service')
     const result = await createCreditRefundAdjustment(ledgerId, {
       accountId: targetAccountId,

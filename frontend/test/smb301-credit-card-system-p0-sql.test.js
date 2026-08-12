@@ -14,6 +14,8 @@ import {
   applyCreditRepaymentAllocationPlan,
   applyCreditStatementClose,
   buildCreditRefundAdjustmentPlan,
+  chooseRefundFormalPath,
+  clampPostedAtIntoOpenPeriod,
   computeActualCardDebtMinor,
   computeCreditUtilization,
   shouldForbidClosedCreditMutation,
@@ -177,14 +179,26 @@ test('sql.js formal path: refund→open posting; closed immutable; alloc same-ca
     [ledgerId, cardId, nextBounds.periodStartInclusive, nextBounds.periodEndExclusive, '2026-03-16T00:00:00', '2026-03-16T00:00:00'],
   )
 
-  // Formal refund path: buildCreditRefundAdjustmentPlan + apply → open statement posting
+  // Formal refund path: even if caller passes closed-period posted_at, clamp into OPEN
+  assert.equal(chooseRefundFormalPath('credit'), 'credit_open_posting')
+  assert.equal(chooseRefundFormalPath('cash'), 'legacy_adjustment')
+  const clampedPosted = clampPostedAtIntoOpenPeriod(
+    '2026-03-10T12:00:00', // inside closed S1
+    {
+      period_start_inclusive: nextBounds.periodStartInclusive,
+      period_end_exclusive: nextBounds.periodEndExclusive,
+    },
+    '2026-03-20T10:00:00',
+  )
+  assert.equal(clampedPosted, '2026-03-20T10:00:00')
+
   const refundPlan = buildCreditRefundAdjustmentPlan({
     accountId: cardId,
     amountMinor: 2000,
     openStatementId: 'S2',
     openStatementStatus: 'open',
-    occurredAt: '2026-03-20T10:00:00',
-    postedAt: '2026-03-20T10:00:00',
+    occurredAt: '2026-03-10T12:00:00', // original purchase day (budget/calendar)
+    postedAt: clampedPosted,
     externalRefId: 'T1',
     categoryId: 'cat_refund',
     transactionId: 'T_REFUND',
@@ -192,6 +206,7 @@ test('sql.js formal path: refund→open posting; closed immutable; alloc same-ca
   })
   assert.equal(refundPlan.posting.statementId, 'S2')
   assert.equal(refundPlan.transaction.originType, 'refund')
+  assert.equal(refundPlan.transaction.postedAt, clampedPosted)
   applyCreditRefundAdjustmentPlan(db, ledgerId, refundPlan, { now: '2026-03-20T10:00:00' })
 
   const refundPosting = db.exec(
@@ -200,6 +215,13 @@ test('sql.js formal path: refund→open posting; closed immutable; alloc same-ca
   assert.equal(refundPosting[0], 'S2')
   assert.equal(refundPosting[1], 'adjustment')
   assert.equal(refundPosting[2], 2000)
+
+  // Refund tx row exists with origin_type=refund (formal createRefundAdjustment credit path)
+  const refundTx = db.exec(
+    `SELECT origin_type, posted_at FROM transactions WHERE id='T_REFUND';`,
+  )[0].values[0]
+  assert.equal(refundTx[0], 'refund')
+  assert.equal(refundTx[1], clampedPosted)
 
   const closedClosing = db.exec(
     `SELECT closing_balance_minor FROM credit_statements WHERE id='S1';`,
@@ -321,6 +343,21 @@ test('sql.js formal path: refund→open posting; closed immutable; alloc same-ca
 
   // Actual card debt for limit alert = SUM(remaining), not bogus account balance
   const remainingS1 = 50000 - 30000
+  // Open S2 has +2000 adjustment (liability decrease) → remaining from adjustment alone is 0 for debt
+  // (adjustment amount_minor +2000 → sumCardLiability = -(+2000) = -2000 → max(0,...) in unpaid filter)
+  // Simulate post-purchase open remaining 85000 against limit 100000 → nearLimit
+  const debtAfterPurchase = computeActualCardDebtMinor([
+    { remaining_minor: remainingS1 },
+    { remaining_minor: 85000 },
+  ])
+  assert.equal(debtAfterPurchase, 105000)
+  const utilPurchase = computeCreditUtilization({
+    debtMinor: computeActualCardDebtMinor([{ remaining_minor: 85000 }]),
+    creditLimitMinor: 100000,
+  })
+  assert.equal(utilPurchase.nearLimit, true)
+  assert.equal(utilPurchase.utilization, 0.85)
+
   const debt = computeActualCardDebtMinor([
     { remaining_minor: remainingS1 },
     { remaining_minor: 0 },
@@ -346,17 +383,24 @@ test('smb301 source wiring: formal refund/batch/alloc/debt paths', () => {
   assert.match(apply, /ALLOCATION_CROSS_CARD_FORBIDDEN/)
   assert.match(apply, /ALLOCATION_EXCEEDS_REMAINING/)
   assert.match(apply, /buildCreditRefundAdjustmentPlan/)
+  assert.match(apply, /clampPostedAtIntoOpenPeriod/)
+  assert.match(apply, /chooseRefundFormalPath/)
   assert.match(apply, /computeActualCardDebtMinor/)
   assert.match(apply, /shouldForbidClosedCreditMutation/)
 
   assert.match(creditService, /validateRepaymentAllocationPlan/)
   assert.match(creditService, /computeActualCardDebtMinor/)
   assert.match(creditService, /buildCreditRefundAdjustmentPlan/)
+  assert.match(creditService, /clampPostedAtIntoOpenPeriod/)
   assert.match(creditService, /shouldForbidClosedCreditMutation/)
+  assert.match(creditService, /findOpenCreditStatement/)
+  assert.match(creditService, /createCreditRefundAdjustment/)
 
   assert.match(txService, /createCreditRefundAdjustment/)
-  assert.match(txService, /account_kind\) === 'credit'/)
+  assert.match(txService, /chooseRefundFormalPath/)
   assert.match(txService, /CLOSED_POSTING_MUTATION_FORBIDDEN/)
-  assert.match(txService, /batchPatchTransactions[\s\S]*assertTransactionMutableForCredit/)
-  assert.match(txService, /batchPatchCategory[\s\S]*assertTransactionMutableForCredit/)
+  // batch hard-fail (throw) — not soft-skip
+  assert.match(txService, /batchPatchCategory[\s\S]*CLOSED_POSTING_MUTATION_FORBIDDEN[\s\S]*throw error/)
+  assert.match(txService, /batchPatchTransactions[\s\S]*CLOSED_POSTING_MUTATION_FORBIDDEN[\s\S]*throw error/)
+  assert.match(txService, /Hard reject|hard-fail|hard reject/i)
 })

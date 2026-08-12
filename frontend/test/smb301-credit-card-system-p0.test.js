@@ -100,6 +100,7 @@ test('migration / wiring mentions hard-contract identifiers', () => {
 
   const txService = readFileSync(resolve(root, 'src/core/services/transaction.service.js'), 'utf8')
   assert.match(txService, /createCreditRefundAdjustment/)
+  assert.match(txService, /chooseRefundFormalPath/)
   assert.match(txService, /assertTransactionMutableForCredit/)
 
   const apply = readFileSync(resolve(root, 'src/core/utils/credit-card-apply.js'), 'utf8')
@@ -108,6 +109,8 @@ test('migration / wiring mentions hard-contract identifiers', () => {
   assert.match(apply, /ALLOCATION_EXCEEDS_REMAINING/)
   assert.match(apply, /shouldForbidClosedCreditMutation/)
   assert.match(apply, /computeActualCardDebtMinor/)
+  assert.match(apply, /clampPostedAtIntoOpenPeriod/)
+  assert.match(apply, /chooseRefundFormalPath/)
 
   const merge = readFileSync(resolve(root, 'src/ui/services/shared-ledger/snapshot-merge.js'), 'utf8')
   assert.match(merge, /credit_card_bundle/)

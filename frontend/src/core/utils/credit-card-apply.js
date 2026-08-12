@@ -129,6 +129,21 @@ export function computeCreditUtilization({ debtMinor, creditLimitMinor } = {}) {
  * Plan a formal credit refund/adjustment into the current OPEN statement.
  * Never mutates closed closing_balance_minor.
  */
+export function clampPostedAtIntoOpenPeriod(postedAt, openStatement, nowIso) {
+  const start = String(openStatement?.period_start_inclusive ?? '')
+  const end = String(openStatement?.period_end_exclusive ?? '')
+  const candidate = String(postedAt ?? nowIso ?? '')
+  if (start && end && candidate >= start && candidate < end) return candidate
+  const now = String(nowIso ?? '')
+  if (start && end && now >= start && now < end) return now
+  return start || candidate || now
+}
+
+/**
+ * Plan a formal credit refund/adjustment into the current OPEN statement.
+ * Never mutates closed closing_balance_minor.
+ * Caller must pass the ledger's current OPEN statement (not a closed period).
+ */
 export function buildCreditRefundAdjustmentPlan({
   accountId,
   amountMinor,
@@ -178,6 +193,15 @@ export function buildCreditRefundAdjustmentPlan({
     },
     statementId,
   }
+}
+
+/**
+ * Formal entry decision used by createRefundAdjustment:
+ * credit accounts must use buildCreditRefundAdjustmentPlan → open posting;
+ * non-credit keep legacy adjustment-only path (no statement posting).
+ */
+export function chooseRefundFormalPath(accountKind) {
+  return String(accountKind ?? '') === 'credit' ? 'credit_open_posting' : 'legacy_adjustment'
 }
 
 /**

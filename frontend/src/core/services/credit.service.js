@@ -17,6 +17,7 @@ import {
 } from '@/core/utils/credit-period'
 import {
   buildCreditRefundAdjustmentPlan,
+  clampPostedAtIntoOpenPeriod,
   computeActualCardDebtMinor,
   computeCreditUtilization,
   shouldForbidClosedCreditMutation,
@@ -530,13 +531,8 @@ export async function createCreditRefundAdjustment(ledgerId, payload = {}) {
 
     // Clamp posted_at into the open period (prefer "now", else period start).
     const nowIso = toLocalIso(new Date())
-    let postedAt = normalizePostedAt(payload.postedAt, nowIso)
-    const inOpen = postedAt >= open.period_start_inclusive && postedAt < open.period_end_exclusive
-    if (!inOpen) {
-      postedAt = nowIso >= open.period_start_inclusive && nowIso < open.period_end_exclusive
-        ? nowIso
-        : open.period_start_inclusive
-    }
+    const requestedPostedAt = normalizePostedAt(payload.postedAt, nowIso)
+    const postedAt = clampPostedAtIntoOpenPeriod(requestedPostedAt, open, nowIso)
     const occurredAt = normalizePostedAt(payload.occurredAt, postedAt)
 
     const plan = buildCreditRefundAdjustmentPlan({
