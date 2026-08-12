@@ -2,7 +2,7 @@
 
 ---
 
-- (smb301) 信用卡 P0 closed 交易正式編輯：`updateManualTransaction` 改載完整列（含 `posted_at`）並以 `diffCreditManualTransactionChanges` 比較；未提供 `postedAt` 時不得把 `occurredAt` 誤判為歸期變更，純消費日校正允許且 `statement_id`／`posted_at` 不變；sql.js／單元正式路徑回歸。
+- (smb301) 信用卡 P0 closed 交易正式編輯：`updateManualTransaction` 以 `findTransactionRecordById`＋`assertUpdateManualCreditMutationAllowed`＋`buildUpdateManualTransactionFields` 正式路徑；未提供 `postedAt` 不得把 `occurredAt` 誤判為歸期變更；純消費日校正允許且 `statement_id`／`posted_at`／`closing_balance_minor` 不變；sql.js 端到端正式路徑回歸（非 raw SQL／非 helper-only）。
 - (smb301) 信用卡 P0 正式路徑再硬化：退款強制寫入當期 open（`clampPostedAtIntoOpenPeriod`，不依 closed 期 posted_at）；批次分類／欄位對 closed 改硬拒絕（禁 soft-skip）；allocation／額度／sql.js 正式路徑回歸維持。
 - (smb301) 信用卡 P0 正式路徑補齊：一般退款寫入當期 open statement posting（不改 closing）；closed 帳單交易禁批次分類／欄位改動；還款 allocation 禁跨卡與超過 remaining；額度警示改用實際卡債（SUM remaining）；sql.js 正式路徑回歸。
 

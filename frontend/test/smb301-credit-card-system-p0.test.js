@@ -102,13 +102,15 @@ test('migration / wiring mentions hard-contract identifiers', () => {
   assert.match(txService, /createCreditRefundAdjustment/)
   assert.match(txService, /chooseRefundFormalPath/)
   assert.match(txService, /assertTransactionMutableForCredit/)
-  assert.match(txService, /diffCreditManualTransactionChanges/)
+  assert.match(txService, /assertUpdateManualCreditMutationAllowed/)
+  assert.match(txService, /buildUpdateManualTransactionFields/)
   assert.match(txService, /findTransactionRecordById/)
   const updateManualFn = txService.match(
     /export async function updateManualTransaction[\s\S]*?(?=\nexport async function )/,
   )?.[0] ?? ''
-  assert.match(updateManualFn, /diffCreditManualTransactionChanges/)
+  assert.match(updateManualFn, /assertUpdateManualCreditMutationAllowed/)
   assert.match(updateManualFn, /findTransactionRecordById/)
+  assert.match(updateManualFn, /buildUpdateManualTransactionFields/)
   assert.doesNotMatch(updateManualFn, /payload\.postedAt\s*\?\?\s*payload\.occurredAt/)
 
   const apply = readFileSync(resolve(root, 'src/core/utils/credit-card-apply.js'), 'utf8')
@@ -117,12 +119,19 @@ test('migration / wiring mentions hard-contract identifiers', () => {
   assert.match(apply, /ALLOCATION_EXCEEDS_REMAINING/)
   assert.match(apply, /shouldForbidClosedCreditMutation/)
   assert.match(apply, /diffCreditManualTransactionChanges/)
+  assert.match(apply, /assertUpdateManualCreditMutationAllowed/)
+  assert.match(apply, /buildUpdateManualTransactionFields/)
+  assert.match(apply, /applyUpdateManualTransactionFields/)
   assert.match(apply, /computeActualCardDebtMinor/)
   assert.match(apply, /clampPostedAtIntoOpenPeriod/)
   assert.match(apply, /chooseRefundFormalPath/)
 
   const txRepo = readFileSync(resolve(root, 'src/core/repositories/transaction.repo.js'), 'utf8')
   assert.match(txRepo, /findTransactionRecordById[\s\S]*posted_at/)
+  const updateByIdFn = txRepo.match(
+    /export async function updateTransactionById[\s\S]*?(?=\nexport async function )/,
+  )?.[0] ?? ''
+  assert.doesNotMatch(updateByIdFn, /posted_at\s*=/)
 
   const merge = readFileSync(resolve(root, 'src/ui/services/shared-ledger/snapshot-merge.js'), 'utf8')
   assert.match(merge, /credit_card_bundle/)
@@ -141,8 +150,10 @@ test('migration / wiring mentions hard-contract identifiers', () => {
   assert.equal(toLocalIso(parseLocalIso('2026-08-13T10:11:12.003')).startsWith('2026-08-13T10:11:12'), true)
 })
 
-test('closed credit formal edit diff: pure occurred_at allowed; omit postedAt must not forbid', async () => {
+test('closed credit formal edit entry: updateManualTransaction gate allows pure occurred_at', async () => {
   const {
+    assertUpdateManualCreditMutationAllowed,
+    buildUpdateManualTransactionFields,
     diffCreditManualTransactionChanges,
     shouldForbidClosedCreditMutation,
   } = await import('../src/core/utils/credit-card-apply.js')
@@ -155,6 +166,7 @@ test('closed credit formal edit diff: pure occurred_at allowed; omit postedAt mu
     occurred_at: '2026-03-10T12:00:00.000Z',
     posted_at: '2026-03-12T00:00:00.000Z',
     note: '咖啡',
+    origin_type: 'manual',
     is_reimbursable: 0,
     include_in_budget: 1,
     include_in_analysis: 1,
@@ -169,17 +181,42 @@ test('closed credit formal edit diff: pure occurred_at allowed; omit postedAt mu
     isReimbursable: false,
     includeInBudget: true,
     includeInAnalysis: true,
+    // postedAt omitted — TransactionEditPage / HomeTransactionEditSheet
   }
-  const changes = diffCreditManualTransactionChanges(current, payload)
-  assert.equal(changes.occurredAt, true)
-  assert.equal(changes.postedAt, false)
-  assert.equal(changes.amount, false)
-  assert.equal(shouldForbidClosedCreditMutation({ status: 'closed', changes }), false)
 
-  const withPosted = diffCreditManualTransactionChanges(current, {
-    ...payload,
-    postedAt: '2026-03-20T00:00:00.000Z',
+  const gate = assertUpdateManualCreditMutationAllowed({
+    currentTx: current,
+    payload,
+    status: 'closed',
   })
-  assert.equal(withPosted.postedAt, true)
-  assert.equal(shouldForbidClosedCreditMutation({ status: 'closed', changes: withPosted }), true)
+  assert.equal(gate.allowed, true)
+  assert.equal(gate.changes.occurredAt, true)
+  assert.equal(gate.changes.postedAt, false)
+
+  const fields = buildUpdateManualTransactionFields(current, payload)
+  assert.equal(Object.prototype.hasOwnProperty.call(fields, 'postedAt'), false)
+  assert.equal(fields.occurredAt, '2026-03-09T08:00:00.000Z')
+  assert.equal(fields.amountMinor, -1200)
+
+  assert.throws(
+    () => assertUpdateManualCreditMutationAllowed({
+      currentTx: current,
+      payload: { ...payload, postedAt: '2026-03-20T00:00:00.000Z' },
+      status: 'closed',
+    }),
+    (err) => err.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN',
+  )
+
+  // Slim findTransactionById shape must fail (missing compare fields)
+  assert.throws(
+    () => assertUpdateManualCreditMutationAllowed({
+      currentTx: { id: 'x', type: 'expense', origin_type: 'manual' },
+      payload,
+      status: 'closed',
+    }),
+    (err) => err.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN',
+  )
+
+  const changes = diffCreditManualTransactionChanges(current, payload)
+  assert.equal(shouldForbidClosedCreditMutation({ status: 'closed', changes }), false)
 })

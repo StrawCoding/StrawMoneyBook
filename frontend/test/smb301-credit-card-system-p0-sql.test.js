@@ -13,7 +13,10 @@ import {
   applyCreditRefundAdjustmentPlan,
   applyCreditRepaymentAllocationPlan,
   applyCreditStatementClose,
+  applyUpdateManualTransactionFields,
+  assertUpdateManualCreditMutationAllowed,
   buildCreditRefundAdjustmentPlan,
+  buildUpdateManualTransactionFields,
   chooseRefundFormalPath,
   clampPostedAtIntoOpenPeriod,
   computeActualCardDebtMinor,
@@ -134,9 +137,9 @@ test('sql.js formal path: refund→open posting; closed immutable; alloc same-ca
   )
   db.run(
     `INSERT INTO transactions (
-      ledger_id, id, type, account_id, amount_minor, occurred_at, posted_at, origin_type,
+      ledger_id, id, type, account_id, category_id, amount_minor, occurred_at, posted_at, note, origin_type,
       include_in_budget, include_in_analysis, created_at, updated_at, deleted_at
-    ) VALUES (?, 'T1', 'expense', ?, -50000, '2026-03-10T12:00:00', '2026-03-10T12:00:00', 'manual', 1, 1, ?, ?, NULL);`,
+    ) VALUES (?, 'T1', 'expense', ?, 'cat_food', -50000, '2026-03-10T12:00:00', '2026-03-10T12:00:00', '刷卡', 'manual', 1, 1, ?, ?, NULL);`,
     [ledgerId, cardId, '2026-03-10T12:00:00', '2026-03-10T12:00:00'],
   )
 
@@ -313,29 +316,65 @@ test('sql.js formal path: refund→open posting; closed immutable; alloc same-ca
     changes: { ...pureDiff, postedAt: true, occurredAt: false },
   }), true)
 
-  // Explicit postedAt change on closed → forbid
-  const postedChangeDiff = diffCreditManualTransactionChanges(closedRow, {
-    ...pureOccurredPayload,
-    postedAt: '2026-03-20T10:00:00',
-  })
-  assert.equal(postedChangeDiff.postedAt, true)
-  assert.equal(shouldForbidClosedCreditMutation({
-    status: 'closed',
-    changes: postedChangeDiff,
-  }), true)
+  // Explicit postedAt change on closed → formal gate must forbid
+  assert.throws(
+    () => assertUpdateManualCreditMutationAllowed({
+      currentTx: closedRow,
+      payload: { ...pureOccurredPayload, postedAt: '2026-03-20T10:00:00' },
+      status: 'closed',
+    }),
+    (err) => err.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN',
+  )
 
-  // Apply pure occurred_at correction on formal path (mirrors updateTransactionById —
-  // does not touch posted_at). statement_id on posting must stay on closed S1.
-  const beforePosted = db.exec(`SELECT posted_at FROM transactions WHERE id='T1';`)[0].values[0][0]
+  // ── Formal updateManualTransaction path (not raw SQL / not helper-only) ──
+  // Load findTransactionRecordById-shaped row from DB, gate, build fields, apply.
+  const recordCols = db.exec(
+    `SELECT id, type, account_id, category_id, amount_minor, occurred_at, posted_at, note,
+            origin_type, include_in_budget, include_in_analysis
+     FROM transactions WHERE id='T1';`,
+  )[0]
+  const recordVals = recordCols.values[0]
+  const fullRecord = {
+    id: recordVals[0],
+    type: recordVals[1],
+    account_id: recordVals[2],
+    category_id: recordVals[3],
+    amount_minor: recordVals[4],
+    occurred_at: recordVals[5],
+    posted_at: recordVals[6],
+    note: recordVals[7],
+    origin_type: recordVals[8],
+    is_reimbursable: 0,
+    include_in_budget: recordVals[9] ?? 1,
+    include_in_analysis: recordVals[10] ?? 1,
+  }
+  assert.equal(fullRecord.posted_at, '2026-03-10T12:00:00')
   const beforeStmt = db.exec(
     `SELECT statement_id FROM transaction_postings WHERE transaction_id='T1';`,
   )[0].values[0][0]
-  assert.equal(beforePosted, '2026-03-10T12:00:00')
   assert.equal(beforeStmt, 'S1')
-  db.run(
-    `UPDATE transactions SET occurred_at = ?, updated_at = ? WHERE id = 'T1';`,
-    ['2026-03-08T09:00:00', '2026-03-20T10:00:00'],
-  )
+
+  const gate = assertUpdateManualCreditMutationAllowed({
+    currentTx: fullRecord,
+    payload: pureOccurredPayload,
+    status: 'closed',
+  })
+  assert.equal(gate.allowed, true)
+  assert.equal(gate.changes.occurredAt, true)
+  assert.equal(gate.changes.postedAt, false)
+
+  const fields = buildUpdateManualTransactionFields(fullRecord, pureOccurredPayload)
+  assert.equal(Object.prototype.hasOwnProperty.call(fields, 'postedAt'), false)
+  assert.equal(fields.occurredAt, '2026-03-08T09:00:00')
+  assert.equal(fields.amountMinor, -50000)
+
+  applyUpdateManualTransactionFields(db, {
+    ledgerId,
+    txId: 'T1',
+    fields,
+    now: '2026-03-20T10:00:00',
+  })
+
   const after = db.exec(
     `SELECT t.occurred_at, t.posted_at, p.statement_id, s.closing_balance_minor, s.status
      FROM transactions t
@@ -349,16 +388,16 @@ test('sql.js formal path: refund→open posting; closed immutable; alloc same-ca
   assert.equal(after[3], 50000) // closing immutable
   assert.equal(after[4], 'closed')
 
-  // Incomplete row (findTransactionById shape) must not be used for diff — proves
-  // missing fields would mis-flag amount/account/postedAt when UI resubmits full form.
+  // Incomplete row (findTransactionById shape) must fail formal gate
   const incompleteRow = { id: 'T1', type: 'expense', origin_type: 'manual' }
-  const incompleteDiff = diffCreditManualTransactionChanges(incompleteRow, pureOccurredPayload)
-  assert.equal(incompleteDiff.account, true)
-  assert.equal(incompleteDiff.amount, true)
-  assert.equal(shouldForbidClosedCreditMutation({
-    status: 'closed',
-    changes: incompleteDiff,
-  }), true)
+  assert.throws(
+    () => assertUpdateManualCreditMutationAllowed({
+      currentTx: incompleteRow,
+      payload: pureOccurredPayload,
+      status: 'closed',
+    }),
+    (err) => err.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN',
+  )
 
   // Allocation: empty → fail
   assert.throws(
@@ -489,6 +528,12 @@ test('smb301 source wiring: formal refund/batch/alloc/debt paths', () => {
   assert.match(apply, /computeActualCardDebtMinor/)
   assert.match(apply, /shouldForbidClosedCreditMutation/)
   assert.match(apply, /diffCreditManualTransactionChanges/)
+  assert.match(apply, /assertUpdateManualCreditMutationAllowed/)
+  assert.match(apply, /buildUpdateManualTransactionFields/)
+  assert.match(apply, /applyUpdateManualTransactionFields/)
+  assert.match(apply, /computeActualCardDebtMinor/)
+  assert.match(apply, /clampPostedAtIntoOpenPeriod/)
+  assert.match(apply, /chooseRefundFormalPath/)
   assert.match(apply, /hasExplicitPostedAt|postedAt intentionally|never fall back to occurredAt/i)
 
   assert.match(creditService, /validateRepaymentAllocationPlan/)
@@ -501,15 +546,18 @@ test('smb301 source wiring: formal refund/batch/alloc/debt paths', () => {
 
   assert.match(txService, /createCreditRefundAdjustment/)
   assert.match(txService, /chooseRefundFormalPath/)
-  assert.match(txService, /diffCreditManualTransactionChanges/)
+  assert.match(txService, /assertUpdateManualCreditMutationAllowed/)
+  assert.match(txService, /buildUpdateManualTransactionFields/)
   assert.match(txService, /findTransactionRecordById/)
+  assert.match(txService, /findPostingStatementStatus/)
   assert.match(txService, /CLOSED_POSTING_MUTATION_FORBIDDEN/)
   // Formal edit must load full row (posted_at) — not findTransactionById slim select
   const updateManualFn = txService.match(
     /export async function updateManualTransaction[\s\S]*?(?=\nexport async function )/,
   )?.[0] ?? ''
   assert.match(updateManualFn, /findTransactionRecordById/)
-  assert.match(updateManualFn, /diffCreditManualTransactionChanges/)
+  assert.match(updateManualFn, /assertUpdateManualCreditMutationAllowed/)
+  assert.match(updateManualFn, /buildUpdateManualTransactionFields/)
   // Must not infer postedAt from occurredAt in the formal edit gate
   assert.doesNotMatch(updateManualFn, /payload\.postedAt\s*\?\?\s*payload\.occurredAt/)
   // batch hard-fail (throw) — not soft-skip
@@ -519,4 +567,10 @@ test('smb301 source wiring: formal refund/batch/alloc/debt paths', () => {
 
   const txRepo = readFileSync(resolve(root, 'src/core/repositories/transaction.repo.js'), 'utf8')
   assert.match(txRepo, /findTransactionRecordById[\s\S]*t\.posted_at/)
+  // updateTransactionById must never SET posted_at
+  assert.match(txRepo, /export async function updateTransactionById[\s\S]*?(?=\nexport async function )/)
+  const updateByIdFn = txRepo.match(
+    /export async function updateTransactionById[\s\S]*?(?=\nexport async function )/,
+  )?.[0] ?? ''
+  assert.doesNotMatch(updateByIdFn, /posted_at\s*=/)
 })

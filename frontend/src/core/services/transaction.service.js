@@ -39,8 +39,9 @@ import {
   resolveCurrentTransactionEditor,
 } from '@/core/services/transaction-editor-attribution'
 import {
+  assertUpdateManualCreditMutationAllowed,
+  buildUpdateManualTransactionFields,
   chooseRefundFormalPath,
-  diffCreditManualTransactionChanges,
 } from '@/core/utils/credit-card-apply'
 
 const TRANSACTION_FAILURE_TRACE_MAX_ENTRIES = 60
@@ -490,22 +491,21 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
   if (!currentTx) {
     throw new Error('找不到交易資料')
   }
-  const creditChanges = diffCreditManualTransactionChanges(currentTx, payload)
-  const creditRelevant = creditChanges.amount
-    || creditChanges.account
-    || creditChanges.postedAt
-    || creditChanges.category
-    || creditChanges.note
-    || creditChanges.flags
-    || creditChanges.occurredAt
-  if (creditRelevant) {
-    try {
-      const { assertTransactionMutableForCredit } = await import('@/core/services/credit.service')
-      await assertTransactionMutableForCredit(ledgerId, txId, { changes: creditChanges })
-    } catch (error) {
-      if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') throw error
-      // Non-credit txs: ignore
+  // Formal path: shared gate used by sql.js regressions (assertUpdateManualCreditMutationAllowed).
+  // UI edits omit postedAt — must not infer posted_at from occurredAt.
+  try {
+    const { findPostingStatementStatus } = await import('@/core/repositories/credit.repo')
+    const statusRow = await findPostingStatementStatus(ledgerId, txId)
+    if (statusRow) {
+      assertUpdateManualCreditMutationAllowed({
+        currentTx,
+        payload,
+        status: statusRow.status,
+      })
     }
+  } catch (error) {
+    if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') throw error
+    // Non-credit / no posting row: ignore (same as prior assertTransactionMutableForCredit catch)
   }
   if (!payload.accountId) {
     throw new Error('請選擇帳戶')
@@ -603,17 +603,13 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
     assertCanCreateReimbursement(reimbursableCount)
   }
 
+  // Same field builder as sql.js formal-path regression — never writes posted_at.
+  const updateFields = buildUpdateManualTransactionFields(currentTx, payload)
   await updateTransactionById(ledgerId, txId, {
-    accountId: payload.accountId,
-    peerAccountId: null,
-    categoryId: payload.type === 'adjustment' ? currentTx.category_id ?? null : payload.categoryId ?? null,
-    amountMinor,
-    occurredAt: payload.occurredAt,
-    note: payload.note ?? null,
+    ...updateFields,
+    amountMinor, // keep validated/signed amount from asserts above
     isReimbursable,
     reimbursementState: isReimbursable ? 'pending' : 'none',
-    includeInBudget: isRefundTransaction ? false : payload.includeInBudget !== false,
-    includeInAnalysis: isRefundTransaction ? false : payload.includeInAnalysis !== false,
     ...editorPatch,
   })
 

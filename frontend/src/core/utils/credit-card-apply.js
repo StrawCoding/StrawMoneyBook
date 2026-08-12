@@ -115,6 +115,112 @@ export function diffCreditManualTransactionChanges(currentTx, payload = {}) {
   }
 }
 
+/** True when the edit touches any credit-relevant field (incl. pure occurred_at). */
+export function isCreditRelevantManualMutation(changes = {}) {
+  return Boolean(
+    changes.amount
+    || changes.account
+    || changes.postedAt
+    || changes.category
+    || changes.note
+    || changes.flags
+    || changes.occurredAt
+    || changes.delete
+    || changes.batch,
+  )
+}
+
+/**
+ * Formal updateManualTransaction credit gate (v1.1).
+ * Requires a FULL transaction row (findTransactionRecordById shape).
+ * Slim findTransactionById rows mis-flag amount/account/postedAt and must fail closed.
+ */
+export function assertUpdateManualCreditMutationAllowed({
+  currentTx,
+  payload,
+  status,
+} = {}) {
+  const changes = diffCreditManualTransactionChanges(currentTx, payload)
+  const creditRelevant = isCreditRelevantManualMutation(changes)
+  if (!creditRelevant) {
+    return { changes, creditRelevant: false, allowed: true }
+  }
+  if (shouldForbidClosedCreditMutation({ status, changes })) {
+    throw creditError('CLOSED_POSTING_MUTATION_FORBIDDEN', 'CLOSED_POSTING_MUTATION_FORBIDDEN')
+  }
+  return { changes, creditRelevant: true, allowed: true }
+}
+
+/**
+ * Build updateTransactionById fields for the non-transfer branch of
+ * updateManualTransaction. Never includes postedAt (statement assignment immutable).
+ */
+export function buildUpdateManualTransactionFields(currentTx, payload = {}) {
+  const txType = String(payload.type ?? currentTx?.type ?? '').trim()
+  const isRefund = String(currentTx?.origin_type ?? currentTx?.originType ?? '').trim() === 'refund'
+  let amountMinor = Number(payload.amountMinor)
+  if (txType === 'expense' || txType === 'income') {
+    amountMinor = Math.abs(Math.round(amountMinor))
+    amountMinor = txType === 'expense' ? amountMinor * -1 : amountMinor
+  } else if (txType === 'adjustment') {
+    amountMinor = Math.round(amountMinor)
+  }
+  const isReimbursable = txType === 'expense' && Boolean(payload.isReimbursable)
+  return {
+    accountId: payload.accountId,
+    peerAccountId: null,
+    categoryId: txType === 'adjustment'
+      ? (currentTx?.category_id ?? currentTx?.categoryId ?? null)
+      : (payload.categoryId ?? null),
+    amountMinor,
+    occurredAt: payload.occurredAt,
+    // postedAt intentionally omitted — updateTransactionById must not rewrite posted_at
+    note: payload.note ?? null,
+    isReimbursable,
+    reimbursementState: isReimbursable ? 'pending' : 'none',
+    includeInBudget: isRefund ? false : payload.includeInBudget !== false,
+    includeInAnalysis: isRefund ? false : payload.includeInAnalysis !== false,
+  }
+}
+
+/**
+ * Apply formal manual edit fields on sql.js (mirrors transaction.repo updateTransactionById).
+ * Does NOT write posted_at — statement_id on postings stays unchanged.
+ */
+export function applyUpdateManualTransactionFields(db, {
+  ledgerId,
+  txId,
+  fields,
+  now,
+} = {}) {
+  const ts = now || new Date().toISOString()
+  db.run(
+    `UPDATE transactions
+     SET account_id = ?,
+         category_id = ?,
+         amount_minor = ?,
+         occurred_at = ?,
+         note = ?,
+         include_in_budget = ?,
+         include_in_analysis = ?,
+         updated_at = ?
+     WHERE ledger_id = ? AND id = ? AND deleted_at IS NULL;`,
+    [
+      fields.accountId,
+      fields.categoryId ?? null,
+      fields.amountMinor,
+      fields.occurredAt,
+      fields.note ?? null,
+      fields.includeInBudget === false ? 0 : 1,
+      fields.includeInAnalysis === false ? 0 : 1,
+      ts,
+      ledgerId,
+      txId,
+    ],
+  )
+  return { txId, postedAtUntouched: true }
+}
+
 /**
  * Validate repayment allocations against the same card + remaining.
  * statementsById: Map|object id → { account_id|accountId, remaining_minor|remainingMinor, status? }
