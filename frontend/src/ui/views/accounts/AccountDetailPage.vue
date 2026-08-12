@@ -96,6 +96,23 @@
             <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
           </button>
         </div>
+        <div v-if="editAccountKind === 'cash'" class="field">
+          <span>{{ t('account.is_settlement_label') }}</span>
+          <button
+            type="button"
+            class="switch-row"
+            :class="{ active: editIsSettlement }"
+            role="switch"
+            :aria-checked="editIsSettlement ? 'true' : 'false'"
+            data-testid="account-is-settlement"
+            @click="editIsSettlement = !editIsSettlement"
+          >
+            <span class="switch-copy">
+              <strong>{{ editIsSettlement ? t('account.is_settlement_on') : t('account.is_settlement_off') }}</strong>
+            </span>
+            <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+          </button>
+        </div>
         <p v-if="openingInvalid" class="error-text">{{ editAccountKind === 'credit' ? '目前欠款格式錯誤' : '預設資金格式錯誤' }}</p>
         <p v-if="creditLimitInvalid" class="error-text">信用額度格式錯誤</p>
         <p v-if="repaymentReminderDayInvalid" class="error-text">還款提醒日需介於 1 到 31</p>
@@ -273,6 +290,7 @@ const editCreditLimit = ref('0')
 const editRepaymentReminderDay = ref('')
 const editIncludeInAssets = ref(true)
 const editIncludeInGroupStatistics = ref(true)
+const editIsSettlement = ref(false)
 const initializedAccountId = ref('')
 
 const accountId = computed(() => String(route.params.id ?? ''))
@@ -406,7 +424,8 @@ const canSave = computed(() => {
     creditLimitMinor !== Math.max(0, Number(account.value.credit_limit_minor ?? 0)) ||
     repaymentReminderDay !== parseRepaymentReminderDay(account.value.repayment_reminder_day) ||
     includeInAssets !== isAccountIncludedInAssets(account.value) ||
-    includeInGroupStatistics !== isAccountIncludedInGroupStatistics(account.value)
+    includeInGroupStatistics !== isAccountIncludedInGroupStatistics(account.value) ||
+    (accountKind === 'cash' && includeInAssets !== undefined && Boolean(editIsSettlement.value) !== (Number(account.value.is_settlement ?? 0) === 1))
   )
 })
 
@@ -429,6 +448,7 @@ watch(
     editRepaymentReminderDay.value = next.repayment_reminder_day == null ? '' : String(next.repayment_reminder_day)
     editIncludeInAssets.value = isAccountIncludedInAssets(next)
     editIncludeInGroupStatistics.value = isAccountIncludedInGroupStatistics(next)
+    editIsSettlement.value = Number(next?.is_settlement ?? 0) === 1
     initializedAccountId.value = nextId
   },
   { immediate: true },
@@ -575,6 +595,7 @@ async function saveProfile() {
       repaymentReminderDay: nextRepaymentReminderDay,
       includeInAssets: editIncludeInAssets.value,
       includeInGroupStatistics: editIncludeInGroupStatistics.value,
+      isSettlement: editAccountKind.value === 'cash' ? editIsSettlement.value : false,
     })
     uiStore.pushToast('帳戶資料已更新')
     await router.push('/assets/accounts')

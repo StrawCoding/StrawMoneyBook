@@ -70,7 +70,7 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'allow_negative', 'opening_balance_minor', 'currency_code', 'icon',
       'credit_limit_minor', 'repayment_reminder_day', 'sort_order', 'is_archived',
       'created_at', 'updated_at', 'deleted_at', 'include_in_assets',
-      'include_in_group_statistics',
+      'include_in_group_statistics', 'is_settlement',
     ),
     required: Object.freeze(['id', 'group_id', 'name', 'created_at', 'updated_at']),
     enums: enums({
@@ -93,6 +93,7 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'ledger_id', 'id', 'group_id', 'name', 'kind', 'icon', 'is_budgetable',
       'sort_order', 'is_archived', 'created_at', 'updated_at', 'deleted_at',
       'default_include_in_analysis', 'default_include_in_budget', 'default_is_reimbursable',
+      'system_key',
     ),
     required: Object.freeze(['id', 'group_id', 'name', 'kind', 'created_at', 'updated_at']),
     enums: enums({
@@ -255,7 +256,7 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
     columns: cols(
       'ledger_id', 'id', 'symbol', 'name', 'market', 'asset_class', 'currency_code',
       'include_in_assets', 'manual_price_minor', 'manual_price_at', 'price_source',
-      'sort_order', 'is_archived', 'created_at', 'updated_at', 'deleted_at',
+      'sort_order', 'is_archived', 'settlement_account_id', 'created_at', 'updated_at', 'deleted_at',
     ),
     required: Object.freeze(['id', 'symbol', 'name', 'created_at', 'updated_at']),
     enums: enums({
@@ -265,7 +266,10 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
   security_transactions: {
     columns: cols(
       'ledger_id', 'id', 'security_id', 'type', 'occurred_at', 'quantity', 'price_minor',
-      'fee_minor', 'cash_account_id', 'note', 'created_at', 'updated_at', 'deleted_at',
+      'fee_minor', 'fee_mode', 'record_mode', 'principal_minor', 'proceeds_minor',
+      'settle_at', 'settlement_status', 'confirmed_at',
+      'cash_account_id', 'cash_principal_tx_id', 'cash_pnl_tx_id',
+      'note', 'created_at', 'updated_at', 'deleted_at',
     ),
     required: Object.freeze([
       'id', 'security_id', 'type', 'occurred_at', 'quantity', 'price_minor',
@@ -273,6 +277,9 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
     ]),
     enums: enums({
       type: ['buy', 'sell'],
+      fee_mode: ['into_cost', 'from_proceeds'],
+      record_mode: ['position', 'funds'],
+      settlement_status: ['scheduled', 'confirmed', 'cancelled'],
     }),
   },
   bank_connections: {

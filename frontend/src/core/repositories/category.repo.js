@@ -31,7 +31,8 @@ export async function listCategories(ledgerId, options = {}) {
   const includeArchived = Boolean(options.includeArchived)
   const result = await query(
     `SELECT ledger_id, id, group_id, name, kind, icon, is_budgetable, sort_order, is_archived,
-            default_include_in_analysis, default_include_in_budget, default_is_reimbursable
+            default_include_in_analysis, default_include_in_budget, default_is_reimbursable,
+            system_key
      FROM categories
      WHERE ledger_id = ?
        AND deleted_at IS NULL
@@ -232,6 +233,15 @@ export async function countBudgetItemReferencesByGroup(ledgerId, groupId) {
 }
 
 export async function deleteCategoryIfUnused(ledgerId, categoryId) {
+  const systemRow = firstRow(
+    await query(
+      `SELECT system_key FROM categories WHERE ledger_id = ? AND id = ? AND deleted_at IS NULL LIMIT 1;`,
+      [ledgerId, categoryId],
+    ),
+  )
+  if (String(systemRow?.system_key ?? '') === 'investment_pnl') {
+    throw new Error('系統分類「投資損益」不可刪除')
+  }
   const count = await countCategoryTransactions(ledgerId, categoryId)
   if (count > 0) {
     await archiveCategory(ledgerId, categoryId)

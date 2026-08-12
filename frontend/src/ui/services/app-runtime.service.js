@@ -23,6 +23,7 @@ import { APP_BUDGET_PERIOD_SYNC_EVENT } from '@/ui/composables/useHomePeriodFilt
 import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { runSavingsJarAutoSaveIfDue } from '@/core/services/savings-jar-auto-save.service'
 import { runSubscriptionChargesIfDue } from '@/core/services/subscription-charge.service'
+import { runDueSecuritySettlements } from '@/core/services/security.service'
 import { syncBookkeepingRemindersForAllLedgers } from '@/ui/services/bookkeeping-reminder.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { loadUiLayout } from '@/ui/services/ui-layout.service'
@@ -371,6 +372,13 @@ function runBudgetSaveInBackground(ledgerId, reason) {
   })
 }
 
+function runSecuritySettlementsInBackground(ledgerId, reason) {
+  if (!ledgerId) return
+  void runDueSecuritySettlements(ledgerId).catch((error) => {
+    console.warn(`[security-settlement] run failed (${reason})`, error)
+  })
+}
+
 export function installAppRuntime({ pinia, router, windowObject = globalThis.window } = {}) {
   const runtimeState = createRuntimeState()
   const listenerHandles = []
@@ -448,6 +456,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
         runSavingsJarAutoSaveInBackground(currentLedgerId, 'app_resume')
         runSubscriptionChargesInBackground(currentLedgerId, 'app_resume')
         runBudgetSaveInBackground(currentLedgerId, 'app_resume')
+        runSecuritySettlementsInBackground(currentLedgerId, 'app_resume')
         scheduleAutoBackupDueCheck(runtimeState, pinia, windowObject)
       }
       void syncActiveLedgerHomeWidget(pinia)
@@ -526,6 +535,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
     runSavingsJarAutoSaveInBackground(ledgerStore.activeLedgerId, 'app_start')
     runSubscriptionChargesInBackground(ledgerStore.activeLedgerId, 'app_start')
     runBudgetSaveInBackground(ledgerStore.activeLedgerId, 'app_start')
+    runSecuritySettlementsInBackground(ledgerStore.activeLedgerId, 'app_start')
   }
 
   const stopLedgerWatcher = watch(
@@ -553,6 +563,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
       runSavingsJarAutoSaveInBackground(normalizedLedgerId, 'active_ledger_change')
       runSubscriptionChargesInBackground(normalizedLedgerId, 'active_ledger_change')
       runBudgetSaveInBackground(normalizedLedgerId, 'active_ledger_change')
+      runSecuritySettlementsInBackground(normalizedLedgerId, 'active_ledger_change')
     },
     { immediate: true },
   )

@@ -18,10 +18,29 @@
           @click="openCreate"
         >{{ t('securities_page.add') }}</button>
       </header>
+
+      <div class="mode-row" data-testid="securities-unrealized-mode">
+        <span class="muted">{{ t('securities_page.unrealized_mode') }}</span>
+        <div class="seg">
+          <button
+            type="button"
+            class="seg-btn"
+            :class="{ active: securityStore.unrealizedMode === 'market' }"
+            @click="setMode('market')"
+          >{{ t('securities_page.unrealized_market') }}</button>
+          <button
+            type="button"
+            class="seg-btn"
+            :class="{ active: securityStore.unrealizedMode === 'cost' }"
+            @click="setMode('cost')"
+          >{{ t('securities_page.unrealized_cost') }}</button>
+        </div>
+      </div>
+
       <div class="summary-grid">
         <div class="summary-item">
-          <small class="muted">{{ t('securities_page.market_value') }}</small>
-          <MoneyText :value-minor="securityStore.summary.totalMarketValueMinor" />
+          <small class="muted">{{ displayValueLabel }}</small>
+          <MoneyText :value-minor="securityStore.summary.totalDisplayValueMinor" />
         </div>
         <div class="summary-item">
           <small class="muted">{{ t('securities_page.invested') }}</small>
@@ -44,10 +63,15 @@
           <button type="button" class="sec-row" @click="openDetail(item.id)">
             <div class="sec-main">
               <strong>{{ item.name }}</strong>
-              <small class="muted">{{ item.symbol }} · {{ assetClassLabel(item.asset_class) }}</small>
+              <small class="muted">
+                {{ item.symbol }} · {{ assetClassLabel(item.asset_class) }}
+                <template v-if="settlementName(item.settlement_account_id)">
+                  · {{ settlementName(item.settlement_account_id) }}
+                </template>
+              </small>
             </div>
             <div class="sec-metrics">
-              <MoneyText :value-minor="item.position.marketValueMinor" />
+              <MoneyText :value-minor="item.position.displayValueMinor" />
               <small class="muted">{{ t('securities_page.qty', { count: item.position.quantity }) }}</small>
             </div>
           </button>
@@ -60,10 +84,17 @@
       :open="createOpen"
       :title="t('securities_page.add')"
       :body-class="'stack form-wrap'"
-      :sheet-class="'sheet'"
+      :sheet-class="'sheet securities-sheet'"
       :show-footer="true"
       @close="createOpen = false"
     >
+      <label>
+        {{ t('securities_page.settlement_account') }}
+        <CustomSelect v-model="createForm.settlementAccountId" :options="settlementOptions" />
+      </label>
+      <button type="button" class="btn" @click="markSelectedSettlement" :disabled="!createForm.settlementAccountId">
+        {{ t('securities_page.mark_settlement') }}
+      </button>
       <label>
         {{ t('securities_page.symbol') }}
         <input v-model.trim="createForm.symbol" class="input" maxlength="20" placeholder="2330" />
@@ -121,6 +152,7 @@ const createForm = reactive({
   assetClass: 'stock',
   priceMajor: 0,
   includeInAssets: true,
+  settlementAccountId: '',
 })
 
 const assetClassOptions = computed(() => [
@@ -128,8 +160,43 @@ const assetClassOptions = computed(() => [
   { value: 'etf', label: t('securities_page.class.etf') },
 ])
 
+const settlementOptions = computed(() => (
+  (securityStore.candidateAccounts || []).map((acc) => ({
+    value: acc.id,
+    label: Number(acc.is_settlement) === 1
+      ? `${acc.name}（${t('securities_page.settlement_badge')}）`
+      : acc.name,
+  }))
+))
+
+const displayValueLabel = computed(() => (
+  securityStore.unrealizedMode === 'cost'
+    ? t('securities_page.cost_value')
+    : t('securities_page.market_value')
+))
+
+const accountNameMap = computed(() => {
+  const map = new Map()
+  for (const acc of securityStore.candidateAccounts || []) {
+    map.set(acc.id, acc.name)
+  }
+  return map
+})
+
+function settlementName(id) {
+  return accountNameMap.value.get(String(id || '')) || ''
+}
+
 function assetClassLabel(value) {
   return value === 'etf' ? t('securities_page.class.etf') : t('securities_page.class.stock')
+}
+
+async function setMode(mode) {
+  try {
+    await securityStore.setUnrealizedMode(mode)
+  } catch (error) {
+    uiStore.pushToast(error?.message || String(error), 'error')
+  }
 }
 
 function openCreate() {
@@ -138,6 +205,10 @@ function openCreate() {
   createForm.assetClass = 'stock'
   createForm.priceMajor = 0
   createForm.includeInAssets = true
+  const preferred = securityStore.settlementAccounts[0]?.id
+    || securityStore.candidateAccounts[0]?.id
+    || ''
+  createForm.settlementAccountId = preferred
   createOpen.value = true
 }
 
@@ -145,16 +216,30 @@ function openDetail(id) {
   router.push(`/assets/securities/${id}`)
 }
 
+async function markSelectedSettlement() {
+  if (!createForm.settlementAccountId) return
+  try {
+    await securityStore.markSettlement(createForm.settlementAccountId, true)
+    uiStore.pushToast(t('securities_page.marked_settlement'))
+  } catch (error) {
+    uiStore.pushToast(error?.message || String(error), 'error')
+  }
+}
+
 async function submitCreate() {
   if (creating.value) return
   creating.value = true
   try {
+    if (createForm.settlementAccountId) {
+      await securityStore.markSettlement(createForm.settlementAccountId, true)
+    }
     const result = await securityStore.create({
       symbol: createForm.symbol,
-      name: createForm.name,
+      name: createForm.name || createForm.symbol,
       assetClass: createForm.assetClass,
       manualPriceMinor: Math.round(Number(createForm.priceMajor || 0) * 100),
       includeInAssets: createForm.includeInAssets,
+      settlementAccountId: createForm.settlementAccountId,
     })
     createOpen.value = false
     uiStore.pushToast(t('securities_page.created'))
@@ -172,10 +257,43 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page-head { align-items: center; justify-content: space-between; }
-.page-title { display: flex; align-items: center; gap: 8px; margin: 0; }
-.title-icon { color: var(--primary); }
-.panel-head { align-items: center; justify-content: space-between; }
+.securities-page {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px) + var(--bottom-nav-height, 64px));
+  overflow-x: hidden;
+}
+.page-head { align-items: center; justify-content: space-between; gap: 12px; }
+.page-title { display: flex; align-items: center; gap: 8px; margin: 0; min-width: 0; }
+.title-icon { color: var(--primary); flex-shrink: 0; }
+.panel { padding: 14px; overflow: hidden; }
+.panel-head { align-items: center; justify-content: space-between; gap: 8px; }
+.mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 10px 0;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--input-bg);
+}
+.seg-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.seg-btn.active {
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+  color: var(--primary);
+  font-weight: 600;
+}
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -189,6 +307,7 @@ onMounted(async () => {
   display: grid;
   gap: 4px;
   background: var(--input-bg);
+  min-width: 0;
 }
 .sec-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .sec-row {
@@ -203,10 +322,12 @@ onMounted(async () => {
   gap: 12px;
   text-align: left;
   cursor: pointer;
+  min-width: 0;
 }
-.sec-main, .sec-metrics { display: grid; gap: 2px; }
-.sec-metrics { text-align: right; justify-items: end; }
-.form-wrap { gap: 12px; }
+.sec-main { display: grid; gap: 4px; min-width: 0; }
+.sec-main strong, .sec-main small { overflow-wrap: anywhere; }
+.sec-metrics { display: grid; gap: 2px; justify-items: end; text-align: right; flex-shrink: 0; }
+.form-wrap { gap: 12px; padding-bottom: 8px; }
 .switch-row {
   width: 100%;
   border: 1px solid var(--field-border);

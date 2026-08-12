@@ -39,6 +39,7 @@ import migration038 from '@/core/db/migrations/038_budget_container_period_mode.
 import migration039 from '@/core/db/migrations/039_budget_pay_cycle.sql?raw'
 import migration040 from '@/core/db/migrations/040_transaction_editor_attribution.sql?raw'
 import migration041 from '@/core/db/migrations/041_securities.sql?raw'
+import migration042 from '@/core/db/migrations/042_securities_settlement_v2.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -78,6 +79,7 @@ const MIGRATIONS = [
   { version: 39, name: 'budget_pay_cycle', sql: migration039 },
   { version: 40, name: 'transaction_editor_attribution', sql: migration040 },
   { version: 41, name: 'securities', sql: migration041 },
+  { version: 42, name: 'securities_settlement_v2', sql: migration042 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'

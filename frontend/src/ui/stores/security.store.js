@@ -3,11 +3,20 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import {
   addSecurityBuy,
   addSecuritySell,
+  cancelSecuritySettlement,
+  confirmSecuritySettlement,
   createSecurityWithOptionalBuy,
+  listCandidateSettlementAccounts,
+  listSettlementAccounts,
   loadSecuritiesDashboard,
   loadSecurityDetail,
+  markAccountAsSettlement,
   removeSecurity,
   removeSecurityTransaction,
+  rescheduleSecuritySettlement,
+  runDueSecuritySettlements,
+  setSecuritiesUnrealizedMode,
+  updateSecurityEvent,
   updateSecurityProfile,
 } from '@/core/services/security.service'
 
@@ -19,21 +28,45 @@ export const useSecurityStore = defineStore('security', {
       includedMarketValueMinor: 0,
       totalMarketValueMinor: 0,
       totalInvestedMinor: 0,
+      totalDisplayValueMinor: 0,
       totalDeltaMinor: 0,
     },
+    unrealizedMode: 'market',
+    settlementAccounts: [],
+    candidateAccounts: [],
     detail: null,
     loading: false,
   }),
 
   actions: {
+    async runDueSettlements() {
+      const ledgerStore = useLedgerStore()
+      if (!ledgerStore.activeLedgerId) return []
+      return runDueSecuritySettlements(ledgerStore.activeLedgerId)
+    },
+
+    async loadAccounts() {
+      const ledgerStore = useLedgerStore()
+      if (!ledgerStore.activeLedgerId) return
+      const [settlement, candidates] = await Promise.all([
+        listSettlementAccounts(ledgerStore.activeLedgerId),
+        listCandidateSettlementAccounts(ledgerStore.activeLedgerId),
+      ])
+      this.settlementAccounts = settlement
+      this.candidateAccounts = candidates
+    },
+
     async load() {
       const ledgerStore = useLedgerStore()
       if (!ledgerStore.activeLedgerId) return
       this.loading = true
       try {
+        await this.runDueSettlements()
         const dashboard = await loadSecuritiesDashboard(ledgerStore.activeLedgerId)
         this.items = dashboard.items
         this.summary = dashboard.summary
+        this.unrealizedMode = dashboard.unrealizedMode
+        await this.loadAccounts()
       } finally {
         this.loading = false
       }
@@ -42,8 +75,22 @@ export const useSecurityStore = defineStore('security', {
     async loadDetail(securityId) {
       const ledgerStore = useLedgerStore()
       if (!ledgerStore.activeLedgerId) return null
+      await this.runDueSettlements()
       this.detail = await loadSecurityDetail(ledgerStore.activeLedgerId, securityId)
       return this.detail
+    },
+
+    async setUnrealizedMode(mode) {
+      const ledgerStore = useLedgerStore()
+      await setSecuritiesUnrealizedMode(ledgerStore.activeLedgerId, mode)
+      await this.load()
+      if (this.detail?.security?.id) await this.loadDetail(this.detail.security.id)
+    },
+
+    async markSettlement(accountId, isSettlement = true) {
+      const ledgerStore = useLedgerStore()
+      await markAccountAsSettlement(ledgerStore.activeLedgerId, accountId, isSettlement)
+      await this.loadAccounts()
     },
 
     async create(payload) {
@@ -76,6 +123,38 @@ export const useSecurityStore = defineStore('security', {
       const result = await addSecuritySell(ledgerStore.activeLedgerId, payload)
       await this.load()
       if (payload.securityId) await this.loadDetail(payload.securityId)
+      return result
+    },
+
+    async updateEvent(transactionId, payload, securityId) {
+      const ledgerStore = useLedgerStore()
+      const result = await updateSecurityEvent(ledgerStore.activeLedgerId, transactionId, payload)
+      await this.load()
+      if (securityId) await this.loadDetail(securityId)
+      return result
+    },
+
+    async confirmSettlement(transactionId, securityId, options = {}) {
+      const ledgerStore = useLedgerStore()
+      const result = await confirmSecuritySettlement(ledgerStore.activeLedgerId, transactionId, options)
+      await this.load()
+      if (securityId) await this.loadDetail(securityId)
+      return result
+    },
+
+    async cancelSettlement(transactionId, securityId) {
+      const ledgerStore = useLedgerStore()
+      const result = await cancelSecuritySettlement(ledgerStore.activeLedgerId, transactionId)
+      await this.load()
+      if (securityId) await this.loadDetail(securityId)
+      return result
+    },
+
+    async rescheduleSettlement(transactionId, settleAt, securityId) {
+      const ledgerStore = useLedgerStore()
+      const result = await rescheduleSecuritySettlement(ledgerStore.activeLedgerId, transactionId, settleAt)
+      await this.load()
+      if (securityId) await this.loadDetail(securityId)
       return result
     },
 

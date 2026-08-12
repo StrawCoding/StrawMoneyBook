@@ -48,6 +48,10 @@ function normalizeIncludeInGroupStatistics(value, fallback = 1) {
   return normalizeIncludeInAssets(value, fallback)
 }
 
+function normalizeIsSettlement(value, fallback = 0) {
+  return normalizeIncludeInAssets(value, fallback)
+}
+
 export async function listAccountGroups(ledgerId) {
   assertLedgerId(ledgerId)
   const result = await query(
@@ -67,7 +71,7 @@ export async function listAccounts(ledgerId, options = {}) {
   const result = await query(
     `SELECT a.ledger_id, a.id, a.group_id, a.name, a.account_type, a.account_kind, a.allow_negative, a.opening_balance_minor,
             a.currency_code, a.icon, a.credit_limit_minor, a.repayment_reminder_day,
-            a.include_in_assets, a.include_in_group_statistics, a.sort_order, a.is_archived,
+            a.include_in_assets, a.include_in_group_statistics, a.is_settlement, a.sort_order, a.is_archived,
             sj.goal_type AS savings_jar_goal_type,
             sj.target_amount_minor AS savings_jar_target_amount_minor,
             sj.auto_save_source_account_id AS savings_jar_auto_save_source_account_id,
@@ -98,7 +102,7 @@ export async function findAccountById(ledgerId, accountId) {
   const result = await query(
     `SELECT a.ledger_id, a.id, a.group_id, a.name, a.account_type, a.account_kind, a.allow_negative, a.opening_balance_minor,
             a.currency_code, a.icon, a.credit_limit_minor, a.repayment_reminder_day,
-            a.include_in_assets, a.include_in_group_statistics, a.sort_order, a.is_archived,
+            a.include_in_assets, a.include_in_group_statistics, a.is_settlement, a.sort_order, a.is_archived,
             sj.goal_type AS savings_jar_goal_type,
             sj.target_amount_minor AS savings_jar_target_amount_minor,
             sj.auto_save_source_account_id AS savings_jar_auto_save_source_account_id,
@@ -148,13 +152,14 @@ export async function createAccount(ledgerId, input) {
   const repaymentReminderDay = normalizeRepaymentReminderDay(input.repaymentReminderDay)
   const includeInAssets = normalizeIncludeInAssets(input.includeInAssets, 1)
   const includeInGroupStatistics = normalizeIncludeInGroupStatistics(input.includeInGroupStatistics, 1)
+  const isSettlement = normalizeIsSettlement(input.isSettlement ?? input.is_settlement, 0)
 
   await run(
     `INSERT INTO accounts (
       ledger_id, id, group_id, name, account_type, account_kind, allow_negative, opening_balance_minor,
       currency_code, icon, credit_limit_minor, repayment_reminder_day,
-      include_in_assets, include_in_group_statistics, sort_order, is_archived, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?);`,
+      include_in_assets, include_in_group_statistics, is_settlement, sort_order, is_archived, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?);`,
     [
       ledgerId,
       id,
@@ -170,6 +175,7 @@ export async function createAccount(ledgerId, input) {
       repaymentReminderDay,
       includeInAssets,
       includeInGroupStatistics,
+      isSettlement,
       input.sortOrder ?? 0,
       now,
       now,
@@ -213,6 +219,11 @@ export async function updateAccountProfile(ledgerId, accountId, input = {}) {
   const includeInAssets = hasIncludeInAssets ? normalizeIncludeInAssets(input.includeInAssets, 1) : null
   const hasIncludeInGroupStatistics = Object.prototype.hasOwnProperty.call(input, 'includeInGroupStatistics')
   const includeInGroupStatistics = hasIncludeInGroupStatistics ? normalizeIncludeInGroupStatistics(input.includeInGroupStatistics, 1) : null
+  const hasIsSettlement = Object.prototype.hasOwnProperty.call(input, 'isSettlement')
+    || Object.prototype.hasOwnProperty.call(input, 'is_settlement')
+  const isSettlement = hasIsSettlement
+    ? normalizeIsSettlement(input.isSettlement ?? input.is_settlement, 0)
+    : null
 
   await run(
     `UPDATE accounts
@@ -229,6 +240,7 @@ export async function updateAccountProfile(ledgerId, accountId, input = {}) {
          END,
          include_in_assets = COALESCE(?, include_in_assets),
          include_in_group_statistics = COALESCE(?, include_in_group_statistics),
+         is_settlement = COALESCE(?, is_settlement),
          updated_at = ?
      WHERE ledger_id = ? AND id = ? AND deleted_at IS NULL;`,
     [
@@ -243,6 +255,7 @@ export async function updateAccountProfile(ledgerId, accountId, input = {}) {
       hasRepaymentReminderDay ? repaymentReminderDay : null,
       includeInAssets,
       includeInGroupStatistics,
+      isSettlement,
       nowIso(),
       ledgerId,
       accountId,
