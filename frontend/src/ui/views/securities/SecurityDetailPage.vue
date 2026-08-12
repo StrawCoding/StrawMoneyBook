@@ -289,9 +289,7 @@ const securityId = computed(() => String(props.id || route.params.id || '').trim
 const settlementOptions = computed(() => (
   (securityStore.candidateAccounts || []).map((acc) => ({
     value: acc.id,
-    label: Number(acc.is_settlement) === 1
-      ? `${acc.name}（${t('securities_page.settlement_badge')}）`
-      : acc.name,
+    label: acc.name,
   }))
 ))
 const settlementLabel = computed(() => {
@@ -372,9 +370,6 @@ async function saveProfile() {
   if (savingProfile.value || !securityId.value) return
   savingProfile.value = true
   try {
-    if (settlementAccountId.value) {
-      await securityStore.markSettlement(settlementAccountId.value, true)
-    }
     await securityStore.update(securityId.value, {
       symbol: profileForm.symbol,
       name: profileForm.name || profileForm.symbol,

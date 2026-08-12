@@ -7,10 +7,8 @@ import {
   confirmSecuritySettlement,
   createSecurityWithOptionalBuy,
   listCandidateSettlementAccounts,
-  listSettlementAccounts,
   loadSecuritiesDashboard,
   loadSecurityDetail,
-  markAccountAsSettlement,
   removeSecurity,
   removeSecurityTransaction,
   rescheduleSecuritySettlement,
@@ -32,6 +30,7 @@ export const useSecurityStore = defineStore('security', {
       totalDeltaMinor: 0,
     },
     unrealizedMode: 'market',
+    /** @deprecated alias of candidateAccounts; kept for callers expecting settlementAccounts */
     settlementAccounts: [],
     candidateAccounts: [],
     detail: null,
@@ -48,12 +47,10 @@ export const useSecurityStore = defineStore('security', {
     async loadAccounts() {
       const ledgerStore = useLedgerStore()
       if (!ledgerStore.activeLedgerId) return
-      const [settlement, candidates] = await Promise.all([
-        listSettlementAccounts(ledgerStore.activeLedgerId),
-        listCandidateSettlementAccounts(ledgerStore.activeLedgerId),
-      ])
-      this.settlementAccounts = settlement
+      // Select-only: any usable asset account may bind as settlement_account_id.
+      const candidates = await listCandidateSettlementAccounts(ledgerStore.activeLedgerId)
       this.candidateAccounts = candidates
+      this.settlementAccounts = candidates
     },
 
     async load() {
@@ -85,12 +82,6 @@ export const useSecurityStore = defineStore('security', {
       await setSecuritiesUnrealizedMode(ledgerStore.activeLedgerId, mode)
       await this.load()
       if (this.detail?.security?.id) await this.loadDetail(this.detail.security.id)
-    },
-
-    async markSettlement(accountId, isSettlement = true) {
-      const ledgerStore = useLedgerStore()
-      await markAccountAsSettlement(ledgerStore.activeLedgerId, accountId, isSettlement)
-      await this.loadAccounts()
     },
 
     async create(payload) {

@@ -420,6 +420,7 @@ export async function getIncludedSecuritiesMarketValueMinor(ledgerId) {
 }
 
 export async function markAccountAsSettlement(ledgerId, accountId, isSettlement = true) {
+  // Legacy compat: field retained for migrations/backup; product no longer gates on it.
   const account = await findAccountById(ledgerId, accountId)
   if (!account) throw new Error('找不到帳戶')
   await run(
@@ -431,20 +432,9 @@ export async function markAccountAsSettlement(ledgerId, accountId, isSettlement 
   return findAccountById(ledgerId, accountId)
 }
 
+/** Usable asset accounts for settlement_account_id binding (select-only; not filtered by is_settlement). */
 export async function listSettlementAccounts(ledgerId) {
-  return rowsOf(
-    await query(
-      `SELECT *
-         FROM accounts
-        WHERE ledger_id = ?
-          AND deleted_at IS NULL
-          AND is_archived = 0
-          AND account_type = 'asset'
-          AND is_settlement = 1
-        ORDER BY sort_order ASC, name ASC;`,
-      [ledgerId],
-    ),
-  )
+  return listCandidateSettlementAccounts(ledgerId)
 }
 
 export async function listCandidateSettlementAccounts(ledgerId) {
@@ -456,7 +446,7 @@ export async function listCandidateSettlementAccounts(ledgerId) {
           AND deleted_at IS NULL
           AND is_archived = 0
           AND account_type = 'asset'
-        ORDER BY is_settlement DESC, sort_order ASC, name ASC;`,
+        ORDER BY sort_order ASC, name ASC;`,
       [ledgerId],
     ),
   )

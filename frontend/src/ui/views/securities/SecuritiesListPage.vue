@@ -88,13 +88,10 @@
       :show-footer="true"
       @close="createOpen = false"
     >
-      <label>
+      <label data-testid="securities-create-settlement">
         {{ t('securities_page.settlement_account') }}
         <CustomSelect v-model="createForm.settlementAccountId" :options="settlementOptions" />
       </label>
-      <button type="button" class="btn" @click="markSelectedSettlement" :disabled="!createForm.settlementAccountId">
-        {{ t('securities_page.mark_settlement') }}
-      </button>
       <label>
         {{ t('securities_page.symbol') }}
         <input v-model.trim="createForm.symbol" class="input" maxlength="20" placeholder="2330" />
@@ -163,9 +160,7 @@ const assetClassOptions = computed(() => [
 const settlementOptions = computed(() => (
   (securityStore.candidateAccounts || []).map((acc) => ({
     value: acc.id,
-    label: Number(acc.is_settlement) === 1
-      ? `${acc.name}（${t('securities_page.settlement_badge')}）`
-      : acc.name,
+    label: acc.name,
   }))
 ))
 
@@ -205,10 +200,7 @@ function openCreate() {
   createForm.assetClass = 'stock'
   createForm.priceMajor = 0
   createForm.includeInAssets = true
-  const preferred = securityStore.settlementAccounts[0]?.id
-    || securityStore.candidateAccounts[0]?.id
-    || ''
-  createForm.settlementAccountId = preferred
+  createForm.settlementAccountId = securityStore.candidateAccounts[0]?.id || ''
   createOpen.value = true
 }
 
@@ -216,23 +208,10 @@ function openDetail(id) {
   router.push(`/assets/securities/${id}`)
 }
 
-async function markSelectedSettlement() {
-  if (!createForm.settlementAccountId) return
-  try {
-    await securityStore.markSettlement(createForm.settlementAccountId, true)
-    uiStore.pushToast(t('securities_page.marked_settlement'))
-  } catch (error) {
-    uiStore.pushToast(error?.message || String(error), 'error')
-  }
-}
-
 async function submitCreate() {
   if (creating.value) return
   creating.value = true
   try {
-    if (createForm.settlementAccountId) {
-      await securityStore.markSettlement(createForm.settlementAccountId, true)
-    }
     const result = await securityStore.create({
       symbol: createForm.symbol,
       name: createForm.name || createForm.symbol,

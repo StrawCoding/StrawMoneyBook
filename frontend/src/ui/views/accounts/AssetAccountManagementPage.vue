@@ -172,23 +172,6 @@
           <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
         </button>
       </div>
-      <div v-if="accountKindInput === 'cash'" class="field">
-        <span>{{ t('account.is_settlement_label') }}</span>
-        <button
-          type="button"
-          class="switch-row"
-          :class="{ active: accountIsSettlementInput }"
-          role="switch"
-          :aria-checked="accountIsSettlementInput ? 'true' : 'false'"
-          data-testid="account-create-is-settlement"
-          @click="accountIsSettlementInput = !accountIsSettlementInput"
-        >
-          <span class="switch-copy">
-            <strong>{{ accountIsSettlementInput ? t('account.is_settlement_on') : t('account.is_settlement_off') }}</strong>
-          </span>
-          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-        </button>
-      </div>
       <p v-if="accountAmountInvalid" class="error-text">{{ accountKindInput === 'credit' ? '目前欠款格式錯誤' : '期初金額格式錯誤' }}</p>
       <p v-if="accountCreditLimitInvalid" class="error-text">信用額度格式錯誤</p>
       <p v-if="accountReminderDayInvalid" class="error-text">還款提醒日需介於 1 到 31</p>
@@ -228,7 +211,6 @@ const accountRepaymentReminderDayInput = ref('')
 const accountIconInput = ref(defaultAccountIcon)
 const accountCurrencyCodeInput = ref('TWD')
 const accountIncludeInAssetsInput = ref(true)
-const accountIsSettlementInput = ref(false)
 const accountIncludeInGroupStatisticsInput = ref(true)
 const accountItemsMap = ref({})
 const expandedGroupIds = ref(new Set())
@@ -386,7 +368,6 @@ async function addAccount(groupId) {
   accountIconInput.value = defaultAccountIcon
   accountCurrencyCodeInput.value = 'TWD'
   accountIncludeInAssetsInput.value = true
-  accountIsSettlementInput.value = false
   accountIncludeInGroupStatisticsInput.value = true
   accountDialogOpen.value = true
 }
@@ -424,7 +405,6 @@ function closeAccountDialog() {
   accountIconInput.value = defaultAccountIcon
   accountCurrencyCodeInput.value = 'TWD'
   accountIncludeInAssetsInput.value = true
-  accountIsSettlementInput.value = false
   accountIncludeInGroupStatisticsInput.value = true
   clearAccountDialogQuery()
 }
@@ -494,7 +474,6 @@ async function submitAccountDialog() {
       repaymentReminderDay: accountKind === 'credit' ? reminderDay : null,
       includeInAssets: accountIncludeInAssetsInput.value,
       includeInGroupStatistics: accountIncludeInGroupStatisticsInput.value,
-      isSettlement: accountKind === 'cash' ? accountIsSettlementInput.value : false,
     })
     uiStore.pushToast('帳戶已新增')
     closeAccountDialog()

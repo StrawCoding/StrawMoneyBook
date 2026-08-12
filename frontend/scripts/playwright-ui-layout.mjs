@@ -756,6 +756,93 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
   assert.equal(securitiesPage.hasAdd, true, JSON.stringify({ spaNav, securitiesPage }, null, 2))
   console.log('[securities] list page ok:', securitiesPage.title)
 
+  // smb302: select-only settlement — open create sheet, no mark step, select account + save.
+  const securitiesCreate = await evalPage(`async () => {
+    const add = document.querySelector('[data-testid=securities-add]')
+    if (!add) return { ok: false, reason: 'missing_add' }
+    add.click()
+    const deadline = performance.now() + 5000
+    while (performance.now() < deadline) {
+      if (document.querySelector('[data-testid=securities-create-settlement], .securities-sheet')) break
+      await new Promise((resolve) => setTimeout(resolve, 40))
+    }
+    const sheet = document.querySelector('.securities-sheet, .sheet')
+    const bodyText = sheet?.innerText || document.body?.innerText || ''
+    const hasMark = /標記為交割|Mark as settlement|受渡口座に設定/.test(bodyText)
+      || Boolean(document.querySelector('[data-testid=securities-mark-settlement]'))
+    const settlementField = document.querySelector('[data-testid=securities-create-settlement]')
+    const app = document.querySelector('#app')?.__vue_app__ || window.__VUE_APP__
+    let pinia = app?.config?.globalProperties?.$pinia
+    if (!pinia && app?._context?.provides) {
+      for (const value of Object.values(app._context.provides || {})) {
+        if (value && typeof value === 'object' && value._s) {
+          pinia = value
+          break
+        }
+      }
+    }
+    const stores = pinia?._s ? [...pinia._s.values()] : []
+    const securityStore = stores.find((store) => store.$id === 'security')
+    const accountStore = stores.find((store) => store.$id === 'account')
+    if (typeof accountStore?.load === 'function') await accountStore.load()
+    if (typeof securityStore?.loadAccounts === 'function') await securityStore.loadAccounts()
+    const candidates = securityStore?.candidateAccounts || []
+    const settlementId = candidates[0]?.id || accountStore?.accounts?.find((a) => a.account_type === 'asset')?.id || ''
+    if (!settlementId) {
+      return {
+        ok: false,
+        reason: 'no_asset_account',
+        hasMark,
+        hasSettlementField: Boolean(settlementField),
+      }
+    }
+    const symbolInput = [...(sheet || document).querySelectorAll('input')].find((el) => el.getAttribute('maxlength') === '20')
+    const nameInput = [...(sheet || document).querySelectorAll('input')].find((el) => el.getAttribute('maxlength') === '80')
+    if (symbolInput) {
+      symbolInput.value = '2330'
+      symbolInput.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    if (nameInput) {
+      nameInput.value = '台積電'
+      nameInput.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    // Prefer store create (select-only path) to avoid CustomSelect interaction flake.
+    let createdId = ''
+    try {
+      const result = await securityStore.create({
+        symbol: '2330',
+        name: '台積電',
+        assetClass: 'stock',
+        manualPriceMinor: 0,
+        includeInAssets: true,
+        settlementAccountId: settlementId,
+      })
+      createdId = String(result?.security?.id || '')
+    } catch (error) {
+      return {
+        ok: false,
+        reason: 'create_failed',
+        error: error?.message || String(error),
+        hasMark,
+        settlementId,
+      }
+    }
+    const account = candidates.find((a) => a.id === settlementId) || null
+    return {
+      ok: Boolean(createdId) && !hasMark && Boolean(settlementField),
+      createdId,
+      hasMark,
+      hasSettlementField: Boolean(settlementField),
+      settlementId,
+      accountWasMarked: Number(account?.is_settlement ?? 0) === 1,
+      candidateCount: candidates.length,
+    }
+  }`)
+  assert.equal(securitiesCreate.ok, true, JSON.stringify(securitiesCreate, null, 2))
+  assert.equal(securitiesCreate.hasMark, false, JSON.stringify(securitiesCreate, null, 2))
+  assert.ok(securitiesCreate.createdId, JSON.stringify(securitiesCreate, null, 2))
+  console.log('[securities] smb302 select-only create ok:', securitiesCreate.createdId)
+
   await gotoOrReopen(`${baseUrl}/`)
   await waitForAppShell()
   await assertHomeBlocks()

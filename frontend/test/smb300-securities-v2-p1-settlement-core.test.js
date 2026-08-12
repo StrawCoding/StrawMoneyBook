@@ -165,7 +165,14 @@ test('migration 042 and wiring present', () => {
   assert.match(detailPage, /profileForm\.assetClass|assetClass:/)
   assert.match(i18n, /'securities_page.settle_at':/)
   assert.equal((i18n.match(/'securities_page.settle_at':/g) || []).length, 3)
-  assert.equal((i18n.match(/'account.is_settlement_label':/g) || []).length, 3)
+  assert.equal((i18n.match(/'securities_page.mark_settlement':/g) || []).length, 0)
+  assert.equal((i18n.match(/'account.is_settlement_label':/g) || []).length, 0)
+  assert.doesNotMatch(listPage, /mark_settlement|markSelectedSettlement|標記為交割/)
+  assert.doesNotMatch(detailPage, /markSettlement|settlement_badge/)
+  assert.match(service, /listSettlementAccounts/)
+  assert.match(service, /listCandidateSettlementAccounts/)
+  // Select-only: listSettlementAccounts must not hard-gate on is_settlement = 1
+  assert.doesNotMatch(service, /AND is_settlement = 1/)
 
   const sqlite = readFileSync(resolve(root, 'src/core/db/sqlite.js'), 'utf8')
   assert.match(sqlite, /beginTransaction/)
