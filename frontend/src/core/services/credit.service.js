@@ -505,11 +505,10 @@ export async function assertTransactionMutableForCredit(ledgerId, transactionId,
 
 export async function createCreditRefundAdjustment(ledgerId, payload = {}) {
   // Formal refund path: write adjustment posting into current OPEN statement;
-  // never mutate closed closing_balance_minor.
+  // never mutate closed closing_balance_minor. posted_at is forced into the open
+  // period so statement assignment stays consistent with hard contract #2/#4.
   const accountId = String(payload.accountId ?? '').trim()
   const amountMinor = Math.round(Math.abs(Number(payload.amountMinor)))
-  const occurredAt = normalizePostedAt(payload.occurredAt, new Date().toISOString())
-  const postedAt = normalizePostedAt(payload.postedAt, occurredAt)
   if (!accountId || amountMinor <= 0) throw new Error('退款參數無效')
 
   const account = await findAccountById(ledgerId, accountId)
@@ -518,12 +517,33 @@ export async function createCreditRefundAdjustment(ledgerId, payload = {}) {
   }
 
   return withTransaction(async () => {
-    const statement = await assignStatementForPostedAt(ledgerId, accountId, postedAt)
+    await runCreditStatementRollovers(ledgerId)
+    let open = await findOpenCreditStatement(ledgerId, accountId)
+    if (!open) {
+      open = await ensureOpenStatementForAccount(ledgerId, account, new Date())
+    }
+    if (!open || open.status !== 'open') {
+      const err = new Error('CLOSED_STATEMENT_POSTING_FORBIDDEN')
+      err.code = 'CLOSED_STATEMENT_POSTING_FORBIDDEN'
+      throw err
+    }
+
+    // Clamp posted_at into the open period (prefer "now", else period start).
+    const nowIso = toLocalIso(new Date())
+    let postedAt = normalizePostedAt(payload.postedAt, nowIso)
+    const inOpen = postedAt >= open.period_start_inclusive && postedAt < open.period_end_exclusive
+    if (!inOpen) {
+      postedAt = nowIso >= open.period_start_inclusive && nowIso < open.period_end_exclusive
+        ? nowIso
+        : open.period_start_inclusive
+    }
+    const occurredAt = normalizePostedAt(payload.occurredAt, postedAt)
+
     const plan = buildCreditRefundAdjustmentPlan({
       accountId,
       amountMinor,
-      openStatementId: statement.id,
-      openStatementStatus: statement.status,
+      openStatementId: open.id,
+      openStatementStatus: open.status,
       occurredAt,
       postedAt,
       note: payload.note ?? '信用卡退款／調整',

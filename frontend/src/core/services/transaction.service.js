@@ -688,29 +688,21 @@ export async function deleteManualTransaction(ledgerId, txId) {
 export async function batchPatchCategory(ledgerId, txIds, categoryId) {
   const validIds = (txIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean)
   if (!validIds.length) return 0
-  const allowed = []
+  // Hard reject: any closed credit posting in the selection fails the whole batch
+  // (v1.1: closed 交易預設禁改；不得 silently skip then claim success).
   for (const txId of validIds) {
     try {
       const { assertTransactionMutableForCredit } = await import('@/core/services/credit.service')
       await assertTransactionMutableForCredit(ledgerId, txId, {
         changes: { category: true, batch: true },
       })
-      allowed.push(txId)
     } catch (error) {
-      if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') {
-        continue
-      }
-      allowed.push(txId)
+      if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') throw error
     }
-  }
-  if (!allowed.length) {
-    const err = new Error('CLOSED_POSTING_MUTATION_FORBIDDEN')
-    err.code = 'CLOSED_POSTING_MUTATION_FORBIDDEN'
-    throw err
   }
   return batchPatchCategoryForTransactions(
     ledgerId,
-    allowed,
+    validIds,
     categoryId ?? null,
     await resolveCurrentTransactionEditor(),
   )
@@ -732,13 +724,8 @@ export async function batchPatchTransactions(ledgerId, txIds, rawPatch = {}) {
   const skipped = []
   const targets = []
 
+  // Pre-pass: any closed credit posting → hard-fail entire batch (no silent skip).
   for (const txId of validIds) {
-    const currentTx = await findTransactionRecordById(ledgerId, txId)
-    if (!currentTx) {
-      skipped.push({ txId, reason: '找不到交易資料' })
-      continue
-    }
-
     try {
       const { assertTransactionMutableForCredit } = await import('@/core/services/credit.service')
       await assertTransactionMutableForCredit(ledgerId, txId, {
@@ -754,10 +741,15 @@ export async function batchPatchTransactions(ledgerId, txIds, rawPatch = {}) {
         },
       })
     } catch (error) {
-      if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') {
-        skipped.push({ txId, reason: 'CLOSED_POSTING_MUTATION_FORBIDDEN' })
-        continue
-      }
+      if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') throw error
+    }
+  }
+
+  for (const txId of validIds) {
+    const currentTx = await findTransactionRecordById(ledgerId, txId)
+    if (!currentTx) {
+      skipped.push({ txId, reason: '找不到交易資料' })
+      continue
     }
 
     const plan = buildBatchTransactionUpdateInput(currentTx, patch)
@@ -774,13 +766,6 @@ export async function batchPatchTransactions(ledgerId, txIds, rawPatch = {}) {
   }
 
   if (!targets.length) {
-    const closedOnly = skipped.length > 0
-      && skipped.every((item) => item.reason === 'CLOSED_POSTING_MUTATION_FORBIDDEN')
-    if (closedOnly) {
-      const err = new Error('CLOSED_POSTING_MUTATION_FORBIDDEN')
-      err.code = 'CLOSED_POSTING_MUTATION_FORBIDDEN'
-      throw err
-    }
     throw new Error(skipped[0]?.reason || '沒有可更新的交易')
   }
 
