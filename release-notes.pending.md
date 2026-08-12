@@ -1,9 +1,10 @@
 # Pending Release Notes
 
+---
+
+## v1.3.108
 - 功能頁一般功能新增「有價證券」入口（`/assets/securities`，`feature-link-securities`），三語 i18n；補 Node／Playwright。
 - 修復有價證券載入／新增後 `(e ?? []) is not iterable`：`security.repo` 列表查詢改走與其他 repo 相同的 `rowsOf(queryResult)`（Capacitor SQLite 回傳 `{ values }`，不可直接 for-of）；服務層／持倉彙總亦防非陣列。補 Node 回歸。
-
----
 
 ## v1.3.106
 - (smb299) 修復功能頁進階列表加長後，最後一列（載具同步）被固定 BottomNav 遮擋導致點擊無效：`feature-link` 補 `scroll-margin-bottom`；`playwright:ui-layout` 進階入口改先 `scrollIntoView({block:'center'})` 並斷言列在 nav 上方再點（必要時 programmatic click fallback）。
