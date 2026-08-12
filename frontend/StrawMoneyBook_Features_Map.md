@@ -71,7 +71,7 @@
 | `/ai-auto-bookkeeping` | `src/ui/views/BookkeepingPage.vue` | AI 記帳模式（內嵌 `AiAutoBookkeepingPage.vue`） |
 | `/assets` | `src/ui/views/assets.vue` | 資產總覽 |
 | `/assets/securities` | `src/ui/views/securities/SecuritiesListPage.vue` | 有價證券列表 |
-| `/credit-cards` | `src/ui/views/credit-cards/CreditCardsPage.vue` | 信用卡 P0（smb301）：帳單／刷卡雙腿／還款 allocations；正式退款強制寫入當期 open posting（posted_at 箝制）；closed 批次硬拒絕；額度警示＝實際卡債 |
+| `/credit-cards` | `src/ui/views/credit-cards/CreditCardsPage.vue` | 信用卡 P0（smb301）：帳單／刷卡雙腿／還款 allocations；正式退款強制寫入當期 open posting（posted_at 箝制）；closed 批次硬拒絕；正式編輯僅允許純 occurred_at（`diffCreditManualTransactionChanges`，禁 occurredAt→postedAt 誤判）；額度警示＝實際卡債 |
 | `/assets/securities/:id` | `src/ui/views/securities/SecurityDetailPage.vue` | 有價證券明細／買賣 |
 | `/icons/pick` | `src/ui/views/IconPickerPage.vue` | 帳戶/分類 icon 選擇 |
 | `/assets/accounts` | `src/ui/views/accounts/AssetAccountManagementPage.vue` | 資產帳戶管理 |

@@ -18,6 +18,7 @@ import {
   clampPostedAtIntoOpenPeriod,
   computeActualCardDebtMinor,
   computeCreditUtilization,
+  diffCreditManualTransactionChanges,
   shouldForbidClosedCreditMutation,
   validateRepaymentAllocationPlan,
 } from '../src/core/utils/credit-card-apply.js'
@@ -259,6 +260,106 @@ test('sql.js formal path: refund→open posting; closed immutable; alloc same-ca
     changes: { category: true, batch: true },
   }), false)
 
+  // Formal edit entry diff: UI omits postedAt; expense amount is positive in payload
+  // while DB stores negative — must NOT flag postedAt/amount as changed.
+  const closedRow = {
+    id: 'T1',
+    type: 'expense',
+    account_id: cardId,
+    category_id: 'cat_food',
+    amount_minor: -50000,
+    occurred_at: '2026-03-10T12:00:00',
+    posted_at: '2026-03-10T12:00:00',
+    note: '刷卡',
+    is_reimbursable: 0,
+    include_in_budget: 1,
+    include_in_analysis: 1,
+  }
+  const pureOccurredPayload = {
+    type: 'expense',
+    accountId: cardId,
+    categoryId: 'cat_food',
+    amountMinor: 50000, // UI positive
+    occurredAt: '2026-03-08T09:00:00', // only budget/calendar correction
+    note: '刷卡',
+    isReimbursable: false,
+    includeInBudget: true,
+    includeInAnalysis: true,
+    // postedAt intentionally omitted (TransactionEditPage / HomeTransactionEditSheet)
+  }
+  const pureDiff = diffCreditManualTransactionChanges(closedRow, pureOccurredPayload)
+  assert.deepEqual(pureDiff, {
+    amount: false,
+    account: false,
+    postedAt: false,
+    category: false,
+    note: false,
+    flags: false,
+    occurredAt: true,
+    delete: false,
+    batch: false,
+  })
+  assert.equal(shouldForbidClosedCreditMutation({
+    status: 'closed',
+    changes: pureDiff,
+  }), false)
+
+  // Regression: old buggy fallback payload.postedAt ?? payload.occurredAt would forbid
+  const buggyPostedAt = String(pureOccurredPayload.postedAt ?? pureOccurredPayload.occurredAt ?? '').trim()
+  const buggyCurrentPosted = String(closedRow.posted_at ?? closedRow.occurred_at ?? '').trim()
+  assert.equal(Boolean(buggyPostedAt) && buggyPostedAt !== buggyCurrentPosted, true)
+  assert.equal(shouldForbidClosedCreditMutation({
+    status: 'closed',
+    changes: { ...pureDiff, postedAt: true, occurredAt: false },
+  }), true)
+
+  // Explicit postedAt change on closed → forbid
+  const postedChangeDiff = diffCreditManualTransactionChanges(closedRow, {
+    ...pureOccurredPayload,
+    postedAt: '2026-03-20T10:00:00',
+  })
+  assert.equal(postedChangeDiff.postedAt, true)
+  assert.equal(shouldForbidClosedCreditMutation({
+    status: 'closed',
+    changes: postedChangeDiff,
+  }), true)
+
+  // Apply pure occurred_at correction on formal path (mirrors updateTransactionById —
+  // does not touch posted_at). statement_id on posting must stay on closed S1.
+  const beforePosted = db.exec(`SELECT posted_at FROM transactions WHERE id='T1';`)[0].values[0][0]
+  const beforeStmt = db.exec(
+    `SELECT statement_id FROM transaction_postings WHERE transaction_id='T1';`,
+  )[0].values[0][0]
+  assert.equal(beforePosted, '2026-03-10T12:00:00')
+  assert.equal(beforeStmt, 'S1')
+  db.run(
+    `UPDATE transactions SET occurred_at = ?, updated_at = ? WHERE id = 'T1';`,
+    ['2026-03-08T09:00:00', '2026-03-20T10:00:00'],
+  )
+  const after = db.exec(
+    `SELECT t.occurred_at, t.posted_at, p.statement_id, s.closing_balance_minor, s.status
+     FROM transactions t
+     JOIN transaction_postings p ON p.transaction_id = t.id
+     JOIN credit_statements s ON s.id = p.statement_id
+     WHERE t.id = 'T1';`,
+  )[0].values[0]
+  assert.equal(after[0], '2026-03-08T09:00:00')
+  assert.equal(after[1], '2026-03-10T12:00:00') // posted_at unchanged
+  assert.equal(after[2], 'S1') // statement_id unchanged
+  assert.equal(after[3], 50000) // closing immutable
+  assert.equal(after[4], 'closed')
+
+  // Incomplete row (findTransactionById shape) must not be used for diff — proves
+  // missing fields would mis-flag amount/account/postedAt when UI resubmits full form.
+  const incompleteRow = { id: 'T1', type: 'expense', origin_type: 'manual' }
+  const incompleteDiff = diffCreditManualTransactionChanges(incompleteRow, pureOccurredPayload)
+  assert.equal(incompleteDiff.account, true)
+  assert.equal(incompleteDiff.amount, true)
+  assert.equal(shouldForbidClosedCreditMutation({
+    status: 'closed',
+    changes: incompleteDiff,
+  }), true)
+
   // Allocation: empty → fail
   assert.throws(
     () => validateRepaymentAllocationPlan({
@@ -387,6 +488,8 @@ test('smb301 source wiring: formal refund/batch/alloc/debt paths', () => {
   assert.match(apply, /chooseRefundFormalPath/)
   assert.match(apply, /computeActualCardDebtMinor/)
   assert.match(apply, /shouldForbidClosedCreditMutation/)
+  assert.match(apply, /diffCreditManualTransactionChanges/)
+  assert.match(apply, /hasExplicitPostedAt|postedAt intentionally|never fall back to occurredAt/i)
 
   assert.match(creditService, /validateRepaymentAllocationPlan/)
   assert.match(creditService, /computeActualCardDebtMinor/)
@@ -398,9 +501,22 @@ test('smb301 source wiring: formal refund/batch/alloc/debt paths', () => {
 
   assert.match(txService, /createCreditRefundAdjustment/)
   assert.match(txService, /chooseRefundFormalPath/)
+  assert.match(txService, /diffCreditManualTransactionChanges/)
+  assert.match(txService, /findTransactionRecordById/)
   assert.match(txService, /CLOSED_POSTING_MUTATION_FORBIDDEN/)
+  // Formal edit must load full row (posted_at) — not findTransactionById slim select
+  const updateManualFn = txService.match(
+    /export async function updateManualTransaction[\s\S]*?(?=\nexport async function )/,
+  )?.[0] ?? ''
+  assert.match(updateManualFn, /findTransactionRecordById/)
+  assert.match(updateManualFn, /diffCreditManualTransactionChanges/)
+  // Must not infer postedAt from occurredAt in the formal edit gate
+  assert.doesNotMatch(updateManualFn, /payload\.postedAt\s*\?\?\s*payload\.occurredAt/)
   // batch hard-fail (throw) — not soft-skip
   assert.match(txService, /batchPatchCategory[\s\S]*CLOSED_POSTING_MUTATION_FORBIDDEN[\s\S]*throw error/)
   assert.match(txService, /batchPatchTransactions[\s\S]*CLOSED_POSTING_MUTATION_FORBIDDEN[\s\S]*throw error/)
   assert.match(txService, /Hard reject|hard-fail|hard reject/i)
+
+  const txRepo = readFileSync(resolve(root, 'src/core/repositories/transaction.repo.js'), 'utf8')
+  assert.match(txRepo, /findTransactionRecordById[\s\S]*t\.posted_at/)
 })

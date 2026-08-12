@@ -5,7 +5,6 @@ import {
   batchPatchCategoryForTransactions,
   countReimbursableTransactions,
   updateTransactionById,
-  findTransactionById,
   findTransactionRecordById,
   listTransferTransactionsByGroup,
   listTransactionsByExternalRef,
@@ -39,7 +38,10 @@ import {
   applyUpdateEditorAttribution,
   resolveCurrentTransactionEditor,
 } from '@/core/services/transaction-editor-attribution'
-import { chooseRefundFormalPath } from '@/core/utils/credit-card-apply'
+import {
+  chooseRefundFormalPath,
+  diffCreditManualTransactionChanges,
+} from '@/core/utils/credit-card-apply'
 
 const TRANSACTION_FAILURE_TRACE_MAX_ENTRIES = 60
 const transactionFailureTraceListeners = new Set()
@@ -482,51 +484,28 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
   if (!txId) {
     throw new Error('缺少交易 ID')
   }
-  const currentTx = await findTransactionById(ledgerId, txId)
+  // Full row (incl. posted_at / amount / flags) required for closed-credit diff —
+  // findTransactionById omits those columns and would mis-flag every edit.
+  const currentTx = await findTransactionRecordById(ledgerId, txId)
   if (!currentTx) {
     throw new Error('找不到交易資料')
   }
-  const currentPostedAt = String(currentTx.posted_at ?? currentTx.occurred_at ?? '').trim()
-  const nextPostedAt = String(payload.postedAt ?? payload.occurredAt ?? '').trim()
-  const changingPostedAt = Boolean(nextPostedAt) && nextPostedAt !== currentPostedAt
-  const changingOccurredAt = Boolean(payload.occurredAt)
-    && String(payload.occurredAt) !== String(currentTx.occurred_at)
-    && !changingPostedAt
-  const changingAmountOrAccount = (
-    (payload.accountId != null && String(payload.accountId) !== String(currentTx.account_id))
-    || (payload.amountMinor != null
-      && Math.round(Number(payload.amountMinor)) !== Math.round(Number(currentTx.amount_minor)))
-  )
-  const changingCategory = payload.categoryId != null
-    && String(payload.categoryId ?? '') !== String(currentTx.category_id ?? '')
-  const changingNote = Object.prototype.hasOwnProperty.call(payload, 'note')
-    && String(payload.note ?? '') !== String(currentTx.note ?? '')
-  const changingFlags = (
-    (payload.isReimbursable != null
-      && Boolean(payload.isReimbursable) !== Boolean(Number(currentTx.is_reimbursable ?? 0)))
-    || (payload.includeInBudget != null
-      && Boolean(payload.includeInBudget) !== Boolean(Number(currentTx.include_in_budget ?? 1)))
-    || (payload.includeInAnalysis != null
-      && Boolean(payload.includeInAnalysis) !== Boolean(Number(currentTx.include_in_analysis ?? 1)))
-  )
-  try {
-    const { assertTransactionMutableForCredit } = await import('@/core/services/credit.service')
-    await assertTransactionMutableForCredit(ledgerId, txId, {
-      changes: {
-        amount: changingAmountOrAccount,
-        account: changingAmountOrAccount,
-        postedAt: changingPostedAt,
-        category: changingCategory,
-        note: changingNote,
-        flags: changingFlags,
-        occurredAt: changingOccurredAt,
-        delete: false,
-        batch: false,
-      },
-    })
-  } catch (error) {
-    if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') throw error
-    // Non-credit txs: ignore
+  const creditChanges = diffCreditManualTransactionChanges(currentTx, payload)
+  const creditRelevant = creditChanges.amount
+    || creditChanges.account
+    || creditChanges.postedAt
+    || creditChanges.category
+    || creditChanges.note
+    || creditChanges.flags
+    || creditChanges.occurredAt
+  if (creditRelevant) {
+    try {
+      const { assertTransactionMutableForCredit } = await import('@/core/services/credit.service')
+      await assertTransactionMutableForCredit(ledgerId, txId, { changes: creditChanges })
+    } catch (error) {
+      if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') throw error
+      // Non-credit txs: ignore
+    }
   }
   if (!payload.accountId) {
     throw new Error('請選擇帳戶')

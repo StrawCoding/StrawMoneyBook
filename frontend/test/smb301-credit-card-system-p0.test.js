@@ -102,15 +102,27 @@ test('migration / wiring mentions hard-contract identifiers', () => {
   assert.match(txService, /createCreditRefundAdjustment/)
   assert.match(txService, /chooseRefundFormalPath/)
   assert.match(txService, /assertTransactionMutableForCredit/)
+  assert.match(txService, /diffCreditManualTransactionChanges/)
+  assert.match(txService, /findTransactionRecordById/)
+  const updateManualFn = txService.match(
+    /export async function updateManualTransaction[\s\S]*?(?=\nexport async function )/,
+  )?.[0] ?? ''
+  assert.match(updateManualFn, /diffCreditManualTransactionChanges/)
+  assert.match(updateManualFn, /findTransactionRecordById/)
+  assert.doesNotMatch(updateManualFn, /payload\.postedAt\s*\?\?\s*payload\.occurredAt/)
 
   const apply = readFileSync(resolve(root, 'src/core/utils/credit-card-apply.js'), 'utf8')
   assert.match(apply, /REPAYMENT_ALLOCATION_REQUIRED/)
   assert.match(apply, /ALLOCATION_CROSS_CARD_FORBIDDEN/)
   assert.match(apply, /ALLOCATION_EXCEEDS_REMAINING/)
   assert.match(apply, /shouldForbidClosedCreditMutation/)
+  assert.match(apply, /diffCreditManualTransactionChanges/)
   assert.match(apply, /computeActualCardDebtMinor/)
   assert.match(apply, /clampPostedAtIntoOpenPeriod/)
   assert.match(apply, /chooseRefundFormalPath/)
+
+  const txRepo = readFileSync(resolve(root, 'src/core/repositories/transaction.repo.js'), 'utf8')
+  assert.match(txRepo, /findTransactionRecordById[\s\S]*posted_at/)
 
   const merge = readFileSync(resolve(root, 'src/ui/services/shared-ledger/snapshot-merge.js'), 'utf8')
   assert.match(merge, /credit_card_bundle/)
@@ -127,4 +139,47 @@ test('migration / wiring mentions hard-contract identifiers', () => {
 
   assert.equal(normalizeCloseDay(99, 25), 25)
   assert.equal(toLocalIso(parseLocalIso('2026-08-13T10:11:12.003')).startsWith('2026-08-13T10:11:12'), true)
+})
+
+test('closed credit formal edit diff: pure occurred_at allowed; omit postedAt must not forbid', async () => {
+  const {
+    diffCreditManualTransactionChanges,
+    shouldForbidClosedCreditMutation,
+  } = await import('../src/core/utils/credit-card-apply.js')
+
+  const current = {
+    type: 'expense',
+    account_id: 'card1',
+    category_id: 'c1',
+    amount_minor: -1200,
+    occurred_at: '2026-03-10T12:00:00.000Z',
+    posted_at: '2026-03-12T00:00:00.000Z',
+    note: '咖啡',
+    is_reimbursable: 0,
+    include_in_budget: 1,
+    include_in_analysis: 1,
+  }
+  const payload = {
+    type: 'expense',
+    accountId: 'card1',
+    categoryId: 'c1',
+    amountMinor: 1200,
+    occurredAt: '2026-03-09T08:00:00.000Z',
+    note: '咖啡',
+    isReimbursable: false,
+    includeInBudget: true,
+    includeInAnalysis: true,
+  }
+  const changes = diffCreditManualTransactionChanges(current, payload)
+  assert.equal(changes.occurredAt, true)
+  assert.equal(changes.postedAt, false)
+  assert.equal(changes.amount, false)
+  assert.equal(shouldForbidClosedCreditMutation({ status: 'closed', changes }), false)
+
+  const withPosted = diffCreditManualTransactionChanges(current, {
+    ...payload,
+    postedAt: '2026-03-20T00:00:00.000Z',
+  })
+  assert.equal(withPosted.postedAt, true)
+  assert.equal(shouldForbidClosedCreditMutation({ status: 'closed', changes: withPosted }), true)
 })

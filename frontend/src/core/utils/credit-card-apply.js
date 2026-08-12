@@ -15,6 +15,7 @@ export function creditError(code, message) {
 /**
  * Closed credit postings: default forbid edit/delete.
  * Only pure occurred_at correction is allowed (budget/calendar; does not reassign statement).
+ * v1.1 HTML §5: 「改 occurred_at only → 允許；若改 posted_at → 拒絕」.
  */
 export function shouldForbidClosedCreditMutation({
   status,
@@ -35,9 +36,83 @@ export function shouldForbidClosedCreditMutation({
   const mutatingKeys = Object.entries(flags)
     .filter(([, on]) => on)
     .map(([k]) => k)
+  // Incomplete callers (empty flags) stay forbidden — safe default.
   if (mutatingKeys.length === 0) return true
   if (mutatingKeys.length === 1 && mutatingKeys[0] === 'occurredAt') return false
   return true
+}
+
+function hasOwn(obj, key) {
+  return obj != null && Object.prototype.hasOwnProperty.call(obj, key)
+}
+
+/**
+ * Diff payload vs existing transaction for closed-credit mutability checks.
+ * Formal edit entry (updateManualTransaction) MUST use this — never infer
+ * posted_at from occurredAt when payload omits postedAt (UI edit only sends occurredAt).
+ */
+export function diffCreditManualTransactionChanges(currentTx, payload = {}) {
+  const current = currentTx && typeof currentTx === 'object' ? currentTx : {}
+  const next = payload && typeof payload === 'object' ? payload : {}
+
+  const currentAccountId = String(current.account_id ?? current.accountId ?? '').trim()
+  const nextAccountId = next.accountId != null ? String(next.accountId).trim() : null
+  const changingAccount = nextAccountId != null && nextAccountId !== currentAccountId
+
+  const currentAmount = Math.round(Number(current.amount_minor ?? current.amountMinor ?? 0))
+  const nextAmountRaw = next.amountMinor != null && next.amountMinor !== ''
+    ? Math.round(Number(next.amountMinor))
+    : null
+  let changingAmount = false
+  if (nextAmountRaw != null && Number.isFinite(nextAmountRaw)) {
+    const txType = String(next.type ?? current.type ?? '').trim()
+    if (txType === 'expense') {
+      changingAmount = (-Math.abs(nextAmountRaw)) !== currentAmount
+    } else if (txType === 'income') {
+      changingAmount = Math.abs(nextAmountRaw) !== currentAmount
+    } else {
+      changingAmount = nextAmountRaw !== currentAmount
+    }
+  }
+
+  // postedAt changes ONLY when explicitly provided — never fall back to occurredAt.
+  const hasExplicitPostedAt = hasOwn(next, 'postedAt')
+    && next.postedAt != null
+    && String(next.postedAt).trim() !== ''
+  const currentPostedAt = String(current.posted_at ?? current.postedAt ?? '').trim()
+  const changingPostedAt = hasExplicitPostedAt
+    && String(next.postedAt).trim() !== currentPostedAt
+
+  const currentOccurredAt = String(current.occurred_at ?? current.occurredAt ?? '').trim()
+  const nextOccurredAt = next.occurredAt != null ? String(next.occurredAt).trim() : ''
+  const changingOccurredAt = Boolean(nextOccurredAt) && nextOccurredAt !== currentOccurredAt
+
+  const changingCategory = next.categoryId != null
+    && String(next.categoryId ?? '') !== String(current.category_id ?? current.categoryId ?? '')
+
+  const changingNote = hasOwn(next, 'note')
+    && String(next.note ?? '') !== String(current.note ?? '')
+
+  const changingFlags = (
+    (next.isReimbursable != null
+      && Boolean(next.isReimbursable) !== Boolean(Number(current.is_reimbursable ?? 0)))
+    || (next.includeInBudget != null
+      && Boolean(next.includeInBudget) !== Boolean(Number(current.include_in_budget ?? 1)))
+    || (next.includeInAnalysis != null
+      && Boolean(next.includeInAnalysis) !== Boolean(Number(current.include_in_analysis ?? 1)))
+  )
+
+  return {
+    amount: changingAmount,
+    account: changingAccount,
+    postedAt: changingPostedAt,
+    category: changingCategory,
+    note: changingNote,
+    flags: changingFlags,
+    occurredAt: changingOccurredAt,
+    delete: false,
+    batch: false,
+  }
 }
 
 /**

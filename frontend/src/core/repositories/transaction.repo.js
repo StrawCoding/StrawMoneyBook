@@ -1124,7 +1124,7 @@ export async function findTransactionRecordById(ledgerId, txId) {
   assertLedgerId(ledgerId)
   const result = await query(
     `SELECT t.ledger_id, t.id, t.type, t.transfer_group_id, t.account_id, t.peer_account_id, t.category_id,
-            t.amount_minor, t.occurred_at, t.note, t.origin_type, t.external_ref_id,
+            t.amount_minor, t.occurred_at, t.posted_at, t.note, t.origin_type, t.external_ref_id,
             t.is_reimbursable, t.reimbursement_state, t.reimburse_target_minor,
             t.include_in_budget, t.include_in_analysis,
             CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END AS has_refund_link,
