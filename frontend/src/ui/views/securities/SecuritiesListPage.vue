@@ -121,7 +121,13 @@
       </button>
       <template #footer>
         <button type="button" class="btn" @click="createOpen = false">{{ t('common.cancel') }}</button>
-        <button type="button" class="btn primary" :disabled="creating" @click="submitCreate">{{ t('common.save') }}</button>
+        <button
+          type="button"
+          class="btn primary"
+          data-testid="securities-create-save"
+          :disabled="creating"
+          @click="submitCreate"
+        >{{ t('common.save') }}</button>
       </template>
     </InputBottomSheet>
   </section>

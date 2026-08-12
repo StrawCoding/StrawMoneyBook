@@ -27,6 +27,15 @@ test('smb302: settlement account is select-only (no mark gate in UI/service/i18n
   assert.doesNotMatch(store, /markSettlement|markAccountAsSettlement/)
   assert.match(store, /listCandidateSettlementAccounts/)
   assert.match(playwright, /smb302|select-only|no.?mark|securities-create-settlement/i)
+  const smb302Block = playwright.split('smb302:')[1]?.split('await gotoOrReopen')[0] || ''
+  assert.ok(smb302Block.length > 200, 'smb302 playwright block missing')
+  assert.match(smb302Block, /securities-create-save/)
+  assert.match(smb302Block, /menu-item/)
+  assert.match(smb302Block, /selectedWasUnmarked/)
+  assert.match(smb302Block, /is_settlement/)
+  assert.match(smb302Block, /usedFormalUi:\s*true/)
+  assert.doesNotMatch(smb302Block, /securityStore\.create\(/)
+  assert.match(listPage, /data-testid="securities-create-save"/)
 })
 
 test('smb302: createSecurity still requires settlement_account_id selection', () => {
