@@ -30,6 +30,19 @@
       </div>
 
       <label class="field mt">
+        {{ t('securities_page.symbol') }}
+        <input v-model.trim="profileForm.symbol" class="input" maxlength="20" data-testid="securities-edit-symbol" />
+      </label>
+      <label class="field mt">
+        {{ t('securities_page.name') }}
+        <input v-model.trim="profileForm.name" class="input" maxlength="80" data-testid="securities-edit-name" />
+      </label>
+      <label class="field mt">
+        {{ t('securities_page.asset_class') }}
+        <CustomSelect v-model="profileForm.assetClass" :options="assetClassOptions" />
+      </label>
+
+      <label class="field mt">
         {{ t('securities_page.manual_price') }}
         <div class="row price-row">
           <input v-model.number="priceMajor" class="input" type="number" min="0" step="0.01" />
@@ -41,7 +54,13 @@
         {{ t('securities_page.settlement_account') }}
         <CustomSelect v-model="settlementAccountId" :options="settlementOptions" />
       </label>
-      <button type="button" class="btn mt" :disabled="savingProfile" @click="saveProfile">{{ t('securities_page.save_profile') }}</button>
+      <button
+        type="button"
+        class="btn mt"
+        data-testid="securities-save-profile"
+        :disabled="savingProfile"
+        @click="saveProfile"
+      >{{ t('securities_page.save_profile') }}</button>
 
       <button
         type="button"
@@ -240,6 +259,11 @@ const rescheduleTxId = ref('')
 const priceMajor = ref(0)
 const includeInAssets = ref(true)
 const settlementAccountId = ref('')
+const profileForm = reactive({
+  symbol: '',
+  name: '',
+  assetClass: 'stock',
+})
 const txForm = reactive({
   type: 'buy',
   recordMode: 'position',
@@ -279,6 +303,10 @@ const feeModeOptions = computed(() => [
   { value: 'into_cost', label: t('securities_page.fee_into_cost') },
   { value: 'from_proceeds', label: t('securities_page.fee_from_proceeds') },
 ])
+const assetClassOptions = computed(() => [
+  { value: 'stock', label: t('securities_page.class.stock') },
+  { value: 'etf', label: t('securities_page.class.etf') },
+])
 const txSheetTitle = computed(() => {
   const base = txForm.type === 'sell' ? t('securities_page.sell') : t('securities_page.buy')
   return editingTxId.value ? `${t('common.edit')} ${base}` : base
@@ -314,6 +342,9 @@ function syncFromDetail() {
   priceMajor.value = Number(detail.value.security.manual_price_minor ?? 0) / 100
   includeInAssets.value = Number(detail.value.security.include_in_assets ?? 1) === 1
   settlementAccountId.value = String(detail.value.security.settlement_account_id ?? '')
+  profileForm.symbol = String(detail.value.security.symbol ?? '')
+  profileForm.name = String(detail.value.security.name ?? '')
+  profileForm.assetClass = detail.value.security.asset_class === 'etf' ? 'etf' : 'stock'
 }
 
 async function reload() {
@@ -345,11 +376,15 @@ async function saveProfile() {
       await securityStore.markSettlement(settlementAccountId.value, true)
     }
     await securityStore.update(securityId.value, {
+      symbol: profileForm.symbol,
+      name: profileForm.name || profileForm.symbol,
+      assetClass: profileForm.assetClass,
       settlementAccountId: settlementAccountId.value,
       includeInAssets: includeInAssets.value,
       manualPriceMinor: Math.round(Number(priceMajor.value || 0) * 100),
     })
     uiStore.pushToast(t('securities_page.profile_saved'))
+    await reload()
   } catch (error) {
     uiStore.pushToast(error?.message || String(error), 'error')
   } finally {

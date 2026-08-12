@@ -265,13 +265,29 @@ export async function getDatabase() {
   return db
 }
 
+/** Nesting depth for withTransaction — when > 0, run/execute join the outer BEGIN. */
+let activeTransactionDepth = 0
+/** True if any mutation ran inside the outermost transaction (persist once on commit). */
+let pendingTransactionMutation = false
+
+export function getActiveSqliteTransactionDepth() {
+  return activeTransactionDepth
+}
+
 export async function run(sql, values = []) {
   const conn = await getDatabase()
   try {
-    const result = await conn.run(sql, values)
+    // jeep-sqlite / Capacitor: run(..., transaction=true) auto BEGIN+COMMIT per call.
+    // Inside withTransaction we must pass false so statements join the outer BEGIN.
+    const joinOuter = activeTransactionDepth > 0
+    const result = await conn.run(sql, values, joinOuter ? false : true)
     if (isDataMutationSql(sql)) {
-      await persistWebStoreAfterMutation()
-      emitDataMutationEvent()
+      if (joinOuter) {
+        pendingTransactionMutation = true
+      } else {
+        await persistWebStoreAfterMutation()
+        emitDataMutationEvent()
+      }
     }
     return result
   } catch (error) {
@@ -287,32 +303,59 @@ export async function query(sql, values = []) {
 export async function execute(sql) {
   const conn = await getDatabase()
   try {
-    return await conn.execute(sql)
+    const joinOuter = activeTransactionDepth > 0
+    const result = await conn.execute(sql, joinOuter ? false : true)
+    if (isDataMutationSql(sql)) {
+      if (joinOuter) {
+        pendingTransactionMutation = true
+      } else {
+        await persistWebStoreAfterMutation()
+        emitDataMutationEvent()
+      }
+    }
+    return result
   } catch (error) {
     rethrowAsForeignKeyError(error)
   }
 }
 
+/**
+ * Real SQLite atomic transaction via Capacitor begin/commit/rollback.
+ * Nested calls share the outermost transaction (no SAVEPOINT).
+ * Mutations inside defer IndexedDB persist until successful commit.
+ */
 export async function withTransaction(handler) {
   const conn = await getDatabase()
-  // IMPORTANT — Platform differences in atomicity:
-  //
-  // Web (SQLite WASM / sql.js):
-  //   Each run()/execute() call is already wrapped in its own implicit transaction.
-  //   Nesting explicit BEGIN/COMMIT causes "cannot commit — no transaction is active" errors.
-  //   Multi-step operations are therefore NOT atomic on web: if step 2 of 3 throws,
-  //   step 1 has already been committed and will NOT be rolled back.
-  //   This is a known platform limitation. Callers must handle partial-write scenarios.
-  //
-  // Native (Android / iOS via Capacitor SQLite):
-  //   Individual run()/execute() calls are each their own auto-committed transaction.
-  //   Multi-step operations are similarly NOT atomic without explicit BEGIN/COMMIT.
-  //   If atomicity is required on native, use conn.execute('BEGIN') / conn.execute('COMMIT')
-  //   / conn.execute('ROLLBACK') directly and test on both platforms before shipping.
-  //
-  // This helper currently serves only as a logical grouping boundary.
-  // Do NOT assume it provides rollback safety.
-  return handler(conn)
+  const isOutermost = activeTransactionDepth === 0
+  if (isOutermost) {
+    await conn.beginTransaction()
+    pendingTransactionMutation = false
+  }
+  activeTransactionDepth += 1
+  try {
+    const result = await handler(conn)
+    if (isOutermost) {
+      await conn.commitTransaction()
+      if (pendingTransactionMutation) {
+        await persistWebStoreAfterMutation()
+        emitDataMutationEvent()
+      }
+      pendingTransactionMutation = false
+    }
+    return result
+  } catch (error) {
+    if (isOutermost) {
+      try {
+        await conn.rollbackTransaction()
+      } catch {
+        // Best-effort rollback; surface the original error.
+      }
+      pendingTransactionMutation = false
+    }
+    throw error
+  } finally {
+    activeTransactionDepth = Math.max(0, activeTransactionDepth - 1)
+  }
 }
 
 export async function closeDatabase() {

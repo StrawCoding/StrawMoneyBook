@@ -1,4 +1,5 @@
-import { withTransaction } from '@/core/db/sqlite'
+import { query, run, withTransaction } from '@/core/db/sqlite'
+import { createId, nowIso } from '@/core/utils/id'
 import {
   assertSellQuantityAllowed,
   buildSecurityPosition,
@@ -6,8 +7,6 @@ import {
   sumIncludedSecuritiesMarketValue,
 } from '@/core/utils/securities-position'
 import {
-  describeSettlementPosting,
-  deriveSettlementCashLegs,
   isSettlementDue,
   normalizeRecordMode,
   normalizeSettlementStatus,
@@ -17,6 +16,10 @@ import {
   toSettleAtIso,
   UNREALIZED_MODE,
 } from '@/core/utils/securities-settlement'
+import {
+  buildCancelSettlementPlan,
+  buildConfirmSettlementPlan,
+} from '@/core/utils/securities-settlement-apply'
 import {
   createSecurity,
   createSecurityTransaction,
@@ -33,8 +36,6 @@ import {
   updateSecurityTransactionSettlement,
 } from '@/core/repositories/security.repo'
 import { findAccountById } from '@/core/repositories/account.repo'
-import { query, run } from '@/core/db/sqlite'
-import { nowIso } from '@/core/utils/id'
 import { firstRow, rowsOf } from '@/core/repositories/base.repo'
 import {
   createAdjustment,
@@ -237,81 +238,68 @@ async function assertSettlementAccount(ledgerId, accountId) {
   return account
 }
 
-async function postCashLegsForConfirmedTx(ledgerId, security, tx) {
-  const accountId = await resolveSettlementAccountId(ledgerId, security, tx)
-  await assertSettlementAccount(ledgerId, accountId)
-  const legs = deriveSettlementCashLegs({
-    type: tx.type,
-    recordMode: tx.record_mode,
-    quantity: tx.quantity,
-    priceMinor: tx.price_minor,
-    feeMinor: tx.fee_minor,
-    feeMode: tx.fee_mode,
-    principalMinor: tx.principal_minor,
-    proceedsMinor: tx.proceeds_minor,
-  })
-  const posting = describeSettlementPosting(legs)
-  const occurredAt = String(tx.settle_at || tx.occurred_at || nowIso())
-  const noteBase = `證券交割 ${security.symbol || ''} ${tx.type}`.trim()
-  let cashPrincipalTxId = null
-  let cashPnlTxId = null
-
-  if (posting.principalAdjustmentMinor) {
-    cashPrincipalTxId = await createAdjustment(ledgerId, {
-      accountId,
-      amountMinor: posting.principalAdjustmentMinor,
-      categoryId: null,
-      note: `${noteBase} 本金`,
-      occurredAt,
-      includeInBudget: false,
-      includeInAnalysis: false,
-      originType: 'manual',
-      externalRefId: tx.id,
-    })
+async function postCashLegsFromPlan(ledgerId, plan) {
+  for (const row of plan.ledgerRows) {
+    if (row.type === 'adjustment') {
+      await createAdjustment(ledgerId, {
+        id: row.id,
+        accountId: row.accountId,
+        amountMinor: row.amountMinor,
+        categoryId: null,
+        note: row.note,
+        occurredAt: row.occurredAt,
+        includeInBudget: false,
+        includeInAnalysis: false,
+        originType: 'manual',
+        externalRefId: row.externalRefId,
+      })
+    } else if (row.type === 'income') {
+      await createIncome(ledgerId, {
+        id: row.id,
+        accountId: row.accountId,
+        categoryId: row.categoryId,
+        amountMinor: Math.abs(row.amountMinor),
+        note: row.note,
+        occurredAt: row.occurredAt,
+        includeInBudget: false,
+        includeInAnalysis: true,
+        originType: 'manual',
+        externalRefId: row.externalRefId,
+      })
+    } else if (row.type === 'expense') {
+      await createExpense(ledgerId, {
+        id: row.id,
+        accountId: row.accountId,
+        categoryId: row.categoryId,
+        amountMinor: Math.abs(row.amountMinor),
+        note: row.note,
+        occurredAt: row.occurredAt,
+        includeInBudget: false,
+        includeInAnalysis: true,
+        originType: 'manual',
+        externalRefId: row.externalRefId,
+        isReimbursable: false,
+      })
+    }
   }
-
-  if (posting.pnlType === 'income' && posting.pnlAmountMinor > 0) {
-    const categoryId = await ensureInvestmentPnlCategory(ledgerId)
-    cashPnlTxId = await createIncome(ledgerId, {
-      accountId,
-      categoryId,
-      amountMinor: posting.pnlAmountMinor,
-      note: `${noteBase} 損益`,
-      occurredAt,
-      includeInBudget: false,
-      includeInAnalysis: true,
-      originType: 'manual',
-      externalRefId: tx.id,
-    })
-  } else if (posting.pnlType === 'expense' && posting.pnlAmountMinor > 0) {
-    const categoryId = await ensureInvestmentPnlCategory(ledgerId)
-    cashPnlTxId = await createExpense(ledgerId, {
-      accountId,
-      categoryId,
-      amountMinor: posting.pnlAmountMinor,
-      note: `${noteBase} 損益`,
-      occurredAt,
-      includeInBudget: false,
-      includeInAnalysis: true,
-      originType: 'manual',
-      externalRefId: tx.id,
-      isReimbursable: false,
-    })
+  return {
+    cashPrincipalTxId: plan.cashPrincipalTxId,
+    cashPnlTxId: plan.cashPnlTxId,
+    legs: plan.legs,
+    posting: plan.posting,
   }
-
-  // Sell net cash must equal proceeds: principal adj + pnl = proceeds
-  // Buy: only principal out.
-  return { cashPrincipalTxId, cashPnlTxId, legs, posting }
 }
 
 async function rollbackCashLegs(ledgerId, tx) {
-  const principalId = String(tx?.cash_principal_tx_id ?? '').trim()
-  const pnlId = String(tx?.cash_pnl_tx_id ?? '').trim()
-  if (principalId) await softDeleteTransactionById(ledgerId, principalId)
-  if (pnlId) await softDeleteTransactionById(ledgerId, pnlId)
+  const plan = buildCancelSettlementPlan(tx)
+  for (const id of plan.softDeleteIds) {
+    await softDeleteTransactionById(ledgerId, id)
+  }
 }
 
 export async function confirmSecuritySettlement(ledgerId, transactionId, { force = false, now = new Date() } = {}) {
+  // withTransaction is a real BEGIN/COMMIT/ROLLBACK (smb300 reopen):
+  // cash legs + settlement status share one atomic unit.
   return withTransaction(async () => {
     const tx = await findSecurityTransactionById(ledgerId, transactionId)
     if (!tx) throw new Error('找不到證券流水')
@@ -326,17 +314,21 @@ export async function confirmSecuritySettlement(ledgerId, transactionId, { force
 
     const security = await findSecurityById(ledgerId, tx.security_id)
     if (!security) throw new Error('找不到證券標的')
-    if (!security.settlement_account_id && !tx.cash_account_id) {
-      throw new Error('請先設定交割帳戶')
-    }
+    const accountId = await resolveSettlementAccountId(ledgerId, security, tx)
+    await assertSettlementAccount(ledgerId, accountId)
 
-    const { cashPrincipalTxId, cashPnlTxId } = await postCashLegsForConfirmedTx(ledgerId, security, tx)
-    return updateSecurityTransactionSettlement(ledgerId, tx.id, {
-      settlementStatus: SETTLEMENT_STATUS.confirmed,
+    const categoryId = await ensureInvestmentPnlCategory(ledgerId)
+    const plan = buildConfirmSettlementPlan({
+      ledgerId,
+      security,
+      securityTx: { ...tx, cash_account_id: tx.cash_account_id || accountId },
+      investmentPnlCategoryId: categoryId,
+      principalTxId: createId('tx'),
+      pnlTxId: createId('tx'),
       confirmedAt: nowIso(),
-      cashPrincipalTxId,
-      cashPnlTxId,
     })
+    await postCashLegsFromPlan(ledgerId, plan)
+    return updateSecurityTransactionSettlement(ledgerId, tx.id, plan.statusPatch)
   })
 }
 
@@ -357,15 +349,9 @@ export async function cancelSecuritySettlement(ledgerId, transactionId) {
     if (!tx) throw new Error('找不到證券流水')
     const status = normalizeSettlementStatus(tx.settlement_status)
     if (status === SETTLEMENT_STATUS.cancelled) return tx
-    if (status === SETTLEMENT_STATUS.confirmed) {
-      await rollbackCashLegs(ledgerId, tx)
-    }
-    return updateSecurityTransactionSettlement(ledgerId, transactionId, {
-      settlementStatus: SETTLEMENT_STATUS.cancelled,
-      confirmedAt: null,
-      cashPrincipalTxId: null,
-      cashPnlTxId: null,
-    })
+    const plan = buildCancelSettlementPlan(tx)
+    await rollbackCashLegs(ledgerId, tx)
+    return updateSecurityTransactionSettlement(ledgerId, transactionId, plan.statusPatch)
   })
 }
 
@@ -376,6 +362,7 @@ export async function removeSecurity(ledgerId, securityId) {
       if (normalizeSettlementStatus(tx.settlement_status) === SETTLEMENT_STATUS.confirmed) {
         await rollbackCashLegs(ledgerId, tx)
       }
+      await softDeleteSecurityTransaction(ledgerId, tx.id)
     }
     await softDeleteSecurity(ledgerId, securityId)
   })

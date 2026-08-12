@@ -135,7 +135,9 @@ export function isDriveRestorePreviewReady(preview) {
  * Wipe then import with mandatory durable-recovery rollback if import fails.
  * Callers must already have proven the import payload is gate-importable.
  *
- * Platform note: withTransaction() is NOT atomic across steps (web/native auto-commit).
+ * Platform note: withTransaction() uses Capacitor begin/commit/rollback (smb300);
+ * nested run() joins the outer tx (transaction:false). Still prefer wipe+restore
+ * recovery here because import spans many statements and external I/O.
  * A mid-import failure can leave partially committed ledgers/rows. Therefore recovery
  * MUST wipe again to clear residue before rehydrating wipe-前原狀 from durable proof.
  */

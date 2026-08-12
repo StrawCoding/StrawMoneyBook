@@ -68,7 +68,7 @@ test('smb296: sqlite run/execute 會把 FOREIGN KEY 轉成 typed error，且產�
   assert.match(sqliteSource, /PRAGMA foreign_keys = ON/)
   assert.match(sqliteSource, /rethrowAsForeignKeyError/)
   assert.match(sqliteSource, /DATABASE_WIPE_DELETE_ORDER/)
-  assert.match(sqliteSource, /await conn\.run\(sql, values\)/)
+  assert.match(sqliteSource, /await conn\.run\(sql, values, joinOuter \? false : true\)/)
   assert.doesNotMatch(sqliteSource, /PRAGMA foreign_keys\s*=\s*OFF/)
 })
 
