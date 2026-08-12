@@ -359,8 +359,18 @@ export async function removeSecurity(ledgerId, securityId) {
   await withTransaction(async () => {
     const txs = await listSecurityTransactions(ledgerId, securityId)
     for (const tx of txs) {
-      if (normalizeSettlementStatus(tx.settlement_status) === SETTLEMENT_STATUS.confirmed) {
+      const status = normalizeSettlementStatus(tx.settlement_status)
+      if (status === SETTLEMENT_STATUS.confirmed) {
+        const plan = buildCancelSettlementPlan(tx)
         await rollbackCashLegs(ledgerId, tx)
+        await updateSecurityTransactionSettlement(ledgerId, tx.id, plan.statusPatch)
+      } else if (status === SETTLEMENT_STATUS.scheduled) {
+        await updateSecurityTransactionSettlement(ledgerId, tx.id, {
+          settlementStatus: SETTLEMENT_STATUS.cancelled,
+          confirmedAt: null,
+          cashPrincipalTxId: null,
+          cashPnlTxId: null,
+        })
       }
       await softDeleteSecurityTransaction(ledgerId, tx.id)
     }
@@ -372,8 +382,18 @@ export async function removeSecurityTransaction(ledgerId, transactionId) {
   await withTransaction(async () => {
     const tx = await findSecurityTransactionById(ledgerId, transactionId)
     if (!tx) return
-    if (normalizeSettlementStatus(tx.settlement_status) === SETTLEMENT_STATUS.confirmed) {
+    const status = normalizeSettlementStatus(tx.settlement_status)
+    if (status === SETTLEMENT_STATUS.confirmed) {
+      const plan = buildCancelSettlementPlan(tx)
       await rollbackCashLegs(ledgerId, tx)
+      await updateSecurityTransactionSettlement(ledgerId, transactionId, plan.statusPatch)
+    } else if (status === SETTLEMENT_STATUS.scheduled) {
+      await updateSecurityTransactionSettlement(ledgerId, transactionId, {
+        settlementStatus: SETTLEMENT_STATUS.cancelled,
+        confirmedAt: null,
+        cashPrincipalTxId: null,
+        cashPnlTxId: null,
+      })
     }
     await softDeleteSecurityTransaction(ledgerId, transactionId)
   })
