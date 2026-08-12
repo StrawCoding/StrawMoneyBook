@@ -274,6 +274,23 @@ export async function createExpense(ledgerId, payload) {
     }
     await assertAccountAllowsDirectTransaction(ledgerId, payload.accountId)
 
+    const account = await findAccountById(ledgerId, payload.accountId)
+    if (account && String(account.account_kind) === 'credit') {
+      const { createCreditPurchase } = await import('@/core/services/credit.service')
+      const result = await createCreditPurchase(ledgerId, {
+        accountId: payload.accountId,
+        categoryId: payload.categoryId,
+        amountMinor: Math.abs(Number(payload.amountMinor)),
+        occurredAt: payload.occurredAt ?? new Date().toISOString(),
+        postedAt: payload.postedAt ?? payload.occurredAt ?? new Date().toISOString(),
+        note: payload.note,
+        includeInBudget: payload.includeInBudget !== false,
+        includeInAnalysis: payload.includeInAnalysis !== false,
+        idempotencyKey: payload.idempotencyKey ?? null,
+      })
+      return result.transactionId
+    }
+
     if (Boolean(payload.isReimbursable)) {
       const reimbursableCount = await countReimbursableTransactions(ledgerId)
       assertCanCreateReimbursement(reimbursableCount)
@@ -288,6 +305,7 @@ export async function createExpense(ledgerId, payload) {
       includeInBudget: payload.includeInBudget !== false,
       includeInAnalysis: payload.includeInAnalysis !== false,
       occurredAt: payload.occurredAt ?? new Date().toISOString(),
+      postedAt: payload.postedAt ?? payload.occurredAt ?? new Date().toISOString(),
     }, await resolveCurrentTransactionEditor()))
   })
 }
@@ -452,6 +470,23 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
   if (!currentTx) {
     throw new Error('找不到交易資料')
   }
+  const currentPostedAt = String(currentTx.posted_at ?? currentTx.occurred_at ?? '').trim()
+  const nextPostedAt = String(payload.postedAt ?? payload.occurredAt ?? '').trim()
+  const changingPostedAt = Boolean(nextPostedAt) && nextPostedAt !== currentPostedAt
+  const changingAmountOrAccount = (
+    (payload.accountId != null && String(payload.accountId) !== String(currentTx.account_id))
+    || (payload.amountMinor != null
+      && Math.round(Number(payload.amountMinor)) !== Math.round(Number(currentTx.amount_minor)))
+  )
+  if (changingPostedAt || changingAmountOrAccount || payload.type === 'transfer') {
+    try {
+      const { assertTransactionMutableForCredit } = await import('@/core/services/credit.service')
+      await assertTransactionMutableForCredit(ledgerId, txId, { changingPostedAt })
+    } catch (error) {
+      if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') throw error
+      // Non-credit txs: ignore
+    }
+  }
   if (!payload.accountId) {
     throw new Error('請選擇帳戶')
   }
@@ -575,6 +610,13 @@ export async function deleteManualTransaction(ledgerId, txId) {
   const target = await findTransactionRecordById(ledgerId, txId)
   if (!target) {
     throw new Error('找不到交易資料')
+  }
+
+  try {
+    const { assertTransactionMutableForCredit } = await import('@/core/services/credit.service')
+    await assertTransactionMutableForCredit(ledgerId, txId, { changingPostedAt: true })
+  } catch (error) {
+    if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') throw error
   }
 
   if (String(target.origin_type ?? '').trim() === 'loan_payment') {

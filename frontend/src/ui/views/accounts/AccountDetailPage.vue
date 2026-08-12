@@ -62,6 +62,14 @@
           還款提醒日（每月 1-31）
           <input v-model="editRepaymentReminderDay" class="input" type="number" min="1" max="31" step="1" placeholder="例如 15" />
         </label>
+        <label v-if="editAccountKind === 'credit'" class="field">
+          {{ t('credit_cards_page.close_day') }}（1-31）
+          <input v-model="editStatementCloseDay" class="input" type="number" min="1" max="31" step="1" placeholder="例如 25" />
+        </label>
+        <label v-if="editAccountKind === 'credit'" class="field">
+          {{ t('credit_cards_page.due_day') }}（1-31）
+          <input v-model="editPaymentDueDay" class="input" type="number" min="1" max="31" step="1" placeholder="例如 15" />
+        </label>
         <div class="field">
           <span>{{ t('account.include_in_assets_label') }}</span>
           <button
@@ -152,6 +160,19 @@
           <div v-if="isCreditAccount" class="detail-row">
             <small class="muted">還款提醒日</small>
             <span>{{ repaymentReminderDayLabel }}</span>
+          </div>
+          <div v-if="isCreditAccount" class="detail-row" data-testid="account-credit-close-day">
+            <small class="muted">{{ t('credit_cards_page.close_day') }}</small>
+            <span>{{ accountCloseDayLabel }}</span>
+          </div>
+          <div v-if="isCreditAccount" class="detail-row" data-testid="account-credit-due-day">
+            <small class="muted">{{ t('credit_cards_page.due_day') }}</small>
+            <span>{{ accountDueDayLabel }}</span>
+          </div>
+          <div v-if="isCreditAccount" class="detail-row">
+            <RouterLink class="btn" to="/credit-cards" data-testid="account-credit-module-link">
+              {{ t('credit_cards_page.open_module') }}
+            </RouterLink>
           </div>
           <div class="detail-row">
             <small class="muted">{{ t('account.include_in_assets_label') }}</small>
@@ -288,6 +309,8 @@ const editAccountKind = ref('cash')
 const editCurrentDebt = ref('0')
 const editCreditLimit = ref('0')
 const editRepaymentReminderDay = ref('')
+const editStatementCloseDay = ref('')
+const editPaymentDueDay = ref('')
 const editIncludeInAssets = ref(true)
 const editIncludeInGroupStatistics = ref(true)
 const editIsSettlement = ref(false)
@@ -327,6 +350,8 @@ const accountCreditLimitMinor = computed(() => Math.max(0, Number(account.value?
 const currentCreditDebtMinor = computed(() => Math.max(0, Number(currentAccountBalanceMinor.value ?? 0) * -1))
 const availableCreditMinor = computed(() => Math.max(0, accountCreditLimitMinor.value - currentCreditDebtMinor.value))
 const repaymentReminderDayLabel = computed(() => formatRepaymentReminderDay(account.value?.repayment_reminder_day))
+const accountCloseDayLabel = computed(() => formatRepaymentReminderDay(account.value?.statement_close_day))
+const accountDueDayLabel = computed(() => formatRepaymentReminderDay(account.value?.payment_due_day))
 const isCreditAccount = computed(() => normalizeAccountKind(account.value?.account_kind) === 'credit')
 const openingInvalid = computed(() => {
   const rawValue = editAccountKind.value === 'credit' ? editCurrentDebt.value : editOpening.value
@@ -446,6 +471,8 @@ watch(
     editCurrentDebt.value = String(Math.max(0, Number(next.opening_balance_minor ?? 0) * -1) / 100)
     editCreditLimit.value = String(Math.max(0, Number(next.credit_limit_minor ?? 0)) / 100)
     editRepaymentReminderDay.value = next.repayment_reminder_day == null ? '' : String(next.repayment_reminder_day)
+    editStatementCloseDay.value = next.statement_close_day == null ? '' : String(next.statement_close_day)
+    editPaymentDueDay.value = next.payment_due_day == null ? '' : String(next.payment_due_day)
     editIncludeInAssets.value = isAccountIncludedInAssets(next)
     editIncludeInGroupStatistics.value = isAccountIncludedInGroupStatistics(next)
     editIsSettlement.value = Number(next?.is_settlement ?? 0) === 1
@@ -583,6 +610,12 @@ async function saveProfile() {
     const nextRepaymentReminderDay = nextAccountKind === 'credit'
       ? parseRepaymentReminderDay(editRepaymentReminderDay.value)
       : null
+    const nextStatementCloseDay = nextAccountKind === 'credit'
+      ? parseRepaymentReminderDay(editStatementCloseDay.value)
+      : null
+    const nextPaymentDueDay = nextAccountKind === 'credit'
+      ? parseRepaymentReminderDay(editPaymentDueDay.value)
+      : null
 
     await accountStore.updateAccountProfile(accountId.value, {
       name: nextName,
@@ -593,6 +626,8 @@ async function saveProfile() {
       openingBalanceMinor: nextOpeningBalanceMinor,
       creditLimitMinor: nextCreditLimitMinor,
       repaymentReminderDay: nextRepaymentReminderDay,
+      statementCloseDay: nextStatementCloseDay,
+      paymentDueDay: nextPaymentDueDay,
       includeInAssets: editIncludeInAssets.value,
       includeInGroupStatistics: editIncludeInGroupStatistics.value,
       isSettlement: editAccountKind.value === 'cash' ? editIsSettlement.value : false,

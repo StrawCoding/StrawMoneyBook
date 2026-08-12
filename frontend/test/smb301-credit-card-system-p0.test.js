@@ -1,0 +1,114 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import {
+  computeDueOn,
+  derivePaidMinorFromAllocations,
+  isOverdue,
+  isPostedInPeriod,
+  normalizeCloseDay,
+  parseLocalIso,
+  resolvePeriodBoundsForPostedAt,
+  shouldNotifyRepaymentReminder,
+  toLocalIso,
+} from '../src/core/utils/credit-period.js'
+
+const root = resolve(import.meta.dirname, '..')
+
+test('close-day boundary: D 00:00 / 12:00 / 23:59:59 stay in old period; D+1 00:00 opens new', () => {
+  const closeDay = 15
+  const cases = [
+    ['2026-03-15T00:00:00.000', true],
+    ['2026-03-15T12:00:00.000', true],
+    ['2026-03-15T23:59:59.999', true],
+    ['2026-03-16T00:00:00.000', false],
+  ]
+  for (const [iso, expectOld] of cases) {
+    const bounds = resolvePeriodBoundsForPostedAt(iso, closeDay)
+    const inOld = isPostedInPeriod(iso, bounds.periodStartInclusive, bounds.periodEndExclusive)
+    assert.equal(inOld, true, iso)
+    if (expectOld) {
+      assert.ok(bounds.periodEndExclusive.startsWith('2026-03-16'), bounds.periodEndExclusive)
+    } else {
+      assert.ok(bounds.periodStartInclusive.startsWith('2026-03-16'), bounds.periodStartInclusive)
+      assert.ok(bounds.periodEndExclusive.startsWith('2026-04-16'), bounds.periodEndExclusive)
+    }
+  }
+})
+
+test('short month and year rollover clamp close day', () => {
+  // close day 31 in February 2026 (non-leap) → Feb 28; period ends Mar 1 00:00
+  const feb = resolvePeriodBoundsForPostedAt('2026-02-28T12:00:00.000', 31)
+  assert.ok(feb.periodEndExclusive.startsWith('2026-03-01'), feb.periodEndExclusive)
+  assert.equal(isPostedInPeriod('2026-02-28T23:59:59.000', feb.periodStartInclusive, feb.periodEndExclusive), true)
+  assert.equal(isPostedInPeriod('2026-03-01T00:00:00.000', feb.periodStartInclusive, feb.periodEndExclusive), false)
+
+  const nye = resolvePeriodBoundsForPostedAt('2026-12-31T23:59:59.000', 31)
+  assert.ok(nye.periodEndExclusive.startsWith('2027-01-01'), nye.periodEndExclusive)
+  const jan = resolvePeriodBoundsForPostedAt('2027-01-01T00:00:00.000', 31)
+  assert.ok(jan.periodStartInclusive.startsWith('2027-01-01'), jan.periodStartInclusive)
+})
+
+test('due_on exists; overdue ignores reminder day', () => {
+  const dueOn = computeDueOn('2026-03-15', 10)
+  assert.match(dueOn, /^2026-04-10$/)
+  assert.equal(isOverdue({ dueOn, remainingMinor: 100, now: parseLocalIso('2026-04-11T00:00:00') }), true)
+  assert.equal(isOverdue({ dueOn, remainingMinor: 100, now: parseLocalIso('2026-04-10T12:00:00') }), false)
+  assert.equal(isOverdue({ dueOn, remainingMinor: 0, now: parseLocalIso('2026-04-20T00:00:00') }), false)
+
+  // Reminder day 5 fires notify but must not affect overdue above
+  assert.equal(shouldNotifyRepaymentReminder({
+    dueOn,
+    repaymentReminderDay: 5,
+    remainingMinor: 100,
+    now: parseLocalIso('2026-04-05T09:00:00'),
+  }), true)
+  assert.equal(isOverdue({ dueOn, remainingMinor: 100, now: parseLocalIso('2026-04-05T09:00:00') }), false)
+})
+
+test('paid_minor is derived from allocations only', () => {
+  assert.equal(derivePaidMinorFromAllocations([
+    { amount_minor: 1000 },
+    { amountMinor: 250 },
+  ]), 1250)
+  assert.equal(derivePaidMinorFromAllocations([]), 0)
+})
+
+test('migration / wiring mentions hard-contract identifiers', () => {
+  const mig = readFileSync(resolve(root, 'src/core/db/migrations/043_credit_card_system_p0.sql'), 'utf8')
+  assert.match(mig, /credit_statements/)
+  assert.match(mig, /credit_repayment_allocations/)
+  assert.match(mig, /transaction_postings/)
+  assert.match(mig, /payment_due_day/)
+  assert.match(mig, /posted_at/)
+  assert.match(mig, /closing_balance_minor/)
+
+  const migrate = readFileSync(resolve(root, 'src/core/db/migrate.js'), 'utf8')
+  assert.match(migrate, /043_credit_card_system_p0/)
+  assert.match(migrate, /credit_card_system_p0/)
+
+  const service = readFileSync(resolve(root, 'src/core/services/credit.service.js'), 'utf8')
+  assert.match(service, /createCreditPurchase/)
+  assert.match(service, /createCreditRepayment/)
+  assert.match(service, /REPAYMENT_ALLOCATION_REQUIRED/)
+  assert.match(service, /CLOSED_POSTING_MUTATION_FORBIDDEN/)
+  assert.match(service, /runCreditStatementRollovers/)
+  assert.match(service, /credit-accrual/)
+
+  const merge = readFileSync(resolve(root, 'src/ui/services/shared-ledger/snapshot-merge.js'), 'utf8')
+  assert.match(merge, /credit_card_bundle/)
+
+  const page = readFileSync(resolve(root, 'src/ui/views/credit-cards/CreditCardsPage.vue'), 'utf8')
+  assert.match(page, /data-testid="credit-cards-page"/)
+  assert.match(page, /credit-repay-submit/)
+
+  const features = readFileSync(resolve(root, 'src/ui/views/FeatureListPage.vue'), 'utf8')
+  assert.match(features, /feature-link-credit-cards/)
+
+  const router = readFileSync(resolve(root, 'src/ui/router/index.js'), 'utf8')
+  assert.match(router, /path: '\/credit-cards'/)
+
+  assert.equal(normalizeCloseDay(99, 25), 25)
+  assert.equal(toLocalIso(parseLocalIso('2026-08-13T10:11:12.003')).startsWith('2026-08-13T10:11:12'), true)
+})

@@ -43,6 +43,30 @@
         <button
           class="summary-item summary-link"
           type="button"
+          data-testid="assets-lend-entry"
+          @click="goLoans('lend')"
+        >
+          <div class="row summary-head">
+            <small class="muted">{{ t('assets_page.lend') }}</small>
+            <small class="muted summary-hint">{{ t('assets_page.view') }}</small>
+          </div>
+          <MoneyText :value-minor="loanStore.summary.totalReceivable" />
+        </button>
+        <button
+          class="summary-item summary-link"
+          type="button"
+          data-testid="assets-borrow-entry"
+          @click="goLoans('borrow')"
+        >
+          <div class="row summary-head">
+            <small class="muted">{{ t('assets_page.borrow') }}</small>
+            <small class="muted summary-hint">{{ t('assets_page.view') }}</small>
+          </div>
+          <MoneyText :value-minor="loanStore.summary.totalPayable" />
+        </button>
+        <button
+          class="summary-item summary-link summary-securities"
+          type="button"
           data-testid="assets-securities-entry"
           @click="goSecurities"
         >
@@ -52,19 +76,17 @@
           </div>
           <MoneyText :value-minor="securitiesMarketValueMinor" />
         </button>
-        <button class="summary-item summary-link" @click="goLoans('lend')">
+        <button
+          class="summary-item summary-link summary-credit"
+          type="button"
+          data-testid="assets-credit-entry"
+          @click="goCreditCards"
+        >
           <div class="row summary-head">
-            <small class="muted">{{ t('assets_page.lend') }}</small>
+            <small class="muted">{{ t('assets_page.credit_cards') }}</small>
             <small class="muted summary-hint">{{ t('assets_page.view') }}</small>
           </div>
-          <MoneyText :value-minor="loanStore.summary.totalReceivable" />
-        </button>
-        <button class="summary-item summary-link" @click="goLoans('borrow')">
-          <div class="row summary-head">
-            <small class="muted">{{ t('assets_page.borrow') }}</small>
-            <small class="muted summary-hint">{{ t('assets_page.view') }}</small>
-          </div>
-          <MoneyText :value-minor="loanStore.summary.totalPayable" />
+          <MoneyText :value-minor="creditDebtMinor" />
         </button>
       </div>
     </article>
@@ -193,6 +215,20 @@ const disposableMinor = computed(() => balanceMetrics.value.disposableMinor)
 const liabilityMinor = computed(() => balanceMetrics.value.liabilityMinor)
 const totalAssetMinor = computed(() => balanceMetrics.value.totalAssetMinor)
 const securitiesMarketValueMinor = computed(() => Number(securityStore.summary.includedMarketValueMinor ?? 0))
+const creditDebtMinor = computed(() => {
+  const balances = Array.isArray(accountStore.balances) ? accountStore.balances : []
+  const accounts = Array.isArray(accountStore.accounts) ? accountStore.accounts : []
+  const creditIds = new Set(
+    accounts.filter((a) => String(a.account_kind) === 'credit').map((a) => a.id),
+  )
+  let debt = 0
+  for (const row of balances) {
+    if (!creditIds.has(row.id)) continue
+    const bal = Number(row.balance_minor ?? 0)
+    if (bal < 0) debt += -bal
+  }
+  return debt
+})
 const activeCurrencyCode = computed(() => normalizeCurrencyCode(ledgerStore.activeLedger?.currency_code, 'TWD'))
 const deductedAdvanceLabel = computed(() => {
   const amountMinor = Number(balanceMetrics.value.advanceDeductedMinor ?? 0)
@@ -309,6 +345,10 @@ function goSecurities() {
   router.push({ name: 'securities' })
 }
 
+function goCreditCards() {
+  router.push({ name: 'credit-cards' })
+}
+
 function goReimbursements() {
   router.push({ name: 'reimbursements' })
 }
@@ -399,7 +439,9 @@ h3 {
   gap: 6px;
 }
 
-.summary-total {
+.summary-total,
+.summary-securities,
+.summary-credit {
   grid-column: 1 / -1;
 }
 

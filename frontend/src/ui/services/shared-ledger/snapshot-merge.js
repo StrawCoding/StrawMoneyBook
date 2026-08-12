@@ -20,6 +20,10 @@ const SNAPSHOT_TABLE_ORDER = [
   'savings_jars',
   'securities',
   'security_transactions',
+  'credit_statements',
+  'credit_repayments',
+  'credit_repayment_allocations',
+  'transaction_postings',
   'bank_connections',
   'bank_accounts',
   'bank_transactions',
@@ -981,6 +985,69 @@ function collectMergeUnits(localTables, remoteTables) {
           'reimbursement_advance_usages',
           getRowKey('reimbursement_advance_usages', usage),
         )
+      }
+    }
+  }
+
+  // credit_card_bundle: profile account + statements + repayments + allocations + related postings
+  for (const tables of [localTables, remoteTables]) {
+    for (const statement of listTableRows({ tables }, 'credit_statements')) {
+      const accountId = normalizeText(statement?.account_id)
+      if (!accountId) continue
+      const unitKey = accountId
+      addMergeUnitMember(unitMap, 'credit_card_bundle', unitKey, 'credit_statements', getRowKey('credit_statements', statement))
+
+      const accountRow = listTableRows({ tables }, 'accounts')
+        .find((row) => normalizeText(row?.id) === accountId)
+      if (accountRow) {
+        addMergeUnitMember(unitMap, 'credit_card_bundle', unitKey, 'accounts', getRowKey('accounts', accountRow))
+      }
+
+      for (const repayment of listTableRows({ tables }, 'credit_repayments')) {
+        if (normalizeText(repayment?.account_id) !== accountId) continue
+        addMergeUnitMember(
+          unitMap,
+          'credit_card_bundle',
+          unitKey,
+          'credit_repayments',
+          getRowKey('credit_repayments', repayment),
+        )
+        const repaymentId = normalizeText(repayment?.id)
+        for (const alloc of listTableRows({ tables }, 'credit_repayment_allocations')) {
+          if (normalizeText(alloc?.repayment_id) !== repaymentId) continue
+          addMergeUnitMember(
+            unitMap,
+            'credit_card_bundle',
+            unitKey,
+            'credit_repayment_allocations',
+            getRowKey('credit_repayment_allocations', alloc),
+          )
+        }
+      }
+
+      const statementId = normalizeText(statement?.id)
+      for (const posting of listTableRows({ tables }, 'transaction_postings')) {
+        if (normalizeText(posting?.statement_id) !== statementId) continue
+        addMergeUnitMember(
+          unitMap,
+          'credit_card_bundle',
+          unitKey,
+          'transaction_postings',
+          getRowKey('transaction_postings', posting),
+        )
+        const txId = normalizeText(posting?.transaction_id)
+        if (!txId) continue
+        const txRow = listTableRows({ tables }, 'transactions')
+          .find((row) => normalizeText(row?.id) === txId)
+        if (txRow) {
+          addMergeUnitMember(
+            unitMap,
+            'credit_card_bundle',
+            unitKey,
+            'transactions',
+            getRowKey('transactions', txRow),
+          )
+        }
       }
     }
   }

@@ -60,6 +60,7 @@ const generalFeatures = computed(() => ([
   { to: '/claim-sheets', label: t('feature_list.claim_sheets'), icon: 'fa-solid fa-file-invoice-dollar', testId: 'feature-link-claim-sheets' },
   { to: '/savings-jars', label: t('feature_list.savings_jars'), icon: 'fa-solid fa-piggy-bank', testId: 'feature-link-savings-jars' },
   { to: '/assets/securities', label: t('feature_list.securities'), icon: 'fa-solid fa-chart-line', testId: 'feature-link-securities' },
+  { to: '/credit-cards', label: t('feature_list.credit_cards'), icon: 'fa-solid fa-credit-card', testId: 'feature-link-credit-cards' },
   { to: '/subscriptions', label: t('feature_list.subscriptions'), icon: 'fa-solid fa-clock-rotate-left', testId: 'feature-link-subscriptions' },
   { to: '/transactions/search', label: t('feature_list.search_transactions'), icon: 'fa-solid fa-magnifying-glass', testId: 'feature-link-search' },
 ]))

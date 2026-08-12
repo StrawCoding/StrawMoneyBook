@@ -26,6 +26,10 @@ export const BACKUP_IMPORT_TABLE_ORDER = Object.freeze([
   'savings_jars',
   'securities',
   'security_transactions',
+  'credit_statements',
+  'credit_repayments',
+  'credit_repayment_allocations',
+  'transaction_postings',
   'bank_connections',
   'bank_accounts',
   'bank_transactions',
@@ -68,7 +72,9 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
     columns: cols(
       'ledger_id', 'id', 'group_id', 'name', 'account_type', 'account_kind',
       'allow_negative', 'opening_balance_minor', 'currency_code', 'icon',
-      'credit_limit_minor', 'repayment_reminder_day', 'sort_order', 'is_archived',
+      'credit_limit_minor', 'repayment_reminder_day',
+      'statement_close_day', 'payment_due_day', 'card_last4', 'issuer',
+      'sort_order', 'is_archived',
       'created_at', 'updated_at', 'deleted_at', 'include_in_assets',
       'include_in_group_statistics', 'is_settlement',
     ),
@@ -103,7 +109,7 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
   transactions: {
     columns: cols(
       'ledger_id', 'id', 'type', 'transfer_group_id', 'account_id', 'peer_account_id',
-      'category_id', 'amount_minor', 'occurred_at', 'note', 'location', 'tags_json',
+      'category_id', 'amount_minor', 'occurred_at', 'posted_at', 'note', 'location', 'tags_json',
       'origin_type', 'external_ref_id', 'idempotency_key', 'include_in_budget',
       'include_in_analysis', 'created_at', 'updated_at', 'deleted_at',
       'is_reimbursable', 'reimbursement_state', 'reimbursed_at', 'reimburse_target_minor',
@@ -280,6 +286,52 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       fee_mode: ['into_cost', 'from_proceeds'],
       record_mode: ['position', 'funds'],
       settlement_status: ['scheduled', 'confirmed', 'cancelled'],
+    }),
+  },
+  credit_statements: {
+    columns: cols(
+      'ledger_id', 'id', 'account_id', 'period_start_inclusive', 'period_end_exclusive',
+      'status', 'closing_balance_minor', 'due_on', 'closed_at', 'closing_hash', 'close_token',
+      'created_at', 'updated_at', 'deleted_at',
+    ),
+    required: Object.freeze([
+      'id', 'account_id', 'period_start_inclusive', 'period_end_exclusive', 'status',
+      'created_at', 'updated_at',
+    ]),
+    enums: enums({
+      status: ['open', 'closed'],
+    }),
+  },
+  credit_repayments: {
+    columns: cols(
+      'ledger_id', 'id', 'account_id', 'source_account_id', 'amount_minor', 'paid_at',
+      'transfer_group_id', 'idempotency_key', 'note', 'created_at', 'updated_at', 'deleted_at',
+    ),
+    required: Object.freeze([
+      'id', 'account_id', 'source_account_id', 'amount_minor', 'paid_at', 'idempotency_key',
+      'created_at', 'updated_at',
+    ]),
+  },
+  credit_repayment_allocations: {
+    columns: cols(
+      'ledger_id', 'id', 'repayment_id', 'statement_id', 'amount_minor',
+      'created_at', 'updated_at', 'deleted_at',
+    ),
+    required: Object.freeze([
+      'id', 'repayment_id', 'statement_id', 'amount_minor', 'created_at', 'updated_at',
+    ]),
+  },
+  transaction_postings: {
+    columns: cols(
+      'ledger_id', 'id', 'transaction_id', 'role', 'account_id', 'category_id', 'amount_minor',
+      'statement_id', 'include_in_budget', 'include_in_analysis',
+      'created_at', 'updated_at', 'deleted_at',
+    ),
+    required: Object.freeze([
+      'id', 'transaction_id', 'role', 'amount_minor', 'created_at', 'updated_at',
+    ]),
+    enums: enums({
+      role: ['expense_accrual', 'card_liability', 'cash_transfer', 'fee', 'adjustment', 'reversal'],
     }),
   },
   bank_connections: {

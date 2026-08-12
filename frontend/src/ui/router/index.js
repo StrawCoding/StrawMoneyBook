@@ -442,6 +442,12 @@ const router = createRouter({
       meta: { tab: 'assets' },
     },
     {
+      name: 'credit-cards',
+      path: '/credit-cards',
+      component: () => import('@/ui/views/credit-cards/CreditCardsPage.vue'),
+      meta: { tab: 'features' },
+    },
+    {
       name: 'security-detail',
       path: '/assets/securities/:id',
       component: () => import('@/ui/views/securities/SecurityDetailPage.vue'),

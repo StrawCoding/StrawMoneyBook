@@ -1,8 +1,10 @@
 # Pending Release Notes
 
----
-
+- (smb301) 信用卡消費制度 P0：credit profile（結帳日／繳款截止日）、`credit_statements` rollover（D 全天屬本期、D+1 00:00 close）、刷卡雙腿 posting、還款 allocations（paid 派生）、額度警示與 due／reminder App 內提醒；UI `/credit-cards`＋功能頁／資產摘要／帳戶明細／FAB 信用帳戶雙腿／首頁卡可關預設關；備份與共同帳本 `credit_card_bundle`；Node 不變式＋`playwright:ui-layout`。
+- 資產頁摘要版面：借出／借入同一列；有價證券單獨滿寬一列置底（`assets-lend-entry`／`assets-borrow-entry`／`assets-securities-entry`）；補 source／Playwright 版面斷言。
 - (smb300) 交割確認／取消／流水刪除／標的刪除原子回滾補齊 sql.js 實庫失敗情境（中途失敗不殘留）與雙交割戶同代碼獨立入帳回歸；明細標的名稱／代碼／類型編輯與真 `withTransaction` 維持。
+
+---
 
 ## v1.3.111
 - (smb300) 交割確認／取消／刪除改為真 SQLite 原子交易（`withTransaction` BEGIN/COMMIT/ROLLBACK；中途失敗整筆回滾本金腿＋損益腿＋交割狀態）；證券明細可編輯名稱／代碼／類型；sql.js 實庫證到期入帳與 300→320／280 帳本列及失敗一致性。

@@ -1284,12 +1284,12 @@ export async function addTransaction(ledgerId, input) {
   await run(
     `INSERT INTO transactions (
       ledger_id, id, type, transfer_group_id, account_id, peer_account_id,
-      category_id, amount_minor, occurred_at, note, location, tags_json, origin_type,
+      category_id, amount_minor, occurred_at, posted_at, note, location, tags_json, origin_type,
       external_ref_id, idempotency_key, is_reimbursable, reimbursement_state,
       reimbursed_at, reimburse_target_minor, include_in_budget, include_in_analysis,
       created_by_user_id, created_by_display_name, updated_by_user_id, updated_by_display_name,
       created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       ledgerId,
       id,
@@ -1300,6 +1300,7 @@ export async function addTransaction(ledgerId, input) {
       input.categoryId ?? null,
       input.amountMinor,
       input.occurredAt,
+      input.postedAt ?? input.occurredAt ?? null,
       input.note ?? null,
       input.location ?? null,
       input.tagsJson ?? null,

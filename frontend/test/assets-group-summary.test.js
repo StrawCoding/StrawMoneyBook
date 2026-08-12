@@ -122,3 +122,23 @@ test('assets page keeps group totals inline within each account group instead of
   assert.doesNotMatch(assetsPageSource, /assets_page\.group_summary_title/)
   assert.doesNotMatch(assetsPageSource, /groupStatSummaries/)
 })
+
+test('assets summary places lend/borrow on one row and securities full-width at the bottom', () => {
+  const gridMatch = assetsPageSource.match(/class="summary-grid">([\s\S]*?)<\/div>\s*<\/article>/)
+  assert.ok(gridMatch, 'summary-grid block missing')
+  const grid = gridMatch[1]
+  const lendAt = grid.indexOf('data-testid="assets-lend-entry"')
+  const borrowAt = grid.indexOf('data-testid="assets-borrow-entry"')
+  const securitiesAt = grid.indexOf('data-testid="assets-securities-entry"')
+  const creditAt = grid.indexOf('data-testid="assets-credit-entry"')
+  assert.ok(lendAt >= 0 && borrowAt >= 0 && securitiesAt >= 0)
+  assert.ok(lendAt < borrowAt, 'lend must precede borrow on the same row')
+  assert.ok(borrowAt < securitiesAt, 'securities must be after lend/borrow')
+  assert.ok(creditAt > securitiesAt, 'credit entry follows securities')
+  assert.match(assetsPageSource, /summary-securities/)
+  assert.match(assetsPageSource, /summary-credit/)
+  assert.match(
+    assetsPageSource,
+    /\.summary-total,\s*\n\.summary-securities,\s*\n\.summary-credit\s*\{\s*\n\s*grid-column:\s*1\s*\/\s*-1;/,
+  )
+})

@@ -33,6 +33,13 @@ function normalizeRepaymentReminderDay(value) {
   return numeric
 }
 
+function normalizeDayOfMonth(value) {
+  if (value === undefined || value === null || value === '') return null
+  const numeric = Math.trunc(Number(value))
+  if (!Number.isFinite(numeric) || numeric < 1 || numeric > 31) return null
+  return numeric
+}
+
 function normalizeIncludeInAssets(value, fallback = 1) {
   if (value === undefined || value === null || value === '') return fallback
   if (typeof value === 'number') return value === 0 ? 0 : 1
@@ -71,6 +78,7 @@ export async function listAccounts(ledgerId, options = {}) {
   const result = await query(
     `SELECT a.ledger_id, a.id, a.group_id, a.name, a.account_type, a.account_kind, a.allow_negative, a.opening_balance_minor,
             a.currency_code, a.icon, a.credit_limit_minor, a.repayment_reminder_day,
+            a.statement_close_day, a.payment_due_day, a.card_last4, a.issuer,
             a.include_in_assets, a.include_in_group_statistics, a.is_settlement, a.sort_order, a.is_archived,
             sj.goal_type AS savings_jar_goal_type,
             sj.target_amount_minor AS savings_jar_target_amount_minor,
@@ -102,6 +110,7 @@ export async function findAccountById(ledgerId, accountId) {
   const result = await query(
     `SELECT a.ledger_id, a.id, a.group_id, a.name, a.account_type, a.account_kind, a.allow_negative, a.opening_balance_minor,
             a.currency_code, a.icon, a.credit_limit_minor, a.repayment_reminder_day,
+            a.statement_close_day, a.payment_due_day, a.card_last4, a.issuer,
             a.include_in_assets, a.include_in_group_statistics, a.is_settlement, a.sort_order, a.is_archived,
             sj.goal_type AS savings_jar_goal_type,
             sj.target_amount_minor AS savings_jar_target_amount_minor,
@@ -150,6 +159,14 @@ export async function createAccount(ledgerId, input) {
   const accountKind = normalizeAccountKind(input.accountKind, 'cash')
   const creditLimitMinor = normalizeMinorAmount(input.creditLimitMinor, 0)
   const repaymentReminderDay = normalizeRepaymentReminderDay(input.repaymentReminderDay)
+  const statementCloseDay = normalizeDayOfMonth(input.statementCloseDay)
+  const paymentDueDay = normalizeDayOfMonth(input.paymentDueDay)
+  const cardLast4 = input.cardLast4 == null || input.cardLast4 === ''
+    ? null
+    : String(input.cardLast4).replace(/\D/g, '').slice(-4) || null
+  const issuer = input.issuer == null || input.issuer === ''
+    ? null
+    : String(input.issuer).trim().slice(0, 80) || null
   const includeInAssets = normalizeIncludeInAssets(input.includeInAssets, 1)
   const includeInGroupStatistics = normalizeIncludeInGroupStatistics(input.includeInGroupStatistics, 1)
   const isSettlement = normalizeIsSettlement(input.isSettlement ?? input.is_settlement, 0)
@@ -158,8 +175,9 @@ export async function createAccount(ledgerId, input) {
     `INSERT INTO accounts (
       ledger_id, id, group_id, name, account_type, account_kind, allow_negative, opening_balance_minor,
       currency_code, icon, credit_limit_minor, repayment_reminder_day,
+      statement_close_day, payment_due_day, card_last4, issuer,
       include_in_assets, include_in_group_statistics, is_settlement, sort_order, is_archived, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?);`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?);`,
     [
       ledgerId,
       id,
@@ -173,6 +191,10 @@ export async function createAccount(ledgerId, input) {
       icon,
       creditLimitMinor,
       repaymentReminderDay,
+      statementCloseDay,
+      paymentDueDay,
+      cardLast4,
+      issuer,
       includeInAssets,
       includeInGroupStatistics,
       isSettlement,
@@ -215,6 +237,22 @@ export async function updateAccountProfile(ledgerId, accountId, input = {}) {
   const creditLimitMinor = hasCreditLimitMinor ? normalizeMinorAmount(input.creditLimitMinor, 0) : null
   const hasRepaymentReminderDay = Object.prototype.hasOwnProperty.call(input, 'repaymentReminderDay')
   const repaymentReminderDay = hasRepaymentReminderDay ? normalizeRepaymentReminderDay(input.repaymentReminderDay) : undefined
+  const hasStatementCloseDay = Object.prototype.hasOwnProperty.call(input, 'statementCloseDay')
+  const statementCloseDay = hasStatementCloseDay ? normalizeDayOfMonth(input.statementCloseDay) : undefined
+  const hasPaymentDueDay = Object.prototype.hasOwnProperty.call(input, 'paymentDueDay')
+  const paymentDueDay = hasPaymentDueDay ? normalizeDayOfMonth(input.paymentDueDay) : undefined
+  const hasCardLast4 = Object.prototype.hasOwnProperty.call(input, 'cardLast4')
+  const cardLast4 = hasCardLast4
+    ? (input.cardLast4 == null || input.cardLast4 === ''
+      ? null
+      : String(input.cardLast4).replace(/\D/g, '').slice(-4) || null)
+    : undefined
+  const hasIssuer = Object.prototype.hasOwnProperty.call(input, 'issuer')
+  const issuer = hasIssuer
+    ? (input.issuer == null || input.issuer === ''
+      ? null
+      : String(input.issuer).trim().slice(0, 80) || null)
+    : undefined
   const hasIncludeInAssets = Object.prototype.hasOwnProperty.call(input, 'includeInAssets')
   const includeInAssets = hasIncludeInAssets ? normalizeIncludeInAssets(input.includeInAssets, 1) : null
   const hasIncludeInGroupStatistics = Object.prototype.hasOwnProperty.call(input, 'includeInGroupStatistics')
@@ -238,6 +276,22 @@ export async function updateAccountProfile(ledgerId, accountId, input = {}) {
            WHEN ? = 1 THEN ?
            ELSE repayment_reminder_day
          END,
+         statement_close_day = CASE
+           WHEN ? = 1 THEN ?
+           ELSE statement_close_day
+         END,
+         payment_due_day = CASE
+           WHEN ? = 1 THEN ?
+           ELSE payment_due_day
+         END,
+         card_last4 = CASE
+           WHEN ? = 1 THEN ?
+           ELSE card_last4
+         END,
+         issuer = CASE
+           WHEN ? = 1 THEN ?
+           ELSE issuer
+         END,
          include_in_assets = COALESCE(?, include_in_assets),
          include_in_group_statistics = COALESCE(?, include_in_group_statistics),
          is_settlement = COALESCE(?, is_settlement),
@@ -253,6 +307,14 @@ export async function updateAccountProfile(ledgerId, accountId, input = {}) {
       creditLimitMinor,
       hasRepaymentReminderDay ? 1 : 0,
       hasRepaymentReminderDay ? repaymentReminderDay : null,
+      hasStatementCloseDay ? 1 : 0,
+      hasStatementCloseDay ? statementCloseDay : null,
+      hasPaymentDueDay ? 1 : 0,
+      hasPaymentDueDay ? paymentDueDay : null,
+      hasCardLast4 ? 1 : 0,
+      hasCardLast4 ? cardLast4 : null,
+      hasIssuer ? 1 : 0,
+      hasIssuer ? issuer : null,
       includeInAssets,
       includeInGroupStatistics,
       isSettlement,

@@ -40,6 +40,7 @@ import migration039 from '@/core/db/migrations/039_budget_pay_cycle.sql?raw'
 import migration040 from '@/core/db/migrations/040_transaction_editor_attribution.sql?raw'
 import migration041 from '@/core/db/migrations/041_securities.sql?raw'
 import migration042 from '@/core/db/migrations/042_securities_settlement_v2.sql?raw'
+import migration043 from '@/core/db/migrations/043_credit_card_system_p0.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -80,6 +81,7 @@ const MIGRATIONS = [
   { version: 40, name: 'transaction_editor_attribution', sql: migration040 },
   { version: 41, name: 'securities', sql: migration041 },
   { version: 42, name: 'securities_settlement_v2', sql: migration042 },
+  { version: 43, name: 'credit_card_system_p0', sql: migration043 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'
@@ -115,6 +117,10 @@ const LEGACY_COLUMN_PATCHES = {
     'ALTER TABLE accounts ADD COLUMN icon TEXT;',
     'ALTER TABLE accounts ADD COLUMN credit_limit_minor INTEGER NOT NULL DEFAULT 0;',
     'ALTER TABLE accounts ADD COLUMN repayment_reminder_day INTEGER;',
+    'ALTER TABLE accounts ADD COLUMN statement_close_day INTEGER;',
+    'ALTER TABLE accounts ADD COLUMN payment_due_day INTEGER;',
+    'ALTER TABLE accounts ADD COLUMN card_last4 TEXT;',
+    'ALTER TABLE accounts ADD COLUMN issuer TEXT;',
     'ALTER TABLE accounts ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;',
     'ALTER TABLE accounts ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;',
     'ALTER TABLE accounts ADD COLUMN deleted_at TEXT;',
@@ -147,6 +153,7 @@ const LEGACY_COLUMN_PATCHES = {
     'ALTER TABLE transactions ADD COLUMN category_id TEXT;',
     'ALTER TABLE transactions ADD COLUMN amount_minor INTEGER;',
     'ALTER TABLE transactions ADD COLUMN occurred_at TEXT;',
+    'ALTER TABLE transactions ADD COLUMN posted_at TEXT;',
     'ALTER TABLE transactions ADD COLUMN note TEXT;',
     'ALTER TABLE transactions ADD COLUMN location TEXT;',
     'ALTER TABLE transactions ADD COLUMN tags_json TEXT;',

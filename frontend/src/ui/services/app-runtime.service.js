@@ -24,6 +24,7 @@ import { warmupMembershipRuntime } from '@/core/services/membership.service'
 import { runSavingsJarAutoSaveIfDue } from '@/core/services/savings-jar-auto-save.service'
 import { runSubscriptionChargesIfDue } from '@/core/services/subscription-charge.service'
 import { runDueSecuritySettlements } from '@/core/services/security.service'
+import { runCreditStatementRollovers } from '@/core/services/credit.service'
 import { syncBookkeepingRemindersForAllLedgers } from '@/ui/services/bookkeeping-reminder.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { loadUiLayout } from '@/ui/services/ui-layout.service'
@@ -379,6 +380,13 @@ function runSecuritySettlementsInBackground(ledgerId, reason) {
   })
 }
 
+function runCreditRolloversInBackground(ledgerId, reason) {
+  if (!ledgerId) return
+  void runCreditStatementRollovers(ledgerId).catch((error) => {
+    console.warn(`[credit-rollover] run failed (${reason})`, error)
+  })
+}
+
 export function installAppRuntime({ pinia, router, windowObject = globalThis.window } = {}) {
   const runtimeState = createRuntimeState()
   const listenerHandles = []
@@ -457,6 +465,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
         runSubscriptionChargesInBackground(currentLedgerId, 'app_resume')
         runBudgetSaveInBackground(currentLedgerId, 'app_resume')
         runSecuritySettlementsInBackground(currentLedgerId, 'app_resume')
+        runCreditRolloversInBackground(currentLedgerId, 'app_resume')
         scheduleAutoBackupDueCheck(runtimeState, pinia, windowObject)
       }
       void syncActiveLedgerHomeWidget(pinia)
@@ -517,6 +526,8 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
       void runGoogleDriveLedgerBackgroundSyncNow(pinia)
     })
     reloadCurrentBudgetPeriodInBackground(pinia, 'window_focus')
+    const focusLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
+    if (focusLedgerId) runCreditRolloversInBackground(focusLedgerId, 'window_focus')
   })
 
   addWindowListener('visibilitychange', () => {
@@ -526,6 +537,8 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
       void runGoogleDriveLedgerBackgroundSyncNow(pinia)
     })
     reloadCurrentBudgetPeriodInBackground(pinia, 'visibility_visible')
+    const visibleLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
+    if (visibleLedgerId) runCreditRolloversInBackground(visibleLedgerId, 'visibility_visible')
   })
 
   scheduleMembershipWarmup('app_start', windowObject)
@@ -536,6 +549,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
     runSubscriptionChargesInBackground(ledgerStore.activeLedgerId, 'app_start')
     runBudgetSaveInBackground(ledgerStore.activeLedgerId, 'app_start')
     runSecuritySettlementsInBackground(ledgerStore.activeLedgerId, 'app_start')
+    runCreditRolloversInBackground(ledgerStore.activeLedgerId, 'app_start')
   }
 
   const stopLedgerWatcher = watch(

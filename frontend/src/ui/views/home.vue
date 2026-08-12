@@ -59,6 +59,7 @@
 
       <HomeAssetSummaryCard data-testid="home-asset-summary" />
       <HomeBudgetSummaryCard data-testid="home-budget-summary" />
+      <HomeCreditSummaryCard />
       <HomeTransactionFeed data-testid="home-transaction-feed" />
 
       <teleport to="body">
@@ -74,6 +75,7 @@ import HomeAssetSummaryCard from '@/ui/components/home/HomeAssetSummaryCard.vue'
 import { useUiLayout } from '@/ui/composables/useUiLayout'
 import { useHomePeriodFilter } from '@/ui/composables/useHomePeriodFilter'
 import HomeBudgetSummaryCard from '@/ui/components/home/HomeBudgetSummaryCard.vue'
+import HomeCreditSummaryCard from '@/ui/components/home/HomeCreditSummaryCard.vue'
 import HomeTransactionFeed from '@/ui/components/home/HomeTransactionFeed.vue'
 import LedgerSwitcher from '@/ui/components/common/LedgerSwitcher.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'

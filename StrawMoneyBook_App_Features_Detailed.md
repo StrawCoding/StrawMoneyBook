@@ -173,7 +173,11 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 
 `playwright:ui-layout` 會 bypass onboarding 進入 app-shell 首頁，確認無傳統／現代切換 UI、畫面為現代 layout（`data-ui-layout=modern`）、首頁區塊／FAB／BottomNav 仍在；強制 Light 主題後驗證收入／支出 block 可見、可讀、版面完整，並抽樣確認 Dark 主題未回歸；legacy `traditional` preference 會遷移為 modern。
 
-功能列表分為「一般功能」與「進階功能」兩區：一般功能含預算項目、借貸、報銷、請款單、存錢罐、有價證券、訂閱、交易搜尋；進階功能（`feature_list.advanced`）含共同帳本、帳本同步、Drive 備份選檔／舊版還原（smb299 → `/settings/auto-backup#drive-appdata-browser`）、銀行同步（feature flag 閘控）、載具同步。預算項目入口搭配圖示直接導向預算管理頁。設定頁主清單不再列出共同帳本／帳本同步／銀行同步／載具同步四項進階同步入口（深度連結／舊 bookmark 仍可開到同一 route）；自動備份仍在設定頁，並可從進階進入 Drive 選檔還原錨點。smb299 進階列加長後，功能列以 `scroll-margin-bottom`（約 BottomNav 高度）避免末列被固定底欄遮擋；`playwright:ui-layout` 點擊進階入口前會置中捲動並確認列在 nav 上方。
+功能列表分為「一般功能」與「進階功能」兩區：一般功能含預算項目、借貸、報銷、請款單、存錢罐、有價證券、信用卡、訂閱、交易搜尋；進階功能（`feature_list.advanced`）含共同帳本、帳本同步、Drive 備份選檔／舊版還原（smb299 → `/settings/auto-backup#drive-appdata-browser`）、銀行同步（feature flag 閘控）、載具同步。預算項目入口搭配圖示直接導向預算管理頁。設定頁主清單不再列出共同帳本／帳本同步／銀行同步／載具同步四項進階同步入口（深度連結／舊 bookmark 仍可開到同一 route）；自動備份仍在設定頁，並可從進階進入 Drive 選檔還原錨點。smb299 進階列加長後，功能列以 `scroll-margin-bottom`（約 BottomNav 高度）避免末列被固定底欄遮擋；`playwright:ui-layout` 點擊進階入口前會置中捲動並確認列在 nav 上方。
+
+### 信用卡消費制度 P0（smb301）
+
+權威契約 v1.1：`statement_close_day` 當日全天屬本期，`period_end_exclusive=(D+1) 00:00` 才 close；歸期只讀 `posted_at`（`occurred_at` 服務預算／日曆）；`closing_balance_minor` close 後不可變；還款必經 `credit_repayment_allocations`（`paid`=SUM）；正式 `payment_due_day`＋每期 `due_on`（reminder 僅通知）；雙腿=`transactions`＋`transaction_postings`（禁中介 credit-accrual 帳戶）；merge unit=`credit_card_bundle`。UI：`/credit-cards`、功能頁入口、資產摘要欠款、帳戶明細信用區塊、FAB／記帳對信用帳戶走刷卡雙腿、首頁卡可開關預設關。Rollover 於啟動／回前景／信用卡頁補跑且冪等。
 
 ### 3.2 交易記帳
 
@@ -374,16 +378,14 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 
 資產頁不只顯示帳戶餘額，而是有明確的財務拆分：
 
-- 總資產
-- 可支配資產
-- 負債
-- 有價證券市值（可選計入總資產）
-- 借出
-- 借入
+- 總資產（摘要區滿寬）
+- 可支配資產／負債（同一列）
+- 借出／借入（同一列）
+- 有價證券市值（可選計入總資產；摘要區**單獨滿寬一列置底**，`assets-securities-entry`）
 
 其中「可支配資產」已考慮代收與暫收款不應算成可自由使用金額，因此比一般簡單加總更接近真實狀態。
 
-有價證券為獨立模組（非一般銀行帳戶）：資產頁入口 `/assets/securities`（`data-testid=assets-securities-entry` → `securities-page`）。v2 P1：每個交割帳戶＝獨立投資組合（同代碼可跨交割戶各有持倉）；標的綁 `settlement_account_id`；流水含 `settle_at`／`settlement_status`（scheduled｜confirmed｜cancelled），預設交易日 T+2 10:00（跳過六日）；App 啟動／回前景／證券頁載入補跑到期自動入帳；本金以 adjustment 不計收支、已實現損益進系統分類「投資損益」（可改名不可刪）；精簡資金／完整持倉雙模式；未實現可切市值估價／只認成本；標的（名稱／代碼／類型）與流水可編刪，交割可改期／取消／提前確認；已確認刪除或取消經 `withTransaction` 真原子回滾現金腿＋損益腿＋交割狀態（sql.js 實庫證 300→320／280、確認／取消／流水刪除／標的刪除中途失敗不殘留、雙交割戶同代碼獨立入帳）。手續費選填（併入成本或從回收扣）。不做封存、配息、分割、多幣、美股專模、券商 API、即時行情。`playwright:ui-layout` 以 SPA 入口驗收列表頁（禁 welcome 假陽性），並檢查 padding／BottomNav／safe-area。
+有價證券為獨立模組（非一般銀行帳戶）：資產頁入口 `/assets/securities`（`data-testid=assets-securities-entry` → `securities-page`）。v2 P1：每個交割帳戶＝獨立投資組合（同代碼可跨交割戶各有持倉）；標的綁 `settlement_account_id`；流水含 `settle_at`／`settlement_status`（scheduled｜confirmed｜cancelled），預設交易日 T+2 10:00（跳過六日）；App 啟動／回前景／證券頁載入補跑到期自動入帳；本金以 adjustment 不計收支、已實現損益進系統分類「投資損益」（可改名不可刪）；精簡資金／完整持倉雙模式；未實現可切市值估價／只認成本；標的（名稱／代碼／類型）與流水可編刪，交割可改期／取消／提前確認；已確認刪除或取消經 `withTransaction` 真原子回滾現金腿＋損益腿＋交割狀態（sql.js 實庫證 300→320／280、確認／取消／流水刪除／標的刪除中途失敗不殘留、雙交割戶同代碼獨立入帳）。手續費選填（併入成本或從回收扣）。不做封存、配息、分割、多幣、美股專模、券商 API、即時行情。`playwright:ui-layout` 以 SPA 入口驗收列表頁（禁 welcome 假陽性），並檢查 padding／BottomNav／safe-area，以及資產摘要「借出／借入同行、有價證券滿寬置底」。
 
 資產頁現在會把群組金額直接顯示在各帳戶群組列上：
 

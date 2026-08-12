@@ -675,12 +675,34 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
       }
       await new Promise((resolve) => setTimeout(resolve, 40))
     }
+    const lend = document.querySelector('[data-testid=assets-lend-entry]')
+    const borrow = document.querySelector('[data-testid=assets-borrow-entry]')
     const entry = document.querySelector('[data-testid=assets-securities-entry]')
-    if (!entry) {
+    if (!lend || !borrow || !entry) {
       return {
         ok: false,
-        reason: 'securities_entry_missing',
+        reason: 'securities_or_loan_entry_missing',
         path: window.location.pathname,
+        hasLend: Boolean(lend),
+        hasBorrow: Boolean(borrow),
+        hasSecurities: Boolean(entry),
+      }
+    }
+    const lendBox = lend.getBoundingClientRect()
+    const borrowBox = borrow.getBoundingClientRect()
+    const secBox = entry.getBoundingClientRect()
+    const sameRow = Math.abs(lendBox.top - borrowBox.top) <= 8
+    const securitiesBelow = secBox.top >= Math.max(lendBox.bottom, borrowBox.bottom) - 2
+    const securitiesFullWidth = entry.classList.contains('summary-securities')
+    if (!sameRow || !securitiesBelow || !securitiesFullWidth) {
+      return {
+        ok: false,
+        reason: 'assets_summary_layout',
+        path: window.location.pathname,
+        sameRow,
+        securitiesBelow,
+        securitiesFullWidth,
+        tops: { lend: lendBox.top, borrow: borrowBox.top, securities: secBox.top },
       }
     }
     entry.click()
@@ -890,6 +912,7 @@ async function assertRouteNavigation() {
     advancedTitle: document.querySelector('[data-testid=feature-list-advanced] .feature-section-title')?.textContent?.trim() ?? '',
     links: {
       securities: Boolean(document.querySelector('[data-testid=feature-link-securities]')),
+      creditCards: Boolean(document.querySelector('[data-testid=feature-link-credit-cards]')),
       shared: Boolean(document.querySelector('[data-testid=feature-link-shared-ledgers]')),
       ledgerSync: Boolean(document.querySelector('[data-testid=feature-link-ledger-sync]')),
       driveAppData: Boolean(document.querySelector('[data-testid=feature-link-drive-appdata-restore]')),
@@ -902,6 +925,7 @@ async function assertRouteNavigation() {
   assert.equal(state.hasAdvancedSection, true, JSON.stringify(state, null, 2))
   assert.match(state.advancedTitle, /進階功能|Advanced|高度な機能/u)
   assert.equal(state.links.securities, true, JSON.stringify(state, null, 2))
+  assert.equal(state.links.creditCards, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.shared, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.ledgerSync, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.driveAppData, true, JSON.stringify(state, null, 2))
@@ -937,6 +961,47 @@ async function assertRouteNavigation() {
     }`)
     assert.equal(securitiesNav.ok, true, JSON.stringify(securitiesNav, null, 2))
     assert.equal(securitiesNav.path, '/assets/securities', JSON.stringify(securitiesNav, null, 2))
+  }
+
+  // General: credit cards module (app-shell, not welcome).
+  {
+    await runPlaywrightCli(['goto', `${baseUrl}/features`])
+    await delay(600)
+    const creditNav = await evalPage(`async () => {
+      const link = document.querySelector('[data-testid=feature-link-credit-cards]')
+      if (!link) return { ok: false, reason: 'missing credit cards link' }
+      link.scrollIntoView({ block: 'center', inline: 'nearest' })
+      link.click()
+      const deadline = Date.now() + 5000
+      while (Date.now() < deadline) {
+        if (window.location.pathname === '/credit-cards'
+          && document.querySelector('[data-testid=credit-cards-page]')
+          && document.querySelector('[data-testid=bottom-nav]')
+          && !document.querySelector('.boot-layer')) {
+          return {
+            ok: true,
+            path: window.location.pathname,
+            title: document.querySelector('[data-testid=credit-cards-page-title]')?.textContent?.trim() || '',
+            hasToggle: Boolean(document.querySelector('[data-testid=credit-home-card-enabled]')),
+            hasBottomNav: true,
+            boot: Boolean(document.querySelector('.boot-layer')),
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      return {
+        ok: false,
+        path: window.location.pathname,
+        hasPage: Boolean(document.querySelector('[data-testid=credit-cards-page]')),
+        hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+        boot: Boolean(document.querySelector('.boot-layer')),
+      }
+    }`)
+    assert.equal(creditNav.ok, true, JSON.stringify(creditNav, null, 2))
+    assert.equal(creditNav.path, '/credit-cards', JSON.stringify(creditNav, null, 2))
+    assert.ok(creditNav.title.length > 0, JSON.stringify(creditNav, null, 2))
+    assert.equal(creditNav.hasToggle, true, JSON.stringify(creditNav, null, 2))
+    console.log('[credit-cards] page ok:', creditNav.title)
   }
 
   const advancedTargets = [
