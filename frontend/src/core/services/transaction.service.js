@@ -415,6 +415,21 @@ export async function createRefundAdjustment(ledgerId, payload = {}) {
     throw new Error('退款扣除金額不可超過原始交易金額')
   }
 
+  // Formal credit refund: write adjustment posting into current OPEN statement.
+  if (String(targetAccount.account_kind) === 'credit') {
+    const { createCreditRefundAdjustment } = await import('@/core/services/credit.service')
+    const result = await createCreditRefundAdjustment(ledgerId, {
+      accountId: targetAccountId,
+      amountMinor: requestedRefundMinor,
+      occurredAt: payload.occurredAt ?? new Date().toISOString(),
+      postedAt: payload.postedAt ?? payload.occurredAt ?? new Date().toISOString(),
+      note: payload.note ?? null,
+      externalRefId: sourceTransactionId,
+      categoryId: refundCategoryId,
+    })
+    return result.transactionId
+  }
+
   return createAdjustment(ledgerId, {
     ...payload,
     accountId: targetAccountId,
@@ -473,19 +488,44 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
   const currentPostedAt = String(currentTx.posted_at ?? currentTx.occurred_at ?? '').trim()
   const nextPostedAt = String(payload.postedAt ?? payload.occurredAt ?? '').trim()
   const changingPostedAt = Boolean(nextPostedAt) && nextPostedAt !== currentPostedAt
+  const changingOccurredAt = Boolean(payload.occurredAt)
+    && String(payload.occurredAt) !== String(currentTx.occurred_at)
+    && !changingPostedAt
   const changingAmountOrAccount = (
     (payload.accountId != null && String(payload.accountId) !== String(currentTx.account_id))
     || (payload.amountMinor != null
       && Math.round(Number(payload.amountMinor)) !== Math.round(Number(currentTx.amount_minor)))
   )
-  if (changingPostedAt || changingAmountOrAccount || payload.type === 'transfer') {
-    try {
-      const { assertTransactionMutableForCredit } = await import('@/core/services/credit.service')
-      await assertTransactionMutableForCredit(ledgerId, txId, { changingPostedAt })
-    } catch (error) {
-      if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') throw error
-      // Non-credit txs: ignore
-    }
+  const changingCategory = payload.categoryId != null
+    && String(payload.categoryId ?? '') !== String(currentTx.category_id ?? '')
+  const changingNote = Object.prototype.hasOwnProperty.call(payload, 'note')
+    && String(payload.note ?? '') !== String(currentTx.note ?? '')
+  const changingFlags = (
+    (payload.isReimbursable != null
+      && Boolean(payload.isReimbursable) !== Boolean(Number(currentTx.is_reimbursable ?? 0)))
+    || (payload.includeInBudget != null
+      && Boolean(payload.includeInBudget) !== Boolean(Number(currentTx.include_in_budget ?? 1)))
+    || (payload.includeInAnalysis != null
+      && Boolean(payload.includeInAnalysis) !== Boolean(Number(currentTx.include_in_analysis ?? 1)))
+  )
+  try {
+    const { assertTransactionMutableForCredit } = await import('@/core/services/credit.service')
+    await assertTransactionMutableForCredit(ledgerId, txId, {
+      changes: {
+        amount: changingAmountOrAccount,
+        account: changingAmountOrAccount,
+        postedAt: changingPostedAt,
+        category: changingCategory,
+        note: changingNote,
+        flags: changingFlags,
+        occurredAt: changingOccurredAt,
+        delete: false,
+        batch: false,
+      },
+    })
+  } catch (error) {
+    if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') throw error
+    // Non-credit txs: ignore
   }
   if (!payload.accountId) {
     throw new Error('請選擇帳戶')
@@ -614,7 +654,9 @@ export async function deleteManualTransaction(ledgerId, txId) {
 
   try {
     const { assertTransactionMutableForCredit } = await import('@/core/services/credit.service')
-    await assertTransactionMutableForCredit(ledgerId, txId, { changingPostedAt: true })
+    await assertTransactionMutableForCredit(ledgerId, txId, {
+      changes: { delete: true, amount: true, postedAt: true },
+    })
   } catch (error) {
     if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') throw error
   }
@@ -646,9 +688,29 @@ export async function deleteManualTransaction(ledgerId, txId) {
 export async function batchPatchCategory(ledgerId, txIds, categoryId) {
   const validIds = (txIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean)
   if (!validIds.length) return 0
+  const allowed = []
+  for (const txId of validIds) {
+    try {
+      const { assertTransactionMutableForCredit } = await import('@/core/services/credit.service')
+      await assertTransactionMutableForCredit(ledgerId, txId, {
+        changes: { category: true, batch: true },
+      })
+      allowed.push(txId)
+    } catch (error) {
+      if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') {
+        continue
+      }
+      allowed.push(txId)
+    }
+  }
+  if (!allowed.length) {
+    const err = new Error('CLOSED_POSTING_MUTATION_FORBIDDEN')
+    err.code = 'CLOSED_POSTING_MUTATION_FORBIDDEN'
+    throw err
+  }
   return batchPatchCategoryForTransactions(
     ledgerId,
-    validIds,
+    allowed,
     categoryId ?? null,
     await resolveCurrentTransactionEditor(),
   )
@@ -677,6 +739,27 @@ export async function batchPatchTransactions(ledgerId, txIds, rawPatch = {}) {
       continue
     }
 
+    try {
+      const { assertTransactionMutableForCredit } = await import('@/core/services/credit.service')
+      await assertTransactionMutableForCredit(ledgerId, txId, {
+        changes: {
+          category: Boolean(patch.categoryId),
+          note: patch.noteMode !== 'keep',
+          flags: (
+            patch.isReimbursableMode !== 'keep'
+            || patch.includeInBudgetMode !== 'keep'
+            || patch.includeInAnalysisMode !== 'keep'
+          ),
+          batch: true,
+        },
+      })
+    } catch (error) {
+      if (error?.code === 'CLOSED_POSTING_MUTATION_FORBIDDEN') {
+        skipped.push({ txId, reason: 'CLOSED_POSTING_MUTATION_FORBIDDEN' })
+        continue
+      }
+    }
+
     const plan = buildBatchTransactionUpdateInput(currentTx, patch)
     if (!plan.ok) {
       skipped.push({ txId, reason: plan.reason || '此交易不支援該批量變更' })
@@ -691,6 +774,13 @@ export async function batchPatchTransactions(ledgerId, txIds, rawPatch = {}) {
   }
 
   if (!targets.length) {
+    const closedOnly = skipped.length > 0
+      && skipped.every((item) => item.reason === 'CLOSED_POSTING_MUTATION_FORBIDDEN')
+    if (closedOnly) {
+      const err = new Error('CLOSED_POSTING_MUTATION_FORBIDDEN')
+      err.code = 'CLOSED_POSTING_MUTATION_FORBIDDEN'
+      throw err
+    }
     throw new Error(skipped[0]?.reason || '沒有可更新的交易')
   }
 

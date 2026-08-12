@@ -2,6 +2,8 @@
 
 ---
 
+- (smb301) 信用卡 P0 正式路徑補齊：一般退款寫入當期 open statement posting（不改 closing）；closed 帳單交易禁批次分類／欄位改動；還款 allocation 禁跨卡與超過 remaining；額度警示改用實際卡債（SUM remaining）；sql.js 正式路徑回歸。
+
 ## v1.3.113
 - (smb301) 信用卡消費制度 P0：credit profile（結帳日／繳款截止日）、`credit_statements` rollover（D 全天屬本期、D+1 00:00 close）、刷卡雙腿 posting、還款 allocations（paid 派生）、額度警示與 due／reminder App 內提醒；UI `/credit-cards`＋功能頁／資產摘要／帳戶明細／FAB 信用帳戶雙腿／首頁卡可關預設關；備份與共同帳本 `credit_card_bundle`；Node 不變式＋`playwright:ui-layout`。
 - 資產頁摘要版面：借出／借入同一列；有價證券單獨滿寬一列置底（`assets-lend-entry`／`assets-borrow-entry`／`assets-securities-entry`）；補 source／Playwright 版面斷言。

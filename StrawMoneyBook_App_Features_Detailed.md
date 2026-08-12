@@ -179,6 +179,8 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 
 權威契約 v1.1：`statement_close_day` 當日全天屬本期，`period_end_exclusive=(D+1) 00:00` 才 close；歸期只讀 `posted_at`（`occurred_at` 服務預算／日曆）；`closing_balance_minor` close 後不可變；還款必經 `credit_repayment_allocations`（`paid`=SUM）；正式 `payment_due_day`＋每期 `due_on`（reminder 僅通知）；雙腿=`transactions`＋`transaction_postings`（禁中介 credit-accrual 帳戶）；merge unit=`credit_card_bundle`。UI：`/credit-cards`、功能頁入口、資產摘要欠款、帳戶明細信用區塊、FAB／記帳對信用帳戶走刷卡雙腿、首頁卡可開關預設關。Rollover 於啟動／回前景／信用卡頁補跑且冪等。
 
+正式路徑補齊：交易明細一般退款對信用卡帳戶走 `createCreditRefundAdjustment`，調整分錄寫入當期 **open** statement posting，不改已 close 的 `closing_balance_minor`；closed 帳單交易禁經批次分類／批次欄位與一般編輯改動（僅允許純 `occurred_at` 校正）；還款 allocation 必須同卡且 ≤ 帳單 remaining；額度警示／利用率以實際卡債（各期 remaining 加總）計算，不以帳戶 raw balance 冒充。
+
 ### 3.2 交易記帳
 
 目前支援三種記帳模式：

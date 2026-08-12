@@ -1,15 +1,28 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   computeDueOn,
   derivePaidMinorFromAllocations,
   resolvePeriodBoundsForPostedAt,
   isPostedInPeriod,
 } from '../src/core/utils/credit-period.js'
+import {
+  applyCreditRefundAdjustmentPlan,
+  applyCreditRepaymentAllocationPlan,
+  applyCreditStatementClose,
+  buildCreditRefundAdjustmentPlan,
+  computeActualCardDebtMinor,
+  computeCreditUtilization,
+  shouldForbidClosedCreditMutation,
+  validateRepaymentAllocationPlan,
+} from '../src/core/utils/credit-card-apply.js'
 
 const require = createRequire(import.meta.url)
 const initSqlJs = require('sql.js')
+const root = resolve(import.meta.dirname, '..')
 
 function openCreditDb(SQL) {
   const db = new SQL.Database()
@@ -20,6 +33,17 @@ function openCreditDb(SQL) {
       ledger_id TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,
       account_kind TEXT NOT NULL DEFAULT 'cash',
       statement_close_day INTEGER, payment_due_day INTEGER,
+      credit_limit_minor INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (ledger_id, id)
+    );
+    CREATE TABLE transactions (
+      ledger_id TEXT NOT NULL, id TEXT NOT NULL, type TEXT NOT NULL,
+      account_id TEXT, category_id TEXT, amount_minor INTEGER NOT NULL,
+      occurred_at TEXT NOT NULL, posted_at TEXT, note TEXT,
+      origin_type TEXT, external_ref_id TEXT,
+      include_in_budget INTEGER NOT NULL DEFAULT 1,
+      include_in_analysis INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT,
       PRIMARY KEY (ledger_id, id)
     );
     CREATE TABLE credit_statements (
@@ -58,41 +82,31 @@ function openCreditDb(SQL) {
   return db
 }
 
-function closeStatement(db, { ledgerId, statementId, closingBalanceMinor, dueOn, closeToken, now }) {
-  const existing = db.exec(
-    `SELECT status, close_token, closing_balance_minor FROM credit_statements
-     WHERE ledger_id='${ledgerId}' AND id='${statementId}';`,
-  )
-  const row = existing[0]?.values?.[0]
-  if (!row) throw new Error('missing')
-  if (row[0] === 'closed' && row[1] === closeToken) return { noop: true, closing: row[2] }
-  if (row[0] === 'closed') return { noop: true, closing: row[2] }
-  db.run(
-    `UPDATE credit_statements SET status='closed', closing_balance_minor=?, due_on=?,
-      closed_at=?, close_token=?, updated_at=? WHERE ledger_id=? AND id=? AND status='open';`,
-    [closingBalanceMinor, dueOn, now, closeToken, now, ledgerId, statementId],
-  )
-  return { noop: false, closing: closingBalanceMinor }
-}
-
-test('sql.js: closing_balance immutable; refund posts to open; paid=SUM(alloc); no accrual account; double close no-op', async () => {
-  const SQL = await initSqlJs()
-  const db = openCreditDb(SQL)
-  const ledgerId = 'L1'
-  const cardId = 'CARD'
-  const cashId = 'CASH'
+function seedCard(db, { ledgerId = 'L1', cardId = 'CARD', cashId = 'CASH', otherCardId = 'CARD2' } = {}) {
   db.run('INSERT INTO ledgers (id) VALUES (?);', [ledgerId])
   db.run(
-    `INSERT INTO accounts (ledger_id, id, name, account_kind, statement_close_day, payment_due_day)
-     VALUES (?, ?, 'Visa', 'credit', 15, 10);`,
+    `INSERT INTO accounts (ledger_id, id, name, account_kind, statement_close_day, payment_due_day, credit_limit_minor)
+     VALUES (?, ?, 'Visa', 'credit', 15, 10, 100000);`,
     [ledgerId, cardId],
+  )
+  db.run(
+    `INSERT INTO accounts (ledger_id, id, name, account_kind, statement_close_day, payment_due_day, credit_limit_minor)
+     VALUES (?, ?, 'Master', 'credit', 20, 15, 50000);`,
+    [ledgerId, otherCardId],
   )
   db.run(
     `INSERT INTO accounts (ledger_id, id, name, account_kind) VALUES (?, ?, 'Bank', 'cash');`,
     [ledgerId, cashId],
   )
+  return { ledgerId, cardId, cashId, otherCardId }
+}
 
-  // Forbid virtual accrual account names in accounts table
+test('sql.js formal path: refund→open posting; closed immutable; alloc same-card/remaining; debt util; batch forbid', async () => {
+  const SQL = await initSqlJs()
+  const db = openCreditDb(SQL)
+  const { ledgerId, cardId, cashId, otherCardId } = seedCard(db)
+
+  // No virtual accrual account
   const names = db.exec(`SELECT name FROM accounts WHERE ledger_id='${ledgerId}';`)[0].values.map((r) => r[0])
   assert.equal(names.some((n) => String(n).toLowerCase().includes('credit-accrual')), false)
 
@@ -108,11 +122,18 @@ test('sql.js: closing_balance immutable; refund posts to open; paid=SUM(alloc); 
     [ledgerId, cardId, bounds.periodStartInclusive, bounds.periodEndExclusive, '2026-03-01T00:00:00', '2026-03-01T00:00:00'],
   )
 
-  // liability postings for period
+  // Purchase liability on S1 (negative = debt increase)
   db.run(
     `INSERT INTO transaction_postings (
       ledger_id, id, transaction_id, role, account_id, amount_minor, statement_id, created_at, updated_at, deleted_at
     ) VALUES (?, 'P1', 'T1', 'card_liability', ?, -50000, 'S1', ?, ?, NULL);`,
+    [ledgerId, cardId, '2026-03-10T12:00:00', '2026-03-10T12:00:00'],
+  )
+  db.run(
+    `INSERT INTO transactions (
+      ledger_id, id, type, account_id, amount_minor, occurred_at, posted_at, origin_type,
+      include_in_budget, include_in_analysis, created_at, updated_at, deleted_at
+    ) VALUES (?, 'T1', 'expense', ?, -50000, '2026-03-10T12:00:00', '2026-03-10T12:00:00', 'manual', 1, 1, ?, ?, NULL);`,
     [ledgerId, cardId, '2026-03-10T12:00:00', '2026-03-10T12:00:00'],
   )
 
@@ -122,8 +143,8 @@ test('sql.js: closing_balance immutable; refund posts to open; paid=SUM(alloc); 
   assert.equal(liability, 50000)
 
   const dueOn = computeDueOn('2026-03-15', 10)
-  const token = 'close:S1:' + bounds.periodEndExclusive
-  const first = closeStatement(db, {
+  const token = `close:S1:${bounds.periodEndExclusive}`
+  const first = applyCreditStatementClose(db, {
     ledgerId,
     statementId: 'S1',
     closingBalanceMinor: liability,
@@ -134,7 +155,8 @@ test('sql.js: closing_balance immutable; refund posts to open; paid=SUM(alloc); 
   assert.equal(first.noop, false)
   assert.equal(first.closing, 50000)
 
-  const second = closeStatement(db, {
+  // Double close / wrong closing attempt → no-op, closing immutable
+  const second = applyCreditStatementClose(db, {
     ledgerId,
     statementId: 'S1',
     closingBalanceMinor: 1,
@@ -145,7 +167,7 @@ test('sql.js: closing_balance immutable; refund posts to open; paid=SUM(alloc); 
   assert.equal(second.noop, true)
   assert.equal(second.closing, 50000)
 
-  // Open next period; refund adjustment goes to open — closing unchanged
+  // Open next period
   const nextBounds = resolvePeriodBoundsForPostedAt('2026-03-16T00:00:00', 15)
   db.run(
     `INSERT INTO credit_statements (
@@ -154,50 +176,139 @@ test('sql.js: closing_balance immutable; refund posts to open; paid=SUM(alloc); 
     ) VALUES (?, 'S2', ?, ?, ?, 'open', NULL, NULL, NULL, NULL, NULL, ?, ?, NULL);`,
     [ledgerId, cardId, nextBounds.periodStartInclusive, nextBounds.periodEndExclusive, '2026-03-16T00:00:00', '2026-03-16T00:00:00'],
   )
-  db.run(
-    `INSERT INTO transaction_postings (
-      ledger_id, id, transaction_id, role, account_id, amount_minor, statement_id, created_at, updated_at, deleted_at
-    ) VALUES (?, 'P2', 'T2', 'adjustment', ?, 2000, 'S2', ?, ?, NULL);`,
-    [ledgerId, cardId, '2026-03-20T10:00:00', '2026-03-20T10:00:00'],
-  )
+
+  // Formal refund path: buildCreditRefundAdjustmentPlan + apply → open statement posting
+  const refundPlan = buildCreditRefundAdjustmentPlan({
+    accountId: cardId,
+    amountMinor: 2000,
+    openStatementId: 'S2',
+    openStatementStatus: 'open',
+    occurredAt: '2026-03-20T10:00:00',
+    postedAt: '2026-03-20T10:00:00',
+    externalRefId: 'T1',
+    categoryId: 'cat_refund',
+    transactionId: 'T_REFUND',
+    postingId: 'P_REFUND',
+  })
+  assert.equal(refundPlan.posting.statementId, 'S2')
+  assert.equal(refundPlan.transaction.originType, 'refund')
+  applyCreditRefundAdjustmentPlan(db, ledgerId, refundPlan, { now: '2026-03-20T10:00:00' })
+
+  const refundPosting = db.exec(
+    `SELECT statement_id, role, amount_minor FROM transaction_postings WHERE id='P_REFUND';`,
+  )[0].values[0]
+  assert.equal(refundPosting[0], 'S2')
+  assert.equal(refundPosting[1], 'adjustment')
+  assert.equal(refundPosting[2], 2000)
+
   const closedClosing = db.exec(
     `SELECT closing_balance_minor FROM credit_statements WHERE id='S1';`,
   )[0].values[0][0]
-  assert.equal(closedClosing, 50000)
+  assert.equal(closedClosing, 50000, 'closed closing_balance_minor must stay immutable after refund')
 
-  // repayment requires allocation; paid derived
-  let failed = false
-  try {
-    // simulate API reject when allocations empty
-    const allocations = []
-    if (!allocations.length) throw Object.assign(new Error('REPAYMENT_ALLOCATION_REQUIRED'), { code: 'REPAYMENT_ALLOCATION_REQUIRED' })
-  } catch (error) {
-    failed = error.code === 'REPAYMENT_ALLOCATION_REQUIRED'
-  }
-  assert.equal(failed, true)
-
-  db.run(
-    `INSERT INTO credit_repayments (
-      ledger_id, id, account_id, source_account_id, amount_minor, paid_at, idempotency_key, created_at, updated_at, deleted_at
-    ) VALUES (?, 'R1', ?, ?, 30000, '2026-04-01T10:00:00', 'idem-1', ?, ?, NULL);`,
-    [ledgerId, cardId, cashId, '2026-04-01T10:00:00', '2026-04-01T10:00:00'],
-  )
-  db.run(
-    `INSERT INTO credit_repayment_allocations (
-      ledger_id, id, repayment_id, statement_id, amount_minor, created_at, updated_at, deleted_at
-    ) VALUES (?, 'A1', 'R1', 'S1', 30000, ?, ?, NULL);`,
-    [ledgerId, '2026-04-01T10:00:00', '2026-04-01T10:00:00'],
+  // Refund into closed statement must be rejected by formal plan builder
+  assert.throws(
+    () => buildCreditRefundAdjustmentPlan({
+      accountId: cardId,
+      amountMinor: 100,
+      openStatementId: 'S1',
+      openStatementStatus: 'closed',
+      occurredAt: '2026-03-20T10:00:00',
+      postedAt: '2026-03-20T10:00:00',
+    }),
+    (err) => err.code === 'CLOSED_STATEMENT_POSTING_FORBIDDEN',
   )
 
-  // duplicate idempotency rejected by UNIQUE
+  // Closed batch / category mutation forbidden
+  assert.equal(shouldForbidClosedCreditMutation({
+    status: 'closed',
+    changes: { category: true, batch: true },
+  }), true)
+  assert.equal(shouldForbidClosedCreditMutation({
+    status: 'closed',
+    changes: { flags: true, batch: true },
+  }), true)
+  assert.equal(shouldForbidClosedCreditMutation({
+    status: 'closed',
+    changes: { occurredAt: true },
+  }), false)
+  assert.equal(shouldForbidClosedCreditMutation({
+    status: 'open',
+    changes: { category: true, batch: true },
+  }), false)
+
+  // Allocation: empty → fail
+  assert.throws(
+    () => validateRepaymentAllocationPlan({
+      accountId: cardId,
+      amountMinor: 30000,
+      allocations: [],
+      statementsById: {},
+    }),
+    (err) => err.code === 'REPAYMENT_ALLOCATION_REQUIRED',
+  )
+
+  // Cross-card allocation → fail
+  assert.throws(
+    () => validateRepaymentAllocationPlan({
+      accountId: cardId,
+      amountMinor: 1000,
+      allocations: [{ statementId: 'OTHER', amountMinor: 1000 }],
+      statementsById: {
+        OTHER: { account_id: otherCardId, remaining_minor: 5000 },
+      },
+    }),
+    (err) => err.code === 'ALLOCATION_CROSS_CARD_FORBIDDEN',
+  )
+
+  // Exceed remaining → fail
+  assert.throws(
+    () => validateRepaymentAllocationPlan({
+      accountId: cardId,
+      amountMinor: 40000,
+      allocations: [{ statementId: 'S1', amountMinor: 40000 }],
+      statementsById: {
+        S1: { account_id: cardId, remaining_minor: 30000 },
+      },
+    }),
+    (err) => err.code === 'ALLOCATION_EXCEEDS_REMAINING',
+  )
+
+  // Formal repayment allocation path (validated + applied)
+  const validated = validateRepaymentAllocationPlan({
+    accountId: cardId,
+    amountMinor: 30000,
+    allocations: [{ statementId: 'S1', amountMinor: 30000 }],
+    statementsById: {
+      S1: { account_id: cardId, remaining_minor: 50000 },
+    },
+  })
+  assert.equal(validated.paidMinor, 30000)
+  const repay = applyCreditRepaymentAllocationPlan(db, ledgerId, {
+    repaymentId: 'R1',
+    accountId: cardId,
+    sourceAccountId: cashId,
+    amountMinor: 30000,
+    paidAt: '2026-04-01T10:00:00',
+    idempotencyKey: 'idem-1',
+    allocations: validated.allocations,
+    now: '2026-04-01T10:00:00',
+  })
+  assert.equal(repay.paidMinor, 30000)
+
+  // Duplicate idempotency rejected by UNIQUE
   let dupRejected = false
   try {
-    db.run(
-      `INSERT INTO credit_repayments (
-        ledger_id, id, account_id, source_account_id, amount_minor, paid_at, idempotency_key, created_at, updated_at, deleted_at
-      ) VALUES (?, 'R2', ?, ?, 100, '2026-04-02T10:00:00', 'idem-1', ?, ?, NULL);`,
-      [ledgerId, cardId, cashId, '2026-04-02T10:00:00', '2026-04-02T10:00:00'],
-    )
+    applyCreditRepaymentAllocationPlan(db, ledgerId, {
+      repaymentId: 'R2',
+      accountId: cardId,
+      sourceAccountId: cashId,
+      amountMinor: 100,
+      paidAt: '2026-04-02T10:00:00',
+      idempotencyKey: 'idem-1',
+      allocations: [{ statementId: 'S1', amountMinor: 100 }],
+      now: '2026-04-02T10:00:00',
+    })
   } catch {
     dupRejected = true
   }
@@ -208,7 +319,44 @@ test('sql.js: closing_balance immutable; refund posts to open; paid=SUM(alloc); 
   )[0].values.map((r) => ({ amount_minor: r[0] }))
   assert.equal(derivePaidMinorFromAllocations(allocRows), 30000)
 
-  // due_on present on closed statement
+  // Actual card debt for limit alert = SUM(remaining), not bogus account balance
+  const remainingS1 = 50000 - 30000
+  const debt = computeActualCardDebtMinor([
+    { remaining_minor: remainingS1 },
+    { remaining_minor: 0 },
+  ])
+  assert.equal(debt, 20000)
+  const util = computeCreditUtilization({ debtMinor: debt, creditLimitMinor: 100000 })
+  assert.equal(util.nearLimit, false)
+  assert.equal(util.utilization, 0.2)
+  const near = computeCreditUtilization({ debtMinor: 85000, creditLimitMinor: 100000 })
+  assert.equal(near.nearLimit, true)
+
+  // due_on present; overdue must not use reminder (covered in unit test; presence here)
   const due = db.exec(`SELECT due_on FROM credit_statements WHERE id='S1';`)[0].values[0][0]
   assert.equal(due, dueOn)
+})
+
+test('smb301 source wiring: formal refund/batch/alloc/debt paths', () => {
+  const creditService = readFileSync(resolve(root, 'src/core/services/credit.service.js'), 'utf8')
+  const txService = readFileSync(resolve(root, 'src/core/services/transaction.service.js'), 'utf8')
+  const apply = readFileSync(resolve(root, 'src/core/utils/credit-card-apply.js'), 'utf8')
+
+  assert.match(apply, /validateRepaymentAllocationPlan/)
+  assert.match(apply, /ALLOCATION_CROSS_CARD_FORBIDDEN/)
+  assert.match(apply, /ALLOCATION_EXCEEDS_REMAINING/)
+  assert.match(apply, /buildCreditRefundAdjustmentPlan/)
+  assert.match(apply, /computeActualCardDebtMinor/)
+  assert.match(apply, /shouldForbidClosedCreditMutation/)
+
+  assert.match(creditService, /validateRepaymentAllocationPlan/)
+  assert.match(creditService, /computeActualCardDebtMinor/)
+  assert.match(creditService, /buildCreditRefundAdjustmentPlan/)
+  assert.match(creditService, /shouldForbidClosedCreditMutation/)
+
+  assert.match(txService, /createCreditRefundAdjustment/)
+  assert.match(txService, /account_kind\) === 'credit'/)
+  assert.match(txService, /CLOSED_POSTING_MUTATION_FORBIDDEN/)
+  assert.match(txService, /batchPatchTransactions[\s\S]*assertTransactionMutableForCredit/)
+  assert.match(txService, /batchPatchCategory[\s\S]*assertTransactionMutableForCredit/)
 })

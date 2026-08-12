@@ -16,6 +16,13 @@ import {
   toLocalIso,
 } from '@/core/utils/credit-period'
 import {
+  buildCreditRefundAdjustmentPlan,
+  computeActualCardDebtMinor,
+  computeCreditUtilization,
+  shouldForbidClosedCreditMutation,
+  validateRepaymentAllocationPlan,
+} from '@/core/utils/credit-card-apply'
+import {
   closeCreditStatementRow,
   findCreditStatementById,
   findOpenCreditStatement,
@@ -368,10 +375,10 @@ export async function createCreditRepayment(ledgerId, payload = {}) {
   }
 
   let allocations = Array.isArray(payload.allocations) ? payload.allocations : null
+  const unpaid = await listUnpaidStatementsFifo(ledgerId, accountId)
   if (!allocations || allocations.length === 0) {
     if (payload.mode === 'full' || payload.mode === 'custom' || !payload.mode) {
       // Auto FIFO allocation
-      const unpaid = await listUnpaidStatementsFifo(ledgerId, accountId)
       let left = amountMinor
       allocations = []
       for (const st of unpaid) {
@@ -391,21 +398,57 @@ export async function createCreditRepayment(ledgerId, payload = {}) {
     }
   }
 
-  if (!allocations || allocations.length === 0) {
-    const err = new Error('REPAYMENT_ALLOCATION_REQUIRED')
-    err.code = 'REPAYMENT_ALLOCATION_REQUIRED'
-    throw err
+  const statementsById = {}
+  for (const st of unpaid) {
+    statementsById[st.id] = st
+  }
+  // Also resolve any explicitly referenced statements (custom mode) for remaining checks
+  for (const alloc of allocations || []) {
+    const sid = String(alloc?.statementId ?? alloc?.statement_id ?? '').trim()
+    if (!sid || statementsById[sid]) continue
+    const st = await findCreditStatementById(ledgerId, sid)
+    if (!st) continue
+    const paid = await sumAllocationsForStatement(ledgerId, st.id)
+    const liability = st.status === 'closed'
+      ? Math.round(Number(st.closing_balance_minor ?? 0))
+      : await sumCardLiabilityForStatement(ledgerId, st.id)
+    statementsById[sid] = {
+      ...st,
+      remaining_minor: Math.max(0, liability - paid),
+    }
   }
 
-  const allocSum = allocations.reduce((s, a) => s + Math.round(Math.abs(Number(a.amountMinor))), 0)
-  if (allocSum !== amountMinor) {
-    const err = new Error('ALLOCATION_SUM_MISMATCH')
-    err.code = 'ALLOCATION_SUM_MISMATCH'
-    throw err
-  }
+  const validated = validateRepaymentAllocationPlan({
+    accountId,
+    amountMinor,
+    allocations,
+    statementsById,
+  })
+  allocations = validated.allocations
 
   return withTransaction(async () => {
     await runCreditStatementRollovers(ledgerId, { now: parseLocalIso(paidAt) })
+
+    // Re-validate remaining inside the transaction against latest rows
+    const freshById = {}
+    for (const alloc of allocations) {
+      const st = await findCreditStatementById(ledgerId, alloc.statementId)
+      if (!st) throw new Error('找不到帳單')
+      const paid = await sumAllocationsForStatement(ledgerId, st.id)
+      const liability = st.status === 'closed'
+        ? Math.round(Number(st.closing_balance_minor ?? 0))
+        : await sumCardLiabilityForStatement(ledgerId, st.id)
+      freshById[st.id] = {
+        ...st,
+        remaining_minor: Math.max(0, liability - paid),
+      }
+    }
+    validateRepaymentAllocationPlan({
+      accountId,
+      amountMinor,
+      allocations,
+      statementsById: freshById,
+    })
 
     const transfer = await addTransfer(ledgerId, {
       fromAccountId: sourceAccountId,
@@ -429,19 +472,10 @@ export async function createCreditRepayment(ledgerId, payload = {}) {
     })
 
     for (const alloc of allocations) {
-      const statementId = String(alloc.statementId ?? '').trim()
-      const allocAmount = Math.round(Math.abs(Number(alloc.amountMinor)))
-      if (!statementId || allocAmount <= 0) {
-        const err = new Error('REPAYMENT_ALLOCATION_REQUIRED')
-        err.code = 'REPAYMENT_ALLOCATION_REQUIRED'
-        throw err
-      }
-      const st = await findCreditStatementById(ledgerId, statementId)
-      if (!st) throw new Error('找不到帳單')
       await insertCreditAllocation(ledgerId, {
         repaymentId,
-        statementId,
-        amountMinor: allocAmount,
+        statementId: alloc.statementId,
+        amountMinor: alloc.amountMinor,
       })
     }
 
@@ -455,13 +489,12 @@ export async function createCreditRepayment(ledgerId, payload = {}) {
   })
 }
 
-export async function assertTransactionMutableForCredit(ledgerId, transactionId, { changingPostedAt = false } = {}) {
+export async function assertTransactionMutableForCredit(ledgerId, transactionId, {
+  changes = {},
+} = {}) {
   const statusRow = await findPostingStatementStatus(ledgerId, transactionId)
   if (!statusRow) return true
-  if (statusRow.status === 'closed') {
-    if (!changingPostedAt) {
-      // occurred_at-only edits are allowed by caller; posted_at / amount / delete forbidden
-    }
+  if (shouldForbidClosedCreditMutation({ status: statusRow.status, changes })) {
     const err = new Error('CLOSED_POSTING_MUTATION_FORBIDDEN')
     err.code = 'CLOSED_POSTING_MUTATION_FORBIDDEN'
     err.statementId = statusRow.statement_id
@@ -471,38 +504,57 @@ export async function assertTransactionMutableForCredit(ledgerId, transactionId,
 }
 
 export async function createCreditRefundAdjustment(ledgerId, payload = {}) {
-  // Refund into open period; never mutate closed closing_balance_minor
+  // Formal refund path: write adjustment posting into current OPEN statement;
+  // never mutate closed closing_balance_minor.
   const accountId = String(payload.accountId ?? '').trim()
   const amountMinor = Math.round(Math.abs(Number(payload.amountMinor)))
   const occurredAt = normalizePostedAt(payload.occurredAt, new Date().toISOString())
   const postedAt = normalizePostedAt(payload.postedAt, occurredAt)
   if (!accountId || amountMinor <= 0) throw new Error('退款參數無效')
 
+  const account = await findAccountById(ledgerId, accountId)
+  if (!account || String(account.account_kind) !== 'credit') {
+    throw new Error('請選擇信用卡帳戶')
+  }
+
   return withTransaction(async () => {
     const statement = await assignStatementForPostedAt(ledgerId, accountId, postedAt)
-    const creditAmount = amountMinor // liability decrease = positive on account
-    const txId = await addTransaction(ledgerId, {
-      type: 'adjustment',
+    const plan = buildCreditRefundAdjustmentPlan({
       accountId,
-      amountMinor: creditAmount,
+      amountMinor,
+      openStatementId: statement.id,
+      openStatementStatus: statement.status,
       occurredAt,
       postedAt,
       note: payload.note ?? '信用卡退款／調整',
-      originType: 'refund',
-      includeInBudget: false,
-      includeInAnalysis: false,
-      tagsJson: JSON.stringify({ credit_adjustment: true }),
+      externalRefId: payload.externalRefId ?? payload.sourceTransactionId ?? null,
+      categoryId: payload.categoryId ?? null,
+    })
+    const txId = await addTransaction(ledgerId, {
+      type: plan.transaction.type,
+      accountId: plan.transaction.accountId,
+      categoryId: plan.transaction.categoryId,
+      amountMinor: plan.transaction.amountMinor,
+      occurredAt: plan.transaction.occurredAt,
+      postedAt: plan.transaction.postedAt,
+      note: plan.transaction.note,
+      originType: plan.transaction.originType,
+      externalRefId: plan.transaction.externalRefId,
+      includeInBudget: plan.transaction.includeInBudget,
+      includeInAnalysis: plan.transaction.includeInAnalysis,
+      tagsJson: plan.transaction.tagsJson,
     })
     await insertTransactionPosting(ledgerId, {
       transactionId: txId,
-      role: 'adjustment',
-      accountId,
-      amountMinor: creditAmount,
-      statementId: statement.id,
-      includeInBudget: false,
-      includeInAnalysis: false,
+      role: plan.posting.role,
+      accountId: plan.posting.accountId,
+      categoryId: plan.posting.categoryId,
+      amountMinor: plan.posting.amountMinor,
+      statementId: plan.posting.statementId,
+      includeInBudget: plan.posting.includeInBudget,
+      includeInAnalysis: plan.posting.includeInAnalysis,
     })
-    return { transactionId: txId, statementId: statement.id }
+    return { transactionId: txId, statementId: plan.statementId }
   })
 }
 
@@ -547,9 +599,11 @@ export async function loadCreditCardDashboard(ledgerId) {
       }
     }
 
-    const debtMinor = Math.max(0, -(Number(account.balance_minor ?? account.opening_balance_minor ?? 0)))
-    // Prefer live balance from list if present
+    // Actual card debt = SUM(statement remaining), not raw account.balance_minor.
+    const unpaid = await listUnpaidStatementsFifo(ledgerId, account.id)
+    const debtMinor = computeActualCardDebtMinor(unpaid)
     const limit = Math.max(0, Number(account.credit_limit_minor ?? 0))
+    const util = computeCreditUtilization({ debtMinor, creditLimitMinor: limit })
     const openLiability = open ? await sumCardLiabilityForStatement(ledgerId, open.id) : 0
     const openPaid = open ? await sumAllocationsForStatement(ledgerId, open.id) : 0
 
@@ -558,9 +612,10 @@ export async function loadCreditCardDashboard(ledgerId) {
       openStatement: open,
       statements: enriched,
       openRemainingMinor: Math.max(0, openLiability - openPaid),
-      creditLimitMinor: limit,
-      utilization: limit > 0 ? Math.min(1, debtMinor / limit) : null,
-      nearLimit: limit > 0 && debtMinor / limit >= 0.8,
+      debtMinor: util.debtMinor,
+      creditLimitMinor: util.creditLimitMinor,
+      utilization: util.utilization,
+      nearLimit: util.nearLimit,
     })
   }
 
