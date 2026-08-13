@@ -1119,11 +1119,21 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
         sheetOpen: Boolean(document.querySelector('.securities-sheet')),
       }
     }
-    return { ok: true, ...sellSaved, hasPreview: Boolean(preview) }
+    const iconHosts = [...document.querySelectorAll('[data-testid=securities-tx-icon]')]
+    const iconSvgs = iconHosts.filter((el) => el.querySelector('svg, .svg-inline--fa, .tx-icon'))
+    return {
+      ok: true,
+      ...sellSaved,
+      hasPreview: Boolean(preview),
+      iconCount: iconHosts.length,
+      renderedIconCount: iconSvgs.length,
+    }
   }`)
   assert.equal(sellLotUi.ok, true, JSON.stringify(sellLotUi, null, 2))
   assert.ok(sellLotUi.rowCount >= 2, JSON.stringify(sellLotUi, null, 2))
   assert.ok(String(sellLotUi.linked || '').length > 0, JSON.stringify(sellLotUi, null, 2))
+  assert.ok(sellLotUi.iconCount >= 2, JSON.stringify(sellLotUi, null, 2))
+  assert.equal(sellLotUi.renderedIconCount, sellLotUi.iconCount, JSON.stringify(sellLotUi, null, 2))
   console.log('[securities] specific-lot sell UI ok:', sellLotUi)
 
   await gotoOrReopen(`${baseUrl}/`)

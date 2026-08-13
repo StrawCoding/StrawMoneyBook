@@ -80,7 +80,10 @@ export async function setSecuritiesUnrealizedMode(ledgerId, mode) {
 export async function ensureInvestmentPnlCategory(ledgerId) {
   const categories = await listCategories(ledgerId, { includeArchived: true })
   const byKey = categories.find((item) => String(item.system_key ?? '') === INVESTMENT_PNL_SYSTEM_KEY)
-  if (byKey) return byKey.id
+  if (byKey) {
+    await ensureInvestmentPnlCategoryIcon(ledgerId, byKey)
+    return byKey.id
+  }
 
   // Locale-agnostic fallback names used before system_key existed
   const byName = categories.find((item) => {
@@ -89,8 +92,8 @@ export async function ensureInvestmentPnlCategory(ledgerId) {
   })
   if (byName) {
     await run(
-      `UPDATE categories SET system_key = ?, updated_at = ? WHERE ledger_id = ? AND id = ?;`,
-      [INVESTMENT_PNL_SYSTEM_KEY, nowIso(), ledgerId, byName.id],
+      `UPDATE categories SET system_key = ?, icon = COALESCE(NULLIF(icon, ''), ?), updated_at = ? WHERE ledger_id = ? AND id = ?;`,
+      [INVESTMENT_PNL_SYSTEM_KEY, 'fa-solid fa-chart-line', nowIso(), ledgerId, byName.id],
     )
     return byName.id
   }
@@ -118,6 +121,16 @@ export async function ensureInvestmentPnlCategory(ledgerId) {
     [INVESTMENT_PNL_SYSTEM_KEY, nowIso(), ledgerId, created.id],
   )
   return created.id
+}
+
+async function ensureInvestmentPnlCategoryIcon(ledgerId, category) {
+  if (String(category?.icon ?? '').trim()) return
+  const id = String(category?.id ?? '').trim()
+  if (!id) return
+  await run(
+    `UPDATE categories SET icon = ?, updated_at = ? WHERE ledger_id = ? AND id = ? AND deleted_at IS NULL;`,
+    ['fa-solid fa-chart-line', nowIso(), ledgerId, id],
+  )
 }
 
 export async function isInvestmentPnlCategory(ledgerId, categoryId) {

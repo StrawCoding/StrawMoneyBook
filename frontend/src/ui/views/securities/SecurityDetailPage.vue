@@ -93,6 +93,9 @@
       </header>
       <ul v-if="detail.transactions.length" class="tx-list">
         <li v-for="tx in detail.transactions" :key="tx.id" class="tx-row">
+          <div class="tx-icon-col" data-testid="securities-tx-icon">
+            <font-awesome-icon :icon="txIcon(tx)" class="tx-icon" />
+          </div>
           <div class="tx-main">
             <strong>{{ tx.type === 'sell' ? t('securities_page.sell') : t('securities_page.buy') }}</strong>
             <small class="muted">{{ formatWhen(tx.occurred_at) }}</small>
@@ -391,6 +394,10 @@ function statusLabel(status) {
   if (status === 'confirmed') return t('securities_page.status_confirmed')
   if (status === 'cancelled') return t('securities_page.status_cancelled')
   return t('securities_page.status_scheduled')
+}
+
+function txIcon(tx) {
+  return tx?.type === 'sell' ? 'fa-solid fa-arrow-trend-up' : 'fa-solid fa-arrow-trend-down'
 }
 
 function formatWhen(value) {
@@ -703,11 +710,21 @@ onMounted(() => { void reload() })
   padding: 10px 12px;
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 12px;
   background: var(--input-bg);
   min-width: 0;
 }
-.tx-main { display: grid; gap: 2px; min-width: 0; }
+.tx-icon-col {
+  width: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+.tx-icon { font-size: 16px; color: var(--primary); }
+.tx-main { display: grid; gap: 2px; min-width: 0; flex: 1; }
 .tx-metrics { display: grid; gap: 2px; justify-items: end; text-align: right; }
 .tx-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; margin-top: 6px; }
 .btn.tiny { padding: 4px 8px; font-size: 12px; }
