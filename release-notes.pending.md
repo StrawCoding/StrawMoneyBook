@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- 有價證券完整持倉賣出改為指定買入（1:1 對應、可部分賣出、最後一筆吃剩餘成本）；成交金額為毛額，精簡資金模式不變；舊無對應賣出仍走平均成本。補 migration 044、備份 schema、Node 與 `playwright:ui-layout` 賣出 sheet。
-
 ---
+
+## v1.3.123
+- 有價證券完整持倉賣出改為指定買入（1:1 對應、可部分賣出、最後一筆吃剩餘成本）；成交金額為毛額，精簡資金模式不變；舊無對應賣出仍走平均成本。補 migration 044、備份 schema、Node 與 `playwright:ui-layout` 賣出 sheet。
 
 ## v1.3.122
 - 補齊漏網帳戶選擇器：有價證券新增／編輯交割帳戶、問答記帳帳戶／轉帳帳戶、報銷代收／變更入帳帳戶改為 `CustomSelect` 依帳戶母分類分組（不再扁平 options）。
