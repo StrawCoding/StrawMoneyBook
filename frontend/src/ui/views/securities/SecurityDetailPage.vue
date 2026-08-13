@@ -87,8 +87,8 @@
       <header class="row panel-head">
         <h3>{{ t('securities_page.transactions') }}</h3>
         <div class="row actions">
-          <button type="button" class="btn" @click="openTx('buy')">{{ t('securities_page.buy') }}</button>
-          <button type="button" class="btn primary" @click="openTx('sell')">{{ t('securities_page.sell') }}</button>
+          <button type="button" class="btn" data-testid="securities-open-buy" @click="openTx('buy')">{{ t('securities_page.buy') }}</button>
+          <button type="button" class="btn primary" data-testid="securities-open-sell" @click="openTx('sell')">{{ t('securities_page.sell') }}</button>
         </div>
       </header>
       <ul v-if="detail.transactions.length" class="tx-list">
@@ -97,6 +97,7 @@
             <strong>{{ tx.type === 'sell' ? t('securities_page.sell') : t('securities_page.buy') }}</strong>
             <small class="muted">{{ formatWhen(tx.occurred_at) }}</small>
             <small class="muted">{{ t('securities_page.settle_at') }}：{{ formatWhen(tx.settle_at) }}</small>
+            <small v-if="linkedBuyLabel(tx)" class="muted" data-testid="securities-sell-linked-buy">{{ linkedBuyLabel(tx) }}</small>
             <small class="status" :data-status="tx.settlement_status">{{ statusLabel(tx.settlement_status) }}</small>
           </div>
           <div class="tx-metrics">
@@ -157,14 +158,34 @@
       </div>
 
       <template v-if="txForm.recordMode === 'position'">
+        <div v-if="isPositionSell" class="field-block" data-testid="securities-sell-source-buy">
+          <span class="field-label">{{ t('securities_page.sell_source_buy') }}</span>
+          <CustomSelect
+            v-model="txForm.sourceBuyTxId"
+            :options="sourceBuyOptions"
+            :placeholder="t('securities_page.sell_source_buy')"
+          />
+          <small class="muted">{{ t('securities_page.sell_source_buy_hint') }}</small>
+          <small v-if="!sourceBuyOptions.length" class="muted">{{ t('securities_page.sell_no_open_lots') }}</small>
+        </div>
         <label>
           {{ t('securities_page.quantity') }}
-          <input v-model.number="txForm.quantity" class="input" type="number" min="0" step="1" />
+          <input v-model.number="txForm.quantity" class="input" type="number" min="0" step="1" data-testid="securities-tx-quantity" />
         </label>
-        <label>
+        <label v-if="!isLotMatchedSell" data-testid="securities-sell-unit-price">
           {{ t('securities_page.unit_price') }}
           <input v-model.number="txForm.priceMajor" class="input" type="number" min="0" step="0.01" />
         </label>
+        <label v-if="isPositionSell" data-testid="securities-sell-proceeds">
+          {{ t('securities_page.sell_proceeds') }}
+          <input v-model.number="txForm.proceedsMajor" class="input" type="number" min="0" step="0.01" />
+        </label>
+        <div v-if="sellLotPreview" class="sell-preview" data-testid="securities-sell-preview">
+          <small class="muted">{{ t('securities_page.sell_preview_cost') }}</small>
+          <MoneyText :value-minor="sellLotPreview.principalMinor" />
+          <small class="muted">{{ t('securities_page.sell_preview_pnl') }}</small>
+          <MoneyText :value-minor="sellLotPreview.pnlMinor" />
+        </div>
       </template>
       <template v-else>
         <label>
@@ -202,7 +223,7 @@
       </label>
       <template #footer>
         <button type="button" class="btn" @click="txOpen = false">{{ t('common.cancel') }}</button>
-        <button type="button" class="btn primary" :disabled="savingTx" @click="submitTx">{{ t('common.save') }}</button>
+        <button type="button" class="btn primary" data-testid="securities-tx-save" :disabled="savingTx || !canSaveTx" @click="submitTx">{{ t('common.save') }}</button>
       </template>
     </InputBottomSheet>
 
@@ -245,6 +266,11 @@ import { useSecurityStore } from '@/ui/stores/security.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
+import {
+  derivePositionSellFromBuyLot,
+  findBuyLotOrThrow,
+  listOpenBuyLots,
+} from '@/core/utils/securities-sell-lot'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -284,6 +310,7 @@ const txForm = reactive({
   hour: 9,
   minute: 0,
   note: '',
+  sourceBuyTxId: '',
 })
 const rescheduleForm = reactive({
   date: '',
@@ -314,6 +341,47 @@ const txSheetTitle = computed(() => {
   const base = txForm.type === 'sell' ? t('securities_page.sell') : t('securities_page.buy')
   return editingTxId.value ? `${t('common.edit')} ${base}` : base
 })
+const isPositionSell = computed(() => txForm.type === 'sell' && txForm.recordMode === 'position')
+const isLotMatchedSell = computed(() => isPositionSell.value && Boolean(String(txForm.sourceBuyTxId || '').trim()))
+const openBuyLots = computed(() => listOpenBuyLots(detail.value?.transactions || [], {
+  excludeSellId: editingTxId.value,
+  securityId: securityId.value,
+}))
+const sourceBuyOptions = computed(() => openBuyLots.value.map((lot) => ({
+  value: lot.buyId,
+  label: t('securities_page.sell_lot_option', {
+    when: formatWhen(lot.occurredAt),
+    qty: lot.remainingQty,
+    cost: formatMajor(lot.remainingPrincipalMinor),
+  }),
+})))
+const sellLotPreview = computed(() => {
+  if (!isLotMatchedSell.value) return null
+  try {
+    const buy = findBuyLotOrThrow(detail.value?.transactions || [], txForm.sourceBuyTxId, {
+      securityId: securityId.value,
+    })
+    return derivePositionSellFromBuyLot({
+      buy,
+      transactions: detail.value?.transactions || [],
+      sellQty: txForm.quantity,
+      proceedsGrossMinor: Math.round(Number(txForm.proceedsMajor || 0) * 100),
+      feeMinor: Math.round(Number(txForm.feeMajor || 0) * 100),
+      feeMode: txForm.feeMode,
+      excludeSellId: editingTxId.value,
+    })
+  } catch {
+    return null
+  }
+})
+const canSaveTx = computed(() => {
+  if (!isPositionSell.value) return true
+  if (isLotMatchedSell.value) {
+    return Number(txForm.quantity) > 0 && Number(txForm.proceedsMajor) > 0
+  }
+  if (editingTxId.value) return Number(txForm.quantity) > 0
+  return false
+})
 
 function assetClassLabel(value) {
   return value === 'etf' ? t('securities_page.class.etf') : t('securities_page.class.stock')
@@ -330,6 +398,35 @@ function formatWhen(value) {
     return new Date(value).toLocaleString()
   } catch {
     return String(value ?? '')
+  }
+}
+
+function formatMajor(minor) {
+  return (Math.max(0, Number(minor) || 0) / 100).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })
+}
+
+function linkedBuyLabel(tx) {
+  const buyId = String(tx?.source_buy_tx_id ?? '').trim()
+  if (!buyId || tx?.type !== 'sell') return ''
+  const buy = (detail.value?.transactions || []).find((row) => String(row.id) === buyId)
+  if (!buy) return ''
+  return t('securities_page.sell_linked_buy', { when: formatWhen(buy.occurred_at) })
+}
+
+function applySelectedLotDefaults({ resetQuantity = false } = {}) {
+  if (!isPositionSell.value) return
+  const lots = openBuyLots.value
+  if (!lots.length) {
+    txForm.sourceBuyTxId = ''
+    return
+  }
+  const selected = lots.find((lot) => lot.buyId === txForm.sourceBuyTxId) || lots[0]
+  txForm.sourceBuyTxId = selected.buyId
+  if (resetQuantity || Number(txForm.quantity) <= 0 || Number(txForm.quantity) > selected.remainingQty) {
+    txForm.quantity = selected.remainingQty
   }
 }
 
@@ -427,10 +524,12 @@ function openTx(type) {
   txForm.feeMode = 'into_cost'
   txForm.principalMajor = 0
   txForm.proceedsMajor = 0
+  txForm.sourceBuyTxId = ''
   txForm.date = toDateInput(now)
   txForm.hour = now.getHours()
   txForm.minute = now.getMinutes()
   txForm.note = ''
+  if (type === 'sell') applySelectedLotDefaults({ resetQuantity: true })
   txOpen.value = true
 }
 
@@ -443,7 +542,14 @@ function openEditTx(tx) {
   txForm.feeMajor = Number(tx.fee_minor || 0) / 100
   txForm.feeMode = tx.fee_mode === 'from_proceeds' ? 'from_proceeds' : 'into_cost'
   txForm.principalMajor = Number(tx.principal_minor || 0) / 100
-  txForm.proceedsMajor = Number(tx.proceeds_minor || 0) / 100
+  const bookedProceeds = Number(tx.proceeds_minor || 0)
+  const feeMinor = Number(tx.fee_minor || 0)
+  txForm.proceedsMajor = (
+    tx.type === 'sell' && tx.fee_mode === 'from_proceeds'
+      ? bookedProceeds + feeMinor
+      : bookedProceeds
+  ) / 100
+  txForm.sourceBuyTxId = String(tx.source_buy_tx_id ?? '')
   const when = new Date(tx.occurred_at)
   txForm.date = toDateInput(when)
   txForm.hour = when.getHours()
@@ -466,6 +572,10 @@ function buildTxPayload() {
   if (txForm.recordMode === 'position') {
     payload.quantity = Math.trunc(Number(txForm.quantity || 0))
     payload.priceMinor = Math.round(Number(txForm.priceMajor || 0) * 100)
+    if (txForm.type === 'sell') {
+      payload.sourceBuyTxId = String(txForm.sourceBuyTxId || '').trim() || null
+      payload.proceedsMinor = Math.round(Number(txForm.proceedsMajor || 0) * 100)
+    }
   } else {
     payload.quantity = 0
     payload.priceMinor = 0
@@ -548,6 +658,13 @@ async function submitReschedule() {
 }
 
 watch(securityId, () => { void reload() }, { immediate: true })
+watch(
+  () => [txForm.type, txForm.recordMode, txForm.sourceBuyTxId, txOpen.value],
+  () => {
+    if (!txOpen.value) return
+    applySelectedLotDefaults()
+  },
+)
 onMounted(() => { void reload() })
 </script>
 
@@ -660,4 +777,14 @@ onMounted(() => { void reload() })
 .switch-row.active .switch-track { background: color-mix(in srgb, var(--primary) 70%, transparent); }
 .switch-row.active .switch-thumb { transform: translateX(18px); }
 .danger-row { justify-content: flex-end; }
+.sell-preview {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--input-bg);
+}
 </style>

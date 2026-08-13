@@ -275,6 +275,7 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'fee_minor', 'fee_mode', 'record_mode', 'principal_minor', 'proceeds_minor',
       'settle_at', 'settlement_status', 'confirmed_at',
       'cash_account_id', 'cash_principal_tx_id', 'cash_pnl_tx_id',
+      'source_buy_tx_id',
       'note', 'created_at', 'updated_at', 'deleted_at',
     ),
     required: Object.freeze([

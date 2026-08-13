@@ -7,10 +7,16 @@ import {
   normalizeFeeMode,
   normalizeRecordMode,
   normalizeSettlementStatus,
+  RECORD_MODE,
   SETTLEMENT_STATUS,
   toSettleAtIso,
 } from '@/core/utils/securities-settlement'
 import { estimateSellPrincipalMinor } from '@/core/utils/securities-position'
+import {
+  assertBuyCanBeMutated,
+  derivePositionSellFromBuyLot,
+  findBuyLotOrThrow,
+} from '@/core/utils/securities-sell-lot'
 
 function normalizeSymbol(value) {
   return String(value ?? '').trim().toUpperCase()
@@ -257,19 +263,53 @@ export async function listDueSecurityTransactions(ledgerId, nowIsoValue = nowIso
   )
 }
 
-function resolveCreateCashFields(input, existingTxs = []) {
+function resolveSourceBuyTxId(input, fallback = null) {
+  if (input.sourceBuyTxId !== undefined || input.source_buy_tx_id !== undefined) {
+    return String(input.sourceBuyTxId ?? input.source_buy_tx_id ?? '').trim() || null
+  }
+  return fallback
+}
+
+function resolveCreateCashFields(input, existingTxs = [], { excludeSellId = '', securityId = '', existingSourceBuyTxId = null } = {}) {
   const type = String(input.type ?? '').trim().toLowerCase() === 'sell' ? 'sell' : 'buy'
   const recordMode = normalizeRecordMode(input.recordMode ?? input.record_mode)
   const feeMode = normalizeFeeMode(input.feeMode ?? input.fee_mode)
-  const quantity = Math.max(0, Math.trunc(Number(input.quantity ?? 0)))
-  const priceMinor = Math.max(0, Math.round(Number(input.priceMinor ?? input.price_minor ?? 0)))
+  let quantity = Math.max(0, Math.trunc(Number(input.quantity ?? 0)))
+  let priceMinor = Math.max(0, Math.round(Number(input.priceMinor ?? input.price_minor ?? 0)))
   const feeMinor = Math.max(0, Math.round(Number(input.feeMinor ?? input.fee_minor ?? 0)))
 
   let principalMinor = input.principalMinor ?? input.principal_minor
   let proceedsMinor = input.proceedsMinor ?? input.proceeds_minor
+  let sourceBuyTxId = type === 'sell' ? resolveSourceBuyTxId(input, existingSourceBuyTxId) : null
 
-  if (type === 'sell' && (principalMinor == null || principalMinor === '') && recordMode === 'position' && quantity > 0) {
-    principalMinor = estimateSellPrincipalMinor(existingTxs, quantity)
+  if (type === 'sell' && recordMode === RECORD_MODE.position) {
+    if (sourceBuyTxId) {
+      const buy = findBuyLotOrThrow(existingTxs, sourceBuyTxId, { securityId })
+      const derived = derivePositionSellFromBuyLot({
+        buy,
+        transactions: existingTxs,
+        sellQty: quantity,
+        proceedsGrossMinor: proceedsMinor ?? (quantity > 0 ? quantity * priceMinor : 0),
+        feeMinor,
+        feeMode,
+        excludeSellId,
+      })
+      quantity = derived.quantity
+      priceMinor = derived.priceMinor
+      principalMinor = derived.principalMinor
+      proceedsMinor = derived.proceedsMinor
+      sourceBuyTxId = derived.sourceBuyTxId
+    } else if (excludeSellId) {
+      // Legacy position sell without a linked buy keeps average-cost principal.
+      if (principalMinor == null || principalMinor === '') {
+        principalMinor = estimateSellPrincipalMinor(
+          existingTxs.filter((row) => String(row?.id ?? '') !== String(excludeSellId)),
+          quantity,
+        )
+      }
+    } else {
+      throw new Error('請選擇要平倉的買入交易')
+    }
   }
 
   const legs = deriveSettlementCashLegs({
@@ -292,6 +332,7 @@ function resolveCreateCashFields(input, existingTxs = []) {
     feeMinor,
     principalMinor: legs.principalMinor,
     proceedsMinor: legs.proceedsMinor,
+    sourceBuyTxId: type === 'sell' && recordMode === RECORD_MODE.position ? sourceBuyTxId : null,
     legs,
   }
 }
@@ -304,7 +345,7 @@ export async function createSecurityTransaction(ledgerId, input = {}) {
   if (!security) throw new Error('找不到證券標的')
 
   const existingTxs = await listSecurityTransactions(ledgerId, securityId)
-  const fields = resolveCreateCashFields(input, existingTxs)
+  const fields = resolveCreateCashFields(input, existingTxs, { securityId })
 
   if (fields.recordMode === 'position' && fields.type === 'buy' && fields.quantity <= 0) {
     // Allow position security without qty only when funds fields provided via funds mode
@@ -342,9 +383,9 @@ export async function createSecurityTransaction(ledgerId, input = {}) {
     `INSERT INTO security_transactions (
        ledger_id, id, security_id, type, occurred_at, quantity, price_minor, fee_minor,
        fee_mode, record_mode, principal_minor, proceeds_minor, settle_at, settlement_status,
-       confirmed_at, cash_account_id, cash_principal_tx_id, cash_pnl_tx_id, note,
+       confirmed_at, cash_account_id, cash_principal_tx_id, cash_pnl_tx_id, source_buy_tx_id, note,
        created_at, updated_at, deleted_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, NULL);`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, NULL);`,
     [
       ledgerId,
       id,
@@ -362,6 +403,7 @@ export async function createSecurityTransaction(ledgerId, input = {}) {
       settlementStatus,
       confirmedAt,
       cashAccountId,
+      fields.sourceBuyTxId,
       note,
       now,
       now,
@@ -381,6 +423,13 @@ export async function updateSecurityTransaction(ledgerId, transactionId, input =
 
   const siblingTxs = (await listSecurityTransactions(ledgerId, existing.security_id))
     .filter((row) => row.id !== existing.id)
+  const nextType = String(input.type ?? existing.type ?? '').trim().toLowerCase() === 'sell' ? 'sell' : 'buy'
+  if (String(existing.type) === 'buy') {
+    const nextQuantity = nextType === 'buy'
+      ? (input.quantity ?? existing.quantity)
+      : null
+    assertBuyCanBeMutated(existing, siblingTxs.concat(existing), { nextQuantity: nextType === 'buy' ? nextQuantity : null })
+  }
   const merged = {
     type: input.type ?? existing.type,
     recordMode: input.recordMode ?? input.record_mode ?? existing.record_mode,
@@ -390,8 +439,13 @@ export async function updateSecurityTransaction(ledgerId, transactionId, input =
     feeMinor: input.feeMinor ?? input.fee_minor ?? existing.fee_minor,
     principalMinor: input.principalMinor ?? input.principal_minor ?? existing.principal_minor,
     proceedsMinor: input.proceedsMinor ?? input.proceeds_minor ?? existing.proceeds_minor,
+    sourceBuyTxId: input.sourceBuyTxId ?? input.source_buy_tx_id ?? existing.source_buy_tx_id,
   }
-  const fields = resolveCreateCashFields(merged, siblingTxs)
+  const fields = resolveCreateCashFields(merged, siblingTxs.concat(existing), {
+    excludeSellId: existing.id,
+    securityId: existing.security_id,
+    existingSourceBuyTxId: existing.source_buy_tx_id,
+  })
   const occurredAt = String(input.occurredAt ?? input.occurred_at ?? existing.occurred_at).trim()
   let settleAt = existing.settle_at
   if (input.settleAt !== undefined || input.settle_at !== undefined) {
@@ -416,6 +470,7 @@ export async function updateSecurityTransaction(ledgerId, transactionId, input =
             record_mode = ?,
             principal_minor = ?,
             proceeds_minor = ?,
+            source_buy_tx_id = ?,
             settle_at = ?,
             cash_account_id = ?,
             note = ?,
@@ -431,6 +486,7 @@ export async function updateSecurityTransaction(ledgerId, transactionId, input =
       fields.recordMode,
       fields.principalMinor,
       fields.proceedsMinor,
+      fields.sourceBuyTxId,
       settleAt,
       cashAccountId,
       note,

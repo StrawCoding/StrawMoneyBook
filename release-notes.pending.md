@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 有價證券完整持倉賣出改為指定買入（1:1 對應、可部分賣出、最後一筆吃剩餘成本）；成交金額為毛額，精簡資金模式不變；舊無對應賣出仍走平均成本。補 migration 044、備份 schema、Node 與 `playwright:ui-layout` 賣出 sheet。
+
 ---
 
 ## v1.3.122

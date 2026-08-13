@@ -3,9 +3,9 @@ import { createId, nowIso } from '@/core/utils/id'
 import {
   assertSellQuantityAllowed,
   buildSecurityPosition,
-  estimateSellPrincipalMinor,
   sumIncludedSecuritiesMarketValue,
 } from '@/core/utils/securities-position'
+import { assertBuyCanBeMutated } from '@/core/utils/securities-sell-lot'
 import {
   isSettlementDue,
   normalizeRecordMode,
@@ -203,12 +203,10 @@ export async function addSecuritySell(ledgerId, payload = {}) {
   const detail = await loadSecurityDetail(ledgerId, securityId)
   if (!detail) throw new Error('找不到證券標的')
   const recordMode = normalizeRecordMode(payload.recordMode ?? payload.record_mode)
-  assertSellQuantityAllowed(detail.position.quantity, payload.quantity, { recordMode })
-  if (recordMode === RECORD_MODE.position && (payload.principalMinor == null && payload.principal_minor == null)) {
-    payload = {
-      ...payload,
-      principalMinor: estimateSellPrincipalMinor(detail.transactions, payload.quantity),
-    }
+  const sourceBuyTxId = String(payload.sourceBuyTxId ?? payload.source_buy_tx_id ?? '').trim()
+  if (!(recordMode === RECORD_MODE.position && sourceBuyTxId)) {
+    // Lot-matched sells are gated by remaining buy qty (scheduled buys are sellable).
+    assertSellQuantityAllowed(detail.position.quantity, payload.quantity, { recordMode })
   }
   return createSecurityTransaction(ledgerId, { ...payload, type: 'sell' })
 }
@@ -382,6 +380,10 @@ export async function removeSecurityTransaction(ledgerId, transactionId) {
   await withTransaction(async () => {
     const tx = await findSecurityTransactionById(ledgerId, transactionId)
     if (!tx) return
+    if (String(tx.type ?? '') === 'buy') {
+      const siblings = await listSecurityTransactions(ledgerId, tx.security_id)
+      assertBuyCanBeMutated(tx, siblings)
+    }
     const status = normalizeSettlementStatus(tx.settlement_status)
     if (status === SETTLEMENT_STATUS.confirmed) {
       const plan = buildCancelSettlementPlan(tx)

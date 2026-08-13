@@ -41,6 +41,7 @@ import migration040 from '@/core/db/migrations/040_transaction_editor_attributio
 import migration041 from '@/core/db/migrations/041_securities.sql?raw'
 import migration042 from '@/core/db/migrations/042_securities_settlement_v2.sql?raw'
 import migration043 from '@/core/db/migrations/043_credit_card_system_p0.sql?raw'
+import migration044 from '@/core/db/migrations/044_security_sell_source_buy.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -82,6 +83,7 @@ const MIGRATIONS = [
   { version: 41, name: 'securities', sql: migration041 },
   { version: 42, name: 'securities_settlement_v2', sql: migration042 },
   { version: 43, name: 'credit_card_system_p0', sql: migration043 },
+  { version: 44, name: 'security_sell_source_buy', sql: migration044 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'
@@ -285,6 +287,9 @@ const LEGACY_COLUMN_PATCHES = {
   deleted_log: [
     'ALTER TABLE deleted_log ADD COLUMN payload_json TEXT;',
     'ALTER TABLE deleted_log ADD COLUMN deleted_at TEXT;',
+  ],
+  security_transactions: [
+    'ALTER TABLE security_transactions ADD COLUMN source_buy_tx_id TEXT;',
   ],
 }
 

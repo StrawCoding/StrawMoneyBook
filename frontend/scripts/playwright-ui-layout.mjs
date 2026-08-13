@@ -1038,6 +1038,94 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
     securitiesCreate.selectedWasUnmarked,
   )
 
+  await gotoOrReopen(`${baseUrl}/assets/securities/${securitiesCreate.createdId}`)
+  await waitForAppShell()
+  const sellLotUi = await evalPage(`async () => {
+    const waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+    const waitUntil = async (predicate, timeoutMs = 8000) => {
+      const deadline = performance.now() + timeoutMs
+      while (performance.now() < deadline) {
+        const value = predicate()
+        if (value) return value
+        await waitMs(40)
+      }
+      return null
+    }
+    const setVueInput = (el, value) => {
+      if (!el) return false
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      if (setter) setter.call(el, value)
+      else el.value = value
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+      return true
+    }
+    const page = await waitUntil(() => document.querySelector('[data-testid=securities-detail-page]'), 8000)
+    if (!page) return { ok: false, reason: 'missing_detail_page', path: window.location.pathname }
+    const buyBtn = document.querySelector('[data-testid=securities-open-buy]')
+    if (!buyBtn) return { ok: false, reason: 'missing_buy_button' }
+    buyBtn.click()
+    const buySheet = await waitUntil(() => document.querySelector('.securities-sheet'), 5000)
+    if (!buySheet) return { ok: false, reason: 'missing_buy_sheet' }
+    const qtyInput = document.querySelector('[data-testid=securities-tx-quantity]')
+    const priceInput = document.querySelector('[data-testid=securities-sell-unit-price] input')
+    if (!setVueInput(qtyInput, '100') || !setVueInput(priceInput, '500')) {
+      return { ok: false, reason: 'missing_buy_qty_or_price' }
+    }
+    await waitMs(80)
+    const buySave = document.querySelector('[data-testid=securities-tx-save]')
+    if (!buySave) return { ok: false, reason: 'missing_buy_save' }
+    buySave.click()
+    const buySaved = await waitUntil(() => {
+      const rows = document.querySelectorAll('[data-testid=securities-detail-page] .tx-row')
+      return rows.length >= 1 ? rows.length : null
+    }, 8000)
+    if (!buySaved) return { ok: false, reason: 'buy_not_listed' }
+
+    const sellBtn = document.querySelector('[data-testid=securities-open-sell]')
+    if (!sellBtn) return { ok: false, reason: 'missing_sell_button' }
+    sellBtn.click()
+    const sourceBuy = await waitUntil(() => document.querySelector('[data-testid=securities-sell-source-buy]'), 5000)
+    const proceeds = document.querySelector('[data-testid=securities-sell-proceeds]')
+    const unitPrice = document.querySelector('[data-testid=securities-sell-unit-price]')
+    if (!sourceBuy || !proceeds) {
+      return { ok: false, reason: 'missing_sell_lot_fields', hasSourceBuy: Boolean(sourceBuy), hasProceeds: Boolean(proceeds) }
+    }
+    if (unitPrice) return { ok: false, reason: 'unit_price_still_visible_for_lot_sell' }
+    const sellQty = document.querySelector('[data-testid=securities-tx-quantity]')
+    const proceedsInput = document.querySelector('[data-testid=securities-sell-proceeds] input')
+    if (!setVueInput(sellQty, '40') || !setVueInput(proceedsInput, '24800')) {
+      return { ok: false, reason: 'missing_sell_qty_or_proceeds' }
+    }
+    await waitMs(80)
+    const preview = document.querySelector('[data-testid=securities-sell-preview]')
+    const sellSave = document.querySelector('[data-testid=securities-tx-save]')
+    if (!sellSave || sellSave.disabled) {
+      return { ok: false, reason: 'sell_save_disabled', hasPreview: Boolean(preview) }
+    }
+    sellSave.click()
+    const sellSaved = await waitUntil(() => {
+      const linked = document.querySelector('[data-testid=securities-sell-linked-buy]')
+      const rows = document.querySelectorAll('[data-testid=securities-detail-page] .tx-row')
+      return linked && rows.length >= 2 ? { rowCount: rows.length, linked: String(linked.textContent || '').trim() } : null
+    }, 10000)
+    if (!sellSaved) {
+      const toast = document.querySelector('.toast, [data-testid=toast], .toast-item, .ui-toast')
+      return {
+        ok: false,
+        reason: 'sell_not_linked',
+        rowCount: document.querySelectorAll('[data-testid=securities-detail-page] .tx-row').length,
+        toast: String(toast && toast.textContent || '').trim(),
+        sheetOpen: Boolean(document.querySelector('.securities-sheet')),
+      }
+    }
+    return { ok: true, ...sellSaved, hasPreview: Boolean(preview) }
+  }`)
+  assert.equal(sellLotUi.ok, true, JSON.stringify(sellLotUi, null, 2))
+  assert.ok(sellLotUi.rowCount >= 2, JSON.stringify(sellLotUi, null, 2))
+  assert.ok(String(sellLotUi.linked || '').length > 0, JSON.stringify(sellLotUi, null, 2))
+  console.log('[securities] specific-lot sell UI ok:', sellLotUi)
+
   await gotoOrReopen(`${baseUrl}/`)
   await waitForAppShell()
   await assertHomeBlocks()
