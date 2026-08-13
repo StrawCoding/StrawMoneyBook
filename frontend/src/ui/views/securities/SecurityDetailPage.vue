@@ -50,9 +50,13 @@
         </div>
       </label>
 
-      <label class="field mt">
+      <label class="field mt" data-testid="securities-edit-settlement">
         {{ t('securities_page.settlement_account') }}
-        <CustomSelect v-model="settlementAccountId" :options="settlementOptions" />
+        <CustomSelect
+          v-model="settlementAccountId"
+          :groups="settlementAccountGroups"
+          :placeholder="t('securities_page.settlement_account')"
+        />
       </label>
       <button
         type="button"
@@ -236,9 +240,11 @@ import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
+import { useAccountStore } from '@/ui/stores/account.store'
 import { useSecurityStore } from '@/ui/stores/security.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -247,6 +253,7 @@ const props = defineProps({
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const accountStore = useAccountStore()
 const securityStore = useSecurityStore()
 const uiStore = useUiStore()
 const savingPrice = ref(false)
@@ -286,11 +293,9 @@ const rescheduleForm = reactive({
 
 const detail = computed(() => securityStore.detail)
 const securityId = computed(() => String(props.id || route.params.id || '').trim())
-const settlementOptions = computed(() => (
-  (securityStore.candidateAccounts || []).map((acc) => ({
-    value: acc.id,
-    label: acc.name,
-  }))
+const settlementAccountGroups = computed(() => buildAccountOptionGroups(
+  accountStore.groups,
+  securityStore.candidateAccounts || [],
 ))
 const settlementLabel = computed(() => {
   const id = detail.value?.security?.settlement_account_id
@@ -346,7 +351,10 @@ function syncFromDetail() {
 }
 
 async function reload() {
-  await securityStore.loadAccounts()
+  await Promise.all([
+    accountStore.load?.() || Promise.resolve(),
+    securityStore.loadAccounts(),
+  ])
   await securityStore.loadDetail(securityId.value)
   syncFromDetail()
 }

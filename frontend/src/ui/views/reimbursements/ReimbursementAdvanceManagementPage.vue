@@ -21,7 +21,7 @@
 
         <label>
           代收帳戶
-          <CustomSelect v-model="form.accountId" :options="accountStore.accounts" />
+          <CustomSelect v-model="form.accountId" :groups="accountStore.groupedRegularAccounts" />
         </label>
 
         <label>

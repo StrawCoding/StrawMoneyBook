@@ -901,6 +901,9 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
         return label === settlementName || label.includes(settlementName)
       }) || null
     }, 5000)
+    const groupLabels = [...document.querySelectorAll('.menu-sheet .group-label, .group-label')]
+      .map((el) => String(el.textContent || '').trim())
+      .filter(Boolean)
     if (!menuItem) {
       return {
         ok: false,
@@ -909,6 +912,7 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
         settlementId,
         settlementName,
         selectedWasUnmarked,
+        groupLabels,
         menuLabels: [...document.querySelectorAll('.menu-item')].map((el) => String(el.textContent || '').trim()),
       }
     }
@@ -1003,6 +1007,8 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
       settlementId,
       settlementName,
       selectedWasUnmarked,
+      groupLabels,
+      hasGroupLabels: groupLabels.length > 0,
       accountWasMarked: !selectedWasUnmarked,
       boundSettlementAccountId,
       boundSymbol,
@@ -1015,6 +1021,7 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
   assert.equal(securitiesCreate.hasMark, false, JSON.stringify(securitiesCreate, null, 2))
   assert.equal(securitiesCreate.selectedWasUnmarked, true, JSON.stringify(securitiesCreate, null, 2))
   assert.equal(securitiesCreate.usedFormalUi, true, JSON.stringify(securitiesCreate, null, 2))
+  assert.equal(securitiesCreate.hasGroupLabels, true, JSON.stringify(securitiesCreate, null, 2))
   assert.equal(securitiesCreate.usedStoreCreateShortcut, false, JSON.stringify(securitiesCreate, null, 2))
   assert.equal(
     securitiesCreate.boundSettlementAccountId,

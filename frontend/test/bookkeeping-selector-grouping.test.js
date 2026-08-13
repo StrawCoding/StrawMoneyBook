@@ -24,6 +24,9 @@ const bankCreateSource = read('src/ui/views/settings/SettingsBankSyncCreatePage.
 const carrierSource = read('src/ui/views/settings/SettingsCarrierSyncPage.vue')
 const einvoiceStep4Source = read('src/ui/views/einvoice/EInvoiceStep4Confirm.vue')
 const amountCalcSource = read('src/ui/components/common/AmountCalculatorInput.vue')
+const securitiesListSource = read('src/ui/views/securities/SecuritiesListPage.vue')
+const securitiesDetailSource = read('src/ui/views/securities/SecurityDetailPage.vue')
+const qnaSource = read('src/ui/views/QnaBookkeepingPage.vue')
 
 test('AI bookkeeping and quick add use grouped account selectors', () => {
   assert.match(aiSource, /const directAccountGroups = computed\(\(\) => accountStore\.groupedRegularAccounts\)/)
@@ -48,6 +51,12 @@ test('home transaction edit sheet uses grouped account selectors', () => {
 test('secondary account pickers use groupedRegularAccounts', () => {
   assert.match(loanListSource, /:groups="accountStore\.groupedRegularAccounts"/)
   assert.match(reimbursementSource, /:groups="accountStore\.groupedRegularAccounts"/)
+  const reimbursementAdvanceSource = read('src/ui/views/reimbursements/ReimbursementAdvanceManagementPage.vue')
+  const reimbursementEditSource = read('src/ui/views/reimbursements/ReimbursementEditPage.vue')
+  assert.match(reimbursementAdvanceSource, /:groups="accountStore\.groupedRegularAccounts"/)
+  assert.doesNotMatch(reimbursementAdvanceSource, /:options="accountStore\.accounts"/)
+  assert.match(reimbursementEditSource, /:groups="accountStore\.groupedRegularAccounts"/)
+  assert.doesNotMatch(reimbursementEditSource, /:options="accountStore\.accounts"/)
   assert.match(subscriptionSource, /:groups="accountOptionGroups"/)
   assert.match(subscriptionSource, /const accountOptionGroups = computed\(\(\) => accountStore\.groupedRegularAccounts\)/)
   assert.match(savingsJarSource, /:groups="flowAccountGroups"/)
@@ -66,6 +75,25 @@ test('secondary account pickers use groupedRegularAccounts', () => {
   assert.match(einvoiceStep4Source, /buildCategorySelectGroups\(categoryStore, 'expense'\)/)
   assert.match(einvoiceStep4Source, /withLeadingAccountOption/)
   assert.doesNotMatch(einvoiceStep4Source, /<optgroup/)
+})
+
+test('securities settlement pickers use grouped CustomSelect', () => {
+  assert.match(securitiesListSource, /:groups="settlementAccountGroups"/)
+  assert.match(securitiesListSource, /buildAccountOptionGroups\(/)
+  assert.doesNotMatch(securitiesListSource, /:options="settlementOptions"/)
+  assert.match(securitiesDetailSource, /:groups="settlementAccountGroups"/)
+  assert.match(securitiesDetailSource, /buildAccountOptionGroups\(/)
+  assert.doesNotMatch(securitiesDetailSource, /:options="settlementOptions"/)
+})
+
+test('qna bookkeeping account pickers use grouped CustomSelect', () => {
+  assert.match(qnaSource, /const directAccountGroups = computed\(\(\) => accountStore\.groupedRegularAccounts\)/)
+  assert.match(qnaSource, /const transferAccountGroups = computed\(\(\) => accountStore\.groupedAccounts\)/)
+  assert.match(qnaSource, /<CustomSelect v-model="model\.accountId" :groups="directAccountGroups"/)
+  assert.match(qnaSource, /<CustomSelect v-model="model\.accountId" :groups="transferAccountGroups"/)
+  assert.match(qnaSource, /<CustomSelect v-model="model\.peerAccountId" :groups="transferAccountGroups"/)
+  assert.doesNotMatch(qnaSource, /:options="directAccountOptions"/)
+  assert.doesNotMatch(qnaSource, /:options="transferAccountOptions"/)
 })
 
 test('credit card repay source uses grouped CustomSelect without credit accounts', () => {

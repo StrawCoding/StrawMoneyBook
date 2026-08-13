@@ -56,7 +56,7 @@
 
       <label v-if="cashSettleMinor > 0" class="field">
         入帳帳戶
-        <CustomSelect v-model="form.accountId" :options="accountStore.accounts" />
+        <CustomSelect v-model="form.accountId" :groups="accountStore.groupedRegularAccounts" />
       </label>
 
       <div class="row action-row">

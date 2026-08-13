@@ -90,7 +90,11 @@
     >
       <label data-testid="securities-create-settlement">
         {{ t('securities_page.settlement_account') }}
-        <CustomSelect v-model="createForm.settlementAccountId" :options="settlementOptions" />
+        <CustomSelect
+          v-model="createForm.settlementAccountId"
+          :groups="settlementAccountGroups"
+          :placeholder="t('securities_page.settlement_account')"
+        />
       </label>
       <label>
         {{ t('securities_page.symbol') }}
@@ -139,12 +143,15 @@ import { RouterLink, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
+import { useAccountStore } from '@/ui/stores/account.store'
 import { useSecurityStore } from '@/ui/stores/security.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
+import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
 
 const { t } = useI18n()
 const router = useRouter()
+const accountStore = useAccountStore()
 const securityStore = useSecurityStore()
 const uiStore = useUiStore()
 const createOpen = ref(false)
@@ -163,11 +170,9 @@ const assetClassOptions = computed(() => [
   { value: 'etf', label: t('securities_page.class.etf') },
 ])
 
-const settlementOptions = computed(() => (
-  (securityStore.candidateAccounts || []).map((acc) => ({
-    value: acc.id,
-    label: acc.name,
-  }))
+const settlementAccountGroups = computed(() => buildAccountOptionGroups(
+  accountStore.groups,
+  securityStore.candidateAccounts || [],
 ))
 
 const displayValueLabel = computed(() => (
@@ -237,7 +242,10 @@ async function submitCreate() {
 }
 
 onMounted(async () => {
-  await securityStore.load()
+  await Promise.all([
+    accountStore.load?.() || Promise.resolve(),
+    securityStore.load(),
+  ])
 })
 </script>
 

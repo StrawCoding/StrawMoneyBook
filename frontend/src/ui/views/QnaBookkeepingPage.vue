@@ -46,16 +46,16 @@
               <div v-if="model.type === 'transfer'" class="inline-grid">
                 <label class="field">
                   {{ t('qna_bookkeeping.field.from_account', '轉出帳戶') }}
-                  <CustomSelect v-model="model.accountId" :options="transferAccountOptions" />
+                  <CustomSelect v-model="model.accountId" :groups="transferAccountGroups" />
                 </label>
                 <label class="field">
                   {{ t('qna_bookkeeping.field.to_account', '轉入帳戶') }}
-                  <CustomSelect v-model="model.peerAccountId" :options="transferAccountOptions" />
+                  <CustomSelect v-model="model.peerAccountId" :groups="transferAccountGroups" />
                 </label>
               </div>
               <label v-else class="field">
                 {{ t('qna_bookkeeping.field.account', '帳戶') }}
-                <CustomSelect v-model="model.accountId" :options="directAccountOptions" />
+                <CustomSelect v-model="model.accountId" :groups="directAccountGroups" />
               </label>
 
               <label v-if="transferNeedsExchangeRate" class="field">
@@ -241,6 +241,8 @@ const typeOptions = computed(() => [
 
 const directAccountOptions = computed(() => accountStore.regularAccounts)
 const transferAccountOptions = computed(() => accountStore.accounts)
+const directAccountGroups = computed(() => accountStore.groupedRegularAccounts)
+const transferAccountGroups = computed(() => accountStore.groupedAccounts)
 const categoryGroupsByType = computed(() => {
   if (model.type === 'income') return categoryStore.incomeCategoryGroups
   return categoryStore.expenseCategoryGroups

@@ -189,7 +189,7 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 - 手動快速新增
 - 問答記帳
 
-帳戶／分類選擇器（含首頁編輯 sheet、借貸／報銷／訂閱／存錢罐／銀行對應、載具／電子發票預設、信用卡還款來源）一律走 `CustomSelect` 依母分類／帳戶群組呈現；空值以 `__none__` sentinel（元件會過濾空字串）；表單輸入／選擇底色統一走 `--input-bg`（並保留 `--surface`／`--surface-soft` 別名以免歷史樣式掉底）。
+帳戶／分類選擇器（含首頁編輯 sheet、問答記帳、借貸／報銷含代收與變更入帳、訂閱／存錢罐／銀行對應、載具／電子發票預設、信用卡還款來源、有價證券交割帳戶）一律走 `CustomSelect` 依母分類／帳戶群組呈現；空值以 `__none__` sentinel（元件會過濾空字串）；表單輸入／選擇底色統一走 `--input-bg`（並保留 `--surface`／`--surface-soft` 別名以免歷史樣式掉底）。
 
 支援的交易型態包含：
 
@@ -387,7 +387,7 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 
 其中「可支配資產」已考慮代收與暫收款不應算成可自由使用金額，因此比一般簡單加總更接近真實狀態。
 
-有價證券為獨立模組（非一般銀行帳戶）：資產頁入口 `/assets/securities`（`data-testid=assets-securities-entry` → `securities-page`）。v2 P1：每個交割帳戶＝獨立投資組合（同代碼可跨交割戶各有持倉）；標的綁 `settlement_account_id`（**交割帳戶來源＝選舉既有資產帳戶或新建證券戶，無需先標記；帳戶詳情／資產帳戶管理不再提供「作為證券交割帳戶」開關；證券建立 sheet 無「標記為交割帳戶」步驟；`listSettlementAccounts`／候選清單不以 `is_settlement=1` 過濾卡死，選用即成立；`is_settlement` 欄位僅相容／遷移惰性保留**）；流水含 `settle_at`／`settlement_status`（scheduled｜confirmed｜cancelled），預設交易日 T+2 10:00（跳過六日）；App 啟動／回前景／證券頁載入補跑到期自動入帳；本金以 adjustment 不計收支、已實現損益進系統分類「投資損益」（可改名不可刪）；精簡資金／完整持倉雙模式；未實現可切市值估價／只認成本；標的（名稱／代碼／類型）與流水可編刪，交割可改期／取消／提前確認；已確認刪除或取消經 `withTransaction` 真原子回滾現金腿＋損益腿＋交割狀態（sql.js 實庫證 300→320／280、確認／取消／流水刪除／標的刪除中途失敗不殘留、雙交割戶同代碼獨立入帳）。手續費選填（併入成本或從回收扣）。不做封存、配息、分割、多幣、美股專模、券商 API、即時行情。`playwright:ui-layout` 以 SPA 入口驗收列表頁（禁 welcome 假陽性），並檢查 padding／BottomNav／safe-area、資產摘要「借出／借入同行、有價證券左／信用卡右並排（信用卡不進母分類）」，以及證券建立正式 UI「CustomSelect 選 `is_settlement=0` 帳戶→按儲存即可存、無 mark 步驟、不走 store.create 捷徑」。
+有價證券為獨立模組（非一般銀行帳戶）：資產頁入口 `/assets/securities`（`data-testid=assets-securities-entry` → `securities-page`）。v2 P1：每個交割帳戶＝獨立投資組合（同代碼可跨交割戶各有持倉）；標的綁 `settlement_account_id`（**交割帳戶來源＝選舉既有資產帳戶或新建證券戶，無需先標記；帳戶詳情／資產帳戶管理不再提供「作為證券交割帳戶」開關；證券建立 sheet 無「標記為交割帳戶」步驟；`listSettlementAccounts`／候選清單不以 `is_settlement=1` 過濾卡死，選用即成立；`is_settlement` 欄位僅相容／遷移惰性保留**）；流水含 `settle_at`／`settlement_status`（scheduled｜confirmed｜cancelled），預設交易日 T+2 10:00（跳過六日）；App 啟動／回前景／證券頁載入補跑到期自動入帳；本金以 adjustment 不計收支、已實現損益進系統分類「投資損益」（可改名不可刪）；精簡資金／完整持倉雙模式；未實現可切市值估價／只認成本；標的（名稱／代碼／類型）與流水可編刪，交割可改期／取消／提前確認；已確認刪除或取消經 `withTransaction` 真原子回滾現金腿＋損益腿＋交割狀態（sql.js 實庫證 300→320／280、確認／取消／流水刪除／標的刪除中途失敗不殘留、雙交割戶同代碼獨立入帳）。手續費選填（併入成本或從回收扣）。不做封存、配息、分割、多幣、美股專模、券商 API、即時行情。`playwright:ui-layout` 以 SPA 入口驗收列表頁（禁 welcome 假陽性），並檢查 padding／BottomNav／safe-area、資產摘要「借出／借入同行、有價證券左／信用卡右並排（信用卡不進母分類）」，以及證券建立正式 UI「CustomSelect **依帳戶母分類分組**選 `is_settlement=0` 帳戶→按儲存即可存、無 mark 步驟、不走 store.create 捷徑」。
 
 資產頁現在會把群組金額直接顯示在各帳戶群組列上：
 
