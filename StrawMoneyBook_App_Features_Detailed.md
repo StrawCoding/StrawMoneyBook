@@ -779,7 +779,7 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 
 手錶是電話帳本的 companion，不是第二本帳。唯一真相為電話 SQLite `straw_money_book`（檔名 `straw_money_bookSQLite.db`，Capacitor Community SQLCipher、目前 `no-encryption`）。Wear 訊息只走 MessageClient 路徑 `/smb/v1/hello|tx/create|tx/ack|snapshot/request|snapshot/payload`；nearby-first（`Node.isNearby()`）是應用層策略，不是「封包絕不經過 Google relay」的保證。帳務禁止 DataClient / DataItem（官方會持久化並可能雲端備份）。身份只用 `idempotencyKey`（UUID），`external_ref_id='wear:'+idempotencyKey`，另以 `wear_applied` UNIQUE 做 effectively-once；`origin_type='wear'` 軟刪須保留冪等鍵。`syncEpoch` 在首次建庫／重裝／wipe／restore 後旋轉。ListenerService 在沒有 Activity／WebView 時仍可 INSERT。
 
-Stage B：獨立 Gradle 模組 `frontend/android/wear`（同一 `applicationId`、獨立 Wear AAB、`versionCode = 100_000_000 + phoneCode`、`standalone=false`、禁 `wearApp`）。手錶 Compose 快記／近期／outbox、Glance Tile、Room outbox；電話功能頁進階「手錶連線」顯示 nearby 節點與 sync 狀態。Play 上架採 phone／Wear 分軌（測試軌道由 `play-testing-channel.json` 的 `internal`｜`closed` 決定；正式 `production`+`wear:production`）。真機配對驗收需實體 Wear 裝置（CI 以單元測試 + 雙 AAB dry-run + Playwright 進階入口為準）。
+Stage B：獨立 Gradle 模組 `frontend/android/wear`（同一 `applicationId`、獨立 Wear AAB、`versionCode = 100_000_000 + phoneCode`、`standalone=false`、禁 `wearApp`；Wear Compose **≥ 1.5.6／現 1.6.2**，避免 `targetSdk≥35` 讀 `reduce_motion` 啟動閃退）。手錶 Compose 快記／近期／outbox、Glance Tile、Room outbox；電話功能頁進階「手錶連線」顯示 nearby 節點與 sync 狀態。Play 上架採 phone／Wear 分軌（測試軌道由 `play-testing-channel.json` 的 `internal`｜`closed` 決定；正式 `production`+`wear:production`）。真機配對驗收需實體 Wear 裝置（CI 以單元測試 + 雙 AAB dry-run + Playwright 進階入口為準）。
 
 ## 9. 銀行同步
 

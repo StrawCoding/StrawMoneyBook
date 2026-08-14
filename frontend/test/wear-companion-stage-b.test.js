@@ -37,6 +37,22 @@ test('stage B: independent :wear module, no wearApp, standalone=false', () => {
   assert.match(wearManifest, /pathPrefix="\/smb\/v1\/"/)
 })
 
+test('stage B: Wear Compose >= 1.5.6 required for targetSdk 35+ (reduce_motion crash)', () => {
+  const wearGradle = readFileSync(resolve(wearRoot, 'build.gradle'), 'utf8')
+  const variables = readFileSync(resolve(androidRoot, 'variables.gradle'), 'utf8')
+  assert.match(variables, /wearTargetSdkVersion\s*=\s*3[5-9]|wearTargetSdkVersion\s*=\s*[4-9]\d/)
+  const material = wearGradle.match(/androidx\.wear\.compose:compose-material:([0-9.]+)/)
+  assert.ok(material, 'wear compose-material dependency missing')
+  const [major, minor, patch] = material[1].split('.').map((part) => Number.parseInt(part, 10))
+  const ok =
+    major > 1
+    || (major === 1 && minor > 5)
+    || (major === 1 && minor === 5 && patch >= 6)
+  assert.ok(ok, `Wear Compose ${material[1]} is too old; need >= 1.5.6 (use 1.6.2)`)
+  assert.match(wearGradle, /compose-foundation:1\.6\.2/)
+  assert.match(wearGradle, /compose-navigation:1\.6\.2/)
+})
+
 test('stage B: wear sources use MessageClient only for ledger paths', () => {
   const kotlinRoot = resolve(wearRoot, 'src/main/java')
   const offenders = []

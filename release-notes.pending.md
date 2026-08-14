@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 修復 Wear OS 啟動閃退：Wear Compose 由 1.4.0 升至 1.6.2（targetSdk≥35 讀 reduce_motion 的 SecurityException；與 Xiaomi Watch 2／Wear OS 5 已知問題相同）。
+
 ---
 
 ## v1.3.130
