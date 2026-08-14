@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- Play 測試軌道改由 `frontend/android/play-testing-channel.json` 開關：`channel=internal|closed`（預設 internal → phone=`internal`、Wear=`wear:internal`；closed → phone=`alpha`、Wear=`wear:WearOS`）；CI／Fastlane 讀 JSON，可選 env 覆寫。
-
 ---
+
+## v1.3.129
+- Play 測試軌道改由 `frontend/android/play-testing-channel.json` 開關：`channel=internal|closed`（預設 internal → phone=`internal`、Wear=`wear:internal`；closed → phone=`alpha`、Wear=`wear:WearOS`）；CI／Fastlane 讀 JSON，可選 env 覆寫。
 
 ## v1.3.128
 - (ART-i18n-SPLIT) `i18n.service` 拆出 zh-TW／en／ja 字典與 runtime 對照模組；服務檔僅保留查表／locale API。
