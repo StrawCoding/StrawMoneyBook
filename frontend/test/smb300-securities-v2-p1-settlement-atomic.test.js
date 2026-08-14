@@ -722,8 +722,10 @@ test('sqlite withTransaction is real BEGIN/COMMIT and settlement service uses it
   assert.match(sqlite, /beginTransaction/)
   assert.match(sqlite, /commitTransaction/)
   assert.match(sqlite, /rollbackTransaction/)
-  assert.match(sqlite, /activeTransactionDepth/)
-  assert.match(sqlite, /joinOuter \? false : true/)
+  assert.match(sqlite, /sharedSqliteWriteQueue/)
+  assert.match(sqlite, /createTransactionContext/)
+  assert.match(sqlite, /isInsideOwnedTransaction|joinOuter \? false : true/)
+  assert.doesNotMatch(sqlite, /let activeTransactionDepth/)
   assert.doesNotMatch(sqlite, /This helper currently serves only as a logical grouping boundary/)
 
   assert.match(service, /buildConfirmSettlementPlan/)

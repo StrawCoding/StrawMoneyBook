@@ -1,6 +1,12 @@
 import { Capacitor } from '@capacitor/core'
 import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite'
 import { runMigrations } from '@/core/db/migrate'
+import {
+  createTransactionContext,
+  getActiveTransactionContext,
+  runWithTransactionContext,
+} from '@/core/db/sqlite-tx-context'
+import { sharedSqliteWriteQueue } from '@/core/db/sqlite-write-queue'
 import { ensureWebSqliteStoreReady } from '@/core/db/web-store'
 import {
   assertExplicitDataWipe,
@@ -272,13 +278,19 @@ export async function getDatabase() {
   return db
 }
 
-/** Nesting depth for withTransaction — when > 0, run/execute join the outer BEGIN. */
-let activeTransactionDepth = 0
-/** True if any mutation ran inside the outermost transaction (persist once on commit). */
+/**
+ * True if any mutation ran inside the outermost transaction (persist once on commit).
+ * Bound to the owning TransactionContext for the active outer only.
+ */
 let pendingTransactionMutation = false
 
 export function getActiveSqliteTransactionDepth() {
-  return activeTransactionDepth
+  return getActiveTransactionContext()?.depth ?? 0
+}
+
+function isInsideOwnedTransaction() {
+  const ctx = getActiveTransactionContext()
+  return Boolean(ctx && ctx.depth > 0 && ctx.status === 'open')
 }
 
 export async function run(sql, values = []) {
@@ -286,7 +298,7 @@ export async function run(sql, values = []) {
   try {
     // jeep-sqlite / Capacitor: run(..., transaction=true) auto BEGIN+COMMIT per call.
     // Inside withTransaction we must pass false so statements join the outer BEGIN.
-    const joinOuter = activeTransactionDepth > 0
+    const joinOuter = isInsideOwnedTransaction()
     const result = await conn.run(sql, values, joinOuter ? false : true)
     if (isDataMutationSql(sql)) {
       if (joinOuter) {
@@ -310,7 +322,7 @@ export async function query(sql, values = []) {
 export async function execute(sql) {
   const conn = await getDatabase()
   try {
-    const joinOuter = activeTransactionDepth > 0
+    const joinOuter = isInsideOwnedTransaction()
     const result = await conn.execute(sql, joinOuter ? false : true)
     if (isDataMutationSql(sql)) {
       if (joinOuter) {
@@ -328,41 +340,55 @@ export async function execute(sql) {
 
 /**
  * Real SQLite atomic transaction via Capacitor begin/commit/rollback.
- * Nested calls share the outermost transaction (no SAVEPOINT).
+ * Outer transactions are serialized by SqliteWriteQueue; each outer owns a
+ * TransactionContext. Nested calls inherit that context (no SAVEPOINT).
  * Mutations inside defer IndexedDB persist until successful commit.
+ *
+ * @param {(conn: unknown, tx?: import('./sqlite-tx-context.js').TransactionContext) => Promise<unknown>} handler
  */
 export async function withTransaction(handler) {
-  const conn = await getDatabase()
-  const isOutermost = activeTransactionDepth === 0
-  if (isOutermost) {
-    await conn.beginTransaction()
-    pendingTransactionMutation = false
+  const existing = getActiveTransactionContext()
+  if (existing && existing.status === 'open') {
+    existing.depth += 1
+    try {
+      const conn = await getDatabase()
+      return await handler(conn, existing)
+    } finally {
+      existing.depth = Math.max(0, existing.depth - 1)
+    }
   }
-  activeTransactionDepth += 1
-  try {
-    const result = await handler(conn)
-    if (isOutermost) {
+
+  return sharedSqliteWriteQueue.enqueue(async () => {
+    const ctx = createTransactionContext()
+    ctx.depth = 1
+    pendingTransactionMutation = false
+    const conn = await getDatabase()
+    await conn.beginTransaction()
+    try {
+      const result = await runWithTransactionContext(ctx, async () => handler(conn, ctx))
+      ctx.status = 'committing'
       await conn.commitTransaction()
+      ctx.status = 'committed'
       if (pendingTransactionMutation) {
         await persistWebStoreAfterMutation()
         emitDataMutationEvent()
       }
       pendingTransactionMutation = false
-    }
-    return result
-  } catch (error) {
-    if (isOutermost) {
+      return result
+    } catch (error) {
+      ctx.status = 'rolling_back'
       try {
         await conn.rollbackTransaction()
       } catch {
         // Best-effort rollback; surface the original error.
       }
+      ctx.status = 'rolled_back'
       pendingTransactionMutation = false
+      throw error
+    } finally {
+      ctx.depth = 0
     }
-    throw error
-  } finally {
-    activeTransactionDepth = Math.max(0, activeTransactionDepth - 1)
-  }
+  })
 }
 
 export async function closeDatabase() {
