@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const pageSource = readFileSync(
@@ -25,7 +26,7 @@ const ledgerHandlersSource = readFileSync(
   join(dirname(root), 'backend/src/routes/shared-ledgers/ledger-handlers.js'),
   'utf8',
 )
-const i18nSource = readFileSync(join(root, 'src/ui/services/i18n.service.js'), 'utf8')
+const i18nSource = readI18nBundleSource()
 
 test('SMB-281: DELETE shared ledger bypasses membership so leave/unshare still works', () => {
   assert.match(routesSource, /name: 'delete'[\s\S]*?bypassMembership: true/)

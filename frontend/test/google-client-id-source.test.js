@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 
 const googleClientIdSource = readFileSync(
   resolve(import.meta.dirname, '../src/services/google/client-id.js'),
@@ -27,10 +28,7 @@ const oauthRefreshApiSource = readFileSync(
   resolve(import.meta.dirname, '../api/google/oauth/refresh.js'),
   'utf8',
 )
-const i18nSource = readFileSync(
-  resolve(import.meta.dirname, '../src/ui/services/i18n.service.js'),
-  'utf8',
-)
+const i18nSource = readI18nBundleSource()
 
 test('Google auth paths share the same frontend web client id resolver', () => {
   assert.match(googleClientIdSource, /'VITE_GOOGLE_WEB_CLIENT_ID'/)

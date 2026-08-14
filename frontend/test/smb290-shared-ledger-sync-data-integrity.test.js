@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 
 import {
   mergeSharedLedgerSnapshots,
@@ -248,7 +249,7 @@ test('smb290: shared-ledger service pull merges dirty/base instead of silent ove
 
 test('smb290: settings page surfaces conflict_resolved status and toast', () => {
   const page = readSource('src/ui/views/settings/SettingsSharedLedgerPage.vue')
-  const i18n = readSource('src/ui/services/i18n.service.js')
+  const i18n = readI18nBundleSource()
   assert.match(page, /sync_status_conflict_resolved/)
   assert.match(page, /toast\.sync_conflict_resolved/)
   assert.match(page, /result\?\.hasConflicts/)

@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 import {
   assertSellQuantityAllowed,
   buildSecurityPosition,
@@ -139,7 +140,7 @@ test('migration 042 and wiring present', () => {
   const runtime = readFileSync(resolve(root, 'src/ui/services/app-runtime.service.js'), 'utf8')
   const listPage = readFileSync(resolve(root, 'src/ui/views/securities/SecuritiesListPage.vue'), 'utf8')
   const detailPage = readFileSync(resolve(root, 'src/ui/views/securities/SecurityDetailPage.vue'), 'utf8')
-  const i18n = readFileSync(resolve(root, 'src/ui/services/i18n.service.js'), 'utf8')
+  const i18n = readI18nBundleSource()
 
   assert.match(migrate, /042_securities_settlement_v2/)
   assert.match(migrate, /version: 42/)

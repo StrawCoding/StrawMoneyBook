@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 
 const featureListSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/FeatureListPage.vue'),
@@ -11,10 +12,7 @@ const settingsSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/settings.vue'),
   'utf8',
 )
-const i18nSource = readFileSync(
-  resolve(import.meta.dirname, '../src/ui/services/i18n.service.js'),
-  'utf8',
-)
+const i18nSource = readI18nBundleSource()
 const featuresMapSource = readFileSync(
   resolve(import.meta.dirname, '../StrawMoneyBook_Features_Map.md'),
   'utf8',

@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 
 const root = resolve(import.meta.dirname, '..')
 const read = (path) => readFileSync(resolve(root, path), 'utf8')
@@ -88,7 +89,7 @@ test('電子發票 Step1 格式錯誤時顯示行內驗證訊息並修正 normal
 })
 
 test('電子發票 Step1 驗證錯誤與清除儲存載具 i18n 具備繁中、英文、日文三語', () => {
-  const source = read('src/ui/services/i18n.service.js')
+  const source = readI18nBundleSource()
   const keys = [
     'einvoice.step1.barcode_error',
     'einvoice.step1.code_error',
@@ -154,7 +155,7 @@ test('電子發票後端服務改用 Playwright scrape API，停用 native WebVi
 
 test('SMB-258: scrape API maps fetch network errors to einvoice i18n message', () => {
   const scrapeApiSource = read('src/services/einvoice/scrape-api.js')
-  const i18nSource = read('src/ui/services/i18n.service.js')
+  const i18nSource = readI18nBundleSource()
 
   assert.match(scrapeApiSource, /mapFetchNetworkError/)
   assert.match(scrapeApiSource, /Failed to fetch/)
@@ -164,7 +165,7 @@ test('SMB-258: scrape API maps fetch network errors to einvoice i18n message', (
 })
 
 test('新增電子發票流程文字具備繁中、英文、日文 i18n', () => {
-  const source = read('src/ui/services/i18n.service.js')
+  const source = readI18nBundleSource()
   const keys = [
     'einvoice.stage1',
     'einvoice.stage2',
@@ -188,7 +189,7 @@ test('新增電子發票流程文字具備繁中、英文、日文 i18n', () => 
 })
 
 test('電子發票 i18n 已移除舊的 phone/password 及 invoice_status 等欄位', () => {
-  const source = read('src/ui/services/i18n.service.js')
+  const source = readI18nBundleSource()
 
   assert.doesNotMatch(source, /'einvoice\.step1\.phone':/)
   assert.doesNotMatch(source, /'einvoice\.step1\.password':/)

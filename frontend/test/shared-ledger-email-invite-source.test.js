@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 
 const pageSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/settings/SettingsSharedLedgerPage.vue'),
@@ -22,10 +23,7 @@ const serviceSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/services/shared-ledger.service.js'),
   'utf8',
 )
-const i18nSource = readFileSync(
-  resolve(import.meta.dirname, '../src/ui/services/i18n.service.js'),
-  'utf8',
-)
+const i18nSource = readI18nBundleSource()
 
 const requiredI18nKeys = [
   'settings_shared_ledgers.email_invite',

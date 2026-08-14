@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 
 const routerSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/router/index.js'),
@@ -48,10 +49,7 @@ const reimbursementServiceSource = readFileSync(
   'utf8',
 )
 
-const i18nServiceSource = readFileSync(
-  resolve(import.meta.dirname, '../src/ui/services/i18n.service.js'),
-  'utf8',
-)
+const i18nServiceSource = readI18nBundleSource()
 
 test('claim sheets expose a dedicated reimbursement import route and page', () => {
   assert.match(routerSource, /name: 'claim-sheet-import'/)

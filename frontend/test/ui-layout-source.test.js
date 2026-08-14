@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 
 const root = resolve(import.meta.dirname, '..')
 const mainJsSource = readFileSync(resolve(root, 'src/main.js'), 'utf8')
@@ -11,7 +12,7 @@ const homeSource = readFileSync(resolve(root, 'src/ui/views/home.vue'), 'utf8')
 const personalizationSource = readFileSync(resolve(root, 'src/ui/views/settings/SettingsPersonalizationPage.vue'), 'utf8')
 const routerSource = readFileSync(resolve(root, 'src/ui/router/index.js'), 'utf8')
 const layoutServiceSource = readFileSync(resolve(root, 'src/ui/services/ui-layout.service.js'), 'utf8')
-const i18nSource = readFileSync(resolve(root, 'src/ui/services/i18n.service.js'), 'utf8')
+const i18nSource = readI18nBundleSource()
 const appRuntimeSource = readFileSync(resolve(root, 'src/ui/services/app-runtime.service.js'), 'utf8')
 const featuresMapSource = readFileSync(resolve(root, 'StrawMoneyBook_Features_Map.md'), 'utf8')
 const detailedDocSource = readFileSync(resolve(import.meta.dirname, '../../StrawMoneyBook_App_Features_Detailed.md'), 'utf8')

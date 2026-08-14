@@ -1,5 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 import {
   assertSellQuantityAllowed,
   buildSecurityPosition,
@@ -7,8 +10,6 @@ import {
   sumIncludedSecuritiesMarketValue,
 } from '../src/core/utils/securities-position.js'
 import { calculateAssetSummary } from '../src/core/utils/assets-summary.js'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 
 test('securities buy/sell summarize quantity and net invested', () => {
   const summary = summarizeSecurityTransactions([
@@ -90,7 +91,7 @@ test('securities migration and routes are wired', () => {
   assert.match(schema, /securities:/)
   assert.match(schema, /security_transactions:/)
   assert.match(schema, /settlement_status/)
-  const i18n = readFileSync(resolve(root, 'src/ui/services/i18n.service.js'), 'utf8')
+  const i18n = readI18nBundleSource()
   assert.match(i18n, /'securities_page\.title':/)
   assert.match(i18n, /'assets_page\.securities':/)
   assert.match(i18n, /'analysis_page\.securities_title':/)

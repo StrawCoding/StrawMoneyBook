@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 
 const transactionRepoSource = readFileSync(
   resolve(import.meta.dirname, '../src/core/repositories/transaction.repo.js'),
@@ -23,10 +24,7 @@ const transactionSearchPageSource = readFileSync(
   'utf8',
 )
 
-const i18nSource = readFileSync(
-  resolve(import.meta.dirname, '../src/ui/services/i18n.service.js'),
-  'utf8',
-)
+const i18nSource = readI18nBundleSource()
 
 const accountDetailPageSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/accounts/AccountDetailPage.vue'),

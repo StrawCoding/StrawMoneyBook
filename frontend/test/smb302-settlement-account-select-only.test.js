@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 
 const root = resolve(import.meta.dirname, '..')
 
@@ -12,7 +13,7 @@ test('smb302: settlement account is select-only (no mark gate in UI/service/i18n
   const detailPage = readFileSync(resolve(root, 'src/ui/views/securities/SecurityDetailPage.vue'), 'utf8')
   const accountDetail = readFileSync(resolve(root, 'src/ui/views/accounts/AccountDetailPage.vue'), 'utf8')
   const assetMgmt = readFileSync(resolve(root, 'src/ui/views/accounts/AssetAccountManagementPage.vue'), 'utf8')
-  const i18n = readFileSync(resolve(root, 'src/ui/services/i18n.service.js'), 'utf8')
+  const i18n = readI18nBundleSource()
   const playwright = readFileSync(resolve(root, 'scripts/playwright-ui-layout.mjs'), 'utf8')
 
   assert.match(listPage, /data-testid="securities-create-settlement"/)

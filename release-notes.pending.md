@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (ART-i18n-SPLIT) `i18n.service` 拆出 zh-TW／en／ja 字典與 runtime 對照模組；服務檔僅保留查表／locale API。
+
 ---
 
 ## v1.3.127

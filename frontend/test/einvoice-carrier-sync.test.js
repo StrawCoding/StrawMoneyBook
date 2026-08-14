@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 
 const root = resolve(import.meta.dirname, '..')
 const read = (path) => readFileSync(resolve(root, path), 'utf8')
@@ -76,7 +77,7 @@ test('SMB-265: scrape API sends existing auth session with e-invoice requests', 
 
 test('SMB-265: legacy barcode credentials prompt re-entry instead of silent reuse', () => {
   const pageSource = read('src/ui/views/settings/SettingsCarrierSyncPage.vue')
-  const i18nSource = read('src/ui/services/i18n.service.js')
+  const i18nSource = readI18nBundleSource()
   assert.match(pageSource, /!isValidCarrierPhone\(saved\.carrierBarcode\)/)
   assert.match(pageSource, /settings_carrier_sync\.legacy_credentials_reenter/)
   assert.match(i18nSource, /settings_carrier_sync\.legacy_credentials_reenter/)
@@ -94,7 +95,7 @@ test('功能列表導向載具同步頁；設定頁主清單不再列載具同�
 })
 
 test('載具同步 i18n 具備繁中、英文、日文三語', () => {
-  const source = read('src/ui/services/i18n.service.js')
+  const source = readI18nBundleSource()
   const keys = [
     'settings_carrier_sync.title',
     'settings_carrier_sync.review.title',

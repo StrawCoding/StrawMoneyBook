@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 import {
   allocateSellPrincipalFromBuy,
   assertBuyCanBeMutated,
@@ -251,7 +252,7 @@ test('migration 044 and wiring mention source_buy_tx_id', () => {
   assert.match(playwright, /securities-sell-source-buy/)
   assert.match(playwright, /specific-lot sell/)
   assert.match(playwright, /funds-matched sell|funds only match buy/)
-  const i18n = readFileSync(resolve(root, 'src/ui/services/i18n.service.js'), 'utf8')
+  const i18n = readI18nBundleSource()
   assert.equal((i18n.match(/'securities_page.sell_source_buy':/g) || []).length, 3)
   assert.equal((i18n.match(/'securities_page.sell_proceeds':/g) || []).length, 3)
   assert.equal((i18n.match(/'securities_page.sell_funds_lot_option':/g) || []).length, 3)

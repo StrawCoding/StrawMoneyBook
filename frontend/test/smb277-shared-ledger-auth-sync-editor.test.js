@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 import {
   applyCreateEditorAttribution,
   applyUpdateEditorAttribution,
@@ -94,7 +95,7 @@ test('SMB-277: account/shared-ledger UI exposes design-aligned session sync pill
     join(root, 'src/ui/views/settings/SettingsSharedLedgerPage.vue'),
     'utf8',
   )
-  const i18n = readFileSync(join(root, 'src/ui/services/i18n.service.js'), 'utf8')
+  const i18n = readI18nBundleSource()
   const homeFeed = readFileSync(
     join(root, 'src/ui/components/home/HomeTransactionFeed.vue'),
     'utf8',

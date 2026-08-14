@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readI18nBundleSource } from './helpers/i18n-source.js'
 
 const globalCssSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/assets/css/global.css'),
@@ -51,10 +52,7 @@ const settingsLedgerSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/settings/SettingsLedgerPage.vue'),
   'utf8',
 )
-const i18nSource = readFileSync(
-  resolve(import.meta.dirname, '../src/ui/services/i18n.service.js'),
-  'utf8',
-)
+const i18nSource = readI18nBundleSource()
 const viewsDir = resolve(import.meta.dirname, '../src/ui/views')
 const settingsViewsDir = resolve(import.meta.dirname, '../src/ui/views/settings')
 
