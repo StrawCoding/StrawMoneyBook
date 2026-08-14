@@ -2,6 +2,11 @@ import { getLedger, purgeLedger } from '@/core/repositories/ledger.repo'
 import { getSetting, removeSetting, setSetting } from '@/core/repositories/settings.repo'
 import { exportLedgerJson } from '@/core/services/export.service'
 import { importLedgerJsonAsNewLedger } from '@/core/services/import.service'
+import { requireRecoveryBackupBeforeWipe } from '@/core/services/data-wipe-guard.service'
+import {
+  persistVerifiedRecoveryBackup,
+  readVerifiedRecoveryBackup,
+} from '@/core/services/recovery-backup.service'
 import { nowIso } from '@/core/utils/id'
 import { formatSyncForeignKeyError, rethrowAsForeignKeyError } from '@/core/utils/sqlite-fk'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -405,9 +410,24 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
   const existingSnapshot = existingLedger ? await exportLedgerJson(ledgerId) : null
   let purgedExistingLedger = false
   let imported = null
+  /** @type {{ backupId?: string } | null} */
+  let recoveryProof = null
 
   try {
-    if (existingLedger) {
+    if (existingLedger && existingSnapshot) {
+      // ART-09: durable recovery before purge; never rely on memory-only rollback.
+      recoveryProof = await requireRecoveryBackupBeforeWipe(
+        () => persistVerifiedRecoveryBackup({
+          purpose: 'shared_ledger_replace',
+          data: existingSnapshot,
+          source: 'shared_ledger.replaceLocalLedgerWithSnapshot',
+          filename: `strawmoneybook-recovery-shared-replace-${ledgerId}.json`,
+        }),
+        {
+          source: 'shared_ledger.replaceLocalLedgerWithSnapshot',
+          i18nKey: 'shared_ledger.error.recovery_backup_required',
+        },
+      )
       await purgeLedger(ledgerId)
       purgedExistingLedger = true
     }
@@ -419,16 +439,37 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
       runIntegrityRepair: false,
     })
   } catch (error) {
-    if (purgedExistingLedger && existingSnapshot) {
-      try {
-        await purgeLedger(ledgerId)
-        await importLedgerJsonAsNewLedger(JSON.stringify(existingSnapshot), {
-          keepLedgerId: true,
-          ledgerName: existingLedger.name,
-          runIntegrityRepair: false,
-        })
-      } catch (restoreError) {
-        console.error('[shared-ledger] failed to restore local ledger after snapshot import failure', restoreError)
+    if (purgedExistingLedger) {
+      let restoredText = ''
+      if (recoveryProof?.backupId) {
+        try {
+          const durable = await readVerifiedRecoveryBackup(recoveryProof.backupId)
+          restoredText = String(durable?.jsonText ?? '').trim()
+        } catch {
+          restoredText = ''
+        }
+      }
+      if (!restoredText && existingSnapshot) {
+        restoredText = JSON.stringify(existingSnapshot)
+      }
+      if (restoredText) {
+        try {
+          await purgeLedger(ledgerId)
+          await importLedgerJsonAsNewLedger(restoredText, {
+            keepLedgerId: true,
+            ledgerName: existingLedger.name,
+            runIntegrityRepair: false,
+          })
+        } catch (restoreError) {
+          // ART-09: rollback failure must surface — never console-only / success path.
+          const wrapped = new Error(
+            `共同帳本快照匯入失敗且本機還原也失敗：${String(error?.message ?? error)}; restore: ${String(restoreError?.message ?? restoreError)}`,
+          )
+          wrapped.code = 'shared_ledger_replace_restore_failed'
+          wrapped.cause = error
+          wrapped.restoreError = restoreError
+          throw wrapped
+        }
       }
     }
     rethrowAsForeignKeyError(error)
