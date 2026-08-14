@@ -49,8 +49,13 @@ import {
   verifyGoogleIdTokenForAuth,
   writeAuthAuditLog,
   GOOGLE_PLAY_CLIENT_SYNC_SOURCE,
+  GOOGLE_PLAY_VERIFIED_SOURCE,
   GOOGLE_PLAY_LIFETIME_SYNC_EXPIRES_AT,
 } from './shared.js'
+import {
+  isGooglePlayPublisherConfigured,
+  verifyGooglePlayPurchase,
+} from '../../collab/google-play-publisher.js'
 
 export async function handleRegister(req, res) {
   const body = parseBody(req)
@@ -310,18 +315,48 @@ export async function handleGooglePlayMembershipSync(req, res) {
   const expiresAt = plan === 'lifetime'
     ? GOOGLE_PLAY_LIFETIME_SYNC_EXPIRES_AT
     : normalizeFutureIso(body.expiresAt ?? body.expires_at)
+  const purchaseToken = normalizeText(body.purchaseToken ?? body.purchase_token)
+  const productId = normalizeText(body.productId ?? body.product_id)
+  const orderId = normalizeText(body.orderId ?? body.order_id)
+  const productTypeRaw = normalizeText(body.productType ?? body.product_type).toLowerCase()
+  const productType = productTypeRaw === 'inapp' || plan === 'lifetime'
+    ? 'inapp'
+    : 'subs'
 
-  // ART-SEC-03 Phase A: client-reported Play membership is an observation only.
-  // Never treat active/plan/expiresAt from the client as authoritative entitlement.
+  let verifiedResult = null
+  let verificationStatus = 'skipped'
+  if (purchaseToken && productId) {
+    if (!isGooglePlayPublisherConfigured()) {
+      verificationStatus = 'not_configured'
+    } else {
+      try {
+        verifiedResult = await verifyGooglePlayPurchase({
+          productId,
+          purchaseToken,
+          productType,
+        })
+        verificationStatus = verifiedResult.active ? 'verified_active' : 'verified_inactive'
+      } catch (error) {
+        verificationStatus = 'verification_failed'
+        console.warn('[auth] google play receipt verification failed', {
+          code: error?.code,
+          status: error?.status,
+          message: error?.message,
+          productId,
+          productType,
+        })
+      }
+    }
+  }
+
   const updatedUser = await updateStore(async (data) => {
     const targetUser = data.users.find((item) => String(item.id) === String(user.id))
     if (!targetUser) {
       throw createAuthError('找不到使用者', 'user_not_found', 404)
     }
 
+    // ART-SEC-03 Phase A: client-reported Play membership remains observation-only.
     syncMembershipGrantBySource(targetUser, GOOGLE_PLAY_CLIENT_SYNC_SOURCE, {
-      // Keep a non-authoritative record for diagnostics when client reports active,
-      // but getMembershipGrantSummary ignores this source for gates.
       active: active && Boolean(plan),
       startAt: observedAt,
       endAt: expiresAt,
@@ -334,8 +369,35 @@ export async function handleGooglePlayMembershipSync(req, res) {
         reported_active: active,
         last_sync_status: String(body.lastSyncStatus ?? body.last_sync_status ?? '').trim(),
         reason: String(body.reason ?? '').trim(),
+        product_id: productId,
+        order_id: orderId,
+        verification_status: verificationStatus,
       },
     })
+
+    // ART-SEC-03 Phase B: only Google Play Developer API success can write verified grants.
+    if (verificationStatus === 'verified_active' && verifiedResult?.active) {
+      syncMembershipGrantBySource(targetUser, GOOGLE_PLAY_VERIFIED_SOURCE, {
+        active: true,
+        startAt: observedAt,
+        endAt: verifiedResult.expiresAt || expiresAt || GOOGLE_PLAY_LIFETIME_SYNC_EXPIRES_AT,
+        meta: {
+          plan: plan || (verifiedResult.productType === 'inapp' ? 'lifetime' : 'monthly'),
+          source: GOOGLE_PLAY_VERIFIED_SOURCE,
+          trust_status: 'VERIFIED',
+          product_id: verifiedResult.productId,
+          product_type: verifiedResult.productType,
+          order_id: verifiedResult.orderId || orderId,
+          package_name: verifiedResult.packageName,
+          verified_at: nowIso(),
+        },
+      })
+    } else if (purchaseToken && productId) {
+      // Token was presented but not verified active — clear any prior verified grant.
+      syncMembershipGrantBySource(targetUser, GOOGLE_PLAY_VERIFIED_SOURCE, {
+        active: false,
+      })
+    }
 
     return targetUser
   })
@@ -348,6 +410,14 @@ export async function handleGooglePlayMembershipSync(req, res) {
       authoritative: false,
       reported_active: active,
       reported_plan: plan,
+    },
+    membership_verification: {
+      status: verificationStatus,
+      authoritative: verificationStatus === 'verified_active',
+      source: verificationStatus === 'verified_active' ? GOOGLE_PLAY_VERIFIED_SOURCE : '',
+      expires_at: verifiedResult?.expiresAt || '',
+      product_id: productId,
+      product_type: productType,
     },
   })
 }

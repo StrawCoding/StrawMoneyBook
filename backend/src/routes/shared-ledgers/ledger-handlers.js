@@ -203,6 +203,9 @@ export async function handleSnapshotPush(req, res, user, sharedLedgerId) {
     sharedLedger.version = currentVersion + 1
     sharedLedger.updated_at = nowIso()
     sharedLedger.updated_by_user_id = user.id
+    // ART-BE-CAS: SQL UPSERT must still match the pre-update version (unless force).
+    sharedLedger.__cas_base_version = currentVersion
+    sharedLedger.__cas_force = Boolean(force)
     return sharedLedger.id
   })
 

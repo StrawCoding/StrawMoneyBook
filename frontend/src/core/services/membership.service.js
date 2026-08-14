@@ -12,6 +12,7 @@ import {
   queryOwned as queryOwnedGooglePlayPurchases,
   redeemPromoCode as redeemGooglePlayPromoCodeInStore,
   restore as restoreGooglePlayPurchases,
+  GOOGLE_PLAY_PRODUCTS,
 } from './google-play-billing.service'
 import {
   buildMembershipBackendSyncFingerprint as buildMembershipBackendSyncFingerprintValue,
@@ -88,6 +89,48 @@ const AI_BOOKKEEPING_USAGE_STORAGE_KEY = 'straw.membership.ai_bookkeeping_daily_
 let membershipBackgroundSyncInFlight = null
 let membershipBackgroundSyncRequestedAt = 0
 let membershipSyncInFlight = null
+let lastOwnedPlayPurchaseEvidence = null
+
+function extractPlayPurchaseEvidence(purchase, productType, productId) {
+  if (!purchase || typeof purchase !== 'object') return null
+  const purchaseToken = String(
+    purchase.purchaseToken
+    ?? purchase.purchase_token
+    ?? purchase.transactionId
+    ?? '',
+  ).trim()
+  if (!purchaseToken) return null
+  return {
+    purchaseToken,
+    productId: String(purchase.productIdentifier ?? purchase.productId ?? productId ?? '').trim(),
+    productType,
+    orderId: String(purchase.orderId ?? purchase.order_id ?? '').trim(),
+  }
+}
+
+function rememberOwnedPlayPurchaseEvidence(owned) {
+  lastOwnedPlayPurchaseEvidence = {
+    lifetime: extractPlayPurchaseEvidence(
+      owned?.lifetime,
+      'inapp',
+      GOOGLE_PLAY_PRODUCTS.lifetime.productIdentifier,
+    ),
+    monthly: extractPlayPurchaseEvidence(
+      owned?.monthly,
+      'subs',
+      GOOGLE_PLAY_PRODUCTS.monthly.productIdentifier,
+    ),
+  }
+}
+
+function resolvePlayPurchaseEvidenceForSnapshot(snapshot) {
+  const plan = normalizeGooglePlayPlan(snapshot?.plan)
+  if (plan === 'lifetime') return lastOwnedPlayPurchaseEvidence?.lifetime ?? null
+  if (plan === 'monthly') return lastOwnedPlayPurchaseEvidence?.monthly ?? null
+  return lastOwnedPlayPurchaseEvidence?.lifetime
+    ?? lastOwnedPlayPurchaseEvidence?.monthly
+    ?? null
+}
 let googlePlaySupportCache = {
   checkedAt: 0,
   supported: false,
@@ -390,6 +433,16 @@ async function flushSharedLedgerMembershipSyncQueue() {
         observedAt: toIsoNow(),
         lastSyncStatus: normalizeSyncStatus(task.snapshot?.lastSyncStatus),
         reason: String(task.reason ?? '').trim(),
+        ...(function buildVerifiedPurchasePayload() {
+          const evidence = resolvePlayPurchaseEvidenceForSnapshot(task.snapshot)
+          if (!evidence?.purchaseToken || !evidence?.productId) return {}
+          return {
+            purchaseToken: evidence.purchaseToken,
+            productId: evidence.productId,
+            productType: evidence.productType,
+            orderId: evidence.orderId,
+          }
+        }()),
       })
       membershipBackendSyncFingerprint = fingerprint
       membershipBackendSyncSyncedAt = nowMs
@@ -526,6 +579,7 @@ export async function syncMembershipEntitlements(reason = 'manual') {
 
     try {
       const owned = await traceGooglePlayCall('query_owned', async () => queryOwnedGooglePlayPurchases())
+      rememberOwnedPlayPurchaseEvidence(owned)
       const nowMs = Date.now()
       const nowIso = new Date(nowMs).toISOString()
 

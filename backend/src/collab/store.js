@@ -642,6 +642,7 @@ function prepareStoreWriteStatements(db) {
       created_at = excluded.created_at,
       updated_at = excluded.updated_at,
       updated_by_user_id = excluded.updated_by_user_id
+    WHERE @cas_force = 1 OR shared_ledgers.version = @cas_base_version
   `)
   const upsertReferral = db.prepare(`
     INSERT INTO referrals (
@@ -685,7 +686,11 @@ function bindUserRow(statement, user) {
 }
 
 function bindSharedLedgerRow(statement, sharedLedger) {
-  statement.run({
+  const casForce = sharedLedger?.__cas_force === false ? 0 : 1
+  const casBaseVersion = Number(
+    sharedLedger?.__cas_base_version ?? sharedLedger?.version ?? 0,
+  )
+  const info = statement.run({
     ...sharedLedger,
     members_json: JSON.stringify(Array.isArray(sharedLedger.members) ? sharedLedger.members : []),
     invitations_json: JSON.stringify(Array.isArray(sharedLedger.invitations) ? sharedLedger.invitations : []),
@@ -695,7 +700,18 @@ function bindSharedLedgerRow(statement, sharedLedger) {
       : '',
     force_audit_json: JSON.stringify(Array.isArray(sharedLedger.force_audit) ? sharedLedger.force_audit : []),
     version: Number(sharedLedger.version ?? 0),
+    cas_force: casForce,
+    cas_base_version: casBaseVersion,
   })
+
+  // ART-BE-CAS: optimistic lock failed at SQL write time.
+  if (casForce === 0 && Number(info?.changes ?? 0) === 0) {
+    const conflictError = new Error('共同帳本已被其他成員更新，請先下載最新版本')
+    conflictError.code = 'version_conflict'
+    conflictError.status = 409
+    conflictError.currentVersion = casBaseVersion
+    throw conflictError
+  }
 }
 
 // Writes the store back to SQLite inside a single transaction.
