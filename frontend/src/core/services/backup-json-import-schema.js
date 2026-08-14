@@ -11,6 +11,7 @@ export const BACKUP_IMPORT_TABLE_ORDER = Object.freeze([
   'category_groups',
   'categories',
   'transactions',
+  'wear_applied',
   'transaction_attachments',
   'counterparties',
   'loans',
@@ -121,9 +122,15 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
     ]),
     enums: enums({
       type: ['expense', 'income', 'adjustment', 'transfer'],
-      origin_type: ['manual', 'loan_payment', 'reimbursement', 'import', 'recurring', 'refund'],
+      origin_type: ['manual', 'loan_payment', 'reimbursement', 'import', 'recurring', 'refund', 'wear'],
       reimbursement_state: ['none', 'pending', 'reimbursed'],
     }),
+  },
+  wear_applied: {
+    columns: cols(
+      'idempotency_key', 'ledger_id', 'tx_id', 'applied_at',
+    ),
+    required: Object.freeze(['idempotency_key', 'ledger_id', 'tx_id', 'applied_at']),
   },
   transaction_attachments: {
     columns: cols(

@@ -1,0 +1,175 @@
+apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
+apply plugin: 'org.jetbrains.kotlin.kapt'
+
+def keystorePropertiesFile = rootProject.file("key.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+def resolveSigningValue = { propertyKey, envKey ->
+    def propertyValue = keystoreProperties[propertyKey]
+    if (propertyValue != null && propertyValue.toString().trim()) {
+        return propertyValue.toString().trim()
+    }
+    def envValue = System.getenv(envKey)
+    if (envValue != null && envValue.trim()) {
+        return envValue.trim()
+    }
+    return ''
+}
+def releaseStoreFilePath = resolveSigningValue('storeFile', 'ANDROID_KEYSTORE_FILE')
+def releaseStorePassword = resolveSigningValue('storePassword', 'ANDROID_KEYSTORE_PASSWORD')
+def releaseKeyAlias = resolveSigningValue('keyAlias', 'ANDROID_KEY_ALIAS')
+def releaseKeyPassword = resolveSigningValue('keyPassword', 'ANDROID_KEY_PASSWORD')
+def releaseStoreType = resolveSigningValue('storeType', 'ANDROID_KEYSTORE_TYPE') ?: 'jks'
+def hasReleaseSigningConfig =
+        releaseStoreFilePath &&
+        releaseStorePassword &&
+        releaseKeyAlias &&
+        releaseKeyPassword
+
+def packageJsonText = rootProject.file('../package.json').text
+def versionMatcher = (packageJsonText =~ /"version"\s*:\s*"([^"]+)"/)
+def packageVersionName = versionMatcher.find() ? versionMatcher.group(1) : "1.0.0"
+def ciVersionName = System.getenv("CI_VERSION_NAME")?.trim()
+def ciVersionCode = System.getenv("CI_VERSION_CODE")?.trim()
+def versionSegmentBase = 1_000
+def majorMultiplier = versionSegmentBase * versionSegmentBase
+def playStoreVersionCodeOffset = 1_000_000
+def wearVersionCodeOffset = 100_000_000
+def maxPlayVersionCode = Integer.MAX_VALUE
+def derivePhoneVersionCodeFromVersionName = { versionName, fallbackValue ->
+    def normalizedVersionName = (versionName ?: '').trim()
+    if (!normalizedVersionName) {
+        return fallbackValue
+    }
+    def versionCore = normalizedVersionName.tokenize('-')[0]
+    def versionParts = versionCore.tokenize('.')
+    if (versionParts.size() < 3) {
+        return fallbackValue
+    }
+    try {
+        def major = Integer.parseInt(versionParts[0])
+        def minor = Integer.parseInt(versionParts[1])
+        def patch = Integer.parseInt(versionParts[2])
+        if (major < 0 || minor < 0 || patch < 0) {
+            return fallbackValue
+        }
+        if (minor >= versionSegmentBase || patch >= versionSegmentBase) {
+            return fallbackValue
+        }
+        def computedVersionCode =
+                playStoreVersionCodeOffset +
+                (major * majorMultiplier) +
+                (minor * versionSegmentBase) +
+                patch
+        if (computedVersionCode > maxPlayVersionCode) {
+            return fallbackValue
+        }
+        return computedVersionCode
+    } catch (NumberFormatException ignored) {
+        return fallbackValue
+    }
+}
+def resolveVersionCode = { envValue, fallbackValue ->
+    if (envValue == null || !envValue) {
+        return fallbackValue
+    }
+    try {
+        return Integer.parseInt(envValue)
+    } catch (NumberFormatException ignored) {
+        return fallbackValue
+    }
+}
+def appVersionName = ciVersionName ?: packageVersionName
+def phoneVersionCode = resolveVersionCode(
+        ciVersionCode,
+        derivePhoneVersionCodeFromVersionName(appVersionName, playStoreVersionCodeOffset)
+)
+def wearVersionCode = wearVersionCodeOffset + phoneVersionCode
+
+android {
+    namespace = "com.strawcoding.strawmoneybook"
+    compileSdk = rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "com.strawcoding.strawmoneybook"
+        minSdkVersion rootProject.ext.wearMinSdkVersion
+        targetSdkVersion rootProject.ext.wearTargetSdkVersion
+        versionCode wearVersionCode
+        versionName appVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+    buildFeatures {
+        compose true
+    }
+    signingConfigs {
+        release {
+            if (hasReleaseSigningConfig) {
+                storeFile rootProject.file(releaseStoreFilePath)
+                storeType releaseStoreType
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix "debug"
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.release
+            }
+        }
+        release {
+            minifyEnabled false
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.release
+            }
+        }
+    }
+    packaging {
+        resources {
+            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+        }
+    }
+}
+
+dependencies {
+    implementation "androidx.core:core-ktx:1.15.0"
+    implementation "androidx.activity:activity-compose:1.9.3"
+    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.8.7"
+    implementation "androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7"
+    implementation platform("androidx.compose:compose-bom:2024.10.01")
+    implementation "androidx.compose.ui:ui"
+    implementation "androidx.compose.ui:ui-tooling-preview"
+    implementation "androidx.compose.foundation:foundation"
+    implementation "androidx.wear.compose:compose-material:1.4.0"
+    implementation "androidx.wear.compose:compose-foundation:1.4.0"
+    implementation "androidx.wear.compose:compose-navigation:1.4.0"
+    implementation "androidx.wear:wear:1.3.0"
+    implementation "androidx.wear.tiles:tiles:1.4.1"
+    implementation "androidx.wear.tiles:tiles-material:1.4.1"
+    implementation "androidx.wear.protolayout:protolayout:1.2.1"
+    implementation "androidx.wear.protolayout:protolayout-material:1.2.1"
+    implementation "com.google.android.gms:play-services-wearable:18.2.0"
+    implementation "androidx.room:room-runtime:2.6.1"
+    implementation "androidx.room:room-ktx:2.6.1"
+    kapt "androidx.room:room-compiler:2.6.1"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0"
+    implementation "org.json:json:20240303"
+    implementation "com.google.guava:guava:33.3.1-android"
+    testImplementation "junit:junit:$junitVersion"
+    debugImplementation "androidx.compose.ui:ui-tooling"
+}

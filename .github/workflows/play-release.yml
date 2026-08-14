@@ -82,11 +82,11 @@ jobs:
         run: |
           echo "CI_VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
 
-      - name: Build release AAB
+      - name: Build release AABs (phone + wear)
         working-directory: frontend/android
-        run: ./gradlew bundleRelease --configuration-cache --build-cache
+        run: ./gradlew :app:bundleRelease :wear:bundleRelease --configuration-cache --build-cache
 
-      - name: Resolve built AAB path
+      - name: Resolve built AAB paths
         working-directory: frontend/android
         run: |
           RESOLVED_AAB_PATH="$(find "$PWD/app/build/outputs/bundle" -type f -name '*.aab' | sort | tail -n 1)"
@@ -96,6 +96,14 @@ jobs:
             exit 1
           fi
           echo "AAB_PATH=$RESOLVED_AAB_PATH" >> "$GITHUB_ENV"
+
+          RESOLVED_WEAR_AAB="$(find "$PWD/wear/build/outputs/bundle" -type f -name '*.aab' | sort | tail -n 1 || true)"
+          if [ -z "$RESOLVED_WEAR_AAB" ]; then
+            echo "Unable to find Wear AAB under frontend/android/wear/build/outputs/bundle" >&2
+            find wear/build/outputs -maxdepth 5 -type f | sort >&2 || true
+            exit 1
+          fi
+          echo "WEAR_AAB_PATH=$RESOLVED_WEAR_AAB" >> "$GITHUB_ENV"
 
       - name: Resolve Play deobfuscation mapping path
         working-directory: frontend/android
@@ -126,6 +134,7 @@ jobs:
           generate_release_notes: true
           files: |
             ${{ env.AAB_PATH }}
+            ${{ env.WEAR_AAB_PATH }}
             ${{ env.PLAY_MAPPING_PATH }}
 
       - name: Prepare Play upload paths

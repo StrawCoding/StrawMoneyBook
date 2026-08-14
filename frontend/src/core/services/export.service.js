@@ -11,6 +11,7 @@ const LEDGER_TABLES = [
   'category_groups',
   'categories',
   'transactions',
+  'wear_applied',
   'transaction_attachments',
   'counterparties',
   'loans',

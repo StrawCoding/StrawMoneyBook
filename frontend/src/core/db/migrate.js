@@ -42,6 +42,7 @@ import migration041 from '@/core/db/migrations/041_securities.sql?raw'
 import migration042 from '@/core/db/migrations/042_securities_settlement_v2.sql?raw'
 import migration043 from '@/core/db/migrations/043_credit_card_system_p0.sql?raw'
 import migration044 from '@/core/db/migrations/044_security_sell_source_buy.sql?raw'
+import migration045 from '@/core/db/migrations/045_wear_companion.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 
 const MIGRATIONS = [
@@ -84,6 +85,7 @@ const MIGRATIONS = [
   { version: 42, name: 'securities_settlement_v2', sql: migration042 },
   { version: 43, name: 'credit_card_system_p0', sql: migration043 },
   { version: 44, name: 'security_sell_source_buy', sql: migration044 },
+  { version: 45, name: 'wear_companion', sql: migration045 },
 ]
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'

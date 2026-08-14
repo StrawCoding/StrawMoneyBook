@@ -98,6 +98,12 @@ const advancedFeatures = computed(() => ([
     icon: 'fa-solid fa-file-invoice',
     testId: 'feature-link-carrier-sync',
   },
+  {
+    to: '/settings/wear-companion',
+    label: t('feature_list.wear_companion'),
+    icon: 'fa-solid fa-mobile-screen-button',
+    testId: 'feature-link-wear-companion',
+  },
 ]))
 </script>
 

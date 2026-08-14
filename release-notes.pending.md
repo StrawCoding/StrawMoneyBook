@@ -1,5 +1,8 @@
 # Pending Release Notes
 
+- Wear OS companion Stage A：電話端 MessageClient `/smb/v1/*` nearby-first、SQLCipher 單一連線擁有者、`origin_type=wear` + `wear_applied` UNIQUE + `syncEpoch`；Listener 不經 WebView 即可入帳；禁 DataClient 帳務與 `wearApp`。
+- Wear OS companion Stage B：獨立 `:wear` 模組（Compose 快記／近期／outbox、Glance Tile、Room outbox、`standalone=false`、Wear `versionCode = 100_000_000 + phone`）；功能頁進階「手錶連線」→ `/settings/wear-companion`；雙 AAB（phone + wear）經 Play closed／production 同次 `aab_paths` 上傳。
+
 ---
 
 ## v1.3.124

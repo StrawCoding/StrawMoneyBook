@@ -34,14 +34,14 @@ test('reimbursable expense state sync keeps paid claim sheet items reimbursed', 
 test('soft-deleted reimbursement transactions release idempotency keys for claim re-completion', () => {
   assert.match(
     transactionRepoSource,
-    /export async function softDeleteTransactionById[\s\S]*SET deleted_at = \?,\s+idempotency_key = NULL,/,
+    /export async function softDeleteTransactionById[\s\S]*SET deleted_at = \?,\s+idempotency_key = CASE WHEN origin_type = 'wear' THEN idempotency_key ELSE NULL END,/,
   )
   assert.match(
     transactionRepoSource,
-    /export async function softDeleteTransferGroup[\s\S]*SET deleted_at = \?,\s+idempotency_key = NULL,/,
+    /export async function softDeleteTransferGroup[\s\S]*SET deleted_at = \?,\s+idempotency_key = CASE WHEN origin_type = 'wear' THEN idempotency_key ELSE NULL END,/,
   )
   assert.match(
     transactionRepoSource,
-    /export async function softDeleteTransactionsByOriginRef[\s\S]*SET deleted_at = \?,\s+idempotency_key = NULL,/,
+    /export async function softDeleteTransactionsByOriginRef[\s\S]*SET deleted_at = \?,\s+idempotency_key = CASE WHEN origin_type = 'wear' THEN idempotency_key ELSE NULL END,/,
   )
 })

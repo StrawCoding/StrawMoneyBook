@@ -57,14 +57,21 @@ jobs:
           mkdir -p "$RELEASE_ASSET_DIR"
           gh release download "${{ inputs.tag_name }}" --pattern "*.aab" --dir "$RELEASE_ASSET_DIR" --clobber
           gh release download "${{ inputs.tag_name }}" --pattern "mapping.txt" --dir "$RELEASE_ASSET_DIR" --clobber || true
-          RESOLVED_AAB_PATH="$(find "$RELEASE_ASSET_DIR" -maxdepth 1 -type f -name '*.aab' | sort | tail -n 1)"
+          RESOLVED_AAB_PATH="$(find "$RELEASE_ASSET_DIR" -maxdepth 1 -type f -name 'app*.aab' | sort | tail -n 1)"
           if [ -z "$RESOLVED_AAB_PATH" ]; then
-            echo "Unable to find downloaded AAB asset for release ${{ inputs.tag_name }}" >&2
+            RESOLVED_AAB_PATH="$(find "$RELEASE_ASSET_DIR" -maxdepth 1 -type f -name '*.aab' ! -name 'wear*.aab' | sort | tail -n 1)"
+          fi
+          if [ -z "$RESOLVED_AAB_PATH" ]; then
+            echo "Unable to find downloaded phone AAB asset for release ${{ inputs.tag_name }}" >&2
             find "$RELEASE_ASSET_DIR" -maxdepth 2 -type f | sort >&2 || true
             exit 1
           fi
+          RESOLVED_WEAR_AAB="$(find "$RELEASE_ASSET_DIR" -maxdepth 1 -type f -name 'wear*.aab' | sort | tail -n 1 || true)"
           RESOLVED_MAPPING_PATH="$(find "$RELEASE_ASSET_DIR" -maxdepth 1 -type f -name 'mapping.txt' | sort | tail -n 1)"
           echo "AAB_PATH=$RESOLVED_AAB_PATH" >> "$GITHUB_ENV"
+          if [ -n "$RESOLVED_WEAR_AAB" ]; then
+            echo "WEAR_AAB_PATH=$RESOLVED_WEAR_AAB" >> "$GITHUB_ENV"
+          fi
           if [ -n "$RESOLVED_MAPPING_PATH" ]; then
             echo "PLAY_MAPPING_PATH=$RESOLVED_MAPPING_PATH" >> "$GITHUB_ENV"
           fi

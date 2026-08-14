@@ -203,7 +203,14 @@ export async function resetDatabase(options = {}) {
   })
   initPromise = null
   activeDbName = PRIMARY_DB_NAME
-  return rebuildDatabase(PRIMARY_DB_NAME)
+  const conn = await rebuildDatabase(PRIMARY_DB_NAME)
+  try {
+    const { rotateWearSyncEpoch } = await import('@/core/services/wear-sync-epoch.service')
+    await rotateWearSyncEpoch()
+  } catch {
+    // wear_sync_state exists after migration 045; ignore on pre-wear test DBs
+  }
+  return conn
 }
 
 export async function initDatabase() {

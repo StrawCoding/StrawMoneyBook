@@ -10,6 +10,9 @@ PLAY_EDIT_CONFLICT_MESSAGE = "A change was made to the application outside of th
 PLAY_UPLOAD_MAX_ATTEMPTS = 3
 PLAY_UPLOAD_RETRY_DELAY_SECONDS = 15
 PLAY_CONSOLE_MAX_LENGTH = 500
+DEFAULT_PHONE_AAB = "app/build/outputs/bundle/release/app-release.aab"
+DEFAULT_WEAR_AAB = "wear/build/outputs/bundle/release/wear-release.aab"
+WEAR_VERSION_CODE_OFFSET = 100_000_000
 
 def require_env!(key)
   value = ENV[key].to_s.strip
@@ -17,24 +20,40 @@ def require_env!(key)
   value
 end
 
+def resolve_existing_path(explicit_path)
+  return "" if explicit_path.to_s.strip.empty?
+
+  absolute = File.expand_path(explicit_path, ANDROID_PROJECT_ROOT)
+  File.exist?(absolute) ? absolute : ""
+end
+
+def glob_last(pattern)
+  Dir.glob(File.join(ANDROID_PROJECT_ROOT, pattern)).sort.last.to_s
+end
+
 def resolve_aab_path(explicit_path)
-  absolute_explicit_path = explicit_path.empty? ? "" : File.expand_path(explicit_path, ANDROID_PROJECT_ROOT)
-  return absolute_explicit_path if !absolute_explicit_path.empty? && File.exist?(absolute_explicit_path)
+  resolved = resolve_existing_path(explicit_path)
+  return resolved unless resolved.empty?
 
-  candidates = Dir.glob(File.join(ANDROID_PROJECT_ROOT, "app/build/outputs/bundle/**/*.aab")).sort
-  return candidates.last unless candidates.empty?
+  found = glob_last("app/build/outputs/bundle/**/*.aab")
+  return found unless found.empty?
 
-  absolute_explicit_path.empty? ? explicit_path : absolute_explicit_path
+  absolute = explicit_path.to_s.strip.empty? ? File.join(ANDROID_PROJECT_ROOT, DEFAULT_PHONE_AAB) : File.expand_path(explicit_path, ANDROID_PROJECT_ROOT)
+  absolute
+end
+
+def resolve_wear_aab_path(explicit_path)
+  resolved = resolve_existing_path(explicit_path)
+  return resolved unless resolved.empty?
+
+  glob_last("wear/build/outputs/bundle/**/*.aab")
 end
 
 def resolve_mapping_path(explicit_path)
-  absolute_explicit_path = explicit_path.empty? ? "" : File.expand_path(explicit_path, ANDROID_PROJECT_ROOT)
-  return absolute_explicit_path if !absolute_explicit_path.empty? && File.exist?(absolute_explicit_path)
+  resolved = resolve_existing_path(explicit_path)
+  return resolved unless resolved.empty?
 
-  candidates = Dir.glob(File.join(ANDROID_PROJECT_ROOT, "app/build/outputs/mapping/**/mapping.txt")).sort
-  return candidates.last unless candidates.empty?
-
-  absolute_explicit_path.empty? ? explicit_path : absolute_explicit_path
+  glob_last("app/build/outputs/mapping/**/mapping.txt")
 end
 
 def play_edit_conflict?(error)
@@ -65,6 +84,10 @@ def version_code_from_name(version_name)
   (major + 1) * 1_000_000 + minor * 1_000 + patch
 end
 
+def wear_version_code_from_name(version_name)
+  WEAR_VERSION_CODE_OFFSET + version_code_from_name(version_name)
+end
+
 def read_pending_note_lines(notes_path)
   return [] unless File.exist?(notes_path)
   lines = []
@@ -89,12 +112,55 @@ def prepare_play_changelogs(version_name, notes_path = PENDING_RELEASE_NOTES_PAT
   lines = read_pending_note_lines(notes_path)
   return false if lines.empty?
 
-  version_code = version_code_from_name(version_name)
   changelog = format_for_play_console(lines)
   FileUtils.mkdir_p(CHANGELOGS_DIR)
-  File.write(File.join(CHANGELOGS_DIR, "#{version_code}.txt"), changelog)
-  UI.message("[release-notes] Loaded #{lines.length} line(s) for version code #{version_code} (#{changelog.length}/#{PLAY_CONSOLE_MAX_LENGTH} chars)")
+  phone_code = version_code_from_name(version_name)
+  wear_code = wear_version_code_from_name(version_name)
+  [phone_code, wear_code].uniq.each do |code|
+    File.write(File.join(CHANGELOGS_DIR, "#{code}.txt"), changelog)
+  end
+  UI.message("[release-notes] Loaded #{lines.length} line(s) for version codes phone=#{phone_code} wear=#{wear_code} (#{changelog.length}/#{PLAY_CONSOLE_MAX_LENGTH} chars)")
   true
+end
+
+def collect_aab_paths
+  requested_phone = ENV.fetch("AAB_PATH", DEFAULT_PHONE_AAB).to_s.strip
+  requested_wear = ENV.fetch("WEAR_AAB_PATH", DEFAULT_WEAR_AAB).to_s.strip
+  phone_aab = resolve_aab_path(requested_phone)
+  wear_aab = resolve_wear_aab_path(requested_wear)
+
+  UI.user_error!("AAB not found at #{phone_aab}") unless File.exist?(phone_aab)
+
+  aabs = [phone_aab]
+  if !wear_aab.empty? && File.exist?(wear_aab)
+    aabs << wear_aab
+    UI.message("Including Wear AAB for Phone + Wear listing: #{wear_aab}")
+  else
+    UI.important("Wear AAB not found — uploading phone bundle only. Set WEAR_AAB_PATH to wear/build/outputs/bundle/release/wear-release.aab for dual upload.")
+  end
+  aabs
+end
+
+def play_upload_options(aabs, json_key_path, package_name, track, mapping_path, has_changelogs)
+  mapping_exists = !mapping_path.empty? && File.exist?(mapping_path)
+  options = {
+    package_name: package_name,
+    json_key: json_key_path,
+    track: track,
+    release_status: "completed",
+    skip_upload_apk: true,
+    skip_upload_metadata: true,
+    skip_upload_images: true,
+    skip_upload_screenshots: true,
+    skip_upload_changelogs: !has_changelogs
+  }
+  options[:mapping] = mapping_path if mapping_exists
+  if aabs.length > 1
+    options[:aab_paths] = aabs
+  else
+    options[:aab] = aabs.first
+  end
+  options
 end
 
 platform :android do
@@ -102,14 +168,12 @@ platform :android do
   lane :production_review do
     package_name = require_env!("ANDROID_PACKAGE_NAME")
     json_key_path = require_env!("PLAY_JSON_KEY_PATH")
-    requested_aab_path = ENV.fetch("AAB_PATH", "app/build/outputs/bundle/release/app-release.aab").to_s.strip
     requested_mapping_path = ENV.fetch("PLAY_MAPPING_PATH", "").to_s.strip
-    aab_path = resolve_aab_path(requested_aab_path)
-    mapping_path = resolve_mapping_path(requested_mapping_path)
-    mapping_exists = !mapping_path.empty? && File.exist?(mapping_path)
 
-    UI.user_error!("AAB not found at #{aab_path}") unless File.exist?(aab_path)
     UI.user_error!("Play service account json not found at #{json_key_path}") unless File.exist?(json_key_path)
+
+    aabs = collect_aab_paths
+    mapping_path = resolve_mapping_path(requested_mapping_path)
 
     ci_version_name = ENV.fetch("CI_VERSION_NAME", "").strip
     UI.message("[release-notes] Reading pending release notes...")
@@ -121,17 +185,7 @@ platform :android do
     end
 
     upload_to_play_store_with_edit_retry!(
-      package_name: package_name,
-      json_key: json_key_path,
-      aab: aab_path,
-      mapping: mapping_exists ? mapping_path : nil,
-      track: "production",
-      release_status: "completed",
-      skip_upload_apk: true,
-      skip_upload_metadata: true,
-      skip_upload_images: true,
-      skip_upload_screenshots: true,
-      skip_upload_changelogs: !has_changelogs
+      play_upload_options(aabs, json_key_path, package_name, "production", mapping_path, has_changelogs)
     )
   end
 
@@ -140,15 +194,13 @@ platform :android do
     package_name = require_env!("ANDROID_PACKAGE_NAME")
     json_key_path = require_env!("PLAY_JSON_KEY_PATH")
     play_track = ENV.fetch("PLAY_CLOSED_TESTING_TRACK", "alpha").to_s.strip
-    requested_aab_path = ENV.fetch("AAB_PATH", "app/build/outputs/bundle/release/app-release.aab").to_s.strip
     requested_mapping_path = ENV.fetch("PLAY_MAPPING_PATH", "").to_s.strip
-    aab_path = resolve_aab_path(requested_aab_path)
-    mapping_path = resolve_mapping_path(requested_mapping_path)
-    mapping_exists = !mapping_path.empty? && File.exist?(mapping_path)
 
-    UI.user_error!("AAB not found at #{aab_path}") unless File.exist?(aab_path)
     UI.user_error!("Play service account json not found at #{json_key_path}") unless File.exist?(json_key_path)
     UI.user_error!("PLAY_CLOSED_TESTING_TRACK must not be empty") if play_track.empty?
+
+    aabs = collect_aab_paths
+    mapping_path = resolve_mapping_path(requested_mapping_path)
 
     ci_version_name = ENV.fetch("CI_VERSION_NAME", "").strip
     UI.message("[release-notes] Reading pending release notes...")
@@ -160,17 +212,7 @@ platform :android do
     end
 
     upload_to_play_store_with_edit_retry!(
-      package_name: package_name,
-      json_key: json_key_path,
-      aab: aab_path,
-      mapping: mapping_exists ? mapping_path : nil,
-      track: play_track,
-      release_status: "completed",
-      skip_upload_apk: true,
-      skip_upload_metadata: true,
-      skip_upload_images: true,
-      skip_upload_screenshots: true,
-      skip_upload_changelogs: !has_changelogs
+      play_upload_options(aabs, json_key_path, package_name, play_track, mapping_path, has_changelogs)
     )
   end
 end

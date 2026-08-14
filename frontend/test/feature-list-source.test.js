@@ -78,9 +78,20 @@ test('smb295: settings main list no longer lists the four sync entries', () => {
   assert.doesNotMatch(settingsSource, /to: '\/settings\/google-drive-ledger-sync'/)
   assert.doesNotMatch(settingsSource, /to: '\/settings\/bank-sync'/)
   assert.doesNotMatch(settingsSource, /to: '\/settings\/carrier-sync'/)
+  assert.doesNotMatch(settingsSource, /to: '\/settings\/wear-companion'/)
   assert.doesNotMatch(settingsSource, /isBankSyncFeatureEnabled/)
   assert.match(settingsSource, /to: '\/settings\/ledgers'/)
   assert.match(settingsSource, /to: '\/settings\/auto-backup'/)
+})
+
+test('wear companion: advanced feature entry + i18n', () => {
+  assert.match(featureListSource, /to: '\/settings\/wear-companion'/)
+  assert.match(featureListSource, /feature_list\.wear_companion/)
+  assert.match(featureListSource, /feature-link-wear-companion/)
+  assert.match(i18nSource, /'feature_list\.wear_companion': '手錶連線'/)
+  assert.match(i18nSource, /'feature_list\.wear_companion': 'Watch Link'/)
+  assert.match(i18nSource, /'feature_list\.wear_companion': '時計連携'/)
+  assert.match(i18nSource, /'settings_wear_companion\.title': '手錶連線'/)
 })
 
 test('smb295: docs record advanced section and settings cleanup', () => {

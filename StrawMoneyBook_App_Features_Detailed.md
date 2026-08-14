@@ -173,7 +173,7 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 
 `playwright:ui-layout` 會 bypass onboarding 進入 app-shell 首頁，確認無傳統／現代切換 UI、畫面為現代 layout（`data-ui-layout=modern`）、首頁區塊／FAB／BottomNav 仍在；強制 Light 主題後驗證收入／支出 block 可見、可讀、版面完整，並抽樣確認 Dark 主題未回歸；legacy `traditional` preference 會遷移為 modern。
 
-功能列表分為「一般功能」與「進階功能」兩區：一般功能含預算項目、借貸、報銷、請款單、存錢罐、有價證券、信用卡、訂閱、交易搜尋；進階功能（`feature_list.advanced`）含共同帳本、帳本同步、Drive 備份選檔／舊版還原（smb299 → `/settings/auto-backup#drive-appdata-browser`）、銀行同步（feature flag 閘控）、載具同步。預算項目入口搭配圖示直接導向預算管理頁。設定頁主清單不再列出共同帳本／帳本同步／銀行同步／載具同步四項進階同步入口（深度連結／舊 bookmark 仍可開到同一 route）；自動備份仍在設定頁，並可從進階進入 Drive 選檔還原錨點。smb299 進階列加長後，功能列以 `scroll-margin-bottom`（約 BottomNav 高度）避免末列被固定底欄遮擋；`playwright:ui-layout` 點擊進階入口前會置中捲動並確認列在 nav 上方。
+功能列表分為「一般功能」與「進階功能」兩區：一般功能含預算項目、借貸、報銷、請款單、存錢罐、有價證券、信用卡、訂閱、交易搜尋；進階功能（`feature_list.advanced`）含共同帳本、帳本同步、Drive 備份選檔／舊版還原（smb299 → `/settings/auto-backup#drive-appdata-browser`）、銀行同步（feature flag 閘控）、載具同步、手錶連線（`/settings/wear-companion`）。預算項目入口搭配圖示直接導向預算管理頁。設定頁主清單不再列出共同帳本／帳本同步／銀行同步／載具同步／手錶連線等進階同步入口（深度連結／舊 bookmark 仍可開到同一 route）；自動備份仍在設定頁，並可從進階進入 Drive 選檔還原錨點。smb299 進階列加長後，功能列以 `scroll-margin-bottom`（約 BottomNav 高度）避免末列被固定底欄遮擋；`playwright:ui-layout` 點擊進階入口前會置中捲動並確認列在 nav 上方。
 
 ### 信用卡消費制度 P0（smb301）
 
@@ -739,6 +739,8 @@ Android 端已有 Google Play 會員整合：
 - 檔案開啟
 - Home Widget
 - 銀行自動化
+- Wear OS companion Stage A（電話端 MessageClient `/smb/v1/*`、nearby-first、SQLCipher 單一連線擁有者）
+- Wear OS companion Stage B（獨立 `:wear` Compose UI／Tile／Room outbox、雙 AAB、`standalone=false`、進階「手錶連線」）
 
 這代表產品規劃不是純 Web 包裝，而是有實際利用原生能力。
 
@@ -772,6 +774,12 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 後端部署腳本 `backend/package.json` 的 `deploy:copy` 會先把後端原始碼 rsync 到 `/mnt/data/Data/serviceApps/StrawMB`，再呼叫 `backend/scripts/deploy-production-install.mjs` 安裝 production 依賴。關鍵在於 native binding（`better-sqlite3`）是綁定 Node ABI 與 glibc 的：若直接在部署主機 Node 上 `npm install`，編出的 binding 會對應主機的 ABI / glibc，與 StrawMB 容器執行的 Node（目前 `1panel/node:25.8.0`，ABI 141）不符，部署 / 重啟窗口期間後端載入 binding 就會噴 `Module did not self-register` / `NODE_MODULE_VERSION` mismatch / `ERR_DLOPEN_FAILED`（穩態時容器啟動會自行重新 `npm install` 而恢復，但窗口期會短暫崩潰）。
 
 治本作法是 `deploy-production-install.mjs` 在與 StrawMB 完全相同的容器 image 內安裝 native 依賴：它從 `/opt/1panel/runtime/node/StrawMB/.env` 讀取 `NODE_VERSION` / `CODE_DIR` / `CONTAINER_PACKAGE_URL`，以 `docker run --rm` 掛載部署目錄到對應的 `1panel/node:<NODE_VERSION>` image 內執行 `npm install`，安裝後再於同一 image 內驗證 `require('better-sqlite3')` 可載入並查詢；docker 不可用時直接中止而非退回 host install。如此一來 deploy:copy 產出的 binding 與容器執行階段的 ABI / glibc 一致，部署窗口不再出現 self-register 錯誤。
+
+### 8.5 Wear OS companion（Stage A + B）
+
+手錶是電話帳本的 companion，不是第二本帳。唯一真相為電話 SQLite `straw_money_book`（檔名 `straw_money_bookSQLite.db`，Capacitor Community SQLCipher、目前 `no-encryption`）。Wear 訊息只走 MessageClient 路徑 `/smb/v1/hello|tx/create|tx/ack|snapshot/request|snapshot/payload`；nearby-first（`Node.isNearby()`）是應用層策略，不是「封包絕不經過 Google relay」的保證。帳務禁止 DataClient / DataItem（官方會持久化並可能雲端備份）。身份只用 `idempotencyKey`（UUID），`external_ref_id='wear:'+idempotencyKey`，另以 `wear_applied` UNIQUE 做 effectively-once；`origin_type='wear'` 軟刪須保留冪等鍵。`syncEpoch` 在首次建庫／重裝／wipe／restore 後旋轉。ListenerService 在沒有 Activity／WebView 時仍可 INSERT。
+
+Stage B：獨立 Gradle 模組 `frontend/android/wear`（同一 `applicationId`、獨立 Wear AAB、`versionCode = 100_000_000 + phoneCode`、`standalone=false`、禁 `wearApp`）。手錶 Compose 快記／近期／outbox、Glance Tile、Room outbox；電話功能頁進階「手錶連線」顯示 nearby 節點與 sync 狀態。真機配對驗收需實體 Wear 裝置（CI 以單元測試 + 雙 AAB dry-run + Playwright 進階入口為準）。
 
 ## 9. 銀行同步
 

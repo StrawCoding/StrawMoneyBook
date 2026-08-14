@@ -1298,6 +1298,7 @@ async function assertRouteNavigation() {
       driveAppData: Boolean(document.querySelector('[data-testid=feature-link-drive-appdata-restore]')),
       bankSync: Boolean(document.querySelector('[data-testid=feature-link-bank-sync]')),
       carrierSync: Boolean(document.querySelector('[data-testid=feature-link-carrier-sync]')),
+      wearCompanion: Boolean(document.querySelector('[data-testid=feature-link-wear-companion]')),
     },
   })`)
   assert.equal(state.path, '/features', JSON.stringify(state, null, 2))
@@ -1311,6 +1312,7 @@ async function assertRouteNavigation() {
   assert.equal(state.links.driveAppData, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.bankSync, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.carrierSync, true, JSON.stringify(state, null, 2))
+  assert.equal(state.links.wearCompanion, true, JSON.stringify(state, null, 2))
 
   // General: securities entry should open securities list above BottomNav.
   {
@@ -1390,6 +1392,7 @@ async function assertRouteNavigation() {
     { testId: 'feature-link-drive-appdata-restore', path: '/settings/auto-backup', text: /Drive appData|Drive 備份|旧版復元|revision restore/iu },
     { testId: 'feature-link-bank-sync', path: '/settings/bank-sync', text: /銀行同步|Bank Sync|銀行同期/iu },
     { testId: 'feature-link-carrier-sync', path: '/settings/carrier-sync', text: /載具同步|Carrier Sync|載具同期/iu },
+    { testId: 'feature-link-wear-companion', path: '/settings/wear-companion', text: /手錶連線|Watch Link|時計連携/iu },
   ]
 
   for (const target of advancedTargets) {
@@ -1460,6 +1463,18 @@ async function assertRouteNavigation() {
         console.log('[carrier-sync] defaults hidden (lock/unavailable):', selectorState.locked)
       }
     }
+    if (target.path === '/settings/wear-companion') {
+      const wearState = await evalPage(`() => ({
+        hasPage: Boolean(document.querySelector('[data-testid=wear-companion-page]')),
+        hasStatus: Boolean(document.querySelector('[data-testid=wear-companion-status]')),
+        hasWebEmpty: Boolean(document.querySelector('[data-testid=wear-empty-web]')),
+        platform: document.querySelector('[data-testid=wear-status-platform]')?.textContent?.trim() || '',
+      })`)
+      assert.equal(wearState.hasPage, true, JSON.stringify(wearState, null, 2))
+      assert.equal(wearState.hasStatus, true, JSON.stringify(wearState, null, 2))
+      assert.equal(wearState.hasWebEmpty, true, JSON.stringify(wearState, null, 2))
+      console.log('[wear-companion] web empty status ok')
+    }
   }
 
   await runPlaywrightCli(['click', '[data-testid="bottom-nav-settings"]'])
@@ -1477,6 +1492,7 @@ async function assertRouteNavigation() {
     '/settings/google-drive-ledger-sync',
     '/settings/bank-sync',
     '/settings/carrier-sync',
+    '/settings/wear-companion',
   ]) {
     assert.equal(
       state.hrefs.includes(blocked),

@@ -201,6 +201,12 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
+      path: '/settings/wear-companion',
+      name: 'settings-wear-companion',
+      component: () => import('@/ui/views/settings/SettingsWearCompanionPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
       path: '/einvoice-import',
       name: 'einvoice-import',
       redirect: { name: 'settings-carrier-sync' },

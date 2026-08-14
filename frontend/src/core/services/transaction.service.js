@@ -290,7 +290,11 @@ export async function createExpense(ledgerId, payload) {
         note: payload.note,
         includeInBudget: payload.includeInBudget !== false,
         includeInAnalysis: payload.includeInAnalysis !== false,
+        originType: payload.originType ?? 'manual',
         idempotencyKey: payload.idempotencyKey ?? null,
+        externalRefId: payload.externalRefId ?? null,
+        createdByUserId: payload.createdByUserId ?? null,
+        createdByDisplayName: payload.createdByDisplayName ?? null,
       })
       return result.transactionId
     }

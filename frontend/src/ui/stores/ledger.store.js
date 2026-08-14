@@ -1,4 +1,5 @@
 import { defineStore, getActivePinia } from 'pinia'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import {
   createLedger,
   deleteLedger,
@@ -17,6 +18,12 @@ import {
 } from '@/ui/services/ledger-runtime.service'
 
 const ACTIVE_LEDGER_KEY = 'straw.active_ledger_id'
+const WearCompanion = registerPlugin('WearCompanion')
+
+function persistWearActiveLedger(ledgerId) {
+  if (!(Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android')) return
+  void WearCompanion.setActiveLedger({ ledgerId: String(ledgerId ?? '') }).catch(() => {})
+}
 
 export const useLedgerStore = defineStore('ledger', {
   state: () => ({
@@ -74,12 +81,16 @@ export const useLedgerStore = defineStore('ledger', {
     },
 
     persistActive(storage = globalThis.localStorage) {
-      if (!storage?.setItem || !storage?.removeItem) return
-      if (this.activeLedgerId) {
-        storage.setItem(ACTIVE_LEDGER_KEY, this.activeLedgerId)
+      if (!storage?.setItem || !storage?.removeItem) {
+        persistWearActiveLedger(this.activeLedgerId)
         return
       }
-      storage.removeItem(ACTIVE_LEDGER_KEY)
+      if (this.activeLedgerId) {
+        storage.setItem(ACTIVE_LEDGER_KEY, this.activeLedgerId)
+      } else {
+        storage.removeItem(ACTIVE_LEDGER_KEY)
+      }
+      persistWearActiveLedger(this.activeLedgerId)
     },
 
     async switchLedger(nextLedgerId, options = {}) {

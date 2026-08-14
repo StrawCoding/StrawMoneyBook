@@ -17,6 +17,7 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
         registerPlugin(FileOpenerPlugin.class);
         registerPlugin(GoogleIdentityPlugin.class);
         registerPlugin(HomeWidgetPlugin.class);
+        registerPlugin(com.strawcoding.strawmoneybook.wear.WearCompanionPlugin.class);
         registerPlugin(SecurityLockPlugin.class);
         registerPlugin(SpeechInputPlugin.class);
         super.onCreate(savedInstanceState);

@@ -163,6 +163,13 @@ test('migrate registers the budget pay cycle migration', () => {
   assert.match(source, /\{ version: 39, name: 'budget_pay_cycle', sql: migration039 \}/)
 })
 
+test('migrate registers the wear companion migration', () => {
+  const source = readFileSync(resolve(import.meta.dirname, '../src/core/db/migrate.js'), 'utf8')
+
+  assert.match(source, /import migration045 from '@\/core\/db\/migrations\/045_wear_companion\.sql\?raw'/)
+  assert.match(source, /\{ version: 45, name: 'wear_companion', sql: migration045 \}/)
+})
+
 test('reimburse target migration adds the nullable column to transactions', () => {
   const source = readFileSync(
     resolve(import.meta.dirname, '../src/core/db/migrations/036_transaction_reimburse_target.sql'),

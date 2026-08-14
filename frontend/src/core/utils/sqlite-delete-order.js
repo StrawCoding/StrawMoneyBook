@@ -22,6 +22,7 @@ export const LEDGER_CHILD_DELETE_ORDER = Object.freeze([
   'credit_repayments',
   'transaction_postings',
   'credit_statements',
+  'wear_applied',
   'transactions',
   'security_transactions',
   'securities',
@@ -39,5 +40,6 @@ export const LEDGER_CHILD_DELETE_ORDER = Object.freeze([
 export const DATABASE_WIPE_DELETE_ORDER = Object.freeze([
   ...LEDGER_CHILD_DELETE_ORDER.filter((table) => table !== 'deleted_log'),
   'deleted_log',
+  'wear_sync_state',
   'ledgers',
 ])

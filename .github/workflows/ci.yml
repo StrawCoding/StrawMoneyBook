@@ -69,4 +69,4 @@ jobs:
       - name: Warm Android bundleRelease cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: frontend/android
-        run: ./gradlew bundleRelease --dry-run --configuration-cache --build-cache
+        run: ./gradlew :app:bundleRelease :wear:bundleRelease --dry-run --configuration-cache --build-cache
