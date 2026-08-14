@@ -171,9 +171,11 @@ const server = createServer(async (req, res) => {
       return
     }
 
+    // ART-SEC-01: never leak raw exception messages / paths / SQL to clients.
+    console.error('[server] unhandled error', error)
     sendJson(response, 500, {
       error: 'server_error',
-      message: String(error?.message ?? error ?? 'unknown error'),
+      message: 'internal server error',
     })
   }
 })

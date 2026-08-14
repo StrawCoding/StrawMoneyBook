@@ -1,3 +1,7 @@
+/**
+ * Rewrite legacy membership-sync expectations for ART-SEC-03 Phase A.
+ * Client Play sync records UNVERIFIED observations and does not unlock gates.
+ */
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -17,6 +21,7 @@ const {
   findUserByEmail,
   nowIso,
   updateStore,
+  syncMembershipGrantBySource,
 } = await import('../src/collab/store.js')
 
 function createMockResponse(req) {
@@ -37,7 +42,6 @@ function createMockResponse(req) {
     },
     json(payload) {
       this.body = payload
-      return this
     },
     end(payload) {
       this.ended = payload
@@ -91,7 +95,7 @@ test.after(async () => {
   await rm(tempDir, { recursive: true, force: true })
 })
 
-test('google play membership sync enables shared-ledger access', async () => {
+test('google play membership sync records UNVERIFIED observation without unlocking shared-ledger', async () => {
   const user = await createUser('membership-on@example.com')
   const session = await createLoginSession(user, {
     issuedByProvider: 'password',
@@ -118,7 +122,9 @@ test('google play membership sync enables shared-ledger access', async () => {
   await authHandler(authReq, authRes)
 
   assert.equal(authRes.statusCode, 200)
-  assert.equal(authRes.body?.user?.membership_active, true)
+  assert.equal(authRes.body?.user?.membership_active, false)
+  assert.equal(authRes.body?.membership_observation?.trust_status, 'UNVERIFIED')
+  assert.equal(authRes.body?.membership_observation?.authoritative, false)
 
   const sharedReq = {
     method: 'GET',
@@ -132,12 +138,23 @@ test('google play membership sync enables shared-ledger access', async () => {
 
   await sharedLedgersHandler(sharedReq, sharedRes)
 
-  assert.equal(sharedRes.statusCode, 200)
-  assert.deepEqual(sharedRes.body?.items ?? [], [])
+  assert.equal(sharedRes.statusCode, 403)
+  assert.equal(sharedRes.body?.error, 'membership_required')
 })
 
-test('google play membership sync can clear the synced grant after a verified free-state sync', async () => {
+test('verified admin grant still unlocks shared-ledger; clearing client sync observation does not revoke it', async () => {
   const user = await createUser('membership-off@example.com')
+  await updateStore(async (data) => {
+    const target = data.users.find((item) => item.id === user.id)
+    syncMembershipGrantBySource(target, 'admin', {
+      active: true,
+      startAt: nowIso(),
+      endAt: futureIso(60),
+      meta: { plan: 'monthly' },
+    })
+    return target
+  })
+
   const session = await createLoginSession(user, {
     issuedByProvider: 'password',
     ipAddress: '127.0.0.1',
@@ -180,7 +197,7 @@ test('google play membership sync can clear the synced grant after a verified fr
   await authHandler(disableReq, disableRes)
 
   assert.equal(disableRes.statusCode, 200)
-  assert.equal(disableRes.body?.user?.membership_active, false)
+  assert.equal(disableRes.body?.user?.membership_active, true)
 
   const sharedReq = {
     method: 'GET',
@@ -194,6 +211,5 @@ test('google play membership sync can clear the synced grant after a verified fr
 
   await sharedLedgersHandler(sharedReq, sharedRes)
 
-  assert.equal(sharedRes.statusCode, 403)
-  assert.equal(sharedRes.body?.error, 'membership_required')
+  assert.equal(sharedRes.statusCode, 200)
 })

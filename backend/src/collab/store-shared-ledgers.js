@@ -1,3 +1,5 @@
+import { validateSharedLedgerSnapshot, SnapshotValidationError } from './snapshot-validator.js'
+
 export const SHARED_LEDGER_ROLES = Object.freeze(['owner', 'admin', 'member', 'viewer'])
 
 const DEFAULT_SHARED_LEDGER_ROLE = 'member'
@@ -93,20 +95,10 @@ export function findPendingInvitationForEmail(sharedLedger, email, { normalizeEm
     .find((invitation) => String(invitation?.status ?? 'pending') === 'pending' && normalizeEmail(invitation?.email) === normalized) ?? null
 }
 
+export { SnapshotValidationError, validateSharedLedgerSnapshot }
+
 export function validateSnapshot(snapshot) {
-  if (!snapshot || typeof snapshot !== 'object') {
-    throw new Error('共同帳本快照格式錯誤')
-  }
-  const ledgerId = String(snapshot.ledger_id ?? '').trim()
-  const tables = snapshot.tables
-  const ledgers = Array.isArray(tables?.ledgers) ? tables.ledgers : []
-  if (!ledgerId || !ledgers.length) {
-    throw new Error('共同帳本快照缺少 ledger 資料')
-  }
-  return {
-    ledgerId,
-    ledgerName: String(ledgers[0]?.name ?? '').trim() || '共同帳本',
-  }
+  return validateSharedLedgerSnapshot(snapshot)
 }
 
 export function buildSharedLedgerSummary(sharedLedger, currentUserId, data, { findUserById }) {

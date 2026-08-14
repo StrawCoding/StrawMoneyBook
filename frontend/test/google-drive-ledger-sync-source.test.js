@@ -20,10 +20,13 @@ test('Google Drive 帳本同步拉回遠端快照前會驗證 ledger_id，避免
   assert.match(source, /settings_google_sync\.error\.ledger_mismatch/)
 })
 
-test('Google Drive 帳本同步替換本機帳本失敗時會用替換前備份復原', () => {
+test('Google Drive 帳本同步替換本機帳本失敗時會用 durable recovery（優先）再 memory fallback 復原', () => {
   assert.match(source, /const localBackupText = existingLedger\s*\? JSON\.stringify\(sanitizeSnapshotForGoogleDriveSync\(await exportLedgerJson\(requestedLedgerId\)\), null, 2\)\s*\: ''/)
-  assert.match(source, /try \{\s*if \(existingLedger\) \{\s*await purgeLedger\(requestedLedgerId\)\s*\}/)
-  assert.match(source, /catch \(error\) \{\s*if \(localBackupText\) \{\s*await restoreLocalLedgerFromBackup\(requestedLedgerId, localBackupText, existingLedger\)/)
+  assert.match(source, /requireRecoveryBackupBeforeWipe/)
+  assert.match(source, /persistVerifiedRecoveryBackup/)
+  assert.match(source, /await purgeLedger\(requestedLedgerId\)/)
+  assert.match(source, /readVerifiedRecoveryBackup\(recoveryProof\.backupId\)/)
+  assert.match(source, /restoreLocalLedgerFromBackup\(requestedLedgerId, restoredText, existingLedger\)/)
 })
 
 test('Google Drive 帳本同步拉回時使用三方合併與 base snapshot，避免直接覆蓋本機未上傳變更', () => {

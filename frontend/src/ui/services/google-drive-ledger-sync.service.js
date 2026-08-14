@@ -5,7 +5,12 @@ import {
   countSnapshotActiveTransactions,
   createEmptyRemoteReplaceBlockedError,
   EMPTY_REMOTE_REPLACE_BLOCKED_CODE,
+  requireRecoveryBackupBeforeWipe,
 } from '@/core/services/data-wipe-guard.service'
+import {
+  persistVerifiedRecoveryBackup,
+  readVerifiedRecoveryBackup,
+} from '@/core/services/recovery-backup.service'
 import { getMembershipTierSnapshot } from '@/core/services/membership.service'
 import { query, run } from '@/core/db/sqlite'
 import { nowIso } from '@/core/utils/id'
@@ -521,8 +526,24 @@ async function replaceLocalLedgerWithRemoteSnapshot(snapshot, ledgerId, state, r
   clearLedgerDirty(requestedLedgerId)
 
   let imported = null
+  /** @type {{ backupId?: string } | null} */
+  let recoveryProof = null
   try {
-    if (existingLedger) {
+    // ART-08: durable recovery proof required before purge — memory backup alone is not enough.
+    if (existingLedger && localBackupText) {
+      const backupData = JSON.parse(localBackupText)
+      recoveryProof = await requireRecoveryBackupBeforeWipe(
+        () => persistVerifiedRecoveryBackup({
+          purpose: 'google_drive_ledger_replace',
+          data: backupData,
+          source: 'google_drive_ledger_sync.replaceLocalLedgerWithRemoteSnapshot',
+          filename: `strawmoneybook-recovery-drive-replace-${requestedLedgerId}.json`,
+        }),
+        {
+          source: 'google_drive_ledger_sync.replaceLocalLedgerWithRemoteSnapshot',
+          i18nKey: 'settings_google_sync.error.recovery_backup_required',
+        },
+      )
       await purgeLedger(requestedLedgerId)
     }
 
@@ -533,8 +554,21 @@ async function replaceLocalLedgerWithRemoteSnapshot(snapshot, ledgerId, state, r
       runIntegrityRepair: false,
     })
   } catch (error) {
-    if (localBackupText) {
-      await restoreLocalLedgerFromBackup(requestedLedgerId, localBackupText, existingLedger)
+    let restoredText = ''
+    if (recoveryProof?.backupId) {
+      try {
+        const durable = await readVerifiedRecoveryBackup(recoveryProof.backupId)
+        restoredText = String(durable?.jsonText ?? '').trim()
+      } catch {
+        restoredText = ''
+      }
+    }
+    if (!restoredText && localBackupText) {
+      // Last-resort memory fallback only after durable read failed (best effort).
+      restoredText = localBackupText
+    }
+    if (restoredText) {
+      await restoreLocalLedgerFromBackup(requestedLedgerId, restoredText, existingLedger)
       await restoreSettingRows(requestedLedgerId, preservedSettings)
     }
     throw error

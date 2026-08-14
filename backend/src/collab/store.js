@@ -307,6 +307,10 @@ function normalizeSharedLedgerRecord(sharedLedger) {
     snapshot: sharedLedger?.snapshot && typeof sharedLedger.snapshot === 'object'
       ? sharedLedger.snapshot
       : {},
+    previous_snapshot: sharedLedger?.previous_snapshot && typeof sharedLedger.previous_snapshot === 'object'
+      ? sharedLedger.previous_snapshot
+      : null,
+    force_audit: Array.isArray(sharedLedger?.force_audit) ? sharedLedger.force_audit : [],
   }
 }
 
@@ -440,6 +444,8 @@ function ensureSchema(db) {
       members_json TEXT NOT NULL,
       invitations_json TEXT NOT NULL,
       snapshot_json TEXT NOT NULL,
+      previous_snapshot_json TEXT NOT NULL DEFAULT '',
+      force_audit_json TEXT NOT NULL DEFAULT '[]',
       version INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -485,6 +491,16 @@ function ensureSchema(db) {
   if (!userColumns.has('last_login_at')) {
     db.exec(`ALTER TABLE users ADD COLUMN last_login_at TEXT NOT NULL DEFAULT ''`)
   }
+
+  const sharedLedgerColumns = new Set(
+    db.prepare(`PRAGMA table_info(shared_ledgers)`).all().map((column) => String(column?.name ?? '').trim()),
+  )
+  if (!sharedLedgerColumns.has('previous_snapshot_json')) {
+    db.exec(`ALTER TABLE shared_ledgers ADD COLUMN previous_snapshot_json TEXT NOT NULL DEFAULT ''`)
+  }
+  if (!sharedLedgerColumns.has('force_audit_json')) {
+    db.exec(`ALTER TABLE shared_ledgers ADD COLUMN force_audit_json TEXT NOT NULL DEFAULT '[]'`)
+  }
 }
 
 function loadStoreFromDatabase(db) {
@@ -509,8 +525,8 @@ function loadStoreFromDatabase(db) {
   const sharedLedgers = db.prepare(`
     SELECT
       id, ledger_id, name, invite_code, owner_user_id, members_json,
-      invitations_json, snapshot_json, version, created_at, updated_at,
-      updated_by_user_id
+      invitations_json, snapshot_json, previous_snapshot_json, force_audit_json,
+      version, created_at, updated_at, updated_by_user_id
     FROM shared_ledgers
     ORDER BY created_at ASC, id ASC
   `).all().map((row) => normalizeSharedLedgerRecord({
@@ -518,6 +534,8 @@ function loadStoreFromDatabase(db) {
     members: parseJsonField(row.members_json, []),
     invitations: parseJsonField(row.invitations_json, []),
     snapshot: parseJsonField(row.snapshot_json, {}),
+    previous_snapshot: parseJsonField(row.previous_snapshot_json, null),
+    force_audit: parseJsonField(row.force_audit_json, []),
   }))
 
   const referrals = db.prepare(`
@@ -603,12 +621,12 @@ function prepareStoreWriteStatements(db) {
   const upsertSharedLedger = db.prepare(`
     INSERT INTO shared_ledgers (
       id, ledger_id, name, invite_code, owner_user_id, members_json,
-      invitations_json, snapshot_json, version, created_at, updated_at,
-      updated_by_user_id
+      invitations_json, snapshot_json, previous_snapshot_json, force_audit_json,
+      version, created_at, updated_at, updated_by_user_id
     ) VALUES (
       @id, @ledger_id, @name, @invite_code, @owner_user_id, @members_json,
-      @invitations_json, @snapshot_json, @version, @created_at, @updated_at,
-      @updated_by_user_id
+      @invitations_json, @snapshot_json, @previous_snapshot_json, @force_audit_json,
+      @version, @created_at, @updated_at, @updated_by_user_id
     )
     ON CONFLICT(id) DO UPDATE SET
       ledger_id = excluded.ledger_id,
@@ -618,6 +636,8 @@ function prepareStoreWriteStatements(db) {
       members_json = excluded.members_json,
       invitations_json = excluded.invitations_json,
       snapshot_json = excluded.snapshot_json,
+      previous_snapshot_json = excluded.previous_snapshot_json,
+      force_audit_json = excluded.force_audit_json,
       version = excluded.version,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at,
@@ -670,6 +690,10 @@ function bindSharedLedgerRow(statement, sharedLedger) {
     members_json: JSON.stringify(Array.isArray(sharedLedger.members) ? sharedLedger.members : []),
     invitations_json: JSON.stringify(Array.isArray(sharedLedger.invitations) ? sharedLedger.invitations : []),
     snapshot_json: JSON.stringify(sharedLedger.snapshot ?? {}),
+    previous_snapshot_json: sharedLedger.previous_snapshot
+      ? JSON.stringify(sharedLedger.previous_snapshot)
+      : '',
+    force_audit_json: JSON.stringify(Array.isArray(sharedLedger.force_audit) ? sharedLedger.force_audit : []),
     version: Number(sharedLedger.version ?? 0),
   })
 }

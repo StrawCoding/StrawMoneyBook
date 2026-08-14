@@ -54,8 +54,36 @@ function isClientAuthorized(req) {
   return secureEquals(provided, GOOGLE_OAUTH_CLIENT_SHARED_KEY)
 }
 
+function isProductionRuntime() {
+  return String(process.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
+}
+
+/**
+ * ART-SEC-02: production always enforces shared client key (no "optional = open" default).
+ * Non-production still enforces when GOOGLE_OAUTH_CLIENT_SHARED_KEY is configured.
+ */
 function shouldEnforceClientAuth() {
+  if (isProductionRuntime()) return true
   return Boolean(GOOGLE_OAUTH_CLIENT_SHARED_KEY)
+}
+
+function assertClientAuthOrReject(req, res, errorNumber) {
+  if (!shouldEnforceClientAuth()) return true
+  if (!GOOGLE_OAUTH_CLIENT_SHARED_KEY) {
+    sendError(
+      res,
+      500,
+      'missing_google_oauth_client_shared_key',
+      'GOOGLE_OAUTH_CLIENT_SHARED_KEY is not configured on the server',
+      errorNumber,
+    )
+    return false
+  }
+  if (!isClientAuthorized(req)) {
+    sendUnauthorizedClient(res, errorNumber)
+    return false
+  }
+  return true
 }
 
 function sendError(res, statusCode, error, message, errorNumber) {
@@ -214,8 +242,7 @@ async function exchangeServerAuthCode(req, res) {
     sendMethodNotAllowed(res, EXCHANGE_ERROR_NUMBER.METHOD_NOT_ALLOWED)
     return
   }
-  if (shouldEnforceClientAuth() && !isClientAuthorized(req)) {
-    sendUnauthorizedClient(res, EXCHANGE_ERROR_NUMBER.UNAUTHORIZED_CLIENT)
+  if (!assertClientAuthOrReject(req, res, EXCHANGE_ERROR_NUMBER.UNAUTHORIZED_CLIENT)) {
     return
   }
 
@@ -291,8 +318,7 @@ async function refreshAccessToken(req, res) {
     sendMethodNotAllowed(res, REFRESH_ERROR_NUMBER.METHOD_NOT_ALLOWED)
     return
   }
-  if (shouldEnforceClientAuth() && !isClientAuthorized(req)) {
-    sendUnauthorizedClient(res, REFRESH_ERROR_NUMBER.UNAUTHORIZED_CLIENT)
+  if (!assertClientAuthOrReject(req, res, REFRESH_ERROR_NUMBER.UNAUTHORIZED_CLIENT)) {
     return
   }
 

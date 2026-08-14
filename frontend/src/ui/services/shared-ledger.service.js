@@ -504,9 +504,18 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
   let mergeMeta = null
 
   try {
+    if (options.force) {
+      const reason = String(options.forceReason ?? options.force_reason ?? '').trim()
+      if (reason.length < 8) {
+        const err = new Error('強制覆寫必須提供原因（至少 8 字）')
+        err.code = 'force_reason_required'
+        throw err
+      }
+    }
     result = await pushSharedLedgerSnapshot(meta.shared_ledger_id, {
       baseVersion: Number(meta.version ?? 0),
       force: Boolean(options.force),
+      forceReason: String(options.forceReason ?? options.force_reason ?? '').trim(),
       name: String(ledger?.name ?? ''),
       snapshot,
     })
@@ -566,9 +575,10 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
     }
 
     resolvedSnapshot = mergedSnapshot
+    // ART-07: normal conflict recovery uses CAS with remote version — never silent force:true.
     result = await pushSharedLedgerSnapshot(meta.shared_ledger_id, {
       baseVersion: Number(remote?.item?.version ?? error?.currentVersion ?? meta.version ?? 0),
-      force: true,
+      force: false,
       name: String(ledger?.name ?? remote?.item?.name ?? ''),
       snapshot: mergedSnapshot,
     })

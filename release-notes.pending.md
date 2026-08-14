@@ -1,5 +1,10 @@
 # Pending Release Notes
 
+- (ART-01/02) 本地 SQLite 外層交易改 SqliteWriteQueue + TransactionContext，消除全域 depth 跨任務 join；並發隔離回歸與 native 驗證策略。
+- (ART-06/07) 共同帳本 SnapshotValidator（結構／語意／完整性）與 CAS；`force` 降為 break-glass（owner/admin + reason + previous_snapshot／force_audit）；衝突合併後不再靜默 `force:true`。
+- (ART-08) Google Drive 帳本 replace 在 purge 前強制 durable recovery proof，匯入失敗優先自 durable 還原。
+- (ART-SEC-01/02/03A) 後端 500 訊息消毒；production Google OAuth 強制 client shared key；Play membership client sync 僅 UNVERIFIED 觀察值，不可解鎖會員閘門。
+
 ---
 
 ## v1.3.126

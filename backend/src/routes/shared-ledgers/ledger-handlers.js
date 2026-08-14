@@ -144,6 +144,7 @@ export async function handleSnapshotPush(req, res, user, sharedLedgerId) {
   const body = parseBody(req)
   const snapshot = body.snapshot
   const force = Boolean(body.force)
+  const forceReason = String(body.forceReason ?? body.force_reason ?? '').trim()
   const baseVersion = Number(body.baseVersion ?? 0)
   const snapshotInfo = validateSnapshot(snapshot)
 
@@ -153,7 +154,8 @@ export async function handleSnapshotPush(req, res, user, sharedLedgerId) {
       throw new Error('找不到共同帳本')
     }
 
-    if (!canPushSnapshot(getMemberRole(sharedLedger, user.id))) {
+    const actorRole = getMemberRole(sharedLedger, user.id)
+    if (!canPushSnapshot(actorRole)) {
       throw createForbiddenError('唯讀成員無法上傳共同帳本變更')
     }
 
@@ -162,12 +164,38 @@ export async function handleSnapshotPush(req, res, user, sharedLedgerId) {
     }
 
     const currentVersion = Number(sharedLedger.version ?? 0)
-    if (!force && currentVersion !== baseVersion) {
+
+    // ART-07: force is break-glass only (owner/admin + reason + audit + keep previous).
+    if (force) {
+      if (actorRole !== 'owner' && actorRole !== 'admin') {
+        throw createForbiddenError('僅 owner/admin 可強制覆寫共同帳本')
+      }
+      if (forceReason.length < 8) {
+        const reasonError = new Error('強制覆寫必須提供原因（至少 8 字）')
+        reasonError.code = 'force_reason_required'
+        reasonError.status = 400
+        throw reasonError
+      }
+    } else if (currentVersion !== baseVersion) {
       const conflictError = new Error('共同帳本已被其他成員更新，請先下載最新版本')
       conflictError.code = 'version_conflict'
       conflictError.status = 409
       conflictError.currentVersion = currentVersion
       throw conflictError
+    }
+
+    const previousSnapshot = sharedLedger.snapshot
+    if (force) {
+      sharedLedger.previous_snapshot = previousSnapshot
+      const audits = Array.isArray(sharedLedger.force_audit) ? sharedLedger.force_audit : []
+      audits.push({
+        at: nowIso(),
+        by_user_id: user.id,
+        reason: forceReason.slice(0, 500),
+        from_version: currentVersion,
+        base_version: baseVersion,
+      })
+      sharedLedger.force_audit = audits.slice(-50)
     }
 
     sharedLedger.snapshot = snapshot
@@ -182,6 +210,7 @@ export async function handleSnapshotPush(req, res, user, sharedLedgerId) {
   const saved = findSharedLedger(data, savedId)
   sendJson(res, 200, {
     item: buildSharedLedgerSummary(saved, user.id, data),
+    force_applied: force,
   })
 }
 

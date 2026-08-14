@@ -311,6 +311,8 @@ export async function handleGooglePlayMembershipSync(req, res) {
     ? GOOGLE_PLAY_LIFETIME_SYNC_EXPIRES_AT
     : normalizeFutureIso(body.expiresAt ?? body.expires_at)
 
+  // ART-SEC-03 Phase A: client-reported Play membership is an observation only.
+  // Never treat active/plan/expiresAt from the client as authoritative entitlement.
   const updatedUser = await updateStore(async (data) => {
     const targetUser = data.users.find((item) => String(item.id) === String(user.id))
     if (!targetUser) {
@@ -318,14 +320,18 @@ export async function handleGooglePlayMembershipSync(req, res) {
     }
 
     syncMembershipGrantBySource(targetUser, GOOGLE_PLAY_CLIENT_SYNC_SOURCE, {
+      // Keep a non-authoritative record for diagnostics when client reports active,
+      // but getMembershipGrantSummary ignores this source for gates.
       active: active && Boolean(plan),
       startAt: observedAt,
       endAt: expiresAt,
       meta: {
         plan,
         source: 'google_play_client_sync',
+        trust_status: 'UNVERIFIED',
         observed_at: observedAt,
         reported_expires_at: expiresAt,
+        reported_active: active,
         last_sync_status: String(body.lastSyncStatus ?? body.last_sync_status ?? '').trim(),
         reason: String(body.reason ?? '').trim(),
       },
@@ -337,6 +343,12 @@ export async function handleGooglePlayMembershipSync(req, res) {
   sendJson(res, 200, {
     user: await buildPublicUserProfile(updatedUser),
     membership_synced: true,
+    membership_observation: {
+      trust_status: 'UNVERIFIED',
+      authoritative: false,
+      reported_active: active,
+      reported_plan: plan,
+    },
   })
 }
 

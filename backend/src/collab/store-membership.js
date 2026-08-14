@@ -1,3 +1,14 @@
+/** Sources that may be recorded as observations but never authorize entitlements. */
+export const UNVERIFIED_MEMBERSHIP_SOURCES = Object.freeze([
+  'google_play_client_sync',
+])
+
+export function isVerifiedMembershipSource(source) {
+  const normalized = String(source ?? '').trim()
+  if (!normalized) return false
+  return !UNVERIFIED_MEMBERSHIP_SOURCES.includes(normalized)
+}
+
 export function getMembershipGrantList(user) {
   return Array.isArray(user?.membership_grants) ? user.membership_grants : []
 }
@@ -7,6 +18,7 @@ export function getMembershipGrantSummary(user, nowMs = Date.now()) {
   let latestGrant = null
 
   for (const grant of grants) {
+    if (!isVerifiedMembershipSource(grant?.source)) continue
     const endAt = String(grant?.end_at ?? '').trim()
     const endMs = Date.parse(endAt)
     if (!Number.isFinite(endMs) || endMs <= nowMs) continue
