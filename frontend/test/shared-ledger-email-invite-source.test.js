@@ -7,6 +7,13 @@ const pageSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/settings/SettingsSharedLedgerPage.vue'),
   'utf8',
 )
+const invitePanelSource = readFileSync(
+  resolve(
+    import.meta.dirname,
+    '../src/ui/views/settings/shared-ledger/SharedLedgerEmailInvitePanel.vue',
+  ),
+  'utf8',
+)
 const backendSource = readFileSync(
   resolve(import.meta.dirname, '../src/services/shared-ledger/backend.js'),
   'utf8',
@@ -38,7 +45,10 @@ test('SettingsSharedLedgerPage exposes email invite UI and delivery feedback hoo
   assert.match(pageSource, /resendEmailInvite/)
   assert.match(pageSource, /pushEmailInviteDeliveryToast/)
   assert.match(pageSource, /getEmailDeliveryLabel/)
-  assert.match(pageSource, /settings_shared_ledgers\.email_invite/)
+  assert.match(pageSource, /SharedLedgerEmailInvitePanel/)
+  assert.match(invitePanelSource, /settings_shared_ledgers\.email_invite/)
+  assert.match(invitePanelSource, /settings_shared_ledgers\.email_invite_send/)
+  assert.match(invitePanelSource, /settings_shared_ledgers\.email_invite_resend/)
 })
 
 test('shared ledger backend and service expose email invite APIs', () => {

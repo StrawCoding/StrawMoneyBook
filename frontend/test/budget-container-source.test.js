@@ -100,9 +100,15 @@ test('ledger store applies budget period settings through budget service carry-f
     resolve(import.meta.dirname, '../src/core/services/budget.service.js'),
     'utf8',
   )
+  const budgetCrudSource = readFileSync(
+    resolve(import.meta.dirname, '../src/core/services/budget-crud.js'),
+    'utf8',
+  )
   assert.match(ledgerStoreSource, /applyLedgerBudgetPeriodSettings/)
-  assert.match(budgetServiceSource, /export async function applyLedgerBudgetPeriodSettings/)
+  assert.match(budgetServiceSource, /applyLedgerBudgetPeriodSettings/)
+  assert.match(budgetCrudSource, /export async function applyLedgerBudgetPeriodSettings/)
   assert.match(budgetServiceSource, /isBudgetPeriodStructureEmpty/)
+  assert.match(budgetCrudSource, /isBudgetPeriodStructureEmpty/)
 })
 
 test('budget store resolves startup pay-cycle period from the current date, not month start', () => {

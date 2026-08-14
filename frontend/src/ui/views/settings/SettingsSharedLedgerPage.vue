@@ -304,34 +304,15 @@
                   <p v-else class="muted compact">
                     {{ t('settings_shared_ledgers.auto_sync_hint', '已啟用背景同步：本機變更會自動上傳，並在開啟 App 時檢查遠端最新資料。') }}
                   </p>
-                  <div class="sync-status-box" data-testid="shared-ledger-sync-status">
-                    <p class="muted compact">
-                      {{ t('settings_shared_ledgers.sync_status', '同步狀態') }}：
-                      <strong>{{ syncStatusLabel }}</strong>
-                    </p>
-                    <p v-if="activeLedgerMeta?.last_synced_at" class="muted compact">
-                      {{ t('settings_shared_ledgers.last_synced_at', { time: formatDateTime(activeLedgerMeta.last_synced_at) }, '上次同步：{time}') }}
-                    </p>
-                    <p v-if="activeLedgerMeta?.version" class="muted compact">
-                      {{ t('settings_shared_ledgers.sync_version', { version: activeLedgerMeta.version }, '版本：{version}') }}
-                    </p>
-                    <p v-if="activeLedgerMeta?.last_sync_error" class="notice compact">
-                      {{ activeLedgerMeta.last_sync_error }}
-                    </p>
-                    <div class="remote-actions">
-                      <button
-                        class="btn"
-                        :disabled="Boolean(ledgerActionBusy) || apiUnavailable || sessionNeedsReauth || sessionRestoring || !sessionValid || syncRetryBusy"
-                        @click="retryActiveLedgerSync"
-                      >
-                        {{
-                          syncRetryBusy
-                            ? t('settings_shared_ledgers.sync_retrying', '重試中...')
-                            : t('settings_shared_ledgers.sync_retry', '重試同步')
-                        }}
-                      </button>
-                    </div>
-                  </div>
+                  <SharedLedgerSyncStatusPanel
+                    :status-label="syncStatusLabel"
+                    :last-synced-at="activeLedgerMeta?.last_synced_at"
+                    :version="activeLedgerMeta?.version"
+                    :last-sync-error="activeLedgerMeta?.last_sync_error"
+                    :retry-busy="syncRetryBusy"
+                    :retry-disabled="Boolean(ledgerActionBusy) || apiUnavailable || sessionNeedsReauth || sessionRestoring || !sessionValid || syncRetryBusy"
+                    @retry="retryActiveLedgerSync"
+                  />
                 </div>
 
                 <div class="remote-actions">
@@ -405,119 +386,32 @@
                   {{ t('settings_shared_ledgers.share_link_hint', '把這個連結傳給對方後，對方點擊即可開啟 app；登入並啟用會員後會直接加入共同帳本。') }}
                 </p>
 
-                <div class="email-invite-box">
-                  <label class="field">
-                    {{ t('settings_shared_ledgers.email_invite', 'Email 邀請') }}
-                    <input
-                      v-model.trim="inviteEmailInput"
-                      class="input"
-                      type="email"
-                      autocomplete="email"
-                      inputmode="email"
-                      maxlength="120"
-                      :placeholder="t('settings_shared_ledgers.email_invite_placeholder', '輸入對方 Email')"
-                      :disabled="emailInviteBusy || apiUnavailable"
-                    />
-                  </label>
-                  <div class="remote-actions email-invite-actions">
-                    <button
-                      class="btn primary"
-                      :disabled="emailInviteBusy || apiUnavailable || !inviteEmailInput"
-                      @click="sendEmailInvite"
-                    >
-                      {{
-                        emailInviteBusy
-                          ? t('settings_shared_ledgers.email_invite_sending', '寄送中...')
-                          : t('settings_shared_ledgers.email_invite_send', '寄送邀請')
-                      }}
-                    </button>
-                  </div>
-                </div>
-
-                <p class="muted compact">
-                  {{ t('settings_shared_ledgers.email_invite_hint', '若 Email 寄送失敗，邀請仍會保留，可稍後重發或改分享加入連結。') }}
-                </p>
-
-                <div v-if="outgoingInvitations.length" class="stack internal-stack">
-                  <strong>{{ t('settings_shared_ledgers.email_invite_pending', '待加入的 Email 邀請') }}</strong>
-                  <ul class="remote-list">
-                    <li v-for="item in outgoingInvitations" :key="item.id" class="remote-item">
-                      <div class="remote-main">
-                        <div class="stack internal-stack">
-                          <strong>{{ item.email }}</strong>
-                          <p class="muted compact">
-                            {{ t('settings_shared_ledgers.email_invite_sent_at', { time: formatDateTime(item.created_at) }, '建立時間：{time}') }}
-                          </p>
-                          <p class="email-delivery-status" :class="`status-${item.email_delivery_status || 'pending'}`">
-                            {{ getEmailDeliveryLabel(item) }}
-                          </p>
-                          <p v-if="item.email_last_error" class="email-delivery-error compact">
-                            {{ item.email_last_error }}
-                          </p>
-                        </div>
-                        <div class="remote-actions">
-                          <button
-                            v-if="canResendEmailInvite(item)"
-                            class="btn"
-                            :disabled="resendInviteBusyId === item.id || apiUnavailable"
-                            @click="resendEmailInvite(item)"
-                          >
-                            {{
-                              resendInviteBusyId === item.id
-                                ? t('settings_shared_ledgers.email_invite_resending', '重發中...')
-                                : t('settings_shared_ledgers.email_invite_resend', '重發邀請')
-                            }}
-                          </button>
-                        </div>
-                      </div>
-                    </li>
-                  </ul>
-                </div>
+                <SharedLedgerEmailInvitePanel
+                  v-model:email="inviteEmailInput"
+                  :busy="emailInviteBusy"
+                  :disabled="apiUnavailable"
+                  :outgoing-invitations="outgoingInvitations"
+                  :resend-busy-id="resendInviteBusyId"
+                  :delivery-label="getEmailDeliveryLabel"
+                  :can-resend="canResendEmailInvite"
+                  @send="sendEmailInvite"
+                  @resend="resendEmailInvite"
+                />
                 </template>
 
-                <div v-if="canManageMembers" class="stack internal-stack member-manage-box">
-                  <div class="section-head">
-                    <strong>{{ t('settings_shared_ledgers.members_title', '成員與角色') }}</strong>
-                    <button class="btn" :disabled="membersLoading || apiUnavailable" @click="loadLedgerMembers">
-                      {{ membersLoading ? t('settings_shared_ledgers.loading', '載入中...') : t('settings_shared_ledgers.refresh', '重新整理') }}
-                    </button>
-                  </div>
-                  <ul v-if="ledgerMembers.length" class="remote-list">
-                    <li v-for="member in ledgerMembers" :key="member.user_id" class="remote-item">
-                      <div class="remote-main">
-                        <div class="stack internal-stack">
-                          <strong>{{ member.display_name || member.email || member.user_id }}</strong>
-                          <p class="muted compact">{{ member.email }}</p>
-                          <p class="muted compact">{{ t('settings_shared_ledgers.member_role', '角色') }}：{{ getRoleLabel(member.role) }}</p>
-                        </div>
-                        <div class="remote-actions">
-                          <select
-                            v-if="!member.is_owner"
-                            class="input role-select"
-                            :value="member.role"
-                            :disabled="memberRoleBusyId === member.user_id || apiUnavailable"
-                            @change="changeMemberRole(member, $event.target.value)"
-                          >
-                            <option v-for="roleOption in getAssignableRoles(member)" :key="roleOption" :value="roleOption">
-                              {{ getRoleLabel(roleOption) }}
-                            </option>
-                          </select>
-                          <button
-                            v-if="canTransferOwnership && !member.is_owner"
-                            class="btn"
-                            :disabled="memberTransferBusyId === member.user_id || apiUnavailable"
-                            @click="transferOwnership(member)"
-                          >
-                            {{ t('settings_shared_ledgers.transfer_ownership', '轉移所有權') }}
-                          </button>
-                        </div>
-                      </div>
-                    </li>
-                  </ul>
-                  <p v-else class="muted compact">
-                    {{ t('settings_shared_ledgers.members_empty', '目前只有你一位成員。') }}
-                  </p>
-                </div>
+                <SharedLedgerMembersPanel
+                  v-if="canManageMembers"
+                  :members="ledgerMembers"
+                  :loading="membersLoading"
+                  :disabled="apiUnavailable"
+                  :role-busy-id="memberRoleBusyId"
+                  :transfer-busy-id="memberTransferBusyId"
+                  :can-transfer-ownership="canTransferOwnership"
+                  :assignable-roles="ASSIGNABLE_ROLES"
+                  @refresh="loadLedgerMembers"
+                  @change-role="changeMemberRole"
+                  @transfer-ownership="transferOwnership"
+                />
               </template>
 
               <template v-else>
@@ -632,6 +526,13 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
+import SharedLedgerEmailInvitePanel from '@/ui/views/settings/shared-ledger/SharedLedgerEmailInvitePanel.vue'
+import SharedLedgerMembersPanel from '@/ui/views/settings/shared-ledger/SharedLedgerMembersPanel.vue'
+import SharedLedgerSyncStatusPanel from '@/ui/views/settings/shared-ledger/SharedLedgerSyncStatusPanel.vue'
+import {
+  formatSharedLedgerDateTime,
+  getSharedLedgerRoleLabel,
+} from '@/ui/views/settings/shared-ledger/formatters.js'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
@@ -865,11 +766,7 @@ function getActiveUnshareConfirmMessage(role) {
 }
 
 function formatDateTime(value) {
-  const source = String(value ?? '').trim()
-  if (!source) return '-'
-  const parsed = new Date(source)
-  if (Number.isNaN(parsed.getTime())) return source
-  return parsed.toLocaleString()
+  return formatSharedLedgerDateTime(value)
 }
 
 async function refreshLocalBindings() {
@@ -920,19 +817,7 @@ async function loadOutgoingInvitations() {
 }
 
 function getRoleLabel(role) {
-  const normalized = String(role ?? '').trim().toLowerCase()
-  if (normalized === 'owner') return t('settings_shared_ledgers.role.owner', '擁有者')
-  if (normalized === 'admin') return t('settings_shared_ledgers.role.admin', '管理員')
-  if (normalized === 'viewer') return t('settings_shared_ledgers.role.viewer', '唯讀成員')
-  return t('settings_shared_ledgers.role.member', '一般成員')
-}
-
-function getAssignableRoles(member) {
-  // Admins can only toggle member<->viewer; owners can assign admin/member/viewer.
-  if (canTransferOwnership.value) return ASSIGNABLE_ROLES
-  const current = String(member?.role ?? '').trim().toLowerCase()
-  if (current === 'admin') return ['admin']
-  return ['member', 'viewer']
+  return getSharedLedgerRoleLabel(t, role)
 }
 
 async function loadLedgerMembers() {
