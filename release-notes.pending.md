@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- Wear OS launcher icon 改滿版圓形：以前景圖貼齊圓形遮罩（不再沿用手機 adaptive 16.7% 內縮／透明邊），並宣告 `roundIcon`。
-
 ---
+
+## v1.3.132
+- Wear OS launcher icon 改滿版圓形：以前景圖貼齊圓形遮罩（不再沿用手機 adaptive 16.7% 內縮／透明邊），並宣告 `roundIcon`。
 
 ## v1.3.131
 - 修復 Wear OS 啟動閃退：Wear Compose 由 1.4.0 升至 1.6.2（targetSdk≥35 讀 reduce_motion 的 SecurityException；與 Xiaomi Watch 2／Wear OS 5 已知問題相同）。
