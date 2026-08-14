@@ -741,6 +741,7 @@ Android 端已有 Google Play 會員整合：
 - 銀行自動化
 - Wear OS companion Stage A（電話端 MessageClient `/smb/v1/*`、nearby-first、SQLCipher 單一連線擁有者）
 - Wear OS companion Stage B（獨立 `:wear` Compose UI／Tile／Room outbox、雙 AAB、`standalone=false`、進階「手錶連線」）
+- Wear OS 完整記帳 scope B（錶上八種帳務型別、編輯／刪除、多帳本切換、資產／預算摘要、重複上一筆、錶端範本、rotary 捲動、語音備註）
 
 這代表產品規劃不是純 Web 包裝，而是有實際利用原生能力。
 
@@ -775,11 +776,36 @@ Android 記帳提醒 manifest 目前也已補上 `POST_NOTIFICATIONS` 與 `SCHED
 
 治本作法是 `deploy-production-install.mjs` 在與 StrawMB 完全相同的容器 image 內安裝 native 依賴：它從 `/opt/1panel/runtime/node/StrawMB/.env` 讀取 `NODE_VERSION` / `CODE_DIR` / `CONTAINER_PACKAGE_URL`，以 `docker run --rm` 掛載部署目錄到對應的 `1panel/node:<NODE_VERSION>` image 內執行 `npm install`，安裝後再於同一 image 內驗證 `require('better-sqlite3')` 可載入並查詢；docker 不可用時直接中止而非退回 host install。如此一來 deploy:copy 產出的 binding 與容器執行階段的 ABI / glibc 一致，部署窗口不再出現 self-register 錯誤。
 
-### 8.5 Wear OS companion（Stage A + B）
+### 8.5 Wear OS companion（Stage A + B + 完整記帳 scope B）
 
-手錶是電話帳本的 companion，不是第二本帳。唯一真相為電話 SQLite `straw_money_book`（檔名 `straw_money_bookSQLite.db`，Capacitor Community SQLCipher、目前 `no-encryption`）。Wear 訊息只走 MessageClient 路徑 `/smb/v1/hello|tx/create|tx/ack|snapshot/request|snapshot/payload`；nearby-first（`Node.isNearby()`）是應用層策略，不是「封包絕不經過 Google relay」的保證。帳務禁止 DataClient / DataItem（官方會持久化並可能雲端備份）。身份只用 `idempotencyKey`（UUID），`external_ref_id='wear:'+idempotencyKey`，另以 `wear_applied` UNIQUE 做 effectively-once；`origin_type='wear'` 軟刪須保留冪等鍵。`syncEpoch` 在首次建庫／重裝／wipe／restore 後旋轉。ListenerService 在沒有 Activity／WebView 時仍可 INSERT。
+手錶是電話帳本的 companion，不是第二本帳。唯一真相為電話 SQLite `straw_money_book`（檔名 `straw_money_bookSQLite.db`，Capacitor Community SQLCipher、目前 `no-encryption`）。Wear 訊息只走 MessageClient 的 `/smb/v1/*` 白名單路徑（scope B 後完整清單見 §8.5.1）；nearby-first（`Node.isNearby()`）是應用層策略，不是「封包絕不經過 Google relay」的保證。帳務禁止 DataClient / DataItem（官方會持久化並可能雲端備份）。身份只用 `idempotencyKey`（UUID），`external_ref_id='wear:'+idempotencyKey`，另以 `wear_applied` UNIQUE 做 effectively-once；`origin_type='wear'` 軟刪須保留冪等鍵。`syncEpoch` 在首次建庫／重裝／wipe／restore 後旋轉。ListenerService 在沒有 Activity／WebView 時仍可 INSERT。
 
 Stage B：獨立 Gradle 模組 `frontend/android/wear`（同一 `applicationId`、獨立 Wear AAB、`versionCode = 100_000_000 + phoneCode`、`standalone=false`、禁 `wearApp`；Wear Compose **≥ 1.5.6／現 1.6.2**，避免 `targetSdk≥35` 讀 `reduce_motion` 啟動閃退）。手錶 Compose 快記／近期／outbox、Glance Tile、Room outbox；電話功能頁進階「手錶連線」顯示 nearby 節點與 sync 狀態。Play 上架採 phone／Wear 分軌（測試軌道由 `play-testing-channel.json` 的 `internal`｜`closed` 決定；正式 `production`+`wear:production`）。真機配對驗收需實體 Wear 裝置（CI 以單元測試 + 雙 AAB dry-run + Playwright 進階入口為準）。
+
+#### 8.5.1 完整記帳 scope B
+
+`protocolVersion` 維持 **1**，改以「同一版本同時更新兩端」的方式擴充路徑與型別（單一常數來源三份實作必須同版對齊，由 `frontend/test/wear-companion-scope-b.test.js` 的 lockstep 測試把關）：
+
+| 面向 | 內容 |
+| --- | --- |
+| 路徑 | `/smb/v1/hello`、`tx/create`、**`tx/update`**、**`tx/delete`**、`tx/ack`、**`ledger/set`**、`snapshot/request`、`snapshot/payload` |
+| 型別 | `expense`、`income`、`transfer`、`adjustment`、`credit_spend`、`credit_repay`、`credit_refund`、`loan` |
+| outbox op | `create`｜`update`｜`delete` |
+| 常數來源 | JS `src/core/services/wear-protocol.js`／Kotlin `protocol/WearPaths.kt`（含 `WearTxTypes`／`WearTxOps`）／Java `wear/WearCompanionConstants.java` |
+
+**欄位與型別條件**：`amount`／`account`／`category`／`time`／`note`／`tags`（陣列→`tagsJson`）為共同欄位，另有 `toAccountId`／`peerAccountId`、`sourceAccountId`、選用 `addons`、`loanDirection`（`lend`｜`borrow`）、`counterpartyName`、`targetTxId`。`expense`／`income`／`credit_spend` 必填分類；`transfer` 必填且不得同帳戶的 `toAccountId`；`credit_repay` 必填 `sourceAccountId`（還款資金來源，亦不得同卡）；`adjustment` 允許帶正負號但禁 0；`loan` 必填方向與對方名稱。標籤上限 12 個、每個 40 字，備註截斷 200 字。
+
+**雙引擎**：WebView 活著時走 JS `wear-transaction.service.js`，直接復用手機既有 domain service（`createExpense`／`createIncome`／`createTransfer`／`createAdjustment`／`createCreditRepayment`／`createCreditRefundAdjustment`／`createLoanWithOptionalTransaction`／`updateManualTransaction`／`deleteManualTransaction`），語意與手機手動記帳完全一致；WebView 未啟動時由 Java `WearTransactionEngine` 以等價 SQL 落帳（轉帳雙腿 + `transfer_group_id`、刷卡雙 posting、還款 FIFO 沖銷、退款寫入當期 open statement、借貸開帳建立 loan 列 + 開帳交易）。兩條路徑皆以 `wear_applied` UNIQUE 保證 effectively-once，`origin_type='wear'` 軟刪仍保留冪等鍵。注意 `updateManualTransaction` 不會寫 `tags_json`，JS 端另以 `writeTagsJson` 補寫（信用卡消費／退款自有標籤格式，不覆蓋）。
+
+**編輯／刪除範圍**：`validateTxUpdatePayload` 只接受 `expense`／`income`／`adjustment` 且**拒絕改型別**——轉帳雙腿、信用卡 posting、借貸列的跨型別重構仍由手機負責，避免手錶以殘缺欄位破壞多列結構。刪除為 soft delete。
+
+**多帳本**：`/smb/v1/ledger/set` 由 `WearActiveLedgerStore.setWatchLedgerId()` 獨立保存手錶偏好帳本，`getEffectiveLedgerId()` 優先採手錶選擇、未設定才回退手機作用帳本；手錶切帳本不會改動手機 UI 正在瀏覽的帳本。
+
+**snapshot 擴充**：`assetsTotalMinor`（`include_in_assets` 帳戶合計）、`budgetRemainingMinor`（依帳本曆月／發薪週期解析目前期間）、`ledgers[]`、`accounts`／`categories`（以 `usage_count`／`last_used_at` 推導 recent／favorite 旗標供選擇器分組）、`loans` 摘要、含全部 B 型別的 `recentTxs`。
+
+**手錶端**：Room outbox 升級 **v2**（新增 `op`／`peerAccountId`／`sourceAccountId`／`tagsJson`／`extrasJson`／`targetTxId`），採 `Migration(1, 2)` 加欄位並帶 `NOT NULL DEFAULT`，升級不清除未同步草稿（禁 `fallbackToDestructiveMigration`）。UI 提供首頁（今日支出／總資產／預算剩餘／帳本 chip／待同步筆數）、型別選擇、記帳表單（數字盤、帳戶／分類／對方帳戶選擇器、時間、備註、標籤）、近期清單與明細（編輯／刪除）、帳本切換、範本、重複上一筆；rotary 錶冠捲動以 `onRotaryScrollEvent` 實作，語音備註走 `RecognizerIntent` 並在無語音服務時安全降級（不閃退）。錶端範本存 `SharedPreferences`，不依賴手機表。
+
+**驗收**：`node --test`（`wear-companion-stage-a/-stage-b/-scope-b`）＋ `:wear:compileReleaseKotlin`／`:app:compileReleaseJavaWithJavac`。真機記帳仍需實體 Wear 裝置配對驗收。
 
 ## 9. 銀行同步
 

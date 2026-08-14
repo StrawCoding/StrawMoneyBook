@@ -21,6 +21,12 @@ interface OutboxDao {
     suspend fun findByIdempotencyKey(key: String): OutboxEntity?
 
     @Query(
+        "SELECT * FROM wear_outbox WHERE op = 'create' AND status IN ('ack_ok','sent','pending')" +
+            " ORDER BY createdAt DESC LIMIT 1"
+    )
+    suspend fun findLastCreate(): OutboxEntity?
+
+    @Query(
         "UPDATE wear_outbox SET status = :status, lastError = :error, phoneTxId = :phoneTxId, updatedAt = :updatedAt WHERE idempotencyKey = :key"
     )
     suspend fun updateStatus(
@@ -33,4 +39,7 @@ interface OutboxDao {
 
     @Query("SELECT COUNT(*) FROM wear_outbox WHERE status IN ('pending','sent','ack_nack')")
     fun observePendingCount(): Flow<Int>
+
+    @Query("DELETE FROM wear_outbox WHERE status = 'ack_ok' AND createdAt < :olderThanIso")
+    suspend fun pruneAcked(olderThanIso: String)
 }

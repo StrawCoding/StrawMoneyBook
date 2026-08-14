@@ -1,9 +1,17 @@
 package com.strawcoding.strawmoneybook.wear;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 public final class WearProtocol {
+    private static final int MAX_TAGS = 12;
+    private static final int MAX_TAG_LENGTH = 40;
+    private static final int MAX_NOTE_LENGTH = 200;
+
     private WearProtocol() {}
 
     public static JSONObject parseEnvelope(String raw) throws JSONException {
@@ -21,37 +29,189 @@ public final class WearProtocol {
         String type = payload.optString("type", "").trim();
         String accountId = payload.optString("accountId", "").trim();
         String categoryId = payload.optString("categoryId", "").trim();
-        long amountMinor = payload.optLong("amountMinor", 0L);
-        if (idempotencyKey.isEmpty() || ledgerId.isEmpty() || accountId.isEmpty() || categoryId.isEmpty()) {
-            throw new JSONException("rejected: missing fields");
+        String peerAccountId = payload.optString("peerAccountId", "").trim();
+        if (peerAccountId.isEmpty()) {
+            peerAccountId = payload.optString("toAccountId", "").trim();
         }
-        if (!"expense".equals(type) && !"income".equals(type)) {
+        String sourceAccountId = payload.optString("sourceAccountId", "").trim();
+        long amountMinor = payload.optLong("amountMinor", 0L);
+
+        if (idempotencyKey.isEmpty()) {
+            throw new JSONException("rejected: idempotencyKey required");
+        }
+        if (ledgerId.isEmpty()) {
+            throw new JSONException("rejected: ledgerId required");
+        }
+        if (!WearCompanionConstants.isKnownTxType(type)) {
             throw new JSONException("rejected: type");
         }
-        if (amountMinor <= 0L) {
-            throw new JSONException("rejected: amountMinor");
+        if (accountId.isEmpty()) {
+            throw new JSONException("rejected: accountId required");
         }
         if (!payload.has("catalogRevision")) {
             throw new JSONException("rejected: catalogRevision");
         }
+        if (WearCompanionConstants.TYPE_ADJUSTMENT.equals(type)) {
+            if (amountMinor == 0L) {
+                throw new JSONException("rejected: adjustment amountMinor");
+            }
+        } else if (amountMinor <= 0L) {
+            throw new JSONException("rejected: amountMinor");
+        }
+        if (WearCompanionConstants.requiresCategory(type) && categoryId.isEmpty()) {
+            throw new JSONException("rejected: categoryId required");
+        }
+
+        String resolvedPeer = peerAccountId;
+        if (WearCompanionConstants.TYPE_CREDIT_REPAY.equals(type)) {
+            resolvedPeer = sourceAccountId.isEmpty() ? peerAccountId : sourceAccountId;
+        }
+        if (WearCompanionConstants.requiresPeerAccount(type)) {
+            if (resolvedPeer.isEmpty()) {
+                throw new JSONException("rejected: peer account required");
+            }
+            if (resolvedPeer.equals(accountId)) {
+                throw new JSONException("rejected: peer account must differ");
+            }
+        }
+
+        String loanDirection = payload.optString("loanDirection", "").trim();
+        String counterpartyName = payload.optString("counterpartyName", "").trim();
+        if (WearCompanionConstants.TYPE_LOAN.equals(type)) {
+            if (!"lend".equals(loanDirection) && !"borrow".equals(loanDirection)) {
+                throw new JSONException("rejected: loanDirection");
+            }
+            if (counterpartyName.isEmpty()) {
+                throw new JSONException("rejected: counterpartyName required");
+            }
+            if (counterpartyName.length() > 80) {
+                counterpartyName = counterpartyName.substring(0, 80);
+            }
+        }
+
         WearTxCreate parsed = new WearTxCreate();
+        parsed.op = WearCompanionConstants.OP_CREATE;
         parsed.idempotencyKey = idempotencyKey;
         parsed.clientTxId = payload.optString("clientTxId", "").trim();
         parsed.ledgerId = ledgerId;
         parsed.type = type;
         parsed.accountId = accountId;
         parsed.categoryId = categoryId;
+        parsed.peerAccountId = resolvedPeer;
+        parsed.sourceAccountId = sourceAccountId;
         parsed.amountMinor = amountMinor;
         parsed.catalogRevision = payload.optLong("catalogRevision");
         parsed.occurredAt = payload.optString("occurredAt", "").trim();
-        parsed.note = payload.optString("note", "");
-        if (parsed.note.length() > 200) {
-            parsed.note = parsed.note.substring(0, 200);
-        }
+        parsed.note = clampNote(payload.optString("note", ""));
+        parsed.tags = normalizeTags(payload);
+        parsed.loanDirection = loanDirection;
+        parsed.counterpartyName = counterpartyName;
+        parsed.includeInBudget = payload.optBoolean("includeInBudget", true);
+        parsed.includeInAnalysis = payload.optBoolean("includeInAnalysis", true);
         return parsed;
     }
 
+    public static WearTxUpdate validateTxUpdate(JSONObject payload) throws JSONException {
+        String idempotencyKey = payload.optString("idempotencyKey", "").trim();
+        String ledgerId = payload.optString("ledgerId", "").trim();
+        String targetTxId = payload.optString("targetTxId", "").trim();
+        String type = payload.optString("type", "").trim();
+        String accountId = payload.optString("accountId", "").trim();
+        String categoryId = payload.optString("categoryId", "").trim();
+        long amountMinor = payload.optLong("amountMinor", 0L);
+
+        if (idempotencyKey.isEmpty()) {
+            throw new JSONException("rejected: idempotencyKey required");
+        }
+        if (ledgerId.isEmpty()) {
+            throw new JSONException("rejected: ledgerId required");
+        }
+        if (!payload.has("catalogRevision")) {
+            throw new JSONException("rejected: catalogRevision");
+        }
+        if (targetTxId.isEmpty()) {
+            throw new JSONException("rejected: targetTxId required");
+        }
+        if (type.isEmpty()) {
+            type = WearCompanionConstants.TYPE_EXPENSE;
+        }
+        if (!WearCompanionConstants.isEditableTxType(type)) {
+            throw new JSONException("rejected: type not editable on watch");
+        }
+        if (accountId.isEmpty()) {
+            throw new JSONException("rejected: accountId required");
+        }
+        if (WearCompanionConstants.TYPE_ADJUSTMENT.equals(type)) {
+            if (amountMinor == 0L) {
+                throw new JSONException("rejected: adjustment amountMinor");
+            }
+        } else if (amountMinor <= 0L) {
+            throw new JSONException("rejected: amountMinor");
+        }
+        if (!WearCompanionConstants.TYPE_ADJUSTMENT.equals(type) && categoryId.isEmpty()) {
+            throw new JSONException("rejected: categoryId required");
+        }
+
+        WearTxUpdate parsed = new WearTxUpdate();
+        parsed.op = WearCompanionConstants.OP_UPDATE;
+        parsed.idempotencyKey = idempotencyKey;
+        parsed.clientTxId = payload.optString("clientTxId", "").trim();
+        parsed.ledgerId = ledgerId;
+        parsed.targetTxId = targetTxId;
+        parsed.type = type;
+        parsed.accountId = accountId;
+        parsed.categoryId = categoryId;
+        parsed.amountMinor = amountMinor;
+        parsed.catalogRevision = payload.optLong("catalogRevision");
+        parsed.occurredAt = payload.optString("occurredAt", "").trim();
+        parsed.note = clampNote(payload.optString("note", ""));
+        parsed.tags = normalizeTags(payload);
+        parsed.includeInBudget = payload.optBoolean("includeInBudget", true);
+        parsed.includeInAnalysis = payload.optBoolean("includeInAnalysis", true);
+        return parsed;
+    }
+
+    public static WearTxDelete validateTxDelete(JSONObject payload) throws JSONException {
+        String idempotencyKey = payload.optString("idempotencyKey", "").trim();
+        String ledgerId = payload.optString("ledgerId", "").trim();
+        String targetTxId = payload.optString("targetTxId", "").trim();
+        if (idempotencyKey.isEmpty()) {
+            throw new JSONException("rejected: idempotencyKey required");
+        }
+        if (ledgerId.isEmpty()) {
+            throw new JSONException("rejected: ledgerId required");
+        }
+        if (targetTxId.isEmpty()) {
+            throw new JSONException("rejected: targetTxId required");
+        }
+        WearTxDelete parsed = new WearTxDelete();
+        parsed.op = WearCompanionConstants.OP_DELETE;
+        parsed.idempotencyKey = idempotencyKey;
+        parsed.clientTxId = payload.optString("clientTxId", "").trim();
+        parsed.ledgerId = ledgerId;
+        parsed.targetTxId = targetTxId;
+        return parsed;
+    }
+
+    public static String validateLedgerSet(JSONObject payload) throws JSONException {
+        String ledgerId = payload.optString("ledgerId", "").trim();
+        if (ledgerId.isEmpty()) {
+            throw new JSONException("rejected: ledgerId required");
+        }
+        return ledgerId;
+    }
+
     public static JSONObject ack(String status, String idempotencyKey, String txId, String error) throws JSONException {
+        return ack(status, idempotencyKey, txId, error, null);
+    }
+
+    public static JSONObject ack(
+        String status,
+        String idempotencyKey,
+        String txId,
+        String error,
+        String op
+    ) throws JSONException {
         JSONObject ack = new JSONObject();
         ack.put("protocolVersion", WearCompanionConstants.PROTOCOL_VERSION);
         ack.put("msg", "tx.ack");
@@ -62,6 +222,9 @@ public final class WearProtocol {
         }
         if (error != null) {
             ack.put("error", error);
+        }
+        if (op != null) {
+            ack.put("op", op);
         }
         return ack;
     }
@@ -76,10 +239,77 @@ public final class WearProtocol {
         return incomingRevision > localRevision;
     }
 
+    /** JSON array text for transactions.tags_json, or null when no tags were sent. */
+    public static String tagsJson(List<String> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return null;
+        }
+        return new JSONArray(tags).toString();
+    }
+
+    private static String clampNote(String note) {
+        String value = note == null ? "" : note;
+        if (value.length() > MAX_NOTE_LENGTH) {
+            return value.substring(0, MAX_NOTE_LENGTH);
+        }
+        return value;
+    }
+
+    private static List<String> normalizeTags(JSONObject payload) {
+        JSONArray raw = payload.optJSONArray("tags");
+        if (raw == null) {
+            String tagsJson = payload.optString("tagsJson", "").trim();
+            if (!tagsJson.isEmpty()) {
+                try {
+                    raw = new JSONArray(tagsJson);
+                } catch (JSONException ignored) {
+                    raw = null;
+                }
+            }
+        }
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        if (raw != null) {
+            for (int i = 0; i < raw.length() && unique.size() < MAX_TAGS; i += 1) {
+                String tag = String.valueOf(raw.optString(i, "")).trim();
+                if (tag.isEmpty()) {
+                    continue;
+                }
+                if (tag.length() > MAX_TAG_LENGTH) {
+                    tag = tag.substring(0, MAX_TAG_LENGTH);
+                }
+                unique.add(tag);
+            }
+        }
+        return new ArrayList<>(unique);
+    }
+
     public static final class WearTxCreate {
+        public String op;
         public String idempotencyKey;
         public String clientTxId;
         public String ledgerId;
+        public String type;
+        public String accountId;
+        public String categoryId;
+        public String peerAccountId;
+        public String sourceAccountId;
+        public long amountMinor;
+        public long catalogRevision;
+        public String occurredAt;
+        public String note;
+        public List<String> tags;
+        public String loanDirection;
+        public String counterpartyName;
+        public boolean includeInBudget = true;
+        public boolean includeInAnalysis = true;
+    }
+
+    public static final class WearTxUpdate {
+        public String op;
+        public String idempotencyKey;
+        public String clientTxId;
+        public String ledgerId;
+        public String targetTxId;
         public String type;
         public String accountId;
         public String categoryId;
@@ -87,5 +317,16 @@ public final class WearProtocol {
         public long catalogRevision;
         public String occurredAt;
         public String note;
+        public List<String> tags;
+        public boolean includeInBudget = true;
+        public boolean includeInAnalysis = true;
+    }
+
+    public static final class WearTxDelete {
+        public String op;
+        public String idempotencyKey;
+        public String clientTxId;
+        public String ledgerId;
+        public String targetTxId;
     }
 }

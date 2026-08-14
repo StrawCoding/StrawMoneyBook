@@ -3,40 +3,22 @@ package com.strawcoding.strawmoneybook.presentation
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
-import androidx.wear.compose.foundation.lazy.items
-import androidx.wear.compose.material.Button
-import androidx.wear.compose.material.Chip
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Scaffold
-import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import com.strawcoding.strawmoneybook.WearApp
-import com.strawcoding.strawmoneybook.data.OutboxEntity
+import com.strawcoding.strawmoneybook.protocol.WearTxTypes
 import com.strawcoding.strawmoneybook.sync.WearSyncRepository
-import java.text.NumberFormat
-import java.util.Locale
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -51,226 +33,250 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+object WearRoutes {
+    const val HOME = "home"
+    const val TYPES = "types"
+    const val ADD = "add"
+    const val PICKER = "picker"
+    const val TAGS = "tags"
+    const val TIME = "time"
+    const val NOTE = "note"
+    const val RECENT = "recent"
+    const val DETAIL = "detail"
+    const val LEDGERS = "ledgers"
+    const val TEMPLATES = "templates"
+}
+
 @Composable
 private fun WearRoot(repo: WearSyncRepository) {
     val nav = rememberSwipeDismissableNavController()
     val scope = rememberCoroutineScope()
+    val draft = remember { WearDraftState() }
+    var toast by remember { mutableStateOf("") }
+    var refreshTick by remember { mutableStateOf(0) }
+    var detailTxId by remember { mutableStateOf("") }
+
+    val sync: () -> Unit = {
+        scope.launch {
+            runCatching {
+                repo.requestHelloAndSnapshot()
+                repo.flushPending()
+            }
+            refreshTick += 1
+        }
+    }
+
     LaunchedEffect(Unit) {
         runCatching {
             repo.requestHelloAndSnapshot()
             repo.flushPending()
         }
+        refreshTick += 1
     }
-    Scaffold(timeText = { TimeText() }) {
-        SwipeDismissableNavHost(navController = nav, startDestination = "home") {
-            composable("home") {
-                HomeScreen(
-                    repo = repo,
-                    onQuickAdd = { nav.navigate("add") },
-                    onRecent = { nav.navigate("recent") },
-                    onRefresh = {
-                        scope.launch {
-                            runCatching {
-                                repo.requestHelloAndSnapshot()
-                                repo.flushPending()
-                            }
-                        }
-                    },
-                )
-            }
-            composable("add") {
-                QuickAddScreen(
-                    onSubmit = { type, amountYuan, note ->
-                        scope.launch {
-                            runCatching {
-                                val minor = Math.round(amountYuan * 100.0)
-                                repo.enqueueExpenseOrIncome(type, minor, note)
-                                nav.popBackStack()
-                            }
-                        }
-                    },
-                )
-            }
-            composable("recent") {
-                RecentScreen(repo = repo)
-            }
-        }
-    }
-}
 
-@Composable
-private fun HomeScreen(
-    repo: WearSyncRepository,
-    onQuickAdd: () -> Unit,
-    onRecent: () -> Unit,
-    onRefresh: () -> Unit,
-) {
-    val pending by repo.observePendingCount().collectAsState(initial = 0)
-    val cache = repo.cacheStore()
-    val spend = cache.todaySpendMinor()
-    val nearby = cache.isNearby()
-    val node = cache.nodeDisplayName()
-    ScalingLazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        item {
-            Text(
-                text = "今日已花",
-                style = MaterialTheme.typography.title3,
-                textAlign = TextAlign.Center,
-            )
-        }
-        item {
-            Text(
-                text = formatTwd(spend),
-                style = MaterialTheme.typography.display3,
-                textAlign = TextAlign.Center,
-            )
-        }
-        item {
-            Text(
-                text = if (nearby) "已連線 ${node.ifBlank { "手機" }}" else "未連線（需靠近手機）",
-                style = MaterialTheme.typography.caption2,
-                textAlign = TextAlign.Center,
-            )
-        }
-        if (pending > 0) {
-            item {
-                Text(
-                    text = "待同步 $pending 筆",
-                    style = MaterialTheme.typography.caption1,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
-        item {
-            Button(onClick = onQuickAdd, modifier = Modifier.fillMaxWidth()) {
-                Text("記一筆")
-            }
-        }
-        item {
-            Chip(onClick = onRecent, label = { Text("最近／待送") }, modifier = Modifier.fillMaxWidth())
-        }
-        item {
-            Chip(onClick = onRefresh, label = { Text("重新同步") }, modifier = Modifier.fillMaxWidth())
-        }
-    }
-}
-
-@Composable
-private fun QuickAddScreen(onSubmit: (type: String, amountYuan: Double, note: String?) -> Unit) {
-    var type by remember { mutableStateOf("expense") }
-    var digits by remember { mutableStateOf("") }
-    ScalingLazyColumn(
-        modifier = Modifier.fillMaxSize().padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        item {
-            Text(if (type == "expense") "支出" else "收入", style = MaterialTheme.typography.title2)
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip(onClick = { type = "expense" }, label = { Text("支出") })
-                Chip(onClick = { type = "income" }, label = { Text("收入") })
-            }
-        }
-        item {
-            Text(
-                text = if (digits.isEmpty()) "0" else digits,
-                style = MaterialTheme.typography.display3,
-            )
-        }
-        item {
-            Numpad(
-                onDigit = { d ->
-                    if (digits.length < 8) digits += d
-                },
-                onDot = {
-                    if (!digits.contains('.')) {
-                        digits = if (digits.isEmpty()) "0." else "$digits."
+    val submit: () -> Unit = {
+        val error = draft.validationError()
+        if (error != null) {
+            toast = error
+        } else {
+            scope.launch {
+                val result = runCatching {
+                    if (draft.isEditing) {
+                        repo.enqueueUpdate(
+                            targetTxId = draft.editingTxId,
+                            type = draft.type,
+                            amountMinor = draft.amountMinor,
+                            accountId = draft.accountId,
+                            categoryId = draft.categoryId.ifBlank { null },
+                            note = draft.note.ifBlank { null },
+                            tags = draft.tags.toList(),
+                            occurredAt = isoUtc(draft.occurredAtMillis),
+                        )
+                    } else {
+                        repo.enqueueEntry(draft.toEntryDraft())
                     }
-                },
-                onBack = { digits = digits.dropLast(1) },
-            )
-        }
-        item {
-            Button(
-                onClick = {
-                    val amount = digits.toDoubleOrNull() ?: 0.0
-                    if (amount > 0) onSubmit(type, amount, null)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = (digits.toDoubleOrNull() ?: 0.0) > 0,
-            ) {
-                Text("送出")
-            }
-        }
-    }
-}
-
-@Composable
-private fun Numpad(onDigit: (String) -> Unit, onDot: () -> Unit, onBack: () -> Unit) {
-    val rows = listOf(
-        listOf("1", "2", "3"),
-        listOf("4", "5", "6"),
-        listOf("7", "8", "9"),
-        listOf(".", "0", "⌫"),
-    )
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        rows.forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                row.forEach { key ->
-                    Chip(
-                        onClick = {
-                            when (key) {
-                                "." -> onDot()
-                                "⌫" -> onBack()
-                                else -> onDigit(key)
-                            }
-                        },
-                        label = { Text(key) },
-                    )
+                }
+                toast = if (result.isSuccess) {
+                    if (draft.isEditing) "已排入修改" else "已記一筆"
+                } else {
+                    enqueueErrorLabel(result.exceptionOrNull()?.message)
+                }
+                if (result.isSuccess) {
+                    draft.reset(WearTxTypes.EXPENSE)
+                    refreshTick += 1
+                    nav.popBackStack(WearRoutes.HOME, false)
                 }
             }
         }
     }
-}
 
-@Composable
-private fun RecentScreen(repo: WearSyncRepository) {
-    val outbox by repo.observeRecent().collectAsState(initial = emptyList())
-    val phoneRecent = repo.cacheStore().recentTxs()
-    ScalingLazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        item { Text("待送／最近", style = MaterialTheme.typography.title3) }
-        items(outbox) { row ->
-            OutboxRow(row)
-        }
-        items(phoneRecent) { tx ->
-            Text(
-                text = "${tx.optString("type")} ${formatTwd(Math.abs(tx.optLong("amountMinor")))} ${tx.optString("note")}",
-                style = MaterialTheme.typography.body2,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-            )
+    Scaffold(timeText = { TimeText() }) {
+        SwipeDismissableNavHost(navController = nav, startDestination = WearRoutes.HOME) {
+            composable(WearRoutes.HOME) {
+                HomeScreen(
+                    repo = repo,
+                    refreshTick = refreshTick,
+                    toast = toast,
+                    onQuickAdd = {
+                        draft.reset(WearTxTypes.EXPENSE)
+                        toast = ""
+                        nav.navigate(WearRoutes.ADD)
+                    },
+                    onPickType = {
+                        toast = ""
+                        nav.navigate(WearRoutes.TYPES)
+                    },
+                    onRecent = { nav.navigate(WearRoutes.RECENT) },
+                    onLedgers = { nav.navigate(WearRoutes.LEDGERS) },
+                    onTemplates = { nav.navigate(WearRoutes.TEMPLATES) },
+                    onRepeatLast = {
+                        scope.launch {
+                            val result = runCatching { repo.repeatLast() }
+                            toast = when {
+                                result.isFailure -> enqueueErrorLabel(result.exceptionOrNull()?.message)
+                                result.getOrNull() == null -> "尚無可重複的紀錄"
+                                else -> "已重複上一筆"
+                            }
+                            refreshTick += 1
+                        }
+                    },
+                    onRefresh = sync,
+                )
+            }
+            composable(WearRoutes.TYPES) {
+                TypePickerScreen(
+                    current = draft.type,
+                    onPick = { type ->
+                        draft.reset(type)
+                        nav.navigate(WearRoutes.ADD)
+                    },
+                )
+            }
+            composable(WearRoutes.ADD) {
+                EntryScreen(
+                    repo = repo,
+                    draft = draft,
+                    toast = toast,
+                    onOpenPicker = { target ->
+                        draft.pickerTarget = target
+                        nav.navigate(WearRoutes.PICKER)
+                    },
+                    onOpenTags = { nav.navigate(WearRoutes.TAGS) },
+                    onOpenTime = { nav.navigate(WearRoutes.TIME) },
+                    onOpenNote = { nav.navigate(WearRoutes.NOTE) },
+                    onSubmit = submit,
+                )
+            }
+            composable(WearRoutes.PICKER) {
+                PickerScreen(
+                    repo = repo,
+                    draft = draft,
+                    onDone = { nav.popBackStack() },
+                )
+            }
+            composable(WearRoutes.TAGS) {
+                TagsScreen(repo = repo, draft = draft, onDone = { nav.popBackStack() })
+            }
+            composable(WearRoutes.TIME) {
+                TimeScreen(draft = draft, onDone = { nav.popBackStack() })
+            }
+            composable(WearRoutes.NOTE) {
+                NoteScreen(draft = draft, onDone = { nav.popBackStack() })
+            }
+            composable(WearRoutes.RECENT) {
+                RecentScreen(
+                    repo = repo,
+                    refreshTick = refreshTick,
+                    onOpenTx = { txId ->
+                        detailTxId = txId
+                        nav.navigate(WearRoutes.DETAIL)
+                    },
+                )
+            }
+            composable(WearRoutes.DETAIL) {
+                TransactionDetailScreen(
+                    repo = repo,
+                    txId = detailTxId,
+                    onEdit = { tx ->
+                        draft.loadFromRecent(tx)
+                        toast = ""
+                        nav.navigate(WearRoutes.ADD)
+                    },
+                    onDelete = { txId ->
+                        scope.launch {
+                            val result = runCatching { repo.enqueueDelete(txId) }
+                            toast = if (result.isSuccess) "已排入刪除" else enqueueErrorLabel(result.exceptionOrNull()?.message)
+                            refreshTick += 1
+                            nav.popBackStack(WearRoutes.HOME, false)
+                        }
+                    },
+                )
+            }
+            composable(WearRoutes.LEDGERS) {
+                LedgerScreen(
+                    repo = repo,
+                    onPick = { ledgerId ->
+                        scope.launch {
+                            runCatching { repo.setActiveLedger(ledgerId) }
+                            refreshTick += 1
+                            nav.popBackStack()
+                        }
+                    },
+                )
+            }
+            composable(WearRoutes.TEMPLATES) {
+                TemplatesScreen(
+                    repo = repo,
+                    refreshTick = refreshTick,
+                    onUse = { template ->
+                        draft.reset(template.type)
+                        draft.digits = (template.amountMinor / 100.0).let {
+                            if (it % 1.0 == 0.0) it.toLong().toString() else it.toString()
+                        }
+                        draft.accountId = template.accountId
+                        draft.categoryId = template.categoryId
+                        nav.navigate(WearRoutes.ADD)
+                    },
+                    onSaveCurrent = {
+                        toast = saveTemplateFromDraft(repo, draft)
+                        nav.popBackStack()
+                    },
+                )
+            }
         }
     }
 }
 
-@Composable
-private fun OutboxRow(row: OutboxEntity) {
-    Text(
-        text = "${row.type} ${formatTwd(row.amountMinor)} · ${row.status}",
-        style = MaterialTheme.typography.body2,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+private fun saveTemplateFromDraft(repo: WearSyncRepository, draft: WearDraftState): String {
+    if (draft.amountMinor <= 0L || draft.accountId.isBlank()) {
+        return "先填好一筆再存範本"
+    }
+    val cache = repo.cacheStore()
+    val templates = cache.templates().toMutableList()
+    templates.add(
+        com.strawcoding.strawmoneybook.data.WearTemplate(
+            id = "tpl_" + System.currentTimeMillis().toString(36),
+            label = buildString {
+                append(typeLabel(draft.type))
+                if (draft.categoryName.isNotBlank()) append(" ").append(draft.categoryName)
+                append(" ").append(formatTwd(draft.amountMinor))
+            },
+            type = draft.type,
+            amountMinor = draft.amountMinor,
+            accountId = draft.accountId,
+            categoryId = draft.categoryId,
+        )
     )
+    cache.saveTemplates(templates)
+    return "已存為範本"
 }
 
-private fun formatTwd(minor: Long): String {
-    val yuan = minor / 100.0
-    return NumberFormat.getCurrencyInstance(Locale.TAIWAN).format(yuan)
+private fun enqueueErrorLabel(message: String?): String = when (message) {
+    "no_ledger" -> "請先與手機同步帳本"
+    "catalog_required" -> "缺少預設帳戶／分類，請同步"
+    "peer_required" -> "請選擇對方帳戶"
+    "loan_direction_required" -> "請選擇借出或借入"
+    "counterparty_required" -> "請填借貸對象"
+    "type_not_editable" -> "此類型請在手機修改"
+    else -> "排入失敗：" + (message ?: "未知錯誤")
 }

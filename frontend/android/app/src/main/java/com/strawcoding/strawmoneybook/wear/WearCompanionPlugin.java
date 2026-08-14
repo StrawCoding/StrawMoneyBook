@@ -38,6 +38,20 @@ public class WearCompanionPlugin extends Plugin {
 
     @PluginMethod
     public void applyTxCreate(PluginCall call) {
+        applyOp(call, WearCompanionConstants.OP_CREATE);
+    }
+
+    @PluginMethod
+    public void applyTxUpdate(PluginCall call) {
+        applyOp(call, WearCompanionConstants.OP_UPDATE);
+    }
+
+    @PluginMethod
+    public void applyTxDelete(PluginCall call) {
+        applyOp(call, WearCompanionConstants.OP_DELETE);
+    }
+
+    private void applyOp(PluginCall call, String op) {
         try {
             JSONObject payload = call.getObject("payload");
             if (payload == null) {
@@ -45,9 +59,16 @@ public class WearCompanionPlugin extends Plugin {
             }
             String activeLedgerId = call.getString(
                 "activeLedgerId",
-                WearActiveLedgerStore.getActiveLedgerId(getContext())
+                WearActiveLedgerStore.getEffectiveLedgerId(getContext())
             );
-            JSONObject ack = WearTransactionEngine.applyTxCreate(getContext(), payload, activeLedgerId);
+            JSONObject ack;
+            if (WearCompanionConstants.OP_UPDATE.equals(op)) {
+                ack = WearTransactionEngine.applyTxUpdate(getContext(), payload, activeLedgerId);
+            } else if (WearCompanionConstants.OP_DELETE.equals(op)) {
+                ack = WearTransactionEngine.applyTxDelete(getContext(), payload, activeLedgerId);
+            } else {
+                ack = WearTransactionEngine.applyTxCreate(getContext(), payload, activeLedgerId);
+            }
             call.resolve(JSObject.fromJSONObject(ack));
         } catch (Exception error) {
             call.reject(String.valueOf(error.getMessage()), error);
@@ -62,9 +83,10 @@ public class WearCompanionPlugin extends Plugin {
                 SupportSQLiteDatabase db = repo.openForWrite();
                 return WearTransactionEngine.buildHello(
                     db,
-                    WearActiveLedgerStore.getActiveLedgerId(getContext())
+                    WearActiveLedgerStore.getEffectiveLedgerId(getContext())
                 );
             });
+            hello.put("watchLedgerId", WearActiveLedgerStore.getWatchLedgerId(getContext()));
             call.resolve(JSObject.fromJSONObject(hello));
         } catch (Exception error) {
             call.reject(String.valueOf(error.getMessage()), error);
@@ -115,13 +137,14 @@ public class WearCompanionPlugin extends Plugin {
                 SupportSQLiteDatabase db = repo.openForWrite();
                 return WearTransactionEngine.buildHello(
                     db,
-                    WearActiveLedgerStore.getActiveLedgerId(getContext())
+                    WearActiveLedgerStore.getEffectiveLedgerId(getContext())
                 );
             });
             result.put("syncEpoch", hello.optString("syncEpoch", ""));
             result.put("snapshotRevision", hello.optLong("snapshotRevision", 0L));
             result.put("catalogRevision", hello.optLong("catalogRevision", 0L));
             result.put("activeLedgerId", hello.optString("activeLedgerId", ""));
+            result.put("watchLedgerId", WearActiveLedgerStore.getWatchLedgerId(getContext()));
             result.put("schemaVersion", hello.optLong("schemaVersion", 0L));
         } catch (Exception error) {
             result.put("dbError", String.valueOf(error.getMessage()));

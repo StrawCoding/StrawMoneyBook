@@ -60,16 +60,16 @@ test('wear snapshot epoch poisoning accepts a different epoch even with a lower 
   assert.equal(shouldApplySnapshot({ syncEpoch: 'aaa', snapshotRevision: 9 }, { syncEpoch: '', snapshotRevision: 99 }), false)
 })
 
-test('wear tx.create payload rejects transfer and requires idempotencyKey', () => {
+test('wear tx.create payload rejects unknown types and requires idempotencyKey', () => {
   assert.throws(() => validateTxCreatePayload({
     idempotencyKey: 'k1',
     ledgerId: 'l1',
-    type: 'transfer',
+    type: 'securities_trade',
     accountId: 'a1',
     categoryId: 'c1',
     amountMinor: 100,
     catalogRevision: 1,
-  }), /type must be expense or income/)
+  }), /type must be one of/)
   assert.throws(() => validateTxCreatePayload({
     ledgerId: 'l1',
     type: 'expense',

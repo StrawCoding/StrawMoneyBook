@@ -44,13 +44,41 @@ public class WearCompanionListenerService extends WearableListenerService {
         try {
             String raw = new String(event.getData() == null ? new byte[0] : event.getData(), StandardCharsets.UTF_8);
             JSONObject envelope = raw.isEmpty() ? new JSONObject() : WearProtocol.parseEnvelope(raw);
+            String activeLedgerId = WearActiveLedgerStore.getEffectiveLedgerId(this);
             if (WearCompanionConstants.PATH_TX_CREATE.equals(path)) {
-                JSONObject ack = WearTransactionEngine.applyTxCreate(
-                    this,
-                    envelope,
-                    WearActiveLedgerStore.getActiveLedgerId(this)
-                );
+                JSONObject ack = WearTransactionEngine.applyTxCreate(this, envelope, activeLedgerId);
                 sendNearby(nodeId, WearCompanionConstants.PATH_TX_ACK, ack);
+                return;
+            }
+            if (WearCompanionConstants.PATH_TX_UPDATE.equals(path)) {
+                JSONObject ack = WearTransactionEngine.applyTxUpdate(this, envelope, activeLedgerId);
+                sendNearby(nodeId, WearCompanionConstants.PATH_TX_ACK, ack);
+                return;
+            }
+            if (WearCompanionConstants.PATH_TX_DELETE.equals(path)) {
+                JSONObject ack = WearTransactionEngine.applyTxDelete(this, envelope, activeLedgerId);
+                sendNearby(nodeId, WearCompanionConstants.PATH_TX_ACK, ack);
+                return;
+            }
+            if (WearCompanionConstants.PATH_LEDGER_SET.equals(path)) {
+                // The watch selection is stored apart from the phone's own active
+                // ledger: the phone UI does not move, but watch writes into the
+                // chosen ledger stay authorized. Unknown ids are ignored.
+                String requested = WearProtocol.validateLedgerSet(envelope);
+                AndroidDbRepository ledgerRepo = AndroidDbRepository.get(this);
+                String resolved = ledgerRepo.withWriteLock(() -> AndroidDbRepository.queryString(
+                    ledgerRepo.openForWrite(),
+                    "SELECT id FROM ledgers WHERE id = ? AND deleted_at IS NULL LIMIT 1;",
+                    new String[] { requested }
+                ));
+                if (resolved != null) {
+                    WearActiveLedgerStore.setWatchLedgerId(this, resolved);
+                }
+                String echoLedgerId = resolved == null ? activeLedgerId : resolved;
+                JSONObject snapshot = ledgerRepo.withWriteLock(() ->
+                    WearTransactionEngine.buildSnapshot(ledgerRepo.openForWrite(), echoLedgerId)
+                );
+                sendNearby(nodeId, WearCompanionConstants.PATH_SNAPSHOT_PAYLOAD, snapshot);
                 return;
             }
             if (WearCompanionConstants.PATH_HELLO.equals(path)
@@ -59,8 +87,8 @@ public class WearCompanionListenerService extends WearableListenerService {
                 JSONObject reply = repo.withWriteLock(() -> {
                     SupportSQLiteDatabase db = repo.openForWrite();
                     return WearCompanionConstants.PATH_HELLO.equals(path)
-                        ? WearTransactionEngine.buildHello(db, WearActiveLedgerStore.getActiveLedgerId(this))
-                        : WearTransactionEngine.buildSnapshot(db, WearActiveLedgerStore.getActiveLedgerId(this));
+                        ? WearTransactionEngine.buildHello(db, activeLedgerId)
+                        : WearTransactionEngine.buildSnapshot(db, activeLedgerId);
                 });
                 String replyPath = WearCompanionConstants.PATH_HELLO.equals(path)
                     ? WearCompanionConstants.PATH_HELLO
