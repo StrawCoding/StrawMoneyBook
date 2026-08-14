@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- Play 測試軌道改由 `frontend/android/play-testing-channel.json` 開關：`channel=internal|closed`（預設 internal → phone=`internal`、Wear=`wear:internal`；closed → phone=`alpha`、Wear=`wear:WearOS`）；CI／Fastlane 讀 JSON，可選 env 覆寫。
+
 ---
 
 ## v1.3.128

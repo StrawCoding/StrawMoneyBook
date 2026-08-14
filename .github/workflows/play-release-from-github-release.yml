@@ -25,8 +25,10 @@ jobs:
     env:
       RUBY_VERSION: "3.2"
       ANDROID_PACKAGE_NAME: ${{ secrets.ANDROID_PACKAGE_NAME }}
-      PLAY_CLOSED_TESTING_TRACK: ${{ vars.PLAY_CLOSED_TESTING_TRACK || 'alpha' }}
-      PLAY_WEAR_CLOSED_TESTING_TRACK: ${{ vars.PLAY_WEAR_CLOSED_TESTING_TRACK || 'wear:alpha' }}
+      # Track pair from frontend/android/play-testing-channel.json unless vars override.
+      PLAY_TESTING_CHANNEL: ${{ vars.PLAY_TESTING_CHANNEL || '' }}
+      PLAY_CLOSED_TESTING_TRACK: ${{ vars.PLAY_CLOSED_TESTING_TRACK || '' }}
+      PLAY_WEAR_CLOSED_TESTING_TRACK: ${{ vars.PLAY_WEAR_CLOSED_TESTING_TRACK || '' }}
       PLAY_UPLOAD_ROLES: ${{ inputs.upload_roles || 'phone,wear' }}
 
     steps:
@@ -96,6 +98,6 @@ jobs:
             echo "PLAY_MAPPING_PATH=$RESOLVED_MAPPING_PATH" >> "$GITHUB_ENV"
           fi
 
-      - name: Publish to Google Play closed testing
+      - name: Publish to Google Play testing tracks
         working-directory: frontend/android
         run: bundle exec fastlane closed_testing

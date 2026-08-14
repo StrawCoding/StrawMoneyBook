@@ -1,0 +1,13 @@
+{
+  "channel": "internal",
+  "tracks": {
+    "internal": {
+      "phone": "internal",
+      "wear": "wear:internal"
+    },
+    "closed": {
+      "phone": "alpha",
+      "wear": "wear:WearOS"
+    }
+  }
+}

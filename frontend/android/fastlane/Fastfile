@@ -1,4 +1,5 @@
 require 'fileutils'
+require 'json'
 
 default_platform(:android)
 
@@ -6,6 +7,7 @@ ANDROID_PROJECT_ROOT = File.expand_path("..", __dir__)
 REPO_ROOT = File.expand_path("../..", ANDROID_PROJECT_ROOT)
 PENDING_RELEASE_NOTES_PATH = File.join(REPO_ROOT, "release-notes.pending.md")
 CHANGELOGS_DIR = File.join(__dir__, "metadata", "android", "zh-TW", "changelogs")
+PLAY_TESTING_CHANNEL_CONFIG_PATH = File.join(ANDROID_PROJECT_ROOT, "play-testing-channel.json")
 PLAY_EDIT_CONFLICT_MESSAGE = "A change was made to the application outside of this Edit, please create a new edit."
 PLAY_UPLOAD_MAX_ATTEMPTS = 3
 PLAY_UPLOAD_RETRY_DELAY_SECONDS = 15
@@ -14,6 +16,7 @@ DEFAULT_PHONE_AAB = "app/build/outputs/bundle/release/app-release.aab"
 DEFAULT_WEAR_AAB = "wear/build/outputs/bundle/release/wear-release.aab"
 DEFAULT_PHONE_TRACK = "alpha"
 DEFAULT_PRODUCTION_TRACK = "production"
+DEFAULT_PLAY_TESTING_CHANNEL = "internal"
 WEAR_VERSION_CODE_OFFSET = 100_000_000
 
 def require_env!(key)
@@ -72,6 +75,49 @@ def wear_track_for_phone_track(phone_track)
   return track if track.start_with?("wear:")
 
   "wear:#{track}"
+end
+
+def play_testing_channel_config
+  @play_testing_channel_config ||= begin
+    UI.user_error!("Missing Play testing channel config: #{PLAY_TESTING_CHANNEL_CONFIG_PATH}") unless File.exist?(PLAY_TESTING_CHANNEL_CONFIG_PATH)
+    JSON.parse(File.read(PLAY_TESTING_CHANNEL_CONFIG_PATH))
+  rescue JSON::ParserError => error
+    UI.user_error!("Invalid JSON in #{PLAY_TESTING_CHANNEL_CONFIG_PATH}: #{error.message}")
+  end
+end
+
+# Resolve phone+wear testing tracks from play-testing-channel.json.
+# Priority: explicit PLAY_CLOSED_TESTING_TRACK / PLAY_WEAR_CLOSED_TESTING_TRACK env
+# → PLAY_TESTING_CHANNEL env → JSON "channel" (default internal).
+def resolve_play_testing_tracks!
+  config = play_testing_channel_config
+  tracks_by_channel = config["tracks"]
+  UI.user_error!("play-testing-channel.json missing tracks object") unless tracks_by_channel.is_a?(Hash)
+
+  channel = ENV.fetch("PLAY_TESTING_CHANNEL", "").to_s.strip
+  channel = config["channel"].to_s.strip if channel.empty?
+  channel = DEFAULT_PLAY_TESTING_CHANNEL if channel.empty?
+  selected = tracks_by_channel[channel]
+  unless selected.is_a?(Hash)
+    UI.user_error!(
+      "Unknown Play testing channel #{channel.inspect}. Allowed: #{tracks_by_channel.keys.sort.join(', ')} (see play-testing-channel.json)."
+    )
+  end
+
+  phone_track = ENV.fetch("PLAY_CLOSED_TESTING_TRACK", "").to_s.strip
+  wear_track = ENV.fetch("PLAY_WEAR_CLOSED_TESTING_TRACK", "").to_s.strip
+  phone_track = selected["phone"].to_s.strip if phone_track.empty?
+  wear_track = selected["wear"].to_s.strip if wear_track.empty?
+
+  UI.user_error!("Resolved phone testing track is empty for channel=#{channel}") if phone_track.empty?
+  UI.user_error!("Resolved wear testing track is empty for channel=#{channel}") if wear_track.empty?
+
+  UI.message("Play testing channel=#{channel} phone=#{phone_track} wear=#{wear_track}")
+  {
+    channel: channel,
+    phone_track: phone_track,
+    wear_track: wear_track
+  }
 end
 
 def wear_track_missing_help(wear_track)
@@ -281,17 +327,16 @@ platform :android do
     )
   end
 
-  desc "Publish phone + wear AABs to Google Play closed testing (phone=alpha, wear=wear:alpha)"
+  desc "Publish phone + wear AABs to Google Play testing tracks (channel from play-testing-channel.json: internal|closed)"
   lane :closed_testing do
     package_name = require_env!("ANDROID_PACKAGE_NAME")
     json_key_path = require_env!("PLAY_JSON_KEY_PATH")
-    play_track = ENV.fetch("PLAY_CLOSED_TESTING_TRACK", DEFAULT_PHONE_TRACK).to_s.strip
-    wear_track = ENV.fetch("PLAY_WEAR_CLOSED_TESTING_TRACK", wear_track_for_phone_track(play_track)).to_s.strip
+    resolved = resolve_play_testing_tracks!
+    play_track = resolved[:phone_track]
+    wear_track = resolved[:wear_track]
     requested_mapping_path = ENV.fetch("PLAY_MAPPING_PATH", "").to_s.strip
 
     UI.user_error!("Play service account json not found at #{json_key_path}") unless File.exist?(json_key_path)
-    UI.user_error!("PLAY_CLOSED_TESTING_TRACK must not be empty") if play_track.empty?
-    UI.user_error!("PLAY_WEAR_CLOSED_TESTING_TRACK must not be empty") if wear_track.empty?
 
     mapping_path = resolve_mapping_path(requested_mapping_path)
 
