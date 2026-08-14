@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- 新增保全式資料降版閘門：啟動 migration 前比對本機 schema／App 版本地板；若舊版開啟較新資料則阻擋（防 APK／快取降版回損）；成功啟動後寫入 `schema_meta`＋localStorage；明確重設資料時清除地板。
-
 ---
+
+## v1.3.130
+- 新增保全式資料降版閘門：啟動 migration 前比對本機 schema／App 版本地板；若舊版開啟較新資料則阻擋（防 APK／快取降版回損）；成功啟動後寫入 `schema_meta`＋localStorage；明確重設資料時清除地板。
 
 ## v1.3.129
 - Play 測試軌道改由 `frontend/android/play-testing-channel.json` 開關：`channel=internal|closed`（預設 internal → phone=`internal`、Wear=`wear:internal`；closed → phone=`alpha`、Wear=`wear:WearOS`）；CI／Fastlane 讀 JSON，可選 env 覆寫。
