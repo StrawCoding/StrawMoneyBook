@@ -133,6 +133,8 @@ export const MESSAGES_JA = {
   'app.init_failed': '初期化に失敗しました: {message}',
   'app.local_db_integrity': 'ローカルDBを安全に開けません。自動で帳簿を空にしません。バックアップ／Google Drive／インポートから復元するか、データ管理で明示的にリセットしてください。',
   'app.local_db_integrity_hint': '自動で帳簿を空にしません。データ管理／自動バックアップ／帳簿同期で復元するか、「すべてのデータをリセット」を明示実行してください。',
+  'app.downgrade_blocked': 'この端末の帳簿はより新しいアプリ版で書き込まれています。データ破損防止のため、古い版での起動をブロックしました。同じまたは新しい版をインストールしてください。',
+  'app.downgrade_blocked_hint': 'Play ストアから同じ／新しい版を入れてください。古い APK／キャッシュで上書きしないでください。帳簿は自動消去しません。',
   'sqlite.error.data_wipe_denied': 'ローカル消去は拒否されました：ユーザー確認がありません。FK／migration／bootstrap の silent wipe は禁止です。',
   'sqlite.error.ledger_repair_denied': '帳簿修復は拒否されました：ユーザー確認がありません。起動／migration／orphan prune による暗黙の書き換えは禁止です。',
   'budgeting.used': '使用済み',

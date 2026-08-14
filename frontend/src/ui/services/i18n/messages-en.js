@@ -716,6 +716,8 @@ export const MESSAGES_EN = {
     'app.init_failed': 'Initialization failed: {message}',
     'app.local_db_integrity': 'The local database cannot be opened safely. The app will not auto-wipe your ledger; restore from backup / Google Drive / import, or explicitly reset in Data Management.',
     'app.local_db_integrity_hint': 'The app will not auto-wipe your ledger. Use Data Management / Auto Backup / Ledger Sync to restore, or explicitly Reset All Data.',
+    'app.downgrade_blocked': 'This device’s ledger was written by a newer app version. Opening it in this older build is blocked to prevent data loss. Install the same or a newer version.',
+    'app.downgrade_blocked_hint': 'Install the same or a newer build from Play Store. Do not overwrite with an older APK/cache. The app will not auto-wipe your ledger.',
     'sqlite.error.data_wipe_denied': 'Local wipe denied: missing explicit user confirmation. FK / migration / bootstrap must never silent-wipe.',
     'sqlite.error.ledger_repair_denied': 'Ledger repair denied: missing explicit user confirmation. Startup / migration / orphan prune must never silently rewrite bookkeeping.',
     'settings_bank_sync_create.title': 'Add Bank',

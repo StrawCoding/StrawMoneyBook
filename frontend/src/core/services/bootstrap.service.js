@@ -1,5 +1,6 @@
 import { initDatabase } from '@/core/db/sqlite'
 import { createLocalDatabaseIntegrityError } from '@/core/services/data-wipe-guard.service'
+import { APP_DOWNGRADE_BLOCKED_CODE } from '@/core/services/data-downgrade-guard.service'
 import { isForeignKeyError } from '@/core/utils/sqlite-fk'
 
 /**
@@ -11,7 +12,11 @@ export async function bootstrapCoreDatabase() {
   try {
     await initDatabase()
   } catch (error) {
-    if (error?.code === 'LOCAL_DB_INTEGRITY' || error?.silentWipeBlocked) {
+    if (
+      error?.code === 'LOCAL_DB_INTEGRITY'
+      || error?.code === APP_DOWNGRADE_BLOCKED_CODE
+      || error?.silentWipeBlocked
+    ) {
       throw error
     }
     if (isForeignKeyError(error)) {

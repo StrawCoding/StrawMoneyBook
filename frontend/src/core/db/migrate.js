@@ -44,6 +44,14 @@ import migration043 from '@/core/db/migrations/043_credit_card_system_p0.sql?raw
 import migration044 from '@/core/db/migrations/044_security_sell_source_buy.sql?raw'
 import migration045 from '@/core/db/migrations/045_wear_companion.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
+import {
+  DATA_FLOOR_APP_VERSION_META_KEY,
+  DATA_FLOOR_SCHEMA_VERSION_META_KEY,
+  assertNoDataDowngrade,
+  getBundledAppVersion,
+  readLocalDataFloorPrefs,
+  writeLocalDataFloorPrefs,
+} from '@/core/services/data-downgrade-guard.service'
 
 const MIGRATIONS = [
   { version: 1, name: 'init_schema', sql: migration001 },
@@ -87,6 +95,10 @@ const MIGRATIONS = [
   { version: 44, name: 'security_sell_source_buy', sql: migration044 },
   { version: 45, name: 'wear_companion', sql: migration045 },
 ]
+
+export function getKnownMaxSchemaVersion() {
+  return MIGRATIONS.reduce((max, migration) => Math.max(max, Number(migration.version) || 0), 0)
+}
 
 const LEGACY_SCHEMA_PATCH_META_KEY = 'legacy_schema_patched_v1'
 
@@ -467,6 +479,46 @@ async function setSchemaMetaValue(db, key, value) {
   )
 }
 
+async function getAppliedMaxSchemaVersion(db) {
+  try {
+    const result = await db.query('SELECT MAX(version) AS max_version FROM schema_migrations;')
+    return Number.parseInt(String(result?.values?.[0]?.max_version ?? '0'), 10) || 0
+  } catch {
+    return 0
+  }
+}
+
+async function enforceDataDowngradeGuard(db) {
+  const knownSchemaMax = getKnownMaxSchemaVersion()
+  const dbMaxSchemaVersion = await getAppliedMaxSchemaVersion(db)
+  const floorAppVersion = await getSchemaMetaValue(db, DATA_FLOOR_APP_VERSION_META_KEY).catch(() => '')
+  const floorSchemaRaw = await getSchemaMetaValue(db, DATA_FLOOR_SCHEMA_VERSION_META_KEY).catch(() => '')
+  const floorSchemaVersion = Number.parseInt(String(floorSchemaRaw || '0'), 10) || 0
+  const prefs = readLocalDataFloorPrefs()
+
+  assertNoDataDowngrade({
+    knownSchemaMax,
+    dbMaxSchemaVersion,
+    floorSchemaVersion,
+    prefsSchemaVersion: prefs.schemaVersion,
+    floorAppVersion,
+    prefsAppVersion: prefs.appVersion,
+    currentAppVersion: getBundledAppVersion(),
+  })
+}
+
+async function stampDataFloor(db) {
+  const knownSchemaMax = getKnownMaxSchemaVersion()
+  const dbMaxSchemaVersion = await getAppliedMaxSchemaVersion(db)
+  const schemaVersion = Math.max(knownSchemaMax, dbMaxSchemaVersion)
+  const appVersion = getBundledAppVersion()
+  if (appVersion) {
+    await setSchemaMetaValue(db, DATA_FLOOR_APP_VERSION_META_KEY, appVersion)
+  }
+  await setSchemaMetaValue(db, DATA_FLOOR_SCHEMA_VERSION_META_KEY, String(schemaVersion))
+  writeLocalDataFloorPrefs({ appVersion, schemaVersion })
+}
+
 export async function runMigrations(db) {
   await ensureSchemaMetaTable(db)
 
@@ -487,6 +539,8 @@ export async function runMigrations(db) {
     );
   `)
 
+  await enforceDataDowngradeGuard(db)
+
   const result = await db.query('SELECT version FROM schema_migrations ORDER BY version ASC;')
   const appliedVersions = new Set((result?.values ?? []).map((row) => row.version))
 
@@ -499,4 +553,6 @@ export async function runMigrations(db) {
       [migration.version, migration.name],
     )
   }
+
+  await stampDataFloor(db)
 }

@@ -714,6 +714,8 @@ export const MESSAGES_ZH_TW = {
     'app.init_failed': '初始化失敗：{message}',
     'app.local_db_integrity': '本機資料庫無法安全開啟。系統不會自動清空帳本；請從備份／Google Drive／匯入還原，或至資料管理明確重設。',
     'app.local_db_integrity_hint': '系統不會自動清空帳本。請至資料管理／自動備份／帳本同步還原，或明確執行「重設全部資料」。',
+    'app.downgrade_blocked': '偵測到本機資料曾由較新版本寫入。為避免資料回損，已阻止此舊版開啟帳本。請改安裝相同或更新的版本。',
+    'app.downgrade_blocked_hint': '請至 Play 商店安裝相同或更新版本；不要用舊 APK／快取覆寫。系統不會自動清空帳本。',
     'sqlite.error.data_wipe_denied': '本機資料清空被拒絕：缺少使用者確認。FK／migration／bootstrap 不得靜默 wipe。',
     'sqlite.error.ledger_repair_denied': '帳本修復被拒絕：缺少使用者確認。啟動／migration／orphan prune 不得靜默改寫帳本語意。',
     'settings_bank_sync_create.title': '新增銀行',

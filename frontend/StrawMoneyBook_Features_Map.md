@@ -299,7 +299,7 @@
 
 | Service | 功能 |
 |---|---|
-| `bootstrap.service.js` | 啟動時資料庫初始化（smb297：禁止 silent reset／rebuild；schema／FK 失敗改 typed `LOCAL_DB_INTEGRITY` 並提示還原路徑）；不再直接碰 UI stores；**smb298**：Android plugin-null **禁止**切空 recovery DB，改重試 primary |
+| `bootstrap.service.js` | 啟動時資料庫初始化（smb297：禁止 silent reset／rebuild；schema／FK 失敗改 typed `LOCAL_DB_INTEGRITY` 並提示還原路徑；**降版保全**：`data-downgrade-guard` 阻擋舊 App／較低 schema 上限開啟較新本機資料，錯誤碼 `APP_DOWNGRADE_BLOCKED`）；不再直接碰 UI stores；**smb298**：Android plugin-null **禁止**切空 recovery DB，改重試 primary |
 | `empty-ledger-restore-hint.service.js` | smb298：空庫＋IndexedDB recovery 偵測／事件；Welcome／toast 導向資料管理還原 |
 | `transaction.service.js` | 收入/支出/轉帳/退款建立、退款帳戶驗證、編輯驗證、刪除關聯交易（報銷/退款） |
 | `transaction-query.service.js` | 統一 `all / year / month / day / account / detail-related` 交易查詢策略，供分析、搜尋、日曆、交易明細、交易編輯與帳戶明細共用 |
@@ -575,7 +575,10 @@ UI composable 目錄：`src/ui/composables/`
 - 類別（0）：無
 
 ### `src/core/services/bootstrap.service.js`
-- 函數（1）：`bootstrapCoreDatabase`（smb297：禁 silent wipe；失敗 → `LOCAL_DB_INTEGRITY`；smb298：禁空 recovery DB live fallback）
+- 函數（1）：`bootstrapCoreDatabase`（smb297：禁 silent wipe；失敗 → `LOCAL_DB_INTEGRITY`；smb298：禁空 recovery DB live fallback；降版 → `APP_DOWNGRADE_BLOCKED`）
+### `src/core/services/data-downgrade-guard.service.js`
+- 職責：保全式防降版回損——比對本機 schema／App 版本地板（`schema_meta`＋localStorage），舊版開啟較新資料時硬擋；成功 migration 後抬高地板；明確 wipe 時清除 prefs 地板。
+- 關鍵錯誤碼：`APP_DOWNGRADE_BLOCKED`
 ### `src/core/services/empty-ledger-restore-hint.service.js`
 - 函數：`detectEmptyLedgerRestoreHint`、`emitEmptyLedgerRestoreHint`
 - 補充（smb298）：空庫＋IndexedDB recovery → Welcome／toast 可見還原提示

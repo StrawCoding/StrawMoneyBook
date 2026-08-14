@@ -390,9 +390,16 @@ async function main() {
     const uiStore = useUiStore(pinia)
     const message = String(error?.message ?? translateMessage('common.unknown_error', '未知錯誤'))
     const integrityHint = error?.code === 'LOCAL_DB_INTEGRITY' || error?.silentWipeBlocked
-      ? translateMessage(
-        'app.local_db_integrity_hint',
-        '系統不會自動清空帳本。請至資料管理／自動備份／帳本同步還原，或明確執行「重設全部資料」。',
+      ? (
+        error?.code === 'APP_DOWNGRADE_BLOCKED'
+          ? translateMessage(
+            'app.downgrade_blocked_hint',
+            '請至 Play 商店安裝相同或更新版本；不要用舊 APK／快取覆寫。系統不會自動清空帳本。',
+          )
+          : translateMessage(
+            'app.local_db_integrity_hint',
+            '系統不會自動清空帳本。請至資料管理／自動備份／帳本同步還原，或明確執行「重設全部資料」。',
+          )
       )
       : ''
     uiStore.pushToast(

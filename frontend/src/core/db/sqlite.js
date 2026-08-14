@@ -13,6 +13,7 @@ import {
   createLocalDatabaseIntegrityError,
   recordDataWipeAudit,
 } from '@/core/services/data-wipe-guard.service'
+import { clearLocalDataFloorPrefs } from '@/core/services/data-downgrade-guard.service'
 import { DATABASE_WIPE_DELETE_ORDER } from '@/core/utils/sqlite-delete-order'
 import { rethrowAsForeignKeyError } from '@/core/utils/sqlite-fk'
 
@@ -207,6 +208,7 @@ export async function resetDatabase(options = {}) {
     confirmed: true,
     note: String(options.note ?? '').slice(0, 240),
   })
+  clearLocalDataFloorPrefs()
   initPromise = null
   activeDbName = PRIMARY_DB_NAME
   const conn = await rebuildDatabase(PRIMARY_DB_NAME)
