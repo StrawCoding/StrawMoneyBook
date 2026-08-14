@@ -1,9 +1,10 @@
 # Pending Release Notes
 
+---
+
+## v1.3.125
 - Wear OS companion Stage A：電話端 MessageClient `/smb/v1/*` nearby-first、SQLCipher 單一連線擁有者、`origin_type=wear` + `wear_applied` UNIQUE + `syncEpoch`；Listener 不經 WebView 即可入帳；禁 DataClient 帳務與 `wearApp`。
 - Wear OS companion Stage B：獨立 `:wear` 模組（Compose 快記／近期／outbox、Glance Tile、Room outbox、`standalone=false`、Wear `versionCode = 100_000_000 + phone`）；功能頁進階「手錶連線」→ `/settings/wear-companion`；雙 AAB（phone + wear）經 Play closed／production 同次 `aab_paths` 上傳。
-
----
 
 ## v1.3.124
 - 有價證券產生的交易項目補齊 icon：交割本金／投資損益在首頁、帳戶明細、日曆、搜尋顯示 `fa-chart-line`；證券流水買入／賣出列顯示趨勢圖示；既有「投資損益」分類若缺 icon 會回填。
