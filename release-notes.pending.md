@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- Wear OS launcher icon 改滿版圓形：以前景圖貼齊圓形遮罩（不再沿用手機 adaptive 16.7% 內縮／透明邊），並宣告 `roundIcon`。
+
 ---
 
 ## v1.3.131

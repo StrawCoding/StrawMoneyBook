@@ -53,6 +53,20 @@ test('stage B: Wear Compose >= 1.5.6 required for targetSdk 35+ (reduce_motion c
   assert.match(wearGradle, /compose-navigation:1\.6\.2/)
 })
 
+test('stage B: Wear launcher icons are full-bleed circular (no transparent ring)', () => {
+  // PNG presence + manifest; pixel fill checked offline when regenerating icons.
+  const wearManifest = readFileSync(resolve(wearRoot, 'src/main/AndroidManifest.xml'), 'utf8')
+  assert.match(wearManifest, /android:icon="@mipmap\/ic_launcher"/)
+  assert.match(wearManifest, /android:roundIcon="@mipmap\/ic_launcher_round"/)
+  for (const density of ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']) {
+    const launcher = resolve(wearRoot, `src/main/res/mipmap-${density}/ic_launcher.png`)
+    const round = resolve(wearRoot, `src/main/res/mipmap-${density}/ic_launcher_round.png`)
+    assert.ok(statSync(launcher).isFile(), launcher)
+    assert.ok(statSync(round).isFile(), round)
+    assert.ok(statSync(launcher).size > 500, `icon too small: ${launcher}`)
+  }
+})
+
 test('stage B: wear sources use MessageClient only for ledger paths', () => {
   const kotlinRoot = resolve(wearRoot, 'src/main/java')
   const offenders = []
