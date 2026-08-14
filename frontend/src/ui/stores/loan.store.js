@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { afterTransactionMutation } from '@/ui/services/transaction-mutation-refresh.js'
 import {
   addBatchLoanRepaymentByCounterparty,
   addBatchLoanRepaymentByLoanIds,
@@ -47,6 +48,7 @@ export const useLoanStore = defineStore('loan', {
       const ledgerStore = useLedgerStore()
       const result = await createLoanWithOptionalTransaction(ledgerStore.activeLedgerId, payload)
       await this.load()
+      await afterTransactionMutation()
       return result
     },
 
@@ -57,6 +59,7 @@ export const useLoanStore = defineStore('loan', {
       if (this.detail?.loan?.id === payload.loanId) {
         await this.loadDetail(payload.loanId)
       }
+      await afterTransactionMutation()
       return result
     },
 
@@ -71,6 +74,7 @@ export const useLoanStore = defineStore('loan', {
           await this.loadDetail(this.detail.loan.id)
         }
       }
+      await afterTransactionMutation()
       return result
     },
 
@@ -85,6 +89,7 @@ export const useLoanStore = defineStore('loan', {
           await this.loadDetail(this.detail.loan.id)
         }
       }
+      await afterTransactionMutation()
       return result
     },
 
@@ -97,6 +102,7 @@ export const useLoanStore = defineStore('loan', {
       } else if (this.detail?.loan?.id) {
         await this.loadDetail(this.detail.loan.id)
       }
+      await afterTransactionMutation()
       return result
     },
 
@@ -111,6 +117,7 @@ export const useLoanStore = defineStore('loan', {
       } else if (this.detail?.loan?.id) {
         await this.loadDetail(this.detail.loan.id)
       }
+      await afterTransactionMutation()
       return result
     },
 
@@ -123,6 +130,7 @@ export const useLoanStore = defineStore('loan', {
       } else if (this.detail?.loan?.id) {
         await this.loadDetail(this.detail.loan.id)
       }
+      await afterTransactionMutation()
       return result
     },
 
@@ -135,6 +143,7 @@ export const useLoanStore = defineStore('loan', {
       } else if (this.detail?.loan?.id) {
         await this.loadDetail(this.detail.loan.id)
       }
+      await afterTransactionMutation()
       return result
     },
 
@@ -145,6 +154,7 @@ export const useLoanStore = defineStore('loan', {
       if (this.detail?.loan?.id === loanId) {
         await this.loadDetail(loanId)
       }
+      await afterTransactionMutation()
     },
 
     async restoreVoided(loanId) {
@@ -154,6 +164,7 @@ export const useLoanStore = defineStore('loan', {
       if (this.detail?.loan?.id === loanId) {
         await this.loadDetail(loanId)
       }
+      await afterTransactionMutation()
     },
 
     async deleteVoided(loanId) {
@@ -163,6 +174,7 @@ export const useLoanStore = defineStore('loan', {
       if (this.detail?.loan?.id === loanId) {
         this.detail = null
       }
+      await afterTransactionMutation()
     },
 
     async loadDetail(loanId) {

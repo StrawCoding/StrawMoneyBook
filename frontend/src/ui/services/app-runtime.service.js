@@ -45,9 +45,11 @@ import {
   scheduleActiveGoogleDriveLedgerSync,
 } from '@/ui/services/google-drive-ledger-sync.service'
 import { resolveAndroidBackDecision } from './app-runtime.helpers'
+import { createRuntimeJobScheduler } from './runtime-job-scheduler.js'
 
 const DATA_CHANGE_BACKUP_DEBOUNCE_MS = 15000
 const AUTO_BACKUP_DUE_CHECK_MS = 5 * 60 * 1000
+const runtimeJobs = createRuntimeJobScheduler()
 const BACK_EXIT_CONFIRM_WINDOW_MS = 1600
 const AUTO_BACKUP_STATE_UPDATED_EVENT = 'app:auto-backup-state-updated'
 
@@ -354,37 +356,55 @@ function restoreSharedLedgerSessionInBackground(reason, { force = false } = {}) 
 
 function runSavingsJarAutoSaveInBackground(ledgerId, reason) {
   if (!ledgerId) return
-  void runSavingsJarAutoSaveIfDue(ledgerId, { reason }).catch((error) => {
-    console.warn(`[savings-jar-auto-save] run failed (${reason})`, error)
-  })
+  void runtimeJobs.run(`savings-jar:${ledgerId}`, () => (
+    runSavingsJarAutoSaveIfDue(ledgerId, { reason }).catch((error) => {
+      console.warn(`[savings-jar-auto-save] run failed (${reason})`, error)
+    })
+  ))
 }
 
 function runSubscriptionChargesInBackground(ledgerId, reason) {
   if (!ledgerId) return
-  void runSubscriptionChargesIfDue(ledgerId, { reason }).catch((error) => {
-    console.warn(`[subscription-charge] run failed (${reason})`, error)
-  })
+  void runtimeJobs.run(`subscription-charge:${ledgerId}`, () => (
+    runSubscriptionChargesIfDue(ledgerId, { reason }).catch((error) => {
+      console.warn(`[subscription-charge] run failed (${reason})`, error)
+    })
+  ))
 }
 
 function runBudgetSaveInBackground(ledgerId, reason) {
   if (!ledgerId) return
-  void runBudgetSaveIfDue(ledgerId, { reason }).catch((error) => {
-    console.warn(`[budget-save] run failed (${reason})`, error)
-  })
+  void runtimeJobs.run(`budget-save:${ledgerId}`, () => (
+    runBudgetSaveIfDue(ledgerId, { reason }).catch((error) => {
+      console.warn(`[budget-save] run failed (${reason})`, error)
+    })
+  ))
 }
 
 function runSecuritySettlementsInBackground(ledgerId, reason) {
   if (!ledgerId) return
-  void runDueSecuritySettlements(ledgerId).catch((error) => {
-    console.warn(`[security-settlement] run failed (${reason})`, error)
-  })
+  void runtimeJobs.run(`security-settlement:${ledgerId}`, () => (
+    runDueSecuritySettlements(ledgerId).catch((error) => {
+      console.warn(`[security-settlement] run failed (${reason})`, error)
+    })
+  ))
 }
 
 function runCreditRolloversInBackground(ledgerId, reason) {
   if (!ledgerId) return
-  void runCreditStatementRollovers(ledgerId).catch((error) => {
-    console.warn(`[credit-rollover] run failed (${reason})`, error)
-  })
+  void runtimeJobs.run(`credit-rollover:${ledgerId}`, () => (
+    runCreditStatementRollovers(ledgerId).catch((error) => {
+      console.warn(`[credit-rollover] run failed (${reason})`, error)
+    })
+  ))
+}
+
+function runSharedLedgerSyncJob(pinia) {
+  return runtimeJobs.run('shared-ledger-sync', () => runSharedLedgerBackgroundSyncNow(pinia))
+}
+
+function runGoogleDriveLedgerSyncJob(pinia) {
+  return runtimeJobs.run('drive-ledger-sync', () => runGoogleDriveLedgerBackgroundSyncNow(pinia))
 }
 
 export function installAppRuntime({ pinia, router, windowObject = globalThis.window } = {}) {
@@ -448,8 +468,8 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
     void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
       if (!isActive) return
       void restoreSharedLedgerSessionInBackground('app_resume').finally(() => {
-        void runSharedLedgerBackgroundSyncNow(pinia)
-        void runGoogleDriveLedgerBackgroundSyncNow(pinia)
+        void runSharedLedgerSyncJob(pinia)
+        void runGoogleDriveLedgerSyncJob(pinia)
       })
       reloadCurrentBudgetPeriodInBackground(pinia, 'app_resume')
       scheduleMembershipWarmup('app_resume', windowObject)
@@ -522,8 +542,8 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
 
   addWindowListener('focus', () => {
     void restoreSharedLedgerSessionInBackground('window_focus').finally(() => {
-      void runSharedLedgerBackgroundSyncNow(pinia)
-      void runGoogleDriveLedgerBackgroundSyncNow(pinia)
+      void runSharedLedgerSyncJob(pinia)
+      void runGoogleDriveLedgerSyncJob(pinia)
     })
     reloadCurrentBudgetPeriodInBackground(pinia, 'window_focus')
     const focusLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
@@ -533,8 +553,8 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
   addWindowListener('visibilitychange', () => {
     if (windowObject?.document?.visibilityState && windowObject.document.visibilityState !== 'visible') return
     void restoreSharedLedgerSessionInBackground('visibility_visible').finally(() => {
-      void runSharedLedgerBackgroundSyncNow(pinia)
-      void runGoogleDriveLedgerBackgroundSyncNow(pinia)
+      void runSharedLedgerSyncJob(pinia)
+      void runGoogleDriveLedgerSyncJob(pinia)
     })
     reloadCurrentBudgetPeriodInBackground(pinia, 'visibility_visible')
     const visibleLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()

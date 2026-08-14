@@ -8,6 +8,9 @@
 - (ART-03) Money 原語（normalize／abs／assert）與 IncomeExpensePostingPolicy；一般收支／調整入帳符號集中於 domain。
 - (ART-04a–d) Credit／Security／Loan／Transfer PostingPolicy 接入服務與 transfer repo。
 - (ART-05) BalanceQuery 策略分離：帳戶账面餘額／信用卡實際卡債／匯出 running balance（禁 God calculateBalance）。
+- (ART-10) 交易寫入後統一 `afterTransactionMutation`／`refreshAfterWriteSafe`；credit／loan／security 現金入帳出口一併刷 account／budget／home。
+- (ART-11) 切帳本 `ledger-runtime` reset／clear／hydrate 納入 `credit.store`，避免殘留舊卡資料。
+- (ART-12) `RuntimeJobScheduler`：同名 runtime job 合併防重入（resume sync／rollover／settlement 等）。
 
 ---
 

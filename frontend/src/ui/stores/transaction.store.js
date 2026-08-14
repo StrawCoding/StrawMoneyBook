@@ -291,6 +291,11 @@ export const useTransactionStore = defineStore('transaction', {
       }
     },
 
+    /** ART-10 alias — prefer afterTransactionMutation() from ui/services for cross-store writes. */
+    async afterTransactionMutation(timeoutMs = 4500) {
+      return this.refreshAfterWriteSafe(timeoutMs)
+    },
+
     async refreshAfterWrite() {
       const accountStore = useAccountStore()
       const budgetStore = useBudgetStore()

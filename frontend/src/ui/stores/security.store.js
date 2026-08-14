@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { afterTransactionMutation } from '@/ui/services/transaction-mutation-refresh.js'
 import {
   addSecurityBuy,
   addSecuritySell,
@@ -130,6 +131,7 @@ export const useSecurityStore = defineStore('security', {
       const result = await confirmSecuritySettlement(ledgerStore.activeLedgerId, transactionId, options)
       await this.load()
       if (securityId) await this.loadDetail(securityId)
+      await afterTransactionMutation()
       return result
     },
 
@@ -138,6 +140,7 @@ export const useSecurityStore = defineStore('security', {
       const result = await cancelSecuritySettlement(ledgerStore.activeLedgerId, transactionId)
       await this.load()
       if (securityId) await this.loadDetail(securityId)
+      await afterTransactionMutation()
       return result
     },
 
@@ -161,6 +164,7 @@ export const useSecurityStore = defineStore('security', {
       await removeSecurityTransaction(ledgerStore.activeLedgerId, transactionId)
       await this.load()
       if (securityId) await this.loadDetail(securityId)
+      await afterTransactionMutation()
     },
   },
 })

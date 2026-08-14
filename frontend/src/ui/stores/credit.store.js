@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { afterTransactionMutation } from '@/ui/services/transaction-mutation-refresh.js'
 import {
   createCreditPurchase,
   createCreditRepayment,
@@ -59,6 +60,7 @@ export const useCreditStore = defineStore('credit', {
       const ledgerStore = useLedgerStore()
       const result = await createCreditPurchase(ledgerStore.activeLedgerId, payload)
       await this.load()
+      await afterTransactionMutation()
       return result
     },
 
@@ -66,6 +68,7 @@ export const useCreditStore = defineStore('credit', {
       const ledgerStore = useLedgerStore()
       const result = await createCreditRepayment(ledgerStore.activeLedgerId, payload)
       await this.load()
+      await afterTransactionMutation()
       return result
     },
   },

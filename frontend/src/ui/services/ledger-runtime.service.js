@@ -2,6 +2,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
+import { useCreditStore } from '@/ui/stores/credit.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
@@ -29,6 +30,7 @@ export function resetLedgerScopedStores(pinia) {
   useLoanStore(pinia).$reset()
   useReimbursementStore(pinia).$reset()
   useSecurityStore(pinia).$reset()
+  useCreditStore(pinia).$reset()
   useAddonTemplateStore(pinia).$reset()
   DEFERRED_HYDRATION_LEDGER_IDS.clear()
 }
@@ -104,6 +106,7 @@ async function hydrateSecondaryLedgerStores(pinia) {
     useLoanStore(pinia).load(),
     useReimbursementStore(pinia).load(),
     useSecurityStore(pinia).load(),
+    useCreditStore(pinia).load(),
     useAddonTemplateStore(pinia).load(),
   ])
 }
@@ -112,6 +115,7 @@ function clearSecondaryLedgerStores(pinia) {
   useLoanStore(pinia).$reset()
   useReimbursementStore(pinia).$reset()
   useSecurityStore(pinia).$reset()
+  useCreditStore(pinia).$reset()
   useAddonTemplateStore(pinia).$reset()
   useTransactionStore(pinia).recent = []
 }
