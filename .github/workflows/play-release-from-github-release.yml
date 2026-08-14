@@ -7,6 +7,11 @@ on:
         description: Git tag / release tag to upload to Google Play
         required: true
         type: string
+      upload_roles:
+        description: "Artifacts to upload (phone,wear or wear)"
+        required: false
+        default: "phone,wear"
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.tag_name }}
@@ -22,6 +27,7 @@ jobs:
       ANDROID_PACKAGE_NAME: ${{ secrets.ANDROID_PACKAGE_NAME }}
       PLAY_CLOSED_TESTING_TRACK: ${{ vars.PLAY_CLOSED_TESTING_TRACK || 'alpha' }}
       PLAY_WEAR_CLOSED_TESTING_TRACK: ${{ vars.PLAY_WEAR_CLOSED_TESTING_TRACK || 'wear:alpha' }}
+      PLAY_UPLOAD_ROLES: ${{ inputs.upload_roles || 'phone,wear' }}
 
     steps:
       - name: Checkout
@@ -58,19 +64,32 @@ jobs:
           mkdir -p "$RELEASE_ASSET_DIR"
           gh release download "${{ inputs.tag_name }}" --pattern "*.aab" --dir "$RELEASE_ASSET_DIR" --clobber
           gh release download "${{ inputs.tag_name }}" --pattern "mapping.txt" --dir "$RELEASE_ASSET_DIR" --clobber || true
-          RESOLVED_AAB_PATH="$(find "$RELEASE_ASSET_DIR" -maxdepth 1 -type f -name 'app*.aab' | sort | tail -n 1)"
-          if [ -z "$RESOLVED_AAB_PATH" ]; then
-            RESOLVED_AAB_PATH="$(find "$RELEASE_ASSET_DIR" -maxdepth 1 -type f -name '*.aab' ! -name 'wear*.aab' | sort | tail -n 1)"
-          fi
-          if [ -z "$RESOLVED_AAB_PATH" ]; then
-            echo "Unable to find downloaded phone AAB asset for release ${{ inputs.tag_name }}" >&2
-            find "$RELEASE_ASSET_DIR" -maxdepth 2 -type f | sort >&2 || true
-            exit 1
-          fi
           RESOLVED_WEAR_AAB="$(find "$RELEASE_ASSET_DIR" -maxdepth 1 -type f -name 'wear*.aab' | sort | tail -n 1 || true)"
           RESOLVED_MAPPING_PATH="$(find "$RELEASE_ASSET_DIR" -maxdepth 1 -type f -name 'mapping.txt' | sort | tail -n 1)"
-          echo "AAB_PATH=$RESOLVED_AAB_PATH" >> "$GITHUB_ENV"
-          if [ -n "$RESOLVED_WEAR_AAB" ]; then
+          UPLOAD_ROLES="$(echo "${{ inputs.upload_roles || 'phone,wear' }}" | tr '[:upper:]' '[:lower:]')"
+          NEED_PHONE=false
+          NEED_WEAR=false
+          case ",$UPLOAD_ROLES," in *,phone,*) NEED_PHONE=true ;; esac
+          case ",$UPLOAD_ROLES," in *,wear,*) NEED_WEAR=true ;; esac
+
+          if [ "$NEED_PHONE" = true ]; then
+            RESOLVED_AAB_PATH="$(find "$RELEASE_ASSET_DIR" -maxdepth 1 -type f -name 'app*.aab' | sort | tail -n 1)"
+            if [ -z "$RESOLVED_AAB_PATH" ]; then
+              RESOLVED_AAB_PATH="$(find "$RELEASE_ASSET_DIR" -maxdepth 1 -type f -name '*.aab' ! -name 'wear*.aab' | sort | tail -n 1)"
+            fi
+            if [ -z "$RESOLVED_AAB_PATH" ]; then
+              echo "Unable to find downloaded phone AAB asset for release ${{ inputs.tag_name }}" >&2
+              find "$RELEASE_ASSET_DIR" -maxdepth 2 -type f | sort >&2 || true
+              exit 1
+            fi
+            echo "AAB_PATH=$RESOLVED_AAB_PATH" >> "$GITHUB_ENV"
+          fi
+          if [ "$NEED_WEAR" = true ]; then
+            if [ -z "$RESOLVED_WEAR_AAB" ]; then
+              echo "Unable to find downloaded Wear AAB asset for release ${{ inputs.tag_name }}" >&2
+              find "$RELEASE_ASSET_DIR" -maxdepth 2 -type f | sort >&2 || true
+              exit 1
+            fi
             echo "WEAR_AAB_PATH=$RESOLVED_WEAR_AAB" >> "$GITHUB_ENV"
           fi
           if [ -n "$RESOLVED_MAPPING_PATH" ]; then

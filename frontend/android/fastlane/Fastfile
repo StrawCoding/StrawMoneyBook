@@ -153,21 +153,38 @@ def prepare_play_changelogs(version_name, notes_path = PENDING_RELEASE_NOTES_PAT
   true
 end
 
+def phone_version_already_used?(error)
+  error.message.to_s.match?(/Version code .+ has already been used/i)
+end
+
+def requested_upload_roles
+  raw = ENV.fetch("PLAY_UPLOAD_ROLES", "phone,wear").to_s.downcase
+  roles = raw.split(/[,\s]+/).map(&:strip).reject(&:empty?).map(&:to_sym)
+  roles = [:phone, :wear] if roles.empty?
+  roles
+end
+
 def collect_upload_artifacts
+  roles = requested_upload_roles
   requested_phone = ENV.fetch("AAB_PATH", DEFAULT_PHONE_AAB).to_s.strip
   requested_wear = ENV.fetch("WEAR_AAB_PATH", DEFAULT_WEAR_AAB).to_s.strip
   phone_aab = resolve_aab_path(requested_phone)
   wear_aab = resolve_wear_aab_path(requested_wear)
 
-  UI.user_error!("AAB not found at #{phone_aab}") unless File.exist?(phone_aab)
-
-  artifacts = [{ role: :phone, path: phone_aab }]
-  if !wear_aab.empty? && File.exist?(wear_aab)
-    artifacts << { role: :wear, path: wear_aab }
-    UI.message("Wear AAB will upload on dedicated Wear track: #{wear_aab}")
-  else
-    UI.important("Wear AAB not found — uploading phone bundle only. Set WEAR_AAB_PATH for dedicated wear:* upload.")
+  artifacts = []
+  if roles.include?(:phone)
+    UI.user_error!("AAB not found at #{phone_aab}") unless File.exist?(phone_aab)
+    artifacts << { role: :phone, path: phone_aab }
   end
+  if roles.include?(:wear)
+    if !wear_aab.empty? && File.exist?(wear_aab)
+      artifacts << { role: :wear, path: wear_aab }
+      UI.message("Wear AAB will upload on dedicated Wear track: #{wear_aab}")
+    else
+      UI.user_error!("Wear AAB not found (PLAY_UPLOAD_ROLES includes wear). Set WEAR_AAB_PATH.")
+    end
+  end
+  UI.user_error!("No upload artifacts selected. Set PLAY_UPLOAD_ROLES=phone,wear (or wear).") if artifacts.empty?
   artifacts
 end
 
@@ -217,6 +234,10 @@ def upload_phone_and_wear!(phone_track:, wear_track:, json_key_path:, package_na
     begin
       upload_to_play_store_with_edit_retry!(options)
     rescue StandardError => error
+      if artifact[:role] == :phone && phone_version_already_used?(error)
+        UI.important("Phone version already on Play; continuing with remaining uploads: #{error.message}")
+        next
+      end
       if artifact[:role] == :wear && wear_optional && (play_track_not_found?(error) || error.message.to_s.include?("dedicated release track"))
         UI.important("PLAY_WEAR_OPTIONAL=true — skipping Wear upload because dedicated track is missing: #{error.message}")
         next

@@ -312,6 +312,8 @@ test('fastlane publishes the closed testing track release and keeps the track co
   assert.doesNotMatch(fastlaneFastfile, /release_status:\s*"draft"/)
   assert.match(fastlaneFastfile, /assert_dedicated_wear_track!/)
   assert.match(fastlaneFastfile, /wear_track_missing_help/)
+  assert.match(fastlaneFastfile, /PLAY_UPLOAD_ROLES/)
+  assert.match(fastlaneFastfile, /phone_version_already_used\?/)
 })
 
 test('fastlane reads pending release notes and uploads changelogs when content is present', () => {
