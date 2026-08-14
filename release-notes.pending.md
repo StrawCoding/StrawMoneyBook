@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- 有價證券「只記資金」賣出也可對應買入：可選連結資金買入、依剩餘成本自動帶本金（可部分平倉、最後一筆吃剩餘），不選則仍手動填本金；補 Node 與 `playwright:ui-layout`。
-
 ---
+
+## v1.3.126
+- 有價證券「只記資金」賣出也可對應買入：可選連結資金買入、依剩餘成本自動帶本金（可部分平倉、最後一筆吃剩餘），不選則仍手動填本金；補 Node 與 `playwright:ui-layout`。
 
 ## v1.3.125
 - Wear OS companion Stage A：電話端 MessageClient `/smb/v1/*` nearby-first、SQLCipher 單一連線擁有者、`origin_type=wear` + `wear_applied` UNIQUE + `syncEpoch`；Listener 不經 WebView 即可入帳；禁 DataClient 帳務與 `wearApp`。
