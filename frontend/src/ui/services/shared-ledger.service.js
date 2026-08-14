@@ -7,6 +7,8 @@ import {
   persistVerifiedRecoveryBackup,
   readVerifiedRecoveryBackup,
 } from '@/core/services/recovery-backup.service'
+import { replaceLedgerWithDurableRecovery } from '@/core/application/destructive-data-ops.js'
+import { canPushSharedLedgerSnapshot } from '@/core/domain/shared-ledger-role-matrix.js'
 import { nowIso } from '@/core/utils/id'
 import { formatSyncForeignKeyError, rethrowAsForeignKeyError } from '@/core/utils/sqlite-fk'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -39,11 +41,9 @@ import {
   updateSharedLedgerMemberRole,
 } from '@/services/shared-ledger/backend'
 
-// Mirror of the backend permission matrix in store-shared-ledgers.js so the
-// client can skip pushes that the server would reject (viewer = read-only).
+// Mirror of backend permission matrix (shared-ledger-role-matrix.js) — ART-15.
 export function sharedLedgerRoleCanPush(role) {
-  const normalized = String(role ?? '').trim().toLowerCase()
-  return normalized === 'owner' || normalized === 'admin' || normalized === 'member'
+  return canPushSharedLedgerSnapshot(role)
 }
 
 const SHARED_LEDGER_META_KEY = 'shared_ledger_meta'
@@ -408,70 +408,29 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
 
   const existingLedger = await getLedger(ledgerId)
   const existingSnapshot = existingLedger ? await exportLedgerJson(ledgerId) : null
-  let purgedExistingLedger = false
+
   let imported = null
-  /** @type {{ backupId?: string } | null} */
-  let recoveryProof = null
-
   try {
-    if (existingLedger && existingSnapshot) {
-      // ART-09: durable recovery before purge; never rely on memory-only rollback.
-      recoveryProof = await requireRecoveryBackupBeforeWipe(
-        () => persistVerifiedRecoveryBackup({
-          purpose: 'shared_ledger_replace',
-          data: existingSnapshot,
-          source: 'shared_ledger.replaceLocalLedgerWithSnapshot',
-          filename: `strawmoneybook-recovery-shared-replace-${ledgerId}.json`,
-        }),
-        {
-          source: 'shared_ledger.replaceLocalLedgerWithSnapshot',
-          i18nKey: 'shared_ledger.error.recovery_backup_required',
-        },
-      )
-      await purgeLedger(ledgerId)
-      purgedExistingLedger = true
-    }
-
-    // smb297: never auto-run repairLedgerData on sync replace — FK preserve + insert only.
-    imported = await importLedgerJsonAsNewLedger(JSON.stringify(normalizedSnapshot), {
-      keepLedgerId: true,
-      ledgerName: String(item?.name ?? ''),
-      runIntegrityRepair: false,
+    imported = await replaceLedgerWithDurableRecovery({
+      ledgerId,
+      existingLedger,
+      existingSnapshot,
+      purpose: 'shared_ledger_replace',
+      source: 'shared_ledger.replaceLocalLedgerWithSnapshot',
+      performReplace: () => importLedgerJsonAsNewLedger(JSON.stringify(normalizedSnapshot), {
+        keepLedgerId: true,
+        ledgerName: String(item?.name ?? ''),
+        runIntegrityRepair: false,
+      }),
+      deps: {
+        requireRecoveryBackupBeforeWipe,
+        persistVerifiedRecoveryBackup,
+        readVerifiedRecoveryBackup,
+        purgeLedger,
+        importLedgerJsonAsNewLedger,
+      },
     })
   } catch (error) {
-    if (purgedExistingLedger) {
-      let restoredText = ''
-      if (recoveryProof?.backupId) {
-        try {
-          const durable = await readVerifiedRecoveryBackup(recoveryProof.backupId)
-          restoredText = String(durable?.jsonText ?? '').trim()
-        } catch {
-          restoredText = ''
-        }
-      }
-      if (!restoredText && existingSnapshot) {
-        restoredText = JSON.stringify(existingSnapshot)
-      }
-      if (restoredText) {
-        try {
-          await purgeLedger(ledgerId)
-          await importLedgerJsonAsNewLedger(restoredText, {
-            keepLedgerId: true,
-            ledgerName: existingLedger.name,
-            runIntegrityRepair: false,
-          })
-        } catch (restoreError) {
-          // ART-09: rollback failure must surface — never console-only / success path.
-          const wrapped = new Error(
-            `共同帳本快照匯入失敗且本機還原也失敗：${String(error?.message ?? error)}; restore: ${String(restoreError?.message ?? restoreError)}`,
-          )
-          wrapped.code = 'shared_ledger_replace_restore_failed'
-          wrapped.cause = error
-          wrapped.restoreError = restoreError
-          throw wrapped
-        }
-      }
-    }
     rethrowAsForeignKeyError(error)
   }
 

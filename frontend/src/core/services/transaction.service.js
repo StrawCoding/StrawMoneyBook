@@ -55,6 +55,7 @@ import {
   toSignedManualUpdateMinor,
 } from '@/core/domain/posting/income-expense-policy.js'
 import { toTransferLegAmounts } from '@/core/domain/posting/transfer-posting-policy.js'
+import { classifyAppError, tagAppError } from '@/core/domain/errors.js'
 
 const TRANSACTION_FAILURE_TRACE_MAX_ENTRIES = 60
 const transactionFailureTraceListeners = new Set()
@@ -125,15 +126,19 @@ function notifyTransactionFailureTraceListeners() {
 }
 
 function recordTransactionFailureTrace(operation, ledgerId, error) {
+  const tagged = tagAppError(error instanceof Error ? error : new Error(String(error ?? 'unknown')))
+  const classified = classifyAppError(tagged)
   const nowMs = Date.now()
   const entry = {
     id: `tx_fail_${nowMs}_${transactionFailureTraceSeq++}`,
     operation: String(operation ?? '').trim() || 'unknown',
     ledgerId: String(ledgerId ?? '').trim(),
     failedAt: new Date(nowMs).toISOString(),
-    reasonType: getTransactionFailureReasonType(error),
-    errorCode: String(error?.code ?? '').trim().toUpperCase(),
-    errorMessage: String(error?.message ?? error ?? '').trim(),
+    reasonType: getTransactionFailureReasonType(tagged),
+    appErrorKind: classified.kind,
+    appErrorRetriable: classified.retriable,
+    errorCode: String(tagged?.code ?? classified.code ?? '').trim().toUpperCase(),
+    errorMessage: String(tagged?.message ?? tagged ?? '').trim(),
   }
   transactionFailureTraceEntries = [entry, ...transactionFailureTraceEntries]
   trimTransactionFailureTraceEntries()

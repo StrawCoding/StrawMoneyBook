@@ -37,3 +37,28 @@ export async function removeSetting(ledgerId, key) {
     [ledgerId, key],
   )
 }
+
+export async function listAppSettingRows(ledgerId) {
+  const result = await query(
+    `SELECT key, value_json, updated_at
+     FROM app_settings
+     WHERE ledger_id = ?;`,
+    [ledgerId],
+  )
+  return Array.isArray(result?.values) ? result.values : []
+}
+
+export async function upsertAppSettingRow(ledgerId, row = {}) {
+  await run(
+    `INSERT INTO app_settings (ledger_id, key, value_json, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(ledger_id, key)
+     DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at;`,
+    [
+      ledgerId,
+      String(row?.key ?? '').trim(),
+      String(row?.value_json ?? 'null'),
+      String(row?.updated_at ?? '').trim() || nowIso(),
+    ],
+  )
+}

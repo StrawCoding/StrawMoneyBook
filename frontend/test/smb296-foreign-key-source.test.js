@@ -84,8 +84,14 @@ test('smb296: 刪除帳戶／分類會檢查含 soft-deleted 的 FK 引用，硬
 test('smb296: 共同帳本同步失敗會寫入可見 FK 友善錯誤，且還原失敗會 throw（非 console-only）', () => {
   assert.match(sharedLedgerSource, /formatSyncForeignKeyError/)
   assert.match(sharedLedgerSource, /rethrowAsForeignKeyError/)
-  assert.match(sharedLedgerSource, /shared_ledger_replace_restore_failed/)
-  assert.match(sharedLedgerSource, /requireRecoveryBackupBeforeWipe/)
+  assert.match(sharedLedgerSource, /replaceLedgerWithDurableRecovery/)
+  assert.match(sharedLedgerSource, /requireRecoveryBackupBeforeWipe|purpose: 'shared_ledger_replace'/)
+  const destructiveOps = readFileSync(
+    resolve(import.meta.dirname, '../src/core/application/destructive-data-ops.js'),
+    'utf8',
+  )
+  assert.match(destructiveOps, /shared_ledger_replace_restore_failed/)
+  assert.match(destructiveOps, /requireRecoveryBackupBeforeWipe/)
 })
 
 test('smb296: repair.service 會修復含 soft-deleted 的 orphan account／category 引用', () => {

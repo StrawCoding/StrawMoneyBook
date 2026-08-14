@@ -9,7 +9,7 @@ import {
 } from '@/core/repositories/ledger.repo'
 import { applyLedgerBudgetPeriodSettings } from '@/core/services/budget.service'
 import { ensureLedgerDefaults } from '@/core/services/seed.service'
-import { assertCanCreateLedger, getMembershipTierSnapshot, isFreeTier } from '@/core/services/membership.service'
+import { MembershipGate } from '@/core/domain/membership-gate.js'
 import { getCurrentLocale } from '@/ui/services/i18n.service'
 import {
   loadLedgerScopedStores,
@@ -60,7 +60,7 @@ export const useLedgerStore = defineStore('ledger', {
         await this.refresh()
         this.activeLedgerId = resolveInitialActiveLedgerId(this.ledgers, {
           cachedLedgerId: storage?.getItem?.(ACTIVE_LEDGER_KEY),
-          membershipTier: getMembershipTierSnapshot(),
+          membershipTier: MembershipGate.getSnapshot(),
         })
         this.persistActive(storage)
       } catch (error) {
@@ -102,7 +102,7 @@ export const useLedgerStore = defineStore('ledger', {
         resetLedgerScopedStores(pinia)
         return
       }
-      if (isFreeTier() && this.ledgers.length > 0 && nextLedgerId !== this.ledgers[0].id) {
+      if (MembershipGate.isFreeTier() && this.ledgers.length > 0 && nextLedgerId !== this.ledgers[0].id) {
         throw new Error('免費版僅可使用 1 個帳本')
       }
       if (!force && nextLedgerId === this.activeLedgerId) return
@@ -113,7 +113,7 @@ export const useLedgerStore = defineStore('ledger', {
 
     async addLedger(input) {
       const pinia = getActivePinia()
-      assertCanCreateLedger(this.ledgers.length)
+      MembershipGate.assertCanCreateLedger(this.ledgers.length)
       const ledger = await createLedger(input)
 
       this.applyLedgerList([...this.ledgers, ledger])

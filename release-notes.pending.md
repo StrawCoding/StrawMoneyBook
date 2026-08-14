@@ -11,6 +11,11 @@
 - (ART-10) 交易寫入後統一 `afterTransactionMutation`／`refreshAfterWriteSafe`；credit／loan／security 現金入帳出口一併刷 account／budget／home。
 - (ART-11) 切帳本 `ledger-runtime` reset／clear／hydrate 納入 `credit.store`，避免殘留舊卡資料。
 - (ART-12) `RuntimeJobScheduler`：同名 runtime job 合併防重入（resume sync／rollover／settlement 等）。
+- (ART-19) 最小 App 錯誤分類（Domain／Database／Network／Auth／Conflict／Recovery）；交易失敗 trace 與 restore 路徑標註 kind。
+- (ART-13) `replaceLedgerWithDurableRecovery` 抽至 application use-case；共同帳本 replace 改呼叫。
+- (ART-14) Drive ledger sync 不再直 import SQLite；改走 `settings.repo`；ui/services→sqlite 靜態閘門。
+- (ART-15) Shared-ledger RoleMatrix 單一來源（FE/BE deepEqual）；`sharedLedgerRoleCanPush` 改引用矩陣。
+- (ART-16) Client `MembershipGate` 單一入口（UX 限額；不取代 server 授權）。
 
 ---
 

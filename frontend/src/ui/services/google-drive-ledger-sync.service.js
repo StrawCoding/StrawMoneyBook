@@ -11,8 +11,8 @@ import {
   persistVerifiedRecoveryBackup,
   readVerifiedRecoveryBackup,
 } from '@/core/services/recovery-backup.service'
-import { getMembershipTierSnapshot } from '@/core/services/membership.service'
-import { query, run } from '@/core/db/sqlite'
+import { MembershipGate } from '@/core/domain/membership-gate.js'
+import { listAppSettingRows, upsertAppSettingRow } from '@/core/repositories/settings.repo'
 import { nowIso } from '@/core/utils/id'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { translateMessage } from '@/ui/services/i18n.service'
@@ -75,7 +75,7 @@ function hasProfileIdentity(profile) {
 }
 
 function hasGoogleDriveLedgerSyncMembershipAccess() {
-  return getMembershipTierSnapshot() === MEMBERSHIP_TIER_MEMBER
+  return MembershipGate.getSnapshot() === MEMBERSHIP_TIER_MEMBER
 }
 
 function assertGoogleDriveLedgerSyncMembershipAccess() {
@@ -292,30 +292,13 @@ async function restoreLocalLedgerFromBackup(ledgerId, localBackupText, existingL
 }
 
 async function listLocalOnlySettingRows(ledgerId) {
-  const result = await query(
-    `SELECT key, value_json, updated_at
-     FROM app_settings
-     WHERE ledger_id = ?;`,
-    [ledgerId],
-  )
-  const rows = Array.isArray(result?.values) ? result.values : []
+  const rows = await listAppSettingRows(ledgerId)
   return rows.filter((row) => isLocalOnlyAppSettingKey(row?.key))
 }
 
 async function restoreSettingRows(ledgerId, rows = []) {
   for (const row of rows) {
-    await run(
-      `INSERT INTO app_settings (ledger_id, key, value_json, updated_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(ledger_id, key)
-       DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at;`,
-      [
-        ledgerId,
-        String(row?.key ?? '').trim(),
-        String(row?.value_json ?? 'null'),
-        String(row?.updated_at ?? '').trim() || nowIso(),
-      ],
-    )
+    await upsertAppSettingRow(ledgerId, row)
   }
 }
 
