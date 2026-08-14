@@ -1,10 +1,11 @@
 # Pending Release Notes
 
+---
+
+## v1.3.128
 - (ART-i18n-SPLIT) `i18n.service` 拆出 zh-TW／en／ja 字典與 runtime 對照模組；服務檔僅保留查表／locale API。
 - (ART-SEC-03B) Google Play membership 改 server-side receipt 驗證：`purchaseToken` → Android Publisher API；通過後寫入 `google_play_verified` 授權來源（client 自報仍僅 UNVERIFIED 觀察）。
 - (ART-BE-CAS) 共同帳本 snapshot upsert 加 SQL `WHERE version=?` optimistic lock（force 可繞過）；防多 process／競態覆寫。
-
----
 
 ## v1.3.127
 - Play 上架改 Wear 專屬軌道：phone=`alpha`／`production`，Wear=`wear:alpha`／`wear:production`（禁 `aab_paths` 合軌）；Console 須先啟用板型規格 Wear OS 專屬測試群組。
