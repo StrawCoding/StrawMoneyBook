@@ -36,6 +36,7 @@ import {
   updateSecurityTransactionSettlement,
 } from '@/core/repositories/security.repo'
 import { findAccountById } from '@/core/repositories/account.repo'
+import { toSecurityCashMagnitudeMinor } from '@/core/domain/posting/security-posting-policy.js'
 import { firstRow, rowsOf } from '@/core/repositories/base.repo'
 import {
   createAdjustment,
@@ -269,7 +270,7 @@ async function postCashLegsFromPlan(ledgerId, plan) {
         id: row.id,
         accountId: row.accountId,
         categoryId: row.categoryId,
-        amountMinor: Math.abs(row.amountMinor),
+        amountMinor: toSecurityCashMagnitudeMinor(row.amountMinor),
         note: row.note,
         occurredAt: row.occurredAt,
         includeInBudget: false,
@@ -282,7 +283,7 @@ async function postCashLegsFromPlan(ledgerId, plan) {
         id: row.id,
         accountId: row.accountId,
         categoryId: row.categoryId,
-        amountMinor: Math.abs(row.amountMinor),
+        amountMinor: toSecurityCashMagnitudeMinor(row.amountMinor),
         note: row.note,
         occurredAt: row.occurredAt,
         includeInBudget: false,

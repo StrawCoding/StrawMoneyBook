@@ -5,6 +5,9 @@
 - (ART-08) Google Drive 帳本 replace 在 purge 前強制 durable recovery proof，匯入失敗優先自 durable 還原。
 - (ART-09) 共同帳本 `replaceLocalLedgerWithSnapshot`：purge 前 durable recovery；還原失敗改 throw（禁 console-only）。
 - (ART-SEC-01/02/03A) 後端 500 訊息消毒；production Google OAuth 強制 client shared key；Play membership client sync 僅 UNVERIFIED 觀察值，不可解鎖會員閘門。
+- (ART-03) Money 原語（normalize／abs／assert）與 IncomeExpensePostingPolicy；一般收支／調整入帳符號集中於 domain。
+- (ART-04a–d) Credit／Security／Loan／Transfer PostingPolicy 接入服務與 transfer repo。
+- (ART-05) BalanceQuery 策略分離：帳戶账面餘額／信用卡實際卡債／匯出 running balance（禁 God calculateBalance）。
 
 ---
 

@@ -2,6 +2,7 @@ import { query, run } from '../db/sqlite.js'
 import { createId, nowIso } from '../utils/id.js'
 import { isForeignKeyError } from '../utils/sqlite-fk.js'
 import { assertLedgerId, rowsOf, firstRow } from './base.repo.js'
+import { getAccountBookBalanceMinor } from '../domain/balance/balance-query.js'
 
 function normalizeAccountIcon(icon) {
   const value = String(icon ?? '').trim()
@@ -564,5 +565,8 @@ export async function getAccountBalances(ledgerId, options = {}) {
     [ledgerId, includeArchived ? 1 : 0],
   )
 
-  return rowsOf(result)
+  return rowsOf(result).map((row) => ({
+    ...row,
+    balance_minor: getAccountBookBalanceMinor(row.balance_minor),
+  }))
 }

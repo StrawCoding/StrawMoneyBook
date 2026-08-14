@@ -24,6 +24,10 @@ import {
   validateRepaymentAllocationPlan,
 } from '@/core/utils/credit-card-apply'
 import {
+  toCreditLiabilityMinor,
+  toCreditMagnitudeMinor,
+} from '@/core/domain/posting/credit-posting-policy.js'
+import {
   closeCreditStatementRow,
   findCreditStatementById,
   findOpenCreditStatement,
@@ -354,7 +358,7 @@ export async function createCreditPurchase(ledgerId, payload = {}) {
   assertLedgerId(ledgerId)
   const accountId = String(payload.accountId ?? '').trim()
   const categoryId = String(payload.categoryId ?? '').trim()
-  const amountMinor = Math.round(Math.abs(Number(payload.amountMinor)))
+  const amountMinor = toCreditMagnitudeMinor(payload.amountMinor)
   if (!accountId || !categoryId) throw new Error('刷卡需要帳戶與分類')
   if (!Number.isFinite(amountMinor) || amountMinor <= 0) throw new Error('金額必須大於 0')
 
@@ -383,7 +387,7 @@ export async function createCreditPurchase(ledgerId, payload = {}) {
 
   return withTransaction(async () => {
     const statement = await assignStatementForPostedAt(ledgerId, accountId, postedAt)
-    const liability = -amountMinor
+    const liability = toCreditLiabilityMinor(amountMinor)
 
     const txId = await addTransaction(ledgerId, {
       type: 'expense',
@@ -435,7 +439,7 @@ export async function createCreditRepayment(ledgerId, payload = {}) {
   assertLedgerId(ledgerId)
   const accountId = String(payload.accountId ?? '').trim()
   const sourceAccountId = String(payload.sourceAccountId ?? '').trim()
-  const amountMinor = Math.round(Math.abs(Number(payload.amountMinor)))
+  const amountMinor = toCreditMagnitudeMinor(payload.amountMinor)
   const paidAt = normalizePostedAt(payload.paidAt, new Date().toISOString())
   const idempotencyKey = String(payload.idempotencyKey ?? '').trim() || `repay:${createId('key')}`
 
@@ -583,7 +587,7 @@ export async function createCreditRefundAdjustment(ledgerId, payload = {}) {
   // never mutate closed closing_balance_minor. posted_at is forced into the open
   // period so statement assignment stays consistent with hard contract #2/#4.
   const accountId = String(payload.accountId ?? '').trim()
-  const amountMinor = Math.round(Math.abs(Number(payload.amountMinor)))
+  const amountMinor = toCreditMagnitudeMinor(payload.amountMinor)
   if (!accountId || amountMinor <= 0) throw new Error('退款參數無效')
 
   const account = await findAccountById(ledgerId, accountId)

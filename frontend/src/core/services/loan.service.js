@@ -35,6 +35,11 @@ import {
 } from '@/core/repositories/transaction.repo'
 import { assertCanCreateLoan } from '@/core/services/membership.service'
 import { isSavingsJarAccount } from '@/core/repositories/savings-jar.repo'
+import {
+  toLoanOpenPrincipalMinor,
+  toLoanRepaymentInterestMinor,
+  toLoanRepaymentPrincipalMinor,
+} from '@/core/domain/posting/loan-posting-policy.js'
 
 function validateDirection(direction) {
   if (!['lend', 'borrow'].includes(direction)) {
@@ -239,7 +244,7 @@ export async function createLoanWithOptionalTransaction(ledgerId, payload) {
     })
 
     const txType = payload.direction === 'lend' ? 'expense' : 'income'
-    const amountMinor = payload.direction === 'lend' ? principalMinor * -1 : principalMinor
+    const amountMinor = toLoanOpenPrincipalMinor(payload.direction, principalMinor)
     const setupTxId = await addTransaction(ledgerId, {
       type: txType,
       accountId: payload.accountId,
@@ -332,7 +337,7 @@ async function addLoanRepaymentInternal(ledgerId, payload) {
       type: txType,
       accountId: payload.accountId,
       categoryId: null,
-      amountMinor: loan.direction === 'lend' ? principalComponentMinor : principalComponentMinor * -1,
+      amountMinor: toLoanRepaymentPrincipalMinor(loan.direction, principalComponentMinor),
       occurredAt,
       note: noteBase,
       originType: 'loan_payment',
@@ -350,7 +355,7 @@ async function addLoanRepaymentInternal(ledgerId, payload) {
       type: txType,
       accountId: payload.accountId,
       categoryId: interestCategoryId,
-      amountMinor: loan.direction === 'lend' ? interestComponentMinor : interestComponentMinor * -1,
+      amountMinor: toLoanRepaymentInterestMinor(loan.direction, interestComponentMinor),
       occurredAt,
       note: payload.note ?? `借貸利息：${loan.counterparty_name ?? ''}`,
       originType: 'loan_payment',

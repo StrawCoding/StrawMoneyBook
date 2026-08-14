@@ -4,6 +4,7 @@
  * tests must call these (not hand-rolled INSERT simulations of product rules).
  */
 
+import { getCreditCardDebtMinor } from '../domain/balance/balance-query.js'
 import { derivePaidMinorFromAllocations } from './credit-period.js'
 
 export function creditError(code, message) {
@@ -286,10 +287,7 @@ export function validateRepaymentAllocationPlan({
 
 /** Sum unpaid remaining across statements — actual card debt for limit alerts. */
 export function computeActualCardDebtMinor(statements = []) {
-  return (Array.isArray(statements) ? statements : []).reduce((sum, st) => {
-    const remaining = Math.round(Number(st?.remaining_minor ?? st?.remainingMinor ?? 0))
-    return sum + (Number.isFinite(remaining) && remaining > 0 ? remaining : 0)
-  }, 0)
+  return getCreditCardDebtMinor(statements)
 }
 
 export function computeCreditUtilization({ debtMinor, creditLimitMinor } = {}) {

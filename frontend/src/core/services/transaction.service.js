@@ -43,6 +43,18 @@ import {
   buildUpdateManualTransactionFields,
   chooseRefundFormalPath,
 } from '@/core/utils/credit-card-apply'
+import {
+  absoluteMinor,
+  assertNonNegativeMinor,
+  assertNonZeroMinor,
+  assertPositiveMinor,
+  normalizeMinor,
+} from '@/core/domain/money.js'
+import {
+  toSignedIncomeExpenseMinor,
+  toSignedManualUpdateMinor,
+} from '@/core/domain/posting/income-expense-policy.js'
+import { toTransferLegAmounts } from '@/core/domain/posting/transfer-posting-policy.js'
 
 const TRANSACTION_FAILURE_TRACE_MAX_ENTRIES = 60
 const transactionFailureTraceListeners = new Set()
@@ -198,17 +210,11 @@ export function subscribeTransactionFailureTrace(listener, { emitCurrent = true 
 }
 
 function assertNonNegativeAmount(amountMinor) {
-  const amount = Number(amountMinor)
-  if (!Number.isInteger(amount) || amount < 0) {
-    throw new Error('amountMinor 必須為大於或等於 0 的數字')
-  }
+  return assertNonNegativeMinor(amountMinor)
 }
 
 function assertPositiveAmount(amountMinor) {
-  const amount = Number(amountMinor)
-  if (!Number.isInteger(amount) || amount <= 0) {
-    throw new Error('amountMinor 必須為大於 0 的數字')
-  }
+  return assertPositiveMinor(amountMinor)
 }
 
 async function assertAccountAllowsDirectTransaction(ledgerId, accountId) {
@@ -284,7 +290,7 @@ export async function createExpense(ledgerId, payload) {
       const result = await createCreditPurchase(ledgerId, {
         accountId: payload.accountId,
         categoryId: payload.categoryId,
-        amountMinor: Math.abs(Number(payload.amountMinor)),
+        amountMinor: absoluteMinor(payload.amountMinor),
         occurredAt: payload.occurredAt ?? new Date().toISOString(),
         postedAt: payload.postedAt ?? payload.occurredAt ?? new Date().toISOString(),
         note: payload.note,
@@ -307,7 +313,7 @@ export async function createExpense(ledgerId, payload) {
     return addTransaction(ledgerId, applyCreateEditorAttribution({
       ...payload,
       type: 'expense',
-      amountMinor: Math.abs(Number(payload.amountMinor)) * -1,
+      amountMinor: toSignedIncomeExpenseMinor('expense', payload.amountMinor),
       isReimbursable: Boolean(payload.isReimbursable),
       reimbursementState: payload.isReimbursable ? 'pending' : 'none',
       includeInBudget: payload.includeInBudget !== false,
@@ -329,7 +335,7 @@ export async function createIncome(ledgerId, payload) {
     return addTransaction(ledgerId, applyCreateEditorAttribution({
       ...payload,
       type: 'income',
-      amountMinor: Math.abs(Number(payload.amountMinor)),
+      amountMinor: toSignedIncomeExpenseMinor('income', payload.amountMinor),
       isReimbursable: false,
       reimbursementState: 'none',
       includeInBudget: payload.includeInBudget !== false,
@@ -345,14 +351,12 @@ export async function createAdjustment(ledgerId, payload) {
       throw new Error('adjustment 需要 accountId')
     }
     await assertAccountAllowsDirectTransaction(ledgerId, payload.accountId)
-    if (!Number.isFinite(Number(payload.amountMinor)) || Number(payload.amountMinor) === 0) {
-      throw new Error('adjustment amountMinor 不能為 0')
-    }
+    assertNonZeroMinor(payload.amountMinor)
 
     return addTransaction(ledgerId, applyCreateEditorAttribution({
       ...payload,
       type: 'adjustment',
-      amountMinor: Number(payload.amountMinor),
+      amountMinor: toSignedIncomeExpenseMinor('adjustment', payload.amountMinor),
       isReimbursable: false,
       reimbursementState: 'none',
       includeInBudget: payload.includeInBudget !== false,
@@ -465,22 +469,18 @@ export async function createTransfer(ledgerId, payload) {
       throw new Error('轉出與轉入帳戶不可相同')
     }
 
-    const sourceExtraMinorInput = Number(payload.sourceExtraMinor ?? 0)
-    const sourceExtraMinor = Number.isFinite(sourceExtraMinorInput) ? Math.round(sourceExtraMinorInput) : 0
-    if (Math.abs(Number(payload.amountMinor)) + sourceExtraMinor <= 0) {
-      throw new Error('轉出金額（含附加項目）需大於 0')
-    }
-    const toAmountMinorInput = Number(payload.toAmountMinor ?? 0)
-    const toAmountMinor = Number.isFinite(toAmountMinorInput) && toAmountMinorInput > 0
-      ? Math.round(toAmountMinorInput)
-      : null
+    const legs = toTransferLegAmounts({
+      amountMinor: payload.amountMinor,
+      sourceExtraMinor: payload.sourceExtraMinor,
+      toAmountMinor: payload.toAmountMinor,
+    })
 
     return addTransfer(ledgerId, applyCreateEditorAttribution({
       ...payload,
       occurredAt: payload.occurredAt ?? new Date().toISOString(),
-      amountMinor: Number(payload.amountMinor),
-      sourceExtraMinor,
-      toAmountMinor,
+      amountMinor: legs.amountMinor,
+      sourceExtraMinor: legs.sourceExtraMinor,
+      toAmountMinor: payload.toAmountMinor != null ? legs.toAmountMinor : null,
     }, await resolveCurrentTransactionEditor()))
   })
 }
@@ -541,9 +541,9 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
       throw new Error('轉帳資料不完整')
     }
 
-    const normalizedAmountMinor = Math.abs(Math.round(Number(payload.amountMinor)))
+    const normalizedAmountMinor = absoluteMinor(payload.amountMinor)
     const sourceExtraMinorInput = Number(payload.sourceExtraMinor ?? 0)
-    const sourceExtraMinor = Number.isFinite(sourceExtraMinorInput) ? Math.round(sourceExtraMinorInput) : 0
+    const sourceExtraMinor = Number.isFinite(sourceExtraMinorInput) ? normalizeMinor(sourceExtraMinorInput) : 0
     if (normalizedAmountMinor + sourceExtraMinor <= 0) {
       throw new Error('轉出金額（含附加項目）需大於 0')
     }
@@ -587,9 +587,7 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
     if (isRefundTransaction) {
       throw new Error('退款紀錄不可改為收入或支出')
     }
-    assertNonNegativeAmount(amountMinor)
-    amountMinor = Math.abs(amountMinor)
-    amountMinor = payload.type === 'expense' ? amountMinor * -1 : amountMinor
+    amountMinor = toSignedManualUpdateMinor(payload.type, amountMinor)
     if (!payload.categoryId) {
       throw new Error('請選擇分類')
     }
@@ -597,6 +595,7 @@ export async function updateManualTransaction(ledgerId, txId, payload) {
     if (!Number.isFinite(amountMinor) || amountMinor === 0) {
       throw new Error('調整金額不可為 0')
     }
+    amountMinor = normalizeMinor(amountMinor)
   } else {
     throw new Error('不支援的交易類型')
   }

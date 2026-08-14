@@ -1,6 +1,10 @@
 import { query } from '@/core/db/sqlite'
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
+import {
+  getAccountBookBalanceMinor,
+  nextRunningBalanceMinor,
+} from '@/core/domain/balance/balance-query.js'
 
 const FileOpener = registerPlugin('FileOpener')
 const EXPORT_ROOT_DIR = 'StrawMoneyBook'
@@ -309,7 +313,7 @@ async function loadAccountBalanceBeforeMap(ledgerId, startUtc = null) {
   const rows = result?.values ?? []
   const map = new Map()
   for (const row of rows) {
-    map.set(String(row.account_id), Number(row.balance_minor ?? 0))
+    map.set(String(row.account_id), getAccountBookBalanceMinor(row.balance_minor))
   }
   return map
 }
@@ -455,7 +459,7 @@ function buildLedgerTransactionExportRows(sourceRows, accountBalanceMap) {
   for (const row of sourceRows) {
     const amountMajor = Number(row.amount_minor ?? 0) / 100
     const accountId = String(row.account_id ?? '')
-    const nextBalanceMinor = Number(accountBalanceMap.get(accountId) ?? 0) + Number(row.amount_minor ?? 0)
+    const nextBalanceMinor = nextRunningBalanceMinor(accountBalanceMap.get(accountId), row.amount_minor)
     accountBalanceMap.set(accountId, nextBalanceMinor)
     const accountBalanceMajor = nextBalanceMinor / 100
     const categories = normalizeCategoryLevels(row.category_group_name, row.category_name)

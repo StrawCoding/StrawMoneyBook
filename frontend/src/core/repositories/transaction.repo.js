@@ -2,6 +2,7 @@ import { query, run, withTransaction } from '@/core/db/sqlite'
 import { createId, nowIso } from '@/core/utils/id'
 import { assertLedgerId, firstRow, rowsOf } from '@/core/repositories/base.repo'
 import { yieldToMainThread } from '@/core/utils/cooperative-yield'
+import { toTransferLegAmounts } from '@/core/domain/posting/transfer-posting-policy.js'
 
 function parseMonthKey(monthKey) {
   const matched = /^(\d{4})-(\d{2})$/.exec(String(monthKey ?? '').trim())
@@ -1330,14 +1331,7 @@ export async function addTransfer(ledgerId, input) {
 
   const transferGroupId = input.transferGroupId ?? createId('tf')
   const occurredAt = input.occurredAt
-  const amountMinor = Math.abs(Number(input.amountMinor))
-  const toAmountMinorInput = Number(input.toAmountMinor)
-  const toAmountMinor = Number.isFinite(toAmountMinorInput) && toAmountMinorInput > 0
-    ? Math.abs(Math.round(toAmountMinorInput))
-    : amountMinor
-  const sourceExtraMinorInput = Number(input.sourceExtraMinor ?? 0)
-  const sourceExtraMinor = Number.isFinite(sourceExtraMinorInput) ? Math.round(sourceExtraMinorInput) : 0
-  const outAmountMinor = (amountMinor + sourceExtraMinor) * -1
+  const legs = toTransferLegAmounts(input)
 
   return withTransaction(async () => {
     const editorFields = {
@@ -1351,7 +1345,7 @@ export async function addTransfer(ledgerId, input) {
       transferGroupId,
       accountId: input.fromAccountId,
       peerAccountId: input.toAccountId,
-      amountMinor: outAmountMinor,
+      amountMinor: legs.outAmountMinor,
       occurredAt,
       note: input.note,
       originType: input.originType ?? 'manual',
@@ -1365,7 +1359,7 @@ export async function addTransfer(ledgerId, input) {
       transferGroupId,
       accountId: input.toAccountId,
       peerAccountId: input.fromAccountId,
-      amountMinor: toAmountMinor,
+      amountMinor: legs.toAmountMinor,
       occurredAt,
       note: input.note,
       originType: input.originType ?? 'manual',
