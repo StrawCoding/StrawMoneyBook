@@ -1,5 +1,6 @@
 # Pending Release Notes
 
+- Play 上架改 Wear 專屬軌道：phone=`alpha`／`production`，Wear=`wear:alpha`／`wear:production`（禁 `aab_paths` 合軌）；Console 須先啟用板型規格 Wear OS 專屬測試群組。
 - (ART-01/02) 本地 SQLite 外層交易改 SqliteWriteQueue + TransactionContext，消除全域 depth 跨任務 join；並發隔離回歸與 native 驗證策略。
 - (ART-06/07) 共同帳本 SnapshotValidator（結構／語意／完整性）與 CAS；`force` 降為 break-glass（owner/admin + reason + previous_snapshot／force_audit）；衝突合併後不再靜默 `force:true`。
 - (ART-08) Google Drive 帳本 replace 在 purge 前強制 durable recovery proof，匯入失敗優先自 durable 還原。
@@ -16,6 +17,8 @@
 - (ART-14) Drive ledger sync 不再直 import SQLite；改走 `settings.repo`；ui/services→sqlite 靜態閘門。
 - (ART-15) Shared-ledger RoleMatrix 單一來源（FE/BE deepEqual）；`sharedLedgerRoleCanPush` 改引用矩陣。
 - (ART-16) Client `MembershipGate` 單一入口（UX 限額；不取代 server 授權）。
+- (ART-17) `SettingsSharedLedgerPage` 拆出 Members／Email Invite／Sync Status 子面板與 formatters（純搬移，同步語意不變）。
+- (ART-18) `budget.service` 改 facade：period／spent／crud／deps 分離，對外 API 相容。
 
 ---
 

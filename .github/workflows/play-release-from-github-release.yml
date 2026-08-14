@@ -21,6 +21,7 @@ jobs:
       RUBY_VERSION: "3.2"
       ANDROID_PACKAGE_NAME: ${{ secrets.ANDROID_PACKAGE_NAME }}
       PLAY_CLOSED_TESTING_TRACK: ${{ vars.PLAY_CLOSED_TESTING_TRACK || 'alpha' }}
+      PLAY_WEAR_CLOSED_TESTING_TRACK: ${{ vars.PLAY_WEAR_CLOSED_TESTING_TRACK || 'wear:alpha' }}
 
     steps:
       - name: Checkout

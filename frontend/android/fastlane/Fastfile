@@ -12,6 +12,8 @@ PLAY_UPLOAD_RETRY_DELAY_SECONDS = 15
 PLAY_CONSOLE_MAX_LENGTH = 500
 DEFAULT_PHONE_AAB = "app/build/outputs/bundle/release/app-release.aab"
 DEFAULT_WEAR_AAB = "wear/build/outputs/bundle/release/wear-release.aab"
+DEFAULT_PHONE_TRACK = "alpha"
+DEFAULT_PRODUCTION_TRACK = "production"
 WEAR_VERSION_CODE_OFFSET = 100_000_000
 
 def require_env!(key)
@@ -60,6 +62,28 @@ def play_edit_conflict?(error)
   error.message.to_s.include?(PLAY_EDIT_CONFLICT_MESSAGE)
 end
 
+def play_track_not_found?(error)
+  msg = error.message.to_s
+  msg.include?("Track not found") || msg.match?(/404.*[Tt]rack/)
+end
+
+def wear_track_for_phone_track(phone_track)
+  track = phone_track.to_s.strip
+  return track if track.start_with?("wear:")
+
+  "wear:#{track}"
+end
+
+def wear_track_missing_help(wear_track)
+  <<~HELP.gsub(/\s+/, " ").strip
+    Wear track #{wear_track.inspect} does not exist for this Play app.
+    Enable it in Play Console: Test and release → Advanced settings → Form factors →
+    Add Wear OS → Manage → Use a dedicated release track for Wear OS → Save.
+    Then re-run the v* tag workflow. Do not put the Wear AAB on the phone track
+    with a combined phone+wear upload (Play requires dedicated wear:* tracks after form-factor opt-in).
+  HELP
+end
+
 def upload_to_play_store_with_edit_retry!(options)
   attempts = 0
 
@@ -67,11 +91,17 @@ def upload_to_play_store_with_edit_retry!(options)
     attempts += 1
     upload_to_play_store(options)
   rescue StandardError => error
-    raise unless play_edit_conflict?(error) && attempts < PLAY_UPLOAD_MAX_ATTEMPTS
+    if play_edit_conflict?(error) && attempts < PLAY_UPLOAD_MAX_ATTEMPTS
+      UI.important("Google Play edit was changed outside this upload; retrying with a new edit (attempt #{attempts + 1}/#{PLAY_UPLOAD_MAX_ATTEMPTS})")
+      sleep(PLAY_UPLOAD_RETRY_DELAY_SECONDS)
+      retry
+    end
 
-    UI.important("Google Play edit was changed outside this upload; retrying with a new edit (attempt #{attempts + 1}/#{PLAY_UPLOAD_MAX_ATTEMPTS})")
-    sleep(PLAY_UPLOAD_RETRY_DELAY_SECONDS)
-    retry
+    if play_track_not_found?(error) && options[:track].to_s.start_with?("wear:")
+      UI.user_error!(wear_track_missing_help(options[:track]))
+    end
+
+    raise
   end
 end
 
@@ -123,7 +153,7 @@ def prepare_play_changelogs(version_name, notes_path = PENDING_RELEASE_NOTES_PAT
   true
 end
 
-def collect_aab_paths
+def collect_upload_artifacts
   requested_phone = ENV.fetch("AAB_PATH", DEFAULT_PHONE_AAB).to_s.strip
   requested_wear = ENV.fetch("WEAR_AAB_PATH", DEFAULT_WEAR_AAB).to_s.strip
   phone_aab = resolve_aab_path(requested_phone)
@@ -131,48 +161,84 @@ def collect_aab_paths
 
   UI.user_error!("AAB not found at #{phone_aab}") unless File.exist?(phone_aab)
 
-  aabs = [phone_aab]
+  artifacts = [{ role: :phone, path: phone_aab }]
   if !wear_aab.empty? && File.exist?(wear_aab)
-    aabs << wear_aab
-    UI.message("Including Wear AAB for Phone + Wear listing: #{wear_aab}")
+    artifacts << { role: :wear, path: wear_aab }
+    UI.message("Wear AAB will upload on dedicated Wear track: #{wear_aab}")
   else
-    UI.important("Wear AAB not found — uploading phone bundle only. Set WEAR_AAB_PATH to wear/build/outputs/bundle/release/wear-release.aab for dual upload.")
+    UI.important("Wear AAB not found — uploading phone bundle only. Set WEAR_AAB_PATH for dedicated wear:* upload.")
   end
-  aabs
+  artifacts
 end
 
-def play_upload_options(aabs, json_key_path, package_name, track, mapping_path, has_changelogs)
+def play_upload_options(aab_path, json_key_path, package_name, track, mapping_path, has_changelogs)
   mapping_exists = !mapping_path.empty? && File.exist?(mapping_path)
   options = {
     package_name: package_name,
     json_key: json_key_path,
     track: track,
     release_status: "completed",
+    aab: aab_path,
     skip_upload_apk: true,
     skip_upload_metadata: true,
     skip_upload_images: true,
     skip_upload_screenshots: true,
     skip_upload_changelogs: !has_changelogs
   }
-  options[:mapping] = mapping_path if mapping_exists
-  if aabs.length > 1
-    options[:aab_paths] = aabs
-  else
-    options[:aab] = aabs.first
-  end
+  # Mapping belongs to the phone (R8) artifact only.
+  options[:mapping] = mapping_path if mapping_exists && !track.to_s.start_with?("wear:")
   options
 end
 
+def assert_dedicated_wear_track!(phone_track, wear_track)
+  if wear_track == phone_track || !wear_track.start_with?("wear:")
+    UI.user_error!(
+      "Wear track must be a dedicated form-factor track (expected wear:*), got phone=#{phone_track.inspect} wear=#{wear_track.inspect}."
+    )
+  end
+end
+
+def upload_phone_and_wear!(phone_track:, wear_track:, json_key_path:, package_name:, mapping_path:, has_changelogs:)
+  assert_dedicated_wear_track!(phone_track, wear_track)
+  artifacts = collect_upload_artifacts
+  wear_optional = ENV.fetch("PLAY_WEAR_OPTIONAL", "false").to_s.strip.downcase == "true"
+
+  artifacts.each do |artifact|
+    track = artifact[:role] == :wear ? wear_track : phone_track
+    UI.message("Uploading #{artifact[:role]} AAB to Play track=#{track} release_status=completed: #{artifact[:path]}")
+    options = play_upload_options(
+      artifact[:path],
+      json_key_path,
+      package_name,
+      track,
+      mapping_path,
+      has_changelogs
+    )
+    begin
+      upload_to_play_store_with_edit_retry!(options)
+    rescue StandardError => error
+      if artifact[:role] == :wear && wear_optional && (play_track_not_found?(error) || error.message.to_s.include?("dedicated release track"))
+        UI.important("PLAY_WEAR_OPTIONAL=true — skipping Wear upload because dedicated track is missing: #{error.message}")
+        next
+      end
+      raise
+    end
+  end
+end
+
 platform :android do
-  desc "Submit the release AAB to Google Play production track for review"
+  desc "Submit phone + wear AABs to Google Play production (phone=production, wear=wear:production)"
   lane :production_review do
     package_name = require_env!("ANDROID_PACKAGE_NAME")
     json_key_path = require_env!("PLAY_JSON_KEY_PATH")
+    phone_track = ENV.fetch("PLAY_PRODUCTION_TRACK", DEFAULT_PRODUCTION_TRACK).to_s.strip
+    wear_track = ENV.fetch("PLAY_WEAR_PRODUCTION_TRACK", wear_track_for_phone_track(phone_track)).to_s.strip
     requested_mapping_path = ENV.fetch("PLAY_MAPPING_PATH", "").to_s.strip
 
     UI.user_error!("Play service account json not found at #{json_key_path}") unless File.exist?(json_key_path)
+    UI.user_error!("PLAY_PRODUCTION_TRACK must not be empty") if phone_track.empty?
+    UI.user_error!("PLAY_WEAR_PRODUCTION_TRACK must not be empty") if wear_track.empty?
 
-    aabs = collect_aab_paths
     mapping_path = resolve_mapping_path(requested_mapping_path)
 
     ci_version_name = ENV.fetch("CI_VERSION_NAME", "").strip
@@ -184,22 +250,28 @@ platform :android do
       UI.important("[release-notes] No release notes found — skipping changelog upload.")
     end
 
-    upload_to_play_store_with_edit_retry!(
-      play_upload_options(aabs, json_key_path, package_name, "production", mapping_path, has_changelogs)
+    upload_phone_and_wear!(
+      phone_track: phone_track,
+      wear_track: wear_track,
+      json_key_path: json_key_path,
+      package_name: package_name,
+      mapping_path: mapping_path,
+      has_changelogs: has_changelogs
     )
   end
 
-  desc "Publish the release AAB to the Google Play closed testing track"
+  desc "Publish phone + wear AABs to Google Play closed testing (phone=alpha, wear=wear:alpha)"
   lane :closed_testing do
     package_name = require_env!("ANDROID_PACKAGE_NAME")
     json_key_path = require_env!("PLAY_JSON_KEY_PATH")
-    play_track = ENV.fetch("PLAY_CLOSED_TESTING_TRACK", "alpha").to_s.strip
+    play_track = ENV.fetch("PLAY_CLOSED_TESTING_TRACK", DEFAULT_PHONE_TRACK).to_s.strip
+    wear_track = ENV.fetch("PLAY_WEAR_CLOSED_TESTING_TRACK", wear_track_for_phone_track(play_track)).to_s.strip
     requested_mapping_path = ENV.fetch("PLAY_MAPPING_PATH", "").to_s.strip
 
     UI.user_error!("Play service account json not found at #{json_key_path}") unless File.exist?(json_key_path)
     UI.user_error!("PLAY_CLOSED_TESTING_TRACK must not be empty") if play_track.empty?
+    UI.user_error!("PLAY_WEAR_CLOSED_TESTING_TRACK must not be empty") if wear_track.empty?
 
-    aabs = collect_aab_paths
     mapping_path = resolve_mapping_path(requested_mapping_path)
 
     ci_version_name = ENV.fetch("CI_VERSION_NAME", "").strip
@@ -211,8 +283,13 @@ platform :android do
       UI.important("[release-notes] No release notes found — skipping changelog upload.")
     end
 
-    upload_to_play_store_with_edit_retry!(
-      play_upload_options(aabs, json_key_path, package_name, play_track, mapping_path, has_changelogs)
+    upload_phone_and_wear!(
+      phone_track: play_track,
+      wear_track: wear_track,
+      json_key_path: json_key_path,
+      package_name: package_name,
+      mapping_path: mapping_path,
+      has_changelogs: has_changelogs
     )
   end
 end

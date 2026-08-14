@@ -22,6 +22,7 @@ jobs:
       AAB_PATH: app/build/outputs/bundle/release/app-release.aab
       ANDROID_PACKAGE_NAME: ${{ secrets.ANDROID_PACKAGE_NAME }}
       PLAY_CLOSED_TESTING_TRACK: ${{ vars.PLAY_CLOSED_TESTING_TRACK || 'alpha' }}
+      PLAY_WEAR_CLOSED_TESTING_TRACK: ${{ vars.PLAY_WEAR_CLOSED_TESTING_TRACK || 'wear:alpha' }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
