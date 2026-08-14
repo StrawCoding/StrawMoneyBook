@@ -81,10 +81,11 @@ test('smb296: 刪除帳戶／分類會檢查含 soft-deleted 的 FK 引用，硬
   assert.match(categorySource, /budget_items/)
 })
 
-test('smb296: 共同帳本同步失敗會寫入可見 FK 友善錯誤，且仍嘗試復原本機帳本', () => {
+test('smb296: 共同帳本同步失敗會寫入可見 FK 友善錯誤，且還原失敗會 throw（非 console-only）', () => {
   assert.match(sharedLedgerSource, /formatSyncForeignKeyError/)
   assert.match(sharedLedgerSource, /rethrowAsForeignKeyError/)
-  assert.match(sharedLedgerSource, /failed to restore local ledger after snapshot import failure/)
+  assert.match(sharedLedgerSource, /shared_ledger_replace_restore_failed/)
+  assert.match(sharedLedgerSource, /requireRecoveryBackupBeforeWipe/)
 })
 
 test('smb296: repair.service 會修復含 soft-deleted 的 orphan account／category 引用', () => {
