@@ -14,6 +14,7 @@ import {
 import { estimateSellPrincipalMinor } from '@/core/utils/securities-position'
 import {
   assertBuyCanBeMutated,
+  deriveFundsSellFromBuyLot,
   derivePositionSellFromBuyLot,
   findBuyLotOrThrow,
 } from '@/core/utils/securities-sell-lot'
@@ -284,7 +285,7 @@ function resolveCreateCashFields(input, existingTxs = [], { excludeSellId = '', 
 
   if (type === 'sell' && recordMode === RECORD_MODE.position) {
     if (sourceBuyTxId) {
-      const buy = findBuyLotOrThrow(existingTxs, sourceBuyTxId, { securityId })
+      const buy = findBuyLotOrThrow(existingTxs, sourceBuyTxId, { securityId, recordMode })
       const derived = derivePositionSellFromBuyLot({
         buy,
         transactions: existingTxs,
@@ -312,6 +313,24 @@ function resolveCreateCashFields(input, existingTxs = [], { excludeSellId = '', 
     }
   }
 
+  if (type === 'sell' && recordMode === RECORD_MODE.funds && sourceBuyTxId) {
+    const buy = findBuyLotOrThrow(existingTxs, sourceBuyTxId, { securityId, recordMode })
+    const derived = deriveFundsSellFromBuyLot({
+      buy,
+      transactions: existingTxs,
+      sellPrincipalMinor: principalMinor,
+      proceedsGrossMinor: proceedsMinor,
+      feeMinor,
+      feeMode,
+      excludeSellId,
+    })
+    quantity = derived.quantity
+    priceMinor = derived.priceMinor
+    principalMinor = derived.principalMinor
+    proceedsMinor = derived.proceedsMinor
+    sourceBuyTxId = derived.sourceBuyTxId
+  }
+
   const legs = deriveSettlementCashLegs({
     type,
     recordMode,
@@ -332,7 +351,7 @@ function resolveCreateCashFields(input, existingTxs = [], { excludeSellId = '', 
     feeMinor,
     principalMinor: legs.principalMinor,
     proceedsMinor: legs.proceedsMinor,
-    sourceBuyTxId: type === 'sell' && recordMode === RECORD_MODE.position ? sourceBuyTxId : null,
+    sourceBuyTxId: type === 'sell' && sourceBuyTxId ? sourceBuyTxId : null,
     legs,
   }
 }
@@ -428,7 +447,13 @@ export async function updateSecurityTransaction(ledgerId, transactionId, input =
     const nextQuantity = nextType === 'buy'
       ? (input.quantity ?? existing.quantity)
       : null
-    assertBuyCanBeMutated(existing, siblingTxs.concat(existing), { nextQuantity: nextType === 'buy' ? nextQuantity : null })
+    const nextPrincipalMinor = nextType === 'buy'
+      ? (input.principalMinor ?? input.principal_minor ?? existing.principal_minor)
+      : null
+    assertBuyCanBeMutated(existing, siblingTxs.concat(existing), {
+      nextQuantity: nextType === 'buy' ? nextQuantity : null,
+      nextPrincipalMinor: nextType === 'buy' ? nextPrincipalMinor : null,
+    })
   }
   const merged = {
     type: input.type ?? existing.type,

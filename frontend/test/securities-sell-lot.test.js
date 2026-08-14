@@ -5,7 +5,9 @@ import { resolve } from 'node:path'
 import {
   allocateSellPrincipalFromBuy,
   assertBuyCanBeMutated,
+  deriveFundsSellFromBuyLot,
   derivePositionSellFromBuyLot,
+  findBuyLotOrThrow,
   listOpenBuyLots,
   remainingBuyLot,
   soldQuantityAgainstBuy,
@@ -132,6 +134,98 @@ test('fee from proceeds reduces booked proceeds; unit price derived from gross',
   assert.equal(derived.principalMinor, 5000000)
 })
 
+test('funds sell can match buy principal with partial then leftover', () => {
+  const fundsBuy = {
+    id: 'funds_buy',
+    security_id: 'sec1',
+    type: 'buy',
+    record_mode: 'funds',
+    quantity: 0,
+    principal_minor: 10000000,
+    occurred_at: '2026-02-01T01:00:00.000Z',
+    settlement_status: 'confirmed',
+  }
+  const first = deriveFundsSellFromBuyLot({
+    buy: fundsBuy,
+    transactions: [fundsBuy],
+    sellPrincipalMinor: 4000000,
+    proceedsGrossMinor: 4500000,
+  })
+  assert.equal(first.principalMinor, 4000000)
+  assert.equal(first.proceedsMinor, 4500000)
+  assert.equal(first.pnlMinor, 500000)
+  assert.equal(first.sourceBuyTxId, 'funds_buy')
+  assert.equal(first.quantity, 0)
+
+  const afterFirst = {
+    id: 'funds_sell_1',
+    type: 'sell',
+    record_mode: 'funds',
+    source_buy_tx_id: 'funds_buy',
+    quantity: 0,
+    principal_minor: 4000000,
+    settlement_status: 'scheduled',
+  }
+  const remain = remainingBuyLot(fundsBuy, [fundsBuy, afterFirst])
+  assert.equal(remain.remainingPrincipalMinor, 6000000)
+
+  const second = deriveFundsSellFromBuyLot({
+    buy: fundsBuy,
+    transactions: [fundsBuy, afterFirst],
+    sellPrincipalMinor: 6000000,
+    proceedsGrossMinor: 5800000,
+  })
+  assert.equal(second.principalMinor, 6000000)
+  assert.equal(second.pnlMinor, -200000)
+
+  const lots = listOpenBuyLots([fundsBuy, afterFirst, {
+    id: 'funds_sell_2',
+    type: 'sell',
+    record_mode: 'funds',
+    source_buy_tx_id: 'funds_buy',
+    quantity: 0,
+    principal_minor: 6000000,
+  }], { recordMode: 'funds' })
+  assert.deepEqual(lots.map((lot) => lot.buyId), [])
+
+  assert.throws(
+    () => deriveFundsSellFromBuyLot({
+      buy: fundsBuy,
+      transactions: [fundsBuy],
+      sellPrincipalMinor: 10000001,
+      proceedsGrossMinor: 1,
+    }),
+    /剩餘/,
+  )
+  assert.throws(
+    () => findBuyLotOrThrow([fundsBuy], 'funds_buy', { recordMode: 'position' }),
+    /完整持倉/,
+  )
+  assert.equal(findBuyLotOrThrow([fundsBuy], 'funds_buy', { recordMode: 'funds' }).id, 'funds_buy')
+})
+
+test('funds buy mutation blocked while linked sells exist', () => {
+  const fundsBuy = {
+    id: 'funds_buy',
+    type: 'buy',
+    record_mode: 'funds',
+    principal_minor: 10000000,
+  }
+  const sell = {
+    id: 'funds_sell',
+    type: 'sell',
+    record_mode: 'funds',
+    source_buy_tx_id: 'funds_buy',
+    principal_minor: 4000000,
+  }
+  assert.throws(() => assertBuyCanBeMutated(fundsBuy, [fundsBuy, sell]), /先處理賣出/)
+  assert.throws(
+    () => assertBuyCanBeMutated(fundsBuy, [fundsBuy, sell], { nextPrincipalMinor: 3999999 }),
+    /不可小於已對應/,
+  )
+  assert.doesNotThrow(() => assertBuyCanBeMutated(fundsBuy, [fundsBuy, sell], { nextPrincipalMinor: 4000000 }))
+})
+
 test('migration 044 and wiring mention source_buy_tx_id', () => {
   const root = resolve(import.meta.dirname, '..')
   const migrate = readFileSync(resolve(root, 'src/core/db/migrate.js'), 'utf8')
@@ -151,11 +245,16 @@ test('migration 044 and wiring mention source_buy_tx_id', () => {
   assert.match(page, /securities-sell-source-buy/)
   assert.match(page, /securities-sell-proceeds/)
   assert.match(page, /securities-open-sell/)
+  assert.match(page, /deriveFundsSellFromBuyLot|recordMode === 'funds'/)
+  assert.match(page, /sell_source_buy_funds_hint|sell_funds_lot_option/)
   const playwright = readFileSync(resolve(root, 'scripts/playwright-ui-layout.mjs'), 'utf8')
   assert.match(playwright, /securities-sell-source-buy/)
   assert.match(playwright, /specific-lot sell/)
+  assert.match(playwright, /funds-matched sell|funds only match buy/)
   const i18n = readFileSync(resolve(root, 'src/ui/services/i18n.service.js'), 'utf8')
   assert.equal((i18n.match(/'securities_page.sell_source_buy':/g) || []).length, 3)
   assert.equal((i18n.match(/'securities_page.sell_proceeds':/g) || []).length, 3)
+  assert.equal((i18n.match(/'securities_page.sell_funds_lot_option':/g) || []).length, 3)
+  assert.equal((i18n.match(/'securities_page.sell_source_buy_optional':/g) || []).length, 3)
   assert.match(migrate, /security_transactions:[\s\S]*source_buy_tx_id/)
 })

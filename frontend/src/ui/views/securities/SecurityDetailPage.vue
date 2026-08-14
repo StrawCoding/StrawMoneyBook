@@ -191,14 +191,37 @@
         </div>
       </template>
       <template v-else>
+        <div v-if="isFundsSell" class="field-block" data-testid="securities-sell-source-buy">
+          <span class="field-label">{{ t('securities_page.sell_source_buy') }}</span>
+          <CustomSelect
+            v-model="txForm.sourceBuyTxId"
+            :options="sourceBuyOptions"
+            :placeholder="t('securities_page.sell_source_buy_optional')"
+          />
+          <small class="muted">{{ t('securities_page.sell_source_buy_funds_hint') }}</small>
+          <small v-if="!sourceBuyOptions.length" class="muted">{{ t('securities_page.sell_no_open_funds_buys') }}</small>
+        </div>
         <label>
           {{ t('securities_page.principal') }}
-          <input v-model.number="txForm.principalMajor" class="input" type="number" min="0" step="0.01" />
+          <input
+            v-model.number="txForm.principalMajor"
+            class="input"
+            type="number"
+            min="0"
+            step="0.01"
+            data-testid="securities-funds-principal"
+          />
         </label>
-        <label v-if="txForm.type === 'sell'">
+        <label v-if="txForm.type === 'sell'" data-testid="securities-sell-proceeds">
           {{ t('securities_page.proceeds') }}
           <input v-model.number="txForm.proceedsMajor" class="input" type="number" min="0" step="0.01" />
         </label>
+        <div v-if="sellLotPreview" class="sell-preview" data-testid="securities-sell-preview">
+          <small class="muted">{{ t('securities_page.sell_preview_cost') }}</small>
+          <MoneyText :value-minor="sellLotPreview.principalMinor" />
+          <small class="muted">{{ t('securities_page.sell_preview_pnl') }}</small>
+          <MoneyText :value-minor="sellLotPreview.pnlMinor" />
+        </div>
       </template>
 
       <label>
@@ -270,6 +293,7 @@ import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
 import {
+  deriveFundsSellFromBuyLot,
   derivePositionSellFromBuyLot,
   findBuyLotOrThrow,
   listOpenBuyLots,
@@ -345,45 +369,92 @@ const txSheetTitle = computed(() => {
   return editingTxId.value ? `${t('common.edit')} ${base}` : base
 })
 const isPositionSell = computed(() => txForm.type === 'sell' && txForm.recordMode === 'position')
+const isFundsSell = computed(() => txForm.type === 'sell' && txForm.recordMode === 'funds')
 const isLotMatchedSell = computed(() => isPositionSell.value && Boolean(String(txForm.sourceBuyTxId || '').trim()))
+const isFundsLotMatchedSell = computed(() => {
+  const id = String(txForm.sourceBuyTxId || '').trim()
+  return isFundsSell.value && Boolean(id) && id !== '__none__'
+})
 const openBuyLots = computed(() => listOpenBuyLots(detail.value?.transactions || [], {
   excludeSellId: editingTxId.value,
   securityId: securityId.value,
+  recordMode: txForm.recordMode === 'funds' ? 'funds' : 'position',
 }))
-const sourceBuyOptions = computed(() => openBuyLots.value.map((lot) => ({
-  value: lot.buyId,
-  label: t('securities_page.sell_lot_option', {
-    when: formatWhen(lot.occurredAt),
-    qty: lot.remainingQty,
-    cost: formatMajor(lot.remainingPrincipalMinor),
-  }),
-})))
-const sellLotPreview = computed(() => {
-  if (!isLotMatchedSell.value) return null
-  try {
-    const buy = findBuyLotOrThrow(detail.value?.transactions || [], txForm.sourceBuyTxId, {
-      securityId: securityId.value,
-    })
-    return derivePositionSellFromBuyLot({
-      buy,
-      transactions: detail.value?.transactions || [],
-      sellQty: txForm.quantity,
-      proceedsGrossMinor: Math.round(Number(txForm.proceedsMajor || 0) * 100),
-      feeMinor: Math.round(Number(txForm.feeMajor || 0) * 100),
-      feeMode: txForm.feeMode,
-      excludeSellId: editingTxId.value,
-    })
-  } catch {
-    return null
+const sourceBuyOptions = computed(() => {
+  const lots = openBuyLots.value.map((lot) => ({
+    value: lot.buyId,
+    label: lot.recordMode === 'funds'
+      ? t('securities_page.sell_funds_lot_option', {
+        when: formatWhen(lot.occurredAt),
+        cost: formatMajor(lot.remainingPrincipalMinor),
+      })
+      : t('securities_page.sell_lot_option', {
+        when: formatWhen(lot.occurredAt),
+        qty: lot.remainingQty,
+        cost: formatMajor(lot.remainingPrincipalMinor),
+      }),
+  }))
+  if (isFundsSell.value) {
+    return [{ value: '__none__', label: t('securities_page.sell_source_buy_none') }, ...lots]
   }
+  return lots
+})
+const sellLotPreview = computed(() => {
+  if (isLotMatchedSell.value) {
+    try {
+      const buy = findBuyLotOrThrow(detail.value?.transactions || [], txForm.sourceBuyTxId, {
+        securityId: securityId.value,
+        recordMode: 'position',
+      })
+      return derivePositionSellFromBuyLot({
+        buy,
+        transactions: detail.value?.transactions || [],
+        sellQty: txForm.quantity,
+        proceedsGrossMinor: Math.round(Number(txForm.proceedsMajor || 0) * 100),
+        feeMinor: Math.round(Number(txForm.feeMajor || 0) * 100),
+        feeMode: txForm.feeMode,
+        excludeSellId: editingTxId.value,
+      })
+    } catch {
+      return null
+    }
+  }
+  if (isFundsLotMatchedSell.value) {
+    try {
+      const buy = findBuyLotOrThrow(detail.value?.transactions || [], txForm.sourceBuyTxId, {
+        securityId: securityId.value,
+        recordMode: 'funds',
+      })
+      return deriveFundsSellFromBuyLot({
+        buy,
+        transactions: detail.value?.transactions || [],
+        sellPrincipalMinor: Math.round(Number(txForm.principalMajor || 0) * 100),
+        proceedsGrossMinor: Math.round(Number(txForm.proceedsMajor || 0) * 100),
+        feeMinor: Math.round(Number(txForm.feeMajor || 0) * 100),
+        feeMode: txForm.feeMode,
+        excludeSellId: editingTxId.value,
+      })
+    } catch {
+      return null
+    }
+  }
+  return null
 })
 const canSaveTx = computed(() => {
-  if (!isPositionSell.value) return true
-  if (isLotMatchedSell.value) {
-    return Number(txForm.quantity) > 0 && Number(txForm.proceedsMajor) > 0
+  if (isPositionSell.value) {
+    if (isLotMatchedSell.value) {
+      return Number(txForm.quantity) > 0 && Number(txForm.proceedsMajor) > 0
+    }
+    if (editingTxId.value) return Number(txForm.quantity) > 0
+    return false
   }
-  if (editingTxId.value) return Number(txForm.quantity) > 0
-  return false
+  if (isFundsSell.value) {
+    if (isFundsLotMatchedSell.value) {
+      return Number(txForm.principalMajor) > 0 && Number(txForm.proceedsMajor) > 0
+    }
+    return Number(txForm.principalMajor) > 0 && Number(txForm.proceedsMajor) > 0
+  }
+  return true
 })
 
 function assetClassLabel(value) {
@@ -423,17 +494,36 @@ function linkedBuyLabel(tx) {
   return t('securities_page.sell_linked_buy', { when: formatWhen(buy.occurred_at) })
 }
 
-function applySelectedLotDefaults({ resetQuantity = false } = {}) {
-  if (!isPositionSell.value) return
+function applySelectedLotDefaults({ resetQuantity = false, resetPrincipal = false } = {}) {
+  if (!isPositionSell.value && !isFundsSell.value) return
   const lots = openBuyLots.value
   if (!lots.length) {
-    txForm.sourceBuyTxId = ''
+    if (isPositionSell.value) txForm.sourceBuyTxId = ''
     return
   }
-  const selected = lots.find((lot) => lot.buyId === txForm.sourceBuyTxId) || lots[0]
+  if (isFundsSell.value && !String(txForm.sourceBuyTxId || '').trim()) {
+    // Funds matching is optional: do not auto-select a buy.
+    return
+  }
+  if (isFundsSell.value && String(txForm.sourceBuyTxId || '').trim() === '__none__') {
+    return
+  }
+  const selected = lots.find((lot) => lot.buyId === txForm.sourceBuyTxId)
+    || (isPositionSell.value ? lots[0] : null)
+  if (!selected) {
+    if (isPositionSell.value) txForm.sourceBuyTxId = ''
+    return
+  }
   txForm.sourceBuyTxId = selected.buyId
-  if (resetQuantity || Number(txForm.quantity) <= 0 || Number(txForm.quantity) > selected.remainingQty) {
-    txForm.quantity = selected.remainingQty
+  if (isPositionSell.value) {
+    if (resetQuantity || Number(txForm.quantity) <= 0 || Number(txForm.quantity) > selected.remainingQty) {
+      txForm.quantity = selected.remainingQty
+    }
+  } else if (isFundsSell.value) {
+    const remainMajor = selected.remainingPrincipalMinor / 100
+    if (resetPrincipal || Number(txForm.principalMajor) <= 0 || Number(txForm.principalMajor) > remainMajor) {
+      txForm.principalMajor = remainMajor
+    }
   }
 }
 
@@ -556,7 +646,7 @@ function openEditTx(tx) {
       ? bookedProceeds + feeMinor
       : bookedProceeds
   ) / 100
-  txForm.sourceBuyTxId = String(tx.source_buy_tx_id ?? '')
+  txForm.sourceBuyTxId = String(tx.source_buy_tx_id ?? '') || (tx.record_mode === 'funds' && tx.type === 'sell' ? '__none__' : '')
   const when = new Date(tx.occurred_at)
   txForm.date = toDateInput(when)
   txForm.hour = when.getHours()
@@ -589,6 +679,8 @@ function buildTxPayload() {
     payload.principalMinor = Math.round(Number(txForm.principalMajor || 0) * 100)
     if (txForm.type === 'sell') {
       payload.proceedsMinor = Math.round(Number(txForm.proceedsMajor || 0) * 100)
+      const sourceId = String(txForm.sourceBuyTxId || '').trim()
+      payload.sourceBuyTxId = sourceId && sourceId !== '__none__' ? sourceId : null
     }
   }
   return payload
@@ -667,9 +759,23 @@ async function submitReschedule() {
 watch(securityId, () => { void reload() }, { immediate: true })
 watch(
   () => [txForm.type, txForm.recordMode, txForm.sourceBuyTxId, txOpen.value],
-  () => {
+  (current, previous) => {
     if (!txOpen.value) return
-    applySelectedLotDefaults()
+    const prevMode = previous ? String(previous[1] ?? '') : ''
+    const nextMode = String(current?.[1] ?? '')
+    if (prevMode && nextMode && prevMode !== nextMode) {
+      txForm.sourceBuyTxId = nextMode === 'funds' && txForm.type === 'sell' ? '__none__' : ''
+      if (nextMode === 'funds') {
+        // After mode switch, wait for next tick of options before defaults.
+      }
+    }
+    const prevSource = previous ? String(previous[2] ?? '') : ''
+    const nextSource = String(current?.[2] ?? '')
+    const sourceChanged = prevSource !== nextSource
+    applySelectedLotDefaults({
+      resetQuantity: isPositionSell.value && (sourceChanged || prevMode !== nextMode),
+      resetPrincipal: isFundsSell.value && sourceChanged && Boolean(nextSource) && nextSource !== '__none__',
+    })
   },
 )
 onMounted(() => { void reload() })

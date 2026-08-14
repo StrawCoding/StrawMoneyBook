@@ -1136,6 +1136,126 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
   assert.equal(sellLotUi.renderedIconCount, sellLotUi.iconCount, JSON.stringify(sellLotUi, null, 2))
   console.log('[securities] specific-lot sell UI ok:', sellLotUi)
 
+  const fundsLotUi = await evalPage(`async () => {
+    const waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+    const waitUntil = async (predicate, timeoutMs = 8000) => {
+      const deadline = performance.now() + timeoutMs
+      while (performance.now() < deadline) {
+        const value = predicate()
+        if (value) return value
+        await waitMs(40)
+      }
+      return null
+    }
+    const setVueInput = (el, value) => {
+      if (!el) return false
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+      if (setter) setter.call(el, value)
+      else el.value = value
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+      return true
+    }
+    const clickSeg = (label) => {
+      const buttons = [...document.querySelectorAll('.securities-sheet .seg-btn')]
+      const btn = buttons.find((el) => String(el.textContent || '').includes(label))
+      if (!btn) return false
+      btn.click()
+      return true
+    }
+    const page = await waitUntil(() => document.querySelector('[data-testid=securities-detail-page]'), 8000)
+    if (!page) return { ok: false, reason: 'missing_detail_page' }
+    const buyBtn = document.querySelector('[data-testid=securities-open-buy]')
+    if (!buyBtn) return { ok: false, reason: 'missing_buy_button' }
+    buyBtn.click()
+    const buySheet = await waitUntil(() => document.querySelector('.securities-sheet'), 5000)
+    if (!buySheet) return { ok: false, reason: 'missing_buy_sheet' }
+    if (!clickSeg('只記資金') && !clickSeg('Funds only') && !clickSeg('資金のみ')) {
+      return { ok: false, reason: 'missing_funds_mode_seg' }
+    }
+    await waitMs(80)
+    const principalInput = document.querySelector('[data-testid=securities-funds-principal]')
+    if (!setVueInput(principalInput, '10000')) {
+      return { ok: false, reason: 'missing_funds_buy_principal' }
+    }
+    await waitMs(80)
+    const buySave = document.querySelector('[data-testid=securities-tx-save]')
+    if (!buySave) return { ok: false, reason: 'missing_buy_save' }
+    buySave.click()
+    const buySaved = await waitUntil(() => {
+      const rows = document.querySelectorAll('[data-testid=securities-detail-page] .tx-row')
+      return rows.length >= 3 ? rows.length : null
+    }, 8000)
+    if (!buySaved) return { ok: false, reason: 'funds_buy_not_listed', rowCount: document.querySelectorAll('[data-testid=securities-detail-page] .tx-row').length }
+
+    const sellBtn = document.querySelector('[data-testid=securities-open-sell]')
+    if (!sellBtn) return { ok: false, reason: 'missing_sell_button' }
+    sellBtn.click()
+    const sellSheet = await waitUntil(() => document.querySelector('.securities-sheet'), 5000)
+    if (!sellSheet) return { ok: false, reason: 'missing_sell_sheet' }
+    if (!clickSeg('只記資金') && !clickSeg('Funds only') && !clickSeg('資金のみ')) {
+      return { ok: false, reason: 'missing_funds_sell_mode_seg' }
+    }
+    await waitMs(80)
+    const sourceBuy = await waitUntil(() => document.querySelector('[data-testid=securities-sell-source-buy]'), 5000)
+    const proceeds = document.querySelector('[data-testid=securities-sell-proceeds]')
+    if (!sourceBuy || !proceeds) {
+      return { ok: false, reason: 'missing_funds_sell_fields', hasSourceBuy: Boolean(sourceBuy), hasProceeds: Boolean(proceeds) }
+    }
+    const selectTrigger = sourceBuy.querySelector('.custom-select button.trigger, button.trigger')
+    if (!selectTrigger) return { ok: false, reason: 'missing_funds_source_buy_trigger' }
+    selectTrigger.click()
+    const option = await waitUntil(() => {
+      const items = [...document.querySelectorAll('.menu-sheet .menu-item, .menu-item')]
+      return items.find((el) => /剩餘成本|cost left|残りコスト/.test(String(el.textContent || ''))) || null
+    }, 5000)
+    if (!option) {
+      return {
+        ok: false,
+        reason: 'funds_buy_option_missing',
+        menuLabels: [...document.querySelectorAll('.menu-item')].map((el) => String(el.textContent || '').trim()),
+      }
+    }
+    option.click()
+    await waitUntil(() => !document.querySelector('.menu-sheet .menu-item'), 3000)
+    await waitMs(100)
+    const principal = document.querySelector('[data-testid=securities-funds-principal]')
+    const proceedsInput = document.querySelector('[data-testid=securities-sell-proceeds] input')
+    if (!setVueInput(principal, '4000') || !setVueInput(proceedsInput, '4500')) {
+      return { ok: false, reason: 'missing_funds_sell_principal_or_proceeds' }
+    }
+    await waitMs(80)
+    const preview = document.querySelector('[data-testid=securities-sell-preview]')
+    const sellSave = document.querySelector('[data-testid=securities-tx-save]')
+    if (!sellSave || sellSave.disabled) {
+      return { ok: false, reason: 'funds_sell_save_disabled', hasPreview: Boolean(preview), principal: principal?.value }
+    }
+    sellSave.click()
+    const sellSaved = await waitUntil(() => {
+      const linked = [...document.querySelectorAll('[data-testid=securities-sell-linked-buy]')]
+      const rows = document.querySelectorAll('[data-testid=securities-detail-page] .tx-row')
+      return linked.length >= 2 && rows.length >= 4
+        ? { rowCount: rows.length, linkedCount: linked.length }
+        : null
+    }, 10000)
+    if (!sellSaved) {
+      const toast = document.querySelector('.toast, [data-testid=toast], .toast-item, .ui-toast')
+      return {
+        ok: false,
+        reason: 'funds_sell_not_linked',
+        rowCount: document.querySelectorAll('[data-testid=securities-detail-page] .tx-row').length,
+        linkedCount: document.querySelectorAll('[data-testid=securities-sell-linked-buy]').length,
+        toast: String(toast && toast.textContent || '').trim(),
+        sheetOpen: Boolean(document.querySelector('.securities-sheet')),
+      }
+    }
+    return { ok: true, ...sellSaved, hasPreview: Boolean(preview), mode: 'funds only match buy' }
+  }`)
+  assert.equal(fundsLotUi.ok, true, JSON.stringify(fundsLotUi, null, 2))
+  assert.ok(fundsLotUi.rowCount >= 4, JSON.stringify(fundsLotUi, null, 2))
+  assert.ok(fundsLotUi.linkedCount >= 2, JSON.stringify(fundsLotUi, null, 2))
+  console.log('[securities] funds-matched sell UI ok:', fundsLotUi)
+
   await gotoOrReopen(`${baseUrl}/`)
   await waitForAppShell()
   await assertHomeBlocks()
