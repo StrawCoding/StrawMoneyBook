@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- Wear OS 手錶記帳新增「可報銷」選項：支出草稿可開關；選分類時依 `default_is_reimbursable` 預填（與手機 Quick Add 對齊）；outbox／`WearProtocol`／`WearTransactionEngine`（及 JS companion）寫入 `is_reimbursable`＋`reimbursement_state=pending`，編輯／重複上一筆／範本／catalog snapshot 不丟旗標。
-
 ---
+
+## v1.3.134
+- Wear OS 手錶記帳新增「可報銷」選項：支出草稿可開關；選分類時依 `default_is_reimbursable` 預填（與手機 Quick Add 對齊）；outbox／`WearProtocol`／`WearTransactionEngine`（及 JS companion）寫入 `is_reimbursable`＋`reimbursement_state=pending`，編輯／重複上一筆／範本／catalog snapshot 不丟旗標。
 
 ## v1.3.133
 - Wear OS 完整記帳（scope B）：手錶可獨立完成八種帳務型別——一般支出／收入、轉帳、餘額調整、刷卡消費、信用卡還款、信用卡退款、借出／借入開帳；金額、帳戶、分類、時間、備註、標籤皆可在錶上填寫。
