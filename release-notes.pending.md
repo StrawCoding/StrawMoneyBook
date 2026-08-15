@@ -1,5 +1,8 @@
 # Pending Release Notes
 
+---
+
+## v1.3.133
 - Wear OS 完整記帳（scope B）：手錶可獨立完成八種帳務型別——一般支出／收入、轉帳、餘額調整、刷卡消費、信用卡還款、信用卡退款、借出／借入開帳；金額、帳戶、分類、時間、備註、標籤皆可在錶上填寫。
 - Wear OS 支援手錶端編輯與刪除：近期交易可直接開啟修改金額／帳戶／分類／時間／備註／標籤或刪除（跨型別改結構仍由手機負責，錶上僅開放支出／收入／調整）。
 - Wear OS 多帳本切換：錶上可選擇作用帳本（`/smb/v1/ledger/set`），手機端獨立記住手錶偏好帳本，不影響手機正在瀏覽的帳本。
@@ -7,8 +10,6 @@
 - Wear OS 新增重複上一筆、錶端快速範本、旋轉錶冠（rotary）捲動與語音輸入備註（無語音服務時安全降級不閃退）。
 - Wear OS 通訊協定維持 `protocolVersion=1`，新增 `/smb/v1/tx/update`、`/smb/v1/tx/delete`、`/smb/v1/ledger/set`；JS／Kotlin／Java 三端常數同版對齊，仍僅走 MessageClient + outbox（禁 DataClient／禁手錶直連 API）。
 - Wear OS outbox 升級 v2（新增 op／peerAccountId／sourceAccountId／tagsJson／extrasJson／targetTxId），採加欄位 Room Migration 1→2，升級不清除未同步草稿；`wear_applied` 冪等保證不變。
-
----
 
 ## v1.3.132
 - Wear OS launcher icon 改滿版圓形：以前景圖貼齊圓形遮罩（不再沿用手機 adaptive 16.7% 內縮／透明邊），並宣告 `roundIcon`。
