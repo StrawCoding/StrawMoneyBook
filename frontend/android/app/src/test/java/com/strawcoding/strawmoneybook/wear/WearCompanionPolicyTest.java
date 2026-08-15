@@ -45,21 +45,33 @@ public class WearCompanionPolicyTest {
     }
 
     @Test
-    public void validateTxCreateRejectsTransferAndRequiresIdempotencyKey() throws Exception {
+    public void validateTxCreateRequiresPeerForTransferAndAcceptsExpense() throws Exception {
         JSONObject transfer = new JSONObject();
         transfer.put("idempotencyKey", "k1");
         transfer.put("ledgerId", "l1");
         transfer.put("type", "transfer");
         transfer.put("accountId", "a1");
-        transfer.put("categoryId", "c1");
         transfer.put("amountMinor", 100);
         transfer.put("catalogRevision", 1);
         try {
             WearProtocol.validateTxCreate(transfer);
-            fail("transfer must be rejected");
+            fail("transfer without peer must be rejected");
         } catch (Exception expected) {
-            assertTrue(expected.getMessage().contains("type"));
+            assertTrue(expected.getMessage().contains("peer"));
         }
+
+        JSONObject transferOk = new JSONObject();
+        transferOk.put("idempotencyKey", "k-tf");
+        transferOk.put("ledgerId", "l1");
+        transferOk.put("type", "transfer");
+        transferOk.put("accountId", "a1");
+        transferOk.put("peerAccountId", "a2");
+        transferOk.put("amountMinor", 100);
+        transferOk.put("catalogRevision", 1);
+        transferOk.put("isReimbursable", true);
+        WearProtocol.WearTxCreate transferParsed = WearProtocol.validateTxCreate(transferOk);
+        assertEquals("transfer", transferParsed.type);
+        assertFalse(transferParsed.isReimbursable);
 
         JSONObject ok = new JSONObject();
         ok.put("idempotencyKey", "k1");
@@ -74,5 +86,35 @@ public class WearCompanionPolicyTest {
         assertEquals("k1", parsed.idempotencyKey);
         assertEquals("room-pk-only", parsed.clientTxId);
         assertEquals("wear:k1", WearCompanionConstants.externalRefId(parsed.idempotencyKey));
+        assertFalse(parsed.isReimbursable);
+    }
+
+    @Test
+    public void validateTxCreateAcceptsExpenseReimbursableFlag() throws Exception {
+        JSONObject ok = new JSONObject();
+        ok.put("idempotencyKey", "k-reimb");
+        ok.put("ledgerId", "l1");
+        ok.put("type", "expense");
+        ok.put("accountId", "a1");
+        ok.put("categoryId", "c1");
+        ok.put("amountMinor", 1200);
+        ok.put("catalogRevision", 1);
+        ok.put("isReimbursable", true);
+        WearProtocol.WearTxCreate parsed = WearProtocol.validateTxCreate(ok);
+        assertTrue(parsed.isReimbursable);
+        assertFalse(parsed.includeInBudget);
+        assertFalse(parsed.includeInAnalysis);
+
+        JSONObject income = new JSONObject();
+        income.put("idempotencyKey", "k-inc");
+        income.put("ledgerId", "l1");
+        income.put("type", "income");
+        income.put("accountId", "a1");
+        income.put("categoryId", "c2");
+        income.put("amountMinor", 1200);
+        income.put("catalogRevision", 1);
+        income.put("isReimbursable", true);
+        WearProtocol.WearTxCreate incomeParsed = WearProtocol.validateTxCreate(income);
+        assertFalse(incomeParsed.isReimbursable);
     }
 }

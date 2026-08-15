@@ -202,6 +202,16 @@ export function validateTxCreatePayload(payload) {
     ? (sourceAccountId || peerAccountId) || null
     : peerAccountId || null
 
+  // Expense-only, matching phone Quick Add / createExpense.
+  const isReimbursable = type === 'expense' && Boolean(payload?.isReimbursable)
+  // When reimbursable and flags omitted → false (Quick Add default on toggle).
+  const resolvedBudget = isReimbursable
+    ? (payload?.includeInBudget === true)
+    : (payload?.includeInBudget !== false)
+  const resolvedAnalysis = isReimbursable
+    ? (payload?.includeInAnalysis === true)
+    : (payload?.includeInAnalysis !== false)
+
   return {
     op: 'create',
     idempotencyKey,
@@ -220,8 +230,9 @@ export function validateTxCreatePayload(payload) {
     addons: normalizeWearAddons(payload?.addons),
     occurredAt: String(payload?.occurredAt ?? '').trim() || new Date().toISOString(),
     note: String(payload?.note ?? '').slice(0, 200) || null,
-    includeInBudget: payload?.includeInBudget !== false,
-    includeInAnalysis: payload?.includeInAnalysis !== false,
+    isReimbursable,
+    includeInBudget: resolvedBudget,
+    includeInAnalysis: resolvedAnalysis,
   }
 }
 
@@ -260,6 +271,15 @@ export function validateTxUpdatePayload(payload) {
     throw reject(`${type} requires categoryId`)
   }
 
+  const resolvedType = type || 'expense'
+  const isReimbursable = resolvedType === 'expense' && Boolean(payload?.isReimbursable)
+  const resolvedBudget = isReimbursable
+    ? (payload?.includeInBudget === true)
+    : (payload?.includeInBudget !== false)
+  const resolvedAnalysis = isReimbursable
+    ? (payload?.includeInAnalysis === true)
+    : (payload?.includeInAnalysis !== false)
+
   return {
     op: 'update',
     idempotencyKey,
@@ -267,15 +287,16 @@ export function validateTxUpdatePayload(payload) {
     ledgerId,
     catalogRevision,
     targetTxId,
-    type: type || 'expense',
+    type: resolvedType,
     amountMinor,
     accountId,
     categoryId: categoryId || null,
     tags: normalizeWearTags(payload?.tags ?? payload?.tagsJson),
     occurredAt: String(payload?.occurredAt ?? '').trim() || new Date().toISOString(),
     note: String(payload?.note ?? '').slice(0, 200) || null,
-    includeInBudget: payload?.includeInBudget !== false,
-    includeInAnalysis: payload?.includeInAnalysis !== false,
+    isReimbursable,
+    includeInBudget: resolvedBudget,
+    includeInAnalysis: resolvedAnalysis,
   }
 }
 

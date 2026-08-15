@@ -91,6 +91,7 @@ private fun WearRoot(repo: WearSyncRepository) {
                             note = draft.note.ifBlank { null },
                             tags = draft.tags.toList(),
                             occurredAt = isoUtc(draft.occurredAtMillis),
+                            isReimbursable = draft.supportsReimbursable() && draft.isReimbursable,
                         )
                     } else {
                         repo.enqueueEntry(draft.toEntryDraft())
@@ -235,6 +236,8 @@ private fun WearRoot(repo: WearSyncRepository) {
                         }
                         draft.accountId = template.accountId
                         draft.categoryId = template.categoryId
+                        draft.isReimbursable =
+                            template.type == WearTxTypes.EXPENSE && template.isReimbursable
                         nav.navigate(WearRoutes.ADD)
                     },
                     onSaveCurrent = {
@@ -265,6 +268,7 @@ private fun saveTemplateFromDraft(repo: WearSyncRepository, draft: WearDraftStat
             amountMinor = draft.amountMinor,
             accountId = draft.accountId,
             categoryId = draft.categoryId,
+            isReimbursable = draft.supportsReimbursable() && draft.isReimbursable,
         )
     )
     cache.saveTemplates(templates)

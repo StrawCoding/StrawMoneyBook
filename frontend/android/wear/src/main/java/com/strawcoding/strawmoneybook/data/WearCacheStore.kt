@@ -12,6 +12,7 @@ data class WearOption(
     val recent: Boolean,
     val favorite: Boolean,
     val balanceMinor: Long = 0L,
+    val defaultIsReimbursable: Boolean = false,
 )
 
 data class WearLedger(val id: String, val name: String)
@@ -24,6 +25,7 @@ data class WearTemplate(
     val amountMinor: Long,
     val accountId: String,
     val categoryId: String,
+    val isReimbursable: Boolean = false,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -32,6 +34,7 @@ data class WearTemplate(
         .put("amountMinor", amountMinor)
         .put("accountId", accountId)
         .put("categoryId", categoryId)
+        .put("isReimbursable", isReimbursable)
 
     companion object {
         fun fromJson(body: JSONObject): WearTemplate = WearTemplate(
@@ -41,6 +44,7 @@ data class WearTemplate(
             amountMinor = body.optLong("amountMinor", 0L),
             accountId = body.optString("accountId", ""),
             categoryId = body.optString("categoryId", ""),
+            isReimbursable = body.optBoolean("isReimbursable", false),
         )
     }
 }
@@ -123,8 +127,17 @@ class WearCacheStore(context: Context) {
             kind = it.optString("kind", "expense"),
             recent = it.optBoolean("recent", false),
             favorite = it.optBoolean("favorite", false),
+            defaultIsReimbursable = it.optBoolean("defaultIsReimbursable", false),
         )
     }.filter { it.id.isNotBlank() && it.kind == kind }
+
+    /** Category default for Quick Add-aligned reimbursable prefill. */
+    fun categoryDefaultIsReimbursable(categoryId: String): Boolean {
+        if (categoryId.isBlank()) return false
+        return readArray(KEY_CATEGORIES_JSON).any {
+            it.optString("id", "") == categoryId && it.optBoolean("defaultIsReimbursable", false)
+        }
+    }
 
     fun loanSummary(): JSONObject = try {
         JSONObject(prefs.getString(KEY_LOANS_JSON, "{}") ?: "{}")

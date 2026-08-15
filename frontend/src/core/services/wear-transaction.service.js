@@ -207,6 +207,7 @@ function baseCreateFields(payload) {
     occurredAt: payload.occurredAt,
     postedAt: payload.occurredAt,
     note: payload.note,
+    isReimbursable: Boolean(payload.isReimbursable),
     includeInBudget: payload.includeInBudget,
     includeInAnalysis: payload.includeInAnalysis,
     originType: 'wear',
@@ -512,6 +513,7 @@ export async function applyWearTxUpdate(rawPayload, options = {}) {
         amountMinor: payload.amountMinor,
         occurredAt: payload.occurredAt,
         note: payload.note,
+        isReimbursable: payload.isReimbursable,
         includeInBudget: payload.includeInBudget,
         includeInAnalysis: payload.includeInAnalysis,
       })

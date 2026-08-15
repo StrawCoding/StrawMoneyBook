@@ -305,6 +305,17 @@ fun EntryScreen(
                 )
             }
         }
+        if (draft.supportsReimbursable()) {
+            item {
+                ToggleChip(
+                    checked = draft.isReimbursable,
+                    onCheckedChange = { draft.isReimbursable = it },
+                    label = { Text(if (draft.isReimbursable) "可報銷 ✓" else "可報銷") },
+                    toggleControl = { Checkbox(checked = draft.isReimbursable) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
         if (draft.type == WearTxTypes.LOAN) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -418,7 +429,7 @@ fun PickerScreen(repo: WearSyncRepository, draft: WearDraftState, onDone: () -> 
             items(favorites) { option ->
                 Chip(
                     onClick = {
-                        applyPick(draft, option.id, option.name)
+                        applyPick(draft, option)
                         onDone()
                     },
                     label = {
@@ -439,7 +450,7 @@ fun PickerScreen(repo: WearSyncRepository, draft: WearDraftState, onDone: () -> 
             items(rest) { option ->
                 Chip(
                     onClick = {
-                        applyPick(draft, option.id, option.name)
+                        applyPick(draft, option)
                         onDone()
                     },
                     label = { Text(option.name + if (option.recent) " ·" else "") },
@@ -450,19 +461,26 @@ fun PickerScreen(repo: WearSyncRepository, draft: WearDraftState, onDone: () -> 
     }
 }
 
-private fun applyPick(draft: WearDraftState, id: String, name: String) {
+private fun applyPick(draft: WearDraftState, option: com.strawcoding.strawmoneybook.data.WearOption) {
     when (draft.pickerTarget) {
         PickerTarget.ACCOUNT -> {
-            draft.accountId = id
-            draft.accountName = name
+            draft.accountId = option.id
+            draft.accountName = option.name
         }
         PickerTarget.PEER_ACCOUNT, PickerTarget.SOURCE_ACCOUNT -> {
-            draft.peerAccountId = id
-            draft.peerAccountName = name
+            draft.peerAccountId = option.id
+            draft.peerAccountName = option.name
         }
         PickerTarget.CATEGORY -> {
-            draft.categoryId = id
-            draft.categoryName = name
+            draft.categoryId = option.id
+            draft.categoryName = option.name
+            // Match phone Quick Add: selecting a category prefills reimbursable from
+            // category.default_is_reimbursable; the user can still override afterwards.
+            if (draft.supportsReimbursable()) {
+                draft.isReimbursable = option.defaultIsReimbursable
+            } else {
+                draft.isReimbursable = false
+            }
         }
     }
 }

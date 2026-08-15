@@ -81,6 +81,50 @@ public class WearTransactionEngineInstrumentedTest {
         );
         assertEquals(ack.getString("txId"), applied);
 
+        long isReimbursable = AndroidDbRepository.queryLong(
+            db,
+            "SELECT is_reimbursable FROM transactions WHERE idempotency_key = ?;",
+            new String[] { "wear-idem-1" },
+            -1L
+        );
+        assertEquals(0L, isReimbursable);
+
+        JSONObject reimbursablePayload = new JSONObject();
+        reimbursablePayload.put("idempotencyKey", "wear-idem-reimb");
+        reimbursablePayload.put("clientTxId", "room-row-reimb");
+        reimbursablePayload.put("ledgerId", "led1");
+        reimbursablePayload.put("type", "expense");
+        reimbursablePayload.put("accountId", "acc1");
+        reimbursablePayload.put("categoryId", "cat1");
+        reimbursablePayload.put("amountMinor", 1800);
+        reimbursablePayload.put("catalogRevision", 1);
+        reimbursablePayload.put("occurredAt", "2026-08-14T02:00:00.000Z");
+        reimbursablePayload.put("note", "taxi");
+        reimbursablePayload.put("isReimbursable", true);
+
+        JSONObject reimbAck = WearTransactionEngine.applyTxCreateOnDb(db, reimbursablePayload, "led1");
+        assertEquals("ok", reimbAck.getString("status"));
+        long reimbFlag = AndroidDbRepository.queryLong(
+            db,
+            "SELECT is_reimbursable FROM transactions WHERE idempotency_key = ?;",
+            new String[] { "wear-idem-reimb" },
+            -1L
+        );
+        assertEquals(1L, reimbFlag);
+        String reimbState = AndroidDbRepository.queryString(
+            db,
+            "SELECT reimbursement_state FROM transactions WHERE idempotency_key = ?;",
+            new String[] { "wear-idem-reimb" }
+        );
+        assertEquals("pending", reimbState);
+        long includeBudget = AndroidDbRepository.queryLong(
+            db,
+            "SELECT include_in_budget FROM transactions WHERE idempotency_key = ?;",
+            new String[] { "wear-idem-reimb" },
+            -1L
+        );
+        assertEquals(0L, includeBudget);
+
         JSONObject dup = WearTransactionEngine.applyTxCreateOnDb(db, payload, "led1");
         assertEquals("duplicate", dup.getString("status"));
         assertEquals(ack.getString("txId"), dup.getString("txId"));

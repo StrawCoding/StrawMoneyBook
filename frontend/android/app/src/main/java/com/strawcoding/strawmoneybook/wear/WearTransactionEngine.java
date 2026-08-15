@@ -311,6 +311,7 @@ public final class WearTransactionEngine {
                     + " occurred_at = ?, note = ?,"
                     + " tags_json = CASE WHEN tags_json IS NULL OR TRIM(tags_json) = ''"
                     + " OR TRIM(tags_json) LIKE '[%' THEN ? ELSE tags_json END,"
+                    + " is_reimbursable = ?, reimbursement_state = ?,"
                     + " include_in_budget = ?, include_in_analysis = ?,"
                     + " updated_by_display_name = 'Wear OS', updated_at = ?"
                     + " WHERE ledger_id = ? AND id = ? AND deleted_at IS NULL;"
@@ -324,11 +325,13 @@ public final class WearTransactionEngine {
                 stmt.bindString(4, occurredAt);
                 bindNullable(stmt, 5, note);
                 bindNullable(stmt, 6, tagsJson);
-                stmt.bindLong(7, parsed.includeInBudget ? 1 : 0);
-                stmt.bindLong(8, parsed.includeInAnalysis ? 1 : 0);
-                stmt.bindString(9, WearIds.nowIso());
-                stmt.bindString(10, parsed.ledgerId);
-                stmt.bindString(11, parsed.targetTxId);
+                stmt.bindLong(7, parsed.isReimbursable ? 1 : 0);
+                stmt.bindString(8, parsed.isReimbursable ? "pending" : "none");
+                stmt.bindLong(9, parsed.includeInBudget ? 1 : 0);
+                stmt.bindLong(10, parsed.includeInAnalysis ? 1 : 0);
+                stmt.bindString(11, WearIds.nowIso());
+                stmt.bindString(12, parsed.ledgerId);
+                stmt.bindString(13, parsed.targetTxId);
                 stmt.executeUpdateDelete();
             } finally {
                 closeQuietly(stmt);
@@ -749,6 +752,7 @@ public final class WearTransactionEngine {
         String note
     ) {
         long signedAmount = signedAmountForType(parsed.type, parsed.amountMinor);
+        boolean reimbursable = WearCompanionConstants.TYPE_EXPENSE.equals(parsed.type) && parsed.isReimbursable;
         return insertTransactionRow(
             db,
             parsed.ledgerId,
@@ -764,7 +768,8 @@ public final class WearTransactionEngine {
             WearCompanionConstants.externalRefId(parsed.idempotencyKey),
             parsed.idempotencyKey,
             parsed.includeInBudget,
-            parsed.includeInAnalysis
+            parsed.includeInAnalysis,
+            reimbursable
         );
     }
 
@@ -792,7 +797,8 @@ public final class WearTransactionEngine {
             WearCompanionConstants.externalRefId(parsed.idempotencyKey),
             parsed.idempotencyKey + ":out",
             parsed.includeInBudget,
-            parsed.includeInAnalysis
+            parsed.includeInAnalysis,
+            false
         );
         insertTransactionRow(
             db,
@@ -809,7 +815,8 @@ public final class WearTransactionEngine {
             WearCompanionConstants.externalRefId(parsed.idempotencyKey),
             parsed.idempotencyKey + ":in",
             parsed.includeInBudget,
-            parsed.includeInAnalysis
+            parsed.includeInAnalysis,
+            false
         );
         return outTxId;
     }
@@ -839,7 +846,8 @@ public final class WearTransactionEngine {
             WearCompanionConstants.externalRefId(parsed.idempotencyKey),
             parsed.idempotencyKey,
             parsed.includeInBudget,
-            parsed.includeInAnalysis
+            parsed.includeInAnalysis,
+            false
         );
         insertPosting(
             db,
@@ -951,7 +959,8 @@ public final class WearTransactionEngine {
             null,
             false,
             false,
-            "manual"
+            "manual",
+            false
         );
         insertTransactionRow(
             db,
@@ -969,7 +978,8 @@ public final class WearTransactionEngine {
             null,
             false,
             false,
-            "manual"
+            "manual",
+            false
         );
 
         String repaymentId = WearIds.createId("crp");
@@ -1055,7 +1065,8 @@ public final class WearTransactionEngine {
             parsed.idempotencyKey,
             false,
             false,
-            "refund"
+            "refund",
+            false
         );
         insertPosting(
             db,
@@ -1148,7 +1159,8 @@ public final class WearTransactionEngine {
             null,
             false,
             false,
-            "loan_payment"
+            "loan_payment",
+            false
         );
     }
 
@@ -1432,7 +1444,8 @@ public final class WearTransactionEngine {
             "SELECT c.id, c.name, c.kind, c.icon,"
                 + " COALESCE((SELECT COUNT(1) FROM transactions t"
                 + "   WHERE t.ledger_id = c.ledger_id AND t.category_id = c.id AND t.deleted_at IS NULL"
-                + "     AND date(t.occurred_at) >= date('now', 'localtime', '-90 day')), 0) AS usage_count"
+                + "     AND date(t.occurred_at) >= date('now', 'localtime', '-90 day')), 0) AS usage_count,"
+                + " COALESCE(c.default_is_reimbursable, 0) AS default_is_reimbursable"
                 + " FROM categories c"
                 + " WHERE c.ledger_id = ? AND c.deleted_at IS NULL AND COALESCE(c.is_archived, 0) = 0"
                 + " AND c.kind IN ('expense','income')"
@@ -1454,6 +1467,7 @@ public final class WearTransactionEngine {
                 row.put("recent", usage > 0);
                 int rank = "income".equals(kind) ? incomeRank++ : expenseRank++;
                 row.put("favorite", usage > 0 && rank < 6);
+                row.put("defaultIsReimbursable", cursor.getLong(5) == 1L);
                 out.put(row);
             }
         } finally {
@@ -1499,7 +1513,8 @@ public final class WearTransactionEngine {
                 + " COALESCE(c.name, '') AS category_name,"
                 + " t.account_id, COALESCE(a.name, '') AS account_name,"
                 + " COALESCE(a.account_kind, 'cash') AS account_kind,"
-                + " COALESCE(t.tags_json, '') AS tags_json"
+                + " COALESCE(t.tags_json, '') AS tags_json,"
+                + " COALESCE(t.is_reimbursable, 0) AS is_reimbursable"
                 + " FROM transactions t"
                 + " LEFT JOIN categories c ON c.ledger_id = t.ledger_id AND c.id = t.category_id"
                 + " LEFT JOIN accounts a ON a.ledger_id = t.ledger_id AND a.id = t.account_id"
@@ -1524,6 +1539,7 @@ public final class WearTransactionEngine {
                 row.put("accountName", cursor.getString(10));
                 row.put("accountKind", cursor.getString(11));
                 row.put("tagsJson", cursor.getString(12));
+                row.put("isReimbursable", cursor.getLong(13) == 1L);
                 boolean editable = transferGroupId.isEmpty()
                     && WearCompanionConstants.isEditableTxType(cursor.getString(1))
                     && !"loan_payment".equals(cursor.getString(5))
@@ -1552,7 +1568,8 @@ public final class WearTransactionEngine {
         String externalRefId,
         String idempotencyKey,
         boolean includeInBudget,
-        boolean includeInAnalysis
+        boolean includeInAnalysis,
+        boolean isReimbursable
     ) {
         return insertTransactionRow(
             db,
@@ -1570,7 +1587,8 @@ public final class WearTransactionEngine {
             idempotencyKey,
             includeInBudget,
             includeInAnalysis,
-            "wear"
+            "wear",
+            isReimbursable
         );
     }
 
@@ -1590,10 +1608,12 @@ public final class WearTransactionEngine {
         String idempotencyKey,
         boolean includeInBudget,
         boolean includeInAnalysis,
-        String originType
+        String originType,
+        boolean isReimbursable
     ) {
         String txId = WearIds.createId("tx");
         String now = WearIds.nowIso();
+        boolean reimbursable = isReimbursable && WearCompanionConstants.TYPE_EXPENSE.equals(type);
         SupportSQLiteStatement stmt = db.compileStatement(
             "INSERT INTO transactions ("
                 + "ledger_id, id, type, transfer_group_id, account_id, peer_account_id,"
@@ -1602,7 +1622,7 @@ public final class WearTransactionEngine {
                 + " reimbursed_at, reimburse_target_minor, include_in_budget, include_in_analysis,"
                 + " created_by_user_id, created_by_display_name, updated_by_user_id, updated_by_display_name,"
                 + " created_at, updated_at"
-                + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 0, 'none',"
+                + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?,"
                 + " NULL, NULL, ?, ?, NULL, 'Wear OS', NULL, 'Wear OS', ?, ?);"
         );
         try {
@@ -1621,10 +1641,12 @@ public final class WearTransactionEngine {
             stmt.bindString(13, originType);
             bindNullable(stmt, 14, externalRefId);
             bindNullable(stmt, 15, idempotencyKey);
-            stmt.bindLong(16, includeInBudget ? 1 : 0);
-            stmt.bindLong(17, includeInAnalysis ? 1 : 0);
-            stmt.bindString(18, now);
-            stmt.bindString(19, now);
+            stmt.bindLong(16, reimbursable ? 1 : 0);
+            stmt.bindString(17, reimbursable ? "pending" : "none");
+            stmt.bindLong(18, includeInBudget ? 1 : 0);
+            stmt.bindLong(19, includeInAnalysis ? 1 : 0);
+            stmt.bindString(20, now);
+            stmt.bindString(21, now);
             stmt.executeInsert();
             return txId;
         } finally {

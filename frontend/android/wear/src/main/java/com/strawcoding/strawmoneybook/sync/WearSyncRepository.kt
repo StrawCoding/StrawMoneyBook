@@ -39,6 +39,7 @@ data class WearEntryDraft(
     val occurredAt: String? = null,
     val loanDirection: String? = null,
     val counterpartyName: String? = null,
+    val isReimbursable: Boolean = false,
 )
 
 class WearSyncRepository(context: Context) {
@@ -134,11 +135,13 @@ class WearSyncRepository(context: Context) {
         note: String?,
         tags: List<String> = emptyList(),
         occurredAt: String? = null,
+        isReimbursable: Boolean = false,
     ): OutboxEntity = withContext(Dispatchers.IO) {
         if (targetTxId.isBlank()) throw IllegalArgumentException("target_required")
         if (!WearTxTypes.EDITABLE.contains(type)) throw IllegalArgumentException("type_not_editable")
         val ledgerId = cache.activeLedgerId().ifBlank { throw IllegalStateException("no_ledger") }
         val now = nowIso()
+        val reimbursable = type == WearTxTypes.EXPENSE && isReimbursable
         val row = OutboxEntity(
             clientTxId = "room_${UUID.randomUUID()}",
             idempotencyKey = UUID.randomUUID().toString(),
@@ -157,6 +160,7 @@ class WearSyncRepository(context: Context) {
             updatedAt = now,
             op = OutboxOps.UPDATE,
             tagsJson = tagsJsonOrNull(tags),
+            extrasJson = reimbursableExtrasJson(reimbursable),
             targetTxId = targetTxId,
         )
         dao.insert(row)
@@ -206,6 +210,7 @@ class WearSyncRepository(context: Context) {
             tags = parseTags(last.optString("tagsJson", "")),
             loanDirection = last.optString("loanDirection", "").ifBlank { null },
             counterpartyName = last.optString("counterpartyName", "").ifBlank { null },
+            isReimbursable = last.optBoolean("isReimbursable", false),
         )
         if (draft.amountMinor <= 0L) return@withContext null
         enqueueEntry(draft)
@@ -295,6 +300,15 @@ class WearSyncRepository(context: Context) {
         if (row.categoryId.isNotBlank()) payload.put("categoryId", row.categoryId)
         if (row.op == OutboxOps.UPDATE) {
             payload.put("targetTxId", row.targetTxId ?: "")
+            row.extrasJson?.takeIf { it.isNotBlank() }?.let { raw ->
+                runCatching { JSONObject(raw) }.getOrNull()?.let { extras ->
+                    val keys = extras.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        payload.put(key, extras.get(key))
+                    }
+                }
+            }
         } else {
             row.peerAccountId?.takeIf { it.isNotBlank() }?.let {
                 payload.put("peerAccountId", it)
@@ -367,7 +381,25 @@ class WearSyncRepository(context: Context) {
         val extras = JSONObject()
         draft.loanDirection?.takeIf { it.isNotBlank() }?.let { extras.put("loanDirection", it) }
         draft.counterpartyName?.takeIf { it.isNotBlank() }?.let { extras.put("counterpartyName", it) }
+        val reimbursable = draft.type == WearTxTypes.EXPENSE && draft.isReimbursable
+        if (reimbursable) {
+            extras.put("isReimbursable", true)
+            extras.put("includeInBudget", false)
+            extras.put("includeInAnalysis", false)
+        } else if (draft.type == WearTxTypes.EXPENSE) {
+            // Explicit false so phone never inherits a stale true from a prior edit path.
+            extras.put("isReimbursable", false)
+        }
         return if (extras.length() == 0) null else extras.toString()
+    }
+
+    private fun reimbursableExtrasJson(reimbursable: Boolean): String {
+        val extras = JSONObject().put("isReimbursable", reimbursable)
+        if (reimbursable) {
+            extras.put("includeInBudget", false)
+            extras.put("includeInAnalysis", false)
+        }
+        return extras.toString()
     }
 
     private fun lastEntryJson(row: OutboxEntity): JSONObject {

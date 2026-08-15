@@ -30,6 +30,8 @@ class WearDraftState {
     var counterpartyName by mutableStateOf("")
     var editingTxId by mutableStateOf("")
     var pickerTarget by mutableStateOf(PickerTarget.ACCOUNT)
+    /** Expense-only; ignored for other types on submit. */
+    var isReimbursable by mutableStateOf(false)
     val tags = mutableStateListOf<String>()
 
     val amountMinor: Long
@@ -39,6 +41,8 @@ class WearDraftState {
         }
 
     val isEditing: Boolean get() = editingTxId.isNotBlank()
+
+    fun supportsReimbursable(): Boolean = type == WearTxTypes.EXPENSE
 
     fun reset(nextType: String) {
         type = nextType
@@ -54,6 +58,7 @@ class WearDraftState {
         loanDirection = "lend"
         counterpartyName = ""
         editingTxId = ""
+        isReimbursable = false
         tags.clear()
     }
 
@@ -72,6 +77,7 @@ class WearDraftState {
         loanDirection = "lend"
         counterpartyName = ""
         editingTxId = tx.optString("id", "")
+        isReimbursable = type == WearTxTypes.EXPENSE && tx.optBoolean("isReimbursable", false)
         tags.clear()
         tags.addAll(parseTagsJson(tx.optString("tagsJson", "")))
     }
@@ -88,6 +94,7 @@ class WearDraftState {
         occurredAt = isoUtc(occurredAtMillis),
         loanDirection = if (type == WearTxTypes.LOAN) loanDirection else null,
         counterpartyName = if (type == WearTxTypes.LOAN) counterpartyName.ifBlank { null } else null,
+        isReimbursable = supportsReimbursable() && isReimbursable,
     )
 
     /** Missing-field reason, or null when the draft can be submitted. */

@@ -106,8 +106,16 @@ public final class WearProtocol {
         parsed.tags = normalizeTags(payload);
         parsed.loanDirection = loanDirection;
         parsed.counterpartyName = counterpartyName;
-        parsed.includeInBudget = payload.optBoolean("includeInBudget", true);
-        parsed.includeInAnalysis = payload.optBoolean("includeInAnalysis", true);
+        // Reimbursable is expense-only (same as phone Quick Add); other types stay false.
+        parsed.isReimbursable = WearCompanionConstants.TYPE_EXPENSE.equals(type)
+            && payload.optBoolean("isReimbursable", false);
+        if (parsed.isReimbursable) {
+            parsed.includeInBudget = payload.optBoolean("includeInBudget", false);
+            parsed.includeInAnalysis = payload.optBoolean("includeInAnalysis", false);
+        } else {
+            parsed.includeInBudget = payload.optBoolean("includeInBudget", true);
+            parsed.includeInAnalysis = payload.optBoolean("includeInAnalysis", true);
+        }
         return parsed;
     }
 
@@ -166,8 +174,15 @@ public final class WearProtocol {
         parsed.occurredAt = payload.optString("occurredAt", "").trim();
         parsed.note = clampNote(payload.optString("note", ""));
         parsed.tags = normalizeTags(payload);
-        parsed.includeInBudget = payload.optBoolean("includeInBudget", true);
-        parsed.includeInAnalysis = payload.optBoolean("includeInAnalysis", true);
+        parsed.isReimbursable = WearCompanionConstants.TYPE_EXPENSE.equals(type)
+            && payload.optBoolean("isReimbursable", false);
+        if (parsed.isReimbursable) {
+            parsed.includeInBudget = payload.optBoolean("includeInBudget", false);
+            parsed.includeInAnalysis = payload.optBoolean("includeInAnalysis", false);
+        } else {
+            parsed.includeInBudget = payload.optBoolean("includeInBudget", true);
+            parsed.includeInAnalysis = payload.optBoolean("includeInAnalysis", true);
+        }
         return parsed;
     }
 
@@ -300,6 +315,7 @@ public final class WearProtocol {
         public List<String> tags;
         public String loanDirection;
         public String counterpartyName;
+        public boolean isReimbursable = false;
         public boolean includeInBudget = true;
         public boolean includeInAnalysis = true;
     }
@@ -318,6 +334,7 @@ public final class WearProtocol {
         public String occurredAt;
         public String note;
         public List<String> tags;
+        public boolean isReimbursable = false;
         public boolean includeInBudget = true;
         public boolean includeInAnalysis = true;
     }
