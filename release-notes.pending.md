@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- Wear OS 取消可報銷／刪除來源交易時，原生 `WearTransactionEngine` 正式 `applyTxUpdateOnDb`／`applyTxDeleteOnDb` 會同步移除 draft 請款單匯入項目並重算總額（對齊 SMB-255；paid 不動）；新增 JVM Robolectric `WearTransactionEngineReimbursableUpdateTest` 實際執行該路徑回歸。
-
 ---
+
+## v1.3.137
+- Wear OS 取消可報銷／刪除來源交易時，原生 `WearTransactionEngine` 正式 `applyTxUpdateOnDb`／`applyTxDeleteOnDb` 會同步移除 draft 請款單匯入項目並重算總額（對齊 SMB-255；paid 不動）；新增 JVM Robolectric `WearTransactionEngineReimbursableUpdateTest` 實際執行該路徑回歸。
 
 ## v1.3.134
 - Wear OS 手錶記帳新增「可報銷」選項：支出草稿可開關；選分類時依 `default_is_reimbursable` 預填（與手機 Quick Add 對齊）；outbox／`WearProtocol`／`WearTransactionEngine`（及 JS companion）寫入 `is_reimbursable`＋`reimbursement_state=pending`；原生 UPDATE 開啟／取消可報銷與 DELETE 會同步 draft 請款單匯入項目（對齊 SMB-255；paid 不動）；編輯／重複上一筆／範本／catalog snapshot 不丟旗標。
