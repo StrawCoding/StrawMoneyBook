@@ -121,6 +121,13 @@ test('smb303: wear sources wire reimbursable end-to-end', () => {
     resolve(wearKotlinRoot, 'com/strawcoding/strawmoneybook/data/WearCacheStore.kt'),
     'utf8',
   )
+  const instrumented = readFileSync(
+    resolve(
+      frontendRoot,
+      'android/app/src/androidTest/java/com/strawcoding/strawmoneybook/wear/WearTransactionEngineInstrumentedTest.java',
+    ),
+    'utf8',
+  )
 
   assert.match(javaProtocol, /isReimbursable/)
   assert.match(javaProtocol, /TYPE_EXPENSE\.equals\(type\)/)
@@ -128,11 +135,16 @@ test('smb303: wear sources wire reimbursable end-to-end', () => {
   assert.match(javaEngine, /reimbursement_state = \?/)
   assert.match(javaEngine, /defaultIsReimbursable/)
   assert.match(javaEngine, /\"isReimbursable\"/)
+  assert.match(javaEngine, /reconcileDraftClaimSheetImportItems/)
   assert.match(jsProtocol, /isReimbursable/)
   assert.match(jsService, /isReimbursable: Boolean\(payload\.isReimbursable\)|isReimbursable: payload\.isReimbursable/)
+  assert.match(jsService, /updateManualTransaction/)
   assert.match(draft, /isReimbursable/)
   assert.match(draft, /supportsReimbursable/)
   assert.match(screens, /可報銷/)
   assert.match(sync, /isReimbursable/)
   assert.match(cache, /defaultIsReimbursable/)
+  assert.match(instrumented, /applyTxUpdateTogglesReimbursableAndSyncsDraftClaimItems/)
+  assert.match(instrumented, /claim-draft-1/)
+  assert.match(instrumented, /isReimbursable", false/)
 })

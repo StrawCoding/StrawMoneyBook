@@ -803,9 +803,9 @@ Stage B：獨立 Gradle 模組 `frontend/android/wear`（同一 `applicationId`�
 
 **snapshot 擴充**：`assetsTotalMinor`（`include_in_assets` 帳戶合計）、`budgetRemainingMinor`（依帳本曆月／發薪週期解析目前期間）、`ledgers[]`、`accounts`／`categories`（以 `usage_count`／`last_used_at` 推導 recent／favorite 旗標供選擇器分組）、`loans` 摘要、含全部 B 型別的 `recentTxs`。
 
-**手錶端**：Room outbox 升級 **v2**（新增 `op`／`peerAccountId`／`sourceAccountId`／`tagsJson`／`extrasJson`／`targetTxId`），採 `Migration(1, 2)` 加欄位並帶 `NOT NULL DEFAULT`，升級不清除未同步草稿（禁 `fallbackToDestructiveMigration`）。UI 提供首頁（今日支出／總資產／預算剩餘／帳本 chip／待同步筆數）、型別選擇、記帳表單（數字盤、帳戶／分類／對方帳戶選擇器、**可報銷開關（僅支出；選分類依 `default_is_reimbursable` 預填，可手動覆寫）**、時間、備註、標籤）、近期清單與明細（編輯／刪除）、帳本切換、範本、重複上一筆；rotary 錶冠捲動以 `onRotaryScrollEvent` 實作，語音備註走 `RecognizerIntent` 並在無語音服務時安全降級（不閃退）。錶端範本存 `SharedPreferences`（含 `isReimbursable`），不依賴手機表。companion 寫入時支出可報銷列會帶 `is_reimbursable=1`、`reimbursement_state='pending'`（與手機 Quick Add 一致），出現在手機報銷清單。
+**手錶端**：Room outbox 升級 **v2**（新增 `op`／`peerAccountId`／`sourceAccountId`／`tagsJson`／`extrasJson`／`targetTxId`），採 `Migration(1, 2)` 加欄位並帶 `NOT NULL DEFAULT`，升級不清除未同步草稿（禁 `fallbackToDestructiveMigration`）。UI 提供首頁（今日支出／總資產／預算剩餘／帳本 chip／待同步筆數）、型別選擇、記帳表單（數字盤、帳戶／分類／對方帳戶選擇器、**可報銷開關（僅支出；選分類依 `default_is_reimbursable` 預填，可手動覆寫）**、時間、備註、標籤）、近期清單與明細（編輯／刪除）、帳本切換、範本、重複上一筆；rotary 錶冠捲動以 `onRotaryScrollEvent` 實作，語音備註走 `RecognizerIntent` 並在無語音服務時安全降級（不閃退）。錶端範本存 `SharedPreferences`（含 `isReimbursable`），不依賴手機表。companion 寫入時支出可報銷列會帶 `is_reimbursable=1`、`reimbursement_state='pending'`（與手機 Quick Add 一致），出現在手機報銷清單。原生 `WearTransactionEngine` 的 UPDATE／DELETE 會同步 SMB-255 草稿請款單：取消可報銷或刪除來源交易時移除 draft import items 並重算總額（paid 請款單不受影響）；JS 路徑則復用 `updateManualTransaction`／`deleteManualTransaction` 既有 reconcile。
 
-**驗收**：`node --test`（`wear-companion-stage-a/-stage-b/-scope-b`／`wear-companion-smb303-reimbursable`）＋ `:wear:compileReleaseKotlin`／`:app:compileReleaseJavaWithJavac`。真機記帳仍需實體 Wear 裝置配對驗收。
+**驗收**：`node --test`（`wear-companion-stage-a/-stage-b/-scope-b`／`wear-companion-smb303-reimbursable`）＋ `:wear:compileReleaseKotlin`／`:app:compileReleaseJavaWithJavac`／instrumented UPDATE 開／關可報銷＋draft sync。真機記帳仍需實體 Wear 裝置配對驗收。
 
 ## 9. 銀行同步
 

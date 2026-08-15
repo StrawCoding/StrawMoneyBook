@@ -2,6 +2,7 @@ package com.strawcoding.strawmoneybook.wear;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
@@ -18,7 +19,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 /**
- * Proves the Wear engine can INSERT without launching MainActivity or Capacitor Bridge.
+ * Proves the Wear engine can INSERT/UPDATE without launching MainActivity or Capacitor Bridge.
+ * smb303: reimbursable CREATE + formal UPDATE enable/cancel with draft claim-sheet sync.
  */
 @RunWith(AndroidJUnit4.class)
 public class WearTransactionEngineInstrumentedTest {
@@ -33,24 +35,7 @@ public class WearTransactionEngineInstrumentedTest {
 
     @Test
     public void applyTxCreateInsertsWithoutActivityOrBridge() throws Exception {
-        Context context = ApplicationProvider.getApplicationContext();
-        helper = new FrameworkSQLiteOpenHelperFactory().create(
-            SupportSQLiteOpenHelper.Configuration.builder(context)
-                .name(null)
-                .callback(new SupportSQLiteOpenHelper.Callback(1) {
-                    @Override
-                    public void onCreate(SupportSQLiteDatabase db) {
-                        seed(db);
-                    }
-
-                    @Override
-                    public void onUpgrade(SupportSQLiteDatabase db, int oldVersion, int newVersion) {
-                    }
-                })
-                .build()
-        );
-
-        SupportSQLiteDatabase db = helper.getWritableDatabase();
+        SupportSQLiteDatabase db = openSeededDb();
         JSONObject payload = new JSONObject();
         payload.put("idempotencyKey", "wear-idem-1");
         payload.put("clientTxId", "room-row-1");
@@ -131,6 +116,160 @@ public class WearTransactionEngineInstrumentedTest {
         assertTrue(WearMessageDispatcher.shouldHandleIncoming(true, WearCompanionConstants.PATH_TX_CREATE));
     }
 
+    @Test
+    public void applyTxUpdateTogglesReimbursableAndSyncsDraftClaimItems() throws Exception {
+        SupportSQLiteDatabase db = openSeededDb();
+
+        JSONObject create = new JSONObject();
+        create.put("idempotencyKey", "wear-idem-upd-base");
+        create.put("clientTxId", "room-upd-base");
+        create.put("ledgerId", "led1");
+        create.put("type", "expense");
+        create.put("accountId", "acc1");
+        create.put("categoryId", "cat1");
+        create.put("amountMinor", 3200);
+        create.put("catalogRevision", 1);
+        create.put("occurredAt", "2026-08-15T03:00:00.000Z");
+        create.put("note", "client lunch");
+        create.put("isReimbursable", false);
+
+        JSONObject createAck = WearTransactionEngine.applyTxCreateOnDb(db, create, "led1");
+        assertEquals("ok", createAck.getString("status"));
+        String txId = createAck.getString("txId");
+
+        JSONObject enable = new JSONObject();
+        enable.put("idempotencyKey", "wear-idem-upd-on");
+        enable.put("ledgerId", "led1");
+        enable.put("targetTxId", txId);
+        enable.put("type", "expense");
+        enable.put("accountId", "acc1");
+        enable.put("categoryId", "cat1");
+        enable.put("amountMinor", 3200);
+        enable.put("catalogRevision", 1);
+        enable.put("occurredAt", "2026-08-15T03:00:00.000Z");
+        enable.put("note", "client lunch");
+        enable.put("isReimbursable", true);
+
+        JSONObject enableAck = WearTransactionEngine.applyTxUpdateOnDb(db, enable, "led1");
+        assertEquals("ok", enableAck.getString("status"));
+        assertEquals(1L, AndroidDbRepository.queryLong(
+            db,
+            "SELECT is_reimbursable FROM transactions WHERE id = ?;",
+            new String[] { txId },
+            -1L
+        ));
+        assertEquals("pending", AndroidDbRepository.queryString(
+            db,
+            "SELECT reimbursement_state FROM transactions WHERE id = ?;",
+            new String[] { txId }
+        ));
+
+        // Simulate phone draft claim sheet that already imported this reimbursable expense.
+        db.execSQL(
+            "INSERT INTO reimbursements("
+                + "ledger_id, id, title, status, total_minor, created_at, updated_at, deleted_at"
+                + ") VALUES ("
+                + "'led1', 'claim-draft-1', 'Trip claim', 'draft', 3200,"
+                + " '2026-08-15T03:01:00.000Z', '2026-08-15T03:01:00.000Z', NULL);"
+        );
+        db.execSQL(
+            "INSERT INTO reimbursement_items("
+                + "ledger_id, id, reimbursement_id, source_type, entry_type, transaction_id,"
+                + " category_id, account_id, description, amount_minor, occurred_at, created_at, updated_at"
+                + ") VALUES ("
+                + "'led1', 'item-1', 'claim-draft-1', 'transaction', 'expense', '" + txId + "',"
+                + " 'cat1', 'acc1', 'Food', 3200, '2026-08-15T03:00:00.000Z',"
+                + " '2026-08-15T03:01:00.000Z', '2026-08-15T03:01:00.000Z');"
+        );
+        // Paid claim must survive cancel-reimbursable on the source tx.
+        db.execSQL(
+            "INSERT INTO reimbursements("
+                + "ledger_id, id, title, status, total_minor, created_at, updated_at, deleted_at"
+                + ") VALUES ("
+                + "'led1', 'claim-paid-1', 'Old paid', 'paid', 500,"
+                + " '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z', NULL);"
+        );
+        db.execSQL(
+            "INSERT INTO reimbursement_items("
+                + "ledger_id, id, reimbursement_id, source_type, entry_type, transaction_id,"
+                + " category_id, account_id, description, amount_minor, occurred_at, created_at, updated_at"
+                + ") VALUES ("
+                + "'led1', 'item-paid-1', 'claim-paid-1', 'transaction', 'expense', '" + txId + "',"
+                + " 'cat1', 'acc1', 'Old', 500, '2026-08-01T00:00:00.000Z',"
+                + " '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z');"
+        );
+
+        JSONObject cancel = new JSONObject();
+        cancel.put("idempotencyKey", "wear-idem-upd-off");
+        cancel.put("ledgerId", "led1");
+        cancel.put("targetTxId", txId);
+        cancel.put("type", "expense");
+        cancel.put("accountId", "acc1");
+        cancel.put("categoryId", "cat1");
+        cancel.put("amountMinor", 3200);
+        cancel.put("catalogRevision", 1);
+        cancel.put("occurredAt", "2026-08-15T03:00:00.000Z");
+        cancel.put("note", "client lunch");
+        cancel.put("isReimbursable", false);
+
+        JSONObject cancelAck = WearTransactionEngine.applyTxUpdateOnDb(db, cancel, "led1");
+        assertEquals("ok", cancelAck.getString("status"));
+        assertEquals(0L, AndroidDbRepository.queryLong(
+            db,
+            "SELECT is_reimbursable FROM transactions WHERE id = ?;",
+            new String[] { txId },
+            -1L
+        ));
+        assertEquals("none", AndroidDbRepository.queryString(
+            db,
+            "SELECT reimbursement_state FROM transactions WHERE id = ?;",
+            new String[] { txId }
+        ));
+
+        assertNull(AndroidDbRepository.queryString(
+            db,
+            "SELECT id FROM reimbursement_items WHERE id = 'item-1';",
+            null
+        ));
+        assertEquals(0L, AndroidDbRepository.queryLong(
+            db,
+            "SELECT total_minor FROM reimbursements WHERE id = 'claim-draft-1';",
+            null,
+            -1L
+        ));
+        assertEquals("item-paid-1", AndroidDbRepository.queryString(
+            db,
+            "SELECT id FROM reimbursement_items WHERE id = 'item-paid-1';",
+            null
+        ));
+        assertEquals(500L, AndroidDbRepository.queryLong(
+            db,
+            "SELECT total_minor FROM reimbursements WHERE id = 'claim-paid-1';",
+            null,
+            -1L
+        ));
+    }
+
+    private SupportSQLiteDatabase openSeededDb() {
+        Context context = ApplicationProvider.getApplicationContext();
+        helper = new FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(null)
+                .callback(new SupportSQLiteOpenHelper.Callback(1) {
+                    @Override
+                    public void onCreate(SupportSQLiteDatabase db) {
+                        seed(db);
+                    }
+
+                    @Override
+                    public void onUpgrade(SupportSQLiteDatabase db, int oldVersion, int newVersion) {
+                    }
+                })
+                .build()
+        );
+        return helper.getWritableDatabase();
+    }
+
     private static void seed(SupportSQLiteDatabase db) {
         db.execSQL("PRAGMA foreign_keys = ON;");
         db.execSQL("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT);");
@@ -181,6 +320,34 @@ public class WearTransactionEngineInstrumentedTest {
                 + " PRIMARY KEY (ledger_id, id));"
         );
         db.execSQL("CREATE UNIQUE INDEX idx_tx_idempotency ON transactions(ledger_id, idempotency_key) WHERE idempotency_key IS NOT NULL;");
+        db.execSQL(
+            "CREATE TABLE reimbursements ("
+                + "ledger_id TEXT NOT NULL, id TEXT NOT NULL, title TEXT NOT NULL,"
+                + " status TEXT NOT NULL, total_minor INTEGER NOT NULL DEFAULT 0,"
+                + " created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT,"
+                + " PRIMARY KEY (ledger_id, id));"
+        );
+        db.execSQL(
+            "CREATE TABLE reimbursement_items ("
+                + "ledger_id TEXT NOT NULL, id TEXT NOT NULL, reimbursement_id TEXT NOT NULL,"
+                + " source_type TEXT NOT NULL, entry_type TEXT NOT NULL DEFAULT 'expense',"
+                + " transaction_id TEXT, category_id TEXT, account_id TEXT,"
+                + " description TEXT, amount_minor INTEGER NOT NULL,"
+                + " occurred_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,"
+                + " PRIMARY KEY (ledger_id, id));"
+        );
+        db.execSQL(
+            "CREATE TABLE credit_statements ("
+                + "ledger_id TEXT NOT NULL, id TEXT NOT NULL, account_id TEXT,"
+                + " status TEXT NOT NULL DEFAULT 'open', deleted_at TEXT,"
+                + " PRIMARY KEY (ledger_id, id));"
+        );
+        db.execSQL(
+            "CREATE TABLE transaction_postings ("
+                + "ledger_id TEXT NOT NULL, id TEXT NOT NULL, transaction_id TEXT,"
+                + " statement_id TEXT, amount_minor INTEGER, deleted_at TEXT, updated_at TEXT,"
+                + " PRIMARY KEY (ledger_id, id));"
+        );
         db.execSQL("INSERT INTO ledgers(id, name) VALUES ('led1', 'Main');");
         db.execSQL("INSERT INTO accounts(ledger_id, id, name, account_kind) VALUES ('led1', 'acc1', 'Cash', 'cash');");
         db.execSQL("INSERT INTO categories(ledger_id, id, name, kind) VALUES ('led1', 'cat1', 'Food', 'expense');");

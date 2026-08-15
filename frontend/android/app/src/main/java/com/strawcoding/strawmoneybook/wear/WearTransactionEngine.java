@@ -5,7 +5,9 @@ import android.database.Cursor;
 import androidx.sqlite.db.SupportSQLiteDatabase;
 import androidx.sqlite.db.SupportSQLiteStatement;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -336,6 +338,9 @@ public final class WearTransactionEngine {
             } finally {
                 closeQuietly(stmt);
             }
+            // Match phone updateManualTransaction / SMB-255: clearing or mutating a
+            // reimbursable expense must sync draft claim-sheet import items (paid claims untouched).
+            reconcileDraftClaimSheetImportItems(db, parsed.ledgerId, parsed.targetTxId);
             insertWearApplied(db, parsed.idempotencyKey, parsed.ledgerId, parsed.targetTxId);
             db.setTransactionSuccessful();
             return WearProtocol.ack(
@@ -464,6 +469,8 @@ public final class WearTransactionEngine {
                 closeQuietly(stmt);
             }
             softDeletePostings(db, parsed.ledgerId, parsed.targetTxId, now);
+            // Soft-deleted source txs must drop draft claim import rows (phone deleteManualTransaction).
+            reconcileDraftClaimSheetImportItems(db, parsed.ledgerId, parsed.targetTxId);
             insertWearApplied(db, parsed.idempotencyKey, parsed.ledgerId, parsed.targetTxId);
             db.setTransactionSuccessful();
             return WearProtocol.ack(
@@ -1275,6 +1282,306 @@ public final class WearTransactionEngine {
             stmt.bindString(2, now);
             stmt.bindString(3, ledgerId);
             stmt.bindString(4, txId);
+            stmt.executeUpdateDelete();
+        } finally {
+            closeQuietly(stmt);
+        }
+    }
+
+    /**
+     * Native mirror of JS {@code reconcileDraftClaimSheetImportItems} (SMB-255).
+     * When Wear UPDATE clears {@code is_reimbursable} or DELETE soft-deletes the source
+     * expense, draft claim-sheet import items for that transaction are removed and
+     * claim totals recomputed. Paid claims are never mutated. While still reimbursable,
+     * item amounts are capped to remaining pending (same as phone draft sync).
+     */
+    static void reconcileDraftClaimSheetImportItems(
+        SupportSQLiteDatabase db,
+        String ledgerId,
+        String txId
+    ) {
+        if (ledgerId == null || ledgerId.isEmpty() || txId == null || txId.isEmpty()) {
+            return;
+        }
+        if (!tableExists(db, "reimbursement_items") || !tableExists(db, "reimbursements")) {
+            return;
+        }
+
+        List<DraftClaimItem> draftItems = listDraftImportItemsForTx(db, ledgerId, txId);
+        if (draftItems.isEmpty()) {
+            return;
+        }
+
+        SyncDecision decision = resolveImportSync(db, ledgerId, txId);
+        Set<String> affectedClaimIds = new HashSet<>();
+        String now = WearIds.nowIso();
+
+        for (DraftClaimItem item : draftItems) {
+            if (!"transaction".equals(item.sourceType)) {
+                continue;
+            }
+            if ("income".equals(item.entryType)) {
+                continue;
+            }
+            affectedClaimIds.add(item.reimbursementId);
+            if (decision.remove) {
+                deleteReimbursementItem(db, ledgerId, item.id);
+                continue;
+            }
+            long nextAmount = Math.min(Math.max(0L, item.amountMinor), decision.pendingMinor);
+            String nextDescription = decision.description == null || decision.description.isEmpty()
+                ? item.description
+                : decision.description;
+            if (nextAmount <= 0L) {
+                deleteReimbursementItem(db, ledgerId, item.id);
+                continue;
+            }
+            if (nextAmount != item.amountMinor
+                || (nextDescription != null && !nextDescription.equals(String.valueOf(item.description)))) {
+                updateReimbursementItem(db, ledgerId, item.id, nextDescription, nextAmount, now);
+            }
+        }
+
+        for (String claimId : affectedClaimIds) {
+            recomputeReimbursementTotal(db, ledgerId, claimId, now);
+        }
+    }
+
+    private static boolean tableExists(SupportSQLiteDatabase db, String tableName) {
+        String found = AndroidDbRepository.queryString(
+            db,
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;",
+            new String[] { tableName }
+        );
+        return found != null;
+    }
+
+    private static final class DraftClaimItem {
+        final String id;
+        final String reimbursementId;
+        final String sourceType;
+        final String entryType;
+        final String description;
+        final long amountMinor;
+
+        DraftClaimItem(
+            String id,
+            String reimbursementId,
+            String sourceType,
+            String entryType,
+            String description,
+            long amountMinor
+        ) {
+            this.id = id;
+            this.reimbursementId = reimbursementId;
+            this.sourceType = sourceType;
+            this.entryType = entryType;
+            this.description = description;
+            this.amountMinor = amountMinor;
+        }
+    }
+
+    private static final class SyncDecision {
+        final boolean remove;
+        final long pendingMinor;
+        final String description;
+
+        SyncDecision(boolean remove, long pendingMinor, String description) {
+            this.remove = remove;
+            this.pendingMinor = pendingMinor;
+            this.description = description;
+        }
+    }
+
+    private static List<DraftClaimItem> listDraftImportItemsForTx(
+        SupportSQLiteDatabase db,
+        String ledgerId,
+        String txId
+    ) {
+        List<DraftClaimItem> items = new ArrayList<>();
+        Cursor cursor = db.query(
+            "SELECT ri.id, ri.reimbursement_id,"
+                + " COALESCE(ri.source_type, '') AS source_type,"
+                + " COALESCE(ri.entry_type, 'expense') AS entry_type,"
+                + " COALESCE(ri.description, '') AS description,"
+                + " COALESCE(ri.amount_minor, 0) AS amount_minor"
+                + " FROM reimbursement_items ri"
+                + " INNER JOIN reimbursements r"
+                + "   ON r.ledger_id = ri.ledger_id AND r.id = ri.reimbursement_id"
+                + " WHERE ri.ledger_id = ?"
+                + "   AND ri.transaction_id = ?"
+                + "   AND r.deleted_at IS NULL"
+                + "   AND r.status = 'draft';",
+            new String[] { ledgerId, txId }
+        );
+        try {
+            while (cursor.moveToNext()) {
+                items.add(new DraftClaimItem(
+                    cursor.getString(0),
+                    cursor.getString(1),
+                    cursor.getString(2),
+                    cursor.getString(3),
+                    cursor.getString(4),
+                    cursor.getLong(5)
+                ));
+            }
+        } finally {
+            cursor.close();
+        }
+        return items;
+    }
+
+    private static SyncDecision resolveImportSync(
+        SupportSQLiteDatabase db,
+        String ledgerId,
+        String txId
+    ) {
+        boolean hasTargetColumn = columnExists(db, "transactions", "reimburse_target_minor");
+        String sql = "SELECT t.is_reimbursable, t.amount_minor, t.note,"
+            + (hasTargetColumn ? " t.reimburse_target_minor," : " NULL AS reimburse_target_minor,")
+            + " t.deleted_at,"
+            + " COALESCE(c.name, '') AS category_name"
+            + " FROM transactions t"
+            + " LEFT JOIN categories c"
+            + "   ON c.ledger_id = t.ledger_id AND c.id = t.category_id"
+            + " WHERE t.ledger_id = ? AND t.id = ? LIMIT 1;";
+        Cursor cursor = db.query(sql, new String[] { ledgerId, txId });
+        try {
+            if (!cursor.moveToNext()) {
+                return new SyncDecision(true, 0L, null);
+            }
+            if (!cursor.isNull(4) && cursor.getString(4) != null && !cursor.getString(4).isEmpty()) {
+                return new SyncDecision(true, 0L, null);
+            }
+            if (cursor.getLong(0) != 1L) {
+                return new SyncDecision(true, 0L, null);
+            }
+            long absAmount = Math.abs(cursor.getLong(1));
+            long claimable = absAmount;
+            if (!cursor.isNull(3)) {
+                long target = cursor.getLong(3);
+                if (target >= 0L) {
+                    claimable = target;
+                }
+            }
+            long reimbursed = sumReimbursedMinorForTx(db, ledgerId, txId);
+            long pending = Math.max(0L, claimable - Math.min(reimbursed, claimable));
+            if (pending <= 0L) {
+                return new SyncDecision(true, 0L, null);
+            }
+            String categoryName = cursor.getString(5);
+            String note = cursor.isNull(2) ? "" : cursor.getString(2);
+            String description = categoryName != null && !categoryName.trim().isEmpty()
+                ? categoryName.trim()
+                : (note == null || note.trim().isEmpty() ? "未命名報銷" : note.trim());
+            return new SyncDecision(false, pending, description);
+        } finally {
+            cursor.close();
+        }
+    }
+
+    private static boolean columnExists(SupportSQLiteDatabase db, String tableName, String columnName) {
+        Cursor cursor = db.query("PRAGMA table_info(" + tableName + ");", new String[0]);
+        try {
+            while (cursor.moveToNext()) {
+                if (columnName.equals(cursor.getString(1))) {
+                    return true;
+                }
+            }
+            return false;
+        } finally {
+            cursor.close();
+        }
+    }
+
+    private static long sumReimbursedMinorForTx(
+        SupportSQLiteDatabase db,
+        String ledgerId,
+        String txId
+    ) {
+        // Paid claim items for this source tx count as already reimbursed.
+        if (!tableExists(db, "reimbursement_items") || !tableExists(db, "reimbursements")) {
+            return 0L;
+        }
+        return AndroidDbRepository.queryLong(
+            db,
+            "SELECT COALESCE(SUM(ri.amount_minor), 0)"
+                + " FROM reimbursement_items ri"
+                + " INNER JOIN reimbursements r"
+                + "   ON r.ledger_id = ri.ledger_id AND r.id = ri.reimbursement_id"
+                + " WHERE ri.ledger_id = ?"
+                + "   AND ri.transaction_id = ?"
+                + "   AND r.deleted_at IS NULL"
+                + "   AND r.status = 'paid';",
+            new String[] { ledgerId, txId },
+            0L
+        );
+    }
+
+    private static void deleteReimbursementItem(
+        SupportSQLiteDatabase db,
+        String ledgerId,
+        String itemId
+    ) {
+        SupportSQLiteStatement stmt = db.compileStatement(
+            "DELETE FROM reimbursement_items WHERE ledger_id = ? AND id = ?;"
+        );
+        try {
+            stmt.bindString(1, ledgerId);
+            stmt.bindString(2, itemId);
+            stmt.executeUpdateDelete();
+        } finally {
+            closeQuietly(stmt);
+        }
+    }
+
+    private static void updateReimbursementItem(
+        SupportSQLiteDatabase db,
+        String ledgerId,
+        String itemId,
+        String description,
+        long amountMinor,
+        String now
+    ) {
+        SupportSQLiteStatement stmt = db.compileStatement(
+            "UPDATE reimbursement_items"
+                + " SET description = ?, amount_minor = ?, updated_at = ?"
+                + " WHERE ledger_id = ? AND id = ?;"
+        );
+        try {
+            bindNullable(stmt, 1, description);
+            stmt.bindLong(2, amountMinor);
+            stmt.bindString(3, now);
+            stmt.bindString(4, ledgerId);
+            stmt.bindString(5, itemId);
+            stmt.executeUpdateDelete();
+        } finally {
+            closeQuietly(stmt);
+        }
+    }
+
+    private static void recomputeReimbursementTotal(
+        SupportSQLiteDatabase db,
+        String ledgerId,
+        String reimbursementId,
+        String now
+    ) {
+        SupportSQLiteStatement stmt = db.compileStatement(
+            "UPDATE reimbursements"
+                + " SET total_minor = ("
+                + "       SELECT COALESCE(SUM(amount_minor), 0)"
+                + "       FROM reimbursement_items"
+                + "       WHERE ledger_id = ? AND reimbursement_id = ?"
+                + "     ),"
+                + "     updated_at = ?"
+                + " WHERE ledger_id = ? AND id = ?;"
+        );
+        try {
+            stmt.bindString(1, ledgerId);
+            stmt.bindString(2, reimbursementId);
+            stmt.bindString(3, now);
+            stmt.bindString(4, ledgerId);
+            stmt.bindString(5, reimbursementId);
             stmt.executeUpdateDelete();
         } finally {
             closeQuietly(stmt);
