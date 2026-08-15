@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- Wear OS 取消可報銷／刪除來源交易時，原生 `WearTransactionEngine` 正式 `applyTxUpdateOnDb`／`applyTxDeleteOnDb` 會同步移除 draft 請款單匯入項目並重算總額（對齊 SMB-255；paid 不動）；新增 JVM Robolectric `WearTransactionEngineReimbursableUpdateTest` 實際執行該路徑回歸。
+
 ---
 
 ## v1.3.134

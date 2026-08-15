@@ -136,6 +136,15 @@ test('smb303: wear sources wire reimbursable end-to-end', () => {
   assert.match(javaEngine, /defaultIsReimbursable/)
   assert.match(javaEngine, /\"isReimbursable\"/)
   assert.match(javaEngine, /reconcileDraftClaimSheetImportItems/)
+  // Formal native UPDATE/DELETE must call reconcile (not only CREATE flag writes).
+  const updateFn = javaEngine.match(
+    /public static JSONObject applyTxUpdateOnDb[\s\S]*?(?=public static JSONObject applyTxDeleteOnDb)/,
+  )?.[0] ?? ''
+  const deleteFn = javaEngine.match(
+    /public static JSONObject applyTxDeleteOnDb[\s\S]*?(?=public static JSONObject |static void |$)/,
+  )?.[0] ?? ''
+  assert.match(updateFn, /reconcileDraftClaimSheetImportItems\(db, parsed\.ledgerId, parsed\.targetTxId\)/)
+  assert.match(deleteFn, /reconcileDraftClaimSheetImportItems\(db, parsed\.ledgerId, parsed\.targetTxId\)/)
   assert.match(jsProtocol, /isReimbursable/)
   assert.match(jsService, /isReimbursable: Boolean\(payload\.isReimbursable\)|isReimbursable: payload\.isReimbursable/)
   assert.match(jsService, /updateManualTransaction/)
@@ -147,4 +156,18 @@ test('smb303: wear sources wire reimbursable end-to-end', () => {
   assert.match(instrumented, /applyTxUpdateTogglesReimbursableAndSyncsDraftClaimItems/)
   assert.match(instrumented, /claim-draft-1/)
   assert.match(instrumented, /isReimbursable", false/)
+
+  const jvmUnit = readFileSync(
+    resolve(
+      frontendRoot,
+      'android/app/src/test/java/com/strawcoding/strawmoneybook/wear/WearTransactionEngineReimbursableUpdateTest.java',
+    ),
+    'utf8',
+  )
+  assert.match(jvmUnit, /RobolectricTestRunner/)
+  assert.match(jvmUnit, /applyTxUpdateOnDb_togglesReimbursableAndSyncsDraftClaimItems/)
+  assert.match(jvmUnit, /applyTxDeleteOnDb_removesDraftClaimItemsKeepsPaid/)
+  assert.match(jvmUnit, /applyTxUpdateOnDb/)
+  assert.match(jvmUnit, /claim-draft-1/)
+  assert.match(jvmUnit, /item-paid-1/)
 })
