@@ -23,14 +23,15 @@ test('bank sync feature flag is controlled by VITE_BANK_SYNC_FEATURE_ENABLED', (
   assert.doesNotMatch(backendSource, /const BANK_SYNC_FEATURE_ENABLED = false/)
 })
 
-test('production provider fallback only exposes first bank', () => {
-  assert.match(backendSource, /id: 'first_bank_tw'/)
+test('production provider fallback exposes registered native banks', () => {
+  assert.match(backendSource, /listRegisteredBankProviders|provider-registry/)
   assert.doesNotMatch(backendSource, /mock_bank_tw/)
 })
 
-test('bank sync backend no longer routes local mock provider in production client', () => {
-  assert.doesNotMatch(backendSource, /local-mock-backend/)
-  assert.doesNotMatch(backendSource, /canUseLocalMockBankSync/)
+test('bank sync backend routes native providers via connectNativeBank', () => {
+  assert.match(backendSource, /connectNativeBank/)
+  assert.match(backendSource, /syncNativeBank/)
+  assert.match(backendSource, /isRegisteredBankProviderId/)
 })
 
 test('bank sync service exposes batch account save helper', () => {

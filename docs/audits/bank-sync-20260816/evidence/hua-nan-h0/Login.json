@@ -1,0 +1,23 @@
+﻿{
+	"pwdInfo" : {
+		"icon" : "#pwdInfo", 
+		"block" : "#pwdInfoContent",
+		"title" : {
+			"CH" : "密碼說明", 
+			"CN" : "密码说明", 
+			"EN" : "password help"
+		},  
+		"content" : {
+			"CH": [	"密碼長度為8~16位", 
+					"可為半形之英文、數字或!@#$%^&*()等符號", 
+					"英文字大小寫視為不同"], 
+			"CN": [	"密码长度为8~16位", 
+					"可为半角之英文、数字或!@#$%^&*()等符号", 
+					"英文字大小写视为不同"],
+			"EN": [	"Password length is from 8 to 16.", 
+					"It's for the half-width of letters, numbers, or the !@#$%^&*() Symbols.", 
+					"English letter is case-sensitive."]
+		}
+	}
+	
+}

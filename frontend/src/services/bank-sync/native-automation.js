@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
+import { isRegisteredBankProviderId } from './provider-registry.js'
 
 const BankAutomation = registerPlugin('BankAutomation')
 
@@ -48,29 +49,63 @@ function normalizePluginError(error, fallbackMessage) {
   return normalized
 }
 
-export async function connectNativeFirstBank(payload = {}) {
-  await ensureNativeBankAutomationAvailable()
-  try {
-    return await BankAutomation.connectFirstBank(payload)
-  } catch (error) {
-    throw normalizePluginError(error, 'First Bank connect failed')
+function withProviderId(payload = {}) {
+  const providerId = String(payload?.providerId ?? payload?.provider ?? '').trim().toLowerCase()
+  return {
+    ...payload,
+    providerId,
+    provider: providerId || payload?.provider,
   }
 }
 
-export async function syncNativeFirstBank(payload = {}) {
+/** Architecture B generic connect. */
+export async function connectNativeBank(payload = {}) {
   await ensureNativeBankAutomationAvailable()
+  const next = withProviderId(payload)
+  if (!isRegisteredBankProviderId(next.providerId)) {
+    throw createNativeBankAutomationError('Unsupported bank provider', 'bank_provider_unsupported')
+  }
   try {
-    return await BankAutomation.syncFirstBank(payload)
+    return await BankAutomation.connectBank(next)
   } catch (error) {
-    throw normalizePluginError(error, 'First Bank sync failed')
+    throw normalizePluginError(error, 'Bank connect failed')
   }
 }
 
-export async function disconnectNativeBankConnection(payload = {}) {
+export async function syncNativeBank(payload = {}) {
   await ensureNativeBankAutomationAvailable()
+  const next = withProviderId(payload)
+  if (!isRegisteredBankProviderId(next.providerId)) {
+    throw createNativeBankAutomationError('Unsupported bank provider', 'bank_provider_unsupported')
+  }
   try {
-    return await BankAutomation.disconnectConnection(payload)
+    return await BankAutomation.syncBank(next)
+  } catch (error) {
+    throw normalizePluginError(error, 'Bank sync failed')
+  }
+}
+
+export async function disconnectNativeBank(payload = {}) {
+  await ensureNativeBankAutomationAvailable()
+  const next = withProviderId(payload)
+  try {
+    return await BankAutomation.disconnectBank(next)
   } catch (error) {
     throw normalizePluginError(error, 'Bank disconnect failed')
   }
+}
+
+/** @deprecated transitional alias — prefer connectNativeBank */
+export async function connectNativeFirstBank(payload = {}) {
+  return connectNativeBank({ ...payload, providerId: 'first_bank_tw', provider: 'first_bank_tw' })
+}
+
+/** @deprecated transitional alias — prefer syncNativeBank */
+export async function syncNativeFirstBank(payload = {}) {
+  return syncNativeBank({ ...payload, providerId: 'first_bank_tw', provider: 'first_bank_tw' })
+}
+
+/** @deprecated transitional alias — prefer disconnectNativeBank */
+export async function disconnectNativeBankConnection(payload = {}) {
+  return disconnectNativeBank(payload)
 }

@@ -27,6 +27,23 @@ public class BankAutomationPlugin extends Plugin {
         call.resolve(result);
     }
 
+    /** Architecture B generic entry — payload.providerId routes native adapters. */
+    @PluginMethod
+    public void connectBank(PluginCall call) {
+        launch(call, BankAutomationActivity.ACTION_CONNECT_BANK);
+    }
+
+    @PluginMethod
+    public void syncBank(PluginCall call) {
+        launch(call, BankAutomationActivity.ACTION_SYNC_BANK);
+    }
+
+    @PluginMethod
+    public void disconnectBank(PluginCall call) {
+        launch(call, BankAutomationActivity.ACTION_DISCONNECT_BANK);
+    }
+
+    /** Transitional First Bank aliases (Phase 10 removes). */
     @PluginMethod
     public void connectFirstBank(PluginCall call) {
         launch(call, BankAutomationActivity.ACTION_CONNECT_FIRST_BANK);

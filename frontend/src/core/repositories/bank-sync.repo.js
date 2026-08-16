@@ -11,7 +11,13 @@ function normalizeConnectionStatus(status) {
 
 function normalizeSyncStatus(status) {
   const value = String(status ?? '').trim().toLowerCase()
-  if (value === 'ok' || value === 'error') return value
+  if (value === 'ok' || value === 'error' || value === 'partial_success') return value
+  return 'idle'
+}
+
+function normalizeAccountSyncStatus(status) {
+  const value = String(status ?? '').trim().toLowerCase()
+  if (value === 'ok' || value === 'error' || value === 'partial_success') return value
   return 'idle'
 }
 
@@ -96,11 +102,20 @@ function toSqlInPlaceholders(values) {
   return values.map(() => '?').join(', ')
 }
 
+const BANK_CONNECTION_SELECT = `ledger_id, id, provider, provider_connection_id, status, user_label,
+            last_sync_at, sync_cursor, last_sync_status, last_error,
+            last_attempt_at, last_full_success_at, auto_import_enabled,
+            created_at, updated_at, deleted_at`
+
+const BANK_ACCOUNT_SELECT = `ledger_id, id, connection_id, provider_account_id, account_mask,
+            account_name, account_type, currency, enabled, user_label, mapped_account_id,
+            last_success_sync_at, sync_cursor, last_sync_status, last_error,
+            created_at, updated_at, deleted_at`
+
 export async function listBankConnections(ledgerId) {
   assertLedgerId(ledgerId)
   const result = await query(
-    `SELECT ledger_id, id, provider, provider_connection_id, status, user_label,
-            last_sync_at, sync_cursor, last_sync_status, last_error, created_at, updated_at, deleted_at
+    `SELECT ${BANK_CONNECTION_SELECT}
      FROM bank_connections
      WHERE ledger_id = ?
        AND deleted_at IS NULL
@@ -114,8 +129,7 @@ export async function findBankConnectionById(ledgerId, connectionId) {
   assertLedgerId(ledgerId)
   if (!connectionId) return null
   const result = await query(
-    `SELECT ledger_id, id, provider, provider_connection_id, status, user_label,
-            last_sync_at, sync_cursor, last_sync_status, last_error, created_at, updated_at, deleted_at
+    `SELECT ${BANK_CONNECTION_SELECT}
      FROM bank_connections
      WHERE ledger_id = ?
        AND id = ?
@@ -132,8 +146,7 @@ export async function findBankConnectionByProviderRef(ledgerId, provider, provid
   const normalizedRef = normalizeText(providerConnectionId)
   if (!normalizedProvider || !normalizedRef) return null
   const result = await query(
-    `SELECT ledger_id, id, provider, provider_connection_id, status, user_label,
-            last_sync_at, sync_cursor, last_sync_status, last_error, created_at, updated_at, deleted_at
+    `SELECT ${BANK_CONNECTION_SELECT}
      FROM bank_connections
      WHERE ledger_id = ?
        AND provider = ?
@@ -211,6 +224,15 @@ export async function updateBankConnection(ledgerId, connectionId, patch = {}) {
     syncCursor: normalizeText(patch.syncCursor ?? existing.sync_cursor) || null,
     lastSyncStatus: normalizeSyncStatus(patch.lastSyncStatus ?? existing.last_sync_status),
     lastError: normalizeText(patch.lastError ?? existing.last_error) || null,
+    lastAttemptAt: patch.lastAttemptAt === undefined
+      ? (existing.last_attempt_at ?? null)
+      : (normalizeText(patch.lastAttemptAt) || null),
+    lastFullSuccessAt: patch.lastFullSuccessAt === undefined
+      ? (existing.last_full_success_at ?? null)
+      : (normalizeText(patch.lastFullSuccessAt) || null),
+    autoImportEnabled: patch.autoImportEnabled === undefined
+      ? Number(existing.auto_import_enabled ?? 0)
+      : (patch.autoImportEnabled ? 1 : 0),
     deletedAt: patch.deletedAt === undefined ? existing.deleted_at : (normalizeText(patch.deletedAt) || null),
   }
 
@@ -222,6 +244,9 @@ export async function updateBankConnection(ledgerId, connectionId, patch = {}) {
          sync_cursor = ?,
          last_sync_status = ?,
          last_error = ?,
+         last_attempt_at = ?,
+         last_full_success_at = ?,
+         auto_import_enabled = ?,
          updated_at = ?,
          deleted_at = ?
      WHERE ledger_id = ? AND id = ?;`,
@@ -232,6 +257,9 @@ export async function updateBankConnection(ledgerId, connectionId, patch = {}) {
       next.syncCursor,
       next.lastSyncStatus,
       next.lastError,
+      next.lastAttemptAt,
+      next.lastFullSuccessAt,
+      next.autoImportEnabled,
       nowIso(),
       next.deletedAt,
       ledgerId,
@@ -248,6 +276,7 @@ export async function listBankAccountsByConnection(ledgerId, connectionId) {
   const result = await query(
     `SELECT ba.ledger_id, ba.id, ba.connection_id, ba.provider_account_id, ba.account_mask,
             ba.account_name, ba.account_type, ba.currency, ba.enabled, ba.user_label, ba.mapped_account_id,
+            ba.last_success_sync_at, ba.sync_cursor, ba.last_sync_status, ba.last_error,
             ba.created_at, ba.updated_at, ba.deleted_at, a.name AS mapped_account_name
      FROM bank_accounts ba
      LEFT JOIN accounts a
@@ -267,9 +296,7 @@ export async function listEnabledBankAccountsByConnection(ledgerId, connectionId
   assertLedgerId(ledgerId)
   if (!connectionId) return []
   const result = await query(
-    `SELECT ledger_id, id, connection_id, provider_account_id, account_mask,
-            account_name, account_type, currency, enabled, user_label, mapped_account_id,
-            created_at, updated_at, deleted_at
+    `SELECT ${BANK_ACCOUNT_SELECT}
      FROM bank_accounts
      WHERE ledger_id = ?
        AND connection_id = ?
@@ -285,9 +312,7 @@ export async function findBankAccountById(ledgerId, bankAccountId) {
   assertLedgerId(ledgerId)
   if (!bankAccountId) return null
   const result = await query(
-    `SELECT ledger_id, id, connection_id, provider_account_id, account_mask,
-            account_name, account_type, currency, enabled, user_label, mapped_account_id,
-            created_at, updated_at, deleted_at
+    `SELECT ${BANK_ACCOUNT_SELECT}
      FROM bank_accounts
      WHERE ledger_id = ?
        AND id = ?
@@ -371,15 +396,42 @@ export async function updateBankAccount(ledgerId, bankAccountId, patch = {}) {
   const nextMappedAccountId = patch.mappedAccountId === undefined
     ? existing.mapped_account_id
     : (normalizeText(patch.mappedAccountId) || null)
+  const nextLastSuccessSyncAt = patch.lastSuccessSyncAt === undefined
+    ? (existing.last_success_sync_at ?? null)
+    : (normalizeText(patch.lastSuccessSyncAt) || null)
+  const nextSyncCursor = patch.syncCursor === undefined
+    ? (existing.sync_cursor ?? null)
+    : (normalizeText(patch.syncCursor) || null)
+  const nextLastSyncStatus = patch.lastSyncStatus === undefined
+    ? normalizeAccountSyncStatus(existing.last_sync_status)
+    : normalizeAccountSyncStatus(patch.lastSyncStatus)
+  const nextLastError = patch.lastError === undefined
+    ? (existing.last_error ?? null)
+    : (normalizeText(patch.lastError) || null)
 
   await run(
     `UPDATE bank_accounts
      SET enabled = ?,
          user_label = ?,
          mapped_account_id = ?,
+         last_success_sync_at = ?,
+         sync_cursor = ?,
+         last_sync_status = ?,
+         last_error = ?,
          updated_at = ?
      WHERE ledger_id = ? AND id = ?;`,
-    [nextEnabled, nextUserLabel, nextMappedAccountId, nowIso(), ledgerId, bankAccountId],
+    [
+      nextEnabled,
+      nextUserLabel,
+      nextMappedAccountId,
+      nextLastSuccessSyncAt,
+      nextSyncCursor,
+      nextLastSyncStatus,
+      nextLastError,
+      nowIso(),
+      ledgerId,
+      bankAccountId,
+    ],
   )
 
   return findBankAccountById(ledgerId, bankAccountId)

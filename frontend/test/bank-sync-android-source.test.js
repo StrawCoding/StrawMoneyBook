@@ -104,5 +104,14 @@ test('Phase 0A/0B v1.1.1 lastSyncAt dual-key precedence and mandatory lookback',
   // sync() must use watermark + lookback helpers (not camel-only lastSyncAt).
   assert.match(firstBankAutomationSource, /readLastSyncWatermark\(payload\)/)
   assert.match(firstBankAutomationSource, /readLookbackDays\(payload\)/)
-  assert.match(firstBankAutomationSource, /resolveQueryStartDate\(initialSyncStartDate, lastSyncWatermark, cursor, lookbackDays\)/)
+  assert.match(firstBankAutomationSource, /resolveQueryStartDate\(initialSyncStartDate, accountWatermark, cursor, lookbackDays\)/)
+})
+
+test('Architecture B: multi-provider dispatch + accountResults partial success', () => {
+  assert.match(bankAutomationActivitySource, /ACTION_CONNECT_BANK/)
+  assert.match(bankAutomationActivitySource, /dispatchByProvider/)
+  assert.match(bankAutomationActivitySource, /hua_nan_bank_tw/)
+  assert.match(firstBankAutomationSource, /accountResults/)
+  assert.match(firstBankAutomationSource, /partial_success|sync_status/)
+  assert.match(firstBankAutomationSource, /BankAutomationSyncContract/)
 })

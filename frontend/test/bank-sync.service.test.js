@@ -22,6 +22,7 @@ function createBaseDependencies(overrides = {}) {
     hasBankSyncMembershipAccess: async () => true,
     markBankTransactionsImported: async () => {},
     markImportedBankTransactions: async () => {},
+    updateBankAccount: async () => ({}),
     traceBankSyncOperation: createTraceStub(),
     yieldToMainThread: async () => {},
     ...overrides,
@@ -225,11 +226,11 @@ test('syncBankConnectionNow stores first bank auth errors as reconnect-required 
     /第一銀行登入失敗/,
   )
 
-  assert.deepEqual(updates, [{
-    status: 'error',
-    lastSyncStatus: 'error',
-    lastError: 'first_bank_login_failed: 第一銀行登入失敗',
-  }])
+  assert.equal(updates.length, 1)
+  assert.equal(updates[0].status, 'error')
+  assert.equal(updates[0].lastSyncStatus, 'error')
+  assert.equal(updates[0].lastError, 'first_bank_login_failed: 第一銀行登入失敗')
+  assert.ok(updates[0].lastAttemptAt)
 })
 
 test('syncBankConnectionNow keeps transient errors retryable', async () => {
@@ -254,11 +255,11 @@ test('syncBankConnectionNow keeps transient errors retryable', async () => {
     /暫時無法使用/,
   )
 
-  assert.deepEqual(updates, [{
-    status: 'active',
-    lastSyncStatus: 'error',
-    lastError: 'bank_upstream_temporarily_unavailable: 第一銀行服務暫時無法使用',
-  }])
+  assert.equal(updates.length, 1)
+  assert.equal(updates[0].status, 'active')
+  assert.equal(updates[0].lastSyncStatus, 'error')
+  assert.equal(updates[0].lastError, 'bank_upstream_temporarily_unavailable: 第一銀行服務暫時無法使用')
+  assert.ok(updates[0].lastAttemptAt)
 })
 
 test('syncBankConnectionNow blocks stored reconnect-required errors before syncing', async () => {
@@ -317,13 +318,14 @@ test('syncBankConnectionNow allows retry for stored transient errors and clears 
   assert.equal(syncCalls, 1)
   assert.deepEqual(result.added, [])
   assert.deepEqual(result.modified, [])
-  assert.deepEqual(updates, [{
-    status: 'active',
-    lastSyncAt: '2026-03-20T10:00:00.000Z',
-    syncCursor: null,
-    lastSyncStatus: 'ok',
-    lastError: '',
-  }])
+  assert.equal(updates.length, 1)
+  assert.equal(updates[0].status, 'active')
+  assert.equal(updates[0].lastSyncAt, '2026-03-20T10:00:00.000Z')
+  assert.equal(updates[0].syncCursor, null)
+  assert.equal(updates[0].lastSyncStatus, 'ok')
+  assert.equal(updates[0].lastError, '')
+  assert.equal(updates[0].lastFullSuccessAt, '2026-03-20T10:00:00.000Z')
+  assert.ok(updates[0].lastAttemptAt)
 })
 
 test('importBankStatementCsv upserts parsed rows into bank mirror tables', async () => {

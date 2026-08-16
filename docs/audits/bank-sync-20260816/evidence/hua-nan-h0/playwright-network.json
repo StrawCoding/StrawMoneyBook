@@ -1,0 +1,606 @@
+{
+  "requests": [
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/servlet/TrxDispatcher?Recognition=private&state=prompt&target=InsAnTr&trx=com.lb.wibc.trx.Login",
+      "method": "GET",
+      "type": "document"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/css.css?v=20251203",
+      "method": "GET",
+      "type": "stylesheet"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/template/html/js/font-awesome-4.5.0/css/font-awesome.css",
+      "method": "GET",
+      "type": "stylesheet"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/js/jquery-1.11.2.min.js",
+      "method": "GET",
+      "type": "script"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/html/jstool.js?V202402",
+      "method": "GET",
+      "type": "script"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/html/encrypt.js",
+      "method": "GET",
+      "type": "script"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/html/validateLoginChg.js?1559501786867190273",
+      "method": "GET",
+      "type": "script"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/js/jsencrypt.min.v2.3.0.js",
+      "method": "GET",
+      "type": "script"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/js/Login.js?v3",
+      "method": "GET",
+      "type": "script"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/css/jquery-ui.min.css",
+      "method": "GET",
+      "type": "stylesheet"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/css/keyboard.css",
+      "method": "GET",
+      "type": "stylesheet"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/js/jquery-ui.min.js",
+      "method": "GET",
+      "type": "script"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/js/jquery.keyboard.js",
+      "method": "GET",
+      "type": "script"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/template/html/js/loadScript.js?155950",
+      "method": "GET",
+      "type": "script"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/js/jquery.bxslider.min.js",
+      "method": "GET",
+      "type": "script"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/css/jquery.bxslider.css",
+      "method": "GET",
+      "type": "stylesheet"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/images/inc/hn_logo.gif",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/images/inc/slogan.gif",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/images/inc/hnf_logo.gif",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/bt_login.gif",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/eye-closed.svg",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/html/CaptchaImage_2.jsp",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/list_icon.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/cdic_logo.jpeg",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://tag.hncb.com.tw/jscollection/WebConnector-hncb.js",
+      "method": "GET",
+      "type": "script"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/index_private_top_bg.jpg",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/images/inc/header_popupwindow_bg.gif",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/logo_r.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/logo_r_t.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/language_r2.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/top_list_r.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/content_bg.jpg",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/login_bg.jpg",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/login_bar_r.jpg",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_private_s.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/logout_btn_r.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/logout_btn_w.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/title_icon.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_1.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/list.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_2.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_03.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_06.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_05.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_04.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/title_bg_line.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/title_bg.jpg",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/title_bg2.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/more.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_o.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/footer_bg.jpg",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/template/html/js/font-awesome-4.5.0/fonts/fontawesome-webfont.woff2?v=4.5.0",
+      "method": "GET",
+      "type": "font"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/bx_loader.gif",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/page.png",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/Login.json",
+      "method": "POST",
+      "type": "xhr"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/Notice/blank_10.jpg",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://tag.hncb.com.tw/jscollection/s-code-contents.js",
+      "method": "GET",
+      "type": "script"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/images/notice/Loan_1151231_071_1.jpg",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/Notice/tax_AD_p_s.jpg",
+      "method": "GET",
+      "type": "image"
+    },
+    {
+      "url": "https://tag.hncb.com.tw/webads/pageTag?AQB=1&ts=s07265003337053&t=16%2F7%2F2026%2015%3A59%3A50%200%20-480&D=D%3D&ce=UTF-8&pagename=%E9%81%A8%E9%81%8A%E9%87%91%E8%9E%8D%E3%80%81%E7%90%86%E8%B2%A1%E8%88%B5%E6%89%8B%7E%E8%8F%AF%E5%8D%97%E9%8A%80%E8%A1%8C-%E5%80%8B%E4%BA%BA%E7%B6%B2%E8%B7%AF%E9%8A%80%E8%A1%8C&pageurlfull=https%3A%2F%2Fnetbank.hncb.com.tw%2Fnetbank%2Fservlet%2FTrxDispatcher%3FRecognition%3Dprivate%26state%3Dprompt%26target%3DInsAnTr%26trx%3Dcom.lb.wibc.trx.Login&c1=%E7%B6%B2%E8%B7%AF%E9%8A%80%E8%A1%8C%E7%B0%BD%E5%85%A5&c2=%E7%B0%BD%E5%85%A5%E7%95%AB%E9%9D%A2&c3=%E4%B8%80%E8%88%AC%28%E7%B9%81%E4%B8%AD%29-%E5%80%8B%E9%8A%80&c4=com.lb.wibc.trx.Login&c5=prompt&pagepath=%2Fnetbank%2Fservlet%2FTrxDispatcher&host=netbank.hncb.com.tw&querystring=Recognition%3Dprivate%26state%3Dprompt%26target%3DInsAnTr%26trx%3Dcom.lb.wibc.trx.Login&browsertype=Chrome%20128&os=Windows%2010&screenresolution=1280x900&c=24&j=1.6&v=N&k=N&bw=1280&bh=900&AQE=1",
+      "method": "GET",
+      "type": "script"
+    }
+  ],
+  "responses": [
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/servlet/TrxDispatcher?Recognition=private&state=prompt&target=InsAnTr&trx=com.lb.wibc.trx.Login",
+      "status": 200,
+      "ct": "text/html; charset=UTF-8"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/css.css?v=20251203",
+      "status": 200,
+      "ct": "text/css;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/template/html/js/font-awesome-4.5.0/css/font-awesome.css",
+      "status": 200,
+      "ct": "text/css;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/css/jquery-ui.min.css",
+      "status": 200,
+      "ct": "text/css;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/css/keyboard.css",
+      "status": 200,
+      "ct": "text/css;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/css/jquery.bxslider.css",
+      "status": 200,
+      "ct": "text/css;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/html/validateLoginChg.js?1559501786867190273",
+      "status": 200,
+      "ct": "application/javascript;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/html/encrypt.js",
+      "status": 200,
+      "ct": "application/javascript;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/js/jquery-ui.min.js",
+      "status": 200,
+      "ct": "application/javascript;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/js/jquery.keyboard.js",
+      "status": 200,
+      "ct": "application/javascript;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/template/html/js/loadScript.js?155950",
+      "status": 200,
+      "ct": "application/javascript;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/html/jstool.js?V202402",
+      "status": 200,
+      "ct": "application/javascript;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/js/Login.js?v3",
+      "status": 200,
+      "ct": "application/javascript;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/js/jsencrypt.min.v2.3.0.js",
+      "status": 200,
+      "ct": "application/javascript;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/js/jquery.bxslider.min.js",
+      "status": 200,
+      "ct": "application/javascript;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/bt_login.gif",
+      "status": 200,
+      "ct": "image/gif;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/js/jquery-1.11.2.min.js",
+      "status": 200,
+      "ct": "application/javascript;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/eye-closed.svg",
+      "status": 200,
+      "ct": "image/svg+xml;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/list_icon.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/images/inc/hn_logo.gif",
+      "status": 200,
+      "ct": "image/gif;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/images/inc/slogan.gif",
+      "status": 200,
+      "ct": "image/gif;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/images/inc/hnf_logo.gif",
+      "status": 200,
+      "ct": "image/gif;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/html/CaptchaImage_2.jsp",
+      "status": 200,
+      "ct": "image/png"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/cdic_logo.jpeg",
+      "status": 200,
+      "ct": "image/jpeg;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/index_private_top_bg.jpg",
+      "status": 200,
+      "ct": "image/jpeg;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/images/inc/header_popupwindow_bg.gif",
+      "status": 200,
+      "ct": "image/gif;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/logo_r.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/logo_r_t.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/language_r2.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/login_bar_r.jpg",
+      "status": 200,
+      "ct": "image/jpeg;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/content_bg.jpg",
+      "status": 200,
+      "ct": "image/jpeg;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/top_list_r.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/login_bg.jpg",
+      "status": 200,
+      "ct": "image/jpeg;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_private_s.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_o.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/title_bg_line.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_2.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_1.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/logout_btn_r.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/title_icon.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/template/html/js/font-awesome-4.5.0/fonts/fontawesome-webfont.woff2?v=4.5.0",
+      "status": 200,
+      "ct": "text/plain;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_05.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_06.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/logout_btn_w.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/title_bg.jpg",
+      "status": 200,
+      "ct": "image/jpeg;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/list.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_03.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/icon_04.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/more.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/title_bg2.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/bx_loader.gif",
+      "status": 200,
+      "ct": "image/gif;charset=Big5"
+    },
+    {
+      "url": "https://tag.hncb.com.tw/jscollection/WebConnector-hncb.js",
+      "status": 200,
+      "ct": "application/x-javascript"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/page.png",
+      "status": 200,
+      "ct": "image/png;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/Login.json",
+      "status": 200,
+      "ct": "application/json;charset=utf-8"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/images/footer_bg.jpg",
+      "status": 200,
+      "ct": "image/jpeg;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/Notice/blank_10.jpg",
+      "status": 200,
+      "ct": "image/jpeg;charset=Big5"
+    },
+    {
+      "url": "https://tag.hncb.com.tw/jscollection/s-code-contents.js",
+      "status": 200,
+      "ct": "application/x-javascript"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/images/notice/Loan_1151231_071_1.jpg",
+      "status": 200,
+      "ct": "image/jpeg;charset=Big5"
+    },
+    {
+      "url": "https://netbank.hncb.com.tw/netbank/pages/jsp/Login/html/Notice/tax_AD_p_s.jpg",
+      "status": 200,
+      "ct": "image/jpeg;charset=Big5"
+    },
+    {
+      "url": "https://tag.hncb.com.tw/webads/pageTag?AQB=1&ts=s07265003337053&t=16%2F7%2F2026%2015%3A59%3A50%200%20-480&D=D%3D&ce=UTF-8&pagename=%E9%81%A8%E9%81%8A%E9%87%91%E8%9E%8D%E3%80%81%E7%90%86%E8%B2%A1%E8%88%B5%E6%89%8B%7E%E8%8F%AF%E5%8D%97%E9%8A%80%E8%A1%8C-%E5%80%8B%E4%BA%BA%E7%B6%B2%E8%B7%AF%E9%8A%80%E8%A1%8C&pageurlfull=https%3A%2F%2Fnetbank.hncb.com.tw%2Fnetbank%2Fservlet%2FTrxDispatcher%3FRecognition%3Dprivate%26state%3Dprompt%26target%3DInsAnTr%26trx%3Dcom.lb.wibc.trx.Login&c1=%E7%B6%B2%E8%B7%AF%E9%8A%80%E8%A1%8C%E7%B0%BD%E5%85%A5&c2=%E7%B0%BD%E5%85%A5%E7%95%AB%E9%9D%A2&c3=%E4%B8%80%E8%88%AC%28%E7%B9%81%E4%B8%AD%29-%E5%80%8B%E9%8A%80&c4=com.lb.wibc.trx.Login&c5=prompt&pagepath=%2Fnetbank%2Fservlet%2FTrxDispatcher&host=netbank.hncb.com.tw&querystring=Recognition%3Dprivate%26state%3Dprompt%26target%3DInsAnTr%26trx%3Dcom.lb.wibc.trx.Login&browsertype=Chrome%20128&os=Windows%2010&screenresolution=1280x900&c=24&j=1.6&v=N&k=N&bw=1280&bh=900&AQE=1",
+      "status": 200,
+      "ct": ""
+    }
+  ]
+}

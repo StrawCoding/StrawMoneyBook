@@ -814,11 +814,12 @@ Stage B：獨立 Gradle 模組 `frontend/android/wear`（同一 `applicationId`�
 銀行同步已改為可透過環境變數 `VITE_BANK_SYNC_FEATURE_ENABLED` 啟用的會員功能：
 
 - 屬於會員功能（`assertCanUseBankSync()`）
-- 目前支援 **Android App 第一銀行本地同步**（非 Open Banking）
+- 目前支援 **Android App 本地同步**：第一銀行（`first_bank_tw`）＋華南銀行（`hua_nan_bank_tw`）；非 Open Banking
 - SMB-278：`isBankSyncFeatureEnabled()` 只依 feature flag 控制設定入口與路由可視性；原生自動化另由 `isBankSyncNativeAutomationAvailable()` 閘控。Web／非 Android 進入 `/settings/bank-sync` 會顯示支援矩陣與可用性診斷（資格→平台→自動化／API→憑證→captcha→同步→審核），並提供單一 recovery CTA（例如取得 Android App），**不再因 provider 空列表靜默 redirect 回設定**
 - SMB-280：`bank_sync_credentials_missing` 僅在 Android 原生自動化可用且尚未建立銀行連線時出現；Web／非 Android 不得誤用此碼（改為 `bank_sync_android_only`／支援矩陣）。原生 vault 改 `commit()` 寫入，同步／中斷以 `provider_connection_id` 對齊讀回，避免建立憑證後仍顯示無憑證或 legacy reconnect；legacy vault 缺失走 credentials 階段 +「重新連結銀行」CTA
 - smb294：重新驗證載具／銀行同步可用性；原生 vault 同步／中斷改傳 **distinct** local DB id + `provider_connection_id` 候選（`buildNativeVaultLookupIds` + `FirstBankAutomation.resolveVaultConnectionId`），避免兩邊傳同一值導致備援永不觸發、誤報憑證缺失；Playwright `carrier-sync`／`bank-sync` 補強錯誤碼分流、recovery CTA 與 seeded review list（`straw.playwright.hooks`）
 - v1.3.139（Architecture B Phase 0A–0C）：修復 JS↔Java 增量 watermark 合約——前端 dual-write `lastSyncAt`／`last_sync_at` 與 `lookbackDays`／`lookback_days`；原生 `readLastSyncWatermark` 採 **`lastSyncAt` > `last_sync_at`**；`resolveQueryStartDate` 強制 lookback overlap（預設 3 日，不早於 initialStart）；JVM `FirstBankAutomationSyncContractTest` 6/6 + node source／service 合約測試。屬 Android 原生修復，需重建 APK 後真機驗證第二次同步查詢窗
+- v1.3.140（Architecture B Phase 1–10）：Provider Registry（第一銀行＋華南銀行）、通用 `connectBank`/`syncBank`、migration 046 帳號層級 checkpoint、`PARTIAL_SUCCESS`、`BankAutomationSyncContract`、淘汰 remote scrape／Playwright provider、華南 Android adapter（H0＋啟發式）；建立頁依 schema 動態欄位。需重建 APK
 - 已移除 Sandbox / Mock 生產路徑；舊測試連線會在 UI 標示為已停用
 - 建立連線改為引導式流程：選擇銀行 → 登入 → 帳戶對應 → 首次同步
 - 第一銀行驗證碼 OCR 全失敗時（v1.3.19），建立連線頁會顯示驗證碼圖與手動輸入框，使用者輸入 4 碼後可重試；若已先手動填寫則跳過 OCR

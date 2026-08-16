@@ -1,0 +1,19 @@
+HTTP/1.1 200 OK
+Date: Sun, 16 Aug 2026 07:56:37 GMT
+X-Frame-Options: SAMEORIGIN
+Strict-Transport-Security: max-age=2592000; includeSubDomains; preload
+X-Powered-By: Servlet/3.0
+Set-Cookie: JSESSIONID=00003ejHoU0WoHxs5o7aujqEynR:18322cq0d; Path=/; Secure; HttpOnly; SameSite=None
+Set-Cookie: JSESSIONID=0000ZMNGZf8jOOw5CL3KEiqlajy:18322cq0d; Path=/; Secure; HttpOnly; SameSite=None
+Expires: Thu, 01 Dec 1994 16:00:00 GMT
+Cache-Control: no-store, no-cache=set-cookie
+X-Frame-Options: SAMEORIGIN
+X-XSS-Protection: 1; mode=block
+X-Content-Type-Options: nosniff
+Permissions-Policy: geolocation=(self),sync-xhr=(self *)
+Content-Security-Policy: frame-ancestors 'self'; frame-src https://*; manifest-src self https://*; script-src * 'unsafe-inline' 'unsafe-eval'
+Referrer-Policy: strict-origin-when-cross-origin
+Transfer-Encoding: chunked
+Content-Type: text/html; charset=UTF-8
+Content-Language: zh-TW
+

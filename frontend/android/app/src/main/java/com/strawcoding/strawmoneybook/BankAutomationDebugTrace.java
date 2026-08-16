@@ -113,6 +113,23 @@ final class BankAutomationDebugTrace {
                 return "銀行 session 已過期，請檢查 silent relogin 與 cookie restore。";
             case "first_bank_transaction_query_failed":
                 return "交易查詢頁可能未成功載入或 DOM 結構已變更；POST 交易請求已安全放行不 replay，請檢查 transaction_query 與 DOM fallback。";
+            case "hua_nan_captcha_not_ready":
+                return "華南驗證碼圖片尚未完成載入，請檢查登入頁 captcha 元素與載入時序。";
+            case "hua_nan_captcha_manual_required":
+            case "hua_nan_captcha_ocr_failed":
+                return "華南驗證碼自動辨識失敗，請改以手動輸入驗證碼後重試。";
+            case "hua_nan_login_failed":
+                return "華南登入失敗，請檢查身分證字號、使用者代號、密碼與驗證碼。";
+            case "hua_nan_login_page_mismatch":
+                return "華南登入表單未就緒，請檢查網銀登入頁是否改版。";
+            case "hua_nan_session_expired":
+                return "華南 session 已過期，請檢查 silent relogin 與 cookie restore。";
+            case "hua_nan_account_list_not_found":
+                return "華南登入成功但帳戶列表未找到，請檢查 post-login 帳戶探索 DOM。";
+            case "hua_nan_transaction_query_failed":
+                return "華南交易查詢頁可能未成功載入或 DOM 結構已變更。";
+            case "bank_provider_unsupported":
+                return "不支援的銀行 providerId，請確認 Provider Registry。";
             case "bank_automation_timeout":
                 return "自動化流程超時，請從最後一個 step 判斷卡住位置。";
             default:

@@ -26,6 +26,9 @@ public class BankAutomationActivity extends Activity {
     public static final String ACTION_CONNECT_FIRST_BANK = "connect_first_bank";
     public static final String ACTION_SYNC_FIRST_BANK = "sync_first_bank";
     public static final String ACTION_DISCONNECT_CONNECTION = "disconnect_connection";
+    public static final String ACTION_CONNECT_BANK = "connect_bank";
+    public static final String ACTION_SYNC_BANK = "sync_bank";
+    public static final String ACTION_DISCONNECT_BANK = "disconnect_bank";
 
     public static final String EXTRA_ACTION = "bank_automation.action";
     public static final String EXTRA_PAYLOAD_JSON = "bank_automation.payload_json";
@@ -145,7 +148,9 @@ public class BankAutomationActivity extends Activity {
             BankAutomationVault vault = new BankAutomationVault(getApplicationContext());
             JSONObject result;
             debugTrace.record("action_started", "ok", action);
-            if (ACTION_CONNECT_FIRST_BANK.equals(action)) {
+            if (ACTION_CONNECT_BANK.equals(action) || ACTION_SYNC_BANK.equals(action) || ACTION_DISCONNECT_BANK.equals(action)) {
+                result = dispatchByProvider(action, payload, vault);
+            } else if (ACTION_CONNECT_FIRST_BANK.equals(action)) {
                 result = FirstBankAutomation.connect(this, webView, vault, debugTrace, payload);
             } else if (ACTION_SYNC_FIRST_BANK.equals(action)) {
                 result = FirstBankAutomation.sync(this, webView, vault, debugTrace, payload);
@@ -160,6 +165,36 @@ public class BankAutomationActivity extends Activity {
         } catch (Exception error) {
             finishWithError(new BankAutomationException("bank_automation_failed", String.valueOf(error.getMessage())));
         }
+    }
+
+    private JSONObject dispatchByProvider(String action, JSONObject payload, BankAutomationVault vault) throws Exception {
+        String providerId = normalizeProviderId(payload);
+        if ("first_bank_tw".equals(providerId)) {
+            if (ACTION_CONNECT_BANK.equals(action)) {
+                return FirstBankAutomation.connect(this, webView, vault, debugTrace, payload);
+            }
+            if (ACTION_SYNC_BANK.equals(action)) {
+                return FirstBankAutomation.sync(this, webView, vault, debugTrace, payload);
+            }
+            return FirstBankAutomation.disconnect(this, webView, vault, debugTrace, payload);
+        }
+        if ("hua_nan_bank_tw".equals(providerId)) {
+            if (ACTION_CONNECT_BANK.equals(action)) {
+                return HuaNanBankAutomation.connect(this, webView, vault, debugTrace, payload);
+            }
+            if (ACTION_SYNC_BANK.equals(action)) {
+                return HuaNanBankAutomation.sync(this, webView, vault, debugTrace, payload);
+            }
+            return HuaNanBankAutomation.disconnect(this, webView, vault, debugTrace, payload);
+        }
+        throw new BankAutomationException("bank_provider_unsupported", "Unsupported bank provider: " + providerId);
+    }
+
+    private static String normalizeProviderId(JSONObject payload) {
+        if (payload == null) return "";
+        String fromProviderId = String.valueOf(payload.optString("providerId", "")).trim().toLowerCase();
+        if (!fromProviderId.isEmpty()) return fromProviderId;
+        return String.valueOf(payload.optString("provider", "")).trim().toLowerCase();
     }
 
     private String stringExtra(Intent intent, String key) {

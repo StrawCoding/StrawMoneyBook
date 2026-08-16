@@ -33,12 +33,22 @@
 
       <article v-if="currentStep === 1" class="card panel">
         <p class="muted">{{ t('settings_bank_sync.platform_hint') }}</p>
-        <div v-for="provider in providerOptions" :key="provider.value" class="provider-card selected">
+        <div
+          v-for="provider in providerOptions"
+          :key="provider.value"
+          class="provider-card"
+          :class="{ selected: form.providerId === provider.value }"
+          role="button"
+          tabindex="0"
+          @click="selectProvider(provider.value)"
+          @keydown.enter.prevent="selectProvider(provider.value)"
+          @keydown.space.prevent="selectProvider(provider.value)"
+        >
           <strong>{{ provider.label }}</strong>
         </div>
-        <p class="muted coming-soon">{{ t('settings_bank_sync_create.wizard.coming_soon') }}</p>
+        <p v-if="!hasMultipleProviders" class="muted coming-soon">{{ t('settings_bank_sync_create.wizard.coming_soon') }}</p>
         <div class="row action-row">
-          <button class="btn primary" @click="goToStep(2)">{{ t('settings_bank_sync_create.wizard.next') }}</button>
+          <button class="btn primary" :disabled="!form.providerId" @click="goToStep(2)">{{ t('settings_bank_sync_create.wizard.next') }}</button>
         </div>
       </article>
 
@@ -58,24 +68,27 @@
           <small class="muted">{{ t('settings_bank_sync_create.initial_sync_start_date_hint') }}</small>
         </label>
 
-        <label class="field">
-          {{ t('settings_bank_sync_create.national_id') }}
-          <input v-model.trim="form.nationalId" class="input" type="text" maxlength="12" />
-        </label>
-
-        <label class="field">
-          {{ t('settings_bank_sync_create.repeat_seq') }}
-          <input v-model.trim="form.repeatSeq" class="input" type="text" inputmode="numeric" maxlength="4" />
-        </label>
-
-        <label class="field">
-          {{ t('settings_bank_sync_create.user_code') }}
-          <input v-model.trim="form.code" class="input" type="text" maxlength="20" />
-        </label>
-
-        <label class="field">
-          {{ t('settings_bank_sync_create.password') }}
-          <input v-model="form.password" class="input" type="password" maxlength="40" />
+        <label
+          v-for="field in visibleCredentialFields"
+          :key="field.id"
+          class="field"
+        >
+          {{ t(field.labelKey) }}
+          <input
+            v-if="field.type === 'password'"
+            v-model="form[credentialFormKey(field.id)]"
+            class="input"
+            type="password"
+            :maxlength="field.maxlength"
+          />
+          <input
+            v-else
+            v-model.trim="form[credentialFormKey(field.id)]"
+            class="input"
+            type="text"
+            :maxlength="field.maxlength"
+            :inputmode="field.inputmode || 'text'"
+          />
         </label>
 
         <article v-if="showCaptchaPanel" class="captcha-panel">
@@ -88,7 +101,7 @@
             {{ t('settings_bank_sync_create.captcha_code') }}
             <input v-model.trim="form.captchaCode" class="input" type="text" maxlength="4" inputmode="text" autocomplete="one-time-code" />
           </label>
-          <p class="muted">{{ t('settings_bank_sync_create.error.first_bank_captcha_manual_required') }}</p>
+          <p class="muted">{{ captchaManualRequiredMessage }}</p>
         </article>
 
         <article v-if="progressText" class="progress-panel">
@@ -163,6 +176,7 @@ import {
   syncBankConnectionNow,
 } from '@/ui/services/bank-sync.service'
 import { getBankSyncApiUnavailableMessage, isBankSyncApiConfigured } from '@/services/bank-sync/backend'
+import { getBankProviderCredentialSchema } from '@/services/bank-sync/provider-registry.js'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
@@ -208,12 +222,36 @@ const form = reactive({
   captchaCode: '',
 })
 
+const CREDENTIAL_FIELD_FORM_KEYS = Object.freeze({
+  nationalId: 'nationalId',
+  repeatSeq: 'repeatSeq',
+  userCode: 'code',
+  password: 'password',
+  captchaCode: 'captchaCode',
+})
+
+const MANUAL_CAPTCHA_ERROR_CODES = Object.freeze([
+  'first_bank_captcha_manual_required',
+  'hua_nan_captcha_manual_required',
+])
+
 const backLink = { name: 'settings-bank-sync' }
 const providerOptions = computed(() => {
   return getBankProviderOptions().map((item) => ({
     value: item.id,
     label: item.country ? `${item.name} (${item.country})` : item.name,
   }))
+})
+const hasMultipleProviders = computed(() => providerOptions.value.length > 1)
+const credentialSchema = computed(() => getBankProviderCredentialSchema(form.providerId))
+const visibleCredentialFields = computed(() => {
+  return credentialSchema.value.filter((field) => field.id !== 'captchaCode')
+})
+const captchaManualRequiredMessage = computed(() => {
+  if (form.providerId === 'hua_nan_bank_tw') {
+    return t('settings_bank_sync_create.error.hua_nan_captcha_manual_required')
+  }
+  return t('settings_bank_sync_create.error.first_bank_captcha_manual_required')
 })
 const hasBankSyncMembershipAccess = computed(() => hasBankSyncMembershipAccessForTier(membershipTier.value))
 const stepTitle = computed(() => {
@@ -227,13 +265,12 @@ const stepTitle = computed(() => {
 })
 const canSubmitLogin = computed(() => {
   if (!ledgerStore.activeLedgerId || !String(form.providerId ?? '').trim()) return false
-  return Boolean(
-    String(form.initialSyncStartDate ?? '').trim()
-    && String(form.nationalId ?? '').trim()
-    && String(form.repeatSeq ?? '').trim()
-    && String(form.code ?? '').trim()
-    && String(form.password ?? '').trim(),
-  )
+  if (!String(form.initialSyncStartDate ?? '').trim()) return false
+  return credentialSchema.value.every((field) => {
+    if (!field.required || field.id === 'captchaCode') return true
+    const formKey = credentialFormKey(field.id)
+    return Boolean(String(form[formKey] ?? '').trim())
+  })
 })
 const ledgerAccountGroups = computed(() => {
   return withLeadingAccountOption(
@@ -268,6 +305,7 @@ onMounted(async () => {
   if (!form.providerId) {
     form.providerId = providerOptions.value[0]?.value ?? ''
   }
+  applyCredentialDefaultsFromSchema()
   await accountStore.load()
 })
 
@@ -278,6 +316,29 @@ onBeforeUnmount(() => {
     unsubscribeMembership()
   }
 })
+
+function credentialFormKey(fieldId) {
+  return CREDENTIAL_FIELD_FORM_KEYS[fieldId] ?? fieldId
+}
+
+function applyCredentialDefaultsFromSchema() {
+  for (const field of getBankProviderCredentialSchema(form.providerId)) {
+    if (field.defaultValue === undefined) continue
+    const formKey = credentialFormKey(field.id)
+    if (!String(form[formKey] ?? '').trim()) {
+      form[formKey] = field.defaultValue
+    }
+  }
+}
+
+function selectProvider(providerId) {
+  if (form.providerId === providerId) return
+  form.providerId = providerId
+  showCaptchaPanel.value = false
+  captchaImageSrc.value = ''
+  form.captchaCode = ''
+  applyCredentialDefaultsFromSchema()
+}
 
 function goToStep(step) {
   currentStep.value = step
@@ -310,6 +371,18 @@ function resolveCreateErrorMessage(error, fallbackKey) {
     first_bank_login_failed: t('settings_bank_sync_create.error.first_bank_login_failed'),
     first_bank_account_list_not_found: t('settings_bank_sync_create.error.first_bank_account_list_not_found'),
     first_bank_legacy_reconnect_required: t('settings_bank_sync_create.error.first_bank_legacy_reconnect_required'),
+    hua_nan_national_id_required: t('settings_bank_sync_create.error.hua_nan_national_id_required'),
+    hua_nan_user_code_required: t('settings_bank_sync_create.error.hua_nan_user_code_required'),
+    hua_nan_password_required: t('settings_bank_sync_create.error.hua_nan_password_required'),
+    hua_nan_initial_start_date_required: t('settings_bank_sync_create.error.hua_nan_initial_start_date_required'),
+    hua_nan_captcha_ocr_failed: t('settings_bank_sync_create.error.hua_nan_captcha_ocr_failed'),
+    hua_nan_captcha_manual_required: t('settings_bank_sync_create.error.hua_nan_captcha_manual_required'),
+    hua_nan_login_page_mismatch: t('settings_bank_sync_create.error.hua_nan_login_page_mismatch'),
+    hua_nan_login_failed: t('settings_bank_sync_create.error.hua_nan_login_failed'),
+    hua_nan_account_list_not_found: t('settings_bank_sync_create.error.hua_nan_account_list_not_found'),
+    hua_nan_legacy_reconnect_required: t('settings_bank_sync_create.error.hua_nan_legacy_reconnect_required'),
+    hua_nan_session_expired: t('settings_bank_sync_create.error.hua_nan_session_expired'),
+    hua_nan_credentials_required: t('settings_bank_sync_create.error.hua_nan_credentials_required'),
     bank_automation_busy: t('settings_bank_sync_create.error.bank_automation_busy'),
     bank_automation_timeout: t('settings_bank_sync_create.error.bank_automation_timeout'),
     bank_automation_android_only: t('settings_bank_sync_create.error.bank_automation_android_only'),
@@ -319,6 +392,9 @@ function resolveCreateErrorMessage(error, fallbackKey) {
 
   if (rawMessage === '第一銀行登入身分資料不完整') {
     return t('settings_bank_sync_create.error.first_bank_identity_required')
+  }
+  if (rawMessage === '華南銀行登入身分資料不完整') {
+    return t('settings_bank_sync_create.error.hua_nan_identity_required')
   }
 
   return rawMessage || t(fallbackKey)
@@ -381,7 +457,7 @@ async function confirmSubmitLogin() {
     uiStore.pushToast(t('settings_bank_sync_create.toast.created'))
     goToStep(3)
   } catch (error) {
-    if (error?.code === 'first_bank_captcha_manual_required') {
+    if (MANUAL_CAPTCHA_ERROR_CODES.includes(String(error?.code ?? '').trim())) {
       showCaptchaPanel.value = true
       captchaImageSrc.value = error.captchaImageBase64
         ? `data:image/png;base64,${error.captchaImageBase64}`
@@ -481,8 +557,17 @@ h3 {
   padding: 12px;
 }
 
+.provider-card {
+  cursor: pointer;
+}
+
 .provider-card.selected {
   border-color: color-mix(in srgb, var(--primary) 40%, var(--line));
+}
+
+.provider-card:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  outline-offset: 2px;
 }
 
 .step-indicator {

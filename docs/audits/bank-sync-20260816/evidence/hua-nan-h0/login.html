@@ -1,0 +1,1507 @@
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+
+
+
+
+<!--2006.01.06 added by Dockers-->
+
+
+
+
+ 
+<!--2006.01.06 added by Dockers-->
+<!--for 公告-->
+
+<!--for 廣告輪撥-->
+
+
+
+
+<script>
+function iDisableRight(){
+	return false; 
+}
+document.oncontextmenu=iDisableRight;
+</script>
+
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="refresh" content="540" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<title>遨遊金融、理財舵手~華南銀行-個人網路銀行</title>
+<link href="/netbank/pages/jsp/Login/html/css.css?v=20251203" rel="stylesheet" type="text/css" />
+<link href="/netbank/pages/template/html/js/font-awesome-4.5.0/css/font-awesome.css" rel="stylesheet" type="text/css" />
+<style>
+.title12oe2 {font-family: "新細明體", "Arial", "taipei";font-size: 12px;color:FF3300;line-height: 135%; FF6600 ;}
+.title12oe2  A:link{color:FF6600; text-decoration:none; }
+.title12oe2  A:visited{color:FF6600; text-decoration: none; }
+.title12oe2  A:hover{color:990000; text-decoration: underline; }
+
+.slideHomePic {
+	width: 690px;
+	height: 350px;
+	border: 0px solid white;
+}
+.slideAward2Pic {
+	width: 320px;
+	height: 190px;
+	border: 0px solid white;
+}
+
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+	display: none;
+	width: 0;
+	height: 0;
+}
+</style>
+<script language="JavaScript">
+
+function chg_pwdmask(id) {
+	var input = document.getElementById(id);
+	var type = input.type;
+	
+	if(type == 'password') {
+		input.type = 'text';
+		document.getElementById(id+'_mask').src = '/netbank/pages/jsp/Login/html/images/eye-opened.svg';
+	} else if (type == 'text') {
+		input.type = 'password';
+		document.getElementById(id+'_mask').src = '/netbank/pages/jsp/Login/html/images/eye-closed.svg';
+	}
+}
+
+</script>
+
+<script language="javascript">
+//判斷瀏覽器版本，並顯示警告訊息: lang = CH|CN|EN
+function detectBrowserVer(lang) {
+	var msg = "";
+	var version = navigator.userAgent.toUpperCase();
+		
+	var ie = version.substring(version.indexOf("MSIE ") + 2, version.length);
+	ie = ie.substring(0, ie.indexOf(";"));
+	
+	var isPerson = top.location.href.indexOf("Recognition=private") == -1 ? false : true;
+	
+	var time = isPerson ? "107年4月21日" : "107年6月1日";
+	var type = "";
+	
+	if (lang == "CN") {
+		type = isPerson ? "个人网络银行" : "企业网络银行";
+		msg = 	"您的浏览器版本为 " + ie + "\n" + 
+				"为强化网络交易之安全性，本行预计自" + time + "日起，提升「" + type + "」支持之浏览器版本为IE9(含)以上、FireFox 54(含)以上、Google Chrome 44(含)以上；请提前提升IE浏览器版本，造成不便之处，尚祈见谅！";
+	} else if (lang == "EN") {
+		time = isPerson ? "Apr 21, 2018" : "Jun 1, 2018";
+		type = isPerson ? "Personal Internet Banking" : "Corporate Internet Banking";
+		msg = 	"Your browser version is " + ie + "\n" + 
+		"For enhancing the security of " + type + ", HNCB will upgrade the system. From " + time + ", HNCB " + type + " will support the browser version not less than IE9、FireFox 54、Google Chrome 44. Please upgrade your browser before " + time + ". Thanks for your understanding!";
+	} else {
+		type = isPerson ? "個人網路銀行" : "企業網路銀行";
+		msg = 	"您的瀏覽器版本為 " + ie + "\n" + 
+				"為強化網路交易之安全性，本行預計自" + time + "起，提升「" + type + "」支援之瀏覽器版本為IE9(含)以上、FireFox 54(含)以上、Google Chrome 44(含)以上；請提前提升IE瀏覽器版本，造成不便之處，尚祈見諒！";
+	}
+	
+	alert(msg);
+}
+
+</script>
+
+<!--[if lt IE 9]>
+    <script>
+		detectBrowserVer("CH");
+	</script>
+<![endif]-->
+
+<script language="javascript">
+//前端頁面顯示相關文字設定
+
+//取得對應用途顯示的訊息
+function getDetailMsg(act) {
+	
+	var act = act || "";
+	
+	//訊息設定變數
+	var contents = {
+		//ID檢核Alert訊息
+		"idAlert" : [
+			//一般登入使用
+			"請輸入身分證字號或統編",
+			"簽入之統編長度小於6!!", 
+			"簽入之統編長度大於10!!", 
+			"簽入身份證字號或統編，除了英文字母及數字以外，不可有空白及其它符號及全形字!!"
+		],
+		//網銀簽入頁密碼說明
+		"pwdHelpList" : [	
+			"密碼長度為8~16位", 
+			"可為半形之英文、數字或!@#$%^&*()等符號", 
+			"英文字大小寫視為不同"
+		],
+		//舊密碼變更規則說明
+		"pwdShortList" : [
+			"長度為8位", 
+			"只允許半形之英數字，不可含其它符號及空白", 
+			"大小寫視為不同的字元", 
+			"不可與簽入統一編號相同", 
+			"不可與簽入代號相同", 
+			"8個字不可全部相同或連續文數字", 
+			"一年至少變更一次"
+		], 
+		//擴充密碼變更規則說明
+		"pwdExdList" : [
+			"使用者密碼長度為8~16位", 
+			"不可訂為相同之英數字、連續英文字或連號數字", 
+			"不可含空白，只允許半形英文、數字及部分符號如：!@#$%^&*()", 
+			"不可與身分證字號、統一編號、使用者代號、SSL密碼相同", 
+			"英文大小寫視為不同的字元", 
+			"每90天建議至少變更一次",
+			"密碼建議應避免使用個人相關資料"
+		], 
+		//擴充密碼變更規則說明 for 胡志明市客戶
+		"pwdExdList_HCM" : [
+			"使用者密碼長度為8~16位", 
+			"不可訂為相同之英數字、連續英文字或連號數字", 
+			"不可含空白，只允許半形英文、數字及部分符號如：!@#$%^&*()", 
+			"不可與身分證字號、統一編號、使用者代號、SSL密碼相同", 
+			"英文大小寫視為不同的字元", 
+			"每年至少變更一次",
+			"密碼建議應避免使用個人相關資料",
+			"使用者密碼須包含：數字、英文大寫字母、英文小寫字母。"
+		], 
+		//密碼提示訊息      使用者密碼須包含：數字、英文大寫字母、英文小寫字母。為胡志明市客戶專用
+		"pwdAlert" : [
+			//一般登入&密碼變更
+			"請輸入密碼", 
+			"請輸入正確密碼！密碼長度必須為8位，只能輸入半形之英數字！",
+			"請輸入正確密碼！密碼長度必須為8~16位，只能輸入半形之指定符號!@#$%^&*()及英數字！",
+			"密碼長度不可小於8位", 
+			"密碼長度不可超過8位",
+			"密碼長度不可超過16位", 
+			//密碼變更
+			"請輸入舊的密碼!", 
+			"請輸入新的密碼!", 
+			"請輸入確認的密碼!", 
+			"新密碼不可包含4個以上相同字元，如aaaa、8888", 
+			"新密碼不可包含連續字元達4位以上，如1234、ABCD", 
+			"新密碼不可與舊密碼相同",
+			"新密碼和確認的密碼不一致", 
+			"密碼不可與ID相同", 
+			"密碼不可與代號相同",
+			"使用者密碼須包含：數字、英文大寫字母、英文小寫字母。",
+			"依胡志明市規範，您需先依規更新您的使用者簽入密碼，如未更新則無法登入，謝謝您。"
+		], 
+		"nicknameAlert" : [
+			//一般登入&代號變更
+			"請輸入代號", 
+			"請輸入正確代號！代號長度必須為6~10位，僅能輸入半形之英數字！", 
+			//代號變更
+			"請輸入新的代號!", 
+			"新代號長度不對!需為6~10碼，請重新輸入！", 
+			"新代號不可為同一字元，請重新輸入！", 
+			"新代號不可為連續英數字，請重新輸入！", 
+			"新代號 請勿與 身分證字號/統一編號 相同", 
+			"新代號 請勿與 EMAIL 相同", 
+			"新代號 請勿與 聯絡電話 相同", 
+			"新代號 請勿與 行動電話 相同",
+			"請輸入舊的代號",  
+			"請輸入確認的代號", 
+			"新代號不可與舊代號相同",
+			"新代號和確認的代號不一致"
+		], 
+		//代號變更規則說明
+		"nicknameList" : [
+			"使用者代號長度為6~10位", 
+			"不可訂為相同之英數字、連續英文字或連號數字", 
+			"只允許半形之英數字，不可含其它符號及空白", 
+			"不可使用顯性資料相關，如身分證字號∕統一編號、使用者密碼、SSL密碼、電子信箱、手機號碼", 
+			"英文大小寫視為不同的字元"
+		], 
+		//樣板Alert資訊
+		"rexAlert" : [
+			"{title}長度最多{maxLen}位，請勿繼續輸入！"
+		],
+		//代號區分大小寫提示
+		"nicknameCaseAlert" : [
+			"提醒您，使用者代號有區分大小寫，請務必妥善保管"
+		],
+		//SSL密碼變更規則
+		"SSLContent" : [
+			"SSL密碼固定長度為8位", 
+			"不可訂為相同之英數字、連續英文字或連號數字", 
+			"只允許半形之英數字，不可含其它符號及空白", 
+			"不可與身分證字號、統一編號、使用者代號、使用者密碼相同", 
+			"英文大小寫視為不同的字元",
+			"每90天建議至少變更一次"
+		],
+		"" : []
+	};
+	
+	return contents[act];
+}
+</script>
+
+<script src="/netbank/pages/jsp/Login/html/js/jquery-1.11.2.min.js"></script>
+<script language="JavaScript" SRC="/netbank/pages/jsp/html/jstool.js?V202402" charset="big5"></script>
+<!--2010/09/17 add for javaScript 取代 java applet-->
+<script language="JavaScript" SRC="/netbank/pages/jsp/html/encrypt.js" charset="big5"></script>
+<script language="JavaScript" SRC="/netbank/pages/jsp/html/validateLoginChg.js?1556371786866997182" charset="big5"></script>
+<script src="/netbank/pages/js/jsencrypt.min.v2.3.0.js"></script>
+<script language="JavaScript" SRC="/netbank/pages/jsp/Login/html/js/Login.js?v3" charset="big5"></script>
+<!-- 小鍵盤 start -->   
+<link href="/netbank/pages/jsp/Login/html/css/jquery-ui.min.css"  rel="stylesheet">
+<link href="/netbank/pages/jsp/Login/html/css/keyboard.css" rel="stylesheet"> 
+<script src="/netbank/pages/jsp/Login/html/js/jquery-ui.min.js"></script>
+<script src="/netbank/pages/jsp/Login/html/js/jquery.keyboard.js"></script>
+﻿<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<script>
+var randomDataObj = {};
+
+function syncHiddenUSERID(){
+	document.getElementById('USERID').value = document.getElementById('USERIDTEXT').value;
+}
+
+function use_hncbVirtualKey(lang,whois){
+	//lang 表示中文 英文  簡體中文
+	//小鍵盤 			
+		littleKeyboardFlag = true;
+		var keybardNICKNAMEFlag=false;
+		var keybardUSERIDFlag=false;
+        var keybardCaptchaFlag=false;		
+		keybardUSERID=null;		
+		keybardNICKNAME=null;		
+		keybardpassword=null;
+		keybardCaptcha=null;//add Captcha
+		var index_KeyboardOrNotOpen=0;
+		var index_KeyboardOrNotClose=0;
+		var index_NICKNAME_Mark=0;
+		var index_USERID_Mark=0;		
+		lang = lang == null ? "" : lang.toLowerCase();	//轉成小寫
+		whois= whois == null ? "" : whois.toLowerCase();	//轉成小寫  若為private 為個人戶  為company 為公司戶			
+		switch(lang){
+			case "cn":
+			//簡體中文
+				index_KeyboardOrNotOpen=4;
+				index_KeyboardOrNotClose=5;
+				index_NICKNAME_Mark=2;
+				index_USERID_Mark=2;
+				if(whois=="company")
+					index_USERID_Mark=4;
+			break;
+			case "en":
+			//英文
+				index_KeyboardOrNotOpen=2;
+				index_KeyboardOrNotClose=3;
+				index_NICKNAME_Mark=1;
+				index_USERID_Mark=1;
+			break;
+			default:
+				index_KeyboardOrNotOpen=0;
+				index_KeyboardOrNotClose=1;
+				index_NICKNAME_Mark=0;
+				index_USERID_Mark=0;
+				if(whois=="company")
+					index_USERID_Mark=3;
+			break;
+		}		
+		//var USERID_MAXLENGTH=$("#USERIDTEXT").prop("maxlength");	//帳號可輸入長度
+		//var NICKNAME_MAXLENGTH=$("#NICKNAME").prop("maxlength");	//代號可輸入長度
+		var USERID_MAXLENGTH=10;	//帳號可輸入長度
+		var NICKNAME_MAXLENGTH=10;	//代號可輸入長度
+		var password_MAXLENGTH=$("#password").prop("maxlength");	//密碼可輸入長度
+		var Captcha_MAXLENGTH=$("#TrxCaptchaKey").prop("maxlength");//add Captcha length
+		var showNICKNAME_mark=["請輸入您的代號","Please enter Username","请输入您的代号"];	//注意若是英文網頁  則陣列的索引要用不同的
+		var showUSERID_mark=["請輸入身分證字號","Please enter your ID !","请输入身分证字号","請輸入統一編號","请输入统一编号"];	//注意若是英文網頁  則陣列的索引要用不同的 且還有企業戶 個人戶
+		var showCaptcha_mark=["驗證碼","Regenerate","验证码"];	//注意若是英文網頁  則陣列的索引要用不同的
+		NICKNAME_PASSWORD_TYPE="<input class=\"text_bar\" name=\"NICKNAME\" id=\"NICKNAME\" type=\"password\" maxlength=\""+NICKNAME_MAXLENGTH+"\"  placeholder=\""+showNICKNAME_mark[index_NICKNAME_Mark]+"\" >"; 
+		NICKNAME_TEXT_TYPE="<input class=\"text_bar\" name=\"NICKNAME\" id=\"NICKNAME\" type=\"text\" maxlength=\""+NICKNAME_MAXLENGTH+"\" autocomplete=\"off\" placeholder=\""+showNICKNAME_mark[index_NICKNAME_Mark]+"\">";		
+		USERID_PASSWORD_TYPE="<input class=\"text_bar\" name=\"USERIDTEXT\" id=\"USERIDTEXT\" type=\"password\" maxlength=\""+USERID_MAXLENGTH+"\" oninput=\"syncHiddenUSERID()\" placeholder=\""+showUSERID_mark[index_USERID_Mark]+"\">";
+		USERID_TEXT_TYPE="<input class=\"text_bar\" name=\"USERIDTEXT\" id=\"USERIDTEXT\" type=\"text\" maxlength=\""+USERID_MAXLENGTH+"\" autocomplete=\"off\" placeholder=\""+showUSERID_mark[index_USERID_Mark]+"\">";
+		var showlittleKeyboardOrNot=["開啟小鍵盤","關閉小鍵盤","open virtual keyboard","close virtual keyboard","开启小键盘","关闭小键盘"];		//注意若是英文網頁  則陣列的索引要用不同的
+		$("#littleKeyboard").text(showlittleKeyboardOrNot[index_KeyboardOrNotOpen]);
+		$("#littleKeyboard").on("click",function(){		
+			if(littleKeyboardFlag){				
+				randomDataObj = getRandomDataObj();
+				
+				keybardUSERID=hncbVirtualKey("#USERIDTEXT",USERID_MAXLENGTH,lang); //帳號
+				keybardNICKNAME=hncbVirtualKey("#NICKNAME",NICKNAME_MAXLENGTH,lang); //代號
+				keybardpassword=hncbVirtualKey("#password",password_MAXLENGTH,lang); //密碼
+				if(whois=="private")
+                	keybardCaptcha=hncbVirtualKey("#TrxCaptchaKey",Captcha_MAXLENGTH,lang); //Captcha
+                	
+				keybardNICKNAME.reveal();
+				keybardUSERID.reveal();
+			$("#littleKeyboard").html("<span style='color:red;'>"+showlittleKeyboardOrNot[index_KeyboardOrNotClose]+"</span>"); //關閉小鍵盤	
+				littleKeyboardFlag=false; 
+				keybardNICKNAMEFlag=true;//nickname
+				keybardUSERIDFlag=true;	//id
+				if(whois=="private")
+					keybardCaptchaFlag=true;//Captcha
+			}else{
+				keybardUSERID.destroy();
+				keybardNICKNAME.destroy();
+				keybardpassword.destroy();
+				if(whois=="private")
+                	keybardCaptcha.destroy();		
+			$("#littleKeyboard").html(showlittleKeyboardOrNot[index_KeyboardOrNotOpen]);	//開啟小鍵盤	
+				littleKeyboardFlag=true;
+				keybardNICKNAMEFlag=false;
+				keybardUSERIDFlag=false;
+				if(whois=="private")
+					keybardCaptchaFlag=false;
+			}
+		});		
+		//隱碼程式寫在這	
+		var USERIDVisiable="";
+			USERIDVisiable=GetCookie("cbUSERIDVisiable")==""?"false":GetCookie("cbUSERIDVisiable");	//是否有勾隱碼	
+			DeleteCookie("cbUSERIDVisiable");		
+		var txtNickname="";
+		var txtUSERID="";
+		if(USERIDVisiable=="true"){	//身份id	
+			$("#USERIDTEXT").replaceWith(USERID_PASSWORD_TYPE);
+			$("#NICKNAME").replaceWith(NICKNAME_PASSWORD_TYPE);
+			$("#list_a2").prop('checked',true);				
+		}else{		
+			$("#list_a2").prop('checked',false);		
+		}		
+		
+		$("#list_a2").on("click",function() { //id下隱碼		
+			txtUSERID=$("#USERIDTEXT").val();	//id
+			txtNickname=$("#NICKNAME").val(); //代號
+			if(txtUSERID.indexOf(showUSERID_mark[index_USERID_Mark])>-1){	//去找 請輸入您的ID 
+				txtUSERID="";
+			}
+			
+			if(txtNickname.indexOf(showNICKNAME_mark[index_NICKNAME_Mark])>-1){	//去找 請輸入您的代號
+				txtNickname="";
+			}			
+			
+			if($("#list_a2").is(":checked")){
+				$("#USERIDTEXT").replaceWith(USERID_PASSWORD_TYPE);
+				$("#USERIDTEXT").val(txtUSERID);					
+				$("#NICKNAME").replaceWith(NICKNAME_PASSWORD_TYPE);
+				$("#NICKNAME").val(txtNickname);		
+			}else{
+				$("#USERIDTEXT").replaceWith(USERID_TEXT_TYPE);		    
+				$("#USERIDTEXT").val(txtUSERID);	
+				$("#NICKNAME").replaceWith(NICKNAME_TEXT_TYPE);		    
+				$("#NICKNAME").val(txtNickname);
+			}			
+			//小鍵盤要寫在後面
+			if(keybardUSERIDFlag){		
+				keybardUSERID=hncbVirtualKey("#USERIDTEXT",USERID_MAXLENGTH,lang); //id
+				keybardNICKNAME=hncbVirtualKey("#NICKNAME",NICKNAME_MAXLENGTH,lang); //代號
+			}			
+		});
+	}
+
+	function hncbVirtualKey(id,mLength,lang,passWord,callMe){
+				//控制小鍵盤程式碼	
+				//var newId = "#"+id;	//  變成 #id
+				var lang=lang;
+				if(lang==null||lang==undefined ){				
+					lang="";
+				}				
+				var showDispalyObj="";
+				switch(lang){
+				case "en":
+					//英文
+					showDispalyObj = {					
+							'bksp'	 : 'DEL',
+							'meta2'	: 'CAPS LOCK',
+							'meta1'	: 'CAPS LOCK'					
+					}
+				break;
+				case "cn":
+					//簡體中文
+					showDispalyObj = {						
+							'bksp'	 : '删除',
+							'meta2'	: '切换大小写',
+							'meta1'	: '切换大小写'						
+					}
+				break;
+				default:
+					//繁體中文
+					showDispalyObj = {						
+							'bksp'	 : '刪除',
+							'meta2'	: '切換大小寫',
+							'meta1'	: '切換大小寫'						
+					}
+				break;
+			}				
+				$.keyboard.keyaction.enter = function(base){  
+					base.accept(); // accept the content
+					doSubmit(); // submit form on enter
+				} 
+				
+				var keybardUSERID=$(id).keyboard(
+						{					
+						useCombos : false,
+						stayOpen : true,
+						autoAccept:true,
+						layout : 'custom',					
+						display : showDispalyObj,						  
+						customLayout : {
+
+								    'default' : [randomDataObj.sdef1,
+								                 randomDataObj.sdef2,
+								                 randomDataObj.sdef3,
+								                 randomDataObj.sdef4,
+										         ],		   							                  						
+		
+									'meta1' : [randomDataObj.sdef1,
+									           randomDataObj.sdef2,
+									           randomDataObj.sdef3,
+									           randomDataObj.sdef4,
+									           ],		   												       
+		
+									'meta2' : [ randomDataObj.sdef_1,		
+									            randomDataObj.sdef_2,
+									            randomDataObj.sdef_3,
+									            randomDataObj.sdef_4,
+												]										
+							  },
+							  
+					    position     : {								
+								of : "#WannaLogin",	//指定鎖定位置							
+								my : 'center top',
+								at : 'center bottom',
+								at2: 'center bottom' // used when "usePreview" is false (centers keyboard at bottom of the input/textarea)
+								},							  
+							    usePreview   : false,
+							    maxLength : mLength,
+								restrictInput : true,								
+								visible       : function(e, keyboard, el) {								
+									addNav(keyboard);	//加入就算密碼也一定要變色
+									
+									$("button[name='meta1']").css("background-color","#228B22");
+									$("button[name='meta1']").hover(function(){
+											$("button[name='meta1']").css("background-color","#E0FFFF");
+									},function(){
+										$("button[name='meta1']").css("background-color","#228B22");
+										}
+											);											
+									$("button[name='meta2']").css("background-color","#228B22");			
+									$("button[name='meta2']").hover(function(){
+											$("button[name='meta2']").css("background-color","#E0FFFF");
+									},function(){
+										$("button[name='meta2']").css("background-color","#228B22");
+										}
+											);																								
+									$("button[name='bksp']").css("background-color","#DC143C");			
+									$("button[name='bksp']").hover(function(){
+											$("button[name='bksp']").css("background-color","#E0FFFF");
+									},function(){
+										$("button[name='bksp']").css("background-color","#DC143C");
+										}
+											);									
+									
+								}								
+						}
+				).getkeyboard();	//帳號		
+				return keybardUSERID;		
+			}			
+				var addNav = function(base) {		
+						 base.$keyboard.find('button').hover(function() {
+							 $(this).addClass('ui-state-hover');
+							},
+							function() {
+								 $(this).removeClass('ui-state-hover');
+								}		 	
+						 )
+				}
+
+
+function changeToSymbol(x){
+	var returnSymbol="";
+	switch(x){
+	case "1":
+		returnSymbol="!";
+		break;
+	case "2":
+		returnSymbol="@";
+		break;
+	case "3":
+		returnSymbol="#";
+		break;
+	case "4":
+		returnSymbol="$";
+		break;
+	case "5":
+		returnSymbol="%";
+		break;
+	case "6":
+		returnSymbol="^";
+		break;
+	case "7":
+		returnSymbol="&";
+		break;
+	case "8":
+		returnSymbol="*";
+		break;
+	case "9":
+		returnSymbol="(";
+		break;
+	case "0":
+		returnSymbol=")";
+		break;	
+	}
+	return returnSymbol;
+	
+}
+
+function shuffle(array) { 
+		 var currentIndex = array.length;
+		 var temporaryValue;
+		 var randomIndex;
+		 var oldArray = [];
+		 for(i=0; i<array.length; i++ ){
+			 oldArray.push(array[i]);
+		 }
+		  
+		 try{			 
+			 while (0 !== currentIndex) { 
+					 randomIndex = Math.floor(Math.random() * currentIndex); 
+					 currentIndex -= 1;
+					 temporaryValue = array[currentIndex]; 
+					 array[currentIndex] = array[randomIndex]; 
+					 array[randomIndex] = temporaryValue; 
+			 }
+		 }catch(e){			 
+			 return oldArray;
+		 }
+		 return array; 
+ } 
+
+
+function getRandomDataObj(){	
+	var oldArray1=["1","2","3","4","5","6","7","8","9","0"];
+	var oldArray2=["a","b","c","d","e","f","g","h","i","j"];
+	var oldArray3=["k","l","m","n","o","p","q","r","s","t"];
+	var oldArray4=["u","v","w","x","y","z"];				
+		
+	var def1 = shuffle(oldArray1);
+	var def2 = shuffle(oldArray2);
+	var def3 = shuffle(oldArray3);
+	var def4 = shuffle(oldArray4);
+	
+	var sdef1="";
+	var sdef_1="";
+	var sdef2="";
+	var sdef_2="";
+	var sdef3="";
+	var sdef_3="";
+	var sdef_3="";
+	var sdef4="{meta2} ";
+	var sdef_4="{meta2} ";
+	
+	var objDef =  {};
+	
+	for(i=0;i<def1.length;i++){
+		sdef1+=def1[i]+" ";
+		sdef_1+=changeToSymbol(def1[i])+" ";
+		
+		sdef2+=def2[i]+" ";		
+		sdef_2+=def2[i].toUpperCase()+" ";
+		
+		sdef3+=def3[i]+" ";
+		sdef_3+=def3[i].toUpperCase()+" ";
+	}
+	
+	for(i=0;i<def4.length;i++){
+		sdef4+=def4[i]+" ";
+		sdef_4+=def4[i].toUpperCase()+" ";
+	}
+	sdef4+="{bksp} ";
+	sdef_4+="{bksp} ";
+	
+	objDef.sdef1 = sdef1;
+	objDef.sdef_1 = sdef_1;
+	objDef.sdef2 = sdef2;
+	objDef.sdef_2 = sdef_2;
+	objDef.sdef3 = sdef3;
+	objDef.sdef_3 = sdef_3;
+	objDef.sdef4 = sdef4;
+	objDef.sdef_4 = sdef_4;
+	
+	return objDef;
+	
+}
+
+
+</script>
+</html>
+<!-- 小鍵盤 end -->
+
+
+
+
+
+
+
+
+
+
+
+<script type="text/javascript" src="/netbank/pages/template/html/js/loadScript.js?155637"></script> 
+<script type="text/javascript">
+	var bigdata_infos;
+	
+	try {
+		bigdata_infos = bigdataInit();
+		
+		loadScript("https://tag.hncb.com.tw/jscollection/WebConnector-hncb.js", function () {});
+	} catch (err) {
+		try {
+			console.log(err);
+		} catch(err) {}
+	}
+	
+	function bigdataInit() {
+		var infos = {};
+		
+		try {
+			var trx 		= "com.lb.wibc.trx.Login";
+			var state 		= "prompt";
+			var title 		= "網路銀行簽入";
+			var stateDesc 	= "簽入畫面";
+			var pageDesc 	= "一般(繁中)-個銀";
+			
+			
+			var url = location.href;
+			
+			if (trx == "" || state == "" || title == "" || url.indexOf(".jsp") > -1) {
+				
+				title = document.title || "";
+				
+				if (url.indexOf(".jsp") > -1) {
+					trx 		= "";
+					state 		= "";
+				}
+				
+				stateDesc 	= "";
+				pageDesc 	= "";
+				
+			}
+			
+			infos = {
+				"trx" : trx, 
+				"state" : state,
+				"title" : title,
+				"sateDesc" : stateDesc, 
+				"pageDesc" : pageDesc
+			};
+		} catch (err) {
+			
+		}
+		
+		return infos;
+		
+	}
+</script>
+<script src="/netbank/pages/jsp/Login/html/js/jquery.bxslider.min.js"></script>
+<link href="/netbank/pages/jsp/Login/html/css/jquery.bxslider.css" rel="stylesheet" />
+</head>
+
+<body class="private" onLoad="javascript:doOnLoad('N');" onkeyup="keypressed(event)">
+
+<div id="Layer2" style="visibility: hidden;position: absolute; left: 0; top: 0; width: 100%; height: 100%;z-index: 1;background-image: url('/netbank/pages/images/inc/header_popupwindow_bg.gif'); layer-background-image: url('/netbank/pages/images/inc/header_popupwindow_bg.gif');">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" height="100%">
+    <tr>
+      <td align="center" valign="top">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0">
+          <tr>
+            <td>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+  <tr>
+    <td><table width="100%" border="0" align="center" cellpadding="0" cellspacing="0"  >
+      <tr>
+        <td width="150" height="49" align="left" valign="bottom"><a href="http://www.hncb.com.tw/"><img src="/netbank/pages/images/inc/hn_logo.gif" width="183" height="42" hspace="22" border="0"></a></td>
+        <td align="left" valign="bottom"><img src="/netbank/pages/images/inc/slogan.gif" width="122" height="16" hspace="15" vspace="14"></td>
+        <td align="right" valign="top"><a href="http://www.hnfhc.com.tw/" target="_blank"><img src="/netbank/pages/images/inc/hnf_logo.gif" width="97" height="23" hspace="23" border="0" /></a></td>
+      </tr>
+    </table></td>
+  </tr>
+</table></td>
+          </tr>
+        </table>
+        <!--hr-->
+        <br>
+        <br>
+        <br>
+		<br>
+        <h2><font color="purple" style="font-size:20px;font-weight: bold;">簽入執行中，請稍候...</font></h2>
+      </td>
+    </tr>
+  </table>
+</div>
+<div id="Layer1" style="position:absolute; left:1px; top:1px; width:100%; height:100%; z-index:2">
+<FORM name="LoginForm" id="LoginForm_post" method="post" action="/netbank/servlet/TrxDispatcher" autocomplete="off">
+    <INPUT type="hidden" name="trx" value="com.lb.wibc.trx.Login">
+    <INPUT type="hidden" name="state" value="checkuser">
+    <INPUT type="hidden" name="PwdChg" value="N">
+    <INPUT type="hidden" name="NKChg" value="N">
+    <INPUT type="hidden" name="MacPASSWORD" value="">
+    <INPUT type="hidden" name="isMacPPC" value="0">
+    <INPUT type="hidden" name="r" value="Iz8wRFe6">
+	
+    <INPUT type="hidden" name="r_id" value="">
+    <INPUT type="hidden" name="r_mac" value="">
+    <INPUT type="hidden" name="r_cipherpin" value="">
+    <INPUT type="hidden" name="r_cipherkey" value="">
+    
+    <INPUT type="hidden" name="r_id2" value="">
+    <INPUT type="hidden" name="r_mac2" value="">
+    <INPUT type="hidden" name="r_cipherpin2" value="">
+    <INPUT type="hidden" name="r_cipherkey2" value="">
+    
+    <INPUT type="hidden" name="lang" value="CH">
+    <INPUT type="hidden" name="unit" value=" ">
+	<INPUT type="hidden" name="Recognition" value="private">
+	<INPUT type="hidden" name="chkImage" value="Y">
+	
+	<input type="hidden" name="target" value="InsAnTr"  />
+	<input type="hidden" name="due" value="null" disabled />
+	<input type="hidden" name="rbanktoken" value="null" disabled />
+    <INPUT type="hidden" name="hideNickName" value="">
+	<INPUT type="hidden" name="TimeZone" value="">                
+	
+	<INPUT type="hidden" name="cookie_inst" value="">                
+<div class="private">
+  <div class="header">
+    <div class="wrapper clearfix">
+      <h1 class="logo text_none"><a href="http://www.hncb.com.tw/" target="_blank">華南銀行</a></h1>
+      <h2 class="text_none"><span>個人網路銀行</span></h2>
+      <ul class="language">
+        <li><a href="/netbank/servlet/TrxDispatcher?trx=com.lb.wibc.trx.Login&state=prompt&lang=EN&Recognition=private">English</a></li>
+        <li><a href="/netbank/servlet/TrxDispatcher?trx=com.lb.wibc.trx.Login&state=prompt&lang=CN&Recognition=private">简体中文</a></li>
+      </ul>
+      <ul class="top_nav">
+        <li><a href="/netbank/servlet/TrxDispatcher?trx=com.lb.wibc.trx.Login&state=prompt&Recognition=company">企業網銀</a></li>
+        <li><a href="http://www.hnfhc.com.tw/" target="_blank">華南金控</a></li>
+      </ul>
+
+    </div>
+  </div>
+  <div class="content">
+    <div class="wrapper">
+      <div class="login_box clearfix">
+		<div class="slides_container" style="float: left;width: 690px;height: 350px;">
+			<ul id="slides_home" ></ul>
+		</div>
+        <div class="login"> 
+          <h3><span>網路銀行/個人用戶</span></h3>          
+		  <div style="margin:3px 0 0 160px; font-size:14px;">
+		  <span id="littleKeyboard" style="color:blue;">開啟小鍵盤</span>&nbsp;
+		  <img src="/netbank/pages/jsp/Login/html/images/bt_login.gif">&nbsp;<a href="/netbank/servlet/TrxDispatcher?trx=com.lb.wibc.trx.Login&state=first&Recognition=private">首次簽入</a></div><hr style="margin-top:0;">
+          <div class="input_box_private">
+            <input class="text_bar" name="USERIDTEXT" id="USERIDTEXT" value="" type="text" maxlength="10" autocomplete="off" placeholder="請輸入身分證字號" oninput="syncHiddenUSERID()">
+            <input name="USERID" id="USERID" value="" type="hidden" maxlength="10" autocomplete="off">
+            <input name="cbUsrid" type="checkbox" value="checkbox" id="list_a1" />
+            <label for="list_a1">記住</label>
+            <!-- 加入隱碼 -->  
+			<input name="cbUSERIDVisiable" type="checkbox" id="list_a2">
+            <label id="label_list_a2" for="list_a2">隱碼</label>      
+          </div>
+          <div class="input_box_private">
+            <input class="text_bar" name="NICKNAME" id="NICKNAME" type="text" maxlength="10" autocomplete="off" placeholder="請輸入您的代號">
+            <input name="cbNickname" type="checkbox" id="list_b1" />
+            <label for="list_b1">記住</label> 
+            <a href="javascript: hint()" class="text_r">提示</a> 
+            <!-- 加入隱碼 -->                          
+          </div>  
+          <div class="input_box_private">
+          	<div class="input_box_witheye">          	
+          		<input class="input_box_witheye input" name="PASSWORD" id="password" type="password" minlength="8" maxlength="16" autocomplete="off" placeholder="請輸入8~16位密碼" onkeypress="detectMaxLen('登入密碼', this.value, 16, event);" onpaste="detectMaxLen('登入密碼', this.value, 16, event);" />
+          		<img class="eye-icon" src="/netbank/pages/jsp/Login/html/images/eye-closed.svg" id="password_mask"  onclick="chg_pwdmask('password');"></img>
+          	</div>          	            
+          </div>
+		  <div class="input_box_private" style="padding-top:2px;padding-bottom:0px;">
+		  <div style="float:left;"><input name="TrxCaptchaKey" type="text" class="text_bar_private" id="TrxCaptchaKey" size="5" maxlength="4" value="" placeholder="圖形驗證碼"></div>
+		  <div style="float:center;"><img src="/netbank/pages/jsp/html/CaptchaImage_2.jsp" id="code_Cap" name="code_Cap" height="30" width="80">&nbsp;&nbsp;<a href="javascript:void( 0 )" type="button" onClick="chgCaptcha();">重新產生</a></div>
+		  </div>
+		  <div style="float:left;padding-left:25px">
+          <ul class="main_btn_private main_btn">
+            <li id="WannaLogin" class="btn_r"><a href="javascript:void( 0 )" onclick="doSubmit();">確定登入</a></li>
+            <li id="cancelData" class="btn_w"><a href="javascript:void( 0 )" type="button" onClick="doReset()" id="resetBottun">清除重填</a></li>            
+          </ul> 
+		  </div>
+        </div>    
+      </div>
+      <div class="clearfix">
+        <div class="books">
+          <h2>必讀手冊</h2>
+		  
+          <div class="list_box">
+            <ul>
+			<!--<marquee direction="up"   scrollamount="3" onMouseOver="this.stop()" onMouseOut="this.start()"   height="210px">-->
+              <!--<li class="clearfix"><span>1</span><a href="http://www.hncb.com.tw/wps/portal/HNCB/per_finance/area2/digital/cor_ebanking" target="_blank">使用網路銀行安全小秘訣</a></li>-->
+              <!--<li class="clearfix"><span>2</span><a href="http://www.hncb.com.tw/wps/portal/HNCB/per_finance/area2/digital/cor_ebanking#個人網路銀行Q & A" target="_blank">交易限額</a></li>-->
+              <li class="clearfix"><span>1</span><a href="/netbank/pages/images/notice/autoprocsys.html" target="_blank">電子帳簿自動遞送服務功能說明....</a></li>
+              <li class="clearfix"><span>2</span><a href="http://www.hncb.com.tw/ibankqa/index.shtml" target="_blank">網銀小秘書</a></li>
+			  <!--<li class="clearfix"><span>5</span><a onClick="document.all.navigation.style.display=(document.all.navigation.style.display =='none') ? '' : 'none'" onMouseOver="this.style.cursor='hand'">新手上路</a></li>
+			  <div id="navigation" style="display:none;margin-left:25%;">
+					<a href="https://campaign.hncb.com.tw/ibh/personal.html" target="_blank">個人網路銀行導覽</a><br />
+					<a href="http://www.hncb.com.tw/ibankqa/HNCBibankManual.pdf" target="_blank">個人網路銀行操作說明手冊</a><br />
+					<a href="https://campaign.hncb.com.tw/ibh/crop_nonlogin.html" target="_blank">企業網路銀行導覽</a>
+			  </div>-->
+			  <li class="clearfix"><span>3</span><a href="http://www.hncb.com.tw/ibankqa/LoginLogout.shtml" target="_blank">忘記密碼與代號了嗎</a></li>
+			  <li class="clearfix"><span>4</span><a href="/netbank/pages/jsp/Time/html/time_edit.jsp" target="_blank">交易時間列表</a></li>
+			 <!--</marquee>-->
+            </ul>
+             <!--<ol class="page clearfix">
+              <li class="activation"><a href="javascript:void( 0 )">1</a></li>
+              <li><a href="javascript:void( 0 )">2</a></li>
+            </ol>-->
+          </div>
+
+        </div>
+        <div class="download">
+          <h2>軟體下載</h2>
+          <div class="list_box">
+            <ul>
+              <li class="clearfix"><span>1</span><a href="https://event.hncb.com.tw/ibankqa/cfca_nonset_tw.shtml" target="_blank">憑證小秘書</a></li>
+              <!--<li class="clearfix"><span>2</span><a href="/netbank/pages/jsp/edi/certific.sec">金融EDI憑證</a></li>-->
+              <!--<li class="clearfix"><span>3</span><a href="/netbank/pages/jsp/edi/OperationManual.doc">金融EDI新憑證載入操作手冊</a></li>-->
+            </ul>
+          </div>
+        </div> 
+        <div class="link">
+          <h2>快速連結</h2>
+          <div class="list_box">
+            <ul class="clearfix">
+			  <li><a href="https://pfpa.hncb.com.tw/pfpaip/web/" class="link_03" >線上申請專區</a></li>
+			  <li><a href="https://netbank.hncb.com.tw/netbank/servlet/TrxDispatcher?trx=com.efee.trx.EfFeeLogin&state=prompt" class="link_06" target="_blank">e手包辦<br>繳費網</a></li>
+			  <li><a href="https://www.hnpoint.com.tw/" class="link_05" target="_blank">華得來點數<br>兌換平台</a></li>
+			  <li><a href="#" class="link_04" onClick="openeATM()">網路ATM</a></li>
+              <!--<li><a href="http://www.hncb.com.tw/wps/portal/HNCB/" class="link_01" target="_blank">理財資訊</a></li>-->
+              <!--<li><a href="http://www.hncb.com.tw/wps/portal/HNCB/" class="link_02" target="_blank">理財試算</a></li>-->
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="private_main clearfix">
+        <div class="private_left">
+          <h2 class="title"><span>公告事項<em></em></span><a href="javascript:void( 0 )" class="more" id="showmore">More</a></h2></h2>
+          <ul class="news_page">
+		  
+            <li><img src="/netbank/pages/jsp/Login/html/images/list_icon.png" hspace="0" vspace="0" align="middle">&nbsp;&nbsp;<a href="/netbank/pages/images/notice/Loan_1160630_913.pdf"  target="_blank"><font color=red><b>基於集團業務策略調整，華南商業銀行股份有限公司澳門分行將終止營運。</b></font></a></li>
+            
+            <li><img src="/netbank/pages/jsp/Login/html/images/list_icon.png" hspace="0" vspace="0" align="middle">&nbsp;&nbsp;<a href="https://snybank.tw/9bq2ev"  target="_blank"><font color=red><b>企業網路銀行轉帳交易限額檢視作業公告</b></font></a></li>
+            
+            <li><img src="/netbank/pages/jsp/Login/html/images/list_icon.png" hspace="0" vspace="0" align="middle">&nbsp;&nbsp;<font color=red><b>配合財金資訊股份有限公司於115年8月16日(日) 00 :00-05:00辦理系統維護作業，請避免於該時段使用轉帳付款(含金融XML及金融EDI)、全國性繳費稅服務，如有造成不便，謹請見諒。</b></font></li>
+            
+            <li><img src="/netbank/pages/jsp/Login/html/images/list_icon.png" hspace="0" vspace="0" align="middle">&nbsp;&nbsp;<a href="https://hncb.tw/9f8fkq"  target="_blank"><font color=red><b>響應政府公布捐款帳戶協助日本熊本救災重建，捐款免收跨行手續費。</b></font></a></li>
+            
+            <li><img src="/netbank/pages/jsp/Login/html/images/list_icon.png" hspace="0" vspace="0" align="middle">&nbsp;&nbsp;<font color=red><b>親愛的華銀客戶您好，為強化您與貴機構使用本行網路銀行的資料傳輸安全，將於114年8月15日(五)起，陸續關閉舊式加密的連線方式。若您仍使用較舊的瀏覽器或OS作業系統，將出現無法連線或顯示相關安全提示。請盡速更新您的網頁瀏覽器，以持續享有本行提供順暢與安全的數位服務，感謝您的理解與支持，華南銀行關心您！</b></font></li>
+            
+            <li><img src="/netbank/pages/jsp/Login/html/images/list_icon.png" hspace="0" vspace="0" align="middle">&nbsp;&nbsp;<a href="/netbank/pages/images/notice/BHO_MANUAL.pdf"  target="_blank"><FONT COLOR=RED>網路銀行BHO元件安裝說明操作手冊。</FONT></a></li>
+            
+            <li><img src="/netbank/pages/jsp/Login/html/images/list_icon.png" hspace="0" vspace="0" align="middle">&nbsp;&nbsp;<a href="/netbank/pages/images/notice/BHO.html"  target="_blank">網路銀行單筆轉帳與整批多筆轉帳BHO元件下載</a></li>
+            
+          </ul>
+        </div>
+        <div class="private_right">
+          <h2 class="title"><span>華南榮耀<em></em></span></h2>
+		  <div class="slides_container">
+			<ul id="slides_award2" ></ul>
+		  </div>
+        </div>
+      </div>
+    </div>
+  </div> 
+  <div class="footer"> 
+    <div class="wrapper">
+	<table>
+	<tr>
+	<td>
+      <ul class="nav clearfix">        
+        <li><a href="http://www.hncb.com.tw/wps/portal/HNCB/footer/info_program" target="_blank">客戶資料保密措施</a></li>
+        <li><a href="http://www.hncb.com.tw/wps/portal/HNCB/footer/disclaimer" target="_blank">免責聲明</a></li>
+		<li><a href="http://www.hncb.com.tw/wps/portal/HNCB/footer/privacy" target="_blank">網站隱私權保護聲明</a></li>
+      </ul>
+      <p>24小時客服中心：(02) 2181-0101　<a href="https://netbank.hncb.com.tw">https://netbank.hncb.com.tw</a>　版權所有 華南銀行</p>
+      <p>建議瀏覽器版本：Microsoft Edge、Google Chrome、Safari及FireFox。解析度1024x768</p>
+	  <p>華南商業銀行股份有限公司｜統編 03742301</p>
+	</td>
+	<td>
+	<a href="https://www.cdic.gov.tw/main_ch/chinese.html" target="_blank">
+	　<img src="/netbank/pages/jsp/Login/html/images/cdic_logo.jpeg" alt=""/></a>
+	</td>
+	</tr>
+	</table>
+    </div>
+  </div>
+</div>
+</FORM>
+</div>
+
+<i id="pwdInfo" class="fa fa-info-circle"></i>
+<div id="pwdInfoContent"></div>
+
+<script language="JavaScript">
+
+	function MM_preloadImages() { //v3.0
+	  var d=document; if(d.images){ if(!d.MM_p) d.MM_p=new Array();
+		var i,j=d.MM_p.length,a=MM_preloadImages.arguments; for(i=0; i<a.length; i++)
+		if (a[i].indexOf("#")!=0){ d.MM_p[j]=new Image; d.MM_p[j++].src=a[i];}}
+	}
+
+	function MM_swapImgRestore() { //v3.0
+	  var i,x,a=document.MM_sr; for(i=0;a&&i<a.length&&(x=a[i])&&x.oSrc;i++) x.src=x.oSrc;
+	}
+
+	function MM_swapImage() { //v3.0
+	  var i,j=0,x,a=MM_swapImage.arguments; document.MM_sr=new Array; for(i=0;i<(a.length-2);i+=3)
+	   if ((x=MM_findObj(a[i]))!=null){document.MM_sr[j++]=x; if(!x.oSrc) x.oSrc=x.src; x.src=a[i+2];}
+	}
+
+
+	var slides_home_imgs, slideHome, slides_award2_imgs, slideAward2;
+	var hiddenUserId;
+	$(document).ready(function() {	        	  
+		//小鍵盤的程式都在includeKeyBoardJs.jsp
+		use_hncbVirtualKey("","private");	//叫用  	 
+		//圖片路徑      
+		var image_path = "/netbank/pages/images/notice/";
+		var path = "/netbank/pages/jsp/Login/html/Notice/";
+		var slideHomeCls = "slideHomePic";
+		var slideAwardCls = "slideAward2Pic";
+		
+		try {
+			//JSON: [{"cls": "slidePic", "path": "/netbank/pages/jsp/Login/html/Notice/", "img": "xxx.jpg", "alt": "xxx", "aURL": "http://xxx.xxx.xxx/xxx" },...]
+			slides_home_imgs = [
+				{"cls": slideHomeCls, "path": path, "img": "blank_10.jpg", "alt": "", "aURL": "" }
+				
+				,{"cls": slideHomeCls, "path": image_path, "img": "DG_20260714_071H_sny1.png", "alt": "", "aURL": "https://hncb.tw/9bm452" } 
+
+				
+				,{"cls": slideHomeCls, "path": image_path, "img": "DG_20260714_071H_hu3.png", "alt": "", "aURL": "https://www.entrust.com.tw/Marketing/2026Q3mission/index.html?utm_source=hs&utm_id=11" } 
+
+				
+				,{"cls": slideHomeCls, "path": image_path, "img": "Loan_1151231_071_1.jpg", "alt": "", "aURL": "https://camp.hncb.com.tw/weba071-0008/" } 
+
+				
+				,{"cls": slideHomeCls, "path": image_path, "img": "10910_071_3.jpg", "alt": "", "aURL": "" } 
+
+				
+			];
+			
+			//var slides_award2_imgs = ["blank_10.jpg", "eAsia_p_s.jpg", "award_p_s.jpg", "tax_p_s.jpg", "tax_AD_p_s.jpg", "iso_p_s.jpg"];
+			slides_award2_imgs = [
+				{"cls": slideAwardCls, "path": path, "img": "blank_10.jpg", "alt": "", "aURL": "" }, 
+				{"cls": slideAwardCls, "path": path, "img": "eAsia_p_s.jpg", "alt": "", "aURL": "" }, 
+				{"cls": slideAwardCls, "path": path, "img": "award_p_s.jpg", "alt": "", "aURL": "" }, 
+				{"cls": slideAwardCls, "path": path, "img": "tax_p_s.jpg", "alt": "", "aURL": "" }, 
+				{"cls": slideAwardCls, "path": path, "img": "tax_AD_p_s.jpg", "alt": "", "aURL": "" }, 
+				{"cls": slideAwardCls, "path": path, "img": "iso_p_s.jpg", "alt": "", "aURL": "" }
+			];
+			//建立輪播圖片
+			appendImages("#slides_home", slides_home_imgs);	
+			appendImages("#slides_award2", slides_award2_imgs);
+			//廣告圖片輪播
+			slideHome = $('#slides_home').bxSlider({
+				auto: true,				//自動啟動
+				//startSlide: 3, 
+				randomStart: true,		//隨機啟動
+				pause: 4500, 			//停留時間
+				slideWidth: 690,		//滑動寬度 
+				controls: false,		//前後頁控制按鈕
+				onSliderLoad: function(index){
+					$('#slides_home').find("IMG").attr("src", slides_home_imgs[index+1].path + slides_home_imgs[index+1].img);
+					//console.log(index);
+				},
+				onSlideBefore: function($slideElement, oldIndex, newIndex) {
+					$slideElement.find("IMG").attr("src", slides_home_imgs[newIndex+1].path + slides_home_imgs[newIndex+1].img);
+					//console.log($slideElement.find("IMG"));
+				},
+				onSlideAfter: function(index){
+					slideHome.stopAuto();
+					slideHome.startAuto();
+				}
+			});
+			
+			
+			
+			slideAward2 = $('#slides_award2').bxSlider({
+				auto: true,				//自動啟動
+				//startSlide: 3, 
+				randomStart: true,		//隨機啟動
+				pause: 5000, 			//停留時間
+				slideWidth: 320,		//滑動寬度
+				controls: false,		//前後頁控制按鈕
+				onSliderLoad: function(index){
+					$('#slides_award2').find("IMG").attr("src", slides_award2_imgs[index+1].path + slides_award2_imgs[index+1].img);
+					//console.log(index);
+				},
+				onSlideBefore: function($slideElement, oldIndex, newIndex) {
+					$slideElement.find("IMG").attr("src", slides_award2_imgs[newIndex+1].path + slides_award2_imgs[newIndex+1].img);
+					//console.log($slideElement.find("IMG"));
+				},
+				onSlideAfter: function(index){
+					slideAward2.stopAuto();
+					slideAward2.startAuto();
+				}
+			});
+			
+			$("#resetBottun").on("click",function(){	
+			
+				doReset();	// 清除重填
+			});	
+			
+			function doReset()
+			{
+				document.LoginForm.reset();
+				//if(document.LoginForm.USERID.value=='') document.LoginForm.USERID.value='請輸入身分證字號';
+				//if(document.LoginForm.NICKNAME.value=='') document.LoginForm.NICKNAME.value='請輸入您的代號';
+				//changeDisplayFocus();
+				//if(document.LoginForm.pwdText.value=='') document.LoginForm.pwdText.value='請輸入8~16位密碼';
+				//$("#USERID").replaceWith(USERID_TEXT_TYPE);
+				//$("#NICKNAME").replaceWith(NICKNAME_TEXT_TYPE);
+				//document.LoginForm.pwdText.focus();
+			}	
+
+			//密碼說明 add on 20160318 by hb13363
+			setPwdInfo("#list_b1", "CH", {left: 0, top: 38}, {left: -210, top: 70});
+		} catch(err) {
+			
+		}
+	});
+
+	//onresize window
+	$(window).resize(function() {
+		setPosition($("#list_b1"), $("#pwdInfo"), 0, 45);
+		setPosition($("#list_b1"), $("#pwdInfoContent"), -210, 80);
+	});	
+
+	//[{"cls": "slidePic", "path": "/netbank/pages/jsp/Login/html/Notice/", "img": "xxx.jpg", "alt": "xxx", "aURL": "http://xxx.xxx.xxx/xxx" },...]
+	function appendImages(id, slideImages) {
+		var alt = "";
+
+		$(id).html("");    
+		
+		for (i = 1; i < slideImages.length; i++) {
+			//如果有圖片替代文字
+			alt = (slideImages[i].alt == "") ? slideImages[i].img : slideImages[i].alt;
+		
+			$(id).append('<li><img class="' + slideImages[i].cls + '" src="' + (slideImages[0].path + slideImages[0].img) + '" alt="' + slideImages[i].alt + '" /></li>');
+			
+			//如果有超連結
+			if (slideImages[i].aURL != "") $(id).find("IMG").eq(i-1).wrap('<a href="' + slideImages[i].aURL + '" target="_blank"></a>');
+		
+		}
+	}
+
+	$(function(){
+		var $category=$(".news_page li:gt(4)");
+		var $togglebtn=$("#showmore");  
+		$category.hide();
+		$togglebtn.click(function(){
+			if ($category.is(":visible")) {
+				$category.hide(300);
+				return false;
+			} else {
+				$category.show(300);
+				return false;
+			}
+		});
+	});
+
+	if (self != top) {
+			top.location = "/netbank/servlet/TrxDispatcher?trx=com.lb.wibc.trx.Login&state=prompt&lang=CH&unit= &Recognition=private";
+	}
+
+	var cwin = null;
+	var board = null;   
+
+	function hint(){
+		var login = document.LoginForm;
+		var usrid = login.USERIDTEXT.value;
+		if(usrid!=hiddenUserId){
+			//有改變過
+			syncHiddenUSERID();
+		}
+		usrid = document.LoginForm.USERID.value;
+
+		if(usrid == ""){
+			alert("請輸入身份證字號!");
+			return;
+		}
+
+		if(cwin==null || cwin.closed)
+			cwin = window.open("/netbank/pages/jsp/Login/html/hint_prompt.jsp?USERID="+ usrid,"",
+				"toolbar=no,location=no,menubar=no,status=no,scrollbars=yes,width=340,height=160");
+	}
+
+
+	//************************
+	function encpt(code)
+	{
+		var strencpt='';
+		
+		for(var i=1;i<=code.length;i++){ 
+			var c=String.fromCharCode(code.charCodeAt(i-1)+code.length); 
+			strencpt+=escape(c);//c;// 
+		}
+		
+		return strencpt;
+	}
+
+	function decpt(code)
+	{
+		//alert("code is" + code) ;
+		code = unescape(code); 
+		strdecpt=''; 
+		for(var i=1;i<=code.length;i++){ 
+			var c=String.fromCharCode(code.charCodeAt(i-1)-code.length); 
+			strdecpt+=c; 
+		}
+		//alert("return "+strdecpt);
+		return strdecpt;
+	}
+
+	function getCookieValH (offset) {
+
+		var endstr = document.cookie.indexOf (";", offset);
+		
+		if (endstr == -1) { endstr = document.cookie.length; }
+		
+		return decpt(unescape(document.cookie.substring(offset, endstr)));
+		}
+	 
+	function GetCookieH (name) {
+		var arg = name + "=";
+		var alen = arg.length;
+		var clen = document.cookie.length;
+
+		var i = 0;
+		while (i < clen) {
+			var j = i + alen;
+			if (document.cookie.substring(i, j) == arg) {
+				return getCookieValH (j);
+				}
+			i = document.cookie.indexOf(" ", i) + 1;
+			if (i == 0) break;
+			}
+		return null;
+		}
+
+	function SetCookieH (name,value,expires,path,domain,secure) {
+
+	  document.cookie = name + "=" + encpt(escape (value)) +
+		((expires) ? "; expires=" + expires.toGMTString() : "") +
+		((path) ? "; path=" + path : "") +
+		((domain) ? "; domain=" + domain : "") +
+		((secure) ? "; secure" : "");
+		}
+	//************************	
+
+	function doSubmit() {
+		var login = document.LoginForm;
+		var usrid = login.USERIDTEXT.value;
+		if(usrid!=hiddenUserId){
+			//有改變過
+			syncHiddenUSERID();
+		}
+		usrid = login.USERID.value;
+		var nickname = login.NICKNAME.value;
+		var pd = login.PASSWORD.value;
+		var RecognitionName=document.LoginForm.Recognition.value;
+		var cbUSERIDVisiable = "false"; //身份id隱碼 使用若為true 表示要記錄代號標記到cookie
+		if($("#list_a2").is(":checked")){
+			cbUSERIDVisiable="true";		
+		}
+		
+		//檢核ID, 密碼及代號
+		var msgs = checkLogin_private(login.USERID, login.PASSWORD, login.PwdChg, login.NICKNAME, login.NKChg, login.USERIDTEXT);
+		
+		if (msgs.length > 0) {
+			alert(msgs);
+			return false;
+		}
+		
+		//交易圖形驗證碼
+		if(login.TrxCaptchaKey.value.length != 4){
+		   alert("請輸入4碼交易圖形驗證碼!");
+		   login.TrxCaptchaKey.focus();	   
+		   return false;
+		}
+		if(!isAlphaNumber1(login.TrxCaptchaKey.value)){
+		   alert("交易圖形驗證碼只能輸入數字!");
+		   login.TrxCaptchaKey.focus();	   
+		   return false;
+		}
+
+		var expiry = new Date();
+
+		expiry.setMonth(expiry.getMonth()+1);
+		//判斷個人戶或是企業戶Start
+		SetCookieH('Recognition', RecognitionName, expiry);
+		//判斷個人戶或是企業戶End
+		if(login.cbUsrid.checked)
+		{
+			//SetCookie('USERID', usrid, expiry);
+			SetCookieH('USERIDh', usrid, expiry);
+			
+		  //若為記住且勾隱碼則寫入cookie
+			if(cbUSERIDVisiable=="true"){   	    		
+			 SetCookie('cbUSERIDVisiable', cbUSERIDVisiable, expiry);	//身份隱碼寫入cookie
+			}
+		}        
+		else
+		{
+			DeleteCookie('USERID');
+			DeleteCookie('USERIDh');
+			
+		}
+		if(login.cbNickname.checked)
+		{
+			//SetCookie('NICKNAME', nickname, expiry);
+			SetCookieH('NICKNAMEh', nickname, expiry);
+		}        
+		else
+		{
+			DeleteCookie('NICKNAME');
+			DeleteCookie('NICKNAMEh');
+		}
+		
+		login.hideNickName.value=encryptNickName('MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCjkVkPJD8JpL9Ixu2pqfeMwWeXS4VWcQtZFeVA0J4yCyo5VpXhayHATf3OUc5S6TiBfoQUdmUx54rcct7bgdqtP46i7X3KMUdOpKwzf1V7sFYux5X7DdEHZFd7fNYUL7/wRQH8hq7TQ5ig/SaB9fDW5aXXoZ5qw3LH9/MbMzKTBwIDAQAB',nickname);
+		login.NICKNAME.value="";
+	   //記得清空小鍵盤
+		if(!littleKeyboardFlag){
+			keybardUSERID.destroy();
+			keybardNICKNAME.destroy();
+			keybardpassword.destroy();
+			keybardCaptcha.destroy();		
+		}
+		
+		//密碼壓碼
+		if (!encipherExd(login, ["r_id", "r_mac", "r_cipherpin", "r_cipherkey"], ["r_id2", "r_mac2", "r_cipherpin2", "r_cipherkey2"], 'BBE5EAD6223753536B781BD32432B98684A39088D92B2F7D40A253B6F7B82EAB3FCC102BC29CA11847EF40E82836291B7051C47E1852C943E8E06043454A4F959DAA0421A7237C197DFB28B1C31133C178CDA92EA3C4BD05FDAA1F5F48C17C8160013DCC3B851F8C3B393FA7D75FFC327F399FA86EC0441029570305FC2FE2F1', '03', usrid, pd, '|')) return false;
+		  
+		login.PASSWORD.value = "";//移除密碼
+		MM_showHideLayers('Layer1','','hide','Layer2','','show');
+		
+		$("#password").remove();	//避免密碼被瀏覽器記住
+		
+		//hide icon
+		$("#pwdInfo").hide();
+			// add for HKU伏擊驗證 20251229
+		login.cookie_inst.value = getInstCookies(); 	
+		document.getElementById('LoginForm_post').submit();
+		return true;						
+		
+	}
+
+	function isAlphaNumber1(){
+		var test = isAlphaNumber1.arguments[0];
+		var range = '1234567890';
+		if(isAlphaNumber1.arguments.length==2)
+			range = isAlphaNumber1.arguments[1];
+		for(var i=0; i<test.length; i++){
+			if(range.indexOf(test.charAt(i))<0)
+			return false;
+			}
+			return true;
+	}
+	function doOnLoad(olduser) {
+
+		var login = document.LoginForm;
+		var ck1 = GetCookie('USERID');
+		if ((ck1!=null) && (ck1 != '')){
+			login.USERID.value=ck1;			//疑似還沒有產生該物件
+			login.cbUsrid.checked=true;
+			DeleteCookie('USERID');
+		}
+		
+		if (!login.cbUsrid.checked) {
+			var ck1 = GetCookieH('USERIDh');
+			
+			if ((ck1!=null) && (ck1 != '')){
+				login.USERID.value=ck1;
+				login.cbUsrid.checked=true;
+			}else{
+				login.USERID.value='';
+				login.cbUsrid.checked=false;
+			}
+		}
+		//代碼的值 start
+		var ck2 = GetCookie('NICKNAME');
+		
+		if ((ck2!=null) && (ck2 != '')){
+			login.NICKNAME.value=ck2;
+			login.cbNickname.checked=true;
+			DeleteCookie('NICKNAME');
+		}
+		
+		if (!login.cbNickname.checked) {
+		
+			var ck2 = GetCookieH('NICKNAMEh');
+
+			if ((ck2!=null) && ck2 != ''){
+				login.NICKNAME.value=ck2;
+				login.cbNickname.checked=true;
+			}else{
+				login.NICKNAME.value='';
+				login.cbNickname.checked=false;
+			}        
+		}
+		
+		if (login.cbUsrid.checked && login.cbNickname.checked) login.PASSWORD.focus(); 		
+		if(olduser=='Y') alert('請輸入代號');
+		//代碼的值end
+		
+		login.TimeZone.value= getTimeZone();        		
+		var expiry = new Date();
+		expiry.setMonth(expiry.getMonth()+1);
+		SetCookie('LANG', 'CH', '','/');
+		SetCookie('UNIT', ' ', '','/');
+
+		
+		
+		if (!login.cbNickname.checked && login.cbUSERIDVisiable.checked) login.NICKNAME.value='';
+		
+		var checkUSERIDValue = login.USERID.value;
+		if(checkUSERIDValue!=null){
+			if(checkUSERIDValue.length>2){
+				hiddenUserId = checkUSERIDValue.substring(0, 2);
+				for(var i=0;i<checkUSERIDValue.length-2;i++){
+					hiddenUserId = hiddenUserId + "*";
+				}
+				login.USERIDTEXT.value = hiddenUserId;
+			}else if(checkUSERIDValue.length>0 && checkUSERIDValue.length<=2){
+				login.USERIDTEXT.value = checkUSERIDValue;
+			}
+		}
+	}
+
+	function sysBoard()        //系統公告
+	{
+
+		board = window.open("/netbank/pages/jsp/Login/html/sysBoard.htm","BOARD","resizable=1,scrollbars=1,status=0,width=300,height=250");
+
+	}
+
+	function OpenWindow(theURL,winName,features)
+	 {
+		board=window.open(theURL,winName,features);
+	 }
+
+	function sysBoard1()        //系統公告
+	{
+		board = window.open("/netbank/pages/jsp/Login/html/sysBoard1.htm","BOARD","resizable=1,scrollbars=1,status=0,width=300,height=300");
+	}
+
+	function opencb()  {
+	   iwin = window.open("/netbank/servlet/TrxDispatcher?trx=com.lb.wibc.trx.CallBack&state=prompt","IWIN",
+	   "reasizable=yes,scrollbars=yes,status=no,toolbar=no,location=no,menu=no,width=650,height=550");
+	}
+	function openjvm()  {
+	   jwin = window.open("/netbank/pages/jsp/Login/html/down_jvm.htm","JWIN",
+	   "reasizable=yes,scrollbars=yes,status=no,toolbar=no,location=no,menu=no,width=300,height=200");
+	}
+
+	function MM_openBrWindow(theURL,winName,features) { //v2.0
+	  window.open(theURL,winName,features);
+	}
+
+	function openeATM()        //eATM視窗
+	{
+		board = window.open("https://www.smartatm.com.tw",'','height=586, width=570, top=0, left=0, toolbar=no, menubar=no, scrollbars=no, resizable=no,location=no, status=no');
+		//board = window.open("https://ibtest.hncb.com.tw/eatm",'','height=586, width=570, top=0, left=0, toolbar=no, menubar=no, scrollbars=no, resizable=no,location=no, status=no');
+	}
+
+	function MM_reloadPage(init) {  //reloads the window if Nav4 resized
+	  if (init==true) with (navigator) {if ((appName=="Netscape")&&(parseInt(appVersion)==4)) {
+		document.MM_pgW=innerWidth; document.MM_pgH=innerHeight; onresize=MM_reloadPage; }}
+	  else if (innerWidth!=document.MM_pgW || innerHeight!=document.MM_pgH) location.reload();
+	}
+	MM_reloadPage(true);
+
+	function MM_findObj(n, d) { //v4.0
+	  var p,i,x;  if(!d) d=document; if((p=n.indexOf("?"))>0&&parent.frames.length) {
+		d=parent.frames[n.substring(p+1)].document; n=n.substring(0,p);}
+	  if(!(x=d[n])&&d.all) x=d.all[n]; for (i=0;!x&&i<d.forms.length;i++) x=d.forms[i][n];
+	  for(i=0;!x&&d.layers&&i<d.layers.length;i++) x=MM_findObj(n,d.layers[i].document);
+	  if(!x && document.getElementById) x=document.getElementById(n); return x;
+	}
+
+	function MM_showHideLayers() { //v3.0
+	  var i,p,v,obj,args=MM_showHideLayers.arguments;
+	  for (i=0; i<(args.length-2); i+=3) if ((obj=MM_findObj(args[i]))!=null) { v=args[i+2];
+		if (obj.style) { obj=obj.style; v=(v=='show')?'visible':(v='hide')?'hidden':v; }
+		obj.visibility=v; }
+	}
+
+	/*function changeDisplay(){
+			var login = document.LoginForm;
+		//	console.log("1111");
+			login.pwdText.style.display="none";
+			login.PASSWORD.style.display="block";
+			login.PASSWORD.focus();
+	}
+	function changeDisplayFocus(){
+			var login = document.LoginForm;
+		//	console.log("2222");
+			if(login.PASSWORD.value==''){
+			login.pwdText.style.display="block";
+			login.PASSWORD.style.display="none";
+			}
+
+	}*/
+	function keypressed(e){ 
+		
+		//支援IE, Chrome, FireFox的判斷
+		var key = window.event ? e.keyCode : e.which;
+		
+		//按下enter後的動作 
+		if(key == '13') { 
+			//to do   
+			doSubmit();
+		}
+	}
+
+	function chgCaptcha(){
+		document.getElementById('TrxCaptchaKey').value = "";//將輸入欄位清空
+		document.getElementById('TrxCaptchaKey').focus();
+		document.getElementById("code_Cap").src="/netbank/pages/jsp/html/CaptchaImage_2.jsp"+ "?reload=" + new Date().getTime();
+	}
+	
+	function getInstCookies() {         //取得名稱是INST_開頭的Cookie
+
+      const cookies = document.cookie.split(';');
+      const instCookies = {};
+
+      cookies.forEach(cookie => {
+        const [name, value] = cookie.trim().split('=');
+        //if (name.startsWith('INST_')) {
+        if (name.startsWith('INST_')) {
+          instCookies[name] = decodeURIComponent(value || '');
+        }
+      });
+
+      var inst_all = "";
+      for (const key in instCookies) {
+        inst_all = inst_all +key +"="+ instCookies[key] + ";";
+      }
+      return inst_all;
+    }
+</script>
+
+</body>
+</html>
+
+

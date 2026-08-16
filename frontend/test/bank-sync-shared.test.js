@@ -78,15 +78,33 @@ test('isBankCredentialAuthError detects credential and login failures', () => {
   assert.equal(isBankCredentialAuthError(genericError), false)
 })
 
-test('shouldRequireReconnectAfterBankSyncError locks only first bank auth failures', () => {
+test('shouldRequireReconnectAfterBankSyncError locks native bank auth failures', () => {
   const authError = new Error('第一銀行登入失敗')
   authError.code = 'first_bank_login_failed'
   assert.equal(shouldRequireReconnectAfterBankSyncError('first_bank_tw', authError), true)
+
+  const huaNanAuthError = new Error('華南登入失敗')
+  huaNanAuthError.code = 'hua_nan_login_failed'
+  assert.equal(shouldRequireReconnectAfterBankSyncError('hua_nan_bank_tw', huaNanAuthError), true)
 
   const transientError = new Error('temporary upstream failure')
   transientError.code = 'bank_upstream_temporarily_unavailable'
   assert.equal(shouldRequireReconnectAfterBankSyncError('first_bank_tw', transientError), false)
   assert.equal(shouldRequireReconnectAfterBankSyncError('mock_bank_tw', authError), false)
+})
+
+test('createHuaNanProviderConnectionId is stable for identity fields', async () => {
+  const { createHuaNanProviderConnectionId, createBankProviderConnectionId } = await import('../src/services/bank-sync/shared.js')
+  const first = createHuaNanProviderConnectionId({
+    nationalId: ' a123456789 ',
+    userCode: ' user01 ',
+  })
+  const second = createBankProviderConnectionId('hua_nan_bank_tw', {
+    nationalId: 'A123456789',
+    userCode: 'user01',
+  })
+  assert.equal(first, second)
+  assert.match(first, /^hua_nan_identity_/)
 })
 
 test('SMB-266 classifyFirstBankSyncFailure separates portal_changed, reconnect, and retry', () => {

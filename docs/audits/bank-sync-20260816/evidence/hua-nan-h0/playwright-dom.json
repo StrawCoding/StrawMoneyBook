@@ -1,0 +1,119 @@
+{
+  "title": "遨遊金融、理財舵手~華南銀行-個人網路銀行",
+  "fields": [
+    {
+      "sel": "#USERIDTEXT",
+      "exists": true,
+      "tag": "INPUT",
+      "name": "USERIDTEXT",
+      "id": "USERIDTEXT",
+      "type": "text",
+      "placeholder": "請輸入身分證字號",
+      "src": null,
+      "maxlength": "10",
+      "visible": true,
+      "text": ""
+    },
+    {
+      "sel": "#USERID",
+      "exists": true,
+      "tag": "INPUT",
+      "name": "USERID",
+      "id": "USERID",
+      "type": "hidden",
+      "placeholder": null,
+      "src": null,
+      "maxlength": "10",
+      "visible": false,
+      "text": ""
+    },
+    {
+      "sel": "#NICKNAME",
+      "exists": true,
+      "tag": "INPUT",
+      "name": "NICKNAME",
+      "id": "NICKNAME",
+      "type": "text",
+      "placeholder": "請輸入您的代號",
+      "src": null,
+      "maxlength": "10",
+      "visible": true,
+      "text": ""
+    },
+    {
+      "sel": "#password",
+      "exists": true,
+      "tag": "INPUT",
+      "name": "PASSWORD",
+      "id": "password",
+      "type": "password",
+      "placeholder": "請輸入8~16位密碼",
+      "src": null,
+      "maxlength": "16",
+      "visible": true,
+      "text": ""
+    },
+    {
+      "sel": "#TrxCaptchaKey",
+      "exists": true,
+      "tag": "INPUT",
+      "name": "TrxCaptchaKey",
+      "id": "TrxCaptchaKey",
+      "type": "text",
+      "placeholder": "圖形驗證碼",
+      "src": null,
+      "maxlength": "4",
+      "visible": true,
+      "text": ""
+    },
+    {
+      "sel": "#code_Cap",
+      "exists": true,
+      "tag": "IMG",
+      "name": "code_Cap",
+      "id": "code_Cap",
+      "type": null,
+      "placeholder": null,
+      "src": "/netbank/pages/jsp/html/CaptchaImage_2.jsp",
+      "maxlength": null,
+      "visible": true,
+      "text": ""
+    },
+    {
+      "sel": "#littleKeyboard",
+      "exists": true,
+      "tag": "SPAN",
+      "name": null,
+      "id": "littleKeyboard",
+      "type": null,
+      "placeholder": null,
+      "src": null,
+      "maxlength": null,
+      "visible": true,
+      "text": "開啟小鍵盤"
+    },
+    {
+      "sel": "#LoginForm_post",
+      "exists": true,
+      "tag": "FORM",
+      "name": "LoginForm",
+      "id": "LoginForm_post",
+      "type": null,
+      "placeholder": null,
+      "src": null,
+      "maxlength": null,
+      "visible": true,
+      "text": "華南銀行\n個人網路銀行\nEnglish\n简体中文\n企業網銀\n華南金控\n1\n2\n3\n4\n網路銀行/個人用戶\n開啟小鍵盤   首次簽入\n  記住  隱碼\n  記住 "
+    }
+  ],
+  "flags": {
+    "sslMention": false,
+    "otp": false,
+    "device": false,
+    "vk": true,
+    "bho": false,
+    "nick": true,
+    "captcha": false
+  },
+  "bodySample": " 華南銀行 個人網路銀行 English 简体中文 企業網銀 華南金控 1 2 3 4 網路銀行/個人用戶 開啟小鍵盤 首次簽入 記住 隱碼 記住 提示 重新產生 確定登入 清除重填 必讀手冊 1 電子帳簿自動遞送服務功能說明.... 2 網銀小秘書 3 忘記密碼與代號了嗎 4 交易時間列表 軟體下載 1 憑證小秘書 快速連結 線上申請專區 e手包辦 繳費網 華得來點數 兌換平台 網路ATM 公告事項 More 基於集團業務策略調整，華南商業銀行股份有限公司澳門分行將終止營運。 企業網路銀行轉帳交易限額檢視作業公告 配合財金資訊股份有限公司於115年8月16日(日) 00 :00-05:00辦理系統維護作業，請避免於該時段使用轉帳付款(含金融XML及金融EDI)、全國性繳費稅服務，如有造成不便，謹請見諒。 響應政府公布捐款帳戶協助日本熊本救災重建，捐款免收跨行手續費。 親愛的華銀客戶您好，為強化您與貴機構使用本行網路銀行的資料傳輸安全，將於114年8月15日(五)起，陸續關閉舊式加密的連線方式。若您仍使用較舊的瀏覽器或OS作業系統，將出現無法連線或顯示相關安全提示。請盡速更新您的網頁瀏覽器，以持續享有本行提供順暢與安全的數位服務，感謝您的理解與支持，華南銀行關心您！ 華南榮耀 1 2 3 4 5 客戶資料保密措施 免責聲明 網站隱私權保護聲明 24小時客服中心：(02) 2181-0101 https://netbank.hncb.com.tw 版權所有 華南銀行 建議瀏覽器版本：Microsoft Edge、Google Chrome、Safari及FireFox。解析度1024x768 華南商業銀行股份有限公司｜統編 03742301 "
+}

@@ -10,14 +10,20 @@ import {
 import {
   buildImportedNote as buildImportedNoteFromMetadata,
   buildNativeVaultLookupIds,
-  createFirstBankProviderConnectionId,
+  createBankProviderConnectionId,
   formatBankErrorForStorage,
   isFirstBankProviderId as isFirstBankProviderIdShared,
   isMockProviderId as isMockProviderIdShared,
+  isNativeBankProviderId as isNativeBankProviderIdShared,
   selectSyncableBankAccounts,
   shouldRequireReconnectAfterBankSyncError,
   shouldRequireReconnectForStoredBankConnection,
 } from '../../services/bank-sync/shared.js'
+import {
+  getBankProviderDefinition,
+  getBankProviderIdentityScheme,
+  getBankProviderLookbackDays,
+} from '../../services/bank-sync/provider-registry.js'
 import { traceBankSyncOperation } from '../../core/services/bank-sync-debug.service.js'
 import { yieldToMainThread } from '../../core/utils/cooperative-yield.js'
 import { buildBankImportPlan } from '../../services/bank-sync/import-auto-rule.js'
@@ -172,6 +178,10 @@ function isMockProviderId(provider) {
 
 function isFirstBankProviderId(provider) {
   return isFirstBankProviderIdShared(provider)
+}
+
+function isNativeBankProviderId(provider) {
+  return isNativeBankProviderIdShared(provider)
 }
 
 function normalizeDateInput(value) {
@@ -428,7 +438,7 @@ export async function prepareBankProviderLink(ledgerId, provider, options = {}) 
   await dependencies.assertCanUseBankSync()
   const normalizedProvider = normalizeText(provider)
   if (!normalizedProvider) throw new Error('缺少 provider')
-  if (isFirstBankProviderId(normalizedProvider)) {
+  if (isNativeBankProviderId(normalizedProvider)) {
     return {
       provider: normalizedProvider,
       session_id: null,
@@ -436,16 +446,7 @@ export async function prepareBankProviderLink(ledgerId, provider, options = {}) 
     }
   }
 
-  const { callbackScheme, deviceInfo } = buildDeviceInfo(options)
-  return dependencies.createBankLinkSession({
-    provider: normalizedProvider,
-    session_id: normalizeText(options.sessionId) || null,
-    refresh_captcha: Boolean(options.refreshCaptcha),
-    callback_scheme: callbackScheme,
-    device_info: deviceInfo,
-    credentials: buildBankCredentialPayload(options),
-    automation: buildBankAutomationPayload(),
-  })
+  throw new Error('目前僅支援 Android 本地銀行同步')
 }
 
 export async function getBankSyncState(ledgerId) {
@@ -471,67 +472,73 @@ export async function getBankSyncConnectionDetail(ledgerId, connectionId) {
 export async function connectBankProvider(ledgerId, provider, options = {}) {
   assertLedgerId(ledgerId)
   await dependencies.assertCanUseBankSync()
-  const normalizedProvider = normalizeText(provider)
+  const normalizedProvider = normalizeText(provider).toLowerCase()
   if (!normalizedProvider) throw new Error('缺少 provider')
-  const isNativeFirstBank = isFirstBankProviderId(normalizedProvider)
-
-  if (isNativeFirstBank) {
-    const providerConnectionId = createFirstBankProviderConnectionId({
-      nationalId: options.nationalId,
-      repeatSeq: options.repeatSeq,
-      userCode: options.code,
-    })
-    if (!providerConnectionId) {
-      throw new Error('第一銀行登入身分資料不完整')
-    }
-    return dependencies.traceBankSyncOperation('connect_first_bank', {
-      ledgerId,
-      provider: normalizedProvider,
-      connectionId: providerConnectionId,
-    }, async (traceContext) => {
-      const exchanged = await dependencies.exchangeBankAuth({
-        provider: normalizedProvider,
-        connectionId: providerConnectionId,
-        nationalId: normalizeText(options.nationalId),
-        repeatSeq: normalizeText(options.repeatSeq || '0'),
-        userCode: normalizeText(options.code),
-        password: String(options.password ?? ''),
-        captchaCode: normalizeText(options.captchaCode),
-        initialSyncStartDate: normalizeDateInput(options.initialSyncStartDate),
-      })
-      traceContext.attachDebugTrace(exchanged?.debugTrace)
-
-      const connection = await dependencies.upsertBankConnection(ledgerId, {
-        id: providerConnectionId,
-        provider: normalizedProvider,
-        providerConnectionId,
-        status: 'active',
-        userLabel: normalizeText(exchanged?.connection_name || exchanged?.institution_name || 'First Bank'),
-        syncCursor: normalizeText(exchanged?.sync_cursor || exchanged?.next_cursor || exchanged?.cursor),
-        lastSyncStatus: 'idle',
-        lastError: '',
-      })
-
-      const rawAccounts = Array.isArray(exchanged?.accounts) ? exchanged.accounts : []
-      await dependencies.upsertBankAccounts(
-        ledgerId,
-        connection.id,
-        rawAccounts.map((item) => ({
-          providerAccountId: normalizeText(item?.account_id || item?.id),
-          accountMask: normalizeText(item?.mask || item?.account_mask),
-          accountName: normalizeText(item?.name || item?.account_name || item?.official_name || 'First Bank Account'),
-          accountType: normalizeText(item?.type || item?.subtype),
-          currency: normalizeText(item?.currency || item?.iso_currency_code || 'TWD'),
-          enabled: true,
-        })),
-      )
-
-      await dependencies.deleteEncryptedSetting(ledgerId, buildBankCredentialSettingKey(connection.id))
-      return getConnectionBundle(ledgerId, connection)
-    })
+  const providerDef = getBankProviderDefinition(normalizedProvider)
+  if (!providerDef || !isNativeBankProviderId(normalizedProvider)) {
+    throw new Error('目前僅支援 Android 本地銀行同步')
   }
 
-  throw new Error('目前僅支援第一銀行 Android 本地同步')
+  const providerConnectionId = createBankProviderConnectionId(normalizedProvider, {
+    nationalId: options.nationalId,
+    repeatSeq: options.repeatSeq,
+    userCode: options.code,
+  })
+  if (!providerConnectionId) {
+    throw new Error(
+      isFirstBankProviderId(normalizedProvider)
+        ? '第一銀行登入身分資料不完整'
+        : '華南銀行登入身分資料不完整',
+    )
+  }
+
+  const defaultLabel = providerDef.name
+  return dependencies.traceBankSyncOperation('connect_bank', {
+    ledgerId,
+    provider: normalizedProvider,
+    connectionId: providerConnectionId,
+  }, async (traceContext) => {
+    const exchanged = await dependencies.exchangeBankAuth({
+      provider: normalizedProvider,
+      providerId: normalizedProvider,
+      connectionId: providerConnectionId,
+      nationalId: normalizeText(options.nationalId),
+      repeatSeq: normalizeText(options.repeatSeq || '0'),
+      userCode: normalizeText(options.code),
+      password: String(options.password ?? ''),
+      captchaCode: normalizeText(options.captchaCode),
+      initialSyncStartDate: normalizeDateInput(options.initialSyncStartDate),
+    })
+    traceContext.attachDebugTrace(exchanged?.debugTrace)
+
+    const connection = await dependencies.upsertBankConnection(ledgerId, {
+      id: providerConnectionId,
+      provider: normalizedProvider,
+      providerConnectionId,
+      status: 'active',
+      userLabel: normalizeText(exchanged?.connection_name || exchanged?.institution_name || defaultLabel),
+      syncCursor: normalizeText(exchanged?.sync_cursor || exchanged?.next_cursor || exchanged?.cursor),
+      lastSyncStatus: 'idle',
+      lastError: '',
+    })
+
+    const rawAccounts = Array.isArray(exchanged?.accounts) ? exchanged.accounts : []
+    await dependencies.upsertBankAccounts(
+      ledgerId,
+      connection.id,
+      rawAccounts.map((item) => ({
+        providerAccountId: normalizeText(item?.account_id || item?.id),
+        accountMask: normalizeText(item?.mask || item?.account_mask),
+        accountName: normalizeText(item?.name || item?.account_name || item?.official_name || `${defaultLabel} Account`),
+        accountType: normalizeText(item?.type || item?.subtype),
+        currency: normalizeText(item?.currency || item?.iso_currency_code || 'TWD'),
+        enabled: true,
+      })),
+    )
+
+    await dependencies.deleteEncryptedSetting(ledgerId, buildBankCredentialSettingKey(connection.id))
+    return getConnectionBundle(ledgerId, connection)
+  })
 }
 
 export async function saveBankAccountSettings(ledgerId, bankAccountId, patch = {}) {
@@ -596,7 +603,7 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
     throw new Error('此銀行連結已停用，請重新連結')
   }
   if (shouldRequireReconnectForStoredBankConnection(connection.provider, connection.status, connection.last_error)) {
-    throw new Error('第一銀行連線已進入錯誤狀態，請先中斷連線並重新新增')
+    throw new Error('銀行連線已進入錯誤狀態，請先中斷連線並重新新增')
   }
 
   const [enabledAccounts, rule] = await Promise.all([
@@ -613,14 +620,15 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
     provider: connection.provider,
     connectionId,
   }, async (traceContext) => {
+    const attemptAt = new Date().toISOString()
     try {
       const secureSettingKey = buildBankCredentialSettingKey(connectionId)
-      const isNativeFirstBank = isFirstBankProviderId(connection.provider)
+      const isNativeBank = isNativeBankProviderId(connection.provider)
       let savedCredentialState = null
       let sanitizedCredentialState = null
       let sessionToken = ''
 
-      if (!isNativeFirstBank) {
+      if (!isNativeBank) {
         savedCredentialState = await dependencies.getEncryptedSetting(ledgerId, secureSettingKey)
         sanitizedCredentialState = sanitizeBankCredentialState(savedCredentialState)
         if (shouldRewriteBankCredentialState(savedCredentialState)) {
@@ -630,8 +638,8 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
         }
         const effectiveCredentialState = sanitizedCredentialState ?? savedCredentialState
         sessionToken = normalizeText(effectiveCredentialState?.sessionToken || effectiveCredentialState?.accessTokenRef)
-        if (isFirstBankProviderId(connection.provider) && !sessionToken) {
-          throw new Error('第一銀行同步 Session 已失效，請重新連線並重新登入一次')
+        if (!sessionToken) {
+          throw new Error('銀行同步 Session 已失效，請重新連線並重新登入一次')
         }
       }
 
@@ -641,28 +649,43 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
       const vaultIds = buildNativeVaultLookupIds(connection)
       // v1.1.1: dual-write watermark + lookback for JS↔Java contract.
       // Canonical camelCase lastSyncAt takes precedence on native; snake is legacy fallback.
-      const lastSyncWatermark = normalizeText(connection.last_sync_at) || null
-      const lookbackDays = rule.lookbackDays
+      const connectionWatermark = normalizeText(connection.last_sync_at) || null
+      const lookbackDays = Number(rule.lookbackDays ?? getBankProviderLookbackDays(connection.provider)) || 3
+      const accountCheckpoints = syncableAccounts.map((item) => ({
+        accountId: item.provider_account_id,
+        providerAccountId: item.provider_account_id,
+        lastSyncAt: normalizeText(item.last_success_sync_at) || connectionWatermark,
+        last_sync_at: normalizeText(item.last_success_sync_at) || connectionWatermark,
+        lastSuccessSyncAt: normalizeText(item.last_success_sync_at) || null,
+        syncCursor: normalizeText(item.sync_cursor) || null,
+      }))
       const syncRes = await dependencies.syncBankTransactions({
         provider: connection.provider,
+        providerId: connection.provider,
         ...vaultIds,
         mode: 'delta',
         cursor: normalizeText(connection.sync_cursor) || null,
-        lastSyncAt: lastSyncWatermark,
-        last_sync_at: lastSyncWatermark,
+        lastSyncAt: connectionWatermark,
+        last_sync_at: connectionWatermark,
         lookbackDays,
         lookback_days: lookbackDays,
+        accountCheckpoints,
+        account_checkpoints: accountCheckpoints,
         account_ids: syncableAccounts.map((item) => item.provider_account_id),
         accountIds: syncableAccounts.map((item) => item.provider_account_id),
-        session_token: isNativeFirstBank ? null : (sessionToken || null),
-        access_token_ref: isNativeFirstBank ? null : (sessionToken || null),
+        session_token: isNativeBank ? null : (sessionToken || null),
+        access_token_ref: isNativeBank ? null : (sessionToken || null),
       })
       traceContext.attachDebugTrace(syncRes?.debugTrace)
 
+      const identityScheme = getBankProviderIdentityScheme(connection.provider)
       const normalizedRows = normalizeBackendSyncRows([
         ...(Array.isArray(syncRes?.added) ? syncRes.added : []),
         ...(Array.isArray(syncRes?.modified) ? syncRes.modified : []),
-      ])
+      ]).map((item) => ({
+        ...item,
+        identityScheme: identityScheme || item.identityScheme,
+      }))
       const providerAccountMap = normalizeProviderAccountMap(syncableAccounts)
       const rowsToUpsert = normalizedRows
         .map((item) => {
@@ -682,6 +705,7 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
             merchant: item.merchant,
             status: item.status,
             rawJson: item.rawJson,
+            identityScheme: item.identityScheme || identityScheme || null,
           }
         })
         .filter(Boolean)
@@ -704,11 +728,57 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
           defaultSelected: false,
         }))
 
-      const syncTime = normalizeText(syncRes?.sync_time) || new Date().toISOString()
+      const coveredThrough = normalizeText(syncRes?.coveredThrough || syncRes?.sync_time) || new Date().toISOString().slice(0, 10)
       const nextCursor = normalizeText(syncRes?.next_cursor || syncRes?.nextCursor || syncRes?.cursor)
       const nextSessionToken = normalizeText(syncRes?.session_token || syncRes?.access_token_ref)
+      const accountResults = Array.isArray(syncRes?.accountResults)
+        ? syncRes.accountResults
+        : Array.isArray(syncRes?.account_results)
+          ? syncRes.account_results
+          : []
+      const aggregateStatus = normalizeText(syncRes?.sync_status || syncRes?.syncStatus).toLowerCase()
+        || (accountResults.some((item) => String(item?.status ?? '').toLowerCase() === 'error')
+          ? (accountResults.some((item) => String(item?.status ?? '').toLowerCase() === 'ok') ? 'partial_success' : 'error')
+          : 'ok')
 
-      if (nextSessionToken && !isMockProviderId(connection.provider) && !isNativeFirstBank) {
+      // Persist per-account watermarks (coveredThrough), never wall-clock finish alone.
+      for (const account of syncableAccounts) {
+        const providerAccountId = normalizeText(account.provider_account_id)
+        const accountResult = accountResults.find((item) => {
+          const resultId = normalizeText(item?.accountId || item?.account_id || item?.providerAccountId)
+          return resultId === providerAccountId
+            || resultId.replace(/\D+/g, '') === providerAccountId.replace(/\D+/g, '')
+        })
+        if (!accountResults.length) {
+          await dependencies.updateBankAccount(ledgerId, account.id, {
+            lastSuccessSyncAt: coveredThrough,
+            lastSyncStatus: 'ok',
+            lastError: '',
+            syncCursor: nextCursor || account.sync_cursor || null,
+          })
+          continue
+        }
+        if (!accountResult) continue
+        const status = String(accountResult.status ?? '').toLowerCase()
+        if (status === 'ok') {
+          await dependencies.updateBankAccount(ledgerId, account.id, {
+            lastSuccessSyncAt: normalizeText(accountResult.coveredThrough) || coveredThrough,
+            lastSyncStatus: 'ok',
+            lastError: '',
+            syncCursor: nextCursor || account.sync_cursor || null,
+          })
+        } else {
+          await dependencies.updateBankAccount(ledgerId, account.id, {
+            lastSyncStatus: 'error',
+            lastError: formatBankErrorForStorage({
+              code: accountResult.code,
+              message: accountResult.message,
+            }),
+          })
+        }
+      }
+
+      if (nextSessionToken && !isMockProviderId(connection.provider) && !isNativeBank) {
         await dependencies.setEncryptedSetting(ledgerId, secureSettingKey, {
           ...(savedCredentialState && typeof savedCredentialState === 'object' ? savedCredentialState : {}),
           sessionToken: nextSessionToken,
@@ -717,19 +787,28 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
         })
       }
 
-      await dependencies.updateBankConnection(ledgerId, connectionId, {
+      const connectionPatch = {
         status: 'active',
-        lastSyncAt: syncTime,
+        lastSyncAt: coveredThrough,
         syncCursor: nextCursor || connection.sync_cursor || null,
-        lastSyncStatus: 'ok',
-        lastError: '',
-      })
+        lastSyncStatus: aggregateStatus === 'partial_success' ? 'partial_success' : 'ok',
+        lastError: aggregateStatus === 'partial_success'
+          ? 'partial_success: some accounts failed'
+          : '',
+        lastAttemptAt: attemptAt,
+      }
+      if (aggregateStatus === 'ok') {
+        connectionPatch.lastFullSuccessAt = coveredThrough
+      }
+      await dependencies.updateBankConnection(ledgerId, connectionId, connectionPatch)
 
       return {
         added,
         modified,
         nextCursor: nextCursor || null,
-        syncTime,
+        syncTime: coveredThrough,
+        syncStatus: aggregateStatus,
+        accountResults,
         raw: syncRes,
       }
     } catch (error) {
@@ -738,6 +817,7 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
         status: requiresReconnect ? 'error' : 'active',
         lastSyncStatus: 'error',
         lastError: formatBankErrorForStorage(error),
+        lastAttemptAt: attemptAt,
       })
       throw error
     }
@@ -969,10 +1049,11 @@ export async function disconnectBankConnection(ledgerId, connectionId, options =
     connectionId,
   }, async () => {
     try {
-      if (isFirstBankProviderId(connection.provider)) {
+      if (isNativeBankProviderId(connection.provider)) {
         const vaultIds = buildNativeVaultLookupIds(connection)
         await dependencies.disconnectBankAuth({
           provider: connection.provider,
+          providerId: connection.provider,
           ...vaultIds,
         })
       } else {

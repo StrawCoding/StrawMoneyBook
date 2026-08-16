@@ -1,12 +1,15 @@
 import { Capacitor } from '@capacitor/core'
 import { translateMessage } from '../../ui/services/i18n.service.js'
 import {
-  connectNativeFirstBank,
-  disconnectNativeBankConnection,
+  connectNativeBank,
+  disconnectNativeBank,
   isNativeBankAutomationRuntimeSupported,
-  syncNativeFirstBank,
+  syncNativeBank,
 } from './native-automation.js'
-import { isFirstBankProviderId } from './shared.js'
+import {
+  isRegisteredBankProviderId,
+  listRegisteredBankProviders,
+} from './provider-registry.js'
 
 const IMPORT_META_ENV = import.meta.env ?? {}
 const DEFAULT_BANK_API_BASE = String(IMPORT_META_ENV.VITE_BANK_SYNC_API_BASE_URL ?? '').trim()
@@ -15,20 +18,13 @@ const BANK_SYNC_FEATURE_ENABLED = parseBooleanEnv(
   IMPORT_META_ENV.VITE_BANK_SYNC_FEATURE_ENABLED,
   false,
 )
-// Keep unsupported real-bank connectors opt-in only.
 const BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS = parseBooleanEnv(
   IMPORT_META_ENV.VITE_BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS,
   false,
 )
 const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
-const PROVIDERS_FALLBACK = [
-  {
-    id: 'first_bank_tw',
-    name: 'First Bank i-Bank',
-    country: 'TW',
-  },
-]
+const PROVIDERS_FALLBACK = listRegisteredBankProviders()
 
 function parseBooleanEnv(value, fallback = false) {
   const normalized = String(value ?? '').trim().toLowerCase()
@@ -36,14 +32,12 @@ function parseBooleanEnv(value, fallback = false) {
   return ['1', 'true', 'yes', 'on'].includes(normalized)
 }
 
-function isNativeFirstBankProvider(providerId) {
-  return isFirstBankProviderId(providerId) && isNativeBankAutomationRuntimeSupported()
+function isNativeBankProvider(providerId) {
+  return isRegisteredBankProviderId(providerId) && isNativeBankAutomationRuntimeSupported()
 }
 
 function shouldExposeProvider(providerId) {
-  // Feature visibility (settings entry / support matrix) must not require native runtime.
-  // Native connect/sync remains gated by isBankSyncNativeAutomationAvailable().
-  if (isFirstBankProviderId(providerId)) {
+  if (isRegisteredBankProviderId(providerId)) {
     return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS
   }
   return false
@@ -108,7 +102,6 @@ export function isBankSyncApiConfigured() {
 }
 
 export function isBankSyncFeatureEnabled() {
-  // Visibility only: keep settings entry + routes reachable so Web can show support matrix.
   return BANK_SYNC_FEATURE_ENABLED
 }
 
@@ -163,18 +156,21 @@ function parseProviderListFromEnv() {
 async function postJson(path, payload) {
   assertBankSyncFeatureEnabled()
 
-  if (isNativeFirstBankProvider(payload?.provider)) {
+  const providerId = String(payload?.providerId ?? payload?.provider ?? '').trim().toLowerCase()
+  if (isNativeBankProvider(providerId)) {
+    const nativePayload = { ...payload, providerId, provider: providerId }
     if (path === '/api/bank/exchange') {
-      return connectNativeFirstBank(payload)
+      return connectNativeBank(nativePayload)
     }
     if (path === '/api/bank/sync') {
-      return syncNativeFirstBank(payload)
+      return syncNativeBank(nativePayload)
     }
     if (path === '/api/bank/disconnect') {
-      return disconnectNativeBankConnection(payload)
+      return disconnectNativeBank(nativePayload)
     }
   }
 
+  // Architecture B: remote scrape providers removed from default path (delete_dead).
   if (shouldRequireExplicitBankApiBase()) {
     throw createMissingBankApiError()
   }

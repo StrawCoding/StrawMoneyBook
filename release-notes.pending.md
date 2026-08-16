@@ -1,5 +1,6 @@
 # Pending Release Notes
 
+- (v1.3.140 / Architecture B) 銀行同步多銀行架構：Provider Registry（第一銀行＋華南銀行）、通用 `connectBank`/`syncBank` plugin、帳號層級 checkpoint（migration 046）、`PARTIAL_SUCCESS`、共享 `BankAutomationSyncContract` watermark／lookback；淘汰 remote scrape／Playwright provider；建立頁依 schema 動態欄位；華南 Android adapter（H0 登入＋啟發式交易查詢）。
 - (v1.3.139 / Phase 0A–0C) 修復第一銀行 Android 增量同步 JS↔Java 合約：`syncBankConnectionNow` dual-write `lastSyncAt`＋`last_sync_at` 與 `lookbackDays`＋`lookback_days`；原生 `readLastSyncWatermark` 採 **`lastSyncAt` > `last_sync_at`** precedence；`resolveQueryStartDate` 強制 lookback overlap（預設 3 日，clamp 至 initialStart）；新增 `FirstBankAutomationSyncContractTest`（6）與 node source／service 合約測試。
 
 ---

@@ -15,6 +15,15 @@ export function isFirstBankProviderId(value) {
   return normalizeProviderId(value) === 'first_bank_tw'
 }
 
+export function isHuaNanBankProviderId(value) {
+  return normalizeProviderId(value) === 'hua_nan_bank_tw'
+}
+
+export function isNativeBankProviderId(value) {
+  const normalized = normalizeProviderId(value)
+  return normalized === 'first_bank_tw' || normalized === 'hua_nan_bank_tw'
+}
+
 export function simpleHash(input) {
   const source = String(input ?? '')
   let hash = 2166136261
@@ -35,6 +44,27 @@ export function createFirstBankProviderConnectionId({
   const normalizedUserCode = normalizeText(userCode)
   if (!normalizedNationalId || !normalizedUserCode) return ''
   return `first_bank_identity_${simpleHash(`${normalizedNationalId}:${normalizedRepeatSeq}:${normalizedUserCode}`)}`
+}
+
+export function createHuaNanProviderConnectionId({
+  nationalId,
+  userCode,
+} = {}) {
+  const normalizedNationalId = normalizeText(nationalId).toUpperCase()
+  const normalizedUserCode = normalizeText(userCode)
+  if (!normalizedNationalId || !normalizedUserCode) return ''
+  return `hua_nan_identity_${simpleHash(`${normalizedNationalId}:${normalizedUserCode}`)}`
+}
+
+export function createBankProviderConnectionId(providerId, options = {}) {
+  const normalizedProviderId = normalizeProviderId(providerId)
+  if (normalizedProviderId === 'first_bank_tw') {
+    return createFirstBankProviderConnectionId(options)
+  }
+  if (normalizedProviderId === 'hua_nan_bank_tw') {
+    return createHuaNanProviderConnectionId(options)
+  }
+  return ''
 }
 
 /**
@@ -84,22 +114,33 @@ export function extractBankErrorCode(value) {
   return normalizeText(text.slice(0, colonIndex))
 }
 
+const BANK_CREDENTIAL_AUTH_ERROR_CODES = Object.freeze([
+  'first_bank_login_failed',
+  'first_bank_login_page_mismatch',
+  'first_bank_portal_contract_failed',
+  'first_bank_session_expired',
+  'first_bank_password_required',
+  'first_bank_user_code_required',
+  'first_bank_national_id_required',
+  'first_bank_repeat_seq_required',
+  'first_bank_credentials_required',
+  'first_bank_legacy_reconnect_required',
+  'first_bank_my_accounts_trigger_missing',
+  'hua_nan_login_failed',
+  'hua_nan_login_page_mismatch',
+  'hua_nan_session_expired',
+  'hua_nan_password_required',
+  'hua_nan_user_code_required',
+  'hua_nan_national_id_required',
+  'hua_nan_credentials_required',
+  'hua_nan_legacy_reconnect_required',
+  'hua_nan_login_trigger_missing',
+])
+
 export function isBankCredentialAuthError(error) {
   const code = normalizeText(error?.code).toLowerCase()
   const message = normalizeText(error?.message ?? error).toLowerCase()
-  if ([
-    'first_bank_login_failed',
-    'first_bank_login_page_mismatch',
-    'first_bank_portal_contract_failed',
-    'first_bank_session_expired',
-    'first_bank_password_required',
-    'first_bank_user_code_required',
-    'first_bank_national_id_required',
-    'first_bank_repeat_seq_required',
-    'first_bank_credentials_required',
-    'first_bank_legacy_reconnect_required',
-    'first_bank_my_accounts_trigger_missing',
-  ].includes(code)) {
+  if (BANK_CREDENTIAL_AUTH_ERROR_CODES.includes(code)) {
     return true
   }
 
@@ -144,7 +185,7 @@ export function classifyFirstBankSyncFailure(error) {
 }
 
 export function shouldRequireReconnectAfterBankSyncError(providerId, error) {
-  if (!isFirstBankProviderId(providerId)) return false
+  if (!isNativeBankProviderId(providerId)) return false
   return isBankCredentialAuthError(error)
 }
 

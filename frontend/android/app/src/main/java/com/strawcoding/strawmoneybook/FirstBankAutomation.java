@@ -212,11 +212,12 @@ final class FirstBankAutomation {
 
         String initialSyncStartDate = requireDate(state.optString("initialSyncStartDate"), "first_bank_initial_start_date_missing", "First Bank initial sync start date is missing");
         // v1.1.1: lastSyncAt (canonical) > last_sync_at (legacy); mandatory lookback overlap.
-        String lastSyncWatermark = readLastSyncWatermark(payload);
+        String connectionWatermark = readLastSyncWatermark(payload);
         int lookbackDays = readLookbackDays(payload);
         String cursor = normalizeText(payload.optString("cursor"));
-        LocalDate startDate = resolveQueryStartDate(initialSyncStartDate, lastSyncWatermark, cursor, lookbackDays);
+        Map<String, String> accountWatermarks = BankAutomationSyncContract.readAccountWatermarkMap(payload);
         LocalDate endDate = LocalDate.now(TAIPEI_ZONE);
+        LocalDate syncStartedDate = endDate;
 
         BrowserSession session = new BrowserSession(activity, webView);
         String cookieHeader = normalizeText(state.optString("cookieHeader"));
@@ -227,75 +228,125 @@ final class FirstBankAutomation {
         }
 
         JSONArray added = new JSONArray();
+        JSONArray accountResults = new JSONArray();
         boolean reloginAttempted = false;
 
         for (int accountIndex = 0; accountIndex < accountIds.length(); accountIndex += 1) {
             String accountId = normalizeDigits(accountIds.optString(accountIndex));
             if (accountId.isEmpty()) continue;
-            for (DateWindow window : splitDateRange(startDate, endDate)) {
-                boolean retryCurrentWindow = true;
-                while (retryCurrentWindow) {
-                    retryCurrentWindow = false;
-                    JSONObject loadDetails = new JSONObject();
-                    loadDetails.put("accountId", accountId);
-                    loadDetails.put("windowStart", window.startDateBank);
-                    loadDetails.put("windowEnd", window.endDateBank);
-                    debugTrace.record("load_transaction_page", "running", "Loading transaction page", loadDetails);
-                    session.loadUrl(TXN_URL + "?acnt=" + accountId);
-                    if (session.isLoginPage()) {
-                        if (reloginAttempted) {
-                            throw new BankAutomationException("first_bank_session_expired", "First Bank session expired and silent relogin failed");
+            String accountWatermark = BankAutomationSyncContract.resolveAccountWatermark(
+                accountWatermarks,
+                accountId,
+                connectionWatermark
+            );
+            LocalDate startDate = resolveQueryStartDate(initialSyncStartDate, accountWatermark, cursor, lookbackDays);
+            int accountRowCount = 0;
+            try {
+                for (DateWindow window : splitDateRange(startDate, endDate)) {
+                    boolean retryCurrentWindow = true;
+                    while (retryCurrentWindow) {
+                        retryCurrentWindow = false;
+                        JSONObject loadDetails = new JSONObject();
+                        loadDetails.put("accountId", accountId);
+                        loadDetails.put("windowStart", window.startDateBank);
+                        loadDetails.put("windowEnd", window.endDateBank);
+                        debugTrace.record("load_transaction_page", "running", "Loading transaction page", loadDetails);
+                        session.loadUrl(TXN_URL + "?acnt=" + accountId);
+                        if (session.isLoginPage()) {
+                            if (reloginAttempted) {
+                                throw new BankAutomationException("first_bank_session_expired", "First Bank session expired and silent relogin failed");
+                            }
+                            debugTrace.record("silent_relogin", "running", "Session expired; retrying login");
+                            performLogin(
+                                activity,
+                                session,
+                                debugTrace,
+                                state.optString("nationalId"),
+                                state.optString("repeatSeq", "0"),
+                                state.optString("userCode"),
+                                state.optString("password"),
+                                ""
+                            );
+                            session.loadUrl(FRAME_URL);
+                            debugTrace.record("silent_relogin", "ok", "Silent relogin completed");
+                            reloginAttempted = true;
+                            retryCurrentWindow = true;
+                            continue;
                         }
-                        debugTrace.record("silent_relogin", "running", "Session expired; retrying login");
-                        performLogin(
-                            activity,
-                            session,
-                            debugTrace,
-                            state.optString("nationalId"),
-                            state.optString("repeatSeq", "0"),
-                            state.optString("userCode"),
-                            state.optString("password"),
-                            ""
-                        );
-                        session.loadUrl(FRAME_URL);
-                        debugTrace.record("silent_relogin", "ok", "Silent relogin completed");
-                        reloginAttempted = true;
-                        retryCurrentWindow = true;
-                        continue;
-                    }
 
-                    debugTrace.record("transaction_query", "running", "Submitting transaction query", loadDetails);
-                    queryTransactions(session, window.startDateBank, window.endDateBank);
-                    if (session.isLoginPage()) {
-                        if (reloginAttempted) {
-                            throw new BankAutomationException("first_bank_session_expired", "First Bank session expired during transaction sync");
+                        debugTrace.record("transaction_query", "running", "Submitting transaction query", loadDetails);
+                        queryTransactions(session, window.startDateBank, window.endDateBank);
+                        if (session.isLoginPage()) {
+                            if (reloginAttempted) {
+                                throw new BankAutomationException("first_bank_session_expired", "First Bank session expired during transaction sync");
+                            }
+                            debugTrace.record("silent_relogin", "running", "Session expired during transaction query");
+                            performLogin(
+                                activity,
+                                session,
+                                debugTrace,
+                                state.optString("nationalId"),
+                                state.optString("repeatSeq", "0"),
+                                state.optString("userCode"),
+                                state.optString("password"),
+                                ""
+                            );
+                            debugTrace.record("silent_relogin", "ok", "Silent relogin after query completed");
+                            reloginAttempted = true;
+                            retryCurrentWindow = true;
+                            continue;
                         }
-                        debugTrace.record("silent_relogin", "running", "Session expired during transaction query");
-                        performLogin(
-                            activity,
-                            session,
-                            debugTrace,
-                            state.optString("nationalId"),
-                            state.optString("repeatSeq", "0"),
-                            state.optString("userCode"),
-                            state.optString("password"),
-                            ""
-                        );
-                        debugTrace.record("silent_relogin", "ok", "Silent relogin after query completed");
-                        reloginAttempted = true;
-                        retryCurrentWindow = true;
-                        continue;
-                    }
 
-                    JSONArray rows = parseTransactions(session, accountId, window.startDateBank, window.endDateBank);
-                    JSONObject parseDetails = new JSONObject(loadDetails.toString());
-                    parseDetails.put("rows", rows.length());
-                    debugTrace.record("parse_transactions", "ok", "Parsed transaction rows", parseDetails);
-                    for (int rowIndex = 0; rowIndex < rows.length(); rowIndex += 1) {
-                        added.put(rows.getJSONObject(rowIndex));
+                        JSONArray rows = parseTransactions(session, accountId, window.startDateBank, window.endDateBank);
+                        JSONObject parseDetails = new JSONObject(loadDetails.toString());
+                        parseDetails.put("rows", rows.length());
+                        debugTrace.record("parse_transactions", "ok", "Parsed transaction rows", parseDetails);
+                        for (int rowIndex = 0; rowIndex < rows.length(); rowIndex += 1) {
+                            added.put(rows.getJSONObject(rowIndex));
+                            accountRowCount += 1;
+                        }
                     }
                 }
+                accountResults.put(BankAutomationSyncContract.accountResultOk(
+                    accountId,
+                    BankAutomationSyncContract.coveredThroughIsoDate(endDate, syncStartedDate),
+                    accountRowCount
+                ));
+            } catch (BankAutomationException accountError) {
+                // Auth/session failures abort the whole sync so reconnect UX stays deterministic.
+                if (isCredentialAbortError(accountError.getCode())) {
+                    throw accountError;
+                }
+                debugTrace.record(
+                    "account_sync_failed",
+                    "error",
+                    String.valueOf(accountError.getMessage()),
+                    BankAutomationSyncContract.accountResultError(accountId, accountError.getCode(), accountError.getMessage())
+                );
+                accountResults.put(BankAutomationSyncContract.accountResultError(
+                    accountId,
+                    accountError.getCode(),
+                    accountError.getMessage()
+                ));
+            } catch (Exception accountError) {
+                accountResults.put(BankAutomationSyncContract.accountResultError(
+                    accountId,
+                    "first_bank_account_sync_failed",
+                    String.valueOf(accountError.getMessage())
+                ));
             }
+        }
+
+        if (accountResults.length() == 0) {
+            throw new BankAutomationException("first_bank_account_ids_required", "First Bank sync requires at least one account ID");
+        }
+        String aggregateStatus = BankAutomationSyncContract.syncStatusFromAccountResults(accountResults);
+        if ("error".equals(aggregateStatus)) {
+            JSONObject firstError = accountResults.optJSONObject(0);
+            throw new BankAutomationException(
+                firstError == null ? "first_bank_account_sync_failed" : firstError.optString("code", "first_bank_account_sync_failed"),
+                firstError == null ? "First Bank account sync failed" : firstError.optString("message", "First Bank account sync failed")
+            );
         }
 
         JSONArray deduped = dedupeTransactions(added);
@@ -307,9 +358,20 @@ final class FirstBankAutomation {
         result.put("provider", PROVIDER_ID);
         result.put("added", deduped);
         result.put("modified", new JSONArray());
-        result.put("sync_time", nowIso());
+        result.put("sync_time", BankAutomationSyncContract.coveredThroughIsoDate(endDate, syncStartedDate));
+        result.put("coveredThrough", BankAutomationSyncContract.coveredThroughIsoDate(endDate, syncStartedDate));
         result.put("next_cursor", buildCursor(initialSyncStartDate));
+        result.put("accountResults", accountResults);
+        result.put("sync_status", aggregateStatus);
         return result;
+    }
+
+    private static boolean isCredentialAbortError(String code) {
+        String normalized = normalizeText(code).toLowerCase(Locale.ROOT);
+        return "first_bank_session_expired".equals(normalized)
+            || "first_bank_login_failed".equals(normalized)
+            || "first_bank_legacy_reconnect_required".equals(normalized)
+            || "first_bank_credentials_required".equals(normalized);
     }
 
     public static JSONObject disconnect(Activity activity, WebView webView, BankAutomationVault vault, BankAutomationDebugTrace debugTrace, JSONObject payload) throws Exception {

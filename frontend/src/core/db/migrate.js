@@ -43,6 +43,7 @@ import migration042 from '@/core/db/migrations/042_securities_settlement_v2.sql?
 import migration043 from '@/core/db/migrations/043_credit_card_system_p0.sql?raw'
 import migration044 from '@/core/db/migrations/044_security_sell_source_buy.sql?raw'
 import migration045 from '@/core/db/migrations/045_wear_companion.sql?raw'
+import migration046 from '@/core/db/migrations/046_bank_sync_account_checkpoints.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 import {
   DATA_FLOOR_APP_VERSION_META_KEY,
@@ -94,6 +95,7 @@ const MIGRATIONS = [
   { version: 43, name: 'credit_card_system_p0', sql: migration043 },
   { version: 44, name: 'security_sell_source_buy', sql: migration044 },
   { version: 45, name: 'wear_companion', sql: migration045 },
+  { version: 46, name: 'bank_sync_account_checkpoints', sql: migration046 },
 ]
 
 export function getKnownMaxSchemaVersion() {
