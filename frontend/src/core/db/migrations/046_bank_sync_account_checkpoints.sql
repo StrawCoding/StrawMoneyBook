@@ -1,4 +1,4 @@
-# Migration 046 — bank sync Architecture B account checkpoints
+-- Migration 046 — bank sync Architecture B account checkpoints
 -- Account-level watermark / status (v1.1.1)
 ALTER TABLE bank_accounts ADD COLUMN last_success_sync_at TEXT;
 ALTER TABLE bank_accounts ADD COLUMN sync_cursor TEXT;

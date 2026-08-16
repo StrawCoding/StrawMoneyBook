@@ -1,10 +1,30 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { buildMigrationStatementSet, executeMigrationSql } from '../src/core/db/migration-executor.js'
 import { splitSqlStatements } from '../src/core/db/sql-statements.js'
+
+const require = createRequire(import.meta.url)
+const initSqlJs = require('sql.js')
+
+function createSqlJsMigrationDb(rawDb) {
+  return {
+    async executeSet(items) {
+      for (const item of items) {
+        rawDb.run(item.statement, item.values ?? [])
+      }
+    },
+  }
+}
+
+function tableColumns(db, tableName) {
+  return db.exec(`PRAGMA table_info(${tableName})`).flatMap((result) =>
+    result.values.map((row) => String(row[1])),
+  )
+}
 
 test('splitSqlStatements keeps trigger bodies intact', () => {
   const sql = `
@@ -200,4 +220,156 @@ test('removed invoice carrier cleanup migration drops retired local data', () =>
   assert.match(source, /DROP TABLE IF EXISTS invoice_carrier_invoices;/)
   assert.match(source, /DROP TABLE IF EXISTS invoice_carrier_connections;/)
   assert.match(source, /key LIKE 'invoice_carrier\.%'/)
+})
+
+test('splitSqlStatements strips MySQL/shell hash comments that SQLite rejects', () => {
+  const sql = `
+# bad header comment
+CREATE TABLE example (id TEXT);
+# another hash line
+ALTER TABLE example ADD COLUMN note TEXT;
+`
+
+  const statements = splitSqlStatements(sql)
+  assert.equal(statements.length, 2)
+  assert.equal(statements[0], 'CREATE TABLE example (id TEXT);')
+  assert.equal(statements[1], 'ALTER TABLE example ADD COLUMN note TEXT;')
+  assert.ok(statements.every((statement) => !statement.includes('#')))
+})
+
+test('splitSqlStatements keeps hash characters inside quoted string literals', () => {
+  const sql = `INSERT INTO notes (body) VALUES ('tag #1');`
+
+  const statements = splitSqlStatements(sql)
+  assert.equal(statements.length, 1)
+  assert.equal(statements[0], `INSERT INTO notes (body) VALUES ('tag #1');`)
+})
+
+test('migrate registers bank sync account checkpoint migration 046', () => {
+  const source = readFileSync(resolve(import.meta.dirname, '../src/core/db/migrate.js'), 'utf8')
+
+  assert.match(source, /import migration046 from '@\/core\/db\/migrations\/046_bank_sync_account_checkpoints\.sql\?raw'/)
+  assert.match(source, /\{ version: 46, name: 'bank_sync_account_checkpoints', sql: migration046 \}/)
+})
+
+test('migration 046 uses SQLite-safe comments and does not emit hash tokens', () => {
+  const migrationPath = resolve(
+    import.meta.dirname,
+    '../src/core/db/migrations/046_bank_sync_account_checkpoints.sql',
+  )
+  const sql = readFileSync(migrationPath, 'utf8')
+
+  assert.doesNotMatch(sql, /^\s*#/m)
+  assert.match(sql, /^-- Migration 046/m)
+
+  const statements = buildMigrationStatementSet(sql)
+  assert.ok(statements.length >= 8)
+  assert.ok(statements.every((item) => !/#/.test(item.statement)))
+  assert.ok(statements.some((item) => /ALTER TABLE bank_accounts ADD COLUMN last_success_sync_at/.test(item.statement)))
+  assert.ok(statements.some((item) => /ALTER TABLE bank_connections ADD COLUMN auto_import_enabled/.test(item.statement)))
+})
+
+test('all migration SQL files avoid hash comments that Android sqlite would reject', () => {
+  const migrationsDir = resolve(import.meta.dirname, '../src/core/db/migrations')
+  const files = readdirSync(migrationsDir).filter((name) => name.endsWith('.sql')).sort()
+
+  assert.ok(files.includes('046_bank_sync_account_checkpoints.sql'))
+
+  for (const file of files) {
+    const sql = readFileSync(resolve(migrationsDir, file), 'utf8')
+    const statements = splitSqlStatements(sql)
+    for (const statement of statements) {
+      assert.equal(
+        statement.includes('#'),
+        false,
+        `${file} still produces a statement containing '#' for executeSet`,
+      )
+    }
+  }
+})
+
+test('executeMigrationSql applies migration 046 on existing bank schema without hash token errors', async () => {
+  const SQL = await initSqlJs()
+  const db = new SQL.Database()
+
+  db.run(`
+    CREATE TABLE bank_connections (
+      ledger_id TEXT NOT NULL,
+      id TEXT NOT NULL,
+      last_sync_at TEXT,
+      deleted_at TEXT,
+      PRIMARY KEY (ledger_id, id)
+    );
+    CREATE TABLE bank_accounts (
+      ledger_id TEXT NOT NULL,
+      id TEXT NOT NULL,
+      connection_id TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      deleted_at TEXT,
+      PRIMARY KEY (ledger_id, id)
+    );
+    CREATE TABLE bank_transactions (
+      ledger_id TEXT NOT NULL,
+      id TEXT NOT NULL,
+      PRIMARY KEY (ledger_id, id)
+    );
+  `)
+
+  db.run(
+    `INSERT INTO bank_connections (ledger_id, id, last_sync_at, deleted_at)
+     VALUES ('L1', 'C1', '2026-08-01T00:00:00Z', NULL);`,
+  )
+  db.run(
+    `INSERT INTO bank_accounts (ledger_id, id, connection_id, enabled, deleted_at)
+     VALUES ('L1', 'A1', 'C1', 1, NULL);`,
+  )
+
+  const sql = readFileSync(
+    resolve(import.meta.dirname, '../src/core/db/migrations/046_bank_sync_account_checkpoints.sql'),
+    'utf8',
+  )
+
+  const executed = []
+  const wrappedDb = {
+    async executeSet(items) {
+      for (const item of items) {
+        executed.push(item.statement)
+        if (/#/.test(item.statement)) {
+          throw new Error('unrecognized token: "#" (code 1): while compiling: ' + item.statement)
+        }
+        db.run(item.statement, item.values ?? [])
+      }
+    },
+  }
+
+  await executeMigrationSql(wrappedDb, sql)
+
+  assert.ok(executed.length >= 8)
+  assert.ok(executed.every((statement) => !statement.includes('#')))
+
+  const accountCols = tableColumns(db, 'bank_accounts')
+  const connectionCols = tableColumns(db, 'bank_connections')
+  const txCols = tableColumns(db, 'bank_transactions')
+  assert.ok(accountCols.includes('last_success_sync_at'))
+  assert.ok(accountCols.includes('sync_cursor'))
+  assert.ok(accountCols.includes('last_sync_status'))
+  assert.ok(accountCols.includes('last_error'))
+  assert.ok(connectionCols.includes('last_attempt_at'))
+  assert.ok(connectionCols.includes('last_full_success_at'))
+  assert.ok(connectionCols.includes('auto_import_enabled'))
+  assert.ok(txCols.includes('identity_scheme'))
+
+  const backfill = db.exec(
+    `SELECT last_success_sync_at FROM bank_accounts WHERE ledger_id = 'L1' AND id = 'A1'`,
+  )
+  assert.equal(backfill[0].values[0][0], '2026-08-01T00:00:00Z')
+
+  // Re-run: duplicate columns are ignorable; user data must remain.
+  await executeMigrationSql(createSqlJsMigrationDb(db), sql)
+  const again = db.exec(
+    `SELECT last_success_sync_at FROM bank_accounts WHERE ledger_id = 'L1' AND id = 'A1'`,
+  )
+  assert.equal(again[0].values[0][0], '2026-08-01T00:00:00Z')
+
+  db.close()
 })

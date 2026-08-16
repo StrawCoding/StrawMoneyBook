@@ -508,6 +508,7 @@ UI composable 目錄：`src/ui/composables/`
 - 函數（10）：`ensureSchemaMetaTable`, `executeMigrationSql`, `getSchemaMetaValue`, `isIgnorableMigrationError`, `patchLegacySchema`, `patchLegacyTableColumns`, `runMigrations`, `setSchemaMetaValue`, `splitSqlStatements`, `tableExists`
 - 變數（3）：`LEGACY_COLUMN_PATCHES`, `LEGACY_SCHEMA_PATCH_META_KEY`, `MIGRATIONS`
 - 類別（0）：無
+- 補充（smb304）：migration 046 銀行同步 Architecture B account checkpoints 僅允許 SQLite `--`／block 註解；`sql-statements.js` 會剝除 MySQL／shell `#` 行註解，避免 Android Capacitor `executeSet` 出現 `unrecognized token: "#"` 卡住初始化（不可靠「重設全部資料」）。
 
 ### `src/core/db/sqlite.js`
 - 函數（19）：`closeAllConnectionsSafely`, `closeDatabase`, `emitDataMutationEvent`, `ensureWebStoreReady`, `execute`, `getDatabase`, `initDatabase`, `isDataMutationSql`, `isNoSuchTableError`, `isPluginNullError`, `isRecoverableSchemaError`, `normalizeErrorMessage`, `openDatabaseConnection`, `openRecoveryDatabase`, `query`, `rebuildDatabase`, `resetDatabase`, `run`, `withTransaction`
