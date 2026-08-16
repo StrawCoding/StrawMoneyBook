@@ -639,13 +639,19 @@ export async function syncBankConnectionNow(ledgerId, connectionId) {
       // Pass distinct local + provider candidates so Android can resolve legacy
       // rows without false-missing credentials when the two ids diverge.
       const vaultIds = buildNativeVaultLookupIds(connection)
+      // v1.1.1: dual-write watermark + lookback for JS↔Java contract.
+      // Canonical camelCase lastSyncAt takes precedence on native; snake is legacy fallback.
+      const lastSyncWatermark = normalizeText(connection.last_sync_at) || null
+      const lookbackDays = rule.lookbackDays
       const syncRes = await dependencies.syncBankTransactions({
         provider: connection.provider,
         ...vaultIds,
         mode: 'delta',
         cursor: normalizeText(connection.sync_cursor) || null,
-        last_sync_at: normalizeText(connection.last_sync_at) || null,
-        lookback_days: rule.lookbackDays,
+        lastSyncAt: lastSyncWatermark,
+        last_sync_at: lastSyncWatermark,
+        lookbackDays,
+        lookback_days: lookbackDays,
         account_ids: syncableAccounts.map((item) => item.provider_account_id),
         accountIds: syncableAccounts.map((item) => item.provider_account_id),
         session_token: isNativeFirstBank ? null : (sessionToken || null),

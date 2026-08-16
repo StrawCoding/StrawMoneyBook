@@ -1,0 +1,169 @@
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>StrawMB Bank Sync Optimization Plan v1.1.1</title><style>
+:root{--bg:#0f1419;--line:#2a3441;--ink:#e8eef6;--muted:#9aa8b8;--accent:#3d9cf0;--code:#0b1016;--ok:#5ad1a8}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Segoe UI",sans-serif;line-height:1.7;font-size:15px}
+.wrap{max-width:960px;margin:0 auto;padding:32px 20px 80px}h1{font-size:24px;border-bottom:2px solid var(--ok);padding-bottom:10px}h2{font-size:18px;margin-top:32px;color:#d7e7fb}h3{font-size:15.5px;margin-top:20px;color:#c5d6ea}
+.sub{color:var(--muted);font-size:13px}a{color:#7ec0ff}code{background:var(--code);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12.5px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:12px;overflow:auto;font-size:12px;line-height:1.5}pre code{border:0;padding:0;background:none}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}th,td{border:1px solid var(--line);padding:7px 9px;vertical-align:top;text-align:left}th{background:#1c2430}
+blockquote{border-left:4px solid var(--ok);margin:12px 0;padding:8px 14px;background:#121820;color:var(--muted)}hr{border:0;border-top:1px solid var(--line);margin:24px 0}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#173028;color:var(--ok)}
+footer{margin-top:36px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:12px}
+</style></head><body><div class="wrap"><p class="sub"><span class="badge">v1.1.1</span> Spec patch · HEAD d374670 · no product code</p><h1>StrawMB Bank Sync Optimization Plan — Spec Patch v1.1.1</h1>
+<p><strong>Type:</strong> Architecture B specification patch only (no product code)  </p>
+<p><strong>Patches:</strong> Optimization Plan <strong>v1.1</strong>  </p>
+<p><strong>Does not replace:</strong> Legacy Architecture A (<code>d37467086506a0a544a7e5cdd76f1d9ce428d7a8</code>)  </p>
+<p><strong>Generated:</strong> 2026-08-16  </p>
+<p><strong>Gate after this patch:</strong> Phase <strong>0A → 0B → 0C</strong> only (not full rewrite)</p>
+<h2>Purpose</h2>
+<p>Stakeholder review of v1.1 (~9.1/10) accepted the plan direction but required <strong>three small, critical contracts</strong> before authorizing implementation. This v1.1.1 patch adds only those contracts.</p>
+<table>
+<tr><th>#</th><th>Topic</th><th>Status in v1.1</th><th>v1.1.1 addition</th></tr>
+<tr><td>1</td><td>Checkpoint time meaning</td><td>account-level OK; watermark undefined</td><td><strong>Watermark Semantics</strong> + mandatory lookback</td></tr>
+<tr><td>2</td><td><code>providerTransactionId</code> upgrades</td><td>provider-owned OK; stability undefined</td><td><strong>Identity Stability Contract</strong> + scheme/version</td></tr>
+<tr><td>3</td><td>Dual-key read when both present</td><td>dual-read OK; precedence undefined</td><td><strong><code>lastSyncAt</code> &gt; <code>last_sync_at</code></strong></td></tr>
+</table>
+<hr>
+<h2>1. Checkpoint Watermark Semantics</h2>
+<h3>1.1 Problem</h3>
+<p>Writing <code>checkpoint = syncFinishedAt</code> (wall-clock end of sync) can skip transactions that posted <strong>during</strong> the query window but after the bank’s result snapshot.</p>
+<p>Example:</p>
+<pre><code>04:00 query starts / bank builds snapshot
+04:03 new txn posts (not in snapshot)
+04:05 sync finishes
+if checkpoint = 04:05 → next query starts 04:05 → 04:03 txn may be lost forever</code></pre>
+<h3>1.2 Required timestamps (conceptual)</h3>
+<p>Per <strong>account</strong> sync attempt, Orchestrator / Provider must distinguish:</p>
+<table>
+<tr><th>Field</th><th>Meaning</th></tr>
+<tr><td><code>syncStartedAt</code></td><td>Local wall time when this account sync attempt began</td></tr>
+<tr><td><code>queryCoverageEnd</code> / <code>coveredThrough</code></td><td><strong>Watermark:</strong> the latest bank-visible instant/date this attempt claims to have covered</td></tr>
+<tr><td><code>syncFinishedAt</code></td><td>Local wall time when attempt ended (success or fail)</td></tr>
+</table>
+<p><strong>Checkpoint that advances on success MUST be the watermark, not finish time:</strong></p>
+<pre><code>on account success:
+  bank_accounts.last_success_sync_at = coveredThrough   # NOT syncFinishedAt
+  bank_accounts.sync_cursor = providerCursorIfAny</code></pre>
+<h3>1.3 How to choose <code>coveredThrough</code></h3>
+<p>For <strong>date-window portals</strong> (First Bank today):</p>
+<pre><code>coveredThrough = min(
+  queryEndDateInclusive,          # the end date sent to the bank query form
+  bankReportedMaxPostedDate?,     # if available from rows
+  syncStartedAt.date(Taipei)      # never claim coverage past &quot;today at start&quot;
+)</code></pre>
+<p>Rules:</p>
+<ol><li>1. Never set watermark to <code>syncFinishedAt</code> alone.  </li><li>2. Never claim coverage beyond the <strong>query end</strong> actually requested.  </li><li>3. Prefer the <strong>inclusive query end date</strong> used in the portal request as the primary watermark for date-based banks.  </li><li>4. If portal returns an explicit “as-of” / statement end, that may refine watermark <strong>downward</strong> only (never upward past query end).</li></ol>
+<h3>1.4 Next query window (mandatory overlap)</h3>
+<pre><code>queryEnd   = today (provider timezone; First Bank = Taipei)
+queryStart = coveredThrough.date - provider.lookbackDays
+             (clamp to initialSyncStartDate / account policy)</code></pre>
+<p><strong>Overlap is mandatory for date-window providers — not optional.</strong></p>
+<table>
+<tr><th>Provider</th><th>Default lookback</th><th>Notes</th></tr>
+<tr><td><code>first_bank_tw</code></td><td><strong>3 days</strong> (align Architecture A <code>bank_sync_rules.lookback_days</code> default)</td><td>Native path must honor this after Phase 0B+; no longer “optional”</td></tr>
+<tr><td><code>hua_nan_bank_tw</code></td><td><strong>TBD in H0 Probe</strong> (≥1 day recommended floor)</td><td>Set in Provider Contract after probe</td></tr>
+</table>
+<p>Rationale: prefer <strong>re-fetch overlap + idempotent <code>providerTransactionId</code> dedupe</strong> over aggressive watermark → permanent miss.</p>
+<h3>1.5 Partial success interaction</h3>
+<p>Unchanged from v1.1:</p>
+<ul><li>Successful account: advance <strong>that account’s</strong> watermark to its <code>coveredThrough</code></li><li>Failed account: watermark unchanged</li><li>Connection <code>last_full_success_at</code> updates only when all syncable accounts succeed</li></ul>
+<h3>1.6 Phase mapping</h3>
+<table>
+<tr><th>Phase</th><th>Watermark work</th></tr>
+<tr><td><strong>0B</strong></td><td>Dual-key fix; when advancing connection-scoped signal still in use, treat value as <strong>coverage/date watermark</strong>, not finish clock if distinguishable; <strong>lookback mandatory</strong> on native First Bank (wire <code>lookback_days</code> / dual keys as needed)</td></tr>
+<tr><td><strong>0C</strong></td><td>Device proof: second sync uses overlap window; no full initial-range re-pull unless first sync</td></tr>
+<tr><td><strong>5</strong></td><td>Persist account-level <code>last_success_sync_at</code> = <code>coveredThrough</code>; store optional <code>last_sync_started_at</code> / <code>last_sync_finished_at</code> for diagnostics</td></tr>
+</table>
+<hr>
+<h2>2. Transaction Identity Stability Contract</h2>
+<h3>2.1 Problem</h3>
+<p>Architecture A First Bank fallback:</p>
+<pre><code>fbtxn_ + hash(accountId|postedAt|amountMinor|summary|note)</code></pre>
+<p>If a future algorithm silently changes inputs (e.g. drop <code>summary</code>, add <code>referenceNo</code>), the same bank row yields a <strong>new</strong> <code>providerTransactionId</code> → UNIQUE does not collide → <strong>duplicate mirror / ledger risk</strong>.</p>
+<h3>2.2 Contract (normative)</h3>
+<pre><code>Transaction Identity Contract
+
+1. providerTransactionId MUST be deterministic for the same bank raw row
+   under the same identity_scheme + identity_version.
+
+2. Identity MUST remain stable across app upgrades for rows already stored.
+
+3. Existing identity algorithms MUST NOT change silently.
+
+4. If the algorithm must change:
+   - require an identity migration plan, AND/OR
+   - maintain legacy alias compatibility so old ids still match.
+
+5. Bank-native stable IDs ALWAYS take priority over composite/hash fallbacks.</code></pre>
+<h3>2.3 Scheme / version (required concept)</h3>
+<p>Each Provider declares:</p>
+<pre><code>identity_scheme   e.g. firstbank:portal-ref | firstbank:fallback-hash | huanan:…
+identity_version  e.g. v1</code></pre>
+<p>Examples:</p>
+<pre><code>firstbank:portal-ref:v1
+firstbank:fallback-hash:v1
+huanan:portal-ref:v1   # after probe</code></pre>
+<p>Storage options (choose in Phase 3/5; not all required day one):</p>
+<ul><li>Column <code>identity_scheme</code> on <code>bank_transactions</code> (recommended when feasible), <strong>or</strong></li><li>Encode scheme in id prefix only if collision-safe and documented (<code>fbtxn_v1_…</code>)</li></ul>
+<p>UNIQUE key may remain <code>(ledger_id, bank_account_id, provider_transaction_id)</code>; scheme/version need not be part of UNIQUE if the id string itself is versioned/prefixed.</p>
+<h3>2.4 Provider responsibility</h3>
+<pre><code>buildTransactionIdentity(raw) → providerTransactionId
+
+Priority inside provider:
+  1) bank-native transactionId / referenceNo / sequenceNo / stable portal key
+  2) versioned composite/hash fallback (NO balanceMinor; avoid mutable text-only)</code></pre>
+<p>Orchestrator never re-hashes.</p>
+<h3>2.5 Change control</h3>
+<p>Any PR that changes <code>buildTransactionIdentity</code> / Java equivalent <strong>must</strong> include:</p>
+<ul><li>bump <code>identity_version</code> or new <code>identity_scheme</code></li><li>migration or dual-match (legacy id OR new id → same logical row)</li><li>tests with fixtures proving old ids still resolve</li></ul>
+<hr>
+<h2>3. Dual-key Precedence (Phase 0B)</h2>
+<h3>3.1 Canonical contract</h3>
+<pre><code>Canonical key:  lastSyncAt          (camelCase)
+Legacy key:     last_sync_at        (snake_case)
+
+Precedence:     lastSyncAt  &gt;  last_sync_at</code></pre>
+<h3>3.2 Java read algorithm (normative)</h3>
+<pre><code>String watermark = normalizeText(payload.optString(&quot;lastSyncAt&quot;));
+if (watermark.isEmpty()) {
+    watermark = normalizeText(payload.optString(&quot;last_sync_at&quot;));
+}
+// use watermark; never prefer snake when camel is non-empty</code></pre>
+<p>Equivalently: <strong>if <code>lastSyncAt</code> present and non-empty → use it; else fallback to <code>last_sync_at</code>.</strong></p>
+<h3>3.3 JS write during transition</h3>
+<pre><code>lastSyncAt   = X
+last_sync_at = X   // same value; dual-write until aliases removed</code></pre>
+<p>After transition period: snake may be dropped in a later cleanup phase (document in Phase 10).</p>
+<h3>3.4 Required regression test (Phase 0A/0B)</h3>
+<pre><code>GIVEN payload:
+  lastSyncAt   = &quot;2026-08-16T04:00:00+08:00&quot;   // or date form used by native parser
+  last_sync_at = &quot;2026-01-01T00:00:00+08:00&quot;
+
+EXPECT native resolveSyncStartDate / watermark input uses 2026-08-16
+       (NOT 2026-01-01)</code></pre>
+<p>Also keep the characterizing test that today’s HEAD (<code>d37467086506a0a544a7e5cdd76f1d9ce428d7a8</code>) sending only <code>last_sync_at</code> fails to feed camel-only reader — then 0B makes both paths work with precedence above.</p>
+<h3>3.5 Account-level future</h3>
+<p>When checkpoints move to <code>bank_accounts.last_success_sync_at</code>, the <strong>same precedence rules</strong> apply to any transitional dual-keyed payload fields bridging JS↔Java.</p>
+<hr>
+<h2>4. Amendments to v1.1 sections (pointer index)</h2>
+<table>
+<tr><th>v1.1 section</th><th>Amendment</th></tr>
+<tr><td>§14 Incremental + Checkpoint</td><td>Watermark = <code>coveredThrough</code>; lookback <strong>mandatory</strong> for date-window providers</td></tr>
+<tr><td>§13 Idempotency</td><td>Add Identity Stability Contract + scheme/version</td></tr>
+<tr><td>§26 Phase 0B</td><td>Dual-key + <strong>precedence</strong> + mandatory First Bank lookback wiring</td></tr>
+<tr><td>§39 P0 tasks</td><td>0A includes precedence conflict test; 0B implements §3 algorithm</td></tr>
+</table>
+<hr>
+<h2>5. Implementation gate (unchanged severity, clearer)</h2>
+<p><strong>Accepted after v1.1.1:</strong> authorize implementation of:</p>
+<pre><code>Phase 0A  Regression / characterizing + precedence conflict test
+   ↓
+Phase 0B  Dual-key fix + precedence + mandatory lookback on native FB
+   ↓
+Phase 0C  First Bank device incremental + overlap verification</code></pre>
+<p><strong>Not authorized yet:</strong> Phase 1+ (Behavior Freeze onward) until 0A–0C evidence passes.</p>
+<p>Architecture B items remain <strong>NOT IMPLEMENTED</strong> in product tree at <code>d37467086506a0a544a7e5cdd76f1d9ce428d7a8</code>.</p>
+<hr>
+<h2>6. Executive one-liner</h2>
+<p>v1.1.1 does not redesign Architecture B; it freezes three contracts so Phase 0 cannot reintroduce silent watermark, identity, or dual-key ambiguity.</p>
+<hr>
+<p>*End of Spec Patch v1.1.1*</p><footer>Authorize Phase 0A→0B→0C only after accepting this patch</footer></div></body></html>

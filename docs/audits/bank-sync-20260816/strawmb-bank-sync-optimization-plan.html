@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StrawMB Bank Sync Optimization Plan v1.1</title><style>
+:root{--bg:#0f1419;--card:#171d25;--line:#2a3441;--ink:#e8eef6;--muted:#9aa8b8;--accent:#3d9cf0;--code:#0b1016;--ok:#5ad1a8;--warn:#e6b84d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Segoe UI",sans-serif;line-height:1.7;font-size:15px}
+.wrap{max-width:980px;margin:0 auto;padding:32px 20px 80px}
+h1{font-size:26px;border-bottom:2px solid var(--accent);padding-bottom:12px}
+h2{font-size:20px;margin-top:36px;color:#d7e7fb}
+h3{font-size:16px;margin-top:22px;color:#c5d6ea}
+h4{font-size:14.5px;color:#b7c8dc}
+.sub{color:var(--muted);font-size:13px}
+a{color:#7ec0ff}
+code{background:var(--code);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12.5px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow:auto;font-size:12px;line-height:1.5}
+pre code{border:0;padding:0;background:none}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+th,td{border:1px solid var(--line);padding:7px 9px;vertical-align:top;text-align:left}
+th{background:#1c2430}
+blockquote{border-left:4px solid var(--ok);margin:12px 0;padding:8px 14px;background:#121820;color:var(--muted)}
+hr{border:0;border-top:1px solid var(--line);margin:28px 0}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#173028;color:var(--ok);margin-right:6px}
+footer{margin-top:40px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:14px}
+</style></head>
+<body><div class="wrap">
+<p class="sub"><span class="badge">Plan v1.1</span> HEAD d374670 · 2026-08-16 · spec-only</p>
+<h1>StrawMB Bank Sync Optimization &amp; Refactoring Plan</h1>
+<p><strong>Version:</strong> <strong>v1.1</strong> (architecture specification only — <strong>no product code changes</strong>)  </p>
+<p><strong>Document type:</strong> Architecture B — AFTER / TARGET + Engineering TDD  </p>
+<p><strong>Supersedes:</strong> v1.0 Optimization Plan (2026-08-16 earlier draft, score ~7.8/10)  </p>
+<p><strong>Status:</strong> Spec revision incorporating stakeholder review — <strong>do not start full rewrite until this v1.1 is accepted</strong>  </p>
+<p><strong>Generated:</strong> 2026-08-16  </p>
+<p><strong>Repo HEAD (product code unchanged):</strong> <code>d37467086506a0a544a7e5cdd76f1d9ce428d7a8</code>  </p>
+<p><strong>Working tree (product):</strong> clean at audit time; this file is documentation only</p>
+<h2>v1.1 Change Log (spec-only)</h2>
+<table>
+<tr><th>#</th><th>Stakeholder finding</th><th>v1.1 resolution</th></tr>
+<tr><td>1</td><td>P0 fix ordered *after* registry/refactor in Migration Plan, contradicting Recommended Order</td><td><strong>Unified:</strong> Phase 0A–0C fix incremental contract <strong>before</strong> any architecture refactor</td></tr>
+<tr><td>2</td><td>PARTIAL_FAILED + connection-level checkpoint conflict</td><td><strong>Account-level checkpoint</strong>; connection holds aggregate only; define <code>PARTIAL_SUCCESS</code></td></tr>
+<tr><td>3</td><td>Hua Nan H0 Probe too late (Phase 7)</td><td><strong>Probe before</strong> Provider Contract / Registry</td></tr>
+<tr><td>4</td><td>Universal fingerprint including <code>balanceMinor</code></td><td><strong>Provider-owned</strong> <code>buildTransactionIdentity()</code> → opaque <code>providerTransactionId</code></td></tr>
+<tr><td>5</td><td>Single-bank hardcoding listed P0 Critical</td><td><strong>Downgrade</strong> to P1 architecture blocker (Legacy §5.20 patched)</td></tr>
+<tr><td>6</td><td>CANCELLED from IDLE; state mixes runtime + history</td><td><strong>Cancel only from in-flight phases</strong>; split Runtime Phase vs Persisted Sync Result</td></tr>
+<tr><td>7</td><td>REST-like retry unsafe for portal automation</td><td><strong>Provider-aware</strong> operation capabilities: SAFE_RETRY / NO_RETRY / REAUTH / USER_INTERACTION_REQUIRED</td></tr>
+</table>
+<p><strong>Explicit non-goal of v1.1:</strong> implement code. Next step after acceptance = Phase 0A long-task only.</p>
+<hr>
+<h2>Locked product decisions (unchanged from intakes)</h2>
+<p>Round 1 <code>pi_dac580dbe64dec5d</code> + Round 2 <code>pi_9d664070c0cfd0e8</code> remain authoritative for product intent (<code>full_rewrite</code>, generic plugin, schema wizard, delete dead remote, HNCB, opt-in auto-import, etc.).  </p>
+<p>**v1.1 only changes *how/when* those goals are engineered**, not the product goals themselves.</p>
+<hr>
+<h2>6. Change Audit (unchanged facts)</h2>
+<pre><code class="">BASE_COMMIT = CURRENT_HEAD = d37467086506a0a544a7e5cdd76f1d9ce428d7a8
+WORKING_TREE product = clean
+Architecture B code = NOT IN TREE</code></pre>
+<p>v1.0 Change Matrix still valid as *planned* work; <strong>execution order rewritten below</strong>.</p>
+<hr>
+<h2>7. Optimization Goals (refined priorities)</h2>
+<table>
+<tr><th>Priority</th><th>Goal</th><th>Note</th></tr>
+<tr><td><strong>P0 Correctness</strong></td><td>Fix <code>last_sync_at</code> ↔ <code>lastSyncAt</code> contract</td><td>Must land before refactor</td></tr>
+<tr><td><strong>P1 Reliability</strong></td><td>Account-level checkpoint + PARTIAL_SUCCESS</td><td>Architecture B必改</td></tr>
+<tr><td><strong>P1 Architecture</strong></td><td>Multi-bank after <strong>evidence</strong> (FB + HN probe)</td><td>Abstraction from two banks, not FB alone</td></tr>
+<tr><td><strong>P1 Security/cleanup</strong></td><td>Delete dead remote scrapers after audit</td><td>per <code>delete_dead</code></td></tr>
+<tr><td><strong>P2 Maintainability</strong></td><td>Split 3316-line FirstBankAutomation</td><td>After contracts stable</td></tr>
+<tr><td><strong>P2 UX</strong></td><td>Runtime phase + persisted lastResult</td><td></td></tr>
+<tr><td>Defer</td><td>SQLCipher, iOS, Open Banking, Kafka/etc.</td><td>Anti-overengineering</td></tr>
+</table>
+<hr>
+<h2>8. Target Architecture B (v1.1)</h2>
+<pre><code class="text">                 BankSyncOrchestrator
+                         │
+           ┌─────────────┼─────────────┐
+           │             │             │
+     ProviderRegistry  SyncLock    ErrorMapper
+           │
+   ┌───────┴────────┐
+   │                │
+FirstBankProvider  HuaNanProvider
+   │                │
+   │  buildTransactionIdentity()
+   │  declareOperationRetryPolicy()
+   │  credentialSchema / capabilities
+   └───────┬────────┘
+           │
+  BankAutomationRuntime (shared WebView/OCR/Intercept/Vault/VK probe helpers)
+           │
+        WebView → Bank Portal
+
+Provider DTO (opaque providerTransactionId)
+     → Normalizer (domain shape only)
+     → Account-level checkpoint read/write
+     → Idempotent Upsert (UNIQUE)
+     → SQLite transaction (per account or explicit partial commit rules)
+     → Import Pipeline (opt-in)
+     → Ledger</code></pre>
+<p><strong>Boundaries (stakeholder-aligned):</strong></p>
+<ul><li><strong>Provider</strong> = bank differences (login, navigation, identity, retry capability)</li><li><strong>Orchestrator</strong> = sync lifecycle, locking, aggregation, error mapping to UI</li><li><strong>Repository</strong> = consistency / persistence</li><li><strong>UI</strong> = render Runtime Phase + Persisted Sync Result only</li></ul>
+<hr>
+<h2>9. Provider Abstraction (v1.1 — evidence-first)</h2>
+<p><strong>Do not freeze</strong> the Provider interface until <strong>Hua Nan H0 Probe</strong> completes.</p>
+<p>Design input set:</p>
+<ol><li>1. First Bank (known production path)</li><li>2. Hua Nan probe report (login/VK/OTP/captcha/account list/txn fields)</li></ol>
+<p>Conceptual contract (draft until after probe):</p>
+<pre><code class="ts">interface BankProvider {
+  id: string
+  credentialSchema: CredentialField[]
+  authenticate(ctx): Promise&lt;AuthResult&gt;
+  refreshSession(ctx): Promise&lt;SessionResult&gt;  // may be REAUTH / USER_INTERACTION
+  fetchAccounts(ctx): Promise&lt;AccountDTO[]&gt;
+  fetchTransactions(ctx, query): Promise&lt;TxnDTO[]&gt;
+  /** Provider-owned: never a universal fingerprint helper in Orchestrator */
+  buildTransactionIdentity(rawRow): string  // → providerTransactionId
+  operationRetryPolicy(op: PortalOperation): RetryCapability
+  logout(ctx): Promise&lt;void&gt;
+}</code></pre>
+<p>Orchestrator <strong>must not</strong> know whether <code>providerTransactionId</code> is bank-native id, composite key, or hash.</p>
+<hr>
+<h2>10. Sync Orchestrator (v1.1)</h2>
+<p>Entrypoints unchanged in spirit: <code>syncBankConnection</code>, internal per-account sync.</p>
+<p><strong>New:</strong> connection sync = fan-out to account syncs with <strong>per-account checkpoint</strong>.</p>
+<pre><code class="text">Connection Sync
+ │
+ ├─ Account A → checkpoint A → upsert A → status A
+ ├─ Account B → checkpoint B → upsert B → status B
+ └─ Account C → FAIL → checkpoint C unchanged → status C=error
+ ↓
+ Aggregate → PARTIAL_SUCCESS | COMPLETED | FAILED
+ Persist connection.last_attempt_at / last_full_success_at / overall status
+ Persist lastResult summary for UI</code></pre>
+<hr>
+<h2>11. Sync State Machine (v1.1)</h2>
+<h3>11.1 Runtime Phase (ephemeral)</h3>
+<pre><code class="mermaid">stateDiagram-v2
+  [*] --&gt; IDLE
+  IDLE --&gt; AUTHENTICATING: start
+  AUTHENTICATING --&gt; SEMI_MANUAL: captcha/VK/OTP
+  SEMI_MANUAL --&gt; AUTHENTICATING: user_done
+  AUTHENTICATING --&gt; FETCHING_ACCOUNTS: auth_ok
+  AUTHENTICATING --&gt; AUTH_REQUIRED: auth_fail
+  FETCHING_ACCOUNTS --&gt; FETCHING_TRANSACTIONS: accounts_ok
+  FETCHING_TRANSACTIONS --&gt; NORMALIZING: batch_ok
+  NORMALIZING --&gt; PERSISTING: normalized
+  PERSISTING --&gt; IDLE: write_done\n(set lastResult)
+
+  AUTHENTICATING --&gt; CANCELLED: cancel
+  SEMI_MANUAL --&gt; CANCELLED: cancel
+  FETCHING_ACCOUNTS --&gt; CANCELLED: cancel
+  FETCHING_TRANSACTIONS --&gt; CANCELLED: cancel
+  NORMALIZING --&gt; CANCELLED: cancel
+  PERSISTING --&gt; CANCELLED: cancel_if_safe
+
+  CANCELLED --&gt; IDLE: acknowledge
+  AUTH_REQUIRED --&gt; IDLE: acknowledge</code></pre>
+<p><strong>Forbidden:</strong> <code>IDLE → CANCELLED</code> (v1.0 error). Cancel only from in-flight phases.</p>
+<h3>11.2 Persisted Sync Result (durable, not a phase)</h3>
+<pre><code class="ts">lastResult = {
+  status: &#x27;COMPLETED&#x27; | &#x27;PARTIAL_SUCCESS&#x27; | &#x27;FAILED&#x27; | &#x27;CANCELLED&#x27; | &#x27;AUTH_REQUIRED&#x27;,
+  finishedAt: string,
+  fetched: number,
+  inserted: number,
+  updated: number,
+  duplicated: number,
+  accountResults: Array&lt;{ accountId, status, errorCode?, checkpoint? }&gt;,
+}</code></pre>
+<p>UI reads <code>phase</code> for spinner copy and <code>lastResult</code> for banners after return to IDLE.</p>
+<hr>
+<h2>12. Concurrency (unchanged intent)</h2>
+<p>Busy lock + single-flight + syncSessionId/generation to ignore stale completions. Account-level sync may serialize accounts on one WebView (realistic for portal) — parallel account WebViews <strong>not</strong> required in v1.1.</p>
+<hr>
+<h2>13. Transaction Idempotency (v1.1)</h2>
+<h3>Provider-owned identity</h3>
+<pre><code class="text">FirstBankProvider.buildTransactionIdentity(raw)
+HuaNanProvider.buildTransactionIdentity(raw)
+        ↓
+DTO.providerTransactionId  (opaque to Orchestrator)
+        ↓
+SQLite UNIQUE (ledger_id, bank_account_id, provider_transaction_id)
+        ↓
+Ledger external_ref = bank:{provider}:{providerAccountId}:{providerTransactionId}</code></pre>
+<h3>Rules</h3>
+<ul><li>Prefer bank-native: transactionId / referenceNo / sequenceNo / stable portal key  </li><li>Composite only from <strong>stable</strong> bank fields (posting date, amount, bank ref) — <strong>provider decides</strong>  </li><li><strong>Do not</strong> put <code>balanceMinor</code> into identity (balance is representation, not identity)  </li><li><strong>Do not</strong> rely on mutable <code>summary</code>/<code>note</code>/<code>description</code> alone  </li><li><strong>No</strong> <code>UniversalTransactionFingerprint()</code> in Orchestrator</li></ul>
+<hr>
+<h2>14. Incremental Sync + Checkpoint (v1.1 — 必改)</h2>
+<h3>Schema ownership</h3>
+<pre><code class="text">bank_connections
+  overall status
+  last_attempt_at
+  last_full_success_at          -- only when ALL enabled accounts succeeded
+  last_error (aggregate)
+  -- keep sync_cursor only if still needed for connection-level metadata; prefer migrate away
+
+bank_accounts
+  last_success_sync_at          -- NEW (checkpoint)
+  sync_cursor                   -- NEW or migrate from connection
+  last_sync_status              -- ok|error|idle
+  last_error</code></pre>
+<h3>PARTIAL_SUCCESS semantics</h3>
+<table>
+<tr><th>Case</th><th>Account checkpoints</th><th>Connection <code>last_full_success_at</code></th><th>Connection overall</th></tr>
+<tr><td>All accounts OK</td><td>advance each</td><td>update to now</td><td>COMPLETED / ok</td></tr>
+<tr><td>Some OK, some FAIL</td><td>advance <strong>only</strong> successful accounts</td><td><strong>unchanged</strong></td><td>PARTIAL_SUCCESS</td></tr>
+<tr><td>All FAIL</td><td>none advanced</td><td>unchanged</td><td>FAILED</td></tr>
+<tr><td>Auth required mid-way</td><td>none advanced after auth break; prior account successes already committed per policy</td><td>unchanged unless all done</td><td>AUTH_REQUIRED or PARTIAL_SUCCESS</td></tr>
+</table>
+<p><strong>Per-account atomicity:</strong> for each account: <code>BEGIN upsert txns + update account checkpoint COMMIT</code>.  </p>
+<p>Failed account: no checkpoint advance → next sync resumes from that account’s last success (with optional safety overlap window).  </p>
+<p>Successful accounts: do <strong>not</strong> re-pull full history solely because a sibling failed.</p>
+<h3>P0 contract fix (still required, Phase 0B)</h3>
+<p>JS ↔ Java must agree on <code>lastSyncAt</code> <strong>and</strong> accept <code>last_sync_at</code> during transition; dual-read in Java; dual-write in JS; regression test. Eventually account-level fields replace connection-only incremental signal.</p>
+<hr>
+<h2>15. Atomic Persistence (v1.1)</h2>
+<p><strong>Not</strong> one big connection transaction that advances a single checkpoint after mixed results.</p>
+<pre><code class="text">for account in syncable:
+  try:
+    BEGIN
+      upsert transactions(account)
+      update account checkpoint
+    COMMIT
+    mark account OK
+  except:
+    ROLLBACK
+    mark account FAIL (checkpoint untouched)
+aggregate → lastResult + connection overall fields</code></pre>
+<hr>
+<h2>16. Database Optimization (v1.1)</h2>
+<h3>Before</h3>
+<p><code>008_bank_sync.sql</code> + <code>019</code> — connection-level <code>last_sync_at</code> / <code>sync_cursor</code>.</p>
+<h3>After (additive)</h3>
+<ul><li><code>bank_accounts.last_success_sync_at TEXT</code></li><li><code>bank_accounts.sync_cursor TEXT</code></li><li><code>bank_accounts.last_sync_status TEXT</code></li><li><code>bank_accounts.last_error TEXT</code></li><li><code>bank_connections.last_attempt_at TEXT</code></li><li><code>bank_connections.last_full_success_at TEXT</code></li><li><code>bank_connections.auto_import_enabled INTEGER</code> (locked product choice)</li><li>Migration + backfill: copy connection <code>last_sync_at</code> → each enabled account as initial checkpoint (best-effort)</li><li>Rollback: drop new columns / ignore in code behind flag</li></ul>
+<hr>
+<h2>17. Error Architecture</h2>
+<p>Domain errors unchanged in spirit; map provider codes → AUTH_REQUIRED / SESSION_EXPIRED / CAPTCHA_REQUIRED / PORTAL_CHANGED / NETWORK / PARSE / DATABASE / PARTIAL_SUCCESS / BUSY / UNKNOWN.  </p>
+<p>Legacy <code>first_bank_*</code> compatibility map for one release (<code>generic_only_codes</code>).</p>
+<hr>
+<h2>18. Retry Policy (v1.1 — provider-aware)</h2>
+<pre><code class="text">RetryCapability:
+  SAFE_RETRY
+  NO_RETRY
+  REAUTH
+  USER_INTERACTION_REQUIRED</code></pre>
+<table>
+<tr><th>Operation (examples)</th><th>Typical capability</th></tr>
+<tr><td>portal load / navigation</td><td>SAFE_RETRY (bounded)</td></tr>
+<tr><td>fetchTransactions query</td><td>SAFE_RETRY</td></tr>
+<tr><td>password / login submit</td><td><strong>NO_RETRY</strong> blind; maybe REAUTH path once</td></tr>
+<tr><td>captcha submit</td><td>NO_RETRY / USER_INTERACTION_REQUIRED</td></tr>
+<tr><td>VK / OTP</td><td>USER_INTERACTION_REQUIRED</td></tr>
+<tr><td>session expired mid-sync</td><td>REAUTH once, then fail</td></tr>
+</table>
+<p>Orchestrator consults <code>provider.operationRetryPolicy(op)</code> — <strong>not</strong> a global REST 3× retry on every failure.</p>
+<hr>
+<h2>19–25. Security / UI / Progress / Observability / Tests / Mock / Perf</h2>
+<p>Same intent as v1.0 with these deltas:</p>
+<ul><li>Progress &amp; metrics keyed by <strong>account</strong> where possible  </li><li>Tests must cover PARTIAL_SUCCESS checkpoint isolation  </li><li>MockProvider must simulate one account fail + siblings success  </li><li>Performance win primarily from Phase 0B + account checkpoints (stop full-history refetch)</li></ul>
+<hr>
+<h2>26. Migration Plan (v1.1) — <strong>authoritative order</strong></h2>
+<blockquote>Resolves v1.0 contradiction: Migration Plan and Recommended Order are now <strong>one sequence</strong>.</blockquote>
+<h3>Phase 0A — Regression harness</h3>
+<ul><li>Goal: failing/characterizing test for <code>last_sync_at</code> vs <code>lastSyncAt</code>  </li><li>DoD: test proves mismatch; documents current behavior  </li><li><strong>No</strong> broad refactor  </li></ul>
+<h3>Phase 0B — Fix incremental DTO contract</h3>
+<ul><li>Dual-key write (JS) + dual-key read (Java)  </li><li>Optional: pass lookback into native if still connection-scoped  </li><li>DoD: unit/source test green; First Bank device smoke shows window advances  </li></ul>
+<h3>Phase 0C — Verify First Bank incremental</h3>
+<ul><li>Manual/device: second sync does not re-pull entire initial range (or overlap-only)  </li><li>DoD: evidence in stage report  </li></ul>
+<h3>Phase 1 — Behavior Freeze</h3>
+<ul><li>Snapshot Architecture A (+0B fix) as golden; expand node/android source tests  </li><li>DoD: freeze checklist signed  </li></ul>
+<h3>Phase 2 — Hua Nan H0 Probe  (<strong>moved earlier</strong>)</h3>
+<ul><li>Login fields, VK, captcha, OTP, account list, txn field stability, JSON vs DOM  </li><li>Output: probe report + draft <code>HuaNanProvider.buildTransactionIdentity</code> strategy  </li><li>DoD: written evidence; <strong>no</strong> interface freeze before this  </li></ul>
+<h3>Phase 3 — Provider Contract from FB + HN evidence</h3>
+<ul><li>Finalize interface, DTO, retry capabilities, identity ownership  </li><li>DoD: design ADR in docs; still minimal code  </li></ul>
+<h3>Phase 4 — Provider Registry + Generic Plugin API</h3>
+<ul><li>Registry; <code>connectBank/syncBank/disconnectBank</code>; transitional FirstBank aliases  </li><li>Schema-driven wizard for First Bank first  </li><li>DoD: First Bank parity on device  </li></ul>
+<h3>Phase 5 — Orchestrator + account-level checkpoint + PARTIAL_SUCCESS</h3>
+<ul><li>Fan-out sync; migrations; lastResult; state machine v1.1  </li><li>DoD: MockProvider partial test; FB device partial simulation if possible  </li></ul>
+<h3>Phase 6 — Split FirstBankAutomation + Shared Runtime</h3>
+<ul><li>Behavior parity  </li><li>DoD: CaptchaTest + smoke  </li></ul>
+<h3>Phase 7 — Delete dead remote providers</h3>
+<ul><li>After grep/prod flag audit  </li><li>DoD: Android-only path  </li></ul>
+<h3>Phase 8 — Errors / UX / i18n generic codes</h3>
+<ul><li>DoD: playwright matrix  </li></ul>
+<h3>Phase 9 — Hua Nan adapter (H1/H2)</h3>
+<ul><li>Login (semi-manual if probe requires) → accounts → txns → review → opt-in import  </li><li>DoD: real device ≥1 txn  </li></ul>
+<h3>Phase 10 — Cleanup</h3>
+<ul><li>Remove aliases; docs; APK; release notes  </li><li>DoD: closeout gates  </li></ul>
+<hr>
+<h2>27. Atomic Modification List (adjusted)</h2>
+<p>P0-only first:</p>
+<ul><li><code>[MODIFY]</code> <code>bank-sync.service.js</code> — emit <code>lastSyncAt</code> + <code>last_sync_at</code></li><li><code>[MODIFY]</code> <code>FirstBankAutomation.java</code> — read both keys</li><li><code>[CREATE/MODIFY]</code> tests asserting contract</li></ul>
+<p>Later phases as in v1.0 file list (registry, plugin, HN, delete dead, migrations for account checkpoints, etc.) — <strong>not</strong> started in v1.1 doc pass.</p>
+<hr>
+<h2>28. Dependency Graph (v1.1)</h2>
+<pre><code class="mermaid">flowchart TD
+  A[0A tests] --&gt; B[0B lastSync fix]
+  B --&gt; C[0C FB incremental verify]
+  C --&gt; F[1 Behavior freeze]
+  F --&gt; P[2 Hua Nan H0 Probe]
+  P --&gt; CTR[3 Provider Contract]
+  CTR --&gt; REG[4 Registry + Plugin]
+  REG --&gt; ORCH[5 Orchestrator + account checkpoint]
+  ORCH --&gt; SPLIT[6 Split FirstBank + Runtime]
+  SPLIT --&gt; DEL[7 Delete dead]
+  ORCH --&gt; UX[8 Errors UX]
+  DEL --&gt; HN[9 Hua Nan adapter]
+  UX --&gt; HN
+  HN --&gt; CL[10 Cleanup]</code></pre>
+<hr>
+<h2>29–30. Comparison / Data Flow</h2>
+<p>v1.0 tables still directionally correct; <strong>add</strong>:</p>
+<ul><li>Checkpoint: connection-only → <strong>account-level</strong>  </li><li>Identity: universal hash → <strong>provider-owned</strong>  </li><li>Probe: late → <strong>before contract</strong>  </li><li>Retry: REST → <strong>capability enum</strong></li></ul>
+<hr>
+<h2>31. Risk Assessment (updated)</h2>
+<table>
+<tr><th>Risk</th><th>Mitigation in v1.1</th></tr>
+<tr><td>Refactoring over broken incremental</td><td>Phase 0B first</td></tr>
+<tr><td>Partial sync data gaps</td><td>Account checkpoints</td></tr>
+<tr><td>Wrong generic interface</td><td>Probe before contract</td></tr>
+<tr><td>False identity collisions</td><td>Provider identity; no balance in fingerprint</td></tr>
+<tr><td>Login retry lockout</td><td>NO_RETRY on submit</td></tr>
+</table>
+<hr>
+<h2>32–33. DoD / Acceptance</h2>
+<p>Add explicit DoD items:</p>
+<ul><li>[ ] Account checkpoint isolation under PARTIAL_SUCCESS  </li><li>[ ] No universal fingerprint helper in Orchestrator  </li><li>[ ] Provider retry capabilities consulted  </li><li>[ ] HN probe report exists before interface freeze  </li><li>[ ] P0 dual-key fix merged before Phase 4+  </li></ul>
+<p>Acceptance matrix at v1.1 plan time: all Architecture B items remain <strong>NOT IMPLEMENTED</strong>; Phase 0B fix <strong>NOT IMPLEMENTED</strong> (bug still present in <code>d37467086506a0a544a7e5cdd76f1d9ce428d7a8</code>).</p>
+<hr>
+<h2>34–35. Debt / Roadmap</h2>
+<p>Unchanged spirit; <strong>Now</strong> = Phase 0A–0C only until accepted.</p>
+<hr>
+<h2>39. Recommended Implementation Order (v1.1) — <strong>same as §26</strong></h2>
+<h3>P0</h3>
+<ol><li>1. 0A characterizing/failing contract test  </li><li>2. 0B dual-key fix  </li><li>3. 0C First Bank incremental verification  </li></ol>
+<h3>P1</h3>
+<ol><li>4. Behavior freeze  </li><li>5. Hua Nan H0 Probe  </li><li>6. Provider Contract ADR  </li><li>7. Registry + generic plugin  </li><li>8. Orchestrator + account checkpoints + PARTIAL_SUCCESS  </li></ol>
+<h3>P2</h3>
+<ol><li>9. Split FirstBank + runtime  </li><li>10. Delete dead providers  </li><li>11. Generic errors/UX  </li><li>12. Hua Nan adapter  </li></ol>
+<h3>P3</h3>
+<ol><li>13. Cleanup / APK / docs  </li></ol>
+<hr>
+<h2>40. Executive Verdict (v1.1)</h2>
+<ol><li>1. <strong>Largest problem:</strong> JS↔Java incremental contract break (P0 correctness), then connection-level checkpoint inadequacy for partial sync, then premature abstraction risk.  </li><li>2. <strong>True bugs:</strong> lastSync key mismatch; lookback unused on native; connection checkpoint vs partial accounts.  </li><li>3. <strong>Debt / blockers:</strong> FirstBank hardcoding = <strong>P1 architecture blocker</strong> (not P0 bug); 3316-line monolith; dead providers.  </li><li>4. <strong>Necessary now:</strong> Phase 0A–0C only, then probe, then contract — <strong>not</strong> full rewrite kickoff.  </li><li>5. <strong>Defer:</strong> iOS, SQLCipher, Open Banking, infra toys.  </li><li>6. <strong>Overengineering risk:</strong> reduced vs v1.0 by evidence-first provider design + account checkpoint instead of clever universal fingerprint.  </li><li>7. <strong>Production-grade?</strong> Still Partial for FB; multi-bank not ready.</li></ol>
+<h3>Grades (unchanged honesty)</h3>
+<table>
+<tr><th>Area</th><th>A now</th><th>B if v1.1 DoD met</th></tr>
+<tr><td>Architecture</td><td>D</td><td>B</td></tr>
+<tr><td>Data Consistency</td><td>C</td><td>B+</td></tr>
+<tr><td>Reliability</td><td>C</td><td>B</td></tr>
+<tr><td>Security</td><td>B-</td><td>B+</td></tr>
+<tr><td>Maintainability</td><td>D</td><td>B</td></tr>
+<tr><td>Testability</td><td>C</td><td>B</td></tr>
+<tr><td>UX</td><td>C</td><td>B</td></tr>
+<tr><td>Observability</td><td>D</td><td>C+/B-</td></tr>
+</table>
+<p><strong>Stakeholder gate:</strong> do <strong>not</strong> authorize Hermes/worker to「全部照企畫實作」until this <strong>v1.1</strong> is accepted. After acceptance, authorize <strong>Phase 0A</strong> only as first atomic task.</p>
+<hr>
+<p>*End of Optimization Plan v1.1 (spec-only).*</p>
+<footer>Architecture A ≠ Architecture B · v1.1 gate: accept before Phase 0A implementation</footer>
+</div></body></html>

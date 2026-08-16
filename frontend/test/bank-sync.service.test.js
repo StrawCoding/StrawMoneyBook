@@ -169,6 +169,40 @@ test('importSelectedBankTransactions marks incoming transfer imports with inTxId
   assert.deepEqual(savedMappings, result.importedMappings)
 })
 
+test('syncBankConnectionNow dual-writes lastSyncAt and lookbackDays for native contract', async () => {
+  let syncPayload = null
+
+  setBankSyncServiceDependenciesForTest(createBaseDependencies({
+    findBankConnectionById: async () => createBankConnection({
+      last_sync_at: '2026-08-16T04:00:00.000Z',
+      sync_cursor: JSON.stringify({ initialStartDate: '2026-01-01' }),
+    }),
+    listEnabledBankAccountsByConnection: async () => [createSyncableAccount()],
+    getBankSyncRule: async () => ({ lookbackDays: 3 }),
+    syncBankTransactions: async (payload) => {
+      syncPayload = payload
+      return {
+        added: [],
+        modified: [],
+        sync_time: '2026-08-16T05:00:00.000Z',
+      }
+    },
+    upsertBankTransactions: async () => ({
+      addedIds: [],
+      modifiedIds: [],
+    }),
+    listBankTransactionsByIds: async () => [],
+    updateBankConnection: async () => {},
+  }))
+
+  await syncBankConnectionNow('ledger-1', 'conn-1')
+
+  assert.equal(syncPayload.lastSyncAt, '2026-08-16T04:00:00.000Z')
+  assert.equal(syncPayload.last_sync_at, '2026-08-16T04:00:00.000Z')
+  assert.equal(syncPayload.lookbackDays, 3)
+  assert.equal(syncPayload.lookback_days, 3)
+})
+
 test('syncBankConnectionNow stores first bank auth errors as reconnect-required error state', async () => {
   const updates = []
   const authError = new Error('第一銀行登入失敗')

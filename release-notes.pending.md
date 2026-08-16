@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- (v1.3.139 / Phase 0A–0C) 修復第一銀行 Android 增量同步 JS↔Java 合約：`syncBankConnectionNow` dual-write `lastSyncAt`＋`last_sync_at` 與 `lookbackDays`＋`lookback_days`；原生 `readLastSyncWatermark` 採 **`lastSyncAt` > `last_sync_at`** precedence；`resolveQueryStartDate` 強制 lookback overlap（預設 3 日，clamp 至 initialStart）；新增 `FirstBankAutomationSyncContractTest`（6）與 node source／service 合約測試。
+
 ---
 
 ## v1.3.137

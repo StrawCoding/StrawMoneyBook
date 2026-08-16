@@ -88,3 +88,21 @@ test('SMB-252 desktop login readiness depends only on functional anchors, not mo
   // mobileHint 改為依版面結構（行動版 viewport 標記）的非攔阻診斷欄位。
   assert.match(firstBankAutomationSource, /hasMobileViewport/)
 })
+
+test('Phase 0A/0B v1.1.1 lastSyncAt dual-key precedence and mandatory lookback', () => {
+  assert.match(firstBankAutomationSource, /static String readLastSyncWatermark\(JSONObject payload\)/)
+  assert.match(firstBankAutomationSource, /optString\("lastSyncAt"\)/)
+  assert.match(firstBankAutomationSource, /optString\("last_sync_at"\)/)
+  // Canonical camel must be preferred when non-empty (precedence contract).
+  assert.match(
+    firstBankAutomationSource,
+    /if \(!canonical\.isEmpty\(\)\) return canonical;[\s\S]*return normalizeText\(payload\.optString\("last_sync_at"\)\);/,
+  )
+  assert.match(firstBankAutomationSource, /static int readLookbackDays\(JSONObject payload\)/)
+  assert.match(firstBankAutomationSource, /static LocalDate resolveQueryStartDate\(/)
+  assert.match(firstBankAutomationSource, /coveredThrough\.minusDays\(safeLookback\)/)
+  // sync() must use watermark + lookback helpers (not camel-only lastSyncAt).
+  assert.match(firstBankAutomationSource, /readLastSyncWatermark\(payload\)/)
+  assert.match(firstBankAutomationSource, /readLookbackDays\(payload\)/)
+  assert.match(firstBankAutomationSource, /resolveQueryStartDate\(initialSyncStartDate, lastSyncWatermark, cursor, lookbackDays\)/)
+})

@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StrawMB Bank Sync Legacy Architecture</title><style>
+:root{--bg:#0f1419;--card:#171d25;--line:#2a3441;--ink:#e8eef6;--muted:#9aa8b8;--accent:#3d9cf0;--code:#0b1016;--ok:#5ad1a8;--warn:#e6b84d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Segoe UI",sans-serif;line-height:1.7;font-size:15px}
+.wrap{max-width:980px;margin:0 auto;padding:32px 20px 80px}
+h1{font-size:26px;border-bottom:2px solid var(--accent);padding-bottom:12px}
+h2{font-size:20px;margin-top:36px;color:#d7e7fb}
+h3{font-size:16px;margin-top:22px;color:#c5d6ea}
+h4{font-size:14.5px;color:#b7c8dc}
+.sub{color:var(--muted);font-size:13px}
+a{color:#7ec0ff}
+code{background:var(--code);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12.5px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow:auto;font-size:12px;line-height:1.5}
+pre code{border:0;padding:0;background:none}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+th,td{border:1px solid var(--line);padding:7px 9px;vertical-align:top;text-align:left}
+th{background:#1c2430}
+blockquote{border-left:4px solid var(--ok);margin:12px 0;padding:8px 14px;background:#121820;color:var(--muted)}
+hr{border:0;border-top:1px solid var(--line);margin:28px 0}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#173028;color:var(--ok);margin-right:6px}
+footer{margin-top:40px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:14px}
+</style></head>
+<body><div class="wrap">
+<p class="sub"><span class="badge">Legacy A + errata</span> HEAD d374670 · 2026-08-16 · spec-only</p>
+<h1>StrawMB Bank Sync Legacy Architecture Technical Specification</h1>
+<p><strong>Document type:</strong> Architecture A — BEFORE / Legacy  </p>
+<p><strong>Status:</strong> Evidence-based audit (read-only)  </p>
+<p><strong>Generated:</strong> 2026-08-16  </p>
+<p><strong>Repo:</strong> <code>/mnt/data/code/project/StrawCoding/StrawMoneyBook</code>  </p>
+<p><strong>Baseline / CURRENT HEAD:</strong> <code>d37467086506a0a544a7e5cdd76f1d9ce428d7a8</code> (<code>chore(release): v1.3.138</code>, 2026-08-15)  </p>
+<p><strong>Working tree:</strong> clean (<code>git status --porcelain</code> empty)  </p>
+<p><strong>Optimization code status:</strong> <strong>NOT STARTED</strong> — no Architecture B code exists in tree. Current HEAD <strong>is</strong> Architecture A.</p>
+<p><strong>Errata (2026-08-16):</strong> §5.20 severity of single-provider hardcoding reclassified P0→P1 per stakeholder review; see Optimization Plan v1.1.</p>
+<blockquote><strong>Separation rule:</strong> This document describes <strong>only</strong> the system as it exists at <code>d37467086506a0a544a7e5cdd76f1d9ce428d7a8</code>. Target/refactor designs belong exclusively in <code>strawmb-bank-sync-optimization-plan.md</code>.</blockquote>
+<hr>
+<h2>0. Snapshot Identity</h2>
+<table>
+<tr><th>Field</th><th>Value</th><th>Evidence</th></tr>
+<tr><td>BASE_COMMIT</td><td><code>d37467086506a0a544a7e5cdd76f1d9ce428d7a8</code></td><td><code>git rev-parse HEAD</code></td></tr>
+<tr><td>CURRENT_HEAD</td><td><code>d37467086506a0a544a7e5cdd76f1d9ce428d7a8</code> (identical)</td><td>same</td></tr>
+<tr><td>WORKING_TREE</td><td>clean</td><td><code>git status -sb</code> → <code>## main...origin/main</code></td></tr>
+<tr><td>Branch</td><td><code>main</code> tracking <code>origin/main</code></td><td><code>git branch -vv</code></td></tr>
+<tr><td>App version</td><td><code>1.3.138</code></td><td><code>frontend/package.json</code></td></tr>
+<tr><td>Intro of FirstBankAutomation.java</td><td><code>87eea68</code> (2026-03-20, v0.21.1)</td><td><code>git log --diff-filter=A --follow -- FirstBankAutomation.java</code></td></tr>
+</table>
+<p><strong>Evolution (selected, not exhaustive):</strong></p>
+<table>
+<tr><th>Commit</th><th>Summary</th></tr>
+<tr><td><code>87eea68</code></td><td>FirstBankAutomation introduced</td></tr>
+<tr><td><code>5ca4086</code></td><td>Desktop viewport + captcha (SMB-241)</td></tr>
+<tr><td><code>68fdb8b</code></td><td>WebView harden + CSV fallback (SMB-252)</td></tr>
+<tr><td><code>13ae05d</code></td><td>Sync contract-check cron (SMB-253)</td></tr>
+<tr><td><code>01a1c89</code> / <code>35c624e</code></td><td>Anchors / vault lookup harden</td></tr>
+<tr><td><code>79b5b5b</code></td><td>Sync entries → Features advanced section</td></tr>
+<tr><td><code>d374670</code></td><td>release v1.3.138</td></tr>
+</table>
+<hr>
+<h2>5.1 Executive Summary</h2>
+<h3>Problem solved</h3>
+<p>Allow a member user on <strong>Android</strong> to link <strong>First Bank (第一銀行) i-Bank</strong>, pull deposit transaction history into a local <strong>review queue</strong>, then import selected rows into the StrawMB ledger as normal transactions/transfers.</p>
+<h3>Supported banks (Architecture A)</h3>
+<table>
+<tr><th>Provider ID</th><th>Status</th></tr>
+<tr><td><code>first_bank_tw</code></td><td><strong>Only production native path</strong></td></tr>
+<tr><td>Mock / other</td><td>Present as dormant/orphan code; UI connect refuses non-native</td></tr>
+</table>
+<p>Evidence: <code>frontend/src/services/bank-sync/backend.js</code> <code>PROVIDERS_FALLBACK</code> L25–31; <code>bank-sync.service.js</code> connect refusal L534.</p>
+<h3>Sync mode</h3>
+<ul><li><strong>Client-orchestrated</strong>, Android <strong>WebView portal automation</strong> (login + scrape / JSON intercept), <strong>not</strong> Open Banking Open API.</li><li>Optional dormant <strong>server-side HTTP scrape</strong> (<code>frontend/api/bank/_first-bank-provider.js</code>) behind env flags — <strong>not</strong> the default UX path.</li><li><strong>CSV import</strong> fallback into the same <code>bank_transactions</code> review pipeline.</li></ul>
+<h3>Client / server split</h3>
+<table>
+<tr><th>Concern</th><th>Where</th></tr>
+<tr><td>Membership gate</td><td>Client <code>membership.service.js</code> <code>assertCanUseBankSync</code></td></tr>
+<tr><td>Feature flag</td><td><code>VITE_BANK_SYNC_FEATURE_ENABLED</code></td></tr>
+<tr><td>Login + fetch</td><td>Android WebView (<code>FirstBankAutomation.java</code>)</td></tr>
+<tr><td>Persist mirror + review</td><td>Client SQLite (<code>bank_*</code> tables)</td></tr>
+<tr><td>Import to ledger</td><td>Client <code>bank-sync.service.js</code> → <code>transaction.repo</code></td></tr>
+<tr><td>Portal contract monitoring</td><td>Backend scripts (<code>first-bank-portal-contract-check.mjs</code>) — monitoring only</td></tr>
+</table>
+<h3>Data storage</h3>
+<ul><li>Mirror: client SQLite <code>bank_connections</code> / <code>bank_accounts</code> / <code>bank_transactions</code> / <code>bank_sync_rules</code></li><li>Credentials (native): Android <code>EncryptedSharedPreferences</code> vault</li><li>Ledger truth after import: <code>transactions</code> (+ <code>external_ref_id</code> / idempotency)</li></ul>
+<h3>Triggers</h3>
+<ul><li>Manual: Settings connection page sync</li><li>Auto: <code>runBankSyncAutoRefreshIfDue</code> (10 min cooldown, single-flight per ledger) from app runtime</li><li>CSV: user file pick on connection page</li></ul>
+<h3>Largest technical limits</h3>
+<ol><li>1. Single-bank hardcoding end-to-end (plugin methods, UI form, error codes, Java class).</li><li>2. Native incremental window likely degraded by <strong>payload key mismatch</strong> (<code>last_sync_at</code> vs <code>lastSyncAt</code>) — see §5.8.</li><li>3. Live portal fragility (HTML/anchors/captcha); contract-check mitigates detection only.</li><li>4. No dedicated Pinia bank-sync store — orchestration lives in service + Vue pages.</li></ol>
+<h3>Largest technical debt</h3>
+<ul><li><code>FirstBankAutomation.java</code> ≈ <strong>3316 lines</strong> monolith.</li><li>Duplicate provider paths (native + HTTP + playwright + mock) with unclear production ownership.</li><li>Source-gate tests ≠ runtime portal proof.</li></ul>
+<hr>
+<h2>5.2 Repository Architecture (real paths)</h2>
+<h3>Inventory</h3>
+<h4><code>frontend/src/services/bank-sync/</code></h4>
+<table>
+<tr><th>Path</th><th>Responsibility</th><th>Called by</th><th>Dependencies</th><th>State</th><th>I/O</th><th>Side effects</th></tr>
+<tr><td><code>shared.js</code></td><td>Provider ids, hash, vault lookup ids, error classify</td><td>service, auto-refresh, tests</td><td>none</td><td>pure</td><td>strings/objects in/out</td><td>none</td></tr>
+<tr><td><code>backend.js</code></td><td>Feature flags, provider list, route native vs HTTP</td><td>UI service, FeatureList, router</td><td>Capacitor, native-automation, shared</td><td>env flags</td><td>API-shaped payloads</td><td>network or native plugin</td></tr>
+<tr><td><code>native-automation.js</code></td><td>Capacitor <code>BankAutomation</code> wrapper</td><td>backend.js</td><td>@capacitor/core</td><td>none</td><td>plugin calls</td><td>launches Activity</td></tr>
+<tr><td><code>availability.js</code> / <code>availability-core.js</code></td><td>Staged availability diagnosis</td><td>settings UI</td><td>membership, backend</td><td>pure+wired</td><td>codes</td><td>none</td></tr>
+<tr><td><code>bank-statement-csv.js</code></td><td>Parse First Bank CSV → txn shape</td><td>service</td><td>shared hash</td><td>pure</td><td>File→rows</td><td>none</td></tr>
+<tr><td><code>import-auto-rule.js</code></td><td>Auto-fill → import plan</td><td>service</td><td>auto-fill rules</td><td>pure</td><td>plan</td><td>none</td></tr>
+<tr><td><code>local-mock-backend.js</code></td><td>Mock payloads</td><td>tests/scripts only</td><td>—</td><td>—</td><td>—</td><td><strong>not wired</strong> in production backend.js</td></tr>
+</table>
+<h4>UI orchestration</h4>
+<table>
+<tr><th>Path</th><th>Responsibility</th></tr>
+<tr><td><code>frontend/src/ui/services/bank-sync.service.js</code></td><td>connect/sync/import/disconnect/CSV; encrypted settings for non-native</td></tr>
+<tr><td><code>frontend/src/ui/services/bank-sync-auto-refresh.service.js</code></td><td>foreground auto sync</td></tr>
+<tr><td><code>frontend/src/core/services/bank-sync-debug.service.js</code></td><td>in-memory debug traces</td></tr>
+<tr><td><code>frontend/src/core/repositories/bank-sync.repo.js</code></td><td>SQLite CRUD</td></tr>
+<tr><td><code>SettingsBankSyncPage.vue</code> / <code>Create</code> / <code>Connection</code></td><td>UI</td></tr>
+<tr><td><code>FeatureListPage.vue</code></td><td>Advanced features entry → <code>/settings/bank-sync</code></td></tr>
+<tr><td><code>frontend/src/ui/router/index.js</code> L180–194</td><td>routes + feature guard</td></tr>
+</table>
+<h4>Android</h4>
+<table>
+<tr><th>Path</th><th>Responsibility</th></tr>
+<tr><td><code>FirstBankAutomation.java</code></td><td>WebView login, accounts, txns</td></tr>
+<tr><td><code>BankAutomationPlugin.java</code></td><td><code>connectFirstBank</code> / <code>syncFirstBank</code> / <code>disconnectConnection</code></td></tr>
+<tr><td><code>BankAutomationActivity.java</code></td><td>WebView host, busy lock, timeout</td></tr>
+<tr><td><code>BankAutomationVault.java</code></td><td>EncryptedSharedPreferences</td></tr>
+<tr><td><code>BankAutomationDebugTrace.java</code> / <code>BankAutomationException.java</code></td><td>diagnostics</td></tr>
+</table>
+<h4>HTTP API (dormant for default Android UX)</h4>
+<p><code>frontend/api/bank/{link_session,exchange,sync,disconnect,mark_imported,_utils,_first-bank-provider,_mock-provider,_playwright-provider}.js</code></p>
+<h4>Backend monitoring</h4>
+<p><code>backend/src/bank/portal-config.js</code>, <code>backend/scripts/first-bank-portal-contract-check.mjs</code>, <code>sync-contract-check-run.mjs</code>, <code>sync-contract-check-cron.sh</code></p>
+<h4>DB migrations</h4>
+<table>
+<tr><th>Path</th><th>Role</th></tr>
+<tr><td><code>frontend/src/core/db/migrations/008_bank_sync.sql</code></td><td>create bank_*</td></tr>
+<tr><td><code>frontend/src/core/db/migrations/019_bank_transaction_metadata.sql</code></td><td>metadata cols</td></tr>
+<tr><td><code>frontend/src/core/db/migrations/018_shared_sync_deleted_log.sql</code></td><td>delete-log triggers include bank tables</td></tr>
+</table>
+<h4>Tests / scripts (non-exhaustive)</h4>
+<p><code>frontend/test/bank-sync*.js</code>, <code>smb278/280/294*bank*</code>, <code>FirstBankAutomationCaptchaTest.java</code>, <code>BankAutomationThreadAffinityTest.java</code>, <code>playwright-bank-sync-settings.mjs</code></p>
+<p><strong>Pinia:</strong> No dedicated <code>bankSync</code> store found under <code>frontend/src/<strong>/stores/</strong></code> (grep empty). UI calls services directly.</p>
+<hr>
+<h2>5.3 Component Architecture (Architecture A — BEFORE)</h2>
+<pre><code class="mermaid">flowchart TD
+  UI[&quot;SettingsBankSync* Vue pages&quot;] --&gt; Svc[&quot;bank-sync.service.js&quot;]
+  Auto[&quot;bank-sync-auto-refresh.service.js&quot;] --&gt; Svc
+  Svc --&gt; BE[&quot;bank-sync/backend.js&quot;]
+  Svc --&gt; Repo[&quot;bank-sync.repo.js&quot;]
+  Svc --&gt; Sec[&quot;secure-setting.service.js AES-GCM&quot;]
+  Svc --&gt; TxRepo[&quot;transaction.repo.js&quot;]
+  BE --&gt;|Android first_bank_tw| Nat[&quot;native-automation.js&quot;]
+  Nat --&gt; Plugin[&quot;BankAutomationPlugin&quot;]
+  Plugin --&gt; Act[&quot;BankAutomationActivity + WebView&quot;]
+  Act --&gt; FBA[&quot;FirstBankAutomation.java&quot;]
+  FBA --&gt; Portal[&quot;ibank.firstbank.com.tw&quot;]
+  FBA --&gt; Vault[&quot;BankAutomationVault EncryptedSharedPreferences&quot;]
+  BE --&gt;|non-native / flagged| HTTP[&quot;fetch /api/bank/*&quot;]
+  HTTP --&gt; Prov[&quot;_first-bank-provider.js scrape&quot;]
+  Prov --&gt; Portal
+  Svc --&gt; Norm[&quot;normalizeBackendSyncRows&quot;]
+  Norm --&gt; Repo
+  Repo --&gt; DB[(&quot;SQLite bank_*&quot;)]
+  Svc --&gt; Import[&quot;importSelectedBankTransactions + import-auto-rule&quot;]
+  Import --&gt; TxRepo
+  TxRepo --&gt; Ledger[(&quot;SQLite transactions&quot;)]
+  Contract[&quot;backend contract-check scripts&quot;] -.-&gt; Portal</code></pre>
+<hr>
+<h2>5.4 Sequence Diagrams</h2>
+<h3>A. First bind (Android First Bank) — BEFORE</h3>
+<pre><code class="mermaid">sequenceDiagram
+  actor User
+  participant UI as SettingsBankSyncCreatePage
+  participant Svc as bank-sync.service
+  participant BE as backend.js
+  participant Nat as BankAutomationPlugin
+  participant FBA as FirstBankAutomation
+  participant Portal as First Bank i-Bank
+  participant Vault as BankAutomationVault
+  participant DB as SQLite
+
+  User-&gt;&gt;UI: enter nationalId/seq/code/password + start date
+  UI-&gt;&gt;Svc: connectBankProvider(ledger, first_bank_tw, creds)
+  Svc-&gt;&gt;BE: exchangeBankAuth
+  BE-&gt;&gt;Nat: connectFirstBank(payload)
+  Nat-&gt;&gt;FBA: connect
+  FBA-&gt;&gt;Portal: load LOGIN_URL desktop WebView
+  FBA-&gt;&gt;Portal: performLogin (OCR/manual captcha)
+  FBA-&gt;&gt;Portal: FRAME + openMyAccounts + discoverAccounts
+  FBA-&gt;&gt;Vault: saveConnectionState(provider_connection_id, creds+cookies)
+  FBA--&gt;&gt;Svc: accounts + provider_connection_id
+  Svc-&gt;&gt;DB: upsertBankConnection + upsertBankAccounts
+  Svc-&gt;&gt;Svc: deleteEncryptedSetting(bank_sync.credentials.*)
+  UI-&gt;&gt;User: map accounts → saveBankAccountsSettings</code></pre>
+<h3>B. Manual sync — BEFORE</h3>
+<pre><code class="mermaid">sequenceDiagram
+  participant UI as ConnectionPage
+  participant Svc as syncBankConnectionNow
+  participant Nat as syncFirstBank
+  participant FBA as FirstBankAutomation
+  participant DB as SQLite
+
+  UI-&gt;&gt;Svc: syncBankConnectionNow
+  Svc-&gt;&gt;Svc: selectSyncableBankAccounts(enabled+mapped)
+  Svc-&gt;&gt;Nat: payload mode=delta, last_sync_at, cursor, accountIds
+  Note over Nat,FBA: Java reads lastSyncAt (camel) — see §5.8
+  Nat-&gt;&gt;FBA: restore cookies / silent relogin if needed
+  FBA-&gt;&gt;FBA: resolveSyncStartDate + splitDateRange(≤30d)
+  FBA-&gt;&gt;FBA: queryTransactions + parse + dedupeTransactions
+  FBA--&gt;&gt;Svc: added/modified rows
+  Svc-&gt;&gt;Svc: normalizeBackendSyncRows
+  Svc-&gt;&gt;DB: upsertBankTransactions (UNIQUE provider_transaction_id)
+  Svc-&gt;&gt;DB: updateBankConnection last_sync_at=ok</code></pre>
+<h3>C. Auto sync — BEFORE</h3>
+<p><code>runBankSyncAutoRefreshIfDue</code> → cooldown 10m → single-flight Map → foreach eligible active connection → <code>syncBankConnectionNow</code>; stop remaining on credential auth error.</p>
+<p>Evidence: <code>bank-sync-auto-refresh.service.js</code> L3–6, L55–114.</p>
+<h3>D–E. Account / transaction refresh</h3>
+<p>Same as B: no separate account-only refresh API in Architecture A. Account discovery mainly at <strong>connect</strong>; sync fetches transactions for already-mapped accounts.</p>
+<h3>F. Auth expired</h3>
+<p>Native detects login page during sync → one silent <code>performLogin</code> → else <code>first_bank_session_expired</code>. JS may mark connection error + reconnect via <code>shouldRequireReconnectAfterBankSyncError</code>.</p>
+<h3>G. Login failed</h3>
+<p><code>first_bank_login_failed</code> / captcha manual required with image payload.</p>
+<h3>H. Network / timeout</h3>
+<p>Native: <code>first_bank_*_timeout</code>, Activity <code>bank_automation_timeout</code>; plugin busy <code>bank_automation_busy</code>.</p>
+<h3>I. Duplicate transaction</h3>
+<p>DB UNIQUE <code>(ledger_id, bank_account_id, provider_transaction_id)</code> + <code>findBankTransactionByProviderId</code> → update or touch <code>last_seen_at</code>. Import uses <code>bank:provider:account:txnId</code> external_ref.</p>
+<h3>J. Partial failure</h3>
+<p><strong>NOT VERIFIED</strong> as explicit multi-account partial commit protocol. Sync is per-connection; native loops accounts — failure mid-loop behavior needs Java path reading (account loop throws → whole sync fails). Evidence of atomic multi-account DB txn wrapping all accounts: <strong>NOT VERIFIED</strong> in service (upsert then update connection separately).</p>
+<hr>
+<h2>5.5 Authentication Architecture</h2>
+<table>
+<tr><th>Item</th><th>Architecture A fact</th><th>Evidence</th></tr>
+<tr><td>Credential fields (First Bank)</td><td>nationalId, repeatSeq, userCode, password, captcha</td><td>Create page + Java <code>connect</code></td></tr>
+<tr><td>Native storage</td><td>EncryptedSharedPreferences <code>strawmoneybook.bank_automation.v1</code></td><td><code>BankAutomationVault.java</code> L13–28</td></tr>
+<tr><td>Vault payload</td><td>provider, connectionId, nationalId, repeatSeq, userCode, password, initialSyncStartDate, cookieHeader, updatedAt</td><td><code>FirstBankAutomation.connect</code> ~L174–184</td></tr>
+<tr><td>Client encrypted settings</td><td><code>bank_sync.credentials.&lt;connectionId&gt;</code> AES-GCM — <strong>deleted after native connect</strong></td><td><code>bank-sync.service.js</code> L185–196, L529</td></tr>
+<tr><td>Remote session</td><td>base64url cookie state; prelogin TTL 10m</td><td><code>_first-bank-provider.js</code></td></tr>
+<tr><td>OAuth / Open Banking</td><td><strong>No evidence</strong></td><td>—</td></tr>
+<tr><td>Session refresh</td><td>Cookie restore + silent relogin once</td><td>Java sync L220–285</td></tr>
+<tr><td>Logout/revoke</td><td><code>disconnect</code> clears vault + cookies; DB status revoked</td><td>Java disconnect + service</td></tr>
+<tr><td>Multi-device</td><td>Vault is <strong>device-local</strong>; no cloud credential sync evidenced</td><td>—</td></tr>
+<tr><td>Plaintext password in SQLite</td><td><strong>No</strong> — vault encrypted prefs; SQLite stores connection metadata only</td><td>migrations 008</td></tr>
+</table>
+<hr>
+<h2>5.6 Account Synchronization</h2>
+<table>
+<tr><th>Topic</th><th>Fact</th></tr>
+<tr><td>Discovery</td><td>At connect: <code>openMyAccounts</code> → <code>discoverAccounts</code></td></tr>
+<tr><td>Identity</td><td><code>provider_account_id</code> UNIQUE per <code>(ledger_id, connection_id, provider_account_id)</code></td></tr>
+<tr><td>Mapping</td><td>User sets <code>mapped_account_id</code> → ledger <code>accounts.id</code></td></tr>
+<tr><td>Syncable</td><td><code>enabled=1</code> AND mapped (<code>selectSyncableBankAccounts</code>)</td></tr>
+<tr><td>Balance refresh</td><td>Balance may appear on txn rows as <code>balance_minor</code>; dedicated balance-only sync <strong>NOT VERIFIED</strong></td></tr>
+<tr><td>Disabled</td><td><code>enabled=0</code> skipped</td></tr>
+<tr><td>New accounts after connect</td><td><strong>NOT VERIFIED</strong> automatic rediscovery on sync — user may need reconnect</td></tr>
+</table>
+<hr>
+<h2>5.7 Transaction Synchronization</h2>
+<pre><code class="">Remote portal rows
+  → FirstBankAutomation.query/parse (JSON intercept preferred, DOM table.CnbTable fallback)
+  → providerTransactionId (or fbtxn_ hash)
+  → JS normalizeBackendSyncRows
+  → upsertBankTransactions
+  → bank_transactions (imported=0 review)
+  → importSelectedBankTransactions → transactions</code></pre>
+<table>
+<tr><th>Field</th><th>Handling</th></tr>
+<tr><td>provider_transaction_id</td><td>Required unique per bank account</td></tr>
+<tr><td>amount_minor</td><td>Integer minor units</td></tr>
+<tr><td>posted_at</td><td>ISO/text from parser</td></tr>
+<tr><td>status</td><td>pending\</td><td>posted\</td><td>reversed (schema)</td></tr>
+<tr><td>metadata</td><td>transaction_type, note, summary, balance_minor (mig 019)</td></tr>
+<tr><td>refund/reversal</td><td>schema supports <code>reversed</code>; live mapping quality <strong>NOT VERIFIED</strong> beyond schema</td></tr>
+<tr><td>transfer detection</td><td>import-auto-rule / plan may create transfer</td><td></td></tr>
+</table>
+<p>Hash fallback (native): <code>fbtxn_</code> + hash(<code>accountId|postedAt|amountMinor|summary|note</code>) — <code>FirstBankAutomation.java</code> ~L1412–1418.</p>
+<hr>
+<h2>5.8 Incremental Sync Algorithm (BEFORE)</h2>
+<p><strong>Intended (JS):</strong></p>
+<pre><code class="">mode: &#x27;delta&#x27;
+cursor: connection.sync_cursor
+last_sync_at: connection.last_sync_at
+lookback_days: rule.lookbackDays (0–30, default 3)</code></pre>
+<p><strong>Native actual:</strong></p>
+<pre><code class="">lastSyncAt = payload.optString(&quot;lastSyncAt&quot;)  // camelCase ONLY
+start = resolveSyncStartDate(initialSyncStartDate, lastSyncAt, cursor)
+windows = splitDateRange(start, today) // MAX_WINDOW_DAYS=30
+for each window: query portal</code></pre>
+<p><strong>Evidence of mismatch (P0):</strong></p>
+<ul><li>JS sends <code>last_sync_at</code> — <code>bank-sync.service.js</code> L647</li><li>Java reads <code>lastSyncAt</code> — <code>FirstBankAutomation.java</code> L214</li><li><code>native-automation.js</code> does <strong>not</strong> remap keys</li><li>Therefore native <code>lastSyncAt</code> is typically <strong>empty</strong></li><li>With empty lastSyncAt, <code>resolveSyncStartDate</code> returns <strong>cursorDate</strong> (<code>initialStartDate</code> from cursor) — L2085–2102</li><li>Effect: each sync tends to <strong>re-fetch from initial start date</strong> (chunked in 30-day windows); correctness relies on dedupe, not true incremental checkpoint</li></ul>
+<p><code>lookback_days</code>: used by remote provider; <strong>native Java does not read lookback</strong> (grep only lastSyncAt/cursor).</p>
+<p>Pseudo-code (as implemented):</p>
+<pre><code class="">syncBankConnectionNow(ledger, connectionId):
+  accounts = selectSyncableBankAccounts(...)
+  payload = { last_sync_at, cursor, lookback_days, accountIds, ... }
+  res = syncNativeFirstBank(payload)  # Java ignores last_sync_at key
+  rows = normalize(res.added + res.modified)
+  upsertBankTransactions(...)
+  updateBankConnection(lastSyncAt=now, syncCursor=next or keep)</code></pre>
+<hr>
+<h2>5.9 Deduplication Architecture</h2>
+<table>
+<tr><th>Layer</th><th>Key</th><th>Evidence</th></tr>
+<tr><td>Native in-batch</td><td><code>providerAccountId + &quot;:&quot; + providerTransactionId</code></td><td>Java <code>dedupeTransactions</code> ~L541–551</td></tr>
+<tr><td>SQLite</td><td><code>UNIQUE (ledger_id, bank_account_id, provider_transaction_id)</code></td><td><code>008_bank_sync.sql</code></td></tr>
+<tr><td>Upsert logic</td><td><code>findBankTransactionByProviderId</code> then insert/update/touch</td><td><code>bank-sync.repo.js</code> L455–507</td></tr>
+<tr><td>Ledger import</td><td><code>bank:{provider}:{providerAccountId}:{providerTransactionId}</code></td><td><code>buildSourceRef</code> L287–288</td></tr>
+<tr><td>CSV</td><td><code>fbcsv_</code> + hash(...)</td><td><code>bank-statement-csv.js</code></td></tr>
+</table>
+<p><strong>If same bank txn synced twice:</strong> second upsert finds existing provider id → update content if diff else touch <code>last_seen_at</code> — should <strong>not</strong> create second mirror row (DB unique).</p>
+<p><strong>Race conditions:</strong></p>
+<ul><li>Concurrent sync: Activity <code>isBusy</code> + auto-refresh inflight Map mitigate; multi-ledger parallelism possible.</li><li>Connect→immediate sync vault race: mitigated by vault <code>commit()</code> (Vault L48–52).</li><li>Import vs sync concurrent: <strong>NOT VERIFIED</strong> explicit lock.</li></ul>
+<hr>
+<h2>5.10 Database Architecture</h2>
+<pre><code class="mermaid">erDiagram
+  ledgers ||--o{ bank_connections : has
+  bank_connections ||--o{ bank_accounts : has
+  bank_connections ||--o| bank_sync_rules : has
+  bank_accounts ||--o{ bank_transactions : has
+  accounts ||--o| bank_accounts : mapped_account_id
+  transactions ||--o| bank_transactions : imported_txn_id
+
+  bank_connections {
+    text ledger_id
+    text id PK
+    text provider
+    text provider_connection_id
+    text status
+    text last_sync_at
+    text sync_cursor
+    text last_sync_status
+    text last_error
+  }
+  bank_accounts {
+    text id PK
+    text connection_id
+    text provider_account_id
+    int enabled
+    text mapped_account_id
+  }
+  bank_transactions {
+    text id PK
+    text provider_transaction_id
+    int amount_minor
+    text posted_at
+    int imported
+    text imported_txn_id
+  }
+  bank_sync_rules {
+    text connection_id PK
+    int lookback_days
+  }</code></pre>
+<p>Review queue = <code>bank_transactions</code> where <code>imported=0</code> (no separate table).</p>
+<hr>
+<h2>5.11 Data Ownership</h2>
+<table>
+<tr><th>Data</th><th>Source of Truth</th><th>Conflict rule</th></tr>
+<tr><td>Bank account list / masks</td><td>Bank portal (at connect)</td><td>Local mapping fields user-owned</td></tr>
+<tr><td>Balance</td><td>Bank (when present on rows)</td><td>Display/mirror; ledger balances from ledger txs</td></tr>
+<tr><td>Bank transaction mirror</td><td>Bank via sync upsert</td><td>Provider id wins for mirror update</td></tr>
+<tr><td>User category / notes on ledger txn</td><td>User / auto-fill rules</td><td>Import creates ledger row; later bank re-sync does not auto-rewrite imported ledger row (<strong>verify:</strong> imported flag prevents re-import; mirror may still update)</td></tr>
+<tr><td>Sync metadata</td><td>Client DB</td><td>last_sync_at / cursor local</td></tr>
+</table>
+<hr>
+<h2>5.12 State Management</h2>
+<p><strong>No Pinia bank store.</strong> Pattern:</p>
+<pre><code class="">Remote → native/HTTP → bank-sync.service → bank-sync.repo → SQLite
+UI ← service getters / page-local reactive state ← SQLite reads</code></pre>
+<p>Loading/error: page-local + connection <code>last_sync_status</code> / <code>last_error</code>.</p>
+<hr>
+<h2>5.13 Concurrency</h2>
+<table>
+<tr><th>Control</th><th>Mechanism</th><th>Evidence</th></tr>
+<tr><td>Auto-refresh single-flight</td><td><code>inflightByLedger</code></td><td>auto-refresh L5–6</td></tr>
+<tr><td>Cooldown</td><td>10 minutes</td><td>L3</td></tr>
+<tr><td>Native busy</td><td><code>BankAutomationActivity.isBusy</code></td><td>Plugin L51–53</td></tr>
+<tr><td>Vault flush</td><td><code>commit()</code></td><td>Vault L48–52</td></tr>
+<tr><td>Double button</td><td>UI-dependent; busy reject helps</td><td>—</td></tr>
+</table>
+<p>Known historical races (account store / transaction submit) are <strong>out of bank-sync module</strong> unless shared write queue used — bank repo uses project SQLite write patterns (<strong>NOT VERIFIED</strong> whether bank upserts use <code>sqlite-write-queue</code>).</p>
+<hr>
+<h2>5.14 Error Handling (Taxonomy mapping)</h2>
+<p>Architecture A uses <strong>First-Bank-prefixed codes</strong>, not the generic names in the brief. Mapping:</p>
+<table>
+<tr><th>Brief name</th><th>Architecture A examples</th></tr>
+<tr><td>AUTH_FAILED</td><td><code>first_bank_login_failed</code>, <code>*_credentials_required</code></td></tr>
+<tr><td>SESSION_EXPIRED</td><td><code>first_bank_session_expired</code>, <code>first_bank_legacy_reconnect_required</code></td></tr>
+<tr><td>BANK_UNAVAILABLE / portal</td><td><code>first_bank_portal_contract_failed</code>, <code>*_page_mismatch</code></td></tr>
+<tr><td>PARSE / query</td><td><code>first_bank_transaction_query_failed</code></td></tr>
+<tr><td>CAPTCHA</td><td><code>first_bank_captcha_manual_required</code></td></tr>
+<tr><td>BUSY / TIMEOUT</td><td><code>bank_automation_busy</code>, <code>*_timeout</code></td></tr>
+<tr><td>FEATURE</td><td><code>bank_sync_feature_disabled</code>, membership <code>BANK_SYNC_ACCESS</code></td></tr>
+</table>
+<p>Classify: <code>classifyFirstBankSyncFailure</code> → <code>portal_changed</code> | <code>reconnect</code> | <code>retry</code> (<code>shared.js</code>).</p>
+<hr>
+<h2>5.15 Retry / Timeout</h2>
+<table>
+<tr><th>Layer</th><th>Behavior</th></tr>
+<tr><td>Captcha OCR</td><td>Multiple attempts then manual required</td></tr>
+<tr><td>Silent relogin</td><td>Once per sync if login page detected</td></tr>
+<tr><td>Auto-refresh</td><td>No exponential backoff; cooldown only</td></tr>
+<tr><td>HTTP provider</td><td><strong>NOT VERIFIED</strong> full retry policy in this audit pass</td></tr>
+<tr><td>Activity</td><td>overall automation timeout → <code>bank_automation_timeout</code></td></tr>
+</table>
+<p>Retry storm: mitigated by cooldown + busy lock; not fully eliminated for manual spam.</p>
+<hr>
+<h2>5.16 Security Architecture</h2>
+<table>
+<tr><th>Area</th><th>Fact</th></tr>
+<tr><td>At rest (Android creds)</td><td>EncryptedSharedPreferences AES</td></tr>
+<tr><td>At rest (SQLite)</td><td>Device filesystem; app sandbox; <strong>not</strong> SQLCipher evidenced for bank tables</td></tr>
+<tr><td>In transit</td><td>HTTPS to bank portal via WebView</td></tr>
+<tr><td>Logs</td><td>DebugTrace exists; must not log passwords — <strong>policy intent</strong>; full audit of all log sinks <strong>NOT VERIFIED</strong> exhaustively</td></tr>
+<tr><td>Env</td><td><code>VITE_BANK_SYNC_*</code>, shared client key header</td></tr>
+<tr><td>Remote session token</td><td>base64 cookie blob if HTTP path enabled — risk if enabled in prod</td></tr>
+</table>
+<hr>
+<h2>5.17 UI / UX Architecture</h2>
+<p>Routes: <code>/settings/bank-sync</code>, <code>/new</code>, <code>/:id</code>  </p>
+<p>Entry: FeatureList「進階功能」  </p>
+<p>States encoded via connection status + toasts + captcha panel + availability matrix  </p>
+<p>i18n: zh-TW / en / ja keys under <code>settings_bank_sync*</code></p>
+<hr>
+<h2>5.18 Observability</h2>
+<table>
+<tr><th>Capability</th><th>Status</th></tr>
+<tr><td>DebugTrace steps</td><td>Yes (native + JS attach)</td></tr>
+<tr><td>bank-sync-debug.service</td><td>In-memory operation traces</td></tr>
+<tr><td>Structured syncId metrics</td><td><strong>NOT VERIFIED</strong> / largely absent as product metrics</td></tr>
+<tr><td>Contract-check stats</td><td>Backend <code>.server-data/sync-contract-check-stats.json</code></td></tr>
+</table>
+<hr>
+<h2>5.19 Testing</h2>
+<table>
+<tr><th>Kind</th><th>Examples</th><th>Gap</th></tr>
+<tr><td>node:test</td><td>bank-sync.service, shared, csv, auto-refresh, import-auto-rule</td><td>—</td></tr>
+<tr><td>Source-gate</td><td>android-source, ui-source, backend-source</td><td>Not runtime</td></tr>
+<tr><td>Android unit</td><td>CaptchaTest</td><td>Not full login E2E</td></tr>
+<tr><td>Playwright</td><td>playwright-bank-sync-settings</td><td>Settings UX</td></tr>
+<tr><td>Live portal E2E</td><td><strong>NOT VERIFIED</strong> in CI as deterministic</td><td>Real bank needed</td></tr>
+</table>
+<hr>
+<h2>5.20 Legacy Architecture Problems</h2>
+<h3>P0 Critical (Correctness)</h3>
+<ol><li>1. <strong>Native incremental key mismatch (<code>last_sync_at</code> vs <code>lastSyncAt</code>)</strong>  </li></ol>
+<p>   Evidence: <code>bank-sync.service.js</code> L647 vs <code>FirstBankAutomation.java</code> L214; <code>native-automation.js</code> no remap. Impact: re-fetch from initial date; load/time; portal risk. Root: JS↔Java DTO contract drift.  </p>
+<p>   <strong>Severity rationale (v1.1 review):</strong> This is the only P0 *correctness* defect blocking reliable incremental sync.</p>
+<h3>P1 High</h3>
+<ol><li>2. <strong>Architecture blocker — single-provider hardcoding</strong> *(downgraded from P0 in v1.1 review)*  </li></ol>
+<p>   Not a production correctness bug while only First Bank is required; blocks Hua Nan / multi-bank. Evidence: Plugin FirstBank-only methods; Create page fields; <code>isFirstBankProviderId</code> gates.</p>
+<ol><li>3. <strong>Partial / connection-level checkpoint ambiguity</strong> *(highlighted for Architecture B)*  </li></ol>
+<p>   Checkpoint today is connection-scoped (<code>bank_connections.last_sync_at</code> / <code>sync_cursor</code>). Partial multi-account failure cannot be expressed safely — either under-fetch or over-refetch.</p>
+<ol><li>4. <strong>3316-line FirstBankAutomation monolith</strong> — maintainability / regression cost.  </li><li>5. <strong>Dormant multi-path providers</strong> (HTTP/playwright/mock) — confusion, attack surface if flags flipped.  </li><li>6. <strong>Virtual keyboard / future banks</strong> — Architecture A has no shared driver.</li></ol>
+<h3>P2 Medium</h3>
+<ol><li>7. Source-gate tests ≠ runtime confidence.  </li><li>8. No Pinia sync state machine — UI inconsistency risk.  </li><li>9. <code>lookback_days</code> unused on native path.</li></ol>
+<h3>P3 Low</h3>
+<ol><li>10. i18n/error strings tightly First-Bank-named.  </li><li>11. mark_imported HTTP no-op.</li></ol>
+<blockquote><strong>Review note (2026-08-16):</strong> Stakeholder reclassified «single-provider hardcoding» from P0 Critical → P1 Architecture blocker. Legacy narrative otherwise unchanged.</blockquote>
+<hr>
+<h2>Source Evidence Index (selected)</h2>
+<table>
+<tr><th>Claim</th><th>File</th><th>Symbol / lines</th></tr>
+<tr><td>HEAD / clean tree</td><td>git</td><td><code>d374670…</code>, porcelain empty</td></tr>
+<tr><td>Provider fallback</td><td><code>frontend/src/services/bank-sync/backend.js</code></td><td>L25–31, L166–175</td></tr>
+<tr><td>Sync payload</td><td><code>frontend/src/ui/services/bank-sync.service.js</code></td><td>L589–719</td></tr>
+<tr><td>lastSyncAt read</td><td><code>FirstBankAutomation.java</code></td><td>L214, L2085–2102</td></tr>
+<tr><td>Vault</td><td><code>BankAutomationVault.java</code></td><td>L13–52</td></tr>
+<tr><td>Schema</td><td><code>008_bank_sync.sql</code>, <code>019_*.sql</code></td><td>full</td></tr>
+<tr><td>Dedupe UNIQUE</td><td><code>008_bank_sync.sql</code></td><td>bank_transactions UNIQUE</td></tr>
+<tr><td>Auto refresh</td><td><code>bank-sync-auto-refresh.service.js</code></td><td>L3–6, L55+</td></tr>
+<tr><td>Membership</td><td><code>membership.service.js</code></td><td><code>assertCanUseBankSync</code> ~L927</td></tr>
+</table>
+<hr>
+<p>*End of Architecture A (Legacy) Technical Specification.*</p>
+<footer>Architecture A ≠ Architecture B · v1.1 gate: accept before Phase 0A implementation</footer>
+</div></body></html>

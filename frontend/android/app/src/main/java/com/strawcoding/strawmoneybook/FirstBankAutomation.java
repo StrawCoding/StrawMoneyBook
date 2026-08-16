@@ -211,9 +211,11 @@ final class FirstBankAutomation {
         }
 
         String initialSyncStartDate = requireDate(state.optString("initialSyncStartDate"), "first_bank_initial_start_date_missing", "First Bank initial sync start date is missing");
-        String lastSyncAt = normalizeText(payload.optString("lastSyncAt"));
+        // v1.1.1: lastSyncAt (canonical) > last_sync_at (legacy); mandatory lookback overlap.
+        String lastSyncWatermark = readLastSyncWatermark(payload);
+        int lookbackDays = readLookbackDays(payload);
         String cursor = normalizeText(payload.optString("cursor"));
-        LocalDate startDate = resolveSyncStartDate(initialSyncStartDate, lastSyncAt, cursor);
+        LocalDate startDate = resolveQueryStartDate(initialSyncStartDate, lastSyncWatermark, cursor, lookbackDays);
         LocalDate endDate = LocalDate.now(TAIPEI_ZONE);
 
         BrowserSession session = new BrowserSession(activity, webView);
@@ -2082,7 +2084,39 @@ final class FirstBankAutomation {
         return Math.max(0, Math.min(255, value));
     }
 
-    private static LocalDate resolveSyncStartDate(String initialSyncStartDate, String lastSyncAt, String cursor) {
+    /**
+     * v1.1.1 Dual-key precedence: canonical {@code lastSyncAt} wins over legacy {@code last_sync_at}.
+     * When camelCase is non-empty it is always used, even if snake_case differs.
+     */
+    static String readLastSyncWatermark(JSONObject payload) {
+        if (payload == null) return "";
+        String canonical = normalizeText(payload.optString("lastSyncAt"));
+        if (!canonical.isEmpty()) return canonical;
+        return normalizeText(payload.optString("last_sync_at"));
+    }
+
+    /**
+     * Mandatory lookback for date-window portals (First Bank default 3, clamp 0–30).
+     * Accepts {@code lookbackDays} or {@code lookback_days}.
+     */
+    static int readLookbackDays(JSONObject payload) {
+        int days = 3;
+        if (payload != null) {
+            if (payload.has("lookbackDays")) {
+                days = payload.optInt("lookbackDays", 3);
+            } else if (payload.has("lookback_days")) {
+                days = payload.optInt("lookback_days", 3);
+            }
+        }
+        if (days < 0) return 0;
+        if (days > MAX_WINDOW_DAYS) return MAX_WINDOW_DAYS;
+        return days;
+    }
+
+    /**
+     * Covered-through watermark (without lookback). Used as the base before mandatory overlap.
+     */
+    static LocalDate resolveSyncStartDate(String initialSyncStartDate, String lastSyncAt, String cursor) {
         LocalDate initialDate = parseDate(initialSyncStartDate);
         LocalDate cursorDate = initialDate;
         try {
@@ -2100,6 +2134,31 @@ final class FirstBankAutomation {
         if (lastSyncDate == null) return cursorDate == null ? LocalDate.now(TAIPEI_ZONE) : cursorDate;
         if (cursorDate == null) return lastSyncDate;
         return lastSyncDate.isAfter(cursorDate) ? lastSyncDate : cursorDate;
+    }
+
+    /**
+     * Query start = coveredThrough − lookbackDays, clamped to initialSyncStartDate.
+     * Prefer re-fetch overlap + dedupe over aggressive watermarks that miss in-flight postings.
+     */
+    static LocalDate resolveQueryStartDate(
+        String initialSyncStartDate,
+        String lastSyncWatermark,
+        String cursor,
+        int lookbackDays
+    ) {
+        LocalDate initialDate = parseDate(initialSyncStartDate);
+        LocalDate coveredThrough = resolveSyncStartDate(initialSyncStartDate, lastSyncWatermark, cursor);
+        if (coveredThrough == null) {
+            coveredThrough = LocalDate.now(TAIPEI_ZONE);
+        }
+        int safeLookback = lookbackDays;
+        if (safeLookback < 0) safeLookback = 0;
+        if (safeLookback > MAX_WINDOW_DAYS) safeLookback = MAX_WINDOW_DAYS;
+        LocalDate withLookback = coveredThrough.minusDays(safeLookback);
+        if (initialDate != null && withLookback.isBefore(initialDate)) {
+            return initialDate;
+        }
+        return withLookback;
     }
 
     private static List<DateWindow> splitDateRange(LocalDate startDate, LocalDate endDate) {
