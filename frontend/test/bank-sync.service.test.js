@@ -359,3 +359,31 @@ test('importBankStatementCsv upserts parsed rows into bank mirror tables', async
   assert.equal(upsertPayload[0].amountMinor, 5000000)
   assert.match(upsertPayload[0].providerTransactionId, /^fbcsv_/)
 })
+
+test('importSelectedBankTransactions skips rows marked possible_duplicate_of', async () => {
+  let markCalled = false
+  setBankSyncServiceDependenciesForTest(createBaseDependencies({
+    listBankTransactionsByIds: async () => [
+      {
+        id: 'bank-tx-dup',
+        provider: 'mock_bank_tw',
+        provider_account_id: 'provider-account-1',
+        provider_transaction_id: 'provider-tx-dup',
+        mapped_account_id: 'asset_bank',
+        amount_minor: -10000,
+        posted_at: '2026-03-20T08:00:00.000Z',
+        summary: '可能重複',
+        raw_json: JSON.stringify({ possible_duplicate_of: 'btx_other' }),
+      },
+    ],
+    getAutoFillRules: async () => [],
+    markBankTransactionsImported: async () => {
+      markCalled = true
+    },
+  }))
+
+  const result = await importSelectedBankTransactions('ledger-1', ['bank-tx-dup'])
+  assert.equal(markCalled, false)
+  assert.deepEqual(result.importedMappings, [])
+  assert.equal(result.skipped[0].reason, 'possible_duplicate')
+})

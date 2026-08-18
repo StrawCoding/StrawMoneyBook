@@ -24,9 +24,11 @@ import {
   getBankProviderIdentityScheme,
   getBankProviderLookbackDays,
 } from '../../services/bank-sync/provider-registry.js'
-import { traceBankSyncOperation } from '../../core/services/bank-sync-debug.service.js'
+import { traceBankSyncOperation, logBankSyncAction } from '../../core/services/bank-sync-debug.service.js'
 import { yieldToMainThread } from '../../core/utils/cooperative-yield.js'
 import { buildBankImportPlan } from '../../services/bank-sync/import-auto-rule.js'
+import { runtimeJobs } from './runtime-job-scheduler.js'
+import { readPossibleDuplicateOf } from '../../core/domain/bank-transaction-identity.js'
 
 function assertLedgerId(ledgerId) {
   if (!ledgerId) throw new Error('缺少帳本 ID')
@@ -412,6 +414,7 @@ export function resetBankSyncServiceDependenciesForTest() {
     }
   }
   Object.assign(dependencies, defaultDependencies)
+  runtimeJobs.clear()
 }
 
 async function getConnectionBundle(ledgerId, connection) {
@@ -437,6 +440,7 @@ export async function prepareBankProviderLink(ledgerId, provider, options = {}) 
   assertLedgerId(ledgerId)
   await dependencies.assertCanUseBankSync()
   const normalizedProvider = normalizeText(provider)
+  logBankSyncAction('service.prepareLink', { ledgerId, provider: normalizedProvider })
   if (!normalizedProvider) throw new Error('缺少 provider')
   if (isNativeBankProviderId(normalizedProvider)) {
     return {
@@ -550,6 +554,10 @@ export async function saveBankAccountSettings(ledgerId, bankAccountId, patch = {
 export async function saveBankAccountsSettings(ledgerId, accountPatches = []) {
   assertLedgerId(ledgerId)
   await dependencies.assertCanUseBankSync()
+  logBankSyncAction('service.saveAccounts', {
+    ledgerId,
+    count: Array.isArray(accountPatches) ? accountPatches.length : 0,
+  })
   const results = []
   for (const [index, item] of accountPatches.entries()) {
     if (index > 0 && index % 10 === 0) {
@@ -580,6 +588,7 @@ export async function countBankReviewTransactionsByConnection(ledgerId, connecti
 export async function saveBankSyncRuleSettings(ledgerId, connectionId, patch = {}) {
   assertLedgerId(ledgerId)
   await dependencies.assertCanUseBankSync()
+  logBankSyncAction('service.saveRule', { ledgerId, connectionId })
   const merged = normalizeRuleInput({
     ...patch,
     excludeKeywords: Array.isArray(patch.excludeKeywords)
@@ -594,6 +603,12 @@ export async function saveBankSyncRuleSettings(ledgerId, connectionId, patch = {
 }
 
 export async function syncBankConnectionNow(ledgerId, connectionId) {
+  return runtimeJobs.run(`bank-sync:${String(connectionId ?? '').trim()}`, () => (
+    syncBankConnectionNowUnqueued(ledgerId, connectionId)
+  ))
+}
+
+async function syncBankConnectionNowUnqueued(ledgerId, connectionId) {
   assertLedgerId(ledgerId)
   await dependencies.assertCanUseBankSync()
   const connection = await dependencies.findBankConnectionById(ledgerId, connectionId)
@@ -868,6 +883,12 @@ export async function listBankReviewTransactions(ledgerId, options = {}) {
 export async function importBankStatementCsv(ledgerId, connectionId, bankAccountId, csvText) {
   assertLedgerId(ledgerId)
   await dependencies.assertCanUseBankSync()
+  logBankSyncAction('service.importCsv', {
+    ledgerId,
+    connectionId,
+    bankAccountId,
+    csvLength: String(csvText ?? '').length,
+  })
   const connection = await dependencies.findBankConnectionById(ledgerId, connectionId)
   if (!connection) throw new Error('找不到銀行連結')
 
@@ -901,18 +922,29 @@ export async function importBankStatementCsv(ledgerId, connectionId, bankAccount
   }))
 
   const upsertRes = await dependencies.upsertBankTransactions(ledgerId, connectionId, rowsToUpsert)
-  return {
+  const result = {
     addedCount: upsertRes.addedIds.length,
     skippedCount: Math.max(0, parsedRows.length - upsertRes.touchedIds.length),
     touchedIds: upsertRes.touchedIds,
     addedIds: upsertRes.addedIds,
     modifiedIds: upsertRes.modifiedIds,
   }
+  logBankSyncAction('service.importCsv.done', {
+    ledgerId,
+    connectionId,
+    addedCount: result.addedCount,
+    skippedCount: result.skippedCount,
+  })
+  return result
 }
 
 export async function importSelectedBankTransactions(ledgerId, bankTransactionIds = []) {
   assertLedgerId(ledgerId)
   await dependencies.assertCanUseBankSync()
+  logBankSyncAction('service.importSelected', {
+    ledgerId,
+    count: Array.isArray(bankTransactionIds) ? bankTransactionIds.length : 0,
+  })
   const [rows, autoFillRules] = await Promise.all([
     dependencies.listBankTransactionsByIds(ledgerId, bankTransactionIds),
     dependencies.getAutoFillRules(ledgerId).catch(() => []),
@@ -937,6 +969,10 @@ export async function importSelectedBankTransactions(ledgerId, bankTransactionId
     const bankTransactionId = row.id
     if (Number(row.imported ?? 0) === 1 && normalizeText(row.imported_txn_id)) {
       skipped.push({ bankTransactionId, reason: 'already_imported' })
+      continue
+    }
+    if (readPossibleDuplicateOf(row.raw_json)) {
+      skipped.push({ bankTransactionId, reason: 'possible_duplicate' })
       continue
     }
 

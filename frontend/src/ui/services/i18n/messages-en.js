@@ -37,6 +37,8 @@ export const MESSAGES_EN = {
     'common.drag_sort': 'Drag to sort',
     'common.processing': 'Processing...',
     'common.unknown_error': 'Unknown error',
+    'transaction.refresh_timeout': 'List refresh is slow; continuing in the background',
+    'transaction.refresh_failed': 'Failed to refresh transactions; data may be stale',
     'nav.home': 'Home',
     'nav.analysis': 'Analysis',
     'nav.assets': 'Assets',

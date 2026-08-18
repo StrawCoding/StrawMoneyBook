@@ -83,7 +83,8 @@ test('ART-12 RuntimeJobScheduler coalesces same-name jobs', async () => {
 })
 
 test('ART-12 app-runtime wires runtime job scheduler for resume sync jobs', () => {
-  assert.match(appRuntime, /createRuntimeJobScheduler/)
+  assert.match(appRuntime, /from '\.\/runtime-job-scheduler\.js'/)
+  assert.match(appRuntime, /runtimeJobs/)
   assert.match(appRuntime, /runSharedLedgerSyncJob/)
   assert.match(appRuntime, /runGoogleDriveLedgerSyncJob/)
   assert.match(appRuntime, /credit-rollover:\$\{ledgerId\}/)

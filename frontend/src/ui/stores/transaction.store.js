@@ -19,6 +19,8 @@ import {
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
+import { useUiStore } from '@/ui/stores/ui.store'
+import { translateMessage } from '@/ui/services/i18n.service'
 
 function resolveHomeBudgetDayKey(mode, key, budgetMonthKey = '') {
   const normalizedMode = String(mode ?? '').trim()
@@ -282,12 +284,22 @@ export const useTransactionStore = defineStore('transaction', {
 
         if (result === 'timeout') {
           console.warn('[transaction] refresh after write timed out, continue in background')
+          try {
+            useUiStore().pushToast(translateMessage('transaction.refresh_timeout'), 'info')
+          } catch {
+            // Pinia may be unavailable in isolated unit tests.
+          }
           void refreshTask.catch((error) => {
             console.warn('[transaction] background refresh failed', error)
           })
         }
       } catch (error) {
         console.warn('[transaction] refresh after write failed', error)
+        try {
+          useUiStore().pushToast(translateMessage('transaction.refresh_failed'), 'error')
+        } catch {
+          // Pinia may be unavailable in isolated unit tests.
+        }
       }
     },
 

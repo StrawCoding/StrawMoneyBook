@@ -825,6 +825,7 @@ Stage B：獨立 Gradle 模組 `frontend/android/wear`（同一 `applicationId`�
 - v1.3.139（Architecture B Phase 0A–0C）：修復 JS↔Java 增量 watermark 合約——前端 dual-write `lastSyncAt`／`last_sync_at` 與 `lookbackDays`／`lookback_days`；原生 `readLastSyncWatermark` 採 **`lastSyncAt` > `last_sync_at`**；`resolveQueryStartDate` 強制 lookback overlap（預設 3 日，不早於 initialStart）；JVM `FirstBankAutomationSyncContractTest` 6/6 + node source／service 合約測試。屬 Android 原生修復，需重建 APK 後真機驗證第二次同步查詢窗
 - v1.3.140（Architecture B Phase 1–10）：Provider Registry（第一銀行＋華南銀行）、通用 `connectBank`/`syncBank`、migration 046 帳號層級 checkpoint、`PARTIAL_SUCCESS`、`BankAutomationSyncContract`、淘汰 remote scrape／Playwright provider、華南 Android adapter（H0＋啟發式）；建立頁依 schema 動態欄位。需重建 APK
 - smb304：修復 Android／Web 初始化因 migration 046 誤用 `#` 註解導致 SQLite `unrecognized token: "#"`、帳本無法開啓；改為 SQLite 安全註解，並在 `splitSqlStatements` 剝除 hash 行註解＋回歸測試，既有帳本可安全套用 046（勿重設資料）
+- 稽核續修：CSV 與原生自動化交易 id 不同時，同帳戶同日同額會標 `possible_duplicate_of` 且審核匯入預設跳過；單一銀行連線同步走 process-wide `runtimeJobs` 合併，避免重入；SQLite `busy_timeout=5000`
 - 已移除 Sandbox / Mock 生產路徑；舊測試連線會在 UI 標示為已停用
 - 建立連線改為引導式流程：選擇銀行 → 登入 → 帳戶對應 → 首次同步
 - 第一銀行驗證碼 OCR 全失敗時（v1.3.19），建立連線頁會顯示驗證碼圖與手動輸入框，使用者輸入 4 碼後可重試；若已先手動填寫則跳過 OCR

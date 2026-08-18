@@ -356,7 +356,7 @@ UI 服務目錄：`src/ui/services/`
 | `app-runtime.service.js` + `SettingsAutoBackupPage.vue` | 背景自動備份 / 自動偵測完成後會送出含 `ledgerId / provider / mode / status / reason / checkedAt` 的 `app:auto-backup-state-updated`，讓設定頁即時重讀 Google / WebDAV provider 狀態；設定頁立即備份會透過 provider runner 先確認設定保存成功才執行，重讀時會保留尚未儲存的 WebDAV 密碼輸入，避免背景 refresh 把使用者輸入清空；手機 App 啟動與帳本切換的 Google 備份恢復只允許靜默授權，避免背景流程彈出互動登入；Google native OAuth exchange / refresh 預設使用 API 主機並由 backend `/api/google/oauth/*` 處理，不依賴官網靜態 host |
 | `google-drive-ledger-sync.service.js` | Google Drive 帳本同步（逐帳本 enable / sync now；SMB-235 / v1.3.7 後偵測 Google 帳號切換、記錄 pending 狀態與 account switch log，並透過 `GOOGLE_LEDGER_SYNC_ACCOUNT_SWITCH_EVENT` 通知 UI） |
 | `addon-template.service.js` | 附加項目模板預設值與保存 |
-| `bank-sync.service.js` | 銀行同步前端流程（憑證加密封裝、同步/匯入） |
+| `bank-sync.service.js` | 銀行同步前端流程（憑證加密封裝、同步/匯入）；同連線 `runtimeJobs` 合併防重入；跨來源同日同額標 `possible_duplicate_of` 且預設不匯入 |
 | `bank-sync-auto-refresh.service.js` | 銀行同步自動刷新節流與前景更新 |
 | `bank-sync-debug.service.js` | 銀行同步 debug trace 與錯誤資訊 |
 | `einvoice-debug.service.js` | 載具（電子發票）抓取與匯入 debug trace 記錄 |
@@ -374,7 +374,7 @@ UI 服務目錄：`src/ui/services/`
 | `i18n.service.js` | 多語系文案管理 |
 | `setup-flow.service.js` | 是否顯示 Welcome / setup 流程判定 |
 | `post-setup-intro.service.js` | 設定完成後導覽旗標管理 |
-| `error-log.service.js` | 前端錯誤去重、上報與全域安裝 |
+| `error-log.service.js` | 前端錯誤去重、失敗上報佇列（localStorage）、longtask 觀察與全域安裝；敏感欄位／email 脫敏 |
 | `app-url-route.js` | App URL / invite code 解析與導向 |
 | `route-scroll.service.js` | Router scroll restore 延後執行 |
 

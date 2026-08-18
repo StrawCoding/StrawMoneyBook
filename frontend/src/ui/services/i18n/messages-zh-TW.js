@@ -37,6 +37,8 @@ export const MESSAGES_ZH_TW = {
     'common.drag_sort': '拖動排序',
     'common.processing': '處理中...',
     'common.unknown_error': '未知錯誤',
+    'transaction.refresh_timeout': '列表更新較慢，正在背景繼續重新整理',
+    'transaction.refresh_failed': '交易列表重新整理失敗，資料可能尚未更新',
     'nav.home': '首頁',
     'nav.analysis': '分析',
     'nav.assets': '資產',

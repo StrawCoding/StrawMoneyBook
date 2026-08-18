@@ -135,6 +135,7 @@ async function openDatabaseConnection(dbName = activeDbName) {
 
   await db.open()
   await db.execute('PRAGMA foreign_keys = ON;')
+  await db.execute('PRAGMA busy_timeout = 5000;')
   await runMigrations(db)
   activeDbName = dbName
   return db
@@ -177,6 +178,7 @@ async function rebuildDatabase(dbName = activeDbName) {
     try {
       // Keep foreign_keys ON (smb296): wipe by child-first order instead of disabling constraints.
       await conn.execute('PRAGMA foreign_keys = ON;')
+      await conn.execute('PRAGMA busy_timeout = 5000;')
       for (const table of DATABASE_WIPE_DELETE_ORDER) {
         try {
           await conn.run(`DELETE FROM ${table};`)

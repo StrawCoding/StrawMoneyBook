@@ -48,3 +48,6 @@ export function createRuntimeJobScheduler() {
 
   return { run, isRunning, clear }
 }
+
+/** Process-wide scheduler so UI, resume, and auto-refresh share one lock (CONC-002). */
+export const runtimeJobs = createRuntimeJobScheduler()

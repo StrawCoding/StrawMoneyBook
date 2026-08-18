@@ -45,11 +45,10 @@ import {
   scheduleActiveGoogleDriveLedgerSync,
 } from '@/ui/services/google-drive-ledger-sync.service'
 import { resolveAndroidBackDecision } from './app-runtime.helpers'
-import { createRuntimeJobScheduler } from './runtime-job-scheduler.js'
+import { runtimeJobs } from './runtime-job-scheduler.js'
 
 const DATA_CHANGE_BACKUP_DEBOUNCE_MS = 15000
 const AUTO_BACKUP_DUE_CHECK_MS = 5 * 60 * 1000
-const runtimeJobs = createRuntimeJobScheduler()
 const BACK_EXIT_CONFIRM_WINDOW_MS = 1600
 const AUTO_BACKUP_STATE_UPDATED_EVENT = 'app:auto-backup-state-updated'
 

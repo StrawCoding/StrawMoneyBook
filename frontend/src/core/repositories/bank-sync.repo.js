@@ -2,6 +2,11 @@ import { query, run } from '@/core/db/sqlite'
 import { assertLedgerId, firstRow, rowsOf } from '@/core/repositories/base.repo'
 import { createId, nowIso } from '@/core/utils/id'
 import { yieldToMainThread } from '@/core/utils/cooperative-yield'
+import {
+  bankTxnCalendarDayKey,
+  mergeBankTxnRawJson,
+  readPossibleDuplicateOf,
+} from '@/core/domain/bank-transaction-identity.js'
 
 function normalizeConnectionStatus(status) {
   const value = String(status ?? '').trim().toLowerCase()
@@ -509,13 +514,35 @@ async function findBankTransactionByProviderId(ledgerId, bankAccountId, provider
     `SELECT ledger_id, id, connection_id, bank_account_id, provider_transaction_id,
             posted_at, amount_minor, currency, description, merchant, status, transaction_type,
             note, summary, balance_minor, seen_in_app, imported, imported_txn_id, raw_json,
-            first_seen_at, last_seen_at, created_at, updated_at
+            identity_scheme, first_seen_at, last_seen_at, created_at, updated_at
      FROM bank_transactions
      WHERE ledger_id = ?
        AND bank_account_id = ?
        AND provider_transaction_id = ?
      LIMIT 1;`,
     [ledgerId, bankAccountId, providerTransactionId],
+  )
+  return firstRow(result)
+}
+
+async function findLikelyDuplicateBankTransaction(ledgerId, {
+  bankAccountId,
+  providerTransactionId,
+  postedAt,
+  amountMinor,
+}) {
+  const day = bankTxnCalendarDayKey(postedAt)
+  if (!day || !bankAccountId || !providerTransactionId) return null
+  const result = await query(
+    `SELECT id, provider_transaction_id, raw_json
+     FROM bank_transactions
+     WHERE ledger_id = ?
+       AND bank_account_id = ?
+       AND amount_minor = ?
+       AND substr(posted_at, 1, 10) = ?
+       AND provider_transaction_id != ?
+     LIMIT 1;`,
+    [ledgerId, bankAccountId, Number(amountMinor) || 0, day, providerTransactionId],
   )
   return firstRow(result)
 }
@@ -539,36 +566,49 @@ export async function upsertBankTransactions(ledgerId, connectionId, transaction
       await yieldToMainThread()
     }
 
-    const bankAccountId = normalizeText(tx?.bankAccountId)
-    const providerTransactionId = normalizeText(tx?.providerTransactionId || tx?.id)
-    if (!bankAccountId || !providerTransactionId) continue
+    try {
+      const bankAccountId = normalizeText(tx?.bankAccountId)
+      const providerTransactionId = normalizeText(tx?.providerTransactionId || tx?.id)
+      if (!bankAccountId || !providerTransactionId) continue
 
-    const nextRow = {
-      posted_at: normalizeText(tx?.postedAt || tx?.posted_at, now),
-      amount_minor: normalizeBankTxnAmountMinor(tx?.amountMinor ?? tx?.amount_minor),
-      currency: normalizeCurrency(tx?.currency, 'TWD'),
-      description: normalizeText(tx?.description) || null,
-      merchant: normalizeText(tx?.merchant) || null,
-      status: normalizeBankTxnStatus(tx?.status),
-      transaction_type: normalizeText(tx?.transactionType ?? tx?.transaction_type) || null,
-      note: normalizeText(tx?.note) || null,
-      summary: normalizeText(tx?.summary) || null,
-      balance_minor: normalizeBankTxnBalanceMinor(tx?.balanceMinor ?? tx?.balance_minor),
-      raw_json: tx?.rawJson ? String(tx.rawJson) : JSON.stringify(tx ?? {}),
-    }
-    const existing = await findBankTransactionByProviderId(ledgerId, bankAccountId, providerTransactionId)
-    if (!existing) {
-      const id = createId('btx')
+      const identityScheme = normalizeText(tx?.identityScheme || tx?.identity_scheme) || null
+      let rawJson = tx?.rawJson ? String(tx.rawJson) : JSON.stringify(tx ?? {})
+      const duplicate = await findLikelyDuplicateBankTransaction(ledgerId, {
+        bankAccountId,
+        providerTransactionId,
+        postedAt: tx?.postedAt || tx?.posted_at,
+        amountMinor: tx?.amountMinor ?? tx?.amount_minor,
+      })
+      if (duplicate?.id) {
+        rawJson = mergeBankTxnRawJson(rawJson, { possible_duplicate_of: duplicate.id })
+      }
+
+      const nextRow = {
+        posted_at: normalizeText(tx?.postedAt || tx?.posted_at, now),
+        amount_minor: normalizeBankTxnAmountMinor(tx?.amountMinor ?? tx?.amount_minor),
+        currency: normalizeCurrency(tx?.currency, 'TWD'),
+        description: normalizeText(tx?.description) || null,
+        merchant: normalizeText(tx?.merchant) || null,
+        status: normalizeBankTxnStatus(tx?.status),
+        transaction_type: normalizeText(tx?.transactionType ?? tx?.transaction_type) || null,
+        note: normalizeText(tx?.note) || null,
+        summary: normalizeText(tx?.summary) || null,
+        balance_minor: normalizeBankTxnBalanceMinor(tx?.balanceMinor ?? tx?.balance_minor),
+        raw_json: rawJson,
+        identity_scheme: identityScheme,
+      }
+
+      const candidateId = createId('btx')
       await run(
-        `INSERT INTO bank_transactions (
+        `INSERT OR IGNORE INTO bank_transactions (
           ledger_id, id, connection_id, bank_account_id, provider_transaction_id,
           posted_at, amount_minor, currency, description, merchant, status, transaction_type,
           note, summary, balance_minor, seen_in_app, imported, imported_txn_id, raw_json,
-          first_seen_at, last_seen_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?);`,
+          identity_scheme, first_seen_at, last_seen_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?, ?, ?);`,
         [
           ledgerId,
-          id,
+          candidateId,
           connectionId,
           bankAccountId,
           providerTransactionId,
@@ -583,66 +623,79 @@ export async function upsertBankTransactions(ledgerId, connectionId, transaction
           nextRow.summary,
           nextRow.balance_minor,
           nextRow.raw_json,
+          nextRow.identity_scheme,
           now,
           now,
           now,
           now,
         ],
       )
-      addedIds.push(id)
-      touchedIds.push(id)
-      continue
-    }
 
-    const oldSummary = summarizeBankTxnForDiff(existing)
-    const nextSummary = summarizeBankTxnForDiff(nextRow)
-    const changed = oldSummary !== nextSummary
-    if (changed) {
-      await run(
-        `UPDATE bank_transactions
-         SET posted_at = ?,
-             amount_minor = ?,
-             currency = ?,
-             description = ?,
-             merchant = ?,
-             status = ?,
-             transaction_type = ?,
-             note = ?,
-             summary = ?,
-             balance_minor = ?,
-             raw_json = ?,
-             last_seen_at = ?,
-             updated_at = ?
-         WHERE ledger_id = ? AND id = ?;`,
-        [
-          nextRow.posted_at,
-          nextRow.amount_minor,
-          nextRow.currency,
-          nextRow.description,
-          nextRow.merchant,
-          nextRow.status,
-          nextRow.transaction_type,
-          nextRow.note,
-          nextRow.summary,
-          nextRow.balance_minor,
-          nextRow.raw_json,
-          now,
-          now,
-          ledgerId,
-          existing.id,
-        ],
-      )
-      modifiedIds.push(existing.id)
-      touchedIds.push(existing.id)
-    } else {
-      await run(
-        `UPDATE bank_transactions
-         SET last_seen_at = ?,
-             updated_at = ?
-         WHERE ledger_id = ? AND id = ?;`,
-        [now, now, ledgerId, existing.id],
-      )
-      touchedIds.push(existing.id)
+      const existing = await findBankTransactionByProviderId(ledgerId, bankAccountId, providerTransactionId)
+      if (!existing) continue
+
+      if (existing.id === candidateId) {
+        addedIds.push(existing.id)
+        touchedIds.push(existing.id)
+        continue
+      }
+
+      const oldSummary = summarizeBankTxnForDiff(existing)
+      const nextSummary = summarizeBankTxnForDiff(nextRow)
+      const changed = oldSummary !== nextSummary
+        || normalizeText(existing.identity_scheme) !== normalizeText(nextRow.identity_scheme)
+        || readPossibleDuplicateOf(existing.raw_json) !== readPossibleDuplicateOf(nextRow.raw_json)
+      if (changed) {
+        await run(
+          `UPDATE bank_transactions
+           SET posted_at = ?,
+               amount_minor = ?,
+               currency = ?,
+               description = ?,
+               merchant = ?,
+               status = ?,
+               transaction_type = ?,
+               note = ?,
+               summary = ?,
+               balance_minor = ?,
+               raw_json = ?,
+               identity_scheme = ?,
+               last_seen_at = ?,
+               updated_at = ?
+           WHERE ledger_id = ? AND id = ?;`,
+          [
+            nextRow.posted_at,
+            nextRow.amount_minor,
+            nextRow.currency,
+            nextRow.description,
+            nextRow.merchant,
+            nextRow.status,
+            nextRow.transaction_type,
+            nextRow.note,
+            nextRow.summary,
+            nextRow.balance_minor,
+            nextRow.raw_json,
+            nextRow.identity_scheme,
+            now,
+            now,
+            ledgerId,
+            existing.id,
+          ],
+        )
+        modifiedIds.push(existing.id)
+        touchedIds.push(existing.id)
+      } else {
+        await run(
+          `UPDATE bank_transactions
+           SET last_seen_at = ?,
+               updated_at = ?
+           WHERE ledger_id = ? AND id = ?;`,
+          [now, now, ledgerId, existing.id],
+        )
+        touchedIds.push(existing.id)
+      }
+    } catch (error) {
+      console.warn('[bank-sync] upsert item skipped', error)
     }
   }
 
@@ -701,7 +754,8 @@ export async function listBankTransactionsForReview(ledgerId, options = {}) {
       `SELECT bt.ledger_id, bt.id, bt.connection_id, bt.bank_account_id, bt.provider_transaction_id,
               bt.posted_at, bt.amount_minor, bt.currency, bt.description, bt.merchant, bt.status,
               bt.transaction_type, bt.note, bt.summary, bt.balance_minor, bt.seen_in_app,
-              bt.imported, bt.imported_txn_id, bt.first_seen_at, bt.last_seen_at, bt.updated_at,
+              bt.imported, bt.imported_txn_id, bt.raw_json, bt.identity_scheme,
+              bt.first_seen_at, bt.last_seen_at, bt.updated_at,
               ba.provider_account_id, ba.account_name AS bank_account_name, ba.user_label AS bank_account_user_label, ba.account_mask AS bank_account_mask,
               ba.mapped_account_id, a.name AS mapped_account_name,
               bc.provider, bc.user_label AS connection_user_label
@@ -746,7 +800,8 @@ export async function listBankTransactionsByIds(ledgerId, ids = []) {
     `SELECT bt.ledger_id, bt.id, bt.connection_id, bt.bank_account_id, bt.provider_transaction_id,
             bt.posted_at, bt.amount_minor, bt.currency, bt.description, bt.merchant, bt.status,
             bt.transaction_type, bt.note, bt.summary, bt.balance_minor, bt.seen_in_app,
-            bt.imported, bt.imported_txn_id, bt.first_seen_at, bt.last_seen_at, bt.updated_at,
+            bt.imported, bt.imported_txn_id, bt.raw_json, bt.identity_scheme,
+            bt.first_seen_at, bt.last_seen_at, bt.updated_at,
             ba.provider_account_id, ba.account_name AS bank_account_name, ba.user_label AS bank_account_user_label, ba.account_mask AS bank_account_mask,
             ba.mapped_account_id,
             bc.provider

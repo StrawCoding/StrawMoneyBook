@@ -11,6 +11,7 @@ import {
   resetErrorLogForTest,
   resetErrorLogServiceDependenciesForTest,
   setErrorLogServiceDependenciesForTest,
+  flushErrorLogUploadQueue,
 } from '../src/ui/services/error-log.service.js'
 
 afterEach(() => {
@@ -169,4 +170,62 @@ test('admin member management uses search pagination and a dedicated detail page
   assert.match(adminMemberPageSource, /updateAdminUserMembership/)
   assert.match(adminMemberPageSource, /deleteAdminUser/)
   assert.match(adminMemberPageSource, /會員詳細資料/)
+})
+
+test('logClientError queues failed uploads and flushes them on the next success', async () => {
+  const uploads = []
+  let failNext = true
+  setErrorLogServiceDependenciesForTest({
+    uploadClientErrorLog: async (payload) => {
+      if (failNext) {
+        failNext = false
+        throw new Error('offline')
+      }
+      uploads.push(payload)
+      return { ok: true }
+    },
+  })
+
+  const queued = await logClientError(new Error('first boom'), { source: 'vue', routePath: '/home' })
+  assert.equal(queued.skipped, 'upload_failed')
+  assert.equal(uploads.length, 0)
+
+  const flushed = await logClientError(new Error('second boom'), { source: 'vue', routePath: '/home' })
+  assert.equal(flushed.ok, true)
+  assert.equal(uploads.length, 2)
+  assert.equal(uploads[0].message, 'second boom')
+  assert.equal(uploads[1].message, 'first boom')
+
+  const leftover = await flushErrorLogUploadQueue()
+  assert.equal(leftover.remaining, 0)
+})
+
+test('logClientError redacts emails and sensitive keys from debug payload', async () => {
+  const uploads = []
+  setErrorLogServiceDependenciesForTest({
+    uploadClientErrorLog: async (payload) => {
+      uploads.push(payload)
+      return { ok: true }
+    },
+  })
+
+  const error = new Error('login failed for user@example.com')
+  error.stack = 'Error: login failed for user@example.com\n    at connect'
+  await logClientError(error, {
+    source: 'bank_sync',
+    debug: {
+      password: 'hunter2',
+      token: 'abc',
+      email: 'user@example.com',
+      note: 'contact admin@example.com',
+    },
+  })
+
+  assert.equal(uploads.length, 1)
+  assert.equal(uploads[0].context.debug.password, '[redacted]')
+  assert.equal(uploads[0].context.debug.token, '[redacted]')
+  assert.equal(uploads[0].context.debug.email, '[redacted]')
+  assert.match(uploads[0].context.debug.note, /\[redacted-email\]/)
+  assert.match(uploads[0].stack, /\[redacted-email\]/)
+  assert.doesNotMatch(uploads[0].stack, /user@example\.com/)
 })

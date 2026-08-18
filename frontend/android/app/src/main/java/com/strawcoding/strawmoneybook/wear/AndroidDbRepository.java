@@ -62,6 +62,7 @@ public final class AndroidDbRepository {
                 throw new IllegalStateException("engine_not_ready");
             }
             db.execSQL("PRAGMA foreign_keys = ON;");
+            db.execSQL("PRAGMA busy_timeout = 5000;");
             return db;
         }
     }

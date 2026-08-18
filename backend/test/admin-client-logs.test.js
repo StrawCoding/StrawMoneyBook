@@ -166,6 +166,43 @@ test('client error logs can be uploaded and viewed from admin overview', async (
   assert.equal(overviewRes.body?.error_logs?.[0]?.context?.debug?.debugLastStep, 'submit_login')
 })
 
+test('client error logs redact emails and secrets from stack and debug', async () => {
+  const member = await createUser('pii-member@example.com')
+  const memberSession = await createSession(member)
+  const logReq = {
+    method: 'POST',
+    url: '/api/client-logs',
+    headers: {
+      host: 'localhost',
+      authorization: `Bearer ${memberSession.accessToken}`,
+    },
+    body: JSON.stringify({
+      message: 'crash for victim@example.com',
+      stack: 'Error: crash for victim@example.com',
+      context: {
+        source: 'window',
+        debug: {
+          password: 'hunter2',
+          note: 'mail victim@example.com',
+        },
+      },
+    }),
+  }
+  const logRes = createMockResponse(logReq)
+  await clientLogsHandler(logReq, logRes)
+  assert.equal(logRes.statusCode, 201)
+
+  const { listClientErrorLogs } = await import('../src/collab/admin-store.js')
+  const logs = await listClientErrorLogs({ limit: 5 })
+  const saved = logs.find((item) => String(item.message ?? '').includes('crash'))
+  assert.ok(saved)
+  assert.match(String(saved.message), /\[redacted-email\]/)
+  assert.doesNotMatch(String(saved.message), /victim@example\.com/)
+  assert.match(String(saved.stack), /\[redacted-email\]/)
+  assert.equal(saved.context?.debug?.password, '[redacted]')
+  assert.match(String(saved.context?.debug?.note ?? ''), /\[redacted-email\]/)
+})
+
 test('admin can update membership and delete users while non-admin cannot access admin api', async () => {
   const admin = await createUser('admin2@example.com', { member: true })
   const user = await createUser('member2@example.com')

@@ -1,6 +1,7 @@
 import { extractBearerToken, methodGuard, normalizePath, normalizeText, parseBody, sendJson } from '../collab/http.js'
 import { findUserById, readStore, verifyAccessToken } from '../collab/store.js'
 import { writeClientErrorLog } from '../collab/admin-store.js'
+import { redactPiiText, redactPiiValue } from '../collab/pii-redact.js'
 
 async function getOptionalAuthenticatedUser(req) {
   const payload = verifyAccessToken(extractBearerToken(req))
@@ -19,42 +20,8 @@ function buildSafeContext(body = {}) {
     lineno: Number(context.lineno ?? 0) || 0,
     colno: Number(context.colno ?? 0) || 0,
     user_agent: normalizeText(body.userAgent),
-    debug: sanitizeDebugValue(context.debug),
+    debug: redactPiiValue(context.debug),
   }
-}
-
-function truncateText(value, maxLength = 600) {
-  const text = String(value ?? '')
-  if (text.length <= maxLength) return text
-  return `${text.slice(0, Math.max(0, maxLength - 1))}…`
-}
-
-function sanitizeDebugValue(value, depth = 0) {
-  if (value == null) return null
-  if (depth >= 4) {
-    return truncateText(value, 240)
-  }
-  if (typeof value === 'string') {
-    return truncateText(value, 600)
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return value
-  }
-  if (Array.isArray(value)) {
-    return value
-      .slice(0, 30)
-      .map((item) => sanitizeDebugValue(item, depth + 1))
-      .filter((item) => item !== undefined)
-  }
-  if (typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value)
-        .slice(0, 30)
-        .map(([key, entryValue]) => [key, sanitizeDebugValue(entryValue, depth + 1)])
-        .filter(([, entryValue]) => entryValue !== undefined),
-    )
-  }
-  return truncateText(value, 240)
 }
 
 export default async function clientLogsHandler(req, res) {
@@ -86,8 +53,8 @@ export default async function clientLogsHandler(req, res) {
       userEmail: normalizeText(user?.email ?? user?.account),
       level: 'error',
       code: normalizeText(body.code),
-      message,
-      stack: String(body.stack ?? ''),
+      message: redactPiiText(message),
+      stack: redactPiiText(String(body.stack ?? '')),
       routePath: normalizeText(body.routePath),
       appVersion: normalizeText(body.appVersion),
       platform: normalizeText(body.platform),

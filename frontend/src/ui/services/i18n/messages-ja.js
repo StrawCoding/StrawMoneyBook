@@ -32,6 +32,8 @@ export const MESSAGES_JA = {
   'common.drag_sort': 'ドラッグで並び替え',
   'common.processing': '処理中...',
   'common.unknown_error': '不明なエラー',
+  'transaction.refresh_timeout': '一覧の更新が遅いため、バックグラウンドで続行します',
+  'transaction.refresh_failed': '取引一覧の再読み込みに失敗しました。表示が最新でない可能性があります',
   'quick_add.field.from_account': '出金元口座',
   'quick_add.action.create_transaction': '取引を作成',
   'quick_add.field.to_account': '入金先口座',

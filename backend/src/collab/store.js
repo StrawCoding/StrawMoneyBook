@@ -504,6 +504,10 @@ function ensureSchema(db) {
 }
 
 function loadStoreFromDatabase(db) {
+  // ARCH-026: writes already go through writeStoreToDatabase + buildStoreBaseline
+  // (row-level). This read path still SELECTs full tables including snapshot_json.
+  // Do not split updateStore into parallel domain queues — better-sqlite3 is one
+  // connection and parallel writes race (ARCH-023).
   const users = db.prepare(`
     SELECT
       id, email, account, email_verified, display_name, avatar_url, referral_code,

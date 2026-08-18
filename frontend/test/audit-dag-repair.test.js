@@ -55,6 +55,12 @@ test('bank client guard fails closed in production and ledger purge uses a trans
   const ci = readFileSync(resolve(import.meta.dirname, '../../.github/workflows/ci.yml'), 'utf8')
   assert.match(ci, /playwright-ui-layout:/)
   assert.match(ci, /npm run playwright:ui-layout/)
+  assert.match(ci, /playwright-budget-save:/)
+  assert.match(ci, /npm run playwright:budget-save/)
+  assert.match(ci, /playwright-analysis-export:/)
+  assert.match(ci, /npm run playwright:analysis-export/)
+  assert.match(ci, /playwright-carrier-sync:/)
+  assert.match(ci, /npm run playwright:carrier-sync/)
   const prepareIdx = ci.indexOf('npm run prepare:android:release')
   const gradleIdx = ci.indexOf(':app:testDebugUnitTest')
   assert.ok(prepareIdx >= 0 && gradleIdx > prepareIdx, 'cap sync must run before Gradle unit tests')
@@ -80,4 +86,45 @@ test('bank client guard fails closed in production and ledger purge uses a trans
   )
   assert.match(uiLayout, /fileURLToPath\(new URL\('\.\.', import\.meta\.url\)\)/)
   assert.doesNotMatch(uiLayout, /frontendDir = '\/mnt\/data/)
+})
+
+test('audit DAG identity, serverless, busy_timeout and PII guards stay in source', () => {
+  const repo = readFileSync(resolve(import.meta.dirname, '../src/core/repositories/bank-sync.repo.js'), 'utf8')
+  assert.match(repo, /INSERT OR IGNORE INTO bank_transactions/)
+  assert.match(repo, /identity_scheme/)
+  assert.match(repo, /findLikelyDuplicateBankTransaction/)
+  assert.match(repo, /possible_duplicate_of/)
+
+  const service = readFileSync(resolve(import.meta.dirname, '../src/ui/services/bank-sync.service.js'), 'utf8')
+  assert.match(service, /runtimeJobs\.run\(`bank-sync:\$\{/)
+  assert.match(service, /readPossibleDuplicateOf/)
+  assert.match(service, /reason: 'possible_duplicate'/)
+  assert.doesNotMatch(service, /runtimeJobs\.run\(`bank-sync:\$\{[\s\S]*runtimeJobs\.run\(`bank-sync:/)
+
+  const sqlite = readFileSync(resolve(import.meta.dirname, '../src/core/db/sqlite.js'), 'utf8')
+  assert.match(sqlite, /PRAGMA busy_timeout = 5000/)
+
+  const androidDb = readFileSync(
+    resolve(import.meta.dirname, '../android/app/src/main/java/com/strawcoding/strawmoneybook/wear/AndroidDbRepository.java'),
+    'utf8',
+  )
+  assert.match(androidDb, /PRAGMA busy_timeout = 5000/)
+
+  const guard = readFileSync(resolve(import.meta.dirname, '../api/_production-guard.js'), 'utf8')
+  assert.match(guard, /export function rejectProductionServerless/)
+  assert.match(guard, /use api\.strawmb\.com/)
+
+  for (const relative of ['auth/[...path].js', 'shared-ledgers/[...path].js', 'referrals/[...path].js']) {
+    const source = readFileSync(resolve(import.meta.dirname, '../api', relative), 'utf8')
+    assert.match(source, /rejectProductionServerless/)
+  }
+
+  const errorLog = readFileSync(resolve(import.meta.dirname, '../src/ui/services/error-log.service.js'), 'utf8')
+  assert.match(errorLog, /smb\.error_log\.upload_queue/)
+  assert.match(errorLog, /longtask/)
+  assert.match(errorLog, /\[redacted-email\]/)
+
+  const transactionStore = readFileSync(resolve(import.meta.dirname, '../src/ui/stores/transaction.store.js'), 'utf8')
+  assert.match(transactionStore, /transaction\.refresh_timeout/)
+  assert.match(transactionStore, /transaction\.refresh_failed/)
 })

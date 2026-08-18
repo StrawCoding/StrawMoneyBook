@@ -89,6 +89,7 @@ export function subscribeErrorLog(listener, { emitCurrent = true } = {}) {
 export function resetErrorLogForTest() {
   errorLogSeq = 0
   errorLogEntries = []
+  writeUploadQueue([])
   notifyErrorLogListeners()
 }
 
@@ -111,13 +112,22 @@ function truncateText(value, maxLength = 600) {
   return `${text.slice(0, Math.max(0, maxLength - 1))}…`
 }
 
+const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
+const SENSITIVE_KEY = /password|secret|token|authorization|cookie|email/i
+const UPLOAD_QUEUE_KEY = 'smb.error_log.upload_queue'
+const memoryUploadQueue = []
+
+function redactPiiText(value) {
+  return String(value ?? '').replace(EMAIL_RE, '[redacted-email]')
+}
+
 function sanitizeDebugValue(value, depth = 0) {
   if (value == null) return null
   if (depth >= 4) {
-    return truncateText(value, 240)
+    return redactPiiText(truncateText(value, 240))
   }
   if (typeof value === 'string') {
-    return truncateText(value, 600)
+    return redactPiiText(truncateText(value, 600))
   }
   if (typeof value === 'number' || typeof value === 'boolean') {
     return value
@@ -132,11 +142,14 @@ function sanitizeDebugValue(value, depth = 0) {
     return Object.fromEntries(
       Object.entries(value)
         .slice(0, 30)
-        .map(([key, entryValue]) => [key, sanitizeDebugValue(entryValue, depth + 1)])
+        .map(([key, entryValue]) => {
+          if (SENSITIVE_KEY.test(key)) return [key, '[redacted]']
+          return [key, sanitizeDebugValue(entryValue, depth + 1)]
+        })
         .filter(([, entryValue]) => entryValue !== undefined),
     )
   }
-  return truncateText(value, 240)
+  return redactPiiText(truncateText(value, 240))
 }
 
 function toError(value) {
@@ -180,13 +193,63 @@ function shouldSkipAsDuplicate(fingerprint, nowMs = Date.now()) {
   return false
 }
 
+function readUploadQueue() {
+  if (typeof localStorage === 'undefined') {
+    return memoryUploadQueue.slice()
+  }
+  try {
+    const parsed = JSON.parse(localStorage.getItem(UPLOAD_QUEUE_KEY) || '[]')
+    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item === 'object') : []
+  } catch {
+    return []
+  }
+}
+
+function writeUploadQueue(items) {
+  const next = Array.isArray(items) ? items.slice(-20) : []
+  memoryUploadQueue.length = 0
+  memoryUploadQueue.push(...next)
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(UPLOAD_QUEUE_KEY, JSON.stringify(next))
+  } catch {
+    // Quota or private mode: keep in-memory fallback.
+  }
+}
+
+function enqueueFailedUpload(payload) {
+  const queue = readUploadQueue()
+  queue.push({
+    queuedAt: new Date().toISOString(),
+    payload,
+  })
+  writeUploadQueue(queue)
+}
+
+export async function flushErrorLogUploadQueue() {
+  const queue = readUploadQueue()
+  if (!queue.length) return { flushed: 0, remaining: 0 }
+  const remaining = []
+  let flushed = 0
+  for (const item of queue) {
+    try {
+      await dependencies.uploadClientErrorLog(item.payload)
+      flushed += 1
+    } catch {
+      remaining.push(item)
+    }
+  }
+  writeUploadQueue(remaining)
+  return { flushed, remaining: remaining.length }
+}
+
 function buildPayload(error, context = {}) {
   const normalizedError = toError(error)
   const debug = sanitizeDebugValue(context.debug)
   return {
     code: normalizeText(normalizedError.code),
-    message: normalizeText(normalizedError.message),
-    stack: String(normalizedError.stack ?? ''),
+    message: redactPiiText(normalizeText(normalizedError.message)),
+    stack: redactPiiText(String(normalizedError.stack ?? '')),
     routePath: normalizeText(context.routePath || (typeof window !== 'undefined' ? window.location?.pathname : '')),
     platform: Capacitor.getPlatform(),
     appVersion: normalizeText(import.meta.env?.VITE_APP_VERSION),
@@ -225,8 +288,10 @@ export async function logClientError(error, context = {}) {
   }
   try {
     await dependencies.uploadClientErrorLog(payload)
+    await flushErrorLogUploadQueue()
     return { ok: true }
   } catch {
+    enqueueFailedUpload(payload)
     return { skipped: 'upload_failed' }
   }
 }
@@ -277,10 +342,42 @@ export function installGlobalErrorLogging(app, { router } = {}) {
 
   window.addEventListener('error', onWindowError)
   window.addEventListener('unhandledrejection', onUnhandledRejection)
+  void flushErrorLogUploadQueue()
+  const stopLongTaskObserver = installLongTaskObserver()
 
   return () => {
     app.config.errorHandler = previousErrorHandler
     window.removeEventListener('error', onWindowError)
     window.removeEventListener('unhandledrejection', onUnhandledRejection)
+    stopLongTaskObserver()
+  }
+}
+
+function installLongTaskObserver() {
+  if (typeof PerformanceObserver === 'undefined') return () => {}
+  const supported = PerformanceObserver.supportedEntryTypes
+  if (Array.isArray(supported) && !supported.includes('longtask')) return () => {}
+  try {
+    const observer = new PerformanceObserver((list) => {
+      let totalMs = 0
+      for (const entry of list.getEntries()) {
+        totalMs += Number(entry.duration) || 0
+      }
+      if (totalMs < 50) return
+      void logClientError(new Error('longtask'), {
+        source: 'longtask',
+        debug: { durationMs: Math.round(totalMs) },
+      })
+    })
+    observer.observe({ type: 'longtask', buffered: true })
+    return () => {
+      try {
+        observer.disconnect()
+      } catch {
+        // Ignore.
+      }
+    }
+  } catch {
+    return () => {}
   }
 }
