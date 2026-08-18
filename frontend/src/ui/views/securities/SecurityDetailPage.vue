@@ -112,6 +112,7 @@
                 v-if="tx.settlement_status === 'scheduled'"
                 type="button"
                 class="btn tiny"
+                data-testid="securities-confirm-early"
                 @click="confirmEarly(tx)"
               >{{ t('securities_page.confirm_early') }}</button>
               <button

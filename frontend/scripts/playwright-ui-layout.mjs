@@ -1256,6 +1256,83 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
   assert.ok(fundsLotUi.linkedCount >= 2, JSON.stringify(fundsLotUi, null, 2))
   console.log('[securities] funds-matched sell UI ok:', fundsLotUi)
 
+  const earlyConfirm = await evalPage(`async () => {
+    const waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+    const waitUntil = async (predicate, timeoutMs = 8000) => {
+      const deadline = performance.now() + timeoutMs
+      while (performance.now() < deadline) {
+        const value = predicate()
+        if (value) return value
+        await waitMs(40)
+      }
+      return null
+    }
+    const page = await waitUntil(() => document.querySelector('[data-testid=securities-detail-page]'), 5000)
+    if (!page) return { ok: false, reason: 'missing_detail_page', path: window.location.pathname }
+    const btn = document.querySelector('[data-testid=securities-confirm-early]')
+    if (!btn) return { ok: false, reason: 'missing_confirm_early' }
+    const confirmedBefore = document.querySelectorAll('[data-testid=securities-detail-page] .status[data-status=confirmed]').length
+    const clickedAtMs = Date.now()
+    btn.click()
+    const confirmedCount = await waitUntil(() => {
+      const n = document.querySelectorAll('[data-testid=securities-detail-page] .status[data-status=confirmed]').length
+      return n > confirmedBefore ? n : null
+    }, 8000)
+    if (!confirmedCount) {
+      return {
+        ok: false,
+        reason: 'not_confirmed',
+        confirmedBefore,
+        statuses: [...document.querySelectorAll('[data-testid=securities-detail-page] .status')].map((el) => ({
+          status: el.getAttribute('data-status'),
+          text: String(el.textContent || '').trim(),
+        })),
+      }
+    }
+    const app = document.querySelector('#app')?.__vue_app__ || window.__VUE_APP__
+    let pinia = app?.config?.globalProperties?.$pinia
+    if (!pinia && app?._context?.provides) {
+      for (const value of Object.values(app._context.provides || {})) {
+        if (value && typeof value === 'object' && value._s) {
+          pinia = value
+          break
+        }
+      }
+    }
+    const stores = pinia?._s ? [...pinia._s.values()] : []
+    const securityStore = stores.find((store) => store.$id === 'security')
+    const txs = [...(securityStore?.detail?.transactions || [])]
+    const confirmedTxs = txs.filter((tx) => String(tx?.settlement_status || '') === 'confirmed')
+    const scored = confirmedTxs.map((tx) => {
+      const settleAt = String(tx?.settle_at || '')
+      const settleMs = Date.parse(settleAt)
+      return {
+        settleAt,
+        settleMs,
+        deltaMs: Number.isFinite(settleMs) ? Math.abs(settleMs - clickedAtMs) : Number.POSITIVE_INFINITY,
+        status: String(tx?.settlement_status || ''),
+      }
+    }).sort((a, b) => a.deltaMs - b.deltaMs)
+    const confirmedTx = scored[0] || null
+    return {
+      ok: Boolean(confirmedTx) && Number.isFinite(confirmedTx.settleMs),
+      confirmedBefore,
+      confirmedCount,
+      settleAt: confirmedTx?.settleAt || '',
+      clickedAtMs,
+      settleMs: confirmedTx?.settleMs ?? null,
+      deltaMs: Number.isFinite(confirmedTx?.deltaMs) ? confirmedTx.deltaMs : null,
+      status: String(confirmedTx?.status || ''),
+    }
+  }`)
+  assert.equal(earlyConfirm.ok, true, JSON.stringify(earlyConfirm, null, 2))
+  assert.equal(earlyConfirm.status, 'confirmed', JSON.stringify(earlyConfirm, null, 2))
+  assert.ok(
+    Number.isFinite(earlyConfirm.deltaMs) && earlyConfirm.deltaMs < 5 * 60 * 1000,
+    JSON.stringify(earlyConfirm, null, 2),
+  )
+  console.log('[securities] early confirm uses current time:', earlyConfirm)
+
   const assetsSecuritiesAmount = await evalPage(`async () => {
     const waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
     const assetsTab = document.querySelector('[data-testid=bottom-nav-assets], a[href="/assets"]')

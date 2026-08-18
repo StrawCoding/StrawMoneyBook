@@ -335,6 +335,7 @@ export async function confirmSecuritySettlement(ledgerId, transactionId, { force
     await assertSettlementAccount(ledgerId, accountId)
 
     const categoryId = await ensureInvestmentPnlCategory(ledgerId)
+    const confirmedIso = now instanceof Date ? now.toISOString() : String(now || nowIso())
     const plan = buildConfirmSettlementPlan({
       ledgerId,
       security,
@@ -342,7 +343,9 @@ export async function confirmSecuritySettlement(ledgerId, transactionId, { force
       investmentPnlCategoryId: categoryId,
       principalTxId: createId('tx'),
       pnlTxId: createId('tx'),
-      confirmedAt: nowIso(),
+      confirmedAt: confirmedIso,
+      // 提前確認：現金腿與交割時間用按下當下，不用原排程 T+2。到期自動入帳仍走 settle_at。
+      postedAt: force ? confirmedIso : null,
     })
     await postCashLegsFromPlan(ledgerId, plan)
     return updateSecurityTransactionSettlement(ledgerId, tx.id, plan.statusPatch)

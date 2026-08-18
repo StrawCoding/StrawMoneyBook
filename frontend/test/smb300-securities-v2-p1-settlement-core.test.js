@@ -9,6 +9,7 @@ import {
   summarizeSecurityTransactions,
   sumIncludedSecuritiesMarketValue,
 } from '../src/core/utils/securities-position.js'
+import { buildConfirmSettlementPlan } from '../src/core/utils/securities-settlement-apply.js'
 import {
   addTradingDays,
   defaultSettleAt,
@@ -141,6 +142,44 @@ test('funds mode sell skips quantity assert; position mode still enforces', () =
   assert.throws(() => assertSellQuantityAllowed(1, 2, { recordMode: 'position' }), /不可超過/)
 })
 
+test('early confirm posts cash at current time instead of scheduled settle_at', () => {
+  const settleAt = '2026-08-20T02:00:00.000Z'
+  const nowIso = '2026-08-18T14:30:00.000Z'
+  const security = { symbol: '2330', settlement_account_id: 'acc1' }
+  const securityTx = {
+    id: 'stx_early',
+    type: 'buy',
+    record_mode: 'funds',
+    quantity: 0,
+    price_minor: 0,
+    fee_minor: 0,
+    fee_mode: 'into_cost',
+    principal_minor: 30000,
+    proceeds_minor: 0,
+    settle_at: settleAt,
+    cash_account_id: 'acc1',
+  }
+  const due = buildConfirmSettlementPlan({
+    ledgerId: 'led1',
+    security,
+    securityTx,
+    confirmedAt: nowIso,
+  })
+  assert.equal(due.ledgerRows[0].occurredAt, settleAt)
+  assert.equal(due.statusPatch.settleAt, undefined)
+
+  const early = buildConfirmSettlementPlan({
+    ledgerId: 'led1',
+    security,
+    securityTx,
+    confirmedAt: nowIso,
+    postedAt: nowIso,
+  })
+  assert.equal(early.ledgerRows[0].occurredAt, nowIso)
+  assert.equal(early.statusPatch.settleAt, nowIso)
+  assert.equal(early.statusPatch.confirmedAt, nowIso)
+})
+
 test('isSettlementDue compares settle_at with now', () => {
   const past = new Date(2020, 0, 1, 10, 0, 0)
   const future = new Date(2099, 0, 1, 10, 0, 0)
@@ -157,6 +196,7 @@ test('migration 042 and wiring present', () => {
   const runtime = readFileSync(resolve(root, 'src/ui/services/app-runtime.service.js'), 'utf8')
   const listPage = readFileSync(resolve(root, 'src/ui/views/securities/SecuritiesListPage.vue'), 'utf8')
   const detailPage = readFileSync(resolve(root, 'src/ui/views/securities/SecurityDetailPage.vue'), 'utf8')
+  const playwright = readFileSync(resolve(root, 'scripts/playwright-ui-layout.mjs'), 'utf8')
   const i18n = readI18nBundleSource()
 
   assert.match(migrate, /042_securities_settlement_v2/)
@@ -177,6 +217,8 @@ test('migration 042 and wiring present', () => {
   assert.match(listPage, /securities-unrealized-mode/)
   assert.match(listPage, /safe-area-inset-bottom/)
   assert.match(detailPage, /confirm_early/)
+  assert.match(detailPage, /securities-confirm-early/)
+  assert.match(playwright, /early confirm uses current time/)
   assert.match(detailPage, /record_mode/)
   assert.match(detailPage, /securities-edit-symbol/)
   assert.match(detailPage, /securities-edit-name/)
@@ -196,4 +238,5 @@ test('migration 042 and wiring present', () => {
   assert.match(sqlite, /beginTransaction/)
   assert.match(sqlite, /rollbackTransaction/)
   assert.match(service, /buildConfirmSettlementPlan/)
+  assert.match(service, /postedAt: force \? confirmedIso/)
 })

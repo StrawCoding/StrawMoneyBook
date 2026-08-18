@@ -27,6 +27,7 @@ export function buildConfirmSettlementPlan({
   principalTxId = null,
   pnlTxId = null,
   confirmedAt = null,
+  postedAt = null,
 } = {}) {
   const accountId = String(securityTx?.cash_account_id || security?.settlement_account_id || '').trim()
   if (!accountId) throw new Error('缺少交割帳戶，無法入帳')
@@ -42,8 +43,10 @@ export function buildConfirmSettlementPlan({
     proceedsMinor: securityTx.proceeds_minor,
   })
   const posting = describeSettlementPosting(legs)
-  const occurredAt = String(securityTx.settle_at || securityTx.occurred_at || nowIso())
   const confirmed = String(confirmedAt || nowIso())
+  const explicitPostedAt = String(postedAt ?? '').trim()
+  const occurredAt = explicitPostedAt
+    || String(securityTx.settle_at || securityTx.occurred_at || confirmed)
   const base = noteBase(security, securityTx)
   const ledgerRows = []
 
@@ -124,6 +127,7 @@ export function buildConfirmSettlementPlan({
       confirmedAt: confirmed,
       cashPrincipalTxId,
       cashPnlTxId,
+      ...(explicitPostedAt ? { settleAt: occurredAt } : {}),
     },
   }
 }
@@ -190,10 +194,32 @@ export function buildSoftDeleteLedgerSql(ledgerId, txId, deletedAt = nowIso()) {
 }
 
 export function buildUpdateSecuritySettlementSql(ledgerId, securityTxId, patch, updatedAt = nowIso()) {
+  const settleAt = String(patch?.settleAt ?? patch?.settle_at ?? '').trim()
+  if (settleAt) {
+    return {
+      sql: `UPDATE security_transactions
+       SET settlement_status = ?,
+           settle_at = ?,
+           confirmed_at = ?,
+           cash_principal_tx_id = ?,
+           cash_pnl_tx_id = ?,
+           updated_at = ?
+     WHERE ledger_id = ? AND id = ? AND deleted_at IS NULL;`,
+      values: [
+        patch.settlementStatus,
+        settleAt,
+        patch.confirmedAt,
+        patch.cashPrincipalTxId,
+        patch.cashPnlTxId,
+        updatedAt,
+        ledgerId,
+        securityTxId,
+      ],
+    }
+  }
   return {
     sql: `UPDATE security_transactions
        SET settlement_status = ?,
-           settle_at = COALESCE(settle_at, settle_at),
            confirmed_at = ?,
            cash_principal_tx_id = ?,
            cash_pnl_tx_id = ?,
