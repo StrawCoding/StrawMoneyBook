@@ -1,6 +1,6 @@
 # Pending Release Notes
 
-- 依 2026-08-18 技術稽核續修：銀行自動同步單一憑證失敗不再中止後續連線；production bank／Google OAuth API fail-closed；migration 外層交易＋SAVEPOINT；帳本 purge 包交易；總資產換匯與信用卡週期改讀帳本時區；軟刪交易連動 posting 且 import／wear／einvoice 保留冪等鍵；銀行 fallback 指紋同日同額加 occurrence（第 0 筆維持 v1 hash）；退款 SQL 收回 domain；Playwright 改相對路徑並將 `ui-layout` 納入 CI。
+- 依 2026-08-18 技術稽核續修：銀行自動同步單一憑證失敗不再中止後續連線；production bank／Google OAuth API fail-closed；sql.js migration 外層交易＋SAVEPOINT，Capacitor／jeep-sqlite 維持逐句 executeSet（避免網頁卡在資料載入中）；帳本 purge 包交易；總資產換匯與信用卡週期改讀帳本時區；軟刪交易連動 posting 且 import／wear／einvoice 保留冪等鍵；銀行 fallback 指紋同日同額加 occurrence（第 0 筆維持 v1 hash）；退款 SQL 收回 domain；Playwright 改相對路徑並將 `ui-layout` 納入 CI；CI 先 `prepare:android:release` 再跑 Android／Wear JVM 測試。
 - 銀行同步修正期：所有銀行同步動作依 debug 模式印到 Console（`[SMB:bank-sync]`，憑證欄位會遮罩）；設定 → 版本資訊 → Debug 頁可開關，網頁也可即時查看。debug／開發模式或手動開啟後，網頁可操作同步流程；網銀自動登入仍需 Android App。Android debug APK 另將原生步驟寫入 logcat `SMB-BankSync`。
 - 語言選項改為 i18n 統一管理：zh-TW／en／ja 由 `SUPPORTED_LOCALES` 單一清單產生，按鈕永遠顯示原名（繁體中文／English／日本語）；補齊日文缺 key；`audit:i18n` 改讀拆檔後字典；共通元件與日期／金額格式跟隨目前語言；Android／Wear 補 `values-en`／`values-ja`。
 - 官方網站網頁測試版 `https://www.strawmb.com/app/` 改連正式營運後端 `https://api.strawmb.com`（hash router 避開 GitHub Pages 巢狀 SPA 404；Google OAuth／共同帳本／載具／銀行 API 在 production web 不再打到官網同網域）。`/preview` 提供入口；`gpr` 會同步發布測試版 SPA。

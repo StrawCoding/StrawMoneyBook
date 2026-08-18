@@ -11,12 +11,23 @@ import {
 } from '@/ui/services/ledger-runtime.service'
 import { installMembershipNavigation } from '@/ui/services/membership-navigation.service'
 
+function markBootStage(stage) {
+  if (typeof window === 'undefined') return
+  window.__SMB_BOOT_STAGE__ = stage
+  window.__SMB_BOOT_STAGES__ = [
+    ...(Array.isArray(window.__SMB_BOOT_STAGES__) ? window.__SMB_BOOT_STAGES__ : []),
+    { stage, t: Date.now() },
+  ]
+}
+
 export async function bootstrapApp(pinia, options = {}) {
   installMembershipNavigation()
+  markBootStage('core-db')
   await bootstrapCoreDatabase()
 
   const ledgerStore = useLedgerStore(pinia)
   const accountStore = useAccountStore(pinia)
+  markBootStage('ledger-init')
   await ledgerStore.init(options)
 
   if (!ledgerStore.activeLedgerId) {
@@ -33,9 +44,12 @@ export async function bootstrapApp(pinia, options = {}) {
     } catch (error) {
       console.warn('[bootstrap] empty-ledger restore hint skipped', error)
     }
+    markBootStage('done-empty')
     return { ledgerStore, hasActiveLedger: false }
   }
 
+  markBootStage('ledger-scoped')
   await loadLedgerScopedStores(ledgerStore.activeLedgerId, pinia)
+  markBootStage('done')
   return { ledgerStore, hasActiveLedger: true }
 }

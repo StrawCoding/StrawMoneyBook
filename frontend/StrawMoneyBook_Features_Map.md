@@ -511,7 +511,8 @@ UI composable 目錄：`src/ui/composables/`
 - 變數（3）：`LEGACY_COLUMN_PATCHES`, `LEGACY_SCHEMA_PATCH_META_KEY`, `MIGRATIONS`
 - 類別（0）：無
 - 補充（smb304）：migration 046 銀行同步 Architecture B account checkpoints 僅允許 SQLite `--`／block 註解；`sql-statements.js` 會剝除 MySQL／shell `#` 行註解，避免 Android Capacitor `executeSet` 出現 `unrecognized token: "#"` 卡住初始化（不可靠「重設全部資料」）。
-- 補充（audit 20260818 Phase 0）：migration 047 補回 `trg_deleted_log_transactions`（026/045 rebuild 時被 DROP TABLE 靜默刪除）並為 snapshot 表 `transaction_postings`／`budget_*`／`securities*`／`credit_*` 補 `deleted_log` 觸發器。版本 20/21/22/27/29 為保留號，runner 會拒絕重用。CI frontend job 在每次 push/PR 執行 `:app:testDebugUnitTest` 與 `:wear:testDebugUnitTest`（JVM/Robolectric，不含 connectedAndroidTest）。
+- 補充（audit 20260818 Phase 0）：migration 047 補回 `trg_deleted_log_transactions`（026/045 rebuild 時被 DROP TABLE 靜默刪除）並為 snapshot 表 `transaction_postings`／`budget_*`／`securities*`／`credit_*` 補 `deleted_log` 觸發器。版本 20/21/22/27/29 為保留號，runner 會拒絕重用。CI frontend job 在每次 push/PR 先 `npm run prepare:android:release`（產生 `capacitor-cordova-android-plugins`）再執行 `:app:testDebugUnitTest` 與 `:wear:testDebugUnitTest`（JVM/Robolectric，不含 connectedAndroidTest）。
+- 補充（audit 20260818 COMPAT-001）：sql.js／測試 double 以 BEGIN＋SAVEPOINT 包 migration 檔；Capacitor／jeep-sqlite 連線禁止 SQL BEGIN／SAVEPOINT（會卡在「資料載入中」），維持逐句 `executeSet` 並忽略 duplicate column。
 
 ### `src/core/db/sqlite.js`
 - 函數（19）：`closeAllConnectionsSafely`, `closeDatabase`, `emitDataMutationEvent`, `ensureWebStoreReady`, `execute`, `getDatabase`, `initDatabase`, `isDataMutationSql`, `isNoSuchTableError`, `isPluginNullError`, `isRecoverableSchemaError`, `normalizeErrorMessage`, `openDatabaseConnection`, `openRecoveryDatabase`, `query`, `rebuildDatabase`, `resetDatabase`, `run`, `withTransaction`

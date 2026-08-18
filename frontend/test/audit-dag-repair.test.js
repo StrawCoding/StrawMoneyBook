@@ -55,6 +55,24 @@ test('bank client guard fails closed in production and ledger purge uses a trans
   const ci = readFileSync(resolve(import.meta.dirname, '../../.github/workflows/ci.yml'), 'utf8')
   assert.match(ci, /playwright-ui-layout:/)
   assert.match(ci, /npm run playwright:ui-layout/)
+  const prepareIdx = ci.indexOf('npm run prepare:android:release')
+  const gradleIdx = ci.indexOf(':app:testDebugUnitTest')
+  assert.ok(prepareIdx >= 0 && gradleIdx > prepareIdx, 'cap sync must run before Gradle unit tests')
+
+  const executor = readFileSync(
+    resolve(import.meta.dirname, '../src/core/db/migration-executor.js'),
+    'utf8',
+  )
+  assert.match(executor, /function isPluginConnection/)
+  assert.match(executor, /async function executePluginStatements/)
+  assert.match(executor, /async function executeSqlJsStatements/)
+  const pluginFn = executor.slice(
+    executor.indexOf('async function executePluginStatements'),
+    executor.indexOf('async function executeSqlJsStatements'),
+  )
+  assert.match(pluginFn, /await db\.executeSet\(\[item\]\)/)
+  assert.doesNotMatch(pluginFn, /executeRaw\(/)
+  assert.doesNotMatch(pluginFn, /SAVEPOINT \$\{/)
 
   const uiLayout = readFileSync(
     resolve(import.meta.dirname, '../scripts/playwright-ui-layout.mjs'),

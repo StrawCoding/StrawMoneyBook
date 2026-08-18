@@ -65,12 +65,11 @@ jobs:
         run: npm run release:sync-check
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+      - name: Prepare Android generated files
+        run: npm run prepare:android:release
       - name: Run Android and Wear unit tests
         working-directory: frontend/android
         run: ./gradlew :app:testDebugUnitTest :wear:testDebugUnitTest --stacktrace --configuration-cache --build-cache
-      - name: Prepare Android release files for cache warmup
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: npm run prepare:android:release
       - name: Warm Android bundleRelease cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: frontend/android

@@ -134,6 +134,7 @@ test('executeMigrationSql ignores duplicate schema errors when using executeSet'
 
   const statements = calls.map((item) => item[0].statement)
   assert.ok(statements.some((statement) => statement.includes('CREATE INDEX idx_example_sample')))
+  assert.ok(statements.some((statement) => statement.startsWith('SAVEPOINT ')))
   assert.equal(statements.at(-1), 'COMMIT;')
 })
 
@@ -155,9 +156,16 @@ test('executeMigrationSql does not wrap Capacitor plugin connections in beginTra
     },
   }
 
-  await executeMigrationSql(db, 'CREATE TABLE example (id TEXT);')
+  await executeMigrationSql(db, `
+    CREATE TABLE example (id TEXT);
+    ALTER TABLE example ADD COLUMN sample TEXT;
+  `)
 
-  assert.deepEqual(calls, ['CREATE TABLE example (id TEXT);'])
+  assert.deepEqual(calls, [
+    'CREATE TABLE example (id TEXT);',
+    'ALTER TABLE example ADD COLUMN sample TEXT;',
+  ])
+  assert.ok(!calls.some((item) => /SAVEPOINT|BEGIN;|COMMIT;|ROLLBACK/.test(String(item))))
 })
 
 test('executeMigrationSql rolls back earlier statements when a later one fails', async () => {

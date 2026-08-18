@@ -24,35 +24,8 @@ function savepointName(index) {
   return `mig_sp_${index}`
 }
 
-async function beginOuter(db) {
-  // Capacitor/jeep-sqlite exposes beginTransaction(), but wrapping executeSet
-  // migrations in it stalls web bootstrap on "資料載入中". sql.js test doubles
-  // only have executeSet, so they still get a real SQL BEGIN/COMMIT.
-  if (typeof db.beginTransaction === 'function') {
-    return null
-  }
-  await executeRaw(db, 'BEGIN;')
-  return 'sql'
-}
-
-async function commitOuter(db, mode) {
-  if (mode === 'plugin') {
-    await db.commitTransaction()
-    return
-  }
-  if (mode === 'sql') {
-    await executeRaw(db, 'COMMIT;')
-  }
-}
-
-async function rollbackOuter(db, mode) {
-  if (mode === 'plugin') {
-    await db.rollbackTransaction()
-    return
-  }
-  if (mode === 'sql') {
-    await executeRaw(db, 'ROLLBACK;')
-  }
+function isPluginConnection(db) {
+  return typeof db?.beginTransaction === 'function'
 }
 
 function isSavepointCandidate(statement) {
@@ -60,21 +33,31 @@ function isSavepointCandidate(statement) {
 }
 
 /**
- * Run a migration file as one SQLite transaction.
- * ALTER TABLE duplicate-column errors stay ignorable via SAVEPOINT
- * so they do not abort the outer transaction (COMPAT-001).
- *
- * Capacitor connections must use beginTransaction() — a raw SQL BEGIN via
- * executeSet can leave jeep-sqlite locked. SAVEPOINTs are only used for ALTER
- * TABLE so first-install CREATE scripts are not 3× slower (bootstrap hang).
+ * Capacitor/jeep-sqlite: never issue SQL BEGIN / SAVEPOINT / COMMIT via executeSet.
+ * Those statements deadlock the web worker and leave the app on 「資料載入中」.
+ * Duplicate-column ALTER errors stay ignorable per statement (no outer txn).
  */
-export async function executeMigrationSql(db, sql) {
-  const statements = buildMigrationStatementSet(sql)
-  if (!statements.length) return
+async function executePluginStatements(db, statements) {
+  for (const item of statements) {
+    try {
+      await db.executeSet([item])
+    } catch (error) {
+      if (!isIgnorableMigrationError(error)) {
+        throw error
+      }
+    }
+  }
+}
 
-  let outerMode = null
+/**
+ * sql.js / test doubles (COMPAT-001): wrap the file in one transaction.
+ * ALTER TABLE duplicate-column errors use SAVEPOINT so they do not abort the rest.
+ */
+async function executeSqlJsStatements(db, statements) {
+  let began = false
   try {
-    outerMode = await beginOuter(db)
+    await executeRaw(db, 'BEGIN;')
+    began = true
   } catch {
     // Already inside a transaction (or engine auto-begins). Continue with statements.
   }
@@ -110,17 +93,35 @@ export async function executeMigrationSql(db, sql) {
         }
       }
     }
-    if (outerMode) {
-      await commitOuter(db, outerMode)
+    if (began) {
+      await executeRaw(db, 'COMMIT;')
     }
   } catch (error) {
-    if (outerMode) {
+    if (began) {
       try {
-        await rollbackOuter(db, outerMode)
+        await executeRaw(db, 'ROLLBACK;')
       } catch {
         // Best-effort rollback; surface the original error.
       }
     }
     throw error
   }
+}
+
+/**
+ * Run a migration file.
+ *
+ * Plugin connections (Capacitor / jeep-sqlite) stay on the original per-statement
+ * executeSet path. sql.js doubles keep COMPAT-001 atomicity via BEGIN + SAVEPOINT.
+ */
+export async function executeMigrationSql(db, sql) {
+  const statements = buildMigrationStatementSet(sql)
+  if (!statements.length) return
+
+  if (isPluginConnection(db)) {
+    await executePluginStatements(db, statements)
+    return
+  }
+
+  await executeSqlJsStatements(db, statements)
 }

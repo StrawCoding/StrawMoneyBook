@@ -284,6 +284,10 @@ async function completeOnboarding() {
     hasWelcome: Boolean(document.querySelector('.welcome-root')),
     hasIntro: window.location.pathname.includes('/welcome/intro') || Boolean(document.querySelector('.intro-root')),
     bodyText: document.body?.innerText?.slice(0, 400) ?? '',
+    bootStage: window.__SMB_BOOT_STAGE__ ?? null,
+    bootStages: Array.isArray(window.__SMB_BOOT_STAGES__) ? window.__SMB_BOOT_STAGES__ : [],
+    hasBootLayer: Boolean(document.querySelector('.boot-layer')),
+    hasJeepSqlite: Boolean(customElements.get('jeep-sqlite')),
   })`)
 }
 
