@@ -1,5 +1,8 @@
 # Pending Release Notes
 
+---
+
+## v1.3.142
 - 依 2026-08-18 技術稽核繼續實作：銀行交易跨來源 identity（同帳戶同日同額標可能重複、匯入預設跳過）、單一銀行連線 `runtimeJobs` 合併防重入、SQLite `busy_timeout`、production Vercel serverless 404 導向 `api.strawmb.com`、client error log 失敗佇列＋longtask 觀察與 PII 脫敏、寫入後列表重整逾時改 toast；CI 另跑 budget-save／analysis-export／carrier-sync／budget-cross-month／budget-pay-cycle Playwright（共用 chromium 安裝＋獨立 session，避免 runner 未裝瀏覽器與搶 default session）。未拆 XL god-object、未接第三方 Sentry、未改 git history、銀行同步 E2E 仍不進 CI。
 - 依 2026-08-18 技術稽核續修：銀行自動同步單一憑證失敗不再中止後續連線；production bank／Google OAuth API fail-closed；sql.js migration 外層交易＋SAVEPOINT，Capacitor／jeep-sqlite 維持逐句 executeSet（避免網頁卡在資料載入中）；帳本 purge 包交易；總資產換匯與信用卡週期改讀帳本時區；軟刪交易連動 posting 且 import／wear／einvoice 保留冪等鍵；銀行 fallback 指紋同日同額加 occurrence（第 0 筆維持 v1 hash）；退款 SQL 收回 domain；Playwright 改相對路徑並將 `ui-layout` 納入 CI；CI 先 `prepare:android:release` 再跑 Android／Wear JVM 測試。
 - 銀行同步修正期：所有銀行同步動作依 debug 模式印到 Console（`[SMB:bank-sync]`，憑證欄位會遮罩）；設定 → 版本資訊 → Debug 頁可開關，網頁也可即時查看。debug／開發模式或手動開啟後，網頁可操作同步流程；網銀自動登入仍需 Android App。Android debug APK 另將原生步驟寫入 logcat `SMB-BankSync`。
@@ -9,7 +12,6 @@
 - 修復資產頁有價證券金額顯示為 $0：未填手動時價時回退平均成本，只記資金以投入本金計入；未交割（T+2）持倉會顯示在證券卡／列表，總資產仍只計已確認交割以免與交割戶現金雙計。補 Node 與 `playwright:ui-layout`。
 - 有價證券「提前確認」交割改以按下當下時間入帳（現金腿與 `settle_at`），不再沿用原排程 T+2；到期自動入帳仍用排程時間。
 
----
 - (v1.3.140 / Architecture B) 銀行同步多銀行架構：Provider Registry（第一銀行＋華南銀行）、通用 `connectBank`/`syncBank` plugin、帳號層級 checkpoint（migration 046）、`PARTIAL_SUCCESS`、共享 `BankAutomationSyncContract` watermark／lookback；淘汰 remote scrape／Playwright provider；建立頁依 schema 動態欄位；華南 Android adapter（H0 登入＋啟發式交易查詢）。
 - (v1.3.139 / Phase 0A–0C) 修復第一銀行 Android 增量同步 JS↔Java 合約：`syncBankConnectionNow` dual-write `lastSyncAt`＋`last_sync_at` 與 `lookbackDays`＋`lookback_days`；原生 `readLastSyncWatermark` 採 **`lastSyncAt` > `last_sync_at`** precedence；`resolveQueryStartDate` 強制 lookback overlap（預設 3 日，clamp 至 initialStart）；新增 `FirstBankAutomationSyncContractTest`（6）與 node source／service 合約測試。
 
