@@ -17,11 +17,11 @@ import migration016 from '@/core/db/migrations/016_loan_payment_interest_tx.sql?
 import migration017 from '@/core/db/migrations/017_account_credit_profile.sql?raw'
 import migration018 from '@/core/db/migrations/018_shared_sync_deleted_log.sql?raw'
 import migration019 from '@/core/db/migrations/019_bank_transaction_metadata.sql?raw'
-// NOTE: versions 20 and 21 were intentionally removed during schema consolidation.
+// NOTE: versions 20, 21, 22, 27 and 29 were intentionally removed during schema consolidation.
 // The schema changes from those drafts were either reverted or merged into adjacent migrations.
-// Do NOT reuse version numbers 20 or 21 — doing so would skip execution on devices that already
+// Do NOT reuse those version numbers — doing so would skip execution on devices that already
 // have schema_migrations rows for those versions, causing a schema split between new and existing installs.
-// Next available version: 37.
+// Next available version: 48.
 import migration023 from '@/core/db/migrations/023_reimbursement_item_advance_source.sql?raw'
 import migration024 from '@/core/db/migrations/024_savings_jars_auto_save.sql?raw'
 import migration025 from '@/core/db/migrations/025_budget_save.sql?raw'
@@ -44,7 +44,11 @@ import migration043 from '@/core/db/migrations/043_credit_card_system_p0.sql?raw
 import migration044 from '@/core/db/migrations/044_security_sell_source_buy.sql?raw'
 import migration045 from '@/core/db/migrations/045_wear_companion.sql?raw'
 import migration046 from '@/core/db/migrations/046_bank_sync_account_checkpoints.sql?raw'
+import migration047 from '@/core/db/migrations/047_restore_deleted_log_triggers.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
+import {
+  assertNoReservedMigrationVersions,
+} from '@/core/db/reserved-migration-versions'
 import {
   DATA_FLOOR_APP_VERSION_META_KEY,
   DATA_FLOOR_SCHEMA_VERSION_META_KEY,
@@ -96,7 +100,10 @@ const MIGRATIONS = [
   { version: 44, name: 'security_sell_source_buy', sql: migration044 },
   { version: 45, name: 'wear_companion', sql: migration045 },
   { version: 46, name: 'bank_sync_account_checkpoints', sql: migration046 },
+  { version: 47, name: 'restore_deleted_log_triggers', sql: migration047 },
 ]
+
+assertNoReservedMigrationVersions(MIGRATIONS)
 
 export function getKnownMaxSchemaVersion() {
   return MIGRATIONS.reduce((max, migration) => Math.max(max, Number(migration.version) || 0), 0)

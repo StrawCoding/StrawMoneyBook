@@ -27,3 +27,4 @@
 - Check `GET /health` returns `ok: true`.
 - Verify auth login/refresh/logout flows still work with rotated refresh tokens.
 - Verify shared-ledger API routes still return the same JSON shape used by the frontend.
+- Confirm `collab-store.sqlite` backup exists and is newer than the last release window. See `docs/backup-strategy.md`. Restore drill: stop API → replace sqlite from `.server-data/backups/` → integrity_check → start API → login + open one shared ledger.

@@ -539,7 +539,9 @@ App 開啟、回到前景、切換帳本與儲存訂閱項目後，會檢查目�
 - 自動同步開關
 - 取消共享
 
-這代表它不是單純把資料丟上雲端，而是有共享身分與同步關係的設計。
+這代表它不是單純把資料丟上雲端，而是有共享身分與同步關係的設計。後端唯一資料源 `collab-store.sqlite` 以 `npm run backup:collab`（`backend/src/collab/backup-store.js`）做線上 SQLite backup，輸出 `.server-data/backups/collab-store-<UTC>.sqlite` 並保留最近 14 份；頻率、環境變數與還原演練見 `docs/backup-strategy.md`，發版清單見 `docs/release-checklist.md`。
+
+本機帳本硬刪除交易／信用卡 posting／預算池／證券／帳單列時，`deleted_log` 需留下 tombstone 供共同帳本合併。migration 026／045 以 DROP+RENAME 重建 `transactions` 後曾遺失 `trg_deleted_log_transactions`；047 補回該觸發器並補齊 018 之後新增、已列入 snapshot 的表。
 
 SMB-188 / v1.2.4 後，PostSetupIntroPage 新增了「共同帳本」專屬步驟，讓首次設定的使用者能在導覽中直接了解並前往相關設定。
 

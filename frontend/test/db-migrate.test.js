@@ -274,6 +274,7 @@ test('all migration SQL files avoid hash comments that Android sqlite would reje
   const files = readdirSync(migrationsDir).filter((name) => name.endsWith('.sql')).sort()
 
   assert.ok(files.includes('046_bank_sync_account_checkpoints.sql'))
+  assert.ok(files.includes('047_restore_deleted_log_triggers.sql'))
 
   for (const file of files) {
     const sql = readFileSync(resolve(migrationsDir, file), 'utf8')
@@ -373,3 +374,144 @@ test('executeMigrationSql applies migration 046 on existing bank schema without 
 
   db.close()
 })
+
+test('migrate registers deleted_log trigger restore migration 047', () => {
+  const source = readFileSync(resolve(import.meta.dirname, '../src/core/db/migrate.js'), 'utf8')
+
+  assert.match(source, /import migration047 from '@\/core\/db\/migrations\/047_restore_deleted_log_triggers\.sql\?raw'/)
+  assert.match(source, /\{ version: 47, name: 'restore_deleted_log_triggers', sql: migration047 \}/)
+  assert.match(source, /assertNoReservedMigrationVersions\(MIGRATIONS\)/)
+  assert.match(source, /versions 20, 21, 22, 27 and 29/)
+  assert.doesNotMatch(source, /\{ version: 20,/)
+  assert.doesNotMatch(source, /\{ version: 21,/)
+  assert.doesNotMatch(source, /\{ version: 22,/)
+  assert.doesNotMatch(source, /\{ version: 27,/)
+  assert.doesNotMatch(source, /\{ version: 29,/)
+})
+
+test('reserved migration versions cannot be re-registered', async () => {
+  const {
+    RESERVED_MIGRATION_VERSIONS,
+    assertNoReservedMigrationVersions,
+  } = await import('../src/core/db/reserved-migration-versions.js')
+
+  assert.deepEqual([...RESERVED_MIGRATION_VERSIONS], [20, 21, 22, 27, 29])
+  assert.doesNotThrow(() => assertNoReservedMigrationVersions([{ version: 47 }]))
+  assert.throws(
+    () => assertNoReservedMigrationVersions([{ version: 22, name: 'reuse' }]),
+    /Do NOT reuse reserved migration versions 22/,
+  )
+})
+
+test('migration 047 restores transaction deleted_log trigger and records hard deletes', async () => {
+  const SQL = await initSqlJs()
+  const db = new SQL.Database()
+
+  db.run(`
+    CREATE TABLE deleted_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ledger_id TEXT NOT NULL,
+      table_name TEXT NOT NULL,
+      row_pk TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      deleted_at TEXT NOT NULL
+    );
+    CREATE TABLE transactions (
+      ledger_id TEXT,
+      id TEXT,
+      deleted_at TEXT,
+      updated_at TEXT,
+      occurred_at TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE transaction_postings (
+      ledger_id TEXT,
+      id TEXT,
+      deleted_at TEXT,
+      updated_at TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE budget_save_settlements (
+      ledger_id TEXT,
+      id TEXT,
+      updated_at TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE budget_containers (
+      ledger_id TEXT,
+      id TEXT,
+      updated_at TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE securities (
+      ledger_id TEXT,
+      id TEXT,
+      deleted_at TEXT,
+      updated_at TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE security_transactions (
+      ledger_id TEXT,
+      id TEXT,
+      deleted_at TEXT,
+      updated_at TEXT,
+      occurred_at TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE credit_statements (
+      ledger_id TEXT,
+      id TEXT,
+      deleted_at TEXT,
+      updated_at TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE credit_repayments (
+      ledger_id TEXT,
+      id TEXT,
+      deleted_at TEXT,
+      updated_at TEXT,
+      paid_at TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE credit_repayment_allocations (
+      ledger_id TEXT,
+      id TEXT,
+      deleted_at TEXT,
+      updated_at TEXT,
+      created_at TEXT
+    );
+    INSERT INTO transactions (ledger_id, id, created_at)
+    VALUES ('L1', 'tx1', '2026-08-01T00:00:00Z');
+    INSERT INTO transaction_postings (ledger_id, id, created_at)
+    VALUES ('L1', 'p1', '2026-08-01T00:00:00Z');
+  `)
+
+  const sql = readFileSync(
+    resolve(import.meta.dirname, '../src/core/db/migrations/047_restore_deleted_log_triggers.sql'),
+    'utf8',
+  )
+  await executeMigrationSql(createSqlJsMigrationDb(db), sql)
+
+  const triggerNames = db.exec(
+    `SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'trg_deleted_log_%' ORDER BY name`,
+  )
+  const names = triggerNames[0].values.map((row) => String(row[0]))
+  assert.ok(names.includes('trg_deleted_log_transactions'))
+  assert.ok(names.includes('trg_deleted_log_transaction_postings'))
+  assert.equal(names.length, 9)
+
+  db.run(`DELETE FROM transactions WHERE ledger_id = 'L1' AND id = 'tx1'`)
+  db.run(`DELETE FROM transaction_postings WHERE ledger_id = 'L1' AND id = 'p1'`)
+
+  const rows = db.exec(
+    `SELECT table_name, row_pk FROM deleted_log ORDER BY table_name`,
+  )
+  assert.deepEqual(rows[0].values, [
+    ['transaction_postings', 'p1'],
+    ['transactions', 'tx1'],
+  ])
+
+  await executeMigrationSql(createSqlJsMigrationDb(db), sql)
+  db.close()
+})
+

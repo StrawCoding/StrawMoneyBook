@@ -1,5 +1,6 @@
 # Pending Release Notes
 
+- 依 2026-08-18 技術稽核 Phase 0：CI 每次 push/PR 跑 Android／Wear JVM 單元測試（`gradlew :app:testDebugUnitTest :wear:testDebugUnitTest`）；migration 047 補回交易 `deleted_log` 觸發器並覆蓋 snapshot 新表；禁止重用遷移編號 20/21/22/27/29；還款超額與跨幣別換匯改為可執行的行為測試（單一 `fx-convert`）；後端 `collab-store.sqlite` 提供文件化線上備份（`npm run backup:collab`）。
 - 銀行同步修正期：所有銀行同步動作依 debug 模式印到 Console（`[SMB:bank-sync]`，憑證欄位會遮罩）；設定 → 版本資訊 → Debug 頁可開關，網頁也可即時查看。debug／開發模式或手動開啟後，網頁可操作同步流程；網銀自動登入仍需 Android App。Android debug APK 另將原生步驟寫入 logcat `SMB-BankSync`。
 - 語言選項改為 i18n 統一管理：zh-TW／en／ja 由 `SUPPORTED_LOCALES` 單一清單產生，按鈕永遠顯示原名（繁體中文／English／日本語）；補齊日文缺 key；`audit:i18n` 改讀拆檔後字典；共通元件與日期／金額格式跟隨目前語言；Android／Wear 補 `values-en`／`values-ja`。
 - 官方網站網頁測試版 `https://www.strawmb.com/app/` 改連正式營運後端 `https://api.strawmb.com`（hash router 避開 GitHub Pages 巢狀 SPA 404；Google OAuth／共同帳本／載具／銀行 API 在 production web 不再打到官網同網域）。`/preview` 提供入口；`gpr` 會同步發布測試版 SPA。

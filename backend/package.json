@@ -10,6 +10,7 @@
     "start": "node --env-file-if-exists=/.env --env-file-if-exists=.env src/server.js",
     "test": "node --test",
     "check": "node --test",
+    "backup:collab": "node scripts/backup-collab-store.mjs",
     "contract-check": "node scripts/sync-contract-check-run.mjs",
     "contract-check:einvoice": "node scripts/einvoice-portal-contract-check.mjs",
     "contract-check:first-bank": "node scripts/first-bank-portal-contract-check.mjs",

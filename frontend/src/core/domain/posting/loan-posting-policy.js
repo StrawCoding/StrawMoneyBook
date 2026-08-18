@@ -31,3 +31,23 @@ export function toLoanRepaymentPrincipalMinor(direction, principalComponentMinor
 export function toLoanRepaymentInterestMinor(direction, interestComponentMinor) {
   return toLoanRepaymentPrincipalMinor(direction, interestComponentMinor)
 }
+
+export const LOAN_OVERPAYMENT_ERROR = '還款金額不可大於借貸剩餘金額'
+
+/**
+ * Block over-payment only when the loan has preset interest.
+ * Without preset interest, amounts above remaining principal are allowed (interest feature).
+ */
+export function shouldBlockLoanOverpayment({
+  presetInterestMinor,
+  nextPaidMinor,
+  targetTotalMinor,
+}) {
+  return Number(presetInterestMinor) > 0 && Number(nextPaidMinor) > Number(targetTotalMinor)
+}
+
+export function assertLoanRepaymentNotOverTarget(params) {
+  if (shouldBlockLoanOverpayment(params)) {
+    throw new Error(LOAN_OVERPAYMENT_ERROR)
+  }
+}

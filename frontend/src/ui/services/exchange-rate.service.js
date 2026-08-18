@@ -1,6 +1,9 @@
 import { Capacitor } from '@capacitor/core'
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
-import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
+import {
+  convertAmountMinorByRate,
+  resolveCrossExchangeRate,
+} from '@/ui/utils/fx-convert.js'
 
 const EXCHANGE_RATE_SETTINGS_KEY = 'exchange_rate.settings'
 const EXCHANGE_RATE_SNAPSHOT_KEY = 'exchange_rate.snapshot'
@@ -643,25 +646,7 @@ export async function syncCbcExchangeRateSnapshot(ledgerId) {
   }
 }
 
-export function resolveCrossExchangeRate(rates, fromCurrency, toCurrency) {
-  const from = normalizeCurrencyCode(fromCurrency, 'TWD')
-  const to = normalizeCurrencyCode(toCurrency, 'TWD')
-  if (from === to) return 1
-
-  const fromPerUsd = Number(rates?.[from])
-  const toPerUsd = Number(rates?.[to])
-  if (!Number.isFinite(fromPerUsd) || fromPerUsd <= 0) return null
-  if (!Number.isFinite(toPerUsd) || toPerUsd <= 0) return null
-  return toPerUsd / fromPerUsd
-}
-
-export function convertAmountMinorByRate(amountMinor, rate) {
-  const amount = Math.abs(Math.round(Number(amountMinor) || 0))
-  const numericRate = Number(rate)
-  if (!Number.isFinite(amount) || amount <= 0) return 0
-  if (!Number.isFinite(numericRate) || numericRate <= 0) return 0
-  return Math.round(amount * numericRate)
-}
+export { convertAmountMinorByRate, resolveCrossExchangeRate }
 
 export function isExchangeRateSyncDue(snapshot, settings, nowMs = Date.now()) {
   const normalizedSettings = normalizeExchangeRateSettings(settings)

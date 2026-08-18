@@ -36,6 +36,7 @@ import {
 import { assertCanCreateLoan } from '@/core/services/membership.service'
 import { isSavingsJarAccount } from '@/core/repositories/savings-jar.repo'
 import {
+  assertLoanRepaymentNotOverTarget,
   toLoanOpenPrincipalMinor,
   toLoanRepaymentInterestMinor,
   toLoanRepaymentPrincipalMinor,
@@ -319,9 +320,11 @@ async function addLoanRepaymentInternal(ledgerId, payload) {
   if (remainingMinor <= 0) {
     throw new Error('此借貸已結清')
   }
-  if (presetInterestMinor > 0 && amountMinor > remainingMinor) {
-    throw new Error('還款金額不可大於借貸剩餘金額')
-  }
+  assertLoanRepaymentNotOverTarget({
+    presetInterestMinor,
+    nextPaidMinor: paidMinor + amountMinor,
+    targetTotalMinor,
+  })
 
   const principalRemainingMinor = Math.max(0, principalMinor - Number(loan.principal_paid_minor ?? 0))
   const principalComponentMinor = Math.min(amountMinor, principalRemainingMinor)
@@ -573,9 +576,11 @@ export async function updateLoanRepayment(ledgerId, payload) {
     const targetTotalMinor = Number(loan.target_total_minor ?? principalMinor)
     const paidExcludingCurrent = await sumLoanPaymentsAmountExcluding(ledgerId, loan.id, payment.id)
     const nextPaidMinor = paidExcludingCurrent + amountMinor
-    if (presetInterestMinor > 0 && nextPaidMinor > targetTotalMinor) {
-      throw new Error('還款金額不可大於借貸剩餘金額')
-    }
+    assertLoanRepaymentNotOverTarget({
+      presetInterestMinor,
+      nextPaidMinor,
+      targetTotalMinor,
+    })
     const principalPaidExcludingCurrent = Math.min(principalMinor, Math.max(0, paidExcludingCurrent))
     const principalRemainingMinor = Math.max(0, principalMinor - principalPaidExcludingCurrent)
     const principalComponentMinor = Math.min(amountMinor, principalRemainingMinor)
