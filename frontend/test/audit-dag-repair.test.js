@@ -59,6 +59,7 @@ test('bank client guard fails closed in production and ledger purge uses a trans
   assert.match(ci, /npm run playwright:budget-save/)
   assert.match(ci, /playwright-analysis-export:/)
   assert.match(ci, /npm run playwright:analysis-export/)
+  assert.match(ci, /poppler-utils/)
   assert.match(ci, /playwright-carrier-sync:/)
   assert.match(ci, /npm run playwright:carrier-sync/)
   assert.match(ci, /playwright-budget-cross-month:/)
