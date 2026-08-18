@@ -141,7 +141,7 @@ import {
   setGoogleDriveLedgerSyncState,
   syncGoogleDriveLedgerNow,
 } from '@/ui/services/google-drive-ledger-sync.service'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 
@@ -163,7 +163,7 @@ function formatDateTime(isoText) {
   if (!isoText) return '-'
   const date = new Date(isoText)
   if (Number.isNaN(date.getTime())) return '-'
-  return date.toLocaleString(locale.value || 'zh-TW', {
+  return date.toLocaleString(resolveIntlLocale(locale.value), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

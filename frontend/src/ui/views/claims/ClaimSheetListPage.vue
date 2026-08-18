@@ -363,7 +363,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
 import { useAccountStore } from '@/ui/stores/account.store'
@@ -800,7 +800,7 @@ function importedBorrowLoanPresentation(tx) {
 
 function formatTime(iso) {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString(locale.value || 'zh-TW', {
+  return new Date(iso).toLocaleString(resolveIntlLocale(locale.value), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

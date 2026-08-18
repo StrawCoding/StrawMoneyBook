@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">StrawMoneyBook</string>
+    <string name="title_activity_main">StrawMoneyBook</string>
+    <string name="package_name">com.strawcoding.strawmoneybook</string>
+    <string name="custom_url_scheme">com.strawcoding.strawmoneybook</string>
+    <string name="widget_catalog_summary_label">Monthly summary</string>
+    <string name="widget_catalog_pie_label">Income/expense pie</string>
+    <string name="widget_catalog_bar_label">Income/expense bars</string>
+    <string name="widget_catalog_quick_add_label">Quick add</string>
+    <string name="widget_catalog_ai_label">AI bookkeeping</string>
+    <string name="widget_title_month_summary">This month</string>
+    <string name="widget_title_pie_chart">This month pie</string>
+    <string name="widget_title_bar_chart">This month bars</string>
+    <string name="widget_title_quick_add">Quick add</string>
+    <string name="widget_title_ai_bookkeeping">AI bookkeeping</string>
+    <string name="widget_action_analysis">Charts</string>
+    <string name="widget_action_quick_add">Quick add</string>
+    <string name="widget_action_ai_bookkeeping">AI bookkeeping</string>
+    <string name="widget_action_quick_add_primary">Open quick add</string>
+    <string name="widget_action_quick_add_secondary">Create a manual transaction</string>
+    <string name="widget_action_ai_bookkeeping_primary">Open AI bookkeeping</string>
+    <string name="widget_action_ai_bookkeeping_secondary">Bookkeep quickly with text or voice</string>
+    <string name="widget_label_net_prefix">Net %1$s</string>
+    <string name="widget_label_income_prefix">Income %1$s</string>
+    <string name="widget_label_expense_prefix">Expense %1$s</string>
+    <string name="widget_description">Show this month\'s pie chart and open quick add</string>
+    <string name="widget_description_pie_chart">Show this month\'s income and expense pie chart</string>
+    <string name="widget_description_bar_chart">Show this month\'s income and expense bar comparison</string>
+    <string name="widget_description_quick_add">Open quick add in one tap</string>
+    <string name="widget_description_ai_bookkeeping">Open AI bookkeeping in one tap</string>
+</resources>

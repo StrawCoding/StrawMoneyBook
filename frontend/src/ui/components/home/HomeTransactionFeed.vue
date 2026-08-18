@@ -115,7 +115,7 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { addonDeltaMajorFromNote, addonDeltaTagText, stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { rememberHomeScrollPosition } from '@/ui/services/route-scroll.service'
 import { getEffectiveTransactionAmountMinor, isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 import { buildTransactionEditorAttributionView } from '@/core/services/transaction-editor-attribution'
@@ -279,7 +279,7 @@ function accountNameOfTransaction(tx) {
 
 function formatTime(iso) {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString('zh-TW', {
+  return new Date(iso).toLocaleString(resolveIntlLocale(), {
     hour: '2-digit',
     minute: '2-digit',
   })

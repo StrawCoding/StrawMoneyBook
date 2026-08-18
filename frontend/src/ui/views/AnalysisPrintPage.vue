@@ -161,7 +161,7 @@ import {
   triggerDownloadFromUrl,
 } from '@/core/services/export.service'
 import { buildAnalysisReportPdfFromElement } from '@/core/services/analysis-report-pdf.service'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 import { monthKeyFromDate } from '@/core/utils/id'
 import {
@@ -533,7 +533,7 @@ function dayKeyFromDate(date) {
 }
 
 function formatDateTime(date) {
-  return date.toLocaleString('zh-TW', {
+  return date.toLocaleString(resolveIntlLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

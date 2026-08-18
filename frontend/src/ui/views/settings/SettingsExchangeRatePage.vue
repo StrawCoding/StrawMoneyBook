@@ -61,7 +61,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { currencyOptions } from '@/ui/constants/currency-options'
 import {
   getExchangeRateSettings,
@@ -95,7 +95,7 @@ const syncedAtLabel = computed(() => {
   if (!snapshot.syncedAt) return t('settings_exchange_rate.never_synced')
   const date = new Date(snapshot.syncedAt)
   if (Number.isNaN(date.getTime())) return t('settings_exchange_rate.never_synced')
-  return date.toLocaleString('zh-TW')
+  return date.toLocaleString(resolveIntlLocale())
 })
 
 const effectiveDateLabel = computed(() => {

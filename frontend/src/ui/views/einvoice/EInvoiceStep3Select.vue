@@ -95,7 +95,7 @@
 import { computed, onMounted } from 'vue'
 import { useEInvoiceImportStore } from '@/ui/stores/einvoice-import.store.js'
 import { scrapeEInvoiceList } from '@/services/einvoice/backend.js'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 
 const { t } = useI18n()
 const store = useEInvoiceImportStore()
@@ -190,11 +190,11 @@ const errorIconClass = computed(() =>
 // ── Formatters ────────────────────────────────────────────────────────────────
 
 function formatAmount(amount) {
-  return Number(amount).toLocaleString('zh-TW')
+  return Number(amount).toLocaleString(resolveIntlLocale())
 }
 
 function formatDate(ms) {
-  return new Date(ms).toLocaleDateString('zh-TW')
+  return new Date(ms).toLocaleDateString(resolveIntlLocale())
 }
 </script>
 

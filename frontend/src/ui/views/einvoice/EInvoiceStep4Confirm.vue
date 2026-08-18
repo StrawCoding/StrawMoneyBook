@@ -81,7 +81,7 @@ import { useAccountStore } from '@/ui/stores/account.store.js'
 import { useCategoryStore } from '@/ui/stores/category.store.js'
 import { useLedgerStore } from '@/ui/stores/ledger.store.js'
 import { importSelectedInvoices } from '@/services/einvoice/backend.js'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { withLeadingAccountOption } from '@/ui/utils/account-option-groups'
 import { buildCategorySelectGroups } from '@/ui/utils/category-options'
@@ -125,7 +125,7 @@ const categorySelectGroups = computed(() => withLeadingAccountOption(
 ))
 
 function formatAmount(amount) {
-  return Number(amount).toLocaleString('zh-TW')
+  return Number(amount).toLocaleString(resolveIntlLocale())
 }
 
 async function handleImport() {

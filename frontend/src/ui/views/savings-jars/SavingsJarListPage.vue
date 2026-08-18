@@ -272,7 +272,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
 
 const accountStore = useAccountStore()
@@ -325,7 +325,7 @@ function formatDate(value) {
     ? new Date(`${text}T00:00:00`)
     : new Date(text)
   if (Number.isNaN(parsed.getTime())) return '-'
-  return parsed.toLocaleDateString('zh-TW')
+  return parsed.toLocaleDateString(resolveIntlLocale())
 }
 
 function readAutoSaveConfig(raw = {}) {
@@ -526,7 +526,7 @@ const canSubmitFlow = computed(() => {
 
 function formatCurrencyMajor(valueMajor, currencyCode = 'TWD') {
   const major = Number(valueMajor) || 0
-  return new Intl.NumberFormat('zh-TW', {
+  return new Intl.NumberFormat(resolveIntlLocale(), {
     style: 'currency',
     currency: normalizeCurrencyCode(currencyCode, 'TWD'),
     minimumFractionDigits: Math.abs(Math.round(major * 100)) % 100 === 0 ? 0 : 2,

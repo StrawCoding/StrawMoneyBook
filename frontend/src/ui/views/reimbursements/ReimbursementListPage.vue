@@ -321,7 +321,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { isFreeTier } from '@/core/services/membership.service'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon } from '@/ui/utils/system-transaction-presenter'
 import {
@@ -493,7 +493,7 @@ watch(
 
 function formatTime(iso) {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString('zh-TW', {
+  return new Date(iso).toLocaleString(resolveIntlLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

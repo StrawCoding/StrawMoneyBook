@@ -289,7 +289,7 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { getLastManualBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
@@ -358,7 +358,7 @@ const aiStatusText = computed(() => {
   if (speechListening.value) return t('ai_bookkeeping.status.listening', 'AI 聆聽中...')
   return ''
 })
-const speechLanguage = computed(() => (locale.value === 'en' ? 'en-US' : 'zh-TW'))
+const speechLanguage = computed(() => (resolveIntlLocale(locale.value)))
 const TRANSFER_RATE_AUTO_SYNC_TIMEOUT_MS = 8000
 
 const model = reactive({
@@ -471,7 +471,7 @@ const transferSnapshotInfoLabel = computed(() => {
   if (!exchangeRateSnapshot.value?.syncedAt) return '尚未同步'
   const parsed = new Date(exchangeRateSnapshot.value.syncedAt)
   if (Number.isNaN(parsed.getTime())) return '尚未同步'
-  return `${parsed.toLocaleString('zh-TW')}（資料日期 ${exchangeRateSnapshot.value.effectiveDate || '-'}）`
+  return `${parsed.toLocaleString(resolveIntlLocale())}（資料日期 ${exchangeRateSnapshot.value.effectiveDate || '-'}）`
 })
 
 watch(
@@ -1539,7 +1539,7 @@ function formatCurrencyMinor(valueMinor, currencyCode = 'TWD') {
   const minor = Math.abs(Math.round(Number(valueMinor) || 0))
   const major = minor / 100
   const safeCurrency = normalizeCurrencyCode(currencyCode, 'TWD')
-  return new Intl.NumberFormat('zh-TW', {
+  return new Intl.NumberFormat(resolveIntlLocale(), {
     style: 'currency',
     currency: safeCurrency,
     minimumFractionDigits: minor % 100 === 0 ? 0 : 2,

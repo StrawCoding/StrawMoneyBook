@@ -452,7 +452,7 @@ import AppDialog from '@/ui/components/common/AppDialog.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
 import { isDailyPoolChildItem } from '@/core/services/budget.service'
 import { APP_BUDGET_PERIOD_SYNC_EVENT } from '@/ui/composables/useHomePeriodFilter'
@@ -916,7 +916,7 @@ function itemDailyRuleSummary(item) {
 }
 
 function numberFormatLocale() {
-  return locale.value === 'en' ? 'en-US' : 'zh-TW'
+  return resolveIntlLocale(locale.value)
 }
 
 function formatMajor(amountMinor) {

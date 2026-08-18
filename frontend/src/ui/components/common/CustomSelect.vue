@@ -11,7 +11,7 @@
         <font-awesome-icon v-if="selectedOption?.icon" :icon="selectedOption.icon" class="option-icon" />
         <span v-if="!iconOnly || !selectedOption?.icon" class="text-wrap">
           <span class="text" :class="{ placeholder: !selectedLabel }">
-            {{ selectedLabel || placeholder }}
+            {{ selectedLabel || resolvedPlaceholder }}
           </span>
           <small v-if="selectedOption?.groupName && selectedLabel" class="selected-group">
             {{ selectedOption.groupName }}
@@ -23,7 +23,7 @@
 
     <InputBottomSheet
       :open="open"
-      :title="placeholder"
+      :title="resolvedPlaceholder"
       :body-class="'menu-sheet-body'"
       :sheet-class="{ 'icon-only-menu': iconOnly, 'menu-sheet': true }"
       @close="closeMenu"
@@ -67,6 +67,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
+import { useI18n } from '@/ui/services/i18n.service'
 
 const props = defineProps({
   modelValue: {
@@ -83,7 +84,7 @@ const props = defineProps({
   },
   placeholder: {
     type: String,
-    default: '請選擇',
+    default: '',
   },
   disabled: {
     type: Boolean,
@@ -97,12 +98,14 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 const open = ref(false)
+const { t } = useI18n()
+const resolvedPlaceholder = computed(() => props.placeholder || t('common.select'))
 
 const normalizedOptions = computed(() => normalizeOptions(props.options))
 const normalizedGroups = computed(() => {
   return (props.groups ?? [])
     .map((group, index) => {
-      const groupName = group.name ?? '分類'
+      const groupName = group.name ?? t('common.category')
       const groupOptions = normalizeOptions(group.options ?? group.categories ?? [], groupName)
       if (!groupOptions.length) return null
       return {

@@ -249,7 +249,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
@@ -720,7 +720,7 @@ function loanTransactionIcon(tx) {
 
 function formatTime(iso) {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString('zh-TW', {
+  return new Date(iso).toLocaleString(resolveIntlLocale(), {
     hour: '2-digit',
     minute: '2-digit',
   })

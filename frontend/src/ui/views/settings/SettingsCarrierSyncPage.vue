@@ -237,7 +237,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { withLeadingAccountOption } from '@/ui/utils/account-option-groups'
 import { buildCategorySelectGroups } from '@/ui/utils/category-options'
@@ -579,17 +579,17 @@ function reloadPending() {
 }
 
 function formatAmount(amount) {
-  return Number(amount).toLocaleString('zh-TW')
+  return Number(amount).toLocaleString(resolveIntlLocale())
 }
 
 function formatDate(ms) {
   if (!ms) return '-'
-  return new Date(ms).toLocaleDateString('zh-TW')
+  return new Date(ms).toLocaleDateString(resolveIntlLocale())
 }
 
 function formatDateTime(ms) {
   if (!ms) return '-'
-  return new Date(ms).toLocaleString('zh-TW')
+  return new Date(ms).toLocaleString(resolveIntlLocale())
 }
 
 function syncStatusText(status) {

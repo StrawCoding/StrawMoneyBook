@@ -13,7 +13,7 @@
 
     <InputBottomSheet
       :open="isOpen"
-      title="選擇帳本"
+      :title="t('ledger_switcher.title')"
       :body-class="'menu-sheet-body'"
       :sheet-class="'menu-sheet'"
       @close="isOpen = false"
@@ -38,13 +38,15 @@ import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { isFreeTier } from '@/core/services/membership.service'
+import { useI18n } from '@/ui/services/i18n.service'
 
 const ledgerStore = useLedgerStore()
 const uiStore = useUiStore()
+const { t } = useI18n()
 const isOpen = ref(false)
 
 const activeLedgerName = computed(() => {
-  return ledgerStore.activeLedger?.name ?? '請選擇帳本'
+  return ledgerStore.activeLedger?.name ?? t('ledger_switcher.placeholder')
 })
 const switchableLedgers = computed(() => {
   const ledgers = ledgerStore.ledgers
@@ -64,9 +66,9 @@ async function onChange(nextLedgerId) {
   if (!nextLedgerId || nextLedgerId === ledgerStore.activeLedgerId) return
   try {
     await ledgerStore.switchLedger(nextLedgerId)
-    uiStore.pushToast('已切換帳本')
+    uiStore.pushToast(t('ledger_switcher.toast.switched'))
   } catch (error) {
-    uiStore.pushToast(error.message ?? '切換帳本失敗', 'error')
+    uiStore.pushToast(error.message ?? t('ledger_switcher.toast.failed'), 'error')
   }
 }
 

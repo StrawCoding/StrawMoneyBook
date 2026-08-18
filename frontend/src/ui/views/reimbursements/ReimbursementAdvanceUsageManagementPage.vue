@@ -113,7 +113,7 @@ import {
   listReimbursementAdvanceUsageRecordsData,
 } from '@/core/services/reimbursement.service'
 import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 
 const router = useRouter()
 const ledgerStore = useLedgerStore()
@@ -227,7 +227,7 @@ async function confirmDelete() {
 
 function formatTime(iso) {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString('zh-TW', {
+  return new Date(iso).toLocaleString(resolveIntlLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

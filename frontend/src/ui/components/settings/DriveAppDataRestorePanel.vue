@@ -237,7 +237,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import {
@@ -408,7 +408,7 @@ function formatTime(value) {
   const ms = Date.parse(raw)
   if (!Number.isFinite(ms)) return raw
   try {
-    return new Intl.DateTimeFormat(locale.value || 'zh-TW', {
+    return new Intl.DateTimeFormat(resolveIntlLocale(locale.value), {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',

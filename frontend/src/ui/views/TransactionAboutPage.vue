@@ -180,7 +180,7 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { loadTransactionDetailContext } from '@/core/services/transaction-query.service'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { goBackOrFallback, returnHomeAfterTransactionDelete } from '@/ui/services/navigation-back.service'
 import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon, getSystemTransactionLabel, getSystemTransactionType } from '@/ui/utils/system-transaction-presenter'
@@ -534,7 +534,7 @@ function relationAccountText(tx) {
 
 function formatTime(iso) {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString(locale.value === 'en' ? 'en-US' : 'zh-TW', {
+  return new Date(iso).toLocaleString(resolveIntlLocale(locale.value), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

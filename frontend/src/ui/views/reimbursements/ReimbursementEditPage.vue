@@ -72,6 +72,7 @@
 </template>
 
 <script setup>
+import { resolveIntlLocale } from '@/ui/services/i18n.service'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
@@ -160,7 +161,7 @@ onMounted(async () => {
 
 function formatTime(iso) {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString('zh-TW', {
+  return new Date(iso).toLocaleString(resolveIntlLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

@@ -16,6 +16,7 @@
             :key="option.value"
             type="button"
             class="language-btn"
+            :data-testid="`language-option-${option.value}`"
             :class="{ active: option.value === locale }"
             @click="pickLanguage(option.value)"
           >

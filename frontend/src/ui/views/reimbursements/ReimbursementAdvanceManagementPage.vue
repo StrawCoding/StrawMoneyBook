@@ -105,6 +105,7 @@
 </template>
 
 <script setup>
+import { resolveIntlLocale } from '@/ui/services/i18n.service'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
@@ -227,7 +228,7 @@ function canDeleteAdvance(advance) {
 
 function formatTime(iso) {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString('zh-TW', {
+  return new Date(iso).toLocaleString(resolveIntlLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

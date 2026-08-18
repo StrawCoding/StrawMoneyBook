@@ -1,63 +1,50 @@
-import fs from 'node:fs'
-import path from 'node:path'
-import vm from 'node:vm'
-import { RUNTIME_JA_MESSAGES_GENERATED } from '../src/ui/services/runtime-ja-messages.generated.js'
+import { MESSAGES_ZH_TW } from '../src/ui/services/i18n/messages-zh-TW.js'
+import { MESSAGES_EN } from '../src/ui/services/i18n/messages-en.js'
+import { MESSAGES_JA } from '../src/ui/services/i18n/messages-ja.js'
 
-const I18N_FILE = path.resolve('src/ui/services/i18n.service.js')
 const BASE_LOCALE = 'zh-TW'
-
-function loadMessagesFromSource() {
-  const source = fs.readFileSync(I18N_FILE, 'utf8')
-  const start = source.indexOf('const MESSAGES =')
-  const end = source.indexOf('\nconst localeRef', start)
-  if (start < 0 || end < 0) {
-    throw new Error('找不到 MESSAGES 定義區段')
-  }
-
-  const snippet = source.slice(start, end)
-  const context = {
-    RUNTIME_JA_MESSAGES_GENERATED,
-  }
-  vm.createContext(context)
-  vm.runInContext(`${snippet}\nthis.__MESSAGES__ = MESSAGES`, context, { filename: I18N_FILE })
-  return context.__MESSAGES__
+const MESSAGES = {
+  'zh-TW': MESSAGES_ZH_TW,
+  en: MESSAGES_EN,
+  ja: MESSAGES_JA,
 }
 
 function main() {
-  const messages = loadMessagesFromSource()
-  if (!messages || typeof messages !== 'object') {
-    throw new Error('MESSAGES 解析失敗')
-  }
-
-  const locales = Object.keys(messages).sort()
+  const locales = Object.keys(MESSAGES).sort()
   if (!locales.includes(BASE_LOCALE)) {
     throw new Error(`缺少基準語言 ${BASE_LOCALE}`)
   }
 
-  const baseKeys = Object.keys(messages[BASE_LOCALE] ?? {}).sort()
+  const baseKeys = Object.keys(MESSAGES[BASE_LOCALE] ?? {}).sort()
   const baseKeySet = new Set(baseKeys)
-  let hasMissing = false
+  let hasProblem = false
 
   console.log(`i18n audit: base=${BASE_LOCALE}, baseKeys=${baseKeys.length}, locales=${locales.join(', ')}`)
   for (const locale of locales) {
-    const dictionary = messages[locale] ?? {}
+    const dictionary = MESSAGES[locale] ?? {}
     const localeKeys = Object.keys(dictionary)
     const missing = baseKeys.filter((key) => !(key in dictionary))
     const extra = localeKeys.filter((key) => !baseKeySet.has(key))
+    const empty = localeKeys.filter((key) => String(dictionary[key] ?? '').trim() === '')
 
-    const status = missing.length ? 'FAIL' : 'OK'
-    console.log(`[${status}] ${locale} keys=${localeKeys.length} missing=${missing.length} extra=${extra.length}`)
+    const status = missing.length || extra.length || empty.length ? 'FAIL' : 'OK'
+    console.log(`[${status}] ${locale} keys=${localeKeys.length} missing=${missing.length} extra=${extra.length} empty=${empty.length}`)
 
     if (missing.length) {
-      hasMissing = true
+      hasProblem = true
       console.log(`  missing sample: ${missing.slice(0, 20).join(', ')}`)
     }
     if (extra.length) {
+      hasProblem = true
       console.log(`  extra sample: ${extra.slice(0, 20).join(', ')}`)
+    }
+    if (empty.length) {
+      hasProblem = true
+      console.log(`  empty sample: ${empty.slice(0, 20).join(', ')}`)
     }
   }
 
-  if (hasMissing) {
+  if (hasProblem) {
     process.exitCode = 1
     return
   }

@@ -97,7 +97,7 @@ import {
   pruneImportAmountOverrides,
   seedImportAmountOverrides,
 } from '@/ui/utils/claim-sheet-import-amount-overrides'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
@@ -230,7 +230,7 @@ function clampAmountOverride(tx) {
 
 function formatTime(iso) {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString(locale.value || 'zh-TW', {
+  return new Date(iso).toLocaleString(resolveIntlLocale(locale.value), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

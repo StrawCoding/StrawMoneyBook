@@ -165,7 +165,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { buildCategorySelectGroups, ensureCategoryIdForType, getCategoryOptionsByType } from '@/ui/utils/category-options'
 import {
   describeSubscriptionInterval,
@@ -326,7 +326,7 @@ function formatDate(value) {
     ? new Date(`${text}T00:00:00`)
     : new Date(text)
   if (Number.isNaN(parsed.getTime())) return '-'
-  return parsed.toLocaleDateString('zh-TW')
+  return parsed.toLocaleDateString(resolveIntlLocale())
 }
 
 function accountName(accountId) {

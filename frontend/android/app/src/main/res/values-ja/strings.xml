@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">StrawMoneyBook</string>
+    <string name="title_activity_main">StrawMoneyBook</string>
+    <string name="package_name">com.strawcoding.strawmoneybook</string>
+    <string name="custom_url_scheme">com.strawcoding.strawmoneybook</string>
+    <string name="widget_catalog_summary_label">月次収支概要</string>
+    <string name="widget_catalog_pie_label">収支円グラフ</string>
+    <string name="widget_catalog_bar_label">収支棒グラフ</string>
+    <string name="widget_catalog_quick_add_label">クイック記帳</string>
+    <string name="widget_catalog_ai_label">AI 記帳</string>
+    <string name="widget_title_month_summary">今月の収支</string>
+    <string name="widget_title_pie_chart">今月の円グラフ</string>
+    <string name="widget_title_bar_chart">今月の棒グラフ</string>
+    <string name="widget_title_quick_add">クイック記帳</string>
+    <string name="widget_title_ai_bookkeeping">AI 記帳</string>
+    <string name="widget_action_analysis">グラフ分析</string>
+    <string name="widget_action_quick_add">クイック記帳</string>
+    <string name="widget_action_ai_bookkeeping">AI 記帳</string>
+    <string name="widget_action_quick_add_primary">クイック追加を開く</string>
+    <string name="widget_action_quick_add_secondary">手動取引を作成</string>
+    <string name="widget_action_ai_bookkeeping_primary">AI 記帳を開く</string>
+    <string name="widget_action_ai_bookkeeping_secondary">テキストまたは音声で素早く記帳</string>
+    <string name="widget_label_net_prefix">差額 %1$s</string>
+    <string name="widget_label_income_prefix">収入 %1$s</string>
+    <string name="widget_label_expense_prefix">支出 %1$s</string>
+    <string name="widget_description">今月の円グラフを表示し、クイック記帳を開けます</string>
+    <string name="widget_description_pie_chart">今月の収入と支出の円グラフを表示します</string>
+    <string name="widget_description_bar_chart">今月の収入と支出の棒グラフ比較を表示します</string>
+    <string name="widget_description_quick_add">ワンタップでクイック記帳を開きます</string>
+    <string name="widget_description_ai_bookkeeping">ワンタップで AI 記帳を開きます</string>
+</resources>

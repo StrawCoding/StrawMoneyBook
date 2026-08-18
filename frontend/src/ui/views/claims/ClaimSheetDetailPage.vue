@@ -126,7 +126,7 @@ import { Capacitor } from '@capacitor/core'
 import { useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -208,7 +208,7 @@ function revokeExportUrl() {
 
 function formatTime(iso) {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString(locale.value || 'zh-TW', {
+  return new Date(iso).toLocaleString(resolveIntlLocale(locale.value), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -291,7 +291,7 @@ async function exportClaim() {
     const pdfFile = await buildClaimSheetPdfFile(
       { claim: claim.value, items: items.value },
       {
-        locale: locale.value || 'zh-TW',
+        locale: resolveIntlLocale(locale.value),
         title: t('claim_sheet.title'),
         detailTitle: t('claim_sheet.detail_title'),
         totalLabel: t('claim_sheet.form.net_total'),

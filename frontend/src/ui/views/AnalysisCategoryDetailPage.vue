@@ -81,7 +81,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { listTransactionsForAnalysis } from '@/core/services/transaction-query.service'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
@@ -326,7 +326,7 @@ function loanTransactionIcon(tx) {
 
 function formatTime(iso) {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString('zh-TW', {
+  return new Date(iso).toLocaleString(resolveIntlLocale(), {
     hour: '2-digit',
     minute: '2-digit',
   })

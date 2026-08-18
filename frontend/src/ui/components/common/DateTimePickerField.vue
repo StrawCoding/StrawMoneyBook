@@ -7,7 +7,7 @@
 
     <InputBottomSheet
       :open="open"
-      title="選擇日期"
+      :title="t('datetime.pick_date')"
       :body-class="'panel-sheet-body'"
       :sheet-class="'panel-sheet'"
       :show-footer="true"
@@ -38,7 +38,7 @@
 
       <div v-if="showTime" class="time-wrap">
         <div class="time-col">
-          <small>時</small>
+          <small>{{ t('datetime.hour') }}</small>
           <div class="time-list">
             <button
               v-for="h in hours"
@@ -54,7 +54,7 @@
         </div>
 
         <div class="time-col">
-          <small>分</small>
+          <small>{{ t('datetime.minute') }}</small>
           <div class="time-list">
             <button
               v-for="m in minutes"
@@ -71,8 +71,8 @@
       </div>
 
       <template #footer>
-        <button type="button" class="btn" @click="setNow">現在</button>
-        <button type="button" class="btn" @click="closePanel">完成</button>
+        <button type="button" class="btn" @click="setNow">{{ t('datetime.now') }}</button>
+        <button type="button" class="btn" @click="closePanel">{{ t('common.done') }}</button>
       </template>
     </InputBottomSheet>
   </div>
@@ -81,6 +81,9 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
+import { resolveIntlLocale, useI18n } from '@/ui/services/i18n.service'
+
+const { t } = useI18n()
 
 const props = defineProps({
   date: {
@@ -107,7 +110,15 @@ const props = defineProps({
 
 const emit = defineEmits(['update:date', 'update:hour', 'update:minute'])
 
-const weekNames = ['日', '一', '二', '三', '四', '五', '六']
+const weekNames = computed(() => [
+  t('datetime.week.sun'),
+  t('datetime.week.mon'),
+  t('datetime.week.tue'),
+  t('datetime.week.wed'),
+  t('datetime.week.thu'),
+  t('datetime.week.fri'),
+  t('datetime.week.sat'),
+])
 const hours = Array.from({ length: 24 }, (_, i) => i)
 const minutes = Array.from({ length: 60 }, (_, i) => i)
 const open = ref(false)
@@ -124,13 +135,13 @@ watch(
 const monthLabel = computed(() => {
   const y = viewMonth.value.getFullYear()
   const m = viewMonth.value.getMonth() + 1
-  return `${y}年${m}月`
+  return t('datetime.month_label', { year: y, month: m })
 })
 
 const displayText = computed(() => {
   const parsed = parseDate(props.date)
   if (!parsed) return '-'
-  const datePart = parsed.toLocaleDateString('zh-TW', {
+  const datePart = parsed.toLocaleDateString(resolveIntlLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

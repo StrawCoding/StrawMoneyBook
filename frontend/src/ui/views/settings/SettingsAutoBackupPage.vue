@@ -287,7 +287,7 @@ import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import DriveAppDataRestorePanel from '@/ui/components/settings/DriveAppDataRestorePanel.vue'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import {
   autoConnectGoogleBackup,
   connectGoogleBackup,
@@ -528,7 +528,7 @@ function formatBackupTime(isoText) {
   if (!isoText) return '-'
   const date = new Date(isoText)
   if (Number.isNaN(date.getTime())) return '-'
-  return date.toLocaleString(locale.value || 'zh-TW', {
+  return date.toLocaleString(resolveIntlLocale(locale.value), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

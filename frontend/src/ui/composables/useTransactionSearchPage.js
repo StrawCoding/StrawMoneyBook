@@ -1,4 +1,5 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { resolveIntlLocale } from '@/ui/services/i18n.service.js'
 import { batchPatchTransactions } from '@/core/services/transaction.service'
 import { listTransactionsForSearch, TRANSACTION_PAGE_SIZE } from '@/core/services/transaction-query.service'
 import {
@@ -109,7 +110,7 @@ export function useTransactionSearchPage({
 
   function formatTime(iso) {
     if (!iso) return '-'
-    return new Date(iso).toLocaleString(locale.value === 'en' ? 'en-US' : 'zh-TW', {
+    return new Date(iso).toLocaleString(resolveIntlLocale(locale.value), {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',

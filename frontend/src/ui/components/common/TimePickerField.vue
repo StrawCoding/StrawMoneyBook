@@ -12,7 +12,7 @@
 
     <InputBottomSheet
       :open="open"
-      :title="title"
+      :title="resolvedTitle"
       :body-class="'panel-sheet-body'"
       :sheet-class="'panel-sheet'"
       :show-footer="true"
@@ -20,7 +20,7 @@
     >
       <div class="time-wrap">
         <div class="time-col">
-          <small>時</small>
+          <small>{{ t('datetime.hour') }}</small>
           <div class="time-list">
             <button
               v-for="h in hours"
@@ -36,7 +36,7 @@
         </div>
 
         <div class="time-col">
-          <small>分</small>
+          <small>{{ t('datetime.minute') }}</small>
           <div class="time-list">
             <button
               v-for="m in minutes"
@@ -53,8 +53,8 @@
       </div>
 
       <template #footer>
-        <button type="button" class="btn" @click="resetToCurrentValue">重設</button>
-        <button type="button" class="btn primary" @click="applySelection">完成</button>
+        <button type="button" class="btn" @click="resetToCurrentValue">{{ t('common.reset_default') }}</button>
+        <button type="button" class="btn primary" @click="applySelection">{{ t('common.done') }}</button>
       </template>
     </InputBottomSheet>
   </div>
@@ -63,6 +63,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
+import { useI18n } from '@/ui/services/i18n.service'
 const DEFAULT_HOUR = 21
 const DEFAULT_MINUTE = 0
 
@@ -77,11 +78,13 @@ const props = defineProps({
   },
   title: {
     type: String,
-    default: '選擇時間',
+    default: '',
   },
 })
 
 const emit = defineEmits(['update:modelValue'])
+const { t } = useI18n()
+const resolvedTitle = computed(() => props.title || t('datetime.pick_time'))
 
 const hours = Array.from({ length: 24 }, (_, index) => index)
 const minutes = Array.from({ length: 60 }, (_, index) => index)

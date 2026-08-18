@@ -4,6 +4,7 @@
 - 語言選項改為 i18n 統一管理：zh-TW／en／ja 由 `SUPPORTED_LOCALES` 單一清單產生，按鈕永遠顯示原名（繁體中文／English／日本語）；補齊日文缺 key；`audit:i18n` 改讀拆檔後字典；共通元件與日期／金額格式跟隨目前語言；Android／Wear 補 `values-en`／`values-ja`。
 - 官方網站網頁測試版 `https://www.strawmb.com/app/` 改連正式營運後端 `https://api.strawmb.com`（hash router 避開 GitHub Pages 巢狀 SPA 404；Google OAuth／共同帳本／載具／銀行 API 在 production web 不再打到官網同網域）。`/preview` 提供入口；`gpr` 會同步發布測試版 SPA。
 - 修復資產頁有價證券金額顯示為 $0：未填手動時價時回退平均成本，只記資金以投入本金計入；未交割（T+2）持倉會顯示在證券卡／列表，總資產仍只計已確認交割以免與交割戶現金雙計。補 Node 與 `playwright:ui-layout`。
+- 有價證券「提前確認」交割改以按下當下時間入帳（現金腿與 `settle_at`），不再沿用原排程 T+2；到期自動入帳仍用排程時間。
 
 ---
 - (v1.3.140 / Architecture B) 銀行同步多銀行架構：Provider Registry（第一銀行＋華南銀行）、通用 `connectBank`/`syncBank` plugin、帳號層級 checkpoint（migration 046）、`PARTIAL_SUCCESS`、共享 `BankAutomationSyncContract` watermark／lookback；淘汰 remote scrape／Playwright provider；建立頁依 schema 動態欄位；華南 Android adapter（H0 登入＋啟發式交易查詢）。

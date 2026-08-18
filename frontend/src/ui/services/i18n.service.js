@@ -11,6 +11,11 @@ import { MESSAGES_JA } from './i18n/messages-ja.js'
 const STORAGE_KEY = 'strawmoneybook.locale'
 const DEFAULT_LOCALE = 'zh-TW'
 const SUPPORTED_LOCALES = ['zh-TW', 'en', 'ja']
+const LANGUAGE_ENDONYMS = {
+  'zh-TW': '繁體中文',
+  en: 'English',
+  ja: '日本語',
+}
 
 const translatableAttributeNames = ['placeholder', 'title', 'aria-label']
 const ENABLE_RUNTIME_DOM_TRANSLATOR = true
@@ -147,6 +152,22 @@ export function setLocale(locale) {
 
 export function getCurrentLocale() {
   return localeRef.value
+}
+
+export function getSupportedLocales() {
+  return [...SUPPORTED_LOCALES]
+}
+
+export function getLanguageEndonym(locale) {
+  const resolved = resolveRuntimeLocale(locale)
+  return LANGUAGE_ENDONYMS[resolved] ?? LANGUAGE_ENDONYMS[DEFAULT_LOCALE]
+}
+
+export function resolveIntlLocale(locale = getCurrentLocale()) {
+  const resolved = resolveRuntimeLocale(locale)
+  if (resolved === 'en') return 'en-US'
+  if (resolved === 'ja') return 'ja-JP'
+  return 'zh-TW'
 }
 
 function translateRuntimeTextToLocale(text, locale) {
@@ -349,7 +370,7 @@ export function useI18n() {
   const localeOptions = computed(() =>
     SUPPORTED_LOCALES.map((item) => ({
       value: item,
-      label: t(`language.${item}`, item),
+      label: getLanguageEndonym(item),
     })),
   )
 

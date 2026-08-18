@@ -6,6 +6,7 @@
 import { computed } from 'vue'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
+import { resolveIntlLocale } from '@/ui/services/i18n.service'
 
 const props = defineProps({
   valueMinor: {
@@ -41,7 +42,7 @@ const text = computed(() => {
 
   const major = minor / 100
   const hasFraction = Math.abs(minor) % 100 !== 0
-  return new Intl.NumberFormat('zh-TW', {
+  return new Intl.NumberFormat(resolveIntlLocale(), {
     style: 'currency',
     currency: resolvedCurrencyCode.value,
     minimumFractionDigits: hasFraction ? 2 : 0,

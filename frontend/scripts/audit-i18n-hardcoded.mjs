@@ -6,6 +6,7 @@ const CJK_PATTERN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u
 
 const EXCLUDED_PATH_PATTERNS = [
   /\/ui\/services\/i18n\.service\.js$/,
+  /\/ui\/services\/i18n\//,
   /\/ui\/services\/runtime-.*\.generated\.js$/,
   /\/services\/bank-sync\/local-mock-backend\.js$/,
   /\/ui\/utils\/fa-icon-options\.js$/,

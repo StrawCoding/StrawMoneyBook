@@ -12,7 +12,7 @@
         >
           <header class="row app-overlay-sheet-head">
             <h3 class="app-overlay-sheet-title">{{ title }}</h3>
-            <button type="button" class="btn mini-btn" @click="$emit('close')">{{ closeText }}</button>
+            <button type="button" class="btn mini-btn" @click="$emit('close')">{{ resolvedCloseText }}</button>
           </header>
 
           <div class="app-bottom-sheet-body" :class="bodyClass">
@@ -30,6 +30,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, useSlots } from 'vue'
+import { useI18n } from '@/ui/services/i18n.service'
 
 const props = defineProps({
   open: {
@@ -46,7 +47,7 @@ const props = defineProps({
   },
   closeText: {
     type: String,
-    default: '關閉',
+    default: '',
   },
   bodyClass: {
     type: [String, Array, Object],
@@ -60,7 +61,9 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 const slots = useSlots()
+const { t } = useI18n()
 const hasFooterSlot = computed(() => Boolean(slots.footer))
+const resolvedCloseText = computed(() => props.closeText || t('common.close'))
 
 function onRequestCloseOverlay(event) {
   if (!props.open) return

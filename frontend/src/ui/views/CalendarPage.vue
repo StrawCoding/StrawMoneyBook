@@ -90,7 +90,7 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { addonDeltaMajorFromNote, addonDeltaTagText } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
@@ -269,12 +269,12 @@ function formatTime(iso) {
   if (!iso) return '-'
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return '-'
-  return date.toLocaleString('zh-TW', { hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleString(resolveIntlLocale(), { hour: '2-digit', minute: '2-digit' })
 }
 
 function formatMinor(minor) {
   const value = Math.abs(Number(minor ?? 0))
-  return new Intl.NumberFormat('zh-TW', {
+  return new Intl.NumberFormat(resolveIntlLocale(), {
     style: 'currency',
     currency: ledgerCurrencyCode.value,
     minimumFractionDigits: value % 100 === 0 ? 0 : 2,

@@ -193,7 +193,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { convertAmountMinorByRate } from '@/ui/services/exchange-rate.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
@@ -559,7 +559,7 @@ function accountNameOf(accountId) {
 function formatAmountSummary() {
   const amount = parseAmountMajor()
   if (!Number.isFinite(amount) || amount <= 0) return '-'
-  return amount.toLocaleString('zh-TW', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+  return amount.toLocaleString(resolveIntlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
 function formatAccountSummary() {
@@ -578,7 +578,7 @@ function formatAccountSummary() {
 function formatTimeSummary() {
   const occurredAt = toOccurredAtIso()
   if (!occurredAt) return '-'
-  return new Date(occurredAt).toLocaleString('zh-TW')
+  return new Date(occurredAt).toLocaleString(resolveIntlLocale())
 }
 
 function formatToggleSummary(enabled) {
