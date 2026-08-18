@@ -1,10 +1,210 @@
 const BANK_SYNC_TRACE_MAX_ENTRIES = 60
+const BANK_SYNC_CONSOLE_MAX_ENTRIES = 200
+const BANK_SYNC_DEBUG_STORAGE_KEY = 'strawmoneybook.bankSync.debugEnabled'
+const BANK_SYNC_CONSOLE_PREFIX = '[SMB:bank-sync]'
+const REDACT_KEY_PATTERN = /(pass|pwd|secret|token|national|captcha|custid|usrid|usercode|cookie|authorization|session|vrfy)/i
+
 const bankSyncTraceListeners = new Set()
+const bankSyncConsoleListeners = new Set()
+const bankSyncDebugModeListeners = new Set()
 let bankSyncTraceSeq = 0
 let bankSyncTraceEntries = []
+let bankSyncConsoleEntries = []
+let bankSyncConsoleSeq = 0
+let debugEnvOverrideForTest = null
+let runtimeToggleMemory = false
 
 function normalizeText(value) {
   return String(value ?? '').trim()
+}
+
+function parseBooleanFlag(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return ['1', 'true', 'yes', 'on'].includes(normalized)
+}
+
+function readImportMetaEnv() {
+  try {
+    return import.meta.env ?? {}
+  } catch {
+    return {}
+  }
+}
+
+export function isBankSyncDebugEnabledFromEnv(env = {}) {
+  const mode = String(env.MODE ?? '').trim().toLowerCase()
+  if (mode === 'debug' || mode === 'development') return true
+  if (env.DEV === true || parseBooleanFlag(env.DEV)) return true
+  return parseBooleanFlag(env.VITE_BANK_SYNC_DEBUG)
+}
+
+function readRuntimeDebugToggle() {
+  try {
+    if (typeof localStorage === 'undefined') return runtimeToggleMemory
+    return parseBooleanFlag(localStorage.getItem(BANK_SYNC_DEBUG_STORAGE_KEY))
+  } catch {
+    return runtimeToggleMemory
+  }
+}
+
+function writeRuntimeDebugToggle(enabled) {
+  runtimeToggleMemory = Boolean(enabled)
+  try {
+    if (typeof localStorage === 'undefined') return
+    if (enabled) localStorage.setItem(BANK_SYNC_DEBUG_STORAGE_KEY, '1')
+    else localStorage.removeItem(BANK_SYNC_DEBUG_STORAGE_KEY)
+  } catch {
+    // Ignore quota / private-mode failures; in-memory flag still works.
+  }
+}
+
+export function isBankSyncDebugEnvForced(env = debugEnvOverrideForTest ?? readImportMetaEnv()) {
+  return isBankSyncDebugEnabledFromEnv(env)
+}
+
+export function isBankSyncDebugEnabled(env = debugEnvOverrideForTest ?? readImportMetaEnv()) {
+  return isBankSyncDebugEnvForced(env) || readRuntimeDebugToggle()
+}
+
+export function resolveBankSyncDebugWebOpen({
+  nativeRuntimeSupported = false,
+  debugEnabled = isBankSyncDebugEnabled(),
+} = {}) {
+  return Boolean(debugEnabled) || Boolean(nativeRuntimeSupported)
+}
+
+function notifyDebugModeListeners() {
+  const enabled = isBankSyncDebugEnabled()
+  const envForced = isBankSyncDebugEnvForced()
+  for (const listener of bankSyncDebugModeListeners) {
+    try {
+      listener({ enabled, envForced })
+    } catch {
+      // Ignore listener errors.
+    }
+  }
+}
+
+export function setBankSyncDebugEnabled(enabled) {
+  writeRuntimeDebugToggle(Boolean(enabled))
+  notifyDebugModeListeners()
+  logBankSyncAction('debug.mode', {
+    enabled: isBankSyncDebugEnabled(),
+    envForced: isBankSyncDebugEnvForced(),
+    source: 'runtime_toggle',
+  })
+  return isBankSyncDebugEnabled()
+}
+
+export function subscribeBankSyncDebugMode(listener, { emitCurrent = true } = {}) {
+  if (typeof listener !== 'function') return () => {}
+  bankSyncDebugModeListeners.add(listener)
+  if (emitCurrent) {
+    try {
+      listener({
+        enabled: isBankSyncDebugEnabled(),
+        envForced: isBankSyncDebugEnvForced(),
+      })
+    } catch {
+      // Ignore listener errors.
+    }
+  }
+  return () => {
+    bankSyncDebugModeListeners.delete(listener)
+  }
+}
+
+function sanitizeValue(key, value, depth = 0) {
+  if (REDACT_KEY_PATTERN.test(String(key ?? ''))) return '[redacted]'
+  if (value == null) return value
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+  if (depth >= 4) return '[truncated]'
+  if (Array.isArray(value)) {
+    return value.slice(0, 20).map((item, index) => sanitizeValue(index, item, depth + 1))
+  }
+  if (typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).slice(0, 40).map(([entryKey, entryValue]) => (
+        [entryKey, sanitizeValue(entryKey, entryValue, depth + 1)]
+      )),
+    )
+  }
+  return String(value)
+}
+
+export function sanitizeBankSyncLogDetails(details) {
+  if (details == null) return null
+  if (typeof details !== 'object') return sanitizeValue('value', details)
+  return sanitizeValue('details', details)
+}
+
+function cloneConsoleEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null
+  return {
+    id: normalizeText(entry.id),
+    at: normalizeText(entry.at),
+    action: normalizeText(entry.action),
+    details: entry.details && typeof entry.details === 'object'
+      ? sanitizeBankSyncLogDetails(entry.details)
+      : entry.details,
+  }
+}
+
+function notifyConsoleListeners() {
+  if (!bankSyncConsoleListeners.size) return
+  const snapshot = getBankSyncConsoleLogSnapshot()
+  for (const listener of bankSyncConsoleListeners) {
+    try {
+      listener(snapshot)
+    } catch {
+      // Ignore listener errors.
+    }
+  }
+}
+
+function writeConsoleLog(action, details) {
+  const payload = details == null ? undefined : sanitizeBankSyncLogDetails(details)
+  const entry = {
+    id: `bank_sync_console_${Date.now()}_${bankSyncConsoleSeq++}`,
+    at: new Date().toISOString(),
+    action: normalizeText(action) || 'unknown',
+    details: payload ?? null,
+  }
+  bankSyncConsoleEntries = [entry, ...bankSyncConsoleEntries]
+  if (bankSyncConsoleEntries.length > BANK_SYNC_CONSOLE_MAX_ENTRIES) {
+    bankSyncConsoleEntries = bankSyncConsoleEntries.slice(0, BANK_SYNC_CONSOLE_MAX_ENTRIES)
+  }
+  notifyConsoleListeners()
+  if (typeof console === 'undefined' || typeof console.log !== 'function') return
+  if (payload === undefined) {
+    console.log(BANK_SYNC_CONSOLE_PREFIX, entry.action)
+    return
+  }
+  console.log(BANK_SYNC_CONSOLE_PREFIX, entry.action, payload)
+}
+
+export function logBankSyncAction(action, details) {
+  if (!isBankSyncDebugEnabled()) return
+  writeConsoleLog(action, details)
+}
+
+export function getBankSyncConsoleLogSnapshot() {
+  return bankSyncConsoleEntries.map(cloneConsoleEntry).filter(Boolean)
+}
+
+export function subscribeBankSyncConsoleLog(listener, { emitCurrent = true } = {}) {
+  if (typeof listener !== 'function') return () => {}
+  bankSyncConsoleListeners.add(listener)
+  if (emitCurrent) {
+    try {
+      listener(getBankSyncConsoleLogSnapshot())
+    } catch {
+      // Ignore listener errors.
+    }
+  }
+  return () => {
+    bankSyncConsoleListeners.delete(listener)
+  }
 }
 
 function cloneStep(step) {
@@ -79,6 +279,19 @@ function applyNativeDebugTrace(entry, debugTrace) {
   if (normalized.errorCode) entry.errorCode = normalized.errorCode
   if (normalized.errorMessage) entry.errorMessage = normalized.errorMessage
   entry.steps = normalized.steps
+  logBankSyncAction('trace.native', {
+    operation: entry.operation,
+    nativeAction: normalized.action,
+    debugHint: normalized.debugHint,
+    debugLastStep: normalized.debugLastStep,
+    errorCode: normalized.errorCode,
+    errorMessage: normalized.errorMessage,
+    steps: normalized.steps.map((step) => ({
+      step: step.step,
+      status: step.status,
+      message: step.message,
+    })),
+  })
 }
 
 function beginBankSyncTrace(operation, meta = {}) {
@@ -103,6 +316,12 @@ function beginBankSyncTrace(operation, meta = {}) {
   bankSyncTraceEntries = [entry, ...bankSyncTraceEntries]
   trimTraceEntries()
   notifyTraceListeners()
+  logBankSyncAction('trace.begin', {
+    operation: entry.operation,
+    provider: entry.provider,
+    ledgerId: entry.ledgerId,
+    connectionId: entry.connectionId,
+  })
   return {
     entry,
     startedAtMs: nowMs,
@@ -133,6 +352,14 @@ function endBankSyncTrace(context, { status, error = null } = {}) {
     }
   }
   notifyTraceListeners()
+  logBankSyncAction('trace.end', {
+    operation: context.entry.operation,
+    status: context.entry.status,
+    durationMs: context.entry.durationMs,
+    errorCode: context.entry.errorCode,
+    errorMessage: context.entry.errorMessage,
+    debugLastStep: context.entry.debugLastStep,
+  })
 }
 
 export async function traceBankSyncOperation(operation, meta = {}, task) {
@@ -168,8 +395,19 @@ export function subscribeBankSyncDebugTrace(listener, { emitCurrent = true } = {
   }
 }
 
+export function setBankSyncDebugEnvForTest(env) {
+  debugEnvOverrideForTest = env && typeof env === 'object' ? env : null
+}
+
 export function resetBankSyncDebugTraceForTest() {
   bankSyncTraceSeq = 0
   bankSyncTraceEntries = []
+  bankSyncConsoleSeq = 0
+  bankSyncConsoleEntries = []
+  debugEnvOverrideForTest = null
+  runtimeToggleMemory = false
+  writeRuntimeDebugToggle(false)
   notifyTraceListeners()
+  notifyConsoleListeners()
+  notifyDebugModeListeners()
 }

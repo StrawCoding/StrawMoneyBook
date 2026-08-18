@@ -98,12 +98,24 @@ function resolveGoogleOAuthApiOrigin() {
   return GOOGLE_OAUTH_DEFAULT_ORIGIN
 }
 
+function shouldPrefixGoogleOAuthApiOrigin() {
+  if (Capacitor.isNativePlatform()) return true
+  if (typeof window !== 'undefined') {
+    const origin = String(window.location?.origin ?? '').trim()
+    if (/^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(origin)) return false
+  }
+  // Production web hosted on www.strawmb.com/app/ is not same-origin with
+  // api.strawmb.com. Relative /api/google/oauth/* would hit GitHub Pages 405
+  // (SMB-192 class). Local vite / Playwright preview still uses same-origin middleware.
+  return import.meta.env.PROD === true
+}
+
 function resolveGoogleOAuthEndpoint(raw, fallbackPath) {
   const value = String(raw ?? '').trim() || String(fallbackPath ?? '').trim()
   if (!value) return ''
   if (isAbsoluteHttpUrl(value)) return value
   if (!value.startsWith('/')) return value
-  if (!Capacitor.isNativePlatform()) return value
+  if (!shouldPrefixGoogleOAuthApiOrigin()) return value
   try {
     return new URL(value, `${GOOGLE_OAUTH_API_ORIGIN}/`).toString()
   } catch {

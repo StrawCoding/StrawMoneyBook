@@ -93,11 +93,11 @@ test('smb298: gpr chain syncs official site app-update after local manifest', ()
   )
   assert.match(
     packageJson.scripts.gpr,
-    /sync:app-update-manifest && npm run sync:official-site-app-update:push && npm run release:git/,
+    /sync:app-update-manifest && npm run sync:official-site-app-update:push && npm run sync:official-site-web-app:push && npm run release:git/,
   )
   assert.match(
     packageJson.scripts['gpr:minor'],
-    /sync:app-update-manifest && npm run sync:official-site-app-update:push && npm run release:git/,
+    /sync:app-update-manifest && npm run sync:official-site-app-update:push && npm run sync:official-site-web-app:push && npm run release:git/,
   )
 })
 

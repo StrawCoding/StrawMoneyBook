@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
 import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
 import { getSharedLedgerSession } from '@/services/shared-ledger/backend'
 import { isHomeRoute } from '@/ui/services/navigation-back.service'
@@ -8,8 +8,20 @@ if (typeof window !== 'undefined' && window.history && 'scrollRestoration' in wi
   window.history.scrollRestoration = 'manual'
 }
 
+function shouldUseWebHashRouter() {
+  return String(import.meta.env.VITE_WEB_HASH_ROUTER ?? '').trim() === 'true'
+}
+
+function createAppRouterHistory() {
+  const base = import.meta.env.BASE_URL
+  // Hosted GitHub Pages nested SPA (www.strawmb.com/app/) cannot use path history:
+  // unknown /app/<route> falls through to the marketing-site 404.html.
+  if (shouldUseWebHashRouter()) return createWebHashHistory(base)
+  return createWebHistory(base)
+}
+
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createAppRouterHistory(),
   scrollBehavior(_to, _from, savedPosition) {
     queueDeferredScrollRestore(savedPosition ?? { left: 0, top: 0 })
     return false

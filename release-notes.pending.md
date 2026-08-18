@@ -1,10 +1,11 @@
 # Pending Release Notes
 
+- 銀行同步修正期：所有銀行同步動作依 debug 模式印到 Console（`[SMB:bank-sync]`，憑證欄位會遮罩）；設定 → 版本資訊 → Debug 頁可開關，網頁也可即時查看。debug／開發模式或手動開啟後，網頁可操作同步流程；網銀自動登入仍需 Android App。Android debug APK 另將原生步驟寫入 logcat `SMB-BankSync`。
+- 語言選項改為 i18n 統一管理：zh-TW／en／ja 由 `SUPPORTED_LOCALES` 單一清單產生，按鈕永遠顯示原名（繁體中文／English／日本語）；補齊日文缺 key；`audit:i18n` 改讀拆檔後字典；共通元件與日期／金額格式跟隨目前語言；Android／Wear 補 `values-en`／`values-ja`。
+- 官方網站網頁測試版 `https://www.strawmb.com/app/` 改連正式營運後端 `https://api.strawmb.com`（hash router 避開 GitHub Pages 巢狀 SPA 404；Google OAuth／共同帳本／載具／銀行 API 在 production web 不再打到官網同網域）。`/preview` 提供入口；`gpr` 會同步發布測試版 SPA。
+- 修復資產頁有價證券金額顯示為 $0：未填手動時價時回退平均成本，只記資金以投入本金計入；未交割（T+2）持倉會顯示在證券卡／列表，總資產仍只計已確認交割以免與交割戶現金雙計。補 Node 與 `playwright:ui-layout`。
+
 ---
-
-- 修復 Android App 初始化失敗：migration 046（銀行同步 Architecture B account checkpoints）誤用 `#` 註解，Capacitor sqlite `executeSet` 報 `unrecognized token: "#"`；改為 SQLite 安全註解，並在 statement splitter 剝除 hash 行註解，既有帳本可安全升級、無需重設資料。
-
-## v1.3.140
 - (v1.3.140 / Architecture B) 銀行同步多銀行架構：Provider Registry（第一銀行＋華南銀行）、通用 `connectBank`/`syncBank` plugin、帳號層級 checkpoint（migration 046）、`PARTIAL_SUCCESS`、共享 `BankAutomationSyncContract` watermark／lookback；淘汰 remote scrape／Playwright provider；建立頁依 schema 動態欄位；華南 Android adapter（H0 登入＋啟發式交易查詢）。
 - (v1.3.139 / Phase 0A–0C) 修復第一銀行 Android 增量同步 JS↔Java 合約：`syncBankConnectionNow` dual-write `lastSyncAt`＋`last_sync_at` 與 `lookbackDays`＋`lookback_days`；原生 `readLastSyncWatermark` 採 **`lastSyncAt` > `last_sync_at`** precedence；`resolveQueryStartDate` 強制 lookback overlap（預設 3 日，clamp 至 initialStart）；新增 `FirstBankAutomationSyncContractTest`（6）與 node source／service 合約測試。
 

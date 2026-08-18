@@ -23,3 +23,8 @@ test('index.html CSP 不使用 unsafe-eval（保留 SMB-233 XSS 防護）', () =
 test('index.html CSP connect-src 允許 einvoice API 主機', () => {
   assert.match(indexHtml, /connect-src[^;]*https:\/\/api\.strawmb\.com/)
 })
+
+test('index.html CSP 允許 Google Identity script/frame（hosted web 登入）', () => {
+  assert.match(indexHtml, /script-src[^;]*https:\/\/accounts\.google\.com/)
+  assert.match(indexHtml, /frame-src https:\/\/accounts\.google\.com/)
+})

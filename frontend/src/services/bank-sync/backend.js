@@ -1,6 +1,11 @@
 import { Capacitor } from '@capacitor/core'
 import { translateMessage } from '../../ui/services/i18n.service.js'
 import {
+  isBankSyncDebugEnabled,
+  logBankSyncAction,
+  resolveBankSyncDebugWebOpen,
+} from '../../core/services/bank-sync-debug.service.js'
+import {
   connectNativeBank,
   disconnectNativeBank,
   isNativeBankAutomationRuntimeSupported,
@@ -12,7 +17,8 @@ import {
 } from './provider-registry.js'
 
 const IMPORT_META_ENV = import.meta.env ?? {}
-const DEFAULT_BANK_API_BASE = String(IMPORT_META_ENV.VITE_BANK_SYNC_API_BASE_URL ?? '').trim()
+const PROD_DEFAULT_BANK_API_BASE = 'https://api.strawmb.com'
+const EXPLICIT_BANK_API_BASE = String(IMPORT_META_ENV.VITE_BANK_SYNC_API_BASE_URL ?? '').trim()
 const BANK_SYNC_CLIENT_SHARED_KEY = String(IMPORT_META_ENV.VITE_BANK_SYNC_CLIENT_SHARED_KEY ?? '').trim()
 const BANK_SYNC_FEATURE_ENABLED = parseBooleanEnv(
   IMPORT_META_ENV.VITE_BANK_SYNC_FEATURE_ENABLED,
@@ -26,6 +32,20 @@ const t = (key, params, fallback) => translateMessage(key, params, fallback)
 
 const PROVIDERS_FALLBACK = listRegisteredBankProviders()
 
+function isLocalDevOrigin() {
+  if (typeof window === 'undefined') return false
+  const origin = String(window.location?.origin ?? '').trim()
+  return /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(origin)
+}
+
+function getBankApiBase() {
+  if (EXPLICIT_BANK_API_BASE) return EXPLICIT_BANK_API_BASE
+  if (Capacitor.getPlatform() !== 'web') return PROD_DEFAULT_BANK_API_BASE
+  if (isLocalDevOrigin()) return ''
+  if (IMPORT_META_ENV.PROD) return PROD_DEFAULT_BANK_API_BASE
+  return ''
+}
+
 function parseBooleanEnv(value, fallback = false) {
   const normalized = String(value ?? '').trim().toLowerCase()
   if (!normalized) return fallback
@@ -33,7 +53,7 @@ function parseBooleanEnv(value, fallback = false) {
 }
 
 function isNativeBankProvider(providerId) {
-  return isRegisteredBankProviderId(providerId) && isNativeBankAutomationRuntimeSupported()
+  return isRegisteredBankProviderId(providerId)
 }
 
 function shouldExposeProvider(providerId) {
@@ -48,12 +68,13 @@ function buildApiUrl(path) {
   if (!normalizedPath.startsWith('/')) {
     throw new Error(`invalid bank api path: ${normalizedPath}`)
   }
-  if (!DEFAULT_BANK_API_BASE) return normalizedPath
-  return `${DEFAULT_BANK_API_BASE.replace(/\/$/, '')}${normalizedPath}`
+  const bankApiBase = getBankApiBase()
+  if (!bankApiBase) return normalizedPath
+  return `${bankApiBase.replace(/\/$/, '')}${normalizedPath}`
 }
 
 function shouldRequireExplicitBankApiBase() {
-  if (DEFAULT_BANK_API_BASE) return false
+  if (getBankApiBase()) return false
   if (isNativeBankAutomationRuntimeSupported()) return false
   return Capacitor.getPlatform() !== 'web'
 }
@@ -85,7 +106,8 @@ function assertBankSyncFeatureEnabled() {
 }
 
 export function isBankSyncPlatformSupported() {
-  return isNativeBankAutomationRuntimeSupported() || Boolean(DEFAULT_BANK_API_BASE)
+  if (isBankSyncDebugEnabled()) return true
+  return isNativeBankAutomationRuntimeSupported() || Boolean(getBankApiBase())
 }
 
 export function isBankSyncNativeAutomationAvailable() {
@@ -97,7 +119,8 @@ export function isBankSyncNativeAutomationAvailable() {
 export function isBankSyncApiConfigured() {
   if (!BANK_SYNC_FEATURE_ENABLED) return false
   if (isBankSyncNativeAutomationAvailable()) return true
-  if (Boolean(DEFAULT_BANK_API_BASE) && listBankProviders().length > 0) return true
+  if (isBankSyncDebugEnabled() && listBankProviders().length > 0) return true
+  if (Boolean(getBankApiBase()) && listBankProviders().length > 0) return true
   return false
 }
 
@@ -108,17 +131,24 @@ export function isBankSyncFeatureEnabled() {
 export function getBankSyncSupportMatrix() {
   const platform = Capacitor.getPlatform()
   const providers = listBankProviders()
+  const debugEnabled = isBankSyncDebugEnabled()
+  const platforms = debugEnabled ? ['android', 'web'] : ['android']
   return {
     featureEnabled: BANK_SYNC_FEATURE_ENABLED,
     platform,
-    androidOnly: true,
+    androidOnly: !debugEnabled,
+    debugEnabled,
+    webDebugOpen: resolveBankSyncDebugWebOpen({
+      nativeRuntimeSupported: isNativeBankAutomationRuntimeSupported(),
+      debugEnabled,
+    }) && platform === 'web',
     nativeAutomationAvailable: isBankSyncNativeAutomationAvailable(),
     csvFallbackAvailable: true,
     supportedBanks: providers.map((item) => ({
       id: item.id,
       name: item.name,
       country: item.country,
-      platforms: ['android'],
+      platforms,
     })),
     checkedAt: Date.now(),
   }
@@ -127,6 +157,9 @@ export function getBankSyncSupportMatrix() {
 export function getBankSyncApiUnavailableMessage() {
   if (!BANK_SYNC_FEATURE_ENABLED) {
     return createBankSyncDisabledError().message
+  }
+  if (isBankSyncDebugEnabled()) {
+    return t('bank_sync.debug.web_open_hint', '銀行同步修正期：網頁已開放操作，步驟會輸出到 Console。')
   }
   if (!isNativeBankAutomationRuntimeSupported()) {
     return t('bank_sync.error.android_only')
@@ -155,8 +188,13 @@ function parseProviderListFromEnv() {
 
 async function postJson(path, payload) {
   assertBankSyncFeatureEnabled()
-
   const providerId = String(payload?.providerId ?? payload?.provider ?? '').trim().toLowerCase()
+  logBankSyncAction('backend.post', {
+    path,
+    providerId,
+    nativeProvider: isNativeBankProvider(providerId),
+  })
+
   if (isNativeBankProvider(providerId)) {
     const nativePayload = { ...payload, providerId, provider: providerId }
     if (path === '/api/bank/exchange') {
@@ -199,7 +237,7 @@ async function postJson(path, payload) {
   }
 
   if (!response.ok) {
-    if (response.status === 404 && !DEFAULT_BANK_API_BASE && path.startsWith('/api/bank/')) {
+    if (response.status === 404 && !getBankApiBase() && path.startsWith('/api/bank/')) {
       throw createMissingBankApiError()
     }
     const message = String(data?.message ?? data?.error ?? text ?? '').trim()

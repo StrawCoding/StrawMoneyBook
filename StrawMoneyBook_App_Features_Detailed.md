@@ -76,13 +76,15 @@ smb297 後資料全消失／silent wipe／語意改寫治本：`bootstrap.servic
 
 smb298 殘餘根因與還原／發版治本：smb297 雖不再 wipe primary，但 Android `plugin-null` 曾切到空的 `straw_money_book_recovery` 當 live DB，造成「資料仍不見」而 primary 仍在。治本改為只重試 primary，失敗才 `LOCAL_DB_INTEGRITY`（禁空 recovery fallback）。空庫但有 IndexedDB recovery 時 Welcome／toast 提示並可進入資料管理還原。`gpr`／`gpr:minor` 強制同步 StrawMoneyBookWeb `app-update.json`＋`api/app-update/play`（Pages→Web-Page／www.strawmb.com）。SavingsJarListPage 修復 `autoSaveAccountOptions` TDZ（Cannot access before initialization）。`playwright:ui-layout` 加 port mutex／獨立 CLI session／`waitForHomeBlocks`／preview 子行程清理，避免並行搶 preview 造成假空白首頁。
 
+官方網站網頁測試版 `https://www.strawmb.com/app/` 連正式營運後端 `https://api.strawmb.com`：GitHub Pages 巢狀 SPA 使用 hash router，production web 的 Google OAuth／共同帳本／載具／銀行 API 不再打到官網同網域。入口為 `https://www.strawmb.com/preview`。`gpr` 會一併發布測試版 SPA。
+
 SMB-190 / v1.2.5 後，資料管理頁手動匯出的全部帳本 JSON 與 CSV 檔名都會加入時間戳，避免在 Android 原生檔案儲存或瀏覽器下載時因固定檔名重複覆蓋，讓多次匯出可以保留各自的檔案版本。SMB-216 / v1.2.29 後，資料管理頁的恢復備份、CSV 匯入與重設資料這類可能超過 3 秒的流程會顯示含百分比的加載動畫與目前動作說明，讓使用者知道系統仍在處理而不是壞掉或卡住。
 
 這讓它更適合長期使用，而不是短期記帳後就難以維護。SMB-220 / v1.2.37 後，Debug 頁面新增 Error Log 紀錄區塊，所有 Vue 元件錯誤、全域 window 錯誤、未處理 Promise 拒絕與 toast 彈窗錯誤訊息都會同步記錄在 in-memory buffer（最多 100 筆），開發者可在設定 → 版本資訊 → Debug 頁面即時查看並一鍵匯出。SMB-221 / v1.2.40 後，所有設定子頁面的 h2 標題都加入與功能對應的 Font Awesome icon（class="title-icon"），與「關於我們」頁面一致的視覺風格。SMB-250 / v1.3.29 後曾於設定 → 個人化提供「介面風格」雙模式；smb289 起**只保留現代 mode**：以 Apple HIG 視覺語言（`apple-ui.css`：Large Title、Inset Grouped、Segmented Control、list row + chevron）為唯一版面，移除設定／onboarding 的「傳統／現代」切換，舊 `traditional` preference 啟動時遷移為 `modern`；**不刪**任何入口或首頁子元件（帳本切換、四段期間篩選、資產卡、預算卡、交易流、FAB、BottomNav）；與配色主題（Light／Dark）獨立。SMB-254 / v1.3.33 後，設定首頁（`/settings`）的清單項目列高度調小、清單更緊湊：現代版設定列（`apple-ui.css` 的 `[data-ui-layout='modern'] .settings-page .setting-group .item-link`）垂直 padding 由 `12px 14px` 改為 `8px 14px`，量測列高由 63px 降至 54px；傳統版（`settings.vue` scoped）列間分隔由 `margin-top/padding-top: 12px` 收斂為 `8px`、描述 `small` 行高 1.35→1.3。兩種版型皆保留每列 `min-height: 44px` 的最小點擊高度，水平 padding 與 safe-area 維持不變，因此縮小高度不影響觸控區域與可讀性。
 
 另外，所有需要輸入資料的彈層已統一為共用 bottom sheet flow，桌面與手機都不再保留另一套輸入型 popover，包含表單 dialog、選單、日期與時間選擇器；`AppDialog` 以及各頁自製輸入 sheet 也都收斂到和快速記帳一致的 shared overlay / bottom-sheet primitives，Android 有底部導覽列 inset 的裝置也會一併吃到底部 safe area，且 sheet 卡片背景會直接延伸到底部，和 `BottomNav` 維持同一個底部基準。
 
-SMB-154 / 0.26.5 後，設定首頁的入口副標、帳號卡未登入提示、登入 / 註冊頁與共同帳本頁使用到的主要介面文案，都已改由正式 i18n key 維護，繁中、英文與日文都有對應文案，不再靠繁中 fallback 或 runtime DOM 翻譯處理這批主要設定流程文字。
+SMB-154 / 0.26.5 後，設定首頁的入口副標、帳號卡未登入提示、登入 / 註冊頁與共同帳本頁使用到的主要介面文案，都已改由正式 i18n key 維護，繁中、英文與日文都有對應文案，不再靠繁中 fallback 或 runtime DOM 翻譯處理這批主要設定流程文字。語言切換（歡迎頁與 `/settings/language`）的三個選項由 `SUPPORTED_LOCALES` 單一清單產生，標籤固定為各語言原名（繁體中文／English／日本語）；`audit:i18n` 直接比對拆檔後的 zh-TW／en／ja 字典，禁止缺 key。日期／金額格式化走 `resolveIntlLocale()`，Android／Wear 原生字串另有 `values-en`／`values-ja`。
 
 前端內部像月份鍵、日期鍵這類共用格式化邏輯，也已收斂到 `src/core/utils/id.js`，避免首頁、分析、日曆、列印頁各自維護相同 helper 後再逐步出現行為漂移。
 
@@ -383,11 +385,11 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 - 總資產（摘要區滿寬）
 - 可支配資產／負債（同一列）
 - 借出／借入（同一列）
-- 有價證券市值（可選計入總資產；摘要區**單獨滿寬一列置底**，`assets-securities-entry`）
+- 有價證券（可選計入總資產；摘要區**有價證券左／信用卡右並排**，`assets-securities-entry`／`assets-securities-amount`：顯示含未交割持倉，無時價／只記資金回退成本；總資產只加已確認交割）
 
 其中「可支配資產」已考慮代收與暫收款不應算成可自由使用金額，因此比一般簡單加總更接近真實狀態。
 
-有價證券為獨立模組（非一般銀行帳戶）：資產頁入口 `/assets/securities`（`data-testid=assets-securities-entry` → `securities-page`）。v2 P1：每個交割帳戶＝獨立投資組合（同代碼可跨交割戶各有持倉）；標的綁 `settlement_account_id`（**交割帳戶來源＝選舉既有資產帳戶或新建證券戶，無需先標記；帳戶詳情／資產帳戶管理不再提供「作為證券交割帳戶」開關；證券建立 sheet 無「標記為交割帳戶」步驟；`listSettlementAccounts`／候選清單不以 `is_settlement=1` 過濾卡死，選用即成立；`is_settlement` 欄位僅相容／遷移惰性保留**）；流水含 `settle_at`／`settlement_status`（scheduled｜confirmed｜cancelled），預設交易日 T+2 10:00（跳過六日）；App 啟動／回前景／證券頁載入補跑到期自動入帳；本金以 adjustment 不計收支、已實現損益進系統分類「投資損益」（可改名不可刪）；精簡資金／完整持倉雙模式（完整持倉賣出必須選擇要平倉的買入交易，1:1 對應、允許部分賣出，剩餘股數／成本由已連結未取消賣出派生，最後一筆吃剩餘本金；成交金額為毛額，手續費 from_proceeds 才從回收扣；只記資金賣出可選對應買入，依該筆買入剩餘成本帶本金並允許部分平倉，最後一筆吃剩餘成本，不選則仍手動填本金／回收；已排程未入帳買入可賣；舊賣出 `source_buy_tx_id` 為空仍走平均成本、不做歷史回填；已有對應賣出的買入不可刪或縮到小於已賣股數／已對應成本）；未實現可切市值估價／只認成本；標的（名稱／代碼／類型）與流水可編刪，交割可改期／取消／提前確認；已確認刪除或取消經 `withTransaction` 真原子回滾現金腿＋損益腿＋交割狀態（sql.js 實庫證 300→320／280、確認／取消／流水刪除／標的刪除中途失敗不殘留、雙交割戶同代碼獨立入帳）。手續費選填（併入成本或從回收扣）。交割入帳的本金 adjustment／投資損益與證券明細買賣列皆顯示 FontAwesome icon（本金／損益 `fa-chart-line`，流水買下／賣上趨勢）；系統分類「投資損益」缺 icon 時會回填。不做封存、配息、分割、多幣、美股專模、券商 API、即時行情。`playwright:ui-layout` 以 SPA 入口驗收列表頁（禁 welcome 假陽性），並檢查 padding／BottomNav／safe-area、資產摘要「借出／借入同行、有價證券左／信用卡右並排（信用卡不進母分類）」，以及證券建立正式 UI「CustomSelect **依帳戶母分類分組**選 `is_settlement=0` 帳戶→按儲存即可存、無 mark 步驟、不走 store.create 捷徑」。
+有價證券為獨立模組（非一般銀行帳戶）：資產頁入口 `/assets/securities`（`data-testid=assets-securities-entry` → `securities-page`）。v2 P1：每個交割帳戶＝獨立投資組合（同代碼可跨交割戶各有持倉）；標的綁 `settlement_account_id`（**交割帳戶來源＝選舉既有資產帳戶或新建證券戶，無需先標記；帳戶詳情／資產帳戶管理不再提供「作為證券交割帳戶」開關；證券建立 sheet 無「標記為交割帳戶」步驟；`listSettlementAccounts`／候選清單不以 `is_settlement=1` 過濾卡死，選用即成立；`is_settlement` 欄位僅相容／遷移惰性保留**）；流水含 `settle_at`／`settlement_status`（scheduled｜confirmed｜cancelled），預設交易日 T+2 10:00（跳過六日）；App 啟動／回前景／證券頁載入補跑到期自動入帳；本金以 adjustment 不計收支、已實現損益進系統分類「投資損益」（可改名不可刪）；精簡資金／完整持倉雙模式（完整持倉賣出必須選擇要平倉的買入交易，1:1 對應、允許部分賣出，剩餘股數／成本由已連結未取消賣出派生，最後一筆吃剩餘本金；成交金額為毛額，手續費 from_proceeds 才從回收扣；只記資金賣出可選對應買入，依該筆買入剩餘成本帶本金並允許部分平倉，最後一筆吃剩餘成本，不選則仍手動填本金／回收；已排程未入帳買入可賣；舊賣出 `source_buy_tx_id` 為空仍走平均成本、不做歷史回填；已有對應賣出的買入不可刪或縮到小於已賣股數／已對應成本）；未實現可切市值估價／只認成本（無手動時價回退平均成本、只記資金顯示投入本金；資產頁證券卡含未交割持倉，總資產只計已確認以免與交割戶現金雙計）；標的（名稱／代碼／類型）與流水可編刪，交割可改期／取消／提前確認；已確認刪除或取消經 `withTransaction` 真原子回滾現金腿＋損益腿＋交割狀態（sql.js 實庫證 300→320／280、確認／取消／流水刪除／標的刪除中途失敗不殘留、雙交割戶同代碼獨立入帳）。手續費選填（併入成本或從回收扣）。交割入帳的本金 adjustment／投資損益與證券明細買賣列皆顯示 FontAwesome icon（本金／損益 `fa-chart-line`，流水買下／賣上趨勢）；系統分類「投資損益」缺 icon 時會回填。不做封存、配息、分割、多幣、美股專模、券商 API、即時行情。`playwright:ui-layout` 以 SPA 入口驗收列表頁（禁 welcome 假陽性），並檢查 padding／BottomNav／safe-area、資產摘要「借出／借入同行、有價證券左／信用卡右並排（信用卡不進母分類）」，以及證券建立正式 UI「CustomSelect **依帳戶母分類分組**選 `is_settlement=0` 帳戶→按儲存即可存、無 mark 步驟、不走 store.create 捷徑」。
 
 資產頁現在會把群組金額直接顯示在各帳戶群組列上：
 
