@@ -172,6 +172,10 @@ export async function loadSecuritiesDashboard(ledgerId, options = {}) {
   const totalMarketValueMinor = items.reduce((sum, item) => sum + Number(item.position?.marketValueMinor ?? 0), 0)
   const totalInvestedMinor = items.reduce((sum, item) => sum + Number(item.position?.investedMinor ?? 0), 0)
   const totalDisplayValueMinor = items.reduce((sum, item) => sum + Number(item.position?.displayValueMinor ?? 0), 0)
+  const includedDisplayValueMinor = items.reduce((sum, item) => {
+    if (!item.position?.includeInAssets) return sum
+    return sum + Math.max(0, Number(item.position?.displayValueMinor ?? 0))
+  }, 0)
 
   return {
     items,
@@ -179,6 +183,7 @@ export async function loadSecuritiesDashboard(ledgerId, options = {}) {
     summary: {
       count: items.length,
       includedMarketValueMinor,
+      includedDisplayValueMinor,
       totalMarketValueMinor,
       totalInvestedMinor,
       totalDisplayValueMinor,

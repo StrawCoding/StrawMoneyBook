@@ -74,7 +74,7 @@
             <small class="muted">{{ t('assets_page.securities') }}</small>
             <small class="muted summary-hint">{{ t('assets_page.view') }}</small>
           </div>
-          <MoneyText :value-minor="securitiesMarketValueMinor" />
+          <MoneyText data-testid="assets-securities-amount" :value-minor="securitiesDisplayMinor" />
         </button>
         <button
           class="summary-item summary-link summary-credit"
@@ -191,7 +191,7 @@ import { useLoanStore } from '@/ui/stores/loan.store'
 import { useReimbursementStore } from '@/ui/stores/reimbursement.store'
 import { useSecurityStore } from '@/ui/stores/security.store'
 import LedgerSwitcher from '@/ui/components/common/LedgerSwitcher.vue'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { calculateAssetSummary, isAssetAccountIncludedInTotals } from '@/core/utils/assets-summary'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 
@@ -214,7 +214,12 @@ const balanceMetrics = computed(() => calculateAssetSummary({
 const disposableMinor = computed(() => balanceMetrics.value.disposableMinor)
 const liabilityMinor = computed(() => balanceMetrics.value.liabilityMinor)
 const totalAssetMinor = computed(() => balanceMetrics.value.totalAssetMinor)
-const securitiesMarketValueMinor = computed(() => Number(securityStore.summary.includedMarketValueMinor ?? 0))
+const securitiesDisplayMinor = computed(() => Number(
+  securityStore.summary.includedDisplayValueMinor
+    ?? securityStore.summary.totalDisplayValueMinor
+    ?? securityStore.summary.includedMarketValueMinor
+    ?? 0,
+))
 const creditDebtMinor = computed(() => {
   const balances = Array.isArray(accountStore.balances) ? accountStore.balances : []
   const accounts = Array.isArray(accountStore.accounts) ? accountStore.accounts : []
@@ -233,7 +238,7 @@ const activeCurrencyCode = computed(() => normalizeCurrencyCode(ledgerStore.acti
 const deductedAdvanceLabel = computed(() => {
   const amountMinor = Number(balanceMetrics.value.advanceDeductedMinor ?? 0)
   const amountMajor = amountMinor / 100
-  return new Intl.NumberFormat('zh-TW', {
+  return new Intl.NumberFormat(resolveIntlLocale(), {
     style: 'currency',
     currency: activeCurrencyCode.value,
     minimumFractionDigits: Math.abs(amountMinor) % 100 === 0 ? 0 : 2,

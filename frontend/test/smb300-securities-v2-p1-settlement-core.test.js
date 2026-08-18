@@ -119,6 +119,23 @@ test('unrealized cost mode uses invested for included assets', () => {
   assert.equal(sumIncludedSecuritiesMarketValue(positions, { unrealizedMode: 'market' }), 9000)
 })
 
+test('market mode falls back to invested when market value is zero', () => {
+  const funds = [
+    { includeInAssets: true, marketValueMinor: 0, investedMinor: 30000, displayValueMinor: 30000 },
+  ]
+  assert.equal(sumIncludedSecuritiesMarketValue(funds, { unrealizedMode: 'market' }), 30000)
+})
+
+test('scheduled holdings are visible but excluded from confirmed included value', () => {
+  const scheduled = buildSecurityPosition(
+    { id: 'sSched', include_in_assets: 1, manual_price_minor: 11000 },
+    [{ type: 'buy', quantity: 10, price_minor: 10000, fee_minor: 0, principal_minor: 100000, settlement_status: 'scheduled', record_mode: 'position' }],
+  )
+  assert.equal(scheduled.quantity, 10)
+  assert.equal(scheduled.displayValueMinor, 110000)
+  assert.equal(scheduled.includedValueMinor, 0)
+})
+
 test('funds mode sell skips quantity assert; position mode still enforces', () => {
   assert.doesNotThrow(() => assertSellQuantityAllowed(0, 0, { recordMode: 'funds' }))
   assert.throws(() => assertSellQuantityAllowed(1, 2, { recordMode: 'position' }), /不可超過/)

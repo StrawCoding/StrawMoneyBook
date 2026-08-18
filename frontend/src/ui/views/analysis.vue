@@ -157,13 +157,13 @@
         <h3>{{ t('analysis_page.securities_title') }}</h3>
         <div class="header-metrics">
           <span class="count-chip">{{ t('analysis_page.items_count', { count: securityStore.summary.count }) }}</span>
-          <MoneyText :value-minor="securityStore.summary.totalMarketValueMinor" />
+          <MoneyText :value-minor="securityStore.summary.totalDisplayValueMinor" />
         </div>
       </header>
       <div class="securities-summary-grid">
         <div>
-          <small class="muted">{{ t('securities_page.market_value') }}</small>
-          <MoneyText :value-minor="securityStore.summary.totalMarketValueMinor" />
+          <small class="muted">{{ displayValueLabel }}</small>
+          <MoneyText :value-minor="securityStore.summary.totalDisplayValueMinor" />
         </div>
         <div>
           <small class="muted">{{ t('securities_page.invested') }}</small>
@@ -312,7 +312,7 @@ import {
   triggerDownloadFromUrl,
 } from '@/core/services/export.service'
 import { buildAnalysisReportPdfFromElement } from '@/core/services/analysis-report-pdf.service'
-import { useI18n } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 import { monthKeyFromDate } from '@/core/utils/id'
 import {
@@ -340,7 +340,7 @@ const router = useRouter()
 const { t } = useI18n()
 
 function formatDateTime(date) {
-  return date.toLocaleString('zh-TW', {
+  return date.toLocaleString(resolveIntlLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -504,21 +504,33 @@ const budgetCards = computed(() => buildBudgetAchievementCards({
 }))
 
 const securityAllocationRows = computed(() => {
-  const total = Math.max(0, Number(securityStore.summary.totalMarketValueMinor ?? 0))
-  return (securityStore.items ?? [])
+  const rows = (securityStore.items ?? [])
     .map((item) => {
-      const amountMinor = Math.max(0, Number(item?.position?.marketValueMinor ?? 0))
-      const percent = total > 0 ? Math.round((amountMinor / total) * 1000) / 10 : 0
+      const amountMinor = Math.max(0, Number(
+        item?.position?.displayValueMinor
+          ?? item?.position?.marketValueMinor
+          ?? 0,
+      ))
       return {
         id: item.id,
         label: `${item.symbol} ${item.name}`,
         amountMinor,
-        percent,
       }
     })
     .filter((row) => row.amountMinor > 0)
     .sort((a, b) => b.amountMinor - a.amountMinor)
+  const total = rows.reduce((sum, row) => sum + row.amountMinor, 0)
+  return rows.map((row) => ({
+    ...row,
+    percent: total > 0 ? Math.round((row.amountMinor / total) * 1000) / 10 : 0,
+  }))
 })
+
+const displayValueLabel = computed(() => (
+  securityStore.unrealizedMode === 'cost'
+    ? t('securities_page.cost_value')
+    : t('securities_page.market_value')
+))
 
 const timeBarRows = computed(() => buildTimeBarRows({
   transactions: statsTransactions.value,

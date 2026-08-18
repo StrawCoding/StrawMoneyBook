@@ -1256,6 +1256,58 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
   assert.ok(fundsLotUi.linkedCount >= 2, JSON.stringify(fundsLotUi, null, 2))
   console.log('[securities] funds-matched sell UI ok:', fundsLotUi)
 
+  const assetsSecuritiesAmount = await evalPage(`async () => {
+    const waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+    const assetsTab = document.querySelector('[data-testid=bottom-nav-assets], a[href="/assets"]')
+    if (assetsTab) assetsTab.click()
+    const deadline = performance.now() + 8000
+    while (performance.now() < deadline) {
+      if (window.location.pathname === '/assets'
+        && document.querySelector('[data-testid=assets-securities-entry]')
+        && document.querySelector('[data-testid=bottom-nav]')
+        && !document.querySelector('.boot-layer')) {
+        break
+      }
+      await waitMs(40)
+    }
+    const app = document.querySelector('#app')?.__vue_app__ || window.__VUE_APP__
+    let pinia = app?.config?.globalProperties?.$pinia
+    if (!pinia && app?._context?.provides) {
+      for (const value of Object.values(app._context.provides || {})) {
+        if (value && typeof value === 'object' && value._s) {
+          pinia = value
+          break
+        }
+      }
+    }
+    const stores = pinia?._s ? [...pinia._s.values()] : []
+    const securityStore = stores.find((store) => store.$id === 'security')
+    if (typeof securityStore?.load === 'function') await securityStore.load()
+    await waitMs(80)
+    const entry = document.querySelector('[data-testid=assets-securities-entry]')
+    const amountEl = document.querySelector('[data-testid=assets-securities-amount]')
+    const amountText = String(amountEl?.textContent || entry?.textContent || '').replace(/\\s+/g, ' ').trim()
+    const displayMinor = Number(securityStore?.summary?.includedDisplayValueMinor
+      ?? securityStore?.summary?.totalDisplayValueMinor
+      ?? 0)
+    const includedMinor = Number(securityStore?.summary?.includedMarketValueMinor ?? 0)
+    const numeric = Number(String(amountText).replace(/[^0-9.-]/g, ''))
+    const zeroLike = !Number.isFinite(numeric) || numeric === 0
+    return {
+      ok: Boolean(entry && amountEl),
+      path: window.location.pathname,
+      amountText,
+      displayMinor,
+      includedMinor,
+      zeroLike,
+    }
+  }`)
+  assert.equal(assetsSecuritiesAmount.ok, true, JSON.stringify(assetsSecuritiesAmount, null, 2))
+  assert.equal(assetsSecuritiesAmount.path, '/assets', JSON.stringify(assetsSecuritiesAmount, null, 2))
+  assert.ok(assetsSecuritiesAmount.displayMinor > 0, JSON.stringify(assetsSecuritiesAmount, null, 2))
+  assert.equal(assetsSecuritiesAmount.zeroLike, false, JSON.stringify(assetsSecuritiesAmount, null, 2))
+  console.log('[securities] assets page amount ok:', assetsSecuritiesAmount)
+
   await gotoOrReopen(`${baseUrl}/`)
   await waitForAppShell()
   await assertHomeBlocks()
@@ -2081,6 +2133,21 @@ async function assertModernLayoutOnly() {
   assert.equal(switchUi.hasModernBtn, false, JSON.stringify(switchUi, null, 2))
   assert.doesNotMatch(switchUi.text, /介面風格|Interface style|画面スタイル/u)
   assert.doesNotMatch(switchUi.text, /Traditional|傳統|クラシック/u)
+
+  await runPlaywrightCli(['goto', `${baseUrl}/settings/language`])
+  await waitForAppShell()
+  const languagePage = await evalPage(`() => {
+    const ids = ['zh-TW', 'en', 'ja']
+    return {
+      path: window.location.pathname,
+      buttons: ids.map((id) => {
+        const el = document.querySelector('[data-testid="language-option-' + id + '"]')
+        return el ? String(el.innerText || '').trim() : null
+      }),
+    }
+  }`)
+  assert.equal(languagePage.path, '/settings/language', JSON.stringify(languagePage, null, 2))
+  assert.deepEqual(languagePage.buttons, ['繁體中文', 'English', '日本語'], JSON.stringify(languagePage, null, 2))
 }
 
 console.log('--- Playwright: ui layout settings + home blocks ---')

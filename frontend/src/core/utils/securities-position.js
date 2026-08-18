@@ -56,23 +56,59 @@ export function summarizeSecurityTransactions(transactions = [], { includeSchedu
   }
 }
 
-export function resolveSecurityPriceMinor(security = {}, _options = {}) {
+export function averageCostMinor(investedMinor, quantity) {
+  const qty = Math.trunc(Number(quantity ?? 0))
+  const invested = Math.max(0, Math.round(Number(investedMinor ?? 0)))
+  if (qty <= 0) return 0
+  return Math.round(invested / qty)
+}
+
+export function resolveSecurityPriceMinor(security = {}, options = {}) {
   const source = String(security?.price_source ?? 'manual').trim().toLowerCase() || 'manual'
   // Phase 2+: branch on source === 'api'
   void source
-  return Math.max(0, Math.round(Number(security?.manual_price_minor ?? 0)))
+  const manual = Math.max(0, Math.round(Number(security?.manual_price_minor ?? 0)))
+  if (manual > 0) return manual
+  return Math.max(0, Math.round(Number(options.fallbackPriceMinor ?? 0)))
+}
+
+function valueForMode({ quantity, investedMinor, marketValueMinor, unrealizedMode }) {
+  if (unrealizedMode === UNREALIZED_MODE.cost) return Math.max(0, investedMinor)
+  if (quantity > 0) return Math.max(0, marketValueMinor > 0 ? marketValueMinor : investedMinor)
+  return Math.max(0, investedMinor)
 }
 
 export function buildSecurityPosition(security, transactions = [], options = {}) {
   const unrealizedMode = normalizeUnrealizedMode(options.unrealizedMode ?? UNREALIZED_MODE.market)
-  const summary = summarizeSecurityTransactions(transactions)
-  const priceMinor = resolveSecurityPriceMinor(security)
-  const quantity = summary.quantity
-  const investedMinor = summary.investedMinor
+  // Visible holdings include scheduled (T+2) so the UI does not show $0 / 0股
+  // right after a buy. Confirmed-only values feed total assets to avoid
+  // double-counting cash that has not left the settlement account yet.
+  const visible = summarizeSecurityTransactions(transactions, { includeScheduled: true })
+  const confirmed = summarizeSecurityTransactions(transactions, { includeScheduled: false })
+  const priceMinor = resolveSecurityPriceMinor(security, {
+    fallbackPriceMinor: averageCostMinor(visible.investedMinor, visible.quantity),
+  })
+  const confirmedPriceMinor = resolveSecurityPriceMinor(security, {
+    fallbackPriceMinor: averageCostMinor(confirmed.investedMinor, confirmed.quantity),
+  })
+  const quantity = visible.quantity
+  const investedMinor = visible.investedMinor
   const marketValueMinor = quantity > 0 ? quantity * priceMinor : 0
-  const displayValueMinor = unrealizedMode === UNREALIZED_MODE.cost
-    ? investedMinor
-    : (quantity > 0 ? marketValueMinor : investedMinor)
+  const confirmedMarketValueMinor = confirmed.quantity > 0
+    ? confirmed.quantity * confirmedPriceMinor
+    : 0
+  const displayValueMinor = valueForMode({
+    quantity,
+    investedMinor,
+    marketValueMinor,
+    unrealizedMode,
+  })
+  const includedValueMinor = valueForMode({
+    quantity: confirmed.quantity,
+    investedMinor: confirmed.investedMinor,
+    marketValueMinor: confirmedMarketValueMinor,
+    unrealizedMode,
+  })
   const deltaMinor = unrealizedMode === UNREALIZED_MODE.cost
     ? 0
     : marketValueMinor - investedMinor
@@ -82,24 +118,37 @@ export function buildSecurityPosition(security, transactions = [], options = {})
     settlementAccountId: security?.settlement_account_id ?? null,
     quantity,
     investedMinor,
+    confirmedQuantity: confirmed.quantity,
+    confirmedInvestedMinor: confirmed.investedMinor,
     priceMinor,
     marketValueMinor,
     displayValueMinor,
+    includedValueMinor,
     deltaMinor,
     unrealizedMode,
     includeInAssets: Number(security?.include_in_assets ?? 1) === 1,
   }
 }
 
+export function includedSecurityValueMinor(position = {}, options = {}) {
+  if (!position?.includeInAssets) return 0
+  const unrealizedMode = normalizeUnrealizedMode(
+    options.unrealizedMode ?? position.unrealizedMode ?? UNREALIZED_MODE.market,
+  )
+  if (position.includedValueMinor != null && Number.isFinite(Number(position.includedValueMinor))) {
+    return Math.max(0, Number(position.includedValueMinor))
+  }
+  const invested = Math.max(0, Number(position.investedMinor ?? position.displayValueMinor ?? 0))
+  if (unrealizedMode === UNREALIZED_MODE.cost) return invested
+  const market = Math.max(0, Number(position.marketValueMinor ?? 0))
+  return market > 0 ? market : invested
+}
+
 export function sumIncludedSecuritiesMarketValue(positions = [], options = {}) {
-  const unrealizedMode = normalizeUnrealizedMode(options.unrealizedMode ?? UNREALIZED_MODE.market)
-  return (positions ?? []).reduce((total, position) => {
-    if (!position?.includeInAssets) return total
-    if (unrealizedMode === UNREALIZED_MODE.cost) {
-      return total + Math.max(0, Number(position.investedMinor ?? position.displayValueMinor ?? 0))
-    }
-    return total + Math.max(0, Number(position.marketValueMinor ?? position.displayValueMinor ?? 0))
-  }, 0)
+  return (positions ?? []).reduce(
+    (total, position) => total + includedSecurityValueMinor(position, options),
+    0,
+  )
 }
 
 export function assertSellQuantityAllowed(currentQuantity, sellQuantity, { recordMode = RECORD_MODE.position } = {}) {

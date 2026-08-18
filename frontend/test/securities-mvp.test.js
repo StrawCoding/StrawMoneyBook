@@ -53,6 +53,53 @@ test('included securities market value feeds asset total', () => {
   assert.equal(summary.totalAssetMinor, 6000)
 })
 
+test('unpriced position uses average cost so assets are not zero', () => {
+  const position = buildSecurityPosition(
+    { id: 's1', include_in_assets: 1, manual_price_minor: 0, price_source: 'manual' },
+    [{ type: 'buy', quantity: 10, price_minor: 50000, fee_minor: 0, principal_minor: 500000, settlement_status: 'confirmed', record_mode: 'position' }],
+  )
+  assert.equal(position.quantity, 10)
+  assert.equal(position.priceMinor, 50000)
+  assert.equal(position.marketValueMinor, 500000)
+  assert.equal(position.displayValueMinor, 500000)
+  assert.equal(position.includedValueMinor, 500000)
+  assert.equal(sumIncludedSecuritiesMarketValue([position]), 500000)
+})
+
+test('funds-only confirmed holdings count invested in market mode', () => {
+  const position = buildSecurityPosition(
+    { id: 's2', include_in_assets: 1, manual_price_minor: 0 },
+    [{ type: 'buy', quantity: 0, price_minor: 0, fee_minor: 0, principal_minor: 30000, settlement_status: 'confirmed', record_mode: 'funds' }],
+  )
+  assert.equal(position.quantity, 0)
+  assert.equal(position.marketValueMinor, 0)
+  assert.equal(position.investedMinor, 30000)
+  assert.equal(position.displayValueMinor, 30000)
+  assert.equal(position.includedValueMinor, 30000)
+  assert.equal(sumIncludedSecuritiesMarketValue([position], { unrealizedMode: 'market' }), 30000)
+})
+
+test('scheduled buys show on display but do not inflate included asset totals', () => {
+  const position = buildSecurityPosition(
+    { id: 's3', include_in_assets: 1, manual_price_minor: 0 },
+    [{ type: 'buy', quantity: 5, price_minor: 10000, fee_minor: 0, principal_minor: 50000, settlement_status: 'scheduled', record_mode: 'position' }],
+  )
+  assert.equal(position.quantity, 5)
+  assert.equal(position.displayValueMinor, 50000)
+  assert.equal(position.confirmedQuantity, 0)
+  assert.equal(position.includedValueMinor, 0)
+  assert.equal(sumIncludedSecuritiesMarketValue([position], { unrealizedMode: 'market' }), 0)
+})
+
+test('assets page shows securities display value and totals confirmed included value', () => {
+  const root = resolve(import.meta.dirname, '..')
+  const assets = readFileSync(resolve(root, 'src/ui/views/assets.vue'), 'utf8')
+  assert.match(assets, /data-testid="assets-securities-amount"/)
+  assert.match(assets, /includedDisplayValueMinor/)
+  assert.match(assets, /securitiesDisplayMinor/)
+  assert.match(assets, /securitiesMarketValueMinor: securityStore\.summary\.includedMarketValueMinor/)
+})
+
 test('securities repo unwraps sqlite query.values via rowsOf', () => {
   const root = resolve(import.meta.dirname, '..')
   const repo = readFileSync(resolve(root, 'src/core/repositories/security.repo.js'), 'utf8')

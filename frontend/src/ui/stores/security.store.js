@@ -25,6 +25,7 @@ export const useSecurityStore = defineStore('security', {
     summary: {
       count: 0,
       includedMarketValueMinor: 0,
+      includedDisplayValueMinor: 0,
       totalMarketValueMinor: 0,
       totalInvestedMinor: 0,
       totalDisplayValueMinor: 0,
