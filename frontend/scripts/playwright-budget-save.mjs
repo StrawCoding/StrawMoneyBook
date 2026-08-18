@@ -5,34 +5,16 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 
+import { createPlaywrightCliRunner } from './playwright-cli-runtime.mjs'
+
 const execFileAsync = promisify(execFile)
 const frontendDir = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
-const defaultBrowsersPath = resolve(repoRoot, 'backend/.server-data/playwright-browsers')
-const playwrightConfigPath = resolve(fileURLToPath(new URL('../playwright-cli.json', import.meta.url)))
 const previewPort = Number(process.env.BUDGET_SAVE_PLAYWRIGHT_PORT || 4175)
 const baseUrl = `http://127.0.0.1:${previewPort}`
-
-async function runPlaywrightCli(args, { raw = false } = {}) {
-  const cliArgs = [
-    '--yes',
-    '--package',
-    '@playwright/cli',
-    'playwright-cli',
-    ...(raw ? ['--raw'] : []),
-    ...args,
-  ]
-  return execFileAsync('npx', cliArgs, {
-    cwd: frontendDir,
-    env: {
-      ...process.env,
-      PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || defaultBrowsersPath,
-      PLAYWRIGHT_MCP_CONFIG: process.env.PLAYWRIGHT_MCP_CONFIG || playwrightConfigPath,
-    },
-    maxBuffer: 4 * 1024 * 1024,
-    timeout: 180000,
-  })
-}
+const { runPlaywrightCli, ensurePlaywrightChromium } = createPlaywrightCliRunner({
+  label: 'budget-save',
+  port: previewPort,
+})
 
 async function evalPage(script) {
   const result = await runPlaywrightCli(['eval', script], { raw: true })
@@ -86,7 +68,7 @@ async function completeOnboarding() {
 
   const welcome = await evalPage(`() => Boolean(document.querySelector('.welcome-root'))`)
   if (welcome) {
-    await runPlaywrightCli(['click', "button:has-text('Next')"])
+    await runPlaywrightCli(['click', "button:has-text('Next'), button:has-text('下一步'), button:has-text('次へ')"])
     await delay(900)
     await runPlaywrightCli(['fill', '.welcome-root input.input', `Playwright Ledger ${Date.now()}`])
     await runPlaywrightCli(['click', "button:has-text('Create Ledger'), button:has-text('建立帳本'), button:has-text('帳簿を作成')"])
@@ -201,7 +183,7 @@ async function saveBudgetContainerWithToggle() {
   await delay(300)
   await runPlaywrightCli(['click', '.form-wrap .switch-row'])
   await delay(300)
-  await runPlaywrightCli(['click', ".form-wrap button.btn.primary:has-text('Save'), .form-wrap button.btn.primary:has-text('儲存'), .form-wrap button.btn.primary:has-text('保存')"])
+  await runPlaywrightCli(['click', ".app-overlay-sheet-card .footer button.btn.primary:has-text('Save'), .app-overlay-sheet-card .footer button.btn.primary:has-text('儲存'), .app-overlay-sheet-card .footer button.btn.primary:has-text('保存')"])
   await delay(1200)
 }
 
@@ -214,7 +196,7 @@ async function saveTotalBudgetSaveToggle() {
   await delay(300)
   await runPlaywrightCli(['click', '.form-wrap .switch-row'])
   await delay(300)
-  await runPlaywrightCli(['click', ".form-wrap button.btn.primary:has-text('Save'), .form-wrap button.btn.primary:has-text('儲存'), .form-wrap button.btn.primary:has-text('保存')"])
+  await runPlaywrightCli(['click', ".app-overlay-sheet-card .footer button.btn.primary:has-text('Save'), .app-overlay-sheet-card .footer button.btn.primary:has-text('儲存'), .app-overlay-sheet-card .footer button.btn.primary:has-text('保存')"])
   await delay(1200)
 }
 
@@ -236,6 +218,7 @@ const preview = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--
 
 try {
   await waitForPreviewReady()
+  await ensurePlaywrightChromium()
 
   await runPlaywrightCli(['delete-data'])
   await runPlaywrightCli(['open', `${baseUrl}/`])

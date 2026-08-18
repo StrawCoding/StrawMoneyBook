@@ -6,35 +6,17 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { join, resolve } from 'node:path'
 
+import { createPlaywrightCliRunner } from './playwright-cli-runtime.mjs'
+
 const execFileAsync = promisify(execFile)
 const frontendDir = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
-const defaultBrowsersPath = resolve(repoRoot, 'backend/.server-data/playwright-browsers')
-const playwrightConfigPath = resolve(fileURLToPath(new URL('../playwright-cli.json', import.meta.url)))
 const previewPort = Number(process.env.ANALYSIS_EXPORT_PLAYWRIGHT_PORT || 4182)
 const baseUrl = `http://127.0.0.1:${previewPort}`
 const playwrightCliDir = resolve(frontendDir, '.playwright-cli')
-
-async function runPlaywrightCli(args, { raw = false } = {}) {
-  const cliArgs = [
-    '--yes',
-    '--package',
-    '@playwright/cli',
-    'playwright-cli',
-    ...(raw ? ['--raw'] : []),
-    ...args,
-  ]
-  return execFileAsync('npx', cliArgs, {
-    cwd: frontendDir,
-    env: {
-      ...process.env,
-      PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || defaultBrowsersPath,
-      PLAYWRIGHT_MCP_CONFIG: process.env.PLAYWRIGHT_MCP_CONFIG || playwrightConfigPath,
-    },
-    maxBuffer: 4 * 1024 * 1024,
-    timeout: 180000,
-  })
-}
+const { runPlaywrightCli, ensurePlaywrightChromium } = createPlaywrightCliRunner({
+  label: 'analysis-export',
+  port: previewPort,
+})
 
 async function evalPage(script) {
   const result = await runPlaywrightCli(['eval', script], { raw: true })
@@ -1008,6 +990,7 @@ const preview = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--
 
 try {
   await waitForPreviewReady()
+  await ensurePlaywrightChromium()
   await runPlaywrightCli(['open', baseUrl])
   await delay(800)
   // Fresh app-shell for deterministic onboarding + seed.

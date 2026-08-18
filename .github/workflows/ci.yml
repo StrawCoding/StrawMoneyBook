@@ -154,3 +154,43 @@ jobs:
         env:
           CI: true
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/backend/.server-data/playwright-browsers
+
+  playwright-budget-cross-month:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Run high-risk Playwright budget-cross-month
+        run: npm run playwright:budget-cross-month
+        env:
+          CI: true
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/backend/.server-data/playwright-browsers
+
+  playwright-budget-pay-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Run high-risk Playwright budget-pay-cycle
+        run: npm run playwright:budget-pay-cycle
+        env:
+          CI: true
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/backend/.server-data/playwright-browsers

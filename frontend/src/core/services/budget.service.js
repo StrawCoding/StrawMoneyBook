@@ -10,6 +10,7 @@ export {
 export {
   dateKeyForLedgerTimeZone,
   monthKeyForLedgerTimeZone,
+  parsePayCycleMonthKey,
   resolveCalendarBudgetPeriod,
   resolvePayCycleBudgetPeriod,
   resolveBudgetPeriodForLedger,

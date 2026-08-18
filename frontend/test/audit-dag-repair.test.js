@@ -61,6 +61,10 @@ test('bank client guard fails closed in production and ledger purge uses a trans
   assert.match(ci, /npm run playwright:analysis-export/)
   assert.match(ci, /playwright-carrier-sync:/)
   assert.match(ci, /npm run playwright:carrier-sync/)
+  assert.match(ci, /playwright-budget-cross-month:/)
+  assert.match(ci, /npm run playwright:budget-cross-month/)
+  assert.match(ci, /playwright-budget-pay-cycle:/)
+  assert.match(ci, /npm run playwright:budget-pay-cycle/)
   const prepareIdx = ci.indexOf('npm run prepare:android:release')
   const gradleIdx = ci.indexOf(':app:testDebugUnitTest')
   assert.ok(prepareIdx >= 0 && gradleIdx > prepareIdx, 'cap sync must run before Gradle unit tests')
@@ -86,6 +90,37 @@ test('bank client guard fails closed in production and ledger purge uses a trans
   )
   assert.match(uiLayout, /fileURLToPath\(new URL\('\.\.', import\.meta\.url\)\)/)
   assert.doesNotMatch(uiLayout, /frontendDir = '\/mnt\/data/)
+
+  const playwrightRuntime = readFileSync(
+    resolve(import.meta.dirname, '../scripts/playwright-cli-runtime.mjs'),
+    'utf8',
+  )
+  assert.match(playwrightRuntime, /export async function ensurePlaywrightChromium/)
+  assert.match(playwrightRuntime, /install-browser', 'chromium'/)
+  assert.match(playwrightRuntime, /--session/)
+  for (const script of [
+    'playwright-budget-save.mjs',
+    'playwright-analysis-export.mjs',
+    'playwright-carrier-sync-settings.mjs',
+    'playwright-budget-cross-month.mjs',
+    'playwright-budget-pay-cycle.mjs',
+  ]) {
+    const source = readFileSync(resolve(import.meta.dirname, '../scripts', script), 'utf8')
+    assert.match(source, /playwright-cli-runtime\.mjs/)
+    assert.match(source, /ensurePlaywrightChromium/)
+  }
+  const budgetSave = readFileSync(
+    resolve(import.meta.dirname, '../scripts/playwright-budget-save.mjs'),
+    'utf8',
+  )
+  assert.match(budgetSave, /button:has-text\('Next'\), button:has-text\('下一步'\), button:has-text\('次へ'\)/)
+  assert.match(budgetSave, /\.footer button\.btn\.primary:has-text\('儲存'\)/)
+  const carrierSync = readFileSync(
+    resolve(import.meta.dirname, '../scripts/playwright-carrier-sync-settings.mjs'),
+    'utf8',
+  )
+  assert.match(carrierSync, /feature-link-carrier-sync/)
+  assert.doesNotMatch(carrierSync, /missing carrier-sync settings link/)
 })
 
 test('audit DAG identity, serverless, busy_timeout and PII guards stay in source', () => {

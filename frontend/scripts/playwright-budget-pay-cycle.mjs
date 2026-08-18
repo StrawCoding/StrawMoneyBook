@@ -1,40 +1,21 @@
 import assert from 'node:assert/strict'
-import { execFile, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
-import { promisify } from 'node:util'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 
-const execFileAsync = promisify(execFile)
+import { createPlaywrightCliRunner } from './playwright-cli-runtime.mjs'
+
 const frontendDir = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
-const defaultBrowsersPath = resolve(repoRoot, 'backend/.server-data/playwright-browsers')
-const playwrightConfigPath = resolve(fileURLToPath(new URL('../playwright-cli.json', import.meta.url)))
 const previewPort = Number(process.env.BUDGET_PAY_CYCLE_PLAYWRIGHT_PORT || 4177)
 const baseUrl = `http://127.0.0.1:${previewPort}`
-
-async function runPlaywrightCli(args, { raw = false, timeout = 60000 } = {}) {
-  const cliArgs = [
-    '--yes',
-    '--package',
-    '@playwright/cli',
-    'playwright-cli',
-    ...(raw ? ['--raw'] : []),
-    ...args,
-  ]
-  return execFileAsync('npx', cliArgs, {
-    cwd: frontendDir,
-    env: {
-      ...process.env,
-      BUDGET_PAY_CYCLE_BASE_URL: baseUrl,
-      PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || defaultBrowsersPath,
-      PLAYWRIGHT_MCP_CONFIG: process.env.PLAYWRIGHT_MCP_CONFIG || playwrightConfigPath,
-    },
-    maxBuffer: 8 * 1024 * 1024,
-    timeout,
-  })
-}
+const { runPlaywrightCli, ensurePlaywrightChromium } = createPlaywrightCliRunner({
+  label: 'budget-pay-cycle',
+  port: previewPort,
+  extraEnv: { BUDGET_PAY_CYCLE_BASE_URL: baseUrl },
+  maxBuffer: 8 * 1024 * 1024,
+})
 
 async function snapshotText() {
   const result = await runPlaywrightCli(['snapshot'], { timeout: 60000 })
@@ -105,6 +86,7 @@ async function assertSourceContract() {
     budgetStore,
     ledgerStore,
     budgetService,
+    budgetPeriod,
     homePeriodFilter,
     transactionRepo,
     errorLogService,
@@ -119,6 +101,7 @@ async function assertSourceContract() {
     readFile(resolve(frontendDir, 'src/ui/stores/budget.store.js'), 'utf8'),
     readFile(resolve(frontendDir, 'src/ui/stores/ledger.store.js'), 'utf8'),
     readFile(resolve(frontendDir, 'src/core/services/budget.service.js'), 'utf8'),
+    readFile(resolve(frontendDir, 'src/core/services/budget-period.js'), 'utf8'),
     readFile(resolve(frontendDir, 'src/ui/composables/useHomePeriodFilter.js'), 'utf8'),
     readFile(resolve(frontendDir, 'src/core/repositories/transaction.repo.js'), 'utf8'),
     readFile(resolve(frontendDir, 'src/ui/services/error-log.service.js'), 'utf8'),
@@ -155,7 +138,7 @@ async function assertSourceContract() {
   assert.match(transactionRepo, /if \(!range\) return \[\]/)
   assert.match(transactionRepo, /if \(!range\) return null/)
   assert.match(errorLogService, /window\.__SMB_ERROR_LOG__/)
-  assert.match(errorLogService, /stack: String/)
+  assert.match(errorLogService, /stack: redactPiiText\(String/)
   assert.match(appRuntimeService, /reloadCurrentBudgetPeriodInBackground/)
   assert.match(appRuntimeService, /loadCurrentPeriod\(\)/)
   assert.match(appRuntimeService, /APP_BUDGET_PERIOD_SYNC_EVENT/)
@@ -163,7 +146,7 @@ async function assertSourceContract() {
   assert.match(appRuntimeService, /appStateChange/)
   assert.match(appRuntimeService, /visibilitychange/)
   assert.match(budgetingVue, /APP_BUDGET_PERIOD_SYNC_EVENT/)
-  assert.match(budgetService, /pay:/)
+  assert.match(budgetPeriod, /pay:/)
   assert.match(migrationSql, /period_key/)
   assert.match(migrationSql, /budget_period_mode/)
 }
@@ -479,8 +462,9 @@ const preview = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--
 
 try {
   await waitForPreviewReady()
+  await ensurePlaywrightChromium()
   console.log('Preview ready; resetting browser data...')
-  await runPlaywrightCli(['delete-data'])
+  await runPlaywrightCli(['delete-data'], { timeout: 120000 })
   console.log('Opening budgeting app shell...')
   await runPlaywrightCli(['open', `${baseUrl}/budget`])
   await delay(1500)

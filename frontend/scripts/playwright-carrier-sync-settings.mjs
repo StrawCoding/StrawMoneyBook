@@ -5,33 +5,16 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 
+import { createPlaywrightCliRunner } from './playwright-cli-runtime.mjs'
+
 const execFileAsync = promisify(execFile)
 const frontendDir = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const repoRoot = resolve(frontendDir, '..')
-const defaultBrowsersPath = resolve(repoRoot, 'backend/.server-data/playwright-browsers')
-const playwrightConfigPath = resolve(frontendDir, 'playwright-cli.json')
 const previewPort = Number(process.env.CARRIER_SYNC_PLAYWRIGHT_PORT || 4175)
 const baseUrl = `http://127.0.0.1:${previewPort}`
-
-async function runPlaywrightCli(args, { raw = false } = {}) {
-  return execFileAsync('npx', [
-    '--yes',
-    '--package',
-    '@playwright/cli',
-    'playwright-cli',
-    ...(raw ? ['--raw'] : []),
-    ...args,
-  ], {
-    cwd: frontendDir,
-    env: {
-      ...process.env,
-      PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || defaultBrowsersPath,
-      PLAYWRIGHT_MCP_CONFIG: process.env.PLAYWRIGHT_MCP_CONFIG || playwrightConfigPath,
-    },
-    maxBuffer: 4 * 1024 * 1024,
-    timeout: 180000,
-  })
-}
+const { runPlaywrightCli, ensurePlaywrightChromium } = createPlaywrightCliRunner({
+  label: 'carrier-sync',
+  port: previewPort,
+})
 
 async function evalPage(script) {
   const result = await runPlaywrightCli(['eval', script], { raw: true })
@@ -145,23 +128,51 @@ async function completeOnboarding() {
 }
 
 async function openCarrierSyncPage() {
-  await runPlaywrightCli(['goto', `${baseUrl}/settings`])
+  await runPlaywrightCli(['goto', `${baseUrl}/features`])
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const ready = await evalPage(`() => ({
       path: window.location.pathname,
-      hasCarrierLink: Boolean(document.querySelector('a[href="/settings/carrier-sync"]')),
+      hasCarrierLink: Boolean(document.querySelector('[data-testid=feature-link-carrier-sync]')),
       hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
     })`)
-    if (ready.path === '/settings' && ready.hasCarrierLink && ready.hasBottomNav) break
+    if (ready.path === '/features' && ready.hasCarrierLink && ready.hasBottomNav) break
     await delay(400)
   }
 
-  await runPlaywrightCli(['eval', `() => {
-    const link = document.querySelector('a[href="/settings/carrier-sync"]')
-    if (!link) throw new Error('missing carrier-sync settings link')
-    link.click()
-    return true
-  }`], { raw: true })
+  const scrolled = await evalPage(`() => {
+    const el = document.querySelector('[data-testid=feature-link-carrier-sync]')
+    if (!el) return { ok: false, reason: 'missing' }
+    el.scrollIntoView({ block: 'center', inline: 'nearest' })
+    const rect = el.getBoundingClientRect()
+    const nav = document.querySelector('[data-testid=bottom-nav]')
+    const navTop = nav ? nav.getBoundingClientRect().top : Number.POSITIVE_INFINITY
+    return {
+      ok: true,
+      clearOfNav: rect.bottom < navTop - 4,
+    }
+  }`)
+  if (!scrolled.ok) throw new Error('missing carrier-sync feature link')
+
+  await runPlaywrightCli(['click', '[data-testid=feature-link-carrier-sync]'])
+  await delay(900)
+  let pageState = await evalPage(`() => ({
+    path: window.location.pathname,
+    hasAvailability: Boolean(document.querySelector('[data-testid=carrier-sync-availability]')),
+    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+    welcome: Boolean(document.querySelector('.welcome-root')),
+  })`)
+  if (pageState.path !== '/settings/carrier-sync') {
+    await runPlaywrightCli(['goto', `${baseUrl}/features`])
+    await delay(500)
+    await evalPage(`() => {
+      const el = document.querySelector('[data-testid=feature-link-carrier-sync]')
+      if (!el) throw new Error('missing carrier-sync feature link')
+      el.scrollIntoView({ block: 'center', inline: 'nearest' })
+      el.click()
+      return true
+    }`)
+    await delay(900)
+  }
 
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const ready = await evalPage(`() => ({
@@ -264,6 +275,7 @@ const preview = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--
 
 try {
   await waitForPreviewReady()
+  await ensurePlaywrightChromium()
   await runPlaywrightCli(['delete-data'])
   await runPlaywrightCli(['open', `${baseUrl}/`])
   const onboarding = await completeOnboarding()
