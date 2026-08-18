@@ -39,6 +39,7 @@
 - 關於與聯絡入口（官網、Facebook、Instagram、Threads、Email、隱私權政策）
 - 官方網站 SEO / 品牌搜尋關鍵字（`../StrawMoneyBookWeb/index.html`：`StrawMoneyBook`、`稻草AI記帳`、`稻草記帳`、`AI記帳`、`對話記帳`、`自動記帳` 等）
 - 官方網站網頁測試版：`https://www.strawmb.com/app/`（GitHub Pages 巢狀 SPA，`VITE_WEB_HASH_ROUTER=true` + `base /app/`），production web 的共同帳本／Google OAuth／載具／銀行 API 預設 `https://api.strawmb.com`，不再打到官網同網域造成 405／假後端。入口在 `/preview`。發布：`npm run sync:official-site-web-app:push`（`gpr` 內建）
+- 本機 `npm run dev`（`frontend/.env.development`）同樣預設連 `https://api.strawmb.com`；Vite 的 `localApiDevPlugin` 只在未設絕對 API base 時當 fallback。要打本機 `8787` 用 gitignored `.env.development.local` 覆寫。`vite preview`／Playwright production 建置不載入此檔。
 - 官方網站 UI / UX 目前已收斂為共用 design tokens + 雙主題 header / page shell；首頁改為 icon / symbol 導向的掃讀式結構，首屏先聚焦單一句產品定位，再依序呈現 3 個重點、4 個主要場景與下載 / 預先體驗 CTA；手機導覽改為折疊選單，桌機保留精簡錨點導覽
 - 官網次頁目前與首頁維持一致視覺語言：`/preview` 提供網頁測試版入口（`/app/`，連 `api.strawmb.com`）並保留排隊表單；共同帳本邀請頁保留 deep link / Play Store fallback 邏輯但改用統一介面；服務條款與隱私權政策改用同一套 legal document shell，並在官網 `public/terms-of-service/index.html`、`public/privacy-policy/index.html` 提供靜態直連頁，避免正式網域直接開啟法律文件路徑時因 SPA history fallback 未命中而回 404
 - 銀行同步（會員限定；`VITE_BANK_SYNC_FEATURE_ENABLED` 啟用後顯示設定入口與支援矩陣；第一銀行自動登入僅 Android 原生；Web 顯示可讀支援矩陣與 CSV 退路，不再靜默導回）
@@ -1084,7 +1085,7 @@ UI composable 目錄：`src/ui/composables/`
 
 #### `src/services/einvoice/backend.js`
 - 函數（6）：`saveEInvoiceCredential`, `loadEInvoiceCredential`, `clearEInvoiceCredential`, `hasEInvoiceCredential`, `scrapeEInvoiceList`, `importSelectedInvoices`
-- `scrapeEInvoiceList()` 以 fetch 呼叫 `/api/einvoice/query-invoices`（native / production 預設 `https://api.strawmb.com`，開發 web 可走相對路徑），送出 `cardNo`、`cardEncrypt`、`startDate`、`endDate`；35 秒前端逾時會轉成 `einvoice_query_timeout`
+- `scrapeEInvoiceList()` 以 fetch 呼叫 `/api/einvoice/query-invoices`（native / production / `npm run dev` 預設 `https://api.strawmb.com`；未設絕對 base 的開發 web 才走相對路徑打 Vite middleware），送出 `cardNo`、`cardEncrypt`、`startDate`、`endDate`；35 秒前端逾時會轉成 `einvoice_query_timeout`
 - **SMB-226 / v1.3.3**：`importSelectedInvoices()` 同步建立支出交易時，透過 `buildCarrierTagsJson(invoice.carrierName)` 把載具名稱寫入 `createExpense` 的 `tagsJson`
 
 #### `src/ui/stores/einvoice-import.store.js`

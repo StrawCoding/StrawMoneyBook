@@ -100,13 +100,19 @@ function resolveGoogleOAuthApiOrigin() {
 
 function shouldPrefixGoogleOAuthApiOrigin() {
   if (Capacitor.isNativePlatform()) return true
+  // npm run dev (.env.development) points Google OAuth at the live ops API.
+  // Relative /api/google/oauth/* would hit Vite middleware instead of api.strawmb.com.
+  if (isAbsoluteHttpUrl(String(import.meta.env.VITE_GOOGLE_OAUTH_API_ORIGIN ?? '').trim())) {
+    return true
+  }
   if (typeof window !== 'undefined') {
     const origin = String(window.location?.origin ?? '').trim()
     if (/^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(origin)) return false
   }
   // Production web hosted on www.strawmb.com/app/ is not same-origin with
   // api.strawmb.com. Relative /api/google/oauth/* would hit GitHub Pages 405
-  // (SMB-192 class). Local vite / Playwright preview still uses same-origin middleware.
+  // (SMB-192 class). Playwright preview without explicit origin still uses
+  // same-origin middleware.
   return import.meta.env.PROD === true
 }
 

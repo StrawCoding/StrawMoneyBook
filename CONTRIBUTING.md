@@ -22,10 +22,10 @@ cp frontend/.env.example frontend/.env
 cp backend/.env.example backend/.env
 # 依需求填入對應的設定值
 
-# 啟動前端開發伺服器
+# 啟動前端開發伺服器（預設連 https://api.strawmb.com）
 npm run dev:frontend
 
-# 啟動後端開發伺服器
+# 可選：本機後端。若要改打 8787，在 frontend/.env.development.local 覆寫 API URL
 npm run dev:backend
 ```
 

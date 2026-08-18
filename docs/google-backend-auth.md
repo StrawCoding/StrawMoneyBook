@@ -290,11 +290,13 @@ frontend/
 
 ### 本機
 
-- `frontend/.env.example`
-  - `VITE_SHARED_LEDGER_API_BASE_URL=http://127.0.0.1:8787`
+- `frontend/.env.development`（`npm run dev`）
+  - `VITE_SHARED_LEDGER_API_BASE_URL=https://api.strawmb.com`
+  - `VITE_GOOGLE_OAUTH_API_ORIGIN=https://api.strawmb.com`
+- 若改打本機後端，在 gitignored `frontend/.env.development.local` 覆寫為 `http://127.0.0.1:8787`
 - `backend/.env.example`
   - `GOOGLE_AUTH_WEB_CLIENT_ID=...`
-- Web GIS 在 localhost 可用
+- Web GIS 在 localhost 可用（Google Cloud OAuth client 需授權 `http://localhost:5173` / `http://127.0.0.1:5173`）
 - Android debug 需把 debug keystore SHA-1 / SHA-256 加到 Google Cloud OAuth Android client
 
 ### 正式環境

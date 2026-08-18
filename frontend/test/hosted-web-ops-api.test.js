@@ -41,6 +41,7 @@ test('production web prefixes Google OAuth to api.strawmb.com instead of GitHub 
   assert.match(googleAuthSource, /localhost/)
   assert.match(googleAuthSource, /SMB-192/)
   assert.match(googleAuthSource, /www\.strawmb\.com\/app\//)
+  assert.match(googleAuthSource, /VITE_GOOGLE_OAUTH_API_ORIGIN/)
 })
 
 test('production web API bases default to api.strawmb.com', () => {

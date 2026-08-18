@@ -15,6 +15,7 @@
     "sync:official-site-web-app:build": "node scripts/sync-official-site-web-app.mjs --build",
     "sync:official-site-web-app:push": "node scripts/sync-official-site-web-app.mjs --build --commit-push",
     "playwright:hosted-web-ops-api": "node scripts/playwright-hosted-web-ops-api.mjs",
+    "playwright:dev-ops-api": "node scripts/playwright-dev-ops-api.mjs",
     "prepare:android:release": "node scripts/prepare-android-release.mjs",
     "copy:android": "npx cap copy android && node scripts/patch-android-flatdir-warning.mjs",
     "sync:android": "npx cap sync android && node scripts/patch-android-flatdir-warning.mjs",

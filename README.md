@@ -54,13 +54,13 @@ npm install --prefix frontend
 npm install --prefix backend
 ```
 
-啟動前端：
+啟動前端（`npm run dev` 預設連正式營運 API `https://api.strawmb.com`，不必先開本機後端）：
 
 ```bash
 npm run dev:frontend
 ```
 
-啟動後端：
+若要改打本機後端，在 `frontend/.env.development.local` 覆寫 `VITE_SHARED_LEDGER_API_BASE_URL=http://127.0.0.1:8787`（及其餘 `VITE_*_API_BASE_URL`），再啟動：
 
 ```bash
 npm run dev:backend

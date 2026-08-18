@@ -76,7 +76,7 @@ smb297 後資料全消失／silent wipe／語意改寫治本：`bootstrap.servic
 
 smb298 殘餘根因與還原／發版治本：smb297 雖不再 wipe primary，但 Android `plugin-null` 曾切到空的 `straw_money_book_recovery` 當 live DB，造成「資料仍不見」而 primary 仍在。治本改為只重試 primary，失敗才 `LOCAL_DB_INTEGRITY`（禁空 recovery fallback）。空庫但有 IndexedDB recovery 時 Welcome／toast 提示並可進入資料管理還原。`gpr`／`gpr:minor` 強制同步 StrawMoneyBookWeb `app-update.json`＋`api/app-update/play`（Pages→Web-Page／www.strawmb.com）。SavingsJarListPage 修復 `autoSaveAccountOptions` TDZ（Cannot access before initialization）。`playwright:ui-layout` 加 port mutex／獨立 CLI session／`waitForHomeBlocks`／preview 子行程清理，避免並行搶 preview 造成假空白首頁。
 
-官方網站網頁測試版 `https://www.strawmb.com/app/` 連正式營運後端 `https://api.strawmb.com`：GitHub Pages 巢狀 SPA 使用 hash router，production web 的 Google OAuth／共同帳本／載具／銀行 API 不再打到官網同網域。入口為 `https://www.strawmb.com/preview`。`gpr` 會一併發布測試版 SPA。
+官方網站網頁測試版 `https://www.strawmb.com/app/` 連正式營運後端 `https://api.strawmb.com`：GitHub Pages 巢狀 SPA 使用 hash router，production web 的 Google OAuth／共同帳本／載具／銀行 API 不再打到官網同網域。入口為 `https://www.strawmb.com/preview`。`gpr` 會一併發布測試版 SPA。本機 `npm run dev` 也預設連同一營運 API（`frontend/.env.development`）；要打本機後端請用 `.env.development.local` 覆寫。
 
 SMB-190 / v1.2.5 後，資料管理頁手動匯出的全部帳本 JSON 與 CSV 檔名都會加入時間戳，避免在 Android 原生檔案儲存或瀏覽器下載時因固定檔名重複覆蓋，讓多次匯出可以保留各自的檔案版本。SMB-216 / v1.2.29 後，資料管理頁的恢復備份、CSV 匯入與重設資料這類可能超過 3 秒的流程會顯示含百分比的加載動畫與目前動作說明，讓使用者知道系統仍在處理而不是壞掉或卡住。
 
