@@ -576,7 +576,7 @@ UI composable 目錄：`src/ui/composables/`
 - 變數（0）：無
 - 類別（0）：無
 - 補充：`listReimbursementTransactions` 的 `reimbursed_minor` 會合併直接報銷入帳、代收抵扣與已完成請款單匯入明細，避免完成請款後原交易仍被分到未報銷。
-- 補充：交易軟刪會同步清空 `idempotency_key`，讓請款單還原後再次完成、排程轉帳重建等流程不會被已軟刪交易的唯一鍵擋住。
+- 補充：請款／排程／借貸軟刪仍釋放 `idempotency_key`；`wear`／`import`／`einvoice` 保留冪等鍵，避免銀行／手錶重送複製一筆。軟刪交易由 migration 048 觸發器同步軟刪 `transaction_postings`。
 
 ### `src/core/services/ai-bookkeeping.service.js`
 - 函數（28）：`compactText`, `countSubsequenceHits`, `escapeRegExp`, `extractAddonItems`, `extractSmartNoteText`, `findAccountByKeyword`, `findAccountMatches`, `fuzzyAccountScore`, `includesAny`, `includesKeyword`, `isGenericCategoryName`, `normalizeIncludeFlag`, `normalizeReimbursable`, `normalizeText`, `normalizeType`, `parseAmountMajor`, `parseAmountWithUnit`, `parseAutoBookkeepingText`, `parseDateTimeFromText`, `pickCategoryBySemanticRules`, `pickCategoryMatch`, `pickClosestAccount`, `pickFirstNonGenericCategory`, `pickTransferAccounts`, `round2`, `shouldTreatAsTransfer`, `stripTextByRanges`, `toMinor`

@@ -1371,8 +1371,15 @@ final class FirstBankAutomation {
         JSONArray rows = new JSONArray();
         collectTransactionJsonRows(parsed, rows);
         JSONArray normalized = new JSONArray();
+        Map<String, Integer> occurrenceByKey = new LinkedHashMap<>();
         for (int index = 0; index < rows.length(); index += 1) {
-            JSONObject item = normalizeInterceptedTransactionRow(rows.optJSONObject(index), accountId, startDateBank, endDateBank);
+            JSONObject item = normalizeInterceptedTransactionRow(
+                rows.optJSONObject(index),
+                accountId,
+                startDateBank,
+                endDateBank,
+                occurrenceByKey
+            );
             if (item != null) {
                 normalized.put(item);
             }
@@ -1430,6 +1437,16 @@ final class FirstBankAutomation {
     }
 
     static JSONObject normalizeInterceptedTransactionRow(JSONObject row, String accountId, String startDateBank, String endDateBank) throws JSONException {
+        return normalizeInterceptedTransactionRow(row, accountId, startDateBank, endDateBank, new LinkedHashMap<>());
+    }
+
+    static JSONObject normalizeInterceptedTransactionRow(
+        JSONObject row,
+        String accountId,
+        String startDateBank,
+        String endDateBank,
+        Map<String, Integer> occurrenceByKey
+    ) throws JSONException {
         if (row == null) return null;
         String postedAtText = firstNonEmpty(
             row.optString("postedAt"),
@@ -1479,7 +1496,12 @@ final class FirstBankAutomation {
             row.optString("txnId")
         );
         if (providerTransactionId.isEmpty()) {
-            providerTransactionId = "fbtxn_" + simpleHash(accountId + "|" + postedAtText + "|" + amountMinor + "|" + summary + "|" + note);
+            String base = accountId + "|" + postedAtText + "|" + amountMinor + "|" + summary + "|" + note;
+            Map<String, Integer> counts = occurrenceByKey != null ? occurrenceByKey : new LinkedHashMap<>();
+            int occurrence = counts.containsKey(base) ? counts.get(base) : 0;
+            counts.put(base, occurrence + 1);
+            String hashInput = occurrence == 0 ? base : base + "|occ:" + occurrence;
+            providerTransactionId = "fbtxn_" + simpleHash(hashInput);
         }
         JSONObject item = new JSONObject();
         item.put("providerTransactionId", providerTransactionId);
@@ -2521,6 +2543,7 @@ final class FirstBankAutomation {
               const headerIndex = rows.findIndex((cells) => cells.some((cell) => /日期|交易類別|支出|存入|餘額|摘要/.test(cell)));
               const headerRow = rows[headerIndex >= 0 ? headerIndex : 0] ?? [];
               const columns = detectColumns(headerRow);
+              const collisionCounts = {};
               const items = [];
               for (const cells of rows.slice(headerIndex >= 0 ? headerIndex + 1 : 1)) {
                 if (!cells.length) continue;
@@ -2539,7 +2562,12 @@ final class FirstBankAutomation {
                 const statusText = text(cellMap.status) || '正常';
                 const balanceMinor = parseMinor(cellMap.balance);
                 const postedAt = parsePostedAt(postedAtText);
-                const sourceText = `${accountId}|${cells.join('|')}`;
+                const collisionKey = `${accountId}|${postedAtText}|${amountMinor}|${summary}|${note}`;
+                const occurrence = collisionCounts[collisionKey] || 0;
+                collisionCounts[collisionKey] = occurrence + 1;
+                const sourceText = occurrence === 0
+                  ? `${accountId}|${cells.join('|')}`
+                  : `${accountId}|${cells.join('|')}|occ:${occurrence}`;
                 items.push({
                   providerTransactionId: `fbtxn_${hash(sourceText)}`,
                   providerAccountId: accountId,

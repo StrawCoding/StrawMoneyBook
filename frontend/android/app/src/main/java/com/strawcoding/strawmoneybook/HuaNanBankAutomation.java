@@ -31,6 +31,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -738,9 +739,10 @@ final class HuaNanBankAutomation {
         }
         JSONArray raw = (JSONArray) result;
         JSONArray out = new JSONArray();
+        Map<String, Integer> occurrenceByKey = new HashMap<>();
         for (int index = 0; index < raw.length(); index += 1) {
             JSONObject row = raw.getJSONObject(index);
-            JSONObject item = buildTransactionIdentity(accountId, row, startDate, endDate);
+            JSONObject item = buildTransactionIdentity(accountId, row, startDate, endDate, occurrenceByKey);
             if (item != null) out.put(item);
         }
         return out;
@@ -748,12 +750,23 @@ final class HuaNanBankAutomation {
 
     /**
      * Prefer portal ref/seq; else {@code hncb_} + hash(account|postedAt|amount|summary). Never include balance.
+     * Occurrence index 0 keeps v1 hash so existing rows are not rehashed (SYNC-01).
      */
     static JSONObject buildTransactionIdentity(
         String accountId,
         JSONObject row,
         String rangeStart,
         String rangeEnd
+    ) throws Exception {
+        return buildTransactionIdentity(accountId, row, rangeStart, rangeEnd, new HashMap<>());
+    }
+
+    static JSONObject buildTransactionIdentity(
+        String accountId,
+        JSONObject row,
+        String rangeStart,
+        String rangeEnd,
+        Map<String, Integer> occurrenceByKey
     ) throws Exception {
         String postedAtText = firstNonEmpty(row.optString("postedAt"), row.optString("date"), row.optString("交易日"));
         String summary = firstNonEmpty(row.optString("summary"), row.optString("摘要"), row.optString("description"));
@@ -774,8 +787,13 @@ final class HuaNanBankAutomation {
             identityScheme = "huanan:portal-ref:v1";
             providerTransactionId = portalRef;
         } else {
-            identityScheme = "huanan:fallback-hash:v1";
-            providerTransactionId = "hncb_" + simpleHash(accountId + "|" + postedAtText + "|" + amountMinor + "|" + summary);
+            String base = accountId + "|" + postedAtText + "|" + amountMinor + "|" + summary;
+            Map<String, Integer> counts = occurrenceByKey != null ? occurrenceByKey : new HashMap<>();
+            int occurrence = counts.containsKey(base) ? counts.get(base) : 0;
+            counts.put(base, occurrence + 1);
+            String hashInput = occurrence == 0 ? base : base + "|occ:" + occurrence;
+            identityScheme = occurrence == 0 ? "huanan:fallback-hash:v1" : "huanan:fallback-hash:v1-occ";
+            providerTransactionId = "hncb_" + simpleHash(hashInput);
         }
         String postedAt = parsePostedAtIso(postedAtText);
         JSONObject item = new JSONObject();

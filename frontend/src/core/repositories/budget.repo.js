@@ -1,5 +1,6 @@
 import { query, run } from '../db/sqlite.js'
 import { createId, nowIso } from '../utils/id.js'
+import { refundDeductedMinorSql } from '@/core/domain/refund-match-sql.js'
 import { assertLedgerId, firstRow, rowsOf } from './base.repo.js'
 
 function normalizePeriodMode(value) {
@@ -26,44 +27,6 @@ function normalizeBudgetPeriodMode(value) {
 function normalizePeriodKey(value, fallback) {
   const normalized = String(value ?? '').trim()
   return normalized || String(fallback ?? '').trim()
-}
-
-function refundedSourceExclusionSql(sourceAlias = 'transactions') {
-  return `NOT EXISTS (
-    SELECT 1
-    FROM transactions rt
-    LEFT JOIN categories rc
-      ON rc.ledger_id = rt.ledger_id
-     AND rc.id = rt.category_id
-    WHERE rt.ledger_id = ${sourceAlias}.ledger_id
-      AND rt.deleted_at IS NULL
-      AND rt.external_ref_id = ${sourceAlias}.id
-      AND (
-        rt.origin_type = 'refund'
-        OR rc.name = '退款'
-        OR rt.note LIKE '退款：%'
-        OR rt.note LIKE '退款:%'
-      )
-  )`
-}
-
-function refundDeductedMinorSql(sourceAlias = 'transactions') {
-  return `COALESCE((
-    SELECT SUM(ABS(rt.amount_minor))
-    FROM transactions rt
-    LEFT JOIN categories rc
-      ON rc.ledger_id = rt.ledger_id
-     AND rc.id = rt.category_id
-    WHERE rt.ledger_id = ${sourceAlias}.ledger_id
-      AND rt.deleted_at IS NULL
-      AND rt.external_ref_id = ${sourceAlias}.id
-      AND (
-        rt.origin_type = 'refund'
-        OR rc.name = '退款'
-        OR rt.note LIKE '退款：%'
-        OR rt.note LIKE '退款:%'
-      )
-  ), 0)`
 }
 
 function budgetSpentMinorSql(sourceAlias = 'transactions') {

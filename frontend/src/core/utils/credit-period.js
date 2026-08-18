@@ -25,8 +25,38 @@ export function toLocalIso(date) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}.${String(date.getMilliseconds()).padStart(3, '0')}`
 }
 
-export function parseLocalIso(value) {
-  const text = String(value ?? '').trim()
+const HAS_TZ_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/i
+
+function normalizeTimeZone(timeZone) {
+  const tz = String(timeZone ?? '').trim() || 'Asia/Taipei'
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date('2026-01-01T00:00:00.000Z'))
+    return tz
+  } catch {
+    return 'Asia/Taipei'
+  }
+}
+
+/** Instant → Date whose local getters match the ledger timezone wall clock. */
+export function zonedInstantToLocalDate(instant, timeZone) {
+  const date = instant instanceof Date ? instant : new Date(instant)
+  if (Number.isNaN(date.getTime())) throw new Error(`invalid posted_at: ${instant}`)
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: normalizeTimeZone(timeZone),
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  })
+  const parts = formatter.formatToParts(date)
+  const read = (type) => Number(parts.find((item) => item.type === type)?.value ?? 0)
+  return localDateTime(read('year'), read('month') - 1, read('day'), read('hour'), read('minute'), read('second'), 0)
+}
+
+function parseCalendarLocalIso(text) {
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2})?:?(\d{2})?:?(\d{2})?(?:\.(\d{1,3}))?)?/.exec(text)
   if (!m) {
     const fallback = new Date(text)
@@ -42,6 +72,23 @@ export function parseLocalIso(value) {
     Number(m[6] ?? 0),
     Number(String(m[7] ?? '0').padEnd(3, '0')),
   )
+}
+
+/**
+ * Parse a posted_at / ISO string.
+ * Calendar datetimes without offset stay ledger-local wall clocks.
+ * Instants (`Z` / ±offset) convert into the ledger timezone when `timeZone` is set
+ * so UTC midnight is not treated as device-local midnight (FIN-1402).
+ */
+export function parseLocalIso(value, timeZone) {
+  if (value instanceof Date) {
+    return timeZone ? zonedInstantToLocalDate(value, timeZone) : value
+  }
+  const text = String(value ?? '').trim()
+  if (timeZone && HAS_TZ_OFFSET.test(text)) {
+    return zonedInstantToLocalDate(text, timeZone)
+  }
+  return parseCalendarLocalIso(text)
 }
 
 /** Close calendar day D in month of `anchor` (short-month clamp). */
@@ -68,8 +115,11 @@ export function previousMonthCloseDay(anchor, statementCloseDay) {
  * Resolve the open period that contains `postedAt` given close day.
  * Returns { periodStartInclusive, periodEndExclusive, closeDayDate }.
  */
-export function resolvePeriodBoundsForPostedAt(postedAt, statementCloseDay) {
-  const posted = postedAt instanceof Date ? postedAt : parseLocalIso(postedAt)
+export function resolvePeriodBoundsForPostedAt(postedAt, statementCloseDay, options = {}) {
+  const timeZone = options?.timeZone
+  const posted = postedAt instanceof Date
+    ? (timeZone ? zonedInstantToLocalDate(postedAt, timeZone) : postedAt)
+    : parseLocalIso(postedAt, timeZone)
   let closeThis = closingCalendarDate(posted, statementCloseDay)
   let endEx = periodEndExclusiveFromCloseDay(closeThis)
   // If posted is on/after endEx, it belongs to the next period (close is this month's D already passed).

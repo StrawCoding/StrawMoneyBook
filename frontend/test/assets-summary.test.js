@@ -71,3 +71,23 @@ test('counts negative liability account balances as debt', () => {
   assert.equal(result.disposableMinor, 0)
   assert.equal(result.liabilityMinor, 32000)
 })
+
+test('converts foreign-currency balances into the target currency for totals', () => {
+  const result = calculateAssetSummary({
+    balances: [
+      {
+        id: 'usd-cash',
+        account_type: 'asset',
+        include_in_assets: 1,
+        balance_minor: 10000,
+        reimbursement_advance_minor: 0,
+      },
+    ],
+    accounts: [{ id: 'usd-cash', currency_code: 'USD', account_type: 'asset', include_in_assets: 1 }],
+    rates: { USD: 1, TWD: 32 },
+    targetCurrencyCode: 'TWD',
+  })
+
+  assert.equal(result.disposableMinor, 320000)
+  assert.equal(result.totalAssetMinor, 320000)
+})

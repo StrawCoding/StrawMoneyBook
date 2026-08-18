@@ -1,5 +1,7 @@
 import { createId } from '@/core/utils/id'
 import { assertLedgerId } from '@/core/repositories/base.repo'
+import { getLedger } from '@/core/repositories/ledger.repo'
+import { normalizeLedgerTimeZone } from '@/core/services/budget-period'
 import { findAccountById, updateAccountProfile, listAccounts, listAccountGroups, createAccountGroup, createAccount } from '@/core/repositories/account.repo'
 import { addTransaction, addTransfer } from '@/core/repositories/transaction.repo'
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
@@ -51,6 +53,11 @@ import {
 export const CREDIT_HOME_CARD_SETTING_KEY = 'credit.home_card_enabled'
 export const FORBIDDEN_ACCRUAL_ACCOUNT_NAME = 'credit-accrual'
 
+async function ledgerTimeZone(ledgerId) {
+  const ledger = await getLedger(ledgerId)
+  return normalizeLedgerTimeZone(ledger?.timezone)
+}
+
 function sha1Lite(text) {
   // Lightweight non-crypto hash for closing_hash audit (stable string).
   let h = 2166136261
@@ -62,17 +69,20 @@ function sha1Lite(text) {
   return `fnv1a_${(h >>> 0).toString(16)}`
 }
 
-function normalizePostedAt(value, occurredAt) {
+function normalizePostedAt(value, occurredAt, timeZone) {
   const raw = String(value ?? occurredAt ?? '').trim()
-  if (!raw) return toLocalIso(new Date())
-  // Accept Date / ISO; normalize to local-ish ISO via parse
+  if (!raw) return toLocalIso(timeZone ? zonedNow(timeZone) : new Date())
   try {
-    return toLocalIso(parseLocalIso(raw))
+    return toLocalIso(parseLocalIso(raw, timeZone))
   } catch {
     const d = new Date(raw)
     if (Number.isNaN(d.getTime())) throw new Error('posted_at 無效')
-    return d.toISOString()
+    return toLocalIso(timeZone ? parseLocalIso(d, timeZone) : d)
   }
+}
+
+function zonedNow(timeZone) {
+  return parseLocalIso(new Date(), timeZone)
 }
 
 export async function isCreditHomeCardEnabled(ledgerId) {
@@ -214,7 +224,8 @@ async function ensureOpenStatementForAccount(ledgerId, account, now = new Date()
   const existing = await findOpenCreditStatement(ledgerId, account.id)
   if (existing) return existing
   const { statementCloseDay, paymentDueDay } = profileDefaultsFromAccount(account)
-  const bounds = resolvePeriodBoundsForPostedAt(now, statementCloseDay)
+  const timeZone = await ledgerTimeZone(ledgerId)
+  const bounds = resolvePeriodBoundsForPostedAt(now, statementCloseDay, { timeZone })
   try {
     const id = await insertCreditStatement(ledgerId, {
       accountId: account.id,
@@ -240,8 +251,10 @@ export async function rolloverCreditCardIfDue(ledgerId, accountId, { now = new D
   account = await ensureCreditProfileDefaults(ledgerId, accountId)
 
   const open = await ensureOpenStatementForAccount(ledgerId, account, now)
+  const timeZone = await ledgerTimeZone(ledgerId)
   const endMs = parseLocalIso(open.period_end_exclusive).getTime()
-  const nowMs = (now instanceof Date ? now : parseLocalIso(now)).getTime()
+  const nowLocal = parseLocalIso(now, timeZone)
+  const nowMs = nowLocal.getTime()
   if (nowMs < endMs) {
     return { closed: false, statement: open, reason: 'not_due' }
   }
@@ -274,12 +287,12 @@ export async function rolloverCreditCardIfDue(ledgerId, accountId, { now = new D
     await closeCreditStatementRow(ledgerId, fresh.id, {
       closingBalanceMinor,
       dueOn,
-      closedAt: toLocalIso(now instanceof Date ? now : parseLocalIso(now)),
+      closedAt: toLocalIso(nowLocal),
       closingHash,
       closeToken,
     })
 
-    const nextBounds = resolvePeriodBoundsForPostedAt(fresh.period_end_exclusive, statementCloseDay)
+    const nextBounds = resolvePeriodBoundsForPostedAt(fresh.period_end_exclusive, statementCloseDay, { timeZone })
     // Next period starts at previous end exclusive
     let nextId = null
     try {
@@ -322,12 +335,17 @@ export async function runCreditStatementRollovers(ledgerId, { now = new Date() }
 
 export async function assignStatementForPostedAt(ledgerId, accountId, postedAt) {
   const account = await ensureCreditProfileDefaults(ledgerId, accountId)
-  await runCreditStatementRollovers(ledgerId, { now: parseLocalIso(postedAt) })
+  const timeZone = await ledgerTimeZone(ledgerId)
+  await runCreditStatementRollovers(ledgerId, { now: parseLocalIso(postedAt, timeZone) })
   // Also rollover against wall clock so open exists for "today"
   await runCreditStatementRollovers(ledgerId)
   let statement = await findStatementForPostedAt(ledgerId, accountId, postedAt)
   if (!statement) {
-    const bounds = resolvePeriodBoundsForPostedAt(postedAt, profileDefaultsFromAccount(account).statementCloseDay)
+    const bounds = resolvePeriodBoundsForPostedAt(
+      postedAt,
+      profileDefaultsFromAccount(account).statementCloseDay,
+      { timeZone },
+    )
     try {
       const id = await insertCreditStatement(ledgerId, {
         accountId,
@@ -367,9 +385,10 @@ export async function createCreditPurchase(ledgerId, payload = {}) {
     throw new Error('請選擇信用卡帳戶')
   }
   await assertNoVirtualAccrualAccounts(ledgerId)
+  const timeZone = await ledgerTimeZone(ledgerId)
 
-  const occurredAt = normalizePostedAt(payload.occurredAt, payload.occurredAt)
-  const postedAt = normalizePostedAt(payload.postedAt, occurredAt)
+  const occurredAt = normalizePostedAt(payload.occurredAt, payload.occurredAt, timeZone)
+  const postedAt = normalizePostedAt(payload.postedAt, occurredAt, timeZone)
   const idempotencyKey = String(payload.idempotencyKey ?? '').trim() || null
 
   if (idempotencyKey) {
@@ -440,7 +459,8 @@ export async function createCreditRepayment(ledgerId, payload = {}) {
   const accountId = String(payload.accountId ?? '').trim()
   const sourceAccountId = String(payload.sourceAccountId ?? '').trim()
   const amountMinor = toCreditMagnitudeMinor(payload.amountMinor)
-  const paidAt = normalizePostedAt(payload.paidAt, new Date().toISOString())
+  const timeZone = await ledgerTimeZone(ledgerId)
+  const paidAt = normalizePostedAt(payload.paidAt, new Date().toISOString(), timeZone)
   const idempotencyKey = String(payload.idempotencyKey ?? '').trim() || `repay:${createId('key')}`
 
   if (!accountId || !sourceAccountId) throw new Error('還款需要信用卡與來源帳戶')
@@ -594,6 +614,7 @@ export async function createCreditRefundAdjustment(ledgerId, payload = {}) {
   if (!account || String(account.account_kind) !== 'credit') {
     throw new Error('請選擇信用卡帳戶')
   }
+  const timeZone = await ledgerTimeZone(ledgerId)
 
   return withTransaction(async () => {
     await runCreditStatementRollovers(ledgerId)
@@ -608,10 +629,10 @@ export async function createCreditRefundAdjustment(ledgerId, payload = {}) {
     }
 
     // Clamp posted_at into the open period (prefer "now", else period start).
-    const nowIso = toLocalIso(new Date())
-    const requestedPostedAt = normalizePostedAt(payload.postedAt, nowIso)
+    const nowIso = toLocalIso(parseLocalIso(new Date(), timeZone))
+    const requestedPostedAt = normalizePostedAt(payload.postedAt, nowIso, timeZone)
     const postedAt = clampPostedAtIntoOpenPeriod(requestedPostedAt, open, nowIso)
-    const occurredAt = normalizePostedAt(payload.occurredAt, postedAt)
+    const occurredAt = normalizePostedAt(payload.occurredAt, postedAt, timeZone)
 
     const plan = buildCreditRefundAdjustmentPlan({
       accountId,

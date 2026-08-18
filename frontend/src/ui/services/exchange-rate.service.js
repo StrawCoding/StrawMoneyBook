@@ -3,7 +3,7 @@ import { getSetting, setSetting } from '@/core/repositories/settings.repo'
 import {
   convertAmountMinorByRate,
   resolveCrossExchangeRate,
-} from '@/ui/utils/fx-convert.js'
+} from '@/core/utils/fx-convert.js'
 
 const EXCHANGE_RATE_SETTINGS_KEY = 'exchange_rate.settings'
 const EXCHANGE_RATE_SNAPSHOT_KEY = 'exchange_rate.snapshot'

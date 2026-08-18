@@ -206,6 +206,9 @@ const totalAssetsInfoOpen = ref(false)
 
 const balanceMetrics = computed(() => calculateAssetSummary({
   balances: accountStore.balances,
+  accounts: accountStore.accounts,
+  rates: accountStore.exchangeRateSnapshot?.rates ?? {},
+  targetCurrencyCode: ledgerStore.activeLedger?.currency_code ?? 'TWD',
   receivableMinor: loanStore.summary.totalReceivable,
   payableMinor: loanStore.summary.totalPayable,
   unreimbursedMinor: reimbursementStore.pendingTotalMinor,

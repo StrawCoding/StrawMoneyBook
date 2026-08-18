@@ -1,4 +1,5 @@
 import { isBankCredentialAuthError, selectSyncableBankAccounts } from '../../services/bank-sync/shared.js'
+import { logBankSyncAction } from '../../core/services/bank-sync-debug.service.js'
 import { isSecurityLockCurrentlyLocked, isSecurityLockEnabled } from './security-lock.service.js'
 
 const AUTO_REFRESH_COOLDOWN_MS = 10 * 60 * 1000
@@ -54,6 +55,10 @@ export function setBankSyncAutoRefreshDependenciesForTest(overrides = {}) {
 
 export async function runBankSyncAutoRefreshIfDue(ledgerId, options = {}) {
   const normalizedLedgerId = normalizeText(ledgerId)
+  logBankSyncAction('autoRefresh.check', {
+    ledgerId: normalizedLedgerId,
+    reason: normalizeText(options.reason) || 'background',
+  })
   if (!normalizedLedgerId) {
     return { ok: false, skipped: 'missing_ledger_id' }
   }
@@ -94,32 +99,39 @@ export async function runBankSyncAutoRefreshIfDue(ledgerId, options = {}) {
         const result = await dependencies.syncBankConnectionNow(normalizedLedgerId, connection.id)
         results.push({
           connectionId: connection.id,
+          ok: true,
           added: Number(result?.added?.length ?? 0),
           modified: Number(result?.modified?.length ?? 0),
         })
       } catch (error) {
+        logBankSyncAction('autoRefresh.connectionFailed', {
+          ledgerId: normalizedLedgerId,
+          connectionId: connection.id,
+          errorCode: normalizeText(error?.code),
+          errorMessage: normalizeText(error?.message ?? error),
+        })
         console.warn(`[bank-sync] auto refresh failed (${normalizeText(options.reason) || 'background'})`, {
           ledgerId: normalizedLedgerId,
           connectionId: connection.id,
           error,
         })
-        if (isBankCredentialAuthError(error)) {
-          return {
-            ok: false,
-            halted: 'auth_error',
-            reason: normalizeText(options.reason) || 'background',
-            connectionId: connection.id,
-            errorCode: normalizeText(error?.code),
-            message: normalizeText(error?.message ?? error),
-          }
-        }
+        results.push({
+          connectionId: connection.id,
+          ok: false,
+          authError: isBankCredentialAuthError(error),
+          errorCode: normalizeText(error?.code),
+          message: normalizeText(error?.message ?? error),
+        })
       }
     }
 
+    const failedConnections = results.filter((item) => item.ok === false)
+    const syncedConnections = results.filter((item) => item.ok !== false)
     return {
-      ok: true,
+      ok: failedConnections.length === 0,
       reason: normalizeText(options.reason) || 'background',
-      syncedConnections: results,
+      syncedConnections,
+      failedConnections,
     }
   })().finally(() => {
     inflightByLedger.delete(normalizedLedgerId)

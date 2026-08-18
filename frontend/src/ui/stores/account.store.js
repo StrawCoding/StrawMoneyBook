@@ -15,6 +15,7 @@ import {
 } from '@/core/repositories/account.repo'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { assertCanCreateAccount } from '@/core/services/membership.service'
+import { convertBalanceToTargetCurrency } from '@/core/utils/fx-convert.js'
 import { buildGroupSummaries } from '@/ui/utils/account-group-summary'
 import { getExchangeRateSnapshot } from '@/ui/services/exchange-rate.service'
 
@@ -116,10 +117,19 @@ export const useAccountStore = defineStore('account', {
     },
 
     totalAssetsMinor(state) {
-      const includeMap = new Map(state.accounts.map((item) => [item.id, isIncludedInAssets(item)]))
+      const ledgerStore = useLedgerStore()
+      const targetCurrencyCode = ledgerStore.activeLedger?.currency_code ?? 'TWD'
+      const rates = state.exchangeRateSnapshot?.rates ?? {}
+      const accountById = new Map(state.accounts.map((item) => [item.id, item]))
       return state.balances.reduce((total, item) => {
-        if (includeMap.get(item.id) === false) return total
-        return total + Number(item.balance_minor ?? 0)
+        const account = accountById.get(item.id) || item
+        if (!isIncludedInAssets(account)) return total
+        return total + convertBalanceToTargetCurrency(
+          item.balance_minor,
+          account,
+          targetCurrencyCode,
+          rates,
+        )
       }, 0)
     },
 

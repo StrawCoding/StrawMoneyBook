@@ -98,7 +98,14 @@ function isClientAuthorized(req) {
   return secureEquals(provided, GOOGLE_OAUTH_CLIENT_SHARED_KEY)
 }
 
+function isProductionRuntime() {
+  const vercelEnv = String(process.env.VERCEL_ENV ?? '').trim().toLowerCase()
+  if (vercelEnv) return vercelEnv === 'production'
+  return String(process.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
+}
+
 function shouldEnforceClientAuth() {
+  if (isProductionRuntime()) return true
   return Boolean(GOOGLE_OAUTH_CLIENT_SHARED_KEY)
 }
 
@@ -228,15 +235,27 @@ export default async function handler(req, res) {
     sendError(res, 405, 'method_not_allowed', 'Method not allowed', ERROR_NUMBER.METHOD_NOT_ALLOWED)
     return
   }
-  if (shouldEnforceClientAuth() && !isClientAuthorized(req)) {
-    sendError(
-      res,
-      401,
-      'unauthorized_client',
-      'missing or invalid x-straw-client-key',
-      ERROR_NUMBER.UNAUTHORIZED_CLIENT,
-    )
-    return
+  if (shouldEnforceClientAuth()) {
+    if (!GOOGLE_OAUTH_CLIENT_SHARED_KEY) {
+      sendError(
+        res,
+        500,
+        'missing_google_oauth_client_shared_key',
+        'GOOGLE_OAUTH_CLIENT_SHARED_KEY is not configured',
+        ERROR_NUMBER.MISSING_GOOGLE_OAUTH_ENV,
+      )
+      return
+    }
+    if (!isClientAuthorized(req)) {
+      sendError(
+        res,
+        401,
+        'unauthorized_client',
+        'missing or invalid x-straw-client-key',
+        ERROR_NUMBER.UNAUTHORIZED_CLIENT,
+      )
+      return
+    }
   }
 
   const body = parseBody(req)

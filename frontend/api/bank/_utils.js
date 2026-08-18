@@ -6,21 +6,71 @@ const BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS = parseBooleanEnv(
   false,
 )
 
+// Allowlist mirrors backend/src/collab/http.js. Capacitor apps send capacitor://localhost.
+const PROD_ALLOWED_ORIGINS = new Set([
+  'https://strawmb.com',
+  'https://www.strawmb.com',
+  'https://api.strawmb.com',
+  'https://localhost',
+  'capacitor://localhost',
+  'ionic://localhost',
+])
+const DEV_ALLOWED_ORIGINS = new Set([
+  ...PROD_ALLOWED_ORIGINS,
+  'http://127.0.0.1:5173',
+  'http://localhost:5173',
+  'https://127.0.0.1:5173',
+  'https://localhost:5173',
+  'http://127.0.0.1:4173',
+  'http://localhost:4173',
+  'https://127.0.0.1:4173',
+  'https://localhost:4173',
+  'http://127.0.0.1:8787',
+  'http://localhost:8787',
+])
+
 function parseBooleanEnv(value, fallback = false) {
   const normalized = String(value ?? '').trim().toLowerCase()
   if (!normalized) return fallback
   return ['1', 'true', 'yes', 'on'].includes(normalized)
 }
 
-function setCorsHeaders(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+function isProductionRuntime() {
+  const vercelEnv = String(process.env.VERCEL_ENV ?? '').trim().toLowerCase()
+  if (vercelEnv) return vercelEnv === 'production'
+  return String(process.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
+}
+
+function resolveAllowedOrigin(requestOrigin) {
+  if (!requestOrigin) return null
+  const allowed = isProductionRuntime() ? PROD_ALLOWED_ORIGINS : DEV_ALLOWED_ORIGINS
+  if (allowed.has(requestOrigin)) return requestOrigin
+  try {
+    const parsed = new URL(requestOrigin)
+    if (parsed.protocol === 'https:'
+      && (parsed.hostname === 'strawmb.com' || parsed.hostname.endsWith('.strawmb.com'))) {
+      return requestOrigin
+    }
+  } catch {
+    // malformed origin — deny
+  }
+  return null
+}
+
+function setCorsHeaders(req, res) {
+  const requestOrigin = String(req?.headers?.origin ?? '').trim()
+  const allowedOrigin = resolveAllowedOrigin(requestOrigin)
+  if (allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
+    res.setHeader('Vary', 'Origin')
+  }
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Straw-Client-Key')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Cache-Control', 'no-store')
 }
 
 function sendJson(res, statusCode, payload) {
-  setCorsHeaders(res)
+  setCorsHeaders(res.__request ?? {}, res)
   res.status(statusCode).json(payload)
 }
 
@@ -81,8 +131,9 @@ function unsupportedProviderGuard(provider, res) {
 }
 
 function methodGuard(req, res) {
+  res.__request = req
   if (req.method === 'OPTIONS') {
-    setCorsHeaders(res)
+    setCorsHeaders(req, res)
     res.status(204).end()
     return true
   }
@@ -110,8 +161,21 @@ function isClientAuthorized(req) {
   return secureEquals(provided, BANK_SYNC_CLIENT_SHARED_KEY)
 }
 
+function shouldEnforceClientAuth() {
+  if (isProductionRuntime()) return true
+  return Boolean(BANK_SYNC_CLIENT_SHARED_KEY)
+}
+
 function clientGuard(req, res) {
-  if (!BANK_SYNC_CLIENT_SHARED_KEY) return false
+  res.__request = req
+  if (!shouldEnforceClientAuth()) return false
+  if (!BANK_SYNC_CLIENT_SHARED_KEY) {
+    sendJson(res, 500, {
+      error: 'missing_bank_sync_client_shared_key',
+      message: 'BANK_SYNC_CLIENT_SHARED_KEY is not configured',
+    })
+    return true
+  }
   if (isClientAuthorized(req)) return false
   sendJson(res, 401, {
     error: 'unauthorized_client',

@@ -37,16 +37,19 @@ const refundOriginTypeMigrationSource = readFileSync(
 )
 
 test('transaction queries expose refund-link state for downstream summaries', () => {
-  assert.match(transactionRepoSource, /function refundRelationExistsSql\(sourceAlias = 't'\)/)
-  assert.match(transactionRepoSource, /function refundDeductedMinorSql\(sourceAlias = 't'\)/)
+  assert.match(transactionRepoSource, /from '@\/core\/domain\/refund-match-sql\.js'/)
+  assert.match(transactionRepoSource, /refundRelationExistsSql/)
+  assert.match(transactionRepoSource, /refundDeductedMinorSql/)
   assert.match(transactionRepoSource, /AS has_refund_link/)
   assert.match(transactionRepoSource, /AS refund_deducted_minor/)
 })
 
 test('budget and export queries expose refund deducted amount for net aggregates', () => {
-  assert.match(budgetRepoSource, /function refundedSourceExclusionSql\(sourceAlias = 'transactions'\)/)
+  assert.match(budgetRepoSource, /from '@\/core\/domain\/refund-match-sql\.js'/)
+  assert.match(budgetRepoSource, /refundDeductedMinorSql/)
   assert.match(budgetRepoSource, /function budgetSpentMinorSql\(sourceAlias = 'transactions'\)/)
   assert.match(budgetRepoSource, /SUM\(\$\{budgetSpentMinorSql\('transactions'\)\}\) AS spent_minor/)
+  assert.match(exportServiceSource, /from '@\/core\/domain\/refund-match-sql\.js'/)
   assert.match(exportServiceSource, /AS has_refund_link/)
   assert.match(exportServiceSource, /AS refund_deducted_minor/)
 })

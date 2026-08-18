@@ -121,7 +121,7 @@ test('wear companion source: origin wear, native engine, no DataClient/wearApp',
   assert.match(transactionService, /originType: payload\.originType \?\? 'manual'/)
   assert.match(
     transactionRepo,
-    /idempotency_key = CASE WHEN origin_type = 'wear' THEN idempotency_key ELSE NULL END/,
+    /idempotency_key = CASE\s+WHEN origin_type IN \('wear', 'import', 'einvoice'\) THEN idempotency_key\s+ELSE NULL\s+END/,
   )
   assert.match(sqlite, /rotateWearSyncEpoch/)
   assert.match(deleteOrder, /'wear_applied'/)
@@ -301,7 +301,7 @@ test('migration 045 rebuilds origin_type wear, UNIQUE wear_applied, and syncEpoc
   assert.ok(Number(revision) >= 1, 'transaction insert must bump snapshot_revision')
 
   db.run(`UPDATE transactions SET deleted_at = '2026-08-14T01:00:00.000Z',
-          idempotency_key = CASE WHEN origin_type = 'wear' THEN idempotency_key ELSE NULL END
+          idempotency_key = CASE WHEN origin_type IN ('wear', 'import', 'einvoice') THEN idempotency_key ELSE NULL END
           WHERE id = 'tx-wear';`)
   const kept = db.exec(`SELECT idempotency_key FROM transactions WHERE id = 'tx-wear';`)[0].values[0][0]
   assert.equal(kept, 'idem-1')

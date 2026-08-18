@@ -1,4 +1,4 @@
-import { query, run } from '../db/sqlite.js'
+import { query, run, withTransaction } from '../db/sqlite.js'
 import { createId, nowIso } from '../utils/id.js'
 import { LEDGER_CHILD_DELETE_ORDER } from '../utils/sqlite-delete-order.js'
 import { isForeignKeyError } from '../utils/sqlite-fk.js'
@@ -106,11 +106,13 @@ export async function deleteLedger(ledgerId) {
     if (!isForeignKeyError(error)) throw error
 
     // Legacy DB fallback: explicitly clear child rows then delete ledger (FK stays ON).
-    for (const table of LEDGER_CHILD_DELETE_ORDER) {
-      await run(`DELETE FROM ${table} WHERE ledger_id = ?;`, [ledgerId])
-    }
-    await run('DELETE FROM ledgers WHERE id = ?;', [ledgerId])
-    await run('DELETE FROM deleted_log WHERE ledger_id = ?;', [ledgerId])
+    await withTransaction(async () => {
+      for (const table of LEDGER_CHILD_DELETE_ORDER) {
+        await run(`DELETE FROM ${table} WHERE ledger_id = ?;`, [ledgerId])
+      }
+      await run('DELETE FROM ledgers WHERE id = ?;', [ledgerId])
+      await run('DELETE FROM deleted_log WHERE ledger_id = ?;', [ledgerId])
+    })
   }
 }
 
@@ -121,10 +123,12 @@ export async function purgeLedger(ledgerId) {
   } catch (error) {
     if (!isForeignKeyError(error)) throw error
 
-    for (const table of LEDGER_CHILD_DELETE_ORDER) {
-      await run(`DELETE FROM ${table} WHERE ledger_id = ?;`, [ledgerId])
-    }
-    await run('DELETE FROM ledgers WHERE id = ?;', [ledgerId])
-    await run('DELETE FROM deleted_log WHERE ledger_id = ?;', [ledgerId])
+    await withTransaction(async () => {
+      for (const table of LEDGER_CHILD_DELETE_ORDER) {
+        await run(`DELETE FROM ${table} WHERE ledger_id = ?;`, [ledgerId])
+      }
+      await run('DELETE FROM ledgers WHERE id = ?;', [ledgerId])
+      await run('DELETE FROM deleted_log WHERE ledger_id = ?;', [ledgerId])
+    })
   }
 }

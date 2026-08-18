@@ -106,19 +106,12 @@ test('executeMigrationSql uses executeSet payloads and never falls back to execu
 
   await executeMigrationSql(db, sql)
 
-  assert.equal(calls.length, 2)
-  assert.deepEqual(calls[0], [{
-    statement: 'CREATE TABLE example (id TEXT);',
-    values: [],
-  }])
-  assert.deepEqual(calls[1], [{
-    statement: `CREATE TRIGGER IF NOT EXISTS trg_example
-    AFTER DELETE ON example
-    BEGIN
-      INSERT INTO deleted_log (row_pk) VALUES (OLD.id);
-    END;`,
-    values: [],
-  }])
+  const statements = calls.map((item) => item[0].statement)
+  assert.equal(statements[0], 'BEGIN;')
+  assert.equal(statements.at(-1), 'COMMIT;')
+  assert.ok(statements.includes('CREATE TABLE example (id TEXT);'))
+  assert.ok(statements.some((statement) => statement.includes('CREATE TRIGGER IF NOT EXISTS trg_example')))
+  assert.ok(calls.every((item) => Array.isArray(item)))
 })
 
 test('executeMigrationSql ignores duplicate schema errors when using executeSet', async () => {
@@ -126,7 +119,8 @@ test('executeMigrationSql ignores duplicate schema errors when using executeSet'
   const db = {
     async executeSet(set) {
       calls.push(set)
-      if (calls.length === 1) {
+      const statement = String(set[0]?.statement ?? '')
+      if (statement.includes('ALTER TABLE')) {
         throw new Error('duplicate column name: example')
       }
       return { changes: { changes: 0 } }
@@ -138,7 +132,48 @@ test('executeMigrationSql ignores duplicate schema errors when using executeSet'
     CREATE INDEX idx_example_sample ON example(sample);
   `)
 
-  assert.equal(calls.length, 2)
+  const statements = calls.map((item) => item[0].statement)
+  assert.ok(statements.some((statement) => statement.includes('CREATE INDEX idx_example_sample')))
+  assert.equal(statements.at(-1), 'COMMIT;')
+})
+
+test('executeMigrationSql does not wrap Capacitor plugin connections in beginTransaction', async () => {
+  const calls = []
+  const db = {
+    async beginTransaction() {
+      calls.push('beginTransaction')
+    },
+    async commitTransaction() {
+      calls.push('commitTransaction')
+    },
+    async rollbackTransaction() {
+      calls.push('rollbackTransaction')
+    },
+    async executeSet(set) {
+      calls.push(set[0]?.statement)
+      return { changes: { changes: 0 } }
+    },
+  }
+
+  await executeMigrationSql(db, 'CREATE TABLE example (id TEXT);')
+
+  assert.deepEqual(calls, ['CREATE TABLE example (id TEXT);'])
+})
+
+test('executeMigrationSql rolls back earlier statements when a later one fails', async () => {
+  const SQL = await initSqlJs()
+  const db = new SQL.Database()
+  await assert.rejects(
+    () => executeMigrationSql(createSqlJsMigrationDb(db), `
+      CREATE TABLE keep_me (id TEXT);
+      CREATE TABLE broken (id TEXT,);
+    `),
+  )
+  const tables = db.exec(
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'keep_me'`,
+  )
+  assert.equal(tables.length, 0)
+  db.close()
 })
 
 test('migrate registers the savings jar auto save migration', () => {
@@ -375,13 +410,16 @@ test('executeMigrationSql applies migration 046 on existing bank schema without 
   db.close()
 })
 
-test('migrate registers deleted_log trigger restore migration 047', () => {
+test('migrate registers deleted_log trigger restore migration 047 and posting soft-delete 048', () => {
   const source = readFileSync(resolve(import.meta.dirname, '../src/core/db/migrate.js'), 'utf8')
 
   assert.match(source, /import migration047 from '@\/core\/db\/migrations\/047_restore_deleted_log_triggers\.sql\?raw'/)
   assert.match(source, /\{ version: 47, name: 'restore_deleted_log_triggers', sql: migration047 \}/)
+  assert.match(source, /import migration048 from '@\/core\/db\/migrations\/048_soft_delete_transaction_postings\.sql\?raw'/)
+  assert.match(source, /\{ version: 48, name: 'soft_delete_transaction_postings', sql: migration048 \}/)
   assert.match(source, /assertNoReservedMigrationVersions\(MIGRATIONS\)/)
   assert.match(source, /versions 20, 21, 22, 27 and 29/)
+  assert.match(source, /Next available version: 49/)
   assert.doesNotMatch(source, /\{ version: 20,/)
   assert.doesNotMatch(source, /\{ version: 21,/)
   assert.doesNotMatch(source, /\{ version: 22,/)
@@ -512,6 +550,45 @@ test('migration 047 restores transaction deleted_log trigger and records hard de
   ])
 
   await executeMigrationSql(createSqlJsMigrationDb(db), sql)
+  db.close()
+})
+
+test('migration 048 soft-deletes postings when parent transaction is soft-deleted', async () => {
+  const SQL = await initSqlJs()
+  const db = new SQL.Database()
+  db.run(`
+    CREATE TABLE transactions (
+      ledger_id TEXT,
+      id TEXT,
+      deleted_at TEXT,
+      updated_at TEXT
+    );
+    CREATE TABLE transaction_postings (
+      ledger_id TEXT,
+      id TEXT,
+      transaction_id TEXT,
+      deleted_at TEXT,
+      updated_at TEXT
+    );
+    INSERT INTO transactions (ledger_id, id, deleted_at, updated_at)
+    VALUES ('L1', 'tx1', NULL, '2026-08-01T00:00:00Z');
+    INSERT INTO transaction_postings (ledger_id, id, transaction_id, deleted_at, updated_at)
+    VALUES ('L1', 'p1', 'tx1', NULL, '2026-08-01T00:00:00Z');
+  `)
+
+  const sql = readFileSync(
+    resolve(import.meta.dirname, '../src/core/db/migrations/048_soft_delete_transaction_postings.sql'),
+    'utf8',
+  )
+  await executeMigrationSql(createSqlJsMigrationDb(db), sql)
+
+  db.run(`UPDATE transactions SET deleted_at = '2026-08-19T00:00:00Z', updated_at = '2026-08-19T00:00:00Z' WHERE id = 'tx1'`)
+  const deleted = db.exec(`SELECT deleted_at FROM transaction_postings WHERE id = 'p1'`)[0].values[0][0]
+  assert.equal(deleted, '2026-08-19T00:00:00Z')
+
+  db.run(`UPDATE transactions SET deleted_at = NULL, updated_at = '2026-08-19T01:00:00Z' WHERE id = 'tx1'`)
+  const restored = db.exec(`SELECT deleted_at FROM transaction_postings WHERE id = 'p1'`)[0].values[0][0]
+  assert.equal(restored, null)
   db.close()
 })
 

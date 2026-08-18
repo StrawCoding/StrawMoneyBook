@@ -75,3 +75,23 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: frontend/android
         run: ./gradlew :app:bundleRelease :wear:bundleRelease --dry-run --configuration-cache --build-cache
+
+  playwright-ui-layout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Run high-risk Playwright ui-layout
+        run: npm run playwright:ui-layout
+        env:
+          CI: true
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/backend/.server-data/playwright-browsers

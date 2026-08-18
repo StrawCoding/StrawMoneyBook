@@ -148,6 +148,14 @@ test('migration / wiring mentions hard-contract identifiers', () => {
 
   assert.equal(normalizeCloseDay(99, 25), 25)
   assert.equal(toLocalIso(parseLocalIso('2026-08-13T10:11:12.003')).startsWith('2026-08-13T10:11:12'), true)
+
+  const utcMidnight = parseLocalIso('2026-08-18T16:00:00.000Z', 'Asia/Taipei')
+  assert.equal(toLocalIso(utcMidnight).startsWith('2026-08-19T00:00:00'), true)
+  const stillOpen = resolvePeriodBoundsForPostedAt('2026-08-25T15:59:59.000Z', 25, { timeZone: 'Asia/Taipei' })
+  assert.equal(stillOpen.periodEndExclusive.startsWith('2026-08-26'), true)
+  const nextPeriod = resolvePeriodBoundsForPostedAt('2026-08-25T16:00:00.000Z', 25, { timeZone: 'Asia/Taipei' })
+  assert.equal(nextPeriod.periodStartInclusive.startsWith('2026-08-26'), true)
+  assert.equal(nextPeriod.periodEndExclusive.startsWith('2026-09-26'), true)
 })
 
 test('closed credit gate helpers: allow pure occurred_at; forbid postedAt / slim row', async () => {

@@ -3,6 +3,15 @@ import { createId, nowIso } from '@/core/utils/id'
 import { assertLedgerId, firstRow, rowsOf } from '@/core/repositories/base.repo'
 import { yieldToMainThread } from '@/core/utils/cooperative-yield'
 import { toTransferLegAmounts } from '@/core/domain/posting/transfer-posting-policy.js'
+import {
+  refundDeductedMinorSql,
+  refundRelationExistsSql,
+} from '@/core/domain/refund-match-sql.js'
+
+const RETAIN_IDEMPOTENCY_ON_SOFT_DELETE_SQL = `idempotency_key = CASE
+         WHEN origin_type IN ('wear', 'import', 'einvoice') THEN idempotency_key
+         ELSE NULL
+       END`
 
 function parseMonthKey(monthKey) {
   const matched = /^(\d{4})-(\d{2})$/.exec(String(monthKey ?? '').trim())
@@ -70,44 +79,6 @@ function dayRangeUtc(dayKey) {
     startUtc: start.toISOString(),
     endUtc: end.toISOString(),
   }
-}
-
-function refundRelationExistsSql(sourceAlias = 't') {
-  return `EXISTS (
-    SELECT 1
-    FROM transactions rt
-    LEFT JOIN categories rc
-      ON rc.ledger_id = rt.ledger_id
-     AND rc.id = rt.category_id
-    WHERE rt.ledger_id = ${sourceAlias}.ledger_id
-      AND rt.deleted_at IS NULL
-      AND rt.external_ref_id = ${sourceAlias}.id
-      AND (
-        rt.origin_type = 'refund'
-        OR rc.name = '退款'
-        OR rt.note LIKE '退款：%'
-        OR rt.note LIKE '退款:%'
-      )
-  )`
-}
-
-function refundDeductedMinorSql(sourceAlias = 't') {
-  return `COALESCE((
-    SELECT SUM(ABS(rt.amount_minor))
-    FROM transactions rt
-    LEFT JOIN categories rc
-      ON rc.ledger_id = rt.ledger_id
-     AND rc.id = rt.category_id
-    WHERE rt.ledger_id = ${sourceAlias}.ledger_id
-      AND rt.deleted_at IS NULL
-      AND rt.external_ref_id = ${sourceAlias}.id
-      AND (
-        rt.origin_type = 'refund'
-        OR rc.name = '退款'
-        OR rt.note LIKE '退款：%'
-        OR rt.note LIKE '退款:%'
-      )
-  ), 0)`
 }
 
 function paidClaimItemMinorSql(sourceAlias = 't') {
@@ -1207,7 +1178,7 @@ export async function softDeleteTransactionById(ledgerId, txId) {
   await run(
     `UPDATE transactions
      SET deleted_at = ?,
-         idempotency_key = CASE WHEN origin_type = 'wear' THEN idempotency_key ELSE NULL END,
+         ${RETAIN_IDEMPOTENCY_ON_SOFT_DELETE_SQL},
          updated_at = ?
      WHERE ledger_id = ?
        AND id = ?
@@ -1222,7 +1193,7 @@ export async function softDeleteTransferGroup(ledgerId, transferGroupId) {
   await run(
     `UPDATE transactions
      SET deleted_at = ?,
-         idempotency_key = CASE WHEN origin_type = 'wear' THEN idempotency_key ELSE NULL END,
+         ${RETAIN_IDEMPOTENCY_ON_SOFT_DELETE_SQL},
          updated_at = ?
      WHERE ledger_id = ?
        AND transfer_group_id = ?
@@ -1237,7 +1208,7 @@ export async function softDeleteTransactionsByOriginRef(ledgerId, originType, ex
   await run(
     `UPDATE transactions
      SET deleted_at = ?,
-         idempotency_key = CASE WHEN origin_type = 'wear' THEN idempotency_key ELSE NULL END,
+         ${RETAIN_IDEMPOTENCY_ON_SOFT_DELETE_SQL},
          updated_at = ?
      WHERE ledger_id = ?
        AND origin_type = ?

@@ -53,4 +53,46 @@ public class HuaNanBankAutomationIdentityTest {
         assertEquals("huanan:fallback-hash:v1", raw.getString("identity_scheme"));
         assertFalse(id.contains("8888"));
     }
+
+    @Test
+    public void fallbackHashKeepsV1ForFirstOccurrenceAndDisambiguatesDuplicates() throws Exception {
+        JSONObject first = new JSONObject();
+        first.put("postedAt", "2026-08-15");
+        first.put("amount", "-50");
+        first.put("summary", "超商");
+
+        JSONObject second = new JSONObject();
+        second.put("postedAt", "2026-08-15");
+        second.put("amount", "-50");
+        second.put("summary", "超商");
+
+        java.util.Map<String, Integer> occurrenceByKey = new java.util.HashMap<>();
+        JSONObject firstItem = HuaNanBankAutomation.buildTransactionIdentity(
+            "987654321098",
+            first,
+            "2026-08-01",
+            "2026-08-16",
+            occurrenceByKey
+        );
+        JSONObject secondItem = HuaNanBankAutomation.buildTransactionIdentity(
+            "987654321098",
+            second,
+            "2026-08-01",
+            "2026-08-16",
+            occurrenceByKey
+        );
+        JSONObject solo = HuaNanBankAutomation.buildTransactionIdentity(
+            "987654321098",
+            first,
+            "2026-08-01",
+            "2026-08-16"
+        );
+
+        assertEquals(solo.getString("providerTransactionId"), firstItem.getString("providerTransactionId"));
+        assertFalse(firstItem.getString("providerTransactionId").equals(secondItem.getString("providerTransactionId")));
+        JSONObject firstRaw = new JSONObject(firstItem.getString("rawJson"));
+        JSONObject secondRaw = new JSONObject(secondItem.getString("rawJson"));
+        assertEquals("huanan:fallback-hash:v1", firstRaw.getString("identity_scheme"));
+        assertEquals("huanan:fallback-hash:v1-occ", secondRaw.getString("identity_scheme"));
+    }
 }

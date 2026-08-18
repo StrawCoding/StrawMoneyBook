@@ -128,12 +128,16 @@ export async function closeCreditStatementRow(ledgerId, statementId, patch) {
 export async function sumCardLiabilityForStatement(ledgerId, statementId) {
   assertLedgerId(ledgerId)
   const result = await query(
-    `SELECT COALESCE(SUM(amount_minor), 0) AS total
-     FROM transaction_postings
-     WHERE ledger_id = ?
-       AND statement_id = ?
-       AND role IN ('card_liability', 'adjustment', 'reversal', 'fee')
-       AND deleted_at IS NULL;`,
+    `SELECT COALESCE(SUM(p.amount_minor), 0) AS total
+     FROM transaction_postings p
+     INNER JOIN transactions t
+       ON t.ledger_id = p.ledger_id
+      AND t.id = p.transaction_id
+     WHERE p.ledger_id = ?
+       AND p.statement_id = ?
+       AND p.role IN ('card_liability', 'adjustment', 'reversal', 'fee')
+       AND p.deleted_at IS NULL
+       AND t.deleted_at IS NULL;`,
     [ledgerId, String(statementId)],
   )
   // Liability postings are negative amounts (debt increase). Closing owed = -sum.

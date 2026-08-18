@@ -8,7 +8,7 @@ import {
   convertBalanceToTargetCurrency,
   normalizeFxCurrencyCode,
   resolveCrossExchangeRate,
-} from '../src/ui/utils/fx-convert.js'
+} from '../src/core/utils/fx-convert.js'
 import { buildGroupSummaries } from '../src/ui/utils/account-group-summary.js'
 
 test('normalizeFxCurrencyCode aliases NTD/RMB and keeps ISO codes', () => {
@@ -77,7 +77,7 @@ test('exchange-rate service re-exports the shared fx helpers', () => {
     resolve(import.meta.dirname, '../src/ui/services/exchange-rate.service.js'),
     'utf8',
   )
-  assert.match(source, /from '@\/ui\/utils\/fx-convert\.js'/)
+  assert.match(source, /from '@\/core\/utils\/fx-convert\.js'/)
   assert.match(source, /export \{ convertAmountMinorByRate, resolveCrossExchangeRate \}/)
 })
 

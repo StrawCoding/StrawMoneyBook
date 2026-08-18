@@ -70,7 +70,7 @@ test('runBankSyncAutoRefreshIfDue uses single-flight and cooldown per ledger', a
   })
 })
 
-test('runBankSyncAutoRefreshIfDue stops immediately on credential auth errors', async () => {
+test('runBankSyncAutoRefreshIfDue continues later connections after credential auth errors', async () => {
   const syncedConnectionIds = []
 
   setBankSyncAutoRefreshDependenciesForTest({
@@ -99,21 +99,27 @@ test('runBankSyncAutoRefreshIfDue stops immediately on credential auth errors', 
         error.code = 'first_bank_login_failed'
         throw error
       }
-      return { added: [], modified: [] }
+      return { added: [{ id: 'row-2' }], modified: [] }
     },
   })
 
   const result = await runBankSyncAutoRefreshIfDue('ledger-1', { reason: 'app_resume' })
 
-  assert.deepEqual(syncedConnectionIds, ['conn-auth'])
-  assert.deepEqual(result, {
-    ok: false,
-    halted: 'auth_error',
-    reason: 'app_resume',
-    connectionId: 'conn-auth',
-    errorCode: 'first_bank_login_failed',
-    message: '第一銀行登入失敗，請確認身分證字號、序號、代碼與密碼',
-  })
+  assert.deepEqual(syncedConnectionIds, ['conn-auth', 'conn-next'])
+  assert.equal(result.ok, false)
+  assert.equal(result.reason, 'app_resume')
+  assert.deepEqual(result.syncedConnections, [
+    { connectionId: 'conn-next', ok: true, added: 1, modified: 0 },
+  ])
+  assert.deepEqual(result.failedConnections, [
+    {
+      connectionId: 'conn-auth',
+      ok: false,
+      authError: true,
+      errorCode: 'first_bank_login_failed',
+      message: '第一銀行登入失敗，請確認身分證字號、序號、代碼與密碼',
+    },
+  ])
 })
 
 test('runBankSyncAutoRefreshIfDue skips when bank sync requires membership', async () => {
