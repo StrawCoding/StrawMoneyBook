@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { hasBankSyncMembershipAccess } from '@/core/services/membership.service.js'
+import { isBankSyncDebugEnabled } from '@/core/services/bank-sync-debug.service.js'
 import {
   getBankSyncSupportMatrix,
   isBankSyncApiConfigured,
@@ -23,7 +24,7 @@ export function assessBankSyncAvailability({
   pendingReviewCount = 0,
   lastErrorCode = '',
   featureEnabled = isBankSyncFeatureEnabled(),
-  androidRuntime = isNativeBankAutomationRuntimeSupported(),
+  androidRuntime = isNativeBankAutomationRuntimeSupported() || isBankSyncDebugEnabled(),
   nativeAutomationAvailable = isBankSyncNativeAutomationAvailable(),
   apiConfigured = isBankSyncApiConfigured(),
 } = {}) {

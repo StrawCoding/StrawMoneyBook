@@ -79,6 +79,8 @@ test('smb294: playwright scripts cover error-code branching + seeded review', ()
   assert.match(bank, /bank_sync_android_only|bank_sync_membership_required/)
   assert.match(bank, /seedMembershipAndPendingConnection/)
   assert.match(bank, /must not silently redirect/)
+  assert.match(bank, /feature-link-bank-sync/)
+  assert.match(bank, /bank-sync-debug-toggle/)
   assert.match(bank, /button:has-text\('Next'\), button:has-text\('下一步'\)/)
 })
 

@@ -8,6 +8,26 @@
     <article class="card panel">
       <p class="muted subtitle">{{ t('debug_page.subtitle') }}</p>
 
+      <article class="debug-toggle-card" data-testid="bank-sync-debug-toggle">
+        <button
+          type="button"
+          class="switch-row"
+          :class="{ active: bankSyncDebugEnabled }"
+          role="switch"
+          :aria-checked="bankSyncDebugEnabled ? 'true' : 'false'"
+          :disabled="bankSyncDebugEnvForced"
+          @click="toggleBankSyncDebug"
+        >
+          <span>{{ t('debug_page.bank_sync_debug.toggle', '銀行同步 Debug Console') }}</span>
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </button>
+        <p class="muted compact">
+          {{ bankSyncDebugEnvForced
+            ? t('debug_page.bank_sync_debug.env_forced', '目前為 debug / 開發模式，Console 紀錄與網頁銀行同步已強制開啟。')
+            : t('debug_page.bank_sync_debug.desc', '開啟後所有銀行同步動作會印到瀏覽器 Console，並在修正期開放網頁使用銀行同步流程。') }}
+        </p>
+      </article>
+
       <div class="action-row">
         <button class="btn" :disabled="loading" @click="refresh">{{ t('debug_page.refresh') }}</button>
         <button class="btn" :disabled="exporting" @click="exportDebugLogs">
@@ -157,6 +177,22 @@
       <hr class="divider" />
 
       <div class="trace-header">
+        <small class="muted">{{ t('debug_page.bank_sync_debug.console_title', '銀行同步 Console Log') }}</small>
+      </div>
+      <div v-if="!bankSyncConsoleLogs.length" class="muted">{{ t('debug_page.bank_sync_debug.console_empty', '尚未有 Console 紀錄。開啟 Debug 後執行銀行同步即可看到。') }}</div>
+      <div v-else class="trace-list console-list" data-testid="bank-sync-console-log">
+        <article v-for="item in bankSyncConsoleLogs" :key="item.id" class="trace-item">
+          <div class="trace-item-top">
+            <strong class="break-all">{{ item.action || '-' }}</strong>
+            <small class="muted">{{ item.at || '-' }}</small>
+          </div>
+          <pre v-if="item.details" class="console-details">{{ formatConsoleDetails(item.details) }}</pre>
+        </article>
+      </div>
+
+      <hr class="divider" />
+
+      <div class="trace-header">
         <small class="muted">{{ t('debug_page.key.bank_sync_calls') }}</small>
       </div>
       <div v-if="!bankSyncCalls.length" class="muted">{{ t('debug_page.bank_sync_calls.empty') }}</div>
@@ -216,7 +252,13 @@ import {
   subscribeTransactionFailureTrace,
 } from '@/core/services/transaction.service'
 import {
+  getBankSyncConsoleLogSnapshot,
   getBankSyncDebugTraceSnapshot,
+  isBankSyncDebugEnabled,
+  isBankSyncDebugEnvForced,
+  setBankSyncDebugEnabled,
+  subscribeBankSyncConsoleLog,
+  subscribeBankSyncDebugMode,
   subscribeBankSyncDebugTrace,
 } from '@/core/services/bank-sync-debug.service'
 import {
@@ -237,6 +279,9 @@ const playCalls = ref(getGooglePlayCallTraceSnapshot())
 const txFailures = ref(getTransactionFailureTraceSnapshot())
 const einvoiceCalls = ref(getEInvoiceDebugTraceSnapshot())
 const bankSyncCalls = ref(getBankSyncDebugTraceSnapshot())
+const bankSyncConsoleLogs = ref(getBankSyncConsoleLogSnapshot())
+const bankSyncDebugEnabled = ref(isBankSyncDebugEnabled())
+const bankSyncDebugEnvForced = ref(isBankSyncDebugEnvForced())
 const errorLogs = ref(getErrorLogSnapshot())
 const snapshot = reactive({
   tier: getMembershipTierSnapshot(),
@@ -254,12 +299,27 @@ let unsubscribePlayTrace = null
 let unsubscribeTxFailureTrace = null
 let unsubscribeEInvoiceTrace = null
 let unsubscribeBankSyncTrace = null
+let unsubscribeBankSyncConsole = null
+let unsubscribeBankSyncDebugMode = null
 let unsubscribeErrorLog = null
 
 function formatDuration(value) {
   const number = Number(value)
   if (!Number.isFinite(number) || number < 0) return '-'
   return `${Math.round(number)}ms`
+}
+
+function formatConsoleDetails(details) {
+  try {
+    return JSON.stringify(details, null, 2)
+  } catch {
+    return String(details ?? '')
+  }
+}
+
+function toggleBankSyncDebug() {
+  if (bankSyncDebugEnvForced.value) return
+  setBankSyncDebugEnabled(!bankSyncDebugEnabled.value)
 }
 
 function createExportTimestamp(date = new Date()) {
@@ -291,6 +351,7 @@ function buildDebugExportPayload() {
       transaction_failures: Array.isArray(txFailures.value) ? txFailures.value : [],
       einvoice_calls: Array.isArray(einvoiceCalls.value) ? einvoiceCalls.value : [],
       bank_sync_calls: Array.isArray(bankSyncCalls.value) ? bankSyncCalls.value : [],
+      bank_sync_console: Array.isArray(bankSyncConsoleLogs.value) ? bankSyncConsoleLogs.value : [],
       error_logs: Array.isArray(errorLogs.value) ? errorLogs.value : [],
     },
   }
@@ -357,6 +418,13 @@ onMounted(async () => {
   unsubscribeBankSyncTrace = subscribeBankSyncDebugTrace((items) => {
     bankSyncCalls.value = Array.isArray(items) ? items : []
   }, { emitCurrent: true })
+  unsubscribeBankSyncConsole = subscribeBankSyncConsoleLog((items) => {
+    bankSyncConsoleLogs.value = Array.isArray(items) ? items : []
+  }, { emitCurrent: true })
+  unsubscribeBankSyncDebugMode = subscribeBankSyncDebugMode((state) => {
+    bankSyncDebugEnabled.value = Boolean(state?.enabled)
+    bankSyncDebugEnvForced.value = Boolean(state?.envForced)
+  }, { emitCurrent: true })
   unsubscribeErrorLog = subscribeErrorLog((items) => {
     errorLogs.value = Array.isArray(items) ? items : []
   }, { emitCurrent: true })
@@ -383,6 +451,14 @@ onBeforeUnmount(() => {
   if (typeof unsubscribeBankSyncTrace === 'function') {
     unsubscribeBankSyncTrace()
     unsubscribeBankSyncTrace = null
+  }
+  if (typeof unsubscribeBankSyncConsole === 'function') {
+    unsubscribeBankSyncConsole()
+    unsubscribeBankSyncConsole = null
+  }
+  if (typeof unsubscribeBankSyncDebugMode === 'function') {
+    unsubscribeBankSyncDebugMode()
+    unsubscribeBankSyncDebugMode = null
   }
   if (typeof unsubscribeErrorLog === 'function') {
     unsubscribeErrorLog()
@@ -421,6 +497,75 @@ onBeforeUnmount(() => {
 .action-row {
   display: flex;
   justify-content: flex-start;
+}
+
+.debug-toggle-card {
+  display: grid;
+  gap: 8px;
+}
+
+.switch-row {
+  width: 100%;
+  border: 1px solid var(--field-border);
+  background: var(--surface-popover);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 700;
+}
+
+.switch-row.active {
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+  background: color-mix(in srgb, var(--primary) 14%, var(--card) 86%);
+}
+
+.switch-row:disabled {
+  opacity: 0.72;
+}
+
+.switch-track {
+  width: 46px;
+  height: 28px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--field-border) 75%, #000 0%);
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fff;
+  transition: transform 0.18s ease;
+}
+
+.switch-row.active .switch-thumb {
+  transform: translateX(18px);
+}
+
+.compact {
+  margin: 0;
+}
+
+.console-list {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.console-details {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 12px;
+  color: var(--text-muted, var(--muted));
 }
 
 .detail-grid {

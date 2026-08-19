@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
+import { logBankSyncAction } from '../../core/services/bank-sync-debug.service.js'
 import { isRegisteredBankProviderId } from './provider-registry.js'
 
 const BankAutomation = registerPlugin('BankAutomation')
@@ -20,6 +21,10 @@ export function isNativeBankAutomationRuntimeSupported() {
 }
 
 export async function ensureNativeBankAutomationAvailable() {
+  logBankSyncAction('native.ensureAvailable', {
+    platform: Capacitor.getPlatform(),
+    nativeRuntime: isNativeBankAutomationRuntimeSupported(),
+  })
   if (!isNativeBankAutomationRuntimeSupported()) {
     throw createNativeBankAutomationError('目前僅支援 Android App 的本地銀行同步', 'bank_automation_android_only')
   }
@@ -60,6 +65,9 @@ function withProviderId(payload = {}) {
 
 /** Architecture B generic connect. */
 export async function connectNativeBank(payload = {}) {
+  logBankSyncAction('native.connect', {
+    providerId: String(payload?.providerId ?? payload?.provider ?? '').trim().toLowerCase(),
+  })
   await ensureNativeBankAutomationAvailable()
   const next = withProviderId(payload)
   if (!isRegisteredBankProviderId(next.providerId)) {
@@ -73,6 +81,10 @@ export async function connectNativeBank(payload = {}) {
 }
 
 export async function syncNativeBank(payload = {}) {
+  logBankSyncAction('native.sync', {
+    providerId: String(payload?.providerId ?? payload?.provider ?? '').trim().toLowerCase(),
+    connectionId: String(payload?.connectionId ?? payload?.provider_connection_id ?? '').trim(),
+  })
   await ensureNativeBankAutomationAvailable()
   const next = withProviderId(payload)
   if (!isRegisteredBankProviderId(next.providerId)) {
@@ -86,6 +98,10 @@ export async function syncNativeBank(payload = {}) {
 }
 
 export async function disconnectNativeBank(payload = {}) {
+  logBankSyncAction('native.disconnect', {
+    providerId: String(payload?.providerId ?? payload?.provider ?? '').trim().toLowerCase(),
+    connectionId: String(payload?.connectionId ?? payload?.provider_connection_id ?? '').trim(),
+  })
   await ensureNativeBankAutomationAvailable()
   const next = withProviderId(payload)
   try {

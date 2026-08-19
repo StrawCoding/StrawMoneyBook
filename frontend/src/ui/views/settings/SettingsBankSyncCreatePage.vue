@@ -32,7 +32,7 @@
       </article>
 
       <article v-if="currentStep === 1" class="card panel">
-        <p class="muted">{{ t('settings_bank_sync.platform_hint') }}</p>
+        <p class="muted">{{ platformHint }}</p>
         <div
           v-for="provider in providerOptions"
           :key="provider.value"
@@ -176,6 +176,7 @@ import {
   syncBankConnectionNow,
 } from '@/ui/services/bank-sync.service'
 import { getBankSyncApiUnavailableMessage, isBankSyncApiConfigured } from '@/services/bank-sync/backend'
+import { isBankSyncDebugEnabled } from '@/core/services/bank-sync-debug.service'
 import { getBankProviderCredentialSchema } from '@/services/bank-sync/provider-registry.js'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAccountStore } from '@/ui/stores/account.store'
@@ -189,6 +190,12 @@ const uiStore = useUiStore()
 const { t } = useI18n()
 const bankSyncApiReady = isBankSyncApiConfigured()
 const bankSyncApiMessage = computed(() => getBankSyncApiUnavailableMessage())
+const platformHint = computed(() => {
+  if (isBankSyncDebugEnabled()) {
+    return t('settings_bank_sync.support_matrix.web_debug_hint', '銀行同步修正期：Debug 已開啟，網頁可操作同步流程，所有步驟會印到 Console。網銀自動登入仍需 Android App。')
+  }
+  return t('settings_bank_sync.platform_hint')
+})
 
 const currentStep = ref(1)
 const submitting = ref(false)

@@ -44,3 +44,10 @@ test('bank sync API utils no longer treat mock provider as supported', () => {
   assert.match(apiUtilsSource, /if \(isFirstBankProvider\(provider\)\) return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS/)
   assert.doesNotMatch(apiUtilsSource, /if \(isMockProvider\(provider\)\) return true/)
 })
+
+test('bank sync backend debug mode opens web and logs actions', () => {
+  assert.match(backendSource, /isBankSyncDebugEnabled/)
+  assert.match(backendSource, /logBankSyncAction/)
+  assert.match(backendSource, /androidOnly: !debugEnabled/)
+  assert.match(serviceSource, /logBankSyncAction/)
+})

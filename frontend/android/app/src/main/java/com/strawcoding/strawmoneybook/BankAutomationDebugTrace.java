@@ -1,10 +1,12 @@
 package com.strawcoding.strawmoneybook;
 
+import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 final class BankAutomationDebugTrace {
+    private static final String TAG = "SMB-BankSync";
     private final JSONArray steps = new JSONArray();
     private final String action;
 
@@ -26,6 +28,9 @@ final class BankAutomationDebugTrace {
             safePut(item, "details", details);
         }
         steps.put(item);
+        Log.d(TAG, action + " " + (step == null ? "" : step.trim())
+            + " [" + (status == null ? "" : status.trim()) + "] "
+            + (message == null ? "" : message.trim()));
     }
 
     JSONObject toJson(String errorCode, String errorMessage) {

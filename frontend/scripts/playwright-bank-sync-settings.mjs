@@ -145,20 +145,20 @@ async function completeOnboarding() {
 }
 
 async function openBankSyncPage() {
-  await runPlaywrightCli(['goto', `${baseUrl}/settings`])
+  await runPlaywrightCli(['goto', `${baseUrl}/features`])
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const ready = await evalPage(`() => ({
       path: window.location.pathname,
-      hasBankLink: Boolean(document.querySelector('a[href="/settings/bank-sync"]')),
+      hasBankLink: Boolean(document.querySelector('[data-testid=feature-link-bank-sync], a[href="/settings/bank-sync"]')),
       hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
     })`)
-    if (ready.path === '/settings' && ready.hasBankLink && ready.hasBottomNav) break
+    if ((ready.path === '/features' || ready.path === '/settings') && ready.hasBankLink && ready.hasBottomNav) break
     await delay(400)
   }
 
   await runPlaywrightCli(['eval', `() => {
-    const link = document.querySelector('a[href="/settings/bank-sync"]')
-    if (!link) throw new Error('missing bank-sync settings link')
+    const link = document.querySelector('[data-testid=feature-link-bank-sync], a[href="/settings/bank-sync"]')
+    if (!link) throw new Error('missing bank-sync feature link')
     link.click()
     return true
   }`], { raw: true })
@@ -326,6 +326,25 @@ try {
   assert.equal(seededState.hasSeedLabel, true, `seeded connection label required: ${JSON.stringify(seededState)}`)
   assert.equal(seededState.hasPendingBadge, true, 'seeded pending review badge required')
   assert.equal(seededState.hasRecoveryCta, true, 'recovery CTA must remain after seeded review connection')
+
+  await runPlaywrightCli(['goto', `${baseUrl}/settings/developer-debug`])
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const debugReady = await evalPage(`() => ({
+      path: window.location.pathname,
+      hasToggle: Boolean(document.querySelector('[data-testid=bank-sync-debug-toggle]')),
+      hasConsole: Boolean(document.querySelector('[data-testid=bank-sync-console-log]'))
+        || /尚未有 Console|No console records|まだ Console/u.test(document.body?.innerText || ''),
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+    })`)
+    if (debugReady.path === '/settings/developer-debug' && debugReady.hasToggle && debugReady.hasBottomNav) {
+      assert.equal(debugReady.hasToggle, true, 'debug page must expose bank sync console toggle on web')
+      break
+    }
+    if (attempt === 39) {
+      throw new Error(`developer-debug page not ready: ${JSON.stringify(debugReady)}`)
+    }
+    await delay(400)
+  }
 
   console.log('Bank sync Playwright app-shell + support matrix + seeded review check passed')
 } finally {

@@ -18,6 +18,11 @@ const connectionPageSource = readFileSync(
   'utf8',
 )
 
+const debugPageSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/views/settings/SettingsDeveloperDebugPage.vue'),
+  'utf8',
+)
+
 test('bank sync create page uses wizard steps and batch account mapping', () => {
   assert.match(createPageSource, /currentStep/)
   assert.match(createPageSource, /settings_bank_sync_create\.wizard\.step1_title/)
@@ -50,4 +55,18 @@ test('bank sync connection page supports bank statement csv import fallback', ()
   assert.match(connectionPageSource, /importBankStatementCsv/)
   assert.match(connectionPageSource, /settings_bank_sync\.csv_import\.title/)
   assert.match(connectionPageSource, /onImportCsvFile/)
+})
+
+test('bank sync pages expose debug-mode web correction-period hint', () => {
+  assert.match(listPageSource, /web_debug_hint/)
+  assert.match(listPageSource, /bank-sync-debug-web-hint/)
+  assert.match(createPageSource, /web_debug_hint/)
+  assert.match(createPageSource, /isBankSyncDebugEnabled/)
+})
+
+test('developer debug page can toggle bank sync console logging for web', () => {
+  assert.match(debugPageSource, /bank-sync-debug-toggle/)
+  assert.match(debugPageSource, /bank-sync-console-log/)
+  assert.match(debugPageSource, /setBankSyncDebugEnabled/)
+  assert.match(debugPageSource, /subscribeBankSyncConsoleLog/)
 })

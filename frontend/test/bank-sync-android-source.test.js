@@ -115,3 +115,13 @@ test('Architecture B: multi-provider dispatch + accountResults partial success',
   assert.match(firstBankAutomationSource, /partial_success|sync_status/)
   assert.match(firstBankAutomationSource, /BankAutomationSyncContract/)
 })
+
+test('bank automation debug trace prints each step to logcat in debug builds', () => {
+  const debugTraceSource = readFileSync(
+    resolve(import.meta.dirname, '../android/app/src/main/java/com/strawcoding/strawmoneybook/BankAutomationDebugTrace.java'),
+    'utf8',
+  )
+  assert.match(debugTraceSource, /SMB-BankSync/)
+  assert.match(debugTraceSource, /Log\.d\(TAG/)
+  assert.doesNotMatch(debugTraceSource, /BuildConfig/)
+})

@@ -79,7 +79,10 @@
           <strong>{{ supportMatrix.csvFallbackAvailable ? t('settings_bank_sync.availability.ok') : t('settings_bank_sync.availability.blocked') }}</strong>
         </li>
       </ul>
-      <p v-if="!supportMatrix.nativeAutomationAvailable" class="muted platform-note">
+      <p v-if="supportMatrix.debugEnabled" class="muted platform-note" data-testid="bank-sync-debug-web-hint">
+        {{ t('settings_bank_sync.support_matrix.web_debug_hint', '銀行同步修正期：Debug 已開啟，網頁可操作同步流程，所有步驟會印到 Console。網銀自動登入仍需 Android App。') }}
+      </p>
+      <p v-else-if="!supportMatrix.nativeAutomationAvailable" class="muted platform-note">
         {{ t('settings_bank_sync.support_matrix.web_hint') }}
       </p>
     </article>
@@ -97,7 +100,7 @@
         </RouterLink>
       </div>
       <template v-else>
-        <p class="muted platform-note">{{ t('settings_bank_sync.platform_hint') }}</p>
+        <p class="muted platform-note">{{ platformHint }}</p>
         <p v-if="!bankSyncApiReady" class="muted bank-api-warning">{{ bankSyncApiMessage }}</p>
         <div class="row top-action-row">
           <RouterLink class="btn primary" :class="{ disabled: !bankSyncApiReady }" :to="bankSyncCreateLink">
@@ -223,6 +226,13 @@ const supportedBankNames = computed(() => {
 
 const bankSyncCreateLink = computed(() => {
   return bankSyncApiReady.value ? { name: 'settings-bank-sync-create' } : { name: 'settings-bank-sync' }
+})
+
+const platformHint = computed(() => {
+  if (supportMatrix.value?.debugEnabled) {
+    return t('settings_bank_sync.support_matrix.web_debug_hint', '銀行同步修正期：Debug 已開啟，網頁可操作同步流程，所有步驟會印到 Console。網銀自動登入仍需 Android App。')
+  }
+  return t('settings_bank_sync.platform_hint')
 })
 
 const recoveryCtaLabel = computed(() => {
