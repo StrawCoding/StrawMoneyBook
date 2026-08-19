@@ -119,6 +119,15 @@ async function closeAllConnectionsSafely() {
   }
 }
 
+/**
+ * Android SupportSQLiteDatabase.execSQL rejects PRAGMAs that return a row
+ * (foreign_keys / busy_timeout assignments included). query() is safe on all platforms.
+ */
+async function applyConnectionPragmas(db) {
+  await db.query('PRAGMA foreign_keys = ON;')
+  await db.query('PRAGMA busy_timeout = 5000;')
+}
+
 async function openDatabaseConnection(dbName = activeDbName) {
   const hasConnection = (await sqlite.isConnection(dbName, false)).result
 
@@ -134,8 +143,7 @@ async function openDatabaseConnection(dbName = activeDbName) {
   }
 
   await db.open()
-  await db.execute('PRAGMA foreign_keys = ON;')
-  await db.execute('PRAGMA busy_timeout = 5000;')
+  await applyConnectionPragmas(db)
   await runMigrations(db)
   activeDbName = dbName
   return db
@@ -177,8 +185,7 @@ async function rebuildDatabase(dbName = activeDbName) {
     const conn = await openDatabaseConnection(dbName)
     try {
       // Keep foreign_keys ON (smb296): wipe by child-first order instead of disabling constraints.
-      await conn.execute('PRAGMA foreign_keys = ON;')
-      await conn.execute('PRAGMA busy_timeout = 5000;')
+      await applyConnectionPragmas(conn)
       for (const table of DATABASE_WIPE_DELETE_ORDER) {
         try {
           await conn.run(`DELETE FROM ${table};`)

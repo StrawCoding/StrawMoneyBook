@@ -139,13 +139,18 @@ test('audit DAG identity, serverless, busy_timeout and PII guards stay in source
   assert.doesNotMatch(service, /runtimeJobs\.run\(`bank-sync:\$\{[\s\S]*runtimeJobs\.run\(`bank-sync:/)
 
   const sqlite = readFileSync(resolve(import.meta.dirname, '../src/core/db/sqlite.js'), 'utf8')
-  assert.match(sqlite, /PRAGMA busy_timeout = 5000/)
+  assert.match(sqlite, /applyConnectionPragmas/)
+  assert.match(sqlite, /db\.query\('PRAGMA foreign_keys = ON;'/)
+  assert.match(sqlite, /db\.query\('PRAGMA busy_timeout = 5000;'/)
+  assert.doesNotMatch(sqlite, /db\.execute\('PRAGMA busy_timeout/)
 
   const androidDb = readFileSync(
     resolve(import.meta.dirname, '../android/app/src/main/java/com/strawcoding/strawmoneybook/wear/AndroidDbRepository.java'),
     'utf8',
   )
+  assert.match(androidDb, /applyConnectionPragma/)
   assert.match(androidDb, /PRAGMA busy_timeout = 5000/)
+  assert.doesNotMatch(androidDb, /execSQL\("PRAGMA busy_timeout/)
 
   const guard = readFileSync(resolve(import.meta.dirname, '../api/_production-guard.js'), 'utf8')
   assert.match(guard, /export function rejectProductionServerless/)

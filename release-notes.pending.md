@@ -3,6 +3,7 @@
 ---
 
 ## v1.3.142
+- 修復 Android 初始化失敗（`Queries can be performed using SQLiteDatabase query or rawQuery methods only`）：`PRAGMA foreign_keys = ON` 與 `PRAGMA busy_timeout = 5000` 改以 `db.query()` 套用，不再走 `execSQL()`（Android 不允許 execSQL 執行會回傳列的 PRAGMA）；`AndroidDbRepository.java` 同步改為 `applyConnectionPragma()` wrapper；加入 regression 斷言防止 PRAGMA 再透過 `execute/execSQL` 呼叫。
 - 依 2026-08-18 技術稽核繼續實作：銀行交易跨來源 identity（同帳戶同日同額標可能重複、匯入預設跳過）、單一銀行連線 `runtimeJobs` 合併防重入、SQLite `busy_timeout`、production Vercel serverless 404 導向 `api.strawmb.com`、client error log 失敗佇列＋longtask 觀察與 PII 脫敏、寫入後列表重整逾時改 toast；CI 另跑 budget-save／analysis-export／carrier-sync／budget-cross-month／budget-pay-cycle Playwright（共用 chromium 安裝＋獨立 session，避免 runner 未裝瀏覽器與搶 default session）。未拆 XL god-object、未接第三方 Sentry、未改 git history、銀行同步 E2E 仍不進 CI。
 - 依 2026-08-18 技術稽核續修：銀行自動同步單一憑證失敗不再中止後續連線；production bank／Google OAuth API fail-closed；sql.js migration 外層交易＋SAVEPOINT，Capacitor／jeep-sqlite 維持逐句 executeSet（避免網頁卡在資料載入中）；帳本 purge 包交易；總資產換匯與信用卡週期改讀帳本時區；軟刪交易連動 posting 且 import／wear／einvoice 保留冪等鍵；銀行 fallback 指紋同日同額加 occurrence（第 0 筆維持 v1 hash）；退款 SQL 收回 domain；Playwright 改相對路徑並將 `ui-layout` 納入 CI；CI 先 `prepare:android:release` 再跑 Android／Wear JVM 測試。
 - 銀行同步修正期：所有銀行同步動作依 debug 模式印到 Console（`[SMB:bank-sync]`，憑證欄位會遮罩）；設定 → 版本資訊 → Debug 頁可開關，網頁也可即時查看。debug／開發模式或手動開啟後，網頁可操作同步流程；網銀自動登入仍需 Android App。Android debug APK 另將原生步驟寫入 logcat `SMB-BankSync`。

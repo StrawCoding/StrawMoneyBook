@@ -61,8 +61,8 @@ public final class AndroidDbRepository {
             if (db == null || !db.isOpen()) {
                 throw new IllegalStateException("engine_not_ready");
             }
-            db.execSQL("PRAGMA foreign_keys = ON;");
-            db.execSQL("PRAGMA busy_timeout = 5000;");
+            applyConnectionPragma(db, "PRAGMA foreign_keys = ON;");
+            applyConnectionPragma(db, "PRAGMA busy_timeout = 5000;");
             return db;
         }
     }
@@ -87,6 +87,20 @@ public final class AndroidDbRepository {
 
     interface ThrowingCallable<T> {
         T call() throws Exception;
+    }
+
+    /** PRAGMA assignments return a row; execSQL rejects them on Android. */
+    private static void applyConnectionPragma(SupportSQLiteDatabase db, String sql) {
+        Cursor cursor = db.query(sql, new String[0]);
+        try {
+            if (cursor != null) {
+                cursor.moveToFirst();
+            }
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
     }
 
     public static String queryString(SupportSQLiteDatabase db, String sql, String[] args) {
