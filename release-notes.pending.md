@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 修復 Google 備份 OAuth `GOOGLE_EXCHANGE_002`：正式後端補上 `GOOGLE_OAUTH_CLIENT_SHARED_KEY`，前端 production／development 同步 `VITE_GOOGLE_OAUTH_CLIENT_SHARED_KEY`，exchange 改送 `X-Straw-Client-Key`。驗證：無 key → 401；正確 key、空 body → `GOOGLE_EXCHANGE_003`。
+
 ---
 
 ## v1.3.142
