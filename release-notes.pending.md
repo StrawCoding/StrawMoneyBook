@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- 修復 Google 備份 OAuth `GOOGLE_EXCHANGE_002`：正式後端補上 `GOOGLE_OAUTH_CLIENT_SHARED_KEY`，前端 production／development 同步 `VITE_GOOGLE_OAUTH_CLIENT_SHARED_KEY`，exchange 改送 `X-Straw-Client-Key`。驗證：無 key → 401；正確 key、空 body → `GOOGLE_EXCHANGE_003`。
-
 ---
+
+## v1.3.144
+- 修復 Google 備份 OAuth `GOOGLE_EXCHANGE_002`：正式後端補上 `GOOGLE_OAUTH_CLIENT_SHARED_KEY`，前端 production／development 同步 `VITE_GOOGLE_OAUTH_CLIENT_SHARED_KEY`，exchange 改送 `X-Straw-Client-Key`。驗證：無 key → 401；正確 key、空 body → `GOOGLE_EXCHANGE_003`。
 
 ## v1.3.142
 - 修復 Android 初始化失敗（`Queries can be performed using SQLiteDatabase query or rawQuery methods only`）：`PRAGMA foreign_keys = ON` 與 `PRAGMA busy_timeout = 5000` 改以 `db.query()` 套用，不再走 `execSQL()`（Android 不允許 execSQL 執行會回傳列的 PRAGMA）；`AndroidDbRepository.java` 同步改為 `applyConnectionPragma()` wrapper；加入 regression 斷言防止 PRAGMA 再透過 `execute/execSQL` 呼叫。
