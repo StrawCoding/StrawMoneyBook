@@ -302,7 +302,7 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useSecurityStore } from '@/ui/stores/security.store'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { listTransactionsForAnalysis } from '@/core/services/transaction-query.service'
+import { loadAnalysisStats } from '@/core/services/transaction-query.service'
 import {
   createPdfBlobUrl,
   getLedgerTransactionsExportData,
@@ -318,7 +318,8 @@ import { monthKeyFromDate } from '@/core/utils/id'
 import {
   buildAccountBalanceBreakdown,
   buildBarRows,
-  buildBreakdownRows,
+  decorateBreakdownRows,
+  mergeAddonSplitsIntoCategoryExpense,
   buildTimeBarRows,
   isAddonBreakdownId,
   resolveTimeBarSearchRange,
@@ -354,7 +355,14 @@ const analysisType = ref('expense')
 const accountAnalysisType = ref('expense')
 const selectedYear = ref(new Date().getFullYear())
 const selectedMonth = ref(monthKeyFromDate(new Date()))
-const statsTransactions = ref([])
+const analysisStats = ref({
+  incomeCategory: [],
+  expenseCategory: [],
+  incomeAccount: [],
+  expenseAccount: [],
+  timeBarFacts: [],
+  addonExpenseFacts: [],
+})
 const exportingPdf = ref(false)
 const showExportCapture = ref(false)
 const exportedFilename = ref('')
@@ -419,61 +427,39 @@ watch(
   { immediate: true },
 )
 
-const incomeBreakdown = computed(() => buildBreakdownRows({
-  transactions: statsTransactions.value,
-  type: 'income',
+const breakdownDecorateOptions = computed(() => ({
+  categoryNameMap: categoryNameMap.value,
+  categoryIconMap: categoryIconMap.value,
+  accountNameMap: accountNameMap.value,
+  accountIconMap: accountIconMap.value,
+  getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
+  getUncategorizedLabel: () => t('analysis_page.uncategorized'),
+  getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
+  swatches: ANALYSIS_CHART_SWATCHES,
+}))
+
+const incomeBreakdown = computed(() => decorateBreakdownRows(analysisStats.value.incomeCategory, {
+  ...breakdownDecorateOptions.value,
   scope: 'category',
-  shouldIncludeTransaction: isCountableForIncomeExpense,
-  categoryNameMap: categoryNameMap.value,
-  categoryIconMap: categoryIconMap.value,
-  accountNameMap: accountNameMap.value,
-  accountIconMap: accountIconMap.value,
-  getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
-  getUncategorizedLabel: () => t('analysis_page.uncategorized'),
-  getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
-  swatches: ANALYSIS_CHART_SWATCHES,
 }))
-const expenseBreakdown = computed(() => buildBreakdownRows({
-  transactions: statsTransactions.value,
-  type: 'expense',
-  scope: 'category',
-  shouldIncludeTransaction: isCountableForIncomeExpense,
-  categoryNameMap: categoryNameMap.value,
-  categoryIconMap: categoryIconMap.value,
-  accountNameMap: accountNameMap.value,
-  accountIconMap: accountIconMap.value,
-  getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
-  getUncategorizedLabel: () => t('analysis_page.uncategorized'),
-  getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
-  swatches: ANALYSIS_CHART_SWATCHES,
-}))
-const incomeAccountBreakdown = computed(() => buildBreakdownRows({
-  transactions: statsTransactions.value,
-  type: 'income',
+const expenseBreakdown = computed(() => decorateBreakdownRows(
+  mergeAddonSplitsIntoCategoryExpense(
+    analysisStats.value.expenseCategory,
+    analysisStats.value.addonExpenseFacts,
+    (label) => t('analysis_page.addon_item', { label }),
+  ),
+  {
+    ...breakdownDecorateOptions.value,
+    scope: 'category',
+  },
+))
+const incomeAccountBreakdown = computed(() => decorateBreakdownRows(analysisStats.value.incomeAccount, {
+  ...breakdownDecorateOptions.value,
   scope: 'account',
-  shouldIncludeTransaction: isCountableForIncomeExpense,
-  categoryNameMap: categoryNameMap.value,
-  categoryIconMap: categoryIconMap.value,
-  accountNameMap: accountNameMap.value,
-  accountIconMap: accountIconMap.value,
-  getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
-  getUncategorizedLabel: () => t('analysis_page.uncategorized'),
-  getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
-  swatches: ANALYSIS_CHART_SWATCHES,
 }))
-const expenseAccountBreakdown = computed(() => buildBreakdownRows({
-  transactions: statsTransactions.value,
-  type: 'expense',
+const expenseAccountBreakdown = computed(() => decorateBreakdownRows(analysisStats.value.expenseAccount, {
+  ...breakdownDecorateOptions.value,
   scope: 'account',
-  shouldIncludeTransaction: isCountableForIncomeExpense,
-  categoryNameMap: categoryNameMap.value,
-  categoryIconMap: categoryIconMap.value,
-  accountNameMap: accountNameMap.value,
-  accountIconMap: accountIconMap.value,
-  getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
-  getUncategorizedLabel: () => t('analysis_page.uncategorized'),
-  getUnassignedAccountLabel: () => t('analysis_page.unassigned_account'),
-  swatches: ANALYSIS_CHART_SWATCHES,
 }))
 const totalAccountBreakdown = computed(() => buildAccountBalanceBreakdown({
   accounts: accountStore.accounts,
@@ -533,7 +519,7 @@ const displayValueLabel = computed(() => (
 ))
 
 const timeBarRows = computed(() => buildTimeBarRows({
-  transactions: statsTransactions.value,
+  transactions: analysisStats.value.timeBarFacts,
   type: analysisType.value,
   mode: mode.value,
   year: selectedYear.value,
@@ -631,12 +617,19 @@ function openTimeBarSearch(item) {
 async function loadStatsTransactions() {
   const ledgerId = ledgerStore.activeLedgerId
   if (!ledgerId) {
-    statsTransactions.value = []
+    analysisStats.value = {
+      incomeCategory: [],
+      expenseCategory: [],
+      incomeAccount: [],
+      expenseAccount: [],
+      timeBarFacts: [],
+      addonExpenseFacts: [],
+    }
     return
   }
 
   try {
-    statsTransactions.value = await listTransactionsForAnalysis(ledgerId, {
+    analysisStats.value = await loadAnalysisStats(ledgerId, {
       mode: mode.value,
       key: mode.value === 'year'
         ? String(selectedYear.value)

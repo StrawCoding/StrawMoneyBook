@@ -31,14 +31,19 @@ npm run dev:backend
 
 ## 開發流程
 
-1. 從 `main` 分支建立你的功能分支：`git checkout -b feature/your-feature`
+GitHub **唯一分支是 `main`**。不要開 feature branch PR 當 StrawMoneyBook 發版路徑。本機可暫時建工作分支，但合入與發版只走 `main` + `gpr`（見 `docs/wiki/Closeout-And-Versioning.md`）。
+
+1. 在 `main` 上修改（或短命工作分支 rebase 後快轉合入 `main`）。
 2. 進行修改並確保通過所有檢查：
    ```bash
    npm run check
    npm run test
    ```
-3. 提交 commit，遵循下列規範。
-4. 發 Pull Request 到 `main` 分支。
+   網頁／UI 改動另跑對應 Playwright（見 `docs/wiki/Playwright-App-Shell.md`）。
+3. 提交 commit，遵循下列規範。更新 `release-notes.pending.md`。
+4. **不要**手動改 `frontend/package.json` version；發版只跑 `cd frontend && npm run gpr`。
+
+新行為**禁止**新增 `frontend/test/*-source.test.js`。優先 service／sqljs／Robolectric／Playwright。
 
 ## Commit 規範
 

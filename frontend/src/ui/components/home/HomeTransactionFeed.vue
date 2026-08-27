@@ -420,6 +420,8 @@ h3 {
   cursor: pointer;
   outline: none;
   min-width: 0;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
   overflow: hidden;
 }
 .tx-item:focus, .tx-item:focus-visible {

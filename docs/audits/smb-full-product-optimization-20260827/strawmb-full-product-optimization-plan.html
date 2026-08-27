@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StrawMB 全產品優化方案</title>
+<style>
+:root{--bg:#0f1419;--card:#171d25;--line:#2a3441;--ink:#e8eef6;--muted:#9aa8b8;--accent:#3d9cf0;--code:#0b1016;--ok:#5ad1a8;--warn:#e6b84d;--bad:#f07178}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Segoe UI",sans-serif;line-height:1.7;font-size:15px}
+.wrap{max-width:980px;margin:0 auto;padding:32px 20px 80px}
+h1{font-size:26px;border-bottom:2px solid var(--accent);padding-bottom:12px}
+h2{font-size:20px;margin-top:36px;color:#d7e7fb}
+h3{font-size:16px;margin-top:22px;color:#c5d6ea}
+.sub{color:var(--muted);font-size:13px}
+a{color:#7ec0ff}
+code{background:var(--code);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12.5px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow:auto;font-size:12px}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+th,td{border:1px solid var(--line);padding:7px 9px;vertical-align:top;text-align:left}
+th{background:#1c2430}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#173028;color:var(--ok);margin-right:6px}
+.badge.warn{background:#2a2414;color:var(--warn)}
+.badge.bad{background:#2a1518;color:var(--bad)}
+footer{margin-top:40px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:14px}
+blockquote{border-left:4px solid var(--accent);margin:12px 0;padding:8px 14px;background:#121820;color:var(--muted)}
+</style></head>
+<body><div class="wrap">
+<p class="sub"><span class="badge">Plan 2026-08-27</span> 產品基準 <strong>v1.4.0</strong> · in-repo wiki <code>docs/wiki/</code> · 非 GitHub Wiki</p>
+<h1>StrawMoneyBook 全產品優化方案</h1>
+<p>範圍：架構／效能／UX／同步穩定性／測試與發版。操作百科與本方案同步寫入 <code>docs/wiki</code>。不開第二套 GitHub Wiki。</p>
+<blockquote>Play 測試軌道預設 <code>internal</code>：文件寫清現況，<strong>未拍板不改 channel</strong>。iOS widget 排除（獨立產品線）。第一銀行 0C／華南 H1/H2 是真機閘，JVM 綠不能代替。</blockquote>
+
+<h2>1. 現況（相對過期文件）</h2>
+<table>
+<tr><th>來源</th><th>過期敘述</th><th>2026-08 現況</th></tr>
+<tr><td>SMB-130 審查</td><td>core 碰 Pinia、view 直打 repo、server if/else</td><td>具名項多已修；剩餘是分析全量 JS、胖頁、source tests、runtime 神檔</td></tr>
+<tr><td>銀行 Arch B phase-0 當日快照</td><td>Phase 1+ not started</td><td>0A–5、7 已進碼；0C 真機／華南 post-login／拆巨石未收口</td></tr>
+<tr><td>docs/wiki 初稿</td><td>概念流程、Troubleshooting「下一輪填充」</td><td>改為操作型；補 closeout／APK／app-shell／發薪／Wear／Arch B</td></tr>
+</table>
+
+<h2>2. 嚴重度</h2>
+<h3>P0</h3>
+<ul>
+<li><strong>分析「全部」全量載入 + 主執行緒多重聚合</strong>：改 SQL GROUP BY／query service。</li>
+<li><strong>Play internal 軌道</strong>：下一個 patch 一般使用者可能看不到更新。需拍板；本方案不擅自改 <code>play-testing-channel.json</code>。</li>
+</ul>
+<h3>P1</h3>
+<ul>
+<li>預算頁本體要有帳本層曆月／發薪切換；PostSetup 指向 BottomNav「功能 → 進階」。</li>
+<li>長表單 <code>meta.hideAppChrome</code> + Playwright（BottomNav 不遮 CTA）。</li>
+<li>載具 <code>isEInvoiceApiConfigured()</code> 不得因 native／PROD 無 key 就回 true。</li>
+<li>銀行 0C 真機、華南 H1/H2、bank-sync Playwright 進 CI。</li>
+</ul>
+<h3>P2</h3>
+<ul>
+<li>禁止新 <code>*-source.test.js</code>；列表虛擬化；清傳統 CSS；SMB-130 文件標 FIXED／PARTIAL。</li>
+</ul>
+
+<h2>3. 階段與驗收</h2>
+<table>
+<tr><th>階段</th><th>做什麼</th><th>怎麼算完</th></tr>
+<tr><td>文件閘</td><td>本 HTML + wiki 新頁／加厚 + README 索引</td><td>單檔 HTML 可直開；wiki 互連</td></tr>
+<tr><td>A 找得到</td><td>預算頁週期入口、PostSetup、hideAppChrome</td><td>playwright:budget-pay-cycle、ui-layout</td></tr>
+<tr><td>B 分析</td><td>SQL 聚合取代 listAllTransactionsChunked 當 stats 路徑</td><td>Node breakdown 語意 + analysis-export</td></tr>
+<tr><td>C 同步</td><td>configured 治本、bank-sync CI、真機閘文件化</td><td>CI job；假陽性測試；0C／HN 標未在裝置證明前不得宣稱可用</td></tr>
+<tr><td>D 金字塔</td><td>測試政策、content-visibility／VirtualList、傳統殘渣</td><td>文件 + CSS/元件 + architecture-review 更新</td></tr>
+</table>
+
+<h2>4. Wiki 地圖</h2>
+<p>權威操作頁（扁平 <code>docs/wiki/*.md</code>）：</p>
+<ul>
+<li>Optimization-Plan、Closeout-And-Versioning、Long-Task-Worker</li>
+<li>Playwright-App-Shell、Testing-And-Verification、CI-CD-And-Gates</li>
+<li>Android-Native-Bank-APK、Android-Release-And-Play-Upload、Wear-Companion</li>
+<li>Backend-Deployment-And-Health（deploy:copy <em>然後</em> docker restart StrawMB）</li>
+<li>Payroll-Cycle-Budget、Sync-Architecture-B、Sync-Operations-Runbooks、Troubleshooting</li>
+</ul>
+<p>不寫進現行 SOP：Plane closeout、feature-branch PR。</p>
+
+<h2>5. 發版</h2>
+<pre><code>cd frontend
+npm run closeout:verify   # 不含 Playwright
+npm run gpr               # 唯一 bump/tag 路徑
+npm run release:sync-check
+</code></pre>
+<p>Worker 禁止 gpr／改 version。native 銀行改動必重建 APK。backend 必 deploy:copy + docker restart StrawMB。</p>
+
+<footer>
+StrawMoneyBook · 全產品優化方案 · 2026-08-27 · 深色單檔 HTML，用 hermes-deliver 交付。Wiki 同源 <code>docs/wiki/Optimization-Plan.md</code>
+</footer>
+</div></body></html>

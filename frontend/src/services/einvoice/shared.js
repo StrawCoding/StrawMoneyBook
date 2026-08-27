@@ -1,5 +1,9 @@
 export const EINVOICE_PLATFORM = 'einvoice'
 
+export function resolveEInvoiceApiConfigured({ apiBase = '', clientKey = '' } = {}) {
+  return Boolean(String(apiBase ?? '').trim()) && Boolean(String(clientKey ?? '').trim())
+}
+
 export function createEInvoiceError(message, code = 'einvoice_error') {
   const error = new Error(String(message ?? '').trim() || 'E-invoice error')
   error.code = String(code ?? 'einvoice_error')

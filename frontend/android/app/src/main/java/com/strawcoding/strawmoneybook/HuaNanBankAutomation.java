@@ -40,8 +40,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Hua Nan Bank (華南銀行) personal netbank automation (H0 login + heuristic post-login).
- * BrowserSession is self-contained because FirstBankAutomation.BrowserSession is private.
+ * Hua Nan Bank (華南銀行) personal netbank automation.
+ * H0 = login page contract (done). H1/H2 = post-login account list + ≥1 txn DOM/JSON
+ * must be frozen from a real device session — current post-login path is heuristic only.
+ * Until H1 evidence exists, missing account list → hua_nan_account_list_not_found (not a frozen selector).
+ * See docs/wiki/Sync-Architecture-B.md.
  */
 final class HuaNanBankAutomation {
     private static final String TAG = "HuaNanBankAutomation";

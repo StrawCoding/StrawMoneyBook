@@ -27,6 +27,50 @@
         </div>
       </header>
 
+      <section class="budget-period-card" data-testid="budget-page-period-settings">
+        <div class="period-field-head">
+          <span>{{ t('budgeting.period.sheet_title') }}</span>
+          <small class="muted">{{ t('settings_ledger_detail.budget_period_mode_hint') }}</small>
+        </div>
+        <div class="ledger-period-mode-row" role="group" :aria-label="t('budgeting.period.sheet_title')">
+          <button
+            type="button"
+            class="ledger-period-mode-btn"
+            :class="{ active: activeLedgerBudgetPeriodMode === 'calendar_month' }"
+            data-testid="budget-page-period-calendar"
+            :disabled="periodSaving"
+            @click="applyBudgetPeriodSettings({ budgetPeriodMode: 'calendar_month', budgetPayDay: activeLedgerBudgetPayDay })"
+          >
+            {{ t('settings_ledger_detail.budget_period_mode.calendar_month') }}
+          </button>
+          <button
+            type="button"
+            class="ledger-period-mode-btn"
+            :class="{ active: activeLedgerBudgetPeriodMode === 'pay_cycle' }"
+            data-testid="budget-page-period-pay-cycle"
+            :disabled="periodSaving"
+            @click="applyBudgetPeriodSettings({ budgetPeriodMode: 'pay_cycle', budgetPayDay: activeLedgerBudgetPayDay })"
+          >
+            {{ t('settings_ledger_detail.budget_period_mode.pay_cycle') }}
+          </button>
+        </div>
+        <label v-if="isPayCycleMode">
+          {{ t('settings_ledger_detail.budget_pay_day') }}
+          <input
+            class="input"
+            type="number"
+            min="1"
+            max="31"
+            inputmode="numeric"
+            data-testid="budget-page-pay-day"
+            :value="activeLedgerBudgetPayDay"
+            :disabled="periodSaving"
+            @change="onBudgetPagePayDayChange"
+          />
+          <small class="muted">{{ t('budgeting.period.sheet_pay_day_hint') }}</small>
+        </label>
+      </section>
+
       <div class="stack stat" :class="{ 'month-over': budgetStore.isMonthOver }">
         <BudgetProgressBar
           :ratio="monthUsedRatio"
@@ -478,6 +522,7 @@ const detailItem = ref(null)
 const isItemDetailOpen = ref(false)
 const deleteDialogOpen = ref(false)
 const deleteLoading = ref(false)
+const periodSaving = ref(false)
 const pendingDeleteItemId = ref('')
 const totalSaveLoading = ref(false)
 const isTotalBudgetSaveDetailOpen = ref(false)
@@ -1138,10 +1183,24 @@ function shouldApplyBudgetPeriodSettings(settings = {}) {
 
 async function applyBudgetPeriodSettings(settings = {}) {
   const ledgerId = String(ledgerStore.activeLedgerId ?? '').trim()
-  if (!ledgerId) return
+  if (!ledgerId || periodSaving.value) return
+  if (!shouldApplyBudgetPeriodSettings(settings)) return
   const next = normalizeBudgetPeriodSettings(settings)
-  await ledgerStore.updateBudgetPeriodSettings(ledgerId, next)
-  await budgetStore.loadCurrentPeriod()
+  periodSaving.value = true
+  try {
+    await ledgerStore.updateBudgetPeriodSettings(ledgerId, next)
+    await budgetStore.loadCurrentPeriod()
+  } finally {
+    periodSaving.value = false
+  }
+}
+
+function onBudgetPagePayDayChange(event) {
+  const nextPayDay = clampPayDay(event?.target?.value)
+  void applyBudgetPeriodSettings({
+    budgetPeriodMode: 'pay_cycle',
+    budgetPayDay: nextPayDay,
+  })
 }
 </script>
 
@@ -1423,6 +1482,34 @@ h2, h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.budget-period-card {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+.period-field-head {
+  display: grid;
+  gap: 4px;
+}
+.ledger-period-mode-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ledger-period-mode-btn {
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.ledger-period-mode-btn.active {
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--field-border) 54%);
+  background: color-mix(in srgb, var(--primary) 10%, var(--card) 90%);
+  color: var(--primary);
 }
 .period-copy {
   margin: 4px 0 0;

@@ -1,5 +1,5 @@
 <template>
-  <nav class="bottom-nav" :class="{ modern: isModern }" data-testid="bottom-nav">
+  <nav class="bottom-nav modern" data-testid="bottom-nav">
     <RouterLink
       v-for="item in items"
       :key="item.key"
@@ -22,11 +22,9 @@
 import { computed } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
-import { useUiLayout } from '@/ui/composables/useUiLayout'
 
 const route = useRoute()
 const { t } = useI18n()
-const { isModern } = useUiLayout()
 
 const NAV_ITEMS = [
   { key: 'home', to: '/', labelKey: 'nav.home', icon: 'fa-solid fa-house' },

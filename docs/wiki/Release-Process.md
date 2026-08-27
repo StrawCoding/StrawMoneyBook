@@ -1,42 +1,38 @@
 # Release-Process
 
-## 目的
-描述專案的版本/發佈流程、以及如何避免「程式碼推上了但 Release/Tag 沒跟上」的治本閘門。
+完整閘門與禁令見 **[Closeout-And-Versioning](Closeout-And-Versioning)**。本頁是可照跑的操作摘要。
 
-## 發佈前置（你要對照的文件）
-- 發版門檻：[`docs/release-checklist.md`](../release-checklist.md)
-- Pending release notes：[`release-notes.pending.md`](../../release-notes.pending.md)
-- Release sync-check：[`frontend/scripts/release-sync-check.mjs`](../../frontend/scripts/release-sync-check.mjs)
+## 發佈前置
 
-## 典型 Release 流程（概念）
-1. 確保變更都對應測試與 Playwright 驗收（見 `Testing-And-Verification`）
-2. 更新 `release-notes.pending.md`（有變更就要有 pending 條目）
-3. 跑 closeout/驗收閘門（對應 `package.json` scripts）
-4. `gpr` 或等價腳本：完成版本 bump、tag、release 建立與發布流水
+- [`docs/release-checklist.md`](../release-checklist.md)
+- [`release-notes.pending.md`](../../release-notes.pending.md)（有使用者可見改動就加 `- ` 條目）
+- 測試：[Testing-And-Verification](Testing-And-Verification)、[Playwright-App-Shell](Playwright-App-Shell)
 
-## 典型指令（以現有 scripts 為準）
+## 操作步驟
+
 ```bash
-# 版本驗收前置（檢查 pending release notes、release sync-check）
+cd /mnt/data/code/project/StrawCoding/StrawMoneyBook
+git fetch origin main --tags
+git status   # 工作區應乾淨（可忽略 .hermes.md）
+
 cd frontend
-npm run closeout:pre
-
-# 驗收（Node 測試 + web build + release gates）
 npm run closeout:verify
+# UI 改動另跑：npm run playwright:ui-layout （或對應 suite）
 
-# 發版（patch）
-npm run gpr
+npm run gpr            # patch；唯一合法 bump/tag
+# npm run gpr:minor    # minor（會 notes:clear）
 
-# 發版（minor）
-npm run gpr:minor
+npm run release:sync-check
+git fetch origin main --tags   # origin/main 與 tag 應對齊
 ```
 
-## 常見「為什麼 CI 會擋」的根因
-- `frontend/package.json` version 與最新 `v*` tag 不一致（release sync-check）
-- `release-notes.pending.md` 結構錯誤或 pending 內容不符 gate 條件
+**禁止：** 手動改 `frontend/package.json` 的 `version`、`npm version`、在 gpr 外建 tag。寫碼 worker 禁止跑本頁的 `gpr`。
 
-## 引用來源
-- [`docs/release-checklist.md`](../release-checklist.md)
-- [`release-notes.pending.md`](../../release-notes.pending.md)
+Play 上傳見 [Android-Release-And-Play-Upload](Android-Release-And-Play-Upload)。側載驗銀行見 [Android-Native-Bank-APK](Android-Native-Bank-APK)。
+
+目前測試軌道預設 **internal**（`frontend/android/play-testing-channel.json`）。AAB 成功 ≠ 一般使用者看得到更新。
+
+## 引用
+
 - [`frontend/scripts/release-sync-check.mjs`](../../frontend/scripts/release-sync-check.mjs)
 - [`frontend/package.json`](../../frontend/package.json)
-

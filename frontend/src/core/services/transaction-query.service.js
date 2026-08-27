@@ -1,6 +1,8 @@
 import {
   HOME_TRANSACTION_PAGE_SIZE,
   listAllTransactionsChunked,
+  listAnalysisAddonExpenseFacts,
+  listAnalysisTimeBarFacts,
   listHomeTransactionsPage,
   listRelatedTransactionsForDetail,
   listTransactionsByAccount,
@@ -10,6 +12,7 @@ import {
   listTransactionSearchPage,
   listTransactionsByYear,
   findTransactionListRowById,
+  summarizeAnalysisBreakdown,
   summarizeHomeAssetTotalsByScope,
 } from '@/core/repositories/transaction.repo'
 
@@ -55,6 +58,49 @@ export async function listTransactionsByScope(ledgerId, {
 
 export async function listTransactionsForAnalysis(ledgerId, options = {}) {
   return listTransactionsByScope(ledgerId, options)
+}
+
+export async function loadAnalysisStats(ledgerId, options = {}) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  const scope = {
+    mode: normalizeTransactionScopeMode(options.mode),
+    key: String(options.key ?? '').trim(),
+  }
+  if (!normalizedLedgerId) {
+    return {
+      incomeCategory: [],
+      expenseCategory: [],
+      incomeAccount: [],
+      expenseAccount: [],
+      timeBarFacts: [],
+      addonExpenseFacts: [],
+    }
+  }
+
+  const [
+    incomeCategory,
+    expenseCategory,
+    incomeAccount,
+    expenseAccount,
+    timeBarFacts,
+    addonExpenseFacts,
+  ] = await Promise.all([
+    summarizeAnalysisBreakdown(normalizedLedgerId, { ...scope, type: 'income', scope: 'category' }),
+    summarizeAnalysisBreakdown(normalizedLedgerId, { ...scope, type: 'expense', scope: 'category' }),
+    summarizeAnalysisBreakdown(normalizedLedgerId, { ...scope, type: 'income', scope: 'account' }),
+    summarizeAnalysisBreakdown(normalizedLedgerId, { ...scope, type: 'expense', scope: 'account' }),
+    listAnalysisTimeBarFacts(normalizedLedgerId, scope),
+    listAnalysisAddonExpenseFacts(normalizedLedgerId, scope),
+  ])
+
+  return {
+    incomeCategory,
+    expenseCategory,
+    incomeAccount,
+    expenseAccount,
+    timeBarFacts,
+    addonExpenseFacts,
+  }
 }
 
 export async function listTransactionsForHome(ledgerId, options = {}) {

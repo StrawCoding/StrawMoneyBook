@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { translateMessage } from '@/ui/services/i18n.service.js'
 import { refreshSharedLedgerSession, getSharedLedgerSession } from '@/services/shared-ledger/backend.js'
 import { getAuthStorageHeaders, shouldSendAuthCredentials } from '@/services/shared-ledger/auth-session-storage.js'
-import { createEInvoiceError } from './shared.js'
+import { createEInvoiceError, resolveEInvoiceApiConfigured } from './shared.js'
 
 const PROD_DEFAULT_API_BASE = 'https://api.strawmb.com'
 const EXPLICIT_API_BASE = String(import.meta.env.VITE_EINVOICE_API_BASE_URL ?? '').trim()
@@ -140,10 +140,10 @@ export async function queryEInvoiceInvoicesAlias(payload = {}, options = {}) {
 }
 
 export function isEInvoiceApiConfigured() {
-  if (EINVOICE_CLIENT_SHARED_KEY) return true
-  if (Capacitor.getPlatform() !== 'web') return true
-  if (import.meta.env.PROD) return true
-  return Boolean(getEInvoiceApiBase())
+  return resolveEInvoiceApiConfigured({
+    apiBase: getEInvoiceApiBase(),
+    clientKey: EINVOICE_CLIENT_SHARED_KEY,
+  })
 }
 
 /**

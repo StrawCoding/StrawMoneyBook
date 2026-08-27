@@ -1,6 +1,7 @@
 # StrawMoneyBook App 功能說明（Detailed）
 
-> 本文件依據目前專案程式碼與頁面結構整理，狀態基準為 `2026-04-18`。
+> 本文件依據目前專案程式碼與頁面結構整理，狀態基準為 `2026-08-27`（產品 v1.4.x）。
+> 官方 Wiki：https://strawcoding.github.io/StrawMoneyBookWiki/。in-repo 快照：`docs/wiki/`。
 > 重點是描述「實際產品能力、使用情境、限制與差異化」，不是單純的檔案索引。
 > 如需專案入口與開發指令，請先閱讀 `README.md`；如需檔案對應關係，請搭配 `frontend/StrawMoneyBook_Features_Map.md` 閱讀。
 
@@ -80,7 +81,7 @@ smb298 殘餘根因與還原／發版治本：smb297 雖不再 wipe primary，�
 
 SMB-190 / v1.2.5 後，資料管理頁手動匯出的全部帳本 JSON 與 CSV 檔名都會加入時間戳，避免在 Android 原生檔案儲存或瀏覽器下載時因固定檔名重複覆蓋，讓多次匯出可以保留各自的檔案版本。SMB-216 / v1.2.29 後，資料管理頁的恢復備份、CSV 匯入與重設資料這類可能超過 3 秒的流程會顯示含百分比的加載動畫與目前動作說明，讓使用者知道系統仍在處理而不是壞掉或卡住。
 
-這讓它更適合長期使用，而不是短期記帳後就難以維護。SMB-220 / v1.2.37 後，Debug 頁面新增 Error Log 紀錄區塊，所有 Vue 元件錯誤、全域 window 錯誤、未處理 Promise 拒絕與 toast 彈窗錯誤訊息都會同步記錄在 in-memory buffer（最多 100 筆），開發者可在設定 → 版本資訊 → Debug 頁面即時查看並一鍵匯出。SMB-221 / v1.2.40 後，所有設定子頁面的 h2 標題都加入與功能對應的 Font Awesome icon（class="title-icon"），與「關於我們」頁面一致的視覺風格。SMB-250 / v1.3.29 後曾於設定 → 個人化提供「介面風格」雙模式；smb289 起**只保留現代 mode**：以 Apple HIG 視覺語言（`apple-ui.css`：Large Title、Inset Grouped、Segmented Control、list row + chevron）為唯一版面，移除設定／onboarding 的「傳統／現代」切換，舊 `traditional` preference 啟動時遷移為 `modern`；**不刪**任何入口或首頁子元件（帳本切換、四段期間篩選、資產卡、預算卡、交易流、FAB、BottomNav）；與配色主題（Light／Dark）獨立。SMB-254 / v1.3.33 後，設定首頁（`/settings`）的清單項目列高度調小、清單更緊湊：現代版設定列（`apple-ui.css` 的 `[data-ui-layout='modern'] .settings-page .setting-group .item-link`）垂直 padding 由 `12px 14px` 改為 `8px 14px`，量測列高由 63px 降至 54px；傳統版（`settings.vue` scoped）列間分隔由 `margin-top/padding-top: 12px` 收斂為 `8px`、描述 `small` 行高 1.35→1.3。兩種版型皆保留每列 `min-height: 44px` 的最小點擊高度，水平 padding 與 safe-area 維持不變，因此縮小高度不影響觸控區域與可讀性。
+這讓它更適合長期使用，而不是短期記帳後就難以維護。SMB-220 / v1.2.37 後，Debug 頁面新增 Error Log 紀錄區塊，所有 Vue 元件錯誤、全域 window 錯誤、未處理 Promise 拒絕與 toast 彈窗錯誤訊息都會同步記錄在 in-memory buffer（最多 100 筆），開發者可在設定 → 版本資訊 → Debug 頁面即時查看並一鍵匯出。SMB-221 / v1.2.40 後，所有設定子頁面的 h2 標題都加入與功能對應的 Font Awesome icon（class="title-icon"），與「關於我們」頁面一致的視覺風格。SMB-250 / v1.3.29 後曾於設定 → 個人化提供「介面風格」雙模式；smb289 起**只保留現代 mode**：以 Apple HIG 視覺語言（`apple-ui.css`：Large Title、Inset Grouped、Segmented Control、list row + chevron）為唯一版面，移除設定／onboarding 的「傳統／現代」切換，舊 `traditional` preference 啟動時遷移為 `modern`；**不刪**任何入口或首頁子元件（帳本切換、四段期間篩選、資產卡、預算卡、交易流、FAB、BottomNav）；與配色主題（Light／Dark）獨立。SMB-254 / v1.3.33 後，設定首頁（`/settings`）的清單項目列高度調小、清單更緊湊：現代版設定列（`apple-ui.css` 的 `[data-ui-layout='modern'] .settings-page .setting-group .item-link`）垂直 padding 由 `12px 14px` 改為 `8px 14px`，量測列高由 63px 降至 54px；設定頁（`settings.vue` scoped）列間分隔由 `margin-top/padding-top: 12px` 收斂為 `8px`、描述 `small` 行高 1.35→1.3。現代版保留每列 `min-height: 44px` 的最小點擊高度，水平 padding 與 safe-area 維持不變，因此縮小高度不影響觸控區域與可讀性。
 
 另外，所有需要輸入資料的彈層已統一為共用 bottom sheet flow，桌面與手機都不再保留另一套輸入型 popover，包含表單 dialog、選單、日期與時間選擇器；`AppDialog` 以及各頁自製輸入 sheet 也都收斂到和快速記帳一致的 shared overlay / bottom-sheet primitives，Android 有底部導覽列 inset 的裝置也會一併吃到底部 safe area，且 sheet 卡片背景會直接延伸到底部，和 `BottomNav` 維持同一個底部基準。
 
@@ -122,7 +123,7 @@ SMB-189 / v1.2.5 後，帳本 scoped store 載入前會先執行帳本完整性�
 
 另外，新帳本建立後會立即完成預算模組初始化並可正常載入空月預算，不會因預算項目查詢的欄位歧義中斷 onboarding 或帳本切換流程。
 
-SMB-215 / v1.2.27 後，初始設定後導覽頁（`PostSetupIntroPage`，`/welcome/intro`）的共同帳本步驟會在原本「前往共同帳本」之外，另外提供「恢復備份」與「帳本同步」快速按鈕。SMB-215 Restart / v1.3.1 後再加強：初始化 setup wizard 本身（`WelcomePage`）的第二頁「建立帳本」也會在「已有共同帳本？登入並加入」連結旁，再加上「恢復備份」與「帳本同步」兩顆 secondary-link 按鈕（僅在 `!hasLedgers` 時顯示，帶 database / cloud-arrow-up FontAwesome 圖示）。SMB-215 Restart / v1.3.2 後再修正按鈕目的地：「恢復備份」改指 `/settings/auto-backup`（自動備份頁，含 Google Drive / WebDAV 登入後**立即還原**入口；Tester 反饋「需要有自動備份的項目」），不再指手動 JSON / CSV 匯入頁；「帳本同步」維持 `/settings/google-drive-ledger-sync`。同步把這兩個目的地 route 加上 `meta.allowWithoutSetup: true`，讓使用者在「還沒有帳本」狀態下點按時不會被 `App.vue` 的 welcome guard 攔回。這樣初始化頁面真的能 onboard「換新裝置、想從自動備份還原」的使用者，從 setup wizard 第二頁一鍵進入自動備份還原流程。
+SMB-215 / v1.2.27 後，初始設定後導覽頁（`PostSetupIntroPage`，`/welcome/intro`）的共同帳本步驟會在原本「前往共同帳本」之外，另外提供「恢復備份」與「帳本同步」快速按鈕。進階同步主入口文案指向底部導覽「功能 → 進階功能」，不再寫「設定」或「首頁右上角」。SMB-215 Restart / v1.3.1 後再加強：初始化 setup wizard 本身（`WelcomePage`）的第二頁「建立帳本」也會在「已有共同帳本？登入並加入」連結旁，再加上「恢復備份」與「帳本同步」兩顆 secondary-link 按鈕（僅在 `!hasLedgers` 時顯示，帶 database / cloud-arrow-up FontAwesome 圖示）。SMB-215 Restart / v1.3.2 後再修正按鈕目的地：「恢復備份」改指 `/settings/auto-backup`（自動備份頁，含 Google Drive / WebDAV 登入後**立即還原**入口；Tester 反饋「需要有自動備份的項目」），不再指手動 JSON / CSV 匯入頁；「帳本同步」維持 `/settings/google-drive-ledger-sync`。同步把這兩個目的地 route 加上 `meta.allowWithoutSetup: true`，讓使用者在「還沒有帳本」狀態下點按時不會被 `App.vue` 的 welcome guard 攔回。這樣初始化頁面真的能 onboard「換新裝置、想從自動備份還原」的使用者，從 setup wizard 第二頁一鍵進入自動備份還原流程。
 
 Android 發版目前也已把版本碼策略收斂成由語意版號自動推導的單調遞增規則，並保留一段 Play Store 歷史版本碼安全區間，避免 `0.x.y` 這類版本名稱在新版發佈時反而低於舊的商店版本碼；若 release 產物存在 `mapping.txt`，Play 上傳流程也會一起帶上去模糊化檔，降低 Crash / ANR 排查成本。`npm run gpr` 推送版本 tag 後，GitHub Actions 會建置 AAB、建立 GitHub Release，並透過 Fastlane 發布到 Google Play **測試軌道**；軌道由 `frontend/android/play-testing-channel.json` 的 `channel` 決定（`internal` → phone=`internal`／Wear=`wear:internal`；`closed` → phone=`alpha`／Wear=`wear:WearOS`；禁 `aab_paths` 合軌；Console 須先啟用板型規格 Wear OS 專屬測試群組）。可選 GitHub Actions 變數／env `PLAY_TESTING_CHANNEL` 或 `PLAY_CLOSED_TESTING_TRACK`／`PLAY_WEAR_CLOSED_TESTING_TRACK` 覆寫。SMB-183 後 `gpr` 在 bump 前先執行 `notes:check` 確認專案根目錄的 `release-notes.pending.md` 檔案存在；pending notes 為空時只提示但仍允許發版，patch 發版成功後會封存既有 notes，空 notes 不會建立空白版本區塊，minor 發版則執行 `notes:clear` 清空暫存檔並 push。GitHub Actions 建立 GitHub Release 時也會把暫存檔內容加入 release body，Fastlane 同步填入 Google Play changelog；發佈失敗時暫存檔不會被清空，確保下次發版紀錄不遺失。
 
@@ -299,7 +300,7 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 - 預算剩餘額自動存入存錢罐
 - SMB-260 / v1.3.45 後新增「共同預算池」：可命名並手動設定池總額，綁定多個分類預算（一項最多一池）；首頁 / 月預算總額採 2B 公式（各池 amount + 未入池項目 resolved_amount，入池分類子預算不重複計入）；分類 / 池 / 月總三層各自判斷超支（3C）；池可啟用池層預算存款（`budget_container_month` 月底結算 = max(0, 池總額 − 綁定分類當月支出)），並與分類預算存款互斥；v1.3.48 日池可在池表單直接多選分類，綁定分類不需子預算金額，首頁日模式納入日池日額；SMB-268 後新增共同預算池與一般分類預算項目可選「套用至月份」跨月建立（inclusive，含跨年），服務層仍 fan-out 成各月份獨立 budget/container/item，不新增跨月資料欄位；月池金額維持每月金額語意，日池金額維持每日費率並依各月天數計入，一般項目保留金額模式、日期日均規則、預算存款與未入池 / 同名共同池對應，既有共同預算池與既有分類預算項目編輯仍只改當月，且跨月建立前會檢查所有目標月份同名池、同分類項目與缺少目標月共同池等衝突並阻擋 partial write；複製上月、匯出 / 匯入與共同帳本 snapshot 皆含 `budget_containers`
 - SMB-269 後，每個帳本可在設定中選擇「曆月」或「發薪週期」預算。曆月是既有預設，既有月預算與歷史資料保留原本 `YYYY-MM` 語意；發薪週期以帳本設定的每月固定發薪日為錨，發薪日當天（含）開始，到下一個發薪日前一天（含）結束，29 / 30 / 31 遇到短月時使用該月最後一天，正確涵蓋二月、閏年與跨年。預算資料層新增通用期間 key、起訖日與 mode，不把跨月週期拆成多筆月預算；交易也不搬移，而是依帳本時區下的實際發生日期落入目前預算期間，服務層會用帳本時區把期間起訖轉成 UTC 查詢範圍，不受 CI runner 或裝置 process timezone 影響。一般分類預算與共同預算池都支援發薪週期；固定額不跨月拆帳，日均項目與日池依該週期實際天數計算，指定日曆日規則只抓週期範圍內符合的日期。預算頁與首頁預算卡會顯示目前週期起訖、上一期 / 下一期與下次發薪日；交易清單、日曆與分析頁仍維持曆月查帳預設。
-- SMB-271 後，發薪週期不再只藏在帳本詳細設定：新增或編輯一般分類預算項目、以及新增或編輯共同預算池時，表單內都有「目前帳本預算期間」區塊，可直接選曆月 / 發薪週期並設定每月發薪日。UI 會明確提醒這是目前帳本的預算期間設定，切換會影響該帳本預算頁與首頁預算卡，不是只有單一項目或單一池改變；資料層仍沿用帳本層 `budget_period_mode` / `budget_pay_day`，不把每個預算項目改成互不相容的獨立週期，也不搬移既有曆月或發薪週期資料。新建項目 / 共同池時若同時切換週期，系統會先套用新帳本週期再建立；編輯既有項目 / 共同池時則先保存目前期間的 row，再套用帳本週期並重新載入目前預算期間，避免舊資料被意外搬期。
+- SMB-271 後，發薪週期不再只藏在帳本詳細設定：新增或編輯一般分類預算項目、以及新增或編輯共同預算池時，表單內都有「目前帳本預算期間」區塊，可直接選曆月 / 發薪週期並設定每月發薪日。UI 會明確提醒這是目前帳本的預算期間設定，切換會影響該帳本預算頁與首頁預算卡，不是只有單一項目或單一池改變；資料層仍沿用帳本層 `budget_period_mode` / `budget_pay_day`，不把每個預算項目改成互不相容的獨立週期，也不搬移既有曆月或發薪週期資料。新建項目 / 共同池時若同時切換週期，系統會先套用新帳本週期再建立；編輯既有項目 / 共同池時則先保存目前期間的 row，再套用帳本週期並重新載入目前預算期間，避免舊資料被意外搬期。預算頁本體（`/budget`）另有帳本層切換（`budget-page-period-settings`），不必先開 sheet。
 - SMB-272 後，App 啟動、重啟或 reload 若遇到既有發薪週期狀態（例如預算 store 的 `monthKey` 為 `pay:YYYY-MM-DD`）不會再把它當成首頁曆月交易篩選，也不會把非法月份送進 `toISOString()` / `Intl.DateTimeFormat` 造成 `Invalid time value`。首頁月份篩選只接受 `YYYY-MM`；預算載入能正規解析 persisted pay-cycle key；交易查詢 repo 對非法年 / 月 / 日 key 回空結果而非拋錯。Debug Error Log 仍保留 message、stack、source、route 與 component/info，方便追查啟動期 route 尚未完成時的錯誤。
 - SMB-273 後，發薪週期會在發薪日邊界自動 rollover：發薪日前一天仍屬舊期，發薪日當天 00:00 起（含）會重新解析為新期。App 首次啟動、完整重啟、頁面 reload、Android 從背景回前景、web/app shell focus 與 visibility 回可見都會重新以帳本時區下的今天載入目前預算期間，首頁預算卡與預算頁不會停在上一期，也不需要使用者手動按上一期 / 下一期。固定額、已花費 / 剩餘、日均 weekday / monthday、共同日池與預算存款結算仍依解析後的實際週期起訖日計算，既有曆月模式與歷史發薪週期資料不搬移。
 - SMB-274 後，app-shell 同時觸發 focus 與 visibility reload 時，若兩個預算快照請求同時建立同一期資料，後到請求會讀回先完成建立的期間，而不會留下 SQLite `budgets.ledger_id, budgets.month_key` 唯一鍵 runtime error。其他資料庫錯誤仍正常回報。
@@ -366,7 +367,7 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 - 細項頁
 - 分析頁右上角一鍵直接匯出 PDF（快捷主路徑）
 - 分析頁「交易報表」入口可進入完整報表頁 `/analysis/print`
-- `/analysis/print` 交易報表匯出頁：期間客製化（全部／年／月／日／自訂）、螢幕預覽、PDF／CSV；匯出成功後顯示「開啟檔案」（`analysis_print.open_link`／`openFileUrl`），失敗不假顯示；含 BottomNav 與返回分析
+- `/analysis/print` 交易報表匯出頁：期間客製化（全部／年／月／日／自訂）、螢幕預覽、PDF／CSV；匯出成功後顯示「開啟檔案」（`analysis_print.open_link`／`openFileUrl`），失敗不假顯示；`hideAppChrome` 隱藏 BottomNav，頁內提供返回分析
 - 圓餅圖可直接點擊查看目前最大分類 / 帳戶明細，並提供 hover / press 回饋
 - 圓餅圖尺寸會隨較窄螢幕縮放，避免固定 220px 在小裝置失衡
 - 互動分析頁完整跟隨 App Dark／Light mode（背景、文字、卡片、圖表軌道／文字、期間篩選與 BottomNav 共存）

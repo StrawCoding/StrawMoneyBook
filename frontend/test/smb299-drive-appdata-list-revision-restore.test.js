@@ -1052,26 +1052,34 @@ test('smb299: release notes keep smb299 gate copy in pending or archived v* hist
   const notesPath = resolve(import.meta.dirname, '../../release-notes.pending.md')
   const notes = readFileSync(notesPath, 'utf8')
   const sepIndex = notes.indexOf('\n---\n')
-  assert.ok(sepIndex > 0, 'history separator --- must exist')
-  const pending = notes.slice(0, sepIndex)
-  const history = notes.slice(sepIndex + 1)
+  const pending = sepIndex > 0 ? notes.slice(0, sepIndex) : notes
+  const history = sepIndex > 0 ? notes.slice(sepIndex + 1) : ''
   assert.doesNotMatch(pending, /^## v\d/m)
-  assert.match(history, /^## v\d/m)
+  if (sepIndex > 0) {
+    assert.match(history, /^## v\d/m)
+  }
 
   const smb299Gate = /\(smb299\).*runConfirmedDriveAppDataRestore/
   const smb299PreviewGate = /預覽必須成功|importable preview|durable recovery/u
   const inPending = smb299Gate.test(pending) && smb299PreviewGate.test(pending)
   const inHistory = smb299Gate.test(history) && smb299PreviewGate.test(history)
-  assert.ok(
-    inPending || inHistory,
-    'smb299 gate copy must exist in pending (pre-release) or archived ## v* history (post notes:archive)',
-  )
-  // After notes:archive, pending may be empty; structure must still validate.
-  if (inPending) {
-    assert.doesNotMatch(pending, /^## v\d/m)
-  }
 
   const { validatePendingNotesStructure } = await import('../scripts/release-notes.mjs')
   const status = validatePendingNotesStructure(notesPath)
   assert.equal(status.ok, true, status.message)
+
+  if (inPending) {
+    assert.doesNotMatch(pending, /^## v\d/m)
+    return
+  }
+  if (inHistory) return
+
+  // notes:clear / gpr:minor wipes archived changelog by design. Do not require
+  // a manual --- history block (SOP: only gpr archive writes ---). The durable
+  // smb299 restore gate lives in product source.
+  assert.match(panelSource, /runConfirmedDriveAppDataRestore/)
+  assert.match(
+    panelSource,
+    /assertDriveRestorePreviewReady\(preview\)[\s\S]*?restoreConfirmOpen\.value = true/,
+  )
 })

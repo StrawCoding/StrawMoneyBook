@@ -23,10 +23,6 @@
   padding: 4px 2px 10px;
 }
 
-[data-ui-layout='traditional'] .home-large-title {
-  display: none;
-}
-
 [data-ui-layout='modern'] .analysis-page > .card.panel > header h2,
 [data-ui-layout='modern'] .assets-page .page-title,
 [data-ui-layout='modern'] .feature-list-page-title,
@@ -258,35 +254,4 @@
   background: var(--card);
   color: var(--text);
   border: 0.5px solid color-mix(in srgb, var(--border) 70%, transparent);
-}
-
-/* ── Personalization layout picker ────────────────────────────── */
-
-[data-ui-layout='modern'] .layout-switch {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-[data-ui-layout='modern'] .layout-btn {
-  border: 1px solid var(--field-border);
-  border-radius: var(--apple-inset-radius);
-  background: var(--bg-soft);
-  color: var(--text);
-  text-align: left;
-  padding: 12px;
-  display: grid;
-  gap: 4px;
-  cursor: pointer;
-}
-
-[data-ui-layout='modern'] .layout-btn.active {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent) inset;
-}
-
-[data-ui-layout='modern'] .layout-btn small {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.35;
 }

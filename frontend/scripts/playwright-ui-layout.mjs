@@ -2578,4 +2578,14 @@ async function assertSharedLedgerAuthAndEditorSurfaces() {
   assert.equal(home.hasFeed, true, JSON.stringify(home, null, 2))
   assert.equal(home.editorChipCount, 2, JSON.stringify(home, null, 2))
   assert.equal(home.hasCreatorAndEditor, true, JSON.stringify(home, null, 2))
+
+  await runPlaywrightCli(['goto', `${baseUrl}/transactions/quick-add`])
+  await delay(1200)
+  const chromeHidden = await evalPage(`() => ({
+    path: window.location.pathname,
+    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+    fullScreen: Boolean(document.querySelector('.app-shell.full-screen-route')),
+  })`)
+  assert.equal(chromeHidden.hasBottomNav, false, JSON.stringify(chromeHidden, null, 2))
+  assert.equal(chromeHidden.fullScreen, true, JSON.stringify(chromeHidden, null, 2))
 }

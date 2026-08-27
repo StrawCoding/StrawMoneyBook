@@ -2250,4 +2250,9 @@ export const MESSAGES_EN = {
     'analysis_print.toast.preview_missing': 'Report preview is missing',
     'analysis_print.toast.pdf_saved': 'Downloaded PDF {filename} to {location}',
     'analysis_print.toast.pdf_downloaded': 'Downloaded PDF {filename}',
+    'post_setup_intro.features.highlight': 'Open sync and management pages from Advanced on the Features tab in the bottom navigation.',
+    'post_setup_intro.features.point_3': 'To find advanced tools later, start from bottom nav Features → Advanced.',
+    'post_setup_intro.shared_ledger.highlight': 'Shared ledgers are a membership feature. After signing in, enable them from Features → Advanced and manage sync status and members.',
+    'post_setup_intro.shared_ledger.point_3': 'Check sharing status, version, and members anytime from Features → Advanced.',
+    'post_setup_intro.ledger_sync.point_3': 'Turn ledger sync on or off per ledger from Features → Advanced.',
 }

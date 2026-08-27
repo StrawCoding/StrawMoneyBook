@@ -70,7 +70,8 @@ test('bottom nav keeps 5 tabs in modern-only layout (no /more or 4-tab CTA)', ()
   assert.doesNotMatch(bottomNavSource, /isCta: true/)
   assert.match(bottomNavSource, /fa-solid fa-grip/)
   assert.match(bottomNavSource, /to: '\/features'/)
-  assert.match(bottomNavSource, /useUiLayout/)
+  assert.match(bottomNavSource, /class="bottom-nav modern"/)
+  assert.doesNotMatch(bottomNavSource, /useUiLayout/)
 })
 
 test('home keeps all blocks and FAB under modern-only layout', () => {
@@ -81,7 +82,8 @@ test('home keeps all blocks and FAB under modern-only layout', () => {
   assert.match(homeSource, /data-testid="home-period-filter"/)
   assert.match(homeSource, /data-testid="home-fab"/)
   assert.match(homeSource, /useHomePeriodFilter/)
-  assert.match(homeSource, /useUiLayout/)
+  assert.match(homeSource, /class="view-root home-modern"/)
+  assert.doesNotMatch(homeSource, /useUiLayout/)
 })
 
 test('router does not register /more page', () => {

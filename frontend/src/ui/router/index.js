@@ -65,7 +65,7 @@ const router = createRouter({
       name: 'analysis-print',
       path: '/analysis/print',
       component: () => import('@/ui/views/AnalysisPrintPage.vue'),
-      meta: { tab: 'analysis' },
+      meta: { tab: 'analysis', hideAppChrome: true },
     },
     {
       name: 'analysis-category-detail',
@@ -83,13 +83,13 @@ const router = createRouter({
       name: 'transaction-quick-add',
       path: '/transactions/quick-add',
       component: () => import('@/ui/views/BookkeepingPage.vue'),
-      meta: { tab: 'home' },
+      meta: { tab: 'home', hideAppChrome: true },
     },
     {
       name: 'transaction-qna-add',
       path: '/transactions/qna',
       component: () => import('@/ui/views/BookkeepingPage.vue'),
-      meta: { tab: 'home' },
+      meta: { tab: 'home', hideAppChrome: true },
     },
     {
       name: 'transaction-calendar',
@@ -107,7 +107,7 @@ const router = createRouter({
       name: 'transaction-edit',
       path: '/transactions/:id/edit',
       component: () => import('@/ui/views/TransactionEditPage.vue'),
-      meta: { tab: 'home' },
+      meta: { tab: 'home', hideAppChrome: true },
     },
     {
       name: 'features',
@@ -125,7 +125,7 @@ const router = createRouter({
       name: 'ai-auto-bookkeeping',
       path: '/ai-auto-bookkeeping',
       component: () => import('@/ui/views/BookkeepingPage.vue'),
-      meta: { tab: 'home' },
+      meta: { tab: 'home', hideAppChrome: true },
     },
     {
       name: 'assets',
@@ -137,6 +137,7 @@ const router = createRouter({
       name: 'icon-picker',
       path: '/icons/pick',
       component: () => import('@/ui/views/IconPickerPage.vue'),
+      meta: { hideAppChrome: true },
     },
     {
       name: 'settings',
@@ -198,7 +199,7 @@ const router = createRouter({
       path: '/settings/bank-sync/new',
       name: 'settings-bank-sync-create',
       component: () => import('@/ui/views/settings/SettingsBankSyncCreatePage.vue'),
-      meta: { tab: 'settings' },
+      meta: { tab: 'settings', hideAppChrome: true },
     },
     {
       path: '/settings/bank-sync/:id',
@@ -299,13 +300,13 @@ const router = createRouter({
       path: '/settings/auto-fill-rules/new',
       name: 'settings-auto-fill-rule-create',
       component: () => import('@/ui/views/settings/SettingsAutoFillRuleEditPage.vue'),
-      meta: { tab: 'settings' },
+      meta: { tab: 'settings', hideAppChrome: true },
     },
     {
       path: '/settings/auto-fill-rules/:id',
       name: 'settings-auto-fill-rule-edit',
       component: () => import('@/ui/views/settings/SettingsAutoFillRuleEditPage.vue'),
-      meta: { tab: 'settings' },
+      meta: { tab: 'settings', hideAppChrome: true },
     },
     {
       path: '/settings/version-info',
@@ -392,21 +393,21 @@ const router = createRouter({
       path: '/claim-sheets/:id/edit',
       component: () => import('@/ui/views/claims/ClaimSheetEditPage.vue'),
       props: true,
-      meta: { tab: 'home' },
+      meta: { tab: 'home', hideAppChrome: true },
     },
     {
       name: 'claim-sheet-import',
       path: '/claim-sheets/:id/import-reimbursements',
       component: () => import('@/ui/views/claims/ClaimSheetImportPage.vue'),
       props: true,
-      meta: { tab: 'home' },
+      meta: { tab: 'home', hideAppChrome: true },
     },
     {
       name: 'claim-sheet-import-borrow-loan',
       path: '/claim-sheets/:id/import-borrow-loans',
       component: () => import('@/ui/views/claims/ClaimSheetImportBorrowLoanPage.vue'),
       props: true,
-      meta: { tab: 'home' },
+      meta: { tab: 'home', hideAppChrome: true },
     },
     {
       name: 'claim-sheet-detail',
@@ -432,7 +433,7 @@ const router = createRouter({
       path: '/reimbursements/:id/edit',
       component: () => import('@/ui/views/reimbursements/ReimbursementEditPage.vue'),
       props: true,
-      meta: { tab: 'home' },
+      meta: { tab: 'home', hideAppChrome: true },
     },
     {
       name: 'reimbursement-offset-about',

@@ -18,6 +18,10 @@
 - refresh token reuse 偵測：重複使用舊 token 會撤銷整個 token family
 - refresh token 只存 hash，不存明文（避免資料庫外洩造成可用 token 泄漏）
 
+## Drive OAuth／405／refresh
+
+Google 備份、server auth code、refresh token 類問題要同時查前端 auth flow 與後端 `/api/google/oauth/*` host，不要只修 UI 登入。細節：[`docs/google-backend-auth.md`](../google-backend-auth.md)。Cookie session 只負責 restore；呼叫 API 仍要 access token。
+
 ## 安全政策（必讀）
 主要規範：
 - 不提交 secret/密鑰檔（Wiki 只描述用途/必填/行為）

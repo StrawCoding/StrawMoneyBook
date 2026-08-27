@@ -1,5 +1,5 @@
 <template>
-  <div class="view-root" :class="{ 'home-modern': isModern }" data-testid="home-view">
+  <div class="view-root home-modern" data-testid="home-view">
     <h1 class="home-large-title">{{ t('nav.home') }}</h1>
     <section class="stack">
       <article class="card ledger-card">
@@ -72,7 +72,6 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import HomeAssetSummaryCard from '@/ui/components/home/HomeAssetSummaryCard.vue'
-import { useUiLayout } from '@/ui/composables/useUiLayout'
 import { useHomePeriodFilter } from '@/ui/composables/useHomePeriodFilter'
 import HomeBudgetSummaryCard from '@/ui/components/home/HomeBudgetSummaryCard.vue'
 import HomeCreditSummaryCard from '@/ui/components/home/HomeCreditSummaryCard.vue'
@@ -86,7 +85,6 @@ import { getPreferredBookkeepingPath } from '@/ui/services/bookkeeping-mode.serv
 const router = useRouter()
 const budgetStore = useBudgetStore()
 const { t } = useI18n()
-const { isModern } = useUiLayout()
 
 const {
   filterMode,

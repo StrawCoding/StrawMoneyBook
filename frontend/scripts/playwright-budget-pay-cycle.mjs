@@ -109,6 +109,8 @@ async function assertSourceContract() {
     readFile(resolve(frontendDir, 'src/core/db/migrations/039_budget_pay_cycle.sql'), 'utf8'),
   ])
 
+  assert.match(budgetingVue, /data-testid="budget-page-period-settings"/)
+  assert.match(budgetingVue, /data-testid="budget-page-period-pay-cycle"/)
   assert.match(budgetingVue, /pay_cycle_budget/)
   assert.match(budgetingVue, /goPreviousPeriod/)
   assert.match(budgetingVue, /next_pay_day/)

@@ -57,6 +57,8 @@ test('smb287 data-loading hot paths use SQL summarize, staged bootstrap, detail 
   assert.match(transactionRepoSource, /await yieldToMainThread\(\)/)
 
   assert.match(transactionQueryServiceSource, /summarizeHomeAssetTotalsByScope/)
+  assert.match(transactionQueryServiceSource, /loadAnalysisStats/)
+  assert.match(transactionRepoSource, /export async function summarizeAnalysisBreakdown/)
   assert.match(transactionQueryServiceSource, /listAllTransactionsChunked/)
   assert.match(transactionQueryServiceSource, /listRelatedTransactionsForDetail/)
   assert.doesNotMatch(transactionQueryServiceSource, /listAllTransactions\(ledgerId, \{ mode: 'all' \}\)/)

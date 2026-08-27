@@ -1,8 +1,20 @@
 # SMB-130 架構審查與收斂方向
 
-本文件記錄 `SMB-130` 實作前確認的結構性問題，作為本次重構的邊界與驗收依據。
+本文件記錄 `SMB-130` **實作前**確認的結構性問題。產品已過 v1.4.0；狀態以 2026-08-27 全產品優化方案為準。操作百科：`docs/wiki/Optimization-Plan.md`。
 
-## 已確認問題
+## 狀態總表（2026-08-27）
+
+| # | 原問題 | 狀態 |
+|---|---|---|
+| 1 | core→ui Pinia／router | **FIXED**（具名路徑）。殘餘：`import.service`／claim-sheet 仍有 ui import；membership 仍胖。 |
+| 2 | View 直打 `transaction.repo` | **FIXED**（具名頁改 `transaction-query.service`）。分析 stats 改 SQL `GROUP BY`。 |
+| 3 | `main.js` 啟動鏈過集中 | **PARTIAL**：邏輯搬到 `app-runtime.service.js`，濃度未消。 |
+| 4 | `ledger.store` 當 coordinator | **PARTIAL**：lifecycle 抽到 `ledger-runtime.service.js`。 |
+| 5 | 分析／搜尋頁過胖 | **PARTIAL**：數學與搜尋 composable 已抽；分析不再全量載入。 |
+| 6 | 後端 route 過胖 | **PARTIAL**：dispatch／route-table 已拆；handler 仍混 orchestration。 |
+| 7 | 過多 `*-source.test.js` | **OPEN（政策）**：禁止新行為再加 source test；既有逐步改行為測試。 |
+
+## 已確認問題（實作前原文）
 
 ### 1. `core -> ui` 反向依賴
 

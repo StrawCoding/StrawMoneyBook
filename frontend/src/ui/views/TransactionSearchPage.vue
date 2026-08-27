@@ -289,7 +289,9 @@ h2 {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 10px
+  gap: 10px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
 }
 .tx-main {
   display: grid;

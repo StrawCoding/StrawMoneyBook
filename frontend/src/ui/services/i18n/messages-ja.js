@@ -1829,4 +1829,9 @@ export const MESSAGES_JA = {
   'ledger_switcher.placeholder': '台帳を選択してください',
   'ledger_switcher.toast.switched': '台帳を切り替えました',
   'ledger_switcher.toast.failed': '台帳の切り替えに失敗しました',
+  'post_setup_intro.features.highlight': '下部ナビの「機能」ページの「高度な機能」から、同期と管理画面をすぐ開けます。',
+  'post_setup_intro.features.point_3': '高度な機能は、下部ナビの「機能」→「高度な機能」から探すのがいちばん早いです。',
+  'post_setup_intro.shared_ledger.highlight': '共有台帳は会員機能です。ログイン後、「機能」→「高度な機能」から有効化し、同期状態とメンバーを管理できます。',
+  'post_setup_intro.shared_ledger.point_3': '共有状態・バージョン・メンバー一覧は「機能」→「高度な機能」からいつでも確認できます。',
+  'post_setup_intro.ledger_sync.point_3': '台帳ごとの同期のオン／オフは「機能」→「高度な機能」で切り替えられます。',
 }

@@ -109,13 +109,13 @@ const slides = computed(() => {
       icon: 'fa-solid fa-sparkles',
       title: t('post_setup_intro.features.title', '特色功能介紹'),
       description: t('post_setup_intro.features.description', '除了基本記帳，還可以直接延伸到借貸、報銷、存錢罐與訂閱追蹤。'),
-      highlight: t('post_setup_intro.features.highlight', '從首頁旁的功能列表，可以快速打開較進階的管理頁。'),
+      highlight: t('post_setup_intro.features.highlight', '從底部導覽「功能」頁的進階功能，可以快速打開同步與管理頁。'),
       actionLabel: t('post_setup_intro.features.action', '前往功能列表'),
       to: '/features',
       points: [
         t('post_setup_intro.features.point_1', 'AI 記帳、快速新增與搜尋交易都已經可以直接使用。'),
         t('post_setup_intro.features.point_2', '借貸、報銷、請款單與訂閱管理都整合在同一套帳本內。'),
-        t('post_setup_intro.features.point_3', '之後要找進階功能，先從首頁右上角選單開始最快。'),
+        t('post_setup_intro.features.point_3', '之後要找進階功能，先從底部「功能」→「進階功能」開始最快。'),
       ],
     },
     {
@@ -137,7 +137,7 @@ const slides = computed(() => {
       icon: 'fa-solid fa-people-group',
       title: t('post_setup_intro.shared_ledger.title', '共同帳本'),
       description: t('post_setup_intro.shared_ledger.description', '建立共同帳本後，可分享加入連結或以 Email 邀請對方，讓多人共同記帳並即時同步。'),
-      highlight: t('post_setup_intro.shared_ledger.highlight', '共同帳本為會員功能，登入帳號後可從設定啟用，並管理同步狀態與成員。'),
+      highlight: t('post_setup_intro.shared_ledger.highlight', '共同帳本為會員功能，登入帳號後可從功能頁「進階功能」啟用，並管理同步狀態與成員。'),
       actionLabel: t('post_setup_intro.shared_ledger.action', '前往共同帳本'),
       to: '/settings/shared-ledgers',
       extraActions: [
@@ -158,7 +158,7 @@ const slides = computed(() => {
       points: [
         t('post_setup_intro.shared_ledger.point_1', '建立後可分享加入連結，或以 Email 邀請對方加入共同帳本。'),
         t('post_setup_intro.shared_ledger.point_2', '每次記帳都會自動推送同步，確保所有成員看到一致的帳本。'),
-        t('post_setup_intro.shared_ledger.point_3', '可在設定中隨時查看共享狀態、版本與成員列表。'),
+        t('post_setup_intro.shared_ledger.point_3', '可在功能頁「進階功能」隨時查看共享狀態、版本與成員列表。'),
       ],
     },
     {
@@ -172,7 +172,7 @@ const slides = computed(() => {
       points: [
         t('post_setup_intro.ledger_sync.point_1', '每次記帳後會自動推送最新快照到 Google Drive，無須手動操作。'),
         t('post_setup_intro.ledger_sync.point_2', '換裝置時登入 Google 帳號並拉取，就能快速還原所有已啟用同步的帳本。'),
-        t('post_setup_intro.ledger_sync.point_3', '可以在設定中為每個帳本分別開啟或關閉同步功能。'),
+        t('post_setup_intro.ledger_sync.point_3', '可以在功能頁「進階功能」為每個帳本分別開啟或關閉同步功能。'),
       ],
     },
     {

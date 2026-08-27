@@ -174,6 +174,83 @@ export function buildThemePalette(count, swatches = []) {
   return palette
 }
 
+export function decorateBreakdownRows(aggregates = [], {
+  scope = 'category',
+  categoryNameMap = new Map(),
+  categoryIconMap = new Map(),
+  accountNameMap = new Map(),
+  accountIconMap = new Map(),
+  getAddonLabel = (label) => `附加項目：${label}`,
+  getUncategorizedLabel = () => '未分類',
+  getUnassignedAccountLabel = () => '未指定帳戶',
+  swatches = [],
+} = {}) {
+  const rows = (Array.isArray(aggregates) ? aggregates : [])
+    .map((item) => ({
+      id: item.id,
+      amountMinor: Number(item.amountMinor ?? 0) || 0,
+      count: Number(item.count ?? 0) || 0,
+      name: resolveBreakdownName(item.id, scope, {
+        accountNameMap,
+        categoryNameMap,
+        getAddonLabel,
+        getUnassignedAccountLabel,
+        getUncategorizedLabel,
+      }),
+      icon: resolveBreakdownIcon(item.id, scope, {
+        accountIconMap,
+        categoryIconMap,
+      }),
+    }))
+    .filter((row) => row.amountMinor > 0)
+    .sort((left, right) => right.amountMinor - left.amountMinor)
+
+  const total = rows.reduce((sum, row) => sum + row.amountMinor, 0)
+  if (!total) return []
+
+  const palette = buildThemePalette(rows.length, swatches)
+  return rows.map((row, index) => ({
+    ...row,
+    color: palette[index],
+    percent: Math.round((row.amountMinor / total) * 100),
+  }))
+}
+
+export function mergeAddonSplitsIntoCategoryExpense(aggregates = [], addonTransactions = [], getAddonLabel) {
+  const map = new Map()
+  for (const item of aggregates ?? []) {
+    const id = String(item?.id ?? '').trim()
+    if (!id) continue
+    map.set(id, {
+      id,
+      amountMinor: Number(item.amountMinor ?? 0) || 0,
+      count: Number(item.count ?? 0) || 0,
+    })
+  }
+
+  for (const tx of addonTransactions ?? []) {
+    const parts = getBreakdownPartsForTransaction(tx, {
+      type: 'expense',
+      scope: 'category',
+      getAddonLabel,
+    })
+    const categoryId = tx?.category_id || '__uncategorized__'
+    for (const part of parts) {
+      if (!isAddonBreakdownId(part.id)) continue
+      const current = map.get(categoryId)
+      if (current) {
+        current.amountMinor = Math.max(0, current.amountMinor - part.amountMinor)
+      }
+      const addon = map.get(part.id) || { id: part.id, amountMinor: 0, count: 0 }
+      addon.amountMinor += part.amountMinor
+      addon.count += part.count
+      map.set(part.id, addon)
+    }
+  }
+
+  return [...map.values()].filter((row) => row.amountMinor > 0)
+}
+
 export function buildBreakdownRows({
   transactions = [],
   type,
@@ -200,34 +277,20 @@ export function buildBreakdownRows({
     }
   }
 
-  const rows = Array.from(map.entries())
-    .map(([id, aggregate]) => ({
-      id,
-      amountMinor: aggregate.amountMinor,
-      count: aggregate.count,
-      name: resolveBreakdownName(id, scope, {
-        accountNameMap,
-        categoryNameMap,
-        getAddonLabel,
-        getUnassignedAccountLabel,
-        getUncategorizedLabel,
-      }),
-      icon: resolveBreakdownIcon(id, scope, {
-        accountIconMap,
-        categoryIconMap,
-      }),
-    }))
-    .sort((left, right) => right.amountMinor - left.amountMinor)
-
-  const total = rows.reduce((sum, row) => sum + row.amountMinor, 0)
-  if (!total) return []
-
-  const palette = buildThemePalette(rows.length, swatches)
-  return rows.map((row, index) => ({
-    ...row,
-    color: palette[index],
-    percent: Math.round((row.amountMinor / total) * 100),
-  }))
+  return decorateBreakdownRows(
+    Array.from(map.entries()).map(([id, aggregate]) => ({ id, ...aggregate })),
+    {
+      scope,
+      categoryNameMap,
+      categoryIconMap,
+      accountNameMap,
+      accountIconMap,
+      getAddonLabel,
+      getUncategorizedLabel,
+      getUnassignedAccountLabel,
+      swatches,
+    },
+  )
 }
 
 export function buildAccountBalanceBreakdown({

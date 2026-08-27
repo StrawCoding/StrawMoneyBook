@@ -2236,4 +2236,9 @@ export const MESSAGES_ZH_TW = {
     'analysis_print.toast.preview_missing': '找不到報表預覽內容',
     'analysis_print.toast.pdf_saved': '已下載 PDF {filename}，存到 {location}',
     'analysis_print.toast.pdf_downloaded': '已下載 PDF {filename}',
+    'post_setup_intro.features.highlight': '從底部導覽「功能」頁的進階功能，可以快速打開同步與管理頁。',
+    'post_setup_intro.features.point_3': '之後要找進階功能，先從底部「功能」→「進階功能」開始最快。',
+    'post_setup_intro.shared_ledger.highlight': '共同帳本為會員功能，登入帳號後可從功能頁「進階功能」啟用，並管理同步狀態與成員。',
+    'post_setup_intro.shared_ledger.point_3': '可在功能頁「進階功能」隨時查看共享狀態、版本與成員列表。',
+    'post_setup_intro.ledger_sync.point_3': '可以在功能頁「進階功能」為每個帳本分別開啟或關閉同步功能。',
 }

@@ -3,6 +3,10 @@
 ## 目的
 讓維護者可以在本機快速完成：環境安裝、前端/後端啟動、以及常用檢查指令。
 
+常用 ports：前端 Vite 預設可能撞 **3000 / 8080 / 8081**（執行前確認占用）。`npm run dev` 預設打正式 API `https://api.strawmb.com`，不必先開本機後端。
+
+進階同步入口在 App 內 **功能頁 → 進階功能**，不是設定主清單。完整 SOP 見 [Home](Home)。
+
 ## 適用範圍
 - 開發中功能/修 bug（前端 Vue、後端 Node）
 - 需要本機測試（Node test、Vite build、Playwright suite）

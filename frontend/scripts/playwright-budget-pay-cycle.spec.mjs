@@ -23,6 +23,9 @@ async (page) => {
   await performWelcomeSetup()
   await finishIntroIfVisible()
   await navigateToBudget()
+  await page.waitForSelector('[data-testid="budget-page-period-settings"]')
+  await page.waitForSelector('[data-testid="budget-page-period-calendar"]')
+  await page.waitForSelector('[data-testid="budget-page-period-pay-cycle"]')
   await assertBodyMatches(/Monthly Budget|每月預算|月預算|月間予算/u)
   await assertBodyDoesNotMatch(/Next pay day|下次發薪日|次の給与日/u)
 

@@ -595,6 +595,148 @@ export async function summarizeHomeAssetTotalsByScope(ledgerId, options = {}) {
   }
 }
 
+function analysisCountableInnerSelectSql(whereSql, deductedSql, hasRefundLinkSql) {
+  return `SELECT
+           t.account_id AS account_id,
+           t.category_id AS category_id,
+           t.type AS type,
+           t.origin_type AS origin_type,
+           t.external_ref_id AS external_ref_id,
+           t.note AS note,
+           t.amount_minor AS amount_minor,
+           t.occurred_at AS occurred_at,
+           t.include_in_analysis AS include_in_analysis,
+           c.name AS category_name,
+           CASE
+             WHEN ${deductedSql} > 0 THEN MIN(ABS(t.amount_minor), ${deductedSql})
+             WHEN ${hasRefundLinkSql} = 1 THEN ABS(t.amount_minor)
+             ELSE 0
+           END AS refund_applied_minor,
+           ${deductedSql} AS refund_deducted_minor,
+           ${hasRefundLinkSql} AS has_refund_link
+         FROM transactions t
+         LEFT JOIN categories c
+           ON c.ledger_id = t.ledger_id
+          AND c.id = t.category_id
+         WHERE ${whereSql}
+           AND COALESCE(t.include_in_analysis, 1) != 0
+           AND COALESCE(t.origin_type, '') != 'loan_payment'`
+}
+
+export async function summarizeAnalysisBreakdown(ledgerId, options = {}) {
+  assertLedgerId(ledgerId)
+  const scopeFilter = buildHomeScopeFilterClauses(options.mode, options.key)
+  if (!scopeFilter) return []
+
+  const normalizedType = options.type === 'income' ? 'income' : 'expense'
+  const dimension = options.scope === 'account' ? 'account' : 'category'
+  const bucketExpr = dimension === 'account'
+    ? `COALESCE(NULLIF(TRIM(scoped.account_id), ''), '__unassigned_account__')`
+    : `COALESCE(NULLIF(TRIM(scoped.category_id), ''), '__uncategorized__')`
+  const amountExpr = normalizedType === 'expense'
+    ? 'ABS(scoped.effective_minor)'
+    : 'scoped.effective_minor'
+  const whereSql = scopeFilter.clauses.join('\n       AND ')
+  const params = [ledgerId, ...scopeFilter.values, normalizedType]
+  const deductedSql = refundDeductedMinorSql('t')
+  const hasRefundLinkSql = `CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END`
+
+  const result = await query(
+    `SELECT
+       ${bucketExpr} AS bucket_id,
+       COUNT(*) AS txn_count,
+       COALESCE(SUM(${amountExpr}), 0) AS amount_minor
+     FROM (
+       SELECT
+         inner_row.account_id AS account_id,
+         inner_row.category_id AS category_id,
+         ${homeIncomeExpenseEffectiveMinorSql('inner_row')} AS effective_minor
+       FROM (
+         ${analysisCountableInnerSelectSql(whereSql, deductedSql, hasRefundLinkSql)}
+           AND t.type = ?
+       ) inner_row
+     ) scoped
+     WHERE scoped.effective_minor != 0
+     GROUP BY bucket_id
+     ORDER BY amount_minor DESC;`,
+    params,
+  )
+
+  return rowsOf(result).map((row) => ({
+    id: String(row?.bucket_id ?? '').trim(),
+    amountMinor: Number(row?.amount_minor ?? 0) || 0,
+    count: Number(row?.txn_count ?? 0) || 0,
+  })).filter((row) => row.id && row.amountMinor > 0)
+}
+
+export async function listAnalysisTimeBarFacts(ledgerId, options = {}) {
+  assertLedgerId(ledgerId)
+  const scopeFilter = buildHomeScopeFilterClauses(options.mode, options.key)
+  if (!scopeFilter) return []
+
+  const whereSql = scopeFilter.clauses.join('\n       AND ')
+  const params = [ledgerId, ...scopeFilter.values]
+  const deductedSql = refundDeductedMinorSql('t')
+  const hasRefundLinkSql = `CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END`
+
+  const result = await query(
+    `SELECT
+       inner_row.type AS type,
+       inner_row.origin_type AS origin_type,
+       inner_row.occurred_at AS occurred_at,
+       inner_row.amount_minor AS amount_minor,
+       inner_row.include_in_analysis AS include_in_analysis,
+       inner_row.refund_deducted_minor AS refund_deducted_minor,
+       inner_row.has_refund_link AS has_refund_link,
+       ${homeIncomeExpenseEffectiveMinorSql('inner_row')} AS effective_minor
+     FROM (
+       ${analysisCountableInnerSelectSql(whereSql, deductedSql, hasRefundLinkSql)}
+     ) inner_row;`,
+    params,
+  )
+
+  return rowsOf(result).map((row) => ({
+    type: row?.type,
+    origin_type: row?.origin_type,
+    occurred_at: row?.occurred_at,
+    amount_minor: Number(row?.amount_minor ?? 0) || 0,
+    include_in_analysis: Number(row?.include_in_analysis ?? 1),
+    refund_deducted_minor: Number(row?.refund_deducted_minor ?? 0) || 0,
+    has_refund_link: Number(row?.has_refund_link ?? 0) || 0,
+  }))
+}
+
+export async function listAnalysisAddonExpenseFacts(ledgerId, options = {}) {
+  assertLedgerId(ledgerId)
+  const scopeFilter = buildHomeScopeFilterClauses(options.mode, options.key)
+  if (!scopeFilter) return []
+
+  const whereSql = scopeFilter.clauses.join('\n       AND ')
+  const params = [ledgerId, ...scopeFilter.values]
+  const deductedSql = refundDeductedMinorSql('t')
+  const hasRefundLinkSql = `CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END`
+
+  const result = await query(
+    `SELECT
+       inner_row.category_id AS category_id,
+       inner_row.type AS type,
+       inner_row.origin_type AS origin_type,
+       inner_row.note AS note,
+       inner_row.amount_minor AS amount_minor,
+       inner_row.include_in_analysis AS include_in_analysis,
+       inner_row.refund_deducted_minor AS refund_deducted_minor,
+       inner_row.has_refund_link AS has_refund_link
+     FROM (
+       ${analysisCountableInnerSelectSql(whereSql, deductedSql, hasRefundLinkSql)}
+         AND t.type = 'expense'
+         AND t.note LIKE '%【附加項目】%'
+     ) inner_row;`,
+    params,
+  )
+
+  return rowsOf(result)
+}
+
 export async function listTransactionSearchPage(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   const limit = normalizeLimit(options.limit, 300)

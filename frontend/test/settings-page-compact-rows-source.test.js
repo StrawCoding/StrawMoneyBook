@@ -33,7 +33,7 @@ test('SMB-254: modern settings rows use compact vertical padding while keeping 4
   assert.match(block, /min-height:\s*var\(--apple-row-min-height\)/)
 })
 
-test('SMB-254: traditional settings list rows are tightened but keep min tap height', () => {
+test('SMB-254: settings scoped list rows are tightened but keep min tap height', () => {
   // Separator spacing between rows reduced from 12px to 8px for a more compact list.
   assert.match(settingsPageSource, /\.item-link \+ \.item-link\s*\{[^}]*margin-top:\s*8px/)
   assert.match(settingsPageSource, /\.item-link \+ \.item-link\s*\{[^}]*padding-top:\s*8px/)

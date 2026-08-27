@@ -381,6 +381,7 @@ async function openReportPageFromAnalysis() {
       hasModeTabs: Boolean(document.querySelector('[data-testid=analysis-export-mode-tabs]')),
       hasBackToAnalysis: Boolean(document.querySelector('a.back-btn[href="/analysis"], a.back-btn[href*="/analysis"]')),
       hasOpenFileBtn: Boolean(document.querySelector('[data-testid=analysis-export-open-file-btn]')),
+      fullScreen: Boolean(document.querySelector('.app-shell.full-screen-route')),
     })`)
     if (state.path.startsWith('/analysis/print') && state.hasPreview && state.hasPdfBtn && state.hasModeTabs) {
       return state
@@ -1030,7 +1031,8 @@ try {
 
   // Report page remains a first-class route: enter from analysis, customize, export, open file.
   const reportEntry = await openReportPageFromAnalysis()
-  assert.equal(reportEntry.hasBottomNav, true, JSON.stringify(reportEntry))
+  assert.equal(reportEntry.hasBottomNav, false, JSON.stringify(reportEntry))
+  assert.equal(reportEntry.fullScreen, true, JSON.stringify(reportEntry))
   assert.equal(reportEntry.hasModeTabs, true, JSON.stringify(reportEntry))
   const customize = await customizeReportRangeAndAssert()
   const reportExport = await exportPdfFromReportPageAndAssertOpenFile()
