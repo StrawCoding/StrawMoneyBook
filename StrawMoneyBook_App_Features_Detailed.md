@@ -1,6 +1,6 @@
 # StrawMoneyBook App 功能說明（Detailed）
 
-> 本文件依據目前專案程式碼與頁面結構整理，狀態基準為 `2026-08-27`（產品 v1.4.x）。
+> 本文件依據目前專案程式碼與頁面結構整理，狀態基準為 `2026-08-28`（產品 v1.4.x）。
 > 官方 Wiki：https://strawcoding.github.io/StrawMoneyBookWiki/。in-repo 快照：`docs/wiki/`。
 > 重點是描述「實際產品能力、使用情境、限制與差異化」，不是單純的檔案索引。
 > 如需專案入口與開發指令，請先閱讀 `README.md`；如需檔案對應關係，請搭配 `frontend/StrawMoneyBook_Features_Map.md` 閱讀。
@@ -191,6 +191,8 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 - AI 自動記帳
 - 手動快速新增
 - 問答記帳
+
+三種模式共用 `BookkeepingPage` 容器，皆為全螢幕（`hideAppChrome`：品牌頂欄與 BottomNav 隱藏）。頂部仍保留與一般 tab 頁等價的 status-bar／瀏海／`safe-area-inset-top` 預留，標題、返回與模式切換不得貼齊螢幕頂端或被系統 inset 遮住。其他同樣隱藏 chrome 的全螢幕頁（例如交易編輯）走同一 app-shell 契約，不會為了補空白而把 BottomNav 或品牌頂欄重新顯示。
 
 帳戶／分類選擇器（含首頁編輯 sheet、問答記帳、借貸／報銷含代收與變更入帳、訂閱／存錢罐／銀行對應、載具／電子發票預設、信用卡還款來源、有價證券交割帳戶）一律走 `CustomSelect` 依母分類／帳戶群組呈現；空值以 `__none__` sentinel（元件會過濾空字串）；表單輸入／選擇底色統一走 `--input-bg`（並保留 `--surface`／`--surface-soft` 別名以免歷史樣式掉底）。
 

@@ -139,7 +139,8 @@ const {
   padding-bottom: 0;
 }
 .app-shell.full-screen-route {
-  padding-top: 0;
+  /* hideAppChrome drops brand bar + BottomNav only; keep status-bar / notch inset. */
+  padding-top: calc(10px + var(--status-bar-height));
   padding-bottom: 0;
 }
 .page-container.booting {

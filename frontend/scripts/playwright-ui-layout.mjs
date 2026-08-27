@@ -20,6 +20,7 @@ const lockPath = resolve(lockDir, `playwright-ui-layout-${previewPort}.lock`)
 // Isolate from concurrent closeout/verify playwright-cli "default" session (smb298 flake).
 const playwrightCliSession = process.env.PLAYWRIGHT_CLI_SESSION
   || `smb-ui-layout-${previewPort}-${process.pid}`
+const FULLSCREEN_STATUS_BAR_INSET_PX = 47
 
 function acquireUiLayoutMutex() {
   mkdirSync(lockDir, { recursive: true })
@@ -2579,13 +2580,158 @@ async function assertSharedLedgerAuthAndEditorSurfaces() {
   assert.equal(home.editorChipCount, 2, JSON.stringify(home, null, 2))
   assert.equal(home.hasCreatorAndEditor, true, JSON.stringify(home, null, 2))
 
-  await runPlaywrightCli(['goto', `${baseUrl}/transactions/quick-add`])
+  await assertFullscreenBookkeepingTopInset()
+}
+
+async function applySimulatedStatusBarInset(insetPx = FULLSCREEN_STATUS_BAR_INSET_PX) {
+  return evalPage(`() => {
+    const inset = ${insetPx}
+    document.documentElement.style.setProperty('--status-bar-height', inset + 'px')
+    try {
+      localStorage.setItem('straw.bookkeeping.last_path', '/transactions/quick-add')
+      localStorage.setItem('straw.bookkeeping.last_manual_path', '/transactions/quick-add')
+    } catch {
+      // ignore
+    }
+    return inset
+  }`)
+}
+
+async function clearSimulatedStatusBarInset() {
+  await runPlaywrightCli(['eval', `() => {
+    document.documentElement.style.removeProperty('--status-bar-height')
+    return true
+  }`], { raw: true })
+}
+
+async function measureFullscreenTopInset(contentSelector, expectedPath) {
+  const snapshot = await evalPage(`() => {
+    const inset = ${FULLSCREEN_STATUS_BAR_INSET_PX}
+    document.documentElement.style.setProperty('--status-bar-height', inset + 'px')
+    const shell = document.querySelector('.app-shell')
+    const first = document.querySelector(${JSON.stringify(contentSelector)})
+    const rect = first?.getBoundingClientRect()
+    const shellPadTop = shell ? Number.parseFloat(getComputedStyle(shell).paddingTop) || 0 : 0
+    const reserved = 10 + inset
+    return {
+      path: window.location.pathname,
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+      hasTopBar: Boolean(document.querySelector('header.top-bar')),
+      fullScreen: Boolean(document.querySelector('.app-shell.full-screen-route')),
+      contentTop: rect ? Number(rect.top.toFixed(2)) : -1,
+      contentHeight: rect ? Number(rect.height.toFixed(2)) : 0,
+      shellPadTop: Number(shellPadTop.toFixed(2)),
+      reserved,
+      inset,
+      hiddenByStatusBar: !rect || rect.top + 0.5 < inset,
+      belowReserved: !rect || rect.top + 0.5 < reserved,
+    }
+  }`)
+  assert.equal(snapshot.path, expectedPath, JSON.stringify(snapshot, null, 2))
+  assert.equal(snapshot.hasBottomNav, false, JSON.stringify(snapshot, null, 2))
+  assert.equal(snapshot.hasTopBar, false, JSON.stringify(snapshot, null, 2))
+  assert.equal(snapshot.fullScreen, true, JSON.stringify(snapshot, null, 2))
+  assert.ok(snapshot.shellPadTop + 0.5 >= snapshot.reserved, JSON.stringify(snapshot, null, 2))
+  assert.ok(snapshot.contentTop + 0.5 >= snapshot.reserved, JSON.stringify(snapshot, null, 2))
+  assert.equal(snapshot.hiddenByStatusBar, false, JSON.stringify(snapshot, null, 2))
+  assert.equal(snapshot.belowReserved, false, JSON.stringify(snapshot, null, 2))
+  return snapshot
+}
+
+async function assertFullscreenBookkeepingTopInset() {
+  await runPlaywrightCli(['goto', `${baseUrl}/`])
+  await delay(900)
+  await applySimulatedStatusBarInset()
+
+  const home = await evalPage(`() => {
+    const inset = ${FULLSCREEN_STATUS_BAR_INSET_PX}
+    document.documentElement.style.setProperty('--status-bar-height', inset + 'px')
+    const topBar = document.querySelector('header.top-bar')
+    const rect = topBar?.getBoundingClientRect()
+    const shell = document.querySelector('.app-shell')
+    const shellPadTop = shell ? Number.parseFloat(getComputedStyle(shell).paddingTop) || 0 : 0
+    const reserved = 10 + inset
+    return {
+      path: window.location.pathname,
+      hasFab: Boolean(document.querySelector('[data-testid=home-fab]')),
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+      hasTopBar: Boolean(topBar),
+      fullScreen: Boolean(document.querySelector('.app-shell.full-screen-route')),
+      chromeTop: rect ? Number(rect.top.toFixed(2)) : -1,
+      shellPadTop: Number(shellPadTop.toFixed(2)),
+      reserved,
+      hiddenByStatusBar: !rect || rect.top + 0.5 < inset,
+    }
+  }`)
+  assert.ok(home.path === '/' || home.path === '/home', JSON.stringify(home, null, 2))
+  assert.equal(home.hasFab, true, JSON.stringify(home, null, 2))
+  assert.equal(home.hasBottomNav, true, JSON.stringify(home, null, 2))
+  assert.equal(home.hasTopBar, true, JSON.stringify(home, null, 2))
+  assert.equal(home.fullScreen, false, JSON.stringify(home, null, 2))
+  assert.ok(home.shellPadTop + 0.5 >= home.reserved, JSON.stringify(home, null, 2))
+  assert.ok(home.chromeTop + 0.5 >= home.reserved, JSON.stringify(home, null, 2))
+  assert.equal(home.hiddenByStatusBar, false, JSON.stringify(home, null, 2))
+
+  await runPlaywrightCli(['click', '[data-testid=home-fab]'])
+  await delay(1400)
+
+  const quick = await measureFullscreenTopInset(
+    '[data-testid=bookkeeping-page-header], [data-testid=bookkeeping-mode-toggle]',
+    '/transactions/quick-add',
+  )
+  assert.ok(quick.contentTop + 0.5 >= home.reserved, JSON.stringify({ home, quick }, null, 2))
+
+  await runPlaywrightCli(['click', '[data-testid=bookkeeping-mode-ai]'])
   await delay(1200)
-  const chromeHidden = await evalPage(`() => ({
-    path: window.location.pathname,
-    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
-    fullScreen: Boolean(document.querySelector('.app-shell.full-screen-route')),
-  })`)
-  assert.equal(chromeHidden.hasBottomNav, false, JSON.stringify(chromeHidden, null, 2))
-  assert.equal(chromeHidden.fullScreen, true, JSON.stringify(chromeHidden, null, 2))
+  await measureFullscreenTopInset(
+    '[data-testid=bookkeeping-page-header], [data-testid=bookkeeping-mode-toggle]',
+    '/ai-auto-bookkeeping',
+  )
+
+  await runPlaywrightCli(['click', '[data-testid=bookkeeping-mode-manual]'])
+  await delay(900)
+  await runPlaywrightCli(['click', '[data-testid=bookkeeping-manual-qna]'])
+  await delay(1200)
+  await measureFullscreenTopInset(
+    '[data-testid=bookkeeping-page-header], [data-testid=bookkeeping-mode-toggle]',
+    '/transactions/qna',
+  )
+
+  await runPlaywrightCli(['goto', `${baseUrl}/transactions/pw-missing-tx/edit`])
+  await delay(1200)
+  await measureFullscreenTopInset(
+    '[data-testid=transaction-edit-header], .page-head, h2',
+    '/transactions/pw-missing-tx/edit',
+  )
+
+  await runPlaywrightCli(['goto', `${baseUrl}/features`])
+  await delay(900)
+  const features = await evalPage(`() => {
+    const inset = ${FULLSCREEN_STATUS_BAR_INSET_PX}
+    document.documentElement.style.setProperty('--status-bar-height', inset + 'px')
+    const topBar = document.querySelector('header.top-bar')
+    const rect = topBar?.getBoundingClientRect()
+    const shell = document.querySelector('.app-shell')
+    const shellPadTop = shell ? Number.parseFloat(getComputedStyle(shell).paddingTop) || 0 : 0
+    const reserved = 10 + inset
+    return {
+      path: window.location.pathname,
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+      hasTopBar: Boolean(topBar),
+      fullScreen: Boolean(document.querySelector('.app-shell.full-screen-route')),
+      chromeTop: rect ? Number(rect.top.toFixed(2)) : -1,
+      shellPadTop: Number(shellPadTop.toFixed(2)),
+      reserved,
+      hiddenByStatusBar: !rect || rect.top + 0.5 < inset,
+    }
+  }`)
+  assert.equal(features.path, '/features', JSON.stringify(features, null, 2))
+  assert.equal(features.hasBottomNav, true, JSON.stringify(features, null, 2))
+  assert.equal(features.hasTopBar, true, JSON.stringify(features, null, 2))
+  assert.equal(features.fullScreen, false, JSON.stringify(features, null, 2))
+  assert.ok(features.shellPadTop + 0.5 >= features.reserved, JSON.stringify(features, null, 2))
+  assert.ok(features.chromeTop + 0.5 >= features.reserved, JSON.stringify(features, null, 2))
+  assert.equal(features.hiddenByStatusBar, false, JSON.stringify(features, null, 2))
+
+  await clearSimulatedStatusBarInset()
 }

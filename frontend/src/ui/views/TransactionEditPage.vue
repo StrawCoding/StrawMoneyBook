@@ -1,6 +1,6 @@
 <template>
   <section class="stack transaction-edit-page">
-    <header class="row page-head">
+    <header class="row page-head" data-testid="transaction-edit-header">
       <h2>{{ t('transaction_about.edit_transaction') }}</h2>
       <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
     </header>

@@ -132,6 +132,7 @@ test('playwright asserts modern-only layout without traditional switch', () => {
   assert.match(playwrightSource, /assertModernLayoutOnly/)
   assert.match(playwrightSource, /assertHomeBlocks/)
   assert.match(playwrightSource, /assertHomeIncomeExpenseLightAndDark/)
+  assert.match(playwrightSource, /assertFullscreenBookkeepingTopInset/)
   assert.match(playwrightSource, /traditional.*migrate|migrate.*modern|localStorage\.setItem\('strawmoneybook\.ui\.layout', 'traditional'\)/u)
 })
 

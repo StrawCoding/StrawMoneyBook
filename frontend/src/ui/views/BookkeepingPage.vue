@@ -1,15 +1,16 @@
 <template>
   <section class="stack">
     <article class="card panel">
-      <header class="row header-row">
+      <header class="row header-row" data-testid="bookkeeping-page-header">
         <h2>{{ t('bookkeeping.page_title') }}</h2>
         <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
       </header>
 
-      <div class="mode-toggle mode-toggle-row">
+      <div class="mode-toggle mode-toggle-row" data-testid="bookkeeping-mode-toggle">
         <button
           type="button"
           class="btn"
+          data-testid="bookkeeping-mode-ai"
           :class="{ primary: topMode === 'ai' }"
           @click="switchTopMode('ai')"
         >
@@ -18,6 +19,7 @@
         <button
           type="button"
           class="btn"
+          data-testid="bookkeeping-mode-manual"
           :class="{ primary: topMode === 'manual' }"
           @click="switchTopMode('manual')"
         >
@@ -31,6 +33,7 @@
           <button
             type="button"
             class="btn"
+            data-testid="bookkeeping-manual-quick"
             :class="{ primary: manualMode === 'quick' }"
             @click="switchManualMode('quick')"
           >
@@ -39,6 +42,7 @@
           <button
             type="button"
             class="btn"
+            data-testid="bookkeeping-manual-qna"
             :class="{ primary: manualMode === 'qna' }"
             @click="switchManualMode('qna')"
           >

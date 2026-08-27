@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 全螢幕記帳頁（快速新增／AI／問答）與其他 hideAppChrome 頁恢復與一般頁等價的頂部 status-bar／safe-area 預留；BottomNav 與品牌頂欄仍隱藏。
+
 ---
 
 ## v1.4.1

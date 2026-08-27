@@ -9,7 +9,7 @@
 1. **bypass onboarding** 進有 BottomNav 的 app shell（`[data-testid=bottom-nav]`）。
 2. 驗 FontAwesome icon 與目標頁，不要在 welcome／post-setup intro 就 PASS。
 3. 多步驟／全螢幕流程：檢查 BottomNav／safe-area **有沒有遮住**表單或主 CTA。
-4. 長表單 route 應設 `meta.hideAppChrome`（`App.vue` 的 `full-screen-route`），Playwright 斷言該頁 **沒有** BottomNav。
+4. 長表單 route 應設 `meta.hideAppChrome`（`App.vue` 的 `full-screen-route`），Playwright 斷言該頁 **沒有** BottomNav 與品牌頂欄，但 **仍有** status-bar／safe-area 頂部預留（內容不得貼齊螢幕頂端）。
 
 ## 套件對照
 
