@@ -169,6 +169,32 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
+function resolveBankSyncAggregateStatus(syncRes = {}, accountResults = []) {
+  const explicit = normalizeText(syncRes?.sync_status || syncRes?.syncStatus).toLowerCase()
+  if (explicit === 'ok' || explicit === 'partial_success' || explicit === 'error') return explicit
+  if (!accountResults.length) return 'ok'
+  let ok = 0
+  let err = 0
+  let partial = 0
+  for (const item of accountResults) {
+    const status = String(item?.status ?? '').toLowerCase()
+    if (status === 'ok') ok += 1
+    else if (status === 'partial' || status === 'partial_success') partial += 1
+    else err += 1
+  }
+  if (err === 0 && partial === 0) return 'ok'
+  if (ok === 0 && partial === 0) return 'error'
+  return 'partial_success'
+}
+
+function pickLatestIsoDate(values = []) {
+  const dates = values
+    .map((value) => normalizeText(value))
+    .filter(Boolean)
+    .sort()
+  return dates.length ? dates[dates.length - 1] : ''
+}
+
 function normalizeProviderId(value) {
   return normalizeText(value).toLowerCase()
 }
@@ -734,7 +760,7 @@ async function syncBankConnectionNowUnqueued(ledgerId, connectionId) {
           defaultSelected: false,
         }))
 
-      const coveredThrough = normalizeText(syncRes?.coveredThrough || syncRes?.sync_time) || new Date().toISOString().slice(0, 10)
+      const topLevelCoveredThrough = normalizeText(syncRes?.coveredThrough || syncRes?.sync_time)
       const nextCursor = normalizeText(syncRes?.next_cursor || syncRes?.nextCursor || syncRes?.cursor)
       const nextSessionToken = normalizeText(syncRes?.session_token || syncRes?.access_token_ref)
       const accountResults = Array.isArray(syncRes?.accountResults)
@@ -742,12 +768,11 @@ async function syncBankConnectionNowUnqueued(ledgerId, connectionId) {
         : Array.isArray(syncRes?.account_results)
           ? syncRes.account_results
           : []
-      const aggregateStatus = normalizeText(syncRes?.sync_status || syncRes?.syncStatus).toLowerCase()
-        || (accountResults.some((item) => String(item?.status ?? '').toLowerCase() === 'error')
-          ? (accountResults.some((item) => String(item?.status ?? '').toLowerCase() === 'ok') ? 'partial_success' : 'error')
-          : 'ok')
+      const aggregateStatus = resolveBankSyncAggregateStatus(syncRes, accountResults)
 
-      // Persist per-account watermarks (coveredThrough), never wall-clock finish alone.
+      // Persist per-account watermarks only for verifiable ok results.
+      // partial / error must never inherit a fake top-level coveredThrough.
+      const successfulCoveredThroughs = []
       for (const account of syncableAccounts) {
         const providerAccountId = normalizeText(account.provider_account_id)
         const accountResult = accountResults.find((item) => {
@@ -756,8 +781,11 @@ async function syncBankConnectionNowUnqueued(ledgerId, connectionId) {
             || resultId.replace(/\D+/g, '') === providerAccountId.replace(/\D+/g, '')
         })
         if (!accountResults.length) {
+          // Legacy providers without accountResults: only advance when top-level watermark exists.
+          if (!topLevelCoveredThrough) continue
+          successfulCoveredThroughs.push(topLevelCoveredThrough)
           await dependencies.updateBankAccount(ledgerId, account.id, {
-            lastSuccessSyncAt: coveredThrough,
+            lastSuccessSyncAt: topLevelCoveredThrough,
             lastSyncStatus: 'ok',
             lastError: '',
             syncCursor: nextCursor || account.sync_cursor || null,
@@ -767,11 +795,22 @@ async function syncBankConnectionNowUnqueued(ledgerId, connectionId) {
         if (!accountResult) continue
         const status = String(accountResult.status ?? '').toLowerCase()
         if (status === 'ok') {
+          const accountCovered = normalizeText(accountResult.coveredThrough) || topLevelCoveredThrough
+          if (!accountCovered) continue
+          successfulCoveredThroughs.push(accountCovered)
           await dependencies.updateBankAccount(ledgerId, account.id, {
-            lastSuccessSyncAt: normalizeText(accountResult.coveredThrough) || coveredThrough,
+            lastSuccessSyncAt: accountCovered,
             lastSyncStatus: 'ok',
             lastError: '',
             syncCursor: nextCursor || account.sync_cursor || null,
+          })
+        } else if (status === 'partial' || status === 'partial_success') {
+          await dependencies.updateBankAccount(ledgerId, account.id, {
+            lastSyncStatus: 'partial_success',
+            lastError: formatBankErrorForStorage({
+              code: accountResult.code,
+              message: accountResult.message,
+            }),
           })
         } else {
           await dependencies.updateBankAccount(ledgerId, account.id, {
@@ -793,18 +832,25 @@ async function syncBankConnectionNowUnqueued(ledgerId, connectionId) {
         })
       }
 
+      const advancedCoveredThrough = pickLatestIsoDate(successfulCoveredThroughs)
+        || (aggregateStatus === 'ok' ? topLevelCoveredThrough : '')
       const connectionPatch = {
         status: 'active',
-        lastSyncAt: coveredThrough,
         syncCursor: nextCursor || connection.sync_cursor || null,
-        lastSyncStatus: aggregateStatus === 'partial_success' ? 'partial_success' : 'ok',
+        lastSyncStatus: aggregateStatus === 'partial_success'
+          ? 'partial_success'
+          : (aggregateStatus === 'error' ? 'error' : 'ok'),
         lastError: aggregateStatus === 'partial_success'
-          ? 'partial_success: some accounts failed'
+          ? 'partial_success: some accounts incomplete or failed'
           : '',
         lastAttemptAt: attemptAt,
       }
-      if (aggregateStatus === 'ok') {
-        connectionPatch.lastFullSuccessAt = coveredThrough
+      // Do not advance connection watermark on pure partial/error — preserve prior checkpoint.
+      if (advancedCoveredThrough) {
+        connectionPatch.lastSyncAt = advancedCoveredThrough
+      }
+      if (aggregateStatus === 'ok' && advancedCoveredThrough) {
+        connectionPatch.lastFullSuccessAt = advancedCoveredThrough
       }
       await dependencies.updateBankConnection(ledgerId, connectionId, connectionPatch)
 
@@ -812,7 +858,7 @@ async function syncBankConnectionNowUnqueued(ledgerId, connectionId) {
         added,
         modified,
         nextCursor: nextCursor || null,
-        syncTime: coveredThrough,
+        syncTime: advancedCoveredThrough || null,
         syncStatus: aggregateStatus,
         accountResults,
         raw: syncRes,

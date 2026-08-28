@@ -365,8 +365,13 @@ final class HuaNanBankAutomation {
         result.put("provider", PROVIDER_ID);
         result.put("added", deduped);
         result.put("modified", new JSONArray());
-        result.put("sync_time", BankAutomationSyncContract.coveredThroughIsoDate(endDate, syncStartedDate));
-        result.put("coveredThrough", BankAutomationSyncContract.coveredThroughIsoDate(endDate, syncStartedDate));
+        // Only advance connection-level coveredThrough when every account is ok.
+        // partial_success must not claim a false watermark that JS would persist.
+        if ("ok".equals(aggregateStatus)) {
+            String covered = BankAutomationSyncContract.coveredThroughIsoDate(endDate, syncStartedDate);
+            result.put("sync_time", covered);
+            result.put("coveredThrough", covered);
+        }
         result.put("next_cursor", buildCursor(initialSyncStartDate));
         result.put("accountResults", accountResults);
         result.put("sync_status", aggregateStatus);

@@ -36,6 +36,8 @@ cd frontend/android && ./gradlew :app:testDebugUnitTest --tests "com.strawcoding
 ### H2 / PARTIAL
 
 - 未找到日期欄／查詢按鈕或未解析交易時：**不得**標帳戶 `ok` + `coveredThrough`；改 `accountResults[].status=partial` + `hua_nan_transaction_query_partial`
+- 原生頂層 `coveredThrough`／`sync_time` 僅在 `sync_status=ok` 時寫入；`partial_success` 省略頂層 watermark
+- JS `syncBankConnectionNow`：只對 `status=ok` 帳戶寫 `lastSuccessSyncAt`；`partial` 寫 `partial_success` 且**不**推進帳戶／連線 watermark（即使 top-level 誤帶日期也忽略）
 - 聚合：`sync_status=partial_success`；checkpoint 只推進 `ok` 帳戶
 
 ### 雙 flag

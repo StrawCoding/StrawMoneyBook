@@ -119,6 +119,20 @@ public class HuaNanBankAutomationIdentityTest {
     }
 
     @Test
+    public void syncStatusPartialDoesNotClaimTopLevelCoveredThrough() throws Exception {
+        org.json.JSONArray accountResults = new org.json.JSONArray();
+        accountResults.put(BankAutomationSyncContract.accountResultPartial(
+            "123456789012",
+            "hua_nan_transaction_query_partial",
+            "incomplete",
+            0
+        ));
+        assertEquals("partial_success", BankAutomationSyncContract.syncStatusFromAccountResults(accountResults));
+        // Account-level partial never carries coveredThrough; callers must omit top-level watermark too.
+        assertFalse(accountResults.getJSONObject(0).has("coveredThrough"));
+    }
+
+    @Test
     public void buildAccountSyncResultOkForExplicitEmptyWithAnchors() throws Exception {
         JSONObject probe = new JSONObject();
         probe.put("hasDateInput", true);

@@ -43,17 +43,13 @@ public class CaptchaSolverFixtureTest {
     }
 
     private String recognizeFixtureCode(Activity activity, byte[] pngBytes, Bitmap bitmap, String dataUrl, boolean numericMode) {
-        if (HostTesseractOcr.isAvailable()) {
-            String hostOcr = HostTesseractOcr.recognizePngBytes(pngBytes, numericMode);
-            if (!hostOcr.isEmpty()) {
-                return hostOcr;
-            }
+        assertTrue("Host Tesseract CLI required for fixture OCR (no mock fallback)", HostTesseractOcr.isAvailable());
+        String hostOcr = HostTesseractOcr.recognizePngBytes(pngBytes, numericMode);
+        if (!hostOcr.isEmpty()) {
+            return hostOcr;
         }
-        String ocr = CaptchaSolver.recognizeFromDataUrl(activity, null, 1, dataUrl, numericMode);
-        if (!ocr.isEmpty()) {
-            return ocr;
-        }
-        return CaptchaFixtureRenderer.recognizeExpectedCode(activity.getApplicationContext(), bitmap, numericMode);
+        // Secondary path: CaptchaSolver → native bridge (still real OCR, never hardcoded).
+        return CaptchaSolver.recognizeFromDataUrl(activity, null, 1, dataUrl, numericMode);
     }
 
     @Test

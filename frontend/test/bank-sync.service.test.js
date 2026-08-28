@@ -204,6 +204,59 @@ test('syncBankConnectionNow dual-writes lastSyncAt and lookbackDays for native c
   assert.equal(syncPayload.lookback_days, 3)
 })
 
+test('syncBankConnectionNow does not advance watermarks on partial accountResults', async () => {
+  const connectionUpdates = []
+  const accountUpdates = []
+
+  setBankSyncServiceDependenciesForTest(createBaseDependencies({
+    findBankConnectionById: async () => createBankConnection({
+      last_sync_at: '2026-08-01T00:00:00.000Z',
+    }),
+    listEnabledBankAccountsByConnection: async () => [createSyncableAccount({
+      last_success_sync_at: '2026-08-01',
+    })],
+    getBankSyncRule: async () => ({ lookbackDays: 3 }),
+    syncBankTransactions: async () => ({
+      added: [],
+      modified: [],
+      // Hostile top-level watermark must be ignored when accounts are partial.
+      coveredThrough: '2026-08-28',
+      sync_time: '2026-08-28',
+      sync_status: 'partial_success',
+      accountResults: [{
+        accountId: 'provider-account-1',
+        status: 'partial',
+        code: 'hua_nan_transaction_query_partial',
+        message: 'incomplete',
+        rowCount: 0,
+      }],
+    }),
+    upsertBankTransactions: async () => ({
+      addedIds: [],
+      modifiedIds: [],
+    }),
+    listBankTransactionsByIds: async () => [],
+    updateBankAccount: async (_ledgerId, accountId, patch) => {
+      accountUpdates.push({ accountId, ...patch })
+    },
+    updateBankConnection: async (_ledgerId, _connectionId, patch) => {
+      connectionUpdates.push(patch)
+    },
+  }))
+
+  const result = await syncBankConnectionNow('ledger-1', 'conn-1')
+
+  assert.equal(result.syncStatus, 'partial_success')
+  assert.equal(result.syncTime, null)
+  assert.equal(accountUpdates.length, 1)
+  assert.equal(accountUpdates[0].lastSyncStatus, 'partial_success')
+  assert.equal(accountUpdates[0].lastSuccessSyncAt, undefined)
+  assert.equal(connectionUpdates.length, 1)
+  assert.equal(connectionUpdates[0].lastSyncStatus, 'partial_success')
+  assert.equal(connectionUpdates[0].lastSyncAt, undefined)
+  assert.equal(connectionUpdates[0].lastFullSuccessAt, undefined)
+})
+
 test('syncBankConnectionNow stores hua nan auth errors as reconnect-required error state', async () => {
   const updates = []
   const authError = new Error('華南登入失敗')
