@@ -26,7 +26,7 @@
 
 - 使用短效 Bearer access token（15 分鐘）搭配 rotating refresh token
 - Refresh token 在資料庫只儲存 hash，不存明文
-- Refresh token reuse 偵測：重複使用舊 token 會撤銷整個 token family
+- Refresh token reuse 偵測：grace（預設 60 秒）內重放剛旋轉的舊 token 視為遺失回應並續發，不踢登入；grace 過後再重放才撤銷整個 token family。family revoke 必須在 SQLite transaction 成功 commit 後才丟錯，避免 throw 造成 rollback 而沒真正撤銷。
 - Google Sign-In ID token 僅在 `/api/auth/google` 換取本地 session，不作為 API 憑證
 
 ### 環境變數

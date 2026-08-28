@@ -409,7 +409,7 @@ UI composable 目錄：`src/ui/composables/`
 | `routes/shared-ledgers/` | 共同帳本建立、查詢、快照上傳下載、Email 邀請、接受邀請、試用與同步 action handlers；SMB-229 / v1.3.9 後依角色權限矩陣（`collab/store-shared-ledgers.js`）檢查每個 endpoint（Viewer 禁 push、Member/Viewer 禁 invite），並新增改角色 `POST /:id/members/:userId/role` 與轉移所有權 `POST /:id/transfer`；SMB-277 新增 `POST /:id/invite-code/rotate`（Owner/Admin 產生新 HTTPS 共享連結）與邀請 URL HTTPS 強制；SMB-281 後 `DELETE /:id` 放行會員閘門（Owner 刪除／成員離開／already_gone），讓會員資格過期後仍可取消共享 |
 | `routes/referrals.js` | 邀請碼資訊、邀請碼兌換、會員獎勵發放 |
 | `collab/store.js` | 本機 SQLite store、使用者資料、共同帳本、邀請、會員加成資料、access token / auth session；SMB-232 / v1.3.10 後 `updateStore` 改為 row-level 差異寫入：載入時建立 id→序列化快照 baseline，寫回時只 upsert 新增/變更的 record、只刪除被移除的 record，全部包在單一 SQLite transaction，移除每次 mutation 全量 upsert 與全表刪除掃描的瓶頸（mutator API 不變） |
-| `collab/auth-store.js` | 帳號、密碼、auth provider、會員 grant、Google Play 同步後的 public profile 會員狀態、refresh session 邏輯 |
+| `collab/auth-store.js` | 帳號、密碼、auth provider、會員 grant、Google Play 同步後的 public profile 會員狀態、refresh session 邏輯；rotated refresh 於 60 秒 grace 內重放會沿 `replaced_by_token_id` 走到 live family head 再 rotate（逾時重試不踢 session），grace 過後仍 family revoke；revoke 寫入在 transaction commit 後才丟錯 |
 | `collab/admin-store.js` | 管理員總覽、client log、會員管理 |
 | `collab/auth-session.js` | Bearer token 驗證、登入狀態檢查、管理員權限檢查 |
 | `collab/http.js` | backend 路由共用的 request/response helper，含 path segment parsing、method/body guard 與 route error serialization |

@@ -15,7 +15,7 @@
 
 ## Token 與風險控管（和安全策略一致）
 - 使用短效 Bearer access token
-- refresh token reuse 偵測：重複使用舊 token 會撤銷整個 token family
+- refresh token reuse 偵測：grace（預設 60 秒）內重放剛旋轉的舊 token 會續發、不踢登入；過後才撤銷整個 token family
 - refresh token 只存 hash，不存明文（避免資料庫外洩造成可用 token 泄漏）
 
 ## Drive OAuth／405／refresh

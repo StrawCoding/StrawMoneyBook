@@ -1,3 +1,20 @@
+/** Default window to accept a just-rotated token as a lost-response retry, not theft. */
+export const DEFAULT_REFRESH_ROTATION_GRACE_MS = 60_000
+
+export function getRefreshRotationGraceMs(env = process.env) {
+  const raw = Number(env?.SHARED_LEDGER_REFRESH_ROTATION_GRACE_MS ?? DEFAULT_REFRESH_ROTATION_GRACE_MS)
+  if (!Number.isFinite(raw) || raw < 0) return DEFAULT_REFRESH_ROTATION_GRACE_MS
+  return raw
+}
+
+export function isWithinRefreshRotationGrace(row, nowMs = Date.now(), env = process.env) {
+  const graceMs = getRefreshRotationGraceMs(env)
+  if (graceMs <= 0) return false
+  const rotatedAtMs = Date.parse(String(row?.revoked_at || row?.updated_at || ''))
+  if (!Number.isFinite(rotatedAtMs)) return false
+  return nowMs - rotatedAtMs <= graceMs
+}
+
 export function createStoreAuthSessionApi({
   createId,
   createOpaqueToken,
@@ -72,6 +89,77 @@ export function createStoreAuthSessionApi({
     `).run(now, String(reason ?? 'logout').trim() || 'logout', now, String(tokenFamilyId ?? '').trim())
   }
 
+  function getRefreshTokenRowById(db, id) {
+    const normalized = String(id ?? '').trim()
+    if (!normalized) return null
+    return db.prepare(`
+      SELECT *
+      FROM refresh_tokens
+      WHERE id = ?
+      LIMIT 1
+    `).get(normalized) ?? null
+  }
+
+  function findLiveFamilyHead(db, startRow) {
+    const seen = new Set()
+    let current = startRow
+    while (current) {
+      const id = String(current.id ?? '').trim()
+      if (!id || seen.has(id)) break
+      seen.add(id)
+      if (!String(current.revoked_at ?? '').trim()) {
+        const expiresAtMs = Date.parse(String(current.expires_at ?? ''))
+        if (Number.isFinite(expiresAtMs) && expiresAtMs > Date.now()) {
+          return current
+        }
+        break
+      }
+      current = getRefreshTokenRowById(db, current.replaced_by_token_id)
+    }
+    return null
+  }
+
+  function rotateLiveRefreshTokenRow(db, liveRow, {
+    user,
+    ipAddress = '',
+    userAgent = '',
+  }) {
+    const now = nowIso()
+    const refresh = createRefreshTokenRow(db, {
+      userId: user.id,
+      tokenFamilyId: liveRow.token_family_id,
+      parentTokenId: liveRow.id,
+      issuedByProvider: liveRow.issued_by_provider,
+      ipAddress,
+      userAgent: userAgent || liveRow.user_agent,
+    })
+
+    db.prepare(`
+      UPDATE refresh_tokens
+      SET replaced_by_token_id = ?,
+          revoked_at = ?,
+          revoke_reason = 'rotated',
+          last_used_at = ?,
+          updated_at = ?
+      WHERE id = ?
+    `).run(refresh.refreshTokenId, now, now, now, liveRow.id)
+
+    return {
+      user,
+      accessToken: issueAccessToken({ ...user, session_family_id: liveRow.token_family_id }),
+      refreshToken: refresh.refreshToken,
+      refreshTokenExpiresAt: refresh.expiresAt,
+      sessionFamilyId: String(liveRow.token_family_id ?? '').trim(),
+      expiresInSec: getAccessTokenExpiresInSeconds(),
+      refreshExpiresInSec: getRefreshTokenExpiresInSeconds(),
+    }
+  }
+
+  function rejectRotatedRefreshReuse(db, row) {
+    revokeRefreshTokenFamilyRows(db, row.token_family_id, 'reuse_detected')
+    return createStoreError('Refresh token 已重複使用，登入狀態已失效', 'refresh_token_reuse_detected', 401)
+  }
+
   async function createLoginSession(user, {
     issuedByProvider = 'password',
     ipAddress = '',
@@ -111,10 +199,14 @@ export function createStoreAuthSessionApi({
   async function rotateRefreshSession(refreshToken, {
     ipAddress = '',
     userAgent = '',
+    nowMs = Date.now(),
   } = {}) {
     const refreshTokenHash = hashSensitiveToken(refreshToken)
     return runSerializedDatabaseWrite((db) => {
-      const tx = db.transaction(() => {
+      // better-sqlite3 rolls back the transaction if the callback throws, so
+      // persist family-revoke / expiry writes first, then throw outside.
+      let committedError = null
+      const session = db.transaction(() => {
         const row = db.prepare(`
           SELECT *
           FROM refresh_tokens
@@ -123,15 +215,30 @@ export function createStoreAuthSessionApi({
         `).get(refreshTokenHash)
 
         if (!row) {
-          throw createStoreError('Refresh token 無效', 'refresh_token_invalid', 401)
+          committedError = createStoreError('Refresh token 無效', 'refresh_token_invalid', 401)
+          return null
         }
 
         if (String(row.revoked_at ?? '').trim()) {
           if (String(row.revoke_reason ?? '').trim() === 'rotated') {
-            revokeRefreshTokenFamilyRows(db, row.token_family_id, 'reuse_detected')
-            throw createStoreError('Refresh token 已重複使用，登入狀態已失效', 'refresh_token_reuse_detected', 401)
+            // Lost HTTP response / timeout retry: walk to the live family head and
+            // rotate that, instead of treating the first replay as token theft.
+            if (isWithinRefreshRotationGrace(row, nowMs)) {
+              const liveHead = findLiveFamilyHead(db, row)
+              const user = liveHead ? findUserRowById(db, liveHead.user_id) : null
+              if (liveHead && user) {
+                return rotateLiveRefreshTokenRow(db, liveHead, {
+                  user,
+                  ipAddress,
+                  userAgent,
+                })
+              }
+            }
+            committedError = rejectRotatedRefreshReuse(db, row)
+            return null
           }
-          throw createStoreError('Refresh token 已失效', 'refresh_token_revoked', 401)
+          committedError = createStoreError('Refresh token 已失效', 'refresh_token_revoked', 401)
+          return null
         }
 
         const expiresAtMs = Date.parse(String(row.expires_at ?? ''))
@@ -142,47 +249,26 @@ export function createStoreAuthSessionApi({
             SET revoked_at = ?, revoke_reason = 'expired', updated_at = ?
             WHERE id = ?
           `).run(now, now, row.id)
-          throw createStoreError('Refresh token 已過期', 'refresh_token_expired', 401)
+          committedError = createStoreError('Refresh token 已過期', 'refresh_token_expired', 401)
+          return null
         }
 
         const user = findUserRowById(db, row.user_id)
         if (!user) {
           revokeRefreshTokenFamilyRows(db, row.token_family_id, 'user_missing')
-          throw createStoreError('登入狀態已失效，請重新登入', 'refresh_user_missing', 401)
+          committedError = createStoreError('登入狀態已失效，請重新登入', 'refresh_user_missing', 401)
+          return null
         }
 
-        const now = nowIso()
-        const refresh = createRefreshTokenRow(db, {
-          userId: user.id,
-          tokenFamilyId: row.token_family_id,
-          parentTokenId: row.id,
-          issuedByProvider: row.issued_by_provider,
-          ipAddress,
-          userAgent: userAgent || row.user_agent,
-        })
-
-        db.prepare(`
-          UPDATE refresh_tokens
-          SET replaced_by_token_id = ?,
-              revoked_at = ?,
-              revoke_reason = 'rotated',
-              last_used_at = ?,
-              updated_at = ?
-          WHERE id = ?
-        `).run(refresh.refreshTokenId, now, now, now, row.id)
-
-        return {
+        return rotateLiveRefreshTokenRow(db, row, {
           user,
-          accessToken: issueAccessToken({ ...user, session_family_id: row.token_family_id }),
-          refreshToken: refresh.refreshToken,
-          refreshTokenExpiresAt: refresh.expiresAt,
-          sessionFamilyId: String(row.token_family_id ?? '').trim(),
-          expiresInSec: getAccessTokenExpiresInSeconds(),
-          refreshExpiresInSec: getRefreshTokenExpiresInSeconds(),
-        }
-      })
+          ipAddress,
+          userAgent,
+        })
+      })()
 
-      return tx()
+      if (committedError) throw committedError
+      return session
     })
   }
 

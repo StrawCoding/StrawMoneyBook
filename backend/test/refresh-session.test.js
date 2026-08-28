@@ -63,8 +63,41 @@ test.after(async () => {
   await rm(tempDir, { recursive: true, force: true })
 })
 
-test('refresh token rotation rejects reuse of an already-rotated token', async () => {
-  const user = await createTestUser('rotate@example.com')
+test('refresh token rotation accepts a replay of the just-rotated token within grace', async () => {
+  const user = await createTestUser('rotate-grace@example.com')
+  const firstSession = await createLoginSession(user, {
+    issuedByProvider: 'password',
+    ipAddress: '127.0.0.1',
+    userAgent: 'node:test',
+  })
+
+  const rotatedSession = await rotateRefreshSession(firstSession.refreshToken, {
+    ipAddress: '127.0.0.1',
+    userAgent: 'node:test',
+  })
+
+  assert.notEqual(rotatedSession.refreshToken, firstSession.refreshToken)
+  assert.ok(rotatedSession.accessToken)
+
+  const replaySession = await rotateRefreshSession(firstSession.refreshToken, {
+    ipAddress: '127.0.0.1',
+    userAgent: 'node:test',
+  })
+
+  assert.ok(replaySession.accessToken)
+  assert.notEqual(replaySession.refreshToken, firstSession.refreshToken)
+  assert.notEqual(replaySession.refreshToken, rotatedSession.refreshToken)
+
+  const followOn = await rotateRefreshSession(replaySession.refreshToken, {
+    ipAddress: '127.0.0.1',
+    userAgent: 'node:test',
+  })
+  assert.ok(followOn.accessToken)
+  assert.notEqual(followOn.refreshToken, replaySession.refreshToken)
+})
+
+test('refresh token rotation rejects reuse of an already-rotated token after grace', async () => {
+  const user = await createTestUser('rotate-reuse@example.com')
   const firstSession = await createLoginSession(user, {
     issuedByProvider: 'password',
     ipAddress: '127.0.0.1',
@@ -83,8 +116,17 @@ test('refresh token rotation rejects reuse of an already-rotated token', async (
     rotateRefreshSession(firstSession.refreshToken, {
       ipAddress: '127.0.0.1',
       userAgent: 'node:test',
+      nowMs: Date.now() + 61_000,
     }),
     (error) => error?.code === 'refresh_token_reuse_detected',
+  )
+
+  await assert.rejects(
+    rotateRefreshSession(rotatedSession.refreshToken, {
+      ipAddress: '127.0.0.1',
+      userAgent: 'node:test',
+    }),
+    (error) => error?.code === 'refresh_token_revoked' || error?.code === 'refresh_token_reuse_detected',
   )
 })
 

@@ -578,6 +578,8 @@ smb288 再修帳號／會員登入 Session（smb277／smb279 之後仍可見的�
 - `scheduleActiveSharedLedgerAutoSync` 與 sync gate 寫入可見 `paused_reauth`／`paused_membership`／`paused_offline`／`paused_session`（離線優先），禁止 silently no-op。
 - token 過期／靜默 refresh 失敗仍保留 profile + hint 並標「需重新登入」；CORS／SameSite／`X-Straw-Native-Client` 合約維持（本階未改 backend 產品碼）。
 
+smb306 修會員登入 Session「已過期／需重新登入」掉線：refresh 已在伺服器 rotate 成功但客戶端逾時／回應遺失時，重送舊 refresh token 不再立刻 family revoke。後端 60 秒 grace 內沿 `replaced_by_token_id` 走到 live family head 再 rotate；grace 過後仍 `refresh_token_reuse_detected`，且 family revoke 必須在 SQLite transaction commit 後才丟錯（避免 better-sqlite3 throw 回滾導致撤銷沒寫入）。前端 `refreshGeneration` 丟棄過期 refresh 回應，避免遲到的舊 token 覆寫較新 rotation。`SHARED_LEDGER_REFRESH_ROTATION_GRACE_MS` 可覆寫 grace（預設 60000）。
+
 SMB-281 修復「無法取消共用帳本」：
 
 - Owner「取消共享」會刪除遠端共同帳本並清本機 binding；成員／Viewer「不再共享」只結束自己的成員關係，本機資料保留。

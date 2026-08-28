@@ -381,7 +381,7 @@ keytool -list -v -alias <your_alias> -keystore <your_release_keystore.jks>
 
 - 使用後端發的一次性 nonce
 - `auth_nonces` 消耗後即失效
-- refresh token reuse 會整個 family revoke
+- refresh token reuse：grace（預設 60s，`SHARED_LEDGER_REFRESH_ROTATION_GRACE_MS`）內重放剛 rotated 的 token 會走到目前 family head 再 rotate，不踢登入；過後才 family revoke。revoke 寫入須在 transaction commit 後再丟 `refresh_token_reuse_detected`，避免 better-sqlite3 throw 回滾。；剛 rotate 成功後 60 秒內重放舊 token 視為遺失回應重試，沿 replacement chain 再 rotate，不踢 session
 
 ### CSRF
 
@@ -404,8 +404,8 @@ keytool -list -v -alias <your_alias> -keystore <your_release_keystore.jks>
 ### Refresh token 洩漏
 
 - DB 只存 hash
-- rotate 後舊 token 失效
-- reuse 時 family revoke
+- rotate 後舊 token 失效；grace 內重放舊 token 會續發（遺失回應），grace 外 reuse 才 family revoke
+- reuse 時 family revoke（transaction 必須先 commit）；60 秒 grace 內的第一次 replay 不當成盜用（timeout / 遺失回應）
 - audit log 記錄
 
 ### Rate limit
@@ -445,7 +445,8 @@ keytool -list -v -alias <your_alias> -keystore <your_release_keystore.jks>
   - audience mismatch mapping
 - `backend/test/refresh-session.test.js`
   - refresh rotation
-  - token reuse detection
+  - grace 內 replay 成功、family 仍活著
+  - grace 外 replay 觸發 reuse revoke
   - nonce one-time consume
 
 ### 建議 API 測試
@@ -453,7 +454,7 @@ keytool -list -v -alias <your_alias> -keystore <your_release_keystore.jks>
 1. `POST /api/auth/google/prepare` 取得 nonce
 2. 使用 mock / staging Google token 走 `/api/auth/google`
 3. `/api/auth/refresh` rotate 成功
-4. 重送舊 refresh token 觸發 reuse revoke
+4. 逾時後重送舊 refresh token 觸發 reuse family revoke；grace 內重送則續發不踢登入
 5. `/api/auth/logout` 後 refresh token 不可再用
 
 ### 建議 E2E

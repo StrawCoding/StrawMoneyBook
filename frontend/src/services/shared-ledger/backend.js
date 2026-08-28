@@ -16,6 +16,7 @@ import {
   writePersistedAuthSession,
   writePersistedNeedsReauthFlag,
 } from '@/services/shared-ledger/auth-session-storage'
+import { shouldApplyRefreshGeneration } from '@/services/shared-ledger/refresh-generation.js'
 
 const PROD_DEFAULT_SHARED_LEDGER_API_BASE = 'https://api.strawmb.com'
 const PROD_DEFAULT_SHARED_LEDGER_INVITE_BASE = 'https://www.strawmb.com/open/shared-ledger'
@@ -29,6 +30,8 @@ const API_DISPLAY_NAME = 'StrawMB API'
 let ongoingRefreshPromise = null
 let ongoingSessionRestorePromise = null
 let lastSessionRestoreAt = 0
+/** Monotonic epoch so a late /api/auth/refresh response cannot overwrite a newer rotation. */
+let refreshGeneration = 0
 /** One forced cookie probe per JS lifetime for pre-hint installs (Web tab close). */
 let anonymousCookieProbeDone = false
 /** Retry cookie restore this session after network/5xx without persisting a false hint. */
@@ -216,6 +219,7 @@ function writeSession(session) {
 }
 
 function clearAuthTokens({ markNeedsReauth = true } = {}) {
+  refreshGeneration += 1
   ongoingRefreshPromise = null
   clearStoredTokens()
   const session = readSession()
@@ -231,6 +235,7 @@ function clearAuthTokens({ markNeedsReauth = true } = {}) {
 }
 
 function clearSession() {
+  refreshGeneration += 1
   ongoingRefreshPromise = null
   pendingCookieRestoreRetry = false
   setNeedsReauthFlag(false)
@@ -282,6 +287,7 @@ function shouldPreserveSessionOnRefreshFailure(error) {
 }
 
 async function performRefreshRequest() {
+  const generation = ++refreshGeneration
   const session = readSession()
   const refreshToken = String(session?.refreshToken ?? getStoredRefreshToken() ?? '').trim()
   const body = refreshToken ? { refreshToken } : {}
@@ -292,6 +298,11 @@ async function performRefreshRequest() {
     auth: false,
     useAuthStorage: true,
   })
+  // A newer refresh (or logout / needs-reauth clear) started while this one
+  // was in flight — applying the stale body would revive an already-rotated token.
+  if (!shouldApplyRefreshGeneration(generation, refreshGeneration)) {
+    return readSession()
+  }
   return writeSession(buildAuthResponseSession(data, session))
 }
 

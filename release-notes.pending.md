@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 修復會員登入「已過期／需重新登入」：refresh 已 rotate 但客戶端逾時時，60 秒內重放舊 token 改走 family head 再續發，不再誤判 reuse；grace 外真 reuse 會先 commit family revoke 再丟錯（避免 SQLite throw 回滾）。前端忽略過期的 refresh 回應。
+
 ---
 
 ## v1.4.2
