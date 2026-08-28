@@ -1601,6 +1601,7 @@ async function assertHomeIncomeExpenseLightAndDark() {
 }
 
 async function assertRouteNavigation() {
+  await ensureLedgerShellReady()
   await runPlaywrightCli(['click', '[data-testid="bottom-nav-features"]'])
   const readFeatureState = () => evalPage(`() => ({
     path: window.location.pathname,
@@ -1729,10 +1730,17 @@ async function assertRouteNavigation() {
 
   for (const target of advancedTargets) {
     await gotoOrReopen(`${baseUrl}/features`)
+    for (let warm = 0; warm < 40; warm += 1) {
+      const ready = await readFeatureState()
+      if (ready.path === '/features' && ready.hasFeatureList && !ready.booting) break
+      await delay(250)
+    }
     let scrolled = { ok: false, reason: 'timeout' }
-    for (let attempt = 0; attempt < 40; attempt += 1) {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
       scrolled = await evalPage(`() => {
         if (document.querySelector('.boot-layer')) return { ok: false, reason: 'booting' }
+        const advanced = document.querySelector('[data-testid=feature-list-advanced]')
+        if (advanced) advanced.scrollIntoView({ block: 'start', inline: 'nearest' })
         const el = document.querySelector('[data-testid="${target.testId}"]')
         if (!el) return { ok: false, reason: 'missing' }
         el.scrollIntoView({ block: 'center', inline: 'nearest' })
@@ -1748,6 +1756,9 @@ async function assertRouteNavigation() {
         }
       }`)
       if (scrolled.ok) break
+      if (attempt === 20 || attempt === 40) {
+        await gotoOrReopen(`${baseUrl}/features`)
+      }
       await delay(250)
     }
     // smb299: advanced list grew (Drive restore). Last rows sit under fixed BottomNav;
