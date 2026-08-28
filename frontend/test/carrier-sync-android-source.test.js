@@ -12,10 +12,25 @@ const carrierActivitySource = read(
 const carrierPluginSource = read(
   'android/app/src/main/java/com/strawcoding/strawmoneybook/CarrierAutomationPlugin.java',
 )
-const natGovSource = read(
-  'android/app/src/main/java/com/strawcoding/strawmoneybook/NatGovEInvoiceAutomation.java',
+const carrierOrchestratorSource = read(
+  'android/app/src/main/java/com/strawcoding/strawmoneybook/CarrierSyncOrchestrator.java',
 )
-const captchaSolverSource = read(
+const carrierProviderSource = read(
+  'android/app/src/main/java/com/strawcoding/strawmoneybook/core/CarrierProvider.java',
+)
+const carrierProviderRegistrySource = read(
+  'android/app/src/main/java/com/strawcoding/strawmoneybook/core/CarrierProviderRegistry.java',
+)
+const natGovProviderSource = read(
+  'android/app/src/main/java/com/strawcoding/strawmoneybook/providers/natgov/NatGovEInvoiceProvider.java',
+)
+const natGovSource = read(
+  'android/app/src/main/java/com/strawcoding/strawmoneybook/providers/natgov/NatGovEInvoiceAutomation.java',
+)
+const carrierRuntimeSource = read(
+  'android/app/src/main/java/com/strawcoding/strawmoneybook/core/CarrierAutomationRuntime.java',
+)
+const carrierSyncContractSource = read(
   'android/app/src/main/java/com/strawcoding/strawmoneybook/core/CarrierSyncContract.java',
 )
 const providerRegistrySource = read('src/services/einvoice/provider-registry.js')
@@ -26,10 +41,11 @@ const availabilitySource = read('src/services/einvoice/availability.js')
 const mainActivitySource = read('android/app/src/main/java/com/strawcoding/strawmoneybook/MainActivity.java')
 const manifestSource = read('android/app/src/main/AndroidManifest.xml')
 
-test('carrier automation activity registers modular provider dispatch', () => {
+test('carrier automation activity registers modular orchestrator dispatch', () => {
   assert.match(carrierActivitySource, /CarrierAutomationActivity/)
   assert.match(carrierActivitySource, /DESKTOP_VIEWPORT_WIDTH = 1280/)
-  assert.match(carrierActivitySource, /NatGovEInvoiceAutomation/)
+  assert.match(carrierActivitySource, /CarrierSyncOrchestrator/)
+  assert.match(carrierActivitySource, /dispatchByOrchestrator/)
   assert.match(carrierActivitySource, /abortRunningSession/)
   assert.match(carrierActivitySource, /einvoice_captcha_required/)
 })
@@ -41,6 +57,18 @@ test('carrier automation plugin exposes Architecture B methods', () => {
   assert.match(carrierPluginSource, /disconnectCarrier/)
   assert.match(carrierPluginSource, /submitCaptcha/)
   assert.match(carrierPluginSource, /abortCarrier/)
+  assert.match(carrierPluginSource, /CarrierSyncOrchestrator/)
+})
+
+test('android carrier modular skeleton wires provider registry', () => {
+  assert.match(carrierOrchestratorSource, /CarrierProviderRegistry/)
+  assert.match(carrierProviderSource, /CarrierProvider/)
+  assert.match(carrierProviderRegistrySource, /nat_gov_einvoice_tw/)
+  assert.match(carrierProviderRegistrySource, /NatGovEInvoiceProvider/)
+  assert.match(natGovProviderSource, /NatGovEInvoiceProvider/)
+  assert.match(natGovProviderSource, /NatGovEInvoiceAutomation/)
+  assert.match(carrierRuntimeSource, /CAPTCHA_REQUIRED/)
+  assert.match(carrierRuntimeSource, /markCaptchaRequired/)
 })
 
 test('nat gov provider uses shared CaptchaSolver validateCaptchaCandidate', () => {
@@ -85,13 +113,15 @@ test('main activity and manifest register carrier automation', () => {
 })
 
 test('carrier sync contract defines lookback + query api detection', () => {
-  assert.match(captchaSolverSource, /readLookbackDays/)
-  assert.match(captchaSolverSource, /isQueryApiUrl/)
-  assert.match(captchaSolverSource, /shouldReplayInterceptRequest/)
+  assert.match(carrierSyncContractSource, /readLookbackDays/)
+  assert.match(carrierSyncContractSource, /isQueryApiUrl/)
+  assert.match(carrierSyncContractSource, /shouldReplayInterceptRequest/)
 })
 
 test('jvm carrier provider and captcha tests exist', () => {
-  const providerTest = read('android/app/src/test/java/com/strawcoding/strawmoneybook/NatGovEInvoiceAutomationTest.java')
+  const providerTest = read(
+    'android/app/src/test/java/com/strawcoding/strawmoneybook/providers/natgov/NatGovEInvoiceAutomationTest.java',
+  )
   const contractTest = read('android/app/src/test/java/com/strawcoding/strawmoneybook/core/CarrierSyncContractTest.java')
   const captchaTest = read('android/app/src/test/java/com/strawcoding/strawmoneybook/core/CaptchaSolverTest.java')
   assert.match(providerTest, /NatGovEInvoiceAutomationTest/)

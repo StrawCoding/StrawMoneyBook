@@ -1,4 +1,4 @@
-package com.strawcoding.strawmoneybook;
+package com.strawcoding.strawmoneybook.providers.natgov;
 
 import android.app.Activity;
 import android.os.Handler;
@@ -9,6 +9,9 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import com.strawcoding.strawmoneybook.CarrierAutomationDebugTrace;
+import com.strawcoding.strawmoneybook.CarrierAutomationException;
+import com.strawcoding.strawmoneybook.CarrierAutomationVault;
 import com.strawcoding.strawmoneybook.core.CaptchaSolver;
 import com.strawcoding.strawmoneybook.core.CarrierPortalConfig;
 import com.strawcoding.strawmoneybook.core.CarrierSyncContract;

@@ -55,7 +55,7 @@ public class CarrierAutomationActivity extends Activity {
     }
 
     public static void abortRunningSession() {
-        NatGovEInvoiceAutomation.requestAbort();
+        CarrierSyncOrchestrator.requestAbortAll();
         CarrierAutomationActivity instance = currentInstance;
         if (instance != null && !instance.finished) {
             instance.finishWithError(new CarrierAutomationException("carrier_automation_aborted", "Carrier automation was cancelled"));
@@ -158,13 +158,13 @@ public class CarrierAutomationActivity extends Activity {
             JSONObject result;
             debugTrace.record("action_started", "ok", action);
             if (ACTION_ABORT_CARRIER.equals(action)) {
-                NatGovEInvoiceAutomation.requestAbort();
+                CarrierSyncOrchestrator.requestAbortAll();
                 result = new JSONObject();
                 result.put("aborted", true);
                 finishWithSuccess(result);
                 return;
             }
-            result = dispatchByProvider(action, payload, vault);
+            result = dispatchByOrchestrator(action, payload, vault);
             if (result.optBoolean("needsCaptcha", false)) {
                 JSONObject errorData = new JSONObject();
                 errorData.put("sessionId", result.optString("sessionId"));
@@ -185,33 +185,20 @@ public class CarrierAutomationActivity extends Activity {
         }
     }
 
-    private JSONObject dispatchByProvider(String action, JSONObject payload, CarrierAutomationVault vault) throws Exception {
-        String providerId = normalizeProviderId(payload);
-        if (!NatGovEInvoiceAutomation.PROVIDER_ID.equals(providerId)) {
-            throw new CarrierAutomationException("carrier_provider_unsupported", "Unsupported carrier provider: " + providerId);
-        }
+    private JSONObject dispatchByOrchestrator(String action, JSONObject payload, CarrierAutomationVault vault) throws Exception {
         if (ACTION_CONNECT_CARRIER.equals(action)) {
-            return NatGovEInvoiceAutomation.connect(this, webView, vault, debugTrace, payload);
+            return CarrierSyncOrchestrator.connect(this, webView, vault, debugTrace, payload);
         }
         if (ACTION_SYNC_CARRIER.equals(action)) {
-            return NatGovEInvoiceAutomation.sync(this, webView, vault, debugTrace, payload);
+            return CarrierSyncOrchestrator.sync(this, webView, vault, debugTrace, payload);
         }
         if (ACTION_SUBMIT_CAPTCHA.equals(action)) {
-            return NatGovEInvoiceAutomation.submitCaptcha(this, webView, vault, debugTrace, payload);
+            return CarrierSyncOrchestrator.submitCaptcha(this, webView, vault, debugTrace, payload);
         }
         if (ACTION_DISCONNECT_CARRIER.equals(action)) {
-            return NatGovEInvoiceAutomation.disconnect(this, webView, vault, debugTrace, payload);
+            return CarrierSyncOrchestrator.disconnect(this, webView, vault, debugTrace, payload);
         }
         throw new CarrierAutomationException("carrier_automation_action_invalid", "Unsupported carrier automation action");
-    }
-
-    private static String normalizeProviderId(JSONObject payload) {
-        if (payload == null) return NatGovEInvoiceAutomation.PROVIDER_ID;
-        String fromProviderId = String.valueOf(payload.optString("providerId", "")).trim().toLowerCase();
-        if (!fromProviderId.isEmpty()) return fromProviderId;
-        String fromProvider = String.valueOf(payload.optString("provider", "")).trim().toLowerCase();
-        if (!fromProvider.isEmpty()) return fromProvider;
-        return NatGovEInvoiceAutomation.PROVIDER_ID;
     }
 
     private String stringExtra(Intent intent, String key) {

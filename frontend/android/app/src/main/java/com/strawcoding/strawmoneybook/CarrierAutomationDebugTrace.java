@@ -5,20 +5,20 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-final class CarrierAutomationDebugTrace {
+public final class CarrierAutomationDebugTrace {
     private static final String TAG = "SMB-CarrierSync";
     private final JSONArray steps = new JSONArray();
     private final String action;
 
-    CarrierAutomationDebugTrace(String action) {
+    public CarrierAutomationDebugTrace(String action) {
         this.action = action == null ? "" : action.trim();
     }
 
-    void record(String step, String status, String message) {
+    public void record(String step, String status, String message) {
         record(step, status, message, null);
     }
 
-    void record(String step, String status, String message, JSONObject details) {
+    public void record(String step, String status, String message, JSONObject details) {
         JSONObject item = new JSONObject();
         safePut(item, "step", step == null ? "" : step.trim());
         safePut(item, "status", status == null ? "" : status.trim());
@@ -33,7 +33,7 @@ final class CarrierAutomationDebugTrace {
             + (message == null ? "" : message.trim()));
     }
 
-    JSONObject toJson(String errorCode, String errorMessage) {
+    public JSONObject toJson(String errorCode, String errorMessage) {
         JSONObject result = new JSONObject();
         safePut(result, "action", action);
         safePut(result, "steps", steps);

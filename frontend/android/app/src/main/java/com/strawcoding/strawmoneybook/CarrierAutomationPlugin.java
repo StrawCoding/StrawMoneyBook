@@ -54,7 +54,7 @@ public class CarrierAutomationPlugin extends Plugin {
             CarrierAutomationActivity.abortRunningSession();
         }
         String sessionId = call.getString("sessionId", "");
-        NatGovEInvoiceAutomation.clearPendingSession(sessionId);
+        CarrierSyncOrchestrator.clearPendingSession(sessionId);
         JSObject result = new JSObject();
         result.put("ok", true);
         call.resolve(result);

@@ -1,4 +1,4 @@
-package com.strawcoding.strawmoneybook;
+package com.strawcoding.strawmoneybook.providers.natgov;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
