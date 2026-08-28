@@ -666,7 +666,7 @@ test('smb297: normalize preserves FK associations and related child row counts',
         },
       ],
       savings_jars: [{ id: 'jar1', account_id: 'a1', name: '存錢' }],
-      bank_connections: [{ id: 'conn1', provider: 'first_bank', display_name: '一銀' }],
+      bank_connections: [{ id: 'conn1', provider: 'hua_nan_bank_tw', display_name: '華南' }],
       bank_accounts: [
         { id: 'ba1', connection_id: 'conn1', mapped_account_id: 'a1', display_name: '薪轉' },
       ],

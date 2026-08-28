@@ -1,7 +1,7 @@
 package com.strawcoding.strawmoneybook.core;
 
 import com.strawcoding.strawmoneybook.BankAutomationException;
-import com.strawcoding.strawmoneybook.HuaNanBankProvider;
+import com.strawcoding.strawmoneybook.providers.huanan.HuaNanBankProvider;
 
 import java.util.LinkedHashMap;
 import java.util.Locale;

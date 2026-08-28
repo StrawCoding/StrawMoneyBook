@@ -729,41 +729,57 @@ onMounted(() => {
   try {
     if (localStorage.getItem('straw.playwright.hooks') === '1') {
       window.__SMB_PLAYWRIGHT_BANK_SYNC_CONNECTION__ = {
-        setReviewRows(rows = []) {
-          if (!connection.value) {
-            const connectionId = String(route.params.id ?? 'pw_bank_conn_wizard').trim()
-            connection.value = {
-              id: connectionId,
-              provider: 'hua_nan_bank_tw',
-              provider_connection_id: connectionId,
-              status: 'active',
-              user_label: 'Playwright Wizard Hua Nan',
-              last_sync_at: '',
-              last_sync_status: 'ok',
-              last_error: '',
-              accounts: [{
-                id: 'pw_bank_acct_1',
-                provider_account_id: 'pw_acct_1',
-                account_name: 'Playwright Savings',
-                enabled: true,
-              }],
-              ruleDraft: {
-                direction: 'all',
-                minAmountMajor: 0,
-                lookbackDays: 3,
-                excludeKeywordText: '',
-                includePending: true,
-              },
-            }
-          }
-          reviewRows.value = Array.isArray(rows) ? rows : []
+        async reloadReviewFromService() {
+          const connectionId = String(route.params.id ?? connection.value?.id ?? '').trim()
+          if (!connectionId) return { ok: false, reason: 'missing_connection_id' }
+          await loadConnection()
+          await loadReview(connectionId)
           selectedReviewIds.value = reviewRows.value.map((item) => item.id)
-          reviewTotal.value = reviewRows.value.length
-          reviewPage.value = 1
-          return reviewRows.value.length
+          return {
+            ok: reviewRows.value.length >= 1,
+            count: reviewRows.value.length,
+            selected: selectedReviewIds.value.length,
+            summaries: reviewRows.value.map((item) => item.summary || item.description || ''),
+          }
         },
         getSelectedReviewIds() {
           return [...selectedReviewIds.value]
+        },
+        async runFormalImport() {
+          if (!selectedReviewIds.value.length) {
+            const reloaded = await this.reloadReviewFromService()
+            if (!reloaded.ok) return { ok: false, reason: 'no_review_rows', ...reloaded }
+          }
+          const beforeIds = [...selectedReviewIds.value]
+          const result = await importSelectedBankTransactions(ledgerStore.activeLedgerId, beforeIds)
+          await loadReview(connection.value?.id)
+          const importedTxnIds = (Array.isArray(result.importedMappings) ? result.importedMappings : [])
+            .map((item) => String(item?.importedTxnId || '').trim())
+            .filter(Boolean)
+          let ledgerHit = importedTxnIds.length
+          try {
+            await transactionStore.refreshAfterWriteSafe(2500)
+            const txs = Array.isArray(transactionStore.transactions) ? transactionStore.transactions : []
+            const storeHits = txs.filter((tx) => {
+              const id = String(tx?.id ?? '')
+              const note = String(tx?.note ?? '')
+              const external = String(tx?.external_ref_id ?? tx?.externalRefId ?? '')
+              return importedTxnIds.includes(id)
+                || /Playwright Seed Txn/u.test(note)
+                || /bank:hua_nan_bank_tw:/u.test(external)
+            }).length
+            if (storeHits > ledgerHit) ledgerHit = storeHits
+          } catch {
+            // importedMappings already prove ledger writes; store refresh is best-effort.
+          }
+          return {
+            ok: result.importedCount >= 1 && reviewRows.value.length === 0 && importedTxnIds.length >= 1,
+            importedCount: result.importedCount,
+            skippedCount: result.skippedCount,
+            remainingReview: reviewRows.value.length,
+            importedTxnIds,
+            ledgerHit,
+          }
         },
       }
     }

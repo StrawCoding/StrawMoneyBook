@@ -19,13 +19,13 @@ afterEach(() => {
 })
 
 test('traceBankSyncOperation records native debug trace on success', async () => {
-  const result = await traceBankSyncOperation('connect_first_bank', {
+  const result = await traceBankSyncOperation('connect_hua_nan', {
     ledgerId: 'ledger-1',
-    provider: 'first_bank_tw',
+    provider: 'hua_nan_bank_tw',
     connectionId: 'conn-1',
   }, async (context) => {
     context.attachDebugTrace({
-      action: 'connect_first_bank',
+      action: 'connect_hua_nan',
       debugHint: 'check captcha',
       debugLastStep: 'captcha_ocr',
       steps: [
@@ -37,7 +37,7 @@ test('traceBankSyncOperation records native debug trace on success', async () =>
 
   assert.deepEqual(result, { ok: true })
   const [entry] = getBankSyncDebugTraceSnapshot()
-  assert.equal(entry.operation, 'connect_first_bank')
+  assert.equal(entry.operation, 'connect_hua_nan')
   assert.equal(entry.status, 'ok')
   assert.equal(entry.debugHint, 'check captcha')
   assert.equal(entry.debugLastStep, 'captcha_ocr')
@@ -46,9 +46,9 @@ test('traceBankSyncOperation records native debug trace on success', async () =>
 
 test('traceBankSyncOperation records native debug trace on error', async () => {
   const error = new Error('captcha failed')
-  error.code = 'FIRST_BANK_CAPTCHA_OCR_FAILED'
+  error.code = 'HUA_NAN_CAPTCHA_OCR_FAILED'
   error.debugTrace = {
-    action: 'connect_first_bank',
+    action: 'connect_hua_nan',
     debugHint: 'check source.png',
     debugLastStep: 'captcha_ocr',
     steps: [
@@ -57,9 +57,9 @@ test('traceBankSyncOperation records native debug trace on error', async () => {
     ],
   }
 
-  await assert.rejects(() => traceBankSyncOperation('connect_first_bank', {
+  await assert.rejects(() => traceBankSyncOperation('connect_hua_nan', {
     ledgerId: 'ledger-1',
-    provider: 'first_bank_tw',
+    provider: 'hua_nan_bank_tw',
     connectionId: 'conn-1',
   }, async () => {
     throw error
@@ -67,7 +67,7 @@ test('traceBankSyncOperation records native debug trace on error', async () => {
 
   const [entry] = getBankSyncDebugTraceSnapshot()
   assert.equal(entry.status, 'error')
-  assert.equal(entry.errorCode, 'FIRST_BANK_CAPTCHA_OCR_FAILED')
+  assert.equal(entry.errorCode, 'HUA_NAN_CAPTCHA_OCR_FAILED')
   assert.equal(entry.debugHint, 'check source.png')
   assert.equal(entry.steps.length, 2)
 })
@@ -88,18 +88,18 @@ test('logBankSyncAction is silent unless debug mode is on', () => {
     lines.push(args)
   }
   try {
-    logBankSyncAction('service.connect', { provider: 'first_bank_tw' })
+    logBankSyncAction('service.connect', { provider: 'hua_nan_bank_tw' })
     assert.equal(lines.length, 0)
     assert.equal(getBankSyncConsoleLogSnapshot().length, 0)
 
     setBankSyncDebugEnvForTest({ MODE: 'debug' })
-    logBankSyncAction('service.connect', { provider: 'first_bank_tw', password: 'secret-value' })
+    logBankSyncAction('service.connect', { provider: 'hua_nan_bank_tw', password: 'secret-value' })
     assert.equal(isBankSyncDebugEnabled(), true)
     assert.equal(lines.length, 1)
     assert.equal(lines[0][0], '[SMB:bank-sync]')
     assert.equal(lines[0][1], 'service.connect')
     assert.equal(lines[0][2].password, '[redacted]')
-    assert.equal(lines[0][2].provider, 'first_bank_tw')
+    assert.equal(lines[0][2].provider, 'hua_nan_bank_tw')
     const [consoleEntry] = getBankSyncConsoleLogSnapshot()
     assert.equal(consoleEntry.action, 'service.connect')
     assert.equal(consoleEntry.details.password, '[redacted]')
@@ -113,12 +113,12 @@ test('sanitizeBankSyncLogDetails redacts credential fields', () => {
     nationalId: 'A123456789',
     userCode: 'user01',
     captchaCode: 'AB12',
-    provider: 'first_bank_tw',
+    provider: 'hua_nan_bank_tw',
   })
   assert.equal(sanitized.nationalId, '[redacted]')
   assert.equal(sanitized.userCode, '[redacted]')
   assert.equal(sanitized.captchaCode, '[redacted]')
-  assert.equal(sanitized.provider, 'first_bank_tw')
+  assert.equal(sanitized.provider, 'hua_nan_bank_tw')
 })
 
 test('runtime toggle enables debug console on production web', () => {
@@ -141,7 +141,7 @@ test('traceBankSyncOperation prints begin/end to console in debug mode', async (
   try {
     await traceBankSyncOperation('sync_bank_connection', {
       ledgerId: 'ledger-1',
-      provider: 'first_bank_tw',
+      provider: 'hua_nan_bank_tw',
       connectionId: 'conn-1',
     }, async () => ({ ok: true }))
     const actions = lines.map((item) => item[1])
@@ -158,13 +158,13 @@ afterEach(() => {
 })
 
 test('traceBankSyncOperation records native debug trace on success', async () => {
-  const result = await traceBankSyncOperation('connect_first_bank', {
+  const result = await traceBankSyncOperation('connect_hua_nan', {
     ledgerId: 'ledger-1',
-    provider: 'first_bank_tw',
+    provider: 'hua_nan_bank_tw',
     connectionId: 'conn-1',
   }, async (context) => {
     context.attachDebugTrace({
-      action: 'connect_first_bank',
+      action: 'connect_hua_nan',
       debugHint: 'check captcha',
       debugLastStep: 'captcha_ocr',
       steps: [
@@ -176,7 +176,7 @@ test('traceBankSyncOperation records native debug trace on success', async () =>
 
   assert.deepEqual(result, { ok: true })
   const [entry] = getBankSyncDebugTraceSnapshot()
-  assert.equal(entry.operation, 'connect_first_bank')
+  assert.equal(entry.operation, 'connect_hua_nan')
   assert.equal(entry.status, 'ok')
   assert.equal(entry.debugHint, 'check captcha')
   assert.equal(entry.debugLastStep, 'captcha_ocr')
@@ -185,9 +185,9 @@ test('traceBankSyncOperation records native debug trace on success', async () =>
 
 test('traceBankSyncOperation records native debug trace on error', async () => {
   const error = new Error('captcha failed')
-  error.code = 'FIRST_BANK_CAPTCHA_OCR_FAILED'
+  error.code = 'HUA_NAN_CAPTCHA_OCR_FAILED'
   error.debugTrace = {
-    action: 'connect_first_bank',
+    action: 'connect_hua_nan',
     debugHint: 'check source.png',
     debugLastStep: 'captcha_ocr',
     steps: [
@@ -196,9 +196,9 @@ test('traceBankSyncOperation records native debug trace on error', async () => {
     ],
   }
 
-  await assert.rejects(() => traceBankSyncOperation('connect_first_bank', {
+  await assert.rejects(() => traceBankSyncOperation('connect_hua_nan', {
     ledgerId: 'ledger-1',
-    provider: 'first_bank_tw',
+    provider: 'hua_nan_bank_tw',
     connectionId: 'conn-1',
   }, async () => {
     throw error
@@ -206,7 +206,7 @@ test('traceBankSyncOperation records native debug trace on error', async () => {
 
   const [entry] = getBankSyncDebugTraceSnapshot()
   assert.equal(entry.status, 'error')
-  assert.equal(entry.errorCode, 'FIRST_BANK_CAPTCHA_OCR_FAILED')
+  assert.equal(entry.errorCode, 'HUA_NAN_CAPTCHA_OCR_FAILED')
   assert.equal(entry.debugHint, 'check source.png')
   assert.equal(entry.steps.length, 2)
 })

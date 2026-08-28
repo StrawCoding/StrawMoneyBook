@@ -389,76 +389,68 @@ try {
   assert.equal(wizardProviders.hasHuaNan, true, 'hua nan provider required')
   assert.equal(wizardProviders.hasWizard, true, 'create wizard head required')
 
-  const wizardSeed = await evalPage(`() => {
+  const formalConnect = await evalPage(`async () => {
     const hook = window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__
-    if (!hook?.seedWizardConnection) return { ok: false, reason: 'missing create hook' }
-    const seeded = hook.seedWizardConnection({
-      id: 'pw_bank_conn_wizard',
-      provider: 'hua_nan_bank_tw',
-      user_label: 'Playwright Wizard Hua Nan',
-    }, [{
-      id: 'pw_bank_acct_1',
-      providerAccountId: 'pw_acct_1',
-      accountName: 'Playwright Savings',
-      mappedAccountIdDraft: '__none__',
-    }])
-    return { ok: seeded.step === 3 && seeded.accountCount >= 1, ...seeded }
+    if (!hook?.runFormalConnect) return { ok: false, reason: 'missing runFormalConnect' }
+    return hook.runFormalConnect({
+      nationalId: 'A123456789',
+      code: 'nickname1',
+      password: 'password12',
+      captchaCode: '1234',
+    })
   }`)
-  assert.equal(wizardSeed.ok, true, JSON.stringify(wizardSeed))
+  assert.equal(formalConnect.ok, true, JSON.stringify(formalConnect))
+  assert.equal(formalConnect.step, 3, JSON.stringify(formalConnect))
+  assert.ok(formalConnect.accountCount >= 1, `formal connect must discover accounts: ${JSON.stringify(formalConnect)}`)
+  assert.ok(formalConnect.connectionId, 'formal connect must return connectionId')
 
-  const mappingReady = await evalPage(`() => ({
-    step: window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__?.getCurrentStep?.() ?? null,
-    accountCount: window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__?.getAccountDraftCount?.() ?? 0,
-    bodyText: document.body?.innerText?.slice(0, 800) ?? '',
-  })`)
-  assert.equal(mappingReady.step, 3, JSON.stringify(mappingReady))
-  assert.ok(mappingReady.accountCount >= 1, `account mapping step must have seeded drafts: ${JSON.stringify(mappingReady)}`)
+  const formalSync = await evalPage(`async () => {
+    const hook = window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__
+    if (!hook?.runFormalSaveMappingAndSync) return { ok: false, reason: 'missing runFormalSaveMappingAndSync' }
+    return hook.runFormalSaveMappingAndSync()
+  }`)
+  assert.equal(formalSync.ok, true, JSON.stringify(formalSync))
+  assert.ok(formalSync.added >= 1, `manual sync must upsert pending review rows: ${JSON.stringify(formalSync)}`)
 
-  await runPlaywrightCli(['goto', `${baseUrl}/settings/bank-sync/pw_bank_conn_wizard`])
-  await delay(2000)
+  await runPlaywrightCli(['goto', `${baseUrl}/settings/bank-sync/${formalSync.connectionId}`])
+  await delay(2500)
 
-  let reviewSeeded = null
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    reviewSeeded = await evalPage(`() => {
+  let reviewReady = null
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    reviewReady = await evalPage(`async () => {
       const hook = window.__SMB_PLAYWRIGHT_BANK_SYNC_CONNECTION__
-      if (!hook?.setReviewRows) return { ok: false, reason: 'missing connection hook' }
-      const count = hook.setReviewRows([{
-        id: 'pw_bank_tx_1',
-        amount_minor: -12800,
-        currency: 'TWD',
-        posted_at: new Date().toISOString(),
-        summary: 'Playwright Seed Txn',
-        status: 'pending',
-        mapped_account_name: 'Cash',
-        bank_account_name: 'Playwright Savings',
-      }])
+      if (!hook?.reloadReviewFromService) return { ok: false, reason: 'missing reloadReviewFromService' }
+      const loaded = await hook.reloadReviewFromService()
       const panel = document.querySelector('[data-testid=bank-sync-review]')
       const items = panel?.querySelectorAll('.review-item')?.length || 0
-      const selected = hook.getSelectedReviewIds?.()?.length || 0
       return {
-        ok: count >= 1 && items >= 1 && selected >= 1,
-        count,
+        ...loaded,
         items,
-        selected,
+        hasPanel: Boolean(panel),
         bodySnippet: panel?.innerText?.slice(0, 400) ?? '',
       }
     }`)
-    if (reviewSeeded.ok) break
+    if (reviewReady.ok && reviewReady.items >= 1) break
     await delay(400)
   }
-  assert.equal(reviewSeeded.ok, true, JSON.stringify(reviewSeeded))
+  assert.equal(reviewReady.ok, true, JSON.stringify(reviewReady))
+  assert.ok(reviewReady.items >= 1, `review panel must show synced rows: ${JSON.stringify(reviewReady)}`)
+  assert.match(String(reviewReady.summaries?.join(' ') || reviewReady.bodySnippet || ''), /Playwright Seed Txn/u)
 
-  await runPlaywrightCli(['click', '[data-testid=bank-sync-review] button.btn.primary'])
-  await delay(1200)
+  const importResult = await evalPage(`async () => {
+    const hook = window.__SMB_PLAYWRIGHT_BANK_SYNC_CONNECTION__
+    if (!hook?.runFormalImport) return { ok: false, reason: 'missing runFormalImport' }
+    return hook.runFormalImport()
+  }`)
+  assert.equal(importResult.ok, true, JSON.stringify(importResult))
+  assert.ok(importResult.importedCount >= 1, `import service must post ledger rows: ${JSON.stringify(importResult)}`)
+  assert.equal(importResult.remainingReview, 0, `pending review must clear after import: ${JSON.stringify(importResult)}`)
+  assert.ok(
+    (importResult.importedTxnIds?.length || 0) >= 1 || importResult.ledgerHit >= 1,
+    `ledger must contain imported bank txn ids: ${JSON.stringify(importResult)}`,
+  )
 
-  const importState = await evalPage(`() => ({
-    bodyText: document.body?.innerText?.slice(0, 1200) ?? '',
-    reviewItems: document.querySelector('[data-testid=bank-sync-review]')?.querySelectorAll('.review-item')?.length || 0,
-  })`)
-  assert.ok(reviewSeeded.items >= 1, 'review items must remain visible after import attempt')
-  assert.match(importState.bodyText, /Playwright Seed Txn|匯入|import|Import|待審核|pending/u)
-
-  console.log('Bank sync Playwright wizard + review import flow passed')
+  console.log('Bank sync Playwright formal connect→map→sync→import flow passed')
 } finally {
   preview.kill('SIGTERM')
 }

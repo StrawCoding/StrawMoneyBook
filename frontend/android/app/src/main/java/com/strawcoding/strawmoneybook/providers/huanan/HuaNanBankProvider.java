@@ -1,8 +1,10 @@
-package com.strawcoding.strawmoneybook;
+package com.strawcoding.strawmoneybook.providers.huanan;
 
 import android.app.Activity;
 import android.webkit.WebView;
 
+import com.strawcoding.strawmoneybook.BankAutomationDebugTrace;
+import com.strawcoding.strawmoneybook.BankAutomationVault;
 import com.strawcoding.strawmoneybook.core.BankProvider;
 import com.strawcoding.strawmoneybook.core.BankProviderRegistry;
 

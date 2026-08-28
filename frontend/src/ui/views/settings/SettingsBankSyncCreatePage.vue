@@ -53,7 +53,7 @@
       </article>
 
       <article v-else-if="currentStep === 2" class="card panel">
-        <p class="muted hint-block">{{ t('settings_bank_sync_create.first_bank_hint') }}</p>
+        <p class="muted hint-block">{{ t('settings_bank_sync_create.hua_nan_hint') }}</p>
 
         <label class="field">
           {{ t('settings_bank_sync_create.initial_sync_start_date') }}
@@ -173,6 +173,7 @@ import {
   connectBankProvider,
   getBankProviderOptions,
   saveBankAccountsSettings,
+  setBankSyncServiceDependenciesForTest,
   syncBankConnectionNow,
 } from '@/ui/services/bank-sync.service'
 import { getBankSyncApiUnavailableMessage, isBankSyncApiConfigured } from '@/services/bank-sync/backend'
@@ -258,7 +259,7 @@ const captchaManualRequiredMessage = computed(() => {
   if (form.providerId === 'hua_nan_bank_tw') {
     return t('settings_bank_sync_create.error.hua_nan_captcha_manual_required')
   }
-  return t('settings_bank_sync_create.error.first_bank_captcha_manual_required')
+  return t('settings_bank_sync_create.error.hua_nan_captcha_manual_required')
 })
 const hasBankSyncMembershipAccess = computed(() => hasBankSyncMembershipAccessForTier(membershipTier.value))
 const stepTitle = computed(() => {
@@ -300,7 +301,7 @@ const canSaveAccounts = computed(() => {
 const confirmMessage = computed(() => {
   const providerLabel = providerOptions.value.find((item) => item.value === form.providerId)?.label || form.providerId
   return t(
-    'settings_bank_sync_create.confirm.first_bank_message',
+    'settings_bank_sync_create.confirm.hua_nan_message',
     `確認要以 ${providerLabel} 建立銀行連線，並從 ${form.initialSyncStartDate} 開始同步嗎？`,
   )
 })
@@ -316,6 +317,7 @@ onMounted(async () => {
   await accountStore.load()
   try {
     if (localStorage.getItem('straw.playwright.hooks') === '1') {
+      const FIXTURE_ACCOUNT_ID = '123456789012'
       window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__ = {
         getProviderOptions() {
           const options = providerOptions.value.map((item) => ({ ...item }))
@@ -332,40 +334,110 @@ onMounted(async () => {
           goToStep(Number(step) || 1)
           return currentStep.value
         },
-        seedWizardConnection(connection = {}, accounts = []) {
-          createdConnection.value = {
-            id: String(connection?.id ?? 'pw_bank_conn_wizard'),
-            provider: String(connection?.provider ?? 'hua_nan_bank_tw'),
-            user_label: String(connection?.user_label ?? 'Playwright Wizard Bank'),
-            ...connection,
-          }
-          accountDrafts.value = (Array.isArray(accounts) ? accounts : []).map((item, index) => ({
-            id: String(item?.id ?? `pw_bank_acct_${index + 1}`),
-            providerAccountId: String(item?.providerAccountId ?? item?.account_id ?? `pw_acct_${index + 1}`),
-            accountName: String(item?.accountName ?? item?.name ?? 'Playwright Account'),
-            enabledBool: item?.enabled !== false,
-            mappedAccountIdDraft: String(item?.mappedAccountIdDraft ?? ledgerAccountOptions.value[0]?.value ?? '__none__'),
-            userLabelDraft: String(item?.userLabelDraft ?? item?.accountName ?? 'Playwright Account'),
-          }))
-          if (!accountDrafts.value.length) {
-            accountDrafts.value = [{
-              id: 'pw_bank_acct_1',
-              providerAccountId: 'pw_acct_1',
-              accountName: 'Playwright Account',
-              enabledBool: true,
-              mappedAccountIdDraft: ledgerAccountOptions.value[0]?.value ?? '__none__',
-              userLabelDraft: 'Playwright Account',
-            }]
-          }
+        installNativeServiceFixtures() {
+          setBankSyncServiceDependenciesForTest({
+            assertCanUseBankSync: async () => {},
+            hasBankSyncMembershipAccess: async () => true,
+            exchangeBankAuth: async () => ({
+              provider: 'hua_nan_bank_tw',
+              accounts: [{
+                account_id: FIXTURE_ACCOUNT_ID,
+                name: 'Playwright Hua Nan Savings',
+                mask: '9012',
+                currency: 'TWD',
+                type: 'depository',
+              }],
+              connection_name: 'Playwright Wizard Hua Nan',
+              institution_name: 'Hua Nan Bank',
+              sync_cursor: '',
+            }),
+            syncBankTransactions: async () => ({
+              status: 'ok',
+              sync_status: 'ok',
+              coveredThrough: '2026-08-28',
+              added: [{
+                providerAccountId: FIXTURE_ACCOUNT_ID,
+                providerTransactionId: `pw_tx_${Date.now()}`,
+                amountMinor: -12800,
+                currency: 'TWD',
+                postedAt: new Date().toISOString(),
+                summary: 'Playwright Seed Txn',
+                description: 'Playwright Seed Txn',
+                status: 'posted',
+              }],
+              modified: [],
+              accountResults: [{
+                accountId: FIXTURE_ACCOUNT_ID,
+                status: 'ok',
+                coveredThrough: '2026-08-28',
+                rowCount: 1,
+              }],
+            }),
+          })
+          return { ok: true }
+        },
+        async runFormalConnect(credentials = {}) {
+          this.installNativeServiceFixtures()
+          form.providerId = 'hua_nan_bank_tw'
+          form.nationalId = String(credentials.nationalId || 'A123456789')
+          form.repeatSeq = String(credentials.repeatSeq || '0')
+          form.code = String(credentials.code || 'nickname1')
+          form.password = String(credentials.password || 'password12')
+          form.captchaCode = String(credentials.captchaCode || '1234')
+          form.initialSyncStartDate = String(credentials.initialSyncStartDate || form.initialSyncStartDate)
+          const connection = await connectBankProvider(ledgerStore.activeLedgerId, form.providerId, {
+            initialSyncStartDate: form.initialSyncStartDate,
+            nationalId: form.nationalId,
+            repeatSeq: form.repeatSeq,
+            code: form.code,
+            password: form.password,
+            captchaCode: form.captchaCode,
+          })
+          createdConnection.value = connection
+          normalizeAccountDrafts(connection)
           currentStep.value = 3
           return {
+            ok: true,
             step: currentStep.value,
-            connectionId: createdConnection.value.id,
+            connectionId: connection.id,
             accountCount: accountDrafts.value.length,
+            provider: connection.provider,
+          }
+        },
+        async runFormalSaveMappingAndSync() {
+          if (!createdConnection.value) return { ok: false, reason: 'missing_connection' }
+          const ledgerAccountId = ledgerAccountOptions.value.find((item) => item.value !== '__none__')?.value
+            || accountStore.accounts?.[0]?.id
+            || null
+          if (!ledgerAccountId) return { ok: false, reason: 'missing_ledger_account' }
+          for (const draft of accountDrafts.value) {
+            draft.enabledBool = true
+            draft.mappedAccountIdDraft = ledgerAccountId
+          }
+          await saveBankAccountsSettings(
+            ledgerStore.activeLedgerId,
+            accountDrafts.value.map((account) => ({
+              bankAccountId: account.id,
+              enabled: true,
+              mappedAccountId: account.mappedAccountIdDraft === '__none__' ? null : account.mappedAccountIdDraft,
+              userLabel: account.userLabelDraft,
+            })),
+          )
+          const syncResult = await syncBankConnectionNow(ledgerStore.activeLedgerId, createdConnection.value.id)
+          currentStep.value = 4
+          return {
+            ok: true,
+            connectionId: createdConnection.value.id,
+            added: Array.isArray(syncResult?.added) ? syncResult.added.length : 0,
+            modified: Array.isArray(syncResult?.modified) ? syncResult.modified.length : 0,
+            syncStatus: syncResult?.syncStatus || syncResult?.status || null,
           }
         },
         getAccountDraftCount() {
           return accountDrafts.value.length
+        },
+        getCreatedConnectionId() {
+          return createdConnection.value?.id || null
         },
       }
     }
@@ -430,17 +502,7 @@ function resolveCreateErrorMessage(error, fallbackKey) {
   const code = String(error?.code ?? '').trim()
   const rawMessage = String(error?.message ?? '').trim()
   const mappedByCode = {
-    first_bank_national_id_required: t('settings_bank_sync_create.error.first_bank_national_id_required'),
-    first_bank_repeat_seq_required: t('settings_bank_sync_create.error.first_bank_repeat_seq_required'),
-    first_bank_user_code_required: t('settings_bank_sync_create.error.first_bank_user_code_required'),
-    first_bank_password_required: t('settings_bank_sync_create.error.first_bank_password_required'),
-    first_bank_initial_start_date_required: t('settings_bank_sync_create.error.first_bank_initial_start_date_required'),
-    first_bank_captcha_ocr_failed: t('settings_bank_sync_create.error.first_bank_captcha_ocr_failed'),
-    first_bank_captcha_manual_required: t('settings_bank_sync_create.error.first_bank_captcha_manual_required'),
-    first_bank_login_page_mismatch: t('settings_bank_sync_create.error.first_bank_login_page_mismatch'),
-    first_bank_login_failed: t('settings_bank_sync_create.error.first_bank_login_failed'),
-    first_bank_account_list_not_found: t('settings_bank_sync_create.error.first_bank_account_list_not_found'),
-    first_bank_legacy_reconnect_required: t('settings_bank_sync_create.error.first_bank_legacy_reconnect_required'),
+    first_bank_captcha_manual_required: t('settings_bank_sync_create.error.hua_nan_captcha_manual_required'),
     hua_nan_national_id_required: t('settings_bank_sync_create.error.hua_nan_national_id_required'),
     hua_nan_user_code_required: t('settings_bank_sync_create.error.hua_nan_user_code_required'),
     hua_nan_password_required: t('settings_bank_sync_create.error.hua_nan_password_required'),
@@ -462,9 +524,6 @@ function resolveCreateErrorMessage(error, fallbackKey) {
   }
   if (mappedByCode[code]) return mappedByCode[code]
 
-  if (rawMessage === '第一銀行登入身分資料不完整') {
-    return t('settings_bank_sync_create.error.first_bank_identity_required')
-  }
   if (rawMessage === '華南銀行登入身分資料不完整') {
     return t('settings_bank_sync_create.error.hua_nan_identity_required')
   }
@@ -500,7 +559,7 @@ function submitLogin() {
   }
   if (!canSubmitLogin.value || submitting.value) return
   if (showCaptchaPanel.value && form.captchaCode.trim().length !== 4) {
-    uiStore.pushToast(t('settings_bank_sync_create.error.first_bank_credentials_required'), 'error')
+    uiStore.pushToast(t('settings_bank_sync_create.error.hua_nan_credentials_required'), 'error')
     return
   }
   confirmDialogOpen.value = true
@@ -535,7 +594,7 @@ async function confirmSubmitLogin() {
         ? `data:image/png;base64,${error.captchaImageBase64}`
         : ''
       confirmDialogOpen.value = false
-      uiStore.pushToast(resolveCreateErrorMessage(error, 'settings_bank_sync_create.error.first_bank_captcha_manual_required'), 'warning')
+      uiStore.pushToast(resolveCreateErrorMessage(error, 'settings_bank_sync_create.error.hua_nan_captcha_manual_required'), 'warning')
       return
     }
     uiStore.pushToast(resolveCreateErrorMessage(error, 'settings_bank_sync_create.toast.create_failed'), 'error')

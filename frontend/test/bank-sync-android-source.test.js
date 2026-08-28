@@ -16,16 +16,16 @@ const bankProviderRegistrySource = read(
   'android/app/src/main/java/com/strawcoding/strawmoneybook/core/BankProviderRegistry.java',
 )
 const huaNanProviderSource = read(
-  'android/app/src/main/java/com/strawcoding/strawmoneybook/HuaNanBankProvider.java',
+  'android/app/src/main/java/com/strawcoding/strawmoneybook/providers/huanan/HuaNanBankProvider.java',
 )
 const huaNanBankAutomationSource = read(
-  'android/app/src/main/java/com/strawcoding/strawmoneybook/HuaNanBankAutomation.java',
+  'android/app/src/main/java/com/strawcoding/strawmoneybook/providers/huanan/HuaNanBankAutomation.java',
 )
 const captchaSolverSource = read(
   'android/app/src/main/java/com/strawcoding/strawmoneybook/core/CaptchaSolver.java',
 )
 const bankSyncContractSource = read(
-  'android/app/src/main/java/com/strawcoding/strawmoneybook/BankAutomationSyncContract.java',
+  'android/app/src/main/java/com/strawcoding/strawmoneybook/core/BankAutomationSyncContract.java',
 )
 const providerRegistrySource = read('src/services/bank-sync/provider-registry.js')
 
@@ -42,6 +42,18 @@ test('Architecture B modular registry registers hua_nan only', () => {
   assert.match(bankSyncOrchestratorSource, /BankProviderRegistry\.resolve/)
   assert.match(huaNanProviderSource, /implements BankProvider/)
   assert.doesNotMatch(providerRegistrySource, /first_bank_tw/)
+})
+
+test('Architecture B exposes BankAutomationRuntime phase machine', () => {
+  const runtimeSource = read(
+    'android/app/src/main/java/com/strawcoding/strawmoneybook/core/BankAutomationRuntime.java',
+  )
+  assert.match(runtimeSource, /enum Phase/)
+  assert.match(runtimeSource, /USER_INTERACTION_REQUIRED/)
+  assert.match(huaNanBankAutomationSource, /BankAutomationRuntime/)
+  assert.match(huaNanBankAutomationSource, /providers\.huanan|package com\.strawcoding\.strawmoneybook\.providers\.huanan/)
+  assert.match(huaNanBankAutomationSource, /structuralAccountFieldCount/)
+  assert.doesNotMatch(huaNanBankAutomationSource, /nodes = Array\.from\(doc\.querySelectorAll\('a, td, th, span, div, option, li'\)/)
 })
 
 test('hua nan automation uses modular core captcha and sync contract', () => {

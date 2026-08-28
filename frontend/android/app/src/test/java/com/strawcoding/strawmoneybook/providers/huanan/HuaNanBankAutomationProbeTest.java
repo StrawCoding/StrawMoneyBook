@@ -1,4 +1,4 @@
-package com.strawcoding.strawmoneybook;
+package com.strawcoding.strawmoneybook.providers.huanan;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -41,7 +41,7 @@ public class HuaNanBankAutomationProbeTest {
             HuaNanBankAutomation.interceptSkipReason("GET")
         );
         assertTrue(HuaNanBankAutomation.isHncbHost("https://netbank.hncb.com.tw/netbank/servlet/TrxDispatcher"));
-        assertFalse(HuaNanBankAutomation.isHncbHost("https://ibank.firstbank.com.tw/NetBank/index103.html"));
+        assertFalse(HuaNanBankAutomation.isHncbHost("https://example.com/not-hncb"));
         assertTrue(HuaNanBankAutomation.looksLikeJsonUrl("https://netbank.hncb.com.tw/foo.json"));
     }
 

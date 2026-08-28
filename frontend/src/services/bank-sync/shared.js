@@ -162,10 +162,6 @@ export function classifyBankSyncFailure(error) {
   return 'retry'
 }
 
-/** @deprecated use classifyBankSyncFailure */
-export function classifyFirstBankSyncFailure(error) {
-  return classifyBankSyncFailure(error)
-}
 
 export function shouldRequireReconnectAfterBankSyncError(providerId, error) {
   if (!isNativeBankProviderId(providerId)) return false

@@ -389,7 +389,7 @@ test('importBankStatementCsv upserts parsed rows into bank mirror tables', async
     listBankAccountsByConnection: async () => [createSyncableAccount({
       id: 'bank-account-1',
       provider_account_id: '29168214193',
-      account_name: 'First Bank',
+      account_name: 'Hua Nan Bank',
     })],
     upsertBankTransactions: async (_ledgerId, _connectionId, rows) => {
       upsertPayload = rows

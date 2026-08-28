@@ -18,7 +18,7 @@ npm run simulate:bank-sync --prefix frontend   # mock API，非真實銀行
 cd frontend/android && ./gradlew :app:testDebugUnitTest --tests "com.strawcoding.strawmoneybook.core.CaptchaSolverFixtureTest"
 ```
 
-生產路徑只有 Android native WebView（`BankAutomationPlugin`）。**Active provider：`hua_nan_bank_tw`  only**；第一銀行已移除。
+生產路徑只有 Android native WebView（`BankAutomationPlugin` + `core/BankAutomationRuntime` + `providers/huanan`）。**Active provider：`hua_nan_bank_tw` only**；第一銀行已移除。
 
 ### 流程
 

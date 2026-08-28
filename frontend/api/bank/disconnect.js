@@ -1,8 +1,6 @@
-import { disconnectFirstBankAuth } from './_first-bank-provider.js'
 import {
   clientGuard,
   createUnsupportedProviderMessage,
-  isFirstBankProvider,
   methodGuard,
   normalizeProvider,
   parseBody,
@@ -22,19 +20,7 @@ export default async function handler(req, res) {
 
   if (unsupportedProviderGuard(provider, res)) return
 
-  if (isFirstBankProvider(provider)) {
-    try {
-      const payload = await disconnectFirstBankAuth(body)
-      sendJson(res, 200, payload)
-    } catch (error) {
-      sendJson(res, 400, {
-        error: 'first_bank_disconnect_failed',
-        message: String(error?.message ?? error ?? 'First Bank disconnect failed'),
-      })
-    }
-    return
-  }
-
+  // Architecture B: remote scrape providers are retired. Production sync is Android native only.
   sendJson(res, 501, {
     error: 'provider_not_supported',
     message: createUnsupportedProviderMessage(provider),

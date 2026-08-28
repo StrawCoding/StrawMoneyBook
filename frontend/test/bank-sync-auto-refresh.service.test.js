@@ -95,8 +95,8 @@ test('runBankSyncAutoRefreshIfDue continues later connections after credential a
     syncBankConnectionNow: async (_ledgerId, connectionId) => {
       syncedConnectionIds.push(connectionId)
       if (connectionId === 'conn-auth') {
-        const error = new Error('第一銀行登入失敗，請確認身分證字號、序號、代碼與密碼')
-        error.code = 'first_bank_login_failed'
+        const error = new Error('華南銀行登入失敗，請確認身分證字號、使用者代號與密碼')
+        error.code = 'hua_nan_login_failed'
         throw error
       }
       return { added: [{ id: 'row-2' }], modified: [] }
@@ -116,8 +116,8 @@ test('runBankSyncAutoRefreshIfDue continues later connections after credential a
       connectionId: 'conn-auth',
       ok: false,
       authError: true,
-      errorCode: 'first_bank_login_failed',
-      message: '第一銀行登入失敗，請確認身分證字號、序號、代碼與密碼',
+      errorCode: 'hua_nan_login_failed',
+      message: '華南銀行登入失敗，請確認身分證字號、使用者代號與密碼',
     },
   ])
 })

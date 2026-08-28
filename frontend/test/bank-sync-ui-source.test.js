@@ -33,7 +33,7 @@ test('bank sync create page uses wizard steps and batch account mapping', () => 
 
 test('bank sync create page supports manual captcha fallback', () => {
   assert.match(createPageSource, /showCaptchaPanel/)
-  assert.match(createPageSource, /first_bank_captcha_manual_required/)
+  assert.match(createPageSource, /hua_nan_captcha_manual_required/)
   assert.match(createPageSource, /form\.captchaCode/)
 })
 

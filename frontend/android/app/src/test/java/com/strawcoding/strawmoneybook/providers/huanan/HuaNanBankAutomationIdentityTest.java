@@ -1,4 +1,5 @@
-package com.strawcoding.strawmoneybook;
+package com.strawcoding.strawmoneybook.providers.huanan;
+import com.strawcoding.strawmoneybook.core.BankAutomationSyncContract;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;

@@ -1,4 +1,11 @@
-package com.strawcoding.strawmoneybook;
+package com.strawcoding.strawmoneybook.providers.huanan;
+
+import com.strawcoding.strawmoneybook.BankAutomationDebugTrace;
+import com.strawcoding.strawmoneybook.BankAutomationException;
+import com.strawcoding.strawmoneybook.BankAutomationVault;
+import com.strawcoding.strawmoneybook.TesseractBridge;
+import com.strawcoding.strawmoneybook.core.BankAutomationRuntime;
+import com.strawcoding.strawmoneybook.core.BankAutomationSyncContract;
 
 import com.strawcoding.strawmoneybook.core.BankSyncContract;
 import com.strawcoding.strawmoneybook.core.CaptchaSolver;
@@ -53,7 +60,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Phase A records masked h1_probe / h2_probe + observe-only hncb intercept (never replay).
  * See docs/wiki/Sync-Architecture-B.md.
  */
-final class HuaNanBankAutomation {
+public final class HuaNanBankAutomation {
     private static final String TAG = "HuaNanBankAutomation";
     private static final String PROVIDER_ID = "hua_nan_bank_tw";
     private static final String COOKIE_URL = "https://netbank.hncb.com.tw";
@@ -76,7 +83,7 @@ final class HuaNanBankAutomation {
         "inputs",
         "tableHeaders",
         "tableIds",
-        "digitBlobCount"
+        "structuralAccountFieldCount"
     };
     static final String[] H2_PROBE_REQUIRED_KEYS = new String[] {
         "inquiryMatch",
@@ -110,10 +117,13 @@ final class HuaNanBankAutomation {
             connectionId = buildConnectionId(nationalId, userCode);
         }
 
+        BankAutomationRuntime runtime = new BankAutomationRuntime(activity, webView, vault, debugTrace, PROVIDER_ID);
+        runtime.enter(BankAutomationRuntime.Phase.LOADING_LOGIN);
         BrowserSession session = new BrowserSession(activity, webView);
         debugTrace.record("load_login_page", "running", "Loading Hua Nan login page");
         session.loadUrl(LOGIN_URL);
         debugTrace.record("load_login_page", "ok", "Login page loaded");
+        runtime.enter(BankAutomationRuntime.Phase.AUTHENTICATING);
         performLogin(
             activity,
             session,
@@ -124,6 +134,7 @@ final class HuaNanBankAutomation {
             CaptchaSolver.normalize(payload.optString("captchaCode", ""))
         );
         debugTrace.record("login_complete", "ok", "Login completed");
+        runtime.enter(BankAutomationRuntime.Phase.DISCOVERING_ACCOUNTS);
 
         debugTrace.record("h1_probe", "running", "Capturing masked post-login structure");
         JSONObject h1Probe = captureStructuralProbe(session, "h1");
@@ -132,7 +143,8 @@ final class HuaNanBankAutomation {
         JSONArray accounts = discoverAccounts(session);
         h1Probe.put("accountCount", accounts.length());
         if (accounts.length() == 0) {
-            debugTrace.record("h1_probe", "error", "No syncable accounts in heuristic discovery", h1Probe);
+            debugTrace.record("h1_probe", "error", "No syncable accounts via structural anchors", h1Probe);
+            runtime.markFailed("hua_nan_account_list_not_found", "Hua Nan account list was not found after login");
             throw queryFailure(
                 "hua_nan_account_list_not_found",
                 "Hua Nan account list was not found after login",
@@ -165,6 +177,8 @@ final class HuaNanBankAutomation {
         result.put("accounts", accounts);
         result.put("sync_cursor", buildCursor(initialSyncStartDate));
         result.put("created_at", nowIso());
+        result.put("runtime", runtime.snapshot());
+        runtime.markSuccess(false);
         return result;
     }
 
@@ -689,26 +703,58 @@ final class HuaNanBankAutomation {
                 visit(window);
                 return docs;
               }
+              function looksLikeAccountField(name, id) {
+                const key = (name + ' ' + id).toLowerCase();
+                return /(account|acct|acno|accno|acctno|bankacct|帳號|帳戶)/i.test(key);
+              }
+              function currencyFrom(blob) {
+                return /USD|美金|美元/i.test(blob) ? 'USD' : 'TWD';
+              }
+              function addAccount(found, rawId, blob, source) {
+                const id = digits(rawId);
+                if (id.length < 8 || id.length > 16) return;
+                if (found.has(id)) return;
+                const mask = id.slice(-4);
+                found.set(id, {
+                  providerAccountId: id,
+                  accountName: 'Hua Nan ' + mask,
+                  accountMask: mask,
+                  currency: currencyFrom(blob),
+                  source: source
+                });
+              }
               const found = new Map();
               for (const doc of collectDocs()) {
-                const nodes = Array.from(doc.querySelectorAll('a, td, th, span, div, option, li'));
-                for (const node of nodes) {
-                  const label = text(node.textContent || node.value || node.getAttribute('title') || '');
-                  const href = text(node.getAttribute('href') || node.getAttribute('onclick') || '');
-                  const blob = label + ' ' + href;
-                  const matches = blob.match(/\\b[0-9]{8,16}\\b/g) || [];
-                  for (const match of matches) {
-                    const id = digits(match);
-                    if (id.length < 8 || id.length > 16) continue;
-                    if (found.has(id)) continue;
-                    const mask = id.slice(-4);
-                    found.set(id, {
-                      providerAccountId: id,
-                      accountName: 'Hua Nan ' + mask,
-                      accountMask: mask,
-                      currency: /USD|美金|美元/i.test(blob) ? 'USD' : 'TWD'
-                    });
-                  }
+                // Structural anchors only — never scan arbitrary page text for digit blobs.
+                const fields = Array.from(doc.querySelectorAll(
+                  'input[type="hidden"], input[type="text"], input:not([type]), select, option'
+                ));
+                for (const field of fields) {
+                  const name = text(field.getAttribute('name') || '');
+                  const idAttr = text(field.getAttribute('id') || '');
+                  if (!looksLikeAccountField(name, idAttr)) continue;
+                  const value = text(field.value || field.getAttribute('value') || '');
+                  addAccount(found, value, name + ' ' + idAttr + ' ' + value, 'input_name');
+                }
+                for (const el of Array.from(doc.querySelectorAll('[data-account], [data-acct], [data-acno]'))) {
+                  const raw = text(
+                    el.getAttribute('data-account')
+                    || el.getAttribute('data-acct')
+                    || el.getAttribute('data-acno')
+                    || ''
+                  );
+                  addAccount(found, raw, raw, 'data_attr');
+                }
+                for (const el of Array.from(doc.querySelectorAll('a[href], form[action]'))) {
+                  const href = text(el.getAttribute('href') || el.getAttribute('action') || '');
+                  if (!/[?&](account|acct|acno|acctno)=/i.test(href) && !/[?&]trx=/i.test(href)) continue;
+                  try {
+                    const url = new URL(href, location.href);
+                    for (const key of ['account', 'acct', 'acno', 'acctno', 'Account', 'ACNO']) {
+                      const v = url.searchParams.get(key);
+                      if (v) addAccount(found, v, href, 'query_param');
+                    }
+                  } catch (_e) {}
                 }
               }
               return Array.from(found.values());
@@ -734,7 +780,7 @@ final class HuaNanBankAutomation {
             account.put("accountName", name);
             account.put("accountMask", mask);
             account.put("currency", currency);
-            // Compatibility aliases used by First Bank native consumers.
+            // Compatibility aliases for JS consumers (account_id / name / mask).
             account.put("account_id", accountId);
             account.put("name", name);
             account.put("mask", mask);
@@ -1349,7 +1395,9 @@ final class HuaNanBankAutomation {
                         }
                       }
                       const blob = text(doc.body && doc.body.innerText).slice(0, 4000);
-                      const digitBlobCount = (blob.match(/\\b[0-9]{8,16}\\b/g) || []).length;
+                      const structuralAccountFieldCount = Array.from(doc.querySelectorAll(
+                        'input[name*="account" i], input[name*="acct" i], input[name*="acno" i], input[id*="account" i], input[id*="acct" i], [data-account], [data-acct], [data-acno]'
+                      )).length;
                       const hasEmptyText = /查無資料|沒有資料|no data/i.test(blob);
                       const dateFields = inputs.filter((item) => /date|start|end|from|to|起|迄|開始|結束/i.test(item.name + item.id));
                       const queryButtonFound = Array.from(doc.querySelectorAll('input[type="button"], input[type="submit"], button'))
@@ -1362,7 +1410,7 @@ final class HuaNanBankAutomation {
                         inputs,
                         tableHeaders,
                         tableIds,
-                        digitBlobCount,
+                        structuralAccountFieldCount,
                         hasTable: tables.length > 0,
                         hasDateInput: dateFields.length > 0,
                         dateFields,

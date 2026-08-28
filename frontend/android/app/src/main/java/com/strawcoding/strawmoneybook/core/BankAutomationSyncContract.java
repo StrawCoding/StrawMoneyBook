@@ -1,4 +1,4 @@
-package com.strawcoding.strawmoneybook;
+package com.strawcoding.strawmoneybook.core;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
