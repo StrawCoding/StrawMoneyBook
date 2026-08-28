@@ -118,68 +118,73 @@ public final class HuaNanBankAutomation {
         }
 
         BankAutomationRuntime runtime = new BankAutomationRuntime(activity, webView, vault, debugTrace, PROVIDER_ID);
-        runtime.enter(BankAutomationRuntime.Phase.LOADING_LOGIN);
-        BrowserSession session = new BrowserSession(activity, webView);
-        debugTrace.record("load_login_page", "running", "Loading Hua Nan login page");
-        session.loadUrl(LOGIN_URL);
-        debugTrace.record("load_login_page", "ok", "Login page loaded");
-        runtime.enter(BankAutomationRuntime.Phase.AUTHENTICATING);
-        performLogin(
-            activity,
-            session,
-            debugTrace,
-            nationalId,
-            userCode,
-            password,
-            CaptchaSolver.normalize(payload.optString("captchaCode", ""))
-        );
-        debugTrace.record("login_complete", "ok", "Login completed");
-        runtime.enter(BankAutomationRuntime.Phase.DISCOVERING_ACCOUNTS);
-
-        debugTrace.record("h1_probe", "running", "Capturing masked post-login structure");
-        JSONObject h1Probe = captureStructuralProbe(session, "h1");
-        mergeInterceptSnapshot(h1Probe, session.interceptSnapshot());
-
-        JSONArray accounts = discoverAccounts(session);
-        h1Probe.put("accountCount", accounts.length());
-        if (accounts.length() == 0) {
-            debugTrace.record("h1_probe", "error", "No syncable accounts via structural anchors", h1Probe);
-            runtime.markFailed("hua_nan_account_list_not_found", "Hua Nan account list was not found after login");
-            throw queryFailure(
-                "hua_nan_account_list_not_found",
-                "Hua Nan account list was not found after login",
-                "account_list_not_found",
-                h1Probe
+        bindActiveRuntime(runtime);
+        try {
+            runtime.enter(BankAutomationRuntime.Phase.LOADING_LOGIN);
+            BrowserSession session = new BrowserSession(activity, webView);
+            debugTrace.record("load_login_page", "running", "Loading Hua Nan login page");
+            session.loadUrl(LOGIN_URL);
+            debugTrace.record("load_login_page", "ok", "Login page loaded");
+            performLogin(
+                activity,
+                session,
+                debugTrace,
+                runtime,
+                nationalId,
+                userCode,
+                password,
+                CaptchaSolver.normalize(payload.optString("captchaCode", ""))
             );
+            debugTrace.record("login_complete", "ok", "Login completed");
+            runtime.enter(BankAutomationRuntime.Phase.DISCOVERING_ACCOUNTS);
+
+            debugTrace.record("h1_probe", "running", "Capturing masked post-login structure");
+            JSONObject h1Probe = captureStructuralProbe(session, "h1");
+            mergeInterceptSnapshot(h1Probe, session.interceptSnapshot());
+
+            JSONArray accounts = discoverAccounts(session);
+            h1Probe.put("accountCount", accounts.length());
+            if (accounts.length() == 0) {
+                debugTrace.record("h1_probe", "error", "No syncable accounts via structural anchors", h1Probe);
+                runtime.markFailed("hua_nan_account_list_not_found", "Hua Nan account list was not found after login");
+                throw queryFailure(
+                    "hua_nan_account_list_not_found",
+                    "Hua Nan account list was not found after login",
+                    "account_list_not_found",
+                    h1Probe
+                );
+            }
+            debugTrace.record("h1_probe", "ok", "Post-login structure captured", h1Probe);
+            JSONObject accountDetails = new JSONObject();
+            accountDetails.put("count", accounts.length());
+            debugTrace.record("discover_accounts", "ok", "Discovered syncable accounts", accountDetails);
+
+            JSONObject state = new JSONObject();
+            state.put("provider", PROVIDER_ID);
+            state.put("connectionId", connectionId);
+            state.put("nationalId", nationalId);
+            state.put("userCode", userCode);
+            state.put("password", password);
+            state.put("initialSyncStartDate", initialSyncStartDate);
+            state.put("cookieHeader", session.captureCookies());
+            state.put("updatedAt", nowIso());
+            vault.saveConnectionState(connectionId, state);
+
+            runtime.markSuccess(false);
+            JSONObject result = new JSONObject();
+            result.put("provider", PROVIDER_ID);
+            result.put("institution_name", "Hua Nan Bank");
+            result.put("provider_connection_id", connectionId);
+            result.put("connection_id", connectionId);
+            result.put("connection_name", "Hua Nan Bank");
+            result.put("accounts", accounts);
+            result.put("sync_cursor", buildCursor(initialSyncStartDate));
+            result.put("created_at", nowIso());
+            result.put("runtime", runtime.snapshot());
+            return result;
+        } finally {
+            clearActiveRuntime(runtime);
         }
-        debugTrace.record("h1_probe", "ok", "Post-login structure captured", h1Probe);
-        JSONObject accountDetails = new JSONObject();
-        accountDetails.put("count", accounts.length());
-        debugTrace.record("discover_accounts", "ok", "Discovered syncable accounts", accountDetails);
-
-        JSONObject state = new JSONObject();
-        state.put("provider", PROVIDER_ID);
-        state.put("connectionId", connectionId);
-        state.put("nationalId", nationalId);
-        state.put("userCode", userCode);
-        state.put("password", password);
-        state.put("initialSyncStartDate", initialSyncStartDate);
-        state.put("cookieHeader", session.captureCookies());
-        state.put("updatedAt", nowIso());
-        vault.saveConnectionState(connectionId, state);
-
-        JSONObject result = new JSONObject();
-        result.put("provider", PROVIDER_ID);
-        result.put("institution_name", "Hua Nan Bank");
-        result.put("provider_connection_id", connectionId);
-        result.put("connection_id", connectionId);
-        result.put("connection_name", "Hua Nan Bank");
-        result.put("accounts", accounts);
-        result.put("sync_cursor", buildCursor(initialSyncStartDate));
-        result.put("created_at", nowIso());
-        result.put("runtime", runtime.snapshot());
-        runtime.markSuccess(false);
-        return result;
     }
 
     public static JSONObject sync(
@@ -219,177 +224,196 @@ public final class HuaNanBankAutomation {
         LocalDate syncStartedDate = endDate;
         String endText = endDate.format(DATE_FORMAT);
 
-        BrowserSession session = new BrowserSession(activity, webView);
-        String cookieHeader = normalizeText(state.optString("cookieHeader"));
-        if (!cookieHeader.isEmpty()) {
-            debugTrace.record("restore_cookies", "running", "Restoring saved bank session cookies");
-            session.restoreCookies(cookieHeader);
-            debugTrace.record("restore_cookies", "ok", "Cookies restored");
-        }
+        BankAutomationRuntime runtime = new BankAutomationRuntime(activity, webView, vault, debugTrace, PROVIDER_ID);
+        bindActiveRuntime(runtime);
+        try {
+            runtime.enter(BankAutomationRuntime.Phase.SYNCING_TRANSACTIONS);
+            BrowserSession session = new BrowserSession(activity, webView);
+            String cookieHeader = normalizeText(state.optString("cookieHeader"));
+            if (!cookieHeader.isEmpty()) {
+                debugTrace.record("restore_cookies", "running", "Restoring saved bank session cookies");
+                session.restoreCookies(cookieHeader);
+                debugTrace.record("restore_cookies", "ok", "Cookies restored");
+            }
 
-        JSONArray added = new JSONArray();
-        JSONArray accountResults = new JSONArray();
-        boolean reloginAttempted = false;
+            JSONArray added = new JSONArray();
+            JSONArray accountResults = new JSONArray();
+            boolean reloginAttempted = false;
 
-        for (int accountIndex = 0; accountIndex < accountIds.length(); accountIndex += 1) {
-            ensureNotAborted();
-            String accountId = normalizeAccountId(accountIds.optString(accountIndex));
-            if (accountId.isEmpty()) continue;
-            String accountWatermark = BankAutomationSyncContract.resolveAccountWatermark(
-                accountWatermarks,
-                accountId,
-                connectionWatermark
-            );
-            LocalDate startDate = BankSyncContract.resolveQueryStartDate(
-                initialSyncStartDate,
-                accountWatermark,
-                cursor,
-                lookbackDays
-            );
-            String startText = startDate.format(DATE_FORMAT);
-            int accountRowCount = 0;
-            try {
-                boolean retryAccount = true;
-                while (retryAccount) {
-                    retryAccount = false;
-                    JSONObject loadDetails = new JSONObject();
-                    loadDetails.put("accountMask", maskAccountId(accountId));
-                    loadDetails.put("windowStart", startText);
-                    loadDetails.put("windowEnd", endText);
-                    debugTrace.record("load_transaction_page", "running", "Opening transaction inquiry", loadDetails);
+            for (int accountIndex = 0; accountIndex < accountIds.length(); accountIndex += 1) {
+                ensureNotAborted(runtime);
+                String accountId = normalizeAccountId(accountIds.optString(accountIndex));
+                if (accountId.isEmpty()) continue;
+                String accountWatermark = BankAutomationSyncContract.resolveAccountWatermark(
+                    accountWatermarks,
+                    accountId,
+                    connectionWatermark
+                );
+                LocalDate startDate = BankSyncContract.resolveQueryStartDate(
+                    initialSyncStartDate,
+                    accountWatermark,
+                    cursor,
+                    lookbackDays
+                );
+                String startText = startDate.format(DATE_FORMAT);
+                int accountRowCount = 0;
+                try {
+                    boolean retryAccount = true;
+                    while (retryAccount) {
+                        retryAccount = false;
+                        JSONObject loadDetails = new JSONObject();
+                        loadDetails.put("accountMask", maskAccountId(accountId));
+                        loadDetails.put("windowStart", startText);
+                        loadDetails.put("windowEnd", endText);
+                        debugTrace.record("load_transaction_page", "running", "Opening transaction inquiry", loadDetails);
 
-                    if (!openTransactionInquiry(session, debugTrace, accountId, startText, endText)) {
+                        if (!openTransactionInquiry(session, debugTrace, accountId, startText, endText)) {
+                            if (session.isLoginPage()) {
+                                if (reloginAttempted) {
+                                    runtime.markFailed("hua_nan_session_expired", "Hua Nan session expired and silent relogin failed");
+                                    throw new BankAutomationException(
+                                        "hua_nan_session_expired",
+                                        "Hua Nan session expired and silent relogin failed"
+                                    );
+                                }
+                                debugTrace.record("silent_relogin", "running", "Session expired; retrying login");
+                                performLogin(
+                                    activity,
+                                    session,
+                                    debugTrace,
+                                    runtime,
+                                    state.optString("nationalId"),
+                                    state.optString("userCode"),
+                                    state.optString("password"),
+                                    ""
+                                );
+                                runtime.enter(BankAutomationRuntime.Phase.SYNCING_TRANSACTIONS);
+                                reloginAttempted = true;
+                                retryAccount = true;
+                                continue;
+                            }
+                            JSONObject missProbe = captureStructuralProbe(session, "h2");
+                            mergeInterceptSnapshot(missProbe, session.interceptSnapshot());
+                            missProbe.put("inquiryMatch", "none");
+                            missProbe.put("reason", "inquiry_not_found");
+                            missProbe.put("accountMask", maskAccountId(accountId));
+                            debugTrace.record("h2_probe", "error", "Transaction inquiry entry was not found", missProbe);
+                            throw queryFailure(
+                                "hua_nan_transaction_query_failed",
+                                "Hua Nan transaction inquiry was not found for account " + maskAccountId(accountId),
+                                "inquiry_not_found",
+                                missProbe
+                            );
+                        }
+
                         if (session.isLoginPage()) {
                             if (reloginAttempted) {
+                                runtime.markFailed("hua_nan_session_expired", "Hua Nan session expired during transaction sync");
                                 throw new BankAutomationException(
                                     "hua_nan_session_expired",
-                                    "Hua Nan session expired and silent relogin failed"
+                                    "Hua Nan session expired during transaction sync"
                                 );
                             }
-                            debugTrace.record("silent_relogin", "running", "Session expired; retrying login");
+                            debugTrace.record("silent_relogin", "running", "Session expired during transaction query");
                             performLogin(
                                 activity,
                                 session,
                                 debugTrace,
+                                runtime,
                                 state.optString("nationalId"),
                                 state.optString("userCode"),
                                 state.optString("password"),
                                 ""
                             );
+                            runtime.enter(BankAutomationRuntime.Phase.SYNCING_TRANSACTIONS);
                             reloginAttempted = true;
                             retryAccount = true;
                             continue;
                         }
-                        JSONObject missProbe = captureStructuralProbe(session, "h2");
-                        mergeInterceptSnapshot(missProbe, session.interceptSnapshot());
-                        missProbe.put("inquiryMatch", "none");
-                        missProbe.put("reason", "inquiry_not_found");
-                        missProbe.put("accountMask", maskAccountId(accountId));
-                        debugTrace.record("h2_probe", "error", "Transaction inquiry entry was not found", missProbe);
-                        throw queryFailure(
-                            "hua_nan_transaction_query_failed",
-                            "Hua Nan transaction inquiry was not found for account " + maskAccountId(accountId),
-                            "inquiry_not_found",
-                            missProbe
-                        );
-                    }
 
-                    if (session.isLoginPage()) {
-                        if (reloginAttempted) {
-                            throw new BankAutomationException(
-                                "hua_nan_session_expired",
-                                "Hua Nan session expired during transaction sync"
-                            );
+                        JSONArray rows = parseTransactions(session, accountId, startText, endText);
+                        JSONObject postQueryProbe = captureStructuralProbe(session, "h2");
+                        mergeInterceptSnapshot(postQueryProbe, session.interceptSnapshot());
+                        JSONObject parseDetails = new JSONObject(loadDetails.toString());
+                        parseDetails.put("rows", rows.length());
+                        parseDetails.put("hasDateInput", postQueryProbe.optBoolean("hasDateInput", false));
+                        parseDetails.put("queryButtonFound", postQueryProbe.optBoolean("queryButtonFound", false));
+                        parseDetails.put("hasEmptyText", postQueryProbe.optBoolean("hasEmptyText", false));
+                        debugTrace.record("parse_transactions", "ok", "Parsed transaction rows", parseDetails);
+                        for (int rowIndex = 0; rowIndex < rows.length(); rowIndex += 1) {
+                            added.put(rows.getJSONObject(rowIndex));
+                            accountRowCount += 1;
                         }
-                        debugTrace.record("silent_relogin", "running", "Session expired during transaction query");
-                        performLogin(
-                            activity,
-                            session,
+                        accountResults.put(buildAccountSyncResult(
                             debugTrace,
-                            state.optString("nationalId"),
-                            state.optString("userCode"),
-                            state.optString("password"),
-                            ""
-                        );
-                        reloginAttempted = true;
-                        retryAccount = true;
-                        continue;
+                            accountId,
+                            endDate,
+                            syncStartedDate,
+                            accountRowCount,
+                            postQueryProbe
+                        ));
                     }
-
-                    JSONArray rows = parseTransactions(session, accountId, startText, endText);
-                    JSONObject postQueryProbe = captureStructuralProbe(session, "h2");
-                    mergeInterceptSnapshot(postQueryProbe, session.interceptSnapshot());
-                    JSONObject parseDetails = new JSONObject(loadDetails.toString());
-                    parseDetails.put("rows", rows.length());
-                    parseDetails.put("hasDateInput", postQueryProbe.optBoolean("hasDateInput", false));
-                    parseDetails.put("queryButtonFound", postQueryProbe.optBoolean("queryButtonFound", false));
-                    parseDetails.put("hasEmptyText", postQueryProbe.optBoolean("hasEmptyText", false));
-                    debugTrace.record("parse_transactions", "ok", "Parsed transaction rows", parseDetails);
-                    for (int rowIndex = 0; rowIndex < rows.length(); rowIndex += 1) {
-                        added.put(rows.getJSONObject(rowIndex));
-                        accountRowCount += 1;
+                } catch (BankAutomationException accountError) {
+                    String code = normalizeText(accountError.getCode()).toLowerCase(Locale.ROOT);
+                    if ("hua_nan_session_expired".equals(code) || "hua_nan_login_failed".equals(code)
+                        || "hua_nan_legacy_reconnect_required".equals(code)
+                        || "hua_nan_captcha_manual_required".equals(code)
+                        || "bank_automation_aborted".equals(code)) {
+                        throw accountError;
                     }
-                    accountResults.put(buildAccountSyncResult(
-                        debugTrace,
+                    accountResults.put(BankAutomationSyncContract.accountResultError(
                         accountId,
-                        endDate,
-                        syncStartedDate,
-                        accountRowCount,
-                        postQueryProbe
+                        accountError.getCode(),
+                        accountError.getMessage()
+                    ));
+                } catch (Exception accountError) {
+                    accountResults.put(BankAutomationSyncContract.accountResultError(
+                        accountId,
+                        "hua_nan_account_sync_failed",
+                        String.valueOf(accountError.getMessage())
                     ));
                 }
-            } catch (BankAutomationException accountError) {
-                String code = normalizeText(accountError.getCode()).toLowerCase(Locale.ROOT);
-                if ("hua_nan_session_expired".equals(code) || "hua_nan_login_failed".equals(code)
-                    || "hua_nan_legacy_reconnect_required".equals(code)) {
-                    throw accountError;
-                }
-                accountResults.put(BankAutomationSyncContract.accountResultError(
-                    accountId,
-                    accountError.getCode(),
-                    accountError.getMessage()
-                ));
-            } catch (Exception accountError) {
-                accountResults.put(BankAutomationSyncContract.accountResultError(
-                    accountId,
-                    "hua_nan_account_sync_failed",
-                    String.valueOf(accountError.getMessage())
-                ));
             }
-        }
 
-        if (accountResults.length() == 0) {
-            throw new BankAutomationException("hua_nan_account_ids_required", "Hua Nan sync requires at least one account ID");
-        }
-        String aggregateStatus = BankAutomationSyncContract.syncStatusFromAccountResults(accountResults);
-        if ("error".equals(aggregateStatus)) {
-            JSONObject firstError = accountResults.optJSONObject(0);
-            throw new BankAutomationException(
-                firstError == null ? "hua_nan_account_sync_failed" : firstError.optString("code", "hua_nan_account_sync_failed"),
-                firstError == null ? "Hua Nan account sync failed" : firstError.optString("message", "Hua Nan account sync failed")
-            );
-        }
+            if (accountResults.length() == 0) {
+                runtime.markFailed("hua_nan_account_ids_required", "Hua Nan sync requires at least one account ID");
+                throw new BankAutomationException("hua_nan_account_ids_required", "Hua Nan sync requires at least one account ID");
+            }
+            String aggregateStatus = BankAutomationSyncContract.syncStatusFromAccountResults(accountResults);
+            if ("error".equals(aggregateStatus)) {
+                JSONObject firstError = accountResults.optJSONObject(0);
+                String errorCode = firstError == null ? "hua_nan_account_sync_failed" : firstError.optString("code", "hua_nan_account_sync_failed");
+                String errorMessage = firstError == null ? "Hua Nan account sync failed" : firstError.optString("message", "Hua Nan account sync failed");
+                runtime.markFailed(errorCode, errorMessage);
+                throw new BankAutomationException(errorCode, errorMessage);
+            }
 
-        JSONArray deduped = dedupeTransactions(added);
-        state.put("cookieHeader", session.captureCookies());
-        state.put("updatedAt", nowIso());
-        vault.saveConnectionState(connectionId, state);
+            JSONArray deduped = dedupeTransactions(added);
+            state.put("cookieHeader", session.captureCookies());
+            state.put("updatedAt", nowIso());
+            vault.saveConnectionState(connectionId, state);
 
-        JSONObject result = new JSONObject();
-        result.put("provider", PROVIDER_ID);
-        result.put("added", deduped);
-        result.put("modified", new JSONArray());
-        // Only advance connection-level coveredThrough when every account is ok.
-        // partial_success must not claim a false watermark that JS would persist.
-        if ("ok".equals(aggregateStatus)) {
-            String covered = BankAutomationSyncContract.coveredThroughIsoDate(endDate, syncStartedDate);
-            result.put("sync_time", covered);
-            result.put("coveredThrough", covered);
+            boolean partial = "partial".equals(aggregateStatus) || "partial_success".equals(aggregateStatus);
+            runtime.markSuccess(partial);
+            JSONObject result = new JSONObject();
+            result.put("provider", PROVIDER_ID);
+            result.put("added", deduped);
+            result.put("modified", new JSONArray());
+            // Only advance connection-level coveredThrough when every account is ok.
+            // partial_success must not claim a false watermark that JS would persist.
+            if ("ok".equals(aggregateStatus)) {
+                String covered = BankAutomationSyncContract.coveredThroughIsoDate(endDate, syncStartedDate);
+                result.put("sync_time", covered);
+                result.put("coveredThrough", covered);
+            }
+            result.put("next_cursor", buildCursor(initialSyncStartDate));
+            result.put("accountResults", accountResults);
+            result.put("sync_status", aggregateStatus);
+            result.put("runtime", runtime.snapshot());
+            return result;
+        } finally {
+            clearActiveRuntime(runtime);
         }
-        result.put("next_cursor", buildCursor(initialSyncStartDate));
-        result.put("accountResults", accountResults);
-        result.put("sync_status", aggregateStatus);
-        return result;
     }
 
     public static JSONObject disconnect(
@@ -417,14 +441,37 @@ public final class HuaNanBankAutomation {
     }
 
     private static volatile boolean abortRequested = false;
+    private static volatile BankAutomationRuntime activeRuntime = null;
+
+    private static void bindActiveRuntime(BankAutomationRuntime runtime) {
+        activeRuntime = runtime;
+        abortRequested = false;
+    }
+
+    private static void clearActiveRuntime(BankAutomationRuntime runtime) {
+        if (activeRuntime == runtime) {
+            activeRuntime = null;
+        }
+    }
 
     static void requestAbort() {
         abortRequested = true;
+        BankAutomationRuntime runtime = activeRuntime;
+        if (runtime != null) {
+            runtime.markAborted();
+        }
     }
 
     private static void ensureNotAborted() throws BankAutomationException {
+        ensureNotAborted(activeRuntime);
+    }
+
+    private static void ensureNotAborted(BankAutomationRuntime runtime) throws BankAutomationException {
         if (abortRequested) {
             abortRequested = false;
+            if (runtime != null) {
+                runtime.markAborted();
+            }
             throw new BankAutomationException(
                 "bank_automation_aborted",
                 "Bank automation was cancelled"
@@ -482,6 +529,7 @@ public final class HuaNanBankAutomation {
         Activity activity,
         BrowserSession session,
         BankAutomationDebugTrace debugTrace,
+        BankAutomationRuntime runtime,
         String nationalId,
         String userCode,
         String password,
@@ -494,12 +542,15 @@ public final class HuaNanBankAutomation {
         boolean manualCaptchaPending = normalizedManualCaptcha.length() == CAPTCHA_EXPECTED_LENGTH
             && normalizedManualCaptcha.chars().allMatch(Character::isDigit);
 
+        if (runtime != null) {
+            runtime.enter(BankAutomationRuntime.Phase.CAPTCHA);
+        }
         debugTrace.record("captcha_wait_ready", "running", "Waiting for captcha image");
         session.waitForCaptchaReady("");
         debugTrace.record("captcha_wait_ready", "ok", "Captcha image became ready");
 
         for (int attempt = 0; attempt < CAPTCHA_MAX_ATTEMPTS; attempt += 1) {
-            ensureNotAborted();
+            ensureNotAborted(runtime);
             if (attempt > 0) {
                 JSONObject refreshDetails = new JSONObject();
                 putJsonValue(refreshDetails, "attempt", attempt + 1);
@@ -532,6 +583,9 @@ public final class HuaNanBankAutomation {
             hasRecognizedCaptcha = true;
             putJsonValue(attemptDetails, "captchaLength", captchaText.length());
             debugTrace.record("captcha_attempt", "ok", "OCR produced a valid 4-digit code", attemptDetails);
+            if (runtime != null) {
+                runtime.enter(BankAutomationRuntime.Phase.AUTHENTICATING);
+            }
             debugTrace.record("submit_login", "running", "Submitting login form via doSubmit", attemptDetails);
             session.submitLogin(nationalId, userCode, password, captchaText);
             if (session.waitForLoginSuccess()) {
@@ -539,12 +593,24 @@ public final class HuaNanBankAutomation {
                 return;
             }
             debugTrace.record("submit_login", "error", "Still on login page after submit", attemptDetails);
+            if (runtime != null) {
+                runtime.enter(BankAutomationRuntime.Phase.CAPTCHA);
+            }
             session.loadUrl(LOGIN_URL);
             session.waitForLoginForm();
         }
 
         if (!hasRecognizedCaptcha) {
+            if (runtime != null) {
+                runtime.markUserInteractionRequired(
+                    "hua_nan_captcha_manual_required",
+                    "Hua Nan captcha recognition failed. Please enter the captcha manually."
+                );
+            }
             throw buildManualCaptchaRequiredException(lastCaptchaDataUrl, "USER_INTERACTION_REQUIRED");
+        }
+        if (runtime != null) {
+            runtime.markFailed("hua_nan_login_failed", "Hua Nan login failed");
         }
         throw new BankAutomationException("hua_nan_login_failed", "Hua Nan login failed");
     }

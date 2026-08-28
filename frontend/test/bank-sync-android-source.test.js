@@ -50,10 +50,23 @@ test('Architecture B exposes BankAutomationRuntime phase machine', () => {
   )
   assert.match(runtimeSource, /enum Phase/)
   assert.match(runtimeSource, /USER_INTERACTION_REQUIRED/)
+  assert.match(runtimeSource, /SYNCING_TRANSACTIONS/)
   assert.match(huaNanBankAutomationSource, /BankAutomationRuntime/)
   assert.match(huaNanBankAutomationSource, /providers\.huanan|package com\.strawcoding\.strawmoneybook\.providers\.huanan/)
   assert.match(huaNanBankAutomationSource, /structuralAccountFieldCount/)
+  assert.match(huaNanBankAutomationSource, /SYNCING_TRANSACTIONS/)
+  assert.match(huaNanBankAutomationSource, /markUserInteractionRequired/)
+  assert.match(huaNanBankAutomationSource, /markSuccess\(false\)[\s\S]*runtime\.snapshot\(\)/)
   assert.doesNotMatch(huaNanBankAutomationSource, /nodes = Array\.from\(doc\.querySelectorAll\('a, td, th, span, div, option, li'\)/)
+})
+
+test('debug trace has no first-bank product residuals', () => {
+  const debugTraceSource = read(
+    'android/app/src/main/java/com/strawcoding/strawmoneybook/BankAutomationDebugTrace.java',
+  )
+  assert.doesNotMatch(debugTraceSource, /first_bank_/)
+  assert.doesNotMatch(debugTraceSource, /第一銀行/)
+  assert.match(debugTraceSource, /hua_nan_captcha_manual_required/)
 })
 
 test('hua nan automation uses modular core captcha and sync contract', () => {

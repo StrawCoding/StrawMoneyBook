@@ -38,6 +38,7 @@
           :key="provider.value"
           class="provider-card"
           :class="{ selected: form.providerId === provider.value }"
+          :data-testid="`bank-sync-provider-${provider.value}`"
           role="button"
           tabindex="0"
           @click="selectProvider(provider.value)"
@@ -48,7 +49,7 @@
         </div>
         <p v-if="!hasMultipleProviders" class="muted coming-soon">{{ t('settings_bank_sync_create.wizard.coming_soon') }}</p>
         <div class="row action-row">
-          <button class="btn primary" :disabled="!form.providerId" @click="goToStep(2)">{{ t('settings_bank_sync_create.wizard.next') }}</button>
+          <button class="btn primary" data-testid="bank-sync-wizard-next" :disabled="!form.providerId" @click="goToStep(2)">{{ t('settings_bank_sync_create.wizard.next') }}</button>
         </div>
       </article>
 
@@ -79,6 +80,7 @@
             v-model="form[credentialFormKey(field.id)]"
             class="input"
             type="password"
+            :data-testid="`bank-sync-field-${field.id}`"
             :maxlength="field.maxlength"
           />
           <input
@@ -86,12 +88,13 @@
             v-model.trim="form[credentialFormKey(field.id)]"
             class="input"
             type="text"
+            :data-testid="`bank-sync-field-${field.id}`"
             :maxlength="field.maxlength"
             :inputmode="field.inputmode || 'text'"
           />
         </label>
 
-        <article v-if="showCaptchaPanel" class="captcha-panel">
+        <article v-if="showCaptchaPanel" class="captcha-panel" data-testid="bank-sync-captcha-panel">
           <label class="field">
             {{ t('settings_bank_sync_create.captcha_image') }}
             <img v-if="captchaImageSrc" :src="captchaImageSrc" alt="captcha" class="captcha-image" />
@@ -99,7 +102,15 @@
           </label>
           <label class="field">
             {{ t('settings_bank_sync_create.captcha_code') }}
-            <input v-model.trim="form.captchaCode" class="input" type="text" maxlength="4" inputmode="text" autocomplete="one-time-code" />
+            <input
+              v-model.trim="form.captchaCode"
+              class="input"
+              type="text"
+              maxlength="4"
+              inputmode="text"
+              autocomplete="one-time-code"
+              data-testid="bank-sync-captcha-code"
+            />
           </label>
           <p class="muted">{{ captchaManualRequiredMessage }}</p>
         </article>
@@ -111,31 +122,31 @@
 
         <div class="row action-row">
           <button class="btn" :disabled="submitting" @click="goToStep(1)">{{ t('settings_bank_sync_create.wizard.back') }}</button>
-          <button class="btn primary" :disabled="!canSubmitLogin || submitting" @click="submitLogin">
+          <button class="btn primary" data-testid="bank-sync-wizard-submit-login" :disabled="!canSubmitLogin || submitting" @click="submitLogin">
             {{ submitting ? t('settings_bank_sync_create.creating') : t('settings_bank_sync_create.wizard.next') }}
           </button>
         </div>
       </article>
 
-      <article v-else-if="currentStep === 3" class="card panel">
+      <article v-else-if="currentStep === 3" class="card panel" data-testid="bank-sync-account-mapping">
         <p class="muted">{{ t('settings_bank_sync.account_sync.desc') }}</p>
-        <div v-for="account in accountDrafts" :key="account.id" class="account-row">
+        <div v-for="account in accountDrafts" :key="account.id" class="account-row" data-testid="bank-sync-account-row">
           <label class="check-row account-enable">
-            <input v-model="account.enabledBool" type="checkbox" />
+            <input v-model="account.enabledBool" type="checkbox" data-testid="bank-sync-account-enable" />
             <span>{{ account.account_name }}（{{ account.account_mask || '-' }}）</span>
           </label>
-          <label class="field">
+          <label class="field" data-testid="bank-sync-account-map">
             {{ t('settings_bank_sync.account_sync.target_account') }}
             <CustomSelect v-model="account.mappedAccountIdDraft" :groups="ledgerAccountGroups" :placeholder="t('settings_bank_sync.account_sync.choose_account')" />
           </label>
           <label class="field">
             {{ t('settings_bank_sync.account_sync.display_name') }}
-            <input v-model.trim="account.userLabelDraft" class="input" type="text" :placeholder="t('settings_bank_sync.account_sync.display_name_placeholder')" />
+            <input v-model.trim="account.userLabelDraft" class="input" type="text" :placeholder="t('settings_bank_sync.account_sync.display_name_placeholder')" data-testid="bank-sync-account-label" />
           </label>
         </div>
         <div class="row action-row">
           <button class="btn" :disabled="savingAccounts" @click="goToStep(2)">{{ t('settings_bank_sync_create.wizard.back') }}</button>
-          <button class="btn primary" :disabled="!canSaveAccounts || savingAccounts" @click="saveAccountsAndContinue">
+          <button class="btn primary" data-testid="bank-sync-save-accounts" :disabled="!canSaveAccounts || savingAccounts" @click="saveAccountsAndContinue">
             {{ savingAccounts ? t('settings_bank_sync.common.saving') : t('settings_bank_sync_create.wizard.next') }}
           </button>
         </div>
@@ -155,6 +166,7 @@
       :message="confirmMessage"
       :confirm-text="t('settings_bank_sync_create.create')"
       :loading="submitting"
+      data-testid="bank-sync-connect-confirm-dialog"
       @close="confirmDialogOpen = false"
       @confirm="confirmSubmitLogin"
     />
@@ -239,8 +251,8 @@ const CREDENTIAL_FIELD_FORM_KEYS = Object.freeze({
 })
 
 const MANUAL_CAPTCHA_ERROR_CODES = Object.freeze([
-  'first_bank_captcha_manual_required',
   'hua_nan_captcha_manual_required',
+  'captcha_required',
 ])
 
 const backLink = { name: 'settings-bank-sync' }
@@ -318,6 +330,47 @@ onMounted(async () => {
   try {
     if (localStorage.getItem('straw.playwright.hooks') === '1') {
       const FIXTURE_ACCOUNT_ID = '123456789012'
+      // Web has no Android WebView: install native-boundary fixtures so formal UI
+      // clicks still exercise real connect/mapping/sync/import service+DB paths.
+      setBankSyncServiceDependenciesForTest({
+        assertCanUseBankSync: async () => {},
+        hasBankSyncMembershipAccess: async () => true,
+        exchangeBankAuth: async () => ({
+          provider: 'hua_nan_bank_tw',
+          accounts: [{
+            account_id: FIXTURE_ACCOUNT_ID,
+            name: 'Playwright Hua Nan Savings',
+            mask: '9012',
+            currency: 'TWD',
+            type: 'depository',
+          }],
+          connection_name: 'Playwright Wizard Hua Nan',
+          institution_name: 'Hua Nan Bank',
+          sync_cursor: '',
+        }),
+        syncBankTransactions: async () => ({
+          status: 'ok',
+          sync_status: 'ok',
+          coveredThrough: '2026-08-28',
+          added: [{
+            providerAccountId: FIXTURE_ACCOUNT_ID,
+            providerTransactionId: `pw_tx_${Date.now()}`,
+            amountMinor: -12800,
+            currency: 'TWD',
+            postedAt: new Date().toISOString(),
+            summary: 'Playwright Seed Txn',
+            description: 'Playwright Seed Txn',
+            status: 'posted',
+          }],
+          modified: [],
+          accountResults: [{
+            accountId: FIXTURE_ACCOUNT_ID,
+            status: 'ok',
+            coveredThrough: '2026-08-28',
+            rowCount: 1,
+          }],
+        }),
+      })
       window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__ = {
         getProviderOptions() {
           const options = providerOptions.value.map((item) => ({ ...item }))
@@ -330,114 +383,11 @@ onMounted(async () => {
         getCurrentStep() {
           return currentStep.value
         },
-        goToStep(step) {
-          goToStep(Number(step) || 1)
-          return currentStep.value
-        },
-        installNativeServiceFixtures() {
-          setBankSyncServiceDependenciesForTest({
-            assertCanUseBankSync: async () => {},
-            hasBankSyncMembershipAccess: async () => true,
-            exchangeBankAuth: async () => ({
-              provider: 'hua_nan_bank_tw',
-              accounts: [{
-                account_id: FIXTURE_ACCOUNT_ID,
-                name: 'Playwright Hua Nan Savings',
-                mask: '9012',
-                currency: 'TWD',
-                type: 'depository',
-              }],
-              connection_name: 'Playwright Wizard Hua Nan',
-              institution_name: 'Hua Nan Bank',
-              sync_cursor: '',
-            }),
-            syncBankTransactions: async () => ({
-              status: 'ok',
-              sync_status: 'ok',
-              coveredThrough: '2026-08-28',
-              added: [{
-                providerAccountId: FIXTURE_ACCOUNT_ID,
-                providerTransactionId: `pw_tx_${Date.now()}`,
-                amountMinor: -12800,
-                currency: 'TWD',
-                postedAt: new Date().toISOString(),
-                summary: 'Playwright Seed Txn',
-                description: 'Playwright Seed Txn',
-                status: 'posted',
-              }],
-              modified: [],
-              accountResults: [{
-                accountId: FIXTURE_ACCOUNT_ID,
-                status: 'ok',
-                coveredThrough: '2026-08-28',
-                rowCount: 1,
-              }],
-            }),
-          })
-          return { ok: true }
-        },
-        async runFormalConnect(credentials = {}) {
-          this.installNativeServiceFixtures()
-          form.providerId = 'hua_nan_bank_tw'
-          form.nationalId = String(credentials.nationalId || 'A123456789')
-          form.repeatSeq = String(credentials.repeatSeq || '0')
-          form.code = String(credentials.code || 'nickname1')
-          form.password = String(credentials.password || 'password12')
-          form.captchaCode = String(credentials.captchaCode || '1234')
-          form.initialSyncStartDate = String(credentials.initialSyncStartDate || form.initialSyncStartDate)
-          const connection = await connectBankProvider(ledgerStore.activeLedgerId, form.providerId, {
-            initialSyncStartDate: form.initialSyncStartDate,
-            nationalId: form.nationalId,
-            repeatSeq: form.repeatSeq,
-            code: form.code,
-            password: form.password,
-            captchaCode: form.captchaCode,
-          })
-          createdConnection.value = connection
-          normalizeAccountDrafts(connection)
-          currentStep.value = 3
-          return {
-            ok: true,
-            step: currentStep.value,
-            connectionId: connection.id,
-            accountCount: accountDrafts.value.length,
-            provider: connection.provider,
-          }
-        },
-        async runFormalSaveMappingAndSync() {
-          if (!createdConnection.value) return { ok: false, reason: 'missing_connection' }
-          const ledgerAccountId = ledgerAccountOptions.value.find((item) => item.value !== '__none__')?.value
-            || accountStore.accounts?.[0]?.id
-            || null
-          if (!ledgerAccountId) return { ok: false, reason: 'missing_ledger_account' }
-          for (const draft of accountDrafts.value) {
-            draft.enabledBool = true
-            draft.mappedAccountIdDraft = ledgerAccountId
-          }
-          await saveBankAccountsSettings(
-            ledgerStore.activeLedgerId,
-            accountDrafts.value.map((account) => ({
-              bankAccountId: account.id,
-              enabled: true,
-              mappedAccountId: account.mappedAccountIdDraft === '__none__' ? null : account.mappedAccountIdDraft,
-              userLabel: account.userLabelDraft,
-            })),
-          )
-          const syncResult = await syncBankConnectionNow(ledgerStore.activeLedgerId, createdConnection.value.id)
-          currentStep.value = 4
-          return {
-            ok: true,
-            connectionId: createdConnection.value.id,
-            added: Array.isArray(syncResult?.added) ? syncResult.added.length : 0,
-            modified: Array.isArray(syncResult?.modified) ? syncResult.modified.length : 0,
-            syncStatus: syncResult?.syncStatus || syncResult?.status || null,
-          }
+        getCreatedConnectionId() {
+          return createdConnection.value?.id || null
         },
         getAccountDraftCount() {
           return accountDrafts.value.length
-        },
-        getCreatedConnectionId() {
-          return createdConnection.value?.id || null
         },
       }
     }
@@ -502,7 +452,7 @@ function resolveCreateErrorMessage(error, fallbackKey) {
   const code = String(error?.code ?? '').trim()
   const rawMessage = String(error?.message ?? '').trim()
   const mappedByCode = {
-    first_bank_captcha_manual_required: t('settings_bank_sync_create.error.hua_nan_captcha_manual_required'),
+    captcha_required: t('settings_bank_sync_create.error.hua_nan_captcha_manual_required'),
     hua_nan_national_id_required: t('settings_bank_sync_create.error.hua_nan_national_id_required'),
     hua_nan_user_code_required: t('settings_bank_sync_create.error.hua_nan_user_code_required'),
     hua_nan_password_required: t('settings_bank_sync_create.error.hua_nan_password_required'),

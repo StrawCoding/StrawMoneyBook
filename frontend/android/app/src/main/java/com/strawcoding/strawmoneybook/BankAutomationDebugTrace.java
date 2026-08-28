@@ -80,7 +80,7 @@ public final class BankAutomationDebugTrace {
     private String buildHint(String errorCode) {
         String code = errorCode == null ? "" : errorCode.trim();
         switch (code) {
-            case "first_bank_captcha_not_ready":
+            case "hua_nan_captcha_not_ready":
                 JSONObject captchaWaitDetails = findLastStepDetails("captcha_wait_ready");
                 if (captchaWaitDetails == null) {
                     captchaWaitDetails = findLastStepDetails("captcha_refresh");
@@ -88,38 +88,16 @@ public final class BankAutomationDebugTrace {
                 String reason = captchaWaitDetails == null ? "" : captchaWaitDetails.optString("reason", "").trim();
                 switch (reason) {
                     case "image_missing":
-                        return "登入頁內找不到 #code_verify，請檢查是否改版或 captcha 是否位於 frame。";
+                        return "華南登入頁內找不到驗證碼圖片元素，請檢查是否改版或 captcha 是否位於 frame。";
                     case "image_incomplete":
-                        return "已找到 #code_verify，但圖片尚未完成載入，請檢查 complete、width、height 與實際網頁載入時序。";
+                        return "已找到華南驗證碼圖片，但尚未完成載入，請檢查 complete、width、height 與實際網頁載入時序。";
                     case "canvas_blocked":
-                        return "已找到 #code_verify，但 WebView 無法轉成 PNG，請檢查 canvas 擷取是否被頁面限制。";
+                        return "已找到華南驗證碼圖片，但 WebView 無法轉成 PNG，請檢查 canvas 擷取是否被頁面限制。";
                     case "frame_mismatch":
-                        return "已找到 frame 內的 #code_verify，但目前 document/frame 路徑不一致，請檢查 frame traversal 與 refresh/login 觸發點。";
+                        return "華南驗證碼位於 frame，但目前 document/frame 路徑不一致，請檢查 frame traversal 與 refresh/login 觸發點。";
                     default:
-                        return "驗證碼圖片尚未完成載入，請檢查登入頁是否成功載入 #code_verify。";
+                        return "華南驗證碼圖片尚未完成載入，請檢查登入頁 captcha 元素與載入時序。";
                 }
-            case "first_bank_captcha_ocr_failed":
-                return "已取得驗證碼圖片，但 OCR 沒有產生有效 4 碼，請檢查 source.png 與 best-variant.png。";
-            case "first_bank_login_failed":
-                return "驗證碼可能辨識錯誤或登入資料不正確，請優先檢查 captcha_attempt 與 submit_login。";
-            case "first_bank_login_page_mismatch":
-                return "登入頁不是電腦版畫面，請檢查 WebView viewport、user-agent 與 desktop_login_page probe 結果。";
-            case "first_bank_navigation_timeout":
-                return "WebView 沒有在時間內完成頁面切換，請檢查 requested/current URL、進度值與 onPageFinished 是否有觸發。";
-            case "first_bank_login_trigger_missing":
-                return "登入按鈕或 clickArea 觸發點可能變更，請檢查登入頁 DOM。";
-            case "first_bank_account_list_not_found":
-                return "登入後未成功進入帳戶總覽或帳號列表頁，請檢查 open_my_accounts 的 URL/function/ID/table structural anchors 與中英文文字備援。";
-            case "first_bank_my_accounts_trigger_missing":
-                return "frame 頁面尚未載入帳戶總覽入口，請檢查 openIt、overview-account/tab1、table.CnbTable、010103 連結與中英文文字備援。";
-            case "first_bank_portal_contract_failed":
-                return "第一銀行入口結構錨點已變更，請檢查 frame_portal_contract 的 URL/function/ID/table predicates；使用者可稍後重試，若持續失敗請回報更新 App。";
-            case "first_bank_session_expired":
-                return "銀行 session 已過期，請檢查 silent relogin 與 cookie restore。";
-            case "first_bank_transaction_query_failed":
-                return "交易查詢頁可能未成功載入或 DOM 結構已變更；POST 交易請求已安全放行不 replay，請檢查 transaction_query 與 DOM fallback。";
-            case "hua_nan_captcha_not_ready":
-                return "華南驗證碼圖片尚未完成載入，請檢查登入頁 captcha 元素與載入時序。";
             case "hua_nan_captcha_manual_required":
             case "hua_nan_captcha_ocr_failed":
                 return "華南驗證碼自動辨識失敗，請改以手動輸入驗證碼後重試。";
@@ -139,6 +117,10 @@ public final class BankAutomationDebugTrace {
                 return "不支援的銀行 providerId，請確認 Provider Registry。";
             case "bank_automation_timeout":
                 return "自動化流程超時，請從最後一個 step 判斷卡住位置。";
+            case "bank_automation_aborted":
+                return "銀行自動化已取消。";
+            case "captcha_required":
+                return "需要使用者手動輸入圖形驗證碼（SEMI_MANUAL）。";
             default:
                 return "";
         }

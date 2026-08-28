@@ -45,6 +45,7 @@
         <div class="row action-row">
           <button
             class="btn primary"
+            data-testid="bank-sync-sync-now"
             :disabled="syncingConnectionId === connection.id || !canSyncConnection(connection)"
             :aria-busy="syncingConnectionId === connection.id"
             @click="syncConnection(connection.id)"
@@ -196,13 +197,13 @@
         <div v-if="!reviewRows.length && !reviewLoading" class="muted">{{ t('settings_bank_sync.review.empty') }}</div>
         <template v-else-if="reviewRows.length">
           <div class="row review-action-row">
-            <button class="btn" @click="selectAllReviewRows">{{ t('settings_bank_sync.review.select_all') }}</button>
+            <button class="btn" data-testid="bank-sync-review-select-all" @click="selectAllReviewRows">{{ t('settings_bank_sync.review.select_all') }}</button>
             <button class="btn" @click="clearReviewSelection">{{ t('settings_bank_sync.review.select_none') }}</button>
             <button class="btn" @click="invertReviewSelection">{{ t('settings_bank_sync.review.invert_selection') }}</button>
             <button class="btn" :disabled="markingSeen || !selectedReviewIds.length" :aria-busy="markingSeen" @click="markSelectedSeen">
               {{ markingSeen ? t('settings_bank_sync.review.marking_seen') : t('settings_bank_sync.review.mark_seen') }}
             </button>
-            <button class="btn primary" :disabled="importing || !selectedReviewIds.length" :aria-busy="importing" @click="importSelected">
+            <button class="btn primary" data-testid="bank-sync-review-import" :disabled="importing || !selectedReviewIds.length" :aria-busy="importing" @click="importSelected">
               {{ importing ? t('settings_bank_sync.review.importing') : t('settings_bank_sync.review.import_selected', { count: selectedReviewIds.length }) }}
             </button>
           </div>
@@ -729,55 +730,32 @@ onMounted(() => {
   try {
     if (localStorage.getItem('straw.playwright.hooks') === '1') {
       window.__SMB_PLAYWRIGHT_BANK_SYNC_CONNECTION__ = {
-        async reloadReviewFromService() {
-          const connectionId = String(route.params.id ?? connection.value?.id ?? '').trim()
-          if (!connectionId) return { ok: false, reason: 'missing_connection_id' }
-          await loadConnection()
-          await loadReview(connectionId)
-          selectedReviewIds.value = reviewRows.value.map((item) => item.id)
-          return {
-            ok: reviewRows.value.length >= 1,
-            count: reviewRows.value.length,
-            selected: selectedReviewIds.value.length,
-            summaries: reviewRows.value.map((item) => item.summary || item.description || ''),
-          }
+        getReviewCount() {
+          return reviewRows.value.length
         },
-        getSelectedReviewIds() {
-          return [...selectedReviewIds.value]
+        getSelectedReviewCount() {
+          return selectedReviewIds.value.length
         },
-        async runFormalImport() {
-          if (!selectedReviewIds.value.length) {
-            const reloaded = await this.reloadReviewFromService()
-            if (!reloaded.ok) return { ok: false, reason: 'no_review_rows', ...reloaded }
-          }
-          const beforeIds = [...selectedReviewIds.value]
-          const result = await importSelectedBankTransactions(ledgerStore.activeLedgerId, beforeIds)
-          await loadReview(connection.value?.id)
-          const importedTxnIds = (Array.isArray(result.importedMappings) ? result.importedMappings : [])
-            .map((item) => String(item?.importedTxnId || '').trim())
-            .filter(Boolean)
-          let ledgerHit = importedTxnIds.length
+        async verifyLedgerAfterImport() {
+          const remainingReview = reviewRows.value.length
+          let ledgerHit = 0
           try {
             await transactionStore.refreshAfterWriteSafe(2500)
             const txs = Array.isArray(transactionStore.transactions) ? transactionStore.transactions : []
-            const storeHits = txs.filter((tx) => {
-              const id = String(tx?.id ?? '')
+            ledgerHit = txs.filter((tx) => {
               const note = String(tx?.note ?? '')
+              const summary = String(tx?.summary ?? tx?.description ?? '')
               const external = String(tx?.external_ref_id ?? tx?.externalRefId ?? '')
-              return importedTxnIds.includes(id)
-                || /Playwright Seed Txn/u.test(note)
+              return /Playwright Seed Txn/u.test(note)
+                || /Playwright Seed Txn/u.test(summary)
                 || /bank:hua_nan_bank_tw:/u.test(external)
             }).length
-            if (storeHits > ledgerHit) ledgerHit = storeHits
           } catch {
-            // importedMappings already prove ledger writes; store refresh is best-effort.
+            // best-effort store refresh
           }
           return {
-            ok: result.importedCount >= 1 && reviewRows.value.length === 0 && importedTxnIds.length >= 1,
-            importedCount: result.importedCount,
-            skippedCount: result.skippedCount,
-            remainingReview: reviewRows.value.length,
-            importedTxnIds,
+            ok: remainingReview === 0 && ledgerHit >= 1,
+            remainingReview,
             ledgerHit,
           }
         },
