@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- 恢復傳統／現代雙介面風格：傳統維持現行 Apple HIG 清單分組；現代改為 Straw Habitat 生活色域（圓滑色島、分區色彩、A/B/C/D 主題全留）。5 tab、FAB、首頁區塊不刪。
-
 ---
+
+## v1.4.5
+- 恢復傳統／現代雙介面風格：傳統維持現行 Apple HIG 清單分組；現代改為 Straw Habitat 生活色域（圓滑色島、分區色彩、A/B/C/D 主題全留）。5 tab、FAB、首頁區塊不刪。
 
 ## v1.4.4
 - 修復會員登入「已過期／需重新登入」：refresh 已 rotate 但客戶端逾時時，60 秒內重放舊 token 改走 family head 再續發，不再誤判 reuse；grace 外真 reuse 會先 commit family revoke 再丟錯（避免 SQLite throw 回滾）。前端忽略過期的 refresh 回應。
