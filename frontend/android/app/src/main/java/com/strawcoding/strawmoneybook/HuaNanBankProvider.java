@@ -56,7 +56,7 @@ public final class HuaNanBankProvider implements BankProvider {
         BankAutomationDebugTrace debugTrace,
         JSONObject payload
     ) throws Exception {
-        return HuaNanBankAutomation.connect(activity, webView, vault, debugTrace, payload);
+        return HuaNanBankAutomation.submitCaptcha(activity, webView, vault, debugTrace, payload);
     }
 
     @Override

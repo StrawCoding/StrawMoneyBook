@@ -71,10 +71,21 @@ test('hua nan intercept observe-only — POST never replay', () => {
   assert.match(huaNanBankAutomationSource, /observe_only_no_replay/)
 })
 
-test('jvm captcha fixture and probe tests exist', () => {
-  const captchaTest = read('android/app/src/test/java/com/strawcoding/strawmoneybook/core/CaptchaSolverFixtureTest.java')
-  const probeTest = read('android/app/src/test/java/com/strawcoding/strawmoneybook/HuaNanBankAutomationProbeTest.java')
-  assert.match(captchaTest, /CaptchaSolverFixtureTest/)
-  assert.match(captchaTest, /validateCaptchaCandidate/)
-  assert.match(probeTest, /HuaNanBankAutomationProbeTest/)
+test('bank automation plugin exposes captcha submit and abort actions', () => {
+  const pluginSource = read(
+    'android/app/src/main/java/com/strawcoding/strawmoneybook/BankAutomationPlugin.java',
+  )
+  const activitySource = read(
+    'android/app/src/main/java/com/strawcoding/strawmoneybook/BankAutomationActivity.java',
+  )
+  assert.match(pluginSource, /submitCaptcha/)
+  assert.match(pluginSource, /abortBank/)
+  assert.match(activitySource, /ACTION_SUBMIT_CAPTCHA/)
+  assert.match(activitySource, /ACTION_ABORT_BANK/)
+  assert.match(activitySource, /abortRunningSession/)
+})
+
+test('bank sync contract supports partial account results', () => {
+  assert.match(bankSyncContractSource, /accountResultPartial/)
+  assert.match(bankSyncContractSource, /"partial"/)
 })

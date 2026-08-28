@@ -160,19 +160,37 @@ public final class BankAutomationSyncContract {
         return item;
     }
 
+    /** H2 incomplete: do not advance checkpoint / coveredThrough. */
+    public static JSONObject accountResultPartial(
+        String accountId,
+        String code,
+        String message,
+        int rowCount
+    ) throws Exception {
+        JSONObject item = new JSONObject();
+        item.put("accountId", accountId);
+        item.put("status", "partial");
+        item.put("code", code == null ? "bank_account_sync_partial" : code);
+        item.put("message", message == null ? "" : message);
+        item.put("rowCount", Math.max(0, rowCount));
+        return item;
+    }
+
     public static String syncStatusFromAccountResults(JSONArray accountResults) {
         if (accountResults == null || accountResults.length() == 0) return "ok";
         int ok = 0;
         int err = 0;
+        int partial = 0;
         for (int i = 0; i < accountResults.length(); i += 1) {
             JSONObject item = accountResults.optJSONObject(i);
             if (item == null) continue;
             String status = normalizeText(item.optString("status")).toLowerCase(Locale.ROOT);
             if ("ok".equals(status)) ok += 1;
+            else if ("partial".equals(status)) partial += 1;
             else err += 1;
         }
-        if (err == 0) return "ok";
-        if (ok == 0) return "error";
+        if (err == 0 && partial == 0) return "ok";
+        if (ok == 0 && partial == 0) return "error";
         return "partial_success";
     }
 }

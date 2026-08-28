@@ -8,6 +8,9 @@ import static org.junit.Assert.assertTrue;
 import org.json.JSONObject;
 import org.junit.Test;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+
 public class HuaNanBankAutomationIdentityTest {
 
     @Test
@@ -94,5 +97,42 @@ public class HuaNanBankAutomationIdentityTest {
         JSONObject secondRaw = new JSONObject(secondItem.getString("rawJson"));
         assertEquals("huanan:fallback-hash:v1", firstRaw.getString("identity_scheme"));
         assertEquals("huanan:fallback-hash:v1-occ", secondRaw.getString("identity_scheme"));
+    }
+
+    @Test
+    public void buildAccountSyncResultMarksPartialWhenAnchorsMissingAndNoRows() throws Exception {
+        JSONObject probe = new JSONObject();
+        probe.put("hasDateInput", false);
+        probe.put("queryButtonFound", false);
+        probe.put("hasEmptyText", false);
+        JSONObject partial = HuaNanBankAutomation.buildAccountSyncResult(
+            null,
+            "123456789012",
+            LocalDate.now(ZoneId.of("Asia/Taipei")),
+            LocalDate.now(ZoneId.of("Asia/Taipei")),
+            0,
+            probe
+        );
+        assertEquals("partial", partial.getString("status"));
+        assertEquals("hua_nan_transaction_query_partial", partial.getString("code"));
+        assertFalse(partial.has("coveredThrough"));
+    }
+
+    @Test
+    public void buildAccountSyncResultOkForExplicitEmptyWithAnchors() throws Exception {
+        JSONObject probe = new JSONObject();
+        probe.put("hasDateInput", true);
+        probe.put("queryButtonFound", true);
+        probe.put("hasEmptyText", true);
+        JSONObject ok = HuaNanBankAutomation.buildAccountSyncResult(
+            null,
+            "123456789012",
+            LocalDate.of(2026, 8, 16),
+            LocalDate.of(2026, 8, 16),
+            0,
+            probe
+        );
+        assertEquals("ok", ok.getString("status"));
+        assertEquals("2026-08-16", ok.getString("coveredThrough"));
     }
 }

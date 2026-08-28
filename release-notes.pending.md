@@ -5,6 +5,9 @@
 ## v1.4.9
 - Playwright ui-layout：session 被 reaper 關閉時以 `lastOpenedUrl` reopen 重試，不再於 reopen 中途跑 onboarding（避免 welcome 假失敗）。
 
+## v1.4.11（pending — smb306）
+- 銀行同步模組化恢復驗收修復：H2 誠實 `partial`（禁假 ok checkpoint）、Captcha JVM fixture 真 OCR、`submitCaptcha`/`abortBank` plugin、Playwright wizard→review→import、文件改為僅華南。
+
 ## v1.4.7
 - 分析分類明細「全部」改 SQL 依分類／附加項目載入列資料與類型合計，不再 `listAllTransactionsChunked` 後在主執行緒篩選。
 - 啟動鏈 FontAwesome 改獨立 `fa-icon-registry` 動態註冊，`main.js` 不再靜態 import 全量 icon。

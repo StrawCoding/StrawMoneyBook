@@ -59,10 +59,10 @@ function isNativeBankProvider(providerId) {
 }
 
 function shouldExposeProvider(providerId) {
-  if (isRegisteredBankProviderId(providerId)) {
-    return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS
-  }
-  return false
+  if (!isRegisteredBankProviderId(providerId)) return false
+  if (BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS) return true
+  if (isBankSyncDebugEnabled()) return true
+  return isNativeBankAutomationRuntimeSupported()
 }
 
 function buildApiUrl(path) {

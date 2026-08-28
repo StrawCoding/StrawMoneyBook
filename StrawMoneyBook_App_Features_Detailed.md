@@ -823,7 +823,7 @@ Stage B：獨立 Gradle 模組 `frontend/android/wear`（同一 `applicationId`�
 銀行同步已改為可透過環境變數 `VITE_BANK_SYNC_FEATURE_ENABLED` 啟用的會員功能：
 
 - 屬於會員功能（`assertCanUseBankSync()`）
-- 目前支援 **Android App 本地同步**：第一銀行（`first_bank_tw`）＋華南銀行（`hua_nan_bank_tw`）；非 Open Banking
+- 目前支援 **Android App 本地同步**：**華南銀行**（`hua_nan_bank_tw`）唯一 active provider；非 Open Banking。**第一銀行已自 Architecture B 模組化恢復中移除**（歷史 v1.3.x 段落僅供追溯）。
 - SMB-278：`isBankSyncFeatureEnabled()` 只依 feature flag 控制設定入口與路由可視性；原生自動化另由 `isBankSyncNativeAutomationAvailable()` 閘控。Web／非 Android 進入 `/settings/bank-sync` 會顯示支援矩陣與可用性診斷（資格→平台→自動化／API→憑證→captcha→同步→審核），並提供單一 recovery CTA（例如取得 Android App），**不再因 provider 空列表靜默 redirect 回設定**
 - SMB-280：`bank_sync_credentials_missing` 僅在 Android 原生自動化可用且尚未建立銀行連線時出現；Web／非 Android 不得誤用此碼（改為 `bank_sync_android_only`／支援矩陣）。原生 vault 改 `commit()` 寫入，同步／中斷以 `provider_connection_id` 對齊讀回，避免建立憑證後仍顯示無憑證或 legacy reconnect；legacy vault 缺失走 credentials 階段 +「重新連結銀行」CTA
 - smb294：重新驗證載具／銀行同步可用性；原生 vault 同步／中斷改傳 **distinct** local DB id + `provider_connection_id` 候選（`buildNativeVaultLookupIds` + `FirstBankAutomation.resolveVaultConnectionId`），避免兩邊傳同一值導致備援永不觸發、誤報憑證缺失；Playwright `carrier-sync`／`bank-sync` 補強錯誤碼分流、recovery CTA 與 seeded review list（`straw.playwright.hooks`）
@@ -843,7 +843,7 @@ Stage B：獨立 Gradle 模組 `frontend/android/wear`（同一 `applicationId`�
 - 匯入前會進入待匯入清單，需手動審核後才寫入記帳交易
 - 多銀行 Provider 接口保留（`VITE_BANK_SYNC_PROVIDERS_JSON`），後續可擴充
 
-所以這不是完全未做，而是已建流程、以會員 + Android 第一銀行為主的受控功能。
+所以這不是完全未做，而是已建流程、以會員 + Android **華南銀行**為主的受控功能（第一銀行已移除）。
 
 ### 9.2 載具同步（v1.3.17 起…；smb307 Android WebView 模組化重建）
 

@@ -218,6 +218,7 @@ final class HuaNanBankAutomation {
         boolean reloginAttempted = false;
 
         for (int accountIndex = 0; accountIndex < accountIds.length(); accountIndex += 1) {
+            ensureNotAborted();
             String accountId = normalizeAccountId(accountIds.optString(accountIndex));
             if (accountId.isEmpty()) continue;
             String accountWatermark = BankAutomationSyncContract.resolveAccountWatermark(
@@ -302,19 +303,27 @@ final class HuaNanBankAutomation {
                     }
 
                     JSONArray rows = parseTransactions(session, accountId, startText, endText);
+                    JSONObject postQueryProbe = captureStructuralProbe(session, "h2");
+                    mergeInterceptSnapshot(postQueryProbe, session.interceptSnapshot());
                     JSONObject parseDetails = new JSONObject(loadDetails.toString());
                     parseDetails.put("rows", rows.length());
+                    parseDetails.put("hasDateInput", postQueryProbe.optBoolean("hasDateInput", false));
+                    parseDetails.put("queryButtonFound", postQueryProbe.optBoolean("queryButtonFound", false));
+                    parseDetails.put("hasEmptyText", postQueryProbe.optBoolean("hasEmptyText", false));
                     debugTrace.record("parse_transactions", "ok", "Parsed transaction rows", parseDetails);
                     for (int rowIndex = 0; rowIndex < rows.length(); rowIndex += 1) {
                         added.put(rows.getJSONObject(rowIndex));
                         accountRowCount += 1;
                     }
+                    accountResults.put(buildAccountSyncResult(
+                        debugTrace,
+                        accountId,
+                        endDate,
+                        syncStartedDate,
+                        accountRowCount,
+                        postQueryProbe
+                    ));
                 }
-                accountResults.put(BankAutomationSyncContract.accountResultOk(
-                    accountId,
-                    BankAutomationSyncContract.coveredThroughIsoDate(endDate, syncStartedDate),
-                    accountRowCount
-                ));
             } catch (BankAutomationException accountError) {
                 String code = normalizeText(accountError.getCode()).toLowerCase(Locale.ROOT);
                 if ("hua_nan_session_expired".equals(code) || "hua_nan_login_failed".equals(code)
@@ -394,6 +403,62 @@ final class HuaNanBankAutomation {
         abortRequested = true;
     }
 
+    private static void ensureNotAborted() throws BankAutomationException {
+        if (abortRequested) {
+            abortRequested = false;
+            throw new BankAutomationException(
+                "bank_automation_aborted",
+                "Bank automation was cancelled"
+            );
+        }
+    }
+
+    static JSONObject buildAccountSyncResult(
+        BankAutomationDebugTrace debugTrace,
+        String accountId,
+        LocalDate endDate,
+        LocalDate syncStartedDate,
+        int accountRowCount,
+        JSONObject postQueryProbe
+    ) throws Exception {
+        boolean hasStructuralAnchors = postQueryProbe != null && (
+            postQueryProbe.optBoolean("hasDateInput", false)
+                || postQueryProbe.optBoolean("queryButtonFound", false)
+        );
+        boolean explicitEmpty = postQueryProbe != null && (
+            postQueryProbe.optBoolean("hasEmptyText", false)
+                || postQueryProbe.optBoolean("emptyInIframe", false)
+        );
+        if (accountRowCount > 0 && hasStructuralAnchors) {
+            return BankAutomationSyncContract.accountResultOk(
+                accountId,
+                BankAutomationSyncContract.coveredThroughIsoDate(endDate, syncStartedDate),
+                accountRowCount
+            );
+        }
+        if (accountRowCount == 0 && explicitEmpty && hasStructuralAnchors) {
+            return BankAutomationSyncContract.accountResultOk(
+                accountId,
+                BankAutomationSyncContract.coveredThroughIsoDate(endDate, syncStartedDate),
+                0
+            );
+        }
+        if (debugTrace != null && postQueryProbe != null) {
+            debugTrace.record(
+                "h2_probe",
+                "error",
+                "Transaction query incomplete — missing anchors or unparsed rows",
+                postQueryProbe
+            );
+        }
+        return BankAutomationSyncContract.accountResultPartial(
+            accountId,
+            "hua_nan_transaction_query_partial",
+            "Hua Nan transaction query did not yield verifiable rows for account " + maskAccountId(accountId),
+            accountRowCount
+        );
+    }
+
     private static void performLogin(
         Activity activity,
         BrowserSession session,
@@ -415,6 +480,7 @@ final class HuaNanBankAutomation {
         debugTrace.record("captcha_wait_ready", "ok", "Captcha image became ready");
 
         for (int attempt = 0; attempt < CAPTCHA_MAX_ATTEMPTS; attempt += 1) {
+            ensureNotAborted();
             if (attempt > 0) {
                 JSONObject refreshDetails = new JSONObject();
                 putJsonValue(refreshDetails, "attempt", attempt + 1);
@@ -459,7 +525,7 @@ final class HuaNanBankAutomation {
         }
 
         if (!hasRecognizedCaptcha) {
-            throw buildManualCaptchaRequiredException(lastCaptchaDataUrl);
+            throw buildManualCaptchaRequiredException(lastCaptchaDataUrl, "USER_INTERACTION_REQUIRED");
         }
         throw new BankAutomationException("hua_nan_login_failed", "Hua Nan login failed");
     }
@@ -556,11 +622,14 @@ final class HuaNanBankAutomation {
         return output;
     }
 
-    private static BankAutomationException buildManualCaptchaRequiredException(String dataUrl) throws JSONException {
+    private static BankAutomationException buildManualCaptchaRequiredException(String dataUrl, String phase) throws JSONException {
         JSONObject data = new JSONObject();
         String base64 = CaptchaSolver.extractPngBase64FromDataUrl(dataUrl);
         if (!base64.isEmpty()) {
             data.put("captchaImageBase64", base64);
+        }
+        if (phase != null && !phase.isEmpty()) {
+            data.put("phase", phase);
         }
         BankAutomationException error = new BankAutomationException(
             "hua_nan_captcha_manual_required",
@@ -568,6 +637,32 @@ final class HuaNanBankAutomation {
         );
         error.attachData(data);
         return error;
+    }
+
+    /** SEMI_MANUAL resume: payload must include captchaCode + same connect credentials. */
+    public static JSONObject submitCaptcha(
+        Activity activity,
+        WebView webView,
+        BankAutomationVault vault,
+        BankAutomationDebugTrace debugTrace,
+        JSONObject payload
+    ) throws Exception {
+        ensureNotAborted();
+        String captchaCode = CaptchaSolver.normalize(payload.optString("captchaCode"));
+        if (!CaptchaSolver.validateCaptchaCandidate(captchaCode, true)) {
+            throw new BankAutomationException(
+                "hua_nan_captcha_invalid",
+                "Hua Nan captcha code must be 4 digits"
+            );
+        }
+        JSONObject connectPayload = new JSONObject(payload.toString());
+        connectPayload.put("captchaCode", captchaCode);
+        debugTrace.record("captcha_manual", "ok", "Resuming connect with user-provided captcha");
+        return connect(activity, webView, vault, debugTrace, connectPayload);
+    }
+
+    private static BankAutomationException buildManualCaptchaRequiredException(String dataUrl) throws JSONException {
+        return buildManualCaptchaRequiredException(dataUrl, "USER_INTERACTION_REQUIRED");
     }
 
     private static JSONArray discoverAccounts(BrowserSession session) throws Exception {
@@ -757,27 +852,42 @@ final class HuaNanBankAutomation {
               const inputs = Array.from(document.querySelectorAll('input, select'));
               const startInput = inputs.find((el) => /start|from|起|開始|起日/i.test(String(el.name || el.id || el.placeholder || '')));
               const endInput = inputs.find((el) => /end|to|迄|結束|迄日/i.test(String(el.name || el.id || el.placeholder || '')));
+              let datesFilled = false;
               if (startInput) {
                 startInput.removeAttribute('readonly');
                 startInput.value = startDate;
                 startInput.dispatchEvent(new Event('input', { bubbles: true }));
                 startInput.dispatchEvent(new Event('change', { bubbles: true }));
+                datesFilled = true;
               }
               if (endInput) {
                 endInput.removeAttribute('readonly');
                 endInput.value = endDate;
                 endInput.dispatchEvent(new Event('input', { bubbles: true }));
                 endInput.dispatchEvent(new Event('change', { bubbles: true }));
+                datesFilled = true;
               }
               const query = Array.from(document.querySelectorAll('input[type="button"], input[type="submit"], button'))
                 .find((btn) => /查詢|Query|Search/i.test(String(btn.value || btn.textContent || '')));
-              if (query && typeof query.click === 'function') {
-                query.click();
-                return true;
-              }
-              return Boolean(startInput || endInput);
+              const queryClicked = Boolean(query && typeof query.click === 'function');
+              if (queryClicked) query.click();
+              return {
+                datesFilled,
+                queryClicked,
+                hasDateInput: Boolean(startInput || endInput),
+                queryButtonFound: Boolean(query),
+              };
             })();
             """, quoteJs(startDate.replace('-', '/')), quoteJs(endDate.replace('-', '/'))));
+
+        JSONObject fillResult = captureStructuralProbe(session, "h2");
+        mergeInterceptSnapshot(fillResult, session.interceptSnapshot());
+        fillResult.put("inquiryMatch", clickResult.optString("match", "unknown"));
+        if (!fillResult.optBoolean("hasDateInput", false) && !fillResult.optBoolean("queryButtonFound", false)) {
+            fillResult.put("reason", "missing_h2_anchors");
+            debugTrace.record("h2_probe", "error", "Transaction inquiry missing date/query anchors", fillResult);
+            return false;
+        }
 
         try {
             session.waitForCondition("""

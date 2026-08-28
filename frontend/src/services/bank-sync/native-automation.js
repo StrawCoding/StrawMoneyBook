@@ -111,6 +111,34 @@ export async function disconnectNativeBank(payload = {}) {
   }
 }
 
+export async function submitNativeBankCaptcha(payload = {}) {
+  logBankSyncAction('native.submitCaptcha', {
+    providerId: String(payload?.providerId ?? payload?.provider ?? '').trim().toLowerCase(),
+  })
+  await ensureNativeBankAutomationAvailable()
+  const next = withProviderId(payload)
+  if (!isRegisteredBankProviderId(next.providerId)) {
+    throw createNativeBankAutomationError('Unsupported bank provider', 'bank_provider_unsupported')
+  }
+  try {
+    return await BankAutomation.submitCaptcha(next)
+  } catch (error) {
+    throw normalizePluginError(error, 'Bank captcha submit failed')
+  }
+}
+
+export async function abortNativeBankAutomation() {
+  logBankSyncAction('native.abort', {})
+  if (!isNativeBankAutomationRuntimeSupported()) {
+    return { aborted: false, skipped: true }
+  }
+  try {
+    return await BankAutomation.abortBank()
+  } catch (error) {
+    throw normalizePluginError(error, 'Bank automation abort failed')
+  }
+}
+
 /** @deprecated legacy alias — use disconnectNativeBank */
 export async function disconnectNativeBankConnection(payload = {}) {
   return disconnectNativeBank(payload)

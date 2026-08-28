@@ -43,6 +43,19 @@ public class BankAutomationPlugin extends Plugin {
         launch(call, BankAutomationActivity.ACTION_DISCONNECT_BANK);
     }
 
+    @PluginMethod
+    public void submitCaptcha(PluginCall call) {
+        launch(call, BankAutomationActivity.ACTION_SUBMIT_CAPTCHA);
+    }
+
+    @PluginMethod
+    public void abortBank(PluginCall call) {
+        BankAutomationActivity.abortRunningSession();
+        JSObject result = new JSObject();
+        result.put("aborted", true);
+        call.resolve(result);
+    }
+
     private void launch(PluginCall call, String action) {
         Activity activity = getActivity();
         if (activity == null || activity.isFinishing() || activity.isDestroyed()) {

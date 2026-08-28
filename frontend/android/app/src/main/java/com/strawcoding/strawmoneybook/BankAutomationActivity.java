@@ -26,6 +26,8 @@ public class BankAutomationActivity extends Activity {
     public static final String ACTION_CONNECT_BANK = "connect_bank";
     public static final String ACTION_SYNC_BANK = "sync_bank";
     public static final String ACTION_DISCONNECT_BANK = "disconnect_bank";
+    public static final String ACTION_SUBMIT_CAPTCHA = "submit_captcha";
+    public static final String ACTION_ABORT_BANK = "abort_bank";
 
     public static final String EXTRA_ACTION = "bank_automation.action";
     public static final String EXTRA_PAYLOAD_JSON = "bank_automation.payload_json";
@@ -38,6 +40,7 @@ public class BankAutomationActivity extends Activity {
     private static final long AUTOMATION_TIMEOUT_MS = 90_000L;
     private static final Object BUSY_LOCK = new Object();
     private static boolean busy = false;
+    private static BankAutomationActivity currentInstance = null;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private ExecutorService executorService;
@@ -52,6 +55,17 @@ public class BankAutomationActivity extends Activity {
         }
     }
 
+    public static void abortRunningSession() {
+        BankSyncOrchestrator.requestAbortAll();
+        BankAutomationActivity instance = currentInstance;
+        if (instance != null && !instance.finished) {
+            instance.finishWithError(new BankAutomationException(
+                "bank_automation_aborted",
+                "Bank automation was cancelled"
+            ));
+        }
+    }
+
     private static boolean acquireBusy() {
         synchronized (BUSY_LOCK) {
             if (busy) return false;
@@ -63,6 +77,7 @@ public class BankAutomationActivity extends Activity {
     private static void releaseBusy() {
         synchronized (BUSY_LOCK) {
             busy = false;
+            currentInstance = null;
         }
     }
 
@@ -74,6 +89,7 @@ public class BankAutomationActivity extends Activity {
             finishWithError(new BankAutomationException("bank_automation_busy", "Bank automation is already running"));
             return;
         }
+        currentInstance = this;
 
         executorService = Executors.newSingleThreadExecutor();
         webView = buildWebView();
@@ -151,6 +167,14 @@ public class BankAutomationActivity extends Activity {
                 result = BankSyncOrchestrator.sync(this, webView, vault, debugTrace, payload);
             } else if (ACTION_DISCONNECT_BANK.equals(action)) {
                 result = BankSyncOrchestrator.disconnect(this, webView, vault, debugTrace, payload);
+            } else if (ACTION_SUBMIT_CAPTCHA.equals(action)) {
+                result = BankSyncOrchestrator.submitCaptcha(this, webView, vault, debugTrace, payload);
+            } else if (ACTION_ABORT_BANK.equals(action)) {
+                BankSyncOrchestrator.requestAbortAll();
+                JSONObject aborted = new JSONObject();
+                aborted.put("aborted", true);
+                finishWithSuccess(aborted);
+                return;
             } else {
                 throw new BankAutomationException("bank_automation_action_invalid", "Unsupported bank automation action");
             }

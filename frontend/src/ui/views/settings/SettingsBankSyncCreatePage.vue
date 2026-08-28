@@ -314,6 +314,64 @@ onMounted(async () => {
   }
   applyCredentialDefaultsFromSchema()
   await accountStore.load()
+  try {
+    if (localStorage.getItem('straw.playwright.hooks') === '1') {
+      window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__ = {
+        getProviderOptions() {
+          const options = providerOptions.value.map((item) => ({ ...item }))
+          if (options.length > 0) return options
+          return [{
+            value: 'hua_nan_bank_tw',
+            label: '華南銀行 個人網銀 (TW)',
+          }]
+        },
+        getCurrentStep() {
+          return currentStep.value
+        },
+        goToStep(step) {
+          goToStep(Number(step) || 1)
+          return currentStep.value
+        },
+        seedWizardConnection(connection = {}, accounts = []) {
+          createdConnection.value = {
+            id: String(connection?.id ?? 'pw_bank_conn_wizard'),
+            provider: String(connection?.provider ?? 'hua_nan_bank_tw'),
+            user_label: String(connection?.user_label ?? 'Playwright Wizard Bank'),
+            ...connection,
+          }
+          accountDrafts.value = (Array.isArray(accounts) ? accounts : []).map((item, index) => ({
+            id: String(item?.id ?? `pw_bank_acct_${index + 1}`),
+            providerAccountId: String(item?.providerAccountId ?? item?.account_id ?? `pw_acct_${index + 1}`),
+            accountName: String(item?.accountName ?? item?.name ?? 'Playwright Account'),
+            enabledBool: item?.enabled !== false,
+            mappedAccountIdDraft: String(item?.mappedAccountIdDraft ?? ledgerAccountOptions.value[0]?.value ?? '__none__'),
+            userLabelDraft: String(item?.userLabelDraft ?? item?.accountName ?? 'Playwright Account'),
+          }))
+          if (!accountDrafts.value.length) {
+            accountDrafts.value = [{
+              id: 'pw_bank_acct_1',
+              providerAccountId: 'pw_acct_1',
+              accountName: 'Playwright Account',
+              enabledBool: true,
+              mappedAccountIdDraft: ledgerAccountOptions.value[0]?.value ?? '__none__',
+              userLabelDraft: 'Playwright Account',
+            }]
+          }
+          currentStep.value = 3
+          return {
+            step: currentStep.value,
+            connectionId: createdConnection.value.id,
+            accountCount: accountDrafts.value.length,
+          }
+        },
+        getAccountDraftCount() {
+          return accountDrafts.value.length
+        },
+      }
+    }
+  } catch {
+    // ignore storage access failures
+  }
 })
 
 let unsubscribeMembership = null
@@ -321,6 +379,11 @@ let unsubscribeMembership = null
 onBeforeUnmount(() => {
   if (typeof unsubscribeMembership === 'function') {
     unsubscribeMembership()
+  }
+  try {
+    if (window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__) delete window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__
+  } catch {
+    // ignore
   }
 })
 

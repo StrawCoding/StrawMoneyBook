@@ -347,6 +347,118 @@ try {
   }
 
   console.log('Bank sync Playwright app-shell + support matrix + seeded review check passed')
+
+  await runPlaywrightCli(['eval', `() => {
+    localStorage.setItem('strawmoneybook.bankSync.debugEnabled', '1')
+    localStorage.setItem('straw.playwright.hooks', '1')
+    localStorage.setItem('straw.membership.entitlement.v2', JSON.stringify({
+      lifetimeOwned: true,
+      monthlyLastVerifiedAt: '',
+      membershipCacheExpiresAt: 'forever',
+      lastSyncAt: new Date().toISOString(),
+      lastSyncStatus: 'ok',
+      lastKnownPlan: 'lifetime',
+    }))
+    return true
+  }`], { raw: true })
+
+  await runPlaywrightCli(['goto', `${baseUrl}/settings/bank-sync/new`])
+  await delay(2500)
+
+  let wizardProviders = null
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    wizardProviders = await evalPage(`() => {
+      const hook = window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__
+      const options = hook?.getProviderOptions?.() || []
+      const body = document.body?.innerText || ''
+      return {
+        path: window.location.pathname,
+        options,
+        hasHook: Boolean(hook),
+        hasFirstBank: options.some((item) => /first_bank|第一/u.test(String(item.value || item.label || ''))),
+        hasHuaNan: options.some((item) => String(item.value || '').includes('hua_nan')),
+        hasWizard: Boolean(document.querySelector('.wizard-head')),
+        bodySnippet: body.slice(0, 500),
+      }
+    }`)
+    if (wizardProviders.path === '/settings/bank-sync/new' && wizardProviders.hasHook && wizardProviders.hasHuaNan) break
+    await delay(400)
+  }
+  assert.equal(wizardProviders.path, '/settings/bank-sync/new', JSON.stringify(wizardProviders))
+  assert.equal(wizardProviders.hasFirstBank, false, 'first bank must not appear in provider list')
+  assert.equal(wizardProviders.hasHuaNan, true, 'hua nan provider required')
+  assert.equal(wizardProviders.hasWizard, true, 'create wizard head required')
+
+  const wizardSeed = await evalPage(`() => {
+    const hook = window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__
+    if (!hook?.seedWizardConnection) return { ok: false, reason: 'missing create hook' }
+    const seeded = hook.seedWizardConnection({
+      id: 'pw_bank_conn_wizard',
+      provider: 'hua_nan_bank_tw',
+      user_label: 'Playwright Wizard Hua Nan',
+    }, [{
+      id: 'pw_bank_acct_1',
+      providerAccountId: 'pw_acct_1',
+      accountName: 'Playwright Savings',
+      mappedAccountIdDraft: '__none__',
+    }])
+    return { ok: seeded.step === 3 && seeded.accountCount >= 1, ...seeded }
+  }`)
+  assert.equal(wizardSeed.ok, true, JSON.stringify(wizardSeed))
+
+  const mappingReady = await evalPage(`() => ({
+    step: window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__?.getCurrentStep?.() ?? null,
+    accountCount: window.__SMB_PLAYWRIGHT_BANK_SYNC_CREATE__?.getAccountDraftCount?.() ?? 0,
+    bodyText: document.body?.innerText?.slice(0, 800) ?? '',
+  })`)
+  assert.equal(mappingReady.step, 3, JSON.stringify(mappingReady))
+  assert.ok(mappingReady.accountCount >= 1, `account mapping step must have seeded drafts: ${JSON.stringify(mappingReady)}`)
+
+  await runPlaywrightCli(['goto', `${baseUrl}/settings/bank-sync/pw_bank_conn_wizard`])
+  await delay(2000)
+
+  let reviewSeeded = null
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    reviewSeeded = await evalPage(`() => {
+      const hook = window.__SMB_PLAYWRIGHT_BANK_SYNC_CONNECTION__
+      if (!hook?.setReviewRows) return { ok: false, reason: 'missing connection hook' }
+      const count = hook.setReviewRows([{
+        id: 'pw_bank_tx_1',
+        amount_minor: -12800,
+        currency: 'TWD',
+        posted_at: new Date().toISOString(),
+        summary: 'Playwright Seed Txn',
+        status: 'pending',
+        mapped_account_name: 'Cash',
+        bank_account_name: 'Playwright Savings',
+      }])
+      const panel = document.querySelector('[data-testid=bank-sync-review]')
+      const items = panel?.querySelectorAll('.review-item')?.length || 0
+      const selected = hook.getSelectedReviewIds?.()?.length || 0
+      return {
+        ok: count >= 1 && items >= 1 && selected >= 1,
+        count,
+        items,
+        selected,
+        bodySnippet: panel?.innerText?.slice(0, 400) ?? '',
+      }
+    }`)
+    if (reviewSeeded.ok) break
+    await delay(400)
+  }
+  assert.equal(reviewSeeded.ok, true, JSON.stringify(reviewSeeded))
+
+  await runPlaywrightCli(['click', '[data-testid=bank-sync-review] button.btn.primary'])
+  await delay(1200)
+
+  const importState = await evalPage(`() => ({
+    bodyText: document.body?.innerText?.slice(0, 1200) ?? '',
+    reviewItems: document.querySelector('[data-testid=bank-sync-review]')?.querySelectorAll('.review-item')?.length || 0,
+  })`)
+  assert.ok(reviewSeeded.items >= 1, 'review items must remain visible after import attempt')
+  assert.match(importState.bodyText, /Playwright Seed Txn|匯入|import|Import|待審核|pending/u)
+
+  console.log('Bank sync Playwright wizard + review import flow passed')
 } finally {
   preview.kill('SIGTERM')
 }

@@ -726,6 +726,50 @@ onMounted(() => {
     membershipTier.value = String(next?.tier ?? getMembershipTierSnapshot())
   }, { emitCurrent: true })
   void loadConnection()
+  try {
+    if (localStorage.getItem('straw.playwright.hooks') === '1') {
+      window.__SMB_PLAYWRIGHT_BANK_SYNC_CONNECTION__ = {
+        setReviewRows(rows = []) {
+          if (!connection.value) {
+            const connectionId = String(route.params.id ?? 'pw_bank_conn_wizard').trim()
+            connection.value = {
+              id: connectionId,
+              provider: 'hua_nan_bank_tw',
+              provider_connection_id: connectionId,
+              status: 'active',
+              user_label: 'Playwright Wizard Hua Nan',
+              last_sync_at: '',
+              last_sync_status: 'ok',
+              last_error: '',
+              accounts: [{
+                id: 'pw_bank_acct_1',
+                provider_account_id: 'pw_acct_1',
+                account_name: 'Playwright Savings',
+                enabled: true,
+              }],
+              ruleDraft: {
+                direction: 'all',
+                minAmountMajor: 0,
+                lookbackDays: 3,
+                excludeKeywordText: '',
+                includePending: true,
+              },
+            }
+          }
+          reviewRows.value = Array.isArray(rows) ? rows : []
+          selectedReviewIds.value = reviewRows.value.map((item) => item.id)
+          reviewTotal.value = reviewRows.value.length
+          reviewPage.value = 1
+          return reviewRows.value.length
+        },
+        getSelectedReviewIds() {
+          return [...selectedReviewIds.value]
+        },
+      }
+    }
+  } catch {
+    // ignore storage access failures
+  }
 })
 
 let unsubscribeMembership = null
@@ -733,6 +777,11 @@ let unsubscribeMembership = null
 onBeforeUnmount(() => {
   if (typeof unsubscribeMembership === 'function') {
     unsubscribeMembership()
+  }
+  try {
+    if (window.__SMB_PLAYWRIGHT_BANK_SYNC_CONNECTION__) delete window.__SMB_PLAYWRIGHT_BANK_SYNC_CONNECTION__
+  } catch {
+    // ignore
   }
 })
 

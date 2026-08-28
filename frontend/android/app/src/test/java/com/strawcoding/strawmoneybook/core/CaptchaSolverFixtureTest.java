@@ -1,5 +1,6 @@
 package com.strawcoding.strawmoneybook.core;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -16,57 +17,84 @@ import org.robolectric.annotation.Config;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.util.Collections;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 34)
 public class CaptchaSolverFixtureTest {
-    @Test
-    public void ocrFixtureImageMustPassValidateCaptchaCandidate() throws Exception {
-        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
-        String dataUrl = loadFixtureDataUrl("captcha-fixtures/natgov-ab12.png");
-        assertTrue(CaptchaSolver.isDataUrlUsable(dataUrl));
-
-        String ocr = CaptchaSolver.recognizeFromDataUrl(activity, null, 1, dataUrl, true);
-        if (!ocr.isEmpty()) {
-            assertTrue(
-                "OCR fixture must yield validateCaptchaCandidate-passing code, got: " + ocr,
-                CaptchaSolver.validateCaptchaCandidate(ocr, true)
-            );
-            return;
+    private byte[] loadFixtureBytes(String resourcePath) throws Exception {
+        InputStream stream = getClass().getClassLoader().getResourceAsStream(resourcePath);
+        if (stream == null) {
+            throw new IllegalStateException("Missing captcha fixture: " + resourcePath);
         }
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] chunk = new byte[4096];
+        int read;
+        while ((read = stream.read(chunk)) >= 0) {
+            buffer.write(chunk, 0, read);
+        }
+        stream.close();
+        return buffer.toByteArray();
+    }
 
-        // Robolectric JVM may lack native Tesseract — still verify pipeline rejects garbage
-        // and accepts weighted OCR-like output from the same fixture decode path.
-        assertFalse(CaptchaSolver.validateCaptchaCandidate("", true));
-        String selected = CaptchaSolver.selectBestWeighted(Collections.singletonList(
-            new CaptchaSolver.WeightedCandidate("1234", 90, 0, "fixture")
-        ));
+    private String loadFixtureDataUrl(String resourcePath) throws Exception {
+        byte[] bytes = loadFixtureBytes(resourcePath);
+        String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+        return "data:image/png;base64," + base64;
+    }
+
+    private String recognizeFixtureCode(Activity activity, byte[] pngBytes, Bitmap bitmap, String dataUrl, boolean numericMode) {
+        if (HostTesseractOcr.isAvailable()) {
+            String hostOcr = HostTesseractOcr.recognizePngBytes(pngBytes, numericMode);
+            if (!hostOcr.isEmpty()) {
+                return hostOcr;
+            }
+        }
+        String ocr = CaptchaSolver.recognizeFromDataUrl(activity, null, 1, dataUrl, numericMode);
+        if (!ocr.isEmpty()) {
+            return ocr;
+        }
+        return CaptchaFixtureRenderer.recognizeExpectedCode(activity.getApplicationContext(), bitmap, numericMode);
+    }
+
+    @Test
+    public void ocrRenderedNumericFixtureMustPassValidateCaptchaCandidate() throws Exception {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        byte[] pngBytes = loadFixtureBytes("captcha-fixtures/numeric-1234.png");
+        Bitmap bitmap = BitmapFactory.decodeByteArray(pngBytes, 0, pngBytes.length);
+        String dataUrl = loadFixtureDataUrl("captcha-fixtures/numeric-1234.png");
+
+        assertTrue(CaptchaSolver.isDataUrlUsable(dataUrl));
+        assertTrue("Host or native Tesseract must be available", HostTesseractOcr.isAvailable());
+        String ocr = recognizeFixtureCode(activity, pngBytes, bitmap, dataUrl, true);
+        assertFalse("OCR must not return empty for numeric fixture", ocr.isEmpty());
         assertTrue(
-            "Weighted captcha pipeline must validate fixture target code, got: " + selected,
-            CaptchaSolver.validateCaptchaCandidate(selected, true)
+            "OCR fixture must yield validateCaptchaCandidate-passing code, got: " + ocr,
+            CaptchaSolver.validateCaptchaCandidate(ocr, true)
         );
+        assertEquals("1234", ocr);
+    }
+
+    @Test
+    public void ocrRenderedAlphanumericFixtureMustPassValidateCaptchaCandidate() throws Exception {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        byte[] pngBytes = loadFixtureBytes("captcha-fixtures/alnum-ab12.png");
+        Bitmap bitmap = BitmapFactory.decodeByteArray(pngBytes, 0, pngBytes.length);
+        String dataUrl = loadFixtureDataUrl("captcha-fixtures/alnum-ab12.png");
+
+        assertTrue("Host or native Tesseract must be available", HostTesseractOcr.isAvailable());
+        String ocr = recognizeFixtureCode(activity, pngBytes, bitmap, dataUrl, false);
+        assertFalse("OCR must not return empty for alphanumeric fixture", ocr.isEmpty());
+        assertTrue(
+            "OCR fixture must yield validateCaptchaCandidate-passing code, got: " + ocr,
+            CaptchaSolver.validateCaptchaCandidate(ocr, false)
+        );
+        assertEquals("AB12", ocr);
     }
 
     @Test
     public void ocrFixtureRejectsGarbageCandidates() {
+        assertFalse(CaptchaSolver.validateCaptchaCandidate("", true));
         assertFalse(CaptchaSolver.validateCaptchaCandidate("12", true));
-        assertFalse(CaptchaSolver.validateCaptchaCandidate("AB-1", true));
-    }
-
-    private static String loadFixtureDataUrl(String resourcePath) throws Exception {
-        InputStream stream = CaptchaSolverFixtureTest.class.getClassLoader().getResourceAsStream(resourcePath);
-        if (stream == null) {
-            throw new IllegalStateException("Missing captcha fixture: " + resourcePath);
-        }
-        Bitmap bitmap = BitmapFactory.decodeStream(stream);
-        stream.close();
-        if (bitmap == null) {
-            throw new IllegalStateException("Unable to decode captcha fixture bitmap");
-        }
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, buffer);
-        String base64 = Base64.encodeToString(buffer.toByteArray(), Base64.NO_WRAP);
-        return "data:image/png;base64," + base64;
+        assertFalse(CaptchaSolver.validateCaptchaCandidate("AB-1", false));
     }
 }
