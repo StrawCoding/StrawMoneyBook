@@ -2,7 +2,9 @@
  * Straw Habitat visual layer (modern UI).
  * Activated when document.documentElement.dataset.uiLayout === 'modern'.
  * Traditional layout stays on apple-ui.css.
- * Color islands follow theme tokens from theme.service.js.
+ *
+ * Visual rules: color islands, no glass, no glow, no gold-washed pages.
+ * Selected controls use a quiet primary tint — never a solid candy fill.
  */
 
 .home-habitat-hello {
@@ -10,16 +12,18 @@
 }
 
 [data-ui-layout='modern'] {
-  --habitat-radius-island: 24px;
-  --habitat-radius-tile: 20px;
-  --habitat-title-size: clamp(18px, 4.6vw, 22px);
+  --habitat-radius-island: 18px;
+  --habitat-radius-tile: 16px;
+  --habitat-title-size: clamp(24px, 6vw, 30px);
+  --habitat-kicker-size: 13px;
   --zone-in-bg: var(--home-income-card-bg);
   --zone-in-ink: var(--home-income-card-value);
   --zone-out-bg: var(--home-expense-card-bg);
   --zone-out-ink: var(--home-expense-card-value);
-  --zone-plan-bg: color-mix(in srgb, var(--primary) 22%, var(--card) 78%);
-  --zone-plan-ink: var(--text);
-  --zone-vault-bg: color-mix(in srgb, var(--secondary) 18%, var(--card) 82%);
+  --zone-plan-bg: color-mix(in srgb, var(--primary) 14%, var(--card) 86%);
+  --zone-vault-bg: color-mix(in srgb, var(--secondary) 14%, var(--card) 86%);
+  --habitat-selected-bg: color-mix(in srgb, var(--primary) 16%, var(--card) 84%);
+  --habitat-selected-line: color-mix(in srgb, var(--primary) 42%, var(--border));
 }
 
 [data-ui-layout='modern'] .home-large-title {
@@ -29,11 +33,16 @@
 [data-ui-layout='modern'] .home-habitat-hello {
   display: block;
   font-size: var(--habitat-title-size);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  color: var(--text);
   margin: 0;
-  padding: 2px 2px 8px;
+  padding: 2px 2px 10px;
+}
+
+[data-ui-layout='modern'] .home-modern > .stack {
+  gap: 12px;
 }
 
 [data-ui-layout='modern'] .analysis-page > .card.panel > header h2,
@@ -41,20 +50,17 @@
 [data-ui-layout='modern'] .feature-list-page-title,
 [data-ui-layout='modern'] .settings-page > h2 {
   font-size: var(--habitat-title-size);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
-  margin: 0 0 8px;
-}
-
-[data-ui-layout='modern'] .home-modern .stack {
-  gap: 8px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.12;
+  margin: 0 0 12px;
 }
 
 [data-ui-layout='modern'] .home-modern .card {
   border-radius: var(--habitat-radius-island);
   border: 1px solid var(--border);
   box-shadow: none;
+  background: var(--card);
 }
 
 [data-ui-layout='modern'] .home-modern .ledger-card {
@@ -62,11 +68,11 @@
 }
 
 [data-ui-layout='modern'] .home-modern .ledger-card > header h3 {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 650;
   color: var(--muted);
   text-transform: none;
-  letter-spacing: 0;
+  letter-spacing: 0.02em;
 }
 
 [data-ui-layout='modern'] .home-modern .period-tabs {
@@ -80,37 +86,48 @@
 
 [data-ui-layout='modern'] .home-modern .period-tabs .tab-btn {
   flex: 1;
-  padding: 8px 4px;
+  padding: 7px 4px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--card);
+  border: 1px solid transparent;
+  background: var(--bg-soft);
   color: var(--muted);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 650;
   box-shadow: none;
 }
 
 [data-ui-layout='modern'] .home-modern .period-tabs .tab-btn.primary {
-  background: var(--primary);
-  color: var(--primary-contrast);
-  border-color: var(--primary);
+  background: var(--habitat-selected-bg);
+  color: var(--text);
+  border-color: var(--habitat-selected-line);
+}
+
+[data-ui-layout='modern'] .home-modern .hero-card {
+  background: var(--card);
 }
 
 [data-ui-layout='modern'] .home-modern .hero-card .split-card.income {
   background: var(--zone-in-bg);
   color: var(--zone-in-ink);
   border-radius: var(--habitat-radius-tile);
+  border: 0;
 }
 
 [data-ui-layout='modern'] .home-modern .hero-card .split-card.expense {
   background: var(--zone-out-bg);
   color: var(--zone-out-ink);
   border-radius: var(--habitat-radius-tile);
+  border: 0;
 }
 
-[data-ui-layout='modern'] .home-modern .summary-card,
-[data-ui-layout='modern'] .home-modern .hero-card {
-  background: var(--zone-plan-bg);
+[data-ui-layout='modern'] .home-modern .summary-card {
+  background: var(--card);
+  border-left: 3px solid var(--primary);
+}
+
+[data-ui-layout='modern'] .home-modern .home-credit-card {
+  background: var(--card);
+  border-left: 3px solid var(--secondary);
 }
 
 [data-ui-layout='modern'] .home-modern [data-testid='home-transaction-feed'] {
@@ -125,26 +142,37 @@
 }
 
 [data-ui-layout='modern'] .bottom-nav.modern .nav-item.active .nav-pill {
-  background: color-mix(in srgb, var(--primary) 22%, transparent);
+  background: transparent;
   box-shadow: none;
+}
+
+[data-ui-layout='modern'] .bottom-nav.modern .nav-item.active .nav-icon {
+  transform: none;
+  color: var(--primary);
+}
+
+[data-ui-layout='modern'] .bottom-nav.modern .nav-item.active .nav-label {
+  color: var(--primary);
+  font-weight: 700;
 }
 
 [data-ui-layout='modern'] .bottom-nav.modern .nav-label {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 [data-ui-layout='modern'] .settings-page .setting-group {
-  padding: 6px;
+  padding: 4px 0;
   overflow: hidden;
-  border-radius: var(--habitat-radius-tile);
+  border-radius: var(--habitat-radius-island);
+  background: var(--card);
 }
 
 [data-ui-layout='modern'] .settings-page .setting-group .item-link {
-  min-height: 44px;
-  padding: 10px 12px;
+  min-height: 48px;
+  padding: 10px 14px;
   border: 0;
-  border-radius: 16px;
+  border-radius: 0;
   background: transparent;
 }
 
@@ -152,34 +180,64 @@
   content: none;
 }
 
+html[data-ui-layout='modern'] .settings-page .item-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--primary) 16%, var(--bg-soft) 84%);
+  color: var(--primary);
+}
+
 [data-ui-layout='modern'] .settings-page .account-card {
   border-radius: var(--habitat-radius-island);
 }
 
 [data-ui-layout='modern'] .feature-list-page .card.panel {
-  padding: 12px;
+  padding: 14px;
   overflow: visible;
   border-radius: var(--habitat-radius-island);
+  background: transparent;
+  border: 0;
 }
 
 [data-ui-layout='modern'] .feature-list-page .feature-list {
   margin-top: 8px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 10px;
 }
 
 [data-ui-layout='modern'] .feature-list-page .feature-link {
-  min-height: 76px;
+  min-height: 64px;
   padding: 12px;
-  border: 0;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
   border-radius: var(--habitat-radius-tile);
-  background: color-mix(in srgb, var(--primary) 10%, var(--card) 90%);
+  background: var(--card);
   font-weight: 700;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 8px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+[data-ui-layout='modern'] .feature-list-page .feature-list .feature-link:nth-child(4n + 1) {
+  border-left-color: var(--ok);
+}
+
+[data-ui-layout='modern'] .feature-list-page .feature-list .feature-link:nth-child(4n + 2) {
+  border-left-color: var(--primary);
+}
+
+[data-ui-layout='modern'] .feature-list-page .feature-list .feature-link:nth-child(4n + 3) {
+  border-left-color: var(--secondary);
+}
+
+[data-ui-layout='modern'] .feature-list-page .feature-list .feature-link:nth-child(4n + 4) {
+  border-left-color: var(--danger);
 }
 
 [data-ui-layout='modern'] .feature-list-page .feature-link::after {
@@ -189,18 +247,24 @@
 [data-ui-layout='modern'] .feature-list-page .feature-icon-wrap {
   width: 36px;
   height: 36px;
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 [data-ui-layout='modern'] .feature-list-page [data-testid='feature-list-advanced'] {
-  margin-top: 16px;
-  padding: 10px;
-  border: 1px dashed var(--primary);
-  border-radius: var(--habitat-radius-tile);
+  margin-top: 18px;
+  padding: 12px;
+  border: 0;
+  border-radius: var(--habitat-radius-island);
+  background: var(--bg-soft);
 }
 
 [data-ui-layout='modern'] .feature-list-page [data-testid='feature-list-advanced'] .feature-list {
   grid-template-columns: 1fr;
+}
+
+[data-ui-layout='modern'] .feature-list-page [data-testid='feature-list-advanced'] .feature-link {
+  background: var(--card);
+  border: 1px solid var(--border);
 }
 
 [data-ui-layout='modern'] .analysis-page > .card.panel,
@@ -224,20 +288,20 @@
 [data-ui-layout='modern'] .export-page .mode-tabs .btn,
 [data-ui-layout='modern'] .analysis-page .type-tabs .btn {
   flex: 1;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--card);
+  background: var(--bg-soft);
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 650;
   box-shadow: none;
 }
 
 [data-ui-layout='modern'] .analysis-page .mode-tabs .btn.primary,
 [data-ui-layout='modern'] .export-page .mode-tabs .btn.primary,
 [data-ui-layout='modern'] .analysis-page .type-tabs .btn.primary {
-  background: var(--primary);
-  color: var(--primary-contrast);
-  border-color: var(--primary);
+  background: var(--habitat-selected-bg);
+  color: var(--text);
+  border-color: var(--habitat-selected-line);
 }
 
 [data-ui-layout='modern'] .analysis-page .big-card.income {
@@ -260,7 +324,6 @@
   background: var(--zone-vault-bg);
 }
 
-[data-ui-layout='modern'] .bookkeeping-page .amt-hero,
-[data-ui-layout='modern'] .stack > .card.panel .header-row + * {
+[data-ui-layout='modern'] .bookkeeping-page .amt-hero {
   border-radius: var(--habitat-radius-tile);
 }

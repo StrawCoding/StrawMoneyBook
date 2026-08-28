@@ -1,6 +1,6 @@
 # Pending Release Notes
 
-- 華南銀行同步 Phase A：失敗時留下去識別化 H1/H2 debug probe 與網路觀察（不重放請求）；`hua_nan_transaction_query_failed` 不再被當成需要重新連結。交易明細合約仍未凍結，需真機 trace 後才能治本。
+- 現代 Habitat 視覺重做：拿掉金漆滿版按鈕、泥色卡片與底欄光暈；改色島層次、柔和選取態與功能牆磁磚。傳統 Apple HIG 不變。
 
 ---
 
