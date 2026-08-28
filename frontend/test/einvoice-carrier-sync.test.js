@@ -97,6 +97,13 @@ test('功能列表導向載具同步頁；設定頁主清單不再列載具同�
   assert.match(router, /settings-carrier-sync/)
 })
 
+test('SMB-307: carrier import uses valid origin_type for transactions table CHECK', () => {
+  const source = read('src/services/einvoice/backend.js')
+  assert.match(source, /originType:\s*'import'/)
+  assert.match(source, /externalRefId:\s*`einvoice:\$\{invoice\.invoiceNumber\}`/)
+  assert.doesNotMatch(source, /originType:\s*'einvoice'/)
+})
+
 test('載具同步 i18n 具備繁中、英文、日文三語', () => {
   const source = readI18nBundleSource()
   const keys = [

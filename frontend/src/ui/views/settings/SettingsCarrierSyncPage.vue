@@ -78,10 +78,23 @@
         <p class="muted">{{ t('settings_carrier_sync.credentials_desc') }}</p>
 
         <label class="field-label">{{ t('settings_carrier_sync.phone') }}</label>
-        <input v-model="carrierPhone" class="field-input" type="tel" inputmode="tel" autocomplete="username" />
+        <input
+          v-model="carrierPhone"
+          class="field-input"
+          type="tel"
+          inputmode="tel"
+          autocomplete="username"
+          data-testid="carrier-sync-field-phone"
+        />
 
         <label class="field-label mt">{{ t('settings_carrier_sync.password') }}</label>
-        <input v-model="carrierPassword" class="field-input" type="password" autocomplete="current-password" />
+        <input
+          v-model="carrierPassword"
+          class="field-input"
+          type="password"
+          autocomplete="current-password"
+          data-testid="carrier-sync-field-password"
+        />
 
         <label class="remember-row mt">
           <input v-model="rememberCredentials" type="checkbox" />
@@ -137,7 +150,13 @@
         <p v-if="syncConfig?.lastError" class="muted warning-text">{{ syncConfig.lastError }}</p>
 
         <div class="row action-row">
-          <button class="btn primary" :disabled="syncing || !canSync" :aria-busy="syncing" @click="handleSyncNow">
+          <button
+            class="btn primary"
+            :disabled="syncing || !canSync"
+            :aria-busy="syncing"
+            data-testid="carrier-sync-sync-now"
+            @click="handleSyncNow"
+          >
             {{ syncing ? t('settings_carrier_sync.syncing') : t('settings_carrier_sync.sync_now') }}
           </button>
         </div>
@@ -155,9 +174,16 @@
         <div v-if="!pendingRows.length" class="muted">{{ t('settings_carrier_sync.review.empty') }}</div>
         <template v-else>
           <div class="row review-action-row">
-            <button class="btn" @click="selectAll">{{ t('settings_carrier_sync.review.select_all') }}</button>
+            <button class="btn" data-testid="carrier-sync-review-select-all" @click="selectAll">
+              {{ t('settings_carrier_sync.review.select_all') }}
+            </button>
             <button class="btn" @click="clearSelection">{{ t('settings_carrier_sync.review.select_none') }}</button>
-            <button class="btn primary" :disabled="importing || !selectedIds.length" @click="handleImportSelected">
+            <button
+              class="btn primary"
+              :disabled="importing || !selectedIds.length"
+              data-testid="carrier-sync-review-import"
+              @click="handleImportSelected"
+            >
               {{ importing ? t('settings_carrier_sync.review.importing') : t('settings_carrier_sync.review.import_selected', { count: selectedIds.length }) }}
             </button>
             <button class="btn" :disabled="!selectedIds.length" @click="handleDismissSelected">
@@ -197,7 +223,12 @@
       <div class="captcha-panel">
         <img v-if="captchaImageSrc" :src="captchaImageSrc" alt="captcha" class="captcha-image" />
         <p v-if="captchaExpired" class="muted warning-text">{{ t('settings_carrier_sync.captcha.expired') }}</p>
-        <input v-model="captchaCode" class="field-input" :placeholder="t('settings_carrier_sync.captcha.placeholder')" />
+        <input
+          v-model="captchaCode"
+          class="field-input"
+          data-testid="carrier-sync-captcha-input"
+          :placeholder="t('settings_carrier_sync.captcha.placeholder')"
+        />
         <div class="row captcha-actions">
           <button class="btn" type="button" :disabled="captchaRefreshing" @click="refreshCaptchaImage">
             {{ captchaRefreshing ? t('settings_carrier_sync.captcha.refreshing') : t('settings_carrier_sync.captcha.refresh') }}
@@ -213,6 +244,10 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import { getMembershipTierSnapshot, hasCarrierSyncMembershipAccess, subscribeMembershipSnapshot } from '@/core/services/membership.service'
+import { getImportedInvoiceNumbers } from '@/core/repositories/einvoice-import.repo.js'
+import { createCategory, createCategoryGroup, findFirstCategoryByKind } from '@/core/repositories/category.repo.js'
+import { listAccounts } from '@/core/repositories/account.repo.js'
+import { query } from '@/core/db/sqlite'
 import {
   dismissPendingCarrierInvoices,
   getCarrierSyncState,
@@ -227,14 +262,18 @@ import {
   loadEInvoiceCredential,
   saveEInvoiceCredential,
 } from '@/services/einvoice/backend.js'
-import { isEInvoiceApiConfigured } from '@/services/einvoice/scrape-api.js'
+import {
+  resetCarrierSyncOrchestratorDependenciesForTest,
+  setCarrierSyncOrchestratorDependenciesForTest,
+} from '@/services/einvoice/carrier-sync-orchestrator.js'
+import { createEInvoiceError, isValidCarrierPhone, normalizeCarrierPhone } from '@/services/einvoice/shared.js'
 import {
   assessCarrierSyncAvailability,
   isCarrierSyncPlatformReady,
   refreshCarrierApiHealthProbe,
 } from '@/services/einvoice/availability.js'
-import { isValidCarrierPhone, normalizeCarrierPhone } from '@/services/einvoice/shared.js'
 import { useAccountStore } from '@/ui/stores/account.store'
+import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
@@ -250,10 +289,14 @@ const ledgerStore = useLedgerStore()
 const accountStore = useAccountStore()
 const categoryStore = useCategoryStore()
 const uiStore = useUiStore()
+const transactionStore = useTransactionStore()
+
+const playwrightFixtureActive = ref(false)
+const lastImportDiagnostics = ref(null)
 
 const membershipTier = ref(getMembershipTierSnapshot())
 const hasCarrierAccess = computed(() => hasCarrierSyncMembershipAccess(membershipTier.value))
-const apiReady = computed(() => isCarrierSyncPlatformReady())
+const apiReady = computed(() => isCarrierSyncPlatformReady() || playwrightFixtureActive.value)
 const apiMessage = computed(() => t('settings_carrier_sync.api_unavailable'))
 const apiHealth = ref(null)
 const availability = ref(assessCarrierSyncAvailability({ membershipTier: membershipTier.value }))
@@ -394,8 +437,15 @@ async function reloadState() {
     if (state.config) {
       autoSyncEnabled.value = state.config.autoSyncEnabled
       lookbackDays.value = state.config.lookbackDays
-      defaultAccountId.value = state.config.defaultAccountId || NONE_OPTION
-      defaultCategoryId.value = state.config.defaultCategoryId || NONE_OPTION
+      if (!playwrightFixtureActive.value || !defaultAccountId.value || defaultAccountId.value === NONE_OPTION) {
+        defaultAccountId.value = state.config.defaultAccountId || NONE_OPTION
+      }
+      if (!playwrightFixtureActive.value || !defaultCategoryId.value || defaultCategoryId.value === NONE_OPTION) {
+        defaultCategoryId.value = state.config.defaultCategoryId || NONE_OPTION
+      }
+    }
+    if (playwrightFixtureActive.value) {
+      await ensurePlaywrightImportTargets()
     }
     refreshAvailability()
   } finally {
@@ -536,16 +586,37 @@ async function handleImportSelected() {
   if (!selectedIds.value.length || importing.value) return
   importing.value = true
   try {
+    const resolvedAccountId = defaultAccountId.value === NONE_OPTION ? undefined : (defaultAccountId.value || undefined)
+    const resolvedCategoryId = defaultCategoryId.value === NONE_OPTION ? undefined : (defaultCategoryId.value || undefined)
     const result = await importPendingCarrierInvoices({
       invoiceNumbers: [...selectedIds.value],
       ledgerId: ledgerStore.activeLedgerId,
-      accountId: defaultAccountId.value || undefined,
-      categoryId: defaultCategoryId.value || undefined,
+      accountId: resolvedAccountId,
+      categoryId: resolvedCategoryId,
     })
+    lastImportDiagnostics.value = {
+      imported: result.imported?.length ?? 0,
+      failed: result.failed?.length ?? 0,
+      skipped: result.skipped?.length ?? 0,
+      accountId: resolvedAccountId ?? null,
+      categoryId: resolvedCategoryId ?? null,
+      firstError: result.failed?.[0]?.errorMessage ?? null,
+    }
+    if ((result.failed?.length ?? 0) > 0 && (result.imported?.length ?? 0) === 0) {
+      throw createEInvoiceError(
+        String(result.failed[0]?.errorMessage || '載具發票匯入失敗'),
+        'einvoice_import_failed',
+      )
+    }
     selectedIds.value = []
     await reloadState()
     uiStore.pushToast(t('settings_carrier_sync.toast.imported', { count: result.imported.length }))
   } catch (error) {
+    lastImportDiagnostics.value = {
+      ...(lastImportDiagnostics.value ?? {}),
+      message: String(error?.message ?? ''),
+      code: String(error?.code ?? ''),
+    }
     uiStore.pushToast(error?.message || t('einvoice.error.import_failed'), 'error')
   } finally {
     importing.value = false
@@ -601,6 +672,84 @@ function syncStatusText(status) {
   return t('settings_carrier_sync.status.idle')
 }
 
+async function ensurePlaywrightImportTargets() {
+  const ledgerId = ledgerStore.activeLedgerId
+  if (!ledgerId) return
+
+  const accounts = await listAccounts(ledgerId)
+  const cashAccount = accounts.find((account) => (
+    !Number(account.is_settlement)
+    && !Number(account.is_archived)
+    && String(account.account_kind ?? 'asset') !== 'credit'
+  ))
+  if (cashAccount?.id) defaultAccountId.value = cashAccount.id
+
+  let category = await findFirstCategoryByKind(ledgerId, 'expense')
+  if (!category?.id) {
+    const group = await createCategoryGroup(ledgerId, { name: 'Playwright', kind: 'expense', sortOrder: 0 })
+    category = await createCategory(ledgerId, {
+      groupId: group.id,
+      name: 'Playwright Expense',
+      kind: 'expense',
+      icon: 'fa-solid fa-receipt',
+    })
+    await categoryStore.load()
+  }
+  if (category?.id) defaultCategoryId.value = category.id
+  await saveConfig()
+}
+
+async function installPlaywrightCarrierFixtures() {
+  const PW_CAPTCHA_SESSION = 'pw_carrier_captcha_session'
+  const PW_CAPTCHA_CODE = 'PWOK1'
+  const PW_CAPTCHA_IMAGE = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  const PW_FIXTURE_INVOICE = {
+    invoiceNumber: 'PW98765432',
+    amount: 256,
+    invoiceDate: Date.now(),
+    merchantName: 'Playwright Carrier Shop',
+    carrierName: '手機條碼',
+  }
+
+  function throwCaptchaRequired(sessionId = PW_CAPTCHA_SESSION) {
+    const error = createEInvoiceError('請輸入圖形驗證碼', 'einvoice_captcha_required')
+    error.sessionId = sessionId
+    error.captchaImageBase64 = PW_CAPTCHA_IMAGE
+    throw error
+  }
+
+  playwrightFixtureActive.value = true
+  apiHealth.value = {
+    ok: true,
+    configured: true,
+    checkedAt: Date.now(),
+    errorCode: null,
+    note: 'playwright_native_boundary_fixture',
+  }
+  // Web has no Android WebView: install orchestrator fixtures so formal UI
+  // clicks still exercise real sync/captcha/import service+DB paths.
+  setCarrierSyncOrchestratorDependenciesForTest({
+    fetchCarrierInvoicesForTest: async ({ captchaCode = '', sessionId = '' } = {}) => {
+      if (sessionId && captchaCode) {
+        if (String(captchaCode).trim().toUpperCase() !== PW_CAPTCHA_CODE) {
+          throwCaptchaRequired(sessionId)
+        }
+        return [PW_FIXTURE_INVOICE]
+      }
+      throwCaptchaRequired()
+    },
+    refreshCarrierCaptchaBackendSessionForTest: async () => ({
+      sessionId: PW_CAPTCHA_SESSION,
+      captchaImageBase64: PW_CAPTCHA_IMAGE,
+      needsCaptcha: true,
+    }),
+    cancelCarrierSyncBackendSessionForTest: async () => {},
+  })
+
+  await ensurePlaywrightImportTargets()
+  refreshAvailability()
+}
+
 onMounted(async () => {
   unsubscribeMembership = subscribeMembershipSnapshot((snapshot) => {
     membershipTier.value = snapshot.tier
@@ -614,6 +763,7 @@ onMounted(async () => {
   await probeHealth()
   try {
     if (localStorage.getItem('straw.playwright.hooks') === '1') {
+      await installPlaywrightCarrierFixtures()
       window.__SMB_PLAYWRIGHT_CARRIER_SYNC__ = {
         setPendingRows(rows = []) {
           pendingRows.value = Array.isArray(rows) ? rows : []
@@ -622,6 +772,58 @@ onMounted(async () => {
         },
         getAvailability() {
           return availability.value
+        },
+        getPendingCount() {
+          return pendingRows.value.length
+        },
+        getSelectedReviewCount() {
+          return selectedIds.value.length
+        },
+        getImportTargetState() {
+          return {
+            ledgerId: ledgerStore.activeLedgerId,
+            accountId: defaultAccountId.value,
+            categoryId: defaultCategoryId.value,
+            playwrightFixtureActive: playwrightFixtureActive.value,
+            lastImportDiagnostics: lastImportDiagnostics.value,
+          }
+        },
+        async verifyLedgerAfterImport() {
+          const remainingReview = pendingRows.value.length
+          const imported = await getImportedInvoiceNumbers()
+          const hasFixtureImport = imported.has('PW98765432')
+          let transactionId = null
+          if (hasFixtureImport) {
+            const row = await query(
+              'SELECT transaction_id FROM einvoice_invoice_imports WHERE invoice_number = ? LIMIT 1;',
+              ['PW98765432'],
+            )
+            transactionId = row?.values?.[0]?.transaction_id ? String(row.values[0].transaction_id) : null
+          }
+          let ledgerHit = transactionId ? 1 : 0
+          if (ledgerHit < 1) {
+            try {
+              await transactionStore.refreshAfterWriteSafe(4500)
+              const txs = Array.isArray(transactionStore.transactions) ? transactionStore.transactions : []
+              ledgerHit = txs.filter((tx) => {
+                const note = String(tx?.note ?? '')
+                const merchant = String(tx?.merchant_name ?? tx?.merchantName ?? '')
+                const summary = String(tx?.summary ?? tx?.description ?? '')
+                return /Playwright Carrier Shop/u.test(note)
+                  || /Playwright Carrier Shop/u.test(merchant)
+                  || /Playwright Carrier Shop/u.test(summary)
+              }).length
+            } catch {
+              // best-effort store refresh
+            }
+          }
+          return {
+            ok: remainingReview === 0 && hasFixtureImport && ledgerHit >= 1,
+            remainingReview,
+            ledgerHit,
+            hasFixtureImport,
+            transactionId,
+          }
         },
       }
     }
@@ -635,6 +837,8 @@ onBeforeUnmount(() => {
   clearCaptchaExpireTimer()
   try {
     if (window.__SMB_PLAYWRIGHT_CARRIER_SYNC__) delete window.__SMB_PLAYWRIGHT_CARRIER_SYNC__
+    resetCarrierSyncOrchestratorDependenciesForTest()
+    playwrightFixtureActive.value = false
   } catch {
     // ignore
   }

@@ -15,6 +15,23 @@ import {
 } from './scrape-api.js'
 import { createEInvoiceError } from './shared.js'
 
+const defaultDependencies = {}
+const dependencies = { ...defaultDependencies }
+
+/** Playwright / unit tests: mock native/scrape boundary without hitting real portal. */
+export function setCarrierSyncOrchestratorDependenciesForTest(overrides = {}) {
+  Object.assign(dependencies, overrides)
+}
+
+export function resetCarrierSyncOrchestratorDependenciesForTest() {
+  for (const key of Object.keys(dependencies)) {
+    if (!(key in defaultDependencies)) {
+      delete dependencies[key]
+    }
+  }
+  Object.assign(dependencies, defaultDependencies)
+}
+
 export function resolveCarrierSyncBackend() {
   return isCarrierAutomationRuntimeSupported() ? 'native' : 'scrape'
 }
@@ -42,6 +59,19 @@ export async function fetchCarrierInvoices({
   lastSyncAt = null,
   lookbackDays = 7,
 } = {}) {
+  if (typeof dependencies.fetchCarrierInvoicesForTest === 'function') {
+    return dependencies.fetchCarrierInvoicesForTest({
+      cardNo,
+      cardEncrypt,
+      dateFrom,
+      dateTo,
+      captchaCode,
+      sessionId,
+      lastSyncAt,
+      lookbackDays,
+    })
+  }
+
   const backend = resolveCarrierSyncBackend()
   if (backend === 'native') {
     return fetchCarrierInvoicesNativeRoute({
@@ -167,6 +197,10 @@ async function fetchCarrierInvoicesScrapeRoute({
 
 export async function cancelCarrierSyncBackendSession(sessionId = '') {
   if (!sessionId) return
+  if (typeof dependencies.cancelCarrierSyncBackendSessionForTest === 'function') {
+    await dependencies.cancelCarrierSyncBackendSessionForTest(sessionId)
+    return
+  }
   if (resolveCarrierSyncBackend() === 'native') {
     await abortNativeCarrierSession({ sessionId })
     return
@@ -179,6 +213,14 @@ export async function refreshCarrierCaptchaBackendSession({
   cardEncrypt,
   previousSessionId = '',
 } = {}) {
+  if (typeof dependencies.refreshCarrierCaptchaBackendSessionForTest === 'function') {
+    return dependencies.refreshCarrierCaptchaBackendSessionForTest({
+      cardNo,
+      cardEncrypt,
+      previousSessionId,
+    })
+  }
+
   if (resolveCarrierSyncBackend() === 'native') {
     if (previousSessionId) {
       await abortNativeCarrierSession({ sessionId: previousSessionId }).catch(() => null)

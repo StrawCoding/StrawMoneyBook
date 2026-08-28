@@ -170,7 +170,8 @@ export async function importSelectedInvoices(invoices, { accountId, categoryId, 
             occurredAt: new Date(invoice.invoiceDate).toISOString(),
             note: invoice.merchantName ?? '',
             tagsJson: buildCarrierTagsJson(invoice.carrierName),
-            originType: 'einvoice',
+            originType: 'import',
+            externalRefId: `einvoice:${invoice.invoiceNumber}`,
           })
           console.log('[EInvoice] 已建立支出交易:', transactionId, '發票:', invoice.invoiceNumber)
         }
@@ -186,7 +187,10 @@ export async function importSelectedInvoices(invoices, { accountId, categoryId, 
         results.imported.push(invoice)
       } catch (err) {
         console.error('[EInvoice] 單筆發票寫入失敗:', invoice.invoiceNumber, err)
-        results.failed.push(invoice)
+        results.failed.push({
+          ...invoice,
+          errorMessage: String(err?.message ?? err),
+        })
       }
     }
 

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile, spawn } from 'node:child_process'
+import net from 'node:net'
 import { promisify } from 'node:util'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
@@ -11,10 +12,47 @@ const execFileAsync = promisify(execFile)
 const frontendDir = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const previewPort = Number(process.env.CARRIER_SYNC_PLAYWRIGHT_PORT || 4175)
 const baseUrl = `http://127.0.0.1:${previewPort}`
+const PW_PHONE = '0912345678'
+const PW_PASSWORD = 'playwright1'
+const PW_CAPTCHA = 'PWOK1'
 const { runPlaywrightCli, ensurePlaywrightChromium } = createPlaywrightCliRunner({
   label: 'carrier-sync',
   port: previewPort,
 })
+
+async function assertPreviewPortFree(port) {
+  await new Promise((resolvePort, reject) => {
+    const server = net.createServer()
+    server.once('error', (error) => {
+      reject(new Error(
+        `preview port ${port} already in use — refusing to attach to a foreign vite preview `
+        + `(strictPort race / leftover process). ${error.message}`,
+      ))
+    })
+    server.listen(port, '127.0.0.1', () => {
+      server.close(() => resolvePort())
+    })
+  })
+}
+
+function stopPreviewProcess(child) {
+  if (!child?.pid) return
+  try {
+    spawn('pkill', ['-P', String(child.pid)], { stdio: 'ignore' })
+  } catch {
+    // ignore
+  }
+  try {
+    child.kill('SIGTERM')
+  } catch {
+    // ignore
+  }
+  try {
+    spawn('fuser', ['-k', `${previewPort}/tcp`], { stdio: 'ignore' })
+  } catch {
+    // ignore
+  }
+}
 
 async function evalPage(script) {
   const result = await runPlaywrightCli(['eval', script], { raw: true })
@@ -258,7 +296,181 @@ async function seedMembershipAndPendingReview() {
   return { ...seeded, ...visible }
 }
 
-console.log('--- Playwright: carrier sync settings (app-shell) ---')
+async function reloadCarrierSyncWithMembership() {
+  await runPlaywrightCli(['eval', `() => {
+    localStorage.setItem('straw.playwright.hooks', '1')
+    localStorage.setItem('straw.membership.entitlement.v2', JSON.stringify({
+      lifetimeOwned: true,
+      monthlyLastVerifiedAt: '',
+      membershipCacheExpiresAt: 'forever',
+      lastSyncAt: new Date().toISOString(),
+      lastSyncStatus: 'ok',
+      lastKnownPlan: 'lifetime',
+    }))
+    window.location.href = ${JSON.stringify(`${baseUrl}/settings/carrier-sync`)}
+    return true
+  }`], { raw: true })
+  await delay(2500)
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const ready = await evalPage(`() => ({
+      path: window.location.pathname,
+      hasHook: Boolean(window.__SMB_PLAYWRIGHT_CARRIER_SYNC__),
+      hasPhone: Boolean(document.querySelector('[data-testid=carrier-sync-field-phone]')),
+      hasSync: Boolean(document.querySelector('[data-testid=carrier-sync-sync-now]')),
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+    })`)
+    if (
+      ready.path === '/settings/carrier-sync'
+      && ready.hasHook
+      && ready.hasPhone
+      && ready.hasSync
+      && ready.hasBottomNav
+    ) {
+      return ready
+    }
+    await delay(400)
+  }
+  throw new Error('carrier-sync membership page not ready for formal flow')
+}
+
+async function runFormalCarrierSyncFlow() {
+  await reloadCarrierSyncWithMembership()
+
+  await runPlaywrightCli(['fill', '[data-testid=carrier-sync-field-phone]', PW_PHONE])
+  await runPlaywrightCli(['fill', '[data-testid=carrier-sync-field-password]', PW_PASSWORD])
+
+  let syncReady = null
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    syncReady = await evalPage(`() => {
+      const btn = document.querySelector('[data-testid=carrier-sync-sync-now]')
+      return {
+        ok: Boolean(btn) && !btn.disabled,
+        disabled: Boolean(btn?.disabled),
+      }
+    }`)
+    if (syncReady.ok) break
+    await delay(400)
+  }
+  assert.equal(syncReady.ok, true, `sync button must enable after credentials: ${JSON.stringify(syncReady)}`)
+
+  await runPlaywrightCli(['click', '[data-testid=carrier-sync-sync-now]'])
+  await delay(800)
+
+  let captchaReady = null
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    captchaReady = await evalPage(`() => ({
+      hasDialog: Boolean(document.querySelector('.dialog-mask, .dialog-sheet, .dialog-popup')),
+      hasCaptchaInput: Boolean(document.querySelector('[data-testid=carrier-sync-captcha-input]')),
+      hasCaptchaImage: Boolean(document.querySelector('.captcha-image')),
+      bodySnippet: document.body?.innerText?.slice(0, 500) ?? '',
+    })`)
+    if (captchaReady.hasDialog && captchaReady.hasCaptchaInput) break
+    await delay(400)
+  }
+  assert.equal(captchaReady.hasDialog, true, `captcha dialog required after sync: ${JSON.stringify(captchaReady)}`)
+  assert.equal(captchaReady.hasCaptchaInput, true, `captcha input required: ${JSON.stringify(captchaReady)}`)
+
+  await runPlaywrightCli(['fill', '[data-testid=carrier-sync-captcha-input]', PW_CAPTCHA])
+  await delay(200)
+
+  const confirmClicked = await evalPage(`() => {
+    const dialog = document.querySelector('.dialog-mask .dialog, .dialog-sheet, .dialog-popup')
+    const buttons = [...(dialog?.querySelectorAll('button') || document.querySelectorAll('.dialog-actions button, .dialog-mask button'))]
+    const confirm = buttons.find((btn) => /確認|Confirm|確定|Submit/u.test(btn.textContent || '') && !btn.disabled)
+      || buttons.find((btn) => btn.classList.contains('primary') && !btn.disabled)
+    if (!confirm) return { ok: false, reason: 'confirm_button_missing', count: buttons.length }
+    confirm.click()
+    return { ok: true }
+  }`)
+  assert.equal(confirmClicked.ok, true, JSON.stringify(confirmClicked))
+
+  let reviewReady = null
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    reviewReady = await evalPage(`() => {
+      const panel = document.querySelector('[data-testid=carrier-sync-review]')
+      const items = panel?.querySelectorAll('.review-item')?.length || 0
+      const text = panel?.innerText || ''
+      return {
+        ok: items >= 1 && /PW98765432|Playwright Carrier Shop/u.test(text),
+        items,
+        hasSelectAll: Boolean(document.querySelector('[data-testid=carrier-sync-review-select-all]')),
+        hasImport: Boolean(document.querySelector('[data-testid=carrier-sync-review-import]')),
+        text: text.slice(0, 400),
+      }
+    }`)
+    if (reviewReady.ok) break
+    await delay(500)
+  }
+  assert.equal(reviewReady.ok, true, `formal sync must populate review rows: ${JSON.stringify(reviewReady)}`)
+
+  await runPlaywrightCli(['click', '[data-testid=carrier-sync-review-select-all]'])
+  await delay(300)
+
+  const selectedState = await evalPage(`() => {
+    const hook = window.__SMB_PLAYWRIGHT_CARRIER_SYNC__
+    const checked = [...document.querySelectorAll('[data-testid=carrier-sync-review] input[type=checkbox]:checked')].length
+    return {
+      selected: hook?.getSelectedReviewCount?.() ?? checked,
+      checked,
+      importDisabled: Boolean(document.querySelector('[data-testid=carrier-sync-review-import]')?.disabled),
+    }
+  }`)
+  assert.ok(selectedState.selected >= 1, `must select review rows via UI: ${JSON.stringify(selectedState)}`)
+  assert.equal(selectedState.importDisabled, false, 'import button must enable after selection')
+
+  const importTargets = await evalPage(`() => window.__SMB_PLAYWRIGHT_CARRIER_SYNC__?.getImportTargetState?.() ?? null`)
+  assert.ok(importTargets?.ledgerId, `ledger required for import: ${JSON.stringify(importTargets)}`)
+  assert.ok(importTargets?.accountId && importTargets.accountId !== '__none__', `account required: ${JSON.stringify(importTargets)}`)
+  assert.ok(importTargets?.categoryId && importTargets.categoryId !== '__none__', `category required: ${JSON.stringify(importTargets)}`)
+
+  await runPlaywrightCli(['click', '[data-testid=carrier-sync-review-import]'])
+  await delay(1500)
+
+  let importResult = null
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    importResult = await evalPage(`async () => {
+      const hook = window.__SMB_PLAYWRIGHT_CARRIER_SYNC__
+      const panel = document.querySelector('[data-testid=carrier-sync-review]')
+      const items = panel?.querySelectorAll('.review-item')?.length || 0
+      const body = document.body?.innerText || ''
+      const hasSeed = /Playwright Carrier Shop/u.test(body)
+      if (hook?.verifyLedgerAfterImport) {
+        const verified = await hook.verifyLedgerAfterImport()
+        return {
+          ...verified,
+          items,
+          hasSeed,
+          via: 'hook',
+        }
+      }
+      return {
+        ok: items === 0 && hasSeed,
+        remainingReview: items,
+        ledgerHit: hasSeed ? 1 : 0,
+        hasSeed,
+        via: 'dom',
+      }
+    }`)
+    if (importResult.ok) break
+    await delay(500)
+  }
+  assert.equal(importResult.ok, true, JSON.stringify({
+    ...importResult,
+    importTargets: await evalPage(`() => window.__SMB_PLAYWRIGHT_CARRIER_SYNC__?.getImportTargetState?.() ?? null`),
+  }))
+  assert.ok(importResult.remainingReview === 0, `pending review must clear after import: ${JSON.stringify(importResult)}`)
+  assert.ok(
+    importResult.ledgerHit >= 1 || importResult.hasFixtureImport,
+    `ledger must contain imported carrier invoice: ${JSON.stringify(importResult)}`,
+  )
+  assert.ok(importResult.hasFixtureImport !== false, `fixture invoice must be recorded in imports: ${JSON.stringify(importResult)}`)
+
+  return importResult
+}
+
+console.log('--- Playwright: carrier sync settings (app-shell + formal flow) ---')
+await assertPreviewPortFree(previewPort)
 console.log('Building web preview bundle...')
 await execFileAsync('npm', ['run', 'build:web'], {
   cwd: frontendDir,
@@ -345,7 +557,15 @@ try {
   assert.equal(reviewStage.code, 'carrier_sync_pending_review')
   assert.equal(memberState.hasRecoveryCta, true, 'recovery CTA must remain after seeded review')
 
-  console.log('Carrier sync Playwright app-shell route + availability + seeded review check passed')
+  const formal = await runFormalCarrierSyncFlow()
+  assert.equal(formal.ok, true, JSON.stringify(formal))
+
+  console.log('Carrier sync Playwright app-shell + seeded review + formal credentials→captcha→import flow passed')
 } finally {
-  preview.kill('SIGTERM')
+  try {
+    await runPlaywrightCli(['close'])
+  } catch {
+    // ignore session close failures
+  }
+  stopPreviewProcess(preview)
 }
