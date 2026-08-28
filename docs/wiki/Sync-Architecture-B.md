@@ -26,7 +26,29 @@
 
 ### 華南 H1/H2
 
-H0 只凍登入頁。H1＝帳戶列表結構、H2＝至少一筆交易 DOM／JSON。沒有真實登入證據前，禁止把 heuristic 寫成已凍合約。失敗碼 `hua_nan_account_list_not_found` 代表尚未通過 H1。
+H0 只凍登入頁。H1＝帳戶列表結構、H2＝至少一筆交易 DOM／JSON。沒有真實登入證據前，禁止把 heuristic 寫成已凍合約。Phase 9 維持 **PARTIAL**。
+
+失敗碼：`hua_nan_account_list_not_found`＝尚未通過 H1；`hua_nan_transaction_query_failed` / `hua_nan_transaction_page_timeout`＝尚未通過 H2（入口找不到、查詢頁沒 ready、或點查詢後 12 秒無 table／空資料文案）。**這些碼不是登入失敗，不得當成重新連結。** Phase A 只做去識別化 `h1_probe` / `h2_probe` + hncb observe-only intercept（含 GET 也不 replay），**不宣稱已修好查詢失敗。**
+
+證據模板：[`docs/audits/bank-sync-20260816/hua-nan-h1h2-evidence-template.md`](../audits/bank-sync-20260816/hua-nan-h1h2-evidence-template.md)。每一項都要有真機 trace 欄位，不能只靠 JVM。
+
+H1 帳戶列表（缺一項不得標 H1 DONE）：
+
+- 登入後落地 URL path（可含 `TrxDispatcher` 的 `trx` / `state` / `target`，去掉 session query）
+- 可讀 frame 數 vs opaque（跨 origin）數；明細是否在 iframe
+- 帳戶列的 **structural** 來源：`form[name/id]`、`trx=`、table `id/class`、hidden `account` 欄；中英文文案只當備援
+- 帳號識別怎麼來（欄位名，不是掃頁面任意 8–16 位數字）
+- 幣別／多帳戶列如何對應 `providerAccountId`
+
+H2 交易查詢（缺一項不得標 H2 DONE）：
+
+- 從帳戶列進「明細」的穩定入口（function / href / `trx=`），不是只匹配「交易明細」文字
+- 查詢表單：起迄日 `name/id`、送出按鈕、日期格式、最大視窗
+- 結果：HTML table 的 header／`id/class`，**或** JSON／XHR 的 method + path pattern
+- 空資料文案（「查無資料」是否真的出現在 `document.body`，還是只在 iframe／alert）
+- 至少 **一筆** 真實交易的欄位對應：日期、金額、摘要、portal ref／序號；identity 優先 `huanan:portal-ref:v1`，禁止把餘額寫進 hash
+- Network：GET vs POST 次數；**POST 永不 replay**；Phase A 連 GET 也不 replay，直到有 allowlist
+- 查詢是否需要 OTP／SSL／BHO（H0 標 NOT VERIFIED）；若需要則能力改 `USER_INTERACTION_REQUIRED`，不能假裝 silent sync
 
 ## Android-only
 

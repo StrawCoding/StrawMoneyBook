@@ -121,6 +121,35 @@ test('SMB-266 classifyFirstBankSyncFailure separates portal_changed, reconnect, 
   assert.equal(classifyFirstBankSyncFailure(retryError), 'retry')
 })
 
+test('Hua Nan H1/H2 query failures are portal_changed and do not force reconnect', () => {
+  const queryError = new Error('Hua Nan transaction inquiry was not found for account ****9012')
+  queryError.code = 'hua_nan_transaction_query_failed'
+  assert.equal(classifyFirstBankSyncFailure(queryError), 'portal_changed')
+  assert.equal(isBankCredentialAuthError(queryError), false)
+  assert.equal(shouldRequireReconnectAfterBankSyncError('hua_nan_bank_tw', queryError), false)
+
+  const timeoutError = new Error('Hua Nan transaction page 逾時')
+  timeoutError.code = 'hua_nan_transaction_page_timeout'
+  assert.equal(classifyFirstBankSyncFailure(timeoutError), 'portal_changed')
+  assert.equal(shouldRequireReconnectAfterBankSyncError('hua_nan_bank_tw', timeoutError), false)
+
+  const accountListError = new Error('Hua Nan account list was not found after login')
+  accountListError.code = 'hua_nan_account_list_not_found'
+  assert.equal(classifyFirstBankSyncFailure(accountListError), 'portal_changed')
+  assert.equal(shouldRequireReconnectAfterBankSyncError('hua_nan_bank_tw', accountListError), false)
+
+  assert.equal(shouldRequireReconnectForStoredBankConnection(
+    'hua_nan_bank_tw',
+    'error',
+    'hua_nan_transaction_query_failed: Hua Nan transaction query did not finish in time',
+  ), false)
+
+  const firstBankPortal = new Error('First Bank portal contract anchors are missing')
+  firstBankPortal.code = 'first_bank_portal_contract_failed'
+  assert.equal(classifyFirstBankSyncFailure(firstBankPortal), 'portal_changed')
+  assert.equal(shouldRequireReconnectAfterBankSyncError('first_bank_tw', firstBankPortal), true)
+})
+
 test('shouldRequireReconnectForStoredBankConnection only locks stored auth errors', () => {
   assert.equal(extractBankErrorCode('first_bank_login_failed: 登入失敗'), 'first_bank_login_failed')
   assert.equal(shouldRequireReconnectForStoredBankConnection(

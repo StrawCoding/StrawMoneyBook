@@ -130,9 +130,11 @@ final class BankAutomationDebugTrace {
             case "hua_nan_session_expired":
                 return "華南 session 已過期，請檢查 silent relogin 與 cookie restore。";
             case "hua_nan_account_list_not_found":
-                return "華南登入成功但帳戶列表未找到，請檢查 post-login 帳戶探索 DOM。";
+                return "華南登入成功但帳戶列表未找到。請檢查 h1_probe 的 frame path、form name/id、table header 與 digitBlobCount（帳號僅末四碼）；H1 尚未凍合約。";
+            case "hua_nan_transaction_page_timeout":
+                return "華南已點進明細入口但查詢頁未 ready。請檢查 h2_probe 的 hasTable/hasDateInput/hasEmptyText 與 intercept skip 計數（POST 不 replay）。";
             case "hua_nan_transaction_query_failed":
-                return "華南交易查詢頁可能未成功載入或 DOM 結構已變更。";
+                return "華南交易查詢失敗（inquiry_not_found 或 query_timeout）。請檢查 h2_probe 的 inquiryMatch/dateFields 與 intercept GET/POST 計數、skipReason；H2 尚未凍合約，不是重新連結。";
             case "bank_provider_unsupported":
                 return "不支援的銀行 providerId，請確認 Provider Registry。";
             case "bank_automation_timeout":

@@ -13,6 +13,8 @@ import android.util.Base64;
 import android.util.Log;
 import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
@@ -25,6 +27,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -44,6 +47,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * H0 = login page contract (done). H1/H2 = post-login account list + ≥1 txn DOM/JSON
  * must be frozen from a real device session — current post-login path is heuristic only.
  * Until H1 evidence exists, missing account list → hua_nan_account_list_not_found (not a frozen selector).
+ * Phase A records masked h1_probe / h2_probe + observe-only hncb intercept (never replay).
  * See docs/wiki/Sync-Architecture-B.md.
  */
 final class HuaNanBankAutomation {
@@ -59,6 +63,27 @@ final class HuaNanBankAutomation {
     private static final long CAPTCHA_READY_TIMEOUT_MS = 12_000L;
     private static final ZoneId TAIPEI_ZONE = ZoneId.of("Asia/Taipei");
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US);
+    static final String INTERCEPT_SKIP_REASON_POST = "post_without_body";
+    static final String INTERCEPT_SKIP_REASON_OBSERVE_ONLY = "observe_only_no_replay";
+    static final int INTERCEPT_PATH_SAMPLE_LIMIT = 12;
+    static final String[] H1_PROBE_REQUIRED_KEYS = new String[] {
+        "readableFrameCount",
+        "opaqueFrameCount",
+        "forms",
+        "inputs",
+        "tableHeaders",
+        "tableIds",
+        "digitBlobCount"
+    };
+    static final String[] H2_PROBE_REQUIRED_KEYS = new String[] {
+        "inquiryMatch",
+        "hrefPattern",
+        "hasTable",
+        "hasDateInput",
+        "dateFields",
+        "queryButtonFound",
+        "hasEmptyText"
+    };
 
     private HuaNanBankAutomation() {}
 
@@ -97,10 +122,22 @@ final class HuaNanBankAutomation {
         );
         debugTrace.record("login_complete", "ok", "Login completed");
 
+        debugTrace.record("h1_probe", "running", "Capturing masked post-login structure");
+        JSONObject h1Probe = captureStructuralProbe(session, "h1");
+        mergeInterceptSnapshot(h1Probe, session.interceptSnapshot());
+
         JSONArray accounts = discoverAccounts(session);
+        h1Probe.put("accountCount", accounts.length());
         if (accounts.length() == 0) {
-            throw new BankAutomationException("hua_nan_account_list_not_found", "Hua Nan account list was not found after login");
+            debugTrace.record("h1_probe", "error", "No syncable accounts in heuristic discovery", h1Probe);
+            throw queryFailure(
+                "hua_nan_account_list_not_found",
+                "Hua Nan account list was not found after login",
+                "account_list_not_found",
+                h1Probe
+            );
         }
+        debugTrace.record("h1_probe", "ok", "Post-login structure captured", h1Probe);
         JSONObject accountDetails = new JSONObject();
         accountDetails.put("count", accounts.length());
         debugTrace.record("discover_accounts", "ok", "Discovered syncable accounts", accountDetails);
@@ -198,12 +235,12 @@ final class HuaNanBankAutomation {
                 while (retryAccount) {
                     retryAccount = false;
                     JSONObject loadDetails = new JSONObject();
-                    loadDetails.put("accountId", accountId);
+                    loadDetails.put("accountMask", maskAccountId(accountId));
                     loadDetails.put("windowStart", startText);
                     loadDetails.put("windowEnd", endText);
                     debugTrace.record("load_transaction_page", "running", "Opening transaction inquiry", loadDetails);
 
-                    if (!openTransactionInquiry(session, accountId, startText, endText)) {
+                    if (!openTransactionInquiry(session, debugTrace, accountId, startText, endText)) {
                         if (session.isLoginPage()) {
                             if (reloginAttempted) {
                                 throw new BankAutomationException(
@@ -225,9 +262,17 @@ final class HuaNanBankAutomation {
                             retryAccount = true;
                             continue;
                         }
-                        throw new BankAutomationException(
+                        JSONObject missProbe = captureStructuralProbe(session, "h2");
+                        mergeInterceptSnapshot(missProbe, session.interceptSnapshot());
+                        missProbe.put("inquiryMatch", "none");
+                        missProbe.put("reason", "inquiry_not_found");
+                        missProbe.put("accountMask", maskAccountId(accountId));
+                        debugTrace.record("h2_probe", "error", "Transaction inquiry entry was not found", missProbe);
+                        throw queryFailure(
                             "hua_nan_transaction_query_failed",
-                            "Hua Nan transaction inquiry was not found for account " + accountId
+                            "Hua Nan transaction inquiry was not found for account " + maskAccountId(accountId),
+                            "inquiry_not_found",
+                            missProbe
                         );
                     }
 
@@ -592,15 +637,20 @@ final class HuaNanBankAutomation {
 
     private static boolean openTransactionInquiry(
         BrowserSession session,
+        BankAutomationDebugTrace debugTrace,
         String accountId,
         String startDate,
         String endDate
     ) throws Exception {
+        debugTrace.record("h2_probe", "running", "Capturing masked transaction inquiry structure");
         Object opened = session.evaluateJavaScript(String.format(Locale.US, """
             (() => {
               const accountId = %s;
               function text(value) { return String(value ?? '').trim(); }
               function digits(value) { return text(value).replace(/\\D+/g, ''); }
+              function maskHref(value) {
+                return text(value).replace(/\\d{5,}/g, '****').slice(0, 180);
+              }
               function collectDocs() {
                 const docs = [];
                 const seen = new Set();
@@ -633,27 +683,63 @@ final class HuaNanBankAutomation {
                     || href.includes(accountId) || digits(href).includes(digits(accountId));
                   return accountHit && /交易明細|帳戶明細|明細查詢|近期交易|Transaction|Statement/i.test(label + ' ' + href);
                 });
-                if (inquiry && clickNode(inquiry)) return true;
+                if (inquiry && clickNode(inquiry)) {
+                  return {
+                    clicked: true,
+                    match: 'account_row',
+                    hrefPattern: maskHref(inquiry.getAttribute('href') || inquiry.getAttribute('onclick') || '')
+                  };
+                }
               }
               for (const doc of collectDocs()) {
                 const anyInquiry = Array.from(doc.querySelectorAll('a, button, input[type="button"], input[type="submit"]'))
                   .find((node) => /交易明細|帳戶明細|明細查詢|近期交易/i.test(text(node.textContent || node.value || '')));
-                if (anyInquiry && clickNode(anyInquiry)) return true;
+                if (anyInquiry && clickNode(anyInquiry)) {
+                  return {
+                    clicked: true,
+                    match: 'any_text',
+                    hrefPattern: maskHref(anyInquiry.getAttribute('href') || anyInquiry.getAttribute('onclick') || '')
+                  };
+                }
               }
-              return false;
+              return { clicked: false, match: 'none', hrefPattern: '' };
             })();
             """, quoteJs(accountId)));
-        if (!Boolean.TRUE.equals(opened)) {
+        JSONObject clickResult = asJsonObject(opened);
+        boolean clicked = clickResult.optBoolean("clicked", false);
+        if (!clicked) {
             return false;
         }
-        session.waitForCondition("""
-            (() => {
-              const text = String(document.body?.innerText ?? '');
-              const hasTable = Boolean(document.querySelector('table'));
-              const hasForm = Boolean(document.querySelector('input[type="date"], input[name*="Date"], input[id*="Date"], input[name*="date"], input[id*="date"]'));
-              return hasTable || hasForm || /交易明細|帳戶明細|查無資料|沒有資料/i.test(text);
-            })();
-            """, 12_000L, 400L, "hua_nan_transaction_page_timeout", "Hua Nan transaction page did not become ready");
+
+        JSONObject h2Probe = captureStructuralProbe(session, "h2");
+        putJsonValue(h2Probe, "inquiryMatch", clickResult.optString("match", "unknown"));
+        putJsonValue(h2Probe, "hrefPattern", clickResult.optString("hrefPattern", ""));
+        putJsonValue(h2Probe, "accountMask", maskAccountId(accountId));
+        mergeInterceptSnapshot(h2Probe, session.interceptSnapshot());
+        debugTrace.record("h2_probe", "ok", "Inquiry entry clicked; recording page structure", h2Probe);
+
+        try {
+            session.waitForCondition("""
+                (() => {
+                  const text = String(document.body?.innerText ?? '');
+                  const hasTable = Boolean(document.querySelector('table'));
+                  const hasForm = Boolean(document.querySelector('input[type="date"], input[name*="Date"], input[id*="Date"], input[name*="date"], input[id*="date"]'));
+                  return hasTable || hasForm || /交易明細|帳戶明細|查無資料|沒有資料/i.test(text);
+                })();
+                """, 12_000L, 400L, "hua_nan_transaction_page_timeout", "Hua Nan transaction page did not become ready");
+        } catch (BankAutomationException pageError) {
+            JSONObject timeoutProbe = captureStructuralProbe(session, "h2");
+            mergeInterceptSnapshot(timeoutProbe, session.interceptSnapshot());
+            timeoutProbe.put("reason", "page_not_ready");
+            timeoutProbe.put("inquiryMatch", clickResult.optString("match", "unknown"));
+            debugTrace.record("h2_probe", "error", "Transaction page did not become ready", timeoutProbe);
+            throw queryFailure(
+                pageError.getCode(),
+                pageError.getMessage(),
+                "page_not_ready",
+                timeoutProbe
+            );
+        }
 
         session.evaluateJavaScript(String.format(Locale.US, """
             (() => {
@@ -684,12 +770,31 @@ final class HuaNanBankAutomation {
             })();
             """, quoteJs(startDate.replace('-', '/')), quoteJs(endDate.replace('-', '/'))));
 
-        session.waitForCondition("""
-            (() => {
-              const text = String(document.body?.innerText ?? '');
-              return Boolean(document.querySelector('table')) || /查無資料|沒有資料|no data/i.test(text);
-            })();
-            """, 12_000L, 400L, "hua_nan_transaction_query_failed", "Hua Nan transaction query did not finish in time");
+        try {
+            session.waitForCondition("""
+                (() => {
+                  const text = String(document.body?.innerText ?? '');
+                  return Boolean(document.querySelector('table')) || /查無資料|沒有資料|no data/i.test(text);
+                })();
+                """, 12_000L, 400L, "hua_nan_transaction_query_failed", "Hua Nan transaction query did not finish in time");
+        } catch (BankAutomationException queryError) {
+            JSONObject timeoutProbe = captureStructuralProbe(session, "h2");
+            mergeInterceptSnapshot(timeoutProbe, session.interceptSnapshot());
+            timeoutProbe.put("reason", "query_timeout");
+            timeoutProbe.put("inquiryMatch", clickResult.optString("match", "unknown"));
+            debugTrace.record("h2_probe", "error", "Transaction query did not finish in time", timeoutProbe);
+            throw queryFailure(
+                queryError.getCode(),
+                queryError.getMessage(),
+                "query_timeout",
+                timeoutProbe
+            );
+        }
+        JSONObject doneProbe = captureStructuralProbe(session, "h2");
+        mergeInterceptSnapshot(doneProbe, session.interceptSnapshot());
+        doneProbe.put("reason", "ok");
+        doneProbe.put("inquiryMatch", clickResult.optString("match", "unknown"));
+        debugTrace.record("h2_probe", "ok", "Query wait completed", doneProbe);
         return true;
     }
 
@@ -947,6 +1052,268 @@ final class HuaNanBankAutomation {
         return JSONObject.quote(value == null ? "" : value);
     }
 
+    static String maskAccountId(String accountId) {
+        String digits = normalizeText(accountId).replaceAll("\\D+", "");
+        if (digits.isEmpty()) return "";
+        if (digits.length() <= 4) return "****";
+        return "****" + digits.substring(digits.length() - 4);
+    }
+
+    static String redactUrlPath(String url) {
+        String source = normalizeText(url);
+        if (source.isEmpty()) return "";
+        try {
+            URI uri = new URI(source);
+            String path = uri.getRawPath() == null ? "" : uri.getRawPath();
+            String query = uri.getRawQuery();
+            StringBuilder kept = new StringBuilder();
+            if (query != null && !query.isEmpty()) {
+                for (String part : query.split("&")) {
+                    int eq = part.indexOf('=');
+                    String key = (eq < 0 ? part : part.substring(0, eq)).toLowerCase(Locale.US);
+                    if (
+                        "trx".equals(key)
+                        || "state".equals(key)
+                        || "target".equals(key)
+                        || "recognition".equals(key)
+                    ) {
+                        if (kept.length() > 0) kept.append('&');
+                        kept.append(part);
+                    }
+                }
+            }
+            String host = uri.getHost() == null ? "" : uri.getHost();
+            String result = path;
+            if (kept.length() > 0) result = path + "?" + kept;
+            if (!host.isEmpty()) result = host + result;
+            return result;
+        } catch (Exception ignored) {
+            return source.replaceAll("(?i)(jsessionid|session|token|sid)=[^&]+", "$1=redacted");
+        }
+    }
+
+    static boolean isHncbHost(String url) {
+        return normalizeText(url).toLowerCase(Locale.US).contains("hncb.com.tw");
+    }
+
+    /**
+     * Phase A: observe-only. GET replay stays false until an H2 URL allowlist is frozen.
+     */
+    static boolean shouldReplayTransactionInterceptRequest(String method) {
+        return false;
+    }
+
+    static String interceptSkipReason(String method) {
+        String normalized = normalizeText(method);
+        if (normalized.isEmpty()) normalized = "GET";
+        if ("POST".equalsIgnoreCase(normalized) || "PUT".equalsIgnoreCase(normalized)) {
+            return INTERCEPT_SKIP_REASON_POST;
+        }
+        return INTERCEPT_SKIP_REASON_OBSERVE_ONLY;
+    }
+
+    static boolean looksLikeJsonUrl(String url) {
+        String normalized = normalizeText(url).toLowerCase(Locale.US);
+        return normalized.contains(".json") || normalized.contains("/json");
+    }
+
+    static JSONObject asJsonObject(Object raw) {
+        if (raw instanceof JSONObject) return (JSONObject) raw;
+        if (raw instanceof String) {
+            String text = normalizeText((String) raw);
+            if (text.isEmpty() || "null".equals(text)) return new JSONObject();
+            try {
+                return new JSONObject(text);
+            } catch (JSONException ignored) {
+                return new JSONObject();
+            }
+        }
+        return new JSONObject();
+    }
+
+    static JSONObject expectedH1ProbeShape() throws JSONException {
+        JSONObject probe = new JSONObject();
+        for (String key : H1_PROBE_REQUIRED_KEYS) {
+            probe.put(key, JSONObject.NULL);
+        }
+        return probe;
+    }
+
+    static JSONObject expectedH2ProbeShape() throws JSONException {
+        JSONObject probe = new JSONObject();
+        for (String key : H2_PROBE_REQUIRED_KEYS) {
+            probe.put(key, JSONObject.NULL);
+        }
+        return probe;
+    }
+
+    private static BankAutomationException queryFailure(
+        String code,
+        String message,
+        String reason,
+        JSONObject probe
+    ) {
+        BankAutomationException error = new BankAutomationException(code, message);
+        JSONObject data = new JSONObject();
+        putJsonValue(data, "reason", reason);
+        if (probe != null) {
+            putJsonValue(data, "probe", probe);
+        }
+        error.attachData(data);
+        return error;
+    }
+
+    private static void mergeInterceptSnapshot(JSONObject target, JSONObject snapshot) {
+        if (target == null || snapshot == null) return;
+        putJsonValue(target, "getCount", snapshot.optInt("getCount"));
+        putJsonValue(target, "postCount", snapshot.optInt("postCount"));
+        putJsonValue(target, "skipCount", snapshot.optInt("skipCount"));
+        putJsonValue(target, "jsonHintCount", snapshot.optInt("jsonHintCount"));
+        putJsonValue(target, "skipReason", snapshot.optString("lastSkipReason"));
+        putJsonValue(target, "pathSamples", snapshot.optJSONArray("pathSamples"));
+    }
+
+    private static JSONObject captureStructuralProbe(BrowserSession session, String kind) {
+        try {
+            Object raw = session.evaluateJavaScript("""
+                (() => {
+                  function text(value) { return String(value ?? '').trim(); }
+                  function redactPath(href) {
+                    try {
+                      const url = new URL(href, location.href);
+                      const kept = [];
+                      for (const key of ['trx', 'state', 'target', 'Recognition']) {
+                        const value = url.searchParams.get(key);
+                        if (value) kept.push(key + '=' + value);
+                      }
+                      return url.host + url.pathname + (kept.length ? ('?' + kept.join('&')) : '');
+                    } catch (_e) {
+                      return String(href || '').replace(/\\d{8,}/g, '****').slice(0, 180);
+                    }
+                  }
+                  const frames = [];
+                  let readableFrameCount = 0;
+                  let opaqueFrameCount = 0;
+                  const seen = new Set();
+                  function visit(win) {
+                    if (!win || seen.has(win)) return;
+                    seen.add(win);
+                    try {
+                      const href = String(win.location && win.location.href || '');
+                      readableFrameCount += 1;
+                      const doc = win.document;
+                      const forms = Array.from(doc.querySelectorAll('form')).slice(0, 8).map((form) => ({
+                        name: text(form.getAttribute('name')),
+                        id: text(form.id),
+                        actionPath: redactPath(form.getAttribute('action') || href)
+                      }));
+                      const inputs = Array.from(doc.querySelectorAll('input, select')).slice(0, 24).map((el) => ({
+                        name: text(el.name),
+                        id: text(el.id),
+                        type: text(el.type || el.tagName)
+                      }));
+                      const tables = Array.from(doc.querySelectorAll('table')).slice(0, 6);
+                      const tableHeaders = [];
+                      const tableIds = [];
+                      for (const table of tables) {
+                        tableIds.push(text(table.id || table.className).slice(0, 80));
+                        const firstRow = table.querySelector('tr');
+                        if (firstRow) {
+                          tableHeaders.push(
+                            Array.from(firstRow.querySelectorAll('th,td')).map((cell) => text(cell.textContent).slice(0, 20)).slice(0, 8)
+                          );
+                        }
+                      }
+                      const blob = text(doc.body && doc.body.innerText).slice(0, 4000);
+                      const digitBlobCount = (blob.match(/\\b[0-9]{8,16}\\b/g) || []).length;
+                      const hasEmptyText = /查無資料|沒有資料|no data/i.test(blob);
+                      const dateFields = inputs.filter((item) => /date|start|end|from|to|起|迄|開始|結束/i.test(item.name + item.id));
+                      const queryButtonFound = Array.from(doc.querySelectorAll('input[type="button"], input[type="submit"], button'))
+                        .some((btn) => /查詢|Query|Search/i.test(text(btn.value || btn.textContent || '')));
+                      frames.push({
+                        path: redactPath(href),
+                        formCount: forms.length,
+                        tableCount: tables.length,
+                        forms,
+                        inputs,
+                        tableHeaders,
+                        tableIds,
+                        digitBlobCount,
+                        hasTable: tables.length > 0,
+                        hasDateInput: dateFields.length > 0,
+                        dateFields,
+                        queryButtonFound,
+                        hasEmptyText
+                      });
+                      for (let i = 0; i < win.frames.length; i += 1) visit(win.frames[i]);
+                    } catch (_e) {
+                      opaqueFrameCount += 1;
+                    }
+                  }
+                  visit(window);
+                  const first = frames[0] || {
+                    path: '',
+                    forms: [],
+                    inputs: [],
+                    tableHeaders: [],
+                    tableIds: [],
+                    digitBlobCount: 0,
+                    hasTable: false,
+                    hasDateInput: false,
+                    dateFields: [],
+                    queryButtonFound: false,
+                    hasEmptyText: false
+                  };
+                  let emptyInIframe = false;
+                  for (let i = 1; i < frames.length; i += 1) {
+                    if (frames[i].hasEmptyText) emptyInIframe = true;
+                  }
+                  return {
+                    kind: 'probe',
+                    readableFrameCount,
+                    opaqueFrameCount,
+                    frames: frames.slice(0, 4),
+                    forms: first.forms,
+                    inputs: first.inputs,
+                    tableHeaders: first.tableHeaders,
+                    tableIds: first.tableIds,
+                    digitBlobCount: first.digitBlobCount,
+                    hasTable: first.hasTable,
+                    hasDateInput: first.hasDateInput,
+                    dateFields: first.dateFields,
+                    queryButtonFound: first.queryButtonFound,
+                    hasEmptyText: first.hasEmptyText,
+                    emptyInIframe,
+                    inquiryMatch: 'none',
+                    hrefPattern: ''
+                  };
+                })();
+                """);
+            JSONObject probe = asJsonObject(raw);
+            if (probe.length() > 0) {
+                putJsonValue(probe, "kind", kind);
+                return probe;
+            }
+        } catch (Exception ignored) {
+        }
+        JSONObject fallback = new JSONObject();
+        putJsonValue(fallback, "kind", kind);
+        putJsonValue(fallback, "readableFrameCount", 0);
+        putJsonValue(fallback, "opaqueFrameCount", 0);
+        putJsonValue(fallback, "forms", new JSONArray());
+        putJsonValue(fallback, "inputs", new JSONArray());
+        putJsonValue(fallback, "tableHeaders", new JSONArray());
+        putJsonValue(fallback, "digitBlobCount", 0);
+        putJsonValue(fallback, "inquiryMatch", "none");
+        putJsonValue(fallback, "hrefPattern", "");
+        putJsonValue(fallback, "hasTable", false);
+        putJsonValue(fallback, "hasDateInput", false);
+        putJsonValue(fallback, "dateFields", new JSONArray());
+        putJsonValue(fallback, "queryButtonFound", false);
+        putJsonValue(fallback, "hasEmptyText", false);
+        return fallback;
+    }
+
     private static final class BrowserSession {
         private final WebView webView;
         private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -954,6 +1321,13 @@ final class HuaNanBankAutomation {
         private final AtomicReference<CountDownLatch> navigationLatchRef = new AtomicReference<>(null);
         private final AtomicReference<String> lastFinishedUrlRef = new AtomicReference<>("");
         private volatile String lastCaptchaSignature = "";
+        private final Object interceptLock = new Object();
+        private int interceptGetCount;
+        private int interceptPostCount;
+        private int interceptSkipCount;
+        private int interceptJsonHintCount;
+        private String lastSkipReason = "";
+        private final List<String> interceptPathSamples = new ArrayList<>();
 
         BrowserSession(Activity activity, WebView webView) throws BankAutomationException {
             this.webView = webView;
@@ -964,7 +1338,56 @@ final class HuaNanBankAutomation {
                     CountDownLatch latch = navigationLatchRef.getAndSet(null);
                     if (latch != null) latch.countDown();
                 }
+
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                    observeNetworkRequest(request);
+                    return null;
+                }
             }));
+        }
+
+        JSONObject interceptSnapshot() {
+            JSONObject snapshot = new JSONObject();
+            synchronized (interceptLock) {
+                putJsonValue(snapshot, "getCount", interceptGetCount);
+                putJsonValue(snapshot, "postCount", interceptPostCount);
+                putJsonValue(snapshot, "skipCount", interceptSkipCount);
+                putJsonValue(snapshot, "jsonHintCount", interceptJsonHintCount);
+                putJsonValue(snapshot, "lastSkipReason", lastSkipReason);
+                JSONArray samples = new JSONArray();
+                for (String sample : interceptPathSamples) {
+                    samples.put(sample);
+                }
+                putJsonValue(snapshot, "pathSamples", samples);
+            }
+            return snapshot;
+        }
+
+        private void observeNetworkRequest(WebResourceRequest request) {
+            if (request == null || request.getUrl() == null) return;
+            String url = String.valueOf(request.getUrl());
+            if (!isHncbHost(url)) return;
+            String method = normalizeText(request.getMethod());
+            if (method.isEmpty()) method = "GET";
+            String path = redactUrlPath(url);
+            synchronized (interceptLock) {
+                if ("GET".equalsIgnoreCase(method)) {
+                    interceptGetCount += 1;
+                } else if ("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)) {
+                    interceptPostCount += 1;
+                }
+                if (!shouldReplayTransactionInterceptRequest(method)) {
+                    interceptSkipCount += 1;
+                    lastSkipReason = interceptSkipReason(method);
+                }
+                if (looksLikeJsonUrl(url)) {
+                    interceptJsonHintCount += 1;
+                }
+                if (!path.isEmpty() && interceptPathSamples.size() < INTERCEPT_PATH_SAMPLE_LIMIT && !interceptPathSamples.contains(path)) {
+                    interceptPathSamples.add(path);
+                }
+            }
         }
 
         void loadUrl(String url) throws BankAutomationException {

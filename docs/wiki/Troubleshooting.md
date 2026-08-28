@@ -44,7 +44,17 @@ AAB 上傳成功只代表檔案到 Google。確認 `play-testing-channel.json` �
 
 ### I) 華南 `hua_nan_account_list_not_found`
 
-H1 尚未用真實登入凍 DOM。[Sync-Architecture-B](Sync-Architecture-B)
+- 症狀：登入成功但沒有可同步帳戶
+- 原因：H1 尚未用真實登入凍 DOM；現行啟發式掃 8–16 位數字
+- 驗證：debug trace 的 `h1_probe`（frame path、form name/id、table header、digitBlobCount）；帳號只應出現末四碼
+- 處理：收集 redacted 真機 trace 後才凍 H1。不是憑證錯誤，不要「重新連結」空轉。[Sync-Architecture-B](Sync-Architecture-B)
+
+### J) 華南 `hua_nan_transaction_query_failed` / `hua_nan_transaction_page_timeout`
+
+- 症狀：帳戶已在、同步拉明細失敗
+- 原因：H2 未凍。啟發式點「交易明細」或等 `table`／「查無資料」沒命中。`reason` 為 `inquiry_not_found`（入口）、`page_not_ready`（點進去頁沒 ready）、`query_timeout`（點查詢後沒結果）
+- 驗證：重建並安裝含 `h2_probe` 的 APK；看 `h2_probe` 的 inquiry match、date field name/id、wait predicates，以及 intercept 的 GET/POST 計數與 `post_without_body` / `observe_only_no_replay` skip reason
+- 處理：Phase A 只取證，不宣稱已修好。有完整 H2 清單證據後才允許 GET allowlist intercept。歸 `portal_changed`／retry，**不要** reconnect
 
 ## 引用
 

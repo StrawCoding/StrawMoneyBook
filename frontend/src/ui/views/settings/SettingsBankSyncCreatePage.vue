@@ -387,6 +387,8 @@ function resolveCreateErrorMessage(error, fallbackKey) {
     hua_nan_login_page_mismatch: t('settings_bank_sync_create.error.hua_nan_login_page_mismatch'),
     hua_nan_login_failed: t('settings_bank_sync_create.error.hua_nan_login_failed'),
     hua_nan_account_list_not_found: t('settings_bank_sync_create.error.hua_nan_account_list_not_found'),
+    hua_nan_transaction_query_failed: t('settings_bank_sync_create.error.hua_nan_transaction_query_failed'),
+    hua_nan_transaction_page_timeout: t('settings_bank_sync_create.error.hua_nan_transaction_page_timeout'),
     hua_nan_legacy_reconnect_required: t('settings_bank_sync_create.error.hua_nan_legacy_reconnect_required'),
     hua_nan_session_expired: t('settings_bank_sync_create.error.hua_nan_session_expired'),
     hua_nan_credentials_required: t('settings_bank_sync_create.error.hua_nan_credentials_required'),

@@ -32,6 +32,8 @@ Play AAB／上架走 [Android-Release-And-Play-Upload](Android-Release-And-Play-
 
 未做這步，不得宣稱「增量同步已在使用者裝置上可用」。步驟與剩餘階段：[Sync-Architecture-B](Sync-Architecture-B)。
 
+華南 H1/H2 **尚未凍合約**；Phase A 的 `h1_probe`／`h2_probe` 也只有重建 APK 後才會出現在真機 debug trace。
+
 ## 引用
 
 - [`frontend/android/app/src/main/java/.../FirstBankAutomation.java`](../../frontend/android)

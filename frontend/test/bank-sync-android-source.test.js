@@ -13,6 +13,11 @@ const firstBankAutomationSource = readFileSync(
   'utf8',
 )
 
+const huaNanBankAutomationSource = readFileSync(
+  resolve(import.meta.dirname, '../android/app/src/main/java/com/strawcoding/strawmoneybook/HuaNanBankAutomation.java'),
+  'utf8',
+)
+
 test('bank automation activity forces desktop viewport for first bank webview', () => {
   assert.match(bankAutomationActivitySource, /DESKTOP_VIEWPORT_WIDTH = 1280/)
   assert.match(bankAutomationActivitySource, /setLoadWithOverviewMode\(false\)/)
@@ -124,4 +129,27 @@ test('bank automation debug trace prints each step to logcat in debug builds', (
   assert.match(debugTraceSource, /SMB-BankSync/)
   assert.match(debugTraceSource, /Log\.d\(TAG/)
   assert.doesNotMatch(debugTraceSource, /BuildConfig/)
+  assert.match(debugTraceSource, /h1_probe/)
+  assert.match(debugTraceSource, /h2_probe/)
+  assert.match(debugTraceSource, /hua_nan_transaction_page_timeout/)
+})
+
+test('Hua Nan Phase A records masked H1/H2 probes and observe-only intercept', () => {
+  assert.match(huaNanBankAutomationSource, /h1_probe/)
+  assert.match(huaNanBankAutomationSource, /h2_probe/)
+  assert.match(huaNanBankAutomationSource, /shouldInterceptRequest/)
+  assert.match(huaNanBankAutomationSource, /shouldReplayTransactionInterceptRequest/)
+  assert.match(huaNanBankAutomationSource, /observe_only_no_replay/)
+  assert.match(huaNanBankAutomationSource, /post_without_body/)
+  assert.match(huaNanBankAutomationSource, /inquiry_not_found/)
+  assert.match(huaNanBankAutomationSource, /query_timeout/)
+  assert.match(huaNanBankAutomationSource, /page_not_ready/)
+  assert.match(huaNanBankAutomationSource, /maskAccountId/)
+  assert.match(huaNanBankAutomationSource, /static boolean shouldReplayTransactionInterceptRequest/)
+  assert.match(
+    huaNanBankAutomationSource,
+    /static boolean shouldReplayTransactionInterceptRequest\(String method\) \{\s*return false;\s*\}/s,
+  )
+  assert.doesNotMatch(huaNanBankAutomationSource, /setDoOutput\(true\)/)
+  assert.match(huaNanBankAutomationSource, /if \(!shouldReplayTransactionInterceptRequest\(method\)\)/)
 })

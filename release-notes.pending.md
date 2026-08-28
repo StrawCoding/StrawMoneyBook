@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 華南銀行同步 Phase A：失敗時留下去識別化 H1/H2 debug probe 與網路觀察（不重放請求）；`hua_nan_transaction_query_failed` 不再被當成需要重新連結。交易明細合約仍未凍結，需真機 trace 後才能治本。
+
 ---
 
 ## v1.4.5

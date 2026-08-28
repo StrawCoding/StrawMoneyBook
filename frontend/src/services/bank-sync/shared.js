@@ -137,9 +137,29 @@ const BANK_CREDENTIAL_AUTH_ERROR_CODES = Object.freeze([
   'hua_nan_login_trigger_missing',
 ])
 
+const BANK_PORTAL_CHANGED_ERROR_CODES = Object.freeze([
+  'first_bank_login_page_mismatch',
+  'first_bank_portal_contract_failed',
+  'first_bank_account_list_not_found',
+  'first_bank_my_accounts_trigger_missing',
+  'first_bank_transaction_query_failed',
+  'hua_nan_account_list_not_found',
+  'hua_nan_transaction_query_failed',
+  'hua_nan_transaction_page_timeout',
+])
+
+const BANK_NON_RECONNECT_PORTAL_CODES = Object.freeze([
+  'hua_nan_account_list_not_found',
+  'hua_nan_transaction_query_failed',
+  'hua_nan_transaction_page_timeout',
+])
+
 export function isBankCredentialAuthError(error) {
   const code = normalizeText(error?.code).toLowerCase()
   const message = normalizeText(error?.message ?? error).toLowerCase()
+  if (BANK_NON_RECONNECT_PORTAL_CODES.includes(code)) {
+    return false
+  }
   if (BANK_CREDENTIAL_AUTH_ERROR_CODES.includes(code)) {
     return true
   }
@@ -158,19 +178,13 @@ export function isBankCredentialAuthError(error) {
 
 export function classifyFirstBankSyncFailure(error) {
   const code = normalizeText(error?.code).toLowerCase()
-  const message = normalizeText(error?.message ?? error).toLowerCase()
-  if ([
-    'first_bank_login_page_mismatch',
-    'first_bank_portal_contract_failed',
-    'first_bank_account_list_not_found',
-    'first_bank_my_accounts_trigger_missing',
-    'first_bank_transaction_query_failed',
-  ].includes(code)) {
+  if (BANK_PORTAL_CHANGED_ERROR_CODES.includes(code)) {
     return 'portal_changed'
   }
   if (isBankCredentialAuthError(error)) {
     return 'reconnect'
   }
+  const message = normalizeText(error?.message ?? error).toLowerCase()
   if (
     code.includes('timeout')
     || code.includes('temporarily')
