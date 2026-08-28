@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
@@ -54,17 +55,28 @@ export async function ensurePlaywrightChromium(root = resolvePlaywrightBrowsersP
   )
 }
 
+export function isBrowserNotOpenError(error) {
+  const blob = [
+    error?.message,
+    error?.stdout,
+    error?.stderr,
+  ].map((part) => String(part ?? '')).join('\n')
+  return /browser ['"]?default['"]? is not open|is not open, please run open first|run open first/i.test(blob)
+}
+
 export function createPlaywrightCliRunner({
   label,
   port,
   configPath = process.env.PLAYWRIGHT_MCP_CONFIG || defaultPlaywrightConfigPath,
   extraEnv = {},
   maxBuffer = 4 * 1024 * 1024,
+  defaultUrl = '',
 } = {}) {
   const browsersPath = resolvePlaywrightBrowsersPath()
   const session = resolvePlaywrightSession(label, port)
+  let lastOpenedUrl = defaultUrl
 
-  async function runPlaywrightCli(args, { raw = false, timeout = 180000 } = {}) {
+  async function runPlaywrightCliOnce(args, { raw = false, timeout = 180000 } = {}) {
     const cliArgs = [
       '--yes',
       '--package',
@@ -89,10 +101,65 @@ export function createPlaywrightCliRunner({
     })
   }
 
+  async function reopenLastUrl({ timeout = 180000 } = {}) {
+    const reopenUrl = lastOpenedUrl || defaultUrl
+    assert.ok(reopenUrl, 'playwright session closed but no lastOpenedUrl/defaultUrl to reopen')
+    await runPlaywrightCliOnce(['open', reopenUrl], { raw: true, timeout })
+    await delay(800)
+  }
+
+  async function runPlaywrightCli(args, { raw = false, timeout = 180000 } = {}) {
+    if ((args[0] === 'goto' || args[0] === 'open') && args[1]) {
+      lastOpenedUrl = String(args[1])
+    }
+    try {
+      return await runPlaywrightCliOnce(args, { raw, timeout })
+    } catch (error) {
+      if (args[0] === 'open' || !isBrowserNotOpenError(error)) throw error
+      await reopenLastUrl({ timeout })
+      return await runPlaywrightCliOnce(args, { raw, timeout })
+    }
+  }
+
+  async function gotoOrReopen(url, { timeout = 180000 } = {}) {
+    lastOpenedUrl = url
+    try {
+      await runPlaywrightCliOnce(['goto', url], { timeout })
+    } catch (error) {
+      if (!isBrowserNotOpenError(error)) throw error
+      await runPlaywrightCliOnce(['open', url], { raw: true, timeout })
+      await delay(800)
+    }
+  }
+
+  async function evalPage(script, { timeout = 180000 } = {}) {
+    const runEval = () => runPlaywrightCli(['eval', script], { raw: true, timeout })
+    let result
+    try {
+      result = await runEval()
+    } catch (error) {
+      if (!isBrowserNotOpenError(error)) throw error
+      await reopenLastUrl({ timeout })
+      result = await runEval()
+    }
+    const stdout = String(result.stdout ?? '').trim()
+    if (!stdout) {
+      throw new Error('playwright eval returned empty payload')
+    }
+    return JSON.parse(stdout)
+  }
+
   return {
     browsersPath,
     session,
+    lastOpenedUrl: () => lastOpenedUrl,
+    setLastOpenedUrl: (url) => {
+      lastOpenedUrl = String(url || '')
+    },
+    runPlaywrightCliOnce,
     runPlaywrightCli,
+    gotoOrReopen,
+    evalPage,
     ensurePlaywrightChromium: () => ensurePlaywrightChromium(browsersPath),
   }
 }

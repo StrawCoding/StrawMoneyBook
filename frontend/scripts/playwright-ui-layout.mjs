@@ -159,11 +159,23 @@ function isBrowserNotOpenError(error) {
 
 let lastOpenedUrl = `${baseUrl}/`
 
+async function reopenLastUrl() {
+  assert.ok(lastOpenedUrl, 'playwright session closed but lastOpenedUrl is empty')
+  await runPlaywrightCliOnce(['open', lastOpenedUrl])
+  await delay(800)
+}
+
 async function runPlaywrightCli(args, { raw = false } = {}) {
   if ((args[0] === 'goto' || args[0] === 'open') && args[1]) {
     lastOpenedUrl = String(args[1])
   }
-  return runPlaywrightCliOnce(args, { raw })
+  try {
+    return await runPlaywrightCliOnce(args, { raw })
+  } catch (error) {
+    if (args[0] === 'open' || !isBrowserNotOpenError(error)) throw error
+    await reopenLastUrl()
+    return await runPlaywrightCliOnce(args, { raw })
+  }
 }
 
 async function gotoOrReopen(url) {
@@ -173,11 +185,20 @@ async function gotoOrReopen(url) {
   } catch (error) {
     if (!isBrowserNotOpenError(error)) throw error
     await runPlaywrightCliOnce(['open', url])
+    await delay(800)
   }
 }
 
 async function evalPage(script) {
-  const result = await runPlaywrightCli(['eval', script], { raw: true })
+  const runEval = () => runPlaywrightCli(['eval', script], { raw: true })
+  let result
+  try {
+    result = await runEval()
+  } catch (error) {
+    if (!isBrowserNotOpenError(error)) throw error
+    await reopenLastUrl()
+    result = await runEval()
+  }
   const stdout = String(result.stdout ?? '').trim()
   if (!stdout) {
     throw new Error('playwright eval returned empty payload')
@@ -305,6 +326,34 @@ async function completeOnboarding() {
     hasBootLayer: Boolean(document.querySelector('.boot-layer')),
     hasJeepSqlite: Boolean(customElements.get('jeep-sqlite')),
   })`)
+}
+
+async function ensureLedgerShellReady() {
+  let state = await evalPage(`() => ({
+    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+    welcome: Boolean(document.querySelector('.welcome-root')),
+    booting: Boolean(document.querySelector('.boot-layer')),
+    path: window.location.pathname,
+  })`)
+  if (state.hasBottomNav && !state.welcome && !state.booting) {
+    return { ok: true, recovered: false }
+  }
+  if (!state.welcome && !state.booting && state.path !== '/' && state.path !== '/home') {
+    await gotoOrReopen(`${baseUrl}/`)
+    await delay(1200)
+    state = await evalPage(`() => ({
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+      welcome: Boolean(document.querySelector('.welcome-root')),
+      booting: Boolean(document.querySelector('.boot-layer')),
+      path: window.location.pathname,
+    })`)
+    if (state.hasBottomNav && !state.welcome && !state.booting) {
+      return { ok: true, recovered: false }
+    }
+  }
+  const onboarding = await completeOnboarding()
+  assert.equal(onboarding.ok, true, JSON.stringify({ onboarding, state }, null, 2))
+  return { ok: true, recovered: true }
 }
 
 async function assertBottomNavIcons() {
@@ -472,7 +521,7 @@ async function assertDeleteTransactionReturnsHomeWithScroll() {
   const seeded = await seedHomeTransactionsForScroll(18)
   assert.equal(seeded.ok, true, JSON.stringify(seeded, null, 2))
 
-  await runPlaywrightCli(['goto', `${baseUrl}/`])
+  await gotoOrReopen(`${baseUrl}/`)
   await delay(1200)
   await assertHomeBlocks()
 
@@ -1816,9 +1865,11 @@ async function waitForAppShell({ expectPersonalization = false } = {}) {
 }
 
 async function assertDriveAppDataBrowser() {
+  await ensureLedgerShellReady()
   // smb299: navigate first (full reload clears window), then inject Drive mock and refresh.
-  await runPlaywrightCli(['goto', `${baseUrl}/settings/auto-backup#drive-appdata-browser`])
+  await gotoOrReopen(`${baseUrl}/settings/auto-backup#drive-appdata-browser`)
   await delay(900)
+  await waitForAppShell()
 
   await runPlaywrightCli(['eval', `() => {
     const incompleteRemote = JSON.stringify({
@@ -2001,15 +2052,25 @@ async function assertDriveAppDataBrowser() {
   await runPlaywrightCli(['click', '[data-testid="drive-appdata-refresh"]'])
   await delay(700)
 
-  let state = await evalPage(`() => ({
-    path: window.location.pathname,
-    welcome: Boolean(document.querySelector('.welcome-root')),
-    hasPanel: Boolean(document.querySelector('[data-testid=drive-appdata-browser]')),
-    hasList: Boolean(document.querySelector('[data-testid=drive-appdata-file-list]')),
-    fileCount: document.querySelectorAll('[data-testid=drive-appdata-file-list] > li').length,
-    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
-    text: document.body?.innerText?.slice(0, 5000) ?? '',
-  })`)
+  let state = null
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    state = await evalPage(`() => ({
+      path: window.location.pathname,
+      welcome: Boolean(document.querySelector('.welcome-root')),
+      hasPanel: Boolean(document.querySelector('[data-testid=drive-appdata-browser]')),
+      hasList: Boolean(document.querySelector('[data-testid=drive-appdata-file-list]')),
+      fileCount: document.querySelectorAll('[data-testid=drive-appdata-file-list] > li').length,
+      hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+      hasMock: Boolean(window.__SMB_DRIVE_APPDATA_MOCK__),
+      text: document.body?.innerText?.slice(0, 5000) ?? '',
+    })`)
+    if (state.hasList && state.fileCount >= 2 && state.hasBottomNav) break
+    if (attempt === 12 || attempt === 24) {
+      await runPlaywrightCli(['click', '[data-testid="drive-appdata-refresh"]'])
+      await delay(500)
+    }
+    await delay(200)
+  }
   assert.equal(state.path, '/settings/auto-backup', JSON.stringify(state, null, 2))
   assert.equal(state.welcome, false, 'must not stop on welcome for drive appData browser')
   assert.equal(state.hasPanel, true, JSON.stringify(state, null, 2))

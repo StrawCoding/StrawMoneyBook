@@ -13,19 +13,16 @@ const frontendDir = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const previewPort = Number(process.env.ANALYSIS_EXPORT_PLAYWRIGHT_PORT || 4182)
 const baseUrl = `http://127.0.0.1:${previewPort}`
 const playwrightCliDir = resolve(frontendDir, '.playwright-cli')
-const { runPlaywrightCli, ensurePlaywrightChromium } = createPlaywrightCliRunner({
+const {
+  runPlaywrightCli,
+  gotoOrReopen,
+  evalPage,
+  ensurePlaywrightChromium,
+} = createPlaywrightCliRunner({
   label: 'analysis-export',
   port: previewPort,
+  defaultUrl: `${baseUrl}/`,
 })
-
-async function evalPage(script) {
-  const result = await runPlaywrightCli(['eval', script], { raw: true })
-  const stdout = String(result.stdout ?? '').trim()
-  if (!stdout) {
-    throw new Error('playwright eval returned empty payload')
-  }
-  return JSON.parse(stdout)
-}
 
 async function waitForPreviewReady() {
   for (let attempt = 0; attempt < 60; attempt += 1) {
