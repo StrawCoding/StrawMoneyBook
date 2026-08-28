@@ -1730,10 +1730,19 @@ async function assertRouteNavigation() {
   ]
 
   for (const target of advancedTargets) {
+    await ensureLedgerShellReady()
     await gotoOrReopen(`${baseUrl}/features`)
-    for (let warm = 0; warm < 40; warm += 1) {
-      const ready = await readFeatureState()
-      if (ready.path === '/features' && ready.hasFeatureList && !ready.booting) break
+    for (let warm = 0; warm < 60; warm += 1) {
+      const ready = await evalPage(`() => ({
+        path: window.location.pathname,
+        booting: Boolean(document.querySelector('.boot-layer')),
+        hasFeatureList: Boolean(document.querySelector('[data-testid=feature-list-page]')),
+        hasTarget: Boolean(document.querySelector('[data-testid="${target.testId}"]')),
+      })`)
+      if (ready.path === '/features' && ready.hasFeatureList && ready.hasTarget && !ready.booting) break
+      if (warm === 20 || warm === 40) {
+        await gotoOrReopen(`${baseUrl}/features`)
+      }
       await delay(250)
     }
     let scrolled = { ok: false, reason: 'timeout' }
@@ -1758,6 +1767,7 @@ async function assertRouteNavigation() {
       }`)
       if (scrolled.ok) break
       if (attempt === 20 || attempt === 40) {
+        await ensureLedgerShellReady()
         await gotoOrReopen(`${baseUrl}/features`)
       }
       await delay(250)
@@ -1775,6 +1785,7 @@ async function assertRouteNavigation() {
     })`)
     // Fallback: programmatic RouterLink click after re-centering (pointer intercept flake).
     if (pageState.path !== target.path) {
+      await ensureLedgerShellReady()
       await gotoOrReopen(`${baseUrl}/features`)
       let clicked = false
       for (let attempt = 0; attempt < 40; attempt += 1) {
