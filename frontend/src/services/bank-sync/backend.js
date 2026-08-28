@@ -6,10 +6,12 @@ import {
   resolveBankSyncDebugWebOpen,
 } from '../../core/services/bank-sync-debug.service.js'
 import {
-  connectNativeBank,
-  disconnectNativeBank,
+  connectBankBackend,
+  disconnectBankBackend,
+  syncBankBackend,
+} from './bank-sync-orchestrator.js'
+import {
   isNativeBankAutomationRuntimeSupported,
-  syncNativeBank,
 } from './native-automation.js'
 import {
   isRegisteredBankProviderId,
@@ -198,13 +200,13 @@ async function postJson(path, payload) {
   if (isNativeBankProvider(providerId)) {
     const nativePayload = { ...payload, providerId, provider: providerId }
     if (path === '/api/bank/exchange') {
-      return connectNativeBank(nativePayload)
+      return connectBankBackend(nativePayload)
     }
     if (path === '/api/bank/sync') {
-      return syncNativeBank(nativePayload)
+      return syncBankBackend(nativePayload)
     }
     if (path === '/api/bank/disconnect') {
-      return disconnectNativeBank(nativePayload)
+      return disconnectBankBackend(nativePayload)
     }
   }
 

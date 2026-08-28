@@ -99,7 +99,7 @@ export function detectBankStatementCsvFormat(csvText) {
   const hasDebit = Boolean(detectColumn(headers, ['支出', '提出', '借方', 'debit']))
   const hasCredit = Boolean(detectColumn(headers, ['存入', '貸方', 'credit']))
   if (hasDate && hasSummary && (hasDebit || hasCredit)) {
-    return 'first_bank_tw'
+    return 'tw_debit_credit_csv'
   }
   return ''
 }

@@ -28,9 +28,9 @@ test('production provider fallback exposes registered native banks', () => {
   assert.doesNotMatch(backendSource, /mock_bank_tw/)
 })
 
-test('bank sync backend routes native providers via connectNativeBank', () => {
-  assert.match(backendSource, /connectNativeBank/)
-  assert.match(backendSource, /syncNativeBank/)
+test('bank sync backend routes native providers via orchestrator', () => {
+  assert.match(backendSource, /connectBankBackend/)
+  assert.match(backendSource, /syncBankBackend/)
   assert.match(backendSource, /isRegisteredBankProviderId/)
 })
 
@@ -40,8 +40,9 @@ test('bank sync service exposes batch account save helper', () => {
   assert.match(serviceSource, /countBankTransactionsForReview/)
 })
 
-test('bank sync API utils no longer treat mock provider as supported', () => {
-  assert.match(apiUtilsSource, /if \(isFirstBankProvider\(provider\)\) return BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS/)
+test('bank sync API utils tombstone blocks unsupported server-side providers', () => {
+  assert.match(apiUtilsSource, /isSupportedProvider/)
+  assert.doesNotMatch(apiUtilsSource, /first_bank_tw/)
   assert.doesNotMatch(apiUtilsSource, /if \(isMockProvider\(provider\)\) return true/)
 })
 

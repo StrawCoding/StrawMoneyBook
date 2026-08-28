@@ -388,6 +388,12 @@ final class HuaNanBankAutomation {
         return result;
     }
 
+    private static volatile boolean abortRequested = false;
+
+    static void requestAbort() {
+        abortRequested = true;
+    }
+
     private static void performLogin(
         Activity activity,
         BrowserSession session,

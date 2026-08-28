@@ -12,7 +12,6 @@ import {
   buildNativeVaultLookupIds,
   createBankProviderConnectionId,
   formatBankErrorForStorage,
-  isFirstBankProviderId as isFirstBankProviderIdShared,
   isMockProviderId as isMockProviderIdShared,
   isNativeBankProviderId as isNativeBankProviderIdShared,
   selectSyncableBankAccounts,
@@ -176,10 +175,6 @@ function normalizeProviderId(value) {
 
 function isMockProviderId(provider) {
   return isMockProviderIdShared(provider)
-}
-
-function isFirstBankProviderId(provider) {
-  return isFirstBankProviderIdShared(provider)
 }
 
 function isNativeBankProviderId(provider) {
@@ -489,11 +484,7 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
     userCode: options.code,
   })
   if (!providerConnectionId) {
-    throw new Error(
-      isFirstBankProviderId(normalizedProvider)
-        ? '第一銀行登入身分資料不完整'
-        : '華南銀行登入身分資料不完整',
-    )
+    throw new Error('華南銀行登入身分資料不完整')
   }
 
   const defaultLabel = providerDef.name

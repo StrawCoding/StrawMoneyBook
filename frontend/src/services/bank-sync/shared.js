@@ -11,10 +11,6 @@ export function isMockProviderId(value) {
   return normalized === 'mock' || normalized === 'mock_bank_tw'
 }
 
-export function isFirstBankProviderId(value) {
-  return normalizeProviderId(value) === 'first_bank_tw'
-}
-
 export function isHuaNanBankProviderId(value) {
   return normalizeProviderId(value) === 'hua_nan_bank_tw'
 }
@@ -31,18 +27,6 @@ export function simpleHash(input) {
     hash = Math.imul(hash, 16777619)
   }
   return Math.abs(hash >>> 0).toString(36)
-}
-
-export function createFirstBankProviderConnectionId({
-  nationalId,
-  repeatSeq,
-  userCode,
-} = {}) {
-  const normalizedNationalId = normalizeText(nationalId).toUpperCase()
-  const normalizedRepeatSeq = normalizeText(repeatSeq || '0')
-  const normalizedUserCode = normalizeText(userCode)
-  if (!normalizedNationalId || !normalizedUserCode) return ''
-  return `first_bank_identity_${simpleHash(`${normalizedNationalId}:${normalizedRepeatSeq}:${normalizedUserCode}`)}`
 }
 
 export function createHuaNanProviderConnectionId({
@@ -66,7 +50,7 @@ export function createBankProviderConnectionId(providerId, options = {}) {
 /**
  * Native vault may be keyed by provider_connection_id OR local DB id (legacy).
  * Always pass distinct candidates so Android can resolve without false
- * bank_sync_credentials_missing / first_bank_legacy_reconnect_required.
+ * bank_sync_credentials_missing / legacy reconnect hints.
  */
 export function buildNativeVaultLookupIds(connection = {}) {
   const localId = normalizeText(connection?.id)
@@ -111,17 +95,6 @@ export function extractBankErrorCode(value) {
 }
 
 const BANK_CREDENTIAL_AUTH_ERROR_CODES = Object.freeze([
-  'first_bank_login_failed',
-  'first_bank_login_page_mismatch',
-  'first_bank_portal_contract_failed',
-  'first_bank_session_expired',
-  'first_bank_password_required',
-  'first_bank_user_code_required',
-  'first_bank_national_id_required',
-  'first_bank_repeat_seq_required',
-  'first_bank_credentials_required',
-  'first_bank_legacy_reconnect_required',
-  'first_bank_my_accounts_trigger_missing',
   'hua_nan_login_failed',
   'hua_nan_login_page_mismatch',
   'hua_nan_session_expired',
@@ -134,11 +107,6 @@ const BANK_CREDENTIAL_AUTH_ERROR_CODES = Object.freeze([
 ])
 
 const BANK_PORTAL_CHANGED_ERROR_CODES = Object.freeze([
-  'first_bank_login_page_mismatch',
-  'first_bank_portal_contract_failed',
-  'first_bank_account_list_not_found',
-  'first_bank_my_accounts_trigger_missing',
-  'first_bank_transaction_query_failed',
   'hua_nan_account_list_not_found',
   'hua_nan_transaction_query_failed',
   'hua_nan_transaction_page_timeout',
@@ -172,7 +140,7 @@ export function isBankCredentialAuthError(error) {
   )
 }
 
-export function classifyFirstBankSyncFailure(error) {
+export function classifyBankSyncFailure(error) {
   const code = normalizeText(error?.code).toLowerCase()
   if (BANK_PORTAL_CHANGED_ERROR_CODES.includes(code)) {
     return 'portal_changed'
@@ -192,6 +160,11 @@ export function classifyFirstBankSyncFailure(error) {
     return 'retry'
   }
   return 'retry'
+}
+
+/** @deprecated use classifyBankSyncFailure */
+export function classifyFirstBankSyncFailure(error) {
+  return classifyBankSyncFailure(error)
 }
 
 export function shouldRequireReconnectAfterBankSyncError(providerId, error) {

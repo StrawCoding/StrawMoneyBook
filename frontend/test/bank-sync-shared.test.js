@@ -3,8 +3,9 @@ import assert from 'node:assert/strict'
 
 import {
   buildImportedNote,
-  classifyFirstBankSyncFailure,
-  createFirstBankProviderConnectionId,
+  classifyBankSyncFailure,
+  createHuaNanProviderConnectionId,
+  createBankProviderConnectionId,
   extractBankErrorCode,
   formatBankErrorForStorage,
   isBankCredentialAuthError,
@@ -13,26 +14,23 @@ import {
   shouldRequireReconnectForStoredBankConnection,
 } from '../src/services/bank-sync/shared.js'
 
-test('createFirstBankProviderConnectionId normalizes nationalId whitespace but keeps userCode case', () => {
-  const first = createFirstBankProviderConnectionId({
+test('createHuaNanProviderConnectionId normalizes nationalId whitespace but keeps userCode case', () => {
+  const first = createHuaNanProviderConnectionId({
     nationalId: ' a123456789 ',
-    repeatSeq: '01',
-    userCode: ' Abcd1234 ',
+    userCode: ' user01 ',
   })
-  const second = createFirstBankProviderConnectionId({
+  const second = createBankProviderConnectionId('hua_nan_bank_tw', {
     nationalId: 'A123456789',
-    repeatSeq: '01',
-    userCode: 'Abcd1234',
+    userCode: 'user01',
   })
-  const third = createFirstBankProviderConnectionId({
+  const third = createBankProviderConnectionId('hua_nan_bank_tw', {
     nationalId: 'A123456789',
-    repeatSeq: '01',
-    userCode: 'ABCD1234',
+    userCode: 'USER01',
   })
 
   assert.equal(first, second)
   assert.notEqual(second, third)
-  assert.match(first, /^first_bank_identity_/)
+  assert.match(first, /^hua_nan_identity_/)
 })
 
 test('buildImportedNote keeps transaction metadata order', () => {
@@ -60,17 +58,17 @@ test('selectSyncableBankAccounts keeps only enabled and mapped accounts', () => 
 
 test('formatBankErrorForStorage prefers code and message when both exist', () => {
   const error = new Error('登入失敗')
-  error.code = 'first_bank_login_failed'
-  assert.equal(formatBankErrorForStorage(error), 'first_bank_login_failed: 登入失敗')
+  error.code = 'hua_nan_login_failed'
+  assert.equal(formatBankErrorForStorage(error), 'hua_nan_login_failed: 登入失敗')
 })
 
 test('isBankCredentialAuthError detects credential and login failures', () => {
-  const authError = new Error('第一銀行登入失敗')
-  authError.code = 'first_bank_login_failed'
+  const authError = new Error('華南登入失敗')
+  authError.code = 'hua_nan_login_failed'
   assert.equal(isBankCredentialAuthError(authError), true)
 
-  const expiredError = new Error('第一銀行登入階段已逾時')
-  expiredError.code = 'first_bank_session_expired'
+  const expiredError = new Error('華南登入階段已逾時')
+  expiredError.code = 'hua_nan_session_expired'
   assert.equal(isBankCredentialAuthError(expiredError), true)
 
   const genericError = new Error('network unavailable')
@@ -78,7 +76,7 @@ test('isBankCredentialAuthError detects credential and login failures', () => {
   assert.equal(isBankCredentialAuthError(genericError), false)
 })
 
-test('shouldRequireReconnectAfterBankSyncError locks hua nan auth failures only', () => {
+test('shouldRequireReconnectAfterBankSyncError locks native bank auth failures', () => {
   const authError = new Error('華南登入失敗')
   authError.code = 'hua_nan_login_failed'
   assert.equal(shouldRequireReconnectAfterBankSyncError('hua_nan_bank_tw', authError), true)
@@ -86,65 +84,40 @@ test('shouldRequireReconnectAfterBankSyncError locks hua nan auth failures only'
   const transientError = new Error('temporary upstream failure')
   transientError.code = 'bank_upstream_temporarily_unavailable'
   assert.equal(shouldRequireReconnectAfterBankSyncError('hua_nan_bank_tw', transientError), false)
-  assert.equal(shouldRequireReconnectAfterBankSyncError('first_bank_tw', authError), false)
   assert.equal(shouldRequireReconnectAfterBankSyncError('mock_bank_tw', authError), false)
 })
 
-test('createHuaNanProviderConnectionId is stable for identity fields', async () => {
-  const { createHuaNanProviderConnectionId, createBankProviderConnectionId } = await import('../src/services/bank-sync/shared.js')
-  const first = createHuaNanProviderConnectionId({
-    nationalId: ' a123456789 ',
-    userCode: ' user01 ',
-  })
-  const second = createBankProviderConnectionId('hua_nan_bank_tw', {
-    nationalId: 'A123456789',
-    userCode: 'user01',
-  })
-  assert.equal(first, second)
-  assert.match(first, /^hua_nan_identity_/)
-})
+test('classifyBankSyncFailure separates portal_changed, reconnect, and retry', () => {
+  const portalChangedError = new Error('Hua Nan account list was not found')
+  portalChangedError.code = 'hua_nan_account_list_not_found'
+  assert.equal(classifyBankSyncFailure(portalChangedError), 'portal_changed')
 
-test('SMB-266 classifyFirstBankSyncFailure separates portal_changed, reconnect, and retry', () => {
-  const portalChangedError = new Error('First Bank portal contract anchors are missing')
-  portalChangedError.code = 'first_bank_portal_contract_failed'
-  assert.equal(classifyFirstBankSyncFailure(portalChangedError), 'portal_changed')
+  const reconnectError = new Error('Hua Nan login failed')
+  reconnectError.code = 'hua_nan_login_failed'
+  assert.equal(classifyBankSyncFailure(reconnectError), 'reconnect')
 
-  const reconnectError = new Error('First Bank login failed')
-  reconnectError.code = 'first_bank_login_failed'
-  assert.equal(classifyFirstBankSyncFailure(reconnectError), 'reconnect')
-
-  const retryError = new Error('First Bank page load timed out')
-  retryError.code = 'first_bank_navigation_timeout'
-  assert.equal(classifyFirstBankSyncFailure(retryError), 'retry')
+  const retryError = new Error('Bank page load timed out')
+  retryError.code = 'bank_navigation_timeout'
+  assert.equal(classifyBankSyncFailure(retryError), 'retry')
 })
 
 test('Hua Nan H1/H2 query failures are portal_changed and do not force reconnect', () => {
   const queryError = new Error('Hua Nan transaction inquiry was not found for account ****9012')
   queryError.code = 'hua_nan_transaction_query_failed'
-  assert.equal(classifyFirstBankSyncFailure(queryError), 'portal_changed')
+  assert.equal(classifyBankSyncFailure(queryError), 'portal_changed')
   assert.equal(isBankCredentialAuthError(queryError), false)
   assert.equal(shouldRequireReconnectAfterBankSyncError('hua_nan_bank_tw', queryError), false)
 
   const timeoutError = new Error('Hua Nan transaction page 逾時')
   timeoutError.code = 'hua_nan_transaction_page_timeout'
-  assert.equal(classifyFirstBankSyncFailure(timeoutError), 'portal_changed')
+  assert.equal(classifyBankSyncFailure(timeoutError), 'portal_changed')
   assert.equal(shouldRequireReconnectAfterBankSyncError('hua_nan_bank_tw', timeoutError), false)
-
-  const accountListError = new Error('Hua Nan account list was not found after login')
-  accountListError.code = 'hua_nan_account_list_not_found'
-  assert.equal(classifyFirstBankSyncFailure(accountListError), 'portal_changed')
-  assert.equal(shouldRequireReconnectAfterBankSyncError('hua_nan_bank_tw', accountListError), false)
 
   assert.equal(shouldRequireReconnectForStoredBankConnection(
     'hua_nan_bank_tw',
     'error',
     'hua_nan_transaction_query_failed: Hua Nan transaction query did not finish in time',
   ), false)
-
-  const firstBankPortal = new Error('First Bank portal contract anchors are missing')
-  firstBankPortal.code = 'first_bank_portal_contract_failed'
-  assert.equal(classifyFirstBankSyncFailure(firstBankPortal), 'portal_changed')
-  assert.equal(shouldRequireReconnectAfterBankSyncError('first_bank_tw', firstBankPortal), false)
 })
 
 test('shouldRequireReconnectForStoredBankConnection only locks stored auth errors', () => {

@@ -111,17 +111,7 @@ export async function disconnectNativeBank(payload = {}) {
   }
 }
 
-/** @deprecated transitional alias — prefer connectNativeBank */
-export async function connectNativeFirstBank(payload = {}) {
-  return connectNativeBank({ ...payload, providerId: 'first_bank_tw', provider: 'first_bank_tw' })
-}
-
-/** @deprecated transitional alias — prefer syncNativeBank */
-export async function syncNativeFirstBank(payload = {}) {
-  return syncNativeBank({ ...payload, providerId: 'first_bank_tw', provider: 'first_bank_tw' })
-}
-
-/** @deprecated transitional alias — prefer disconnectNativeBank */
+/** @deprecated legacy alias — use disconnectNativeBank */
 export async function disconnectNativeBankConnection(payload = {}) {
   return disconnectNativeBank(payload)
 }

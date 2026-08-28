@@ -9,14 +9,14 @@ const firstBankFixture = `交易日期,摘要,支出,存入,餘額
 2026/03/07,薪資入帳,,50000,80000
 2026/03/06,超商消費,120,,30000`
 
-test('detectBankStatementCsvFormat recognizes first bank statement headers', () => {
+test('detectBankStatementCsvFormat recognizes TW debit/credit statement headers', () => {
   const format = detectBankStatementCsvFormat(firstBankFixture)
-  assert.equal(format, 'first_bank_tw')
+  assert.equal(format, 'tw_debit_credit_csv')
 })
 
-test('parseBankStatementCsv maps first bank rows into bank sync transaction shape', () => {
+test('parseBankStatementCsv maps TW debit/credit rows into bank sync transaction shape', () => {
   const rows = parseBankStatementCsv(firstBankFixture, {
-    provider: 'first_bank_tw',
+    provider: 'hua_nan_bank_tw',
     providerAccountId: '29168214193',
   })
 

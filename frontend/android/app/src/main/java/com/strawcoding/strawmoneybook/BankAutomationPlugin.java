@@ -43,22 +43,6 @@ public class BankAutomationPlugin extends Plugin {
         launch(call, BankAutomationActivity.ACTION_DISCONNECT_BANK);
     }
 
-    /** Legacy alias — First Bank provider removed; routes to generic connect with rejection. */
-    @PluginMethod
-    public void connectFirstBank(PluginCall call) {
-        call.reject("First Bank provider is not available", "bank_provider_disabled");
-    }
-
-    @PluginMethod
-    public void syncFirstBank(PluginCall call) {
-        call.reject("First Bank provider is not available", "bank_provider_disabled");
-    }
-
-    @PluginMethod
-    public void disconnectConnection(PluginCall call) {
-        launch(call, BankAutomationActivity.ACTION_DISCONNECT_CONNECTION);
-    }
-
     private void launch(PluginCall call, String action) {
         Activity activity = getActivity();
         if (activity == null || activity.isFinishing() || activity.isDestroyed()) {

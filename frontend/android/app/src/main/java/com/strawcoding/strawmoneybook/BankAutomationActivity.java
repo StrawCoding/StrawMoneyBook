@@ -23,7 +23,6 @@ import java.util.concurrent.Executors;
 public class BankAutomationActivity extends Activity {
     static final int DESKTOP_VIEWPORT_WIDTH = 1280;
 
-    public static final String ACTION_DISCONNECT_CONNECTION = "disconnect_connection";
     public static final String ACTION_CONNECT_BANK = "connect_bank";
     public static final String ACTION_SYNC_BANK = "sync_bank";
     public static final String ACTION_DISCONNECT_BANK = "disconnect_bank";
@@ -146,10 +145,12 @@ public class BankAutomationActivity extends Activity {
             BankAutomationVault vault = new BankAutomationVault(getApplicationContext());
             JSONObject result;
             debugTrace.record("action_started", "ok", action);
-            if (ACTION_CONNECT_BANK.equals(action) || ACTION_SYNC_BANK.equals(action) || ACTION_DISCONNECT_BANK.equals(action)) {
-                result = dispatchByProvider(action, payload, vault);
-            } else if (ACTION_DISCONNECT_CONNECTION.equals(action)) {
-                result = dispatchByProvider(ACTION_DISCONNECT_BANK, payload, vault);
+            if (ACTION_CONNECT_BANK.equals(action)) {
+                result = BankSyncOrchestrator.connect(this, webView, vault, debugTrace, payload);
+            } else if (ACTION_SYNC_BANK.equals(action)) {
+                result = BankSyncOrchestrator.sync(this, webView, vault, debugTrace, payload);
+            } else if (ACTION_DISCONNECT_BANK.equals(action)) {
+                result = BankSyncOrchestrator.disconnect(this, webView, vault, debugTrace, payload);
             } else {
                 throw new BankAutomationException("bank_automation_action_invalid", "Unsupported bank automation action");
             }
@@ -159,30 +160,6 @@ public class BankAutomationActivity extends Activity {
         } catch (Exception error) {
             finishWithError(new BankAutomationException("bank_automation_failed", String.valueOf(error.getMessage())));
         }
-    }
-
-    private JSONObject dispatchByProvider(String action, JSONObject payload, BankAutomationVault vault) throws Exception {
-        String providerId = normalizeProviderId(payload);
-        if ("first_bank_tw".equals(providerId)) {
-            throw new BankAutomationException("bank_provider_disabled", "First Bank provider is not available");
-        }
-        if ("hua_nan_bank_tw".equals(providerId)) {
-            if (ACTION_CONNECT_BANK.equals(action)) {
-                return HuaNanBankAutomation.connect(this, webView, vault, debugTrace, payload);
-            }
-            if (ACTION_SYNC_BANK.equals(action)) {
-                return HuaNanBankAutomation.sync(this, webView, vault, debugTrace, payload);
-            }
-            return HuaNanBankAutomation.disconnect(this, webView, vault, debugTrace, payload);
-        }
-        throw new BankAutomationException("bank_provider_unsupported", "Unsupported bank provider: " + providerId);
-    }
-
-    private static String normalizeProviderId(JSONObject payload) {
-        if (payload == null) return "";
-        String fromProviderId = String.valueOf(payload.optString("providerId", "")).trim().toLowerCase();
-        if (!fromProviderId.isEmpty()) return fromProviderId;
-        return String.valueOf(payload.optString("provider", "")).trim().toLowerCase();
     }
 
     private String stringExtra(Intent intent, String key) {
