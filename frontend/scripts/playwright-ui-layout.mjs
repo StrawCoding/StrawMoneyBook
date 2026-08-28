@@ -154,7 +154,7 @@ function isBrowserNotOpenError(error) {
     error?.stdout,
     error?.stderr,
   ].map((part) => String(part ?? '')).join('\n')
-  return /browser ['"]?default['"]? is not open|is not open, please run open first|run open first/i.test(blob)
+  return /browser ['"]?default['"]? is not open|is not open, please run open first|run open first|Target page, context or browser has been closed/i.test(blob)
 }
 
 let lastOpenedUrl = `${baseUrl}/`
@@ -163,6 +163,7 @@ async function reopenLastUrl() {
   assert.ok(lastOpenedUrl, 'playwright session closed but lastOpenedUrl is empty')
   await runPlaywrightCliOnce(['open', lastOpenedUrl])
   await delay(800)
+  await ensureLedgerShellReady()
 }
 
 async function runPlaywrightCli(args, { raw = false } = {}) {
