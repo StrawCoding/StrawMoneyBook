@@ -1,11 +1,12 @@
 # Pending Release Notes
 
+---
+
+## v1.4.7
 - 分析分類明細「全部」改 SQL 依分類／附加項目載入列資料與類型合計，不再 `listAllTransactionsChunked` 後在主執行緒篩選。
 - 啟動鏈 FontAwesome 改獨立 `fa-icon-registry` 動態註冊，`main.js` 不再靜態 import 全量 icon。
 - 恢復模組化銀行同步（僅華南、不含第一銀行）：provider-agnostic `CaptchaSolver` / `BankSyncContract`、功能頁進階入口、Playwright 與 Node 測試。
 - 恢復模組化載具同步（Android WebView 原生 Java，`nat_gov_einvoice_tw`）：`CarrierAutomationPlugin` / `CarrierSyncOrchestrator`、共用 `CaptchaSolver.validateCaptchaCandidate`、Web 保留 Playwright scrape fallback。
-
----
 
 ## v1.4.6
 - 現代 Habitat 視覺重做：拿掉金漆滿版按鈕、泥色卡片與底欄光暈；改色島層次、柔和選取態與功能牆磁磚。傳統 Apple HIG 不變。
