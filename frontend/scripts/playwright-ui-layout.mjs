@@ -163,7 +163,6 @@ async function reopenLastUrl() {
   assert.ok(lastOpenedUrl, 'playwright session closed but lastOpenedUrl is empty')
   await runPlaywrightCliOnce(['open', lastOpenedUrl])
   await delay(800)
-  await ensureLedgerShellReady()
 }
 
 async function runPlaywrightCli(args, { raw = false } = {}) {
