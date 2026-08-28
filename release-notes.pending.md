@@ -4,6 +4,7 @@
 
 ## v1.4.15
 - 載具同步模組化重建（smb307）：Android 權威路徑恢復 WebView 原生 Java；`CarrierSyncOrchestrator` / `CarrierProviderRegistry` / `NatGovEInvoiceProvider`（`providers/natgov` 分包）；Activity/Plugin 經 orchestrator 分派；captcha OCR 共用 `CaptchaSolver.validateCaptchaCandidate` + 半自動 UI；Web 保留 scrape fallback。
+- 載具同步 Playwright 正式流程（smb307 驗收補齊）：憑證→sync→captcha 半自動→待審核→import ledger（對齊 smb306 銀行 sync 核准標準）；Web preview 經 orchestrator test fixtures 走真實 service+DB 路徑；import 修正 `origin_type=import` 以通過 transactions CHECK。
 
 ## v1.4.14
 - 銀行同步驗收補齊（smb306）：Playwright 改走真實 UI（建立連線表單→帳戶對應→手動同步→待匯入勾選匯入→交易搜尋 ledger）；`BankAutomationRuntime` 於 connect 先 `markSuccess` 再 snapshot、sync 進入 `SYNCING_TRANSACTIONS`、captcha/abort 同一狀態機；移除 DebugTrace 第一銀行殘留診斷文案。
