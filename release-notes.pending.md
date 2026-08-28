@@ -1,9 +1,10 @@
 # Pending Release Notes
 
+---
+
+## v1.4.14
 - 銀行同步驗收補齊（smb306）：Playwright 改走真實 UI（建立連線表單→帳戶對應→手動同步→待匯入勾選匯入→交易搜尋 ledger）；`BankAutomationRuntime` 於 connect 先 `markSuccess` 再 snapshot、sync 進入 `SYNCING_TRANSACTIONS`、captcha/abort 同一狀態機；移除 DebugTrace 第一銀行殘留診斷文案。
 - 銀行同步 Playwright 預覽治本：預設埠改 4226、佔用即失敗，避免掛到殘留／外國 `vite preview` 造成「hua nan provider required」假陰性。
-
----
 
 ## v1.4.9
 - Playwright ui-layout：session 被 reaper 關閉時以 `lastOpenedUrl` reopen 重試，不再於 reopen 中途跑 onboarding（避免 welcome 假失敗）。
