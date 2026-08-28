@@ -91,6 +91,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
+import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
 import {
   completePostSetupIntro,
   isPostSetupIntroPending,
@@ -99,6 +100,8 @@ import {
 const router = useRouter()
 const { t } = useI18n()
 const currentIndex = ref(0)
+const showBankSyncSlide = isBankSyncFeatureEnabled()
+
 const slides = computed(() => {
   const items = [
     {
@@ -187,6 +190,23 @@ const slides = computed(() => {
       ],
     },
   ]
+
+  if (showBankSyncSlide) {
+    items.splice(1, 0, {
+      id: 'bank-sync',
+      icon: 'fa-solid fa-building-columns',
+      title: t('post_setup_intro.bank_sync.title', '銀行同步'),
+      description: t('post_setup_intro.bank_sync.description', '可在 Android App 內新增銀行連線，之後把銀行交易同步進來，再決定是否匯入帳本。'),
+      highlight: t('post_setup_intro.bank_sync.highlight', '每家銀行都有自己的管理頁，可分別查看同步時間、帳戶對應與匯入狀態。'),
+      actionLabel: t('post_setup_intro.bank_sync.action', '前往銀行同步'),
+      to: '/settings/bank-sync',
+      points: [
+        t('post_setup_intro.bank_sync.point_1', '第一次新增連線後，就能在管理頁啟用、同步與查看明細。'),
+        t('post_setup_intro.bank_sync.point_2', '匯入前可先用自動識別規則，把轉帳或固定描述自動分類。'),
+        t('post_setup_intro.bank_sync.point_3', '同步資料與記帳資料分開管理，整理完成後再決定哪些交易要正式匯入。'),
+      ],
+    })
+  }
 
   return items
 })

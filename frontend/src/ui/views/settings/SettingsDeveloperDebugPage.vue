@@ -8,6 +8,25 @@
     <article class="card panel">
       <p class="muted subtitle">{{ t('debug_page.subtitle') }}</p>
 
+      <article class="debug-toggle-card" data-testid="bank-sync-debug-toggle">
+        <button
+          type="button"
+          class="switch-row"
+          :class="{ active: bankSyncDebugEnabled }"
+          role="switch"
+          :aria-checked="bankSyncDebugEnabled ? 'true' : 'false'"
+          :disabled="bankSyncDebugEnvForced"
+          @click="toggleBankSyncDebug"
+        >
+          <span>{{ t('debug_page.bank_sync_debug.toggle', '銀行同步 Debug Console') }}</span>
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </button>
+        <p class="muted compact">
+          {{ bankSyncDebugEnvForced
+            ? t('debug_page.bank_sync_debug.env_forced', '目前為 debug / 開發模式，Console 紀錄與網頁銀行同步已強制開啟。')
+            : t('debug_page.bank_sync_debug.desc', '開啟後所有銀行同步動作會印到瀏覽器 Console，並在修正期開放網頁使用銀行同步流程。') }}
+        </p>
+      </article>
 
       <div class="action-row">
         <button class="btn" :disabled="loading" @click="refresh">{{ t('debug_page.refresh') }}</button>
@@ -155,6 +174,60 @@
         </article>
       </div>
 
+      <hr class="divider" />
+
+      <div class="trace-header">
+        <small class="muted">{{ t('debug_page.bank_sync_debug.console_title', '銀行同步 Console Log') }}</small>
+      </div>
+      <div v-if="!bankSyncConsoleLogs.length" class="muted">{{ t('debug_page.bank_sync_debug.console_empty', '尚未有 Console 紀錄。開啟 Debug 後執行銀行同步即可看到。') }}</div>
+      <div v-else class="trace-list console-list" data-testid="bank-sync-console-log">
+        <article v-for="item in bankSyncConsoleLogs" :key="item.id" class="trace-item">
+          <div class="trace-item-top">
+            <strong class="break-all">{{ item.action || '-' }}</strong>
+            <small class="muted">{{ item.at || '-' }}</small>
+          </div>
+          <pre v-if="item.details" class="console-details">{{ formatConsoleDetails(item.details) }}</pre>
+        </article>
+      </div>
+
+      <hr class="divider" />
+
+      <div class="trace-header">
+        <small class="muted">{{ t('debug_page.key.bank_sync_calls') }}</small>
+      </div>
+      <div v-if="!bankSyncCalls.length" class="muted">{{ t('debug_page.bank_sync_calls.empty') }}</div>
+      <div v-else class="trace-list">
+        <article v-for="item in bankSyncCalls" :key="item.id" class="trace-item">
+          <div class="trace-item-top">
+            <strong>{{ item.operation || '-' }}</strong>
+            <strong :class="item.status === 'ok' ? 'trace-ok' : item.status === 'error' ? 'trace-error' : ''">
+              {{ item.status || '-' }}
+            </strong>
+          </div>
+          <div class="trace-item-body">
+            <small class="muted">{{ t('debug_page.key.bank_sync_provider') }}: {{ item.provider || '-' }}</small>
+            <small class="muted">{{ t('debug_page.key.bank_sync_connection') }}: {{ item.connectionId || '-' }}</small>
+            <small class="muted">{{ t('debug_page.key.bank_sync_ledger') }}: {{ item.ledgerId || '-' }}</small>
+            <small class="muted">{{ t('debug_page.key.play_call_started') }}: {{ item.startedAt || '-' }}</small>
+            <small class="muted">{{ t('debug_page.key.play_call_ended') }}: {{ item.endedAt || '-' }}</small>
+            <small class="muted">{{ t('debug_page.key.play_call_duration') }}: {{ formatDuration(item.durationMs) }}</small>
+            <small v-if="item.errorCode" class="muted">{{ t('debug_page.key.play_call_error_code') }}: {{ item.errorCode }}</small>
+            <small v-if="item.errorMessage" class="muted break-all">{{ t('debug_page.key.play_call_error_message') }}: {{ item.errorMessage }}</small>
+            <small v-if="item.debugHint" class="muted break-all">{{ t('debug_page.key.bank_sync_debug_hint') }}: {{ item.debugHint }}</small>
+            <small v-if="item.debugLastStep" class="muted">{{ t('debug_page.key.bank_sync_last_step') }}: {{ item.debugLastStep }}</small>
+          </div>
+          <div v-if="item.steps?.length" class="trace-step-list">
+            <small class="muted">{{ t('debug_page.key.bank_sync_steps') }}</small>
+            <div v-for="(step, index) in item.steps" :key="`${item.id}-${index}`" class="trace-step-item">
+              <strong>{{ step.step || '-' }}</strong>
+              <small :class="step.status === 'ok' ? 'trace-ok' : step.status === 'error' ? 'trace-error' : 'muted'">
+                {{ step.status || '-' }}
+              </small>
+              <small class="muted break-all">{{ step.message || '-' }}</small>
+            </div>
+          </div>
+        </article>
+      </div>
 
     </article>
   </section>
@@ -179,6 +252,16 @@ import {
   subscribeTransactionFailureTrace,
 } from '@/core/services/transaction.service'
 import {
+  getBankSyncConsoleLogSnapshot,
+  getBankSyncDebugTraceSnapshot,
+  isBankSyncDebugEnabled,
+  isBankSyncDebugEnvForced,
+  setBankSyncDebugEnabled,
+  subscribeBankSyncConsoleLog,
+  subscribeBankSyncDebugMode,
+  subscribeBankSyncDebugTrace,
+} from '@/core/services/bank-sync-debug.service'
+import {
   getEInvoiceDebugTraceSnapshot,
   subscribeEInvoiceDebugTrace,
 } from '@/core/services/einvoice-debug.service'
@@ -195,6 +278,10 @@ const playSupported = ref(false)
 const playCalls = ref(getGooglePlayCallTraceSnapshot())
 const txFailures = ref(getTransactionFailureTraceSnapshot())
 const einvoiceCalls = ref(getEInvoiceDebugTraceSnapshot())
+const bankSyncCalls = ref(getBankSyncDebugTraceSnapshot())
+const bankSyncConsoleLogs = ref(getBankSyncConsoleLogSnapshot())
+const bankSyncDebugEnabled = ref(isBankSyncDebugEnabled())
+const bankSyncDebugEnvForced = ref(isBankSyncDebugEnvForced())
 const errorLogs = ref(getErrorLogSnapshot())
 const snapshot = reactive({
   tier: getMembershipTierSnapshot(),
@@ -211,12 +298,28 @@ let unsubscribe = null
 let unsubscribePlayTrace = null
 let unsubscribeTxFailureTrace = null
 let unsubscribeEInvoiceTrace = null
+let unsubscribeBankSyncTrace = null
+let unsubscribeBankSyncConsole = null
+let unsubscribeBankSyncDebugMode = null
 let unsubscribeErrorLog = null
 
 function formatDuration(value) {
   const number = Number(value)
   if (!Number.isFinite(number) || number < 0) return '-'
   return `${Math.round(number)}ms`
+}
+
+function formatConsoleDetails(details) {
+  try {
+    return JSON.stringify(details, null, 2)
+  } catch {
+    return String(details ?? '')
+  }
+}
+
+function toggleBankSyncDebug() {
+  if (bankSyncDebugEnvForced.value) return
+  setBankSyncDebugEnabled(!bankSyncDebugEnabled.value)
 }
 
 function createExportTimestamp(date = new Date()) {
@@ -247,6 +350,8 @@ function buildDebugExportPayload() {
       play_calls: Array.isArray(playCalls.value) ? playCalls.value : [],
       transaction_failures: Array.isArray(txFailures.value) ? txFailures.value : [],
       einvoice_calls: Array.isArray(einvoiceCalls.value) ? einvoiceCalls.value : [],
+      bank_sync_calls: Array.isArray(bankSyncCalls.value) ? bankSyncCalls.value : [],
+      bank_sync_console: Array.isArray(bankSyncConsoleLogs.value) ? bankSyncConsoleLogs.value : [],
       error_logs: Array.isArray(errorLogs.value) ? errorLogs.value : [],
     },
   }
@@ -310,6 +415,16 @@ onMounted(async () => {
   unsubscribeEInvoiceTrace = subscribeEInvoiceDebugTrace((items) => {
     einvoiceCalls.value = Array.isArray(items) ? items : []
   }, { emitCurrent: true })
+  unsubscribeBankSyncTrace = subscribeBankSyncDebugTrace((items) => {
+    bankSyncCalls.value = Array.isArray(items) ? items : []
+  }, { emitCurrent: true })
+  unsubscribeBankSyncConsole = subscribeBankSyncConsoleLog((items) => {
+    bankSyncConsoleLogs.value = Array.isArray(items) ? items : []
+  }, { emitCurrent: true })
+  unsubscribeBankSyncDebugMode = subscribeBankSyncDebugMode((state) => {
+    bankSyncDebugEnabled.value = Boolean(state?.enabled)
+    bankSyncDebugEnvForced.value = Boolean(state?.envForced)
+  }, { emitCurrent: true })
   unsubscribeErrorLog = subscribeErrorLog((items) => {
     errorLogs.value = Array.isArray(items) ? items : []
   }, { emitCurrent: true })
@@ -332,6 +447,18 @@ onBeforeUnmount(() => {
   if (typeof unsubscribeEInvoiceTrace === 'function') {
     unsubscribeEInvoiceTrace()
     unsubscribeEInvoiceTrace = null
+  }
+  if (typeof unsubscribeBankSyncTrace === 'function') {
+    unsubscribeBankSyncTrace()
+    unsubscribeBankSyncTrace = null
+  }
+  if (typeof unsubscribeBankSyncConsole === 'function') {
+    unsubscribeBankSyncConsole()
+    unsubscribeBankSyncConsole = null
+  }
+  if (typeof unsubscribeBankSyncDebugMode === 'function') {
+    unsubscribeBankSyncDebugMode()
+    unsubscribeBankSyncDebugMode = null
   }
   if (typeof unsubscribeErrorLog === 'function') {
     unsubscribeErrorLog()

@@ -126,10 +126,11 @@ test('電子發票 Step2 預設查詢區間不超過後端單次查詢上限', (
   assert.doesNotMatch(source, /setMonth\(from\.getMonth\(\) - 3\)/)
 })
 
-test('電子發票後端服務改用 Playwright scrape API，停用 native WebView 自動化', () => {
+test('載具同步：Android 原生 WebView 為權威路徑，Web 保留 Playwright scrape fallback', () => {
   const backendSource = read('src/services/einvoice/backend.js')
   const scrapeApiSource = read('src/services/einvoice/scrape-api.js')
   const nativeSource = read('src/services/einvoice/native-automation.js')
+  const orchestratorSource = read('src/services/einvoice/carrier-sync-orchestrator.js')
   const packageSource = read('package.json')
   const mainActivity = read('android/app/src/main/java/com/strawcoding/strawmoneybook/MainActivity.java')
   const manifest = read('android/app/src/main/AndroidManifest.xml')
@@ -140,12 +141,12 @@ test('電子發票後端服務改用 Playwright scrape API，停用 native WebVi
   assert.match(scrapeApiSource, /\/api\/einvoice\/scrape\/query/)
   assert.match(scrapeApiSource, /\/api\/einvoice\/query-invoices/)
 
-  assert.match(nativeSource, /return false/)
-  assert.match(nativeSource, /Playwright scrape/)
-  assert.doesNotMatch(nativeSource, /WebViewActivity\.start/)
-  assert.doesNotMatch(nativeSource, /EInvoiceAutomationPlugin\.query/)
-  assert.doesNotMatch(mainActivity, /EInvoiceAutomationPlugin/)
-  assert.doesNotMatch(manifest, /EInvoiceAutomationActivity/)
+  assert.match(nativeSource, /isCarrierAutomationRuntimeSupported/)
+  assert.match(nativeSource, /CarrierAutomation/)
+  assert.match(orchestratorSource, /fetchCarrierInvoicesScrapeRoute/)
+  assert.match(mainActivity, /CarrierAutomationPlugin/)
+  assert.match(manifest, /CarrierAutomationActivity/)
+  assert.doesNotMatch(nativeSource, /EInvoiceAutomationPlugin/)
   assert.doesNotMatch(packageSource, /simulate:einvoice-login/)
   assert.equal(existsSync(new URL('../android/app/src/main/java/com/strawcoding/strawmoneybook/EInvoiceAutomation.java', import.meta.url)), false)
   assert.equal(existsSync(new URL('../android/app/src/main/java/com/strawcoding/strawmoneybook/EInvoiceAutomationActivity.java', import.meta.url)), false)

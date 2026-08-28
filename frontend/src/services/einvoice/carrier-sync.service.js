@@ -11,14 +11,13 @@ import {
 } from '@/core/repositories/einvoice-sync.repo.js'
 import { traceEInvoiceScrape } from '@/core/services/einvoice-debug.service.js'
 import { assertCanUseCarrierSync, hasCarrierSyncMembershipAccess } from '@/core/services/membership.service.js'
-import { importSelectedInvoices, loadEInvoiceCredential } from './backend.js'
 import {
-  cancelEInvoiceScrapeSession,
-  queryEInvoiceScrapeInvoices,
-  startEInvoiceScrapeSession,
-  submitEInvoiceScrapeCaptcha,
-} from './scrape-api.js'
-import { createEInvoiceError } from './shared.js'
+  cancelCarrierSyncBackendSession,
+  fetchCarrierInvoices,
+  refreshCarrierCaptchaBackendSession,
+  resolveCarrierSyncBackend,
+} from './carrier-sync-orchestrator.js'
+import { importSelectedInvoices, loadEInvoiceCredential } from './backend.js'
 
 function formatDateInput(date) {
   const year = date.getFullYear()
@@ -87,44 +86,23 @@ export async function syncCarrierInvoicesNow({
   const startedAt = Date.now()
 
   return traceEInvoiceScrape(
-    { carrierBarcode, dateFrom, dateTo, operation: 'sync' },
+    {
+      carrierBarcode,
+      dateFrom,
+      dateTo,
+      operation: 'sync',
+      backend: resolveCarrierSyncBackend(),
+    },
     async () => {
-      let activeSessionId = String(sessionId ?? '').trim()
-      let captchaImageBase64 = ''
-
-      if (!activeSessionId) {
-        const start = await startEInvoiceScrapeSession({
-          cardNo: carrierBarcode,
-          cardEncrypt: verificationCode,
-          force_captcha: false,
-        })
-        activeSessionId = start.session_id
-        if (start.needs_captcha && !captchaCode) {
-          await upsertEInvoiceSyncConfig({
-            lastSyncStatus: 'captcha_required',
-            lastError: null,
-          })
-          const error = createEInvoiceError('請輸入圖形驗證碼', 'einvoice_captcha_required')
-          error.sessionId = activeSessionId
-          error.captchaImageBase64 = start.captcha_image_base64 ?? ''
-          throw error
-        }
-      }
-
-      if (captchaCode) {
-        await submitEInvoiceScrapeCaptcha({
-          session_id: activeSessionId,
-          captcha_code: captchaCode,
-        })
-      }
-
-      const invoices = await queryEInvoiceScrapeInvoices({
-        session_id: activeSessionId,
+      const invoices = await fetchCarrierInvoices({
         cardNo: carrierBarcode,
         cardEncrypt: verificationCode,
-        startDate: dateFrom,
-        endDate: dateTo,
-        captcha_code: captchaCode || undefined,
+        dateFrom,
+        dateTo,
+        captchaCode,
+        sessionId,
+        lastSyncAt: config?.lastSyncAt ?? null,
+        lookbackDays: config?.lookbackDays ?? 7,
       })
 
       const deduped = await dedupeInvoices(invoices)
@@ -214,7 +192,7 @@ export async function dismissPendingCarrierInvoices(invoiceNumbers = []) {
 
 export async function cancelCarrierSyncSession(sessionId = '') {
   if (!sessionId) return
-  await cancelEInvoiceScrapeSession({ session_id: sessionId })
+  await cancelCarrierSyncBackendSession(sessionId)
 }
 
 /**
@@ -226,26 +204,11 @@ export async function refreshCarrierCaptchaSession({
   previousSessionId = '',
 } = {}) {
   await assertCanUseCarrierSync()
-  if (previousSessionId) {
-    await cancelEInvoiceScrapeSession({ session_id: previousSessionId }).catch(() => null)
-  }
-  const start = await startEInvoiceScrapeSession({
+  return refreshCarrierCaptchaBackendSession({
     cardNo: carrierBarcode,
     cardEncrypt: verificationCode,
-    force_captcha: true,
+    previousSessionId,
   })
-  if (!start?.needs_captcha) {
-    return {
-      sessionId: start?.session_id ?? '',
-      captchaImageBase64: '',
-      needsCaptcha: false,
-    }
-  }
-  return {
-    sessionId: start.session_id,
-    captchaImageBase64: start.captcha_image_base64 ?? '',
-    needsCaptcha: true,
-  }
 }
 
 let autoSyncInFlight = false

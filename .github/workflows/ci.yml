@@ -197,3 +197,22 @@ jobs:
           CI: true
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/backend/.server-data/playwright-browsers
 
+  playwright-bank-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Run high-risk Playwright bank-sync
+        run: npm run playwright:bank-sync
+        env:
+          CI: true
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/backend/.server-data/playwright-browsers

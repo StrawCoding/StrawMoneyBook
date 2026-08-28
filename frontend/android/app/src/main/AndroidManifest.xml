@@ -36,6 +36,22 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".BankAutomationActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:finishOnTaskLaunch="true"
+            android:launchMode="singleTop"
+            android:theme="@style/AppTheme.BankAutomation" />
+
+        <activity
+            android:name=".CarrierAutomationActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:finishOnTaskLaunch="true"
+            android:launchMode="singleTop"
+            android:theme="@style/AppTheme.CarrierAutomation" />
+
         <receiver
             android:name=".StrawMoneyWidgetProvider"
             android:label="@string/widget_catalog_summary_label"

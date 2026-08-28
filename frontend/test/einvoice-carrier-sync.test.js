@@ -22,14 +22,15 @@ test('載具同步 repo 提供 pending 去重與狀態更新方法', () => {
   assert.match(source, /INSERT OR IGNORE/)
 })
 
-test('carrier-sync service 串接 scrape API 與 pending 佇列', () => {
+test('carrier-sync service 串接 orchestrator 與 pending 佇列', () => {
   const source = read('src/services/einvoice/carrier-sync.service.js')
   assert.match(source, /syncCarrierInvoicesNow/)
   assert.match(source, /dedupeInvoices/)
   assert.match(source, /importPendingCarrierInvoices/)
   assert.match(source, /maybeAutoSyncCarrierInvoices/)
   assert.match(source, /runCarrierSyncAutoRefreshInBackground/)
-  assert.match(source, /startEInvoiceScrapeSession/)
+  assert.match(source, /fetchCarrierInvoices/)
+  assert.match(source, /resolveCarrierSyncBackend/)
 })
 
 test('載具同步設定頁使用手機號碼與密碼欄位', () => {
@@ -66,7 +67,9 @@ test('SMB-265: captcha-required state is not overwritten as generic error', () =
 })
 
 test('SMB-265: scrape API sends existing auth session with e-invoice requests', () => {
+  const orchestrator = read('src/services/einvoice/carrier-sync-orchestrator.js')
   const source = read('src/services/einvoice/scrape-api.js')
+  assert.match(orchestrator, /fetchCarrierInvoicesScrapeRoute/)
   assert.match(source, /refreshSharedLedgerSession/)
   assert.match(source, /getSharedLedgerSession/)
   assert.match(source, /getAuthStorageHeaders/)

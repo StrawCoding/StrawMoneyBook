@@ -230,6 +230,7 @@ import {
 import { isEInvoiceApiConfigured } from '@/services/einvoice/scrape-api.js'
 import {
   assessCarrierSyncAvailability,
+  isCarrierSyncPlatformReady,
   refreshCarrierApiHealthProbe,
 } from '@/services/einvoice/availability.js'
 import { isValidCarrierPhone, normalizeCarrierPhone } from '@/services/einvoice/shared.js'
@@ -252,7 +253,7 @@ const uiStore = useUiStore()
 
 const membershipTier = ref(getMembershipTierSnapshot())
 const hasCarrierAccess = computed(() => hasCarrierSyncMembershipAccess(membershipTier.value))
-const apiReady = computed(() => isEInvoiceApiConfigured())
+const apiReady = computed(() => isCarrierSyncPlatformReady())
 const apiMessage = computed(() => t('settings_carrier_sync.api_unavailable'))
 const apiHealth = ref(null)
 const availability = ref(assessCarrierSyncAvailability({ membershipTier: membershipTier.value }))

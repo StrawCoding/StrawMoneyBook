@@ -110,6 +110,15 @@ const compareRows = [
     memberFallback: '可使用',
   },
   {
+    key: 'bank-sync',
+    featureKey: 'membership_page.compare.bank_sync',
+    featureFallback: '銀行同步',
+    freeKey: 'membership_page.compare.free.no',
+    freeFallback: '不可使用',
+    memberKey: 'membership_page.compare.member.yes',
+    memberFallback: '可使用',
+  },
+  {
     key: 'google-drive-ledger-sync',
     featureKey: 'membership_page.compare.google_drive_ledger_sync',
     featureFallback: '帳本同步',

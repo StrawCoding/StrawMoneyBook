@@ -12,7 +12,14 @@
 
 ## Bank Sync
 
-產品面已移除。舊 bookmark `/settings/bank-sync*` 導向 `/features`。歷史 APK 紀錄見 [Android-Native-Bank-APK](Android-Native-Bank-APK)。
+```bash
+npm run playwright:bank-sync --prefix frontend
+npm run simulate:bank-sync --prefix frontend   # mock，非真實銀行
+```
+
+生產路徑只有 Android native。雙 flag：`VITE_BANK_SYNC_FEATURE_ENABLED` 與 `VITE_BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS`。
+
+先看可用性診斷的**錯誤碼**，再處理 UI。auth 失敗整次中止；非 auth 可 `partial_success`（帳號級 watermark）。
 
 ## Carrier Sync
 
@@ -24,5 +31,6 @@ npm run playwright:carrier-sync --prefix frontend
 
 ## 引用
 
+- [`frontend/scripts/playwright-bank-sync-settings.mjs`](../../frontend/scripts/playwright-bank-sync-settings.mjs)
 - [`frontend/scripts/playwright-carrier-sync-settings.mjs`](../../frontend/scripts/playwright-carrier-sync-settings.mjs)
 - [Environment-Variables](Environment-Variables)
