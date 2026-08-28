@@ -131,6 +131,44 @@ export function getBreakdownPartsForTransaction(tx, {
   return parts
 }
 
+export function resolveAnalysisCategoryTargetId(categoryId, addonId) {
+  const normalizedCategoryId = String(categoryId ?? '').trim()
+  const normalizedAddonId = String(addonId ?? '').trim()
+  if (normalizedCategoryId === '__addon__' && isAddonBreakdownId(normalizedAddonId)) {
+    return normalizedAddonId
+  }
+  return normalizedCategoryId
+}
+
+export function projectAnalysisCategoryTransactions(transactions = [], {
+  type,
+  categoryId,
+  addonId,
+  getAddonLabel = (label) => `附加項目：${label}`,
+} = {}) {
+  const analysisType = type === 'income' ? 'income' : 'expense'
+  const targetId = resolveAnalysisCategoryTargetId(categoryId, addonId)
+  if (!targetId) return []
+
+  return (Array.isArray(transactions) ? transactions : []).flatMap((tx) => {
+    if (Number(tx?.include_in_analysis ?? 1) === 0) return []
+    if (String(tx?.origin_type ?? '') === 'loan_payment') return []
+    if (String(tx?.origin_type ?? '') === 'refund') return []
+    const part = getBreakdownPartsForTransaction(tx, {
+      type: analysisType,
+      scope: 'category',
+      getAddonLabel,
+    }).find((item) => item.id === targetId)
+    if (!part) return []
+    return [{
+      ...tx,
+      amount_minor: analysisType === 'expense' ? part.amountMinor * -1 : part.amountMinor,
+      analysis_part_label: part.name,
+      analysis_part_icon: part.icon,
+    }]
+  })
+}
+
 function resolveBreakdownName(id, scope, {
   accountNameMap,
   categoryNameMap,

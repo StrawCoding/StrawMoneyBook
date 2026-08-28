@@ -2,6 +2,7 @@ import {
   HOME_TRANSACTION_PAGE_SIZE,
   listAllTransactionsChunked,
   listAnalysisAddonExpenseFacts,
+  listAnalysisCategoryTransactions,
   listAnalysisTimeBarFacts,
   listHomeTransactionsPage,
   listRelatedTransactionsForDetail,
@@ -13,6 +14,7 @@ import {
   listTransactionsByYear,
   findTransactionListRowById,
   summarizeAnalysisBreakdown,
+  summarizeAnalysisTypeTotal,
   summarizeHomeAssetTotalsByScope,
 } from '@/core/repositories/transaction.repo'
 
@@ -58,6 +60,35 @@ export async function listTransactionsByScope(ledgerId, {
 
 export async function listTransactionsForAnalysis(ledgerId, options = {}) {
   return listTransactionsByScope(ledgerId, options)
+}
+
+export async function loadAnalysisCategoryDetail(ledgerId, options = {}) {
+  const normalizedLedgerId = String(ledgerId ?? '').trim()
+  const scope = {
+    mode: normalizeTransactionScopeMode(options.mode),
+    key: String(options.key ?? '').trim(),
+  }
+  const type = options.type === 'income' ? 'income' : 'expense'
+  const categoryId = String(options.categoryId ?? '').trim()
+  const addonId = String(options.addonId ?? '').trim()
+  if (!normalizedLedgerId || !categoryId) {
+    return { typeTotalMinor: 0, items: [] }
+  }
+
+  const [typeTotalMinor, items] = await Promise.all([
+    summarizeAnalysisTypeTotal(normalizedLedgerId, { ...scope, type }),
+    listAnalysisCategoryTransactions(normalizedLedgerId, {
+      ...scope,
+      type,
+      categoryId,
+      addonId,
+    }),
+  ])
+
+  return {
+    typeTotalMinor: Number(typeTotalMinor ?? 0) || 0,
+    items: Array.isArray(items) ? items : [],
+  }
 }
 
 export async function loadAnalysisStats(ledgerId, options = {}) {

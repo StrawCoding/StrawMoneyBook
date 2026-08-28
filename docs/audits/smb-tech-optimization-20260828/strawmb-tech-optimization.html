@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StrawMB 優化技術報告</title>
+<style>
+:root{--bg:#0f1419;--card:#171d25;--line:#2a3441;--ink:#e8eef6;--muted:#9aa8b8;--accent:#3d9cf0;--code:#0b1016;--ok:#5ad1a8;--warn:#e6b84d;--bad:#f07178}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Segoe UI",sans-serif;line-height:1.7;font-size:15px}
+.wrap{max-width:980px;margin:0 auto;padding:32px 20px 80px}
+h1{font-size:26px;border-bottom:2px solid var(--accent);padding-bottom:12px}
+h2{font-size:20px;margin-top:36px;color:#d7e7fb}
+h3{font-size:16px;margin-top:22px;color:#c5d6ea}
+.sub{color:var(--muted);font-size:13px}
+a{color:#7ec0ff}
+code{background:var(--code);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12.5px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow:auto;font-size:12px}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+th,td{border:1px solid var(--line);padding:7px 9px;vertical-align:top;text-align:left}
+th{background:#1c2430}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#173028;color:var(--ok);margin-right:6px}
+.badge.warn{background:#2a2414;color:var(--warn)}
+.badge.bad{background:#2a1518;color:var(--bad)}
+.badge.muted{background:#1c2430;color:var(--muted)}
+footer{margin-top:40px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:14px}
+blockquote{border-left:4px solid var(--accent);margin:12px 0;padding:8px 14px;background:#121820;color:var(--muted)}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0}
+.flow .n{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px}
+.flow .arr{color:var(--muted)}
+ul.tight li{margin:4px 0}
+</style></head>
+<body><div class="wrap">
+<p class="sub"><span class="badge">Tech 2026-08-28</span> 產品基準 <strong>v1.4.5</strong> · HEAD <code>d12a40f</code> · 只讀、無產品碼 diff</p>
+<h1>StrawMoneyBook 優化技術報告</h1>
+<p>範圍：剩餘<strong>架構／效能／測試</strong>手法與驗收閘。不重開 2026-08-27 全產品方案已落地的項目。操作百科：<code>docs/wiki/Technical-Optimization.md</code>。</p>
+<blockquote>本文件是稽核交付，不是實作授權。Play <code>internal</code> 軌道、iOS widget、刪 traditional layout、銀行 0C／華南真機都不在本報告實作範圍。第一銀行／華南真機閘見既有 Arch B wiki，JVM 綠不能代替。</blockquote>
+
+<h2>1. 基準與已落地（標 DONE，避免重開單）</h2>
+<p>相對 2026-08-27 全產品方案（對齊當時 v1.4.0）。A／B／C 與 D 的政策／虛擬化已進 <strong>v1.4.1</strong>；目前產品 <strong>v1.4.5</strong>。</p>
+<table>
+<tr><th>項</th><th>證據</th><th>狀態</th></tr>
+<tr><td>分析主頁 stats SQL <code>GROUP BY</code></td><td><code>transaction-query.service.js</code> L63–91 <code>loadAnalysisStats</code> → <code>summarizeAnalysisBreakdown</code>；repo L644–659</td><td><span class="badge">DONE</span></td></tr>
+<tr><td>首頁 SQL 彙總＋分頁</td><td><code>summarizeHomeAssetTotalsByScope</code>；<code>listTransactionsForHome</code> 分頁 300</td><td><span class="badge">DONE</span></td></tr>
+<tr><td>啟動 staged hydration</td><td><code>ledger-runtime.service.js</code> 186 行：critical path vs 延遲 store／完整性掃描</td><td><span class="badge">DONE</span></td></tr>
+<tr><td>路由 code splitting</td><td><code>router/index.js</code> 皆 <code>() =&gt; import(...)</code></td><td><span class="badge">DONE</span></td></tr>
+<tr><td>Vite <code>manualChunks</code></td><td><code>vite.config.js</code> L156–198：sqlite／icons／vue／membership／google／ai</td><td><span class="badge">DONE</span></td></tr>
+<tr><td>交易索引</td><td><code>045_wear_companion.sql</code> L115–121：<code>idx_tx_date</code>／account／category／posted_at</td><td><span class="badge">DONE</span> 不是缺 index</td></tr>
+<tr><td>後端 route-table + auth 拆 handler</td><td><code>routes/route-table.js</code>；<code>routes/auth/index.js</code> 51 行 dispatch；<code>shared-ledgers.js</code> 再 export</td><td><span class="badge">DONE</span> SMB-130 #6 原文過期</td></tr>
+<tr><td>membership 不碰 router</td><td><code>setMembershipLimitNavigationHandler</code> L520–522 注入</td><td><span class="badge">DONE</span> 檔仍胖</td></tr>
+<tr><td>view 不直打 <code>transaction.repo</code></td><td>具名頁改 <code>transaction-query.service</code></td><td><span class="badge">DONE</span></td></tr>
+<tr><td>列表 content-visibility（首頁流／搜尋）</td><td><code>HomeTransactionFeed.vue</code> L423–424；<code>TransactionSearchPage.vue</code> L293–294</td><td><span class="badge">DONE</span> 其他列表未套</td></tr>
+<tr><td>測試政策：禁新 source test</td><td><code>CONTRIBUTING.md</code>；wiki <code>Testing-And-Verification.md</code></td><td><span class="badge">DONE</span> 既有 73 檔仍在</td></tr>
+<tr><td>Playwright 進 CI</td><td>ui-layout／budget-save／analysis-export／carrier-sync／budget-cross-month／budget-pay-cycle／bank-sync</td><td><span class="badge">DONE</span></td></tr>
+<tr><td>雙 layout</td><td><code>apple-ui.css</code> 傳統；<code>habitat-ui.css</code> 現代</td><td><span class="badge muted">產品決策</span> 禁止當「清傳統 CSS」債</td></tr>
+</table>
+
+<h2>2. 手法目錄</h2>
+<p>每一項：現況 → 手法 → 邊界 → 之後怎麼驗。實作須另開階段，本報告不改碼。</p>
+
+<h3>2.1 Query pushdown</h3>
+<p><span class="badge bad">P0 剩餘</span> 聚合與分頁進 SQLite，熱路徑禁止 <code>listAllTransactionsChunked</code>。</p>
+<p><strong>現況：</strong>分析主頁已 SQL。分類明細在「全部」仍把整本帳本載入再於 JS 篩分類：</p>
+<pre><code>AnalysisCategoryDetailPage.vue L221–228
+  listTransactionsForAnalysis(ledgerId, { mode, key })
+    → listTransactionsByScope  L36–56
+      mode=all → listAllTransactionsChunked(ledgerId)
+    註：year/month 走 listTransactionsByYear/Month；day 未從 UI 傳 key 時 key=''</code></pre>
+<p><strong>手法：</strong>明細改 <code>listTransactionsByCategoryPage</code>（ledger + category + type + scope + LIMIT/OFFSET），語意對齊現有 refund／<code>include_in_analysis</code>／排除 <code>loan_payment</code>。不要在頁面再掃全表。</p>
+<p><strong>邊界：</strong>報表匯出（PDF/CSV）需要列資料，可保留 chunked 路徑；不得當分析互動熱路徑。</p>
+<p><strong>驗收：</strong>sql.js 對齊 breakdown 列集合；<code>mode=all</code> 路徑測試禁止呼叫 <code>listAllTransactionsChunked</code>；<code>playwright:analysis-export</code> 不回退。</p>
+
+<h3>2.2 Staged hydration</h3>
+<p><span class="badge">部分 DONE</span> 帳本 critical path 已抽到 <code>ledger-runtime.service.js</code>（186 行）。</p>
+<p><strong>仍阻塞 first paint 前的 JS：</strong></p>
+<ol class="tight">
+<li><code>main.js</code> 模組求值：FontAwesome 全量 import + <code>library.add</code>（見 2.4），發生在 <code>main()</code> 之前。</li>
+<li><code>app.mount('#app')</code> 之後才 <code>await initSqliteWebStoreWithTimeout()</code>（L378–381），再 <code>bootstrapApp</code> + <code>installAppRuntime</code>。殼先上、資料後到——這是對的；成本在 FA 與 sqlite wasm。</li>
+</ol>
+<p><strong>手法：</strong>不要把更多工作塞回 <code>main.js</code>。FA 子集（2.4）；runtime job 繼續走 <code>runtime-job-scheduler.js</code>（已有 coalesce／anti-reentry，53 行）。</p>
+<p><strong>驗收：</strong>行為測試（sql.js／Playwright）證明首屏帳戶／分類／目前預算先完成；完整性掃描與借貸／報銷仍背景。禁止只靠 source <code>assert.match</code>。</p>
+
+<h3>2.3 渲染虛擬化</h3>
+<p><span class="badge warn">P2</span> 已套 <code>content-visibility: auto</code> + <code>contain-intrinsic-size: auto 72px</code>：</p>
+<ul>
+<li>首頁交易流 <code>HomeTransactionFeed.vue</code> L423–424</li>
+<li>搜尋 <code>TransactionSearchPage.vue</code> L293–294（資料本身已分頁 300，<code>listTransactionsForSearch</code> L142–161）</li>
+</ul>
+<p><strong>未套：</strong><code>AccountDetailPage.vue</code>（1053 行，資料已 <code>listTransactionPageForAccount</code> 分頁）、<code>AnalysisCategoryDetailPage.vue</code>（536 行，資料仍可能全量）、請款單各列表。</p>
+<p><strong>手法：</strong>同一 CSS 契約即可，不必上 VirtualList 函式庫。優先套「會全量渲染」的分類明細；已分頁列表收益較小。</p>
+<p><strong>驗收：</strong>Playwright 捲動仍可點列；source CSS match 不是驗收。</p>
+
+<h3>2.4 啟動與 bundle — FontAwesome 全量註冊</h3>
+<p><span class="badge bad">P0</span> <code>main.js</code> 419 行，幾乎全是 <code>fa*</code> import。獨特符號 <strong>162</strong> 個，<code>library.add(...icons)</code> 在 L360–365 同步執行。Vite 已把 <code>@fortawesome</code> 切到 <code>vendor-icons</code> chunk——<strong>不降低 parse／execute 成本</strong>。</p>
+<p><strong>手法：</strong>只註冊實際用到的 icon（從 template／對照表蒐集），或按 route 懶註冊。不要再為 FA 開空 chunk。</p>
+<p><strong>邊界：</strong>漏註冊會變空白圖示；必須用 i18n／icon picker 實際集合當權威，禁止猜。</p>
+<p><strong>驗收：</strong><code>playwright:ui-layout</code> 斷言首頁／BottomNav／功能列表 FontAwesome 仍渲染；bundle 報告 <code>main</code> 模組不再含完整 icon 表。</p>
+
+<h3>2.5 分層：core 禁 <code>@/ui</code></h3>
+<p><span class="badge warn">P1</span> SMB-130 #1 具名 Pinia／router 已修。剩餘 3 處純函式反向依賴：</p>
+<table>
+<tr><th>檔</th><th>行</th><th>import</th></tr>
+<tr><td><code>core/services/import.service.js</code> (480)</td><td>L15</td><td><code>@/ui/services/shared-ledger/snapshot-merge</code></td></tr>
+<tr><td><code>core/utils/claim-sheet-draft-sync.js</code> (101)</td><td>L1–2</td><td><code>@/ui/utils/reimbursement-item</code>、<code>addon-note</code></td></tr>
+<tr><td><code>core/services/claim-sheet-draft-sync.service.js</code> (131)</td><td>L15</td><td><code>@/ui/utils/addon-note</code></td></tr>
+</table>
+<p><strong>手法：</strong>把無 Vue／Pinia 的純函式下沉 <code>core/utils</code>，ui 改 re-export。不為分層搬 store。</p>
+<p><strong>驗收：</strong><code>rg "from '@/ui" frontend/src/core</code> 零命中；既有 import／請款 draft 行為測試 PASS。</p>
+
+<h3>2.6 Runtime 拆神檔</h3>
+<p><span class="badge warn">P1</span> <code>app-runtime.service.js</code> <strong>633 行</strong>仍集中：backup、bank／carrier 自動刷新、Drive、shared ledger、Android back、widget、匯率、訂閱扣款。</p>
+<p>已有 <code>runtime-job-scheduler.js</code>（53 行，ART-12 coalesce）。<code>main.js</code> 啟動鏈本身已薄（L368–415）。</p>
+<p><strong>手法：</strong>job 註冊表（name → fn），<code>installAppRuntime</code> 只 bind 生命週期。不要把邏輯搬回 <code>main.js</code>。</p>
+<p><strong>驗收：</strong>Android back／backup debounce 行為測試；不新增 <code>*-source.test.js</code>。</p>
+
+<h3>2.7 胖 domain：membership</h3>
+<p><span class="badge warn">P1</span> <code>membership.service.js</code> <strong>971 行</strong>：Play billing、entitlements snapshot、配額 gate、AI 日限。Router 依賴已解。Vite 已把此檔切 <code>app-membership</code> chunk。</p>
+<p><strong>手法：</strong>三檔、公開 API 不變：<code>membership-billing</code>／<code>membership-snapshot</code>／<code>membership-gate</code>（gate 已有 <code>core/domain/membership-gate.js</code>）。</p>
+<p><strong>驗收：</strong>既有 membership／Play 測試 PASS；免費額度錯誤碼不變。</p>
+
+<h3>2.8 測試金字塔</h3>
+<p><span class="badge warn">P1 政策／P2 存量</span> <code>*-source.test.js</code>：frontend <strong>70</strong> + backend <strong>3</strong> = <strong>73</strong>。政策已禁<strong>新</strong>檔；既有不無故刪。</p>
+<p><strong>會鎖死本報告手法的高 churn 檔（優先改行為測試）：</strong></p>
+<ul>
+<li><code>data-loading-speed-source.test.js</code> — 讀 repo／query 字串，<strong>不是</strong> runtime 量測</li>
+<li><code>home-transaction-pagination-source.test.js</code> — 同樣鎖函式名</li>
+<li><code>ui-layout-source.test.js</code>、layout／CSS match 類</li>
+</ul>
+<p><strong>手法：</strong>sql.js 對真實 query 結果；Playwright app-shell；Wear 用 Robolectric。改完再刪對應 source 檔。</p>
+<p><strong>驗收：</strong>CI <code>test:node</code> 仍綠；新行為零新增 <code>*-source.test.js</code>。</p>
+
+<h3>2.9 同步真機閘（只索引）</h3>
+<p>不複製銀行計畫。權威：<code>docs/wiki/Sync-Architecture-B.md</code>。</p>
+<ul>
+<li>第一銀行 0C：增量 overlap-only，<strong>重建 APK 真機</strong></li>
+<li>華南 H1/H2：post-login 仍 heuristic；HEAD <code>d12a40f</code> 有 masked probe，<strong>未凍 DOM</strong></li>
+</ul>
+<p>JVM／source 綠 ≠ 可用。</p>
+
+<h2>3. 剩餘債總表</h2>
+<table>
+<tr><th>ID</th><th>嚴重度</th><th>問題</th><th>證據</th><th>建議手法</th></tr>
+<tr><td>T-01</td><td><span class="badge bad">P0</span></td><td>分析分類明細 <code>all</code> 全量 chunk</td><td><code>AnalysisCategoryDetailPage.vue</code> L221；query L55–60</td><td>2.1 SQL 分頁</td></tr>
+<tr><td>T-02</td><td><span class="badge bad">P0</span></td><td>啟動 FA 162 icon 全量註冊</td><td><code>main.js</code> L360–365</td><td>2.4 子集／懶註冊</td></tr>
+<tr><td>T-03</td><td><span class="badge warn">P1</span></td><td>core → ui 三處</td><td>import L15；claim-sheet-draft-sync L1–2／L15</td><td>2.5 下沉 utils</td></tr>
+<tr><td>T-04</td><td><span class="badge warn">P1</span></td><td>runtime 神檔 633 行</td><td><code>app-runtime.service.js</code></td><td>2.6 job 註冊表</td></tr>
+<tr><td>T-05</td><td><span class="badge warn">P1</span></td><td>membership 971 行</td><td><code>membership.service.js</code></td><td>2.7 三檔、API 不變</td></tr>
+<tr><td>T-06</td><td><span class="badge warn">P1</span></td><td>source test 鎖重構</td><td>73 檔；尤其 data-loading-speed</td><td>2.8 改行為測試</td></tr>
+<tr><td>T-07</td><td><span class="badge">P2</span></td><td>分類明細／請款列表無 content-visibility</td><td>僅 HomeFeed + Search 已套</td><td>2.3 同 CSS 契約</td></tr>
+<tr><td>—</td><td><span class="badge muted">拍板</span></td><td>Play patch 軌道 <code>internal</code></td><td><code>play-testing-channel.json</code></td><td>未拍板不改</td></tr>
+</table>
+<p>胖頁現況（非獨立 P0）：<code>analysis.vue</code> 1020 行（stats 已 SQL，UI／圖仍厚）；<code>AccountDetailPage.vue</code> 1053 行（已分頁）；搜尋邏輯已抽 <code>useTransactionSearchPage.js</code> 448 行。</p>
+<p><code>ledger.store.js</code> 168 行，lifecycle 已在 runtime；僅餘 Wear <code>setActiveLedger</code> 副作用，不列獨立債。</p>
+
+<h2>4. 建議實作順序（核准後另開階段）</h2>
+<div class="flow">
+  <span class="n">T-01 分類明細 SQL</span><span class="arr">→</span>
+  <span class="n">T-02 FA 子集</span><span class="arr">→</span>
+  <span class="n">T-03 core 禁 ui</span><span class="arr">→</span>
+  <span class="n">T-06 解 source 鎖</span><span class="arr">→</span>
+  <span class="n">T-04／T-05 拆檔</span><span class="arr">→</span>
+  <span class="n">T-07 虛擬化加深</span>
+</div>
+<p>一次一條管線。T-01 與 T-06 常綁在一起：先有行為測試才敢改 query。T-04／T-05 無使用者可見差異，排在體感項之後。</p>
+
+<h2>5. 明確排除</h2>
+<ul>
+<li>iOS widget（獨立產品線）</li>
+<li>改 <code>play-testing-channel.json</code>（仍 <code>internal</code>）</li>
+<li>刪 traditional／<code>apple-ui.css</code></li>
+<li>本報告階段做銀行 0C／華南 H1/H2 真機（需裝置；證據模板已在 Arch B）</li>
+<li>改資料表 schema 或前後端 API path／response shape</li>
+<li>把已 FIXED 的 SMB-130 項當 OPEN（core Pinia、view 直打 repo、server 長 if/else、分析主頁全量 JS）</li>
+</ul>
+
+<h2>6. 本報告驗收</h2>
+<ul>
+<li>單檔 HTML、繁中、深色、可線上直開</li>
+<li>每條剩餘債有路徑與行號；DONE 項不標 OPEN</li>
+<li>無產品碼 diff</li>
+<li>Wiki 索引：<code>docs/wiki/Technical-Optimization.md</code></li>
+</ul>
+
+<footer>
+StrawMoneyBook · 優化技術報告 · 2026-08-28 · 產品 v1.4.5 · HEAD d12a40f<br>
+同源 wiki <code>docs/wiki/Technical-Optimization.md</code> · 全產品方案 2026-08-27 不取代本文件
+</footer>
+</div></body></html>

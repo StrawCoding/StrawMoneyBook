@@ -80,17 +80,13 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useLoanStore } from '@/ui/stores/loan.store'
-import { listTransactionsForAnalysis } from '@/core/services/transaction-query.service'
+import { loadAnalysisCategoryDetail } from '@/core/services/transaction-query.service'
 import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
-import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 import { monthKeyFromDate } from '@/core/utils/id'
-import {
-  getBreakdownPartsForTransaction,
-  isAddonBreakdownId,
-} from '@/core/utils/analysis-breakdown'
+import { projectAnalysisCategoryTransactions } from '@/core/utils/analysis-breakdown'
 
 const route = useRoute()
 const router = useRouter()
@@ -102,6 +98,7 @@ const uiStore = useUiStore()
 const { t } = useI18n()
 
 const statsTransactions = ref([])
+const typeTotalMinor = ref(0)
 const referenceLedgerId = ref('')
 
 const analysisType = computed(() => (String(route.query.type ?? '') === 'income' ? 'income' : 'expense'))
@@ -143,34 +140,12 @@ const rangeLabel = computed(() => {
   return t('analysis_page.mode.all')
 })
 
-const typeTransactions = computed(() => {
-  return statsTransactions.value.filter((tx) => {
-    if (!isCountableForIncomeExpense(tx)) return false
-    if (tx.origin_type === 'loan_payment') return false
-    if (tx.type !== analysisType.value) return false
-    return normalizedAmountMinor(tx) > 0
-  })
-})
-const categoryTransactions = computed(() => {
-  const targetId = categoryId.value === '__addon__' && isAddonBreakdownId(addonId.value)
-    ? addonId.value
-    : categoryId.value
-
-  return typeTransactions.value.flatMap((tx) => {
-    const part = getBreakdownPartsForTransaction(tx, {
-      type: analysisType.value,
-      scope: 'category',
-      getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
-    }).find((item) => item.id === targetId)
-    if (!part) return []
-    return [{
-      ...tx,
-      amount_minor: analysisType.value === 'expense' ? part.amountMinor * -1 : part.amountMinor,
-      analysis_part_label: part.name,
-      analysis_part_icon: part.icon,
-    }]
-  })
-})
+const categoryTransactions = computed(() => projectAnalysisCategoryTransactions(statsTransactions.value, {
+  type: analysisType.value,
+  categoryId: categoryId.value,
+  addonId: addonId.value,
+  getAddonLabel: (label) => t('analysis_page.addon_item', { label }),
+}))
 const groupedCategoryTransactions = computed(() => {
   const grouped = []
   const groupMap = new Map()
@@ -185,7 +160,6 @@ const groupedCategoryTransactions = computed(() => {
   }
   return grouped
 })
-const typeTotalMinor = computed(() => typeTransactions.value.reduce((total, tx) => total + normalizedAmountMinor(tx), 0))
 const categoryTotalMinor = computed(() => categoryTransactions.value.reduce((total, tx) => total + normalizedAmountMinor(tx), 0))
 const categoryRatioText = computed(() => {
   if (!typeTotalMinor.value) return '0%'
@@ -212,20 +186,26 @@ async function loadStatsTransactions() {
   const ledgerId = ledgerStore.activeLedgerId
   if (!ledgerId) {
     statsTransactions.value = []
+    typeTotalMinor.value = 0
     referenceLedgerId.value = ''
     return
   }
 
   try {
     await ensureReferenceData(ledgerId)
-    statsTransactions.value = await listTransactionsForAnalysis(ledgerId, {
+    const detail = await loadAnalysisCategoryDetail(ledgerId, {
       mode: mode.value,
       key: mode.value === 'year'
         ? String(selectedYear.value)
         : mode.value === 'month'
           ? selectedMonth.value
           : '',
+      type: analysisType.value,
+      categoryId: categoryId.value,
+      addonId: addonId.value,
     })
+    statsTransactions.value = detail.items
+    typeTotalMinor.value = detail.typeTotalMinor
   } catch (error) {
     uiStore.pushToast(error.message ?? t('analysis_category_detail.toast.load_failed'), 'error')
   }

@@ -669,6 +669,74 @@ export async function summarizeAnalysisBreakdown(ledgerId, options = {}) {
   })).filter((row) => row.id && row.amountMinor > 0)
 }
 
+export async function summarizeAnalysisTypeTotal(ledgerId, options = {}) {
+  assertLedgerId(ledgerId)
+  const scopeFilter = buildHomeScopeFilterClauses(options.mode, options.key)
+  if (!scopeFilter) return 0
+
+  const normalizedType = options.type === 'income' ? 'income' : 'expense'
+  const amountExpr = normalizedType === 'expense'
+    ? 'ABS(scoped.effective_minor)'
+    : 'scoped.effective_minor'
+  const whereSql = scopeFilter.clauses.join('\n       AND ')
+  const params = [ledgerId, ...scopeFilter.values, normalizedType]
+  const deductedSql = refundDeductedMinorSql('t')
+  const hasRefundLinkSql = `CASE WHEN ${refundRelationExistsSql('t')} THEN 1 ELSE 0 END`
+
+  const result = await query(
+    `SELECT
+       COALESCE(SUM(${amountExpr}), 0) AS amount_minor
+     FROM (
+       SELECT
+         ${homeIncomeExpenseEffectiveMinorSql('inner_row')} AS effective_minor
+       FROM (
+         ${analysisCountableInnerSelectSql(whereSql, deductedSql, hasRefundLinkSql)}
+           AND t.type = ?
+       ) inner_row
+     ) scoped
+     WHERE scoped.effective_minor != 0;`,
+    params,
+  )
+
+  return Number(firstRow(result)?.amount_minor ?? 0) || 0
+}
+
+export async function listAnalysisCategoryTransactions(ledgerId, options = {}) {
+  assertLedgerId(ledgerId)
+  const scopeFilter = buildHomeScopeFilterClauses(options.mode, options.key)
+  if (!scopeFilter) return []
+
+  const normalizedType = options.type === 'income' ? 'income' : 'expense'
+  const categoryId = String(options.categoryId ?? '').trim()
+  const clauses = [
+    ...scopeFilter.clauses,
+    'COALESCE(t.include_in_analysis, 1) != 0',
+    "COALESCE(t.origin_type, '') != 'loan_payment'",
+    't.type = ?',
+  ]
+  const values = [...scopeFilter.values, normalizedType]
+
+  if (categoryId === '__addon__') {
+    clauses.push("t.note LIKE '%【附加項目】%'")
+  } else if (categoryId === '__uncategorized__') {
+    clauses.push("(t.category_id IS NULL OR TRIM(t.category_id) = '')")
+  } else if (categoryId) {
+    clauses.push('t.category_id = ?')
+    values.push(categoryId)
+  } else {
+    return []
+  }
+
+  const whereSql = clauses.join('\n       AND ')
+  const result = await query(
+    `${transactionListSelectSql()}
+     WHERE ${whereSql}
+     ${transactionListOrderSql()};`,
+    [ledgerId, ...values],
+  )
+  return rowsOf(result)
+}
+
 export async function listAnalysisTimeBarFacts(ledgerId, options = {}) {
   assertLedgerId(ledgerId)
   const scopeFilter = buildHomeScopeFilterClauses(options.mode, options.key)

@@ -124,7 +124,7 @@ async function ensurePlaywrightChromium() {
   )
 }
 
-async function runPlaywrightCli(args, { raw = false } = {}) {
+async function runPlaywrightCliOnce(args, { raw = false } = {}) {
   const cliArgs = [
     '--yes',
     '--package',
@@ -157,12 +157,22 @@ function isBrowserNotOpenError(error) {
   return /browser ['"]?default['"]? is not open|is not open, please run open first|run open first/i.test(blob)
 }
 
+let lastOpenedUrl = `${baseUrl}/`
+
+async function runPlaywrightCli(args, { raw = false } = {}) {
+  if ((args[0] === 'goto' || args[0] === 'open') && args[1]) {
+    lastOpenedUrl = String(args[1])
+  }
+  return runPlaywrightCliOnce(args, { raw })
+}
+
 async function gotoOrReopen(url) {
+  lastOpenedUrl = url
   try {
-    await runPlaywrightCli(['goto', url])
+    await runPlaywrightCliOnce(['goto', url])
   } catch (error) {
     if (!isBrowserNotOpenError(error)) throw error
-    await runPlaywrightCli(['open', url])
+    await runPlaywrightCliOnce(['open', url])
   }
 }
 
@@ -189,6 +199,7 @@ async function waitForPreviewReady() {
 }
 
 async function waitForBootAndMaybeSkipOnboarding() {
+  let reloadedStuckBoot = false
   for (let attempt = 0; attempt < 120; attempt += 1) {
     const state = await evalPage(`() => ({
       booting: Boolean(document.querySelector('.boot-layer')),
@@ -198,6 +209,10 @@ async function waitForBootAndMaybeSkipOnboarding() {
     })`)
     if (state.hasBottomNav) return { ok: true, skipped: true }
     if (!state.booting && (state.welcome || state.intro)) break
+    if (state.booting && !reloadedStuckBoot && attempt === 40) {
+      reloadedStuckBoot = true
+      await gotoOrReopen(`${baseUrl}/`)
+    }
     await delay(500)
   }
   return { ok: false, skipped: false }
@@ -1538,9 +1553,9 @@ async function assertHomeIncomeExpenseLightAndDark() {
 
 async function assertRouteNavigation() {
   await runPlaywrightCli(['click', '[data-testid="bottom-nav-features"]'])
-  await delay(800)
-  let state = await evalPage(`() => ({
+  const readFeatureState = () => evalPage(`() => ({
     path: window.location.pathname,
+    booting: Boolean(document.querySelector('.boot-layer')),
     hasFeatureList: Boolean(document.querySelector('.feature-list-page, [data-testid=feature-list-page]')),
     hasAdvancedSection: Boolean(document.querySelector('[data-testid=feature-list-advanced]')),
     advancedTitle: document.querySelector('[data-testid=feature-list-advanced] .feature-section-title')?.textContent?.trim() ?? '',
@@ -1555,6 +1570,21 @@ async function assertRouteNavigation() {
       wearCompanion: Boolean(document.querySelector('[data-testid=feature-link-wear-companion]')),
     },
   })`)
+  let state = { path: '', hasFeatureList: false }
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    state = await readFeatureState()
+    if (state.path === '/features' && state.hasFeatureList && !state.booting) break
+    await delay(250)
+  }
+  if (state.path !== '/features' || !state.hasFeatureList) {
+    lastOpenedUrl = `${baseUrl}/features`
+    await gotoOrReopen(`${baseUrl}/features`)
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      state = await readFeatureState()
+      if (state.path === '/features' && state.hasFeatureList && !state.booting) break
+      await delay(250)
+    }
+  }
   assert.equal(state.path, '/features', JSON.stringify(state, null, 2))
   assert.equal(state.hasFeatureList, true, JSON.stringify(state, null, 2))
   assert.equal(state.hasAdvancedSection, true, JSON.stringify(state, null, 2))
@@ -1650,25 +1680,30 @@ async function assertRouteNavigation() {
   ]
 
   for (const target of advancedTargets) {
-    await runPlaywrightCli(['goto', `${baseUrl}/features`])
-    await delay(600)
+    await gotoOrReopen(`${baseUrl}/features`)
+    let scrolled = { ok: false, reason: 'timeout' }
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      scrolled = await evalPage(`() => {
+        if (document.querySelector('.boot-layer')) return { ok: false, reason: 'booting' }
+        const el = document.querySelector('[data-testid="${target.testId}"]')
+        if (!el) return { ok: false, reason: 'missing' }
+        el.scrollIntoView({ block: 'center', inline: 'nearest' })
+        const rect = el.getBoundingClientRect()
+        const nav = document.querySelector('[data-testid=bottom-nav]')
+        const navTop = nav ? nav.getBoundingClientRect().top : Number.POSITIVE_INFINITY
+        return {
+          ok: true,
+          top: Math.round(rect.top),
+          bottom: Math.round(rect.bottom),
+          navTop: Number.isFinite(navTop) ? Math.round(navTop) : null,
+          clearOfNav: rect.bottom < navTop - 4,
+        }
+      }`)
+      if (scrolled.ok) break
+      await delay(250)
+    }
     // smb299: advanced list grew (Drive restore). Last rows sit under fixed BottomNav;
     // default click scrollIntoView(end) lands under the nav and the click hits the tab bar.
-    const scrolled = await evalPage(`() => {
-      const el = document.querySelector('[data-testid="${target.testId}"]')
-      if (!el) return { ok: false, reason: 'missing' }
-      el.scrollIntoView({ block: 'center', inline: 'nearest' })
-      const rect = el.getBoundingClientRect()
-      const nav = document.querySelector('[data-testid=bottom-nav]')
-      const navTop = nav ? nav.getBoundingClientRect().top : Number.POSITIVE_INFINITY
-      return {
-        ok: true,
-        top: Math.round(rect.top),
-        bottom: Math.round(rect.bottom),
-        navTop: Number.isFinite(navTop) ? Math.round(navTop) : null,
-        clearOfNav: rect.bottom < navTop - 4,
-      }
-    }`)
     assert.equal(scrolled.ok, true, JSON.stringify({ target, scrolled }, null, 2))
     assert.equal(scrolled.clearOfNav, true, JSON.stringify({ target, scrolled }, null, 2))
     await runPlaywrightCli(['click', `[data-testid="${target.testId}"]`])
@@ -1680,15 +1715,20 @@ async function assertRouteNavigation() {
     })`)
     // Fallback: programmatic RouterLink click after re-centering (pointer intercept flake).
     if (pageState.path !== target.path) {
-      await runPlaywrightCli(['goto', `${baseUrl}/features`])
-      await delay(500)
-      await evalPage(`() => {
-        const el = document.querySelector('[data-testid="${target.testId}"]')
-        if (!el) return false
-        el.scrollIntoView({ block: 'center', inline: 'nearest' })
-        el.click()
-        return true
-      }`)
+      await gotoOrReopen(`${baseUrl}/features`)
+      let clicked = false
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        clicked = await evalPage(`() => {
+          if (document.querySelector('.boot-layer')) return false
+          const el = document.querySelector('[data-testid="${target.testId}"]')
+          if (!el) return false
+          el.scrollIntoView({ block: 'center', inline: 'nearest' })
+          el.click()
+          return true
+        }`)
+        if (clicked) break
+        await delay(250)
+      }
       await delay(900)
       pageState = await evalPage(`() => ({
         path: window.location.pathname,

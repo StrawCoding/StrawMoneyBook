@@ -6,6 +6,7 @@ import { readI18nBundleSource } from './helpers/i18n-source.js'
 
 const root = resolve(import.meta.dirname, '..')
 const mainJsSource = readFileSync(resolve(root, 'src/main.js'), 'utf8')
+const iconRegistrySource = readFileSync(resolve(root, 'src/ui/utils/fa-icon-registry.js'), 'utf8')
 
 const bottomNavSource = readFileSync(resolve(root, 'src/ui/components/layout/BottomNav.vue'), 'utf8')
 const homeSource = readFileSync(resolve(root, 'src/ui/views/home.vue'), 'utf8')
@@ -38,7 +39,7 @@ function collectFaSolidIcons(source) {
 
 function collectRegisteredIconImports(source) {
   const importBlock = source.match(/from '@fortawesome\/free-solid-svg-icons'[\s\S]*?\}/)?.[0] ?? ''
-  const iconsArrayBlock = source.match(/const icons = \[([\s\S]*?)\]/)?.[1] ?? ''
+  const iconsArrayBlock = source.match(/const (?:icons|solidIcons) = \[([\s\S]*?)\]/)?.[1] ?? ''
   const names = new Set()
   for (const match of `${importBlock}\n${iconsArrayBlock}`.matchAll(/\b(fa[A-Z][A-Za-z0-9]*)\b/g)) {
     names.add(match[1])
@@ -46,9 +47,9 @@ function collectRegisteredIconImports(source) {
   return names
 }
 
-const registeredIcons = collectRegisteredIconImports(mainJsSource)
+const registeredIcons = collectRegisteredIconImports(iconRegistrySource)
 
-test('ui-layout surfaces only use FontAwesome icons registered in main.js', () => {
+test('ui-layout surfaces only use FontAwesome icons registered in fa-icon-registry', () => {
   const missing = []
   for (const filePath of UI_LAYOUT_ICON_FILES) {
     const source = readFileSync(filePath, 'utf8')
@@ -107,6 +108,17 @@ test('ui-layout service keeps traditional and modern without forced migration', 
   assert.match(layoutServiceSource, /DEFAULT_LAYOUT = 'modern'/)
   assert.match(layoutServiceSource, /normalizeUiLayout/)
   assert.doesNotMatch(layoutServiceSource, /migrates to modern/)
+})
+
+test('main.js defers FontAwesome registry instead of statically importing every icon', () => {
+  assert.match(mainJsSource, /fa-icon-registry/)
+  assert.doesNotMatch(mainJsSource, /@fortawesome\/free-solid-svg-icons/)
+  assert.match(iconRegistrySource, /export function registerAppIcons/)
+  const iconImport = mainJsSource.indexOf("import('@/ui/utils/fa-icon-registry.js')")
+  const mountCall = mainJsSource.indexOf('app.mount(')
+  const sqliteCall = mainJsSource.indexOf('await initSqliteWebStoreWithTimeout(')
+  assert.equal(iconImport >= 0 && iconImport < mountCall, true, 'icon chunk must start before mount')
+  assert.equal(sqliteCall > mountCall, true, 'sqlite init must start after mount, not wait on FA')
 })
 
 test('app runtime bootstraps ui layout and habitat css', () => {

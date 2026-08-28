@@ -6,7 +6,7 @@
 ## 1. 功能總覽
 
 - 多帳本管理（切換帳本、排序、帳本設定、活動帳本上下文刷新）
-- 首頁總覽（帳本切換、收支卡、預算簡表、交易流、浮動快速新增；收支卡收入／支出區塊背景與文字色跟隨主題 Light／Dark token，淺色模式不可沿用深色硬編碼底；SMB-257 後首頁交易流在全部 / 年 / 月 / 日範圍皆改為 SQL 分頁載入，每頁最多 300 筆，badge 顯示總筆數；smb287 後收支摘要改由 `summarizeHomeAssetTotalsByScope` 單次 SQL 彙總（含退款淨額／`include_in_analysis`／排除 `loan_payment`），不再分頁掃完全部交易；啟動改為帳本 critical path（帳戶／分類／目前預算）先完成，完整性掃描與借貸／報銷／附加範本／recent 背景延遲載入；交易明細／編輯改載入關聯交易而非整本帳本；分析「全部」範圍改 SQL `GROUP BY`／`loadAnalysisStats`（分類／帳戶彙總不把整本帳本載入主執行緒；time-bar 用精簡 facts；附加項目只載入含「【附加項目】」的支出）；舊 chunked 全量路徑改留給明細／報表需要列資料的頁面；首頁期間切換以 `homeLoadToken` 丟棄過期結果。空狀態文案透過 i18n 維護並由 source test 防回歸，預算簡表滑動切換閾值已提高以降低誤觸）
+- 首頁總覽（帳本切換、收支卡、預算簡表、交易流、浮動快速新增；收支卡收入／支出區塊背景與文字色跟隨主題 Light／Dark token，淺色模式不可沿用深色硬編碼底；SMB-257 後首頁交易流在全部 / 年 / 月 / 日範圍皆改為 SQL 分頁載入，每頁最多 300 筆，badge 顯示總筆數；smb287 後收支摘要改由 `summarizeHomeAssetTotalsByScope` 單次 SQL 彙總（含退款淨額／`include_in_analysis`／排除 `loan_payment`），不再分頁掃完全部交易；啟動改為帳本 critical path（帳戶／分類／目前預算）先完成，完整性掃描與借貸／報銷／附加範本／recent 背景延遲載入；交易明細／編輯改載入關聯交易而非整本帳本；分析「全部」範圍改 SQL `GROUP BY`／`loadAnalysisStats`（分類／帳戶彙總不把整本帳本載入主執行緒；time-bar 用精簡 facts；附加項目只載入含「【附加項目】」的支出）；分類明細改 `loadAnalysisCategoryDetail`（SQL 依分類／附加項目篩列＋類型合計，不再 `listAllTransactionsChunked`）；舊 chunked 全量路徑改留給報表需要列資料的頁面；首頁期間切換以 `homeLoadToken` 丟棄過期結果。空狀態文案透過 i18n 維護並由 source test 防回歸，預算簡表滑動切換閾值已提高以降低誤觸）
 - 記帳三模式（AI 記帳、手動快速新增、問答記帳；三條路由共用 `BookkeepingPage` 全螢幕容器：隱藏品牌頂欄與 BottomNav，但保留與一般頁等價的 status-bar／safe-area 頂部預留；SMB-175 後手動快速新增的金額欄整合計算機，支援加減乘除四則運算並即時預覽結果；帳戶／分類選擇器一律走 `CustomSelect` 分組——含 Quick Add／交易編輯／AI／問答記帳／首頁編輯 sheet／借貸／報銷（含代收／變更入帳）／訂閱／存錢罐／銀行對應／載具預設／電子發票確認／信用卡還款來源／有價證券交割帳戶；分類依母分類分組；空值用 `__none__` sentinel；表單底色統一走 `--input-bg`，並補齊歷史缺失的 `--surface`／`--surface-soft` 別名）
 - 交易查詢（搜尋頁、日曆頁、交易明細頁、交易編輯頁；SMB-155 後搜尋交易改為 SQL 分頁載入，每頁 300 筆，關鍵字與日期篩選會先進資料查詢層後再取當頁資料，避免大型帳本一次載入全部交易；SMB-211 後交易搜尋的 SQL 關鍵字比對會納入借貸交易的畫面顯示條件與往來對象，例如借出、借入、歸還 / 還款與收回 / 收回借款，不再只能用 `loan_payment` 或備註命中借貸交易；SMB-189 / v1.2.5 後帳本載入會自動掃描並修復交易遺失帳戶 / peer 帳戶 / 分類引用、壞掉的轉帳群組、報銷總額 / 已付款狀態與借貸狀態；SMB-219 / v1.2.28 後交易編輯頁與首頁交易編輯 sheet 改選分類時會同步套用分類預設報銷、紀錄預算與紀錄收支設定，載入既有交易時保留原交易已儲存的記帳旗標；smb292 後刪除交易成功一律 `replace` 回首頁並還原離開首頁前的 window 捲動（列表變短時 clamp），不可停在已刪除明細／空白頁；詳情頁若交易已不存在亦導回首頁）
 - 退款流程（交易明細可建立退款、選擇退款帳戶、指定扣除金額；SMB-149 後部分退款會以原交易扣除退款金額後的淨額納入首頁、預算、分析與列印報表，全額退款則歸零）
@@ -59,7 +59,7 @@
 | `/` | `src/ui/views/home.vue` | 首頁總覽、範圍篩選、快速新增 |
 | `/budget` | `src/ui/views/budgeting.vue` | 曆月 / 發薪週期預算、共同預算池、分類預算與預算存款管理 |
 | `/analysis` | `src/ui/views/analysis.vue` | 收支圖表分析（全部/年/月；圖示化圓餅／長條、大數字、預算達成卡、帳戶占比；跟隨 App Dark／Light；右上角一鍵直接匯出 PDF +「交易報表」入口進 `/analysis/print`） |
-| `/analysis/category` | `src/ui/views/AnalysisCategoryDetailPage.vue` | 分類分析明細 |
+| `/analysis/category` | `src/ui/views/AnalysisCategoryDetailPage.vue` | 分類分析明細（`loadAnalysisCategoryDetail` SQL 依分類／附加項目篩列，比例分母用類型合計） |
 | `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 交易報表匯出頁（期間客製化 all/year/month/day/custom、螢幕預覽、PDF／CSV、匯出成功後「開啟檔案」；`hideAppChrome` 全螢幕、頁內返回分析） |
 | `/transactions/search` | `src/ui/views/TransactionSearchPage.vue` | 交易搜尋（支援批量選取與批量編輯分類 / 備註 / 可報銷 / 預算 / 收支分析；SMB-155 後每頁 300 筆 SQL 分頁載入） |
 | `/transactions/quick-add` | `src/ui/views/BookkeepingPage.vue` | 手動快速新增模式（內嵌 `QuickAddPage.vue`；`hideAppChrome` 隱藏品牌頂欄與 BottomNav，app-shell 仍保留與一般頁等價的 status-bar／safe-area 頂部預留） |
@@ -250,7 +250,7 @@
 | 收入圓餅圖 | `analysis.vue` + `src/core/utils/analysis-breakdown.js`（分類彙總 + 色盤） |
 | 支出圓餅圖 | `analysis.vue` + `src/core/utils/analysis-breakdown.js`（分類彙總 + 色盤；正向附加項目會以「附加項目」分析列納入） |
 | 帳戶分析（總額/收入/支出） | `analysis.vue` + `src/core/utils/analysis-breakdown.js`（帳戶彙總 + 色盤） |
-| 分類明細頁 | `analysis.vue` -> `/analysis/category` + `AnalysisCategoryDetailPage.vue` + `src/core/services/transaction-query.service.js`；支援附加項目分析列明細 |
+| 分類明細頁 | `analysis.vue` -> `/analysis/category` + `AnalysisCategoryDetailPage.vue` + `transaction-query.service.js:loadAnalysisCategoryDetail`（SQL 依分類／附加項目篩列＋類型合計，不再 `listAllTransactionsChunked`）；支援附加項目分析列明細 |
 | 右上角匯出按鈕 | `analysis.vue` 一鍵直接匯出 PDF（offscreen `AnalysisReportDocument` + html2canvas/jsPDF；快捷主路徑） |
 | 交易報表頁入口 | `analysis.vue` → `/analysis/print`（`data-testid=analysis-print-link`／`analysis_page.open_report`） |
 | AI 分析頁 | 已移除（不再提供 `/analysis/ai` 路由） |
@@ -433,7 +433,6 @@ UI composable 目錄：`src/ui/composables/`
 | `loan.repo.js` | 借貸與還款紀錄 |
 | `reimbursement.repo.js` | 報銷單與明細 |
 | `savings-jar.repo.js` | 存錢罐資料 |
-| `bank-sync.repo.js` | 銀行連線與同步設定 |
 | `counterparty.repo.js` | 往來對象 |
 | `settings.repo.js` | 設定（含 ledger-scoped 預算存款偏好） |
 | `base.repo.js` | 通用 helper |
@@ -446,7 +445,7 @@ UI composable 目錄：`src/ui/composables/`
 - SQL 與資料結構調整，先改 repository，再檢查對應 store/action。
 - **日期工具統一使用 `src/core/utils/id.js` 的 `monthKeyFromDate` / `dateKeyFromDate`**，禁止在 view / service 內重複定義相同邏輯。
 - **多步驟刪除/寫入操作須包裝在 `withTransaction`（來自 `@/core/db/sqlite`）** 以確保資料完整性，參考 `transaction.service.js:deleteManualTransaction`。
-- `transaction.repo.js:listHomeTransactionsPage` 支援首頁全部 / 年 / 月 / 日範圍的 SQL `LIMIT/OFFSET` 分頁（`HOME_TRANSACTION_PAGE_SIZE = 300`）；`summarizeHomeAssetTotalsByScope` 以單次 SQL 彙總收支（語意對齊退款淨額／分析旗標／排除借貸還款），`transaction-query.service.js:summarizeHomeAssetTotals` 改走此路徑；分析「全部」改 `listAllTransactionsChunked`；交易明細／編輯改 `listRelatedTransactionsForDetail`，避免一次載入整本帳本。
+- `transaction.repo.js:listHomeTransactionsPage` 支援首頁全部 / 年 / 月 / 日範圍的 SQL `LIMIT/OFFSET` 分頁（`HOME_TRANSACTION_PAGE_SIZE = 300`）；`summarizeHomeAssetTotalsByScope` 以單次 SQL 彙總收支（語意對齊退款淨額／分析旗標／排除借貸還款），`transaction-query.service.js:summarizeHomeAssetTotals` 改走此路徑；分析「全部」stats 改 SQL `GROUP BY`；分類明細改 `listAnalysisCategoryTransactions`（依分類／附加項目 SQL 篩選）＋ `summarizeAnalysisTypeTotal`；交易明細／編輯改 `listRelatedTransactionsForDetail`，避免一次載入整本帳本。FontAwesome 改 `fa-icon-registry.js` 動態註冊，`main.js` 不再靜態 import 全量 icon。
 - 若新增主頁功能，優先考慮：`home.vue` + `HomeTransactionFeed.vue` + `transaction.store.js`。
 - 若新增分析維度，優先考慮：`analysis.vue`、`analysis-breakdown.js` 與 `transaction-query.service.js`。
 - 若調整交易報表欄位或匯出格式，優先考慮：`analysis.vue`（一鍵 PDF 快捷 + 報表頁入口）+ `AnalysisPrintPage.vue`（客製化期間／預覽／PDF／CSV／開啟檔案）+ `AnalysisReportDocument.vue` + `analysis-report-pdf.service.js` + `analysis-report-light-theme.js` + `export.service.js`（`openFileUrl`），並同步檢查分析頁共用圖示化圖表；互動分析頁須跟隨 Dark／Light；PDF 必須仍為淺色；PDF 須以 A4 print-layout 擷取並等比分頁且不得中切斷區塊；不得刪除 `/analysis/print` 路由或分析頁入口。
@@ -885,8 +884,9 @@ UI composable 目錄：`src/ui/composables/`
 - 全螢幕契約：三條記帳路由皆 `meta.hideAppChrome`（隱藏品牌頂欄與 BottomNav），但 `App.vue` 的 `.app-shell.full-screen-route` 仍套用 `padding-top: calc(10px + var(--status-bar-height))`，標題／返回／模式切換不得貼齊螢幕頂端或被狀態列遮住。
 
 ### `src/ui/views/AnalysisCategoryDetailPage.vue`
-- 函數（19）：`accountName`, `categoryIconOfTransaction`, `categoryKeyOf`, `dateKeyOf`, `dateLabelOf`, `ensureReferenceData`, `formatTime`, `goBack`, `labelOf`, `labelOfTransaction`, `loadStatsTransactions`, `loanTransactionIcon`, `loanTransactionLabel`, `monthKeyFromDate`, `normalizedAmountMinor`, `openTransaction`, `parseMode`, `parseMonthKey`, `parseYear`
-- 變數（25）：`accountStore`, `activeCategoryLabel`, `activeTypeLabel`, `analysisType`, `categoryId`, `categoryNameMap`, `categoryRatioText`, `categoryStore`, `categoryTotalMinor`, `categoryTransactions`, `groupedCategoryTransactions`, `ledgerStore`, `loanStore`, `mode`, `queryCategoryLabel`, `rangeLabel`, `referenceLedgerId`, `route`, `router`, `selectedMonth`, `selectedYear`, `statsTransactions`, `typeTotalMinor`, `typeTransactions`, `uiStore`
+- 載入：`loadAnalysisCategoryDetail`（SQL 依分類／附加項目篩列）＋ `projectAnalysisCategoryTransactions`；比例分母 `typeTotalMinor` 來自 `summarizeAnalysisTypeTotal`，不再掃整本帳本。
+- 函數（18）：`accountName`, `categoryIconOfTransaction`, `dateKeyOf`, `dateLabelOf`, `ensureReferenceData`, `formatTime`, `goBack`, `labelOf`, `labelOfTransaction`, `loadStatsTransactions`, `loanTransactionIcon`, `loanTransactionLabel`, `monthKeyFromDate`, `normalizedAmountMinor`, `openTransaction`, `parseMode`, `parseMonthKey`, `parseYear`
+- 變數（26）：`accountStore`, `activeCategoryLabel`, `activeTypeLabel`, `addonId`, `analysisCurrencyCode`, `analysisType`, `categoryId`, `categoryNameMap`, `categoryRatioText`, `categoryStore`, `categoryTotalMinor`, `categoryTransactions`, `groupedCategoryTransactions`, `ledgerStore`, `loanStore`, `mode`, `queryCategoryLabel`, `rangeLabel`, `referenceLedgerId`, `route`, `router`, `selectedMonth`, `selectedYear`, `statsTransactions`, `typeTotalMinor`, `uiStore`
 - 類別（0）：無
 
 ### `src/ui/views/AnalysisPrintPage.vue`

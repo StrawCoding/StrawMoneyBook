@@ -2,7 +2,7 @@
 
 這是 StrawMoneyBook **技術操作 Wiki 來源快照**（`docs/wiki/`）。**權威發布站**是 VitePress：[https://strawcoding.github.io/StrawMoneyBookWiki/](https://strawcoding.github.io/StrawMoneyBookWiki/)（repo [`StrawCoding/StrawMoneyBookWiki`](https://github.com/StrawCoding/StrawMoneyBookWiki)）。改 runbook 後必須同步進該 repo 的 `docs/operations/`，不要只改這裡。
 
-產品能力圖另見 [`StrawMoneyBook_App_Features_Detailed.md`](../../StrawMoneyBook_App_Features_Detailed.md) 與 [`frontend/StrawMoneyBook_Features_Map.md`](../../frontend/StrawMoneyBook_Features_Map.md)。全產品優化 backlog：[Optimization-Plan](Optimization-Plan)。
+產品能力圖另見 [`StrawMoneyBook_App_Features_Detailed.md`](../../StrawMoneyBook_App_Features_Detailed.md) 與 [`frontend/StrawMoneyBook_Features_Map.md`](../../frontend/StrawMoneyBook_Features_Map.md)。全產品優化 backlog：[Optimization-Plan](Optimization-Plan)。剩餘架構／效能手法：[Technical-Optimization](Technical-Optimization)。
 
 ## 快速導覽
 
@@ -10,6 +10,7 @@
 - [Local-Dev-Quickstart](Local-Dev-Quickstart)
 - [Environment-Variables](Environment-Variables)
 - [Testing-And-Verification](Testing-And-Verification)
+- [Technical-Optimization](Technical-Optimization)
 - [Playwright-App-Shell](Playwright-App-Shell)
 - [CI-CD-And-Gates](CI-CD-And-Gates)
 
@@ -34,6 +35,7 @@
 ### 事故
 - [Troubleshooting](Troubleshooting)
 - [Optimization-Plan](Optimization-Plan)
+- [Technical-Optimization](Technical-Optimization)
 
 ## 引用來源（避免知識漂移）
 

@@ -1,5 +1,8 @@
 # Pending Release Notes
 
+- 分析分類明細「全部」改 SQL 依分類／附加項目載入列資料與類型合計，不再 `listAllTransactionsChunked` 後在主執行緒篩選。
+- 啟動鏈 FontAwesome 改獨立 `fa-icon-registry` 動態註冊，`main.js` 不再靜態 import 全量 icon。
+
 ---
 
 ## v1.4.6

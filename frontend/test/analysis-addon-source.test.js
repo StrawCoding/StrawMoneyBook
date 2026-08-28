@@ -12,8 +12,10 @@ test('analysis addon breakdown rows can navigate to detail pages', () => {
   assert.match(analysisPageSource, /categoryId: isAddon \? '__addon__' : String\(item\.id\)/)
   assert.match(analysisPageSource, /query\.addonId = String\(item\.id\)/)
   assert.match(detailPageSource, /const addonId = computed/)
-  assert.match(detailPageSource, /getBreakdownPartsForTransaction\(tx, \{/)
+  assert.match(detailPageSource, /projectAnalysisCategoryTransactions/)
+  assert.match(detailPageSource, /loadAnalysisCategoryDetail/)
   assert.match(detailPageSource, /analysis_part_label/)
+  assert.doesNotMatch(detailPageSource, /listTransactionsForAnalysis/)
 })
 
 test('analysis print report uses shared breakdown rows so addon items are included', () => {
