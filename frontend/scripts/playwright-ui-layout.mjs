@@ -1644,7 +1644,7 @@ async function assertRouteNavigation() {
   assert.equal(state.links.shared, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.ledgerSync, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.driveAppData, true, JSON.stringify(state, null, 2))
-  assert.equal(state.links.bankSync, false, JSON.stringify(state, null, 2))
+  assert.equal(state.links.bankSync, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.carrierSync, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.wearCompanion, true, JSON.stringify(state, null, 2))
 
@@ -1724,6 +1724,7 @@ async function assertRouteNavigation() {
     { testId: 'feature-link-shared-ledgers', path: '/settings/shared-ledgers', text: /共同帳本|Shared ledger|共有台帳/iu },
     { testId: 'feature-link-ledger-sync', path: '/settings/google-drive-ledger-sync', text: /帳本同步|Ledger Sync|帳簿同期/iu },
     { testId: 'feature-link-drive-appdata-restore', path: '/settings/auto-backup', text: /Drive appData|Drive 備份|旧版復元|revision restore/iu },
+    { testId: 'feature-link-bank-sync', path: '/settings/bank-sync', text: /銀行同步|Bank Sync|銀行同期/iu },
     { testId: 'feature-link-carrier-sync', path: '/settings/carrier-sync', text: /載具同步|Carrier Sync|載具同期/iu },
     { testId: 'feature-link-wear-companion', path: '/settings/wear-companion', text: /手錶連線|Watch Link|時計連携/iu },
   ]
