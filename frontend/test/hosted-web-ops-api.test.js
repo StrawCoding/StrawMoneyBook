@@ -16,7 +16,6 @@ const routerSource = readFileSync(resolve(frontendRoot, 'src/ui/router/index.js'
 const googleAuthSource = readFileSync(resolve(frontendRoot, 'src/services/einvoice/auth.js'), 'utf8')
 const einvoiceApiSource = readFileSync(resolve(frontendRoot, 'src/services/einvoice/scrape-api.js'), 'utf8')
 const sharedLedgerSource = readFileSync(resolve(frontendRoot, 'src/services/shared-ledger/backend.js'), 'utf8')
-const bankSyncSource = readFileSync(resolve(frontendRoot, 'src/services/bank-sync/backend.js'), 'utf8')
 const indexHtml = readFileSync(resolve(frontendRoot, 'index.html'), 'utf8')
 const syncScript = readFileSync(resolve(frontendRoot, 'scripts/sync-official-site-web-app.mjs'), 'utf8')
 
@@ -49,9 +48,6 @@ test('production web API bases default to api.strawmb.com', () => {
   assert.match(einvoiceApiSource, /if \(import\.meta\.env\.PROD\) return PROD_DEFAULT_API_BASE/)
   assert.match(sharedLedgerSource, /PROD_DEFAULT_SHARED_LEDGER_API_BASE = 'https:\/\/api\.strawmb\.com'/)
   assert.match(sharedLedgerSource, /if \(import\.meta\.env\.PROD\) return PROD_DEFAULT_SHARED_LEDGER_API_BASE/)
-  assert.match(bankSyncSource, /PROD_DEFAULT_BANK_API_BASE = 'https:\/\/api\.strawmb\.com'/)
-  assert.match(bankSyncSource, /function getBankApiBase\(/)
-  assert.match(bankSyncSource, /if \(IMPORT_META_ENV\.PROD\) return PROD_DEFAULT_BANK_API_BASE/)
 })
 
 test('index.html CSP allows ops API and Google Identity for hosted web', () => {

@@ -25,9 +25,6 @@
 常見（依 [`frontend/.env.example`](../../frontend/.env.example)）：
 - `VITE_SHARED_LEDGER_API_BASE_URL`：shared ledger/共同帳本後端 API base URL
 - `VITE_GOOGLE_WEB_CLIENT_ID`：Google Sign-In 的 Web client id
-- `VITE_BANK_SYNC_FEATURE_ENABLED`：bank-sync 入口是否顯示（Feature flag）
-- `VITE_BANK_SYNC_ENABLE_UNSUPPORTED_REAL_PROVIDERS`：原生銀行自動化第二道開關。**兩個都要開**，功能頁才會出現銀行同步且 native 路徑才會跑；只開第一個不夠
-- `VITE_BANK_SYNC_API_BASE_URL`：bank-sync 相關 API base URL
 - `VITE_EINVOICE_CLIENT_SHARED_KEY`：e-invoice/載具流程的前端共享 key（server 端需同值）
 - `VITE_EINVOICE_API_BASE_URL`：e-invoice/載具 API base URL
 - `VITE_GOOGLE_OAUTH_API_ORIGIN`：Google OAuth API 的 origin（production 時影響走哪個網域）

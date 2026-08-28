@@ -138,9 +138,7 @@ test('settings page shows helper descriptions for each entry', () => {
   assert.match(settingsSource, /item\.descKey/)
   assert.doesNotMatch(settingsSource, /desc: '/)
   assert.match(i18nSource, /'settings\.desc\.addon_templates': '建立常用附加項目，快速套用到交易。'/)
-  assert.match(i18nSource, /'settings\.desc\.bank_sync': '管理銀行連線、同步規則與待匯入交易。'/)
   assert.match(i18nSource, /'settings\.desc\.addon_templates': 'Create common add-on items for quick use in transactions.'/)
-  assert.match(i18nSource, /'settings\.desc\.bank_sync': 'Manage bank connections, sync rules, and pending imports.'/)
 })
 
 test('SMB-221 settings subpage titles include feature icons', () => {

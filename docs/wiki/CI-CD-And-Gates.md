@@ -36,7 +36,6 @@ main push 另 dry-run `bundleRelease`。
 | playwright-carrier-sync | `playwright:carrier-sync` |
 | playwright-budget-cross-month | `playwright:budget-cross-month` |
 | playwright-budget-pay-cycle | `playwright:budget-pay-cycle` |
-| playwright-bank-sync | `playwright:bank-sync` |
 
 環境：`CI=true`、`PLAYWRIGHT_BROWSERS_PATH` 指向 `backend/.server-data/playwright-browsers`（CI 用 `github.workspace` 前綴）。
 

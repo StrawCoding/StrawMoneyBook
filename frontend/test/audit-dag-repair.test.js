@@ -19,12 +19,7 @@ test('refund SQL fragments share a single match predicate', () => {
   assert.equal(refundedSourceExclusionSql('transactions'), `NOT ${refundRelationExistsSql('transactions')}`)
 })
 
-test('bank client guard fails closed in production and ledger purge uses a transaction', () => {
-  const bankUtils = readFileSync(resolve(import.meta.dirname, '../api/bank/_utils.js'), 'utf8')
-  assert.match(bankUtils, /missing_bank_sync_client_shared_key/)
-  assert.match(bankUtils, /if \(isProductionRuntime\(\)\) return true/)
-  assert.doesNotMatch(bankUtils, /Access-Control-Allow-Origin', '\*'/)
-
+test('oauth client guard fails closed in production and ledger purge uses a transaction', () => {
   const googleExchange = readFileSync(
     resolve(import.meta.dirname, '../api/google/oauth/exchange.js'),
     'utf8',
@@ -126,18 +121,6 @@ test('bank client guard fails closed in production and ledger purge uses a trans
 })
 
 test('audit DAG identity, serverless, busy_timeout and PII guards stay in source', () => {
-  const repo = readFileSync(resolve(import.meta.dirname, '../src/core/repositories/bank-sync.repo.js'), 'utf8')
-  assert.match(repo, /INSERT OR IGNORE INTO bank_transactions/)
-  assert.match(repo, /identity_scheme/)
-  assert.match(repo, /findLikelyDuplicateBankTransaction/)
-  assert.match(repo, /possible_duplicate_of/)
-
-  const service = readFileSync(resolve(import.meta.dirname, '../src/ui/services/bank-sync.service.js'), 'utf8')
-  assert.match(service, /runtimeJobs\.run\(`bank-sync:\$\{/)
-  assert.match(service, /readPossibleDuplicateOf/)
-  assert.match(service, /reason: 'possible_duplicate'/)
-  assert.doesNotMatch(service, /runtimeJobs\.run\(`bank-sync:\$\{[\s\S]*runtimeJobs\.run\(`bank-sync:/)
-
   const sqlite = readFileSync(resolve(import.meta.dirname, '../src/core/db/sqlite.js'), 'utf8')
   assert.match(sqlite, /applyConnectionPragmas/)
   assert.match(sqlite, /db\.query\('PRAGMA foreign_keys = ON;'/)

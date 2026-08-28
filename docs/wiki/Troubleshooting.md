@@ -12,7 +12,7 @@
 ### B) 測試通過但 UI 不對
 
 - 優先 `npm run playwright:ui-layout --prefix frontend`（必須進 BottomNav shell）
-- 再跑功能 suite：`playwright:bank-sync` / `carrier-sync` / `budget-pay-cycle`
+- 再跑功能 suite：`playwright:carrier-sync` / `budget-pay-cycle`
 
 ### C) Playwright 找不到 browsers
 
@@ -26,9 +26,9 @@ cd backend && npm run playwright:install-browsers
 
 不要在 host install native。`backend && npm run deploy:copy` 後 **`docker restart StrawMB`**。[Backend-Deployment-And-Health](Backend-Deployment-And-Health)
 
-### E) 手機銀行同步仍是舊行為
+### E) 銀行同步
 
-Web／CI 綠 ≠ 原生已修。確認 APK versionName 後重裝。[Android-Native-Bank-APK](Android-Native-Bank-APK)
+產品面已移除。舊 bookmark `/settings/bank-sync` 會導向功能頁。
 
 ### F) 載具「已設定」但一查就 401／503
 

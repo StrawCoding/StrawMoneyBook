@@ -176,7 +176,7 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 
 `playwright:ui-layout` 會 bypass onboarding 進入 app-shell 首頁，確認預設為現代 Habitat layout（`data-ui-layout=modern`）、設定 → 個人化可切傳統／現代且會寫入 localStorage、兩種 layout 下首頁區塊／FAB／BottomNav 仍在；強制 Light 主題後驗證收入／支出 block 可見、可讀、版面完整，並抽樣確認 Dark 主題未回歸。
 
-功能列表分為「一般功能」與「進階功能」兩區：一般功能含預算項目、借貸、報銷、請款單、存錢罐、有價證券、信用卡、訂閱、交易搜尋；進階功能（`feature_list.advanced`）含共同帳本、帳本同步、Drive 備份選檔／舊版還原（smb299 → `/settings/auto-backup#drive-appdata-browser`）、銀行同步（feature flag 閘控）、載具同步、手錶連線（`/settings/wear-companion`）。預算項目入口搭配圖示直接導向預算管理頁。設定頁主清單不再列出共同帳本／帳本同步／銀行同步／載具同步／手錶連線等進階同步入口（深度連結／舊 bookmark 仍可開到同一 route）；自動備份仍在設定頁，並可從進階進入 Drive 選檔還原錨點。smb299 進階列加長後，功能列以 `scroll-margin-bottom`（約 BottomNav 高度）避免末列被固定底欄遮擋；`playwright:ui-layout` 點擊進階入口前會置中捲動並確認列在 nav 上方。
+功能列表分為「一般功能」與「進階功能」兩區：一般功能含預算項目、借貸、報銷、請款單、存錢罐、有價證券、信用卡、訂閱、交易搜尋；進階功能（`feature_list.advanced`）含共同帳本、帳本同步、Drive 備份選檔／舊版還原（smb299 → `/settings/auto-backup#drive-appdata-browser`）、載具同步、手錶連線（`/settings/wear-companion`）。預算項目入口搭配圖示直接導向預算管理頁。銀行同步產品面已移除。設定頁主清單不再列出共同帳本／帳本同步／載具同步／手錶連線等進階同步入口（深度連結／舊 bookmark 仍可開到同一 route）；自動備份仍在設定頁，並可從進階進入 Drive 選檔還原錨點。smb299 進階列加長後，功能列以 `scroll-margin-bottom`（約 BottomNav 高度）避免末列被固定底欄遮擋；`playwright:ui-layout` 點擊進階入口前會置中捲動並確認列在 nav 上方。
 
 ### 信用卡消費制度 P0（smb301）
 
@@ -820,30 +820,15 @@ Stage B：獨立 Gradle 模組 `frontend/android/wear`（同一 `applicationId`�
 
 ### 9.1 銀行同步現況
 
-銀行同步已改為可透過環境變數 `VITE_BANK_SYNC_FEATURE_ENABLED` 啟用的會員功能：
+銀行同步產品面**已全部移除**：不再提供網銀 WebView 自動化、設定頁、Android `BankAutomation*` plugin、`/api/bank`、或 CI `playwright:bank-sync`。
 
-- 屬於會員功能（`assertCanUseBankSync()`）
-- 目前支援 **Android App 本地同步**：第一銀行（`first_bank_tw`）＋華南銀行（`hua_nan_bank_tw`）；非 Open Banking
-- SMB-278：`isBankSyncFeatureEnabled()` 只依 feature flag 控制設定入口與路由可視性；原生自動化另由 `isBankSyncNativeAutomationAvailable()` 閘控。Web／非 Android 進入 `/settings/bank-sync` 會顯示支援矩陣與可用性診斷（資格→平台→自動化／API→憑證→captcha→同步→審核），並提供單一 recovery CTA（例如取得 Android App），**不再因 provider 空列表靜默 redirect 回設定**
-- SMB-280：`bank_sync_credentials_missing` 僅在 Android 原生自動化可用且尚未建立銀行連線時出現；Web／非 Android 不得誤用此碼（改為 `bank_sync_android_only`／支援矩陣）。原生 vault 改 `commit()` 寫入，同步／中斷以 `provider_connection_id` 對齊讀回，避免建立憑證後仍顯示無憑證或 legacy reconnect；legacy vault 缺失走 credentials 階段 +「重新連結銀行」CTA
-- smb294：重新驗證載具／銀行同步可用性；原生 vault 同步／中斷改傳 **distinct** local DB id + `provider_connection_id` 候選（`buildNativeVaultLookupIds` + `FirstBankAutomation.resolveVaultConnectionId`），避免兩邊傳同一值導致備援永不觸發、誤報憑證缺失；Playwright `carrier-sync`／`bank-sync` 補強錯誤碼分流、recovery CTA 與 seeded review list（`straw.playwright.hooks`）
-- v1.3.139（Architecture B Phase 0A–0C）：修復 JS↔Java 增量 watermark 合約——前端 dual-write `lastSyncAt`／`last_sync_at` 與 `lookbackDays`／`lookback_days`；原生 `readLastSyncWatermark` 採 **`lastSyncAt` > `last_sync_at`**；`resolveQueryStartDate` 強制 lookback overlap（預設 3 日，不早於 initialStart）；JVM `FirstBankAutomationSyncContractTest` 6/6 + node source／service 合約測試。屬 Android 原生修復，需重建 APK 後真機驗證第二次同步查詢窗
-- v1.3.140（Architecture B Phase 1–10）：Provider Registry（第一銀行＋華南銀行）、通用 `connectBank`/`syncBank`、migration 046 帳號層級 checkpoint、`PARTIAL_SUCCESS`、`BankAutomationSyncContract`、淘汰 remote scrape／Playwright provider、華南 Android adapter（H0＋啟發式）；建立頁依 schema 動態欄位。需重建 APK
-- 華南 H2 Phase A：登入後仍 heuristic（Phase 9 PARTIAL）。Android 改寫去識別化 `h1_probe`／`h2_probe` 與 hncb observe-only intercept（不 replay GET/POST），讓真機 `hua_nan_transaction_query_failed` 留下可填驗收清單的 trace。錯誤碼歸 `portal_changed`、三語 i18n，不要求重新連結。**尚未凍 H2、不宣稱查詢已修好**；需重建 APK 後才看得到 probe。清單：`docs/wiki/Sync-Architecture-B.md`
-- smb304：修復 Android／Web 初始化因 migration 046 誤用 `#` 註解導致 SQLite `unrecognized token: "#"`、帳本無法開啓；改為 SQLite 安全註解，並在 `splitSqlStatements` 剝除 hash 行註解＋回歸測試，既有帳本可安全套用 046（勿重設資料）
-- 稽核續修：CSV 與原生自動化交易 id 不同時，同帳戶同日同額會標 `possible_duplicate_of` 且審核匯入預設跳過；單一銀行連線同步走 process-wide `runtimeJobs` 合併，避免重入；SQLite `busy_timeout=5000`。CI 另跑預算跨月／發薪週期 Playwright（獨立 job）
-- 已移除 Sandbox / Mock 生產路徑；舊測試連線會在 UI 標示為已停用
-- 建立連線改為引導式流程：選擇銀行 → 登入 → 帳戶對應 → 首次同步
-- 第一銀行驗證碼 OCR 全失敗時（v1.3.19），建立連線頁會顯示驗證碼圖與手動輸入框，使用者輸入 4 碼後可重試；若已先手動填寫則跳過 OCR
-- v1.3.20（SMB-241）：Android 銀行自動化 WebView 強制 1280px 桌面 viewport 與登入頁 DOM 探測，避免載入行動版登入頁導致驗證碼過小或 OCR 失敗；canvas 擷取過小時改以 cookie 直接下載驗證碼圖
-- v1.3.32（SMB-252）P1 銀行同步硬化：Android `FirstBankAutomation` 以 `shouldInterceptRequest` 優先攔截交易 JSON（DOM `table.CnbTable` 降備援）、OCR 信心門檻 + 全失敗回圖手填、frame 合約自檢（`#code_verify` /「我的帳戶」）；銀行連線頁新增「匯入銀行帳單 CSV」退路（`bank-statement-csv.js` → 待匯入審核管線）
-- v1.3.34（SMB-252 Restart）修復 v1.3.32 desktop 硬化的回歸：桌面登入頁探測 `buildDesktopLoginPageProbeScript()` 原把「頁面文字含手機版 / Mobile Bank」當成 `mobileHint` 並列入 `ready` 攔阻條件，導致第一銀行**電腦版**登入頁（`index103.html`，文字本身就含指向行動銀行 App 的「Mobile Bank」連結）被誤判為手機版而中止（`first_bank_login_page_mismatch`）。治本：`ready` 只依功能錨點（`hasLoginForm` / `hasCaptchaImage` / `hasCaptchaLoginArea` / `hasVrfyCode`）；`mobileHint` 改為依版面結構（行動版 `viewport` `width=device-width` + 缺少 desktop 錨點）推斷的**非攔阻診斷欄位**，不再用頁面文字判斷
-- v1.3.36（SMB-252 Restart）修復「登入送出/驗證碼」階段失敗（v1.3.34 修好誤判手機版後，實機 trace 顯示送出後仍停在登入頁→退回 OCR 第 2~5 次空轉→`first_bank_login_failed`）。根因（已比對線上 `index103.html` 真實表單）：`doLogin()` 讀取 `type="hidden"` 的 `#loginCustId`（真值欄位），`#loginCustIdFake` 僅為可見代理、由 `attachIdBehavior` 遮罩事件不可靠同步；`buildSubmitLoginScript` 過去只設 `*Fake` 欄位 `.value`，隱藏 `#loginCustId` 可能為空 → `doLogin()` 跳 `alert` 中止 → 從未真正送出。治本：(1) 直接寫入 `doLogin()` 真正讀取的隱藏/實名欄位 `loginCustId`/`loginCustIdRptSeq`/`usrId`/`pwd`/`vrfyCode`（`setFieldByName`）；(2) 送出改 `clickArea()`→備援 `doLogin()`，不再假設只有 `clickArea()`；(3) 攔截 `window.alert()` 並新增 `buildLoginResponseDiagnosticsScript` / `captureLoginResponseDiagnostics`，把 alert／訊息回覆頁／欄位驗證文字寫入 debug trace（`summarizeLoginFailure` 取代籠統訊息）；(4) `waitForLoginSuccess` 偵測 alert/錯誤對話框即提早歸因，不再空等 15 秒。屬 Android 原生修復，已重建 APK（versionName 1.3.36）始能 ship 至裝置；需真機/模擬器以真實 i-Bank 憑證實測
-- SMB-266 後第一銀行 Android WebView 同步入口與交易查詢再硬化：登入後 frame / 帳戶總覽不再只依賴「我的帳戶」中文文字，而是優先使用 URL / function (`openIt`) / ID (`overview-account`、`tab1`) / table (`table.CnbTable`) 等 structural anchors，中文與英文文案僅作備援；交易 JSON 攔截只 replay 安全 GET，POST 候選請求因 WebView 無法提供 request body 會直接放行，避免以空 body 重送破壞原始銀行請求，資料仍可由 DOM fallback 解析；合約自檢同步加入 frame structural predicates，失敗分類補上 `portal_changed` / `retry` / `reconnect`，`debugHint` / `debugLastStep` 會提示可檢查的錨點與 POST fallback 狀態
-- 匯入前會進入待匯入清單，需手動審核後才寫入記帳交易
-- 多銀行 Provider 接口保留（`VITE_BANK_SYNC_PROVIDERS_JSON`），後續可擴充
+保留：
+- 記帳資產帳戶類型「銀行」
+- 載具同步（§9.2）
+- 會員 helper `hasBankSyncMembershipAccess`／`maxBankSyncConnections`（載具同步 alias）
+- 歷史 SQL migration 與 backup export 的 `bank_sync_*` 表（既有 DB 仍能開）
 
-所以這不是完全未做，而是已建流程、以會員 + Android 第一銀行為主的受控功能。
+舊 bookmark `/settings/bank-sync*` 導向 `/features`。
 
 ### 9.2 載具同步（v1.3.17 起，v1.3.19 憑證格式修正，v1.3.30 SPA 治本改寫，v1.3.40 Cloudflare 挑戰修復，SMB-265 可靠性硬化，SMB-278 可用性診斷）
 

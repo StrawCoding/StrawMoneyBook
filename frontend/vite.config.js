@@ -10,11 +10,6 @@ function createRouteModuleLoader(relativePath) {
 
 const EXACT_API_ROUTE_LOADERS = {
   '/api/app-update/play': createRouteModuleLoader('./api/app-update/play.js'),
-  '/api/bank/disconnect': createRouteModuleLoader('./api/bank/disconnect.js'),
-  '/api/bank/exchange': createRouteModuleLoader('./api/bank/exchange.js'),
-  '/api/bank/link_session': createRouteModuleLoader('./api/bank/link_session.js'),
-  '/api/bank/mark_imported': createRouteModuleLoader('./api/bank/mark_imported.js'),
-  '/api/bank/sync': createRouteModuleLoader('./api/bank/sync.js'),
   '/api/exchange-rate/cbc': createRouteModuleLoader('./api/exchange-rate/cbc.js'),
   '/api/google/oauth/exchange': createRouteModuleLoader('./api/google/oauth/exchange.js'),
   '/api/google/oauth/refresh': createRouteModuleLoader('./api/google/oauth/refresh.js'),

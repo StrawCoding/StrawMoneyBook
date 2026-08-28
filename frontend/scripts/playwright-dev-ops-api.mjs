@@ -117,18 +117,15 @@ async function main() {
     const modules = await evalPage(`() => Promise.all([
       fetch('/src/services/shared-ledger/backend.js').then((response) => response.text()),
       fetch('/src/services/einvoice/scrape-api.js').then((response) => response.text()),
-      fetch('/src/services/bank-sync/backend.js').then((response) => response.text()),
       fetch('/src/services/einvoice/auth.js').then((response) => response.text()),
-    ]).then(([sharedLedger, einvoice, bankSync, googleAuth]) => ({
+    ]).then(([sharedLedger, einvoice, googleAuth]) => ({
       sharedLedger,
       einvoice,
-      bankSync,
       googleAuth,
     }))`)
 
     assert.match(modules.sharedLedger, /https:\/\/api\.strawmb\.com/)
     assert.match(modules.einvoice, /https:\/\/api\.strawmb\.com/)
-    assert.match(modules.bankSync, /https:\/\/api\.strawmb\.com/)
     assert.match(modules.googleAuth, /https:\/\/api\.strawmb\.com/)
 
     const health = await evalPage(`() => fetch(${JSON.stringify(`${opsApiBase}/health`)})

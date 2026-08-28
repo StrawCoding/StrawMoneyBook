@@ -48,10 +48,7 @@
 import { RouterLink } from 'vue-router'
 import { computed } from 'vue'
 import { useI18n } from '@/ui/services/i18n.service'
-import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
-
 const { t } = useI18n()
-const showBankSyncEntry = isBankSyncFeatureEnabled()
 
 const generalFeatures = computed(() => ([
   { to: '/budget', label: t('feature_list.budget_items'), icon: 'fa-solid fa-chart-pie', testId: 'feature-link-budget' },
@@ -84,14 +81,6 @@ const advancedFeatures = computed(() => ([
     icon: 'fa-solid fa-clock-rotate-left',
     testId: 'feature-link-drive-appdata-restore',
   },
-  ...(showBankSyncEntry
-    ? [{
-        to: '/settings/bank-sync',
-        label: t('feature_list.bank_sync'),
-        icon: 'fa-solid fa-building-columns',
-        testId: 'feature-link-bank-sync',
-      }]
-    : []),
   {
     to: '/settings/carrier-sync',
     label: t('feature_list.carrier_sync'),

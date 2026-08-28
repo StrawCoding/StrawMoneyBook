@@ -20,7 +20,6 @@ npm run check --prefix frontend
 ## Playwright 怎麼選
 
 - 設定殼／首頁／功能列表：`playwright:ui-layout`
-- 銀行：`playwright:bank-sync`（已進 CI）
 - 載具：`playwright:carrier-sync`
 - 預算：`budget-save` / `budget-cross-month` / `budget-pay-cycle`
 - 分析匯出：`playwright:analysis-export`

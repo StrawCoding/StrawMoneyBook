@@ -1,5 +1,4 @@
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
-import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
 import { getSharedLedgerSession } from '@/services/shared-ledger/backend'
 import { isHomeRoute } from '@/ui/services/navigation-back.service'
 import { queueDeferredScrollRestore, rememberHomeScrollPosition } from '@/ui/services/route-scroll.service'
@@ -190,22 +189,8 @@ const router = createRouter({
       meta: { tab: 'settings' },
     },
     {
-      path: '/settings/bank-sync',
-      name: 'settings-bank-sync',
-      component: () => import('@/ui/views/settings/SettingsBankSyncPage.vue'),
-      meta: { tab: 'settings' },
-    },
-    {
-      path: '/settings/bank-sync/new',
-      name: 'settings-bank-sync-create',
-      component: () => import('@/ui/views/settings/SettingsBankSyncCreatePage.vue'),
-      meta: { tab: 'settings', hideAppChrome: true },
-    },
-    {
-      path: '/settings/bank-sync/:id',
-      name: 'settings-bank-sync-connection',
-      component: () => import('@/ui/views/settings/SettingsBankSyncConnectionPage.vue'),
-      meta: { tab: 'settings' },
+      path: '/settings/bank-sync/:pathMatch(.*)*',
+      redirect: '/features',
     },
     {
       path: '/settings/carrier-sync',
@@ -482,12 +467,6 @@ const router = createRouter({
   ],
 })
 
-const BANK_SYNC_ROUTE_NAMES = new Set([
-  'settings-bank-sync',
-  'settings-bank-sync-create',
-  'settings-bank-sync-connection',
-])
-
 const ADMIN_ROUTE_NAMES = new Set([
   'settings-admin',
   'settings-admin-user',
@@ -497,9 +476,6 @@ router.beforeEach((to, from) => {
   // Capture home window scroll before leaving so delete/edit return can restore it.
   if (isHomeRoute(from) && !isHomeRoute(to)) {
     rememberHomeScrollPosition()
-  }
-  if (BANK_SYNC_ROUTE_NAMES.has(String(to.name ?? '')) && !isBankSyncFeatureEnabled()) {
-    return { name: 'settings' }
   }
   if (ADMIN_ROUTE_NAMES.has(String(to.name ?? '')) && !Boolean(getSharedLedgerSession()?.user?.is_admin)) {
     return { name: 'settings' }

@@ -2,6 +2,7 @@
 
 - 分析分類明細「全部」改 SQL 依分類／附加項目載入列資料與類型合計，不再 `listAllTransactionsChunked` 後在主執行緒篩選。
 - 啟動鏈 FontAwesome 改獨立 `fa-icon-registry` 動態註冊，`main.js` 不再靜態 import 全量 icon。
+- 移除銀行同步產品面（第一銀行／華南 WebView 自動化、設定頁、原生 plugin、`/api/bank`、CI Playwright）。記帳「銀行」資產帳戶與載具同步保留；舊 bookmark `/settings/bank-sync` 改導向功能頁。
 
 ---
 

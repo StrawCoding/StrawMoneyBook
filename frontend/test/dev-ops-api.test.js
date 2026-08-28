@@ -15,7 +15,6 @@ test('npm run dev loads ops API bases from .env.development', () => {
   const devEnv = loadEnv('development', frontendRoot, 'VITE_')
   assert.equal(devEnv.VITE_SHARED_LEDGER_API_BASE_URL, opsApi)
   assert.equal(devEnv.VITE_EINVOICE_API_BASE_URL, opsApi)
-  assert.equal(devEnv.VITE_BANK_SYNC_API_BASE_URL, opsApi)
   assert.equal(devEnv.VITE_GOOGLE_OAUTH_API_ORIGIN, opsApi)
   assert.equal(devEnv.VITE_EXCHANGE_RATE_API_BASE_URL, opsApi)
   assert.match(envDevelopment, /^VITE_SHARED_LEDGER_API_BASE_URL=https:\/\/api\.strawmb\.com$/m)

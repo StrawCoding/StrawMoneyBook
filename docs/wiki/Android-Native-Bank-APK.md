@@ -1,3 +1,5 @@
+> **歷史文件**：銀行同步產品面已移除（不再提供 WebView 自動化、設定頁、plugin、`/api/bank`）。本頁僅保留當時 APK 重建流程紀錄，不是現行 SOP。
+
 # Android 原生銀行 APK
 
 ## 目的

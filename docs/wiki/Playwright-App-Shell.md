@@ -21,7 +21,6 @@
 | 載具同步 | `playwright:carrier-sync` | 有 |
 | 跨月預算 | `playwright:budget-cross-month` | 有 |
 | 發薪週期 | `playwright:budget-pay-cycle` | 有 |
-| 銀行同步設定 | `playwright:bank-sync` | **有（本方案納入 CI）** |
 
 `closeout:verify` 不含 Playwright。Hermes closeout 要加 `--playwright <suite>`。
 
