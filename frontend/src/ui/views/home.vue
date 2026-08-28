@@ -1,6 +1,7 @@
 <template>
   <div class="view-root home-modern" data-testid="home-view">
     <h1 class="home-large-title">{{ t('nav.home') }}</h1>
+    <p class="home-habitat-hello">{{ t('home_page.habitat_hello') }}</p>
     <section class="stack">
       <article class="card ledger-card">
         <header class="row">

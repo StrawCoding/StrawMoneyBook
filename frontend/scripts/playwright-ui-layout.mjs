@@ -2122,7 +2122,7 @@ async function assertDriveAppDataBrowser() {
   assert.match(state.href, /auto-backup#drive-appdata-browser/)
 }
 
-async function assertModernLayoutOnly() {
+async function assertDualUiLayout() {
   await runPlaywrightCli(['goto', `${baseUrl}/`])
   await waitForAppShell()
   for (let attempt = 0; attempt < 40; attempt += 1) {
@@ -2147,6 +2147,7 @@ async function assertModernLayoutOnly() {
     hasFab: Boolean(document.querySelector('[data-testid=home-fab]')),
     isModernHome: Boolean(document.querySelector('.home-modern')),
     isModernNav: Boolean(document.querySelector('.bottom-nav.modern')),
+    hasHabitatHello: Boolean(document.querySelector('.home-habitat-hello')),
   })`)
   assert.ok(home.path === '/' || home.path === '/home', JSON.stringify(home, null, 2))
   assert.equal(home.hasHomeView, true, JSON.stringify(home, null, 2))
@@ -2157,50 +2158,7 @@ async function assertModernLayoutOnly() {
   assert.equal(home.hasFab, true, 'FAB must remain')
   assert.equal(home.isModernHome, true, JSON.stringify(home, null, 2))
   assert.equal(home.isModernNav, true, JSON.stringify(home, null, 2))
-
-  // Legacy traditional preference must migrate to modern without blank/broken layout.
-  await runPlaywrightCli(['eval', `() => {
-    try { localStorage.setItem('strawmoneybook.ui.layout', 'traditional') } catch {}
-    location.reload()
-    return true
-  }`], { raw: true })
-  await delay(1500)
-  await waitForAppShell()
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const ready = await evalPage(`() => ({
-      path: window.location.pathname,
-      hasHomeView: Boolean(document.querySelector('[data-testid=home-view]')),
-      hasFab: Boolean(document.querySelector('[data-testid=home-fab]')),
-    })`)
-    if ((ready.path === '/' || ready.path === '/home') && ready.hasHomeView && ready.hasFab) break
-    if (ready.hasHomeView === false && (ready.path === '/' || ready.path === '/home')) {
-      // stay
-    } else if (ready.path !== '/' && ready.path !== '/home') {
-      await runPlaywrightCli(['goto', `${baseUrl}/`])
-    }
-    await delay(250)
-  }
-
-  const migrated = await evalPage(`() => ({
-    layout: document.documentElement.dataset.uiLayout ?? '',
-    stored: (() => {
-      try { return localStorage.getItem('strawmoneybook.ui.layout') } catch { return null }
-    })(),
-    path: window.location.pathname,
-    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
-    hasFab: Boolean(document.querySelector('[data-testid=home-fab]')),
-    hasPeriod: Boolean(document.querySelector('[data-testid=home-period-filter]')),
-    isModernHome: Boolean(document.querySelector('.home-modern')),
-  })`)
-  assert.equal(migrated.layout, 'modern', JSON.stringify(migrated, null, 2))
-  assert.equal(migrated.stored, 'modern', JSON.stringify(migrated, null, 2))
-  assert.equal(migrated.hasBottomNav, true, JSON.stringify(migrated, null, 2))
-  assert.equal(migrated.hasFab, true, JSON.stringify(migrated, null, 2))
-  assert.equal(migrated.hasPeriod, true, JSON.stringify(migrated, null, 2))
-  assert.equal(migrated.isModernHome, true, JSON.stringify(migrated, null, 2))
-
-  await assertHomeBlocks()
-  await assertBottomNavIcons()
+  assert.equal(home.hasHabitatHello, true, JSON.stringify(home, null, 2))
 
   await runPlaywrightCli(['goto', `${baseUrl}/settings/personalization`])
   await waitForAppShell({ expectPersonalization: true })
@@ -2210,11 +2168,49 @@ async function assertModernLayoutOnly() {
     hasModernBtn: Boolean(document.querySelector('[data-testid="ui-layout-modern"]')),
     text: document.body?.innerText?.slice(0, 4000) ?? '',
   })`)
-  assert.equal(switchUi.hasLayoutSwitch, false, JSON.stringify(switchUi, null, 2))
-  assert.equal(switchUi.hasTraditionalBtn, false, JSON.stringify(switchUi, null, 2))
-  assert.equal(switchUi.hasModernBtn, false, JSON.stringify(switchUi, null, 2))
-  assert.doesNotMatch(switchUi.text, /介面風格|Interface style|画面スタイル/u)
-  assert.doesNotMatch(switchUi.text, /Traditional|傳統|クラシック/u)
+  assert.equal(switchUi.hasLayoutSwitch, true, JSON.stringify(switchUi, null, 2))
+  assert.equal(switchUi.hasTraditionalBtn, true, JSON.stringify(switchUi, null, 2))
+  assert.equal(switchUi.hasModernBtn, true, JSON.stringify(switchUi, null, 2))
+  assert.match(switchUi.text, /介面風格|Interface style|画面スタイル/u)
+
+  await runPlaywrightCli(['click', '[data-testid="ui-layout-traditional"]'])
+  await delay(300)
+  await runPlaywrightCli(['goto', `${baseUrl}/`])
+  await waitForAppShell()
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const ready = await evalPage(`() => ({
+      path: window.location.pathname,
+      hasHomeView: Boolean(document.querySelector('[data-testid=home-view]')),
+      hasFab: Boolean(document.querySelector('[data-testid=home-fab]')),
+    })`)
+    if ((ready.path === '/' || ready.path === '/home') && ready.hasHomeView && ready.hasFab) break
+    await delay(250)
+  }
+
+  const traditional = await evalPage(`() => ({
+    layout: document.documentElement.dataset.uiLayout ?? '',
+    stored: (() => {
+      try { return localStorage.getItem('strawmoneybook.ui.layout') } catch { return null }
+    })(),
+    hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
+    hasFab: Boolean(document.querySelector('[data-testid=home-fab]')),
+    hasPeriod: Boolean(document.querySelector('[data-testid=home-period-filter]')),
+    isModernHome: Boolean(document.querySelector('.home-modern')),
+  })`)
+  assert.equal(traditional.layout, 'traditional', JSON.stringify(traditional, null, 2))
+  assert.equal(traditional.stored, 'traditional', JSON.stringify(traditional, null, 2))
+  assert.equal(traditional.hasBottomNav, true, JSON.stringify(traditional, null, 2))
+  assert.equal(traditional.hasFab, true, JSON.stringify(traditional, null, 2))
+  assert.equal(traditional.hasPeriod, true, JSON.stringify(traditional, null, 2))
+  assert.equal(traditional.isModernHome, true, JSON.stringify(traditional, null, 2))
+
+  await runPlaywrightCli(['goto', `${baseUrl}/settings/personalization`])
+  await waitForAppShell({ expectPersonalization: true })
+  await runPlaywrightCli(['click', '[data-testid="ui-layout-modern"]'])
+  await delay(300)
+
+  await assertHomeBlocks()
+  await assertBottomNavIcons()
 
   await runPlaywrightCli(['goto', `${baseUrl}/settings/language`])
   await waitForAppShell()
@@ -2294,15 +2290,15 @@ try {
   await assertDeleteTransactionReturnsHomeWithScroll()
   await assertRouteNavigation()
   await assertDriveAppDataBrowser()
-  await assertModernLayoutOnly()
+  await assertDualUiLayout()
   await assertSharedLedgerAuthAndEditorSurfaces()
 
   await gotoOrReopen(`${baseUrl}/settings/personalization`)
   const personalizationSnapshot = await runPlaywrightCli(['snapshot'])
   const personalizationText = String(personalizationSnapshot.stdout ?? '')
   assert.match(personalizationText, /Theme scheme|主題方案|テーマスキーム|Theme Scheme/u)
-  assert.doesNotMatch(personalizationText, /Interface style|介面風格|画面スタイル/u)
-  assert.doesNotMatch(personalizationText, /Traditional|傳統|クラシック/u)
+  assert.match(personalizationText, /Interface style|介面風格|画面スタイル/u)
+  assert.match(personalizationText, /Traditional|傳統|クラシック/u)
 
   console.log('UI layout Playwright smoke passed')
 } finally {

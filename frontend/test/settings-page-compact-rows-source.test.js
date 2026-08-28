@@ -21,10 +21,10 @@ function extractBlock(source, selectorMarker) {
   return source.slice(open + 1, close)
 }
 
-test('SMB-254: modern settings rows use compact vertical padding while keeping 44px tap target', () => {
+test('SMB-254: traditional settings rows use compact vertical padding while keeping 44px tap target', () => {
   const block = extractBlock(
     appleUiSource,
-    "[data-ui-layout='modern'] .settings-page .setting-group .item-link {",
+    "[data-ui-layout='traditional'] .settings-page .setting-group .item-link {",
   )
   // Compact: vertical padding reduced from 12px to 8px, horizontal padding preserved at 14px.
   assert.match(block, /padding:\s*8px\s+14px/)

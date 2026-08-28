@@ -1,10 +1,10 @@
 /*
- * Apple HIG visual layer (modern-only UI).
- * Always activated: document.documentElement.dataset.uiLayout === 'modern'.
- * Legacy traditional preference is migrated to modern at boot.
+ * Traditional layout = Apple HIG visual layer.
+ * Activated when document.documentElement.dataset.uiLayout === 'traditional'.
+ * Modern layout uses habitat-ui.css (Straw Habitat).
  */
 
-[data-ui-layout='modern'] {
+[data-ui-layout='traditional'] {
   --apple-separator: 0.5px solid color-mix(in srgb, var(--border) 80%, transparent);
   --apple-inset-radius: 12px;
   --apple-large-title-size: clamp(28px, 7vw, 34px);
@@ -13,7 +13,11 @@
 
 /* ── Large titles ─────────────────────────────────────────────── */
 
-[data-ui-layout='modern'] .home-large-title {
+[data-ui-layout='traditional'] .home-habitat-hello {
+  display: none;
+}
+
+[data-ui-layout='traditional'] .home-large-title {
   display: block;
   font-size: var(--apple-large-title-size);
   font-weight: 800;
@@ -23,10 +27,10 @@
   padding: 4px 2px 10px;
 }
 
-[data-ui-layout='modern'] .analysis-page > .card.panel > header h2,
-[data-ui-layout='modern'] .assets-page .page-title,
-[data-ui-layout='modern'] .feature-list-page-title,
-[data-ui-layout='modern'] .settings-page > h2 {
+[data-ui-layout='traditional'] .analysis-page > .card.panel > header h2,
+[data-ui-layout='traditional'] .assets-page .page-title,
+[data-ui-layout='traditional'] .feature-list-page-title,
+[data-ui-layout='traditional'] .settings-page > h2 {
   font-size: var(--apple-large-title-size);
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -36,21 +40,21 @@
 
 /* ── Home: inset grouped stack ────────────────────────────────── */
 
-[data-ui-layout='modern'] .home-modern .stack {
+[data-ui-layout='traditional'] .home-modern .stack {
   gap: 10px;
 }
 
-[data-ui-layout='modern'] .home-modern .card {
+[data-ui-layout='traditional'] .home-modern .card {
   border-radius: var(--apple-inset-radius);
   border: 1px solid var(--border);
   box-shadow: none;
 }
 
-[data-ui-layout='modern'] .home-modern .ledger-card {
+[data-ui-layout='traditional'] .home-modern .ledger-card {
   background: var(--card);
 }
 
-[data-ui-layout='modern'] .home-modern .ledger-card > header h3 {
+[data-ui-layout='traditional'] .home-modern .ledger-card > header h3 {
   font-size: 13px;
   font-weight: 600;
   color: var(--muted);
@@ -59,7 +63,7 @@
 }
 
 /* Segmented control (period filter) */
-[data-ui-layout='modern'] .home-modern .period-tabs {
+[data-ui-layout='traditional'] .home-modern .period-tabs {
   display: flex;
   gap: 0;
   padding: 2px;
@@ -68,7 +72,7 @@
   border: 1px solid var(--border);
 }
 
-[data-ui-layout='modern'] .home-modern .period-tabs .tab-btn {
+[data-ui-layout='traditional'] .home-modern .period-tabs .tab-btn {
   flex: 1;
   padding: 7px 4px;
   border-radius: 7px;
@@ -80,14 +84,14 @@
   box-shadow: none;
 }
 
-[data-ui-layout='modern'] .home-modern .period-tabs .tab-btn.primary {
+[data-ui-layout='traditional'] .home-modern .period-tabs .tab-btn.primary {
   background: var(--card);
   color: var(--text);
   border: 0.5px solid color-mix(in srgb, var(--border) 70%, transparent);
   box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 8%, transparent);
 }
 
-[data-ui-layout='modern'] .home-modern .month-row {
+[data-ui-layout='traditional'] .home-modern .month-row {
   padding-top: 2px;
   border-top: var(--apple-separator);
   margin-top: 14px;
@@ -95,7 +99,7 @@
 
 /* ── Bottom navigation (5 tabs + FAB unchanged) ───────────────── */
 
-[data-ui-layout='modern'] .bottom-nav.modern {
+[data-ui-layout='traditional'] .bottom-nav.modern {
   height: calc(64px + var(--navigation-bar-height));
   padding-top: 6px;
   background: color-mix(in srgb, var(--bg) 78%, transparent);
@@ -104,7 +108,7 @@
   border-top: var(--apple-separator);
 }
 
-[data-ui-layout='modern'] .bottom-nav.modern .nav-pill {
+[data-ui-layout='traditional'] .bottom-nav.modern .nav-pill {
   width: auto;
   height: auto;
   min-width: 44px;
@@ -113,25 +117,25 @@
   border-radius: var(--radius-pill);
 }
 
-[data-ui-layout='modern'] .bottom-nav.modern .nav-item.active .nav-pill {
+[data-ui-layout='traditional'] .bottom-nav.modern .nav-item.active .nav-pill {
   background: color-mix(in srgb, var(--primary) 18%, transparent);
   box-shadow: none;
 }
 
-[data-ui-layout='modern'] .bottom-nav.modern .nav-label {
+[data-ui-layout='traditional'] .bottom-nav.modern .nav-label {
   font-size: 10px;
   font-weight: 500;
 }
 
 /* ── Settings grouped list rows ───────────────────────────────── */
 
-[data-ui-layout='modern'] .settings-page .setting-group {
+[data-ui-layout='traditional'] .settings-page .setting-group {
   padding: 0;
   overflow: hidden;
   border-radius: var(--apple-inset-radius);
 }
 
-[data-ui-layout='modern'] .settings-page .setting-group .item-link {
+[data-ui-layout='traditional'] .settings-page .setting-group .item-link {
   min-height: var(--apple-row-min-height);
   padding: 8px 14px;
   border: none;
@@ -140,11 +144,11 @@
   border-bottom: var(--apple-separator);
 }
 
-[data-ui-layout='modern'] .settings-page .setting-group .item-link:last-child {
+[data-ui-layout='traditional'] .settings-page .setting-group .item-link:last-child {
   border-bottom: none;
 }
 
-[data-ui-layout='modern'] .settings-page .setting-group .item-link::after {
+[data-ui-layout='traditional'] .settings-page .setting-group .item-link::after {
   content: '';
   width: 7px;
   height: 7px;
@@ -156,34 +160,34 @@
   opacity: 0.55;
 }
 
-[data-ui-layout='modern'] .settings-page .account-card {
+[data-ui-layout='traditional'] .settings-page .account-card {
   border-radius: var(--apple-inset-radius);
   min-height: var(--apple-row-min-height);
 }
 
-[data-ui-layout='modern'] .settings-page .account-arrow {
+[data-ui-layout='traditional'] .settings-page .account-arrow {
   transform: rotate(-90deg);
   opacity: 0.55;
 }
 
 /* ── Features list ────────────────────────────────────────────── */
 
-[data-ui-layout='modern'] .feature-list-page .card.panel {
+[data-ui-layout='traditional'] .feature-list-page .card.panel {
   padding: 0;
   overflow: hidden;
   border-radius: var(--apple-inset-radius);
 }
 
-[data-ui-layout='modern'] .feature-list-page .panel > header {
+[data-ui-layout='traditional'] .feature-list-page .panel > header {
   padding: 16px 14px 8px;
 }
 
-[data-ui-layout='modern'] .feature-list-page .feature-list {
+[data-ui-layout='traditional'] .feature-list-page .feature-list {
   margin-top: 0;
   gap: 0;
 }
 
-[data-ui-layout='modern'] .feature-list-page .feature-link {
+[data-ui-layout='traditional'] .feature-list-page .feature-link {
   min-height: var(--apple-row-min-height);
   padding: 12px 14px;
   border: none;
@@ -195,11 +199,11 @@
   scroll-margin-top: 24px;
 }
 
-[data-ui-layout='modern'] .feature-list-page .feature-link:last-child {
+[data-ui-layout='traditional'] .feature-list-page .feature-link:last-child {
   border-bottom: none;
 }
 
-[data-ui-layout='modern'] .feature-list-page .feature-link::after {
+[data-ui-layout='traditional'] .feature-list-page .feature-link::after {
   content: '';
   width: 7px;
   height: 7px;
@@ -211,7 +215,7 @@
   opacity: 0.55;
 }
 
-[data-ui-layout='modern'] .feature-list-page .feature-icon-wrap {
+[data-ui-layout='traditional'] .feature-list-page .feature-icon-wrap {
   width: 30px;
   height: 30px;
   border-radius: 8px;
@@ -219,15 +223,15 @@
 
 /* ── Analysis / assets page shells ────────────────────────────── */
 
-[data-ui-layout='modern'] .analysis-page > .card.panel,
-[data-ui-layout='modern'] .export-page > .card.panel,
-[data-ui-layout='modern'] .assets-page > .card.panel {
+[data-ui-layout='traditional'] .analysis-page > .card.panel,
+[data-ui-layout='traditional'] .export-page > .card.panel,
+[data-ui-layout='traditional'] .assets-page > .card.panel {
   border-radius: var(--apple-inset-radius);
 }
 
-[data-ui-layout='modern'] .analysis-page .mode-tabs,
-[data-ui-layout='modern'] .export-page .mode-tabs,
-[data-ui-layout='modern'] .analysis-page .type-tabs {
+[data-ui-layout='traditional'] .analysis-page .mode-tabs,
+[data-ui-layout='traditional'] .export-page .mode-tabs,
+[data-ui-layout='traditional'] .analysis-page .type-tabs {
   display: flex;
   gap: 0;
   padding: 2px;
@@ -236,9 +240,9 @@
   border: 1px solid var(--border);
 }
 
-[data-ui-layout='modern'] .analysis-page .mode-tabs .btn,
-[data-ui-layout='modern'] .export-page .mode-tabs .btn,
-[data-ui-layout='modern'] .analysis-page .type-tabs .btn {
+[data-ui-layout='traditional'] .analysis-page .mode-tabs .btn,
+[data-ui-layout='traditional'] .export-page .mode-tabs .btn,
+[data-ui-layout='traditional'] .analysis-page .type-tabs .btn {
   flex: 1;
   border: none;
   border-radius: 7px;
@@ -248,9 +252,9 @@
   box-shadow: none;
 }
 
-[data-ui-layout='modern'] .analysis-page .mode-tabs .btn.primary,
-[data-ui-layout='modern'] .export-page .mode-tabs .btn.primary,
-[data-ui-layout='modern'] .analysis-page .type-tabs .btn.primary {
+[data-ui-layout='traditional'] .analysis-page .mode-tabs .btn.primary,
+[data-ui-layout='traditional'] .export-page .mode-tabs .btn.primary,
+[data-ui-layout='traditional'] .analysis-page .type-tabs .btn.primary {
   background: var(--card);
   color: var(--text);
   border: 0.5px solid color-mix(in srgb, var(--border) 70%, transparent);

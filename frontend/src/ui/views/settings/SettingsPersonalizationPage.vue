@@ -6,6 +6,24 @@
     </header>
     <article class="card panel">
       <div class="stack section-block">
+        <h3>{{ t('personalization.ui_layout') }}</h3>
+        <div class="layout-switch" role="group" :aria-label="t('personalization.ui_layout')">
+          <button
+            v-for="item in layouts"
+            :key="item.id"
+            type="button"
+            class="layout-btn"
+            :class="{ active: item.id === selectedLayoutId }"
+            :data-testid="`ui-layout-${item.id}`"
+            @click="pickLayout(item.id)"
+          >
+            <strong>{{ t(item.nameKey) }}</strong>
+            <small>{{ t(item.descriptionKey) }}</small>
+          </button>
+        </div>
+      </div>
+
+      <div class="stack section-block">
         <h3>{{ t('personalization.theme_scheme') }}</h3>
         <div class="scheme-grid">
           <button
@@ -74,13 +92,24 @@ import {
   saveThemeScheme,
   saveThemeColor,
 } from '@/ui/services/theme.service'
+import { listUiLayouts } from '@/ui/services/ui-layout.service'
+import { useUiLayout } from '@/ui/composables/useUiLayout'
 const uiStore = useUiStore()
 const { t } = useI18n()
+const { layout, setLayout } = useUiLayout()
+const layouts = listUiLayouts()
+const selectedLayoutId = layout
 const schemes = listThemeSchemes()
 const initialTheme = getCurrentThemePreference()
 const primary = ref(initialTheme.primary)
 const selectedSchemeId = ref(initialTheme.schemeId)
 const paletteColors = buildPaletteColors()
+
+function pickLayout(layoutId) {
+  const applied = setLayout(layoutId)
+  uiStore.pushToast(t('personalization.layout_saved'))
+  return applied
+}
 
 function applyColor() {
   primary.value = applyThemeColor(primary.value)
@@ -225,6 +254,29 @@ label {
 }
 .section-block {
   gap: 10px
+}
+.layout-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.layout-btn {
+  border: 1px solid var(--field-border);
+  border-radius: 16px;
+  background: var(--bg-soft);
+  color: var(--text);
+  text-align: left;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+}
+.layout-btn.active {
+  border-color: var(--primary);
+}
+.layout-btn small {
+  color: var(--muted);
+  font-size: 11px;
 }
 .scheme-grid {
   display: grid;

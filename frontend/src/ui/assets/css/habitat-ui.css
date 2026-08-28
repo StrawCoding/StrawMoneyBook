@@ -1,0 +1,266 @@
+/*
+ * Straw Habitat visual layer (modern UI).
+ * Activated when document.documentElement.dataset.uiLayout === 'modern'.
+ * Traditional layout stays on apple-ui.css.
+ * Color islands follow theme tokens from theme.service.js.
+ */
+
+.home-habitat-hello {
+  display: none;
+}
+
+[data-ui-layout='modern'] {
+  --habitat-radius-island: 24px;
+  --habitat-radius-tile: 20px;
+  --habitat-title-size: clamp(18px, 4.6vw, 22px);
+  --zone-in-bg: var(--home-income-card-bg);
+  --zone-in-ink: var(--home-income-card-value);
+  --zone-out-bg: var(--home-expense-card-bg);
+  --zone-out-ink: var(--home-expense-card-value);
+  --zone-plan-bg: color-mix(in srgb, var(--primary) 22%, var(--card) 78%);
+  --zone-plan-ink: var(--text);
+  --zone-vault-bg: color-mix(in srgb, var(--secondary) 18%, var(--card) 82%);
+}
+
+[data-ui-layout='modern'] .home-large-title {
+  display: none;
+}
+
+[data-ui-layout='modern'] .home-habitat-hello {
+  display: block;
+  font-size: var(--habitat-title-size);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  margin: 0;
+  padding: 2px 2px 8px;
+}
+
+[data-ui-layout='modern'] .analysis-page > .card.panel > header h2,
+[data-ui-layout='modern'] .assets-page .page-title,
+[data-ui-layout='modern'] .feature-list-page-title,
+[data-ui-layout='modern'] .settings-page > h2 {
+  font-size: var(--habitat-title-size);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  margin: 0 0 8px;
+}
+
+[data-ui-layout='modern'] .home-modern .stack {
+  gap: 8px;
+}
+
+[data-ui-layout='modern'] .home-modern .card {
+  border-radius: var(--habitat-radius-island);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+[data-ui-layout='modern'] .home-modern .ledger-card {
+  background: var(--card);
+}
+
+[data-ui-layout='modern'] .home-modern .ledger-card > header h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+[data-ui-layout='modern'] .home-modern .period-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+[data-ui-layout='modern'] .home-modern .period-tabs .tab-btn {
+  flex: 1;
+  padding: 8px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+[data-ui-layout='modern'] .home-modern .period-tabs .tab-btn.primary {
+  background: var(--primary);
+  color: var(--primary-contrast);
+  border-color: var(--primary);
+}
+
+[data-ui-layout='modern'] .home-modern .hero-card .split-card.income {
+  background: var(--zone-in-bg);
+  color: var(--zone-in-ink);
+  border-radius: var(--habitat-radius-tile);
+}
+
+[data-ui-layout='modern'] .home-modern .hero-card .split-card.expense {
+  background: var(--zone-out-bg);
+  color: var(--zone-out-ink);
+  border-radius: var(--habitat-radius-tile);
+}
+
+[data-ui-layout='modern'] .home-modern .summary-card,
+[data-ui-layout='modern'] .home-modern .hero-card {
+  background: var(--zone-plan-bg);
+}
+
+[data-ui-layout='modern'] .home-modern [data-testid='home-transaction-feed'] {
+  background: var(--card);
+}
+
+[data-ui-layout='modern'] .bottom-nav.modern {
+  height: calc(64px + var(--navigation-bar-height));
+  padding-top: 6px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+[data-ui-layout='modern'] .bottom-nav.modern .nav-item.active .nav-pill {
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+  box-shadow: none;
+}
+
+[data-ui-layout='modern'] .bottom-nav.modern .nav-label {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+[data-ui-layout='modern'] .settings-page .setting-group {
+  padding: 6px;
+  overflow: hidden;
+  border-radius: var(--habitat-radius-tile);
+}
+
+[data-ui-layout='modern'] .settings-page .setting-group .item-link {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+}
+
+[data-ui-layout='modern'] .settings-page .setting-group .item-link::after {
+  content: none;
+}
+
+[data-ui-layout='modern'] .settings-page .account-card {
+  border-radius: var(--habitat-radius-island);
+}
+
+[data-ui-layout='modern'] .feature-list-page .card.panel {
+  padding: 12px;
+  overflow: visible;
+  border-radius: var(--habitat-radius-island);
+}
+
+[data-ui-layout='modern'] .feature-list-page .feature-list {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+[data-ui-layout='modern'] .feature-list-page .feature-link {
+  min-height: 76px;
+  padding: 12px;
+  border: 0;
+  border-radius: var(--habitat-radius-tile);
+  background: color-mix(in srgb, var(--primary) 10%, var(--card) 90%);
+  font-weight: 700;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+}
+
+[data-ui-layout='modern'] .feature-list-page .feature-link::after {
+  content: none;
+}
+
+[data-ui-layout='modern'] .feature-list-page .feature-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+}
+
+[data-ui-layout='modern'] .feature-list-page [data-testid='feature-list-advanced'] {
+  margin-top: 16px;
+  padding: 10px;
+  border: 1px dashed var(--primary);
+  border-radius: var(--habitat-radius-tile);
+}
+
+[data-ui-layout='modern'] .feature-list-page [data-testid='feature-list-advanced'] .feature-list {
+  grid-template-columns: 1fr;
+}
+
+[data-ui-layout='modern'] .analysis-page > .card.panel,
+[data-ui-layout='modern'] .export-page > .card.panel,
+[data-ui-layout='modern'] .assets-page > .card.panel {
+  border-radius: var(--habitat-radius-island);
+}
+
+[data-ui-layout='modern'] .analysis-page .mode-tabs,
+[data-ui-layout='modern'] .export-page .mode-tabs,
+[data-ui-layout='modern'] .analysis-page .type-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+[data-ui-layout='modern'] .analysis-page .mode-tabs .btn,
+[data-ui-layout='modern'] .export-page .mode-tabs .btn,
+[data-ui-layout='modern'] .analysis-page .type-tabs .btn {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font-weight: 700;
+  box-shadow: none;
+}
+
+[data-ui-layout='modern'] .analysis-page .mode-tabs .btn.primary,
+[data-ui-layout='modern'] .export-page .mode-tabs .btn.primary,
+[data-ui-layout='modern'] .analysis-page .type-tabs .btn.primary {
+  background: var(--primary);
+  color: var(--primary-contrast);
+  border-color: var(--primary);
+}
+
+[data-ui-layout='modern'] .analysis-page .big-card.income {
+  background: var(--zone-in-bg);
+  color: var(--zone-in-ink);
+  border-radius: var(--habitat-radius-tile);
+}
+
+[data-ui-layout='modern'] .analysis-page .big-card.expense {
+  background: var(--zone-out-bg);
+  color: var(--zone-out-ink);
+  border-radius: var(--habitat-radius-tile);
+}
+
+[data-ui-layout='modern'] .assets-page .summary-item {
+  border-radius: var(--habitat-radius-tile);
+}
+
+[data-ui-layout='modern'] .assets-page .summary-total {
+  background: var(--zone-vault-bg);
+}
+
+[data-ui-layout='modern'] .bookkeeping-page .amt-hero,
+[data-ui-layout='modern'] .stack > .card.panel .header-row + * {
+  border-radius: var(--habitat-radius-tile);
+}
