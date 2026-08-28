@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile, spawn } from 'node:child_process'
+import net from 'node:net'
 import { promisify } from 'node:util'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
@@ -10,8 +11,11 @@ const frontendDir = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const repoRoot = resolve(frontendDir, '..')
 const defaultBrowsersPath = resolve(repoRoot, 'backend/.server-data/playwright-browsers')
 const playwrightConfigPath = resolve(frontendDir, 'playwright-cli.json')
-const previewPort = Number(process.env.BANK_SYNC_PLAYWRIGHT_PORT || 4176)
+// Dedicated port — must NOT share 4176 with playwright-budget-cross-month (stale preview flake).
+const previewPort = Number(process.env.BANK_SYNC_PLAYWRIGHT_PORT || 4226)
 const baseUrl = `http://127.0.0.1:${previewPort}`
+const playwrightCliSession = process.env.PLAYWRIGHT_CLI_SESSION
+  || `smb-bank-sync-${previewPort}-${process.pid}`
 
 async function runPlaywrightCli(args, { raw = false } = {}) {
   return execFileAsync('npx', [
@@ -19,6 +23,8 @@ async function runPlaywrightCli(args, { raw = false } = {}) {
     '--package',
     '@playwright/cli',
     'playwright-cli',
+    '--session',
+    playwrightCliSession,
     ...(raw ? ['--raw'] : []),
     ...args,
   ], {
@@ -40,8 +46,47 @@ async function evalPage(script) {
   return JSON.parse(stdout)
 }
 
-async function waitForPreviewReady() {
+async function assertPreviewPortFree(port) {
+  await new Promise((resolvePort, reject) => {
+    const server = net.createServer()
+    server.once('error', (error) => {
+      reject(new Error(
+        `preview port ${port} already in use — refusing to attach to a foreign vite preview `
+        + `(strictPort race / leftover process). ${error.message}`,
+      ))
+    })
+    server.listen(port, '127.0.0.1', () => {
+      server.close(() => resolvePort())
+    })
+  })
+}
+
+function stopPreviewProcess(child) {
+  if (!child?.pid) return
+  try {
+    spawn('pkill', ['-P', String(child.pid)], { stdio: 'ignore' })
+  } catch {
+    // ignore
+  }
+  try {
+    child.kill('SIGTERM')
+  } catch {
+    // ignore
+  }
+  try {
+    spawn('fuser', ['-k', `${previewPort}/tcp`], { stdio: 'ignore' })
+  } catch {
+    // ignore
+  }
+}
+
+async function waitForPreviewReady(previewChild) {
   for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (previewChild && previewChild.exitCode != null) {
+      throw new Error(
+        `preview process exited early (code=${previewChild.exitCode}) before ready at ${baseUrl}`,
+      )
+    }
     try {
       const response = await fetch(`${baseUrl}/`)
       if (response.ok) return
@@ -250,7 +295,8 @@ async function seedMembershipAndPendingConnection() {
 }
 
 console.log('--- Playwright: bank sync settings (app-shell + support matrix) ---')
-console.log('Building web preview bundle...')
+await assertPreviewPortFree(previewPort)
+console.log(`Building web preview bundle (port ${previewPort})...`)
 await execFileAsync('npm', ['run', 'build:web'], {
   cwd: frontendDir,
   env: process.env,
@@ -258,14 +304,14 @@ await execFileAsync('npm', ['run', 'build:web'], {
   timeout: 300000,
 })
 
-const preview = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', String(previewPort), '--strictPort'], {
-  cwd: frontendDir,
-  stdio: 'ignore',
-  env: process.env,
-})
-
+let preview = null
 try {
-  await waitForPreviewReady()
+  preview = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', String(previewPort), '--strictPort'], {
+    cwd: frontendDir,
+    stdio: 'ignore',
+    env: process.env,
+  })
+  await waitForPreviewReady(preview)
   await runPlaywrightCli(['delete-data'])
   await runPlaywrightCli(['open', `${baseUrl}/`])
   const onboarding = await completeOnboarding()
@@ -348,6 +394,8 @@ try {
 
   console.log('Bank sync Playwright app-shell + support matrix + seeded review check passed')
 
+  // Hard reload into create wizard so debug + membership + hooks remount cleanly
+  // (SPA click against a stale/foreign preview previously flaked as missing Hua Nan).
   await runPlaywrightCli(['eval', `() => {
     localStorage.setItem('strawmoneybook.bankSync.debugEnabled', '1')
     localStorage.setItem('straw.playwright.hooks', '1')
@@ -359,21 +407,8 @@ try {
       lastSyncStatus: 'ok',
       lastKnownPlan: 'lifetime',
     }))
+    window.location.href = ${JSON.stringify(`${baseUrl}/settings/bank-sync/new`)}
     return true
-  }`], { raw: true })
-
-  // Open create wizard via UI (features → bank-sync → new)
-  await runPlaywrightCli(['goto', `${baseUrl}/settings/bank-sync`])
-  await delay(1500)
-  await runPlaywrightCli(['eval', `() => {
-    const link = document.querySelector('a[href="/settings/bank-sync/new"], [data-testid=bank-sync-create-link]')
-      || [...document.querySelectorAll('a,button')].find((el) => /新增|建立|New|Create|接続/u.test(el.textContent || ''))
-    if (!link) {
-      window.location.href = ${JSON.stringify(`${baseUrl}/settings/bank-sync/new`)}
-      return { ok: true, via: 'goto' }
-    }
-    link.click()
-    return { ok: true, via: 'click' }
   }`], { raw: true })
   await delay(2500)
 
@@ -401,9 +436,9 @@ try {
     await delay(400)
   }
   assert.equal(wizardProviders.path, '/settings/bank-sync/new', JSON.stringify(wizardProviders))
-  assert.equal(wizardProviders.hasFirstBank, false, 'first bank must not appear in provider list')
-  assert.equal(wizardProviders.hasHuaNan, true, 'hua nan provider required')
-  assert.equal(wizardProviders.hasWizard, true, 'create wizard head required')
+  assert.equal(wizardProviders.hasFirstBank, false, `first bank must not appear in provider list: ${JSON.stringify(wizardProviders)}`)
+  assert.equal(wizardProviders.hasHuaNan, true, `hua nan provider required: ${JSON.stringify(wizardProviders)}`)
+  assert.equal(wizardProviders.hasWizard, true, `create wizard head required: ${JSON.stringify(wizardProviders)}`)
 
   // Step 1: select Hua Nan provider card + Next
   await runPlaywrightCli(['click', '[data-testid=bank-sync-provider-hua_nan_bank_tw]'])
@@ -682,5 +717,10 @@ try {
 
   console.log('Bank sync Playwright formal connect→map→sync→import UI flow passed')
 } finally {
-  preview.kill('SIGTERM')
+  try {
+    await runPlaywrightCli(['close'])
+  } catch {
+    // ignore session close failures
+  }
+  stopPreviewProcess(preview)
 }

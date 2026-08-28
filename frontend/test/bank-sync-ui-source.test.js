@@ -84,11 +84,18 @@ test('playwright bank-sync drives formal product UI via data-testid (no runForma
   assert.match(playwrightSource, /\[data-testid=bank-sync-review-select-all\]/)
   assert.match(playwrightSource, /\[data-testid=bank-sync-review-import\]/)
   assert.match(playwrightSource, /hasFirstBank/)
+  // Dedicated preview port + refuse-free gate (avoid attaching to foreign/stale vite on 4176).
+  assert.match(playwrightSource, /BANK_SYNC_PLAYWRIGHT_PORT \|\| 4226/)
+  assert.doesNotMatch(playwrightSource, /BANK_SYNC_PLAYWRIGHT_PORT \|\| 4176/)
+  assert.match(playwrightSource, /assertPreviewPortFree/)
+  assert.match(playwrightSource, /stopPreviewProcess/)
+  assert.match(playwrightSource, /settings\/bank-sync\/new/)
   // Web has no WebView: native-boundary fixtures are allowed; UI clicks must still exercise service/DB.
   assert.match(createPageSource, /setBankSyncServiceDependenciesForTest/)
   assert.match(createPageSource, /exchangeBankAuth:\s*async/)
   assert.match(createPageSource, /syncBankTransactions:\s*async/)
   assert.match(createPageSource, /data-testid="bank-sync-account-mapping"/)
+  assert.match(createPageSource, /computed\(\(\) => isBankSyncApiConfigured\(\)\)/)
   assert.match(connectionPageSource, /data-testid="bank-sync-sync-now"/)
   assert.match(connectionPageSource, /data-testid="bank-sync-review-import"/)
 })

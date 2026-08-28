@@ -201,7 +201,7 @@ const ledgerStore = useLedgerStore()
 const accountStore = useAccountStore()
 const uiStore = useUiStore()
 const { t } = useI18n()
-const bankSyncApiReady = isBankSyncApiConfigured()
+const bankSyncApiReady = computed(() => isBankSyncApiConfigured())
 const bankSyncApiMessage = computed(() => getBankSyncApiUnavailableMessage())
 const platformHint = computed(() => {
   if (isBankSyncDebugEnabled()) {
@@ -499,7 +499,7 @@ function startSubmitProgress() {
 }
 
 function submitLogin() {
-  if (!bankSyncApiReady) {
+  if (!bankSyncApiReady.value) {
     uiStore.pushToast(bankSyncApiMessage.value, 'error')
     return
   }
