@@ -51,12 +51,18 @@ test('Architecture B exposes BankAutomationRuntime phase machine', () => {
   assert.match(runtimeSource, /enum Phase/)
   assert.match(runtimeSource, /USER_INTERACTION_REQUIRED/)
   assert.match(runtimeSource, /SYNCING_TRANSACTIONS/)
+  assert.match(runtimeSource, /markAborted|Phase\.ABORTED/)
   assert.match(huaNanBankAutomationSource, /BankAutomationRuntime/)
   assert.match(huaNanBankAutomationSource, /providers\.huanan|package com\.strawcoding\.strawmoneybook\.providers\.huanan/)
   assert.match(huaNanBankAutomationSource, /structuralAccountFieldCount/)
   assert.match(huaNanBankAutomationSource, /SYNCING_TRANSACTIONS/)
   assert.match(huaNanBankAutomationSource, /markUserInteractionRequired/)
   assert.match(huaNanBankAutomationSource, /markSuccess\(false\)[\s\S]*runtime\.snapshot\(\)/)
+  // sync path must enter SYNCING_TRANSACTIONS and finish via markSuccess before snapshot
+  assert.match(
+    huaNanBankAutomationSource,
+    /public static JSONObject sync\([\s\S]*enter\(BankAutomationRuntime\.Phase\.SYNCING_TRANSACTIONS\)[\s\S]*markSuccess\([\s\S]*runtime\.snapshot\(\)/,
+  )
   assert.doesNotMatch(huaNanBankAutomationSource, /nodes = Array\.from\(doc\.querySelectorAll\('a, td, th, span, div, option, li'\)/)
 })
 

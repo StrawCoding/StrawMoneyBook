@@ -70,3 +70,25 @@ test('developer debug page can toggle bank sync console logging for web', () => 
   assert.match(debugPageSource, /setBankSyncDebugEnabled/)
   assert.match(debugPageSource, /subscribeBankSyncConsoleLog/)
 })
+
+test('playwright bank-sync drives formal product UI via data-testid (no runFormal* shortcuts)', () => {
+  const playwrightSource = readFileSync(
+    resolve(import.meta.dirname, '../scripts/playwright-bank-sync-settings.mjs'),
+    'utf8',
+  )
+  assert.doesNotMatch(playwrightSource, /runFormalConnect|runFormalSaveMappingAndSync|runFormalImport/)
+  assert.match(playwrightSource, /\[data-testid=bank-sync-provider-hua_nan_bank_tw\]/)
+  assert.match(playwrightSource, /\[data-testid=bank-sync-field-nationalId\]/)
+  assert.match(playwrightSource, /\[data-testid=bank-sync-save-accounts\]/)
+  assert.match(playwrightSource, /\[data-testid=bank-sync-sync-now\]/)
+  assert.match(playwrightSource, /\[data-testid=bank-sync-review-select-all\]/)
+  assert.match(playwrightSource, /\[data-testid=bank-sync-review-import\]/)
+  assert.match(playwrightSource, /hasFirstBank/)
+  // Web has no WebView: native-boundary fixtures are allowed; UI clicks must still exercise service/DB.
+  assert.match(createPageSource, /setBankSyncServiceDependenciesForTest/)
+  assert.match(createPageSource, /exchangeBankAuth:\s*async/)
+  assert.match(createPageSource, /syncBankTransactions:\s*async/)
+  assert.match(createPageSource, /data-testid="bank-sync-account-mapping"/)
+  assert.match(connectionPageSource, /data-testid="bank-sync-sync-now"/)
+  assert.match(connectionPageSource, /data-testid="bank-sync-review-import"/)
+})
