@@ -1,6 +1,8 @@
 # Pending Release Notes
 
 - 華南銀行同步 H2 凍合約：明細入口改 `InqMain`／「明細」、表單用 `#acct1`+`inqtype`+民國年 select、`doSubmit()`；超過 3 個月自動切窗；跨 frame 解析交易表並略過表單控制表。
+- Error Log 必帶 error code：本機 buffer／上傳 payload 經 `resolveErrorLogCode`（顯式碼 → taxonomy → 來源 fallback）保證非空；Debug 頁一律顯示錯誤碼；後端 `/api/client-logs` 缺碼預設 `unknown_error`。
+
 ---
 
 ## v1.4.15

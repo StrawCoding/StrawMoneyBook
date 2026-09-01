@@ -12,6 +12,7 @@ import {
   resetErrorLogServiceDependenciesForTest,
   setErrorLogServiceDependenciesForTest,
   flushErrorLogUploadQueue,
+  resolveErrorLogCode,
 } from '../src/ui/services/error-log.service.js'
 
 afterEach(() => {
@@ -77,9 +78,72 @@ test('logToastError appends error entry accessible via getErrorLogSnapshot', () 
   assert.equal(snapshot.length, 1)
   assert.equal(snapshot[0].source, 'toast')
   assert.equal(snapshot[0].message, '網路連線失敗')
+  assert.equal(snapshot[0].code, 'toast_error')
   assert.equal(snapshot[0].routePath, '/settings/auto-backup')
   assert.ok(snapshot[0].loggedAt)
   assert.ok(snapshot[0].id.startsWith('error_log_'))
+})
+
+test('logToastError accepts an explicit error code', () => {
+  logToastError('銀行同步失敗', '/settings/bank-sync', 'bank_sync_login_failed')
+  const snapshot = getErrorLogSnapshot()
+  assert.equal(snapshot.length, 1)
+  assert.equal(snapshot[0].code, 'bank_sync_login_failed')
+})
+
+test('logClientError always uploads a non-empty error code', async () => {
+  const uploads = []
+  setErrorLogServiceDependenciesForTest({
+    uploadClientErrorLog: async (payload) => {
+      uploads.push(payload)
+      return { ok: true }
+    },
+  })
+
+  await logClientError(new Error('component render failed'), {
+    source: 'vue',
+    component: 'HomeView',
+    routePath: '/',
+  })
+
+  assert.equal(uploads.length, 1)
+  assert.equal(uploads[0].code, 'vue_error')
+  const snapshot = getErrorLogSnapshot()
+  assert.equal(snapshot[0].code, 'vue_error')
+})
+
+test('logClientError prefers explicit error.code over source fallback', async () => {
+  const uploads = []
+  setErrorLogServiceDependenciesForTest({
+    uploadClientErrorLog: async (payload) => {
+      uploads.push(payload)
+      return { ok: true }
+    },
+  })
+
+  const error = new Error('bank sync failed')
+  error.code = 'bank_sync_login_failed'
+  await logClientError(error, { source: 'vue', routePath: '/settings/bank-sync' })
+
+  assert.equal(uploads.length, 1)
+  assert.equal(uploads[0].code, 'bank_sync_login_failed')
+  assert.equal(getErrorLogSnapshot()[0].code, 'bank_sync_login_failed')
+})
+
+test('resolveErrorLogCode falls back by source when taxonomy is unknown', () => {
+  assert.equal(resolveErrorLogCode(new Error('x'), { source: 'window' }), 'window_error')
+  assert.equal(resolveErrorLogCode(new Error('x'), { source: 'promise' }), 'unhandled_rejection')
+  assert.equal(resolveErrorLogCode(new Error('x'), { source: 'longtask' }), 'longtask')
+  assert.equal(resolveErrorLogCode(new Error('x'), { source: 'other' }), 'unknown_error')
+})
+
+test('debug page always renders error log code field', () => {
+  const debugPageSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/views/settings/SettingsDeveloperDebugPage.vue'),
+    'utf8',
+  )
+  assert.match(debugPageSource, /play_call_error_code.*item\.code/)
+  assert.doesNotMatch(debugPageSource, /v-if="item\.code".*play_call_error_code|play_call_error_code.*v-if="item\.code"/s)
 })
 
 test('logClientError appends vue error entry to in-memory buffer', async () => {
@@ -92,6 +156,7 @@ test('logClientError appends vue error entry to in-memory buffer', async () => {
   assert.equal(snapshot.length, 1)
   assert.equal(snapshot[0].source, 'vue')
   assert.equal(snapshot[0].message, 'component render failed')
+  assert.equal(snapshot[0].code, 'vue_error')
   assert.equal(snapshot[0].component, 'HomeView')
   assert.equal(snapshot[0].routePath, '/')
 })

@@ -375,7 +375,7 @@ UI 服務目錄：`src/ui/services/`
 | `i18n.service.js` | 多語系文案管理 |
 | `setup-flow.service.js` | 是否顯示 Welcome / setup 流程判定 |
 | `post-setup-intro.service.js` | 設定完成後導覽旗標管理 |
-| `error-log.service.js` | 前端錯誤去重、失敗上報佇列（localStorage）、longtask 觀察與全域安裝；敏感欄位／email 脫敏 |
+| `error-log.service.js` | 前端錯誤去重、失敗上報佇列（localStorage）、longtask 觀察與全域安裝；敏感欄位／email 脫敏；`resolveErrorLogCode` 保證每筆 Error Log 非空 error code（顯式碼 → `classifyAppError` → 來源 fallback） |
 | `app-url-route.js` | App URL / invite code 解析與導向 |
 | `route-scroll.service.js` | Router scroll restore 延後執行 |
 
@@ -1011,7 +1011,7 @@ UI composable 目錄：`src/ui/composables/`
 - 變數（13）：`bankSyncCalls`, `einvoiceCalls`, `errorLogs`, `loading`, `playCalls`, `playSupported`, `snapshot`, `txFailures`, `unsubscribe`, `unsubscribeBankSyncTrace`, `unsubscribeEInvoiceTrace`, `unsubscribeErrorLog`, `unsubscribePlayTrace`, `unsubscribeTxFailureTrace`
 - 類別（0）：無
 - **SMB-172**：新增載具（電子發票）抓取紀錄區塊；使用 `einvoice-debug.service.js` 追蹤 `scrape` 和 `import` 兩種操作，顯示手機號碼（末4位遮蔽）、查詢日期區間、狀態、抓取/匯入/跳過/失敗筆數、錯誤訊息；export payload 也一併包含 `einvoice_calls`
-- **SMB-220**：新增 Error Log 紀錄區塊；使用 `error-log.service.js` 的 `subscribeErrorLog` 即時顯示 Vue 元件錯誤、window 錯誤、unhandled rejection 與 toast 彈窗錯誤（最多 100 筆）；export payload 包含 `error_logs`
+- **SMB-220**：新增 Error Log 紀錄區塊；使用 `error-log.service.js` 的 `subscribeErrorLog` 即時顯示 Vue 元件錯誤、window 錯誤、unhandled rejection 與 toast 彈窗錯誤（最多 100 筆）；export payload 包含 `error_logs`；後續強化為每筆必帶非空 `code`（Debug 一律顯示；後端缺碼預設 `unknown_error`）
 
 ### `src/ui/views/settings/SettingsLanguagePage.vue`
 - 函數（1）：`pickLanguage`

@@ -48,11 +48,12 @@ export default async function clientLogsHandler(req, res) {
     }
 
     const user = await getOptionalAuthenticatedUser(req)
+    const code = normalizeText(body.code) || 'unknown_error'
     const saved = await writeClientErrorLog({
       userId: normalizeText(user?.id),
       userEmail: normalizeText(user?.email ?? user?.account),
       level: 'error',
-      code: normalizeText(body.code),
+      code,
       message: redactPiiText(message),
       stack: redactPiiText(String(body.stack ?? '')),
       routePath: normalizeText(body.routePath),

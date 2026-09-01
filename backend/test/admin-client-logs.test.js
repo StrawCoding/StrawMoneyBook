@@ -203,6 +203,34 @@ test('client error logs redact emails and secrets from stack and debug', async (
   assert.match(String(saved.context?.debug?.note ?? ''), /\[redacted-email\]/)
 })
 
+test('client error logs default missing code to unknown_error', async () => {
+  const member = await createUser('nocode-member@example.com')
+  const memberSession = await createSession(member)
+  const logReq = {
+    method: 'POST',
+    url: '/api/client-logs',
+    headers: {
+      host: 'localhost',
+      authorization: `Bearer ${memberSession.accessToken}`,
+    },
+    body: JSON.stringify({
+      message: 'legacy client without code',
+      routePath: '/home',
+      platform: 'web',
+      context: { source: 'window' },
+    }),
+  }
+  const logRes = createMockResponse(logReq)
+  await clientLogsHandler(logReq, logRes)
+  assert.equal(logRes.statusCode, 201)
+
+  const { listClientErrorLogs } = await import('../src/collab/admin-store.js')
+  const logs = await listClientErrorLogs({ limit: 10 })
+  const saved = logs.find((item) => item.message === 'legacy client without code')
+  assert.ok(saved)
+  assert.equal(saved.code, 'unknown_error')
+})
+
 test('admin can update membership and delete users while non-admin cannot access admin api', async () => {
   const admin = await createUser('admin2@example.com', { member: true })
   const user = await createUser('member2@example.com')

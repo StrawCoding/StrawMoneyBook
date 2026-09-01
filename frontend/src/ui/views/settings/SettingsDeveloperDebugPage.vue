@@ -167,7 +167,7 @@
           </div>
           <div class="trace-item-body">
             <small class="muted">{{ t('debug_page.key.error_log_time') }}: {{ item.loggedAt || '-' }}</small>
-            <small v-if="item.code" class="muted">{{ t('debug_page.key.play_call_error_code') }}: {{ item.code }}</small>
+            <small class="muted">{{ t('debug_page.key.play_call_error_code') }}: {{ item.code || '-' }}</small>
             <small v-if="item.routePath" class="muted">{{ t('debug_page.key.error_log_route') }}: {{ item.routePath }}</small>
             <small v-if="item.component" class="muted">{{ t('debug_page.key.error_log_component') }}: {{ item.component }}</small>
           </div>

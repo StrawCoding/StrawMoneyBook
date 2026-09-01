@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core'
+import { APP_ERROR_KIND, classifyAppError } from '@/core/domain/errors.js'
 
 async function defaultUploadClientErrorLog(...args) {
   const mod = await import('../../services/shared-ledger/backend.js')
@@ -6,9 +7,40 @@ async function defaultUploadClientErrorLog(...args) {
 }
 
 const ERROR_LOG_MAX_ENTRIES = 100
+const SOURCE_FALLBACK_CODES = Object.freeze({
+  toast: 'toast_error',
+  vue: 'vue_error',
+  window: 'window_error',
+  promise: 'unhandled_rejection',
+  longtask: 'longtask',
+})
 const errorLogListeners = new Set()
 let errorLogSeq = 0
 let errorLogEntries = []
+
+function normalizeErrorLogText(value) {
+  return String(value ?? '').trim()
+}
+
+/**
+ * Guarantee every Error Log entry has a non-empty machine-readable code.
+ * Prefer explicit codes, then non-unknown app taxonomy, then source fallbacks.
+ */
+export function resolveErrorLogCode(error, context = {}) {
+  const explicit = normalizeErrorLogText(error?.code) || normalizeErrorLogText(error?.appErrorCode)
+  if (explicit) return explicit
+
+  const classified = classifyAppError(error)
+  const classifiedCode = normalizeErrorLogText(classified?.code)
+  if (classified?.kind && classified.kind !== APP_ERROR_KIND.UNKNOWN && classifiedCode) {
+    return classifiedCode
+  }
+
+  const source = normalizeErrorLogText(context?.source).toLowerCase()
+  if (SOURCE_FALLBACK_CODES[source]) return SOURCE_FALLBACK_CODES[source]
+
+  return classifiedCode && classifiedCode !== 'Error' ? classifiedCode : 'unknown_error'
+}
 
 function cloneErrorLogEntry(entry) {
   if (!entry || typeof entry !== 'object') return null
@@ -51,7 +83,7 @@ function appendErrorLog(error, context = {}) {
     id: `error_log_${nowMs}_${errorLogSeq++}`,
     source: String(context.source ?? ''),
     message: String(error?.message ?? error ?? ''),
-    code: String(error?.code ?? ''),
+    code: resolveErrorLogCode(error, context),
     stack: String(error?.stack ?? ''),
     routePath: String(context.routePath ?? ''),
     component: String(context.component ?? ''),
@@ -63,8 +95,30 @@ function appendErrorLog(error, context = {}) {
   notifyErrorLogListeners()
 }
 
-export function logToastError(message, routePath = '') {
-  appendErrorLog({ message: String(message ?? '') }, { source: 'toast', routePath })
+/**
+ * @param {string} message
+ * @param {string} [routePathOrOptions]
+ * @param {string|{ code?: string, routePath?: string }} [codeOrOptions]
+ */
+export function logToastError(message, routePathOrOptions = '', codeOrOptions = '') {
+  let routePath = ''
+  let code = ''
+  if (routePathOrOptions && typeof routePathOrOptions === 'object') {
+    routePath = normalizeErrorLogText(routePathOrOptions.routePath)
+    code = normalizeErrorLogText(routePathOrOptions.code)
+  } else {
+    routePath = normalizeErrorLogText(routePathOrOptions)
+  }
+  if (codeOrOptions && typeof codeOrOptions === 'object') {
+    code = normalizeErrorLogText(codeOrOptions.code) || code
+    routePath = normalizeErrorLogText(codeOrOptions.routePath) || routePath
+  } else if (codeOrOptions) {
+    code = normalizeErrorLogText(codeOrOptions) || code
+  }
+  appendErrorLog(
+    { message: String(message ?? ''), code },
+    { source: 'toast', routePath },
+  )
 }
 
 export function getErrorLogSnapshot() {
@@ -247,7 +301,7 @@ function buildPayload(error, context = {}) {
   const normalizedError = toError(error)
   const debug = sanitizeDebugValue(context.debug)
   return {
-    code: normalizeText(normalizedError.code),
+    code: resolveErrorLogCode(normalizedError, context),
     message: redactPiiText(normalizeText(normalizedError.message)),
     stack: redactPiiText(String(normalizedError.stack ?? '')),
     routePath: normalizeText(context.routePath || (typeof window !== 'undefined' ? window.location?.pathname : '')),
