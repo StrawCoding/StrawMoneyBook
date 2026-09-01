@@ -12,7 +12,7 @@
 | 6 provider-agnostic Runtime + `providers/huanan` 分包 | DONE（smb306：`BankAutomationRuntime` Phase 狀態機；禁第一銀行實作） |
 | 7 遠端 provider tombstone | DONE |
 | 8 錯誤／UX Playwright | 設定頁 suite 有；**已納入 CI**（正式 connect→map→sync→import service 路徑） |
-| 9 華南 H1/H2 | **PARTIAL：H1 改結構錨點；H2 真機交易查詢仍未凍結** |
+| 9 華南 H1/H2 | **H2 表單合約已凍（2026-09-01）：`InqMain`／「明細」、`#acct1`、`inqtype`+民國年 `S_`/`E_` select、`doSubmit()`；結果表欄位仍以真機 ≥1 筆 trace 補強，解析失敗仍誠實 partial** |
 | 10 刪 dual-write alias | PARTIAL |
 
 合約：watermark = `coveredThrough`（不是 finish wall-clock）；`providerTransactionId` 方案版本化；dual-key 優先 `lastSyncAt` > `last_sync_at`。
@@ -23,11 +23,17 @@
 
 ### 華南 H1/H2
 
-H0 只凍登入頁。H1＝帳戶列表結構、H2＝至少一筆交易 DOM／JSON。沒有真實登入證據前，禁止把 heuristic 寫成已凍合約。Phase 9 維持 **PARTIAL**。
+H0 只凍登入頁。H1＝帳戶列表結構。H2 查詢**表單**已依 2026-09-01 真實 DOM 凍結：
 
-失敗碼：`hua_nan_account_list_not_found`＝尚未通過 H1；`hua_nan_transaction_query_failed` / `hua_nan_transaction_page_timeout`＝尚未通過 H2（入口找不到、查詢頁沒 ready、或點查詢後 12 秒無 table／空資料文案）。**這些碼不是登入失敗，不得當成重新連結。** Phase A 只做去識別化 `h1_probe` / `h2_probe` + hncb observe-only intercept（含 GET 也不 replay），**不宣稱已修好查詢失敗。**
+- 入口：`a[href*="trx=com.lb.wibc.trx.InqMain"]`（`acct=` 對帳號）或文字精確「明細」；必要時先「帳務查詢」`InqAcctParent`
+- 表單：`#acct1`、`inqtype`（1=今日／3=自訂）、`S_Year`/`S_Month`/`S_Date`、`E_*`（年 option value＝民國碼 `year-1911` 四位，如 2026→`0115`）、`ApplyType=0`、`doSubmit()`／`a[href*="doSubmit"]`
+- 單次自訂區間 ≤3 個月；超過則切窗合併
+- 結果：跨 frame 掃交易 table（略過表單控制表）；無列且非「查無資料」→ `hua_nan_transaction_query_partial`
+- Network：仍 observe-only，**不** replay POST／GET
 
-證據模板：[`docs/audits/bank-sync-20260816/hua-nan-h1h2-evidence-template.md`](../audits/bank-sync-20260816/hua-nan-h1h2-evidence-template.md)。每一項都要有真機 trace 欄位，不能只靠 JVM。
+失敗碼：`hua_nan_account_list_not_found`＝尚未通過 H1；`hua_nan_transaction_query_failed` / `hua_nan_transaction_page_timeout`＝入口／ready／查詢逾時。**這些碼不是登入失敗，不得當成重新連結。**
+
+證據模板：[`docs/audits/bank-sync-20260816/hua-nan-h1h2-evidence-template.md`](../audits/bank-sync-20260816/hua-nan-h1h2-evidence-template.md)。結果表 header／欄位對應仍建議補真機 ≥1 筆 trace。
 
 H1 帳戶列表（缺一項不得標 H1 DONE）：
 
@@ -37,15 +43,14 @@ H1 帳戶列表（缺一項不得標 H1 DONE）：
 - 帳號識別怎麼來（欄位名，不是掃頁面任意 8–16 位數字）
 - 幣別／多帳戶列如何對應 `providerAccountId`
 
-H2 交易查詢（缺一項不得標 H2 DONE）：
+H2 交易查詢（表單已凍；結果列映射持續補強）：
 
-- 從帳戶列進「明細」的穩定入口（function / href / `trx=`），不是只匹配「交易明細」文字
-- 查詢表單：起迄日 `name/id`、送出按鈕、日期格式、最大視窗
-- 結果：HTML table 的 header／`id/class`，**或** JSON／XHR 的 method + path pattern
-- 空資料文案（「查無資料」是否真的出現在 `document.body`，還是只在 iframe／alert）
-- 至少 **一筆** 真實交易的欄位對應：日期、金額、摘要、portal ref／序號；identity 優先 `huanan:portal-ref:v1`，禁止把餘額寫進 hash
-- Network：GET vs POST 次數；**POST 永不 replay**；Phase A 連 GET 也不 replay，直到有 allowlist
-- 查詢是否需要 OTP／SSL／BHO（H0 標 NOT VERIFIED）；若需要則能力改 `USER_INTERACTION_REQUIRED`，不能假裝 silent sync
+- 穩定入口：`InqMain` + `acct=`（非只匹配「交易明細」長文案）
+- 查詢表單：`inqtype` + 民國年 select、`doSubmit`、最大視窗 3 個月
+- 結果：HTML table 跨 frame；空資料「查無資料」
+- 至少 **一筆** 真實交易欄位對應：日期、金額、摘要、portal ref；identity 優先 `huanan:portal-ref:v1`，禁止餘額進 hash
+- Network：POST 永不 replay；GET 仍 observe-only 直到 allowlist
+- OTP／SSL／BHO 若需要 → `USER_INTERACTION_REQUIRED`
 
 ## Android-only
 

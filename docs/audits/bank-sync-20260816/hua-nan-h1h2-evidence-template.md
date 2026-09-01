@@ -21,13 +21,15 @@ Date：
 
 | Gate | Trace field | Value (redacted) | Pass? |
 |------|-------------|------------------|-------|
-| Stable inquiry entry (function/href/trx, not 交易明細 text-only) | `inquiryMatch` / `hrefPattern` | | |
-| Date form name/id, submit, date format, max window | `dateFields` / `queryButtonFound` | | |
+| Stable inquiry entry (`InqMain`/`明細`, not 交易明細 text-only) | `inquiryMatch`=`inq_main_href`\|`mingxi_text`\|`inq_acct_parent` / `hrefPattern` | | |
+| Date form: `#acct1`, `inqtype`, `S_`/`E_` year(ROC)/month/day, `doSubmit` | `dateFields` / `queryButtonFound` / `hasH2FormAnchors` | | |
 | Result table header/id **or** JSON method+path | `tableHeaders` / intercept `pathSamples` | | |
 | Empty-data copy in body vs iframe vs alert | `hasEmptyText` / `emptyInIframe` | | |
 | ≥1 real txn field map (date/amount/summary/ref); no balance in identity | manual after success | | |
 | GET vs POST counts; POST never replayed | `getCount` / `postCount` / `skipReason` | | |
 | OTP / SSL / BHO required for inquiry? | note (NOT VERIFIED until seen) | | |
 
-`inquiryMatch`: `account_row` | `any_text` | `none`.  
-`reason` on failure: `inquiry_not_found` | `page_not_ready` | `query_timeout`.
+`inquiryMatch`: `inq_main_href` | `mingxi_text` | `inq_acct_parent` | `already_on_form` | `none`（legacy `account_row`/`any_text` retired）.  
+`reason` on failure: `inquiry_not_found` | `page_not_ready` | `query_timeout` | `missing_h2_anchors`.
+
+Frozen form notes (2026-09-01): ROC year option value = `String.format("%04d", year - 1911)` (2026→`0115`); submit via `doSubmit()`; custom range ≤3 months (`MAX_INQUIRY_MONTHS`).

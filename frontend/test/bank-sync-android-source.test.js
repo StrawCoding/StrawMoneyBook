@@ -102,6 +102,26 @@ test('hua nan intercept observe-only — POST never replay', () => {
   assert.match(huaNanBankAutomationSource, /observe_only_no_replay/)
 })
 
+test('hua nan H2 inquiry uses frozen InqMain form anchors not text heuristics alone', () => {
+  assert.match(huaNanBankAutomationSource, /com\.lb\.wibc\.trx\.InqMain/)
+  assert.match(huaNanBankAutomationSource, /inq_main_href/)
+  assert.match(huaNanBankAutomationSource, /mingxi_text/)
+  assert.match(huaNanBankAutomationSource, /inq_acct_parent/)
+  assert.match(huaNanBankAutomationSource, /select\[name="S_Year"\]/)
+  assert.match(huaNanBankAutomationSource, /toRocYearCode/)
+  assert.match(huaNanBankAutomationSource, /splitInquiryWindows/)
+  assert.match(huaNanBankAutomationSource, /MAX_INQUIRY_MONTHS = 3/)
+  assert.match(huaNanBankAutomationSource, /doSubmit/)
+  assert.match(huaNanBankAutomationSource, /hasH2FormAnchors/)
+  assert.match(huaNanBankAutomationSource, /isFormControlTable/)
+  assert.match(huaNanBankAutomationSource, /#acct1/)
+  // Legacy long-label-only entry must not be the primary path
+  assert.doesNotMatch(
+    huaNanBankAutomationSource,
+    /return accountHit && \/交易明細\|帳戶明細\|明細查詢\|近期交易/,
+  )
+})
+
 test('bank automation plugin exposes captcha submit and abort actions', () => {
   const pluginSource = read(
     'android/app/src/main/java/com/strawcoding/strawmoneybook/BankAutomationPlugin.java',

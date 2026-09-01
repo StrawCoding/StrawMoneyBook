@@ -54,9 +54,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Hua Nan Bank (華南銀行) personal netbank automation.
- * H0 = login page contract (done). H1/H2 = post-login account list + ≥1 txn DOM/JSON
- * must be frozen from a real device session — current post-login path is heuristic only.
- * Until H1 evidence exists, missing account list → hua_nan_account_list_not_found (not a frozen selector).
+ * H0 = login page contract (done). H1 = structural account list.
+ * H2 inquiry form frozen from live portal DOM (2026-09-01):
+ * entry {@code trx=com.lb.wibc.trx.InqMain} / label「明細」, form {@code #acct1} + {@code inqtype}
+ * + ROC year selects {@code S_Year}/{@code E_Year}, submit {@code doSubmit()}.
  * Phase A records masked h1_probe / h2_probe + observe-only hncb intercept (never replay).
  * See docs/wiki/Sync-Architecture-B.md.
  */
@@ -68,6 +69,8 @@ public final class HuaNanBankAutomation {
         "https://netbank.hncb.com.tw/netbank/servlet/TrxDispatcher?Recognition=private&state=prompt&target=InsAnTr&trx=com.lb.wibc.trx.Login";
     private static final String CAPTCHA_ABS_URL =
         "https://netbank.hncb.com.tw/netbank/pages/jsp/html/CaptchaImage_2.jsp";
+    /** Portal: single custom-range inquiry limited to 3 months. */
+    static final int MAX_INQUIRY_MONTHS = 3;
     private static final int CAPTCHA_MAX_ATTEMPTS = 5;
     private static final int CAPTCHA_EXPECTED_LENGTH = 4;
     private static final long CAPTCHA_READY_TIMEOUT_MS = 12_000L;
@@ -92,6 +95,7 @@ public final class HuaNanBankAutomation {
         "hasDateInput",
         "dateFields",
         "queryButtonFound",
+        "hasH2FormAnchors",
         "hasEmptyText"
     };
 
@@ -255,28 +259,73 @@ public final class HuaNanBankAutomation {
                     cursor,
                     lookbackDays
                 );
-                String startText = startDate.format(DATE_FORMAT);
+                List<LocalDate[]> inquiryWindows = splitInquiryWindows(startDate, endDate);
                 int accountRowCount = 0;
                 try {
                     boolean retryAccount = true;
                     while (retryAccount) {
                         retryAccount = false;
-                        JSONObject loadDetails = new JSONObject();
-                        loadDetails.put("accountMask", maskAccountId(accountId));
-                        loadDetails.put("windowStart", startText);
-                        loadDetails.put("windowEnd", endText);
-                        debugTrace.record("load_transaction_page", "running", "Opening transaction inquiry", loadDetails);
+                        accountRowCount = 0;
+                        JSONObject lastPostQueryProbe = null;
+                        for (LocalDate[] window : inquiryWindows) {
+                            ensureNotAborted(runtime);
+                            String windowStartText = window[0].format(DATE_FORMAT);
+                            String windowEndText = window[1].format(DATE_FORMAT);
+                            JSONObject loadDetails = new JSONObject();
+                            loadDetails.put("accountMask", maskAccountId(accountId));
+                            loadDetails.put("windowStart", windowStartText);
+                            loadDetails.put("windowEnd", windowEndText);
+                            loadDetails.put("windowCount", inquiryWindows.size());
+                            debugTrace.record("load_transaction_page", "running", "Opening transaction inquiry", loadDetails);
 
-                        if (!openTransactionInquiry(session, debugTrace, accountId, startText, endText)) {
+                            if (!openTransactionInquiry(session, debugTrace, accountId, windowStartText, windowEndText)) {
+                                if (session.isLoginPage()) {
+                                    if (reloginAttempted) {
+                                        runtime.markFailed("hua_nan_session_expired", "Hua Nan session expired and silent relogin failed");
+                                        throw new BankAutomationException(
+                                            "hua_nan_session_expired",
+                                            "Hua Nan session expired and silent relogin failed"
+                                        );
+                                    }
+                                    debugTrace.record("silent_relogin", "running", "Session expired; retrying login");
+                                    performLogin(
+                                        activity,
+                                        session,
+                                        debugTrace,
+                                        runtime,
+                                        state.optString("nationalId"),
+                                        state.optString("userCode"),
+                                        state.optString("password"),
+                                        ""
+                                    );
+                                    runtime.enter(BankAutomationRuntime.Phase.SYNCING_TRANSACTIONS);
+                                    reloginAttempted = true;
+                                    retryAccount = true;
+                                    break;
+                                }
+                                JSONObject missProbe = captureStructuralProbe(session, "h2");
+                                mergeInterceptSnapshot(missProbe, session.interceptSnapshot());
+                                missProbe.put("inquiryMatch", "none");
+                                missProbe.put("reason", "inquiry_not_found");
+                                missProbe.put("accountMask", maskAccountId(accountId));
+                                debugTrace.record("h2_probe", "error", "Transaction inquiry entry was not found", missProbe);
+                                throw queryFailure(
+                                    "hua_nan_transaction_query_failed",
+                                    "Hua Nan transaction inquiry was not found for account " + maskAccountId(accountId),
+                                    "inquiry_not_found",
+                                    missProbe
+                                );
+                            }
+
                             if (session.isLoginPage()) {
                                 if (reloginAttempted) {
-                                    runtime.markFailed("hua_nan_session_expired", "Hua Nan session expired and silent relogin failed");
+                                    runtime.markFailed("hua_nan_session_expired", "Hua Nan session expired during transaction sync");
                                     throw new BankAutomationException(
                                         "hua_nan_session_expired",
-                                        "Hua Nan session expired and silent relogin failed"
+                                        "Hua Nan session expired during transaction sync"
                                     );
                                 }
-                                debugTrace.record("silent_relogin", "running", "Session expired; retrying login");
+                                debugTrace.record("silent_relogin", "running", "Session expired during transaction query");
                                 performLogin(
                                     activity,
                                     session,
@@ -290,67 +339,33 @@ public final class HuaNanBankAutomation {
                                 runtime.enter(BankAutomationRuntime.Phase.SYNCING_TRANSACTIONS);
                                 reloginAttempted = true;
                                 retryAccount = true;
-                                continue;
+                                break;
                             }
-                            JSONObject missProbe = captureStructuralProbe(session, "h2");
-                            mergeInterceptSnapshot(missProbe, session.interceptSnapshot());
-                            missProbe.put("inquiryMatch", "none");
-                            missProbe.put("reason", "inquiry_not_found");
-                            missProbe.put("accountMask", maskAccountId(accountId));
-                            debugTrace.record("h2_probe", "error", "Transaction inquiry entry was not found", missProbe);
-                            throw queryFailure(
-                                "hua_nan_transaction_query_failed",
-                                "Hua Nan transaction inquiry was not found for account " + maskAccountId(accountId),
-                                "inquiry_not_found",
-                                missProbe
-                            );
-                        }
 
-                        if (session.isLoginPage()) {
-                            if (reloginAttempted) {
-                                runtime.markFailed("hua_nan_session_expired", "Hua Nan session expired during transaction sync");
-                                throw new BankAutomationException(
-                                    "hua_nan_session_expired",
-                                    "Hua Nan session expired during transaction sync"
-                                );
+                            JSONArray rows = parseTransactions(session, accountId, windowStartText, windowEndText);
+                            JSONObject postQueryProbe = captureStructuralProbe(session, "h2");
+                            mergeInterceptSnapshot(postQueryProbe, session.interceptSnapshot());
+                            lastPostQueryProbe = postQueryProbe;
+                            JSONObject parseDetails = new JSONObject(loadDetails.toString());
+                            parseDetails.put("rows", rows.length());
+                            parseDetails.put("hasDateInput", postQueryProbe.optBoolean("hasDateInput", false));
+                            parseDetails.put("queryButtonFound", postQueryProbe.optBoolean("queryButtonFound", false));
+                            parseDetails.put("hasH2FormAnchors", postQueryProbe.optBoolean("hasH2FormAnchors", false));
+                            parseDetails.put("hasEmptyText", postQueryProbe.optBoolean("hasEmptyText", false));
+                            debugTrace.record("parse_transactions", "ok", "Parsed transaction rows", parseDetails);
+                            for (int rowIndex = 0; rowIndex < rows.length(); rowIndex += 1) {
+                                added.put(rows.getJSONObject(rowIndex));
+                                accountRowCount += 1;
                             }
-                            debugTrace.record("silent_relogin", "running", "Session expired during transaction query");
-                            performLogin(
-                                activity,
-                                session,
-                                debugTrace,
-                                runtime,
-                                state.optString("nationalId"),
-                                state.optString("userCode"),
-                                state.optString("password"),
-                                ""
-                            );
-                            runtime.enter(BankAutomationRuntime.Phase.SYNCING_TRANSACTIONS);
-                            reloginAttempted = true;
-                            retryAccount = true;
-                            continue;
                         }
-
-                        JSONArray rows = parseTransactions(session, accountId, startText, endText);
-                        JSONObject postQueryProbe = captureStructuralProbe(session, "h2");
-                        mergeInterceptSnapshot(postQueryProbe, session.interceptSnapshot());
-                        JSONObject parseDetails = new JSONObject(loadDetails.toString());
-                        parseDetails.put("rows", rows.length());
-                        parseDetails.put("hasDateInput", postQueryProbe.optBoolean("hasDateInput", false));
-                        parseDetails.put("queryButtonFound", postQueryProbe.optBoolean("queryButtonFound", false));
-                        parseDetails.put("hasEmptyText", postQueryProbe.optBoolean("hasEmptyText", false));
-                        debugTrace.record("parse_transactions", "ok", "Parsed transaction rows", parseDetails);
-                        for (int rowIndex = 0; rowIndex < rows.length(); rowIndex += 1) {
-                            added.put(rows.getJSONObject(rowIndex));
-                            accountRowCount += 1;
-                        }
+                        if (retryAccount) continue;
                         accountResults.put(buildAccountSyncResult(
                             debugTrace,
                             accountId,
                             endDate,
                             syncStartedDate,
                             accountRowCount,
-                            postQueryProbe
+                            lastPostQueryProbe
                         ));
                     }
                 } catch (BankAutomationException accountError) {
@@ -487,15 +502,13 @@ public final class HuaNanBankAutomation {
         int accountRowCount,
         JSONObject postQueryProbe
     ) throws Exception {
-        boolean hasStructuralAnchors = postQueryProbe != null && (
-            postQueryProbe.optBoolean("hasDateInput", false)
-                || postQueryProbe.optBoolean("queryButtonFound", false)
-        );
+        boolean hasStructuralAnchors = hasH2InquiryAnchors(postQueryProbe);
         boolean explicitEmpty = postQueryProbe != null && (
             postQueryProbe.optBoolean("hasEmptyText", false)
                 || postQueryProbe.optBoolean("emptyInIframe", false)
         );
-        if (accountRowCount > 0 && hasStructuralAnchors) {
+        // Verifiable parsed rows are enough even on the result page (form anchors may be gone).
+        if (accountRowCount > 0) {
             return BankAutomationSyncContract.accountResultOk(
                 accountId,
                 BankAutomationSyncContract.coveredThroughIsoDate(endDate, syncStartedDate),
@@ -523,6 +536,50 @@ public final class HuaNanBankAutomation {
             "Hua Nan transaction query did not yield verifiable rows for account " + maskAccountId(accountId),
             accountRowCount
         );
+    }
+
+    /** True when probe reflects frozen H2 form/result anchors (not legacy date-input heuristics alone). */
+    static boolean hasH2InquiryAnchors(JSONObject probe) {
+        if (probe == null) return false;
+        if (probe.optBoolean("hasH2FormAnchors", false)) return true;
+        if (probe.optBoolean("hasDateInput", false)) return true;
+        if (probe.optBoolean("queryButtonFound", false)) return true;
+        if (probe.optBoolean("hasEmptyText", false) || probe.optBoolean("emptyInIframe", false)) return true;
+        return false;
+    }
+
+    /**
+     * Portal custom range is limited to 3 months per submit. Split inclusive [start, end].
+     */
+    static List<LocalDate[]> splitInquiryWindows(LocalDate start, LocalDate end) {
+        List<LocalDate[]> windows = new ArrayList<>();
+        if (start == null || end == null) return windows;
+        LocalDate from = start;
+        LocalDate to = end;
+        if (from.isAfter(to)) {
+            LocalDate swap = from;
+            from = to;
+            to = swap;
+        }
+        while (!from.isAfter(to)) {
+            LocalDate windowEnd = from.plusMonths(MAX_INQUIRY_MONTHS).minusDays(1);
+            if (windowEnd.isAfter(to)) windowEnd = to;
+            windows.add(new LocalDate[] { from, windowEnd });
+            from = windowEnd.plusDays(1);
+        }
+        return windows;
+    }
+
+    /** ROC year option value used by Hua Nan selects (2026 → {@code 0115}). */
+    static String toRocYearCode(int westernYear) {
+        int roc = westernYear - 1911;
+        if (roc < 0) roc = 0;
+        return String.format(Locale.US, "%04d", roc);
+    }
+
+    static String toRocYearCode(LocalDate date) {
+        if (date == null) return "";
+        return toRocYearCode(date.getYear());
     }
 
     private static void performLogin(
@@ -864,9 +921,23 @@ public final class HuaNanBankAutomation {
         String endDate
     ) throws Exception {
         debugTrace.record("h2_probe", "running", "Capturing masked transaction inquiry structure");
+        LocalDate startLocal = parseDate(startDate);
+        LocalDate endLocal = parseDate(endDate);
+        LocalDate today = LocalDate.now(TAIPEI_ZONE);
+        boolean todayOnly = startLocal != null && endLocal != null
+            && startLocal.equals(endLocal)
+            && startLocal.equals(today);
+        String startRocYear = toRocYearCode(startLocal);
+        String endRocYear = toRocYearCode(endLocal);
+        int startMonth = startLocal == null ? 1 : startLocal.getMonthValue();
+        int startDay = startLocal == null ? 1 : startLocal.getDayOfMonth();
+        int endMonth = endLocal == null ? 1 : endLocal.getMonthValue();
+        int endDay = endLocal == null ? 1 : endLocal.getDayOfMonth();
+
         Object opened = session.evaluateJavaScript(String.format(Locale.US, """
             (() => {
               const accountId = %s;
+              const targetDigits = String(accountId || '').replace(/\\D+/g, '');
               function text(value) { return String(value ?? '').trim(); }
               function digits(value) { return text(value).replace(/\\D+/g, ''); }
               function maskHref(value) {
@@ -894,65 +965,153 @@ public final class HuaNanBankAutomation {
                 }
                 return false;
               }
+              function hrefOf(node) {
+                return text(node.getAttribute('href') || node.getAttribute('onclick') || '');
+              }
+              function isInquiryForm(doc) {
+                if (!doc) return false;
+                const hasAcct = Boolean(doc.querySelector('#acct1, select[name="acct1"]'));
+                const hasYear = Boolean(doc.querySelector('select[name="S_Year"], select[name="E_Year"]'));
+                const hasSubmit = Boolean(doc.querySelector('a[href*="doSubmit"]'))
+                  || (typeof doc.defaultView !== 'undefined' && typeof doc.defaultView.doSubmit === 'function')
+                  || (typeof window.doSubmit === 'function');
+                const titleHit = /帳戶明細/.test(text(doc.body && doc.body.innerText));
+                return (hasAcct && (hasYear || hasSubmit)) || (hasAcct && titleHit);
+              }
               for (const doc of collectDocs()) {
-                const candidates = Array.from(doc.querySelectorAll('a, button, input[type="button"], input[type="submit"], td, span'));
-                const inquiry = candidates.find((node) => {
-                  const label = text(node.textContent || node.value || node.getAttribute('title') || '');
-                  const href = text(node.getAttribute('href') || node.getAttribute('onclick') || '');
-                  const near = text(node.closest('tr')?.textContent || '');
-                  const accountHit = !accountId || near.includes(accountId) || digits(near).includes(digits(accountId))
-                    || href.includes(accountId) || digits(href).includes(digits(accountId));
-                  return accountHit && /交易明細|帳戶明細|明細查詢|近期交易|Transaction|Statement/i.test(label + ' ' + href);
+                if (isInquiryForm(doc)) {
+                  return { clicked: false, alreadyOnForm: true, match: 'already_on_form', hrefPattern: '' };
+                }
+              }
+              function findInqMain(doc) {
+                const links = Array.from(doc.querySelectorAll('a[href*="InqMain"], a[href*="inqMain"]'));
+                const preferred = links.find((node) => {
+                  const href = hrefOf(node);
+                  if (!/trx=com\\.lb\\.wibc\\.trx\\.InqMain/i.test(href)) return false;
+                  if (!targetDigits) return true;
+                  return digits(href).includes(targetDigits) || /acct=/i.test(href);
                 });
-                if (inquiry && clickNode(inquiry)) {
-                  return {
-                    clicked: true,
-                    match: 'account_row',
-                    hrefPattern: maskHref(inquiry.getAttribute('href') || inquiry.getAttribute('onclick') || '')
-                  };
+                if (preferred) return preferred;
+                return links.find((node) => /trx=com\\.lb\\.wibc\\.trx\\.InqMain/i.test(hrefOf(node))) || null;
+              }
+              function findMingxi(doc) {
+                return Array.from(doc.querySelectorAll('a')).find((node) => {
+                  const label = text(node.textContent || node.value || '');
+                  if (label !== '明細') return false;
+                  const href = hrefOf(node);
+                  if (!targetDigits) return true;
+                  return digits(href).includes(targetDigits) || digits(text(node.closest('tr')?.textContent || '')).includes(targetDigits);
+                }) || null;
+              }
+              function findInqAcctParent(doc) {
+                const byFn = Array.from(doc.querySelectorAll('a[href*="InqAcctParent"], a[onclick*="InqAcctParent"]'))
+                  .find(Boolean);
+                if (byFn) return byFn;
+                return Array.from(doc.querySelectorAll('a')).find((node) => text(node.textContent) === '帳務查詢') || null;
+              }
+              for (const doc of collectDocs()) {
+                const inq = findInqMain(doc);
+                if (inq && clickNode(inq)) {
+                  return { clicked: true, alreadyOnForm: false, match: 'inq_main_href', hrefPattern: maskHref(hrefOf(inq)) };
                 }
               }
               for (const doc of collectDocs()) {
-                const anyInquiry = Array.from(doc.querySelectorAll('a, button, input[type="button"], input[type="submit"]'))
-                  .find((node) => /交易明細|帳戶明細|明細查詢|近期交易/i.test(text(node.textContent || node.value || '')));
-                if (anyInquiry && clickNode(anyInquiry)) {
-                  return {
-                    clicked: true,
-                    match: 'any_text',
-                    hrefPattern: maskHref(anyInquiry.getAttribute('href') || anyInquiry.getAttribute('onclick') || '')
-                  };
+                const mingxi = findMingxi(doc);
+                if (mingxi && clickNode(mingxi)) {
+                  return { clicked: true, alreadyOnForm: false, match: 'mingxi_text', hrefPattern: maskHref(hrefOf(mingxi)) };
                 }
               }
-              return { clicked: false, match: 'none', hrefPattern: '' };
+              for (const doc of collectDocs()) {
+                const parent = findInqAcctParent(doc);
+                if (parent && clickNode(parent)) {
+                  return { clicked: true, alreadyOnForm: false, match: 'inq_acct_parent', hrefPattern: maskHref(hrefOf(parent)), needRetryInqMain: true };
+                }
+              }
+              return { clicked: false, alreadyOnForm: false, match: 'none', hrefPattern: '' };
             })();
             """, quoteJs(accountId)));
         JSONObject clickResult = asJsonObject(opened);
+        boolean alreadyOnForm = clickResult.optBoolean("alreadyOnForm", false);
         boolean clicked = clickResult.optBoolean("clicked", false);
-        if (!clicked) {
+        String inquiryMatch = clickResult.optString("match", "none");
+
+        if (clickResult.optBoolean("needRetryInqMain", false)) {
+            session.waitForCondition("""
+                (() => {
+                  try {
+                    const links = Array.from(document.querySelectorAll('a[href*="InqMain"]'));
+                    return links.some((a) => /trx=com\\.lb\\.wibc\\.trx\\.InqMain/i.test(String(a.getAttribute('href') || '')))
+                      || Array.from(document.querySelectorAll('a')).some((a) => String(a.textContent || '').trim() === '明細');
+                  } catch (_e) { return false; }
+                })();
+                """, 12_000L, 400L, "hua_nan_transaction_page_timeout", "Hua Nan account inquiry menu did not expose InqMain");
+            Object retry = session.evaluateJavaScript(String.format(Locale.US, """
+                (() => {
+                  const accountId = %s;
+                  const targetDigits = String(accountId || '').replace(/\\D+/g, '');
+                  function text(value) { return String(value ?? '').trim(); }
+                  function digits(value) { return text(value).replace(/\\D+/g, ''); }
+                  function maskHref(value) { return text(value).replace(/\\d{5,}/g, '****').slice(0, 180); }
+                  function hrefOf(node) { return text(node.getAttribute('href') || node.getAttribute('onclick') || ''); }
+                  const links = Array.from(document.querySelectorAll('a'));
+                  const inq = links.find((node) => {
+                    const href = hrefOf(node);
+                    if (!/trx=com\\.lb\\.wibc\\.trx\\.InqMain/i.test(href)) return false;
+                    if (!targetDigits) return true;
+                    return digits(href).includes(targetDigits);
+                  }) || links.find((node) => text(node.textContent) === '明細');
+                  if (inq && typeof inq.click === 'function') {
+                    inq.click();
+                    return { clicked: true, match: 'inq_main_href_after_parent', hrefPattern: maskHref(hrefOf(inq)) };
+                  }
+                  return { clicked: false, match: 'none', hrefPattern: '' };
+                })();
+                """, quoteJs(accountId)));
+            JSONObject retryResult = asJsonObject(retry);
+            if (!retryResult.optBoolean("clicked", false)) {
+                return false;
+            }
+            clicked = true;
+            inquiryMatch = retryResult.optString("match", "inq_main_href_after_parent");
+            clickResult.put("hrefPattern", retryResult.optString("hrefPattern", ""));
+        }
+
+        if (!alreadyOnForm && !clicked) {
             return false;
         }
 
         JSONObject h2Probe = captureStructuralProbe(session, "h2");
-        putJsonValue(h2Probe, "inquiryMatch", clickResult.optString("match", "unknown"));
+        putJsonValue(h2Probe, "inquiryMatch", inquiryMatch);
         putJsonValue(h2Probe, "hrefPattern", clickResult.optString("hrefPattern", ""));
         putJsonValue(h2Probe, "accountMask", maskAccountId(accountId));
         mergeInterceptSnapshot(h2Probe, session.interceptSnapshot());
-        debugTrace.record("h2_probe", "ok", "Inquiry entry clicked; recording page structure", h2Probe);
+        debugTrace.record("h2_probe", "ok", alreadyOnForm ? "Already on inquiry form" : "Inquiry entry clicked", h2Probe);
 
         try {
             session.waitForCondition("""
                 (() => {
-                  const text = String(document.body?.innerText ?? '');
-                  const hasTable = Boolean(document.querySelector('table'));
-                  const hasForm = Boolean(document.querySelector('input[type="date"], input[name*="Date"], input[id*="Date"], input[name*="date"], input[id*="date"]'));
-                  return hasTable || hasForm || /交易明細|帳戶明細|查無資料|沒有資料/i.test(text);
+                  function ready(doc) {
+                    if (!doc) return false;
+                    const text = String(doc.body?.innerText ?? '');
+                    const hasAcct = Boolean(doc.querySelector('#acct1, select[name="acct1"]'));
+                    const hasYear = Boolean(doc.querySelector('select[name="S_Year"]'));
+                    const hasSubmit = Boolean(doc.querySelector('a[href*="doSubmit"]')) || typeof window.doSubmit === 'function';
+                    return (hasAcct && (hasYear || hasSubmit)) || /帳戶明細/.test(text);
+                  }
+                  try {
+                    if (ready(document)) return true;
+                    for (let i = 0; i < window.frames.length; i += 1) {
+                      try { if (ready(window.frames[i].document)) return true; } catch (_e) {}
+                    }
+                  } catch (_e) {}
+                  return false;
                 })();
                 """, 12_000L, 400L, "hua_nan_transaction_page_timeout", "Hua Nan transaction page did not become ready");
         } catch (BankAutomationException pageError) {
             JSONObject timeoutProbe = captureStructuralProbe(session, "h2");
             mergeInterceptSnapshot(timeoutProbe, session.interceptSnapshot());
             timeoutProbe.put("reason", "page_not_ready");
-            timeoutProbe.put("inquiryMatch", clickResult.optString("match", "unknown"));
+            timeoutProbe.put("inquiryMatch", inquiryMatch);
             debugTrace.record("h2_probe", "error", "Transaction page did not become ready", timeoutProbe);
             throw queryFailure(
                 pageError.getCode(),
@@ -962,62 +1121,183 @@ public final class HuaNanBankAutomation {
             );
         }
 
-        session.evaluateJavaScript(String.format(Locale.US, """
+        Object fillRaw = session.evaluateJavaScript(String.format(Locale.US, """
             (() => {
-              const startDate = %s;
-              const endDate = %s;
-              const inputs = Array.from(document.querySelectorAll('input, select'));
-              const startInput = inputs.find((el) => /start|from|起|開始|起日/i.test(String(el.name || el.id || el.placeholder || '')));
-              const endInput = inputs.find((el) => /end|to|迄|結束|迄日/i.test(String(el.name || el.id || el.placeholder || '')));
-              let datesFilled = false;
-              if (startInput) {
-                startInput.removeAttribute('readonly');
-                startInput.value = startDate;
-                startInput.dispatchEvent(new Event('input', { bubbles: true }));
-                startInput.dispatchEvent(new Event('change', { bubbles: true }));
-                datesFilled = true;
+              const accountId = %s;
+              const todayOnly = %s;
+              const startRocYear = %s;
+              const endRocYear = %s;
+              const startMonth = %d;
+              const startDay = %d;
+              const endMonth = %d;
+              const endDay = %d;
+              function text(value) { return String(value ?? '').trim(); }
+              function collectDocs() {
+                const docs = [];
+                const seen = new Set();
+                function visit(win) {
+                  if (!win || seen.has(win)) return;
+                  seen.add(win);
+                  try {
+                    if (win.document) docs.push({ doc: win.document, win });
+                    for (let i = 0; i < win.frames.length; i += 1) visit(win.frames[i]);
+                  } catch (_e) {}
+                }
+                visit(window);
+                return docs;
               }
-              if (endInput) {
-                endInput.removeAttribute('readonly');
-                endInput.value = endDate;
-                endInput.dispatchEvent(new Event('input', { bubbles: true }));
-                endInput.dispatchEvent(new Event('change', { bubbles: true }));
-                datesFilled = true;
+              function setSelect(el, value) {
+                if (!el) return false;
+                const wanted = String(value);
+                const opts = Array.from(el.options || []);
+                let match = opts.find((o) => String(o.value) === wanted);
+                if (!match) match = opts.find((o) => text(o.textContent) === wanted);
+                if (!match && /^0+\\d+$/.test(wanted)) {
+                  const asInt = String(parseInt(wanted, 10));
+                  match = opts.find((o) => String(o.value) === asInt || text(o.textContent) === asInt);
+                }
+                if (!match) return false;
+                el.value = match.value;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
               }
-              const query = Array.from(document.querySelectorAll('input[type="button"], input[type="submit"], button'))
-                .find((btn) => /查詢|Query|Search/i.test(String(btn.value || btn.textContent || '')));
-              const queryClicked = Boolean(query && typeof query.click === 'function');
-              if (queryClicked) query.click();
+              function checkRadio(doc, name, value) {
+                const radio = doc.querySelector('input[type="radio"][name="' + name + '"][value="' + value + '"]');
+                if (!radio) return false;
+                radio.checked = true;
+                radio.click();
+                radio.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+              }
+              let target = null;
+              for (const item of collectDocs()) {
+                if (item.doc.querySelector('#acct1, select[name="acct1"], select[name="S_Year"]')) {
+                  target = item;
+                  break;
+                }
+              }
+              if (!target) {
+                return { ok: false, reason: 'form_not_found', hasDateInput: false, queryButtonFound: false, hasH2FormAnchors: false };
+              }
+              const doc = target.doc;
+              const win = target.win || window;
+              const acct = doc.querySelector('#acct1, select[name="acct1"]');
+              let acctSet = false;
+              if (acct) {
+                acctSet = setSelect(acct, accountId);
+                if (typeof win.changeAcct === 'function') {
+                  try { win.changeAcct(0); } catch (_e) {}
+                }
+              }
+              let inqType = todayOnly ? '1' : '3';
+              checkRadio(doc, 'inqtype', inqType);
+              if (typeof win.changeInqType === 'function') {
+                try { win.changeInqType(); } catch (_e) {}
+              }
+              let datesFilled = todayOnly;
+              if (!todayOnly) {
+                const sY = setSelect(doc.querySelector('select[name="S_Year"]'), startRocYear);
+                const sM = setSelect(doc.querySelector('select[name="S_Month"]'), startMonth);
+                const sD = setSelect(doc.querySelector('select[name="S_Date"]'), startDay);
+                const eY = setSelect(doc.querySelector('select[name="E_Year"]'), endRocYear);
+                const eM = setSelect(doc.querySelector('select[name="E_Month"]'), endMonth);
+                const eD = setSelect(doc.querySelector('select[name="E_Date"]'), endDay);
+                datesFilled = sY && sM && sD && eY && eM && eD;
+                if (typeof win.changeInqType === 'function') {
+                  try { win.changeInqType(); } catch (_e) {}
+                }
+              }
+              checkRadio(doc, 'ApplyType', '0');
+              const preType = doc.querySelector('select[name="preType"]');
+              if (preType) setSelect(preType, '0');
+              let submitted = false;
+              if (typeof win.doSubmit === 'function') {
+                try { win.doSubmit(); submitted = true; } catch (_e) {}
+              }
+              if (!submitted) {
+                const link = doc.querySelector('a[href*="doSubmit"]');
+                if (link && typeof link.click === 'function') {
+                  link.click();
+                  submitted = true;
+                }
+              }
+              const hasYear = Boolean(doc.querySelector('select[name="S_Year"], select[name="E_Year"]'));
+              const hasSubmit = Boolean(doc.querySelector('a[href*="doSubmit"]')) || typeof win.doSubmit === 'function';
               return {
+                ok: submitted && (todayOnly || datesFilled),
+                acctSet,
                 datesFilled,
-                queryClicked,
-                hasDateInput: Boolean(startInput || endInput),
-                queryButtonFound: Boolean(query),
+                submitted,
+                inqType,
+                hasDateInput: hasYear,
+                queryButtonFound: hasSubmit,
+                hasH2FormAnchors: Boolean(acct) && hasYear && hasSubmit,
               };
             })();
-            """, quoteJs(startDate.replace('-', '/')), quoteJs(endDate.replace('-', '/'))));
-
+            """,
+            quoteJs(accountId),
+            todayOnly ? "true" : "false",
+            quoteJs(startRocYear),
+            quoteJs(endRocYear),
+            startMonth,
+            startDay,
+            endMonth,
+            endDay
+        ));
+        JSONObject fillMeta = asJsonObject(fillRaw);
         JSONObject fillResult = captureStructuralProbe(session, "h2");
         mergeInterceptSnapshot(fillResult, session.interceptSnapshot());
-        fillResult.put("inquiryMatch", clickResult.optString("match", "unknown"));
-        if (!fillResult.optBoolean("hasDateInput", false) && !fillResult.optBoolean("queryButtonFound", false)) {
+        fillResult.put("inquiryMatch", inquiryMatch);
+        fillResult.put("hasDateInput", fillMeta.optBoolean("hasDateInput", fillResult.optBoolean("hasDateInput", false)));
+        fillResult.put("queryButtonFound", fillMeta.optBoolean("queryButtonFound", fillResult.optBoolean("queryButtonFound", false)));
+        fillResult.put("hasH2FormAnchors", fillMeta.optBoolean("hasH2FormAnchors", fillResult.optBoolean("hasH2FormAnchors", false)));
+        fillResult.put("inqType", fillMeta.optString("inqType", ""));
+        if (!fillMeta.optBoolean("ok", false)
+            && !fillResult.optBoolean("hasH2FormAnchors", false)
+            && !fillResult.optBoolean("hasDateInput", false)
+            && !fillResult.optBoolean("queryButtonFound", false)) {
             fillResult.put("reason", "missing_h2_anchors");
             debugTrace.record("h2_probe", "error", "Transaction inquiry missing date/query anchors", fillResult);
             return false;
         }
+        if (!fillMeta.optBoolean("submitted", false)) {
+            fillResult.put("reason", "missing_h2_anchors");
+            debugTrace.record("h2_probe", "error", "Transaction inquiry submit (doSubmit) was not found", fillResult);
+            return false;
+        }
+        debugTrace.record("h2_probe", "ok", "Inquiry form filled and submitted", fillMeta);
 
         try {
             session.waitForCondition("""
                 (() => {
-                  const text = String(document.body?.innerText ?? '');
-                  return Boolean(document.querySelector('table')) || /查無資料|沒有資料|no data/i.test(text);
+                  function scan(doc) {
+                    if (!doc) return false;
+                    const text = String(doc.body?.innerText ?? '');
+                    if (/查無資料|沒有資料|no data/i.test(text)) return true;
+                    const tables = Array.from(doc.querySelectorAll('table'));
+                    for (const table of tables) {
+                      const header = String(table.querySelector('tr')?.textContent || '');
+                      if (/日期|摘要|說明|金額|支出|存入|餘額|交易/.test(header)) return true;
+                      const rows = table.querySelectorAll('tr');
+                      if (rows.length >= 2 && /\\d{4}[\\/.-]\\d{1,2}/.test(String(table.textContent || ''))) return true;
+                    }
+                    return false;
+                  }
+                  try {
+                    if (scan(document)) return true;
+                    for (let i = 0; i < window.frames.length; i += 1) {
+                      try { if (scan(window.frames[i].document)) return true; } catch (_e) {}
+                    }
+                  } catch (_e) {}
+                  return false;
                 })();
                 """, 12_000L, 400L, "hua_nan_transaction_query_failed", "Hua Nan transaction query did not finish in time");
         } catch (BankAutomationException queryError) {
             JSONObject timeoutProbe = captureStructuralProbe(session, "h2");
             mergeInterceptSnapshot(timeoutProbe, session.interceptSnapshot());
             timeoutProbe.put("reason", "query_timeout");
-            timeoutProbe.put("inquiryMatch", clickResult.optString("match", "unknown"));
+            timeoutProbe.put("inquiryMatch", inquiryMatch);
             debugTrace.record("h2_probe", "error", "Transaction query did not finish in time", timeoutProbe);
             throw queryFailure(
                 queryError.getCode(),
@@ -1029,7 +1309,7 @@ public final class HuaNanBankAutomation {
         JSONObject doneProbe = captureStructuralProbe(session, "h2");
         mergeInterceptSnapshot(doneProbe, session.interceptSnapshot());
         doneProbe.put("reason", "ok");
-        doneProbe.put("inquiryMatch", clickResult.optString("match", "unknown"));
+        doneProbe.put("inquiryMatch", inquiryMatch);
         debugTrace.record("h2_probe", "ok", "Query wait completed", doneProbe);
         return true;
     }
@@ -1047,32 +1327,56 @@ public final class HuaNanBankAutomation {
               function cells(row) {
                 return Array.from(row.querySelectorAll('th,td')).map((cell) => text(cell.textContent));
               }
-              const tables = Array.from(document.querySelectorAll('table'));
+              function collectDocs() {
+                const docs = [];
+                const seen = new Set();
+                function visit(win) {
+                  if (!win || seen.has(win)) return;
+                  seen.add(win);
+                  try {
+                    if (win.document) docs.push(win.document);
+                    for (let i = 0; i < win.frames.length; i += 1) visit(win.frames[i]);
+                  } catch (_e) {}
+                }
+                visit(window);
+                return docs;
+              }
+              function isFormControlTable(table) {
+                const blob = text(table.textContent);
+                if (/inqtype|S_Year|E_Year|送出資料|帳號（單選）|一般查詢/.test(blob)) return true;
+                if (table.querySelector('select[name="S_Year"], select[name="acct1"], #acct1, input[name="inqtype"]')) return true;
+                return false;
+              }
               const rows = [];
-              for (const table of tables) {
-                const bodyRows = Array.from(table.querySelectorAll('tr'));
-                if (bodyRows.length < 2) continue;
-                const header = cells(bodyRows[0]).map((value) => value.toLowerCase());
-                const looksTxn = header.some((h) => /日期|date|摘要|說明|金額|amount|支出|存入|餘額/.test(h))
-                  || /交易|明細/.test(text(table.textContent));
-                if (!looksTxn) continue;
-                for (let index = 1; index < bodyRows.length; index += 1) {
-                  const values = cells(bodyRows[index]);
-                  if (values.length < 2) continue;
-                  const joined = values.join(' ');
-                  if (!joined || /合計|小計|查無|沒有資料/.test(joined)) continue;
-                  const dateMatch = joined.match(/(\\d{4}[\\/.-]\\d{1,2}[\\/.-]\\d{1,2})/);
-                  const amountMatch = joined.match(/-?[\\d,]+(?:\\.\\d{1,2})?/);
-                  const refMatch = joined.match(/(?:序號|參考|流水|Ref|SEQ)[^0-9A-Za-z]*([0-9A-Za-z-]{4,})/i)
-                    || values.find((value) => /^[0-9A-Za-z-]{6,}$/.test(value));
-                  rows.push({
-                    cells: values,
-                    postedAt: dateMatch ? dateMatch[1] : '',
-                    amount: amountMatch ? amountMatch[0] : '',
-                    summary: values.find((value) => /[\\u4e00-\\u9fffA-Za-z]/.test(value) && !/\\d{4}[\\/.-]\\d{1,2}/.test(value)) || '',
-                    ref: typeof refMatch === 'string' ? refMatch : (refMatch && refMatch[1] ? refMatch[1] : ''),
-                    accountId
-                  });
+              for (const doc of collectDocs()) {
+                const tables = Array.from(doc.querySelectorAll('table'));
+                for (const table of tables) {
+                  if (isFormControlTable(table)) continue;
+                  const bodyRows = Array.from(table.querySelectorAll('tr'));
+                  if (bodyRows.length < 2) continue;
+                  const header = cells(bodyRows[0]).map((value) => value.toLowerCase());
+                  const looksTxn = header.some((h) => /日期|date|摘要|說明|金額|amount|支出|存入|餘額/.test(h))
+                    || (/交易|明細/.test(text(table.textContent)) && /\\d{4}[\\/.-]\\d{1,2}/.test(text(table.textContent)));
+                  if (!looksTxn) continue;
+                  for (let index = 1; index < bodyRows.length; index += 1) {
+                    const values = cells(bodyRows[index]);
+                    if (values.length < 2) continue;
+                    const joined = values.join(' ');
+                    if (!joined || /合計|小計|查無|沒有資料/.test(joined)) continue;
+                    if (!/\\d{4}[\\/.-]\\d{1,2}/.test(joined)) continue;
+                    const dateMatch = joined.match(/(\\d{4}[\\/.-]\\d{1,2}[\\/.-]\\d{1,2})/);
+                    const amountMatch = joined.match(/-?[\\d,]+(?:\\.\\d{1,2})?/);
+                    const refMatch = joined.match(/(?:序號|參考|流水|Ref|SEQ)[^0-9A-Za-z]*([0-9A-Za-z-]{4,})/i)
+                      || values.find((value) => /^[0-9A-Za-z-]{6,}$/.test(value));
+                    rows.push({
+                      cells: values,
+                      postedAt: dateMatch ? dateMatch[1] : '',
+                      amount: amountMatch ? amountMatch[0] : '',
+                      summary: values.find((value) => /[\\u4e00-\\u9fffA-Za-z]/.test(value) && !/\\d{4}[\\/.-]\\d{1,2}/.test(value)) || '',
+                      ref: typeof refMatch === 'string' ? refMatch : (refMatch && refMatch[1] ? refMatch[1] : ''),
+                      accountId
+                    });
+                  }
                 }
               }
               return rows;
@@ -1465,9 +1769,17 @@ public final class HuaNanBankAutomation {
                         'input[name*="account" i], input[name*="acct" i], input[name*="acno" i], input[id*="account" i], input[id*="acct" i], [data-account], [data-acct], [data-acno]'
                       )).length;
                       const hasEmptyText = /查無資料|沒有資料|no data/i.test(blob);
-                      const dateFields = inputs.filter((item) => /date|start|end|from|to|起|迄|開始|結束/i.test(item.name + item.id));
+                      const dateFields = inputs.filter((item) =>
+                        /date|start|end|from|to|起|迄|開始|結束|S_Year|S_Month|S_Date|E_Year|E_Month|E_Date|inqtype|Y_YM|M_YM/i
+                          .test(item.name + item.id)
+                      );
                       const queryButtonFound = Array.from(doc.querySelectorAll('input[type="button"], input[type="submit"], button'))
-                        .some((btn) => /查詢|Query|Search/i.test(text(btn.value || btn.textContent || '')));
+                        .some((btn) => /查詢|Query|Search|送出/i.test(text(btn.value || btn.textContent || '')))
+                        || Array.from(doc.querySelectorAll('a[href*="doSubmit"]')).length > 0
+                        || typeof win.doSubmit === 'function';
+                      const hasAcct = inputs.some((item) => item.id === 'acct1' || item.name === 'acct1')
+                        || Boolean(doc.querySelector('#acct1'));
+                      const hasH2FormAnchors = hasAcct && dateFields.length > 0 && queryButtonFound;
                       frames.push({
                         path: redactPath(href),
                         formCount: forms.length,
@@ -1481,6 +1793,7 @@ public final class HuaNanBankAutomation {
                         hasDateInput: dateFields.length > 0,
                         dateFields,
                         queryButtonFound,
+                        hasH2FormAnchors,
                         hasEmptyText
                       });
                       for (let i = 0; i < win.frames.length; i += 1) visit(win.frames[i]);
@@ -1500,11 +1813,14 @@ public final class HuaNanBankAutomation {
                     hasDateInput: false,
                     dateFields: [],
                     queryButtonFound: false,
+                    hasH2FormAnchors: false,
                     hasEmptyText: false
                   };
                   let emptyInIframe = false;
+                  let anyH2FormAnchors = Boolean(first.hasH2FormAnchors);
                   for (let i = 1; i < frames.length; i += 1) {
                     if (frames[i].hasEmptyText) emptyInIframe = true;
+                    if (frames[i].hasH2FormAnchors) anyH2FormAnchors = true;
                   }
                   return {
                     kind: 'probe',
@@ -1520,6 +1836,7 @@ public final class HuaNanBankAutomation {
                     hasDateInput: first.hasDateInput,
                     dateFields: first.dateFields,
                     queryButtonFound: first.queryButtonFound,
+                    hasH2FormAnchors: anyH2FormAnchors,
                     hasEmptyText: first.hasEmptyText,
                     emptyInIframe,
                     inquiryMatch: 'none',
@@ -1548,6 +1865,7 @@ public final class HuaNanBankAutomation {
         putJsonValue(fallback, "hasDateInput", false);
         putJsonValue(fallback, "dateFields", new JSONArray());
         putJsonValue(fallback, "queryButtonFound", false);
+        putJsonValue(fallback, "hasH2FormAnchors", false);
         putJsonValue(fallback, "hasEmptyText", false);
         return fallback;
     }

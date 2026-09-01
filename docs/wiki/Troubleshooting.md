@@ -52,9 +52,9 @@ AAB 上傳成功只代表檔案到 Google。確認 `play-testing-channel.json` �
 ### J) 華南 `hua_nan_transaction_query_failed` / `hua_nan_transaction_page_timeout`
 
 - 症狀：帳戶已在、同步拉明細失敗
-- 原因：H2 未凍。啟發式點「交易明細」或等 `table`／「查無資料」沒命中。`reason` 為 `inquiry_not_found`（入口）、`page_not_ready`（點進去頁沒 ready）、`query_timeout`（點查詢後沒結果）
-- 驗證：重建並安裝含 `h2_probe` 的 APK；看 `h2_probe` 的 inquiry match、date field name/id、wait predicates，以及 intercept 的 GET/POST 計數與 `post_without_body` / `observe_only_no_replay` skip reason
-- 處理：Phase A 只取證，不宣稱已修好。有完整 H2 清單證據後才允許 GET allowlist intercept。歸 `portal_changed`／retry，**不要** reconnect
+- 原因：入口／表單 ready／送出後結果逾時。表單合約已凍（`InqMain`、「明細」、`#acct1`、`inqtype`+民國年 select、`doSubmit`）。`reason`：`inquiry_not_found`｜`page_not_ready`｜`query_timeout`｜`missing_h2_anchors`
+- 驗證：重建並安裝含 `h2_probe` 的 APK；看 `inquiryMatch`（`inq_main_href`／`mingxi_text`）、`hasH2FormAnchors`、intercept skip reason
+- 處理：歸 `portal_changed`／retry，**不要** reconnect；結果列仍 partial 時補真機 table header 證據。GET allowlist 仍未開（observe-only）
 
 ## 引用
 

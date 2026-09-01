@@ -150,4 +150,31 @@ public class HuaNanBankAutomationIdentityTest {
         assertEquals("ok", ok.getString("status"));
         assertEquals("2026-08-16", ok.getString("coveredThrough"));
     }
+
+    @Test
+    public void buildAccountSyncResultOkWhenRowsParsedEvenWithoutFormAnchors() throws Exception {
+        JSONObject probe = new JSONObject();
+        probe.put("hasDateInput", false);
+        probe.put("queryButtonFound", false);
+        probe.put("hasH2FormAnchors", false);
+        probe.put("hasEmptyText", false);
+        JSONObject ok = HuaNanBankAutomation.buildAccountSyncResult(
+            null,
+            "123456789012",
+            LocalDate.of(2026, 9, 1),
+            LocalDate.of(2026, 9, 1),
+            3,
+            probe
+        );
+        assertEquals("ok", ok.getString("status"));
+        assertEquals("2026-09-01", ok.getString("coveredThrough"));
+    }
+
+    @Test
+    public void hasH2InquiryAnchorsAcceptsFrozenFormFlag() throws Exception {
+        JSONObject probe = new JSONObject();
+        probe.put("hasH2FormAnchors", true);
+        assertTrue(HuaNanBankAutomation.hasH2InquiryAnchors(probe));
+        assertFalse(HuaNanBankAutomation.hasH2InquiryAnchors(new JSONObject()));
+    }
 }

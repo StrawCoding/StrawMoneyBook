@@ -830,7 +830,7 @@ Stage B：獨立 Gradle 模組 `frontend/android/wear`（同一 `applicationId`�
 - smb306：模組化恢復（僅華南）— `BankAutomationRuntime`（connect 先 markSuccess 再 snapshot；sync=`SYNCING_TRANSACTIONS`；captcha/abort 同狀態機）、`providers/huanan`、H1 結構錨點、Playwright **真實 UI** 建立連線表單→帳戶對應→手動同步→待匯入勾選匯入→交易搜尋 ledger（Web 僅對 native 邊界裝 fixture，不直接呼叫 runFormal*）
 - Architecture B watermark／checkpoint：前端 dual-write `lastSyncAt`／`last_sync_at` 與 `lookbackDays`／`lookback_days`；原生 `readLastSyncWatermark` 採 **`lastSyncAt` > `last_sync_at`**；帳號層級 checkpoint（migration 046）；`PARTIAL_SUCCESS` 時**不得**推進假 `coveredThrough`／`lastSyncAt`
 - Architecture B Provider Registry：僅註冊華南；通用 `connectBank`/`syncBank`／`submitCaptcha`／`abortBank`；淘汰 remote scrape／Playwright bank provider；建立頁依 schema 動態欄位
-- 華南 H2 Phase A：登入後仍 heuristic（Phase 9 PARTIAL）。Android 寫去識別化 `h1_probe`／`h2_probe` 與 hncb observe-only intercept（不 replay GET/POST）。缺少日期／查詢錨點或未解析交易 → `accountResults[].status=partial` + `hua_nan_transaction_query_partial`，**不宣稱查詢已修好**
+- 華南 H2：表單已凍（`InqMain`／「明細」、`#acct1`、`inqtype`+民國年 select、`doSubmit`、3 月切窗）。Android 寫去識別化 `h1_probe`／`h2_probe` 與 observe-only intercept。未解析可驗證交易列 → `partial` + `hua_nan_transaction_query_partial`（有列則 ok，不需表單錨點仍在結果頁）
 - smb304：修復 Android／Web 初始化因 migration 046 誤用 `#` 註解導致 SQLite `unrecognized token: "#"`、帳本無法開啓；改為 SQLite 安全註解，並在 `splitSqlStatements` 剝除 hash 行註解＋回歸測試，既有帳本可安全套用 046（勿重設資料）
 - 稽核續修：CSV 與原生自動化交易 id 不同時，同帳戶同日同額會標 `possible_duplicate_of` 且審核匯入預設跳過；單一銀行連線同步走 process-wide `runtimeJobs` 合併，避免重入；SQLite `busy_timeout=5000`。CI 另跑預算跨月／發薪週期 Playwright（獨立 job）
 - 已移除 Sandbox / Mock 生產路徑；舊測試連線會在 UI 標示為已停用

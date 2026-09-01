@@ -1,5 +1,6 @@
 # Pending Release Notes
 
+- 華南銀行同步 H2 凍合約：明細入口改 `InqMain`／「明細」、表單用 `#acct1`+`inqtype`+民國年 select、`doSubmit()`；超過 3 個月自動切窗；跨 frame 解析交易表並略過表單控制表。
 ---
 
 ## v1.4.15

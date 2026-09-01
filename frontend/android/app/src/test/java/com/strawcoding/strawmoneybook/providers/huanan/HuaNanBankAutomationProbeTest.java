@@ -55,5 +55,29 @@ public class HuaNanBankAutomationProbeTest {
         for (String key : HuaNanBankAutomation.H2_PROBE_REQUIRED_KEYS) {
             assertTrue("missing H2 key " + key, h2.has(key));
         }
+        assertTrue(h2.has("hasH2FormAnchors"));
+    }
+
+    @Test
+    public void rocYearCodeMatchesHuaNanSelectValues() {
+        assertEquals("0115", HuaNanBankAutomation.toRocYearCode(2026));
+        assertEquals("0114", HuaNanBankAutomation.toRocYearCode(2025));
+        assertEquals("0113", HuaNanBankAutomation.toRocYearCode(2024));
+        assertEquals("0115", HuaNanBankAutomation.toRocYearCode(java.time.LocalDate.of(2026, 9, 1)));
+    }
+
+    @Test
+    public void splitInquiryWindowsRespectsThreeMonthPortalLimit() {
+        java.util.List<java.time.LocalDate[]> windows = HuaNanBankAutomation.splitInquiryWindows(
+            java.time.LocalDate.of(2026, 1, 1),
+            java.time.LocalDate.of(2026, 9, 1)
+        );
+        assertTrue(windows.size() >= 3);
+        for (java.time.LocalDate[] window : windows) {
+            assertFalse(window[0].isAfter(window[1]));
+            assertFalse(window[0].plusMonths(HuaNanBankAutomation.MAX_INQUIRY_MONTHS).isBefore(window[1].plusDays(1)));
+        }
+        assertEquals(java.time.LocalDate.of(2026, 1, 1), windows.get(0)[0]);
+        assertEquals(java.time.LocalDate.of(2026, 9, 1), windows.get(windows.size() - 1)[1]);
     }
 }
