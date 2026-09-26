@@ -70,9 +70,9 @@ test('computeReservedMinor returns zero for past months and ignores fixed budget
   assert.equal(reservedMinor, 0)
 })
 
-test('computeDailyPoolReservedMinor counts remaining calendar days for daily pools', () => {
+test('computeDailyPoolReservedMinor counts remaining calendar days for save-mode daily pools', () => {
   const reservedMinor = computeDailyPoolReservedMinor(
-    [{ period_mode: 'daily', amount_minor: 1000 }],
+    [{ period_mode: 'daily', amount_minor: 1000, surplus_mode: 'save' }],
     '2026-07',
     new Date('2026-07-10T12:00:00+08:00'),
     'Asia/Taipei',
@@ -82,10 +82,10 @@ test('computeDailyPoolReservedMinor counts remaining calendar days for daily poo
   assert.equal(reservedMinor, 22000)
 })
 
-test('computeMonthlyReservedMinor combines daily average items and daily pools', () => {
+test('computeMonthlyReservedMinor combines daily average items and save-mode daily pools', () => {
   const reservedMinor = computeMonthlyReservedMinor(
     [DAILY_ITEM],
-    [{ period_mode: 'daily', amount_minor: 1000 }],
+    [{ period_mode: 'daily', amount_minor: 1000, surplus_mode: 'save' }],
     '2026-07',
     new Date('2026-07-10T12:00:00+08:00'),
     'Asia/Taipei',
@@ -95,10 +95,10 @@ test('computeMonthlyReservedMinor combines daily average items and daily pools',
   assert.equal(reservedMinor, 23500)
 })
 
-test('computePeriodReservedMinor counts pay-cycle item rules and daily pools through the inclusive period end', () => {
+test('computePeriodReservedMinor counts pay-cycle item rules and save-mode daily pools through the inclusive period end', () => {
   const reservedMinor = computePeriodReservedMinor(
     [DAILY_ITEM],
-    [{ period_mode: 'daily', amount_minor: 1000 }],
+    [{ period_mode: 'daily', amount_minor: 1000, surplus_mode: 'save' }],
     {
       mode: 'pay_cycle',
       key: 'pay:2026-02-25:2026-03-24',
@@ -112,4 +112,20 @@ test('computePeriodReservedMinor counts pay-cycle item rules and daily pools thr
   )
 
   assert.equal(reservedMinor, 5500)
+})
+
+test('computeDailyPoolReservedMinor subtracts spent for roll-mode monthly pools when container id matches', () => {
+  const reservedMinor = computeDailyPoolReservedMinor(
+    [{ id: 'bc1', period_mode: 'monthly', amount_minor: 31000, surplus_mode: 'roll' }],
+    '2026-07',
+    new Date('2026-07-10T12:00:00+08:00'),
+    'Asia/Taipei',
+    {
+      includeReferenceDay: true,
+      items: [{ budget_container_id: 'bc1', category_id: 'cat1' }],
+      spentMap: { cat1: 5000 },
+      todaySpentMap: { cat1: 0 },
+    },
+  )
+  assert.equal(reservedMinor, 26000)
 })

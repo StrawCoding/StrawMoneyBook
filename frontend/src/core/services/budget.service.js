@@ -30,6 +30,13 @@ export {
 } from './budget-period.js'
 
 export {
+  normalizeContainerSurplusMode,
+  resolvePoolTodayAllowanceMinor,
+  resolvePoolStatsForDate,
+  resolvePoolReservedMinor,
+} from './budget-pool-daily.js'
+
+export {
   resolveBudgetItemForPeriod,
   resolveBudgetItemForMonth,
 } from './budget-spent.js'

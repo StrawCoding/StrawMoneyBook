@@ -7,6 +7,13 @@ function normalizePeriodMode(value) {
   return String(value ?? '').trim() === 'daily' ? 'daily' : 'monthly'
 }
 
+function normalizeSurplusMode(value, budgetSaveEnabled = false) {
+  const mode = String(value ?? '').trim()
+  if (mode === 'save') return 'save'
+  if (mode === 'roll') return 'roll'
+  return budgetSaveEnabled ? 'save' : 'roll'
+}
+
 function normalizeBudgetSaveAccountId(value) {
   const normalized = String(value ?? '').trim()
   return normalized || null
@@ -162,13 +169,16 @@ export async function listBudgetContainers(ledgerId, budgetId) {
   const result = await query(
     `SELECT ledger_id, id, budget_id, name, amount_minor,
             budget_save_enabled, budget_save_target_account_id, budget_save_source_account_id,
-            period_mode, sort_order, created_at, updated_at
+            period_mode, surplus_mode, sort_order, created_at, updated_at
      FROM budget_containers
      WHERE ledger_id = ? AND budget_id = ?
      ORDER BY sort_order ASC, created_at ASC;`,
     [ledgerId, budgetId],
   )
-  return rowsOf(result)
+  return rowsOf(result).map((row) => ({
+    ...row,
+    surplus_mode: normalizeSurplusMode(row?.surplus_mode, Number(row?.budget_save_enabled ?? 0) === 1),
+  }))
 }
 
 export async function upsertBudgetContainer(ledgerId, input) {
@@ -176,12 +186,15 @@ export async function upsertBudgetContainer(ledgerId, input) {
   const now = nowIso()
   const id = input.id ?? createId('bc')
 
+  const budgetSaveEnabled = normalizeBudgetSaveEnabled(input.budgetSaveEnabled)
+  const surplusMode = normalizeSurplusMode(input.surplusMode, budgetSaveEnabled)
+
   await run(
     `INSERT INTO budget_containers (
       ledger_id, id, budget_id, name, amount_minor,
       budget_save_enabled, budget_save_target_account_id, budget_save_source_account_id,
-      period_mode, sort_order, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      period_mode, surplus_mode, sort_order, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(ledger_id, id) DO UPDATE SET
       name = excluded.name,
       amount_minor = excluded.amount_minor,
@@ -189,6 +202,7 @@ export async function upsertBudgetContainer(ledgerId, input) {
       budget_save_target_account_id = excluded.budget_save_target_account_id,
       budget_save_source_account_id = excluded.budget_save_source_account_id,
       period_mode = excluded.period_mode,
+      surplus_mode = excluded.surplus_mode,
       sort_order = excluded.sort_order,
       updated_at = excluded.updated_at;`,
     [
@@ -197,10 +211,11 @@ export async function upsertBudgetContainer(ledgerId, input) {
       input.budgetId,
       input.name,
       Math.max(0, Math.round(Number(input.amountMinor ?? 0))),
-      normalizeBudgetSaveEnabled(input.budgetSaveEnabled),
+      budgetSaveEnabled,
       normalizeBudgetSaveAccountId(input.budgetSaveTargetAccountId),
       normalizeBudgetSaveAccountId(input.budgetSaveSourceAccountId),
       normalizePeriodMode(input.periodMode),
+      surplusMode,
       input.sortOrder ?? 0,
       now,
       now,

@@ -76,7 +76,7 @@ import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { getEffectiveTransactionAmountMinor, isCountableForBudget } from '@/ui/utils/refund-transaction'
-import { isDailyPoolContainer } from '@/core/services/budget.service'
+import { resolvePoolStatsForDate } from '@/core/services/budget-pool-daily.js'
 import { getDatePartsInTimeZone } from '@/core/services/budget-reserve.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 
@@ -247,18 +247,26 @@ const activeDailyBudgetItems = computed(() => {
   })
 })
 
-const dailyPoolContainers = computed(() => (
-  (budgetStore.containers ?? []).filter((container) => isDailyPoolContainer(container))
-))
+const rollingPoolContainers = computed(() => (budgetStore.containers ?? []))
 
-const dailyPoolCategoryIds = computed(() => {
-  const ids = new Set()
-  for (const container of dailyPoolContainers.value) {
+const poolCategoryIdsByContainer = computed(() => {
+  const map = new Map()
+  for (const container of rollingPoolContainers.value) {
+    const ids = new Set()
     for (const item of budgetStore.items) {
       if (String(item?.budget_container_id ?? '') !== String(container.id)) continue
       const categoryId = String(item?.category_id ?? '').trim()
       if (categoryId) ids.add(categoryId)
     }
+    map.set(String(container.id), ids)
+  }
+  return map
+})
+
+const dailyPoolCategoryIds = computed(() => {
+  const ids = new Set()
+  for (const categoryIds of poolCategoryIdsByContainer.value.values()) {
+    for (const categoryId of categoryIds) ids.add(categoryId)
   }
   return ids
 })
@@ -273,12 +281,57 @@ const activeDailyBudgetCategoryIds = computed(() => {
   return ids
 })
 
-const dailyPoolBudgetMinor = computed(() => (
-  dailyPoolContainers.value.reduce((total, container) => {
-    const amountMinor = Number(container?.amount_minor ?? 0)
-    if (!Number.isFinite(amountMinor) || amountMinor <= 0) return total
-    return total + Math.round(amountMinor)
+const homeBudgetTransactions = computed(() => (
+  (
+    transactionStore.homeFilterMode === 'day'
+    || (transactionStore.homeFilterMode === 'month' && transactionStore.homeFilterKey === budgetStore.monthKey)
+  )
+    ? transactionStore.homeBudgetDayTransactions
+    : transactionStore.recent
+))
+
+function sumPoolCategorySpent(categoryIds, { onDayKey = null, beforeDayKey = null, periodStart = null } = {}) {
+  if (!categoryIds?.size) return 0
+  return homeBudgetTransactions.value.reduce((total, tx) => {
+    if (!isBudgetExpenseTransaction(tx)) return total
+    const categoryId = String(tx?.category_id ?? '').trim()
+    if (!categoryId || !categoryIds.has(categoryId)) return total
+    const txDayKey = dateKeyOf(new Date(tx.occurred_at))
+    if (!txDayKey) return total
+    if (periodStart && txDayKey < periodStart) return total
+    if (onDayKey && txDayKey !== onDayKey) return total
+    if (beforeDayKey && !(txDayKey < beforeDayKey)) return total
+    return total + Math.abs(getEffectiveTransactionAmountMinor(tx))
   }, 0)
+}
+
+const rollingPoolStats = computed(() => {
+  const selectedDayKey = dateKeyOf(monthDateMeta.value.selectedDate)
+  const period = budgetStore.period ?? {
+    key: budgetStore.monthKey,
+    monthKey: budgetStore.monthKey,
+    startDate: `${budgetStore.monthKey}-01`,
+    endDate: `${budgetStore.monthKey}-28`,
+  }
+  return rollingPoolContainers.value.map((container) => {
+    const categoryIds = poolCategoryIdsByContainer.value.get(String(container.id)) ?? new Set()
+    const spentOnDayMinor = sumPoolCategorySpent(categoryIds, { onDayKey: selectedDayKey })
+    const spentBeforeMinor = sumPoolCategorySpent(categoryIds, {
+      beforeDayKey: selectedDayKey,
+      periodStart: period.startDate,
+    })
+    return resolvePoolStatsForDate({
+      container,
+      period,
+      spentPeriodMinor: spentBeforeMinor + spentOnDayMinor,
+      spentOnDayMinor,
+      dayKey: selectedDayKey,
+    })
+  })
+})
+
+const dailyPoolBudgetMinor = computed(() => (
+  rollingPoolStats.value.reduce((total, stats) => total + Math.max(0, stats.todayAllowanceMinor), 0)
 ))
 
 const dailyBudgetMinor = computed(() => {
@@ -294,14 +347,7 @@ const selectedDaySpentMinor = computed(() => {
   const selectedDayKey = dateKeyOf(monthDateMeta.value.selectedDate)
   if (!selectedDayKey) return 0
 
-  const transactions = (
-    transactionStore.homeFilterMode === 'day'
-    || (transactionStore.homeFilterMode === 'month' && transactionStore.homeFilterKey === budgetStore.monthKey)
-  )
-    ? transactionStore.homeBudgetDayTransactions
-    : transactionStore.recent
-
-  return transactions.reduce((total, tx) => {
+  return homeBudgetTransactions.value.reduce((total, tx) => {
     if (!isBudgetExpenseTransaction(tx)) return total
     const categoryId = String(tx?.category_id ?? '').trim()
     if (!categoryId || !activeDailyBudgetCategoryIds.value.has(categoryId)) return total

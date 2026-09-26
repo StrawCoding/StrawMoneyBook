@@ -21,7 +21,7 @@ import migration019 from '@/core/db/migrations/019_bank_transaction_metadata.sql
 // The schema changes from those drafts were either reverted or merged into adjacent migrations.
 // Do NOT reuse those version numbers — doing so would skip execution on devices that already
 // have schema_migrations rows for those versions, causing a schema split between new and existing installs.
-// Next available version: 49.
+// Next available version: 50.
 import migration023 from '@/core/db/migrations/023_reimbursement_item_advance_source.sql?raw'
 import migration024 from '@/core/db/migrations/024_savings_jars_auto_save.sql?raw'
 import migration025 from '@/core/db/migrations/025_budget_save.sql?raw'
@@ -46,6 +46,7 @@ import migration045 from '@/core/db/migrations/045_wear_companion.sql?raw'
 import migration046 from '@/core/db/migrations/046_bank_sync_account_checkpoints.sql?raw'
 import migration047 from '@/core/db/migrations/047_restore_deleted_log_triggers.sql?raw'
 import migration048 from '@/core/db/migrations/048_soft_delete_transaction_postings.sql?raw'
+import migration049 from '@/core/db/migrations/049_budget_container_surplus_mode.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 import {
   assertNoReservedMigrationVersions,
@@ -103,6 +104,7 @@ const MIGRATIONS = [
   { version: 46, name: 'bank_sync_account_checkpoints', sql: migration046 },
   { version: 47, name: 'restore_deleted_log_triggers', sql: migration047 },
   { version: 48, name: 'soft_delete_transaction_postings', sql: migration048 },
+  { version: 49, name: 'budget_container_surplus_mode', sql: migration049 },
 ]
 
 assertNoReservedMigrationVersions(MIGRATIONS)

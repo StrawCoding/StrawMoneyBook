@@ -179,9 +179,13 @@ async function saveBudgetContainerWithToggle() {
 
   await runPlaywrightCli(['fill', '.form-wrap input.input[type="text"]', 'Playwright Pool'])
   await runPlaywrightCli(['fill', '.form-wrap input.input[type="number"]', '1000'])
+  await runPlaywrightCli(['click', '[data-testid="budget-container-surplus-save"]'])
+  await delay(300)
   await runPlaywrightCli(['click', '.form-wrap .switch-row'])
   await delay(300)
   await runPlaywrightCli(['click', '.form-wrap .switch-row'])
+  await delay(300)
+  await runPlaywrightCli(['click', '[data-testid="budget-container-surplus-roll"]'])
   await delay(300)
   await runPlaywrightCli(['click', ".app-overlay-sheet-card .footer button.btn.primary:has-text('Save'), .app-overlay-sheet-card .footer button.btn.primary:has-text('儲存'), .app-overlay-sheet-card .footer button.btn.primary:has-text('保存')"])
   await delay(1200)

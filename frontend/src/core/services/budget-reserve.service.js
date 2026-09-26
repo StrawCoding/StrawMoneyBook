@@ -1,3 +1,8 @@
+import {
+  normalizeContainerSurplusMode,
+  resolvePoolReservedMinor,
+} from './budget-pool-daily.js'
+
 const FALLBACK_LEDGER_TIME_ZONE = 'Asia/Taipei'
 
 function normalizeTimeZone(value) {
@@ -237,27 +242,87 @@ export function countRemainingCalendarDaysInPeriod(period, referenceDate, timeZo
   return Math.round((endMs - effectiveStartMs) / 86400000) + 1
 }
 
+function toFiniteMinor(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return 0
+  return numeric
+}
+
+function sumContainerSpent(container, items = [], spentMap = {}) {
+  const containerId = String(container?.id ?? '')
+  return (items ?? []).reduce((total, item) => {
+    if (String(item?.budget_container_id ?? '') !== containerId) return total
+    const categoryId = String(item?.category_id ?? '').trim()
+    if (!categoryId) return total
+    return total + toFiniteMinor(spentMap?.[categoryId])
+  }, 0)
+}
+
 export function computeDailyPoolReservedMinor(containers = [], monthKey, referenceDate, timeZone, options = {}) {
   const remainingDays = countRemainingCalendarDaysInMonth(monthKey, referenceDate, timeZone, options)
   if (remainingDays <= 0) return 0
+  const period = options.period ?? {
+    key: monthKey,
+    monthKey,
+    startDate: `${monthKey}-01`,
+    endDate: `${monthKey}-${String(new Date(
+      Number(String(monthKey).slice(0, 4)),
+      Number(String(monthKey).slice(5, 7)),
+      0,
+    ).getDate()).padStart(2, '0')}`,
+  }
+  const items = options.items ?? []
+  const spentMap = options.spentMap ?? {}
+  const todaySpentMap = options.todaySpentMap ?? {}
 
   return (containers ?? []).reduce((total, container) => {
-    if (normalizeContainerPeriodMode(container?.period_mode) !== 'daily') return total
-    const amountMinor = Math.max(0, Math.round(Number(container?.amount_minor ?? 0) || 0))
-    if (amountMinor <= 0) return total
-    return total + (amountMinor * remainingDays)
+    const periodMode = normalizeContainerPeriodMode(container?.period_mode)
+    const surplusMode = normalizeContainerSurplusMode(
+      container?.surplus_mode ?? container?.surplusMode,
+      { budgetSaveEnabled: container?.budget_save_enabled ?? container?.budgetSaveEnabled },
+    )
+    // Only daily pools used to contribute; rolling monthly pools now also reserve.
+    if (periodMode !== 'daily' && surplusMode === 'save') return total
+
+    const spentPeriodMinor = sumContainerSpent(container, items, spentMap)
+    const spentOnDayMinor = sumContainerSpent(container, items, todaySpentMap)
+    return total + resolvePoolReservedMinor({
+      container,
+      period,
+      spentPeriodMinor,
+      spentOnDayMinor,
+      remainingDaysInclusive: remainingDays,
+      includeReferenceDay: options.includeReferenceDay !== false,
+    })
   }, 0)
 }
 
 export function computeDailyPoolReservedMinorForPeriod(containers = [], period, referenceDate, timeZone, options = {}) {
   const remainingDays = countRemainingCalendarDaysInPeriod(period, referenceDate, timeZone, options)
   if (remainingDays <= 0) return 0
+  const items = options.items ?? []
+  const spentMap = options.spentMap ?? {}
+  const todaySpentMap = options.todaySpentMap ?? {}
 
   return (containers ?? []).reduce((total, container) => {
-    if (normalizeContainerPeriodMode(container?.period_mode) !== 'daily') return total
-    const amountMinor = Math.max(0, Math.round(Number(container?.amount_minor ?? 0) || 0))
-    if (amountMinor <= 0) return total
-    return total + (amountMinor * remainingDays)
+    const periodMode = normalizeContainerPeriodMode(container?.period_mode)
+    const surplusMode = normalizeContainerSurplusMode(
+      container?.surplus_mode ?? container?.surplusMode,
+      { budgetSaveEnabled: container?.budget_save_enabled ?? container?.budgetSaveEnabled },
+    )
+    // Daily pools always reserve; monthly pools only when rolling surplus back into the pool.
+    if (periodMode !== 'daily' && surplusMode !== 'roll') return total
+
+    const spentPeriodMinor = sumContainerSpent(container, items, spentMap)
+    const spentOnDayMinor = sumContainerSpent(container, items, todaySpentMap)
+    return total + resolvePoolReservedMinor({
+      container,
+      period,
+      spentPeriodMinor,
+      spentOnDayMinor,
+      remainingDaysInclusive: remainingDays,
+      includeReferenceDay: options.includeReferenceDay !== false,
+    })
   }, 0)
 }
 

@@ -46,6 +46,7 @@ test('budget repo exposes shared budget container CRUD and item binding columns'
   assert.match(budgetRepoSource, /export async function deleteBudgetContainer/)
   assert.match(budgetRepoSource, /bi\.budget_container_id/)
   assert.match(budgetRepoSource, /period_mode/)
+  assert.match(budgetRepoSource, /surplus_mode/)
 })
 
 test('budget store uses 2B total formula and grouped sections', () => {
@@ -146,10 +147,19 @@ test('budget container sheet exposes pool amount and savings controls', () => {
   assert.match(containerSheetSource, /budgeting\.container\.name/)
   assert.match(containerSheetSource, /budgeting\.container\.amount/)
   assert.match(containerSheetSource, /budgeting\.container\.period_mode/)
+  assert.match(containerSheetSource, /budgeting\.container\.surplus_mode/)
   assert.match(containerSheetSource, /budgeting\.container\.fill_child_sum/)
   assert.match(containerSheetSource, /budgeting\.container\.budget_save_hint/)
   assert.match(containerSheetSource, /budgeting\.container\.categories_field/)
   assert.match(containerSheetSource, /model\.categoryIds/)
+  assert.match(containerSheetSource, /model\.surplusMode/)
+})
+
+test('budgeting page shows rolling daily allowance and period remain for pools', () => {
+  assert.match(budgetingSource, /budgeting\.container\.today_allowance/)
+  assert.match(budgetingSource, /budgeting\.container\.period_remaining/)
+  assert.match(budgetStoreSource, /resolvePoolStatsForDate/)
+  assert.match(homeBudgetSummarySource, /resolvePoolStatsForDate/)
 })
 
 test('budget container sheet exposes creation-only cross-month apply-through control', () => {

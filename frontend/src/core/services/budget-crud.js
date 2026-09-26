@@ -28,6 +28,9 @@ import {
   monthRangeUtc,
 } from './budget-period.js'
 import {
+  normalizeContainerSurplusMode,
+} from './budget-pool-daily.js'
+import {
   normalizeDayRuleUnit,
   normalizeDayRuleValues,
   countDailyRuleOccurrences,
@@ -568,12 +571,35 @@ export async function normalizeBudgetContainerPayload(ledgerId, payload = {}) {
     throw createBudgetError('budgeting.container.error.name_required')
   }
 
-  const budgetSave = await assertValidBudgetSaveConfig(ledgerId, normalizeBudgetSaveConfig(payload))
+  const surplusMode = normalizeContainerSurplusMode(
+    payload.surplusMode ?? payload.surplus_mode,
+    { budgetSaveEnabled: payload.budgetSaveEnabled ?? payload.budget_save_enabled },
+  )
+  const savePayload = surplusMode === 'save'
+    ? payload
+    : {
+      ...payload,
+      budgetSaveEnabled: false,
+      budget_save_enabled: false,
+      budgetSaveTargetAccountId: null,
+      budget_save_target_account_id: null,
+      budgetSaveSourceAccountId: null,
+      budget_save_source_account_id: null,
+    }
+  const budgetSave = await assertValidBudgetSaveConfig(ledgerId, normalizeBudgetSaveConfig(savePayload))
+  if (surplusMode === 'save' && !budgetSave.enabled) {
+    throw createBudgetError('budgeting.container.error.surplus_save_required')
+  }
   return {
     id: normalizeText(payload.id) || undefined,
     name,
     amountMinor: Math.max(0, Math.round(Number(payload.amountMinor))),
-    budgetSave,
+    budgetSave: surplusMode === 'save' ? budgetSave : {
+      enabled: false,
+      targetAccountId: null,
+      sourceAccountId: null,
+    },
+    surplusMode,
     periodMode: normalizeContainerPeriodMode(payload.periodMode),
     sortOrder: payload.sortOrder ?? 0,
     categoryIds: normalizeCategoryIdList(payload.categoryIds),
@@ -590,6 +616,9 @@ export function buildBudgetContainerWritePayload(budget, normalizedPayload, id =
     budgetSaveTargetAccountId: normalizedPayload.budgetSave.targetAccountId,
     budgetSaveSourceAccountId: normalizedPayload.budgetSave.sourceAccountId,
     periodMode: normalizedPayload.periodMode,
+    surplusMode: normalizeContainerSurplusMode(normalizedPayload.surplusMode, {
+      budgetSaveEnabled: normalizedPayload.budgetSave.enabled,
+    }),
     sortOrder: normalizedPayload.sortOrder,
   }
 }
@@ -751,6 +780,9 @@ export async function copyPreviousMonthBudget(ledgerId, monthKey, options = {}) 
       budgetSaveTargetAccountId: container.budget_save_target_account_id,
       budgetSaveSourceAccountId: container.budget_save_source_account_id,
       periodMode: normalizeContainerPeriodMode(container.period_mode),
+      surplusMode: normalizeContainerSurplusMode(container.surplus_mode, {
+        budgetSaveEnabled: Number(container.budget_save_enabled ?? 0) === 1,
+      }),
       sortOrder: index,
     })
   }
@@ -845,6 +877,9 @@ export async function carryForwardBudgetPeriodStructure(ledgerId, sourceSnapshot
       budgetSaveTargetAccountId: container.budget_save_target_account_id,
       budgetSaveSourceAccountId: container.budget_save_source_account_id,
       periodMode: normalizeContainerPeriodMode(container.period_mode),
+      surplusMode: normalizeContainerSurplusMode(container.surplus_mode, {
+        budgetSaveEnabled: Number(container.budget_save_enabled ?? 0) === 1,
+      }),
       sortOrder: index,
     })
   }

@@ -2,6 +2,7 @@ import {
   getBudgetSavePreferences,
   resolveCalendarBudgetPeriod,
   resolveContainerPeriodAmountMinor,
+  normalizeContainerSurplusMode,
 } from './budget.service.js'
 
 const defaultDependencies = {
@@ -745,6 +746,9 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
 
     for (const container of containers) {
       if (!normalizeBudgetSaveEnabled(container?.budget_save_enabled)) continue
+      if (normalizeContainerSurplusMode(container?.surplus_mode, {
+        budgetSaveEnabled: container?.budget_save_enabled,
+      }) === 'roll') continue
       if (budgetPeriod.endDate >= todayDayKey) continue
 
       const config = readBudgetSaveConfig(container, 'container')
@@ -812,6 +816,9 @@ export async function runBudgetSaveIfDue(ledgerId, options = {}) {
     }
     for (const container of containers) {
       if (!normalizeBudgetSaveEnabled(container?.budget_save_enabled)) continue
+      if (normalizeContainerSurplusMode(container?.surplus_mode, {
+        budgetSaveEnabled: container?.budget_save_enabled,
+      }) === 'roll') continue
       for (const item of items) {
         if (String(item?.budget_container_id ?? '') !== String(container.id)) continue
         const categoryId = normalizeText(item?.category_id)

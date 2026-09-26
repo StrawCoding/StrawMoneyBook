@@ -153,8 +153,8 @@
               />
               <div class="container-stats">
                 <div class="stat-cell">
-                  <span class="muted">{{ containerBudgetLabel(section.container) }}</span>
-                  <MoneyText :value-minor="section.container.budgetMinor ?? section.container.amount_minor" />
+                  <span class="muted">{{ t('budgeting.container.today_allowance') }}</span>
+                  <MoneyText :value-minor="section.container.todayAllowanceMinor ?? section.container.budgetMinor" />
                 </div>
                 <div class="stat-cell">
                   <span class="muted">{{ t('budgeting.used') }}</span>
@@ -163,6 +163,20 @@
                 <div class="stat-cell" :class="{ 'remain-over': section.container.isOver }">
                   <span class="muted">{{ t('budgeting.remaining') }}</span>
                   <MoneyText :value-minor="section.container.remainMinor" />
+                </div>
+              </div>
+              <div class="container-stats container-stats-period">
+                <div class="stat-cell">
+                  <span class="muted">{{ containerBudgetLabel(section.container) }}</span>
+                  <MoneyText :value-minor="section.container.periodBudgetMinor ?? section.container.amount_minor" />
+                </div>
+                <div class="stat-cell">
+                  <span class="muted">{{ t('budgeting.container.period_spent') }}</span>
+                  <MoneyText :value-minor="section.container.periodSpentMinor ?? 0" />
+                </div>
+                <div class="stat-cell" :class="{ 'remain-over': section.container.isPeriodOver }">
+                  <span class="muted">{{ t('budgeting.container.period_remaining') }}</span>
+                  <MoneyText :value-minor="section.container.periodRemainMinor ?? 0" />
                 </div>
               </div>
             </button>
@@ -1277,6 +1291,11 @@ h2, h3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+}
+.container-stats-period {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--field-border) 70%, transparent);
 }
 .container-actions {
   display: flex;

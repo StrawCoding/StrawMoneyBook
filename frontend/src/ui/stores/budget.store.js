@@ -19,9 +19,11 @@ import {
   saveBudgetItem,
   saveBudgetItemRange,
   isDailyPoolChildItem,
+  dateKeyForLedgerTimeZone,
 } from '@/core/services/budget.service'
 // computePeriodReservedMinor supersedes computeMonthlyReservedMinor while preserving calendar-month behavior.
 import { computePeriodReservedMinor } from '@/core/services/budget-reserve.service'
+import { resolvePoolStatsForDate } from '@/core/services/budget-pool-daily.js'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 
 function toFiniteMinor(value) {
@@ -107,33 +109,50 @@ export const useBudgetStore = defineStore('budget', {
     },
 
     containersWithStats(state) {
+      const ledger = useLedgerStore().activeLedger
+      const todayKey = dateKeyForLedgerTimeZone(ledger?.timezone)
+      const period = state.period ?? {
+        key: state.monthKey,
+        monthKey: state.monthKey,
+        startDate: `${state.monthKey}-01`,
+        endDate: `${state.monthKey}-28`,
+      }
       return state.containers.map((container) => {
         const childItems = state.items.filter(
           (item) => String(item?.budget_container_id ?? '') === String(container.id),
         )
-        const isDailyPool = normalizeContainerPeriodMode(container.period_mode) === 'daily'
-        const spentMinor = childItems.reduce(
-          (total, item) => total + toFiniteMinor(
-            isDailyPool
-              ? state.todaySpentMap[item.category_id]
-              : state.spentMap[item.category_id],
-          ),
+        const spentPeriodMinor = childItems.reduce(
+          (total, item) => total + toFiniteMinor(state.spentMap[item.category_id]),
           0,
         )
-        const amountMinor = toFiniteMinor(container.amount_minor)
-        const budgetMinor = isDailyPool
-          ? amountMinor
-          : (state.period?.key
-            ? resolveContainerPeriodAmountMinor(container, state.period)
-            : resolveContainerMonthlyAmountMinor(container, state.monthKey))
+        const spentOnDayMinor = childItems.reduce(
+          (total, item) => total + toFiniteMinor(state.todaySpentMap[item.category_id]),
+          0,
+        )
+        const stats = resolvePoolStatsForDate({
+          container,
+          period,
+          spentPeriodMinor,
+          spentOnDayMinor,
+          dayKey: todayKey,
+        })
+        const periodBudgetMinor = state.period?.key
+          ? resolveContainerPeriodAmountMinor(container, state.period)
+          : resolveContainerMonthlyAmountMinor(container, state.monthKey)
         return {
           ...container,
           items: childItems,
           periodMode: normalizeContainerPeriodMode(container.period_mode),
-          spentMinor,
-          budgetMinor,
-          remainMinor: budgetMinor - spentMinor,
-          isOver: budgetMinor > 0 && spentMinor > budgetMinor,
+          surplusMode: stats.surplusMode,
+          spentMinor: stats.spentOnDayMinor,
+          periodSpentMinor: stats.spentPeriodMinor,
+          budgetMinor: stats.todayAllowanceMinor,
+          periodBudgetMinor,
+          remainMinor: stats.todayRemainMinor,
+          periodRemainMinor: stats.periodRemainMinor,
+          todayAllowanceMinor: stats.todayAllowanceMinor,
+          isOver: stats.isOver,
+          isPeriodOver: stats.isPeriodOver,
         }
       })
     },
@@ -166,7 +185,12 @@ export const useBudgetStore = defineStore('budget', {
           state.period ?? { key: state.monthKey, monthKey: state.monthKey },
           referenceDate,
           timeZone,
-          options,
+          {
+            ...options,
+            items: state.items,
+            spentMap: state.spentMap,
+            todaySpentMap: state.todaySpentMap,
+          },
         )
       )
     },

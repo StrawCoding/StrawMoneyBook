@@ -1,5 +1,6 @@
 # Pending Release Notes
 
+- 共同預算池滾動日均：月池／日池今日可花 = 剩餘 ÷ 剩餘天數；超支縮減後續日均、有剩加回池。池設定可選「滾動回池」或「轉存錢罐」（互斥）。
 - 華南銀行同步 H2 凍合約：明細入口改 `InqMain`／「明細」、表單用 `#acct1`+`inqtype`+民國年 select、`doSubmit()`；超過 3 個月自動切窗；跨 frame 解析交易表並略過表單控制表。
 - Error Log 必帶 error code：本機 buffer／上傳 payload 經 `resolveErrorLogCode`（顯式碼 → taxonomy → 來源 fallback）保證非空；Debug 頁一律顯示錯誤碼；後端 `/api/client-logs` 缺碼預設 `unknown_error`。
 

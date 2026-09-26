@@ -133,7 +133,32 @@
       </small>
     </label>
 
-    <div class="field-card">
+    <label>
+      {{ t('budgeting.container.surplus_mode') }}
+      <div class="period-mode-row">
+        <button
+          type="button"
+          class="period-mode-btn"
+          :class="{ active: model.surplusMode === 'roll' }"
+          data-testid="budget-container-surplus-roll"
+          @click="setSurplusMode('roll')"
+        >
+          {{ t('budgeting.container.surplus_mode.roll') }}
+        </button>
+        <button
+          type="button"
+          class="period-mode-btn"
+          :class="{ active: model.surplusMode === 'save' }"
+          data-testid="budget-container-surplus-save"
+          @click="setSurplusMode('save')"
+        >
+          {{ t('budgeting.container.surplus_mode.save') }}
+        </button>
+      </div>
+      <small class="muted">{{ t('budgeting.container.surplus_mode_hint') }}</small>
+    </label>
+
+    <div v-if="model.surplusMode === 'save'" class="field-card">
       <span>{{ t('budgeting.budget_save.title') }}</span>
       <button
         type="button"
@@ -150,7 +175,7 @@
       </button>
     </div>
 
-    <template v-if="model.budgetSaveEnabled">
+    <template v-if="model.surplusMode === 'save' && model.budgetSaveEnabled">
       <label>
         {{ t('budgeting.budget_save.target') }}
         <CustomSelect v-model="model.budgetSaveTargetAccountId" :groups="budgetSaveTargetGroups" />
@@ -240,6 +265,7 @@ const model = reactive({
   name: '',
   amountMajor: null,
   periodMode: 'monthly',
+  surplusMode: 'roll',
   applyThroughMonth: '',
   categoryIds: [],
   budgetSaveEnabled: false,
@@ -311,7 +337,8 @@ const budgetSaveSourceGroups = computed(() => (
 const budgetSaveSourceOptions = computed(() => budgetSaveSourceGroups.value.flatMap((group) => group.options))
 
 const budgetSaveInvalidReason = computed(() => {
-  if (!model.budgetSaveEnabled) return ''
+  if (model.surplusMode !== 'save') return ''
+  if (!model.budgetSaveEnabled) return t('budgeting.container.error.surplus_save_required')
   if (props.hasChildBudgetSave) return t('budgeting.budget_save.error.group_conflict')
   if (!budgetSaveTargetOptions.value.length) return t('budgeting.budget_save.error.target_invalid')
   if (!String(model.budgetSaveTargetAccountId ?? '').trim()) return t('budgeting.budget_save.error.target_required')
@@ -322,6 +349,21 @@ const budgetSaveInvalidReason = computed(() => {
   }
   return ''
 })
+
+function setSurplusMode(mode) {
+  model.surplusMode = mode === 'save' ? 'save' : 'roll'
+  if (model.surplusMode === 'roll') {
+    model.budgetSaveEnabled = false
+  } else if (!model.budgetSaveEnabled) {
+    model.budgetSaveEnabled = true
+  }
+}
+
+function resolveSurplusModeFromContainer(container) {
+  const raw = String(container?.surplus_mode ?? container?.surplusMode ?? '').trim()
+  if (raw === 'save' || raw === 'roll') return raw
+  return Number(container?.budget_save_enabled ?? 0) === 1 ? 'save' : 'roll'
+}
 
 const saveInvalidReason = computed(() => {
   if (!String(model.name ?? '').trim()) return t('budgeting.container.error.name_required')
@@ -339,11 +381,13 @@ watch(
       model.name = props.container.name ?? ''
       model.amountMajor = Number(props.container.amount_minor ?? 0) / 100
       model.periodMode = String(props.container.period_mode ?? '').trim() === 'daily' ? 'daily' : 'monthly'
+      model.surplusMode = resolveSurplusModeFromContainer(props.container)
       model.applyThroughMonth = ''
       model.categoryIds = (props.childItems ?? [])
         .map((item) => String(item?.category_id ?? '').trim())
         .filter(Boolean)
-      model.budgetSaveEnabled = Number(props.container.budget_save_enabled ?? 0) === 1
+      model.budgetSaveEnabled = model.surplusMode === 'save'
+        && Number(props.container.budget_save_enabled ?? 0) === 1
       model.budgetSaveTargetAccountId = String(props.container.budget_save_target_account_id ?? '')
       model.budgetSaveSourceAccountId = String(props.container.budget_save_source_account_id ?? '')
       return
@@ -353,6 +397,7 @@ watch(
     model.name = ''
     model.amountMajor = null
     model.periodMode = 'monthly'
+    model.surplusMode = 'roll'
     model.applyThroughMonth = ''
     model.categoryIds = []
     model.budgetSaveEnabled = false
@@ -401,11 +446,16 @@ function onSave() {
     name: String(model.name ?? '').trim(),
     amountMinor: Math.round(Number(model.amountMajor ?? 0) * 100),
     periodMode: model.periodMode === 'daily' ? 'daily' : 'monthly',
+    surplusMode: model.surplusMode === 'save' ? 'save' : 'roll',
     applyThroughMonth: model.id ? undefined : String(model.applyThroughMonth ?? '').trim() || undefined,
     categoryIds: model.periodMode === 'daily' ? [...model.categoryIds] : undefined,
-    budgetSaveEnabled: model.budgetSaveEnabled,
-    budgetSaveTargetAccountId: model.budgetSaveEnabled ? model.budgetSaveTargetAccountId : null,
-    budgetSaveSourceAccountId: model.budgetSaveEnabled ? model.budgetSaveSourceAccountId : null,
+    budgetSaveEnabled: model.surplusMode === 'save' && model.budgetSaveEnabled,
+    budgetSaveTargetAccountId: model.surplusMode === 'save' && model.budgetSaveEnabled
+      ? model.budgetSaveTargetAccountId
+      : null,
+    budgetSaveSourceAccountId: model.surplusMode === 'save' && model.budgetSaveEnabled
+      ? model.budgetSaveSourceAccountId
+      : null,
     ledgerBudgetPeriodSettings: {
       budgetPeriodMode: model.ledgerBudgetPeriodMode === 'pay_cycle' ? 'pay_cycle' : 'calendar_month',
       budgetPayDay: clampPayDay(model.ledgerBudgetPayDay),

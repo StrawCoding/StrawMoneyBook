@@ -418,16 +418,18 @@ test('executeMigrationSql applies migration 046 on existing bank schema without 
   db.close()
 })
 
-test('migrate registers deleted_log trigger restore migration 047 and posting soft-delete 048', () => {
+test('migrate registers deleted_log trigger restore migration 047 and posting soft-delete 048 and surplus_mode 049', () => {
   const source = readFileSync(resolve(import.meta.dirname, '../src/core/db/migrate.js'), 'utf8')
 
   assert.match(source, /import migration047 from '@\/core\/db\/migrations\/047_restore_deleted_log_triggers\.sql\?raw'/)
   assert.match(source, /\{ version: 47, name: 'restore_deleted_log_triggers', sql: migration047 \}/)
   assert.match(source, /import migration048 from '@\/core\/db\/migrations\/048_soft_delete_transaction_postings\.sql\?raw'/)
   assert.match(source, /\{ version: 48, name: 'soft_delete_transaction_postings', sql: migration048 \}/)
+  assert.match(source, /import migration049 from '@\/core\/db\/migrations\/049_budget_container_surplus_mode\.sql\?raw'/)
+  assert.match(source, /\{ version: 49, name: 'budget_container_surplus_mode', sql: migration049 \}/)
   assert.match(source, /assertNoReservedMigrationVersions\(MIGRATIONS\)/)
   assert.match(source, /versions 20, 21, 22, 27 and 29/)
-  assert.match(source, /Next available version: 49/)
+  assert.match(source, /Next available version: 50/)
   assert.doesNotMatch(source, /\{ version: 20,/)
   assert.doesNotMatch(source, /\{ version: 21,/)
   assert.doesNotMatch(source, /\{ version: 22,/)
