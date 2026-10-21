@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- Drive／JSON 匯入 gate：`budget_containers.surplus_mode` 納入備份 schema 合約，含 v1.4.19+ 共同池滾動日均備份可還原，不再誤判「不存在的欄位」而中止。
-
 ---
+
+## v1.4.20
+- Drive／JSON 匯入 gate：`budget_containers.surplus_mode` 納入備份 schema 合約，含 v1.4.19+ 共同池滾動日均備份可還原，不再誤判「不存在的欄位」而中止。
 
 ## v1.4.19
 - 共同預算池滾動日均：月池／日池今日可花 = 剩餘 ÷ 剩餘天數；超支縮減後續日均、有剩加回池。池設定可選「滾動回池」或「轉存錢罐」（互斥）。
