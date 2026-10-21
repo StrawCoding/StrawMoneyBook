@@ -313,6 +313,25 @@ test('smb299: restore orchestration requires importable preview and never wipes 
   assert.equal(assertBackupJsonStructureImportable(goodJson).mode, 'all_ledgers')
   assert.equal(assertDriveRestorePreviewReady(goodPreview).jsonText, goodJson)
 
+  const poolPayload = buildAllLedgersPayload({
+    ledgerName: '個人',
+    transactions: [buildValidTransaction({ id: 't_pool', occurred_at: '2026-02-01T00:00:00.000Z' })],
+  })
+  poolPayload.ledgers[0].tables.budget_containers = [{
+    id: 'bc_roll',
+    budget_id: 'b1',
+    name: '伙食池',
+    amount_minor: 30000,
+    period_mode: 'daily',
+    surplus_mode: 'roll',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+  }]
+  assert.equal(
+    assertBackupJsonStructureImportable(JSON.stringify(poolPayload)).mode,
+    'all_ledgers',
+  )
+
   await assert.rejects(
     async () => assertBackupJsonImportable('{not-json'),
     (error) => error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE && error?.silentWipeBlocked === true,

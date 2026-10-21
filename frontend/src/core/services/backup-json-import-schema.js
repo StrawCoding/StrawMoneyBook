@@ -236,9 +236,12 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
     columns: cols(
       'ledger_id', 'id', 'budget_id', 'name', 'amount_minor', 'budget_save_enabled',
       'budget_save_target_account_id', 'budget_save_source_account_id', 'sort_order',
-      'created_at', 'updated_at', 'period_mode',
+      'created_at', 'updated_at', 'period_mode', 'surplus_mode',
     ),
     required: Object.freeze(['id', 'budget_id', 'name', 'created_at', 'updated_at']),
+    enums: enums({
+      surplus_mode: ['roll', 'save'],
+    }),
   },
   budget_items: {
     columns: cols(

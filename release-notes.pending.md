@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- Drive／JSON 匯入 gate：`budget_containers.surplus_mode` 納入備份 schema 合約，含 v1.4.19+ 共同池滾動日均備份可還原，不再誤判「不存在的欄位」而中止。
+
 ---
 
 ## v1.4.19
