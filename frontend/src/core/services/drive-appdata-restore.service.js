@@ -131,6 +131,16 @@ export function isDriveRestorePreviewReady(preview) {
   }
 }
 
+/** Human-readable gate failure for preview UI (no throw). */
+export function describeDriveRestorePreviewGateError(preview) {
+  try {
+    assertDriveRestorePreviewReady(preview)
+    return ''
+  } catch (error) {
+    return String(error?.message ?? error ?? '').trim()
+  }
+}
+
 /**
  * Wipe then import with mandatory durable-recovery rollback if import fails.
  * Callers must already have proven the import payload is gate-importable.

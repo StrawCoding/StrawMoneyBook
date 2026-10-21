@@ -349,6 +349,7 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
     columns: cols(
       'ledger_id', 'id', 'provider', 'provider_connection_id', 'status', 'user_label',
       'last_sync_at', 'sync_cursor', 'last_sync_status', 'last_error',
+      'last_attempt_at', 'last_full_success_at', 'auto_import_enabled',
       'created_at', 'updated_at', 'deleted_at',
     ),
     required: Object.freeze(['id', 'provider', 'provider_connection_id', 'created_at', 'updated_at']),
@@ -361,9 +362,13 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
     columns: cols(
       'ledger_id', 'id', 'connection_id', 'provider_account_id', 'account_mask',
       'account_name', 'account_type', 'currency', 'enabled', 'user_label',
-      'mapped_account_id', 'created_at', 'updated_at', 'deleted_at',
+      'mapped_account_id', 'last_success_sync_at', 'sync_cursor', 'last_sync_status',
+      'last_error', 'created_at', 'updated_at', 'deleted_at',
     ),
     required: Object.freeze(['id', 'connection_id', 'provider_account_id', 'account_name', 'created_at', 'updated_at']),
+    enums: enums({
+      last_sync_status: ['idle', 'ok', 'error'],
+    }),
   },
   bank_transactions: {
     columns: cols(
@@ -371,7 +376,7 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       'posted_at', 'amount_minor', 'currency', 'description', 'merchant', 'status',
       'seen_in_app', 'imported', 'imported_txn_id', 'raw_json', 'first_seen_at',
       'last_seen_at', 'created_at', 'updated_at', 'transaction_type', 'note', 'summary',
-      'balance_minor',
+      'balance_minor', 'identity_scheme',
     ),
     required: Object.freeze([
       'id', 'connection_id', 'bank_account_id', 'provider_transaction_id', 'posted_at',

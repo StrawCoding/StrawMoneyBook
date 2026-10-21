@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- Drive 還原：匯入 gate 補齊 migration 046 銀行同步欄位；預覽失敗時顯示具體 gate 原因（非僅通用文案）。**Play 安裝版須更新 AAB 才含修復**（Web 版隨 `/app/` 部署）。
+
 ---
 
 ## v1.4.20

@@ -332,6 +332,23 @@ test('smb299: restore orchestration requires importable preview and never wipes 
     'all_ledgers',
   )
 
+  const bankCheckpointPayload = buildAllLedgersPayload({
+    ledgerName: '個人',
+    transactions: [buildValidTransaction({ id: 't_bank', occurred_at: '2026-02-01T00:00:00.000Z' })],
+  })
+  bankCheckpointPayload.ledgers[0].tables.bank_connections = [{
+    id: 'bc1',
+    provider: 'huanan',
+    provider_connection_id: 'pc1',
+    auto_import_enabled: 1,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+  }]
+  assert.equal(
+    assertBackupJsonStructureImportable(JSON.stringify(bankCheckpointPayload)).mode,
+    'all_ledgers',
+  )
+
   await assert.rejects(
     async () => assertBackupJsonImportable('{not-json'),
     (error) => error?.code === DRIVE_RESTORE_NOT_IMPORTABLE_CODE && error?.silentWipeBlocked === true,

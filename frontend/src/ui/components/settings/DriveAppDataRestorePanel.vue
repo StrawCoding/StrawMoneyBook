@@ -168,7 +168,10 @@
               </li>
             </ul>
             <p v-if="previewPayload && !previewImportable" class="warn compact" data-testid="drive-appdata-preview-not-importable">
-              {{ t('settings_auto_backup.drive_browser.not_importable', '此檔／版本無法匯入（內容無法解析為帳本備份）。請另選檔或舊版。') }}
+              {{
+                previewGateError
+                  || t('settings_auto_backup.drive_browser.not_importable', '此檔／版本無法匯入（內容無法解析為帳本備份）。請另選檔或舊版。')
+              }}
             </p>
             <p v-if="previewAgeWarn" class="warn compact" data-testid="drive-appdata-age-warn">{{ previewAgeWarn }}</p>
             <p v-if="previewCoverageWarn" class="warn compact" data-testid="drive-appdata-coverage-warn">{{ previewCoverageWarn }}</p>
@@ -261,6 +264,7 @@ import {
   DRIVE_RESTORE_NOT_IMPORTABLE_CODE,
   DRIVE_RESTORE_PREVIEW_REQUIRED_CODE,
   assertDriveRestorePreviewReady,
+  describeDriveRestorePreviewGateError,
   isDriveRestorePreviewReady,
   runConfirmedDriveAppDataRestore,
 } from '@/core/services/drive-appdata-restore.service'
@@ -304,6 +308,11 @@ const hasTestMock = computed(() => detectDriveAppDataMock())
 const canUseBrowser = computed(() => Boolean(props.connected || hasTestMock.value))
 const busy = computed(() => listing.value || restoring.value || Boolean(revisionLoadingId.value) || pendingPreviewLoading.value)
 const previewImportable = computed(() => isDriveRestorePreviewReady(previewPayload.value))
+const previewGateError = computed(() => (
+  previewPayload.value && !previewImportable.value
+    ? describeDriveRestorePreviewGateError(previewPayload.value)
+    : ''
+))
 const pendingImportable = computed(() => isDriveRestorePreviewReady(pendingPreview.value))
 const canConfirmRestore = computed(() => (
   !restoring.value
