@@ -226,8 +226,8 @@
 | 交易清單（含空狀態與快速記帳 CTA） | `src/ui/components/home/HomeTransactionFeed.vue` |
 | 編輯交易 | `src/ui/components/home/HomeTransactionEditSheet.vue`（SMB-217 後改用 AmountCalculatorInput 計算機輸入） |
 | 快速新增入口 | `src/ui/views/BookkeepingPage.vue` + `src/ui/services/bookkeeping-mode.service.js` |
-| 手動快速新增 | `src/ui/views/QuickAddPage.vue`（SMB-162 後附加項目抵消後可存 0 元交易；SMB-175 後金額欄整合計算機；v1.4.22 未輸入金額前端攔截 + `bookkeeping-submit-error.js` 錯誤映射） |
-| 問答記帳 | `src/ui/views/QnaBookkeepingPage.vue` |
+| 手動快速新增 | `src/ui/views/QuickAddPage.vue`（SMB-162 後附加項目抵消後可存 0 元交易；SMB-175 後金額欄整合計算機；v1.4.22 未輸入金額前端攔截 + `bookkeeping-submit-error.js` 錯誤映射；v1.4.23 與 AI 共用金額／錯誤 helper，進入頁保證載入帳戶／分類） |
+| 問答記帳 | `src/ui/views/QnaBookkeepingPage.vue`（v1.4.23 進入頁載入帳戶／分類，儲存列避開系統導覽列） |
 | AI 記帳 | `src/ui/views/AiAutoBookkeepingPage.vue` + `src/core/services/ai-bookkeeping.service.js`（SMB-163 後解析帳本附加項目模板；SMB-162 後附加項目抵消後可存 0 元交易；smb291 後四則運算／單位算式與保留詞不入備註） |
 | 快速新增附加資訊（備註/報銷/附加項目） | `src/ui/views/QuickAddPage.vue` |
 | 日期時間選擇 | `src/ui/components/common/DateTimePickerField.vue` |

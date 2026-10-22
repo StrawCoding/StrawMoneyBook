@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveBookkeepingSubmitErrorMessage } from '../src/ui/utils/bookkeeping-submit-error.js'
+import {
+  isUnsetZeroBookkeepingAmount,
+  resolveBookkeepingSubmitErrorMessage,
+} from '../src/ui/utils/bookkeeping-submit-error.js'
 
 const t = (key, fallback) => {
   const map = {
@@ -27,4 +30,22 @@ test('resolveBookkeepingSubmitErrorMessage maps zero amount backend message', ()
 test('resolveBookkeepingSubmitErrorMessage falls back to message then generic', () => {
   assert.equal(resolveBookkeepingSubmitErrorMessage(new Error('自訂錯誤'), t), '自訂錯誤')
   assert.equal(resolveBookkeepingSubmitErrorMessage(new Error(''), t), '新增失敗')
+})
+
+test('isUnsetZeroBookkeepingAmount allows addon net-zero but blocks empty amount', () => {
+  assert.equal(isUnsetZeroBookkeepingAmount({
+    settledAmountMinorRaw: 0,
+    baseAmountMinor: 0,
+    appliedAddonItems: [],
+  }), true)
+  assert.equal(isUnsetZeroBookkeepingAmount({
+    settledAmountMinorRaw: 0,
+    baseAmountMinor: 0,
+    appliedAddonItems: [{ deltaMajor: 50 }],
+  }), false)
+  assert.equal(isUnsetZeroBookkeepingAmount({
+    settledAmountMinorRaw: 8800,
+    baseAmountMinor: 8800,
+    appliedAddonItems: [],
+  }), false)
 })

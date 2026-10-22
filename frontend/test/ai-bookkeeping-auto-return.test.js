@@ -15,3 +15,13 @@ test('AI bookkeeping saves now route through close-after-success flow', () => {
   assert.match(source, /if \(successCount > 0\) \{\s*await closePage\(\)/)
   assert.match(source, /if \(closeAfterSuccess\) \{\s*await closePage\(\)/)
 })
+
+test('AI submit maps shared bookkeeping errors and keeps created transaction id', () => {
+  assert.match(source, /resolveBookkeepingSubmitErrorMessage/)
+  assert.match(source, /isUnsetZeroBookkeepingAmount/)
+  assert.match(source, /const savedTxId = String\(persistedTransactionId\.value/)
+  assert.match(source, /return savedTxId \|\| true/)
+  assert.match(source, /typeof created === 'string'/)
+  assert.match(source, /data-testid="ai-bookkeeping-save"/)
+  assert.match(source, /data-testid="ai-bookkeeping-parse"/)
+})

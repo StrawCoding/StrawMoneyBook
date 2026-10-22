@@ -125,6 +125,10 @@ async function goBack() {
 </script>
 
 <style scoped>
+.stack {
+  padding-bottom: calc(12px + var(--navigation-bar-height));
+}
+
 .panel {
   padding: 14px;
 }

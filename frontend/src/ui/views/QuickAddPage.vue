@@ -221,7 +221,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
@@ -243,7 +243,10 @@ import {
   resolveCrossExchangeRate,
   syncCbcExchangeRateSnapshot,
 } from '@/ui/services/exchange-rate.service'
-import { resolveBookkeepingSubmitErrorMessage } from '@/ui/utils/bookkeeping-submit-error'
+import {
+  isUnsetZeroBookkeepingAmount,
+  resolveBookkeepingSubmitErrorMessage,
+} from '@/ui/utils/bookkeeping-submit-error'
 
 const TRANSFER_RATE_AUTO_SYNC_TIMEOUT_MS = 8000
 const props = defineProps({
@@ -702,11 +705,11 @@ async function submit(options = {}) {
   } else if (settledAmountMinorRaw < 0) {
     uiStore.pushToast(t('quick_add.error.amount_required'), 'error')
     return
-  } else if (
-    settledAmountMinorRaw === 0
-    && baseAmountMinor <= 0
-    && !appliedAddonItems.some((item) => item.deltaMajor > 0)
-  ) {
+  } else if (isUnsetZeroBookkeepingAmount({
+    settledAmountMinorRaw,
+    baseAmountMinor,
+    appliedAddonItems,
+  })) {
     uiStore.pushToast(t('quick_add.error.amount_required'), 'error')
     return
   }
@@ -815,6 +818,13 @@ function addonLabelOf(optionId) {
 }
 
 fillDefaultOccurredAt()
+onMounted(() => {
+  void Promise.all([
+    accountStore.accounts.length ? Promise.resolve() : accountStore.load(),
+    categoryStore.categories.length ? Promise.resolve() : categoryStore.load(),
+    addonTemplateStore.load(),
+  ])
+})
 void addonTemplateStore.load()
 </script>
 
@@ -965,6 +975,7 @@ h2 {
 .action-row {
   margin-top: 12px;
   justify-content: space-between;
+  padding-bottom: var(--navigation-bar-height);
 }
 
 .extra-mask {

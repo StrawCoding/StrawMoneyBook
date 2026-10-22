@@ -8,11 +8,11 @@ const read = (rel) => readFileSync(resolve(root, rel), 'utf8')
 
 test('QuickAddPage blocks unset zero amount while preserving addon net-zero', () => {
   const source = read('src/ui/views/QuickAddPage.vue')
-  assert.match(source, /settledAmountMinorRaw === 0/)
-  assert.match(source, /baseAmountMinor <= 0/)
-  assert.match(source, /appliedAddonItems\.some/)
+  assert.match(source, /isUnsetZeroBookkeepingAmount/)
   assert.match(source, /settledAmountMinorRaw < 0/)
   assert.match(source, /resolveBookkeepingSubmitErrorMessage/)
+  assert.match(source, /accountStore\.load\(\)/)
+  assert.match(source, /categoryStore\.load\(\)/)
 })
 
 test('QuickAddPage exposes save buttons for Playwright', () => {

@@ -324,6 +324,14 @@ export async function loadBudgetSnapshotForPeriod(ledgerId, period) {
   const ledgerTimeZone = normalizeLedgerTimeZone(ledger?.timezone)
   const { startUtc, endUtc } = dateRangeUtc(period.startDate, period.endDate, ledgerTimeZone)
   const { startUtc: todayStartUtc, endUtc: todayEndUtc } = todayRangeUtc(ledgerTimeZone)
+  const spentByCategoryDayTask = typeof dependencies.listBudgetSpentByCategoryAndDay === 'function'
+    ? Promise.resolve()
+      .then(() => dependencies.listBudgetSpentByCategoryAndDay(ledgerId, startUtc, endUtc))
+      .catch((error) => {
+        console.warn('[budget] listBudgetSpentByCategoryAndDay failed', error)
+        return []
+      })
+    : Promise.resolve([])
   const [rawItems, spentRows, todaySpentRows, usedOccurrenceRows, budgetSavePreferences, rawContainers, spentByCategoryDayRows] = await Promise.all([
     dependencies.listBudgetItems(ledgerId, budget.id),
     dependencies.computeBudgetSpentByCategory(ledgerId, startUtc, endUtc),
@@ -331,7 +339,7 @@ export async function loadBudgetSnapshotForPeriod(ledgerId, period) {
     dependencies.listBudgetUsageDaysByCategory(ledgerId, startUtc, endUtc),
     getBudgetSavePreferences(ledgerId),
     dependencies.listBudgetContainers(ledgerId, budget.id),
-    dependencies.listBudgetSpentByCategoryAndDay(ledgerId, startUtc, endUtc),
+    spentByCategoryDayTask,
   ])
   const usedDaysMap = new Map()
   for (const row of usedOccurrenceRows) {

@@ -45,6 +45,7 @@
         </button>
         <button
           class="btn primary icon-action-btn"
+          data-testid="ai-bookkeeping-parse"
           :class="{ busy: parsing || submitting }"
           :disabled="parsing || submitting"
           :aria-label="t('ai_bookkeeping.action.submit')"
@@ -264,7 +265,13 @@
 
       <footer class="row action-row result-action-row">
         <button class="btn" :disabled="parsing || submitting" @click="parseText">重新解析</button>
-        <button class="btn primary" :class="{ busy: submitting }" :disabled="parsing || submitting" @click="saveDraftAndReturn">
+        <button
+          class="btn primary"
+          data-testid="ai-bookkeeping-save"
+          :class="{ busy: submitting }"
+          :disabled="parsing || submitting"
+          @click="saveDraftAndReturn"
+        >
           {{ t('common.save') }}
         </button>
       </footer>
@@ -274,7 +281,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
@@ -294,6 +301,10 @@ import { getLastManualBookkeepingPath } from '@/ui/services/bookkeeping-mode.ser
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { mergeAddonItemsToNote } from '@/ui/utils/addon-note'
+import {
+  isUnsetZeroBookkeepingAmount,
+  resolveBookkeepingSubmitErrorMessage,
+} from '@/ui/utils/bookkeeping-submit-error'
 import { resolveAiBookkeepingNoteValue } from '@/ui/services/ai-bookkeeping-draft'
 import {
   convertAmountMinorByRate,
@@ -499,7 +510,7 @@ watch(
     const categoryList = type === 'income' ? categoryStore.incomeCategories : categoryStore.expenseCategories
     const hasCurrent = categoryList.some((item) => item.id === model.categoryId)
     if (!hasCurrent) {
-      model.categoryId = ''
+      model.categoryId = categoryList[0]?.id ?? ''
     }
     if (type !== 'expense') {
       model.isReimbursable = false
@@ -528,6 +539,8 @@ watch(
   () => ledgerStore.activeLedgerId,
   () => {
     void Promise.all([
+      accountStore.accounts.length ? Promise.resolve() : accountStore.load(),
+      categoryStore.categories.length ? Promise.resolve() : categoryStore.load(),
       loadAutoFillRules(),
       addonTemplateStore.load(),
       loanStore.load(),
@@ -535,6 +548,13 @@ watch(
   },
   { immediate: true },
 )
+
+onMounted(() => {
+  void Promise.all([
+    accountStore.accounts.length ? Promise.resolve() : accountStore.load(),
+    categoryStore.categories.length ? Promise.resolve() : categoryStore.load(),
+  ])
+})
 
 watch(
   () => model.isReimbursable,
@@ -745,7 +765,7 @@ async function parseText(options = {}) {
     })
     if (created) {
       uiStore.pushToast(t('ai_bookkeeping.toast.saved', 'AI 記帳已儲存交易'))
-      const savedTxId = String(persistedTransactionId.value ?? '').trim()
+      const savedTxId = typeof created === 'string' ? created : String(persistedTransactionId.value ?? '').trim()
       if (savedTxId) {
         await router.push({
           name: 'transaction-edit',
@@ -828,7 +848,8 @@ function applyDraft(draft, options = {}) {
   model.occurredMinute = date.getMinutes()
   model.accountId = draft.accountId ?? directAccountOptions.value[0]?.id ?? ''
   model.peerAccountId = draft.peerAccountId ?? transferAccountOptions.value.find((item) => item.id !== model.accountId)?.id ?? ''
-  model.categoryId = draft.categoryId ?? ''
+  const fallbackCategories = draft.type === 'income' ? categoryStore.incomeCategories : categoryStore.expenseCategories
+  model.categoryId = draft.categoryId || fallbackCategories[0]?.id || ''
   model.note = resolveAiBookkeepingNoteValue(currentNote, draft.note, {
     preserveCurrentWhenParsedEmpty: Boolean(options.preserveCurrentNoteWhenParsedEmpty),
   })
@@ -870,7 +891,9 @@ async function submit(options = {}) {
   const closeAfterSuccess = options.closeAfterSuccess === true
   if (parsing.value || submitting.value) return
   const failSubmit = (message) => {
-    const resolvedMessage = String(message ?? '').trim() || t('ai_bookkeeping.toast.save_failed', '儲存交易失敗')
+    const resolvedMessage = message && typeof message === 'object'
+      ? resolveBookkeepingSubmitErrorMessage(message, t)
+      : (String(message ?? '').trim() || t('ai_bookkeeping.toast.save_failed', '儲存交易失敗'))
     if (throwOnError) {
       throw new Error(resolvedMessage)
     }
@@ -905,6 +928,12 @@ async function submit(options = {}) {
     }
   } else if (settledAmountMinorRaw < 0) {
     return failSubmit('請輸入有效金額（含附加項目後不可小於 0）')
+  } else if (model.type !== 'adjustment' && isUnsetZeroBookkeepingAmount({
+    settledAmountMinorRaw,
+    baseAmountMinor,
+    appliedAddonItems,
+  })) {
+    return failSubmit(t('quick_add.error.amount_required'))
   }
   if (!occurredAt) {
     return failSubmit('請選擇有效時間')
@@ -1173,6 +1202,7 @@ async function submit(options = {}) {
           : t('ai_bookkeeping.toast.saved', 'AI 記帳已儲存交易'),
       )
     }
+    const savedTxId = String(persistedTransactionId.value ?? '').trim()
     finalizeAiSubmitSuccess({
       keepDraft,
       preserveSourceText,
@@ -1180,9 +1210,9 @@ async function submit(options = {}) {
     if (closeAfterSuccess) {
       await closePage()
     }
-    return true
+    return savedTxId || true
   } catch (error) {
-    return failSubmit(error.message ?? t('ai_bookkeeping.toast.save_failed', '儲存交易失敗'))
+    return failSubmit(error)
   } finally {
     submitting.value = false
   }
@@ -1603,6 +1633,7 @@ h2, h3 {
 .result-action-row {
   margin-top: 12px;
   justify-content: flex-end;
+  padding-bottom: var(--navigation-bar-height);
 }
 .speech-hint {
   display: block;

@@ -1,6 +1,19 @@
 /**
  * Map backend / service errors from manual bookkeeping submits to user-facing i18n.
  */
+
+export function isUnsetZeroBookkeepingAmount({
+  settledAmountMinorRaw = 0,
+  baseAmountMinor = 0,
+  appliedAddonItems = [],
+} = {}) {
+  return (
+    Number(settledAmountMinorRaw) === 0
+    && Number(baseAmountMinor) <= 0
+    && !appliedAddonItems.some((item) => Number(item?.deltaMajor) > 0)
+  )
+}
+
 export function resolveBookkeepingSubmitErrorMessage(error, t) {
   const code = String(error?.code ?? '').trim()
   const message = String(error?.message ?? '').trim()

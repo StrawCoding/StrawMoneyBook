@@ -185,7 +185,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
@@ -696,6 +696,12 @@ async function submit(options = {}) {
 
 fillDefaultOccurredAt()
 ensureSelections()
+onMounted(() => {
+  void Promise.all([
+    accountStore.accounts.length ? Promise.resolve() : accountStore.load(),
+    categoryStore.categories.length ? Promise.resolve() : categoryStore.load(),
+  ])
+})
 </script>
 
 <style scoped>
@@ -816,6 +822,7 @@ ensureSelections()
   margin-top: 14px;
   justify-content: space-between;
   gap: 8px;
+  padding-bottom: var(--navigation-bar-height);
   flex-wrap: wrap;
 }
 
