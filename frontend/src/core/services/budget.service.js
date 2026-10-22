@@ -37,6 +37,12 @@ export {
 } from './budget-pool-daily.js'
 
 export {
+  buildBudgetDailyStatsRows,
+  listPeriodDayKeys,
+  isBudgetItemActiveOnDate,
+} from './budget-daily-stats.js'
+
+export {
   resolveBudgetItemForPeriod,
   resolveBudgetItemForMonth,
 } from './budget-spent.js'

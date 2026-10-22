@@ -1,5 +1,9 @@
 # Pending Release Notes
 
+- 快速記帳：未輸入金額（仍為 0 且無附加項目）時前端即提示，避免 Play 版按儲存只出「新增失敗」；金額計算機在 0 元時視覺提示；信用卡／關帳帳單等後端錯誤改為可讀 i18n；問答記帳共用 `bookkeeping-submit-error`。
+- 預算頁：本期逐日預算／已花／差額與累計表（`BudgetDailyStatsTable`，含滾動共同池日均）。
+- 華南銀行同步：InqMain 帳號 href 探測、交易表依表頭解析民國日期與支出／存入欄。**Play 安裝版須更新 AAB/APK 才含記帳與華南原生修復**。
+
 ---
 
 ## v1.4.21

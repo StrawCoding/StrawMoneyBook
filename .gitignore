@@ -75,3 +75,8 @@ speech-stt-service/models/
 
 # Local development/design artifacts
 developeTmp/
+
+# Competitive audit captures (local research; do not ship in product releases)
+docs/competitive/apks/
+docs/competitive/screenshots/
+docs/competitive/**/*.xapk

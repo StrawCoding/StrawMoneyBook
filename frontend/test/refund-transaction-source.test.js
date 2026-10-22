@@ -45,7 +45,7 @@ test('transaction queries expose refund-link state for downstream summaries', ()
 })
 
 test('budget and export queries expose refund deducted amount for net aggregates', () => {
-  assert.match(budgetRepoSource, /from '@\/core\/domain\/refund-match-sql\.js'/)
+  assert.match(budgetRepoSource, /from '\.\.\/domain\/refund-match-sql\.js'/)
   assert.match(budgetRepoSource, /refundDeductedMinorSql/)
   assert.match(budgetRepoSource, /function budgetSpentMinorSql\(sourceAlias = 'transactions'\)/)
   assert.match(budgetRepoSource, /SUM\(\$\{budgetSpentMinorSql\('transactions'\)\}\) AS spent_minor/)

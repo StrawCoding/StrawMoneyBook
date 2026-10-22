@@ -122,6 +122,15 @@ test('hua nan H2 inquiry uses frozen InqMain form anchors not text heuristics al
   )
 })
 
+test('hua nan H2 result parsing maps ROC dates and withdraw/deposit columns', () => {
+  assert.match(huaNanBankAutomationSource, /resolveTransactionAmountMinor/)
+  assert.match(huaNanBankAutomationSource, /交易日期|交易日/)
+  assert.match(huaNanBankAutomationSource, /inq_main_href/)
+  assert.match(huaNanBankAutomationSource, /year \+= 1911/)
+  assert.match(huaNanBankAutomationSource, /idxWithdraw/)
+  assert.match(huaNanBankAutomationSource, /idxDeposit/)
+})
+
 test('bank automation plugin exposes captcha submit and abort actions', () => {
   const pluginSource = read(
     'android/app/src/main/java/com/strawcoding/strawmoneybook/BankAutomationPlugin.java',

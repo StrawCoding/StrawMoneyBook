@@ -109,10 +109,24 @@
       </div>
 
       <footer class="row action-row">
-        <button class="btn" :class="{ busy: submitting }" :disabled="submitting" @click="submit({ closeAfterSuccess: false })">
+        <button
+          type="button"
+          class="btn"
+          data-testid="quick-add-save-and-add"
+          :class="{ busy: submitting }"
+          :disabled="submitting"
+          @click="submit({ closeAfterSuccess: false })"
+        >
           {{ t('quick_add.action.save_and_add') }}
         </button>
-        <button class="btn primary" :class="{ busy: submitting }" :disabled="submitting" @click="submit({ closeAfterSuccess: true })">
+        <button
+          type="button"
+          class="btn primary"
+          data-testid="quick-add-create"
+          :class="{ busy: submitting }"
+          :disabled="submitting"
+          @click="submit({ closeAfterSuccess: true })"
+        >
           {{ t('quick_add.action.create_transaction') }}
         </button>
       </footer>
@@ -229,6 +243,7 @@ import {
   resolveCrossExchangeRate,
   syncCbcExchangeRateSnapshot,
 } from '@/ui/services/exchange-rate.service'
+import { resolveBookkeepingSubmitErrorMessage } from '@/ui/utils/bookkeeping-submit-error'
 
 const TRANSFER_RATE_AUTO_SYNC_TIMEOUT_MS = 8000
 const props = defineProps({
@@ -687,6 +702,13 @@ async function submit(options = {}) {
   } else if (settledAmountMinorRaw < 0) {
     uiStore.pushToast(t('quick_add.error.amount_required'), 'error')
     return
+  } else if (
+    settledAmountMinorRaw === 0
+    && baseAmountMinor <= 0
+    && !appliedAddonItems.some((item) => item.deltaMajor > 0)
+  ) {
+    uiStore.pushToast(t('quick_add.error.amount_required'), 'error')
+    return
   }
 
   submitting.value = true
@@ -738,7 +760,7 @@ async function submit(options = {}) {
     }
     resetFormForNextEntry()
   } catch (error) {
-    uiStore.pushToast(error.message ?? t('quick_add.toast.create_failed'), 'error')
+    uiStore.pushToast(resolveBookkeepingSubmitErrorMessage(error, t), 'error')
   } finally {
     submitting.value = false
   }

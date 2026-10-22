@@ -1,6 +1,11 @@
 <template>
   <div class="amount-calc-field">
-    <button type="button" class="calc-trigger" @click="openCalc">
+    <button
+      type="button"
+      class="calc-trigger"
+      :class="{ 'calc-trigger-empty': !hasPositiveAmount }"
+      @click="openCalc"
+    >
       <span class="calc-trigger-expr" :class="{ 'has-operator': hasOperator }">{{ triggerLabel }}</span>
       <span v-if="hasOperator && liveResult !== null" class="calc-trigger-preview">= {{ liveResult }}</span>
       <span class="calc-trigger-icon" aria-hidden="true">⌨</span>
@@ -78,6 +83,10 @@ const expression = ref('')
 
 const liveResult = computed(() => evaluateAmountExpression(expression.value))
 const hasOperator = computed(() => expressionHasOperator(expression.value))
+const hasPositiveAmount = computed(() => {
+  const val = Number(props.modelValue ?? 0)
+  return Number.isFinite(val) && val > 0
+})
 
 const triggerLabel = computed(() => {
   if (expression.value && expression.value !== '0') return expression.value
@@ -194,6 +203,11 @@ onBeforeUnmount(() => {
 .calc-trigger:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+.calc-trigger-empty {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
 .calc-trigger-expr {

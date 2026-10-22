@@ -58,6 +58,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * H2 inquiry form frozen from live portal DOM (2026-09-01):
  * entry {@code trx=com.lb.wibc.trx.InqMain} / label「明細」, form {@code #acct1} + {@code inqtype}
  * + ROC year selects {@code S_Year}/{@code E_Year}, submit {@code doSubmit()}.
+ * H2 result rows: header-mapped table (交易日期 / 摘要 / 支出|存入) + ROC {@code yyyy/mm/dd} dates.
  * Phase A records masked h1_probe / h2_probe + observe-only hncb intercept (never replay).
  * See docs/wiki/Sync-Architecture-B.md.
  */
@@ -879,6 +880,15 @@ public final class HuaNanBankAutomation {
                     }
                   } catch (_e) {}
                 }
+                for (const el of Array.from(doc.querySelectorAll('a[href*="InqMain"], a[href*="inqMain"]'))) {
+                  const href = text(el.getAttribute('href') || '');
+                  if (!/trx=com\\.lb\\.wibc\\.trx\\.InqMain/i.test(href)) continue;
+                  try {
+                    const url = new URL(href, location.href);
+                    const acct = url.searchParams.get('acct');
+                    if (acct) addAccount(found, acct, href, 'inq_main_href');
+                  } catch (_e) {}
+                }
               }
               return Array.from(found.values());
             })();
@@ -1278,9 +1288,10 @@ public final class HuaNanBankAutomation {
                     const tables = Array.from(doc.querySelectorAll('table'));
                     for (const table of tables) {
                       const header = String(table.querySelector('tr')?.textContent || '');
-                      if (/日期|摘要|說明|金額|支出|存入|餘額|交易/.test(header)) return true;
+                      if (/交易日期|交易日|日期|摘要|說明|金額|支出|存入|餘額|交易/.test(header)) return true;
                       const rows = table.querySelectorAll('tr');
-                      if (rows.length >= 2 && /\\d{4}[\\/.-]\\d{1,2}/.test(String(table.textContent || ''))) return true;
+                      const blob = String(table.textContent || '');
+                      if (rows.length >= 2 && /\\d{2,4}[\\/.-]\\d{1,2}[\\/.-]\\d{1,2}/.test(blob)) return true;
                     }
                     return false;
                   }
@@ -1347,6 +1358,41 @@ public final class HuaNanBankAutomation {
                 if (table.querySelector('select[name="S_Year"], select[name="acct1"], #acct1, input[name="inqtype"]')) return true;
                 return false;
               }
+              function normHeader(value) {
+                return text(value).toLowerCase().replace(/\\s+/g, '');
+              }
+              function colIndex(header, patterns) {
+                for (let i = 0; i < header.length; i += 1) {
+                  const h = normHeader(header[i]);
+                  if (patterns.some((pattern) => pattern.test(h))) return i;
+                }
+                return -1;
+              }
+              function hasTxnDate(value) {
+                return /(\\d{2,4})[\\/.-]\\d{1,2}[\\/.-]\\d{1,2}/.test(text(value));
+              }
+              function extractDate(value) {
+                const match = text(value).match(/(\\d{2,4})[\\/.-](\\d{1,2})[\\/.-](\\d{1,2})/);
+                if (!match) return '';
+                return match[1] + '/' + match[2] + '/' + match[3];
+              }
+              function pickSummary(values, idxSummary, idxDate, idxWithdraw, idxDeposit, idxBalance) {
+                if (idxSummary >= 0 && values[idxSummary]) return values[idxSummary];
+                const skip = new Set([idxDate, idxWithdraw, idxDeposit, idxBalance].filter((i) => i >= 0));
+                for (let i = 0; i < values.length; i += 1) {
+                  if (skip.has(i)) continue;
+                  const value = values[i];
+                  if (!value || hasTxnDate(value)) continue;
+                  if (/^[\\d,.\\-+()\\s]+$/.test(value)) continue;
+                  if (/[\\u4e00-\\u9fffA-Za-z]/.test(value)) return value;
+                }
+                return '';
+              }
+              function pickRef(values, joined) {
+                const refMatch = joined.match(/(?:序號|參考|流水|Ref|SEQ)[^0-9A-Za-z]*([0-9A-Za-z-]{4,})/i);
+                if (refMatch && refMatch[1]) return refMatch[1];
+                return values.find((value) => /^[0-9A-Za-z-]{6,}$/.test(value)) || '';
+              }
               const rows = [];
               for (const doc of collectDocs()) {
                 const tables = Array.from(doc.querySelectorAll('table'));
@@ -1354,26 +1400,42 @@ public final class HuaNanBankAutomation {
                   if (isFormControlTable(table)) continue;
                   const bodyRows = Array.from(table.querySelectorAll('tr'));
                   if (bodyRows.length < 2) continue;
-                  const header = cells(bodyRows[0]).map((value) => value.toLowerCase());
-                  const looksTxn = header.some((h) => /日期|date|摘要|說明|金額|amount|支出|存入|餘額/.test(h))
-                    || (/交易|明細/.test(text(table.textContent)) && /\\d{4}[\\/.-]\\d{1,2}/.test(text(table.textContent)));
+                  const header = cells(bodyRows[0]);
+                  const idxDate = colIndex(header, [/交易日期|交易日|^日期$|date/i]);
+                  const idxSummary = colIndex(header, [/摘要|說明|備註|交易內容|summary|memo/i]);
+                  const idxWithdraw = colIndex(header, [/支出金額|^支出$|提金|提匯/i]);
+                  const idxDeposit = colIndex(header, [/存入金額|^存入$|存金/i]);
+                  const idxBalance = colIndex(header, [/餘額|balance/i]);
+                  const tableBlob = text(table.textContent);
+                  const looksTxn = idxDate >= 0 || idxSummary >= 0 || (idxWithdraw >= 0 && idxDeposit >= 0)
+                    || header.some((h) => /日期|摘要|支出|存入|交易|amount|date/i.test(normHeader(h)))
+                    || (hasTxnDate(tableBlob) && /摘要|支出|存入|餘額|交易/.test(tableBlob));
                   if (!looksTxn) continue;
                   for (let index = 1; index < bodyRows.length; index += 1) {
                     const values = cells(bodyRows[index]);
                     if (values.length < 2) continue;
                     const joined = values.join(' ');
-                    if (!joined || /合計|小計|查無|沒有資料/.test(joined)) continue;
-                    if (!/\\d{4}[\\/.-]\\d{1,2}/.test(joined)) continue;
-                    const dateMatch = joined.match(/(\\d{4}[\\/.-]\\d{1,2}[\\/.-]\\d{1,2})/);
-                    const amountMatch = joined.match(/-?[\\d,]+(?:\\.\\d{1,2})?/);
-                    const refMatch = joined.match(/(?:序號|參考|流水|Ref|SEQ)[^0-9A-Za-z]*([0-9A-Za-z-]{4,})/i)
-                      || values.find((value) => /^[0-9A-Za-z-]{6,}$/.test(value));
+                    if (!joined || /合計|小計|查無|沒有資料|小計:/.test(joined)) continue;
+                    const postedAt = idxDate >= 0 ? extractDate(values[idxDate]) : extractDate(joined);
+                    if (!postedAt) continue;
+                    const withdraw = idxWithdraw >= 0 ? values[idxWithdraw] : '';
+                    const deposit = idxDeposit >= 0 ? values[idxDeposit] : '';
+                    let amount = '';
+                    if (withdraw && /\\d/.test(withdraw)) amount = withdraw.startsWith('-') ? withdraw : '-' + withdraw;
+                    else if (deposit && /\\d/.test(deposit)) amount = deposit;
+                    else {
+                      const amountMatch = joined.match(/-?[\\d,]+(?:\\.\\d{1,2})?/);
+                      amount = amountMatch ? amountMatch[0] : '';
+                    }
+                    if (!amount || !/\\d/.test(amount)) continue;
                     rows.push({
                       cells: values,
-                      postedAt: dateMatch ? dateMatch[1] : '',
-                      amount: amountMatch ? amountMatch[0] : '',
-                      summary: values.find((value) => /[\\u4e00-\\u9fffA-Za-z]/.test(value) && !/\\d{4}[\\/.-]\\d{1,2}/.test(value)) || '',
-                      ref: typeof refMatch === 'string' ? refMatch : (refMatch && refMatch[1] ? refMatch[1] : ''),
+                      postedAt,
+                      withdraw,
+                      deposit,
+                      amount,
+                      summary: pickSummary(values, idxSummary, idxDate, idxWithdraw, idxDeposit, idxBalance),
+                      ref: pickRef(values, joined),
                       accountId
                     });
                   }
@@ -1418,7 +1480,7 @@ public final class HuaNanBankAutomation {
     ) throws Exception {
         String postedAtText = firstNonEmpty(row.optString("postedAt"), row.optString("date"), row.optString("交易日"));
         String summary = firstNonEmpty(row.optString("summary"), row.optString("摘要"), row.optString("description"));
-        long amountMinor = parseMinorAmount(firstNonEmpty(row.optString("amount"), row.optString("金額")));
+        long amountMinor = resolveTransactionAmountMinor(row);
         if (postedAtText.isEmpty() || amountMinor == 0L) {
             return null;
         }
@@ -1443,7 +1505,7 @@ public final class HuaNanBankAutomation {
             identityScheme = occurrence == 0 ? "huanan:fallback-hash:v1" : "huanan:fallback-hash:v1-occ";
             providerTransactionId = "hncb_" + simpleHash(hashInput);
         }
-        String postedAt = parsePostedAtIso(postedAtText);
+        String postedAt = parsePostedAtIso(postedAtText, rangeEnd);
         JSONObject item = new JSONObject();
         item.put("providerTransactionId", providerTransactionId);
         item.put("providerAccountId", accountId);
@@ -1530,14 +1592,72 @@ public final class HuaNanBankAutomation {
         }
     }
 
-    private static String parsePostedAtIso(String value) {
+    /**
+     * Resolve signed amount from Hua Nan result columns (支出 / 存入) or a single amount cell.
+     */
+    static long resolveTransactionAmountMinor(JSONObject row) {
+        if (row == null) return 0L;
+        String withdraw = firstNonEmpty(
+            row.optString("withdraw"),
+            row.optString("支出"),
+            row.optString("提")
+        );
+        String deposit = firstNonEmpty(
+            row.optString("deposit"),
+            row.optString("存入"),
+            row.optString("存")
+        );
+        long withdrawMinor = parseMinorAmount(withdraw, Boolean.TRUE);
+        long depositMinor = parseMinorAmount(deposit, Boolean.FALSE);
+        if (withdrawMinor != 0L || depositMinor != 0L) {
+            if (withdrawMinor != 0L && depositMinor != 0L) {
+                return depositMinor - Math.abs(withdrawMinor);
+            }
+            return withdrawMinor != 0L ? withdrawMinor : depositMinor;
+        }
+        return parseMinorAmount(
+            firstNonEmpty(row.optString("amount"), row.optString("金額")),
+            null
+        );
+    }
+
+    static String parsePostedAtIso(String value) {
+        return parsePostedAtIso(value, "");
+    }
+
+    static String parsePostedAtIso(String value, String fallbackRangeEndDate) {
         String source = normalizeText(value).replace('.', '/').replace('-', '/');
         String[] parts = source.split("[/\\s:]+");
-        if (parts.length < 3) return "";
+        if (parts.length >= 3) {
+            String iso = postedAtPartsToIso(parts);
+            if (!iso.isEmpty()) return iso;
+        }
+        if (parts.length == 2) {
+            LocalDate fallback = parseDate(fallbackRangeEndDate);
+            if (fallback != null) {
+                try {
+                    int month = Integer.parseInt(parts[0]);
+                    int day = Integer.parseInt(parts[1]);
+                    return LocalDate.of(fallback.getYear(), month, day)
+                        .atStartOfDay(TAIPEI_ZONE)
+                        .toInstant()
+                        .toString();
+                } catch (Exception ignored) {
+                    return "";
+                }
+            }
+        }
+        return "";
+    }
+
+    private static String postedAtPartsToIso(String[] parts) {
         try {
             int year = Integer.parseInt(parts[0]);
             int month = Integer.parseInt(parts[1]);
             int day = Integer.parseInt(parts[2]);
+            if (year > 0 && year < 1911) {
+                year += 1911;
+            }
             int hour = parts.length > 3 ? Integer.parseInt(parts[3]) : 0;
             int minute = parts.length > 4 ? Integer.parseInt(parts[4]) : 0;
             int second = parts.length > 5 ? Integer.parseInt(parts[5]) : 0;
@@ -1547,10 +1667,22 @@ public final class HuaNanBankAutomation {
         }
     }
 
-    private static long parseMinorAmount(String value) {
+    static long parseMinorAmount(String value) {
+        return parseMinorAmount(value, null);
+    }
+
+    static long parseMinorAmount(String value, Boolean forceNegative) {
         String source = normalizeText(value);
         if (source.isEmpty()) return 0L;
-        boolean negative = source.contains("(") || source.startsWith("-") || source.contains("支出");
+        boolean negative;
+        if (forceNegative != null) {
+            negative = forceNegative.booleanValue();
+        } else {
+            negative = source.contains("(")
+                || source.startsWith("-")
+                || source.contains("支出")
+                || source.contains("提");
+        }
         String numeric = source.replaceAll("[^0-9.]", "");
         if (numeric.isEmpty()) return 0L;
         double amount = Double.parseDouble(numeric);

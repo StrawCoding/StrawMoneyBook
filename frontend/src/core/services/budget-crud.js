@@ -324,13 +324,14 @@ export async function loadBudgetSnapshotForPeriod(ledgerId, period) {
   const ledgerTimeZone = normalizeLedgerTimeZone(ledger?.timezone)
   const { startUtc, endUtc } = dateRangeUtc(period.startDate, period.endDate, ledgerTimeZone)
   const { startUtc: todayStartUtc, endUtc: todayEndUtc } = todayRangeUtc(ledgerTimeZone)
-  const [rawItems, spentRows, todaySpentRows, usedOccurrenceRows, budgetSavePreferences, rawContainers] = await Promise.all([
+  const [rawItems, spentRows, todaySpentRows, usedOccurrenceRows, budgetSavePreferences, rawContainers, spentByCategoryDayRows] = await Promise.all([
     dependencies.listBudgetItems(ledgerId, budget.id),
     dependencies.computeBudgetSpentByCategory(ledgerId, startUtc, endUtc),
     dependencies.computeBudgetSpentByCategory(ledgerId, todayStartUtc, todayEndUtc),
     dependencies.listBudgetUsageDaysByCategory(ledgerId, startUtc, endUtc),
     getBudgetSavePreferences(ledgerId),
     dependencies.listBudgetContainers(ledgerId, budget.id),
+    dependencies.listBudgetSpentByCategoryAndDay(ledgerId, startUtc, endUtc),
   ])
   const usedDaysMap = new Map()
   for (const row of usedOccurrenceRows) {
@@ -351,6 +352,7 @@ export async function loadBudgetSnapshotForPeriod(ledgerId, period) {
     containers: rawContainers,
     spentRows,
     todaySpentRows,
+    spentByCategoryDayRows,
     budgetSavePreferences,
   }
 }

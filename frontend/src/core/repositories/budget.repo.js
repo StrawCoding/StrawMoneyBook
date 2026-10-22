@@ -1,6 +1,6 @@
 import { query, run } from '../db/sqlite.js'
 import { createId, nowIso } from '../utils/id.js'
-import { refundDeductedMinorSql } from '@/core/domain/refund-match-sql.js'
+import { refundDeductedMinorSql } from '../domain/refund-match-sql.js'
 import { assertLedgerId, firstRow, rowsOf } from './base.repo.js'
 
 function normalizePeriodMode(value) {
@@ -368,6 +368,26 @@ export async function listBudgetUsageDaysByCategory(ledgerId, monthStartUtc, mon
        AND type = 'expense'
        AND include_in_budget = 1
        AND ${budgetSpentMinorSql('transactions')} > 0
+       AND occurred_at >= ?
+       AND occurred_at < ?
+       AND category_id IS NOT NULL
+     GROUP BY category_id, substr(occurred_at, 1, 10);`,
+    [ledgerId, monthStartUtc, monthEndUtc],
+  )
+
+  return rowsOf(result)
+}
+
+export async function listBudgetSpentByCategoryAndDay(ledgerId, monthStartUtc, monthEndUtc) {
+  const result = await query(
+    `SELECT category_id,
+            substr(occurred_at, 1, 10) AS occurred_day,
+            SUM(${budgetSpentMinorSql('transactions')}) AS spent_minor
+     FROM transactions
+     WHERE ledger_id = ?
+       AND deleted_at IS NULL
+       AND type = 'expense'
+       AND include_in_budget = 1
        AND occurred_at >= ?
        AND occurred_at < ?
        AND category_id IS NOT NULL

@@ -195,6 +195,7 @@ import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
+import { resolveBookkeepingSubmitErrorMessage } from '@/ui/utils/bookkeeping-submit-error'
 import { convertAmountMinorByRate } from '@/ui/services/exchange-rate.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 
@@ -687,7 +688,7 @@ async function submit(options = {}) {
     }
     resetForm()
   } catch (error) {
-    uiStore.pushToast(error?.message || t('qna_bookkeeping.toast.failed', '建立交易失敗'), 'error')
+    uiStore.pushToast(resolveBookkeepingSubmitErrorMessage(error, t), 'error')
   } finally {
     submitting.value = false
   }

@@ -20,6 +20,7 @@ import {
   saveBudgetItemRange,
   isDailyPoolChildItem,
   dateKeyForLedgerTimeZone,
+  buildBudgetDailyStatsRows,
 } from '@/core/services/budget.service'
 // computePeriodReservedMinor supersedes computeMonthlyReservedMinor while preserving calendar-month behavior.
 import { computePeriodReservedMinor } from '@/core/services/budget-reserve.service'
@@ -60,6 +61,7 @@ export const useBudgetStore = defineStore('budget', {
     containers: [],
     spentMap: {},
     todaySpentMap: {},
+    spentByCategoryDayRows: [],
     budgetSavePreferences: {
       retroactiveMode: 'manual',
     },
@@ -202,6 +204,21 @@ export const useBudgetStore = defineStore('budget', {
     dailyReservedMinor() {
       return this.reservedMinorByDate(new Date(), { includeReferenceDay: false })
     },
+
+    dailyStatsRows(state) {
+      const period = state.period ?? {
+        key: state.monthKey,
+        monthKey: state.monthKey,
+        startDate: `${state.monthKey}-01`,
+        endDate: `${state.monthKey}-28`,
+      }
+      return buildBudgetDailyStatsRows({
+        period,
+        items: state.items,
+        containers: state.containers,
+        spentByCategoryDayRows: state.spentByCategoryDayRows,
+      })
+    },
   },
 
   actions: {
@@ -283,6 +300,7 @@ export const useBudgetStore = defineStore('budget', {
 
         this.spentMap = spentMap
         this.todaySpentMap = todaySpentMap
+        this.spentByCategoryDayRows = snapshot.spentByCategoryDayRows ?? []
       } finally {
         this.loading = false
       }

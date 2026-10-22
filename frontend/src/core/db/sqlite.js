@@ -12,8 +12,8 @@ import {
   assertExplicitDataWipe,
   createLocalDatabaseIntegrityError,
   recordDataWipeAudit,
-} from '@/core/services/data-wipe-guard.service'
-import { clearLocalDataFloorPrefs } from '@/core/services/data-downgrade-guard.service'
+} from '@/core/services/data-wipe-guard.service.js'
+import { clearLocalDataFloorPrefs } from '@/core/services/data-downgrade-guard.service.js'
 import { DATABASE_WIPE_DELETE_ORDER } from '@/core/utils/sqlite-delete-order'
 import { rethrowAsForeignKeyError } from '@/core/utils/sqlite-fk'
 

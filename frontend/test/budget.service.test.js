@@ -277,6 +277,9 @@ test('loadBudgetSnapshotForPeriod uses pay-cycle date range and counts daily rul
       calls.push({ usageStartUtc: startUtc, usageEndUtc: endUtc })
       return []
     },
+    async listBudgetSpentByCategoryAndDay() {
+      return []
+    },
     async getSetting() {
       return null
     },
@@ -339,6 +342,9 @@ test('loadBudgetSnapshotForPeriod reuses a budget created by a concurrent pay-cy
       return []
     },
     async listBudgetUsageDaysByCategory() {
+      return []
+    },
+    async listBudgetSpentByCategoryAndDay() {
       return []
     },
     async getSetting() {

@@ -310,6 +310,7 @@ AI 記帳支援自然語句輸入，例如一句話中同時帶入：
 - SMB-276 後，更改每月發薪日或切換曆月 / 發薪週期模式時，系統會先以舊帳本設定解析「今天」所在的目前期間並載入其預算結構，套用新設定後再解析新目前期間；若新舊 period key 不同且新期尚無使用者設定內容（無項目、無共同池、無整期預算存款設定），會自動將舊期的分類項目金額與日均規則、共同池與綁定、整期預算存款設定 carry-forward 到新期，已花費依新期日期範圍重算，交易與歷史期間資料不搬移也不覆寫。帳本詳細設定頁、預算項目 sheet、共同池 sheet 三條入口皆走同一 `applyLedgerBudgetPeriodSettings` 流程，避免改發薪日後預算頁跳到空殼。
 - SMB-261 / v1.3.50：`budget.repo.js` 補上 `normalizeBudgetSaveEnabled`，修復 `/budget` 儲存預算存款或切換共同預算池存款開關時 `normalizeBudgetSaveEnabled is not defined` 連續 toast 報錯；三模組（repo / service / save.service）布林正規化邏輯已對齊
 - SMB-151 後，預算項目的「日期」分配已改用與首頁查看範圍相同的 `HomeRangePicker` 日期選擇器，並在預算項目情境啟用日曆複選：使用者可在一致的日期 bottom sheet 直接點選多個分配日，系統再轉成每月日號規則，不再只是 1~31 的純數字格或另一套自製月曆，降低選錯分配日期的機率
+- v1.4.20 後，預算頁（`/budget`）摘要區下方新增「每日花費統計」表：依目前預算期間列出每日日預算（對齊首頁日模式：未入池日均項目 + 共同池今日可花）、當日支出、差額與累計支出；預設顯示至今天為止，可收合
 
 此外，分類預算不只支援固定月額，還支援更進階的日均規則：
 
@@ -830,7 +831,7 @@ Stage B：獨立 Gradle 模組 `frontend/android/wear`（同一 `applicationId`�
 - smb306：模組化恢復（僅華南）— `BankAutomationRuntime`（connect 先 markSuccess 再 snapshot；sync=`SYNCING_TRANSACTIONS`；captcha/abort 同狀態機）、`providers/huanan`、H1 結構錨點、Playwright **真實 UI** 建立連線表單→帳戶對應→手動同步→待匯入勾選匯入→交易搜尋 ledger（Web 僅對 native 邊界裝 fixture，不直接呼叫 runFormal*）
 - Architecture B watermark／checkpoint：前端 dual-write `lastSyncAt`／`last_sync_at` 與 `lookbackDays`／`lookback_days`；原生 `readLastSyncWatermark` 採 **`lastSyncAt` > `last_sync_at`**；帳號層級 checkpoint（migration 046）；`PARTIAL_SUCCESS` 時**不得**推進假 `coveredThrough`／`lastSyncAt`
 - Architecture B Provider Registry：僅註冊華南；通用 `connectBank`/`syncBank`／`submitCaptcha`／`abortBank`；淘汰 remote scrape／Playwright bank provider；建立頁依 schema 動態欄位
-- 華南 H2：表單已凍（`InqMain`／「明細」、`#acct1`、`inqtype`+民國年 select、`doSubmit`、3 月切窗）。Android 寫去識別化 `h1_probe`／`h2_probe` 與 observe-only intercept。未解析可驗證交易列 → `partial` + `hua_nan_transaction_query_partial`（有列則 ok，不需表單錨點仍在結果頁）
+- 華南 H2：表單已凍（`InqMain`／「明細」、`#acct1`、`inqtype`+民國年 select、`doSubmit`、3 月切窗）；結果表依表頭映射日期（含民國年）／摘要／支出／存入。Android 寫去識別化 `h1_probe`／`h2_probe` 與 observe-only intercept。H1 另掃 `InqMain` 之 `acct=`。未解析可驗證交易列 → `partial` + `hua_nan_transaction_query_partial`（有列則 ok）
 - smb304：修復 Android／Web 初始化因 migration 046 誤用 `#` 註解導致 SQLite `unrecognized token: "#"`、帳本無法開啓；改為 SQLite 安全註解，並在 `splitSqlStatements` 剝除 hash 行註解＋回歸測試，既有帳本可安全套用 046（勿重設資料）
 - 稽核續修：CSV 與原生自動化交易 id 不同時，同帳戶同日同額會標 `possible_duplicate_of` 且審核匯入預設跳過；單一銀行連線同步走 process-wide `runtimeJobs` 合併，避免重入；SQLite `busy_timeout=5000`。CI 另跑預算跨月／發薪週期 Playwright（獨立 job）
 - 已移除 Sandbox / Mock 生產路徑；舊測試連線會在 UI 標示為已停用

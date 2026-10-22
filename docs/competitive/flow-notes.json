@@ -1,0 +1,94 @@
+{
+  "device": "emulator-5554",
+  "captured_at": "2026-10-19T00:08:13+0800",
+  "apps": [
+    {
+      "app_id": "daak",
+      "label": "Daak",
+      "package": "com.lovelyduck.daak",
+      "steps": [
+        {
+          "name": "cold_start",
+          "screenshot": "daak_01_cold_start.png",
+          "activity": "com.lovelyduck.daak/b.O",
+          "notes": ""
+        },
+        {
+          "name": "after_onboarding",
+          "screenshot": "daak_02_after_onboarding.png",
+          "activity": "com.lovelyduck.daak/b.O",
+          "notes": "auto-dismiss dialogs"
+        },
+        {
+          "name": "add_entry",
+          "screenshot": "daak_03_add_entry.png",
+          "activity": "com.lovelyduck.daak/b.O",
+          "notes": "fallback_bottom_tap"
+        }
+      ],
+      "tap_count_estimate": 1,
+      "limitations": ""
+    },
+    {
+      "app_id": "moneybook",
+      "label": "麻布記帳 Moneybook",
+      "package": "tw.com.moneybook.moneybook",
+      "steps": [
+        {
+          "name": "cold_start",
+          "screenshot": "moneybook_01_cold_start.png",
+          "activity": "tw.com.moneybook.moneybook/.ui.auth.AuthenticationActivity",
+          "notes": ""
+        },
+        {
+          "name": "after_onboarding",
+          "screenshot": "moneybook_02_after_onboarding.png",
+          "activity": "tw.com.moneybook.moneybook/.ui.auth.AuthenticationActivity",
+          "notes": "auto-dismiss dialogs"
+        },
+        {
+          "name": "add_entry",
+          "screenshot": "moneybook_03_add_entry.png",
+          "activity": "tw.com.moneybook.moneybook/.ui.auth.AuthenticationActivity",
+          "notes": "fallback_bottom_tap"
+        },
+        {
+          "name": "accounts_tab",
+          "screenshot": "moneybook_04_accounts_tab.png",
+          "activity": "tw.com.moneybook.moneybook/.ui.auth.AuthenticationActivity",
+          "notes": ""
+        }
+      ],
+      "tap_count_estimate": 8,
+      "limitations": ""
+    },
+    {
+      "app_id": "strawmb",
+      "label": "StrawMoneyBook",
+      "package": "com.strawcoding.strawmoneybook",
+      "steps": [
+        {
+          "name": "cold_start",
+          "screenshot": "strawmb_01_cold_start.png",
+          "activity": "com.strawcoding.strawmoneybook/.MainActivity",
+          "notes": ""
+        },
+        {
+          "name": "after_onboarding",
+          "screenshot": "strawmb_02_after_onboarding.png",
+          "activity": "com.strawcoding.strawmoneybook/.MainActivity",
+          "notes": "auto-dismiss dialogs"
+        },
+        {
+          "name": "add_entry",
+          "screenshot": "strawmb_03_add_entry.png",
+          "activity": "com.strawcoding.strawmoneybook/.MainActivity",
+          "notes": "fallback_bottom_tap"
+        }
+      ],
+      "tap_count_estimate": 7,
+      "limitations": ""
+    }
+  ],
+  "finch_note": "com.xinran.finch APK unavailable via apkeep (apk-pure/huawei); see Finch web audit in report."
+}

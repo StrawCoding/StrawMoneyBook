@@ -45,6 +45,10 @@ const defaultDependencies = {
     const mod = await import('../repositories/budget.repo.js')
     return mod.listBudgetUsageDaysByCategory(...args)
   },
+  async listBudgetSpentByCategoryAndDay(...args) {
+    const mod = await import('../repositories/budget.repo.js')
+    return mod.listBudgetSpentByCategoryAndDay(...args)
+  },
   async listBudgetItems(...args) {
     const mod = await import('../repositories/budget.repo.js')
     return mod.listBudgetItems(...args)

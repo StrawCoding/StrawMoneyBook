@@ -118,6 +118,8 @@
         <button class="btn" @click="openCreateContainer">{{ t('budgeting.container.add') }}</button>
         <button class="btn primary" @click="openCreate">{{ t('budgeting.add_item') }}</button>
       </div>
+
+      <BudgetDailyStatsTable />
     </article>
 
     <article class="card panel">
@@ -506,6 +508,7 @@ import MoneyText from '@/ui/components/common/MoneyText.vue'
 import BudgetItemSheet from '@/ui/components/budget/BudgetItemSheet.vue'
 import BudgetContainerSheet from '@/ui/components/budget/BudgetContainerSheet.vue'
 import BudgetProgressBar from '@/ui/components/budget/BudgetProgressBar.vue'
+import BudgetDailyStatsTable from '@/ui/components/budget/BudgetDailyStatsTable.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'

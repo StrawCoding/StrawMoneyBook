@@ -1,0 +1,121 @@
+{
+  "generated_at": "2026-10-19",
+  "dimensions": [
+    {
+      "id": "visual_identity",
+      "label": "視覺識別／品牌氣質",
+      "daak": "手繪 icon、少女心配色、節日主題 icon；偏「可愛＋生活感」",
+      "finch": "2025 全面 redesign；多主題背景、偏極簡 fintech；商店圖強調 AI",
+      "moneybook": "官網大圖行銷、白底＋品牌綠；App 登入閘門偏金融信任感",
+      "strawmb": "官網 icon 掃讀式；App 預設 modern Habitat（色島）+ 4 套 A/B/C/D 主題；traditional 為 Apple HIG inset grouped",
+      "strawmb_refs": ["frontend/src/ui/assets/css/habitat-ui.css", "frontend/src/ui/assets/css/apple-ui.css", "StrawMoneyBook_App_Features_Detailed.md §2.3 SMB-250"]
+    },
+    {
+      "id": "theme_dark_light",
+      "label": "深／淺色與主題切換",
+      "daak": "少女系淺色為主；多 app icon 主題",
+      "finch": "多主題背景、夜間模式 icon 優化（release notes）",
+      "moneybook": "偏固定品牌色；重功能輕裝飾",
+      "strawmb": "charcoal / morning-dew / sunny-harvest / midnight-forest；layout 與 theme 獨立；PDF 報表強制淺色列印友善",
+      "strawmb_refs": ["frontend/src/ui/views/settings/SettingsPersonalizationPage.vue"]
+    },
+    {
+      "id": "layout_density",
+      "label": "排版密度與資訊層級",
+      "daak": "一二级分類、日曆＋列表；偏鬆散可愛",
+      "finch": "統一訂閱／分期／借貸表單樣式（3.7.0）；統計一級分類餅圖",
+      "moneybook": "首屏資產＋明細；34 家整合資訊密度高但標準化",
+      "strawmb": "首頁四段期間＋資產卡＋預算卡＋交易流；設定列 SMB-254 收斂高度；禁止刪 FAB/BottomNav",
+      "strawmb_refs": ["frontend/src/ui/views/home.vue", "frontend/src/ui/assets/css/apple-ui.css"]
+    },
+    {
+      "id": "navigation",
+      "label": "導覽與記帳入口",
+      "daak": "底部 tab + 小工具",
+      "finch": "曾強推對話框記帳（負評）；需保留手動面板",
+      "moneybook": "帳戶／明細／分析 tab；自動同步減少進入記帳",
+      "strawmb": "5 tab + FAB；記帳全螢幕 hideAppChrome；返回鍵先關 overlay",
+      "strawmb_refs": ["frontend/src/ui/views/BookkeepingPage.vue", "ui/composables/useAppShellRuntime.js"]
+    },
+    {
+      "id": "forms_sheets",
+      "label": "表單與輸入",
+      "daak": "記帳範本、計算機",
+      "finch": "新記帳面板、顏色選擇器、統一 bottom 流程",
+      "moneybook": "新增明細分步",
+      "strawmb": "統一 bottom sheet（AppDialog 收斂）；AmountCalculatorInput 共用；CustomSelect 分組",
+      "strawmb_refs": ["QuickAddPage.vue", "SMB-154 統一 sheet 說明"]
+    },
+    {
+      "id": "iconography",
+      "label": "圖示",
+      "daak": "100+ 手繪分類圖",
+      "finch": "150+ 銀行／支付 icon",
+      "moneybook": "銀行 logo 為主",
+      "strawmb": "Font Awesome 單一註冊源 main.js；picker 與頁面同步",
+      "strawmb_refs": ["frontend/src/main.js"]
+    },
+    {
+      "id": "onboarding",
+      "label": "首次／空狀態",
+      "daak": "可愛引導",
+      "finch": "5.0 新用戶引導頁",
+      "moneybook": "登入＋綁卡教育",
+      "strawmb": "Welcome setup + PostSetupIntro；首頁空狀態「立即記帳」i18n",
+      "strawmb_refs": ["WelcomePage", "PostSetupIntroPage.vue"]
+    },
+    {
+      "id": "marketing_web",
+      "label": "官網／商店呈現",
+      "daak": "daakapp.com 雙語可愛文案",
+      "finch": "Play 多語、功能 bullet 清晰",
+      "moneybook": "moneybook.com.tw 大 hero＋認證徽章",
+      "strawmb": "strawmb.com 掃讀 icon 結構、preview 分流",
+      "strawmb_refs": ["StrawMoneyBookWeb"]
+    }
+  ],
+  "ux_recommendations": [
+    {
+      "priority": "P0",
+      "id": "UX-1",
+      "title": "記帳模式視覺層級",
+      "body": "BookkeepingPage 三模式切換在窄螢幕仍占標題區；可學 Finch「預設模式 + 設定記憶」，減少每次 2 次 segment 點擊，但保留 SMB 三模式並列（勿預設單一對話框）。"
+    },
+    {
+      "priority": "P0",
+      "id": "UX-2",
+      "title": "Onboarding 完成後首屏「美觀空狀態」",
+      "body": "競品（Daak）用插畫空狀態降低冷啟動壓力；SMB 已有 copy + CTA，可補 habitat 色島插槽／示意圖，並在 modern layout 下與預算卡視覺平衡。"
+    },
+    {
+      "priority": "P1",
+      "id": "UX-3",
+      "title": "傳統／現代 layout 預覽",
+      "body": "設定 → 個人化切 layout 時提供並排縮圖或 3 秒 preview animation，降低「切錯不知道差在哪」；對標 Daak 主題試穿感。"
+    },
+    {
+      "priority": "P1",
+      "id": "UX-4",
+      "title": "Pending 審核列表視覺",
+      "body": "Moneybook 自動帳以列表密度 + 分類色點辨識；bank-sync／載具審核可引入分類色 chip、左滑色塊（與 habitat 圓角一致），提升「掃一眼可決定」。"
+    },
+    {
+      "priority": "P1",
+      "id": "UX-5",
+      "title": "圖示情感化（節制）",
+      "body": "不必全抄 Daak 手繪；可為「常用 8 分類」提供 optional 柔和 illustration pack，預設仍 FA，避免 picker 與分析圖表不一致。"
+    },
+    {
+      "priority": "P2",
+      "id": "UX-6",
+      "title": "官網與 App 主題連續性",
+      "body": "官網已 design tokens；App preview 頁可展示 charcoal + modern 預設截圖，與 Play 商店圖一致，減少下載後「長不一樣」。"
+    },
+    {
+      "priority": "P2",
+      "id": "UX-7",
+      "title": "Finch 反面：對話框記帳",
+      "body": "維持 Quick Add 為高頻預設；AI 為增強而非取代表單。設定內明示「預設記帳方式」。"
+    }
+  ]
+}

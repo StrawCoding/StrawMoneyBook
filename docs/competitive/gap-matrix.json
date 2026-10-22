@@ -1,0 +1,134 @@
+{
+  "generated_at": "2026-10-19",
+  "strawmb_repo": "/mnt/data/code/project/StrawCoding/StrawMoneyBook",
+  "matrix": [
+    {
+      "capability": "記帳入口（AI / 手動 / 問答可切換）",
+      "daak": "手動為主；iOS 語音／截圖",
+      "finch": "AI 對話為主（Play 評論：需保留手動）",
+      "moneybook": "手動＋自動匯入為主",
+      "strawmb": "三模式容器 BookkeepingPage",
+      "strawmb_refs": ["frontend/src/ui/views/BookkeepingPage.vue"],
+      "gap": "none",
+      "priority": "-"
+    },
+    {
+      "capability": "快速記帳（3 秒內、儲存並再記一筆）",
+      "daak": "範本＋計算機面板",
+      "finch": "新記帳面板＋計算機",
+      "moneybook": "明細頁鉛筆新增",
+      "strawmb": "QuickAddPage 有 save_and_add",
+      "strawmb_refs": ["frontend/src/ui/views/QuickAddPage.vue"],
+      "gap": "缺手機範本／重複上一筆（Wear 已有）",
+      "priority": "P0-B1"
+    },
+    {
+      "capability": "通用週期記帳（非訂閱）",
+      "daak": "2025+ recurring",
+      "finch": "日／週／月／季／年",
+      "moneybook": "週期帳較弱",
+      "strawmb": "僅 subscriptions 自動扣款",
+      "strawmb_refs": ["StrawMoneyBook_App_Features_Detailed.md §訂閱"],
+      "gap": "缺 recurrence_rules 通用引擎",
+      "priority": "P1-A1"
+    },
+    {
+      "capability": "截圖／分享圖片記帳",
+      "daak": "iOS",
+      "finch": "Android/iOS share intent",
+      "moneybook": "無",
+      "strawmb": "無 ACTION_SEND",
+      "strawmb_refs": ["frontend/android/app/src/main/java/.../MainActivity.java"],
+      "gap": "缺 ShareIntent → AI 記帳",
+      "priority": "P1-A2"
+    },
+    {
+      "capability": "標籤／地點／商家",
+      "daak": "標籤、地點",
+      "finch": "標籤、商家、成員",
+      "moneybook": "自動分類規則",
+      "strawmb": "schema 有 tags_json/location；Quick Add 未暴露",
+      "strawmb_refs": ["frontend/src/core/repositories/transaction.repo.js", "frontend/src/ui/views/QuickAddPage.vue"],
+      "gap": "UI 與搜尋未完整",
+      "priority": "P0-B2"
+    },
+    {
+      "capability": "銀行／卡自動同步廣度",
+      "daak": "無",
+      "finch": "無",
+      "moneybook": "30+ 家代理同步",
+      "strawmb": "會員；Architecture B 模組化，華南等",
+      "strawmb_refs": ["frontend/src/ui/services/bank-sync.service.js", "frontend/android/.../BankAutomationRuntime"],
+      "gap": "provider 數量；審核路徑長",
+      "priority": "P0-B4 / P2-C4"
+    },
+    {
+      "capability": "匯入後分類學習",
+      "daak": "有限",
+      "finch": "有限",
+      "moneybook": "自動分類規則強",
+      "strawmb": "auto-fill rules + import-auto-rule",
+      "strawmb_refs": ["frontend/src/ui/views/settings/SettingsAutoFillRulesPage.vue", "frontend/src/services/bank-sync/import-auto-rule.js"],
+      "gap": "缺「修正後一鍵建議規則」UX",
+      "priority": "P1-A3"
+    },
+    {
+      "capability": "預算（發薪週期／共同池／日均）",
+      "daak": "固定月／年預算 2026",
+      "finch": "結轉、日剩餘",
+      "moneybook": "月預算分析",
+      "strawmb": "發薪週期＋共同池＋預算存款（領先）",
+      "strawmb_refs": ["frontend/src/core/services/budget-crud.js", "frontend/src/ui/views/budgeting/BudgetPage.vue"],
+      "gap": "缺固定「年度」語意；週起始日設定",
+      "priority": "P2-C2/C3"
+    },
+    {
+      "capability": "分期付款計畫",
+      "daak": "有",
+      "finch": "本金／利息計畫",
+      "moneybook": "信用卡分期一站",
+      "strawmb": "信用卡 statement 模型；無通用 installment",
+      "strawmb_refs": ["StrawMoneyBook_App_Features_Detailed.md §信用卡 smb301"],
+      "gap": "缺 installment 模組",
+      "priority": "P2-C1"
+    },
+    {
+      "capability": "報銷／請款／借貸鏈",
+      "daak": "報銷",
+      "finch": "借貸",
+      "moneybook": "弱",
+      "strawmb": "完整請款＋借出消除",
+      "strawmb_refs": ["frontend/src/core/services/claim-sheet-import.service.js"],
+      "gap": "優勢；需 onboarding 敘事",
+      "priority": "護城河"
+    },
+    {
+      "capability": "資料自主／recovery",
+      "daak": "Drive／iCloud",
+      "finch": "本地＋WebDAV/GDrive",
+      "moneybook": "雲端集中",
+      "strawmb": "本地 SQLite＋recovery＋downgrade guard",
+      "strawmb_refs": ["frontend/src/core/services/bootstrap.service.js"],
+      "gap": "none",
+      "priority": "護城河"
+    },
+    {
+      "capability": "Android 桌面小工具",
+      "daak": "多種",
+      "finch": "有限",
+      "moneybook": "有",
+      "strawmb": "Quick Add／AI／圖表 widgets",
+      "strawmb_refs": ["frontend/android/.../StrawMoneyQuickAddWidgetProvider.java"],
+      "gap": "需與範本／預設模式聯動",
+      "priority": "P1"
+    }
+  ],
+  "emulator_audit": {
+    "avd": "smb_competitive (API 34, Pixel 6, google_apis x86_64)",
+    "installed": ["com.lovelyduck.daak", "tw.com.moneybook.moneybook", "com.strawcoding.strawmoneybook"],
+    "not_installed": {
+      "com.xinran.finch": "apkeep apk-pure/huawei 無法取得 APK；以 Play 商店頁＋官網文案補充"
+    },
+    "moneybook_limit": "需登入帳號才能進入主流程；未使用真實網銀憑證"
+  }
+}

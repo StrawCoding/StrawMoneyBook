@@ -84,6 +84,16 @@ test('budget item and pool sheets expose ledger budget period settings', () => {
   assert.match(containerSheetSource, /data-testid="budget-container-period-pay-cycle"/)
 })
 
+test('budgeting page exposes daily spending stats table', () => {
+  const dailyStatsSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/components/budget/BudgetDailyStatsTable.vue'),
+    'utf8',
+  )
+  assert.match(budgetingSource, /BudgetDailyStatsTable/)
+  assert.match(dailyStatsSource, /data-testid="budget-daily-stats"/)
+  assert.match(budgetStoreSource, /dailyStatsRows/)
+})
+
 test('budgeting page saves ledger budget period settings from budget workflows', () => {
   assert.match(budgetingSource, /:ledger-budget-period-mode="activeLedgerBudgetPeriodMode"/)
   assert.match(budgetingSource, /:ledger-budget-pay-day="activeLedgerBudgetPayDay"/)
