@@ -1,12 +1,13 @@
 # Pending Release Notes
 
+---
+
+## v1.5.1
 - 對齊已移除的第一銀行合約自檢：runner／測試不再 import 缺失腳本，排程合約檢查只跑載具 portal。
 - CI：frontend Node 與 Android SDK 分開；Setup Android SDK 不再安裝已廢棄 `tools`；銀行 Playwright 會安裝 Chromium；發薪週期 source contract 改查 `BudgetDailyStatsTable`。
 - Capacitor Android／core／cli 升到 8.5.3（GHSA-rvm3-566m-v7fv）；Vue 升到 3.5.44（GHSA-g2v6-rqmx-r4w6）；nodemailer 升到 10.x；`tar` override 到 7.5.22。
 - 遠端銀行 scrape smoke 改預期 501 `provider_not_supported`。
 - 還原 `release-notes.pending.md` 歷史；`notes:clear` 只清 pending、不得砍 archive。
-
----
 
 ## v1.5.0
 - 記帳成功（AI 自動儲存／手動快速新增／問答記帳）一律返回首頁並還原離開前捲動，不再導向交易編輯頁，也不再可能停在功能頁。
