@@ -53,71 +53,58 @@ async function callJson(handler, payload) {
   }
 }
 
-console.log('--- Simulate: bank link_session (mock) ---')
-const link = await callJson(linkSessionHandler, {
-  provider: 'mock_bank_tw',
-})
-assert.equal(link.statusCode, 200)
-assert.match(String(link.body?.session_id ?? ''), /^mock_session_/)
-assert.match(String(link.body?.mock_code ?? ''), /^mock_/)
-console.log({
-  provider: link.body.provider,
-  sessionId: link.body.session_id,
-  mockCode: link.body.mock_code,
-})
+function assertRetiredRemoteProvider(label, result) {
+  assert.equal(result.statusCode, 501, `${label} must retire remote scrape with 501`)
+  assert.equal(result.body?.error, 'provider_not_supported')
+  assert.match(String(result.body?.message ?? ''), /目前未開放/)
+  console.log({
+    label,
+    statusCode: result.statusCode,
+    error: result.body?.error,
+    message: result.body?.message,
+  })
+}
 
-console.log('--- Simulate: bank exchange (mock) ---')
-const exchanged = await callJson(exchangeHandler, {
-  provider: 'mock_bank_tw',
-  session_id: link.body.session_id,
-  code: link.body.mock_code,
-})
-assert.equal(exchanged.statusCode, 200)
-assert.match(String(exchanged.body?.connection_id ?? ''), /^mock_conn_/)
-assert.ok(Array.isArray(exchanged.body?.accounts))
-assert.ok(exchanged.body.accounts.length >= 1)
-console.log({
-  provider: exchanged.body.provider,
-  connectionId: exchanged.body.connection_id,
-  accountCount: exchanged.body.accounts.length,
-})
+console.log('--- Simulate: retired remote bank APIs return 501 ---')
+assertRetiredRemoteProvider(
+  'link_session',
+  await callJson(linkSessionHandler, { provider: 'mock_bank_tw' }),
+)
+assertRetiredRemoteProvider(
+  'exchange',
+  await callJson(exchangeHandler, {
+    provider: 'mock_bank_tw',
+    session_id: 'mock_session_retired',
+    code: 'mock_code_retired',
+  }),
+)
+assertRetiredRemoteProvider(
+  'sync',
+  await callJson(syncHandler, {
+    provider: 'mock_bank_tw',
+    connection_id: 'mock_conn_retired',
+    account_ids: ['acct_retired'],
+    cursor: null,
+  }),
+)
+assertRetiredRemoteProvider(
+  'disconnect',
+  await callJson(disconnectHandler, {
+    provider: 'mock_bank_tw',
+    connection_id: 'mock_conn_retired',
+  }),
+)
 
-console.log('--- Simulate: bank sync (mock) ---')
-const synced = await callJson(syncHandler, {
-  provider: 'mock_bank_tw',
-  connection_id: exchanged.body.connection_id,
-  account_ids: exchanged.body.accounts.map((item) => item.account_id),
-  cursor: null,
-})
-assert.equal(synced.statusCode, 200)
-assert.ok(Array.isArray(synced.body?.added))
-assert.ok(synced.body.added.length >= exchanged.body.accounts.length)
-console.log({
-  added: synced.body.added.length,
-  nextCursor: synced.body.next_cursor,
-})
-
-console.log('--- Simulate: bank mark_imported ---')
+console.log('--- Simulate: mark_imported remains a local ledger ack ---')
 const marked = await callJson(markImportedHandler, {
-  transactions: synced.body.added.slice(0, 2).map((item, index) => ({
-    source_ref: `bank:mock_bank_tw:${item.providerAccountId}:${item.providerTransactionId}`,
-    imported_txn_id: `txn_imported_${index + 1}`,
-  })),
+  transactions: [{
+    source_ref: 'bank:mock_bank_tw:acct_retired:txn_retired',
+    imported_txn_id: 'txn_imported_1',
+  }],
 })
 assert.equal(marked.statusCode, 200)
 assert.equal(marked.body?.ok, true)
-assert.equal(marked.body?.accepted, Math.min(2, synced.body.added.length))
-console.log({
-  accepted: marked.body.accepted,
-})
+assert.equal(marked.body?.accepted, 1)
+console.log({ accepted: marked.body.accepted })
 
-console.log('--- Simulate: bank disconnect ---')
-const disconnected = await callJson(disconnectHandler, {
-  provider: 'mock_bank_tw',
-  connection_id: exchanged.body.connection_id,
-})
-assert.equal(disconnected.statusCode, 200)
-assert.equal(disconnected.body?.ok, true)
-console.log({
-  disconnected: disconnected.body.ok,
-})
+console.log('Bank remote scrape APIs correctly return 501 provider_not_supported')

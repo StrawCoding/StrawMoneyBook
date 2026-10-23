@@ -79,6 +79,7 @@ async function runLogged(command, args, options = {}) {
 async function assertSourceContract() {
   const [
     budgetingVue,
+    budgetDailyStatsTableVue,
     settingsLedgerVue,
     budgetItemSheetVue,
     budgetContainerSheetVue,
@@ -94,6 +95,7 @@ async function assertSourceContract() {
     migrationSql,
   ] = await Promise.all([
     readFile(resolve(frontendDir, 'src/ui/views/budgeting.vue'), 'utf8'),
+    readFile(resolve(frontendDir, 'src/ui/components/budget/BudgetDailyStatsTable.vue'), 'utf8'),
     readFile(resolve(frontendDir, 'src/ui/views/settings/SettingsLedgerDetailPage.vue'), 'utf8'),
     readFile(resolve(frontendDir, 'src/ui/components/budget/BudgetItemSheet.vue'), 'utf8'),
     readFile(resolve(frontendDir, 'src/ui/components/budget/BudgetContainerSheet.vue'), 'utf8'),
@@ -110,7 +112,7 @@ async function assertSourceContract() {
   ])
 
   assert.match(budgetingVue, /BudgetDailyStatsTable/)
-  assert.match(budgetingVue, /data-testid="budget-daily-stats"/)
+  assert.match(budgetDailyStatsTableVue, /data-testid="budget-daily-stats"/)
   assert.match(budgetStore, /dailyStatsRows/)
   assert.match(budgetingVue, /data-testid="budget-page-period-settings"/)
   assert.match(budgetingVue, /data-testid="budget-page-period-pay-cycle"/)

@@ -54,7 +54,8 @@ export function getReleaseNotesStatus(filePath = NOTES_FILE_PATH) {
   }
 }
 
-export function validatePendingNotesStructure(filePath = NOTES_FILE_PATH) {
+export function validatePendingNotesStructure(filePath = NOTES_FILE_PATH, options = {}) {
+  const requireHistory = Boolean(options.requireHistory)
   const exists = existsSync(filePath)
   const content = exists ? readFileSync(filePath, 'utf8') : ''
   const lineCount = exists ? readValidNoteLines(filePath).length : 0
@@ -86,6 +87,20 @@ export function validatePendingNotesStructure(filePath = NOTES_FILE_PATH) {
     }
   }
 
+  if (requireHistory && !hasVersionHistory) {
+    return {
+      ok: false,
+      exists: true,
+      lineCount,
+      hasHistory: false,
+      separatorTooEarly: false,
+      message: [
+        'release-notes.pending.md is missing archived ## v* history.',
+        'notes:clear / reset may only empty pending bullets; restore archived changelog from git.',
+      ].join(' '),
+    }
+  }
+
   return {
     ok: true,
     exists: true,
@@ -105,6 +120,11 @@ export function formatForPlayConsole(lines, maxLength = PLAY_CONSOLE_MAX_LENGTH)
 
 export function resetNotesFile(filePath = NOTES_FILE_PATH) {
   writeFileSync(filePath, NOTES_HEADER, 'utf8')
+}
+
+export function clearPendingNotesFile(filePath = NOTES_FILE_PATH) {
+  const { history } = parseFile(filePath)
+  writeFileSync(filePath, history ? `${NOTES_HEADER}\n${history.trimStart()}` : NOTES_HEADER, 'utf8')
 }
 
 export function archiveNotesFile(version, filePath = NOTES_FILE_PATH) {
@@ -156,7 +176,7 @@ export function clearAndPushNotes({
   ensureMainBranchFn = ensureMainBranch,
 } = {}) {
   ensureMainBranchFn(repoRoot, gitRunner)
-  resetNotesFile(notesFilePath)
+  clearPendingNotesFile(notesFilePath)
   gitRunner(['add', notesFilePath], repoRoot)
 
   const staged = String(
@@ -206,10 +226,19 @@ function printHelp() {
   console.log([
     'Usage: node scripts/release-notes.mjs [--check | --archive | --clear]',
     '',
-    '--check    Validate that the pending notes file exists; empty notes are allowed',
+    '--check    Validate pending notes exist; empty pending is allowed when ## v* history is present',
     '--archive  Move pending notes into versioned history section (for patch releases)',
-    '--clear    Reset the entire file to header only (for minor/major releases)',
+    '--clear    Clear pending bullets only; keep archived ## v* history',
   ].join('\n'))
+}
+
+function repoHasVersionTags(repoRoot = REPO_ROOT) {
+  const result = spawnSync('git', ['tag', '--list', 'v*'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: 'pipe',
+  })
+  return Boolean(String(result.stdout || '').trim())
 }
 
 export function main(argv = process.argv.slice(2)) {
@@ -220,7 +249,9 @@ export function main(argv = process.argv.slice(2)) {
 
   if (argv.includes('--check')) {
     console.log('[release-notes] Reading pending release notes...')
-    const validation = validatePendingNotesStructure(NOTES_FILE_PATH)
+    const validation = validatePendingNotesStructure(NOTES_FILE_PATH, {
+      requireHistory: repoHasVersionTags(),
+    })
     if (!validation.ok) {
       console.error(`[release-notes] ERROR: ${validation.message}`)
       process.exitCode = 1
@@ -247,7 +278,7 @@ export function main(argv = process.argv.slice(2)) {
   }
 
   if (argv.includes('--clear')) {
-    console.log('[release-notes] Clearing all release notes (minor/major release)...')
+    console.log('[release-notes] Clearing pending release notes (keep archived history)...')
     const result = clearAndPushNotes()
     if (result.cleared) {
       console.log('[release-notes] Cleared and pushed release notes reset.')

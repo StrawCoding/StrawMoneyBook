@@ -63,8 +63,35 @@ jobs:
       - name: Validate release version matches latest git tag
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: npm run release:sync-check
+
+  android-unit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+      - run: npm ci
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # GitHub images already ship cmdline-tools; the obsolete `tools` package
+          # makes sdkmanager exit 1 and used to fail the whole frontend job.
+          packages: 'platform-tools'
       - name: Prepare Android generated files
         run: npm run prepare:android:release
       - name: Run Android and Wear unit tests

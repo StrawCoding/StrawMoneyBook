@@ -1110,9 +1110,9 @@ test('smb299: release notes keep smb299 gate copy in pending or archived v* hist
   }
   if (inHistory) return
 
-  // notes:clear / gpr:minor wipes archived changelog by design. Do not require
-  // a manual --- history block (SOP: only gpr archive writes ---). The durable
-  // smb299 restore gate lives in product source.
+  // notes:clear / gpr:minor now keep archived ## v* history. If this copy is
+  // missing from pending AND history, the durable smb299 restore gate still
+  // lives in product source.
   assert.match(panelSource, /runConfirmedDriveAppDataRestore/)
   assert.match(
     panelSource,

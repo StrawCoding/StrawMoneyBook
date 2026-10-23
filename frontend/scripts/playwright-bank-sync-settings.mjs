@@ -6,6 +6,8 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 
+import { ensurePlaywrightChromium } from './playwright-cli-runtime.mjs'
+
 const execFileAsync = promisify(execFile)
 const frontendDir = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const repoRoot = resolve(frontendDir, '..')
@@ -312,6 +314,7 @@ try {
     env: process.env,
   })
   await waitForPreviewReady(preview)
+  await ensurePlaywrightChromium()
   await runPlaywrightCli(['delete-data'])
   await runPlaywrightCli(['open', `${baseUrl}/`])
   const onboarding = await completeOnboarding()

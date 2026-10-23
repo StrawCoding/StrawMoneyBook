@@ -23,8 +23,6 @@ import {
 
 const repoRoot = resolve(import.meta.dirname, '..')
 const runScriptSource = readSource(resolve(repoRoot, 'scripts/sync-contract-check-run.mjs'), 'utf8')
-const bankCheckSource = readSource(resolve(repoRoot, 'scripts/first-bank-portal-contract-check.mjs'), 'utf8')
-const bankConfigSource = readSource(resolve(repoRoot, 'src/bank/portal-config.js'), 'utf8')
 const cronSource = readSource(resolve(repoRoot, 'scripts/sync-contract-check-cron.sh'), 'utf8')
 
 test('SMB-253: failure classifier covers portal_changed / captcha / auth / timeout', () => {
@@ -142,23 +140,14 @@ test('SMB-253: alert message includes failure classification summary', () => {
   assert.match(message, /累計分類統計/)
 })
 
-test('SMB-253: run script wires checks, stats, and alerting', () => {
-  assert.match(runScriptSource, /first-bank-portal-contract-check/)
+test('SMB-253: run script wires einvoice checks, stats, and alerting without first-bank', () => {
+  assert.doesNotMatch(runScriptSource, /first-bank-portal-contract-check/)
+  assert.doesNotMatch(runScriptSource, /runFirstBankPortalContractCheck/)
   assert.match(runScriptSource, /einvoice-portal-contract-check/)
   assert.match(runScriptSource, /recordContractCheckRun/)
   assert.match(runScriptSource, /appendAlertLog/)
   assert.match(runScriptSource, /failureCode/)
-})
-
-test('SMB-253: bank contract check asserts login anchors', () => {
-  assert.match(bankCheckSource, /code_verify/)
-  assert.match(bankCheckSource, /captchaLoginArea/)
-  assert.match(bankCheckSource, /vrfyCode/)
-  assert.match(bankCheckSource, /hasStructuralAnchor/)
-  assert.match(bankCheckSource, /hasTextFallback/)
-  assert.match(bankCheckSource, /openIt/)
-  assert.match(bankCheckSource, /My Accounts/)
-  assert.match(bankConfigSource, /ibank\.firstbank\.com\.tw/)
+  assert.match(runScriptSource, /target: 'einvoice'/)
 })
 
 test('SMB-253: simulated selector drift classifies portal_changed and triggers alert decision', () => {

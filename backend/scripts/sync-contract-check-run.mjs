@@ -11,7 +11,6 @@ import {
 } from '../src/sync/contract-check-alert.js'
 import {
   attachFailureCode,
-  classifyBankContractFailure,
   classifyEinvoiceContractFailure,
 } from '../src/sync/contract-failure-classifier.js'
 import {
@@ -22,7 +21,6 @@ import {
   saveStats,
 } from '../src/sync/contract-check-stats.js'
 import { runEinvoicePortalContractCheck } from './einvoice-portal-contract-check.mjs'
-import { runFirstBankPortalContractCheck } from './first-bank-portal-contract-check.mjs'
 
 const backendRoot = fileURLToPath(new URL('..', import.meta.url))
 const defaultStatsPath = join(backendRoot, '.server-data/sync-contract-check-stats.json')
@@ -79,18 +77,10 @@ export async function runSyncContractChecks(options = {}) {
       ok: true,
       failureCode: null,
       skipped: true,
-    }, {
-      target: 'first_bank',
-      ok: true,
-      failureCode: null,
-      skipped: true,
     })
   } else {
     const einvoiceResult = await runEinvoicePortalContractCheck()
     checks.push(attachFailureCode('einvoice', einvoiceResult, classifyEinvoiceContractFailure))
-
-    const bankResult = await runFirstBankPortalContractCheck()
-    checks.push(attachFailureCode('first_bank', bankResult, classifyBankContractFailure))
   }
 
   const ok = checks.every((check) => check.ok)

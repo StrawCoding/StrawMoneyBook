@@ -11,6 +11,7 @@ import {
   formatForPlayConsole,
   resetNotesFile,
   clearAndPushNotes,
+  clearPendingNotesFile,
   archiveNotesFile,
   archiveAndPushNotes,
   NOTES_HEADER,
@@ -55,6 +56,13 @@ test('validatePendingNotesStructure rejects --- separator with no pending notes 
   const validation = validatePendingNotesStructure(filePath)
   assert.equal(validation.ok, false)
   assert.match(validation.message, /Add `- \.\.\.` lines below the header/)
+})
+
+test('validatePendingNotesStructure rejects header-only file when history is required', () => {
+  const filePath = tempFile('# Pending Release Notes\n')
+  const validation = validatePendingNotesStructure(filePath, { requireHistory: true })
+  assert.equal(validation.ok, false)
+  assert.match(validation.message, /missing archived ## v\* history/)
 })
 
 test('validatePendingNotesStructure allows archived history with empty pending section', () => {
@@ -111,8 +119,37 @@ test('resetNotesFile writes header only', () => {
   assert.equal(readFileSync(filePath, 'utf8'), NOTES_HEADER)
 })
 
-test('clearAndPushNotes resets file content, stages, commits, and pushes', () => {
-  const filePath = tempFile('# Pending Release Notes\n\n- some change\n')
+test('clearPendingNotesFile keeps archived history and only drops pending bullets', () => {
+  const filePath = tempFile([
+    '# Pending Release Notes',
+    '',
+    '- pending change',
+    '',
+    '---',
+    '',
+    '## v1.5.0',
+    '- archived note',
+    '',
+  ].join('\n'))
+  clearPendingNotesFile(filePath)
+  const content = readFileSync(filePath, 'utf8')
+  assert.deepEqual(readValidNoteLines(filePath), [])
+  assert.match(content, /## v1\.5\.0/)
+  assert.match(content, /- archived note/)
+})
+
+test('clearAndPushNotes resets pending bullets, stages, commits, and pushes', () => {
+  const filePath = tempFile([
+    '# Pending Release Notes',
+    '',
+    '- some change',
+    '',
+    '---',
+    '',
+    '## v1.5.0',
+    '- archived note',
+    '',
+  ].join('\n'))
   const calls = []
 
   const gitRunner = (args) => {
@@ -132,7 +169,9 @@ test('clearAndPushNotes resets file content, stages, commits, and pushes', () =>
     ensureMainBranchFn: () => {},
   })
 
-  assert.equal(readFileSync(filePath, 'utf8'), NOTES_HEADER)
+  const content = readFileSync(filePath, 'utf8')
+  assert.deepEqual(readValidNoteLines(filePath), [])
+  assert.match(content, /## v1\.5\.0/)
   assert.deepEqual(result, { cleared: true, pushed: true })
   assert.deepEqual(calls, [
     ['add', filePath],

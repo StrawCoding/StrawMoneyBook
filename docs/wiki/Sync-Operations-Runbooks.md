@@ -14,7 +14,7 @@
 
 ```bash
 npm run playwright:bank-sync --prefix frontend
-npm run simulate:bank-sync --prefix frontend   # mock API，非真實銀行
+npm run simulate:bank-sync --prefix frontend   # 遠端 scrape 已退役，預期 501 provider_not_supported
 cd frontend/android && ./gradlew :app:testDebugUnitTest --tests "com.strawcoding.strawmoneybook.core.CaptchaSolverFixtureTest"
 ```
 

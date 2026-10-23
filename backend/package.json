@@ -13,7 +13,6 @@
     "backup:collab": "node scripts/backup-collab-store.mjs",
     "contract-check": "node scripts/sync-contract-check-run.mjs",
     "contract-check:einvoice": "node scripts/einvoice-portal-contract-check.mjs",
-    "contract-check:first-bank": "node scripts/first-bank-portal-contract-check.mjs",
     "playwright:install-browsers": "PLAYWRIGHT_INSTALL_BROWSERS=1 node scripts/ensure-playwright-browsers.mjs",
     "postinstall": "node scripts/ensure-playwright-browsers.mjs",
     "deploy:copy": "mkdir -p /mnt/data/Data/serviceApps/StrawMB && find /mnt/data/Data/serviceApps/StrawMB -mindepth 1 -maxdepth 1 ! -name .server-data -exec rm -rf {} + && rsync -a --exclude node_modules --exclude .server-data ./ /mnt/data/Data/serviceApps/StrawMB/ && node scripts/deploy-production-install.mjs",
@@ -24,6 +23,6 @@
     "better-sqlite3": "^12.4.1",
     "busboy": "^1.6.0",
     "google-auth-library": "^9.15.1",
-    "nodemailer": "^7.0.7"
+    "nodemailer": "^10.2.1"
   }
 }

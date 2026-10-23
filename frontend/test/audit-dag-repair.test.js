@@ -101,6 +101,7 @@ test('oauth client guard fails closed in production and ledger purge uses a tran
     'playwright-carrier-sync-settings.mjs',
     'playwright-budget-cross-month.mjs',
     'playwright-budget-pay-cycle.mjs',
+    'playwright-bank-sync-settings.mjs',
   ]) {
     const source = readFileSync(resolve(import.meta.dirname, '../scripts', script), 'utf8')
     assert.match(source, /playwright-cli-runtime\.mjs/)
