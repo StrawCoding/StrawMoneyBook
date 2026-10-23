@@ -15,7 +15,7 @@ async (page) => {
   const baseOrigin = initialUrl.match(/^https?:\/\/[^/]+/u)?.[0] ?? 'http://127.0.0.1:4177'
   await installMockDate()
   await setAppDateIso('2026-07-13T12:00:00+08:00')
-  await page.goto(`${baseOrigin}/budget`, { waitUntil: 'domcontentloaded', timeout: 10000 })
+  await page.goto(`${baseOrigin}/budget/settings`, { waitUntil: 'domcontentloaded', timeout: 10000 })
   await page.evaluate(() => {
     localStorage.setItem('strawmoneybook.ui.layout', 'modern')
   })
@@ -260,26 +260,26 @@ async (page) => {
   async function navigateToBudget() {
     const currentUrl = String(page.url())
     const origin = currentUrl.match(/^https?:\/\/[^/]+/u)?.[0] ?? currentUrl.replace(/\/.*$/u, '')
-    await page.goto(`${origin}/budget`, { waitUntil: 'domcontentloaded', timeout: 10000 })
+    await page.goto(`${origin}/budget/settings`, { waitUntil: 'domcontentloaded', timeout: 10000 })
     await waitForAppState()
     if (await isWelcomeVisible()) {
       await performWelcomeSetup()
       await finishIntroIfVisible()
-      await page.goto(`${origin}/budget`, { waitUntil: 'domcontentloaded', timeout: 10000 })
+      await page.goto(`${origin}/budget/settings`, { waitUntil: 'domcontentloaded', timeout: 10000 })
       await waitForAppState()
     }
     for (let attempt = 0; attempt < 80; attempt += 1) {
       if (await isWelcomeVisible()) {
         await performWelcomeSetup()
         await finishIntroIfVisible()
-        await page.goto(`${origin}/budget`, { waitUntil: 'domcontentloaded', timeout: 10000 })
+        await page.goto(`${origin}/budget/settings`, { waitUntil: 'domcontentloaded', timeout: 10000 })
       }
       if (await isIntroVisible()) {
         await finishIntroIfVisible()
-        await page.goto(`${origin}/budget`, { waitUntil: 'domcontentloaded', timeout: 10000 })
+        await page.goto(`${origin}/budget/settings`, { waitUntil: 'domcontentloaded', timeout: 10000 })
       }
       const ready = await page.evaluate(() => (
-        window.location.pathname === '/budget'
+        window.location.pathname === '/budget/settings'
         && Boolean(document.querySelector('.page-title'))
         && [...document.querySelectorAll('button')].some((button) => /Add Item|新增項目|項目を追加/u.test(button.textContent ?? ''))
       ))

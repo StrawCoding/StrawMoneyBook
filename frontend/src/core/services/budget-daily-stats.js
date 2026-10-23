@@ -135,6 +135,102 @@ function resolveBudgetSpentMinorForDay(dayKey, budgetCategoryIds, spentByCategor
   return total
 }
 
+export function spentByCategoryOnDay(spentByCategoryDayRows = [], dayKey) {
+  const target = String(dayKey ?? '').trim()
+  if (!target) return []
+  const totals = new Map()
+  for (const row of spentByCategoryDayRows) {
+    if (String(row?.occurred_day ?? '').trim() !== target) continue
+    const categoryId = String(row?.category_id ?? '').trim()
+    if (!categoryId) continue
+    totals.set(categoryId, (totals.get(categoryId) ?? 0) + toFiniteMinor(row?.spent_minor))
+  }
+  return [...totals.entries()]
+    .map(([categoryId, spentMinor]) => ({ categoryId, spentMinor }))
+    .filter((row) => row.spentMinor !== 0)
+    .sort((a, b) => b.spentMinor - a.spentMinor)
+}
+
+export function isDayKeyInBudgetPeriod(dayKey, periodStartDate, periodEndDate) {
+  const day = String(dayKey ?? '').trim()
+  const start = String(periodStartDate ?? '').trim()
+  const end = String(periodEndDate ?? '').trim()
+  if (!day || !start || !end) return false
+  return day >= start && day <= end
+}
+
+export function shiftBudgetMonthKey(monthKey, delta = 0) {
+  const matched = /^(\d{4})-(\d{2})$/.exec(String(monthKey ?? '').trim())
+  if (!matched) return ''
+  const year = Number(matched[1])
+  const month = Number(matched[2])
+  const shift = Number(delta)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(shift)) return ''
+  const date = new Date(year, month - 1 + shift, 1)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+export function buildBudgetMonthCalendarCells({
+  monthKey,
+  dailyStatsRows = [],
+  periodStartDate,
+  periodEndDate,
+  todayKey = '',
+} = {}) {
+  const matched = /^(\d{4})-(\d{2})$/.exec(String(monthKey ?? '').trim())
+  if (!matched) return []
+  const yearText = matched[1]
+  const monthText = matched[2]
+  const year = Number(yearText)
+  const month = Number(monthText)
+  const statsByDay = new Map(
+    dailyStatsRows.map((row) => [String(row?.dayKey ?? '').trim(), row]),
+  )
+  const firstWeekday = new Date(year, month - 1, 1).getDay()
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const cells = []
+
+  for (let index = 0; index < firstWeekday; index += 1) {
+    cells.push({
+      key: `empty-${index}`,
+      dateKey: '',
+      dayLabel: '',
+      spentMinor: 0,
+      plannedMinor: 0,
+      diffMinor: 0,
+      inPeriod: false,
+      isToday: false,
+      isOver: false,
+      selectable: false,
+    })
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const dateKey = `${yearText}-${monthText}-${String(day).padStart(2, '0')}`
+    const stats = statsByDay.get(dateKey)
+    const inPeriod = isDayKeyInBudgetPeriod(dateKey, periodStartDate, periodEndDate)
+    const spentMinor = inPeriod ? toFiniteMinor(stats?.spentMinor) : 0
+    const plannedMinor = inPeriod ? toFiniteMinor(stats?.plannedMinor) : 0
+    const diffMinor = inPeriod
+      ? toFiniteMinor(stats?.diffMinor ?? (plannedMinor - spentMinor))
+      : 0
+    cells.push({
+      key: dateKey,
+      dateKey,
+      dayLabel: String(day),
+      spentMinor,
+      plannedMinor,
+      diffMinor,
+      inPeriod,
+      isToday: dateKey === todayKey,
+      isOver: inPeriod && plannedMinor > 0 && diffMinor < 0,
+      selectable: inPeriod,
+    })
+  }
+
+  return cells
+}
+
 export function buildBudgetDailyStatsRows({
   period,
   items = [],

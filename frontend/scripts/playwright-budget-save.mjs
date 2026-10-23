@@ -137,7 +137,7 @@ async function assertBudgetPageReady() {
       hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
       booting: Boolean(document.querySelector('.boot-layer')),
     })`)
-    if (!state.booting && state.path === '/budget' && state.hasBudgetTitle && state.hasBudgetSavePanel) {
+    if (!state.booting && state.path === '/budget/settings' && state.hasBudgetTitle && state.hasBudgetSavePanel) {
       return state
     }
     await delay(400)
@@ -150,7 +150,7 @@ async function assertBudgetPageReady() {
     title: document.title,
     bodyText: document.body?.innerText?.slice(0, 500) ?? '',
   })`)
-  assert.equal(finalState.path, '/budget', JSON.stringify(finalState, null, 2))
+  assert.equal(finalState.path, '/budget/settings', JSON.stringify(finalState, null, 2))
   assert.equal(finalState.hasBudgetTitle, true, JSON.stringify(finalState, null, 2))
   assert.equal(finalState.hasBudgetSavePanel, true, JSON.stringify(finalState, null, 2))
   return finalState
@@ -159,7 +159,7 @@ async function assertBudgetPageReady() {
 async function navigateToBudget() {
   await runPlaywrightCli(['click', '[data-testid="bottom-nav-features"]'])
   await delay(800)
-  await runPlaywrightCli(['click', 'a.feature-link[href="/budget"]'])
+  await runPlaywrightCli(['click', 'a.feature-link[href="/budget/settings"]'])
   await delay(1000)
 }
 

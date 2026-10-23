@@ -21,6 +21,7 @@ import {
   isDailyPoolChildItem,
   dateKeyForLedgerTimeZone,
   buildBudgetDailyStatsRows,
+  spentByCategoryOnDay as spentByCategoryOnDayRows,
 } from '@/core/services/budget.service'
 // computePeriodReservedMinor supersedes computeMonthlyReservedMinor while preserving calendar-month behavior.
 import { computePeriodReservedMinor } from '@/core/services/budget-reserve.service'
@@ -218,6 +219,10 @@ export const useBudgetStore = defineStore('budget', {
         containers: state.containers,
         spentByCategoryDayRows: state.spentByCategoryDayRows,
       })
+    },
+
+    spentByCategoryOnDay(state) {
+      return (dayKey) => spentByCategoryOnDayRows(state.spentByCategoryDayRows, dayKey)
     },
   },
 

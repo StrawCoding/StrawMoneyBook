@@ -40,6 +40,10 @@ export {
   buildBudgetDailyStatsRows,
   listPeriodDayKeys,
   isBudgetItemActiveOnDate,
+  spentByCategoryOnDay,
+  isDayKeyInBudgetPeriod,
+  shiftBudgetMonthKey,
+  buildBudgetMonthCalendarCells,
 } from './budget-daily-stats.js'
 
 export {

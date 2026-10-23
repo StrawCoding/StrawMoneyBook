@@ -55,6 +55,7 @@ const showBankSyncEntry = isBankSyncFeatureEnabled()
 
 const generalFeatures = computed(() => ([
   { to: '/budget', label: t('feature_list.budget_items'), icon: 'fa-solid fa-chart-pie', testId: 'feature-link-budget' },
+  { to: '/budget/settings', label: t('feature_list.budget_settings'), icon: 'fa-solid fa-sliders', testId: 'feature-link-budget-settings' },
   { to: '/loans', label: t('feature_list.loans'), icon: 'fa-solid fa-hand-holding-dollar', testId: 'feature-link-loans' },
   { to: '/reimbursements', label: t('feature_list.reimbursements'), icon: 'fa-solid fa-receipt', testId: 'feature-link-reimbursements' },
   { to: '/claim-sheets', label: t('feature_list.claim_sheets'), icon: 'fa-solid fa-file-invoice-dollar', testId: 'feature-link-claim-sheets' },

@@ -1,6 +1,6 @@
 {
   "name": "strawmoneybook",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "private": true,
   "type": "module",
   "engines": {
@@ -43,6 +43,7 @@
     "playwright:budget-save": "node scripts/playwright-budget-save.mjs",
     "playwright:budget-cross-month": "node scripts/playwright-budget-cross-month.mjs",
     "playwright:budget-pay-cycle": "node scripts/playwright-budget-pay-cycle.mjs",
+    "playwright:budget-display": "node scripts/playwright-budget-display.mjs",
     "playwright:analysis-export": "node scripts/playwright-analysis-export.mjs",
     "playwright:ui-layout": "node scripts/playwright-ui-layout.mjs",
     "playwright:quick-add-save": "node scripts/playwright-quick-add-save.mjs",

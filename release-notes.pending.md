@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 預算顯示與設定拆開：`/budget` 用月曆看每日預算支出與分類總表（含 Icon），設定改到 `/budget/settings`。發薪週期月曆會淡化本期以外的日子。
+
 ---
 
 ## v1.5.1

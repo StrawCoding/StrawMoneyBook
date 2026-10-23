@@ -2,8 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildBudgetDailyStatsRows,
+  buildBudgetMonthCalendarCells,
   isBudgetItemActiveOnDate,
   listPeriodDayKeys,
+  spentByCategoryOnDay,
 } from '../src/core/services/budget-daily-stats.js'
 
 const julyPeriod = {
@@ -97,4 +99,40 @@ test('buildBudgetDailyStatsRows applies rolling pool allowance on second day aft
   })
   assert.equal(rows[0].plannedMinor, 1000)
   assert.equal(rows[1].plannedMinor, 500)
+})
+
+test('spentByCategoryOnDay groups budget expenses for one day', () => {
+  const rows = spentByCategoryOnDay([
+    { category_id: 'cat_food', occurred_day: '2026-07-02', spent_minor: 1200 },
+    { category_id: 'cat_food', occurred_day: '2026-07-02', spent_minor: 300 },
+    { category_id: 'cat_fixed', occurred_day: '2026-07-01', spent_minor: 900 },
+    { category_id: 'cat_empty', occurred_day: '2026-07-02', spent_minor: 0 },
+  ], '2026-07-02')
+  assert.deepEqual(rows, [{ categoryId: 'cat_food', spentMinor: 1500 }])
+})
+
+test('buildBudgetMonthCalendarCells fades days outside pay-cycle and only counts in-period spent', () => {
+  const cells = buildBudgetMonthCalendarCells({
+    monthKey: '2026-07',
+    periodStartDate: '2026-06-25',
+    periodEndDate: '2026-07-24',
+    todayKey: '2026-07-13',
+    dailyStatsRows: [
+      { dayKey: '2026-07-13', plannedMinor: 1000, spentMinor: 1500, diffMinor: -500 },
+      { dayKey: '2026-07-24', plannedMinor: 1000, spentMinor: 200, diffMinor: 800 },
+    ],
+  })
+  const faded = cells.find((cell) => cell.dateKey === '2026-07-25')
+  const over = cells.find((cell) => cell.dateKey === '2026-07-13')
+  const inPeriod = cells.find((cell) => cell.dateKey === '2026-07-24')
+  assert.equal(faded.inPeriod, false)
+  assert.equal(faded.selectable, false)
+  assert.equal(faded.spentMinor, 0)
+  assert.equal(over.inPeriod, true)
+  assert.equal(over.selectable, true)
+  assert.equal(over.isToday, true)
+  assert.equal(over.isOver, true)
+  assert.equal(over.spentMinor, 1500)
+  assert.equal(inPeriod.isOver, false)
+  assert.equal(inPeriod.spentMinor, 200)
 })

@@ -105,10 +105,10 @@ async (page) => {
   async function navigateToBudget() {
     await page.locator('[data-testid="bottom-nav-features"]').click()
     await page.waitForTimeout(800)
-    await page.locator('a.feature-link[href="/budget"]').click()
+    await page.locator('a.feature-link[href="/budget/settings"]').click()
     for (let attempt = 0; attempt < 80; attempt += 1) {
       const ready = await page.evaluate(() => (
-        window.location.pathname === '/budget'
+        window.location.pathname === '/budget/settings'
         && Boolean(document.querySelector('.page-title'))
         && [...document.querySelectorAll('button')].some((button) => /Add Shared Budget Pool|新增共同預算池|共同予算プール/u.test(button.textContent ?? ''))
       ))

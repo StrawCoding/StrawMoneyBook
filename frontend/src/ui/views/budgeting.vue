@@ -1,8 +1,8 @@
 <template>
-  <section class="stack">
+  <section class="stack" data-testid="budget-settings-page">
     <header class="row">
-      <h2 class="page-title">{{ t('budgeting.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/">{{ t('common.back') }}</RouterLink>
+      <h2 class="page-title">{{ t('budgeting.settings_title') }}</h2>
+      <RouterLink class="btn back-btn" to="/budget">{{ t('common.back') }}</RouterLink>
     </header>
 
     <article class="card panel">
@@ -118,8 +118,6 @@
         <button class="btn" @click="openCreateContainer">{{ t('budgeting.container.add') }}</button>
         <button class="btn primary" @click="openCreate">{{ t('budgeting.add_item') }}</button>
       </div>
-
-      <BudgetDailyStatsTable />
     </article>
 
     <article class="card panel">
@@ -498,7 +496,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useAccountStore } from '@/ui/stores/account.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
@@ -508,7 +506,6 @@ import MoneyText from '@/ui/components/common/MoneyText.vue'
 import BudgetItemSheet from '@/ui/components/budget/BudgetItemSheet.vue'
 import BudgetContainerSheet from '@/ui/components/budget/BudgetContainerSheet.vue'
 import BudgetProgressBar from '@/ui/components/budget/BudgetProgressBar.vue'
-import BudgetDailyStatsTable from '@/ui/components/budget/BudgetDailyStatsTable.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
@@ -523,6 +520,7 @@ const accountStore = useAccountStore()
 const categoryStore = useCategoryStore()
 const uiStore = useUiStore()
 const ledgerStore = useLedgerStore()
+const route = useRoute()
 const { t, locale } = useI18n()
 
 const isSheetOpen = ref(false)
@@ -701,6 +699,13 @@ const detailItemRuleText = computed(() => (
     ? itemDailyRuleSummary(detailItem.value)
     : ''
 ))
+
+watch(
+  () => [route.query.focus, route.query.id, budgetStore.items.length, budgetStore.containers.length, budgetStore.loading],
+  () => {
+    applyFocusFromQuery()
+  },
+)
 
 watch(
   () => [budgetStore.budget, budgetStore.budgetSavePreferences],
@@ -1218,6 +1223,35 @@ function onBudgetPagePayDayChange(event) {
     budgetPeriodMode: 'pay_cycle',
     budgetPayDay: nextPayDay,
   })
+}
+
+function applyFocusFromQuery() {
+  if (budgetStore.loading) return
+  const focus = String(route.query.focus ?? '').trim()
+  const id = String(route.query.id ?? '').trim()
+  if (focus === 'item' && id) {
+    const item = budgetStore.items.find((entry) => String(entry.id) === id)
+    if (item) openEdit(item)
+    return
+  }
+  if (focus === 'container' && id) {
+    const container = budgetStore.containers.find((entry) => String(entry.id) === id)
+    if (container) {
+      editingContainer.value = container
+      isContainerSheetOpen.value = true
+    }
+    return
+  }
+  if (focus === 'save') {
+    openTotalBudgetSaveConfig()
+    return
+  }
+  if (focus === 'period') {
+    if (typeof document === 'undefined') return
+    document.querySelector('[data-testid="budget-page-period-settings"]')?.scrollIntoView({
+      block: 'center',
+    })
+  }
 }
 </script>
 

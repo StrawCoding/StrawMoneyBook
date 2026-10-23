@@ -52,6 +52,12 @@ const router = createRouter({
     {
       name: 'budget',
       path: '/budget',
+      component: () => import('@/ui/views/BudgetDisplayPage.vue'),
+      meta: { tab: 'budget' },
+    },
+    {
+      name: 'budget-settings',
+      path: '/budget/settings',
       component: () => import('@/ui/views/budgeting.vue'),
       meta: { tab: 'budget' },
     },

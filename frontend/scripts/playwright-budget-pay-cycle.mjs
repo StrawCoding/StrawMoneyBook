@@ -79,6 +79,7 @@ async function runLogged(command, args, options = {}) {
 async function assertSourceContract() {
   const [
     budgetingVue,
+    budgetDisplayVue,
     budgetDailyStatsTableVue,
     settingsLedgerVue,
     budgetItemSheetVue,
@@ -95,6 +96,7 @@ async function assertSourceContract() {
     migrationSql,
   ] = await Promise.all([
     readFile(resolve(frontendDir, 'src/ui/views/budgeting.vue'), 'utf8'),
+    readFile(resolve(frontendDir, 'src/ui/views/BudgetDisplayPage.vue'), 'utf8'),
     readFile(resolve(frontendDir, 'src/ui/components/budget/BudgetDailyStatsTable.vue'), 'utf8'),
     readFile(resolve(frontendDir, 'src/ui/views/settings/SettingsLedgerDetailPage.vue'), 'utf8'),
     readFile(resolve(frontendDir, 'src/ui/components/budget/BudgetItemSheet.vue'), 'utf8'),
@@ -111,7 +113,8 @@ async function assertSourceContract() {
     readFile(resolve(frontendDir, 'src/core/db/migrations/039_budget_pay_cycle.sql'), 'utf8'),
   ])
 
-  assert.match(budgetingVue, /BudgetDailyStatsTable/)
+  assert.match(budgetDisplayVue, /BudgetDailyStatsTable/)
+  assert.match(budgetDisplayVue, /BudgetMonthCalendar/)
   assert.match(budgetDailyStatsTableVue, /data-testid="budget-daily-stats"/)
   assert.match(budgetStore, /dailyStatsRows/)
   assert.match(budgetingVue, /data-testid="budget-page-period-settings"/)
@@ -271,7 +274,7 @@ async function assertBudgetPageReady() {
       hasAddItem: [...document.querySelectorAll('button')].some((button) => /Add Item|新增項目|項目を追加/u.test(button.textContent ?? '')),
       bodyText: document.body?.innerText?.slice(0, 800) ?? '',
     })`)
-    if (state.path === '/budget' && state.hasTitle && state.hasAddItem) return
+    if (state.path === '/budget/settings' && state.hasTitle && state.hasAddItem) return
     await delay(500)
   }
   const state = await evalPage(`() => ({
@@ -473,7 +476,7 @@ try {
   console.log('Preview ready; resetting browser data...')
   await runPlaywrightCli(['delete-data'], { timeout: 120000 })
   console.log('Opening budgeting app shell...')
-  await runPlaywrightCli(['open', `${baseUrl}/budget`])
+  await runPlaywrightCli(['open', `${baseUrl}/budget/settings`])
   await delay(1500)
   const shellText = await snapshotText()
   assert.match(shellText, /StrawMoneyBook|Budget|預算|Welcome|歡迎|ようこそ/)

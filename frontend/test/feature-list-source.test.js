@@ -41,8 +41,17 @@ test('feature list exposes budget items with an icon', () => {
   assert.match(i18nSource, /'feature_list\.budget_items': '預算項目'/)
 })
 
+test('feature list exposes budget settings as a separate entry', () => {
+  assert.match(featureListSource, /to: '\/budget\/settings'/)
+  assert.match(featureListSource, /feature_list\.budget_settings/)
+  assert.match(featureListSource, /feature-link-budget-settings/)
+  assert.match(i18nSource, /'feature_list\.budget_settings': '預算設定'/)
+  assert.match(i18nSource, /'feature_list\.budget_settings': 'Budget Settings'/)
+  assert.match(i18nSource, /'feature_list\.budget_settings': '予算設定'/)
+})
+
 test('feature list docs include the budget items entry', () => {
-  assert.match(featuresMapSource, /功能列表導覽[\s\S]*預算項目：`\/budget`/)
+  assert.match(featuresMapSource, /功能列表導覽[\s\S]*預算項目：`\/budget`[\s\S]*預算設定：`\/budget\/settings`/)
   assert.match(detailedDocSource, /功能列表分為「一般功能」與「進階功能」/)
 })
 

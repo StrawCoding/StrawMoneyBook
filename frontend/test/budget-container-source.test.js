@@ -89,7 +89,11 @@ test('budgeting page exposes daily spending stats table', () => {
     resolve(import.meta.dirname, '../src/ui/components/budget/BudgetDailyStatsTable.vue'),
     'utf8',
   )
-  assert.match(budgetingSource, /BudgetDailyStatsTable/)
+  const displaySource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/views/BudgetDisplayPage.vue'),
+    'utf8',
+  )
+  assert.match(displaySource, /BudgetDailyStatsTable/)
   assert.match(dailyStatsSource, /data-testid="budget-daily-stats"/)
   assert.match(budgetStoreSource, /dailyStatsRows/)
 })
