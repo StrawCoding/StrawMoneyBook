@@ -194,7 +194,7 @@ import { useCategoryStore } from '@/ui/stores/category.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
-import { goBackOrFallback } from '@/ui/services/navigation-back.service'
+import { goBackOrFallback, returnHomeAfterBookkeeping } from '@/ui/services/navigation-back.service'
 import { resolveBookkeepingSubmitErrorMessage } from '@/ui/utils/bookkeeping-submit-error'
 import { convertAmountMinorByRate } from '@/ui/services/exchange-rate.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
@@ -683,7 +683,7 @@ async function submit(options = {}) {
 
     uiStore.pushToast(t('qna_bookkeeping.toast.saved', '問答記帳已建立交易'))
     if (closeAfterSuccess) {
-      await closePage()
+      await returnHomeAfterBookkeeping(router)
       return
     }
     resetForm()

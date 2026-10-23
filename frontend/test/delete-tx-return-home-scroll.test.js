@@ -16,7 +16,9 @@ import {
 import {
   isHomeRoute,
   isTransactionDetailOrEditPath,
+  returnHomeAfterBookkeeping,
   returnHomeAfterTransactionDelete,
+  returnHomeWithRememberedScroll,
 } from '../src/ui/services/navigation-back.service.js'
 
 test('scroll helpers normalize and clamp positions', () => {
@@ -73,6 +75,28 @@ test('returnHomeAfterTransactionDelete always replaces to home with scroll resto
   assert.deepEqual(calls, [['replace', { name: 'home' }]])
   // Forced restore consumed by scrollBehavior-compatible queue.
   assert.deepEqual(queueDeferredScrollRestore({ left: 0, top: 0 }), { left: 0, top: 512 })
+  resetRouteScrollStateForTests()
+})
+
+test('returnHomeAfterBookkeeping shares the home-with-scroll restore path', async () => {
+  resetRouteScrollStateForTests()
+  rememberHomeScrollPosition({ left: 0, top: 88 })
+  const calls = []
+  const router = {
+    currentRoute: { value: { name: 'ai-auto-bookkeeping', path: '/ai-auto-bookkeeping' } },
+    async replace(target) {
+      calls.push(['replace', target])
+      this.currentRoute.value = { name: 'home', path: '/' }
+    },
+    async back() {
+      calls.push(['back'])
+    },
+  }
+  const result = await returnHomeAfterBookkeeping(router)
+  assert.equal(result, 'replaced')
+  assert.deepEqual(calls, [['replace', { name: 'home' }]])
+  assert.equal(returnHomeAfterBookkeeping, returnHomeWithRememberedScroll)
+  assert.equal(returnHomeAfterTransactionDelete, returnHomeWithRememberedScroll)
   resetRouteScrollStateForTests()
 })
 

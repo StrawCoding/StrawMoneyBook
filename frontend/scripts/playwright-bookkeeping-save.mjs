@@ -231,7 +231,7 @@ try {
     aiState = await evalPage(dumpStateScript())
     if (
       aiState.toasts.some((text) => /已儲存|儲存交易|交易已新增|失敗|沒有|請/u.test(text))
-      || aiState.path.includes('transaction')
+      || aiState.path === '/'
       || (aiState.txItems ?? []).some((text) => text.includes('77'))
     ) {
       break
@@ -249,19 +249,22 @@ try {
     }
   }
 
-  const savedToEdit = /\/transactions\/[^/]+\/edit/.test(String(aiState.path ?? ''))
-  if (!(aiState.txItems ?? []).some((text) => text.includes('77')) && !savedToEdit) {
-    await runPlaywrightCli(['eval', `() => { window.location.href = '${baseUrl}/'; return true }`], { raw: true })
-  }
-  if (!(aiState.txItems ?? []).some((text) => text.includes('77'))) {
-    await runPlaywrightCli(['eval', `() => { window.location.href = '${baseUrl}/'; return true }`], { raw: true })
-    const aiHome = await waitForHomeFeed('77', 10000)
-    await dump('ai-home')
-    assert.ok(
-      (aiHome?.txItems ?? []).some((text) => text.includes('77')),
-      `AI save did not appear on home: ${JSON.stringify({ aiState, aiHome }, null, 2)}`,
-    )
-  }
+  assert.doesNotMatch(
+    String(aiState.path ?? ''),
+    /\/transactions\/[^/]+\/edit/,
+    `AI save must not open the editor: ${JSON.stringify(aiState, null, 2)}`,
+  )
+
+  const aiHome = await waitForHomeFeed('77', 10000)
+  await dump('ai-home')
+  assert.ok(
+    aiHome?.path === '/' || aiHome?.path === '/home',
+    `AI save should return home, got ${JSON.stringify(aiHome, null, 2)}`,
+  )
+  assert.ok(
+    (aiHome?.txItems ?? []).some((text) => text.includes('77')),
+    `AI save did not appear on home: ${JSON.stringify({ aiState, aiHome }, null, 2)}`,
+  )
 
   console.log('AI + manual bookkeeping save Playwright passed')
 } finally {

@@ -71,11 +71,12 @@ export function isTransactionDetailOrEditPath(path = '/') {
 }
 
 /**
- * After a successful transaction delete: always land on home with BottomNav home tab,
- * restoring the remembered home scroll (clamped by route-scroll flush).
- * Never router.back() into a deleted detail page.
+ * After a successful bookkeeping save or transaction delete: always land on home
+ * with BottomNav home tab, restoring the remembered home scroll (clamped by
+ * route-scroll flush). Never router.back() into edit/detail, and never fall
+ * back to /features.
  */
-export async function returnHomeAfterTransactionDelete(router) {
+export async function returnHomeWithRememberedScroll(router) {
   const remembered = getRememberedHomeScrollPosition() ?? { left: 0, top: 0 }
   setNextScrollRestore(remembered)
 
@@ -89,6 +90,9 @@ export async function returnHomeAfterTransactionDelete(router) {
   await router.replace({ name: 'home' })
   return 'replaced'
 }
+
+export const returnHomeAfterTransactionDelete = returnHomeWithRememberedScroll
+export const returnHomeAfterBookkeeping = returnHomeWithRememberedScroll
 
 export async function goBackOrFallback(router, fallback) {
   const currentPath = toPathText(router?.currentRoute?.value?.path)

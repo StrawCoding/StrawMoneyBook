@@ -298,7 +298,7 @@ import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useAddonTemplateStore } from '@/ui/stores/addon-template.store'
 import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { getLastManualBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
-import { goBackOrFallback } from '@/ui/services/navigation-back.service'
+import { goBackOrFallback, returnHomeAfterBookkeeping } from '@/ui/services/navigation-back.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { mergeAddonItemsToNote } from '@/ui/utils/addon-note'
 import {
@@ -392,10 +392,6 @@ const model = reactive({
 
 async function goBack() {
   await goBackOrFallback(router, '/features')
-}
-
-async function closePage() {
-  await goBackOrFallback(router, props.embedded ? '/features' : '/')
 }
 
 async function goManualBookkeeping() {
@@ -709,7 +705,7 @@ async function parseText(options = {}) {
         uiStore.pushToast(`未建立：${failedLines.slice(0, 2).join('；')}`, 'error')
       }
       if (successCount > 0) {
-        await closePage()
+        await returnHomeAfterBookkeeping(router)
       }
       return
     }
@@ -761,20 +757,10 @@ async function parseText(options = {}) {
       autoCreated: true,
       keepDraft: false,
       preserveSourceText: false,
-      closeAfterSuccess: false,
+      closeAfterSuccess: true,
     })
     if (created) {
       uiStore.pushToast(t('ai_bookkeeping.toast.saved', 'AI 記帳已儲存交易'))
-      const savedTxId = typeof created === 'string' ? created : String(persistedTransactionId.value ?? '').trim()
-      if (savedTxId) {
-        await router.push({
-          name: 'transaction-edit',
-          params: { id: savedTxId },
-          query: { from: 'ai-auto-bookkeeping' },
-        }).catch(() => {})
-        return
-      }
-      await closePage()
     }
   }
 }
@@ -1016,7 +1002,7 @@ async function submit(options = {}) {
         preserveSourceText,
       })
       if (closeAfterSuccess) {
-        await closePage()
+        await returnHomeAfterBookkeeping(router)
       }
       return true
     }
@@ -1208,7 +1194,7 @@ async function submit(options = {}) {
       preserveSourceText,
     })
     if (closeAfterSuccess) {
-      await closePage()
+      await returnHomeAfterBookkeeping(router)
     }
     return savedTxId || true
   } catch (error) {

@@ -8,8 +8,9 @@ const source = readFileSync(
   'utf8',
 )
 
-test('AI bookkeeping single-item auto create routes to standalone transaction edit page', () => {
-  assert.match(source, /const savedTxId = String\(persistedTransactionId\.value \?\? ''\)\.trim\(\)/)
-  assert.match(source, /await router\.push\(\{\s+name: 'transaction-edit',\s+params: \{ id: savedTxId \},/s)
-  assert.match(source, /query: \{ from: 'ai-auto-bookkeeping' \}/)
+test('AI bookkeeping success returns home instead of opening the transaction editor', () => {
+  assert.match(source, /returnHomeAfterBookkeeping\(router\)/)
+  assert.match(source, /closeAfterSuccess: true/)
+  assert.doesNotMatch(source, /name:\s*'transaction-edit'/)
+  assert.doesNotMatch(source, /from:\s*'ai-auto-bookkeeping'/)
 })

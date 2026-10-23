@@ -234,7 +234,7 @@ import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { getCurrentLocale, useI18n } from '@/ui/services/i18n.service'
-import { goBackOrFallback } from '@/ui/services/navigation-back.service'
+import { goBackOrFallback, returnHomeAfterBookkeeping } from '@/ui/services/navigation-back.service'
 import { normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { mergeAddonItemsToNote } from '@/ui/utils/addon-note'
 import {
@@ -758,7 +758,7 @@ async function submit(options = {}) {
 
     uiStore.pushToast(t('quick_add.toast.created'))
     if (closeAfterSuccess) {
-      await closePage()
+      await returnHomeAfterBookkeeping(router)
       return
     }
     resetFormForNextEntry()
