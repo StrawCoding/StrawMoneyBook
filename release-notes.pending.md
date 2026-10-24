@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- 預算顯示與設定拆開：`/budget` 用月曆看每日預算支出與分類總表（含 Icon），設定改到 `/budget/settings`。發薪週期月曆會淡化本期以外的日子。
-
 ---
+
+## v1.5.2
+- 預算顯示與設定拆開：`/budget` 用月曆看每日預算支出與分類總表（含 Icon），設定改到 `/budget/settings`。發薪週期月曆會淡化本期以外的日子。
 
 ## v1.5.1
 - 對齊已移除的第一銀行合約自檢：runner／測試不再 import 缺失腳本，排程合約檢查只跑載具 portal。
