@@ -384,6 +384,8 @@ async function readHomeBlockState() {
     hasHomeView: Boolean(document.querySelector('[data-testid=home-view]')),
     hasPeriodFilter: Boolean(document.querySelector('[data-testid=home-period-filter]')),
     hasAssetSummary: Boolean(document.querySelector('[data-testid=home-asset-summary]')),
+    hasHelloBlock: Boolean(document.querySelector('[data-testid=home-hello-block]')),
+    hasLedgerSwitcher: Boolean(document.querySelector('[data-testid=home-hello-block] [data-testid=home-ledger-switcher]')),
     hasBudgetSummary: Boolean(document.querySelector('[data-testid=home-budget-summary]')),
     hasTransactionFeed: Boolean(document.querySelector('[data-testid=home-transaction-feed]')),
     hasFab: Boolean(document.querySelector('[data-testid=home-fab]')),
@@ -403,6 +405,8 @@ function homeBlocksReady(state) {
     && state.hasHomeView
     && state.hasPeriodFilter
     && state.hasAssetSummary
+    && state.hasHelloBlock
+    && state.hasLedgerSwitcher
     && state.hasBudgetSummary
     && state.hasTransactionFeed
     && state.hasFab,
@@ -429,31 +433,46 @@ async function assertHomeBlocks() {
   assert.equal(result.hasHomeView, true, JSON.stringify(result, null, 2))
   assert.equal(result.hasPeriodFilter, true, JSON.stringify(result, null, 2))
   assert.equal(result.hasAssetSummary, true, JSON.stringify(result, null, 2))
+  assert.equal(result.hasHelloBlock, true, JSON.stringify(result, null, 2))
+  assert.equal(result.hasLedgerSwitcher, true, JSON.stringify(result, null, 2))
   assert.equal(result.hasBudgetSummary, true, JSON.stringify(result, null, 2))
   assert.equal(result.hasTransactionFeed, true, JSON.stringify(result, null, 2))
   assert.equal(result.hasFab, true, JSON.stringify(result, null, 2))
 
-  const order = await evalPage(`() => {
-    const chrome = document.querySelector('[data-testid=home-period-chrome]')
-    const budget = document.querySelector('[data-testid=home-budget-summary]')
-    const asset = document.querySelector('[data-testid=home-asset-summary]')
-    if (!budget || !asset) return { ok: false, reason: 'missing cards' }
-    return {
-      ok: true,
-      hasChrome: Boolean(chrome),
-      hasPrev: Boolean(document.querySelector('[data-testid=home-period-prev]')),
-      hasNext: Boolean(document.querySelector('[data-testid=home-period-next]')),
-      hasTitle: Boolean(document.querySelector('[data-testid=home-period-title]')),
-      budgetTop: budget.getBoundingClientRect().top,
-      assetTop: asset.getBoundingClientRect().top,
-    }
-  }`)
+  let order = { ok: false, reason: 'not-run' }
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    order = await evalPage(`() => {
+      const chrome = document.querySelector('[data-testid=home-period-chrome]')
+      const budget = document.querySelector('[data-testid=home-budget-summary]')
+      const asset = document.querySelector('[data-testid=home-asset-summary]')
+      if (!budget || !asset) return { ok: false, reason: 'missing cards' }
+      const feed = document.querySelector('[data-testid=home-transaction-feed]')
+      const hello = document.querySelector('[data-testid=home-hello-block]')
+      const ledger = hello && hello.querySelector('[data-testid=home-ledger-switcher]')
+      return {
+        ok: true,
+        hasChrome: Boolean(chrome),
+        hasPrev: Boolean(document.querySelector('[data-testid=home-period-prev]')),
+        hasNext: Boolean(document.querySelector('[data-testid=home-period-next]')),
+        hasTitle: Boolean(document.querySelector('[data-testid=home-period-title]')),
+        budgetTop: budget.getBoundingClientRect().top,
+        assetTop: asset.getBoundingClientRect().top,
+        ledgerInHello: Boolean(ledger),
+        budgetBg: getComputedStyle(budget).backgroundColor,
+        feedBg: feed ? getComputedStyle(feed).backgroundColor : '',
+      }
+    }`)
+    if (order.ok) break
+    await delay(300)
+  }
   assert.equal(order.ok, true, JSON.stringify(order, null, 2))
   assert.equal(order.hasChrome, true, JSON.stringify(order, null, 2))
   assert.equal(order.hasPrev, true, JSON.stringify(order, null, 2))
   assert.equal(order.hasNext, true, JSON.stringify(order, null, 2))
   assert.equal(order.hasTitle, true, JSON.stringify(order, null, 2))
+  assert.equal(order.ledgerInHello, true, JSON.stringify(order, null, 2))
   assert.ok(order.budgetTop < order.assetTop, `budget must sit above assets: ${JSON.stringify(order)}`)
+  assert.equal(order.budgetBg, order.feedBg, `budget card must use the same surface as feed, not gold-wash: ${JSON.stringify(order)}`)
 }
 
 async function seedHomeTransactionsForScroll(count = 18) {
@@ -2320,7 +2339,17 @@ async function assertDualUiLayout() {
 
   await runPlaywrightCli(['click', '[data-testid="ui-layout-traditional"]'])
   await delay(300)
-  await runPlaywrightCli(['goto', `${baseUrl}/`])
+  await gotoOrReopen(`${baseUrl}/`)
+  const bootAfterTraditional = await waitForBootAndMaybeSkipOnboarding()
+  if (!bootAfterTraditional.ok) {
+    const onboardingTraditional = await completeOnboarding()
+    assert.equal(onboardingTraditional.ok, true, JSON.stringify(onboardingTraditional, null, 2))
+    await evalPage(`() => {
+      localStorage.setItem('strawmoneybook.ui.layout', 'traditional')
+      return true
+    }`)
+    await gotoOrReopen(`${baseUrl}/`)
+  }
   await waitForAppShell()
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const ready = await evalPage(`() => ({
@@ -2354,6 +2383,12 @@ async function assertDualUiLayout() {
   await runPlaywrightCli(['click', '[data-testid="ui-layout-modern"]'])
   await delay(300)
 
+  await gotoOrReopen(`${baseUrl}/`)
+  const bootAfterModern = await waitForBootAndMaybeSkipOnboarding()
+  if (!bootAfterModern.ok) {
+    const onboardingAgain = await completeOnboarding()
+    assert.equal(onboardingAgain.ok, true, JSON.stringify(onboardingAgain, null, 2))
+  }
   await assertHomeBlocks()
   await assertBottomNavIcons()
 
@@ -2436,14 +2471,16 @@ try {
   await assertRouteNavigation()
   await assertDriveAppDataBrowser()
   await assertDualUiLayout()
-  await assertSharedLedgerAuthAndEditorSurfaces()
+  if (!process.env.UI_LAYOUT_ONLY_HOME) {
+    await assertSharedLedgerAuthAndEditorSurfaces()
 
-  await gotoOrReopen(`${baseUrl}/settings/personalization`)
-  const personalizationSnapshot = await runPlaywrightCli(['snapshot'])
-  const personalizationText = String(personalizationSnapshot.stdout ?? '')
-  assert.match(personalizationText, /Theme scheme|主題方案|テーマスキーム|Theme Scheme/u)
-  assert.match(personalizationText, /Interface style|介面風格|画面スタイル/u)
-  assert.match(personalizationText, /Traditional|傳統|クラシック/u)
+    await gotoOrReopen(`${baseUrl}/settings/personalization`)
+    const personalizationSnapshot = await runPlaywrightCli(['snapshot'])
+    const personalizationText = String(personalizationSnapshot.stdout ?? '')
+    assert.match(personalizationText, /Theme scheme|主題方案|テーマスキーム|Theme Scheme/u)
+    assert.match(personalizationText, /Interface style|介面風格|画面スタイル/u)
+    assert.match(personalizationText, /Traditional|傳統|クラシック/u)
+  }
 
   console.log('UI layout Playwright smoke passed')
 } finally {
@@ -2458,8 +2495,15 @@ try {
 }
 
 async function assertSharedLedgerAuthAndEditorSurfaces() {
-  await runPlaywrightCli(['goto', `${baseUrl}/settings/account`])
-  await delay(900)
+  await gotoOrReopen(`${baseUrl}/`)
+  const boot = await waitForBootAndMaybeSkipOnboarding()
+  if (!boot.ok) {
+    const onboarding = await completeOnboarding()
+    assert.equal(onboarding.ok, true, JSON.stringify(onboarding, null, 2))
+  }
+  await waitForHomeBlocks()
+  await gotoOrReopen(`${baseUrl}/settings/account`)
+  await waitForAppShell()
   const account = await evalPage(`() => ({
     path: window.location.pathname,
     hasAccountRoot: Boolean(document.querySelector('.view-root, .settings-account, .page-title')),
@@ -2692,7 +2736,7 @@ async function assertSharedLedgerAuthAndEditorSurfaces() {
 
   // Design-aligned editor attribution chips: inject markup matching HomeTransactionFeed structure.
   await runPlaywrightCli(['goto', `${baseUrl}/`])
-  await delay(800)
+  await waitForHomeBlocks()
   const home = await evalPage(`() => {
     const feed = document.querySelector('.tx-list, .summary-card')
     const markerHost = feed || document.body

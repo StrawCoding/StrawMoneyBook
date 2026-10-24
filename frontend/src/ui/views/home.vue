@@ -1,12 +1,12 @@
 <template>
   <div class="view-root home-modern" data-testid="home-view">
-    <h1 class="home-large-title">{{ t('nav.home') }}</h1>
-    <p class="home-habitat-hello">{{ t('home_page.habitat_hello') }}</p>
+    <header class="home-hello-block" data-testid="home-hello-block">
+      <h1 class="home-large-title">{{ t('nav.home') }}</h1>
+      <p class="home-habitat-hello">{{ t('home_page.habitat_hello') }}</p>
+      <LedgerSwitcher class="home-hello-ledger ledger-switcher-wrap" data-testid="home-ledger-switcher" />
+    </header>
     <section class="stack">
       <header class="home-period-chrome" data-testid="home-period-chrome">
-        <div class="home-chrome-top">
-          <LedgerSwitcher class="ledger-switcher-wrap" data-testid="home-ledger-switcher" />
-        </div>
         <div class="period-title-row">
           <button
             type="button"
@@ -128,14 +128,15 @@ function openQuickAdd() {
 </script>
 
 <style scoped>
+.home-hello-block {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 2px 2px 4px;
+}
 .home-period-chrome {
   display: grid;
   gap: 10px;
-}
-.home-chrome-top {
-  display: flex;
-  align-items: center;
-  min-width: 0;
 }
 .period-title-row {
   display: grid;

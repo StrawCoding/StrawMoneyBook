@@ -88,6 +88,13 @@ test('home keeps all blocks and FAB under both layouts', () => {
   assert.match(homeSource, /useHomePeriodFilter/)
   assert.match(homeSource, /class="view-root home-modern"/)
   assert.match(homeSource, /home-habitat-hello/)
+  assert.match(homeSource, /home-hello-block/)
+  assert.match(homeSource, /data-testid="home-hello-block"/)
+  assert.match(habitatCssSource, /\[data-ui-layout='modern'\] \.home-modern \.summary-card \{[\s\S]*?background: var\(--card\)/)
+  assert.doesNotMatch(
+    habitatCssSource,
+    /\[data-ui-layout='modern'\] \.home-modern \.summary-card \{[\s\S]*?background: var\(--zone-plan-bg\)/,
+  )
   assert.doesNotMatch(homeSource, /useUiLayout/)
   const budgetAt = homeSource.indexOf('data-testid="home-budget-summary"')
   const assetAt = homeSource.indexOf('data-testid="home-asset-summary"')

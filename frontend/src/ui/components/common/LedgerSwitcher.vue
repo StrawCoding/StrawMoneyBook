@@ -88,6 +88,9 @@ watch(
   align-items: center;
   min-width: 160px
 }
+.ledger-switcher.home-hello-ledger {
+  min-width: 0;
+}
 .switcher-btn {
   background-image: none;
   padding-right: 12px;
@@ -125,4 +128,9 @@ watch(
 }
 .switcher-btn {
   min-width: 160px
+}
+.home-hello-ledger .switcher-btn {
+  min-width: 0;
+  width: max-content;
+  max-width: 100%;
 }</style>

@@ -13,6 +13,12 @@
 
 /* ── Large titles ─────────────────────────────────────────────── */
 
+[data-ui-layout='traditional'] .home-hello-block {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
 [data-ui-layout='traditional'] .home-habitat-hello {
   display: none;
 }
