@@ -1,5 +1,5 @@
 <template>
-  <div class="amount-calc-field">
+  <div class="amount-calc-field" :class="{ 'amount-calc-inline': inline }">
     <button
       type="button"
       class="calc-trigger"
@@ -11,7 +11,46 @@
       <span class="calc-trigger-icon" aria-hidden="true">⌨</span>
     </button>
 
-    <teleport to="body">
+    <div v-if="inline" class="inline-keypad-wrap">
+      <div class="calc-keypad">
+        <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('1')">1</button>
+        <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('2')">2</button>
+        <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('3')">3</button>
+        <button type="button" class="btn calc-btn back-btn" @click="pressBackspace">⌫</button>
+        <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('4')">4</button>
+        <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('5')">5</button>
+        <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('6')">6</button>
+        <button type="button" class="btn calc-btn op-btn" @click="pressOp('+')">+</button>
+        <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('7')">7</button>
+        <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('8')">8</button>
+        <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('9')">9</button>
+        <button type="button" class="btn calc-btn op-btn" @click="pressOp('-')">−</button>
+        <button type="button" class="btn calc-btn digit-btn" @click="pressDot">.</button>
+        <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('0')">0</button>
+        <button
+          type="button"
+          class="btn calc-btn secondary-btn"
+          :data-testid="secondaryTestid || undefined"
+          :class="{ busy: confirmBusy }"
+          :disabled="confirmBusy"
+          @click="onSecondary"
+        >
+          {{ secondaryLabel || t('quick_add.action.save_and_add') }}
+        </button>
+        <button
+          type="button"
+          class="btn calc-btn confirm-btn primary"
+          :data-testid="confirmTestid || undefined"
+          :class="{ busy: confirmBusy }"
+          :disabled="confirmBusy"
+          @click="onConfirm"
+        >
+          {{ confirmLabel || t('common.done') }}
+        </button>
+      </div>
+    </div>
+
+    <teleport v-if="!inline" to="body">
       <transition name="overlay-fade">
         <section v-if="calcOpen" class="app-overlay-sheet-mask" @click.self="onConfirm">
           <article class="card sheet app-bottom-sheet app-overlay-sheet-card calc-sheet">
@@ -60,7 +99,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, nextTick, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { evaluateAmountExpression, expressionHasOperator } from '@/ui/utils/amount-calculator'
 
@@ -73,9 +112,33 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  inline: {
+    type: Boolean,
+    default: false,
+  },
+  confirmLabel: {
+    type: String,
+    default: '',
+  },
+  secondaryLabel: {
+    type: String,
+    default: '',
+  },
+  confirmTestid: {
+    type: String,
+    default: '',
+  },
+  secondaryTestid: {
+    type: String,
+    default: '',
+  },
+  confirmBusy: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'confirm', 'secondary'])
 const { t } = useI18n()
 
 const calcOpen = ref(false)
@@ -94,9 +157,14 @@ const triggerLabel = computed(() => {
   return val === 0 ? '0' : String(val)
 })
 
-function openCalc() {
+function syncExpressionFromModel() {
   const val = Number(props.modelValue ?? 0)
   expression.value = Number.isFinite(val) && (val > 0 || (props.allowNegative && val < 0)) ? String(val) : ''
+}
+
+function openCalc() {
+  syncExpressionFromModel()
+  if (props.inline) return
   calcOpen.value = true
 }
 
@@ -111,9 +179,25 @@ function resolvedConfirmValue() {
   return 0
 }
 
-function onConfirm() {
-  emit('update:modelValue', resolvedConfirmValue())
+async function commitValue() {
+  const value = resolvedConfirmValue()
+  emit('update:modelValue', value)
+  await nextTick()
+  return value
+}
+
+async function onConfirm() {
+  const value = await commitValue()
+  if (props.inline) {
+    emit('confirm', value)
+    return
+  }
   calcOpen.value = false
+}
+
+async function onSecondary() {
+  const value = await commitValue()
+  emit('secondary', value)
 }
 
 function pressDigit(d) {
@@ -171,6 +255,7 @@ function onRequestCloseOverlay(event) {
 }
 
 onMounted(() => {
+  if (props.inline) syncExpressionFromModel()
   window.addEventListener('app:request-close-overlay', onRequestCloseOverlay)
 })
 
@@ -182,6 +267,20 @@ onBeforeUnmount(() => {
 <style scoped>
 .amount-calc-field {
   display: contents;
+}
+
+.amount-calc-inline {
+  display: grid;
+  gap: 10px;
+}
+
+.inline-keypad-wrap {
+  min-width: 0;
+}
+
+.secondary-btn {
+  font-size: 15px;
+  background: var(--surface-soft);
 }
 
 .calc-trigger {

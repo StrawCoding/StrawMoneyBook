@@ -6,7 +6,7 @@
         <button type="button" class="btn back-btn" @click="closePage">{{ t('common.back') }}</button>
       </header>
 
-      <div class="type-grid">
+      <div class="type-grid chip-row">
         <button v-if="!embedded" type="button" class="btn" @click="openAiPage">{{ t('quick_add.action.open_ai') }}</button>
         <button
           v-for="item in typeOptions"
@@ -21,12 +21,22 @@
       </div>
 
       <div class="stack form-wrap">
-        <div class="field">
+        <div class="field amt-hero">
           {{ t('common.amount_yuan') }}
-          <AmountCalculatorInput v-model="model.amountMajor" />
+          <AmountCalculatorInput
+            v-model="model.amountMajor"
+            :inline="embedded"
+            :confirm-label="t('quick_add.action.create_transaction')"
+            :secondary-label="t('quick_add.action.save_and_add')"
+            confirm-testid="quick-add-create"
+            secondary-testid="quick-add-save-and-add"
+            :confirm-busy="submitting"
+            @confirm="submit({ closeAfterSuccess: true })"
+            @secondary="submit({ closeAfterSuccess: false })"
+          />
         </div>
 
-        <div class="field">
+        <div class="field chip-row meta-chips">
           <div class="date-extra-row">
             <div class="field">
               <span>{{ t('common.transaction_time') }}</span>
@@ -108,7 +118,7 @@
 
       </div>
 
-      <footer class="row action-row">
+      <footer v-if="!embedded" class="row action-row">
         <button
           type="button"
           class="btn"
@@ -846,6 +856,14 @@ h2 {
 
 .form-wrap {
   margin-top: 14px;
+}
+
+.chip-row {
+  min-width: 0;
+}
+
+.amt-hero {
+  font-weight: 700;
 }
 
 .field {

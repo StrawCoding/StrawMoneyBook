@@ -131,13 +131,23 @@ async function dump(label) {
 }
 
 async function enterAmountViaCalculator(major) {
-  await runPlaywrightCli(['click', '.quick-add-page .calc-trigger'])
-  await delay(500)
-  await runPlaywrightCli(['click', '.calc-sheet .clear-btn'])
-  for (const digit of String(major)) {
-    await runPlaywrightCli(['click', `.calc-sheet button.digit-btn:has-text("${digit}")`])
+  const mode = await evalPage(`() => document.querySelector('.amount-calc-inline') ? 'inline' : 'overlay'`)
+  const root = mode === 'inline' ? '.amount-calc-inline' : '.calc-sheet'
+  if (mode === 'overlay') {
+    await runPlaywrightCli(['click', '.quick-add-page .calc-trigger'])
+    await delay(500)
+    await runPlaywrightCli(['click', `${root} .clear-btn`])
+  } else {
+    for (let i = 0; i < 8; i += 1) {
+      await runPlaywrightCli(['click', `${root} .back-btn`])
+    }
   }
-  await runPlaywrightCli(['click', '.calc-sheet .confirm-btn'])
+  for (const digit of String(major)) {
+    await runPlaywrightCli(['click', `${root} button.digit-btn:has-text("${digit}")`])
+  }
+  if (mode === 'overlay') {
+    await runPlaywrightCli(['click', `${root} .confirm-btn`])
+  }
   await delay(400)
 }
 

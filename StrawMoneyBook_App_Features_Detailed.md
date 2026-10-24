@@ -161,14 +161,13 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 
 **首頁**（`src/ui/views/home.vue`）提供：
 
-- 帳本切換
-- 全部 / 年 / 月 / 日 範圍切換
+- 期間 chrome：帳本頂列切換、期間大標與上一期／下一期箭頭、全部 / 年 / 月 / 日 pill（不再把這些塞進一張帳本管理卡）
 - 當期收支摘要（`HomeAssetSummaryCard`：收入／支出區塊背景與數字色跟隨主題 `--home-*-card-*` Light／Dark token；淺色模式使用淺綠／淺紅底與深綠／深紅數字，禁止沿用深色硬編碼底；現代介面風格下切換主題後仍可辨識收入／支出語意）
-- 預算摘要
+- 預算摘要（在收支卡上方）
 - 交易清單
 - 浮動快速記帳按鈕（FAB）
 
-期間篩選邏輯由 `useHomePeriodFilter` composable 管理。
+期間篩選邏輯由 `useHomePeriodFilter` composable 管理。發薪週期帳本在月模式下，期間標題顯示本期起訖，箭頭切上一期／下一期；曆月模式才顯示「年／月」。這是顯示與導覽，不改 `budget.store` 語意。
 
 另外，首頁交易流在全部 / 年 / 月 / 日範圍皆改為 SQL 分頁載入，每頁最多 300 筆，並提供上一頁 / 下一頁控制；badge 顯示該範圍總筆數。收支摘要卡改由單次 SQL 彙總（`summarizeHomeAssetTotalsByScope`，語意對齊退款淨額、`include_in_analysis`、排除 `loan_payment`），不再分頁掃完全部交易。App 啟動／切換帳本時先完成帳戶、分類與目前預算期間（critical path），完整性掃描與借貸／報銷／附加範本／recent 於背景延遲載入，讓首頁更快可互動；期間快速切換會以請求序號丟棄過期結果。交易明細／編輯改只載入關聯交易（轉帳群組、退款、報銷、借貸同組），分析「全部」範圍改分段查詢並讓出主執行緒。需要跨頁瀏覽或完整歷史篩選時，仍可使用交易搜尋、分析與報表頁。
 

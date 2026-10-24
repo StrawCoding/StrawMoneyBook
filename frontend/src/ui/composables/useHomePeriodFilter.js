@@ -10,6 +10,7 @@ import {
   dateKeyForLedgerTimeZone,
   monthKeyForLedgerTimeZone,
 } from '@/core/services/budget.service'
+import { shiftDayKey, shiftMonthKey } from '@/ui/utils/home-period-shift.js'
 
 export const APP_BUDGET_PERIOD_SYNC_EVENT = 'app:budget-period-sync'
 
@@ -41,6 +42,18 @@ export function useHomePeriodFilter() {
     if (!year || !month) return '-'
     return t('home_page.month_display', { year, month })
   })
+
+  const periodTitle = computed(() => {
+    if (filterMode.value === 'all') return t('home_page.all_transactions')
+    if (isPayCycleLedger() && filterMode.value === 'month') {
+      const start = String(budgetStore.period?.startDate ?? '').trim()
+      const end = String(budgetStore.period?.endDate ?? '').trim()
+      if (start && end) return t('home_page.pay_cycle_title', { start, end })
+    }
+    return displayRange.value
+  })
+
+  const canStepPeriod = computed(() => filterMode.value !== 'all')
 
   const currentRangeLabel = computed(() => {
     if (filterMode.value === 'year') return t('home_page.current_year')
@@ -174,6 +187,36 @@ export function useHomePeriodFilter() {
     await syncHomeTransactions()
   }
 
+  async function stepPeriod(delta) {
+    const step = Number(delta)
+    if (!Number.isFinite(step) || step === 0 || !canStepPeriod.value) return
+    const direction = step < 0 ? -1 : 1
+    try {
+      if (isPayCycleLedger() && filterMode.value === 'month') {
+        if (direction < 0) await budgetStore.goPreviousPeriod()
+        else await budgetStore.goNextPeriod()
+        const nextMonth = normalizeMonthKey(budgetStore.monthKey)
+        if (nextMonth) selectedMonth.value = nextMonth
+        await syncHomeTransactions({ skipBudgetMonthSync: true })
+        return
+      }
+      if (filterMode.value === 'year') {
+        selectedYear.value = Number(selectedYear.value) + direction
+        await syncHomeTransactions()
+        return
+      }
+      if (filterMode.value === 'day') {
+        selectedDay.value = shiftDayKey(selectedDay.value, direction)
+        await syncHomeTransactions()
+        return
+      }
+      selectedMonth.value = shiftMonthKey(selectedMonth.value, direction)
+      await applyMonthInput()
+    } catch (error) {
+      uiStore.pushToast(error.message ?? t('home_page.toast.switch_month_failed'), 'error')
+    }
+  }
+
   function handleBudgetPeriodSync() {
     resetRangeToLedgerToday()
     void syncHomeTransactions({ skipBudgetMonthSync: true })
@@ -196,12 +239,15 @@ export function useHomePeriodFilter() {
     selectedYear,
     filterModes,
     displayRange,
+    periodTitle,
+    canStepPeriod,
     currentRangeLabel,
     switchFilterMode,
     goCurrentRange,
     pickMonth,
     pickDay,
     pickYear,
+    stepPeriod,
   }
 }
 

@@ -432,6 +432,28 @@ async function assertHomeBlocks() {
   assert.equal(result.hasBudgetSummary, true, JSON.stringify(result, null, 2))
   assert.equal(result.hasTransactionFeed, true, JSON.stringify(result, null, 2))
   assert.equal(result.hasFab, true, JSON.stringify(result, null, 2))
+
+  const order = await evalPage(`() => {
+    const chrome = document.querySelector('[data-testid=home-period-chrome]')
+    const budget = document.querySelector('[data-testid=home-budget-summary]')
+    const asset = document.querySelector('[data-testid=home-asset-summary]')
+    if (!budget || !asset) return { ok: false, reason: 'missing cards' }
+    return {
+      ok: true,
+      hasChrome: Boolean(chrome),
+      hasPrev: Boolean(document.querySelector('[data-testid=home-period-prev]')),
+      hasNext: Boolean(document.querySelector('[data-testid=home-period-next]')),
+      hasTitle: Boolean(document.querySelector('[data-testid=home-period-title]')),
+      budgetTop: budget.getBoundingClientRect().top,
+      assetTop: asset.getBoundingClientRect().top,
+    }
+  }`)
+  assert.equal(order.ok, true, JSON.stringify(order, null, 2))
+  assert.equal(order.hasChrome, true, JSON.stringify(order, null, 2))
+  assert.equal(order.hasPrev, true, JSON.stringify(order, null, 2))
+  assert.equal(order.hasNext, true, JSON.stringify(order, null, 2))
+  assert.equal(order.hasTitle, true, JSON.stringify(order, null, 2))
+  assert.ok(order.budgetTop < order.assetTop, `budget must sit above assets: ${JSON.stringify(order)}`)
 }
 
 async function seedHomeTransactionsForScroll(count = 18) {

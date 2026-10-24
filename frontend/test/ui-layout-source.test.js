@@ -83,11 +83,15 @@ test('home keeps all blocks and FAB under both layouts', () => {
   assert.match(homeSource, /HomeBudgetSummaryCard/)
   assert.match(homeSource, /HomeTransactionFeed/)
   assert.match(homeSource, /data-testid="home-period-filter"/)
+  assert.match(homeSource, /data-testid="home-period-chrome"/)
   assert.match(homeSource, /data-testid="home-fab"/)
   assert.match(homeSource, /useHomePeriodFilter/)
   assert.match(homeSource, /class="view-root home-modern"/)
   assert.match(homeSource, /home-habitat-hello/)
   assert.doesNotMatch(homeSource, /useUiLayout/)
+  const budgetAt = homeSource.indexOf('data-testid="home-budget-summary"')
+  const assetAt = homeSource.indexOf('data-testid="home-asset-summary"')
+  assert.ok(budgetAt >= 0 && assetAt >= 0 && budgetAt < assetAt, 'budget card must render above asset card')
 })
 
 test('router does not register /more page', () => {

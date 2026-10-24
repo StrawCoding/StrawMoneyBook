@@ -3,11 +3,33 @@
     <h1 class="home-large-title">{{ t('nav.home') }}</h1>
     <p class="home-habitat-hello">{{ t('home_page.habitat_hello') }}</p>
     <section class="stack">
-      <article class="card ledger-card">
-        <header class="row">
-          <h3>{{ t('home_page.current_ledger') }}</h3>
-        </header>
-        <LedgerSwitcher class="ledger-switcher-wrap" data-testid="home-ledger-switcher" />
+      <header class="home-period-chrome" data-testid="home-period-chrome">
+        <div class="home-chrome-top">
+          <LedgerSwitcher class="ledger-switcher-wrap" data-testid="home-ledger-switcher" />
+        </div>
+        <div class="period-title-row">
+          <button
+            type="button"
+            class="period-arrow"
+            data-testid="home-period-prev"
+            :disabled="!canStepPeriod"
+            :aria-label="t('home_page.period_prev')"
+            @click="stepPeriod(-1)"
+          >
+            ‹
+          </button>
+          <h2 class="period-title" data-testid="home-period-title">{{ periodTitle }}</h2>
+          <button
+            type="button"
+            class="period-arrow"
+            data-testid="home-period-next"
+            :disabled="!canStepPeriod"
+            :aria-label="t('home_page.period_next')"
+            @click="stepPeriod(1)"
+          >
+            ›
+          </button>
+        </div>
         <div class="period-tabs" data-testid="home-period-filter">
           <button
             v-for="mode in filterModes"
@@ -18,10 +40,6 @@
           >
             {{ mode.label }}
           </button>
-        </div>
-        <div class="row month-row">
-          <span class="muted">{{ t('home_page.range_label') }}</span>
-          <div class="all-range">{{ filterMode === 'all' ? t('home_page.all_transactions') : displayRange }}</div>
         </div>
         <transition name="collapse-fade">
           <div v-if="filterMode !== 'all'" class="picker-row">
@@ -56,10 +74,10 @@
             </button>
           </div>
         </transition>
-      </article>
+      </header>
 
-      <HomeAssetSummaryCard data-testid="home-asset-summary" />
       <HomeBudgetSummaryCard data-testid="home-budget-summary" />
+      <HomeAssetSummaryCard data-testid="home-asset-summary" />
       <HomeCreditSummaryCard />
       <HomeTransactionFeed data-testid="home-transaction-feed" />
 
@@ -93,13 +111,15 @@ const {
   selectedDay,
   selectedYear,
   filterModes,
-  displayRange,
+  periodTitle,
+  canStepPeriod,
   currentRangeLabel,
   switchFilterMode,
   goCurrentRange,
   pickMonth,
   pickDay,
   pickYear,
+  stepPeriod,
 } = useHomePeriodFilter()
 
 function openQuickAdd() {
@@ -107,25 +127,55 @@ function openQuickAdd() {
 }
 </script>
 
-<style scoped>.ledger-card {
-  padding: 16px;
-  background:
-    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--primary) 8%, transparent) 0%, transparent 55%),
-    var(--card);
+<style scoped>
+.home-period-chrome {
+  display: grid;
+  gap: 10px;
 }
-.month-row {
-  margin-top: 12px;
+.home-chrome-top {
   display: flex;
   align-items: center;
-  justify-content: space-between
+  min-width: 0;
+}
+.period-title-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 8px;
+}
+.period-title {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(22px, 6vw, 28px);
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.period-arrow {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  border-radius: 999px;
+  width: 40px;
+  height: 40px;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+.period-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 .ledger-switcher-wrap {
-  margin-top: 12px;
   position: relative;
-  z-index: 20
+  z-index: 20;
+  min-width: 0;
+  max-width: 100%;
 }
 .period-tabs {
-  margin-top: 14px;
   position: relative;
   z-index: 1;
   display: flex;
@@ -153,12 +203,7 @@ function openQuickAdd() {
   border: 1px solid var(--border-strong);
   box-shadow: none;
 }
-.all-range {
-  font-weight: 700;
-  font-size: 15px
-}
 .picker-row {
-  margin-top: 10px;
   display: flex;
   gap: 8px;
   align-items: center
@@ -168,12 +213,6 @@ function openQuickAdd() {
 }
 .quick-btn {
   white-space: nowrap
-}
-h3 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-soft)
 }
 .fab {
   position: fixed;
@@ -185,4 +224,5 @@ h3 {
   font-weight: 700;
   letter-spacing: 0.02em;
   box-shadow: var(--shadow-primary-lg);
-}</style>
+}
+</style>

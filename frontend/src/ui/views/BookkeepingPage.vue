@@ -1,11 +1,8 @@
 <template>
-  <section class="stack">
-    <article class="card panel">
-      <header class="row header-row" data-testid="bookkeeping-page-header">
-        <h2>{{ t('bookkeeping.page_title') }}</h2>
-        <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
-      </header>
-
+  <section class="stack bookkeeping-page">
+    <header class="bookkeeping-chrome" data-testid="bookkeeping-page-header">
+      <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
+      <h2>{{ t('bookkeeping.page_title') }}</h2>
       <div class="mode-toggle mode-toggle-row" data-testid="bookkeeping-mode-toggle">
         <button
           type="button"
@@ -26,31 +23,31 @@
           {{ t('bookkeeping.mode.manual', '手動記帳') }}
         </button>
       </div>
+    </header>
 
-      <div v-if="topMode === 'manual'" class="manual-switch-row">
-        <span class="muted manual-switch-label">{{ t('bookkeeping.manual.label', '手動模式') }}</span>
-        <div class="manual-switch-actions">
-          <button
-            type="button"
-            class="btn"
-            data-testid="bookkeeping-manual-quick"
-            :class="{ primary: manualMode === 'quick' }"
-            @click="switchManualMode('quick')"
-          >
-            {{ t('bookkeeping.manual.quick_add', '快速新增') }}
-          </button>
-          <button
-            type="button"
-            class="btn"
-            data-testid="bookkeeping-manual-qna"
-            :class="{ primary: manualMode === 'qna' }"
-            @click="switchManualMode('qna')"
-          >
-            {{ t('bookkeeping.manual.qna', '問答記帳') }}
-          </button>
-        </div>
+    <div v-if="topMode === 'manual'" class="manual-switch-row">
+      <span class="muted manual-switch-label">{{ t('bookkeeping.manual.label', '手動模式') }}</span>
+      <div class="manual-switch-actions">
+        <button
+          type="button"
+          class="btn"
+          data-testid="bookkeeping-manual-quick"
+          :class="{ primary: manualMode === 'quick' }"
+          @click="switchManualMode('quick')"
+        >
+          {{ t('bookkeeping.manual.quick_add', '快速新增') }}
+        </button>
+        <button
+          type="button"
+          class="btn"
+          data-testid="bookkeeping-manual-qna"
+          :class="{ primary: manualMode === 'qna' }"
+          @click="switchManualMode('qna')"
+        >
+          {{ t('bookkeeping.manual.qna', '問答記帳') }}
+        </button>
       </div>
-    </article>
+    </div>
 
     <AiAutoBookkeepingPage v-if="topMode === 'ai'" embedded />
     <QnaBookkeepingPage v-else-if="manualMode === 'qna'" embedded />
@@ -129,33 +126,18 @@ async function goBack() {
   padding-bottom: calc(12px + var(--navigation-bar-height));
 }
 
-.panel {
-  padding: 14px;
-}
-
-h2 {
-  margin: 0;
-}
-
-.header-row {
+.bookkeeping-chrome {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.header-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: nowrap;
-  align-items: center;
-  overflow-x: auto;
-  max-width: 100%;
-  scrollbar-width: none;
-}
-
-.header-actions::-webkit-scrollbar {
-  display: none;
+h2 {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .mode-toggle,
@@ -173,10 +155,6 @@ h2 {
   white-space: nowrap;
 }
 
-.mode-toggle-row {
-  margin-top: 12px;
-}
-
 .mode-toggle-row .btn {
   flex: 1 1 0;
 }
@@ -186,9 +164,6 @@ h2 {
 }
 
 .manual-switch-row {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--field-border);
   display: flex;
   align-items: center;
   justify-content: space-between;

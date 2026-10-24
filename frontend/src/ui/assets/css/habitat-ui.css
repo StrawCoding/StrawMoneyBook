@@ -63,16 +63,17 @@
   background: var(--card);
 }
 
-[data-ui-layout='modern'] .home-modern .ledger-card {
-  background: var(--card);
+[data-ui-layout='modern'] .home-modern .home-period-chrome {
+  background: transparent;
 }
 
-[data-ui-layout='modern'] .home-modern .ledger-card > header h3 {
-  font-size: 12px;
-  font-weight: 650;
-  color: var(--muted);
-  text-transform: none;
-  letter-spacing: 0.02em;
+[data-ui-layout='modern'] .home-modern .period-title {
+  font-size: var(--habitat-title-size);
+}
+
+[data-ui-layout='modern'] .home-modern .period-arrow {
+  background: var(--bg-soft);
+  border-color: transparent;
 }
 
 [data-ui-layout='modern'] .home-modern .period-tabs {
@@ -121,7 +122,7 @@
 }
 
 [data-ui-layout='modern'] .home-modern .summary-card {
-  background: var(--card);
+  background: var(--zone-plan-bg);
   border-left: 3px solid var(--primary);
 }
 

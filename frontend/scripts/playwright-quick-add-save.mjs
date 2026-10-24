@@ -99,17 +99,27 @@ async function openQuickAddFromFab() {
 }
 
 async function enterAmountViaCalculator(major) {
-  await runPlaywrightCli(['click', '.quick-add-page .calc-trigger'])
-  await delay(500)
-  await runPlaywrightCli(['click', '.calc-sheet .clear-btn'])
-  for (const digit of String(major)) {
-    if (digit === '.') {
-      await runPlaywrightCli(['click', '.calc-sheet button:has-text(".")'])
-    } else {
-      await runPlaywrightCli(['click', `.calc-sheet button.digit-btn:has-text("${digit}")`])
+  const mode = await evalPage(`() => document.querySelector('.amount-calc-inline') ? 'inline' : 'overlay'`)
+  const root = mode === 'inline' ? '.amount-calc-inline' : '.calc-sheet'
+  if (mode === 'overlay') {
+    await runPlaywrightCli(['click', '.quick-add-page .calc-trigger'])
+    await delay(500)
+    await runPlaywrightCli(['click', `${root} .clear-btn`])
+  } else {
+    for (let i = 0; i < 8; i += 1) {
+      await runPlaywrightCli(['click', `${root} .back-btn`])
     }
   }
-  await runPlaywrightCli(['click', '.calc-sheet .confirm-btn'])
+  for (const digit of String(major)) {
+    if (digit === '.') {
+      await runPlaywrightCli(['click', `${root} button:has-text(".")`])
+    } else {
+      await runPlaywrightCli(['click', `${root} button.digit-btn:has-text("${digit}")`])
+    }
+  }
+  if (mode === 'overlay') {
+    await runPlaywrightCli(['click', `${root} .confirm-btn`])
+  }
   await delay(400)
 }
 
@@ -153,6 +163,26 @@ try {
   const amountLabel = await evalPage(`() => document.querySelector('.quick-add-page .calc-trigger-expr')?.textContent?.trim() ?? ''`)
   assert.match(amountLabel, /88/, `calculator did not apply amount, label=${amountLabel}`)
 
+  await runPlaywrightCli(['click', '[data-testid=quick-add-save-and-add]'])
+  let stayOnQuickAdd = false
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const state = await evalPage(`() => ({
+      path: window.location.pathname,
+      toasts: [...document.querySelectorAll('.toast')].map((node) => node.textContent?.trim() ?? '').filter(Boolean),
+      hasCreate: Boolean(document.querySelector('[data-testid=quick-add-create]')),
+    })`)
+    if (state.toasts.some((text) => /新增失敗|失敗|failed|錯誤|required|有效金額/u.test(text))) {
+      assert.fail(`save-and-add failed: ${JSON.stringify(state)}`)
+    }
+    if (state.path.includes('quick-add') && state.hasCreate) {
+      stayOnQuickAdd = true
+      break
+    }
+    await delay(150)
+  }
+  assert.ok(stayOnQuickAdd, '再記 must stay on quick-add')
+
+  await enterAmountViaCalculator(66)
   await runPlaywrightCli(['click', '[data-testid=quick-add-create]'])
   let saveSucceeded = false
   for (let attempt = 0; attempt < 40; attempt += 1) {
