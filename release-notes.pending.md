@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 新增記帳頁（快速新增／AI／問答）顯示與首頁相同的品牌頂欄（logo + StrawMoneyBook）；BottomNav 仍隱藏，避免擋住計算機。
+
 ---
 
 ## v1.5.5

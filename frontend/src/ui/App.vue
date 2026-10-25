@@ -1,6 +1,6 @@
 <template>
-  <div class="app-shell" :class="{ booting: isBooting, 'welcome-mode': showGuidedFlow, 'full-screen-route': hideAppChrome }">
-    <header v-if="!isBooting && !showGuidedFlow && !hideAppChrome" class="top-bar">
+  <div class="app-shell" :class="{ booting: isBooting, 'welcome-mode': showGuidedFlow, 'full-screen-route': hideBottomNav }">
+    <header v-if="!isBooting && !showGuidedFlow && !hideBrandBar" class="top-bar" data-testid="app-brand-bar">
       <div class="title-wrap">
         <img class="brand-logo" :src="BRAND_LOGO_URL" alt="StrawMoneyBook logo" />
         <div class="brand-text">
@@ -9,7 +9,7 @@
       </div>
     </header>
 
-    <main class="page-container" :class="{ booting: isBooting, 'welcome-mode': showGuidedFlow, 'full-screen-route': hideAppChrome }">
+    <main class="page-container" :class="{ booting: isBooting, 'welcome-mode': showGuidedFlow, 'full-screen-route': hideBottomNav }">
       <transition name="boot-overlay" appear>
         <section v-if="isBooting" class="boot-layer card">
           <img class="boot-logo" :src="BRAND_LOGO_URL" alt="StrawMoneyBook logo" />
@@ -38,7 +38,7 @@
     </main>
 
     <transition name="fade-scale" appear>
-      <BottomNav v-if="hasLedgers && !isBooting && !showGuidedFlow && !hideAppChrome" />
+      <BottomNav v-if="hasLedgers && !isBooting && !showGuidedFlow && !hideBottomNav" />
     </transition>
     <ToastHost />
     <AppDialog
@@ -97,6 +97,8 @@ const isBooting = computed(() => isAppShellBooting({
 }))
 const allowWithoutSetup = computed(() => Boolean(route.meta?.allowWithoutSetup))
 const hideAppChrome = computed(() => Boolean(route.meta?.hideAppChrome))
+const hideBrandBar = computed(() => Boolean(route.meta?.hideBrandBar ?? hideAppChrome.value))
+const hideBottomNav = computed(() => Boolean(route.meta?.hideBottomNav ?? hideAppChrome.value))
 const showWelcomePage = computed(() => shouldShowWelcomePage({
   ready: ledgerStore.ready,
   allowWithoutSetup: allowWithoutSetup.value,
@@ -139,7 +141,7 @@ const {
   padding-bottom: 0;
 }
 .app-shell.full-screen-route {
-  /* hideAppChrome drops brand bar + BottomNav only; keep status-bar / notch inset. */
+  /* hideBottomNav drops BottomNav only; brand bar can stay. Keep status-bar / notch inset. */
   padding-top: calc(10px + var(--status-bar-height));
   padding-bottom: 0;
 }

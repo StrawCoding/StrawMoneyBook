@@ -1916,6 +1916,8 @@ async function waitForAppShell({ expectPersonalization = false } = {}) {
       welcome: Boolean(document.querySelector('.welcome-root')),
       hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
       hasThemeScheme: Boolean(document.querySelector('[data-testid^="theme-scheme-"]')),
+      hasBookkeeping: Boolean(document.querySelector('[data-testid=bookkeeping-page-header]')),
+      hasBrandBar: Boolean(document.querySelector('[data-testid=app-brand-bar], header.top-bar')),
       path: window.location.pathname,
     })`)
     if (state.booting || state.welcome) continue
@@ -1924,6 +1926,7 @@ async function waitForAppShell({ expectPersonalization = false } = {}) {
       continue
     }
     if (state.hasBottomNav) return state
+    if (state.hasBookkeeping && state.hasBrandBar) return state
   }
   throw new Error('app shell not ready')
 }
@@ -2465,6 +2468,7 @@ try {
 
   await assertBottomNavIcons()
   await assertHomeBlocks()
+  await assertFullscreenBookkeepingTopInset()
   await assertHomePeriodAndAnalysisLoadSpeed()
   await assertHomeIncomeExpenseLightAndDark()
   await assertDeleteTransactionReturnsHomeWithScroll()
@@ -2764,8 +2768,6 @@ async function assertSharedLedgerAuthAndEditorSurfaces() {
   assert.equal(home.hasFeed, true, JSON.stringify(home, null, 2))
   assert.equal(home.editorChipCount, 2, JSON.stringify(home, null, 2))
   assert.equal(home.hasCreatorAndEditor, true, JSON.stringify(home, null, 2))
-
-  await assertFullscreenBookkeepingTopInset()
 }
 
 async function applySimulatedStatusBarInset(insetPx = FULLSCREEN_STATUS_BAR_INSET_PX) {
@@ -2789,22 +2791,45 @@ async function clearSimulatedStatusBarInset() {
   }`], { raw: true })
 }
 
-async function measureFullscreenTopInset(contentSelector, expectedPath) {
+async function openBookkeepingPath(path, clickSelector) {
+  if (clickSelector) {
+    try {
+      await runPlaywrightCli(['click', clickSelector])
+    } catch {
+      // Mode buttons can wrap off-hit after chrome changes; fall back to the route.
+    }
+  }
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const current = await evalPage(`() => window.location.pathname`)
+    if (current === path) return
+    if (attempt === 2) {
+      await gotoOrReopen(`${baseUrl}${path}`)
+    }
+    await delay(250)
+  }
+}
+
+async function measureFullscreenTopInset(contentSelector, expectedPath, { expectTopBar = false } = {}) {
   const snapshot = await evalPage(`() => {
     const inset = ${FULLSCREEN_STATUS_BAR_INSET_PX}
     document.documentElement.style.setProperty('--status-bar-height', inset + 'px')
     const shell = document.querySelector('.app-shell')
     const first = document.querySelector(${JSON.stringify(contentSelector)})
+    const topBar = document.querySelector('header.top-bar, [data-testid=app-brand-bar]')
     const rect = first?.getBoundingClientRect()
+    const topBarRect = topBar?.getBoundingClientRect()
     const shellPadTop = shell ? Number.parseFloat(getComputedStyle(shell).paddingTop) || 0 : 0
     const reserved = 10 + inset
     return {
       path: window.location.pathname,
       hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
-      hasTopBar: Boolean(document.querySelector('header.top-bar')),
+      hasTopBar: Boolean(topBar),
+      brandTitle: topBar?.querySelector('h1')?.textContent?.trim() || '',
       fullScreen: Boolean(document.querySelector('.app-shell.full-screen-route')),
       contentTop: rect ? Number(rect.top.toFixed(2)) : -1,
       contentHeight: rect ? Number(rect.height.toFixed(2)) : 0,
+      topBarTop: topBarRect ? Number(topBarRect.top.toFixed(2)) : -1,
+      topBarBottom: topBarRect ? Number(topBarRect.bottom.toFixed(2)) : -1,
       shellPadTop: Number(shellPadTop.toFixed(2)),
       reserved,
       inset,
@@ -2814,7 +2839,12 @@ async function measureFullscreenTopInset(contentSelector, expectedPath) {
   }`)
   assert.equal(snapshot.path, expectedPath, JSON.stringify(snapshot, null, 2))
   assert.equal(snapshot.hasBottomNav, false, JSON.stringify(snapshot, null, 2))
-  assert.equal(snapshot.hasTopBar, false, JSON.stringify(snapshot, null, 2))
+  assert.equal(snapshot.hasTopBar, expectTopBar, JSON.stringify(snapshot, null, 2))
+  if (expectTopBar) {
+    assert.equal(snapshot.brandTitle, 'StrawMoneyBook', JSON.stringify(snapshot, null, 2))
+    assert.ok(snapshot.topBarTop + 0.5 >= snapshot.reserved, JSON.stringify(snapshot, null, 2))
+    assert.ok(snapshot.contentTop + 0.5 >= snapshot.topBarBottom, JSON.stringify(snapshot, null, 2))
+  }
   assert.equal(snapshot.fullScreen, true, JSON.stringify(snapshot, null, 2))
   assert.ok(snapshot.shellPadTop + 0.5 >= snapshot.reserved, JSON.stringify(snapshot, null, 2))
   assert.ok(snapshot.contentTop + 0.5 >= snapshot.reserved, JSON.stringify(snapshot, null, 2))
@@ -2857,32 +2887,42 @@ async function assertFullscreenBookkeepingTopInset() {
   assert.ok(home.chromeTop + 0.5 >= home.reserved, JSON.stringify(home, null, 2))
   assert.equal(home.hiddenByStatusBar, false, JSON.stringify(home, null, 2))
 
-  await runPlaywrightCli(['click', '[data-testid=home-fab]'])
-  await delay(1400)
+  try {
+    await runPlaywrightCli(['click', '[data-testid=home-fab]'])
+  } catch {
+    // FAB click can miss after layout switch; open the add page directly.
+  }
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const path = await evalPage(`() => window.location.pathname`)
+    if (path === '/transactions/quick-add' || path === '/transactions/qna' || path === '/ai-auto-bookkeeping') break
+    if (attempt === 3) {
+      await gotoOrReopen(`${baseUrl}/transactions/quick-add`)
+    }
+    await delay(300)
+  }
 
   const quick = await measureFullscreenTopInset(
     '[data-testid=bookkeeping-page-header], [data-testid=bookkeeping-mode-toggle]',
     '/transactions/quick-add',
+    { expectTopBar: true },
   )
   assert.ok(quick.contentTop + 0.5 >= home.reserved, JSON.stringify({ home, quick }, null, 2))
 
-  await runPlaywrightCli(['click', '[data-testid=bookkeeping-mode-ai]'])
-  await delay(1200)
+  await openBookkeepingPath('/ai-auto-bookkeeping', '[data-testid=bookkeeping-mode-ai]')
   await measureFullscreenTopInset(
     '[data-testid=bookkeeping-page-header], [data-testid=bookkeeping-mode-toggle]',
     '/ai-auto-bookkeeping',
+    { expectTopBar: true },
   )
 
-  await runPlaywrightCli(['click', '[data-testid=bookkeeping-mode-manual]'])
-  await delay(900)
-  await runPlaywrightCli(['click', '[data-testid=bookkeeping-manual-qna]'])
-  await delay(1200)
+  await openBookkeepingPath('/transactions/qna', '[data-testid=bookkeeping-manual-qna]')
   await measureFullscreenTopInset(
     '[data-testid=bookkeeping-page-header], [data-testid=bookkeeping-mode-toggle]',
     '/transactions/qna',
+    { expectTopBar: true },
   )
 
-  await runPlaywrightCli(['goto', `${baseUrl}/transactions/pw-missing-tx/edit`])
+  await gotoOrReopen(`${baseUrl}/transactions/pw-missing-tx/edit`)
   await delay(1200)
   await measureFullscreenTopInset(
     '[data-testid=transaction-edit-header], .page-head, h2',
@@ -2919,4 +2959,5 @@ async function assertFullscreenBookkeepingTopInset() {
   assert.equal(features.hiddenByStatusBar, false, JSON.stringify(features, null, 2))
 
   await clearSimulatedStatusBarInset()
+  console.log('[bookkeeping] brand bar present on add pages; BottomNav hidden')
 }

@@ -36,18 +36,22 @@ test('fullscreen hideAppChrome keeps status-bar top inset on the app shell', () 
   )
 
   assert.match(appSource, /hideAppChrome/)
-  assert.match(appSource, /v-if="hasLedgers && !isBooting && !showGuidedFlow && !hideAppChrome"/)
-  assert.match(appSource, /<header v-if="!isBooting && !showGuidedFlow && !hideAppChrome" class="top-bar">/)
+  assert.match(appSource, /hideBrandBar/)
+  assert.match(appSource, /hideBottomNav/)
+  assert.match(appSource, /v-if="hasLedgers && !isBooting && !showGuidedFlow && !hideBottomNav"/)
+  assert.match(appSource, /<header v-if="!isBooting && !showGuidedFlow && !hideBrandBar" class="top-bar"/)
 })
 
-test('bookkeeping modes and related fullscreen pages hide chrome via route meta', () => {
+test('bookkeeping pages keep brand bar and only hide BottomNav', () => {
   for (const path of [
     '/transactions/quick-add',
     '/transactions/qna',
     '/ai-auto-bookkeeping',
-    '/transactions/:id/edit',
   ]) {
-    assert.match(routeMetaBlock(path), /hideAppChrome:\s*true/, `${path} must hide app chrome`)
+    const meta = routeMetaBlock(path)
+    assert.match(meta, /hideBottomNav:\s*true/, `${path} must hide BottomNav`)
+    assert.doesNotMatch(meta, /hideAppChrome:\s*true/, `${path} must keep the brand bar`)
+    assert.doesNotMatch(meta, /hideBrandBar:\s*true/, `${path} must keep the brand bar`)
   }
 
   assert.match(bookkeepingSource, /data-testid="bookkeeping-page-header"/)
@@ -55,6 +59,10 @@ test('bookkeeping modes and related fullscreen pages hide chrome via route meta'
   assert.match(bookkeepingSource, /AiAutoBookkeepingPage/)
   assert.match(bookkeepingSource, /QnaBookkeepingPage/)
   assert.match(bookkeepingSource, /QuickAddPage/)
+})
+
+test('transaction edit still hides full app chrome', () => {
+  assert.match(routeMetaBlock('/transactions/:id/edit'), /hideAppChrome:\s*true/)
 })
 
 test('playwright ui-layout measures bookkeeping top inset from home FAB', () => {
@@ -68,4 +76,6 @@ test('playwright ui-layout measures bookkeeping top inset from home FAB', () => 
   assert.match(playwrightSource, /\/transactions\/qna/)
   assert.match(playwrightSource, /transaction-edit-header/)
   assert.match(playwrightSource, /hiddenByStatusBar/)
+  assert.match(playwrightSource, /expectTopBar:\s*true/)
+  assert.match(playwrightSource, /app-brand-bar/)
 })

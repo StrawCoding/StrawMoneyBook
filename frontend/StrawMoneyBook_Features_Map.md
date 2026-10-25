@@ -63,15 +63,15 @@
 | `/analysis/category` | `src/ui/views/AnalysisCategoryDetailPage.vue` | 分類分析明細（`loadAnalysisCategoryDetail` SQL 依分類／附加項目篩列，比例分母用類型合計） |
 | `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 交易報表匯出頁（期間客製化 all/year/month/day/custom、螢幕預覽、PDF／CSV、匯出成功後「開啟檔案」；`hideAppChrome` 全螢幕、頁內返回分析） |
 | `/transactions/search` | `src/ui/views/TransactionSearchPage.vue` | 交易搜尋（支援批量選取與批量編輯分類 / 備註 / 可報銷 / 預算 / 收支分析；SMB-155 後每頁 300 筆 SQL 分頁載入） |
-| `/transactions/quick-add` | `src/ui/views/BookkeepingPage.vue` | 手動快速新增模式（內嵌 `QuickAddPage.vue`；`hideAppChrome` 隱藏品牌頂欄與 BottomNav，app-shell 仍保留與一般頁等價的 status-bar／safe-area 頂部預留） |
-| `/transactions/qna` | `src/ui/views/BookkeepingPage.vue` | 問答記帳模式（內嵌 `QnaBookkeepingPage.vue`；與快速新增同一記帳容器，頂部 inset 契約相同） |
+| `/transactions/quick-add` | `src/ui/views/BookkeepingPage.vue` | 手動快速新增模式（內嵌 `QuickAddPage.vue`；`hideBottomNav` 隱藏 BottomNav，品牌頂欄與首頁相同仍顯示；app-shell 仍保留與一般頁等價的 status-bar／safe-area 頂部預留） |
+| `/transactions/qna` | `src/ui/views/BookkeepingPage.vue` | 問答記帳模式（內嵌 `QnaBookkeepingPage.vue`；與快速新增同一記帳容器，顯示品牌頂欄、隱藏 BottomNav） |
 | `/transactions/calendar` | `src/ui/views/CalendarPage.vue` | 交易日曆 |
 | `/transactions/:id` | `src/ui/views/TransactionAboutPage.vue` | 交易明細（含退款/關聯） |
 | `/transactions/:id/edit` | `src/ui/views/TransactionEditPage.vue` | 交易編輯（SMB-217 後改用 AmountCalculatorInput 計算機輸入；`hideAppChrome` 仍保留頂部 status-bar／safe-area 預留） |
 | `/features` | `src/ui/views/FeatureListPage.vue` | 功能列表入口頁（一般功能 + 進階功能分區；smb295 後共同帳本／帳本同步／銀行同步／載具同步主入口在進階功能；smb299 加 Drive 選檔／舊版還原後列高變長，`feature-link` 以 `scroll-margin-bottom` 避開固定 BottomNav） |
 | `/welcome/intro` | `src/ui/views/PostSetupIntroPage.vue` | 初始設定後導覽頁（含特色功能、帳號登入、共同帳本、帳本同步、會員邀請碼；SMB-188 / v1.2.4 後新增共同帳本與帳本同步兩個步驟；SMB-215 / v1.2.27 後共同帳本步驟另外提供「恢復備份」與「帳本同步」快速按鈕；進階同步入口文案指向底部「功能 → 進階功能」） |
 | `/welcome` (隱含 route，由 `App.vue` shouldShowWelcomePage 控制) | `src/ui/views/WelcomePage.vue` | 初始 setup wizard 三步（語言 / 建立帳本 / 建立帳戶）；SMB-215 Restart / v1.3.1 後 step 2「建立帳本」在「已有共同帳本？登入並加入」secondary-link 旁新增「恢復備份 / 帳本同步」兩顆按鈕（僅 `!hasLedgers` 時顯示）。SMB-215 Restart / v1.3.2 後修正目的地：「恢復備份」→ `/settings/auto-backup`（自動備份頁，含 Google Drive / WebDAV 登入 + 立即還原；Tester 反饋「需要有自動備份的項目」）；「帳本同步」維持 `/settings/google-drive-ledger-sync`。`settings-auto-backup` + `settings-google-drive-ledger-sync` 兩 route 帶 `meta.allowWithoutSetup: true`，`settings-data-management` 的 v1.3.1 allowWithoutSetup 已還原 |
-| `/ai-auto-bookkeeping` | `src/ui/views/BookkeepingPage.vue` | AI 記帳模式（內嵌 `AiAutoBookkeepingPage.vue`；與快速新增同一記帳容器，頂部 inset 契約相同） |
+| `/ai-auto-bookkeeping` | `src/ui/views/BookkeepingPage.vue` | AI 記帳模式（內嵌 `AiAutoBookkeepingPage.vue`；與快速新增同一記帳容器，顯示品牌頂欄、隱藏 BottomNav） |
 | `/assets` | `src/ui/views/assets.vue` | 資產總覽 |
 | `/assets/securities` | `src/ui/views/securities/SecuritiesListPage.vue` | 有價證券列表 |
 | `/credit-cards` | `src/ui/views/credit-cards/CreditCardsPage.vue` | 信用卡：頁內可新增（不掛資產母分類）＋還款／帳單；刷卡＝一般記帳選信用卡帳戶（createExpense→刷卡雙腿）；P0（smb301）：帳單／刷卡雙腿／還款 allocations；正式退款強制寫入當期 open posting（posted_at 箝制）；closed 批次硬拒絕；正式編輯僅允許純 occurred_at（入口=`updateManualTransaction`＋`findTransactionRecordById`；禁 occurredAt→postedAt 誤判；statement_id／posted_at／closing 不變；harness 實呼回歸）；額度警示＝實際卡債 |
@@ -883,7 +883,7 @@ UI composable 目錄：`src/ui/composables/`
 ### `src/ui/views/BookkeepingPage.vue`
 - 功能：記帳模式容器頁，依路由在 AI 記帳、手動快速新增與問答記帳之間切換。
 - 內嵌頁：`src/ui/views/AiAutoBookkeepingPage.vue`、`src/ui/views/QuickAddPage.vue`、`src/ui/views/QnaBookkeepingPage.vue`
-- 全螢幕契約：三條記帳路由皆 `meta.hideAppChrome`（隱藏品牌頂欄與 BottomNav），但 `App.vue` 的 `.app-shell.full-screen-route` 仍套用 `padding-top: calc(10px + var(--status-bar-height))`，標題／返回／模式切換不得貼齊螢幕頂端或被狀態列遮住。
+- 全螢幕契約：三條記帳路由皆 `meta.hideBottomNav`（隱藏 BottomNav，品牌頂欄仍顯示），`App.vue` 的 `.app-shell.full-screen-route` 仍套用 `padding-top: calc(10px + var(--status-bar-height))`，品牌列／標題／返回／模式切換不得貼齊螢幕頂端或被狀態列遮住。
 
 ### `src/ui/views/AnalysisCategoryDetailPage.vue`
 - 載入：`loadAnalysisCategoryDetail`（SQL 依分類／附加項目篩列）＋ `projectAnalysisCategoryTransactions`；比例分母 `typeTotalMinor` 來自 `summarizeAnalysisTypeTotal`，不再掃整本帳本。

@@ -89,13 +89,13 @@ const router = createRouter({
       name: 'transaction-quick-add',
       path: '/transactions/quick-add',
       component: () => import('@/ui/views/BookkeepingPage.vue'),
-      meta: { tab: 'home', hideAppChrome: true },
+      meta: { tab: 'home', hideBottomNav: true },
     },
     {
       name: 'transaction-qna-add',
       path: '/transactions/qna',
       component: () => import('@/ui/views/BookkeepingPage.vue'),
-      meta: { tab: 'home', hideAppChrome: true },
+      meta: { tab: 'home', hideBottomNav: true },
     },
     {
       name: 'transaction-calendar',
@@ -131,7 +131,7 @@ const router = createRouter({
       name: 'ai-auto-bookkeeping',
       path: '/ai-auto-bookkeeping',
       component: () => import('@/ui/views/BookkeepingPage.vue'),
-      meta: { tab: 'home', hideAppChrome: true },
+      meta: { tab: 'home', hideBottomNav: true },
     },
     {
       name: 'assets',
