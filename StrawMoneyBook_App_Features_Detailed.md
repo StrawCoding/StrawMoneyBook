@@ -85,7 +85,7 @@ SMB-190 / v1.2.5 後，資料管理頁手動匯出的全部帳本 JSON 與 CSV �
 
 另外，所有需要輸入資料的彈層已統一為共用 bottom sheet flow，桌面與手機都不再保留另一套輸入型 popover，包含表單 dialog、選單、日期與時間選擇器；`AppDialog` 以及各頁自製輸入 sheet 也都收斂到和快速記帳一致的 shared overlay / bottom-sheet primitives，Android 有底部導覽列 inset 的裝置也會一併吃到底部 safe area，且 sheet 卡片背景會直接延伸到底部，和 `BottomNav` 維持同一個底部基準。
 
-SMB-154 / 0.26.5 後，設定首頁的入口副標、帳號卡未登入提示、登入 / 註冊頁與共同帳本頁使用到的主要介面文案，都已改由正式 i18n key 維護，繁中、英文與日文都有對應文案，不再靠繁中 fallback 或 runtime DOM 翻譯處理這批主要設定流程文字。語言切換（歡迎頁與 `/settings/language`）的三個選項由 `SUPPORTED_LOCALES` 單一清單產生，標籤固定為各語言原名（繁體中文／English／日本語）；`audit:i18n` 直接比對拆檔後的 zh-TW／en／ja 字典，禁止缺 key。日期／金額格式化走 `resolveIntlLocale()`，Android／Wear 原生字串另有 `values-en`／`values-ja`。
+SMB-154 / 0.26.5 後，設定首頁的入口副標、帳號卡未登入提示、登入 / 註冊頁與共同帳本頁使用到的主要介面文案，都已改由正式 i18n key 維護，繁中、英文與日文都有對應文案，不再靠繁中 fallback 或 runtime DOM 翻譯處理這批主要設定流程文字。語言切換（歡迎頁與 `/settings/language`）的三個選項由 `SUPPORTED_LOCALES` 單一清單產生，標籤固定為各語言原名（繁體中文／English／日本語）；`audit:i18n` 直接比對拆檔後的 zh-TW／en／ja 字典，禁止缺 key。日期／金額格式化走 `resolveIntlLocale()`，Android／Wear 原生字串另有 `values-en`／`values-ja`。v1.5.12 後借貸清單／明細／對象頁、報銷統整／編輯／代收／抵消明細、帳戶與分類明細、交易搜尋與 UI 服務錯誤也改走 `t()`／`translateMessage`；圖示挑選標籤走 `icon.account.*`／`icon.category.*`。語音辨識數字與 AI 中文解析詞典仍保留原文，不當 UI 翻譯。
 
 前端內部像月份鍵、日期鍵這類共用格式化邏輯，也已收斂到 `src/core/utils/id.js`，避免首頁、分析、日曆、列印頁各自維護相同 helper 後再逐步出現行為漂移。
 

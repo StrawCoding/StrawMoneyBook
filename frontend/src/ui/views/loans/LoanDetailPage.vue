@@ -1,53 +1,53 @@
 <template>
   <section class="stack">
     <header class="row page-head">
-      <h2>借貸明細</h2>
-      <RouterLink class="btn back-btn" :to="backLink">返回</RouterLink>
+      <h2>{{ t('loans.detail_title') }}</h2>
+      <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
     </header>
 
     <article class="card panel">
       <div v-if="loan" class="stack loan-body">
         <div class="row">
-          <strong>{{ loan.counterparty_name || '未命名對象' }}</strong>
+          <strong>{{ loan.counterparty_name || t('common.unnamed_counterparty') }}</strong>
           <span class="badge" :class="loan.status">{{ statusLabel(loan) }}</span>
         </div>
 
         <div class="row muted">
-          <span>{{ loan.direction === 'lend' ? '借出' : '借入' }}</span>
+          <span>{{ loan.direction === 'lend' ? t('loans.lend') : t('loans.borrow') }}</span>
           <span>{{ formatDateTime(loan.start_date) }}{{ loan.due_date ? ` ~ ${formatDateTime(loan.due_date)}` : '' }}</span>
         </div>
 
-        <div class="row"><small class="muted">本金</small><MoneyText :value-minor="loan.principal_minor" /></div>
-        <div class="row"><small class="muted">預設利息</small><MoneyText :value-minor="loan.preset_interest_minor ?? 0" /></div>
-        <div class="row"><small class="muted">建立入帳帳戶</small><span>{{ loan.setup_account_name || '—' }}</span></div>
+        <div class="row"><small class="muted">{{ t('loans.principal') }}</small><MoneyText :value-minor="loan.principal_minor" /></div>
+        <div class="row"><small class="muted">{{ t('loans.preset_interest') }}</small><MoneyText :value-minor="loan.preset_interest_minor ?? 0" /></div>
+        <div class="row"><small class="muted">{{ t('loans.setup_account') }}</small><span>{{ loan.setup_account_name || '—' }}</span></div>
         <div class="row"><small class="muted">{{ paidLabel(loan) }}</small><MoneyText :value-minor="loan.paid_minor" /></div>
         <div class="row">
-          <small class="muted">已還本金 / 利息</small>
+          <small class="muted">{{ t('loans.paid_principal_interest') }}</small>
           <span>
             <MoneyText :value-minor="loan.principal_paid_minor ?? 0" /> /
             <MoneyText :value-minor="loan.interest_paid_minor ?? 0" />
           </span>
         </div>
-        <div class="row"><small class="muted">剩餘</small><MoneyText :value-minor="loan.remaining_minor" /></div>
+        <div class="row"><small class="muted">{{ t('loans.remaining') }}</small><MoneyText :value-minor="loan.remaining_minor" /></div>
 
         <div class="row btn-wrap">
           <button v-if="!showFinished" class="btn" @click="openRepaySheet" :disabled="!canRepay(loan)">{{ collectionLabel(loan) }}</button>
-          <button class="btn" @click="openSetupAccountSheet">變更入帳帳戶</button>
-          <button class="btn" @click="refreshDetail">刷新</button>
-          <button v-if="!showFinished" class="btn" @click="openVoidDialog" :disabled="loan.status === 'void'">完成</button>
-          <button v-if="showFinished" class="btn" @click="openPrincipalSheet">變更本金</button>
-          <button v-if="showFinished && loan.status === 'void'" class="btn" @click="markRestore">恢復</button>
-          <button v-if="canDeleteLoan(loan)" class="btn danger" @click="openDeleteDialog">刪除</button>
+          <button class="btn" @click="openSetupAccountSheet">{{ t('loans.change_setup_account') }}</button>
+          <button class="btn" @click="refreshDetail">{{ t('common.refresh') }}</button>
+          <button v-if="!showFinished" class="btn" @click="openVoidDialog" :disabled="loan.status === 'void'">{{ t('common.done') }}</button>
+          <button v-if="showFinished" class="btn" @click="openPrincipalSheet">{{ t('loans.change_principal') }}</button>
+          <button v-if="showFinished && loan.status === 'void'" class="btn" @click="markRestore">{{ t('common.restore') }}</button>
+          <button v-if="canDeleteLoan(loan)" class="btn danger" @click="openDeleteDialog">{{ t('common.delete') }}</button>
         </div>
       </div>
 
-      <p v-else class="muted">找不到借貸資料</p>
+      <p v-else class="muted">{{ t('loans.not_found') }}</p>
     </article>
 
     <article class="card panel">
       <div class="row">
         <h3>{{ collectionRecordLabel(loan) }}</h3>
-        <button class="btn" @click="refreshDetail">刷新</button>
+        <button class="btn" @click="refreshDetail">{{ t('common.refresh') }}</button>
       </div>
       <ul class="payments">
         <li v-for="payment in payments" :key="payment.id" class="row pay-item">
@@ -55,73 +55,73 @@
           <span class="pay-amount-wrap">
             <MoneyText :value-minor="payment.amount_minor" />
             <small class="muted">
-              本金 <MoneyText :value-minor="payment.principal_component_minor ?? 0" />
-              / 利息 <MoneyText :value-minor="payment.interest_component_minor ?? 0" />
+              {{ t('loans.principal') }} <MoneyText :value-minor="payment.principal_component_minor ?? 0" />
+              / {{ t('loans.interest') }} <MoneyText :value-minor="payment.interest_component_minor ?? 0" />
             </small>
             <span class="pay-actions">
-              <button class="btn" @click="openEditRepayment(payment)">變更</button>
-              <button class="btn danger" @click="openDeleteRepaymentDialog(payment)">刪除</button>
+              <button class="btn" @click="openEditRepayment(payment)">{{ t('common.change') }}</button>
+              <button class="btn danger" @click="openDeleteRepaymentDialog(payment)">{{ t('common.delete') }}</button>
             </span>
           </span>
         </li>
-        <li v-if="!payments.length" class="muted">尚無{{ collectionRecordLabel(loan) }}</li>
+        <li v-if="!payments.length" class="muted">{{ t('settings_bank_sync.support_matrix.none') }}{{ collectionRecordLabel(loan) }}</li>
       </ul>
     </article>
 
     <InputBottomSheet
       :open="repayOpen"
-      :title="editingRepayment ? `編輯${collectionLabel(loan)}` : `借貸${collectionLabel(loan)}`"
+      :title="editingRepayment ? t('loans.edit_collection', { action: collectionLabel(loan) }) : t('loans.loan_action_title', { action: collectionLabel(loan) })"
       :body-class="'stack form-wrap'"
       :sheet-class="'sheet'"
       :show-footer="true"
       @close="closeRepaySheet"
     >
-              <p class="muted">{{ loan?.counterparty_name }} / 剩餘 <MoneyText :value-minor="loan?.remaining_minor ?? 0" /></p>
+              <p class="muted">{{ loan?.counterparty_name }} / {{ t('loans.remaining') }} <MoneyText :value-minor="loan?.remaining_minor ?? 0" /></p>
               <label>
-                {{ collectionLabel(loan) }}金額（元）
+                {{ collectionLabel(loan) }}{{ t('common.amount_yuan') }}
                 <input v-model.number="repayForm.amountMajor" class="input" type="number" min="0" step="1" />
               </label>
               <p v-if="repayInterestPreview > 0" class="interest-hint muted">
-                超出本金部分 <MoneyText :value-minor="repayInterestPreview" /> 將計為利息
+                {{ t('loans.over_principal') }} <MoneyText :value-minor="repayInterestPreview" /> {{ t('loans.counts_as_interest') }}
               </p>
 
               <label>
-                帳戶
+                {{ t('common.account') }}
                 <CustomSelect v-model="repayForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
 
               <label>
-                備註
+                {{ t('common.note') }}
                 <textarea v-model="repayForm.note" class="textarea" rows="2" />
               </label>
       <template #footer>
-        <button class="btn" @click="closeRepaySheet">取消</button>
-        <button class="btn primary" @click="submitRepayment">{{ editingRepayment ? '儲存變更' : '儲存' }}</button>
+        <button class="btn" @click="closeRepaySheet">{{ t('common.cancel') }}</button>
+        <button class="btn primary" @click="submitRepayment">{{ editingRepayment ? t('settings_ledger_detail.save_changes') : t('common.save') }}</button>
       </template>
     </InputBottomSheet>
 
     <InputBottomSheet
       :open="setupAccountOpen"
-      title="變更入帳帳戶"
+      :title="t('loans.change_setup_account')"
       :body-class="'stack form-wrap'"
       :sheet-class="'sheet'"
       :show-footer="true"
       @close="closeSetupAccountSheet"
     >
-              <p class="muted">{{ loan?.counterparty_name }} / 目前帳戶 {{ loan?.setup_account_name || '—' }}</p>
+              <p class="muted">{{ loan?.counterparty_name }} / {{ t('loans.current_account') }} {{ loan?.setup_account_name || '—' }}</p>
               <label>
-                帳戶
+                {{ t('common.account') }}
                 <CustomSelect v-model="setupAccountForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
       <template #footer>
-        <button class="btn" @click="closeSetupAccountSheet">取消</button>
-        <button class="btn primary" @click="submitSetupAccount">儲存</button>
+        <button class="btn" @click="closeSetupAccountSheet">{{ t('common.cancel') }}</button>
+        <button class="btn primary" @click="submitSetupAccount">{{ t('common.save') }}</button>
       </template>
     </InputBottomSheet>
 
     <InputBottomSheet
       :open="principalOpen"
-      title="變更本金"
+      :title="t('loans.change_principal')"
       :body-class="'stack form-wrap'"
       :sheet-class="'sheet'"
       :show-footer="true"
@@ -129,31 +129,31 @@
     >
               <p class="muted">{{ loan?.counterparty_name }}</p>
               <label>
-                本金（元）
+                {{ t('loans.principal_yuan') }}
                 <input v-model.number="principalForm.principalMajor" class="input" type="number" min="1" step="1" />
               </label>
       <template #footer>
-        <button class="btn" @click="closePrincipalSheet">取消</button>
-        <button class="btn primary" @click="submitPrincipal">儲存</button>
+        <button class="btn" @click="closePrincipalSheet">{{ t('common.cancel') }}</button>
+        <button class="btn primary" @click="submitPrincipal">{{ t('common.save') }}</button>
       </template>
     </InputBottomSheet>
 
     <AppDialog
       :open="confirmDialog.open"
-      :title="confirmDialog.type === 'void' ? '完成借貸' : '刪除借貸'"
-      :message="confirmDialog.type === 'void' ? '確定要完成這筆借貸？不會刪除交易紀錄' : '確定要刪除這筆借貸？此動作無法復原'"
+      :title="confirmDialog.type === 'void' ? t('loans.complete_loan') : t('loans.delete_loan')"
+      :message="confirmDialog.type === 'void' ? t('loans.confirm_complete') : t('loans.confirm_delete')"
       :loading="confirmDialog.loading"
-      :confirm-text="confirmDialog.type === 'void' ? '確認完成' : '確認刪除'"
+      :confirm-text="confirmDialog.type === 'void' ? t('claim_sheet.confirm_complete') : t('common.confirm_delete')"
       @close="closeConfirmDialog"
       @confirm="confirmDialogAction"
     />
 
     <AppDialog
       :open="deleteRepaymentDialog.open"
-      :title="`刪除${collectionLabel(loan)}`"
-      :message="`確定要刪除這筆${collectionLabel(loan)}紀錄？\n會同步刪除對應交易並重算借貸金額。`"
+      :title="`${t('common.delete')}${collectionLabel(loan)}`"
+      :message="t('loans.confirm_delete_collection', { action: collectionLabel(loan) })"
       :loading="deleteRepaymentDialog.loading"
-      confirm-text="確認刪除"
+      :confirm-text="t('common.confirm_delete')"
       @close="closeDeleteRepaymentDialog"
       @confirm="confirmDeleteRepayment"
     />
@@ -172,6 +172,7 @@ import { useAccountStore } from '@/ui/stores/account.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useTransactionStore } from '@/ui/stores/transaction.store'
 import { useBudgetStore } from '@/ui/stores/budget.store'
+import { useI18n } from '@/ui/services/i18n.service'
 import {
   buildLoanCounterpartyQuery,
   buildLoanListQuery,
@@ -186,6 +187,7 @@ const accountStore = useAccountStore()
 const uiStore = useUiStore()
 const transactionStore = useTransactionStore()
 const budgetStore = useBudgetStore()
+const { t } = useI18n()
 
 const repayOpen = ref(false)
 const editingRepayment = ref(null)
@@ -287,10 +289,10 @@ async function refreshLinkedData() {
 function statusLabel(item) {
   const status = String(item?.status ?? '')
   const map = {
-    active: '進行中',
-    partial: item?.direction === 'lend' ? '部分收回' : '部分償還',
-    settled: '已結清',
-    void: '完成',
+    active: t('loans.active'),
+    partial: item?.direction === 'lend' ? t('loans.partial_collect') : t('loans.partial_repay'),
+    settled: t('loans.settled'),
+    void: t('common.done'),
   }
   return map[status] ?? status
 }
@@ -304,15 +306,15 @@ function canDeleteLoan(item) {
 }
 
 function collectionLabel(item) {
-  return item?.direction === 'borrow' ? '歸還' : '收回'
+  return item?.direction === 'borrow' ? t('loans.repay') : t('loans.collect')
 }
 
 function paidLabel(item) {
-  return item?.direction === 'borrow' ? '已歸還' : '已收回'
+  return item?.direction === 'borrow' ? t('loans.repaid') : t('loans.collected')
 }
 
 function collectionRecordLabel(item) {
-  return `${collectionLabel(item)}紀錄`
+  return t('loans.collection_records', { action: collectionLabel(item) })
 }
 
 function openRepaySheet() {
@@ -400,10 +402,14 @@ async function submitRepayment() {
 
     await refreshLinkedData()
 
-    uiStore.pushToast(editingRepayment.value ? `${collectionLabel(loan.value)}紀錄已更新` : `${collectionLabel(loan.value)}已記錄`)
+    uiStore.pushToast(editingRepayment.value
+      ? t('loans.collection_updated', { action: collectionLabel(loan.value) })
+      : t('loans.collection_recorded', { action: collectionLabel(loan.value) }))
     closeRepaySheet()
   } catch (error) {
-    uiStore.pushToast(error.message ?? (editingRepayment.value ? `更新${collectionLabel(loan.value)}失敗` : `${collectionLabel(loan.value)}失敗`), 'error')
+    uiStore.pushToast(error.message ?? (editingRepayment.value
+      ? t('loans.collection_update_failed', { action: collectionLabel(loan.value) })
+      : t('loans.collection_failed', { action: collectionLabel(loan.value) })), 'error')
   }
 }
 
@@ -415,10 +421,10 @@ async function submitSetupAccount() {
       accountId: setupAccountForm.accountId,
     })
     await refreshLinkedData()
-    uiStore.pushToast('借貸入帳帳戶已更新')
+    uiStore.pushToast(t('loans.setup_account_updated'))
     closeSetupAccountSheet()
   } catch (error) {
-    uiStore.pushToast(error.message ?? '更新借貸入帳帳戶失敗', 'error')
+    uiStore.pushToast(error.message ?? t('loans.setup_account_update_failed'), 'error')
   }
 }
 
@@ -435,10 +441,10 @@ async function submitPrincipal() {
       principalMinor: Math.round(Number(principalForm.principalMajor ?? 0) * 100),
     })
     await refreshLinkedData()
-    uiStore.pushToast('本金已更新')
+    uiStore.pushToast(t('loans.principal_updated'))
     closePrincipalSheet()
   } catch (error) {
-    uiStore.pushToast(error.message ?? '更新本金失敗', 'error')
+    uiStore.pushToast(error.message ?? t('loans.principal_update_failed'), 'error')
   }
 }
 
@@ -452,10 +458,10 @@ async function confirmDeleteRepayment() {
       paymentId: deleteRepaymentDialog.paymentId,
     })
     await refreshLinkedData()
-    uiStore.pushToast(`${collectionLabel(loan.value)}紀錄已刪除`)
+    uiStore.pushToast(t('loans.collection_deleted', { action: collectionLabel(loan.value) }))
     resetDeleteRepaymentDialog()
   } catch (error) {
-    uiStore.pushToast(error.message ?? `刪除${collectionLabel(loan.value)}紀錄失敗`, 'error')
+    uiStore.pushToast(error.message ?? t('loans.collection_delete_failed', { action: collectionLabel(loan.value) }), 'error')
   } finally {
     deleteRepaymentDialog.loading = false
   }
@@ -500,9 +506,9 @@ async function markRestore() {
   try {
     await loanStore.restoreVoided(loan.value.id)
     await refreshLinkedData()
-    uiStore.pushToast('借貸已恢復')
+    uiStore.pushToast(t('loans.restored'))
   } catch (error) {
-    uiStore.pushToast(error.message ?? '恢復失敗', 'error')
+    uiStore.pushToast(error.message ?? t('common.restore_failed'), 'error')
   }
 }
 
@@ -512,10 +518,10 @@ async function removeVoidedLoan() {
   try {
     await loanStore.deleteVoided(loan.value.id)
     await refreshLinkedData()
-    uiStore.pushToast('借貸已刪除')
+    uiStore.pushToast(t('loans.deleted'))
     void router.push(backLink.value)
   } catch (error) {
-    uiStore.pushToast(error.message ?? '刪除失敗', 'error')
+    uiStore.pushToast(error.message ?? t('common.delete_failed'), 'error')
   }
 }
 
@@ -526,14 +532,14 @@ async function confirmDialogAction() {
     if (confirmDialog.type === 'void') {
       await loanStore.markVoid(loan.value.id)
       await refreshLinkedData()
-      uiStore.pushToast('借貸已完成')
+      uiStore.pushToast(t('loans.completed'))
       confirmDialog.open = false
       return
     }
     await removeVoidedLoan()
     confirmDialog.open = false
   } catch (error) {
-    uiStore.pushToast(error.message ?? (confirmDialog.type === 'void' ? '完成失敗' : '刪除失敗'), 'error')
+    uiStore.pushToast(error.message ?? (confirmDialog.type === 'void' ? t('common.complete_failed') : t('common.delete_failed')), 'error')
   } finally {
     confirmDialog.loading = false
   }

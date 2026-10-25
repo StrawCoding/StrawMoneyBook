@@ -27,7 +27,7 @@
         <TimePickerField
           v-model="form.time"
           :disabled="loading || saving"
-          title="選擇提醒時間"
+          :title="t('common.pick_time')"
         />
       </label>
 

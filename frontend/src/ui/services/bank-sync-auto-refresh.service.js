@@ -1,5 +1,6 @@
 import { isBankCredentialAuthError, selectSyncableBankAccounts } from '../../services/bank-sync/shared.js'
 import { logBankSyncAction } from '../../core/services/bank-sync-debug.service.js'
+import { translateMessage } from './i18n.service.js'
 import { isSecurityLockCurrentlyLocked, isSecurityLockEnabled } from './security-lock.service.js'
 
 const AUTO_REFRESH_COOLDOWN_MS = 10 * 60 * 1000
@@ -40,7 +41,9 @@ function isConnectionEligible(connection) {
 function isMembershipRequiredError(error) {
   const code = normalizeText(error?.code).toUpperCase()
   if (code === 'MEMBERSHIP_LIMIT_BANK_SYNC_ACCESS') return true
-  return normalizeText(error?.message).includes('銀行同步僅限會員使用')
+  const membershipMessage = translateMessage('common.bank_sync_members_only', '銀行同步僅限會員使用')
+  const message = normalizeText(error?.message)
+  return message.includes('銀行同步僅限會員使用') || message.includes(membershipMessage)
 }
 
 export function resetBankSyncAutoRefreshStateForTest() {

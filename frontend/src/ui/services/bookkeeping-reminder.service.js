@@ -56,7 +56,7 @@ export function resetBookkeepingReminderDependenciesForTest() {
 
 function assertLedgerId(ledgerId) {
   if (!String(ledgerId ?? '').trim()) {
-    throw new Error('缺少帳本 ID')
+    throw new Error(t('common.missing_ledger_id', '缺少帳本 ID'))
   }
 }
 
@@ -143,8 +143,8 @@ function countBestStreak(dateKeys = []) {
 }
 
 function buildReminderBody(ledgerName) {
-  const resolvedLedgerName = String(ledgerName ?? '').trim() || t('bookkeeping_reminder.notification.ledger_fallback', '目前帳本')
-  return t('bookkeeping_reminder.notification.body', { ledgerName: resolvedLedgerName }, `別忘了為「${resolvedLedgerName}」補上今天的收支。`)
+  const resolvedLedgerName = String(ledgerName ?? '').trim() || t('common.current_ledger', '目前帳本')
+  return t('bookkeeping_reminder.body', { name: resolvedLedgerName }, '別忘了為「{name}」補上今天的收支。')
 }
 
 function buildReminderNotificationId(ledgerId) {
@@ -229,7 +229,7 @@ function waitForSerializedReminderSync(taskPromise, timeoutMessage) {
 async function resolveNotificationPermission(plugin, requestPermission = false) {
   let permission = await withReminderPluginTimeout(
     plugin.checkPermissions(),
-    t('bookkeeping_reminder.error.permission_check_timeout', '檢查記帳提醒權限逾時，請稍後再試'),
+    t('error.reminder_permission_timeout', '檢查記帳提醒權限逾時，請稍後再試'),
   )
   let display = String(permission?.display ?? '')
 

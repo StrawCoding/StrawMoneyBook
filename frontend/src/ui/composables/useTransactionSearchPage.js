@@ -1,5 +1,5 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { resolveIntlLocale } from '@/ui/services/i18n.service.js'
+import { resolveIntlLocale, translateMessage } from '@/ui/services/i18n.service.js'
 import { batchPatchTransactions } from '@/core/services/transaction.service'
 import { listTransactionsForSearch, TRANSACTION_PAGE_SIZE } from '@/core/services/transaction-query.service'
 import {
@@ -32,9 +32,10 @@ export function useTransactionSearchPage({
   uiStore,
   route,
   router,
-  t,
+  t: tFn,
   locale,
 }) {
+  const t = typeof tFn === 'function' ? tFn : translateMessage
   const keyword = ref('')
   const startDay = ref('')
   const endDay = ref('')
@@ -230,29 +231,29 @@ export function useTransactionSearchPage({
   const batchCategoryGroups = computed(() => ([
     {
       id: 'batch-keep',
-      name: '維持原值',
-      options: [{ value: '__keep__', label: '分類不變' }],
+      name: t('common.keep_original'),
+      options: [{ value: '__keep__', label: t('common.category_unchanged') }],
     },
     ...allCategoryGroups.value,
   ]))
 
-  const batchNoteModeOptions = [
-    { value: BATCH_NOTE_MODE_KEEP, label: '備註不變' },
-    { value: BATCH_NOTE_MODE_REPLACE, label: '覆蓋備註' },
-    { value: BATCH_NOTE_MODE_CLEAR, label: '清空備註' },
-  ]
+  const batchNoteModeOptions = computed(() => [
+    { value: BATCH_NOTE_MODE_KEEP, label: t('common.note_unchanged') },
+    { value: BATCH_NOTE_MODE_REPLACE, label: t('common.overwrite_note') },
+    { value: BATCH_NOTE_MODE_CLEAR, label: t('common.clear_note') },
+  ])
 
-  const batchToggleOptions = [
-    { value: BATCH_TOGGLE_KEEP, label: '維持原值' },
-    { value: 'true', label: '設為開啟' },
-    { value: 'false', label: '設為關閉' },
-  ]
+  const batchToggleOptions = computed(() => [
+    { value: BATCH_TOGGLE_KEEP, label: t('common.keep_original') },
+    { value: 'true', label: t('common.set_on') },
+    { value: 'false', label: t('common.set_off') },
+  ])
 
-  const batchReimbursableOptions = [
-    { value: BATCH_TOGGLE_KEEP, label: '維持原值' },
-    { value: 'true', label: '設為可報銷' },
-    { value: 'false', label: '設為不可報銷' },
-  ]
+  const batchReimbursableOptions = computed(() => [
+    { value: BATCH_TOGGLE_KEEP, label: t('common.keep_original') },
+    { value: 'true', label: t('tx_search.set_reimbursable') },
+    { value: 'false', label: t('tx_search.set_not_reimbursable') },
+  ])
 
   const selectedBatchTransactions = computed(() => (
     transactions.value.filter((tx) => selectedIds.value.has(tx.id))
@@ -344,17 +345,17 @@ export function useTransactionSearchPage({
       batchEditSheetOpen.value = false
       batchMode.value = false
       resetBatchPatch()
-      const summaryParts = [`已更新 ${result.updatedCount} 筆交易`]
+      const summaryParts = [t('tx_search.updated_n', { count: result.updatedCount })]
       if (result.skippedCount > 0) {
         const firstReason = String(result.skipped?.[0]?.reason ?? '').trim()
-        summaryParts.push(`略過 ${result.skippedCount} 筆`)
-        if (firstReason) summaryParts.push(`原因：${firstReason}`)
+        summaryParts.push(t('reimbursement.skipped_n', { count: result.skippedCount }))
+        if (firstReason) summaryParts.push(t('tx_search.skip_reason', { reason: firstReason }))
         uiStore.pushToast(summaryParts.join('，'), 'error')
         return
       }
       uiStore.pushToast(summaryParts.join('，'))
     } catch (error) {
-      uiStore.pushToast(error.message ?? '批量更改失敗', 'error')
+      uiStore.pushToast(error.message ?? t('tx_search.batch_failed'), 'error')
     } finally {
       batchWorking.value = false
     }

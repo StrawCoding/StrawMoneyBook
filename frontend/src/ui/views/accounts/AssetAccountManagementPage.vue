@@ -1,16 +1,16 @@
 <template>
   <section class="stack">
     <header class="row page-header">
-      <h2 class="page-title">資產帳戶管理</h2>
+      <h2 class="page-title">{{ t('common.asset_account_management') }}</h2>
       <RouterLink class="btn back-btn" to="/assets">{{ t('common.back') }}</RouterLink>
     </header>
 
     <article class="card panel">
       <header class="row">
-        <h3>資產帳戶</h3>
+        <h3>{{ t('common.asset_accounts') }}</h3>
         <div class="header-actions">
-          <button class="btn mini-btn" @click="addAccountFromHeader">新增帳號</button>
-          <button class="btn mini-btn" @click="addGroup">新增群組</button>
+          <button class="btn mini-btn" @click="addAccountFromHeader">{{ t('common.add_account') }}</button>
+          <button class="btn mini-btn" @click="addGroup">{{ t('common.add_group') }}</button>
         </div>
       </header>
 
@@ -29,7 +29,7 @@
             <RouterLink
               class="btn mini-btn icon-btn"
               :to="{ name: 'asset-account-group-detail', params: { id: group.id } }"
-              aria-label="母分類設定"
+              :aria-label="t('common.parent_group_settings')"
             >
               <font-awesome-icon icon="fa-solid fa-gear" />
             </RouterLink>
@@ -65,7 +65,7 @@
                         </span>
                       </span>
                     </RouterLink>
-                    <font-awesome-icon icon="fa-solid fa-bars" class="drag-handle child-drag-bar" aria-label="拖動排序" />
+                    <font-awesome-icon icon="fa-solid fa-bars" class="drag-handle child-drag-bar" :aria-label="t('common.drag_sort')" />
                   </div>
                 </li>
               </template>
@@ -78,66 +78,66 @@
     <AppDialog
       :open="groupDialogOpen"
       presentation="sheet"
-      title="新增群組"
+      :title="t('common.add_group')"
       :confirm-disabled="!groupNameInput.trim()"
-      confirm-text="儲存"
+      :confirm-text="t('common.save')"
       @close="closeGroupDialog"
       @confirm="submitGroupDialog"
     >
       <label class="field">
-        群組名稱
-        <input v-model="groupNameInput" class="input" type="text" maxlength="40" placeholder="請輸入群組名稱" />
+        {{ t('common.group_name') }}
+        <input v-model="groupNameInput" class="input" type="text" maxlength="40" :placeholder="t('common.please_enter_group_name')" />
       </label>
     </AppDialog>
 
     <AppDialog
       :open="accountDialogOpen"
       presentation="sheet"
-      title="新增帳戶"
+      :title="t('settings_bank_sync_create.account_mode_create')"
       :confirm-disabled="!accountNameInput.trim() || !accountTargetGroupId || accountAmountInvalid || accountCreditLimitInvalid || accountReminderDayInvalid"
-      confirm-text="儲存"
+      :confirm-text="t('common.save')"
       @close="closeAccountDialog"
       @confirm="submitAccountDialog"
     >
       <label class="field">
-        帳戶名稱
-        <input v-model="accountNameInput" class="input" type="text" maxlength="40" placeholder="請輸入帳戶名稱" />
+        {{ t('common.account_name') }}
+        <input v-model="accountNameInput" class="input" type="text" maxlength="40" :placeholder="t('common.please_enter_account_name')" />
       </label>
       <label v-if="accountKindInput !== 'credit'" class="field">
-        所屬群組
-        <CustomSelect v-model="accountTargetGroupId" :options="groupOptions" placeholder="請選擇群組" />
+        {{ t('common.belonging_group') }}
+        <CustomSelect v-model="accountTargetGroupId" :options="groupOptions" :placeholder="t('common.select_group')" />
       </label>
-      <p v-else class="muted credit-group-hint">信用卡不掛資產母分類；請至「信用卡」頁新增與管理。</p>
+      <p v-else class="muted credit-group-hint">{{ t('account.credit_use_cards_page') }}</p>
       <label class="field">
-        帳戶 Icon
+        {{ t('common.account_icon') }}
         <button class="icon-picker-btn" type="button" @click="openAccountIconPicker">
           <font-awesome-icon :icon="accountIconInput" />
-          <span>選擇 icon</span>
+          <span>{{ t('common.choose_icon') }}</span>
         </button>
       </label>
       <label class="field">
-        帳號類型
+        {{ t('common.account_type') }}
         <CustomSelect v-model="accountKindInput" :options="accountKindOptions" />
       </label>
       <label class="field">
-        帳戶幣別
-        <CustomSelect v-model="accountCurrencyCodeInput" :options="currencyOptions" placeholder="請選擇幣別" />
+        {{ t('welcome.account_currency') }}
+        <CustomSelect v-model="accountCurrencyCodeInput" :options="currencyOptions" :placeholder="t('common.please_select_currency')" />
       </label>
       <label v-if="accountKindInput === 'cash'" class="field">
-        期初金額（元，可小數）
+        {{ t('account.opening_amount_alt') }}
         <input v-model="accountOpeningInput" class="input" type="number" step="0.01" />
       </label>
       <label v-else class="field">
-        目前欠款（元，可小數）
+        {{ t('account.current_debt') }}
         <input v-model="accountCurrentDebtInput" class="input" type="number" min="0" step="0.01" />
       </label>
       <label v-if="accountKindInput === 'credit'" class="field">
-        信用額度（元，可小數）
+        {{ t('account.credit_limit') }}
         <input v-model="accountCreditLimitInput" class="input" type="number" min="0" step="0.01" />
       </label>
       <label v-if="accountKindInput === 'credit'" class="field">
-        還款提醒日（每月 1-31）
-        <input v-model="accountRepaymentReminderDayInput" class="input" type="number" min="1" max="31" step="1" placeholder="例如 15" />
+        {{ t('account.repay_day') }}
+        <input v-model="accountRepaymentReminderDayInput" class="input" type="number" min="1" max="31" step="1" :placeholder="t('common.example_15')" />
       </label>
       <div class="field">
         <span>{{ t('account.include_in_assets_label') }}</span>
@@ -173,9 +173,9 @@
           <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
         </button>
       </div>
-      <p v-if="accountAmountInvalid" class="error-text">{{ accountKindInput === 'credit' ? '目前欠款格式錯誤' : '期初金額格式錯誤' }}</p>
-      <p v-if="accountCreditLimitInvalid" class="error-text">信用額度格式錯誤</p>
-      <p v-if="accountReminderDayInvalid" class="error-text">還款提醒日需介於 1 到 31</p>
+      <p v-if="accountAmountInvalid" class="error-text">{{ accountKindInput === 'credit' ? t('common.current_debt_invalid') : t('account.opening_alt_invalid') }}</p>
+      <p v-if="accountCreditLimitInvalid" class="error-text">{{ t('common.credit_limit_invalid') }}</p>
+      <p v-if="accountReminderDayInvalid" class="error-text">{{ t('common.repay_day_range') }}</p>
     </AppDialog>
   </section>
 </template>
@@ -331,7 +331,7 @@ function toggleGroup(groupId) {
 }
 
 const accountKindOptions = computed(() => ([
-  { value: 'cash', label: '現金帳戶' },
+  { value: 'cash', label: t('common.cash_account') },
 ]))
 const accountAmountInvalid = computed(() => {
   const rawValue = accountKindInput.value === 'credit' ? accountCurrentDebtInput.value : accountOpeningInput.value
@@ -362,7 +362,7 @@ async function addGroup() {
 async function addAccountFromHeader() {
   const firstGroupId = groupSummaries.value[0]?.id || accountStore.groups[0]?.id || ''
   if (!firstGroupId) {
-    uiStore.pushToast('請先新增群組', 'error')
+    uiStore.pushToast(t('account.create_group_first'), 'error')
     return
   }
   await addAccount(firstGroupId)
@@ -397,10 +397,10 @@ async function submitGroupDialog() {
       type: 'other',
       sortOrder: accountStore.groups.length,
     })
-    uiStore.pushToast('群組已新增')
+    uiStore.pushToast(t('common.group_created'))
     closeGroupDialog()
   } catch (error) {
-    uiStore.pushToast(error.message ?? '新增失敗', 'error')
+    uiStore.pushToast(error.message ?? t('quick_add.toast.create_failed'), 'error')
   }
 }
 
@@ -454,19 +454,19 @@ async function submitAccountDialog() {
   const reminderDay = parseRepaymentReminderDay(accountRepaymentReminderDayInput.value)
   if (!groupId || !name) return
   if (accountKind === 'cash' && !Number.isFinite(openingMajor)) {
-    uiStore.pushToast('期初金額格式錯誤', 'error')
+    uiStore.pushToast(t('account.opening_alt_invalid'), 'error')
     return
   }
   if (accountKind === 'credit' && !Number.isFinite(currentDebtMajor)) {
-    uiStore.pushToast('目前欠款格式錯誤', 'error')
+    uiStore.pushToast(t('common.current_debt_invalid'), 'error')
     return
   }
   if (accountKind === 'credit' && (!Number.isFinite(creditLimitMajor) || creditLimitMajor < 0)) {
-    uiStore.pushToast('信用額度格式錯誤', 'error')
+    uiStore.pushToast(t('common.credit_limit_invalid'), 'error')
     return
   }
   if (accountKind === 'credit' && accountRepaymentReminderDayInput.value !== '' && reminderDay == null) {
-    uiStore.pushToast('還款提醒日需介於 1 到 31', 'error')
+    uiStore.pushToast(t('common.repay_day_range'), 'error')
     return
   }
   try {
@@ -486,10 +486,10 @@ async function submitAccountDialog() {
       includeInAssets: accountIncludeInAssetsInput.value,
       includeInGroupStatistics: accountIncludeInGroupStatisticsInput.value,
     })
-    uiStore.pushToast('帳戶已新增')
+    uiStore.pushToast(t('welcome.toast.account_created'))
     closeAccountDialog()
   } catch (error) {
-    uiStore.pushToast(error.message ?? '新增帳戶失敗', 'error')
+    uiStore.pushToast(error.message ?? t('welcome.toast.create_account_failed'), 'error')
   }
 }
 

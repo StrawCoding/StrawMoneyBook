@@ -25,26 +25,34 @@ export function resolveBookkeepingSubmitErrorMessage(error, t) {
     )
   }
 
-  if (message.includes('金額必須大於 0') || message.includes('amount must be greater than 0')) {
-    return t('quick_add.error.amount_required')
+  const amountMustGtZero = t('quick_add.error.amount_required', '請輸入有效金額（需大於 0）')
+  if (message.includes('金額必須大於 0') || message.includes('amount must be greater than 0') || message.includes(amountMustGtZero)) {
+    return amountMustGtZero
   }
 
-  if (message.includes('禁止建立信用卡應計') || message.includes('virtual accrual')) {
-    return t(
-      'quick_add.error.credit_virtual_accrual',
-      '帳本內仍有舊版「信用卡應計」帳戶，請至資產管理移除或重新命名後再記帳。',
-    )
+  const creditAccrualForbidden = t('error.credit_accrual_forbidden', '禁止建立信用卡應計')
+  const legacyCreditAccrual = t(
+    'error.legacy_credit_accrual_account',
+    '帳本內仍有舊版「信用卡應計」帳戶，請至資產管理移除或重新命名後再記帳。',
+  )
+  if (message.includes('禁止建立信用卡應計') || message.includes('virtual accrual') || message.includes(creditAccrualForbidden)) {
+    return creditAccrualForbidden
+  }
+  if (message.includes('帳本內仍有舊版') || message.includes(legacyCreditAccrual)) {
+    return legacyCreditAccrual
   }
 
-  if (message.includes('存錢罐僅支援')) {
-    return t(
-      'quick_add.error.savings_jar_direct',
-      '存錢罐僅支援存入與提取，請使用存錢罐功能頁。',
-    )
+  const savingsJarDirect = t(
+    'quick_add.error.savings_jar_direct',
+    '存錢罐僅支援存入與提取，請使用存錢罐功能頁。',
+  )
+  if (message.includes('存錢罐僅支援') || message.includes(savingsJarDirect)) {
+    return savingsJarDirect
   }
 
-  if (message.includes('請選擇信用卡帳戶')) {
-    return t('quick_add.error.credit_account_required', '請選擇信用卡帳戶')
+  const creditAccountRequired = t('quick_add.error.credit_account_required', '請選擇信用卡帳戶')
+  if (message.includes('請選擇信用卡帳戶') || message.includes(creditAccountRequired)) {
+    return creditAccountRequired
   }
 
   return message || t('quick_add.toast.create_failed')

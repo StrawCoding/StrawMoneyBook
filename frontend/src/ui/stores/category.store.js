@@ -13,6 +13,7 @@ import {
   updateCategoryProfile as updateCategoryProfileRepo,
 } from '@/core/repositories/category.repo'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { translateMessage } from '@/ui/services/i18n.service.js'
 
 function buildCategoryGroupsByKind(groups, categories, kind) {
   const filteredCategories = categories.filter((category) => category.kind === kind || category.kind === 'both')
@@ -44,7 +45,7 @@ function buildCategoryGroupsByKind(groups, categories, kind) {
   if (orphanCategories.length > 0) {
     grouped.push({
       id: '__ungrouped__',
-      name: '未分組',
+      name: translateMessage('common.ungrouped', '未分組'),
       kind,
       categories: orphanCategories,
     })

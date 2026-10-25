@@ -1,3 +1,5 @@
+import { translateMessage } from '@/ui/services/i18n.service.js'
+
 function textOf(value) {
   return String(value ?? '').trim()
 }
@@ -11,7 +13,13 @@ export function isRefundTransaction(tx) {
 
   const categoryName = textOf(tx?.category_name)
   const note = textOf(tx?.note)
-  return categoryName === '退款' || note.startsWith('退款：') || note.startsWith('退款:')
+  const refundLabel = translateMessage('common.refund', '退款')
+  const refundPrefix = translateMessage('common.refund_prefix', '退款：')
+  return categoryName === '退款'
+    || categoryName === refundLabel
+    || note.startsWith('退款：')
+    || note.startsWith('退款:')
+    || note.startsWith(refundPrefix)
 }
 
 export function hasRefundLink(tx) {

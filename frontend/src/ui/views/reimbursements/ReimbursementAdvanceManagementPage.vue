@@ -1,51 +1,51 @@
 <template>
   <section class="stack">
     <header class="row page-header">
-      <h2 class="page-title">代收管理</h2>
+      <h2 class="page-title">{{ t('reimbursement.advance_manage_title') }}</h2>
       <div class="row header-actions">
-        <RouterLink class="btn" :to="{ name: 'reimbursement-advance-usage-manage' }">抵扣紀錄</RouterLink>
-        <RouterLink class="btn back-btn" :to="{ name: 'reimbursements' }">返回</RouterLink>
+        <RouterLink class="btn" :to="{ name: 'reimbursement-advance-usage-manage' }">{{ t('reimbursement.offset_records') }}</RouterLink>
+        <RouterLink class="btn back-btn" :to="{ name: 'reimbursements' }">{{ t('common.back') }}</RouterLink>
       </div>
     </header>
 
     <article class="card panel">
       <header class="row panel-head">
-        <h3>新增代收</h3>
+        <h3>{{ t('reimbursement.add_advance') }}</h3>
       </header>
 
       <div class="stack form-wrap">
         <label>
-          代收金額（元）
+          {{ t('reimbursement.advance_amount_yuan') }}
           <input v-model.number="form.amountMajor" type="number" min="0" step="1" class="input" />
         </label>
 
         <label>
-          代收帳戶
+          {{ t('reimbursement.advance_account') }}
           <CustomSelect v-model="form.accountId" :groups="accountStore.groupedRegularAccounts" />
         </label>
 
         <label>
-          歸還金額（元，留空則同代收金額）
-          <input v-model.number="form.returnAmountMajor" type="number" min="0" step="1" class="input" placeholder="可自訂歸還金額" />
+          {{ t('reimbursement.repay_amount_optional') }}
+          <input v-model.number="form.returnAmountMajor" type="number" min="0" step="1" class="input" :placeholder="t('reimbursement.custom_repay_amount')" />
         </label>
 
         <label>
-          備註
-          <input v-model.trim="form.note" type="text" class="input" placeholder="例如：公司先墊付報銷款" />
+          {{ t('common.note') }}
+          <input v-model.trim="form.note" type="text" class="input" :placeholder="t('reimbursement.advance_note_example')" />
         </label>
       </div>
 
       <footer class="row panel-actions">
         <button class="btn primary" :disabled="creating || !canCreateAdvance" @click="submitAdvance">
-          {{ creating ? '建立中...' : '新增代收' }}
+          {{ creating ? t('claim_sheet.creating') : t('reimbursement.add_advance') }}
         </button>
       </footer>
     </article>
 
     <article class="card panel">
       <header class="row panel-head">
-        <h3>可用代收</h3>
-        <small class="muted">共 {{ visibleAdvances.length }} 筆</small>
+        <h3>{{ t('reimbursement.available_advance') }}</h3>
+        <small class="muted">{{ t('common.total_items', { count: visibleAdvances.length }) }}</small>
       </header>
 
       <ul class="advance-list">
@@ -64,11 +64,11 @@
             </div>
 
             <div class="advance-meta">
-              <small class="muted">帳戶：{{ advance.account_name || '未指定帳戶' }}</small>
-              <small v-if="advance.return_amount_minor != null" class="muted">歸還：<MoneyText :value-minor="advance.return_amount_minor" /></small>
-              <small class="muted">可用：<MoneyText :value-minor="advance.available_minor" /></small>
-              <small class="muted">已抵：<MoneyText :value-minor="advance.used_minor" /></small>
-              <small class="muted">日期：{{ formatTime(advance.received_at) }}</small>
+              <small class="muted">{{ t('reimbursement_advance_usage.account_prefix') }}{{ advance.account_name || t('common.unknown_account') }}</small>
+              <small v-if="advance.return_amount_minor != null" class="muted">{{ t('reimbursement.repay_prefix') }}<MoneyText :value-minor="advance.return_amount_minor" /></small>
+              <small class="muted">{{ t('reimbursement.available_prefix') }}<MoneyText :value-minor="advance.available_minor" /></small>
+              <small class="muted">{{ t('reimbursement.offset_prefix') }}<MoneyText :value-minor="advance.used_minor" /></small>
+              <small class="muted">{{ t('common.date_prefix') }}{{ formatTime(advance.received_at) }}</small>
               <small v-if="advance.note" class="muted break-word">{{ advance.note }}</small>
             </div>
           </div>
@@ -77,26 +77,26 @@
             <button
               class="btn danger"
               :disabled="deletingAdvanceId === advance.id || !canDeleteAdvance(advance)"
-              :title="canDeleteAdvance(advance) ? '刪除代收' : '已有抵扣紀錄，需先刪除抵扣紀錄才能刪除代收'"
+              :title="canDeleteAdvance(advance) ? t('reimbursement.delete_advance') : t('reimbursement.delete_advance_blocked')"
               @click="openDeleteDialog(advance)"
             >
-              {{ deletingAdvanceId === advance.id ? '刪除中...' : '刪除' }}
+              {{ deletingAdvanceId === advance.id ? t('reimbursement_advance_usage.deleting') : t('common.delete') }}
             </button>
           </div>
         </li>
 
-        <li v-if="!visibleAdvances.length" class="muted">目前沒有尚可抵扣的代收資料</li>
+        <li v-if="!visibleAdvances.length" class="muted">{{ t('reimbursement.no_open_advance') }}</li>
       </ul>
-      <p class="muted page-hint">部分抵扣但仍有餘額的代收會保留在此；完全抵扣的紀錄可到「抵扣紀錄」查看。</p>
+      <p class="muted page-hint">{{ t('reimbursement.partial_advance_hint') }}</p>
     </article>
 
     <AppDialog
       :open="Boolean(deleteTarget)"
-      title="刪除代收"
+      :title="t('reimbursement.delete_advance')"
       :message="deleteDialogMessage"
-      confirm-text="確認刪除"
-      cancel-text="取消"
-      loading-text="刪除中..."
+      :confirm-text="t('common.confirm_delete')"
+      :cancel-text="t('common.cancel')"
+      :loading-text="t('reimbursement_advance_usage.deleting')"
       :loading="Boolean(deletingAdvanceId)"
       @close="closeDeleteDialog"
       @confirm="confirmDeleteAdvance"
@@ -105,7 +105,7 @@
 </template>
 
 <script setup>
-import { resolveIntlLocale } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
@@ -118,6 +118,7 @@ import { useUiStore } from '@/ui/stores/ui.store'
 const reimbursementStore = useReimbursementStore()
 const accountStore = useAccountStore()
 const uiStore = useUiStore()
+const { t } = useI18n()
 
 const creating = ref(false)
 const deletingAdvanceId = ref('')
@@ -134,7 +135,10 @@ const visibleAdvances = computed(() => {
 })
 const deleteDialogMessage = computed(() => {
   if (!deleteTarget.value) return ''
-  return `確定要刪除這筆代收？\n${advanceCategoryName(deleteTarget.value)} / ${deleteTarget.value.account_name || '未指定帳戶'}`
+  return t('reimbursement.confirm_delete_advance', {
+    name: advanceCategoryName(deleteTarget.value),
+    account: deleteTarget.value.account_name || t('common.unknown_account'),
+  })
 })
 const canCreateAdvance = computed(() => {
   return Number.isFinite(Number(form.amountMajor))
@@ -172,9 +176,9 @@ async function submitAdvance() {
       receivedAt: new Date().toISOString(),
     })
     resetForm()
-    uiStore.pushToast('代收已新增')
+    uiStore.pushToast(t('reimbursement.advance_created'))
   } catch (error) {
-    uiStore.pushToast(error.message ?? '新增代收失敗', 'error')
+    uiStore.pushToast(error.message ?? t('reimbursement.add_advance_failed'), 'error')
   } finally {
     creating.value = false
   }
@@ -184,7 +188,7 @@ function openDeleteDialog(advance) {
   const advanceId = String(advance?.id ?? '').trim()
   if (!advanceId || deletingAdvanceId.value) return
   if (!canDeleteAdvance(advance)) {
-    uiStore.pushToast('已有抵扣紀錄的代收需先刪除抵扣紀錄', 'error')
+    uiStore.pushToast(t('reimbursement.delete_advance_need_offsets'), 'error')
     return
   }
   deleteTarget.value = advance
@@ -203,9 +207,9 @@ async function confirmDeleteAdvance() {
   try {
     await reimbursementStore.deleteAdvance(advanceId)
     deleteTarget.value = null
-    uiStore.pushToast('代收已刪除')
+    uiStore.pushToast(t('reimbursement.advance_deleted'))
   } catch (error) {
-    uiStore.pushToast(error.message ?? '刪除代收失敗', 'error')
+    uiStore.pushToast(error.message ?? t('reimbursement.delete_advance_failed'), 'error')
   } finally {
     deletingAdvanceId.value = ''
   }
@@ -215,7 +219,7 @@ function advanceCategoryName(advance) {
   const name = String(advance?.category_name ?? '').trim()
   if (name) return name
   const note = String(advance?.note ?? '').trim()
-  return note || '代收'
+  return note || t('reimbursement_advance_usage.default_advance_name')
 }
 
 function advanceCategoryIcon(advance) {

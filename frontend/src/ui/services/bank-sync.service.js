@@ -28,9 +28,10 @@ import { yieldToMainThread } from '../../core/utils/cooperative-yield.js'
 import { buildBankImportPlan } from '../../services/bank-sync/import-auto-rule.js'
 import { runtimeJobs } from './runtime-job-scheduler.js'
 import { readPossibleDuplicateOf } from '../../core/domain/bank-transaction-identity.js'
+import { translateMessage } from '@/ui/services/i18n.service.js'
 
 function assertLedgerId(ledgerId) {
-  if (!ledgerId) throw new Error('缺少帳本 ID')
+  if (!ledgerId) throw new Error(translateMessage('common.missing_ledger_id', '缺少帳本 ID'))
 }
 
 export { buildNativeVaultLookupIds }
@@ -462,7 +463,7 @@ export async function prepareBankProviderLink(ledgerId, provider, options = {}) 
   await dependencies.assertCanUseBankSync()
   const normalizedProvider = normalizeText(provider)
   logBankSyncAction('service.prepareLink', { ledgerId, provider: normalizedProvider })
-  if (!normalizedProvider) throw new Error('缺少 provider')
+  if (!normalizedProvider) throw new Error(translateMessage('common.missing_provider', '缺少 provider'))
   if (isNativeBankProviderId(normalizedProvider)) {
     return {
       provider: normalizedProvider,
@@ -471,7 +472,7 @@ export async function prepareBankProviderLink(ledgerId, provider, options = {}) 
     }
   }
 
-  throw new Error('目前僅支援 Android 本地銀行同步')
+  throw new Error(translateMessage('common.android_bank_sync_only', '目前僅支援 Android 本地銀行同步'))
 }
 
 export async function getBankSyncState(ledgerId) {
@@ -498,10 +499,10 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
   assertLedgerId(ledgerId)
   await dependencies.assertCanUseBankSync()
   const normalizedProvider = normalizeText(provider).toLowerCase()
-  if (!normalizedProvider) throw new Error('缺少 provider')
+  if (!normalizedProvider) throw new Error(translateMessage('common.missing_provider', '缺少 provider'))
   const providerDef = getBankProviderDefinition(normalizedProvider)
   if (!providerDef || !isNativeBankProviderId(normalizedProvider)) {
-    throw new Error('目前僅支援 Android 本地銀行同步')
+    throw new Error(translateMessage('common.android_bank_sync_only', '目前僅支援 Android 本地銀行同步'))
   }
 
   const providerConnectionId = createBankProviderConnectionId(normalizedProvider, {
@@ -510,7 +511,7 @@ export async function connectBankProvider(ledgerId, provider, options = {}) {
     userCode: options.code,
   })
   if (!providerConnectionId) {
-    throw new Error('華南銀行登入身分資料不完整')
+    throw new Error(translateMessage('bank_sync.error.identity_incomplete', '華南銀行登入身分資料不完整'))
   }
 
   const defaultLabel = providerDef.name
@@ -629,13 +630,13 @@ async function syncBankConnectionNowUnqueued(ledgerId, connectionId) {
   assertLedgerId(ledgerId)
   await dependencies.assertCanUseBankSync()
   const connection = await dependencies.findBankConnectionById(ledgerId, connectionId)
-  if (!connection) throw new Error('找不到銀行連結')
+  if (!connection) throw new Error(translateMessage('bank_sync.error.connection_not_found', '找不到銀行連結'))
   const normalizedStatus = String(connection.status ?? '').toLowerCase()
   if (normalizedStatus === 'revoked') {
-    throw new Error('此銀行連結已停用，請重新連結')
+    throw new Error(translateMessage('bank_sync.error.connection_disabled', '此銀行連結已停用，請重新連結'))
   }
   if (shouldRequireReconnectForStoredBankConnection(connection.provider, connection.status, connection.last_error)) {
-    throw new Error('銀行連線已進入錯誤狀態，請先中斷連線並重新新增')
+    throw new Error(translateMessage('bank_sync.error.connection_error_state', '銀行連線已進入錯誤狀態，請先中斷連線並重新新增'))
   }
 
   const [enabledAccounts, rule] = await Promise.all([
@@ -644,7 +645,7 @@ async function syncBankConnectionNowUnqueued(ledgerId, connectionId) {
   ])
   const syncableAccounts = selectSyncableBankAccounts(enabledAccounts)
   if (!syncableAccounts.length) {
-    throw new Error('請先啟用並對應至少一個銀行帳戶後再同步')
+    throw new Error(translateMessage('bank_sync.error.need_mapped_account', '請先啟用並對應至少一個銀行帳戶後再同步'))
   }
 
   return dependencies.traceBankSyncOperation('sync_bank_connection', {
@@ -671,7 +672,7 @@ async function syncBankConnectionNowUnqueued(ledgerId, connectionId) {
         const effectiveCredentialState = sanitizedCredentialState ?? savedCredentialState
         sessionToken = normalizeText(effectiveCredentialState?.sessionToken || effectiveCredentialState?.accessTokenRef)
         if (!sessionToken) {
-          throw new Error('銀行同步 Session 已失效，請重新連線並重新登入一次')
+          throw new Error(translateMessage('bank_sync.error.session_expired', '銀行同步 Session 已失效，請重新連線並重新登入一次'))
         }
       }
 
@@ -927,11 +928,11 @@ export async function importBankStatementCsv(ledgerId, connectionId, bankAccount
     csvLength: String(csvText ?? '').length,
   })
   const connection = await dependencies.findBankConnectionById(ledgerId, connectionId)
-  if (!connection) throw new Error('找不到銀行連結')
+  if (!connection) throw new Error(translateMessage('bank_sync.error.connection_not_found', '找不到銀行連結'))
 
   const accounts = await dependencies.listBankAccountsByConnection(ledgerId, connectionId)
   const account = accounts.find((item) => normalizeText(item.id) === normalizeText(bankAccountId))
-  if (!account) throw new Error('找不到銀行帳戶')
+  if (!account) throw new Error(translateMessage('bank_sync.error.account_not_found', '找不到銀行帳戶'))
 
   const { parseBankStatementCsv } = await import('../../services/bank-sync/bank-statement-csv.js')
   const parsedRows = parseBankStatementCsv(csvText, {
@@ -1114,7 +1115,7 @@ export async function disconnectBankConnection(ledgerId, connectionId, options =
   assertLedgerId(ledgerId)
   await dependencies.assertCanUseBankSync()
   const connection = await dependencies.findBankConnectionById(ledgerId, connectionId)
-  if (!connection) throw new Error('找不到銀行連結')
+  if (!connection) throw new Error(translateMessage('bank_sync.error.connection_not_found', '找不到銀行連結'))
 
   return dependencies.traceBankSyncOperation('disconnect_bank_connection', {
     ledgerId,

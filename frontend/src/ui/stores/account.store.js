@@ -18,6 +18,7 @@ import { assertCanCreateAccount } from '@/core/services/membership.service'
 import { convertBalanceToTargetCurrency } from '@/core/utils/fx-convert.js'
 import { buildGroupSummaries } from '@/ui/utils/account-group-summary'
 import { getExchangeRateSnapshot } from '@/ui/services/exchange-rate.service'
+import { translateMessage } from '@/ui/services/i18n.service.js'
 
 function isIncludedInAssets(account) {
   return Number(account?.include_in_assets ?? 1) === 1
@@ -31,7 +32,7 @@ function isCreditAccount(account) {
   return String(account?.account_kind ?? '').trim().toLowerCase() === 'credit'
 }
 
-function buildGroupedAccounts(groups, accounts, { includeSavings = true, includeCredit = true, creditGroupLabel = '信用卡' } = {}) {
+function buildGroupedAccounts(groups, accounts, { includeSavings = true, includeCredit = true, creditGroupLabel = translateMessage('common.credit_card', '信用卡') } = {}) {
   const filteredAccounts = includeSavings
     ? [...(accounts ?? [])]
     : (accounts ?? []).filter((account) => !isSavingsJarAccount(account))
@@ -71,7 +72,7 @@ function buildGroupedAccounts(groups, accounts, { includeSavings = true, include
   if (orphanAccounts.length) {
     grouped.push({
       id: '__ungrouped__',
-      name: '未分組',
+      name: translateMessage('common.ungrouped', '未分組'),
       options: orphanAccounts.map((account) => ({
         value: account.id,
         label: account.name,
@@ -215,12 +216,12 @@ export const useAccountStore = defineStore('account', {
 
     async removeAccount(accountId) {
       if (this.accounts.length <= 1) {
-        throw new Error('至少需要保留一個帳戶')
+        throw new Error(translateMessage('common.keep_at_least_one_account', '至少需要保留一個帳戶'))
       }
       const target = this.accounts.find((item) => item.id === accountId)
       const remainingRegularCount = this.accounts.filter((item) => !isSavingsJarAccount(item) && item.id !== accountId).length
       if (!isSavingsJarAccount(target) && remainingRegularCount <= 0) {
-        throw new Error('至少需要保留一個可交易帳戶')
+        throw new Error(translateMessage('common.keep_at_least_one_tradable', '至少需要保留一個可交易帳戶'))
       }
       const ledgerStore = useLedgerStore()
       await deleteAccountIfUnused(ledgerStore.activeLedgerId, accountId)

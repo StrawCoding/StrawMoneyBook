@@ -1,4 +1,5 @@
 import { getSetting, removeSetting, setSetting } from '@/core/repositories/settings.repo'
+import { translateMessage } from '@/ui/services/i18n.service.js'
 
 const MASTER_KEY_STORAGE_KEY = 'straw.secure-setting.master-key.v1'
 const ENCRYPTED_PAYLOAD_VERSION = 1
@@ -58,7 +59,7 @@ function persistMasterKey(base64Key) {
 async function getMasterKey() {
   const cryptoApi = getWebCrypto()
   if (!cryptoApi) {
-    throw new Error('目前環境不支援安全加密儲存')
+    throw new Error(translateMessage('common.secure_store_unsupported', '目前環境不支援安全加密儲存'))
   }
 
   let base64Key = readStoredMasterKey()
@@ -75,7 +76,7 @@ async function getMasterKey() {
 export async function setEncryptedSetting(ledgerId, key, value) {
   const cryptoApi = getWebCrypto()
   if (!cryptoApi) {
-    throw new Error('目前環境不支援安全加密儲存')
+    throw new Error(translateMessage('common.secure_store_unsupported', '目前環境不支援安全加密儲存'))
   }
 
   const masterKey = await getMasterKey()

@@ -95,7 +95,7 @@ function triggerBankAutoRefresh(pinia, ledgerId, reason) {
       if (result?.halted === 'auth_error' && result?.message) {
         useUiStore(pinia).pushToast(
           translateMessage(
-            'settings_bank_sync.toast.auto_sync_disabled_auth_error',
+            'error.bank_auto_sync_stopped',
             { message: result.message },
             '銀行自動同步已停止：{message}',
           ),
@@ -519,7 +519,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
     if (count <= 0) return
     useUiStore(pinia).pushToast(
       translateMessage(
-        'settings_data.integrity.toast_detected',
+        'error.integrity_abnormal',
         { count },
         '帳本完整性異常 {count} 項：系統未自動改寫。請至資料管理檢視／明確修復，或從備份還原。',
       ),

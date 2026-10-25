@@ -1,7 +1,7 @@
 <template>
   <section class="stack">
     <header class="row page-header">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-tags" class="title-icon" />母分類設定</h2>
+      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-tags" class="title-icon" />{{ t('settings_category_page.group_settings') }}</h2>
       <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
     </header>
 
@@ -9,41 +9,41 @@
       <header class="row">
         <h3>{{ group.name }}</h3>
         <button class="btn primary" :disabled="!canSave || saving" @click="saveOrder">
-          {{ saving ? '儲存中...' : '儲存排序' }}
+          {{ saving ? t('settings_ledger_detail.saving') : t('common.save_sort') }}
         </button>
       </header>
 
       <div class="detail-grid">
         <div class="detail-row">
-          <small class="muted">目前排序</small>
+          <small class="muted">{{ t('common.current_sort') }}</small>
           <span>{{ currentOrder }}</span>
         </div>
       </div>
 
       <label class="field">
-        排序數字（1 開始）
+        {{ t('common.sort_number') }}
         <input v-model="orderInput" class="input" type="number" min="1" step="1" />
       </label>
-      <p v-if="orderInvalid" class="error-text">排序數字需為大於 0 的整數</p>
+      <p v-if="orderInvalid" class="error-text">{{ t('common.sort_number_invalid') }}</p>
 
       <div class="row action-row">
         <button class="btn danger" :disabled="deleting" @click="removeGroupRecord">
-          {{ deleting ? '處理中...' : '刪除/封存母分類' }}
+          {{ deleting ? t('common.processing') : t('category.delete_archive_group') }}
         </button>
       </div>
     </article>
 
     <article v-else class="card panel">
-      <p class="muted">找不到此母分類，可能已刪除或封存。</p>
+      <p class="muted">{{ t('common.parent_group_missing') }}</p>
     </article>
 
     <AppDialog
       :open="deleteConfirmOpen"
-      title="確認刪除/封存"
-      :message="`確定刪除/封存「${group?.name ?? ''}」？`"
-      confirm-text="確認刪除"
+      :title="t('common.confirm_delete_archive')"
+      :message="t('category.confirm_delete_group_name', { name: group?.name ?? '' })"
+      :confirm-text="t('common.confirm_delete')"
       :loading="deleting"
-      loading-text="處理中..."
+      :loading-text="t('common.processing')"
       @close="closeDeleteConfirm"
       @confirm="confirmRemoveGroupRecord"
     />
@@ -114,10 +114,10 @@ async function saveOrder() {
     if (fromIndex < 0) return
 
     await categoryStore.reorderGroups(groupKind.value, moveItem(ids, fromIndex, toIndex))
-    uiStore.pushToast('母分類排序已更新')
+    uiStore.pushToast(t('category.group_sort_updated'))
     await router.push(backLink.value)
   } catch (error) {
-    uiStore.pushToast(error.message ?? '更新排序失敗', 'error')
+    uiStore.pushToast(error.message ?? t('category.group_sort_failed'), 'error')
   } finally {
     saving.value = false
   }
@@ -138,11 +138,11 @@ async function confirmRemoveGroupRecord() {
   deleting.value = true
   try {
     await categoryStore.removeGroup(groupId.value)
-    uiStore.pushToast('母分類已處理')
+    uiStore.pushToast(t('category.group_processed'))
     deleteConfirmOpen.value = false
     await router.push(backLink.value)
   } catch (error) {
-    uiStore.pushToast(error.message ?? '處理母分類失敗', 'error')
+    uiStore.pushToast(error.message ?? t('category.group_process_failed'), 'error')
   } finally {
     deleting.value = false
   }

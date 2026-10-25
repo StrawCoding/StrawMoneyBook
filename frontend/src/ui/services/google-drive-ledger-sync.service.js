@@ -80,7 +80,7 @@ function hasGoogleDriveLedgerSyncMembershipAccess() {
 
 function assertGoogleDriveLedgerSyncMembershipAccess() {
   if (hasGoogleDriveLedgerSyncMembershipAccess()) return
-  throw new Error(t('settings_google_sync.error.member_only', null, '帳本同步僅限會員使用'))
+  throw new Error(t('common.ledger_sync_members_only', '帳本同步僅限會員使用'))
 }
 
 function readLocalStorageObject(key) {
@@ -343,7 +343,7 @@ async function ensureGoogleAccess({ interactive = false, preferredEmail = '', bo
       t(
         'settings_google_sync.error.account_switched',
         { bound: boundEmail, current: profile.email || '-' },
-        `Google 帳號已切換（綁定：${boundEmail}，目前：${profile.email || '-' }）`,
+        'Google 帳號已切換（綁定：{bound}，目前：{current}）',
       ),
     )
     switchError.code = 'GOOGLE_ACCOUNT_SWITCHED'
@@ -409,7 +409,7 @@ async function recordAccountSwitchMismatch(ledgerId, state, error) {
       || t('settings_google_sync.error.account_switched', {
         bound: pendingAccountSwitch.boundEmail || '-',
         current: pendingAccountSwitch.currentEmail || '-',
-      }, `Google 帳號已切換（綁定：${pendingAccountSwitch.boundEmail || '-'}，目前：${pendingAccountSwitch.currentEmail || '-' }）`),
+      }, 'Google 帳號已切換（綁定：{bound}，目前：{current}）'),
   })
   emitAccountSwitchEvent(ledgerId, pendingAccountSwitch)
   return nextState
@@ -439,7 +439,7 @@ export async function getGoogleDriveLedgerSyncState(ledgerId) {
 
 export async function setGoogleDriveLedgerSyncState(ledgerId, patch = {}) {
   const normalizedLedgerId = String(ledgerId ?? '').trim()
-  if (!normalizedLedgerId) throw new Error(t('settings_google_sync.error.missing_ledger_id', null, '缺少帳本 ID'))
+  if (!normalizedLedgerId) throw new Error(t('common.missing_ledger_id', '缺少帳本 ID'))
   const map = readStateMap()
   const next = normalizeState({
     ...map[normalizedLedgerId],
@@ -465,7 +465,7 @@ async function replaceLocalLedgerWithRemoteSnapshot(snapshot, ledgerId, state, r
   const normalizedSnapshot = sanitizeSnapshotForGoogleDriveSync(snapshot)
   const requestedLedgerId = String(ledgerId ?? '').trim()
   if (!requestedLedgerId) {
-    throw new Error(t('settings_google_sync.error.missing_ledger_id', null, '缺少帳本 ID'))
+    throw new Error(t('common.missing_ledger_id', '缺少帳本 ID'))
   }
 
   const snapshotLedgerId = resolveSnapshotLedgerId(normalizedSnapshot)
@@ -766,7 +766,7 @@ async function resolveSyncAction(ledgerId, state, options = {}) {
 
 export async function setGoogleDriveLedgerSyncEnabled(ledgerId, enabled, options = {}) {
   const normalizedLedgerId = String(ledgerId ?? '').trim()
-  if (!normalizedLedgerId) throw new Error(t('settings_google_sync.error.missing_ledger_id', null, '缺少帳本 ID'))
+  if (!normalizedLedgerId) throw new Error(t('common.missing_ledger_id', '缺少帳本 ID'))
   const current = await getGoogleDriveLedgerSyncState(normalizedLedgerId)
   if (!enabled) {
     clearLedgerDirty(normalizedLedgerId)
@@ -810,7 +810,7 @@ export async function setGoogleDriveLedgerSyncEnabled(ledgerId, enabled, options
 
 export async function syncGoogleDriveLedgerNow(ledgerId, options = {}) {
   const normalizedLedgerId = String(ledgerId ?? '').trim()
-  if (!normalizedLedgerId) throw new Error(t('settings_google_sync.error.missing_ledger_id', null, '缺少帳本 ID'))
+  if (!normalizedLedgerId) throw new Error(t('common.missing_ledger_id', '缺少帳本 ID'))
   assertGoogleDriveLedgerSyncMembershipAccess()
   if (syncingLedgerIds.has(normalizedLedgerId)) {
     return {

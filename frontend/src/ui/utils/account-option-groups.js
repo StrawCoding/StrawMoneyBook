@@ -1,3 +1,5 @@
+import { translateMessage } from '@/ui/services/i18n.service.js'
+
 function normalizeCurrencyCode(value) {
   return String(value ?? '').trim().toUpperCase()
 }
@@ -40,7 +42,7 @@ export function buildAccountOptionGroups(groups = [], accounts = [], options = {
   if (ungroupedAccounts.length) {
     groupedOptions.push({
       id: '__ungrouped__',
-      name: '未分組',
+      name: translateMessage('common.ungrouped', '未分組'),
       options: ungroupedAccounts.map((account) => ({
         value: account.id,
         label: account.name,

@@ -1,5 +1,6 @@
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
 import { createId } from '@/core/utils/id'
+import { translateMessage } from '@/ui/services/i18n.service.js'
 
 const AUTO_FILL_RULES_KEY = 'ai_bookkeeping.auto_fill_rules'
 
@@ -27,7 +28,7 @@ function normalizeAddonItems(rawItems) {
 
 function ensureLedgerId(ledgerId) {
   if (!ledgerId) {
-    throw new Error('缺少帳本 ID')
+    throw new Error(translateMessage('common.missing_ledger_id', '缺少帳本 ID'))
   }
 }
 
@@ -86,7 +87,7 @@ export async function upsertAutoFillRule(ledgerId, rule) {
   ensureLedgerId(ledgerId)
   const normalizedRule = normalizeRule(rule)
   if (!normalizedRule) {
-    throw new Error('規則內容不完整')
+    throw new Error(translateMessage('common.missing_rule_content', '規則內容不完整'))
   }
 
   const current = await getAutoFillRules(ledgerId)

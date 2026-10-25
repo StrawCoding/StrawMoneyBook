@@ -1,8 +1,8 @@
 <template>
   <section class="stack">
     <header class="row page-header">
-      <h2 class="page-title">代收抵消明細</h2>
-      <RouterLink class="btn back-btn" :to="backLink">返回</RouterLink>
+      <h2 class="page-title">{{ t('reimbursement.offset_about_title') }}</h2>
+      <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
     </header>
 
     <article v-if="detail" class="card panel">
@@ -16,36 +16,36 @@
 
       <div class="detail-grid">
         <div class="detail-row">
-          <small class="muted">原支出</small>
+          <small class="muted">{{ t('reimbursement.original_expense') }}</small>
           <MoneyText :value-minor="sourceAmountMinor" />
         </div>
         <div class="detail-row">
-          <small class="muted">代收抵消</small>
+          <small class="muted">{{ t('reimbursement.advance_offset') }}</small>
           <MoneyText :value-minor="detail.offsetMinor" />
         </div>
         <div class="detail-row">
-          <small class="muted">現金入帳</small>
+          <small class="muted">{{ t('reimbursement.cash_in') }}</small>
           <MoneyText :value-minor="detail.cashMinor" />
         </div>
         <div class="detail-row">
-          <small class="muted">合計已報銷</small>
+          <small class="muted">{{ t('reimbursement.total_reimbursed') }}</small>
           <MoneyText :value-minor="detail.settledMinor" />
         </div>
       </div>
 
       <p class="muted notice">
-        代收抵消可使用不同帳戶，這裡只會扣代收可用金額，不會另外建立轉帳。
+        {{ t('reimbursement.offset_no_transfer_hint') }}
       </p>
 
       <div class="row action-row">
-        <button class="btn" @click="openTransaction(detail.sourceTx.id)">來源交易</button>
-        <button v-if="detail.cashTx?.id" class="btn" @click="openTransaction(detail.cashTx.id)">現金入帳</button>
+        <button class="btn" @click="openTransaction(detail.sourceTx.id)">{{ t('reimbursement.source_tx') }}</button>
+        <button v-if="detail.cashTx?.id" class="btn" @click="openTransaction(detail.cashTx.id)">{{ t('reimbursement.cash_in') }}</button>
       </div>
     </article>
 
     <article v-if="detail" class="card panel">
       <header class="row panel-head">
-        <h3>抵消項目</h3>
+        <h3>{{ t('reimbursement.offset_items') }}</h3>
         <span class="badge">{{ detail.usages.length }}</span>
       </header>
 
@@ -56,23 +56,23 @@
               <font-awesome-icon v-if="usage.category_icon" :icon="usage.category_icon" class="usage-icon" />
               <strong>{{ usageDisplayName(usage) }}</strong>
             </div>
-            <small class="muted">帳戶：{{ usage.account_name || '未指定帳戶' }}</small>
+            <small class="muted">{{ t('reimbursement_advance_usage.account_prefix') }}{{ usage.account_name || t('common.unknown_account') }}</small>
             <small v-if="usage.advance_note" class="muted break-word">{{ usage.advance_note }}</small>
           </div>
           <MoneyText :value-minor="usage.amount_minor" />
         </li>
-        <li v-if="!detail.usages.length" class="muted">這筆報銷目前沒有代收抵消。</li>
+        <li v-if="!detail.usages.length" class="muted">{{ t('reimbursement.no_offset') }}</li>
       </ul>
     </article>
 
     <article v-if="!detail && !loading" class="card panel">
-      <p class="muted">找不到抵消資料，可能尚未使用代收抵扣。</p>
+      <p class="muted">{{ t('reimbursement.offset_not_found') }}</p>
     </article>
   </section>
 </template>
 
 <script setup>
-import { resolveIntlLocale } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
@@ -84,6 +84,7 @@ const route = useRoute()
 const router = useRouter()
 const ledgerStore = useLedgerStore()
 const uiStore = useUiStore()
+const { t } = useI18n()
 
 const loading = ref(false)
 const detail = ref(null)
@@ -98,7 +99,7 @@ const sourceTitle = computed(() => {
   if (categoryName) return categoryName
   const noteText = String(detail.value?.sourceTx?.note ?? '').trim()
   if (noteText) return noteText
-  return '來源報銷交易'
+  return t('reimbursement.source_reimbursement')
 })
 const sourceAmountMinor = computed(() => Math.abs(Math.round(Number(detail.value?.sourceTx?.amount_minor ?? 0))))
 
@@ -125,7 +126,7 @@ async function load() {
     detail.value = await getReimbursementOffsetDetail(ledgerId, expenseTxId.value)
   } catch (error) {
     detail.value = null
-    uiStore.pushToast(error.message ?? '載入抵消資料失敗', 'error')
+    uiStore.pushToast(error.message ?? t('reimbursement.offset_load_failed'), 'error')
   } finally {
     loading.value = false
   }
@@ -151,7 +152,7 @@ function usageDisplayName(usage) {
   const name = String(usage?.category_name ?? '').trim()
   if (name) return name
   const note = String(usage?.advance_note ?? '').trim()
-  return note || '代收'
+  return note || t('reimbursement_advance_usage.default_advance_name')
 }
 </script>
 

@@ -59,18 +59,18 @@ async function main() {
       ? (
         error?.code === 'APP_DOWNGRADE_BLOCKED'
           ? translateMessage(
-            'app.downgrade_blocked_hint',
+            'error.install_from_play',
             '請至 Play 商店安裝相同或更新版本；不要用舊 APK／快取覆寫。系統不會自動清空帳本。',
           )
           : translateMessage(
-            'app.local_db_integrity_hint',
+            'error.no_auto_wipe',
             '系統不會自動清空帳本。請至資料管理／自動備份／帳本同步還原，或明確執行「重設全部資料」。',
           )
       )
       : ''
     uiStore.pushToast(
       translateMessage(
-        'app.init_failed',
+        'error.init_failed',
         { message: integrityHint ? `${message} ${integrityHint}` : message },
         '初始化失敗：{message}',
       ),

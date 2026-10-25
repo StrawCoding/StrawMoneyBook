@@ -14,7 +14,7 @@
         <button class="btn" @click="exportCsv('accounts')">{{ t('settings_data.export.accounts_csv') }}</button>
         <button class="btn" @click="exportCsv('categories')">{{ t('settings_data.export.categories_csv') }}</button>
       </div>
-      <p v-if="lastExportPath" class="muted export-path">輸出路徑：<code>{{ lastExportPath }}</code></p>
+      <p v-if="lastExportPath" class="muted export-path">{{ t('common.export_path') }}<code>{{ lastExportPath }}</code></p>
     </article>
 
     <article class="card panel recovery-panel">

@@ -13,6 +13,7 @@ import { nowIso } from '@/core/utils/id'
 import { formatSyncForeignKeyError, rethrowAsForeignKeyError } from '@/core/utils/sqlite-fk'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { isLocalOnlyAppSettingKey } from '@/ui/services/local-only-app-settings'
+import { translateMessage } from '@/ui/services/i18n.service.js'
 import {
   areSharedLedgerSnapshotsEquivalent,
   buildMergeLog,
@@ -91,7 +92,7 @@ async function assertSharedLedgerSyncAllowed(pinia) {
     await markActiveLedgerSyncGate(
       pinia,
       'paused_offline',
-      '目前離線，連上網路後將自動重試',
+      translateMessage('common.shared_offline_retry', '目前離線，連上網路後將自動重試'),
     )
     return false
   }
@@ -101,13 +102,13 @@ async function assertSharedLedgerSyncAllowed(pinia) {
       await markActiveLedgerSyncGate(
         pinia,
         'paused_reauth',
-        '需重新登入後才能同步共同帳本',
+        translateMessage('common.shared_relogin', '需重新登入後才能同步共同帳本'),
       )
     } else if (auth.restoring || auth.hasProfile || auth.hasRestoreCandidate) {
       await markActiveLedgerSyncGate(
         pinia,
         'paused_session',
-        '登入狀態恢復中，稍後自動重試同步',
+        translateMessage('common.shared_login_restoring', '登入狀態恢復中，稍後自動重試同步'),
       )
     }
     return false
@@ -116,7 +117,7 @@ async function assertSharedLedgerSyncAllowed(pinia) {
     await markActiveLedgerSyncGate(
       pinia,
       'paused_membership',
-      '需有效會員才能同步共同帳本',
+      translateMessage('common.shared_members_only', '需有效會員才能同步共同帳本'),
     )
     return false
   }
@@ -229,7 +230,7 @@ function clearBaseSnapshot(ledgerId) {
 function sanitizeSnapshotForSharedSync(snapshot) {
   const normalized = cloneJson(snapshot)
   if (!normalized || typeof normalized !== 'object') {
-    throw new Error('帳本快照格式錯誤')
+    throw new Error(translateMessage('settings_google_sync.error.invalid_snapshot', '帳本快照格式錯誤'))
   }
   const appSettings = Array.isArray(normalized?.tables?.app_settings) ? normalized.tables.app_settings : []
   normalized.tables.app_settings = appSettings.filter((row) => !isLocalOnlyAppSettingKey(row?.key))
@@ -296,7 +297,7 @@ function buildSyncStatusPatch(mergeMeta = null) {
   })
   return {
     last_sync_status: 'conflict_resolved',
-    last_sync_error: `已安全合併 ${conflictCount} 處衝突（可於同步狀態查看）`,
+    last_sync_error: translateMessage('leftover.shared.merged_conflicts', { count: conflictCount }, '已安全合併 {count} 處衝突（可於同步狀態查看）'),
     last_conflict_count: conflictCount,
     last_merge_log: mergeLog,
   }
@@ -355,7 +356,7 @@ export async function getSharedLedgerMeta(ledgerId) {
 
 export async function setSharedLedgerMeta(ledgerId, item, patch = {}) {
   const normalizedLedgerId = String(ledgerId ?? '').trim()
-  if (!normalizedLedgerId) throw new Error('缺少帳本 ID')
+  if (!normalizedLedgerId) throw new Error(translateMessage('common.missing_ledger_id', '缺少帳本 ID'))
   const existingMeta = await getSharedLedgerMeta(normalizedLedgerId)
   const nextMeta = buildSharedMeta(item, existingMeta, patch)
   await setSetting(normalizedLedgerId, SHARED_LEDGER_META_KEY, nextMeta)
@@ -373,7 +374,7 @@ export async function clearSharedLedgerMeta(ledgerId) {
 export async function setSharedLedgerAutoSyncEnabled(ledgerId, enabled) {
   const meta = await getSharedLedgerMeta(ledgerId)
   if (!meta?.shared_ledger_id) {
-    throw new Error('此帳本尚未綁定共同帳本')
+    throw new Error(translateMessage('leftover.shared.not_bound', '此帳本尚未綁定共同帳本'))
   }
   await setSharedLedgerMeta(ledgerId, meta, {
     auto_sync_enabled: Boolean(enabled),
@@ -400,7 +401,7 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
   const normalizedSnapshot = sanitizeSnapshotForSharedSync(snapshot)
   const ledgerId = String(normalizedSnapshot?.ledger_id ?? '').trim()
   if (!ledgerId) {
-    throw new Error('共同帳本快照缺少 ledger_id')
+    throw new Error(translateMessage('leftover.shared.snapshot_missing_ledger_id', '共同帳本快照缺少 ledger_id'))
   }
 
   muteAutoSync(ledgerId)
@@ -458,7 +459,7 @@ async function replaceLocalLedgerWithSnapshot(snapshot, item, existingMeta = nul
 
 export async function publishLedgerAsShared(ledgerId, options = {}) {
   const normalizedLedgerId = String(ledgerId ?? '').trim()
-  if (!normalizedLedgerId) throw new Error('缺少帳本 ID')
+  if (!normalizedLedgerId) throw new Error(translateMessage('common.missing_ledger_id', '缺少帳本 ID'))
 
   const snapshot = sanitizeSnapshotForSharedSync(await exportLedgerJson(normalizedLedgerId))
   const result = await createSharedLedger({
@@ -484,15 +485,15 @@ export async function publishLedgerAsShared(ledgerId, options = {}) {
 
 export async function pushLocalLedgerToShared(ledgerId, options = {}) {
   const normalizedLedgerId = String(ledgerId ?? '').trim()
-  if (!normalizedLedgerId) throw new Error('缺少帳本 ID')
+  if (!normalizedLedgerId) throw new Error(translateMessage('common.missing_ledger_id', '缺少帳本 ID'))
 
   const meta = await getSharedLedgerMeta(normalizedLedgerId)
   if (!meta?.shared_ledger_id) {
-    throw new Error('此帳本尚未綁定共同帳本')
+    throw new Error(translateMessage('leftover.shared.not_bound', '此帳本尚未綁定共同帳本'))
   }
 
   if (!sharedLedgerRoleCanPush(meta.role)) {
-    const error = new Error('唯讀成員無法上傳共同帳本變更')
+    const error = new Error(translateMessage('leftover.shared.reader_cannot_push', '唯讀成員無法上傳共同帳本變更'))
     error.code = 'shared_ledger_forbidden'
     throw error
   }
@@ -507,7 +508,7 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
     if (options.force) {
       const reason = String(options.forceReason ?? options.force_reason ?? '').trim()
       if (reason.length < 8) {
-        const err = new Error('強制覆寫必須提供原因（至少 8 字）')
+        const err = new Error(translateMessage('leftover.shared.force_overwrite_reason', '強制覆寫必須提供原因（至少 8 字）'))
         err.code = 'force_reason_required'
         throw err
       }
@@ -613,11 +614,11 @@ export async function pushLocalLedgerToShared(ledgerId, options = {}) {
 
 export async function pullSharedLedgerToLocal(ledgerId, options = {}) {
   const normalizedLedgerId = String(ledgerId ?? '').trim()
-  if (!normalizedLedgerId) throw new Error('缺少帳本 ID')
+  if (!normalizedLedgerId) throw new Error(translateMessage('common.missing_ledger_id', '缺少帳本 ID'))
 
   const meta = await getSharedLedgerMeta(normalizedLedgerId)
   if (!meta?.shared_ledger_id) {
-    throw new Error('此帳本尚未綁定共同帳本')
+    throw new Error(translateMessage('leftover.shared.not_bound', '此帳本尚未綁定共同帳本'))
   }
 
   const result = await getSharedLedgerSnapshot(meta.shared_ledger_id)
@@ -765,20 +766,20 @@ function createStopSharingError(message, code) {
 async function assertStopSharingSessionReady() {
   if (needsSharedLedgerReauth()) {
     throw createStopSharingError(
-      '登入狀態已過期，請重新登入後再取消共享或離開共同帳本',
+      translateMessage('leftover.shared.unshare_reauth', '登入狀態已過期，請重新登入後再取消共享或離開共同帳本'),
       'shared_ledger_needs_reauth',
     )
   }
   const status = await ensureSharedLedgerSessionReady()
   if (status?.needsReauth) {
     throw createStopSharingError(
-      '登入狀態已過期，請重新登入後再取消共享或離開共同帳本',
+      translateMessage('leftover.shared.unshare_reauth', '登入狀態已過期，請重新登入後再取消共享或離開共同帳本'),
       'shared_ledger_needs_reauth',
     )
   }
   if (!status?.canUseApi) {
     throw createStopSharingError(
-      '目前無法連線共同帳本服務，請確認登入狀態後再試',
+      translateMessage('leftover.shared.service_unreachable', '目前無法連線共同帳本服務，請確認登入狀態後再試'),
       'shared_ledger_session_not_ready',
     )
   }
@@ -811,11 +812,11 @@ async function deleteSharedLedgerAllowingGone(sharedLedgerId) {
 
 export async function stopSharingLocalLedger(ledgerId) {
   const normalizedLedgerId = String(ledgerId ?? '').trim()
-  if (!normalizedLedgerId) throw new Error('缺少帳本 ID')
+  if (!normalizedLedgerId) throw new Error(translateMessage('common.missing_ledger_id', '缺少帳本 ID'))
 
   const meta = await getSharedLedgerMeta(normalizedLedgerId)
   if (!meta?.shared_ledger_id) {
-    throw new Error('此帳本尚未綁定共同帳本')
+    throw new Error(translateMessage('leftover.shared.not_bound', '此帳本尚未綁定共同帳本'))
   }
 
   await assertStopSharingSessionReady()
@@ -826,7 +827,7 @@ export async function stopSharingLocalLedger(ledgerId) {
 
 export async function stopSharingRemoteSharedLedger(sharedLedgerId, options = {}) {
   const normalizedSharedLedgerId = String(sharedLedgerId ?? '').trim()
-  if (!normalizedSharedLedgerId) throw new Error('缺少共同帳本 ID')
+  if (!normalizedSharedLedgerId) throw new Error(translateMessage('shared_ledger.error.missing_ledger_id', '缺少共同帳本 ID'))
 
   await assertStopSharingSessionReady()
   const result = await deleteSharedLedgerAllowingGone(normalizedSharedLedgerId)
@@ -957,7 +958,7 @@ async function syncActiveLedgerLatest(pinia) {
       await setSharedLedgerMeta(activeLedgerId, pulled?.meta ?? meta, {
         last_sync_status: pulled?.hasConflicts ? 'conflict_resolved' : 'ok',
         last_sync_error: pulled?.hasConflicts
-          ? `已安全合併 ${pulled.conflictCount ?? 0} 處衝突（可於同步狀態查看）`
+          ? translateMessage('leftover.shared.merged_conflicts', { count: pulled.conflictCount ?? 0 }, '已安全合併 {count} 處衝突（可於同步狀態查看）')
           : '',
       })
     }
@@ -991,17 +992,17 @@ export function scheduleActiveSharedLedgerAutoSync(pinia, delayMs = AUTO_PUSH_DE
   autoSyncTimer = window.setTimeout(async () => {
     autoSyncTimer = null
     if (!isOnline()) {
-      await markActiveLedgerSyncGate(pinia, 'paused_offline', '目前離線，連上網路後將自動重試')
+      await markActiveLedgerSyncGate(pinia, 'paused_offline', translateMessage('common.shared_offline_retry', '目前離線，連上網路後將自動重試'))
       return
     }
     const auth = await ensureSharedLedgerSessionReady()
     if (!auth.canUseApi || !hasSharedLedgerMembershipAccess()) {
       if (auth.needsReauth) {
-        await markActiveLedgerSyncGate(pinia, 'paused_reauth', '需重新登入後才能同步共同帳本')
+        await markActiveLedgerSyncGate(pinia, 'paused_reauth', translateMessage('common.shared_relogin', '需重新登入後才能同步共同帳本'))
       } else if (!hasSharedLedgerMembershipAccess() && auth.canUseApi) {
-        await markActiveLedgerSyncGate(pinia, 'paused_membership', '需有效會員才能同步共同帳本')
+        await markActiveLedgerSyncGate(pinia, 'paused_membership', translateMessage('common.shared_members_only', '需有效會員才能同步共同帳本'))
       } else if (auth.restoring || auth.hasProfile || auth.hasRestoreCandidate) {
-        await markActiveLedgerSyncGate(pinia, 'paused_session', '登入狀態恢復中，稍後自動重試同步')
+        await markActiveLedgerSyncGate(pinia, 'paused_session', translateMessage('common.shared_login_restoring', '登入狀態恢復中，稍後自動重試同步'))
       }
       return
     }

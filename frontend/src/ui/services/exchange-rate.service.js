@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
+import { translateMessage } from '@/ui/services/i18n.service.js'
 import {
   convertAmountMinorByRate,
   resolveCrossExchangeRate,
@@ -26,7 +27,7 @@ const EXCHANGE_RATE_PROXY_ENDPOINTS = resolveExchangeRateProxyEndpoints(import.m
 
 function ensureLedgerId(ledgerId) {
   if (!ledgerId) {
-    throw new Error('缺少帳本 ID')
+    throw new Error(translateMessage('common.missing_ledger_id', '缺少帳本 ID'))
   }
 }
 
@@ -209,7 +210,7 @@ function parseCbcRatesPayload(payload) {
 
   const latestRow = readLatestValidRow(rows)
   if (!latestRow) {
-    throw new Error('央行匯率資料為空')
+    throw new Error(translateMessage('error.fx_empty_cbc', '央行匯率資料為空'))
   }
 
   const rates = { USD: 1 }
@@ -263,7 +264,7 @@ function parseTaifexRatesPayload(payload) {
   const rows = Array.isArray(payload) ? payload : []
   const latestRow = readLatestValidTaifexRow(rows)
   if (!latestRow) {
-    throw new Error('TAIFEX 匯率資料為空')
+    throw new Error(translateMessage('error.fx_empty_taifex', 'TAIFEX 匯率資料為空'))
   }
 
   const rates = { USD: 1 }
@@ -454,7 +455,7 @@ function parseExchangeRateSnapshotPayload(payload) {
   if (isLikelyCurrencyApiPayload(payload)) return parseCurrencyApiRatesPayload(payload)
   if (isLikelyFrankfurterPayload(payload)) return parseFrankfurterRatesPayload(payload)
   if (isLikelyGenericUsdBasePayload(payload)) return parseGenericUsdBasePayload(payload)
-  throw new Error('匯率來源回應格式不支援')
+  throw new Error(translateMessage('error.fx_unsupported_format', '匯率來源回應格式不支援'))
 }
 
 function withTimeout(task, timeoutMs, timeoutMessage) {
@@ -474,9 +475,9 @@ function withTimeout(task, timeoutMs, timeoutMessage) {
 
 function normalizeFetchErrorMessage(error) {
   const message = String(error?.message ?? error ?? '').trim()
-  if (!message) return '未知錯誤'
+  if (!message) return translateMessage('common.unknown_error', '未知錯誤')
   if (/failed to fetch|networkerror|load failed|fetch failed|network request failed/i.test(message)) {
-    return '網路連線失敗或服務無回應'
+    return translateMessage('common.network_or_service_failed', '網路連線失敗或服務無回應')
   }
   return message
 }
@@ -494,7 +495,7 @@ async function fetchJsonPayload(url) {
       cache: 'no-store',
     }),
     FETCH_TIMEOUT_MS,
-    '匯率同步逾時',
+    translateMessage('error.fx_sync_timeout', '匯率同步逾時'),
   )
 
   if (!response.ok) {
@@ -503,12 +504,12 @@ async function fetchJsonPayload(url) {
 
   const text = await response.text()
   if (!text.trim()) {
-    throw new Error('回應為空')
+    throw new Error(translateMessage('error.empty_response', '回應為空'))
   }
   try {
     return JSON.parse(text)
   } catch {
-    throw new Error('回應格式錯誤（非 JSON）')
+    throw new Error(translateMessage('error.invalid_json_response', '回應格式錯誤（非 JSON）'))
   }
 }
 
@@ -533,7 +534,7 @@ async function tryFetchParsedSnapshot(url, sourceLabel, errors) {
     const payload = await fetchJsonPayloadWithRetry(url, sourceLabel)
     return parseExchangeRateSnapshotPayload(payload)
   } catch (error) {
-    errors.push(String(error?.message ?? '').trim() || `${sourceLabel}：未知錯誤`)
+    errors.push(String(error?.message ?? '').trim() || translateMessage('error.source_unknown', { source: sourceLabel }, '{source}：未知錯誤'))
     return null
   }
 }
@@ -544,7 +545,7 @@ function buildExchangeRateSourceList() {
     const url = appendFileNameQuery(endpoint, CBC_FILE_CODE_DAILY)
     return {
       url,
-      label: `代理 ${url}`,
+      label: translateMessage('leftover.fx.source_proxy', { url }, '代理 {url}'),
     }
   })
 
@@ -553,7 +554,7 @@ function buildExchangeRateSourceList() {
     { url: TAIFEX_DAILY_FX_API_URL, label: `TAIFEX ${TAIFEX_DAILY_FX_API_URL}` },
     { url: CURRENCY_API_PAGES_USD_API_URL, label: `Currency API ${CURRENCY_API_PAGES_USD_API_URL}` },
     { url: CURRENCY_API_JSDELIVR_USD_API_URL, label: `Currency API CDN ${CURRENCY_API_JSDELIVR_USD_API_URL}` },
-    { url: cbcUrl, label: `央行 ${CBC_API_URL}` },
+    { url: cbcUrl, label: translateMessage('leftover.fx.source_cbc', { url: CBC_API_URL }, '央行 {url}') },
     { url: FRANKFURTER_USD_API_URL, label: `Frankfurter ${FRANKFURTER_USD_API_URL}` },
   ]
 
@@ -592,10 +593,8 @@ async function fetchExchangeRatePayload() {
   }
 
   const message = errors.join(' | ')
-  if (/網路連線失敗或服務無回應/i.test(message)) {
-    throw new Error(`匯率同步失敗：${message}`)
-  }
-  throw new Error(`匯率同步失敗：${message || '未知錯誤'}`)
+  const failedMessage = message || translateMessage('common.unknown_error', '未知錯誤')
+  throw new Error(translateMessage('error.fx_sync_failed', { message: failedMessage }, '匯率同步失敗：{message}'))
 }
 
 function hasUsableHistoricalRates(snapshot) {

@@ -9,7 +9,7 @@
       <header class="row">
         <h3>{{ pageTitle }}</h3>
         <button class="btn primary" :disabled="!canSave || saving || deleting" @click="submitRule">
-          {{ saving ? '儲存中...' : t('common.save') }}
+          {{ saving ? t('settings_ledger_detail.saving') : t('common.save') }}
         </button>
       </header>
 
@@ -76,18 +76,18 @@
             </button>
           </div>
         </div>
-        <button class="btn addon-add-btn" @click="addAddonRow">新增附加項目</button>
+        <button class="btn addon-add-btn" @click="addAddonRow">{{ t('common.add_addon_item') }}</button>
       </div>
 
       <div v-if="isEditMode" class="row action-row">
         <button class="btn danger" :disabled="saving || deleting" @click="removeCurrentRule">
-          {{ deleting ? '刪除中...' : t('common.delete') }}
+          {{ deleting ? t('settings_bank_sync.actions.deleting') : t('common.delete') }}
         </button>
       </div>
     </article>
 
     <article v-else class="card panel">
-      <p class="muted">找不到這條規則，可能已被刪除。</p>
+      <p class="muted">{{ t('common.rule_not_found') }}</p>
     </article>
   </section>
 </template>

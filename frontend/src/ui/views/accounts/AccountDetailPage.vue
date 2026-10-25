@@ -1,7 +1,7 @@
 <template>
   <section class="stack">
     <header class="row page-header">
-      <h2 class="page-title">{{ isEditMode ? '編輯帳戶' : '帳戶明細' }}</h2>
+      <h2 class="page-title">{{ isEditMode ? t('common.edit_account') : t('common.account_detail') }}</h2>
       <button v-if="!isEditMode" class="btn back-btn" type="button" @click="goBack">{{ t('common.back') }}</button>
       <RouterLink v-else class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
     </header>
@@ -13,63 +13,63 @@
           <span>{{ accountName }}</span>
         </h3>
         <button v-if="isEditMode" class="btn primary" :disabled="!canSave || saving" @click="saveProfile">
-          {{ saving ? '儲存中...' : '儲存變更' }}
+          {{ saving ? t('settings_ledger_detail.saving') : t('settings_ledger_detail.save_changes') }}
         </button>
       </header>
 
       <template v-if="isEditMode">
         <label class="field">
-          帳戶名稱
-          <input v-model="editName" class="input" type="text" maxlength="40" placeholder="請輸入帳戶名稱" />
+          {{ t('common.account_name') }}
+          <input v-model="editName" class="input" type="text" maxlength="40" :placeholder="t('common.please_enter_account_name')" />
         </label>
 
         <div class="field">
-          <span>帳戶 Icon</span>
+          <span>{{ t('common.account_icon') }}</span>
           <button class="icon-picker-btn" type="button" @click.stop.prevent="openIconPicker">
             <font-awesome-icon :icon="editIcon || defaultAccountIcon" />
-            <span>選擇 icon</span>
+            <span>{{ t('common.choose_icon') }}</span>
           </button>
         </div>
 
         <label v-if="!isCreditAccount" class="field">
-          所屬群組
-          <CustomSelect v-model="editGroupId" :options="groupOptions" placeholder="請選擇群組" />
+          {{ t('common.belonging_group') }}
+          <CustomSelect v-model="editGroupId" :options="groupOptions" :placeholder="t('common.select_group')" />
         </label>
-        <p v-else class="muted">信用卡不掛資產母分類；群組僅供內部儲存。</p>
+        <p v-else class="muted">{{ t('account.credit_no_group_hint') }}</p>
 
         <label class="field">
-          帳號類型
-          <CustomSelect v-model="editAccountKind" :options="accountKindOptions" placeholder="請選擇帳號類型" />
+          {{ t('common.account_type') }}
+          <CustomSelect v-model="editAccountKind" :options="accountKindOptions" :placeholder="t('common.please_select_type')" />
         </label>
 
         <label class="field">
-          帳戶幣別
-          <CustomSelect v-model="editCurrencyCode" :options="currencyOptions" placeholder="請選擇幣別" />
+          {{ t('welcome.account_currency') }}
+          <CustomSelect v-model="editCurrencyCode" :options="currencyOptions" :placeholder="t('common.please_select_currency')" />
         </label>
 
         <label v-if="editAccountKind === 'cash'" class="field">
-          預設資金（元，可小數）
+          {{ t('account.opening_amount') }}
           <input v-model="editOpening" class="input" type="number" step="0.01" />
         </label>
         <label v-else class="field">
-          目前欠款（元，可小數）
+          {{ t('account.current_debt') }}
           <input v-model="editCurrentDebt" class="input" type="number" min="0" step="0.01" />
         </label>
         <label v-if="editAccountKind === 'credit'" class="field">
-          信用額度（元，可小數）
+          {{ t('account.credit_limit') }}
           <input v-model="editCreditLimit" class="input" type="number" min="0" step="0.01" />
         </label>
         <label v-if="editAccountKind === 'credit'" class="field">
-          還款提醒日（每月 1-31）
-          <input v-model="editRepaymentReminderDay" class="input" type="number" min="1" max="31" step="1" placeholder="例如 15" />
+          {{ t('account.repay_day') }}
+          <input v-model="editRepaymentReminderDay" class="input" type="number" min="1" max="31" step="1" :placeholder="t('common.example_15')" />
         </label>
         <label v-if="editAccountKind === 'credit'" class="field">
           {{ t('credit_cards_page.close_day') }}（1-31）
-          <input v-model="editStatementCloseDay" class="input" type="number" min="1" max="31" step="1" placeholder="例如 25" />
+          <input v-model="editStatementCloseDay" class="input" type="number" min="1" max="31" step="1" :placeholder="t('common.example_25')" />
         </label>
         <label v-if="editAccountKind === 'credit'" class="field">
           {{ t('credit_cards_page.due_day') }}（1-31）
-          <input v-model="editPaymentDueDay" class="input" type="number" min="1" max="31" step="1" placeholder="例如 15" />
+          <input v-model="editPaymentDueDay" class="input" type="number" min="1" max="31" step="1" :placeholder="t('common.example_15')" />
         </label>
         <div class="field">
           <span>{{ t('account.include_in_assets_label') }}</span>
@@ -105,12 +105,12 @@
             <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
           </button>
         </div>
-        <p v-if="openingInvalid" class="error-text">{{ editAccountKind === 'credit' ? '目前欠款格式錯誤' : '預設資金格式錯誤' }}</p>
-        <p v-if="creditLimitInvalid" class="error-text">信用額度格式錯誤</p>
-        <p v-if="repaymentReminderDayInvalid" class="error-text">還款提醒日需介於 1 到 31</p>
+        <p v-if="openingInvalid" class="error-text">{{ editAccountKind === 'credit' ? t('common.current_debt_invalid') : t('account.opening_invalid') }}</p>
+        <p v-if="creditLimitInvalid" class="error-text">{{ t('common.credit_limit_invalid') }}</p>
+        <p v-if="repaymentReminderDayInvalid" class="error-text">{{ t('common.repay_day_range') }}</p>
         <div class="row action-row">
           <button class="btn danger" :disabled="deleting" @click="removeAccountRecord">
-            {{ deleting ? '處理中...' : '刪除/封存帳戶' }}
+            {{ deleting ? t('common.processing') : t('account.delete_archive') }}
           </button>
         </div>
       </template>
@@ -118,31 +118,31 @@
       <template v-else>
         <div class="detail-grid">
           <div class="detail-row">
-            <small class="muted">所屬群組</small>
+            <small class="muted">{{ t('common.belonging_group') }}</small>
             <span>{{ accountGroupName }}</span>
           </div>
           <div class="detail-row">
-            <small class="muted">帳號類型</small>
+            <small class="muted">{{ t('common.account_type') }}</small>
             <span>{{ accountKindLabel }}</span>
           </div>
           <div class="detail-row">
-            <small class="muted">帳戶幣別</small>
+            <small class="muted">{{ t('welcome.account_currency') }}</small>
             <span>{{ accountCurrencyCode }}</span>
           </div>
           <div v-if="isCreditAccount" class="detail-row">
-            <small class="muted">目前欠款</small>
+            <small class="muted">{{ t('account.current_debt_label') }}</small>
             <MoneyText :value-minor="currentCreditDebtMinor" :currency="accountCurrencyCode" />
           </div>
           <div v-if="isCreditAccount" class="detail-row">
-            <small class="muted">信用額度</small>
+            <small class="muted">{{ t('credit_cards_page.limit') }}</small>
             <MoneyText :value-minor="accountCreditLimitMinor" :currency="accountCurrencyCode" />
           </div>
           <div v-if="isCreditAccount" class="detail-row">
-            <small class="muted">可用額度</small>
+            <small class="muted">{{ t('account.available_credit') }}</small>
             <MoneyText :value-minor="availableCreditMinor" :currency="accountCurrencyCode" />
           </div>
           <div v-if="isCreditAccount" class="detail-row">
-            <small class="muted">還款提醒日</small>
+            <small class="muted">{{ t('account.repay_day_label') }}</small>
             <span>{{ repaymentReminderDayLabel }}</span>
           </div>
           <div v-if="isCreditAccount" class="detail-row" data-testid="account-credit-close-day">
@@ -172,17 +172,17 @@
 
     <article class="card panel">
       <header class="row">
-        <h3>交易紀錄</h3>
-        <button class="btn" :disabled="refreshing" @click="refreshTransactions">刷新</button>
+        <h3>{{ t('home_tx.title') }}</h3>
+        <button class="btn" :disabled="refreshing" @click="refreshTransactions">{{ t('common.refresh') }}</button>
       </header>
-      <p class="muted">共 {{ accountTransactionTotal }} 筆交易，目前顯示第 {{ accountTransactionPage }} / {{ accountTransactionTotalPages }} 頁</p>
+      <p class="muted">{{ t('account.tx_page_status', { total: accountTransactionTotal, page: accountTransactionPage, pages: accountTransactionTotalPages }) }}</p>
       <ul class="tx-list">
         <li v-for="group in groupedAccountTransactions" :key="group.dateKey" class="tx-date-group">
           <div class="tx-date-head">
             <span>{{ group.label }}</span>
             <span class="tx-date-total">
-              <small>收 <MoneyText :value-minor="group.incomeMinor" :currency="accountCurrencyCode" tone="income" /></small>
-              <small>支 <MoneyText :value-minor="group.expenseMinor" :currency="accountCurrencyCode" tone="expense" /></small>
+              <small>{{ t('home_tx.date_income_short') }} <MoneyText :value-minor="group.incomeMinor" :currency="accountCurrencyCode" tone="income" /></small>
+              <small>{{ t('home_tx.date_expense_short') }} <MoneyText :value-minor="group.expenseMinor" :currency="accountCurrencyCode" tone="expense" /></small>
             </span>
           </div>
           <ul class="tx-day-list">
@@ -207,7 +207,7 @@
               <div class="tx-side">
                 <MoneyText :value-minor="tx.amount_minor" :currency="tx.account_currency_code" :tone="tx.type" />
                 <small class="tx-balance">
-                  餘額 <MoneyText :value-minor="tx.balanceAfterMinor" :currency="accountCurrencyCode" />
+                  {{ t('settings_bank_sync.review.balance') }} <MoneyText :value-minor="tx.balanceAfterMinor" :currency="accountCurrencyCode" />
                 </small>
                 <small
                   v-if="showAddonDeltaTag(tx)"
@@ -220,26 +220,26 @@
             </li>
           </ul>
         </li>
-        <li v-if="groupedAccountTransactions.length === 0" class="muted">目前沒有交易紀錄</li>
+        <li v-if="groupedAccountTransactions.length === 0" class="muted">{{ t('savings_jar.activity.empty') }}</li>
       </ul>
 
-      <nav v-if="accountTransactionTotal > 0" class="pagination-bar" aria-label="帳戶交易分頁">
-        <button class="btn" :disabled="!canGoPreviousAccountTransactionPage" @click="goPreviousAccountTransactionPage">上一頁</button>
+      <nav v-if="accountTransactionTotal > 0" class="pagination-bar" :aria-label="t('account.tx_pagination')">
+        <button class="btn" :disabled="!canGoPreviousAccountTransactionPage" @click="goPreviousAccountTransactionPage">{{ t('common.previous_page') }}</button>
         <span class="muted page-status">
-          第 {{ accountTransactionPageStart }}-{{ accountTransactionPageEnd }} 筆 / 共 {{ accountTransactionTotal }} 筆
+          {{ t('common.page_range', { start: accountTransactionPageStart, end: accountTransactionPageEnd, total: accountTransactionTotal }) }}
         </span>
-        <button class="btn" :disabled="!canGoNextAccountTransactionPage" @click="goNextAccountTransactionPage">下一頁</button>
+        <button class="btn" :disabled="!canGoNextAccountTransactionPage" @click="goNextAccountTransactionPage">{{ t('common.next_page') }}</button>
       </nav>
 
     </article>
 
     <AppDialog
       :open="deleteConfirmOpen"
-      title="確認刪除/封存"
-      :message="`確定要刪除/封存「${account?.name ?? ''}」？`"
-      confirm-text="確認刪除"
+      :title="t('common.confirm_delete_archive')"
+      :message="t('account.confirm_delete_name', { name: account?.name ?? '' })"
+      :confirm-text="t('common.confirm_delete')"
       :loading="deleting"
-      loading-text="處理中..."
+      :loading-text="t('common.processing')"
       @close="closeDeleteConfirm"
       @confirm="confirmRemoveAccountRecord"
     />
@@ -308,7 +308,7 @@ function goBack() {
   void goBackOrFallback(router, backLink.value)
 }
 
-const accountName = computed(() => account.value?.name || '帳戶')
+const accountName = computed(() => account.value?.name || t('common.account'))
 const accountCurrencyCode = computed(() => normalizeCurrencyCode(account.value?.currency_code, 'TWD'))
 const accountGroupName = computed(() => {
   const groupId = account.value?.group_id
@@ -328,7 +328,7 @@ const accountIncludeInGroupStatisticsLabel = computed(() => (
     ? t('account.include_in_group_statistics_on')
     : t('account.include_in_group_statistics_off')
 ))
-const accountKindLabel = computed(() => (isCreditAccount.value ? '信用帳戶' : '現金帳戶'))
+const accountKindLabel = computed(() => (isCreditAccount.value ? t('common.credit_account') : t('common.cash_account')))
 const accountCreditLimitMinor = computed(() => Math.max(0, Number(account.value?.credit_limit_minor ?? 0)))
 const currentCreditDebtMinor = computed(() => Math.max(0, Number(currentAccountBalanceMinor.value ?? 0) * -1))
 const availableCreditMinor = computed(() => Math.max(0, accountCreditLimitMinor.value - currentCreditDebtMinor.value))
@@ -397,8 +397,8 @@ const groupOptions = computed(() => {
   }))
 })
 const accountKindOptions = computed(() => ([
-  { value: 'cash', label: '現金帳戶' },
-  { value: 'credit', label: '信用帳戶' },
+  { value: 'cash', label: t('common.cash_account') },
+  { value: 'credit', label: t('common.credit_account') },
 ]))
 const canSave = computed(() => {
   if (!isEditMode.value || !account.value) return false
@@ -539,7 +539,7 @@ async function openIconPicker() {
       },
     })
   } catch (error) {
-    uiStore.pushToast(error?.message ?? '開啟 icon 選擇器失敗', 'error')
+    uiStore.pushToast(error?.message ?? t('settings_category_page.toast.open_icon_failed'), 'error')
   }
 }
 
@@ -563,10 +563,10 @@ async function persistPickedIcon(icon) {
   iconSaving.value = true
   try {
     await accountStore.updateAccountIcon(accountId.value, normalized)
-    uiStore.pushToast('帳戶 icon 已更新')
+    uiStore.pushToast(t('account.icon_updated'))
   } catch (error) {
     editIcon.value = current
-    uiStore.pushToast(error?.message ?? '更新帳戶 icon 失敗', 'error')
+    uiStore.pushToast(error?.message ?? t('account.icon_update_failed'), 'error')
   } finally {
     iconSaving.value = false
   }
@@ -612,10 +612,10 @@ async function saveProfile() {
       includeInAssets: editIncludeInAssets.value,
       includeInGroupStatistics: editIncludeInGroupStatistics.value,
     })
-    uiStore.pushToast('帳戶資料已更新')
+    uiStore.pushToast(t('account.data_updated'))
     await router.push('/assets/accounts')
   } catch (error) {
-    uiStore.pushToast(error.message ?? '更新帳戶資料失敗', 'error')
+    uiStore.pushToast(error.message ?? t('account.data_update_failed'), 'error')
   } finally {
     saving.value = false
   }
@@ -636,11 +636,11 @@ async function confirmRemoveAccountRecord() {
   deleting.value = true
   try {
     await accountStore.removeAccount(accountId.value)
-    uiStore.pushToast('帳戶已處理')
+    uiStore.pushToast(t('common.account_processed'))
     deleteConfirmOpen.value = false
     await router.push('/assets/accounts')
   } catch (error) {
-    uiStore.pushToast(error.message ?? '刪除帳戶失敗', 'error')
+    uiStore.pushToast(error.message ?? t('account.delete_failed'), 'error')
   } finally {
     deleting.value = false
   }
@@ -676,8 +676,8 @@ function showAddonDeltaTag(tx) {
 }
 
 function labelOfTransaction(tx) {
-  if (!tx) return '結餘'
-  if (tx.origin_type === 'reimbursement') return '報銷'
+  if (!tx) return t('transaction_search.label.adjustment')
+  if (tx.origin_type === 'reimbursement') return t('transaction_search.label.reimbursement')
   if (tx.origin_type === 'loan_payment') return loanTransactionLabel(tx)
   const systemLabel = getSystemTransactionLabel(tx)
   if (systemLabel) return systemLabel
@@ -685,17 +685,17 @@ function labelOfTransaction(tx) {
   if (directName) return directName
   const category = categoryStore.categories.find((item) => item.id === tx.category_id)
   if (category?.name) return category.name
-  if (tx.type === 'expense') return '支出'
-  if (tx.type === 'income') return '收入'
-  if (tx.type === 'transfer') return '轉帳'
-  return '結餘'
+  if (tx.type === 'expense') return t('transaction.type.expense')
+  if (tx.type === 'income') return t('transaction.type.income')
+  if (tx.type === 'transfer') return t('transaction.type.transfer')
+  return t('transaction_search.label.adjustment')
 }
 
 function loanTransactionLabel(tx) {
   const loanDirection = loanStore.items.find((item) => item.id === tx.external_ref_id)?.direction
-  if (loanDirection === 'lend') return tx.type === 'income' ? '收回' : '借出'
-  if (loanDirection === 'borrow') return tx.type === 'expense' ? '歸還' : '借入'
-  return tx.type === 'income' ? '收回' : '借出'
+  if (loanDirection === 'lend') return tx.type === 'income' ? t('loans.collect') : t('loans.lend')
+  if (loanDirection === 'borrow') return tx.type === 'expense' ? t('loans.repay') : t('loans.borrow')
+  return tx.type === 'income' ? t('loans.collect') : t('loans.lend')
 }
 
 function categoryIconOfTransaction(tx) {
@@ -775,8 +775,8 @@ function parseRepaymentReminderDay(value) {
 
 function formatRepaymentReminderDay(value) {
   const day = parseRepaymentReminderDay(value)
-  if (day == null) return '未設定'
-  return `每月 ${day} 日`
+  if (day == null) return t('savings_jar.auto_save.status.off')
+  return t('account.monthly_day', { day })
 }
 </script>
 

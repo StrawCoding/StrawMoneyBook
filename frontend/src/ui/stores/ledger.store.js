@@ -10,7 +10,7 @@ import {
 import { applyLedgerBudgetPeriodSettings } from '@/core/services/budget.service'
 import { ensureLedgerDefaults } from '@/core/services/seed.service'
 import { MembershipGate } from '@/core/domain/membership-gate.js'
-import { getCurrentLocale } from '@/ui/services/i18n.service'
+import { getCurrentLocale, translateMessage } from '@/ui/services/i18n.service'
 import {
   loadLedgerScopedStores,
   resetLedgerScopedStores,
@@ -103,7 +103,7 @@ export const useLedgerStore = defineStore('ledger', {
         return
       }
       if (MembershipGate.isFreeTier() && this.ledgers.length > 0 && nextLedgerId !== this.ledgers[0].id) {
-        throw new Error('免費版僅可使用 1 個帳本')
+        throw new Error(translateMessage('common.free_ledger_limit', '免費版僅可使用 1 個帳本'))
       }
       if (!force && nextLedgerId === this.activeLedgerId) return
       this.activeLedgerId = nextLedgerId

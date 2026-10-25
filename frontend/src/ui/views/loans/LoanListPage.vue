@@ -1,25 +1,25 @@
 <template>
   <section class="stack">
     <header class="row page-head">
-      <h2>借貸清單</h2>
+      <h2>{{ t('loans.list_title') }}</h2>
       <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
     </header>
 
     <article class="card panel summary">
       <header class="row panel-head">
-        <h3>借貸清單</h3>
-        <button class="btn primary" @click="openCreateSheet">新增借貸</button>
+        <h3>{{ t('loans.list_title') }}</h3>
+        <button class="btn primary" @click="openCreateSheet">{{ t('loans.add') }}</button>
       </header>
       <div class="row">
-        <span class="muted">進行中</span>
+        <span class="muted">{{ t('loans.active') }}</span>
         <span class="badge">{{ loanStore.summary.activeCount }}</span>
       </div>
       <div class="row">
-        <span class="muted">應收</span>
+        <span class="muted">{{ t('loans.receivable') }}</span>
         <MoneyText :value-minor="loanStore.summary.totalReceivable" />
       </div>
       <div class="row">
-        <span class="muted">應付</span>
+        <span class="muted">{{ t('loans.payable') }}</span>
         <MoneyText :value-minor="loanStore.summary.totalPayable" />
       </div>
     </article>
@@ -27,12 +27,12 @@
     <article class="card panel">
       <div class="row list-header">
         <div class="tab-row">
-          <button class="btn" :class="{ primary: tab === 'lend' }" @click="tab = 'lend'">借出</button>
-          <button class="btn" :class="{ primary: tab === 'borrow' }" @click="tab = 'borrow'">借入</button>
+          <button class="btn" :class="{ primary: tab === 'lend' }" @click="tab = 'lend'">{{ t('loans.lend') }}</button>
+          <button class="btn" :class="{ primary: tab === 'borrow' }" @click="tab = 'borrow'">{{ t('loans.borrow') }}</button>
         </div>
         <div class="row list-actions">
           <button class="btn end-btn" :class="{ primary: showFinished }" @click="showFinished = !showFinished">
-            {{ showFinished ? '進行中' : '已結束' }}
+            {{ showFinished ? t('loans.active') : t('loans.finished') }}
           </button>
         </div>
       </div>
@@ -40,47 +40,47 @@
       <ul v-if="counterpartyGroups.length" class="counterparty-list">
         <li v-for="group in counterpartyGroups" :key="group.key">
           <button class="counterparty-btn" @click="openCounterpartyDetail(group.name)">
-            <span class="counterparty-name">{{ group.name }}</span>
+            <span class="counterparty-name">{{ displayCounterpartyName(group.name) }}</span>
             <span class="row counterparty-meta">
-              <span class="muted">{{ group.items.length }} 筆</span>
+              <span class="muted">{{ t('common.count_items', { count: group.items.length }) }}</span>
               <MoneyText :value-minor="group.remainingMinor" />
             </span>
           </button>
         </li>
       </ul>
-      <p v-else class="muted">{{ showFinished ? '目前沒有已結束借貸' : '目前沒有進行中借貸' }}</p>
+      <p v-else class="muted">{{ showFinished ? t('loans.empty_finished') : t('loans.empty_active') }}</p>
     </article>
 
     <InputBottomSheet
       :open="createOpen"
-      title="新增借貸"
+      :title="t('loans.add')"
       :body-class="'stack form-wrap'"
       :sheet-class="'sheet'"
       :show-footer="true"
       @close="closeCreateSheet"
     >
       <label>
-        借貸方向
+        {{ t('loans.direction') }}
         <CustomSelect v-model="createForm.direction" :options="directionOptions" />
       </label>
 
       <label>
-        對象名稱
+        {{ t('loans.counterparty_name') }}
         <input v-model="createForm.counterpartyName" class="input" />
       </label>
 
       <label>
-        本金（元）
+        {{ t('loans.principal_yuan') }}
         <input v-model.number="createForm.principalMajor" class="input" type="number" min="0" step="1" />
       </label>
 
       <label>
-        預設利息（元，可選）
+        {{ t('loans.preset_interest_optional') }}
         <input v-model.number="createForm.interestMajor" class="input" type="number" min="0" step="1" />
       </label>
 
       <div class="field-block">
-        <span class="field-label">開始日期</span>
+        <span class="field-label">{{ t('loans.start_date') }}</span>
         <div class="date-picker-wrap">
           <DateTimePickerField
             :date="createForm.startDate"
@@ -95,7 +95,7 @@
       </div>
 
       <div class="field-block">
-        <span class="field-label">到期日（可選）</span>
+        <span class="field-label">{{ t('loans.due_optional') }}</span>
         <div class="row due-date-row">
           <div class="due-picker-wrap">
             <DateTimePickerField
@@ -108,23 +108,23 @@
               @update:minute="pickCreateDueMinute"
             />
           </div>
-          <button class="btn mini-btn" type="button" @click="clearCreateDueDate">清除</button>
+          <button class="btn mini-btn" type="button" @click="clearCreateDueDate">{{ t('common.clear') }}</button>
         </div>
       </div>
 
       <label>
-        建立入帳帳戶
+        {{ t('loans.setup_account') }}
         <CustomSelect v-model="createForm.accountId" :groups="accountStore.groupedRegularAccounts" />
       </label>
 
       <label>
-        備註
+        {{ t('common.note') }}
         <textarea v-model="createForm.note" class="textarea" rows="2" />
       </label>
 
       <template #footer>
-        <button class="btn" @click="closeCreateSheet">取消</button>
-        <button class="btn primary" @click="createLoan">儲存</button>
+        <button class="btn" @click="closeCreateSheet">{{ t('common.cancel') }}</button>
+        <button class="btn primary" @click="createLoan">{{ t('common.save') }}</button>
       </template>
     </InputBottomSheet>
   </section>
@@ -163,10 +163,10 @@ const { t } = useI18n()
 const createOpen = ref(false)
 const tab = ref('lend')
 const showFinished = ref(false)
-const directionOptions = [
-  { value: 'lend', label: '借出（應收）' },
-  { value: 'borrow', label: '借入（應付）' },
-]
+const directionOptions = computed(() => [
+  { value: 'lend', label: t('loans.lend_receivable') },
+  { value: 'borrow', label: t('loans.borrow_payable') },
+])
 
 const createForm = reactive({
   direction: 'lend',
@@ -256,6 +256,10 @@ watch([tab, showFinished], ([nextTab, nextShowFinished]) => {
 
 function normalizeCounterpartyName(rawName) {
   return String(rawName ?? '').trim() || '未命名對象'
+}
+
+function displayCounterpartyName(name) {
+  return name === '未命名對象' ? t('common.unnamed_counterparty') : name
 }
 
 function openCounterpartyDetail(name) {
@@ -356,10 +360,10 @@ async function createLoan() {
 
     await Promise.all([transactionStore.loadRecent(), budgetStore.loadMonth(budgetStore.monthKey), accountStore.load()])
 
-    uiStore.pushToast('借貸已建立')
+    uiStore.pushToast(t('loans.created'))
     closeCreateSheet()
   } catch (error) {
-    uiStore.pushToast(error.message ?? '建立借貸失敗', 'error')
+    uiStore.pushToast(error.message ?? t('loans.create_failed'), 'error')
   }
 }
 

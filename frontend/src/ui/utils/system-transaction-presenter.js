@@ -1,3 +1,5 @@
+import { translateMessage } from '@/ui/services/i18n.service.js'
+
 function textOf(value) {
   return String(value ?? '').trim()
 }
@@ -9,11 +11,16 @@ function isSecuritySettlementTx(tx) {
   const origin = textOf(tx?.origin_type)
   if (origin === 'security_settlement') return true
   const note = textOf(tx?.note)
-  if (note.startsWith('證券交割')) return true
+  const settlementLabel = translateMessage('system_tx.security_settlement', '證券交割')
+  if (note.startsWith('證券交割') || note.startsWith(settlementLabel)) return true
   const ref = textOf(tx?.external_ref_id)
   if (ref.startsWith('stx_')) return true
   const categoryName = textOf(tx?.category_name)
-  if (SECURITY_PNL_NAMES.has(categoryName)) return true
+  if (
+    SECURITY_PNL_NAMES.has(categoryName)
+    || categoryName === translateMessage('system_tx.investment_pl', '投資損益')
+    || categoryName === translateMessage('system_tx.investment_pl_security', '投資損益（證券）')
+  ) return true
   return false
 }
 
@@ -22,7 +29,10 @@ export function getSystemTransactionType(tx) {
   const externalRefId = textOf(tx?.external_ref_id)
   const note = textOf(tx?.note)
 
-  if (categoryName === '退款' || note.startsWith('退款：')) {
+  const refundLabel = translateMessage('common.refund', '退款')
+  const refundPrefix = translateMessage('common.refund_prefix', '退款：')
+  const advanceNote = translateMessage('system_tx.reimbursement_advance', '報銷代收')
+  if (categoryName === '退款' || categoryName === refundLabel || note.startsWith('退款：') || note.startsWith(refundPrefix)) {
     return 'refund'
   }
 
@@ -30,7 +40,9 @@ export function getSystemTransactionType(tx) {
     categoryName === '代收' ||
     externalRefId.startsWith('radv') ||
     note === '報銷代收' ||
-    note.startsWith('報銷代收\n')
+    note === advanceNote ||
+    note.startsWith('報銷代收\n') ||
+    note.startsWith(`${advanceNote}\n`)
   ) {
     return 'advance'
   }
@@ -45,9 +57,9 @@ export function getSystemTransactionType(tx) {
 
 export function getSystemTransactionLabel(tx) {
   const type = getSystemTransactionType(tx)
-  if (type === 'refund') return '退款'
-  if (type === 'advance') return '代收'
-  if (type === 'security_principal') return '證券本金'
+  if (type === 'refund') return translateMessage('common.refund', '退款')
+  if (type === 'advance') return translateMessage('assets_page.advance_label', '代收')
+  if (type === 'security_principal') return translateMessage('system_tx.security_principal', '證券本金')
   return ''
 }
 

@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 借貸、報銷、帳戶、交易搜尋與相關 UI 錯誤改走正式 i18n key（zh-TW／en／ja），不再只靠繁中原文與 runtime DOM 對照。
+
 ---
 
 ## v1.5.11

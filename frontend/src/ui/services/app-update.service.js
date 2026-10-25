@@ -2,6 +2,7 @@ import capacitorConfig from '../../../capacitor.config.json'
 import appPackage from '../../../package.json'
 import { Capacitor } from '@capacitor/core'
 import { AppUpdate, AppUpdateAvailability } from '@capawesome/capacitor-app-update'
+import { translateMessage } from '@/ui/services/i18n.service.js'
 
 const DEFAULT_UPDATE_MANIFEST_URL = 'https://www.strawmb.com/app-update.json'
 const SECONDARY_UPDATE_MANIFEST_URL = 'https://cdn.jsdelivr.net/gh/StrawCoding/StrawMoneyBookWeb@Web-Page/app-update.json'
@@ -174,41 +175,41 @@ function resolveHttpErrorDetail(responseText) {
 
 function normalizeUpdateFetchErrorMessage(error) {
   const raw = String(error?.message ?? error ?? '').trim()
-  if (!raw) return '未知錯誤'
+  if (!raw) return translateMessage('common.unknown_error', '未知錯誤')
   if (/回應為 html|收到 html|api_not_deployed_html/i.test(raw)) {
-    return 'Play 版本 API 未部署或 URL 指到前端頁面（非 JSON）'
+    return translateMessage('error.play_api_not_json', 'Play 版本 API 未部署或 URL 指到前端頁面（非 JSON）')
   }
   if (/play_app_not_found|app not found/i.test(raw)) {
     return APP_ID
-      ? `Google Play 找不到此 App（${APP_ID}）`
-      : 'Google Play 找不到此 App'
+      ? translateMessage('error.play_app_missing_id', { id: APP_ID }, 'Google Play 找不到此 App（{id}）')
+      : translateMessage('error.play_app_missing', 'Google Play 找不到此 App')
   }
   if (/missing_app_id|appid is required/i.test(raw)) {
-    return '未設定 Google Play App ID（VITE_GOOGLE_PLAY_APP_ID）'
+    return translateMessage('error.play_app_id_missing', '未設定 Google Play App ID（VITE_GOOGLE_PLAY_APP_ID）')
   }
   if (/http\s*404/i.test(raw) && /play_api|api\/app-update\/play/i.test(raw)) {
-    return 'Play 版本 API 路徑不存在（HTTP 404）'
+    return translateMessage('error.play_api_404', 'Play 版本 API 路徑不存在（HTTP 404）')
   }
   if (/http\s*(401|403)|unauthorized|forbidden/i.test(raw)) {
-    return 'Play 版本 API 無權限存取'
+    return translateMessage('error.play_api_forbidden', 'Play 版本 API 無權限存取')
   }
   if (/failed to fetch|networkerror|load failed|fetch failed|network request failed|ecconn|enotfound|connection refused/i.test(raw)) {
-    return '網路連線失敗或服務無回應'
+    return translateMessage('common.network_or_service_failed', '網路連線失敗或服務無回應')
   }
   if (/timeout|逾時|timed out/i.test(raw)) {
-    return '更新檢查逾時'
+    return translateMessage('error.update_timeout', '更新檢查逾時')
   }
   return raw
 }
 
 function normalizePlayCoreErrorMessage(error) {
   const raw = String(error?.message ?? error ?? '').trim()
-  if (!raw) return 'Play Core 錯誤'
+  if (!raw) return translateMessage('error.play_core', 'Play Core 錯誤')
   if (/timeout|逾時|timed out/i.test(raw)) {
-    return 'Play Core 檢查逾時'
+    return translateMessage('error.play_core_timeout', 'Play Core 檢查逾時')
   }
   if (/plugin.*not implemented|not implemented|unimplemented|does not have web implementation|unavailable|not available/i.test(raw)) {
-    return 'Play Core 目前不可用'
+    return translateMessage('error.play_core_unavailable', 'Play Core 目前不可用')
   }
   return raw
 }
@@ -216,12 +217,14 @@ function normalizePlayCoreErrorMessage(error) {
 function isNetworkLikeUpdateError(message) {
   const text = String(message ?? '').trim().toLowerCase()
   if (!text) return false
+  const networkFailed = translateMessage('common.network_or_service_failed', '網路連線失敗或服務無回應').toLowerCase()
   return /網路連線失敗|服務無回應|failed to fetch|networkerror|load failed|fetch failed|network request failed|timeout|timed out|ecconn|enotfound|connection refused/.test(text)
+    || (networkFailed && text.includes(networkFailed))
 }
 
 function buildPlayApiFailureMessage(errorItems = []) {
   if (!Array.isArray(errorItems) || !errorItems.length) {
-    return '無法取得 Play 版本資訊'
+    return translateMessage('error.play_version_unavailable', '無法取得 Play 版本資訊')
   }
 
   const messages = errorItems
@@ -229,29 +232,34 @@ function buildPlayApiFailureMessage(errorItems = []) {
     .filter(Boolean)
 
   if (!messages.length) {
-    return '無法取得 Play 版本資訊'
+    return translateMessage('error.play_version_unavailable', '無法取得 Play 版本資訊')
   }
 
-  if (messages.some((item) => item.includes('未設定 Google Play App ID'))) {
-    return '未設定 Google Play App ID（請設定 VITE_GOOGLE_PLAY_APP_ID）'
+  const playAppIdMissing = translateMessage('error.play_app_id_missing', '未設定 Google Play App ID（VITE_GOOGLE_PLAY_APP_ID）')
+  const playAppIdMissingHint = translateMessage('error.play_app_id_missing_hint', '未設定 Google Play App ID（請設定 VITE_GOOGLE_PLAY_APP_ID）')
+  if (messages.some((item) => item.includes('未設定 Google Play App ID') || item.includes(playAppIdMissing) || item.includes(playAppIdMissingHint))) {
+    return playAppIdMissingHint
   }
 
-  if (messages.some((item) => item.includes('Google Play 找不到此 App'))) {
+  const playAppMissing = translateMessage('error.play_app_missing', 'Google Play 找不到此 App')
+  if (messages.some((item) => item.includes('Google Play 找不到此 App') || item.includes(playAppMissing))) {
     return APP_ID
-      ? `Google Play 找不到此 App（${APP_ID}），請確認 Play 上架狀態與 appId`
-      : 'Google Play 找不到此 App，請確認 appId'
+      ? translateMessage('error.play_app_missing_confirm_id', { id: APP_ID }, 'Google Play 找不到此 App（{id}），請確認 Play 上架狀態與 appId')
+      : translateMessage('error.play_app_missing_confirm', 'Google Play 找不到此 App，請確認 appId')
   }
 
-  if (messages.every((item) => item.includes('Play 版本 API 未部署或 URL 指到前端頁面（非 JSON）'))) {
-    return 'Play 版本 API 未部署或 URL 錯誤，請設定 VITE_APP_UPDATE_PLAY_API_URL 指向可用的 /api/app-update/play'
+  const playApiNotJson = translateMessage('error.play_api_not_json', 'Play 版本 API 未部署或 URL 指到前端頁面（非 JSON）')
+  if (messages.every((item) => item.includes('Play 版本 API 未部署或 URL 指到前端頁面（非 JSON）') || item.includes(playApiNotJson))) {
+    return translateMessage('error.play_api_url_wrong', 'Play 版本 API 未部署或 URL 錯誤，請設定 VITE_APP_UPDATE_PLAY_API_URL 指向可用的 /api/app-update/play')
   }
 
-  if (messages.every((item) => item.includes('Play 版本 API 路徑不存在（HTTP 404）'))) {
-    return 'Play 版本 API 路徑不存在（HTTP 404），請確認 VITE_APP_UPDATE_PLAY_API_URL 與後端部署'
+  const playApi404 = translateMessage('error.play_api_404', 'Play 版本 API 路徑不存在（HTTP 404）')
+  if (messages.every((item) => item.includes('Play 版本 API 路徑不存在（HTTP 404）') || item.includes(playApi404))) {
+    return translateMessage('error.play_api_404_hint', 'Play 版本 API 路徑不存在（HTTP 404），請確認 VITE_APP_UPDATE_PLAY_API_URL 與後端部署')
   }
 
   if (messages.every((item) => isNetworkLikeUpdateError(item))) {
-    return '網路連線失敗或 Play 版本服務無回應'
+    return translateMessage('error.play_network_or_service', '網路連線失敗或 Play 版本服務無回應')
   }
 
   return errorItems
@@ -340,10 +348,10 @@ function normalizePlayCorePayload(rawPayload) {
   const stalenessDays = Number(payload.clientVersionStalenessDays)
   const messageParts = []
   if (updateAvailability === AppUpdateAvailability.UPDATE_IN_PROGRESS) {
-    messageParts.push('更新安裝進行中')
+    messageParts.push(translateMessage('leftover.app_update.installing', '更新安裝進行中'))
   }
   if (Number.isFinite(stalenessDays) && stalenessDays >= 0) {
-    messageParts.push(`已可更新 ${stalenessDays} 天`)
+    messageParts.push(translateMessage('leftover.app_update.stale_days', { days: stalenessDays }, '已可更新 {days} 天'))
   }
 
   return {
@@ -408,18 +416,18 @@ async function fetchJsonPayload(url, timeoutMessage, emptyMessage, invalidMessag
 async function fetchUpdateManifestPayload(url) {
   return fetchJsonPayload(
     url,
-    '檢查更新逾時',
-    '更新資訊為空',
-    '更新資訊格式錯誤（非 JSON）',
+    translateMessage('error.update_check_timeout', '檢查更新逾時'),
+    translateMessage('error.update_empty', '更新資訊為空'),
+    translateMessage('error.update_invalid_json', '更新資訊格式錯誤（非 JSON）'),
   )
 }
 
 async function fetchPlayApiPayload(url) {
   return fetchJsonPayload(
     url,
-    'Play API 檢查逾時',
-    'Play API 回應為空',
-    'Play API 回應格式錯誤（非 JSON）',
+    translateMessage('error.play_api_timeout', 'Play API 檢查逾時'),
+    translateMessage('error.play_api_empty', 'Play API 回應為空'),
+    translateMessage('error.play_api_invalid_json', 'Play API 回應格式錯誤（非 JSON）'),
   )
 }
 
@@ -435,13 +443,13 @@ async function fetchLatestVersionFromPlayCore() {
     const appUpdateInfo = await withTimeout(
       AppUpdate.getAppUpdateInfo(),
       UPDATE_FETCH_TIMEOUT_MS,
-      'Play Core 檢查逾時',
+      translateMessage('error.play_core_timeout', 'Play Core 檢查逾時'),
     )
     const payload = normalizePlayCorePayload(appUpdateInfo)
     if (!payload) {
       return {
         payload: null,
-        errorMessage: 'Play Core 回傳未知狀態',
+        errorMessage: translateMessage('error.play_core_unknown_status', 'Play Core 回傳未知狀態'),
       }
     }
     return {
@@ -460,13 +468,13 @@ async function fetchLatestVersionFromPlayApi() {
   if (!APP_ID) {
     return {
       payload: null,
-      errorMessage: '未設定 Google Play App ID（請設定 VITE_GOOGLE_PLAY_APP_ID）',
+      errorMessage: translateMessage('error.play_app_id_missing_hint', '未設定 Google Play App ID（請設定 VITE_GOOGLE_PLAY_APP_ID）'),
     }
   }
   if (!UPDATE_PLAY_API_URLS.length) {
     return {
       payload: null,
-      errorMessage: '未設定 Play 版本 API（請設定 VITE_APP_UPDATE_PLAY_API_URL）',
+      errorMessage: translateMessage('error.play_api_url_missing', '未設定 Play 版本 API（請設定 VITE_APP_UPDATE_PLAY_API_URL）'),
     }
   }
 
@@ -485,14 +493,18 @@ async function fetchLatestVersionFromPlayApi() {
       if (!payload.latestVersion) {
         errors.push({
           url,
-          message: '缺少 latestVersion',
+          message: translateMessage('leftover.app_update.missing_latest_short', '缺少 latestVersion'),
         })
         continue
       }
       if (!isComparableVersion(payload.latestVersion)) {
         errors.push({
           url,
-          message: `latestVersion 不可比較（${payload.latestVersion}）`,
+          message: translateMessage(
+            'leftover.app_update.version_incomparable_short',
+            { version: payload.latestVersion },
+            'latestVersion 不可比較（{version}）',
+          ),
         })
         continue
       }
@@ -503,7 +515,7 @@ async function fetchLatestVersionFromPlayApi() {
     } catch (error) {
       const normalizedError = normalizeUpdateFetchErrorMessage(error)
       const errorMessage = /^HTTP\s*404\b/i.test(normalizedError)
-        ? 'Play 版本 API 路徑不存在（HTTP 404）'
+        ? translateMessage('error.play_api_404', 'Play 版本 API 路徑不存在（HTTP 404）')
         : normalizedError
       errors.push({
         url,
@@ -613,7 +625,7 @@ export async function checkForAppUpdate(options = {}) {
       currentVersion,
       latestVersion: '',
       playUrl: GOOGLE_PLAY_URL,
-      message: combinedFailureMessage || '無法取得 Play 版本資訊',
+      message: combinedFailureMessage || translateMessage('error.play_version_unavailable', '無法取得 Play 版本資訊'),
       checkedAt: new Date().toISOString(),
     }
     cachedCheckResult = result
@@ -645,14 +657,19 @@ export async function checkForAppUpdate(options = {}) {
     try {
       const payload = normalizeManifestPayload(await fetchUpdateManifestPayload(url))
       if (!payload.latestVersion) {
-        errors.push(`${url}: 缺少 latestVersion`)
+        const missingLatest = translateMessage('error.missing_latest_version', { url }, '{url}: 缺少 latestVersion')
+        errors.push(missingLatest)
         if (!isLocalUrl) {
-          remoteErrors.push(`${url}: 缺少 latestVersion`)
+          remoteErrors.push(missingLatest)
         }
         continue
       }
       if (!isComparableVersion(payload.latestVersion)) {
-        const errorText = `${url}: latestVersion 不可比較（${payload.latestVersion}）`
+        const errorText = translateMessage(
+          'error.latest_version_incomparable',
+          { url, version: payload.latestVersion },
+          '{url}: latestVersion 不可比較（{version}）',
+        )
         errors.push(errorText)
         if (!isLocalUrl) {
           remoteErrors.push(errorText)
@@ -689,7 +706,7 @@ export async function checkForAppUpdate(options = {}) {
   const allNetworkLike = errors.length > 0
     && errors.every((item) => isNetworkLikeUpdateError(item))
   const fallbackMessage = allNetworkLike
-    ? '更新檢查服務暫時無法連線'
+    ? translateMessage('error.update_service_unavailable', '更新檢查服務暫時無法連線')
     : errors.join(' | ')
 
   const result = {

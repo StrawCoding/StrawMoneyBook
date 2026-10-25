@@ -31,17 +31,17 @@
       <header class="row panel-head">
         <small class="muted">{{ t('transaction_search.results_count', { count: searchTotal }) }}</small>
         <button class="btn" :class="{ active: batchMode }" @click="toggleBatchMode">
-          {{ batchMode ? '取消批量' : '批量操作' }}
+          {{ batchMode ? t('tx_search.cancel_batch') : t('common.batch_actions') }}
         </button>
       </header>
 
       <div v-if="batchMode" class="batch-bar">
         <button class="btn" @click="toggleSelectAll">
-          {{ selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? '取消全選' : '全選' }}
+          {{ selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? t('claim_sheet.import.clear_all') : t('claim_sheet.import.select_all') }}
         </button>
-        <span class="muted batch-count">已選 {{ selectedIds.size }} 筆</span>
+        <span class="muted batch-count">{{ t('common.selected_count', { count: selectedIds.size }) }}</span>
         <button class="btn primary" :disabled="selectedIds.size === 0 || batchWorking" @click="openBatchEditSheet">
-          批量編輯
+          {{ t('tx_search.batch_edit') }}
         </button>
       </div>
 
@@ -83,7 +83,7 @@
         <li v-if="!filteredTransactions.length" class="muted empty">{{ t('transaction_search.no_results') }}</li>
       </ul>
 
-      <nav v-if="searchTotal > 0" class="pagination-bar" aria-label="交易搜尋分頁">
+      <nav v-if="searchTotal > 0" class="pagination-bar" :aria-label="t('tx_search.page_label')">
         <button class="btn" :disabled="!canGoPreviousPage" @click="goPreviousPage">
           {{ t('common.previous_page') }}
         </button>
@@ -99,61 +99,61 @@
 
     <InputBottomSheet
       :open="batchEditSheetOpen"
-      title="批量編輯交易"
+      :title="t('tx_search.batch_edit_tx')"
       :body-class="'stack form-wrap'"
       :show-footer="true"
-      :close-text="'取消'"
+      :close-text="t('common.cancel')"
       @close="closeBatchEditSheet"
     >
       <div class="batch-summary muted">
-        已選 {{ selectedIds.size }} 筆
-        <span v-if="selectedBatchStats.expenseCount">・支出 {{ selectedBatchStats.expenseCount }}</span>
-        <span v-if="selectedBatchStats.incomeCount">・收入 {{ selectedBatchStats.incomeCount }}</span>
-        <span v-if="selectedBatchStats.transferCount">・轉帳 {{ selectedBatchStats.transferCount }}</span>
-        <span v-if="selectedBatchStats.adjustmentCount">・調整 {{ selectedBatchStats.adjustmentCount }}</span>
+        {{ t('common.selected_count', { count: selectedIds.size }) }}
+        <span v-if="selectedBatchStats.expenseCount">{{ t('tx_search.type_expense') }} {{ selectedBatchStats.expenseCount }}</span>
+        <span v-if="selectedBatchStats.incomeCount">{{ t('tx_search.type_income') }} {{ selectedBatchStats.incomeCount }}</span>
+        <span v-if="selectedBatchStats.transferCount">{{ t('tx_search.type_transfer') }} {{ selectedBatchStats.transferCount }}</span>
+        <span v-if="selectedBatchStats.adjustmentCount">{{ t('tx_search.type_adjust') }} {{ selectedBatchStats.adjustmentCount }}</span>
       </div>
       <label>
-        分類
-        <CustomSelect v-model="batchPatch.categoryId" :groups="batchCategoryGroups" :placeholder="'選擇分類（不變 / 指定分類）'" />
+        {{ t('common.category') }}
+        <CustomSelect v-model="batchPatch.categoryId" :groups="batchCategoryGroups" :placeholder="t('tx_search.pick_category')" />
       </label>
       <label>
-        備註
-        <CustomSelect v-model="batchPatch.noteMode" :options="batchNoteModeOptions" :placeholder="'選擇備註處理方式'" />
+        {{ t('common.note') }}
+        <CustomSelect v-model="batchPatch.noteMode" :options="batchNoteModeOptions" :placeholder="t('tx_search.pick_note_mode')" />
       </label>
       <label v-if="batchPatch.noteMode === 'replace'">
-        新備註
-        <textarea v-model.trim="batchPatch.note" class="textarea" rows="3" placeholder="輸入要套用到所有選取交易的備註" />
+        {{ t('tx_search.new_note') }}
+        <textarea v-model.trim="batchPatch.note" class="textarea" rows="3" :placeholder="t('tx_search.note_apply_all')" />
       </label>
       <label>
-        可報銷
+        {{ t('tx_search.reimbursable') }}
         <CustomSelect
           v-model="batchPatch.isReimbursableMode"
           :options="batchReimbursableOptions"
-          :placeholder="'選擇是否更新可報銷'"
+          :placeholder="t('tx_search.pick_reimbursable')"
         />
       </label>
       <label>
-        納入預算
+        {{ t('tx_search.include_budget') }}
         <CustomSelect
           v-model="batchPatch.includeInBudgetMode"
           :options="batchToggleOptions"
-          :placeholder="'選擇是否更新納入預算'"
+          :placeholder="t('tx_search.pick_budget')"
         />
       </label>
       <label>
-        納入收支分析
+        {{ t('tx_search.include_analysis') }}
         <CustomSelect
           v-model="batchPatch.includeInAnalysisMode"
           :options="batchToggleOptions"
-          :placeholder="'選擇是否更新納入收支分析'"
+          :placeholder="t('tx_search.pick_analysis')"
         />
       </label>
       <p class="muted batch-hint">
-        分類只會套用到收入 / 支出交易；可報銷只會套用到支出交易。若所選交易中包含不適用項目，完成後會在結果摘要中顯示略過筆數。
+        {{ t('tx_search.batch_hint') }}
       </p>
       <template #footer>
         <button class="btn primary" :disabled="batchWorking" @click="applyBatchEdit">
-          {{ batchWorking ? '更新中...' : `套用至 ${selectedIds.size} 筆` }}
+          {{ batchWorking ? t('tx_search.applying') : t('tx_search.apply_n', { count: selectedIds.size }) }}
         </button>
       </template>
     </InputBottomSheet>

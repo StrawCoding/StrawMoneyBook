@@ -1,21 +1,21 @@
 <template>
   <section class="stack counterparty-page">
     <header class="row page-head">
-      <h2>{{ counterpartyName }}</h2>
+      <h2>{{ displayCounterpartyName(counterpartyName) }}</h2>
       <div class="row head-actions">
-        <button class="btn" :disabled="!visibleLoans.length" @click="exportCsv">匯出 CSV</button>
-        <RouterLink class="btn back-btn" :to="backLink">返回</RouterLink>
+        <button class="btn" :disabled="!visibleLoans.length" @click="exportCsv">{{ t('analysis_print.export_csv') }}</button>
+        <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
       </div>
     </header>
 
     <div class="row counterparty-create-actions">
       <button class="btn primary" @click="openCreateSheet('lend')">
         <font-awesome-icon icon="fa-solid fa-arrow-up" class="counterparty-create-icon" />
-        新增該對象借出
+        {{ t('loans.add_lend_for_person') }}
       </button>
       <button class="btn primary" @click="openCreateSheet('borrow')">
         <font-awesome-icon icon="fa-solid fa-arrow-down" class="counterparty-create-icon" />
-        新增該對象借入
+        {{ t('loans.add_borrow_for_person') }}
       </button>
     </div>
 
@@ -25,7 +25,7 @@
         <MoneyText :value-minor="outstandingMinor" />
       </div>
       <div class="row summary-row">
-        <span class="muted">進行中筆數</span>
+        <span class="muted">{{ t('loans.active_count') }}</span>
         <span class="badge">{{ activeCount }}</span>
       </div>
     </article>
@@ -33,17 +33,17 @@
     <article class="card panel">
       <div class="row list-header">
         <div class="tab-row">
-          <button class="btn" :class="{ primary: tab === 'lend' }" @click="tab = 'lend'">借出</button>
-          <button class="btn" :class="{ primary: tab === 'borrow' }" @click="tab = 'borrow'">借入</button>
+          <button class="btn" :class="{ primary: tab === 'lend' }" @click="tab = 'lend'">{{ t('loans.lend') }}</button>
+          <button class="btn" :class="{ primary: tab === 'borrow' }" @click="tab = 'borrow'">{{ t('loans.borrow') }}</button>
         </div>
         <button class="btn end-btn" :class="{ primary: showFinished }" @click="showFinished = !showFinished">
-          {{ showFinished ? '進行中' : '已結束' }}
+          {{ showFinished ? t('loans.active') : t('loans.finished') }}
         </button>
       </div>
 
       <ul class="list">
         <li v-for="loan in visibleLoans" :key="loan.id" class="entry">
-          <label class="entry-select" :aria-label="`選取借貸 ${loan.id}`" @click.stop>
+          <label class="entry-select" :aria-label="t('loans.select_loan', { id: loan.id })" @click.stop>
             <input
               :checked="isLoanSelected(loan.id)"
               type="checkbox"
@@ -69,7 +69,7 @@
             <div class="entry-content">
               <div class="row item-main">
                 <span class="row item-block">
-                  <small class="muted">金額</small>
+                  <small class="muted">{{ t('analysis_print.col.amount') }}</small>
                   <MoneyText :value-minor="loan.principal_minor" />
                 </span>
                 <span class="row item-block">
@@ -77,25 +77,25 @@
                   <MoneyText :value-minor="loan.paid_minor ?? 0" />
                 </span>
                 <span class="row item-block">
-                  <small class="muted">剩餘</small>
+                  <small class="muted">{{ t('loans.remaining') }}</small>
                   <MoneyText :value-minor="loan.remaining_minor ?? 0" />
                 </span>
               </div>
 
               <div class="row item-meta">
                 <span class="row item-block">
-                  <small class="muted">帳戶</small>
+                  <small class="muted">{{ t('common.account') }}</small>
                   <span class="item-value">{{ loan.setup_account_name || '—' }}</span>
                 </span>
                 <span class="row item-block">
-                  <small class="muted">日期</small>
+                  <small class="muted">{{ t('analysis_print.col.date') }}</small>
                   <span class="item-value">{{ formatDateTime(loan.setup_occurred_at || loan.created_at) }}</span>
                 </span>
               </div>
             </div>
           </div>
         </li>
-        <li v-if="visibleLoans.length === 0" class="muted">{{ showFinished ? '目前沒有已結束借貸' : '目前沒有進行中借貸' }}</li>
+        <li v-if="visibleLoans.length === 0" class="muted">{{ showFinished ? t('loans.empty_finished') : t('loans.empty_active') }}</li>
       </ul>
     </article>
 
@@ -103,8 +103,8 @@
       <transition name="selection-dock-slide">
         <section v-if="isSelectionDockVisible" class="selection-dock card">
           <div class="selection-dock-copy">
-            <small class="muted">已選 {{ selectedVisibleCount }} / {{ visibleLoans.length }} 筆</small>
-            <button class="btn primary" :disabled="!selectedVisibleCount" @click="openSelectionActionSheet">操作</button>
+            <small class="muted">{{ t('common.selected_of_total', { count: selectedVisibleCount, total: visibleLoans.length }) }}</small>
+            <button class="btn primary" :disabled="!selectedVisibleCount" @click="openSelectionActionSheet">{{ t('common.actions') }}</button>
           </div>
           <button class="select-all-btn" type="button" @click="toggleSelectAllVisible">
             <span class="select-all-check" :class="{ active: isAllVisibleSelected }">
@@ -113,7 +113,7 @@
             <span class="select-all-label-wrap">
               <transition name="select-all-label" mode="out-in">
                 <span :key="isAllVisibleSelected ? 'cancel-all' : 'select-all'" class="select-all-label">
-                  {{ isAllVisibleSelected ? '取消全選' : '全選' }}
+                  {{ isAllVisibleSelected ? t('settings_carrier_sync.review.select_none') : t('settings_carrier_sync.review.select_all') }}
                 </span>
               </transition>
             </span>
@@ -127,42 +127,42 @@
         <section v-if="selectionActionSheetOpen" class="sheet-mask" @click.self="closeSelectionActionSheet">
           <article class="sheet card action-sheet app-bottom-sheet">
             <header class="row">
-              <h3>借貸操作</h3>
-              <button class="btn" @click="closeSelectionActionSheet">關閉</button>
+              <h3>{{ t('loans.actions_title') }}</h3>
+              <button class="btn" @click="closeSelectionActionSheet">{{ t('common.close') }}</button>
             </header>
-            <small class="muted action-hint">已選 {{ selectedVisibleCount }} 筆</small>
+            <small class="muted action-hint">{{ t('common.selected_count', { count: selectedVisibleCount }) }}</small>
             <div class="stack action-list app-bottom-sheet-body">
               <button
                 v-if="canCollectSelected"
                 class="btn action-btn"
                 @click="actionCollectSelected"
               >
-                {{ selectedCollectionCandidates.length > 1 ? `批量${collectionLabelByDirection(tab)}` : collectionLabelByDirection(tab) }}
+                {{ selectedCollectionCandidates.length > 1 ? t('loans.batch_action', { action: collectionLabelByDirection(tab) }) : collectionLabelByDirection(tab) }}
               </button>
               <button
                 v-if="canCompleteSelected"
                 class="btn action-btn"
                 @click="openConfirmDialog('void')"
               >
-                完成
+                {{ t('common.done') }}
               </button>
               <button
                 v-if="canRestoreSelected"
                 class="btn action-btn"
                 @click="openConfirmDialog('restore')"
               >
-                恢復
+                {{ t('common.restore') }}
               </button>
               <button
                 v-if="canDeleteSelected"
                 class="btn danger action-btn"
                 @click="openConfirmDialog('delete')"
               >
-                刪除
+                {{ t('common.delete') }}
               </button>
               <div class="action-pair-row">
-                <button class="btn action-btn" :disabled="!selectedVisibleCount" @click="clearSelection">清除選取</button>
-                <button class="btn action-btn" @click="closeSelectionActionSheet">取消</button>
+                <button class="btn action-btn" :disabled="!selectedVisibleCount" @click="clearSelection">{{ t('settings_bank_sync.review.select_none') }}</button>
+                <button class="btn action-btn" @click="closeSelectionActionSheet">{{ t('common.cancel') }}</button>
               </div>
             </div>
           </article>
@@ -172,34 +172,34 @@
 
     <InputBottomSheet
       :open="createOpen"
-      title="新增借貸"
+      :title="t('loans.add')"
       :body-class="'stack form-wrap'"
       :sheet-class="'sheet'"
       :show-footer="true"
       @close="closeCreateSheet"
     >
               <label>
-                借貸方向
+                {{ t('loans.direction') }}
                 <CustomSelect v-model="createForm.direction" :options="directionOptions" />
               </label>
 
               <label>
-                對象名稱
+                {{ t('loans.counterparty_name') }}
                 <input v-model="createForm.counterpartyName" class="input" />
               </label>
 
               <label>
-                本金（元）
+                {{ t('loans.principal_yuan') }}
                 <input v-model.number="createForm.principalMajor" class="input" type="number" min="0" step="1" />
               </label>
 
               <label>
-                預設利息（元，可選）
+                {{ t('loans.preset_interest_optional') }}
                 <input v-model.number="createForm.interestMajor" class="input" type="number" min="0" step="1" />
               </label>
 
               <div class="field-block">
-                <span class="field-label">開始日期</span>
+                <span class="field-label">{{ t('loans.start_date') }}</span>
                 <div class="date-picker-wrap">
                   <DateTimePickerField
                     :date="createForm.startDate"
@@ -214,7 +214,7 @@
               </div>
 
               <div class="field-block">
-                <span class="field-label">到期日（可選）</span>
+                <span class="field-label">{{ t('loans.due_optional') }}</span>
                 <div class="row due-date-row">
                   <div class="due-picker-wrap">
                     <DateTimePickerField
@@ -227,91 +227,91 @@
                       @update:minute="pickCreateDueMinute"
                     />
                   </div>
-                  <button class="btn mini-btn" type="button" @click="clearCreateDueDate">清除</button>
+                  <button class="btn mini-btn" type="button" @click="clearCreateDueDate">{{ t('common.clear') }}</button>
                 </div>
               </div>
 
               <label>
-                建立入帳帳戶
+                {{ t('loans.setup_account') }}
                 <CustomSelect v-model="createForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
 
               <label>
-                備註
+                {{ t('common.note') }}
                 <textarea v-model="createForm.note" class="textarea" rows="2" />
               </label>
       <template #footer>
-        <button class="btn" @click="closeCreateSheet">取消</button>
-        <button class="btn primary" @click="createLoan">儲存</button>
+        <button class="btn" @click="closeCreateSheet">{{ t('common.cancel') }}</button>
+        <button class="btn primary" @click="createLoan">{{ t('common.save') }}</button>
       </template>
     </InputBottomSheet>
 
     <InputBottomSheet
       :open="repayOpen"
-      :title="`借貸${collectionLabel(repayLoan)}`"
+      :title="t('loans.loan_action_title', { action: collectionLabel(repayLoan) })"
       :body-class="'stack form-wrap'"
       :sheet-class="'sheet'"
       :show-footer="true"
       @close="closeRepaySheet"
     >
-              <p class="muted">{{ repayLoan?.counterparty_name }} / 剩餘 <MoneyText :value-minor="repayLoan?.remaining_minor ?? 0" /></p>
+              <p class="muted">{{ repayLoan?.counterparty_name }} / {{ t('loans.remaining') }} <MoneyText :value-minor="repayLoan?.remaining_minor ?? 0" /></p>
               <label>
-                {{ collectionLabel(repayLoan) }}金額（元）
+                {{ collectionLabel(repayLoan) }}{{ t('common.amount_yuan') }}
                 <input v-model.number="repayForm.amountMajor" class="input" type="number" min="0" step="1" />
               </label>
 
               <label>
-                帳戶
+                {{ t('common.account') }}
                 <CustomSelect v-model="repayForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
 
               <label>
-                備註
+                {{ t('common.note') }}
                 <textarea v-model="repayForm.note" class="textarea" rows="2" />
               </label>
       <template #footer>
-        <button class="btn" @click="closeRepaySheet">取消</button>
-        <button class="btn primary" @click="submitRepayment">儲存</button>
+        <button class="btn" @click="closeRepaySheet">{{ t('common.cancel') }}</button>
+        <button class="btn primary" @click="submitRepayment">{{ t('common.save') }}</button>
       </template>
     </InputBottomSheet>
 
     <InputBottomSheet
       :open="batchRepayOpen"
-      :title="`批量${collectionLabelByDirection(tab)}`"
+      :title="t('loans.batch_action', { action: collectionLabelByDirection(tab) })"
       :body-class="'stack form-wrap'"
       :sheet-class="'sheet'"
       :show-footer="true"
       @close="closeBatchRepaySheet"
     >
               <p class="muted">
-                {{ counterpartyName }} / 共 {{ batchRepayCandidates.length }} 筆選取 /
-                剩餘 <MoneyText :value-minor="batchRepayTotalMinor" />
+                {{ displayCounterpartyName(counterpartyName) }} / {{ t('common.total_items', { count: batchRepayCandidates.length }) }}{{ t('loans.select_prefix') }} /
+                {{ t('loans.remaining') }} <MoneyText :value-minor="batchRepayTotalMinor" />
               </p>
               <label>
-                批量{{ collectionLabelByDirection(tab) }}金額（元）
+                {{ t('loans.batch_action', { action: collectionLabelByDirection(tab) }) }}{{ t('common.amount_yuan') }}
                 <input v-model.number="batchRepayForm.amountMajor" class="input" type="number" min="0" step="1" />
               </label>
 
               <label>
-                帳戶
+                {{ t('common.account') }}
                 <CustomSelect v-model="batchRepayForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
 
               <label>
-                備註
+                {{ t('common.note') }}
                 <textarea v-model="batchRepayForm.note" class="textarea" rows="2" />
               </label>
 
               <div class="stack batch-preview">
-                <small class="muted">將依較早借貸優先沖抵</small>
+                <small class="muted">{{ t('loans.offset_earlier_first') }}</small>
                 <div v-for="loan in batchRepayCandidates" :key="loan.id" class="row batch-preview-item">
                   <span>{{ formatDateTime(loan.start_date || loan.setup_occurred_at || loan.created_at) }}</span>
                   <span><MoneyText :value-minor="loan.remaining_minor" /></span>
                 </div>
               </div>
       <template #footer>
-        <button class="btn" @click="closeBatchRepaySheet">取消</button>
-        <button class="btn primary" @click="submitBatchRepayment">儲存</button>
+        <button class="btn" @click="closeBatchRepaySheet">{{ t('common.cancel') }}</button>
+        <button class="btn primary" @click="submitBatchRepayment">{{ t('common.save') }}</button>
       </template>
     </InputBottomSheet>
 
@@ -348,6 +348,7 @@ import {
   saveCsvFileToDevice,
   triggerDownloadFromUrl,
 } from '@/core/services/export.service'
+import { useI18n } from '@/ui/services/i18n.service'
 import {
   buildLoanCounterpartyQuery,
   buildLoanListQuery,
@@ -362,6 +363,7 @@ const accountStore = useAccountStore()
 const uiStore = useUiStore()
 const transactionStore = useTransactionStore()
 const budgetStore = useBudgetStore()
+const { t } = useI18n()
 
 const repayOpen = ref(false)
 const repayLoan = ref(null)
@@ -374,10 +376,10 @@ const selectedLoanIds = ref([])
 const batchRepayLoanIds = ref([])
 let exportedUrl = ''
 
-const directionOptions = [
-  { value: 'lend', label: '借出（應收）' },
-  { value: 'borrow', label: '借入（應付）' },
-]
+const directionOptions = computed(() => [
+  { value: 'lend', label: t('loans.lend_receivable') },
+  { value: 'borrow', label: t('loans.borrow_payable') },
+])
 
 const createForm = reactive({
   direction: 'lend',
@@ -488,33 +490,33 @@ const activeCount = computed(() => {
   return loansByCounterpartyAndTab.value.filter((loan) => ['active', 'partial'].includes(loan.status)).length
 })
 const summaryLabel = computed(() => {
-  return tab.value === 'lend' ? '該人欠你' : '你欠該人'
+  return tab.value === 'lend' ? t('loans.they_owe_you') : t('loans.you_owe_them')
 })
 const confirmDialogTitle = computed(() => {
-  if (confirmDialog.type === 'delete') return confirmDialog.loanIds.length > 1 ? '刪除借貸' : '刪除借貸'
-  if (confirmDialog.type === 'restore') return '恢復借貸'
-  return '完成借貸'
+  if (confirmDialog.type === 'delete') return t('loans.delete_loan')
+  if (confirmDialog.type === 'restore') return t('loans.restore_loan')
+  return t('loans.complete_loan')
 })
 const confirmDialogConfirmText = computed(() => {
-  if (confirmDialog.type === 'delete') return '確認刪除'
-  if (confirmDialog.type === 'restore') return '確認恢復'
-  return '確認完成'
+  if (confirmDialog.type === 'delete') return t('common.confirm_delete')
+  if (confirmDialog.type === 'restore') return t('common.confirm_restore')
+  return t('claim_sheet.confirm_complete')
 })
 const confirmDialogMessage = computed(() => {
   const count = confirmDialog.loanIds.length
   if (confirmDialog.type === 'delete') {
     return count > 1
-      ? `確定要刪除這 ${count} 筆借貸？此動作無法復原`
-      : '確定要刪除這筆借貸？此動作無法復原'
+      ? t('loans.confirm_delete_n', { count })
+      : t('loans.confirm_delete')
   }
   if (confirmDialog.type === 'restore') {
     return count > 1
-      ? `確定要恢復這 ${count} 筆作廢借貸？`
-      : '確定要恢復這筆作廢借貸？'
+      ? t('loans.confirm_restore_n', { count })
+      : t('loans.confirm_restore_one')
   }
   return count > 1
-    ? `確定要完成這 ${count} 筆借貸？不會刪除交易紀錄`
-    : '確定要完成這筆借貸？不會刪除交易紀錄'
+    ? t('loans.confirm_complete_n', { count })
+    : t('loans.confirm_complete')
 })
 
 onMounted(() => {
@@ -586,16 +588,20 @@ function normalizeCounterpartyName(rawName) {
   return String(rawName ?? '').trim() || '未命名對象'
 }
 
+function displayCounterpartyName(name) {
+  return name === '未命名對象' ? t('common.unnamed_counterparty') : name
+}
+
 function collectionLabel(item) {
-  return item?.direction === 'borrow' ? '歸還' : '收回'
+  return item?.direction === 'borrow' ? t('loans.repay') : t('loans.collect')
 }
 
 function collectionLabelByDirection(direction) {
-  return direction === 'borrow' ? '歸還' : '收回'
+  return direction === 'borrow' ? t('loans.repay') : t('loans.collect')
 }
 
 function paidLabel(item) {
-  return item?.direction === 'borrow' ? '已歸還' : '已收回'
+  return item?.direction === 'borrow' ? t('loans.repaid') : t('loans.collected')
 }
 
 async function refreshLinkedData() {
@@ -757,10 +763,10 @@ async function createLoan() {
 
     await refreshLinkedData()
 
-    uiStore.pushToast('借貸已建立')
+    uiStore.pushToast(t('loans.created'))
     closeCreateSheet()
   } catch (error) {
-    uiStore.pushToast(error.message ?? '建立借貸失敗', 'error')
+    uiStore.pushToast(error.message ?? t('loans.create_failed'), 'error')
   }
 }
 
@@ -806,10 +812,10 @@ async function submitRepayment() {
 
     await refreshLinkedData()
     clearSelection()
-    uiStore.pushToast(`${collectionLabel(repayLoan.value)}已記錄`)
+    uiStore.pushToast(t('loans.collection_recorded', { action: collectionLabel(repayLoan.value) }))
     closeRepaySheet()
   } catch (error) {
-    uiStore.pushToast(error.message ?? `${collectionLabel(repayLoan.value)}失敗`, 'error')
+    uiStore.pushToast(error.message ?? t('loans.collection_failed', { action: collectionLabel(repayLoan.value) }), 'error')
   }
 }
 
@@ -840,20 +846,20 @@ async function submitBatchRepayment() {
     clearSelection()
 
     const summaryParts = [
-      `已批量${collectionLabelByDirection(tab.value)} ${result.affectedLoanCount} 筆`,
-      `剩餘 ${Math.round(Number(result.remainingMinor ?? 0)) / 100} 元`,
+      t('loans.toast_batch_done', { action: collectionLabelByDirection(tab.value), count: result.affectedLoanCount }),
+      t('loans.toast_remaining', { amount: Math.round(Number(result.remainingMinor ?? 0)) / 100 }),
     ]
     uiStore.pushToast(summaryParts.join('，'))
     closeBatchRepaySheet()
   } catch (error) {
-    uiStore.pushToast(error.message ?? `批量${collectionLabelByDirection(tab.value)}失敗`, 'error')
+    uiStore.pushToast(error.message ?? t('loans.toast_batch_failed', { action: collectionLabelByDirection(tab.value) }), 'error')
   }
 }
 
 function actionCollectSelected() {
   closeSelectionActionSheet()
   if (!selectedCollectionCandidates.value.length) {
-    uiStore.pushToast(`請先勾選要${collectionLabelByDirection(tab.value)}的借貸`, 'error')
+    uiStore.pushToast(t('loans.toast_select_first', { action: collectionLabelByDirection(tab.value) }), 'error')
     return
   }
   if (selectedCollectionCandidates.value.length === 1) {
@@ -902,7 +908,7 @@ async function confirmDialogAction() {
       } catch (error) {
         failed += 1
         if (!firstError) {
-          firstError = String(error?.message ?? error ?? '處理失敗')
+          firstError = String(error?.message ?? error ?? t('common.process_failed'))
         }
       }
     }
@@ -911,13 +917,13 @@ async function confirmDialogAction() {
     clearSelection()
 
     if (failed > 0) {
-      uiStore.pushToast(`成功 ${success} 筆，失敗 ${failed} 筆（${firstError}）`, 'error')
+      uiStore.pushToast(`${t('loans.toast_partial', { ok: success, fail: failed })} (${firstError})`, 'error')
     } else if (confirmDialog.type === 'void') {
-      uiStore.pushToast(success > 1 ? `已完成 ${success} 筆借貸` : '借貸已完成')
+      uiStore.pushToast(success > 1 ? t('loans.toast_completed_n', { count: success }) : t('loans.completed'))
     } else if (confirmDialog.type === 'restore') {
-      uiStore.pushToast(success > 1 ? `已恢復 ${success} 筆借貸` : '借貸已恢復')
+      uiStore.pushToast(success > 1 ? t('loans.toast_restored_n', { count: success }) : t('loans.restored'))
     } else {
-      uiStore.pushToast(success > 1 ? `已刪除 ${success} 筆借貸` : '借貸已刪除')
+      uiStore.pushToast(success > 1 ? t('loans.toast_deleted_n', { count: success }) : t('loans.deleted'))
     }
 
     confirmDialog.open = false
@@ -928,7 +934,7 @@ async function confirmDialogAction() {
 
 async function exportCsv() {
   if (!visibleLoans.value.length) {
-    uiStore.pushToast('目前沒有可匯出的借貸資料', 'error')
+    uiStore.pushToast(t('loans.export_empty'), 'error')
     return
   }
 
@@ -944,7 +950,7 @@ async function exportCsv() {
 
     if (deviceSave?.saved && openTarget) {
       openFileUrl(openTarget)
-      uiStore.pushToast(`已匯出 ${counterpartyName.value} ${result.rowCount} 筆借貸`)
+      uiStore.pushToast(t('loans.export_done', { filename: result.filename, count: result.rowCount }))
       return
     }
 
@@ -954,9 +960,9 @@ async function exportCsv() {
     if (!opened) {
       triggerDownloadFromUrl(exportedUrl, result.filename)
     }
-    uiStore.pushToast(`已匯出 ${counterpartyName.value} ${result.rowCount} 筆借貸`)
+    uiStore.pushToast(t('loans.export_done', { filename: result.filename, count: result.rowCount }))
   } catch (error) {
-    uiStore.pushToast(error.message ?? '匯出借貸 CSV 失敗', 'error')
+    uiStore.pushToast(error.message ?? t('loans.export_failed'), 'error')
   }
 }
 

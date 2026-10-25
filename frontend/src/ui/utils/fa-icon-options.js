@@ -1,3 +1,5 @@
+import { translateMessage } from '@/ui/services/i18n.service.js'
+
 const ACCOUNT_ICON_OPTIONS = [
   // Core money/account
   { value: 'fa-solid fa-wallet', label: '錢包' },
@@ -147,17 +149,39 @@ const CATEGORY_ICON_OPTIONS = [
   { value: 'fa-solid fa-money-bill-transfer', label: '轉帳收支' },
 ]
 
-export const accountIconOptions = ACCOUNT_ICON_OPTIONS.map((item) => ({
-  ...item,
-  icon: item.value,
-  searchText: [item.label, item.value, ...(item.keywords ?? [])].join(' ').toLowerCase(),
-}))
+function iconSlug(value) {
+  const tokens = String(value ?? '').split(/\s+/).filter((token) => (
+    token.startsWith('fa-')
+    && token !== 'fa-solid'
+    && token !== 'fa-regular'
+    && token !== 'fa-brands'
+  ))
+  return String(tokens[tokens.length - 1] ?? '').replace(/^fa-/, '')
+}
 
-export const categoryIconOptions = CATEGORY_ICON_OPTIONS.map((item) => ({
-  ...item,
-  icon: item.value,
-  searchText: [item.label, item.value, ...(item.keywords ?? [])].join(' ').toLowerCase(),
-}))
+function translateIconOptions(kind, source) {
+  return source.map((item) => {
+    const slug = iconSlug(item.value)
+    const translated = translateMessage(`icon.${kind}.${slug}`, item.label)
+    return {
+      ...item,
+      label: translated,
+      icon: item.value,
+      searchText: [item.label, translated, item.value, ...(item.keywords ?? [])].join(' ').toLowerCase(),
+    }
+  })
+}
+
+export function getAccountIconOptions() {
+  return translateIconOptions('account', ACCOUNT_ICON_OPTIONS)
+}
+
+export function getCategoryIconOptions() {
+  return translateIconOptions('category', CATEGORY_ICON_OPTIONS)
+}
+
+export const accountIconOptions = getAccountIconOptions()
+export const categoryIconOptions = getCategoryIconOptions()
 
 export const defaultAccountIcon = accountIconOptions[0]?.value ?? ''
 export const defaultCategoryExpenseIcon = 'fa-solid fa-utensils'

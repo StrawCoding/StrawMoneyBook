@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { Capacitor, registerPlugin } from '@capacitor/core'
+import { translateMessage } from '@/ui/services/i18n.service.js'
 
 const SECURITY_LOCK_STORAGE_KEY = 'strawmoneybook.security_lock.enabled'
 const SECURITY_LOCK_UNSUPPORTED_CODE = 'security_lock_unsupported'
@@ -63,7 +64,7 @@ export function setSecurityLockCurrentLocked(locked) {
   return securityLockedRef.value
 }
 
-export async function getSecurityLockAvailability(fallbackUnsupportedMessage = '此裝置不支援安全鎖') {
+export async function getSecurityLockAvailability(fallbackUnsupportedMessage = translateMessage('common.secure_lock_unsupported', '此裝置不支援安全鎖')) {
   if (!isSecurityLockRuntimeSupported()) {
     return {
       available: false,
@@ -90,20 +91,20 @@ export async function getSecurityLockAvailability(fallbackUnsupportedMessage = '
 }
 
 export async function authenticateSecurityLock(options = {}) {
-  const fallbackUnsupportedMessage = String(options.unsupportedMessage ?? '此裝置不支援安全鎖')
+  const fallbackUnsupportedMessage = String(options.unsupportedMessage ?? translateMessage('common.secure_lock_unsupported', '此裝置不支援安全鎖'))
   if (!isSecurityLockRuntimeSupported()) {
     throw normalizePluginError({ code: SECURITY_LOCK_UNSUPPORTED_CODE }, fallbackUnsupportedMessage)
   }
 
   try {
     await SecurityLock.authenticate({
-      title: String(options.title ?? 'App 安全鎖'),
+      title: String(options.title ?? translateMessage('common.app_lock_title', 'App 安全鎖')),
       subtitle: String(options.subtitle ?? ''),
       description: String(options.description ?? ''),
       reason: String(options.reason ?? ''),
     })
     return true
   } catch (error) {
-    throw normalizePluginError(error, String(options.failureMessage ?? '解鎖失敗'))
+    throw normalizePluginError(error, String(options.failureMessage ?? translateMessage('common.unlock_failed', '解鎖失敗')))
   }
 }

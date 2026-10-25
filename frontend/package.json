@@ -46,6 +46,7 @@
     "playwright:budget-display": "node scripts/playwright-budget-display.mjs",
     "playwright:analysis-export": "node scripts/playwright-analysis-export.mjs",
     "playwright:ui-layout": "node scripts/playwright-ui-layout.mjs",
+    "playwright:i18n-surfaces": "node scripts/playwright-i18n-surfaces.mjs",
     "playwright:quick-add-save": "node scripts/playwright-quick-add-save.mjs",
     "playwright:bookkeeping-save": "node scripts/playwright-bookkeeping-save.mjs",
     "audit:i18n": "node scripts/audit-i18n.mjs",

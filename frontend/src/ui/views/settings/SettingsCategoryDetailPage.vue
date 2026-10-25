@@ -1,7 +1,7 @@
 <template>
   <section class="stack">
     <header class="row page-header">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-tag" class="title-icon" />分類明細</h2>
+      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-tag" class="title-icon" />{{ t('common.category_detail') }}</h2>
       <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
     </header>
 
@@ -12,26 +12,26 @@
           <span>{{ category.name }}</span>
         </h3>
         <button class="btn primary" :disabled="!canSave || saving" @click="saveProfile">
-          {{ saving ? '儲存中...' : '儲存變更' }}
+          {{ saving ? t('settings_ledger_detail.saving') : t('settings_ledger_detail.save_changes') }}
         </button>
       </header>
 
       <label class="field">
-        分類名稱
-        <input v-model="editName" class="input" type="text" maxlength="40" placeholder="請輸入分類名稱" />
+        {{ t('common.category_name') }}
+        <input v-model="editName" class="input" type="text" maxlength="40" :placeholder="t('common.please_enter_category_name')" />
       </label>
 
       <div class="field">
-        <span>分類 Icon</span>
+        <span>{{ t('common.category_icon') }}</span>
         <button class="icon-picker-btn" type="button" @click.stop.prevent="openIconPicker">
           <font-awesome-icon :icon="editIcon" />
-          <span>選擇 icon</span>
+          <span>{{ t('common.choose_icon') }}</span>
         </button>
       </div>
 
       <label class="field">
-        所屬群組
-        <CustomSelect v-model="editGroupId" :options="groupOptions" placeholder="請選擇群組" />
+        {{ t('common.belonging_group') }}
+        <CustomSelect v-model="editGroupId" :options="groupOptions" :placeholder="t('common.select_group')" />
       </label>
 
       <div class="defaults-section">
@@ -76,22 +76,22 @@
 
       <div class="row action-row">
         <button class="btn danger" :disabled="deleting" @click="removeCategoryRecord">
-          {{ deleting ? '處理中...' : '刪除/封存分類' }}
+          {{ deleting ? t('common.processing') : t('category.delete_archive') }}
         </button>
       </div>
     </article>
 
     <article v-else class="card panel">
-      <p class="muted">找不到此分類，可能已刪除或封存。</p>
+      <p class="muted">{{ t('category.not_found') }}</p>
     </article>
 
     <AppDialog
       :open="deleteConfirmOpen"
-      title="確認刪除/封存"
-      :message="`確定刪除/封存「${category?.name ?? ''}」？`"
-      confirm-text="確認刪除"
+      :title="t('common.confirm_delete_archive')"
+      :message="t('category.confirm_delete_name', { name: category?.name ?? '' })"
+      :confirm-text="t('common.confirm_delete')"
       :loading="deleting"
-      loading-text="處理中..."
+      :loading-text="t('common.processing')"
       @close="closeDeleteConfirm"
       @confirm="confirmRemoveCategoryRecord"
     />
@@ -194,7 +194,7 @@ async function openIconPicker() {
       },
     })
   } catch (error) {
-    uiStore.pushToast(error?.message ?? '開啟 icon 選擇器失敗', 'error')
+    uiStore.pushToast(error?.message ?? t('settings_category_page.toast.open_icon_failed'), 'error')
   }
 }
 
@@ -212,10 +212,10 @@ async function saveProfile() {
       defaultIncludeInBudget: editDefaultIncludeInBudget.value,
       defaultIsReimbursable: editDefaultIsReimbursable.value,
     })
-    uiStore.pushToast('分類資料已更新')
+    uiStore.pushToast(t('category.data_updated'))
     await router.push(backLink.value)
   } catch (error) {
-    uiStore.pushToast(error.message ?? '更新分類資料失敗', 'error')
+    uiStore.pushToast(error.message ?? t('category.data_update_failed'), 'error')
   } finally {
     saving.value = false
   }
@@ -236,11 +236,11 @@ async function confirmRemoveCategoryRecord() {
   deleting.value = true
   try {
     await categoryStore.removeCategory(categoryId.value)
-    uiStore.pushToast('分類已處理')
+    uiStore.pushToast(t('common.category_processed'))
     deleteConfirmOpen.value = false
     await router.push(backLink.value)
   } catch (error) {
-    uiStore.pushToast(error.message ?? '處理分類失敗', 'error')
+    uiStore.pushToast(error.message ?? t('category.process_failed'), 'error')
   } finally {
     deleting.value = false
   }

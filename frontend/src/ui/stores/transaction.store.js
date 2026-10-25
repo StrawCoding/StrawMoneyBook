@@ -250,7 +250,7 @@ export const useTransactionStore = defineStore('transaction', {
         } catch (error) {
           failed.push({
             txId,
-            message: String(error?.message ?? error ?? '刪除失敗'),
+            message: String(error?.message ?? error ?? translateMessage('common.delete_failed', '刪除失敗')),
           })
         }
       }

@@ -44,8 +44,8 @@ test('loan store refreshes dashboard and detail after changing the setup account
 })
 
 test('loan detail page exposes a setup-account editor', () => {
-  assert.match(loanDetailSource, /建立入帳帳戶/)
-  assert.match(loanDetailSource, /變更入帳帳戶/)
+  assert.match(loanDetailSource, /t\('loans\.setup_account'\)/)
+  assert.match(loanDetailSource, /t\('loans\.change_setup_account'\)/)
   assert.match(loanDetailSource, /loanStore\.updateSetupAccount\(\{/)
   assert.match(
     loanDetailSource,

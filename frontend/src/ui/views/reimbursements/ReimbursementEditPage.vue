@@ -1,34 +1,34 @@
 <template>
   <section class="stack">
     <header class="row page-header">
-      <h2 class="page-title">變更報銷金額</h2>
-      <RouterLink class="btn back-btn" :to="backLink">返回</RouterLink>
+      <h2 class="page-title">{{ t('reimbursement.change_amount') }}</h2>
+      <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
     </header>
 
     <article v-if="targetTx" class="card panel">
       <header class="row">
-        <h3>{{ targetTx.category_name || noteTextOfTx(targetTx) || '未命名分類' }}</h3>
+        <h3>{{ targetTx.category_name || noteTextOfTx(targetTx) || t('common.unnamed_category') }}</h3>
         <MoneyText :value-minor="originalMinorOfTx(targetTx)" />
       </header>
 
       <div class="detail-grid">
         <div class="detail-row">
-          <small class="muted">原交易時間</small>
+          <small class="muted">{{ t('reimbursement.original_time') }}</small>
           <span>{{ formatTime(targetTx.occurred_at) }}</span>
         </div>
         <div class="detail-row">
-          <small class="muted">目前已報銷</small>
+          <small class="muted">{{ t('reimbursement.already_amount') }}</small>
           <MoneyText :value-minor="reimbursedMinorOfTx(targetTx)" />
         </div>
       </div>
 
       <label class="field">
-        報銷金額（元）
+        {{ t('reimbursement.amount_yuan') }}
         <input v-model.number="form.amountMajor" class="input" type="number" min="0" step="1" />
       </label>
 
       <div class="field">
-        <span>代收抵扣（可複選）</span>
+        <span>{{ t('reimbursement.advance_multi') }}</span>
         <div v-if="usableAdvances.length" class="advance-list">
           <label v-for="advance in usableAdvances" :key="advance.id" class="advance-item">
             <input v-model="form.selectedAdvanceIds" type="checkbox" :value="advance.id" />
@@ -41,38 +41,38 @@
                 />
                 <span>{{ advanceCategoryName(advance) }}</span>
               </span>
-              <small class="muted">{{ advance.account_name || '未指定帳戶' }}</small>
+              <small class="muted">{{ advance.account_name || t('common.unknown_account') }}</small>
             </span>
             <MoneyText :value-minor="advanceUsableMinor(advance)" />
           </label>
         </div>
-        <small v-else class="muted">目前沒有可用代收</small>
+        <small v-else class="muted">{{ t('reimbursement.no_advance') }}</small>
         <small v-if="selectedAdvanceCapacityMinor > 0" class="muted">
-          本次代收抵扣 <MoneyText :value-minor="selectedAdvanceCapacityMinor" />
+          {{ t('reimbursement.this_advance_offset') }} <MoneyText :value-minor="selectedAdvanceCapacityMinor" />
         </small>
-        <small class="muted">可跨不同帳戶抵消，僅扣代收額度，不另建轉帳。</small>
-        <small v-if="cashSettleMinor <= 0" class="muted">本次將全額以代收抵扣，不再建立新的入帳交易。</small>
+        <small class="muted">{{ t('reimbursement.advance_cross_account_hint') }}</small>
+        <small v-if="cashSettleMinor <= 0" class="muted">{{ t('reimbursement.full_advance_hint') }}</small>
       </div>
 
       <label v-if="cashSettleMinor > 0" class="field">
-        入帳帳戶
+        {{ t('claim_sheet.form.account') }}
         <CustomSelect v-model="form.accountId" :groups="accountStore.groupedRegularAccounts" />
       </label>
 
       <div class="row action-row">
-        <button class="btn" :disabled="saving" @click="goBack">取消</button>
-        <button class="btn primary" :disabled="saving || !canSave" @click="save">{{ saving ? '儲存中...' : '儲存變更' }}</button>
+        <button class="btn" :disabled="saving" @click="goBack">{{ t('common.cancel') }}</button>
+        <button class="btn primary" :disabled="saving || !canSave" @click="save">{{ saving ? t('settings_account.saving') : t('settings_ledger_detail.save_changes') }}</button>
       </div>
     </article>
 
     <article v-else class="card panel">
-      <p class="muted">找不到這筆報銷資料，可能已被移除。</p>
+      <p class="muted">{{ t('reimbursement.not_found') }}</p>
     </article>
   </section>
 </template>
 
 <script setup>
-import { resolveIntlLocale } from '@/ui/services/i18n.service'
+import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
@@ -91,6 +91,7 @@ const reimbursementStore = useReimbursementStore()
 const accountStore = useAccountStore()
 const transactionStore = useTransactionStore()
 const uiStore = useUiStore()
+const { t } = useI18n()
 
 const saving = ref(false)
 const form = reactive({
@@ -188,7 +189,7 @@ function advanceCategoryName(advance) {
   const name = String(advance?.category_name ?? '').trim()
   if (name) return name
   const note = String(advance?.note ?? '').trim()
-  return note || '代收'
+  return note || t('reimbursement_advance_usage.default_advance_name')
 }
 
 function advanceCategoryIcon(advance) {
@@ -216,15 +217,15 @@ async function save() {
       amountMinor: settleAmountMinor.value,
       accountId: cashSettleMinor.value > 0 ? form.accountId : '',
       occurredAt: new Date().toISOString(),
-      note: `報銷入帳（來源交易：${targetTx.value.id}）`,
+      note: t('reimbursement.settle_note', { id: targetTx.value.id }),
       selectedAdvanceIds: form.selectedAdvanceIds,
       allowUpdate: true,
     })
     await Promise.all([transactionStore.loadRecent(), accountStore.load()])
-    uiStore.pushToast('報銷金額已更新')
+    uiStore.pushToast(t('reimbursement.amount_updated'))
     goBack()
   } catch (error) {
-    uiStore.pushToast(error.message ?? '更新失敗', 'error')
+    uiStore.pushToast(error.message ?? t('claim_sheet.toast.update_failed'), 'error')
   } finally {
     saving.value = false
   }

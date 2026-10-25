@@ -1,3 +1,5 @@
+import { translateMessage } from '@/ui/services/i18n.service.js'
+
 const STORAGE_KEY = 'strawmoneybook.theme.preference'
 const LEGACY_PRIMARY_KEY = 'strawmoneybook.theme.primary'
 const DEFAULT_SCHEME_ID = 'charcoal'
@@ -371,8 +373,8 @@ function applyPreference(preference) {
 export function listThemeSchemes() {
   return Object.values(THEME_SCHEMES).map((scheme) => ({
     id: scheme.id,
-    name: scheme.name,
-    description: scheme.description,
+    name: translateMessage(`theme_scheme.${scheme.id}.name`, scheme.name),
+    description: translateMessage(`theme_scheme.${scheme.id}.description`, scheme.description),
     mode: scheme.palette.mode ?? 'dark',
     primary: scheme.palette.primary,
     background: scheme.palette.bg,

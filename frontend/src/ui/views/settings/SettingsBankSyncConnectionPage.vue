@@ -237,7 +237,7 @@
             </li>
           </ul>
 
-          <nav v-if="reviewTotal > 0" class="pagination-bar" aria-label="銀行待匯入分頁">
+          <nav v-if="reviewTotal > 0" class="pagination-bar" :aria-label="t('common.bank_pending_pagination')">
             <button class="btn" :disabled="!canGoPreviousReviewPage" @click="goPreviousReviewPage">
               {{ t('common.previous_page') }}
             </button>

@@ -36,7 +36,7 @@ test('Google auth paths share the same frontend web client id resolver', () => {
   assert.match(googleClientIdSource, /'VITE_GOOGLE_CLIENT_ID'/)
   assert.match(googleIdentitySource, /getConfiguredGoogleWebClientId/)
   assert.match(googleBackupAuthSource, /getConfiguredGoogleWebClientId/)
-  assert.match(googleClientIdSource, /settings_account\.google_client_id_missing/)
+  assert.match(googleClientIdSource, /common\.missing_google_web_client_id/)
   assert.doesNotMatch(googleIdentitySource, /import\.meta\.env\.VITE_GOOGLE_WEB_CLIENT_ID/)
   assert.doesNotMatch(googleBackupAuthSource, /import\.meta\.env\.VITE_GOOGLE_WEB_CLIENT_ID/)
 })

@@ -30,7 +30,7 @@ test('assets page puts securities left and credit right without full-width stack
 test('assets and management exclude credit accounts from mother categories', () => {
   assert.match(assetsSource, /account_kind.*=== 'credit'/)
   assert.match(managementSource, /account_kind.*=== 'credit'/)
-  assert.match(managementSource, /信用卡不掛資產母分類/)
+  assert.match(managementSource, /account\.credit_use_cards_page/)
   assert.doesNotMatch(managementSource, /value: 'credit'/)
 })
 

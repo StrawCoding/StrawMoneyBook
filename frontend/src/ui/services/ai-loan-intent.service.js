@@ -1,3 +1,5 @@
+import { translateMessage } from '@/ui/services/i18n.service.js'
+
 const ACTIVE_LOAN_STATUSES = new Set(['active', 'partial'])
 
 function pad2(value) {
@@ -31,11 +33,15 @@ export function resolveLoanTransactionType(loanIntent) {
 }
 
 export function resolveLoanActionLabel(loanIntent) {
-  if (!loanIntent) return '借貸'
+  if (!loanIntent) return translateMessage('loans.loan_noun', '借貸')
   if (loanIntent.mode === 'create') {
-    return loanIntent.direction === 'borrow' ? '借入' : '借出'
+    return loanIntent.direction === 'borrow'
+      ? translateMessage('loans.borrow', '借入')
+      : translateMessage('loans.lend', '借出')
   }
-  return loanIntent.direction === 'borrow' ? '歸還' : '收回'
+  return loanIntent.direction === 'borrow'
+    ? translateMessage('loans.repay', '歸還')
+    : translateMessage('loans.collect', '收回')
 }
 
 export function formatLoanStartDateTime(occurredAt) {
@@ -53,7 +59,12 @@ export function resolveLoanCounterpartyName(loanIntent) {
 
 export function pickLoanForAiRepayment(loans, loanIntent) {
   const direction = loanIntent?.direction === 'borrow' ? 'borrow' : 'lend'
-  const directionLabel = direction === 'borrow' ? '借入' : '借出'
+  const directionLabel = direction === 'borrow'
+    ? translateMessage('loans.borrow', '借入')
+    : translateMessage('loans.lend', '借出')
+  const actionLabel = loanIntent?.direction === 'borrow'
+    ? translateMessage('loans.repay', '歸還')
+    : translateMessage('loans.collect', '收回')
   const activeLoans = sortByRecent(
     (loans ?? []).filter((item) => ACTIVE_LOAN_STATUSES.has(String(item?.status ?? '')) && item?.direction === direction),
   )
@@ -61,7 +72,11 @@ export function pickLoanForAiRepayment(loans, loanIntent) {
   if (!activeLoans.length) {
     return {
       loan: null,
-      warning: `目前沒有可${loanIntent?.direction === 'borrow' ? '歸還' : '收回'}的${directionLabel}借貸`,
+      warning: translateMessage(
+        'loans.no_repay_available',
+        { action: actionLabel, direction: directionLabel },
+        '目前沒有可{action}的{direction}借貸',
+      ),
     }
   }
 
@@ -73,7 +88,7 @@ export function pickLoanForAiRepayment(loans, loanIntent) {
     }
     return {
       loan: null,
-      warning: '沒有辨識到借貸對象，請補上姓名，例如「歸還小明 500」',
+      warning: translateMessage('loans.need_counterparty_example', '沒有辨識到借貸對象，請補上姓名，例如「歸還小明 500」'),
     }
   }
 
@@ -81,7 +96,9 @@ export function pickLoanForAiRepayment(loans, loanIntent) {
   if (exactMatched.length > 0) {
     return {
       loan: sortByRecent(exactMatched)[0],
-      warning: exactMatched.length > 1 ? `找到多筆「${targetNameRaw}」借貸，已套用最新一筆` : '',
+      warning: exactMatched.length > 1
+        ? translateMessage('leftover.loans.multiple_exact', { name: targetNameRaw }, '找到多筆「{name}」借貸，已套用最新一筆')
+        : '',
     }
   }
 
@@ -94,12 +111,18 @@ export function pickLoanForAiRepayment(loans, loanIntent) {
   if (fuzzyMatched.length > 0) {
     return {
       loan: sortByRecent(fuzzyMatched)[0],
-      warning: fuzzyMatched.length > 1 ? `找到多筆相近對象，已套用最新一筆` : '',
+      warning: fuzzyMatched.length > 1
+        ? translateMessage('leftover.loans.multiple_fuzzy', '找到多筆相近對象，已套用最新一筆')
+        : '',
     }
   }
 
   return {
     loan: null,
-    warning: `找不到進行中的「${targetNameRaw}」借貸，請先建立借貸或補上正確對象`,
+    warning: translateMessage(
+      'leftover.loans.active_not_found',
+      { name: targetNameRaw },
+      '找不到進行中的「{name}」借貸，請先建立借貸或補上正確對象',
+    ),
   }
 }

@@ -29,7 +29,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { accountIconOptions, categoryIconOptions, normalizeFaIcon } from '@/ui/utils/fa-icon-options'
+import { getAccountIconOptions, getCategoryIconOptions, normalizeFaIcon } from '@/ui/utils/fa-icon-options'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { canNavigateBackInApp } from '@/ui/services/navigation-back.service'
@@ -41,7 +41,7 @@ const uiStore = useUiStore()
 const picking = ref(false)
 
 const scope = computed(() => (queryText(route.query.scope) === 'account' ? 'account' : 'category'))
-const options = computed(() => (scope.value === 'account' ? accountIconOptions : categoryIconOptions))
+const options = computed(() => (scope.value === 'account' ? getAccountIconOptions() : getCategoryIconOptions()))
 const currentValue = computed(() => normalizeFaIcon(queryText(route.query.current), options.value[0]?.value ?? ''))
 
 async function pick(icon) {

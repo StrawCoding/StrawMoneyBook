@@ -85,19 +85,19 @@
 
       <div class="stack form-wrap">
         <label class="field">
-          {{ model.type === 'adjustment' ? '結餘金額（元，可正負）' : '金額（元）' }}
+          {{ model.type === 'adjustment' ? t('ai_bookkeeping.balance_amount') : t('common.amount_yuan') }}
           <input
             v-model="model.amountInput"
             class="input"
             type="text"
             inputmode="decimal"
-            :placeholder="model.type === 'adjustment' ? '可直接輸入 -300+50' : '可直接輸入 120+35-10'"
+            :placeholder="model.type === 'adjustment' ? t('common.calc_placeholder_adjust') : t('common.calc_placeholder_normal')"
             @input="handleAmountInput"
           />
         </label>
 
         <div class="field">
-          <span>交易時間</span>
+          <span>{{ t('common.transaction_time') }}</span>
           <DateTimePickerField
             :date="model.occurredDate"
             :hour="model.occurredHour"
@@ -110,17 +110,17 @@
 
         <div v-if="model.type === 'transfer'" class="inline-grid">
           <label class="field">
-            轉出帳戶
+            {{ t('quick_add.field.from_account') }}
             <CustomSelect v-model="model.accountId" :groups="transferAccountGroups" />
           </label>
           <label class="field">
-            轉入帳戶
+            {{ t('quick_add.field.to_account') }}
             <CustomSelect v-model="model.peerAccountId" :groups="transferAccountGroups" />
           </label>
         </div>
         <section v-if="model.type === 'transfer'" class="fx-panel">
           <div class="fx-row">
-            <small class="muted">轉帳幣別</small>
+            <small class="muted">{{ t('quick_add.field.transfer_currencies') }}</small>
             <strong>{{ transferFromCurrency }} → {{ transferToCurrency }}</strong>
           </div>
           <template v-if="transferNeedsExchangeRate">
@@ -131,7 +131,7 @@
                 :class="{ primary: model.exchangeRateMode === 'system' }"
                 @click="model.exchangeRateMode = 'system'"
               >
-                系統同步（即時）
+                {{ t('quick_add.fx.mode.system') }}
               </button>
               <button
                 type="button"
@@ -139,21 +139,21 @@
                 :class="{ primary: model.exchangeRateMode === 'manual' }"
                 @click="model.exchangeRateMode = 'manual'"
               >
-                自行輸入
+                {{ t('quick_add.fx.mode.manual') }}
               </button>
             </div>
             <label v-if="model.exchangeRateMode === 'manual'" class="field">
-              匯率（1 {{ transferFromCurrency }} = ? {{ transferToCurrency }}）
+              {{ t('quick_add.field.manual_exchange_rate', { from: transferFromCurrency, to: transferToCurrency }) }}
               <input
                 v-model.trim="model.manualExchangeRateInput"
                 type="text"
                 inputmode="decimal"
                 class="input"
-                placeholder="例如 0.0318"
+                :placeholder="t('quick_add.placeholder.manual_exchange_rate')"
               />
             </label>
             <div v-else class="fx-system-row">
-              <small class="muted">系統匯率快照：{{ transferSnapshotInfoLabel }}</small>
+              <small class="muted">{{ t('quick_add.fx.snapshot_label', { label: transferSnapshotInfoLabel }) }}</small>
               <button
                 type="button"
                 class="btn"
@@ -161,35 +161,35 @@
                 :disabled="exchangeRateSyncing"
                 @click="syncExchangeRateSnapshotNow"
               >
-                {{ exchangeRateSyncing ? '同步中...' : '立即同步匯率' }}
+                {{ exchangeRateSyncing ? t('quick_add.fx.syncing') : t('quick_add.fx.sync_now') }}
               </button>
             </div>
-            <p class="muted fx-note">換算匯率：1 {{ transferFromCurrency }} = {{ transferResolvedRateLabel }} {{ transferToCurrency }}</p>
-            <p class="muted fx-note">預估轉入：{{ formatCurrencyMinor(transferEstimatedReceiveMinor, transferToCurrency) }}</p>
+            <p class="muted fx-note">{{ t('quick_add.fx.resolved_rate', { from: transferFromCurrency, rate: transferResolvedRateLabel, to: transferToCurrency }) }}</p>
+            <p class="muted fx-note">{{ t('quick_add.fx.estimate_receive', { amount: formatCurrencyMinor(transferEstimatedReceiveMinor, transferToCurrency) }) }}</p>
           </template>
-          <p v-else class="muted fx-note">同幣別轉帳，匯率固定為 1</p>
+          <p v-else class="muted fx-note">{{ t('quick_add.fx.same_currency') }}</p>
         </section>
 
         <label v-else-if="model.type === 'adjustment'" class="field">
-          帳戶
+          {{ t('common.account') }}
           <CustomSelect v-model="model.accountId" :groups="directAccountGroups" />
         </label>
 
         <div v-else class="inline-grid">
           <label class="field">
-            帳戶
+            {{ t('common.account') }}
             <CustomSelect v-model="model.accountId" :groups="directAccountGroups" />
           </label>
           <label class="field">
-            分類
+            {{ t('common.category') }}
             <CustomSelect v-model="model.categoryId" :groups="categoryGroupsByType" />
           </label>
         </div>
 
         <section class="field addon-field">
           <div class="row addon-head">
-            <span>附加項目</span>
-            <button type="button" class="btn" @click="addAddonRow">新增項目</button>
+            <span>{{ t('common.addon_item') }}</span>
+            <button type="button" class="btn" @click="addAddonRow">{{ t('common.add_item') }}</button>
           </div>
 
           <div v-if="addonRows.length" class="addon-list">
@@ -202,15 +202,15 @@
               />
               <CustomSelect v-model="item.direction" class="addon-dir" :options="addonDirectionOptions" />
               <input v-model.number="item.amountMajor" class="input addon-amount" type="number" min="0" step="0.01" placeholder="0" />
-              <button type="button" class="btn danger addon-remove" @click="removeAddonRow(item.id)">刪除</button>
+              <button type="button" class="btn danger addon-remove" @click="removeAddonRow(item.id)">{{ t('common.delete') }}</button>
             </div>
           </div>
 
-          <small class="muted">可在設定中的附加項目清單更改</small>
+          <small class="muted">{{ t('quick_add.extra.manage_hint') }}</small>
         </section>
 
         <label class="field">
-          備註
+          {{ t('common.note') }}
           <textarea v-model.trim="model.note" class="textarea" rows="3" />
         </label>
 
@@ -264,7 +264,7 @@
       </div>
 
       <footer class="row action-row result-action-row">
-        <button class="btn" :disabled="parsing || submitting" @click="parseText">重新解析</button>
+        <button class="btn" :disabled="parsing || submitting" @click="parseText">{{ t('ai_bookkeeping.reparse') }}</button>
         <button
           class="btn primary"
           data-testid="ai-bookkeeping-save"
@@ -412,7 +412,7 @@ const autoFillRules = ref([])
 const typeOptions = computed(() => [
   { value: 'expense', label: t('transaction.type.expense') },
   { value: 'income', label: t('transaction.type.income') },
-  { value: 'adjustment', label: '結餘' },
+  { value: 'adjustment', label: t('transaction_search.label.adjustment') },
   { value: 'transfer', label: t('transaction.type.transfer') },
 ])
 const addonDirectionOptions = [
@@ -475,10 +475,10 @@ const transferEstimatedReceiveMinor = computed(() => {
   return convertAmountMinorByRate(baseMinor, rate)
 })
 const transferSnapshotInfoLabel = computed(() => {
-  if (!exchangeRateSnapshot.value?.syncedAt) return '尚未同步'
+  if (!exchangeRateSnapshot.value?.syncedAt) return t('quick_add.fx.not_synced')
   const parsed = new Date(exchangeRateSnapshot.value.syncedAt)
-  if (Number.isNaN(parsed.getTime())) return '尚未同步'
-  return `${parsed.toLocaleString(resolveIntlLocale())}（資料日期 ${exchangeRateSnapshot.value.effectiveDate || '-'}）`
+  if (Number.isNaN(parsed.getTime())) return t('quick_add.fx.not_synced')
+  return `${parsed.toLocaleString(resolveIntlLocale())}${t('ai_bookkeeping.data_date', { date: exchangeRateSnapshot.value.effectiveDate || '-' })}`
 })
 
 watch(
@@ -634,7 +634,7 @@ async function parseText(options = {}) {
   const text = String(sourceText.value ?? '').trim()
   if (!text) {
     hasDraft.value = false
-    uiStore.pushToast('請先輸入內容', 'error')
+    uiStore.pushToast(t('common.please_enter_content'), 'error')
     return
   }
 
@@ -657,13 +657,13 @@ async function parseText(options = {}) {
         try {
           result = parseSourceTextWithAi(line)
         } catch (error) {
-          failedLines.push(`${line}（${error?.message || 'AI 解析失敗'}）`)
+          failedLines.push(t('ai_bookkeeping.line_wrap', { line, detail: error?.message || t('ai_bookkeeping.parse_failed') }))
           continue
         }
 
         if (!result?.draft) {
           const lineWarnings = resolveAiParserWarnings(result)
-          failedLines.push(`${line}（${lineWarnings[0] || '沒有抓到可用交易資訊'}）`)
+          failedLines.push(t('ai_bookkeeping.line_wrap', { line, detail: lineWarnings[0] || t('ai_bookkeeping.no_usable') }))
           continue
         }
 
@@ -682,27 +682,27 @@ async function parseText(options = {}) {
           if (created) {
             successCount += 1
           } else {
-            failedLines.push(`${line}（儲存失敗）`)
+            failedLines.push(t('ai_bookkeeping.line_wrap', { line, detail: t('ai_bookkeeping.save_failed') }))
           }
         } catch (error) {
-          failedLines.push(`${line}（${error?.message || '儲存失敗'}）`)
+          failedLines.push(t('ai_bookkeeping.line_wrap', { line, detail: error?.message || t('ai_bookkeeping.save_failed') }))
         }
       }
 
       resetAiInputState({ clearSourceText: false, clearDraft: true })
 
       if (!successCount && failedLines.length) {
-        uiStore.pushToast(`批量建立失敗：${failedLines.slice(0, 2).join('；')}`, 'error')
+        uiStore.pushToast(`${t('ai_bookkeeping.batch_failed')}：${failedLines.slice(0, 2).join('；')}`, 'error')
         return
       }
 
-      const summary = [`批量建立完成 ${successCount} 筆`]
+      const summary = [t('ai_bookkeeping.batch_done', { count: successCount })]
       if (failedLines.length) {
-        summary.push(`失敗 ${failedLines.length} 筆`)
+        summary.push(t('reimbursement.failed_n', { count: failedLines.length }))
       }
       uiStore.pushToast(summary.join('，'))
       if (failedLines.length) {
-        uiStore.pushToast(`未建立：${failedLines.slice(0, 2).join('；')}`, 'error')
+        uiStore.pushToast(`${t('ai_bookkeeping.not_created')}${failedLines.slice(0, 2).join('；')}`, 'error')
       }
       if (successCount > 0) {
         await returnHomeAfterBookkeeping(router)
@@ -717,7 +717,7 @@ async function parseText(options = {}) {
       warnings.value = []
       hasDraft.value = false
       latestLoanIntent.value = null
-      uiStore.pushToast(error?.message || 'AI 解析失敗，請稍後再試', 'error')
+      uiStore.pushToast(error?.message || t('ai_bookkeeping.parse_failed_retry'), 'error')
       return
     }
 
@@ -739,9 +739,9 @@ async function parseText(options = {}) {
     shouldAutoSubmit = autoCreate
     if (!shouldAutoSubmit) {
       if (!warnings.value.length) {
-        uiStore.pushToast('解析完成，請確認後儲存')
+        uiStore.pushToast(t('ai_bookkeeping.parse_review'))
       } else {
-        uiStore.pushToast('解析完成，請先確認警示項目')
+        uiStore.pushToast(t('ai_bookkeeping.parse_warnings'))
       }
     }
   } finally {
@@ -801,7 +801,7 @@ async function toggleVoiceInput() {
       }
     },
     onError: (message) => {
-      uiStore.pushToast(message || '語音辨識失敗，請改用手動輸入', 'error')
+      uiStore.pushToast(message || t('ai_bookkeeping.voice_failed'), 'error')
     },
     onEnd: () => {
       if (heardFinal) {
@@ -815,9 +815,9 @@ async function toggleVoiceInput() {
   })
 
   if (!started && !speechLastError.value) {
-    uiStore.pushToast('語音啟動失敗，請稍後再試', 'error')
+    uiStore.pushToast(t('ai_bookkeeping.voice_start_failed'), 'error')
   } else if (!started) {
-    uiStore.pushToast(speechLastError.value || '語音啟動失敗，請稍後再試', 'error')
+    uiStore.pushToast(speechLastError.value || t('ai_bookkeeping.voice_start_failed'), 'error')
   }
 }
 
@@ -853,7 +853,7 @@ function resetPersistedTransaction() {
 }
 
 function resolveAiLimitWithManualHint(message) {
-  const baseMessage = String(message ?? '').trim() || '免費版 AI 記帳每日最多 5 次'
+  const baseMessage = String(message ?? '').trim() || t('ai_bookkeeping.free_daily_limit')
   const manualHint = t('ai_bookkeeping.toast.limit_manual_hint', '可改用手動記帳')
   if (baseMessage.includes(manualHint)) return baseMessage
   return `${baseMessage}，${manualHint}`
@@ -903,17 +903,17 @@ async function submit(options = {}) {
 
   if (model.type === 'transfer') {
     if (baseAmountMinor <= 0) {
-      return failSubmit('請輸入有效金額（主轉帳金額需大於 0）')
+      return failSubmit(t('quick_add.error.transfer_base_amount_invalid'))
     }
     if (baseAmountMinor + sourceExtraMinor <= 0) {
-      return failSubmit('轉出金額（含附加項目）需大於 0')
+      return failSubmit(t('quick_add.error.transfer_total_amount_invalid'))
     }
   } else if (model.type === 'adjustment') {
     if (!settledAmountMinorRaw) {
-      return failSubmit('請輸入有效結餘金額（不可為 0）')
+      return failSubmit(t('ai_bookkeeping.balance_invalid'))
     }
   } else if (settledAmountMinorRaw < 0) {
-    return failSubmit('請輸入有效金額（含附加項目後不可小於 0）')
+    return failSubmit(t('home_tx_edit.error.amount_too_small'))
   } else if (model.type !== 'adjustment' && isUnsetZeroBookkeepingAmount({
     settledAmountMinorRaw,
     baseAmountMinor,
@@ -922,18 +922,18 @@ async function submit(options = {}) {
     return failSubmit(t('quick_add.error.amount_required'))
   }
   if (!occurredAt) {
-    return failSubmit('請選擇有效時間')
+    return failSubmit(t('quick_add.error.invalid_occurred_at'))
   }
   if (!model.accountId) {
-    return failSubmit('請選擇帳戶')
+    return failSubmit(t('common.please_select_account'))
   }
   if (!loanIntent && model.type !== 'transfer' && model.type !== 'adjustment' && !model.categoryId) {
-    return failSubmit('沒有分類，請在設定中新增後再試，未建立交易紀錄')
+    return failSubmit(t('ai_bookkeeping.no_category_no_tx'))
   }
 
   const usage = getAiBookkeepingDailyUsage()
   if (Number.isFinite(usage.limit) && usage.used >= usage.limit) {
-    return failSubmit(resolveAiLimitWithManualHint('免費版 AI 記帳每日最多 5 次'))
+    return failSubmit(resolveAiLimitWithManualHint(t('ai_bookkeeping.free_daily_limit')))
   }
 
   submitting.value = true
@@ -945,7 +945,7 @@ async function submit(options = {}) {
       if (loanIntent.mode === 'create') {
         const counterpartyName = resolveLoanCounterpartyName(loanIntent)
         if (!counterpartyName) {
-          return failSubmit('沒有辨識到借貸對象，請補上名字後再試')
+          return failSubmit(t('ai_bookkeeping.no_counterparty_retry'))
         }
         await withTimeout(
           loanStore.create({
@@ -960,17 +960,17 @@ async function submit(options = {}) {
             note: noteText,
           }),
           AI_SUBMIT_TIMEOUT_MS,
-          'AI 記帳逾時，請稍後再試',
+          t('ai_bookkeeping.timeout'),
         )
       } else {
         await withTimeout(
           loanStore.load(),
           AI_SUBMIT_TIMEOUT_MS,
-          'AI 記帳逾時，請稍後再試',
+          t('ai_bookkeeping.timeout'),
         )
         const matched = pickLoanForAiRepayment(loanStore.items, loanIntent)
         if (!matched.loan) {
-          return failSubmit(matched.warning || '找不到可歸還/收回的借貸紀錄')
+          return failSubmit(matched.warning || t('ai_bookkeeping.no_repay_loan'))
         }
         if (matched.warning && !suppressToast) {
           uiStore.pushToast(matched.warning)
@@ -984,18 +984,18 @@ async function submit(options = {}) {
             paidAt: resolveLoanOccurredAtIso(occurredAt),
           }),
           AI_SUBMIT_TIMEOUT_MS,
-          'AI 記帳逾時，請稍後再試',
+          t('ai_bookkeeping.timeout'),
         )
       }
 
       await withTimeout(
         refreshLinkedDataAfterLoanWrite(),
         AI_SUBMIT_TIMEOUT_MS,
-        'AI 記帳逾時，請稍後再試',
+        t('ai_bookkeeping.timeout'),
       )
       recordAiBookkeepingUsage()
       if (!suppressToast) {
-        uiStore.pushToast(autoCreated ? `已先完成${actionLabel}` : `AI 自動記帳已完成${actionLabel}`)
+        uiStore.pushToast(autoCreated ? t('ai_bookkeeping.did_action', { action: actionLabel }) : t('ai_bookkeeping.ai_did_action', { action: actionLabel }))
       }
       finalizeAiSubmitSuccess({
         keepDraft,
@@ -1018,7 +1018,7 @@ async function submit(options = {}) {
       await withTimeout(
         transactionStore.deleteTransaction(currentPersistedTxId),
         AI_SUBMIT_TIMEOUT_MS,
-        'AI 記帳逾時，請稍後再試',
+        t('ai_bookkeeping.timeout'),
       )
       resetPersistedTransaction()
     }
@@ -1027,14 +1027,14 @@ async function submit(options = {}) {
     const targetTxId = String(persistedTransactionId.value ?? '').trim()
     if (model.type === 'transfer') {
       if (!model.peerAccountId || model.accountId === model.peerAccountId) {
-        return failSubmit('請選擇不同的轉出/轉入帳戶')
+        return failSubmit(t('ai_bookkeeping.same_transfer_accounts'))
       }
       const transferRate = await resolveTransferRateOrThrow()
       const transferToAmountMinor = transferNeedsExchangeRate.value
         ? convertAmountMinorByRate(baseAmountMinor, transferRate)
         : baseAmountMinor
       if (transferToAmountMinor <= 0) {
-        return failSubmit('轉入金額需大於 0，請調整匯率')
+        return failSubmit(t('quick_add.error.receive_amount_invalid'))
       }
       if (targetTxId) {
         await withTimeout(
@@ -1051,7 +1051,7 @@ async function submit(options = {}) {
             note: noteText,
           }),
           AI_SUBMIT_TIMEOUT_MS,
-          'AI 記帳逾時，請稍後再試',
+          t('ai_bookkeeping.timeout'),
         )
         persistedTransactionType.value = 'transfer'
         updatedExisting = true
@@ -1067,7 +1067,7 @@ async function submit(options = {}) {
             note: noteText,
           }),
           AI_SUBMIT_TIMEOUT_MS,
-          'AI 記帳逾時，請稍後再試',
+          t('ai_bookkeeping.timeout'),
         )
         persistedTransactionId.value = String(transferResult?.outTxId ?? transferResult?.inTxId ?? '').trim()
         persistedTransactionType.value = 'transfer'
@@ -1086,7 +1086,7 @@ async function submit(options = {}) {
             note: noteText,
           }),
           AI_SUBMIT_TIMEOUT_MS,
-          'AI 記帳逾時，請稍後再試',
+          t('ai_bookkeeping.timeout'),
         )
         persistedTransactionType.value = 'income'
         updatedExisting = true
@@ -1102,7 +1102,7 @@ async function submit(options = {}) {
             note: noteText,
           }),
           AI_SUBMIT_TIMEOUT_MS,
-          'AI 記帳逾時，請稍後再試',
+          t('ai_bookkeeping.timeout'),
         )
         persistedTransactionId.value = String(createdTxId ?? '').trim()
         persistedTransactionType.value = 'income'
@@ -1121,7 +1121,7 @@ async function submit(options = {}) {
             note: noteText,
           }),
           AI_SUBMIT_TIMEOUT_MS,
-          'AI 記帳逾時，請稍後再試',
+          t('ai_bookkeeping.timeout'),
         )
         persistedTransactionType.value = 'adjustment'
         updatedExisting = true
@@ -1136,7 +1136,7 @@ async function submit(options = {}) {
             note: noteText,
           }),
           AI_SUBMIT_TIMEOUT_MS,
-          'AI 記帳逾時，請稍後再試',
+          t('ai_bookkeeping.timeout'),
         )
         persistedTransactionId.value = String(createdTxId ?? '').trim()
         persistedTransactionType.value = 'adjustment'
@@ -1156,7 +1156,7 @@ async function submit(options = {}) {
             note: noteText,
           }),
           AI_SUBMIT_TIMEOUT_MS,
-          'AI 記帳逾時，請稍後再試',
+          t('ai_bookkeeping.timeout'),
         )
         persistedTransactionType.value = 'expense'
         updatedExisting = true
@@ -1173,7 +1173,7 @@ async function submit(options = {}) {
             note: noteText,
           }),
           AI_SUBMIT_TIMEOUT_MS,
-          'AI 記帳逾時，請稍後再試',
+          t('ai_bookkeeping.timeout'),
         )
         persistedTransactionId.value = String(createdTxId ?? '').trim()
         persistedTransactionType.value = 'expense'
@@ -1209,7 +1209,7 @@ function warmupRecentHistoryInBackground() {
   historyWarmupTask = withTimeout(
     transactionStore.loadRecent(120),
     AI_HISTORY_WARMUP_TIMEOUT_MS,
-    'AI 歷史資料預載逾時',
+    t('ai_bookkeeping.history_preload_timeout'),
   )
     .catch((error) => {
       console.warn('[ai-page] recent history warmup failed', error)
@@ -1337,12 +1337,12 @@ async function syncExchangeRateSnapshotNow(options = {}) {
     const snapshot = await syncCbcExchangeRateSnapshot(ledgerId)
     exchangeRateSnapshot.value = snapshot
     if (!silent) {
-      uiStore.pushToast(`匯率同步完成（資料日期：${snapshot.effectiveDate || '-'}）`)
+        uiStore.pushToast(t('quick_add.toast.rate_synced', { date: snapshot.effectiveDate || '-' }))
     }
     return true
   } catch (error) {
     if (!silent) {
-      uiStore.pushToast(error.message ?? '匯率同步失敗', 'error')
+      uiStore.pushToast(error.message ?? t('quick_add.toast.rate_sync_failed'), 'error')
     }
     return false
   } finally {
@@ -1358,7 +1358,7 @@ async function resolveTransferRateOrThrow() {
   if (model.exchangeRateMode === 'manual') {
     const manualRate = Number(model.manualExchangeRateInput)
     if (!Number.isFinite(manualRate) || manualRate <= 0) {
-      throw new Error('請輸入有效匯率')
+      throw new Error(t('quick_add.error.invalid_rate'))
     }
     return manualRate
   }
@@ -1370,10 +1370,10 @@ async function resolveTransferRateOrThrow() {
     const synced = await withTimeout(
       syncExchangeRateSnapshotNow({ silent: true }),
       TRANSFER_RATE_AUTO_SYNC_TIMEOUT_MS,
-      '系統匯率同步逾時，請改用手動輸入或稍後再試',
+      t('quick_add.error.rate_sync_timeout'),
     )
     if (!synced && !hasSystemExchangeRateReady()) {
-      throw new Error('找不到可用的系統匯率，請改用手動輸入')
+      throw new Error(t('quick_add.error.rate_unavailable'))
     }
   }
 
@@ -1383,7 +1383,7 @@ async function resolveTransferRateOrThrow() {
     transferToCurrency.value,
   )
   if (!Number.isFinite(rate) || rate <= 0) {
-    throw new Error('找不到可用的系統匯率，請改用手動輸入')
+    throw new Error(t('quick_add.error.rate_unavailable'))
   }
   return rate
 }
@@ -1483,7 +1483,7 @@ function createAddonRow() {
 }
 
 function defaultAddonTemplate() {
-  return addonTemplateItems.value[0] ?? { id: 'addon-default', label: '附加項目', defaultDirection: 'plus' }
+  return addonTemplateItems.value[0] ?? { id: 'addon-default', label: t('common.addon_item'), defaultDirection: 'plus' }
 }
 
 function addAddonRow() {
@@ -1513,7 +1513,7 @@ function collectAppliedAddonItems() {
 }
 
 function addonLabelOf(optionId) {
-  return addonTemplateItems.value.find((item) => item.id === optionId)?.label ?? '附加項目'
+  return addonTemplateItems.value.find((item) => item.id === optionId)?.label ?? t('common.addon_item')
 }
 
 function addonOptionIdByLabel(label) {

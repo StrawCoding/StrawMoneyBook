@@ -1,49 +1,49 @@
 <template>
   <section class="stack">
     <header class="row page-head">
-      <h2>報銷統整</h2>
+      <h2>{{ t('reimbursement.list_title') }}</h2>
       <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
     </header>
 
     <article class="card panel summary">
       <div class="row">
-        <span class="muted">未報銷金額</span>
+        <span class="muted">{{ t('reimbursement.unsettled_amount') }}</span>
         <MoneyText :value-minor="reimbursementStore.pendingTotalMinor" />
       </div>
       <div class="row">
-        <span class="muted">已報銷金額</span>
+        <span class="muted">{{ t('reimbursement.settled_amount') }}</span>
         <MoneyText :value-minor="reimbursementStore.reimbursedTotalMinor" />
       </div>
       <div class="row">
-        <span class="muted">代收可抵金額</span>
+        <span class="muted">{{ t('reimbursement.advance_available') }}</span>
         <MoneyText :value-minor="reimbursementStore.availableAdvanceTotalMinor" />
       </div>
       <div class="row summary-action-row">
-        <RouterLink class="btn" :to="{ name: 'reimbursement-advance-manage' }">管理代收</RouterLink>
-        <RouterLink class="btn" :to="{ name: 'reimbursement-advance-usage-manage' }">抵扣紀錄</RouterLink>
-        <button class="btn" @click="openAdvanceSheet">新增代收</button>
+        <RouterLink class="btn" :to="{ name: 'reimbursement-advance-manage' }">{{ t('reimbursement.manage_advances') }}</RouterLink>
+        <RouterLink class="btn" :to="{ name: 'reimbursement-advance-usage-manage' }">{{ t('reimbursement.offset_records') }}</RouterLink>
+        <button class="btn" @click="openAdvanceSheet">{{ t('reimbursement.add_advance') }}</button>
       </div>
     </article>
 
     <article class="card panel">
       <div class="tab-row">
-        <button class="btn" :class="{ primary: tab === 'pending' }" @click="tab = 'pending'">未報銷</button>
-        <button class="btn" :class="{ primary: tab === 'reimbursed' }" @click="tab = 'reimbursed'">已報銷</button>
+        <button class="btn" :class="{ primary: tab === 'pending' }" @click="tab = 'pending'">{{ t('assets_page.unreimbursed') }}</button>
+        <button class="btn" :class="{ primary: tab === 'reimbursed' }" @click="tab = 'reimbursed'">{{ t('reimbursement.already_reimbursed') }}</button>
       </div>
 
       <div class="row export-row">
-        <small class="muted">已選 {{ selectedActiveCount }} / {{ activeList.length }} 筆</small>
-        <button class="btn" @click="openActionSheet">操作</button>
+        <small class="muted">{{ t('common.selected_of_total', { count: selectedActiveCount, total: activeList.length }) }}</small>
+        <button class="btn" @click="openActionSheet">{{ t('common.actions') }}</button>
       </div>
-      <p v-if="exportedFilename" class="muted file-note">檔案：{{ exportedFilename }}</p>
-      <p v-if="exportedLocation" class="muted file-note">位置：{{ exportedLocation }}</p>
+      <p v-if="exportedFilename" class="muted file-note">{{ t('common.file_prefix') }}{{ exportedFilename }}</p>
+      <p v-if="exportedLocation" class="muted file-note">{{ t('common.location_prefix') }}{{ exportedLocation }}</p>
       <div v-if="exportedUrl" class="row export-open-row">
         <button class="btn" @click="openExportLink">{{ exportedActionLabel }}</button>
       </div>
 
       <ul class="list">
         <li v-for="tx in activeList" :key="tx.id" class="entry">
-          <label class="entry-select" :aria-label="`選取交易 ${tx.id}`">
+          <label class="entry-select" :aria-label="t('reimbursement.select_tx', { id: tx.id })">
             <input v-model="selectedByTab[tab]" type="checkbox" :value="tx.id" />
             <span class="entry-select-mark">
               <font-awesome-icon icon="fa-solid fa-check" />
@@ -63,7 +63,7 @@
                 <span class="tx-icon-col">
                   <font-awesome-icon v-if="categoryIconOfTx(tx)" :icon="categoryIconOfTx(tx)" class="tx-icon" />
                 </span>
-                <strong class="entry-name">{{ tx.category_name || noteTextOfTx(tx) || '未命名分類' }}</strong>
+                <strong class="entry-name">{{ tx.category_name || noteTextOfTx(tx) || t('common.unnamed_category') }}</strong>
               </div>
               <MoneyText :value-minor="originalMinorOfTx(tx)" />
             </div>
@@ -73,13 +73,13 @@
             </div>
             <div v-if="hasAdvanceOffset(tx)" class="row offset-row">
               <small class="offset-pill">
-                代收抵消 <MoneyText :value-minor="tx.advance_used_minor" />
+                {{ t('reimbursement.advance_offset') }} <MoneyText :value-minor="tx.advance_used_minor" />
               </small>
-              <button class="btn" @click.stop="openOffsetAbout(tx)">抵消明細</button>
+              <button class="btn" @click.stop="openOffsetAbout(tx)">{{ t('reimbursement.offset_detail') }}</button>
             </div>
             <div v-if="hasCustomClaimAmount(tx)" class="row claim-row">
               <small class="claim-pill">
-                報銷金額 <MoneyText :value-minor="claimableMinorOfTx(tx)" />
+                {{ t('reimbursement.amount') }} <MoneyText :value-minor="claimableMinorOfTx(tx)" />
               </small>
             </div>
           </div>
@@ -90,26 +90,26 @@
               class="btn entry-action-btn"
               @click.stop="openClaimAmountSheet(tx)"
             >
-              報銷金額
+              {{ t('reimbursement.amount') }}
             </button>
             <button
               v-if="tab === 'pending'"
               class="btn entry-action-btn"
               @click.stop="openSingleSettle(tx)"
             >
-              報銷
+              {{ t('feature_list.reimbursements') }}
             </button>
             <button
               v-else
               class="btn entry-action-btn"
               @click.stop="openReimbursementEdit(tx)"
             >
-              調整
+              {{ t('reimbursement.adjust') }}
             </button>
           </div>
         </li>
 
-        <li v-if="!activeList.length" class="muted">目前此分頁沒有資料</li>
+        <li v-if="!activeList.length" class="muted">{{ t('reimbursement.empty_tab') }}</li>
       </ul>
     </article>
 
@@ -118,13 +118,13 @@
         <section v-if="isActionSheetOpen" class="sheet-mask" @click.self="closeActionSheet">
           <article class="sheet card action-sheet app-bottom-sheet">
             <header class="row">
-              <h3>批量操作</h3>
-              <button class="btn" @click="closeActionSheet">關閉</button>
+              <h3>{{ t('common.batch_actions') }}</h3>
+              <button class="btn" @click="closeActionSheet">{{ t('common.close') }}</button>
             </header>
-            <small class="muted action-hint">可操作 {{ activeList.length }} 筆，已選 {{ selectedActiveCount }} 筆</small>
+            <small class="muted action-hint">{{ t('reimbursement.operable_selected', { total: activeList.length, count: selectedActiveCount }) }}</small>
             <div class="stack action-list app-bottom-sheet-body">
               <button class="btn action-btn" :disabled="!activeList.length" @click="actionToggleSelectAll">
-                {{ isAllActiveSelected ? '取消全選' : '全選' }}
+                {{ isAllActiveSelected ? t('claim_sheet.import.clear_all') : t('claim_sheet.import.select_all') }}
               </button>
               <div v-if="tab === 'pending'" class="action-pair-row">
                 <button
@@ -132,7 +132,7 @@
                   :disabled="!selectedActiveCount || settlingBatch || voidingBatch"
                   @click="actionOpenBatchSettle"
                 >
-                  <span>批量標記報銷</span>
+                  <span>{{ t('reimbursement.batch_mark') }}</span>
                 </button>
                 <button
                   class="btn danger action-btn"
@@ -140,7 +140,7 @@
                   @click="actionMarkVoidSelected"
                 >
                   <font-awesome-icon icon="fa-solid fa-ban" />
-                  <span>{{ voidingBatch ? '批量作廢中...' : '批量作廢' }}</span>
+                  <span>{{ voidingBatch ? t('reimbursement.batch_voiding') : t('reimbursement.batch_void') }}</span>
                 </button>
               </div>
               <button
@@ -149,7 +149,7 @@
                 :disabled="selectedActiveCount !== 1 || settlingBatch || voidingBatch"
                 @click="actionOpenSelectedAdjustment"
               >
-                調整
+                {{ t('reimbursement.adjust') }}
               </button>
               <button
                 v-if="tab !== 'pending'"
@@ -158,17 +158,17 @@
                 @click="actionMarkVoidSelected"
               >
                 <font-awesome-icon icon="fa-solid fa-ban" />
-                <span>{{ voidingBatch ? '批量作廢中...' : '批量作廢' }}</span>
+                <span>{{ voidingBatch ? t('reimbursement.batch_voiding') : t('reimbursement.batch_void') }}</span>
               </button>
               <div class="action-pair-row">
                 <button class="btn primary action-btn" :disabled="!canExportClaimSheet" @click="actionExportClaimSheetCsv">
-                  匯出 CSV
+                  {{ t('analysis_print.export_csv') }}
                 </button>
               </div>
               <button v-if="exportedUrl" class="btn action-btn" @click="actionOpenExportLink">{{ exportedActionLabel }}</button>
               <div class="action-pair-row">
-                <button class="btn action-btn" :disabled="!selectedActiveCount" @click="actionClearSelection">清除選取</button>
-                <button class="btn action-btn" @click="closeActionSheet">取消</button>
+                <button class="btn action-btn" :disabled="!selectedActiveCount" @click="actionClearSelection">{{ t('settings_bank_sync.review.select_none') }}</button>
+                <button class="btn action-btn" @click="closeActionSheet">{{ t('common.cancel') }}</button>
               </div>
             </div>
           </article>
@@ -178,18 +178,18 @@
 
     <InputBottomSheet
       :open="isSettleOpen"
-      :title="settleMode === 'batch' ? `批量報銷設定（${batchSettleItems.length} 筆）` : '報銷完成設定'"
+      :title="settleMode === 'batch' ? t('reimbursement.batch_settle_title', { count: batchSettleItems.length }) : t('reimbursement.settle_title')"
       :body-class="'stack form-wrap'"
       :sheet-class="'sheet'"
       :show-footer="true"
       @close="closeSettle"
     >
               <label v-if="settleMode === 'single'">
-                報銷金額（元）
+                {{ t('reimbursement.amount_yuan') }}
                 <input v-model.number="settleForm.amountMajor" type="number" min="0" step="1" class="input" />
               </label>
               <div v-if="settleMode === 'single'" class="copy-wrap">
-                <p class="copy-title">代收抵扣（可複選）</p>
+                <p class="copy-title">{{ t('reimbursement.advance_multi') }}</p>
                 <div v-if="usableSingleAdvances.length" class="copy-ledger-list">
                   <label v-for="advance in usableSingleAdvances" :key="advance.id" class="copy-ledger-item">
                     <input v-model="settleForm.selectedAdvanceIds" class="copy-ledger-check" type="checkbox" :value="advance.id" />
@@ -204,7 +204,7 @@
                         <span>{{ advanceCategoryName(advance) }}</span>
                       </span>
                       <small class="muted copy-ledger-meta">
-                        {{ advance.account_name || '未指定帳戶' }}
+                        {{ advance.account_name || t('common.unknown_account') }}
                       </small>
                       <small class="muted copy-ledger-meta">
                         <MoneyText :value-minor="advance.available_minor" />
@@ -212,28 +212,28 @@
                     </span>
                   </label>
                 </div>
-                <p v-else class="muted">目前沒有可用代收</p>
+                <p v-else class="muted">{{ t('reimbursement.no_advance') }}</p>
                 <div v-if="selectedAdvanceCapacityMinor > 0" class="row advance-summary-row">
-                  <span>本次代收抵扣</span>
+                  <span>{{ t('reimbursement.this_advance_offset') }}</span>
                   <MoneyText :value-minor="selectedAdvanceCapacityMinor" />
                 </div>
-                <p class="muted">可跨不同帳戶抵消，僅扣代收額度，不另建轉帳。</p>
-                <p v-if="singleSettleCashMinor <= 0" class="muted">本次將全額以代收抵扣，不再建立新的入帳交易。</p>
+                <p class="muted">{{ t('reimbursement.advance_cross_account_hint') }}</p>
+                <p v-if="singleSettleCashMinor <= 0" class="muted">{{ t('reimbursement.full_advance_hint') }}</p>
               </div>
               <div v-else class="batch-settle-summary">
-                <small class="muted">將以每筆「剩餘未報銷金額」入帳</small>
+                <small class="muted">{{ t('reimbursement.remain_hint') }}</small>
                 <div class="row">
-                  <span>合計待入帳</span>
+                  <span>{{ t('reimbursement.pending_in') }}</span>
                   <MoneyText :value-minor="batchSettlePendingMinor" />
                 </div>
               </div>
 
               <label v-if="settleMode === 'batch' || singleSettleCashMinor > 0">
-                入帳帳戶
+                {{ t('claim_sheet.form.account') }}
                 <CustomSelect v-model="settleForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
               <div class="copy-wrap">
-                <p class="copy-title">同步複製到其他帳本（可複選）</p>
+                <p class="copy-title">{{ t('reimbursement.copy_other_ledgers') }}</p>
                 <div v-if="copyLedgerOptions.length" class="copy-ledger-list">
                   <label v-for="ledger in copyLedgerOptions" :key="ledger.id" class="copy-ledger-item">
                     <input v-model="settleForm.copyToLedgerIds" class="copy-ledger-check" type="checkbox" :value="ledger.id" />
@@ -241,66 +241,66 @@
                     <span class="copy-ledger-name">{{ ledger.name }}</span>
                   </label>
                 </div>
-                <p v-else class="muted">目前沒有其他帳本可選</p>
+                <p v-else class="muted">{{ t('reimbursement.no_other_ledger') }}</p>
               </div>
       <template #footer>
-        <button class="btn" @click="closeSettle">取消</button>
+        <button class="btn" @click="closeSettle">{{ t('common.cancel') }}</button>
         <button class="btn primary" :disabled="settlingBatch" @click="confirmSettle">
-          {{ settlingBatch ? '處理中...' : '確認' }}
+          {{ settlingBatch ? t('common.processing') : t('common.confirm') }}
         </button>
       </template>
     </InputBottomSheet>
 
     <InputBottomSheet
       :open="isAdvanceOpen"
-      title="新增代收"
+      :title="t('reimbursement.add_advance')"
       :body-class="'stack form-wrap'"
       :sheet-class="'sheet'"
       :show-footer="true"
       @close="closeAdvanceSheet"
     >
               <label>
-                代收金額（元）
+                {{ t('reimbursement.advance_amount_yuan') }}
                 <input v-model.number="advanceForm.amountMajor" type="number" min="0" step="1" class="input" />
               </label>
               <label>
-                代收帳戶
+                {{ t('reimbursement.advance_account') }}
                 <CustomSelect v-model="advanceForm.accountId" :groups="accountStore.groupedRegularAccounts" />
               </label>
               <label>
-                備註
-                <input v-model="advanceForm.note" type="text" class="input" placeholder="例如：公司先墊付報銷款" />
+                {{ t('common.note') }}
+                <input v-model="advanceForm.note" type="text" class="input" :placeholder="t('reimbursement.advance_note_example')" />
               </label>
       <template #footer>
-        <button class="btn" @click="closeAdvanceSheet">取消</button>
+        <button class="btn" @click="closeAdvanceSheet">{{ t('common.cancel') }}</button>
         <button class="btn primary" :disabled="creatingAdvance || !canCreateAdvance" @click="submitAdvance">
-          {{ creatingAdvance ? '建立中...' : '確認新增' }}
+          {{ creatingAdvance ? t('claim_sheet.creating') : t('common.confirm_add') }}
         </button>
       </template>
     </InputBottomSheet>
 
     <InputBottomSheet
       :open="isClaimAmountOpen"
-      title="設定報銷金額"
+      :title="t('reimbursement.set_amount')"
       :body-class="'stack form-wrap'"
       :sheet-class="'sheet'"
       :show-footer="true"
       @close="closeClaimAmountSheet"
     >
       <p v-if="claimAmountTargetTx" class="muted claim-hint">
-        原始支出 <MoneyText :value-minor="originalMinorOfTx(claimAmountTargetTx)" />，可設定實際報銷（請款）金額，匯出與請款單將以此金額計算。
+        {{ t('reimbursement.original_out') }} <MoneyText :value-minor="originalMinorOfTx(claimAmountTargetTx)" />{{ t('reimbursement.custom_claim_hint') }}
       </p>
       <label>
-        報銷金額（元）
+        {{ t('reimbursement.amount_yuan') }}
         <input v-model.number="claimAmountForm.amountMajor" type="number" min="0" step="1" class="input" />
       </label>
       <button class="btn claim-reset-btn" type="button" @click="useOriginalClaimAmount">
-        重設為原始支出
+        {{ t('reimbursement.reset_original') }}
       </button>
       <template #footer>
-        <button class="btn" :disabled="savingClaimAmount" @click="closeClaimAmountSheet">取消</button>
+        <button class="btn" :disabled="savingClaimAmount" @click="closeClaimAmountSheet">{{ t('common.cancel') }}</button>
         <button class="btn primary" :disabled="savingClaimAmount" @click="confirmClaimAmount">
-          {{ savingClaimAmount ? '儲存中...' : '確認' }}
+          {{ savingClaimAmount ? t('settings_account.saving') : t('common.confirm') }}
         </button>
       </template>
     </InputBottomSheet>
@@ -464,7 +464,7 @@ const exportTargetItems = computed(() => {
   return []
 })
 const canExportClaimSheet = computed(() => exportTargetItems.value.length > 0)
-const exportedActionLabel = computed(() => '開啟檔案')
+const exportedActionLabel = computed(() => t('analysis_print.open_link'))
 const copyLedgerOptions = computed(() => {
   if (isFreeTier()) return []
   return (ledgerStore.ledgers ?? []).filter((item) => item.id !== ledgerStore.activeLedgerId)
@@ -541,7 +541,7 @@ function advanceCategoryName(advance) {
   const name = String(advance?.category_name ?? '').trim()
   if (name) return name
   const note = String(advance?.note ?? '').trim()
-  return note || '代收'
+  return note || t('reimbursement_advance_usage.default_advance_name')
 }
 
 function advanceCategoryIcon(advance) {
@@ -585,9 +585,9 @@ async function submitAdvance() {
     })
     await accountStore.load()
     isAdvanceOpen.value = false
-    uiStore.pushToast('代收已新增')
+    uiStore.pushToast(t('reimbursement.advance_created'))
   } catch (error) {
-    uiStore.pushToast(error.message ?? '新增失敗', 'error')
+    uiStore.pushToast(error.message ?? t('quick_add.toast.create_failed'), 'error')
   } finally {
     creatingAdvance.value = false
   }
@@ -627,7 +627,7 @@ function actionOpenBatchSettle() {
 function actionOpenSelectedAdjustment() {
   if (tab.value === 'pending') return
   if (selectedActiveItems.value.length !== 1) {
-    uiStore.pushToast('請先勾選 1 筆要調整的項目', 'error')
+    uiStore.pushToast(t('reimbursement.pick_one_adjust'), 'error')
     return
   }
 
@@ -654,7 +654,7 @@ function actionOpenExportLink() {
 function openBatchSettle() {
   if (tab.value !== 'pending') return
   if (!batchSettleItems.value.length) {
-    uiStore.pushToast('請先勾選要批量報銷的項目', 'error')
+    uiStore.pushToast(t('reimbursement.pick_batch'), 'error')
     return
   }
 
@@ -787,7 +787,7 @@ async function confirmClaimAmount() {
 
   const amountMinor = Math.max(0, Math.round(Number(claimAmountForm.amountMajor ?? 0) * 100))
   if (!Number.isFinite(amountMinor) || amountMinor <= 0) {
-    uiStore.pushToast('報銷金額必須大於 0', 'error')
+    uiStore.pushToast(t('reimbursement.amount_gt_zero'), 'error')
     return
   }
 
@@ -798,11 +798,11 @@ async function confirmClaimAmount() {
     const targetMinor = amountMinor === originalMinorOfTx(target) ? null : amountMinor
     await reimbursementStore.setClaimAmount(target.id, targetMinor)
     pruneSelectedIds()
-    uiStore.pushToast('報銷金額已更新')
+    uiStore.pushToast(t('reimbursement.amount_updated'))
     isClaimAmountOpen.value = false
     claimAmountTargetTx.value = null
   } catch (error) {
-    uiStore.pushToast(error.message ?? '更新失敗', 'error')
+    uiStore.pushToast(error.message ?? t('claim_sheet.toast.update_failed'), 'error')
   } finally {
     savingClaimAmount.value = false
   }
@@ -824,21 +824,29 @@ function buildClaimSheetExportPayload() {
     return null
   }
 
-  const statusLabel = tab.value === 'pending' ? '未報銷' : '已報銷'
+  const statusLabel = tab.value === 'pending' ? t('assets_page.unreimbursed') : t('reimbursement.already_reimbursed')
+  const headerStatus = t('claim_sheet.status_label')
+  const headerDate = t('reimbursement.tx_date')
+  const headerCategory = t('common.category')
+  const headerNote = t('common.note')
+  const headerOriginal = t('reimbursement.original_out')
+  const headerAmount = t('reimbursement.amount')
+  const headerReimbursed = t('reimbursement.already_reimbursed')
+  const headerClaim = t('reimbursement.this_claim')
   const rows = rowsSource.map((tx) => {
     const amountMinor = originalMinorOfTx(tx)
     const claimableMinor = claimableMinorOfTx(tx)
     const reimbursedMinor = reimbursedMinorOfTx(tx)
     const claimMinor = claimMinorOfTx(tx)
     return {
-      狀態: statusLabel,
-      交易日期: toDateText(tx.occurred_at),
-      分類: tx.category_name || '',
-      備註: noteTextOfTx(tx),
-      原始支出: toAmountMajorText(amountMinor),
-      報銷金額: toAmountMajorText(claimableMinor),
-      已報銷: toAmountMajorText(reimbursedMinor),
-      本次請款: toAmountMajorText(claimMinor),
+      [headerStatus]: statusLabel,
+      [headerDate]: toDateText(tx.occurred_at),
+      [headerCategory]: tx.category_name || '',
+      [headerNote]: noteTextOfTx(tx),
+      [headerOriginal]: toAmountMajorText(amountMinor),
+      [headerAmount]: toAmountMajorText(claimableMinor),
+      [headerReimbursed]: toAmountMajorText(reimbursedMinor),
+      [headerClaim]: toAmountMajorText(claimMinor),
     }
   })
 
@@ -847,17 +855,17 @@ function buildClaimSheetExportPayload() {
   const totalReimbursedMinor = rowsSource.reduce((sum, tx) => sum + reimbursedMinorOfTx(tx), 0)
   const totalClaimMinor = rowsSource.reduce((sum, tx) => sum + claimMinorOfTx(tx), 0)
   rows.push({
-    狀態: '合計',
-    交易日期: '',
-    分類: '',
-    備註: '',
-    原始支出: toAmountMajorText(totalAmountMinor),
-    報銷金額: toAmountMajorText(totalClaimableMinor),
-    已報銷: toAmountMajorText(totalReimbursedMinor),
-    本次請款: toAmountMajorText(totalClaimMinor),
+    [headerStatus]: t('claim_sheet.export_total'),
+    [headerDate]: '',
+    [headerCategory]: '',
+    [headerNote]: '',
+    [headerOriginal]: toAmountMajorText(totalAmountMinor),
+    [headerAmount]: toAmountMajorText(totalClaimableMinor),
+    [headerReimbursed]: toAmountMajorText(totalReimbursedMinor),
+    [headerClaim]: toAmountMajorText(totalClaimMinor),
   })
 
-  const headers = ['狀態', '交易日期', '分類', '備註', '原始支出', '報銷金額', '已報銷', '本次請款']
+  const headers = [headerStatus, headerDate, headerCategory, headerNote, headerOriginal, headerAmount, headerReimbursed, headerClaim]
   const csvText = rowsToCsv(rows, headers)
   return {
     rowsSource,
@@ -865,34 +873,34 @@ function buildClaimSheetExportPayload() {
     rows,
     headers,
     csvText,
-    csvFilename: `請款單_${statusLabel}_${timestampForFilename()}.csv`,
+    csvFilename: `${t('claim_sheet.title')}_${statusLabel}_${timestampForFilename()}.csv`,
   }
 }
 
 async function exportClaimSheetCsv() {
   const payload = buildClaimSheetExportPayload()
   if (!payload) {
-    uiStore.pushToast('沒有可匯出的請款資料', 'error')
+    uiStore.pushToast(t('reimbursement.export_empty'), 'error')
     return
   }
 
   const { rowsSource, csvText, csvFilename } = payload
   const filename = csvFilename
   exportedFilename.value = filename
-  let exportLocation = Capacitor.isNativePlatform() ? 'App 內預覽' : '瀏覽器下載'
+  let exportLocation = Capacitor.isNativePlatform() ? t('reimbursement.in_app_preview') : t('reimbursement.browser_download')
 
   if (Capacitor.isNativePlatform()) {
     const saved = await saveCsvFileToDevice(filename, csvText, { category: 'reimbursements' })
     if (saved?.saved) {
       exportedFilename.value = String(saved.filename ?? filename)
-      exportLocation = saved.location || '裝置檔案'
+      exportLocation = saved.location || t('claim_sheet.device_files')
       revokeBlobUrl(exportedUrl.value)
       exportedUrl.value = String(saved.uri ?? '').trim()
         || String(saved.openUrl ?? '').trim()
         || createCsvBlobUrl(csvText)
       exportedIsDeviceLink.value = Boolean(String(saved.uri ?? '').trim() || String(saved.openUrl ?? '').trim())
       exportedLocation.value = exportLocation
-      uiStore.pushToast(`請款單已匯出（${rowsSource.length} 筆，${exportLocation}）`)
+      uiStore.pushToast(t('reimbursement.exported', { count: rowsSource.length, location: exportLocation }))
       return
     } else {
       revokeBlobUrl(exportedUrl.value)
@@ -900,7 +908,7 @@ async function exportClaimSheetCsv() {
       exportedIsDeviceLink.value = false
       exportedLocation.value = exportLocation
       openExportLink()
-      uiStore.pushToast(`請款單已匯出（${rowsSource.length} 筆，${exportLocation}）`)
+      uiStore.pushToast(t('reimbursement.exported', { count: rowsSource.length, location: exportLocation }))
       return
     }
   }
@@ -910,7 +918,7 @@ async function exportClaimSheetCsv() {
   exportedIsDeviceLink.value = false
   exportedLocation.value = ''
   openExportLink()
-  uiStore.pushToast(`請款單已匯出（${rowsSource.length} 筆，${exportLocation}）`)
+  uiStore.pushToast(t('reimbursement.exported', { count: rowsSource.length, location: exportLocation }))
 }
 
 function openExportLink() {
@@ -932,11 +940,11 @@ async function confirmSettle() {
 async function confirmSingleSettle() {
   if (!settleTargetTx.value?.id) return
   if (singleSettleAmountMinor.value <= 0) {
-    uiStore.pushToast('報銷金額必須大於 0', 'error')
+    uiStore.pushToast(t('reimbursement.amount_gt_zero'), 'error')
     return
   }
   if (singleSettleCashMinor.value > 0 && !String(settleForm.accountId ?? '').trim()) {
-    uiStore.pushToast('請選擇入帳帳戶', 'error')
+    uiStore.pushToast(t('reimbursement.pick_settle_account'), 'error')
     return
   }
 
@@ -945,25 +953,25 @@ async function confirmSingleSettle() {
       amountMinor: singleSettleAmountMinor.value,
       accountId: singleSettleCashMinor.value > 0 ? settleForm.accountId : '',
       occurredAt: new Date().toISOString(),
-      note: `報銷入帳（來源交易：${settleTargetTx.value.id}）`,
+      note: t('reimbursement.settle_note', { id: settleTargetTx.value.id }),
       copyToLedgerIds: settleForm.copyToLedgerIds,
       selectedAdvanceIds: settleForm.selectedAdvanceIds,
       allowUpdate: tab.value === 'reimbursed',
     })
     await Promise.all([transactionStore.loadRecent(), accountStore.load()])
-    const copiedInfo = Number(result?.copiedLedgers ?? 0) > 0 ? `，並複製到 ${result.copiedLedgers} 個帳本` : ''
-    const advanceInfo = Number(result?.usedAdvanceMinor ?? 0) > 0 ? '，已套用代收抵扣' : ''
+    const copiedInfo = Number(result?.copiedLedgers ?? 0) > 0 ? t('reimbursement.copied_ledgers', { count: result.copiedLedgers }) : ''
+    const advanceInfo = Number(result?.usedAdvanceMinor ?? 0) > 0 ? t('reimbursement.applied_advance') : ''
     if (result?.updatedIncome) {
-      uiStore.pushToast(`已更新報銷入帳${advanceInfo}${copiedInfo}`)
+      uiStore.pushToast(`${t('reimbursement.updated_settle')}${advanceInfo}${copiedInfo}`)
     } else if (result?.alreadyExists) {
-      uiStore.pushToast(`已標記為報銷，且已有入帳交易${advanceInfo}${copiedInfo}`)
+      uiStore.pushToast(`${t('reimbursement.already_settled')}${advanceInfo}${copiedInfo}`)
     } else {
-      uiStore.pushToast(`已標記報銷並完成入帳${advanceInfo}${copiedInfo}`)
+      uiStore.pushToast(`${t('reimbursement.marked_and_posted')}${advanceInfo}${copiedInfo}`)
     }
     pruneSelectedIds()
     closeSettle()
   } catch (error) {
-    uiStore.pushToast(error.message ?? '更新失敗', 'error')
+    uiStore.pushToast(error.message ?? t('claim_sheet.toast.update_failed'), 'error')
   }
 }
 
@@ -971,11 +979,11 @@ async function confirmBatchSettle() {
   if (settlingBatch.value) return
   const targets = batchSettleItems.value
   if (!targets.length) {
-    uiStore.pushToast('請先勾選要批量報銷的項目', 'error')
+    uiStore.pushToast(t('reimbursement.pick_batch'), 'error')
     return
   }
   if (!String(settleForm.accountId ?? '').trim()) {
-    uiStore.pushToast('請選擇入帳帳戶', 'error')
+    uiStore.pushToast(t('reimbursement.pick_settle_account'), 'error')
     return
   }
 
@@ -998,7 +1006,7 @@ async function confirmBatchSettle() {
           amountMinor: pendingMinor,
           accountId: settleForm.accountId,
           occurredAt,
-          note: `報銷入帳（來源交易：${tx.id}）`,
+          note: t('reimbursement.settle_note', { id: tx.id }),
           copyToLedgerIds: settleForm.copyToLedgerIds,
           allowUpdate: false,
         }, {
@@ -1008,7 +1016,7 @@ async function confirmBatchSettle() {
       } catch (error) {
         failed += 1
         if (errorMessages.length < 3) {
-          errorMessages.push(String(error?.message ?? error ?? '未知錯誤'))
+          errorMessages.push(String(error?.message ?? error ?? t('common.unknown_error')))
         }
       }
     }
@@ -1017,9 +1025,9 @@ async function confirmBatchSettle() {
     pruneSelectedIds()
     closeSettle()
 
-    const summaryParts = [`批量報銷完成：成功 ${success} 筆`]
-    if (failed > 0) summaryParts.push(`失敗 ${failed} 筆`)
-    if (skipped > 0) summaryParts.push(`略過 ${skipped} 筆`)
+    const summaryParts = [t('reimbursement.batch_done', { count: success })]
+    if (failed > 0) summaryParts.push(t('reimbursement.failed_n', { count: failed }))
+    if (skipped > 0) summaryParts.push(t('reimbursement.skipped_n', { count: skipped }))
     const summary = summaryParts.join('，')
     if (failed > 0 && errorMessages.length) {
       uiStore.pushToast(`${summary}（${errorMessages.join('；')}）`, 'error')
@@ -1035,11 +1043,11 @@ async function markVoidSelected() {
   if (voidingBatch.value) return
   const targets = selectedActiveItems.value
   if (!targets.length) {
-    uiStore.pushToast('請先勾選要作廢的項目', 'error')
+    uiStore.pushToast(t('reimbursement.pick_void'), 'error')
     return
   }
 
-  const ok = window.confirm(`確定要批量作廢 ${targets.length} 筆報銷交易？`)
+  const ok = window.confirm(t('reimbursement.confirm_batch_void', { count: targets.length }))
   if (!ok) return
 
   voidingBatch.value = true
@@ -1050,13 +1058,13 @@ async function markVoidSelected() {
 
     const failedCount = Number(result?.failed?.length ?? 0)
     if (failedCount > 0) {
-      const firstError = String(result.failed?.[0]?.message ?? '部分交易作廢失敗')
-      uiStore.pushToast(`批量作廢完成：成功 ${result.deleted} 筆，失敗 ${failedCount} 筆（${firstError}）`, 'error')
+      const firstError = String(result.failed?.[0]?.message ?? t('reimbursement.partial_void_failed'))
+      uiStore.pushToast(t('reimbursement.batch_void_done', { ok: result.deleted, fail: failedCount, error: firstError }), 'error')
       return
     }
-    uiStore.pushToast(`已批量作廢 ${result.deleted} 筆報銷交易`)
+    uiStore.pushToast(t('reimbursement.batch_void_done_ok', { count: result.deleted }))
   } catch (error) {
-    uiStore.pushToast(error.message ?? '批量作廢失敗', 'error')
+    uiStore.pushToast(error.message ?? t('reimbursement.batch_void_failed'), 'error')
   } finally {
     voidingBatch.value = false
   }

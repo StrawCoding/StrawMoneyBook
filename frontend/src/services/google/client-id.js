@@ -16,7 +16,7 @@ export function getConfiguredGoogleWebClientId() {
 
 export function getGoogleWebClientIdMissingMessage() {
   return translateMessage(
-    'settings_account.google_client_id_missing',
+    'common.missing_google_web_client_id',
     '缺少 Google Web Client ID（請設定 VITE_GOOGLE_WEB_CLIENT_ID）',
   )
 }

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import { translateMessage } from '@/ui/services/i18n.service.js'
 import { afterTransactionMutation } from '@/ui/services/transaction-mutation-refresh.js'
 import {
   createCreditPurchase,
@@ -50,7 +51,7 @@ export const useCreditStore = defineStore('credit', {
 
     async createCard(payload) {
       const ledgerStore = useLedgerStore()
-      if (!ledgerStore.activeLedgerId) throw new Error('尚未選擇帳本')
+      if (!ledgerStore.activeLedgerId) throw new Error(translateMessage('common.no_ledger_selected', '尚未選擇帳本'))
       const account = await createCreditCardAccount(ledgerStore.activeLedgerId, payload)
       await this.load()
       return account

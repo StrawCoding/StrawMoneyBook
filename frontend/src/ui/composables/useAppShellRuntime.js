@@ -95,7 +95,7 @@ export function useAppShellRuntime({ t, uiStore }) {
     emptyRestoreHintToasted = true
     uiStore.pushToast(
       t(
-        'welcome.empty_restore.toast',
+        'error.recovery_backup_hint',
         '帳本為空但偵測到本機 recovery 備份，請至資料管理還原。',
       ),
       'warning',

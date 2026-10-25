@@ -30,7 +30,7 @@ test('TransactionSearchPage supports batch select mode', () => {
   assert.match(searchPageSource, /toggleBatchMode/)
   assert.match(searchPageSource, /toggleSelectAll/)
   assert.match(searchPageSource, /toggleSelect/)
-  assert.match(searchPageSource, /批量操作/)
+  assert.match(searchPageSource, /common\.batch_actions/)
 })
 
 test('TransactionSearchPage supports batch category change', () => {
@@ -38,11 +38,11 @@ test('TransactionSearchPage supports batch category change', () => {
   assert.match(searchPageSource, /batchPatch/)
   assert.match(searchPageSource, /applyBatchEdit/)
   assert.match(searchPageSource, /openBatchEditSheet/)
-  assert.match(searchPageSource, /批量編輯/)
-  assert.match(searchPageSource, /可報銷/)
-  assert.match(searchPageSource, /納入預算/)
-  assert.match(searchPageSource, /納入收支分析/)
-  assert.match(searchPageSource, /備註/)
+  assert.match(searchPageSource, /tx_search\.batch_edit/)
+  assert.match(searchPageSource, /tx_search\.reimbursable/)
+  assert.match(searchPageSource, /tx_search\.include_budget/)
+  assert.match(searchPageSource, /tx_search\.include_analysis/)
+  assert.match(searchPageSource, /common\.note/)
 })
 
 test('transaction service exports batchPatchCategory', () => {

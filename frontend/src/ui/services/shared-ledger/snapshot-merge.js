@@ -1,3 +1,5 @@
+import { translateMessage } from '@/ui/services/i18n.service.js'
+
 const SNAPSHOT_TABLE_ORDER = [
   'ledgers',
   'account_groups',
@@ -249,7 +251,7 @@ function ensurePreserveAccountGroup(nextTables, report, groupId = 'system_fk_pre
     [groupId],
     (id) => ({
       id,
-      name: '資料保全群組',
+      name: translateMessage('snapshot.preserve_group', '資料保全群組'),
       type: 'other',
       sort_order: 9999,
       is_archived: 1,
@@ -269,7 +271,7 @@ function ensurePreserveAccounts(nextTables, report, accountIds) {
     (id) => ({
       id,
       group_id: preserveGroupId,
-      name: '資料保全帳戶',
+      name: translateMessage('snapshot.preserve_account', '資料保全帳戶'),
       account_type: 'asset',
       account_kind: 'cash',
       allow_negative: 1,
@@ -293,7 +295,7 @@ function ensurePreserveCategories(nextTables, report, categoryIds) {
     [preserveCatGroupId],
     (id) => ({
       id,
-      name: '資料保全分類群組',
+      name: translateMessage('snapshot.preserve_category_group', '資料保全分類群組'),
       type: 'expense',
       sort_order: 9999,
       is_archived: 1,
@@ -307,7 +309,7 @@ function ensurePreserveCategories(nextTables, report, categoryIds) {
     (id) => ({
       id,
       group_id: preserveCatGroupId,
-      name: '資料保全分類',
+      name: translateMessage('snapshot.preserve_category', '資料保全分類'),
       type: 'expense',
       sort_order: 9999,
       is_archived: 1,
@@ -344,7 +346,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
     collectReferencedIds(accountRows, 'group_id'),
     (id) => ({
       id,
-      name: '資料保全群組',
+      name: translateMessage('snapshot.preserve_group', '資料保全群組'),
       type: 'other',
       sort_order: 9999,
       is_archived: 1,
@@ -362,7 +364,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
     collectReferencedIds(categoryRows, 'group_id'),
     (id) => ({
       id,
-      name: '資料保全分類群組',
+      name: translateMessage('snapshot.preserve_category_group', '資料保全分類群組'),
       type: 'expense',
       sort_order: 9999,
       is_archived: 1,
@@ -406,7 +408,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
     collectReferencedIds(loanRows, 'counterparty_id'),
     (id) => ({
       id,
-      name: '資料保全往來對象',
+      name: translateMessage('snapshot.preserve_counterparty', '資料保全往來對象'),
       ...FK_PRESERVE_STAMP,
     }),
   )
@@ -487,7 +489,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
     collectReferencedIds(reimbursementRows, 'counterparty_id'),
     (id) => ({
       id,
-      name: '資料保全往來對象',
+      name: translateMessage('snapshot.preserve_counterparty', '資料保全往來對象'),
       ...FK_PRESERVE_STAMP,
     }),
   )
@@ -510,7 +512,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
     missingReimbursementIds,
     (id) => ({
       id,
-      title: '資料保全請款',
+      title: translateMessage('snapshot.preserve_claim', '資料保全請款'),
       status: 'open',
       total_minor: 0,
       ...FK_PRESERVE_STAMP,
@@ -545,7 +547,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
     missingReimbursementIdsForPayments,
     (id) => ({
       id,
-      title: '資料保全請款',
+      title: translateMessage('snapshot.preserve_claim', '資料保全請款'),
       status: 'open',
       total_minor: 0,
       paid_minor: 0,
@@ -580,7 +582,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
       [preserveReimbursementId],
       (id) => ({
         id,
-        title: '資料保全請款',
+        title: translateMessage('snapshot.preserve_claim', '資料保全請款'),
         status: 'open',
         total_minor: 0,
         paid_minor: 0,
@@ -673,7 +675,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
       .filter((id) => id && !buildIdSet(nextTables.category_groups).has(id)),
     (id) => ({
       id,
-      name: '資料保全分類群組',
+      name: translateMessage('snapshot.preserve_category_group', '資料保全分類群組'),
       type: 'expense',
       sort_order: 9999,
       is_archived: 1,
@@ -707,7 +709,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
     (id) => ({
       id,
       provider: 'fk_preserve',
-      display_name: '資料保全銀行連線',
+      display_name: translateMessage('snapshot.preserve_bank_connection', '資料保全銀行連線'),
       ...FK_PRESERVE_STAMP,
     }),
   )
@@ -731,7 +733,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
     (id) => ({
       id,
       provider: 'fk_preserve',
-      display_name: '資料保全銀行連線',
+      display_name: translateMessage('snapshot.preserve_bank_connection', '資料保全銀行連線'),
       ...FK_PRESERVE_STAMP,
     }),
   )
@@ -748,7 +750,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
         (id) => ({
           id,
           provider: 'fk_preserve',
-          display_name: '資料保全銀行連線',
+          display_name: translateMessage('snapshot.preserve_bank_connection', '資料保全銀行連線'),
           ...FK_PRESERVE_STAMP,
         }),
       )
@@ -761,7 +763,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
       (id) => ({
         id,
         connection_id: [...bankConnectionIds][0],
-        display_name: '資料保全銀行帳戶',
+        display_name: translateMessage('snapshot.preserve_bank_account', '資料保全銀行帳戶'),
         ...FK_PRESERVE_STAMP,
       }),
     )
@@ -785,7 +787,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
     (id) => ({
       id,
       provider: 'fk_preserve',
-      display_name: '資料保全銀行連線',
+      display_name: translateMessage('snapshot.preserve_bank_connection', '資料保全銀行連線'),
       ...FK_PRESERVE_STAMP,
     }),
   )
@@ -1480,7 +1482,7 @@ export function mergeSharedLedgerSnapshots(localSnapshot, remoteSnapshot, option
     && normalizedRemoteSnapshot.ledger_id
     && normalizedLocalSnapshot.ledger_id !== normalizedRemoteSnapshot.ledger_id
   ) {
-    throw new Error('共同帳本快照 ledger_id 不一致，無法合併')
+    throw new Error(translateMessage('leftover.shared.snapshot_ledger_mismatch', '共同帳本快照 ledger_id 不一致，無法合併'))
   }
 
   const { mergedTables, conflicts } = mergeSnapshotTablesTwoWay(
@@ -1518,7 +1520,7 @@ export function threeWayMergeSnapshots(baseSnapshot, localSnapshot, remoteSnapsh
     && normalizedRemote.ledger_id
     && normalizedLocal.ledger_id !== normalizedRemote.ledger_id
   ) {
-    throw new Error('共同帳本快照 ledger_id 不一致，無法合併')
+    throw new Error(translateMessage('leftover.shared.snapshot_ledger_mismatch', '共同帳本快照 ledger_id 不一致，無法合併'))
   }
 
   const prefer = options?.prefer === 'local' ? 'local' : 'remote'

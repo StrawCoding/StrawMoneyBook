@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { translateRuntimeText } from '@/ui/services/i18n.service'
+import { translateMessage, translateRuntimeText } from '@/ui/services/i18n.service'
 import { logToastError } from '@/ui/services/error-log.service'
 import router from '@/ui/router'
 
@@ -9,7 +9,8 @@ function shouldRedirectToMembershipBenefits(message, type) {
   if (String(type ?? '').trim().toLowerCase() !== 'error') return false
   const text = String(message ?? '').trim()
   if (!text) return false
-  return text.startsWith('免費版') || text.includes('MEMBERSHIP_LIMIT_')
+  const freePlan = translateMessage('common.free_plan', '免費版')
+  return text.startsWith('免費版') || text.startsWith(freePlan) || text.includes('MEMBERSHIP_LIMIT_')
 }
 
 function redirectToMembershipBenefitsFromToast() {

@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { getConfiguredGoogleWebClientId, getGoogleWebClientIdMissingMessage } from '@/services/google/client-id'
+import { translateMessage } from '@/ui/services/i18n.service.js'
 
 const GIS_SCRIPT_URL = 'https://accounts.google.com/gsi/client'
 const GOOGLE_WEB_CLIENT_ID = getConfiguredGoogleWebClientId()
@@ -34,14 +35,14 @@ export function getGoogleIdentityUnavailableReason() {
   if (isWebRuntime()) return ''
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') return ''
   if (Capacitor.isNativePlatform()) {
-    return '目前僅支援 Android App 的 Google 登入'
+    return translateMessage('common.google_android_only', '目前僅支援 Android App 的 Google 登入')
   }
   return getGoogleWebClientIdMissingMessage()
 }
 
 async function loadGoogleIdentityScript() {
   if (!isWebRuntime()) {
-    throw createGoogleIdentityError('Web GIS 僅支援瀏覽器環境', 'google_identity_web_only')
+    throw createGoogleIdentityError(translateMessage('common.web_gis_browser_only', 'Web GIS 僅支援瀏覽器環境'), 'google_identity_web_only')
   }
   if (gisScriptPromise) return gisScriptPromise
 
@@ -49,7 +50,7 @@ async function loadGoogleIdentityScript() {
     const existing = document.querySelector(`script[src="${GIS_SCRIPT_URL}"]`)
     if (existing) {
       existing.addEventListener('load', () => resolve(), { once: true })
-      existing.addEventListener('error', () => reject(createGoogleIdentityError('Google Identity Services 載入失敗', 'google_gis_load_failed')), { once: true })
+      existing.addEventListener('error', () => reject(createGoogleIdentityError(translateMessage('common.gis_load_failed', 'Google Identity Services 載入失敗'), 'google_gis_load_failed')), { once: true })
       if (getGoogleAccountsIdApi()) resolve()
       return
     }
@@ -59,7 +60,7 @@ async function loadGoogleIdentityScript() {
     script.async = true
     script.defer = true
     script.onload = () => resolve()
-    script.onerror = () => reject(createGoogleIdentityError('Google Identity Services 載入失敗', 'google_gis_load_failed'))
+    script.onerror = () => reject(createGoogleIdentityError(translateMessage('common.gis_load_failed', 'Google Identity Services 載入失敗'), 'google_gis_load_failed'))
     document.head.appendChild(script)
   }).finally(() => {
     if (!getGoogleAccountsIdApi()) {
@@ -71,20 +72,20 @@ async function loadGoogleIdentityScript() {
 }
 
 function normalizeNativeError(error) {
-  const message = String(error?.message ?? error ?? '').trim() || 'Google 登入失敗'
+  const message = String(error?.message ?? error ?? '').trim() || translateMessage('settings_account.google_login_failed', 'Google 登入失敗')
   const code = String(error?.code ?? '').trim()
   return createGoogleIdentityError(message, code || 'google_identity_native_failed')
 }
 
 export async function signInWithGoogleCredentialManager({ nonce } = {}) {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
-    throw createGoogleIdentityError('Credential Manager 僅支援 Android App', 'google_identity_android_only')
+    throw createGoogleIdentityError(translateMessage('leftover.google.credential_manager_android_only', 'Credential Manager 僅支援 Android App'), 'google_identity_android_only')
   }
   if (!GOOGLE_WEB_CLIENT_ID) {
-    throw createGoogleIdentityError('缺少 Google Web Client ID', 'google_client_id_missing')
+    throw createGoogleIdentityError(translateMessage('common.missing_google_web_client_id', '缺少 Google Web Client ID（請設定 VITE_GOOGLE_WEB_CLIENT_ID）'), 'google_client_id_missing')
   }
   if (!nonce) {
-    throw createGoogleIdentityError('缺少 Google nonce', 'google_nonce_required')
+    throw createGoogleIdentityError(translateMessage('leftover.google.missing_nonce', '缺少 Google nonce'), 'google_nonce_required')
   }
 
   try {
@@ -115,22 +116,22 @@ export async function renderGoogleIdentityButton(container, {
   onError = null,
 } = {}) {
   if (!container) {
-    throw createGoogleIdentityError('缺少 Google 按鈕容器', 'google_button_container_missing')
+    throw createGoogleIdentityError(translateMessage('leftover.google.missing_button_container', '缺少 Google 按鈕容器'), 'google_button_container_missing')
   }
   if (!isWebRuntime()) {
-    throw createGoogleIdentityError('Google GIS 按鈕僅支援 Web', 'google_identity_web_only')
+    throw createGoogleIdentityError(translateMessage('leftover.google.gis_button_web_only', 'Google GIS 按鈕僅支援 Web'), 'google_identity_web_only')
   }
   if (!GOOGLE_WEB_CLIENT_ID) {
-    throw createGoogleIdentityError('缺少 Google Web Client ID', 'google_client_id_missing')
+    throw createGoogleIdentityError(translateMessage('common.missing_google_web_client_id', '缺少 Google Web Client ID（請設定 VITE_GOOGLE_WEB_CLIENT_ID）'), 'google_client_id_missing')
   }
   if (!nonce) {
-    throw createGoogleIdentityError('缺少 Google nonce', 'google_nonce_required')
+    throw createGoogleIdentityError(translateMessage('leftover.google.missing_nonce', '缺少 Google nonce'), 'google_nonce_required')
   }
 
   await loadGoogleIdentityScript()
   const accounts = getGoogleAccountsIdApi()
   if (!accounts) {
-    throw createGoogleIdentityError('Google Identity Services 尚未就緒', 'google_gis_not_ready')
+    throw createGoogleIdentityError(translateMessage('leftover.google.gis_not_ready', 'Google Identity Services 尚未就緒'), 'google_gis_not_ready')
   }
 
   container.innerHTML = ''
@@ -142,7 +143,7 @@ export async function renderGoogleIdentityButton(container, {
     callback: (response) => {
       const idToken = String(response?.credential ?? '').trim()
       if (!idToken) {
-        const error = createGoogleIdentityError('Google 未回傳 ID token', 'google_id_token_missing')
+        const error = createGoogleIdentityError(translateMessage('leftover.google.missing_id_token', 'Google 未回傳 ID token'), 'google_id_token_missing')
         if (typeof onError === 'function') onError(error)
         return
       }
@@ -155,7 +156,7 @@ export async function renderGoogleIdentityButton(container, {
     },
     error_callback: (reason) => {
       if (typeof onError === 'function') {
-        onError(createGoogleIdentityError(String(reason?.type ?? 'Google 登入失敗'), 'google_gis_error'))
+        onError(createGoogleIdentityError(String(reason?.type ?? translateMessage('settings_account.google_login_failed', 'Google 登入失敗')), 'google_gis_error'))
       }
     },
   })

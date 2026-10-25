@@ -1072,7 +1072,7 @@ export async function listAdminErrorLogs(reviewStatus = '') {
 
 export async function reviewAdminErrorLog(logId, payload = {}) {
   const normalizedId = String(logId ?? '').trim()
-  if (!normalizedId) throw new Error('缺少錯誤紀錄 ID')
+  if (!normalizedId) throw new Error(t('common.missing_error_log_id', '缺少錯誤紀錄 ID'))
   return requestJson(`/api/admin/error-logs/${normalizedId}/review`, {
     method: 'POST',
     body: payload,
@@ -1081,7 +1081,7 @@ export async function reviewAdminErrorLog(logId, payload = {}) {
 
 export async function updateAdminUserMembership(userId, payload = {}) {
   const normalizedId = String(userId ?? '').trim()
-  if (!normalizedId) throw new Error('缺少使用者 ID')
+  if (!normalizedId) throw new Error(t('common.missing_user_id', '缺少使用者 ID'))
   const data = await requestJson(`/api/admin/users/${normalizedId}/membership`, {
     method: 'POST',
     body: payload,
@@ -1094,7 +1094,7 @@ export async function updateAdminUserMembership(userId, payload = {}) {
 
 export async function deleteAdminUser(userId) {
   const normalizedId = String(userId ?? '').trim()
-  if (!normalizedId) throw new Error('缺少使用者 ID')
+  if (!normalizedId) throw new Error(t('common.missing_user_id', '缺少使用者 ID'))
   return requestJson(`/api/admin/users/${normalizedId}`, {
     method: 'DELETE',
   })

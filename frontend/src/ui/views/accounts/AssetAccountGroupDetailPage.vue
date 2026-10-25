@@ -1,7 +1,7 @@
 <template>
   <section class="stack">
     <header class="row page-header">
-      <h2 class="page-title">母分類設定</h2>
+      <h2 class="page-title">{{ t('common.parent_group_settings') }}</h2>
       <RouterLink class="btn back-btn" to="/assets/accounts">{{ t('common.back') }}</RouterLink>
     </header>
 
@@ -9,47 +9,47 @@
       <header class="row">
         <h3>{{ group.name }}</h3>
         <button class="btn primary" :disabled="!canSave || saving" @click="saveGroupProfile">
-          {{ saving ? '儲存中...' : '儲存變更' }}
+          {{ saving ? t('settings_ledger_detail.saving') : t('settings_ledger_detail.save_changes') }}
         </button>
       </header>
 
       <div class="detail-grid">
         <div class="detail-row">
-          <small class="muted">目前排序</small>
+          <small class="muted">{{ t('common.current_sort') }}</small>
           <span>{{ currentOrder }}</span>
         </div>
       </div>
 
       <label class="field">
-        群組名稱
-        <input v-model="nameInput" class="input" type="text" maxlength="40" placeholder="請輸入群組名稱" />
+        {{ t('common.group_name') }}
+        <input v-model="nameInput" class="input" type="text" maxlength="40" :placeholder="t('common.please_enter_group_name')" />
       </label>
 
       <label class="field">
-        排序數字（1 開始）
+        {{ t('common.sort_number') }}
         <input v-model="orderInput" class="input" type="number" min="1" step="1" />
       </label>
-      <p v-if="nameInvalid" class="error-text">群組名稱不可為空</p>
-      <p v-if="orderInvalid" class="error-text">排序數字需為大於 0 的整數</p>
+      <p v-if="nameInvalid" class="error-text">{{ t('common.group_name_required') }}</p>
+      <p v-if="orderInvalid" class="error-text">{{ t('common.sort_number_invalid') }}</p>
 
       <div class="row action-row">
         <button class="btn danger" :disabled="deleting" @click="removeGroupRecord">
-          {{ deleting ? '處理中...' : '刪除母分類' }}
+          {{ deleting ? t('common.processing') : t('common.delete_parent_group') }}
         </button>
       </div>
     </article>
 
     <article v-else class="card panel">
-      <p class="muted">找不到此母分類，可能已刪除。</p>
+      <p class="muted">{{ t('account.group_not_found_deleted') }}</p>
     </article>
 
     <AppDialog
       :open="deleteConfirmOpen"
-      title="確認刪除"
-      :message="`確定刪除母分類「${group?.name ?? ''}」？`"
-      confirm-text="確認刪除"
+      :title="t('common.confirm_delete')"
+      :message="t('account.confirm_delete_group', { name: group?.name ?? '' })"
+      :confirm-text="t('common.confirm_delete')"
       :loading="deleting"
-      loading-text="處理中..."
+      :loading-text="t('common.processing')"
       @close="closeDeleteConfirm"
       @confirm="confirmRemoveGroupRecord"
     />
@@ -130,10 +130,10 @@ async function saveGroupProfile() {
       await accountStore.reorderGroups(movedIds)
     }
 
-    uiStore.pushToast('帳戶群組資料已更新')
+    uiStore.pushToast(t('account.group_updated'))
     await router.push('/assets/accounts')
   } catch (error) {
-    uiStore.pushToast(error.message ?? '更新帳戶群組失敗', 'error')
+    uiStore.pushToast(error.message ?? t('account.group_update_failed'), 'error')
   } finally {
     saving.value = false
   }
@@ -154,11 +154,11 @@ async function confirmRemoveGroupRecord() {
   deleting.value = true
   try {
     await accountStore.removeGroup(groupId.value)
-    uiStore.pushToast('母分類已刪除')
+    uiStore.pushToast(t('account.group_deleted'))
     deleteConfirmOpen.value = false
     await router.push('/assets/accounts')
   } catch (error) {
-    uiStore.pushToast(error.message ?? '刪除母分類失敗', 'error')
+    uiStore.pushToast(error.message ?? t('account.group_delete_failed'), 'error')
   } finally {
     deleting.value = false
   }
