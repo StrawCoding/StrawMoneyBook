@@ -18,6 +18,7 @@ const SURFACES = [
   'src/ui/views/AiAutoBookkeepingPage.vue',
   'src/ui/views/settings/SettingsCategoryDetailPage.vue',
   'src/ui/views/settings/SettingsCategoryGroupDetailPage.vue',
+  'src/ui/views/settings/SettingsDataManagementPage.vue',
 ]
 
 const HARDCODED_COPY = [
@@ -27,6 +28,8 @@ const HARDCODED_COPY = [
   />報銷統整</,
   />資產帳戶管理</,
   /title="新增借貸"/,
+  /共 \$\{importedCount\} 本/,
+  /（已完成資料檢查）/,
 ]
 
 test('previously unaudited surfaces import useI18n and drop hardcoded titles', () => {

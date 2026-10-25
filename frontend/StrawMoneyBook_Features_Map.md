@@ -156,7 +156,7 @@
 
 ### 設定內導覽（`src/ui/views/settings.vue`）
 
-設定首頁入口標題、入口副標與帳號卡未登入提示皆透過 `src/ui/services/i18n.service.js` 的正式 key 維護；SMB-154 / 0.26.5 後登入 / 註冊頁與共同帳本頁使用到的 `t()` key 也會由 source test 檢查是否已註冊於 `MESSAGES`，英文與日文不再依賴繁中 fallback 或 runtime DOM 翻譯。v1.5.12 後借貸三頁、報銷四頁、帳戶／分類明細、交易搜尋與對應 UI 錯誤／圖示標籤也改走正式 key；`test/i18n-audit-surfaces-source.test.js` 與 `playwright:i18n-surfaces` 防回歸。
+設定首頁入口標題、入口副標與帳號卡未登入提示皆透過 `src/ui/services/i18n.service.js` 的正式 key 維護；SMB-154 / 0.26.5 後登入 / 註冊頁與共同帳本頁使用到的 `t()` key 也會由 source test 檢查是否已註冊於 `MESSAGES`，英文與日文不再依賴繁中 fallback 或 runtime DOM 翻譯。v1.5.12 後借貸三頁、報銷四頁、帳戶／分類明細、交易搜尋與對應 UI 錯誤／圖示標籤也改走正式 key；v1.5.13 資料管理匯入／還原 toast（多本帳本、完整性提示）同樣改走 key，日文借貸例句改「返済」。`test/i18n-audit-surfaces-source.test.js` 與 `playwright:i18n-surfaces` 防回歸。
 
 - 帳號卡片：`/settings/account`（顯示頭貼、名稱、帳號；未登入時導向登入 / 註冊）
 - 帳本管理：`/settings/ledgers`
@@ -1009,7 +1009,7 @@ UI composable 目錄：`src/ui/composables/`
 - 類別（0）：無
 
 ### `src/ui/views/settings/SettingsDataManagementPage.vue`
-- 函數（12）：`clearResetTimer`, `closeResetConfirm`, `confirmResetAllData`, `exportCsv`, `exportJson`, `importIntegrityHint`, `onImportCsvFile`, `onImportJsonFile`, `onRequestCloseOverlay`, `openResetConfirm`, `readFileAsText`, `refreshAllStores`
+- 函數（13）：`clearResetTimer`, `closeResetConfirm`, `confirmResetAllData`, `exportCsv`, `exportJson`, `importIntegrityHint`, `importedLedgerLabel`, `onImportCsvFile`, `onImportJsonFile`, `onRequestCloseOverlay`, `openResetConfirm`, `readFileAsText`, `refreshAllStores`
 - 變數（18）：`accountStore`, `budgetStore`, `categoryStore`, `csvImportType`, `csvImportTypeOptions`, `csvInputRef`, `isResetConfirmOpen`, `jsonInputRef`, `lastExportPath`, `ledgerStore`, `loanStore`, `reimbursementStore`, `resetConfirmLabel`, `resetCountdown`, `resetTimerId`, `resettingAllData`, `transactionStore`, `uiStore`
 - 類別（0）：無
 

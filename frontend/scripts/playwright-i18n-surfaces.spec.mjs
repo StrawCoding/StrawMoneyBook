@@ -40,6 +40,16 @@ async (page) => {
     throw new Error(`en reimbursements page missing keyed title\n${reimburseText}`)
   }
 
+  await page.goto(`${baseOrigin}/settings/data-management`, { waitUntil: 'domcontentloaded', timeout: 10000 })
+  await page.waitForSelector('section.stack')
+  const dataText = String(await page.locator('section.stack').innerText())
+  if (!/Data Management/.test(dataText)) {
+    throw new Error(`en data-management page missing keyed title\n${dataText}`)
+  }
+  if (/資料管理/.test(dataText) || /（已完成資料檢查）/.test(dataText)) {
+    throw new Error(`en data-management page still shows hardcoded Chinese copy\n${dataText}`)
+  }
+
   async function completeOnboarding() {
     for (let attempt = 0; attempt < 120; attempt += 1) {
       const state = await page.evaluate(() => ({

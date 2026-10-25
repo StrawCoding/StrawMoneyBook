@@ -75,3 +75,19 @@ test('common chrome components no longer hardcode CJK defaults', () => {
     assert.doesNotMatch(source, /title="選擇帳本"/)
   }
 })
+
+test('import integrity hint keys exist in all locales and ja loan example uses 返済', () => {
+  const hintKeys = [
+    'settings_data.import.hint_checked',
+    'settings_data.import.hint_auto_fixed',
+    'settings_data.import.hint_partial',
+    'settings_data.import.hint_detected',
+  ]
+  for (const key of hintKeys) {
+    assert.ok(MESSAGES_ZH_TW[key], `zh-TW missing ${key}`)
+    assert.ok(MESSAGES_EN[key], `en missing ${key}`)
+    assert.ok(MESSAGES_JA[key], `ja missing ${key}`)
+  }
+  assert.match(MESSAGES_JA['loans.need_counterparty_example'], /返済/)
+  assert.doesNotMatch(MESSAGES_JA['loans.need_counterparty_example'], /帰還/)
+})

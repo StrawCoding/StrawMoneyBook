@@ -596,7 +596,7 @@ async function confirmLocalRestore() {
     })
     const importedCount = Number(result.importedLedgers?.length ?? 0)
     const importedName = result.firstLedgerName || result.importedLedgers?.[0]?.ledgerName || ''
-    const importedLabel = importedCount > 1 ? `共 ${importedCount} 本` : importedName
+    const importedLabel = importedLedgerLabel(importedCount, importedName)
     uiStore.pushToast(
       t('settings_data.local_recovery.toast_restored', { ledgerName: importedLabel }, '本機 recovery 還原完成：{ledgerName}'),
     )
@@ -641,17 +641,25 @@ async function refreshAllStores() {
   ])
 }
 
+function importedLedgerLabel(count, name) {
+  if (Number(count ?? 0) > 1) return t('settings_auto_backup.restore.multiple_ledgers', { count })
+  return name
+}
+
 function importIntegrityHint(result) {
   const integrity = result?.integrityCheck
   if (!integrity) return ''
-  if (Number(integrity.beforeIssueCount ?? 0) <= 0) return '（已完成資料檢查）'
+  if (Number(integrity.beforeIssueCount ?? 0) <= 0) return t('settings_data.import.hint_checked')
   if (Number(integrity.afterIssueCount ?? 0) <= 0) {
-    return `（已自動修復 ${Number(integrity.fixedCount ?? 0)} 項）`
+    return t('settings_data.import.hint_auto_fixed', { count: Number(integrity.fixedCount ?? 0) })
   }
   if (Number(integrity.fixedCount ?? 0) > 0) {
-    return `（已修復 ${Number(integrity.fixedCount ?? 0)} 項，剩餘 ${Number(integrity.afterIssueCount ?? 0)} 項）`
+    return t('settings_data.import.hint_partial', {
+      fixed: Number(integrity.fixedCount ?? 0),
+      remaining: Number(integrity.afterIssueCount ?? 0),
+    })
   }
-  return `（偵測 ${Number(integrity.afterIssueCount ?? 0)} 項異常）`
+  return t('settings_data.import.hint_detected', { count: Number(integrity.afterIssueCount ?? 0) })
 }
 
 
@@ -779,7 +787,7 @@ async function confirmImportJson() {
     })
     const importedCount = Number(result.importedLedgers?.length ?? 0)
     const importedName = result.firstLedgerName || result.importedLedgers?.[0]?.ledgerName || ''
-    const importedLabel = importedCount > 1 ? `共 ${importedCount} 本` : importedName
+    const importedLabel = importedLedgerLabel(importedCount, importedName)
     uiStore.pushToast(`${t('settings_data.toast.import_json_done', { ledgerName: importedLabel })}${importIntegrityHint(result.importedLedgers?.[0])}`)
     closeImportConfirm({ force: true })
   } catch (error) {
