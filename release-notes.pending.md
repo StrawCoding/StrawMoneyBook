@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 記帳計算機倒退鍵不再套用頁面返回 chevron，格子比例與數字鍵一致。
+
 ---
 
 ## v1.5.6

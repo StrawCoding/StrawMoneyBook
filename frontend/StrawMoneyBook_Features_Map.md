@@ -235,7 +235,7 @@
 | 日期時間選擇 | `src/ui/components/common/DateTimePickerField.vue` |
 | 純時間選擇 | `src/ui/components/common/TimePickerField.vue` |
 | 共用輸入型 sheet 殼層 | `src/ui/components/common/InputBottomSheet.vue` |
-| 金額計算機輸入欄 | `src/ui/components/common/AmountCalculatorInput.vue`（SMB-175；邏輯層：`src/ui/utils/amount-calculator.js` → 共用 `src/core/utils/amount-expression.js`，與 AI 記帳算式對齊） |
+| 金額計算機輸入欄 | `src/ui/components/common/AmountCalculatorInput.vue`（SMB-175；邏輯層：`src/ui/utils/amount-calculator.js` → 共用 `src/core/utils/amount-expression.js`，與 AI 記帳算式對齊；倒退鍵用 `calc-back-btn`，不可套全域頁面 `.back-btn` chevron） |
 | 交易搜尋頁（支援批量編輯分類、備註、可報銷、是否納入預算 / 收支分析） | `src/ui/views/TransactionSearchPage.vue` |
 | 交易日曆頁 | `src/ui/views/CalendarPage.vue` |
 | 功能列表頁 | `src/ui/views/FeatureListPage.vue` |

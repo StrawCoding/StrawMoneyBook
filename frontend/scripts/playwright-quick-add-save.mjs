@@ -107,7 +107,7 @@ async function enterAmountViaCalculator(major) {
     await runPlaywrightCli(['click', `${root} .clear-btn`])
   } else {
     for (let i = 0; i < 8; i += 1) {
-      await runPlaywrightCli(['click', `${root} .back-btn`])
+      await runPlaywrightCli(['click', `${root} [data-testid=calc-backspace]`])
     }
   }
   for (const digit of String(major)) {
@@ -150,6 +150,31 @@ try {
   assert.equal(onboarding.ok, true, JSON.stringify(onboarding, null, 2))
 
   await openQuickAddFromFab()
+
+  const keypadGeometry = await evalPage(`() => {
+    const del = document.querySelector('[data-testid=calc-backspace]')
+    const digit = document.querySelector('.amount-calc-inline .digit-btn')
+    if (!del || !digit) return { ok: false, reason: 'missing keys' }
+    const delRect = del.getBoundingClientRect()
+    const digitRect = digit.getBoundingClientRect()
+    const before = getComputedStyle(del, '::before')
+    return {
+      ok: true,
+      delW: Number(delRect.width.toFixed(1)),
+      delH: Number(delRect.height.toFixed(1)),
+      digitW: Number(digitRect.width.toFixed(1)),
+      digitH: Number(digitRect.height.toFixed(1)),
+      usesPageBackClass: del.classList.contains('back-btn'),
+      beforeContent: String(before.content || ''),
+      label: (del.textContent || '').replace(/\\s+/g, ''),
+    }
+  }`)
+  assert.equal(keypadGeometry.ok, true, JSON.stringify(keypadGeometry))
+  assert.equal(keypadGeometry.usesPageBackClass, false, JSON.stringify(keypadGeometry))
+  assert.equal(keypadGeometry.label, '⌫', JSON.stringify(keypadGeometry))
+  assert.ok(Math.abs(keypadGeometry.delW - keypadGeometry.digitW) <= 2, JSON.stringify(keypadGeometry))
+  assert.ok(Math.abs(keypadGeometry.delH - keypadGeometry.digitH) <= 2, JSON.stringify(keypadGeometry))
+  assert.ok(!keypadGeometry.beforeContent || keypadGeometry.beforeContent === 'none' || keypadGeometry.beforeContent === '""' || keypadGeometry.beforeContent === "''", JSON.stringify(keypadGeometry))
 
   await runPlaywrightCli(['click', '[data-testid=quick-add-create]'])
   await delay(800)

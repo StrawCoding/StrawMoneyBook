@@ -16,7 +16,7 @@
         <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('1')">1</button>
         <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('2')">2</button>
         <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('3')">3</button>
-        <button type="button" class="btn calc-btn back-btn" @click="pressBackspace">⌫</button>
+        <button type="button" class="btn calc-btn calc-back-btn" data-testid="calc-backspace" :aria-label="t('quick_add.calculator.backspace', '倒退')" @click="pressBackspace">⌫</button>
         <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('4')">4</button>
         <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('5')">5</button>
         <button type="button" class="btn calc-btn digit-btn" @click="pressDigit('6')">6</button>
@@ -85,7 +85,7 @@
               <button type="button" class="btn calc-btn digit-btn" @click="pressDot">.</button>
               <button type="button" class="btn calc-btn op-btn" @click="pressOp('+')">+</button>
 
-              <button type="button" class="btn calc-btn back-btn" @click="pressBackspace">⌫</button>
+              <button type="button" class="btn calc-btn calc-back-btn" data-testid="calc-backspace" :aria-label="t('quick_add.calculator.backspace', '倒退')" @click="pressBackspace">⌫</button>
               <button type="button" class="btn calc-btn eq-btn" @click="pressEqual">=</button>
               <button type="button" class="btn calc-btn confirm-btn primary" @click="onConfirm">
                 {{ t('common.done') }}
@@ -398,9 +398,11 @@ onBeforeUnmount(() => {
   color: var(--danger, #e55);
 }
 
-.back-btn {
+.calc-back-btn {
   background: var(--surface-soft);
-  font-size: 18px;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0;
 }
 
 .eq-btn {

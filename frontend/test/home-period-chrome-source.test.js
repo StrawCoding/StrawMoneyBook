@@ -43,3 +43,9 @@ test('quick add embedded path uses inline keypad actions', () => {
   assert.match(calcSource, /emit\('secondary'/)
   assert.match(bookkeepingSource, /class="stack bookkeeping-page"/)
 })
+
+test('calculator delete key is not the page back chevron', () => {
+  assert.match(calcSource, /class="btn calc-btn calc-back-btn"/)
+  assert.match(calcSource, /data-testid="calc-backspace"/)
+  assert.doesNotMatch(calcSource, /class="btn calc-btn back-btn"/)
+})

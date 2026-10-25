@@ -88,6 +88,7 @@ export const MESSAGES_JA = {
   'home_tx_edit.delete_dialog_message': 'この取引を削除しますか？',
   'home_tx_edit.delete_dialog_confirm': '削除する',
   'quick_add.calculator.title': '計算機',
+  'quick_add.calculator.backspace': '一文字削除',
   'settings_category_page.title': 'カテゴリ管理',
   'settings_category_page.add_group': 'グループを追加',
   'settings_category_page.archive_hint': 'L2 カテゴリが既に取引で使われている場合、削除時は自動的にアーカイブされます。',

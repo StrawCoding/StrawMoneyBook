@@ -126,6 +126,7 @@ export const MESSAGES_EN = {
     'home_tx_edit.delete_dialog_message': 'Delete this transaction?',
     'home_tx_edit.delete_dialog_confirm': 'Confirm Delete',
     'quick_add.calculator.title': 'Calculator',
+    'quick_add.calculator.backspace': 'Backspace',
     'transaction.type.expense': 'Expense',
     'transaction.type.income': 'Income',
     'transaction.type.transfer': 'Transfer',

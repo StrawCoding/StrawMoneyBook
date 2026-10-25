@@ -130,6 +130,7 @@ export const MESSAGES_ZH_TW = {
     'home_tx_edit.delete_dialog_message': '確定要刪除這筆交易？',
     'home_tx_edit.delete_dialog_confirm': '確認刪除',
     'quick_add.calculator.title': '計算機',
+    'quick_add.calculator.backspace': '倒退',
     'transaction.type.expense': '支出',
     'transaction.type.income': '收入',
     'transaction.type.transfer': '轉帳',

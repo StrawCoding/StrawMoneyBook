@@ -139,7 +139,7 @@ async function enterAmountViaCalculator(major) {
     await runPlaywrightCli(['click', `${root} .clear-btn`])
   } else {
     for (let i = 0; i < 8; i += 1) {
-      await runPlaywrightCli(['click', `${root} .back-btn`])
+      await runPlaywrightCli(['click', `${root} [data-testid=calc-backspace]`])
     }
   }
   for (const digit of String(major)) {
