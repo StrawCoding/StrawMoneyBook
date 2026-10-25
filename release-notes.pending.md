@@ -1,8 +1,9 @@
 # Pending Release Notes
 
-- 功能列表「預算設定」補回 sliders 圖示：該 icon 先前未註冊進 FontAwesome library，會畫成空框。
-
 ---
+
+## v1.5.9
+- 功能列表「預算設定」補回 sliders 圖示：該 icon 先前未註冊進 FontAwesome library，會畫成空框。
 
 ## v1.5.8
 - 同一張請款單可分次入帳，每次依本次金額 FIFO 回寫項目與來源，不必一次收完。
