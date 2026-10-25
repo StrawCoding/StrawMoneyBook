@@ -375,6 +375,8 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 }
 
 [data-ui-layout='modern'] .assets-modern .vault-summary-card {
+  display: grid;
+  gap: 10px;
   background: var(--card);
 }
 
@@ -580,7 +582,6 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   white-space: nowrap;
 }
 
-[data-ui-layout='modern'] .page-container .vault-drill-list,
 [data-ui-layout='modern'] .page-container .drill-list {
   list-style: none;
   margin: 0;
@@ -591,7 +592,6 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border: 0;
 }
 
-[data-ui-layout='modern'] .page-container .drill-list li + li,
-[data-ui-layout='modern'] .page-container .vault-drill-list li + li {
+[data-ui-layout='modern'] .page-container .drill-list li + li {
   border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
 }

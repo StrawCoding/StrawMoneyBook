@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.19
+- 現代 layout 資產簡表：修正全域 Habitat 誤把 `.page-container .vault-drill-list` margin 清零，導致「可支配／負債」與借出列表之間間距消失；改以資產卡 grid gap 保留空隙。
+
 ## v1.5.18
 - 現代 layout（Habitat）批次套用：功能子頁（請款／報銷／借貸／訂閱／信用卡／證券／存錢罐／帳戶管理等）與設定子頁改共用 `HabitatPageShell`（pill／drill-list／文字返回）；補齊三語 `habitat_hello` 與 shell 標題 key；管理員平台一併套殼。
 
