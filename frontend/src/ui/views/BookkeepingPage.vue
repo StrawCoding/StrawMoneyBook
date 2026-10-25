@@ -1,53 +1,53 @@
 <template>
   <section class="stack bookkeeping-page">
     <header class="bookkeeping-chrome" data-testid="bookkeeping-page-header">
-      <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
-      <h2>{{ t('bookkeeping.page_title') }}</h2>
-      <div class="mode-toggle mode-toggle-row" data-testid="bookkeeping-mode-toggle">
-        <button
-          type="button"
-          class="btn"
-          data-testid="bookkeeping-mode-ai"
-          :class="{ primary: topMode === 'ai' }"
-          @click="switchTopMode('ai')"
-        >
-          {{ t('bookkeeping.mode.ai') }}
-        </button>
-        <button
-          type="button"
-          class="btn"
-          data-testid="bookkeeping-mode-manual"
-          :class="{ primary: topMode === 'manual' }"
-          @click="switchTopMode('manual')"
-        >
-          {{ t('bookkeeping.mode.manual', '手動記帳') }}
-        </button>
+      <div class="bookkeeping-top-row">
+        <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
+        <h2>{{ t('bookkeeping.page_title') }}</h2>
+      </div>
+      <div class="bookkeeping-mode-stack">
+        <div class="segment-pills mode-toggle-row" data-testid="bookkeeping-mode-toggle">
+          <button
+            type="button"
+            class="btn tab-btn"
+            data-testid="bookkeeping-mode-ai"
+            :class="{ primary: topMode === 'ai' }"
+            @click="switchTopMode('ai')"
+          >
+            {{ t('bookkeeping.mode.ai') }}
+          </button>
+          <button
+            type="button"
+            class="btn tab-btn"
+            data-testid="bookkeeping-mode-manual"
+            :class="{ primary: topMode === 'manual' }"
+            @click="switchTopMode('manual')"
+          >
+            {{ t('bookkeeping.mode.manual', '手動記帳') }}
+          </button>
+        </div>
+        <div v-if="topMode === 'manual'" class="segment-pills manual-switch-actions" data-testid="bookkeeping-manual-toggle">
+          <button
+            type="button"
+            class="btn tab-btn"
+            data-testid="bookkeeping-manual-quick"
+            :class="{ primary: manualMode === 'quick' }"
+            @click="switchManualMode('quick')"
+          >
+            {{ t('bookkeeping.manual.quick_add', '快速新增') }}
+          </button>
+          <button
+            type="button"
+            class="btn tab-btn"
+            data-testid="bookkeeping-manual-qna"
+            :class="{ primary: manualMode === 'qna' }"
+            @click="switchManualMode('qna')"
+          >
+            {{ t('bookkeeping.manual.qna', '問答記帳') }}
+          </button>
+        </div>
       </div>
     </header>
-
-    <div v-if="topMode === 'manual'" class="manual-switch-row">
-      <span class="muted manual-switch-label">{{ t('bookkeeping.manual.label', '手動模式') }}</span>
-      <div class="manual-switch-actions">
-        <button
-          type="button"
-          class="btn"
-          data-testid="bookkeeping-manual-quick"
-          :class="{ primary: manualMode === 'quick' }"
-          @click="switchManualMode('quick')"
-        >
-          {{ t('bookkeeping.manual.quick_add', '快速新增') }}
-        </button>
-        <button
-          type="button"
-          class="btn"
-          data-testid="bookkeeping-manual-qna"
-          :class="{ primary: manualMode === 'qna' }"
-          @click="switchManualMode('qna')"
-        >
-          {{ t('bookkeeping.manual.qna', '問答記帳') }}
-        </button>
-      </div>
-    </div>
 
     <AiAutoBookkeepingPage v-if="topMode === 'ai'" embedded />
     <QnaBookkeepingPage v-else-if="manualMode === 'qna'" embedded />
@@ -127,62 +127,54 @@ async function goBack() {
 }
 
 .bookkeeping-chrome {
+  display: grid;
+  gap: 10px;
+}
+
+.bookkeeping-top-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  flex-wrap: wrap;
+  min-width: 0;
 }
 
 h2 {
   margin: 0;
   flex: 1 1 auto;
   min-width: 0;
+  font-size: clamp(20px, 5vw, 24px);
+  font-weight: 750;
+  letter-spacing: -0.03em;
 }
 
-.mode-toggle,
-.manual-switch-actions {
+.bookkeeping-mode-stack {
+  display: grid;
+  gap: 6px;
+}
+
+.segment-pills {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
-.mode-toggle {
-  flex-wrap: nowrap;
-  flex: 0 0 auto;
-}
-
-.mode-toggle .btn {
-  white-space: nowrap;
-}
-
-.mode-toggle-row .btn {
+.segment-pills .tab-btn {
   flex: 1 1 0;
-}
-
-.manual-switch-actions {
-  flex-wrap: wrap;
-}
-
-.manual-switch-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.manual-switch-label {
+  min-width: 0;
+  padding: 8px 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--bg-soft);
+  color: var(--muted);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 650;
+  white-space: nowrap;
+  box-shadow: none;
 }
 
-@media (max-width: 720px) {
-  .manual-switch-actions {
-    width: 100%;
-  }
-
-  .manual-switch-actions .btn {
-    flex: 1 1 0;
-  }
+.segment-pills .tab-btn.primary {
+  background: color-mix(in srgb, var(--primary) 16%, var(--card) 84%);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
 }
 </style>
