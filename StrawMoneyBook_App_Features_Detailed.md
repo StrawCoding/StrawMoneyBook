@@ -177,7 +177,7 @@ VS Code workspace 目前會透過 `java.import.exclusions` 與 `java.project.exc
 
 `playwright:ui-layout` 會 bypass onboarding 進入 app-shell 首頁，確認預設為現代 Habitat layout（`data-ui-layout=modern`）、設定 → 個人化可切傳統／現代且會寫入 localStorage、兩種 layout 下首頁區塊／FAB／BottomNav 仍在；強制 Light 主題後驗證收入／支出 block 可見、可讀、版面完整，並抽樣確認 Dark 主題未回歸。
 
-功能列表分為「一般功能」與「進階功能」兩區：一般功能含預算項目（`/budget` 顯示頁）、預算設定（`/budget/settings`）、借貸、報銷、請款單、存錢罐、有價證券、信用卡、訂閱、交易搜尋；進階功能（`feature_list.advanced`）含共同帳本、帳本同步、Drive 備份選檔／舊版還原（smb299 → `/settings/auto-backup#drive-appdata-browser`）、銀行同步（feature flag 閘控）、載具同步、手錶連線（`/settings/wear-companion`）。預算項目入口搭配圖示直接導向預算顯示頁；設定入口進期間／項目／池／存款管理。設定頁主清單不再列出共同帳本／帳本同步／銀行同步／載具同步／手錶連線等進階同步入口（深度連結／舊 bookmark 仍可開到同一 route）；自動備份仍在設定頁，並可從進階進入 Drive 選檔還原錨點。smb299 進階列加長後，功能列以 `scroll-margin-bottom`（約 BottomNav 高度）避免末列被固定底欄遮擋；`playwright:ui-layout` 點擊進階入口前會置中捲動並確認列在 nav 上方。
+功能列表分為「一般功能」與「進階功能」兩區：一般功能含預算項目（`/budget` 顯示頁）、預算設定（`/budget/settings`）、借貸、報銷、請款單、存錢罐、有價證券、信用卡、訂閱、交易搜尋；進階功能（`feature_list.advanced`）含共同帳本、帳本同步、Drive 備份選檔／舊版還原（smb299 → `/settings/auto-backup#drive-appdata-browser`）、銀行同步（feature flag 閘控）、載具同步、手錶連線（`/settings/wear-companion`）。列上圖示必須在 `fa-icon-registry.js` 註冊（預算設定 `fa-sliders` 曾漏註冊會成空框）。預算項目入口搭配圖示直接導向預算顯示頁；設定入口進期間／項目／池／存款管理。設定頁主清單不再列出共同帳本／帳本同步／銀行同步／載具同步／手錶連線等進階同步入口（深度連結／舊 bookmark 仍可開到同一 route）；自動備份仍在設定頁，並可從進階進入 Drive 選檔還原錨點。smb299 進階列加長後，功能列以 `scroll-margin-bottom`（約 BottomNav 高度）避免末列被固定底欄遮擋；`playwright:ui-layout` 點擊進階入口前會置中捲動並確認列在 nav 上方。
 
 ### 信用卡消費制度 P0（smb301）
 

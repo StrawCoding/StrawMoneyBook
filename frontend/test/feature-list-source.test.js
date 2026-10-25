@@ -45,6 +45,11 @@ test('feature list exposes budget settings as a separate entry', () => {
   assert.match(featureListSource, /to: '\/budget\/settings'/)
   assert.match(featureListSource, /feature_list\.budget_settings/)
   assert.match(featureListSource, /feature-link-budget-settings/)
+  assert.match(featureListSource, /fa-solid fa-sliders/)
+  assert.match(
+    readFileSync(resolve(import.meta.dirname, '../src/ui/utils/fa-icon-registry.js'), 'utf8'),
+    /\bfaSliders\b/,
+  )
   assert.match(i18nSource, /'feature_list\.budget_settings': '預算設定'/)
   assert.match(i18nSource, /'feature_list\.budget_settings': 'Budget Settings'/)
   assert.match(i18nSource, /'feature_list\.budget_settings': '予算設定'/)

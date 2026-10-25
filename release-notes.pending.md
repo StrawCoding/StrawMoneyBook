@@ -1,5 +1,7 @@
 # Pending Release Notes
 
+- 功能列表「預算設定」補回 sliders 圖示：該 icon 先前未註冊進 FontAwesome library，會畫成空框。
+
 ---
 
 ## v1.5.8

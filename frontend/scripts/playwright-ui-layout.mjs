@@ -1689,6 +1689,35 @@ async function assertRouteNavigation() {
   assert.equal(state.links.carrierSync, true, JSON.stringify(state, null, 2))
   assert.equal(state.links.wearCompanion, true, JSON.stringify(state, null, 2))
 
+  const featureIcons = await evalPage(`() => {
+    return [...document.querySelectorAll('.feature-list-page .feature-link')].map((link) => {
+      const svg = link.querySelector('.feature-icon svg, .feature-icon-wrap svg')
+      const path = svg?.querySelector('path')
+      let box = { width: 0, height: 0 }
+      try {
+        box = svg?.getBBox?.() || box
+      } catch {
+        box = { width: Number(svg?.clientWidth || 0), height: Number(svg?.clientHeight || 0) }
+      }
+      return {
+        testId: link.getAttribute('data-testid'),
+        label: link.textContent.trim(),
+        hasSvg: Boolean(svg),
+        hasPath: Boolean(path?.getAttribute('d')),
+        width: Number(box.width || 0),
+        height: Number(box.height || 0),
+      }
+    })
+  }`)
+  const emptyIcons = featureIcons.filter((icon) => !icon.hasSvg || !icon.hasPath || icon.width < 4 || icon.height < 4)
+  assert.equal(emptyIcons.length, 0, JSON.stringify({ emptyIcons, featureIcons }, null, 2))
+  assert.equal(
+    featureIcons.some((icon) => icon.testId === 'feature-link-budget-settings'),
+    true,
+    JSON.stringify(featureIcons, null, 2),
+  )
+  console.log(`[features] icons ok: ${featureIcons.length}`)
+
   // General: securities entry should open securities list above BottomNav.
   {
     const securitiesNav = await evalPage(`async () => {
@@ -2218,6 +2247,10 @@ async function assertDriveAppDataBrowser() {
   assert.equal(state.hasPanel, true, JSON.stringify(state, null, 2))
 
   // Corrupt / not-importable file must NOT open restore confirm.
+  await evalPage(`() => {
+    document.querySelector('[data-file-id="file-corrupt"]')?.scrollIntoView({ block: 'center' })
+    return true
+  }`)
   await runPlaywrightCli(['click', '[data-file-id="file-corrupt"] [data-testid="drive-appdata-restore-file"]'])
   await delay(1000)
   state = await evalPage(`() => ({
@@ -2232,6 +2265,10 @@ async function assertDriveAppDataBrowser() {
   )
 
   // smb299 tick13: summary+ledger-id ok but unknown/missing row fields must NOT open confirm.
+  await evalPage(`() => {
+    document.querySelector('[data-file-id="file-row-invalid"]')?.scrollIntoView({ block: 'center' })
+    return true
+  }`)
   await runPlaywrightCli(['click', '[data-file-id="file-row-invalid"] [data-testid="drive-appdata-restore-file"]'])
   await delay(1000)
   state = await evalPage(`() => ({
@@ -2245,6 +2282,10 @@ async function assertDriveAppDataBrowser() {
   )
 
   // smb299 tick14: CHECK enum invalid (type=not_a_valid_type) must NOT open confirm.
+  await evalPage(`() => {
+    document.querySelector('[data-file-id="file-check-invalid"]')?.scrollIntoView({ block: 'center' })
+    return true
+  }`)
   await runPlaywrightCli(['click', '[data-file-id="file-check-invalid"] [data-testid="drive-appdata-restore-file"]'])
   await delay(1000)
   state = await evalPage(`() => ({
@@ -2466,6 +2507,10 @@ try {
   const onboarding = await completeOnboarding()
   assert.equal(onboarding.ok, true, JSON.stringify(onboarding, null, 2))
 
+  if (process.env.UI_LAYOUT_ONLY_FEATURES) {
+    await assertRouteNavigation()
+    console.log('UI layout Playwright features-only passed')
+  } else {
   await assertBottomNavIcons()
   await assertHomeBlocks()
   await assertFullscreenBookkeepingTopInset()
@@ -2487,6 +2532,7 @@ try {
   }
 
   console.log('UI layout Playwright smoke passed')
+  }
 } finally {
   try {
     await runPlaywrightCli(['close'], { raw: true }).catch(() => {})

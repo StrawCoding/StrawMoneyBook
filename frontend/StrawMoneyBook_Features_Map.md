@@ -181,6 +181,8 @@
 
 ### 功能列表導覽（`src/ui/views/FeatureListPage.vue`）
 
+列上的 FontAwesome 圖示必須註冊在 `src/ui/utils/fa-icon-registry.js`，否則會畫成空框（預算設定 `fa-sliders` 曾漏註冊）。
+
 #### 一般功能
 - 預算項目：`/budget`
 - 預算設定：`/budget/settings`

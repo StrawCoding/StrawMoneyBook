@@ -25,6 +25,7 @@ const UI_LAYOUT_ICON_FILES = [
   resolve(root, 'src/ui/components/layout/BottomNav.vue'),
   resolve(root, 'src/ui/views/home.vue'),
   resolve(root, 'src/ui/views/settings/SettingsPersonalizationPage.vue'),
+  resolve(root, 'src/ui/views/FeatureListPage.vue'),
 ]
 
 function faKebabToImportName(iconClass) {
