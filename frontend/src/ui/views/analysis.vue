@@ -1,37 +1,41 @@
 <template>
-  <div class="view-root analysis-modern" data-testid="analysis-view">
-    <header class="analysis-hello-block" data-testid="analysis-hello-block">
-      <div class="analysis-title-row">
-        <h1 class="analysis-large-title">{{ t('analysis_page.title') }}</h1>
-        <div class="analysis-toolbar toolbar-cluster" data-testid="analysis-toolbar">
-          <button
-            type="button"
-            class="btn icon-btn toolbar-icon"
-            :class="{ primary: exportingPdf, busy: exportingPdf }"
-            data-testid="analysis-export-direct-btn"
-            :disabled="exportingPdf"
-            :aria-label="exportingPdf ? t('analysis_print.exporting') : t('analysis_print.export_pdf')"
-            :title="exportingPdf ? t('analysis_print.exporting') : t('analysis_print.export_pdf')"
-            @click="exportPdfDirect"
-          >
-            <font-awesome-icon icon="fa-solid fa-file-invoice-dollar" />
-          </button>
-          <RouterLink
-            class="btn icon-btn toolbar-icon"
-            data-testid="analysis-print-link"
-            :to="reportPageTo"
-            :aria-label="t('analysis_page.open_report')"
-            :title="t('analysis_page.open_report')"
-          >
-            <font-awesome-icon icon="fa-solid fa-chart-column" />
-          </RouterLink>
-        </div>
+  <HabitatPageShell
+    :title="t('analysis_page.title')"
+    :kicker="t('analysis_page.habitat_hello')"
+    test-id="analysis-view"
+    hello-test-id="analysis-hello-block"
+    root-class="analysis-modern"
+    stack-class="analysis-page"
+    stack-test-id="analysis-page"
+    :stack-theme-aware="true"
+  >
+    <template #toolbar>
+      <div class="analysis-toolbar toolbar-cluster" data-testid="analysis-toolbar">
+        <button
+          type="button"
+          class="btn icon-btn toolbar-icon"
+          :class="{ primary: exportingPdf, busy: exportingPdf }"
+          data-testid="analysis-export-direct-btn"
+          :disabled="exportingPdf"
+          :aria-label="exportingPdf ? t('analysis_print.exporting') : t('analysis_print.export_pdf')"
+          :title="exportingPdf ? t('analysis_print.exporting') : t('analysis_print.export_pdf')"
+          @click="exportPdfDirect"
+        >
+          <font-awesome-icon icon="fa-solid fa-file-invoice-dollar" />
+        </button>
+        <RouterLink
+          class="btn icon-btn toolbar-icon"
+          data-testid="analysis-print-link"
+          :to="reportPageTo"
+          :aria-label="t('analysis_page.open_report')"
+          :title="t('analysis_page.open_report')"
+        >
+          <font-awesome-icon icon="fa-solid fa-chart-column" />
+        </RouterLink>
       </div>
-      <p class="analysis-habitat-hello">{{ t('analysis_page.habitat_hello') }}</p>
-    </header>
+    </template>
 
-    <section class="stack analysis-page" data-testid="analysis-page" data-theme-aware="1">
-      <header class="analysis-period-chrome" data-testid="analysis-period-chrome">
+    <header class="analysis-period-chrome" data-testid="analysis-period-chrome">
         <h2 class="period-title">{{ periodTitle }}</h2>
         <div class="period-tabs mode-tabs" data-testid="analysis-period-filter">
           <button type="button" class="btn tab-btn" :class="{ primary: mode === 'all' }" @click="mode = 'all'">{{ t('analysis_page.mode.all') }}</button>
@@ -290,12 +294,12 @@
         :account-count="exportAccountCount"
       />
     </div>
-    </section>
-  </div>
+  </HabitatPageShell>
 </template>
 
 <script setup>
 import { Capacitor } from '@capacitor/core'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'

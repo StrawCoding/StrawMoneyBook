@@ -2364,7 +2364,11 @@ async function assertDualUiLayout() {
     hasFab: Boolean(document.querySelector('[data-testid=home-fab]')),
     isModernHome: Boolean(document.querySelector('.home-modern')),
     isModernNav: Boolean(document.querySelector('.bottom-nav.modern')),
-    hasHabitatHello: Boolean(document.querySelector('.home-habitat-hello')),
+    hasHabitatHello: Boolean(
+      document.querySelector(
+        '[data-testid=home-hello-block] .habitat-kicker, [data-testid=home-hello-block] .habitat-page-title, .home-habitat-hello',
+      ),
+    ),
   })`)
   assert.ok(home.path === '/' || home.path === '/home', JSON.stringify(home, null, 2))
   assert.equal(home.hasHomeView, true, JSON.stringify(home, null, 2))

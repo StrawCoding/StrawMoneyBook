@@ -1,5 +1,5 @@
 <template>
-  <section class="stack welcome-root view-root welcome-modern" data-testid="welcome-view">
+  <HabitatPageShell root-class="welcome-modern" test-id="welcome-view" stack-class="welcome-root">
     <article class="card welcome-card">
       <header class="stack title-wrap">
         <p class="step-text">{{ t('welcome.step') }} {{ step }} / 3</p>
@@ -179,12 +179,13 @@
         </button>
       </footer>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import { BRAND_LOGO_URL } from '@/ui/constants/brand-assets'
 import {

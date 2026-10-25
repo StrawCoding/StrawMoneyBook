@@ -1,18 +1,22 @@
 <template>
-  <div class="view-root assets-modern" data-testid="assets-view">
-    <header class="assets-hello-block" data-testid="assets-hello-block">
-      <div class="assets-title-row page-header">
-        <h1 class="assets-large-title page-title">{{ t('assets_page.title') }}</h1>
-        <RouterLink class="manage-link" to="/assets/accounts">{{ t('assets_page.manage') }}</RouterLink>
-      </div>
-      <p class="assets-habitat-hello">{{ t('assets_page.habitat_hello') }}</p>
+  <HabitatPageShell
+    :title="t('assets_page.title')"
+    :kicker="t('assets_page.habitat_hello')"
+    test-id="assets-view"
+    hello-test-id="assets-hello-block"
+    root-class="assets-modern"
+    stack-class="assets-page"
+  >
+    <template #toolbar>
+      <RouterLink class="text-link manage-link" to="/assets/accounts">{{ t('assets_page.manage') }}</RouterLink>
+    </template>
+    <template #header-extra>
       <div class="ledger-hello">
         <small class="muted ledger-kicker">{{ t('assets_page.current_ledger') }}</small>
         <LedgerSwitcher class="ledger-switcher-wrap ledger-panel" />
       </div>
-    </header>
+    </template>
 
-    <section class="stack assets-page">
     <article class="card panel vault-summary-card">
       <header class="row vault-summary-head">
         <h3>{{ t('assets_page.summary_title') }}</h3>
@@ -170,13 +174,13 @@
         </p>
       </div>
     </AppDialog>
-    </section>
-  </div>
+  </HabitatPageShell>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { useAccountStore } from '@/ui/stores/account.store'

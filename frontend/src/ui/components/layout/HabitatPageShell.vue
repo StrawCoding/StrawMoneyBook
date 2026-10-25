@@ -15,7 +15,12 @@
       <p v-if="kicker" class="habitat-kicker">{{ kicker }}</p>
       <slot name="header-extra" />
     </header>
-    <section class="stack habitat-stack" :class="stackClass">
+    <section
+      class="stack habitat-stack"
+      :class="stackClass"
+      :data-testid="stackTestId || undefined"
+      :data-theme-aware="stackThemeAware ? '1' : undefined"
+    >
       <slot />
     </section>
   </div>
@@ -58,6 +63,14 @@ const props = defineProps({
   stackClass: {
     type: String,
     default: '',
+  },
+  stackTestId: {
+    type: String,
+    default: '',
+  },
+  stackThemeAware: {
+    type: Boolean,
+    default: false,
   },
 })
 

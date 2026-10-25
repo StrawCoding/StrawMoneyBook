@@ -1,95 +1,99 @@
 <template>
-  <div class="view-root home-modern" data-testid="home-view">
-    <header class="home-hello-block" data-testid="home-hello-block">
-      <h1 class="home-large-title">{{ t('nav.home') }}</h1>
-      <p class="home-habitat-hello">{{ t('home_page.habitat_hello') }}</p>
+  <HabitatPageShell
+    :title="t('nav.home')"
+    :kicker="t('home_page.habitat_hello')"
+    test-id="home-view"
+    hello-test-id="home-hello-block"
+    root-class="home-modern"
+  >
+    <template #header-extra>
       <LedgerSwitcher class="home-hello-ledger ledger-switcher-wrap" data-testid="home-ledger-switcher" />
+    </template>
+
+    <header class="home-period-chrome" data-testid="home-period-chrome">
+      <div class="period-title-row">
+        <button
+          type="button"
+          class="period-arrow"
+          data-testid="home-period-prev"
+          :disabled="!canStepPeriod"
+          :aria-label="t('home_page.period_prev')"
+          @click="stepPeriod(-1)"
+        >
+          ‹
+        </button>
+        <h2 class="period-title" data-testid="home-period-title">{{ periodTitle }}</h2>
+        <button
+          type="button"
+          class="period-arrow"
+          data-testid="home-period-next"
+          :disabled="!canStepPeriod"
+          :aria-label="t('home_page.period_next')"
+          @click="stepPeriod(1)"
+        >
+          ›
+        </button>
+      </div>
+      <div class="period-tabs" data-testid="home-period-filter">
+        <button
+          v-for="mode in filterModes"
+          :key="mode.value"
+          class="btn tab-btn"
+          :class="{ primary: filterMode === mode.value }"
+          @click="switchFilterMode(mode.value)"
+        >
+          {{ mode.label }}
+        </button>
+      </div>
+      <transition name="collapse-fade">
+        <div v-if="filterMode !== 'all'" class="picker-row">
+          <transition name="fade-scale" mode="out-in">
+            <HomeRangePicker
+              v-if="filterMode === 'month'"
+              key="month"
+              mode="month"
+              :month="selectedMonth"
+              class="picker-input"
+              @update:month="pickMonth"
+            />
+            <HomeRangePicker
+              v-else-if="filterMode === 'day'"
+              key="day"
+              mode="day"
+              :day="selectedDay"
+              class="picker-input"
+              @update:day="pickDay"
+            />
+            <HomeRangePicker
+              v-else
+              key="year"
+              mode="year"
+              :year="selectedYear"
+              class="picker-input"
+              @update:year="pickYear"
+            />
+          </transition>
+          <button class="btn quick-btn" :disabled="budgetStore.loading" @click="goCurrentRange">
+            {{ currentRangeLabel }}
+          </button>
+        </div>
+      </transition>
     </header>
-    <section class="stack">
-      <header class="home-period-chrome" data-testid="home-period-chrome">
-        <div class="period-title-row">
-          <button
-            type="button"
-            class="period-arrow"
-            data-testid="home-period-prev"
-            :disabled="!canStepPeriod"
-            :aria-label="t('home_page.period_prev')"
-            @click="stepPeriod(-1)"
-          >
-            ‹
-          </button>
-          <h2 class="period-title" data-testid="home-period-title">{{ periodTitle }}</h2>
-          <button
-            type="button"
-            class="period-arrow"
-            data-testid="home-period-next"
-            :disabled="!canStepPeriod"
-            :aria-label="t('home_page.period_next')"
-            @click="stepPeriod(1)"
-          >
-            ›
-          </button>
-        </div>
-        <div class="period-tabs" data-testid="home-period-filter">
-          <button
-            v-for="mode in filterModes"
-            :key="mode.value"
-            class="btn tab-btn"
-            :class="{ primary: filterMode === mode.value }"
-            @click="switchFilterMode(mode.value)"
-          >
-            {{ mode.label }}
-          </button>
-        </div>
-        <transition name="collapse-fade">
-          <div v-if="filterMode !== 'all'" class="picker-row">
-            <transition name="fade-scale" mode="out-in">
-              <HomeRangePicker
-                v-if="filterMode === 'month'"
-                key="month"
-                mode="month"
-                :month="selectedMonth"
-                class="picker-input"
-                @update:month="pickMonth"
-              />
-              <HomeRangePicker
-                v-else-if="filterMode === 'day'"
-                key="day"
-                mode="day"
-                :day="selectedDay"
-                class="picker-input"
-                @update:day="pickDay"
-              />
-              <HomeRangePicker
-                v-else
-                key="year"
-                mode="year"
-                :year="selectedYear"
-                class="picker-input"
-                @update:year="pickYear"
-              />
-            </transition>
-            <button class="btn quick-btn" :disabled="budgetStore.loading" @click="goCurrentRange">
-              {{ currentRangeLabel }}
-            </button>
-          </div>
-        </transition>
-      </header>
 
-      <HomeBudgetSummaryCard data-testid="home-budget-summary" />
-      <HomeAssetSummaryCard data-testid="home-asset-summary" />
-      <HomeCreditSummaryCard />
-      <HomeTransactionFeed data-testid="home-transaction-feed" />
+    <HomeBudgetSummaryCard data-testid="home-budget-summary" />
+    <HomeAssetSummaryCard data-testid="home-asset-summary" />
+    <HomeCreditSummaryCard />
+    <HomeTransactionFeed data-testid="home-transaction-feed" />
 
-      <teleport to="body">
-        <button class="fab btn primary" data-testid="home-fab" @click="openQuickAdd">{{ t('home_page.quick_add') }}</button>
-      </teleport>
-    </section>
-  </div>
+    <teleport to="body">
+      <button class="fab btn primary" data-testid="home-fab" @click="openQuickAdd">{{ t('home_page.quick_add') }}</button>
+    </teleport>
+  </HabitatPageShell>
 </template>
 
 <script setup>
 import { useRouter } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import HomeAssetSummaryCard from '@/ui/components/home/HomeAssetSummaryCard.vue'
 import { useHomePeriodFilter } from '@/ui/composables/useHomePeriodFilter'
 import HomeBudgetSummaryCard from '@/ui/components/home/HomeBudgetSummaryCard.vue'
@@ -128,12 +132,6 @@ function openQuickAdd() {
 </script>
 
 <style scoped>
-.home-hello-block {
-  display: grid;
-  justify-items: start;
-  gap: 8px;
-  padding: 2px 2px 4px;
-}
 .home-period-chrome {
   display: grid;
   gap: 10px;

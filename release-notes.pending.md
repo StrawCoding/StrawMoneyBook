@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.22
+- 首頁／分析／資產／歡迎／導覽改為 `HabitatPageShell`，與全站外觀一致；覆蓋率測試改為除嵌入子頁外皆須套殼。
+
 ## v1.5.20
 - 全站 Habitat 補齊：記帳全螢幕、交易編輯、分析報表匯出、電子發票精靈改 `HabitatPageShell`；歡迎／導覽頁接 global 色島；新增 `habitat-page-coverage` 防漏網。
 - 資產金庫改 vault drill 列表；Playwright／node 測試對齊 Habitat `data-testid`（證券、信用卡、Wear 等）。

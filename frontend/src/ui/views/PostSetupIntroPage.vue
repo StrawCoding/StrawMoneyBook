@@ -1,5 +1,5 @@
 <template>
-  <section class="intro-root view-root intro-modern" data-testid="post-setup-intro-view">
+  <HabitatPageShell root-class="intro-modern" test-id="post-setup-intro-view" stack-class="intro-root">
     <article class="card intro-card">
       <header class="hero-block">
         <div class="hero-copy">
@@ -84,12 +84,13 @@
         </button>
       </footer>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
 import {
