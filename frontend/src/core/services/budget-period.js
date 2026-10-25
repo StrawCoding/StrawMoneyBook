@@ -303,6 +303,28 @@ export function isDailyPoolChildItem(item, containers = []) {
   return Boolean(container) && isDailyPoolContainer(container)
 }
 
+function toDisplayMinor(value) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : 0
+}
+
+/** Period spent for a budget row. Daily-pool children still show category spend; they do not own a budget. */
+export function itemDisplaySpentMinor(item, spentMap = {}) {
+  return Math.max(0, toDisplayMinor(spentMap?.[item?.category_id]))
+}
+
+/** Own budget amount. Daily-pool children contribute 0 so pool math is not double-counted. */
+export function itemDisplayBudgetMinor(item, containers = []) {
+  if (isDailyPoolChildItem(item, containers)) return 0
+  return Math.max(0, toDisplayMinor(item?.resolved_amount_minor ?? item?.amount_minor))
+}
+
+/** Own remaining. Daily-pool children stay 0; leftover lives on the parent pool. */
+export function itemDisplayRemainMinor(item, spentMap = {}, containers = []) {
+  if (isDailyPoolChildItem(item, containers)) return 0
+  return itemDisplayBudgetMinor(item, containers) - itemDisplaySpentMinor(item, spentMap)
+}
+
 export function monthRangeUtc(monthKey, timeZone = 'Asia/Taipei') {
   const payCycleStartMonthKey = parsePayCycleMonthKey(monthKey).slice(0, 7)
   const parsed = parseMonthKey(monthKey) ?? parseMonthKey(payCycleStartMonthKey) ?? parseMonthKey(monthKeyFromDate())

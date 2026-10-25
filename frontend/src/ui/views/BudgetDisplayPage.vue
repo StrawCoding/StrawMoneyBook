@@ -255,7 +255,9 @@ import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { APP_BUDGET_PERIOD_SYNC_EVENT } from '@/ui/composables/useHomePeriodFilter'
 import {
   dateKeyForLedgerTimeZone,
-  isDailyPoolChildItem,
+  itemDisplayBudgetMinor,
+  itemDisplayRemainMinor,
+  itemDisplaySpentMinor,
   shiftBudgetMonthKey,
 } from '@/core/services/budget.service'
 import { listTransactionsForCalendarMonth } from '@/core/services/transaction-query.service'
@@ -403,36 +405,16 @@ function categoryIcon(categoryId) {
   return normalizeFaIcon(icon, defaultCategoryExpenseIcon)
 }
 
-function isDailyPoolChild(item) {
-  return isDailyPoolChildItem(item, budgetStore.containers)
-}
-
-function itemSpentMinor(categoryId) {
-  const spentMinor = Number(budgetStore.spentMap[categoryId] ?? 0)
-  return Number.isFinite(spentMinor) ? spentMinor : 0
-}
-
-function itemTodaySpentMinor(categoryId) {
-  const spentMinor = Number(budgetStore.todaySpentMap[categoryId] ?? 0)
-  return Number.isFinite(spentMinor) ? spentMinor : 0
-}
-
 function itemSpentMinorForItem(item) {
-  return isDailyPoolChild(item)
-    ? itemTodaySpentMinor(item?.category_id)
-    : itemSpentMinor(item?.category_id)
+  return itemDisplaySpentMinor(item, budgetStore.spentMap)
 }
 
 function itemBudgetMinor(item) {
-  if (isDailyPoolChild(item)) return 0
-  const budgetMinor = Number(item?.resolved_amount_minor ?? item?.amount_minor ?? 0)
-  if (!Number.isFinite(budgetMinor)) return 0
-  return Math.max(0, budgetMinor)
+  return itemDisplayBudgetMinor(item, budgetStore.containers)
 }
 
 function itemRemainMinor(item) {
-  if (isDailyPoolChild(item)) return 0
-  return itemBudgetMinor(item) - itemSpentMinor(item?.category_id)
+  return itemDisplayRemainMinor(item, budgetStore.spentMap, budgetStore.containers)
 }
 
 function txLabel(tx) {

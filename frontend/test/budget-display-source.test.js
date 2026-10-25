@@ -51,6 +51,15 @@ test('budget display calendar only paints in-period budget expense', () => {
   assert.match(storeSource, /spentByCategoryOnDay/)
 })
 
+test('daily pool children show period spent and stay out of own budget math', () => {
+  assert.match(tableSource, /itemDisplaySpentMinor/)
+  assert.match(tableSource, /itemDisplayBudgetMinor/)
+  assert.match(tableSource, /itemDisplayRemainMinor/)
+  assert.doesNotMatch(tableSource, /itemTodaySpentMinor/)
+  assert.match(displaySource, /itemDisplaySpentMinor/)
+  assert.match(settingsSource, /itemDisplaySpentMinor/)
+})
+
 test('budget category table is read-only and can deep-link to settings', () => {
   assert.match(tableSource, /data-testid="budget-category-table"/)
   assert.match(tableSource, /normalizeFaIcon/)

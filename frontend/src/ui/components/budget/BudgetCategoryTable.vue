@@ -120,7 +120,12 @@ import BudgetProgressBar from '@/ui/components/budget/BudgetProgressBar.vue'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useI18n } from '@/ui/services/i18n.service'
-import { isDailyPoolChildItem } from '@/core/services/budget.service'
+import {
+  isDailyPoolChildItem,
+  itemDisplayBudgetMinor,
+  itemDisplayRemainMinor,
+  itemDisplaySpentMinor,
+} from '@/core/services/budget.service'
 import { defaultCategoryExpenseIcon, normalizeFaIcon } from '@/ui/utils/fa-icon-options'
 
 defineEmits(['select-item', 'select-container', 'go-settings'])
@@ -149,31 +154,19 @@ function isDailyPoolChild(item) {
 }
 
 function itemSpentMinor(categoryId) {
-  const spentMinor = Number(budgetStore.spentMap[categoryId] ?? 0)
-  return Number.isFinite(spentMinor) ? spentMinor : 0
-}
-
-function itemTodaySpentMinor(categoryId) {
-  const spentMinor = Number(budgetStore.todaySpentMap[categoryId] ?? 0)
-  return Number.isFinite(spentMinor) ? spentMinor : 0
+  return itemDisplaySpentMinor({ category_id: categoryId }, budgetStore.spentMap)
 }
 
 function itemSpentMinorForItem(item) {
-  return isDailyPoolChild(item)
-    ? itemTodaySpentMinor(item?.category_id)
-    : itemSpentMinor(item?.category_id)
+  return itemDisplaySpentMinor(item, budgetStore.spentMap)
 }
 
 function itemBudgetMinor(item) {
-  if (isDailyPoolChild(item)) return 0
-  const budgetMinor = Number(item?.resolved_amount_minor ?? item?.amount_minor ?? 0)
-  if (!Number.isFinite(budgetMinor)) return 0
-  return Math.max(0, budgetMinor)
+  return itemDisplayBudgetMinor(item, budgetStore.containers)
 }
 
 function itemRemainMinor(item) {
-  if (isDailyPoolChild(item)) return 0
-  return itemBudgetMinor(item) - itemSpentMinor(item?.category_id)
+  return itemDisplayRemainMinor(item, budgetStore.spentMap, budgetStore.containers)
 }
 
 function itemUsedRatio(item) {

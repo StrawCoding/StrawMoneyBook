@@ -949,7 +949,7 @@ UI composable 目錄：`src/ui/composables/`
 - 類別（0）：無
 
 ### `src/ui/views/BudgetDisplayPage.vue`
-- 補充：`/budget` 只讀顯示頁。期間列可切曆月或發薪週期，主視圖是 `BudgetMonthCalendar`（日格只畫列入預算的支出；發薪期外日子淡化、不可點）。點日展開當日日預算／支出／差額、分類拆帳與 `include_in_budget` 交易。下方 `BudgetCategoryTable` 顯示 Icon + 預算／已用／剩餘；編輯深連 `/budget/settings?focus=item&id=`。可切到既有 `BudgetDailyStatsTable` 列表。不加 BottomNav 預算分頁。
+- 補充：`/budget` 只讀顯示頁。期間列可切曆月或發薪週期，主視圖是 `BudgetMonthCalendar`（日格只畫列入預算的支出；發薪期外日子淡化、不可點）。點日展開當日日預算／支出／差額、分類拆帳與 `include_in_budget` 交易。下方 `BudgetCategoryTable` 顯示 Icon + 預算／已用／剩餘；共用日池子項只顯示該分類整期已用，總額／剩餘不列入計算（留給上層日池）。編輯深連 `/budget/settings?focus=item&id=`。可切到既有 `BudgetDailyStatsTable` 列表。不加 BottomNav 預算分頁。
 
 ### `src/ui/views/budgeting.vue`
 - 函數（新增重點）：`goPreviousPeriod`, `goCurrentPeriod`, `goNextPeriod`, `copyPreviousMonth`, `openCreate`, `openEdit`, `saveItem`, `removeItem`, `applyFocusFromQuery`
