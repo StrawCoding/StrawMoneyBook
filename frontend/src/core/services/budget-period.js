@@ -325,6 +325,35 @@ export function itemDisplayRemainMinor(item, spentMap = {}, containers = []) {
   return itemDisplayBudgetMinor(item, containers) - itemDisplaySpentMinor(item, spentMap)
 }
 
+export function dailyPoolParentContainer(item, containers = []) {
+  const containerId = normalizeText(item?.budget_container_id)
+  if (!containerId) return null
+  const container = (containers ?? []).find((entry) => String(entry?.id ?? '') === containerId)
+  if (!container || !isDailyPoolContainer(container)) return null
+  return container
+}
+
+/** Display denominator for used%. Daily-pool children use the parent pool period budget. */
+export function itemDisplayUsedBudgetMinor(item, containers = []) {
+  if (isDailyPoolChildItem(item, containers)) {
+    const parent = dailyPoolParentContainer(item, containers)
+    return Math.max(0, toDisplayMinor(parent?.periodBudgetMinor ?? parent?.amount_minor))
+  }
+  return itemDisplayBudgetMinor(item, containers)
+}
+
+/** Used ratio for progress bars. Children stay out of own budget math; this is share of the parent pool. */
+export function itemDisplayUsedRatio(item, spentMap = {}, containers = []) {
+  const budgetMinor = itemDisplayUsedBudgetMinor(item, containers)
+  if (budgetMinor <= 0) return 0
+  const ratio = itemDisplaySpentMinor(item, spentMap) / budgetMinor
+  return Number.isFinite(ratio) ? Math.max(0, ratio) : 0
+}
+
+export function itemDisplayUsedPercentLabel(item, spentMap = {}, containers = []) {
+  return `${Math.round(itemDisplayUsedRatio(item, spentMap, containers) * 100)}%`
+}
+
 export function monthRangeUtc(monthKey, timeZone = 'Asia/Taipei') {
   const payCycleStartMonthKey = parsePayCycleMonthKey(monthKey).slice(0, 7)
   const parsed = parseMonthKey(monthKey) ?? parseMonthKey(payCycleStartMonthKey) ?? parseMonthKey(monthKeyFromDate())

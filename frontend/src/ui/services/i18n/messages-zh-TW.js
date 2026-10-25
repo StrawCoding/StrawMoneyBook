@@ -1948,6 +1948,7 @@ export const MESSAGES_ZH_TW = {
     'budgeting.display.list': '列表',
     'budgeting.display.view_toggle': '預算檢視',
     'budgeting.display.category_table': '總預算',
+    'budgeting.display.pool_share': '佔日池',
     'budgeting.display.empty': '還沒有預算項目。到設定頁新增分類或共同池。',
     'budgeting.display.go_settings': '前往設定',
     'budgeting.display.day_detail': '{date} 預算明細',

@@ -208,17 +208,13 @@
                 </div>
 
                 <BudgetProgressBar
-                  v-if="!isDailyPoolChild(item)"
                   class="item-progress"
                   :ratio="itemUsedRatio(item)"
-                  :over="isItemOverBudget(item)"
+                  :over="itemUsedRatio(item) > 1"
                   :percent-label="itemUsedPercentLabel(item)"
-                  :subtitle="t('budgeting.used')"
+                  :subtitle="isDailyPoolChild(item) ? t('budgeting.display.pool_share') : t('budgeting.used')"
                   :aria-label="categoryName(item.category_id)"
                 />
-                <p v-else class="muted pool-child-spent">
-                  {{ t('budgeting.used') }} {{ formatMajor(itemSpentMinorForItem(item)) }}
-                </p>
 
                 <small v-if="isDailyAverageItem(item)" class="muted item-rule-hint">{{ itemDailyRuleSummary(item) }}</small>
                 <div v-if="itemBudgetSaveEnabled(item)" class="row budget-save-inline-row">
@@ -517,6 +513,8 @@ import {
   itemDisplayBudgetMinor,
   itemDisplayRemainMinor,
   itemDisplaySpentMinor,
+  itemDisplayUsedPercentLabel,
+  itemDisplayUsedRatio,
 } from '@/core/services/budget.service'
 import { APP_BUDGET_PERIOD_SYNC_EVENT } from '@/ui/composables/useHomePeriodFilter'
 
@@ -781,10 +779,6 @@ function categoryName(categoryId) {
   return categoryStore.categories.find((category) => category.id === categoryId)?.name ?? t('budgeting.deleted_category')
 }
 
-function itemSpentMinor(categoryId) {
-  return itemDisplaySpentMinor({ category_id: categoryId }, budgetStore.spentMap)
-}
-
 function isDailyPoolChild(item) {
   return isDailyPoolChildItem(item, budgetStore.containers)
 }
@@ -808,17 +802,11 @@ function itemRemainMinor(item) {
 }
 
 function itemUsedRatio(item) {
-  const budgetMinor = itemBudgetMinor(item)
-  if (!budgetMinor) return 0
-  const ratio = itemSpentMinor(item.category_id) / budgetMinor
-  return Number.isFinite(ratio) ? ratio : 0
+  return itemDisplayUsedRatio(item, budgetStore.spentMap, budgetStore.containers)
 }
 
 function itemUsedPercentLabel(item) {
-  const budgetMinor = itemBudgetMinor(item)
-  if (!budgetMinor) return '0%'
-  const ratio = itemSpentMinor(item.category_id) / budgetMinor
-  return `${Math.round((Number.isFinite(ratio) ? ratio : 0) * 100)}%`
+  return itemDisplayUsedPercentLabel(item, budgetStore.spentMap, budgetStore.containers)
 }
 
 const monthUsedRatio = computed(() => {

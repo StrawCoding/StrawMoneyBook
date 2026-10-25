@@ -52,6 +52,13 @@ async (page) => {
   if (!/321/.test(poolTable)) {
     throw new Error(`daily pool child should show period spent 321\n${poolTable}`)
   }
+  if (!/\d+%/.test(poolTable)) {
+    throw new Error(`daily pool child should show used percent bar\n${poolTable}`)
+  }
+  const childProgress = await page.locator('[data-testid="budget-category-table"] [role="progressbar"]').count()
+  if (childProgress < 2) {
+    throw new Error(`daily pool parent and child should both show progress bars, got ${childProgress}`)
+  }
 
   function assert(condition, message) {
     if (!condition) throw new Error(message)

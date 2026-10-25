@@ -760,6 +760,7 @@ export const MESSAGES_JA = {
   'budgeting.display.list': 'リスト',
   'budgeting.display.view_toggle': '予算表示',
   'budgeting.display.category_table': '予算合計',
+  'budgeting.display.pool_share': '日プール比',
   'budgeting.display.empty': '予算項目はまだありません。設定でカテゴリまたは共同プールを追加してください。',
   'budgeting.display.go_settings': '設定を開く',
   'budgeting.display.day_detail': '{date} の予算明細',

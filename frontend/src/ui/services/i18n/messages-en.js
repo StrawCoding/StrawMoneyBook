@@ -1965,6 +1965,7 @@ export const MESSAGES_EN = {
     'budgeting.display.list': 'List',
     'budgeting.display.view_toggle': 'Budget view',
     'budgeting.display.category_table': 'Budget totals',
+    'budgeting.display.pool_share': 'Of pool',
     'budgeting.display.empty': 'No budget items yet. Add a category or shared pool in settings.',
     'budgeting.display.go_settings': 'Open settings',
     'budgeting.display.day_detail': 'Budget detail for {date}',

@@ -80,12 +80,11 @@
                   </span>
                 </div>
                 <BudgetProgressBar
-                  v-if="!isDailyPoolChild(item)"
                   class="row-progress"
                   :ratio="itemUsedRatio(item)"
-                  :over="isItemOverBudget(item)"
+                  :over="itemUsedRatio(item) > 1"
                   :percent-label="itemUsedPercentLabel(item)"
-                  :subtitle="t('budgeting.used')"
+                  :subtitle="isDailyPoolChild(item) ? t('budgeting.display.pool_share') : t('budgeting.used')"
                   :aria-label="categoryName(item.category_id)"
                 />
                 <div class="amount-grid">
@@ -125,6 +124,8 @@ import {
   itemDisplayBudgetMinor,
   itemDisplayRemainMinor,
   itemDisplaySpentMinor,
+  itemDisplayUsedPercentLabel,
+  itemDisplayUsedRatio,
 } from '@/core/services/budget.service'
 import { defaultCategoryExpenseIcon, normalizeFaIcon } from '@/ui/utils/fa-icon-options'
 
@@ -153,10 +154,6 @@ function isDailyPoolChild(item) {
   return isDailyPoolChildItem(item, budgetStore.containers)
 }
 
-function itemSpentMinor(categoryId) {
-  return itemDisplaySpentMinor({ category_id: categoryId }, budgetStore.spentMap)
-}
-
 function itemSpentMinorForItem(item) {
   return itemDisplaySpentMinor(item, budgetStore.spentMap)
 }
@@ -170,14 +167,11 @@ function itemRemainMinor(item) {
 }
 
 function itemUsedRatio(item) {
-  const budgetMinor = itemBudgetMinor(item)
-  if (!budgetMinor) return 0
-  const ratio = itemSpentMinor(item.category_id) / budgetMinor
-  return Number.isFinite(ratio) ? ratio : 0
+  return itemDisplayUsedRatio(item, budgetStore.spentMap, budgetStore.containers)
 }
 
 function itemUsedPercentLabel(item) {
-  return `${Math.round(itemUsedRatio(item) * 100)}%`
+  return itemDisplayUsedPercentLabel(item, budgetStore.spentMap, budgetStore.containers)
 }
 
 function isItemOverBudget(item) {
