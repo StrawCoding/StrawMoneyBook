@@ -83,7 +83,11 @@ function dayRangeUtc(dayKey) {
 
 function paidClaimItemMinorSql(sourceAlias = 't') {
   return `COALESCE((
-    SELECT SUM(ri.amount_minor)
+    SELECT SUM(CASE
+      WHEN COALESCE(ri.settled_minor, 0) > 0 THEN ri.settled_minor
+      WHEN r.status = 'paid' THEN ri.amount_minor
+      ELSE 0
+    END)
     FROM reimbursement_items ri
     INNER JOIN reimbursements r
       ON r.ledger_id = ri.ledger_id
@@ -91,7 +95,6 @@ function paidClaimItemMinorSql(sourceAlias = 't') {
     WHERE ri.ledger_id = ${sourceAlias}.ledger_id
       AND ri.transaction_id = ${sourceAlias}.id
       AND r.deleted_at IS NULL
-      AND r.status = 'paid'
   ), 0)`
 }
 

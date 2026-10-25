@@ -32,13 +32,18 @@ import {
   updateCategoryIcon,
 } from '@/core/repositories/category.repo'
 import {
+  addReimbursementItemSettledMinor,
+  addReimbursementPaidMinor,
   countReimbursements,
   createReimbursementAdvance,
+  createReimbursementPayment,
+  createReimbursementPaymentAllocation,
   createReimbursementAdvanceUsage,
   createReimbursement,
   createReimbursementItem,
   deleteReimbursementItemsByReimbursementId,
   deleteReimbursementById,
+  deleteReimbursementPaymentsByReimbursementId,
   deleteReimbursementAdvanceUsageById,
   getReimbursementAdvanceUsageById,
   getReimbursementAdvanceById,
@@ -51,8 +56,11 @@ import {
   listReimbursementAdvancesBySourceTxId,
   listReimbursementAdvances,
   listReimbursementItems,
+  listReimbursementPayments,
   listReimbursements,
   recomputeReimbursementTotal,
+  resetReimbursementItemSettledMinor,
+  resetReimbursementPaidMinor,
   setReimbursementPaid,
   softDeleteReimbursementAdvanceById,
   updateReimbursement,
@@ -61,14 +69,15 @@ import {
 } from '@/core/repositories/reimbursement.repo'
 import { assertCanCreateReimbursement, isFreeTier } from '@/core/services/membership.service'
 import { isReimbursementImportClaimItem } from '@/core/utils/claim-sheet-draft-sync'
+import {
+  allocateClaimPaymentFifo,
+  claimRemainingMinor,
+  isAdvanceClaimItem,
+  isBorrowLoanClaimItem,
+  isClaimFullyPaid,
+} from '@/core/utils/claim-sheet-payment'
 
 const ADDON_NOTE_PREFIX = '【附加項目】'
-
-function isBorrowLoanClaimItem(item) {
-  if (!item) return false
-  if (String(item.source_type ?? '').trim() !== 'transaction') return false
-  return String(item.entry_type ?? '').trim() === 'income'
-}
 
 function normalizeTargetLedgerIds(activeLedgerId, rawList) {
   if (!Array.isArray(rawList)) return []
@@ -303,10 +312,10 @@ async function ensureHiddenAdvanceCategory(ledgerId) {
 
 export async function loadReimbursementDashboard(ledgerId) {
   const claims = await listReimbursements(ledgerId)
-  const pendingCount = claims.filter((item) => item.status !== 'paid' && item.status !== 'rejected').length
-  const pendingTotal = claims
-    .filter((item) => item.status !== 'paid' && item.status !== 'rejected')
-    .reduce((total, item) => total + Number(item.total_minor ?? 0), 0)
+  const pendingClaims = claims.filter((item) => !isClaimFullyPaid(item) && item.status !== 'rejected')
+  const pendingCount = pendingClaims.length
+  const pendingTotal = pendingClaims
+    .reduce((total, item) => total + claimRemainingMinor(item), 0)
 
   return {
     claims,
@@ -529,7 +538,8 @@ export async function getReimbursementDetail(ledgerId, reimbursementId) {
   }
 
   const items = await listReimbursementItems(ledgerId, reimbursementId)
-  return { claim, items }
+  const payments = await listReimbursementPayments(ledgerId, reimbursementId)
+  return { claim, items, payments }
 }
 
 export async function transitionReimbursementStatus(ledgerId, reimbursementId, nextStatus) {
@@ -545,7 +555,7 @@ export async function transitionReimbursementStatus(ledgerId, reimbursementId, n
       throw new Error('paid 狀態請使用入帳流程')
     }
 
-    if (String(claim.status ?? '') === 'paid' && nextStatus === 'draft') {
+    if (nextStatus === 'draft' && (String(claim.status ?? '') === 'paid' || claimPaidMinorOfSafe(claim) > 0)) {
       const claimItems = await listReimbursementItems(ledgerId, claim.id)
       await revertPaidClaimEffects(ledgerId, claim, claimItems)
     }
@@ -562,7 +572,7 @@ export async function deleteReimbursement(ledgerId, reimbursementId) {
     }
 
     const claimItems = await listReimbursementItems(ledgerId, claim.id)
-    if (String(claim.status ?? '') === 'paid') {
+    if (String(claim.status ?? '') === 'paid' || claimPaidMinorOfSafe(claim) > 0) {
       await revertPaidClaimEffects(ledgerId, claim, claimItems)
     } else {
       for (const item of claimItems) {
@@ -666,75 +676,89 @@ export async function markReimbursementPaid(ledgerId, payload) {
       throw new Error(`狀態 ${claim.status} 不能入帳`)
     }
 
-    const idempotencyKey = `reim_paid_${claim.id}`
-
-    const claimItems = await listReimbursementItems(ledgerId, claim.id)
-
-    async function syncLinkedReimbursableTransactions() {
-      for (const item of claimItems) {
-        const txId = String(item?.transaction_id ?? '').trim()
-        if (!txId) continue
-        await markTransactionReimbursed(ledgerId, txId, true)
-      }
-    }
-
-    if (claim.status === 'paid') {
-      await syncLinkedReimbursableTransactions()
+    const remainingMinor = claimRemainingMinor(claim)
+    if (claim.status === 'paid' || remainingMinor <= 0) {
+      const claimItems = await listReimbursementItems(ledgerId, claim.id)
+      await syncLinkedReimbursableTransactions(ledgerId, claimItems)
       return {
         alreadyProcessed: true,
         reimbursementId: claim.id,
         paidTxId: claim.paid_tx_id ?? '',
+        paymentId: '',
         usedAdvanceMinor: 0,
-        cashAmountMinor: Math.max(0, Math.round(Number(claim.total_minor ?? 0))),
+        cashAmountMinor: 0,
+        remainingMinor: 0,
       }
     }
+
+    const requestedMinor = payload.amountMinor == null || payload.amountMinor === ''
+      ? remainingMinor
+      : Math.max(0, Math.round(Number(payload.amountMinor)))
+    if (requestedMinor <= 0) {
+      throw new Error('入帳金額必須大於 0')
+    }
+    if (requestedMinor > remainingMinor) {
+      throw new Error('入帳金額不可超過剩餘未收')
+    }
+
+    const paymentId = createId('rp')
+    const isFullRemaining = requestedMinor === remainingMinor && claimPaidMinorOfSafe(claim) === 0
+    const idempotencyKey = isFullRemaining
+      ? `reim_paid_${claim.id}`
+      : `reim_pay_${claim.id}_${paymentId}`
 
     const existingTx = await findTransactionByIdempotencyKey(ledgerId, idempotencyKey)
     if (existingTx) {
-      const updated = await setReimbursementPaid(ledgerId, claim.id, {
-        paidTxId: existingTx.id,
-        idempotencyKey,
-      })
-      await syncLinkedReimbursableTransactions()
-      return {
-        alreadyProcessed: true,
-        reimbursementId: updated.id,
-        paidTxId: existingTx.id,
+      if (isFullRemaining) {
+        const updated = await setReimbursementPaid(ledgerId, claim.id, {
+          paidTxId: existingTx.id,
+          idempotencyKey,
+        })
+        const claimItems = await listReimbursementItems(ledgerId, claim.id)
+        await syncLinkedReimbursableTransactions(ledgerId, claimItems)
+        return {
+          alreadyProcessed: true,
+          reimbursementId: updated.id,
+          paidTxId: existingTx.id,
+        }
       }
+      throw new Error('這筆入帳已處理')
     }
 
-    const totalMinor = Number(claim.total_minor ?? 0)
-    if (totalMinor <= 0) {
-      throw new Error('總額必須大於 0 才能入帳')
+    const claimItems = await listReimbursementItems(ledgerId, claim.id)
+    const { allocations, leftoverMinor } = allocateClaimPaymentFifo(claimItems, requestedMinor)
+    if (!allocations.length || leftoverMinor > 0) {
+      throw new Error('剩餘項目不足以入帳這筆金額')
     }
 
-    const claimAdvanceItems = listClaimAdvanceItems(claimItems)
-    const claimAdvanceMinor = claimAdvanceItems.reduce((sum, item) => {
-      return sum + Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
-    }, 0)
-    const borrowLoanMinor = sumClaimBorrowLoanMinor(claimItems)
+    const borrowAllocations = allocations.filter((row) => isBorrowLoanClaimItem(row.item))
+    const advanceAllocations = allocations.filter((row) => isAdvanceClaimItem(row.item))
+    const offsetAllocations = allocations.filter((row) => {
+      return !isBorrowLoanClaimItem(row.item) && !isAdvanceClaimItem(row.item)
+    })
+    const borrowLoanMinor = borrowAllocations.reduce((sum, row) => sum + row.amountMinor, 0)
+    const claimAdvanceMinor = advanceAllocations.reduce((sum, row) => sum + row.amountMinor, 0)
+    const offsettableMinor = offsetAllocations.reduce((sum, row) => sum + row.amountMinor, 0)
+
+    const offsetItems = offsetAllocations.map((row) => ({
+      ...row.item,
+      amount_minor: row.amountMinor,
+    }))
     const advanceResult = await applyClaimAdvanceUsages(
       ledgerId,
-      claimItems,
-      totalMinor,
+      offsetItems,
+      offsettableMinor,
       payload.selectedAdvanceIds,
     )
-    const reimbursementCashMinor = Math.max(
-      0,
-      advanceResult.cashAmountMinor - claimAdvanceMinor - borrowLoanMinor,
-    )
+    const reimbursementCashMinor = Math.max(0, advanceResult.cashAmountMinor)
     let txId = ''
     const createdAdvanceIds = []
 
-    if ((claimAdvanceMinor > 0 || borrowLoanMinor > 0) && !payload.accountId) {
-      throw new Error('請選擇入帳帳戶')
+    if ((claimAdvanceMinor > 0 || borrowLoanMinor > 0 || reimbursementCashMinor > 0) && !payload.accountId) {
+      throw new Error(reimbursementCashMinor > 0 ? '入帳必須指定帳戶' : '請選擇入帳帳戶')
     }
 
     if (reimbursementCashMinor > 0) {
-      if (!payload.accountId) {
-        throw new Error('入帳必須指定帳戶')
-      }
-
       txId = await addTransaction(ledgerId, {
         type: 'income',
         accountId: payload.accountId,
@@ -750,17 +774,15 @@ export async function markReimbursementPaid(ledgerId, payload) {
       })
     }
 
-    for (const [index, item] of claimAdvanceItems.entries()) {
-      const amountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
-      if (amountMinor <= 0) continue
+    for (const [index, row] of advanceAllocations.entries()) {
       const createdAdvance = await createReimbursementAdvanceEntry(ledgerId, {
-        amountMinor,
+        amountMinor: row.amountMinor,
         accountId: payload.accountId,
-        note: String(item?.description ?? '').trim() || `${claim.title || '請款單'} 代收 ${index + 1}`,
+        note: String(row.item?.description ?? '').trim() || `${claim.title || '請款單'} 代收 ${index + 1}`,
         receivedAt: payload.paidAt ?? nowIso(),
         originType: 'reimbursement',
         externalRefId: claim.id,
-        idempotencyKey: `${idempotencyKey}:advance:${index + 1}`,
+        idempotencyKey: `${idempotencyKey}:advance:${row.itemId}`,
       })
       if (createdAdvance?.id) {
         createdAdvanceIds.push(createdAdvance.id)
@@ -770,22 +792,57 @@ export async function markReimbursementPaid(ledgerId, payload) {
       }
     }
 
-    const settlementResult = await settleBorrowLoanClaimItems(ledgerId, claim, claimItems, payload)
+    const settlementResult = await settleBorrowLoanClaimAllocations(
+      ledgerId,
+      claim,
+      borrowAllocations,
+      payload,
+      idempotencyKey,
+    )
     for (const repayment of settlementResult.repaymentResults) {
       if (!txId && repayment?.txId) {
         txId = repayment.txId
       }
     }
 
-    const updated = await setReimbursementPaid(ledgerId, claim.id, {
-      paidTxId: txId || null,
-      idempotencyKey,
+    for (const row of allocations) {
+      await addReimbursementItemSettledMinor(ledgerId, row.itemId, row.amountMinor)
+    }
+
+    await createReimbursementPayment(ledgerId, {
+      id: paymentId,
+      reimbursementId: claim.id,
+      accountId: payload.accountId || null,
+      paidAt: payload.paidAt ?? nowIso(),
+      amountMinor: requestedMinor,
+      generatedTxId: txId || null,
+      note: payload.note ?? null,
     })
-    await syncLinkedReimbursableTransactions()
+    for (const row of allocations) {
+      await createReimbursementPaymentAllocation(ledgerId, {
+        paymentId,
+        itemId: row.itemId,
+        amountMinor: row.amountMinor,
+      })
+    }
+
+    const updatedAfterPay = await addReimbursementPaidMinor(ledgerId, claim.id, requestedMinor)
+    const nextRemaining = claimRemainingMinor(updatedAfterPay)
+    let updated = updatedAfterPay
+    if (nextRemaining <= 0) {
+      updated = await setReimbursementPaid(ledgerId, claim.id, {
+        paidTxId: txId || updatedAfterPay.paid_tx_id || null,
+        idempotencyKey,
+      })
+    }
+
+    const latestItems = await listReimbursementItems(ledgerId, claim.id)
+    await syncLinkedReimbursableTransactions(ledgerId, latestItems)
 
     return {
       alreadyProcessed: false,
       reimbursementId: updated.id,
+      paymentId,
       paidTxId: txId,
       createdAdvanceIds,
       claimAdvanceMinor,
@@ -793,17 +850,44 @@ export async function markReimbursementPaid(ledgerId, payload) {
       usedAdvanceMinor: advanceResult.usedAdvanceMinor,
       usedAdvanceIds: advanceResult.usedAdvanceIds,
       cashAmountMinor: reimbursementCashMinor,
+      remainingMinor: nextRemaining,
       settledLoanIds: settlementResult.settledLoanIds,
       loanRepaymentResults: settlementResult.repaymentResults,
     }
   })
 }
 
+function claimPaidMinorOfSafe(claim) {
+  return Math.max(0, Math.round(Number(claim?.paid_minor ?? 0)))
+}
+
+async function syncLinkedReimbursableTransactions(ledgerId, claimItems = []) {
+  for (const item of claimItems) {
+    const txId = String(item?.transaction_id ?? '').trim()
+    if (!txId) continue
+    await syncReimbursableExpenseState(ledgerId, txId)
+  }
+}
+
 async function settleBorrowLoanClaimItems(ledgerId, claim, claimItems = [], payload = {}) {
   const borrowItems = listClaimBorrowLoanItems(claimItems)
+  return settleBorrowLoanClaimAllocations(
+    ledgerId,
+    claim,
+    borrowItems.map((item) => ({
+      item,
+      itemId: String(item?.id ?? ''),
+      amountMinor: Math.max(0, Math.round(Number(item?.amount_minor ?? 0))),
+    })),
+    payload,
+    `reim_paid_${claim.id}`,
+  )
+}
+
+async function settleBorrowLoanClaimAllocations(ledgerId, claim, allocations = [], payload = {}, idempotencyBase = '') {
   const settledLoanIds = []
   const repaymentResults = []
-  if (!borrowItems.length) {
+  if (!allocations.length) {
     return { settledLoanIds, repaymentResults }
   }
 
@@ -811,15 +895,14 @@ async function settleBorrowLoanClaimItems(ledgerId, claim, claimItems = [], payl
     throw new Error('請選擇入帳帳戶')
   }
 
-  const idempotencyBase = `reim_paid_${claim.id}`
   const paidAt = payload.paidAt ?? nowIso()
   const note = payload.note ?? `請款單收回：${claim.title}`
 
-  for (const item of borrowItems) {
-    const amountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
+  for (const row of allocations) {
+    const amountMinor = Math.max(0, Math.round(Number(row?.amountMinor ?? 0)))
     if (amountMinor <= 0) continue
 
-    const loanId = await resolveBorrowLoanIdFromClaimItem(ledgerId, item)
+    const loanId = await resolveBorrowLoanIdFromClaimItem(ledgerId, row.item)
     if (!loanId) continue
 
     const repayment = await addLoanRepayment(ledgerId, {
@@ -828,7 +911,7 @@ async function settleBorrowLoanClaimItems(ledgerId, claim, claimItems = [], payl
       accountId: payload.accountId,
       paidAt,
       note,
-      idempotencyKey: `${idempotencyBase}:loan_repay:${loanId}`,
+      idempotencyKey: `${idempotencyBase}:loan_repay:${loanId}:${row.itemId || createId('ri')}`,
     })
 
     settledLoanIds.push(loanId)
@@ -840,17 +923,26 @@ async function settleBorrowLoanClaimItems(ledgerId, claim, claimItems = [], payl
 
 async function revertBorrowLoanClaimSettlements(ledgerId, claim, claimItems = []) {
   const revertedLoanIds = []
-  const idempotencyBase = `reim_paid_${claim.id}`
+  const payments = await listReimbursementPayments(ledgerId, claim.id)
+  const bases = [`reim_paid_${claim.id}`, ...payments.map((payment) => `reim_pay_${claim.id}_${payment.id}`)]
 
   for (const item of listClaimBorrowLoanItems(claimItems)) {
     const loanId = await resolveBorrowLoanIdFromClaimItem(ledgerId, item)
     if (!loanId) continue
+    const itemId = String(item?.id ?? '')
 
-    const existingTx = await findTransactionByIdempotencyKey(ledgerId, `${idempotencyBase}:loan_repay:${loanId}`)
-    if (!existingTx?.id) continue
-
-    await deleteLoanRepaymentByTransactionId(ledgerId, existingTx.id)
-    revertedLoanIds.push(loanId)
+    for (const base of bases) {
+      const keys = [
+        `${base}:loan_repay:${loanId}`,
+        `${base}:loan_repay:${loanId}:${itemId}`,
+      ]
+      for (const key of keys) {
+        const existingTx = await findTransactionByIdempotencyKey(ledgerId, key)
+        if (!existingTx?.id) continue
+        await deleteLoanRepaymentByTransactionId(ledgerId, existingTx.id)
+        revertedLoanIds.push(loanId)
+      }
+    }
   }
 
   return revertedLoanIds
@@ -923,6 +1015,9 @@ async function revertPaidClaimEffects(ledgerId, claim, claimItems = []) {
   }
 
   await softDeleteTransactionsByOriginRef(ledgerId, 'reimbursement', claim.id)
+  await deleteReimbursementPaymentsByReimbursementId(ledgerId, claim.id)
+  await resetReimbursementItemSettledMinor(ledgerId, claim.id)
+  await resetReimbursementPaidMinor(ledgerId, claim.id)
 
   for (const item of claimItems) {
     const txId = String(item?.transaction_id ?? '').trim()

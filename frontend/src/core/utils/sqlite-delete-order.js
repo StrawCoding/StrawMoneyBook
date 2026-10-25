@@ -5,6 +5,8 @@
 export const LEDGER_CHILD_DELETE_ORDER = Object.freeze([
   'transaction_attachments',
   'loan_payments',
+  'reimbursement_payment_allocations',
+  'reimbursement_payments',
   'reimbursement_advance_usages',
   'reimbursement_advances',
   'reimbursement_items',

@@ -21,7 +21,7 @@ import migration019 from '@/core/db/migrations/019_bank_transaction_metadata.sql
 // The schema changes from those drafts were either reverted or merged into adjacent migrations.
 // Do NOT reuse those version numbers — doing so would skip execution on devices that already
 // have schema_migrations rows for those versions, causing a schema split between new and existing installs.
-// Next available version: 50.
+// Next available version: 51.
 import migration023 from '@/core/db/migrations/023_reimbursement_item_advance_source.sql?raw'
 import migration024 from '@/core/db/migrations/024_savings_jars_auto_save.sql?raw'
 import migration025 from '@/core/db/migrations/025_budget_save.sql?raw'
@@ -47,6 +47,7 @@ import migration046 from '@/core/db/migrations/046_bank_sync_account_checkpoints
 import migration047 from '@/core/db/migrations/047_restore_deleted_log_triggers.sql?raw'
 import migration048 from '@/core/db/migrations/048_soft_delete_transaction_postings.sql?raw'
 import migration049 from '@/core/db/migrations/049_budget_container_surplus_mode.sql?raw'
+import migration050 from '@/core/db/migrations/050_claim_sheet_payments.sql?raw'
 import { executeMigrationSql, isIgnorableMigrationError } from '@/core/db/migration-executor'
 import {
   assertNoReservedMigrationVersions,
@@ -105,6 +106,7 @@ const MIGRATIONS = [
   { version: 47, name: 'restore_deleted_log_triggers', sql: migration047 },
   { version: 48, name: 'soft_delete_transaction_postings', sql: migration048 },
   { version: 49, name: 'budget_container_surplus_mode', sql: migration049 },
+  { version: 50, name: 'claim_sheet_payments', sql: migration050 },
 ]
 
 assertNoReservedMigrationVersions(MIGRATIONS)
@@ -254,6 +256,7 @@ const LEGACY_COLUMN_PATCHES = {
     'ALTER TABLE reimbursements ADD COLUMN created_at TEXT;',
     'ALTER TABLE reimbursements ADD COLUMN updated_at TEXT;',
     'ALTER TABLE reimbursements ADD COLUMN deleted_at TEXT;',
+    'ALTER TABLE reimbursements ADD COLUMN paid_minor INTEGER NOT NULL DEFAULT 0;',
   ],
   reimbursement_items: [
     "ALTER TABLE reimbursement_items ADD COLUMN source_type TEXT NOT NULL DEFAULT 'manual';",
@@ -267,6 +270,7 @@ const LEGACY_COLUMN_PATCHES = {
     'ALTER TABLE reimbursement_items ADD COLUMN attachment_uri TEXT;',
     'ALTER TABLE reimbursement_items ADD COLUMN created_at TEXT;',
     'ALTER TABLE reimbursement_items ADD COLUMN updated_at TEXT;',
+    'ALTER TABLE reimbursement_items ADD COLUMN settled_minor INTEGER NOT NULL DEFAULT 0;',
   ],
   reimbursement_advances: [
     'ALTER TABLE reimbursement_advances ADD COLUMN category_id TEXT;',

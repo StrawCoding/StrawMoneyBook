@@ -169,12 +169,13 @@ test('SMB-222 v1.2.45: claim sheet i18n strings rename borrow_loan import to len
 
 test('SMB-222 v1.2.45: completing reimbursement settles imported lent loans and reverting restores active status', () => {
   assert.match(reimbursementServiceSource, /function settleBorrowLoanClaimItems/)
+  assert.match(reimbursementServiceSource, /function settleBorrowLoanClaimAllocations/)
   assert.match(reimbursementServiceSource, /function revertBorrowLoanClaimSettlements/)
-  assert.match(reimbursementServiceSource, /await settleBorrowLoanClaimItems\(ledgerId, claim, claimItems, payload\)/)
+  assert.match(reimbursementServiceSource, /await settleBorrowLoanClaimAllocations\(/)
   assert.match(reimbursementServiceSource, /await revertBorrowLoanClaimSettlements\(ledgerId, claim, claimItems\)/)
   assert.match(reimbursementServiceSource, /addLoanRepayment/)
   assert.match(reimbursementServiceSource, /deleteLoanRepaymentByTransactionId/)
-  assert.match(reimbursementServiceSource, /advanceResult\.cashAmountMinor - claimAdvanceMinor - borrowLoanMinor/)
+  assert.match(reimbursementServiceSource, /const reimbursementCashMinor = Math\.max\(\s*0,\s*advanceResult\.cashAmountMinor\s*\)/)
   assert.doesNotMatch(reimbursementServiceSource, /function clearBorrowLoanClaimSources/)
   assert.doesNotMatch(reimbursementServiceSource, /function restoreBorrowLoanClaimSources/)
 })

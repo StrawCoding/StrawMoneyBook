@@ -21,13 +21,17 @@ const claimSheetListSource = readFileSync(
 test('claim completion subtracts borrow_loan amounts from reimbursement cash income', () => {
   assert.match(
     reimbursementServiceSource,
-    /const reimbursementCashMinor = Math\.max\(\s*0,\s*advanceResult\.cashAmountMinor - claimAdvanceMinor - borrowLoanMinor,/,
+    /const reimbursementCashMinor = Math\.max\(\s*0,\s*advanceResult\.cashAmountMinor\s*\)/,
   )
   assert.match(reimbursementServiceSource, /function sumClaimBorrowLoanMinor/)
+  assert.match(reimbursementServiceSource, /function settleBorrowLoanClaimAllocations/)
 })
 
 test('claim completion settles borrow_loan items through loan repayment with idempotency keys', () => {
-  assert.match(reimbursementServiceSource, /idempotencyKey: `\$\{idempotencyBase\}:loan_repay:\$\{loanId\}`/)
+  assert.match(
+    reimbursementServiceSource,
+    /idempotencyKey: `\$\{idempotencyBase\}:loan_repay:\$\{loanId\}:\$\{row\.itemId \|\| createId\('ri'\)\}`/,
+  )
   assert.match(reimbursementServiceSource, /await addLoanRepayment\(ledgerId, \{/)
   assert.doesNotMatch(reimbursementServiceSource, /softDeleteLoanById/)
   assert.doesNotMatch(reimbursementServiceSource, /deleteLoanPaymentsByLoanId/)

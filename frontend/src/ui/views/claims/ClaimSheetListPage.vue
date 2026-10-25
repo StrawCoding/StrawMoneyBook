@@ -8,7 +8,7 @@
     <article class="card panel">
       <header class="row panel-head">
         <h3>{{ t('claim_sheet.title') }}</h3>
-        <button class="btn primary" @click="openCreateSheet">{{ t('claim_sheet.create') }}</button>
+        <button class="btn primary" data-testid="claim-create-open" @click="openCreateSheet">{{ t('claim_sheet.create') }}</button>
       </header>
 
       <div class="summary-grid">
@@ -54,7 +54,7 @@
               <div class="row claim-head">
                 <div class="claim-info">
                   <strong>{{ claim.title || t('claim_sheet.unnamed') }}</strong>
-                  <small class="muted">{{ statusLabel(claim.status) }}</small>
+                  <small class="muted">{{ claimStatusLabel(claim) }}</small>
                 </div>
                 <MoneyText :value-minor="claim.total_minor" />
               </div>
@@ -62,6 +62,10 @@
                 <div class="row claim-meta">
                   <span>{{ t('claim_sheet.item_count', { count: claim.item_count }) }}</span>
                   <span v-if="claim.counterparty_name">{{ claim.counterparty_name }}</span>
+                </div>
+                <div v-if="claimPaidMinorOf(claim) > 0 && claimRemainingMinor(claim) > 0" class="row claim-meta">
+                  <span>{{ t('claim_sheet.remaining_amount') }}</span>
+                  <MoneyText :value-minor="claimRemainingMinor(claim)" />
                 </div>
                 <div class="row claim-meta claim-date-row">
                   <span>{{ t('transaction_about.detail.updated_at') }}</span>
@@ -72,9 +76,10 @@
             <button
               v-if="!isClaimCompleteDisabled(claim)"
               class="btn primary claim-complete-btn"
+              data-testid="claim-record-payment"
               @click.stop="openCompleteSheet(claim)"
             >
-              {{ t('claim_sheet.complete') }}
+              {{ t('claim_sheet.record_payment') }}
             </button>
           </div>
         </li>
@@ -97,6 +102,7 @@
                 <input
                   v-model="createForm.title"
                   class="input"
+                  data-testid="claim-create-title"
                   type="text"
                   :placeholder="t('claim_sheet.form.title_placeholder')"
                 />
@@ -160,6 +166,7 @@
                   <input
                     v-model.number="item.amountMajor"
                     class="input"
+                    data-testid="claim-manual-amount"
                     type="number"
                     min="0"
                     step="1"
@@ -273,7 +280,7 @@
               </div>
       <template #footer>
         <button class="btn" @click="closeCreateSheet">{{ t('common.cancel') }}</button>
-        <button class="btn primary" :disabled="creating || !canCreateClaim" @click="submitCreateSheet">
+        <button class="btn primary" data-testid="claim-create-submit" :disabled="creating || !canCreateClaim" @click="submitCreateSheet">
           {{ creating ? t('claim_sheet.creating') : (isEditingCreateForm ? t('claim_sheet.save') : t('claim_sheet.create')) }}
         </button>
       </template>
@@ -281,7 +288,7 @@
 
     <InputBottomSheet
       :open="Boolean(completeTarget)"
-      :title="t('claim_sheet.complete')"
+      :title="t('claim_sheet.record_payment')"
       :body-class="'stack form-wrap'"
       :sheet-class="'sheet'"
       :show-footer="true"
@@ -300,6 +307,25 @@
                 <span>{{ t('claim_sheet.net_amount') }}</span>
                 <MoneyText :value-minor="completeTarget.total_minor" />
               </div>
+              <div class="row">
+                <span>{{ t('claim_sheet.paid_amount') }}</span>
+                <MoneyText :value-minor="claimPaidMinorOf(completeTarget)" />
+              </div>
+              <div class="row">
+                <span>{{ t('claim_sheet.remaining_amount') }}</span>
+                <MoneyText :value-minor="completeRemainingMinor" />
+              </div>
+              <label>
+                {{ t('claim_sheet.form.payment_amount') }}
+                <input
+                  v-model.number="completeForm.amountMajor"
+                  class="input"
+                  data-testid="claim-payment-amount"
+                  type="number"
+                  min="0"
+                  step="1"
+                />
+              </label>
               <div class="copy-wrap">
                 <p class="copy-title">代收抵扣（可複選）</p>
                 <div v-if="usableCompleteAdvances.length" class="copy-ledger-list">
@@ -349,8 +375,8 @@
               </label>
       <template #footer>
         <button class="btn" @click="closeCompleteSheet">{{ t('common.cancel') }}</button>
-        <button class="btn primary" :disabled="completing || !canCompleteClaim" @click="submitCompleteSheet">
-          {{ completing ? t('claim_sheet.processing') : t('claim_sheet.confirm_complete') }}
+        <button class="btn primary" data-testid="claim-payment-submit" :disabled="completing || !canCompleteClaim" @click="submitCompleteSheet">
+          {{ completing ? t('claim_sheet.processing') : (isCompleteFullRemaining ? t('claim_sheet.confirm_complete') : t('claim_sheet.confirm_payment')) }}
         </button>
       </template>
     </InputBottomSheet>
@@ -403,6 +429,15 @@ import {
   pruneImportAmountOverrides,
   seedImportAmountOverrides,
 } from '@/ui/utils/claim-sheet-import-amount-overrides'
+import {
+  allocateClaimPaymentFifo,
+  claimPaidMinorOf,
+  claimRemainingMinor,
+  isAdvanceClaimItem,
+  isBorrowLoanClaimItem,
+  isClaimCollecting,
+  isClaimFullyPaid,
+} from '@/core/utils/claim-sheet-payment'
 
 const route = useRoute()
 const router = useRouter()
@@ -440,6 +475,7 @@ const createForm = reactive({
 const completeForm = reactive({
   accountId: '',
   note: '',
+  amountMajor: 0,
   selectedAdvanceIds: [],
 })
 
@@ -465,15 +501,27 @@ const usableCompleteAdvances = computed(() => {
   })
 })
 
+const completeRemainingMinor = computed(() => claimRemainingMinor(completeTarget.value))
+
+const completePaymentMinor = computed(() => {
+  return Math.max(0, Math.round(Number(completeForm.amountMajor ?? 0) * 100))
+})
+
+const completePaymentAllocations = computed(() => {
+  return allocateClaimPaymentFifo(completeItems.value, completePaymentMinor.value).allocations
+})
+
+const isCompleteFullRemaining = computed(() => {
+  return completePaymentMinor.value > 0 && completePaymentMinor.value === completeRemainingMinor.value
+})
+
 const completeAdvanceOffsettableMinor = computed(() => {
-  const claimTotalMinor = Math.max(0, Math.round(Number(completeTarget.value?.total_minor ?? 0)))
-  const linkedExpenseMinor = completeItems.value.reduce((sum, item) => {
-    const txId = String(item?.transaction_id ?? '').trim()
-    if (!txId || String(item?.entry_type ?? '') === 'income') return sum
-    const amountMinor = Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
-    return sum + amountMinor
+  return completePaymentAllocations.value.reduce((sum, row) => {
+    if (isBorrowLoanClaimItem(row.item) || isAdvanceClaimItem(row.item)) return sum
+    const txId = String(row.item?.transaction_id ?? '').trim()
+    if (!txId || String(row.item?.entry_type ?? '') === 'income') return sum
+    return sum + row.amountMinor
   }, 0)
-  return Math.min(claimTotalMinor, linkedExpenseMinor)
 })
 
 const selectedCompleteAdvanceCapacityMinor = computed(() => {
@@ -499,10 +547,10 @@ const selectedCompleteAdvanceCapacityMinor = computed(() => {
 })
 
 const completeCashMinor = computed(() => {
-  const claimTotalMinor = Math.max(0, Math.round(Number(completeTarget.value?.total_minor ?? 0)))
+  const paymentMinor = completePaymentMinor.value
   return Math.max(
     0,
-    claimTotalMinor
+    paymentMinor
       - selectedCompleteAdvanceCapacityMinor.value
       - completeClaimAdvanceMinor.value
       - completeBorrowLoanMinor.value,
@@ -510,17 +558,16 @@ const completeCashMinor = computed(() => {
 })
 
 const completeClaimAdvanceMinor = computed(() => {
-  return completeItems.value.reduce((sum, item) => {
-    if (String(item?.source_type ?? '').trim() !== 'advance') return sum
-    return sum + Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
+  return completePaymentAllocations.value.reduce((sum, row) => {
+    if (!isAdvanceClaimItem(row.item)) return sum
+    return sum + row.amountMinor
   }, 0)
 })
 
 const completeBorrowLoanMinor = computed(() => {
-  return completeItems.value.reduce((sum, item) => {
-    const txId = String(item?.transaction_id ?? '').trim()
-    if (!txId || String(item?.entry_type ?? '') !== 'income') return sum
-    return sum + Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
+  return completePaymentAllocations.value.reduce((sum, row) => {
+    if (!isBorrowLoanClaimItem(row.item)) return sum
+    return sum + row.amountMinor
   }, 0)
 })
 
@@ -532,16 +579,16 @@ const completeRequiresAccount = computed(() => (
 
 const pendingClaimMinor = computed(() => {
   return dashboard.value.claims
-    .filter((item) => item.status !== 'paid' && item.status !== 'rejected')
-    .reduce((sum, item) => sum + Math.max(0, Number(item.total_minor ?? 0)), 0)
+    .filter((item) => !isClaimFullyPaid(item) && item.status !== 'rejected')
+    .reduce((sum, item) => sum + claimRemainingMinor(item), 0)
 })
 
 const activeClaims = computed(() => {
-  return dashboard.value.claims.filter((item) => String(item?.status ?? '') !== 'paid')
+  return dashboard.value.claims.filter((item) => !isClaimFullyPaid(item))
 })
 
 const completedClaims = computed(() => {
-  return dashboard.value.claims.filter((item) => String(item?.status ?? '') === 'paid')
+  return dashboard.value.claims.filter((item) => isClaimFullyPaid(item))
 })
 
 const visibleClaims = computed(() => {
@@ -603,7 +650,9 @@ const canCreateClaim = computed(() => {
 
 const canCompleteClaim = computed(() => {
   if (!completeTarget.value) return false
-  if (Number(completeTarget.value?.total_minor ?? 0) <= 0) return false
+  if (completePaymentMinor.value <= 0) return false
+  if (completePaymentMinor.value > completeRemainingMinor.value) return false
+  if (allocateClaimPaymentFifo(completeItems.value, completePaymentMinor.value).leftoverMinor > 0) return false
   if (!completeRequiresAccount.value) return true
   return accountStore.accounts.some((item) => item.id === String(completeForm.accountId ?? '').trim())
 })
@@ -630,6 +679,20 @@ onMounted(async () => {
 watch(() => route.query.tab, () => {
   syncActiveClaimPageFromRoute()
 })
+
+watch(
+  [() => route.query.complete, () => ledgerStore.activeLedgerId, () => dashboard.value.claims],
+  ([completeId, ledgerId, claims]) => {
+    const id = String(completeId ?? '').trim()
+    if (!id || !String(ledgerId ?? '').trim()) return
+    const claim = (claims ?? []).find((item) => String(item?.id ?? '') === id)
+    if (!claim || isClaimCompleteDisabled(claim)) return
+    const nextQuery = { ...route.query }
+    delete nextQuery.complete
+    void router.replace({ name: 'claim-sheets', query: nextQuery })
+    openCompleteSheet(claim)
+  },
+)
 
 watch(
   [() => route.query.edit, () => ledgerStore.activeLedgerId, createSheetBootstrapReady],
@@ -816,6 +879,12 @@ function statusLabel(status) {
   if (status === 'in_review') return t('claim_sheet.status.in_review')
   if (status === 'submitted') return t('claim_sheet.status.submitted')
   return t('claim_sheet.status.draft')
+}
+
+function claimStatusLabel(claim) {
+  if (isClaimCollecting(claim)) return t('claim_sheet.status.collecting')
+  if (isClaimFullyPaid(claim)) return t('claim_sheet.status.paid')
+  return statusLabel(claim?.status)
 }
 
 function normalizeClaimTab(tab) {
@@ -1085,7 +1154,11 @@ async function submitCreateSheet() {
 }
 
 function isClaimCompleteDisabled(claim) {
-  return Number(claim?.total_minor ?? 0) <= 0 || ['paid', 'rejected'].includes(String(claim?.status ?? ''))
+  return claimRemainingMinor(claim) <= 0 || ['rejected'].includes(String(claim?.status ?? ''))
+}
+
+function setCompleteAmountToRemaining(claim) {
+  completeForm.amountMajor = claimRemainingMinor(claim) / 100
 }
 
 function openCompleteSheet(claim) {
@@ -1097,6 +1170,7 @@ function openCompleteSheet(claim) {
     ? t('claim_sheet.default_complete_note_named', { title: claim.title })
     : t('claim_sheet.default_complete_note')
   completeForm.selectedAdvanceIds = []
+  setCompleteAmountToRemaining(claim)
   void loadCompleteItems(claim.id)
 }
 
@@ -1131,16 +1205,22 @@ async function submitCompleteSheet() {
   completing.value = true
   try {
     const readyClaim = await ensureClaimReadyForPayment(completeTarget.value)
-    await markReimbursementPaid(ledgerStore.activeLedgerId, {
+    const result = await markReimbursementPaid(ledgerStore.activeLedgerId, {
       reimbursementId: readyClaim.id,
       accountId: completeRequiresAccount.value ? completeForm.accountId : '',
       note: completeForm.note,
       selectedAdvanceIds: completeForm.selectedAdvanceIds,
+      amountMinor: completePaymentMinor.value,
     })
     await Promise.all([reloadDashboard(), accountStore.load()])
     await reimbursementStore.load()
     await reloadImportableTxs()
     closeCompleteSheet()
+    const remainingMinor = Math.max(0, Math.round(Number(result?.remainingMinor ?? 0)))
+    if (remainingMinor > 0) {
+      uiStore.pushToast(t('claim_sheet.toast.recorded_remaining', { amount: remainingMinor / 100 }))
+      return
+    }
     uiStore.pushToast(t('claim_sheet.toast.completed'))
     await router.replace({ name: 'home' })
   } catch (error) {
@@ -1170,7 +1250,9 @@ async function loadCompleteItems(claimId) {
   try {
     const detail = await getReimbursementDetail(ledgerStore.activeLedgerId, claimId)
     if (String(completeTarget.value?.id ?? '') !== String(claimId)) return
+    completeTarget.value = detail.claim ?? completeTarget.value
     completeItems.value = detail.items
+    setCompleteAmountToRemaining(completeTarget.value)
   } catch (error) {
     closeCompleteSheet()
     uiStore.pushToast(error.message ?? t('claim_sheet.toast.load_failed'), 'error')

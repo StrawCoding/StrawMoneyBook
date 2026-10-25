@@ -20,6 +20,8 @@ export const BACKUP_IMPORT_TABLE_ORDER = Object.freeze([
   'reimbursement_advance_usages',
   'reimbursements',
   'reimbursement_items',
+  'reimbursement_payments',
+  'reimbursement_payment_allocations',
   'budget_save_settlements',
   'budgets',
   'budget_containers',
@@ -187,7 +189,7 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
   reimbursements: {
     columns: cols(
       'ledger_id', 'id', 'title', 'counterparty_id', 'status', 'submitted_at',
-      'approved_at', 'paid_at', 'paid_tx_id', 'total_minor', 'note', 'idempotency_key',
+      'approved_at', 'paid_at', 'paid_tx_id', 'total_minor', 'paid_minor', 'note', 'idempotency_key',
       'created_at', 'updated_at', 'deleted_at',
     ),
     required: Object.freeze(['id', 'title', 'status', 'created_at', 'updated_at']),
@@ -198,7 +200,7 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
   reimbursement_items: {
     columns: cols(
       'ledger_id', 'id', 'reimbursement_id', 'source_type', 'transaction_id',
-      'category_id', 'account_id', 'description', 'amount_minor', 'occurred_at',
+      'category_id', 'account_id', 'description', 'amount_minor', 'settled_minor', 'occurred_at',
       'attachment_uri', 'created_at', 'updated_at', 'entry_type',
     ),
     required: Object.freeze([
@@ -209,6 +211,23 @@ export const BACKUP_IMPORT_TABLE_SCHEMA = Object.freeze({
       source_type: ['transaction', 'manual', 'advance'],
       entry_type: ['expense', 'income'],
     }),
+  },
+  reimbursement_payments: {
+    columns: cols(
+      'ledger_id', 'id', 'reimbursement_id', 'account_id', 'paid_at',
+      'amount_minor', 'generated_tx_id', 'note', 'created_at', 'updated_at',
+    ),
+    required: Object.freeze([
+      'id', 'reimbursement_id', 'paid_at', 'amount_minor', 'created_at', 'updated_at',
+    ]),
+  },
+  reimbursement_payment_allocations: {
+    columns: cols(
+      'ledger_id', 'id', 'payment_id', 'item_id', 'amount_minor', 'created_at', 'updated_at',
+    ),
+    required: Object.freeze([
+      'id', 'payment_id', 'item_id', 'amount_minor', 'created_at', 'updated_at',
+    ]),
   },
   budget_save_settlements: {
     columns: cols(

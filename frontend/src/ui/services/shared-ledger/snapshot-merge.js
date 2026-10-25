@@ -13,6 +13,8 @@ const SNAPSHOT_TABLE_ORDER = [
   'reimbursement_advance_usages',
   'reimbursements',
   'reimbursement_items',
+  'reimbursement_payments',
+  'reimbursement_payment_allocations',
   'budget_save_settlements',
   'budgets',
   'budget_containers',
@@ -496,7 +498,7 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
       if (beforePaid && !normalizeText(next?.paid_tx_id)) report.nulledOptionalRefs += 1
       return next
     })
-  const reimbursementIds = buildIdSet(nextTables.reimbursements)
+  let reimbursementIds = buildIdSet(nextTables.reimbursements)
 
   // Reimbursement items: keep every row; synthesize missing reimbursement / account / category.
   const itemRows = listTableRows({ tables: nextTables }, 'reimbursement_items')
@@ -533,6 +535,90 @@ function preserveSharedLedgerSnapshotForeignKeys(tables) {
       if (beforeTx && !normalizeText(next?.transaction_id)) report.nulledOptionalRefs += 1
       return next
     })
+
+  const paymentRows = listTableRows({ tables: nextTables }, 'reimbursement_payments')
+  const missingReimbursementIdsForPayments = [...collectReferencedIds(paymentRows, 'reimbursement_id')]
+    .filter((id) => !reimbursementIds.has(id))
+  ensurePlaceholderRows(
+    nextTables,
+    'reimbursements',
+    missingReimbursementIdsForPayments,
+    (id) => ({
+      id,
+      title: '資料保全請款',
+      status: 'open',
+      total_minor: 0,
+      paid_minor: 0,
+      ...FK_PRESERVE_STAMP,
+    }),
+  )
+  reimbursementIds = buildIdSet(nextTables.reimbursements)
+  report.synthesizedAccounts += ensurePreserveAccounts(
+    nextTables,
+    report,
+    [...collectReferencedIds(paymentRows, 'account_id')].filter((id) => !accountIds.has(id)),
+  )
+  accountIds = buildIdSet(nextTables.accounts)
+  nextTables.reimbursement_payments = paymentRows
+    .map((row) => {
+      const beforeTx = normalizeText(row?.generated_tx_id)
+      const next = cloneRowWithNullMissingRefs(row, ['generated_tx_id'], transactionIds)
+      if (beforeTx && !normalizeText(next?.generated_tx_id)) report.nulledOptionalRefs += 1
+      return next
+    })
+
+  let paymentIds = buildIdSet(nextTables.reimbursement_payments)
+  const itemIds = buildIdSet(nextTables.reimbursement_items)
+  const allocationRows = listTableRows({ tables: nextTables }, 'reimbursement_payment_allocations')
+  const missingPaymentIds = [...collectReferencedIds(allocationRows, 'payment_id')]
+    .filter((id) => !paymentIds.has(id))
+  const preserveReimbursementId = [...reimbursementIds][0] || 'system_fk_preserve_reimbursement'
+  if (missingPaymentIds.length && !reimbursementIds.has(preserveReimbursementId)) {
+    ensurePlaceholderRows(
+      nextTables,
+      'reimbursements',
+      [preserveReimbursementId],
+      (id) => ({
+        id,
+        title: '資料保全請款',
+        status: 'open',
+        total_minor: 0,
+        paid_minor: 0,
+        ...FK_PRESERVE_STAMP,
+      }),
+    )
+    reimbursementIds = buildIdSet(nextTables.reimbursements)
+  }
+  ensurePlaceholderRows(
+    nextTables,
+    'reimbursement_payments',
+    missingPaymentIds,
+    (id) => ({
+      id,
+      reimbursement_id: preserveReimbursementId,
+      paid_at: '1970-01-01T00:00:00.000Z',
+      amount_minor: 1,
+      ...FK_PRESERVE_STAMP,
+    }),
+  )
+  paymentIds = buildIdSet(nextTables.reimbursement_payments)
+  const missingItemIds = [...collectReferencedIds(allocationRows, 'item_id')]
+    .filter((id) => !itemIds.has(id))
+  ensurePlaceholderRows(
+    nextTables,
+    'reimbursement_items',
+    missingItemIds,
+    (id) => ({
+      id,
+      reimbursement_id: preserveReimbursementId,
+      source_type: 'manual',
+      entry_type: 'expense',
+      amount_minor: 0,
+      occurred_at: '1970-01-01T00:00:00.000Z',
+      ...FK_PRESERVE_STAMP,
+    }),
+  )
+  nextTables.reimbursement_payment_allocations = allocationRows
 
   // Budgets / containers / items: keep rows; synthesize missing budgets / categories / groups.
   const budgetRows = listTableRows({ tables: nextTables }, 'budgets')
@@ -961,6 +1047,29 @@ function collectMergeUnits(localTables, remoteTables) {
           getRowKey('reimbursement_items', item),
         )
       }
+
+      const paymentIds = new Set()
+      for (const payment of listTableRows({ tables }, 'reimbursement_payments')) {
+        if (normalizeText(payment?.reimbursement_id) !== reimbursementId) continue
+        paymentIds.add(normalizeText(payment?.id))
+        addMergeUnitMember(
+          unitMap,
+          'reimbursement_bundle',
+          reimbursementId,
+          'reimbursement_payments',
+          getRowKey('reimbursement_payments', payment),
+        )
+      }
+      for (const allocation of listTableRows({ tables }, 'reimbursement_payment_allocations')) {
+        if (!paymentIds.has(normalizeText(allocation?.payment_id))) continue
+        addMergeUnitMember(
+          unitMap,
+          'reimbursement_bundle',
+          reimbursementId,
+          'reimbursement_payment_allocations',
+          getRowKey('reimbursement_payment_allocations', allocation),
+        )
+      }
     }
   }
 
@@ -1299,6 +1408,8 @@ export function assertSnapshotBookkeepingPreserved(beforeSnapshot, afterSnapshot
     'reimbursement_advances',
     'reimbursement_advance_usages',
     'reimbursement_items',
+    'reimbursement_payments',
+    'reimbursement_payment_allocations',
     'budget_containers',
     'budget_items',
     'savings_jars',

@@ -18,6 +18,8 @@ export const SHARED_LEDGER_SNAPSHOT_TABLES = Object.freeze([
   'reimbursement_advance_usages',
   'reimbursements',
   'reimbursement_items',
+  'reimbursement_payments',
+  'reimbursement_payment_allocations',
   'budget_save_settlements',
   'budgets',
   'budget_containers',

@@ -9,7 +9,7 @@
       <header class="row claim-head">
         <div class="claim-title">
           <h3>{{ claim.title || t('claim_sheet.detail_title') }}</h3>
-          <small class="muted">{{ statusLabel(claim.status) }}</small>
+          <small class="muted">{{ claimStatusLabel(claim) }}</small>
         </div>
         <MoneyText :value-minor="claim.total_minor" />
       </header>
@@ -18,6 +18,14 @@
         <div class="detail-row">
           <small class="muted">{{ t('claim_sheet.net_amount') }}</small>
           <span><MoneyText :value-minor="claim.total_minor" /></span>
+        </div>
+        <div class="detail-row">
+          <small class="muted">{{ t('claim_sheet.paid_amount') }}</small>
+          <span><MoneyText :value-minor="claimPaidMinorOf(claim)" /></span>
+        </div>
+        <div class="detail-row">
+          <small class="muted">{{ t('claim_sheet.remaining_amount') }}</small>
+          <span><MoneyText :value-minor="claimRemainingMinor(claim)" /></span>
         </div>
         <div class="detail-row">
           <small class="muted">{{ t('claim_sheet.item_count_label') }}</small>
@@ -36,6 +44,13 @@
       <p v-if="claim.note" class="note">{{ claim.note }}</p>
 
       <div class="row action-row">
+        <button
+          v-if="!isClaimCompleteDisabled(claim)"
+          class="btn primary"
+          @click="openRecordPayment"
+        >
+          {{ t('claim_sheet.record_payment') }}
+        </button>
         <button class="btn" :disabled="!isClaimEditable(claim)" @click="openEdit">
           {{ t('common.edit') }}
         </button>
@@ -84,9 +99,33 @@
             <span class="detail-badge muted">{{ itemPresentation(item).entryLabel }}</span>
             <span class="detail-badge muted">{{ itemPresentation(item).sourceLabel }}</span>
             <span class="detail-badge muted">{{ itemPresentation(item).categoryName || t('analysis_page.uncategorized') }}</span>
+            <span v-if="itemSettledMinorOf(item) > 0" class="detail-badge muted">
+              {{ t('claim_sheet.item_settled', { amount: itemSettledMinorOf(item) / 100 }) }}
+            </span>
           </div>
           <p v-if="itemPresentation(item).note" class="muted detail-note">{{ itemPresentation(item).note }}</p>
         </li>
+      </ul>
+    </article>
+
+    <article v-if="claim" class="card panel">
+      <header class="row">
+        <h3>{{ t('claim_sheet.payments_title') }}</h3>
+      </header>
+      <ul class="detail-list">
+        <li v-for="payment in payments" :key="payment.id" class="detail-item">
+          <div class="row detail-item-head">
+            <div class="detail-item-title">
+              <strong>{{ formatTime(payment.paid_at) }}</strong>
+            </div>
+            <MoneyText :value-minor="payment.amount_minor" />
+          </div>
+          <div class="detail-meta">
+            <span v-if="payment.account_name" class="detail-badge muted">{{ payment.account_name }}</span>
+            <span v-if="payment.note" class="detail-badge muted">{{ payment.note }}</span>
+          </div>
+        </li>
+        <li v-if="!payments.length" class="muted">{{ t('claim_sheet.payments_empty') }}</li>
       </ul>
     </article>
 
@@ -149,6 +188,13 @@ import {
   getReimbursementDetail,
   transitionReimbursementStatus,
 } from '@/core/services/reimbursement.service'
+import {
+  claimPaidMinorOf,
+  claimRemainingMinor,
+  isClaimCollecting,
+  isClaimFullyPaid,
+  itemSettledMinorOf,
+} from '@/core/utils/claim-sheet-payment'
 
 const route = useRoute()
 const router = useRouter()
@@ -166,6 +212,7 @@ const deleteDialogOpen = ref(false)
 const restoreDialogOpen = ref(false)
 const claim = ref(null)
 const items = ref([])
+const payments = ref([])
 const exportedUrl = ref('')
 const exportedFilename = ref('')
 const exportedLocation = ref('')
@@ -176,7 +223,7 @@ const backTab = computed(() => {
   const queryTab = String(route.query.tab ?? '').trim()
   if (queryTab === 'completed') return 'completed'
   if (queryTab === 'active') return 'active'
-  return String(claim.value?.status ?? '').trim() === 'paid' ? 'completed' : 'active'
+  return isClaimFullyPaid(claim.value) ? 'completed' : 'active'
 })
 const backLink = computed(() => (
   backTab.value === 'completed'
@@ -226,12 +273,33 @@ function statusLabel(status) {
   return t('claim_sheet.status.draft')
 }
 
+function claimStatusLabel(value) {
+  if (isClaimCollecting(value)) return t('claim_sheet.status.collecting')
+  if (isClaimFullyPaid(value)) return t('claim_sheet.status.paid')
+  return statusLabel(value?.status)
+}
+
 function isClaimEditable(value) {
-  return String(value?.status ?? 'draft') === 'draft'
+  return String(value?.status ?? 'draft') === 'draft' && claimPaidMinorOf(value) <= 0
 }
 
 function isClaimRestorable(value) {
-  return String(value?.status ?? '').trim() === 'paid'
+  return String(value?.status ?? '').trim() === 'paid' || claimPaidMinorOf(value) > 0
+}
+
+function isClaimCompleteDisabled(value) {
+  return claimRemainingMinor(value) <= 0 || String(value?.status ?? '') === 'rejected'
+}
+
+function openRecordPayment() {
+  if (!claim.value?.id || isClaimCompleteDisabled(claim.value)) return
+  void router.push({
+    name: 'claim-sheets',
+    query: {
+      complete: claim.value.id,
+      ...(backTab.value === 'completed' ? { tab: 'completed' } : {}),
+    },
+  })
 }
 
 function signedMinorOfItem(item) {
@@ -252,6 +320,7 @@ async function loadDetail() {
   if (!ledgerStore.activeLedgerId || !claimId.value) {
     claim.value = null
     items.value = []
+    payments.value = []
     return
   }
 
@@ -261,9 +330,11 @@ async function loadDetail() {
     if (claimId.value !== String(route.params.id ?? '').trim()) return
     claim.value = detail.claim ?? null
     items.value = Array.isArray(detail.items) ? detail.items : []
+    payments.value = Array.isArray(detail.payments) ? detail.payments : []
   } catch (error) {
     claim.value = null
     items.value = []
+    payments.value = []
     uiStore.pushToast(error.message ?? t('claim_sheet.toast.load_failed'), 'error')
   } finally {
     loading.value = false

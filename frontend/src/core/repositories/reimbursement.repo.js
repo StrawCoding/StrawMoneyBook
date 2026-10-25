@@ -14,6 +14,7 @@ export async function listReimbursements(ledgerId) {
        c.name AS counterparty_name,
        r.status,
        r.total_minor,
+       r.paid_minor,
        r.paid_tx_id,
        r.created_at,
        r.updated_at,
@@ -61,6 +62,7 @@ export async function getReimbursementById(ledgerId, reimbursementId) {
        c.name AS counterparty_name,
        r.status,
        r.total_minor,
+       r.paid_minor,
        r.note,
        r.submitted_at,
        r.approved_at,
@@ -136,6 +138,7 @@ export async function listReimbursementItems(ledgerId, reimbursementId) {
        i.account_id,
        i.description,
        i.amount_minor,
+       i.settled_minor,
        i.occurred_at,
        i.attachment_uri,
        i.created_at,
@@ -835,4 +838,153 @@ export async function findTransactionByIdempotencyKey(ledgerId, idempotencyKey) 
   )
 
   return firstRow(result)
+}
+
+export async function addReimbursementPaidMinor(ledgerId, reimbursementId, amountMinor) {
+  assertLedgerId(ledgerId)
+  const now = nowIso()
+  const delta = Math.max(0, Math.round(Number(amountMinor ?? 0)))
+  await run(
+    `UPDATE reimbursements
+     SET paid_minor = COALESCE(paid_minor, 0) + ?,
+         updated_at = ?
+     WHERE ledger_id = ?
+       AND id = ?
+       AND deleted_at IS NULL;`,
+    [delta, now, ledgerId, reimbursementId],
+  )
+  return getReimbursementById(ledgerId, reimbursementId)
+}
+
+export async function resetReimbursementPaidMinor(ledgerId, reimbursementId) {
+  assertLedgerId(ledgerId)
+  const now = nowIso()
+  await run(
+    `UPDATE reimbursements
+     SET paid_minor = 0,
+         updated_at = ?
+     WHERE ledger_id = ?
+       AND id = ?
+       AND deleted_at IS NULL;`,
+    [now, ledgerId, reimbursementId],
+  )
+}
+
+export async function addReimbursementItemSettledMinor(ledgerId, itemId, amountMinor) {
+  assertLedgerId(ledgerId)
+  const now = nowIso()
+  const delta = Math.max(0, Math.round(Number(amountMinor ?? 0)))
+  await run(
+    `UPDATE reimbursement_items
+     SET settled_minor = COALESCE(settled_minor, 0) + ?,
+         updated_at = ?
+     WHERE ledger_id = ?
+       AND id = ?;`,
+    [delta, now, ledgerId, itemId],
+  )
+}
+
+export async function resetReimbursementItemSettledMinor(ledgerId, reimbursementId) {
+  assertLedgerId(ledgerId)
+  const now = nowIso()
+  await run(
+    `UPDATE reimbursement_items
+     SET settled_minor = 0,
+         updated_at = ?
+     WHERE ledger_id = ?
+       AND reimbursement_id = ?;`,
+    [now, ledgerId, reimbursementId],
+  )
+}
+
+export async function createReimbursementPayment(ledgerId, input) {
+  assertLedgerId(ledgerId)
+  const id = input.id ?? createId('rp')
+  const now = nowIso()
+  await run(
+    `INSERT INTO reimbursement_payments (
+      ledger_id, id, reimbursement_id, account_id, paid_at,
+      amount_minor, generated_tx_id, note, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    [
+      ledgerId,
+      id,
+      input.reimbursementId,
+      input.accountId ?? null,
+      input.paidAt ?? now,
+      input.amountMinor,
+      input.generatedTxId ?? null,
+      input.note ?? null,
+      now,
+      now,
+    ],
+  )
+  return id
+}
+
+export async function createReimbursementPaymentAllocation(ledgerId, input) {
+  assertLedgerId(ledgerId)
+  const id = input.id ?? createId('rpa')
+  const now = nowIso()
+  await run(
+    `INSERT INTO reimbursement_payment_allocations (
+      ledger_id, id, payment_id, item_id, amount_minor, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?);`,
+    [
+      ledgerId,
+      id,
+      input.paymentId,
+      input.itemId,
+      input.amountMinor,
+      now,
+      now,
+    ],
+  )
+  return id
+}
+
+export async function listReimbursementPayments(ledgerId, reimbursementId) {
+  assertLedgerId(ledgerId)
+  const result = await query(
+    `SELECT
+       p.ledger_id,
+       p.id,
+       p.reimbursement_id,
+       p.account_id,
+       a.name AS account_name,
+       p.paid_at,
+       p.amount_minor,
+       p.generated_tx_id,
+       p.note,
+       p.created_at
+     FROM reimbursement_payments p
+     LEFT JOIN accounts a
+       ON a.ledger_id = p.ledger_id
+      AND a.id = p.account_id
+     WHERE p.ledger_id = ?
+       AND p.reimbursement_id = ?
+     ORDER BY p.paid_at ASC, p.created_at ASC;`,
+    [ledgerId, reimbursementId],
+  )
+  return rowsOf(result)
+}
+
+export async function deleteReimbursementPaymentsByReimbursementId(ledgerId, reimbursementId) {
+  assertLedgerId(ledgerId)
+  await run(
+    `DELETE FROM reimbursement_payment_allocations
+     WHERE ledger_id = ?
+       AND payment_id IN (
+         SELECT id FROM reimbursement_payments
+         WHERE ledger_id = ?
+           AND reimbursement_id = ?
+       );`,
+    [ledgerId, ledgerId, reimbursementId],
+  )
+  await run(
+    `DELETE FROM reimbursement_payments
+     WHERE ledger_id = ?
+       AND reimbursement_id = ?;`,
+    [ledgerId, reimbursementId],
+  )
 }

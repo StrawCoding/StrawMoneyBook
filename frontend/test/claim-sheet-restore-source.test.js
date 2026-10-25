@@ -25,9 +25,9 @@ const claimListSource = readFileSync(
 
 test('claim sheet restore reverts paid state and related advance records', () => {
   assert.match(reimbursementServiceSource, /paid: \['draft'\]/)
-  assert.match(reimbursementServiceSource, /if \(String\(claim\.status \?\? ''\) === 'paid' && nextStatus === 'draft'\) \{/)
+  assert.match(reimbursementServiceSource, /if \(nextStatus === 'draft' && \(String\(claim\.status \?\? ''\) === 'paid' \|\| claimPaidMinorOfSafe\(claim\) > 0\)\) \{/)
   assert.match(reimbursementServiceSource, /await revertPaidClaimEffects\(ledgerId, claim, claimItems\)/)
-  assert.match(reimbursementServiceSource, /originType: 'reimbursement',[\s\S]*externalRefId: claim\.id,[\s\S]*idempotencyKey: `\$\{idempotencyKey\}:advance:\$\{index \+ 1\}`/)
+  assert.match(reimbursementServiceSource, /originType: 'reimbursement',[\s\S]*externalRefId: claim\.id,[\s\S]*idempotencyKey: `\$\{idempotencyKey\}:advance:\$\{row\.itemId\}`/)
   assert.match(reimbursementServiceSource, /await softDeleteTransactionsByOriginRef\(ledgerId, 'reimbursement', claim\.id\)/)
   assert.match(reimbursementServiceSource, /const generatedAdvances = await listReimbursementAdvancesByReimbursementId\(ledgerId, claim\.id\)/)
   assert.match(reimbursementServiceSource, /const usages = await listReimbursementAdvanceUsagesByAdvanceId\(ledgerId, advance\.id\)/)

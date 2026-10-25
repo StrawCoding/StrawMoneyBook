@@ -316,7 +316,7 @@
 | `budget-reserve.service.js` | 依帳本預算期間 / 時區 / 日均規則即時計算保留金額 |
 | `budget-save.service.js` | 預算剩餘額自動結算、補跑、delta/manual 補差；曆月與發薪週期皆以期間結束後一次性結算 |
 | `loan.service.js` | 借貸建立、還款、作廢；單筆新增 / 編輯還款會阻擋超過借貸剩餘金額 |
-| `reimbursement.service.js` | 報銷流程、報銷入帳、請款單完成 / 還原後的匯入報銷狀態同步、隱藏分類處理；SMB-237 後 `setReimbursableExpenseClaimAmount` 設定 / 重設可報銷交易的 `reimburse_target_minor`（自訂報銷金額）；SMB-255 後在設定報銷金額、報銷入帳 / 取消入帳與載入草稿 detail 時觸發草稿請款單 import item 同步 |
+| `reimbursement.service.js` | 報銷流程、報銷入帳、請款單完成 / 還原後的匯入報銷狀態同步、隱藏分類處理；v1.5.8 後同一張請款單可分次入帳，每次 FIFO 回寫 `settled_minor`／`paid_minor`；SMB-237 後 `setReimbursableExpenseClaimAmount` 設定 / 重設可報銷交易的 `reimburse_target_minor`（自訂報銷金額）；SMB-255 後在設定報銷金額、報銷入帳 / 取消入帳與載入草稿 detail 時觸發草稿請款單 import item 同步 |
 | `claim-sheet-draft-sync.service.js` | SMB-255 草稿請款單導入報銷項目自動同步：`reconcileDraftClaimSheetImportItems` 依最新交易 pending 更新或移除 draft claim items 並重算總額 |
 | `savings-jar.service.js` | 存錢罐存提與目標管理 |
 | `src/ui/services/bookkeeping-reminder.service.js` | 記帳提醒設定、通知排程（含 `repeats: true` 確保每日重複觸發）、連續記帳成就統計、原生通知同步逾時保護、全帳本同步去重、同步序列化避免實機儲存卡死、Android Local Notifications plugin proxy 相容性處理、exact alarm 檢查與系統設定導引 |
@@ -578,7 +578,7 @@ UI composable 目錄：`src/ui/composables/`
 - 函數（23）：`addTransaction`, `addTransfer`, `countReimbursableTransactions`, `dayRangeUtc`, `findReimbursementSettlementIncomeTx`, `findTransactionById`, `findTransactionRecordById`, `getPaidClaimItemMinorByTransactionId`, `listAllTransactions`, `listRecentTransactions`, `listReimbursementTransactions`, `listTransactionsByAccount`, `listTransactionsByDay`, `listTransactionsByMonth`, `listTransactionsByYear`, `listTransferTransactionsByGroup`, `markTransactionReimbursed`, `monthRangeUtc`, `paidClaimItemMinorSql`, `softDeleteTransactionById`, `softDeleteTransferGroup`, `updateTransactionById`, `yearRangeUtc`
 - 變數（0）：無
 - 類別（0）：無
-- 補充：`listReimbursementTransactions` 的 `reimbursed_minor` 會合併直接報銷入帳、代收抵扣與已完成請款單匯入明細，避免完成請款後原交易仍被分到未報銷。
+- 補充：`listReimbursementTransactions` 的 `reimbursed_minor` 會合併直接報銷入帳、代收抵扣與請款單已回寫金額（`settled_minor`，舊資料仍相容 `status='paid'`），避免分次入帳後原交易仍被分到未報銷。
 - 補充：請款／排程／借貸軟刪仍釋放 `idempotency_key`；`wear`／`import`／`einvoice` 保留冪等鍵，避免銀行／手錶重送複製一筆。軟刪交易由 migration 048 觸發器同步軟刪 `transaction_postings`。
 
 ### `src/core/services/ai-bookkeeping.service.js`
