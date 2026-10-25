@@ -2,7 +2,8 @@
   <HabitatPageShell
     :title="t('securities_page.title')"
     :kicker="t('securities_page.habitat_hello')"
-    test-id="securities-list-view"
+    test-id="securities-page"
+    hello-test-id="securities-page-title"
     back-to="/features"
     stack-class="securities-page"
   >

@@ -41,7 +41,8 @@ test('quick add embedded path uses inline keypad actions', () => {
   assert.match(calcSource, /inline/)
   assert.match(calcSource, /emit\('confirm'/)
   assert.match(calcSource, /emit\('secondary'/)
-  assert.match(bookkeepingSource, /class="stack bookkeeping-page"/)
+  assert.match(bookkeepingSource, /HabitatPageShell/)
+  assert.match(bookkeepingSource, /stack-class="bookkeeping-page"/)
 })
 
 test('calculator delete key is not the page back chevron', () => {

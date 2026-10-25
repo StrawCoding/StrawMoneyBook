@@ -105,7 +105,7 @@ test('SMB-178 subpage headers share the ledger sync back header style', () => {
   assert.match(globalCssSource, /header\.row:has\(\.back-btn\)\s*\{[\s\S]*grid-template-columns:\s*40px minmax\(0, 1fr\) 40px;/)
   assert.match(globalCssSource, /header\.row:has\(\.back-btn\)::after\s*\{[\s\S]*grid-column:\s*3;/)
   assert.match(globalCssSource, /header\.row:has\(\.back-btn\) > :is\(h1, h2, \.page-title\)[\s\S]*justify-self:\s*center;/)
-  assert.match(eInvoiceImportWizardSource, /class="btn back-btn"/)
+  assert.match(eInvoiceImportWizardSource, /class="[^"]*\bback-btn\b/)
   assert.doesNotMatch(eInvoiceImportWizardSource, /\.back-btn\s*\{/)
 })
 
@@ -119,7 +119,7 @@ test('SMB-178 page-level back headers are not nested inside content cards', () =
   assert.deepEqual(offenders, [])
 })
 
-test('SMB-178 create buttons use the savings jar panel-head position', () => {
+test('SMB-178 create buttons use habitat toolbar or panel-head (not legacy page-head)', () => {
   const sourceByName = {
     loanListSource,
     claimSheetListSource,
@@ -127,9 +127,11 @@ test('SMB-178 create buttons use the savings jar panel-head position', () => {
     settingsLedgerSource,
   }
   for (const [name, source] of Object.entries(sourceByName)) {
-    assert.match(source, /<header class="row page-head">\s*<h2[\s\S]*?<RouterLink class="btn back-btn"/, `${name} keeps page header focused on title and back`)
-    assert.match(source, /<article class="card panel(?: summary)?">\s*<header class="row panel-head">[\s\S]*?<button class="btn primary"/, `${name} places primary action in first panel header`)
-    assert.doesNotMatch(source, /<header class="row page-head">(?:(?!<\/header>)[\s\S])*<button class="btn primary"/, `${name} should not put primary action in page header`)
+    assert.match(source, /HabitatPageShell/, `${name} uses HabitatPageShell`)
+    const hasToolbarPrimary = /<template #toolbar>[\s\S]*?class="btn primary"/.test(source)
+    const hasPanelPrimary = /<article class="card panel(?: summary)?">\s*<header class="row panel-head">[\s\S]*?<button class="btn primary"/.test(source)
+    assert.ok(hasToolbarPrimary || hasPanelPrimary, `${name} exposes primary create in toolbar or panel-head`)
+    assert.doesNotMatch(source, /<header class="row page-head">(?:(?!<\/header>)[\s\S]*)<button class="btn primary"/, `${name} should not put primary action in legacy page header`)
   }
 })
 

@@ -2,7 +2,7 @@
   <HabitatPageShell
     :title="t('settings_wear_companion.title')"
     :kicker="t('settings_wear_companion.habitat_hello')"
-    test-id="settings-wear-view"
+    test-id="wear-companion-page"
     back-to="/settings"
     stack-class="settings-subpage"
   >

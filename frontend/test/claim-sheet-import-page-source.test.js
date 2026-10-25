@@ -106,7 +106,10 @@ test('claim sheets expose a dedicated borrow loan import route and page', () => 
   assert.match(routerSource, /ClaimSheetImportBorrowLoanPage\.vue/)
   assert.match(claimImportBorrowLoanSource, /CURRENT_KIND = 'borrow_loan'/)
   assert.match(claimImportBorrowLoanSource, /listClaimSheetImportableBorrowLoans/)
-  assert.match(claimImportBorrowLoanSource, /claim_sheet\.form\.import_borrow_loans/)
+  assert.match(
+    claimImportBorrowLoanSource,
+    /claim_sheet\.(form\.import_borrow_loans|import_borrow_title)/,
+  )
   assert.match(claimImportBorrowLoanSource, /claim_sheet\.form\.no_importable_borrow_loan/)
   assert.match(claimImportBorrowLoanSource, /borrowLoanImportTxIds/)
   assert.match(claimImportBorrowLoanSource, /function goBack\(\) \{\s*void router\.replace\(returnLink\.value\)\s*\}/)

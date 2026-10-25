@@ -1,9 +1,14 @@
-<template>
-  <section class="stack transaction-edit-page">
-    <header class="row page-head" data-testid="transaction-edit-header">
-      <h2>{{ t('transaction_about.edit_transaction') }}</h2>
+o<template>
+  <HabitatPageShell
+    :title="t('transaction_about.edit_transaction')"
+    :kicker="t('transaction_edit.habitat_hello')"
+    test-id="transaction-edit-view"
+    hello-test-id="transaction-edit-header"
+    stack-class="transaction-edit-page"
+  >
+    <template #toolbar>
       <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
-    </header>
+    </template>
 
     <article class="card panel">
       <div v-if="loading" class="muted">{{ t('app.loading') }}</div>
@@ -231,12 +236,13 @@
       @close="closeDeleteConfirm"
       @confirm="confirmRemove"
     />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import AppDialog from '@/ui/components/common/AppDialog.vue'
 import AmountCalculatorInput from '@/ui/components/common/AmountCalculatorInput.vue'
 import DateTimePickerField from '@/ui/components/common/DateTimePickerField.vue'

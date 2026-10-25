@@ -1,5 +1,5 @@
 <template>
-  <section class="intro-root">
+  <section class="intro-root view-root intro-modern" data-testid="post-setup-intro-view">
     <article class="card intro-card">
       <header class="hero-block">
         <div class="hero-copy">

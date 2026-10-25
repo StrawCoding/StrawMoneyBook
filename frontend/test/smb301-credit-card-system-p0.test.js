@@ -137,7 +137,7 @@ test('migration / wiring mentions hard-contract identifiers', () => {
   assert.match(merge, /credit_card_bundle/)
 
   const page = readFileSync(resolve(root, 'src/ui/views/credit-cards/CreditCardsPage.vue'), 'utf8')
-  assert.match(page, /data-testid="credit-cards-page"/)
+  assert.match(page, /test-id="credit-cards-view"/)
   assert.match(page, /credit-repay-submit/)
 
   const features = readFileSync(resolve(root, 'src/ui/views/FeatureListPage.vue'), 'utf8')

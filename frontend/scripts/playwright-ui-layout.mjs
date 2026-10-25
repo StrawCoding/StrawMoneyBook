@@ -779,6 +779,7 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
     const deadline = performance.now() + 8000
     while (performance.now() < deadline) {
       if (window.location.pathname.includes('/assets')
+        && document.querySelector('[data-testid=assets-view], [data-testid=assets-drill-list]')
         && document.querySelector('[data-testid=bottom-nav]')
         && !document.querySelector('.boot-layer')) {
         break
@@ -800,29 +801,33 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
         hasCredit: Boolean(credit),
       }
     }
+    const drillList = document.querySelector('[data-testid=assets-drill-list]')
     const lendBox = lend.getBoundingClientRect()
     const borrowBox = borrow.getBoundingClientRect()
     const secBox = entry.getBoundingClientRect()
     const creditBox = credit.getBoundingClientRect()
-    const sameRow = Math.abs(lendBox.top - borrowBox.top) <= 8
-    const securitiesBelow = secBox.top >= Math.max(lendBox.bottom, borrowBox.bottom) - 2
-    const securitiesCreditSameRow = Math.abs(secBox.top - creditBox.top) <= 8
-    const securitiesLeftOfCredit = secBox.left < creditBox.left - 4
-    const hasSecuritiesClass = entry.classList.contains('summary-securities')
-    const hasCreditClass = credit.classList.contains('summary-credit')
-    if (!sameRow || !securitiesBelow || !securitiesCreditSameRow || !securitiesLeftOfCredit || !hasSecuritiesClass || !hasCreditClass) {
+    const lendAboveBorrow = lendBox.top < borrowBox.top - 2
+    const securitiesAboveCredit = secBox.top < creditBox.top - 2
+    const securitiesAfterLoans = secBox.top >= borrowBox.bottom - 4
+    const vaultDrillRows = entry.classList.contains('vault-drill-row')
+      && credit.classList.contains('vault-drill-row')
+    if (
+      !drillList
+      || !lendAboveBorrow
+      || !securitiesAboveCredit
+      || !securitiesAfterLoans
+      || !vaultDrillRows
+    ) {
       return {
         ok: false,
         reason: 'assets_summary_layout',
         path: window.location.pathname,
-        sameRow,
-        securitiesBelow,
-        securitiesCreditSameRow,
-        securitiesLeftOfCredit,
-        hasSecuritiesClass,
-        hasCreditClass,
+        hasDrillList: Boolean(drillList),
+        lendAboveBorrow,
+        securitiesAboveCredit,
+        securitiesAfterLoans,
+        vaultDrillRows,
         tops: { lend: lendBox.top, borrow: borrowBox.top, securities: secBox.top, credit: creditBox.top },
-        lefts: { securities: secBox.left, credit: creditBox.left },
       }
     }
     entry.click()
@@ -851,7 +856,9 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     securitiesPage = await evalPage(`() => ({
       path: window.location.pathname,
-      title: document.querySelector('[data-testid=securities-page-title], .securities-page .page-title')?.textContent?.trim() || '',
+      title: document.querySelector(
+        '[data-testid=securities-page-title] .habitat-page-title, [data-testid=securities-page] .habitat-page-title, .securities-page .habitat-page-title, .securities-page .page-title',
+      )?.textContent?.trim() || '',
       hasAdd: Boolean(document.querySelector('[data-testid=securities-add], .securities-page .btn.primary')),
       hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
       boot: Boolean(document.querySelector('.boot-layer')),
@@ -1767,7 +1774,9 @@ async function assertRouteNavigation() {
           return {
             ok: true,
             path: window.location.pathname,
-            title: document.querySelector('[data-testid=credit-cards-page-title]')?.textContent?.trim() || '',
+            title: document.querySelector(
+              '[data-testid=credit-cards-page-title] .habitat-page-title, [data-testid=credit-cards-page] .habitat-page-title',
+            )?.textContent?.trim() || '',
             hasToggle: Boolean(document.querySelector('[data-testid=credit-home-card-enabled]')),
             hasBottomNav: true,
             boot: Boolean(document.querySelector('.boot-layer')),

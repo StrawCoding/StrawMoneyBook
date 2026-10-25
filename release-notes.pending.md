@@ -2,6 +2,10 @@
 
 ---
 
+## v1.5.20
+- 全站 Habitat 補齊：記帳全螢幕、交易編輯、分析報表匯出、電子發票精靈改 `HabitatPageShell`；歡迎／導覽頁接 global 色島；新增 `habitat-page-coverage` 防漏網。
+- 資產金庫改 vault drill 列表；Playwright／node 測試對齊 Habitat `data-testid`（證券、信用卡、Wear 等）。
+
 ## v1.5.19
 - 現代 layout 資產簡表：修正全域 Habitat 誤把 `.page-container .vault-drill-list` margin 清零，導致「可支配／負債」與借出列表之間間距消失；改以資產卡 grid gap 保留空隙。
 

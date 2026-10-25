@@ -1,13 +1,18 @@
 <template>
-  <section class="stack wizard-page">
-    <header class="wizard-header row">
-      <button class="btn back-btn" type="button" @click="handleBack">
+  <HabitatPageShell
+    :title="t('einvoice.title')"
+    :kicker="t('einvoice.habitat_hello')"
+    test-id="einvoice-wizard-view"
+    hello-test-id="einvoice-wizard-header"
+    root-class="wizard-page"
+    stack-class="wizard-page"
+  >
+    <template #toolbar>
+      <button class="btn back-btn icon-btn toolbar-icon" type="button" aria-label="back" @click="handleBack">
         <font-awesome-icon icon="fa-solid fa-chevron-left" />
       </button>
-      <h1 class="wizard-title">{{ t('einvoice.title') }}</h1>
-      <span />
-    </header>
-
+    </template>
+    <template #header-extra>
     <div class="stage-track">
       <template v-for="(stageKey, i) in STAGE_KEYS" :key="i">
         <div
@@ -27,16 +32,18 @@
         <div v-if="i < 3" class="stage-connector" :class="{ done: currentStep > i + 1 }" />
       </template>
     </div>
+    </template>
 
     <transition :name="transitionName" mode="out-in">
       <component :is="currentStepComponent" :key="currentStep" />
     </transition>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { useEInvoiceImportStore } from '@/ui/stores/einvoice-import.store.js'
 import { useI18n } from '@/ui/services/i18n.service'
 import EInvoiceStep1Account from './EInvoiceStep1Account.vue'

@@ -14,17 +14,15 @@ const accountStoreSource = read('src/ui/stores/account.store.js')
 const creditStoreSource = read('src/ui/stores/credit.store.js')
 const managementSource = read('src/ui/views/accounts/AssetAccountManagementPage.vue')
 
-test('assets page puts securities left and credit right without full-width stack', () => {
+test('assets page lists securities before credit in vault drill-down', () => {
   assert.match(assetsSource, /data-testid="assets-securities-entry"/)
   assert.match(assetsSource, /data-testid="assets-credit-entry"/)
+  assert.match(assetsSource, /data-testid="assets-drill-list"/)
   const securitiesAt = assetsSource.indexOf('data-testid="assets-securities-entry"')
   const creditAt = assetsSource.indexOf('data-testid="assets-credit-entry"')
   assert.ok(securitiesAt < creditAt)
-  assert.match(assetsSource, /\.summary-total\s*\{\s*\n\s*grid-column:\s*1\s*\/\s*-1;/)
-  assert.doesNotMatch(
-    assetsSource,
-    /\.summary-total,\s*\n\.summary-securities,\s*\n\.summary-credit\s*\{/,
-  )
+  assert.match(assetsSource, /vault-drill-list/)
+  assert.match(assetsSource, /summary-total/)
 })
 
 test('assets and management exclude credit accounts from mother categories', () => {

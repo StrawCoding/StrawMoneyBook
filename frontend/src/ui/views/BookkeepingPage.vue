@@ -1,10 +1,17 @@
 <template>
-  <section class="stack bookkeeping-page">
-    <header class="bookkeeping-chrome" data-testid="bookkeeping-page-header">
-      <div class="bookkeeping-top-row">
-        <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
-        <h2>{{ t('bookkeeping.page_title') }}</h2>
-      </div>
+  <HabitatPageShell
+    :title="t('bookkeeping.page_title')"
+    :kicker="t('bookkeeping.habitat_hello')"
+    test-id="bookkeeping-view"
+    hello-test-id="bookkeeping-page-header"
+    stack-class="bookkeeping-page"
+  >
+    <template #toolbar>
+      <button type="button" class="btn back-btn" data-testid="bookkeeping-back" @click="goBack">
+        {{ t('common.back') }}
+      </button>
+    </template>
+    <template #header-extra>
       <div class="bookkeeping-mode-stack">
         <div class="segment-pills mode-toggle-row" data-testid="bookkeeping-mode-toggle">
           <button
@@ -47,17 +54,18 @@
           </button>
         </div>
       </div>
-    </header>
+    </template>
 
     <AiAutoBookkeepingPage v-if="topMode === 'ai'" embedded />
     <QnaBookkeepingPage v-else-if="manualMode === 'qna'" embedded />
     <QuickAddPage v-else embedded />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import {
   getLastManualBookkeepingPath,
@@ -122,29 +130,8 @@ async function goBack() {
 </script>
 
 <style scoped>
-.stack {
+.bookkeeping-page {
   padding-bottom: calc(12px + var(--navigation-bar-height));
-}
-
-.bookkeeping-chrome {
-  display: grid;
-  gap: 10px;
-}
-
-.bookkeeping-top-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-h2 {
-  margin: 0;
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: clamp(20px, 5vw, 24px);
-  font-weight: 750;
-  letter-spacing: -0.03em;
 }
 
 .bookkeeping-mode-stack {

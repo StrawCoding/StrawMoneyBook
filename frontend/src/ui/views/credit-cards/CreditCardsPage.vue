@@ -2,7 +2,8 @@
   <HabitatPageShell
     :title="t('credit_cards_page.title')"
     :kicker="t('credit_cards_page.habitat_hello')"
-    test-id="credit-cards-view"
+    test-id="credit-cards-page"
+    hello-test-id="credit-cards-page-title"
     back-to="/features"
     stack-class="credit-cards-page"
   >

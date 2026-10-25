@@ -54,7 +54,7 @@ test('bookkeeping pages keep brand bar and only hide BottomNav', () => {
     assert.doesNotMatch(meta, /hideBrandBar:\s*true/, `${path} must keep the brand bar`)
   }
 
-  assert.match(bookkeepingSource, /data-testid="bookkeeping-page-header"/)
+  assert.match(bookkeepingSource, /(?:data-testid|hello-test-id)="bookkeeping-page-header"/)
   assert.match(bookkeepingSource, /data-testid="bookkeeping-mode-toggle"/)
   assert.match(bookkeepingSource, /AiAutoBookkeepingPage/)
   assert.match(bookkeepingSource, /QnaBookkeepingPage/)

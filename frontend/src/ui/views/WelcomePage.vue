@@ -1,5 +1,5 @@
 <template>
-  <section class="stack welcome-root">
+  <section class="stack welcome-root view-root welcome-modern" data-testid="welcome-view">
     <article class="card welcome-card">
       <header class="stack title-wrap">
         <p class="step-text">{{ t('welcome.step') }} {{ step }} / 3</p>

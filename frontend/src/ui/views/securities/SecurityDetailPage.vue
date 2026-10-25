@@ -2,7 +2,7 @@
   <HabitatPageShell
     :title="detail?.security?.name || t('securities_page.detail_title')"
     :kicker="t('securities_page.habitat_hello')"
-    test-id="security-detail-view"
+    test-id="securities-detail-page"
     back-to="/assets/securities"
     stack-class="securities-detail-page"
   >

@@ -26,26 +26,12 @@ test('SMB-225 v1.2.51: counterparty detail exposes 新增該對象借出 / 借�
   assert.match(counterpartySource, /t\('loans\.add_lend_for_person'\)/)
   assert.match(counterpartySource, /t\('loans\.add_borrow_for_person'\)/)
 
-  // The buttons must live in `.counterparty-create-actions`, which itself
-  // must be a SIBLING of (not a child of) `header.row.page-head`. We assert
-  // both the structural placement and that the two buttons are inside it.
   assert.match(
     counterpartySource,
-    /<\/header>\s*\n\s*<div class="row counterparty-create-actions">[\s\S]*?openCreateSheet\('lend'\)[\s\S]*?t\('loans\.add_lend_for_person'\)[\s\S]*?openCreateSheet\('borrow'\)[\s\S]*?t\('loans\.add_borrow_for_person'\)[\s\S]*?<\/div>/,
+    /<div class="row counterparty-create-actions">[\s\S]*?openCreateSheet\('lend'\)[\s\S]*?t\('loans\.add_lend_for_person'\)[\s\S]*?openCreateSheet\('borrow'\)[\s\S]*?t\('loans\.add_borrow_for_person'\)[\s\S]*?<\/div>/,
   )
-
-  // The two buttons must NOT live inside `head-actions` anymore (otherwise
-  // the iOS-nav grid will hide them again on mobile). We extract the
-  // head-actions block (between its opening div tag and the FIRST closing
-  // </div>) and assert it contains only exportCsv + back-btn — definitely
-  // not openCreateSheet.
-  const headActionsMatch = counterpartySource.match(
-    /<div class="row head-actions">([\s\S]*?)<\/div>/,
-  )
-  assert.ok(headActionsMatch, 'head-actions block must exist')
-  assert.doesNotMatch(headActionsMatch[1], /openCreateSheet/)
-  assert.match(headActionsMatch[1], /@click="exportCsv"/)
-  assert.match(headActionsMatch[1], /class="btn back-btn"/)
+  assert.doesNotMatch(counterpartySource, /<header class="row page-head">[\s\S]*?openCreateSheet\('lend'\)/)
+  assert.match(counterpartySource, /HabitatPageShell/)
 })
 
 test('SMB-225 v1.2.51: .counterparty-create-actions CSS keeps buttons visible (mobile column / desktop row)', () => {

@@ -1,18 +1,18 @@
 <template>
-  <section
-    class="stack export-page"
-    data-testid="analysis-export-page"
-    data-export-chrome="app-theme"
+  <HabitatPageShell
+    :title="t('analysis_print.title')"
+    :kicker="t('analysis_print.habitat_hello')"
+    back-to="/analysis"
+    test-id="analysis-export-page"
+    hello-test-id="analysis-export-hello"
+    root-class="export-page"
+    stack-class="export-page"
   >
     <article
       class="card panel screen-controls"
       data-testid="analysis-export-controls"
+      data-export-chrome="app-theme"
     >
-      <header class="row">
-        <h2>{{ t('analysis_print.title') }}</h2>
-        <RouterLink class="btn back-btn" to="/analysis">{{ t('common.back') }}</RouterLink>
-      </header>
-
       <div class="mode-tabs" data-testid="analysis-export-mode-tabs">
         <button
           class="btn"
@@ -135,13 +135,14 @@
         :account-count="accountCount"
       />
     </div>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
 import { Capacitor } from '@capacitor/core'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
 import AnalysisReportDocument from '@/ui/components/analysis/AnalysisReportDocument.vue'
 import { useAccountStore } from '@/ui/stores/account.store'

@@ -24,6 +24,7 @@ const habitatCssSource = readFileSync(resolve(root, 'src/ui/assets/css/habitat-u
 const habitatShellSource = readFileSync(resolve(root, 'src/ui/components/layout/HabitatPageShell.vue'), 'utf8')
 const featureListSource = readFileSync(resolve(root, 'src/ui/views/FeatureListPage.vue'), 'utf8')
 const settingsSource = readFileSync(resolve(root, 'src/ui/views/settings.vue'), 'utf8')
+const bookkeepingSource = readFileSync(resolve(root, 'src/ui/views/BookkeepingPage.vue'), 'utf8')
 const appleCssSource = readFileSync(resolve(root, 'src/ui/assets/css/apple-ui.css'), 'utf8')
 
 const UI_LAYOUT_ICON_FILES = [
@@ -81,6 +82,13 @@ test('bottom nav keeps 5 tabs in both layouts (no /more or 4-tab CTA)', () => {
   assert.match(bottomNavSource, /to: '\/features'/)
   assert.match(bottomNavSource, /class="bottom-nav modern"/)
   assert.doesNotMatch(bottomNavSource, /useUiLayout/)
+})
+
+test('bookkeeping fullscreen route uses HabitatPageShell and segment pills', () => {
+  assert.match(bookkeepingSource, /HabitatPageShell/)
+  assert.match(bookkeepingSource, /bookkeeping\.habitat_hello/)
+  assert.match(bookkeepingSource, /(?:data-testid|hello-test-id)="bookkeeping-page-header"/)
+  assert.match(bookkeepingSource, /segment-pills/)
 })
 
 test('HabitatPageShell rolls out to tab-adjacent routes with global modern CSS', () => {
