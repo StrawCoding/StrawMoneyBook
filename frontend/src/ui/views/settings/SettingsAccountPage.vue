@@ -1,10 +1,12 @@
 <template>
-  <div class="view-root">
-    <section class="stack">
-      <header class="row page-head">
-        <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-user-check" class="title-icon" />{{ t('settings_account.title', '帳號') }}</h2>
-        <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-      </header>
+  <HabitatPageShell
+    :title="t('settings_account.title')"
+    :kicker="t('settings_account.habitat_hello')"
+    test-id="settings-account-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
+
 
       <article class="card panel">
         <p class="muted intro">
@@ -132,7 +134,7 @@
       <article v-else-if="!sessionUser" class="card panel">
         <header class="section-head">
           <h3>{{ authMode === 'login' ? t('settings_account.login', '登入') : t('settings_account.register', '註冊') }}</h3>
-          <div class="tab-row">
+          <div class="segment-pills tab-row">
             <button type="button" class="tab-btn" :class="{ active: authMode === 'login' }" @click="authMode = 'login'">
               {{ t('settings_account.login', '登入') }}
             </button>
@@ -580,11 +582,11 @@
           </p>
         </article>
       </template>
-    </section>
-  </div>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { RouterLink, useRoute, useRouter } from 'vue-router'

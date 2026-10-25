@@ -1,9 +1,11 @@
 <template>
-  <section class="stack securities-detail-page" data-testid="securities-detail-page">
-    <header class="row page-head">
-      <h2 class="page-title">{{ detail?.security?.name || t('securities_page.detail_title') }}</h2>
-      <RouterLink class="btn back-btn" to="/assets/securities">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="detail?.security?.name || t('securities_page.detail_title')"
+    :kicker="t('securities_page.habitat_hello')"
+    test-id="security-detail-view"
+    back-to="/assets/securities"
+    stack-class="securities-detail-page"
+  >
 
     <article v-if="detail" class="card panel">
       <p class="muted symbol-line">
@@ -278,10 +280,11 @@
         <button type="button" class="btn primary" @click="submitReschedule">{{ t('common.save') }}</button>
       </template>
     </InputBottomSheet>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'

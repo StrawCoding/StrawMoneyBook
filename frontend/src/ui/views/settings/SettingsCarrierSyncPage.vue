@@ -1,12 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2 class="page-title">
-        <font-awesome-icon icon="fa-solid fa-receipt" class="title-icon" />
-        {{ t('settings_carrier_sync.title') }}
-      </h2>
-      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_carrier_sync.title')"
+    :kicker="t('settings_carrier_sync.habitat_hello')"
+    test-id="settings-carrier-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
 
     <article class="card panel" data-testid="carrier-sync-availability">
       <h3>{{ t('settings_carrier_sync.availability.title') }}</h3>
@@ -236,10 +235,11 @@
         </div>
       </div>
     </AppDialog>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'

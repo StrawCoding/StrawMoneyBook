@@ -1,17 +1,16 @@
 <template>
-  <section class="stack admin-dashboard">
+  <HabitatPageShell
+    :title="t('settings_admin.title', '管理員平台')"
+    :kicker="t('settings_admin.habitat_hello')"
+    test-id="settings-admin-view"
+    back-to="/settings"
+    stack-class="settings-subpage admin-dashboard"
+  >
     <article class="card panel dashboard-hero">
       <div class="hero-copy">
-        <span class="hero-kicker">Admin Console</span>
-        <div class="row page-head">
-          <div class="hero-title-wrap">
-            <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-users" class="title-icon" />{{ t('settings_admin.title', '管理員平台') }}</h2>
-            <p class="muted hero-desc">
-              {{ t('settings_admin.desc', '查看使用者、會員狀態與錯誤 log，並執行基本管理操作。') }}
-            </p>
-          </div>
-          <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-        </div>
+        <p class="muted hero-desc">
+          {{ t('settings_admin.desc', '查看使用者、會員狀態與錯誤 log，並執行基本管理操作。') }}
+        </p>
 
         <p v-if="apiUnavailable" class="muted error-text">{{ apiUnavailableMessage }}</p>
         <p v-else-if="!isAdmin" class="muted error-text">{{ t('settings_admin.not_allowed', '你目前沒有管理員權限。') }}</p>
@@ -356,10 +355,11 @@
         </article>
       </section>
     </template>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useUiStore } from '@/ui/stores/ui.store'

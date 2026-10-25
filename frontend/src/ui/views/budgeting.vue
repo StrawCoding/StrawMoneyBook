@@ -1,10 +1,11 @@
 <template>
-  <section class="stack" data-testid="budget-settings-page">
-    <header class="row">
-      <h2 class="page-title">{{ t('budgeting.settings_title') }}</h2>
-      <RouterLink class="btn back-btn" to="/budget">{{ t('common.back') }}</RouterLink>
-    </header>
-
+  <HabitatPageShell
+    :title="t('budgeting.settings_title')"
+    :kicker="t('budget_settings.habitat_hello')"
+    test-id="budget-settings-view"
+    back-to="/budget"
+    stack-class="budget-settings-page"
+  >
     <article class="card panel">
       <header class="row">
         <div>
@@ -487,10 +488,11 @@
       @close="closeDeleteDialog"
       @confirm="confirmRemoveItem"
     />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useBudgetStore } from '@/ui/stores/budget.store'

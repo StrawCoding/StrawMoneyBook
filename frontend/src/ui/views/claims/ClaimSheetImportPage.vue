@@ -1,13 +1,10 @@
 <template>
-  <section class="stack claim-import-page">
+  <HabitatPageShell
+    :title="t('claim_sheet.import_reimbursements_title')"
+    :kicker="t('claim_sheet.habitat_hello')"
+    test-id="claim-sheet-import-view"
+  >
     <article class="card panel">
-      <header class="row page-head">
-        <div>
-          <h2>{{ t('claim_sheet.form.import_reimbursements') }}</h2>
-          <small class="muted">{{ t('claim_sheet.form.import_hint') }}</small>
-        </div>
-        <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
-      </header>
 
       <div class="row import-toolbar">
         <div class="selection-summary">
@@ -73,10 +70,11 @@
         {{ saving ? t('claim_sheet.processing') : t('common.save') }}
       </button>
     </footer>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'

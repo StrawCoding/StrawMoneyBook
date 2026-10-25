@@ -1,9 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-palette" class="title-icon" />{{ t('personalization.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('personalization.title')"
+    :kicker="t('settings_page.habitat_hello')"
+    test-id="settings-personalization-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
     <article class="card panel">
       <div class="stack section-block">
         <h3>{{ t('personalization.ui_layout') }}</h3>
@@ -75,10 +77,11 @@
         <button class="btn" @click="resetColor">{{ t('common.reset_default') }}</button>
       </div>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useUiStore } from '@/ui/stores/ui.store'

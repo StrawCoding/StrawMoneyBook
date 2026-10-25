@@ -1,12 +1,11 @@
 <template>
-  <section class="stack securities-page" data-testid="securities-page">
-    <header class="row page-head">
-      <h2 class="page-title" data-testid="securities-page-title">
-        <font-awesome-icon icon="fa-solid fa-chart-line" class="title-icon" />
-        {{ t('securities_page.title') }}
-      </h2>
-      <RouterLink class="btn back-btn" to="/assets">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('securities_page.title')"
+    :kicker="t('securities_page.habitat_hello')"
+    test-id="securities-list-view"
+    back-to="/features"
+    stack-class="securities-page"
+  >
 
     <article class="card panel">
       <header class="row panel-head">
@@ -134,10 +133,11 @@
         >{{ t('common.save') }}</button>
       </template>
     </InputBottomSheet>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'

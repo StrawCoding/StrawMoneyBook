@@ -1,9 +1,10 @@
 <template>
-  <section class="stack">
-    <header class="row page-header">
-      <h2 class="page-title">{{ t('savings_jar.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('savings_jar.list_title')"
+    :kicker="t('savings_jar.habitat_hello')"
+    test-id="savings-jar-list-view"
+    back-to="/features"
+  >
 
     <article class="card panel">
       <header class="row panel-head">
@@ -253,10 +254,11 @@
       <p v-if="flowInsufficientBalance" class="error-text">{{ t('savings_jar.toast.insufficient_balance') }}</p>
       <p v-if="!flowAccountOptions.length" class="muted">{{ t('savings_jar.same_currency_required') }}</p>
     </AppDialog>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'

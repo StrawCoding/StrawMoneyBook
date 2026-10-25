@@ -1,9 +1,10 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2>{{ t('loans.detail_title') }}</h2>
-      <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('loans.detail_title')"
+    :kicker="t('loans.habitat_hello')"
+    test-id="loan-detail-view"
+    back-to="/loans"
+  >
 
     <article class="card panel">
       <div v-if="loan" class="stack loan-body">
@@ -157,10 +158,11 @@
       @close="closeDeleteRepaymentDialog"
       @confirm="confirmDeleteRepayment"
     />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'

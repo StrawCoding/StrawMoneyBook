@@ -1,12 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <div class="title-wrap">
-        <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-user-group" class="title-icon" />{{ pageTitle }}</h2>
-        <small v-if="member" class="muted">{{ member.email }}</small>
-      </div>
-      <RouterLink class="btn back-btn" to="/settings/admin">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_admin.member_title')"
+    :kicker="t('settings_admin.habitat_hello')"
+    test-id="settings-admin-member-view"
+    back-to="/settings/admin"
+    stack-class="settings-subpage"
+  >
 
     <article v-if="apiUnavailable" class="card panel">
       <p class="muted error-text">{{ apiUnavailableMessage }}</p>
@@ -91,10 +90,11 @@
         </div>
       </article>
     </template>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useUiStore } from '@/ui/stores/ui.store'

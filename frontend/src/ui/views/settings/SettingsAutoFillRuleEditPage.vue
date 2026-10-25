@@ -1,9 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-header">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-wand-magic-sparkles" class="title-icon" />{{ pageTitle }}</h2>
-      <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_auto_fill.edit_title')"
+    :kicker="t('settings_auto_fill.habitat_hello')"
+    test-id="settings-autofill-edit-view"
+    back-to="/settings/auto-fill-rules"
+    stack-class="settings-subpage"
+  >
 
     <article v-if="!ruleMissing" class="card panel">
       <header class="row">
@@ -89,10 +91,11 @@
     <article v-else class="card panel">
       <p class="muted">{{ t('common.rule_not_found') }}</p>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'

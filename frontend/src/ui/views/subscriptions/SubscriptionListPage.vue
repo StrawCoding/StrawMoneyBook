@@ -1,9 +1,10 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2>{{ t('subscription_page.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('subscription.list_title')"
+    :kicker="t('subscription.habitat_hello')"
+    test-id="subscription-list-view"
+    back-to="/features"
+  >
 
     <article class="card panel">
       <header class="row panel-head">
@@ -149,10 +150,11 @@
         </button>
       </div>
     </AppDialog>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'

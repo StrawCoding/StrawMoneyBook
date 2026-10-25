@@ -1,9 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-arrow-right-arrow-left" class="title-icon" />{{ t('settings_google_sync.title', '帳本同步') }}</h2>
-      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_google_drive_sync.title')"
+    :kicker="t('settings_google_drive_sync.habitat_hello')"
+    test-id="settings-gdrive-sync-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
 
     <article class="card panel" :class="{ working: !!googleLedgerSyncBusyId }">
       <p class="muted">
@@ -126,10 +128,11 @@
         {{ t('settings_google_sync.empty', '目前沒有可同步的帳本。') }}
       </p>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { getMembershipTierSnapshot, subscribeMembershipSnapshot } from '@/core/services/membership.service'

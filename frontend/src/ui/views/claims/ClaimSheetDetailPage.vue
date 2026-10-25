@@ -1,9 +1,10 @@
 <template>
-  <section class="stack">
-    <header class="row">
-      <h2>{{ t('claim_sheet.detail_title') }}</h2>
-      <button class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
-    </header>
+  <HabitatPageShell
+    :title="t('claim_sheet.detail_title')"
+    :kicker="t('claim_sheet.habitat_hello')"
+    test-id="claim-sheet-detail-view"
+    back-to="/claim-sheets"
+  >
 
     <article v-if="claim" class="card panel">
       <header class="row claim-head">
@@ -156,10 +157,11 @@
       @close="closeDeleteDialog"
       @confirm="confirmDeleteClaim"
     />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { useRoute, useRouter } from 'vue-router'

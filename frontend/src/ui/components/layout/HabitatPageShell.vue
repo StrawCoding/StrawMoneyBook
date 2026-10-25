@@ -7,7 +7,8 @@
     >
       <div class="habitat-title-row">
         <h1 class="habitat-page-title">{{ title }}</h1>
-        <div v-if="$slots.toolbar" class="habitat-toolbar">
+        <div v-if="$slots.toolbar || backTo" class="habitat-toolbar">
+          <RouterLink v-if="backTo" class="text-link back-link" :to="backTo">{{ backLabel }}</RouterLink>
           <slot name="toolbar" />
         </div>
       </div>
@@ -22,8 +23,18 @@
 
 <script setup>
 import { computed, useSlots } from 'vue'
+import { RouterLink } from 'vue-router'
+import { useI18n } from '@/ui/services/i18n.service'
 
 const props = defineProps({
+  backTo: {
+    type: String,
+    default: '',
+  },
+  backLabelKey: {
+    type: String,
+    default: 'common.back',
+  },
   title: {
     type: String,
     default: '',
@@ -51,9 +62,12 @@ const props = defineProps({
 })
 
 const slots = useSlots()
+const { t } = useI18n()
+
+const backLabel = computed(() => t(props.backLabelKey))
 
 const showHeader = computed(() => Boolean(
-  props.title || props.kicker || slots.toolbar || slots['header-extra'],
+  props.title || props.kicker || props.backTo || slots.toolbar || slots['header-extra'],
 ))
 </script>
 

@@ -1,9 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-building-columns" class="title-icon" />{{ t('settings_bank_sync.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_bank_sync.title')"
+    :kicker="t('settings_bank_sync.habitat_hello')"
+    test-id="settings-bank-sync-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
 
     <article class="card panel" data-testid="bank-sync-availability">
       <h3>{{ t('settings_bank_sync.availability.title') }}</h3>
@@ -178,10 +180,11 @@
       @close="acceptDisclaimer"
       @confirm="acceptDisclaimer"
     />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'

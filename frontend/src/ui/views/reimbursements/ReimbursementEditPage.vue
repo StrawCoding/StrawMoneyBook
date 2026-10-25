@@ -1,9 +1,10 @@
 <template>
-  <section class="stack">
-    <header class="row page-header">
-      <h2 class="page-title">{{ t('reimbursement.change_amount') }}</h2>
-      <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('reimbursement.edit_title')"
+    :kicker="t('reimbursement.habitat_hello')"
+    test-id="reimbursement-edit-view"
+    back-to="/reimbursements"
+  >
 
     <article v-if="targetTx" class="card panel">
       <header class="row">
@@ -68,10 +69,11 @@
     <article v-else class="card panel">
       <p class="muted">{{ t('reimbursement.not_found') }}</p>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'

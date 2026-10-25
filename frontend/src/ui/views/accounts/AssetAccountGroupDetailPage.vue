@@ -1,9 +1,10 @@
 <template>
-  <section class="stack">
-    <header class="row page-header">
-      <h2 class="page-title">{{ t('common.parent_group_settings') }}</h2>
-      <RouterLink class="btn back-btn" to="/assets/accounts">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('account_group.detail_title')"
+    :kicker="t('assets_page.habitat_hello')"
+    test-id="account-group-view"
+    back-to="/assets/accounts"
+  >
 
     <article v-if="group" class="card panel">
       <header class="row">
@@ -53,10 +54,11 @@
       @close="closeDeleteConfirm"
       @confirm="confirmRemoveGroupRecord"
     />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'

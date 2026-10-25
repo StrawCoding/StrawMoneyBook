@@ -1,10 +1,12 @@
 <template>
-  <div class="view-root">
-    <section class="stack">
-      <header class="row page-head">
-        <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-book" class="title-icon" />{{ t('settings_ledger_page.title') }}</h2>
-        <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-      </header>
+  <HabitatPageShell
+    :title="t('settings_ledger.title')"
+    :kicker="t('settings_ledger.habitat_hello')"
+    test-id="settings-ledger-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
+
 
       <article class="card panel">
         <header class="row panel-head">
@@ -39,7 +41,6 @@
           </template>
         </draggable>
       </article>
-    </section>
 
     <AppDialog
       :open="dialogMode === 'create'"
@@ -55,10 +56,11 @@
         <input v-model="ledgerNameInput" class="input" type="text" maxlength="40" :placeholder="t('settings_ledger_page.name_placeholder')" />
       </label>
     </AppDialog>
-  </div>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import draggable from 'vuedraggable'

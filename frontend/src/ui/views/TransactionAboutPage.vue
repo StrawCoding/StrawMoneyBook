@@ -1,9 +1,10 @@
 <template>
-  <section class="stack">
-    <header class="row">
-      <h2>{{ t('transaction_about.title') }}</h2>
-      <button class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
-    </header>
+  <HabitatPageShell
+    :title="t('transaction_about.title')"
+    :kicker="t('transaction_search.habitat_hello')"
+    test-id="transaction-about-view"
+    back-to="/"
+  >
 
     <article v-if="transaction" class="card panel">
       <header class="row">
@@ -164,10 +165,11 @@
         </button>
       </template>
     </InputBottomSheet>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'

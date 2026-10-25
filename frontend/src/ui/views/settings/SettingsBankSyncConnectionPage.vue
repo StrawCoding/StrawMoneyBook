@@ -1,12 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <div class="title-wrap">
-        <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-building-columns" class="title-icon" />{{ pageTitle }}</h2>
-        <small v-if="connection" class="muted">{{ connection.provider_connection_id }}</small>
-      </div>
-      <RouterLink class="btn back-btn" to="/settings/bank-sync">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_bank_sync_connection.title')"
+    :kicker="t('settings_bank_sync.habitat_hello')"
+    test-id="settings-bank-connection-view"
+    back-to="/settings/bank-sync"
+    stack-class="settings-subpage"
+  >
 
     <article v-if="!connection && !loadingState" class="card panel">
       <template v-if="!hasBankSyncMembershipAccess">
@@ -262,10 +261,11 @@
       @close="disconnectDialogOpen = false"
       @confirm="confirmDisconnect"
     />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'

@@ -1,9 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-header">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-tag" class="title-icon" />{{ t('common.category_detail') }}</h2>
-      <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_category.detail_title')"
+    :kicker="t('settings_category.habitat_hello')"
+    test-id="settings-category-detail-view"
+    back-to="/settings/categories"
+    stack-class="settings-subpage"
+  >
 
     <article class="card panel" v-if="category">
       <header class="row">
@@ -95,10 +97,11 @@
       @close="closeDeleteConfirm"
       @confirm="confirmRemoveCategoryRecord"
     />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'

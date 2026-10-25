@@ -1,9 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-database" class="title-icon" />{{ t('settings_data.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_data.title')"
+    :kicker="t('settings_data.habitat_hello')"
+    test-id="settings-data-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
 
     <article class="card panel">
       <h3>{{ t('settings_data.export.title') }}</h3>
@@ -260,10 +262,11 @@
         </section>
       </transition>
     </teleport>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'

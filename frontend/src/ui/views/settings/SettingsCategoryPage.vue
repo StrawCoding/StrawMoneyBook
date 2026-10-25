@@ -1,13 +1,12 @@
 <template>
-  <div class="view-root">
-    <section class="stack">
-      <header class="row page-head">
-        <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-tags" class="title-icon" />{{ t('settings_category_page.title') }}</h2>
-        <div class="btn-wrap">
-          <button class="btn mini-btn" @click="addGroup">{{ t('settings_category_page.add_group') }}</button>
-          <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-        </div>
-      </header>
+  <HabitatPageShell
+    :title="t('settings_category.title')"
+    :kicker="t('settings_category.habitat_hello')"
+    test-id="settings-category-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
+
 
     <article class="card panel">
       <p class="muted">{{ t('settings_category_page.archive_hint') }}</p>
@@ -62,7 +61,6 @@
         </li>
       </ul>
     </article>
-    </section>
 
     <AppDialog
       :open="groupDialogOpen"
@@ -109,10 +107,11 @@
         </template>
       </label>
     </AppDialog>
-  </div>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import draggable from 'vuedraggable'

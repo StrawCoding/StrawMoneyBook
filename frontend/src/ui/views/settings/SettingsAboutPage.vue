@@ -1,12 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-header">
-      <h2 class="page-title">
-        <font-awesome-icon icon="fa-solid fa-users" class="title-icon" />
-        {{ t('settings_about.title') }}
-      </h2>
-      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_about.title')"
+    :kicker="t('settings_about.habitat_hello')"
+    test-id="settings-about-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
 
     <article class="card panel">
       <p class="muted intro">{{ t('settings_about.subtitle') }}</p>
@@ -29,10 +28,11 @@
         <span class="action">{{ t('settings_about.open') }}</span>
       </a>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'

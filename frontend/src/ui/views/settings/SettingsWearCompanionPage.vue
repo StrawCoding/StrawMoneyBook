@@ -1,13 +1,11 @@
 <template>
-  <section class="stack" data-testid="wear-companion-page">
-    <header class="row page-head">
-      <h2 class="page-title">
-        <font-awesome-icon icon="fa-solid fa-mobile-screen-button" class="title-icon" />
-        {{ t('settings_wear_companion.title') }}
-      </h2>
-      <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
-    </header>
-
+  <HabitatPageShell
+    :title="t('settings_wear_companion.title')"
+    :kicker="t('settings_wear_companion.habitat_hello')"
+    test-id="settings-wear-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
     <article class="card panel" data-testid="wear-companion-status">
       <h3>{{ t('settings_wear_companion.status_title') }}</h3>
       <p class="muted compact">{{ t('settings_wear_companion.status_desc') }}</p>
@@ -66,11 +64,11 @@
         {{ status.error || status.dbError }}
       </p>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
-import { RouterLink } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { onMounted, reactive } from 'vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { getWearConnectionStatus } from '@/ui/services/wear-companion.service'

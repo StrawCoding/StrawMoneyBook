@@ -1,9 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-building-columns" class="title-icon" />{{ t('settings_bank_sync_create.title') }}</h2>
-      <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_bank_sync_create.title')"
+    :kicker="t('settings_bank_sync.habitat_hello')"
+    test-id="settings-bank-create-view"
+    back-to="/settings/bank-sync"
+    stack-class="settings-subpage"
+  >
 
     <article v-if="!bankSyncApiReady" class="card panel warning-panel">
       <h3>{{ t('settings_bank_sync_create.api_unavailable_title') }}</h3>
@@ -170,10 +172,11 @@
       @close="confirmDialogOpen = false"
       @confirm="confirmSubmitLogin"
     />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'

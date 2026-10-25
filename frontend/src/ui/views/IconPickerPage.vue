@@ -1,10 +1,10 @@
 <template>
-  <div class="view-root">
-    <section class="stack">
-      <header class="row page-header">
-        <h2 class="page-title">{{ t('icon_picker.title') }}</h2>
-        <button class="btn back-btn" type="button" @click="goBack">{{ t('common.back') }}</button>
-      </header>
+  <HabitatPageShell
+    :title="t('icon_picker.title')"
+    :kicker="t('icon_picker.habitat_hello')"
+    test-id="icon-picker-view"
+  >
+
 
       <article class="card panel">
         <div class="icon-grid">
@@ -22,11 +22,11 @@
           </button>
         </div>
       </article>
-    </section>
-  </div>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAccountIconOptions, getCategoryIconOptions, normalizeFaIcon } from '@/ui/utils/fa-icon-options'

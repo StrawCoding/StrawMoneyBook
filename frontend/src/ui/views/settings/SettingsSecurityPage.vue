@@ -1,9 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-header">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-shield-halved" class="title-icon" />{{ t('settings_security.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_security.title')"
+    :kicker="t('settings_security.habitat_hello')"
+    test-id="settings-security-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
 
     <article class="card panel">
       <div class="row switch-row">
@@ -29,10 +31,11 @@
         </div>
       </div>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'

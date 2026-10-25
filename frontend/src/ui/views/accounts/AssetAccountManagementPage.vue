@@ -1,9 +1,10 @@
 <template>
-  <section class="stack">
-    <header class="row page-header">
-      <h2 class="page-title">{{ t('common.asset_account_management') }}</h2>
-      <RouterLink class="btn back-btn" to="/assets">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('assets_page.manage')"
+    :kicker="t('assets_page.habitat_hello')"
+    test-id="asset-account-manage-view"
+    back-to="/assets"
+  >
 
     <article class="card panel">
       <header class="row">
@@ -177,10 +178,11 @@
       <p v-if="accountCreditLimitInvalid" class="error-text">{{ t('common.credit_limit_invalid') }}</p>
       <p v-if="accountReminderDayInvalid" class="error-text">{{ t('common.repay_day_range') }}</p>
     </AppDialog>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import draggable from 'vuedraggable'

@@ -1,9 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-header">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-book" class="title-icon" />{{ t('settings_ledger_detail.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/settings/ledgers">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_ledger.detail_title')"
+    :kicker="t('settings_ledger.habitat_hello')"
+    test-id="settings-ledger-detail-view"
+    back-to="/settings/ledgers"
+    stack-class="settings-subpage"
+  >
 
     <article v-if="ledger" class="card panel">
       <header class="row">
@@ -68,10 +70,11 @@
       @close="closeDeleteConfirm"
       @confirm="confirmRemoveLedgerRecord"
     />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'

@@ -1,9 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-language" class="title-icon" />{{ t('language_page.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_language.title')"
+    :kicker="t('settings_language.habitat_hello')"
+    test-id="settings-language-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
 
     <article class="card panel">
       <p class="muted current-line">{{ t('language_page.current') }}：{{ currentLabel }}</p>
@@ -25,10 +27,11 @@
         </div>
       </div>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'

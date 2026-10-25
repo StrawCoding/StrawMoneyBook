@@ -1,9 +1,10 @@
 <template>
-  <section class="stack claim-edit-page">
-    <header class="row page-head">
-      <h2>{{ t('claim_sheet.edit') }}</h2>
-      <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
-    </header>
+  <HabitatPageShell
+    :title="t('claim_sheet.edit_title')"
+    :kicker="t('claim_sheet.habitat_hello')"
+    test-id="claim-sheet-edit-view"
+    back-to="/claim-sheets"
+  >
 
     <article class="card panel">
       <div v-if="loading" class="muted">{{ t('app.loading') }}</div>
@@ -202,10 +203,11 @@
       <p v-else-if="claim" class="muted">只有草稿請款單可編輯</p>
       <p v-else class="muted">{{ t('claim_sheet.not_found') }}</p>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'

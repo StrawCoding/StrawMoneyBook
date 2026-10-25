@@ -1,9 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-cloud-arrow-up" class="title-icon" />{{ t('settings_auto_backup.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_auto_backup.title')"
+    :kicker="t('settings_auto_backup.habitat_hello')"
+    test-id="settings-auto-backup-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
 
     <article class="card panel" :class="{ working: isWorking }">
       <h3>{{ t('settings_auto_backup.google_panel_title') }}</h3>
@@ -277,10 +279,11 @@
         </section>
       </transition>
     </teleport>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'

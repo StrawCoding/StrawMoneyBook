@@ -1,12 +1,11 @@
 <template>
-  <section class="stack credit-cards-page" data-testid="credit-cards-page">
-    <header class="row page-head">
-      <h2 class="page-title" data-testid="credit-cards-page-title">
-        <font-awesome-icon icon="fa-solid fa-credit-card" class="title-icon" />
-        {{ t('credit_cards_page.title') }}
-      </h2>
-      <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('credit_cards_page.title')"
+    :kicker="t('credit_cards_page.habitat_hello')"
+    test-id="credit-cards-view"
+    back-to="/features"
+    stack-class="credit-cards-page"
+  >
 
     <article class="card panel" data-testid="credit-home-card-toggle">
       <div class="row panel-head">
@@ -163,10 +162,11 @@
         {{ t('common.save') }}
       </button>
     </InputBottomSheet>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'

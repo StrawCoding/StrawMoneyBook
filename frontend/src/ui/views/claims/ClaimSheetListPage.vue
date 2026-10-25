@@ -1,9 +1,10 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2>{{ t('claim_sheet.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('claim_sheet.list_title')"
+    :kicker="t('claim_sheet.habitat_hello')"
+    test-id="claim-sheet-list-view"
+    back-to="/features"
+  >
 
     <article class="card panel">
       <header class="row panel-head">
@@ -380,10 +381,11 @@
         </button>
       </template>
     </InputBottomSheet>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'

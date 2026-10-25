@@ -1,9 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2 class="page-title"><font-awesome-icon icon="fa-solid fa-wand-magic-sparkles" class="title-icon" />{{ t('settings_auto_fill.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/settings">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('settings_auto_fill.title')"
+    :kicker="t('settings_auto_fill.habitat_hello')"
+    test-id="settings-autofill-view"
+    back-to="/settings"
+    stack-class="settings-subpage"
+  >
 
     <article class="card panel">
       <p class="muted">{{ t('settings_auto_fill.hint') }}</p>
@@ -29,10 +31,11 @@
 
       <p v-else class="muted">{{ t('settings_auto_fill.empty') }}</p>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAccountStore } from '@/ui/stores/account.store'

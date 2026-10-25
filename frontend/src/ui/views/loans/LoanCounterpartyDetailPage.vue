@@ -1,12 +1,10 @@
 <template>
-  <section class="stack counterparty-page">
-    <header class="row page-head">
-      <h2>{{ displayCounterpartyName(counterpartyName) }}</h2>
-      <div class="row head-actions">
-        <button class="btn" :disabled="!visibleLoans.length" @click="exportCsv">{{ t('analysis_print.export_csv') }}</button>
-        <RouterLink class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
-      </div>
-    </header>
+  <HabitatPageShell
+    :title="t('loans.counterparty_title')"
+    :kicker="t('loans.habitat_hello')"
+    test-id="loan-counterparty-view"
+    back-to="/loans"
+  >
 
     <div class="row counterparty-create-actions">
       <button class="btn primary" @click="openCreateSheet('lend')">
@@ -32,7 +30,7 @@
 
     <article class="card panel">
       <div class="row list-header">
-        <div class="tab-row">
+        <div class="segment-pills tab-row">
           <button class="btn" :class="{ primary: tab === 'lend' }" @click="tab = 'lend'">{{ t('loans.lend') }}</button>
           <button class="btn" :class="{ primary: tab === 'borrow' }" @click="tab = 'borrow'">{{ t('loans.borrow') }}</button>
         </div>
@@ -324,10 +322,11 @@
       @close="closeConfirmDialog"
       @confirm="confirmDialogAction"
     />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'

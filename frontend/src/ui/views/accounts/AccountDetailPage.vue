@@ -1,10 +1,10 @@
 <template>
-  <section class="stack">
-    <header class="row page-header">
-      <h2 class="page-title">{{ isEditMode ? t('common.edit_account') : t('common.account_detail') }}</h2>
-      <button v-if="!isEditMode" class="btn back-btn" type="button" @click="goBack">{{ t('common.back') }}</button>
-      <RouterLink v-else class="btn back-btn" :to="backLink">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('account.detail_title')"
+    :kicker="t('assets_page.habitat_hello')"
+    test-id="account-detail-view"
+    back-to="/assets"
+  >
 
     <article class="card panel">
       <header class="row">
@@ -243,10 +243,11 @@
       @close="closeDeleteConfirm"
       @confirm="confirmRemoveAccountRecord"
     />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'

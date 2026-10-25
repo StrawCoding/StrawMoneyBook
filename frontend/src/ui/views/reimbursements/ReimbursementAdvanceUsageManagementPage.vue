@@ -1,12 +1,10 @@
 <template>
-  <section class="stack">
-    <header class="row page-header">
-      <h2 class="page-title">{{ t('reimbursement_advance_usage.title') }}</h2>
-      <div class="row header-actions">
-        <RouterLink class="btn" :to="{ name: 'reimbursement-advance-manage' }">{{ t('reimbursement_advance_usage.advance_manage_button') }}</RouterLink>
-        <RouterLink class="btn back-btn" :to="{ name: 'reimbursements' }">{{ t('common.back') }}</RouterLink>
-      </div>
-    </header>
+  <HabitatPageShell
+    :title="t('reimbursement.offset_records')"
+    :kicker="t('reimbursement.habitat_hello')"
+    test-id="reimbursement-offset-view"
+    back-to="/reimbursements"
+  >
 
     <article class="card panel summary-panel">
       <div class="summary-row">
@@ -97,10 +95,11 @@
       @close="closeDeleteDialog"
       @confirm="confirmDelete"
     />
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppDialog from '@/ui/components/common/AppDialog.vue'

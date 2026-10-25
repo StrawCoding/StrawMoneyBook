@@ -1,13 +1,11 @@
 <template>
-  <section class="stack">
+  <HabitatPageShell
+    :title="t('analysis_category_detail.title')"
+    :kicker="t('analysis_page.habitat_hello')"
+    test-id="analysis-category-view"
+    back-to="/analysis"
+  >
     <article class="card panel">
-      <header class="row">
-        <div class="head-main">
-          <h2>{{ t('analysis_category_detail.title') }}</h2>
-          <small class="muted category-line">{{ activeTypeLabel }} / {{ activeCategoryLabel }}</small>
-        </div>
-        <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
-      </header>
 
       <p class="muted range-line">{{ t('analysis_category_detail.range', { range: rangeLabel }) }}</p>
 
@@ -68,10 +66,11 @@
         <li v-if="!categoryTransactions.length" class="muted empty-item">{{ t('analysis_category_detail.no_records') }}</li>
       </ul>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'

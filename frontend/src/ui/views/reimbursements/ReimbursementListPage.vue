@@ -1,9 +1,10 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2>{{ t('reimbursement.list_title') }}</h2>
-      <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('reimbursement.list_title')"
+    :kicker="t('reimbursement.habitat_hello')"
+    test-id="reimbursement-list-view"
+    back-to="/features"
+  >
 
     <article class="card panel summary">
       <div class="row">
@@ -26,7 +27,7 @@
     </article>
 
     <article class="card panel">
-      <div class="tab-row">
+      <div class="segment-pills tab-row">
         <button class="btn" :class="{ primary: tab === 'pending' }" @click="tab = 'pending'">{{ t('assets_page.unreimbursed') }}</button>
         <button class="btn" :class="{ primary: tab === 'reimbursed' }" @click="tab = 'reimbursed'">{{ t('reimbursement.already_reimbursed') }}</button>
       </div>
@@ -304,10 +305,11 @@
         </button>
       </template>
     </InputBottomSheet>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
