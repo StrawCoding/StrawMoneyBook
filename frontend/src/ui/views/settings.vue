@@ -1,7 +1,11 @@
 <template>
-  <section class="stack settings-page">
-    <h2>{{ t('settings.title') }}</h2>
-
+  <HabitatPageShell
+    :title="t('settings.title')"
+    :kicker="t('settings_page.habitat_hello')"
+    test-id="settings-view"
+    hello-test-id="settings-hello-block"
+    stack-class="settings-page"
+  >
     <RouterLink class="card panel account-card" to="/settings/account" data-testid="settings-account-card">
       <div class="account-avatar">
         <img v-if="sessionUser?.avatar_url" :src="sessionUser.avatar_url" alt="avatar" class="avatar-img" />
@@ -23,12 +27,13 @@
         </span>
       </RouterLink>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import {
   getSharedLedgerAuthStatus,

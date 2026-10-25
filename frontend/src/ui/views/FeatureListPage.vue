@@ -1,10 +1,13 @@
 <template>
-  <section class="stack feature-list-page" data-testid="feature-list-page">
+  <HabitatPageShell
+    :title="t('feature_list.title')"
+    :kicker="t('feature_list.habitat_hello')"
+    test-id="feature-list-view"
+    hello-test-id="feature-list-page"
+    root-class="feature-list-page"
+    stack-class="feature-list-page"
+  >
     <article class="card panel">
-      <header class="row">
-        <h2 class="feature-list-page-title">{{ t('feature_list.title') }}</h2>
-      </header>
-
       <section class="feature-section" data-testid="feature-list-general">
         <h3 class="feature-section-title">{{ t('feature_list.general') }}</h3>
         <nav class="feature-list">
@@ -41,11 +44,12 @@
         </nav>
       </section>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
 import { RouterLink } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed } from 'vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'

@@ -21,6 +21,9 @@ const featuresMapSource = readFileSync(resolve(root, 'StrawMoneyBook_Features_Ma
 const detailedDocSource = readFileSync(resolve(import.meta.dirname, '../../StrawMoneyBook_App_Features_Detailed.md'), 'utf8')
 const playwrightSource = readFileSync(resolve(root, 'scripts/playwright-ui-layout.mjs'), 'utf8')
 const habitatCssSource = readFileSync(resolve(root, 'src/ui/assets/css/habitat-ui.css'), 'utf8')
+const habitatShellSource = readFileSync(resolve(root, 'src/ui/components/layout/HabitatPageShell.vue'), 'utf8')
+const featureListSource = readFileSync(resolve(root, 'src/ui/views/FeatureListPage.vue'), 'utf8')
+const settingsSource = readFileSync(resolve(root, 'src/ui/views/settings.vue'), 'utf8')
 const appleCssSource = readFileSync(resolve(root, 'src/ui/assets/css/apple-ui.css'), 'utf8')
 
 const UI_LAYOUT_ICON_FILES = [
@@ -78,6 +81,18 @@ test('bottom nav keeps 5 tabs in both layouts (no /more or 4-tab CTA)', () => {
   assert.match(bottomNavSource, /to: '\/features'/)
   assert.match(bottomNavSource, /class="bottom-nav modern"/)
   assert.doesNotMatch(bottomNavSource, /useUiLayout/)
+})
+
+test('HabitatPageShell rolls out to tab-adjacent routes with global modern CSS', () => {
+  assert.match(habitatShellSource, /class="view-root habitat-page"/)
+  assert.match(featureListSource, /HabitatPageShell/)
+  assert.match(featureListSource, /feature_list\.habitat_hello/)
+  assert.match(settingsSource, /HabitatPageShell/)
+  assert.match(settingsSource, /settings_page\.habitat_hello/)
+  assert.match(habitatCssSource, /Global Habitat \(modern layout, all routes\)/)
+  assert.match(habitatCssSource, /\[data-ui-layout='modern'\] \.page-container \.card\.panel/)
+  assert.match(i18nSource, /'feature_list\.habitat_hello'/)
+  assert.match(i18nSource, /'settings_page\.habitat_hello'/)
 })
 
 test('analysis and assets use habitat modern shells (Daak/Finch IA)', () => {

@@ -1,14 +1,17 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2>{{ t('loans.list_title') }}</h2>
-      <RouterLink class="btn back-btn" to="/features">{{ t('common.back') }}</RouterLink>
-    </header>
+  <HabitatPageShell
+    :title="t('loans.list_title')"
+    :kicker="t('loans.habitat_hello')"
+    test-id="loan-list-view"
+    hello-test-id="loan-list-hello"
+  >
+    <template #toolbar>
+      <button type="button" class="btn primary" @click="openCreateSheet">{{ t('loans.add') }}</button>
+    </template>
 
     <article class="card panel summary">
       <header class="row panel-head">
-        <h3>{{ t('loans.list_title') }}</h3>
-        <button class="btn primary" @click="openCreateSheet">{{ t('loans.add') }}</button>
+        <h3>{{ t('loans.summary_title', '概覽') }}</h3>
       </header>
       <div class="row">
         <span class="muted">{{ t('loans.active') }}</span>
@@ -26,9 +29,9 @@
 
     <article class="card panel">
       <div class="row list-header">
-        <div class="tab-row">
-          <button class="btn" :class="{ primary: tab === 'lend' }" @click="tab = 'lend'">{{ t('loans.lend') }}</button>
-          <button class="btn" :class="{ primary: tab === 'borrow' }" @click="tab = 'borrow'">{{ t('loans.borrow') }}</button>
+        <div class="segment-pills tab-row">
+          <button type="button" class="btn tab-btn" :class="{ primary: tab === 'lend' }" @click="tab = 'lend'">{{ t('loans.lend') }}</button>
+          <button type="button" class="btn tab-btn" :class="{ primary: tab === 'borrow' }" @click="tab = 'borrow'">{{ t('loans.borrow') }}</button>
         </div>
         <div class="row list-actions">
           <button class="btn end-btn" :class="{ primary: showFinished }" @click="showFinished = !showFinished">
@@ -127,12 +130,13 @@
         <button class="btn primary" @click="createLoan">{{ t('common.save') }}</button>
       </template>
     </InputBottomSheet>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'

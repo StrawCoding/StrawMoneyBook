@@ -1,10 +1,10 @@
 <template>
-  <section class="stack">
-    <header class="row page-header">
-      <h2>{{ t('calendar_page.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/">{{ t('common.back') }}</RouterLink>
-    </header>
-
+  <HabitatPageShell
+    :title="t('calendar_page.title')"
+    :kicker="t('calendar_page.habitat_hello')"
+    test-id="calendar-view"
+    hello-test-id="calendar-hello"
+  >
     <article class="card panel">
       <div class="row month-head">
         <button class="btn mini-btn" @click="goPrevMonth">‹</button>
@@ -77,12 +77,13 @@
         <li v-if="selectedDayTransactions.length === 0" class="muted">{{ t('calendar_page.empty_day') }}</li>
       </ul>
     </article>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { listTransactionsForCalendarMonth } from '@/core/services/transaction-query.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'

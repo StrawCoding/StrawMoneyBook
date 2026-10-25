@@ -474,3 +474,124 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 [data-ui-layout='modern'] .bookkeeping-page .amt-hero {
   border-radius: var(--habitat-radius-tile);
 }
+
+/* —— Global Habitat (modern layout, all routes) —— */
+
+[data-ui-layout='modern'] .page-container > .route-stage .stack,
+[data-ui-layout='modern'] .habitat-page > .habitat-stack {
+  gap: 12px;
+}
+
+[data-ui-layout='modern'] .page-container .card.panel {
+  border-radius: var(--habitat-radius-island);
+  border: 1px solid var(--border);
+  box-shadow: none;
+  background: var(--card);
+}
+
+[data-ui-layout='modern'] .habitat-page .habitat-page-title {
+  font-size: var(--habitat-title-size);
+}
+
+[data-ui-layout='modern'] .habitat-page .habitat-kicker {
+  font-size: var(--habitat-kicker-size);
+}
+
+[data-ui-layout='modern'] .page-container .toolbar-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--bg-soft);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+[data-ui-layout='modern'] .page-container .toolbar-cluster .icon-btn,
+[data-ui-layout='modern'] .page-container .toolbar-cluster .toolbar-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+[data-ui-layout='modern'] .page-container .toolbar-cluster .icon-btn.primary,
+[data-ui-layout='modern'] .page-container .toolbar-cluster .icon-btn:hover,
+[data-ui-layout='modern'] .page-container .toolbar-cluster .toolbar-icon.primary,
+[data-ui-layout='modern'] .page-container .toolbar-cluster .toolbar-icon:hover {
+  background: var(--habitat-selected-bg);
+  color: var(--text);
+  border-color: var(--habitat-selected-line);
+}
+
+[data-ui-layout='modern'] .page-container .mode-tabs,
+[data-ui-layout='modern'] .page-container .type-tabs,
+[data-ui-layout='modern'] .page-container .segment-pills,
+[data-ui-layout='modern'] .page-container .view-toggle,
+[data-ui-layout='modern'] .page-container .period-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+[data-ui-layout='modern'] .page-container .mode-tabs .btn,
+[data-ui-layout='modern'] .page-container .type-tabs .btn,
+[data-ui-layout='modern'] .page-container .segment-pills .btn,
+[data-ui-layout='modern'] .page-container .segment-pills .tab-btn,
+[data-ui-layout='modern'] .page-container .view-toggle .btn,
+[data-ui-layout='modern'] .page-container .period-nav .btn,
+[data-ui-layout='modern'] .page-container .period-tabs .tab-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--bg-soft);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  box-shadow: none;
+}
+
+[data-ui-layout='modern'] .page-container .mode-tabs .btn.primary,
+[data-ui-layout='modern'] .page-container .type-tabs .btn.primary,
+[data-ui-layout='modern'] .page-container .segment-pills .btn.primary,
+[data-ui-layout='modern'] .page-container .segment-pills .tab-btn.primary,
+[data-ui-layout='modern'] .page-container .view-toggle .btn.primary,
+[data-ui-layout='modern'] .page-container .period-nav .btn.primary,
+[data-ui-layout='modern'] .page-container .period-tabs .tab-btn.primary {
+  background: var(--habitat-selected-bg);
+  color: var(--text);
+  border-color: var(--habitat-selected-line);
+}
+
+[data-ui-layout='modern'] .page-container .text-link,
+[data-ui-layout='modern'] .habitat-page .text-link {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+[data-ui-layout='modern'] .page-container .vault-drill-list,
+[data-ui-layout='modern'] .page-container .drill-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--habitat-radius-tile);
+  overflow: hidden;
+  background: var(--bg-soft);
+  border: 0;
+}
+
+[data-ui-layout='modern'] .page-container .drill-list li + li,
+[data-ui-layout='modern'] .page-container .vault-drill-list li + li {
+  border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}

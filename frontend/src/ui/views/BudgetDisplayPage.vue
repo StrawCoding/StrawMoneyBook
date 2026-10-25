@@ -1,19 +1,24 @@
 <template>
-  <section class="stack" data-testid="budget-display-page">
-    <header class="row">
-      <h2 class="page-title">{{ t('budgeting.title') }}</h2>
-      <div class="header-actions">
+  <HabitatPageShell
+    :title="t('budgeting.title')"
+    :kicker="t('budget_page.habitat_hello')"
+    test-id="budget-view"
+    hello-test-id="budget-display-page"
+    stack-class="budget-display-page"
+  >
+    <template #toolbar>
+      <div class="toolbar-cluster">
         <RouterLink
-          class="btn icon-btn"
+          class="btn icon-btn toolbar-icon"
           to="/budget/settings"
           data-testid="budget-display-settings"
           :aria-label="t('budgeting.display.settings')"
+          :title="t('budgeting.display.settings')"
         >
           <font-awesome-icon icon="fa-solid fa-gear" />
         </RouterLink>
-        <RouterLink class="btn back-btn" to="/">{{ t('common.back') }}</RouterLink>
       </div>
-    </header>
+    </template>
 
     <article class="card panel">
       <header class="row">
@@ -235,10 +240,11 @@
         <button class="btn primary" @click="editDetailContainer">{{ t('budgeting.edit') }}</button>
       </template>
     </InputBottomSheet>
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'

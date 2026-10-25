@@ -1,10 +1,11 @@
 <template>
-  <section class="stack">
-    <header class="row page-head">
-      <h2>{{ t('transaction_search.title') }}</h2>
-      <RouterLink class="btn back-btn" to="/">{{ t('common.back') }}</RouterLink>
-    </header>
-
+  <HabitatPageShell
+    :title="t('transaction_search.title')"
+    :kicker="t('transaction_search.habitat_hello')"
+    test-id="transaction-search-view"
+    hello-test-id="transaction-search-hello"
+    stack-class="transaction-search-page"
+  >
     <article class="card panel">
       <input
         v-model.trim="keyword"
@@ -158,11 +159,12 @@
       </template>
     </InputBottomSheet>
 
-  </section>
+  </HabitatPageShell>
 </template>
 
 <script setup>
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
