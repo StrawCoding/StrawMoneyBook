@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.17
+- 官網網頁測試版（`/app/`）修復 jeep-sqlite WASM 路徑：改設定 Stencil `wasmpath`／`wasmPath`，不再誤用 `wasm-path` 而請求 `/assets/sql-wasm.wasm` 404、卡在「資料載入中…」。
+
 ## v1.5.16
 - 現代 layout 全站底層：共用 `HabitatPageShell`、全域 pill 分段／色島卡片；功能、設定、預算、搜尋、日曆、借貸清單等主入口已套用（子頁與傳統 layout 不受影響）。
 

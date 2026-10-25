@@ -35,7 +35,9 @@ export async function ensureWebSqliteStoreReady() {
     await ensureJeepSqliteRegistered()
 
     const el = document.querySelector('jeep-sqlite') ?? document.createElement('jeep-sqlite')
-    el.setAttribute('wasm-path', WASM_PATH)
+    // Stencil prop `wasmPath` reflects as HTML attribute `wasmpath` (not `wasm-path`).
+    el.wasmPath = WASM_PATH
+    el.setAttribute('wasmpath', WASM_PATH)
 
     if (!el.parentElement) {
       document.body.appendChild(el)

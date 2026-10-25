@@ -18,11 +18,19 @@ const einvoiceApiSource = readFileSync(resolve(frontendRoot, 'src/services/einvo
 const sharedLedgerSource = readFileSync(resolve(frontendRoot, 'src/services/shared-ledger/backend.js'), 'utf8')
 const indexHtml = readFileSync(resolve(frontendRoot, 'index.html'), 'utf8')
 const syncScript = readFileSync(resolve(frontendRoot, 'scripts/sync-official-site-web-app.mjs'), 'utf8')
+const webStoreSource = readFileSync(resolve(frontendRoot, 'src/core/db/web-store.js'), 'utf8')
 
 test('hosted web test SPA public URL talks to live ops API', () => {
   assert.equal(getHostedWebAppPublicUrl(), 'https://www.strawmb.com/app/')
   assert.equal(getHostedWebApiBase(), 'https://api.strawmb.com')
   assert.equal(getHostedWebDistRoot(frontendRoot), resolve(frontendRoot, 'dist-hosted-web'))
+})
+
+test('hosted web jeep-sqlite wasmPath uses BASE_URL assets (Stencil wasmpath, not wasm-path)', () => {
+  assert.match(webStoreSource, /import\.meta\.env\.BASE_URL.*assets/)
+  assert.match(webStoreSource, /el\.wasmPath = WASM_PATH/)
+  assert.match(webStoreSource, /setAttribute\('wasmpath'/)
+  assert.doesNotMatch(webStoreSource, /setAttribute\('wasm-path'/)
 })
 
 test('hosted web uses hash router so GitHub Pages nested SPA does not fall through to marketing 404', () => {
