@@ -1,91 +1,96 @@
 <template>
-  <section class="stack analysis-page" data-testid="analysis-page" data-theme-aware="1">
-    <article class="card panel">
-      <header class="row">
-        <h2>{{ t('analysis_page.title') }}</h2>
-        <div class="header-actions">
+  <div class="view-root analysis-modern" data-testid="analysis-view">
+    <header class="analysis-hello-block" data-testid="analysis-hello-block">
+      <div class="analysis-title-row">
+        <h1 class="analysis-large-title">{{ t('analysis_page.title') }}</h1>
+        <div class="analysis-toolbar toolbar-cluster" data-testid="analysis-toolbar">
           <button
             type="button"
-            class="btn primary"
+            class="btn icon-btn toolbar-icon"
+            :class="{ primary: exportingPdf, busy: exportingPdf }"
             data-testid="analysis-export-direct-btn"
             :disabled="exportingPdf"
-            :aria-label="t('analysis_print.export_pdf')"
-            :title="t('analysis_print.export_pdf')"
+            :aria-label="exportingPdf ? t('analysis_print.exporting') : t('analysis_print.export_pdf')"
+            :title="exportingPdf ? t('analysis_print.exporting') : t('analysis_print.export_pdf')"
             @click="exportPdfDirect"
           >
-            {{ exportingPdf ? t('analysis_print.exporting') : t('analysis_print.export_pdf') }}
+            <font-awesome-icon icon="fa-solid fa-file-invoice-dollar" />
           </button>
           <RouterLink
-            class="btn"
+            class="btn icon-btn toolbar-icon"
             data-testid="analysis-print-link"
             :to="reportPageTo"
             :aria-label="t('analysis_page.open_report')"
             :title="t('analysis_page.open_report')"
           >
-            {{ t('analysis_page.open_report') }}
+            <font-awesome-icon icon="fa-solid fa-chart-column" />
           </RouterLink>
         </div>
-      </header>
-      <p
-        v-if="exportedFilename"
-        class="muted export-result"
-        data-testid="analysis-export-result"
-        :data-filename="exportedFilename"
-        :data-page-count="String(exportedPageCount || '')"
-        :data-light-pdf="exportedLightPdf ? '1' : '0'"
-      >
-        {{ t('analysis_print.file_label', { filename: exportedFilename }) }}
-      </p>
-      <div v-if="exportedUrl && exportedFilename" class="export-open-row">
-        <button
-          type="button"
-          class="btn"
-          data-testid="analysis-direct-open-file-btn"
-          @click="openExportLink"
+      </div>
+      <p class="analysis-habitat-hello">{{ t('analysis_page.habitat_hello') }}</p>
+    </header>
+
+    <section class="stack analysis-page" data-testid="analysis-page" data-theme-aware="1">
+      <header class="analysis-period-chrome" data-testid="analysis-period-chrome">
+        <h2 class="period-title">{{ periodTitle }}</h2>
+        <div class="period-tabs mode-tabs" data-testid="analysis-period-filter">
+          <button type="button" class="btn tab-btn" :class="{ primary: mode === 'all' }" @click="mode = 'all'">{{ t('analysis_page.mode.all') }}</button>
+          <button type="button" class="btn tab-btn" :class="{ primary: mode === 'year' }" @click="mode = 'year'">{{ t('analysis_page.mode.year') }}</button>
+          <button type="button" class="btn tab-btn" :class="{ primary: mode === 'month' }" @click="mode = 'month'">{{ t('analysis_page.mode.month') }}</button>
+        </div>
+        <transition name="collapse-fade">
+          <div v-if="mode !== 'all'" class="picker-row picker-wrap">
+            <transition name="fade-scale" mode="out-in">
+              <HomeRangePicker v-if="mode === 'year'" key="year" mode="year" :year="selectedYear" class="picker-input" @update:year="pickYear" />
+              <HomeRangePicker v-else key="month" mode="month" :month="selectedMonth" class="picker-input" @update:month="pickMonth" />
+            </transition>
+          </div>
+        </transition>
+        <p
+          v-if="exportedFilename"
+          class="muted export-result"
+          data-testid="analysis-export-result"
+          :data-filename="exportedFilename"
+          :data-page-count="String(exportedPageCount || '')"
+          :data-light-pdf="exportedLightPdf ? '1' : '0'"
         >
-          {{ t('analysis_print.open_link') }}
-        </button>
-      </div>
-      <p
-        v-if="lastExportError"
-        class="muted export-result"
-        data-testid="analysis-export-error"
-      >
-        {{ lastExportError }}
-      </p>
-
-      <div class="mode-tabs">
-        <button class="btn" :class="{ primary: mode === 'all' }" @click="mode = 'all'">{{ t('analysis_page.mode.all') }}</button>
-        <button class="btn" :class="{ primary: mode === 'year' }" @click="mode = 'year'">{{ t('analysis_page.mode.year') }}</button>
-        <button class="btn" :class="{ primary: mode === 'month' }" @click="mode = 'month'">{{ t('analysis_page.mode.month') }}</button>
-      </div>
-
-      <transition name="collapse-fade">
-        <div v-if="mode !== 'all'" class="picker-wrap">
-          <transition name="fade-scale" mode="out-in">
-            <HomeRangePicker v-if="mode === 'year'" key="year" mode="year" :year="selectedYear" @update:year="pickYear" />
-            <HomeRangePicker v-else key="month" mode="month" :month="selectedMonth" @update:month="pickMonth" />
-          </transition>
+          {{ t('analysis_print.file_label', { filename: exportedFilename }) }}
+        </p>
+        <div v-if="exportedUrl && exportedFilename" class="export-open-row">
+          <button
+            type="button"
+            class="btn"
+            data-testid="analysis-direct-open-file-btn"
+            @click="openExportLink"
+          >
+            {{ t('analysis_print.open_link') }}
+          </button>
         </div>
-      </transition>
-    </article>
+        <p
+          v-if="lastExportError"
+          class="muted export-result"
+          data-testid="analysis-export-error"
+        >
+          {{ lastExportError }}
+        </p>
+      </header>
 
-    <article class="card panel" data-testid="analysis-big-numbers">
-      <div class="big-numbers">
-        <div class="big-card income">
-          <small>{{ t('analysis_page.type.income') }}</small>
-          <MoneyText :value-minor="incomeTotalMinor" tone="income" />
+      <article class="card panel analysis-hero-card" data-testid="analysis-big-numbers">
+        <div class="split-grid">
+          <div class="split-card income">
+            <small class="split-label">{{ t('analysis_page.type.income') }}</small>
+            <MoneyText class="split-value" :value-minor="incomeTotalMinor" tone="income" />
+          </div>
+          <div class="split-card expense">
+            <small class="split-label">{{ t('analysis_page.type.expense') }}</small>
+            <MoneyText class="split-value" :value-minor="expenseTotalMinor" tone="expense" />
+          </div>
         </div>
-        <div class="big-card expense">
-          <small>{{ t('analysis_page.type.expense') }}</small>
-          <MoneyText :value-minor="expenseTotalMinor" tone="expense" />
-        </div>
-        <div class="big-card balance">
-          <small>{{ t('analysis_print.summary.balance') }}</small>
+        <div class="balance-strip" :class="{ negative: balanceMinor < 0, positive: balanceMinor > 0 }">
+          <span class="balance-label">{{ t('analysis_print.summary.balance') }}</span>
           <MoneyText :value-minor="balanceMinor" :tone="balanceMinor >= 0 ? 'income' : 'expense'" />
         </div>
-      </div>
-    </article>
+      </article>
 
     <article class="card panel" data-testid="analysis-income-section">
       <AnalysisIconizedChartPair
@@ -195,14 +200,14 @@
         </div>
       </header>
 
-      <div class="type-tabs account-type-tabs">
-        <button class="btn" :class="{ primary: accountAnalysisType === 'total' }" @click="accountAnalysisType = 'total'">
+      <div class="segment-pills account-type-tabs" data-testid="analysis-account-type-filter">
+        <button type="button" class="btn tab-btn" :class="{ primary: accountAnalysisType === 'total' }" @click="accountAnalysisType = 'total'">
           {{ t('analysis_page.type.total') }}
         </button>
-        <button class="btn" :class="{ primary: accountAnalysisType === 'income' }" @click="accountAnalysisType = 'income'">
+        <button type="button" class="btn tab-btn" :class="{ primary: accountAnalysisType === 'income' }" @click="accountAnalysisType = 'income'">
           {{ t('analysis_page.type.income') }}
         </button>
-        <button class="btn" :class="{ primary: accountAnalysisType === 'expense' }" @click="accountAnalysisType = 'expense'">
+        <button type="button" class="btn tab-btn" :class="{ primary: accountAnalysisType === 'expense' }" @click="accountAnalysisType = 'expense'">
           {{ t('analysis_page.type.expense') }}
         </button>
       </div>
@@ -230,9 +235,9 @@
         </div>
       </header>
 
-      <div class="type-tabs">
-        <button class="btn" :class="{ primary: analysisType === 'income' }" @click="analysisType = 'income'">{{ t('analysis_page.type.income') }}</button>
-        <button class="btn" :class="{ primary: analysisType === 'expense' }" @click="analysisType = 'expense'">{{ t('analysis_page.type.expense') }}</button>
+      <div class="segment-pills" data-testid="analysis-time-type-filter">
+        <button type="button" class="btn tab-btn" :class="{ primary: analysisType === 'income' }" @click="analysisType = 'income'">{{ t('analysis_page.type.income') }}</button>
+        <button type="button" class="btn tab-btn" :class="{ primary: analysisType === 'expense' }" @click="analysisType = 'expense'">{{ t('analysis_page.type.expense') }}</button>
       </div>
 
       <div class="time-bar-chart">
@@ -285,7 +290,8 @@
         :account-count="exportAccountCount"
       />
     </div>
-  </section>
+    </section>
+  </div>
 </template>
 
 <script setup>
@@ -411,6 +417,7 @@ const exportPeriodLabel = computed(() => {
   if (mode.value === 'month') return `${t('analysis_print.mode.month')}｜${selectedMonth.value}`
   return t('analysis_print.all_hint')
 })
+const periodTitle = computed(() => exportPeriodLabel.value)
 const exportFilterLabel = computed(() => (mode.value === 'all' ? '' : exportPeriodLabel.value))
 const reportPageTo = computed(() => {
   const query = { mode: mode.value === 'year' ? 'year' : mode.value === 'all' ? 'all' : 'month' }
@@ -747,6 +754,138 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.analysis-hello-block {
+  display: grid;
+  gap: 8px;
+  padding: 2px 2px 4px;
+}
+
+.analysis-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.analysis-large-title {
+  margin: 0;
+  font-size: clamp(24px, 6vw, 30px);
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1.12;
+}
+
+.analysis-habitat-hello {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.analysis-toolbar {
+  flex-shrink: 0;
+}
+
+.toolbar-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+}
+
+.toolbar-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.toolbar-icon.primary,
+.toolbar-icon:hover {
+  background: var(--habitat-selected-bg, color-mix(in srgb, var(--primary) 14%, var(--card) 86%));
+  color: var(--text);
+  border-color: var(--habitat-selected-line, transparent);
+}
+
+.analysis-period-chrome {
+  display: grid;
+  gap: 10px;
+}
+
+.period-title {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(20px, 5vw, 24px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.picker-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.picker-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.analysis-hero-card {
+  display: grid;
+  gap: 10px;
+}
+
+.split-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.split-card {
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.split-card.income {
+  background: color-mix(in srgb, #40c057 10%, var(--card) 90%);
+}
+
+.split-card.expense {
+  background: color-mix(in srgb, #fa5252 10%, var(--card) 90%);
+}
+
+.split-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.balance-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+}
+
+.balance-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
 .stack {
   width: 100%;
   max-width: 100%;
@@ -825,26 +964,34 @@ h2, h3 {
   width: 100%;
 }
 
-.mode-tabs {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
 .picker-wrap {
-  margin-top: 10px;
+  margin-top: 0;
 }
 
-.type-tabs {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+.segment-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
 }
 
-.account-type-tabs {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.segment-pills .tab-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--bg-soft);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  box-shadow: none;
+}
+
+.segment-pills .tab-btn.primary {
+  background: color-mix(in srgb, var(--primary) 16%, var(--card) 84%);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
 }
 
 .big-numbers,

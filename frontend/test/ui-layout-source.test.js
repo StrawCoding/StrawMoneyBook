@@ -10,6 +10,8 @@ const iconRegistrySource = readFileSync(resolve(root, 'src/ui/utils/fa-icon-regi
 
 const bottomNavSource = readFileSync(resolve(root, 'src/ui/components/layout/BottomNav.vue'), 'utf8')
 const homeSource = readFileSync(resolve(root, 'src/ui/views/home.vue'), 'utf8')
+const analysisSource = readFileSync(resolve(root, 'src/ui/views/analysis.vue'), 'utf8')
+const assetsSource = readFileSync(resolve(root, 'src/ui/views/assets.vue'), 'utf8')
 const personalizationSource = readFileSync(resolve(root, 'src/ui/views/settings/SettingsPersonalizationPage.vue'), 'utf8')
 const routerSource = readFileSync(resolve(root, 'src/ui/router/index.js'), 'utf8')
 const layoutServiceSource = readFileSync(resolve(root, 'src/ui/services/ui-layout.service.js'), 'utf8')
@@ -76,6 +78,29 @@ test('bottom nav keeps 5 tabs in both layouts (no /more or 4-tab CTA)', () => {
   assert.match(bottomNavSource, /to: '\/features'/)
   assert.match(bottomNavSource, /class="bottom-nav modern"/)
   assert.doesNotMatch(bottomNavSource, /useUiLayout/)
+})
+
+test('analysis and assets use habitat modern shells (Daak/Finch IA)', () => {
+  assert.match(analysisSource, /class="view-root analysis-modern"/)
+  assert.match(analysisSource, /data-testid="analysis-hello-block"/)
+  assert.match(analysisSource, /data-testid="analysis-period-chrome"/)
+  assert.match(analysisSource, /data-testid="analysis-period-filter"/)
+  assert.match(analysisSource, /analysis-habitat-hello/)
+  assert.match(analysisSource, /analysis-hero-card/)
+  assert.match(assetsSource, /class="view-root assets-modern"/)
+  assert.match(assetsSource, /data-testid="assets-hello-block"/)
+  assert.match(assetsSource, /assets-habitat-hello/)
+  assert.match(assetsSource, /vault-summary-card/)
+  assert.match(assetsSource, /data-testid="assets-lend-entry"/)
+  assert.match(assetsSource, /data-testid="assets-drill-list"/)
+  assert.match(analysisSource, /data-testid="analysis-toolbar"/)
+  assert.match(analysisSource, /toolbar-cluster/)
+  assert.match(analysisSource, /segment-pills/)
+  assert.match(habitatCssSource, /\[data-ui-layout='modern'\] \.analysis-modern \.analysis-hero-card \.split-card\.income/)
+  assert.match(habitatCssSource, /\[data-ui-layout='modern'\] \.assets-modern \.vault-summary-card/)
+  assert.match(habitatCssSource, /\[data-ui-layout='modern'\] \.assets-modern \.vault-drill-list/)
+  assert.match(i18nSource, /'analysis_page\.habitat_hello'/)
+  assert.match(i18nSource, /'assets_page\.habitat_hello'/)
 })
 
 test('home keeps all blocks and FAB under both layouts', () => {

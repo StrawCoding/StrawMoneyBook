@@ -1,22 +1,23 @@
 <template>
-  <section class="stack assets-page">
-    <header class="row page-header">
-      <h2 class="page-title">{{ t('assets_page.title') }}</h2>
-      <RouterLink class="btn" to="/assets/accounts">{{ t('assets_page.manage') }}</RouterLink>
+  <div class="view-root assets-modern" data-testid="assets-view">
+    <header class="assets-hello-block" data-testid="assets-hello-block">
+      <div class="assets-title-row page-header">
+        <h1 class="assets-large-title page-title">{{ t('assets_page.title') }}</h1>
+        <RouterLink class="manage-link" to="/assets/accounts">{{ t('assets_page.manage') }}</RouterLink>
+      </div>
+      <p class="assets-habitat-hello">{{ t('assets_page.habitat_hello') }}</p>
+      <div class="ledger-hello">
+        <small class="muted ledger-kicker">{{ t('assets_page.current_ledger') }}</small>
+        <LedgerSwitcher class="ledger-switcher-wrap ledger-panel" />
+      </div>
     </header>
 
-    <article class="card panel ledger-panel">
-      <header class="row">
-        <h3>{{ t('assets_page.current_ledger') }}</h3>
-      </header>
-      <LedgerSwitcher class="ledger-switcher-wrap" />
-    </article>
-
-    <article class="card panel">
-      <header class="row">
+    <section class="stack assets-page">
+    <article class="card panel vault-summary-card">
+      <header class="row vault-summary-head">
         <h3>{{ t('assets_page.summary_title') }}</h3>
       </header>
-      <div class="summary-grid">
+      <div class="vault-metrics">
         <div class="summary-item summary-total">
           <div class="row summary-title-row">
             <small class="muted">{{ t('assets_page.total_assets') }}</small>
@@ -32,67 +33,59 @@
           </div>
           <MoneyText :value-minor="totalAssetMinor" />
         </div>
-        <div class="summary-item">
-          <small class="muted">{{ t('assets_page.disposable') }}</small>
-          <MoneyText :value-minor="disposableMinor" />
+        <div class="vault-split">
+          <div class="summary-item summary-stat">
+            <small class="muted">{{ t('assets_page.disposable') }}</small>
+            <MoneyText :value-minor="disposableMinor" />
+          </div>
+          <div class="summary-item summary-stat">
+            <small class="muted">{{ t('assets_page.liability') }}</small>
+            <MoneyText :value-minor="liabilityMinor" />
+          </div>
         </div>
-        <div class="summary-item">
-          <small class="muted">{{ t('assets_page.liability') }}</small>
-          <MoneyText :value-minor="liabilityMinor" />
-        </div>
-        <button
-          class="summary-item summary-link"
-          type="button"
-          data-testid="assets-lend-entry"
-          @click="goLoans('lend')"
-        >
-          <div class="row summary-head">
-            <small class="muted">{{ t('assets_page.lend') }}</small>
-            <small class="muted summary-hint">{{ t('assets_page.view') }}</small>
-          </div>
-          <MoneyText :value-minor="loanStore.summary.totalReceivable" />
-        </button>
-        <button
-          class="summary-item summary-link"
-          type="button"
-          data-testid="assets-borrow-entry"
-          @click="goLoans('borrow')"
-        >
-          <div class="row summary-head">
-            <small class="muted">{{ t('assets_page.borrow') }}</small>
-            <small class="muted summary-hint">{{ t('assets_page.view') }}</small>
-          </div>
-          <MoneyText :value-minor="loanStore.summary.totalPayable" />
-        </button>
-        <button
-          class="summary-item summary-link summary-securities"
-          type="button"
-          data-testid="assets-securities-entry"
-          @click="goSecurities"
-        >
-          <div class="row summary-head">
-            <small class="muted">{{ t('assets_page.securities') }}</small>
-            <small class="muted summary-hint">{{ t('assets_page.view') }}</small>
-          </div>
-          <MoneyText data-testid="assets-securities-amount" :value-minor="securitiesDisplayMinor" />
-        </button>
-        <button
-          class="summary-item summary-link summary-credit"
-          type="button"
-          data-testid="assets-credit-entry"
-          @click="goCreditCards"
-        >
-          <div class="row summary-head">
-            <small class="muted">{{ t('assets_page.credit_cards') }}</small>
-            <small class="muted summary-hint">{{ t('assets_page.view') }}</small>
-          </div>
-          <MoneyText :value-minor="creditDebtMinor" />
-        </button>
       </div>
+      <ul class="vault-drill-list" data-testid="assets-drill-list">
+        <li>
+          <button type="button" class="vault-drill-row" data-testid="assets-lend-entry" @click="goLoans('lend')">
+            <span class="vault-drill-label">{{ t('assets_page.lend') }}</span>
+            <span class="vault-drill-value">
+              <MoneyText :value-minor="loanStore.summary.totalReceivable" />
+              <span class="vault-drill-chevron" aria-hidden="true">›</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="vault-drill-row" data-testid="assets-borrow-entry" @click="goLoans('borrow')">
+            <span class="vault-drill-label">{{ t('assets_page.borrow') }}</span>
+            <span class="vault-drill-value">
+              <MoneyText :value-minor="loanStore.summary.totalPayable" />
+              <span class="vault-drill-chevron" aria-hidden="true">›</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="vault-drill-row" data-testid="assets-securities-entry" @click="goSecurities">
+            <span class="vault-drill-label">{{ t('assets_page.securities') }}</span>
+            <span class="vault-drill-value">
+              <MoneyText data-testid="assets-securities-amount" :value-minor="securitiesDisplayMinor" />
+              <span class="vault-drill-chevron" aria-hidden="true">›</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="vault-drill-row" data-testid="assets-credit-entry" @click="goCreditCards">
+            <span class="vault-drill-label">{{ t('assets_page.credit_cards') }}</span>
+            <span class="vault-drill-value">
+              <MoneyText :value-minor="creditDebtMinor" />
+              <span class="vault-drill-chevron" aria-hidden="true">›</span>
+            </span>
+          </button>
+        </li>
+      </ul>
     </article>
 
-    <article class="card panel">
-      <header class="row">
+    <article class="card panel accounts-island">
+      <header class="row accounts-island-head">
         <h3>{{ t('assets_page.asset_accounts') }}</h3>
       </header>
 
@@ -177,7 +170,8 @@
         </p>
       </div>
     </AppDialog>
-  </section>
+    </section>
+  </div>
 </template>
 
 <script setup>
@@ -405,6 +399,51 @@ function persistExpandedGroupState() {
 </script>
 
 <style scoped>
+.assets-hello-block {
+  display: grid;
+  gap: 8px;
+  padding: 2px 2px 4px;
+}
+
+.assets-title-row {
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.assets-large-title {
+  margin: 0;
+  font-size: clamp(24px, 6vw, 30px);
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1.12;
+}
+
+.assets-habitat-hello {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.ledger-hello {
+  display: grid;
+  gap: 6px;
+}
+
+.ledger-kicker {
+  font-size: 12px;
+}
+
+.manage-link {
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--primary);
+  text-decoration: none;
+  padding: 6px 0;
+}
+
 .panel {
   padding: 14px;
 }
@@ -414,16 +453,12 @@ h3 {
   margin: 0;
 }
 
-.page-title {
-  font-size: 24px;
-}
-
 .page-header {
+  display: flex;
   align-items: center;
 }
 
 .ledger-switcher-wrap {
-  margin-top: 10px;
   position: relative;
   z-index: 31;
 }
@@ -433,6 +468,11 @@ h3 {
   z-index: 30;
 }
 
+.vault-summary-head,
+.accounts-island-head {
+  margin-bottom: 2px;
+}
+
 .group-list,
 .account-list {
   list-style: none;
@@ -440,8 +480,13 @@ h3 {
   padding: 0;
 }
 
-.summary-grid {
+.vault-metrics {
   margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.vault-split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
@@ -449,20 +494,73 @@ h3 {
 
 .summary-item {
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px;
+  border-radius: 12px;
+  padding: 10px 12px;
   display: grid;
   gap: 6px;
+  background: var(--bg-soft);
 }
 
 .summary-total {
-  grid-column: 1 / -1;
+  border: 0;
+  background: color-mix(in srgb, var(--secondary) 12%, var(--card) 88%);
 }
 
-/* 有價證券左、信用卡右（與 lend/borrow 同列雙欄） */
-.summary-securities,
-.summary-credit {
-  grid-column: auto;
+.summary-stat {
+  border: 0;
+}
+
+.vault-drill-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--card);
+}
+
+.vault-drill-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.vault-drill-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.vault-drill-row:active {
+  background: var(--bg-soft);
+}
+
+.vault-drill-label {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.vault-drill-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.vault-drill-chevron {
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 400;
 }
 
 .summary-note {
@@ -489,22 +587,6 @@ h3 {
 
 .summary-info-content {
   gap: 8px;
-}
-
-.summary-link {
-  width: 100%;
-  text-align: left;
-  color: inherit;
-  background: color-mix(in srgb, var(--card) 82%, var(--surface-soft-accent) 18%);
-  cursor: pointer;
-}
-
-.summary-head {
-  align-items: center;
-}
-
-.summary-hint {
-  font-size: 11px;
 }
 
 .group-list {

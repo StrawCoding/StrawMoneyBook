@@ -59,7 +59,7 @@
 | `/` | `src/ui/views/home.vue` | 首頁總覽、範圍篩選、快速新增 |
 | `/budget` | `src/ui/views/BudgetDisplayPage.vue` | 預算顯示頁：期間摘要、月曆每日預算支出、分類總表（含 Icon）；設定入口進 `/budget/settings` |
 | `/budget/settings` | `src/ui/views/budgeting.vue` | 預算設定：帳本層曆月／發薪週期、複製上月、分類項目／共同池／預算存款 CRUD |
-| `/analysis` | `src/ui/views/analysis.vue` | 收支圖表分析（全部/年/月；圖示化圓餅／長條、大數字、預算達成卡、帳戶占比；跟隨 App Dark／Light；右上角一鍵直接匯出 PDF +「交易報表」入口進 `/analysis/print`） |
+| `/analysis` | `src/ui/views/analysis.vue` | 收支圖表分析（全部/年/月；v1.5.14 modern Habitat：大標題＋期間 pill＋收支色島摘要，圓餅／長條與預算／帳戶／證券區塊不刪；跟隨 App Dark／Light；匯出 PDF +「交易報表」→ `/analysis/print`） |
 | `/analysis/category` | `src/ui/views/AnalysisCategoryDetailPage.vue` | 分類分析明細（`loadAnalysisCategoryDetail` SQL 依分類／附加項目篩列，比例分母用類型合計） |
 | `/analysis/print` | `src/ui/views/AnalysisPrintPage.vue` | 交易報表匯出頁（期間客製化 all/year/month/day/custom、螢幕預覽、PDF／CSV、匯出成功後「開啟檔案」；`hideAppChrome` 全螢幕、頁內返回分析） |
 | `/transactions/search` | `src/ui/views/TransactionSearchPage.vue` | 交易搜尋（支援批量選取與批量編輯分類 / 備註 / 可報銷 / 預算 / 收支分析；SMB-155 後每頁 300 筆 SQL 分頁載入） |
@@ -72,7 +72,7 @@
 | `/welcome/intro` | `src/ui/views/PostSetupIntroPage.vue` | 初始設定後導覽頁（含特色功能、帳號登入、共同帳本、帳本同步、會員邀請碼；SMB-188 / v1.2.4 後新增共同帳本與帳本同步兩個步驟；SMB-215 / v1.2.27 後共同帳本步驟另外提供「恢復備份」與「帳本同步」快速按鈕；進階同步入口文案指向底部「功能 → 進階功能」） |
 | `/welcome` (隱含 route，由 `App.vue` shouldShowWelcomePage 控制) | `src/ui/views/WelcomePage.vue` | 初始 setup wizard 三步（語言 / 建立帳本 / 建立帳戶）；SMB-215 Restart / v1.3.1 後 step 2「建立帳本」在「已有共同帳本？登入並加入」secondary-link 旁新增「恢復備份 / 帳本同步」兩顆按鈕（僅 `!hasLedgers` 時顯示）。SMB-215 Restart / v1.3.2 後修正目的地：「恢復備份」→ `/settings/auto-backup`（自動備份頁，含 Google Drive / WebDAV 登入 + 立即還原；Tester 反饋「需要有自動備份的項目」）；「帳本同步」維持 `/settings/google-drive-ledger-sync`。`settings-auto-backup` + `settings-google-drive-ledger-sync` 兩 route 帶 `meta.allowWithoutSetup: true`，`settings-data-management` 的 v1.3.1 allowWithoutSetup 已還原 |
 | `/ai-auto-bookkeeping` | `src/ui/views/BookkeepingPage.vue` | AI 記帳模式（內嵌 `AiAutoBookkeepingPage.vue`；與快速新增同一記帳容器，顯示品牌頂欄、隱藏 BottomNav） |
-| `/assets` | `src/ui/views/assets.vue` | 資產總覽 |
+| `/assets` | `src/ui/views/assets.vue` | 資產總覽（v1.5.14 modern Habitat：大標題＋帳本切換＋金庫摘要色島；借出／借入／證券／信用卡格線與 testid 不變） |
 | `/assets/securities` | `src/ui/views/securities/SecuritiesListPage.vue` | 有價證券列表 |
 | `/credit-cards` | `src/ui/views/credit-cards/CreditCardsPage.vue` | 信用卡：頁內可新增（不掛資產母分類）＋還款／帳單；刷卡＝一般記帳選信用卡帳戶（createExpense→刷卡雙腿）；P0（smb301）：帳單／刷卡雙腿／還款 allocations；正式退款強制寫入當期 open posting（posted_at 箝制）；closed 批次硬拒絕；正式編輯僅允許純 occurred_at（入口=`updateManualTransaction`＋`findTransactionRecordById`；禁 occurredAt→postedAt 誤判；statement_id／posted_at／closing 不變；harness 實呼回歸）；額度警示＝實際卡債 |
 | `/assets/securities/:id` | `src/ui/views/securities/SecurityDetailPage.vue` | 有價證券明細／買賣 |

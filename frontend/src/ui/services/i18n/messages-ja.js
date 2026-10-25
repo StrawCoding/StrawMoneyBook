@@ -1052,6 +1052,8 @@ export const MESSAGES_JA = {
   'personalization.ui_layout': '画面スタイル',
   'personalization.layout_saved': '画面スタイルを保存しました',
   'home_page.habitat_hello': '今日の調子はどう',
+  'analysis_page.habitat_hello': 'この期間の収入と支出',
+  'assets_page.habitat_hello': '金庫と口座の一覧',
   'home_page.period_prev': '前の期間',
   'home_page.period_next': '次の期間',
   'home_page.pay_cycle_title': '{start}–{end}',
