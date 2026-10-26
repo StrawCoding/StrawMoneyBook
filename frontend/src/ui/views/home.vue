@@ -6,8 +6,8 @@
     hello-test-id="home-hello-block"
     root-class="home-modern"
   >
-    <template #header-extra>
-      <LedgerSwitcher class="home-hello-ledger ledger-switcher-wrap" data-testid="home-ledger-switcher" />
+    <template #toolbar>
+      <LedgerSwitcher class="home-toolbar-ledger ledger-switcher-wrap" data-testid="home-ledger-switcher" />
     </template>
 
     <header class="home-period-chrome" data-testid="home-period-chrome">
@@ -41,9 +41,6 @@
           ›
         </button>
       </div>
-      <button type="button" class="btn period-edit-btn" data-testid="home-period-sheet-trigger" @click="periodSheetOpen = true">
-        {{ t('home_page.period_filter', '調整期間') }}
-      </button>
     </header>
 
     <InputBottomSheet
@@ -173,10 +170,8 @@ function openQuickAdd() {
 .period-title-btn:hover {
   background: color-mix(in srgb, var(--primary) 8%, transparent);
 }
-.period-edit-btn {
-  justify-self: center;
-  font-size: 13px;
-  padding: 6px 14px;
+.home-toolbar-ledger {
+  max-width: min(52vw, 220px);
 }
 .period-arrow {
   appearance: none;
@@ -199,7 +194,6 @@ function openQuickAdd() {
   position: relative;
   z-index: 20;
   min-width: 0;
-  max-width: 100%;
 }
 .period-tabs {
   display: flex;

@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.26
+- 首頁：移除「調整期間」按鈕（點期間標題開 sheet）；帳本切換改到標題列右側 toolbar。
+
 ## v1.5.24
 - 現代首頁 Finch 向重設（階段 1）：預算／收支／資產／信用卡合併為 `HomeModernOverview` hero + 列表；期間 tab 改 bottom sheet「調整期間」；保留 FAB 與交易 feed。
 

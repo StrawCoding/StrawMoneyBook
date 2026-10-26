@@ -384,7 +384,7 @@ async function readHomeBlockState() {
     hasHomeView: Boolean(document.querySelector('[data-testid=home-view]')),
     hasPeriodFilter: Boolean(
       document.querySelector('[data-testid=home-period-filter]')
-      || document.querySelector('[data-testid=home-period-sheet-trigger]'),
+      || document.querySelector('[data-testid=home-period-title]'),
     ),
     hasAssetSummary: Boolean(document.querySelector('[data-testid=home-asset-summary]')),
     hasHelloBlock: Boolean(document.querySelector('[data-testid=home-hello-block]')),
@@ -691,7 +691,7 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
   const periodTiming = await evalPage(`async () => {
     let filter = document.querySelector('[data-testid=home-period-filter]')
     if (!filter) {
-      const open = document.querySelector('[data-testid=home-period-sheet-trigger]')
+      const open = document.querySelector('[data-testid=home-period-title]')
       if (open) {
         open.click()
         await new Promise((resolve) => setTimeout(resolve, 120))
@@ -2443,7 +2443,7 @@ async function assertDualUiLayout() {
     hasFab: Boolean(document.querySelector('[data-testid=home-fab]')),
     hasPeriod: Boolean(
       document.querySelector('[data-testid=home-period-filter]')
-      || document.querySelector('[data-testid=home-period-sheet-trigger]'),
+      || document.querySelector('[data-testid=home-period-title]'),
     ),
     isModernHome: Boolean(document.querySelector('.home-modern')),
   })`)
