@@ -1,34 +1,36 @@
 <template>
-  <HabitatPageShell root-class="intro-modern" test-id="post-setup-intro-view" stack-class="intro-root">
-    <article class="card intro-card">
-      <header class="hero-block">
-        <div class="hero-copy">
-          <p class="eyebrow">{{ t('post_setup_intro.eyebrow', '初始化完成') }}</p>
-          <h2>{{ t('post_setup_intro.title', '用 1 分鐘快速認識 StrawMoneyBook') }}</h2>
-          <p class="muted hero-desc">
-            {{ t('post_setup_intro.subtitle', '依序看完幾個重點功能，就能更快上手同步、登入與會員邀請。') }}
-          </p>
-        </div>
+  <HabitatPageShell
+    :title="t('post_setup_intro.title', '用 1 分鐘快速認識 StrawMoneyBook')"
+    :kicker="t('post_setup_intro.habitat_hello', '初始化完成 · 功能導覽')"
+    test-id="post-setup-intro-view"
+    hello-test-id="post-setup-intro-hello"
+    root-class="intro-modern"
+    stack-class="intro-root"
+  >
+    <section class="habitat-flow-section intro-progress-section">
+      <p class="muted intro-lead">
+        {{ t('post_setup_intro.subtitle', '依序看完幾個重點功能，就能更快上手同步、登入與會員邀請。') }}
+      </p>
+      <div
+        class="progress-strip"
+        :style="{ gridTemplateColumns: `repeat(${slides.length}, minmax(0, 1fr))` }"
+        aria-label="post-setup intro progress"
+      >
+        <button
+          v-for="(item, index) in slides"
+          :key="item.id"
+          type="button"
+          class="progress-dot"
+          :class="{ active: index === currentIndex }"
+          :aria-label="item.title"
+          @click="jumpTo(index)"
+        />
+      </div>
+    </section>
 
-        <div
-          class="progress-strip"
-          :style="{ gridTemplateColumns: `repeat(${slides.length}, minmax(0, 1fr))` }"
-          aria-label="post-setup intro progress"
-        >
-          <button
-            v-for="(item, index) in slides"
-            :key="item.id"
-            type="button"
-            class="progress-dot"
-            :class="{ active: index === currentIndex }"
-            :aria-label="item.title"
-            @click="jumpTo(index)"
-          />
-        </div>
-      </header>
-
+    <section class="habitat-flow-section intro-slide-section">
       <transition name="wizard-slide" mode="out-in">
-        <section :key="currentSlide.id" class="content-grid">
+        <div :key="currentSlide.id" class="content-grid">
           <div class="overview-panel">
             <div class="icon-badge">
               <font-awesome-icon :icon="currentSlide.icon" />
@@ -69,21 +71,21 @@
               </li>
             </ul>
           </div>
-        </section>
+        </div>
       </transition>
+    </section>
 
-      <footer class="intro-actions">
-        <button type="button" class="btn" :disabled="currentIndex === 0" @click="goPrev">
-          {{ t('common.back') }}
-        </button>
-        <button type="button" class="btn" @click="finishIntro">
-          {{ t('post_setup_intro.skip', '先開始使用') }}
-        </button>
-        <button type="button" class="btn primary" @click="goNext">
-          {{ isLastSlide ? t('post_setup_intro.finish', '完成並進入首頁') : t('welcome.next') }}
-        </button>
-      </footer>
-    </article>
+    <footer class="intro-actions">
+      <button type="button" class="btn" :disabled="currentIndex === 0" @click="goPrev">
+        {{ t('common.back') }}
+      </button>
+      <button type="button" class="btn" @click="finishIntro">
+        {{ t('post_setup_intro.skip', '先開始使用') }}
+      </button>
+      <button type="button" class="btn primary" @click="goNext">
+        {{ isLastSlide ? t('post_setup_intro.finish', '完成並進入首頁') : t('welcome.next') }}
+      </button>
+    </footer>
   </HabitatPageShell>
 </template>
 
@@ -257,41 +259,26 @@ onMounted(async () => {
 
 <style scoped>
 .intro-root {
-  min-height: 100%;
-  display: grid;
-  place-items: center;
-  padding: 18px;
-}
-.intro-card {
   width: min(760px, 100%);
-  padding: 20px;
+  max-width: 760px;
+  margin: 0 auto;
   display: grid;
-  gap: 18px;
-  border: 1px solid var(--field-border);
-  background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--primary) 14%, transparent), transparent 32%),
-    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--ok) 12%, transparent), transparent 28%),
-    var(--card);
+  gap: 4px;
+  align-content: start;
+  padding: 4px 0 16px;
 }
-.hero-block {
-  display: grid;
-  gap: 14px;
+.intro-progress-section {
+  gap: 10px;
 }
-.hero-copy {
-  display: grid;
-  gap: 8px;
-}
-.eyebrow {
+.intro-lead {
   margin: 0;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--primary);
+  font-size: 14px;
+  line-height: 1.55;
 }
-h2,
+.intro-slide-section {
+  min-width: 0;
+}
 h3,
-.hero-desc,
 .slide-step,
 .slide-desc,
 .highlight-label,
@@ -310,7 +297,7 @@ h3,
   cursor: pointer;
 }
 .progress-dot.active {
-  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--ok) 62%, var(--primary)));
+  background: var(--primary);
 }
 .content-grid {
   display: grid;
@@ -323,21 +310,21 @@ h3,
   gap: 12px;
 }
 .overview-panel {
-  padding: 18px;
-  border-radius: 20px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 14%, var(--card)), color-mix(in srgb, var(--surface-soft-accent) 82%, var(--card)));
-  border: 1px solid color-mix(in srgb, var(--primary) 14%, var(--field-border));
+  padding: 14px;
+  border-radius: var(--habitat-radius-island, 18px);
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
 }
 .icon-badge {
-  width: 52px;
-  height: 52px;
-  border-radius: 18px;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
-  font-size: 22px;
+  font-size: 20px;
   color: var(--primary);
-  background: color-mix(in srgb, var(--card) 42%, white);
-  box-shadow: var(--shadow-card);
+  background: color-mix(in srgb, var(--primary) 12%, var(--bg-soft));
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
 }
 .slide-step {
   font-size: 13px;
@@ -361,10 +348,10 @@ h3,
   justify-self: auto;
 }
 .highlight-card {
-  padding: 16px;
-  border-radius: 18px;
-  border: 1px solid var(--field-border);
-  background: var(--surface-soft-accent);
+  padding: 14px;
+  border-radius: var(--habitat-radius-tile, 16px);
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
   display: grid;
   gap: 8px;
 }
@@ -392,9 +379,9 @@ h3,
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
   padding: 12px 14px;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--card) 64%, var(--surface-soft-accent));
-  border: 1px solid var(--field-border);
+  border-radius: var(--habitat-radius-tile, 16px);
+  background: var(--bg-soft);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
 }
 .point-marker {
   width: 24px;
@@ -413,12 +400,6 @@ h3,
 }
 
 @media (max-width: 720px) {
-  .intro-root {
-    padding: 10px;
-  }
-  .intro-card {
-    padding: 16px;
-  }
   .content-grid {
     grid-template-columns: 1fr;
   }

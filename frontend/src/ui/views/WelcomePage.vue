@@ -1,29 +1,35 @@
 <template>
-  <HabitatPageShell root-class="welcome-modern" test-id="welcome-view" stack-class="welcome-root">
-    <article class="card welcome-card">
-      <header class="stack title-wrap">
-        <p class="step-text">{{ t('welcome.step') }} {{ step }} / 3</p>
-        <div class="step-dots" role="progressbar" :aria-valuenow="step" aria-valuemin="1" aria-valuemax="3">
-          <span
-            v-for="n in 3"
-            :key="n"
-            class="step-dot"
-            :class="{ active: n === step, done: n < step }"
-          />
-        </div>
-      </header>
+  <HabitatPageShell
+    :title="stepTitle"
+    :kicker="t('welcome.habitat_hello')"
+    test-id="welcome-view"
+    hello-test-id="welcome-hello-block"
+    root-class="welcome-modern"
+    stack-class="welcome-root"
+  >
+    <section class="habitat-flow-section welcome-progress-section">
+      <p class="step-text">{{ t('welcome.step') }} {{ step }} / 3</p>
+      <div class="step-dots" role="progressbar" :aria-valuenow="step" aria-valuemin="1" aria-valuemax="3">
+        <span
+          v-for="n in 3"
+          :key="n"
+          class="step-dot"
+          :class="{ active: n === step, done: n < step }"
+        />
+      </div>
+    </section>
 
+    <section class="habitat-flow-section welcome-step-section">
       <transition name="wizard-slide" mode="out-in">
-        <section v-if="step === 1" :key="'step-1'" class="step-panel">
+        <div v-if="step === 1" :key="'step-1'" class="step-panel">
           <img class="hero-logo" :src="BRAND_LOGO_URL" alt="StrawMoneyBook logo" />
-          <h2>{{ t('welcome.title') }}</h2>
           <p class="muted intro-copy">
             {{ t('welcome.subtitle') }}
           </p>
 
           <div class="stack language-block">
             <h3>{{ t('welcome.choose_language') }}</h3>
-            <div class="language-grid">
+            <div class="language-grid" role="group" :aria-label="t('welcome.choose_language')">
               <button
                 v-for="option in localeOptions"
                 :key="option.value"
@@ -37,10 +43,9 @@
               </button>
             </div>
           </div>
-        </section>
+        </div>
 
-        <section v-else-if="step === 2" :key="'step-2'" class="step-panel ledger-step">
-          <h2>{{ t('welcome.create_ledger') }}</h2>
+        <div v-else-if="step === 2" :key="'step-2'" class="step-panel ledger-step">
           <p class="muted intro-copy">
             {{
               hasLedgers
@@ -116,10 +121,9 @@
             <font-awesome-icon icon="fa-solid fa-clock-rotate-left" class="secondary-link-icon" />
             {{ t('welcome.local_recovery_action', '本機 recovery 還原') }}
           </RouterLink>
-        </section>
+        </div>
 
-        <section v-else :key="'step-3'" class="step-panel">
-          <h2>{{ t('welcome.create_account') }}</h2>
+        <div v-else :key="'step-3'" class="step-panel">
           <p class="muted intro-copy">
             {{
               hasAccounts
@@ -167,18 +171,18 @@
           >
             {{ creatingAccount ? t('welcome.creating') : t('welcome.create_account') }}
           </button>
-        </section>
+        </div>
       </transition>
+    </section>
 
-      <footer class="wizard-actions">
-        <button class="btn" :disabled="step === 1" @click="goPrevStep">
-          {{ t('welcome.back') }}
-        </button>
-        <button class="btn primary" :disabled="!canGoNext" @click="goNextStep">
-          {{ step === 3 ? t('welcome.start') : t('welcome.next') }}
-        </button>
-      </footer>
-    </article>
+    <footer class="wizard-actions">
+      <button class="btn" :disabled="step === 1" @click="goPrevStep">
+        {{ t('welcome.back') }}
+      </button>
+      <button class="btn primary" :disabled="!canGoNext" @click="goNextStep">
+        {{ step === 3 ? t('welcome.start') : t('welcome.next') }}
+      </button>
+    </footer>
   </HabitatPageShell>
 </template>
 
@@ -224,6 +228,12 @@ const canGoNext = computed(() => {
   if (step.value === 1) return true
   if (step.value === 2) return hasLedgers.value
   return hasAccounts.value
+})
+
+const stepTitle = computed(() => {
+  if (step.value === 2) return t('welcome.create_ledger')
+  if (step.value === 3) return t('welcome.create_account')
+  return t('welcome.title')
 })
 
 function applyEmptyRestoreHint(detail = {}) {
@@ -365,27 +375,21 @@ async function createFirstAccount() {
 
 <style scoped>
 .welcome-root {
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  display: grid;
-  align-items: center;
-  overflow: hidden;
-}
-
-.welcome-card {
-  padding: 20px;
-  display: grid;
-  gap: 16px;
   width: min(760px, 100%);
   max-width: 760px;
   margin: 0 auto;
-  max-height: 100%;
-  overflow: visible;
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: 4px 0 16px;
 }
 
-.title-wrap {
-  gap: 4px;
+.welcome-progress-section {
+  gap: 8px;
+}
+
+.welcome-step-section {
+  min-width: 0;
 }
 
 .step-text {
@@ -451,15 +455,14 @@ async function createFirstAccount() {
   justify-self: center;
 }
 
-h2,
 h3,
 p {
   margin: 0;
 }
 
-h2,
 .intro-copy {
   text-align: center;
+  line-height: 1.5;
 }
 
 .language-block {
@@ -484,8 +487,9 @@ h2,
 }
 
 .language-btn.active {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent) inset;
+  border-color: var(--habitat-selected-line, var(--primary));
+  background: var(--habitat-selected-bg, color-mix(in srgb, var(--primary) 12%, var(--bg-soft)));
+  color: var(--text);
 }
 
 .field {

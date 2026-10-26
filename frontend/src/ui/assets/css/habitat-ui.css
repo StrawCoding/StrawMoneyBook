@@ -505,11 +505,13 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
 }
 
-[data-ui-layout='modern'] .welcome-modern .welcome-card,
-[data-ui-layout='modern'] .intro-modern .intro-card {
-  border-radius: var(--habitat-radius-island);
-  border: 1px solid var(--border);
-  box-shadow: none;
+[data-ui-layout='modern'] .welcome-modern .language-btn {
+  border-radius: var(--habitat-radius-tile);
+}
+
+[data-ui-layout='modern'] .welcome-modern .wizard-actions,
+[data-ui-layout='modern'] .intro-modern .intro-actions {
+  padding-top: 4px;
 }
 
 /* PeriodChrome sheet + chrome (shared home / analysis) */
@@ -575,7 +577,9 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 
 [data-ui-layout='modern'] .habitat-flow-section,
 [data-ui-layout='modern'] .analysis-modern .analysis-flow-section,
-[data-ui-layout='modern'] .assets-modern .assets-flow-section {
+[data-ui-layout='modern'] .assets-modern .assets-flow-section,
+[data-ui-layout='modern'] .welcome-modern .habitat-flow-section,
+[data-ui-layout='modern'] .intro-modern .habitat-flow-section {
   display: grid;
   gap: 10px;
   min-width: 0;
@@ -585,7 +589,9 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 
 [data-ui-layout='modern'] .habitat-stack > .habitat-flow-section:last-child,
 [data-ui-layout='modern'] .analysis-modern .analysis-flow-section:last-child,
-[data-ui-layout='modern'] .assets-modern .assets-flow-section:last-child {
+[data-ui-layout='modern'] .assets-modern .assets-flow-section:last-child,
+[data-ui-layout='modern'] .welcome-modern .welcome-step-section,
+[data-ui-layout='modern'] .intro-modern .intro-slide-section {
   border-bottom: 0;
 }
 

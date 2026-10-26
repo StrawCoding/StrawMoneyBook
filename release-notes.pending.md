@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.48
+- 初始化／導覽頁對齊現代 Habitat：`/welcome` 與 `/welcome/intro` 改 flow 區塊 + 大標題 shell，移除外層 card 與導覽頁漸層光暈。
+
 ## v1.5.47
 - 介面風格預設現代：`index.html` 首屏即 `data-ui-layout=modern`；個人化選項「現代」排前（已選傳統者不強制改）。
 
