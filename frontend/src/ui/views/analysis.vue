@@ -173,25 +173,22 @@
     </section>
 
     <section class="analysis-flow-section" data-testid="analysis-securities-section">
-      <header class="row">
+      <header class="row analysis-section-head">
         <h3>{{ t('analysis_page.securities_title') }}</h3>
-        <div class="header-metrics">
-          <span class="count-chip">{{ t('analysis_page.items_count', { count: securityStore.summary.count }) }}</span>
-          <MoneyText :value-minor="securityStore.summary.totalDisplayValueMinor" />
-        </div>
+        <span class="count-chip">{{ t('analysis_page.items_count', { count: securityStore.summary.count }) }}</span>
       </header>
-      <div class="securities-summary-grid">
-        <div>
-          <small class="muted">{{ displayValueLabel }}</small>
-          <MoneyText :value-minor="securityStore.summary.totalDisplayValueMinor" />
+      <div class="securities-summary-grid" role="list">
+        <div class="securities-metric-row" role="listitem">
+          <small class="muted metric-label">{{ displayValueLabel }}</small>
+          <MoneyText class="metric-value" :value-minor="securityStore.summary.totalDisplayValueMinor" />
         </div>
-        <div>
-          <small class="muted">{{ t('securities_page.invested') }}</small>
-          <MoneyText :value-minor="securityStore.summary.totalInvestedMinor" />
+        <div class="securities-metric-row" role="listitem">
+          <small class="muted metric-label">{{ t('securities_page.invested') }}</small>
+          <MoneyText class="metric-value" :value-minor="securityStore.summary.totalInvestedMinor" />
         </div>
-        <div>
-          <small class="muted">{{ t('securities_page.delta') }}</small>
-          <MoneyText :value-minor="securityStore.summary.totalDeltaMinor" />
+        <div class="securities-metric-row" role="listitem">
+          <small class="muted metric-label">{{ t('securities_page.delta') }}</small>
+          <MoneyText class="metric-value" :value-minor="securityStore.summary.totalDeltaMinor" />
         </div>
       </div>
       <ul v-if="securityAllocationRows.length" class="securities-alloc-list">
@@ -1016,10 +1013,30 @@ h2, h3 {
   min-width: 0;
 }
 
-.header-metrics,
 .budget-stats {
   justify-content: space-between;
   width: 100%;
+}
+
+.analysis-flow-section > header.row {
+  flex-wrap: nowrap;
+}
+
+.analysis-flow-section > header.row h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.analysis-flow-section > header.row .header-metrics,
+.analysis-section-head .count-chip {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.analysis-flow-section > header.row .header-metrics {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 8px;
 }
 
 .picker-wrap {

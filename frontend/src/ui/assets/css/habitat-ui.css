@@ -518,6 +518,26 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   background: var(--bg-soft);
 }
 
+[data-ui-layout='modern'] .analysis-modern .iconized-chart-pair .pair-head {
+  flex-wrap: nowrap;
+}
+
+[data-ui-layout='modern'] .analysis-modern .iconized-chart-pair .pair-head h4 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  [data-ui-layout='modern'] .analysis-modern .iconized-chart-pair .pair-layout {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  [data-ui-layout='modern'] .analysis-modern .iconized-chart-pair .pie {
+    width: min(200px, 72vw);
+  }
+}
+
 [data-ui-layout='modern'] .analysis-modern .bar-chart-list {
   gap: 0;
 }
@@ -531,21 +551,43 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 }
 
 /* Analysis flow sections: metrics / budget / securities — no nested bordered mini-cards */
-[data-ui-layout='modern'] .analysis-modern .securities-summary-grid {
-  gap: 8px 12px;
-  margin-top: 6px;
+[data-ui-layout='modern'] .analysis-modern .analysis-flow-section > header.row.analysis-section-head {
+  align-items: center;
+  gap: 10px;
 }
 
-[data-ui-layout='modern'] .analysis-modern .securities-summary-grid > div {
+[data-ui-layout='modern'] .analysis-modern .securities-summary-grid {
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin-top: 4px;
+}
+
+[data-ui-layout='modern'] .analysis-modern .securities-summary-grid .securities-metric-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   border: 0;
   border-radius: 0;
-  padding: 4px 0;
+  padding: 11px 0;
   background: transparent;
-  gap: 2px;
 }
 
-[data-ui-layout='modern'] .analysis-modern .securities-summary-grid > div small {
-  font-size: 12px;
+[data-ui-layout='modern'] .analysis-modern .securities-summary-grid .securities-metric-row + .securities-metric-row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}
+
+[data-ui-layout='modern'] .analysis-modern .securities-metric-row .metric-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+[data-ui-layout='modern'] .analysis-modern .securities-metric-row .metric-value {
+  flex: 0 0 auto;
+  text-align: right;
+  font-weight: 650;
 }
 
 [data-ui-layout='modern'] .analysis-modern .budget-grid {
