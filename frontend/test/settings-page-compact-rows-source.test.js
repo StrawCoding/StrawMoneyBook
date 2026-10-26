@@ -44,4 +44,7 @@ test('SMB-254: settings scoped list rows are tightened but keep min tap height',
   const itemLinkBlock = extractBlock(settingsPageSource, '.item-link {')
   assert.match(itemLinkBlock, /min-height:\s*44px/)
   assert.match(itemLinkBlock, /border-bottom:/)
+  assert.match(itemLinkBlock, /align-items:\s*flex-start/)
+  assert.doesNotMatch(settingsPageSource, /\.item-link:last-child[\s\S]*border-bottom:\s*0/)
+  assert.doesNotMatch(settingsPageSource, /settings-flow-group \+ \.settings-flow-group[\s\S]*border-top:/)
 })

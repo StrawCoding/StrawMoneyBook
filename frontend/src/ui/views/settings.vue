@@ -158,17 +158,19 @@ onUnmounted(() => {
 }
 
 .settings-account-section .settings-account-row {
-  border-bottom: 0;
   margin-bottom: 0;
 }
 
 .settings-account-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   text-decoration: none;
   color: var(--text);
-  padding: 10px 4px 12px;
+  padding: 12px 4px;
+  min-height: 44px;
+  box-sizing: border-box;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
 }
 
 .account-avatar {
@@ -208,6 +210,7 @@ onUnmounted(() => {
   color: var(--muted);
   font-size: 14px;
   flex-shrink: 0;
+  margin-top: 4px;
 }
 
 .settings-flow-group {
@@ -217,25 +220,21 @@ onUnmounted(() => {
 }
 
 .settings-flow-group + .settings-flow-group {
-  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
-  margin-top: 4px;
-  padding-top: 8px;
+  margin-top: 14px;
+  padding-top: 0;
 }
 
 .item-link {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  padding: 10px 4px;
+  padding: 12px 4px;
   min-height: 44px;
+  box-sizing: border-box;
   text-decoration: none;
   color: var(--text);
   font-weight: 650;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-}
-
-.settings-flow-group .item-link:last-child {
-  border-bottom: 0;
 }
 
 .item-copy {
@@ -260,5 +259,7 @@ onUnmounted(() => {
   width: 18px;
   flex-shrink: 0;
   color: var(--muted);
+  margin-top: 3px;
 }
+
 </style>

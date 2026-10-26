@@ -150,8 +150,12 @@
   border-bottom: var(--apple-separator);
 }
 
+[data-ui-layout='traditional'] .settings-page .setting-group .item-link {
+  align-items: flex-start;
+}
+
 [data-ui-layout='traditional'] .settings-page .setting-group .item-link:last-child {
-  border-bottom: none;
+  border-bottom: var(--apple-separator);
 }
 
 [data-ui-layout='traditional'] .settings-page .setting-group .item-link::after {
