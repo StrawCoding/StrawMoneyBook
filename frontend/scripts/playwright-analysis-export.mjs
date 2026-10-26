@@ -257,15 +257,13 @@ async function navigateToAnalysis() {
 async function assertAnalysisIconsVisible() {
   const state = await evalPage(`() => {
     const icons = [...document.querySelectorAll('[data-testid=analysis-income-charts] svg, [data-testid=analysis-expense-charts] svg, [data-testid=analysis-income-charts] .swatch-icon, [data-testid=analysis-expense-charts] .swatch-icon, .icon-swatch svg')]
-    const pieLegend = document.querySelector('[data-testid=analysis-pie-legend], [data-testid=analysis-expense-charts] .pie-legend, [data-testid=analysis-income-charts] .pie-legend')
-    const barList = document.querySelector('[data-testid=analysis-bar-list], [data-testid=analysis-expense-charts] .bar-chart-list, [data-testid=analysis-income-charts] .bar-chart-list')
+    const breakdownList = document.querySelector('[data-testid=analysis-breakdown-list], [data-testid=analysis-income-charts] [data-testid=analysis-breakdown-list]')
     return {
       path: window.location.pathname,
       hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
       hasBigNumbers: Boolean(document.querySelector('[data-testid=analysis-big-numbers]')),
       iconCount: icons.length,
-      hasPieLegend: Boolean(pieLegend),
-      hasBarList: Boolean(barList),
+      hasBreakdownList: Boolean(breakdownList),
       hasIncomeOrExpense: Boolean(document.querySelector('[data-testid=analysis-income-section], [data-testid=analysis-expense-section]')),
       hasDirectExport: Boolean(document.querySelector('[data-testid=analysis-export-direct-btn]')),
       hasPrintLink: Boolean(document.querySelector('[data-testid=analysis-print-link]')),
@@ -277,7 +275,7 @@ async function assertAnalysisIconsVisible() {
   assert.equal(state.hasIncomeOrExpense, true, JSON.stringify(state))
   assert.equal(state.hasDirectExport, true, `main export must be direct button: ${JSON.stringify(state)}`)
   assert.equal(state.hasPrintLink, true, `report page entry must remain reachable: ${JSON.stringify(state)}`)
-  assert.ok(state.iconCount > 0 || state.hasPieLegend || state.hasBarList, JSON.stringify(state))
+  assert.ok(state.iconCount > 0 || state.hasBreakdownList, JSON.stringify(state))
   return state
 }
 
@@ -305,9 +303,8 @@ async function assertAnalysisPageDarkTheme() {
     const page = document.querySelector('[data-testid=analysis-page]')
     const panel = document.querySelector('[data-testid=analysis-page] .card.panel, [data-testid=analysis-big-numbers]')
     const heading = document.querySelector('[data-testid=analysis-page] h2')
-    const piePanel = document.querySelector('[data-testid=analysis-income-charts] .pie-panel, [data-testid=analysis-expense-charts] .pie-panel')
-    const pieHole = document.querySelector('[data-testid=analysis-income-charts] .pie-hole, [data-testid=analysis-expense-charts] .pie-hole')
-    const track = document.querySelector('[data-testid=analysis-income-charts] .bar-chart-track, [data-testid=analysis-expense-charts] .bar-chart-track, .budget-track, .time-bar-track')
+    const breakdownRow = document.querySelector('[data-testid=analysis-income-charts] .breakdown-row, [data-testid=analysis-expense-charts] .breakdown-row')
+    const track = document.querySelector('.budget-track')
     const muted = document.querySelector('[data-testid=analysis-income-charts] .muted, [data-testid=analysis-expense-charts] .muted, [data-testid=analysis-page] .count-chip')
     return {
       path: window.location.pathname,
@@ -318,8 +315,7 @@ async function assertAnalysisPageDarkTheme() {
       pageBg: page ? getComputedStyle(page).backgroundColor : '',
       panelBg: panel ? getComputedStyle(panel).backgroundColor : '',
       headingColor: heading ? getComputedStyle(heading).color : '',
-      piePanelBg: piePanel ? getComputedStyle(piePanel).backgroundColor : '',
-      pieHoleBg: pieHole ? getComputedStyle(pieHole).backgroundColor : '',
+      breakdownRowBg: breakdownRow ? getComputedStyle(breakdownRow).backgroundColor : '',
       trackBg: track ? getComputedStyle(track).backgroundColor : '',
       mutedColor: muted ? getComputedStyle(muted).color : '',
     }
@@ -330,18 +326,10 @@ async function assertAnalysisPageDarkTheme() {
 
   const panelLum = relativeLuminance(parseRgbChannels(state.panelBg))
   const headingLum = relativeLuminance(parseRgbChannels(state.headingColor))
-  const piePanelLum = relativeLuminance(parseRgbChannels(state.piePanelBg))
-  const pieHoleLum = relativeLuminance(parseRgbChannels(state.pieHoleBg))
   const mutedLum = relativeLuminance(parseRgbChannels(state.mutedColor))
 
   assert.ok(panelLum != null && panelLum <= 0.45, `analysis panel must be dark: ${JSON.stringify(state)} lum=${panelLum}`)
   assert.ok(headingLum != null && headingLum >= 0.55, `analysis heading must be light-on-dark: ${JSON.stringify(state)} lum=${headingLum}`)
-  if (piePanelLum != null) {
-    assert.ok(piePanelLum <= 0.55, `chart panel must follow dark theme: ${JSON.stringify(state)} lum=${piePanelLum}`)
-  }
-  if (pieHoleLum != null) {
-    assert.ok(pieHoleLum <= 0.55, `pie hole must not stay hard-coded white: ${JSON.stringify(state)} lum=${pieHoleLum}`)
-  }
   if (mutedLum != null) {
     assert.ok(mutedLum >= 0.25, `muted text must remain readable on dark: ${JSON.stringify(state)} lum=${mutedLum}`)
   }

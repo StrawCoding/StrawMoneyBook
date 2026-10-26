@@ -382,6 +382,7 @@ keytool -list -v -alias <your_alias> -keystore <your_release_keystore.jks>
 - 使用後端發的一次性 nonce
 - `auth_nonces` 消耗後即失效
 - refresh token reuse：grace（預設 60s，`SHARED_LEDGER_REFRESH_ROTATION_GRACE_MS`）內重放剛 rotated 的 token 會走到目前 family head 再 rotate，不踢登入；過後才 family revoke。revoke 寫入須在 transaction commit 後再丟 `refresh_token_reuse_detected`，避免 better-sqlite3 throw 回滾。；剛 rotate 成功後 60 秒內重放舊 token 視為遺失回應重試，沿 replacement chain 再 rotate，不踢 session
+- cookie 模式（含 Android native backup）：`extractRefreshTokenFromRequest` 有 cookie 時優先 cookie，body 的 native 備份僅在 cookie 缺失時使用；前端 `/api/auth/refresh` 預設不帶 body refresh，400 時才 fallback localStorage 一次
 
 ### CSRF
 

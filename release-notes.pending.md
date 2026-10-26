@@ -2,6 +2,10 @@
 
 ---
 
+## v1.5.51
+- 分析頁：移除圓餅／長條圖區塊與時間軸長條圖；收支／帳戶改為可點選的分類 breakdown 列表（PDF 匯出同樣改列表）。
+- 會員登入：cookie 模式 refresh 以 HttpOnly cookie 為準，Android localStorage 備份 token 不再覆蓋 cookie，降低「refresh token 已重複使用」誤觸 family 註銷。
+
 ## v1.5.50
 - 帳號登入頁：登入／註冊 segment 以 `primary`+`active` 顯示目前模式（modern Habitat 選取色）；補 `aria-selected` 與 testid。
 

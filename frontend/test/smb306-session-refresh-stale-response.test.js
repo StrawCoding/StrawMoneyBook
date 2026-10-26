@@ -22,13 +22,22 @@ test('stale refresh responses are discarded when a newer generation is in flight
 test('shared-ledger backend increments refresh generation and ignores stale bodies', () => {
   assert.match(backendSource, /let refreshGeneration = 0/)
   assert.match(backendSource, /shouldApplyRefreshGeneration/)
-  assert.match(backendSource, /const generation = \+\+refreshGeneration/)
+  assert.match(backendSource, /const activeGeneration = generation \?\? \+\+refreshGeneration/)
   assert.match(
     backendSource,
-    /if \(!shouldApplyRefreshGeneration\(generation, refreshGeneration\)\) \{\s*return readSession\(\)/,
+    /if \(!shouldApplyRefreshGeneration\(activeGeneration, refreshGeneration\)\) \{\s*return readSession\(\)/,
   )
   assert.match(backendSource, /function clearAuthTokens[\s\S]*refreshGeneration \+= 1/)
   assert.match(backendSource, /function clearSession[\s\S]*refreshGeneration \+= 1/)
+})
+
+test('cookie-mode refresh omits stale native body token unless cookie is missing', () => {
+  assert.match(backendSource, /function buildRefreshRequestBody/)
+  assert.match(
+    backendSource,
+    /shouldSendAuthCredentials\(\) && !useNativeRefreshBodyFallback[\s\S]*return \{\}/,
+  )
+  assert.match(backendSource, /useNativeRefreshBodyFallback: true/)
 })
 
 test('rotated refresh replay walks the live family head inside grace instead of family-revoke', () => {

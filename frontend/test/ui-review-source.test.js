@@ -88,7 +88,7 @@ test('home budget summary uses a higher swipe threshold to reduce accidental pag
   assert.match(homeBudgetSummarySource, /const SWIPE_THRESHOLD_PX = 72/)
 })
 
-test('analysis page makes pie charts interactive with responsive sizing', () => {
+test('analysis page uses interactive breakdown lists without pie or bar chart panels', () => {
   const chartPairSource = readFileSync(
     resolve(import.meta.dirname, '../src/ui/components/analysis/AnalysisIconizedChartPair.vue'),
     'utf8',
@@ -96,8 +96,10 @@ test('analysis page makes pie charts interactive with responsive sizing', () => 
   assert.match(analysisPageSource, /AnalysisIconizedChartPair/)
   assert.match(analysisPageSource, /@select="\(item\) => openCategoryBreakdownDetail\(item, 'income'\)"/)
   assert.match(analysisPageSource, /@select="openAccountBreakdownDetail"/)
-  assert.match(chartPairSource, /class="pie-button"/)
-  assert.match(chartPairSource, /width: min\(220px, 100%\);/)
+  assert.doesNotMatch(analysisPageSource, /analysis-time-section/)
+  assert.match(chartPairSource, /data-testid="analysis-breakdown-list"/)
+  assert.doesNotMatch(chartPairSource, /pie-panel/)
+  assert.doesNotMatch(chartPairSource, /bar-chart-track/)
   assert.match(chartPairSource, /interactive/)
 })
 

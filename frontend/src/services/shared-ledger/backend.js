@@ -286,21 +286,46 @@ function shouldPreserveSessionOnRefreshFailure(error) {
   )
 }
 
-async function performRefreshRequest() {
-  const generation = ++refreshGeneration
+function buildRefreshRequestBody({ useNativeRefreshBodyFallback = false } = {}) {
+  if (shouldSendAuthCredentials() && !useNativeRefreshBodyFallback) {
+    return {}
+  }
   const session = readSession()
   const refreshToken = String(session?.refreshToken ?? getStoredRefreshToken() ?? '').trim()
-  const body = refreshToken ? { refreshToken } : {}
+  return refreshToken ? { refreshToken } : {}
+}
 
-  const data = await requestJson('/api/auth/refresh', {
-    method: 'POST',
-    body,
-    auth: false,
-    useAuthStorage: true,
-  })
+async function performRefreshRequest({ useNativeRefreshBodyFallback = false, generation = null } = {}) {
+  const activeGeneration = generation ?? ++refreshGeneration
+  const session = readSession()
+  const body = buildRefreshRequestBody({ useNativeRefreshBodyFallback })
+
+  let data
+  try {
+    data = await requestJson('/api/auth/refresh', {
+      method: 'POST',
+      body,
+      auth: false,
+      useAuthStorage: true,
+    })
+  } catch (error) {
+    const code = String(error?.code ?? '').trim()
+    if (
+      !useNativeRefreshBodyFallback
+      && shouldSendAuthCredentials()
+      && (code === 'refresh_token_required' || Number(error?.status ?? 0) === 400)
+      && Boolean(String(session?.refreshToken ?? getStoredRefreshToken() ?? '').trim())
+    ) {
+      return performRefreshRequest({
+        useNativeRefreshBodyFallback: true,
+        generation: activeGeneration,
+      })
+    }
+    throw error
+  }
   // A newer refresh (or logout / needs-reauth clear) started while this one
   // was in flight — applying the stale body would revive an already-rotated token.
-  if (!shouldApplyRefreshGeneration(generation, refreshGeneration)) {
+  if (!shouldApplyRefreshGeneration(activeGeneration, refreshGeneration)) {
     return readSession()
   }
   return writeSession(buildAuthResponseSession(data, session))

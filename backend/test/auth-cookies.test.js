@@ -26,7 +26,7 @@ test('parseCookieHeader decodes refresh token cookie values', () => {
   assert.equal(cookies.other, 'value')
 })
 
-test('extractRefreshTokenFromRequest prefers body over cookie', () => {
+test('extractRefreshTokenFromRequest prefers body over cookie in legacy body mode', () => {
   const token = extractRefreshTokenFromRequest({
     headers: {
       cookie: `${REFRESH_TOKEN_COOKIE_NAME}=cookie-token`,
@@ -36,6 +36,31 @@ test('extractRefreshTokenFromRequest prefers body over cookie', () => {
   })
 
   assert.equal(token, 'body-token')
+})
+
+test('extractRefreshTokenFromRequest prefers cookie over stale native body backup', () => {
+  const token = extractRefreshTokenFromRequest({
+    headers: {
+      [AUTH_STORAGE_HEADER]: AUTH_STORAGE_COOKIE_MODE,
+      cookie: `${REFRESH_TOKEN_COOKIE_NAME}=cookie-token`,
+    },
+  }, {
+    refreshToken: 'stale-body-token',
+  })
+
+  assert.equal(token, 'cookie-token')
+})
+
+test('extractRefreshTokenFromRequest cookie mode falls back to body when cookie missing', () => {
+  const token = extractRefreshTokenFromRequest({
+    headers: {
+      [AUTH_STORAGE_HEADER]: AUTH_STORAGE_COOKIE_MODE,
+    },
+  }, {
+    refreshToken: 'native-backup-token',
+  })
+
+  assert.equal(token, 'native-backup-token')
 })
 
 test('extractRefreshTokenFromRequest falls back to HttpOnly cookie', () => {

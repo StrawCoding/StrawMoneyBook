@@ -73,9 +73,16 @@ export function usesNativeClientAuthBackup(req) {
 
 export function extractRefreshTokenFromRequest(req, body = {}) {
   const fromBody = String(body?.refreshToken ?? body?.refresh_token ?? '').trim()
-  if (fromBody) return fromBody
   const cookies = parseCookieHeader(req)
-  return String(cookies[REFRESH_TOKEN_COOKIE_NAME] ?? '').trim()
+  const fromCookie = String(cookies[REFRESH_TOKEN_COOKIE_NAME] ?? '').trim()
+  // Cookie mode: HttpOnly cookie is authoritative. Native localStorage backup in
+  // the JSON body can lag behind rotation and must not override a fresh cookie.
+  if (usesCookieAuthStorage(req)) {
+    if (fromCookie) return fromCookie
+    return fromBody
+  }
+  if (fromBody) return fromBody
+  return fromCookie
 }
 
 export function buildRefreshTokenCookie(refreshToken, {
