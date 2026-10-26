@@ -12,7 +12,7 @@
       <RouterLink class="text-link manage-link" to="/assets/accounts">{{ t('assets_page.manage') }}</RouterLink>
     </template>
 
-    <article class="card panel vault-summary-card">
+    <section class="assets-block vault-summary-card">
       <header class="row vault-summary-head">
         <h3>{{ t('assets_page.summary_title') }}</h3>
       </header>
@@ -81,59 +81,61 @@
           </button>
         </li>
       </ul>
-    </article>
+    </section>
 
-    <article class="card panel accounts-island">
+    <section class="assets-accounts-section accounts-island">
       <header class="row accounts-island-head">
-        <h3>{{ t('assets_page.asset_accounts') }}</h3>
+        <h3 class="assets-section-heading">{{ t('assets_page.asset_accounts') }}</h3>
       </header>
 
       <ul class="group-list">
         <li v-for="group in groupSummaries" :key="group.id" class="group-item">
-          <button
-            class="row group-head"
-            :class="{ open: isGroupExpanded(group.id) }"
-            type="button"
-            @click="toggleGroup(group.id)"
-          >
-            <h3 class="group-title">{{ group.name }}</h3>
-            <span class="group-total-wrap">
-              <MoneyText class="group-total" :value-minor="group.totalMinor" :currency="group.currencyCode" />
-              <font-awesome-icon
-                icon="fa-solid fa-chevron-down"
-                class="group-chevron"
-                :class="{ open: isGroupExpanded(group.id) }"
-              />
-            </span>
-          </button>
+          <div class="assets-group-panel">
+            <button
+              class="row group-head"
+              :class="{ open: isGroupExpanded(group.id) }"
+              type="button"
+              @click="toggleGroup(group.id)"
+            >
+              <h3 class="group-title">{{ group.name }}</h3>
+              <span class="group-total-wrap">
+                <MoneyText class="group-total" :value-minor="group.totalMinor" :currency="group.currencyCode" />
+                <font-awesome-icon
+                  icon="fa-solid fa-chevron-down"
+                  class="group-chevron"
+                  :class="{ open: isGroupExpanded(group.id) }"
+                />
+              </span>
+            </button>
 
-          <ul v-if="isGroupExpanded(group.id)" class="account-list">
-            <li v-for="account in accountsByGroup(group.id)" :key="account.id">
-              <RouterLink
-                :to="`/accounts/${account.id}`"
-                class="account-row"
-                :class="{ excluded: !isAccountIncludedInAssets(account), 'group-stat-excluded': !isAccountIncludedInGroupStatistics(account) }"
-              >
-                <span class="account-left">
-                  <span class="account-icon-wrap">
-                    <font-awesome-icon v-if="account.icon" :icon="account.icon" class="account-icon" />
+            <ul v-if="isGroupExpanded(group.id)" class="account-list">
+              <li v-for="account in accountsByGroup(group.id)" :key="account.id">
+                <RouterLink
+                  :to="`/accounts/${account.id}`"
+                  class="account-row"
+                  :class="{ excluded: !isAccountIncludedInAssets(account), 'group-stat-excluded': !isAccountIncludedInGroupStatistics(account) }"
+                >
+                  <span class="account-left">
+                    <span class="account-icon-wrap">
+                      <font-awesome-icon v-if="account.icon" :icon="account.icon" class="account-icon" />
+                    </span>
+                    <span class="account-text">
+                      <span class="account-name">{{ account.name }}</span>
+                      <small v-if="advanceMinorOf(account.id) > 0" class="muted account-advance">
+                        {{ t('assets_page.advance_label') }} <MoneyText :value-minor="advanceMinorOf(account.id)" />
+                      </small>
+                    </span>
                   </span>
-                  <span class="account-text">
-                    <span class="account-name">{{ account.name }}</span>
-                    <small v-if="advanceMinorOf(account.id) > 0" class="muted account-advance">
-                      {{ t('assets_page.advance_label') }} <MoneyText :value-minor="advanceMinorOf(account.id)" />
-                    </small>
+                  <span class="account-right">
+                    <MoneyText class="account-balance" :value-minor="balanceOf(account.id)" :currency="account.currency_code" />
                   </span>
-                </span>
-                <span class="account-right">
-                  <MoneyText class="account-balance" :value-minor="balanceOf(account.id)" :currency="account.currency_code" />
-                </span>
-              </RouterLink>
-            </li>
-          </ul>
+                </RouterLink>
+              </li>
+            </ul>
+          </div>
         </li>
       </ul>
-    </article>
+    </section>
 
     <AppDialog
       :open="totalAssetsInfoOpen"
@@ -434,8 +436,23 @@ function persistExpandedGroupState() {
   padding: 6px 0;
 }
 
-.panel {
-  padding: 14px;
+.assets-block {
+  border: 1px solid var(--border);
+  border-radius: var(--habitat-radius-island, 18px);
+  background: var(--card);
+  padding: 12px 14px 0;
+  display: grid;
+  gap: 10px;
+}
+
+.assets-accounts-section {
+  display: grid;
+  gap: 10px;
+}
+
+.assets-section-heading {
+  font-size: 15px;
+  font-weight: 700;
 }
 
 h2,
@@ -472,6 +489,7 @@ h3 {
 
 .vault-metrics {
   margin-top: 10px;
+  padding-bottom: 2px;
   display: grid;
   gap: 8px;
 }
@@ -483,8 +501,8 @@ h3 {
 }
 
 .summary-item {
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 0;
+  border-radius: var(--habitat-radius-tile, 14px);
   padding: 10px 12px;
   display: grid;
   gap: 6px;
@@ -492,22 +510,22 @@ h3 {
 }
 
 .summary-total {
-  border: 0;
   background: color-mix(in srgb, var(--secondary) 12%, var(--card) 88%);
 }
 
-.summary-stat {
-  border: 0;
+.vault-split .summary-stat {
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
 }
 
 .vault-drill-list {
   list-style: none;
-  margin: 10px 0 0;
+  margin: 4px -14px 0;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--habitat-radius-island, 18px) var(--habitat-radius-island, 18px);
   overflow: hidden;
-  background: var(--card);
+  background: var(--bg-soft);
 }
 
 .vault-drill-list li + li {
@@ -580,15 +598,20 @@ h3 {
 }
 
 .group-list {
-  margin-top: 12px;
+  margin-top: 4px;
   display: grid;
-  gap: 16px;
+  gap: 10px;
 }
 
 .group-item {
-  border: 0;
-  border-radius: 0;
-  padding: 0;
+  list-style: none;
+}
+
+.assets-group-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--habitat-radius-tile, 14px);
+  overflow: hidden;
+  background: var(--card);
 }
 
 .group-head {
@@ -596,18 +619,18 @@ h3 {
   border: 0;
   background: transparent;
   color: inherit;
-  padding: 0;
+  padding: 12px 14px;
   cursor: pointer;
   align-items: center;
   margin-bottom: 0;
 }
 
 .group-head.open {
-  margin-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
 }
 
 .group-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
 }
 
@@ -634,9 +657,10 @@ h3 {
 }
 
 .account-list {
-  margin-top: 0;
+  margin: 0;
   display: grid;
-  gap: 12px;
+  gap: 0;
+  background: var(--bg-soft);
 }
 
 .account-row {
@@ -644,19 +668,24 @@ h3 {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  border-radius: var(--habitat-radius-tile, 14px);
-  background: var(--card);
-  border: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  border: 0;
   box-shadow: none;
-  padding: 14px 14px;
+  padding: 12px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+}
+.account-list li:last-child .account-row {
+  border-bottom: 0;
 }
 .account-row.excluded {
-  background: color-mix(in srgb, var(--card) 92%, var(--muted) 8%);
-  border-color: color-mix(in srgb, var(--muted) 28%, var(--border) 72%);
   opacity: 0.88;
 }
 .account-row.group-stat-excluded {
   border-bottom-style: dashed;
+}
+.account-row:active {
+  background: color-mix(in srgb, var(--bg-soft) 70%, var(--primary) 6%);
 }
 
 a {
@@ -679,10 +708,10 @@ a {
 }
 
 .account-name {
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.15;
   color: var(--text);
-  font-weight: 700;
+  font-weight: 650;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -697,8 +726,8 @@ a {
 }
 
 .account-balance {
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 650;
   line-height: 1.1;
 }
 .account-row.excluded .account-balance {

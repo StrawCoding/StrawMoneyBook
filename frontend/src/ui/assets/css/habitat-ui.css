@@ -278,8 +278,7 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   background: var(--card);
 }
 
-[data-ui-layout='modern'] .assets-modern .vault-summary-card,
-[data-ui-layout='modern'] .assets-modern .accounts-island {
+[data-ui-layout='modern'] .assets-modern .assets-block {
   border-radius: var(--habitat-radius-island);
   border: 1px solid var(--border);
   box-shadow: none;
@@ -291,22 +290,33 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   background: var(--zone-vault-bg);
 }
 
-[data-ui-layout='modern'] .assets-modern .summary-stat {
+[data-ui-layout='modern'] .assets-modern .vault-split .summary-stat {
   border-radius: var(--habitat-radius-tile);
   border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
   background: var(--bg-soft);
 }
 
 [data-ui-layout='modern'] .assets-modern .vault-drill-list {
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--habitat-radius-island) var(--habitat-radius-island);
+  background: var(--bg-soft);
+}
+
+[data-ui-layout='modern'] .assets-modern .assets-group-panel {
   border-radius: var(--habitat-radius-tile);
   border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: none;
+}
+
+[data-ui-layout='modern'] .assets-modern .account-list {
   background: var(--bg-soft);
 }
 
 [data-ui-layout='modern'] .assets-modern .account-row {
-  border-radius: var(--habitat-radius-tile);
-  border: 1px solid var(--border);
-  background: var(--bg-soft);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
 }
 
