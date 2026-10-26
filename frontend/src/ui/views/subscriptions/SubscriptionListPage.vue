@@ -6,7 +6,7 @@
     back-to="/features"
   >
 
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <header class="row panel-head">
         <h3>{{ t('subscription_page.title') }}</h3>
         <button class="btn primary" :disabled="!activeLedgerId" @click="openCreateDialog">
@@ -14,9 +14,9 @@
         </button>
       </header>
       <p class="muted subtitle">{{ t('subscription_page.subtitle') }}</p>
-    </article>
+    </section>
 
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <header class="row">
         <h3>{{ t('subscription_page.list_title') }}</h3>
         <small v-if="isFreePlan" class="muted">{{ t('subscription_page.list_hint') }}</small>
@@ -65,7 +65,7 @@
       </ul>
 
       <p v-else class="muted">{{ t('subscription_page.empty') }}</p>
-    </article>
+    </section>
 
     <AppDialog
       :open="dialogOpen"

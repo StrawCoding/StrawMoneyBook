@@ -311,23 +311,6 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-radius: var(--habitat-radius-tile);
 }
 
-[data-ui-layout='modern'] .assets-modern .assets-flow-section {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-  padding: 4px 0 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-}
-
-[data-ui-layout='modern'] .assets-modern .assets-flow-section:last-child {
-  border-bottom: 0;
-}
-
-[data-ui-layout='modern'] .assets-modern .assets-flow-section > header h3 {
-  font-size: 15px;
-  font-weight: 700;
-}
-
 [data-ui-layout='modern'] .assets-modern .vault-drill-list li + li {
   border-top-color: var(--border);
 }
@@ -589,7 +572,9 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-bottom: 1px solid var(--border);
 }
 
-[data-ui-layout='modern'] .analysis-modern .analysis-flow-section {
+[data-ui-layout='modern'] .habitat-flow-section,
+[data-ui-layout='modern'] .analysis-modern .analysis-flow-section,
+[data-ui-layout='modern'] .assets-modern .assets-flow-section {
   display: grid;
   gap: 10px;
   min-width: 0;
@@ -597,11 +582,53 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 
-[data-ui-layout='modern'] .analysis-modern .analysis-flow-section:last-child {
+[data-ui-layout='modern'] .habitat-stack > .habitat-flow-section:last-child,
+[data-ui-layout='modern'] .analysis-modern .analysis-flow-section:last-child,
+[data-ui-layout='modern'] .assets-modern .assets-flow-section:last-child {
   border-bottom: 0;
 }
 
-[data-ui-layout='modern'] .analysis-modern .analysis-flow-section > header h3 {
+[data-ui-layout='modern'] .habitat-flow-section > header h3,
+[data-ui-layout='modern'] .analysis-modern .analysis-flow-section > header h3,
+[data-ui-layout='modern'] .assets-modern .assets-flow-section > header h3 {
   font-size: 15px;
   font-weight: 700;
+}
+
+/* Subpages still on card.panel markup: flatten on modern (reference hubs excluded). */
+[data-ui-layout='modern'] .habitat-page:not(.home-modern):not(.analysis-modern):not(.feature-list-page)
+  .habitat-stack:not(.budget-display-page):not(.budget-settings-page):not(.settings-page):not(.assets-page)
+  > .card.panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 0 12px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+[data-ui-layout='modern'] .habitat-page:not(.home-modern):not(.analysis-modern):not(.feature-list-page)
+  .habitat-stack:not(.budget-display-page):not(.budget-settings-page):not(.settings-page):not(.assets-page)
+  > .card.panel:last-child {
+  border-bottom: 0;
+  padding-bottom: 4px;
+}
+
+[data-ui-layout='modern'] .habitat-page:not(.home-modern):not(.analysis-modern):not(.feature-list-page)
+  .habitat-stack:not(.budget-display-page):not(.budget-settings-page):not(.settings-page):not(.assets-page)
+  > .card.panel > header h3 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+[data-ui-layout='modern'] .habitat-page .habitat-stack {
+  gap: 12px;
+}
+
+[data-ui-layout='modern'] .settings-subpage.habitat-stack > .card.panel .group-list .item-link,
+[data-ui-layout='modern'] .settings-subpage.habitat-stack > .card.panel .list-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
 }

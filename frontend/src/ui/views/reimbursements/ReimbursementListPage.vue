@@ -6,7 +6,7 @@
     back-to="/features"
   >
 
-    <article class="card panel summary">
+    <section class="habitat-flow-section summary">
       <div class="row">
         <span class="muted">{{ t('reimbursement.unsettled_amount') }}</span>
         <MoneyText :value-minor="reimbursementStore.pendingTotalMinor" />
@@ -24,9 +24,9 @@
         <RouterLink class="btn" :to="{ name: 'reimbursement-advance-usage-manage' }">{{ t('reimbursement.offset_records') }}</RouterLink>
         <button class="btn" @click="openAdvanceSheet">{{ t('reimbursement.add_advance') }}</button>
       </div>
-    </article>
+    </section>
 
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <div class="segment-pills tab-row">
         <button class="btn" :class="{ primary: tab === 'pending' }" @click="tab = 'pending'">{{ t('assets_page.unreimbursed') }}</button>
         <button class="btn" :class="{ primary: tab === 'reimbursed' }" @click="tab = 'reimbursed'">{{ t('reimbursement.already_reimbursed') }}</button>
@@ -112,7 +112,7 @@
 
         <li v-if="!activeList.length" class="muted">{{ t('reimbursement.empty_tab') }}</li>
       </ul>
-    </article>
+    </section>
 
     <teleport to="body">
       <transition name="overlay-fade">
@@ -172,7 +172,7 @@
                 <button class="btn action-btn" @click="closeActionSheet">{{ t('common.cancel') }}</button>
               </div>
             </div>
-          </article>
+          </section>
         </section>
       </transition>
     </teleport>

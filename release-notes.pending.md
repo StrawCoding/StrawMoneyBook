@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.44
+- Modern 子頁／功能列表：共用 `habitat-flow-section` + CSS 扁平化 card（基準頁不動）；借貸／報銷／請款／存錢筒等 10 列表頁已換 markup。
+
 ## v1.5.43
 - 全站返回統一：左側 icon（chevron + `back-btn` 40×40），無障礙用 `common.back`；Habitat `back-to`／`#back` 槽位。
 

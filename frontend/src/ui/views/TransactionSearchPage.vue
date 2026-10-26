@@ -6,7 +6,7 @@
     hello-test-id="transaction-search-hello"
     stack-class="transaction-search-page"
   >
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <input
         v-model.trim="keyword"
         class="input"
@@ -26,9 +26,9 @@
           </label>
         </div>
       </details>
-    </article>
+    </section>
 
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <header class="row panel-head">
         <small class="muted">{{ t('transaction_search.results_count', { count: searchTotal }) }}</small>
         <button class="btn" :class="{ active: batchMode }" @click="toggleBatchMode">
@@ -96,7 +96,7 @@
           {{ t('common.next_page') }}
         </button>
       </nav>
-    </article>
+    </section>
 
     <InputBottomSheet
       :open="batchEditSheetOpen"

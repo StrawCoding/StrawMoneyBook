@@ -5,7 +5,7 @@
     test-id="calendar-view"
     hello-test-id="calendar-hello"
   >
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <div class="row month-head">
         <button class="btn mini-btn" @click="goPrevMonth">‹</button>
         <strong>{{ monthLabel }}</strong>
@@ -30,9 +30,9 @@
           <span v-if="cell.dateKey && cell.expenseMinor > 0" class="day-amount expense">-{{ formatMinor(cell.expenseMinor) }}</span>
         </button>
       </div>
-    </article>
+    </section>
 
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <header class="row">
         <h3>{{ t('calendar_page.day_tx', { date: selectedDateKey || '-' }) }}</h3>
         <div v-if="selectedDayIncomeMinor > 0 || selectedDayExpenseMinor > 0" class="day-total">
@@ -76,7 +76,7 @@
         </li>
         <li v-if="selectedDayTransactions.length === 0" class="muted">{{ t('calendar_page.empty_day') }}</li>
       </ul>
-    </article>
+    </section>
   </HabitatPageShell>
 </template>
 

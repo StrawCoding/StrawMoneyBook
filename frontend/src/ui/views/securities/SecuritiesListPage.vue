@@ -8,7 +8,7 @@
     stack-class="securities-page"
   >
 
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <header class="row panel-head">
         <h3>{{ t('securities_page.summary_title') }}</h3>
         <button
@@ -55,9 +55,9 @@
           <MoneyText :value-minor="securityStore.summary.includedMarketValueMinor" />
         </div>
       </div>
-    </article>
+    </section>
 
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <ul v-if="securityStore.items.length" class="sec-list">
         <li v-for="item in securityStore.items" :key="item.id">
           <button type="button" class="sec-row" @click="openDetail(item.id)">
@@ -78,7 +78,7 @@
         </li>
       </ul>
       <p v-else class="muted">{{ t('securities_page.empty') }}</p>
-    </article>
+    </section>
 
     <InputBottomSheet
       :open="createOpen"

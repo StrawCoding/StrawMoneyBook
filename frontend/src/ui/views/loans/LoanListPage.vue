@@ -9,7 +9,7 @@
       <button type="button" class="btn primary" @click="openCreateSheet">{{ t('loans.add') }}</button>
     </template>
 
-    <article class="card panel summary">
+    <section class="habitat-flow-section summary">
       <header class="row panel-head">
         <h3>{{ t('loans.summary_title', '概覽') }}</h3>
       </header>
@@ -25,9 +25,9 @@
         <span class="muted">{{ t('loans.payable') }}</span>
         <MoneyText :value-minor="loanStore.summary.totalPayable" />
       </div>
-    </article>
+    </section>
 
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <div class="row list-header">
         <div class="segment-pills tab-row">
           <button type="button" class="btn tab-btn" :class="{ primary: tab === 'lend' }" @click="tab = 'lend'">{{ t('loans.lend') }}</button>
@@ -52,7 +52,7 @@
         </li>
       </ul>
       <p v-else class="muted">{{ showFinished ? t('loans.empty_finished') : t('loans.empty_active') }}</p>
-    </article>
+    </section>
 
     <InputBottomSheet
       :open="createOpen"

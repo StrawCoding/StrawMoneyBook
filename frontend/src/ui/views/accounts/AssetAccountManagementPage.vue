@@ -6,7 +6,7 @@
     back-to="/assets"
   >
 
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <header class="row">
         <h3>{{ t('common.asset_accounts') }}</h3>
         <div class="header-actions">
@@ -74,7 +74,7 @@
           </transition>
         </li>
       </ul>
-    </article>
+    </section>
 
     <AppDialog
       :open="groupDialogOpen"

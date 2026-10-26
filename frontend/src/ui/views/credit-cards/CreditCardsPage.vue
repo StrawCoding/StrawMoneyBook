@@ -8,7 +8,7 @@
     stack-class="credit-cards-page"
   >
 
-    <article class="card panel" data-testid="credit-home-card-toggle">
+    <section class="habitat-flow-section" data-testid="credit-home-card-toggle">
       <div class="row panel-head">
         <div>
           <h3>{{ t('credit_cards_page.home_card') }}</h3>
@@ -24,7 +24,7 @@
           <span>{{ creditStore.homeCardEnabled ? t('common.on') : t('common.off') }}</span>
         </label>
       </div>
-    </article>
+    </section>
 
     <article v-if="creditStore.reminders.length" class="card panel warn" data-testid="credit-reminders">
       <h3>{{ t('credit_cards_page.reminders') }}</h3>
@@ -36,9 +36,9 @@
           <MoneyText :value-minor="item.remainingMinor" />
         </li>
       </ul>
-    </article>
+    </section>
 
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <header class="row panel-head">
         <h3>{{ t('credit_cards_page.cards') }}</h3>
         <div class="header-actions">
@@ -93,7 +93,7 @@
           </div>
         </div>
       </div>
-    </article>
+    </section>
 
     <InputBottomSheet
       :open="addOpen"

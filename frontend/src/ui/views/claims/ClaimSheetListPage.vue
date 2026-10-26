@@ -6,7 +6,7 @@
     back-to="/features"
   >
 
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <header class="row panel-head">
         <h3>{{ t('claim_sheet.title') }}</h3>
         <button class="btn primary" data-testid="claim-create-open" @click="openCreateSheet">{{ t('claim_sheet.create') }}</button>
@@ -26,9 +26,9 @@
           <MoneyText :value-minor="reimbursementStore.pendingTotalMinor" />
         </div>
       </div>
-    </article>
+    </section>
 
-    <article class="card panel">
+    <section class="habitat-flow-section">
       <div class="row claim-tabs">
         <button
           type="button"
@@ -87,7 +87,7 @@
 
         <li v-if="!visibleClaims.length" class="muted">{{ t(visibleClaimEmptyKey) }}</li>
       </ul>
-    </article>
+    </section>
 
     <InputBottomSheet
       :open="isCreateOpen"
