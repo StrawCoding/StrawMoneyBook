@@ -12,12 +12,10 @@
       <RouterLink class="text-link manage-link" to="/assets/accounts">{{ t('assets_page.manage') }}</RouterLink>
     </template>
 
-    <section class="assets-block vault-summary-card">
-      <header class="row vault-summary-head">
-        <h3>{{ t('assets_page.summary_title') }}</h3>
-      </header>
+    <section class="assets-vault-section vault-summary-card">
+      <h3 class="assets-section-heading">{{ t('assets_page.summary_title') }}</h3>
       <div class="vault-metrics">
-        <div class="summary-item summary-total">
+        <div class="summary-item summary-total assets-item-card">
           <div class="row summary-title-row">
             <small class="muted">{{ t('assets_page.total_assets') }}</small>
             <button
@@ -33,11 +31,11 @@
           <MoneyText :value-minor="totalAssetMinor" />
         </div>
         <div class="vault-split">
-          <div class="summary-item summary-stat">
+          <div class="summary-item summary-stat assets-item-card">
             <small class="muted">{{ t('assets_page.disposable') }}</small>
             <MoneyText :value-minor="disposableMinor" />
           </div>
-          <div class="summary-item summary-stat">
+          <div class="summary-item summary-stat assets-item-card">
             <small class="muted">{{ t('assets_page.liability') }}</small>
             <MoneyText :value-minor="liabilityMinor" />
           </div>
@@ -45,7 +43,7 @@
       </div>
       <ul class="vault-drill-list" data-testid="assets-drill-list">
         <li>
-          <button type="button" class="vault-drill-row" data-testid="assets-lend-entry" @click="goLoans('lend')">
+          <button type="button" class="vault-drill-row assets-item-card" data-testid="assets-lend-entry" @click="goLoans('lend')">
             <span class="vault-drill-label">{{ t('assets_page.lend') }}</span>
             <span class="vault-drill-value">
               <MoneyText :value-minor="loanStore.summary.totalReceivable" />
@@ -54,7 +52,7 @@
           </button>
         </li>
         <li>
-          <button type="button" class="vault-drill-row" data-testid="assets-borrow-entry" @click="goLoans('borrow')">
+          <button type="button" class="vault-drill-row assets-item-card" data-testid="assets-borrow-entry" @click="goLoans('borrow')">
             <span class="vault-drill-label">{{ t('assets_page.borrow') }}</span>
             <span class="vault-drill-value">
               <MoneyText :value-minor="loanStore.summary.totalPayable" />
@@ -63,7 +61,7 @@
           </button>
         </li>
         <li>
-          <button type="button" class="vault-drill-row" data-testid="assets-securities-entry" @click="goSecurities">
+          <button type="button" class="vault-drill-row assets-item-card" data-testid="assets-securities-entry" @click="goSecurities">
             <span class="vault-drill-label">{{ t('assets_page.securities') }}</span>
             <span class="vault-drill-value">
               <MoneyText data-testid="assets-securities-amount" :value-minor="securitiesDisplayMinor" />
@@ -72,7 +70,7 @@
           </button>
         </li>
         <li>
-          <button type="button" class="vault-drill-row" data-testid="assets-credit-entry" @click="goCreditCards">
+          <button type="button" class="vault-drill-row assets-item-card" data-testid="assets-credit-entry" @click="goCreditCards">
             <span class="vault-drill-label">{{ t('assets_page.credit_cards') }}</span>
             <span class="vault-drill-value">
               <MoneyText :value-minor="creditDebtMinor" />
@@ -90,49 +88,47 @@
 
       <ul class="group-list">
         <li v-for="group in groupSummaries" :key="group.id" class="group-item">
-          <div class="assets-group-panel">
-            <button
-              class="row group-head"
-              :class="{ open: isGroupExpanded(group.id) }"
-              type="button"
-              @click="toggleGroup(group.id)"
-            >
-              <h3 class="group-title">{{ group.name }}</h3>
-              <span class="group-total-wrap">
-                <MoneyText class="group-total" :value-minor="group.totalMinor" :currency="group.currencyCode" />
-                <font-awesome-icon
-                  icon="fa-solid fa-chevron-down"
-                  class="group-chevron"
-                  :class="{ open: isGroupExpanded(group.id) }"
-                />
-              </span>
-            </button>
+          <button
+            class="row group-head assets-item-card"
+            :class="{ open: isGroupExpanded(group.id) }"
+            type="button"
+            @click="toggleGroup(group.id)"
+          >
+            <h3 class="group-title">{{ group.name }}</h3>
+            <span class="group-total-wrap">
+              <MoneyText class="group-total" :value-minor="group.totalMinor" :currency="group.currencyCode" />
+              <font-awesome-icon
+                icon="fa-solid fa-chevron-down"
+                class="group-chevron"
+                :class="{ open: isGroupExpanded(group.id) }"
+              />
+            </span>
+          </button>
 
-            <ul v-if="isGroupExpanded(group.id)" class="account-list">
-              <li v-for="account in accountsByGroup(group.id)" :key="account.id">
-                <RouterLink
-                  :to="`/accounts/${account.id}`"
-                  class="account-row"
-                  :class="{ excluded: !isAccountIncludedInAssets(account), 'group-stat-excluded': !isAccountIncludedInGroupStatistics(account) }"
-                >
-                  <span class="account-left">
-                    <span class="account-icon-wrap">
-                      <font-awesome-icon v-if="account.icon" :icon="account.icon" class="account-icon" />
-                    </span>
-                    <span class="account-text">
-                      <span class="account-name">{{ account.name }}</span>
-                      <small v-if="advanceMinorOf(account.id) > 0" class="muted account-advance">
-                        {{ t('assets_page.advance_label') }} <MoneyText :value-minor="advanceMinorOf(account.id)" />
-                      </small>
-                    </span>
+          <ul v-if="isGroupExpanded(group.id)" class="account-list">
+            <li v-for="account in accountsByGroup(group.id)" :key="account.id">
+              <RouterLink
+                :to="`/accounts/${account.id}`"
+                class="account-row assets-item-card"
+                :class="{ excluded: !isAccountIncludedInAssets(account), 'group-stat-excluded': !isAccountIncludedInGroupStatistics(account) }"
+              >
+                <span class="account-left">
+                  <span class="account-icon-wrap">
+                    <font-awesome-icon v-if="account.icon" :icon="account.icon" class="account-icon" />
                   </span>
-                  <span class="account-right">
-                    <MoneyText class="account-balance" :value-minor="balanceOf(account.id)" :currency="account.currency_code" />
+                  <span class="account-text">
+                    <span class="account-name">{{ account.name }}</span>
+                    <small v-if="advanceMinorOf(account.id) > 0" class="muted account-advance">
+                      {{ t('assets_page.advance_label') }} <MoneyText :value-minor="advanceMinorOf(account.id)" />
+                    </small>
                   </span>
-                </RouterLink>
-              </li>
-            </ul>
-          </div>
+                </span>
+                <span class="account-right">
+                  <MoneyText class="account-balance" :value-minor="balanceOf(account.id)" :currency="account.currency_code" />
+                </span>
+              </RouterLink>
+            </li>
+          </ul>
         </li>
       </ul>
     </section>
@@ -436,23 +432,29 @@ function persistExpandedGroupState() {
   padding: 6px 0;
 }
 
-.assets-block {
-  border: 1px solid var(--border);
-  border-radius: var(--habitat-radius-island, 18px);
-  background: var(--card);
-  padding: 12px 14px 0;
-  display: grid;
-  gap: 10px;
-}
-
+.assets-vault-section,
 .assets-accounts-section {
   display: grid;
   gap: 10px;
 }
 
+.assets-accounts-section {
+  margin-top: 4px;
+}
+
 .assets-section-heading {
-  font-size: 15px;
+  margin: 0 2px;
+  font-size: 13px;
   font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted, color-mix(in srgb, var(--text) 62%, transparent));
+}
+
+.assets-item-card {
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: var(--habitat-radius-tile, 14px);
+  background: var(--card);
+  box-shadow: none;
 }
 
 h2,
@@ -475,9 +477,8 @@ h3 {
   z-index: 30;
 }
 
-.vault-summary-head,
 .accounts-island-head {
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .group-list,
@@ -488,8 +489,6 @@ h3 {
 }
 
 .vault-metrics {
-  margin-top: 10px;
-  padding-bottom: 2px;
   display: grid;
   gap: 8px;
 }
@@ -501,35 +500,25 @@ h3 {
 }
 
 .summary-item {
-  border: 0;
-  border-radius: var(--habitat-radius-tile, 14px);
   padding: 10px 12px;
   display: grid;
   gap: 6px;
-  background: var(--bg-soft);
 }
 
 .summary-total {
   background: color-mix(in srgb, var(--secondary) 12%, var(--card) 88%);
 }
 
-.vault-split .summary-stat {
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-}
-
 .vault-drill-list {
   list-style: none;
-  margin: 4px -14px 0;
+  margin: 0;
   padding: 0;
-  border: 0;
-  border-top: 1px solid var(--border);
-  border-radius: 0 0 var(--habitat-radius-island, 18px) var(--habitat-radius-island, 18px);
-  overflow: hidden;
-  background: var(--bg-soft);
+  display: grid;
+  gap: 8px;
 }
 
 .vault-drill-list li + li {
-  border-top: 1px solid var(--border);
+  border-top: 0;
 }
 
 .vault-drill-row {
@@ -598,35 +587,26 @@ h3 {
 }
 
 .group-list {
-  margin-top: 4px;
+  margin-top: 0;
   display: grid;
-  gap: 10px;
+  gap: 14px;
 }
 
 .group-item {
   list-style: none;
-}
-
-.assets-group-panel {
-  border: 1px solid var(--border);
-  border-radius: var(--habitat-radius-tile, 14px);
-  overflow: hidden;
-  background: var(--card);
+  display: grid;
+  gap: 8px;
 }
 
 .group-head {
   width: 100%;
-  border: 0;
-  background: transparent;
   color: inherit;
   padding: 12px 14px;
   cursor: pointer;
   align-items: center;
   margin-bottom: 0;
-}
-
-.group-head.open {
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  text-align: left;
+  font: inherit;
 }
 
 .group-title {
@@ -659,8 +639,7 @@ h3 {
 .account-list {
   margin: 0;
   display: grid;
-  gap: 0;
-  background: var(--bg-soft);
+  gap: 8px;
 }
 
 .account-row {
@@ -668,24 +647,17 @@ h3 {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  border-radius: 0;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
   padding: 12px 14px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-}
-.account-list li:last-child .account-row {
-  border-bottom: 0;
 }
 .account-row.excluded {
   opacity: 0.88;
+  background: color-mix(in srgb, var(--card) 92%, var(--muted) 8%);
 }
 .account-row.group-stat-excluded {
-  border-bottom-style: dashed;
+  border-style: dashed;
 }
 .account-row:active {
-  background: color-mix(in srgb, var(--bg-soft) 70%, var(--primary) 6%);
+  background: color-mix(in srgb, var(--card) 82%, var(--primary) 8%);
 }
 
 a {

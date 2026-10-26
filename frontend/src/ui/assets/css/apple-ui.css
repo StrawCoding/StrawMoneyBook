@@ -248,8 +248,7 @@
 
 [data-ui-layout='traditional'] .analysis-page > .card.panel,
 [data-ui-layout='traditional'] .export-page > .card.panel,
-[data-ui-layout='traditional'] .assets-page > .card.panel,
-[data-ui-layout='traditional'] .assets-page > .assets-block {
+[data-ui-layout='traditional'] .assets-page > .card.panel {
   border-radius: var(--apple-inset-radius);
 }
 
