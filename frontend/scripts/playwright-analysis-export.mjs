@@ -257,14 +257,14 @@ async function navigateToAnalysis() {
 async function assertAnalysisIconsVisible() {
   const state = await evalPage(`() => {
     const icons = [...document.querySelectorAll('[data-testid=analysis-income-charts] svg, [data-testid=analysis-expense-charts] svg, [data-testid=analysis-income-charts] .swatch-icon, [data-testid=analysis-expense-charts] .swatch-icon, .icon-swatch svg')]
-    const pieLegend = document.querySelector('[data-testid=analysis-pie-legend], [data-testid=analysis-expense-charts] .pie-legend, [data-testid=analysis-income-charts] .pie-legend')
+    const pieChart = document.querySelector('[data-testid=analysis-income-charts] .pie, [data-testid=analysis-expense-charts] .pie')
     const barList = document.querySelector('[data-testid=analysis-bar-list], [data-testid=analysis-expense-charts] .bar-chart-list, [data-testid=analysis-income-charts] .bar-chart-list')
     return {
       path: window.location.pathname,
       hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
       hasBigNumbers: Boolean(document.querySelector('[data-testid=analysis-big-numbers]')),
       iconCount: icons.length,
-      hasPieLegend: Boolean(pieLegend),
+      hasPieChart: Boolean(pieChart),
       hasBarList: Boolean(barList),
       hasIncomeOrExpense: Boolean(document.querySelector('[data-testid=analysis-income-section], [data-testid=analysis-expense-section]')),
       hasDirectExport: Boolean(document.querySelector('[data-testid=analysis-export-direct-btn]')),
@@ -277,7 +277,7 @@ async function assertAnalysisIconsVisible() {
   assert.equal(state.hasIncomeOrExpense, true, JSON.stringify(state))
   assert.equal(state.hasDirectExport, true, `main export must be direct button: ${JSON.stringify(state)}`)
   assert.equal(state.hasPrintLink, true, `report page entry must remain reachable: ${JSON.stringify(state)}`)
-  assert.ok(state.iconCount > 0 || state.hasPieLegend || state.hasBarList, JSON.stringify(state))
+  assert.ok(state.iconCount > 0 || state.hasPieChart || state.hasBarList, JSON.stringify(state))
   return state
 }
 

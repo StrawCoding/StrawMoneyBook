@@ -12,7 +12,6 @@
 
     <div class="pair-layout">
       <div class="pie-panel">
-        <div class="chart-title">{{ pieTitle }}</div>
         <button
           type="button"
           class="pie-button"
@@ -28,28 +27,9 @@
             </div>
           </div>
         </button>
-
-        <ul class="pie-legend" data-testid="analysis-pie-legend">
-          <li
-            v-for="item in items"
-            :key="`legend-${item.id}`"
-            class="pie-legend-item"
-          >
-            <span class="icon-swatch" :style="{ background: item.color }">
-              <font-awesome-icon
-                v-if="item.icon"
-                :icon="item.icon"
-                class="swatch-icon"
-              />
-            </span>
-            <span class="legend-name">{{ item.name }}</span>
-            <span class="legend-percent">{{ item.percent }}%</span>
-          </li>
-        </ul>
       </div>
 
       <div class="bar-panel">
-        <div class="chart-title">{{ barTitle }}</div>
         <ul class="bar-chart-list" data-testid="analysis-bar-list">
           <li v-for="item in barRows" :key="`bar-${item.id}`">
             <component
@@ -116,8 +96,6 @@ const pieStyle = computed(() => buildPieStyle(props.items))
 const barRows = computed(() => buildBarRows(props.items))
 const primaryItem = computed(() => props.items[0] ?? null)
 const countLabel = computed(() => t('analysis_page.items_count', { count: props.count }))
-const pieTitle = computed(() => props.pieTitle || t('analysis_page.chart.pie'))
-const barTitle = computed(() => props.barTitle || t('analysis_page.chart.bar'))
 
 function itemCountLabel(count) {
   return t('analysis_page.items_count', { count })
@@ -160,12 +138,6 @@ function emitSelect(item) {
   min-width: 0;
 }
 
-.chart-title {
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 10px;
-}
-
 .pie-button {
   display: block;
   width: 100%;
@@ -199,16 +171,14 @@ function emitSelect(item) {
   padding: 12px;
 }
 
-.pie-legend,
 .bar-chart-list {
-  margin: 12px 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
   display: grid;
   gap: 8px;
 }
 
-.pie-legend-item,
 .bar-chart-label,
 .bar-chart-head,
 .bar-chart-stats {
@@ -217,7 +187,6 @@ function emitSelect(item) {
   gap: 8px;
 }
 
-.pie-legend-item,
 .bar-chart-head,
 .bar-chart-stats {
   justify-content: space-between;
@@ -244,7 +213,6 @@ function emitSelect(item) {
   height: 12px;
 }
 
-.legend-name,
 .bar-chart-name {
   min-width: 0;
   overflow: hidden;
@@ -253,7 +221,6 @@ function emitSelect(item) {
   flex: 1 1 auto;
 }
 
-.legend-percent,
 .bar-chart-percent {
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;

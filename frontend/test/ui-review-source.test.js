@@ -103,6 +103,8 @@ test('analysis page keeps pie/bar charts with flat panels (no nested card blocks
   assert.match(analysisPageSource, /data-testid="analysis-time-section"/)
   assert.match(chartPairSource, /class="pie-button"/)
   assert.match(chartPairSource, /data-testid="analysis-bar-list"/)
+  assert.doesNotMatch(chartPairSource, /analysis-pie-legend/)
+  assert.doesNotMatch(chartPairSource, /chart-title/)
   assert.match(chartPairSource, /bar-chart-track/)
   assert.match(chartPairSource, /background: transparent/)
   assert.match(habitatCssSource, /\.analysis-modern \.iconized-chart-pair \.pie-panel/)
