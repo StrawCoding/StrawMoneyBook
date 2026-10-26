@@ -152,8 +152,13 @@
   border-left: 3px solid var(--secondary);
 }
 
-[data-ui-layout='modern'] .home-modern [data-testid='home-transaction-feed'] {
-  background: var(--card);
+[data-ui-layout='modern'] .home-modern .home-tx-feed {
+  background: transparent;
+}
+
+[data-ui-layout='modern'] .home-modern .home-tx-feed .tx-item {
+  border-radius: 0;
+  box-shadow: none;
 }
 
 [data-ui-layout='modern'] .bottom-nav.modern {

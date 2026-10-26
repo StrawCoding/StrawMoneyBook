@@ -1,16 +1,20 @@
 <template>
-  <article class="card summary-card">
-    <header class="row summary-head">
-      <div class="title-row">
-        <h3>{{ t('home_tx.title') }}</h3>
-        <RouterLink class="btn icon-btn" to="/transactions/search">
-          <font-awesome-icon icon="fa-solid fa-magnifying-glass" />
-        </RouterLink>
-        <RouterLink class="btn icon-btn" to="/transactions/calendar">
-          <font-awesome-icon icon="fa-solid fa-calendar" />
-        </RouterLink>
+  <section class="home-tx-feed">
+    <header class="home-tx-head">
+      <div class="home-tx-title-row">
+        <h3 class="home-tx-title">{{ t('home_tx.title') }}</h3>
+        <div class="home-tx-tools">
+          <RouterLink class="home-tx-tool" to="/transactions/search" :aria-label="t('feature_list.search_transactions')">
+            <font-awesome-icon icon="fa-solid fa-magnifying-glass" />
+          </RouterLink>
+          <RouterLink class="home-tx-tool" to="/transactions/calendar" :aria-label="t('calendar_page.title')">
+            <font-awesome-icon icon="fa-solid fa-calendar" />
+          </RouterLink>
+        </div>
       </div>
-      <span class="badge tx-count-badge">{{ t('home_tx.badge_count', { month: monthLabel, count: transactionStore.homeTotal }) }}</span>
+      <p class="muted home-tx-meta">
+        {{ t('home_tx.badge_count', { month: monthLabel, count: transactionStore.homeTotal }) }}
+      </p>
     </header>
 
     <ul class="tx-list">
@@ -87,20 +91,20 @@
       </li>
     </ul>
 
-    <nav v-if="transactionStore.homeTotal > 0" class="pagination-bar" aria-label="首頁交易分頁">
-      <button class="btn" :disabled="!canGoPreviousHomePage" @click="goPreviousHomePage">
+    <nav v-if="transactionStore.homeTotal > 0" class="home-tx-pagination" aria-label="首頁交易分頁">
+      <button type="button" class="home-tx-page-btn" :disabled="!canGoPreviousHomePage" @click="goPreviousHomePage">
         {{ t('common.previous_page') }}
       </button>
-      <span class="muted page-status">
+      <span class="muted home-tx-page-status">
         {{ t('common.page_status', { page: transactionStore.homePage, totalPages: transactionStore.homeTotalPages }) }}
         ・{{ t('common.page_range', { start: homePageStart, end: homePageEnd, total: transactionStore.homeTotal }) }}
       </span>
-      <button class="btn" :disabled="!canGoNextHomePage" @click="goNextHomePage">
+      <button type="button" class="home-tx-page-btn" :disabled="!canGoNextHomePage" @click="goNextHomePage">
         {{ t('common.next_page') }}
       </button>
     </nav>
 
-  </article>
+  </section>
 </template>
 
 <script setup>
@@ -341,51 +345,85 @@ function openEdit(tx) {
 }
 </script>
 
-<style scoped>.summary-card {
-  padding: 14px
-}
-h3 {
-  margin: 0;
-  font-size: 16px
-}
-.summary-head {
-  align-items: flex-start;
-  flex-wrap: wrap
-}
-.title-row {
-  display: flex;
-  align-items: center;
+<style scoped>
+.home-tx-feed {
+  display: grid;
   gap: 8px;
-  flex: 1;
-  min-width: 0
+  padding: 8px 0 4px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
 }
-.tx-count-badge {
-  margin-left: auto;
-  max-width: 100%;
-  white-space: normal;
-  text-align: right;
-  line-height: 1.35
-}
-.tx-list {
-  list-style: none;
-  padding: 0;
-  margin: 12px 0 0;
+
+.home-tx-head {
   display: grid;
-  gap: 10px
+  gap: 4px;
 }
-.tx-date-group {
-  display: grid;
-  gap: 6px
-}
-.tx-date-head {
+
+.home-tx-title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.home-tx-title {
+  margin: 0;
   font-size: 15px;
-  color: var(--muted);
   font-weight: 700;
-  padding: 0 2px 2px
+  letter-spacing: -0.02em;
+}
+
+.home-tx-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.home-tx-tool {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  text-decoration: none;
+  border-radius: 999px;
+}
+
+.home-tx-tool:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.home-tx-meta {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.tx-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+  display: grid;
+  gap: 14px;
+}
+
+.tx-date-group {
+  display: grid;
+  gap: 0;
+}
+
+.tx-date-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 650;
+  padding: 6px 2px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 
 .tx-date-total {
@@ -406,23 +444,33 @@ h3 {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px
+  gap: 0;
 }
+
 .tx-item {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--card) 90%, transparent);
+  padding: 11px 2px;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: transparent;
   cursor: pointer;
   outline: none;
   min-width: 0;
   content-visibility: auto;
-  contain-intrinsic-size: auto 72px;
+  contain-intrinsic-size: auto 68px;
   overflow: hidden;
+}
+
+.tx-day-list li:last-child .tx-item {
+  border-bottom: 0;
+}
+
+.tx-item:active {
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
 }
 .tx-item:focus, .tx-item:focus-visible {
   outline: none;
@@ -433,12 +481,12 @@ h3 {
   min-width: 0
 }
 .tx-icon-col {
-  height: 100%;
-  width: 22px;
+  width: 28px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  flex-shrink: 0
+  flex-shrink: 0;
+  padding-top: 2px;
 }
 .tx-side {
   display: grid;
@@ -471,8 +519,9 @@ h3 {
   display: inline-flex;
   align-items: flex-start;
   gap: 6px;
-  font-weight: 700;
-  margin-bottom: 4px;
+  font-weight: 650;
+  font-size: 15px;
+  margin-bottom: 2px;
   min-width: 0;
   max-width: 100%
 }
@@ -506,10 +555,10 @@ h3 {
   gap: 6px;
   font-size: 11px;
   color: var(--muted);
-  background: color-mix(in srgb, var(--card) 70%, #121820 30%);
-  border: 1px solid color-mix(in srgb, var(--line, #2e3c4d) 80%, transparent);
-  border-radius: 999px;
-  padding: 2px 8px 2px 3px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
 }
 .tx-editor-initial {
   display: inline-grid;
@@ -538,36 +587,37 @@ h3 {
   max-width: 120px
 }
 .tx-icon {
-  font-size: 22px;
-  margin-top: 1px;
-  color: var(--primary-soft);
-  flex-shrink: 0
+  font-size: 18px;
+  color: var(--muted);
+  flex-shrink: 0;
 }
+
 .empty-item {
   text-align: center;
-  padding: 0
+  padding: 0;
 }
+
 .empty-state {
   display: grid;
   justify-items: center;
   gap: 10px;
-  padding: 22px 16px;
-  border: 1px dashed color-mix(in srgb, var(--primary) 26%, var(--border) 74%);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--surface-highlight) 64%, transparent);
+  padding: 28px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .empty-state strong {
   font-size: var(--text-md);
 }
 .empty-state-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  border-radius: 0;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--primary) 18%, transparent);
-  color: var(--primary-soft);
-  font-size: 20px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
 }
 .empty-state-copy {
   margin: 0;
@@ -577,25 +627,38 @@ h3 {
 .empty-state-action {
   min-width: 108px;
 }
-.icon-btn {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center
-}
-.pagination-bar {
+.home-tx-pagination {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 12px;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   flex-wrap: wrap;
 }
-.page-status {
+
+.home-tx-page-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 650;
+  padding: 6px 4px;
+  cursor: pointer;
+}
+
+.home-tx-page-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.home-tx-page-status {
   flex: 1;
   text-align: center;
   min-width: 10rem;
   line-height: 1.4;
-}</style>
+  font-size: 12px;
+}
+</style>

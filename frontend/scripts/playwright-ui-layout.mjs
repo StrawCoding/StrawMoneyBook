@@ -2820,7 +2820,7 @@ async function assertSharedLedgerAuthAndEditorSurfaces() {
   await runPlaywrightCli(['goto', `${baseUrl}/`])
   await waitForHomeBlocks()
   const home = await evalPage(`() => {
-    const feed = document.querySelector('.tx-list, .summary-card')
+    const feed = document.querySelector('.home-tx-feed, .tx-list, .summary-card')
     const markerHost = feed || document.body
     const row = document.createElement('div')
     row.className = 'tx-editor-row'

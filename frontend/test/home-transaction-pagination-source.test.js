@@ -64,7 +64,7 @@ test('SMB-257 transaction store tracks home pagination and asset totals separate
 test('SMB-257 home transaction feed exposes pagination controls and total badge count', () => {
   assert.match(homeTransactionFeedSource, /transactionStore\.homeTotal/)
   assert.match(homeTransactionFeedSource, /goNextHomePage/)
-  assert.match(homeTransactionFeedSource, /pagination-bar/)
+  assert.match(homeTransactionFeedSource, /home-tx-pagination/)
 })
 
 test('SMB-257 home asset summary uses store totals instead of paginated feed rows', () => {
