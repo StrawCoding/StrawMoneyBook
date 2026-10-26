@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.47
+- 介面風格預設現代：`index.html` 首屏即 `data-ui-layout=modern`；個人化選項「現代」排前（已選傳統者不強制改）。
+
 ## v1.5.46
 - 管理入口統一 icon：資產 tab toolbar 改齒輪（對齊預算／分析）；母分類／資產群組列用 `habitat-manage-btn`（僅 icon + aria-label/title）。
 

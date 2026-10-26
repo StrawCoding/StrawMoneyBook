@@ -20,6 +20,7 @@ const appRuntimeSource = readFileSync(resolve(root, 'src/ui/services/app-runtime
 const featuresMapSource = readFileSync(resolve(root, 'StrawMoneyBook_Features_Map.md'), 'utf8')
 const detailedDocSource = readFileSync(resolve(import.meta.dirname, '../../StrawMoneyBook_App_Features_Detailed.md'), 'utf8')
 const playwrightSource = readFileSync(resolve(root, 'scripts/playwright-ui-layout.mjs'), 'utf8')
+const indexHtmlSource = readFileSync(resolve(root, 'index.html'), 'utf8')
 const habitatCssSource = readFileSync(resolve(root, 'src/ui/assets/css/habitat-ui.css'), 'utf8')
 const habitatShellSource = readFileSync(resolve(root, 'src/ui/components/layout/HabitatPageShell.vue'), 'utf8')
 const featureListSource = readFileSync(resolve(root, 'src/ui/views/FeatureListPage.vue'), 'utf8')
@@ -224,8 +225,10 @@ test('personalization page has traditional/modern layout switch UI', () => {
 })
 
 test('ui-layout service keeps traditional and modern without forced migration', () => {
+  assert.match(indexHtmlSource, /data-ui-layout="modern"/)
   assert.match(layoutServiceSource, /id: 'traditional'/)
   assert.match(layoutServiceSource, /DEFAULT_LAYOUT = 'modern'/)
+  assert.match(layoutServiceSource, /UI_LAYOUTS\.modern, UI_LAYOUTS\.traditional/)
   assert.match(layoutServiceSource, /normalizeUiLayout/)
   assert.doesNotMatch(layoutServiceSource, /migrates to modern/)
 })

@@ -29,7 +29,7 @@ export function normalizeUiLayout(value) {
 }
 
 export function listUiLayouts() {
-  return [UI_LAYOUTS.traditional, UI_LAYOUTS.modern]
+  return [UI_LAYOUTS.modern, UI_LAYOUTS.traditional]
 }
 
 export function getCurrentUiLayout() {

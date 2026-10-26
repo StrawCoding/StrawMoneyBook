@@ -29,7 +29,7 @@ function createStorage(initial = {}) {
 }
 
 test('ui-layout.service keeps traditional and modern as selectable layouts', () => {
-  assert.deepEqual(listUiLayouts().map((item) => item.id), ['traditional', 'modern'])
+  assert.deepEqual(listUiLayouts().map((item) => item.id), ['modern', 'traditional'])
   assert.equal(normalizeUiLayout(''), 'modern')
   assert.equal(normalizeUiLayout('traditional'), 'traditional')
   assert.equal(normalizeUiLayout('modern'), 'modern')
