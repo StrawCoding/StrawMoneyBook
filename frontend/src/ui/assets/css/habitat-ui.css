@@ -461,7 +461,10 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   font-size: var(--habitat-title-size);
 }
 
-[data-ui-layout='modern'] .habitat-page .habitat-kicker {
+/* Modern: no prose under page titles (habitat_hello). Keep metric muted lines (%, MoneyText). */
+[data-ui-layout='modern'] .habitat-page .habitat-kicker,
+[data-ui-layout='modern'] .habitat-page .panel-kicker,
+[data-ui-layout='modern'] .habitat-page .hero-kicker {
   display: none;
 }
 

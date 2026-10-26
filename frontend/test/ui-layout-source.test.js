@@ -93,6 +93,10 @@ test('bookkeeping fullscreen route uses HabitatPageShell and segment pills', () 
 
 test('HabitatPageShell rolls out to tab-adjacent routes with global modern CSS', () => {
   assert.match(habitatShellSource, /class="view-root habitat-page"/)
+  assert.match(habitatShellSource, /showDeckKicker/)
+  assert.match(habitatShellSource, /isModern/)
+  assert.match(habitatCssSource, /panel-kicker/)
+  assert.match(habitatCssSource, /Keep metric muted/)
   assert.match(featureListSource, /HabitatPageShell/)
   assert.match(featureListSource, /feature_list\.habitat_hello/)
   assert.match(settingsSource, /HabitatPageShell/)

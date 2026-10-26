@@ -12,7 +12,7 @@
           <slot name="toolbar" />
         </div>
       </div>
-      <p v-if="kicker" class="habitat-kicker">{{ kicker }}</p>
+      <p v-if="showDeckKicker" class="habitat-kicker">{{ kicker }}</p>
       <slot name="header-extra" />
     </header>
     <section
@@ -30,6 +30,7 @@
 import { computed, useSlots } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
+import { useUiLayout } from '@/ui/composables/useUiLayout'
 
 const props = defineProps({
   backTo: {
@@ -76,8 +77,12 @@ const props = defineProps({
 
 const slots = useSlots()
 const { t } = useI18n()
+const { isModern } = useUiLayout()
 
 const backLabel = computed(() => t(props.backLabelKey))
+
+/** Modern: hide title-deck copy only; in-page metric lines (%, amounts) stay visible. */
+const showDeckKicker = computed(() => Boolean(props.kicker) && !isModern.value)
 
 const showHeader = computed(() => Boolean(
   props.title || props.kicker || props.backTo || slots.toolbar || slots['header-extra'],

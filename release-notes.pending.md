@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.30
+- Modern：全站標題下副標（habitat kicker／panel-kicker）不渲染或隱藏；含 %／金額等資料的小字（如已用 72%）保留。
+
 ## v1.5.29
 - Modern 版面：僅隱藏標題列下方 Habitat 副標（kicker）；頁內說明／meta 小字保留。
 
