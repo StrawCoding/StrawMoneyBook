@@ -22,6 +22,19 @@ const detailedDocSource = readFileSync(
   'utf8',
 )
 
+test('feature list general section uses two-column grid tiles', () => {
+  assert.match(featureListSource, /feature-list--two-col/)
+  assert.match(featureListSource, /data-testid="feature-list-general"[\s\S]*?feature-list--two-col/)
+  assert.match(featureListSource, /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/)
+  assert.match(featureListSource, /feature-link-label/)
+  const advancedSection = featureListSource.match(
+    /data-testid="feature-list-advanced"([\s\S]*?)<\/section>/,
+  )?.[1]
+  assert.ok(advancedSection, 'advanced section block missing')
+  assert.doesNotMatch(advancedSection, /feature-list--two-col/)
+  assert.match(advancedSection, /<nav class="feature-list">/)
+})
+
 test('feature list exposes securities entry in general section', () => {
   assert.match(featureListSource, /to: '\/assets\/securities'/)
   assert.match(featureListSource, /feature_list\.securities/)

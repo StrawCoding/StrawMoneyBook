@@ -9,7 +9,7 @@
   >
     <section class="feature-section" data-testid="feature-list-general">
       <h3 class="feature-section-title">{{ t('feature_list.general') }}</h3>
-      <nav class="feature-list">
+      <nav class="feature-list feature-list--two-col">
         <RouterLink
           v-for="feature in generalFeatures"
           :key="feature.to"
@@ -20,7 +20,7 @@
           <span class="feature-icon-wrap">
             <font-awesome-icon :icon="feature.icon" class="feature-icon" />
           </span>
-          <span>{{ feature.label }}</span>
+          <span class="feature-link-label">{{ feature.label }}</span>
         </RouterLink>
       </nav>
     </section>
@@ -128,6 +128,10 @@ const advancedFeatures = computed(() => ([
   display: grid;
   gap: 0;
 }
+.feature-list--two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
 .feature-link {
   display: flex;
   align-items: center;
@@ -139,12 +143,36 @@ const advancedFeatures = computed(() => ([
   padding: 12px 4px;
   background: transparent;
   font-weight: 650;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
   scroll-margin-bottom: calc(88px + var(--navigation-bar-height));
   scroll-margin-top: 24px;
 }
-.feature-list .feature-link:last-child {
+.feature-list:not(.feature-list--two-col) .feature-link {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+}
+.feature-list:not(.feature-list--two-col) .feature-link:last-child {
   border-bottom: 0;
+}
+.feature-list--two-col .feature-link {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  min-height: 84px;
+  padding: 12px 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: var(--habitat-radius-tile, 14px);
+  background: var(--card);
+}
+.feature-link-label {
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 650;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
 }
 .feature-list-page {
   padding-bottom: 12px;

@@ -219,9 +219,17 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   margin-top: 20px;
 }
 
-[data-ui-layout='modern'] .feature-list-page .feature-link {
+[data-ui-layout='modern'] .feature-list-page .feature-list:not(.feature-list--two-col) .feature-link {
   min-height: 52px;
   font-weight: 650;
+}
+
+[data-ui-layout='modern'] .feature-list-page .feature-list--two-col .feature-link {
+  min-height: 84px;
+  border-radius: var(--habitat-radius-tile);
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  box-shadow: none;
 }
 
 [data-ui-layout='modern'] .feature-list-page .feature-link::after {
