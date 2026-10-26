@@ -36,7 +36,7 @@
           <MoneyText :value-minor="item.remainingMinor" />
         </li>
       </ul>
-    </section>
+    </article>
 
     <section class="habitat-flow-section">
       <header class="row panel-head">

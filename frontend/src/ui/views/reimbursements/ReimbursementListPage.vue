@@ -172,7 +172,7 @@
                 <button class="btn action-btn" @click="closeActionSheet">{{ t('common.cancel') }}</button>
               </div>
             </div>
-          </section>
+          </article>
         </section>
       </transition>
     </teleport>

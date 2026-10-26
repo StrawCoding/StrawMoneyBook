@@ -35,8 +35,8 @@ function patch(source) {
   if (!source.includes('class="card panel')) return null
   let next = source.replaceAll('<article class="card panel', '<section class="habitat-flow-section')
   if (next === source) return null
-  // Close tags for these list pages only use card.panel wrappers at stack level.
-  next = next.replaceAll('</article>', '</section>')
+  // Close only stack-level card.panel blocks (same indent as opening).
+  next = next.replaceAll('\n    </article>', '\n    </section>')
   return next
 }
 

@@ -76,7 +76,7 @@
             <button class="btn" :disabled="!jar.canTransfer" @click="openFlowDialog('withdraw', jar)">{{ t('savings_jar.action.withdraw') }}</button>
           </div>
           <p v-if="!jar.canTransfer" class="muted transfer-hint">{{ t('savings_jar.same_currency_required') }}</p>
-        </section>
+        </article>
       </div>
 
       <p v-else class="muted empty-note">{{ t('savings_jar.empty') }}</p>
