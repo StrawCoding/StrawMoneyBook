@@ -709,7 +709,9 @@ a,
 .overlay-fade-enter-active .sheet,
 .overlay-fade-leave-active .sheet,
 .overlay-fade-enter-active .extra-sheet,
-.overlay-fade-leave-active .extra-sheet {
+.overlay-fade-leave-active .extra-sheet,
+.overlay-fade-enter-active .app-overlay-sheet-card,
+.overlay-fade-leave-active .app-overlay-sheet-card {
   transition:
     opacity var(--anim-mid) var(--anim-standard),
     transform var(--anim-mid) var(--anim-spring);
@@ -720,9 +722,16 @@ a,
 .overlay-fade-enter-from .sheet,
 .overlay-fade-leave-to .sheet,
 .overlay-fade-enter-from .extra-sheet,
-.overlay-fade-leave-to .extra-sheet {
+.overlay-fade-leave-to .extra-sheet,
+.overlay-fade-enter-from .app-overlay-sheet-card,
+.overlay-fade-leave-to .app-overlay-sheet-card {
   opacity: 0;
   transform: translate3d(0, 32px, 0);
+}
+
+.overlay-fade-enter-from .app-overlay-sheet-mask-nested .app-overlay-sheet-card,
+.overlay-fade-leave-to .app-overlay-sheet-mask-nested .app-overlay-sheet-card {
+  transform: translate3d(0, 40px, 0) scale(0.97);
 }
 
 .app-bottom-sheet {
@@ -785,6 +794,36 @@ a,
 
 .app-overlay-sheet-mask-nested {
   z-index: 150;
+  background: color-mix(in srgb, var(--overlay-backdrop) 88%, black 12%);
+}
+
+/* Vue TransitionGroup — list insert/remove/reorder */
+.motion-list-enter-active,
+.motion-list-leave-active {
+  transition:
+    opacity var(--anim-mid) var(--anim-standard),
+    transform var(--anim-mid) var(--anim-spring);
+}
+
+.motion-list-enter-from {
+  opacity: 0;
+  transform: translate3d(0, 10px, 0);
+}
+
+.motion-list-leave-to {
+  opacity: 0;
+  transform: translate3d(0, -6px, 0) scale(0.98);
+}
+
+.motion-list-leave-active {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 0;
+}
+
+.motion-list-move {
+  transition: transform var(--anim-mid) var(--anim-spring);
 }
 
 .app-overlay-sheet-footer {

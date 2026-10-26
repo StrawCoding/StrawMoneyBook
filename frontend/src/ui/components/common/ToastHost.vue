@@ -26,7 +26,7 @@ const orderedToasts = computed(() => {
   display: grid;
   gap: 8px;
   pointer-events: none;
-  z-index: 160
+  z-index: 160;
 }
 .toast {
   justify-self: center;
@@ -45,15 +45,29 @@ const orderedToasts = computed(() => {
   background: var(--danger-btn-bg);
   color: var(--danger-btn-text)
 }
-.toast-enter-active, .toast-leave-active {
+.toast-enter-active,
+.toast-leave-active {
   transition:
-    opacity var(--anim-fast) var(--anim-standard),
-    transform var(--anim-fast) var(--anim-spring)
+    opacity var(--anim-mid) var(--anim-standard),
+    transform var(--anim-mid) var(--anim-spring);
 }
-.toast-enter-from, .toast-leave-to {
+
+.toast-leave-active {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+.toast-enter-from {
   opacity: 0;
-  transform: translate3d(0, -10px, 0)
+  transform: translate3d(0, -12px, 0) scale(0.98);
 }
+
+.toast-leave-to {
+  opacity: 0;
+  transform: translate3d(0, 8px, 0) scale(0.96);
+}
+
 .toast-move {
-  transition: transform var(--anim-mid) var(--anim-spring)
+  transition: transform var(--anim-mid) var(--anim-spring);
 }</style>

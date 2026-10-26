@@ -1,6 +1,6 @@
 <template>
   <teleport to="body">
-    <transition name="overlay-fade">
+    <transition name="overlay-fade" appear>
       <section
         v-if="open"
         class="app-overlay-sheet-mask"

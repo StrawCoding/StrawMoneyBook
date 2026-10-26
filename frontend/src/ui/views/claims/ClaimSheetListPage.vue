@@ -48,7 +48,7 @@
         </button>
       </div>
 
-      <ul class="claim-list">
+      <TransitionGroup name="motion-list" tag="ul" class="claim-list">
         <li v-for="claim in visibleClaims" :key="claim.id" class="claim-item">
           <div class="row claim-row">
             <button type="button" class="claim-link" @click="openClaimDetail(claim)">
@@ -84,9 +84,8 @@
             </button>
           </div>
         </li>
-
-        <li v-if="!visibleClaims.length" class="muted">{{ t(visibleClaimEmptyKey) }}</li>
-      </ul>
+      </TransitionGroup>
+      <p v-if="!visibleClaims.length" class="muted claim-list-empty">{{ t(visibleClaimEmptyKey) }}</p>
     </section>
 
     <InputBottomSheet
@@ -248,7 +247,7 @@
 
 <script setup>
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, TransitionGroup, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import ClaimSheetDraftForm from '@/ui/components/claims/ClaimSheetDraftForm.vue'
@@ -1220,6 +1219,11 @@ h3 {
   padding: 0;
   display: grid;
   gap: 10px;
+  position: relative;
+}
+
+.claim-list-empty {
+  margin: 8px 0 0;
 }
 
 .claim-tabs {
@@ -1234,6 +1238,15 @@ h3 {
   padding: 8px 12px;
   background: var(--card);
   color: var(--text);
+  transition:
+    background-color var(--anim-fast) var(--anim-standard),
+    border-color var(--anim-fast) var(--anim-standard),
+    color var(--anim-fast) var(--anim-standard),
+    transform var(--anim-fast) var(--anim-spring);
+}
+
+.tab-btn:active {
+  transform: scale(0.97);
 }
 
 .tab-btn.active {

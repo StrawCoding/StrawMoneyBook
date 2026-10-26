@@ -42,7 +42,7 @@
         <button class="btn" @click="openExportLink">{{ exportedActionLabel }}</button>
       </div>
 
-      <ul class="list">
+      <TransitionGroup name="motion-list" tag="ul" class="list">
         <li v-for="tx in activeList" :key="tx.id" class="entry">
           <label class="entry-select" :aria-label="t('reimbursement.select_tx', { id: tx.id })">
             <input v-model="selectedByTab[tab]" type="checkbox" :value="tx.id" />
@@ -109,9 +109,8 @@
             </button>
           </div>
         </li>
-
-        <li v-if="!activeList.length" class="muted">{{ t('reimbursement.empty_tab') }}</li>
-      </ul>
+      </TransitionGroup>
+      <p v-if="!activeList.length" class="muted list-empty-note">{{ t('reimbursement.empty_tab') }}</p>
     </section>
 
     <teleport to="body">
@@ -310,7 +309,7 @@
 
 <script setup>
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, TransitionGroup, watch } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
@@ -1136,7 +1135,12 @@ h2 {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px
+  gap: 8px;
+  position: relative;
+}
+
+.list-empty-note {
+  margin: 8px 0 0;
 }
 .summary-action-row {
   justify-content: flex-end;

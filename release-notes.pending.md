@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.57
+- UI 動效：Bottom Sheet 展開 appear + nested 層深度；請款／報銷列表 TransitionGroup 進出；BottomNav 選中 tab pop；Toast 進出對稱；預算圓餅百分比過渡。
+
 ## v1.5.56
 - Bottom Sheet 全整：InputBottomSheet 加 drag handle、高度分級、sticky footer、icon 關閉與 nested 層；Modern 扁平 overlay 樣式。
 - 新增請款／編輯請款：共用 ClaimSheetDraftForm（摘要列、分段 tab、列式項目）；手動項改子 sheet 編輯；footer 顯示無法建立原因。

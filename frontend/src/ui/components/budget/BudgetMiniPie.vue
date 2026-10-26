@@ -118,6 +118,7 @@ const shellStyle = computed(() => ({
   background: color-mix(in srgb, var(--card) 90%, var(--bg) 10%);
   display: grid;
   place-items: center;
+  transition: transform var(--anim-mid) var(--anim-spring);
   gap: 1px;
   text-align: center;
 }
@@ -125,6 +126,9 @@ const shellStyle = computed(() => ({
 .pie-hole strong {
   font-size: 12px;
   line-height: 1;
+  transition:
+    opacity var(--anim-fast) var(--anim-standard),
+    transform var(--anim-mid) var(--anim-spring);
 }
 
 .pie-hole small {

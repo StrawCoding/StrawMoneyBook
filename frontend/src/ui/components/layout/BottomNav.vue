@@ -113,6 +113,19 @@ const activeTab = computed(() => route.meta.tab)
 .nav-item.active .nav-pill {
   background: color-mix(in srgb, var(--primary) 22%, transparent);
   box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 30%, transparent);
+  animation: nav-tab-pop var(--anim-mid) var(--anim-spring);
+}
+
+@keyframes nav-tab-pop {
+  0% {
+    transform: scale(0.86);
+  }
+  70% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .nav-item.active .nav-icon {
