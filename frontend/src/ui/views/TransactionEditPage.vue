@@ -1,4 +1,4 @@
-o<template>
+<template>
   <HabitatPageShell
     :title="t('transaction_about.edit_transaction')"
     :kicker="t('transaction_edit.habitat_hello')"
@@ -6,8 +6,16 @@ o<template>
     hello-test-id="transaction-edit-header"
     stack-class="transaction-edit-page"
   >
-    <template #toolbar>
-      <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
+    <template #back>
+      <button
+        type="button"
+        class="btn back-btn"
+        :aria-label="t('common.back')"
+        :title="t('common.back')"
+        @click="goBack"
+      >
+        <font-awesome-icon icon="fa-solid fa-chevron-left" />
+      </button>
     </template>
 
     <article class="card panel">

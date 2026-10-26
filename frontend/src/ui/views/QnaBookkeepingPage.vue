@@ -2,8 +2,16 @@
   <section class="stack qna-page" :class="{ embedded }">
     <article class="card panel">
       <header v-if="!embedded" class="row">
+        <button
+          type="button"
+          class="btn back-btn"
+          :aria-label="t('common.back')"
+          :title="t('common.back')"
+          @click="closePage"
+        >
+          <font-awesome-icon icon="fa-solid fa-chevron-left" />
+        </button>
         <h2>{{ t('qna_bookkeeping.page_title', '問答記帳') }}</h2>
-        <button type="button" class="btn back-btn" @click="closePage">{{ t('common.back') }}</button>
       </header>
 
       <p class="muted intro">{{ t('qna_bookkeeping.intro', '一步一步回答，就能建立交易。') }}</p>

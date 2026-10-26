@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.43
+- 全站返回統一：左側 icon（chevron + `back-btn` 40×40），無障礙用 `common.back`；Habitat `back-to`／`#back` 槽位。
+
 ## v1.5.42
 - 資產頁 IA 對齊分析頁：`assets-flow-hero`（總資產 strip + 可支配／負債 split）與 `assets-flow-section` 列分隔。
 

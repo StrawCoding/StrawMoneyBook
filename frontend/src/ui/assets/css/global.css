@@ -426,6 +426,7 @@ button:focus-visible,
 .btn.icon-btn {
   min-height: 32px;
 }
+/* Navigation back: icon-only 40×40; label via aria-label/title (common.back). */
 .back-btn {
   width: 40px;
   min-height: 40px;

@@ -2,10 +2,18 @@
   <section ref="pageRef" class="stack ai-page" :class="{ leaving: isPageLeaving }">
     <article class="card panel" :class="{ 'ai-busy-panel': speechListening || parsing || submitting }">
       <header v-if="!embedded" class="row">
+        <button
+          type="button"
+          class="btn back-btn"
+          :aria-label="t('common.back')"
+          :title="t('common.back')"
+          @click="goBack"
+        >
+          <font-awesome-icon icon="fa-solid fa-chevron-left" />
+        </button>
         <h2>{{ t('ai_bookkeeping.page_title') }}</h2>
         <div class="header-actions">
           <button type="button" class="btn" @click="goManualBookkeeping">{{ t('ai_bookkeeping.action.switch_manual') }}</button>
-          <button type="button" class="btn back-btn" @click="goBack">{{ t('common.back') }}</button>
         </div>
       </header>
 

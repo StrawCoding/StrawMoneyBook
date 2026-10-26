@@ -91,6 +91,14 @@ test('bookkeeping fullscreen route uses HabitatPageShell and segment pills', () 
   assert.match(bookkeepingSource, /segment-pills/)
 })
 
+test('HabitatPageShell uses icon back control with accessible label', () => {
+  assert.match(habitatShellSource, /class="btn back-btn"/)
+  assert.match(habitatShellSource, /fa-solid fa-chevron-left/)
+  assert.match(habitatShellSource, /:aria-label="backLabel"/)
+  assert.match(habitatShellSource, /name="back"/)
+  assert.doesNotMatch(habitatShellSource, /text-link back-link/)
+})
+
 test('HabitatPageShell rolls out to tab-adjacent routes with global modern CSS', () => {
   assert.match(habitatShellSource, /class="view-root habitat-page"/)
   assert.match(habitatShellSource, /showDeckKicker/)

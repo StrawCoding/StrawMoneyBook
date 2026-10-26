@@ -2,8 +2,16 @@
   <section class="stack quick-add-page" :class="{ embedded }">
     <article class="card panel">
       <header v-if="!embedded" class="row">
+        <button
+          type="button"
+          class="btn back-btn"
+          :aria-label="t('common.back')"
+          :title="t('common.back')"
+          @click="closePage"
+        >
+          <font-awesome-icon icon="fa-solid fa-chevron-left" />
+        </button>
         <h2>{{ t('quick_add.page_title') }}</h2>
-        <button type="button" class="btn back-btn" @click="closePage">{{ t('common.back') }}</button>
       </header>
 
       <div class="type-grid chip-row">

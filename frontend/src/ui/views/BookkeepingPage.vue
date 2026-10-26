@@ -6,9 +6,16 @@
     hello-test-id="bookkeeping-page-header"
     stack-class="bookkeeping-page"
   >
-    <template #toolbar>
-      <button type="button" class="btn back-btn" data-testid="bookkeeping-back" @click="goBack">
-        {{ t('common.back') }}
+    <template #back>
+      <button
+        type="button"
+        class="btn back-btn"
+        data-testid="bookkeeping-back"
+        :aria-label="t('common.back')"
+        :title="t('common.back')"
+        @click="goBack"
+      >
+        <font-awesome-icon icon="fa-solid fa-chevron-left" />
       </button>
     </template>
     <template #header-extra>

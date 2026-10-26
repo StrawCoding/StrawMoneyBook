@@ -7,8 +7,14 @@
     root-class="wizard-page"
     stack-class="wizard-page"
   >
-    <template #toolbar>
-      <button class="btn back-btn icon-btn toolbar-icon" type="button" aria-label="back" @click="handleBack">
+    <template #back>
+      <button
+        class="btn back-btn"
+        type="button"
+        :aria-label="t('common.back')"
+        :title="t('common.back')"
+        @click="handleBack"
+      >
         <font-awesome-icon icon="fa-solid fa-chevron-left" />
       </button>
     </template>

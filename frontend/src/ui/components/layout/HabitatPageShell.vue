@@ -5,10 +5,22 @@
       class="habitat-hello-block"
       :data-testid="helloTestId || undefined"
     >
-      <div class="habitat-title-row">
+      <div class="habitat-title-row" :class="{ 'has-back': showBackControl }">
+        <div v-if="showBackControl" class="habitat-back-slot">
+          <RouterLink
+            v-if="backTo"
+            class="btn back-btn"
+            :to="backTo"
+            :aria-label="backLabel"
+            :title="backLabel"
+            data-testid="habitat-back-link"
+          >
+            <font-awesome-icon icon="fa-solid fa-chevron-left" />
+          </RouterLink>
+          <slot v-else name="back" />
+        </div>
         <h1 class="habitat-page-title">{{ title }}</h1>
-        <div v-if="$slots.toolbar || backTo" class="habitat-toolbar">
-          <RouterLink v-if="backTo" class="text-link back-link" :to="backTo">{{ backLabel }}</RouterLink>
+        <div v-if="$slots.toolbar" class="habitat-toolbar">
           <slot name="toolbar" />
         </div>
       </div>
@@ -84,8 +96,10 @@ const backLabel = computed(() => t(props.backLabelKey))
 /** Modern: hide title-deck copy only; in-page metric lines (%, amounts) stay visible. */
 const showDeckKicker = computed(() => Boolean(props.kicker) && !isModern.value)
 
+const showBackControl = computed(() => Boolean(props.backTo || slots.back))
+
 const showHeader = computed(() => Boolean(
-  props.title || props.kicker || props.backTo || slots.toolbar || slots['header-extra'],
+  props.title || props.kicker || showBackControl.value || slots.toolbar || slots['header-extra'],
 ))
 </script>
 
@@ -97,11 +111,29 @@ const showHeader = computed(() => Boolean(
 }
 
 .habitat-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.habitat-title-row.has-back {
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+}
+
+.habitat-back-slot {
+  grid-column: 1;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.habitat-title-row.has-back .habitat-page-title {
+  grid-column: 2;
+}
+
+.habitat-title-row.has-back .habitat-toolbar {
+  grid-column: 3;
 }
 
 .habitat-page-title {
@@ -110,8 +142,16 @@ const showHeader = computed(() => Boolean(
   font-weight: 750;
   letter-spacing: -0.04em;
   line-height: 1.12;
-  flex: 1 1 auto;
   min-width: 0;
+  grid-column: 1;
+}
+
+.habitat-title-row:not(.has-back) .habitat-page-title {
+  grid-column: 1;
+}
+
+.habitat-title-row:not(.has-back) .habitat-toolbar {
+  grid-column: 2;
 }
 
 .habitat-kicker {
