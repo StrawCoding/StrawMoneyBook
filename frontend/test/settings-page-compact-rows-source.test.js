@@ -35,6 +35,10 @@ test('SMB-254: traditional settings rows use compact vertical padding while keep
 
 test('SMB-254: settings scoped list rows are tightened but keep min tap height', () => {
   assert.match(settingsPageSource, /settings-flow-group/)
+  assert.match(settingsPageSource, /settings-section-title/)
+  assert.match(settingsPageSource, /settings_page\.section_account/)
+  assert.match(settingsPageSource, /group\.titleKey/)
+  assert.match(settingsPageSource, /group\.items/)
   assert.doesNotMatch(settingsPageSource, /class="card panel setting-group"/)
   assert.doesNotMatch(settingsPageSource, /class="card panel account-card"/)
   const itemLinkBlock = extractBlock(settingsPageSource, '.item-link {')

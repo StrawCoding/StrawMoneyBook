@@ -6,24 +6,28 @@
     hello-test-id="settings-hello-block"
     stack-class="settings-page"
   >
-    <RouterLink class="settings-account-row" to="/settings/account" data-testid="settings-account-card">
-      <div class="account-avatar">
-        <img v-if="sessionUser?.avatar_url" :src="sessionUser.avatar_url" alt="avatar" class="avatar-img" />
-        <span v-else>{{ avatarLabel }}</span>
-      </div>
-      <div class="account-main">
-        <strong>{{ accountCardTitle }}</strong>
-        <small class="muted">{{ accountCardHint }}</small>
-      </div>
-      <font-awesome-icon icon="fa-solid fa-chevron-right" class="account-arrow" />
-    </RouterLink>
+    <section class="settings-flow-group settings-account-section">
+      <h3 class="settings-section-title">{{ t('settings_page.section_account') }}</h3>
+      <RouterLink class="settings-account-row" to="/settings/account" data-testid="settings-account-card">
+        <div class="account-avatar">
+          <img v-if="sessionUser?.avatar_url" :src="sessionUser.avatar_url" alt="avatar" class="avatar-img" />
+          <span v-else>{{ avatarLabel }}</span>
+        </div>
+        <div class="account-main">
+          <strong>{{ accountCardTitle }}</strong>
+          <small class="muted">{{ accountCardHint }}</small>
+        </div>
+        <font-awesome-icon icon="fa-solid fa-chevron-right" class="account-arrow" />
+      </RouterLink>
+    </section>
 
     <section
-      v-for="(group, groupIndex) in settingGroups"
-      :key="groupIndex"
+      v-for="group in settingGroups"
+      :key="group.titleKey"
       class="settings-flow-group setting-group"
     >
-      <RouterLink v-for="item in group" :key="item.to" class="item-link" :to="item.to">
+      <h3 class="settings-section-title">{{ t(group.titleKey) }}</h3>
+      <RouterLink v-for="item in group.items" :key="item.to" class="item-link" :to="item.to">
         <font-awesome-icon :icon="item.icon" class="item-icon" />
         <span class="item-copy">
           <span>{{ t(item.labelKey) }}</span>
@@ -77,29 +81,41 @@ function syncAccountCardFromAuth(session = getSharedLedgerSession()) {
 // smb295: 共同帳本／帳本同步／銀行同步／載具同步主入口改至功能頁「進階功能」；
 // 設定頁不再列為主清單入口（深度連結與既有 route 仍可用）。
 const settingGroups = computed(() => [
-  [
-    { to: '/settings/ledgers', labelKey: 'settings.ledger_management', descKey: 'settings.desc.ledger_management', icon: 'fa-solid fa-book' },
-    { to: '/settings/categories', labelKey: 'settings.category_management', descKey: 'settings.desc.category_management', icon: 'fa-solid fa-tags' },
-    { to: '/settings/addon-templates', labelKey: 'settings.addon_templates', descKey: 'settings.desc.addon_templates', icon: 'fa-solid fa-receipt' },
-    { to: '/settings/auto-fill-rules', labelKey: 'settings.auto_fill_rules', descKey: 'settings.desc.auto_fill_rules', icon: 'fa-solid fa-wand-magic-sparkles' },
-    { to: '/settings/exchange-rate', labelKey: 'settings.exchange_rate', descKey: 'settings.desc.exchange_rate', icon: 'fa-solid fa-arrow-right-arrow-left' },
-  ],
-  [
-    { to: '/settings/data-management', labelKey: 'settings.data_management', descKey: 'settings.desc.data_management', icon: 'fa-solid fa-database' },
-    { to: '/settings/auto-backup', labelKey: 'settings.auto_backup', descKey: 'settings.desc.auto_backup', icon: 'fa-solid fa-cloud-arrow-up' },
-  ],
-  [
-    { to: '/settings/language', labelKey: 'settings.language', descKey: 'settings.desc.language', icon: 'fa-solid fa-language' },
-    { to: '/settings/personalization', labelKey: 'settings.personalization', descKey: 'settings.desc.personalization', icon: 'fa-solid fa-palette' },
-    { to: '/settings/security', labelKey: 'settings.security_lock', descKey: 'settings.desc.security_lock', icon: 'fa-solid fa-shield-halved' },
-    { to: '/settings/bookkeeping-reminder', labelKey: 'settings.bookkeeping_reminder', descKey: 'settings.desc.bookkeeping_reminder', icon: 'fa-solid fa-calendar-days' },
-  ],
-  [
-    { to: '/settings/membership-benefits', labelKey: 'settings.membership_benefits', descKey: 'settings.desc.membership_benefits', icon: 'fa-solid fa-money-check-dollar' },
-    ...(showAdminEntry.value ? [{ to: '/settings/admin', labelKey: 'settings.admin_console', descKey: 'settings.desc.admin_console', icon: 'fa-solid fa-users' }] : []),
-    { to: '/settings/about', labelKey: 'settings.about_us', descKey: 'settings.desc.about_us', icon: 'fa-solid fa-users' },
-    { to: '/settings/version-info', labelKey: 'settings.version_info', descKey: 'settings.desc.version_info', icon: 'fa-solid fa-circle-info' },
-  ],
+  {
+    titleKey: 'settings_page.section_bookkeeping',
+    items: [
+      { to: '/settings/ledgers', labelKey: 'settings.ledger_management', descKey: 'settings.desc.ledger_management', icon: 'fa-solid fa-book' },
+      { to: '/settings/categories', labelKey: 'settings.category_management', descKey: 'settings.desc.category_management', icon: 'fa-solid fa-tags' },
+      { to: '/settings/addon-templates', labelKey: 'settings.addon_templates', descKey: 'settings.desc.addon_templates', icon: 'fa-solid fa-receipt' },
+      { to: '/settings/auto-fill-rules', labelKey: 'settings.auto_fill_rules', descKey: 'settings.desc.auto_fill_rules', icon: 'fa-solid fa-wand-magic-sparkles' },
+      { to: '/settings/exchange-rate', labelKey: 'settings.exchange_rate', descKey: 'settings.desc.exchange_rate', icon: 'fa-solid fa-arrow-right-arrow-left' },
+    ],
+  },
+  {
+    titleKey: 'settings_page.section_data',
+    items: [
+      { to: '/settings/data-management', labelKey: 'settings.data_management', descKey: 'settings.desc.data_management', icon: 'fa-solid fa-database' },
+      { to: '/settings/auto-backup', labelKey: 'settings.auto_backup', descKey: 'settings.desc.auto_backup', icon: 'fa-solid fa-cloud-arrow-up' },
+    ],
+  },
+  {
+    titleKey: 'settings_page.section_app',
+    items: [
+      { to: '/settings/language', labelKey: 'settings.language', descKey: 'settings.desc.language', icon: 'fa-solid fa-language' },
+      { to: '/settings/personalization', labelKey: 'settings.personalization', descKey: 'settings.desc.personalization', icon: 'fa-solid fa-palette' },
+      { to: '/settings/security', labelKey: 'settings.security_lock', descKey: 'settings.desc.security_lock', icon: 'fa-solid fa-shield-halved' },
+      { to: '/settings/bookkeeping-reminder', labelKey: 'settings.bookkeeping_reminder', descKey: 'settings.desc.bookkeeping_reminder', icon: 'fa-solid fa-calendar-days' },
+    ],
+  },
+  {
+    titleKey: 'settings_page.section_about',
+    items: [
+      { to: '/settings/membership-benefits', labelKey: 'settings.membership_benefits', descKey: 'settings.desc.membership_benefits', icon: 'fa-solid fa-money-check-dollar' },
+      ...(showAdminEntry.value ? [{ to: '/settings/admin', labelKey: 'settings.admin_console', descKey: 'settings.desc.admin_console', icon: 'fa-solid fa-users' }] : []),
+      { to: '/settings/about', labelKey: 'settings.about_us', descKey: 'settings.desc.about_us', icon: 'fa-solid fa-users' },
+      { to: '/settings/version-info', labelKey: 'settings.version_info', descKey: 'settings.desc.version_info', icon: 'fa-solid fa-circle-info' },
+    ],
+  },
 ])
 const avatarLabel = computed(() => {
   const base = String(sessionUser.value?.display_name || sessionUser.value?.email || '?').trim()
@@ -129,15 +145,30 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.settings-section-title {
+  margin: 0 4px 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted, color-mix(in srgb, var(--text) 62%, transparent));
+}
+
+.settings-account-section {
+  padding-top: 2px;
+}
+
+.settings-account-section .settings-account-row {
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+
 .settings-account-row {
   display: flex;
   align-items: center;
   gap: 12px;
   text-decoration: none;
   color: var(--text);
-  padding: 12px 4px 14px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  padding: 10px 4px 12px;
 }
 
 .account-avatar {
