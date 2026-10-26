@@ -226,7 +226,8 @@
 | 帳本切換 | `src/ui/components/common/LedgerSwitcher.vue` |
 | 範圍選擇（全部/年/月/日） | `src/ui/components/common/HomeRangePicker.vue` |
 | 當期收支卡 | `src/ui/components/home/HomeAssetSummaryCard.vue`（收入／支出 split 背景與數字色跟隨 `theme.service.js` 的 `--home-*-card-*` Light／Dark token；禁止硬編碼深色底導致淺色模式對比失效；傳統／現代共用） |
-| 預算簡表（月均/日均 + 左右滑動切換） | `src/ui/components/home/HomeBudgetSummaryCard.vue` |
+| 首頁 Finch 向總覽（hero 預算 + 收支 chip + 資產/信用卡下鑽） | `src/ui/components/home/HomeModernOverview.vue` |
+| 預算簡表（月均/日均；仍供其他入口／邏輯 composable） | `src/ui/composables/useHomeBudgetSummaryMetrics.js` |
 | 交易清單（含空狀態與快速記帳 CTA） | `src/ui/components/home/HomeTransactionFeed.vue` |
 | 編輯交易 | `src/ui/components/home/HomeTransactionEditSheet.vue`（SMB-217 後改用 AmountCalculatorInput 計算機輸入） |
 | 快速新增入口 | `src/ui/views/BookkeepingPage.vue` + `src/ui/services/bookkeeping-mode.service.js` |

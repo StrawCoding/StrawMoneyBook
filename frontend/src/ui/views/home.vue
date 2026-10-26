@@ -22,7 +22,14 @@
         >
           ‹
         </button>
-        <h2 class="period-title" data-testid="home-period-title">{{ periodTitle }}</h2>
+        <button
+          type="button"
+          class="period-title period-title-btn"
+          data-testid="home-period-title"
+          @click="periodSheetOpen = true"
+        >
+          {{ periodTitle }}
+        </button>
         <button
           type="button"
           class="period-arrow"
@@ -34,6 +41,16 @@
           ›
         </button>
       </div>
+      <button type="button" class="btn period-edit-btn" data-testid="home-period-sheet-trigger" @click="periodSheetOpen = true">
+        {{ t('home_page.period_filter', '調整期間') }}
+      </button>
+    </header>
+
+    <InputBottomSheet
+      :open="periodSheetOpen"
+      :title="t('home_page.period_filter', '調整期間')"
+      @close="periodSheetOpen = false"
+    >
       <div class="period-tabs" data-testid="home-period-filter">
         <button
           v-for="mode in filterModes"
@@ -45,44 +62,36 @@
           {{ mode.label }}
         </button>
       </div>
-      <transition name="collapse-fade">
-        <div v-if="filterMode !== 'all'" class="picker-row">
-          <transition name="fade-scale" mode="out-in">
-            <HomeRangePicker
-              v-if="filterMode === 'month'"
-              key="month"
-              mode="month"
-              :month="selectedMonth"
-              class="picker-input"
-              @update:month="pickMonth"
-            />
-            <HomeRangePicker
-              v-else-if="filterMode === 'day'"
-              key="day"
-              mode="day"
-              :day="selectedDay"
-              class="picker-input"
-              @update:day="pickDay"
-            />
-            <HomeRangePicker
-              v-else
-              key="year"
-              mode="year"
-              :year="selectedYear"
-              class="picker-input"
-              @update:year="pickYear"
-            />
-          </transition>
-          <button class="btn quick-btn" :disabled="budgetStore.loading" @click="goCurrentRange">
-            {{ currentRangeLabel }}
-          </button>
-        </div>
-      </transition>
-    </header>
+      <div v-if="filterMode !== 'all'" class="picker-row">
+        <HomeRangePicker
+          v-if="filterMode === 'month'"
+          mode="month"
+          :month="selectedMonth"
+          class="picker-input"
+          @update:month="pickMonth"
+        />
+        <HomeRangePicker
+          v-else-if="filterMode === 'day'"
+          mode="day"
+          :day="selectedDay"
+          class="picker-input"
+          @update:day="pickDay"
+        />
+        <HomeRangePicker
+          v-else
+          mode="year"
+          :year="selectedYear"
+          class="picker-input"
+          @update:year="pickYear"
+        />
+        <button class="btn quick-btn" :disabled="budgetStore.loading" @click="goCurrentRange">
+          {{ currentRangeLabel }}
+        </button>
+      </div>
+    </InputBottomSheet>
 
-    <HomeBudgetSummaryCard data-testid="home-budget-summary" />
-    <HomeAssetSummaryCard data-testid="home-asset-summary" />
-    <HomeCreditSummaryCard />
+    <HomeModernOverview />
+
     <HomeTransactionFeed data-testid="home-transaction-feed" />
 
     <teleport to="body">
@@ -92,15 +101,15 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
-import HomeAssetSummaryCard from '@/ui/components/home/HomeAssetSummaryCard.vue'
+import HomeModernOverview from '@/ui/components/home/HomeModernOverview.vue'
 import { useHomePeriodFilter } from '@/ui/composables/useHomePeriodFilter'
-import HomeBudgetSummaryCard from '@/ui/components/home/HomeBudgetSummaryCard.vue'
-import HomeCreditSummaryCard from '@/ui/components/home/HomeCreditSummaryCard.vue'
 import HomeTransactionFeed from '@/ui/components/home/HomeTransactionFeed.vue'
 import LedgerSwitcher from '@/ui/components/common/LedgerSwitcher.vue'
 import HomeRangePicker from '@/ui/components/common/HomeRangePicker.vue'
+import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import { getPreferredBookkeepingPath } from '@/ui/services/bookkeeping-mode.service'
@@ -108,6 +117,7 @@ import { getPreferredBookkeepingPath } from '@/ui/services/bookkeeping-mode.serv
 const router = useRouter()
 const budgetStore = useBudgetStore()
 const { t } = useI18n()
+const periodSheetOpen = ref(false)
 
 const {
   filterMode,
@@ -134,7 +144,7 @@ function openQuickAdd() {
 <style scoped>
 .home-period-chrome {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 .period-title-row {
   display: grid;
@@ -150,6 +160,23 @@ function openQuickAdd() {
   letter-spacing: -0.04em;
   line-height: 1.15;
   overflow-wrap: anywhere;
+}
+.period-title-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+.period-title-btn:hover {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+.period-edit-btn {
+  justify-self: center;
+  font-size: 13px;
+  padding: 6px 14px;
 }
 .period-arrow {
   appearance: none;
@@ -175,14 +202,13 @@ function openQuickAdd() {
   max-width: 100%;
 }
 .period-tabs {
-  position: relative;
-  z-index: 1;
   display: flex;
   gap: 6px;
   padding: 4px;
   background: var(--input-bg);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
+  margin-bottom: 12px;
 }
 .tab-btn {
   flex: 1;
@@ -193,25 +219,22 @@ function openQuickAdd() {
   color: var(--muted);
   font-size: var(--text-sm);
   font-weight: 600;
-  letter-spacing: 0.01em;
-  transition: all var(--anim-fast) var(--anim-standard);
 }
 .tab-btn.primary {
   background: var(--btn-bg);
   color: var(--primary);
   border: 1px solid var(--border-strong);
-  box-shadow: none;
 }
 .picker-row {
   display: flex;
   gap: 8px;
-  align-items: center
+  align-items: center;
 }
 .picker-input {
-  flex: 1
+  flex: 1;
 }
 .quick-btn {
-  white-space: nowrap
+  white-space: nowrap;
 }
 .fab {
   position: fixed;

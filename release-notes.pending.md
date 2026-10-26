@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.24
+- 現代首頁 Finch 向重設（階段 1）：預算／收支／資產／信用卡合併為 `HomeModernOverview` hero + 列表；期間 tab 改 bottom sheet「調整期間」；保留 FAB 與交易 feed。
+
 ## v1.5.22
 - 首頁／分析／資產／歡迎／導覽改為 `HabitatPageShell`，與全站外觀一致；覆蓋率測試改為除嵌入子頁外皆須套殼。
 

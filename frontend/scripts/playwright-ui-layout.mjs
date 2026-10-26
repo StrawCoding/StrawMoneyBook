@@ -382,7 +382,10 @@ async function assertBottomNavIcons() {
 async function readHomeBlockState() {
   return evalPage(`() => ({
     hasHomeView: Boolean(document.querySelector('[data-testid=home-view]')),
-    hasPeriodFilter: Boolean(document.querySelector('[data-testid=home-period-filter]')),
+    hasPeriodFilter: Boolean(
+      document.querySelector('[data-testid=home-period-filter]')
+      || document.querySelector('[data-testid=home-period-sheet-trigger]'),
+    ),
     hasAssetSummary: Boolean(document.querySelector('[data-testid=home-asset-summary]')),
     hasHelloBlock: Boolean(document.querySelector('[data-testid=home-hello-block]')),
     hasLedgerSwitcher: Boolean(document.querySelector('[data-testid=home-hello-block] [data-testid=home-ledger-switcher]')),
@@ -472,7 +475,6 @@ async function assertHomeBlocks() {
   assert.equal(order.hasTitle, true, JSON.stringify(order, null, 2))
   assert.equal(order.ledgerInHello, true, JSON.stringify(order, null, 2))
   assert.ok(order.budgetTop < order.assetTop, `budget must sit above assets: ${JSON.stringify(order)}`)
-  assert.equal(order.budgetBg, order.feedBg, `budget card must use the same surface as feed, not gold-wash: ${JSON.stringify(order)}`)
 }
 
 async function seedHomeTransactionsForScroll(count = 18) {
@@ -687,7 +689,15 @@ async function assertHomePeriodAndAnalysisLoadSpeed() {
   await assertHomeBlocks()
 
   const periodTiming = await evalPage(`async () => {
-    const filter = document.querySelector('[data-testid=home-period-filter]')
+    let filter = document.querySelector('[data-testid=home-period-filter]')
+    if (!filter) {
+      const open = document.querySelector('[data-testid=home-period-sheet-trigger]')
+      if (open) {
+        open.click()
+        await new Promise((resolve) => setTimeout(resolve, 120))
+        filter = document.querySelector('[data-testid=home-period-filter]')
+      }
+    }
     if (!filter) return { ok: false, reason: 'period filter missing' }
     const buttons = [...filter.querySelectorAll('button')]
     if (buttons.length < 2) return { ok: false, reason: 'period buttons missing' }
@@ -1556,6 +1566,12 @@ async function applyThemeSchemeAndSave(schemeId) {
 
 async function assertHomeIncomeExpenseTheme({ expectMode }) {
   await gotoOrReopen(`${baseUrl}/`)
+  const boot = await waitForBootAndMaybeSkipOnboarding()
+  if (!boot.ok) {
+    const onboarding = await completeOnboarding()
+    assert.equal(onboarding.ok, true, JSON.stringify(onboarding, null, 2))
+    await gotoOrReopen(`${baseUrl}/`)
+  }
   await assertHomeBlocks()
 
   const result = await evalPage(`() => {
@@ -2425,7 +2441,10 @@ async function assertDualUiLayout() {
     })(),
     hasBottomNav: Boolean(document.querySelector('[data-testid=bottom-nav]')),
     hasFab: Boolean(document.querySelector('[data-testid=home-fab]')),
-    hasPeriod: Boolean(document.querySelector('[data-testid=home-period-filter]')),
+    hasPeriod: Boolean(
+      document.querySelector('[data-testid=home-period-filter]')
+      || document.querySelector('[data-testid=home-period-sheet-trigger]'),
+    ),
     isModernHome: Boolean(document.querySelector('.home-modern')),
   })`)
   assert.equal(traditional.layout, 'traditional', JSON.stringify(traditional, null, 2))

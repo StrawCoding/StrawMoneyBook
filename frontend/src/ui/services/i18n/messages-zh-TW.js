@@ -2127,6 +2127,7 @@ export const MESSAGES_ZH_TW = {
     'home_page.month_display': '{year} 年 {month} 月',
     'home_page.period_prev': '上一期',
     'home_page.period_next': '下一期',
+    'home_page.period_filter': '調整期間',
     'home_page.pay_cycle_title': '{start}–{end}',
     'home_asset_summary.title_all': '全部收支',
     'home_asset_summary.title_year': '{year} 年收支',

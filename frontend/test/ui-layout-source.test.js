@@ -132,8 +132,9 @@ test('analysis and assets use habitat modern shells (Daak/Finch IA)', () => {
 
 test('home keeps all blocks and FAB under both layouts', () => {
   assert.doesNotMatch(homeSource, /HomeModernView/)
-  assert.match(homeSource, /HomeAssetSummaryCard/)
-  assert.match(homeSource, /HomeBudgetSummaryCard/)
+  assert.match(homeSource, /HomeModernOverview/)
+  assert.doesNotMatch(homeSource, /HomeAssetSummaryCard/)
+  assert.doesNotMatch(homeSource, /HomeBudgetSummaryCard/)
   assert.match(homeSource, /HomeTransactionFeed/)
   assert.match(homeSource, /data-testid="home-period-filter"/)
   assert.match(homeSource, /data-testid="home-period-chrome"/)
@@ -143,15 +144,16 @@ test('home keeps all blocks and FAB under both layouts', () => {
   assert.match(homeSource, /root-class="home-modern"/)
   assert.match(homeSource, /home_page\.habitat_hello/)
   assert.match(homeSource, /hello-test-id="home-hello-block"/)
-  assert.match(habitatCssSource, /\[data-ui-layout='modern'\] \.home-modern \.summary-card \{[\s\S]*?background: var\(--card\)/)
-  assert.doesNotMatch(
-    habitatCssSource,
-    /\[data-ui-layout='modern'\] \.home-modern \.summary-card \{[\s\S]*?background: var\(--zone-plan-bg\)/,
-  )
+  assert.match(habitatCssSource, /\[data-ui-layout='modern'\] \.home-modern \.overview-hero/)
+  assert.doesNotMatch(homeSource, /HomeCreditSummaryCard/)
   assert.doesNotMatch(homeSource, /useUiLayout/)
-  const budgetAt = homeSource.indexOf('data-testid="home-budget-summary"')
-  const assetAt = homeSource.indexOf('data-testid="home-asset-summary"')
-  assert.ok(budgetAt >= 0 && assetAt >= 0 && budgetAt < assetAt, 'budget card must render above asset card')
+  const overviewSource = readFileSync(
+    resolve(import.meta.dirname, '../src/ui/components/home/HomeModernOverview.vue'),
+    'utf8',
+  )
+  const budgetAt = overviewSource.indexOf('data-testid="home-budget-summary"')
+  const assetAt = overviewSource.indexOf('data-testid="home-asset-summary"')
+  assert.ok(budgetAt >= 0 && assetAt >= 0 && budgetAt < assetAt, 'budget hero must render above asset flow')
 })
 
 test('router does not register /more page', () => {

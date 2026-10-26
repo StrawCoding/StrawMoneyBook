@@ -154,6 +154,23 @@
   border-left: 3px solid var(--primary);
 }
 
+[data-ui-layout='modern'] .home-modern .overview-hero {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+
+[data-ui-layout='modern'] .home-modern .flow-chip.income {
+  background: var(--zone-in-bg);
+  color: var(--zone-in-ink);
+  border: 0;
+}
+
+[data-ui-layout='modern'] .home-modern .flow-chip.expense {
+  background: var(--zone-out-bg);
+  color: var(--zone-out-ink);
+  border: 0;
+}
+
 [data-ui-layout='modern'] .home-modern .home-credit-card {
   background: var(--card);
   border-left: 3px solid var(--secondary);

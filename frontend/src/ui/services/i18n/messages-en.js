@@ -2144,6 +2144,7 @@ export const MESSAGES_EN = {
     'home_page.month_display': '{year}-{month}',
     'home_page.period_prev': 'Previous period',
     'home_page.period_next': 'Next period',
+    'home_page.period_filter': 'Adjust period',
     'home_page.pay_cycle_title': '{start}–{end}',
     'home_asset_summary.title_all': 'All Income & Expense',
     'home_asset_summary.title_year': '{year} Income & Expense',

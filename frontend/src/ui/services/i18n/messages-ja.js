@@ -1060,6 +1060,7 @@ export const MESSAGES_JA = {
   'assets_page.habitat_hello': '金庫と口座の一覧',
   'home_page.period_prev': '前の期間',
   'home_page.period_next': '次の期間',
+  'home_page.period_filter': '期間を調整',
   'home_page.pay_cycle_title': '{start}–{end}',
   'home_budget_summary.view': '見る',
   'home_budget_summary.remain': '残高',
