@@ -324,6 +324,7 @@ import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useSecurityStore } from '@/ui/stores/security.store'
+import { useAnalysisCacheStore } from '@/ui/stores/analysis-cache.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { loadAnalysisStats } from '@/core/services/transaction-query.service'
 import {
@@ -357,6 +358,7 @@ import {
 const accountStore = useAccountStore()
 const budgetStore = useBudgetStore()
 const securityStore = useSecurityStore()
+const analysisCacheStore = useAnalysisCacheStore()
 const categoryStore = useCategoryStore()
 const ledgerStore = useLedgerStore()
 const uiStore = useUiStore()
@@ -666,6 +668,12 @@ function openTimeBarSearch(item) {
   })
 }
 
+function resolveAnalysisFilterKey() {
+  if (mode.value === 'year') return String(selectedYear.value)
+  if (mode.value === 'month') return selectedMonth.value
+  return ''
+}
+
 async function loadStatsTransactions() {
   const ledgerId = ledgerStore.activeLedgerId
   if (!ledgerId) {
@@ -680,22 +688,27 @@ async function loadStatsTransactions() {
     return
   }
 
+  const filterKey = resolveAnalysisFilterKey()
+  const cached = analysisCacheStore.takeStats(ledgerId, mode.value, filterKey)
+  if (cached) {
+    analysisStats.value = cached
+  }
+
   try {
     analysisStats.value = await loadAnalysisStats(ledgerId, {
       mode: mode.value,
-      key: mode.value === 'year'
-        ? String(selectedYear.value)
-        : mode.value === 'month'
-          ? selectedMonth.value
-          : '',
+      key: filterKey,
     })
+    analysisCacheStore.setStats(ledgerId, mode.value, filterKey, analysisStats.value)
     const budgetMonthKey = mode.value === 'month' ? selectedMonth.value : monthKeyFromDate(new Date())
     await Promise.all([
       budgetStore.loadMonth(budgetMonthKey),
       securityStore.load(),
     ])
   } catch (error) {
-    uiStore.pushToast(error.message ?? t('analysis_page.toast.load_failed'), 'error')
+    if (!cached) {
+      uiStore.pushToast(error.message ?? t('analysis_page.toast.load_failed'), 'error')
+    }
   }
 }
 

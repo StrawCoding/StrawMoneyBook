@@ -97,6 +97,22 @@ export function useHomePeriodFilter() {
 
   async function syncHomeTransactions(options = {}) {
     try {
+      if (
+        !options.force
+        && filterMode.value !== 'all'
+        && transactionStore.homeFilterMode === filterMode.value
+        && transactionStore.homeFilterKey === (
+          filterMode.value === 'year'
+            ? String(selectedYear.value)
+            : filterMode.value === 'day'
+              ? selectedDay.value
+              : selectedMonth.value
+        )
+        && transactionStore.homeRecent.length > 0
+        && !transactionStore.homeLoading
+      ) {
+        return
+      }
       if (!options.skipBudgetMonthSync) {
         await syncBudgetMonthByHomeFilter()
       }

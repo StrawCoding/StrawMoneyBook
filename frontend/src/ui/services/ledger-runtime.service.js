@@ -16,6 +16,8 @@ import {
   resolveInitialActiveLedgerId,
   sumNumericValues,
 } from './ledger-runtime.helpers'
+import { prefetchMainTabData } from '@/ui/services/main-tab-prefetch.service'
+import { useAnalysisCacheStore } from '@/ui/stores/analysis-cache.store'
 
 const AUTO_CHECKED_LEDGER_IDS = new Set()
 const DEFERRED_HYDRATION_LEDGER_IDS = new Set()
@@ -32,6 +34,7 @@ export function resetLedgerScopedStores(pinia) {
   useSecurityStore(pinia).$reset()
   useCreditStore(pinia).$reset()
   useAddonTemplateStore(pinia).$reset()
+  useAnalysisCacheStore(pinia).clear()
   DEFERRED_HYDRATION_LEDGER_IDS.clear()
 }
 
@@ -171,6 +174,8 @@ export async function loadLedgerScopedStores(ledgerId, pinia) {
     categoryStore.load(),
     budgetStore.loadCurrentMonth(),
   ])
+
+  await prefetchMainTabData(pinia, normalizedLedgerId)
 
   scheduleDeferredLedgerHydration(normalizedLedgerId, pinia)
 
