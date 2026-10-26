@@ -158,6 +158,17 @@ test('analysis and assets use habitat modern shells (Daak/Finch IA)', () => {
   assert.doesNotMatch(featureListSource, /class="card panel"/)
   assert.match(assetsSource, /data-testid="assets-ledger-switcher"/)
   assert.doesNotMatch(assetsSource, /ledger-kicker/)
+  assert.match(assetsSource, /data-testid="assets-toolbar-manage"/)
+  assert.match(assetsSource, /toolbar-cluster/)
+  assert.match(assetsSource, /assets_page\.manage[\s\S]*aria-label/)
+  assert.doesNotMatch(assetsSource, /text-link manage-link/)
+  assert.match(assetsSource, /data-testid="assets-manage-link"/)
+  const categorySource = readFileSync(resolve(root, 'src/ui/views/settings/SettingsCategoryPage.vue'), 'utf8')
+  const assetManageSource = readFileSync(resolve(root, 'src/ui/views/accounts/AssetAccountManagementPage.vue'), 'utf8')
+  const globalCssSource = readFileSync(resolve(root, 'src/ui/assets/css/global.css'), 'utf8')
+  assert.match(categorySource, /habitat-manage-btn/)
+  assert.match(assetManageSource, /habitat-manage-btn/)
+  assert.match(globalCssSource, /\.habitat-manage-btn/)
 })
 
 test('ledger switcher uses plain trigger without select chrome', () => {

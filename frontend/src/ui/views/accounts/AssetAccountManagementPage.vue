@@ -28,9 +28,10 @@
               <font-awesome-icon icon="fa-solid fa-chevron-down" class="group-chevron" />
             </button>
             <RouterLink
-              class="btn mini-btn icon-btn"
+              class="btn habitat-manage-btn"
               :to="{ name: 'asset-account-group-detail', params: { id: group.id } }"
               :aria-label="t('common.parent_group_settings')"
+              :title="t('common.parent_group_settings')"
             >
               <font-awesome-icon icon="fa-solid fa-gear" />
             </RouterLink>

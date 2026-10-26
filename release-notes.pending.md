@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.46
+- 管理入口統一 icon：資產 tab toolbar 改齒輪（對齊預算／分析）；母分類／資產群組列用 `habitat-manage-btn`（僅 icon + aria-label/title）。
+
 ## v1.5.44
 - Modern 子頁／功能列表：共用 `habitat-flow-section` + CSS 扁平化 card（基準頁不動）；借貸／報銷／請款／存錢筒等 10 列表頁已換 markup。
 

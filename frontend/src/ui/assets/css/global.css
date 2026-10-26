@@ -426,6 +426,21 @@ button:focus-visible,
 .btn.icon-btn {
   min-height: 32px;
 }
+/* Habitat manage/settings entry: icon-only gear in list rows; label via aria-label/title. */
+.btn.habitat-manage-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 36px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
 /* Navigation back: icon-only 40×40; label via aria-label/title (common.back). */
 .back-btn {
   width: 40px;

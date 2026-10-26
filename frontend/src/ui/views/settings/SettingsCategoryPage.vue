@@ -21,9 +21,10 @@
               <span>{{ group.name }}</span>
             </div>
             <RouterLink
-              class="btn mini-btn icon-btn"
+              class="btn habitat-manage-btn"
               :to="{ name: 'settings-category-group-detail', params: { id: group.id }, query: { activeKind } }"
               :aria-label="t('settings_category_page.group_settings')"
+              :title="t('settings_category_page.group_settings')"
             >
               <font-awesome-icon icon="fa-solid fa-gear" />
             </RouterLink>

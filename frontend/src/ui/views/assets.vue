@@ -9,7 +9,17 @@
   >
     <template #toolbar>
       <LedgerSwitcher class="ledger-switcher-wrap ledger-panel" data-testid="assets-ledger-switcher" />
-      <RouterLink class="text-link manage-link" to="/assets/accounts">{{ t('assets_page.manage') }}</RouterLink>
+      <div class="toolbar-cluster" data-testid="assets-toolbar-manage">
+        <RouterLink
+          class="btn icon-btn toolbar-icon"
+          to="/assets/accounts"
+          data-testid="assets-manage-link"
+          :aria-label="t('assets_page.manage')"
+          :title="t('assets_page.manage')"
+        >
+          <font-awesome-icon icon="fa-solid fa-gear" />
+        </RouterLink>
+      </div>
     </template>
 
     <section class="assets-flow-hero vault-summary-card">
@@ -424,15 +434,6 @@ function persistExpandedGroupState() {
   color: var(--muted);
   font-size: 13px;
   font-weight: 650;
-}
-
-.manage-link {
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--primary);
-  text-decoration: none;
-  padding: 6px 0;
 }
 
 .assets-flow-hero {

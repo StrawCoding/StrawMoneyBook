@@ -407,6 +407,7 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   display: none;
 }
 
+/* Tab toolbar secondary actions (budget settings, assets manage, analysis export): icon-only in toolbar-cluster. */
 [data-ui-layout='modern'] .page-container .toolbar-cluster {
   display: inline-flex;
   align-items: center;
