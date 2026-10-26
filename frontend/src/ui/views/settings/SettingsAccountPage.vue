@@ -134,11 +134,31 @@
       <article v-else-if="!sessionUser" class="card panel">
         <header class="section-head">
           <h3>{{ authMode === 'login' ? t('settings_account.login', '登入') : t('settings_account.register', '註冊') }}</h3>
-          <div class="segment-pills tab-row">
-            <button type="button" class="tab-btn" :class="{ active: authMode === 'login' }" @click="authMode = 'login'">
+          <div
+            class="segment-pills tab-row"
+            role="tablist"
+            :aria-label="t('settings_account.login_register', '登入 / 註冊')"
+          >
+            <button
+              type="button"
+              role="tab"
+              class="tab-btn"
+              :class="{ primary: authMode === 'login', active: authMode === 'login' }"
+              :aria-selected="authMode === 'login' ? 'true' : 'false'"
+              data-testid="account-auth-tab-login"
+              @click="authMode = 'login'"
+            >
               {{ t('settings_account.login', '登入') }}
             </button>
-            <button type="button" class="tab-btn" :class="{ active: authMode === 'register' }" @click="authMode = 'register'">
+            <button
+              type="button"
+              role="tab"
+              class="tab-btn"
+              :class="{ primary: authMode === 'register', active: authMode === 'register' }"
+              :aria-selected="authMode === 'register' ? 'true' : 'false'"
+              data-testid="account-auth-tab-register"
+              @click="authMode = 'register'"
+            >
               {{ t('settings_account.register', '註冊') }}
             </button>
           </div>

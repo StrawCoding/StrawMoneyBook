@@ -474,9 +474,11 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 [data-ui-layout='modern'] .page-container .type-tabs .btn.primary,
 [data-ui-layout='modern'] .page-container .segment-pills .btn.primary,
 [data-ui-layout='modern'] .page-container .segment-pills .tab-btn.primary,
+[data-ui-layout='modern'] .page-container .segment-pills .tab-btn.active,
 [data-ui-layout='modern'] .page-container .view-toggle .btn.primary,
 [data-ui-layout='modern'] .page-container .period-nav .btn.primary,
-[data-ui-layout='modern'] .page-container .period-tabs .tab-btn.primary {
+[data-ui-layout='modern'] .page-container .period-tabs .tab-btn.primary,
+[data-ui-layout='modern'] .page-container .period-tabs .tab-btn.active {
   background: var(--habitat-selected-bg);
   color: var(--text);
   border-color: var(--habitat-selected-line);

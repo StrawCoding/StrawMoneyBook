@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.50
+- 帳號登入頁：登入／註冊 segment 以 `primary`+`active` 顯示目前模式（modern Habitat 選取色）；補 `aria-selected` 與 testid。
+
 ## v1.5.49
 - 支援幣別旁顯示國旗 emoji：幣別選單（CustomSelect）、匯率預覽列表、帳戶詳情幣別列。
 
