@@ -12,7 +12,7 @@
       <RouterLink class="text-link manage-link" to="/assets/accounts">{{ t('assets_page.manage') }}</RouterLink>
     </template>
 
-    <section class="vault-summary-card assets-flow-section">
+    <article class="card panel vault-summary-card">
       <header class="row vault-summary-head">
         <h3>{{ t('assets_page.summary_title') }}</h3>
       </header>
@@ -81,9 +81,9 @@
           </button>
         </li>
       </ul>
-    </section>
+    </article>
 
-    <section class="assets-accounts-section assets-flow-section">
+    <article class="card panel accounts-island">
       <header class="row accounts-island-head">
         <h3>{{ t('assets_page.asset_accounts') }}</h3>
       </header>
@@ -133,7 +133,7 @@
           </ul>
         </li>
       </ul>
-    </section>
+    </article>
 
     <AppDialog
       :open="totalAssetsInfoOpen"
@@ -434,15 +434,8 @@ function persistExpandedGroupState() {
   padding: 6px 0;
 }
 
-.assets-flow-section {
-  display: grid;
-  gap: 10px;
-  padding: 4px 0 12px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-}
-
-.assets-flow-section:last-of-type {
-  border-bottom: 0;
+.panel {
+  padding: 14px;
 }
 
 h2,
@@ -490,31 +483,31 @@ h3 {
 }
 
 .summary-item {
-  border: 0;
-  border-radius: 0;
-  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
   display: grid;
   gap: 6px;
-  background: transparent;
+  background: var(--bg-soft);
 }
 
 .summary-total {
-  padding-bottom: 10px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border: 0;
+  background: color-mix(in srgb, var(--secondary) 12%, var(--card) 88%);
 }
 
 .summary-stat {
-  padding: 6px 4px;
+  border: 0;
 }
 
 .vault-drill-list {
   list-style: none;
-  margin: 4px 0 0;
+  margin: 10px 0 0;
   padding: 0;
-  border: 0;
-  border-radius: 0;
-  overflow: visible;
-  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--card);
 }
 
 .vault-drill-list li + li {
@@ -527,7 +520,7 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 11px 4px;
+  padding: 11px 12px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -587,9 +580,9 @@ h3 {
 }
 
 .group-list {
-  margin-top: 8px;
+  margin-top: 12px;
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .group-item {
@@ -643,7 +636,7 @@ h3 {
 .account-list {
   margin-top: 0;
   display: grid;
-  gap: 0;
+  gap: 12px;
 }
 
 .account-row {
@@ -651,19 +644,16 @@ h3 {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  border-radius: 0;
-  background: transparent;
-  border: 0;
+  border-radius: var(--habitat-radius-tile, 14px);
+  background: var(--card);
+  border: 1px solid var(--border);
   box-shadow: none;
-  padding: 12px 4px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
-}
-.account-list li:last-child .account-row {
-  border-bottom: 0;
+  padding: 14px 14px;
 }
 .account-row.excluded {
-  background: transparent;
-  opacity: 0.72;
+  background: color-mix(in srgb, var(--card) 92%, var(--muted) 8%);
+  border-color: color-mix(in srgb, var(--muted) 28%, var(--border) 72%);
+  opacity: 0.88;
 }
 .account-row.group-stat-excluded {
   border-bottom-style: dashed;
@@ -689,10 +679,10 @@ a {
 }
 
 .account-name {
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.15;
   color: var(--text);
-  font-weight: 650;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -707,8 +697,8 @@ a {
 }
 
 .account-balance {
-  font-size: 16px;
-  font-weight: 650;
+  font-size: 17px;
+  font-weight: 700;
   line-height: 1.1;
 }
 .account-row.excluded .account-balance {

@@ -279,35 +279,39 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 }
 
 [data-ui-layout='modern'] .assets-modern .vault-summary-card,
-[data-ui-layout='modern'] .assets-modern .assets-accounts-section {
-  display: grid;
-  gap: 10px;
-  background: transparent;
-  border: 0;
+[data-ui-layout='modern'] .assets-modern .accounts-island {
+  border-radius: var(--habitat-radius-island);
+  border: 1px solid var(--border);
   box-shadow: none;
+  background: var(--card);
 }
 
-[data-ui-layout='modern'] .assets-modern .summary-total,
+[data-ui-layout='modern'] .assets-modern .summary-total {
+  border-radius: var(--habitat-radius-tile);
+  background: var(--zone-vault-bg);
+}
+
 [data-ui-layout='modern'] .assets-modern .summary-stat {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
+  border-radius: var(--habitat-radius-tile);
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  background: var(--bg-soft);
 }
 
 [data-ui-layout='modern'] .assets-modern .vault-drill-list {
-  border: 0;
-  background: transparent;
-  border-radius: 0;
+  border-radius: var(--habitat-radius-tile);
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
 }
 
 [data-ui-layout='modern'] .assets-modern .account-row {
-  background: transparent;
-  border-radius: 0;
+  border-radius: var(--habitat-radius-tile);
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
   box-shadow: none;
 }
 
 [data-ui-layout='modern'] .assets-modern .vault-drill-list li + li {
-  border-top-color: color-mix(in srgb, var(--border) 65%, transparent);
+  border-top-color: var(--border);
 }
 
 [data-ui-layout='modern'] .analysis-modern .toolbar-cluster {
