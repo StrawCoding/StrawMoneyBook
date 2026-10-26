@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.42
+- 資產頁 IA 對齊分析頁：`assets-flow-hero`（總資產 strip + 可支配／負債 split）與 `assets-flow-section` 列分隔。
+
 ## v1.5.41
 - 設定列表：分隔線改貼在每列底部（含區段最後一列）；移除區段 border-top，標題不再被頂線切到。
 

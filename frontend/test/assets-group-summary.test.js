@@ -134,7 +134,7 @@ test('assets summary uses vault drill list for lend/borrow/securities/credit', (
   assert.ok(lendAt >= 0 && borrowAt >= 0 && securitiesAt >= 0 && creditAt >= 0)
   assert.ok(lendAt < borrowAt && borrowAt < securitiesAt && securitiesAt < creditAt)
   assert.match(assetsPageSource, /vault-drill-list/)
-  assert.match(assetsPageSource, /vault-split/)
+  assert.match(assetsPageSource, /split-grid/)
   assert.doesNotMatch(assetsPageSource, /summary-hint/)
   // 資產母分類列表排除信用卡
   assert.match(assetsPageSource, /account_kind.*credit/)
