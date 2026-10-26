@@ -8,6 +8,7 @@
       @click="toggleOpen"
     >
       <span class="value" :class="{ 'icon-only': iconOnly }">
+        <span v-if="selectedOption?.flag" class="currency-flag" aria-hidden="true">{{ selectedOption.flag }}</span>
         <font-awesome-icon v-if="selectedOption?.icon" :icon="selectedOption.icon" class="option-icon" />
         <span v-if="!iconOnly || !selectedOption?.icon" class="text-wrap">
           <span class="text" :class="{ placeholder: !selectedLabel }">
@@ -40,6 +41,7 @@
             :disabled="option.disabled"
             @click="pick(option.value)"
           >
+            <span v-if="option.flag" class="currency-flag" aria-hidden="true">{{ option.flag }}</span>
             <font-awesome-icon v-if="option.icon" :icon="option.icon" class="option-icon" />
             <span v-if="!iconOnly">{{ option.label }}</span>
           </button>
@@ -56,6 +58,7 @@
           :disabled="option.disabled"
           @click="pick(option.value)"
         >
+          <span v-if="option.flag" class="currency-flag" aria-hidden="true">{{ option.flag }}</span>
           <font-awesome-icon v-if="option.icon" :icon="option.icon" class="option-icon" />
           <span v-if="!iconOnly">{{ option.label }}</span>
         </button>
@@ -137,6 +140,7 @@ function normalizeOptions(options, groupName = '') {
       value: item.value ?? item.id ?? '',
       label: item.label ?? item.name ?? String(item.value ?? item.id ?? ''),
       icon: item.icon ?? '',
+      flag: item.flag ?? '',
       groupName: String(item.groupName ?? groupName ?? '').trim(),
       disabled: Boolean(item.disabled),
     }))

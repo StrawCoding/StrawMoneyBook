@@ -50,7 +50,10 @@
 
       <ul class="rate-list">
         <li v-for="item in previewRates" :key="item.code" class="rate-item">
-          <span>{{ item.code }}</span>
+          <span class="currency-with-flag">
+            <span v-if="item.flag" class="currency-flag" aria-hidden="true">{{ item.flag }}</span>
+            <span>{{ item.code }}</span>
+          </span>
           <strong>{{ item.valueLabel }}</strong>
         </li>
       </ul>
@@ -113,6 +116,7 @@ const previewRates = computed(() => {
     const valueLabel = Number.isFinite(numeric) && numeric > 0 ? numeric.toFixed(6) : '-'
     return {
       code,
+      flag: item.flag,
       valueLabel,
     }
   })

@@ -426,6 +426,18 @@ button:focus-visible,
 .btn.icon-btn {
   min-height: 32px;
 }
+
+.currency-flag {
+  flex: 0 0 auto;
+  font-size: 1.15em;
+  line-height: 1;
+}
+
+.currency-with-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 /* Habitat manage/settings entry: icon-only gear in list rows; label via aria-label/title. */
 .btn.habitat-manage-btn {
   width: 36px;

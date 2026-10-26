@@ -127,7 +127,10 @@
           </div>
           <div class="detail-row">
             <small class="muted">{{ t('welcome.account_currency') }}</small>
-            <span>{{ accountCurrencyCode }}</span>
+            <span class="currency-with-flag">
+              <span v-if="accountCurrencyDisplay.flag" class="currency-flag" aria-hidden="true">{{ accountCurrencyDisplay.flag }}</span>
+              <span>{{ accountCurrencyDisplay.label }}</span>
+            </span>
           </div>
           <div v-if="isCreditAccount" class="detail-row">
             <small class="muted">{{ t('account.current_debt_label') }}</small>
@@ -263,7 +266,7 @@ import AppDialog from '@/ui/components/common/AppDialog.vue'
 import { addonDeltaMajorFromNote, addonDeltaTagText } from '@/ui/utils/addon-note'
 import { defaultAccountIcon, normalizeFaIcon } from '@/ui/utils/fa-icon-options'
 import { getSystemTransactionIcon, getSystemTransactionLabel } from '@/ui/utils/system-transaction-presenter'
-import { currencyOptions, normalizeCurrencyCode } from '@/ui/constants/currency-options'
+import { currencyOptions, getCurrencyOption, normalizeCurrencyCode } from '@/ui/constants/currency-options'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 
 const route = useRoute()
@@ -311,6 +314,11 @@ function goBack() {
 
 const accountName = computed(() => account.value?.name || t('common.account'))
 const accountCurrencyCode = computed(() => normalizeCurrencyCode(account.value?.currency_code, 'TWD'))
+const accountCurrencyDisplay = computed(() => getCurrencyOption(accountCurrencyCode.value) ?? {
+  value: accountCurrencyCode.value,
+  label: accountCurrencyCode.value,
+  flag: '',
+})
 const accountGroupName = computed(() => {
   const groupId = account.value?.group_id
   if (!groupId) return '-'
