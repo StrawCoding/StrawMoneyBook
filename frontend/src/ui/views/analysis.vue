@@ -35,21 +35,31 @@
       </div>
     </template>
 
-    <header class="analysis-period-chrome" data-testid="analysis-period-chrome">
-        <h2 class="period-title">{{ periodTitle }}</h2>
-        <div class="period-tabs mode-tabs" data-testid="analysis-period-filter">
+    <PeriodChrome
+      chrome-test-id="analysis-period-chrome"
+      id-prefix="analysis-period"
+      :title="chromePeriodTitle"
+      :can-step="canStepAnalysisPeriod"
+      :sheet-title="t('home_page.period_filter', '調整期間')"
+      :prev-label="t('home_page.period_prev')"
+      :next-label="t('home_page.period_next')"
+      @step="stepAnalysisPeriod"
+    >
+      <template #sheet>
+        <div class="period-chrome-sheet-tabs" data-testid="analysis-period-filter">
           <button type="button" class="btn tab-btn" :class="{ primary: mode === 'all' }" @click="mode = 'all'">{{ t('analysis_page.mode.all') }}</button>
           <button type="button" class="btn tab-btn" :class="{ primary: mode === 'year' }" @click="mode = 'year'">{{ t('analysis_page.mode.year') }}</button>
           <button type="button" class="btn tab-btn" :class="{ primary: mode === 'month' }" @click="mode = 'month'">{{ t('analysis_page.mode.month') }}</button>
         </div>
-        <transition name="collapse-fade">
-          <div v-if="mode !== 'all'" class="picker-row picker-wrap">
-            <transition name="fade-scale" mode="out-in">
-              <HomeRangePicker v-if="mode === 'year'" key="year" mode="year" :year="selectedYear" class="picker-input" @update:year="pickYear" />
-              <HomeRangePicker v-else key="month" mode="month" :month="selectedMonth" class="picker-input" @update:month="pickMonth" />
-            </transition>
-          </div>
-        </transition>
+        <div v-if="mode !== 'all'" class="period-chrome-sheet-picker">
+          <HomeRangePicker v-if="mode === 'year'" mode="year" :year="selectedYear" class="picker-input" @update:year="pickYear" />
+          <HomeRangePicker v-else mode="month" :month="selectedMonth" class="picker-input" @update:month="pickMonth" />
+          <button type="button" class="btn quick-btn" @click="goCurrentAnalysisRange">
+            {{ currentAnalysisRangeLabel }}
+          </button>
+        </div>
+      </template>
+      <template #below>
         <p
           v-if="exportedFilename"
           class="muted export-result"
@@ -77,9 +87,10 @@
         >
           {{ lastExportError }}
         </p>
-      </header>
+      </template>
+    </PeriodChrome>
 
-      <article class="card panel analysis-hero-card" data-testid="analysis-big-numbers">
+      <section class="analysis-flow-hero" data-testid="analysis-big-numbers">
         <div class="split-grid">
           <div class="split-card income">
             <small class="split-label">{{ t('analysis_page.type.income') }}</small>
@@ -94,9 +105,9 @@
           <span class="balance-label">{{ t('analysis_print.summary.balance') }}</span>
           <MoneyText :value-minor="balanceMinor" :tone="balanceMinor >= 0 ? 'income' : 'expense'" />
         </div>
-      </article>
+      </section>
 
-    <article class="card panel" data-testid="analysis-income-section">
+    <section class="analysis-flow-section" data-testid="analysis-income-section">
       <AnalysisIconizedChartPair
         v-if="incomeBarRows.length"
         :title="t('analysis_page.type_analysis', { type: t('analysis_page.type.income') })"
@@ -110,9 +121,9 @@
         @select="(item) => openCategoryBreakdownDetail(item, 'income')"
       />
       <p v-else class="muted no-data-tip">{{ t('analysis_page.no_data_for_type', { type: t('analysis_page.type.income').toLowerCase() }) }}</p>
-    </article>
+    </section>
 
-    <article class="card panel" data-testid="analysis-expense-section">
+    <section class="analysis-flow-section" data-testid="analysis-expense-section">
       <AnalysisIconizedChartPair
         v-if="expenseBarRows.length"
         :title="t('analysis_page.type_analysis', { type: t('analysis_page.type.expense') })"
@@ -126,11 +137,11 @@
         @select="(item) => openCategoryBreakdownDetail(item, 'expense')"
       />
       <p v-else class="muted no-data-tip">{{ t('analysis_page.no_data_for_type', { type: t('analysis_page.type.expense').toLowerCase() }) }}</p>
-    </article>
+    </section>
 
-    <article
+    <section
       v-if="budgetCards.length"
-      class="card panel"
+      class="analysis-flow-section"
       data-testid="analysis-budget-cards"
     >
       <header class="row">
@@ -159,9 +170,9 @@
           </div>
         </article>
       </div>
-    </article>
+    </section>
 
-    <article class="card panel" data-testid="analysis-securities-section">
+    <section class="analysis-flow-section" data-testid="analysis-securities-section">
       <header class="row">
         <h3>{{ t('analysis_page.securities_title') }}</h3>
         <div class="header-metrics">
@@ -193,9 +204,9 @@
         </li>
       </ul>
       <p v-else class="muted no-data-tip">{{ t('analysis_page.securities_empty') }}</p>
-    </article>
+    </section>
 
-    <article class="card panel" data-testid="analysis-account-section">
+    <section class="analysis-flow-section" data-testid="analysis-account-section">
       <header class="row">
         <h3>{{ t('analysis_page.scope.account') }}</h3>
         <div class="header-metrics">
@@ -228,9 +239,9 @@
         @select="openAccountBreakdownDetail"
       />
       <p v-else class="muted no-data-tip">{{ t('analysis_page.no_data_for_type', { type: accountActiveTypeLabel.toLowerCase() }) }}</p>
-    </article>
+    </section>
 
-    <article v-if="showTimeBarChart" class="card panel">
+    <section v-if="showTimeBarChart" class="analysis-flow-section" data-testid="analysis-time-section">
       <header class="row">
         <h3>{{ timeBarTitle }}</h3>
         <div class="header-metrics">
@@ -265,7 +276,7 @@
           <div class="time-bar-count muted">{{ t('analysis_page.items_count', { count: item.count }) }}</div>
         </button>
       </div>
-    </article>
+    </section>
 
     <div
       v-if="showExportCapture"
@@ -300,6 +311,8 @@
 <script setup>
 import { Capacitor } from '@capacitor/core'
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
+import PeriodChrome from '@/ui/components/layout/PeriodChrome.vue'
+import { shiftMonthKey } from '@/ui/utils/home-period-shift.js'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
@@ -422,6 +435,34 @@ const exportPeriodLabel = computed(() => {
   return t('analysis_print.all_hint')
 })
 const periodTitle = computed(() => exportPeriodLabel.value)
+const chromePeriodTitle = computed(() => {
+  if (mode.value === 'all') return t('home_page.all_transactions')
+  if (mode.value === 'year') return t('home_page.year_display', { year: selectedYear.value })
+  const [year, month] = String(selectedMonth.value ?? '').split('-')
+  if (!year || !month) return '-'
+  return t('home_page.month_display', { year, month })
+})
+const canStepAnalysisPeriod = computed(() => mode.value !== 'all')
+const currentAnalysisRangeLabel = computed(() => (
+  mode.value === 'year' ? t('home_page.current_year') : t('home_page.current_month')
+))
+
+function stepAnalysisPeriod(delta) {
+  if (mode.value === 'year') {
+    selectedYear.value += Number(delta || 0)
+    return
+  }
+  if (mode.value === 'month') {
+    selectedMonth.value = shiftMonthKey(selectedMonth.value, delta)
+  }
+}
+
+function goCurrentAnalysisRange() {
+  const now = new Date()
+  selectedMonth.value = monthKeyFromDate(now)
+  selectedYear.value = now.getFullYear()
+}
+
 const exportFilterLabel = computed(() => (mode.value === 'all' ? '' : exportPeriodLabel.value))
 const reportPageTo = computed(() => {
   const query = { mode: mode.value === 'year' ? 'year' : mode.value === 'all' ? 'all' : 'month' }

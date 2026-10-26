@@ -2,6 +2,11 @@
 
 ---
 
+## v1.5.28
+- 恢復 modern 各頁 Habitat 副標（kicker）顯示。
+- 新增共用 `PeriodChrome`（首頁／分析：箭頭 + 點標題開 sheet 調期間）。
+- 分析頁改 flow 區塊（去外層 card）；功能頁「進階」預設收合。
+
 ## v1.5.27
 - 現代版面：各頁 Habitat 副標（kicker 小字）隱藏；帳本切換改 Daak 式純文字＋▾（無邊框／底色）；資產頁帳本改至標題列 toolbar。
 

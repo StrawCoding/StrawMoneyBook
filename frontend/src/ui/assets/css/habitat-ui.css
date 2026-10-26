@@ -103,44 +103,8 @@
   background: var(--card);
 }
 
-[data-ui-layout='modern'] .home-modern .home-period-chrome {
+[data-ui-layout='modern'] .period-chrome {
   background: transparent;
-}
-
-[data-ui-layout='modern'] .home-modern .period-title {
-  font-size: var(--habitat-title-size);
-}
-
-[data-ui-layout='modern'] .home-modern .period-arrow {
-  background: var(--bg-soft);
-  border-color: transparent;
-}
-
-[data-ui-layout='modern'] .home-modern .period-tabs {
-  display: flex;
-  gap: 6px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-}
-
-[data-ui-layout='modern'] .home-modern .period-tabs .tab-btn {
-  flex: 1;
-  padding: 7px 4px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  background: var(--bg-soft);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 650;
-  box-shadow: none;
-}
-
-[data-ui-layout='modern'] .home-modern .period-tabs .tab-btn.primary {
-  background: var(--habitat-selected-bg);
-  color: var(--text);
-  border-color: var(--habitat-selected-line);
 }
 
 [data-ui-layout='modern'] .home-modern .hero-card {
@@ -340,40 +304,11 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   font-size: var(--habitat-title-size);
 }
 
-[data-ui-layout='modern'] .analysis-modern .analysis-period-chrome,
 [data-ui-layout='modern'] .assets-modern .assets-hello-block {
   background: transparent;
 }
 
-[data-ui-layout='modern'] .analysis-modern .period-tabs,
-[data-ui-layout='modern'] .analysis-modern .analysis-period-chrome .mode-tabs {
-  display: flex;
-  gap: 6px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-}
-
-[data-ui-layout='modern'] .analysis-modern .period-tabs .tab-btn,
-[data-ui-layout='modern'] .analysis-modern .analysis-period-chrome .mode-tabs .btn {
-  flex: 1;
-  padding: 7px 4px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  background: var(--bg-soft);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 650;
-  box-shadow: none;
-}
-
-[data-ui-layout='modern'] .analysis-modern .period-tabs .tab-btn.primary,
-[data-ui-layout='modern'] .analysis-modern .analysis-period-chrome .mode-tabs .btn.primary {
-  background: var(--habitat-selected-bg);
-  color: var(--text);
-  border-color: var(--habitat-selected-line);
-}
-
+[data-ui-layout='modern'] .analysis-modern .analysis-flow-hero .split-card.income,
 [data-ui-layout='modern'] .analysis-modern .analysis-hero-card .split-card.income {
   background: var(--zone-in-bg);
   color: var(--zone-in-ink);
@@ -381,6 +316,7 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border: 0;
 }
 
+[data-ui-layout='modern'] .analysis-modern .analysis-flow-hero .split-card.expense,
 [data-ui-layout='modern'] .analysis-modern .analysis-hero-card .split-card.expense {
   background: var(--zone-out-bg);
   color: var(--zone-out-ink);
@@ -388,6 +324,7 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border: 0;
 }
 
+[data-ui-layout='modern'] .analysis-modern .analysis-flow-hero .balance-strip,
 [data-ui-layout='modern'] .analysis-modern .analysis-hero-card .balance-strip {
   border: 0;
   background: var(--bg-soft);
@@ -525,7 +462,7 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 }
 
 [data-ui-layout='modern'] .habitat-page .habitat-kicker {
-  display: none;
+  font-size: var(--habitat-kicker-size);
 }
 
 [data-ui-layout='modern'] .page-container .toolbar-cluster {
@@ -630,4 +567,82 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-radius: var(--habitat-radius-island);
   border: 1px solid var(--border);
   box-shadow: none;
+}
+
+/* PeriodChrome sheet + chrome (shared home / analysis) */
+.period-chrome-sheet-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: var(--input-bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.period-chrome-sheet-tabs .tab-btn {
+  flex: 1;
+  padding: 7px 0;
+  border-radius: var(--radius-xs);
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.period-chrome-sheet-tabs .tab-btn.primary {
+  background: var(--btn-bg);
+  color: var(--primary);
+  border: 1px solid var(--border-strong);
+}
+
+.period-chrome-sheet-picker {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.period-chrome-sheet-picker .picker-input {
+  flex: 1;
+  min-width: 0;
+}
+
+[data-ui-layout='modern'] .period-chrome-sheet-tabs {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+[data-ui-layout='modern'] .period-chrome .period-title {
+  font-size: var(--habitat-title-size);
+}
+
+[data-ui-layout='modern'] .period-chrome .period-arrow {
+  background: var(--bg-soft);
+  border-color: transparent;
+}
+
+[data-ui-layout='modern'] .analysis-modern .analysis-flow-hero {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+[data-ui-layout='modern'] .analysis-modern .analysis-flow-section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+[data-ui-layout='modern'] .analysis-modern .analysis-flow-section:last-child {
+  border-bottom: 0;
+}
+
+[data-ui-layout='modern'] .analysis-modern .analysis-flow-section > header h3 {
+  font-size: 15px;
+  font-weight: 700;
 }

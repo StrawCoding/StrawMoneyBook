@@ -26,8 +26,8 @@
         </nav>
       </section>
 
-      <section class="feature-section" data-testid="feature-list-advanced">
-        <h3 class="feature-section-title">{{ t('feature_list.advanced') }}</h3>
+      <details class="feature-section feature-advanced-details" data-testid="feature-list-advanced">
+        <summary class="feature-section-title feature-advanced-summary">{{ t('feature_list.advanced') }}</summary>
         <nav class="feature-list">
           <RouterLink
             v-for="feature in advancedFeatures"
@@ -42,7 +42,7 @@
             <span>{{ feature.label }}</span>
           </RouterLink>
         </nav>
-      </section>
+      </details>
     </article>
   </HabitatPageShell>
 </template>
@@ -132,6 +132,34 @@ h2 {
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--muted, color-mix(in srgb, var(--text) 62%, transparent))
+}
+.feature-advanced-details {
+  margin-top: 16px;
+}
+.feature-advanced-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px;
+  border-radius: 10px;
+}
+.feature-advanced-summary::-webkit-details-marker {
+  display: none;
+}
+.feature-advanced-summary::after {
+  content: '▾';
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  transition: transform 120ms ease;
+}
+.feature-advanced-details[open] .feature-advanced-summary::after {
+  transform: rotate(180deg);
+}
+.feature-advanced-details .feature-list {
+  margin-top: 8px;
 }
 .feature-list {
   display: grid;
