@@ -128,6 +128,19 @@ test('analysis and assets use habitat modern shells (Daak/Finch IA)', () => {
   assert.doesNotMatch(habitatCssSource, /\[data-ui-layout='modern'\] \.page-container \.vault-drill-list/)
   assert.match(i18nSource, /'analysis_page\.habitat_hello'/)
   assert.match(i18nSource, /'assets_page\.habitat_hello'/)
+  assert.match(habitatCssSource, /\[data-ui-layout='modern'\] \.habitat-page \.habitat-kicker[\s\S]*?display:\s*none/)
+  assert.match(assetsSource, /data-testid="assets-ledger-switcher"/)
+  assert.doesNotMatch(assetsSource, /ledger-kicker/)
+})
+
+test('ledger switcher uses plain trigger without select chrome', () => {
+  const ledgerSwitcherSource = readFileSync(
+    resolve(root, 'src/ui/components/common/LedgerSwitcher.vue'),
+    'utf8',
+  )
+  assert.match(ledgerSwitcherSource, /switcher-trigger/)
+  assert.doesNotMatch(ledgerSwitcherSource, /class="select switcher-btn"/)
+  assert.match(habitatCssSource, /\[data-ui-layout='modern'\] \.ledger-switcher \.switcher-btn[\s\S]*?background:\s*transparent/)
 })
 
 test('home keeps all blocks and FAB under both layouts', () => {

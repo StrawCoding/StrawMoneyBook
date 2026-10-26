@@ -1,7 +1,7 @@
 <template>
   <div class="ledger-switcher">
     <button
-      class="select switcher-btn"
+      class="switcher-btn switcher-trigger"
       type="button"
       :disabled="switchableLedgers.length <= 1"
       :aria-expanded="isOpen ? 'true' : 'false'"
@@ -91,11 +91,28 @@ watch(
 .ledger-switcher.home-hello-ledger {
   min-width: 0;
 }
+.switcher-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  width: auto;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: right;
+}
+.switcher-trigger:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
 .switcher-btn {
   background-image: none;
-  padding-right: 12px;
-  justify-content: space-between;
-  gap: 10px
+  padding-right: 0;
+  justify-content: flex-end;
+  gap: 2px;
 }
 .menu-sheet-body {
   display: grid;

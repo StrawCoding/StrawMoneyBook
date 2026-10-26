@@ -8,13 +8,8 @@
     stack-class="assets-page"
   >
     <template #toolbar>
+      <LedgerSwitcher class="ledger-switcher-wrap ledger-panel" data-testid="assets-ledger-switcher" />
       <RouterLink class="text-link manage-link" to="/assets/accounts">{{ t('assets_page.manage') }}</RouterLink>
-    </template>
-    <template #header-extra>
-      <div class="ledger-hello">
-        <small class="muted ledger-kicker">{{ t('assets_page.current_ledger') }}</small>
-        <LedgerSwitcher class="ledger-switcher-wrap ledger-panel" />
-      </div>
     </template>
 
     <article class="card panel vault-summary-card">
@@ -428,15 +423,6 @@ function persistExpandedGroupState() {
   color: var(--muted);
   font-size: 13px;
   font-weight: 650;
-}
-
-.ledger-hello {
-  display: grid;
-  gap: 6px;
-}
-
-.ledger-kicker {
-  font-size: 12px;
 }
 
 .manage-link {
