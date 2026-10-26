@@ -514,6 +514,78 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   box-shadow: none;
 }
 
+[data-ui-layout='modern'] .analysis-modern .iconized-chart-pair .pie-hole {
+  background: var(--bg-soft);
+}
+
+[data-ui-layout='modern'] .analysis-modern .bar-chart-list {
+  gap: 0;
+}
+
+[data-ui-layout='modern'] .analysis-modern .bar-chart-list > li + li {
+  border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}
+
+[data-ui-layout='modern'] .analysis-modern .bar-chart-item.interactive {
+  padding: 10px 0;
+}
+
+/* Analysis flow sections: metrics / budget / securities — no nested bordered mini-cards */
+[data-ui-layout='modern'] .analysis-modern .securities-summary-grid {
+  gap: 8px 12px;
+  margin-top: 6px;
+}
+
+[data-ui-layout='modern'] .analysis-modern .securities-summary-grid > div {
+  border: 0;
+  border-radius: 0;
+  padding: 4px 0;
+  background: transparent;
+  gap: 2px;
+}
+
+[data-ui-layout='modern'] .analysis-modern .securities-summary-grid > div small {
+  font-size: 12px;
+}
+
+[data-ui-layout='modern'] .analysis-modern .budget-grid {
+  gap: 0;
+  margin-top: 8px;
+}
+
+[data-ui-layout='modern'] .analysis-modern .budget-card {
+  border: 0;
+  border-radius: 0;
+  padding: 12px 0;
+  background: transparent;
+  gap: 8px;
+}
+
+[data-ui-layout='modern'] .analysis-modern .budget-card + .budget-card {
+  border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}
+
+[data-ui-layout='modern'] .analysis-modern .securities-alloc-list {
+  gap: 0;
+  margin-top: 10px;
+}
+
+[data-ui-layout='modern'] .analysis-modern .securities-alloc-row {
+  border: 0;
+  border-radius: 0;
+  padding: 10px 0;
+  background: transparent;
+}
+
+[data-ui-layout='modern'] .analysis-modern .securities-alloc-list .securities-alloc-row + .securities-alloc-row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}
+
+[data-ui-layout='modern'] .analysis-modern .count-chip {
+  border-color: transparent;
+  background: var(--bg-soft);
+}
+
 [data-ui-layout='modern'] .welcome-modern .language-btn {
   border-radius: var(--habitat-radius-tile);
 }

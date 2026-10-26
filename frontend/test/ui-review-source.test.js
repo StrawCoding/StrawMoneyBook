@@ -108,6 +108,8 @@ test('analysis page keeps pie/bar charts with flat panels (no nested card blocks
   assert.match(chartPairSource, /bar-chart-track/)
   assert.match(chartPairSource, /background: transparent/)
   assert.match(habitatCssSource, /\.analysis-modern \.iconized-chart-pair \.pie-panel/)
+  assert.match(habitatCssSource, /\.analysis-modern \.securities-summary-grid > div[\s\S]*?background: transparent/)
+  assert.match(habitatCssSource, /\.analysis-modern \.budget-card[\s\S]*?background: transparent/)
   assert.match(chartPairSource, /interactive/)
 })
 
