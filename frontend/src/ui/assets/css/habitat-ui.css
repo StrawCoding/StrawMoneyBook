@@ -217,76 +217,17 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-radius: var(--habitat-radius-island);
 }
 
-[data-ui-layout='modern'] .feature-list-page .card.panel {
-  padding: 14px;
-  overflow: visible;
-  border-radius: var(--habitat-radius-island);
-  background: transparent;
-  border: 0;
-}
-
-[data-ui-layout='modern'] .feature-list-page .feature-list {
-  margin-top: 8px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+[data-ui-layout='modern'] .feature-list-page .feature-section + .feature-section {
+  margin-top: 20px;
 }
 
 [data-ui-layout='modern'] .feature-list-page .feature-link {
-  min-height: 64px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-left-width: 4px;
-  border-radius: var(--habitat-radius-tile);
-  background: var(--card);
-  font-weight: 700;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-}
-
-[data-ui-layout='modern'] .feature-list-page .feature-list .feature-link:nth-child(4n + 1) {
-  border-left-color: var(--ok);
-}
-
-[data-ui-layout='modern'] .feature-list-page .feature-list .feature-link:nth-child(4n + 2) {
-  border-left-color: var(--primary);
-}
-
-[data-ui-layout='modern'] .feature-list-page .feature-list .feature-link:nth-child(4n + 3) {
-  border-left-color: var(--secondary);
-}
-
-[data-ui-layout='modern'] .feature-list-page .feature-list .feature-link:nth-child(4n + 4) {
-  border-left-color: var(--danger);
+  min-height: 52px;
+  font-weight: 650;
 }
 
 [data-ui-layout='modern'] .feature-list-page .feature-link::after {
   content: none;
-}
-
-[data-ui-layout='modern'] .feature-list-page .feature-icon-wrap {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-}
-
-[data-ui-layout='modern'] .feature-list-page [data-testid='feature-list-advanced'] {
-  margin-top: 18px;
-  padding: 12px;
-  border: 0;
-  border-radius: var(--habitat-radius-island);
-  background: var(--bg-soft);
-}
-
-[data-ui-layout='modern'] .feature-list-page [data-testid='feature-list-advanced'] .feature-list {
-  grid-template-columns: 1fr;
-}
-
-[data-ui-layout='modern'] .feature-list-page [data-testid='feature-list-advanced'] .feature-link {
-  background: var(--card);
-  border: 1px solid var(--border);
 }
 
 [data-ui-layout='modern'] .analysis-modern > .stack,

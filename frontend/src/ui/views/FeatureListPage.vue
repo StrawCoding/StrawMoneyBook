@@ -7,43 +7,41 @@
     root-class="feature-list-page"
     stack-class="feature-list-page"
   >
-    <article class="card panel">
-      <section class="feature-section" data-testid="feature-list-general">
-        <h3 class="feature-section-title">{{ t('feature_list.general') }}</h3>
-        <nav class="feature-list">
-          <RouterLink
-            v-for="feature in generalFeatures"
-            :key="feature.to"
-            class="feature-link"
-            :data-testid="feature.testId"
-            :to="feature.to"
-          >
-            <span class="feature-icon-wrap">
-              <font-awesome-icon :icon="feature.icon" class="feature-icon" />
-            </span>
-            <span>{{ feature.label }}</span>
-          </RouterLink>
-        </nav>
-      </section>
+    <section class="feature-section" data-testid="feature-list-general">
+      <h3 class="feature-section-title">{{ t('feature_list.general') }}</h3>
+      <nav class="feature-list">
+        <RouterLink
+          v-for="feature in generalFeatures"
+          :key="feature.to"
+          class="feature-link"
+          :data-testid="feature.testId"
+          :to="feature.to"
+        >
+          <span class="feature-icon-wrap">
+            <font-awesome-icon :icon="feature.icon" class="feature-icon" />
+          </span>
+          <span>{{ feature.label }}</span>
+        </RouterLink>
+      </nav>
+    </section>
 
-      <details class="feature-section feature-advanced-details" data-testid="feature-list-advanced">
-        <summary class="feature-section-title feature-advanced-summary">{{ t('feature_list.advanced') }}</summary>
-        <nav class="feature-list">
-          <RouterLink
-            v-for="feature in advancedFeatures"
-            :key="feature.to"
-            class="feature-link"
-            :data-testid="feature.testId"
-            :to="feature.to"
-          >
-            <span class="feature-icon-wrap">
-              <font-awesome-icon :icon="feature.icon" class="feature-icon" />
-            </span>
-            <span>{{ feature.label }}</span>
-          </RouterLink>
-        </nav>
-      </details>
-    </article>
+    <section class="feature-section" data-testid="feature-list-advanced">
+      <h3 class="feature-section-title">{{ t('feature_list.advanced') }}</h3>
+      <nav class="feature-list">
+        <RouterLink
+          v-for="feature in advancedFeatures"
+          :key="feature.to"
+          class="feature-link"
+          :data-testid="feature.testId"
+          :to="feature.to"
+        >
+          <span class="feature-icon-wrap">
+            <font-awesome-icon :icon="feature.icon" class="feature-icon" />
+          </span>
+          <span>{{ feature.label }}</span>
+        </RouterLink>
+      </nav>
+    </section>
   </HabitatPageShell>
 </template>
 
@@ -113,57 +111,22 @@ const advancedFeatures = computed(() => ([
 </script>
 
 <style scoped>
-.panel {
-  padding: 14px
-}
-h2 {
-  margin: 0;
-  font-size: 18px
-}
 .feature-section {
-  margin-top: 16px
+  margin-top: 16px;
 }
 .feature-section:first-of-type {
-  margin-top: 12px
+  margin-top: 4px;
 }
 .feature-section-title {
-  margin: 0 8px;
+  margin: 0 4px 8px;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--muted, color-mix(in srgb, var(--text) 62%, transparent))
-}
-.feature-advanced-details {
-  margin-top: 16px;
-}
-.feature-advanced-summary {
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 8px;
-  border-radius: 10px;
-}
-.feature-advanced-summary::-webkit-details-marker {
-  display: none;
-}
-.feature-advanced-summary::after {
-  content: '▾';
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--muted);
-  transition: transform 120ms ease;
-}
-.feature-advanced-details[open] .feature-advanced-summary::after {
-  transform: rotate(180deg);
-}
-.feature-advanced-details .feature-list {
-  margin-top: 8px;
+  color: var(--muted, color-mix(in srgb, var(--text) 62%, transparent));
 }
 .feature-list {
   display: grid;
-  gap: 8px
+  gap: 0;
 }
 .feature-link {
   display: flex;
@@ -171,14 +134,17 @@ h2 {
   gap: 12px;
   text-decoration: none;
   color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px;
-  background: var(--surface-soft-accent);
-  font-weight: 700;
-  /* Keep rows clear of fixed BottomNav when scrolled into view / focused. */
+  border: 0;
+  border-radius: 0;
+  padding: 12px 4px;
+  background: transparent;
+  font-weight: 650;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
   scroll-margin-bottom: calc(88px + var(--navigation-bar-height));
   scroll-margin-top: 24px;
+}
+.feature-list .feature-link:last-child {
+  border-bottom: 0;
 }
 .feature-list-page {
   padding-bottom: 12px;
@@ -192,7 +158,7 @@ h2 {
   justify-content: center;
   background: color-mix(in srgb, var(--primary) 12%, var(--card) 88%);
   color: var(--primary);
-  flex: 0 0 auto
+  flex: 0 0 auto;
 }
 .feature-icon {
   width: 16px;
