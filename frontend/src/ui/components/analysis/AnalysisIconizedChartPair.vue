@@ -1,51 +1,99 @@
 <template>
   <section
     v-if="items.length"
-    class="analysis-breakdown"
+    class="iconized-chart-pair"
     :data-testid="testId"
     :data-chart-tone="tone"
   >
-    <header v-if="title" class="breakdown-head row">
+    <header v-if="title" class="pair-head row">
       <h4>{{ title }}</h4>
       <span class="muted">{{ countLabel }}</span>
     </header>
 
-    <ul class="breakdown-list" data-testid="analysis-breakdown-list">
-      <li v-for="item in barRows" :key="`row-${item.id}`">
-        <component
-          :is="interactive ? 'button' : 'div'"
-          :type="interactive ? 'button' : undefined"
-          class="breakdown-row"
-          :class="{ interactive }"
-          @click="interactive ? emitSelect(item) : undefined"
+    <div class="pair-layout">
+      <div class="pie-panel">
+        <div class="chart-title">{{ pieTitle }}</div>
+        <button
+          type="button"
+          class="pie-button"
+          :class="{ interactive: interactive && Boolean(primaryItem) }"
+          :disabled="!(interactive && primaryItem)"
+          :aria-label="primaryItem ? `${title} ${primaryItem.name}` : title"
+          @click="emitSelect(primaryItem)"
         >
-          <div class="breakdown-row-head">
-            <div class="breakdown-row-label">
-              <span class="icon-swatch" :style="{ background: item.color }">
-                <font-awesome-icon
-                  v-if="item.icon"
-                  :icon="item.icon"
-                  class="swatch-icon"
-                />
-              </span>
-              <span class="breakdown-row-name">{{ item.name }}</span>
+          <div class="pie" :style="pieStyle">
+            <div class="pie-hole">
+              <small class="muted">{{ totalLabel }}</small>
+              <MoneyText :value-minor="totalMinor" :tone="tone" />
             </div>
-            <span class="breakdown-row-percent">{{ item.percent }}%</span>
           </div>
-          <div class="breakdown-row-stats">
-            <MoneyText :value-minor="item.amountMinor" :tone="tone" />
-            <span class="muted">{{ itemCountLabel(item.count) }}</span>
-          </div>
-        </component>
-      </li>
-    </ul>
+        </button>
+
+        <ul class="pie-legend" data-testid="analysis-pie-legend">
+          <li
+            v-for="item in items"
+            :key="`legend-${item.id}`"
+            class="pie-legend-item"
+          >
+            <span class="icon-swatch" :style="{ background: item.color }">
+              <font-awesome-icon
+                v-if="item.icon"
+                :icon="item.icon"
+                class="swatch-icon"
+              />
+            </span>
+            <span class="legend-name">{{ item.name }}</span>
+            <span class="legend-percent">{{ item.percent }}%</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="bar-panel">
+        <div class="chart-title">{{ barTitle }}</div>
+        <ul class="bar-chart-list" data-testid="analysis-bar-list">
+          <li v-for="item in barRows" :key="`bar-${item.id}`">
+            <component
+              :is="interactive ? 'button' : 'div'"
+              :type="interactive ? 'button' : undefined"
+              class="bar-chart-item"
+              :class="{ interactive }"
+              @click="interactive ? emitSelect(item) : undefined"
+            >
+              <div class="bar-chart-head">
+                <div class="bar-chart-label">
+                  <span class="icon-swatch" :style="{ background: item.color }">
+                    <font-awesome-icon
+                      v-if="item.icon"
+                      :icon="item.icon"
+                      class="swatch-icon"
+                    />
+                  </span>
+                  <span class="bar-chart-name">{{ item.name }}</span>
+                </div>
+                <span class="bar-chart-percent">{{ item.percent }}%</span>
+              </div>
+              <div class="bar-chart-track">
+                <span
+                  class="bar-chart-fill"
+                  :style="{ width: `${item.barWidthPercent}%`, background: item.color }"
+                />
+              </div>
+              <div class="bar-chart-stats">
+                <MoneyText :value-minor="item.amountMinor" :tone="tone" />
+                <span class="muted">{{ itemCountLabel(item.count) }}</span>
+              </div>
+            </component>
+          </li>
+        </ul>
+      </div>
+    </div>
   </section>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
-import { buildBarRows } from '@/core/utils/analysis-breakdown'
+import { buildBarRows, buildPieStyle } from '@/core/utils/analysis-breakdown'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const props = defineProps({
@@ -64,8 +112,12 @@ const props = defineProps({
 const emit = defineEmits(['select'])
 const { t } = useI18n()
 
+const pieStyle = computed(() => buildPieStyle(props.items))
 const barRows = computed(() => buildBarRows(props.items))
+const primaryItem = computed(() => props.items[0] ?? null)
 const countLabel = computed(() => t('analysis_page.items_count', { count: props.count }))
+const pieTitle = computed(() => props.pieTitle || t('analysis_page.chart.pie'))
+const barTitle = computed(() => props.barTitle || t('analysis_page.chart.bar'))
 
 function itemCountLabel(count) {
   return t('analysis_page.items_count', { count })
@@ -78,69 +130,102 @@ function emitSelect(item) {
 </script>
 
 <style scoped>
-.analysis-breakdown {
+.iconized-chart-pair {
   display: grid;
   gap: 10px;
 }
 
-.breakdown-head {
+.pair-head {
   gap: 12px;
   align-items: center;
 }
 
-.breakdown-head h4 {
+.pair-head h4 {
   margin: 0;
 }
 
-.breakdown-list {
-  margin: 0;
+.pair-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.pie-panel,
+.bar-panel {
+  border: 0;
+  border-radius: 0;
   padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 0;
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  border-radius: var(--habitat-radius-tile, 16px);
-  overflow: hidden;
-  background: var(--bg-soft);
+  background: transparent;
+  min-width: 0;
 }
 
-.breakdown-list li + li {
-  border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+.chart-title {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 10px;
 }
 
-.breakdown-row {
-  display: grid;
-  gap: 6px;
+.pie-button {
+  display: block;
   width: 100%;
   border: 0;
   background: transparent;
-  padding: 12px 14px;
-  text-align: left;
-  color: inherit;
+  padding: 0;
+  cursor: default;
 }
 
-.breakdown-row.interactive {
+.pie-button.interactive {
   cursor: pointer;
 }
 
-.breakdown-row.interactive:hover {
-  background: color-mix(in srgb, var(--primary) 8%, transparent);
+.pie {
+  width: min(220px, 100%);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  position: relative;
+  margin: 0 auto;
 }
 
-.breakdown-row-head,
-.breakdown-row-stats {
+.pie-hole {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  background: var(--card);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: 12px;
+}
+
+.pie-legend,
+.bar-chart-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.pie-legend-item,
+.bar-chart-label,
+.bar-chart-head,
+.bar-chart-stats {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.pie-legend-item,
+.bar-chart-head,
+.bar-chart-stats {
   justify-content: space-between;
 }
 
-.breakdown-row-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.bar-chart-label {
+  justify-content: flex-start;
   min-width: 0;
-  flex: 1 1 auto;
 }
 
 .icon-swatch {
@@ -159,20 +244,65 @@ function emitSelect(item) {
   height: 12px;
 }
 
-.breakdown-row-name {
+.legend-name,
+.bar-chart-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1 1 auto;
 }
 
-.breakdown-row-percent {
+.legend-percent,
+.bar-chart-percent {
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
 
+.bar-chart-item {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+}
+
+.bar-chart-item.interactive {
+  cursor: pointer;
+}
+
+.bar-chart-track {
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--chart-track);
+}
+
+.bar-chart-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
 .muted {
   color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .pair-layout {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<style>
+/* Unscoped: parent report sets data-print-layout during PDF capture */
+#analysis-report-document[data-print-layout='a4'] .pair-layout,
+.analysis-report-document[data-print-layout='a4'] .pair-layout {
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) !important;
 }
 </style>

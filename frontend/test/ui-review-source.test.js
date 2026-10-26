@@ -20,6 +20,10 @@ const analysisPageSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/analysis.vue'),
   'utf8',
 )
+const habitatCssSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/assets/css/habitat-ui.css'),
+  'utf8',
+)
 const settingsSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/views/settings.vue'),
   'utf8',
@@ -88,7 +92,7 @@ test('home budget summary uses a higher swipe threshold to reduce accidental pag
   assert.match(homeBudgetSummarySource, /const SWIPE_THRESHOLD_PX = 72/)
 })
 
-test('analysis page uses interactive breakdown lists without pie or bar chart panels', () => {
+test('analysis page keeps pie/bar charts with flat panels (no nested card blocks)', () => {
   const chartPairSource = readFileSync(
     resolve(import.meta.dirname, '../src/ui/components/analysis/AnalysisIconizedChartPair.vue'),
     'utf8',
@@ -96,10 +100,12 @@ test('analysis page uses interactive breakdown lists without pie or bar chart pa
   assert.match(analysisPageSource, /AnalysisIconizedChartPair/)
   assert.match(analysisPageSource, /@select="\(item\) => openCategoryBreakdownDetail\(item, 'income'\)"/)
   assert.match(analysisPageSource, /@select="openAccountBreakdownDetail"/)
-  assert.doesNotMatch(analysisPageSource, /analysis-time-section/)
-  assert.match(chartPairSource, /data-testid="analysis-breakdown-list"/)
-  assert.doesNotMatch(chartPairSource, /pie-panel/)
-  assert.doesNotMatch(chartPairSource, /bar-chart-track/)
+  assert.match(analysisPageSource, /data-testid="analysis-time-section"/)
+  assert.match(chartPairSource, /class="pie-button"/)
+  assert.match(chartPairSource, /data-testid="analysis-bar-list"/)
+  assert.match(chartPairSource, /bar-chart-track/)
+  assert.match(chartPairSource, /background: transparent/)
+  assert.match(habitatCssSource, /\.analysis-modern \.iconized-chart-pair \.pie-panel/)
   assert.match(chartPairSource, /interactive/)
 })
 

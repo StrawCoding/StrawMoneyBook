@@ -507,6 +507,13 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
 }
 
+[data-ui-layout='modern'] .analysis-modern .iconized-chart-pair .pie-panel,
+[data-ui-layout='modern'] .analysis-modern .iconized-chart-pair .bar-panel {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 [data-ui-layout='modern'] .welcome-modern .language-btn {
   border-radius: var(--habitat-radius-tile);
 }

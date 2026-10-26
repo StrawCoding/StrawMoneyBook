@@ -2,8 +2,11 @@
 
 ---
 
+## v1.5.52
+- 分析頁：還原圓餅／長條／時間軸圖表與點選鑽取；僅移除外層 pie-panel／bar-panel 卡片框（扁平 flow）。
+
 ## v1.5.51
-- 分析頁：移除圓餅／長條圖區塊與時間軸長條圖；收支／帳戶改為可點選的分類 breakdown 列表（PDF 匯出同樣改列表）。
+- 分析頁（v1.5.52 修正）：誤删圖表功能已還原，改為只扁平化區塊樣式。
 - 會員登入：cookie 模式 refresh 以 HttpOnly cookie 為準，Android localStorage 備份 token 不再覆蓋 cookie，降低「refresh token 已重複使用」誤觸 family 註銷。
 
 ## v1.5.50

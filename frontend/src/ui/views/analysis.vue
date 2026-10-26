@@ -241,6 +241,43 @@
       <p v-else class="muted no-data-tip">{{ t('analysis_page.no_data_for_type', { type: accountActiveTypeLabel.toLowerCase() }) }}</p>
     </section>
 
+    <section v-if="showTimeBarChart" class="analysis-flow-section" data-testid="analysis-time-section">
+      <header class="row">
+        <h3>{{ timeBarTitle }}</h3>
+        <div class="header-metrics">
+          <span class="count-chip">{{ t('analysis_page.items_count', { count: timeBarCount }) }}</span>
+          <MoneyText :value-minor="timeBarTotalMinor" />
+        </div>
+      </header>
+
+      <div class="segment-pills" data-testid="analysis-time-type-filter">
+        <button type="button" class="btn tab-btn" :class="{ primary: analysisType === 'income' }" @click="analysisType = 'income'">{{ t('analysis_page.type.income') }}</button>
+        <button type="button" class="btn tab-btn" :class="{ primary: analysisType === 'expense' }" @click="analysisType = 'expense'">{{ t('analysis_page.type.expense') }}</button>
+      </div>
+
+      <div class="time-bar-chart">
+        <button
+          v-for="item in timeBarRows"
+          :key="`${mode}-${analysisType}-${item.id}`"
+          type="button"
+          class="time-bar-col"
+          @click="openTimeBarSearch(item)"
+        >
+          <div class="time-bar-value">
+            <MoneyText :value-minor="item.amountMinor" />
+          </div>
+          <div class="time-bar-track">
+            <div
+              class="time-bar-fill"
+              :style="{ height: `${item.barHeightPercent}%`, background: timeBarColor }"
+            ></div>
+          </div>
+          <div class="time-bar-label">{{ item.label }}</div>
+          <div class="time-bar-count muted">{{ t('analysis_page.items_count', { count: item.count }) }}</div>
+        </button>
+      </div>
+    </section>
+
     <div
       v-if="showExportCapture"
       class="analysis-export-capture-host"
@@ -307,7 +344,9 @@ import {
   buildBarRows,
   decorateBreakdownRows,
   mergeAddonSplitsIntoCategoryExpense,
+  buildTimeBarRows,
   isAddonBreakdownId,
+  resolveTimeBarSearchRange,
 } from '@/core/utils/analysis-breakdown'
 import {
   ANALYSIS_CHART_SWATCHES,
@@ -533,6 +572,28 @@ const displayValueLabel = computed(() => (
     : t('securities_page.market_value')
 ))
 
+const timeBarRows = computed(() => buildTimeBarRows({
+  transactions: analysisStats.value.timeBarFacts,
+  type: analysisType.value,
+  mode: mode.value,
+  year: selectedYear.value,
+  monthKey: selectedMonth.value,
+  shouldIncludeTransaction: isCountableForIncomeExpense,
+}))
+const timeBarTitle = computed(() => {
+  if (mode.value === 'year') return t('analysis_page.chart.month_bar')
+  if (mode.value === 'all') return t('analysis_page.chart.year_bar')
+  if (mode.value === 'month') return t('analysis_page.chart.day_bar')
+  return ''
+})
+const timeBarTotalMinor = computed(() => timeBarRows.value.reduce((total, item) => total + item.amountMinor, 0))
+const timeBarCount = computed(() => timeBarRows.value.reduce((total, item) => total + item.count, 0))
+const showTimeBarChart = computed(() => (mode.value === 'all' || mode.value === 'year' || mode.value === 'month') && timeBarRows.value.length > 0)
+const timeBarColor = computed(() =>
+  analysisType.value === 'income'
+    ? 'color-mix(in srgb, #40c057 82%, var(--card) 18%)'
+    : 'color-mix(in srgb, #fa5252 82%, var(--card) 18%)',
+)
 const accountActiveBreakdown = computed(() => {
   if (accountAnalysisType.value === 'income') return incomeAccountBreakdown.value
   if (accountAnalysisType.value === 'expense') return expenseAccountBreakdown.value
@@ -588,6 +649,23 @@ function openAccountBreakdownDetail(item) {
   if (!item?.id) return
   if (String(item.id).startsWith('__')) return
   void router.push({ name: 'account-detail', params: { id: String(item.id) } })
+}
+
+function openTimeBarSearch(item) {
+  const range = resolveTimeBarSearchRange({
+    mode: mode.value,
+    bucketId: item?.id,
+    year: selectedYear.value,
+    monthKey: selectedMonth.value,
+  })
+  if (!range) return
+  void router.push({
+    name: 'transaction-search',
+    query: {
+      startDay: range.startDay,
+      endDay: range.endDay,
+    },
+  })
 }
 
 function resolveAnalysisFilterKey() {
@@ -1086,6 +1164,56 @@ h2, h3 {
 
 .no-data-tip {
   margin: 12px 0 0;
+}
+
+.time-bar-chart {
+  margin-top: 12px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(52px, 1fr);
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.time-bar-col {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: grid;
+  grid-template-rows: auto 120px auto auto;
+  gap: 6px;
+  align-items: end;
+  min-width: 52px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.time-bar-value {
+  font-size: 11px;
+  text-align: center;
+  min-height: 1.2em;
+}
+
+.time-bar-track {
+  height: 120px;
+  border-radius: 12px 12px 8px 8px;
+  background: var(--chart-track);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.time-bar-fill {
+  width: 100%;
+  border-radius: 10px 10px 6px 6px;
+  min-height: 4px;
+}
+
+.time-bar-label,
+.time-bar-count {
+  text-align: center;
+  font-size: 12px;
 }
 
 @media (max-width: 720px) {
