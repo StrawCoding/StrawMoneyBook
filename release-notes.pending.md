@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.29
+- Modern 版面：僅隱藏標題列下方 Habitat 副標（kicker）；頁內說明／meta 小字保留。
+
 ## v1.5.28
 - 恢復 modern 各頁 Habitat 副標（kicker）顯示。
 - 新增共用 `PeriodChrome`（首頁／分析：箭頭 + 點標題開 sheet 調期間）。

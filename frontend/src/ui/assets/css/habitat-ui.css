@@ -462,7 +462,7 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 }
 
 [data-ui-layout='modern'] .habitat-page .habitat-kicker {
-  font-size: var(--habitat-kicker-size);
+  display: none;
 }
 
 [data-ui-layout='modern'] .page-container .toolbar-cluster {
