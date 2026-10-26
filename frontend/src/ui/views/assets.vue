@@ -12,7 +12,7 @@
       <RouterLink class="text-link manage-link" to="/assets/accounts">{{ t('assets_page.manage') }}</RouterLink>
     </template>
 
-    <article class="card panel vault-summary-card">
+    <section class="vault-summary-card assets-flow-section">
       <header class="row vault-summary-head">
         <h3>{{ t('assets_page.summary_title') }}</h3>
       </header>
@@ -81,9 +81,9 @@
           </button>
         </li>
       </ul>
-    </article>
+    </section>
 
-    <article class="card panel accounts-island">
+    <section class="assets-accounts-section assets-flow-section">
       <header class="row accounts-island-head">
         <h3>{{ t('assets_page.asset_accounts') }}</h3>
       </header>
@@ -133,7 +133,7 @@
           </ul>
         </li>
       </ul>
-    </article>
+    </section>
 
     <AppDialog
       :open="totalAssetsInfoOpen"
@@ -434,8 +434,15 @@ function persistExpandedGroupState() {
   padding: 6px 0;
 }
 
-.panel {
-  padding: 14px;
+.assets-flow-section {
+  display: grid;
+  gap: 10px;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.assets-flow-section:last-of-type {
+  border-bottom: 0;
 }
 
 h2,
@@ -483,31 +490,31 @@ h3 {
 }
 
 .summary-item {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 12px;
+  border: 0;
+  border-radius: 0;
+  padding: 8px 4px;
   display: grid;
   gap: 6px;
-  background: var(--bg-soft);
+  background: transparent;
 }
 
 .summary-total {
-  border: 0;
-  background: color-mix(in srgb, var(--secondary) 12%, var(--card) 88%);
+  padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 
 .summary-stat {
-  border: 0;
+  padding: 6px 4px;
 }
 
 .vault-drill-list {
   list-style: none;
-  margin: 10px 0 0;
+  margin: 4px 0 0;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--card);
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
 }
 
 .vault-drill-list li + li {
@@ -520,7 +527,7 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 11px 12px;
+  padding: 11px 4px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -580,9 +587,9 @@ h3 {
 }
 
 .group-list {
-  margin-top: 12px;
+  margin-top: 8px;
   display: grid;
-  gap: 16px;
+  gap: 12px;
 }
 
 .group-item {
@@ -636,7 +643,7 @@ h3 {
 .account-list {
   margin-top: 0;
   display: grid;
-  gap: 12px;
+  gap: 0;
 }
 
 .account-row {
@@ -644,24 +651,22 @@ h3 {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  border-radius: 24px;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--card) 72%, var(--surface-soft-accent) 28%),
-      color-mix(in srgb, var(--card) 86%, var(--primary) 14%)
-    );
-  border: 1px solid color-mix(in srgb, var(--primary) 14%, var(--border) 86%);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, white 20%, transparent);
-  padding: 16px 16px;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 12px 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+}
+.account-list li:last-child .account-row {
+  border-bottom: 0;
 }
 .account-row.excluded {
-  background: color-mix(in srgb, var(--card) 92%, var(--surface-soft-accent) 8%);
-  border-color: color-mix(in srgb, var(--muted) 28%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--muted) 14%, transparent);
+  background: transparent;
+  opacity: 0.72;
 }
 .account-row.group-stat-excluded {
-  border-style: dashed;
+  border-bottom-style: dashed;
 }
 
 a {
@@ -684,10 +689,10 @@ a {
 }
 
 .account-name {
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.15;
   color: var(--text);
-  font-weight: 700;
+  font-weight: 650;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -702,8 +707,8 @@ a {
 }
 
 .account-balance {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 650;
   line-height: 1.1;
 }
 .account-row.excluded .account-balance {
@@ -744,23 +749,4 @@ a {
   border-radius: 12px;
 }
 
-@media (prefers-color-scheme: dark) {
-  .account-row {
-    background: color-mix(in srgb, var(--card) 86%, #111 14%);
-    border-color: color-mix(in srgb, var(--text) 14%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, white 8%, transparent);
-  }
-
-  .account-row.excluded {
-    background: color-mix(in srgb, var(--card) 92%, #000 8%);
-  }
-
-  .account-icon {
-    color: #f7f7f7;
-  }
-
-  .account-row.excluded .account-icon {
-    color: color-mix(in srgb, var(--muted) 78%, #f7f7f7 22%);
-  }
-}
 </style>

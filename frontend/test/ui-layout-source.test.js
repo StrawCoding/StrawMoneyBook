@@ -120,6 +120,8 @@ test('analysis and assets use habitat modern shells (Daak/Finch IA)', () => {
   assert.match(assetsSource, /hello-test-id="assets-hello-block"/)
   assert.match(assetsSource, /assets_page\.habitat_hello/)
   assert.match(assetsSource, /vault-summary-card/)
+  assert.match(assetsSource, /assets-accounts-section/)
+  assert.doesNotMatch(assetsSource, /class="card panel accounts-island"/)
   assert.match(assetsSource, /data-testid="assets-lend-entry"/)
   assert.match(assetsSource, /data-testid="assets-drill-list"/)
   assert.match(analysisSource, /data-testid="analysis-toolbar"/)
