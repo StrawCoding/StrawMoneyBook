@@ -25,6 +25,10 @@
     <InputBottomSheet
       :open="open"
       :title="resolvedPlaceholder"
+      size="compact"
+      nested
+      :show-handle="true"
+      close-variant="icon"
       :body-class="'menu-sheet-body'"
       :sheet-class="{ 'icon-only-menu': iconOnly, 'menu-sheet': true }"
       @close="closeMenu"

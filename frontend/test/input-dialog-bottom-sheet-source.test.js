@@ -40,6 +40,7 @@ test('AppDialog supports rendering form dialogs as bottom sheets', () => {
   assert.match(appDialogSource, /props\.presentation === 'sheet'/)
   assert.match(sharedSheetSource, /app-overlay-sheet-mask/)
   assert.match(sharedSheetSource, /app-bottom-sheet-body/)
+  assert.match(sharedSheetSource, /app-overlay-sheet-handle/)
 })
 
 test('input-heavy dialogs opt into the bottom sheet presentation', () => {

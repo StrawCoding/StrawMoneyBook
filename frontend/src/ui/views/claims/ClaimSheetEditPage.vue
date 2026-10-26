@@ -9,200 +9,49 @@
     <article class="card panel">
       <div v-if="loading" class="muted">{{ t('app.loading') }}</div>
       <template v-else-if="claim && isEditableClaim">
-        <div class="stack form-wrap">
-          <label>
-            {{ t('claim_sheet.form.title') }}
-            <input
-              v-model="form.title"
-              class="input"
-              type="text"
-              :placeholder="t('claim_sheet.form.title_placeholder')"
-            />
-          </label>
-          <label>
-            {{ t('claim_sheet.form.counterparty') }}
-            <input
-              v-model="form.counterpartyName"
-              class="input"
-              type="text"
-              :placeholder="t('claim_sheet.form.counterparty_placeholder')"
-            />
-          </label>
-          <label>
-            {{ t('claim_sheet.form.note') }}
-            <input
-              v-model="form.note"
-              class="input"
-              type="text"
-              :placeholder="t('claim_sheet.form.note_placeholder')"
-            />
-          </label>
-
-          <div class="stack sub-section">
-            <div class="row sub-head">
-              <strong>{{ t('claim_sheet.form.manual_items') }}</strong>
-              <button type="button" class="btn" @click="addManualItem">{{ t('claim_sheet.form.add_item') }}</button>
-            </div>
-            <div v-for="item in form.manualItems" :key="item.id" class="manual-item">
-              <div class="manual-item-preview">
-                <div class="manual-item-preview-main">
-                  <font-awesome-icon
-                    v-if="manualItemPresentation(item).icon"
-                    :icon="manualItemPresentation(item).icon"
-                    class="item-leading-icon"
-                  />
-                  <strong>{{ manualItemPresentation(item).title }}</strong>
-                </div>
-                <small class="muted">{{ manualItemPresentation(item).categoryName || manualItemPresentation(item).entryLabel }}</small>
-              </div>
-              <CustomSelect
-                v-model="item.entryType"
-                :options="entryTypeOptions"
-                @update:model-value="onManualEntryTypeChange(item, $event)"
-              />
-              <div v-if="item.entryType === 'advance'" class="manual-static-field muted">
-                {{ t('claim_sheet.form.advance_category_hint') }}
-              </div>
-              <CustomSelect
-                v-else
-                v-model="item.categoryId"
-                :groups="categoryGroupsByEntryType(item.entryType)"
-                :placeholder="t('claim_sheet.form.choose_category')"
-              />
-              <input
-                v-model="item.description"
-                class="input"
-                type="text"
-                :placeholder="t('claim_sheet.form.item_description')"
-              />
-              <input
-                v-model.number="item.amountMajor"
-                class="input"
-                type="number"
-                min="0"
-                step="1"
-                :placeholder="t('claim_sheet.form.amount')"
-              />
-              <button type="button" class="btn danger" @click="removeManualItem(item.id)">
-                {{ t('common.delete') }}
-              </button>
-            </div>
-          </div>
-
-          <div class="stack sub-section">
-            <div class="row sub-head">
-              <strong>{{ t('claim_sheet.form.import_reimbursements') }}</strong>
-              <small class="muted">{{ t('claim_sheet.form.import_hint') }}</small>
-            </div>
-            <div class="import-action-card">
-              <div class="import-summary">
-                <small class="muted">{{ t('claim_sheet.import.selected_count', { count: importedItems.length }) }}</small>
-                <MoneyText :value-minor="importedTotalMinor" />
-              </div>
-              <button type="button" class="btn" @click="openImportPage">
-                {{ t('claim_sheet.import.open') }}
-              </button>
-            </div>
-            <div v-if="importedItems.length" class="imported-claim-list">
-              <div v-for="tx in importedItems" :key="tx.id" class="imported-claim-item">
-                <div class="imported-claim-item-preview">
-                  <div class="imported-claim-item-main">
-                    <font-awesome-icon
-                      v-if="importedTxPresentation(tx).icon"
-                      :icon="importedTxPresentation(tx).icon"
-                      class="item-leading-icon"
-                    />
-                    <strong>{{ importedTxPresentation(tx).title }}</strong>
-                  </div>
-                  <small v-if="importedTxPresentation(tx).categoryName" class="muted">
-                    {{ importedTxPresentation(tx).categoryName }}
-                  </small>
-                </div>
-                <small class="muted">
-                  {{ t('claim_sheet.import.pending_amount') }}
-                  <MoneyText :value-minor="maxMinorOfReimbursementTx(tx)" />
-                </small>
-                <label>
-                  {{ t('claim_sheet.form.this_claim_amount') }}
-                  <input
-                    v-model.number="form.importAmountOverrides[String(tx.id)]"
-                    class="input"
-                    type="number"
-                    min="0"
-                    :max="maxMinorOfReimbursementTx(tx) / 100"
-                    step="1"
-                    @change="clampReimbursementAmountOverride(tx)"
-                  />
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div class="stack sub-section">
-            <div class="row sub-head">
-              <strong>{{ t('claim_sheet.form.import_borrow_loans') }}</strong>
-              <small class="muted">{{ t('claim_sheet.form.import_borrow_loan_hint') }}</small>
-            </div>
-            <div class="import-action-card">
-              <div class="import-summary">
-                <small class="muted">{{ t('claim_sheet.import.selected_count', { count: importedBorrowLoanItems.length }) }}</small>
-                <MoneyText :value-minor="importedBorrowLoanTotalMinor" />
-              </div>
-              <button type="button" class="btn" @click="openBorrowLoanImportPage">
-                {{ t('claim_sheet.import.open_borrow_loan') }}
-              </button>
-            </div>
-            <div v-if="importedBorrowLoanItems.length" class="imported-claim-list">
-              <div v-for="tx in importedBorrowLoanItems" :key="tx.id" class="imported-claim-item">
-                <div class="imported-claim-item-preview">
-                  <div class="imported-claim-item-main">
-                    <font-awesome-icon
-                      v-if="importedBorrowLoanPresentation(tx).icon"
-                      :icon="importedBorrowLoanPresentation(tx).icon"
-                      class="item-leading-icon"
-                    />
-                    <strong>{{ importedBorrowLoanPresentation(tx).title }}</strong>
-                  </div>
-                  <small v-if="importedBorrowLoanPresentation(tx).categoryName" class="muted">
-                    {{ importedBorrowLoanPresentation(tx).categoryName }}
-                  </small>
-                </div>
-                <small class="muted">
-                  {{ t('claim_sheet.import.remaining_amount') }}
-                  <MoneyText :value-minor="maxMinorOfBorrowLoanTx(tx)" />
-                </small>
-                <label>
-                  {{ t('claim_sheet.form.this_claim_amount') }}
-                  <input
-                    v-model.number="form.borrowLoanImportAmountOverrides[String(tx.id)]"
-                    class="input"
-                    type="number"
-                    min="0"
-                    :max="maxMinorOfBorrowLoanTx(tx) / 100"
-                    step="1"
-                    @change="clampBorrowLoanAmountOverride(tx)"
-                  />
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div class="row total-row">
-            <span>{{ t('claim_sheet.form.net_total') }}</span>
-            <MoneyText :value-minor="draftTotalMinor" />
-          </div>
-        </div>
+        <ClaimSheetDraftForm
+          v-model:active-section="editDraftSection"
+          :form="form"
+          :draft-total-minor="draftTotalMinor"
+          :draft-item-count="draftItemCount"
+          :imported-items="importedItems"
+          :imported-borrow-loan-items="importedBorrowLoanItems"
+          :imported-total-minor="importedTotalMinor"
+          :imported-borrow-loan-total-minor="importedBorrowLoanTotalMinor"
+          @add-manual="openNewManualItemEditor"
+          @edit-manual="openManualItemEditor"
+          @open-import-reimburse="openImportPage"
+          @open-import-borrow="openBorrowLoanImportPage"
+          @clamp-reimburse="clampReimbursementAmountOverride"
+          @clamp-borrow="clampBorrowLoanAmountOverride"
+        />
 
         <footer class="row action-row">
-          <button type="button" class="btn" :disabled="saving" @click="goBack">{{ t('common.cancel') }}</button>
-          <button type="button" class="btn primary" :disabled="saving || !canSaveClaim" @click="submit">
-            {{ saving ? t('claim_sheet.processing') : t('common.save') }}
-          </button>
+          <div class="stack edit-save-footer">
+            <p v-if="!canSaveClaim && saveSubmitHint" class="muted">{{ saveSubmitHint }}</p>
+            <div class="row">
+              <button type="button" class="btn" :disabled="saving" @click="goBack">{{ t('common.cancel') }}</button>
+              <button type="button" class="btn primary" :disabled="saving || !canSaveClaim" @click="submit">
+                {{ saving ? t('claim_sheet.processing') : t('common.save') }}
+              </button>
+            </div>
+          </div>
         </footer>
       </template>
       <p v-else-if="claim" class="muted">只有草稿請款單可編輯</p>
       <p v-else class="muted">{{ t('claim_sheet.not_found') }}</p>
     </article>
+
+    <ClaimSheetManualItemSheet
+      ref="manualItemSheetRef"
+      :open="Boolean(editingManualItem)"
+      :item="editingManualItem"
+      :entry-type-options="entryTypeOptions"
+      :allow-delete="form.manualItems.length > 0"
+      @close="closeManualItemEditor"
+      @save="saveManualItemFromSheet"
+      @remove="removeEditingManualItem"
+    />
   </HabitatPageShell>
 </template>
 
@@ -210,8 +59,8 @@
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import CustomSelect from '@/ui/components/common/CustomSelect.vue'
-import MoneyText from '@/ui/components/common/MoneyText.vue'
+import ClaimSheetDraftForm from '@/ui/components/claims/ClaimSheetDraftForm.vue'
+import ClaimSheetManualItemSheet from '@/ui/components/claims/ClaimSheetManualItemSheet.vue'
 import { getReimbursementDetail, updateReimbursementDraft } from '@/core/services/reimbursement.service'
 import { listClaimSheetImportableBorrowLoans } from '@/core/services/claim-sheet-import.service'
 import {
@@ -249,6 +98,9 @@ const reimbursementStore = useReimbursementStore()
 
 const loading = ref(false)
 const saving = ref(false)
+const editDraftSection = ref('manual')
+const editingManualItemId = ref('')
+const manualItemSheetRef = ref(null)
 const claim = ref(null)
 const claimItems = ref([])
 const importableBorrowLoanTxs = ref([])
@@ -380,6 +232,17 @@ const importedAmountsValid = computed(() => {
   return reimbursementValid && borrowLoanValid
 })
 
+const draftItemCount = computed(() => {
+  const manualCount = form.manualItems.filter((item) => Number(item.amountMajor ?? 0) > 0).length
+  return manualCount + importedItems.value.length + importedBorrowLoanItems.value.length
+})
+
+const editingManualItem = computed(() => {
+  const id = String(editingManualItemId.value ?? '').trim()
+  if (!id) return null
+  return form.manualItems.find((item) => item.id === id) ?? null
+})
+
 const canSaveClaim = computed(() => {
   const hasTitle = Boolean(String(form.title ?? '').trim())
   const hasImported = importedItems.value.length > 0 || importedBorrowLoanItems.value.length > 0
@@ -390,6 +253,21 @@ const canSaveClaim = computed(() => {
     return Boolean(String(item.categoryId ?? '').trim())
   })
   return hasTitle && (hasImported || hasManual) && manualCategoriesReady && importedAmountsValid.value
+})
+
+const saveSubmitHint = computed(() => {
+  if (canSaveClaim.value) return ''
+  if (!String(form.title ?? '').trim()) return t('claim_sheet.form.hint_need_title')
+  const manualItemsWithAmount = form.manualItems.filter((item) => Number(item.amountMajor ?? 0) > 0)
+  const hasImported = importedItems.value.length > 0 || importedBorrowLoanItems.value.length > 0
+  const hasManual = manualItemsWithAmount.length > 0
+  if (!hasImported && !hasManual) return t('claim_sheet.form.hint_need_item')
+  const manualCategoriesReady = manualItemsWithAmount.every((item) => {
+    if (item.entryType === 'advance') return true
+    return Boolean(String(item.categoryId ?? '').trim())
+  })
+  if (!manualCategoriesReady) return t('claim_sheet.form.hint_need_category')
+  return t('claim_sheet.form.hint_check_amounts')
 })
 
 watch(
@@ -456,7 +334,8 @@ function resetForm() {
   form.importAmountOverrides = {}
   form.borrowLoanImportAmountOverrides = {}
   form.manualItems = []
-  addManualItem()
+  editDraftSection.value = 'manual'
+  editingManualItemId.value = ''
 }
 
 function createManualItem() {
@@ -475,7 +354,37 @@ function addManualItem() {
 
 function removeManualItem(itemId) {
   form.manualItems = form.manualItems.filter((item) => item.id !== itemId)
-  if (!form.manualItems.length) addManualItem()
+}
+
+function openNewManualItemEditor() {
+  const item = createManualItem()
+  form.manualItems.push(item)
+  editingManualItemId.value = item.id
+}
+
+function openManualItemEditor(itemId) {
+  editingManualItemId.value = String(itemId ?? '').trim()
+}
+
+function closeManualItemEditor() {
+  editingManualItemId.value = ''
+}
+
+function saveManualItemFromSheet() {
+  const sheet = manualItemSheetRef.value
+  const target = editingManualItem.value
+  if (!sheet?.draft || !target) return
+  target.entryType = sheet.draft.entryType
+  target.categoryId = sheet.draft.categoryId
+  target.description = sheet.draft.description
+  target.amountMajor = Number(sheet.draft.amountMajor ?? 0)
+  closeManualItemEditor()
+}
+
+function removeEditingManualItem() {
+  const id = String(editingManualItemId.value ?? '').trim()
+  if (id) removeManualItem(id)
+  closeManualItemEditor()
 }
 
 function categoriesByEntryType(entryType) {
@@ -642,9 +551,6 @@ function fillFormFromDetail(detail) {
         amountMajor: Math.max(0, Math.round(Number(item?.amount_minor ?? 0))) / 100,
       }
     })
-  if (!form.manualItems.length) {
-    addManualItem()
-  }
 }
 
 async function loadPage() {

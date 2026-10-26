@@ -2,6 +2,10 @@
 
 ---
 
+## v1.5.56
+- Bottom Sheet 全整：InputBottomSheet 加 drag handle、高度分級、sticky footer、icon 關閉與 nested 層；Modern 扁平 overlay 樣式。
+- 新增請款／編輯請款：共用 ClaimSheetDraftForm（摘要列、分段 tab、列式項目）；手動項改子 sheet 編輯；footer 顯示無法建立原因。
+
 ## v1.5.55
 - 分析頁顯示優化：證券區標題與筆數同一列、指標改列式對齊（標籤左／金額右）；帳戶等區塊 header 不再因 100% 寬換行；窄屏圖表 pair 改單欄。
 

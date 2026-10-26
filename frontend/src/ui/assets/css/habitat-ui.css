@@ -762,3 +762,38 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 [data-ui-layout='modern'] .settings-subpage.habitat-stack > .card.panel .list-row {
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
 }
+
+/* Bottom sheet (InputBottomSheet) — Habitat Modern */
+[data-ui-layout='modern'] .app-overlay-sheet-card {
+  border: 0;
+  box-shadow: none;
+  background: var(--card);
+}
+
+[data-ui-layout='modern'] .app-overlay-sheet-card .app-overlay-sheet-handle {
+  background: color-mix(in srgb, var(--border) 75%, transparent);
+}
+
+[data-ui-layout='modern'] .app-overlay-sheet-footer {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--card) 0%, transparent) 0%,
+    var(--card) 32%
+  );
+}
+
+[data-ui-layout='modern'] .claim-sheet-draft-form .claim-draft-summary {
+  border-color: color-mix(in srgb, var(--border) 65%, transparent);
+}
+
+[data-ui-layout='modern'] .claim-sheet-draft-form .import-action-card {
+  border: 0;
+  border-radius: 0;
+  padding: 10px 0;
+  background: transparent;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}
+
+[data-ui-layout='modern'] .claim-sheet-draft-form .claim-draft-item-row {
+  border-bottom-color: color-mix(in srgb, var(--border) 65%, transparent);
+}

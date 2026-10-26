@@ -156,7 +156,11 @@ try {
   await runPlaywrightCli(['click', '[data-testid=claim-create-open]'])
   await delay(800)
   await runPlaywrightCli(['fill', '[data-testid=claim-create-title]', '分次入帳測試'])
+  await clickByTestId('claim-draft-add-manual')
+  await delay(400)
   await runPlaywrightCli(['fill', '[data-testid=claim-manual-amount]', '200'])
+  await clickByTestId('claim-manual-save')
+  await delay(400)
   await delay(300)
   const createReady = await evalPage(`() => {
     const submit = document.querySelector('[data-testid=claim-create-submit]')
