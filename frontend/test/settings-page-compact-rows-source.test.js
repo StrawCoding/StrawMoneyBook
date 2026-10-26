@@ -34,10 +34,10 @@ test('SMB-254: traditional settings rows use compact vertical padding while keep
 })
 
 test('SMB-254: settings scoped list rows are tightened but keep min tap height', () => {
-  // Separator spacing between rows reduced from 12px to 8px for a more compact list.
-  assert.match(settingsPageSource, /\.item-link \+ \.item-link\s*\{[^}]*margin-top:\s*8px/)
-  assert.match(settingsPageSource, /\.item-link \+ \.item-link\s*\{[^}]*padding-top:\s*8px/)
-  // Each row keeps a 44px minimum height so the click area / readability is preserved.
+  assert.match(settingsPageSource, /settings-flow-group/)
+  assert.doesNotMatch(settingsPageSource, /class="card panel setting-group"/)
+  assert.doesNotMatch(settingsPageSource, /class="card panel account-card"/)
   const itemLinkBlock = extractBlock(settingsPageSource, '.item-link {')
   assert.match(itemLinkBlock, /min-height:\s*44px/)
+  assert.match(itemLinkBlock, /border-bottom:/)
 })

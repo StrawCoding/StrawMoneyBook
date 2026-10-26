@@ -6,7 +6,7 @@
     hello-test-id="settings-hello-block"
     stack-class="settings-page"
   >
-    <RouterLink class="card panel account-card" to="/settings/account" data-testid="settings-account-card">
+    <RouterLink class="settings-account-row" to="/settings/account" data-testid="settings-account-card">
       <div class="account-avatar">
         <img v-if="sessionUser?.avatar_url" :src="sessionUser.avatar_url" alt="avatar" class="avatar-img" />
         <span v-else>{{ avatarLabel }}</span>
@@ -15,10 +15,14 @@
         <strong>{{ accountCardTitle }}</strong>
         <small class="muted">{{ accountCardHint }}</small>
       </div>
-      <font-awesome-icon icon="fa-solid fa-chevron-down" class="account-arrow" />
+      <font-awesome-icon icon="fa-solid fa-chevron-right" class="account-arrow" />
     </RouterLink>
 
-    <article v-for="(group, groupIndex) in settingGroups" :key="groupIndex" class="card panel setting-group">
+    <section
+      v-for="(group, groupIndex) in settingGroups"
+      :key="groupIndex"
+      class="settings-flow-group setting-group"
+    >
       <RouterLink v-for="item in group" :key="item.to" class="item-link" :to="item.to">
         <font-awesome-icon :icon="item.icon" class="item-icon" />
         <span class="item-copy">
@@ -26,7 +30,7 @@
           <small class="muted">{{ t(item.descKey) }}</small>
         </span>
       </RouterLink>
-    </article>
+    </section>
   </HabitatPageShell>
 </template>
 
@@ -125,23 +129,20 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.panel {
-  padding: 14px
-}
-h2 {
-  margin: 0;
-  font-size: 24px
-}
-.account-card {
+.settings-account-row {
   display: flex;
   align-items: center;
   gap: 12px;
   text-decoration: none;
   color: var(--text);
+  padding: 12px 4px 14px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
 }
+
 .account-avatar {
-  width: 52px;
-  height: 52px;
+  width: 48px;
+  height: 48px;
   border-radius: 999px;
   overflow: hidden;
   display: grid;
@@ -149,56 +150,84 @@ h2 {
   flex-shrink: 0;
   background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 76%, #fff 24%), #1b8f6a);
   color: #fff;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
 }
+
 .avatar-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
+
 .account-main {
   display: grid;
   gap: 4px;
   min-width: 0;
   flex: 1;
 }
+
 .account-main small {
   white-space: normal;
+  font-size: 12px;
+  line-height: 1.35;
 }
+
 .account-arrow {
   color: var(--muted);
-  transform: rotate(-90deg);
+  font-size: 14px;
+  flex-shrink: 0;
 }
-.setting-group {
+
+.settings-flow-group {
   display: grid;
-  gap: 0
+  gap: 0;
+  padding: 4px 0 8px;
 }
+
+.settings-flow-group + .settings-flow-group {
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
 .item-link {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 0;
+  gap: 12px;
+  padding: 10px 4px;
   min-height: 44px;
   text-decoration: none;
   color: var(--text);
-  font-weight: 700
+  font-weight: 650;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
 }
+
+.settings-flow-group .item-link:last-child {
+  border-bottom: 0;
+}
+
 .item-copy {
   display: grid;
   gap: 2px;
+  min-width: 0;
+  flex: 1;
 }
+
+.item-copy > span:first-child {
+  font-size: 15px;
+  line-height: 1.25;
+}
+
 .item-copy small {
   font-weight: 500;
-  line-height: 1.3;
+  font-size: 12px;
+  line-height: 1.35;
 }
-.item-link + .item-link {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line, var(--field-border))
-}
+
 .item-icon {
   width: 18px;
-  color: var(--text-muted)
+  flex-shrink: 0;
+  color: var(--muted);
 }
 </style>

@@ -188,38 +188,31 @@
   font-weight: 600;
 }
 
-[data-ui-layout='modern'] .settings-page .setting-group {
-  padding: 4px 0;
-  overflow: hidden;
-  border-radius: var(--habitat-radius-island);
-  background: var(--card);
+[data-ui-layout='modern'] .settings-page .settings-flow-group {
+  background: transparent;
+  border-radius: 0;
 }
 
 [data-ui-layout='modern'] .settings-page .setting-group .item-link {
-  min-height: 48px;
-  padding: 10px 14px;
-  border: 0;
-  border-radius: 0;
   background: transparent;
+  border-radius: 0;
 }
 
 [data-ui-layout='modern'] .settings-page .setting-group .item-link::after {
   content: none;
 }
 
-html[data-ui-layout='modern'] .settings-page .item-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--primary) 16%, var(--bg-soft) 84%);
-  color: var(--primary);
+[data-ui-layout='modern'] .settings-page .settings-account-row {
+  background: transparent;
+  border-radius: 0;
 }
 
-[data-ui-layout='modern'] .settings-page .account-card {
-  border-radius: var(--habitat-radius-island);
+html[data-ui-layout='modern'] .settings-page .item-icon {
+  width: 18px;
+  height: auto;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
 }
 
 [data-ui-layout='modern'] .feature-list-page .feature-section + .feature-section {
