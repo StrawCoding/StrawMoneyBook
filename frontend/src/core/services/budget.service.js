@@ -24,6 +24,7 @@ export {
   resolveContainerPeriodAmountMinor,
   isDailyPoolContainer,
   isDailyPoolChildItem,
+  dailyPoolContainerPeriodSpentMinor,
   itemDisplaySpentMinor,
   itemDisplayBudgetMinor,
   itemDisplayRemainMinor,

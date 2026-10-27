@@ -3,6 +3,7 @@
     :title="t('budgeting.settings_title')"
     :kicker="t('budget_settings.habitat_hello')"
     test-id="budget-settings-view"
+    hello-test-id="budget-settings-page"
     back-to="/budget"
     stack-class="budget-settings-page"
   >
@@ -121,7 +122,7 @@
       </div>
     </article>
 
-    <article class="card panel">
+    <article class="habitat-flow-section">
       <header class="row">
         <h3>{{ t('budgeting.items_by_category') }}</h3>
         <span class="badge">{{ t('budgeting.items_count', { count: budgetStore.items.length }) }}</span>
@@ -804,11 +805,11 @@ function itemRemainMinor(item) {
 }
 
 function itemUsedRatio(item) {
-  return itemDisplayUsedRatio(item, budgetStore.spentMap, budgetStore.containers)
+  return itemDisplayUsedRatio(item, budgetStore.spentMap, budgetStore.containers, budgetStore.items)
 }
 
 function itemUsedPercentLabel(item) {
-  return itemDisplayUsedPercentLabel(item, budgetStore.spentMap, budgetStore.containers)
+  return itemDisplayUsedPercentLabel(item, budgetStore.spentMap, budgetStore.containers, budgetStore.items)
 }
 
 const monthUsedRatio = computed(() => {

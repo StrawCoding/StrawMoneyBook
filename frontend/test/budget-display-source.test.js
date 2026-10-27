@@ -63,6 +63,11 @@ test('daily pool children show period spent and stay out of own budget math', ()
   assert.match(settingsSource, /itemDisplaySpentMinor/)
 })
 
+test('budget category table is read-only flow section without nested card blocks', () => {
+  assert.match(tableSource, /habitat-flow-section budget-category-table/)
+  assert.doesNotMatch(tableSource, /class="card panel budget-category-table"/)
+})
+
 test('budget category table is read-only and can deep-link to settings', () => {
   assert.match(tableSource, /data-testid="budget-category-table"/)
   assert.match(tableSource, /normalizeFaIcon/)

@@ -333,6 +333,15 @@ export function dailyPoolParentContainer(item, containers = []) {
   return container
 }
 
+/** Sum period spent for all categories bound to a daily pool container. */
+export function dailyPoolContainerPeriodSpentMinor(containerId, items = [], spentMap = {}) {
+  const normalizedContainerId = normalizeText(containerId)
+  if (!normalizedContainerId) return 0
+  return (items ?? [])
+    .filter((entry) => normalizeText(entry?.budget_container_id) === normalizedContainerId)
+    .reduce((total, entry) => total + itemDisplaySpentMinor(entry, spentMap), 0)
+}
+
 /** Display denominator for used%. Daily-pool children use the parent pool period budget. */
 export function itemDisplayUsedBudgetMinor(item, containers = []) {
   if (isDailyPoolChildItem(item, containers)) {
@@ -342,16 +351,28 @@ export function itemDisplayUsedBudgetMinor(item, containers = []) {
   return itemDisplayBudgetMinor(item, containers)
 }
 
-/** Used ratio for progress bars. Children stay out of own budget math; this is share of the parent pool. */
-export function itemDisplayUsedRatio(item, spentMap = {}, containers = []) {
+/**
+ * Used ratio for progress bars.
+ * Daily-pool children: share of pool spending (category spent ÷ total pool spent).
+ * Other items: spent ÷ own budget.
+ */
+export function itemDisplayUsedRatio(item, spentMap = {}, containers = [], items = []) {
+  if (isDailyPoolChildItem(item, containers)) {
+    const parent = dailyPoolParentContainer(item, containers)
+    if (!parent) return 0
+    const poolSpentMinor = dailyPoolContainerPeriodSpentMinor(parent.id, items, spentMap)
+    if (poolSpentMinor <= 0) return 0
+    const ratio = itemDisplaySpentMinor(item, spentMap) / poolSpentMinor
+    return Number.isFinite(ratio) ? Math.max(0, Math.min(1, ratio)) : 0
+  }
   const budgetMinor = itemDisplayUsedBudgetMinor(item, containers)
   if (budgetMinor <= 0) return 0
   const ratio = itemDisplaySpentMinor(item, spentMap) / budgetMinor
   return Number.isFinite(ratio) ? Math.max(0, ratio) : 0
 }
 
-export function itemDisplayUsedPercentLabel(item, spentMap = {}, containers = []) {
-  return `${Math.round(itemDisplayUsedRatio(item, spentMap, containers) * 100)}%`
+export function itemDisplayUsedPercentLabel(item, spentMap = {}, containers = [], items = []) {
+  return `${Math.round(itemDisplayUsedRatio(item, spentMap, containers, items) * 100)}%`
 }
 
 export function monthRangeUtc(monthKey, timeZone = 'Asia/Taipei') {

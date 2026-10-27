@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import {
+  dailyPoolContainerPeriodSpentMinor,
   isDailyPoolChildItem,
   itemDisplayBudgetMinor,
   itemDisplayRemainMinor,
@@ -43,9 +44,22 @@ test('daily pool child shows period spent but stays out of budget math', () => {
   assert.equal(itemDisplayRemainMinor(child, spentMap, containers), 0)
 })
 
-test('daily pool child used% is share of parent pool, not own zero budget', () => {
-  assert.equal(itemDisplayUsedRatio(child, spentMap, containers), 440000 / 620000)
-  assert.equal(itemDisplayUsedPercentLabel(child, spentMap, containers), '71%')
+test('daily pool child used% is share of pool spending, not period budget or own zero budget', () => {
+  const poolItems = [child]
+  assert.equal(dailyPoolContainerPeriodSpentMinor('pool-food', poolItems, spentMap), 440000)
+  assert.equal(itemDisplayUsedRatio(child, spentMap, containers, poolItems), 1)
+  assert.equal(itemDisplayUsedPercentLabel(child, spentMap, containers, poolItems), '100%')
+
+  const lunchChild = {
+    id: 'item-lunch',
+    category_id: 'cat-lunch',
+    budget_container_id: 'pool-food',
+    amount_minor: 0,
+  }
+  const multiSpent = { 'cat-breakfast': 440000, 'cat-lunch': 160000 }
+  const multiItems = [child, lunchChild]
+  assert.equal(itemDisplayUsedRatio(child, multiSpent, containers, multiItems), 440000 / 600000)
+  assert.equal(itemDisplayUsedPercentLabel(child, multiSpent, containers, multiItems), '73%')
 })
 
 test('standalone item still uses own budget, spent, and remaining', () => {

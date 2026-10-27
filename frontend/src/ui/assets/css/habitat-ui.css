@@ -727,7 +727,7 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 
 /* Subpages still on card.panel markup: flatten on modern (reference hubs excluded). */
 [data-ui-layout='modern'] .habitat-page:not(.home-modern):not(.analysis-modern):not(.feature-list-page)
-  .habitat-stack:not(.budget-display-page):not(.budget-settings-page):not(.settings-page):not(.assets-page)
+  .habitat-stack:not(.settings-page):not(.assets-page)
   > .card.panel {
   display: grid;
   gap: 10px;
@@ -741,14 +741,14 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 }
 
 [data-ui-layout='modern'] .habitat-page:not(.home-modern):not(.analysis-modern):not(.feature-list-page)
-  .habitat-stack:not(.budget-display-page):not(.budget-settings-page):not(.settings-page):not(.assets-page)
+  .habitat-stack:not(.settings-page):not(.assets-page)
   > .card.panel:last-child {
   border-bottom: 0;
   padding-bottom: 4px;
 }
 
 [data-ui-layout='modern'] .habitat-page:not(.home-modern):not(.analysis-modern):not(.feature-list-page)
-  .habitat-stack:not(.budget-display-page):not(.budget-settings-page):not(.settings-page):not(.assets-page)
+  .habitat-stack:not(.settings-page):not(.assets-page)
   > .card.panel > header h3 {
   font-size: 15px;
   font-weight: 700;
@@ -756,6 +756,43 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 
 [data-ui-layout='modern'] .habitat-page .habitat-stack {
   gap: 12px;
+}
+
+[data-ui-layout='modern'] .budget-display-page .budget-category-table .container-row,
+[data-ui-layout='modern'] .budget-display-page .budget-category-table .item-row,
+[data-ui-layout='modern'] .budget-settings-page .container-head,
+[data-ui-layout='modern'] .budget-settings-page .item-card-btn,
+[data-ui-layout='modern'] .budget-display-page .breakdown-item,
+[data-ui-layout='modern'] .budget-display-page .tx-item {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-ui-layout='modern'] .budget-display-page .budget-category-table .container-row,
+[data-ui-layout='modern'] .budget-display-page .budget-category-table .item-row,
+[data-ui-layout='modern'] .budget-settings-page .container-head,
+[data-ui-layout='modern'] .budget-settings-page .item-card-btn,
+[data-ui-layout='modern'] .budget-display-page .breakdown-item,
+[data-ui-layout='modern'] .budget-display-page .tx-item {
+  padding-left: 0;
+  padding-right: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+[data-ui-layout='modern'] .budget-settings-page .budget-period-card,
+[data-ui-layout='modern'] .budget-settings-page .budget-save-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+[data-ui-layout='modern'] .budget-display-page .budget-category-table .list .item-row:last-child,
+[data-ui-layout='modern'] .budget-settings-page .list .item-row:last-child .item-card-btn {
+  border-bottom: 0;
 }
 
 [data-ui-layout='modern'] .settings-subpage.habitat-stack > .card.panel .group-list .item-link,

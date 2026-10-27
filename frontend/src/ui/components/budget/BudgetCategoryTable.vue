@@ -1,5 +1,5 @@
 <template>
-  <article class="card panel budget-category-table" data-testid="budget-category-table">
+  <article class="habitat-flow-section budget-category-table" data-testid="budget-category-table">
     <header class="row">
       <h3>{{ t('budgeting.display.category_table') }}</h3>
       <span class="badge">{{ t('budgeting.items_count', { count: budgetStore.items.length }) }}</span>
@@ -167,11 +167,11 @@ function itemRemainMinor(item) {
 }
 
 function itemUsedRatio(item) {
-  return itemDisplayUsedRatio(item, budgetStore.spentMap, budgetStore.containers)
+  return itemDisplayUsedRatio(item, budgetStore.spentMap, budgetStore.containers, budgetStore.items)
 }
 
 function itemUsedPercentLabel(item) {
-  return itemDisplayUsedPercentLabel(item, budgetStore.spentMap, budgetStore.containers)
+  return itemDisplayUsedPercentLabel(item, budgetStore.spentMap, budgetStore.containers, budgetStore.items)
 }
 
 function isItemOverBudget(item) {
@@ -209,9 +209,6 @@ function containerUsedPercentLabel(container) {
 </script>
 
 <style scoped>
-.panel {
-  padding: 14px;
-}
 h3,
 h4 {
   margin: 0;
