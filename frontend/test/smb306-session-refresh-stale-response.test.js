@@ -31,6 +31,14 @@ test('shared-ledger backend increments refresh generation and ignores stale bodi
   assert.match(backendSource, /function clearSession[\s\S]*refreshGeneration \+= 1/)
 })
 
+test('cookie-only refresh response clears stale native backup via resolveRefreshTokenFromAuthResponse', () => {
+  assert.match(backendSource, /resolveRefreshTokenFromAuthResponse/)
+  assert.match(
+    backendSource,
+    /const refreshToken = resolveRefreshTokenFromAuthResponse\(data, \{ previousSession \}\)/,
+  )
+})
+
 test('cookie-mode refresh omits stale native body token unless cookie is missing', () => {
   assert.match(backendSource, /function buildRefreshRequestBody/)
   assert.match(

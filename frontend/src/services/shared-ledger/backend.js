@@ -11,6 +11,7 @@ import {
   readPersistedAuthHint,
   readPersistedAuthSession,
   readPersistedNeedsReauthFlag,
+  resolveRefreshTokenFromAuthResponse,
   shouldSendAuthCredentials,
   writePersistedAuthHint,
   writePersistedAuthSession,
@@ -262,13 +263,7 @@ function buildAuthResponseSession(data, previousSession = null) {
   if (!token || !user) {
     throw new Error(t('shared_ledger.error.auth_response_invalid'))
   }
-  const refreshToken = String(
-    data?.refresh_token
-    ?? data?.refreshToken
-    ?? previousSession?.refreshToken
-    ?? getStoredRefreshToken()
-    ?? '',
-  ).trim()
+  const refreshToken = resolveRefreshTokenFromAuthResponse(data, { previousSession })
   return {
     token,
     refreshToken,

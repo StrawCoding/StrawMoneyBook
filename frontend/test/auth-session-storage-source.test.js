@@ -23,6 +23,11 @@ test('SMB-233: auth session storage keeps refresh token out of web storage', () 
   assert.match(storageSource, /SHARED_LEDGER_USER_STORAGE_KEY/)
 })
 
+test('cookie-only auth response must not reuse previous refresh token in cookie mode', () => {
+  assert.match(storageSource, /resolveRefreshTokenFromAuthResponse/)
+  assert.match(storageSource, /if \(shouldSendAuthCredentials\(\)\) return ''/)
+})
+
 test('SMB-242: auth session storage persists native refresh token backup key', () => {
   assert.match(storageSource, /NATIVE_REFRESH_TOKEN_STORAGE_KEY/)
   assert.match(storageSource, /getNativeClientPlatformHeaderValue\(/)

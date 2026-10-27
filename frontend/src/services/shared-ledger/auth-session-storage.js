@@ -66,6 +66,18 @@ export function getStoredRefreshToken() {
   return String(localStorageRef.getItem(NATIVE_REFRESH_TOKEN_STORAGE_KEY) ?? '').trim()
 }
 
+/**
+ * Cookie auth: HttpOnly cookie owns refresh rotation. Only persist a refresh token
+ * when the server explicitly returns one (native backup). Never keep a previous
+ * token after a cookie-only refresh — stale native backup + fallback POST triggers reuse.
+ */
+export function resolveRefreshTokenFromAuthResponse(data, { previousSession = null } = {}) {
+  const fromResponse = String(data?.refresh_token ?? data?.refreshToken ?? '').trim()
+  if (fromResponse) return fromResponse
+  if (shouldSendAuthCredentials()) return ''
+  return String(previousSession?.refreshToken ?? getStoredRefreshToken() ?? '').trim()
+}
+
 export function setStoredAccessToken(token) {
   memoryAccessToken = String(token ?? '').trim()
 }

@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.60
+- 登入 refresh：cookie 輪替成功且回應未帶 refresh_token 時，不再保留舊的 Android native 備份 token，避免 fallback 重送已 rotate 的 token 觸發「Refresh token 已重複使用」。
+
 ## v1.5.59
 - 首頁預算卡「月均／當日可用」切換會記住選擇（localStorage）；傳統／現代首頁共用同一狀態。
 

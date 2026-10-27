@@ -12,6 +12,8 @@ import {
   getAuthStorageHeaders,
   migrateLegacyPersistedSession,
   readPersistedAuthSession,
+  resolveRefreshTokenFromAuthResponse,
+  setStoredRefreshToken,
   shouldPersistNativeRefreshToken,
   shouldSendAuthCredentials,
   shouldPersistUserProfileInLocalStorage,
@@ -51,6 +53,33 @@ test('SMB-239: native platforms persist user profile in localStorage, web keeps 
 test('SMB-242: native platforms persist refresh token backup in localStorage', () => {
   assert.equal(shouldPersistNativeRefreshToken('android'), true)
   assert.equal(shouldPersistNativeRefreshToken('web'), false)
+})
+
+test('cookie-mode refresh response without body token must not retain stale native backup', () => {
+  const localStorageRef = createStorage({
+    [NATIVE_REFRESH_TOKEN_STORAGE_KEY]: 'rotated-away-refresh',
+  })
+  const originalLocalStorage = globalThis.localStorage
+  globalThis.localStorage = localStorageRef
+
+  try {
+    setStoredRefreshToken('rotated-away-refresh')
+    const resolved = resolveRefreshTokenFromAuthResponse(
+      { access_token: 'new-access', user: { id: 'u1' } },
+      { previousSession: { refreshToken: 'rotated-away-refresh' } },
+    )
+    assert.equal(resolved, '')
+    assert.equal(
+      resolveRefreshTokenFromAuthResponse(
+        { access_token: 'new-access', refresh_token: 'native-backup-refresh', user: { id: 'u1' } },
+        { previousSession: { refreshToken: 'rotated-away-refresh' } },
+      ),
+      'native-backup-refresh',
+    )
+  } finally {
+    clearPersistedAuthSession()
+    globalThis.localStorage = originalLocalStorage
+  }
 })
 
 test('writePersistedAuthSession keeps tokens in memory and user in sessionStorage only', () => {
