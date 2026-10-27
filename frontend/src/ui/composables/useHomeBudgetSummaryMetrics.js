@@ -6,6 +6,13 @@ import { getEffectiveTransactionAmountMinor, isCountableForBudget } from '@/ui/u
 import { resolvePoolStatsForDate } from '@/core/services/budget-pool-daily.js'
 import { getDatePartsInTimeZone } from '@/core/services/budget-reserve.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
+import {
+  getHomeBudgetSummaryDisplayMode,
+  setHomeBudgetSummaryDisplayMode,
+} from '@/ui/services/home-budget-summary-display-mode.service.js'
+
+/** Shared across HomeBudgetSummaryCard + HomeModernOverview (same swipe / pill state). */
+const sharedDisplayMode = ref(getHomeBudgetSummaryDisplayMode())
 
 export function useHomeBudgetSummaryMetrics() {
   const budgetStore = useBudgetStore()
@@ -16,7 +23,7 @@ export function useHomeBudgetSummaryMetrics() {
     { key: 'monthly', label: isPayCycleMode.value ? t('home_budget_summary.mode.period') : t('home_budget_summary.mode.monthly') },
     { key: 'daily', label: t('home_budget_summary.mode.daily') },
   ]))
-  const displayMode = ref('monthly')
+  const displayMode = sharedDisplayMode
   const displayModeIndex = computed(() => {
     const index = displayModes.value.findIndex((mode) => mode.key === displayMode.value)
     return index >= 0 ? index : 0
@@ -319,7 +326,7 @@ const modeMetrics = computed(() => ({
 }))
 
 function setDisplayMode(mode) {
-  displayMode.value = mode === 'daily' ? 'daily' : 'monthly'
+  displayMode.value = setHomeBudgetSummaryDisplayMode(mode)
 }
 
 function onTouchStart(event) {

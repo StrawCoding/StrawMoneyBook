@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.59
+- 首頁預算卡「月均／當日可用」切換會記住選擇（localStorage）；傳統／現代首頁共用同一狀態。
+
 ## v1.5.57
 - UI 動效：Bottom Sheet 展開 appear + nested 層深度；請款／報銷列表 TransitionGroup 進出；BottomNav 選中 tab pop；Toast 進出對稱；預算圓餅百分比過渡。
 
