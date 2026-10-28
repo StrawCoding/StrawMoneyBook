@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.86
+- 設定列表 chevron：Font Awesome 註冊 faChevronRight（修復列尾 <!----> 空白）。
+
 ## v1.5.85
 - 設定 hub：改 HabitatSection／ListGroup／Row；列尾 chevron；關閉 stack 進場動畫、列 horizontal padding 归零（16px 页边）。
 
