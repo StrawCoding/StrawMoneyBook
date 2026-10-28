@@ -43,3 +43,26 @@ test('ToastHost leave uses distinct motion from enter', () => {
   assert.match(toast, /\.toast-leave-to/)
   assert.match(toast, /translate3d\(0, 8px/)
 })
+
+test('period shift transition tokens and PeriodContentTransition wiring', () => {
+  const globalCss = readFileSync(resolve(import.meta.dirname, '../src/ui/assets/css/global.css'), 'utf8')
+  assert.match(globalCss, /\.period-shift-forward-enter-from/)
+  assert.match(globalCss, /\.period-shift-back-leave-to/)
+  assert.match(globalCss, /\.period-shift-fade-enter-from/)
+
+  const transition = read('components/layout/PeriodContentTransition.vue')
+  assert.match(transition, /mode="out-in"/)
+  assert.match(transition, /period-shift-forward/)
+
+  const periodViews = [
+    ['views/home.vue', /useHomePeriodFilter|usePeriodShiftDirection/],
+    ['views/analysis.vue', /usePeriodShiftDirection/],
+    ['views/BudgetDisplayPage.vue', /usePeriodShiftDirection/],
+    ['views/CalendarPage.vue', /usePeriodShiftDirection/],
+  ]
+  for (const [view, directionPattern] of periodViews) {
+    const source = read(view)
+    assert.match(source, /PeriodContentTransition/, `${view} should wrap period body`)
+    assert.match(source, directionPattern, `${view} should mark shift direction`)
+  }
+})

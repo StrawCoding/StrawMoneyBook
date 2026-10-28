@@ -47,9 +47,9 @@
     >
       <template #sheet>
         <div class="period-chrome-sheet-tabs" data-testid="analysis-period-filter">
-          <button type="button" class="btn tab-btn" :class="{ primary: mode === 'all' }" @click="mode = 'all'">{{ t('analysis_page.mode.all') }}</button>
-          <button type="button" class="btn tab-btn" :class="{ primary: mode === 'year' }" @click="mode = 'year'">{{ t('analysis_page.mode.year') }}</button>
-          <button type="button" class="btn tab-btn" :class="{ primary: mode === 'month' }" @click="mode = 'month'">{{ t('analysis_page.mode.month') }}</button>
+          <button type="button" class="btn tab-btn" :class="{ primary: mode === 'all' }" @click="setAnalysisMode('all')">{{ t('analysis_page.mode.all') }}</button>
+          <button type="button" class="btn tab-btn" :class="{ primary: mode === 'year' }" @click="setAnalysisMode('year')">{{ t('analysis_page.mode.year') }}</button>
+          <button type="button" class="btn tab-btn" :class="{ primary: mode === 'month' }" @click="setAnalysisMode('month')">{{ t('analysis_page.mode.month') }}</button>
         </div>
         <div v-if="mode !== 'all'" class="period-chrome-sheet-picker">
           <HomeRangePicker v-if="mode === 'year'" mode="year" :year="selectedYear" class="picker-input" @update:year="pickYear" />
@@ -90,6 +90,11 @@
       </template>
     </PeriodChrome>
 
+    <PeriodContentTransition
+      :content-key="analysisPeriodContentKey"
+      :direction="periodShiftDirection"
+      class="analysis-period-body"
+    >
       <section class="analysis-flow-hero" data-testid="analysis-big-numbers">
         <div class="split-grid">
           <div class="split-card income">
@@ -274,6 +279,7 @@
         </button>
       </div>
     </section>
+    </PeriodContentTransition>
 
     <div
       v-if="showExportCapture"
@@ -309,6 +315,8 @@
 import { Capacitor } from '@capacitor/core'
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import PeriodChrome from '@/ui/components/layout/PeriodChrome.vue'
+import PeriodContentTransition from '@/ui/components/layout/PeriodContentTransition.vue'
+import { usePeriodShiftDirection } from '@/ui/composables/usePeriodShiftDirection.js'
 import { shiftMonthKey } from '@/ui/utils/home-period-shift.js'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
@@ -446,20 +454,51 @@ const currentAnalysisRangeLabel = computed(() => (
   mode.value === 'year' ? t('home_page.current_year') : t('home_page.current_month')
 ))
 
+const {
+  periodShiftDirection,
+  markPeriodShift,
+  markPeriodShiftNeutral,
+} = usePeriodShiftDirection()
+
+const analysisPeriodContentKey = computed(() => {
+  if (mode.value === 'all') return 'all'
+  if (mode.value === 'year') return `year:${selectedYear.value}`
+  return `month:${selectedMonth.value}`
+})
+
+function setAnalysisMode(nextMode) {
+  markPeriodShiftNeutral()
+  mode.value = nextMode
+}
+
 function stepAnalysisPeriod(delta) {
+  const step = Number(delta)
+  if (!Number.isFinite(step) || step === 0) return
+  markPeriodShift(step)
   if (mode.value === 'year') {
-    selectedYear.value += Number(delta || 0)
+    selectedYear.value += step
     return
   }
   if (mode.value === 'month') {
-    selectedMonth.value = shiftMonthKey(selectedMonth.value, delta)
+    selectedMonth.value = shiftMonthKey(selectedMonth.value, step)
   }
 }
 
 function goCurrentAnalysisRange() {
+  markPeriodShiftNeutral()
   const now = new Date()
   selectedMonth.value = monthKeyFromDate(now)
   selectedYear.value = now.getFullYear()
+}
+
+function pickMonth(value) {
+  markPeriodShiftNeutral()
+  selectedMonth.value = value
+}
+
+function pickYear(value) {
+  markPeriodShiftNeutral()
+  selectedYear.value = Number(value)
 }
 
 const exportFilterLabel = computed(() => (mode.value === 'all' ? '' : exportPeriodLabel.value))
@@ -615,14 +654,6 @@ const accountActiveTypeLabel = computed(() =>
       ? t('analysis_page.type.expense')
       : t('analysis_page.type.total'),
 )
-
-function pickYear(value) {
-  selectedYear.value = Number(value)
-}
-
-function pickMonth(value) {
-  selectedMonth.value = value
-}
 
 function openCategoryBreakdownDetail(item, type = analysisType.value) {
   if (!item?.id) return
@@ -872,6 +903,11 @@ onBeforeUnmount(() => {
 .analysis-period-chrome {
   display: grid;
   gap: 10px;
+}
+
+.analysis-period-body {
+  display: grid;
+  gap: 12px;
 }
 
 .period-title {

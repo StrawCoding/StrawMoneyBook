@@ -11,6 +11,7 @@ import {
   monthKeyForLedgerTimeZone,
 } from '@/core/services/budget.service'
 import { shiftDayKey, shiftMonthKey } from '@/ui/utils/home-period-shift.js'
+import { usePeriodShiftDirection } from '@/ui/composables/usePeriodShiftDirection.js'
 
 export const APP_BUDGET_PERIOD_SYNC_EVENT = 'app:budget-period-sync'
 
@@ -27,6 +28,22 @@ export function useHomePeriodFilter() {
   const selectedMonth = ref(monthKeyForLedgerTimeZone())
   const selectedDay = ref(dateKeyForLedgerTimeZone())
   const selectedYear = ref(Number(new Date().getFullYear()))
+  const {
+    periodShiftDirection,
+    markPeriodShift,
+    markPeriodShiftNeutral,
+  } = usePeriodShiftDirection()
+
+  const periodContentKey = computed(() => {
+    if (filterMode.value === 'all') return 'all'
+    if (filterMode.value === 'year') return `year:${selectedYear.value}`
+    if (filterMode.value === 'day') return `day:${selectedDay.value}`
+    if (isPayCycleLedger()) {
+      const periodKey = String(budgetStore.period?.key ?? '').trim()
+      return periodKey ? `pay:${periodKey}` : `month:${selectedMonth.value}`
+    }
+    return `month:${selectedMonth.value}`
+  })
 
   const filterModes = computed(() => ([
     { value: 'all', label: t('home_page.filter.all') },
@@ -148,6 +165,7 @@ export function useHomePeriodFilter() {
   }
 
   async function switchFilterMode(nextMode) {
+    markPeriodShiftNeutral()
     filterMode.value = nextMode
     const budgetMonthKey = normalizeMonthKey(budgetStore.monthKey)
     if (nextMode === 'month' && budgetMonthKey) {
@@ -157,6 +175,7 @@ export function useHomePeriodFilter() {
   }
 
   async function goCurrentRange() {
+    markPeriodShiftNeutral()
     resetRangeToLedgerToday()
     if (filterMode.value === 'year') {
       await syncHomeTransactions()
@@ -189,16 +208,19 @@ export function useHomePeriodFilter() {
   }
 
   async function pickMonth(value) {
+    markPeriodShiftNeutral()
     selectedMonth.value = value
     await applyMonthInput()
   }
 
   async function pickDay(value) {
+    markPeriodShiftNeutral()
     selectedDay.value = value
     await syncHomeTransactions()
   }
 
   async function pickYear(value) {
+    markPeriodShiftNeutral()
     selectedYear.value = Number(value)
     await syncHomeTransactions()
   }
@@ -207,6 +229,7 @@ export function useHomePeriodFilter() {
     const step = Number(delta)
     if (!Number.isFinite(step) || step === 0 || !canStepPeriod.value) return
     const direction = step < 0 ? -1 : 1
+    markPeriodShift(direction)
     try {
       if (isPayCycleLedger() && filterMode.value === 'month') {
         if (direction < 0) await budgetStore.goPreviousPeriod()
@@ -264,6 +287,8 @@ export function useHomePeriodFilter() {
     pickDay,
     pickYear,
     stepPeriod,
+    periodContentKey,
+    periodShiftDirection,
   }
 }
 

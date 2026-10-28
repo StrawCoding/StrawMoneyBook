@@ -6,78 +6,84 @@
     hello-test-id="calendar-hello"
     back-to="/"
   >
-    <section class="habitat-flow-section">
-      <div class="row month-head">
-        <button class="btn mini-btn" @click="goPrevMonth">‹</button>
-        <strong>{{ monthLabel }}</strong>
-        <button class="btn mini-btn" @click="goNextMonth">›</button>
-      </div>
-
-      <div class="week-head">
-        <span v-for="item in weekLabels" :key="item">{{ item }}</span>
-      </div>
-
-      <div class="calendar-grid">
-        <button
-          v-for="cell in calendarCells"
-          :key="cell.key"
-          class="day-cell"
-          :class="{ empty: !cell.dateKey, selected: cell.dateKey === selectedDateKey }"
-          :disabled="!cell.dateKey"
-          @click="selectDay(cell.dateKey)"
-        >
-          <span class="day-num">{{ cell.dayLabel }}</span>
-          <span v-if="cell.dateKey && cell.incomeMinor > 0" class="day-amount income">+{{ formatMinor(cell.incomeMinor) }}</span>
-          <span v-if="cell.dateKey && cell.expenseMinor > 0" class="day-amount expense">-{{ formatMinor(cell.expenseMinor) }}</span>
-        </button>
-      </div>
-    </section>
-
-    <section class="habitat-flow-section">
-      <header class="row">
-        <h3>{{ t('calendar_page.day_tx', { date: selectedDateKey || '-' }) }}</h3>
-        <div v-if="selectedDayIncomeMinor > 0 || selectedDayExpenseMinor > 0" class="day-total">
-          <span v-if="selectedDayIncomeMinor > 0" class="income">+{{ formatMinor(selectedDayIncomeMinor) }}</span>
-          <span v-if="selectedDayExpenseMinor > 0" class="expense">-{{ formatMinor(selectedDayExpenseMinor) }}</span>
+    <PeriodContentTransition
+      :content-key="calendarPeriodContentKey"
+      :direction="periodShiftDirection"
+      class="calendar-period-body"
+    >
+      <section class="habitat-flow-section">
+        <div class="row month-head">
+          <button class="btn mini-btn" @click="goPrevMonth">‹</button>
+          <strong>{{ monthLabel }}</strong>
+          <button class="btn mini-btn" @click="goNextMonth">›</button>
         </div>
-      </header>
 
-      <ul class="tx-list">
-        <li
-          v-for="tx in selectedDayTransactions"
-          :key="tx.id"
-          class="tx-item"
-          role="button"
-          tabindex="0"
-          @click="openTx(tx.id)"
-          @keydown.enter.prevent="openTx(tx.id)"
-        >
-          <div class="tx-icon-col">
-            <font-awesome-icon v-if="txIcon(tx)" :icon="txIcon(tx)" class="tx-icon" />
+        <div class="week-head">
+          <span v-for="item in weekLabels" :key="item">{{ item }}</span>
+        </div>
+
+        <div class="calendar-grid">
+          <button
+            v-for="cell in calendarCells"
+            :key="cell.key"
+            class="day-cell"
+            :class="{ empty: !cell.dateKey, selected: cell.dateKey === selectedDateKey }"
+            :disabled="!cell.dateKey"
+            @click="selectDay(cell.dateKey)"
+          >
+            <span class="day-num">{{ cell.dayLabel }}</span>
+            <span v-if="cell.dateKey && cell.incomeMinor > 0" class="day-amount income">+{{ formatMinor(cell.incomeMinor) }}</span>
+            <span v-if="cell.dateKey && cell.expenseMinor > 0" class="day-amount expense">-{{ formatMinor(cell.expenseMinor) }}</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="habitat-flow-section">
+        <header class="row">
+          <h3>{{ t('calendar_page.day_tx', { date: selectedDateKey || '-' }) }}</h3>
+          <div v-if="selectedDayIncomeMinor > 0 || selectedDayExpenseMinor > 0" class="day-total">
+            <span v-if="selectedDayIncomeMinor > 0" class="income">+{{ formatMinor(selectedDayIncomeMinor) }}</span>
+            <span v-if="selectedDayExpenseMinor > 0" class="expense">-{{ formatMinor(selectedDayExpenseMinor) }}</span>
           </div>
-          <div class="tx-main">
-            <div class="tx-type">
-              <span>{{ txLabel(tx) }}</span>
+        </header>
+
+        <ul class="tx-list">
+          <li
+            v-for="tx in selectedDayTransactions"
+            :key="tx.id"
+            class="tx-item"
+            role="button"
+            tabindex="0"
+            @click="openTx(tx.id)"
+            @keydown.enter.prevent="openTx(tx.id)"
+          >
+            <div class="tx-icon-col">
+              <font-awesome-icon v-if="txIcon(tx)" :icon="txIcon(tx)" class="tx-icon" />
             </div>
-            <small class="muted">{{ formatTime(tx.occurred_at) }}</small>
-          </div>
-          <div class="tx-side">
-            <div class="amount-line">
-              <small
-                v-if="showAddonDeltaTag(tx)"
-                class="addon-delta"
-                :class="{ plus: addonDeltaMajor(tx.note) > 0, minus: addonDeltaMajor(tx.note) < 0 }"
-              >
-                {{ addonDeltaTag(tx.note) }}
-              </small>
-              <MoneyText :value-minor="tx.amount_minor" :currency="tx.account_currency_code" :tone="tx.type" />
+            <div class="tx-main">
+              <div class="tx-type">
+                <span>{{ txLabel(tx) }}</span>
+              </div>
+              <small class="muted">{{ formatTime(tx.occurred_at) }}</small>
             </div>
-            <small class="muted tx-account-side">{{ accountNameOfTransaction(tx) }}</small>
-          </div>
-        </li>
-        <li v-if="selectedDayTransactions.length === 0" class="muted">{{ t('calendar_page.empty_day') }}</li>
-      </ul>
-    </section>
+            <div class="tx-side">
+              <div class="amount-line">
+                <small
+                  v-if="showAddonDeltaTag(tx)"
+                  class="addon-delta"
+                  :class="{ plus: addonDeltaMajor(tx.note) > 0, minus: addonDeltaMajor(tx.note) < 0 }"
+                >
+                  {{ addonDeltaTag(tx.note) }}
+                </small>
+                <MoneyText :value-minor="tx.amount_minor" :currency="tx.account_currency_code" :tone="tx.type" />
+              </div>
+              <small class="muted tx-account-side">{{ accountNameOfTransaction(tx) }}</small>
+            </div>
+          </li>
+          <li v-if="selectedDayTransactions.length === 0" class="muted">{{ t('calendar_page.empty_day') }}</li>
+        </ul>
+      </section>
+    </PeriodContentTransition>
   </HabitatPageShell>
 </template>
 
@@ -85,6 +91,8 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
+import PeriodContentTransition from '@/ui/components/layout/PeriodContentTransition.vue'
+import { usePeriodShiftDirection } from '@/ui/composables/usePeriodShiftDirection.js'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { listTransactionsForCalendarMonth } from '@/core/services/transaction-query.service'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
@@ -106,9 +114,19 @@ const accountStore = useAccountStore()
 const uiStore = useUiStore()
 const { t, locale } = useI18n()
 
+const {
+  periodShiftDirection,
+  markPeriodShift,
+  markPeriodShiftNeutral,
+} = usePeriodShiftDirection()
+
 const currentMonth = ref(monthKeyFromDate(new Date()))
 const selectedDateKey = ref(dateKeyFromDate(new Date()))
 const monthTransactions = ref([])
+
+const calendarPeriodContentKey = computed(() => (
+  `month:${currentMonth.value}|day:${selectedDateKey.value || '-'}`
+))
 // 2024-01-07 is a Sunday; generate narrow weekday labels for Sun–Sat
 const weekLabels = computed(() =>
   Array.from({ length: 7 }, (_, i) =>
@@ -178,10 +196,17 @@ const ledgerCurrencyCode = computed(() => normalizeCurrencyCode(ledgerStore.acti
 
 function selectDay(dateKey) {
   if (!dateKey) return
+  const prev = selectedDateKey.value
+  if (prev && prev !== dateKey) {
+    markPeriodShift(dateKey > prev ? 1 : dateKey < prev ? -1 : 0)
+  } else {
+    markPeriodShiftNeutral()
+  }
   selectedDateKey.value = dateKey
 }
 
 function goPrevMonth() {
+  markPeriodShift(-1)
   const [yearText, monthText] = currentMonth.value.split('-')
   const year = Number(yearText)
   const month = Number(monthText)
@@ -191,6 +216,7 @@ function goPrevMonth() {
 }
 
 function goNextMonth() {
+  markPeriodShift(1)
   const [yearText, monthText] = currentMonth.value.split('-')
   const year = Number(yearText)
   const month = Number(monthText)
@@ -471,6 +497,11 @@ function dateKeyFromIso(iso) {
   align-items: center;
   gap: 8px;
   font-size: 12px;
+}
+
+.calendar-period-body {
+  display: grid;
+  gap: 12px;
 }
 
 @media (max-width: 480px) {

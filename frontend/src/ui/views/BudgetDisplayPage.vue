@@ -38,18 +38,23 @@
           @update:month="pickMonth"
         />
         <div v-else class="row period-nav">
-          <button type="button" class="btn" data-testid="budget-display-period-previous" @click="budgetStore.goPreviousPeriod">
+          <button type="button" class="btn" data-testid="budget-display-period-previous" @click="goBudgetPreviousPeriod">
             {{ t('budgeting.period.previous') }}
           </button>
-          <button type="button" class="btn" data-testid="budget-display-period-current" @click="budgetStore.loadCurrentPeriod">
+          <button type="button" class="btn" data-testid="budget-display-period-current" @click="goBudgetCurrentPeriod">
             {{ t('budgeting.period.current') }}
           </button>
-          <button type="button" class="btn" data-testid="budget-display-period-next" @click="budgetStore.goNextPeriod">
+          <button type="button" class="btn" data-testid="budget-display-period-next" @click="goBudgetNextPeriod">
             {{ t('budgeting.period.next') }}
           </button>
         </div>
       </header>
 
+      <PeriodContentTransition
+        :content-key="budgetPeriodContentKey"
+        :direction="periodShiftDirection"
+        class="budget-period-body"
+      >
       <div class="stack stat" :class="{ 'month-over': budgetStore.isMonthOver }">
         <BudgetProgressBar
           :ratio="monthUsedRatio"
@@ -116,6 +121,7 @@
         @select-day="openDayDetail"
       />
       <BudgetDailyStatsTable v-else />
+      </PeriodContentTransition>
     </article>
 
     <article v-if="selectedDayStats" class="card panel" data-testid="budget-day-detail">
@@ -123,6 +129,11 @@
         <h3>{{ t('budgeting.display.day_detail', { date: selectedDateKey }) }}</h3>
         <button type="button" class="btn" @click="closeDayDetail">{{ t('budgeting.sheet.close') }}</button>
       </header>
+      <PeriodContentTransition
+        :content-key="budgetDayContentKey"
+        :direction="dayShiftDirection"
+        class="budget-day-body"
+      >
       <div class="stat-grid">
         <div class="stat-cell">
           <span class="muted">{{ t('budgeting.daily_stats.col_planned') }}</span>
@@ -169,6 +180,7 @@
           <MoneyText :value-minor="tx.amount_minor" :currency="tx.account_currency_code" tone="expense" />
         </li>
       </ul>
+      </PeriodContentTransition>
     </article>
 
     <BudgetCategoryTable
@@ -245,6 +257,8 @@
 
 <script setup>
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
+import PeriodContentTransition from '@/ui/components/layout/PeriodContentTransition.vue'
+import { usePeriodShiftDirection } from '@/ui/composables/usePeriodShiftDirection.js'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
@@ -274,6 +288,17 @@ const budgetStore = useBudgetStore()
 const categoryStore = useCategoryStore()
 const ledgerStore = useLedgerStore()
 const { t, locale } = useI18n()
+
+const {
+  periodShiftDirection,
+  markPeriodShift,
+  markPeriodShiftNeutral,
+} = usePeriodShiftDirection()
+const {
+  periodShiftDirection: dayShiftDirection,
+  markPeriodShift: markDayShift,
+  markPeriodShiftNeutral: markDayShiftNeutral,
+} = usePeriodShiftDirection()
 
 const viewMode = ref('calendar')
 const calendarMonthKey = ref('')
@@ -348,14 +373,48 @@ function syncCalendarMonthToPeriod() {
   )
 }
 
+const budgetPeriodContentKey = computed(() => {
+  const cal = calendarMonthKey.value || budgetStore.monthKey || ''
+  if (isPayCycleMode.value) {
+    const pk =
+      String(budgetStore.period?.key ?? '').trim()
+      || `${budgetStore.period?.startDate ?? ''}_${budgetStore.period?.endDate ?? ''}`
+    return `pay:${pk}|cal:${cal}`
+  }
+  return `month:${budgetStore.monthKey || cal}|cal:${cal}`
+})
+
+const budgetDayContentKey = computed(() => (
+  selectedDateKey.value ? `day:${selectedDateKey.value}` : 'day:none'
+))
+
+function goBudgetPreviousPeriod() {
+  markPeriodShift(-1)
+  void budgetStore.goPreviousPeriod()
+}
+
+function goBudgetNextPeriod() {
+  markPeriodShift(1)
+  void budgetStore.goNextPeriod()
+}
+
+function goBudgetCurrentPeriod() {
+  markPeriodShiftNeutral()
+  void budgetStore.loadCurrentPeriod()
+}
+
 function pickMonth(monthKey) {
   if (!monthKey) return
+  markPeriodShiftNeutral()
   calendarMonthKey.value = monthKey
   if (monthKey !== budgetStore.monthKey) budgetStore.loadMonth(monthKey)
 }
 
 function shiftCalendarMonth(delta) {
-  const next = shiftBudgetMonthKey(calendarMonthKey.value || budgetStore.monthKey, delta)
+  const step = Number(delta)
+  if (!Number.isFinite(step) || step === 0) return
+  markPeriodShift(step)
+  const next = shiftBudgetMonthKey(calendarMonthKey.value || budgetStore.monthKey, step)
   if (!next) return
   calendarMonthKey.value = next
   if (!isPayCycleMode.value) {
@@ -364,10 +423,18 @@ function shiftCalendarMonth(delta) {
 }
 
 function openDayDetail(dayKey) {
+  if (!dayKey) return
+  const prev = selectedDateKey.value
+  if (prev && prev !== dayKey) {
+    markDayShift(dayKey > prev ? 1 : dayKey < prev ? -1 : 0)
+  } else {
+    markDayShiftNeutral()
+  }
   selectedDateKey.value = dayKey
 }
 
 function closeDayDetail() {
+  markDayShiftNeutral()
   selectedDateKey.value = ''
 }
 
@@ -549,6 +616,11 @@ h2, h3 {
   gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+.budget-period-body,
+.budget-day-body {
+  display: grid;
+  gap: 12px;
 }
 .view-toggle {
   margin: 12px 0 8px;

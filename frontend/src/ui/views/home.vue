@@ -61,9 +61,14 @@
       </template>
     </PeriodChrome>
 
-    <HomeModernOverview />
-
-    <HomeTransactionFeed data-testid="home-transaction-feed" />
+    <PeriodContentTransition
+      :content-key="periodContentKey"
+      :direction="periodShiftDirection"
+      class="home-period-body"
+    >
+      <HomeModernOverview />
+      <HomeTransactionFeed data-testid="home-transaction-feed" />
+    </PeriodContentTransition>
 
     <teleport to="body">
       <button class="fab btn primary" data-testid="home-fab" @click="openQuickAdd">{{ t('home_page.quick_add') }}</button>
@@ -75,6 +80,7 @@
 import { useRouter } from 'vue-router'
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import PeriodChrome from '@/ui/components/layout/PeriodChrome.vue'
+import PeriodContentTransition from '@/ui/components/layout/PeriodContentTransition.vue'
 import HomeModernOverview from '@/ui/components/home/HomeModernOverview.vue'
 import { useHomePeriodFilter } from '@/ui/composables/useHomePeriodFilter'
 import HomeTransactionFeed from '@/ui/components/home/HomeTransactionFeed.vue'
@@ -103,6 +109,8 @@ const {
   pickDay,
   pickYear,
   stepPeriod,
+  periodContentKey,
+  periodShiftDirection,
 } = useHomePeriodFilter()
 
 function openQuickAdd() {
@@ -111,6 +119,11 @@ function openQuickAdd() {
 </script>
 
 <style scoped>
+.home-period-body {
+  display: grid;
+  gap: 12px;
+}
+
 .home-toolbar-ledger {
   max-width: min(52vw, 220px);
 }

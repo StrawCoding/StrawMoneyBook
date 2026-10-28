@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.64
+- 切換期間／日期：首頁、分析、預算、日曆在換月／換日／發薪期步進時，主內容區以 slide＋fade（`PeriodContentTransition`）整體過場；picker／回本期用淡入淡出。
+
 ## v1.5.63
 - 修復部分頁面返回 chevron 無反應：`goBackOrFallback` 在 `router.back()` 無效時改走 `backTo`／fallback；圖示選擇器補返回鈕；交易搜尋／日曆加回首頁返回。
 
