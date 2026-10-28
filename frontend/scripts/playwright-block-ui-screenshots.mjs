@@ -301,9 +301,10 @@ try {
     }
   })
 
+  const pkgVersion = JSON.parse(readFileSync(join(frontendDir, 'package.json'), 'utf8')).version
   const html = buildReportHtml({
     items,
-    versionNote: 'v1.5.69 preview (modern)',
+    versionNote: `v${pkgVersion} preview (modern)`,
     capturedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
   })
 
