@@ -33,9 +33,11 @@ doc/log/
 
 # Environment and local secrets
 ./backend/.env
-.env.example
+backend/.env
+frontend/.env
 .env.local
 .env.*.local
+!frontend/.env.example
 key.properties
 *.jks
 *.keystore
