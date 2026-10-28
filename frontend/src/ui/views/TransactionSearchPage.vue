@@ -5,6 +5,7 @@
     test-id="transaction-search-view"
     hello-test-id="transaction-search-hello"
     stack-class="transaction-search-page"
+    back-to="/"
   >
     <section class="habitat-flow-section">
       <input

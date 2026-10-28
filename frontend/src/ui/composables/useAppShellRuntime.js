@@ -6,7 +6,7 @@ import { flushDeferredScrollRestore } from '@/ui/services/route-scroll.service'
 import { checkForAppUpdate, openGooglePlayStore } from '@/ui/services/app-update.service'
 import { EMPTY_LEDGER_RESTORE_HINT_EVENT } from '@/core/services/empty-ledger-restore-hint.service'
 import { initGoogleAuth, getAccessToken } from '@/services/einvoice/auth'
-import { canNavigateBackInApp } from '@/ui/services/navigation-back.service'
+import { goBackOrFallback, resolveBackAnchorFallback } from '@/ui/services/navigation-back.service'
 import {
   authenticateSecurityLock,
   getSecurityLockAvailability,
@@ -138,9 +138,9 @@ export function useAppShellRuntime({ t, uiStore }) {
   function onBackButtonAnchorClick(event) {
     const anchor = resolveBackButtonAnchor(event)
     if (!anchor) return
-    if (!canNavigateBackInApp(route.fullPath)) return
     event.preventDefault()
-    void router.back()
+    const fallback = resolveBackAnchorFallback(anchor, route.fullPath)
+    void goBackOrFallback(router, fallback)
   }
 
   function onRequestCloseOverlay(event) {

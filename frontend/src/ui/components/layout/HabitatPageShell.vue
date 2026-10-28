@@ -126,6 +126,8 @@ const showHeader = computed(() => Boolean(
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  position: relative;
+  z-index: 2;
 }
 
 .habitat-title-row.has-back .habitat-page-title {

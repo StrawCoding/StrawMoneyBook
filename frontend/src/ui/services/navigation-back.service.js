@@ -94,16 +94,43 @@ export async function returnHomeWithRememberedScroll(router) {
 export const returnHomeAfterTransactionDelete = returnHomeWithRememberedScroll
 export const returnHomeAfterBookkeeping = returnHomeWithRememberedScroll
 
+function resolveFallbackTarget(fallback, currentPath) {
+  const explicit = toPathText(fallback)
+  if (explicit) return explicit
+  return resolveBackFallback(currentPath)
+}
+
 export async function goBackOrFallback(router, fallback) {
   const currentPath = toPathText(router?.currentRoute?.value?.path)
+  const target = resolveFallbackTarget(fallback, currentPath)
+
   if (canNavigateBackInApp(currentPath)) {
-    await router.back()
-    return 'back'
+    try {
+      await router.back()
+    } catch {
+      // History may be empty despite vue-router state.back — fall through to explicit target.
+    }
+    const afterPath = toPathText(router?.currentRoute?.value?.path)
+    if (afterPath && afterPath !== currentPath) {
+      return 'back'
+    }
   }
 
-  const target = fallback ?? resolveBackFallback(currentPath)
   await router.replace(target)
   return 'fallback'
+}
+
+/** Parse pathname from an in-app back anchor href (absolute or root-relative). */
+export function resolveBackAnchorFallback(anchor, currentPath = '/') {
+  if (!anchor) return resolveBackFallback(currentPath)
+  const href = String(anchor.getAttribute('href') ?? '').trim()
+  if (!href || href === '#') return resolveBackFallback(currentPath)
+  try {
+    const url = new URL(href, typeof window !== 'undefined' ? window.location.origin : 'http://localhost')
+    return toPathText(url.pathname)
+  } catch {
+    return toPathText(href.split('?')[0]) || resolveBackFallback(currentPath)
+  }
 }
 
 export function shouldConfirmExit(path = '/') {

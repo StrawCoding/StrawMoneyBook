@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.63
+- 修復部分頁面返回 chevron 無反應：`goBackOrFallback` 在 `router.back()` 無效時改走 `backTo`／fallback；圖示選擇器補返回鈕；交易搜尋／日曆加回首頁返回。
+
 ## v1.5.62
 - 首頁交易列表 icon 與資產頁帳戶 icon 統一為 `--habitat-page-icon`（主題 `--primary-soft` 琥珀色）；排除計入資產的帳戶仍維持 muted。
 

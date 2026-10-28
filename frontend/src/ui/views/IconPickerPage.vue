@@ -4,7 +4,18 @@
     :kicker="t('icon_picker.habitat_hello')"
     test-id="icon-picker-view"
   >
-
+    <template #back>
+      <button
+        type="button"
+        class="btn back-btn"
+        data-testid="icon-picker-back"
+        :aria-label="t('common.back')"
+        :title="t('common.back')"
+        @click="goBack"
+      >
+        <font-awesome-icon icon="fa-solid fa-chevron-left" />
+      </button>
+    </template>
 
       <article class="card panel">
         <div class="icon-grid">
@@ -32,7 +43,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getAccountIconOptions, getCategoryIconOptions, normalizeFaIcon } from '@/ui/utils/fa-icon-options'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useUiStore } from '@/ui/stores/ui.store'
-import { canNavigateBackInApp } from '@/ui/services/navigation-back.service'
+import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -101,37 +112,27 @@ async function pick(icon) {
   picking.value = false
 }
 
-function goBack() {
-  if (canNavigateBackInApp(route.fullPath)) {
-    void router.back()
-    return
-  }
-
+function resolveIconPickerFallbackRoute() {
   const from = queryText(route.query.from)
   const accountId = queryText(route.query.accountId)
   const categoryId = queryText(route.query.categoryId)
   const nextQuery = buildBaseQuery(route.query)
 
-  if (from === 'account-detail') {
-    void router.push({ name: 'account-detail', params: { id: accountId }, query: nextQuery })
-    return
+  if (from === 'account-detail' && accountId) {
+    return { name: 'account-detail', params: { id: accountId }, query: nextQuery }
   }
+  if (from === 'settings-category-detail' && categoryId) {
+    return { name: 'settings-category-detail', params: { id: categoryId }, query: nextQuery }
+  }
+  if (from === 'asset-account-management-edit' || from === 'asset-account-management') {
+    return { name: 'asset-account-management', query: nextQuery }
+  }
+  return { name: 'settings-categories', query: nextQuery }
+}
 
-  if (from === 'settings-category-detail') {
-    void router.push({ name: 'settings-category-detail', params: { id: categoryId }, query: nextQuery })
-    return
-  }
-
-  if (from === 'asset-account-management-edit') {
-    void router.push({ name: 'asset-account-management', query: nextQuery })
-    return
-  }
-
-  if (from === 'asset-account-management') {
-    void router.push({ name: 'asset-account-management', query: nextQuery })
-    return
-  }
-  void router.push({ name: 'settings-categories', query: nextQuery })
+async function goBack() {
+  const fallbackRoute = resolveIconPickerFallbackRoute()
+  await goBackOrFallback(router, router.resolve(fallbackRoute).fullPath)
 }
 
 async function safeNavigate(target) {

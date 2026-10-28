@@ -49,6 +49,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { useEInvoiceImportStore } from '@/ui/stores/einvoice-import.store.js'
 import { useI18n } from '@/ui/services/i18n.service'
@@ -81,10 +82,10 @@ const currentStep = computed(() => store.currentStep)
 const STEP_COMPONENTS = [EInvoiceStep1Account, EInvoiceStep2Query, EInvoiceStep3Select, EInvoiceStep4Confirm]
 const currentStepComponent = computed(() => STEP_COMPONENTS[currentStep.value - 1])
 
-function handleBack() {
+async function handleBack() {
   if (store.currentStep === 1) {
     store.reset()
-    router.back()
+    await goBackOrFallback(router, '/features')
   } else if (store.currentStep === 3) {
     store.clearScrapeResults()
     store.currentStep = 2

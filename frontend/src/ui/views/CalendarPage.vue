@@ -4,6 +4,7 @@
     :kicker="t('calendar_page.habitat_hello')"
     test-id="calendar-view"
     hello-test-id="calendar-hello"
+    back-to="/"
   >
     <section class="habitat-flow-section">
       <div class="row month-head">

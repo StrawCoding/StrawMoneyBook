@@ -475,6 +475,8 @@ button:focus-visible,
   color: var(--text);
   font-size: 0;
   gap: 0;
+  position: relative;
+  z-index: 1;
 }
 .btn.back-btn {
   border-color: transparent;
