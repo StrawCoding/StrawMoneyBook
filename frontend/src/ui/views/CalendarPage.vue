@@ -7,11 +7,6 @@
     back-to="/"
   >
     <div class="calendar-period-body">
-      <PeriodContentTransition
-        :content-key="calendarMonthContentKey"
-        :direction="monthShiftDirection"
-        class="calendar-month-shift"
-      >
       <section class="habitat-flow-section habitat-line-calendar">
         <div class="row month-head">
           <button class="btn mini-btn" @click="goPrevMonth">‹</button>
@@ -19,26 +14,33 @@
           <button class="btn mini-btn" @click="goNextMonth">›</button>
         </div>
 
-        <div class="week-head">
-          <span v-for="item in weekLabels" :key="item">{{ item }}</span>
-        </div>
+        <PeriodContentTransition
+          :content-key="calendarMonthContentKey"
+          :direction="monthShiftDirection"
+          class="calendar-grid-shift"
+        >
+          <div class="calendar-grid-body">
+            <div class="week-head">
+              <span v-for="item in weekLabels" :key="item">{{ item }}</span>
+            </div>
 
-        <div class="calendar-grid">
-          <button
-            v-for="cell in calendarCells"
-            :key="cell.key"
-            class="day-cell"
-            :class="{ empty: !cell.dateKey, selected: cell.dateKey === selectedDateKey }"
-            :disabled="!cell.dateKey"
-            @click="selectDay(cell.dateKey)"
-          >
-            <span class="day-num">{{ cell.dayLabel }}</span>
-            <span v-if="cell.dateKey && cell.incomeMinor > 0" class="day-amount income">+{{ formatMinor(cell.incomeMinor) }}</span>
-            <span v-if="cell.dateKey && cell.expenseMinor > 0" class="day-amount expense">-{{ formatMinor(cell.expenseMinor) }}</span>
-          </button>
-        </div>
+            <div class="calendar-grid">
+              <button
+                v-for="cell in calendarCells"
+                :key="cell.key"
+                class="day-cell"
+                :class="{ empty: !cell.dateKey, selected: cell.dateKey === selectedDateKey }"
+                :disabled="!cell.dateKey"
+                @click="selectDay(cell.dateKey)"
+              >
+                <span class="day-num">{{ cell.dayLabel }}</span>
+                <span v-if="cell.dateKey && cell.incomeMinor > 0" class="day-amount income">+{{ formatMinor(cell.incomeMinor) }}</span>
+                <span v-if="cell.dateKey && cell.expenseMinor > 0" class="day-amount expense">-{{ formatMinor(cell.expenseMinor) }}</span>
+              </button>
+            </div>
+          </div>
+        </PeriodContentTransition>
       </section>
-      </PeriodContentTransition>
 
       <PeriodContentTransition
         :content-key="calendarDayContentKey"
@@ -519,8 +521,14 @@ function dateKeyFromIso(iso) {
   gap: 12px;
 }
 
-.calendar-month-shift,
+.calendar-grid-shift,
 .calendar-day-shift {
+  display: grid;
+  gap: inherit;
+  min-width: 0;
+}
+
+.calendar-grid-body {
   display: grid;
   gap: inherit;
   min-width: 0;
