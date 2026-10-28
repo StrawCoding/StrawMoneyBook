@@ -4,6 +4,8 @@
 
 # StrawMoneyBook
 
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-orange.svg)](./LICENSE)
+
 StrawMoneyBook 是一款以個人現金流管理為核心的記帳 App。它不只處理收入與支出，也把預算、資產負債、借貸、報銷、請款、存錢罐、訂閱、同步與備份整合在同一套帳本工作流中，適合長期追蹤個人、家庭、專案或副業金流。
 
 ## 特色
@@ -93,10 +95,9 @@ npm run check
 
 ## 授權與原始碼
 
-- StrawMoneyBook 為 **StrawCoding 商業產品**；GitHub repo **私有**，**不作開源釋出**。
-- 禁止將本專案公開、fork 供第三方商業使用或冒充官方發行；詳見 [LICENSE](./LICENSE)。
+- **開源、禁止商用**：原始碼公開於 [github.com/StrawCoding/StrawMoneyBook](https://github.com/StrawCoding/StrawMoneyBook)，採 [PolyForm Noncommercial 1.0.0](./LICENSE)——可閱讀、修改、再散布，但 **不得用於商業目的**（含付費 App、SaaS、代客記帳等）；StrawCoding 官方 Play／`api.strawmb.com` 服務不受此限。
 - 本地開發：複製 `frontend/.env.example` → `frontend/.env.development.local`；簽章、OAuth secret、憑證 **勿提交 git**。
-- 官方營運：`api.strawmb.com`、Play 商店／內測由 StrawCoding 維運。
+- 再散布時須保留 LICENSE 與 `Required Notice`。
 
 ## 維護原則
 
