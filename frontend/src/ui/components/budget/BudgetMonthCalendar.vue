@@ -213,11 +213,46 @@ function formatMinor(minor) {
   color: #ef4444;
 }
 
+.habitat-cross-grid .calendar-week-strip.week-head {
+  margin-top: 0;
+  width: 100%;
+  gap: 0;
+}
+
+.habitat-cross-grid .calendar-grid {
+  margin-top: 0;
+  width: 100%;
+  gap: 0;
+}
+
+.habitat-cross-grid .day-cell {
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+}
+
+.habitat-cross-grid .day-cell.empty {
+  border: 0;
+  background: var(--bg);
+}
+
+.habitat-cross-grid .day-cell.today {
+  box-shadow: none;
+}
+
+.habitat-cross-grid .day-cell.over {
+  border: 0;
+}
+
 @media (max-width: 480px) {
-  .week-head,
-  .calendar-grid {
+  .week-head:not(.calendar-week-strip),
+  .calendar-grid:not(.habitat-cross-grid .calendar-grid) {
     width: 100%;
     gap: 3px;
+  }
+
+  .habitat-cross-grid .calendar-grid {
+    gap: 0;
   }
   .day-cell {
     min-height: 46px;

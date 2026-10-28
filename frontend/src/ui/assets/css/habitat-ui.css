@@ -909,21 +909,36 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-radius: 12px;
   overflow: hidden;
   background: transparent;
-  --calendar-grid-line: color-mix(in srgb, var(--border) 14%, transparent);
+  --calendar-grid-line: color-mix(in srgb, var(--border) 22%, transparent);
 }
 
+/* 僅內部十字格線（外圈無框）；inset 1px 避免 gap 被 scoped 蓋掉後變粗 */
 .habitat-cross-grid .calendar-grid {
   margin-top: 0;
   width: 100%;
-  gap: 0.33px;
-  background: var(--calendar-grid-line);
+  gap: 0;
+  background: transparent;
 }
 
 .habitat-cross-grid .calendar-grid .day-cell {
   border: 0;
   border-radius: 0;
-  box-shadow: none;
   background: var(--bg);
+  box-shadow:
+    inset -1px 0 0 0 var(--calendar-grid-line),
+    inset 0 -1px 0 0 var(--calendar-grid-line);
+}
+
+.habitat-cross-grid .calendar-grid .day-cell:nth-child(7n) {
+  box-shadow: inset 0 -1px 0 0 var(--calendar-grid-line);
+}
+
+.habitat-cross-grid .calendar-grid .day-cell:nth-last-child(-n + 7) {
+  box-shadow: inset -1px 0 0 0 var(--calendar-grid-line);
+}
+
+.habitat-cross-grid .calendar-grid .day-cell:nth-child(7n):nth-last-child(-n + 7) {
+  box-shadow: none;
 }
 
 .habitat-cross-grid .calendar-grid .day-cell.empty {
@@ -947,19 +962,17 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-bottom-right-radius: 12px;
 }
 
-.habitat-cross-grid .day-cell.selected {
-  box-shadow: inset 0 0 0 2px var(--primary);
-  background: color-mix(in srgb, var(--primary) 11%, transparent);
+.habitat-cross-grid .calendar-grid .day-cell.selected {
+  background: color-mix(in srgb, var(--primary) 11%, var(--bg) 89%);
   z-index: 1;
   position: relative;
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }
 
-.habitat-cross-grid .day-cell.today {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 60%, transparent);
-}
-
-.habitat-cross-grid .day-cell.today.selected {
-  box-shadow: inset 0 0 0 2px var(--primary);
+.habitat-cross-grid .calendar-grid .day-cell.today:not(.selected) {
+  outline: 1px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  outline-offset: -1px;
 }
 
 .habitat-cross-grid .day-cell.over {
@@ -993,8 +1006,28 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 }
 
 [data-ui-layout='modern'] .habitat-cross-grid .calendar-cross-shell {
-  --calendar-grid-line: color-mix(in srgb, var(--border) 9%, transparent);
+  --calendar-grid-line: color-mix(in srgb, var(--border) 16%, transparent);
   border-radius: 14px;
+}
+
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .habitat-cross-grid .calendar-grid .day-cell {
+    box-shadow:
+      inset -0.5px 0 0 0 var(--calendar-grid-line),
+      inset 0 -0.5px 0 0 var(--calendar-grid-line);
+  }
+
+  .habitat-cross-grid .calendar-grid .day-cell:nth-child(7n) {
+    box-shadow: inset 0 -0.5px 0 0 var(--calendar-grid-line);
+  }
+
+  .habitat-cross-grid .calendar-grid .day-cell:nth-last-child(-n + 7) {
+    box-shadow: inset -0.5px 0 0 0 var(--calendar-grid-line);
+  }
+
+  .habitat-cross-grid .calendar-grid .day-cell:nth-child(7n):nth-last-child(-n + 7) {
+    box-shadow: none;
+  }
 }
 
 [data-ui-layout='modern'] .habitat-cross-grid .calendar-grid .day-cell:first-child {

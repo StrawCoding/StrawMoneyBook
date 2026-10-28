@@ -538,6 +538,33 @@ function dateKeyFromIso(iso) {
   min-width: 0;
 }
 
+.habitat-cross-grid .calendar-week-strip.week-head {
+  margin-top: 0;
+  width: 100%;
+  gap: 0;
+}
+
+.habitat-cross-grid .calendar-grid {
+  margin-top: 0;
+  width: 100%;
+  gap: 0;
+}
+
+.habitat-cross-grid .day-cell {
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+}
+
+.habitat-cross-grid .day-cell.empty {
+  border: 0;
+  background: var(--bg);
+}
+
+.habitat-cross-grid .day-cell.selected {
+  border-color: transparent;
+}
+
 @media (max-width: 480px) {
   .panel {
     padding: 8px;

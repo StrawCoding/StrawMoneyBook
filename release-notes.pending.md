@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.82
+- 月曆十字格驗收修復：scoped 不再蓋 gap／圓角框；改 inset 內格線（外圈無框、Retina 0.5px）；選中用 outline。
+
 ## v1.5.81
 - 月曆十字格線再細：間隙 0.33px、格線色約 14%／Modern 9% border mix。
 
