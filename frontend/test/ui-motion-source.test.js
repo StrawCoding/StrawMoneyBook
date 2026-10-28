@@ -47,11 +47,13 @@ test('ToastHost leave uses distinct motion from enter', () => {
 test('period shift transition tokens and PeriodContentTransition wiring', () => {
   const globalCss = readFileSync(resolve(import.meta.dirname, '../src/ui/assets/css/global.css'), 'utf8')
   assert.match(globalCss, /\.period-shift-forward-enter-from/)
+  assert.match(globalCss, /translate3d\(100%, 0, 0\)/)
   assert.match(globalCss, /\.period-shift-back-leave-to/)
+  assert.match(globalCss, /translate3d\(-100%, 0, 0\)/)
   assert.match(globalCss, /\.period-shift-fade-enter-from/)
 
   const transition = read('components/layout/PeriodContentTransition.vue')
-  assert.match(transition, /mode="out-in"/)
+  assert.match(transition, /period-shift-viewport/)
   assert.match(transition, /period-shift-forward/)
 
   const periodViews = [

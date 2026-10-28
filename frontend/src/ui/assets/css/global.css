@@ -699,53 +699,74 @@ a,
   transform: translate3d(0, 6px, 0) scale(0.985);
 }
 
-/* Period / date range changes (home, analysis, budget, calendar) */
+/* Period / date range changes — horizontal carousel (home, analysis, budget, calendar) */
 .period-shift-forward-enter-active,
 .period-shift-forward-leave-active,
 .period-shift-back-enter-active,
-.period-shift-back-leave-active,
-.period-shift-fade-enter-active,
-.period-shift-fade-leave-active {
-  transition:
-    opacity var(--anim-mid) var(--anim-standard),
-    transform var(--anim-mid) var(--anim-spring);
-  will-change: opacity, transform;
+.period-shift-back-leave-active {
+  transition: transform var(--anim-slow) var(--anim-spring);
+  will-change: transform;
 }
 
+.period-shift-forward-enter-active,
+.period-shift-back-enter-active {
+  z-index: 2;
+}
+
+.period-shift-forward-leave-active,
+.period-shift-back-leave-active {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  z-index: 1;
+}
+
+/* 下一期／較新日期：右 → 左 */
 .period-shift-forward-enter-from {
-  opacity: 0;
-  transform: translate3d(20px, 0, 0);
+  transform: translate3d(100%, 0, 0);
 }
 
 .period-shift-forward-leave-to {
-  opacity: 0;
-  transform: translate3d(-20px, 0, 0);
+  transform: translate3d(-100%, 0, 0);
 }
 
+/* 上一期／較舊日期：左 → 右 */
 .period-shift-back-enter-from {
-  opacity: 0;
-  transform: translate3d(-20px, 0, 0);
+  transform: translate3d(-100%, 0, 0);
 }
 
 .period-shift-back-leave-to {
-  opacity: 0;
-  transform: translate3d(20px, 0, 0);
-}
-
-.period-shift-fade-enter-from,
-.period-shift-fade-leave-to {
-  opacity: 0;
-  transform: translate3d(0, 8px, 0);
+  transform: translate3d(100%, 0, 0);
 }
 
 .period-shift-forward-enter-to,
 .period-shift-forward-leave-from,
 .period-shift-back-enter-to,
-.period-shift-back-leave-from,
+.period-shift-back-leave-from {
+  transform: translate3d(0, 0, 0);
+}
+
+/* Picker／跳回當期：無方向，僅淡入淡出 */
+.period-shift-fade-enter-active,
+.period-shift-fade-leave-active {
+  transition: opacity var(--anim-mid) var(--anim-standard);
+  will-change: opacity;
+}
+
+.period-shift-fade-leave-active {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+}
+
+.period-shift-fade-enter-from,
+.period-shift-fade-leave-to {
+  opacity: 0;
+}
+
 .period-shift-fade-enter-to,
 .period-shift-fade-leave-from {
   opacity: 1;
-  transform: translate3d(0, 0, 0);
 }
 
 .overlay-fade-enter-active,

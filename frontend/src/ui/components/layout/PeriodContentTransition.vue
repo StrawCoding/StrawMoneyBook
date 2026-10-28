@@ -1,9 +1,11 @@
 <template>
-  <Transition :name="transitionName" mode="out-in">
-    <div :key="contentKey" class="period-content-shift" :class="$attrs.class">
-      <slot />
-    </div>
-  </Transition>
+  <div class="period-shift-viewport" :class="$attrs.class">
+    <Transition :name="transitionName">
+      <div :key="contentKey" class="period-content-shift">
+        <slot />
+      </div>
+    </Transition>
+  </div>
 </template>
 
 <script setup>
@@ -32,9 +34,19 @@ const transitionName = computed(() => {
 </script>
 
 <style scoped>
+.period-shift-viewport {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: inherit;
+}
+
 .period-content-shift {
   display: grid;
   gap: inherit;
   min-width: 0;
+  width: 100%;
 }
 </style>
