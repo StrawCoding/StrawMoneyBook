@@ -1060,58 +1060,9 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-radius: 0;
 }
 
-/* Membership compare — feature rows, not spreadsheet */
-[data-ui-layout='modern'] .membership-compare-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0;
-}
-
-[data-ui-layout='modern'] .membership-compare-row {
-  display: grid;
-  gap: 8px;
-  padding: 12px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-}
-
-[data-ui-layout='modern'] .membership-compare-row:last-child {
-  border-bottom: 0;
-}
-
-[data-ui-layout='modern'] .membership-compare-feature {
-  font-weight: 700;
-  font-size: 14px;
-}
-
-[data-ui-layout='modern'] .membership-tier-pills {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-[data-ui-layout='modern'] .membership-tier-pill {
-  display: grid;
-  gap: 2px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  background: transparent;
-  font-size: 12px;
-}
-
-[data-ui-layout='modern'] .membership-tier-pill small {
+/* Membership compare matrix (check / dash / limit text) */
+[data-ui-layout='modern'] .membership-compare-panel .compare-lead {
   color: var(--muted);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-[data-ui-layout='modern'] .membership-tier-pill.member {
-  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
-  background: color-mix(in srgb, var(--primary) 6%, transparent);
 }
 
 [data-ui-layout='modern'] .settings-subpage .secondary-actions,

@@ -28,23 +28,42 @@
       </div>
     </article>
 
-    <article class="card panel">
-      <h3>{{ t('membership_page.compare.title') }}</h3>
-      <ul class="membership-compare-list">
-        <li v-for="item in compareRows" :key="item.key" class="membership-compare-row">
-          <span class="membership-compare-feature">{{ t(item.featureKey, item.featureFallback) }}</span>
-          <div class="membership-tier-pills">
-            <div class="membership-tier-pill">
-              <small>{{ t('membership_page.compare.free') }}</small>
-              <span>{{ t(item.freeKey, item.freeFallback) }}</span>
-            </div>
-            <div class="membership-tier-pill member">
-              <small>{{ t('membership_page.compare.member') }}</small>
-              <span>{{ t(item.memberKey, item.memberFallback) }}</span>
-            </div>
-          </div>
-        </li>
-      </ul>
+    <article class="card panel membership-compare-panel">
+      <h3>{{ t('membership_page.compare.detail_title') }}</h3>
+      <p class="muted compare-lead">{{ t('membership_page.compare.lead') }}</p>
+      <div class="membership-compare-matrix" role="table" :aria-label="t('membership_page.compare.title')">
+        <div class="membership-compare-header" role="row">
+          <span class="col-feature" role="columnheader">{{ t('membership_page.compare.feature') }}</span>
+          <span role="columnheader">{{ t('membership_page.compare.free') }}</span>
+          <span role="columnheader">{{ t('membership_page.compare.premium') }}</span>
+          <span role="columnheader">{{ t('membership_page.compare.lifetime') }}</span>
+        </div>
+        <div
+          v-for="item in compareRows"
+          :key="item.key"
+          class="membership-compare-data-row"
+          role="row"
+        >
+          <span class="col-feature membership-compare-feature" role="cell">
+            {{ t(item.featureKey, item.featureFallback) }}
+          </span>
+          <span
+            v-for="tier in compareTiers"
+            :key="`${item.key}-${tier}`"
+            class="compare-mark"
+            role="cell"
+          >
+            <font-awesome-icon
+              v-if="compareCellMode(item, tier) === 'check'"
+              icon="fa-solid fa-check"
+              class="compare-check"
+              aria-hidden="true"
+            />
+            <span v-else-if="compareCellMode(item, tier) === 'dash'" class="compare-dash" aria-hidden="true">—</span>
+            <span v-else class="compare-text">{{ compareCellText(item, tier) }}</span>
+          </span>
+        </div>
+      </div>
     </article>
 
     <article class="card panel">
@@ -105,6 +124,20 @@ const redeeming = ref(false)
 const redeemCode = ref('')
 const priceDisplay = ref(getMembershipProductDisplaySnapshot())
 const playStoreSupported = ref(true)
+
+const compareTiers = ['free', 'premium', 'lifetime']
+
+function compareCellText(row, tier) {
+  if (tier === 'free') return t(row.freeKey, row.freeFallback)
+  return t(row.memberKey, row.memberFallback)
+}
+
+function compareCellMode(row, tier) {
+  const key = tier === 'free' ? row.freeKey : row.memberKey
+  if (String(key).endsWith('.no')) return 'dash'
+  if (String(key).endsWith('.yes') || String(key).endsWith('.unlimited')) return 'check'
+  return 'text'
+}
 
 const compareRows = [
   {
@@ -399,29 +432,78 @@ h2, h3 {
   justify-content: center;
   text-decoration: none;
 }
-.compare-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
-  border: 1px solid var(--field-border);
-  border-radius: 12px;
+.compare-lead {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.membership-compare-matrix {
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card) 92%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   overflow: hidden;
 }
-.compare-head,
-.compare-cell {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--field-border);
-  border-right: 1px solid var(--field-border);
-  background: var(--surface-soft-accent);
+
+.membership-compare-header,
+.membership-compare-data-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) repeat(3, minmax(0, 0.62fr));
+  align-items: center;
+  column-gap: 8px;
+  padding: 11px 12px;
 }
-.compare-head:nth-child(3n),
-.compare-cell:nth-child(3n) {
-  border-right: 0;
+
+.membership-compare-header {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
-.compare-grid > :nth-last-child(-n + 3) {
-  border-bottom: 0;
+
+.membership-compare-header span:not(.col-feature) {
+  text-align: center;
 }
-.feature {
-  font-weight: 700;
+
+.membership-compare-data-row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.membership-compare-data-row:first-of-type {
+  border-top: 0;
+}
+
+.membership-compare-feature {
+  font-weight: 650;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.compare-mark {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 22px;
+}
+
+.compare-check {
+  color: #34d399;
+  font-size: 15px;
+}
+
+.compare-dash {
+  color: color-mix(in srgb, var(--muted) 85%, transparent);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.compare-text {
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 600;
 }
 .plans-wrap {
   display: grid;
