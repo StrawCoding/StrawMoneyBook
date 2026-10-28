@@ -30,17 +30,21 @@
 
     <article class="card panel">
       <h3>{{ t('membership_page.compare.title') }}</h3>
-      <div class="compare-grid">
-        <div class="compare-head muted">{{ t('membership_page.compare.feature') }}</div>
-        <div class="compare-head">{{ t('membership_page.compare.free') }}</div>
-        <div class="compare-head">{{ t('membership_page.compare.member') }}</div>
-
-        <template v-for="item in compareRows" :key="item.key">
-          <div class="compare-cell feature">{{ t(item.featureKey, item.featureFallback) }}</div>
-          <div class="compare-cell">{{ t(item.freeKey, item.freeFallback) }}</div>
-          <div class="compare-cell">{{ t(item.memberKey, item.memberFallback) }}</div>
-        </template>
-      </div>
+      <ul class="membership-compare-list">
+        <li v-for="item in compareRows" :key="item.key" class="membership-compare-row">
+          <span class="membership-compare-feature">{{ t(item.featureKey, item.featureFallback) }}</span>
+          <div class="membership-tier-pills">
+            <div class="membership-tier-pill">
+              <small>{{ t('membership_page.compare.free') }}</small>
+              <span>{{ t(item.freeKey, item.freeFallback) }}</span>
+            </div>
+            <div class="membership-tier-pill member">
+              <small>{{ t('membership_page.compare.member') }}</small>
+              <span>{{ t(item.memberKey, item.memberFallback) }}</span>
+            </div>
+          </div>
+        </li>
+      </ul>
     </article>
 
     <article class="card panel">

@@ -11,7 +11,7 @@
       :direction="periodShiftDirection"
       class="calendar-period-body"
     >
-      <section class="habitat-flow-section">
+      <section class="habitat-flow-section habitat-line-calendar">
         <div class="row month-head">
           <button class="btn mini-btn" @click="goPrevMonth">‹</button>
           <strong>{{ monthLabel }}</strong>

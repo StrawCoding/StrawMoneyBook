@@ -14,7 +14,7 @@
           <h3>{{ t('credit_cards_page.home_card') }}</h3>
           <p class="muted tip">{{ t('credit_cards_page.home_card_hint') }}</p>
         </div>
-        <label class="toggle">
+        <label class="habitat-switch">
           <input
             type="checkbox"
             data-testid="credit-home-card-enabled"

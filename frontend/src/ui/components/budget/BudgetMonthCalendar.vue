@@ -1,5 +1,5 @@
 <template>
-  <section class="budget-month-calendar" data-testid="budget-month-calendar">
+  <section class="budget-month-calendar habitat-line-calendar" data-testid="budget-month-calendar">
     <div class="row month-head">
       <button
         type="button"

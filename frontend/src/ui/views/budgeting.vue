@@ -22,7 +22,7 @@
           :month="budgetStore.monthKey"
           @update:month="pickMonth"
         />
-        <div v-else class="row period-nav">
+        <div v-else class="row period-nav habitat-segmented-nav">
           <button type="button" class="btn" @click="budgetStore.goPreviousPeriod">{{ t('budgeting.period.previous') }}</button>
           <button type="button" class="btn" @click="budgetStore.loadCurrentPeriod">{{ t('budgeting.period.current') }}</button>
           <button type="button" class="btn" @click="budgetStore.goNextPeriod">{{ t('budgeting.period.next') }}</button>

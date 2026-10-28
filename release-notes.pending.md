@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.68
+- Modern UI flat pass 2：交易／預算線框月曆、期間 segmented、RangePicker 線格、信用卡 switch、會員方案非表格式對照、settings-subpage／請款報銷頂層 card 扁平。
+
 ## v1.5.66
 - 期間切換動畫改為全寬橫向炫覽：步進下一期／較新日期為右→左，上一期／較舊日期為左→右；picker／回當期仍為淡入淡出。
 
