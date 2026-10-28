@@ -1,5 +1,5 @@
 <template>
-  <section class="budget-month-calendar habitat-line-calendar" data-testid="budget-month-calendar">
+  <section class="budget-month-calendar habitat-line-calendar habitat-cross-grid" data-testid="budget-month-calendar">
     <div class="row month-head">
       <button
         type="button"
@@ -20,11 +20,12 @@
       </button>
     </div>
 
-    <div class="week-head">
-      <span v-for="label in weekLabels" :key="label">{{ label }}</span>
-    </div>
+    <div class="calendar-cross-shell">
+      <div class="week-head">
+        <span v-for="label in weekLabels" :key="label">{{ label }}</span>
+      </div>
 
-    <div class="calendar-grid">
+      <div class="calendar-grid">
       <button
         v-for="cell in cells"
         :key="cell.key"
@@ -47,6 +48,7 @@
           -{{ formatMinor(cell.spentMinor) }}
         </span>
       </button>
+      </div>
     </div>
   </section>
 </template>
@@ -209,11 +211,73 @@ function formatMinor(minor) {
   color: #ef4444;
 }
 
+.habitat-cross-grid .calendar-cross-shell {
+  width: min(100%, 460px);
+  margin-inline: auto;
+  margin-top: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--card) 96%, transparent);
+}
+.habitat-cross-grid .week-head {
+  margin-top: 0;
+  width: 100%;
+  gap: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  padding: 7px 0;
+  background: color-mix(in srgb, var(--card) 90%, transparent);
+}
+.habitat-cross-grid .calendar-grid {
+  margin-top: 0;
+  width: 100%;
+  gap: 0;
+}
+.habitat-cross-grid .day-cell {
+  border-radius: 0;
+  border: 0;
+  border-right: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  background: transparent;
+}
+.habitat-cross-grid .day-cell:nth-child(7n) {
+  border-right-width: 0;
+}
+.habitat-cross-grid .day-cell:nth-last-child(-n + 7) {
+  border-bottom-width: 0;
+}
+.habitat-cross-grid .day-cell.empty {
+  border-style: solid;
+  background: color-mix(in srgb, var(--border) 6%, transparent);
+}
+.habitat-cross-grid .day-cell.selected {
+  box-shadow: inset 0 0 0 2px var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  z-index: 1;
+  position: relative;
+}
+.habitat-cross-grid .day-cell.today {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 65%, transparent);
+}
+.habitat-cross-grid .day-cell.today.selected {
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+.habitat-cross-grid .day-cell.over {
+  background: color-mix(in srgb, var(--danger, #d14343) 8%, transparent);
+}
+
 @media (max-width: 480px) {
+  .habitat-cross-grid .calendar-cross-shell {
+    width: 100%;
+  }
   .week-head,
   .calendar-grid {
     width: 100%;
     gap: 3px;
+  }
+  .habitat-cross-grid .week-head,
+  .habitat-cross-grid .calendar-grid {
+    gap: 0;
   }
   .day-cell {
     min-height: 46px;
