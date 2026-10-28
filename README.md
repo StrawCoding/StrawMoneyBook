@@ -4,8 +4,6 @@
 
 # StrawMoneyBook
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-
 StrawMoneyBook 是一款以個人現金流管理為核心的記帳 App。它不只處理收入與支出，也把預算、資產負債、借貸、報銷、請款、存錢罐、訂閱、同步與備份整合在同一套帳本工作流中，適合長期追蹤個人、家庭、專案或副業金流。
 
 ## 特色
@@ -93,12 +91,12 @@ npm run check
 - `docs/release-checklist.md`：發版檢查清單。
 - `docs/google-backend-auth.md`：Google backend auth 整合說明。
 
-## 開源
+## 授權與原始碼
 
-- **授權**：[MIT](./LICENSE)（Copyright StrawCoding）
-- **原始碼**：[github.com/StrawCoding/StrawMoneyBook](https://github.com/StrawCoding/StrawMoneyBook)（公開 repo，`main` 為唯一長期分支）
-- **自建 App**：複製 `frontend/.env.example` 為 `frontend/.env.development.local`，填入自己的 `VITE_GOOGLE_WEB_CLIENT_ID` 與 API 位址；Play 上架簽章、後端 OAuth secret、銀行同步憑證等**請勿**提交進 git。
-- **官方營運**：`api.strawmb.com`、Play 商店版與內部測試通道由 StrawCoding 維運，與 fork 自建互不衝突。
+- StrawMoneyBook 為 **StrawCoding 商業產品**；GitHub repo **私有**，**不作開源釋出**。
+- 禁止將本專案公開、fork 供第三方商業使用或冒充官方發行；詳見 [LICENSE](./LICENSE)。
+- 本地開發：複製 `frontend/.env.example` → `frontend/.env.development.local`；簽章、OAuth secret、憑證 **勿提交 git**。
+- 官方營運：`api.strawmb.com`、Play 商店／內測由 StrawCoding 維運。
 
 ## 維護原則
 
