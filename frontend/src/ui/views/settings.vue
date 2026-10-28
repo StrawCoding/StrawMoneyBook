@@ -6,42 +6,58 @@
     hello-test-id="settings-hello-block"
     stack-class="settings-page"
   >
-    <section class="settings-flow-group settings-account-section">
-      <h3 class="settings-section-title">{{ t('settings_page.section_account') }}</h3>
-      <RouterLink class="settings-account-row" to="/settings/account" data-testid="settings-account-card">
-        <div class="account-avatar">
-          <img v-if="sessionUser?.avatar_url" :src="sessionUser.avatar_url" alt="avatar" class="avatar-img" />
-          <span v-else>{{ avatarLabel }}</span>
-        </div>
-        <div class="account-main">
-          <strong>{{ accountCardTitle }}</strong>
-          <small class="muted">{{ accountCardHint }}</small>
-        </div>
-        <font-awesome-icon icon="fa-solid fa-chevron-right" class="account-arrow" />
-      </RouterLink>
-    </section>
+    <HabitatSection :title="t('settings_page.section_account')">
+      <HabitatListGroup>
+        <HabitatRow
+          to="/settings/account"
+          class="settings-account-row"
+          test-id="settings-account-card"
+          interactive
+        >
+          <div class="account-avatar">
+            <img v-if="sessionUser?.avatar_url" :src="sessionUser.avatar_url" alt="avatar" class="avatar-img" />
+            <span v-else>{{ avatarLabel }}</span>
+          </div>
+          <div class="account-main">
+            <strong>{{ accountCardTitle }}</strong>
+            <small class="muted">{{ accountCardHint }}</small>
+          </div>
+          <font-awesome-icon icon="fa-solid fa-chevron-right" class="row-chevron" aria-hidden="true" />
+        </HabitatRow>
+      </HabitatListGroup>
+    </HabitatSection>
 
-    <section
+    <HabitatSection
       v-for="group in settingGroups"
       :key="group.titleKey"
-      class="settings-flow-group setting-group"
+      :title="t(group.titleKey)"
     >
-      <h3 class="settings-section-title">{{ t(group.titleKey) }}</h3>
-      <RouterLink v-for="item in group.items" :key="item.to" class="item-link" :to="item.to">
-        <font-awesome-icon :icon="item.icon" class="item-icon" />
-        <span class="item-copy">
-          <span>{{ t(item.labelKey) }}</span>
-          <small class="muted">{{ t(item.descKey) }}</small>
-        </span>
-      </RouterLink>
-    </section>
+      <HabitatListGroup>
+        <HabitatRow
+          v-for="item in group.items"
+          :key="item.to"
+          :to="item.to"
+          class="settings-nav-row"
+          interactive
+        >
+          <font-awesome-icon :icon="item.icon" class="item-icon" />
+          <span class="item-copy">
+            <span>{{ t(item.labelKey) }}</span>
+            <small class="muted">{{ t(item.descKey) }}</small>
+          </span>
+          <font-awesome-icon icon="fa-solid fa-chevron-right" class="row-chevron" aria-hidden="true" />
+        </HabitatRow>
+      </HabitatListGroup>
+    </HabitatSection>
   </HabitatPageShell>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
+import HabitatSection from '@/ui/components/layout/habitat/HabitatSection.vue'
+import HabitatListGroup from '@/ui/components/layout/habitat/HabitatListGroup.vue'
+import HabitatRow from '@/ui/components/layout/habitat/HabitatRow.vue'
 import { useI18n } from '@/ui/services/i18n.service'
 import {
   getSharedLedgerAuthStatus,
@@ -78,8 +94,7 @@ function syncAccountCardFromAuth(session = getSharedLedgerSession()) {
   sessionRestoring.value = Boolean(status.restoring)
   sessionNeedsReauth.value = Boolean(status.needsReauth)
 }
-// smb295: 共同帳本／帳本同步／銀行同步／載具同步主入口改至功能頁「進階功能」；
-// 設定頁不再列為主清單入口（深度連結與既有 route 仍可用）。
+
 const settingGroups = computed(() => [
   {
     titleKey: 'settings_page.section_bookkeeping',
@@ -117,6 +132,7 @@ const settingGroups = computed(() => [
     ],
   },
 ])
+
 const avatarLabel = computed(() => {
   const base = String(sessionUser.value?.display_name || sessionUser.value?.email || '?').trim()
   return base.slice(0, 1).toUpperCase()
@@ -145,32 +161,8 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.settings-section-title {
-  margin: 0 4px 6px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--muted, color-mix(in srgb, var(--text) 62%, transparent));
-}
-
-.settings-account-section {
-  padding-top: 2px;
-}
-
-.settings-account-section .settings-account-row {
-  margin-bottom: 0;
-}
-
 .settings-account-row {
-  display: flex;
   align-items: flex-start;
-  gap: 12px;
-  text-decoration: none;
-  color: var(--text);
-  padding: 12px 4px;
-  min-height: 44px;
-  box-sizing: border-box;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
 }
 
 .account-avatar {
@@ -206,35 +198,8 @@ onUnmounted(() => {
   line-height: 1.35;
 }
 
-.account-arrow {
-  color: var(--muted);
-  font-size: 14px;
-  flex-shrink: 0;
-  margin-top: 4px;
-}
-
-.settings-flow-group {
-  display: grid;
-  gap: 0;
-  padding: 4px 0 8px;
-}
-
-.settings-flow-group + .settings-flow-group {
-  margin-top: 14px;
-  padding-top: 0;
-}
-
-.item-link {
-  display: flex;
+.settings-nav-row {
   align-items: flex-start;
-  gap: 12px;
-  padding: 12px 4px;
-  min-height: 44px;
-  box-sizing: border-box;
-  text-decoration: none;
-  color: var(--text);
-  font-weight: 650;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
 }
 
 .item-copy {
@@ -247,6 +212,7 @@ onUnmounted(() => {
 .item-copy > span:first-child {
   font-size: 15px;
   line-height: 1.25;
+  font-weight: 650;
 }
 
 .item-copy small {
@@ -262,4 +228,10 @@ onUnmounted(() => {
   margin-top: 3px;
 }
 
+.row-chevron {
+  color: var(--muted);
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
 </style>

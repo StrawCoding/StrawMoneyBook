@@ -195,23 +195,21 @@
   font-weight: 600;
 }
 
-[data-ui-layout='modern'] .settings-page .settings-flow-group {
-  background: transparent;
-  border-radius: 0;
+[data-ui-layout='modern'] .habitat-stack.settings-page.stack > * {
+  animation: none;
 }
 
-[data-ui-layout='modern'] .settings-page .setting-group .item-link {
-  background: transparent;
-  border-radius: 0;
+[data-ui-layout='modern'] .settings-page .habitat-section {
+  padding-bottom: 12px;
 }
 
-[data-ui-layout='modern'] .settings-page .setting-group .item-link::after {
-  content: none;
+[data-ui-layout='modern'] .settings-page .habitat-section-title {
+  margin: 0 0 4px;
+  padding: 0;
 }
 
-[data-ui-layout='modern'] .settings-page .settings-account-row {
-  background: transparent;
-  border-radius: 0;
+[data-ui-layout='modern'] .settings-page .habitat-row {
+  padding-inline: 0;
 }
 
 html[data-ui-layout='modern'] .settings-page .item-icon {

@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.85
+- 設定 hub：改 HabitatSection／ListGroup／Row；列尾 chevron；關閉 stack 進場動畫、列 horizontal padding 归零（16px 页边）。
+
 ## v1.5.84
 - UI 去區塊化（batch 1）：新增 HabitatSection／ListGroup／Row／Divider；設定子頁語言／安全／關於／版本／開發者改 section 語意（移除 card.panel）。
 

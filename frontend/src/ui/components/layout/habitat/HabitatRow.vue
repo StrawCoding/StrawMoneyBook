@@ -3,13 +3,10 @@
     :is="tag"
     class="habitat-row"
     :class="rowClass"
-    :to="to"
-    :href="href"
-    :target="target"
-    :rel="rel"
     :type="tag === 'button' ? type : undefined"
     :disabled="tag === 'button' ? disabled : undefined"
     :data-testid="testId || undefined"
+    v-bind="linkAttrs"
   >
     <slot />
   </component>
@@ -68,4 +65,16 @@ const tag = computed(() => {
 const rowClass = computed(() => ({
   'habitat-row-interactive': Boolean(props.to || props.href || props.interactive),
 }))
+
+const linkAttrs = computed(() => {
+  if (props.to) return { to: props.to }
+  if (props.href) {
+    return {
+      href: props.href,
+      target: props.target || undefined,
+      rel: props.rel || undefined,
+    }
+  }
+  return {}
+})
 </script>
