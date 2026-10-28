@@ -18,7 +18,7 @@ jobs:
     env:
       NODE_VERSION: "22"
       JAVA_VERSION: "21"
-      RUBY_VERSION: "3.2"
+      RUBY_VERSION: "3.3"
       AAB_PATH: app/build/outputs/bundle/release/app-release.aab
       ANDROID_PACKAGE_NAME: ${{ secrets.ANDROID_PACKAGE_NAME }}
       # Track pair comes from frontend/android/play-testing-channel.json (internal|closed).
@@ -34,7 +34,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Ruby 3.2
+      - name: Setup Ruby 3.3
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ env.RUBY_VERSION }}

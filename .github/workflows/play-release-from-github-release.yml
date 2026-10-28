@@ -23,7 +23,7 @@ jobs:
     permissions:
       contents: read
     env:
-      RUBY_VERSION: "3.2"
+      RUBY_VERSION: "3.3"
       ANDROID_PACKAGE_NAME: ${{ secrets.ANDROID_PACKAGE_NAME }}
       # Track pair from frontend/android/play-testing-channel.json unless vars override.
       PLAY_TESTING_CHANNEL: ${{ vars.PLAY_TESTING_CHANNEL || '' }}
@@ -35,7 +35,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Ruby 3.2
+      - name: Setup Ruby 3.3
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ env.RUBY_VERSION }}

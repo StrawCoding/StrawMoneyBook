@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.92
+- CI：Play 上架 workflow Ruby 3.3（修復 fastlane excon 與 Ruby 3.2 不相容導致內測未上傳）。
+
 ## v1.5.91
 - Play 同步發版（文件／Wiki 網址更新；App 行為同 v1.5.90）。
 
