@@ -218,13 +218,13 @@
       </header>
 
       <div class="segment-pills account-type-tabs" data-testid="analysis-account-type-filter">
-        <button type="button" class="btn tab-btn" :class="{ primary: accountAnalysisType === 'total' }" @click="accountAnalysisType = 'total'">
+        <button type="button" class="btn tab-btn" :class="{ primary: accountAnalysisType === 'total' }" @click="selectAccountAnalysisType('total')">
           {{ t('analysis_page.type.total') }}
         </button>
-        <button type="button" class="btn tab-btn" :class="{ primary: accountAnalysisType === 'income' }" @click="accountAnalysisType = 'income'">
+        <button type="button" class="btn tab-btn" :class="{ primary: accountAnalysisType === 'income' }" @click="selectAccountAnalysisType('income')">
           {{ t('analysis_page.type.income') }}
         </button>
-        <button type="button" class="btn tab-btn" :class="{ primary: accountAnalysisType === 'expense' }" @click="accountAnalysisType = 'expense'">
+        <button type="button" class="btn tab-btn" :class="{ primary: accountAnalysisType === 'expense' }" @click="selectAccountAnalysisType('expense')">
           {{ t('analysis_page.type.expense') }}
         </button>
       </div>
@@ -342,6 +342,10 @@ import {
 } from '@/core/services/export.service'
 import { buildAnalysisReportPdfFromElement } from '@/core/services/analysis-report-pdf.service'
 import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
+import {
+  getAnalysisAccountAnalysisType,
+  setAnalysisAccountAnalysisType,
+} from '@/ui/services/analysis-account-analysis-type.service.js'
 import { isCountableForIncomeExpense } from '@/ui/utils/refund-transaction'
 import { monthKeyFromDate } from '@/core/utils/id'
 import {
@@ -382,7 +386,11 @@ function formatDateTime(date) {
 
 const mode = ref('month')
 const analysisType = ref('expense')
-const accountAnalysisType = ref('expense')
+const accountAnalysisType = ref(getAnalysisAccountAnalysisType())
+
+function selectAccountAnalysisType(type) {
+  accountAnalysisType.value = setAnalysisAccountAnalysisType(type)
+}
 const selectedYear = ref(new Date().getFullYear())
 const selectedMonth = ref(monthKeyFromDate(new Date()))
 const analysisStats = ref({
