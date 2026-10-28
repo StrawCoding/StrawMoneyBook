@@ -1,5 +1,7 @@
 # Playwright App Shell
 
+> **線上（canonical）：** [Wiki · Playwright App Shell](https://strawcoding.github.io/StrawMoneyBookWiki/operations/playwright-app-shell)
+
 ## 目的
 
 網頁／UI 驗收必須證明使用者看得到的 **實際 route + app chrome**，不是 welcome 畫面或元件單元假陽性。
