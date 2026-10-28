@@ -241,7 +241,8 @@ function buildReportHtml(manifest) {
   <div class="wrap">
     <h1>StrawMoneyBook — 區塊 UI 盤點 + 各頁截圖</h1>
     <p class="meta">Playwright · 390×844 · ${manifest.versionNote} · ${manifest.capturedAt}</p>
-    <div class="callout">截圖環境：vite preview 手機視窗（與 CI ui-layout 相同），非 ADB 實機。需登入／資料的動態路由在空帳本下可能略過。</div>
+    <div class="callout">截圖：390×844 preview（CI 同環境，非 ADB）。<strong>flat pass 2</strong> 後線框月曆／segmented／settings 扁平。修復摘要：<a href="https://download.hermes.wastebase.xyz/smb-ui-flat-repair-report.html" style="color:var(--primary-soft)">smb-ui-flat-repair-report</a>。空帳本動態路由可能略過。</div>
+    <p class="meta">markup 盤點：58 檔仍含 <code>card panel</code>；modern 頂層多已視覺扁平。</p>
     ${sectionsHtml}
   </div>
 </body>
@@ -302,7 +303,7 @@ try {
 
   const html = buildReportHtml({
     items,
-    versionNote: 'v1.5.67+ preview',
+    versionNote: 'v1.5.69 preview (modern)',
     capturedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
   })
 
