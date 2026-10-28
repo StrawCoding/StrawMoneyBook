@@ -3,15 +3,12 @@
     <section class="overview-hero" data-testid="home-budget-summary">
       <div class="hero-top">
         <div
+          ref="modeSwitchEl"
           class="mode-switch"
           role="tablist"
-          :data-active-mode="displayMode"
+          :style="modeGliderStyle"
         >
-          <span
-            class="mode-switch-glider"
-            aria-hidden="true"
-            :data-target="displayMode"
-          />
+          <span class="mode-switch-glider" aria-hidden="true" />
           <button
             v-for="mode in displayModes"
             :key="mode.key"
@@ -91,7 +88,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
 import { useHomeBudgetSummaryMetrics } from '@/ui/composables/useHomeBudgetSummaryMetrics.js'
@@ -140,7 +137,44 @@ function toggleTypeFilter(type) {
   transactionStore.setHomeTypeFilter(type)
 }
 
-onMounted(refreshCredit)
+const modeSwitchEl = ref(null)
+const modeGliderX = ref(0)
+const modeGliderW = ref(0)
+
+const modeGliderStyle = computed(() => ({
+  '--mode-glider-x': `${modeGliderX.value}px`,
+  '--mode-glider-w': `${modeGliderW.value}px`,
+}))
+
+function syncModeGlider() {
+  const root = modeSwitchEl.value
+  if (!root) return
+  const active = root.querySelector('.mode-chip.active')
+  if (!active) return
+  const rootRect = root.getBoundingClientRect()
+  const activeRect = active.getBoundingClientRect()
+  modeGliderX.value = activeRect.left - rootRect.left
+  modeGliderW.value = activeRect.width
+}
+
+let modeGliderResizeObserver = null
+
+onMounted(async () => {
+  await refreshCredit()
+  await nextTick(syncModeGlider)
+  if (typeof ResizeObserver !== 'undefined' && modeSwitchEl.value) {
+    modeGliderResizeObserver = new ResizeObserver(() => syncModeGlider())
+    modeGliderResizeObserver.observe(modeSwitchEl.value)
+  }
+})
+
+onUnmounted(() => {
+  modeGliderResizeObserver?.disconnect()
+  modeGliderResizeObserver = null
+})
+
+watch(displayMode, () => nextTick(syncModeGlider))
+watch(displayModes, () => nextTick(syncModeGlider), { deep: true })
 watch(() => ledgerStore.activeLedgerId, refreshCredit)
 </script>
 
@@ -176,12 +210,13 @@ watch(() => ledgerStore.activeLedgerId, refreshCredit)
   position: absolute;
   top: 3px;
   bottom: 3px;
-  left: 3px;
-  width: calc((100% - 6px - 4px) / 2);
+  left: 0;
+  width: var(--mode-glider-w, 0);
   border-radius: var(--radius-pill);
   background: var(--btn-bg);
   border: 1px solid var(--border-strong);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 8%, transparent);
+  transform: translateX(var(--mode-glider-x, 0));
   transition:
     transform 280ms cubic-bezier(0.34, 1.15, 0.64, 1),
     width 280ms cubic-bezier(0.34, 1.15, 0.64, 1);
@@ -189,15 +224,9 @@ watch(() => ledgerStore.activeLedgerId, refreshCredit)
   z-index: 0;
 }
 
-.mode-switch-glider[data-target='daily'] {
-  transform: translateX(calc(100% + 4px));
-}
-
 .mode-chip {
   position: relative;
   z-index: 1;
-  flex: 1 1 0;
-  min-width: 0;
   border: none;
   background: transparent;
   color: var(--muted);
