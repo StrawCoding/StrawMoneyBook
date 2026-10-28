@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.70
+- 交易月曆：換日僅下方「當日交易」區塊橫向過場；換月僅上方月曆 grid 過場（分離 PeriodContentTransition）。
+
 ## v1.5.68
 - Modern UI flat pass 2：交易／預算線框月曆、期間 segmented、RangePicker 線格、信用卡 switch、會員方案非表格式對照、settings-subpage／請款報銷頂層 card 扁平。
 

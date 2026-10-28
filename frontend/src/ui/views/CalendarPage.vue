@@ -6,11 +6,12 @@
     hello-test-id="calendar-hello"
     back-to="/"
   >
-    <PeriodContentTransition
-      :content-key="calendarPeriodContentKey"
-      :direction="periodShiftDirection"
-      class="calendar-period-body"
-    >
+    <div class="calendar-period-body">
+      <PeriodContentTransition
+        :content-key="calendarMonthContentKey"
+        :direction="monthShiftDirection"
+        class="calendar-month-shift"
+      >
       <section class="habitat-flow-section habitat-line-calendar">
         <div class="row month-head">
           <button class="btn mini-btn" @click="goPrevMonth">‹</button>
@@ -37,8 +38,14 @@
           </button>
         </div>
       </section>
+      </PeriodContentTransition>
 
-      <section class="habitat-flow-section">
+      <PeriodContentTransition
+        :content-key="calendarDayContentKey"
+        :direction="dayShiftDirection"
+        class="calendar-day-shift"
+      >
+      <section class="habitat-flow-section calendar-day-section">
         <header class="row">
           <h3>{{ t('calendar_page.day_tx', { date: selectedDateKey || '-' }) }}</h3>
           <div v-if="selectedDayIncomeMinor > 0 || selectedDayExpenseMinor > 0" class="day-total">
@@ -83,7 +90,8 @@
           <li v-if="selectedDayTransactions.length === 0" class="muted">{{ t('calendar_page.empty_day') }}</li>
         </ul>
       </section>
-    </PeriodContentTransition>
+      </PeriodContentTransition>
+    </div>
   </HabitatPageShell>
 </template>
 
@@ -115,18 +123,22 @@ const uiStore = useUiStore()
 const { t, locale } = useI18n()
 
 const {
-  periodShiftDirection,
-  markPeriodShift,
-  markPeriodShiftNeutral,
+  periodShiftDirection: monthShiftDirection,
+  markPeriodShift: markMonthShift,
+  markPeriodShiftNeutral: markMonthShiftNeutral,
+} = usePeriodShiftDirection()
+const {
+  periodShiftDirection: dayShiftDirection,
+  markPeriodShift: markDayShift,
+  markPeriodShiftNeutral: markDayShiftNeutral,
 } = usePeriodShiftDirection()
 
 const currentMonth = ref(monthKeyFromDate(new Date()))
 const selectedDateKey = ref(dateKeyFromDate(new Date()))
 const monthTransactions = ref([])
 
-const calendarPeriodContentKey = computed(() => (
-  `month:${currentMonth.value}|day:${selectedDateKey.value || '-'}`
-))
+const calendarMonthContentKey = computed(() => `month:${currentMonth.value}`)
+const calendarDayContentKey = computed(() => `day:${selectedDateKey.value || '-'}`)
 // 2024-01-07 is a Sunday; generate narrow weekday labels for Sun–Sat
 const weekLabels = computed(() =>
   Array.from({ length: 7 }, (_, i) =>
@@ -196,17 +208,19 @@ const ledgerCurrencyCode = computed(() => normalizeCurrencyCode(ledgerStore.acti
 
 function selectDay(dateKey) {
   if (!dateKey) return
+  markMonthShiftNeutral()
   const prev = selectedDateKey.value
   if (prev && prev !== dateKey) {
-    markPeriodShift(dateKey > prev ? 1 : dateKey < prev ? -1 : 0)
+    markDayShift(dateKey > prev ? 1 : dateKey < prev ? -1 : 0)
   } else {
-    markPeriodShiftNeutral()
+    markDayShiftNeutral()
   }
   selectedDateKey.value = dateKey
 }
 
 function goPrevMonth() {
-  markPeriodShift(-1)
+  markDayShiftNeutral()
+  markMonthShift(-1)
   const [yearText, monthText] = currentMonth.value.split('-')
   const year = Number(yearText)
   const month = Number(monthText)
@@ -216,7 +230,8 @@ function goPrevMonth() {
 }
 
 function goNextMonth() {
-  markPeriodShift(1)
+  markDayShiftNeutral()
+  markMonthShift(1)
   const [yearText, monthText] = currentMonth.value.split('-')
   const year = Number(yearText)
   const month = Number(monthText)
@@ -502,6 +517,13 @@ function dateKeyFromIso(iso) {
 .calendar-period-body {
   display: grid;
   gap: 12px;
+}
+
+.calendar-month-shift,
+.calendar-day-shift {
+  display: grid;
+  gap: inherit;
+  min-width: 0;
 }
 
 @media (max-width: 480px) {
