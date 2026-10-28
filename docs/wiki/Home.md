@@ -7,6 +7,7 @@
 ## 快速導覽
 
 ### 開發與品質
+- [Open-Source-And-License](Open-Source-And-License)
 - [Local-Dev-Quickstart](Local-Dev-Quickstart)
 - [Environment-Variables](Environment-Variables)
 - [Testing-And-Verification](Testing-And-Verification)
