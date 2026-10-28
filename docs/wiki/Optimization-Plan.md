@@ -5,7 +5,7 @@
 **HTML 報告：** [`docs/audits/smb-full-product-optimization-20260827/strawmb-full-product-optimization-plan.html`](../audits/smb-full-product-optimization-20260827/strawmb-full-product-optimization-plan.html)  
 **剩餘技術手法（v1.4.6；T-01／T-02 已落地）：** [Technical-Optimization](Technical-Optimization)
 
-權威發布站：[https://strawcoding.github.io/StrawMoneyBookWiki/](https://strawcoding.github.io/StrawMoneyBookWiki/)（Operations）。主 repo `docs/wiki/` 是同步來源快照。
+權威發布站：[https://strawcoding.github.io/](https://strawcoding.github.io/)（Operations）。主 repo `docs/wiki/` 是同步來源快照。
 
 ## 現況摘要
 

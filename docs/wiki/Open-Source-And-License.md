@@ -1,7 +1,7 @@
 # Open-Source-And-License
 
-> 完整版（表格、FAQ、mermaid、建置步驟）：[Wiki · Open Source & License](https://strawcoding.github.io/StrawMoneyBookWiki/operations/open-source-and-license)  
-> 文件中心索引：[Wiki /guide/](https://strawcoding.github.io/StrawMoneyBookWiki/guide/)
+> 完整版（表格、FAQ、mermaid、建置步驟）：[Wiki · Open Source & License](https://strawcoding.github.io/operations/open-source-and-license)  
+> 文件中心索引：[Wiki /guide/](https://strawcoding.github.io/guide/)
 
 ## 概述
 

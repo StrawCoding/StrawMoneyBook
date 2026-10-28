@@ -1,7 +1,7 @@
 # StrawMoneyBook App 功能說明（Detailed）
 
 > 本文件依據目前專案程式碼與頁面結構整理，狀態基準為 `2026-08-28`（產品 v1.4.x）。
-> 官方 Wiki：https://strawcoding.github.io/StrawMoneyBookWiki/。in-repo 快照：`docs/wiki/`。
+> 官方 Wiki：https://strawcoding.github.io/。in-repo 快照：`docs/wiki/`。
 > 重點是描述「實際產品能力、使用情境、限制與差異化」，不是單純的檔案索引。
 > 如需專案入口與開發指令，請先閱讀 `README.md`；如需檔案對應關係，請搭配 `frontend/StrawMoneyBook_Features_Map.md` 閱讀。
 

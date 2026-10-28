@@ -1,6 +1,6 @@
 # Playwright App Shell
 
-> **線上（canonical）：** [Wiki · Playwright App Shell](https://strawcoding.github.io/StrawMoneyBookWiki/operations/playwright-app-shell)
+> **線上（canonical）：** [Wiki · Playwright App Shell](https://strawcoding.github.io/operations/playwright-app-shell)
 
 ## 目的
 

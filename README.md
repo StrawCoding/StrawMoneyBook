@@ -84,7 +84,7 @@ npm run check
 
 ## 文件索引
 
-- 官方開發者 Wiki（VitePress）：[https://strawcoding.github.io/StrawMoneyBookWiki/](https://strawcoding.github.io/StrawMoneyBookWiki/)（架構／功能域／Operations runbook）。來源 repo：[`StrawCoding/StrawMoneyBookWiki`](https://github.com/StrawCoding/StrawMoneyBookWiki)。
+- 官方開發者 Wiki（VitePress）：[https://strawcoding.github.io/](https://strawcoding.github.io/)（架構／功能域／Operations runbook）。來源 repo：[`StrawCoding/StrawMoneyBookWiki`](https://github.com/StrawCoding/StrawMoneyBookWiki)。
 - `docs/wiki/`：操作 Wiki 的 in-repo 快照；改完須同步進 StrawMoneyBookWiki。
 - `StrawMoneyBook_App_Features_Detailed.md`：產品能力、使用情境、限制與差異化說明。
 - `frontend/StrawMoneyBook_Features_Map.md`：功能、路由、元件、Store、Service、Repository 對應表。

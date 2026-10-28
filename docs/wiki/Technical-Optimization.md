@@ -6,7 +6,7 @@
 
 全產品方案（找得到／分析主頁 SQL／wiki 閘）見 [Optimization-Plan](Optimization-Plan)，不要把已落地項重開單。
 
-權威發布站：[https://strawcoding.github.io/StrawMoneyBookWiki/](https://strawcoding.github.io/StrawMoneyBookWiki/)（Operations）。本頁是 in-repo 快照；同步 VitePress 時只加本索引，不另造 SOP。
+權威發布站：[https://strawcoding.github.io/](https://strawcoding.github.io/)（Operations）。本頁是 in-repo 快照；同步 VitePress 時只加本索引，不另造 SOP。
 
 ## 已落地（不要重做）
 

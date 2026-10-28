@@ -1,7 +1,7 @@
 # StrawMoneyBook 功能與檔案對應
 
 此文件整理目前 StrawMoneyBook 的主要功能、頁面、元件與資料層對應關係，方便開發與維護。
-詳細產品說明請搭配 `../StrawMoneyBook_App_Features_Detailed.md` 閱讀；專案入口與開發指令請先閱讀 `../README.md`；官方 Wiki：https://strawcoding.github.io/StrawMoneyBookWiki/；in-repo 快照 `../docs/wiki/Home.md`。
+詳細產品說明請搭配 `../StrawMoneyBook_App_Features_Detailed.md` 閱讀；專案入口與開發指令請先閱讀 `../README.md`；官方 Wiki：https://strawcoding.github.io/；in-repo 快照 `../docs/wiki/Home.md`。
 
 ## 1. 功能總覽
 
