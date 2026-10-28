@@ -7,7 +7,7 @@
     back-to="/"
   >
     <div class="calendar-period-body">
-      <section class="habitat-flow-section habitat-line-calendar habitat-cross-grid">
+      <section class="habitat-flow-section habitat-line-calendar">
         <div class="row month-head">
           <button class="btn mini-btn" @click="goPrevMonth">‹</button>
           <strong>{{ monthLabel }}</strong>
@@ -20,13 +20,11 @@
           class="calendar-grid-shift"
         >
           <div class="calendar-grid-body">
-            <div class="calendar-grid-stack">
-              <div class="week-head calendar-week-strip">
-                <span v-for="item in weekLabels" :key="item">{{ item }}</span>
-              </div>
+            <div class="week-head">
+              <span v-for="item in weekLabels" :key="item">{{ item }}</span>
+            </div>
 
-              <div class="calendar-cross-shell">
-                <div class="calendar-grid">
+            <div class="calendar-grid">
               <button
                 v-for="cell in calendarCells"
                 :key="cell.key"
@@ -39,8 +37,6 @@
                 <span v-if="cell.dateKey && cell.incomeMinor > 0" class="day-amount income">+{{ formatMinor(cell.incomeMinor) }}</span>
                 <span v-if="cell.dateKey && cell.expenseMinor > 0" class="day-amount expense">-{{ formatMinor(cell.expenseMinor) }}</span>
               </button>
-                </div>
-              </div>
             </div>
           </div>
         </PeriodContentTransition>
@@ -538,36 +534,14 @@ function dateKeyFromIso(iso) {
   min-width: 0;
 }
 
-.habitat-cross-grid .calendar-week-strip.week-head {
-  margin-top: 0;
-  width: 100%;
-  gap: 0;
-}
-
-.habitat-cross-grid .calendar-grid {
-  margin-top: 0;
-  width: 100%;
-  gap: 0;
-}
-
-.habitat-cross-grid .day-cell {
-  border: 0;
-  border-radius: 0;
-  background: var(--bg);
-}
-
-.habitat-cross-grid .day-cell.empty {
-  border: 0;
-  background: var(--bg);
-}
-
-.habitat-cross-grid .day-cell.selected {
-  border-color: transparent;
-}
-
 @media (max-width: 480px) {
   .panel {
     padding: 8px;
+  }
+  .week-head,
+  .calendar-grid {
+    width: 100%;
+    gap: 3px;
   }
   .day-cell {
     min-height: 46px;

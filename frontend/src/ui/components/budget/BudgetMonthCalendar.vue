@@ -1,5 +1,5 @@
 <template>
-  <section class="budget-month-calendar habitat-line-calendar habitat-cross-grid" data-testid="budget-month-calendar">
+  <section class="budget-month-calendar habitat-line-calendar" data-testid="budget-month-calendar">
     <div class="row month-head">
       <button
         type="button"
@@ -20,13 +20,11 @@
       </button>
     </div>
 
-    <div class="calendar-grid-stack">
-      <div class="week-head calendar-week-strip">
-        <span v-for="label in weekLabels" :key="label">{{ label }}</span>
-      </div>
+    <div class="week-head">
+      <span v-for="label in weekLabels" :key="label">{{ label }}</span>
+    </div>
 
-      <div class="calendar-cross-shell">
-        <div class="calendar-grid">
+    <div class="calendar-grid">
       <button
         v-for="cell in cells"
         :key="cell.key"
@@ -49,8 +47,6 @@
           -{{ formatMinor(cell.spentMinor) }}
         </span>
       </button>
-        </div>
-      </div>
     </div>
   </section>
 </template>
@@ -213,46 +209,11 @@ function formatMinor(minor) {
   color: #ef4444;
 }
 
-.habitat-cross-grid .calendar-week-strip.week-head {
-  margin-top: 0;
-  width: 100%;
-  gap: 0;
-}
-
-.habitat-cross-grid .calendar-grid {
-  margin-top: 0;
-  width: 100%;
-  gap: 0;
-}
-
-.habitat-cross-grid .day-cell {
-  border: 0;
-  border-radius: 0;
-  background: var(--bg);
-}
-
-.habitat-cross-grid .day-cell.empty {
-  border: 0;
-  background: var(--bg);
-}
-
-.habitat-cross-grid .day-cell.today {
-  box-shadow: none;
-}
-
-.habitat-cross-grid .day-cell.over {
-  border: 0;
-}
-
 @media (max-width: 480px) {
-  .week-head:not(.calendar-week-strip),
-  .calendar-grid:not(.habitat-cross-grid .calendar-grid) {
+  .week-head,
+  .calendar-grid {
     width: 100%;
     gap: 3px;
-  }
-
-  .habitat-cross-grid .calendar-grid {
-    gap: 0;
   }
   .day-cell {
     min-height: 46px;
