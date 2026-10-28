@@ -26,6 +26,7 @@ import { runSubscriptionChargesIfDue } from '@/core/services/subscription-charge
 import { runDueSecuritySettlements } from '@/core/services/security.service'
 import { runCreditStatementRollovers } from '@/core/services/credit.service'
 import { syncBookkeepingRemindersForAllLedgers } from '@/ui/services/bookkeeping-reminder.service'
+import { syncCreditDueRemindersForAllLedgers } from '@/ui/services/credit-due-reminder.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { loadUiLayout } from '@/ui/services/ui-layout.service'
 import { initLocalePreference, translateMessage } from '@/ui/services/i18n.service'
@@ -115,6 +116,12 @@ function triggerBankAutoRefresh(pinia, ledgerId, reason) {
 function runBookkeepingReminderSyncInBackground(reason) {
   void syncBookkeepingRemindersForAllLedgers().catch((error) => {
     console.warn(`[bookkeeping-reminder] background sync failed (${reason})`, error)
+  })
+}
+
+function runCreditDueReminderSyncInBackground(reason) {
+  void syncCreditDueRemindersForAllLedgers().catch((error) => {
+    console.warn(`[credit-due-reminder] background sync failed (${reason})`, error)
   })
 }
 
@@ -473,6 +480,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
       reloadCurrentBudgetPeriodInBackground(pinia, 'app_resume')
       scheduleMembershipWarmup('app_resume', windowObject)
       runBookkeepingReminderSyncInBackground('app_resume')
+      runCreditDueReminderSyncInBackground('app_resume')
       windowObject?.dispatchEvent?.(new Event('app:check-update'))
       const currentLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
       if (currentLedgerId) {
@@ -562,6 +570,7 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
 
   scheduleMembershipWarmup('app_start', windowObject)
   runBookkeepingReminderSyncInBackground('app_start')
+  runCreditDueReminderSyncInBackground('app_start')
   reloadCurrentBudgetPeriodInBackground(pinia, 'app_start', windowObject)
   if (ledgerStore.activeLedgerId) {
     runSavingsJarAutoSaveInBackground(ledgerStore.activeLedgerId, 'app_start')

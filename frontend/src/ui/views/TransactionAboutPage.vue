@@ -43,6 +43,16 @@
           <small class="muted">{{ t('transaction_about.detail.transaction_type') }}</small>
           <span>{{ transactionTypeLabel(transaction.type) }}</span>
         </div>
+        <div v-if="creditStatementLink" class="detail-row">
+          <small class="muted">{{ t('transaction_about.credit_statement') }}</small>
+          <RouterLink
+            :to="creditStatementLink"
+            class="btn mini-link"
+            data-testid="tx-credit-statement-link"
+          >
+            {{ t('transaction_about.view_credit_statement') }}
+          </RouterLink>
+        </div>
       </div>
 
       <p v-if="displayNote(transaction.note)" class="note">{{ displayNote(transaction.note) }}</p>
@@ -171,7 +181,7 @@
 <script setup>
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import CustomSelect from '@/ui/components/common/CustomSelect.vue'
 import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import MoneyText from '@/ui/components/common/MoneyText.vue'
@@ -188,6 +198,7 @@ import { stripAddonSummaryFromNote } from '@/ui/utils/addon-note'
 import { getSystemTransactionIcon, getSystemTransactionLabel, getSystemTransactionType } from '@/ui/utils/system-transaction-presenter'
 import { buildTransactionEditorAttributionView } from '@/core/services/transaction-editor-attribution'
 import { getSetting } from '@/core/repositories/settings.repo'
+import { findPostingStatementStatus } from '@/core/services/credit.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -208,8 +219,19 @@ const refundAccountId = ref('')
 const refundDeductAmountMajor = ref(0)
 const activeLedgerIsShared = ref(false)
 const currentUserId = ref('')
+const creditStatementMeta = ref(null)
 
 const txId = computed(() => String(route.params.id ?? ''))
+
+const creditStatementLink = computed(() => {
+  const meta = creditStatementMeta.value
+  const tx = transaction.value
+  if (!meta?.statement_id || !tx?.account_id) return null
+  return {
+    name: 'credit-statement-detail',
+    params: { accountId: tx.account_id, statementId: meta.statement_id },
+  }
+})
 const editorAttribution = computed(() => buildTransactionEditorAttributionView(transaction.value, {
   currentUserId: currentUserId.value,
   isSharedLedger: activeLedgerIsShared.value,
@@ -384,6 +406,14 @@ async function load() {
     const detailContext = await loadTransactionDetailContext(ledgerId, txId.value)
     allTransactions.value = detailContext.allTransactions
     transaction.value = detailContext.transaction
+    creditStatementMeta.value = null
+    if (transaction.value) {
+      try {
+        creditStatementMeta.value = await findPostingStatementStatus(ledgerId, txId.value)
+      } catch {
+        creditStatementMeta.value = null
+      }
+    }
     // Deleted / missing tx must not leave a blank detail page (smb292 back-stack safety).
     if (!transaction.value) {
       await returnHomeAfterTransactionDelete(router)

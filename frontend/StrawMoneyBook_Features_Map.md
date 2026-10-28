@@ -74,7 +74,7 @@
 | `/ai-auto-bookkeeping` | `src/ui/views/BookkeepingPage.vue` | AI 記帳模式（內嵌 `AiAutoBookkeepingPage.vue`；與快速新增同一記帳容器，顯示品牌頂欄、隱藏 BottomNav） |
 | `/assets` | `src/ui/views/assets.vue` | 資產總覽（v1.5.14 modern Habitat：大標題＋帳本切換＋金庫摘要色島；借出／借入／證券／信用卡格線與 testid 不變） |
 | `/assets/securities` | `src/ui/views/securities/SecuritiesListPage.vue` | 有價證券列表 |
-| `/credit-cards` | `src/ui/views/credit-cards/CreditCardsPage.vue` | 信用卡：頁內可新增（不掛資產母分類）＋還款／帳單；刷卡＝一般記帳選信用卡帳戶（createExpense→刷卡雙腿）；P0（smb301）：帳單／刷卡雙腿／還款 allocations；正式退款強制寫入當期 open posting（posted_at 箝制）；closed 批次硬拒絕；正式編輯僅允許純 occurred_at（入口=`updateManualTransaction`＋`findTransactionRecordById`；禁 occurredAt→postedAt 誤判；statement_id／posted_at／closing 不變；harness 實呼回歸）；額度警示＝實際卡債 |
+| `/credit-cards` | `src/ui/views/credit-cards/CreditCardsPage.vue` | 信用卡：新增／**編輯／刪除（無交易硬刪、有交易封存）**／封存還原；帳期列→`/credit-cards/:accountId/statements/:statementId` 詳情（posting 明細、closed 鎖定提示）；還款 FIFO **預覽**＋成功摘要；顯示已封存；設定→`/settings/credit-due-reminder` 本地繳款提醒；分析頁卡債／利用率；交易詳情跳帳期；帳戶明細 anchor 到卡；smb301 契約不變 |
 | `/assets/securities/:id` | `src/ui/views/securities/SecurityDetailPage.vue` | 有價證券明細／買賣 |
 | `/icons/pick` | `src/ui/views/IconPickerPage.vue` | 帳戶/分類 icon 選擇 |
 | `/assets/accounts` | `src/ui/views/accounts/AssetAccountManagementPage.vue` | 資產帳戶管理 |

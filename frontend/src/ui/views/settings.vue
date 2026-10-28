@@ -105,6 +105,7 @@ const settingGroups = computed(() => [
       { to: '/settings/personalization', labelKey: 'settings.personalization', descKey: 'settings.desc.personalization', icon: 'fa-solid fa-palette' },
       { to: '/settings/security', labelKey: 'settings.security_lock', descKey: 'settings.desc.security_lock', icon: 'fa-solid fa-shield-halved' },
       { to: '/settings/bookkeeping-reminder', labelKey: 'settings.bookkeeping_reminder', descKey: 'settings.desc.bookkeeping_reminder', icon: 'fa-solid fa-calendar-days' },
+      { to: '/settings/credit-due-reminder', labelKey: 'settings.credit_due_reminder', descKey: 'settings.desc.credit_due_reminder', icon: 'fa-solid fa-credit-card' },
     ],
   },
   {

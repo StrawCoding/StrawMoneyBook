@@ -177,6 +177,33 @@
       </div>
     </section>
 
+    <section
+      v-if="creditUtilRows.length"
+      class="analysis-flow-section"
+      data-testid="analysis-credit-section"
+    >
+      <header class="row analysis-section-head">
+        <h3>{{ t('analysis_page.credit_title') }}</h3>
+      </header>
+      <div class="securities-summary-grid" role="list">
+        <div class="securities-metric-row" role="listitem">
+          <small class="muted metric-label">{{ t('analysis_page.credit_total_debt') }}</small>
+          <MoneyText class="metric-value" :value-minor="creditTotalDebtMinor" tone="expense" />
+        </div>
+        <div class="securities-metric-row" role="listitem">
+          <small class="muted metric-label">{{ t('analysis_page.credit_avg_util') }}</small>
+          <span class="metric-value">{{ creditAvgUtilLabel }}</span>
+        </div>
+      </div>
+      <ul class="securities-alloc-list">
+        <li v-for="row in creditUtilRows" :key="row.id">
+          <strong>{{ row.name }}</strong>
+          <span class="muted">{{ row.utilLabel }}</span>
+          <MoneyText :value-minor="row.debtMinor" tone="expense" />
+        </li>
+      </ul>
+    </section>
+
     <section class="analysis-flow-section" data-testid="analysis-securities-section">
       <header class="row analysis-section-head">
         <h3>{{ t('analysis_page.securities_title') }}</h3>
@@ -329,6 +356,7 @@ import { useBudgetStore } from '@/ui/stores/budget.store'
 import { useCategoryStore } from '@/ui/stores/category.store'
 import { useLedgerStore } from '@/ui/stores/ledger.store'
 import { useSecurityStore } from '@/ui/stores/security.store'
+import { useCreditStore } from '@/ui/stores/credit.store'
 import { useAnalysisCacheStore } from '@/ui/stores/analysis-cache.store'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { loadAnalysisStats } from '@/core/services/transaction-query.service'
@@ -367,6 +395,26 @@ import {
 const accountStore = useAccountStore()
 const budgetStore = useBudgetStore()
 const securityStore = useSecurityStore()
+const creditStore = useCreditStore()
+
+const creditUtilRows = computed(() => (creditStore.cards || [])
+  .filter((c) => !c.account?.is_archived)
+  .map((c) => ({
+    id: c.account.id,
+    name: c.account.name,
+    debtMinor: c.debtMinor ?? 0,
+    utilLabel: `${Math.round(Number(c.utilization ?? 0) * 100)}%`,
+  })))
+
+const creditTotalDebtMinor = computed(() => creditUtilRows.value.reduce((sum, row) => sum + Number(row.debtMinor ?? 0), 0))
+
+const creditAvgUtilLabel = computed(() => {
+  const cards = creditUtilRows.value
+  if (!cards.length) return '0%'
+  const totalLimit = (creditStore.cards || []).reduce((sum, c) => sum + Number(c.creditLimitMinor ?? 0), 0)
+  if (totalLimit <= 0) return '—'
+  return `${Math.round((creditTotalDebtMinor.value / totalLimit) * 100)}%`
+})
 const analysisCacheStore = useAnalysisCacheStore()
 const categoryStore = useCategoryStore()
 const ledgerStore = useLedgerStore()
@@ -740,6 +788,7 @@ async function loadStatsTransactions() {
     await Promise.all([
       budgetStore.loadMonth(budgetMonthKey),
       securityStore.load(),
+      creditStore.load(),
     ])
   } catch (error) {
     if (!cached) {

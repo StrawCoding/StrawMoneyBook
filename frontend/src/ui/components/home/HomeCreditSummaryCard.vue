@@ -12,6 +12,7 @@
           <MoneyText :value-minor="card.openRemainingMinor" />
         </div>
         <small v-if="card.nearLimit" class="warn">{{ t('credit_cards_page.near_limit') }}</small>
+        <small v-else-if="cardNearestDue(card)" class="muted due">{{ t('credit_cards_page.due_on') }} {{ cardNearestDue(card) }}</small>
       </li>
     </ul>
   </article>
@@ -32,6 +33,13 @@ const loaded = ref(false)
 
 const visible = computed(() => creditStore.homeCardEnabled && loaded.value)
 const cards = computed(() => creditStore.cards || [])
+
+function cardNearestDue(card) {
+  const rows = (card.statements || []).filter((s) => s.due_on && Number(s.remaining_minor) > 0)
+  if (!rows.length) return ''
+  rows.sort((a, b) => String(a.due_on).localeCompare(String(b.due_on)))
+  return rows[0].due_on
+}
 
 async function refresh() {
   if (!ledgerStore.activeLedgerId) return

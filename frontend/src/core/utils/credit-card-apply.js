@@ -499,3 +499,20 @@ export function applyCreditRepaymentAllocationPlan(db, ledgerId, {
   })
   return { repaymentId, paidMinor: derivePaidMinorFromAllocations(allocations.map((a) => ({ amount_minor: a.amountMinor }))) }
 }
+
+export function buildFifoRepaymentAllocations(amountMinor, unpaidStatements = []) {
+  const amount = Math.round(Math.abs(Number(amountMinor)))
+  if (!Number.isFinite(amount) || amount <= 0) return []
+  let left = amount
+  const allocations = []
+  for (const st of unpaidStatements) {
+    if (left <= 0) break
+    const remaining = Math.max(0, Math.round(Number(st.remaining_minor ?? 0)))
+    const take = Math.min(left, remaining)
+    if (take > 0) {
+      allocations.push({ statementId: st.id, amountMinor: take, statement: st })
+      left -= take
+    }
+  }
+  return allocations
+}

@@ -2,7 +2,17 @@ import { createId } from '@/core/utils/id'
 import { assertLedgerId } from '@/core/repositories/base.repo'
 import { getLedger } from '@/core/repositories/ledger.repo'
 import { normalizeLedgerTimeZone } from '@/core/services/budget-period'
-import { findAccountById, updateAccountProfile, listAccounts, listAccountGroups, createAccountGroup, createAccount } from '@/core/repositories/account.repo'
+import {
+  findAccountById,
+  updateAccountProfile,
+  listAccounts,
+  listAccountGroups,
+  createAccountGroup,
+  createAccount,
+  archiveAccount,
+  restoreAccount,
+  deleteAccountIfUnused,
+} from '@/core/repositories/account.repo'
 import { addTransaction, addTransfer } from '@/core/repositories/transaction.repo'
 import { getSetting, setSetting } from '@/core/repositories/settings.repo'
 import { withTransaction } from '@/core/db/sqlite'
@@ -24,6 +34,7 @@ import {
   computeCreditUtilization,
   shouldForbidClosedCreditMutation,
   validateRepaymentAllocationPlan,
+  buildFifoRepaymentAllocations,
 } from '@/core/utils/credit-card-apply'
 import {
   toCreditLiabilityMinor,
@@ -44,6 +55,7 @@ import {
   listAllocationsForStatement,
   listCreditAccounts,
   listCreditStatements,
+  listPostingsForStatement,
   listPostingsForTransaction,
   listUnpaidStatementsFifo,
   sumAllocationsForStatement,
@@ -51,6 +63,7 @@ import {
 } from '@/core/repositories/credit.repo'
 
 export const CREDIT_HOME_CARD_SETTING_KEY = 'credit.home_card_enabled'
+export const CREDIT_DUE_REMINDER_SETTING_KEY = 'credit.due_reminder.settings.v1'
 export const FORBIDDEN_ACCRUAL_ACCOUNT_NAME = 'credit-accrual'
 
 async function ledgerTimeZone(ledgerId) {
@@ -477,22 +490,19 @@ export async function createCreditRepayment(ledgerId, payload = {}) {
   const unpaid = await listUnpaidStatementsFifo(ledgerId, accountId)
   if (!allocations || allocations.length === 0) {
     if (payload.mode === 'full' || payload.mode === 'custom' || !payload.mode) {
-      // Auto FIFO allocation
-      let left = amountMinor
-      allocations = []
-      for (const st of unpaid) {
-        if (left <= 0) break
-        const take = Math.min(left, st.remaining_minor)
-        if (take > 0) {
-          allocations.push({ statementId: st.id, amountMinor: take })
-          left -= take
-        }
-      }
       if (payload.statementId && payload.mode === 'full') {
         const target = unpaid.find((s) => s.id === payload.statementId)
-        if (target) {
-          allocations = [{ statementId: target.id, amountMinor: Math.min(amountMinor, target.remaining_minor) }]
-        }
+        allocations = target
+          ? [{ statementId: target.id, amountMinor: Math.min(amountMinor, target.remaining_minor) }]
+          : buildFifoRepaymentAllocations(amountMinor, unpaid).map(({ statementId, amountMinor: amt }) => ({
+            statementId,
+            amountMinor: amt,
+          }))
+      } else {
+        allocations = buildFifoRepaymentAllocations(amountMinor, unpaid).map(({ statementId, amountMinor: amt }) => ({
+          statementId,
+          amountMinor: amt,
+        }))
       }
     }
   }
@@ -673,10 +683,112 @@ export async function createCreditRefundAdjustment(ledgerId, payload = {}) {
   })
 }
 
-export async function loadCreditCardDashboard(ledgerId) {
+export async function previewCreditRepaymentAllocations(ledgerId, payload = {}) {
+  assertLedgerId(ledgerId)
+  const accountId = String(payload.accountId ?? '').trim()
+  const amountMinor = toCreditMagnitudeMinor(payload.amountMinor)
+  if (!accountId) throw new Error('缺少信用卡帳戶')
+  if (!Number.isFinite(amountMinor) || amountMinor <= 0) return []
+  await runCreditStatementRollovers(ledgerId)
+  const unpaid = await listUnpaidStatementsFifo(ledgerId, accountId)
+  return buildFifoRepaymentAllocations(amountMinor, unpaid)
+}
+
+export async function updateCreditCardProfile(ledgerId, accountId, payload = {}) {
+  assertLedgerId(ledgerId)
+  const account = await findAccountById(ledgerId, accountId)
+  if (!account || String(account.account_kind) !== 'credit') {
+    throw new Error('不是信用卡帳戶')
+  }
+  const name = String(payload.name ?? account.name ?? '').trim()
+  if (!name) throw new Error('請輸入卡片名稱')
+  const creditLimitMajor = Number(payload.creditLimitMajor)
+  const creditLimitMinor = Number.isFinite(Number(payload.creditLimitMinor))
+    ? Math.max(0, Math.round(Number(payload.creditLimitMinor)))
+    : (Number.isFinite(creditLimitMajor)
+      ? Math.max(0, Math.round(Math.abs(creditLimitMajor) * 100))
+      : undefined)
+  await updateAccountProfile(ledgerId, accountId, {
+    name,
+    groupId: account.group_id,
+    icon: payload.icon ?? account.icon,
+    accountKind: 'credit',
+    statementCloseDay: payload.statementCloseDay ?? payload.closeDay ?? account.statement_close_day,
+    paymentDueDay: payload.paymentDueDay ?? payload.dueDay ?? account.payment_due_day,
+    creditLimitMinor: creditLimitMinor ?? account.credit_limit_minor,
+    repaymentReminderDay: payload.repaymentReminderDay ?? account.repayment_reminder_day,
+    cardLast4: Object.prototype.hasOwnProperty.call(payload, 'cardLast4') ? payload.cardLast4 : account.card_last4,
+    openingBalanceMinor: account.opening_balance_minor,
+    currencyCode: account.currency_code,
+    includeInAssets: account.include_in_assets,
+    includeInGroupStatistics: account.include_in_group_statistics,
+  })
+  return findAccountById(ledgerId, accountId)
+}
+
+export async function archiveCreditCardAccount(ledgerId, accountId) {
+  assertLedgerId(ledgerId)
+  const account = await findAccountById(ledgerId, accountId)
+  if (!account || String(account.account_kind) !== 'credit') {
+    throw new Error('不是信用卡帳戶')
+  }
+  await archiveAccount(ledgerId, accountId)
+  return { archived: true }
+}
+
+export async function restoreCreditCardAccount(ledgerId, accountId) {
+  assertLedgerId(ledgerId)
+  const account = await findAccountById(ledgerId, accountId)
+  if (!account || String(account.account_kind) !== 'credit') {
+    throw new Error('不是信用卡帳戶')
+  }
+  await restoreAccount(ledgerId, accountId)
+  return { restored: true }
+}
+
+export async function removeCreditCardAccount(ledgerId, accountId) {
+  assertLedgerId(ledgerId)
+  const account = await findAccountById(ledgerId, accountId)
+  if (!account || String(account.account_kind) !== 'credit') {
+    throw new Error('不是信用卡帳戶')
+  }
+  return deleteAccountIfUnused(ledgerId, accountId)
+}
+
+export async function loadCreditStatementDetail(ledgerId, accountId, statementId) {
   assertLedgerId(ledgerId)
   await runCreditStatementRollovers(ledgerId)
-  const accounts = await listCreditAccounts(ledgerId)
+  const account = await findAccountById(ledgerId, accountId)
+  if (!account || String(account.account_kind) !== 'credit') {
+    throw new Error('不是信用卡帳戶')
+  }
+  const statement = await findCreditStatementById(ledgerId, statementId)
+  if (!statement || String(statement.account_id) !== String(accountId)) {
+    throw new Error('找不到帳單期')
+  }
+  const paid = await sumAllocationsForStatement(ledgerId, statement.id)
+  const liability = statement.status === 'closed'
+    ? Math.round(Number(statement.closing_balance_minor ?? 0))
+    : await sumCardLiabilityForStatement(ledgerId, statement.id)
+  const remaining = Math.max(0, liability - paid)
+  const postings = await listPostingsForStatement(ledgerId, statement.id)
+  return {
+    account,
+    statement: {
+      ...statement,
+      paid_minor: paid,
+      liability_minor: liability,
+      remaining_minor: remaining,
+      overdue: statement.status === 'closed' && isOverdue({ dueOn: statement.due_on, remainingMinor: remaining }),
+    },
+    postings,
+  }
+}
+
+export async function loadCreditCardDashboard(ledgerId, { includeArchived = false } = {}) {
+  assertLedgerId(ledgerId)
+  await runCreditStatementRollovers(ledgerId)
+  const accounts = await listCreditAccounts(ledgerId, { includeArchived })
   const cards = []
   const reminders = []
 
@@ -745,7 +857,10 @@ export async function getStatementPaidMinor(ledgerId, statementId) {
 export {
   listCreditAccounts,
   listCreditStatements,
+  listPostingsForStatement,
   listPostingsForTransaction,
   findOpenCreditStatement,
   sumCardLiabilityForStatement,
+  findCreditStatementById,
+  findPostingStatementStatus,
 }

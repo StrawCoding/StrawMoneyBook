@@ -6,17 +6,53 @@ function nowIso() {
   return new Date().toISOString()
 }
 
-export async function listCreditAccounts(ledgerId) {
+export async function listCreditAccounts(ledgerId, { includeArchived = false } = {}) {
   assertLedgerId(ledgerId)
+  const archivedClause = includeArchived ? '' : ' AND a.is_archived = 0'
   const result = await query(
     `SELECT a.*
      FROM accounts a
      WHERE a.ledger_id = ?
        AND a.deleted_at IS NULL
-       AND a.is_archived = 0
+       ${archivedClause}
        AND a.account_kind = 'credit'
-     ORDER BY a.sort_order ASC, a.name COLLATE NOCASE ASC;`,
+     ORDER BY a.is_archived ASC, a.sort_order ASC, a.name COLLATE NOCASE ASC;`,
     [ledgerId],
+  )
+  return rowsOf(result)
+}
+
+export async function listPostingsForStatement(ledgerId, statementId) {
+  assertLedgerId(ledgerId)
+  const result = await query(
+    `SELECT
+       p.id,
+       p.transaction_id,
+       p.role,
+       p.account_id,
+       p.category_id,
+       p.amount_minor,
+       p.statement_id,
+       t.type AS transaction_type,
+       t.occurred_at,
+       t.posted_at,
+       t.note,
+       c.name AS category_name
+     FROM transaction_postings p
+     INNER JOIN transactions t
+       ON t.ledger_id = p.ledger_id
+      AND t.id = p.transaction_id
+      AND t.deleted_at IS NULL
+     LEFT JOIN categories c
+       ON c.ledger_id = p.ledger_id
+      AND c.id = p.category_id
+      AND c.deleted_at IS NULL
+     WHERE p.ledger_id = ?
+       AND p.statement_id = ?
+       AND p.deleted_at IS NULL
+       AND p.role IN ('card_liability', 'adjustment', 'reversal', 'fee')
+     ORDER BY COALESCE(t.posted_at, t.occurred_at) DESC, p.id DESC;`,
+    [ledgerId, String(statementId)],
   )
   return rowsOf(result)
 }

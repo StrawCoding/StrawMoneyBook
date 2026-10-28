@@ -1812,7 +1812,15 @@ async function assertRouteNavigation() {
     assert.equal(creditNav.path, '/credit-cards', JSON.stringify(creditNav, null, 2))
     assert.ok(creditNav.title.length > 0, JSON.stringify(creditNav, null, 2))
     assert.equal(creditNav.hasToggle, true, JSON.stringify(creditNav, null, 2))
-    console.log('[credit-cards] page ok:', creditNav.title)
+    const creditEnhance = await evalPage(`() => ({
+      hasDelete: Boolean(document.querySelector('[data-testid=credit-delete-open]')),
+      hasReminderSettings: Boolean(document.querySelector('[data-testid=credit-due-reminder-settings]')),
+      hasEdit: Boolean(document.querySelector('[data-testid=credit-edit-open]')),
+    })`)
+    if (creditEnhance.hasDelete || creditEnhance.hasEdit) {
+      assert.equal(creditEnhance.hasReminderSettings, true, JSON.stringify(creditEnhance, null, 2))
+    }
+    console.log('[credit-cards] page ok:', creditNav.title, creditEnhance)
   }
 
   const advancedTargets = [

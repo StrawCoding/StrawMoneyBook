@@ -157,7 +157,11 @@
             <span>{{ accountDueDayLabel }}</span>
           </div>
           <div v-if="isCreditAccount" class="detail-row">
-            <RouterLink class="btn" to="/credit-cards" data-testid="account-credit-module-link">
+            <RouterLink
+              class="btn"
+              :to="{ name: 'credit-cards', query: { account: accountId } }"
+              data-testid="account-credit-module-link"
+            >
               {{ t('credit_cards_page.open_module') }}
             </RouterLink>
           </div>

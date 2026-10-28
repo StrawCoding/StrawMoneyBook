@@ -473,6 +473,19 @@ const router = createRouter({
       meta: { tab: 'features' },
     },
     {
+      name: 'credit-statement-detail',
+      path: '/credit-cards/:accountId/statements/:statementId',
+      component: () => import('@/ui/views/credit-cards/CreditStatementDetailPage.vue'),
+      props: true,
+      meta: { tab: 'features' },
+    },
+    {
+      name: 'settings-credit-due-reminder',
+      path: '/settings/credit-due-reminder',
+      component: () => import('@/ui/views/settings/SettingsCreditDueReminderPage.vue'),
+      meta: { tab: 'settings' },
+    },
+    {
       name: 'security-detail',
       path: '/assets/securities/:id',
       component: () => import('@/ui/views/securities/SecurityDetailPage.vue'),

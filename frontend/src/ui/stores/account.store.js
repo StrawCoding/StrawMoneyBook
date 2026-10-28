@@ -39,7 +39,7 @@ function buildGroupedAccounts(groups, accounts, { includeSavings = true, include
 
   const cashAccounts = filteredAccounts.filter((account) => !isCreditAccount(account))
   const creditAccounts = includeCredit
-    ? filteredAccounts.filter((account) => isCreditAccount(account))
+    ? filteredAccounts.filter((account) => isCreditAccount(account) && !Number(account.is_archived))
     : []
 
   const accountsByGroupId = new Map()
