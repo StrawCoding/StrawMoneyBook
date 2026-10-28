@@ -754,7 +754,7 @@ a {
 
 .account-icon {
   font-size: 22px;
-  color: color-mix(in srgb, var(--primary) 68%, var(--text) 32%);
+  color: var(--habitat-page-icon);
 }
 .account-row.excluded .account-icon {
   color: color-mix(in srgb, var(--muted) 78%, var(--text) 22%);

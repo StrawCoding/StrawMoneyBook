@@ -152,6 +152,13 @@
   border-left: 3px solid var(--secondary);
 }
 
+[data-ui-layout='modern'] .home-modern .home-tx-feed .tx-icon,
+[data-ui-layout='modern'] .home-modern .home-tx-feed .home-tx-tool,
+[data-ui-layout='modern'] .home-modern .home-tx-feed .empty-state-icon,
+[data-ui-layout='modern'] .assets-modern .account-row:not(.excluded) .account-icon {
+  color: var(--habitat-page-icon);
+}
+
 [data-ui-layout='modern'] .home-modern .home-tx-feed {
   background: transparent;
 }

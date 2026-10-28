@@ -10,6 +10,8 @@ const iconRegistrySource = readFileSync(resolve(root, 'src/ui/utils/fa-icon-regi
 
 const bottomNavSource = readFileSync(resolve(root, 'src/ui/components/layout/BottomNav.vue'), 'utf8')
 const homeSource = readFileSync(resolve(root, 'src/ui/views/home.vue'), 'utf8')
+const homeTxFeedSource = readFileSync(resolve(root, 'src/ui/components/home/HomeTransactionFeed.vue'), 'utf8')
+const globalCssSource = readFileSync(resolve(root, 'src/ui/assets/css/global.css'), 'utf8')
 const analysisSource = readFileSync(resolve(root, 'src/ui/views/analysis.vue'), 'utf8')
 const assetsSource = readFileSync(resolve(root, 'src/ui/views/assets.vue'), 'utf8')
 const personalizationSource = readFileSync(resolve(root, 'src/ui/views/settings/SettingsPersonalizationPage.vue'), 'utf8')
@@ -222,6 +224,15 @@ test('personalization page has traditional/modern layout switch UI', () => {
   assert.match(personalizationSource, /setLayout/)
   assert.match(personalizationSource, /ui-layout-\$\{/)
   assert.match(personalizationSource, /theme-scheme/)
+})
+
+test('home and assets list icons share habitat-page-icon token', () => {
+  assert.match(globalCssSource, /--habitat-page-icon: var\(--primary-soft\)/)
+  assert.match(homeTxFeedSource, /color: var\(--habitat-page-icon\)/)
+  assert.match(assetsSource, /\.account-icon[\s\S]*?color: var\(--habitat-page-icon\)/)
+  assert.match(habitatCssSource, /--habitat-page-icon/)
+  assert.match(habitatCssSource, /\.home-modern \.home-tx-feed \.tx-icon/)
+  assert.match(habitatCssSource, /\.assets-modern \.account-row:not\(\.excluded\) \.account-icon/)
 })
 
 test('ui-layout service keeps traditional and modern without forced migration', () => {

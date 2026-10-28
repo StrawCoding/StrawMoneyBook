@@ -384,7 +384,7 @@ function openEdit(tx) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--muted);
+  color: var(--habitat-page-icon);
   text-decoration: none;
   border-radius: 999px;
 }
@@ -588,7 +588,7 @@ function openEdit(tx) {
 }
 .tx-icon {
   font-size: 18px;
-  color: var(--muted);
+  color: var(--habitat-page-icon);
   flex-shrink: 0;
 }
 
@@ -616,7 +616,7 @@ function openEdit(tx) {
   display: grid;
   place-items: center;
   background: transparent;
-  color: var(--muted);
+  color: var(--habitat-page-icon);
   font-size: 22px;
 }
 .empty-state-copy {

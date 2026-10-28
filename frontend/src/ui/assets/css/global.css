@@ -11,6 +11,8 @@
   /* Primary — amber gold */
   --primary: #f5a623;
   --primary-soft: #f7c26b;
+  /* Home / assets list icons (category, account, feed tools) */
+  --habitat-page-icon: var(--primary-soft);
   --primary-vivid: #ffb830;
   --primary-contrast: #1a1000;
   --primary-glow: color-mix(in srgb, var(--primary) 28%, transparent);
