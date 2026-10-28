@@ -6,9 +6,8 @@
     back-to="/settings"
     stack-class="settings-subpage"
   >
-    <article class="card panel">
+    <HabitatSection :title="t('personalization.ui_layout')">
       <div class="stack section-block">
-        <h3>{{ t('personalization.ui_layout') }}</h3>
         <div class="layout-switch" role="group" :aria-label="t('personalization.ui_layout')">
           <button
             v-for="item in layouts"
@@ -24,9 +23,10 @@
           </button>
         </div>
       </div>
+    </HabitatSection>
 
+    <HabitatSection :title="t('personalization.theme_scheme')">
       <div class="stack section-block">
-        <h3>{{ t('personalization.theme_scheme') }}</h3>
         <div class="scheme-grid">
           <button
             v-for="scheme in schemes"
@@ -50,11 +50,9 @@
           </button>
         </div>
       </div>
+    </HabitatSection>
 
-      <label class="color-field">
-        {{ t('personalization.primary_color') }}
-      </label>
-
+    <HabitatSection :title="t('personalization.primary_color')">
       <div class="palette-wrap">
         <button
           v-for="color in paletteColors"
@@ -76,14 +74,14 @@
         <button class="btn primary" data-testid="theme-save" @click="saveTheme">{{ t('personalization.save_theme') }}</button>
         <button class="btn" @click="resetColor">{{ t('common.reset_default') }}</button>
       </div>
-    </article>
+    </HabitatSection>
   </HabitatPageShell>
 </template>
 
 <script setup>
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
+import HabitatSection from '@/ui/components/layout/habitat/HabitatSection.vue'
 import { ref } from 'vue'
-import { RouterLink } from 'vue-router'
 import { useUiStore } from '@/ui/stores/ui.store'
 import { useI18n } from '@/ui/services/i18n.service'
 import {

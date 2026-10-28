@@ -7,34 +7,39 @@
     stack-class="settings-subpage"
   >
 
-    <article class="card panel">
+    <HabitatSection>
       <p class="muted intro">{{ t('settings_about.subtitle') }}</p>
 
-      <a
-        v-for="link in contactLinks"
-        :key="link.key"
-        class="link-row"
-        :href="link.href"
-        :target="link.target"
-        :rel="link.rel"
-      >
-        <span class="icon-wrap">
-          <font-awesome-icon :icon="link.icon" />
-        </span>
-        <span class="content-wrap">
-          <span class="label">{{ t(`settings_about.${link.key}`) }}</span>
-          <strong>{{ t(`settings_about.${link.key}_value`) }}</strong>
-        </span>
-        <span class="action">{{ t('settings_about.open') }}</span>
-      </a>
-    </article>
+      <HabitatListGroup>
+        <HabitatRow
+          v-for="link in contactLinks"
+          :key="link.key"
+          :href="link.href"
+          :target="link.target"
+          :rel="link.rel"
+          class="link-row"
+          interactive
+        >
+          <span class="icon-wrap">
+            <font-awesome-icon :icon="link.icon" />
+          </span>
+          <span class="content-wrap">
+            <span class="label">{{ t(`settings_about.${link.key}`) }}</span>
+            <strong>{{ t(`settings_about.${link.key}_value`) }}</strong>
+          </span>
+          <span class="action">{{ t('settings_about.open') }}</span>
+        </HabitatRow>
+      </HabitatListGroup>
+    </HabitatSection>
   </HabitatPageShell>
 </template>
 
 <script setup>
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
+import HabitatSection from '@/ui/components/layout/habitat/HabitatSection.vue'
+import HabitatListGroup from '@/ui/components/layout/habitat/HabitatListGroup.vue'
+import HabitatRow from '@/ui/components/layout/habitat/HabitatRow.vue'
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
 
 const { t } = useI18n()
@@ -100,27 +105,17 @@ const contactLinks = computed(() => [
   align-items: center;
 }
 
-.panel {
-  padding: 14px;
-  display: grid;
-  gap: 10px;
-}
-
 .intro {
   margin: 0 0 2px;
 }
 
 .link-row {
-  border: 1px solid var(--field-border);
-  border-radius: 10px;
-  padding: 10px 12px;
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 10px;
-  text-decoration: none;
-  color: var(--text);
-  background: color-mix(in srgb, var(--card) 88%, var(--surface-popover) 12%);
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 .icon-wrap {

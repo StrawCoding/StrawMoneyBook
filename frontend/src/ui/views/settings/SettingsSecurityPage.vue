@@ -6,9 +6,8 @@
     back-to="/settings"
     stack-class="settings-subpage"
   >
-
-    <article class="card panel">
-      <div class="row switch-row">
+    <HabitatSection>
+      <HabitatRow class="switch-row">
         <div class="switch-text">
           <strong>{{ t('settings_security.toggle_label') }}</strong>
           <small class="muted">{{ t('settings_security.description') }}</small>
@@ -22,7 +21,9 @@
         >
           {{ securityLockEnabled ? t('common.on') : t('common.off') }}
         </button>
-      </div>
+      </HabitatRow>
+
+      <HabitatDivider />
 
       <div class="detail-list">
         <div class="detail-item">
@@ -30,14 +31,16 @@
           <strong>{{ supportLabel }}</strong>
         </div>
       </div>
-    </article>
+    </HabitatSection>
   </HabitatPageShell>
 </template>
 
 <script setup>
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
+import HabitatSection from '@/ui/components/layout/habitat/HabitatSection.vue'
+import HabitatRow from '@/ui/components/layout/habitat/HabitatRow.vue'
+import HabitatDivider from '@/ui/components/layout/habitat/HabitatDivider.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useUiStore } from '@/ui/stores/ui.store'
 import {
@@ -120,37 +123,19 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.panel {
-  padding: 14px;
-  display: grid;
-  gap: 10px;
-}
-
-.page-title {
-  margin: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.title-icon {
-  font-size: 18px;
-  color: var(--primary-soft);
-}
-
-.page-header {
-  align-items: center;
-}
-
 .switch-row {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 .switch-text {
   display: grid;
   gap: 4px;
+  min-width: 0;
+  flex: 1;
 }
 
 .detail-list {

@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.84
+- UI 去區塊化（batch 1）：新增 HabitatSection／ListGroup／Row／Divider；設定子頁語言／安全／關於／版本／開發者改 section 語意（移除 card.panel）。
+
 ## v1.5.83
 - 月曆 UI 回復 v1.5.75 線框圓角日格（交易／預算）；移除 v1.5.76–82 十字格實驗。換月 grid／星期列分離動畫不變。
 

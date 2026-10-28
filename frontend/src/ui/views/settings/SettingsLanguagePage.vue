@@ -6,13 +6,11 @@
     back-to="/settings"
     stack-class="settings-subpage"
   >
-
-    <article class="card panel">
+    <HabitatSection>
       <p class="muted current-line">{{ t('language_page.current') }}：{{ currentLabel }}</p>
 
-      <div class="stack section-block">
-        <h3>{{ t('language_page.select') }}</h3>
-        <div class="language-grid">
+      <h3 class="habitat-section-title">{{ t('language_page.select') }}</h3>
+      <div class="language-grid">
           <button
             v-for="option in localeOptions"
             :key="option.value"
@@ -25,15 +23,14 @@
             {{ option.label }}
           </button>
         </div>
-      </div>
-    </article>
+    </HabitatSection>
   </HabitatPageShell>
 </template>
 
 <script setup>
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
+import HabitatSection from '@/ui/components/layout/habitat/HabitatSection.vue'
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useUiStore } from '@/ui/stores/ui.store'
 
@@ -54,29 +51,6 @@ function pickLanguage(localeValue) {
 </script>
 
 <style scoped>
-.panel {
-  padding: 14px;
-  display: grid;
-  gap: 10px;
-}
-h2,
-h3 {
-  margin: 0;
-}
-
-.page-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.title-icon {
-  font-size: 18px;
-  color: var(--primary-soft);
-}
-.section-block {
-  gap: 10px;
-}
 .current-line {
   margin: 0;
 }

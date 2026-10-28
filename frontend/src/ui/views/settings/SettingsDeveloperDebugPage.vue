@@ -7,10 +7,10 @@
     stack-class="settings-subpage"
   >
 
-    <article class="card panel">
+    <HabitatSection>
       <p class="muted subtitle">{{ t('debug_page.subtitle') }}</p>
 
-      <article class="debug-toggle-card" data-testid="bank-sync-debug-toggle">
+      <div class="debug-toggle-block" data-testid="bank-sync-debug-toggle">
         <button
           type="button"
           class="switch-row"
@@ -28,7 +28,7 @@
             ? t('debug_page.bank_sync_debug.env_forced', '目前為 debug / 開發模式，Console 紀錄與網頁銀行同步已強制開啟。')
             : t('debug_page.bank_sync_debug.desc', '開啟後所有銀行同步動作會印到瀏覽器 Console，並在修正期開放網頁使用銀行同步流程。') }}
         </p>
-      </article>
+      </div>
 
       <div class="action-row">
         <button class="btn" :disabled="loading" @click="refresh">{{ t('debug_page.refresh') }}</button>
@@ -231,12 +231,13 @@
         </article>
       </div>
 
-    </article>
+    </HabitatSection>
   </HabitatPageShell>
 </template>
 
 <script setup>
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
+import HabitatSection from '@/ui/components/layout/habitat/HabitatSection.vue'
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { downloadJsonFile, saveJsonFileToDevice } from '@/core/services/export.service'
@@ -502,9 +503,11 @@ onBeforeUnmount(() => {
   justify-content: flex-start;
 }
 
-.debug-toggle-card {
+.debug-toggle-block {
   display: grid;
   gap: 8px;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
 }
 
 .switch-row {

@@ -842,6 +842,96 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-bottom-color: color-mix(in srgb, var(--border) 65%, transparent);
 }
 
+/* —— Habitat structure: Section / ListGroup / Row / Divider (de-card) —— */
+
+[data-ui-layout='modern'] .habitat-stack.settings-subpage,
+[data-ui-layout='modern'] .habitat-stack.settings-page {
+  gap: 0;
+  padding-inline: 16px;
+  box-sizing: border-box;
+}
+
+.habitat-section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 0 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 68%, transparent);
+}
+
+.habitat-stack > .habitat-section:last-child {
+  border-bottom: 0;
+  padding-bottom: 8px;
+}
+
+.habitat-section-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--muted, var(--text)) 88%, var(--text) 12%);
+}
+
+.habitat-list-group {
+  display: grid;
+  min-width: 0;
+}
+
+.habitat-divider {
+  height: 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  margin: 0;
+}
+
+.habitat-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 12px 0;
+  box-sizing: border-box;
+  color: var(--text);
+  text-decoration: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  text-align: inherit;
+  width: 100%;
+}
+
+.habitat-list-group > .habitat-row + .habitat-row,
+.habitat-list-group > .habitat-divider + .habitat-row,
+.habitat-list-group > .habitat-row + .habitat-divider {
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  margin-top: 0;
+}
+
+.habitat-row-interactive {
+  cursor: pointer;
+}
+
+.habitat-row-interactive:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  outline-offset: 2px;
+}
+
+[data-ui-layout='modern'] .habitat-section .detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+[data-ui-layout='modern'] .habitat-section .detail-row:last-child {
+  border-bottom: 0;
+}
+
 /* —— Modern flat pass 2: settings / claims / calendars / controls —— */
 
 [data-ui-layout='modern'] .habitat-stack.settings-subpage > .card.panel,

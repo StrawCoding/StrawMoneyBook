@@ -7,7 +7,7 @@
     stack-class="settings-subpage"
   >
 
-    <article class="card panel">
+    <HabitatSection>
       <div class="detail-row">
         <small class="muted version-label">
           <font-awesome-icon icon="fa-solid fa-circle-info" class="version-icon" />
@@ -32,12 +32,13 @@
         </button>
         <RouterLink class="btn" to="/settings/developer-debug">{{ t('settings_version.developer') }}</RouterLink>
       </div>
-    </article>
+    </HabitatSection>
   </HabitatPageShell>
 </template>
 
 <script setup>
 import HabitatPageShell from '@/ui/components/layout/HabitatPageShell.vue'
+import HabitatSection from '@/ui/components/layout/habitat/HabitatSection.vue'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import appPackage from '../../../../package.json'
@@ -103,12 +104,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.panel {
-  padding: 14px;
-  display: grid;
-  gap: 8px;
-}
-
 .page-title {
   margin: 0;
   display: inline-flex;
