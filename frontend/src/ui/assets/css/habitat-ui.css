@@ -909,13 +909,13 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-radius: 12px;
   overflow: hidden;
   background: transparent;
-  --calendar-grid-line: color-mix(in srgb, var(--border) 26%, transparent);
+  --calendar-grid-line: color-mix(in srgb, var(--border) 14%, transparent);
 }
 
 .habitat-cross-grid .calendar-grid {
   margin-top: 0;
   width: 100%;
-  gap: 0.5px;
+  gap: 0.33px;
   background: var(--calendar-grid-line);
 }
 
@@ -993,7 +993,7 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 }
 
 [data-ui-layout='modern'] .habitat-cross-grid .calendar-cross-shell {
-  --calendar-grid-line: color-mix(in srgb, var(--border) 18%, transparent);
+  --calendar-grid-line: color-mix(in srgb, var(--border) 9%, transparent);
   border-radius: 14px;
 }
 
