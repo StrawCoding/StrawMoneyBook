@@ -211,6 +211,7 @@ test('home keeps all blocks and FAB under both layouts', () => {
   const budgetAt = overviewSource.indexOf('data-testid="home-budget-summary"')
   const assetAt = overviewSource.indexOf('data-testid="home-asset-summary"')
   assert.ok(budgetAt >= 0 && assetAt >= 0 && budgetAt < assetAt, 'budget hero must render above asset flow')
+  assert.match(overviewSource, /mode-switch-glider/)
 })
 
 test('router does not register /more page', () => {

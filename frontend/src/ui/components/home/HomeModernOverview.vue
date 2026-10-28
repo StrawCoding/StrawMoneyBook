@@ -2,7 +2,16 @@
   <div class="home-modern-overview">
     <section class="overview-hero" data-testid="home-budget-summary">
       <div class="hero-top">
-        <div class="mode-switch" role="tablist">
+        <div
+          class="mode-switch"
+          role="tablist"
+          :data-active-mode="displayMode"
+        >
+          <span
+            class="mode-switch-glider"
+            aria-hidden="true"
+            :data-target="displayMode"
+          />
           <button
             v-for="mode in displayModes"
             :key="mode.key"
@@ -10,6 +19,7 @@
             class="mode-chip"
             :class="{ active: displayMode === mode.key }"
             role="tab"
+            :aria-selected="displayMode === mode.key"
             @click="setDisplayMode(mode.key)"
           >
             {{ mode.label }}
@@ -153,6 +163,7 @@ watch(() => ledgerStore.activeLedgerId, refreshCredit)
 }
 
 .mode-switch {
+  position: relative;
   display: inline-flex;
   gap: 4px;
   padding: 3px;
@@ -161,7 +172,32 @@ watch(() => ledgerStore.activeLedgerId, refreshCredit)
   border: 1px solid var(--border);
 }
 
+.mode-switch-glider {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px - 4px) / 2);
+  border-radius: var(--radius-pill);
+  background: var(--btn-bg);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 8%, transparent);
+  transition:
+    transform 280ms cubic-bezier(0.34, 1.15, 0.64, 1),
+    width 280ms cubic-bezier(0.34, 1.15, 0.64, 1);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.mode-switch-glider[data-target='daily'] {
+  transform: translateX(calc(100% + 4px));
+}
+
 .mode-chip {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  min-width: 0;
   border: none;
   background: transparent;
   color: var(--muted);
@@ -170,12 +206,15 @@ watch(() => ledgerStore.activeLedgerId, refreshCredit)
   padding: 5px 10px;
   border-radius: var(--radius-pill);
   cursor: pointer;
+  transition: color 220ms ease, transform 120ms ease;
+}
+
+.mode-chip:active:not(.active) {
+  transform: scale(0.97);
 }
 
 .mode-chip.active {
-  background: var(--btn-bg);
   color: var(--primary);
-  border: 1px solid var(--border-strong);
 }
 
 .hero-link {
