@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.80
+- 月曆十字格外緣圓角（shell clip + 四角格圓滑；Modern 14px）。
+
 ## v1.5.79
 - 月曆十字格線改 0.5px 間隙、格線色更淡（Modern 約 18% border mix）。
 

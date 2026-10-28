@@ -906,8 +906,8 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 .habitat-cross-grid .calendar-cross-shell {
   width: 100%;
   border: 0;
-  border-radius: 0;
-  overflow: visible;
+  border-radius: 12px;
+  overflow: hidden;
   background: transparent;
   --calendar-grid-line: color-mix(in srgb, var(--border) 26%, transparent);
 }
@@ -929,6 +929,22 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 .habitat-cross-grid .calendar-grid .day-cell.empty {
   background: var(--bg);
   opacity: 0.42;
+}
+
+.habitat-cross-grid .calendar-grid .day-cell:first-child {
+  border-top-left-radius: 12px;
+}
+
+.habitat-cross-grid .calendar-grid .day-cell:nth-child(7) {
+  border-top-right-radius: 12px;
+}
+
+.habitat-cross-grid .calendar-grid .day-cell:nth-last-child(7) {
+  border-bottom-left-radius: 12px;
+}
+
+.habitat-cross-grid .calendar-grid .day-cell:last-child {
+  border-bottom-right-radius: 12px;
 }
 
 .habitat-cross-grid .day-cell.selected {
@@ -978,6 +994,23 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
 
 [data-ui-layout='modern'] .habitat-cross-grid .calendar-cross-shell {
   --calendar-grid-line: color-mix(in srgb, var(--border) 18%, transparent);
+  border-radius: 14px;
+}
+
+[data-ui-layout='modern'] .habitat-cross-grid .calendar-grid .day-cell:first-child {
+  border-top-left-radius: 14px;
+}
+
+[data-ui-layout='modern'] .habitat-cross-grid .calendar-grid .day-cell:nth-child(7) {
+  border-top-right-radius: 14px;
+}
+
+[data-ui-layout='modern'] .habitat-cross-grid .calendar-grid .day-cell:nth-last-child(7) {
+  border-bottom-left-radius: 14px;
+}
+
+[data-ui-layout='modern'] .habitat-cross-grid .calendar-grid .day-cell:last-child {
+  border-bottom-right-radius: 14px;
 }
 
 [data-ui-layout='modern'] .habitat-cross-grid .calendar-grid .day-cell.selected {
