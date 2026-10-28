@@ -20,12 +20,13 @@
           class="calendar-grid-shift"
         >
           <div class="calendar-grid-body">
-            <div class="calendar-cross-shell">
-              <div class="week-head">
+            <div class="calendar-grid-stack">
+              <div class="week-head calendar-week-strip">
                 <span v-for="item in weekLabels" :key="item">{{ item }}</span>
               </div>
 
-              <div class="calendar-grid">
+              <div class="calendar-cross-shell">
+                <div class="calendar-grid">
               <button
                 v-for="cell in calendarCells"
                 :key="cell.key"
@@ -38,6 +39,7 @@
                 <span v-if="cell.dateKey && cell.incomeMinor > 0" class="day-amount income">+{{ formatMinor(cell.incomeMinor) }}</span>
                 <span v-if="cell.dateKey && cell.expenseMinor > 0" class="day-amount expense">-{{ formatMinor(cell.expenseMinor) }}</span>
               </button>
+                </div>
               </div>
             </div>
           </div>
@@ -536,59 +538,9 @@ function dateKeyFromIso(iso) {
   min-width: 0;
 }
 
-/* 十字框格：週列與日期格共用邊線，格線交叉 */
-.habitat-cross-grid .calendar-cross-shell {
-  width: min(100%, 460px);
-  margin-inline: auto;
-  margin-top: 10px;
-  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
-  border-radius: 10px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--card) 96%, transparent);
-}
-.habitat-cross-grid .week-head {
-  margin-top: 0;
-  width: 100%;
-  gap: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
-  padding: 7px 0;
-  background: color-mix(in srgb, var(--card) 90%, transparent);
-}
-.habitat-cross-grid .calendar-grid {
-  margin-top: 0;
-  width: 100%;
-  gap: 0;
-}
-.habitat-cross-grid .day-cell {
-  border-radius: 0;
-  border: 0;
-  border-right: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
-  background: transparent;
-}
-.habitat-cross-grid .day-cell:nth-child(7n) {
-  border-right-width: 0;
-}
-.habitat-cross-grid .day-cell:nth-last-child(-n + 7) {
-  border-bottom-width: 0;
-}
-.habitat-cross-grid .day-cell.empty {
-  border-style: solid;
-  background: color-mix(in srgb, var(--border) 6%, transparent);
-}
-.habitat-cross-grid .day-cell.selected {
-  box-shadow: inset 0 0 0 2px var(--primary);
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
-  z-index: 1;
-  position: relative;
-}
-
 @media (max-width: 480px) {
   .panel {
     padding: 8px;
-  }
-  .habitat-cross-grid .calendar-cross-shell {
-    width: 100%;
   }
   .day-cell {
     min-height: 46px;

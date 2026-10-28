@@ -870,22 +870,146 @@ html[data-ui-layout='modern'] .settings-page .item-icon {
   border-bottom: 0;
 }
 
-/* Month calendars: cross-grid (shared cell borders) */
+/* Month calendars: cross-grid + standalone week strip */
+.habitat-cross-grid .calendar-grid-stack {
+  width: min(100%, 460px);
+  margin-inline: auto;
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.habitat-cross-grid .calendar-week-strip {
+  margin-top: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.habitat-cross-grid .calendar-week-strip span {
+  display: block;
+  padding: 7px 0;
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  background: color-mix(in srgb, var(--border) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 32%, transparent);
+}
+
+.habitat-cross-grid .calendar-cross-shell {
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 14px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--card) 90%, var(--bg) 10%);
+}
+
+.habitat-cross-grid .calendar-grid {
+  margin-top: 0;
+  width: 100%;
+  gap: 0;
+}
+
+.habitat-cross-grid .day-cell {
+  border-radius: 0;
+  border: 0;
+  border-right: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--card) 40%, transparent);
+}
+
+.habitat-cross-grid .day-cell:nth-child(7n) {
+  border-right-width: 0;
+}
+
+.habitat-cross-grid .day-cell:nth-last-child(-n + 7) {
+  border-bottom-width: 0;
+}
+
+.habitat-cross-grid .day-cell.empty {
+  border-style: solid;
+  background: color-mix(in srgb, var(--border) 5%, transparent);
+}
+
+.habitat-cross-grid .day-cell.selected {
+  box-shadow: inset 0 0 0 2px var(--primary);
+  background: color-mix(in srgb, var(--primary) 11%, transparent);
+  z-index: 1;
+  position: relative;
+}
+
+.habitat-cross-grid .day-cell.today {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 60%, transparent);
+}
+
+.habitat-cross-grid .day-cell.today.selected {
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.habitat-cross-grid .day-cell.over {
+  background: color-mix(in srgb, var(--danger, #d14343) 8%, transparent);
+}
+
+.habitat-cross-grid .day-cell.faded {
+  opacity: 0.38;
+}
+
+@media (max-width: 480px) {
+  .habitat-cross-grid .calendar-grid-stack {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .habitat-cross-grid .calendar-week-strip {
+    gap: 4px;
+  }
+
+  .habitat-cross-grid .calendar-week-strip span {
+    padding: 6px 0;
+    font-size: 10px;
+    border-radius: 8px;
+  }
+}
+
+[data-ui-layout='modern'] .habitat-cross-grid .calendar-week-strip span {
+  background: color-mix(in srgb, var(--border) 6%, transparent);
+  border-color: color-mix(in srgb, var(--border) 22%, transparent);
+  color: color-mix(in srgb, var(--muted) 92%, var(--text) 8%);
+  font-size: 10px;
+  font-weight: 600;
+}
+
 [data-ui-layout='modern'] .habitat-cross-grid .calendar-cross-shell {
-  border-color: color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: 12px;
+  border-color: color-mix(in srgb, var(--border) 48%, transparent);
+  border-radius: 16px;
+  background: linear-gradient(
+    168deg,
+    color-mix(in srgb, var(--card) 96%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 88%, transparent) 100%
+  );
+}
+
+[data-ui-layout='modern'] .habitat-cross-grid .day-cell {
+  background: color-mix(in srgb, var(--card) 18%, transparent);
 }
 
 [data-ui-layout='modern'] .habitat-cross-grid .day-cell.empty {
-  background: color-mix(in srgb, var(--border) 4%, transparent);
+  background: color-mix(in srgb, var(--border) 3%, transparent);
 }
 
 [data-ui-layout='modern'] .habitat-cross-grid .day-cell.selected {
-  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
 }
 
-[data-ui-layout='modern'] .habitat-line-calendar .week-head,
-[data-ui-layout='modern'] .budget-month-calendar .week-head {
+[data-ui-layout='modern'] .habitat-line-calendar .week-head:not(.calendar-week-strip),
+[data-ui-layout='modern'] .budget-month-calendar .week-head:not(.calendar-week-strip) {
   color: var(--muted);
   font-size: 11px;
   letter-spacing: 0.02em;
