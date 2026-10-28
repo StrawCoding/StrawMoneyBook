@@ -16,6 +16,7 @@ test-results/
 playwright-report/
 .playwright-cli/
 frontend/.artifacts/
+frontend/scripts/playwright-block-ui-screenshots.generated.spec.mjs
 .codex_snapshots/
 
 # Logs
