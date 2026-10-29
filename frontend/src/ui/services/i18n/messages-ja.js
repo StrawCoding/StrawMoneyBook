@@ -427,6 +427,8 @@ export const MESSAGES_JA = {
   'settings_carrier_sync.sync_now': '今すぐ同期',
   'settings_carrier_sync.syncing': '同期中…',
   'settings_carrier_sync.sync_failed': '同期に失敗しました。後でもう一度お試しください',
+  'settings_carrier_sync.error.cloudflare_timeout':
+    '電子発票ポータルのセキュリティ確認（Cloudflare）がタイムアウトしました。安定したネットワーク（Wi‑Fi など）で再試行してください。',
   'settings_carrier_sync.sync_result': '{fetched} 件取得、{pending} 件が審査待ちに追加',
   'settings_carrier_sync.status.idle': '未同期',
   'settings_carrier_sync.status.ok': '成功',

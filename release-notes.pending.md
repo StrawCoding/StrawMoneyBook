@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.3
+- 載具 Android：對齊後端 Cloudflare 等待（偵測 Just a moment、點「手機條碼」分頁、反 webdriver 注入、等待 60s）；真 CF 逾時與 portal 改版分開錯誤碼；設定頁三語提示。
+
 ## v1.6.2
 - 載具驗證碼 OCR：修正 CaptchaSolver 強制 4× 放大導致財政部 150×40 圖糊掉、Tesseract 常無 4 字結果；寬短圖加原生 scale variant、英數信心門檻 45、PSM block。
 

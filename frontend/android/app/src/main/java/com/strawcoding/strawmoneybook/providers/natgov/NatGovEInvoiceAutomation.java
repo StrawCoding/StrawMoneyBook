@@ -40,7 +40,29 @@ public final class NatGovEInvoiceAutomation {
     public static final String INTERCEPT_SKIP_REASON_POST = "post_never_replay";
     public static final String INTERCEPT_SKIP_REASON_OBSERVE_ONLY = "observe_only_no_replay";
 
-    private static final long PAGE_WAIT_MS = 45_000L;
+    private static final long PAGE_WAIT_MS = 60_000L;
+    static final String ANTI_DETECT_JS =
+        "(function(){try{Object.defineProperty(navigator,'webdriver',{get:function(){return undefined;}});"
+            + "window.chrome=window.chrome||{runtime:{}};}catch(e){}})();";
+    static final String LOGIN_READY_PROBE_JS =
+        "() => {"
+            + "const title = document.title || '';"
+            + "const cloudflareChallenge = /Just a moment/i.test(title);"
+            + "if (!cloudflareChallenge) {"
+            + "  const nodes = document.querySelectorAll('button,a,[role=\"tab\"],label,span');"
+            + "  for (const el of nodes) {"
+            + "    const text = (el.innerText || '').trim();"
+            + "    if (text.includes('手機條碼') && !text.includes('查詢')) { el.click(); break; }"
+            + "  }"
+            + "}"
+            + "return {"
+            + "  cloudflareChallenge,"
+            + "  title,"
+            + "  phone: !!document.querySelector('" + CarrierPortalConfig.SELECTOR_PHONE + "'),"
+            + "  password: !!document.querySelector('" + CarrierPortalConfig.SELECTOR_PASSWORD + "'),"
+            + "  captcha: !!document.querySelector('" + CarrierPortalConfig.SELECTOR_CAPTCHA + "')"
+            + "};"
+            + "}";
     private static final int MAX_CAPTCHA_ATTEMPTS = 3;
     private static final Map<String, PendingSession> PENDING_SESSIONS = new ConcurrentHashMap<>();
     private static volatile boolean abortRequested = false;
@@ -534,21 +556,31 @@ public final class NatGovEInvoiceAutomation {
 
         void waitForLoginReady() throws Exception {
             long deadline = System.currentTimeMillis() + PAGE_WAIT_MS;
+            JSONObject lastProbe = new JSONObject();
             while (System.currentTimeMillis() < deadline) {
                 ensureNotAborted();
-                JSONObject probe = evaluateJson(
-                    "() => ({"
-                        + "phone: !!document.querySelector('" + CarrierPortalConfig.SELECTOR_PHONE + "'),"
-                        + "password: !!document.querySelector('" + CarrierPortalConfig.SELECTOR_PASSWORD + "'),"
-                        + "captcha: !!document.querySelector('" + CarrierPortalConfig.SELECTOR_CAPTCHA + "')"
-                        + "})"
-                );
-                if (probe != null && probe.optBoolean("phone") && probe.optBoolean("password") && probe.optBoolean("captcha")) {
+                JSONObject probe = evaluateJson(LOGIN_READY_PROBE_JS);
+                if (probe != null) {
+                    lastProbe = probe;
+                }
+                if (probe != null
+                    && probe.optBoolean("phone")
+                    && probe.optBoolean("password")
+                    && probe.optBoolean("captcha")) {
                     return;
                 }
-                Thread.sleep(400L);
+                Thread.sleep(1_000L);
             }
-            throw new CarrierAutomationException("einvoice_cloudflare_timeout", "Portal login page did not become ready");
+            if (lastProbe.optBoolean("cloudflareChallenge")) {
+                throw new CarrierAutomationException(
+                    "einvoice_cloudflare_timeout",
+                    "Cloudflare challenge did not complete before login selectors appeared"
+                );
+            }
+            throw new CarrierAutomationException(
+                "einvoice_portal_changed",
+                "Portal login page did not become ready"
+            );
         }
 
         void waitForPageSettle(long ms) throws InterruptedException {
@@ -711,6 +743,7 @@ public final class NatGovEInvoiceAutomation {
                     @Override
                     public void onPageFinished(WebView view, String url) {
                         if (isNatGovHost(url)) {
+                            view.evaluateJavascript(ANTI_DETECT_JS, null);
                             view.evaluateJavascript(INJECT_NETWORK_HOOK_JS, null);
                         }
                     }

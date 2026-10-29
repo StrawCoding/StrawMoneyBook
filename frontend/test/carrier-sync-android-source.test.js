@@ -77,6 +77,9 @@ test('nat gov provider uses shared CaptchaSolver validateCaptchaCandidate', () =
   assert.match(natGovSource, /nat_gov_einvoice_tw/)
   assert.match(natGovSource, /observe_only/)
   assert.match(natGovSource, /INTERCEPT_SKIP_REASON_POST/)
+  assert.match(natGovSource, /Just a moment/i)
+  assert.match(natGovSource, /手機條碼/)
+  assert.match(natGovSource, /ANTI_DETECT_JS/)
 })
 
 test('provider registry lists nat_gov_einvoice_tw only', () => {

@@ -532,6 +532,8 @@ export const MESSAGES_EN = {
     'settings_carrier_sync.sync_now': 'Sync now',
     'settings_carrier_sync.syncing': 'Syncing…',
     'settings_carrier_sync.sync_failed': 'Sync failed, please try again later',
+    'settings_carrier_sync.error.cloudflare_timeout':
+      'The e-invoice portal security check (Cloudflare) timed out. Try again on a stable network (e.g. Wi‑Fi).',
     'settings_carrier_sync.sync_result': 'Fetched {fetched}, {pending} new pending review',
     'settings_carrier_sync.status.idle': 'Not synced yet',
     'settings_carrier_sync.status.ok': 'Success',

@@ -357,6 +357,14 @@ function extractCarrierErrorCode(value) {
   return ''
 }
 
+function carrierSyncErrorMessage(error, fallbackKey = 'settings_carrier_sync.sync_failed') {
+  const code = String(error?.code ?? '').trim()
+  if (code === 'einvoice_cloudflare_timeout') {
+    return t('settings_carrier_sync.error.cloudflare_timeout')
+  }
+  return error?.message || t(fallbackKey)
+}
+
 function refreshAvailability(extra = {}) {
   const lastError = String(syncConfig.value?.lastError ?? '').trim()
   availability.value = assessCarrierSyncAvailability({
@@ -503,7 +511,7 @@ async function handleSyncNow() {
       refreshAvailability({ captchaRequired: true })
       return
     }
-    syncMessage.value = error?.message || t('settings_carrier_sync.sync_failed')
+    syncMessage.value = carrierSyncErrorMessage(error)
     uiStore.pushToast(syncMessage.value, 'error')
     refreshAvailability({ lastErrorCode: String(error?.code ?? 'einvoice_query_failed') })
   } finally {
@@ -561,7 +569,7 @@ async function submitCaptchaAndSync() {
     }
     captchaImageSrc.value = ''
     captchaSessionId.value = ''
-    uiStore.pushToast(error?.message || t('settings_carrier_sync.sync_failed'), 'error')
+    uiStore.pushToast(carrierSyncErrorMessage(error), 'error')
     refreshAvailability({ lastErrorCode: String(error?.code ?? 'einvoice_query_failed') })
   } finally {
     syncing.value = false
