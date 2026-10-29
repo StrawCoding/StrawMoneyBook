@@ -14,19 +14,20 @@ import {
   runAutoBackupProvidersOnDataChange,
 } from '@/ui/services/auto-backup-orchestrator.service'
 import { isBankSyncFeatureEnabled } from '@/services/bank-sync/backend'
-import { runBankSyncAutoRefreshIfDue } from '@/ui/services/bank-sync-auto-refresh.service'
-import { runCarrierSyncAutoRefreshInBackground } from '@/services/einvoice/carrier-sync.service.js'
-import { runExchangeRateAutoSyncIfDue } from '@/ui/services/exchange-rate.service'
+import {
+  enqueueAppForegroundSyncBatch,
+  enqueueBankSyncAutoRefresh,
+  enqueueBookkeepingReminderSync,
+  enqueueCreditDueReminderSync,
+  enqueueExchangeRateAutoSync,
+  enqueueGoogleDriveLedgerBackgroundSync,
+  enqueueLedgerMaintenanceJobs,
+  enqueueSharedLedgerBackgroundSync,
+} from '@/ui/services/app-runtime-background-jobs.js'
 import { clearHomeWidgetSummary, syncHomeWidgetSummary } from '@/ui/services/home-widget.service'
-import { runBudgetSaveIfDue } from '@/core/services/budget-save.service'
 import { APP_BUDGET_PERIOD_SYNC_EVENT } from '@/ui/composables/useHomePeriodFilter'
 import { warmupMembershipRuntime } from '@/core/services/membership.service'
-import { runSavingsJarAutoSaveIfDue } from '@/core/services/savings-jar-auto-save.service'
-import { runSubscriptionChargesIfDue } from '@/core/services/subscription-charge.service'
-import { runDueSecuritySettlements } from '@/core/services/security.service'
 import { runCreditStatementRollovers } from '@/core/services/credit.service'
-import { syncBookkeepingRemindersForAllLedgers } from '@/ui/services/bookkeeping-reminder.service'
-import { syncCreditDueRemindersForAllLedgers } from '@/ui/services/credit-due-reminder.service'
 import { loadThemeColor } from '@/ui/services/theme.service'
 import { loadUiLayout } from '@/ui/services/ui-layout.service'
 import { initLocalePreference, translateMessage } from '@/ui/services/i18n.service'
@@ -36,17 +37,15 @@ import { canNavigateBackInApp, resolveBackFallback, shouldConfirmExit } from '@/
 import { extractSharedLedgerInviteCode, restoreSharedLedgerSession } from '@/services/shared-ledger/backend'
 import {
   initSharedLedgerBackgroundSync,
-  runSharedLedgerBackgroundSyncNow,
   scheduleActiveSharedLedgerAutoSync,
 } from '@/ui/services/shared-ledger.service'
 import {
   GOOGLE_LEDGER_SYNC_ACCOUNT_SWITCH_EVENT,
   initGoogleDriveLedgerSync,
-  runGoogleDriveLedgerBackgroundSyncNow,
   scheduleActiveGoogleDriveLedgerSync,
 } from '@/ui/services/google-drive-ledger-sync.service'
 import { resolveAndroidBackDecision } from './app-runtime.helpers'
-import { runtimeJobs } from './runtime-job-scheduler.js'
+import { backgroundWorkQueue } from './background-work-queue.service.js'
 
 const DATA_CHANGE_BACKUP_DEBOUNCE_MS = 15000
 const AUTO_BACKUP_DUE_CHECK_MS = 5 * 60 * 1000
@@ -91,7 +90,7 @@ function triggerBankAutoRefresh(pinia, ledgerId, reason) {
   if (!isBankSyncFeatureEnabled()) return
   const normalizedLedgerId = String(ledgerId ?? '').trim()
   if (!normalizedLedgerId) return
-  void runBankSyncAutoRefreshIfDue(normalizedLedgerId, { reason })
+  void enqueueBankSyncAutoRefresh(normalizedLedgerId, reason)
     .then((result) => {
       if (result?.halted === 'auth_error' && result?.message) {
         useUiStore(pinia).pushToast(
@@ -111,18 +110,6 @@ function triggerBankAutoRefresh(pinia, ledgerId, reason) {
         error,
       })
     })
-}
-
-function runBookkeepingReminderSyncInBackground(reason) {
-  void syncBookkeepingRemindersForAllLedgers().catch((error) => {
-    console.warn(`[bookkeeping-reminder] background sync failed (${reason})`, error)
-  })
-}
-
-function runCreditDueReminderSyncInBackground(reason) {
-  void syncCreditDueRemindersForAllLedgers().catch((error) => {
-    console.warn(`[credit-due-reminder] background sync failed (${reason})`, error)
-  })
 }
 
 function reloadCurrentBudgetPeriodInBackground(pinia, reason, windowObject = globalThis.window) {
@@ -360,57 +347,13 @@ function restoreSharedLedgerSessionInBackground(reason, { force = false } = {}) 
   })
 }
 
-function runSavingsJarAutoSaveInBackground(ledgerId, reason) {
-  if (!ledgerId) return
-  void runtimeJobs.run(`savings-jar:${ledgerId}`, () => (
-    runSavingsJarAutoSaveIfDue(ledgerId, { reason }).catch((error) => {
-      console.warn(`[savings-jar-auto-save] run failed (${reason})`, error)
-    })
-  ))
-}
-
-function runSubscriptionChargesInBackground(ledgerId, reason) {
-  if (!ledgerId) return
-  void runtimeJobs.run(`subscription-charge:${ledgerId}`, () => (
-    runSubscriptionChargesIfDue(ledgerId, { reason }).catch((error) => {
-      console.warn(`[subscription-charge] run failed (${reason})`, error)
-    })
-  ))
-}
-
-function runBudgetSaveInBackground(ledgerId, reason) {
-  if (!ledgerId) return
-  void runtimeJobs.run(`budget-save:${ledgerId}`, () => (
-    runBudgetSaveIfDue(ledgerId, { reason }).catch((error) => {
-      console.warn(`[budget-save] run failed (${reason})`, error)
-    })
-  ))
-}
-
-function runSecuritySettlementsInBackground(ledgerId, reason) {
-  if (!ledgerId) return
-  void runtimeJobs.run(`security-settlement:${ledgerId}`, () => (
-    runDueSecuritySettlements(ledgerId).catch((error) => {
-      console.warn(`[security-settlement] run failed (${reason})`, error)
-    })
-  ))
-}
-
 function runCreditRolloversInBackground(ledgerId, reason) {
   if (!ledgerId) return
-  void runtimeJobs.run(`credit-rollover:${ledgerId}`, () => (
+  void backgroundWorkQueue.enqueue(`credit-rollover:${ledgerId}:${reason}`, () => (
     runCreditStatementRollovers(ledgerId).catch((error) => {
       console.warn(`[credit-rollover] run failed (${reason})`, error)
     })
   ))
-}
-
-function runSharedLedgerSyncJob(pinia) {
-  return runtimeJobs.run('shared-ledger-sync', () => runSharedLedgerBackgroundSyncNow(pinia))
-}
-
-function runGoogleDriveLedgerSyncJob(pinia) {
-  return runtimeJobs.run('drive-ledger-sync', () => runGoogleDriveLedgerBackgroundSyncNow(pinia))
 }
 
 export function installAppRuntime({ pinia, router, windowObject = globalThis.window } = {}) {
@@ -473,26 +416,15 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
 
     void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
       if (!isActive) return
+      const currentLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
       void restoreSharedLedgerSessionInBackground('app_resume').finally(() => {
-        void runSharedLedgerSyncJob(pinia)
-        void runGoogleDriveLedgerSyncJob(pinia)
+        enqueueAppForegroundSyncBatch({ pinia, ledgerId: currentLedgerId, reason: 'app_resume' })
       })
       reloadCurrentBudgetPeriodInBackground(pinia, 'app_resume')
       scheduleMembershipWarmup('app_resume', windowObject)
-      runBookkeepingReminderSyncInBackground('app_resume')
-      runCreditDueReminderSyncInBackground('app_resume')
       windowObject?.dispatchEvent?.(new Event('app:check-update'))
-      const currentLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
       if (currentLedgerId) {
         restoreGoogleBackupForActiveLedgerInBackground(runtimeState, currentLedgerId, { runDueBackup: true })
-        void runExchangeRateAutoSyncIfDue(currentLedgerId)
-        triggerBankAutoRefresh(pinia, currentLedgerId, 'app_resume')
-        void runCarrierSyncAutoRefreshInBackground(currentLedgerId, 'app_resume')
-        runSavingsJarAutoSaveInBackground(currentLedgerId, 'app_resume')
-        runSubscriptionChargesInBackground(currentLedgerId, 'app_resume')
-        runBudgetSaveInBackground(currentLedgerId, 'app_resume')
-        runSecuritySettlementsInBackground(currentLedgerId, 'app_resume')
-        runCreditRolloversInBackground(currentLedgerId, 'app_resume')
         scheduleAutoBackupDueCheck(runtimeState, pinia, windowObject)
       }
       void syncActiveLedgerHomeWidget(pinia)
@@ -549,8 +481,8 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
 
   addWindowListener('focus', () => {
     void restoreSharedLedgerSessionInBackground('window_focus').finally(() => {
-      void runSharedLedgerSyncJob(pinia)
-      void runGoogleDriveLedgerSyncJob(pinia)
+      void enqueueSharedLedgerBackgroundSync(pinia, 'window_focus')
+      void enqueueGoogleDriveLedgerBackgroundSync(pinia, 'window_focus')
     })
     reloadCurrentBudgetPeriodInBackground(pinia, 'window_focus')
     const focusLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
@@ -560,8 +492,8 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
   addWindowListener('visibilitychange', () => {
     if (windowObject?.document?.visibilityState && windowObject.document.visibilityState !== 'visible') return
     void restoreSharedLedgerSessionInBackground('visibility_visible').finally(() => {
-      void runSharedLedgerSyncJob(pinia)
-      void runGoogleDriveLedgerSyncJob(pinia)
+      void enqueueSharedLedgerBackgroundSync(pinia, 'visibility_visible')
+      void enqueueGoogleDriveLedgerBackgroundSync(pinia, 'visibility_visible')
     })
     reloadCurrentBudgetPeriodInBackground(pinia, 'visibility_visible')
     const visibleLedgerId = String(ledgerStore.activeLedgerId ?? '').trim()
@@ -569,14 +501,11 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
   })
 
   scheduleMembershipWarmup('app_start', windowObject)
-  runBookkeepingReminderSyncInBackground('app_start')
-  runCreditDueReminderSyncInBackground('app_start')
+  enqueueBookkeepingReminderSync('app_start')
+  enqueueCreditDueReminderSync('app_start')
   reloadCurrentBudgetPeriodInBackground(pinia, 'app_start', windowObject)
   if (ledgerStore.activeLedgerId) {
-    runSavingsJarAutoSaveInBackground(ledgerStore.activeLedgerId, 'app_start')
-    runSubscriptionChargesInBackground(ledgerStore.activeLedgerId, 'app_start')
-    runBudgetSaveInBackground(ledgerStore.activeLedgerId, 'app_start')
-    runSecuritySettlementsInBackground(ledgerStore.activeLedgerId, 'app_start')
+    enqueueLedgerMaintenanceJobs(ledgerStore.activeLedgerId, 'app_start')
     runCreditRolloversInBackground(ledgerStore.activeLedgerId, 'app_start')
   }
 
@@ -600,12 +529,9 @@ export function installAppRuntime({ pinia, router, windowObject = globalThis.win
           })
         })
       scheduleAutoBackupDueCheck(runtimeState, pinia, windowObject)
-      void runExchangeRateAutoSyncIfDue(normalizedLedgerId)
+      enqueueExchangeRateAutoSync(normalizedLedgerId)
       triggerBankAutoRefresh(pinia, normalizedLedgerId, 'active_ledger_change')
-      runSavingsJarAutoSaveInBackground(normalizedLedgerId, 'active_ledger_change')
-      runSubscriptionChargesInBackground(normalizedLedgerId, 'active_ledger_change')
-      runBudgetSaveInBackground(normalizedLedgerId, 'active_ledger_change')
-      runSecuritySettlementsInBackground(normalizedLedgerId, 'active_ledger_change')
+      enqueueLedgerMaintenanceJobs(normalizedLedgerId, 'active_ledger_change')
     },
     { immediate: true },
   )

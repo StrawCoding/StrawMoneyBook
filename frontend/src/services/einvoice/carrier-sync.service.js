@@ -18,6 +18,8 @@ import {
   resolveCarrierSyncBackend,
 } from './carrier-sync-orchestrator.js'
 import { importSelectedInvoices, loadEInvoiceCredential } from './backend.js'
+import { yieldToMainThread } from '@/core/utils/cooperative-yield'
+import { runtimeJobs } from '@/ui/services/runtime-job-scheduler.js'
 
 function formatDateInput(date) {
   const year = date.getFullYear()
@@ -43,7 +45,9 @@ function buildSyncDateRange(config) {
 
 async function dedupeInvoices(invoices = []) {
   const imported = await getImportedInvoiceNumbers()
+  await yieldToMainThread()
   const dismissed = await listDismissedInvoiceNumbers()
+  await yieldToMainThread()
   const pending = await listPendingEInvoiceInvoices()
   const pendingNumbers = new Set(pending.map((item) => item.invoiceNumber))
 
@@ -246,20 +250,24 @@ export async function maybeAutoSyncCarrierInvoices({
 }
 
 export async function runCarrierSyncAutoRefreshInBackground(ledgerId, reason = 'app_resume') {
-  try {
-    const credential = await loadEInvoiceCredential()
-    if (!credential) return null
-    const result = await maybeAutoSyncCarrierInvoices({
-      carrierBarcode: credential.carrierBarcode,
-      verificationCode: credential.verificationCode,
-      ledgerId,
-    })
-    if (result?.newPendingCount > 0) {
-      console.log(`[CarrierSync] ${reason}: ${result.newPendingCount} new pending invoices`)
+  const normalizedLedgerId = String(ledgerId ?? '').trim() || 'default'
+  return runtimeJobs.run(`carrier-auto-refresh:${normalizedLedgerId}`, async () => {
+    try {
+      const credential = await loadEInvoiceCredential()
+      if (!credential) return null
+      await yieldToMainThread()
+      const result = await maybeAutoSyncCarrierInvoices({
+        carrierBarcode: credential.carrierBarcode,
+        verificationCode: credential.verificationCode,
+        ledgerId,
+      })
+      if (result?.newPendingCount > 0) {
+        console.log(`[CarrierSync] ${reason}: ${result.newPendingCount} new pending invoices`)
+      }
+      return result
+    } catch (error) {
+      console.error(`[CarrierSync] background refresh failed (${reason})`, error)
+      return null
     }
-    return result
-  } catch (error) {
-    console.error(`[CarrierSync] background refresh failed (${reason})`, error)
-    return null
-  }
+  })
 }

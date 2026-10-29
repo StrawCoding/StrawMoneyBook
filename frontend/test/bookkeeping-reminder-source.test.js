@@ -46,10 +46,8 @@ test('bookkeeping reminder page wires reminder settings and achievement board', 
 })
 
 test('application bootstraps and refreshes bookkeeping reminders centrally', () => {
-  assert.match(mainSource, /syncBookkeepingRemindersForAllLedgers/)
-  assert.match(mainSource, /runBookkeepingReminderSyncInBackground/)
+  assert.match(mainSource, /enqueueBookkeepingReminderSync/)
   assert.match(mainSource, /CapacitorApp\.addListener\('appStateChange'/)
-  assert.match(mainSource, /runBookkeepingReminderSyncInBackground\('app_start'\)/)
-  assert.match(mainSource, /runBookkeepingReminderSyncInBackground\('app_resume'\)/)
-  assert.match(mainSource, /background sync failed/)
+  assert.match(mainSource, /enqueueBookkeepingReminderSync\('app_start'\)/)
+  assert.match(mainSource, /enqueueAppForegroundSyncBatch/)
 })

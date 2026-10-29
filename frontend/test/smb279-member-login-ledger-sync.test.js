@@ -111,7 +111,7 @@ test('SMB-279: cold start restores session before first background sync; visibil
   assert.match(runtimeSource, /restoreSharedLedgerSessionInBackground\('app_start', \{ force: true \}\)\.finally/)
   assert.match(runtimeSource, /initSharedLedgerBackgroundSync\(pinia\)/)
   assert.match(runtimeSource, /visibility_visible/)
-  assert.match(runtimeSource, /runSharedLedgerBackgroundSyncNow\(pinia\)/)
+  assert.match(runtimeSource, /enqueueSharedLedgerBackgroundSync\(pinia, 'visibility_visible'\)/)
 })
 
 test('SMB-279: account/shared-ledger UI distinguishes valid / restoring / needs-relogin', () => {
