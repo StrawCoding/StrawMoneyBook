@@ -31,6 +31,8 @@ public final class CaptchaSolver {
     private static final String TAG = "CaptchaSolver";
     public static final int EXPECTED_LENGTH = 4;
     public static final int MIN_CONFIDENCE = 55;
+    /** Alphanumeric portal captchas (e.g. NatGov carrier) often report lower Tesseract confidence. */
+    public static final int MIN_CONFIDENCE_ALPHANUMERIC = 45;
     public static final int MIN_DATA_URL_LENGTH = 64;
     public static final int MIN_TARGET_HEIGHT = 108;
     public static final int MIN_CAPTURE_HEIGHT = 20;
@@ -200,8 +202,9 @@ public final class CaptchaSolver {
         List<TesseractBridge.RecognitionCandidate> recognitions =
             TesseractBridge.recognizeCaptchaCandidates(activity, variants, numericMode);
         List<WeightedCandidate> weightedCandidates = new ArrayList<>();
+        int minConfidence = numericMode ? MIN_CONFIDENCE : MIN_CONFIDENCE_ALPHANUMERIC;
         for (TesseractBridge.RecognitionCandidate recognition : recognitions) {
-            if (recognition.confidence < MIN_CONFIDENCE) continue;
+            if (recognition.confidence < minConfidence) continue;
             weightedCandidates.add(new WeightedCandidate(
                 recognition.text,
                 recognition.confidence,
@@ -243,6 +246,10 @@ public final class CaptchaSolver {
 
     static List<Bitmap> buildVariants(Bitmap source) {
         List<Bitmap> variants = new ArrayList<>();
+        if (isWideShortPortalCaptcha(source)) {
+            variants.add(preprocessWithScale(source, 0, false, 1.0f, 1.0f));
+            variants.add(preprocessWithScale(source, 0, false, 1.05f, 2.0f));
+        }
         Bitmap conservativeTrim = cropMargins(source, 0.02f, 0.04f);
         Bitmap standardTrim = cropMargins(source, 0.04f, 0.08f);
         variants.add(preprocess(source, 0, false, 1.25f));
@@ -273,8 +280,38 @@ public final class CaptchaSolver {
         return Bitmap.createBitmap(source, insetX, insetY, width, height);
     }
 
+    private static boolean isWideShortPortalCaptcha(Bitmap source) {
+        return source != null
+            && source.getHeight() > 0
+            && source.getHeight() <= 48
+            && source.getWidth() >= 100;
+    }
+
+    /** Avoid legacy minimum 4× upscale that blurred NatGov ~150×40 RGBA captchas. */
+    static float computeUpscaleFactor(Bitmap source) {
+        if (source == null) return 2.0f;
+        return computeUpscaleFactorForSize(source.getWidth(), source.getHeight());
+    }
+
+    static float computeUpscaleFactorForSize(int width, int height) {
+        int h = Math.max(1, height);
+        int w = Math.max(1, width);
+        float byMinHeight = MIN_TARGET_HEIGHT / (float) h;
+        if (h < MIN_CAPTURE_HEIGHT || w < 80) {
+            return Math.min(Math.max(byMinHeight, 2.0f), 4.0f);
+        }
+        if (h <= 48 && w >= 100) {
+            return Math.min(Math.max(byMinHeight, 1.0f), 2.75f);
+        }
+        return Math.min(Math.max(byMinHeight, 1.25f), 3.0f);
+    }
+
     private static Bitmap preprocess(Bitmap source, int threshold, boolean invert, float contrast) {
-        float scale = Math.max(MIN_TARGET_HEIGHT / (float) Math.max(1, source.getHeight()), 4f);
+        return preprocessWithScale(source, threshold, invert, contrast, 0f);
+    }
+
+    private static Bitmap preprocessWithScale(Bitmap source, int threshold, boolean invert, float contrast, float scaleOverride) {
+        float scale = scaleOverride > 0f ? scaleOverride : computeUpscaleFactor(source);
         int targetWidth = Math.max(Math.round(source.getWidth() * scale), 180);
         int targetHeight = Math.max(Math.round(source.getHeight() * scale), MIN_TARGET_HEIGHT);
         Bitmap scaled = Bitmap.createScaledBitmap(source, targetWidth, targetHeight, true);

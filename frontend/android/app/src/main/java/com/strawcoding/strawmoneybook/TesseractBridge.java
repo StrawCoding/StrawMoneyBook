@@ -62,6 +62,9 @@ public final class TesseractBridge {
                 Log.d(TAG, "Recognizing captcha variant=" + index + " size=" + variant.getWidth() + "x" + variant.getHeight());
                 addRecognizedText(candidates, api, variant, index, TessBaseAPI.PageSegMode.PSM_SINGLE_WORD, "whole_word");
                 addRecognizedText(candidates, api, variant, index, TessBaseAPI.PageSegMode.PSM_SINGLE_LINE, "whole_line");
+                if (!numericMode) {
+                    addRecognizedText(candidates, api, variant, index, TessBaseAPI.PageSegMode.PSM_SINGLE_BLOCK, "single_block");
+                }
                 api.clear();
             }
             if (!hasAnyFourCharacterCandidate(candidates)) {

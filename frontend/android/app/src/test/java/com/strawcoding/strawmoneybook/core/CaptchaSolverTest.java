@@ -78,4 +78,11 @@ public class CaptchaSolverTest {
         assertTrue(CaptchaSolver.validateCaptchaCandidate("1234", true));
         assertFalse(CaptchaSolver.validateCaptchaCandidate("12AB", true));
     }
+
+    @Test
+    public void computeUpscaleFactorAvoidsForcedFourTimesForNatGovShape() {
+        float scale = CaptchaSolver.computeUpscaleFactorForSize(150, 40);
+        assertTrue("expected ~2.7× for 40px height, was " + scale, scale >= 2.5f && scale <= 2.85f);
+        assertTrue(CaptchaSolver.computeUpscaleFactorForSize(150, 40) < 4.0f);
+    }
 }
