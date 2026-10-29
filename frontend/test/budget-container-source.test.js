@@ -27,6 +27,10 @@ const homeBudgetSummarySource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/components/home/HomeBudgetSummaryCard.vue'),
   'utf8',
 )
+const homeBudgetSummaryMetricsSource = readFileSync(
+  resolve(import.meta.dirname, '../src/ui/composables/useHomeBudgetSummaryMetrics.js'),
+  'utf8',
+)
 const homePeriodFilterSource = readFileSync(
   resolve(import.meta.dirname, '../src/ui/composables/useHomePeriodFilter.js'),
   'utf8',
@@ -173,7 +177,8 @@ test('budgeting page shows rolling daily allowance and period remain for pools',
   assert.match(budgetingSource, /budgeting\.container\.today_allowance/)
   assert.match(budgetingSource, /budgeting\.container\.period_remaining/)
   assert.match(budgetStoreSource, /resolvePoolStatsForDate/)
-  assert.match(homeBudgetSummarySource, /resolvePoolStatsForDate/)
+  assert.match(homeBudgetSummaryMetricsSource, /resolveHomeDailyBudgetMetricsForDay/)
+  assert.match(homeBudgetSummaryMetricsSource, /spentByCategoryDayRows: budgetStore\.spentByCategoryDayRows/)
 })
 
 test('budget container sheet exposes creation-only cross-month apply-through control', () => {
@@ -197,5 +202,5 @@ test('budgeting page uses progress bars for budget items and pools', () => {
 })
 
 test('home budget summary uses month-level over budget getter for 3C', () => {
-  assert.match(homeBudgetSummarySource, /budgetStore\.isMonthOver/)
+  assert.match(homeBudgetSummaryMetricsSource, /budgetStore\.isMonthOver/)
 })

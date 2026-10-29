@@ -2,6 +2,9 @@
 
 ---
 
+## v1.5.94
+- 首頁「當日可用」：共用池 spentBefore 改為整期 `spentByCategoryDayRows`（與預算頁同口徑），維持每日配額制 `floor((periodBudget-spentBeforeToday)/remainingDays)`，修正誤算成整期預算÷剩餘天數。
+
 ## v1.5.93
 - 信用卡完善：帳單詳情、編輯／封存／**刪除卡片**、還款 FIFO 預覽、繳款本地提醒、分析利用率、交易詳情跳帳期。
 

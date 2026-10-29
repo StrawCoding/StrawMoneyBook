@@ -51,19 +51,21 @@ export function isBudgetItemActiveOnDate(item, date) {
   return ruleValues.includes(weekday)
 }
 
-function buildSpentByCategoryDayMap(rows = []) {
+export function buildSpentByCategoryDayMap(rows = []) {
   const map = new Map()
   for (const row of rows) {
     const categoryId = String(row?.category_id ?? '').trim()
     const dayKey = String(row?.occurred_day ?? '').trim()
     if (!categoryId || !dayKey) continue
     if (!map.has(categoryId)) map.set(categoryId, new Map())
-    map.get(categoryId).set(dayKey, toFiniteMinor(row?.spent_minor))
+    const prev = map.get(categoryId).get(dayKey) ?? 0
+    map.get(categoryId).set(dayKey, prev + toFiniteMinor(row?.spent_minor))
   }
   return map
 }
 
-function sumCategorySpent(categoryIds, spentByCategoryDay, { onDayKey = null, beforeDayKey = null, periodStart = null } = {}) {
+/** Sum budget expenses for pool/daily categories from period day rows (same source as budget page). */
+export function sumCategorySpentFromDayMap(categoryIds, spentByCategoryDay, { onDayKey = null, beforeDayKey = null, periodStart = null } = {}) {
   let total = 0
   for (const categoryId of categoryIds) {
     const dayMap = spentByCategoryDay.get(categoryId)
@@ -76,6 +78,106 @@ function sumCategorySpent(categoryIds, spentByCategoryDay, { onDayKey = null, be
     }
   }
   return total
+}
+
+function buildPoolCategoryIdsByContainer(items = []) {
+  const map = new Map()
+  for (const item of items) {
+    const containerId = String(item?.budget_container_id ?? '').trim()
+    const categoryId = String(item?.category_id ?? '').trim()
+    if (!containerId || !categoryId) continue
+    if (!map.has(containerId)) map.set(containerId, new Set())
+    map.get(containerId).add(categoryId)
+  }
+  return map
+}
+
+/**
+ * Rolling pool stats for one day using full-period category×day aggregates (daily quota semantics).
+ */
+export function resolveDailyPoolStatsListForDay({
+  dayKey,
+  period,
+  items = [],
+  containers = [],
+  spentByCategoryDayRows = [],
+} = {}) {
+  const spentByCategoryDay = buildSpentByCategoryDayMap(spentByCategoryDayRows)
+  const poolCategoryIdsByContainer = buildPoolCategoryIdsByContainer(items)
+  const normalizedDayKey = String(dayKey ?? '').trim()
+  if (!normalizedDayKey) return []
+
+  return (containers ?? []).map((container) => {
+    const categoryIds = poolCategoryIdsByContainer.get(String(container.id)) ?? new Set()
+    const spentOnDayMinor = sumCategorySpentFromDayMap(categoryIds, spentByCategoryDay, { onDayKey: normalizedDayKey })
+    const spentBeforeMinor = sumCategorySpentFromDayMap(categoryIds, spentByCategoryDay, {
+      beforeDayKey: normalizedDayKey,
+      periodStart: period?.startDate,
+    })
+    return resolvePoolStatsForDate({
+      container,
+      period,
+      spentPeriodMinor: spentBeforeMinor + spentOnDayMinor,
+      spentOnDayMinor,
+      dayKey: normalizedDayKey,
+    })
+  })
+}
+
+/**
+ * Home「當日可用」：今日配額 = floor((periodBudget - spentBeforeToday)/remainingDays)；今日剩 = 配額 - 今日已花。
+ */
+export function resolveHomeDailyBudgetMetricsForDay({
+  dayKey,
+  period,
+  items = [],
+  containers = [],
+  spentByCategoryDayRows = [],
+} = {}) {
+  const spentByCategoryDay = buildSpentByCategoryDayMap(spentByCategoryDayRows)
+  const normalizedDayKey = String(dayKey ?? '').trim()
+  const date = parseDayKeyToDate(normalizedDayKey)
+
+  const poolCategoryIdsByContainer = buildPoolCategoryIdsByContainer(items)
+  const activeDailyCategoryIds = new Set()
+  for (const categoryIds of poolCategoryIdsByContainer.values()) {
+    for (const categoryId of categoryIds) activeDailyCategoryIds.add(categoryId)
+  }
+
+  let standaloneDailyBudgetMinor = 0
+  if (date) {
+    for (const item of items ?? []) {
+      if (String(item?.budget_container_id ?? '').trim()) continue
+      if (normalizeAmountMode(item?.amount_mode) !== 'daily_average') continue
+      if (!isBudgetItemActiveOnDate(item, date)) continue
+      const categoryId = String(item?.category_id ?? '').trim()
+      if (categoryId) activeDailyCategoryIds.add(categoryId)
+      standaloneDailyBudgetMinor += Math.max(0, Math.round(Number(item?.amount_minor ?? 0)))
+    }
+  }
+
+  const poolStats = resolveDailyPoolStatsListForDay({
+    dayKey: normalizedDayKey,
+    period,
+    items,
+    containers,
+    spentByCategoryDayRows,
+  })
+  const poolPlannedMinor = poolStats.reduce((total, stats) => total + Math.max(0, stats.todayAllowanceMinor), 0)
+  const plannedMinor = standaloneDailyBudgetMinor + poolPlannedMinor
+  const spentOnDayMinor = sumCategorySpentFromDayMap(activeDailyCategoryIds, spentByCategoryDay, {
+    onDayKey: normalizedDayKey,
+  })
+
+  return {
+    dayKey: normalizedDayKey,
+    plannedMinor,
+    spentOnDayMinor,
+    remainMinor: plannedMinor - spentOnDayMinor,
+    standaloneDailyBudgetMinor,
+    poolPlannedMinor,
+    poolStats,
+  }
 }
 
 function resolveDailyBudgetMinorForDay({
@@ -109,8 +211,8 @@ function resolveDailyBudgetMinorForDay({
 
   for (const container of containers) {
     const categoryIds = poolCategoryIdsByContainer.get(String(container.id)) ?? new Set()
-    const spentOnDayMinor = sumCategorySpent(categoryIds, spentByCategoryDay, { onDayKey: dayKey })
-    const spentBeforeMinor = sumCategorySpent(categoryIds, spentByCategoryDay, {
+    const spentOnDayMinor = sumCategorySpentFromDayMap(categoryIds, spentByCategoryDay, { onDayKey: dayKey })
+    const spentBeforeMinor = sumCategorySpentFromDayMap(categoryIds, spentByCategoryDay, {
       beforeDayKey: dayKey,
       periodStart: period?.startDate,
     })

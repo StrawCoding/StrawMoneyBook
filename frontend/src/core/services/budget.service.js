@@ -51,6 +51,10 @@ export {
   isDayKeyInBudgetPeriod,
   shiftBudgetMonthKey,
   buildBudgetMonthCalendarCells,
+  resolveHomeDailyBudgetMetricsForDay,
+  resolveDailyPoolStatsListForDay,
+  sumCategorySpentFromDayMap,
+  buildSpentByCategoryDayMap,
 } from './budget-daily-stats.js'
 
 export {
