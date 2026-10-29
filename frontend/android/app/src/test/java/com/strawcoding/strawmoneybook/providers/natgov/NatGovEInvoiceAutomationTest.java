@@ -52,6 +52,12 @@ public class NatGovEInvoiceAutomationTest {
     }
 
     @Test
+    public void toRocDateConvertsIsoToRocCompact() {
+        assertEquals("1151029", NatGovEInvoiceAutomation.toRocDate("2026-10-29"));
+        assertEquals("1140101", NatGovEInvoiceAutomation.toRocDate("2025-01-01"));
+    }
+
+    @Test
     public void validateCaptchaCandidateRejectsInvalidFixtureCodes() {
         assertFalse(com.strawcoding.strawmoneybook.core.CaptchaSolver.validateCaptchaCandidate("12", false));
         assertFalse(com.strawcoding.strawmoneybook.core.CaptchaSolver.validateCaptchaCandidate("AB-1", false));

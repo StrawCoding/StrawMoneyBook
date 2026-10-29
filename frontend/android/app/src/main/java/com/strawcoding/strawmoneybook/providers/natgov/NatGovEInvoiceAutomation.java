@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.os.Handler;
 import android.os.Looper;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
@@ -25,6 +26,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -154,6 +156,7 @@ public final class NatGovEInvoiceAutomation {
 
         String dateFrom = normalizeText(payload.optString("dateFrom"));
         String dateTo = normalizeText(payload.optString("dateTo"));
+        session.performInvoiceQuery(dateFrom, dateTo, debugTrace);
         JSONArray invoices = session.collectInterceptedInvoices(dateFrom, dateTo);
 
         JSONObject result = new JSONObject();
@@ -367,6 +370,13 @@ public final class NatGovEInvoiceAutomation {
             + "phone.value = payload.cardNo;"
             + "pwd.value = payload.password;"
             + "captcha.value = payload.captchaCode;"
+            + "if (payload.captchaToken) {"
+            + "  window.__SMB_EINVOICE_CAPTCHA_TOKEN__ = payload.captchaToken;"
+            + "  document.querySelectorAll('input[type=hidden]').forEach((el) => {"
+            + "    const n = (el.name || el.id || '').toLowerCase();"
+            + "    if (n.includes('token') || n.includes('captcha')) el.value = payload.captchaToken;"
+            + "  });"
+            + "}"
             + "btn.click();"
             + "return JSON.stringify({ ok: true });"
             + "})(" + new JSONObject()
@@ -420,6 +430,74 @@ public final class NatGovEInvoiceAutomation {
         return raw;
     }
 
+    /** ISO yyyy-MM-dd → ROC yyyMMdd (matches backend toRocDate). */
+    static String toRocDate(String isoDate) {
+        String raw = normalizeText(isoDate);
+        if (raw.matches("^\\d{4}-\\d{2}-\\d{2}$")) {
+            int year = Integer.parseInt(raw.substring(0, 4));
+            int roc = year - 1911;
+            return String.format(Locale.ROOT, "%03d%s", roc, raw.substring(5).replace("-", ""));
+        }
+        return raw.replace("-", "/");
+    }
+
+    private static final String INJECT_NETWORK_HOOK_JS =
+        "(function(){"
+            + "if(window.__smbCarrierHookInstalled)return;"
+            + "window.__smbCarrierHookInstalled=true;"
+            + "function pushJson(text){"
+            + "try{if(!text||text.length<2)return;"
+            + "if(window.SMBCarrierBridge&&window.SMBCarrierBridge.onJson)"
+            + "window.SMBCarrierBridge.onJson(String(text));"
+            + "}catch(e){}"
+            + "}"
+            + "const origFetch=window.fetch;"
+            + "if(typeof origFetch==='function'){"
+            + "window.fetch=function(){"
+            + "return origFetch.apply(this,arguments).then(function(res){"
+            + "try{var c=res.clone();var ct=(res.headers&&res.headers.get('content-type'))||'';"
+            + "if(/json/i.test(ct)||/json/i.test(res.url||'')){c.text().then(pushJson);}"
+            + "}catch(e){}"
+            + "return res;"
+            + "});"
+            + "};"
+            + "}"
+            + "const XHR=window.XMLHttpRequest;"
+            + "if(XHR&&XHR.prototype){"
+            + "const open=XHR.prototype.open;const send=XHR.prototype.send;"
+            + "XHR.prototype.open=function(m,u){this.__smbUrl=u;return open.apply(this,arguments);};"
+            + "XHR.prototype.send=function(){"
+            + "this.addEventListener('load',function(){"
+            + "try{var ct=(this.getResponseHeader('content-type')||'');"
+            + "if(/json/i.test(ct)||/einvoice/i.test(String(this.__smbUrl||'')))"
+            + "pushJson(this.responseText);"
+            + "}catch(e){}"
+            + "});"
+            + "return send.apply(this,arguments);"
+            + "};"
+            + "}"
+            + "})();";
+
+    static final class InvoiceJsonBridge {
+        private final CopyOnWriteArrayList<String> chunks = new CopyOnWriteArrayList<>();
+
+        @JavascriptInterface
+        public void onJson(String json) {
+            if (json == null) return;
+            String trimmed = json.trim();
+            if (trimmed.length() < 2) return;
+            chunks.add(trimmed);
+        }
+
+        void clear() {
+            chunks.clear();
+        }
+
+        CopyOnWriteArrayList<String> snapshotChunks() {
+            return new CopyOnWriteArrayList<>(chunks);
+        }
+    }
+
     private static final class CaptchaBundle {
         String token = "";
         String code = "";
@@ -434,7 +512,9 @@ public final class NatGovEInvoiceAutomation {
         private final CarrierAutomationDebugTrace debugTrace;
         private final Handler mainHandler = new Handler(Looper.getMainLooper());
         private final List<JSONObject> interceptedPayloads = new ArrayList<>();
+        private final InvoiceJsonBridge jsonBridge = new InvoiceJsonBridge();
         private volatile boolean pageReady = false;
+        private volatile boolean bridgeAttached = false;
 
         BrowserSession(Activity activity, WebView webView, CarrierAutomationDebugTrace debugTrace) {
             this.activity = activity;
@@ -500,17 +580,100 @@ public final class NatGovEInvoiceAutomation {
             return new JSONObject(raw);
         }
 
+        void performInvoiceQuery(String dateFrom, String dateTo, CarrierAutomationDebugTrace debugTrace) throws Exception {
+            jsonBridge.clear();
+            interceptedPayloads.clear();
+            injectNetworkHook();
+
+            String rocStart = toRocDate(dateFrom);
+            String rocEnd = toRocDate(dateTo);
+            String script = "(function(payload){"
+                + "function pick(selectors){"
+                + "for(const s of selectors.split(',')){const el=document.querySelector(s.trim());if(el)return el;}"
+                + "const links=[...document.querySelectorAll('a,button')];"
+                + "for(const el of links){const t=(el.innerText||'').trim();"
+                + "if(t.includes('手機條碼')&&t.includes('查詢'))return el;}"
+                + "return null;"
+                + "}"
+                + "function setValue(el,v){if(!el)return;el.focus();el.value=v;"
+                + "el.dispatchEvent(new Event('input',{bubbles:true}));"
+                + "el.dispatchEvent(new Event('change',{bubbles:true}));}"
+                + "const nav=pick('"
+                + CarrierPortalConfig.SELECTOR_QUERY_NAV
+                + "');"
+                + "if(nav){nav.click();}"
+                + "const start=pick('"
+                + CarrierPortalConfig.SELECTOR_START_DATE
+                + "');"
+                + "const end=pick('"
+                + CarrierPortalConfig.SELECTOR_END_DATE
+                + "');"
+                + "if(!start||!end)return JSON.stringify({ok:false,reason:'query_form_missing'});"
+                + "setValue(start,payload.startDate);"
+                + "setValue(end,payload.endDate);"
+                + "const btn=pick('"
+                + CarrierPortalConfig.SELECTOR_QUERY_SUBMIT
+                + "');"
+                + "if(!btn)return JSON.stringify({ok:false,reason:'query_submit_missing'});"
+                + "btn.click();"
+                + "return JSON.stringify({ok:true});"
+                + "})(" + new JSONObject()
+                    .put("startDate", rocStart)
+                    .put("endDate", rocEnd)
+                    .toString() + ")";
+            JSONObject fillResult = evaluateJson(script);
+            if (fillResult == null || !fillResult.optBoolean("ok", false)) {
+                throw new CarrierAutomationException(
+                    "einvoice_portal_changed",
+                    "Invoice query form was not found: " + (fillResult == null ? "null" : fillResult.optString("reason"))
+                );
+            }
+            debugTrace.record("query_submit", "ok", "Submitted invoice query");
+
+            long deadline = System.currentTimeMillis() + PAGE_WAIT_MS;
+            while (System.currentTimeMillis() < deadline) {
+                ensureNotAborted();
+                drainJsonBridgeIntoPayloads();
+                JSONArray probe = new JSONArray();
+                for (JSONObject payload : interceptedPayloads) {
+                    probe = mergeInvoiceArrays(probe, extractInvoices(payload));
+                }
+                if (probe.length() > 0) {
+                    debugTrace.record("query_intercept", "ok", "Captured invoice JSON payloads");
+                    return;
+                }
+                Thread.sleep(500L);
+            }
+            drainJsonBridgeIntoPayloads();
+            debugTrace.record("query_intercept", "warn", "No invoice JSON captured before timeout");
+        }
+
         JSONArray collectInterceptedInvoices(String dateFrom, String dateTo) throws Exception {
+            drainJsonBridgeIntoPayloads();
             JSONArray invoices = new JSONArray();
             for (JSONObject payload : interceptedPayloads) {
+                if (payload.has("url") && !payload.has("list") && !payload.has("data")) {
+                    continue;
+                }
                 invoices = mergeInvoiceArrays(invoices, extractInvoices(payload));
             }
-            if (invoices.length() > 0) return invoices;
-            JSONObject fallback = evaluateJson(
-                "() => ({ ok: true, note: 'observe_only_no_dom_fallback_in_android_v1' })"
-            );
-            debugTrace.record("query_intercept", "ok", "Intercept collection finished", fallback);
             return invoices;
+        }
+
+        private void drainJsonBridgeIntoPayloads() {
+            for (String chunk : jsonBridge.snapshotChunks()) {
+                try {
+                    JSONObject parsed = new JSONObject(chunk);
+                    interceptedPayloads.add(parsed);
+                } catch (Exception ignored) {
+                    // ignore non-object JSON
+                }
+            }
+            jsonBridge.clear();
+        }
+
+        private void injectNetworkHook() throws Exception {
+            evaluateJson(INJECT_NETWORK_HOOK_JS);
         }
 
         String captureCookies() {
@@ -537,28 +700,22 @@ public final class NatGovEInvoiceAutomation {
         }
 
         private void attachClient() {
-            webView.setWebViewClient(new WebViewClient() {
-                @Override
-                public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                    observeRequest(request);
-                    return super.shouldInterceptRequest(view, request);
+            mainHandler.post(() -> {
+                if (!bridgeAttached) {
+                    webView.getSettings().setJavaScriptEnabled(true);
+                    webView.getSettings().setDomStorageEnabled(true);
+                    webView.addJavascriptInterface(jsonBridge, "SMBCarrierBridge");
+                    bridgeAttached = true;
                 }
+                webView.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public void onPageFinished(WebView view, String url) {
+                        if (isNatGovHost(url)) {
+                            view.evaluateJavascript(INJECT_NETWORK_HOOK_JS, null);
+                        }
+                    }
+                });
             });
-        }
-
-        private void observeRequest(WebResourceRequest request) {
-            if (request == null || request.getUrl() == null) return;
-            String url = request.getUrl().toString();
-            if (!CarrierSyncContract.isQueryApiUrl(url)) return;
-            if (CarrierSyncContract.shouldReplayInterceptRequest(request.getMethod())) return;
-            try {
-                // Observe-only: actual body capture happens post-response via evaluate when available.
-                JSONObject marker = new JSONObject();
-                marker.put("url", url);
-                marker.put("method", request.getMethod());
-                interceptedPayloads.add(marker);
-            } catch (Exception ignored) {
-            }
         }
     }
 

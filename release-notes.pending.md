@@ -1,5 +1,8 @@
 # Pending Release Notes
 
+- 載具同步（Android）：查詢階段自動填日期並送出；以 fetch/XHR hook 攔截發票 JSON（修正只記 URL 導致 0 筆）；登入補 captcha token hidden 欄位。
+- 後端載具 scrape：deploy postinstall 同步安裝 playwright-cli Chromium（修正 Web fallback「瀏覽器未安裝」）。
+
 ---
 
 ## v1.5.94

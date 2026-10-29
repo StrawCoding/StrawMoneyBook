@@ -13,6 +13,11 @@ public final class CarrierPortalConfig {
     public static final String SELECTOR_PASSWORD = "#password";
     public static final String SELECTOR_CAPTCHA = "#captcha";
     public static final String SELECTOR_LOGIN_BUTTON = "#submitBtn";
+    /** Comma-separated fallback selectors (parsed in WebView JS). */
+    public static final String SELECTOR_QUERY_NAV = "a[href*='btc']";
+    public static final String SELECTOR_START_DATE = "input[name='startDate'],#startDate";
+    public static final String SELECTOR_END_DATE = "input[name='endDate'],#endDate";
+    public static final String SELECTOR_QUERY_SUBMIT = "#btnQuery,button[type='submit']";
 
     private CarrierPortalConfig() {}
 }

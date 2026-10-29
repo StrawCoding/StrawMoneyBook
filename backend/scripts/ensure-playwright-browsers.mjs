@@ -26,12 +26,20 @@ if (!existsSync(browsersPath)) {
   execSync(`mkdir -p ${JSON.stringify(browsersPath)}`, { stdio: 'inherit' })
 }
 
+const playwrightEnv = {
+  ...process.env,
+  PLAYWRIGHT_BROWSERS_PATH: browsersPath,
+}
+
 execSync('npx playwright install chromium', {
   stdio: 'inherit',
-  env: {
-    ...process.env,
-    PLAYWRIGHT_BROWSERS_PATH: browsersPath,
-  },
+  env: playwrightEnv,
+})
+
+// einvoice scrape + contract-check use playwright-cli (separate browser cache).
+execSync('npx playwright-cli install-browser chromium', {
+  stdio: 'inherit',
+  env: playwrightEnv,
 })
 
 // Docker StrawMB runs as root; headless Chromium needs system libs (e.g. libnspr4.so).
