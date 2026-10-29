@@ -1,9 +1,10 @@
 # Pending Release Notes
 
+---
+
+## v1.6.1
 - 載具同步（Android）：查詢階段自動填日期並送出；以 fetch/XHR hook 攔截發票 JSON（修正只記 URL 導致 0 筆）；登入補 captcha token hidden 欄位。
 - 後端載具 scrape：deploy postinstall 同步安裝 playwright-cli Chromium（修正 Web fallback「瀏覽器未安裝」）。
-
----
 
 ## v1.5.94
 - 首頁「當日可用」：共用池 spentBefore 改為整期 `spentByCategoryDayRows`（與預算頁同口徑），維持每日配額制 `floor((periodBudget-spentBeforeToday)/remainingDays)`，修正誤算成整期預算÷剩餘天數。
