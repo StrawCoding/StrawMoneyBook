@@ -359,10 +359,17 @@ function extractCarrierErrorCode(value) {
 
 function carrierSyncErrorMessage(error, fallbackKey = 'settings_carrier_sync.sync_failed') {
   const code = String(error?.code ?? '').trim()
+  const message = String(error?.message ?? '').trim()
   if (code === 'einvoice_cloudflare_timeout') {
+    if (/Portal login page did not become ready/i.test(message)) {
+      return t('settings_carrier_sync.error.portal_login_not_ready')
+    }
     return t('settings_carrier_sync.error.cloudflare_timeout')
   }
-  return error?.message || t(fallbackKey)
+  if (code === 'einvoice_portal_changed') {
+    return t('settings_carrier_sync.error.portal_login_not_ready')
+  }
+  return message || t(fallbackKey)
 }
 
 function refreshAvailability(extra = {}) {

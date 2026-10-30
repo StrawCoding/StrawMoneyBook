@@ -36,7 +36,7 @@ public class CarrierAutomationActivity extends Activity {
     public static final String EXTRA_DEBUG_TRACE_JSON = "carrier_automation.debug_trace_json";
     public static final String EXTRA_ERROR_DATA_JSON = "carrier_automation.error_data_json";
 
-    private static final long AUTOMATION_TIMEOUT_MS = 90_000L;
+    private static final long AUTOMATION_TIMEOUT_MS = 180_000L;
     private static final Object BUSY_LOCK = new Object();
     private static boolean busy = false;
     private static CarrierAutomationActivity currentInstance = null;

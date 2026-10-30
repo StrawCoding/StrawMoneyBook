@@ -530,6 +530,8 @@ export const MESSAGES_ZH_TW = {
     'settings_carrier_sync.sync_failed': '同步失敗，請稍後再試',
     'settings_carrier_sync.error.cloudflare_timeout':
       '財政部網站安全驗證（Cloudflare）逾時，請改用較穩定網路（例如 Wi‑Fi）後再試',
+    'settings_carrier_sync.error.portal_login_not_ready':
+      '財政部登入頁尚未載入完成（請確認 App 已更新至最新內測版、改用 Wi‑Fi 後再試）',
     'settings_carrier_sync.sync_result': '已抓取 {fetched} 筆，新增 {pending} 筆待審核',
     'settings_carrier_sync.status.idle': '尚未同步',
     'settings_carrier_sync.status.ok': '成功',

@@ -60,7 +60,8 @@ public final class NatGovEInvoiceAutomation {
             + "  title,"
             + "  phone: !!document.querySelector('" + CarrierPortalConfig.SELECTOR_PHONE + "'),"
             + "  password: !!document.querySelector('" + CarrierPortalConfig.SELECTOR_PASSWORD + "'),"
-            + "  captcha: !!document.querySelector('" + CarrierPortalConfig.SELECTOR_CAPTCHA + "')"
+            + "  captcha: !!document.querySelector('" + CarrierPortalConfig.SELECTOR_CAPTCHA + "'),"
+            + "  submit: !!document.querySelector('" + CarrierPortalConfig.SELECTOR_LOGIN_BUTTON + "')"
             + "};"
             + "}";
     private static final int MAX_CAPTCHA_ATTEMPTS = 3;
@@ -535,23 +536,36 @@ public final class NatGovEInvoiceAutomation {
         private final Handler mainHandler = new Handler(Looper.getMainLooper());
         private final List<JSONObject> interceptedPayloads = new ArrayList<>();
         private final InvoiceJsonBridge jsonBridge = new InvoiceJsonBridge();
-        private volatile boolean pageReady = false;
         private volatile boolean bridgeAttached = false;
+        private volatile CountDownLatch pageFinishedLatch;
 
-        BrowserSession(Activity activity, WebView webView, CarrierAutomationDebugTrace debugTrace) {
+        BrowserSession(Activity activity, WebView webView, CarrierAutomationDebugTrace debugTrace) throws Exception {
             this.activity = activity;
             this.webView = webView;
             this.debugTrace = debugTrace;
-            attachClient();
+            CountDownLatch clientReady = new CountDownLatch(1);
+            mainHandler.post(() -> {
+                attachClientOnUiThread();
+                clientReady.countDown();
+            });
+            if (!clientReady.await(10, TimeUnit.SECONDS)) {
+                throw new CarrierAutomationException("carrier_automation_timeout", "WebView client attach timed out");
+            }
         }
 
-        void loadUrl(String url) throws InterruptedException {
-            CountDownLatch latch = new CountDownLatch(1);
+        void loadUrl(String url) throws Exception {
+            pageFinishedLatch = new CountDownLatch(1);
+            CountDownLatch loadStarted = new CountDownLatch(1);
             mainHandler.post(() -> {
                 webView.loadUrl(url);
-                latch.countDown();
+                loadStarted.countDown();
             });
-            latch.await(5, TimeUnit.SECONDS);
+            if (!loadStarted.await(5, TimeUnit.SECONDS)) {
+                throw new CarrierAutomationException("carrier_automation_timeout", "WebView load did not start");
+            }
+            if (!pageFinishedLatch.await(PAGE_WAIT_MS, TimeUnit.MILLISECONDS)) {
+                debugTrace.record("open_portal", "warn", "Portal page did not fire onPageFinished before selector wait");
+            }
         }
 
         void waitForLoginReady() throws Exception {
@@ -566,11 +580,20 @@ public final class NatGovEInvoiceAutomation {
                 if (probe != null
                     && probe.optBoolean("phone")
                     && probe.optBoolean("password")
-                    && probe.optBoolean("captcha")) {
+                    && probe.optBoolean("captcha")
+                    && probe.optBoolean("submit")) {
                     return;
                 }
                 Thread.sleep(1_000L);
             }
+            JSONObject failureDetails = new JSONObject();
+            failureDetails.put("title", lastProbe.optString("title"));
+            failureDetails.put("phone", lastProbe.optBoolean("phone"));
+            failureDetails.put("password", lastProbe.optBoolean("password"));
+            failureDetails.put("captcha", lastProbe.optBoolean("captcha"));
+            failureDetails.put("submit", lastProbe.optBoolean("submit"));
+            failureDetails.put("cloudflareChallenge", lastProbe.optBoolean("cloudflareChallenge"));
+            debugTrace.record("open_portal", "error", "Login selectors not ready", failureDetails);
             if (lastProbe.optBoolean("cloudflareChallenge")) {
                 throw new CarrierAutomationException(
                     "einvoice_cloudflare_timeout",
@@ -731,23 +754,24 @@ public final class NatGovEInvoiceAutomation {
             return snapshot;
         }
 
-        private void attachClient() {
-            mainHandler.post(() -> {
-                if (!bridgeAttached) {
-                    webView.getSettings().setJavaScriptEnabled(true);
-                    webView.getSettings().setDomStorageEnabled(true);
-                    webView.addJavascriptInterface(jsonBridge, "SMBCarrierBridge");
-                    bridgeAttached = true;
-                }
-                webView.setWebViewClient(new WebViewClient() {
-                    @Override
-                    public void onPageFinished(WebView view, String url) {
-                        if (isNatGovHost(url)) {
-                            view.evaluateJavascript(ANTI_DETECT_JS, null);
-                            view.evaluateJavascript(INJECT_NETWORK_HOOK_JS, null);
-                        }
+        private void attachClientOnUiThread() {
+            if (!bridgeAttached) {
+                webView.getSettings().setJavaScriptEnabled(true);
+                webView.getSettings().setDomStorageEnabled(true);
+                webView.addJavascriptInterface(jsonBridge, "SMBCarrierBridge");
+                bridgeAttached = true;
+            }
+            webView.setWebViewClient(new WebViewClient() {
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    if (!isNatGovHost(url)) return;
+                    view.evaluateJavascript(ANTI_DETECT_JS, null);
+                    view.evaluateJavascript(INJECT_NETWORK_HOOK_JS, null);
+                    CountDownLatch latch = pageFinishedLatch;
+                    if (latch != null) {
+                        latch.countDown();
                     }
-                });
+                }
             });
         }
     }
