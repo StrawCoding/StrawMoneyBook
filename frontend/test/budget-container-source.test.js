@@ -62,6 +62,7 @@ test('budget store uses 2B total formula and grouped sections', () => {
 })
 
 test('budgeting page exposes shared budget pool UI flows', () => {
+  assert.match(budgetingSource, /containerDisplayBudgetAmountMinor/)
   assert.match(budgetingSource, /budgeting\.container\.add/)
   assert.match(budgetingSource, /groupedBudgetSections/)
   assert.match(budgetingSource, /BudgetContainerSheet/)

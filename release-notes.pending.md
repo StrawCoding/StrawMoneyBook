@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.7
+- 預算設定：日池列「池日額」改顯示每日設定值，不再誤顯示整期總額（日額×天數）。
+
 ## v1.6.4
 - 背景作業：新增 idle 排程佇列，App 回前景時銀行／載具／Drive／共用帳本同步改串流執行並讓出主執行緒，減少同步進行中整體卡頓。
 - 載具 Android：WebView 等 onPageFinished 後再探測登入欄；client 先 attach；含 #submitBtn；Activity 逾時 180s。

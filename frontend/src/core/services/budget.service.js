@@ -23,6 +23,8 @@ export {
   resolveContainerMonthlyAmountMinor,
   resolveContainerPeriodAmountMinor,
   isDailyPoolContainer,
+  containerDailyPoolRateMinor,
+  containerDisplayBudgetAmountMinor,
   isDailyPoolChildItem,
   dailyPoolContainerPeriodSpentMinor,
   itemDisplaySpentMinor,

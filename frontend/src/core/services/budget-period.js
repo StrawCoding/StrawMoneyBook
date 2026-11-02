@@ -296,6 +296,19 @@ export function isDailyPoolContainer(container) {
   return normalizeContainerPeriodMode(container?.period_mode ?? container?.periodMode) === 'daily'
 }
 
+/** UI label「池日額」must show stored daily rate (`amount_minor`), not periodBudgetMinor (rate × days). */
+export function containerDailyPoolRateMinor(container) {
+  return Math.max(0, Math.round(Number(container?.amount_minor ?? 0)))
+}
+
+export function containerDisplayBudgetAmountMinor(container, periodBudgetMinor = 0) {
+  if (isDailyPoolContainer(container)) {
+    return containerDailyPoolRateMinor(container)
+  }
+  const fallback = Math.max(0, Math.round(Number(periodBudgetMinor) || 0))
+  return fallback > 0 ? fallback : containerDailyPoolRateMinor(container)
+}
+
 export function isDailyPoolChildItem(item, containers = []) {
   const containerId = normalizeText(item?.budget_container_id)
   if (!containerId) return false

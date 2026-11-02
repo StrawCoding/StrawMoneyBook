@@ -170,7 +170,12 @@
               <div class="container-stats container-stats-period">
                 <div class="stat-cell">
                   <span class="muted">{{ containerBudgetLabel(section.container) }}</span>
-                  <MoneyText :value-minor="section.container.periodBudgetMinor ?? section.container.amount_minor" />
+                  <MoneyText
+                    :value-minor="containerDisplayBudgetAmountMinor(
+                      section.container,
+                      section.container.periodBudgetMinor,
+                    )"
+                  />
                 </div>
                 <div class="stat-cell">
                   <span class="muted">{{ t('budgeting.container.period_spent') }}</span>
@@ -512,6 +517,7 @@ import InputBottomSheet from '@/ui/components/common/InputBottomSheet.vue'
 import { useI18n, resolveIntlLocale } from '@/ui/services/i18n.service'
 import { buildAccountOptionGroups } from '@/ui/utils/account-option-groups'
 import {
+  containerDisplayBudgetAmountMinor,
   isDailyPoolChildItem,
   itemDisplayBudgetMinor,
   itemDisplayRemainMinor,
