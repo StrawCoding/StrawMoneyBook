@@ -202,16 +202,11 @@
                 :class="{ 'item-over': isItemOverBudget(item) }"
                 @click="openItemDetail(item)"
               >
-                <div class="item-header row">
-                  <span class="item-category">{{ categoryName(item.category_id) }}</span>
-                  <span v-if="isDailyPoolChild(item)" class="pool-child-label muted">
+                <div class="container-title-row item-title-row">
+                  <strong class="item-category">{{ categoryName(item.category_id) }}</strong>
+                  <span v-if="isDailyPoolChild(item)" class="budget-save-chip pool-child-chip">
                     {{ t('budgeting.container.daily_pool_child_label') }}
                   </span>
-                  <MoneyText
-                    v-else
-                    class="item-budget-amount"
-                    :value-minor="itemBudgetMinor(item)"
-                  />
                 </div>
 
                 <BudgetProgressBar
@@ -232,14 +227,23 @@
                 </div>
                 <p v-if="itemBudgetSaveIssue(item)" class="error-text">{{ itemBudgetSaveIssue(item) }}</p>
 
-                <div class="item-footer">
-                  <div v-if="!isDailyPoolChild(item)" class="footer-stat remain-line">
-                    <small class="budget-label">{{ t('budgeting.remaining') }}</small>
-                    <strong class="budget-value">{{ formatMajor(itemRemainMinor(item)) }}</strong>
+                <div class="amount-grid">
+                  <div class="stat-cell">
+                    <span class="muted">{{ t('budgeting.budget_total') }}</span>
+                    <MoneyText v-if="!isDailyPoolChild(item)" :value-minor="itemBudgetMinor(item)" />
+                    <span v-else class="muted pool-stat-placeholder">—</span>
                   </div>
-                  <div class="footer-stat used-line">
-                    <small class="budget-label">{{ t('budgeting.used') }}</small>
-                    <strong class="budget-value">{{ formatMajor(itemSpentMinorForItem(item)) }}</strong>
+                  <div class="stat-cell">
+                    <span class="muted">{{ t('budgeting.used') }}</span>
+                    <MoneyText :value-minor="itemSpentMinorForItem(item)" />
+                  </div>
+                  <div
+                    class="stat-cell"
+                    :class="{ 'remain-over': !isDailyPoolChild(item) && isItemOverBudget(item) }"
+                  >
+                    <span class="muted">{{ t('budgeting.remaining') }}</span>
+                    <MoneyText v-if="!isDailyPoolChild(item)" :value-minor="itemRemainMinor(item)" />
+                    <span v-else class="muted pool-stat-placeholder">—</span>
                   </div>
                 </div>
               </button>
@@ -1314,10 +1318,14 @@ h2, h3 {
   display: grid;
   gap: 10px;
 }
+.amount-grid,
 .container-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+}
+.amount-grid .stat-cell {
+  gap: 2px;
 }
 .container-stats-period {
   margin-top: 8px;
@@ -1387,12 +1395,18 @@ h2, h3 {
 .action-row {
   margin-top: 12px
 }
+.budget-section > .list {
+  margin: 0;
+  padding: 4px 0 4px 12px;
+  border-left: 2px solid color-mix(in srgb, var(--primary) 22%, var(--border) 78%);
+  margin-left: 8px;
+}
 .list {
   list-style: none;
   margin: 12px 0 0;
   padding: 0;
   display: grid;
-  gap: 8px
+  gap: 8px;
 }
 .item-row {
   border-radius: 12px;
@@ -1413,32 +1427,26 @@ h2, h3 {
   border-color: color-mix(in srgb, var(--danger, #d14343) 34%, var(--border) 66%);
   background: color-mix(in srgb, var(--danger, #d14343) 5%, var(--card) 95%);
 }
-.item-header {
-  align-items: baseline;
-  gap: 8px;
+.item-title-row {
+  margin-bottom: 0;
 }
 .item-category {
-  font-weight: 600;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.item-budget-amount {
-  flex: 0 0 auto;
-  font-weight: 700;
+.pool-child-chip {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--field-border) 65%);
+  color: var(--primary-soft, var(--primary));
+  font-weight: 600;
+}
+.pool-stat-placeholder {
+  font-size: 14px;
+  line-height: 1.35;
 }
 .item-progress {
   width: 100%;
-}
-.item-footer {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.footer-stat {
-  display: grid;
-  gap: 2px;
 }
 .item-rule-hint {
   display: block
@@ -1489,20 +1497,6 @@ h2, h3 {
 }
 .switch-row.active .switch-thumb {
   transform: translate3d(20px, 0, 0);
-}
-.budget-label,
-.budget-value {
-  font-size: 12px;
-  line-height: 1.2;
-}
-.budget-value {
-  font-weight: 700;
-}
-.used-line {
-  color: var(--chart-budget-used, var(--danger, #d14343))
-}
-.remain-line {
-  color: var(--chart-budget-remain, var(--success, #1f9d55))
 }
 .detail-sheet-body {
   gap: 12px;
