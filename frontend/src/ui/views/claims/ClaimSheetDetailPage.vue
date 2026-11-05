@@ -283,7 +283,7 @@ function claimStatusLabel(value) {
 }
 
 function isClaimEditable(value) {
-  return isClaimDraftEditable(value)
+  return isClaimDraftEditable(value, { payments: payments.value })
 }
 
 function isClaimRestorable(value) {

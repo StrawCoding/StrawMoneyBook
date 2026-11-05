@@ -1005,7 +1005,7 @@ function fillCreateFormFromDetail(detail) {
 async function openEditSheetById(claimId) {
   if (!ledgerStore.activeLedgerId || !claimId) return false
   const detail = await getReimbursementDetail(ledgerStore.activeLedgerId, claimId)
-  if (!isClaimEditable(detail?.claim)) return false
+  if (!isClaimDraftEditable(detail?.claim, { payments: detail?.payments })) return false
   fillCreateFormFromDetail(detail)
   isCreateOpen.value = true
   return true

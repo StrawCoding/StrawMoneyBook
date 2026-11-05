@@ -73,11 +73,25 @@ export function isClaimFullyPaid(claim) {
 
 const UNPAID_EDITABLE_STATUSES = new Set(['draft', 'submitted', 'in_review', 'approved'])
 
-/** Draft edit is allowed until any payment is recorded (incl. claims stuck in approved before first deposit). */
-export function isClaimDraftEditable(claim) {
+export function claimRecordedPaymentMinor(claim, payments = null) {
+  const paidOnClaim = claimPaidMinorOf(claim)
+  if (paidOnClaim > 0) return paidOnClaim
+  if (!Array.isArray(payments) || !payments.length) return paidOnClaim
+  return payments.reduce(
+    (sum, payment) => sum + Math.max(0, Math.round(Number(payment?.amount_minor ?? 0))),
+    0,
+  )
+}
+
+/** Draft edit is allowed until any payment is recorded (incl. claims stuck in approved/paid before first deposit). */
+export function isClaimDraftEditable(claim, options = {}) {
   if (!claim) return false
-  if (claimPaidMinorOf(claim) > 0) return false
+  const payments = options.payments ?? null
+  if (claimRecordedPaymentMinor(claim, payments) > 0) return false
   const status = String(claim?.status ?? 'draft').trim()
-  if (status === 'paid' || status === 'rejected') return false
+  if (status === 'rejected') return false
+  if (status === 'paid') {
+    return claimRecordedPaymentMinor(claim, payments) <= 0
+  }
   return UNPAID_EDITABLE_STATUSES.has(status)
 }

@@ -123,7 +123,9 @@ const backLink = computed(() => ({
   params: { id: claimId.value },
   query: backTab.value === 'completed' ? { tab: 'completed' } : {},
 }))
-const isEditableClaim = computed(() => isClaimDraftEditable(claim.value))
+const claimPayments = ref([])
+
+const isEditableClaim = computed(() => isClaimDraftEditable(claim.value, { payments: claimPayments.value }))
 
 const entryTypeOptions = computed(() => [
   { label: t('claim_sheet.entry_type.expense'), value: 'expense' },
@@ -557,6 +559,7 @@ function fillFormFromDetail(detail) {
 async function loadPage() {
   if (!ledgerStore.activeLedgerId || !claimId.value) {
     claim.value = null
+    claimPayments.value = []
     claimItems.value = []
     importableBorrowLoanTxs.value = []
     return
@@ -572,11 +575,13 @@ async function loadPage() {
     ])
     if (claimId.value !== String(route.params.id ?? '').trim()) return
     claim.value = detail.claim ?? null
+    claimPayments.value = Array.isArray(detail.payments) ? detail.payments : []
     claimItems.value = Array.isArray(detail.items) ? detail.items : []
     importableBorrowLoanTxs.value = Array.isArray(borrowLoanImportable) ? borrowLoanImportable : []
     fillFormFromDetail(detail)
   } catch (error) {
     claim.value = null
+    claimPayments.value = []
     claimItems.value = []
     importableBorrowLoanTxs.value = []
     uiStore.pushToast(error.message ?? t('claim_sheet.toast.load_failed'), 'error')

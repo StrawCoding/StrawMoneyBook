@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   allocateClaimPaymentFifo,
+  claimRecordedPaymentMinor,
   claimRemainingMinor,
   isClaimCollecting,
   isClaimDraftEditable,
@@ -52,7 +53,20 @@ test('isClaimDraftEditable allows unpaid draft and approved, blocks after any pa
   assert.equal(isClaimDraftEditable({ status: 'approved', paid_minor: 0 }), true)
   assert.equal(isClaimDraftEditable({ status: 'submitted', paid_minor: 0 }), true)
   assert.equal(isClaimDraftEditable({ status: 'approved', paid_minor: 100 }), false)
-  assert.equal(isClaimDraftEditable({ status: 'paid', paid_minor: 0 }), false)
+  assert.equal(isClaimDraftEditable({ status: 'paid', paid_minor: 0 }), true)
+  assert.equal(isClaimDraftEditable({ status: 'paid', paid_minor: 100 }), false)
+})
+
+test('claimRecordedPaymentMinor prefers paid_minor and sums payment rows when claim is still zero', () => {
+  assert.equal(claimRecordedPaymentMinor({ paid_minor: 500 }), 500)
+  assert.equal(
+    claimRecordedPaymentMinor({ paid_minor: 0 }, [{ amount_minor: 200 }, { amount_minor: 300 }]),
+    500,
+  )
+  assert.equal(
+    isClaimDraftEditable({ status: 'approved', paid_minor: 0 }, { payments: [{ amount_minor: 1 }] }),
+    false,
+  )
 })
 
 test('schema lists include claim payment tables and settled_minor writeback', () => {
@@ -84,6 +98,9 @@ test('schema lists include claim payment tables and settled_minor writeback', ()
   assert.match(files.service, /export async function ensureClaimReadyForPayment/)
   assert.match(files.service, /claim = await ensureClaimReadyForPayment\(ledgerId, claim\)/)
   assert.match(files.service, /await addReimbursementItemSettledMinor/)
+  assert.match(files.service, /claimRecordedPaymentMinor\(claim, payments\)/)
+  assert.match(files.service, /revertPaidClaimEffects\(ledgerId, claim, claimItems\)/)
+  assert.match(files.detailPage, /isClaimDraftEditable\(value, \{ payments: payments\.value \}\)/)
   assert.doesNotMatch(files.listPage, /async function ensureClaimReadyForPayment/)
   assert.match(files.listPage, /data-testid="claim-payment-amount"/)
   assert.match(files.listPage, /amountMinor: completePaymentMinor\.value/)

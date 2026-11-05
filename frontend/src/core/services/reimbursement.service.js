@@ -74,6 +74,7 @@ import {
   claimRemainingMinor,
   isAdvanceClaimItem,
   isBorrowLoanClaimItem,
+  claimRecordedPaymentMinor,
   isClaimDraftEditable,
   isClaimFullyPaid,
 } from '@/core/utils/claim-sheet-payment'
@@ -524,12 +525,18 @@ export async function updateReimbursementDraft(ledgerId, reimbursementId, payloa
     if (!claim) {
       throw new Error('找不到資料')
     }
-    if (!isClaimDraftEditable(claim)) {
+    const payments = await listReimbursementPayments(ledgerId, normalizedReimbursementId)
+    if (!isClaimDraftEditable(claim, { payments })) {
       throw new Error('已有入帳紀錄或已完成請款，無法編輯')
     }
-    const payments = await listReimbursementPayments(ledgerId, normalizedReimbursementId)
-    if (payments.length > 0) {
-      throw new Error('已有入帳紀錄或已完成請款，無法編輯')
+
+    const recordedMinor = claimRecordedPaymentMinor(claim, payments)
+    if (String(claim.status ?? '') === 'paid' && recordedMinor <= 0) {
+      const claimItems = await listReimbursementItems(ledgerId, normalizedReimbursementId)
+      await revertPaidClaimEffects(ledgerId, claim, claimItems)
+      claim = await getReimbursementById(ledgerId, normalizedReimbursementId)
+    } else if (payments.length && recordedMinor <= 0) {
+      await deleteReimbursementPaymentsByReimbursementId(ledgerId, normalizedReimbursementId)
     }
 
     const counterpartyId = await ensureCounterpartyByName(ledgerId, payload.counterpartyName ?? '')
