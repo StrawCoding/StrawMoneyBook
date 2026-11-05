@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.16
+- 第一銀行 connect：登入後導向帳戶總覽 iframe（acntReviewAll／0101），強化帳號 discover；模擬器實測 connect 成功。
+
 ## v1.6.14
 - 銀行同步恢復第一銀行（`first_bank_tw`）：Android WebView 自動化、設定精靈與驗證碼半自動；修正 WebView 背景執行緒攔截、驗證碼 OCR（英數）與登入後 JS 等待。
 

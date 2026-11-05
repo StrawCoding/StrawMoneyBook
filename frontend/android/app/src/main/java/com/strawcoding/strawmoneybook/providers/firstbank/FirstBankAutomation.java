@@ -60,6 +60,13 @@ public final class FirstBankAutomation {
     private static final String PROVIDER_ID = "first_bank_tw";
     private static final String LOGIN_URL = "https://ibank.firstbank.com.tw/NetBank/index103.html";
     private static final String FRAME_URL = "https://ibank.firstbank.com.tw/NetBank/frame.html";
+    private static final String ACCOUNT_OVERVIEW_BASE = "https://ibank.firstbank.com.tw";
+    private static final String[] ACCOUNT_OVERVIEW_PATHS = {
+        "/NetBank/1/acntReviewAll.html",
+        "/NetBank/2/0101.html",
+        "/NetBank/2/010101.html",
+        "/NetBank/2/010103.html",
+    };
     private static final String TXN_URL = "https://ibank.firstbank.com.tw/NetBank/2/010103.html";
     private static final int CAPTCHA_MAX_ATTEMPTS = 5;
     private static final int CAPTCHA_EXPECTED_LENGTH = 4;
@@ -164,14 +171,20 @@ public final class FirstBankAutomation {
         debugTrace.record("load_login_page", "ok", "Login page loaded");
         performLogin(activity, session, debugTrace, nationalId, repeatSeq, userCode, password, normalizeCaptchaString(payload.optString("captchaCode", "")));
         debugTrace.record("login_complete", "ok", "Login completed");
-        debugTrace.record("load_frame_page", "running", "Loading account frame page");
-        session.loadUrl(FRAME_URL);
-        debugTrace.record("load_frame_page", "ok", "Frame page loaded");
-        ensureFramePortalContract(session, debugTrace);
+        ensurePostLoginShell(session, debugTrace);
         openMyAccounts(session, debugTrace);
         JSONArray accounts = discoverAccounts(session);
         if (accounts.length() == 0) {
-            throw new BankAutomationException("first_bank_account_list_not_found", "First Bank account list was not found after login");
+            accounts = retryDiscoverAccountsViaOverviewPaths(session, debugTrace);
+        }
+        if (accounts.length() == 0) {
+            JSONObject probe = session.probeAccountDiscoveryFailure();
+            BankAutomationException error = new BankAutomationException(
+                "first_bank_account_list_not_found",
+                "First Bank account list was not found after login"
+            );
+            error.attachData(probe);
+            throw error;
         }
         JSONObject accountDetails = new JSONObject();
         accountDetails.put("count", accounts.length());
@@ -522,8 +535,39 @@ public final class FirstBankAutomation {
         return normalized.substring(commaIndex + 1).trim();
     }
 
+    private static void ensurePostLoginShell(BrowserSession session, BankAutomationDebugTrace debugTrace) throws Exception {
+        if (session.isPostLoginReady()) {
+            debugTrace.record("load_frame_page", "ok", "Post-login shell already active");
+            return;
+        }
+        debugTrace.record("load_frame_page", "running", "Loading account frame page");
+        session.loadUrl(FRAME_URL);
+        debugTrace.record("load_frame_page", "ok", "Frame page loaded");
+        ensureFramePortalContract(session, debugTrace);
+    }
+
+    private static JSONArray retryDiscoverAccountsViaOverviewPaths(BrowserSession session, BankAutomationDebugTrace debugTrace) throws Exception {
+        JSONArray accounts = new JSONArray();
+        for (String path : ACCOUNT_OVERVIEW_PATHS) {
+            JSONObject details = new JSONObject();
+            putJsonValue(details, "path", path);
+            debugTrace.record("discover_accounts", "running", "Retry account overview navigation", details);
+            session.navigateAccountOverviewPath(path);
+            session.openMyAccounts();
+            session.waitForAccountsReady();
+            accounts = discoverAccounts(session);
+            if (accounts.length() > 0) {
+                putJsonValue(details, "count", accounts.length());
+                debugTrace.record("discover_accounts", "ok", "Discovered accounts after overview retry", details);
+                return accounts;
+            }
+        }
+        return accounts;
+    }
+
     private static void openMyAccounts(BrowserSession session, BankAutomationDebugTrace debugTrace) throws Exception {
         debugTrace.record("open_my_accounts", "running", "Opening My Accounts");
+        session.navigateAccountOverview();
         session.openMyAccounts();
         if (session.waitForAccountsReady()) {
             debugTrace.record("open_my_accounts", "ok", "My Accounts page is ready");
@@ -2379,10 +2423,112 @@ public final class FirstBankAutomation {
         return JSONObject.quote(value == null ? "" : value);
     }
 
+    static String buildNavigateAccountOverviewScript() {
+        return """
+            (() => {
+              function text(value) { return String(value ?? '').trim(); }
+              function collectWindows() {
+                const wins = [];
+                const seen = new Set();
+                function visit(win) {
+                  if (!win || seen.has(win)) return;
+                  seen.add(win);
+                  wins.push(win);
+                  try {
+                    for (let index = 0; index < win.frames.length; index += 1) {
+                      visit(win.frames[index]);
+                    }
+                  } catch (_error) {}
+                }
+                visit(window);
+                return wins;
+              }
+              const paths = [
+                '/NetBank/1/acntReviewAll.html',
+                '/NetBank/2/0101.html',
+                '/NetBank/2/010101.html',
+                '/NetBank/2/010103.html',
+              ];
+              function setIframeSrc(doc, url) {
+                const selectors = ['#frame1', 'iframe[name="frame1"]', 'iframe#mainFrame', 'iframe'];
+                for (const selector of selectors) {
+                  const nodes = Array.from(doc.querySelectorAll(selector));
+                  for (const node of nodes) {
+                    if (!node || node.tagName !== 'IFRAME') continue;
+                    node.src = url;
+                    return true;
+                  }
+                }
+                return false;
+              }
+              for (const path of paths) {
+                const url = path.startsWith('http') ? path : `${location.origin}${path}`;
+                for (const win of collectWindows()) {
+                  try {
+                    if (setIframeSrc(win.document, url)) {
+                      return { navigated: true, path, target: 'iframe' };
+                    }
+                  } catch (_error) {}
+                }
+              }
+              try {
+                if (typeof resetIframeURL === 'function') {
+                  resetIframeURL('/NetBank/1/acntReviewAll.html');
+                  return { navigated: true, path: '/NetBank/1/acntReviewAll.html', target: 'resetIframeURL' };
+                }
+              } catch (_error) {}
+              return { navigated: false };
+            })();
+            """;
+    }
+
+    static String buildAccountDiscoveryFailureProbeScript() {
+        return """
+            (() => {
+              function text(value) { return String(value ?? '').trim(); }
+              function collectEntries() {
+                const found = [];
+                const seen = new Set();
+                function visit(win, depth) {
+                  if (!win || seen.has(win)) return;
+                  seen.add(win);
+                  try {
+                    const doc = win.document;
+                    found.push({
+                      depth,
+                      url: text(win.location?.href || doc?.URL || ''),
+                      title: text(doc?.title || ''),
+                      hasTab1: Boolean(doc?.querySelector('#tab1')),
+                      hasOverview: Boolean(doc?.querySelector('#overview-account')),
+                      hasFrame1: Boolean(doc?.querySelector('#frame1, iframe[name="frame1"]')),
+                      bodySample: text(doc?.body?.innerText || '').slice(0, 240),
+                    });
+                    for (let index = 0; index < win.frames.length; index += 1) {
+                      visit(win.frames[index], depth + 1);
+                    }
+                  } catch (_error) {}
+                }
+                visit(window, 0);
+                return found.slice(0, 12);
+              }
+              return { frames: collectEntries() };
+            })();
+            """;
+    }
+
     private static String buildDiscoverAccountsScript() {
         return """
             (() => {
               function text(value) { return String(value ?? '').trim(); }
+              function addAccount(found, accountId, type, currencyHint) {
+                const normalized = text(accountId).replace(/\\s/g, '');
+                if (!/^\\d{6,16}$/.test(normalized) || found.has(normalized)) return;
+                found.set(normalized, {
+                  account_id: normalized,
+                  type: text(type) || 'depository',
+                  currency: /美金|USD/i.test(String(currencyHint ?? '')) ? 'USD' : 'TWD',
+                });
+              }
               function collectWindows() {
                 const wins = [];
                 const seen = new Set();
@@ -2410,38 +2556,46 @@ public final class FirstBankAutomation {
               }
               const found = new Map();
               for (const { doc } of collectEntries()) {
-                const anchors = Array.from(doc.querySelectorAll('a'));
+                const anchors = Array.from(doc.querySelectorAll('a, button, input[type="button"], input[type="submit"]'));
                 for (const anchor of anchors) {
                   const onclick = text(anchor.getAttribute('onclick'));
                   const href = text(anchor.getAttribute('href'));
-                  const raw = `${onclick} ${href}`;
-                  if (!/010103\\.html|近期交易明細/.test(raw) && !/010103\\.html|近期交易明細/.test(text(anchor.textContent))) continue;
-                  const accountMatch = raw.match(/'([0-9]{6,})'/);
-                  const accountId = text(accountMatch?.[1]);
+                  const label = text(anchor.textContent || anchor.value || '');
+                  const raw = `${onclick} ${href} ${label}`;
+                  if (!/01010[0-9]|0101\\.html|acntReviewAll|selectService|近期交易|Transaction|Balance|帳戶|帳號|account/i.test(raw)) {
+                    continue;
+                  }
+                  let accountId = '';
+                  const serviceMatch = onclick.match(/selectService(?:Href)?\\s*\\(\\s*['"]([0-9]{6,})['"]/i);
+                  if (serviceMatch) accountId = text(serviceMatch[1]);
+                  const acntMatch = raw.match(/acnt[=:]\\s*['"]?([0-9]{6,})/i);
+                  if (!accountId && acntMatch) accountId = text(acntMatch[1]);
+                  const quotedMatch = raw.match(/['"]([0-9]{10,16})['"]/);
+                  if (!accountId && quotedMatch) accountId = text(quotedMatch[1]);
                   if (!accountId) continue;
                   const row = anchor.closest('tr');
                   const cells = row ? Array.from(row.querySelectorAll('td,th')).map((cell) => text(cell.textContent).replace(/\\s+/g, ' ')) : [];
-                  const type = text(cells[1] ?? '').replace(/\\s+/g, ' ');
-                  const currency = /美金|USD/i.test(cells[3] ?? '') ? 'USD' : 'TWD';
-                  found.set(accountId, {
-                    account_id: accountId,
-                    type: type || 'depository',
-                    currency,
-                  });
+                  addAccount(found, accountId, text(cells[1] ?? ''), cells.join(' '));
                 }
-                const tab = doc.querySelector('#tab1');
+                for (const table of doc.querySelectorAll('table')) {
+                  const rows = Array.from(table.querySelectorAll('tr'));
+                  const header = rows.find((row) => /帳號|account/i.test(text(row.textContent)));
+                  if (!header) continue;
+                  for (const row of rows) {
+                    const cells = Array.from(row.querySelectorAll('td,th')).map((cell) => text(cell.textContent));
+                    for (const cell of cells) {
+                      const match = cell.replace(/\\s/g, '').match(/\\b(\\d{10,16})\\b/);
+                      if (match) addAccount(found, match[1], cells[1] ?? '', cells.join(' '));
+                    }
+                  }
+                }
+                const tab = doc.querySelector('#tab1, #overview-account, .tab_content');
                 if (tab) {
                   for (const row of tab.querySelectorAll('tr')) {
                     const cells = Array.from(row.querySelectorAll('td,th')).map((cell) => text(cell.textContent).replace(/\\s+/g, ' '));
                     for (const cell of cells) {
-                      const match = cell.replace(/\\s/g, '').match(/\\b(\\d{10,14})\\b/);
-                      const accountId = text(match?.[1]);
-                      if (!accountId || found.has(accountId)) continue;
-                      found.set(accountId, {
-                        account_id: accountId,
-                        type: text(cells[1] ?? '') || 'depository',
-                        currency: /美金|USD/i.test(cells.join(' ')) ? 'USD' : 'TWD',
-                      });
+                      const match = cell.replace(/\\s/g, '').match(/\\b(\\d{10,16})\\b/);
+                      if (match) addAccount(found, match[1], cells[1] ?? '', cells.join(' '));
                     }
                   }
                 }
@@ -3051,6 +3205,69 @@ public final class FirstBankAutomation {
             return new JSONObject();
         }
 
+        boolean isPostLoginReady() throws BankAutomationException {
+            return Boolean.TRUE.equals(evalBooleanSafe(buildPostLoginLandingReadyScript()));
+        }
+
+        void navigateAccountOverview() throws Exception {
+            Object result = evaluateJavaScript(buildNavigateAccountOverviewScript());
+            sleep(1_200L);
+            if (result instanceof JSONObject) {
+                JSONObject payload = (JSONObject) result;
+                if (!payload.optBoolean("navigated", false)) {
+                    loadUrl(ACCOUNT_OVERVIEW_BASE + ACCOUNT_OVERVIEW_PATHS[0]);
+                }
+            }
+        }
+
+        void navigateAccountOverviewPath(String path) throws Exception {
+            String normalizedPath = normalizeText(path);
+            if (normalizedPath.isEmpty()) {
+                return;
+            }
+            String script = String.format(Locale.US, """
+                (() => {
+                  const path = %s;
+                  const url = path.startsWith('http') ? path : `${location.origin}${path}`;
+                  function setIframeSrc(doc) {
+                    const selectors = ['#frame1', 'iframe[name="frame1"]', 'iframe'];
+                    for (const selector of selectors) {
+                      for (const node of Array.from(doc.querySelectorAll(selector))) {
+                        if (node && node.tagName === 'IFRAME') {
+                          node.src = url;
+                          return true;
+                        }
+                      }
+                    }
+                    return false;
+                  }
+                  try {
+                    if (setIframeSrc(document)) return { navigated: true, target: 'iframe' };
+                  } catch (_error) {}
+                  try {
+                    if (typeof resetIframeURL === 'function') {
+                      resetIframeURL(path);
+                      return { navigated: true, target: 'resetIframeURL' };
+                    }
+                  } catch (_error) {}
+                  return { navigated: false };
+                })();
+                """, quoteJs(normalizedPath));
+            Object result = evaluateJavaScript(script);
+            sleep(1_500L);
+            if (result instanceof JSONObject && !((JSONObject) result).optBoolean("navigated", false)) {
+                loadUrl(ACCOUNT_OVERVIEW_BASE + normalizedPath);
+            }
+        }
+
+        JSONObject probeAccountDiscoveryFailure() throws Exception {
+            Object result = evaluateJavaScript(buildAccountDiscoveryFailureProbeScript());
+            if (result instanceof JSONObject) {
+                return (JSONObject) result;
+            }
+            return new JSONObject();
+        }
+
         void openMyAccounts() throws Exception {
             waitForCondition("""
                 (() => {
@@ -3226,7 +3443,10 @@ public final class FirstBankAutomation {
                             return true;
                           }
                           const anchors = Array.from(doc.querySelectorAll('a'));
-                          if (anchors.some((anchor) => /近期交易明細/.test(text(anchor.textContent)))) {
+                          if (anchors.some((anchor) => /近期交易明細|Transaction Detail|Account Balance/i.test(text(anchor.textContent)))) {
+                            return true;
+                          }
+                          if (Array.from(doc.querySelectorAll('table tr')).some((row) => /\\d{10,16}/.test(text(row.textContent)) && /帳號|account|balance|餘額/i.test(text(row.textContent)))) {
                             return true;
                           }
                         } catch (_error) {}
