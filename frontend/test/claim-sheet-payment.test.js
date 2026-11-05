@@ -6,6 +6,7 @@ import {
   allocateClaimPaymentFifo,
   claimRemainingMinor,
   isClaimCollecting,
+  isClaimDraftEditable,
   isClaimFullyPaid,
 } from '../src/core/utils/claim-sheet-payment.js'
 
@@ -46,6 +47,14 @@ test('claim remaining and collecting flags follow paid_minor writeback', () => {
   assert.equal(isClaimFullyPaid({ total_minor: 10000, paid_minor: 10000, status: 'paid' }), true)
 })
 
+test('isClaimDraftEditable allows unpaid draft and approved, blocks after any payment', () => {
+  assert.equal(isClaimDraftEditable({ status: 'draft', paid_minor: 0 }), true)
+  assert.equal(isClaimDraftEditable({ status: 'approved', paid_minor: 0 }), true)
+  assert.equal(isClaimDraftEditable({ status: 'submitted', paid_minor: 0 }), true)
+  assert.equal(isClaimDraftEditable({ status: 'approved', paid_minor: 100 }), false)
+  assert.equal(isClaimDraftEditable({ status: 'paid', paid_minor: 0 }), false)
+})
+
 test('schema lists include claim payment tables and settled_minor writeback', () => {
   const root = resolve(import.meta.dirname, '..')
   const files = {
@@ -72,7 +81,10 @@ test('schema lists include claim payment tables and settled_minor writeback', ()
   assert.match(files.snapshot, /'reimbursement_payments'/)
   assert.match(files.snapshot, /'reimbursement_payment_allocations'/)
   assert.match(files.service, /allocateClaimPaymentFifo\(claimItems, requestedMinor\)/)
+  assert.match(files.service, /export async function ensureClaimReadyForPayment/)
+  assert.match(files.service, /claim = await ensureClaimReadyForPayment\(ledgerId, claim\)/)
   assert.match(files.service, /await addReimbursementItemSettledMinor/)
+  assert.doesNotMatch(files.listPage, /async function ensureClaimReadyForPayment/)
   assert.match(files.listPage, /data-testid="claim-payment-amount"/)
   assert.match(files.listPage, /amountMinor: completePaymentMinor\.value/)
   assert.match(files.detailPage, /t\('claim_sheet\.payments_title'\)/)

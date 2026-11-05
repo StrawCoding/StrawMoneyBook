@@ -1807,6 +1807,7 @@ export const MESSAGES_ZH_TW = {
     'claim_sheet.toast.exported_saved': '請款單已匯出（{location}）',
     'claim_sheet.toast.export_failed': '匯出失敗',
     'claim_sheet.not_found': '找不到這張請款單，可能已被移除。',
+    'claim_sheet.not_editable': '已有入帳紀錄或已完成請款，無法編輯。',
     'claim_sheet.export_pdf_hint': '匯入報銷的備註與代收項目都會一併整理到 PDF 中。',
     'assets_page.title': '資產',
     'assets_page.habitat_hello': '你的金庫與帳戶一覽',

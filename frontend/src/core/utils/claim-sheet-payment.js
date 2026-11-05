@@ -70,3 +70,14 @@ export function isClaimFullyPaid(claim) {
     claimTotalMinorOf(claim) > 0 && claimRemainingMinor(claim) <= 0 && claimPaidMinorOf(claim) > 0
   )
 }
+
+const UNPAID_EDITABLE_STATUSES = new Set(['draft', 'submitted', 'in_review', 'approved'])
+
+/** Draft edit is allowed until any payment is recorded (incl. claims stuck in approved before first deposit). */
+export function isClaimDraftEditable(claim) {
+  if (!claim) return false
+  if (claimPaidMinorOf(claim) > 0) return false
+  const status = String(claim?.status ?? 'draft').trim()
+  if (status === 'paid' || status === 'rejected') return false
+  return UNPAID_EDITABLE_STATUSES.has(status)
+}

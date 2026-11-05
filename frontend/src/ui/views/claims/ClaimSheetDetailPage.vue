@@ -194,6 +194,7 @@ import {
   claimPaidMinorOf,
   claimRemainingMinor,
   isClaimCollecting,
+  isClaimDraftEditable,
   isClaimFullyPaid,
   itemSettledMinorOf,
 } from '@/core/utils/claim-sheet-payment'
@@ -282,7 +283,7 @@ function claimStatusLabel(value) {
 }
 
 function isClaimEditable(value) {
-  return String(value?.status ?? 'draft') === 'draft' && claimPaidMinorOf(value) <= 0
+  return isClaimDraftEditable(value)
 }
 
 function isClaimRestorable(value) {

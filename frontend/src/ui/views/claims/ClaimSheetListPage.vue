@@ -274,7 +274,6 @@ import {
   getReimbursementDetail,
   loadReimbursementDashboard,
   markReimbursementPaid,
-  transitionReimbursementStatus,
   updateReimbursementDraft,
 } from '@/core/services/reimbursement.service'
 import {
@@ -301,6 +300,7 @@ import {
   isAdvanceClaimItem,
   isBorrowLoanClaimItem,
   isClaimCollecting,
+  isClaimDraftEditable,
   isClaimFullyPaid,
 } from '@/core/utils/claim-sheet-payment'
 
@@ -893,7 +893,7 @@ function openBorrowLoanImportPageFromCreateSheet() {
 }
 
 function isClaimEditable(claim) {
-  return String(claim?.status ?? 'draft') === 'draft'
+  return isClaimDraftEditable(claim)
 }
 
 function claimTabOfStatus(status) {
@@ -1103,32 +1103,13 @@ function closeCompleteSheet() {
   completeForm.selectedAdvanceIds = []
 }
 
-async function ensureClaimReadyForPayment(claim) {
-  const status = String(claim?.status ?? 'draft')
-  if (!ledgerStore.activeLedgerId) return claim
-  let current = claim
-
-  if (status === 'draft') {
-    current = await transitionReimbursementStatus(ledgerStore.activeLedgerId, current.id, 'submitted')
-  }
-  if (String(current?.status ?? '') === 'submitted') {
-    current = await transitionReimbursementStatus(ledgerStore.activeLedgerId, current.id, 'approved')
-  }
-  if (String(current?.status ?? '') === 'in_review') {
-    current = await transitionReimbursementStatus(ledgerStore.activeLedgerId, current.id, 'approved')
-  }
-
-  return current
-}
-
 async function submitCompleteSheet() {
   if (!canCompleteClaim.value || completing.value || !ledgerStore.activeLedgerId || !completeTarget.value) return
 
   completing.value = true
   try {
-    const readyClaim = await ensureClaimReadyForPayment(completeTarget.value)
     const result = await markReimbursementPaid(ledgerStore.activeLedgerId, {
-      reimbursementId: readyClaim.id,
+      reimbursementId: completeTarget.value.id,
       accountId: completeRequiresAccount.value ? completeForm.accountId : '',
       note: completeForm.note,
       selectedAdvanceIds: completeForm.selectedAdvanceIds,

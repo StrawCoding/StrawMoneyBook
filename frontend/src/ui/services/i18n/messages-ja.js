@@ -768,6 +768,7 @@ export const MESSAGES_JA = {
   'claim_sheet.toast.exported_saved': '請求書をエクスポートしました（{location}）',
   'claim_sheet.toast.export_failed': '請求書のエクスポートに失敗しました',
   'claim_sheet.not_found': 'この請求書は見つかりませんでした。',
+  'claim_sheet.not_editable': '入金記録があるか完了済みのため、編集できません。',
   'claim_sheet.export_pdf_hint': '取り込み立替のメモと代収項目を PDF にまとめています。',
   'budgeting.settings_title': '予算設定',
   'budgeting.display.settings': '予算設定',

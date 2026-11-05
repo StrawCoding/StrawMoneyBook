@@ -1824,6 +1824,7 @@ export const MESSAGES_EN = {
     'claim_sheet.toast.exported_saved': 'Claim sheet exported ({location})',
     'claim_sheet.toast.export_failed': 'Failed to export claim sheet',
     'claim_sheet.not_found': 'This claim sheet could not be found.',
+    'claim_sheet.not_editable': 'This claim sheet cannot be edited after payments or completion.',
     'claim_sheet.export_pdf_hint': 'Imported reimbursement notes and advance items are included in this PDF.',
     'assets_page.title': 'Assets',
     'assets_page.habitat_hello': 'Your vault and accounts at a glance',

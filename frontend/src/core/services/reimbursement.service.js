@@ -74,6 +74,7 @@ import {
   claimRemainingMinor,
   isAdvanceClaimItem,
   isBorrowLoanClaimItem,
+  isClaimDraftEditable,
   isClaimFullyPaid,
 } from '@/core/utils/claim-sheet-payment'
 
@@ -488,6 +489,24 @@ async function replaceReimbursementItems(ledgerId, reimbursementId, items = []) 
   }
 }
 
+export async function ensureClaimReadyForPayment(ledgerId, claim) {
+  if (!claim?.id) return claim
+  let current = claim
+  const status = String(current?.status ?? 'draft')
+
+  if (status === 'draft') {
+    current = await transitionReimbursementStatus(ledgerId, current.id, 'submitted')
+  }
+  if (String(current?.status ?? '') === 'submitted') {
+    current = await transitionReimbursementStatus(ledgerId, current.id, 'approved')
+  }
+  if (String(current?.status ?? '') === 'in_review') {
+    current = await transitionReimbursementStatus(ledgerId, current.id, 'approved')
+  }
+
+  return current
+}
+
 export async function updateReimbursementDraft(ledgerId, reimbursementId, payload) {
   const normalizedReimbursementId = String(reimbursementId ?? '').trim()
   if (!normalizedReimbursementId) {
@@ -505,8 +524,12 @@ export async function updateReimbursementDraft(ledgerId, reimbursementId, payloa
     if (!claim) {
       throw new Error('找不到資料')
     }
-    if (String(claim.status ?? 'draft') !== 'draft') {
-      throw new Error('只有草稿請款單可編輯')
+    if (!isClaimDraftEditable(claim)) {
+      throw new Error('已有入帳紀錄或已完成請款，無法編輯')
+    }
+    const payments = await listReimbursementPayments(ledgerId, normalizedReimbursementId)
+    if (payments.length > 0) {
+      throw new Error('已有入帳紀錄或已完成請款，無法編輯')
     }
 
     const counterpartyId = await ensureCounterpartyByName(ledgerId, payload.counterpartyName ?? '')
@@ -516,7 +539,11 @@ export async function updateReimbursementDraft(ledgerId, reimbursementId, payloa
       note: payload.note ?? null,
     })
     await replaceReimbursementItems(ledgerId, normalizedReimbursementId, payload.items)
-    return recomputeReimbursementTotal(ledgerId, normalizedReimbursementId)
+    const updated = await recomputeReimbursementTotal(ledgerId, normalizedReimbursementId)
+    if (String(updated?.status ?? 'draft') !== 'draft') {
+      return updateReimbursementStatus(ledgerId, normalizedReimbursementId, 'draft')
+    }
+    return updated
   })
 }
 
@@ -667,10 +694,12 @@ export async function markReimbursementPaid(ledgerId, payload) {
   }
 
   return withTransaction(async () => {
-    const claim = await getReimbursementById(ledgerId, payload.reimbursementId)
+    let claim = await getReimbursementById(ledgerId, payload.reimbursementId)
     if (!claim) {
       throw new Error('找不到資料')
     }
+
+    claim = await ensureClaimReadyForPayment(ledgerId, claim)
 
     if (!['approved', 'in_review', 'submitted', 'paid'].includes(claim.status)) {
       throw new Error(`狀態 ${claim.status} 不能入帳`)

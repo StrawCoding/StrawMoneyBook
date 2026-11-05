@@ -38,7 +38,7 @@
           </div>
         </footer>
       </template>
-      <p v-else-if="claim" class="muted">只有草稿請款單可編輯</p>
+      <p v-else-if="claim" class="muted">{{ t('claim_sheet.not_editable') }}</p>
       <p v-else class="muted">{{ t('claim_sheet.not_found') }}</p>
     </article>
 
@@ -81,6 +81,7 @@ import {
   pruneImportAmountOverrides,
   seedImportAmountOverrides,
 } from '@/ui/utils/claim-sheet-import-amount-overrides'
+import { isClaimDraftEditable } from '@/core/utils/claim-sheet-payment'
 import { goBackOrFallback } from '@/ui/services/navigation-back.service'
 import { useI18n } from '@/ui/services/i18n.service'
 import { useCategoryStore } from '@/ui/stores/category.store'
@@ -122,7 +123,7 @@ const backLink = computed(() => ({
   params: { id: claimId.value },
   query: backTab.value === 'completed' ? { tab: 'completed' } : {},
 }))
-const isEditableClaim = computed(() => String(claim.value?.status ?? 'draft') === 'draft')
+const isEditableClaim = computed(() => isClaimDraftEditable(claim.value))
 
 const entryTypeOptions = computed(() => [
   { label: t('claim_sheet.entry_type.expense'), value: 'expense' },
