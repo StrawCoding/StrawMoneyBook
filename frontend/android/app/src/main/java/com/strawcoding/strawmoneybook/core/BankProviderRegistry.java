@@ -1,20 +1,23 @@
 package com.strawcoding.strawmoneybook.core;
 
 import com.strawcoding.strawmoneybook.BankAutomationException;
+import com.strawcoding.strawmoneybook.providers.firstbank.FirstBankProvider;
 import com.strawcoding.strawmoneybook.providers.huanan.HuaNanBankProvider;
 
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
-/** Native provider registry — initial scope: hua_nan_bank_tw only. */
+/** Native provider registry — Android WebView automation adapters. */
 public final class BankProviderRegistry {
     public static final String HUA_NAN_BANK_TW = "hua_nan_bank_tw";
+    public static final String FIRST_BANK_TW = "first_bank_tw";
 
     private static final Map<String, BankProvider> PROVIDERS = new LinkedHashMap<>();
 
     static {
         register(new HuaNanBankProvider());
+        register(new FirstBankProvider());
     }
 
     private BankProviderRegistry() {}

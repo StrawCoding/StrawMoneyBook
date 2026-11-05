@@ -255,6 +255,7 @@ const CREDENTIAL_FIELD_FORM_KEYS = Object.freeze({
 
 const MANUAL_CAPTCHA_ERROR_CODES = Object.freeze([
   'hua_nan_captcha_manual_required',
+  'first_bank_captcha_manual_required',
   'captcha_required',
 ])
 

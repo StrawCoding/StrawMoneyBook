@@ -1,10 +1,11 @@
 /**
  * Bank sync Provider Registry (Architecture B — modular restore).
- * Active: hua_nan_bank_tw only.
+ * Active native providers: hua_nan_bank_tw, first_bank_tw.
  */
 
 export const BANK_PROVIDER_IDS = Object.freeze({
   HUA_NAN_BANK_TW: 'hua_nan_bank_tw',
+  FIRST_BANK_TW: 'first_bank_tw',
 })
 
 /** @typedef {{ id: string, labelKey: string, type: string, required?: boolean, maxlength?: number, inputmode?: string, defaultValue?: string }} CredentialField */
@@ -21,6 +22,29 @@ const PROVIDERS = Object.freeze({
     credentialSchema: [
       { id: 'nationalId', labelKey: 'settings_bank_sync_create.national_id', type: 'text', required: true, maxlength: 10 },
       { id: 'userCode', labelKey: 'settings_bank_sync_create.user_code', type: 'text', required: true, maxlength: 10 },
+      { id: 'password', labelKey: 'settings_bank_sync_create.password', type: 'password', required: true, maxlength: 16 },
+      { id: 'captchaCode', labelKey: 'settings_bank_sync_create.captcha_code', type: 'text', required: false, maxlength: 4, inputmode: 'numeric' },
+    ],
+    capabilities: {
+      portalLoad: 'SAFE_RETRY',
+      fetchTransactions: 'SAFE_RETRY',
+      loginSubmit: 'NO_RETRY',
+      captchaSubmit: 'USER_INTERACTION_REQUIRED',
+      virtualKeyboard: 'USER_INTERACTION_REQUIRED',
+      sessionExpired: 'REAUTH',
+    },
+  },
+  [BANK_PROVIDER_IDS.FIRST_BANK_TW]: {
+    id: BANK_PROVIDER_IDS.FIRST_BANK_TW,
+    name: '第一銀行 個人網銀',
+    country: 'TW',
+    lookbackDays: 30,
+    identityScheme: 'firstbank:portal-ref:v1',
+    enabled: true,
+    credentialSchema: [
+      { id: 'nationalId', labelKey: 'settings_bank_sync_create.national_id', type: 'text', required: true, maxlength: 10 },
+      { id: 'repeatSeq', labelKey: 'settings_bank_sync_create.repeat_seq', type: 'text', required: false, maxlength: 2, defaultValue: '0' },
+      { id: 'userCode', labelKey: 'settings_bank_sync_create.user_code', type: 'text', required: true, maxlength: 20 },
       { id: 'password', labelKey: 'settings_bank_sync_create.password', type: 'password', required: true, maxlength: 16 },
       { id: 'captchaCode', labelKey: 'settings_bank_sync_create.captcha_code', type: 'text', required: false, maxlength: 4, inputmode: 'numeric' },
     ],

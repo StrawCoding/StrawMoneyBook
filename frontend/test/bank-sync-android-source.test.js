@@ -36,12 +36,14 @@ test('bank automation activity uses desktop viewport and orchestrator dispatch',
   assert.doesNotMatch(bankAutomationActivitySource, /first_bank_tw/)
 })
 
-test('Architecture B modular registry registers hua_nan only', () => {
+test('Architecture B modular registry registers hua nan and first bank', () => {
   assert.match(bankProviderRegistrySource, /HUA_NAN_BANK_TW/)
+  assert.match(bankProviderRegistrySource, /FIRST_BANK_TW/)
   assert.match(bankProviderRegistrySource, /HuaNanBankProvider/)
+  assert.match(bankProviderRegistrySource, /FirstBankProvider/)
   assert.match(bankSyncOrchestratorSource, /BankProviderRegistry\.resolve/)
   assert.match(huaNanProviderSource, /implements BankProvider/)
-  assert.doesNotMatch(providerRegistrySource, /first_bank_tw/)
+  assert.match(providerRegistrySource, /first_bank_tw/)
 })
 
 test('Architecture B exposes BankAutomationRuntime phase machine', () => {

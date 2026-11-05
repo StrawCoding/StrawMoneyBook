@@ -12,6 +12,7 @@ import android.webkit.JsResult;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.util.Log;
 import android.widget.FrameLayout;
 
 import org.json.JSONException;
@@ -37,7 +38,7 @@ public class BankAutomationActivity extends Activity {
     public static final String EXTRA_DEBUG_TRACE_JSON = "bank_automation.debug_trace_json";
     public static final String EXTRA_ERROR_DATA_JSON = "bank_automation.error_data_json";
 
-    private static final long AUTOMATION_TIMEOUT_MS = 90_000L;
+    private static final long AUTOMATION_TIMEOUT_MS = 120_000L;
     private static final Object BUSY_LOCK = new Object();
     private static boolean busy = false;
     private static BankAutomationActivity currentInstance = null;
@@ -152,6 +153,12 @@ public class BankAutomationActivity extends Activity {
                 result.confirm();
                 return true;
             }
+
+            @Override
+            public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
+                result.confirm();
+                return true;
+            }
         });
         return nextWebView;
     }
@@ -204,6 +211,7 @@ public class BankAutomationActivity extends Activity {
             } catch (JSONException ignored) {
             }
             result.putExtra(EXTRA_RESULT_JSON, safePayload.toString());
+            Log.i("SMB-BankSync", "bank_automation_success action=" + stringExtra(getIntent(), EXTRA_ACTION));
             setResult(Activity.RESULT_OK, result);
             finish();
         });
@@ -222,6 +230,7 @@ public class BankAutomationActivity extends Activity {
                 EXTRA_DEBUG_TRACE_JSON,
                 debugTrace == null ? "{}" : debugTrace.toJson(error.getCode(), error.getMessage()).toString()
             );
+            Log.i("SMB-BankSync", "bank_automation_error code=" + error.getCode() + " message=" + error.getMessage());
             setResult(Activity.RESULT_CANCELED, result);
             finish();
         });

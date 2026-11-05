@@ -15,8 +15,12 @@ export function isHuaNanBankProviderId(value) {
   return normalizeProviderId(value) === 'hua_nan_bank_tw'
 }
 
+export function isFirstBankProviderId(value) {
+  return normalizeProviderId(value) === 'first_bank_tw'
+}
+
 export function isNativeBankProviderId(value) {
-  return isHuaNanBankProviderId(value)
+  return isHuaNanBankProviderId(value) || isFirstBankProviderId(value)
 }
 
 export function simpleHash(input) {
@@ -39,10 +43,25 @@ export function createHuaNanProviderConnectionId({
   return `hua_nan_identity_${simpleHash(`${normalizedNationalId}:${normalizedUserCode}`)}`
 }
 
+export function createFirstBankProviderConnectionId({
+  nationalId,
+  repeatSeq,
+  userCode,
+} = {}) {
+  const normalizedNationalId = normalizeText(nationalId).toUpperCase()
+  const normalizedRepeatSeq = normalizeText(repeatSeq || '0')
+  const normalizedUserCode = normalizeText(userCode)
+  if (!normalizedNationalId || !normalizedUserCode) return ''
+  return `first_bank_identity_${simpleHash(`${normalizedNationalId}:${normalizedRepeatSeq}:${normalizedUserCode}`)}`
+}
+
 export function createBankProviderConnectionId(providerId, options = {}) {
   const normalizedProviderId = normalizeProviderId(providerId)
   if (normalizedProviderId === 'hua_nan_bank_tw') {
     return createHuaNanProviderConnectionId(options)
+  }
+  if (normalizedProviderId === 'first_bank_tw') {
+    return createFirstBankProviderConnectionId(options)
   }
   return ''
 }

@@ -53,7 +53,10 @@ public final class BankSyncOrchestrator {
     }
 
     public static void requestAbortAll() {
-        for (String providerId : new String[] { BankProviderRegistry.HUA_NAN_BANK_TW }) {
+        for (String providerId : new String[] {
+            BankProviderRegistry.HUA_NAN_BANK_TW,
+            BankProviderRegistry.FIRST_BANK_TW,
+        }) {
             try {
                 BankProviderRegistry.resolve(providerId).requestAbort();
             } catch (Exception ignored) {

@@ -439,7 +439,7 @@ try {
     await delay(400)
   }
   assert.equal(wizardProviders.path, '/settings/bank-sync/new', JSON.stringify(wizardProviders))
-  assert.equal(wizardProviders.hasFirstBank, false, `first bank must not appear in provider list: ${JSON.stringify(wizardProviders)}`)
+  assert.equal(wizardProviders.hasFirstBank, true, `first bank must appear in provider list: ${JSON.stringify(wizardProviders)}`)
   assert.equal(wizardProviders.hasHuaNan, true, `hua nan provider required: ${JSON.stringify(wizardProviders)}`)
   assert.equal(wizardProviders.hasWizard, true, `create wizard head required: ${JSON.stringify(wizardProviders)}`)
 
