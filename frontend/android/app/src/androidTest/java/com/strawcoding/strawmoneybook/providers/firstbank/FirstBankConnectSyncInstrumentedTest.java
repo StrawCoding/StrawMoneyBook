@@ -36,7 +36,7 @@ public class FirstBankConnectSyncInstrumentedTest {
             return;
         }
 
-        String initialSyncStartDate = args.getString("initialSyncStartDate", "2026-10-20");
+        String initialSyncStartDate = args.getString("initialSyncStartDate", "2026-10-06");
         String captchaCode = args.getString("captchaCode", "").trim();
 
         BankAutomationActivity.clearLastAutomationOutcome();

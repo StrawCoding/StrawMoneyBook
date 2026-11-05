@@ -1528,30 +1528,49 @@ public final class FirstBankAutomation {
         }
     }
 
+    static void applyJinRuyiAccountQueryParams(JSONObject params, String accountId) throws JSONException {
+        String normalizedAccount = normalizeDigits(accountId);
+        if (normalizedAccount.isEmpty()) {
+            return;
+        }
+        params.put("acnt", normalizedAccount);
+        params.put("acctNoTmp", normalizedAccount);
+        params.put("acctNo", normalizedAccount);
+        params.put("accNo", normalizedAccount);
+        if (normalizeText(params.optString("ccd")).isEmpty()) {
+            params.put("ccd", "00");
+        }
+        if (normalizeText(params.optString("fundFlag")).isEmpty()) {
+            params.put("fundFlag", "1");
+        }
+    }
+
+    private static void appendQueryParam(StringBuilder url, boolean[] hasQuery, String key, String value) {
+        if (normalizeText(value).isEmpty()) {
+            return;
+        }
+        if (hasQuery[0]) {
+            url.append('&');
+        }
+        url.append(key).append('=').append(URLEncoder.encode(value, StandardCharsets.UTF_8));
+        hasQuery[0] = true;
+    }
+
     static String buildDirectTransactionQueryUrl(String accountId, String startDateBank, String endDateBank) {
         String normalizedAccount = normalizeDigits(accountId);
         String start = normalizeText(startDateBank);
         String end = normalizeText(endDateBank);
         StringBuilder url = new StringBuilder(TXN_URL);
         url.append('?');
-        boolean hasQuery = false;
-        if (!normalizedAccount.isEmpty()) {
-            url.append("acnt=").append(URLEncoder.encode(normalizedAccount, StandardCharsets.UTF_8));
-            hasQuery = true;
-        }
-        if (!start.isEmpty()) {
-            if (hasQuery) {
-                url.append('&');
-            }
-            url.append("txnStart=").append(URLEncoder.encode(start, StandardCharsets.UTF_8));
-            hasQuery = true;
-        }
-        if (!end.isEmpty()) {
-            if (hasQuery) {
-                url.append('&');
-            }
-            url.append("txnEnd=").append(URLEncoder.encode(end, StandardCharsets.UTF_8));
-        }
+        boolean[] hasQuery = new boolean[] { false };
+        appendQueryParam(url, hasQuery, "acnt", normalizedAccount);
+        appendQueryParam(url, hasQuery, "txnStart", start);
+        appendQueryParam(url, hasQuery, "txnEnd", end);
+        appendQueryParam(url, hasQuery, "acctNoTmp", normalizedAccount);
+        appendQueryParam(url, hasQuery, "acctNo", normalizedAccount);
+        appendQueryParam(url, hasQuery, "accNo", normalizedAccount);
+        appendQueryParam(url, hasQuery, "ccd", "00");
+        appendQueryParam(url, hasQuery, "fundFlag", "1");
         return url.toString();
     }
 
@@ -1672,6 +1691,11 @@ public final class FirstBankAutomation {
                 params.txnEnd = endDate;
                 if (accountId) {
                   params.acnt = accountId;
+                  params.acctNoTmp = accountId;
+                  params.acctNo = accountId;
+                  params.accNo = accountId;
+                  if (!params.ccd) params.ccd = '00';
+                  if (!params.fundFlag) params.fundFlag = '1';
                   if (Object.prototype.hasOwnProperty.call(params, 'ACNT')) params.ACNT = accountId;
                 }
                 const enquiryButton = Array.from(doc.querySelectorAll('input[type="button"], input[type="submit"], button')).find((button) => {
@@ -4666,6 +4690,7 @@ public final class FirstBankAutomation {
             for (String variantKey : new String[] { "primary", "digits", "roc" }) {
                 JSONObject attemptParams = new JSONObject(params.toString());
                 applyTransactionDateVariant(attemptParams, startDateBank, endDateBank, variantKey);
+                applyJinRuyiAccountQueryParams(attemptParams, accountId);
                 mergeActionQueryIntoParams(action, attemptParams);
                 String postAction = stripUrlQuery(action);
                 String responseHtml = executeTransactionHttpRequest(

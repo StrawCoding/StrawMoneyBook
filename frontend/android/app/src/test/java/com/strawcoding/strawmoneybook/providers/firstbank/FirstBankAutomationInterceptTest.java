@@ -17,6 +17,9 @@ public class FirstBankAutomationInterceptTest {
         assertTrue(url.contains("acnt=123456789012"));
         assertTrue(url.contains("txnStart=2026%2F10%2F20"));
         assertTrue(url.contains("txnEnd=2026%2F11%2F04"));
+        assertTrue(url.contains("acctNoTmp=123456789012"));
+        assertTrue(url.contains("fundFlag=1"));
+        assertTrue(url.contains("ccd=00"));
     }
 
     @Test

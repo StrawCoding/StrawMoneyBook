@@ -2,6 +2,9 @@
 
 ---
 
+## v1.6.22
+- 第一銀行 sync：金如意／010103 直查與表單重放補齊 `acctNoTmp`／`acctNo`／`accNo`／`ccd=00`／`fundFlag=1`（對齊第 e 個網 iframe 查詢字串）。
+
 ## v1.6.21
 - 第一銀行 sync：對齊 `form1`／`contract()` 流程（`dateCheck`／`checkdatescope`／`oneclick` 後 `form1.submit`）；交易頁 URL 帶起迄日；HTTP／WebView POST 分離 action query；英文「Information not found」視為無資料；instrumented lookback 120 日。
 
